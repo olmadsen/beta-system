@@ -376,6 +376,82 @@ PpkVT: public
      pop  RetAddr;
      push theTextAddr;
      goto RetAddr
+  #);
+
+PpkSVT: proc;
+PpkVTS: public
+(# do goto PpkSVT #);
+
+PpkSVT: public
+  (#
+     { input parameters }
+     repArg:      Repetition = DataReg1;
+     low:         Long       = DataReg2;
+     high:        Long       = DataReg3;
+
+     { variables }
+     theRep:      Repetition = RegArg;
+     a1:          Repetition = RegArg;
+     theTextAddr: DataArea   = RegAdr;
+     FreeSpace:   Long       = DataRegA;
+     nextText:    DataArea   = AddrReg1;
+     
+     index:       Long       = DataReg2; { same as low }
+     Value:       Byte       = DataRegA; { same as FreeSpace }
+     
+     RetAddr:     CodeArea   = AddrReg1
+  do 
+     push a1;
+     repArg -> theRep;
+     
+     { Check bounds and transform high into number of bytes to copy }
+     (if low  < theRep.LowBorder   then push RegObj; push -6; call BetaError if);
+     (if high > theRep.HighBorder  then push RegObj; push -7; call BetaError if);
+     
+     low  -> high-; 1 -> high+;
+     (if high < 0 then 0 -> high if);     
+     
+     { Compute the text start point. }
+     CTextPoolEnd -> theTextAddr;
+     
+     { Set the first byte in the pascal string eq the length. }
+     high!b -> theTextAddr[0]!b;
+     
+     { Check range overflow on CTextPool.                               }
+     { nextText is used as a tmp. register only.                        }
+     { Size_left_in_CTextPool = (Adr(CTextPool) + 1000) - CTextPoolEnd. }
+     CTextPool[] -> nextText;
+     nextText -> FreeSpace;
+     1000 -> FreeSpace+;
+     CTextPoolEnd -> FreeSpace-;
+     
+     (if FreeSpace <= high then
+         push RegObj;
+         push -35;
+         call BetaError
+     if);
+     
+     { Copy the contents of the repetition to the CTextPool. }
+     (if high <> 0 then
+         1 -> low-;
+         theRep[low][] -> theRep; { Start at low. }
+         0 -> index;
+         loop:
+         theRep[16+index] -> Value; { Get as long to avoid byte-ordering. }
+         Value -> theTextAddr[1+index]!b;
+         1 -> index+;
+         (if index < high then goto loop if)
+     if);
+      
+     { Update CTextPool. }
+     theTextAddr[1+high][] -> nextText;
+     nextText -> CTextPoolEnd;
+     
+     pop a1;
+     pop  RetAddr;
+     push theTextAddr;
+     goto RetAddr
   #)
+
 
 ---]]
