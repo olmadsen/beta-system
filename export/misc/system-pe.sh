@@ -15,7 +15,7 @@ if [ -z "$COMPRESS" ]; then echo "COMPRESS not set"; exit 1 ;fi
 
 if [ "$COMPRESS" = "icomp" ]
 then
-	# Special windows packing
+	########################### WINDOWS ###########################
 	echo ""
 	echo "Creating $DST/system.cmd"
 	FILES=`${BETALIB}/export/files/system-pe.files`
@@ -56,7 +56,7 @@ mv $DST/system-pe.cmd  $DST/system.cmd
 else
 if [ "$COMPRESS" = "maccomp" ]
 then
-
+	###################### MACINTOSH #########################
 	echo ""
 	echo "Creating $DST/mac.pack"
 	echo '# Usage:    makeExport MyDisk:beta:'                    > $DST/mac.pack
@@ -106,6 +106,12 @@ then
 fi
 
 else	
+	##################### UNIX ######################
+	if [ "$TARGET" = "sun4s" ]; then
+	    BETARUN_EXT="a"
+	else
+	    BETARUN_EXT="o"
+	fi
 	echo ""
 	echo "Creating $DST/system.tar "
 	echo "(Listing in $DST/system.lst)"
@@ -121,20 +127,20 @@ else
 
 	if [ ! -d ${BETALIB}/test ]; then mkdir ${BETALIB}/test; fi
 	cd ${BETALIB}/test
-	echo "Adding betarun_pe.o as betarun.o and betarun_v.o from directory"
+	echo "Adding betarun_pe.${BETARUN_EXT} as betarun.${BETARUN_EXT} and betarun_v.${BETARUN_EXT} from directory"
 	pwd
 
 	/bin/rm -rf betarun
 	mkdir betarun
 	mkdir betarun/$TARGET
-	cp ${BETALIB}/betarun/$TARGET/betarun_pe.o ./betarun/$TARGET/betarun.o
-	cp ${BETALIB}/betarun/$TARGET/betarun_pe.o ./betarun/$TARGET/betarun_v.o
+	cp ${BETALIB}/betarun/$TARGET/betarun_pe.${BETARUN_EXT} ./betarun/$TARGET/betarun.${BETARUN_EXT}
+	cp ${BETALIB}/betarun/$TARGET/betarun_pe.${BETARUN_EXT} ./betarun/$TARGET/betarun_v.${BETARUN_EXT}
 	cp ${BETALIB}/crypt/${TARGET}/decrypt ./betarun/$TARGET/
-	${BETALIB}/crypt/${objdir}/encrypt $PRODKEY 0 ${BETALIB}/betarun/$TARGET/betarun.o ./betarun/$TARGET/betarun_o.crypt
-	${BETALIB}/crypt/${objdir}/encrypt $PRODKEY 0 ${BETALIB}/betarun/$TARGET/betarun_v.o ./betarun/$TARGET/betarun_v_o.crypt
+	${BETALIB}/crypt/${objdir}/encrypt $PRODKEY 0 ${BETALIB}/betarun/$TARGET/betarun.${BETARUN_EXT} ./betarun/$TARGET/betarun_o.crypt
+	${BETALIB}/crypt/${objdir}/encrypt $PRODKEY 0 ${BETALIB}/betarun/$TARGET/betarun_v.${BETARUN_EXT} ./betarun/$TARGET/betarun_v_o.crypt
 	tar -rovhf $DST/system.tar \
-	  ./betarun/${CODEDIR}/betarun.o \
-	  ./betarun/${CODEDIR}/betarun_v.o  \
+	  ./betarun/${CODEDIR}/betarun.${BETARUN_EXT} \
+	  ./betarun/${CODEDIR}/betarun_v.${BETARUN_EXT}  \
 	  ./betarun/${CODEDIR}/betarun_o.crypt  \
 	  ./betarun/${CODEDIR}/betarun_v_o.crypt  \
 	  ./betarun/${CODEDIR}/decrypt  \
