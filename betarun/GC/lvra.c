@@ -100,8 +100,9 @@ static void RepCopy(dst, src)
  * The returned value is <= TableMAX.
  */
 static long LVRATableIndex(size)
-     long size;
-{ long index = 0; size >>= 4;
+     unsigned long size;
+{ long index = 0; 
+  size >>= 4;
   while ((size >>= 1) != 0) index++;
   if (index > TableMAX) index = TableMAX;
   return index; 
@@ -296,7 +297,7 @@ long LVRARestInBlock(theBlock)
   return (long) theBlock->limit - (long) theBlock->top;
 }
 
-/* Allocate repetition with range in LVRATopBlock->[top..limit]. */
+/* Allocate repetition with range in LVRATopBlock->[top..limit[. */
 static ref(ValRep)LVRAAllocInBlock(proto, range, size)
      ref(ProtoType) proto;
      long           range;
@@ -365,7 +366,7 @@ ref(ValRep) LVRAAlloc(proto, range)
     } else {
       long *p;
       DEBUG_LVRA(fprintf(output, "#LVRAAlloc: LVRARestInBlock < headsize(ValRep)\n"));
-      for (p=LVRATopBlock->top; p<=LVRATopBlock->limit; p++) *p = 0;
+      for (p=LVRATopBlock->top; p<LVRATopBlock->limit; p++) *p = 0;
     }
   }
 
@@ -552,7 +553,7 @@ void LVRACompaction()
 	      } else {
 		long *p;
 		DEBUG_LVRA(fprintf(output, "#LVRACompaction: LVRARestInBlock < headsize(ValRep)\n"));
-		for (p=dstBlock->top; p<=dstBlock->limit; p++) *p = 0;
+		for (p=dstBlock->top; p<dstBlock->limit; p++) *p = 0;
 	      }
 	    }
 	    dstBlock = dstBlock->next;
