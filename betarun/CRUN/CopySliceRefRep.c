@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:41 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-08-27 15:46:37 $, SID: $Revision: 1.11 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -22,26 +22,25 @@ void CCopySRR(ref(RefRep) theRep,
 	      unsigned high
 	      )
 {
+    DeclReference1(struct RefRep *newRep);
     register unsigned size;
     register int i;
-
-    GCable_Entry
-
-#define newRep (cast(RefRep) GCreg3)
-      
-      Ck(theItem); Ck(theRep);
+    
+    GCable_Entry();
+    
+    Ck(theItem); Ck(theRep);
     /* Copy a slice of a Reference Repetition.
      * stack on entry [return(0),offset(4),Item(8),ValRep(12),...]
      * and registers DataReg1=low, DataReg2=high.
      */
-
+    
     /* stack[12] -> theRep; */
     /* Check that low and high usable. */
     if (low<theRep->LowBorder) BetaError(-6, theItem);
     if (high<theRep->LowBorder) BetaError(-7, theItem);
     if (low>theRep->HighBorder) BetaError(-6, theItem);
     if (high>theRep->HighBorder) BetaError(-7, theItem);
-
+    
     /* Calculate the range of the new repetition. */
     size = high - low + 1;
     if (size < 0) size = 0;
@@ -50,6 +49,10 @@ void CCopySRR(ref(RefRep) theRep,
     
     newRep = cast(RefRep) IOAalloc(RefRepSize(size));
     
+    ForceVolatileRef(theItem);
+    ForceVolatileRef(theRep);
+    Ck(theRep); Ck(theItem);
+
     /* The new Object is now allocated, but not assigned yet! */
     
     /* Initialize the structual part of the repetition. */
