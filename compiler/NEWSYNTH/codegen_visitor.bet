@@ -4,9 +4,7 @@ INCLUDE '~beta/betaast/betasematt';
 INCLUDE '../GENERATOR/machine';
 INCLUDE '../SYNTHESIZER/signature';
 INCLUDE '../SYNTHESIZER/genlib_bytecode';
-INCLUDE 'newgen';
 include 'display_visitor';
-(*---cfllevellib:attributes---*)
 ---thegenlib:attributes---
 a2i:
   (# A: ^ast; I: @ASTindex
@@ -14,11 +12,8 @@ a2i:
   do A[] -> astAsAstIndex -> I
   exit I[]
   #);
-IVisitor: betaCfl.treeLevelVisitor
-  (# G: ^newgen
-  enter G[]
-  #); 
-FormVisitor: Ivisitor
+
+FormVisitor: betaCfl.treeLevelVisitor
   (#  visit_descriptorForm::
        (#
        do 'Form:descriptorForm:'->putline;
@@ -36,12 +31,12 @@ FormVisitor: Ivisitor
      visit_objectDescriptor::
        (#
        do 'Form:objectDescriptor:'->putline;
-          (G[],G.BCname[],N[],0) -> genClass
+          (BCname[],N[],0) -> genClass
        #);
      visit_patternDecl::
        (# 
        do 'Form:pattern:'->putline;
-          (G[],G.BCname[],N.getobjectDescriptor,0) -> genClass
+          (BCname[],N.getobjectDescriptor,0) -> genClass
        #);
      visit_doPart::
        (#
@@ -53,7 +48,7 @@ FormVisitor: Ivisitor
        #)
   exit this(FormVisitor)[]
   #);
-CodeGenVisitor: Ivisitor
+CodeGenVisitor: betaCfl.treeLevelVisitor
   (# InnerDescs:[3] ^beta.ObjectDescriptor; top: @integer;
      scan:
        (# current: ^beta.objectDescriptor
@@ -95,7 +90,7 @@ CodeGenVisitor: Ivisitor
           ns.newScan
           (# ND: ^NameDecl
           do current.getNameDecl->ND[];
-             (G[],ND.getText,OD[],false) -> genPtnMethod;
+             (ND.getText,OD[],false) -> genPtnMethod;
           #);
           this(CodeGenVisitor)[] -> OD.accept
        #);
@@ -137,7 +132,7 @@ CodeGenVisitor: Ivisitor
             -> (methodName[],innerName[]);
           methodName[] -> sig.addMethod;
           sig.asText -> putline;
-          (0,innerName[],false,sig.asText,0) -> G.mch.initDo;
+          (0,innerName[],false,sig.asText,0) -> mch.initDo;
 
           true -> inEnterDoExitMethod;
           GD.restartLab.new; 
@@ -148,8 +143,8 @@ CodeGenVisitor: Ivisitor
           (* false -> inDoPartWithTmp*)
           false -> inEnterDoExitMethod;
 
-          (false,0) -> G.mch.return;
-          G.mch.endMethod
+          (false,0) -> mch.return;
+          mch.endMethod
        #);
      
      visit_insertedItem::
@@ -166,12 +161,12 @@ CodeGenVisitor: Ivisitor
        (# C: ^const
        do 'integer:'->putline;
           N.getConst->C[];
-          (C.getValue->G.mch.newCstOp,G.mch.dataTop[]) -> G.mch.ldCst;
+          (C.getValue->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
        #);
   exit this(CodeGenVisitor)[]        
   #);
 
-DescName: Ivisitor
+DescName: betaCfl.treeLevelVisitor
   (# name: @text
        (# addSep: @boolean;
           extend:
@@ -188,7 +183,7 @@ DescName: Ivisitor
        #);
      visit_attributesform::
        (#
-       do G.common.betaPackage -> name.append
+       do common.betaPackage -> name.append
        #);
      visit_objectDescriptor::
        (#
@@ -226,56 +221,73 @@ DescName: Ivisitor
   #);
 
 GenClass:
-  (# G: ^newgen;
-     path: ^text;
+  (# path: ^text;
      desc: ^beta.objectDescriptor;
      blockLevel: @integer;
-  enter(G[],path[],desc[],blockLevel)
+  enter(path[],desc[],blockLevel)
   <<SLOT new_genClass:doPart>>
   #);
 GenPtnMethod:
-  (# G: ^newgen;
-     methodName: ^text;
+  (# methodName: ^text;
      desc: ^beta.objectDescriptor;
      isStatic: @boolean
-  enter(G[],methodName[],desc[],isStatic)
+  enter(methodName[],desc[],isStatic)
   <<SLOT new_GenPtnMethod:doPart>>
   #);
-isJava: (# exit true #); (* perhaps isJava in com.bet *)
 
 ---new_genClass:doPart---
 do (# className: @descName;
-      superDesc,supername,orgName: ^text;
+      superDesc,supername,orgName,c: ^text;
       subLevel: @integer;
       CG: @CodeGenVisitor;
-   do (if isJava then
-          (* open file *)
-      if);
-      '\nGenClass: '->puttext;
+   do '\nGenClass: '->puttext;
+      
       desc[] -> astAsAstIndex -> thisDesc;
-      '***'->putline;
-      G[] -> className;
-      className[] -> (desc.father).accept;
+      className[] -> (desc.father).accept;      
       className.name[] -> putline;
       
+      'path: ' -> puttext; path[] -> putline;
+      path[] -> splitPathAndNAme -> (path[],c[]);
+      'path: ' -> puttext; path[] -> putline;
+      
+      (if isJava then
+          (* open file *)
+          (if (thisPackagePath[] <> none) then
+              313->trace(#
+                        do 'PATH:asmLink:A: '-> puttext;
+                           path[] -> putline;
+                        #);
+              (*thisPackagePath[] -> path.append;*)
+              className.name[]->path.append;
+              313->trace(#
+                        do 'PATH:asmLink: ' -> puttext;
+                           path[] -> putline;
+                        #);
+           else
+              className.name[]->path.append;
+          if);
+          'path: ' -> puttext; path[] -> putline;
+          (path.copy,asmlink.byteCodeKind,true,false) 
+            -> AsmLink.TX.insert;
+      if);
+      
       'LBetaObject;'->orgName[];
-      (if  G[] = none then 'G none' -> putline if);
-      (if  G.mch[] = none then 'G.mch none' -> putline if);
+      (if  mch[] = none then 'mch none' -> putline if);
       ((*theDesc.nodeId div 2, - we reuse a field - BAD *)
       blockLevel,className.name[],false
       ,'LBetaObject;' (*((superDesc[],superName[])->SuperSignature).asText*)
       ,subLevel,orgName[])
-        -> G.mch.initGen;
+        -> mch.initGen;
       
-      G[] -> CG -> (desc.getMainPart).accept;
+      CG -> (desc.getMainPart).accept;
       'end'->putline;
-      G.mch.endClass;
+      mch.endClass;
       (if isJava then
-          G.mch.close
+          mch.close
       if);
       CG.scan
       (#
-      do (G[],G.BCname[],current[],1) -> genClass
+      do (BCname[],current[],1) -> genClass
       #)
    #)
 ---new_GenPtnMethod:doPart---
@@ -308,9 +320,9 @@ do (# sig: @signature;
                                           * handled
                                           *)
 
-      (0,methodName[],true,sig.asText,sig.noOfEnterArgs) -> G.mch.initDo;
+      (0,methodName[],true,sig.asText,sig.noOfEnterArgs) -> mch.initDo;
 
-      (false,exitId) -> G.mch.return;
-      G.mch.endMethod
+      (false,exitId) -> mch.return;
+      mch.endMethod
    #)
    
