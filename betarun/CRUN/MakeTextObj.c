@@ -15,7 +15,7 @@
 #define REP_OFF 3
 
 
-/*void MkTO() asm("MkTO");*/
+/*void MkTO() __asm__("MkTO");*/
 
 #ifdef sparc
 

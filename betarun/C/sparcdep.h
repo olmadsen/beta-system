@@ -70,7 +70,7 @@ register volatile void *GCreg4 __asm__("%o4");
 #define DeclReference2(type, name) type name
 
 #define asmlabel(label, code) \
-  __asm__(".text; .align 4; .global " #label ";" #label ": " code)
+  __asm__(".text; .align 4; .global " #label "; " #label ": " code)
 
 #define asmcomment(text) \
   __asm__("! " #text)
@@ -222,7 +222,7 @@ void name(struct ObjectRep *theRep,                     \
 #endif
 
 #define push(v) (StackPointer -= 2, StackPointer[16] = (long) v)
-#define pop(v) (((long)v) = StackPointer[16], StackPointer += 2)
+#define pop(v) ((v) = (__typeof__(v))StackPointer[16], StackPointer += 2)
 
 #define Protect(var, code)				\
   push(var);						\

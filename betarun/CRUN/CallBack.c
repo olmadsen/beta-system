@@ -196,13 +196,13 @@ void *CopyPPP(ref(Structure) theStruct, long size, ref(Object) theObj, long univ
 #ifdef __svr4__
 extern long HandleCB();
 #else
-extern long HandleCB() asm("HandleCB");
+extern long HandleCB() __asm__("HandleCB");
 #endif
 
-asmlabel(CopyCPP, "
-	ba	"CPREF"CopyCPP
-	mov	%i0, %o1
-");
+asmlabel(CopyCPP, 
+	 "ba	"CPREF"CopyCPP; "
+	 "mov	%i0, %o1; "
+	 );
 
 void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 {
@@ -241,12 +241,12 @@ void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 
 long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
 {
-    register long		 g1	       asm("%g1");
+    register long		 g1	       __asm__("%g1");
 
     /* A CallBackFrame: */
-    register ref(CallBackFrame)  next	       asm("%l5");
-    register long              * betaTop       asm("%l6");
-    register long                tmp           asm("%l7");
+    register ref(CallBackFrame)  next	       __asm__("%l5");
+    register long              * betaTop       __asm__("%l6");
+    register long                tmp           __asm__("%l7");
     
     ref(Item) 		         theObj;
     ref(CallBackEntry) cb;
@@ -294,7 +294,7 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
     /* Fool gcc into believing that the address of a6 is taken, thus
        making it save it on stack. */
     
-    asm(""::"r" (&a6), "r" (next), "r" (betaTop), "r" (tmp)) ;
+    __asm__(""::"r" (&a6), "r" (next), "r" (betaTop), "r" (tmp)) ;
     return retval;
 }
 
@@ -342,8 +342,9 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
     CBFATop->theStruct = theStruct;
 
     hcb = (unsigned long) HandleCB; /* this does not work, but imports the symbol !!!! */
-    asm volatile ("LDIL L'HandleCB, %0
-                   LDO  R'HandleCB(%0),%0": "=r" (hcb));
+    __asm__ volatile ("LDIL L'HandleCB, %0;"
+		      "LDO  R'HandleCB(%0),%0;": "=r" (hcb)
+		      );
 
     /* Construct the following code in the CBF:
      * 0 LDIL L'HandleCB, %r1
@@ -369,44 +370,44 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
     /* Now flush the code from the data cache */
 
     /* Save SR0 */
-    /* asm volatile ("mfsp %%sr0,%0" : "=r" (savedSR0)); */
+    /* __asm__ volatile ("mfsp %%sr0,%0" : "=r" (savedSR0)); */
 
     /* Extract SID from address */
-    asm volatile ("ldsid\t(0,%0),%%r1" : : "r" (&CBFATop->code[0]) );
+    __asm__ volatile ("ldsid\t(0,%0),%%r1" : : "r" (&CBFATop->code[0]) );
 
     /* SID -> SR0 */
-    asm volatile ("mtsp\t%r1,%sr0"); 
+    __asm__ volatile ("mtsp\t%r1,%sr0"); 
 
     /* flush data cache and synchronize */
-    asm volatile ("fdc\t0(0,%0)" : : "r" (&CBFATop->code[0]));
-    asm volatile ("fdc\t0(0,%0)" : : "r" (&CBFATop->code[2]));
-    asm volatile ("fdc\t0(0,%0)" : : "r" (&CBFATop->code[4]));
-    asm volatile ("fdc\t0(0,%0)" : : "r" (&CBFATop->code[6]));
-    asm volatile ("sync");
+    __asm__ volatile ("fdc\t0(0,%0)" : : "r" (&CBFATop->code[0]));
+    __asm__ volatile ("fdc\t0(0,%0)" : : "r" (&CBFATop->code[2]));
+    __asm__ volatile ("fdc\t0(0,%0)" : : "r" (&CBFATop->code[4]));
+    __asm__ volatile ("fdc\t0(0,%0)" : : "r" (&CBFATop->code[6]));
+    __asm__ volatile ("sync");
 
     /* Flush instruction cache and synchronize */
-    asm volatile ("fic\t0(%%sr0,%0)" : : "r" (&CBFATop->code[0]));
-    asm volatile ("fic\t0(%%sr0,%0)" : : "r" (&CBFATop->code[2]));
-    asm volatile ("fic\t0(%%sr0,%0)" : : "r" (&CBFATop->code[4]));
-    asm volatile ("fic\t0(%%sr0,%0)" : : "r" (&CBFATop->code[6]));
-    asm volatile ("sync");
+    __asm__ volatile ("fic\t0(%%sr0,%0)" : : "r" (&CBFATop->code[0]));
+    __asm__ volatile ("fic\t0(%%sr0,%0)" : : "r" (&CBFATop->code[2]));
+    __asm__ volatile ("fic\t0(%%sr0,%0)" : : "r" (&CBFATop->code[4]));
+    __asm__ volatile ("fic\t0(%%sr0,%0)" : : "r" (&CBFATop->code[6]));
+    __asm__ volatile ("sync");
 
     /* Assure cache has been flushed */
-    asm volatile ("nop");
-    asm volatile ("nop");
-    asm volatile ("nop");
-    asm volatile ("nop");
-    asm volatile ("nop");
-    asm volatile ("nop");
-    asm volatile ("nop");
+    __asm__ volatile ("nop");
+    __asm__ volatile ("nop");
+    __asm__ volatile ("nop");
+    __asm__ volatile ("nop");
+    __asm__ volatile ("nop");
+    __asm__ volatile ("nop");
+    __asm__ volatile ("nop");
 
     /* Restore SR0 */
-    /* asm volatile("mtsp\t%0,%%sr0" : : "r" (savedSR0)); */
+    /* __asm__ volatile("mtsp\t%0,%%sr0" : : "r" (savedSR0)); */
 
     ++CBFATop;
 
     /* the following C call expects the function-pointer in arg1 - sic! */
-    asm("COPY %0, %%r26" : /*no out*/ : "r" (&(CBFATop-1)->code[0]) : "r26");
+    __asm__("COPY %0, %%r26" : /*no out*/ : "r" (&(CBFATop-1)->code[0]) : "r26");
     return((void *)&(CBFATop-1)->code[0]);
 }
 
@@ -418,7 +419,7 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
     DeclReference1(struct Item *, theObj);
 
     /* First things first, get a grib on the struct pointer */
-    asm volatile ("LDW 0(%%r28),%0" : "=r" (theStruct));
+    __asm__ volatile ("LDW 0(%%r28),%0" : "=r" (theStruct));
 
     if (!theStruct) { freeCallbackCalled(); return 0; }
 

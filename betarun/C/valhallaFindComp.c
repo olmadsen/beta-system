@@ -450,7 +450,7 @@ static void findComponentStack (struct ComponentStack* compStack, int PC)
    * been assigned a stack object.
    * Otherwise it has no stack at all. */
 
-  switch ((int) compStack->info.stackObj = compStack->comp->StackObj) {
+  switch ((int) (compStack->info.stackObj = compStack->comp->StackObj)) {
   case 0:
   case -1:
     compStack->stacktype = CS_NOSTACK;

@@ -266,12 +266,12 @@ struct Component * Att(struct Object *this, struct Component *comp)
 ParamThisComp(struct Component *, Att)
 {
   long * entryAdr;
-  register ref(CallBackFrame)  callBackFrame asm("%l5");
-  register long              * nextCompBlock asm("%l6");
-  register long                level         asm("%l7");
+  register ref(CallBackFrame)  callBackFrame __asm__("%l5");
+  register long              * nextCompBlock __asm__("%l6");
+  register long                level         __asm__("%l7");
   long first = comp->CallerLSC == 0;
   
-  register long              * tmp asm("%i1") 
+  register long              * tmp __asm__("%i1") 
     /* Needed for lastCompBlock assignment */;
   
   GCable_Entry();
@@ -304,17 +304,17 @@ ParamThisComp(struct Component *, Att)
   level = 0;
   nextCompBlock = (long *) lastCompBlock;
   /* Fool gcc into believing that %i1 is used */
-  asm(""::"r" (tmp));
+  __asm__(""::"r" (tmp));
   callBackFrame = ActiveCallBackFrame;
   /* Fool gcc into believing that %i1 is used */
-  asm(""::"r" (tmp));
+  __asm__(""::"r" (tmp));
   
   ActiveCallBackFrame = 0;		    /* Clear the CallBackFrame list */
   /* Fool gcc into believing that %i1 is used */
-  asm(""::"r" (tmp));
+  __asm__(""::"r" (tmp));
   lastCompBlock = cast(ComponentBlock) StackPointer;
   /* Fool gcc into believing that %i1 is used */
-  asm(""::"r" (tmp));
+  __asm__(""::"r" (tmp));
   
   if (first) {
     /* Hack to indicate that comp has now been attached once.
@@ -325,7 +325,7 @@ ParamThisComp(struct Component *, Att)
 
     ActiveComponent = comp;
     /* Fool gcc into believing that %i1 is used */
-    asm(""::"r" (tmp));
+    __asm__(""::"r" (tmp));
     
     /* comp->Body is the Object and comp->Body->Proto[-1] is the M-entry address */
 
@@ -342,7 +342,7 @@ ParamThisComp(struct Component *, Att)
 #endif
     
     /* Fool gcc into believing that level, next.. is used */
-    asm(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
+    __asm__(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
     
     /* TerminateComponent: */
     DEBUG_CODE(NumTermComp++);
@@ -351,10 +351,10 @@ ParamThisComp(struct Component *, Att)
      * fflush(stdout);
      */
     /* Fool gcc into believing that %i1 is used */
-    asm(""::"r" (tmp));
+    __asm__(""::"r" (tmp));
     ActiveComponent  = comp->CallerComp;
     /* Fool gcc into believing that %i1 is used */
-    asm(""::"r" (tmp));
+    __asm__(""::"r" (tmp));
     this             = comp->CallerObj;
     comp->StackObj   = 0;
     comp->CallerComp = 0;
@@ -363,10 +363,10 @@ ParamThisComp(struct Component *, Att)
     /* Pop the Component Block */
     ActiveCallBackFrame = callBackFrame;
     /* Fool gcc into believing that %i1 is used */
-    asm(""::"r" (tmp));
+    __asm__(""::"r" (tmp));
     lastCompBlock = cast(ComponentBlock) nextCompBlock;
     /* Fool gcc into believing that %i1 is used */
-    asm(""::"r" (tmp));
+    __asm__(""::"r" (tmp));
     setret(ActiveComponent->CallerLSC);
     
     return comp;  /* maintain %o0 ?? */
@@ -377,7 +377,7 @@ ParamThisComp(struct Component *, Att)
   }
   ActiveComponent = comp;
   /* Fool gcc into believing that %i1 is used */
-  asm(""::"r" (tmp));
+  __asm__(""::"r" (tmp));
   
   /* Unpack 'ActiveComponent.StackObj' on top of the stack.
      
@@ -397,9 +397,9 @@ ParamThisComp(struct Component *, Att)
     ref(RegWin) rw;
     
     /* Fool gcc into believing that %i1 is used */
-    asm(""::"r" (tmp));
+    __asm__(""::"r" (tmp));
     
-    ((char *)StackPointer) -= size;
+    StackPointer = (long*)((char *)StackPointer - size);
     dest = (char *)FramePointer - size;
     memcpy(dest, theStackObj->Body+1, size);
     
@@ -418,19 +418,19 @@ ParamThisComp(struct Component *, Att)
   ok:
     lastCompBlock = cast(ComponentBlock) rw;
     /* Fool gcc into believing that %i1 is used */
-    asm(""::"r" (tmp));
+    __asm__(""::"r" (tmp));
     /* Update ComponentBlock in the restored RegWin */
     rw->l5 = (long) callBackFrame;
     /* Fool gcc into believing that %i1 is used */
-    asm(""::"r" (tmp));
+    __asm__(""::"r" (tmp));
     /* Fool gcc into believing that %i1 is used */
-    asm(""::"r" (tmp));
+    __asm__(""::"r" (tmp));
     rw->l6 = (long) nextCompBlock;
     /* Fool gcc into believing that %i1 is used */
-    asm(""::"r" (tmp));
+    __asm__(""::"r" (tmp));
     rw->l7 = level;
-    asm("ta 3");
-    ((char *)FramePointer) -= size;
+    __asm__("ta 3");
+    FramePointer = (long*)((char *)FramePointer - size);
 
 #ifdef RTVALHALLA
     if (valhallaIsStepping)
@@ -439,7 +439,7 @@ ParamThisComp(struct Component *, Att)
 
     setret(comp->CallerLSC);
     /* Fool gcc into believing that level, next.. is used */
-    asm(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
+    __asm__(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
     
     return comp; /* still ?? */
   }

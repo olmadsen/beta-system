@@ -6,7 +6,7 @@
 #define GCable_Module
 
 #ifdef hppa
-register long _dummyx asm("r16");
+register long _dummyx __asm__("r16");
 #endif
 
 #include "beta.h"

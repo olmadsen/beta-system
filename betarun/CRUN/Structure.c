@@ -255,11 +255,11 @@ long gtS(ref(Structure) arg1, ref(Structure) arg2)
 }
 
 #ifdef sparc
-asmlabel(ltS, "
-	 clr %o2
-         clr %o3
-         ba   "CPREF"ltS
-         clr %o4");
+asmlabel(ltS, 
+	 "clr %o2; "
+         "clr %o3; "
+         "ba   "CPREF"ltS; "
+         "clr %o4");
 long CltS(ref(Structure) arg1, ref(Structure) arg2)
 #else
 long ltS(ref(Structure) arg1, ref(Structure) arg2)

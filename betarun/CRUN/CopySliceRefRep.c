@@ -6,8 +6,8 @@
 #define GCable_Module
 
 #ifdef hppa
-register long _dummy8 asm("%r15"); /* really tmp data 1 */
-register long _dummy9 asm("%r16"); /* really tmp data 2 */
+register long _dummy8 __asm__("%r15"); /* really tmp data 1 */
+register long _dummy9 __asm__("%r16"); /* really tmp data 2 */
 #endif
 
 #include "beta.h"

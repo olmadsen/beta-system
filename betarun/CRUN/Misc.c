@@ -11,7 +11,7 @@
 #if (defined(sparc) && (!defined(RTDEBUG)))
 /* An extra nop is needed before retl in case Return is called directly
  * from a runtime routine. This is the case for e.g. an empty program.
- * If you try to do this with an asm("nop") in a C function, the C function
+ * If you try to do this with an __asm__("nop") in a C function, the C function
  * will NOT become a leaf routine. Thus we do it manually her.
  */
 #ifdef sun4s
@@ -67,7 +67,7 @@ void RefNone(ref(Object) theObj)
 {
 #if (defined(hppa) && defined(RTLAZY))
   /* Called with the possible dangling reference in %r31 */
-  asm volatile ("\tCOPY\t%%r31,%0\n" : "=r" (theObj));
+  __asm__ volatile ("\tCOPY\t%%r31,%0\n" : "=r" (theObj));
   if (isLazyRef(theObj)){
     /* save reference registers in case of dangling reference */
     PushGCRegs();
@@ -108,13 +108,13 @@ void RefNone(ref(Object) theObj)
 #ifdef sparc
 /* Need to do this in assembler, as the arguments to
    my caller normally isn't accesseable */
-asmlabel(SetArgValues, "
-	set "USCORE"ArgCount, %g1
-	st %i0, [%g1]
-	set "USCORE"ArgVector, %g1
-	retl
-	st %i1, [%g1]
-");
+asmlabel(SetArgValues, 
+	 "set "USCORE"ArgCount, %g1; "
+	 "st %i0, [%g1]; "
+	 "set "USCORE"ArgVector, %g1; "
+	 "retl; "
+	 "st %i1, [%g1]; "
+	 );
 #else
 void SetArgValues(int argc, char *argv[])
 {
@@ -139,17 +139,17 @@ void SetArgValues(int argc, char *argv[])
 
 #ifdef sparc
 #ifdef sun4s
-asmlabel(FailureExit, "
-	mov	%i0, %o1
-	call	BetaError
-	mov	-8, %o0
-");
+asmlabel(FailureExit, 
+	 "mov	%i0, %o1; "
+	 "call	BetaError; "
+	 "mov	-8, %o0; "
+	 );
 #else
-asmlabel(_FailureExit, "
-	mov	%i0, %o1
-	call	_BetaError
-	mov	-8, %o0
-");
+asmlabel(_FailureExit, 
+	 "mov	%i0, %o1; "
+	 "call	_BetaError; "
+	 "mov	-8, %o0; "
+	 );
 #endif
 #endif
 

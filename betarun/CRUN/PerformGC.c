@@ -88,7 +88,7 @@ void doGC() /* The one called from IOA(c)alloc */
 #ifdef hppa
 #ifndef UseRefStack
     StackEnd = (long *)getSPReg();
-#endif UseRefStack
+#endif /* UseRefStack */
     PushGCRegs();
     CkReg("doGC", *(RefSP-1), "%r7");
     CkReg("doGC", *(RefSP-2), "%r6");

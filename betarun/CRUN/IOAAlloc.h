@@ -11,7 +11,7 @@ extern void doGC();
 
  
 #ifdef __GNUC__
-static inline 
+static __inline__
 #endif
 char *IOAalloc(unsigned size)
 {

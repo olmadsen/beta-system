@@ -7,7 +7,7 @@
 
 #ifdef hppa
 /* to keep Gcc's grappy little hand off this */
-register long _dummyx asm("r16");
+register long _dummyx __asm__("r16");
 #endif
 
 #include "beta.h"

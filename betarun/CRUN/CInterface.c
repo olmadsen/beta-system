@@ -13,11 +13,11 @@ void CinitT(void)
 }
 
 #ifndef MAC
-asmlabel(CpkVT, "
-	mov %o0, %o1
-        ba "CPREF"CpkVT
-	mov %i0, %o0
-");
+asmlabel(CpkVT, 
+	 "mov %o0, %o1; "
+	 "ba "CPREF"CpkVT; "
+	 "mov %i0, %o0; "
+	 );
 #endif
 
 char *
@@ -51,20 +51,21 @@ char *
       BetaError(CTextPoolErr, currentObj);
     
     /* Copy the contents of the repetition to the CTextPool */
-    for (i = 0; i < bodysize/4; ++i)
-      *((long *)CTextPoolEnd)++ = theRep->Body[i];
+    for (i = 0; i < bodysize/4; ++i, CTextPoolEnd+=4){
+      *((long *)CTextPoolEnd) = theRep->Body[i];
+    }
 
     return CTextPoolEnd - bodysize;
 }
 
 #ifndef MAC
-asmlabel(CpkSVT, "
-	mov %o2, %o3
-	mov %o1, %o2
-	mov %o0, %o1
-        ba "CPREF"CpkSVT
-	mov %i0, %o0
-");
+asmlabel(CpkSVT, 
+	 "mov %o2, %o3; "
+	 "mov %o1, %o2; "
+	 "mov %o0, %o1; "
+	 "ba "CPREF"CpkSVT; "
+	 "mov %i0, %o0; "
+	 );
 #endif
 
 /* CCpkSVT: Copy Slice of variable text (byte rep) to C */
@@ -108,13 +109,14 @@ char *
     
     /* Copy the contents of the repetition to the CTextPool. */
     oldBody = (unsigned char *)((unsigned)theRep->Body+(low-theRep->LowBorder));
-    for (i = 0;  i < high; i+=1)
-      *(((unsigned char *)CTextPoolEnd))++ = *(unsigned char *)((unsigned)oldBody+i);
-    *(((unsigned char *)CTextPoolEnd))++ = 0; /* NULL termination */
+    for (i = 0;  i < high; i+=1, CTextPoolEnd+=1)
+      *(((unsigned char *)CTextPoolEnd)) = *(unsigned char *)((unsigned)oldBody+i);
+    *(((unsigned char *)CTextPoolEnd)) = 0; /* NULL termination */
+    CTextPoolEnd+=1;
     CTextPoolEnd = (char*)((((long)CTextPoolEnd+3)/4)*4); /* long align next text */
 
 #ifdef hppa
-    asm volatile ("COPY %0,%%r26" : /* no out */ 
+    __asm__ volatile ("COPY %0,%%r26" : /* no out */ 
 		  : "r" (CTextPoolEnd - bodysize) : "r26");
 #endif
 

@@ -187,7 +187,7 @@ ParamThis(struct Component *, Susp)
    */
   
   /* Add one for the 'orig start' */
-  asm("ta 3");
+  __asm__("ta 3");
   Size = (long *) (cast(RegWin)lastCompBlock)->fp - FramePointer + 1;
 
   theStackObj = ActiveComponent->StackObj;

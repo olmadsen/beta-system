@@ -13,9 +13,9 @@ ParamThisComp(void, AttBC)
 /* = void AttBC(struct Object *this, struct Component *comp) */
 {
 #ifdef sparc
-    register ref(CallBackFrame) callBackFrame asm("%l5");
-    register ref(RegWin)	nextCompBlock asm("%l6");
-    register long 		level 	      asm("%l7");
+    register ref(CallBackFrame) callBackFrame __asm__("%l5");
+    register ref(RegWin)	nextCompBlock __asm__("%l6");
+    register long 		level 	      __asm__("%l7");
 #endif
 
 #ifdef hppa
@@ -82,7 +82,7 @@ ParamThisComp(void, AttBC)
     /* The following volapyk is to fool gcc into beliving that
      * callBackFrame, nextCompBlock and level is used in this function */
 
-    asm(""::"r" (callBackFrame), "r" (nextCompBlock), "r" (level));
+    __asm__(""::"r" (callBackFrame), "r" (nextCompBlock), "r" (level));
 #endif
 }
 

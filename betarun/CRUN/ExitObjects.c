@@ -8,11 +8,11 @@
 #include "crun.h"
 
 #ifdef sparc
-asmlabel(ExO, "
-        mov     %i1, %o1
-        ba       "CPREF"ExitO
-        mov     %i0, %o2
-");
+asmlabel(ExO, 
+	 "mov     %i1, %o1; "
+	 "ba       "CPREF"ExitO; "
+	 "mov     %i0, %o2; "
+	 );
 /* Note: The offset parameter is complely ignored. It's not needed
    on the SPARC */
 
@@ -30,7 +30,7 @@ void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
   setret(exitAddr-8);
 
   /* We need to read the stack, thus this trap to flush regwins */
-  asm("ta 3");
+  __asm__("ta 3");
   rw = cast(RegWin) FramePointer;
 
   if (theObj == exitObj)

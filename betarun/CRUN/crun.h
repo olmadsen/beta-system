@@ -24,30 +24,30 @@ struct Item *SPARC_AlloSI(struct Structure *s, int i1, int i2, int i3, int i4);
 /* binding of entry names */
 
 #ifndef __svr4__
-extern void 		CinitT() asm("CinitT");
-extern ref(StackObject) AlloSO() asm("AlloSO");
-extern ref(Item)	CopyT() asm("CopyT");
-extern void		CopySRR() asm("CopySRR");
-extern void		CopySVR() asm("CopySVR");
-extern ref(Structure)	AlloS() asm("AlloS");
-extern ref(Structure)	ThisS() asm("ThisS");
-extern ref(Structure)	ObjS() asm("ObjS");
-extern void		DoGC() asm("DoGC");
-extern ref(Item)	AlloSI() asm("AlloSI");
-extern ref(Component)	AlloSC() asm("AlloSC");
-extern void             RefNone() asm("RefNone");
-extern void             AttBC() asm("AttBC");
-extern void             CopyRR() asm("CopyRR");
-extern void             CopyVR() asm("CopyVR");
-extern void             ChkRA() asm("ChkRA");
-extern ref(Component)   Susp() asm("Susp");
+extern void 		CinitT() __asm__("CinitT");
+extern ref(StackObject) AlloSO() __asm__("AlloSO");
+extern ref(Item)	CopyT() __asm__("CopyT");
+extern void		CopySRR() __asm__("CopySRR");
+extern void		CopySVR() __asm__("CopySVR");
+extern ref(Structure)	AlloS() __asm__("AlloS");
+extern ref(Structure)	ThisS() __asm__("ThisS");
+extern ref(Structure)	ObjS() __asm__("ObjS");
+extern void		DoGC() __asm__("DoGC");
+extern ref(Item)	AlloSI() __asm__("AlloSI");
+extern ref(Component)	AlloSC() __asm__("AlloSC");
+extern void             RefNone() __asm__("RefNone");
+extern void             AttBC() __asm__("AttBC");
+extern void             CopyRR() __asm__("CopyRR");
+extern void             CopyVR() __asm__("CopyVR");
+extern void             ChkRA() __asm__("ChkRA");
+extern ref(Component)   Susp() __asm__("Susp");
 
-extern long 		 eqS() asm("eqS"); 
-extern long              neS() asm("neS");
-extern long              gtS() asm("gtS");
-extern long              leS() asm("leS");
-extern long              geS() asm("geS");
-extern long              ltS() asm("ltS");
+extern long 		 eqS() __asm__("eqS"); 
+extern long              neS() __asm__("neS");
+extern long              gtS() __asm__("gtS");
+extern long              leS() __asm__("leS");
+extern long              geS() __asm__("geS");
+extern long              ltS() __asm__("ltS");
 #else
 extern ref(StackObject) AlloSO(unsigned size);
 extern long 		 eqS(); 
@@ -60,12 +60,12 @@ extern long              ltS();
 #endif /* sparc */
 
 #ifdef hppa
-extern long 		 eqS() asm("eqS"); 
-extern long              neS() asm("neS");
-extern long              gtS() asm("gtS");
-extern long              leS() asm("leS");
-extern long              geS() asm("geS");
-extern long              ltS() asm("ltS");
+extern long 		 eqS() __asm__("eqS"); 
+extern long              neS() __asm__("neS");
+extern long              gtS() __asm__("gtS");
+extern long              leS() __asm__("leS");
+extern long              geS() __asm__("geS");
+extern long              ltS() __asm__("ltS");
 #endif
 
 #ifdef crts
@@ -80,7 +80,7 @@ extern long              ltS(struct Structure *, struct Structure *);
 #ifdef MAC
 static void 
 #else
-static inline void 
+static __inline__ void 
 #endif
 AssignReference(long *theCell, ref(Item) newObject)
 {
@@ -98,7 +98,7 @@ AssignReference(long *theCell, ref(Item) newObject)
 
 #ifdef RTDEBUG
 #ifdef __GNUC__
-static inline void 
+static __inline__ void 
 #else
 static void 
 #endif
@@ -115,7 +115,7 @@ zero_check(char *p, unsigned bytesize)
 #endif
 
 #ifdef __GNUC__
-static inline void 
+static __inline__ void 
 #else
 static void 
 #endif

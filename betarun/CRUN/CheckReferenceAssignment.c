@@ -17,12 +17,12 @@ void ChkRA()
 #endif
 {
 #ifdef sparc
-  register handle(Object) theObjHandle asm("%g1");
+  register handle(Object) theObjHandle __asm__("%g1");
 #endif
 #ifdef hppa
   struct Object **theObjHandle;
 
-  asm volatile ("COPY %%r28,%0" : "=r" (theObjHandle));
+  __asm__ volatile ("COPY %%r28,%0" : "=r" (theObjHandle));
 #endif
 
   DEBUG_CODE(NumChkRA++);

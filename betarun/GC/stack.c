@@ -739,8 +739,6 @@ void ProcessStackPart(long *low, long *high)
 
 #ifdef sparc
 
-static long skipCparams=FALSE;
-
 #ifdef RTDEBUG
 struct RegWin *BottomAR=0, *lastAR=0;
 long PC = 0;
@@ -843,11 +841,6 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
     CompleteScavenging();
 
     /* Process the stack part */
-    if (skipCparams)
-      /* This AR called C, skip one hidden word, and (at least) 
-       * six parameters (compiler allocates 48, that may be too much...)
-       */
-       ((long) theEnd) -= 48;
     for (; theCell != (struct Object **) theEnd; theCell+=2)
       /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
       if (inBetaHeap(*theCell) && isObject(*theCell))
@@ -927,13 +920,9 @@ void ProcessStack()
 			});
 
 	    theAR = (struct RegWin *) theAR->l6; /* Skip to betaTop */
-
-	    skipCparams = TRUE;
-
 	  }
 	}
 	ProcessAR(theAR, (struct RegWin *) theAR->fp);
-	skipCparams=FALSE;
 	DEBUG_CODE(lastAR = theAR);
     }
     DEBUG_CODE(if (BottomAR) Claim(lastAR==BottomAR, "lastAR==BottomAR");
@@ -1449,14 +1438,6 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
   /* Notice that in INNER some return adresses are pushed. This is no
    * danger.
    */
-  if (skipCparams){
-    /* This AR called C, skip one hidden word, and (at least) 
-     * six parameters
-     */
-    ((long) theEnd) -= 48;
-    fprintf(output, "(Skipped 12 longs allocated for C-call)\n");
-  }
-
   for (; theCell != (struct Object **) theEnd; theCell+=2) {
     fprintf(output, "0x%x", (int)(*theCell));
     PrintRef(cast(Object)(*theCell));
@@ -1485,8 +1466,6 @@ void PrintStack()
   PC=((struct RegWin *) end)->i7 +8;
   end = (struct RegWin *)((struct RegWin *) end)->fp; /* Skip AR of PrintStack() */
 
-  skipCparams = TRUE; /* Skip 12 longs allocated for the call to PrintStack() */
-  
   for (theAR =  (struct RegWin *) end;
        theAR != (struct RegWin *) 0;
        PC = theAR->i7 +8, theAR = (struct RegWin *) theAR->fp) {
@@ -1515,11 +1494,9 @@ void PrintStack()
 			});
 
 	    theAR = (struct RegWin *) theAR->l6; /* Skip to betaTop */
-	    skipCparams = TRUE;
       }
     }
     PrintAR(theAR, (struct RegWin *) theAR->fp);
-    skipCparams=FALSE;
   }
    
   fprintf(output, " *****  End of trace  *****\n");
