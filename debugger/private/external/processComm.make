@@ -1,15 +1,8 @@
-CC        = gcc -g 
-BASEDIR   = $(BETALIB)/debugger/v2.0/private
-EXTERNALDIR = $(BASEDIR)/external
-OBJECTDIR = $(BASEDIR)/$(MACHINETYPE)
 
-make: $(OBJECTDIR)/processComm.o $(OBJECTDIR)/getfileno.o 
+make: ../$(MACHINETYPE)/processComm.o ../$(MACHINETYPE)/getfileno.o 
       
-$(OBJECTDIR)/processComm.o: $(EXTERNALDIR)/processComm.c  
-	$(CC) -D$(MACHINETYPE) -c $(EXTERNALDIR)/processComm.c -o $(OBJECTDIR)/processComm.o 
-    
-$(OBJECTDIR)/getfileno.o: $(EXTERNALDIR)/getfileno.c  
-	$(CC) -D$(MACHINETYPE) -c $(EXTERNALDIR)/getfileno.c -o $(OBJECTDIR)/getfileno.o 
+../$(MACHINETYPE)/processComm.o: processComm.c  
+	$(CC) -D$(MACHINETYPE) -DMACHINETYPE=$(MACHINETYPE) -c  -o ../$(MACHINETYPE)/processComm.o processComm.c
 
-$(OBJECTDIR): 
-	mkdir $(OBJECTDIR)
+../$(MACHINETYPE)/getFileno.o: getFileno.c  
+	$(CC) -D$(MACHINETYPE) -DMACHINETYPE=$(MACHINETYPE) -c  -o ../$(MACHINETYPE)/getFileno.o getFileno.c

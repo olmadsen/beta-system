@@ -69,43 +69,10 @@ int executeProcess (char *execName)
 
 char *valhallaMachineName()
 {
-  /* Sun variants */
-#ifdef sun
-#ifdef sparc
-#ifdef sun4s
-  return "sun4s";
+#ifdef MACHINETYPE
+  return #MACHINETYPE;
 #else
-  return "sun4";
+  return "unknown";
 #endif
-#else
-  return "sun3";
-#endif
-#endif
-  
-  /* HP variants */
-#ifdef hpux9pa
-  return "hpux9pa";
-#endif
-#ifdef hpux8
-  return "hpux8";
-#endif
-  
-  /* Macintosh */
-#ifdef macintosh
-  return "mac";
-#endif
-
-  /* Linux */
-#ifdef linux
-  return "linux";
-#endif
-  
-  /* NTI */
-#ifdef nti
-  return "nti";
-#endif
-  
-  /* default */
-  return ""; 
 }
 

@@ -4,7 +4,7 @@
 
 #include "coreaccess.h"
 
-#ifdef sun4s
+#if defined(sun4s) || defined(sgi) /* just a guess for sgi */
 
 /* Implementation using the /proc file system. */
 #include <fcntl.h>

@@ -14,17 +14,21 @@ FILE *thePipe; /* The pipe from which the nameTable is read */
 int NextAddress;    
 char NextLabel[100]; /* The last address and label read from the pipe. */
 
+#ifdef sgi
+#define nmcommand "nm -hvdp %s"
+#define Decimal
+#endif
 #ifdef sun4s
 #define nmcommand "nm -hvp %s"
-#define nmbase 10
+#define Decimal
 #endif
 #ifdef sun4
 #define nmcommand "nm -gn %s"
-#define nmbase 16
+#define Hexadecimal
 #endif
 #ifdef hpux9pa
 #define nmcommand "nm -hp %s | grep ' T ' | sort"
-#define nmbase 10
+#define Decimal
 #endif
 
 void findNextLabel ()
@@ -40,16 +44,17 @@ void findNextLabel ()
 	pclose (thePipe);
 	return;
       }
-#ifdef sun4
+#ifdef Hexadecimal
       if (('0'<=ch) && (ch<='9')) {
 	val = ch-'0';
       } else {
 	val = 10+ch-'a';
       }
+      NextAddress = (NextAddress*16)+val;
 #else
       val = ch-'0';
+      NextAddress = (NextAddress*10)+val;
 #endif
-      NextAddress = (NextAddress*nmbase)+val;
     }
 
     type = fgetc (thePipe);
