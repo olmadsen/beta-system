@@ -1,0 +1,2370 @@
+ORIGIN '~beta/guienv/v1.2/guienv';
+BODY 'CVtexteditorimpl';
+INCLUDE '~beta/guienv/v1.2/guienv'
+        '~beta/guienv/v1.2/fields'
+        '~beta/guienv/v1.2/guienvactions'
+        '~beta/guienv/v1.2/stddialogs'
+        '~beta/guienv/v1.2/utils/textfieldadds'
+        '~beta/pretty/v4.9.1/pplib'
+        '~beta/betaast/v4.9.1/betasematt'
+        '~beta/mps/v4.9.1/private/astparser'
+        '~beta/betaast/v4.9.1/donecheck'
+        '~beta/betaast/v4.9.1/gram'
+        (*'~beta/interfacebuilder/v1.0d/guienvadds/textfieldadds'*)
+        '~beta/sysutils/v1.4/envstring';
+-- windowlib: Attributes --
+sifTextEditor: textEditor
+  (#
+     charWidthType:< IntegerValue
+       (#
+          ts: ^textStyle;
+          sz: @Point;
+          count,sum: @Integer;
+          ch: @Char;
+          viewsize: @Point;
+          
+       enter viewsize
+       do
+          (if ts[]
+           // none then
+              contents.defaultStyle->ts[];
+              (if ts[]
+               // none then
+                  INNER ;
+                  (if ts[]
+                   // none then system.systemTextStyle[]->ts[]; 
+                  if);
+                  
+              if);
+              
+          if);
+          'a'->ch;
+          loop:
+          (if ch <= 'z' then
+              (ch->ts.widthOfChar)+sum->sum;
+              (ch->ascii.upcase->ts.widthOfChar)+sum->sum;
+              count+2->count;
+              ch+1->ch;
+              restart loop;
+              
+          if);
+          '0'->ch;
+          loop:
+          (if ch <= '9' then
+              (ch->ts.widthOfChar)+sum->sum;
+              count+1->count;
+              ch+1->ch;
+              restart loop;
+              
+          if);
+          viewsize.h div (sum div count)->value;
+          
+       #);
+     charWidth: @charWidthType;
+     codeViewerType:< codeViewer;
+     initialContractionLevel:< IntegerValue;
+     (* SBRANDT *)
+     SifViewer: ^codeviewerType;
+     mps: ^astInterface;
+     betaGrammar: (*^mps.treelevel;*) ^mps.beta;
+     UI: ^guienv;
+     frag: ^mps.fragmentForm;
+     node: ^mps.ast;
+     onOpen:<
+       (# 
+       do
+          sifViewer.automaticHolocomments;
+          (if node[] <> none then
+          (* Open contractions before prettyprinting to prevent prettyprinting
+           * twice: *)
+              node[]->SifViewer.openContractionsUntilRoot; 
+           else
+              (if initialContractionLevel <> 0 then
+                  (frag.root[],initialContractionLevel)
+                    ->SifViewer.openContractionLevel;
+                  
+              if);
+              
+          if);
+          (frag.root[],- 1)->sifViewer.astView.pp.present;
+          (if node[] <> none then
+              (node[],1,0,0)->sifViewer.setFocus
+           else
+              (1,1)->SifViewer.selectionToAst; 
+          if)
+       #);
+     onDoubleClick:<
+       (# start,end: @integer
+       enter (start,end)
+       do (start,end)->SifViewer.selectionToAST; SifViewer.handleDoubleClick; 
+       #);
+     onClick:<
+       (# start,end,line1,char1,line2,char2: @integer
+       enter (start,end)
+       do (start,end)->SifViewer.selectionToAST; 
+       #);
+     prettyprinting: @boolean;
+     showContents:
+       (# 
+       do
+          (if SifViewer.switch[2] then
+              (if SifViewer.switch[3] then
+                  'contents: '->screen.putLine;
+                  '['->screen.put;
+                  contents.contents->screen.putText;
+                  ']'->screen.put;
+                  screen.newLine;
+                  'contents: (scan) '->screen.putLine;
+                  '['->screen.put;
+                  contents.all
+                    ->contents.scanText
+                      (# 
+                      do
+                         (if ch
+                          // ascii.sp then
+                             ','->screen.put
+                          // ascii.newline then
+                             '<cr>'->screen.putText
+                          else
+                             ch->screen.put
+                         if)
+                      #);
+                  ']'->screen.put;
+                  screen.newLine
+              if);
+              'selection: '->screen.putText;
+              contents.selection.start->screen.putint;
+              ' '->screen.put;
+              contents.selection.end->screen.putint;
+              screen.newLine;
+              'selection.contents: '->screen.putLine;
+              '['->screen.put;
+              contents.selection.contents->screen.putText;
+              ']'->screen.put;
+              'selection.contents: (scan)'->screen.putLine;
+              '['->screen.put;
+              (contents.selection.start,contents.selection.end)
+                ->contents.scanText
+                  (# 
+                  do
+                     (if ch
+                      // ascii.sp then
+                         ','->screen.put
+                      // ascii.newline then
+                         '<cr>'->screen.putText
+                      else
+                         ch->screen.put
+                     if)
+                  #);
+              ']'->screen.put;
+              screen.newLine;
+              'length: '->screen.putText;
+              contents.length->screen.putInt;
+              screen.newLine
+          if)
+       #);
+     contentstype::< 
+       (#
+          <<SLOT codeviewercontentsLib:Attributes>>;
+          draggingSelection: @boolean;
+          skipMouseUp: @Boolean;
+          eventHandler::< 
+            (#
+               oldSelection: @point;
+               onIdle::< 
+                 (# 
+                 do
+                    (if sifViewer[] <>
+                    none then
+                        (if SifViewer.switch[1] then 'onIdle'->putLine;  if);
+                        (if draggingSelection then
+                            oldSelection->onClick; false->draggingSelection
+                        if)
+                    if);
+                    
+                 #);
+               onKeyDown::< 
+                 (# 
+                 do
+                    (if sifViewer[] <> none then
+                        (if SifViewer.switch[1] then
+                            'onKeyDown: '->putText; ch->put; newLine; 
+                        if);
+                        (if ch
+                         // 'p' then
+                            (SifViewer.frag.root[],- 1)
+                              ->SifViewer.astView.pp.present;
+                            SifViewer.cs->sifViewer.setFocus;
+                            
+                         else
+                            INNER ; 
+                        if);
+                        
+                    if);
+                    
+                 #);
+               onMouseUp::< 
+                 (# 
+                 do
+                    (if sifViewer[] <> none then
+                        (if SifViewer.switch[1] then
+                            '-------------------'->putLine;
+                            'onMouseUp'->putLine;
+                            
+                        if);
+                        (if SifViewer.switch[2] then
+                            'selection: '->putText;
+                            selection.start->putInt;
+                            ' '->put;
+                            selection.end->putInt;
+                            newLine;
+                            
+                        if);
+                        (if not skipMouseUp then
+                            (if doubleClick then
+                                (if SifViewer.switch[1] then
+                                    'doubleClick'->putLine; 
+                                if);
+                                oldSelection->onDoubleClick
+                             else
+                                (if selection.start <> selection.end then
+                                    (if SifViewer.switch[1] then
+                                        'draggingSelection'->putLine; 
+                                    if);
+                                    selection->oldSelection;
+                                    true->draggingSelection
+                                if);
+                                selection->oldSelection->onClick
+                            if);
+                            
+                         else
+                            FALSE->skipMouseUp; 
+                        if);
+                        INNER ;
+                        
+                    if);
+                    
+                 #);
+               onBeforeChange::<  (#  do prettyprinting->allow; INNER #);
+               onTextChanged::< 
+                 (# 
+                 do
+                    (if sifViewer[] <> none then
+                        (if SifViewer.switch[1] then
+                            'onTextChanged'->putLine; 
+                        if);
+                        INNER
+                    if);
+                    
+                 #);
+               onFrameChanged::< 
+                 (# oz,nz: @Point; 
+                 do
+                    (if SifViewer[] <> none then
+                        (if sifViewer.astView[] <> none then
+                            oldFrame.size->oz;
+                            newFrame.size->nz;
+                            (if nz.h <> oz.h then
+                                newFrame.size->charWidth
+                                  ->SifViewer.astView.pp.width;
+                                (frag.root[],- 1)->SifViewer.astView.pp.present;
+                                (if SifViewer.cs.node[] <> none then
+                                    SifViewer.cs->SifViewer.setFocus; 
+                                if);
+                                
+                            if);
+                            
+                        if)
+                    if);
+                    
+                 #);
+               
+            #);
+          
+       #);
+     selectArea:
+       (# line1,pos1,line2,pos2: @integer
+       enter (line1,pos1,line2,pos2)
+       do
+          (if SifViewer.switch[2] then
+              'TE.selectArea'->screen.putLine;
+              line1->screen.putint;
+              ' '->screen.put;
+              pos1->screen.putint;
+              ' '->screen.put;
+              line2->screen.putint;
+              ' '->screen.put;
+              pos2->screen.putint;
+              ' '->screen.put;
+              screen.newLine;
+              
+          if);
+          ((line1,pos1)->contents.rowColToPos,
+           (line2,pos2)->contents.rowColToPos)->contents.selection;
+          (if SifViewer.switch[2] then
+              'selection: '->screen.putText;
+              contents.selection.start->screen.putint;
+              ' '->screen.put;
+              contents.selection.end->screen.putint;
+              ' '->screen.put;
+              screen.newLine;
+              
+          if);
+          
+       #);
+     deleteline:
+       (# lineno: @integer; 
+       enter lineno
+       do <<SLOT sdeWtexteditordeleteline:Descriptor>>
+       #);
+     deletelines:
+       (#
+          lineno,number: @integer; 
+       enter (lineno,number)
+       do
+          <<SLOT sdeWtexteditordeletelines:Descriptor>>
+       #);
+     deleteArea:
+       (# line1,pos1,line2,pos2: @integer
+       enter (line1,pos1,line2,pos2)
+       do
+          (if SifViewer.switch[1] then
+              'TE.deleteArea'->screen.putLine; showContents; 
+          if);
+          ((line1,pos1)->contents.rowColToPos,
+           ((line2,pos2)->contents.rowColToPos)+1 (* WHY??*) )
+            ->contents.selection;
+          (if SifViewer.switch[2] then
+              'line1: '->screen.putText;
+              line1->screen.putint;
+              ' line2: '->screen.putText;
+              line2->screen.putint;
+              ' pos1: '->screen.putText;
+              pos1->screen.putint;
+              ' pos2: '->screen.putText;
+              pos2->screen.putint;
+              screen.newLine;
+              'selection.start: '->screen.putline;
+              contents.selection.start->screen.putint;
+              ' selection.end: '->screen.putline;
+              contents.selection.end->screen.putint;
+              screen.newLine;
+              
+          if);
+          contents.delete (*cut*) ;
+          showContents
+       #);
+     insertline:
+       (# lineno: @integer; tt: ^text; 
+       enter (tt[],lineno)
+       do <<SLOT sdeWtexteditorinsertline:Descriptor>>
+       #);
+     getline:
+       (#
+          lineno: @integer;
+          tt: ^text;
+          
+       enter lineno
+       do
+          <<SLOT sdeWtexteditorgetline:Descriptor>>
+       exit tt[]
+       #);
+     insertText:
+       (# tt: ^text; 
+       enter tt[]
+       do <<SLOT sdeWtexteditorinsertText:Descriptor>>
+       #);
+     replaceText: (#  #);
+     setText:
+       (# tt: ^text; 
+       enter tt[]
+       do
+          <<SLOT sdeWtexteditorsetText:Descriptor>>
+       #);
+     getText:
+       (# lineno: @integer; tt: ^text; 
+       enter lineno
+       do <<SLOT sdeWtexteditorgetText:Descriptor>>
+       exit tt[]
+       #);
+     delete:
+       (#
+          lineno: @integer;
+          tt: ^text;
+          
+       enter lineno
+       do
+          <<SLOT sdeWtexteditordelete:Descriptor>>
+       exit tt[]
+       #);
+     before:
+       (# lineno: @integer; tt: ^text; 
+       enter lineno
+       do <<SLOT sdeWtexteditorbefore:Descriptor>>
+       exit tt[]
+       #);
+     after:
+       (#
+          lineno: @integer;
+          tt: ^text;
+          
+       enter lineno
+       do
+          <<SLOT sdeWtexteditorafter:Descriptor>>
+       exit tt[]
+       #);
+     refresh:
+       (# lineno: @integer; tt: ^text; 
+       enter lineno
+       do <<SLOT sdeWtexteditorrefresh:Descriptor>>
+       exit tt[]
+       #);
+     open::< 
+       (# 
+       do
+       (*contents.afterButtonUpAction[]->appendAction;*)
+          (300,200)->size; INNER ; 
+       #);
+     newfragment:<
+       (# 
+       enter (mps[],betaGrammar[], (*UI[],*) frag[],node[])
+       do
+          THIS(guienv)[]->UI[];
+          INNER ;
+          (if mps[] = none then
+              none ->SifViewer[]; 
+           else
+              &codeviewerType[]->SifViewer[];
+              (mps[],betaGrammar[],UI[],THIS(SifTextEditor)[],frag[],node[])
+                ->SifViewer.init;
+              
+          if);
+          
+       #);
+     
+  #);
+codeviewer:
+  (#
+     mps: ^astInterface;
+     betaGrammar: (*^mps.treelevel;*) ^mps.beta;
+     (* shoul only exist in one copy *)
+     betaGram: @grammar;
+     mg: ^mps.metagrammar;
+     fg: ^mps.fragmentGroup;
+     frag: ^mps.fragmentForm;
+     node: ^mps.ast;
+     UI: ^guienv;
+     theSifTextEditor: ^sifTextEditor;
+     generalOutput: astView.output
+       (#
+          printSpecialComment::< 
+            (# skipLeadingBlanks: @boolean; 
+            do
+               0->noOfLines;
+               astView.pp.comBegin.lgth->lengthOfLastLine;
+               astView.pp.comBegin[]->putText;
+               false->skipLeadingBlanks;
+               com.scanAll
+                 (# 
+                 do
+                    (if ch
+                     // ascii.newLine then
+                        noOfLines+1->noOfLines;
+                        1->lengthOfLastLine;
+                        lineNo+1->lineNo;
+                        lineNo->newLine;
+                        (for margin+1 repeat ' '->put for);
+                        true->skipLeadingBlanks;
+                        
+                     else
+                        (if skipLeadingBlanks
+                         // true then
+                            (if (ch->ascii.isSpace)
+                             // false then
+                                ch->put;
+                                lengthOfLastLine+1->lengthOfLastLine;
+                                false->skipLeadingBlanks
+                            if)
+                         else
+                        (* skipping tabs *)
+                            (if (ch->ascii.isSpace)
+                             // true then
+                                (if ch
+                                 // ascii.sp then
+                                    ch->put;
+                                    lengthOfLastLine+1->lengthOfLastLine;
+                                    
+                                 else
+                                    'eating tabs in comment: '->screen.putText;
+                                    ch->screen.putInt;
+                                    screen.newLine;
+                                    ' '->put;
+                                    
+                                if)
+                             else
+                                ch->put; lengthOfLastLine+1->lengthOfLastLine; 
+                            if);
+                            
+                        if);
+                        
+                    if);
+                    
+                 #);
+               lengthOfLastLine+astView.pp.comEnd.lgth->lengthOfLastLine;
+               astView.pp.comEnd[]->putText;
+               
+            #);
+          measureSpecialComment::< 
+            (# 
+            do
+               (if (com.lgth > 40)
+                // true then
+                   100
+                     ->length
+                     (* only used to provoke a break
+                      * the length 
+                      *)
+               if);
+               
+            #);
+          (*putT: @screen.putText;
+           putL: @screen.putLine;
+           putC: @screen.put;
+           *)
+          
+       #);
+     windowOutput: generalOutput
+       (#
+          windowLine,theWholeText: ^text;
+          beforePresent::< 
+            (# 
+            do
+               (if switch[1] then 'out. beforePresent'->screen.putLine;  if);
+               theWholeText.clear;
+               theSifTexteditor.before;
+               ;
+               
+            #);
+          afterPresent::< 
+            (# 
+            do
+               (if switch[1] then 'out.afterPresent'->screen.putLine;  if);
+               theWholeText[]->theSifTexteditor.insertText;
+               theSifTexteditor.after;
+               
+            #);
+          beforeUpdate::< 
+            (# 
+            do
+               (if switch[1] then 'out.beforeUpdate'->screen.putLine;  if);
+               theWholeText.clear;
+               theSifTexteditor.before;
+               
+            #);
+          afterUpdate::< 
+            (# 
+            do
+               (if switch[1] then 'out.afterUpdate'->screen.putLine;  if);
+               theWholeText[]->theSifTexteditor.insertText;
+               theSifTexteditor.after;
+               
+            #);
+          put::<  (#  do ch->windowLine.put;  #);
+          putText::<  (#  do s[]->windowLine.putText;  #);
+          putInt::<  (#  do n->windowLine.putInt #);
+          selectArea::< 
+            (# 
+            do
+               (if switch[1] then 'out.selectArea'->screen.putLine;  if);
+               ((row1,col1,row2,col2))->theSifTexteditor.selectArea;
+               
+            #);
+          clear::< 
+            (# 
+            do
+               (if switch[1] then 'out.clear'->screen.putLine;  if);
+               theSifTexteditor.contents.all
+                 ->theSifTexteditor.contents.selection;
+               theSifTexteditor.contents.clear
+            #);
+          newLine::< 
+            (# 
+            do
+               (if switch[1] then 'out.newLine'->screen.putLine;  if);
+               (if windowLine.length > 0
+                // true then
+                   windowLine[]->theWholeText.putLine; windowLine.clear; 
+                else
+               (*'eating emtyline!'->screen.putLine;*)
+                   
+               if);
+               
+            #);
+          insertLine::< 
+            (# 
+            do
+               (if switch[1] then 'out.insertLine'->screen.putLine;  if);
+               ('  ',lineNo)->theSifTexteditor.insertLine;
+               
+            #);
+          deleteLine::< 
+            (# 
+            do
+               (if switch[1] then 'out.deleteLine'->screen.putLine;  if);
+               lineNo->theSifTexteditor.deleteLine;
+               
+            #);
+          deleteLines::< 
+            (# 
+            do
+            (*(for i:number repeat
+             lineNo -> theSifTexteditor.contents.deleteLine;
+             for) *)
+               (if switch[1] then 'out.deleteLines'->screen.putLine;  if);
+               (lineNo,number)->theSifTexteditor.deleteLines;
+               
+            #);
+          deleteArea::< 
+            (# 
+            do
+               (if switch[1] then 'out.deleteArea'->screen.putLine;  if);
+               ((line1,pos1,line2,pos2))->theSifTexteditor.deleteArea
+            #);
+          getLine::< 
+            (# 
+            do
+               (if switch[1] then 'out.getLine'->screen.putLine;  if);
+               lineNo->theSifTexteditor.getLine->s[];
+               
+            #);
+          init::< 
+            (# 
+            do
+               (if switch[1] then 'out.init'->screen.putLine;  if);
+               &text[]->windowLine[];
+               &text[]->theWholeText[];
+               
+            #);
+          
+       #);
+     prodList: ^mg.productionList;
+     doObserveAST,traceSLOTsearch: @boolean;
+     astFocus: (* end earlier in pretty *)
+       (#
+          node: ^mps.ast;
+          length,subCommentInx1,subCommentInx2: @integer;
+          isComment,isContraction,isSlot,hasSemanticLink: @boolean;
+          
+       enter (node[],length,subCommentInx1,subCommentInx2)
+       exit (node[],length,subCommentInx1,subCommentInx2)
+       #);
+     cs: @astFocus;
+     astView: ^mps.astViewer;
+     switch: [10] @boolean;
+     selectionToAST:
+       (#
+          start,end,line1,char1,line2,char2: @integer;
+          newCS: @astFocus;
+          startNode,endNode,nca,firstListElement,lastListElement: ^mps.ast;
+          prod: ^mg.prod;
+          expNode: ^mps.expanded;
+          startSonNo,endSonNo: @integer;
+          synCatNo: @mps.nonterminalSymbol;
+          subcommentInx1,subcommentInx2: @integer
+       enter (start,end)
+       do
+          start->theSifTexteditor.contents.posToRowCol->(line1,char1);
+          end->theSifTexteditor.contents.posToRowCol->(line2,char2);
+          (if switch[2] then
+              'onClick after posToRowCol: '->putText;
+              line1->screen.putint;
+              ' '->screen.put;
+              char1->screen.putint;
+              ' '->screen.put;
+              line2->screen.putint;
+              ' '->screen.put;
+              char2->screen.putint;
+              ' '->screen.put;
+              newLine;
+              
+          if);
+          (line1,char1)->astView.pp.hit
+            ->(startNode[],subcommentInx1,subcommentInx2);
+          (line2,char2)->astView.pp.hit
+            ->(endNode[],subcommentInx1,subcommentInx2);
+          startNode[]->endNode.nearestCommonAncestor
+            ->(nca[],startSonNo,endSonNo);
+          (if switch[2] then
+              'onClick: startSonNo, index: '->putText;
+              startSonNo->putInt;
+              ' '->put;
+              startNode.index->putInt;
+              newLine;
+              'onClick endSonNo, index: '->putText;
+              endSonNo->putInt;
+              ' '->put;
+              endNode.index->putInt;
+              newLine;
+              'noClick: nca index: '->putText;
+              nca.index->putInt;
+              newLine;
+              
+          if);
+          (if ((startSonNo = 0) or (endSonNo = 0))
+           // true then (nca[],1,0,0)->newCS
+           else
+              nca[]->getSynCatNo->synCatNo;
+              (if synCatNo.isLexem
+               // true then (nca[],1,0,0)->newCS; 
+               else
+                  synCatNo->prodList.get->prod[];
+                  (if prod.symbol
+                   // mg.listZero // mg.listOne then
+                      nca[]->expNode[];
+                      startSonNo->expNode.get->firstListElement[];
+                      endSonNo->expNode.get->lastListElement[];
+                      (if switch[2] then
+                          'onClick: first: '->putText;
+                          firstListElement.index->putInt;
+                          newLine;
+                          'onClick: last: '->putText;
+                          lastListElement.index->putInt;
+                          newLine;
+                          
+                      if);
+                      (firstListElement[],endSonNo-startSonNo+1,0,0)->newCS;
+                      
+                   else
+                      (nca[],1,0,0)->newCS; 
+                  if);
+                  
+              if);
+              
+          if);
+          newCS->setFocus
+       #);
+     aFocusChangedEvent: @focusChangedEvent;
+     focusChangedEvent:<
+       (#
+          newCS: @astFocus;
+          t: ^text;
+          commentAst: ^mps.comment;
+          inContr: @boolean;
+          contractionNode,fatherNode: ^mps.ast;
+          unexp: ^mps.unexpanded
+       enter newCS
+       do (* from notification.focusChanged *)
+          newCS.node[]->inContraction->(inContr,contractionNode[]);
+          (if inContr then
+              newCS.node[]->openContractionsUntilRoot;
+              (frag.root[],- 1)
+                ->
+                  astView.pp.present
+                  (* should be update, mut disabled due to an error *)
+          if);
+          newCS->cs->astToSelection;
+          false->cs.isComment->cs.isContraction->cs.isSlot->cs.hasSemanticLink;
+          (if (cs.subcommentInx1 <> 0) and ((cs.subcommentInx2 <> 0)) then
+              (cs.subCommentInx1,cs.subCommentInx2)->cs.node.getSubcomment->t[];
+              (if t[] <> none then
+                  (t.length <> 0)->cs.isComment;
+                  true->ShowCommentPermit;
+                  false->MakeCommentPermit
+              if)
+          if);
+          (if not cs.isComment then
+              true->MakeCommentPermit;
+              false->ShowCommentPermit;
+              (if cs.node.hasComment then
+                  (if cs.node.typeOfComment = astView.pp.holocomment then
+                      true->cs.isContraction
+                  if)
+              if);
+              (if cs.node.kind = mps.kinds.unexpanded then
+                  cs.node[]->unexp[];
+                  (if unexp.isSlot then true->cs.isSlot;  if)
+              if);
+              (if
+              (mps[],cs.node.frag.father)->getDoneCheckProperty (* isChecked *)
+               then
+                  (if cs.node.kind
+                   // mps.kinds.nameDecl // mps.kinds.nameAppl then
+                      cs.node.father->fatherNode[];
+                      (if fatherNode.symbol
+                       // betaGrammar.nameDcl then
+                          fatherNode.father->fatherNode[];
+                          (if fatherNode.symbol
+                           // betaGrammar.names then
+                              fatherNode.father->fatherNode[];
+                              (if fatherNode.symbol
+                               // betaGrammar.bindingDecl
+                               // betaGrammar.finalDecl then
+                                  true->cs.hasSemanticLink
+                              if)
+                          if)
+                       // betaGrammar.nameApl then
+                          true->cs.hasSemanticLink; 
+                      if)
+                  if)
+              if)
+          if);
+          (if false (*UI.traceStart*) then
+              'cs.isComment      : '->putText;
+              (if cs.isComment then
+                  'TRUE'->putLine
+               else
+                  'false'->putLine; 
+              if);
+              'cs.isContraction  : '->putText;
+              (if cs.isContraction then
+                  'TRUE'->putLine
+               else
+                  'false'->putLine; 
+              if);
+              'cs.isSlot         : '->putText;
+              (if cs.isSlot then 'TRUE'->putLine else 'false'->putLine;  if);
+              'cs.hasSemanticLink: '->putText;
+              (if cs.hasSemanticLink then
+                  'TRUE'->putLine
+               else
+                  'false'->putLine; 
+              if)
+          if);
+          (if doObserveAST then newCS.node[]->ASTObserver if);
+          
+       #);
+     topDotOpen:
+       (#
+          input: ^text;
+          f: ^mps.fragment;
+          feedBackOnNotExisting:< booleanValue
+            (#  do true->value; INNER #);
+          myStartingParsing:< object;
+          myParseErrors:< object;
+          myFatalParseError:<
+            (# errNo: @integer enter errNo do INNER #);
+          noChangesOnDisk:< (* used by checkDisk *) object;
+          checkDisk:< trueObject;
+          
+       enter input[]
+       do '<<SLOT topDotOpenBody:Descriptor>>'->putLine; 
+       exit f[]
+       #);
+     groupEditorList: @list
+       (#
+          findEditorForForm:
+          (* given a fragmentform and an AST node inside it (selectedNode),
+           *            * find an Editor on the fragmentform and select the AST node
+           *            * if not found create the editor
+           *            * id is used in the communication with Freja
+           *            *)
+            (#
+               ff: ^mps.fragmentForm;
+               selectedNode: ^mps.ast;
+               newEditor: ^fragmentEditor;
+               id: @integer
+            enter (ff[],selectedNode[])
+            do '<<SLOT findEditorForFormBody:Descriptor>>'->putLine; 
+            exit (newEditor[],id)
+            #);
+          findAndSelect:
+            (# a: ^mps.ast; ed: ^fragmentEditor
+            enter a[]
+            do '<<SLOT findAndSelectBody:Descriptor>>'->putLine
+            exit ed[]
+            #);
+          
+       #);
+     fragmentEditor: (#  #);
+     getSynCatNo:
+       (#
+          node: ^mps.ast;
+          synCatNo: @mps.nonterminalSymbol;
+          nontNode: ^mps.unExpanded
+       enter node[]
+       do
+          (if
+          ((node.kind = mps.kinds.unexpanded) or
+           (node.kind = mps.kinds.optional))
+           // true then
+              node[]->nontNode[]; nontNode.nonterminalSymbol->synCatNo
+           // false then
+              node.symbol->synCatNo
+          if)
+       exit synCatNo
+       #);
+     setFocus:
+       (# 
+       enter cs
+       do
+          checkSon;
+          cs->aFocusChangedEvent;
+          theSifTexteditor.contents.selection.scrollIntoView;
+          
+       #);
+     astToSelection:
+       (# 
+       enter cs
+       do
+          cs->selectArea
+            ->
+              astView.out.selectArea
+              (* burde istedet kalde en cursor i winduet, maaske bare selection *)
+       #);
+     ASTObserver:
+       (# node: ^mps.ast; 
+       enter node[]
+       do
+            (#
+               synCatNo,fatherSynCatNo,superSynCatNo: @mps.nonterminalSymbol;
+               prod,fatherProd,nextProd: ^mg.prod;
+               fatherNode: ^mps.ast;
+               str,str2: @text;
+               constructor: ^mg.constructor;
+               alternation: ^mg.alternation;
+               opt: ^mg.opt;
+               listOne: ^mg.listOne;
+               listZero: ^mg.listZero;
+               dummy: ^mg.dummy;
+               leftSide: ^mg.leftSide;
+               
+            do
+               '['->screen.put;
+               node[]->getSynCatNo->synCatNo;
+               (if node.kind
+                // mps.kinds.comment then 'comment'->str; 
+                else
+                   (if synCatNo.isLexem
+                    // true then
+                       (if node.kind
+                        // mps.kinds.nameAppl then
+                           'nameAppl'->str; 
+                        // mps.kinds.nameDecl then
+                           'nameDecl'->str; 
+                        // mps.kinds.string then
+                           'string'->str; 
+                        // mps.kinds.const then
+                           'const'->str; 
+                        else
+                           'lexem'->str; 
+                       if);
+                       
+                    // false then
+                       synCatNo->Prodlist.get->prod[];
+                       (if prod.symbol
+                        // mg.alternation then
+                           'alternation'->str; 
+                        // mg.constructor then
+                           'constructor'->str; 
+                        // mg.listOne then
+                           'listOne'->str; 
+                        // mg.listZero then
+                           'listZero'->str; 
+                        // mg.opt then
+                           'optional'->str; 
+                        // mg.dummy then
+                           'dummy'->str; 
+                       if);
+                       
+                   if);
+                   
+               if);
+               str[]->screen.putText;
+               synCatNo->screen.putInt;
+               ' '->screen.put;
+               node.father
+                 -> (* now look at the father or super categories *)
+                   fatherNode[];
+               (if fatherNode[]
+                // none then 'root'->screen.putText; 
+                else
+                   fatherNode[]->getSynCatNo->fatherSynCatNo;
+                   (if fatherSynCatNo.isLexem (* should not be necessary? *)
+                    // true then
+                       'fatherLexem'->screen.putText; 
+                    // false then
+                       fatherSynCatNo->Prodlist.get->fatherProd[];
+                       (if fatherProd.symbol
+                        // mg.listOne // mg.listZero then
+                           'list'->screen.putText;
+                           fatherSynCatNo->screen.putInt;
+                           
+                        else
+                           (if synCatNo.isLexem
+                            // false then
+                               loop:
+                                 (# 
+                                 do
+                                    (if prod.symbol
+                                     // mg.constructor then
+                                        'C'->screen.put;
+                                        prod[]->constructor[];
+                                        constructor.getLeftside->leftSide[];
+                                        
+                                     // mg.alternation then
+                                        'A'->screen.put;
+                                        prod[]->alternation[];
+                                        alternation.getLeftside->leftSide[];
+                                        
+                                     // mg.opt then
+                                        'O'->screen.put;
+                                        prod[]->opt[];
+                                        opt.getLeftside->leftSide[];
+                                        
+                                     // mg.listOne then
+                                        'LO'->screen.putText;
+                                        prod[]->listOne[];
+                                        listOne.getLeftside->leftSide[];
+                                        
+                                     // mg.listZero then
+                                        'LZ'->screen.putText;
+                                        prod[]->listZero[];
+                                        listZero.getLeftside->leftSide[];
+                                        
+                                     // mg.dummy then
+                                        'D'->screen.put;
+                                        prod[]->dummy[];
+                                        dummy.getLeftside->leftSide[];
+                                        
+                                    if);
+                                    1->leftSide.getAttribute->superSynCatNo;
+                                    (if superSynCatNo
+                                     // mps.super.cons then
+                                        'cons'->screen.putText; 
+                                     // mps.super.list then
+                                        'list'->screen.putText; 
+                                     // mps.super.undefined then
+                                        'undefined'->screen.putText; 
+                                     else
+                                        'super'->screen.putText;
+                                        superSynCatNo->screen.putInt;
+                                        ' '->screen.put;
+                                        superSynCatNo->Prodlist.get->prod[];
+                                        restart loop;
+                                        
+                                    if);
+                                    
+                                 #);
+                               
+                           if);
+                           
+                       if);
+                       
+                   if);
+                   
+               if);
+               ']'->screen.put;
+               ' '->put;
+                 (# index: @integer; node: ^mps.ast; pptext: @text; 
+                 do
+                    (mps[],frag[],cs.node[],ppText[],none ,80,0,false,false,
+                     false,false,false,false,false,'',false,false)->ppFragment;
+                    'Prettyprint of node: '->screen.putText;
+                    cs.node.index->screen.putInt;
+                    screen.newLine;
+                    ppText[]->screen.putLine;
+                    
+                 #);
+               
+            #)
+       #);
+     editComment:
+       (#
+          node: ^mps.ast;
+          subCommentInx1,subCommentInx2: @integer;
+          t: ^text;
+          reprettyprint: @boolean;
+          
+       enter (node[],subCommentInx1,subCommentInx2,t[])
+       do '<<SLOT editCommentBody:Descriptor>>'->putLine; 
+       exit reprettyprint
+       #);
+     ShowCommentPermit,MakeCommentPermit,HideCommentPermit,PasteCommentPermit:
+       @boolean;
+     commentEditor: sifTextEditor
+       (#
+          commentEditorPrivate: @
+            (#
+               reprettyprint,commentTouched: @boolean;
+               commentWindow: ^commentEditor;
+               node: ^mps.ast;
+               subCommentInx1,subCommentInx2: @integer;
+               line1,char1,line2,char2: @integer;
+               initEditor:
+                 (# title: @text; x,y,w,h: @integer
+                 enter
+                 (commentWindow[],title,x,y,w,h,node[],subCommentInx1,
+                  subCommentInx2)
+                 do 'initEditor: (title[],x,y,w,h)->init; '->putLine; 
+                 #);
+               hereIAm:
+                 (# 
+                 do 'hereIam: (char1,line1,char2,line2)->cursor;'->putLine
+                 #);
+               writeComment:
+                 (#
+                    node: ^mps.ast;
+                    subCommentInx1,subCommentInx2: @integer;
+                    t,t1,theWholeText: ^text;
+                    lineno,firstRealLine: @integer;
+                    skipLeadingBlanks: @boolean;
+                    
+                 enter (node[],subCommentInx1,subCommentInx2)
+                 do
+                    1->firstRealLine;
+                    'writeComment: clear;'->putLine;
+                    &text[]->theWholeText[];
+                    1->char1->char2;
+                    1->line1->line2;
+                    (if node.hasComment
+                     // false then (* ('  ',1)->insertLine;*)
+                        ''->setText
+                     // true then
+                        hasCommentLabel:
+                          (# 
+                          do (*node.getComment->aComment[];*)
+                             &text[]->t1[];
+                             (subCommentInx1,subCommentInx2)->node.getSubcomment
+                               ->t[];
+                             (if t.length
+                              // 0 then
+                                 'Empty comment'->screen.putLine;
+                                 leave hasCommentLabel
+                             if);
+                             1->lineno;
+                             'UI.setWaitCursor;'->putLine;
+                             t.scanAll
+                               (# 
+                               do
+                                  (if ch
+                                   // ascii.newLine then
+                                      (if lineno
+                                       // firstRealLine then
+                                       (*(t1,line2) -> insertLine; *)
+                                          t1[]->theWholeText.putLine;
+                                          &text[]->t1[];
+                                          line2+1->line2;
+                                          1->char2;
+                                          ' '->t1.put;
+                                          char2+1->char2;
+                                          true->skipLeadingBlanks;
+                                          
+                                       else
+                                          lineno+1->lineno
+                                      if);
+                                      
+                                   else
+                                      (if lineno
+                                       // firstRealLine then
+                                          (if skipLeadingBlanks
+                                           // true then
+                                              (if (ch <> ' ')
+                                               // true then
+                                                  ch->t1.put;
+                                                  char2+1->char2;
+                                                  false->skipLeadingBlanks;
+                                                  
+                                              if)
+                                           else
+                                              ch->t1.put; char2+1->char2; 
+                                          if)
+                                      if)
+                                  if);
+                                  
+                               #);
+                             t1[]
+                               -> (*(t1,line2) -> insertLine;*)
+                                 theWholeText.putText;
+                             theWholeText[]->setText;
+                             
+                          #);
+                        
+                    if);
+                    ' UI.setTextCursor;'->putLine;
+                    
+                 #);
+               undoCommentEditing: (* Reinsert the text in the comment node *)
+                 (# 
+                 do
+                    (node[],subCommentInx1,subCommentInx2)->writeComment;
+                    false->reprettyPrint;
+                    (CS.node[],CS.subCommentInx1,CS.subCommentInx2,
+                     reprettyprint,false)->printComment;
+                    
+                 #);
+               exitCommentEditing:
+               (* Insert the edited text in the comment node *)
+                 (# firstRealLine: @integer; commentText: ^text; 
+                 do
+                    &text[]->commentText[];
+                    commentText.clear;
+                    'exitCommentEditing: lastPosition->pToXY->(char2,line2);'
+                      ->putLine;
+                    (char2+1,line2+1)->(char2,line2);
+                    'exitCommentEditing: (char1,line1,char2,line2)
+                      ->scanChar (#  do ch->commentText.put #);'
+                      ->putLine;
+                    1->firstRealLine;
+                    (if commentText.length
+                     // 0 then 'Empty comment'->screen.putLine
+                    if);
+                    (CS.node[],subCommentInx1,subCommentInx2,commentText[])
+                      -> (*sde.*) editComment->reprettyprint;
+                    false->commentEditorPrivate.commentTouched;
+                    (if astView.pp.includeComments
+                     // true then true->rePrettyprint; 
+                    if);
+                    (if commentText.length
+                     // 0 then 'Empty comment'->screen.putLine
+                     else
+                        (CS.node[],subCommentInx1,subCommentInx2,reprettyprint,
+                         false)->printComment;
+                        
+                    if);
+                    'exitCommentEditing: sde.fragmentChangedEvent;'->putLine;
+                    
+                 #);
+               
+            #);
+          (*
+           onOpenTool::< 
+           (# 
+           do
+           (commentEditorPrivate.node[],commentEditorPrivate.subCommentInx1,
+           commentEditorPrivate.subCommentInx2)
+           ->commentEditorPrivate.writeComment;
+           INNER
+           #);
+           onCloseTool::< 
+           (# 
+           do
+           search: commentWindows.scan
+           (# 
+           do
+           (if
+           (Current.commentEditorPrivate.node[]
+           ->commentEditorPrivate.node.equal) and
+           (Current.commentEditorPrivate.subcommentInx1 =
+           commentEditorPrivate.subcommentInx1) and
+           (Current.commentEditorPrivate.subcommentInx2 =
+           commentEditorPrivate.subcommentInx2) then
+           Current[]->commentWindows.at->commentWindows.delete;
+           leave search
+           if)
+           #);
+           INNER
+           #);
+           onActivateWindow::< 
+           (# 
+           do
+           (#
+           testNode: ^mps.ast;
+           i,subCommentInx1,subCommentInx2: @integer;
+           
+           do
+           sde.getFocus->(testNode[],i,subCommentInx1,subCommentInx2);
+           ' UI.setTextCursor;'->putLine;'->putLine;
+           
+           #);
+           INNER
+           #);
+           onDeactivateWindow::< 
+           (# 
+           do
+           (if commentEditorPrivate.commentTouched
+           // true then commentEditorPrivate.exitCommentEditing; 
+           if);
+           INNER
+           #);
+           onTermPos::<  (#  do ; INNER #);
+           onTermSeq::<  (#  do ; INNER ;  #);
+           onKeyPressed::< 
+           (# 
+           do
+           (if ch
+           // ascii.esc then
+           commentEditorPrivate.undoCommentEditing;
+           false->commentEditorPrivate.commentTouched;
+           sde.fragmentDetouched;
+           
+           // 3 [* MPW enter key *] then
+           commentEditorPrivate.exitCommentEditing
+           else
+           (if commentEditorPrivate.commentTouched
+           // false then
+           sde.fragmentTouched;
+           true->commentEditorPrivate.commentTouched;
+           
+           if);
+           
+           if);
+           INNER
+           #);
+           onShowNode::< 
+           (# 
+           do (commentEditorPrivate.node[],1,0,0)->sde.setFocus; INNER
+           #);
+           *)
+          
+       #);
+     printComment:
+       (#
+          node: ^mps.ast;
+          subCommentInx1,subCommentInx2: @integer;
+          reprettyprint: @boolean;
+          updateWindow: @boolean
+       enter (node[],subCommentInx1,subCommentInx2,reprettyprint,updateWindow)
+       do
+          (if reprettyprint then
+              (node[],node[])->astView.pp.update; (node[],1,0,0)->astToSelection
+           else
+              (node[],subCommentInx1,subCommentInx2,updateWindow)
+                ->comCprivate.checkWindow
+          if);
+          
+       #);
+     createCommentWindow:
+       (#
+          node: ^mps.ast;
+          subCommentInx1,subCommentInx2: @integer;
+          theWindow: ^commentEditor;
+          
+       enter (node[],subCommentInx1,subCommentInx2)
+       do
+            (# title: ^text; 
+            do
+               (if
+               ((node[],subcommentInx1,subcommentInx2)
+                  ->commentWindows.findWindow->theWindow[])
+                // none then
+                   'Comment on '->title[];
+                   'sdeC.editorTitle[]->title.append;'->putLine;
+                   &commentEditor[]->theWindow[];
+                   (theWindow[],title,2 (*comCprivate.nextEditorX*) ,2
+                    (* comCprivate.nextEditorY*) ,0,0,node[],subCommentInx1,
+                    subCommentInx2)->theWindow.commentEditorPrivate.initEditor;
+                   theWindow[]->commentWindows.insertWindow;
+                   true->HideCommentPermit
+                else
+                   theWindow.commentEditorPrivate.hereIam; 
+               if)
+            #);
+          
+       exit theWindow[]
+       #);
+     commentWindows: @list
+       (#
+          element::< commentEditor;
+          insertWindow:
+            (# ce: ^commentEditor; 
+            enter ce[]
+            do ce[]->append; comcPrivate.commentWindowsTest; 
+            #);
+          deleteWindow:
+            (# node: ^mps.ast; subcommentInx1,subcommentInx2: @integer
+            enter (node[],subcommentInx1,subcommentInx2)
+            do
+                 (# ce2: ^commentEditor; 
+                 do
+                    search: scan
+                      (# 
+                      do
+                         (if (Current.commentEditorPrivate.node[]->node.equal)
+                         and
+                         (Current.commentEditorPrivate.subcommentInx1 =
+                          subcommentInx1) and
+                         (Current.commentEditorPrivate.subcommentInx2 =
+                          subcommentInx2) then
+                             Current[]->ce2[];
+                             Current[]->at->delete;
+                             ce2.close;
+                             leave search
+                         if)
+                      #);
+                    comcPrivate.commentWindowsTest;
+                    
+                 #);
+               
+            #);
+          findWindow:
+            (#
+               node: ^mps.ast;
+               ce: ^commentEditor;
+               subcommentInx1,subcommentInx2: @integer
+            enter (node[],subcommentInx1,subcommentInx2)
+            do 
+            exit ce[]
+            #);
+          deleteAllWindows:
+            (# 
+            do
+                 (# ce2: ^commentEditor; 
+                 do
+                    scan
+                      (# 
+                      do Current[]->ce2[]; Current[]->at->delete; ce2.close; 
+                      #);
+                    comcPrivate.commentWindowsTest;
+                    
+                 #);
+               
+            #);
+          enablePaste: (#  do  #);
+          
+       #);
+     comcPrivate: @
+       (#
+          nextX,nextY: @integer;
+          nextEditorX: (#  enter nextX exit nextX #);
+          nextEditorY: (#  enter nextY do nextY+50->nextY exit nextY #);
+          commentWindowsTest:
+            (# 
+            do
+               (if true
+                // false then
+                   '######################## commentWindows'->putLine;
+                   commentWindows.scan
+                     (# 
+                     do
+                        'node: '->putText;
+                        current.commentEditorPrivate.node.index->putInt;
+                        '   '->putText;
+                        'inx1: '->putText;
+                        current.commentEditorPrivate.subcommentinx1->putInt;
+                        '   '->putText;
+                        'inx2: '->putText;
+                        current.commentEditorPrivate.subcommentinx2->putInt;
+                        newLine
+                     #)
+               if)
+            #);
+          checkWindow:
+            (#
+               node: ^mps.ast;
+               subCommentInx1,subCommentInx2: @integer;
+               updateWindow: @boolean;
+               theWindow: ^commentEditor;
+               
+            enter (node[],subCommentInx1,subCommentInx2,updateWindow)
+            do
+               (if
+               (((node[],subcommentInx1,subcommentInx2)
+                   ->commentWindows.findWindow->theWindow[]) <> none )
+                // true then
+                   (if updateWindow
+                    // true then
+                       (node[],subCommentInx1,subCommentInx2)
+                         ->theWindow.commentEditorPrivate.writeComment
+                    else
+                   (*theWindow.commentEditorPrivate.hereIam;*)
+                       
+                   if);
+                   
+               if);
+               
+            #);
+          
+       #);
+     makeDetail:<
+       (# 
+       do (*'makeDetail'->putLine;*)
+          CS.node[]->openContraction;
+          (CS.node[],CS.node[])->astView.pp.update;
+          cs-> (*cs->sdeC.changeFocus;*) setFocus
+       #);
+     makeShowComment:<
+       (# doneInInner: @boolean
+       do
+          INNER makeShowComment;
+          (if not doneInInner then
+              'makeShowComment'->putLine;
+              cs->astToSelection;
+              cs-> (*sdeC.*) astToSelection;
+              (CS.node[],CS.subCommentInx1,CS.subCommentInx2)
+                ->createCommentWindow
+          if)
+       #);
+     makeFollowSemanticLink:<
+       (# doneInInner: @boolean
+       do
+          INNER makeFollowSemanticLink;
+          (if not doneInInner then
+              (if cs.node.kind
+               // mps.kinds.nameDecl // mps.kinds.nameAppl then
+                  (1,cs.node[])->followSemanticLink
+              if)
+          if)
+       #);
+     makeSearchSlotBinding:<
+       (# a: ^mps.ast; 
+       do
+          INNER makeSearchSlotBinding;
+          (if a[] <> none then a[]->selectNode;  if)
+       #);
+     searchSlotBinding:
+       (#
+          theSlot: ^mps.slotDesc;
+          slotName: ^text;
+          found: @boolean;
+          searchedUnexp: ^mps.unexpanded;
+          bindingFound:<
+            (# ff: ^mps.fragmentform enter ff[] do INNER #);
+          bindingNotFound:<
+            (# slotName: ^text enter slotName[] do INNER #);
+          searchBinding:
+            (#
+               searchFrag,fg: ^mps.fragmentGroup;
+               found: @boolean;
+               ff: ^mps.fragmentForm;
+               help: ^text;
+               de: @diskentry
+            enter searchFrag[]
+            do
+               search: searchFrag.prop.scanProp
+                 (#
+                    doProp::< 
+                      (# 
+                      do
+                         (if true
+                          // ('BODY'->prop.equalNCS) then
+                             scanParameters
+                               (#
+                                  doString::< 
+                                    (# 
+                                    do
+                                       searchFrag.fullName->de.path;
+                                       (if traceSLOTsearch
+                                        // true then
+                                           s[]->screen.putText; ' '->screen.put
+                                       if);
+                                       (s[],de.path.head)
+                                         ->mps.thePathHandler.convertFilePath
+                                         ->help[]->topDotOpen->fg[];
+                                       (if (* should test if open already *)
+                                       fg[]
+                                        // none then
+                                           s[]->help[];
+                                           ' not found'->help.putText;
+                                           help[]-> (*UI.alertUser;*) putLine
+                                        else
+                                           fg.fragmentList.scan
+                                             (# 
+                                             do
+                                                (if
+                                                (current.name[]
+                                                   ->slotName.equalNCS)
+                                                 // true then
+                                                    (if current.type
+                                                     // mps.formType then
+                                                        true->found;
+                                                        (if traceSLOTsearch
+                                                         // true then newLine
+                                                        if);
+                                                        current.f[]->ff[]
+                                                          ->bindingFound;
+                                                        leave search
+                                                     else
+                                                        'Not a fragment form! '
+                                                          ->putLine
+                                                    if)
+                                                if)
+                                             #);
+                                           fg[]->&searchBinding->found
+                                       if)
+                                    #)
+                               #)
+                          // ('MDBODY'->prop.equalNCS) then
+                             searchMDbody: scanParameters
+                               (#
+                                  t,name: ^text;
+                                  foundMachineType,isDefaultMachine,
+                                    noMachineType: @boolean;
+                                  doName::< 
+                                    (# 
+                                    do
+                                       '$(objdir)'->expandEnvVar->t[];
+                                       n[]->name[];
+                                       (if t[] <> none then
+                                           (if t[]->n.equal then
+                                               true->foundMachineType; 
+                                            else
+                                               (if 'default'->n.equal then
+                                                   true->isDefaultMachine
+                                               if)
+                                           if)
+                                        else
+                                           true->noMachineType;
+                                           'No objdir set in script'->putLine
+                                       if)
+                                    #);
+                                  doString::< 
+                                    (# 
+                                    do
+                                       searchFrag.fullName->de.path;
+                                       (if traceSLOTsearch
+                                        // true then
+                                           s[]->screen.putText; ' '->screen.put
+                                       if);
+                                       (if foundMachineType or isDefaultMachine
+                                       or noMachineType then
+                                           'Choosing MDBODY '->putText;
+                                           (if foundMachineType then
+                                               t[]->putLine
+                                            else
+                                               name[]->putLine
+                                           if);
+                                           (s[],de.path.head)
+                                             ->
+                                               mps.thePathHandler.
+                                                 convertFilePath->help[]
+                                             ->topDotOpen->fg[];
+                                           (if (* should test if open already *)
+                                           fg[]
+                                            // none then
+                                               s[]->help[];
+                                               ' not found'->help.putText;
+                                               help[]
+                                                 -> (*UI.alertUser;*) putLine
+                                            else
+                                               fg.fragmentList.scan
+                                                 (# 
+                                                 do
+                                                    (if
+                                                    (current.name[]
+                                                       ->slotName.equalNCS)
+                                                     // true then
+                                                        (if current.type
+                                                         // mps.formType then
+                                                            true->found;
+                                                            (if traceSLOTsearch
+                                                             // true then
+                                                                newLine
+                                                            if);
+                                                            current.f[]->ff[]
+                                                              ->bindingFound;
+                                                            leave search
+                                                         else
+                                                            'Not a fragment form! '
+                                                              ->putLine
+                                                        if)
+                                                    if)
+                                                 #);
+                                               fg[]->&searchBinding->found
+                                           if);
+                                           leave searchMDbody
+                                       if)
+                                    #)
+                               #)
+                         if)
+                      #)
+                 #)
+            exit found
+            #)
+       enter searchedUnexp[]
+       do
+          searchedUnexp.theSlot->theSlot[];
+          theSlot.name->slotName[];
+          (if traceSLOTsearch
+           // true then
+              newLine;
+              'Searching for a SLOT binding of '''->putText;
+              slotName[]->putText;
+              ''''->put;
+              ' in:'->putLine
+          if);
+          frag.father->&searchBinding->found;
+          (if found // false then slotName[]->bindingNotFound if)
+       #);
+     selectNode:<
+       (# a: ^mps.ast; help: ^text
+       enter a[]
+       do
+          INNER
+          (* (if a[]
+           // none then <<@44946:Imperatives>>
+           else
+           'UI.setwaitCursor;'->putLine; a[]->groupEditorList.findAndSelect
+           if);
+           ' UI.setstructureCursor'->putLine;*)
+       #);
+     followSemanticLink:
+       (#
+          itemSelected: @integer;
+          node,theNode: ^mps.ast;
+          help: ^text;
+          ff: ^mps.fragmentForm;
+          fg: ^mps.fragmentGroup;
+          
+       enter (itemSelected,node[])
+       do
+          (if node.kind
+           // mps.kinds.nameAppl // mps.kinds.nameDecl then
+              node.father->theNode[]
+           else
+              node[]->theNode[]
+          if);
+          (if (itemSelected > 0)
+           // true then
+              node.frag[]->ff[];
+              ff.father->fg[];
+              (if (mps[],fg[])->getDoneCheckProperty (* isChecked *)
+               // false then (* itemselected is 1 *)
+                  'This fragment group must be (re)checked'->help[];
+                  help.newLine;
+                  'in order to (re)build the semantic links.'->help.putLine;
+                  'This is currently done by the compiler'->help.putText;
+                  'help[]->UI.alertUser'->putLine;
+                  
+               else
+                  (if theNode.symbol
+                   // betaGrammar.descriptorForm then
+                        (# theDescForm: ^betaGrammar.DescriptorForm
+                        do
+                           theNode[]->theDescForm[];
+                           (if itemSelected
+                            // 1 then
+                               'descNo : '->screen.putText;
+                               theDescForm.descNo->screen.putInt;
+                               screen.newLine
+                            // 2 then
+                               theDescForm.origin->selectNode
+                            // 3 then
+                               'size : '->screen.putText;
+                               theDescForm.size->screen.putInt;
+                               screen.newLine
+                            // 4 then
+                               'attSize : '->screen.putText;
+                               theDescForm.attSize->screen.putInt;
+                               screen.newLine
+                            // 5 then
+                               'kind : '->screen.putText;
+                               theDescForm.kind->screen.putInt;
+                               screen.newLine
+                           if)
+                        #)
+                   // betaGrammar.attributesForm then
+                        (# theAttForm: ^betaGrammar.attributesForm
+                        do
+                           theNode[]->theAttForm[];
+                           (if itemSelected
+                            // 1 then theAttForm.origin->selectNode
+                           if)
+                        #)
+                   // betaGrammar.objectDescriptor then
+                        (# theObjDesc: ^betaGrammar.objectDescriptor
+                        do
+                           theNode[]->theObjDesc[];
+                           (if itemSelected
+                            // 1 then
+                               'descNo : '->screen.putText;
+                               theObjDesc.descNo->screen.putInt;
+                               screen.newLine
+                            // 2 then
+                               theObjDesc.origin->selectNode
+                            // 3 then
+                               'size : '->screen.putText;
+                               theObjDesc.size->screen.putInt;
+                               screen.newLine
+                            // 4 then
+                               'attSize : '->screen.putText;
+                               theObjDesc.attSize->screen.putInt;
+                               screen.newLine
+                            // 5 then
+                               'kind : '->screen.putText;
+                               theObjDesc.kind->screen.putInt;
+                               screen.newLine
+                           if)
+                        #)
+                   // betaGrammar.repetitionDecl then
+                        (# theRepetitionDecl: ^betaGrammar.repetitionDecl
+                        do
+                           theNode[]->theRepetitionDecl[];
+                           (if itemSelected
+                            // 1 then theRepetitionDecl.origin->selectNode
+                           if)
+                        #)
+                   // betaGrammar.forImp then
+                        (# theForImp: ^betaGrammar.ForImp
+                        do
+                           theNode[]->theForImp[];
+                           (if itemSelected
+                            // 1 then theForImp.origin->selectNode
+                           if)
+                        #)
+                   // betaGrammar.labelledImp then
+                        (# theLabelledImp: ^betaGrammar.labelledImp
+                        do
+                           theNode[]->theLabelledImp[];
+                           (if itemSelected
+                            // 1 then theLabelledImp.origin->selectNode
+                           if)
+                        #)
+                   // betaGrammar.nameApl then
+                        (# theNameApl: ^betaGrammar.nameApl
+                        do
+                           theNode[]->theNameApl[];
+                           (if itemSelected
+                            // 1 then
+                               theNameApl.dclRef->selectNode
+                            // 2 then
+                               theNameApl.descRef->selectNode
+                            // 3 then
+                               theNameApl.findDescriptor->selectNode
+                           if)
+                        #)
+                   // betaGrammar.nameDcl then
+                        (# theNameDcl: ^betaGrammar.nameDcl; f: ^mps.ast
+                        do
+                           theNode.father->f[];
+                           (if f.symbol
+                            // betaGrammar.names then
+                               f.father->f[];
+                               (if f.symbol
+                                // betaGrammar.bindingDecl
+                                // betaGrammar.finalDecl then
+                                   theNode[]->theNameDcl[];
+                                   (if itemSelected
+                                    // 1 then theNameDcl.virtDcl->selectNode
+                                   if)
+                               if)
+                           if);
+                           (if itemSelected
+                            // 2 then
+                               theNode[]->theNameDcl[];
+                               theNameDcl.findDescriptor->selectNode
+                           if);
+                           
+                        #)
+                  if)
+              if)
+          if)
+       #);
+     makeSomethingElse:< (#  do INNER #);
+     handleDoubleClick:
+       (# unexp: ^mps.unexpanded; done: @boolean
+       do (*'sdeChandleOnDoubleClick '->putLine;*)
+          (if cs.isComment then
+              makeShowComment
+           else
+              (if cs.isContraction then
+                  makeDetail
+               else
+                  (if cs.isSlot then
+                      makeSearchSlotBinding
+                   else
+                      (if cs.hasSemanticLink then
+                          makeFollowSemanticLink
+                       else
+                          cs->astToSelection; makeSomethingElse
+                      if)
+                  if)
+              if)
+          if);
+          
+       #);
+     selectArea:
+       (#
+          f: @astFocus;
+          l1,l2,l,c1,c2: @integer;
+          c: @integer;
+          fatherNode: ^mps.expanded;
+          node,keepNode: ^mps.ast
+       enter f
+       do
+          (if astView.pp.ppDebug then
+              ' selectarea: '->putText;
+              f.node.index->putInt;
+              ' '->put;
+              f.length->putInt;
+              newLine;
+              
+          if);
+          (f.node[],f.subcommentInx1,f.subcommentInx2)->astView.pp.select
+            ->(l1,c1,l2,c2);
+          (if (1 < f.length)
+           // true then
+              (if (1 < f.length)
+               // true then
+                  f.node[]->checkFatherNode->node[];
+                  (if astView.pp.ppDebug then
+                      'node.index: '->putText; node.index->putInt; newLine; 
+                  if);
+                  node.father->fatherNode[];
+                  (if astView.pp.ppDebug then
+                      'fathernode.index: '->putText;
+                      fathernode.index->putInt;
+                      newLine;
+                      
+                  if);
+                  (node.sonNo+f.length-1)->fatherNode.get->node[];
+                  (node[],0,0)->astView.pp.select->(l,c,l2,c2);
+                  
+              if);
+              
+          if);
+          
+       exit (l1,c1,l2,c2)
+       #);
+     checkSonNode:
+       (#
+          node: ^mps.ast;
+          expNode: ^mps.expanded;
+          prod: ^mg.prod;
+          constructor: ^mg.constructor;
+          consElemList: ^mg.consElemList;
+          
+       enter node[]
+       do
+          loop:
+          (if (node.kind = mps.kinds.interior)
+           // true then
+              node[]->expNode[];
+              (if expNode.noOfSons
+               // 1 then
+                  expNode.symbol->Prodlist.get->prod[];
+                  (if prod.symbol
+                   // mg.listZero // mg.listOne then
+                      expNode.getson1->node[]; restart loop; 
+                   // mg.constructor then
+                      prod[]->constructor[];
+                      constructor.getConsElemList->consElemList[];
+                      (if consElemList.noOfSons
+                       // 1 then expNode.getson1->node[]; restart loop; 
+                      if);
+                      
+                  if);
+                  
+              if);
+              
+          if)
+       exit node[]
+       #);
+     checkSon:
+       (# 
+       do
+          (if cs.subCommentInx1
+           // 0 then cs.node[]->checkSonNode->cs.node[]
+          if)
+       #);
+     checkFather: (#  do cs.node[]->checkFatherNode->cs.node[] #);
+     checkFatherNode:
+       (#
+          node: ^mps.ast;
+          fatherNode: ^mps.expanded;
+          prod: ^mg.prod;
+          constructor: ^mg.constructor;
+          consElemList: ^mg.consElemList
+       enter node[]
+       do
+          loop:
+          (if (node.father <> none )
+           // true then
+              node.father->fatherNode[];
+              fatherNode.symbol->Prodlist.get->prod[];
+              (if fatherNode.noOfSons
+               // 1 then
+                  (if prod.symbol
+                   // mg.constructor then
+                      prod[]->constructor[];
+                      constructor.getConsElemList->consElemList[];
+                      (if consElemList.noOfSons
+                       // 1 then fatherNode[]->node[]; restart loop; 
+                      if);
+                      
+                  if);
+                  
+              if);
+              
+          if);
+          
+       exit node[]
+       #);
+     contractionCategories: [1] @integer;
+     getPropertiesFromGrammar:
+       (# fg: ^mps.fragmentGroup; 
+       do
+          frag.grammar.kindArray.range-contractionCategories.range
+            ->contractionCategories.extend;
+          frag.grammar.grammarAst.father->fg[];
+          (if fg.prop[]
+           // none then 
+           else
+              'contractioncategoriesvalues'
+                ->fg.prop.getProp
+                  (#
+                     doprop::< 
+                       (# 
+                       do
+                          scanParameters
+                            (#
+                               doConst::< 
+                                 (# 
+                                 do
+                                    (if
+                                    ((c > 0) and
+                                     (c <= contractionCategories.range))
+                                     // true then 1->contractionCategories[c]
+                                    if)
+                                 #)
+                            #)
+                       #)
+                  #);
+              'longLexems'
+                ->fg.prop.getProp
+                  (#
+                     doProp::< 
+                       (#  do true->astView.pp.specialLexemTreatment;  #)
+                  #);
+              'longLexemsWithQuote'
+                ->fg.prop.getProp
+                  (#
+                     doProp::< 
+                       (# 
+                       do
+                          true
+                            ->
+                              astView.pp.specialLexemTreatment
+                              (*->longLexemsWithquote*) ;
+                          
+                       #)
+                  #);
+              
+          if);
+          
+       #);
+     setContractions:<
+       (#
+          node: ^mps.ast;
+          symbol: @mps.nonterminalSymbol;
+          expNode: ^mps.expanded
+       enter node[]
+       do
+          (if (node.struc <= mps.expanded##)
+           // true then
+              node[]->expNode[];
+              expNode.suffixWalk
+                (#
+                   unexp: ^mps.unexpanded;
+                   aList: ^mps.list;
+                   doContract: @boolean;
+                   prod: ^mg.prod
+                do
+                   true->doContract;
+                   Current.symbol->symbol;
+                   (if symbol.predefined
+                    // true then false->doContract; 
+                    else
+                       (if Current.kind
+                        // mps.kinds.unexpanded then
+                           Current[]->unexp[]; false->doContract; 
+                        // mps.kinds.list then
+                           Current[]->aList[];
+                           (aList.noOfSons > 3 (* should be user-changable *) )
+                             ->doContract;
+                           
+                        // mps.kinds.optional then
+                           false->doContract
+                        // mps.kinds.interior then
+                           symbol->Prodlist.get->prod[];
+                           (if prod.symbol
+                            // mg.listOne // mg.listZero then
+                               Current[]->aList[];
+                               (aList.noOfSons > 3
+                                (* should be user-changable *) )->doContract;
+                               
+                           if);
+                           
+                        else
+                           
+                       if);
+                       (if doContract
+                        // true then
+                           (if contractionCategories[symbol]
+                            // 1 then Current[]->setContraction
+                           if);
+                           
+                       if)
+                   if)
+                #)
+          if)
+       #);
+     setContraction:
+       (# node: ^mps.ast; newComment: ^mps.comment; t: ^text
+       enter node[]
+       do
+          (if node.hasComment
+           // false then
+              (mps.comment,0,frag[])->betaGrammar.newlexemText->newComment[];
+              &text[]->t[];
+              t[]->newcomment.putText;
+              newComment[]->node.addComment;
+              
+          if);
+          astView.pp.holocomment->node.typeOfComment;
+          
+       #);
+     inContraction:
+       (#
+          node,contractionNode: ^mps.ast;
+          inContr: @boolean;
+          fatherNode: ^mps.ast;
+          
+       enter node[]
+       do
+          false->inContr;
+          loop:
+            (# 
+            do
+               node.father->fatherNode[];
+               (if (fatherNode[] = none )
+                // false then
+                   (if fatherNode.hasComment
+                    // true then
+                       (if (fatherNode.typeOfComment = astView.pp.holocomment)
+                        // true then
+                           fatherNode[]->contractionNode[];
+                           true->inContr;
+                           leave loop
+                       if);
+                       
+                   if);
+                   fatherNode[]->node[];
+                   restart loop;
+                   
+               if);
+               
+            #);
+          
+       exit (inContr,contractionNode[])
+       #);
+     openContractionsUntilRoot:
+       (# node,holoNode,fatherNode: ^mps.ast; inHolo: @boolean; 
+       enter node[]
+       do
+          false->inHolo;
+          loop:
+            (# 
+            do
+               node.father->fatherNode[];
+               (if (fatherNode[] = none )
+                // false then
+                   (if fatherNode.hasComment
+                    // true then
+                       (if (fatherNode.typeOfComment = astView.pp.holocomment)
+                        // true then
+                           fatherNode[]->holoNode[]->openContraction;
+                           true->inHolo;
+                           
+                       if);
+                       
+                   if);
+                   fatherNode[]->node[];
+                   restart loop;
+                   
+               if);
+               
+            #);
+          
+       #);
+     openContraction:
+       (# node: ^mps.ast; aComment: ^mps.comment; 
+       enter node[]
+       do
+          (if node.hasComment
+           // true then
+              (if node.typeOfComment
+               // astView.pp.holocomment then
+                  node.getComment->aComment[];
+                  (if (aComment.curLength > 0)
+                   // true then
+                      astView.pp.normalComment->node.typeOfComment; 
+                   // false then
+                      none ->node.addComment; 
+                  if);
+                  
+              if);
+              
+          if);
+          
+       #);
+     openContractionLevel:
+       (#
+          node: ^mps.ast;
+          level: @integer;
+          anExp: ^mps.expanded;
+          openedOne: @boolean;
+          
+       enter (node[],level)
+       do
+          (if node.kind
+           // mps.kinds.interior then
+              node[]->anExp[];
+              anExp.scan
+                (# 
+                do
+                   (if current.hasComment
+                    // true then
+                       (if current.typeOfComment
+                        // astView.pp.holocomment then
+                           current[]->openContraction; true->openedOne; 
+                       if)
+                   if);
+                   
+                #);
+              (if openedOne // true then level-1->level if);
+              (if (level > 0)
+               // true then
+                  anExp.scan
+                    (#  do (current[],level)->&openContractionLevel #)
+              if)
+          if)
+       #);
+     automaticHolocomments:
+       (# abstracted: @boolean; 
+       do
+          frag.root[]
+            ->setContractions
+            (*false->abstracted;
+             loop: frag.prop.scanProp (# doProp::<  <<@32602:MainPart>>; #);
+             (if abstracted
+             // false then
+             ff.root[]->setContractions; 'ABSTRACTED'->frag.prop.addProp;
+             if)*)
+       #);
+     setBreakPointBefore:
+       (#
+          node: ^mps.ast;
+          theText: ^text;
+          update: @boolean;
+          pos: @integer;
+          commentAST: ^mps.comment;
+          theComment: ^text
+       enter (node[],theText[],update)
+       do
+          (if not node.hasComment then
+              node[]->astView.pp.CreateEmptyComment->theComment[];
+              (mps.comment,0,frag[])->frag.grammar.newlexemText->commentAST[];
+              theComment[]->commentAST.putText;
+              commentAST[]->node.addComment
+          if);
+          (theText[],1,1)->node.setSubcomment;
+          astView.pp.breakPointComment->node.typeOfComment;
+          (if update then
+              (node[],node[])->astView.pp.update; (node[],1,0,0)->setFocus
+          if)
+       exit 1
+       #);
+     setBreakPointAfter:
+       (#
+          node: ^mps.ast;
+          pos: @integer;
+          theText: ^text;
+          update: @boolean;
+          commentAST: ^mps.comment;
+          theComment: ^text;
+          noOfSons: @integer
+       enter (node[],theText[],update)
+       do
+          (if not node.hasComment then
+              node[]->astView.pp.CreateEmptyComment->theComment[];
+              (mps.comment,0,frag[])->frag.grammar.newlexemText->commentAST[];
+              theComment[]->commentAST.putText;
+              commentAST[]->node.addComment
+           else
+              node.getComment->commentAst[]; commentAST.getText->theComment[]
+          if);
+          mps.commentSeparator1->theComment.findCh (#  do inx->noOfSons #);
+          (theText[],noOfSons+2,1)->node.setSubcomment;
+          astView.pp.breakPointComment->node.typeOfComment;
+          (if update then
+              (node[],node[])->astView.pp.update; (node[],1,0,0)->setFocus
+          if)
+       exit noOfSons+2
+       #);
+     clearBreakPoint:
+       (# node: ^mps.ast; pos: @integer; update: @boolean
+       enter (node[],pos,update)
+       do
+          (if node.hasComment then ('',pos,1)->node.setSubcomment if);
+          astView.pp.normalComment->node.typeOfComment;
+          (if update then
+              (node[],node[])->astView.pp.update; (node[],1,0,0)->setFocus
+          if)
+       #);
+     metaGrammarInit:
+       (#
+          theMetaGrammar: ^mps.treelevel;
+          grammarWithPath,help: ^text;
+          gg: ^mps.fragmentGroup;
+          bobsfile: @file
+       do
+          (if mps.grammarTable.meta[] <> none then
+              mps.grammarTable.meta[]->mg[]; 
+           else
+              &mps.metaGrammar[]->theMetaGrammar[]->mps.grammarTable.meta[]
+                ->mg[];
+              theMetaGrammar.init;
+              '~beta/grammars/metagram/v4.4/metagrammar'->grammarWithPath[];
+              ('-meta'->grammarWithPath.copyAppend,screen[])->mps.top.open
+                ->gg[];
+              (if gg[]
+               // none then
+                  'Could not open: '->screen.putText;
+                  '-meta'->grammarWithPath.copyAppend->screen.putLine;
+                  (failure,'')->stop;
+                  
+               else
+                  ('metagrammar',screen[])->gg.open
+                    ->theMetagrammar.grammarAst[];
+                  (if theMetagrammar.grammarAst[]
+                   // none then
+                      'No grammarAst for '->screen.putText;
+                      grammarWithPath[]->screen.putLine;
+                      (failure,'')->stop;
+                      
+                   else
+                      grammarWithPath[]->mps.expandToFullPath->help[];
+                      '-parser'->help.append;
+                      mps.parserFileExtension->help.append;
+                      help[]->bobsFile.name;
+                      (if bobsFile.entry.exists
+                       // true then
+                          bobsFile.name->theMetagrammar.parser.initialize; 
+                       else
+                          'No parser available: '->screen.putText;
+                          bobsFile.name->screen.putLine;
+                          
+                      if)
+                  if);
+                  
+              if);
+              
+          if);
+          
+       #);
+     init:<
+       (# grammar: ^mg.Agrammar
+       enter (mps[],betaGrammar[],UI[],theSifTextEditor[],frag[],node[])
+       do
+          false->switch[1];
+          false->switch[2];
+          false->switch[3];
+          metaGrammarInit;
+          &mps.astViewer[]->astView[];
+          &windowOutput[]->astView.out[];
+          betaGrammar.grammarAst.root[]->grammar[];
+          grammar.getProductionList->prodList[];
+          astView.out.init;
+          frag.grammar.grammarAst.father->fg[];
+          fg.father->fg[];
+          fg.fullName->astView.pp.init;
+          true->astView.pp.abstractPresentation;
+          true->astView.pp.editorMode;
+          theSifTextEditor.contents.size->theSifTextEditor.charWidth
+            ->astView.pp.width;
+          getPropertiesFromGrammar;
+          theSifTexteditor.onOpen;
+          
+       #)
+  #)  
+
