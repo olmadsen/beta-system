@@ -1803,8 +1803,8 @@ int DisplayBetaStack(BetaErr errorNumber,
   old_output = output;
 
   if (errorNumber==DumpStackErr) {
-    SimpleDump = 1;
     output = stderr; 
+    DEBUG_CODE(fprintf(output, "DumpStackErr: Switched output to stderr\n"));
   } else {
     if (!OpenDumpFile(errorNumber)) return 0;
   }

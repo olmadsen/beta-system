@@ -177,7 +177,7 @@ void BetaError(BetaErr err, Object *theObj)
 	StackEnd++;  /* Two below */
 	break;
       case DumpStackErr:
-	if (DumpStackProp!=TRUE) {
+	if (SkipDumpStack) {
 	  return;
 	} else {
 	  DoNotExit = 1;  /* note no break here !! */
@@ -450,6 +450,8 @@ void PrintBetaError(BetaErr err)
     fprintf(output, "UnorderedFval"); break;    
   case StackErr:
     fprintf(output, "StackErr"); break;         
+  case DumpStackErr:
+    fprintf(output, "DumpStackErr"); break;         
   case UnknownSigErr:
     fprintf(output, "UnknownSigErr"); break;    
   default:
