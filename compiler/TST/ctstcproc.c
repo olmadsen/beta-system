@@ -216,10 +216,24 @@ long tstrealX()
  v = tstreal4(44,55,17.7,18.8);
  w = tstreal5(66,77,88,20.2);
  x = tstreal12(1.1,2.2,3.3,4.4);
+ return 0; /* correct? Added by datpete 11/08/99 */
 }
 
 void flush_stdout(void){
   fflush(stdout);
 }
 
-long long a64(long long a, long long b){ return a+b;}
+#ifndef int64
+#ifdef __GNUC__
+#define int64 signed long long int
+#endif /* __GNUC__ */
+#ifdef nti
+#define int64 signed _int64
+#endif /* nti */
+#endif /* int64 */
+
+#ifndef int64
+#error int64 must be defined
+#endif /* int64 */
+
+int64 a64(int64 a, int64 b){ return a+b;}
