@@ -1,7 +1,14 @@
-char betarun_version[] = "BETARUN VERSION 5.3(75)";
+char betarun_version[] = "BETARUN VERSION 5.3(76)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.83  2002/03/15 10:50:33  datpete
+ * U GC/sparc_stack.c
+ *
+ * fix for debug code failing with floating point exception
+ *
+ * Betarun version number: 75
+ *
  * Revision 1.82  2002/03/13 22:15:13  corry
  * Add include of <malloc.h> on Linux in order to get the nonstandard
  * function memalign declared.  Needed for glibc 2.2.4 and later I think.
