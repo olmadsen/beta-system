@@ -9,6 +9,16 @@
 /* Max number of linear probes in AOAtoIOAInsert */
 #define MAX_PROBES 60
 
+void aoatoioa_dummy() {
+#ifdef sparc
+  USE();
+#endif /* sparc */
+}
+
+#ifdef PERSIST
+#include "../P/PException.h"
+#endif /* PERSIST */
+
 /* Some primes to use as the size of the AOAtoIOAtable.
  * primes(n+1) ~~ primes(n) * 1.5
  */
@@ -321,9 +331,15 @@ void AOAtoIOACheck(void)
     
     /* fprintf(output, "#AOAtoIOACheck: AOAtoIOAtableSize: %d\n", (int)AOAtoIOAtableSize); */
     for(i=0; i<AOAtoIOAtableSize; i++){
-	if (pointer[i]){
+      if (pointer[i]){
 	  Claim( inAOA( pointer[i]),"AOAtoIOACheck: *pointer in AOA" );
-	  Claim((((*(long*)(pointer[i])) & 7)==0), "AOAToIOACheck: **pointer 8 aligned");
+#ifdef PERSIST
+	  if (!inPIT((void *)*(long*)(pointer[i]))) {
+#endif /* PERSIST */
+	    Claim((((*(long*)(pointer[i])) & 7)==0), "AOAToIOACheck: **pointer 8 aligned");
+#ifdef PERSIST
+	  }
+#endif /* PERSIST */
 	}
     }
 }
