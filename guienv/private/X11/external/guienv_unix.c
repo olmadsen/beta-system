@@ -47,6 +47,20 @@ long tickcount (void) {
   return t;
 }
 
+static char *get_font_name (Display *dpy, XFontStruct *fs)
+{
+    register XFontProp *fp;
+    register int i;
+    Atom fontatom = XInternAtom (dpy, "FONT", False);
+
+    for (i = 0, fp = fs->properties; i < fs->n_properties; i++, fp++) {
+	if (fp->name == fontatom) {
+	    return (XGetAtomName (dpy, fp->card32));
+	}
+    }
+    return NULL;
+}
+
 void getfontinfo (XFontStruct *font,long *ascent,long *descent) {
   *ascent = font->ascent;
   *descent = font->descent;
