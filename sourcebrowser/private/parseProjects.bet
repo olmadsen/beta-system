@@ -230,12 +230,12 @@ parse:
               input.name->mps.AST.expandToFullPath->newProj.location.puttext
           if);
           true->newProj.hasSubprojects;
-          newProj.subProjects[]->parseProjectList;
+          newProj[]->parseProjectList;
           EOF->accept
        #);
      
      parseProjectList:
-       (# currProjList: ^projectList;
+       (# currProj: ^browser.projects.project;
           
           parseProject:
             (# newProj: ^browser.projects.project;
@@ -352,11 +352,13 @@ parse:
                (if currentToken
                 // string then
                    theText[]->mps.AST.expandToFullPath->newProj.location.puttext;
+                   currProj[]->newProj.superProject[];
                    newProj[]->setupProject;
-                   newProj[]->currProjList.append;
+                   newProj[]->currProj.subprojects.append;
                    advance
                 // group then  
-                   newProj[]->currProjList.append;
+                   currProj[]->newProj.superProject[];
+                   newProj[]->currProj.subprojects.append;
                    newProj.groups[]->parseGroupList;
                 // project then
                    true->newProj.hasSubprojects;
@@ -364,13 +366,14 @@ parse:
                        ((newProj.name.length->newProj.name.inxGet)<>'/') then
                        '/'->newProj.name.append;
                    if);
-                   newProj[]->currProjList.append;
-                   newProj.subprojects[]->parseProjectList;
+                   currProj[]->newProj.superProject[];
+                   newProj[]->currProj.subprojects.append;
+                   newProj[]->parseProjectList;
                 else 'parseProject: STRING or NAME expected'->markError
                if);
             #);
           
-       enter currProjList[]
+       enter currProj[]
        do (* parseProjectList *)
           loop:
             (if currentToken
@@ -432,14 +435,17 @@ do (projectFile[],ph.currentDirectory)->ph.convertFilePath->projectFile[];
 
 --- ymerParseProjectsRC: descriptor ---
 (# newProj: ^browser.projects.project;
-   projectFile: ^text;
+   projectFile, user: ^text;
 do ('~/.ymer.pjt',ph.currentDirectory)
      ->ph.convertfilepath->projectFile[];
    (if projectFile[]->fileReadable then
        &browser.projects.project[]->newProj[];
        (projectFile[], newProj[])->projects.theProjects.parseProjectFile;
        newProj.subprojects.scan
-       (# do current[]->projects.theProjects.append #);
+       (#
+       do current[]->projects.theProjects.append;
+          NONE->current.superProject[]
+       #);
    if);
    (if projects.theProjects.size=0 then
        (if not ('.'->(('~beta/configuration/r3.0',ph.currentDirectory)->ph.localpath).equal) then
@@ -454,6 +460,16 @@ do ('~/.ymer.pjt',ph.currentDirectory)
                (projectFile[],newProj[])->parse;
                newProj[]->append
            if)
-       if);   
+       if);
+       '$(USER)'->expandEnvVar
+       (# defaultValue::
+            (# do '/usr/local/lib/beta'->envvarvalue[] #)#)
+         ->user[];
+       '~'->user.prepend;
+       &browser.projects.project[]->newProj[];
+       user.copy->newProj.name[];
+       user[]->MPS.ast.expandToFullPath->newProj.location.puttext;
+       newProj[]->browser.projects.setupProject;
+       newProj[]->browser.projects.theProjects.append;
    if);
 #)

@@ -125,12 +125,14 @@ setupProject:
              root.location->proj.location;
              true->proj.isDomain;
              '[domain]'->proj.name[];
+             root[]->proj.superProject[];
              proj[]->root.subprojects.append;
              
              &browser.projects.project[]->proj[];
              root.location->proj.location;
              true->proj.isExtent;
              '[extent]'->proj.name[];
+             root[]->proj.superProject[];
              proj[]->root.subprojects.append;
           // f.entry.exists and
              f.entry.readable and
@@ -315,6 +317,86 @@ do ''->infoView.contents.label;
    
 --- browserLib: attributes ---
 
+setupDotDot:
+  (# proj: ^browser.projects.project;
+     projPos: ^projects.theProjects.theCellType;
+     d: @directory;
+     location: ^text; level: @integer;
+     superProject, superSuperProject: ^browser.projects.project;
+     createParentProject:
+       (# newProj: ^browser.projects.project
+       do &browser.projects.project[]->newProj[];
+          location->newProj.location;
+          newProj[]->browser.projects.setupProject;
+          (newProj[],superProject[]->browser.projects.theProjects.at)
+            ->browser.projects.theProjects.insertBefore;
+          superProject.level->newProj.level;
+          (for newProj.level repeat '  '->newProj.name.prepend for);
+          superProject.level+1->superProject.level;
+          '  '->superProject.name.prepend;
+          l: (superProject[]
+            ->browser.projects.theProjects.at).succ[]
+            ->browser.projects.theProjects.iterateFrom
+          (# 
+          do (if current.elm.level>=superProject.level then
+                 current.elm.level+1->current.elm.level;
+                 '  '->current.elm.name.prepend;
+              else leave l
+             if);
+          #);
+          true->newProj.unfolded;
+          newProj[]->foldSubprojects;
+          newProj[]->unfoldSubprojects;
+          browser.projectsChanged;
+          newProj[]->browser.setProject;
+       #);
+  enter proj[]
+  do (* we now have to create a new project to contain the
+      * parent directory of currentDirectory
+      *)
+     ((1,proj.location.length-1)->proj.location.sub,ph.currentDirectory)
+       ->ph.convertfilepath->location[]; '/'->location.put;
+     proj.superProject[]->superProject[];
+     (if superProject[]<>NONE then
+         superProject.level->level;
+         superProject.superProject[]->superSuperProject[];
+         (if superSuperProject[]<>NONE then
+             (if superSuperProject.isDirectory then
+                 (* this is the .. directory - select it *)
+                 superSuperProject[]->setProject;
+              else
+                 (* try to locate the '..' project in
+                  * superSuperProject
+                  *)
+                 l: (#
+                    do superSuperProject.subprojects.iterate
+                       (#
+                       do 
+                          (if current.elm.location[]
+                                ->location.equal then
+                              current.elm[]->setProject; leave l
+                          if);
+                       #);
+                       (* not found - create it *)
+                       createParentProject;
+                    #);
+             if)
+          else (* OK, we are 'on the top'.  Try those *)
+             l: (#
+                do browser.projects.theProjects.iterate
+                   (# where:: (# do (current.elm.level=level)->value #);
+                   do 
+                      (if current.elm.location[]->location.equal then
+                          current.elm[]->setProject; leave l
+                      if);
+                   #);
+                   (* not found - create it *)
+                   createParentProject;
+                #);
+         if);
+     if);
+  #);
+
 unfoldSubprojects:
   (# proj: ^browser.projects.project;
      projPos: ^projects.theProjects.theCellType;
@@ -338,56 +420,71 @@ unfoldSubprojects:
       // proj.isDirectory then
          (if proj.subprojects.size=0 then
              (* the directory haven't previously been unfolded *)
-             (# d: @directory; f: @file;
+             (# d: @directory; f: @file; level: @integer;
              do (proj.location[],ph.currentDirectory)
                   ->ph.convertfilepath->d.name;
                 d.scanEntries
                 (# 
                 do select
                    (# whenDir::
-                        (# d: ^directory; name: ^text;
+                        (# d: ^directory;
+                           name: ^text; location: ^text;
                            newProj: ^browser.projects.project;
+                           create, dotdot: @boolean;
                         do thedir->d[];
                            d.entry.path.name->name[];
                            (if true
                             // '.'->name.equalNCS
-                            // '..'->name.equalNCS
-                            // 'sun4s'->name.equalNCS then
-                            // 'sun4'->name.equalNCS then
-                            // 'sun3'->name.equalNCS then
-                            // 'snake'->name.equalNCS then
-                            // 'sgi'->name.equalNCS then
-                            // 'nti'->name.equalNCS then
-                            // 'linux'->name.equalNCS then
-                            // 'hpux9pa'->name.equalNCS then
-                            // 'hpux8'->name.equalNCS then
+                            // 'sun4s'->name.equalNCS
+                            // 'sun4'->name.equalNCS
+                            // 'sun3'->name.equalNCS
+                            // 'snake'->name.equalNCS
+                            // 'sgi'->name.equalNCS
+                            // 'nti'->name.equalNCS
+                            // 'linux'->name.equalNCS
+                            // 'hpux9mc'->name.equalNCS
+                            // 'hpux9pa'->name.equalNCS
+                            // 'hpux8'->name.equalNCS
                             // 'b2c'->name.equalNCS then
+                               false->create;
+                            // '..'->name.equalNCS then
+                               true->create; true->dotdot;
                             else
+                               true->create; false->dotdot;
+                           if);
+                           (if create then
                                &browser.projects.project[]
                                  ->newProj[];
+                               true->newProj.isDirectory;
                                (d.name,proj.location[])
                                  ->ph.convertfilePath
-                                 ->newProj.location.puttext;
-                               newProj.location[]->f.name;
-                               (if (newProj.location.length
-                                     ->newProj.location.inxGet)<>'/'
-                                   then
-                                   '/'->newProj.location.append
-                               if);
-                               proj.level+1->newProj.level;
+                                 ->location[];
+                               location[]->f.name;
                                &text[]->newProj.name[];
+                               proj.level+1->newProj.level;
                                (for newProj.level repeat
                                     '  '->newProj.name.puttext
                                for);
                                f.entry.path.name
                                  ->newProj.name.puttext;
                                '/'->newProj.name.append;
-                               true->newProj.isDirectory;
+                               (if dotdot then
+                                   true->newProj.isDotDotDirectory;
+                                   (f.entry.path.head)->f.name;
+                                   (f.entry.path.head)->location[]
+                               if);
+                               location[]->newProj.location.puttext;
+                               (if (newProj.location.length
+                                     ->newProj.location.inxGet)<>'/'
+                                   then
+                                   '/'->newProj.location.append
+                               if);
                                (if (newProj.location[]->fileExists) and
                                    (newProj.location[]->fileReadable) then
                                    (newProj[],proj[]
                                      ->projects.theProjects.at)
                                      ->projects.theProjects.insertAfter;
+                                   proj[]->newProj.superProject[];
                                    newProj[]->proj.subprojects.append;
                                 else
                                    (* skip for ECOOP: newProj.location[]->fileAvailable *)
@@ -426,10 +523,14 @@ unfoldSubprojects:
                                    (newProj[],proj[]
                                      ->projects.theProjects.at)
                                      ->projects.theProjects.insertAfter;
+                                   proj[]->newProj.superProject[];
                                    newProj[]->proj.subprojects.append;
                                 else
                                    (* skip for ECOOP: newProj.location[]->fileAvailable *)
-             if)if)#)#)#)#)
+                               if)
+                           if)
+                        #)
+             #)#)#)
           else
              (* the directory have previously been unfolded *)
              proj[]->projects.theProjects.at->projPos[];
@@ -439,7 +540,7 @@ unfoldSubprojects:
                      '  '->current.name.prepend
                 for);
                 (current[],projPos[])
-                  ->projects.theProjects.insertAfter->projPos[];
+                  ->projects.theProjects.insertAfter->projpos[];
              #);
              proj.subprojects.scan
              (# do (if current.unfolded then current[]->unfoldSubprojects if) #);
@@ -504,12 +605,14 @@ do &thegrouplist.action
                   root.location->newProj.location;
                   true->newProj.isDomain;
                   '[domain]'->newProj.name[];
+                  root[]->newProj.superProject[];
                   newProj[]->root.subprojects.append;
                   
                   &browser.projects.project[]->newProj[];
                   root.location->newProj.location;
                   true->newProj.isExtent;
                   '[extent]'->newProj.name[];
+                  root[]->newProj.superProject[];
                   newProj[]->root.subprojects.append;
                   
                   projectsChanged;
@@ -527,15 +630,20 @@ do &theprojectlist.action
    do (if (theprojectlist.selection.first->i)<>0 then
           (if theEvent.doubleClick then
               i->projectByIndex->selectedProj[];
-              (if selectedProj.unfolded then
+              (if true
+               // selectedProj.isDotDotDirectory then
+                  selectedProj[]->setupDotDot;
+               // selectedProj.unfolded then
                   false->selectedProj.unfolded;
                   selectedProj[]->foldSubprojects;
+                  projectsChanged;
+                  selectedProj[]->setProject;
                else
                   true->selectedProj.unfolded;
                   selectedProj[]->unfoldSubprojects;
+                  projectsChanged;
+                  selectedProj[]->setProject;
               if);
-              projectsChanged;
-              selectedProj[]->setProject;
           if)
       if)
    #)[]->theprojectlist.appendAction;
