@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(71)";
+char betarun_version[] = "BETARUN VERSION 5.3(72)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.75  2002/03/01 12:10:55  corry
+ * Make it work on nti_ms
+ * Use -j2 to make in parallel
+ * Betarun version number: 71
+ *
  * Revision 1.74  2002/02/28 17:44:01  corry
  * Lots of stuff for nti_ms
  * Betarun version number: 70
