@@ -246,6 +246,13 @@ ComputeSplitOutline:
 do (# pixels: @integer;
       width, height: @integer;
    do backgroundColor  -> doublebuffer.content.clear;
+      size -> (width, height);
+      
+      0 -> doublebuffer.left;
+      width -> doublebuffer.right;
+      0 -> doublebuffer.top;
+      height -> doublebuffer.bottom;
+      
       doublebuffer.begin;
       doublebuffer.push;
       (panx, pany) -> doublebuffer.translate;
@@ -260,7 +267,7 @@ do (# pixels: @integer;
       doublebuffer.pop;
       
       
-      size -> (width, height);
+      
       doublebuffer.content.private.handleToPixmap -> pixels;
       (pixels, width, height, filename) -> write_pixels_to_png;
       doublebuffer.end;
@@ -269,6 +276,12 @@ do (# pixels: @integer;
 do (# pixels: @integer;
       width, height: @integer;
    do backgroundColor  -> doublebuffer.content.clear;
+      
+      0 -> doublebuffer.left;
+      0 -> doublebuffer.top;
+      10000 -> doublebuffer.right;
+      10000 -> doublebuffer.bottom;
+        
       doublebuffer.begin;
       doublebuffer.push;
       (panx, pany) -> doublebuffer.translate;
@@ -308,7 +321,21 @@ do INNER;
 -- GraphicsCanvasOnRefresh: doPart --
 do (# windowid, pixmapid: @integer;
       width, height: @integer;
-   do backgroundColor -> doublebuffer.content.clear;
+      
+      area: ^Rectangle;
+      
+      
+   do updateRect -> area[];
+      
+      
+      backgroundColor -> doublebuffer.content.clear;
+      (* Clear only area *)
+      
+      area.left -> doublebuffer.left;
+      area.right -> doublebuffer.right;
+      area.top -> doublebuffer.top;
+      area.bottom -> doublebuffer.bottom;
+      
       doublebuffer.begin;
       doublebuffer.push;
       (panx, pany) -> doublebuffer.translate;
@@ -324,8 +351,8 @@ do (# windowid, pixmapid: @integer;
 
       THIS(Canvas).windowItemDevice -> windowid;
       doublebuffer.private.hdc -> pixmapid;
-      size -> (width, height);
-      (windowid, 0, 0, width, height, pixmapid, 0, 0, SRCCOPY) -> BitBlt;
+      area.size -> (width, height);
+      (windowid, area.left, area.top, width, height, pixmapid, area.left, area.top, SRCCOPY) -> BitBlt;
       doublebuffer.end;
    #);
    
@@ -514,14 +541,28 @@ do (if useGDI then
           (* private.hdc, prev) -> SelectObject; *)
        #);
     else
-       (# x, y: @integer;
-          w, h: @integer;
-          x1, y1: @integer;
-       do (0, 0) -> transform -> (x1, y1);
-          width -> w;
-          height -> h;
-          (x1, y1, w, h) -> fill_oval;
-       #);
+       filling:
+         (# x, y: @integer;
+            w, h: @integer;
+            x1, y1: @integer;
+         do (0, 0) -> transform -> (x1, y1);
+            width -> w;
+            height -> h;
+            
+            (if x1 > right then
+                leave filling;
+            if);
+            (if y1 > bottom then
+                leave filling;
+            if);
+            (if x1 + w < left then
+                leave filling;
+            if);
+            (if y1 + h < top then
+                leave filling;
+            if);
+            (x1, y1, w, h) -> fill_oval;
+         #);
    if);
    
 -- PixmapSurfaceFillOval: doPart --
@@ -539,18 +580,32 @@ do (if useGDI  then
           (* (private.hdc, prev) -> SelectObject; *)
        #);
     else
-       (# x, y: @integer;
-          w, h: @integer;
-          x1, y1: @integer;
-       do (0, 0) -> transform -> (x1, y1);
-          x1 + strokewidth -> x1;
-          y1 + strokewidth -> y1;
-          
-          (width / 2, height / 2) -> transform -> (x, y);
-          width - 2*strokewidth -> w;
-          height - 2*strokewidth -> h;
-          (x1, y1, w, h) -> fill_oval;
-       #);
+       filling:
+         (# x, y: @integer;
+            w, h: @integer;
+            x1, y1: @integer;
+         do (0, 0) -> transform -> (x1, y1);
+            x1 + strokewidth -> x1;
+            y1 + strokewidth -> y1;
+            
+            (width / 2, height / 2) -> transform -> (x, y);
+            width - 2*strokewidth -> w;
+            height - 2*strokewidth -> h;
+            (if x1 > right then
+                leave filling;
+            if);
+            (if y1 > bottom then
+                leave filling;
+            if);
+            (if x1 + w < left then
+                leave filling;
+            if);
+            (if y1 + h < top then
+                leave filling;
+            if);
+            
+            (x1, y1, w, h) -> fill_oval;
+         #);
    if);
 -- PixmapSurfaceDrawPolygon: doPart --
 do (# flag: @boolean;
@@ -1023,3 +1078,65 @@ do (# theSurface: ^PixmapSurface;
    do getShared -> theSurface[];
       theSurface.useGDI -> value;
    #);
+
+-- GraphicsCanvasChangePan: doPart --
+do (# hwnd: @integer;
+      hdc: @integer;
+      dx, dy: @integer;
+      width, height: @integer;
+      
+      fromx, tox, fromy, toy: @integer;
+      
+      area: @Rectangle;
+      ptr: @integer;
+   do panx - newx -> dx;
+      pany - newy -> dy;
+      
+      (if ((dx <> 0) OR (dy <> 0)) then
+          size -> (width, height);
+          (if dx > 0 then
+              dx -> fromx;
+              0 -> tox;
+              width - fromx -> width; 
+           else
+              0 -> fromx;
+              -dx -> tox;
+              width - tox -> width;
+          if);
+          
+          (if dy > 0 then
+              dy -> fromy;
+              0 -> toy;
+              height - fromy -> height;
+           else
+              0 -> fromy;
+              -dy -> toy;
+              height - toy -> height;
+          if);
+          THIS(GraphicsCanvas).interfaceObjectID -> hwnd;
+          hwnd -> GetDC -> hdc;
+          (hdc, tox, toy, width, height, hdc, fromx, fromy, SRCCOPY) -> BitBlt;
+          
+          0 -> area.left;
+          0 -> area.top;
+          size -> (area.right, area.bottom);
+          area[] -> makeNtRectPtr -> ptr;
+          (hwnd, ptr, 0) -> InvalidateRect;
+          ptr -> free;
+          
+          tox -> area.left;
+          toy -> area.top;
+          area.left + width -> area.right;
+          area.top + height -> area.bottom;
+          area[] -> makeNtRectPtr -> ptr;
+          
+          (hwnd, ptr) -> ValidateRect;
+          ptr -> free;
+          
+          
+          newx -> panx;
+          newy -> pany;
+          (hwnd, hdc) -> ReleaseDC;
+      if);
+   #);
+   
