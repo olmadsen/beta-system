@@ -29,6 +29,9 @@ ParamThisComp(struct Component *, Att)
     FetchThisComp
     Ck(comp); Ck(this);
 
+    if (comp->StackObj == cast(StackObject) -1 || comp == ActiveComponent)
+      BetaError(RecursiveAttErr, this);
+
     getret(ActiveComponent->CallerLSC);		/* Save our return address */
 
     AssignReference((long *)&comp->CallerComp, cast(Item) ActiveComponent);
