@@ -175,6 +175,18 @@ static inline void *setCallReg(void *p)
   return p; /* 'cause it's used in the RETURN macro */
 }
 
+static inline long *getR8Reg()
+{     
+  long *res; 
+  asm volatile ("COPY\t%%r8, %0" : "=r" (res)); 
+  return res;
+}
+
+static inline void setR8Reg(long p)
+{     
+  asm volatile ("COPY\t%0, %%r8" : /* no out */ : "r" (p));
+}
+
 static inline long *getOriginReg()
 {     
   /* This is probably a nop in most cases since r26 = first C param */
@@ -266,7 +278,7 @@ static inline long getRPReg()
 #define ParamOriginProto(t,name)			\
   t name(struct Object *origin, struct ProtoType *proto)
 
-#define FetchOriginProto			\
+#define FetchOriginProto()			\
   origin = (struct Object *)getOriginReg();	\
   proto  = (struct ProtoType *)getCallReg();
 
@@ -283,11 +295,11 @@ static inline long getRPReg()
 #define ParamStruc(t, name) \
   t name(struct Structure *struc)
 
-#define FetchThisComp			\
+#define FetchThisComp()			\
   this = (struct Item *)getThisReg();	\
   comp = (struct Component *)getCallReg();
 
-#define FetchStruc struc = cast(Structure) getCallReg();
+#define FetchStruc() struc = cast(Structure) getCallReg();
 
 extern struct Component *AlloC();
 extern struct Item *AlloI();
@@ -339,6 +351,30 @@ static inline struct Item * CAlloSI(struct Structure *s)
   (setCallReg(item), (* (void (*)()) (entry))()); BETA_CLOBBER;  \
   /* setRefSP(popReg()); */       \
 }
+
+#define PushGCRegs()                                          \
+    asm volatile ("\tLDIL\tLR'RefSP,%r1\n"                    \
+		  "\tLDW\tRR'RefSP(%r1),%r14\n"               \
+		  "\tSTWS,MA\t%r3,4(0,%r14)\n"  /* r3 (th) */ \
+		  "\tSTWS,MA\t%r4,4(0,%r14)\n"  /* r4 (ca) */ \
+		  "\tSTWS,MA\t%r5,4(0,%r14)\n"  /* r5 */      \
+		  "\tSTWS,MA\t%r6,4(0,%r14)\n"  /* r6 */      \
+		  "\tSTWS,MA\t%r7,4(0,%r14)\n"  /* r7 */      \
+		  /* r8 is NOT to be GC'ed */                 \
+		  "\tSTW\t%r14,RR'RefSP(0,%r1)\n"             \
+		  )
+
+#define PopGCRegs()                                           \
+    asm volatile ("\tLDIL\tLR'RefSP,%r1\n"                    \
+		  "\tLDW\tRR'RefSP(%r1),%r14\n"               \
+		  "\tLDWS,MB\t-4(0,%r14),%r7\n"               \
+		  "\tLDWS,MB\t-4(0,%r14),%r6\n"               \
+		  "\tLDWS,MB\t-4(0,%r14),%r5\n"               \
+		  "\tLDWS,MB\t-4(0,%r14),%r4\n"               \
+		  "\tLDWS,MB\t-4(0,%r14),%r3\n"               \
+		  "\tSTW\t%r14,RR'RefSP(0,%r1)\n"             \
+		  )
+
 
 #define Protect(var, code) \
   pushReference(var); { code; } var = (typeof(var))popReference();
