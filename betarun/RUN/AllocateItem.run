@@ -20,9 +20,9 @@ AlloI: public
      TmpData:       Long      = DataReg1;
      Eax:           CodeArea  = DataReg1;
      Entry:         CodeArea  = DataReg1;
-     TmpAddr:       Long      = AddrReg1;
-     initTab:       GCEntry   = AddrReg1; { index in GC table in prototype }
-     newTop:        DataArea  = AddrReg1;
+     TmpAddr:       Long      = { AddrReg1 } RegThis;
+     initTab:       GCEntry   = { AddrReg1 } RegThis; { index in GC table in prototype }
+     newTop:        DataArea  = { AddrReg1 } RegThis;
      theItem:       Item      = AddrReg2;
           
   do
@@ -30,9 +30,14 @@ AlloI: public
      (if debug then call Ck if);
      
      { General Stack Layout:
-       <DataReg2>
-       <AddrReg2>
-       <AddrReg1>
+       <DataReg2>  +8
+       <AddrReg2>  +4
+       <RegThis>   +0
+       <PC>        -4
+       It is vital to beta.dump/valhalla that RegThis is pushed as the first
+       thing here: Then the stack will contain the necessary (Object, PC) pair.
+       This is, of course, only a subject when stack traversal is needed during
+       allocation, e.g. when errors occur in G-parts.
      }
      
      (if debug then
@@ -45,7 +50,7 @@ AlloI: public
              }
              { Don't do this before AttBC }
              (if ActiveComponent<>0 then
-                 push AddrReg1, AddrReg2, DataReg2Long;
+                 push { AddrReg1 } RegThis, AddrReg2, DataReg2Long;
                  0 -> Size!l;
                  protoType.Size -> Size;
                  goto GC;
@@ -55,7 +60,7 @@ AlloI: public
      
      again:
      
-     push AddrReg1, AddrReg2, DataReg2Long;
+     push { AddrReg1 } RegThis, AddrReg2, DataReg2Long;
      
      IOATop -> theItem;
      0 -> Size!l;
@@ -91,17 +96,17 @@ AlloI: public
      (if HandOptimizedAlloI then
          AsmComment 'Optimized loop for partobj init';
          (if linux then
-             (code '	testl	$0xffff,(%ebp)		#u 1	' code);
+             (code '	testl	$0xffff,(%edx)		#u 1	' code);
              (code '	je	L5a			#v 1	' code);
              (code 'L4a:					' code);
-             (code '	movl	(%ebp),%eax		#u 2	' code);
-             (code '	movl	(%ebp),%ebx		#v 2	' code);
+             (code '	movl	(%edx),%eax		#u 2	' code);
+             (code '	movl	(%edx),%ebx		#v 2	' code);
              (code '	sarl	$16,%eax		#u 3	' code);
              (code '	andl	$0xffff,%ebx		#v 3	' code);
-             (code '	addl	$8,%ebp			#u 4	' code);
+             (code '	addl	$8,%edx			#u 4	' code);
              (code '	movl	%eax,4(%esi,%ebx,4)	#v 4	' code);
-             (code '	movl	-4(%ebp),%eax		#u 5	' code);
-             (code '	testl	$0xffff,(%ebp)		#v 5	' code);
+             (code '	movl	-4(%edx),%eax		#u 5	' code);
+             (code '	testl	$0xffff,(%edx)		#v 5	' code);
              (if COM then
                  (code'	leal	DISP_OFF(%eax),%eax     #u 6 SETPROTO' code);
                  (code'	nop				#v 6	' code);
@@ -111,16 +116,16 @@ AlloI: public
              (code 'L5a:					' code);
          if);
          (if nti then
-             (code '	test	dword ptr [ebp],0ffffh	;u 1	' code);
+             (code '	test	dword ptr [edx],0ffffh	;u 1	' code);
              (code '    je	L5a			;v 1	' code);
-             (code 'L4a:mov	eax,[ebp]		;u 2	' code);
-             (code '    mov	ebx,[ebp]		;v 2	' code);
+             (code 'L4a:mov	eax,[edx]		;u 2	' code);
+             (code '    mov	ebx,[edx]		;v 2	' code);
              (code '    sar	eax,16			;u 3	' code);
              (code '    and	ebx,0ffffh		;v 3	' code);
-             (code '    add	ebp,8			;u 4	' code);
+             (code '    add	edx,8			;u 4	' code);
              (code '    mov	4[esi+4*ebx],eax	;v 4	' code);
-             (code '    mov	eax,[ebp-4]		;u 5	' code);
-             (code '    test	dword ptr [ebp],0ffffh	;v 5	' code);
+             (code '    mov	eax,[edx-4]		;u 5	' code);
+             (code '    test	dword ptr [edx],0ffffh	;v 5	' code);
              (if COM then
                  (code'	lea	eax,DISP_OFF[eax]       ;u 6 SETPROTO' code);
                  (code'	nop				;v 6	' code);
@@ -169,14 +174,14 @@ AlloI: public
          pop TmpData!l; {Discard Protect1Tag tag (to dummy DataReg)}
      if);
      
-     pop DataReg2Long, AddrReg2, AddrReg1;
+     pop DataReg2Long, AddrReg2, { AddrReg1 } RegThis;
      (if debug then call Ck if);
      return;
      
      GC:
      { The IOA heap is full, so we need a garbage collection.  }
      Size!l -> ReqObjectSize; { Set the requested Object Size. }
-     pop DataReg2Long, AddrReg2, AddrReg1;
+     pop DataReg2Long, AddrReg2, { AddrReg1 } RegThis;
      { Stack: as on entry }
      push pReg1; { update origin }
      { Stack:

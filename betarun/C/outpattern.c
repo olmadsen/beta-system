@@ -789,9 +789,8 @@ void DisplayStackPart(long *low,
     TRACE_DUMP(fprintf(output, ">>>TraceDump: 0x%x: 0x%x ", (int)current, *(int*)current));
     if (inBetaHeap(theObj)){
       if (isObject(theObj)){
-	if ((!inBetaHeap((Object*)*(current+1))) &&
-	    IsBetaCodeAddrOfProcess(*(current+1))){
-	  /* Found an object with a PC just before it on stack */
+	if ((!inBetaHeap((Object*)*(current+1))) && IsBetaCodeAddrOfProcess(*(current+1))){
+	  /* Found an object with a PC just below it on stack */
 	  lastObj = theObj;
 	  TRACE_DUMP(fprintf(output,"new lastObj: "); DescribeObject(lastObj));
 	  if (!isComponent(lastObj) && IsComponentItem(lastObj)){
@@ -805,7 +804,7 @@ void DisplayStackPart(long *low,
 	  TRACE_DUMP(fprintf(output, "\n"));
 	} else {
 	  /* Probably a pushed register */
-	  TRACE_DUMP(fprintf(output, "(object with no PC)\n"));
+	  TRACE_DUMP(fprintf(output, "(object with no PC below)\n"));
 	}
       } else {
 	TRACE_DUMP(fprintf(output, "(illegal pointer inside heap)\n"));
@@ -817,6 +816,7 @@ void DisplayStackPart(long *low,
 	current += skip;
       } else {
 	if (IsBetaCodeAddrOfProcess(*current)){
+	  /* Found a BETA PC */
 	  long PC=*current;
 	  TRACE_DUMP(PrintCodeAddress(PC));
 	  if (lastObj){
@@ -852,34 +852,42 @@ long *DisplayCallbackFrames(CallBackFrame *cbFrame,
      *    2. The address of the call back stub.
      */
     TRACE_DUMP(fprintf(output, "  cb: "));
-    fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n"); 
+    if (isMakingDump){
+      /* beta.dump */
+      fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n"); 
+    } else {
+      /* valhalla? */
+    }
     low = cbFrame->betaTop;
-    low += 4;
-    /* low+4 because the compiler saves 4 intel registers
+    low += 3;
+    /* low+3 because the compiler pushes %edx, %edi, %ebp, %esi
      * before setting BetaStackTop.
+     * Of these we only want to see %edx (current object).
      */
     cbFrame = cbFrame->next;
     if (isObject((Object *)(*low))) {
       Object *obj = (Object*)(*low);
       TRACE_DUMP({
 	fprintf(output, 
-		">>>DisplayCallbackFrames: low: 0x%x: 0x%x ",
-		(int)low,
-		(int)obj);
+		">>>DisplayCallbackFrames: low: 0x%x: 0x%x ", (int)low, (int)obj);
 	DescribeObject(obj);
 	fprintf(output, "\n"); 
       });
       if (!isComponent(obj) && IsComponentItem(obj)){
 	  obj = (Object*)EnclosingComponent(obj);
 	  TRACE_DUMP({
-	    fprintf(output, 
-		    " is item of component 0x%x\n", 
-		    (int)obj);
+	    fprintf(output, " is item of component 0x%x\n", (int)obj);
 	  });
       }
-      func(0, obj);
+      TRACE_DUMP({ fprintf(output, ">>>DisplayCallbackFrames: func(0, obj)\n");});
+      func(0, obj); /* PC=0 since we cannot easily determine where the PC is
+		     * saved when the external was called: BetaStackTop was set before 
+		     * arguments to the external were pushed. So if we were to
+		     * figure out where the PC was saved, we need to know how many 
+		     * arguments the external has.
+		     */
     }
-    low += 2;
+    low += 1; /* Skip the object */
     TRACE_DUMP({
       fprintf(output, 
 	      ">>>DisplayCallbackFrames: cbFrame: 0x%x, low: 0x%x\n", 
@@ -901,11 +909,16 @@ void DisplayINTELStack(BetaErr errorNumber,
 		       long theSignal /* theSignal is zero if not applicable. */
 		       )
 { 
-  long            *low;
-  long            *high;
-  CallBackFrame   *cbFrame;
+  Component       *currentComponent = ActiveComponent;
+  long            *low              = (long *) StackEnd;
+  long            *high             = (long *) lastCompBlock;
+  CallBackFrame   *cbFrame          = ActiveCallBackFrame; 
   ComponentBlock  *currentBlock;
-  Component       *currentComponent;
+
+  /*
+   * Handle the topmost component block, designated by 
+   * StackEnd, ActiveCallbackFrame and lastCompBlock.
+   */
 
   /* First check for errors occured outside BETA */
   if (!IsBetaCodeAddrOfProcess(PC)){
@@ -915,21 +928,36 @@ void DisplayINTELStack(BetaErr errorNumber,
 	    );
     if (!SimpleDump) PrintCodeAddress((long)PC);
     fprintf(output, ") ]\n");
+    if ((StackEnd<BetaStackTop) && (BetaStackTop<(long*)StackStart)){
+      /* BetaStackTop is in the active stack. Try continuing from there.
+       * This will work if BETA called a C routine, but not if the error
+       * occurred in a runtime routine - BetaStackTop is not set, when
+       * runtime routines are called.
+       * This might also fail if we are returning from a callback chain,
+       * since BetaStackTop is not adjusted as we pop off callback frames.
+       * Should be handled, though, by the requirement that BetaStackTop 
+       * must be between StackStart and StackEnd.
+       */
+      low = BetaStackTop;
+      TRACE_DUMP({
+	fprintf(output, 
+		">>>DisplayINTELStack: adjusting low to BetaStackTop: 0x%x\n",
+		(int)BetaStackTop);
+      });
+    }
+    low += 3;
+    /* low+3 because the compiler pushes %edx, %edi, %ebp, %esi
+     * before setting BetaStackTop.
+     * Of these we only want to see %edx (current object).
+     */
   }
 
-  /*
-   * Handle the topmost component block, designated by 
-   * StackEnd, ActiveCallbackFrame and lastCompBlock.
-   */
-  currentComponent = ActiveComponent;
-  low              = (long *) StackEnd;
-  high             = (long *) lastCompBlock;
-  cbFrame          = ActiveCallBackFrame; 
+  if (cbFrame){
+    /* Display callbackframes in the component */
+    low = DisplayCallbackFrames(cbFrame, low, currentObject, DisplayCell);
+  }
 
-  /* Display callbackframes in the component */
-  low = DisplayCallbackFrames(cbFrame, low, currentObject, DisplayCell);
-
-  /* Displays the objects from the last callback was initiated
+  /* Displays the objects from where the last callback was initiated
    * (if any) and onwards to the ComponentBlock.
    */
   DisplayStackPart(low, high-3, currentObject, DisplayCell);  
@@ -968,10 +996,12 @@ void DisplayINTELStack(BetaErr errorNumber,
       }
     }
 
-    /* Display callbackframes in the component */
-    low = DisplayCallbackFrames(cbFrame, low, currentObject, DisplayCell);
+    if (cbFrame){
+      /* Display callbackframes in the component */
+      low = DisplayCallbackFrames(cbFrame, low, currentObject, DisplayCell);
+    }
     
-    /* Displays the objects from the last callback was initiated
+    /* Displays the objects from where the last callback was initiated
      * (if any) and onwards to the ComponentBlock.
      */
     DisplayStackPart(low, high-3, currentObject, DisplayCell); 

@@ -200,13 +200,15 @@ static long sourceReg(unsigned long instruction, ucontext_t *ucon, long returnSP
 
 static unsigned long dummy;
 
-/* proxyTrapHandler: Will decode the faulting instruction, lookup the
+/* SPARC:
+   proxyTrapHandler: Will decode the faulting instruction, lookup the
    object, and insert a reference to it in the register previously
    containing the proxy. */
 static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 {
   unsigned long instruction, returnPC, returnSP, absAddr = 0;
   void *ip;
+  int isBeta;
   
   INFO_PERSISTENCE(numPF++);
 
@@ -218,7 +220,9 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   /* SP to restore when fetch has completed: */
   returnSP = ucon->uc_mcontext.gregs[REG_SP]; 
 
-  if (sourceReg(instruction, ucon, returnSP)) {
+  isBeta = !((int)returnPC&3) && IsBetaCodeAddrOfProcess((unsigned long)returnPC);
+
+  if (isBeta && sourceReg(instruction, ucon, returnSP)) {
     
     if (sourcereg != -1) {
       
@@ -413,67 +417,77 @@ static long* decodeModRM(CONTEXT* pContextRecord,
   return 0;
 }
 
+/* WIN32:
+   NTI:
+   proxyTrapHandler:
+*/
 int proxyTrapHandler(CONTEXT* pContextRecord)
 {
   long *proxy, *absAddr = 0;
   unsigned char* PC;
   unsigned char modrm;
+  int isBeta;
 
   PC = (unsigned char*)pContextRecord->Eip;
+  StackEnd = (long *)pContextRecord->Esp;
+
+  isBeta = IsBetaCodeAddrOfProcess((unsigned long)PC);
 
   Claim(!IOAActive, "!IOAActive");
   INFO_PERSISTENCE(numPF++);
 
-  switch (PC[0]) {
-  case 0x62:  /* BOUND R32, M32, M32 */
-  case 0x80:  /* CMP R/M8, IMM8 */
-  case 0x88:  /* MOV R/M8, R8 */
-  case 0x89:  /* MOV R/M32, R32 */
-  case 0x8a:  /* MOV R8, R/M8 */
-  case 0x8b:  /* MOV R32, R/M32 */
-  case 0xc6:  /* MOV R/M8, IMM8 */
-  case 0xc7:  /* MOV R/M32, IMM32 */
-    modrm = PC[1]; 
-    proxy = decodeModRM(pContextRecord, modrm, PC+1);
-    break;
-  case 0x0f: /* Two-byte instruction. */
-    switch (PC[1]) {
-    case 0xb6: /* MOVZX R32, R/M8 */
-    case 0xb7: /* MOVZX R32, R/M16 */
-    case 0xbe: /* MOVSX R32, R/M8 */
-    case 0xbf: /* MOVSX R32, R/M16 */
-      modrm = PC[2]; 
-      proxy = decodeModRM(pContextRecord, modrm, PC+2);
+  if (isBeta){
+    switch (PC[0]) {
+    case 0x62:  /* BOUND R32, M32, M32 */
+    case 0x80:  /* CMP R/M8, IMM8 */
+    case 0x88:  /* MOV R/M8, R8 */
+    case 0x89:  /* MOV R/M32, R32 */
+    case 0x8a:  /* MOV R8, R/M8 */
+    case 0x8b:  /* MOV R32, R/M32 */
+    case 0xc6:  /* MOV R/M8, IMM8 */
+    case 0xc7:  /* MOV R/M32, IMM32 */
+      modrm = PC[1]; 
+      proxy = decodeModRM(pContextRecord, modrm, PC+1);
+      break;
+    case 0x0f: /* Two-byte instruction. */
+      switch (PC[1]) {
+      case 0xb6: /* MOVZX R32, R/M8 */
+      case 0xb7: /* MOVZX R32, R/M16 */
+      case 0xbe: /* MOVSX R32, R/M8 */
+      case 0xbf: /* MOVSX R32, R/M16 */
+	modrm = PC[2]; 
+	proxy = decodeModRM(pContextRecord, modrm, PC+2);
+	break;
+      default:
+	DEBUG_CODE({
+	  fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
+		  "%02x %02x %02x %02x %02x %02x\n", 
+		  (int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
+	});
+	return 1;
+      }
       break;
     default:
-    DEBUG_CODE({
-      fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
-	      "%02x %02x %02x %02x %02x %02x\n", 
-	      (int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
-    });
-    return 1;
+      DEBUG_CODE({
+	fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
+		"%02x %02x %02x %02x %02x %02x\n", 
+		(int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
+      });
+      return 1;
     }
-    break;
-  default:
-    DEBUG_CODE({
-      fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
-	      "%02x %02x %02x %02x %02x %02x\n", 
-	      (int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
-    });
-    return 1;
-  }
-  
-  if (inPIT(proxy)) {
-    /* Calculate absolute address by looking in appropriate tables */
-    absAddr = (long*)unswizzleReference(proxy);
-
-    /* Now write the new value back into sourcereg: */
-    setRegisterContents(pContextRecord, sourcereg, (long)absAddr);
-
-    return 0;
-  } else if (!proxy) {
-    /* Normal refNone:  Handle as regular refNone. */
-    return 2;
+    
+    if (inPIT(proxy)) {
+      /* Calculate absolute address by looking in appropriate tables */
+      absAddr = (long*)unswizzleReference(proxy);
+      
+      /* Now write the new value back into sourcereg: */
+      setRegisterContents(pContextRecord, sourcereg, (long)absAddr);
+      
+      return 0;
+    } else if (!proxy) {
+      /* Normal refNone:  Handle as regular refNone. */
+      return 2;
+    }
   }
 
   /* Exception not handled, let sighandler decide what to do. */
@@ -559,11 +573,15 @@ static long* decodeModRM(struct sigcontext_struct *scp,
   return 0;
 }
 
+/* LINUX:
+   proxyTrapHandler:
+ */
 void proxyTrapHandler(long sig, struct sigcontext_struct scp)
 {
   long *proxy = 0, *absAddr = 0;
   unsigned char* PC;
   unsigned char modrm;
+  int isBeta;
 
   if (scp.trapno==5 || scp.trapno==12) {
     BetaSignalHandler(sig, scp);
@@ -571,69 +589,73 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
   }
   INFO_PERSISTENCE(numPF++);
   PC = (unsigned char*) scp.eip;
-  
-  Claim(!IOAActive, "!IOAActive");
 
-  switch (PC[0]) {
-  case 0x62:  /* BOUND R32, M32, M32 */
-  case 0x80:  /* CMP R/M8, IMM8 */
-  case 0x88:  /* MOV R/M8, R8 */
-  case 0x89:  /* MOV R/M32, R32 */
-  case 0x8a:  /* MOV R8, R/M8 */
-  case 0x8b:  /* MOV R32, R/M32 */
-  case 0xc6:  /* MOV R/M8, IMM8 */
-  case 0xc7:  /* MOV R/M32, IMM32 */
-    modrm = PC[1]; 
-    proxy = decodeModRM(&scp, modrm, PC+1);
-    break;
-  case 0x0f: /* Two-byte instruction. */
-    switch (PC[1]) {
-    case 0xb6: /* MOVZX R32, R/M8 */
-    case 0xb7: /* MOVZX R32, R/M16 */
-    case 0xbe: /* MOVSX R32, R/M8 */
-    case 0xbf: /* MOVSX R32, R/M16 */
-      modrm = PC[2]; 
-      proxy = decodeModRM(&scp, modrm, PC+2);
+  isBeta = IsBetaCodeAddrOfProcess((unsigned long)PC);
+  
+  if (isBeta){
+    Claim(!IOAActive, "!IOAActive");
+    
+    switch (PC[0]) {
+    case 0x62:  /* BOUND R32, M32, M32 */
+    case 0x80:  /* CMP R/M8, IMM8 */
+    case 0x88:  /* MOV R/M8, R8 */
+    case 0x89:  /* MOV R/M32, R32 */
+    case 0x8a:  /* MOV R8, R/M8 */
+    case 0x8b:  /* MOV R32, R/M32 */
+    case 0xc6:  /* MOV R/M8, IMM8 */
+    case 0xc7:  /* MOV R/M32, IMM32 */
+      modrm = PC[1]; 
+      proxy = decodeModRM(&scp, modrm, PC+1);
+      break;
+    case 0x0f: /* Two-byte instruction. */
+      switch (PC[1]) {
+      case 0xb6: /* MOVZX R32, R/M8 */
+      case 0xb7: /* MOVZX R32, R/M16 */
+      case 0xbe: /* MOVSX R32, R/M8 */
+      case 0xbf: /* MOVSX R32, R/M16 */
+	modrm = PC[2]; 
+	proxy = decodeModRM(&scp, modrm, PC+2);
+	break;
+      default:
+	DEBUG_CODE({
+	  fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
+		  "%02x %02x %02x %02x %02x %02x\n", 
+		  (int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
+	});
+	/* Exception not handled, let sighandler decide what to do. */
+	BetaSignalHandler(sig, scp);
+      }
       break;
     default:
-    DEBUG_CODE({
-      fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
-	      "%02x %02x %02x %02x %02x %02x\n", 
-	      (int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
-    });
-    /* Exception not handled, let sighandler decide what to do. */
-    BetaSignalHandler(sig, scp);
+      DEBUG_CODE({
+	fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
+		"%02x %02x %02x %02x %02x %02x\n", 
+		(int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
+      });
+      /* Exception not handled, let sighandler decide what to do. */
+      BetaSignalHandler(sig, scp);
     }
-    break;
-  default:
-    DEBUG_CODE({
-      fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
-	      "%02x %02x %02x %02x %02x %02x\n", 
-	      (int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
-    });
-    /* Exception not handled, let sighandler decide what to do. */
-    BetaSignalHandler(sig, scp);
-  }
-  
-  if (inPIT(proxy)) {
-    /* Calculate absolute address by looking in appropriate tables */
-    absAddr = (long*)unswizzleReference(proxy);
+    
+    if (inPIT(proxy)) {
+      /* Calculate absolute address by looking in appropriate tables */
+      absAddr = (long*)unswizzleReference(proxy);
+      
+      /* Now write the new value back into sourcereg: */
+      setRegisterContents(&scp, sourcereg, (long)absAddr);
+    } else if (!proxy) {
+      Object *    theObj = 0;
+      theObj = (Object *) scp.edx;
+      if ( ! (inIOA(theObj) && isObject (theObj)))
+	theObj  = 0;
+      /* Normal refNone:  Handle as regular refNone. */
+      /* PC = (long *) scp.eip; */
+      StackEnd = (long *) scp.esp_at_signal;
+      if (!DisplayBetaStack(RefNoneErr, theObj, (long*)PC, sig)) {
+	BetaExit(1);
+      }
+      return;
+    } 
 
-    /* Now write the new value back into sourcereg: */
-    setRegisterContents(&scp, sourcereg, (long)absAddr);
-  } else if (!proxy) {
-    Object *    theObj = 0;
-    theObj = (Object *) scp.edx;
-    if ( ! (inIOA(theObj) && isObject (theObj)))
-      theObj  = 0;
-    /* Normal refNone:  Handle as regular refNone. */
-    /* PC = (long *) scp.eip; */
-    StackEnd = (long *) scp.esp_at_signal;
-    if (!DisplayBetaStack(RefNoneErr, theObj, (long*)PC, sig)) {
-      BetaExit(1);
-    }
-    return;
-  } else {
     /* Exception not handled, let sighandler decide what to do. */
     BetaSignalHandler(sig, scp);
   }
@@ -692,7 +714,9 @@ static unsigned long dummy;
 
 extern void BetaSignalHandler(long sig, long code, 
 			      struct sigcontext * scp, char *addr);
-/* proxyTrapHandler: Will decode the faulting instruction, lookup the
+
+/* SGI:
+   proxyTrapHandler: Will decode the faulting instruction, lookup the
    object, and insert a reference to it in the register previously
    containing the proxy. */
 /* See /usr/include/sys/signal.h, man siginfo */
@@ -700,62 +724,78 @@ static void proxyTrapHandler(long sig, long code, struct sigcontext * scp, char 
 {
   unsigned long instruction, opcode;
   unsigned long proxy = 0;
+  int isBeta;
   long *PC;
+
   PC = (long *) scp->sc_pc;
 
   INFO_PERSISTENCE(numPF++);
   DEBUG_CODE({
-  fprintf(output, "(proxyTrapHandler:PC=0x%08x, instr0x%08x)\n",
-	  (int)PC, (int)*PC);
+    fprintf(output, "(proxyTrapHandler:PC=0x%08x, ", (int)PC);
+    fflush(output);
   });
 
-  /* Fetch the faulting instruction. */
-  dummy = instruction = *PC;
-  opcode = (instruction & 0xfc000000);
-  switch (opcode) {
+  isBeta = !((int)PC&3) && IsBetaCodeAddrOfProcess((unsigned long)PC);
+  if (!isBeta){
+    DEBUG_CODE({
+      fprintf(output, "(outside BETA code))\n");
+      fflush(output);
+    });
+  } else {
+    DEBUG_CODE({
+      fprintf(output, "is BETA code address: ");
+      fflush(output);
+      fprintf(output, "instr=0x%08x)\n", (int)*PC);
+      fflush(output);
+    });
+    
+    /* Fetch the faulting instruction. */
+    dummy = instruction = *PC;
+    opcode = (instruction & 0xfc000000);
+    switch (opcode) {
     case /* LW   */ 0x8c000000: 
       proxy = DecodeFormatI(scp, instruction);
       break;
-  default:
-    fprintf(output, "proxyTrapHandler: instruction=0x%08x\n",instruction);
-  }
-
-  if (proxy > 1) {
-    proxy = (unsigned long)unswizzleReference((long*)proxy);
-    DEBUG_CODE({
-      fprintf(output, "proxyTrapHandler: reg=%d set to value=0x%08x\n", 
-	      (int)regToSet, (int)proxy);
-    });
-    setRegisterContents(scp, regToSet, proxy);
-    InstallProxyHandler();
-    return;
-  }
-  
-  if (proxy == 1) {
-    long todo;
-    Object *theObj = CurrentObject = (Object *)scp->sc_regs[30];
-    StackEndAtSignal = StackEnd = (long*)scp->sc_regs[29];
-    if (!(inBetaHeap(theObj) && isObject(theObj))) {
-      theObj = NULL;
+    default:
+      fprintf(output, "proxyTrapHandler: instruction=0x%08x\n",instruction);
     }
+    
+    if (proxy > 1) {
+      proxy = (unsigned long)unswizzleReference((long*)proxy);
+      DEBUG_CODE({
+	fprintf(output, "proxyTrapHandler: reg=%d set to value=0x%08x\n", 
+		(int)regToSet, (int)proxy);
+      });
+      setRegisterContents(scp, regToSet, proxy);
+      InstallProxyHandler();
+      return;
+    }
+    
+    if (proxy == 1) {
+      long todo;
+      Object *theObj = CurrentObject = (Object *)scp->sc_regs[30];
+      if (!(inBetaHeap(theObj) && isObject(theObj))) {
+	theObj = NULL;
+      }
+      StackEndAtSignal = StackEnd = (long*)scp->sc_regs[29];
 #ifdef RTVALHALLA
-    if (valhallaID) {
-      /* We are running under valhalla */
-      register_handles handles = {-1, -1, -1, -1, -1};
-      DEBUG_CODE(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
-      SaveSGIRegisters(scp, &handles);
+      if (valhallaID) {
+	/* We are running under valhalla */
+	register_handles handles = {-1, -1, -1, -1, -1};
+	DEBUG_CODE(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
+	SaveSGIRegisters(scp, &handles);
+	todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); 
+	RestoreSGIRegisters(scp, &handles);
+	if (!todo) BetaExit(1);
+	return;
+      } 
+#endif /* RTVALHALLA */
+      /* Not running under valhalla */
       todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); 
-      RestoreSGIRegisters(scp, &handles);
       if (!todo) BetaExit(1);
       return;
-    } 
-#endif /* RTVALHALLA */
-    /* Not running under valhalla */
-    todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); 
-    if (!todo) BetaExit(1);
-    return;
+    }
   }
-  
   /* If we get here, it was an ordinary SIGBUS, SIGSEGV or object
      could not be loaded */
   BetaSignalHandler(sig, code, scp, addr);

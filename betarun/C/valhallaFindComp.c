@@ -92,13 +92,25 @@ int scanComponentStack (Component* comp,
     
     /* First handle the topmost component block */
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: topmost component block\n"));
-    currentObject = curObj;
+    currentObject    = curObj;
     currentComponent = ActiveComponent;
-    low  = (long *) StackEnd;
-    high = (long *) lastCompBlock;
-    cbFrame  = ActiveCallBackFrame; 
+    low              = (long *) StackEnd;
+    high             = (long *) lastCompBlock;
+    cbFrame          = ActiveCallBackFrame; 
 
-    low = DisplayCallbackFrames(cbFrame, low, currentObject, ShowCell);
+    /* First check for errors occured outside BETA */
+    if (!IsBetaCodeAddrOfProcess(PC)){
+      low += 3;
+      /* low+3 because the compiler pushes %edx, %edi, %ebp, %esi
+       * before setting BetaStackTop.
+       * Of these we only want to see %edx (current object).
+       */
+      /* Anything to tell valhalla? */
+    }
+    
+    if (cbFrame){
+      low = DisplayCallbackFrames(cbFrame, low, currentObject, ShowCell);
+    }
     DisplayStackPart(low, high-3, currentObject, ShowCell); 
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: topmost component block done\n"));
     
@@ -123,7 +135,9 @@ int scanComponentStack (Component* comp,
 	DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", (int)PC, (int)currentObject));
 	ShowCell(PC, currentObject);
       }
-      low = DisplayCallbackFrames(cbFrame, low, currentObject, ShowCell);
+      if (cbFrame){
+	low = DisplayCallbackFrames(cbFrame, low, currentObject, ShowCell);
+      }
       DisplayStackPart(low, high-3, currentObject, ShowCell); 
       currentBlock     = currentBlock->next;
       currentObject    = currentComponent->CallerObj;
@@ -132,15 +146,6 @@ int scanComponentStack (Component* comp,
     }
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: other component blocks done\n"));
   }
-#if 0
-  LINUX_CODE({
-    extern void Att(void);
-    DEBUG_VALHALLA({
-      fprintf(output, "Dummy Attach Pair: PC=0x%x, obj=0x%x\n", (int)&Att, 0);
-    });
-    ShowCell(0, (Object*)&Att);
-  })
-#endif
   DEBUG_VALHALLA(fprintf(output, "scanComponentStack: machinestack done\n"));
 
   if (!stacktype){

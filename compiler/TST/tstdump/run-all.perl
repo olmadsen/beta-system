@@ -1,7 +1,7 @@
 #!/usr/local/bin/perl -s
 #-*-Perl-*-
 
-# nti usage: perl -I..\..\..\..\bin\admin run-all.perl
+# usage: perl -s run-all.perl [-u] [-f]
 
 $UseDefaults = 1 if ($u);
 $FastMode = 1 if ($f);
@@ -15,7 +15,7 @@ $nti = ($OS eq "WIN");
 $exe = "\.exe" if ($nti);
 
 $ENV{'BETART'}="";
-$ENV{'LD_LIBRARY_PATH'}= $ENV{'LD_LIBRARY_PATH'} . ":../lib/${objdir}";
+$ENV{'LD_LIBRARY_PATH'}= $ENV{'LD_LIBRARY_PATH'} . ":" . $ENV{'BETALIB'} . "/lib/${objdir}:../lib/${objdir}";
 
 print "\nRemoving old output- and dump files...\n";
 print "======================================================\n";
@@ -160,8 +160,8 @@ foreach $f (@files) {
 
 open(SUMMARY, ">summary.run-all" || die "cannot open summary.run-all for writing: $!\n");
 
+print SUMMARY "Summary (${objdir}): ";
 print SUMMARY ctime(time);
-print SUMMARY "Summary:\n";
 foreach $f (@files) {
     $f =~ s%^\.\/%%;
     $f =~ s/${exe}$//;

@@ -70,15 +70,19 @@ group_header* NextGroup (group_header* current)
   TRACE_GROUP(fprintf (output, "NextGroup: current = 0x%x\n", (int)current));
 
   if (!current){
-    /* met 1 NULL - try next too */
+    TRACE_GROUP(fprintf (output, "NextGroup: met 1 NULL - try next too\n"));
     ptr++;
+    TRACE_GROUP(fprintf (output, "NextGroup: next ptr=0x%x\n", (int)ptr));
     current = *ptr;
+    TRACE_GROUP(fprintf (output, "NextGroup: next current = 0x%x\n", (int)current));
     if (current){
       /* A non-zero field after the first NULL is a pointer to
        * another block - continue through that one.
        */
       ptr = (group_header **)current;
+      TRACE_GROUP(fprintf (output, "NextGroup: new ptr=0x%x\n", (int)ptr));
       current = *ptr;
+      TRACE_GROUP(fprintf (output, "NextGroup: new current = 0x%x\n", (int)current));
     }
   }
   if (current){
@@ -86,6 +90,7 @@ group_header* NextGroup (group_header* current)
     current->ptr = ptr;
   }
 
+  TRACE_GROUP(fprintf (output, "NextGroup: returns current = 0x%x\n", (int)current));
   return current;
 }
 
@@ -170,6 +175,8 @@ int IsPrototypeOfProcess(long pt)
 { 
   group_header *gh;
 
+  TRACE_GROUP(fprintf(output, "IsPrototypeOfProcess(0x%08x)\n", (int)pt));
+
   if (isSpecialProtoType(pt)) return 1;
   gh = NextGroup(0);
   while (gh){
@@ -194,6 +201,10 @@ int IsBetaCodeAddrOfProcess(unsigned long addr)
 #else
   group_header *current = 0;
   while ((current = NextGroup (current))) {
+    TRACE_GROUP({
+      fprintf(output, "IsBetaCodeAddrOfProcess: current=0x%08x\n", (int)current); 
+      fflush(output);
+    });
     if ((GroupCodeStart(current)<=addr) && (addr<=GroupCodeEnd(current)))
       return TRUE;
   }
@@ -214,6 +225,10 @@ int IsBetaDataAddrOfProcess(unsigned long addr)
 #else
   group_header *current = 0;
   while ((current = NextGroup (current))) {
+    TRACE_GROUP({
+      fprintf(output, "IsBetaDataAddrOfProcess: current=0x%08x\n", (int)current); 
+      fflush(output);
+    });
     if (((unsigned long)current->data_start<=addr) && (addr<=(unsigned long)current->data_end))
       return TRUE;
   }
