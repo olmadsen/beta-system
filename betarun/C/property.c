@@ -85,7 +85,7 @@ static ValueProperty( name, value)
 	  AOAPercentage = 3;
 	}
 	if( AOAPercentage > 97 ){
-	  fprintf( output, "#AOAPercentage (%d) is too high, adjusted to 3\n",
+	  fprintf( output, "#AOAPercentage (%d) is too high, adjusted to 97\n",
 		  AOAPercentage);
 	  AOAPercentage = 97;
 	});
@@ -101,7 +101,7 @@ static ValueProperty( name, value)
 	  LVRAPercentage = 3;
 	}
 	if( LVRAPercentage > 97 ){
-	  fprintf( output, "#LVRAPercentage (%d) is too high, adjusted to 3\n",
+	  fprintf( output, "#LVRAPercentage (%d) is too high, adjusted to 97\n",
 		   LVRAPercentage);
 	  LVRAPercentage = 97;
 	});
