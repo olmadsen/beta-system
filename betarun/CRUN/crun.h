@@ -129,7 +129,9 @@ extern char	       *IOAalloc();
 #endif
 
 static __inline__ void CRUN_USE() {
+#ifdef sparc
   USE();
+#endif
   if (0) {
     AssignReference(0, 0);
     setup_item(0,0,0);

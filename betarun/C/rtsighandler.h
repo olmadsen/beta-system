@@ -48,6 +48,9 @@
 #ifdef ppcmac
 #define SIGNAL_CONTEXT ExceptionInformation *
 #endif
+#ifdef hppa
+#define SIGNAL_CONTEXT struct sigcontext *
+#endif
 
 void set_BetaStackTop(long *SP);
 

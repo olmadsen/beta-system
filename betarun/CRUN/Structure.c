@@ -45,7 +45,7 @@ Structure *VAlloS(ProtoType *proto, long *SP, long PC)
 #ifdef hppa
   /* Valhalla not yet supported */
   fprintf(output, "valhalla_AlloS: NYI for hppa\n");
-  struc = 0;
+  newStruct = NULL;
 #endif /* hppa */
   Ck(newStruct);
   return newStruct;
