@@ -3,11 +3,12 @@ INCLUDE 'bytecodebackendbody';
 INCLUDE '~beta/process/activate'; 
 INCLUDE '~beta/basiclib/basicsystemenv'; 
 INCLUDE '~beta/basiclib/formatio'; 
-INCLUDE '~beta/basiclib/pcre'; 
 INCLUDE '~beta/basiclib/streamPosition'; 
 INCLUDE '~beta/toollibs/utils/fileExtensions';
 INCLUDE '~beta/basiclib/texthash';
 INCLUDE 'BCdotnetSupport';
+MDBODY nti     'BCdotnetWindowsBody'
+       default 'BCdotnetUnixBody';
 
 --BCmachineLib: attributes--
 trace_opcodes: 
@@ -834,33 +835,7 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
                                  if)
                               #);
             assemblyname[] -> safequote -> out.puttext;
-            (if hostIsWindows then
-                out.indent.inc;
-                ' {' -> out.puttext;
-                (if is_external then
-                    (# version, publickeytoken: ^text;
-                    do assemblyname[]
-                         -> lookupAssemblyVersion 
-                         -> (version[], publickeytoken[]);
-                       out.nl;
-                       '.ver %s'
-                         -> out.putformat(# do version[]->s; #);
-                       out.nl;
-                       '.publickeytoken = (%s)'
-                         -> out.putformat(# do publickeytoken[]->s #);
-                       out.newline;
-                    #)
-                 else
-                    out.nl;
-                    '.ver %s'
-                      -> out.putformat(# do defaultversion->s; #);
-                    out.newline;                       
-                if);
-                out.indent.dec;
-                '}' -> out.putln;
-             else
-                ' {}' -> out.putline;
-            if);
+            <<SLOT ImportAssemblyVersion: descriptor>>
         if)
      #);
    
@@ -868,75 +843,10 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
      (# assemblyname: ^text;
         version, publickeytoken: ^text;
         
-        gacutil: 
-          (# gac, gacline: ^text;
-             cmd: ^text;
-             gacutil_output: @file;
-             system: external
-               (# cmd: [0]@char
-               enter cmd
-               #);
-             regexp: @pcre;
-          do (if false then
-                 (* Calling execReadText apparently hangs in general in windows,
-                  * if output is more than one line (:-(  
-                  *)
-                 ('gacutil','-l') -> (GetSystemenv).execReadText -> gac[];
-              else
-                 &text[] -> cmd[];
-                 'gacutil -l %s' -> cmd.putformat(# do assemblyname[]->s #);
-                 (*'\n' -> (cmd.copy).prepend -> screen.putline;*)
-                 ' > gacutil.out' -> cmd.append;
-                 cmd -> system;
-                 'gacutil.out' -> gacutil_output.name;
-                 gacutil_output.openread;
-                 &text[] -> gac[];
-                 read:
-                   (if not gacutil_output.eos then
-                       gacutil_output.getline -> gac.putline;
-                       restart read;
-                   if);
-                 gacutil_output.close;
-                 gacutil_output.delete;  
-             if);
-             (* find last line of gacutil output matching assemblyname *)
-             ', Version=(\\d+)\\.(\\d+)\\.(\\d+)\.(\\d+), Culture=.*, PublicKeyToken=(.*),' 
-               -> (assemblyname.copy).append 
-               -> regexp;
-             gac.reset;
-             match:
-               (if not gac.eos then
-                   gac.getline 
-                     -> gacline[];
-                   (*gacline[] -> screen.putline;*)
-                   gacline[]
-                     -> regexp.match(# 
-                                    do (*'match of version in GAC'->screen.putline;*)
-                                       &text[] -> version[];
-                                       '%d:%d:%d:%d'
-                                         -> version.putformat(# sub: ^text;
-                                                             do sub1 -> sub[];
-                                                                sub.reset; sub.getint->d;
-                                                                sub2 -> sub[];
-                                                                sub.reset; sub.getint->d;
-                                                                sub3 -> sub[];
-                                                                sub.reset; sub.getint->d;
-                                                                sub4 -> sub[];
-                                                                sub.reset; sub.getint->d;
-                                                             #);
-                                       sub5 -> publickeytoken[];
-                                    #);
-                   restart match;
-               if);
-             
-          #);
+        gacutil: <<SLOT GacUtil: descriptor>>;
         was_there: @boolean;
      enter assemblyname[]
      do '1:0:0:0' -> version[];
-        (* FIXME: 
-         * could call gacutil -l and match "assemblyname, version=xxxx", 
-         * or use IMetaDataAssemblyImport from unmanaged API 
-         *)
         assemblyname[] 
           -> lookedup_assemblies.get
           -> (was_there, version[], publickeytoken[]);
