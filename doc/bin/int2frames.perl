@@ -92,24 +92,25 @@ if ($fullpath){
 
 # Other file names:
 $indexfile = "inx.html";
-$indexnavfile = "inx-nav.html";
-$indexdocfile = "inx-doc.html";
+($indexnavfile = $indexfile) =~ s/\.html$/-nav.html/;
+($indexdocfile = $indexfile) =~ s/\.html$/-doc.html/;
 if ($wiki){
-    $contentsfile = $ENV{'TOCURL'};
+    $tocfile = $ENV{'TOCURL'};
 } else {
-    $contentsfile = "index.html";
+    $tocfile = "index.html";
 }
+($tocnavfile = $tocfile) =~ s/\.html$/-nav.html/;
+($tocdocfile = $tocfile) =~ s/\.html$/-doc.html/;
+$toptarget = " TARGET=\"_top\"";
+
+
+###### Functions for buttons and standard HTML header and frameset ##
 
 sub print_button
 {
     local ($type, $href) = @_;
     local ($alt) = ucfirst ($type);
-    local ($target);
-    if ($frames){
-	$target = " TARGET=\"_top\"";
-    } else {
-	$target="";
-    }
+
     # special case for "prev":
     $alt =~ s/Prev/Previous/g;
     if ("$href" eq ""){
@@ -117,7 +118,7 @@ sub print_button
 	print $type . "g.gif\" ALT=";
 	print $alt . " BORDER=0></A>\n";
     } else {
-	print "<A HREF=\"" . $href . "\"" . $target . ">";
+	print "<A HREF=\"" . $href . "\"" . $toptarget . ">";
 	print "<IMG ALIGN=BOTTOM SRC=\"$imagedir";
 	print $type . ".gif\" ALT=";
 	print $alt . " BORDER=0></A>\n";
@@ -138,14 +139,14 @@ sub print_std_buttons
 	if ($wiki){
 	    &print_button("prev", "");
 	} else {
-	    &print_button("prev", $contentsfile);
+	    &print_button("prev", $tocfile);
 	};
     } else {
 	&print_button("prev", 
 		      &strip_path(&strip_extension($files[$filenumber-1])) . ".html");
     }
     &print_button("top", $topfile) if (!$wiki);
-    &print_button("content", $contentsfile);
+    &print_button("content", $tocfile);
     &print_button("index", $indexfile);
 }
 
@@ -162,7 +163,6 @@ sub print_header
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
 </HEAD>
 EOT
-
 }
 
 sub print_trailer
@@ -176,20 +176,42 @@ sub print_trailer
 <P></P>
 <TABLE cols=3 border=0 width=100%>
 <TR>
-<TD width="40%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
+<TD width="40%" align="left"><ADDRESS>$title</ADDRESS></TD>
 <TD width="20%" align="center">$copyright</TD>
 <TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
 </TABLE>
-<P></P>
 EOT
+}
 
-    &print_std_buttons if (!$frames);
+sub print_frameset()
+{
+    
+    local ($title, $basename, $height) = @_;
 
-    print<<EOT;
-</BODY>
+    &print_header($title);
+
+    print<<"EOT";
+<FRAMESET border=0 noresize scrolling=no ROWS="$height,*">
+   <NOFRAMES>
+   <BODY>
+   <H1>$title</H1>
+   To display this page correctly, frames are required. Your browser 
+   does not support it, or has not enabled it.  
+   <P>
+   Click here instead:
+   <UL>
+     <LI><A href="$basename-doc.html">$title</A>
+   </UL>
+   </BODY>
+   </NOFRAMES>
+   <FRAME SRC="$basename-nav.html" NAME="${basename}Nav" SCROLLING=NO MARGINHEIGHT=1>
+   <FRAME SRC="$basename-doc.html" NAME="${basename}Body">
+</FRAMESET>
 </HTML>
 EOT
 }
+
+################### Functions for body files ######################
 
 sub print_nav_frame
 {
@@ -199,7 +221,7 @@ sub print_nav_frame
 
     print <<EOT;
 <BODY>
-<TABLE VALIGN=MIDDLE WIDTH="100%" CELLPADDING=0 CELLSPACING=5>
+<TABLE VALIGN=MIDDLE WIDTH="100%" CELLPADDING=0 CELLSPACING=2>
 <TR>
 <TD>
 EOT
@@ -208,7 +230,7 @@ EOT
 
     print<<EOT;
 </TD>
-<TH ALIGN=right>Interface Description</TH>
+<TH ALIGN=right>$title</TH>
 </TR>
 </TABLE>
 
@@ -223,43 +245,18 @@ sub print_doc_frame(){
     &print_header($title);
     print<<"EOT";
 <BODY>
-<H1>$title</H1>
-<P></P>
-<HR>
-<H2><A name="$basename">$basename</A></H2>
+<H1><A name="$basename">$title</A></H1>
 <PRE CLASS=interface>
 EOT
     print $contents; # full interface file as build in $_ above.
     &print_trailer($title);
-}
-
-sub print_frameset()
-{
-    
-    local ($title, $basename) = @_;
-
-    &print_header($title);
-
-    print<<"EOT";
-<FRAMESET border=0 noresize scrolling=no ROWS="49,*">
-   <NOFRAMES>
-   <BODY>
-   <H1>$title</H1>
-   To display this page correctly, frames are required. Your browser 
-   does not support it, or has not enabled it.  
-   <P>
-   Click here instead:
-   <UL>
-     <LI><A href="$basename-doc.html">$title</A>
-   </UL>
-   </BODY>
-   </NOFRAMES>
-   <FRAME SRC="$basename-nav.html"  NAME="${basename}Nav" MARGINHEIGHT=1>
-   <FRAME SRC="$basename-doc.html" NAME=""${basename}Body" MARGINHEIGHT=5 FRAMEBORDER=1>
-</FRAMESET>
+    print<<EOT;
+</BODY>
 </HTML>
 EOT
 }
+
+############### Functions for index generation ####################
 
 sub print_index_nav_frame
 {
@@ -278,17 +275,42 @@ EOT
     &print_button("prev", 
 		  &strip_path(&strip_extension($files[$#files])) . ".html");
     &print_button("top", $topfile) if (!$wiki);
-    &print_button("content", $contentsfile);
+    &print_button("content", $tocfile);
 
     print<<EOT;
 </TD>
-<TH ALIGN=right>Interface Description</TH>
+<TH ALIGN=right>Interface Descriptions: Index</TH>
+</TR>
+<TR>
+<TD colspan=2>
+EOT
+
+    &calculate_index();
+    &print_index_toc();
+
+    print<<EOT;
+</TD>
 </TR>
 </TABLE>
-
 </BODY>
 </HTML>
 EOT
+}
+
+sub print_index_toc
+{
+    local ($i, $ch);
+    print "<HR>\n";
+    for ($i=65; $i<=90; $i++){
+	$ch = sprintf ("%c", $i);
+	if ($caps{$ch}){
+	    print "<STRONG><A HREF=\"inx-doc.html#_$ch\" TARGET=\"inxBody\">$ch</A></STRONG> &nbsp; \n";
+	} else {
+	    # no indices starting with $ch
+	    print "<STRONG CLASS=disabled>$ch</STRONG> &nbsp; \n";
+	}	    
+    }
+    print "<HR><P></P>\n";
 }
 
 sub print_index_header()
@@ -299,10 +321,6 @@ sub print_index_header()
 
     print<<EOT;
 <BODY>
-<P></P>
-<P>Interface Description</P>
-<HR>
-<!---------------------------------------------------------->
 
 <H1><A name="Index.identifiers">Index of Identifiers</A></H1>
 <PRE CLASS=interface>
@@ -313,15 +331,10 @@ sub print_index_trailer()
 {
     print<<EOT;
 </PRE>
-<!---------------------------------------------------------->
-<HR>
-<P></P>
-<TABLE cols=3 border=0 width=100%>
-<TR>
-<TD width="40%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
-<TD width="20%" align="center">$copyright</TD>
-<TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
-</TABLE>
+EOT
+    &print_trailer();
+
+    print<<EOT;
 <P></P>
 EOT
 
@@ -329,7 +342,7 @@ EOT
     &print_button("prev", 
 		  &strip_path(&strip_extension($files[$#files])) . ".html");
     &print_button("top", $topfile) if (!$wiki);
-    &print_button("content", $contentsfile);
+    &print_button("content", $tocfile);
 
     print<<EOT;
 </BODY>
@@ -337,25 +350,8 @@ EOT
 EOT
 }
 
-sub print_index_toc
+sub calculate_index()
 {
-    local ($i, $ch);
-    print "</PRE>\n<HR>\n";
-    for ($i=65; $i<=90; $i++){
-	$ch = sprintf ("%c", $i);
-	if ($caps{$ch}){
-	    print "<STRONG><A HREF=\"#_$ch\">$ch</A></STRONG> &nbsp; \n";
-	} else {
-	    # no indices starting with $ch
-	    print "<STRONG CLASS=disabled>$ch</STRONG> &nbsp; \n";
-	}	    
-    }
-    print "<HR>\n<P></P>\n<PRE CLASS=interface>\n";
-}
-
-sub print_index()
-{
-
     # Remove levels on single index-entries.
     #s/(\{\\v\s*\w+)\.\d+/$1/g;
 
@@ -373,7 +369,7 @@ sub print_index()
 
     # Sort index ignoring case
     @index = sort {lc($a) cmp lc($b)} @index;
-    local ($html_index, $prev_id, $prev_no, $initial_ch, $htmlfile, $i, %entries);
+    local ($prev_id, $prev_no, $initial_ch, $htmlfile, $i, %entries);
 
     #print STDERR "index:++++++++++++++++++++\n";
     #print STDERR join ("\n", @index);
@@ -446,7 +442,7 @@ sub print_index()
 	if ( ($index[$i] =~ m/^betaenv.1/) && ($htmlfile eq "betaenv.html")){
 	    if (!$entries{"betaenv"}){
 		print STDERR "Treating betaenv specially\n" if $verbose;
-		$html_index .= "\n  <I><A HREF=\"betaenv.html\">betaenv</I></A>";
+		$html_index .= "\n  <I><A HREF=\"betaenv.html\" $toptarget>betaenv</I></A>";
 		$entries{"betaenv"} = 1;
 	    }
 	}
@@ -462,7 +458,7 @@ sub print_index()
 		$html_index .= "\n";
 		# indent with double-spaces
 		$html_index .= "  " x (1+&num_chars(':', $scopes));
-		$html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\">" . $id . "</A>";
+		$html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\"$toptarget>" . $id . "</A>";
 		$entries{$_} = 1;
 	    } else {
 		$html_index .= "Index Error: $_ ($scopes) ($id)\n";
@@ -475,66 +471,38 @@ sub print_index()
 		    # break line of references
 		    $html_index .= "\n   ";
 		}
-		$html_index .= " <A href=\"$htmlfile\#" . $index[$i] . "\">[" . $prev_no . "]</A>";
+		$html_index .= " <A href=\"$htmlfile\#" . $index[$i] . "\"$toptarget>[" . $prev_no . "]</A>";
 	    } else {
 		$prev_no=1;
 		$html_index .= "\n";
-		$html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\">" . $id . "</A>";
+		$html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\"$toptarget>" . $id . "</A>";
 		$prev_id = $id;
 	    }
 	    $entries{$_} = 1;
 	}
     }
+}
+
+sub print_index_doc_frame()
+{
     &print_index_header;
-    &print_index_toc;
     print $html_index;
     &print_index_trailer;
 }
 
-sub print_toc_header
+####### Functions for table of contents #######################
+
+sub print_toc_nav_frame
 {
-    print<<EOT;
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
-<HTML>
-<!-- Autogenerated file - do not edit -->
-<HEAD>
-<TITLE>Interface Description: Table of Contents</TITLE>
-<LINK REL="stylesheet" HREF="$css" TYPE="text/css">
-</HEAD>
+    local ($title) = @_;
+
+    &print_header($title);
+
+    print <<EOT;
 <BODY>
-<P></P>
-EOT
-
-    &print_button("next", 
-		  &strip_path(&strip_extension($files[0])) . ".html");
-    &print_button("prev", "");
-    &print_button("up", $upfile) if (!$wiki);
-    &print_button("top", $topfile) if (!$wiki);
-    &print_button("index", $indexfile);
-
-    print<<EOT;
-<P></P>
-<P>Interface Description</P>
-<HR>
-<!---------------------------------------------------------->
-
-<H1><A name="Interface.TOC">Table of Contents</A></H1>
-EOT
-}
-
-sub print_toc_trailer
-{
-    print<<EOT;
-<!---------------------------------------------------------->
-<HR>
-<P></P>
-<TABLE cols=3 border=0 width=100%>
+<TABLE VALIGN=MIDDLE WIDTH="100%" CELLPADDING=0 CELLSPACING=5>
 <TR>
-<TD width="40%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
-<TD width="20%" align="center">$copyright</TD>
-<TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
-</TABLE>
-<P></P>
+<TD>
 EOT
 
     &print_button("next", 
@@ -545,29 +513,66 @@ EOT
     &print_button("index", $indexfile);
 
     print<<EOT;
+</TD>
+<TH ALIGN=right>Interface Descriptions: Contents</TH>
+</TR>
+</TABLE>
 </BODY>
 </HTML>
 EOT
 }
 
-sub print_toc
+sub print_toc_header
 {
-    &print_toc_header;
+    local ($title) = @_;
+
+    &print_header($title);
+
+    print<<EOT;
+<BODY>
+<P></P>
+<H1><A name="_toc">Table of Contents</A></H1>
+EOT
+}
+
+sub print_toc_trailer
+{
+    local ($title) = @_;
+    
+    &print_trailer($title);
+
+    print<<EOT;
+<P></P>
+</BODY>
+</HTML>
+EOT
+}
+
+sub print_toc_doc_frame
+{
+    local ($title) = @_;
+    local ($htmlfile);
+
+    &print_toc_header($title);
     print "<DIV CLASS=toc>\n";
     print "<DL>\n";
     print "<DT><DD>\n";
     print "<DL>\n";
     for ($i=0; $i<=$#htmlfiles; $i++){
-	print "<DT><A HREF=\"" . $htmlfiles[$i] . ".html\">";
-	print $htmlfiles[$i] ." Interface</A>\n<DD>\n";
+	($htmlfile = $htmlfiles[$i]) =~ s/\-doc$//;
+	print "<DT><A HREF=\"" . $htmlfile . ".html\"$toptarget>";
+	print $htmlfile ." Interface</A>\n<DD>\n";
     }
     print "<DT>&nbsp;\n<DD>\n";
-    print "<DT><A HREF=\"" . $indexfile . "\">Index</A>\n<DD>\n";
+    print "<DT><A HREF=\"" . $indexfile . "\"$toptarget>Index</A>\n<DD>\n";
     print "</DL>\n";
     print "</DL>\n";
     print "</DIV>\n";
     &print_toc_trailer;
 }
+
+
+######################## Utility functions #####################
 
 sub strip_extension
 {
@@ -870,50 +875,35 @@ sub process_file
     s/\021/&lt;/g;
     s/\022/&gt;/g;
 
-    if ($frames){
-	printf STDERR "Writing frameset to $outfile ... " if $verbose==1;
-	if (!open (STDOUT, ">$outfile")){
-	    print "\nCannot open $outfile for writing: $!\n";
-	    return;
-	}
-	&print_frameset($title, $basename);
-	close (STDOUT);
-	printf STDERR "done.\n" if $verbose==1;
-
-	$outfile = $basename . "-nav.html";
-	printf STDERR "Writing navigation frame to $outfile ... " if $verbose==1;
-	if (!open (STDOUT, ">$outfile")){
-	    print "\nCannot open $outfile for writing: $!\n";
-	    return;
-	}
-	&print_nav_frame($title);
-	close (STDOUT);
-	printf STDERR "done.\n" if $verbose==1;
-
-	$outfile = $basename . "-doc.html";
-	printf STDERR "Writing body frame to $outfile ... " if $verbose==1;
-	if (!open (STDOUT, ">$outfile")){
-	    print "\nCannot open $outfile for writing: $!\n";
-	    return;
-	}
-
-	&print_doc_frame($title, $basename, $_);
-	close (STDOUT);
-	printf STDERR "done.\n" if $verbose==1;
-    } else {
-	# No frames
-	printf STDERR "Writing to $outfile ... " if $verbose==1;
-	if (!open (STDOUT, ">$outfile")){
-	    print "\nCannot open $outfile for writing: $!\n";
-	    return;
-	}
-	&print_header($title);
-	print "<BODY>\n";
-	print;
-	&print_trailer($title);
-	close (STDOUT);
-	printf STDERR "done.\n" if $verbose==1;
+    printf STDERR "Writing frameset to $outfile ... " if $verbose==1;
+    if (!open (STDOUT, ">$outfile")){
+	print "\nCannot open $outfile for writing: $!\n";
+	return;
     }
+    &print_frameset($title, $basename,45);
+    close (STDOUT);
+    printf STDERR "done.\n" if $verbose==1;
+    
+    $outfile = $basename . "-nav.html";
+    printf STDERR "Writing navigation frame to $outfile ... " if $verbose==1;
+    if (!open (STDOUT, ">$outfile")){
+	print "\nCannot open $outfile for writing: $!\n";
+	return;
+    }
+    &print_nav_frame($title);
+    close (STDOUT);
+    printf STDERR "done.\n" if $verbose==1;
+    
+    $outfile = $basename . "-doc.html";
+    printf STDERR "Writing body frame to $outfile ... " if $verbose==1;
+    if (!open (STDOUT, ">$outfile")){
+	print "\nCannot open $outfile for writing: $!\n";
+	return;
+    }
+    
+    &print_doc_frame($title, $basename, $_);
+    close (STDOUT);
+    printf STDERR "done.\n" if $verbose==1;
 
     push @htmlfiles, &strip_extension($outfile);
 
@@ -934,31 +924,68 @@ for ($filenumber=0; $filenumber<=$#ARGV; $filenumber++){
     &process_file($files[$filenumber]);
 }
 
-$outfile = "inx.html";
-printf STDERR "Writing body frame to $outfile ... " if $verbose==1;
-if (!open (STDOUT, ">$outfile")){
-    print "\nCannot open $outfile for writing: $!\n";
+
+### Generate index ###
+printf STDERR "\nWriting common index ...\n" if $verbose=1;
+
+printf STDERR "Writing frameset to $indexfile ..." if $verbose==1;
+if (!open (STDOUT, ">$indexfile")){
+    print "\nCannot open $indexfile for writing: $!\n";
     return;
 }
-
-&print_doc_frame($title, $basename, $_);
+&print_frameset("Interface Descriptions: Index", "inx", 100);
 close (STDOUT);
 printf STDERR "done.\n" if $verbose==1;
 
-
-
-
-
-printf STDERR "\nWriting common index to $indexfile ... " if $verbose==1;
-open (STDOUT, ">$indexfile") || die "\nCannot open $indexfile for writing: $!\n";
-&print_index();
+printf STDERR "Writing navigation frame to $indexnavfile ... " if $verbose==1;
+if (!open (STDOUT, ">$indexnavfile")){
+    print "\nCannot open $indexnavfile for writing: $!\n";
+    return;
+}
+&print_index_nav_frame("Interface Descriptions: Index");
 close (STDOUT);
 printf STDERR "done.\n" if $verbose==1;
+
+printf STDERR "Writing body frame to $indexdocfile ... " if $verbose==1;
+if (!open (STDOUT, ">$indexdocfile")){
+    print "\nCannot open $indexdocfile for writing: $!\n";
+    return;
+}
+&print_index_doc_frame("Interface Descriptions: Index");
+close (STDOUT);
+printf STDERR "done.\n" if $verbose==1;
+
+### Generate table of contents ###
 
 if (!$wiki){
-    printf STDERR "\nWriting table of contents to $contentsfile ... " if $verbose==1;
-    open (STDOUT, ">$contentsfile") || die "\nCannot open $contentsfile for writing: $!\n";
-    &print_toc();
+    printf STDERR "\nWriting common toc ...\n" if $verbose=1;
+    
+    printf STDERR "Writing frameset to $tocfile ..." if $verbose==1;
+    if (!open (STDOUT, ">$tocfile")){
+	print "\nCannot open $tocfile for writing: $!\n";
+	return;
+    }
+    &print_frameset("Interface Descriptions: Contents", "index", 45);
     close (STDOUT);
+    printf STDERR "done.\n" if $verbose==1;
+    
+    printf STDERR "Writing navigation frame to $tocnavfile ... " if $verbose==1;
+    if (!open (STDOUT, ">$tocnavfile")){
+	print "\nCannot open $tocnavfile for writing: $!\n";
+	return;
+    }
+    &print_toc_nav_frame("Interface Descriptions: Contents");
+    close (STDOUT);
+    printf STDERR "done.\n" if $verbose==1;
+    
+    printf STDERR "Writing body frame to $tocdocfile ... " if $verbose==1;
+    if (!open (STDOUT, ">$tocdocfile")){
+	print "\nCannot open $tocdocfile for writing: $!\n";
+	return;
+    }
+    &print_toc_doc_frame("Interface Descriptions: Contents");
+    close (STDOUT);
+    printf STDERR "done.\n" if $verbose==1;
 }
 printf STDERR "done.\n" if $verbose==1;
+
