@@ -166,7 +166,6 @@ void BetaError(BetaErr err, Object *theObj)
       switch(err){
       case RepLowRangeErr /* CpkSVT, CopySRR, CopySVRx,  */:
       case RepHighRangeErr /* CpkSVT, CopySRR, CopySVRx,   */:
-      case CTextPoolErr /* CpkVT, CpkSVT */:
       case CompCallBackErr /* Susp */:
       case RecursiveAttErr /* Att */:
       case CompTerminatedErr /* Att */:
@@ -181,16 +180,18 @@ void BetaError(BetaErr err, Object *theObj)
 	thePC = *(long**)StackEnd;
 	StackEnd++;  /* Two below */
 	break;
+      case CTextPoolErr /* CpkVT, CpkSVT */:
+	/* BETA -> CInitT; BETA -> CpkSVT */
       case StopCalledErr:
 	/* betaenv.stop   -> FailureExit        -> BetaError   */
 	/* betaenvbody.bet   linuxadditions.run    betaerror.c */
 	StackEnd = BetaStackTop;
-	/* BetaStackTop was written just before calling FailureExit,
+	/* BetaStackTop was written just before calling FailureExit/Cpk(S)VT,
 	 * i.e. the instruction pointer can be found one up
 	 * on the stack (the call instruction puts it there).
 	 */
 	thePC = *(long**)(StackEnd-1);
-	/* edx, edi, ebp, esi were pushed before calling FailureExit:
+	/* edx, edi, ebp, esi were pushed before setting BetaStackTop:
 	 *   pushl  %edx
 	 *   pushl  %edi
 	 *   pushl  %ebp

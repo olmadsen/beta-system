@@ -12,6 +12,7 @@ echo ""
 echo Removing old output- and dump files...
 echo "======================================================"
 /bin/rm -f *.out
+/bin/rm -f *.err
 /bin/rm -f *.dump
 
 echo ""
@@ -68,6 +69,7 @@ do
        sed -e "s/MACHINE_TYPE/$objdir/g" < dumps/$f.dump | diff - $f.dump
        if [ $? = 0 ]; then
 	  echo "[Dump is correct]"
+	  rm $f.dump
 	  rm $f
        else
 	  echo "[Difference in dump]"
