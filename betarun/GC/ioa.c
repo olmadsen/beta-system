@@ -385,7 +385,8 @@ void IOAGc()
      */
     memset(GLOBAL_IOATop, 0, (long)GLOBAL_IOALimit-(long)GLOBAL_IOATop);
 
-    DEBUG_MT({ 
+#ifdef MT
+    DEBUG_IOA({ 
       /* If there is only one thread, IOACheck will only check the range
        * IOA..IOATop (not gIOA..gIOATop). To make this possible at this point,
        * we must set the thread specific IOATop already here.
@@ -394,6 +395,7 @@ void IOAGc()
        */
       if (NumTSD==1) IOATop = GLOBAL_IOATop; 
     });
+#endif
 
     DEBUG_IOA( IOACheck() );
     DEBUG_CBFA( CBFACheck() );
