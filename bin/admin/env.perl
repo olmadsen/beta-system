@@ -122,6 +122,10 @@ if (-e "c:\\") {
 	    $MACHINETYPE = 'HPUX9PA';
 	    $objdir = 'hpux9pa';
 	    &setup_hpux9pa;
+	} elsif ($rev =~ /10\./) {
+	    $MACHINETYPE = 'HPUX9PA';
+	    $objdir = 'hpux9pa';
+	    &setup_hpux9pa;
 	} else {
 	    print "Unknown/unsupported HP-UX Version\n";
 	    exit 1;
