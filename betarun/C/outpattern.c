@@ -206,6 +206,8 @@ static struct errorEntry {
   0, 0
   };
 
+static char UnknownError[25];
+
 void ErrorMessage(output, errorNumber)
      ptr(FILE) output;
      long errorNumber;
@@ -215,11 +217,14 @@ void ErrorMessage(output, errorNumber)
   while( errorTable[index].errorNumber != 0){
     if( errorNumber == errorTable[index].errorNumber){
       fprintf(output,"%s", errorTable[index].errorMessage);
+      BetaErrorString = errorTable[index].errorMessage; /* For Valhalla */
       return;
     }
     index++;
   }
-  fprintf(output,"Unknown error (%d)", errorNumber);
+  sprintf(UnknownError, "Unknown error (%d)", errorNumber);
+  BetaErrorString = UnknownError;
+  fprintf(output, UnknownError);
 }
 
 #ifndef sparc
