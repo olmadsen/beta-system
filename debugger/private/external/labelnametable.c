@@ -140,14 +140,18 @@ void initReadNameTable (char* execFileName) {
 int nextAddress () 
 { 
   findNextLabel ();
-#if 1
+#ifdef nti
+#if 0
   fprintf(stderr, 
 	  "NextAddress: %d (0x%x), NextLabel: %s\n",
 	  NextAddress + processOffset,
 	  NextAddress + processOffset,
 	  NextLabel);
-#endif
+#endif 
   return NextAddress + processOffset;
+#else
+  return NextAddress;
+#endif /* nti */
 }
 
 char* nextLabel () 
