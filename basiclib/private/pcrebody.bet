@@ -12,6 +12,15 @@ MDBODY jvm     'pcre_jvmbody'
    oVector: [1] @Integer;
 #)
 
+-- PcreLib: attributes --
+exec:
+  (# subject: ^text;
+     position, options, status: @integer
+  enter (subject[], position, options)
+  <<SLOT PcreExec:dopart>>
+  exit status
+  #);
+
 ---- PcreMatchPos: dopart ----
 do private.oVector[1] + 1 -> start;
    private.oVector[2] -> end;
@@ -102,7 +111,52 @@ do (if num > matches + 1 then
    if);
    INNER;
 
-
+   
+---- PcreMatch: dopart ----
+do options -> opt;
+   0 -> subMatchCounter;
+   pre;
+   private.oVector.range -> private.oVector.new;
+   (if subject.T.range = 0 then 1 -> subject.T.extend; 0 -> subject.T[1] if);
+   position - 1 -> psn;
+   (subject[], psn, opt %Band pcre_NONBETAOPTIONS) -> exec -> result;
+   (result <> pcre_ERROR_NOMATCH) -> matched;
+   (if matched then
+       INNER;
+    else
+       noMatch;
+   if);
+   
+---- PcreMatchAll: dopart ----
+do split;
+   matches + 1 -> matches;
+   INNER matchAll;
+   loop:
+     (#
+     do private.oVector[2] -> privatema.endOfPreviousMatch;
+        (if private.oVector[2] >= subject.lgth then
+	    leave loop;  (* Got to end of string *)
+	if);
+        (subject[], private.oVector[2], opt %Band pcre_NONBETAOPTIONS) -> exec -> result;
+        (result <> pcre_ERROR_NOMATCH) -> matched;
+        (if matched then
+	    split;
+	    matches + 1 -> matches;
+	    INNER matchAll;
+	 else
+	    (* Fix up private.oVector so you can call splitText and splitPos one
+	     * last time.
+	     *)
+	    subject.lgth -> private.oVector[1];
+	    subject.lgth -> private.oVector[2];
+	    split;
+	    post;
+	    true -> matched; (* At least one match occurred *)
+	    leave loop;
+        if);
+        restart loop;
+     #);
+   
 ---- PcreReplace: dopart ----
 do (1, private.oVector[1]) -> subject.sub -> new[];
    replacement[] -> rep -> new.append;
