@@ -34,7 +34,7 @@ struct Object *getNewIOASlice(unsigned long numbytes)
     IOATop = gIOATop;
   } 
   
-  if (gIOALimit <= (long*)((long)IOATop + reqsize)) {
+  if (gIOALimit < (long*)((long)IOATop + reqsize)) {
     /* FIXME: Stop all other threads! */
 
     /* Force GC */

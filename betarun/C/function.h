@@ -85,7 +85,7 @@ extern void InstallSigHandler(int sig);
 /* C/multithread.c */
 extern void initSynchVariables(void);
 extern int numProcessors(int online);
-extern int attToProcessor(struct Component *comp);
+extern thread_t attToProcessor(struct Component *comp);
 extern void SetupVirtualTimerHandler(unsigned usec);
 extern void SetupVirtualTimer(unsigned usec);
 extern void* MT_malloc(int size);

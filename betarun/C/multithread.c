@@ -71,19 +71,26 @@ int numProcessors(int online)
 
 extern void *AttTC(void *);
 
-int attToProcessor(struct Component *comp)
+thread_t attToProcessor(struct Component *comp)
 { 
-  thread_t new;
+  thread_t tid;
   if (thr_create(NULL                           /* stack base */,
 		 0                              /* stack size */,
 		 (void *(*)(void *))AttTC       /* func       */,
 		 (void *)comp                   /* arg        */,
-		 THR_DETACHED                   /* flags      */,
-		 &new                           /* id         */)){
+		 THR_NEW_LWP|THR_DETACHED                   /* flags      */,
+		 &tid                           /* id         */)){
     fprintf(output, "Failed to create thread for component 0x%x\n", (int)comp);
+    fflush(output);
     exit (1);
   }
-  return 0;
+  DEBUG_MT(fprintf(output, 
+		   "Created thread 0x%x for comp 0x%x\n", 
+		   (int)tid, 
+		   (int)comp);
+	   fflush(output););
+    
+  return tid;
 }
 
 static __inline__ int TryLock(unsigned long* l)
@@ -129,7 +136,7 @@ void SetupVirtualTimerHandler(unsigned usec)
   sigemptyset(&act.sa_mask);        /* Block no other signals in handler */
 
   if (sigaction(SIGVTALRM, &act, NULL)) {
-    printf("sigaction failed. Errno=%d (%s)\n", errno, strerror(errno));
+    fprintf(output,"sigaction failed. Errno=%d (%s)\n", errno,strerror(errno));
     BetaExit(1);
   }
   SetupVirtualTimer(usec);
@@ -146,7 +153,7 @@ void SetupVirtualTimer(unsigned usec)
   interval.it_interval.tv_usec = usec;
 
   if (setitimer(ITIMER_VIRTUAL, &interval, NULL)) {
-    printf("setitimer failed. Errno=%d (%s)\n", errno, strerror(errno));
+    fprintf(output,"setitimer failed. Errno=%d (%s)\n", errno,strerror(errno));
     BetaExit(1);
   }  
 }
@@ -154,7 +161,7 @@ void SetupVirtualTimer(unsigned usec)
 void* MT_malloc(int size) 
 { 
   void* p = memalign(64, (size));
-  DEBUG_CODE(fprintf(output,"[malloc at 0x%0x]\n", (int)p));
+  DEBUG_MT(fprintf(output,"[malloc at 0x%0x]\n", (int)p));
   memset(p, 0, (size));
   return p;
 }
