@@ -1,0 +1,477 @@
+ORIGIN '../numberio';
+INCLUDE '../math';
+MDBODY nt 'numberioLittleEndian'
+       nti 'numberioLittleEndian'
+       linux 'numberioLittleEndian'
+       default 'numberioBigEndian';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1992-95
+ *       All rights reserved.
+ *)   
+--- numberIoGetNumberBody: descriptor ---
+(#
+do readNumber:
+     (# ch: @char; negative, noLeadingInt: @boolean;
+        eosTest: @eos; getC: @get; peekC: @peek;
+        nextch: @
+          (#
+          do (if not eosTest then getC if);
+             (if eosTest then ascii.nul->ch else peekC->ascii.upCase->ch if)
+          #);
+        skip: @
+          (#
+          do (if eosTest then
+                 ascii.nul->ch
+              else (if ((peekC->ascii.upCase->ch) <= ' ') then
+                       getC; restart skip if)
+             if)
+          #);
+        sign: @
+          (# do (if ch
+                 // '-' then true->negative; nextch
+                 // '+' then nextch
+                if)
+          #);
+        leadingInt: @
+          (#
+          do (if not (ch->ascii.isDigit) then true->noLeadingInt if);
+             ReadDigits:
+               (if (ch->ascii.isDigit) then
+                   V * 10 + ( ch - '0')->V;
+                   nextch;
+                   restart readDigits
+               if)
+          #);
+        Digits: @
+          (# lz: @integer (* number of leading zero's *) 
+          do 1->accuracy; 0->lz;
+             (if (ch->ascii.isDigit) then 
+                 0->V;
+                 L: (if ch = '0' then
+                        1+lz->lz; accuracy*10->accuracy;
+                        nextch; restart L
+                    if);
+                 L:(if (ch->ascii.isDigit) then
+                       accuracy*10->accuracy;
+                       V*base+(ch-'0')->V;
+                       nextch; restart L 
+                   if)
+              else (if not eosTest then peekC->syntaxError if);
+                 leave readNumber
+             if)
+          exit lz
+          #);
+        Exponent: @
+          (# neg: @boolean
+          do false->neg;
+             (if ch
+              // '+' then nextch
+              // '-' then true->neg; nextch
+             if);
+             Digits; (if neg then -V->V if)
+          #);
+        toReal: @
+          (# value: @real;
+          do A->value;
+             (if (D<>0) and (B<>0) then
+                 value+(B div D)->value;
+             if);
+             (if true
+              // C<0 then
+                 value div ((10,-C)->pow) -> value
+              // C>0 then
+                 value * ((10,C)->pow) -> value
+             if)
+          exit value
+          #);
+        BasedNumber: @
+          (#
+          do (if negative then -V->base else V->base if);
+             (if (base>126) then base->baseError; leave readNumber
+              else
+                 (if eosTest then syntaxError if);
+                 (if base = 0 then 16->base if);
+                 0->N;
+                 L: (if true
+                     // ch->ascii.isDigit then 
+                        (if (ch-'0') >= base then ch->valueerror; leave readNumber if);
+                        N*base+(ch-'0')->N; nextch; restart L; 
+                     // ch->ascii.isLetter then 
+                        (if (ch-'A') >= base then ch->valueerror; leave readNumber if);
+                        N*base+(ch-'A')+10->N; nextch; restart L
+             if)if);
+             (if negative then -N->N if);
+          #);
+        V,A,B,C,D,accuracy: @real;
+        N, lz,base: @integer
+     do 0->V; false->negative;
+        10->base;
+        skip;
+        (if ch = ascii.nul then EOSerror if);
+        sign;
+        leadingInt;
+        (if negative then -V->V if);
+        (if ch
+         // '.' then
+            (if true
+             // realValue##<realValuePtn## then
+                V->A; nextch; Digits->lz;
+                (if negative then -V->V if);
+                V->B; accuracy->D;
+                (if ch = 'E' then nextch; Exponent; V->C if);
+                (A,B,lz,C,toReal)->realValue
+             // integerValue##<integerValuePtn## then
+                V->integerValue
+             // basedValue##<basedValuePtn## then
+                peekC->syntaxError
+             else leave readNumber
+            if)
+         // 'E' then
+            (if true
+             // realValue##<realValuePtn## then
+                V->A; nextch; Exponent; V->C;
+                (A,B,0,C,toReal)->realValue
+             // integerValue##<integerValuePtn## then
+                V->integerValue
+             // basedValue##<basedValuePtn## then
+                peekC->syntaxError
+             else leave readNumber
+            if)
+         // 'X' then
+            (if true
+             // basedValue##<basedValuePtn## then
+                nextch; BasedNumber;
+                (base,N)->basedValue
+             // integerValue##<integerValuePtn## then
+                V->integerValue
+             // realValue##<realValuePtn## then
+                (V,0,0,0,V)->realValue
+             else leave readNumber
+            if)
+         else
+            (if noLeadingInt then 
+                (if not eosTest then peekC->syntaxError if);
+                leave readNumber
+            if);
+            (if true
+             // integerValue##<integerValuePtn## then V->integerValue
+             // realValue##<realValuePtn## then (V,0,0,0,V)->realValue
+             // basedValue##<basedValuePtn## then peekC->syntaxError (*(10,V)->basedValue *)
+             else leave readNumber
+            if)
+        if)
+     #)
+   #)
+
+---numberIoPutBasedBody: descriptor ---
+(# numberput: @number.put;
+   resultput: @result.put; resultputtext: @result.puttext;
+   baseprefixprepend: @baseprefix.prepend; baseprefixput: @baseprefix.put;
+   baseprefixputint: @baseprefix.putint; baseprefixlength: @baseprefix.length;
+   result, basePrefix, number: @text;
+   zeroBase: @boolean;
+   padding, basePadding: @integer;
+   digitA: @char;
+   addOneLater: @boolean;
+   putBasedNumber:
+     (# value, rest: @integer;
+        num: @text;
+     enter value
+     do num.clear;
+        value mod base -> rest;
+        value div base -> value;
+        (if addOneLater then
+            rest + 1 -> rest;
+            (if rest = base then
+                0 -> rest;
+                value + 1 -> value;
+            if);
+        if);
+        putDigits:
+          (#
+          do (if (0<=rest) and (rest<=9) then
+                 '0'+rest->num.put;
+              else
+                 digitA+(rest-10)->num.put;
+             if);
+             (if value = 0 then leave putDigits if);
+             value mod base -> rest;
+             value div base -> value;
+             restart putDigits
+          #);
+        (for i:num.length repeat
+             num.length-i+1->num.inxget->numberput
+        for);
+     #);
+   negatevalue:
+     (#
+     do (if value=minint then
+            -(value+1)->value; (* ensures that -minint is positive *)
+            true->addOneLater (* but we must add one later *)
+         else
+            -value->value
+        if)
+     #);
+do format; basePrefix.clear; number.clear;
+   (if true
+    // (base=0) then true->zeroBase; 16->base;
+    // (base<0) // (base=1) // (126<base) then base->baseError
+   if);
+   (if noBasePrefix then
+       (if value<0 then
+           '-'->baseprefixput; negatevalue;
+        else (if signed then '+'->baseprefixput
+              else (if blankSign then ' '->baseprefixput if)
+             if)
+       if)
+    else
+       (if zeroBase then
+           0->baseprefixputint;
+        else base->baseprefixputint
+       if);
+       (if upcase then 'X'->baseprefixput else 'x'->baseprefixput if);
+       baseWidth+1->baseWidth;
+       (baseWidth-baseprefixlength) -> basePadding;
+       (if basePadding<0 then 0 -> basePadding if);
+       (if baseZeroPadding then
+           (for i:basePadding repeat '0'->baseprefixprepend for);
+           (if value<0 then
+               '-'->baseprefixprepend; negatevalue;
+            else (if signed then '+'->baseprefixprepend
+                  else (if blankSign then ' '->baseprefixprepend if)
+                 if)
+           if)
+        else
+           (if value<0 then
+               '-'->baseprefixprepend; negatevalue;
+            else (if signed then '+'->baseprefixprepend
+                  else (if blankSign then ' '->baseprefixprepend if)
+                 if)
+           if);
+           (for i:basePadding repeat ' '->baseprefixprepend for)
+       if)
+   if);
+   (if uppercase then 'A'->digitA else 'a'->digitA if);
+   (if value=0 then '0'->numberput
+    else value->putBasedNumber
+   if);
+   (width-(baseprefixlength+number.length)) -> padding;
+   (if padding > 0 then
+       (if zeroPadding then
+           basePrefix[]->resultputtext;
+           (for i:padding repeat '0'->resultput for);
+           number[]->resultputtext;
+        else
+           (if adjustLeft then
+               basePrefix[]->resultputtext; number[]->resultputtext;
+               (for i:padding repeat ' '->resultput for);
+            else
+               (for i:padding repeat ' '->resultput for);
+               basePrefix[]->resultputtext;
+               number[]->resultputtext;
+           if)
+       if)
+    else
+       basePrefix[]->resultputtext; number[]->resultputtext
+   if);
+   result[]->puttext
+#)
+
+--- numberIoGetRadixRadixErrorDopart: dopart ---
+do 'getRadix: Illegal radix: "'->msg.append; 
+   radix->msg.putInt; '"'->msg.put;
+   INNER radixError
+   
+--- numberIoGetRadixBody: descriptor ---
+(# ch: @char; negative: @boolean; eosTest: @eos; getC: @get; peekC: @peek;
+   nextch: @
+     (#
+     do (if not eosTest then getC if);
+        (if eosTest then ascii.nul->ch else peekC->ascii.upCase->ch if)
+     #);
+   skip: @
+     (#
+     do (if eosTest then
+            ascii.nul->ch
+         else (if ((peekC->ascii.upCase->ch) <= ' ') then
+                  getC; restart skip if)
+        if)
+     #);
+   sign: @
+     (# do (if ch
+            // '-' then true->negative; nextch
+            // '+' then nextch
+           if)
+     #)
+do  (if true
+      // (radix=0) then 16->radix;
+      // (radix<0) // (radix=1) // (126<radix) then radix->radixError
+     if);
+     skip;
+     sign;
+     0->value;
+     L: (if true
+         // ch->ascii.isDigit then 
+            (if (ch-'0') >= radix then leave L if);
+            value*radix+(ch-'0')->value; nextch; restart L; 
+         // ch->ascii.isLetter then 
+            (if (ch-'A') >= radix then leave L if);
+            value*radix+(ch-'A')+10->value; nextch; restart L
+        if);
+   (if negative then -value->value if)
+#)
+
+--- numberIoPutRealBody: descriptor ---
+(# sprintf: External
+     (# str: @integer;
+        fmt: @integer;
+        r: @real;
+     enter (str, fmt, r)
+     #);
+   control: @text;
+   controlput: @control.put; controlputint: @control.putint;
+   buffer: [400]@char; (* Make room for sprintf to write to *)
+   result: @text;
+   putchar: @result.put;
+do (* Set up format string for sprintf *)
+   format; control.clear; result.clear;
+   '%' -> control;
+   (if width<>0 then
+       (if adjustLeft  then '-' -> controlput if);
+       (if signed      then '+' -> controlput if);
+       (if blankSign   then ' ' -> controlput if);
+       (if zeroPadding then '0' -> controlput if);
+       width -> controlputint;
+   if);
+   '.'->controlput;
+   precision -> controlputint;
+   (if style
+    // noexp then
+       'f' -> controlput
+    // exp then
+       (if upcase then  'E' -> controlput
+        else 'e' -> controlput
+       if)
+    // plain then
+       (if upcase then  'G' -> controlput
+        else 'g' -> controlput
+       if)
+   if);
+   0 -> controlput; (* Null-terminate control-string *)
+   (@@buffer[1], @@control.T[1], r) -> sprintf;
+   copy:
+     (# 
+     do (for i: buffer.range repeat
+             (if buffer[i] = 0 then
+                 leave copy (* sprintf NULL-terminates result *)
+              else
+                 buffer[i]-> putchar
+             if)
+        for);
+        (* NULL termination not reached !! *)
+        'PutReal: Error in buffer, sprintf may have destroyed objects!'
+          -> screen.putline
+     #);
+   result[]->puttext
+#)
+--- numberIoAsRealDopart: dopart ---
+do getReal(# syntaxError::(# do peekCh->this(asReal).syntaxError; true->continue #);
+             baseError::(# do base->this(asReal).baseError; true->continue #);
+             valueError::(# do peekCh->this(asReal).valueError; true->continue #)
+          #)->r;
+   INNER asReal
+--- numberIoAsBasedDopart: dopart ---
+do getBased
+   (# syntaxError::(# do peekCh->this(asBased).syntaxError; true->continue #);
+      baseError::(# do base->this(asBased).baseError; true->continue #);
+      valueError::(# do peekCh->this(asBased).valueError; true->continue #)
+   #)
+     ->(b,i);
+   INNER asBased
+--- numberIoAsRadixDopart: dopart ---
+do radix->getRadix
+   (# radixError::(# do radix->this(asRadix).baseError; true->continue #) #)
+     ->value;
+   INNER asRadix
+--- numberIoAsIntegerDopart: dopart ---
+do getInteger
+   (# syntaxError::(# do peekCh->this(asInteger).syntaxError; true->continue #);
+      baseError::(# do base->this(asInteger).baseError; true->continue #);
+      valueError::(# do peekCh->this(asInteger).valueError; true->continue #)
+   #)
+     ->i;
+   INNER asInteger
+   
+
+
+(*--- numberioPutHex: descriptor --- in numberio{Little|Big}Endian.bet*)
+
+(*--- numberioPutByteHex: descriptor --- in numberio{Little|Big}Endian.bet*)
+
+--- numberioPutBinary: descriptor ---
+(# putC: @put
+do (for i:32 repeat
+        '0'+(((i-1),1)->x.%getBits)->putC
+   for)
+#)
+    
+(*--- numberioPutByteBinary: descriptor --- in numberio{Little|Big}Endian.bet*)
+
+--- numberioGetHex: descriptor ---
+(# ch: @char;
+   eosTest: @eos; getC: @get; peekC: @peek;
+   nextch: @
+     (#
+     do (if not eosTest then getC if);
+        (if eosTest then ascii.nul->ch else peekC->ascii.upCase->ch if)
+     #);
+   skip: @
+     (#
+     do (if eosTest then
+            ascii.nul->ch
+         else (if ((peekC->ascii.upCase->ch) <= ' ') then
+                  getC; restart skip if)
+        if)
+     #)
+do skip; (if ch = ascii.nul then EOSerror if);
+   (if ch
+    //'0'//'1'//'2'//'3'//'4'//'5'//'6'//'7'//'8'//'9'
+    //'A'//'B'//'C'//'D'//'E'//'F' then
+       l: (if ch
+           //'0'//'1'//'2'//'3'//'4'//'5'//'6'//'7'//'8'//'9' then
+              x*16+ch-'0'->x; nextch;  restart l
+           //'A'//'B'//'C'//'D'//'E'//'F' then
+              x*16+ch-'A'+10->x; nextch;  restart l
+          if)
+    else peekC->noNumberError
+   if)
+#)
+
+--- numberioGetBinary: descriptor ---
+(# ch: @char;
+   eosTest: @eos; getC: @get; peekC: @peek;
+   nextch: @
+     (#
+     do (if not eosTest then getC if);
+        (if eosTest then ascii.nul->ch else peekC->ascii.upCase->ch if)
+     #);
+   skip: @
+     (#
+     do (if eosTest then
+            ascii.nul->ch
+         else (if ((peekC->ascii.upCase->ch) <= ' ') then
+                  getC; restart skip if)
+        if)
+     #)
+do skip; (if ch = ascii.nul then EOSerror if);
+   (if ch
+    //'0'//'1' then
+       l: (if ch
+           //'0'//'1' then
+              x*2+ch-'0'->x; nextch;  restart l
+          if)
+    else peekC->noNumberError
+   if)
+#)
+

@@ -1,0 +1,588 @@
+ORIGIN  '../betaenv';
+MDBODY mac     'betaenv_macbody'
+       nti     'betaenv_ntbody'
+       default 'betaenv_unixbody';
+OBJFILE nti     '$/basicio.obj' 
+        default '$/basicio.o';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1984-95
+ *       All rights reserved.
+ *)
+
+--- betaenvForTo: dopart ---
+do low->inx;
+   loop: 
+     (if (inx <= high) then INNER forTo; 
+         inx+1->inx; restart loop
+     if)
+   
+--- betaenvCycle: dopart ---
+do INNER cycle; restart cycle
+   
+--- betaenvLoop: dopart ---
+do (if whilecondition then
+       INNER loop;
+       (if not untilcondition then restart loop if)
+   if)
+   
+--- betaenvQua: dopart ---
+do (if R## <= as## then 
+       R[]->thisObj[];
+       INNER qua
+    else quaError
+   if)
+
+--- betaenvAsciiPrivate: descriptor ---
+(* The characters 0..255 are represented in the arrays as indexes 1..256
+ * to handle possible null characters. For ex. the uppercase equivalent
+ * of 'a' is given by upCase['a'+1].
+ *)
+(# upCase,lowCase: [256] @char;
+   digits,letters,blanks,NonWhiteSpace,isUpCase,isLowCase: [256] @boolean
+#)
+
+--- betaenvAsciiInitAscii: descriptor ---
+(# 
+do (for ch: private.upCase.range repeat 
+	ch-1->private.upCase[ch]->private.lowCase[ch] 
+   for);
+   (for ch: 26 repeat
+        capA+ch-1->private.upCase[smalla+ch];
+        smalla+ch-1->private.lowCase[capA+ch];
+        true->private.letters['A'+ch]->private.letters['a'+ch];
+        true->private.isUpCase['A'+ch]->private.isLowCase['a'+ch]
+   for);
+   (for i: 10 repeat true->private.digits['0'+i] for);
+   true->private.blanks[sp+1]->private.blanks[cr+1]->private.blanks[nl+1]
+     ->private.blanks[np+1]->private.blanks[ht+1]->private.blanks[vt+1];
+   (for ch: (128-33) repeat true->private.NonWhiteSpace[ch+33] for);
+   <<SLOT betaenvbodyMDInitAscii: descriptor>>
+#)
+--- betaenvAsciiUpCase: dopart ---
+do private.upCase[value+1]->value 
+--- betaenvAsciiLowCase: dopart ---
+do private.lowCase[value+1]->value 
+--- betaenvAsciiIsUpper: dopart ---
+do private.isUpCase[ch+1]->value 
+--- betaenvAsciiIsLower: dopart ---
+do private.isLowCase[ch+1]->value 
+--- betaenvAsciiIsDigit: dopart ---
+do private.digits[ch+1]->value 
+--- betaenvAsciiIsLetter: dopart ---
+do private.letters[ch+1]->value 
+--- betaenvAsciiIsSpace: dopart ---
+do private.blanks[ch+1]->value 
+--- betaenvAsciiIsWhiteSpace: dopart ---
+do not private.NonWhiteSpace[ch+1]->value 
+   
+--- betaenvStreamGetNonBlank: dopart ---
+do skipblanks;
+   (if testEOS then ascii.fs->ch else getCh->ch if)
+   
+--- betaenvStreamGetInt: descriptor ---
+(# ch: @char; negative: @boolean; getC: @get; peekC: @peek; eosTest: @eos;
+   nextch: @
+     (# do getC; (if not eosTest then peekC->ch else ascii.nul->ch if) #)
+do 0->value; false->negative;
+   skip: 
+     (if not eosTest then
+         (if ((peekC->ch)->ascii.isWhiteSpace) then getC; restart skip if)
+      else ascii.nul->ch
+     if);
+   (if ch
+    //'-' then true->negative; nextch
+    //'+' then nextch
+   if);
+   (if  not (ch->ascii.isDigit) then syntaxError if);
+   ReadDigits: 
+     (if (ch->ascii.isDigit) then
+         value*10+(ch-'0')->value;
+         nextch;
+         restart readDigits
+     if);
+   (if negative then -value->value if)
+#)
+--- betaenvStreamPutInt: descriptor ---
+(# i, noOfSpaces: @integer; negative: @boolean; c: [20] @char; pad: @char;
+   putC: @put
+do (if n=minInt then '8463847412          '->C; 10->i; true->negative
+    else
+       (if (n<0)->negative then -n->n if);
+       0->i;
+       loop: 
+         (if ((i=0) or (0<n)) then
+       	     i+1->i;
+       	     (n mod 10)+'0'->c[i];
+       	     n div 10->n;
+       	     restart loop
+   if)if);
+   (if (width-i->noOfspaces)<0 then 0->noOfspaces if);
+   (if adjustLeft then
+       (if negative then noOfSpaces-1->noOfSpaces; '-'->putC
+        else (if true
+              //signed then noOfSpaces-1->noOfSpaces; '+'->putC
+              //blankSign then noOfSpaces-1->noOfSpaces; ' '->putC
+             if)
+       if);
+       (for l: i repeat c[i-(l-1)]->putC for);
+       (for l: noOfspaces repeat ' '->putC for)
+    else (if zeroPadding then
+             (if negative then noOfSpaces-1->noOfSpaces; '-'->putC
+              else (if true
+                    //signed then noOfSpaces-1->noOfSpaces; '+'->putC
+                    //blankSign then noOfSpaces-1->noOfSpaces; ' '->putC
+                   if)
+             if);
+             (for l: noOfspaces repeat '0'->putC for);
+             (for l: i repeat c[i-(l-1)]->putC for)
+          else (if negative then noOfSpaces-1->noOfSpaces; i+1->i; '-'->c[i]
+                else (if true
+                      //signed then noOfSpaces-1->noOfSpaces; i+1->i; '+'->c[i]
+                      //blankSign then noOfSpaces-1->noOfSpaces; i+1->i; ' '->c[i]
+                     if)
+               if);
+             (for l: noOfspaces repeat ' '->putC for);
+             (for l: i repeat c[i-(l-1)]->putC for)
+         if)
+   if)
+#)
+
+--- betaenvStreamAsIntDopart: dopart ---
+do reset;
+   getInt
+   (# syntaxError:: (# do peek->this(asInt).syntaxError; true->continue #) #)
+     ->i;
+   INNER asInt;
+   ScanWhiteSpace; (if not eos then peek->syntaxError if)
+   
+--- betaenvStreamScan: dopart ---
+do scanLoop:
+     (if not testEOS then
+         (if (getPeek->whilecondition) then
+             getCh->ch; INNER scan; restart scanLoop
+         if)
+     if)
+   
+--- betaenvStreamScanAtom: dopart ---
+do scanWhiteSpace;
+   scan(# while::< (# do not (ch->ascii.isWhiteSpace)->value #)
+       do ch->this(scanAtom).ch; INNER scanAtom
+       #)
+   
+--- betaenvStreamScanToNl: dopart ---
+do scan
+   (# while::< (# do (ch <> ascii.newline)->value #)
+   do ch->THIS(scanToNl).ch; INNER scanToNl
+   #);
+   (if not eos then getCh->ch if)
+
+--- betaenvTextPut: dopart ---
+do (if (pos+1->pos)>lgth then pos->lgth if);
+   (if lgth > T.range then T.range+16->T.extend if);
+   ch->T[pos]
+   
+--- betaenvTextPuttext: dopart ---
+do (if T.range < (pos+txt.lgth) then T.range+16+txt.lgth->T.extend if);
+   (for i: txt.lgth repeat
+        txt.T[i]->T[pos+i]
+   for);
+   (if (pos+txt.lgth->pos) > lgth then pos->lgth if)
+   
+--- betaenvTextGet: dopart ---
+do (if pos >= lgth then EOSError if);
+   T[pos+1->pos]->ch
+   
+--- betaenvTextGetAtom: dopart ---
+do skipBlanks:
+     (if pos < lgth then
+         (if (T[pos+1]->ascii.isWhiteSpace) then
+             pos+1->pos; restart skipBlanks 
+     if)if);
+   scan:
+     (if pos < lgth then
+         (if not (T[pos+1]->ascii.isWhiteSpace) then
+             (if (txt.pos+1->txt.pos) > txt.T.range then txt.T.range+16->txt.T.extend if);
+             pos+1->pos; T[pos]->txt.T[txt.pos]; txt.lgth+1->txt.lgth;
+             restart scan
+     if)if)
+   
+--- betaenvTextGetLine: dopart ---
+do scan:
+     (if (pos < lgth) then
+         (if (T[pos+1]<>ascii.newline) then
+             (if (txt.pos+1->txt.pos) > txt.T.range then txt.T.range+16->txt.T.extend if);
+             pos+1->pos; T[pos]->txt.T[txt.pos]; txt.lgth+1->txt.lgth;
+             restart scan
+     if)if)
+              
+--- betaenvTextPeek: dopart ---
+do (if pos >= lgth then EOSError if);
+   T[pos+1]->ch
+   
+--- betaenvTextSetPos: dopart ---
+do (if true
+    //p < 0 then 0->pos
+    //p > lgth then lgth->pos
+    else p->pos
+   if)
+
+--- betaenvTextEOS: dopart ---
+do (pos >= lgth)->value
+   
+--- betaenvTextInxGet: descriptor ---
+(# checkit: @check
+do i->checkit; T[i]->value
+#)
+--- betaenvTextInxPut: descriptor ---
+(# checkit: @check
+do i->checkit; ch->T[i]
+#)
+
+--- betaenvTextAppend: dopart ---
+do (if T1[] <> NONE then
+       (if (T.range < lgth+T1.lgth) then T.range+16+T1.lgth->T.extend if);
+       (for i: T1.lgth repeat T1.T[i]->T[lgth+i] for);
+       (if pos=lgth then pos+T1.lgth->pos if);
+       lgth+T1.lgth->lgth; 
+   if)
+
+--- betaenvTextPrepend: dopart ---
+do (T1[],0)->Insert
+   
+--- betaenvTextSub: descriptor ---
+(# copyType: ##text
+do (if (i<1) then 1->i if);
+   (if (j>lgth) then lgth->j if);
+   this(text)##->copyType##; &copyType[]->T1[];
+   (if (i<=j) then
+       j-i+1->T1.lgth->T1.pos;
+       (if (T1.lgth>T1.T.range) then T1.lgth->T1.T.new if);
+       (for k: T1.lgth repeat T[k+i-1]->T1.T[k] for)
+   if)
+#)
+
+--- betaenvTextInsert: dopart ---
+do (if T1[] <> NONE then
+       (if inx<1 then 1->inx if);
+       (if (lgth<inx) then T1[]->append
+        else
+           (if (T.range < lgth+T1.lgth) then T.range+16+T1.lgth->T.extend if);
+           (for k: (lgth-inx+1) repeat
+	        T[lgth-k+1]->T[lgth+T1.lgth-k+1]
+           for);
+           (for i: T1.lgth repeat
+                T1.T[i]->T[inx+i-1]
+           for);
+           (if (pos >= inx) then pos+T1.lgth->pos if);
+           lgth+T1.lgth->lgth 
+   if)if)
+
+--- betaenvTextDelete: descriptor ---
+(# checkit: @check
+do i->checkit;
+   j->checkit;
+   (if (i<=j) then
+       (for k: lgth-j repeat
+            T[j+k]->T[i+k-1]
+       for);
+       lgth-(j-i+1)->lgth;
+       (if true
+        //pos>=j then pos-(j-i+1)->pos
+        //pos>=i then i-1->pos
+           (* else don't change pos *)
+if)if)#)
+
+--- betaenvTextEqual: dopart ---
+do equal:
+     (if txt[]<>NONE then
+         (if txt.lgth=lgth then
+             (if NCS then
+                 (for i: lgth repeat
+                      (if ascii.private.UPCASE[T[i]+1]
+                          <>ascii.private.UPCASE[txt.T[i]+1] then leave equal if)
+                 for)
+              else
+                 (for i: lgth repeat
+                      (if T[i]<>txt.T[i] then leave equal if)
+                 for)
+             if);
+             true->value
+     if)if)
+   
+--- betaenvTextLess: dopart ---
+do less:
+     (if T1[] <> NONE then
+         (if true
+          //(T1.lgth<lgth) then
+             (for i: T1.lgth repeat
+                  (if T1.T[i]<>T[i] then (T1.T[i]<T[i])->value; leave less if)
+             for);
+             (* T1 exhausted *)
+             true->value;
+          //(T1.lgth>=lgth) then
+             (for i: lgth repeat
+                  (if T1.T[i]<>T[i] then (T1.T[i]<T[i])->value; leave less if)
+             for);
+             (* T exhausted *)
+             false->value;
+         if) 
+     if)
+   
+--- betaenvTextGreater: dopart ---
+do greater:
+     (if T1[] <> NONE then
+         (for i: T1.lgth repeat
+              (if ((i > lgth)->value) then leave greater
+               else 
+                  (if ((T1.T[i] > T[i])->value) then leave greater
+                   else 
+                      (if (T1.T[i] < T[i]) then 
+                          false->value;
+                          leave greater
+                       else false->value
+                      if)
+     if)if)for)if)
+--- betaenvTextMakeLC: dopart ---
+do (for i: lgth repeat ascii.private.lowCase[T[i]+1]->T[i] for)
+--- betaenvTextMakeUC: dopart ---
+do (for i: lgth repeat ascii.private.upCase[T[i]+1]->T[i] for)
+--- betaenvTextFind: dopart ---
+do from+1->inx;
+   (if NCS then
+       ascii.private.UPCASE[ch+1]->ch;
+       (for lgth-inx+1 repeat
+            (if ch=ascii.private.UPCASE[T[inx]+1] then INNER find if);
+            inx+1->inx
+       for)
+    else
+       (for lgth-inx+1 repeat
+            (if ch=T[inx] then INNER find if);
+            inx+1->inx
+       for)
+   if)
+--- betaenvTextFindText: dopart ---
+do (if txt[]<>NONE then
+       from+1->inx;
+       (if NCS then
+           (txt.copy->txt[]).makeUC;
+           (for lgth-inx-txt.lgth+2 repeat
+                L: (# 
+                   do (for i: txt.lgth repeat
+                           (if txt.T[i]<>ascii.private.UPCASE[T[inx+i-1]+1] then
+                               leave L if)
+                      for);
+                      INNER findText
+                   #);
+                inx+1->inx
+           for)
+        else
+           (for lgth-inx-txt.lgth+2 repeat
+                L: (# 
+                   do (for i: txt.lgth repeat
+                           (if txt.T[i]<>T[inx+i-1] then leave L if)
+                      for);
+                      INNER findText
+                   #);
+                inx+1->inx
+           for)
+       if)
+   if)
+--- betaenvTextCopy: descriptor ---
+(# copyType: ##text
+do this(text)##->copyType##; &copyType[]->T1[];
+   lgth->T1.lgth->T1.pos; T[1: lgth]->T1.T
+#)
+
+--- betaenvTextIndexError: dopart ---
+do 'Index error in text! (index '->msg.puttext;
+   inx->msg.putint;
+   ') \n'->msg.puttext;
+   msg[]->TextErrorMsg;
+   INNER
+   
+--- betaenvTextEOSerror: dopart ---
+do msg[]->textErrormsg; INNER 
+--- betaenvTextOtherError: dopart ---
+do msg[]->textErrormsg; INNER 
+   
+--- TextLib: attributes ---
+Check: 
+  (# i: @integer
+  enter i
+  do (if ((i<1) or (lgth<i)) then i->IndexError if)
+  #);
+TextErrorMsg: 
+  (# msg: ^Text
+  enter msg[]
+  do (if lgth=0 then
+         'Empty text.'->msg.putline
+      else
+         (if lgth>70 then
+             'Error in text, which begins as follows: '->msg.putLine;
+             ''''->msg.put;
+             (for i: 70 repeat T[i]->msg.put for);
+             '.....'''->msg.putLine
+          else
+             'Error in the text: '''->msg.puttext;
+             this(text)[]->msg.puttext;
+             ''''->msg.putline
+         if)
+     if)
+  #)
+
+--- betaenvStop: descriptor ---
+(# BetaExit: External(# status: @integer enter status do CallC #);
+   FailureExit: External(# do CallC #)
+do newLine; 
+   (if T[] <> NONE then T[]->putText; newline if);
+   <<SLOT betaenvbodyTerminateConsole: descriptor>>;
+   (if termCode
+    //normal  then 0->BetaExit
+    //failure then 1->BetaExit
+    //failureTrace then FailureExit
+if)#)
+
+--- LIB: attributes ---
+infinityReal: 
+  external
+  (* Returns the real value 'Infinity'. The C routine is defined in
+   * the file external/basicio.c
+   *)
+  (# r: @real
+  do 'infReal'->callC
+  exit r
+  #);
+Argc: External(# noOfArgs: @integer exit noOfArgs #);
+Argv: External
+  (# argNo: @integer;
+     theArg: [1]@char
+  enter argNo
+  do CallC
+  exit theArg
+  #)
+--- betaenvNoOfArguments: dopart ---
+do Argc->value
+--- betaenvArguments: dopart ---
+do (if ((1<=argNo) and (argNo<=ArgC)) then
+       &text[]->theArg[]; argNo->Argv->theArg
+   if)
+   
+--- betaenvObjectPoolPrivate: descriptor ---
+(# elm: (# type: ##object; obj: ^object#);
+   table: [2] ^elm; top: @integer;
+   insert: @
+     (# e: ^elm; obj: ^Object; type: ##Object
+     enter (obj[], type##)
+     do top+1->top;
+        (if top > table.range then
+            table.range+2->table.extend
+        if);
+        &elm[]->e[];
+        (obj[], type##)->(e.obj[], e.type##);
+        e[]->table[top][]
+     #)
+#)
+--- betaenvObjectPoolGet: dopart ---
+do get:
+     (if exact then
+         (for i: private.top repeat
+              (if type## = private.table[i].type## then
+                  private.table[i].obj[]->obj[]; leave get
+              if)
+         for)
+      else
+         (for i: private.top repeat
+              (if private.table[i].type## <= type## then
+                  private.table[i].obj[]->obj[]; leave get
+              if)
+         for)
+     if);
+   (* not found *)
+   (&type[]->obj[], type##)->private.insert;
+   init
+   
+--- betaenvObjectPoolStrucGet: dopart ---
+do strucGet:
+     (if exact then
+         (for i: private.top repeat
+              (if type## = private.table[i].type## then
+                  private.table[i].obj[]->obj[]; leave strucGet
+              if)
+         for)
+      else
+         (for i: private.top repeat
+              (if private.table[i].type## <= type## then
+                  private.table[i].obj[]->obj[]; leave strucGet
+            if)
+         for)
+     if);
+   (* not found *)
+   &type[]->obj[];
+   (obj[], type##)->private.insert;
+   init
+   
+--- betaenvObjectPoolScan: dopart ---
+do (if exact then
+         (for i: private.top repeat
+              (if private.table[i].type## = type##  then
+                  private.table[i].obj[]->current[]; INNER scan
+              if)
+         for)
+      else
+         (for i: private.top repeat
+              (if private.table[i].type## <= type## then
+                  private.table[i].obj[]->current[]; INNER scan
+              if)
+         for)
+     if)
+   
+--- betaenvObjectPoolStrucScan: dopart ---
+do (if exact then
+         (for i: private.top repeat
+              (if private.table[i].type## = type##  then
+                  private.table[i].obj[]->current[]; INNER strucScan
+              if)
+         for)
+      else
+         (for i: private.top repeat
+              (if private.table[i].type## <= type## then
+                  private.table[i].obj[]->current[]; INNER strucScan
+              if)
+         for)
+     if)
+   
+--- betaenvObjectPoolPut: descriptor ---
+(# isExact: @Boolean;
+   type: ##Object
+do obj##->type##;
+   put:
+     (if exact then
+         (for i: private.top repeat
+              (if type## = private.table[i].type## then
+                  alreadyThere; leave put
+              if)
+         for)
+      else
+         (for i: private.top repeat
+              (if private.table[i].type## <= type## then
+                  alreadyThere; leave put
+              if)
+         for)
+     if);
+   (* not found *)
+   (obj[], obj##)->private.insert
+#)
+
+--- betaenvMaxInt: dopart ---
+do 0x7fffffff->value 
+--- betaenvMinInt: dopart ---
+do 0x80000000->value 
+--- betaenvMaxReal: dopart ---
+do 1.7976931348623157E+308->value 
+--- betaenvMinReal: dopart ---
+do 2.2250738585072014E-308->value
+--- betaenvInfReal: dopart ---
+do infinityReal->value
+--- betaenvDoGC: dopart ---
+do TOS'DoGC'

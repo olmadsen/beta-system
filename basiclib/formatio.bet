@@ -1,0 +1,382 @@
+ORIGIN 'betaenv';
+BODY 'private/formatioBody'
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1984-95
+ *       All rights reserved.
+ *
+ *)
+--- streamLib: attributes ---
+getFormat: formatter
+  (* getFormat accepts the following syntax for markers:
+   * 
+   *      %[width][.[precision]]{dioxXrRbBfeEgGcsn%}
+   * 
+   * where width is a (unsigned) decimal number (or '*'), and
+   *   precision is a (unsigned) decimal number (or '*'),
+   * 
+   * and where
+   *     [ ... ] means that the enclodes is optional,
+   * and { ... } means one if the enclosed characters.
+   * 
+   * Width is only interpreted in conjunction with the 's' marker.
+   * Precision is only interpreted in conjunction with the
+   * 'r' and 'R' markers.
+   * 
+   * For all but the 'c' marker, leading white space are skipped.
+   * 
+   * The '%' marker means that a '%' is expected on the input stream.
+   * 
+   * Actually, getFormat accepts the same syntax as putFormat (see
+   * later):
+   * 
+   *      %{-+ }[[0]width][.[[0]precision]]{dioxXrRbBfeEgGcsn%}
+   * 
+   * but only the above part of that syntax is actually interpreted by
+   * getFormat.  The reason for accepting the same syntax is to allow
+   * a format string to be used both for getFormat and putFormat.
+   *)
+  (# width:
+       (* sets the default precision to be used in future '*' width
+        * specifications
+        *)
+       (# w: @integer enter w <<SLOT formatIoGetFormatWidthDopart: dopart>> #);
+     precision:
+       (* sets the default precision to be used in future '*'
+        * precision specifications
+        *)
+       (# p: @integer enter p <<SLOT formatIoGetFormatPrecisionDopart: dopart>> #);
+     marker: scanForMarker
+       (# formatEOS:: (# do mark->missingMarker #)
+       <<SLOT formatIoGetFormatMarkerDopart: dopart>>
+       #);
+     d: marker (* read a decimal number *)
+       (# mark:: (# do 'd'->value #);
+          value: @integer
+       <<SLOT formatIoGetFormatDmarkerDopart: dopart>>     
+       exit value
+       #);
+     i: marker
+       (* read a number, either decimal, octal or hexadecimal using C
+        * conventions: 0nnn implies octal, 0xnnn implies hexadecimal,
+        * decimal otherwise.
+        *)
+       (# mark:: (# do 'i'->value #);
+          value: @integer
+       <<SLOT formatIoGetFormatImarkerDopart: dopart>>     
+       exit value
+       #);
+     o: marker (* read an octal number *)
+       (# mark:: (# do 'o'->value #);
+          value: @integer
+       <<SLOT formatIoGetFormatOmarkerDopart: dopart>>     
+       exit value
+       #);
+     x: marker (* read a hexadecimal number *)
+       (# mark:: (# do 'x'->value #);
+          value: @integer
+       <<SLOT formatIoGetFormatXmarkerDopart: dopart>>    
+       exit value
+       #);
+     uX: marker (* read a hexadecimal number.  Identical to 'x' *)
+       (# mark:: (# do 'X'->value #);
+          value: @integer
+       <<SLOT formatIoGetFormatUXmarkerDopart: dopart>>     
+       exit value
+       #);
+     r: marker
+       (* read a number in radix given by precision *)
+       (# mark:: (# do 'r'->value #);
+          value: @integer
+       <<SLOT formatIoGetFormatRmarkerDopart: dopart>>   
+       exit value
+       #);
+     uR: marker
+       (* read a number in radix given by precision.  Identical to
+        * 'r'
+        *)
+       (# mark:: (# do 'R'->value #);
+          value: @integer
+       <<SLOT formatIoGetFormatURmarkerDopart: dopart>>   
+       exit value
+       #);
+     b: marker
+       (* read a number as based number (i.e. in the bbxnnn format) *)
+       (# mark:: (# do 'b'->value #);
+          base, value: @integer
+       <<SLOT formatIoGetFormatBmarkerDopart: dopart>>   
+       exit (base,value)
+       #);
+     uB: marker
+       (* read a number as based number (i.e. in the bbxnnn format).
+        * Identical to 'b'
+        *)
+       (# mark:: (# do 'B'->value #);
+          base, value: @integer
+       <<SLOT formatIoGetFormatUBmarkerDopart: dopart>>   
+       exit (base,value)
+       #);
+     f: marker (* read a real *)
+       (# mark:: (# do 'f'->value #);
+          value: @real
+       <<SLOT formatIoGetFormatFmarkerDopart: dopart>>     
+       exit value
+       #);
+     e: marker (* read a real.  Identical to 'f' *)
+       (# mark:: (# do 'e'->value #);
+          value: @real
+       <<SLOT formatIoGetFormatEmarkerDopart: dopart>>     
+       exit value
+       #);
+     uE: marker (* read a real.  Identical to 'f' *)
+       (# mark:: (# do 'E'->value #);
+          value: @real
+       <<SLOT formatIoGetFormatUEmarkerDopart: dopart>>     
+       exit value
+       #);
+     g: marker (* read a real.  Identical to 'f' *)
+       (# mark:: (# do 'g'->value #);
+          value: @real
+       <<SLOT formatIoGetFormatGmarkerDopart: dopart>>     
+       exit value
+       #);
+     uG: marker (* read a real.  Identical to 'f' *)
+       (# mark:: (# do 'G'->value #);
+          value: @real
+       <<SLOT formatIoGetFormatUGmarkerDopart: dopart>>     
+       exit value
+       #);
+     c: marker (* read a single character *)
+       (# mark:: (# do 'c'->value #);
+          value: @char
+       <<SLOT formatIoGetFormatCmarkerDopart: dopart>>     
+       exit value
+       #);
+     s: marker 
+       (* read a text atom (i.e. a sequence of non-white space
+        * characters, terminated by a white space character - similar
+        * to getAtom).  If width is non-zero, at most width characters
+        * are read.  Otherwise, characters are read until next
+        * whitespace character
+        *)
+       (# mark:: (# do 's'->value #);
+          value: ^text
+       <<SLOT formatIoGetFormatSmarkerDopart: dopart>>   
+       exit value[]
+       #);
+     n: marker
+       (* return the length of the converted string until this point
+        *)
+       (# mark:: (# do 'n'->value #);
+          value: @integer
+       <<SLOT formatIoGetFormatNmarkerDopart: dopart>>   
+       exit value
+       #);
+     match:: (* private *)
+       (# <<SLOT formatIoGetFormatMatchDopart: dopart>> #)
+  do INNER getFormat
+  #);
+
+putFormat: formatter
+  (* putFormat accepts the following syntax for markers:
+   * 
+   *      %{-+ }[[0]width][.[[0]precision]]{dioxXrRbBfeEgGcsn%}
+   * 
+   * where width is a (unsigned) decimal number (or '*'), and
+   *   precision is a (unsigned) decimal number (or '*') and where
+   * 
+   *     [ ... ] means that the enclodes is optional,
+   * and { ... } means one if the enclosed characters.
+   * 
+   * '-' implies output leftjustified in field
+   * '+' implies output numbers signed (always with leading '+' or
+   *                                    '-')
+   * ' ' implies output numbers with blank sign (i.e. leading ' ' if
+   *                                             positive)
+   * '0' in front of either width or precision implies zero padding
+   * width specifies the minimun width of the output field.
+   * precision is interpreted for various things in the 'rRbBfeEgG'
+   *     markers.
+   * 
+   * The '%' marker means that a '%' is put on the output stream.
+   *)
+  (# width:
+       (* sets the default precision to be used in future '*' width
+        * specifications
+        *)
+       (# w: @integer enter w <<SLOT formatIoPutFormatWidthDopart: dopart>> #);
+     precision:
+       (* sets the default precision to be used in future '*'
+        * precision specifications
+        *)
+       (# p: @integer enter p <<SLOT formatIoPutFormatPrecisionDopart: dopart>> #);
+     marker: scanForMarker
+       (# formatEOS:: (# do mark->missingMarker #)
+       <<SLOT formatIoPutFormatMarkerDopart: dopart>>
+       #);
+     d: marker (* insert the integer *)
+       (# mark:: (# do 'd'->value #);
+          value: @integer
+       enter value
+       <<SLOT formatIoPutFormatDmarkerDopart: dopart>>   
+       #);
+     i: marker (* insert the integer. Identical to 'd' *)
+       (# mark:: (# do 'i'->value #);
+          value: @integer
+       enter value
+       <<SLOT formatIoPutFormatImarkerDopart: dopart>>   
+       #);
+     o: marker (* insert the integer in octal *)
+       (# mark:: (# do 'o'->value #);
+          value: @integer
+       enter value
+       <<SLOT formatIoPutFormatOmarkerDopart: dopart>>   
+       #);
+     x: marker (* insert the integer in hexadecimal *)
+       (# mark:: (# do 'x'->value #);
+          value: @integer
+       enter value
+       <<SLOT formatIoPutFormatXmarkerDopart: dopart>>   
+       #);
+     uX: marker
+       (* insert the integer in hexadecimal, using uppercase letters
+        *)
+       (# mark:: (# do 'X'->value #);
+          value: @integer
+       enter value
+       <<SLOT formatIoPutFormatUXmarkerDopart: dopart>>   
+       #);
+     r: marker
+       (* insert the integer in radix given by precision *)
+       (# mark:: (# do 'r'->value #);
+          value: @integer
+       enter value
+       <<SLOT formatIoPutFormatRmarkerDopart: dopart>>   
+       #);
+     uR: marker
+       (* insert the integer in radix given by precision, using
+        * uppercase letters if radix>10
+        *)
+       (# mark:: (# do 'R'->value #);
+          value: @integer
+       enter value
+       <<SLOT formatIoPutFormatURmarkerDopart: dopart>>   
+       #);
+     b: marker
+       (* insert the integer as based number (i.e. in the bbxnnn
+        * format) with base given by precision
+        *)
+       (# mark:: (# do 'b'->value #);
+          value: @integer
+       enter value
+       <<SLOT formatIoPutFormatBmarkerDopart: dopart>>   
+       #);
+     uB: marker
+       (* insert the integer as based number (i.e. in the bbxnnn
+        * format) with base given by precision, using uppercase
+        * letters if base>10
+        *)
+       (# mark:: (# do 'B'->value #);
+          value: @integer
+       enter value
+       <<SLOT formatIoPutFormatUBmarkerDopart: dopart>>   
+       #);
+     f: marker (* insert the real in noexp style *)
+       (# mark:: (# do 'f'->value #);
+          value: @real
+       enter value
+       <<SLOT formatIoPutFormatFmarkerDopart: dopart>>   
+       #);
+     e: marker (* insert the real in exp style *)
+       (# mark:: (# do 'e'->value #);
+          value: @real
+       enter value
+       <<SLOT formatIoPutFormatEmarkerDopart: dopart>>   
+       #);
+     uE: marker (* insert the real in exp style and upcase 'E' *)
+       (# mark:: (# do 'E'->value #);
+          value: @real
+       enter value
+       <<SLOT formatIoPutFormatUEmarkerDopart: dopart>>   
+       #);
+     g: marker (* insert the real in plain style *)
+       (# mark:: (# do 'g'->value #);
+          value: @real
+       enter value
+       <<SLOT formatIoPutFormatGmarkerDopart: dopart>>   
+       #);
+     uG: marker (* insert the real in plain style and upcase 'E' *)
+       (# mark:: (# do 'G'->value #);
+          value: @real
+       enter value
+       <<SLOT formatIoPutFormatUGmarkerDopart: dopart>>   
+       #);
+     c: marker (* insert the char *)
+       (# mark:: (# do 'c'->value #);
+          value: @char;
+          putc: @(* Private *)<<SLOT formatIoPutFormatCmarkerBody: descriptor>>   
+       enter value
+       do putc
+       #);
+     s: marker (* insert the text *)
+       (# mark:: (# do 's'->value #);
+          value: ^text;
+          puts: @(* Private *)<<SLOT formatIoPutFormatSmarkerBody: descriptor>>
+       enter value[]
+       do puts
+       #);
+     n: marker
+       (* return the length of the converted string until this point
+        *)
+       (# mark:: (# do 'n'->value #);
+          value: @integer
+       <<SLOT formatIoPutFormatNmarkerDopart: dopart>>   
+       exit value
+       #);
+     match:: (* private *)
+       (# <<SLOT formatIoPutFormatMatchDopart: dopart>> #)
+  do INNER putFormat
+  #);
+
+formatter: (* superpattern for putFormat and getFormat *)
+  (# illegalFormat:< exception
+       (# mark: @char
+       enter mark
+       <<SLOT formatIoFormatterIllegalFormatDopart: dopart>>
+       #);
+     missingMarker:< exception
+       (# mark: @char
+       enter mark
+       <<SLOT formatIoFormatterMissingMarkerDopart: dopart>>
+       #);
+     missingField:< exception
+       (# <<SLOT formatIoFormatterMissingFieldDopart: dopart>> #);
+     inputError:< exception
+       (# chFound, chExpected: @char
+       enter (chFound, chExpected)
+       <<SLOT formatIoFormatterInputErrorDopart: dopart>>
+       #);
+     scanForMarker: (* Private *)
+       (# mark:< charValue;
+          formatEOS:< exception;
+          fieldWidth, precisionSpec: @integer;
+          leftFlag, signedFlag, blankFlag,
+          alternativeFlag, zeroFlag, longFlag: @boolean
+       <<SLOT formatIoScanForMarkerDopart: dopart>>
+       #);
+     match:< (* private *)
+       (# ch: @char
+       enter ch
+       do INNER match
+       #);
+     private: @<<SLOT formatIoFormatterPrivate: descriptor>>;
+     formatStr: ^text
+  enter formatStr[]
+  <<SLOT formatIoFormatterDopart: dopart>>
+  #);
+
+--- lib: attributes ---
+   
+getFormat: keyboard.getFormat(# do INNER getFormat #);
+
+putFormat: screen.putFormat(# do INNER putFormat #);

@@ -1,0 +1,298 @@
+ORIGIN '../regexp';
+INCLUDE '../external'; 
+MAKE    nti 'external/regexpr.nt_make'
+        default 'external/regexpr.make';
+OBJFILE default '$/regexpr.o';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1992-95
+ *       All rights reserved.
+ *)
+
+--- regexpRegistersGetRegisterValueBody: descriptor ---
+(# do thePos+regNr*4 -> getLong -> value #)
+
+--- lib: attributes ---
+regexpr_pattern_buffer: Cstruct
+  (* typedef struct re_pattern_buffer
+   * { char *buffer; 	 /* compiled pattern */
+   *   int allocated;	 /* allocated size of compiled pattern */
+   *   int used;	 /* actual length of compiled pattern */
+   *   char *fastmap;	 /* fastmap[ch] is true if ch can start pattern */
+   *   char *translate;	 /* translation to apply during compilation/matching */
+   *   char fastmap_accurate; /* true if fastmap is valid */
+   *   char can_be_null; /* true if can match empty string */
+   *   char uses_registers;/* registers are used and need to be initialized */
+   *   char anchor;	 /* anchor: 0=none 1=begline 2=begbuf */
+   * } *regexp_t;
+   *)
+  (# byteSize::< (# do 28 -> value #);
+     buffer: @long(# pos::< (# do 0 -> value #) #);
+     allocated: @long(# pos::< (# do 4 -> value #) #);
+     used: @long(# pos::< (# do 8 -> value #) #);
+     fastmap: @long(# pos::< (# do 12 -> value #) #);
+     translate: @long(# pos::< (# do 16 -> value #) #);
+     fastmap_accurate: @short(# pos::< (# do 20 -> value #) #);
+     can_be_null: @short(# pos::< (# do 22 -> value #) #);
+     uses_registers: @short(# pos::< (# do 24 -> value #) #);
+     anchor: @short(# pos::< (# do 26 -> value #) #);
+  #);
+
+regexpr_NO_BK_PARENS: (# exit   1 #); (* no quoting for parentheses *)
+regexpr_NO_BK_VBAR: (# exit   2 #); (* no quoting for vertical bar *)
+regexpr_BK_PLUS_QM: (# exit   4 #); (* quoting needed for + and ? *)
+regexpr_TIGHT_VBAR: (# exit   8 #); (* | binds tighter than ^and $ *)
+regexpr_NEWLINE_OR: (# exit  16 #); (* treat newline as or *)
+regexpr_CONTEXT_INDEP_OPS: (# exit  32 #); (* ^$?*+ are special in all contexts *)
+regexpr_ANSI_HEX: (# exit  64 #); (* ansi sequences (\n etc) and \xhh *)
+regexpr_NO_GNU_EXTENSIONS: (# exit 128 #); (* no gnu extensions *)
+
+(* definitions for some common regexp styles *)
+regexpr_SYNTAX_AWK: (# exit regexpr_NO_BK_PARENS+regexpr_NO_BK_VBAR+regexpr_CONTEXT_INDEP_OPS #);
+regexpr_SYNTAX_EGREP: (# exit regexpr_SYNTAX_AWK+regexpr_NEWLINE_OR #);
+regexpr_SYNTAX_GREP: (# exit regexpr_BK_PLUS_QM+regexpr_NEWLINE_OR #);
+regexpr_SYNTAX_EMACS: (# exit 0 #);
+
+
+regexpr_set_syntax: external
+  (* int re_set_syntax(int syntax);
+   * 
+   * This sets the syntax to use and returns the previous syntax.  The syntax
+   * is specified by a bit mask of the above defined bits.
+   *)
+  (# syntax: @integer;
+     status: @integer
+  enter syntax
+  do 're_set_syntax'->callC   
+  exit status
+  #);
+
+regexpr_compile_pattern: external
+  (* char *re_compile_pattern(char *regex, int regex_size, regexp_t compiled);
+   * 
+   * This compiles the regexp (given in regex and length in regex_size).  This
+   * returns NULL if the regexp compiled successfully, and an error message if
+   * an error was encountered.  The buffer field must be initialized to a
+   * memory area allocated by malloc (or to NULL) before use, and the allocated
+   * field must be set to its length (or 0 if buffer is NULL).  Also, the
+   * translate field must be set to point to a valid translation table, or NULL
+   * if it is not used.
+   *)
+  (# regex: @integer;
+     regex_size: @integer;
+     compiled: @integer;
+     error_message: @integer
+  enter (regex, regex_size, compiled)
+  do 're_compile_pattern'->callC   
+  exit error_message
+  #);
+
+regexpr_match: external
+  (* int re_match(regexp_t compiled, char *string, int size, int pos,
+   *              regexp_registers_t regs);
+   * 
+   * This tries to match the regexp against the string.  This returns the
+   * length of the matched portion, or -1 if the pattern could not be matched
+   * and -2 if an error (such as failure stack overflow) is encountered.
+   *)
+  (# compiled: @integer;
+     string: @integer;
+     size: @integer;
+     pos: @integer;
+     regs: @integer;
+     status: @integer
+  enter (compiled, string, size, pos, regs)
+  do 're_match'->callC   
+  exit status
+  #);
+
+regexpr_match_2: external
+  (* int re_match_2(regexp_t compiled, char *string1, int size1,
+   *                char *string2, int size2, int pos, regexp_registers_t regs,
+   *                int mstop);
+   * 
+   * This tries to match the regexp to the concatenation of string1 and
+   * string2.  This returns the length of the matched portion, or -1 if the
+   * pattern could not be matched and -2 if an error (such as failure stack
+   * overflow) is encountered.
+   *)
+  (# compiled: @integer;
+     string1: @integer;
+     size1: @integer;
+     string2: @integer;
+     size2: @integer;
+     pos: @integer;
+     regs: @integer;
+     mstop: @integer;
+     status: @integer
+  enter (compiled, string1, size1, string2, size2, pos, regs, mstop)
+  do 're_match_2'->callC   
+  exit status
+  #);
+
+regexpr_search: external
+  (* int re_search(regexp_t compiled, char *string, int size, int startpos,
+   *               int range, regexp_registers_t regs);
+   * 
+   * This searches for a substring matching the regexp.  This returns the
+   * first index at which a match is found.  range specifies at how many
+   * positions to try matching; positive values indicate searching forwards,
+   * and negative values indicate searching backwards.  mstop specifies the
+   * offset beyond which a match must not go.  This returns -1 if no match is
+   * found, and -2 if an error (such as failure stack overflow) is encountered.
+   *)
+  (# compiled: @integer;
+     string: @integer;
+     size: @integer;
+     startpos: @integer;
+     range: @integer;
+     regs: @integer;
+     status: @integer
+  enter (compiled, string, size, startpos, range, regs)
+  do 're_search'->callC   
+  exit status
+  #);
+
+regexpr_search_2: external
+  (* int re_search_2(regexp_t compiled, char *string1, int size1,
+   *    	     char *string2, int size2, int startpos, int range,
+   *    	     regexp_registers_t regs, int mstop);
+   * 
+   * This is like regexpr_search, but search from the concatenation of string1 and
+   * string2.
+   *)
+  (# compiled: @integer;
+     string1: @integer;
+     size1: @integer;
+     string2: @integer;
+     size2: @integer;
+     startpos: @integer;
+     range: @integer;
+     regs: @integer;
+     mstop: @integer;
+     status: @integer
+  enter (compiled, string1, size1, string2, size2, startpos, range, regs, mstop)
+  do 're_search_2'->callC   
+  exit status
+  #);
+
+regexpr_compile_fastmap: external
+  (* void re_compile_fastmap(regexp_t compiled);
+   * 
+   * This computes the fastmap for the regexp.  For this to have any effect,
+   * the calling program must have initialized the fastmap field to point to an
+   * array of 256 characters.
+   *)
+  (# compiled: @integer;
+  enter compiled
+  do 're_compile_fastmap'->callC   
+  #);
+
+regexpr_comp: external
+  (* char *re_comp(char *s);
+   * 
+   * BSD 4.2 regex library routine re_comp.  This compiles the regexp into an
+   * internal buffer.  This returns NULL if the regexp was compiled
+   * successfully, and an error message if there was an error.
+   *)
+  (# s: @integer;
+     error_message: @integer
+  enter s
+  do 're_comp'->callC   
+  exit error_message
+  #);
+
+regexpr_exec: external
+  (* int re_exec(char *s);
+   * 
+   * BSD 4.2 regexp library routine re_exec.  This returns true if the string
+   * matches the regular expression (that is, a matching part is found anywhere
+   * in the string).
+   *)
+  (# s: @integer;
+     status: @integer
+  enter s
+  do 're_exec'->callC   
+  exit status
+  #);
+
+--- regexpOperationPrivate:descriptor ---
+(# regexp: (* Private *) @regexpr_pattern_buffer;
+   status: (* Private *) @integer;
+#)
+
+--- regexpReOperationEnterBodyBody:descriptor ---
+(# l: @integer
+do regexp_string.length->l;
+   (@@regexp_string.T[1], l, @@private.regexp.R[1])
+     -> regexpr_compile_pattern -> private.status;
+   (if private.status <> 0 then regexpError if);
+   @@private.regexp.R[1] -> regexpr_compile_fastmap;
+   (if private.status <> 0 then regexpError if)
+#)
+
+--- regexpReMatchBodyBody:descriptor ---
+(# l, s: @integer
+do limit->l; start->s;
+   (@@private.regexp.R[1], @@T[1], l, s, @@regs.R[1])
+     -> regexpr_match -> private.status;
+   (if private.status >= 0 then
+       true->value;
+       (if posToMatchEnd then 0->regs.end->pos if);
+       INNER regexp_match
+    else noMatch
+   if);
+#)
+
+--- regexpReSearchBodyBody:descriptor ---
+(#  l, s: @integer
+do limit->l; start->s;
+   (@@private.regexp.R[1], @@T[1], l, s, limit-start, @@regs.R[1])
+     -> regexpr_search -> private.status;
+   (if private.status >= 0 then
+       true->value;
+       (if posToMatchEnd then 0->regs.end->pos if);
+       INNER regexp_search
+    else noMatch
+   if)
+#)
+
+--- regexpReReplaceBodyBody:descriptor ---
+(# regstart, regEnd: [10]@integer;
+   regNr: @integer;
+   previousSlash: @boolean;
+   tmp: ^text;
+do (for i: regStart.range repeat
+        (if ((i-1->regs.start)+1->regStart[i]) > 0
+            then (i-1->regs.end)->regEnd[i]
+        if)
+   for); &text[] -> tmp[];
+   replace_string.scanAll
+   (#
+   do (if true
+       // previousSlash then
+          false -> previousSlash;
+          (if ch
+           // '\' then '\' -> tmp.put
+           // '0' // '1' // '2' // '3' // '4' // '5' // '6' // '7' // '8' // '9' then
+              ch-'0'+1 -> regNr;
+              (regStart[regNr], regEnd[regNr])
+                -> sub -> tmp.append
+          if)
+       // (ch='\') then true -> previousSlash
+       else ch -> tmp.put;
+      if)
+   #);
+   (regStart[1], regEnd[1])->delete;
+   (tmp[], (0->regs.start)+1)->insert;
+   (if posToMatchEnd then (0->regs.start)+tmp.length->pos if);
+   INNER regexp_replace
+#)
+
+--- regexpReReplaceLiterallyBodyBody:descriptor ---
+(# do
+   ((0->regs.start)+1, 0->regs.end)->delete;
+   (replace_string[], (0->regs.start)+1)->insert;
+   (if posToMatchEnd then (0->regs.start)+replace_string.length->pos if);
+   INNER regexp_replace_literally
+#)

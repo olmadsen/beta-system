@@ -1,0 +1,478 @@
+ORIGIN 'betaenv';
+BODY 'private/numberioBody'
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1992-95
+ *       All rights reserved.
+ *
+ * This fragment implements the following stream operations:
+ *    getNumber  * reads a number from THIS(stream).
+ *               * The number may be either an integer, 
+ *               * a based number or a real number
+ *    getBased   * reads a based number from THIS(stream)
+ *    getRadix   * reads a based number from THIS(stream), 
+ *               * without the 'bbx' part
+ *    getInteger * reads an integer number from THIS(stream)
+ *    getReal    * reads a real number from THIS(stream)
+ *    putReal    * appends a textual rep. of a real value to 
+ *               * THIS(stream)
+ *    putBased   * appends a textual rep. of a integer value in a 
+ *               * particular to THIS(stream).  The textual
+ *               * representation in in the given base
+ *    putRadix   * as putBased, except that the 'bbx' part is
+ *               * not printed
+ *    getHex     * similar to getRadix with radix 16, but more efficient.
+ *    putHex     * similar to putBased with base 16, but more efficient.
+ *    getBinary  * similar to getRadix with radix 2, but more efficient.
+ *    putBinary  * similar to putBased with base 2, but more efficient.
+ *    putByteHex    * like putHex, except that it only prints one byte.
+ *    putByteBinary * like putBinary, except that it only prints one byte.
+ * 
+ *    asNumber   * abstract pattern for the following asBased,
+ *               * asRadix, and asReal operations
+ *    asBased    * returns the based number present in
+ *               * THIS(stream)
+ *    asRadix    * returns the based number present in
+ *               * THIS(stream), without the 'bbx' part
+ *    asReal     * returns the real number present in
+ *               * THIS(stream)
+ * 
+ * The corresponding short-cuts for keyboard.getNumber, etc, and 
+ * screen.putReal, etc. are also included in this fragment.
+ * 
+ * Since the asNumber operations does not make sence for keyboard,
+ * no short-cuts are defined for these.
+ *)
+--- StreamLib: attributes ---
+(* idx=2 *)
+getNumber:  
+  (* getNumber reads a number from the current position of 
+   * this(stream).
+   * The number is either an integer (in base 10), an integer with a
+   *  given base, or a real.
+   * Integer examples:  10, 0, 123
+   * A based integer has the form <base>X<number>. Examples are:
+   *    2X101          base=2, number= 4*1 + 2*0 + 1*1 = 5
+   *    8X12           base=8, number= 8*1 + 1*2 = 10
+   *    16x2A1         base=16, number= 256*2 + 16*10 + 1*1  = 673
+   *     0x2A1         base=16, i.e. base=0 is interpreted as base=16
+   * Examples of reals are:
+   *   3.14, 3.14E-8, 3E+8
+   * The following grammar defines the exact syntax of the numbers:
+   *
+   * N ::= {D}+                        Int             314
+   *    |  {D}+ '.' {D}+               real            3.14
+   *    |  {D}+ '.' {D}+ 'E' E         real            3.14E8
+   *                                   real            3.14E+8
+   *                                   real            3.14E-8
+   *
+   *    |  {D}+  'E' E                 real            3E8
+   *                                   real            3E+8
+   *                                   real            3E-8
+   *    |  'X' {D | L}+                based           2X0101
+   *                                   based           8x0845
+   *                                   based           16xAF12
+   * D ::= {'0' | ... | '9' }
+   * L ::= {'A' | ... | 'Z'}
+   * E ::= {D}+
+   *    |  {D}+ '+' {D}+               
+   *    |  {D}+ '-' {D}+
+   *    
+   * All letters may be in lower or upper case.
+   * After the call, the stream is positioned
+   * after the first char not in the number.
+   *)
+  (# integerValue:<
+       (* the number has the form
+        *     x
+        * value contains the integer value
+        *)
+       integerValuePtn;
+     integerValuePtn:
+       (# value: @integer enter value do inner #);
+     basedValue:<
+       (* the number has the form
+        *     bXy
+        * base contains the base number
+        * value contains the integer value (in base 10)
+        *)
+       basedValuePtn;
+     basedValuePtn:
+       (# base,value: @integer enter (base,value) do inner #);
+     realValue:<
+       (* the  number has the form 
+        * 	x.yEz
+        * 	l is the number of leading zero's in y. i.e. in
+        * 	3.0017E-12, x=3, y=17,l=2 and z=-12
+        * value contains the real value
+        *)
+       realValuePtn;
+     realValuePtn:
+       (# x,y,l,z: @real; value: @real enter(x,y,l,z,value)
+       do INNER #);
+     syntaxError:< streamException
+       (# peekCh: @char
+       enter peekCh
+       do 'getNumber: Syntax error - looking at: "'->msg.append;
+          (if peekCh = ascii.nul then 'NUL'->msg.puttext
+           else peekCh->msg.put if);
+          '"'->msg.put; INNER #);
+     baseError:< streamException
+       (# base: @integer
+       enter base
+       do 'getNumber: Error in base - looking at: "'->msg.append; 
+          base->msg.putInt; '"'->msg.put; INNER #);
+     valueError:< streamException
+       (# peekCh: @char
+       enter peekCh
+       do 'getNumber: Illegal value type - looking at: "'->msg.append;
+          peekCh->msg.put; '"'->msg.put; INNER #);
+     getn: @<<SLOT numberIoGetNumberBody: descriptor>>
+  do getn;
+     INNER getNumber
+  #);
+getReal: getNumber
+  (# r: @real;
+     realValue::< (# do value->r #)
+  do INNER getReal
+  exit r
+  #);
+getBased: getNumber
+  (# i, b: @integer;
+     basedValue::< (# do value->i; base->b #)
+  do INNER getBased
+  exit (b,i)
+  #);
+getInteger: getNumber
+  (# i: @integer;
+     integerValue::< (# do value->i #)
+  do INNER getInteger
+  exit i
+  #);
+getRadix:
+  (* gets a number in the specified radix.  GetRadix is similar to
+   * getBased, except that is does NOT expect the 'bbx' prefix
+   *)
+  (# radix, value: @integer;
+     radixError:< streamException
+       (# radix: @integer
+       enter radix
+       <<SLOT numberIoGetRadixRadixErrorDopart: dopart>>
+       #);
+     getr: (* private *) @<<SLOT numberIoGetRadixBody: descriptor>>
+  enter radix
+  do getr;
+     INNER getRadix
+  exit value
+  #);
+
+putBased:
+  (* Takes a number and a base, and prints the number in that base.
+   * If base is 0, base 16 is assumed, and the format "0xnnn" is used.
+   * If base is negative, 1 or greater that 126, the baseError
+   * exception is invoked.
+   * 
+   * The format is default "bbxnnnn", where "bb" is the base (in
+   * decimal), and "nnnn" is the number, printed in the base. "x"
+   * separates the two parts.  The format may be controlled by the
+   * signed, blankSign, upcase, uppercase, width, adjustLeft,
+   * zeroPadding, noBasePrefix, baseWidth and baseZeroPadding variable
+   * attributes. If noBasePrefix is true, the "bbx" part is omitted.
+   *)
+  (# value, base: @integer;
+     baseError:< streamException
+       (# base: @integer
+       enter base
+       do 'putBased: Illegal base: "'->msg.append; 
+          base->msg.putInt; '"'->msg.put; INNER #);
+     (* The format may be further controlled by the signed, blankSign,
+      * width, adjustLeft and zeroPadding variable attributes.  
+      * width is extended if it is too small.
+      *
+      * Examples:
+      *   (10,10)->putBased
+      *      yields: '10x10'
+      *   (2,5)->putBased(# do 10->width; true->adjustLeft #);
+      *      yields: '2x101     '
+      *   (2,5)->putBased(# do 10->width; true->zeroPadding #);
+      *      yields: '2x00000101'
+      *)
+     signed:
+       (* If the number is positive, a '+' will always be displayed
+        *)
+       @boolean;
+     blankSign:
+       (* If the number is positive, a ' ' space is displayed as the
+        * sign.  Ignored if signed=true
+        *)
+       @boolean;
+     upcase: @boolean
+       (* Specifies whether an upcase 'X' or a lowcase 'x' is the
+        * be used in the 'bbx' part.
+        *);
+     uppercase: @boolean
+       (* Specifies whether uppercase letters or lowercase letters
+        * are used in the 'nnnn' part (for base>9).
+        *);
+     width: (* Minimum width *) @integer;
+     adjustLeft: @boolean
+       (* Specifies if the number is to be aligned left or right,
+        * if padding of spaces is necessary to fill up the specified
+        * width.
+        *);
+     zeroPadding:
+       (* width is padded with leading zero instead of spaces.
+        * Ignored if adjustLeft=true
+        *)
+       @boolean;
+     noBasePrefix: (* If true, the 'bbx' part is omitted *)
+       @boolean;
+     baseWidth: (* minimun width for the 'bbx' part *)
+       @integer;
+     baseZeroPadding:
+       (* baseWidth is padded with leading zero instead of spaces *)
+       @boolean;
+     format:< (# do INNER #);
+     putb: @<<SLOT numberIoPutBasedBody: descriptor>>
+  enter (base, value)
+  do INNER putBased; putb
+  #);
+putReal:
+  (* Append a real to THIS(stream). The format may be controlled by
+   * the style, signed, blankSign, precision, upcase, width,
+   * adjustLeft and zeroPadding variable attributes
+   *)
+  (# r: @real;
+     style: @integer
+       (* Controls the style, and may be one of plain, exp and noexp
+        * (noexp is the default)
+        *);
+     noexp: (* The notation [-]mmm.dddddd is used *)
+       (# exit 0 #);
+     exp: (* The notation [-]m.ddddddE[+|-]xx is used *)
+       (# exit 1 #);
+     plain:
+       (* In this style, precision is the total number of digits in
+        * the printed real (not the number of digits in the fraction,
+        * as in the other styles).
+        * 
+        * The exp or noexp style is used, dependent on the value being
+        * printed.  Exp style is used only if the exponent is less
+        * than -4 or greater than or equal to the precision; otherwise
+        * the noexp notation is used.  Trailing zeros are not printed
+        * as part of the fractional part and a decimal point is
+        * printed if not followed by a digit
+        *)
+       (# exit 2 #);
+     signed: (* If real is positive, a '+' will always be displayed *)
+       @boolean;
+     blankSign:
+       (* If real is positive, a ' ' space is displayed as the sign.
+        * Ignored if signed=true
+        *)
+       @boolean;
+     precision: @integer
+       (* The number of d's in the expressions above, default 6 *);
+     upcase: @boolean
+       (* Specifies whether an upcase 'E' or a lowcase 'e' is the
+        * be used in the exp style.
+        *);
+     width: (* Minimum width *)
+       @integer;
+     adjustLeft: @boolean
+       (* Specifies if the number is to be aligned left or right,
+        * if padding of spaces is necessary to fill up the specified
+        * width.
+        *);
+     zeroPadding:
+       (* width is padded with leading zero instead of spaces.
+        * Ignored if adjustLeft=true
+        *)
+       @boolean;
+     (* Examples:
+      *   10*pi -> putreal;
+      *      yields: '31.415926'
+      *   10*pi -> putreal(# do 10->width; true->adjustLeft #);
+      *      yields: '31.415926   '
+      *   10*pi -> putreal(# do exp->style; true->upcase #);
+      *      yields: '3.1415926E+01'
+      *   10*pi -> putreal(# do exp->style; 2->precision #);
+      *      yields: '3.14e+01'
+      *)
+     format:< (# do INNER #);
+     putr: @<<SLOT numberIoPutRealBody: descriptor>>
+  enter r
+  do 1->width; 6->precision; format; INNER putReal; putr
+  #);
+putRadix: putBased
+  (#
+  do true->noBasePrefix; INNER putRadix 
+  #);
+
+putHex:
+  (* prints a hexadecimal representation of x (as unsigned word) on
+   * this(stream). Similar to
+   * (16,x)->putRadix(# do true->zeroPadding; 8->width #)
+   * but more efficient.
+   *) 
+  (# x: @integer;
+     putH: (*private*)@<<SLOT numberioPutHex: descriptor>>
+  enter x
+  do INNER putHex; putH
+  #);
+
+putByteHex:
+  (* prints a hexadecimal representation of byte 'byte' in x (as
+   * unsigned word) on this(stream)
+   *)
+  (# x: @integer;
+     byte: @integer;
+     putBH: (*private*)@<<SLOT numberioPutByteHex: descriptor>>
+  enter (x,byte)
+  do INNER putByteHex; putBH
+  #);
+
+putBinary:
+  (* prints a binary representation of x (as unsigned word) on
+   * this(stream). Similar to
+   * (2,x)->putRadix(# do true->zeroPadding; 32->width #)
+   * but more efficient.
+   *)
+  (# x: @integer;
+     putB: (*private*)@<<SLOT numberioPutBinary: descriptor>>
+  enter x
+  do INNER putBinary; putB
+  #);
+
+putByteBinary:
+  (* prints a binary representation of byte 'byte' of x (as unsigned
+   * word) on this(stream)
+   *)
+  (# x: @integer;
+     byte: @integer;
+     putBB: (*private*)@<<SLOT numberioPutByteBinary: descriptor>>
+  enter (x, byte)
+  do INNER putByteBinary; putBB
+  #);
+
+getHex:
+  (* reads a hexadecimal number from this(stream) and returns the
+   * value in x (as unsigned word). Similar to 16->getRadix but more
+   * efficient.
+   *)
+  (# x: @integer;
+     noNumberError:< streamException
+       (# peekCh: @char
+       enter peekCh
+       do 'getHex: the number begins with: "'->msg.append;
+          (if peekCh = ascii.nul then 'NUL'->msg.puttext
+           else peekCh->msg.put if);
+          '".  Not a legal hexadecimal digit'->msg.puttext;
+          INNER noNumberError
+       #);
+     getH: (*private*)<<SLOT numberioGetHex: descriptor>>
+  do INNER getHex; getH
+  exit x
+  #);
+getBinary:
+  (* reads a binary number from this(stream) and returns the value in
+   * x (as unsigned word). Similar to 2->getRadix but more efficient.
+   *)
+  (# x: @integer;
+     noNumberError:< streamException
+       (# peekCh: @char
+       enter peekCh
+       do 'getBinary: the number begins with: "'->msg.append;
+          (if peekCh = ascii.nul then 'NUL'->msg.puttext
+           else peekCh->msg.put if);
+          '".  Not a legal binary digit'->msg.puttext;
+          INNER noNumberError
+       #);
+     getB: (*private*)<<SLOT numberioGetBinary: descriptor>>
+  do INNER getBinary; getB
+  exit x
+  #);
+
+asNumber:
+  (# syntaxError:< streamException
+       (# peekCh: @char
+       enter peekCh
+       do 'asNumber: Syntax error - looking at: "'->msg.append;
+          peekCh->msg.put; '"'->msg.put;
+          INNER syntaxError
+       #);
+     baseError:< streamException
+       (# base: @integer
+       enter base
+       do 'asNumber: Error in base - looking at: "'->msg.append;
+          base->msg.putInt; '"'->msg.put;
+          INNER baseError
+       #);
+     valueError:< streamException
+       (# peekCh: @char
+       enter peekCh
+       do 'asNumber: Illegal value type - looking at: "'->msg.append;
+          peekCh->msg.put; '"'->msg.put;
+          INNER valueError
+       #);
+  do reset;
+     INNER asNumber;
+     ScanWhiteSpace; (if not eos then peek->syntaxError if)
+  #);
+
+asReal: asNumber
+  (# r: @real
+    <<SLOT numberIoAsRealDopart: dopart>>
+  exit r
+  #);
+asBased: asNumber
+  (# i, b: @integer
+    <<SLOT numberIoAsBasedDopart: dopart>>
+  exit (b,i)
+  #);
+asRadix: asNumber
+  (# radix, value: @integer
+  enter radix
+  <<SLOT numberIoAsRadixDopart: dopart>>
+  exit value
+  #);
+asInteger: asNumber
+  (# i: @integer
+    <<SLOT numberIoAsIntegerDopart: dopart>>
+  exit i
+  #)
+
+--- lib: attributes ---
+
+getNumber: keyboard.getNumber
+  (# do INNER getNumber #);
+getReal: keyboard.getReal
+  (# do INNER getReal #);
+getBased: keyboard.getBased
+  (# do INNER getbased #);
+getRadix: keyboard.getRadix
+  (# do INNER getRadix #);
+getInteger: keyboard.getInteger
+  (# do INNER getInteger #);
+
+putReal: screen.putReal
+  (# do INNER putReal #);
+putBased: screen.putBased
+  (# do INNER putBased #);
+putRadix: screen.putRadix
+  (# do INNER putRadix #);
+
+getHex: keyboard.getHex
+  (# do INNER getHex #);
+getBinary: keyboard.getBinary
+  (# do INNER getBinary #);
+
+putHex: screen.putHex
+  (# do INNER putHex #);
+putByteHex: screen.putByteHex
+  (# do INNER putByteHex #);
+putBinary: screen.putBinary
+  (# do INNER putBinary #);
+putByteBinary: screen.putByteBinary
+  (# do INNER putByteBinary #);
+

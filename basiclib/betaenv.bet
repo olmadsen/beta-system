@@ -1,0 +1,851 @@
+BODY 'private/betaenvbody';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1984-95
+ *       All rights reserved.
+ *
+ * This fragment implements the very basic patterns, utilized by most
+ * BETA programs
+ *)
+-- betaenv: descriptor --
+(# <<SLOT lib: attributes>>;
+   (******************************************************************)
+   (* The simple patterns for simple values and variables.  These
+    * simple patterns are treated special by the compiler.
+    *)
+   integer: (* 32 bit signed long *) (# #);
+   shortInt: (* 16 bit unsigned half *) (# #);
+   char: (* 8 bit unsigned byte *) (# #);
+   boolean: (* 8 bit unsigned byte, values 0 or 1 *) (# #);
+   false: boolean (* 8 bit unsigned byte with value 0 *) (# #);
+   true: boolean (* 8 bit unsigned byte with value 1 *) (# #);
+   real: (* double precision floating point number *) (# #);
+   object: (* General superpattern *) (# do INNER object #);
+
+   (* The following patterns define 'real' patterns corresponding to
+    * the predefined simple patterns
+    *)
+   integerValue: (# value: @integer do INNER integerValue exit value #);
+   integerObject: integerValue(# enter value do INNER integerObject #);
+   charValue: (# value: @char do INNER charValue exit value #);
+   charObject: charValue(# enter value do INNER charObject #);
+   booleanValue: (# value: @boolean do INNER booleanValue exit value #);
+   booleanObject: booleanValue(# enter value do INNER booleanObject #);
+   trueObject: booleanObject(# do true->value; INNER trueObject #);
+   falseObject: booleanObject(# do INNER falseObject #);
+   realValue: (# value: @real do INNER realValue exit value #);
+   realObject: realValue(# enter value do INNER realObject #);
+   
+   (****  Implementation dependent constants *************************) 
+   maxInt: integerValue(# <<SLOT betaenvMaxInt: dopart>> #);
+   minInt: integervalue(# <<SLOT betaenvMinInt: dopart>> #);
+   maxReal: realValue(# <<SLOT betaenvMaxReal: dopart>> #);
+   minReal: realValue(# <<SLOT betaenvMinReal: dopart>> #);
+   infReal: (* Returns the real value 'Infinity' *)
+     realValue(# <<SLOT betaenvInfReal: dopart>> #);
+   
+   (*****  Functional patterns ***************************************)
+   min: (* Returns the minimum of 2 integers *)
+     (# a,b: @integer
+     enter (a,b)
+     do (if (a < b) then a->b if)
+     exit b
+     #);
+   max: (* Returns the maximum of 2 integers *)
+     (# a,b: @integer
+     enter (a,b)
+     do (if (a < b) then b->a if)
+     exit a
+     #);
+   abs: (* Returns the absolute value of an integer *)
+     (# n: @integer
+     enter n
+     do (if (n < 0) then -n->n if)
+     exit n
+     #);
+   
+   (*****  Simple standard input/output patterns *********************)
+   keyboard, screen: ^stream;
+   get: (# ch: @char; getC: @keyboard.get do getC->ch exit ch #);
+   put: (# ch: @char; putC: @screen.put enter ch do ch->putC #);
+   newline: screen.newline(# #);
+   putint: screen.putint(# #);
+   getint: keyBoard.getint(# #);
+   puttext: (# t: ^text; putT: @screen.puttext
+            enter t[]
+            do t[]->putT
+            #);
+   putline: screen.putline(# #);
+   getNonBlank: keyBoard.getNonBlank(# #);
+   scanAtom: keyBoard.scanAtom(# do INNER scanAtom #);
+   getAtom: (# t: ^text; getA: @keyBoard.getAtom do getA->t[] exit t[] #);
+   getline: (# t: ^text; getL: @keyBoard.getline do getL->t[] exit t[] #);
+   
+   (*****  Control patterns ******************************************)
+   forTo: (* for 'inx' in [low:high] do INNER forTo *)
+     (# low, high, inx: @integer;
+     enter (low, high)
+     <<SLOT betaenvForTo: dopart>>   
+     #);
+   cycle: (* Executes INNER forever *)
+     (# <<SLOT betaenvCycle: dopart>> #);
+   (* idx+ *)
+   loop: 
+     (# while:< booleanValue(# do true->value; INNER while #);
+        until:< booleanValue;
+        whilecondition: @while;
+        untilcondition: @until;
+     <<SLOT betaenvLoop: dopart>>
+     #);
+   qua:
+     (* Pattern replacing the BETA language construct QUA.  To be
+      * used as 't1[]->qua(# as::< Tn #)->t2[]'.  The 'qua' pattern
+      * checks, whether 't1' is qualified by 'Tn'.  If not, the
+      * 'quaError' exception is invoked.  Otherwise, a reference
+      * qualified by 'Tn', and referring to the same object as 't1[]'
+      * is referring, is returned.
+      *)
+     (# as:< object; R: ^object; thisObj: ^as;
+        quaError:< exception
+          (# do 'Qualification error'->msg.append; INNER quaError #)
+     enter R[]
+     <<SLOT betaenvQua: dopart>>   
+     exit thisObj[]
+     #);
+   
+   (*****  Stream patterns *******************************************)
+   stream: 
+     (# <<SLOT streamLib: attributes>>;
+        length:< integerValue (* returns the length of THIS(stream) *)
+          (#
+          do -1->value; INNER length
+          #);
+        position: (* current position of THIS(stream) *)
+          (# 
+          enter setPos
+          exit getPos
+          #);
+        eos:< (* returns 'true' if THIS(stream) is at end-of-stream *)
+          booleanValue;
+        reset: (* sets 'position' to zero *)
+          (#
+          do 0->setPos
+          exit THIS(stream)[]
+          #);
+        peek:< (* looks at the next character of THIS(stream) *)
+          (# ch: @char
+          do INNER peek
+          exit ch
+          #);
+        get:< (* reads a character from THIS(stream) *)
+          (# ch: @char
+          do INNER get
+          exit ch
+          #);
+        getNonBlank: 
+          (* Reads first non-whitespace character from THIS(stream).
+           * If called at end-of-stream the character 'ascii.fs' is
+           * returned
+           *)
+          (# ch: @char;
+             skipblanks: @scanWhiteSpace;
+             testEOS: @EOS;
+             getCh: @get;
+          <<SLOT betaenvStreamGetNonBlank: dopart>>
+          exit ch
+          #);
+        getint: integerValue
+          (* Reads an integer: skips whitespace characters and
+           * returns the following digits.
+           * 
+           * See numberio.bet for more numerical output operations
+           *)
+          (# syntaxError:< streamException
+               (# 
+               do 'getint: syntax error - looking at: "'->msg.append;
+                  peek->msg.put; '"'->msg.putline; INNER syntaxError
+               #);
+             geti: @<<SLOT betaenvStreamGetInt: descriptor>> 
+          do geti
+          #);
+        getAtom:<
+          (* Returns the next atom (i.e. sequence of non-white
+           * characters - skipping leading blanks)
+           *)
+          (# txt: ^text;
+          do &text[]->txt[]; INNER getAtom
+          exit txt[]
+          #);
+        getline:<
+          (* Reads a sequence of characters until nl-character
+           * appears and returns the characters read.
+           *)
+          (# txt: ^text;
+          do &text[]->txt[]; INNER getline
+          exit txt[]
+          #);
+        asInt:
+          (* converts THIS(text) to an integer value, ignoring
+           * leading and trailing whitespace.  See numberio.bet for
+           * more numerical conversion operations.
+           *)
+          (# i: @integer;
+             syntaxError:< streamException
+               (# peekCh: @char
+               enter peekCh
+               do 'asInt: syntax error - looking at: "'->msg.append;
+                  peekCh->msg.put; '"'->msg.put;
+                  INNER syntaxError
+               #)
+          <<SLOT betaenvStreamAsIntdopart: dopart>>
+          exit i
+          #);
+        put:< (* writes a character to THIS(stream) *)
+          (# ch: @char
+          enter ch
+          do INNER put
+          exit THIS(stream)[]
+          #);
+        newline: (* writes the nl-character *) 
+          (#
+          do ascii.newline->put
+          exit THIS(stream)[]
+          #);
+        putint: 
+          (* Writes an integer to THIS(stream); The format may be
+           * controlled by the 'signed', 'blankSign', 'width',
+           * 'adjustLeft' and 'zeroPadding' variable attributes.
+           * 'width' is extended if it is too small.  Examples:
+           * '10->putint' yields: '10'; '10*pi->putint(# do 10->width;
+           * true->adjustLeft #)' yields: '10 '; and '10->putint(# do
+           * 10->width; true->zeroPadding #)' yields: '0000000010'.
+           * 
+           * See numberio.bet for more numerical output operations
+           *)
+          (# n: @integer;
+             signed: @boolean
+               (* If integer is positive, a '+' will always be
+                * displayed
+                *);
+             blankSign: @boolean 
+               (* If integer is positive, a ' ' space is displayed as
+                * the sign.  Ignored if 'signed=true'
+                *);
+             width: @integer
+               (* Minimum width *);
+             adjustLeft: @boolean
+               (* Specifies if the number is to be aligned left or
+                * right, if padding of spaces is necessary to fill up
+                * the specified width.
+                *);
+             zeroPadding: @boolean
+               (* width is padded with leading zero instead of
+                * spaces.  Ignored if 'adjustLeft=true'
+                *);
+             format:< (# do INNER format #);
+             puti: @<<SLOT betaenvStreamPutInt: descriptor>>
+          enter n
+          do 1->width; format; INNER putint; puti
+          exit THIS(stream)[]
+          #);
+        puttext:< (* Writes a text to THIS(stream). *)
+          (# txt: ^text
+          enter txt[]
+          do (if txt[]<>NONE then INNER puttext if)
+          exit THIS(stream)[]
+          #);
+        putline: 
+          (* 'puttext' followed by 'newline' *)
+          (# T: ^text; putT: @puttext; newL: @newline
+          enter T[]
+          do T[]->putT; newL
+          exit THIS(stream)[]
+          #);
+        scan: 
+          (* Scan chars from current position in THIS(stream) while
+           * '(ch->while)=true'; perform INNER for each char being
+           * scanned
+           *)
+          (# while:<
+               (# ch: @char; value: @boolean
+               enter ch
+               do true->value; INNER while
+               exit value
+               #);
+             ch: @char;
+             whilecondition: @while;
+             testEOS: @EOS;
+             getPeek: @peek;
+             getCh: @get;
+          <<SLOT betaenvStreamScan: dopart>>
+          exit THIS(stream)[]
+          #);
+        scanWhiteSpace: scan 
+          (* Scan whitespace characters *)
+          (# while::< (# do ch->ascii.isWhiteSpace->value #)
+          do INNER scanWhiteSpace
+          exit THIS(stream)[]
+          #);
+        scanAtom: 
+          (* Scan until first non-whitespace char.  Scan the next
+           * sequence of non-whitespace chars.  Stop at first
+           * whitespace char.  For each non-whitespace char an INNER
+           * is performed. Usage: 'scanAtom(# do ch-><destination> #)'
+           *)
+          (# ch: @char;
+          <<SLOT betaenvStreamScanAtom: dopart>>
+          exit THIS(stream)[]
+          #);
+        scanToNl: 
+          (* Scan all chars in current line including newline char *)
+          (# ch: @char; getCh: @get;
+          <<SLOT betaenvStreamScanToNl: dopart>>
+          exit THIS(stream)[]
+          #);
+        streamException: exception
+          (# do INNER streamException #);
+        EOSerror:< streamException
+          (* Raised from 'get' and 'peek' when attempted to read past
+           * the end of the stream.
+           *)
+          (# 
+          do 'Attempt to read past end-of-stream'->msg.putline; 
+             INNER EOSerror
+          #);
+        otherError:< streamException
+          (* Raised when some other kind of stream error apart from
+           * the one mentioned above occurs.
+           *);
+        getPos:< (* returns current position of THIS(Stream) *)
+          integerValue;
+        setPos:< (* sets current position in THIS(stream) to 'p' *)
+          (# p: @integer
+          enter p do INNER setPos
+          exit THIS(stream)[]
+          #)
+     #); (* pattern stream *)
+   
+   (*****  Text pattern **********************************************)
+   text: stream
+     (* A text is a sequence of characters.  Let 'T: @text'. The
+      * range of 'T' is '[1,T.length]'.  A text can be initialized by
+      * executing 'T.clear' or by assigning it another (initialized)
+      * text.  A text-constant has the form 'foo'.  The 'text' pattern
+      * is primarily intended for small texts but there is no upper
+      * limit in the size. However, most of the operations becomes
+      * less efficient with larger texts.
+      *)
+     (# <<SLOT textLib: attributes>>;
+        length::< (* Returns the length of THIS(text) *) 
+          (# do lgth->value #);
+        eos::<
+          (# <<SLOT betaenvTextEOS: dopart>> #);
+        empty: 
+          (# exit (lgth = 0) #);
+        clear: (* Sets the length and position of THIS(text) to zero *)
+          (#
+          do 0->pos->lgth
+          exit THIS(text)[]
+          #);
+        equal: booleanValue
+          (* Tests if THIS(text) is equal to the entered text.  If
+           * 'NCS' is further bound to 'trueObject', the comparison
+           * will be done Non Case Sensitive.
+           *)
+          (# txt: ^text;
+             NCS:< booleanObject
+          enter txt[]
+          <<SLOT betaenvTextEqual: dopart>>
+          #);
+        equalNCS: equal
+          (* As 'equal', except the the comparison will be done Non
+           * Case Sensitive
+           *)
+          (# NCS:: trueObject #);
+        less: booleanValue
+          (* Tests whether the entered text 'T1[1: length]' is less
+           * than 'THIS(text)[1: T1.length]'.  The lexicographical
+           * ordering is used.
+           *)
+          (# T1: ^text
+          enter T1[]
+          <<SLOT betaenvTextLess: dopart>>
+          #);
+        greater: booleanValue
+          (* Tests whether the entered text 'T1[1: length]' is
+           * greater than 'THIS(text)[1: T1.length]'.  The
+           * lexicographical ordering is used.
+           *)
+          (# T1: ^text
+          enter T1[]
+          <<SLOT betaenvTextGreater: dopart>>
+          #);
+        peek::<
+          (* Returns the character at current position; does not
+           * update 'position'
+           *)
+          (# <<SLOT betaenvTextPeek: dopart>> #);
+        get::<
+          (* Returns the character at current position; increments
+           * 'position'
+           *) 
+          (# <<SLOT betaenvTextGet: dopart>> #);
+        inxGet: charValue
+          (* Returns the character at position 'i' *)
+          (# i: @integer;
+             iget: @<<SLOT betaenvTextInxGet: descriptor>>
+          enter i
+          do iget
+          #);
+        getAtom::<
+          (* Returns the next atom (i.e. sequence of non-white
+           * characters - skipping leading blanks)
+           *)
+          (# <<SLOT betaenvTextGetAtom: dopart>> #);
+        getline::<
+          (* Reads a sequence of characters until nl-character
+           * appears and returns the characters read.
+           *)
+          (# <<SLOT betaenvTextGetLine: dopart>> #);
+        put::<
+          (* writes the character 'ch' at current position in
+           * THIS(text); increments 'position'
+           *) 
+          (# <<SLOT betaenvTextPut: dopart>> #);
+        inxPut: 
+          (* Replaces the character at position 'i' *)
+          (# ch: @char;
+             i: @integer;
+             iput: @<<SLOT betaenvTextInxPut: descriptor>>
+          enter (ch,i)
+          do iput
+          exit THIS(text)[]
+          #);
+        puttext::<
+          (# <<SLOT betaenvTextPuttext: dopart>> #);
+        append: 
+          (* Appends a text to THIS(text); does not change 'position'
+           *)
+          (# T1: ^text
+          enter T1[]
+          <<SLOT betaenvTextAppend: dopart>>
+          exit THIS(text)[]
+          #);
+        prepend: 
+          (* Inserts the text in 'T1' in front of THIS(text); updates
+           * current position to 'position+T1.length' if 'position>0'
+           *)
+          (# T1: ^text
+          enter T1[]
+          <<SLOT betaenvTextPrepend: dopart>>
+          exit THIS(text)[]
+          #);
+        insert: 
+          (* Inserts a text before the character at position 'inx'.
+           * Note: inx<1 means inx=1; inx>length means inx=length+1.
+           * If 'position>=inx' then 'position+T1.length->position'.
+           *)
+          (# T1: ^text;
+             inx: @integer
+          enter (T1[],inx)
+          <<SLOT betaenvTextInsert: dopart>>
+          exit THIS(text)[]
+          #);
+        delete: 
+          (* Deletes THIS(text)[i: j]; updates current position:
+           *      i<=position<j => i-1->position
+           *      j<=position   => position-(j-i+1)->position
+           *)
+          (# i,j: @integer; 
+             deleteT: @<<SLOT betaenvTextDelete: descriptor>>
+          enter (i,j)
+          do deleteT
+          exit THIS(text)[]
+          #);
+        makeLC: (* Converts all characters to lower case *)
+          (# <<SLOT betaenvTextMakeLC: dopart>>
+          exit THIS(text)[]
+          #);
+        makeUC: 
+          (* Converts all characters to upper case *)
+          (# <<SLOT betaenvTextMakeUC: dopart>>
+          exit THIS(text)[]
+          #);
+        sub:
+          (* Returns a copy of THIS(text)[i:j].  If 'i<1', 'i' is
+           * adjusted to 1. If 'j>length', 'j' is adjusted to
+           * 'length'.  If (after adjustment) 'i>j', an empty text is
+           * returned.
+           *)
+          (# i,j: @integer; T1: ^text;
+             subI: @<<SLOT betaenvTextSub: descriptor>>
+          enter (i,j)
+          do subI
+          exit T1[]
+          #);
+        copy: 
+          (# T1: ^text;
+             copyI: @<<SLOT betaenvTextCopy: descriptor>>
+          do copyI
+          exit T1[]
+          #);
+        scanAll: 
+          (* Scans all the elements in THIS(text).  For 'ch' in '[1:
+           * THIS(text).length]' do INNER
+           *)
+          (# ch: @char
+          do (for i: lgth repeat T[i]->ch; INNER scanAll for)
+          exit THIS(text)[]
+          #);
+        find:
+          (* find all occurrences of the character 'ch' in
+           * THIS(text), executing INNER for each occurrence found,
+           * beginning at 'THIS(text).position'.  'inx' will contain
+           * the position of each 'ch' in THIS(text).  If 'NCS' is
+           * further bound to 'trueObject', the comparison will be
+           * done Non Case Sensitive.  If 'from' is further bound, the
+           * search will begin at position 'from'.
+           *)
+          (# ch: @char;
+             inx: @integer;
+             NCS:< booleanObject;
+             from:< integerObject(# do pos->value; INNER from #)
+          enter ch
+          <<SLOT betaenvTextFind: dopart>>
+          exit THIS(text)[]
+          #);
+        findAll: find
+          (* As 'find', except that the entire text will be searched.
+           * Replaces 'findCh' in previous versions of betaenv (v1.4
+           * and earlier)
+           *)
+          (# from:: (# do 0->value #)
+          do INNER findAll
+          #);
+        findText:
+          (* find all occurrences of the 'txt' in THIS(text),
+           * executing INNER for each occurrence found, beginning at
+           * 'THIS(text).position'.  'inx' will contain the position
+           * of the first character of each occurrence found
+           * THIS(text).  If 'NCS' is further bound to 'trueObject',
+           * the comparison will be done Non Case Sensitive.  If
+           * 'from' is further bound, the search will begin at
+           * position 'from'.
+           *)
+          (# txt: ^text;
+             inx: @integer;
+             NCS:< booleanObject;
+             from:< integerObject(# do pos->value; INNER from #)
+          enter txt[]
+          <<SLOT betaenvTextFindText: dopart>>
+          exit THIS(text)[]
+          #);
+        findTextAll: findText
+          (* As 'findText', except that the entire text will be
+           * searched
+           *)
+          (# from:: (# do 0->value #)
+          do INNER findTextAll
+          #);
+        extend: 
+          (* Extend THIS(text) with 'L' (undefined) chars. Notice
+           * that it is only the representation of the THIS(text),
+           * that is extended, the 'length' and 'position' are not
+           * changed.
+           *)
+          (# L: @integer
+          enter L do L->T.extend
+          exit THIS(text)[]
+          #);
+        indexError:< streamException
+          (* Raised from 'Check' when the index goes outside the
+           * range of the text. Message: "Index error in text!".
+           *)
+          (# inx: @integer 
+          enter inx
+          <<SLOT betaenvTextIndexError: dopart>>
+          #);
+        EOSerror::<
+          (* Raised from 'get' and 'peek' when the end of the stream is
+           * passed.
+           *) 
+          (# <<SLOT betaenvTextEOSerror: dopart>> #);
+        otherError::<
+          (* Raised when an error other than the Index-/EOSerror
+           * occurs.
+           *) 
+          (# <<SLOT betaenvTextOtherError: dopart>> #);
+        setPos::<
+         (# <<SLOT betaenvTextSetPos: dopart>> #);
+        getPos::<
+          (# do pos->value #);
+        (* Private attributes: !!OBS!! The 3 attributes 'T', 'lgth'
+         * and 'pos' declared below MUST be the first data items
+         * declared in 'stream' and 'text' since their addresses are
+         * hardcoded into the compiler.
+         *)
+        T: [16] @char;
+        lgth,pos: (* 16 is default size *) @integer;
+        setT: (# enter T do T.range->lgth->pos #)
+     enter setT
+     exit T[1: lgth]
+     #) (* Pattern text *); 
+   
+   (*****  ASCII character constants and attributes ******************)
+   ascii: @
+     (# <<SLOT asciiLib: attributes>>;
+        nul: (# exit 0 #);
+        soh: (# exit 1 #);
+        stx: (# exit 2 #);
+        etx: (# exit 3 #);
+        eot: (# exit 4 #);
+        enq: (# exit 5 #);
+        ack: (# exit 6 #);
+        bel: (# exit 7 #);
+        bs: (# exit 8 #);
+        ht: (# exit 9 #);
+        nl: (# exit 10 #);
+        vt: (# exit 11 #);
+        np: (# exit 12 #);
+        cr: (# exit 13 #);
+        so: (# exit 14 #);
+        si: (# exit 15 #);
+        dle: (# exit 16 #);
+        dc1: (# exit 17 #);
+        dc2: (# exit 18 #);
+        dc3: (# exit 19 #);
+        dc4: (# exit 20 #);
+        nak: (# exit 21 #);
+        syn: (# exit 22 #);
+        etb: (# exit 23 #);
+        can: (# exit 24 #);
+        em: (# exit 25 #);
+        sub: (# exit 26 #);
+        esc: (# exit 27 #);
+        fs: (# exit 28 #);
+        gs: (# exit 29 #);
+        rs: (# exit 30 #);
+        us: (# exit 31 #);
+        sp: (# exit 32 #);
+        capA: (# exit 65 #);
+        smalla: (# exit 97 #);
+        del: (# exit 127 #);
+        newline: @char; (* either 'lf' or 'cr' *)
+        
+        init: <<SLOT betaenvAsciiInitAscii: descriptor>>;
+        upCase: @charObject
+          (# <<SLOT betaenvAsciiUpCase: dopart>> #);
+        lowCase: @charObject
+          (# <<SLOT betaenvAsciiLowCase: dopart>> #);
+        testChar: booleanValue
+          (# ch: @char
+          enter ch
+          do INNER testchar
+          #);
+        isUpper: @testChar
+          (# <<SLOT betaenvAsciiIsUpper: dopart>> #);
+        isLower: @testChar
+          (# <<SLOT betaenvAsciiIsLower: dopart>> #);
+        isDigit: @testChar
+          (# <<SLOT betaenvAsciiIsDigit: dopart>> #);
+        isLetter: @testChar
+          (# <<SLOT betaenvAsciiIsLetter: dopart>> #);
+        isSpace: @testChar
+          (* True if 'ch' in {sp,cr,nl,np,ht,vt} *) 
+          (# <<SLOT betaenvAsciiIsSpace: dopart>> #);
+        isWhiteSpace: @testChar
+          (* True if 'ch' is a whitespace char *) 
+          (# <<SLOT betaenvAsciiIsWhiteSpace: dopart>> #);
+        private: @<<SLOT betaenvAsciiPrivate: descriptor>>
+     #);
+   (* idx- *)
+   (*****  Exception Patterns ****************************************)
+   stop: 
+     (* Terminates program execution: 'termCode=normal': normal
+      * termination; 'termCode=failure': abnormal termination;
+      * 'termCode=failureTrace': abnormal termination with trace of
+      * run-time stack on dump-file; 'T' will be printed on the
+      * screen.
+      *)
+     (# termCode: @integer; T: ^text
+     enter (termCode,T[])
+     do <<SLOT betaenvStop: descriptor>>
+     #);
+   normal: (# exit 0 #);
+   failure: (# exit -1 #);
+   failureTrace: (# exit -2 #);
+   (* idx+ *)
+   exception: 
+     (# <<SLOT exceptionLib: attributes>>;
+        continue: @boolean
+          (* True: continue execution after exception 
+           * False: Execution will be terminated by calling 
+           * 'stop'; default
+           *);
+        termCode: @integer
+          (* Arg. to 'stop'; see pattern 'stop'; initial
+           * value=failureTrace
+           *);
+        msg: @text
+     do failureTrace->termCode;
+        INNER exception;
+        (if not continue then
+            '**** Exception processing\n'->msg.prepend;
+            (termCode,msg[])->&stop
+        if)
+     #);
+   notification: exception
+     (# do true->continue; INNER notification #);
+   (* idx- *)
+   (*****  Object Pool ***********************************************)
+   objectPool: @
+     (# <<SLOT objectPoolLib: attributes>>;
+        get: 
+          (# type:< object;
+             obj: ^type;
+             exact:< booleanValue;
+             init:< object(* Called if an object was created *)
+          <<SLOT betaenvObjectPoolGet: dopart>>
+          exit obj[]
+          #);
+        strucGet: 
+          (# type: ##object;
+             obj: ^object;
+             exact:< booleanValue;
+             init:< object(* Called if an object was created *);
+          enter type##
+          <<SLOT betaenvObjectPoolStrucGet: dopart>>
+          exit obj[]
+          #);
+        scan: 
+          (* Scan through all objects in 'objectPool', (at least)
+           * qualified by 'type'.
+           *)
+          (# type:< object;
+             current: ^type;
+             exact:< booleanValue;
+          <<SLOT betaenvObjectPoolScan: dopart>>
+          #);
+        strucScan: 
+          (* Scan through all objects in 'objectPool', (at least)
+           * qualified by 'type'
+           *)
+          (# type: ##object;
+             current: ^object;
+             exact:< booleanValue
+          enter type##
+          <<SLOT betaenvObjectPoolStrucScan: dopart>>
+          #);
+        put: 
+          (* Puts a given object into 'objectPool'. If an object with
+           * (at least) the qualification of the given object is
+           * already present in 'objectPool', the exception
+           * 'alreadyThere' is raised.
+           *)
+          (# obj: ^object;
+             exact:< booleanValue;
+             alreadyThere:< exception;
+             putObj: @<<SLOT betaenvObjectPoolPut: descriptor>>
+          enter obj[]
+          do putObj
+          #);
+        private: @<<SLOT betaenvObjectPoolPrivate: descriptor>>;
+     #);
+   
+   (*****  Command line arguments ************************************)
+   noOfArguments: integervalue
+     (* Return the number of arguments on command line *)
+     (# <<SLOT betaenvNoOfArguments: dopart>> #);
+   arguments: 
+     (* Returns argument number argNo.  
+      * Number 1 is the program name, number 2 is the first program
+      * argument, etc.
+      *)
+     (# argNo: @integer; theArg: ^text;
+     enter argNo
+     <<SLOT betaenvArguments: dopart>>
+     exit theArg[]
+     #);
+   (* idx+ *)
+   (******************************************************************)
+   (* External language interface: See file 'external.bet' for further
+    * patterns.
+    *)
+   external:
+     (* Is only meaningful with interface to externals *)
+     (# callC,callPascal,pascal,pascalTrap,callStd,
+        cExternalEntry,pascalExternalEntry,stdExternalEntry: @text
+     #);
+   cStruct: (* Super-pattern for describing cStruct-patterns *)
+     (# <<SLOT cStructLib: attributes>>;
+        R: [(byteSize-1) div 4 + 1] @integer;
+        byteSize:< integerObject
+          (* 'R' is the bytestream containing THIS(cStruct).  Must be
+           * declared as the first attribute
+           *);
+        chkBounds:< (* Number of bytes in THIS(cStruct) *)
+          (# inx: @integer; continue: @boolean
+          enter inx
+          do (if ((inx < 0) or (R.range*4 < inx)) then
+                 INNER chkBounds;
+                 (if not continue then 
+                     (failureTrace,'Index error in cStruct')->&stop
+                 if)
+             if)
+          #)
+     #);
+   data:
+     (* The 'data' pattern may be used for definining simple data
+      * objects.  Data-objects have no 'type' information. They can
+      * thus NOT be allocated dynamically in the BETA heap. They do
+      * not have the overhead of extra attributes used for virtual
+      * dispatch and garbage collection. One main use of data-objects
+      * is as interface to external data such as 'cstruct'.  For
+      * details see the manuals
+      *)
+     (# #);
+   doGC: (* will force a garbage collection to happen *)
+     (# <<SLOT betaenvDoGC: dopart>> #);
+   program: (* descriptor executed by this environment *)
+     <<SLOT program: descriptor>>;
+   theProgram: ^|program;
+   theScheduler: ^|object
+     (* Scheduler installed by 'basicSystemEnv' (if used in program) *);
+   (* idx- *)
+   (******************************************************************)
+   (* The following patterns are only used by the compiler and should
+    * NOT be used for other purposes.
+    *)
+   repetition: 
+     (# range: (* Returns the range of THIS(repetition) *)
+          (# n: @integer
+          exit n
+          #);
+        new: 
+          (* Allocates a new repetition of 'n' elements. The previous
+           * elements in THIS(repetition) become inaccessible
+           * hereafter
+           *)
+          (# n: @integer
+          enter n
+          #);
+        extend:
+          (* Extends THIS(repetition) by 'n' elements.  The existing
+           * elements are retained.  The new elements are allocated
+           * after the existing elements (i.e. with index from the
+           * 'range+1')
+           *)
+          (# n: @integer
+          enter n
+          #)
+     #);
+   errorName: (# #)
+   
+   (******************************************************************)
+do <<SLOT betaenvInitEnv: descriptor>>;
+   &|program[]->theProgram[];
+   theProgram;
+   (if theScheduler[]<>NONE then theScheduler if);
+   <<SLOT betaenvTerminateEnv: descriptor>> 
+#)  
+

@@ -1,0 +1,423 @@
+ORIGIN  'directorybody';
+INCLUDE 'file_unixbody';
+MAKE    default 'external/dirunixbody.make';
+OBJFILE default '$/dirInt.o';
+(*
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-95
+ *       All rights reserved.
+ *
+ * This fragment group is the UNIX dependent implementation of directories.
+ * It uses a lot of calls to external C-routines from UNIX.
+ *)
+
+-- DirectoryLib: attributes ---
+
+ScanDir: External
+  (# dir: [0] @char; 
+     callBack: ##external; 
+     longest: ##external;
+     i: @integer
+  enter (dir, longest##, callBack## )
+  do CallC
+  exit (i)
+  #);
+
+findUnixEntry: External
+  (# nameOfEntry,pathOfDirectory: [1]@char;
+     status: @integer; 
+     (* -1 => error (invalid enter list)
+      * -2 => error (when openeing the directory)
+      * 0 => the entry was not found 
+      * 1 => the entry was found
+      *)
+  enter(pathOfDirectory,nameOfEntry)
+  exit status
+  #);
+
+countDir: external
+  (* return the number of entries in the directory with path path or
+   * -1 : Invalid arguments.
+   * -2 : Fail in opendir call.
+   *)
+  (# path: [1]@char; num: @integer;
+  enter path
+  exit num
+  #);
+
+isDirEmpty: external
+  (* Find out if the directory with path path is empty, i.e. contains only "." and ".."
+   * If the directory is not empty, 0 is returned. 
+   * If the directory is empty, 1 is returned. 
+   * -1 : Invalid arguments.
+   * -2 : Fail in opendir call.
+   *)
+  (# path: [1]@char; empty: @boolean;
+  enter path
+  exit empty
+  #);
+
+(* Operations for obtaining information about the content
+ * of a directory. Each directory is, after opened, represented
+ * as an integer (a DIR pointer from the C point of view).
+ * This integer is supplied to all other operations other
+ * than openDirectory. The information is obtained  by iterating
+ * over the entries in the directory, and the entries are
+ * represented as names (text). Furthermore an operation exists
+ * that in addition to the names return information about 
+ * the category (file/directory) of the entries.
+ *)
+
+createUnixDirectory: External
+  (# path: [1]@char;
+     status: @integer; (* -1 => error *)
+  enter path
+  exit status
+  #);
+
+deleteUnixDirectory: External
+  (# path: [1]@char;
+     status: @integer; (* -1 => error *)
+  enter path
+  exit status
+  #);
+
+
+
+DirFullPath:
+  (# p: ^text;
+     dir: ^text;
+     cwd: ^text;
+     entry: ^text;
+  enter (p[], dir[], cwd[], entry[])
+  do (if p.length=0 then
+       	 (if entry.t[1] = '/' then
+             entry -> p;
+	  else
+       	     (if true
+    	      // dir.t[1]='/' then
+	       	 (* dir is a full path *)
+	       	 dir -> p;
+    	      // '.' -> dir.equal then
+	       	 (* dir is CWD *)
+       	       	 cwd -> p;
+    	      else
+       	       	 (* dir has path relative to CWD *)
+       	       	 cwd -> p;
+	       	 '/' -> p.append;
+	       	 dir[] -> p.append;
+       	     if);
+       	     '/' -> p.append;
+       	     entry[] -> p.append;
+       	 if);
+     if);
+#)
+
+
+-- DirPrivate: descriptor --
+   (# cwd: ^text #)
+
+-- DirException: descriptor --
+(# 
+do msg.newline;
+   'Directory exception for ''' -> msg.putText; 
+   name->msg.putText; ''''->msg.put;
+   msg.newline;
+   'Error in system call: ' -> msg.puttext;
+   getErrno -> errorstring -> msg.putline;
+#)
+
+
+-- DirTouch: descriptor--
+(# 
+do entry.private.checkfollow;
+   (if ((entry.private.path, entry.private.follow) -> entryExists) 
+    // -1 then error
+    // 0  then
+       (if (entry.private.path -> createunixdirectory) = -1 then error if);
+   if);
+#)
+
+
+-- DirNoOfEntries: dopart --
+do (if (entry.private.path) -> countDir -> value
+    // -1 then -1 -> value; error
+    // -2 then -1 -> value; error
+   if)
+
+-- DirEmpty: dopart --
+do (if (entry.private.path) -> isDirEmpty ->  value
+    // -1 then error
+    // -2 then error
+   if)
+
+-- DirDelete: descriptor --
+(# 
+do entry.private.checkfollow;
+   (if ((entry.private.path, entry.private.follow) -> entryExists) 
+    // -1 then error
+    // 0 then nosuch
+    // 1  then
+       (if (entry.private.path -> deleteunixdirectory) = -1 then error if);
+   if)
+#)
+
+-- DirCreateFile: dopart -- 
+do (if name[]=NONE then &text[]->name[] if);
+   '/' -> name.prepend;
+   entry.path -> name.prepend;
+   (if ((name, false) -> entryExists) 
+    // -1 then error;
+    // 1 then exists; 
+    // 0  then
+       (if (name -> createunixfile) = -1 then error if);
+       &EntryDesc[] -> newEntry[];
+       name[] -> newEntry.path;
+   if)
+
+-- DirDeleteFile: dopart --
+do (if name[]=NONE then &text[]->name[] if);
+   '/' -> name.prepend;
+   entry.path -> name.prepend;
+   (if ((name, false) -> entryExists) 
+    // -1 then error;
+    // 0 then nosuch;
+    // 1  then
+       (if (name -> deleteunixfile) = -1 then error if);
+   if)
+
+-- DirCreateDir: dopart --
+do (if name[]=NONE then &text[]->name[] if);
+   '/' -> name.prepend;
+   entry.path -> name.prepend;
+   (if ((name, false) -> entryExists) 
+    // -1 then error;
+    // 1 then exists;
+    // 0  then
+       (if (name -> createunixdirectory) = -1 then error if);
+       &EntryDesc[] -> newEntry[];
+       name[] -> newEntry.path;
+   if)
+
+-- DirDeleteDir: dopart --
+do (if name[]=NONE then &text[]->name[] if);
+   '/' -> name.prepend;
+   entry.path -> name.prepend;
+   (if ( (name, false) -> entryExists) 
+    // -1 then error;
+    // 0 then nosuch
+    // 1  then
+       (if (name -> deleteunixdirectory) = -1 then error if);
+   if)
+
+-- DirFindSelect: descriptor --
+(# 
+do (if found[]=NONE then
+       NotFoundException;
+    else
+       (if true
+	// '.' -> entry.private.path.equal 
+	// private.cwd[] -> entry.private.path.equal then
+	   (* THIS(Directory) is current directory *)
+	   (if found.private.dostat then error if);     
+	// entry.private.path.t[1]='/' then
+	   (* Absolute path, not CWD *)
+	   (# path: @text;
+	   do entry.private.path -> path;
+	      '/' -> path.append;
+	      found.private.path[] -> path.append;
+	      (if ((path,@@found.private.statBuf[1],
+		  @@found.private.permBuf[1],
+		  found.private.follow)
+                    -> entryStatus)<0 then error;
+	      if);
+	   #)
+	else
+	   (* THIS(directory) has path relative to CWD *)
+	   (# path: @text;
+	   do private.cwd -> path;
+	      '/' -> path.append;
+	      entry.private.path[] -> path.append;
+	      '/' -> path.append;
+	      found.private.path[] -> path.append;
+	      (if ((path,@@found.private.statBuf[1],
+		  @@found.private.permBuf[1],
+		  found.private.follow)
+                    -> entryStatus)<0 then error;
+	      if);
+	   #)
+       if);
+   if)
+#)
+
+-- DirFindDispatch: descriptor --
+(# 
+do (if not selectedInInner then
+       (if 1
+	// found.private.statBuf[6] then whenfile;
+	// found.private.statBuf[3] then whendir;
+	else
+	   whenother;
+       if)
+   if)
+#)
+
+-- DirFindFullPath: descriptor -- 
+(# 
+do &text[]->p[];
+   (if found[]=NONE then
+       NotFoundException;
+    else
+       (p[], 
+       THIS(directory).entry.private.path[],
+       THIS(directory).private.cwd[],
+       found.private.path[])
+       -> DirFullPath;
+   if)
+#)
+
+-- DirFindGetFile: descriptor --
+(# 
+do (if found[]=NONE then
+       NotFoundException;
+    else
+       &foundFile[] -> f[];
+       foundfullpath -> f.name;
+   if)
+#)
+
+-- DirFindGetDir: descriptor --
+(# 
+do (if found[]=NONE then
+       NotFoundException;
+    else
+       &foundDir[] -> d[];
+       foundfullpath -> d.name;
+   if)
+#)
+
+-- DirFindEntry: descriptor --
+(# entryfullpath: @text;
+do (if candidate[]<>NONE then 
+       getCurrentDir -> private.cwd[];
+       (* Find full path of entry *)
+       (if true
+        // entry.private.path.t[1]='/' then
+           (* Already full path *)
+           entry.private.path -> entryfullpath;
+        // '.' -> entry.private.path.equal then
+           private.cwd -> entryfullpath;
+        else
+           (* path relative to CWD *)
+           private.cwd -> entryfullpath;
+           '/' -> entryfullpath.append;
+           entry.private.path[] -> entryfullpath.append;
+       if);
+       (if (entryfullpath, candidate) -> findUnixEntry
+        // -1 then error
+        // -2 then error
+        // 0 then notFound
+        // 1 then 
+           &foundDesc[] -> found[];
+           candidate[] -> found.path;
+           INNER findEntry
+       if)
+   if)
+#)
+
+-- DirScanFullPath: descriptor --
+(# 
+do &text[]->p[];
+   (if found[]=NONE then
+       NotFoundException;
+    else
+       (p[], 
+       THIS(directory).entry.private.path[],
+       THIS(directory).private.cwd[],
+       found.private.path[])
+       -> DirFullPath;
+   if)
+#)
+
+-- DirScanSelect: descriptor --
+(# 
+do (if true
+    // '.' -> entry.private.path.equal 
+    // private.cwd[] -> entry.private.path.equal then
+       (* THIS(Directory) is current directory *)
+       (if found.private.dostat then error if);     
+    // entry.private.path.t[1]='/' then
+       (* Absolute path, not CWD *)
+       (# path: @text;
+       do entry.private.path -> path;
+	  '/' -> path.append;
+	  found.private.path[] -> path.append;
+	  (if ((path,@@found.private.statBuf[1],
+	      @@found.private.permBuf[1],
+	      found.private.follow)
+                -> entryStatus)<0 then error;
+	  if);
+       #)
+    else
+       (* THIS(directory) has path relative to CWD *)
+       (# path: @text;
+       do private.cwd -> path;
+	  '/' -> path.append;
+	  entry.private.path[] -> path.append;
+	  '/' -> path.append;
+	  found.private.path[] -> path.append;
+	  (if ((path,@@found.private.statBuf[1],
+	      @@found.private.permBuf[1],
+	      found.private.follow)
+                -> entryStatus)<0 then error;
+	  if);
+       #)
+   if);
+#)
+
+-- DirScanDispatch: descriptor --
+(# 
+do (if not selectedInInner then
+       (if 1
+    	// found.private.statBuf[6] then whenfile;
+    	// found.private.statBuf[3] then whendir;
+    	else
+       	   whenother;
+       if)
+   if)
+#)
+
+-- DirScanGetFile: descriptor -- 
+(# 
+do &foundFile[] -> f[];
+   foundfullpath -> f.name;
+#)
+
+-- DirScanGetDir: descriptor --
+(# 
+do &foundDir[] -> d[];
+   foundfullpath -> d.name;
+#)
+
+-- DirScanEntries: descriptor -- 
+(# 
+   LongestEntry: external
+     (# l: @integer
+     enter l
+     do cExternalEntry;
+	l -> longest;
+     #);
+   MakeEntry: external
+     (# t: [1]@char; p: @text
+     enter t
+     do cExternalEntry;
+	&foundDesc[] -> found[];
+	t->p; p[]->found.path;
+	INNER scanEntries;
+     #);
+
+do getCurrentDir -> private.cwd[];
+   (if ((entry.private.path, LongestEntry##, MakeEntry## ) -> ScanDir) = -1
+       then -1 -> longest; error;
+   if)
+#)

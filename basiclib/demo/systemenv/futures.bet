@@ -1,0 +1,65 @@
+ORIGIN '~beta/basiclib/v1.5/systemenv';
+
+---program: descriptor--
+
+(* This demo-program illustrates how it is possible to implement general
+ * futures in the current BETA concurrency model.
+ *)
+
+systemenv
+(# future: (# sem: @semaphore;
+              resultType:< Object;
+              result: ^resultType;
+           enter (# enter result[] do sem.V #)
+           exit (# do sem.P exit result[] #)
+           #);
+   textFuture: future(# resultType::< text #);
+
+   Server: @| System
+     (# service: @port;
+        service1: service.entry
+          (# txt: ^text; max: @integer;
+             resultFuture: ^textFuture;
+             body: @| system
+               (# t: @text (* local processing data *)
+               do (for i: max repeat (* calculate *) pause for);
+                  '('->txt.put; max->txt.putint; ') calculated'->txt.puttext;
+                  'Server: ' -> screen.putText;
+                  txt[] -> screen.putLine;
+                  txt[]->resultFuture;
+               #);
+          enter (txt[],max)
+          do &textFuture[]->resultFuture[];
+             body[]->fork;
+          exit resultFuture[]
+          #);
+     do (for 10 repeat service.accept for)
+     #);
+   
+   Client: @| System
+     (# hello: ^text; V: @integer; fut: [10]^textFuture
+     do 'Client starting execution'->putline;
+        'Client: Type 10 numbers: '->puttext;
+        (for i: 10 repeat
+             &text[]->hello[];
+             getInt->V;
+             'Client invoking Server.service1: '->puttext; V->putint; newline;
+             (hello[],V)->Server.service1->fut[i][];
+        for);
+        (for i: 10 repeat
+             (# fetchResult: @| system
+                  (# txt: ^text; inx: @integer;
+                  do 'Client awaiting for the '->puttext;
+                     inx->putint; '''th result.'->putline;
+                     fut[inx]->txt[];
+                     'Client recieved the '->puttext;
+                     inx->putint; '''th result: '->puttext;
+                     txt[]->putline;
+                  #)
+             do i->fetchResult.inx; fetchResult[]->fork
+             #)
+        for)
+     #)
+   
+do conc(# do Server[]->start;  Client[]->start #)
+#)

@@ -1,0 +1,268 @@
+.TH MY_GETCH TCAD
+.\" NAME should be all caps, SECTION should be 1-8, maybe w/ subsection
+.\" other parms are allowed: see man(7), man(1)
+.SH NAME
+my_getch \- unbuffered character input routine
+.SH SYNOPSIS
+.sp 1
+.nf
+ 
+ #include "sysdefs.h"
+
+ int my_getch()
+
+ void my_raw(int set)
+
+.fi
+.SH "DESCRIPTION"
+.in +3n
+.ti -3n
+my_getch():
+This routine reads one character from the keyboard
+while being in raw mode. This enables to read a char
+without needing a CR/LF. 
+
+Currently tested and working platforms include:
+.nf
+       Apollo DN4500 Domain OS SR10.3      (BSD)
+       HP-Apollo 425 Domain OS SR10.3      (BSD)
+       HP 9000   735 HP-UX  V9.0           (SYSV)
+       Convex C2     ConvexOs              (BSD)
+       SUN Sparc     SunOs                 (BSD)
+       SUN Sparc     Solaris 2.3           (Solaris)
+       DECstation 5000/120 RISC Ultrix 4.X (BSD)
+       DECstation 3500 Alpha OSF V1.3      (OSF)
+       DECstation Alpha OpenVMS V6.1       (VMS)
+       VAX 8X00 // VAX 6X00 OpenVMS 5.5    (VMS)
+       VAX 780 Ultrix 4.X                  (BSD)
+
+.fi
+
+An important difference with other known routines is that on UNIX
+platforms,
+this version catches the interrupt, quit, keyboard stop, termination
+and continuation signals to the process and resets the previous
+tty settings before exiting or suspending the proces. This 
+prevents that the controlling terminal is left in a weird
+state (which gets solved mostly by killing the shell and do a new login).
+Note that some smart shells are doing this (tcsh, some csh) but 
+as a lot don't, this functionality has been provided in my_getch().
+When the user sends a continuation signal (SIGCONT) to the proces,
+the process environment as before the stop signal occured, is reloaded 
+again. Hence the program continues in the same mode again and the 
+user is warned about the fact that he had to enter something there.
+When the raw mode is left again, the signal functions as loaded
+by default or by the user program are set again to their original
+values, hence users setting their own signal handling do not loose 
+these when calling the my_getch() routine.
+
+This does not apply on VAX systems running VMS using the System Services
+routines. There the library routines take care of this.
+.sp 1
+.ti -3n
+my_raw():
+This routine does the actual setting of the terminal in raw mode.
+The routine is isolated from my_getch() as it contains typical
+system dependent settings. It is called by the my_getch() routine
+but it may be used within other routines.
+
+Placing the terminal in raw mode happens by using ioctl() call's on
+UNIX (BSD and SYSV) platforms. Systems not having ioctl() but with
+a good curses library can use this option. On systems using
+the THINK\-C compiler the code can be used through the csetmode() call.
+VAX systems running VMS or OpenVMS can use the System Service routines
+for
+handling unbuffered input. A separate routine vms_getkey() is provided.
+In case no raw mode is available, the my_getch() routine calls the 
+my_gets() routine performing buffered input with EOF detection.
+
+Actually the necessary setting are done in the \fIsysdefs.h\fR file.
+.in -3n
+.SH "\fINOTES\fR"
+.in +3n
+.sp 1
+.ti -3n
+The my_getch() and my_raw() routines need the \fIsysdefs.h\fR header file.
+In this file system dependent settings are done. For most predefined systems
+no problems should occur in installing the routines. If you port it to 
+a not\-yet\-supported platform, look in this file for the typical settings.
+Most important is the difference between BSD and SYSV based systems which is
+set by detecting flags set by the compiler and the do the appropriate 
+definitions. The following flags are important: BSD, UNIX, SYSV.
+VAX systems under VMS use the VMS flag.
+Settings and definitions for PC's (IBM AT comp.), MAC and AMIGA 
+machines have been done but not yet tested. However, platforms
+using the THINK\-C compiler or who have a good curses library should not 
+impose much difficulties in get this code working.
+
+I refer to the sysdefs.h file for these systems dependent settings.
+.sp 1
+.ti -3n
+I experimented first with raw modes (hence the name my_raw() !)
+which are not doing
+signal processing. So, we must do it by ourself. However,
+raw() has the disadvantage that it also stops any i/o processing
+hence any data in the output buffer (e.g.
+the question to
+answer with y/n) is being flushed
+to /dev/null !! Therefore
+I switched to cbreak modes with signal catching with signal().
+for doing a controlled exit from these modes.
+See the restrictions on the SIGKILL and SIGSTOP signals.
+.in -3n
+.SH "OPTIONS \- RETURN VALUE"
+.sp 1
+.nf
+void my_raw(int set)
+   Input:  set = TRUE (1) : set terminal into raw state;
+           set = FALSE (0): reset terminal into no raw state;
+   Output: none
+
+int my_getch()
+   Input:  none
+   Output: int value of input character or EOF on error or ^D.
+.fi
+.SH "\fIUSAGE\fR"
+The my_getch() routine reads only one character from the input.
+Error processing and information (the question) must be provided by the 
+application writer. The following is a small illustrative test program.
+.br
+.bp \" next page
+.nf
+
+/* ============================================================== */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+#include <errno.h>
+
+extern int   my_getch();
+
+#ifndef TRUE
+#   define TRUE (1)
+#endif
+#ifndef FALSE
+#   define FALSE (0)
+#endif
+
+/* =============================================================== */
+main(int argc, char **argv)
+{
+ int input;     /* entered character */
+ int answer=FALSE,leave_loop;   
+
+ do 
+   {
+      printf("     Please enter something <y,n>: ");
+      putchar(\'n\');           /* show the default option */
+      fflush(stdout);
+      input = my_getch();     /* <====== here's the call */
+      printf("\\b%c\\n",input); /* flush entered character */
+      putchar(\'\\n\');
+      switch(input)           /* check the entered character */
+      {                       /* and perform something       */
+	case \'y\':             /* depending on the answer     */
+	case \'Y\':
+	     answer = TRUE;
+             leave_loop  = TRUE; 
+	     break;
+	case \'n\':
+	case \'N\':
+	case \'\r\':
+	case \'\n\':
+	     answer = FALSE;
+             leave_loop  = TRUE; 
+	     break;
+	default:
+	     leave_loop  = FALSE;
+	     break;
+      }
+   }
+   while (! leave_loop);
+
+   if (answer)
+      printf("     You said yes \\n");
+   else
+      printf("     You said no \\n");
+
+}
+/* =============================================================== */
+.fi
+.sp 1
+Of course you can write a new routine using the my_getch() but including
+the do\-while construct and parsing the question string as a variable.
+.SH RESTRICTIONS
+So far, only the SIGINT, SIGQUIT, SIGTERM, SIGTSTP and SIGCONT are 
+catched and handled in the routine. All other signals call the 
+signal handler loaded at that time (which is the default signal handler
+routine or any other handler provided by the programmer before the 
+call to my_getch()).
+
+The SIGKILL signal (kill \-9 <pid>) cannot be caught, blocked or ignored
+hence the state of the terminal after killing the process, being in cbreak
+mode, depends
+on the shell's behaviour.
+tcsh does save the original terminal settings and after killing it
+re\-installs them. Some csh's do, other and sh don't. Those who don't
+save the tty settings will leave the terminal in cbreak mode or any other
+weird state.
+The same is true for SIGSTOP (kill -17 <pid>) which cannot be caught,
+blocked or ignored.
+
+These signals are NOT cathed on VAX systems running under VMS or OpenVMS.
+
+.SH "ERRORS and BUGS"
+Well, I guess there are many as it was only tested extensively on 
+BSD and SYSV UNIX systems. The code for other platforms was provided
+but not yet fully tested. 
+.SH FILES
+.br
+.nf
+.\" set tabstop to longest possible filename, plus a wee bit
+.ta \w'/usr/lib/perl/getopts.pl   'u
+\fImy_getch.c\fR         The source file
+\fImy_getch.l\fR         The manual page source file
+\fImy_gets.c\fR          my_getch() needs it when no raw modes are available
+\fImy_gets.l\fR         The my_gets() manual page source file
+\fImystrings.c\fR        Some support routines.
+\fIsysdefs.h\fR          System dependent settings
+\fItest.c\fR             A small test program
+\fIvms_getkey.h\fR       Definitions for VMS unbuffered input.
+\fIvms_getkey.c\fR       Source for subroutine on VMS systems.
+\fImakefile\fR           makefile to be modified.
+\fImake.com\fR           DCL compile script for VAX-VMS systems.
+.SH ENHANCEMENTS 
+Feel free to enhance the code and send 
+improvements back to me so that I can include them in further releases.
+.SH COPYRIGHT
+.sp 1
+Copyright 1993 by R. Vankemmel
+.sp 1
+Permission to use, copy, modify and distribute this software and the
+supporting documentation without fee is hereby granted, provided that :
+.in +4n
+.ti -4n
+1 : Both the above copyright notice and this permission notice
+appear in all copies of both the software and the supporting
+documentation.
+.ti -4n
+2 : You don't make a profit out of it.
+.ti -4n
+3 : You properly credit the author of this software when it is 
+included in any other package.
+.sp 1
+.in -4n
+THE AUTHORS DISCLAIM ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO
+EVENT SHALL THEY BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL
+DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
+PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS
+ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+.SH AUTHOR
+Rudi Vankemmel (september 1993) [vankemme@imec.be]: wrote the cbreak
+routines for most UNIX platforms.
+Anthony C. McCracken (april 1992) : wrote the getkey() routine for VMS.
+He did not provide a particular copyright notice on this part. R. Vankemmel
+ported the VMS routine to DEC Alpha (OpenVMS 6.1).

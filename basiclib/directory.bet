@@ -1,0 +1,321 @@
+ORIGIN 'file';
+BODY 'private/directorybody';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1984-95
+ *       All rights reserved.
+ *
+ *)
+---- LIB: attributes ----
+(* idx=2 *)
+directory:
+  (* Generalization of disk folder/directory.  Describes the list
+   * aspects of directories and contains a DiskEntry item describing
+   * the other properties of a directory.
+   *)
+  (#
+     <<SLOT DirectoryLib: attributes>>;
+     
+     EntryDesc:< DiskEntry;
+     entry: @EntryDesc
+       (* The item holding most characterizing attributes of
+        * THIS(directory)
+        *); 
+     name: @
+       (* convenient interface to entry.path *)
+       (# read:
+            (* Reads a directory name from the Keyboard *)
+            (# do <<SLOT DirReadName: descriptor>> #);
+       enter entry.path
+       exit entry.path
+       #);
+     
+     (* Directory exceptions *)
+     
+     DirException: Exception
+       (* General directory exception *)
+       (# do <<SLOT DirException: descriptor>>; INNER #);
+     EntryExistException: DirException
+       (* Raised on attempt to create a file or directory that
+        * allready existed in THIS(directory). Message: "Directory
+        * entry allready exist"
+        *)
+       (# do <<SLOT DirEntExistException: descriptor>>; INNER #);
+     DirScanException: DirException
+       (* Raised if a scan of THIS(directory) has failed.  Message:
+        * "Scan of directory failed.", and an indication of why it
+        * failed.
+        *)
+       (# do <<SLOT DirScanException: descriptor>>; INNER #);
+     DirSearchException: DirException
+       (* Raised if a find in THIS(directory) has failed.  Message:
+        * "Search of directory failed.", and an indication of why it
+        * failed.
+        *)
+       (# do <<SLOT DirSearchException: descriptor>>; INNER #);
+     NoSuchException: DirException
+       (* Raised on attempt to delete a file or directory that did
+        * not exist in THIS(directory). Message: "Attempt to delete a
+        * nonexisting entry."
+        *)
+       (# do <<SLOT DirNoSuchException: descriptor>>; INNER #);
+     NotFoundException: DirException
+       (* Raised if findEntry.select is used in findEntry.notFound,
+        * or in other situations that findEntry.found[]=NONE. Message:
+        * "Attempt to use 'select' in 'findEntry' when the candidate
+        * was not found."
+        *)
+       (# do <<SLOT DirNotFoundException: descriptor>>; INNER #);
+     
+     (* Manipulations of THIS(directory) *)
+     
+     touch: entry.touch
+       (* If the disk entry does not exist, an empty directory will
+        * be created.
+        *)
+       (# touchD: @<<SLOT DirTouch: descriptor>>; 
+       do touchD 
+       #);
+     delete:
+       (* Delete THIS(directory) *)
+       (# nosuch:< NoSuchException
+            (* Raised if there was no disk entry corresponding to
+             * THIS(Directory)
+             *);
+          error:< entry.DiskEntryException
+            (* Raised if other errors occurred *);
+          deleteD: @<<SLOT DirDelete: descriptor>>; 
+       do deleteD
+       #);
+     createFile:
+       (* Create a file named 'name' in THIS(Directory) *)
+       (# name: ^text;
+          newEntry: ^EntryDesc;
+          exists:< EntryExistException
+            (* Raised if en entry of that name already existed *);
+          error:< DirException
+            (* Raised if other errors occurred *);
+       enter name[]
+       <<SLOT DirCreateFile: dopart>>
+       exit newEntry[]
+       #);
+     deleteFile: 
+       (* Delete a file named 'name' in THIS(Directory) *)
+       (# name: ^text;
+          nosuch:< NoSuchException
+            (* Raised if there was no disk entry in THIS(Directory)
+             * named 'name'
+             *);
+          error:<DirException
+            (* Raised if other errors occured *)
+       enter name[]
+       <<SLOT DirDeleteFile: dopart>>
+       #);
+     createDir:
+       (* Create a directory named 'name' in THIS(Directory) *)
+       (# name: ^text;
+          newEntry: ^EntryDesc;
+          exists:< EntryExistException
+            (* Raised if en entry of that name already existed *);
+          error:< DirException
+            (* Raised if other errors occurred *);
+       enter name[]
+       <<SLOT DirCreateDir: dopart>>
+       exit newEntry[]
+       #);
+     deleteDir:
+       (* Delete a directory named 'name' in THIS(Directory) *)
+       (# name: ^text;
+          nosuch:< NoSuchException
+            (* Raised if there was no disk entry in THIS(Directory)
+             * named 'name'
+             *);
+          error:< DirException
+            (* Raised if other errors occured *)
+       enter name[]
+       <<SLOT DirDeleteDir: dopart>>
+       #);
+     noOfEntries: IntegerValue
+       (* exit the number of entries in THIS(directory) *)
+       (# error:<DirException; 
+       <<SLOT DirNoOfEntries: dopart>> 
+       #);
+     empty: BooleanValue
+       (* TRUE iff THIS(directory) is empty. Note that this does not
+        * always imply NoOfEntries=0
+        *)
+       (# error:<DirException; 
+       <<SLOT DirEmpty: dopart>> 
+       #);
+     (* idx+ *)
+     findEntry:
+       (* Calls INNER if entry was found in THIS(directory), and
+        * otherwise calls notFound
+        *)
+       (# <<SLOT DirFindLib: attributes>>;
+          candidate: ^text;
+          (* The name of the entry to search for *)
+          foundDesc:< DiskEntry;
+          (* Qualification of "found" *)
+          found: ^foundDesc;
+          (* Reference to entry, if found.  Notice that 'found.path'
+           * is relative to THIS(directory).  The full path may be
+           * obtained by 'foundFullPath' Also 'foundFullPath ->
+           * found.path' may be needed before is queried for modtime
+           * etc., if THIS(Directory) is not the current working
+           * directory.
+           *)
+          foundFile:< File; 
+          (* Qualification of file generated in
+           * select.whenfile.thefile
+           *)
+          foundDir:< Directory;
+          (* Qualification of directory generated in
+           * select.whendir.thedir
+           *)
+          foundFullPath: (* Fullpath of "found" *)
+            (# p: ^text do <<SLOT DirFindFullPath: descriptor>> exit p[] #);
+           
+          notfound:< (* Called if the entry was not found *)
+            (# do INNER #);
+          (* idx+ *)
+          select:
+            (* Used to distinguish between the various entries that
+             * may be found
+             *)
+            (# error:< found.DiskEntryException;
+               whenFile:<
+                 (* Called when the entry found is a file *)
+                 (# thefile: 
+                      (* Generate an instance of foundFile
+                       * corresponding to the entry found. Notice that
+                       * 'found' and 'f.entry' are two distinct
+                       * objects; 'f.entry' has a full path, 'found'
+                       * may or may not have a path relative to
+                       * THIS(Directory).
+                       *)
+                      (# f: ^foundFile 
+                      do <<SLOT DirFindGetFile: descriptor>>
+                      exit f[]
+                      #);
+                 do INNER
+                 #);
+               whenDir:<
+                 (* Called when the entry found is a directory *)
+                 (# theDir: 
+                      (* Generate an instance of foundDir
+                       * corresponding to the entry found. Notice that
+                       * 'found' and 'd.entry' are two distinct
+                       * objects; 'd.entry' has a full path, 'found'
+                       * may or may not have a path relative to
+                       * THIS(Directory).
+                       *)
+                      (# d: ^foundDir 
+                      do <<SLOT DirFindGetDir: descriptor>>
+                      exit d[]
+                      #);
+                 do INNER
+                 #);
+               whenOther:<
+                 (* Called when the entry found is neither a file nor
+                  * a directory
+                  *)
+                 (# do INNER #);
+               selectImpl:< (* private *)
+                 (# selectedInInner: @boolean
+                 do <<SLOT DirFindSelect:descriptor>>;
+                    INNER;
+                    <<SLOT DirFindDispatch:descriptor>>;
+                 #)
+            do selectImpl;
+            #); (* select *)
+          error:< DirSearchException
+            (* Raised if the search fails *);
+          (* idx- *)
+       enter candidate[]
+       do <<SLOT DirFindEntry: descriptor>>;
+       #); (* findEntry *)
+     scanEntries:
+       (* Calls INNER for each entry in THIS(directory) *)
+       (# <<SLOT DirScanLib: attributes>>;
+          longest: @integer;
+          (* The length of the longest entry-name in THIS(directory)
+           *)
+          foundDesc:< DiskEntry;
+          (* Qualification of "found" *)
+          found: ^foundDesc;
+          (* Reference to entry, if found.  Notice that 'found.path'
+           * is relative to THIS(directory).  The full path may be
+           * obtained by 'foundFullPath' Also 'foundFullPath ->
+           * found.path' may be needed before is queried for modtime
+           * etc., if THIS(Directory) is not the current working
+           * directory.
+           *)
+          foundFile:< File; 
+          (* Qualification of file generated in
+           * select.whenfile.thefile
+           *)
+          foundDir:< Directory;
+          (* Qualification of directory generated in
+           * select.whendir.thedir
+           *)
+          foundFullPath: (* Fullpath of "found"  *)
+            (# p: ^text do <<SLOT DirScanFullPath: descriptor>> exit p[] #);
+          (* idx+ *)
+          select:
+            (* Used to distinguish between the various entries that
+             * may be found
+             *)
+            (# error:< found.DiskEntryException;
+               whenFile:<
+                 (* Called when the entry found is a file *)
+                 (# thefile: 
+                      (* Generate an instance of foundFile
+                       * corresponding to the entry found. Notice that
+                       * 'found' and 'f.entry' are two distinct
+                       * objects; 'f.entry' has a full path, 'found'
+                       * may or may not have a path relative to
+                       * THIS(Directory).
+                       *)
+                      (# f: ^foundFile 
+                      do <<SLOT DirScanGetFile: descriptor>>
+                      exit f[]
+                      #);
+                 do INNER
+                 #);
+               whenDir:<
+                 (* Called when the entry found is a directory *)
+                 (# theDir: 
+                      (* Generate an instance of foundDir
+                       * corresponding to the entry found. Notice that
+                       * 'found' and 'd.entry' are two distinct
+                       * objects; 'd.entry' has a full path, 'found'
+                       * may or may not have a path relative to
+                       * THIS(Directory).
+                       *)
+                      (# d: ^foundDir 
+                      do <<SLOT DirScanGetDir: descriptor>>
+                      exit d[]
+                      #);
+                 do INNER
+                 #);
+               whenOther:<
+                 (* Called when the entry found is neither a file nor
+                  * a directory
+                  *)
+                 (# do INNER #);
+               selectImpl:< (* private *)
+                 (# selectedInInner: @boolean
+                 do <<SLOT DirScanSelect:descriptor>>;
+                    INNER;
+                    <<SLOT DirScanDispatch:descriptor>>;
+                 #)
+            do selectImpl;
+            #); (* select *)
+          error:< DirScanException
+            (* Raised if the scan fails *);
+          (* idx- *) (* idx- *)
+       do <<SLOT DirScanEntries: descriptor>>;
+       #); (* scanEntries *)
+     private: @<<SLOT DirPrivate: descriptor>>;
+  #) (* directory *)

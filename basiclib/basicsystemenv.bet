@@ -1,0 +1,369 @@
+ORIGIN 'betaenv';
+BODY 'private/basicsystemenvbody'
+---LIB:attributes---
+(*
+ * COPYRIGHT 
+ *       Copyright Mjolner Informatics, 1992-95 
+ *       All rights reserved.
+ * 
+ * This fragment contains abstract superpatterns for describing the
+ * BETA concepts of concurrent systems.
+ * 
+ * The basic ideas are
+ * 
+ *      A. Components (coroutines) can be executed concurrently
+ * 
+ *      B. A primitive semaphore pattern is available for
+ *         syncronization.
+ * 
+ *      C. An abstract pattern 'Monitor' similar to the monitor
+ *         proposed by Hoare and Brinch-Hansen
+ * 
+ *      D. An abstract pattern 'System' is defined. System defines
+ *         communication between systems by means of synchronized
+ *         rendezvous.  A concurreny imperative 'conc' is defined for
+ *         systems.
+ * 
+ * The abstractions defined here are identical to the ones described
+ * in chapter 12 of the BETA book except for the following points:
+ * 
+ * 1. The syntax of 'fork' is
+ *      S[]->fork
+ *    and NOT S.fork
+ * 
+ * 2. The syntax of 'conc' is
+ *      conc(# do S1[]->start; S2[]->start; S3[]->start #)
+ *    and NOT conc(# do S1.start; S2.start; S3.start #)
+ * 
+ * 4. THE CONCURRENCY IS SIMULATED In order to implement real
+ *    concurreny, an interrupt mechanism must be implemented. This is
+ *    currently NOT done. A component/system will thus keep the
+ *    control until it makes an explicit or implicit SUSPEND.  An
+ *    implicit SUSPEND is made when a component must wait for a
+ *    semaphore, executes the pause pattern, executes the sleep
+ *    pattern, or performs a blocking communication using the shellEnv
+ *    distribution abstractions.  As the concurrency is simulated,
+ *    there is no difference between the implementation of the alt and
+ *    conc imperatives.
+ * 
+ * 5. A program using concurrency must have the form:
+ *      systemenv(# ... do ... #)
+ * 
+ * 6. Concurrency and X-Windows/macenv/guienv
+ *    User interface environments are usually event-driven in the
+ *    sense that actions in the program are executed as a response to
+ *    user input events.  To handle this, a number of separate
+ *    implementations of SystemEnv exists for different user interface
+ *    libraries:
+ * 
+ *    Use systemenv.bet as origin for programs not using event-driven
+ *    user-interface libraries.
+ * 
+ *    Use ~beta/Xt/current/xsystemenv.bet as origin for programs using
+ *    XtEnv, AwEnv or MotifEnv.
+ * 
+ *    Use ~beta/guienv/current/guienvsystemenv.bet as origin for
+ *    programs using GUIenv (Lidskvjalv).
+ * 
+ *    See xsystemenv and guienvsystemenv for a description of using
+ *    systemenv in conjunction with X and GUIenv programs,
+ *    respectively.
+ * 
+ *    See ~beta/macenv/current/macsystemenv for a description of using
+ *    systemenv and macenv.
+ * 
+ * For examples of using SystemEnv see the demo directory.
+ *)
+(* idx=2 *)
+getSystemEnv: 
+  (* Returns the unique systemEnv instance running *)
+  (# theSystemEnv: ^systemEnv;
+  do SystemEnv## -> objectPool.strucGet 
+     (# init::< 
+          (# 
+          do (failure, 
+             'Program:descriptor must be a subpattern of systemEnv')
+               -> stop
+     #)#) -> theSystemEnv[];
+  exit theSystemEnv[]
+  #);
+SystemEnv: SysHead
+  (# <<SLOT systemlib:attributes >>;
+     semaphore:
+       (* P and V are the usual semaphore operations.
+        * 
+        * tryP returns true if the P operation succeded. Returns false
+        * if a P would block the caller. In that case the P operation
+        * is not performed.
+        * 
+        * Count returns the number of components waiting for the
+        *         semaphore.
+        *)
+       (# P: @<<SLOT SemP:descriptor>>;
+          V: @<<SLOT SemV:descriptor>>;
+          tryP: @BooleanValue
+            (# doTry: @<<SLOT SemTryP:descriptor>> do doTry #);
+          Count: @
+            (# value: @Integer;
+               doCount: @<<SLOT SemCount:descriptor>> 
+            do doCount
+            exit value
+            #);
+          semRep: @<<SLOT SemRep:descriptor>>
+       #);
+     fork: @
+       (* S is put into the queue of scheduled systems. The calling
+        * system keeps control, i.e. is not preempted.
+        *)
+       (# first:  @<<SLOT forkfirst:descriptor>>;
+          second: @<<SLOT forksecond:descriptor>>;
+          S: ^|SysHead 
+       enter S[] 
+       do first; second; none -> s[];
+       #);
+     kill: @
+       (* Kills S. If S is the active system, this is equivalent to a
+        * direct suspend.
+        *)
+       (# S: ^|SysHead; doKill: @<<SLOT systemenvKill:descriptor>>
+       enter S[] 
+       do doKill
+       #);
+     pause: @
+       (* Moves the calling system to the end of the queue of
+        * scheduled systems.
+        *)
+       <<SLOT pause:descriptor>>;
+     sleep: @
+       (* Makes the calling system sleep at least time seconds.  If
+        * time is 0 or negative, sleep has no effect.
+        *)
+       (# time: @Integer
+       enter time 
+       do <<SLOT sleep:descriptor>> 
+       #);
+     (* idx+ *)
+     Monitor:
+       (# (* idx+ *)
+          Condition:
+            (# q: @Semaphore;
+               Wait: <<SLOT conditionWait:descriptor>>;
+               Signal: <<SLOT contitionSignal:descriptor>>;
+            #);
+          Wait:
+            (# cond: @boolean 
+            do INNER;
+               (if not cond then 
+                   return; (* exit monitor *)
+                   pause;
+                   mutex.P; (* reentry of monitor *)
+                   restart Wait
+               if)
+            #);
+          (* idx- *)
+          Entry: (# do mutex.P; INNER; return #);
+          init:< (# do INNER; mutex.V; #);
+          (* private:
+           * 
+           * mutex controls entry to the Monitor.  urgent delays a
+           * signalling process.
+           * 
+           * return is executed by processes leaving the monitor.
+           * Reactivates possible processes waiting for entry: delayed
+           * signalling processes (urgent) have first priority
+           *)
+          mutex: @semaphore;
+          urgent: @semaphore; 
+          return: @<<SLOT MonitorReturn:descriptor>>;
+       #);
+     (* idx+ *)
+     System: SysHead
+       (# Port:
+            (# mx,m: @Semaphore; (* initially zero *)
+               entry: (# do m.P; INNER; mx.V #);
+               accept: (# do m.V; mx.P #)
+            #);
+          RestrictedPort:
+            (# mx,m,delayed: @Semaphore;
+               accept:<
+                 (# 
+                 do (if delayed.count>0 then delayed.V else m.V if); 
+                    mx.P 
+                 #);
+               acceptable:< (# OK: @Boolean do INNER exit OK #);
+               restrictedEntry:
+                 (# 
+                 do (if acceptable then m.P else delayed.P if);
+                    INNER; 
+                    mx.V
+                 #);
+            #);
+          ObjectPort: RestrictedPort
+            (# accept::< (# enter sender[] #);
+               acceptable::< (# do <<SLOT rPortAccept:descriptor>> #);
+               entry: RestrictedEntry (# do INNER #);
+               sender: ^|sysHead
+            #);
+          QualifiedPort: RestrictedPort
+            (# accept::< (# enter sender## #);
+               acceptable::< (# do <<SLOT oPortAccept:descriptor>> #);
+               entry: RestrictedEntry(# do INNER #);
+               sender: ##sysHead
+            #);
+          conc:
+            (# start:
+                 (# s: ^|system
+                 enter s[]
+                 do <<SLOT systemConcStart:descriptor>>
+                 #);
+               concPriv: @<<SLOT systemConcPriv:descriptor>>
+            do INNER; <<SLOT systemConc:descriptor>>; 
+            #);
+          alt: conc (# do INNER #);
+          onKilled:<
+            (* Called before this system terminates. *)
+            (# 
+            do (if caller[]<>NONE then (* not the outermost system *)
+                   caller.dec; NONE -> caller[]
+               if);
+               INNER;
+            #);
+          caller: ^protectedInt;
+       do INNER;
+       #);
+     deadLocked:< Exception
+       (* This exception is called when all coroutines are blocked
+        * and none are waiting for I/O.
+        *)
+       (# 
+       do INNER;
+          (if not continue then
+              'BasicSystemEnv: All coroutines blocked on semaphores.'
+                -> msg.append;
+          if);
+       #);
+     conc:
+       (# start:
+            (# s: ^|system
+            enter s[]
+            do <<SLOT systemEnvConcStart:descriptor>>
+            #);
+          concPriv: @<<SLOT systemEnvConcPriv:descriptor>>
+       do INNER; <<SLOT systemEnvConc:descriptor>>; 
+       #);
+     alt: 
+       (* Same as conc as a consequence of non-preemtive scheduling.
+        *)
+       conc (# #);
+     
+     (* ATTRIBUTES FOR EVENT-DRIVEN WINDOWING ENVIRONMENTS
+      * 
+      * These attributes are only used when combining SystemEnv with
+      * an event-driven windowing environment. This demands an
+      * alternative implementation than the standard SystemEnv
+      * implementation. See the file: xsystemenv.bet
+      *)
+     windowEnvType:< Object;
+     theWindowEnv: ^windowEnvType;
+     setWindowEnv:< Object;
+     
+     (* PRIVATE
+      * 
+      * Everything below is in principle private implementation stuff.
+      *)
+     private: @ <<SLOT BasicSystemEnvPrivate:descriptor>>;
+     BasicScheduler: <<SLOT BasicScheduler:descriptor>>; 
+     theActive: ^|sysHead;
+     ProtectedInt: IntegerObject
+       (* Used in implementation of conc. *)
+       (# mutex: @semaphore;
+          atZero: @semaphore;
+          dec:
+            (# 
+            do mutex.P; (if (value-1->value)=0 then atZero.V if); mutex.V;
+            #);
+          waitForZero: (# do atZero.P #);
+          init: (# enter value do mutex.V #);
+       #);
+     initBeforeScheduler:< 
+       (* Called before the scheduler is activated and before
+        * setWindowEnv and the systemenv INNER is called.
+        *)
+       Object;
+  do <<SLOT InitSystemEnv:descriptor>>;
+     INNER
+  #);
+
+cyclicElm:
+  (# s: ^|SysHead;
+     next, prev: ^cyclicElm;
+     due: @Integer 
+       (* due is used by sleepingQueue. If zero, this element is
+        * currently not in a sleepingQueue.
+        *)
+  #);
+cyclicQueue:
+  (# onDelete:< Object;
+     onDel: @onDelete;
+     onInsert:< Object;
+     onIns: @onInsert;
+     first, freeList: ^cyclicElm;
+     insert: @
+       (# s: ^|sysHead; new: ^cyclicElm;
+       enter s[]
+       <<SLOT cyclicQueueInsert:dopart>>
+       exit new[]
+       #);
+     append: @
+       (# elm: ^cyclicElm;
+       enter elm[]
+       <<SLOT cyclicQueueAppend:dopart>>
+       #);
+     prepend: @
+       (# elm: ^cyclicElm;
+       enter elm[] 
+       <<SLOT cyclicQueuePrepend:dopart>>
+       #);
+     insertBefore: @
+       (# new, old: ^cyclicElm;
+       enter (new[],old[])
+       <<SLOT cyclicQueueInsertBefore:dopart>>
+       #);
+     getFirst: @
+       (# elm: ^cyclicElm;
+       <<SLOT cyclicQueueGetFirst:dopart>>
+       exit elm[]
+       #);
+     delete: @
+       (# elm: ^cyclicElm;
+       enter elm[]
+       <<SLOT cyclicQueueDelete:dopart>>
+       exit elm[]
+       #);
+     remove: @ 
+       (* elm should not be reused after remove. Use delete instead.
+        *)
+       (# elm: ^cyclicElm; s: ^|sysHead;
+       enter elm[]
+       <<SLOT cyclicQueueRemove:dopart>>
+       exit s[]
+       #);
+     scan:
+       (# current: ^cyclicElm;
+       do <<SLOT cyclicQueueScan:descriptor>>
+       #);
+     size: @Integer;
+  #);
+SysHead: 
+  (# shstatus: @Integer; 
+     lc: ^Object;     (* Last errorCatcher for distribution errors. *)
+     ce: ^cyclicElm;  (* ce,q <> none => this(sysHead) is ce in q.  *)
+     q: ^cyclicQueue;
+  do INNER
+  #);
+(* SysHead.shstatus values: *)
+SE_RUNNING:  (# exit 1 #);  (* Current system.       *)
+SE_WAITING:  (# exit 2 #);  (* Blocked on semaphore. *)
+SE_READY:    (# exit 3 #);  (* Ready to run.         *)
+SE_SLEEPING: (# exit 4 #);  (* Sleeping.             *)
+SE_KILLED:   (# exit 5 #);  

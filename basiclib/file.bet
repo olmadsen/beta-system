@@ -1,0 +1,392 @@
+ORIGIN 'betaenv';
+BODY 'private/filebody';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1984-95
+ *       All rights reserved.
+ *
+ * The BETA interface to disk-entries in a hierarchic file system
+ * files, and directories is organised as follows:
+ * 
+ *   DiskEntry:     Machine independent interface to entries like
+ *                  file and directories on the disk 
+ *                  (file 'file.bet').
+ *   UnixEntry:     Unix specific specialization of DiskEntry 
+ *                  (file 'unixfile.bet').
+ *   MacEntry:      Macintosh specific specialization of DiskEntry 
+ *                  (file 'macfile.bet').
+ * 
+ *   File:          Machine independent interface to disk files. Is  
+ *                  a specialization of Stream (file 'betaenv.bet'),
+ *                  and contains a DiskEntry (file 'file.bet').
+ *   UnixFile:      Unix specific specialization of File, which 
+ *                  contains a UnixEntry (file 'unixfile.bet').
+ *   MacFile:       Macintosh  specific specialization of File,
+ *                   which contains a MacEntry (file 'macfile.bet').
+ *    
+ *   Directory:     Machine independent interface to 
+ *                  directories/folders. Contains a DiskEntry 
+ *                  (file 'directory.bet').
+ *   UnixDirectory: Unix specific specialization of Directory, 
+ *                  which contains a UnixEntry 
+ *                  (file 'unixdirectory.bet').
+ *   MacDirectory:  Macintosh specific specialization of Directory,
+ *                  which contains a MacEntry 
+ *                  (file 'macdirectory.bet').
+ *)
+-- LIB: Attributes --
+(* idx=2 *)
+DiskEntry:
+  (* Pattern describing various attributes of disk-entries like files
+   * and directories in a hierarchic file system
+   *)
+  (# <<SLOT DiskEntryLib: attributes>>;
+     
+     (* DISK ENTRY EXCEPTIONS *)
+     DiskEntryException: Exception
+       (* General exception for disk entries *)
+       (# <<SLOT DiskEntryException: dopart>> #);
+     DiskEntryExistsException: DiskEntryException
+       (* Raised if a test for disk entry existence has
+        * failed. Message: "Test for disk entry existence failed.",
+        * and an indication of why it failed.
+        *)
+       (# <<SLOT DiskEntryExistsException: dopart>> #);
+     DiskEntryModtimeException: DiskEntryException
+       (* Raised if examination or setting of disk entry modtime has failed.
+        * Message: "Examination/setting of disk entry modtime failed.", and an
+        * indication of why it failed.
+        *)
+       (# <<SLOT DiskEntryModtimeException: dopart>> #);
+     DiskEntryTouchException: DiskEntryException
+       (* Raised if touch of a disk entry has failed. Message: "Touch
+        * of disk entry failed.", and an indication of why it failed.
+        *)
+       (# <<SLOT DiskEntryTouchException: dopart>> #);
+     DiskEntryRenameException: DiskEntryException
+       (* Raised if rename of a disk entry has failed. Message:
+        * "Rename of disk entry failed.", and an indication of why it
+        * failed.
+        *)
+       (# <<SLOT DiskEntryRenameException: dopart>> #);
+     (* idx+ *)
+     pathDesc:<
+       (* A virtual descriptor for the full or relative path of
+        * THIS(DiskEntry)
+        *)
+       (# head:<
+            (* The head of the path, e.g. head of '/usr/smith/foo.bet'
+             * is '/usr/smith'
+             *)
+            (# h: ^text
+            <<SLOT DiskEntryPathHead: dopart>> 
+            exit h[] 
+            #);
+          (* idx+ *)
+          nameDesc:< 
+            (* The actual name-part of the path, e.g. name part of
+             * '/usr/smith/foo.bet' is 'foo.bet'
+             *) 
+            (# prefix:<
+                 (* exits the prefix part of the name, i.e. what is
+                  * before the last dot (.), e.g 'foo' for 'foo.bet'
+                  *)
+                 (# p: ^text 
+                 <<SLOT DiskEntryPathNamePref: dopart>> 
+                 exit p[]
+                 #);
+               extension:<
+                 (* exits the extension part of the name, i.e. what
+                  * is after the last dot (.), e.g. 'bet' for 'foo.bet'
+                  *)
+                 (# e: ^text 
+                 <<SLOT DiskEntryPathNameExt: dopart>> 
+                 exit e[]
+                 #);
+               suffix:<
+                 (* like extension, but includes the dot (.),
+                  * e.g. '.bet' for 'foo.bet'
+                  *)
+                 (# s: ^text
+                 <<SLOT DiskEntryPathNameSuf: dopart>>
+                 exit s[]
+                 #);
+               get:<
+                 (* exits "prefix.extension" *)
+                 (# n: ^text 
+                 <<SLOT DiskEntryPathNameGet: dopart>> 
+                 exit n[]
+                 #);
+            exit get
+            #);
+          (* idx- *)
+          name: @nameDesc;
+          set:< 
+            (* set the entire path *)
+            (# p: ^text 
+            enter p[]
+            <<SLOT DiskEntryPathSet: dopart>> 
+            #);
+          get:< 
+            (* get the entire path *)
+            (# p: ^text 
+            <<SLOT DiskEntryPathGet: dopart>> 
+            exit p[]
+            #);
+       enter set
+       do INNER
+       exit get
+       #);
+     (* idx- *)
+     path: @pathDesc;
+     exists: BooleanValue
+       (* exits a boolean indicating whether the disk entry
+        * corresponding to the current setting of path actually exists
+        *)
+       (# error:< DiskEntryExistsException;
+       <<SLOT DiskEntryExists: dopart>>
+       #);
+     modtime: 
+       (* exits an integer denoting the (system) time of the last
+        *         modification
+        *)
+       (# time: @integer;
+          error:<DiskEntryModTimeException;
+       enter (# enter time <<SLOT DiskEntrySetModTime: dopart>> #)
+       exit (# <<SLOT DiskEntryGetModTime: dopart>> exit time #)
+       #); 
+     touch:
+       (* Updates the modtime to the current (system) time. *)
+       (# error:< DiskEntryTouchException;
+       <<SLOT DiskEntryTouch: dopart>>
+       #);
+     rename:
+       (* Rename the disk entry. Changes the physical disk entry and
+        * updates THIS(DiskEntry).path
+        *)
+       (# newpath: ^text;
+          error:< DiskEntryRenameException;
+       enter newpath[]
+       <<SLOT DiskEntryRename: dopart>>
+       #);
+     size: IntegerValue
+       (* exits the size of THIS(DiskEntry) in bytes *)
+       (# error:<DiskEntryException;
+       <<SLOT DiskEntrySize: dopart>> 
+       #);
+     readable: BooleanValue
+       (* exits true if THIS(DiskEntry) can be read *)
+       (# error:< DiskEntryException;
+       <<SLOT DiskEntryReadable: dopart>> 
+       #);
+     writeable: BooleanValue
+       (* exits true if THIS(DiskEntry) can be written to *)
+       (# error:< DiskEntryException;
+          checkwrite: @<<SLOT DiskEntryWriteable: descriptor>>; 
+       do checkwrite
+       #);
+     isFile: BooleanValue
+       (* True if THIS(DiskEntry) is a regular file *)
+       (# error:< DiskEntryException;
+       <<SLOT DiskEntryIsFile: dopart>>
+       #);
+     isDirectory: BooleanValue
+       (* True if THIS(DiskEntry) is a directory *)
+       (# error:<DiskEntryException;
+       <<SLOT DiskEntryIsDir: dopart>>
+       #);
+     
+     private: @<<SLOT DiskEntryPrivate: descriptor>>
+  do INNER
+  #); (* DiskEntry *)
+
+(* Constants used for specifying mode to File.SetPos. *)
+FromBeginning:   
+  (* Seeks relative to the beginning of a file.  Corresponds to
+   * absolute positions in File[0:File.Length-1].
+   *)
+  (# exit 0 #);
+FromCurrent:  
+  (* Seeks relative to the current position.   *)
+  (# exit 1 #); 
+FromEnd:          
+  (* Seeks relative to the end of a file. *)
+  (# exit 2 #);
+
+File: Stream
+  (* Generalization of disk file.  Describes the stream aspects of
+   * files, providing buffered I/O, and contains a DiskEntry object
+   * describing the other properties of a file.
+   *)
+  (# <<SLOT FileLib: attributes>>;
+     
+     EntryDesc:< DiskEntry;
+     Entry: @EntryDesc
+       (* The item holding most characterizing attributes of
+        * THIS(file)
+        *);
+     name: @
+       (* convenient interface to entry.path *)
+       (# read:
+            (* Reads the file name from the Keyboard *)
+            (# <<SLOT FileReadName: dopart>>  #);
+       enter entry.path
+       exit entry.path
+       #);
+     Put::<  (# <<SLOT FilePut:dopart>> #);
+     Get::<  (# <<SLOT FileGet:dopart>> #);
+     Peek::< (# <<SLOT FilePeek:dopart>> #);
+     PutText::< (# <<SLOT FilePutText: dopart>> #);
+     GetAtom::< (# <<SLOT FileGetAtom: dopart>> #);
+     GetLine::< (# <<SLOT FileGetLine: dopart>> #);
+     Length::<
+       (* Returns the byte size of THIS(file). Notice that this is
+        * not always the same as entry.size, which is how many bytes
+        * THIS(file) occupies on the disk
+        *)
+       (# <<SLOT FileLength: dopart>> #);
+     GetPos::<
+       (* Returns current position of THIS(File) *)
+       (# <<SLOT FileGetPos:dopart>> #);
+     SetPos::<
+       (* Sets position on THIS(file).  Enters position and mode. See
+        * above for definition of constants to use as mode,
+        * FromBeginning, FromCurrent, FromEnd.  Returns the absolute
+        * position seeked to [0..File.Length-1].
+        *)
+       (# mode,newpos: @integer
+       enter mode
+       <<SLOT FileSetPos:dopart>> 
+       exit newpos
+       #);
+     Eos::< (# <<SLOT FileEos:dopart>> #);
+     touch: entry.touch
+       (* If the disk entry does not exist, an empty file will be
+        * created.
+        *)
+       (# <<SLOT FileTouch: dopart>> #);
+     delete:
+       (* Deletes THIS(File) *)
+       (# <<SLOT FileDelete:dopart>> #);
+     getRep:
+       (# repAdr (* @@ rep[inx]: start address *),
+          length (* max. no. of elements to read *): @integer;
+       enter(repAdr,length)
+       <<SLOT GetRep:dopart>>
+       exit(length div 4)
+       #);
+     putRep:
+       (# repAdr (* @@rep[inx]: start address *),
+          length (* no. of rep-elements to be and was written
+                  *): @integer;
+       enter(repAdr,length)
+       <<SLOT PutRep:dopart>>
+       exit (length div 4)
+       #);
+     binary:< booleanvalue
+       (* THIS(File) is binary if value is true. On some systems a
+        * non-binary (e.g. textual) file may behave differently, than
+        * a binary file. A binary file is always treated as raw bytes,
+        * whereas a non-binary file may treat some characters, notably
+        * the end-of-line marker, differently.
+        *);
+     openRead:
+       (* opens THIS(File) for reading, starting at the beginning *)
+       (# <<SLOT FileOpenRead:dopart>> #);
+     openWrite:
+       (* Opens THIS(File) for writing.  truncates the contents of
+        * the disk file if it already existed, and creates the disk
+        * file if not
+        *)
+       (# <<SLOT FileOpenWrite:dopart>> #);
+     openAppend:
+       (* Opens THIS(File) for writing at the end.  Setpos cannot be
+        * used to write other places than at the end.  Creates the
+        * file if it did not exist.
+        *)
+       (# <<SLOT FileOpenAppend:dopart>> #);
+     openReadWrite:
+       (* Opens THIS(File) for both reading and writing.  The file is
+        * positioned at the beginning. To switch between writing and
+        * reading an intermediate setpos may be necessary.
+        *)
+       (# <<SLOT FileOpenReadWrite:dopart>> #);
+     openReadAppend:
+       (* Like OpenReadWrite, but positiones at the end *)
+       (# <<SLOT FileOpenReadAppend:dopart>> #);
+     flush: 
+       (* Flushes THIS(File). Affects only files opened for output *)
+       (# <<SLOT FileFlush:dopart>> #);
+     close:  (* Closes THIS(File) *)
+       (# <<SLOT FileClose:dopart>> #);    
+     
+     (* FILE EXCEPTIONS *)
+     
+     FileException: StreamException
+       (* General File exception *)
+       (# m: ^text
+       enter m[]
+       <<SLOT FileException: dopart>>
+       #);
+     OpenException: FileException
+       (* Raised if opening of a file has failed. Message: "Cannot
+        *         open file".
+        *)
+       (# <<SLOT FileOpenException: dopart>> #);
+     AccessError:< OpenException
+       (* Raised on attempt to access a file with insufficient
+        * privilegies.  Message: "Insufficient access privilegies".
+        *)
+       (# <<SLOT FileAccessException: dopart>> #);
+     WriteError:< FileException
+       (* Raised from Put, PutText and Flush on attempt to write on a
+        * non-existing block. Message: "Write block error".
+        *)
+       (# <<SLOT FileWriteException: dopart>> #);
+     ReadError:< FileException
+       (* Raised from Get and Peek on attempt to read a non-existing
+        * block. Message: "Read block error".
+        *)
+       (# <<SLOT FileReadException: dopart>> #);
+     EOSerror::< 
+       (# <<SLOT FileEOSException: dopart>> #);
+     NoSuchFileError:< FileException
+       (* Raised on attempt to open a non-existing file. Message:
+        * "File does not exist"
+        *)
+       (# <<SLOT FileNoSuchException: dopart>> #);
+     FileExistsError:< FileException
+       (* Raised when creating an already existing file. Message:
+        * "File does already exist".
+        *)
+       (# <<SLOT FileExistsException: dopart>> #);
+     NoSpaceError:< FileException
+       (* Raised when the file system is full. Message: "File system
+        * is full".
+        *)
+       (# <<SLOT FileDiskFullException: dopart>> #);
+     OtherError:< FileException
+       (* Raised when errors other than the above occur *)
+       (# <<SLOT FileOtherException: dopart>> #);
+     private: @ <<SLOT FilePrivate:descriptor>>; 
+  #); (* pattern File *)
+
+FileRep:
+  (* A pattern consisting of a repetition R which may be
+   * saved/restored in one chunk from a file; When saving, the
+   * elements R[1:top-1] are saved; After restoring top is R.range
+   *)
+  (# <<SLOT FileRepLib: attributes>>;
+     R: [1] @integer;
+     top: @integer;
+     Save:
+       (# filename: ^text 
+       enter filename[]
+       do <<SLOT FileRepSave: descriptor>>
+       #);
+     Restore:
+       (# filename: ^text
+       enter filename[] 
+       do <<SLOT FileRepRestore: descriptor>>
+       #)
+  #);

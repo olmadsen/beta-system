@@ -1,0 +1,448 @@
+ORIGIN '../basicsystemenv';
+MDBODY nti 'basicsystemenv_ntbody'
+       mac 'basicsystemenv_macbody'
+       default 'basicsystemenv_unixbody';
+(*
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-95
+ *       All rights reserved.
+ *)
+
+--- lib:attributes ---
+
+secondCounter:
+  (# now: @Integer; (* Seconds since something. *)
+  <<SLOT secoundCounterBody:dopart>>
+  exit now
+  #);
+
+---semP:descriptor---
+(# 
+do 
+   (if (semRep.cnt < 1) then
+       SE_WAITING -> theActive.shstatus;
+       theActive.ce[] -> theActive.q.delete
+       (* theActive.q is private.active *);
+       theActive.ce[] -> semRep.Q.append;
+       semRep.Q[] -> theActive.q[];
+       SUSPEND
+    else
+       semRep.cnt-1->semRep.cnt
+   if)
+#)
+
+---semV:descriptor---
+(# next: ^cyclicElm;
+do 
+   (if semRep.cnt < 0 then
+       semRep.Q.getFirst -> semRep.Q.delete -> next[];
+       next[] -> private.active.append;
+       SE_READY -> next.s.shstatus;
+       next[] -> next.s.ce[];
+       private.active[] -> next.s.q[];
+       private.ensure;
+    else
+       semRep.cnt+1 -> semRep.cnt
+   if);
+#)
+
+---semTryP:descriptor---
+(# 
+do (if semrep.cnt < 1 then
+       false -> value;
+    else
+       P; true -> value; 
+   if)
+#)
+
+---SemCount:descriptor---
+(# do semRep.Q.size -> value #)
+   
+---SemRep:descriptor---
+(# cnt: @Integer;
+   Q: @cyclicQueue 
+     (# onDelete::< 
+          (# 
+          do cnt+1 -> cnt;
+             private.blockedCount-1 -> private.blockedCount; 
+          #);
+        onInsert::< 
+          (# 
+          do cnt-1 -> cnt;
+             private.blockedCount+1 -> private.blockedCount; 
+          #);
+     #);
+#)
+
+---forkfirst:descriptor---
+(# 
+do 
+   (if s.shstatus=0 then
+       S[] -> private.active.insert -> S.ce[];
+       private.active[] -> S.q[];
+       SE_READY -> S.shstatus;
+    else
+       (failuretrace,'FORK FAILURE: Only newly created systems may be forked.')
+         -> stop;
+   if);
+#)
+
+--pause:descriptor--
+(# 
+do SE_READY -> theActive.shstatus; SUSPEND 
+#)
+
+--- systemenvKill:descriptor ---
+(# sys: ^|System;
+do
+   (if S[]=theActive[] then
+       (* suicide *)
+       suspend
+    else
+       S.ce[] -> S.q.remove;
+       none -> S.ce[];
+       none -> S.q[];
+       SE_KILLED -> S.shstatus;
+       (if S## <= System## then
+           s[] -> sys[];
+           sys.onKilled;
+           none -> sys[];
+       if);
+   if);
+   
+#)
+   
+---conditionWait:descriptor---
+(# do Return; q.P #)
+   
+---contitionSignal:descriptor---
+(# do (if q.Count>0 then q.V; urgent.P if) #)
+   
+---MonitorReturn:descriptor---
+(# do (if urgent.count>0 then urgent.V else mutex.V if) #)
+   
+--- sleep:descriptor ---
+(#
+do 
+   (if time > 0 then
+       theActive.ce[] -> theActive.q.delete;
+       SE_SLEEPING -> theActive.shstatus;
+       (theActive.ce[], time) -> private.sleeping.putSleeper;
+       private.sleeping[] -> theActive.q[];
+       SUSPEND;
+   if)
+#)
+
+--BasicSystemEnvPrivate:descriptor--
+(# 
+   installKeyboard: <<SLOT installKeyboard:descriptor>>;
+   mdpriv: @<<SLOT BasicSystemEnvMDPriv:descriptor>>;
+   ensure: @<<SLOT pioEnsure:descriptor>>;
+   (* In e.g. the X implementation of the scheduler, ensure ensures that
+    * the scheduler is called. The scheduler may have been deinstalled if
+    * no coroutines where ready to be attached. *)
+   
+   active: @CyclicQueue;       (* Systems read for attach.      *)
+   blockedCount: @Integer;     (* Number of blocked systems. These 
+                                * systems are in some semaphore queue. *)
+   sleeping: @sleepingQueue;   (* Sleeping systems.              *)
+   
+   attNext: @
+     (* Return values: 
+      *   0: Ok, still something to do.
+      *   1: All systems blocked. (Could mean deadlock)
+      *   2: No systems left.
+      *  Negative number: Nobody is ready, but someone is sleeping and is
+      *  supposed to wake up in -value seconds. *)
+     (# 
+        value: @Integer;
+        sleeper, next: ^cyclicElm;
+        untilNextReady: @Integer;
+        sys: ^|System;
+        
+     do run:
+          (#
+          do sleeping.getSleeper -> (sleeper[],untilNextReady);
+             (if sleeper[]<>NONE then
+                 sleeper[] -> active.append;
+                 active[] -> sleeper.s.q[];
+                 SE_READY -> sleeper.s.shstatus;
+             if);
+             
+             (if active.size=0 then
+                 (if sleeping.size=0 then
+                     (if blockedCount=0 then
+                         2 -> value;
+                      else
+                         1 -> value; 
+                     if);
+                  else
+                     untilNextReady -> value; 
+                 if);
+                 leave run
+              else
+                 active.getFirst -> next[];
+                 next.s[] -> theActive[];
+                 0 -> value; none -> next[];
+             if);
+             
+             SE_RUNNING -> theActive.shstatus;
+             theActive;
+             
+             (if theActive.shstatus=SE_RUNNING then 
+                 (* direct suspend or termination *)
+                 theActive.ce[] -> theActive.q.remove;
+                 none -> theActive.ce[];
+                 none -> theActive.q[];
+                 SE_KILLED -> theActive.shstatus;
+                 (if theActive## <= System## then
+                     theActive[] -> sys[];
+                     sys.onKilled;
+                     none -> sys[];
+                 if);
+             if);
+             none -> theActive[];
+          #)   
+     exit value
+     #);
+   
+   
+   init:
+     (#
+     do    
+        THIS(systemEnv)[] -> objectPool.put;
+        
+        installKeyboard;
+        
+	&|BasicScheduler[]->theScheduler[];
+        (if (theprogram## <= systemenv##) then 
+            theProgram[]->fork;
+         else
+            'Illegal use of systemEnv. ' -> putLine;
+            'The PROGRAM descriptor must be a subpattern of ''systemEnv''.'
+              -> putLine;
+            (failureTrace, '') -> stop;
+        if);
+     #)
+#)
+(*********** System ****************)
+--rPortAccept:descriptor--
+(# 
+do (theActive[] = sender[]) -> OK
+#)
+
+--oPortAccept:descriptor--
+(# 
+do (theActive##<=sender##)->OK
+#)
+
+--InitSystemEnv:descriptor--
+(#
+do private.init;
+   SUSPEND;
+#)
+
+--- systemConcStart:descriptor ---
+(# 
+do concPriv.pio[] -> s.caller[];
+   s[] -> fork;
+   concPriv.count+1 -> concPriv.count;
+#)
+
+--- systemConcPriv:descriptor ---
+(# count: @Integer;
+   pio: @ProtectedInt;
+#)
+
+--- systemConc:descriptor ---
+(# 
+do 
+   (if concPriv.count<>0 then
+       concPriv.count -> concPriv.pio.init;
+       concPriv.pio.waitForZero;
+   if);
+#)
+
+--- systemEnvConcStart:descriptor ---
+(# 
+do concPriv.pio[] -> s.caller[];
+   s[] -> fork;
+   concPriv.count+1 -> concPriv.count;
+#)
+
+--- systemEnvConcPriv:descriptor ---
+(# count: @Integer;
+   pio: @ProtectedInt;
+#)
+
+--- systemEnvConc:descriptor ---
+(# 
+do 
+   (if concPriv.count<>0 then
+       concPriv.count -> concPriv.pio.init;
+       concPriv.pio.waitForZero;
+   if);
+#)
+
+--- cyclicQueueInsert:dopart ---
+do
+   (if freeList[]=NONE then
+       &cyclicElm[] -> new[];
+    else
+       freeList[] -> new[];
+       freeList.next[] -> freeList[];
+   if);
+   s[] -> new.s[];
+   new[] -> append;
+
+--- cyclicQueueAppend:dopart ---
+do (elm[],first[]) -> insertBefore
+
+--- cyclicQueuePrepend:dopart ---
+do (elm[],first[]) -> insertBefore;
+   first.prev[] -> first[]
+
+--- cyclicQueueInsertBefore:dopart ---
+do
+   (if old[]=NONE then
+       new[] -> first[] -> new.next[] -> new.prev[];
+    else
+       old[] -> new.next[];
+       old.prev[] -> new.prev[];
+       new[] -> old.prev.next[];
+       new[] -> old.prev[];
+   if);
+   size+1 -> size;
+   onIns;
+
+--- cyclicQueueGetFirst:dopart ---
+do
+   first[] -> elm[];
+   first.next[] -> first[];
+   
+--- cyclicQueueDelete:dopart ---
+do
+   (if elm[]<>NONE then
+       (if elm.next[]=elm[] then
+           NONE -> first[];
+        else
+           elm.next[] -> elm.prev.next[];
+           elm.prev[] -> elm.next.prev[];
+           (if elm[]=first[] then
+               elm.next[] -> first[];
+           if);
+       if);
+       size-1 -> size;
+       onDel;
+   if);
+   
+--- cyclicQueueRemove:dopart ---
+do
+   (if elm[]<>NONE then
+       (if elm.next[]=elm[] then
+           NONE -> first[];
+        else
+           elm.next[] -> elm.prev.next[];
+           elm.prev[] -> elm.next.prev[];
+           (if elm[]=first[] then
+               elm.next[] -> first[];
+           if);
+       if);
+       elm.s[] -> s[];
+       none -> elm.s[]; 
+       none -> elm.prev[];
+       freeList[] -> elm.next[];
+       elm[] -> freeList[];
+       size-1 -> size;
+       onDel;
+   if)
+   
+--- cyclicQueueScan:descriptor ---
+(# 
+do
+   first[] -> current[];
+   loop:
+     (if current[]<>NONE then
+         INNER scan;
+         current.next[] -> current[];
+         (if current[]<>first[] then
+             restart loop
+         if);
+     if);
+#)
+   
+--- systemlib:attributes ---
+
+
+(* SLEEPINGQUEUE
+ * =============
+ * 
+ * Used to keep track of sleeping systems. The head of the queue 
+ * is the first system to wake up.
+ * 
+ * putSleeper *)
+
+sleepingQueue: cyclicQueue
+  (# onDelete::<
+       (# 
+       do (if delete.elm[]<>NONE then
+              0 -> delete.elm.due;
+          if);
+          (if first[]<>NONE then
+              first.due -> firstDue
+          if);
+          INNER;
+       #);
+       
+     firstDue: @Integer;
+     now: @secondCounter;
+     
+     putSleeper: @
+       (# sleepingTime: @Integer; 
+          elm, cur: ^cyclicElm;
+       enter (elm[],sleepingTime)
+       do
+          now + sleepingTime -> elm.due;
+          (if elm.due=0 then 1 -> elm.due if);
+          
+          doput:
+            (if size=0 then
+                (elm[],NONE) -> insertBefore;
+                elm.due -> firstDue;
+             else
+                first[] -> cur[];
+                (for size repeat
+                     (if cur.due > elm.due then
+                         (elm[],cur[]) -> insertBefore;
+                         (if cur[]=first[] then
+                             elm.due -> firstDue;
+                             elm[] -> first[];
+                         if);
+                         leave doput;
+                      else
+                         cur.next[] -> cur[];
+                     if);
+                for);
+                elm[] -> append;
+            if);
+       #);
+     
+     getSleeper: @
+       (# elm: ^cyclicElm; untilNextReady: @Integer;
+       do
+          (if size=0 then
+              none -> elm[]; 
+           else
+              now - firstDue -> untilNextReady;
+              (if untilNextReady >= 0 then
+                  first[] -> delete -> elm[];
+                  0 -> elm.due; (* Mark that elm is no longer in 
+                                 * a sleepingQueue *)
+                  (if first[]<>NONE then first.due -> firstDue if);
+               else
+                  none -> elm[];
+              if)
+          if);
+       exit (elm[],untilNextReady)
+       #);
+  #);

@@ -1,0 +1,261 @@
+ORIGIN '../substreams';
+INCLUDE '../private/betaenvbody';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1995
+ *       All rights reserved.
+ *)
+-- substreamNotAttachedError: dopart --
+do 'The substream is not attached to any stream!'->substreamErrorMsg;
+   INNER notAttachedError;
+   
+-- substreamIllegalRangeError: dopart --
+do 'The substream range is not within the attached stream range!'->substreamErrorMsg;
+   INNER illegalRangeError;
+   
+-- substreamIndexError: dopart --
+do 'Index error in substream! (index '->msg.puttext;
+   inx->msg.putint;
+   ') \n'->msg.puttext;
+   msg[]->substreamErrorMsg;
+   INNER indexError;
+   
+-- substreamEOSerror: dopart --
+do msg[]->substreamErrormsg; INNER EOSerror
+-- substreamOtherError: dopart --
+do msg[]->substreamErrormsg; INNER otherError
+   
+-- substreamLib: attributes --
+substreamErrorMsg: 
+  (# msg: ^Text; stmpos: @integer
+  enter msg[]
+  do stm.getpos->stmpos; 
+     (if lgth=0 then
+         'Empty substream.'->msg.putline;
+      else
+         low->stm.setpos;
+         (if lgth>70 then
+             'Error in substream, which begins as follows: '->msg.putLine;
+             ''''->msg.put;
+             (for 70 repeat stm.get->msg.put for);
+             '.....'''->msg.putLine;
+          else
+             'Error in the substream: '''->msg.puttext;
+             (for lgth repeat stm.get->msg.put for);
+             ''''->msg.putline;
+         if);
+     if);
+    (if stm.length=0 then
+         'of empty stream.'->msg.putline;
+      else
+        stm.reset;
+        (if stm.length>70 then
+            'of the stream, which begins as follows: '->msg.putLine;
+            ''''->msg.put;
+            (for 70 repeat stm.get->msg.put for);
+            '.....'''->msg.putLine
+         else
+            'of the stream: '''->msg.puttext;
+            (for stm.length repeat stm.get->msg.put for);
+            ''''->msg.putline;
+        if)
+    if);
+     stmpos->stm.setpos
+  #)
+
+--- substreamSetpos: dopart ---
+do (if p>lgth then EOSerror if); p+low-1->pos
+--- substreamGetpos: dopart ---
+do pos-low+1->value
+--- substreamEos: dopart ---
+do pos>=high->value
+--- substreamLength: dopart ---
+do lgth->value
+--- substreamEmpty: dopart ---
+do low>high->value
+--- substreamCopy: descriptor ---
+(# copyType: ##substream
+do this(substream)##->copyType##;
+   &copyType[]->theCopy[];
+   stm[]->theCopy.attach;
+   (low,high)->theCopy.range;
+   theCopy.init
+#)
+
+
+
+--- substreamPut: dopart ---
+do (if pos>=high then EOSerror if); (ch,pos+1->pos)->stm.inxput  
+--- substreamPutText: dopart ---
+do L: (if pos+txt.lgth>=high then EOSerror
+       else
+          (for i: txt.lgth repeat
+               (txt.T[i],pos+i)->stm.inxput
+          for);
+          (if (pos+txt.lgth->pos) > lgth then pos->lgth if)
+      if);
+   
+--- substreamGet: dopart ---
+do (if pos>=high then EOSerror if); pos+1->pos->stm.inxget->ch
+--- substreamGetAtom: dopart ---
+do (if pos>=high then EOSerror if);
+   skipBlanks:
+     (if (pos < high) and ((pos->stm.inxget)=ascii.isWhiteSpace) then
+         pos+1->pos; restart skipBlanks
+     if);
+   scan:
+     (if (pos <= lgth) and ((pos->stm.inxget)<>ascii.isWhiteSpace) then
+         (if (txt.pos+1->txt.pos) > txt.lgth then txt.T.range+16->txt.T.extend if);
+         pos->stm.inxget->txt.T[txt.pos]; pos+1->pos;
+         restart scan
+     if)
+--- substreamGetLine: dopart ---
+do (if pos>=high then EOSerror if);
+   scan:
+     (if (pos < high) and ((pos->stm.inxget)<>ascii.newline) then
+         (if (txt.pos+1->txt.pos) > txt.lgth then txt.T.range+16->txt.T.extend if);
+         pos->stm.inxget->txt.T[txt.pos]; pos+1->pos;
+         restart scan
+     if)
+   
+--- substreamPeek: dopart ---
+do (if pos>=high then EOSerror if); pos+1->stm.inxget->ch
+--- substreamClear: dopart ---
+do (1,lgth)->delete; 0->pos->lgth; low-1->high
+--- substreamInxget: dopart ---
+do (if (i<1) or (lgth<i) then i->indexError if);
+   low+i-1->stm.inxGet->value
+--- substreamInxput: dopart ---
+do (if (i<1) or (lgth<i) then i->indexError if);
+   (ch,low+i-1)->stm.inxPut
+--- substreamAppend: dopart ---
+do S1.length->S1lgt;
+   (S1[],high+1)->stm.insert;
+   S1lgt+lgth->lgth; S1lgt+high->high;
+--- substreamPrepend: dopart ---
+do S1.length->S1lgt;
+   (S1[],low)->stm.insert;
+   S1lgt+lgth->lgth; S1lgt+high->high;
+   S1lgt+pos->pos
+--- substreamScanAll: dopart ---
+do (for i: length repeat stm.T[i+low-1]->ch; INNER scanall for)
+--- substreamInsert: dopart ---
+do (if (inx<0) or (lgth<inx) then inx->indexError if);
+   (if T1[]<>NONE then
+       (T1[],low+inx)->stm.insert;
+       (if pos>=low+inx then pos+T1.length->pos if);
+       high+T1.length->high; lgth+T1.length->lgth
+   if)
+--- substreamDelete: dopart ---
+do (if (i<1) or (lgth<i) then i->indexError if);
+   (if (j<1) or (lgth<j) then j->indexError if);
+   (if i<=j then
+       (low+i-1,low+j-1)->stm.delete;
+       (if true
+        // pos>=(low+j-1) then pos-(j-i)->pos
+        // pos>=(low+i-1) then low+i-1->pos
+       if);
+       high-(j-i+1)->high; lgth-(j-i+1)->lgth
+   if)
+--- substreamEqual: dopart ---
+do (if S1[]<>NONE then length->lgt;
+       L: (if S1.length=lgt then
+              S1.getPos->S1pos; S1.reset;
+              (if NCS then
+                  (for i: lgth repeat
+                       (if ascii.private.UPCASE[S1.get+1] <>
+                           ascii.private.UPCASE[stm.T[i+low-1]+1] then
+                           S1pos->S1.setPos; leave L
+                       if)
+                  for);
+               else
+                  (for i: lgt repeat
+                       (if S1.get<>stm.T[i+low-1] then
+                           S1pos->S1.setPos; leave L
+                       if)
+                  for)
+              if);
+              S1pos->S1.setPos; true->value
+          if)
+   if)
+--- substreamLess: dopart ---
+do (if S1[]<>NONE then
+       S1.getPos->S1pos; S1.reset;
+       (if S1.length<length then S1.length->lgt else length->lgt if);
+       L: (for i: lgt repeat
+               (if (S1.get->ch1)<>(stm.T[i+low-1]->ch) then
+                   (ch1<ch)->value; S1pos->S1.setPos; leave L
+               if)
+          for);
+       (if lgt=S1.length then
+           lgt<>length->value
+        else false->value
+       if);
+       S1pos->S1.setPos
+   if)
+--- substreamGreater: dopart ---
+do (if S1[]<>NONE then
+       S1.getPos->S1pos; S1.reset;
+       (if S1.length<length then S1.length->lgt else length->lgt if);
+       L: (for i: lgt repeat
+               (if (S1.get->ch1)<>(stm.T[i+low-1]->ch) then
+                   (ch1>ch)->value; S1pos->S1.setPos; leave L
+               if)
+          for);
+       (if lgt=length then
+           lgt<>S1.length->value
+        else false->value
+       if);
+       S1pos->S1.setPos
+   if)
+--- substreamMakeLC: dopart ---
+do (for i: length repeat ascii.private.lowCase[stm.T[i+low-1]+1]->stm.T[i+low-1] for)
+--- substreamMakeUC: dopart ---
+do (for i: length repeat ascii.private.upCase[stm.T[i+low-1]+1]->stm.T[i+low-1] for)
+--- substreamFind: dopart ---
+do from+1->inx;
+   (if NCS then
+       ascii.private.UPCASE[ch+1]->ch;
+       (for lgth-inx+1 repeat
+            (if ch=ascii.private.UPCASE[stm.T[inx+low-1]+1] then INNER find if);
+            inx+1->inx
+       for)
+    else
+       (for lgth-inx+1 repeat
+            (if ch=stm.T[inx+low-1] then INNER find if);
+            inx+1->inx
+       for)
+   if)
+-- substreamFindText: dopart --
+do from+1->inx;
+   (if NCS then
+       (txt.copy->txt[]).makeUC;
+       (for lgth-inx-txt.lgth+2 repeat
+            L: (#
+               do (for i: txt.lgth repeat
+                       (if txt.T[i]<>ascii.private.UPCASE[stm.T[inx+low+i-2]+1] then
+                           leave L if)
+                  for);
+                  INNER findText
+               #);
+            inx+1->inx
+       for)
+    else
+       (for lgth-inx-txt.lgth+2 repeat
+            L: (#
+               do (for i:txt.lgth repeat
+                       (if txt.T[i]<>stm.T[inx+low+i-2] then leave L if)
+                  for);
+                  INNER findText
+               #);
+            inx+1->inx
+       for)
+   if)
+   
+--- substreamPutSubstream: dopart ---
+do (if stm[]<>NONE then
+       stm.position->p;
+       0->stm.position;
+       (for stm.length repeat stm.get->put for);
+       p->stm.position;
+   if)

@@ -1,0 +1,290 @@
+ORIGIN 'basicsystemenvbody';
+INCLUDE '~beta/unixlib/v1.5/iostate';
+OBJFILE default '$/systemenvExt.o';
+MAKE default 'external/systemEnv.make';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1984-95
+ *       All rights reserved.
+ *
+ *)
+
+--- lib:attributes ---
+
+pioReadBlocked:  (# exit 1 #);
+pioWriteBlocked: (# exit 2 #);
+
+pioReadReady: (# exit -1 #);
+pioWriteReady: (# exit -2 #);
+pioException: (# exit -3 #);
+
+sleepUntil: external (# due: @Integer enter due #);
+time: external 
+  (# timeloc: @Integer; time: @Integer; 
+  enter timeloc 
+  exit time 
+  #);
+
+selectSockets: external
+  (* In external/systemenvExt.c *)
+  (# readCandidatesAdr, writeCandidatesAdr, exceptCandidatesAdr: @Integer;
+     sec, usec: @Integer;
+     readyCount: @Integer;
+  enter (readCandidatesAdr, writeCandidatesAdr, exceptCandidatesAdr, sec, usec)
+  exit readyCount
+  #);
+
+--- systemLib:attributes ---
+
+SystemEnvKeyboard: Stream
+  (# state: @IOmask;
+     fd: @Integer;
+     readyCount: @Integer;
+     readyBytes: external (# fd, count: @Integer; enter fd exit count #);
+     init: 
+       (# getStandardIn: external (# fd: @Integer exit fd #);
+       do getStandardIn -> fd -> state.AddReadFD;
+       #);
+     Eos::<
+       (# sysenvKeyboardEOS: External(# res: @Integer exit res #);
+       do 
+          check:
+            (if readyCount=0 then
+                (if (fd -> readyBytes -> readyCount)=0 then
+                    state.block;
+                if);
+                restart check;
+             else
+                sysenvKeyboardEOS -> value;
+            if);
+       #);
+     OtherError::< (#do 'BasicSystemEnv keyboard error'->msg.puttext #);
+     Put::< 
+       (# 
+       do 'Warning: attempt to Put to the Keyboard' -> screen.putline; 
+       #);
+     Get::<
+       (# sysenvGetCh: external(# ch: @char exit ch #);
+       do 
+          check:
+            (if readyCount=0 then
+                (if (fd -> readyBytes -> readyCount)=0 then
+                    state.block;
+                if);
+                restart check;
+             else
+                sysenvGetCh -> ch; 
+                readyCount-1 -> readyCount;
+            if);
+       #);
+     Peek::<
+       (# sysenvKeyboardPeek: External(# ch: @char exit ch #)
+       do 
+          check:
+            (if readyCount=0 then
+                (if (fd -> readyBytes -> readyCount)=0 then
+                    state.block;
+                if);
+                restart check;
+             else
+                sysenvKeyboardPeek -> ch; 
+            if);
+       #);
+  #);
+
+--- installKeyboard:descriptor ---
+(# kb: ^SystemEnvKeyboard;
+do
+   &SystemEnvKeyboard[] -> kb[] -> keyboard[]; 
+   kb.init;
+#)
+
+--- BasicSystemEnvMDPriv:descriptor ---
+(# 
+   (* PIO
+    * ===
+    * 
+    * pio implements UNIX non-blocking socket and pipe I/O *)
+   
+   pioinsert: @
+     (# elm: ^IOmask;
+        doInnerP: 
+          (# elm: ^IOmask; 
+          enter elm[]
+          do INNER
+          #);
+        doInner: ^doInnerP;
+     enter elm[]
+     do 
+        (if (piosize+1 -> piosize) > piotable.range then
+            piotable.range -> piotable.extend;
+        if);
+        elm[] -> piotable[piosize][];
+        (if doInner[]<>NONE then elm[] -> doInner if);
+     #);
+   piodelete: @
+     (# elm: ^IOmask;
+        doInnerP: 
+          (# elm: ^IOmask;
+          enter elm[]
+          do INNER
+          #);
+        doInner: ^doInnerP;
+     enter elm[]
+     do 
+        find:
+          (for i:piosize repeat
+               (if piotable[i][]=elm[] then
+                   piotable[piosize][] -> piotable[i][];
+                   NONE -> piotable[piosize][];
+                   piosize-1-> piosize;
+                   (if doInner[]<>NONE then elm[] -> doInner if);
+                   leave find;
+               if);
+          for);
+     #);
+   piosize: @Integer;
+   piotable: [8]^IOmask;
+   
+   pioPrivate: @<<SLOT pioPrivate:descriptor>>;
+   
+   check: @
+     (* check handles pending I/O and makes the process sleep if 
+      * there is currently nothing to do. *)
+     (# pendingList:
+          (# fds: [5]@Integer;
+             ioms: [5]^IOmask;
+             last: @Integer;
+             
+             append: @
+               (# fd: @Integer;
+                  iom: ^IOmask;
+               enter (fd,iom[])
+               do 
+                  (if (last + 1 -> last) > fds.range then
+                      5 -> fds.extend;
+                      5 -> ioms.extend;
+                  if);
+                  fd -> fds[last];
+                  iom[] -> ioms[last][];
+               #);
+             
+             cont: 
+               (# iom: ^IOmask; fd: @Integer;
+               do (for i: last - 1 repeat
+                       (if fds[i] >= 0 then
+                           ioms[i][] -> iom[];
+                           fds[i] -> fd;
+                           INNER;
+                       if);
+                       NONE -> ioms[i][];
+                  for);
+                  0 -> last;
+               #);
+          #);
+        
+        readers: @pendingList
+          (# continue: @cont 
+               (# do (fd,pioReadReady) -> iom.continue #)
+          #);
+        writers: @pendingList
+          (# continue: @cont 
+               (# do (fd,pioWriteReady) -> iom.continue #)
+          #);
+        excepters: @pendingList
+          (# continue: @cont 
+               (# do (fd,pioException) -> iom.continue #)
+          #);
+        
+        readyCount: @Integer;
+        
+        sec, usec: @Integer;
+        
+        scanPending: @
+          (# cur: ^IOmask;
+          do 
+             (for i: piosize repeat
+                  piotable[i][] -> cur[];
+                  cur.scan
+                  (# 
+                  do
+                     (if read then 
+                         (curFD,cur[]) -> readers.append 
+                     if);
+                     (if write then 
+                         (curFD,cur[]) -> writers.append 
+                     if);
+                     (if except then 
+                         (curFD,cur[]) -> excepters.append 
+                     if);
+                  #);
+             for)
+          #);
+        
+        done: @Boolean;
+        
+     do
+        doCheck:
+          (if piosize=0 then 
+              
+              (if active.size=0 then
+                  (* Nobody is active and there is no pending IO. 
+                   * If nobody is sleeping we have a deadlock. *)
+                  (if sleeping.size=0 then
+                      (if blockedCount=0 then
+                          true -> done; leave doCheck;
+                       else
+                          deadlocked;
+                      if);
+                   else
+                      sleeping.firstDue -> sleepUntil;
+                  if);
+              if);
+              
+           else
+              
+              scanPending;
+              
+              (if active.size=0 then
+                  (* Nobody is active so we can block until the first 
+                   * sleeper is due or until some pending IO should
+                   * be awakened. *)
+                  
+                  (if sleeping.size=0 then
+                      (* Nobody is sleeping. We can wait foreever on pending
+                       * IO. *)
+                      -1 -> sec -> usec;
+                   else
+                      (if (sleeping.firstDue - (0 -> time) -> sec) <= 0 then
+                          0 -> sec -> usec
+                       else
+                          0 -> usec
+                      if);
+                  if);
+                  
+               else
+                  (* Someone else is active. Only do a poll. *)
+                  0 -> sec -> usec;
+              if);
+              
+              (* 'selectSockets' expect -1 terminated integer arrays: *)
+              (-1,none) -> readers.append; 
+              (-1,none) -> writers.append;
+              (-1,none) -> excepters.append;
+              
+              (@@readers.fds[1], @@writers.fds[1], @@excepters.fds[1], 
+              sec, usec) -> selectSockets -> readyCount;
+              
+              (* Signal ready readers and writers. *)
+              readers.continue;
+              writers.continue;
+              excepters.continue;
+          if)
+     exit done   
+     #);
+   
+#)
+
+--- secoundCounterBody:dopart ---
+do 0 -> time -> now
+   

@@ -1,0 +1,103 @@
+ORIGIN 'betaenv';
+BODY 'private/regexplib';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1992-95
+ *       All rights reserved.
+ *)
+--- textlib: attributes ---
+regexp_operation:
+  (* generic superpattern for all regexp text operations:
+   *     regexp_match, regexp_search, regexp_replace,
+   *     regexp_replace_literally.
+   * regexp_string: text string containing the regexp.
+   * start: start position for match in THIS(text).  
+   *        Default: pos
+   * limit: end position for match in THIS(text).  
+   *        Default: length
+   * posToMatchEnd: if true, move THIS(text).pos to the end of the
+   *                matched substring.  
+   *        Default: false
+   * regs: structure for getting access to the matched substring.
+   * noMatch: invoked if no matches are found.
+   * regexpError: is invoked if syntax error occurs in the specified
+   * regexp.
+   * 
+   * value: true, if any match is found.
+   *)
+  (# regexp_string: ^text;
+     start:< integerObject(# do pos -> value; INNER #);
+     limit:< integerObject(# do length -> value; INNER #);
+     posToMatchEnd:< booleanObject;
+     regs: @regexp_registers;
+     noMatch:< Notification;
+     regexpError:< Exception(# do 'Syntax error in regular expression'->msg #);
+     value: @boolean;
+     private: @(* private *)<<SLOT regexpOperationPrivate:descriptor>>
+  enter (#
+        enter regexp_string[]
+        do <<SLOT regexpReOperationEnterBodyBody:descriptor>>
+        #)
+  do INNER regexp_operation
+  exit value
+  #);
+
+regexp_match: regexp_operation
+(* Takes a regexp as enter parameter (in the form of a reference to a
+ * text, containing the regexp.  Matches THIS(text) against the
+ * regexp.  INNER is executed if THIS(text) matches the regexp, and
+ * the virtual notification noMatch is invoked otherwise.  Returns
+ * true if a match is found, false otherwise.  The regexp must be
+ * found starting at the current position of THIS(text).
+ *)
+(# do <<SLOT regexpReMatchBodyBody:descriptor>> #);
+
+regexp_search: regexp_operation
+(* Like regexp_match, except that the match is allowed to be found
+ * anywhere between the current position and the end of THIS(text).
+ *)
+(# do <<SLOT regexpReSearchBodyBody:descriptor>> #);
+
+regexp_replace: regexp_search
+(* Like regexp_search, except that it takes a second enter parameter,
+ * replace_string.  Regexp_replace searches for the regexp, and
+ * replaces the matched substring of THIS(text) with the replacement
+ * string.  The replacement string may contain \0, \1, ..., \9,
+ * representing the substring matched by the i'th parenthesis in the
+ * regexp.  \0 represents the entire substring matched.  INNER is
+ * executed after the replace have taken place.
+ *)
+(# replace_string: ^text;
+enter replace_string[]
+do <<SLOT regexpReReplaceBodyBody:descriptor>>
+#);
+
+regexp_replace_literally: regexp_search
+(* Like regexp_replace, except that the replacement string is taken
+ * literally (i.e \0, \1, etc. are not substituted with any matched
+ * substrings).
+ *)
+(# replace_string: ^text
+enter replace_string[]
+do <<SLOT regexpReReplaceLiterallyBodyBody:descriptor>>
+#);
+
+--- lib: attributes ---
+regexp_numberOfRegisters: (# exit 10 #);
+
+regexp_registers: Cstruct
+  (* Structure for accessing the substrings matched by some regexp. *)
+  (# getRegisterValue:
+       (# regNr, value: @integer;
+          pos:< integerValue;
+          thePos: @pos (* private: for efficiency *)
+       enter regNr
+       do <<SLOT regexpRegistersGetRegisterValueBody: descriptor>>
+       exit value
+       #);
+     start: @getRegisterValue
+       (# pos::< (# do 0 -> value #) #);
+     end: @getRegisterValue
+       (# pos::< (# do 40 -> value #) #);
+     byteSize::< (* private *) (# do regexp_numberOfRegisters*2*4 -> value #)
+  #)
