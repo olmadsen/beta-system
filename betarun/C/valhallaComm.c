@@ -761,6 +761,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
 
   if (invops) {
     fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
+    DEBUG_CODE(fprintf(output,"Entering infinite loop...\n"); while(1));
     exit(99);
   } else {
     invops=TRUE;
