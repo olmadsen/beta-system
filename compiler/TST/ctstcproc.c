@@ -227,6 +227,9 @@ void flush_stdout(void){
 #ifdef __GNUC__
 #define int64 signed long long int
 #endif /* __GNUC__ */
+#ifdef sgi
+#define int64 signed long long int
+#endif
 #ifdef nti
 #define int64 signed _int64
 #endif /* nti */
