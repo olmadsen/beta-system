@@ -17,6 +17,12 @@ then
 	FILES=`${BETALIB}/export/files/system.files`
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/system.cmd
 
+echo "cd %BETALIB%"                                   >  $DST/system.new
+echo "copy /Q bin\\README.txt README.txt"             >> $DST/system.new
+echo ""                                               >> $DST/system.new
+cat $DST/system.cmd                                   >> $DST/system.new
+mv $DST/system.new  $DST/system.cmd
+
 else
 
 	echo ""
