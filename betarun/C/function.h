@@ -199,7 +199,6 @@ extern Object * NewCopyObject(Object *, Object **);
 
 /* GC/stack.c */
 extern void ProcessStackObj(StackObject *, CellProcessFunc func);
-
 extern void ProcessStack(void);
 #ifdef NEWRUN
 extern void ProcessStackFrames(long SP, long StackStart, long stopAtComp, long dynOnly, CellProcessFunc func);
@@ -207,6 +206,9 @@ extern void ProcessStackFrames(long SP, long StackStart, long stopAtComp, long d
 #if (defined(RTVALHALLA) && defined(intel))
 extern void ProcessRefStack(void);
 #endif /* RTVALHALLA && intel */
+#ifdef intel
+extern void PrintStack(long *StackEnd);
+#endif /* intel */
 
 /* GC/ioa.c */
 extern void IOAGc(void);
@@ -233,6 +235,8 @@ void PrintWhichHeap(Object *ref);
 extern void Illegal(void);
 #endif
 extern long inBetaHeap(Object *);
+extern char *getLabel (long addr);
+extern long labelOffset;
 #if defined(MAC)
 extern void InitTheCursor(void);
 extern void RotateTheCursor(void);

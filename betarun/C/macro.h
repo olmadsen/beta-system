@@ -110,8 +110,8 @@ do {                               \
 #define inIOA(x)     (((long)IOA <= (long)(x)) && ((long)(x) < (long)IOATop))
 #endif /* sparc || newrun */
 
-#define inHeap(x)    inIOA(x)
 #define inToSpace(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceTop)) 
+#define inToSpaceArea(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceLimit)) 
 #define inAOA(x)     inArea(AOABaseBlock, (Object *)(x))
 #define inAOAUnused(x) inAreaUnused(AOABaseBlock, (Object *)(x))
 

@@ -1366,64 +1366,77 @@ P("      [ EXTERNAL ACTIVATION PART ]")
 
 #ifdef RTDEBUG
 
-void DescribeObject(theObject)
-     Object *theObject;
+void DescribeObject(Object *theObj)
 {
-  ProtoType * theProto = theObject->Proto;
+  ProtoType * theProto = theObj->Proto;
   if (isSpecialProtoType(theProto)){
     switch (SwitchProto(theProto)){
     case SwitchProto(ComponentPTValue):
       fprintf(output, "Component: ");
-      DescribeObject((Object *)((Component *)theObject)->Body);
+      DescribeObject((Object *)((Component *)theObj)->Body);
+      PrintWhichHeap(theObj);
       return;
     case SwitchProto(StackObjectPTValue):
       fprintf(output, "StackObj");
+      PrintWhichHeap(theObj);
       return;
     case SwitchProto(StructurePTValue):
       fprintf(output, 
 	      "Struc: origin: 0x%x \"%s\", proto: 0x%x \"%s\"", 
-	      (int)(((Structure *)theObject)->iOrigin),
-	      ProtoTypeName((((Structure *)theObject)->iOrigin)->Proto),
-	      (int)(((Structure *)theObject)->iProto),
-	      ProtoTypeName(((Structure *)theObject)->iProto)
+	      (int)(((Structure *)theObj)->iOrigin),
+	      ProtoTypeName((((Structure *)theObj)->iOrigin)->Proto),
+	      (int)(((Structure *)theObj)->iProto),
+	      ProtoTypeName(((Structure *)theObj)->iProto)
 	      );
+      PrintWhichHeap(theObj);
       return;
     case SwitchProto(DopartObjectPTValue):
       fprintf(output, 
 	      "Dopart: origin: 0x%x, proto: 0x%x (%s)", 
-	      (int)(((DopartObject *)theObject)->Origin),
-	      (int)(((DopartObject *)theObject)->Origin)->Proto,
-	      ProtoTypeName((((DopartObject *)theObject)->Origin)->Proto)
+	      (int)(((DopartObject *)theObj)->Origin),
+	      (int)(((DopartObject *)theObj)->Origin)->Proto,
+	      ProtoTypeName((((DopartObject *)theObj)->Origin)->Proto)
 	      );
+      PrintWhichHeap(theObj);
       return;
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):
-      fprintf(output, "ObjectRep"); return;
+      fprintf(output, "ObjectRep"); 
+      PrintWhichHeap(theObj);
+      return;
     case SwitchProto(RefRepPTValue):
-      fprintf(output, "RefRep"); return;
+      fprintf(output, "RefRep"); 
+      PrintWhichHeap(theObj);
+      return;
     case SwitchProto(LongRepPTValue):
-      fprintf(output, "IntegerRep"); return;
+      fprintf(output, "IntegerRep"); 
+      PrintWhichHeap(theObj);
+      return;
     case SwitchProto(ByteRepPTValue):
       fprintf(output, "CharRep: '");
-      if ( ((((ValRep *)theObject)->HighBorder)-(((ValRep *)theObject)->LowBorder)+1) > 10 ){
-	fprintf(output, "%s", (char *)((ValRep *)theObject)->Body);
+      if ( ((((ValRep *)theObj)->HighBorder)-(((ValRep *)theObj)->LowBorder)+1) > 10 ){
+	fprintf(output, "%s", (char *)((ValRep *)theObj)->Body);
 	fprintf(output, "...'");
       } else {
-	fprintf(output, "%s", (char *)((ValRep *)theObject)->Body);
+	fprintf(output, "%s", (char *)((ValRep *)theObj)->Body);
 	fprintf(output, "'");
       }
+      PrintWhichHeap(theObj);
       return;
     case SwitchProto(ShortRepPTValue):
       fprintf(output, "ShortRep");
+      PrintWhichHeap(theObj);
       return;
     case SwitchProto(DoubleRepPTValue):
       fprintf(output, "RealRep");
+      PrintWhichHeap(theObj);
       return;
     default:
       fprintf(output, "Unknown object type!");
       return;
     }
   } else {
+    /* ordinary object */
 #ifdef sparc
     if (DebugStack){
 #ifdef MT
@@ -1438,6 +1451,7 @@ void DescribeObject(theObject)
 #else /* ! sparc */
     fprintf(output, "\"%s\"", ProtoTypeName(theProto));
 #endif
+    PrintWhichHeap(theObj);
   }
 }
 

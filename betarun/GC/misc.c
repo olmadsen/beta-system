@@ -368,6 +368,10 @@ long isInToSpace(long x)
 {
   return (long)inToSpace(x);
 }
+long isInToSpaceArea(long x)
+{
+  return (long)inToSpaceArea(x);
+}
 #endif /* RTDEBUG */
 
 #if defined(MT) || defined(RTDEBUG)
@@ -525,7 +529,7 @@ void PrintWhichHeap(Object *ref)
       fprintf(output, " (IOA)");
     if (inAOA(ref)) 
       fprintf(output, " (AOA)");
-    if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
+    if (inToSpaceArea(ref))
       fprintf(output, " (ToSpace area)");
   } else {
     if (ref){
@@ -576,16 +580,28 @@ void PrintHeap(long * startaddr, long numlongs)
 #ifdef intel
 static void RegError(long pc1, long pc2, char *reg, Object * value)
 {
-  fprintf(output, "\nIllegal value for GC register at PC=0x%x (called from 0x%x): %s=0x%x ", 
-	  (int)pc1, (int)pc2, reg, (int)value);
-  if (inIOA(value)){
-    fprintf(output, "(is in IOA, but is not a legal object)\n");
-  }
-  if (inAOA(value)){
-    fprintf(output, "(is in AOA, but is not a legal object)\n");
-  }
-  if (inToSpace(value)){
-    fprintf(output, "(is in ToSpace)\n");
+  fprintf(output, 
+	  "\nIllegal value for GC register %s at PC=0x%x (called from 0x%x): %s=0x%x\n", 
+	  reg, 
+	  (int)pc1, 
+	  (int)pc2, 
+	  reg, 
+	  (int)value);
+  fprintf(output, "I.e., PC is <%s+0x%x> ", getLabel(pc1), (int)labelOffset);
+  fprintf(output, ", called from <%s+0x%x>\n", getLabel(pc2), (int)labelOffset);
+  
+  if (inBetaHeap(value)){
+    if (inIOA(value)){
+      fprintf(output, "%s points to IOA, but not to a legal object.\n", reg);
+    }
+    if (inAOA(value)){
+      fprintf(output, "%s points to AOA, but not to a legal object.\n", reg);
+    }
+    if (inToSpaceArea(value)){
+      fprintf(output, "%s points in to ToSpace!\n", reg);
+    }
+  } else {
+    fprintf(output, "%s points out of BETA heaps!\n", reg);
   }
   fprintf(output, "\n");
   Illegal();
@@ -626,5 +642,151 @@ void CheckRegisters(void)
   if (!CheckCell(edx)) RegError(pc1, pc2, "edx", edx);
   if (!CheckCell(edi)) RegError(pc1, pc2, "edi", edi);
 #endif /* (defined(linux) || defined(nti)) */
-#endif /* RTDEBUG */
 }
+
+/*************************** Label Debug ****************************/
+
+#undef DEBUG_LABELS 
+
+typedef struct _label {
+  long address;
+  char *id;
+} label;
+
+GLOBAL(long labelOffset) = 0;
+GLOBAL(label **labels) = 0;
+GLOBAL(long numLabels) = 0;
+GLOBAL(long maxLabels) = 1000;
+#ifdef nti
+GLOBAL(long process_offset) = 0;
+#endif
+
+static void initLabels()
+{
+
+#ifdef ppcmac
+  return;
+#endif
+  char exefilename[500];
+  char *theLabel;
+  labeltable *table;
+  long lastLab=0;
+  long labelAddress;
+
+  fprintf(output, "[initLabels ... ");
+  fflush(output);
+  sprintf(exefilename,"%s", ArgVector[0]);
+#ifdef nti
+  if ((strlen(exefilename)<=4) || 
+      (strncasecmp(&exefilename[0]+strlen(exefilename), ".exe", 4)!=0)){
+    strcat(exefilename, ".exe");
+  }
+#endif
+  table = initReadNameTable(exefilename, 1);
+  if (!table){
+    fprintf(output, "FAILED!]");
+    fflush(output);
+    return;
+  }
+#ifdef nti
+  {
+    extern void main();
+    process_offset = getProcessOffset((long)&main);
+  }
+#endif
+  labels=(label**)MALLOC(maxLabels * sizeof(label*));
+  if (!labels) {
+    fprintf(output, "Failed to allocate memory for labels\n");
+    labels = 0; 
+  }
+  INFO_ALLOC(maxLabels * sizeof(label *));
+  /* Read labels */
+  for (;;lastLab++){
+    label *lab;
+    lab = (label *) MALLOC(sizeof(label));
+    if (!lab){
+      fprintf(output, "Allocation of label failed\n");
+      /* free previously allocated labels */
+      FREE(labels);
+      labels = 0;
+      break;
+    }
+    INFO_ALLOC(sizeof(label));
+    labelAddress = nextAddress(table);
+    if (labelAddress==-1){
+      /* Termination condition reached */
+      break;
+    }
+    theLabel = nextLabel(table);
+#if 0
+#ifdef DEBUG_LABELS
+    fprintf(output, "0x%08x %s\n",  (unsigned)labelAddress, theLabel);
+    fflush(output);
+#endif
+#endif
+    lab->id = (char *)MALLOC(strlen(theLabel)+1);
+    if (!lab) {
+      fprintf(output, "Allocation of label id failed\n");
+      /* free previously allocated labels */
+      FREE(labels);
+      labels = 0;
+      break;
+    }
+    INFO_ALLOC(strlen(theLabel)+1);
+    lab->address = labelAddress;
+    strcpy(lab->id, theLabel);
+    if (lastLab>=maxLabels){
+      maxLabels *= 2;
+      fprintf(output, "*"); fflush(output);
+      labels=REALLOC(labels, maxLabels * sizeof(label*));
+    }
+    labels[lastLab] = lab;
+  }
+  numLabels=lastLab;
+  fprintf(output, " done]");
+  fflush(output);
+#ifdef DEBUG_LABELS
+  fprintf(output, "Labels:\n");
+  { 
+    long n;
+    for (n=0; n<lastLab; n++){
+      fprintf(output, "0x%x\t%s\n", (unsigned)labels[n]->address, labels[n]->id);
+    }
+  }
+  fflush(output);
+#endif
+}
+
+char *getLabel (long addr)
+{
+  long n;
+
+#ifdef ppcmac
+  labelOffset=0;
+  return "<unknown>";
+#endif
+
+if (!labels) initLabels();
+  if (!addr){
+    labelOffset=0;
+    return "<unknown>";
+  }
+#ifdef nti
+  addr -= process_offset;
+#endif
+  if (labels){
+    for (n=numLabels-1; n>=0; n--){
+      if (labels[n]->address <= addr){
+	labelOffset = addr-(labels[n]->address);
+	return labels[n]->id;
+      }
+    }
+  }
+  labelOffset=0;
+  return "<unknown>";
+}
+
+/************************* End Label Debug *************************/
+
+
+#endif /* RTDEBUG */
