@@ -1,16 +1,7 @@
 #ifndef nti
 #include "com_unix.h"
-HRESULT BETA_Invoke(long pdisp, 
-		    long wFlags,
-		    long* pvRet,
-		    long* pexcepinfo,
-		    unsigned int* pnArgErr, 
-		    unsigned short *pszName,
-		    char *pszFmt, 
-		    ...)
-{
-  return Unimplemented("BETA_Invoke");
-}
+
+/* dummy BETA_Invoke is in com_unix.c */
 
 #else /* nti */
 

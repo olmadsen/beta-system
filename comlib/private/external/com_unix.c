@@ -51,3 +51,15 @@ HRESULT RegisterActiveObject(void *pUnk, CLSID *rclsid, long flags, unsigned reg
   return Unimplemented("RegisterActiveObject");
 }
 
+
+HRESULT BETA_Invoke(long pdisp, 
+		    long wFlags,
+		    long* pvRet,
+		    long* pexcepinfo,
+		    unsigned int* pnArgErr, 
+		    unsigned short *pszName,
+		    char *pszFmt, 
+		    ...)
+{
+  return Unimplemented("BETA_Invoke");
+}

@@ -1,5 +1,33 @@
 ORIGIN 'X11fonts';
+INCLUDE '~beta/basiclib/private/betaenvbody';
 LIB_ITEM 'bifrost';
+
+-- BifrostAttributes: attributes -- 
+
+SetXFontName:
+  (# name: ^text;
+     nam,sty,siz: @integer;
+  enter (name[], nam, sty,siz)
+  do (if debug_fonts then
+         'SetXFontName: '->puttext;
+         (nam,sty,siz) -> Font2Text -> puttext;
+         ': '->puttext;
+         name[] -> putline;
+     if);
+     name->THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz].name;
+  #);
+SetXF:
+  (# xf: ^THIS(guienv).private.xfont;
+     nam,sty,siz: @integer;
+  enter (xf[],nam,sty,siz)
+  do xf[] -> THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz][]
+  #);
+GetXF:
+  (# nam,sty,siz: @integer;
+  enter (nam,sty,siz)
+  exit THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz][]
+  #);
+
 -- Fontname2textDoPart: dopart --
 do (if i
     //Courier then
@@ -41,18 +69,26 @@ do
       (* Substitute italic with oblique *)
       'medium-o' -> s
    #);
+   (if debug_fonts then
+       'Listing '->puttext;
+       fname[] -> putline;
+   if);
    (xdisplay, fname,maxnames,@@count) -> XListFonts -> names;
    
 -- buildFontNamesListFonts: doPart --
 do
    fname.clear;
    tmpname[]->fname.putFormat
-     (#
-     do
-	nam->Fontname2Text->s;
-	sty->Fontstyle2Text->s
-     #);
+   (#
+   do
+      nam->Fontname2Text->s;
+      sty->Fontstyle2Text->s
+   #);
 
+   (if debug_fonts then
+       'Listing '->puttext;
+       fname[] -> putline;
+   if);
    (xdisplay, fname,maxnames,@@count) -> XListFonts -> names;
 
 -- buildFontNames: descriptor--
@@ -107,114 +143,105 @@ do
             0 -> names;
         if);
      #);
-   GetXF:
-     (# siz: @integer;
-     enter siz
-     exit THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz][]
+   ScanNames:
+     (# min,max: @integer;
+        xf: ^THIS(guienv).private.xfont; 
+     enter (min,max)
+     do (for i:count repeat
+             %getLongAt (names+4*(i-1)) -> xname;
+             (if debug_fonts then
+                 'scan: '->puttext; xname.get -> putline;
+             if);
+             xname.get->realname[]->getfontsize->size;
+             (* NB: realname is changed by getfontsize to include a "%d" *)
+             (if size=0 then 
+                 (* looks like a scalable font *)
+                 (if debug_fonts then
+                     '(scalable)' -> putline;
+                 if);
+                 fname.clear;
+                 realname[]->fname.putformat(# do 1->d; #);
+                 &THIS(guienv).private.xfont[]->xf[];
+                 fname -> xf.name;
+                 xf[]->XLoadFontFromName;
+                 (if xf.loaded then
+                     (if debug_fonts then
+                         fname[] -> puttext; ' loaded.' -> putline;
+                     if);
+                     (xf[],nam,sty,1) -> SetXF;
+                  else
+                     (* try size 2 instead - some servers only support
+                      * 2, 4, 6, 7, 8, 9 for scalable, e.g. sgi's 
+                      *)
+                     (if debug_fonts then
+                         fname[] -> puttext; ' can\'t be loaded.' -> putline;
+                     if);
+                     fname.clear;
+                     realname[]->fname.putformat(# do 2->d; #);
+                     fname -> xf.name;
+                     xf[] ->XLoadFontFromName;
+                     (if xf.loaded then
+                         (if debug_fonts then
+                             fname[] -> puttext; ' loaded.' -> putline;
+                         if);
+                         (* Use 2 for size 1 too: *)
+                         (xf[],nam,sty,1) -> SetXF;
+                         (* 2 will be set below *)
+                      else
+                         (if debug_fonts then
+                             fname[] -> puttext; ' can\'t be loaded.' -> putline;
+                         if);
+                         (* Give up scaling *)
+                     if);
+                 if);
+                 (if xf.loaded then
+                     (* Use scalable for all sizes *)
+                     THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range ->tmprange;
+                     (for fsize: (tmprange-1) repeat
+                          fname.clear;
+                          realname[]->fname.putformat(# do (fsize+1)->d; #);
+                          (fname[],nam,sty,fsize+1) -> SetXFontName;
+                     for);
+                     THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range->totalfonts;
+                  else
+                     (if not tried_nonscalable then
+                         ListNonScalableFonts;
+                         restart ScanNames;
+                     if);
+                 if);
+              else
+                 (if (size<=max)and(size>=min) then
+                     totalfonts+1->totalfonts;
+                     (realname[],nam,sty,size) -> SetXFontName;
+                 if);
+             if)
+        for);
      #);
+
 do
    (* We first try to find scalable fonts if available else we find non scalables *)
-   (* FIXME: the below code must be polished *)
-   
    &text[] ->fname[];
    ListScalableFonts;
-   
    (if count=0 then
        ListNonScalableFonts;
    if);
-
    (if count=0 then
        NoFontsAvail;
+    else
+       (1,60) -> ScanNames;
    if);
-   ScanNames:
-     (for i:count repeat
-          %getLongAt (names+4*(i-1)) -> xname;
-          xname.get->realname[]->getfontsize->size;
-          (* NB: realname is changed by getfontsize to include a "%d" *)
-          (if size=0 then 
-              (* looks like a scalable font *)
-              fname.clear;
-              realname[]->fname.putformat
-              (#
-              do 1->d;
-              #);
-              fname->(1->GetXF).name;
-              1->GetXF->XLoadFontFromName;
-              (if (1->GetXF).loaded then
-                  true->THIS(guienv).private.fonts.scalableExists;
-                  &text[]->THIS(guienv).private.fonts.scalableName[];
-                  realname->THIS(guienv).private.fonts.scalableName;
-                  THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range ->tmprange;
-                  (for fsize: (tmprange-1) repeat
-                       fname.clear;
-                       realname[]->fname.putformat
-                       (#
-                       do (fsize+1)->d;
-                       #);
-                       fname->(fsize+1->GetXF).name;
-                  for);
-                  THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range->totalfonts;
-               else
-                  (if not tried_nonscalable then
-                      ListNonScalableFonts;
-                      restart ScanNames;
-                  if);
-              if);
-           else
-              (if (size<=60)and(size>0) then
-                  totalfonts+1->totalfonts;
-                  realname->(size->GetXF).name;
-              if);
-          if)
-     for);
-  FreeNames;
-#)
-
--- SearchAnyFindScalableFont: descriptor --
-(#
-   fname, scalableName: ^text;
-   maxnames: (# exit 100 #);
-   names, count: @integer;
-   xname: @cstring;
-   nam: @FontName;
-   sty: @Style;
-   warntxt: ^text;
-enter warntxt[]
-do
-   (if not THIS(guienv).private.fonts.scalableExists then
-       '-*-*-*-normal-*-0-0-*-*-*-*-iso8859-1' -> fname[];
-       (xdisplay, fname,maxnames,@@count) -> XListFonts -> names;
-       ScanNames:
-         (for i:count repeat
-              %getLongAt (names+4*(i-1)) -> xname;
-              (if (xname.get->scalableName[]->getfontsize) = 0 then 
-                  (* looks like a scalable font *)
-                  (* NB: realname is changed by getfontsize to include a "%d" *)
-                  true->THIS(guienv).private.fonts.scalableExists;
-                  scalableName[]->THIS(guienv).private.fonts.scalableName[];
-                  leave ScanNames;
-              if);
-         for);
-       (if count=0 then
-           'WARNING:'->warntxt.putline;
-           'There is no scalable font available on the system.'->warntxt.putline;
-           'Zoom will not function properly!!!'->warntxt.putline;
-           warntxt.putline;
-       if);
-       names->XFreeFontNames;
-   if);
+   FreeNames;
 #)
 
 -- getfontsize: doPart --
-do -1 ->mysize;
+do (* Extract font size from X11 font spec *)
+   -1 ->mysize;
    (if t[]<>NONE then
        t.reset;
        myscan:
          t.scan
-         (# getinteger: @
-              t.getint(# syntaxerror::(# do -1->value;true->continue#)#);
-         do
-            (if ch='-' then
+         (# getinteger: @t.getint(# syntaxerror::(# do -1->value;true->continue#)#);
+         do (if ch='-' then
                 (if (mypos+1->mypos)=7 then
                     (t.position,t.position+4)->t.sub->temp[];
                     (if ('-0-0-' -> temp.equal) then
@@ -225,21 +252,7 @@ do -1 ->mysize;
                         ;
                         (if (getinteger->mysize) = 0 then
                             -1 -> mysize;
-                           (* workaround for a bug in X-Win32 *)
-                        if);
-                    if);
-                    (if false then
-                        getinteger->mysize;
-                        (if mysize=0 then
-                            t.position->sizepos;
-                            t.get;
-                            getinteger->mysize;
-                            (if mysize=0 then
-                                sizepos->t.position;
-                                (t.position,t.position+1)->t.delete;
-                                ('%d-',t.position+1) -> t.insert;
-                             else -1 ->mysize;
-                            if);
+                            (* workaround for a bug in X-Win32 *)
                         if);
                     if);
                     leave myscan
@@ -250,84 +263,80 @@ do -1 ->mysize;
 
 -- initBifrostFonts: dopart --
 do 
-   (# SetXF:
-        (# xf: ^THIS(guienv).private.xfont;
-           nam,sty,siz: @integer;
-        enter (xf[],nam,sty,siz)
-        do xf[] -> THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz][]
-        #);
-      GetXF:
-        (# nam,sty,siz: @integer;
-        enter (nam,sty,siz)
-        exit THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz][]
-        #);
-   do
-      (if debugGraphic then 'InitFonts ... ' -> putwarntext if);
-      (for nam: THIS(guienv).private.fonts.xfonts.range repeat
-           &THIS(guienv).private.fonts.stylearray[]
-             -> THIS(guienv).private.fonts.xfonts[nam][];
-           
-           (for sty: stylepattern.style.range repeat
-                &THIS(guienv).private.fonts.sizearray[]
-                  -> THIS(guienv).private.fonts.xfonts[nam].style[sty][];
+   (# MakeInstances:
+        (#
+        do (for nam: THIS(guienv).private.fonts.xfonts.range repeat
+                &THIS(guienv).private.fonts.stylearray[]
+                  -> THIS(guienv).private.fonts.xfonts[nam][];
                 
-                (for siz: sizepattern.size.range repeat
-                     (&THIS(guienv).private.xfont[],nam,sty,siz) -> SetXF;
-                     false -> ((nam,sty,siz) -> GetXF).loaded;
+                (for sty: stylepattern.style.range repeat
+                     &THIS(guienv).private.fonts.sizearray[]
+                       -> THIS(guienv).private.fonts.xfonts[nam].style[sty][];
+                     
+                     (for siz: sizepattern.size.range repeat
+                          (&THIS(guienv).private.xfont[],nam,sty,siz) -> SetXF;
+                          false -> ((nam,sty,siz)->GetXF).loaded;
+                     for);
                 for);
            for);
-      for);
+        #);
+      FindDefaultFont:
+        (#
+        do (* search for smallest font found less than size 10 *)
+           10->smallest;
+           (for nam: THIS(guienv).private.fonts.xfonts.range repeat
+                (for sty: THIS(guienv).private.fonts.xfonts[nam].style.range repeat
+                     THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range->sizerange;
+                     (if sizerange>10 then 10->sizerange; if);
+                     (for siz: sizerange repeat
+                          (if not ((nam,sty,siz)->GetXF).name.empty then
+                              (if siz<smallest then
+                                  siz->smallest;
+                                  (nam,sty,siz) -> GetXF ->df[];
+                              if);
+                          if);
+                     for);
+                for);
+           for);
+           (if df[]=NONE then
+               '8x13' -> THIS(guienv).private.fonts.defaultfont.name;
+            else
+               df.name -> THIS(guienv).private.fonts.defaultfont.name;
+           if);
+           (if debug_fonts then
+               'default: ' ->puttext; 
+               THIS(guienv).private.fonts.defaultfont.name[] -> putline;
+           if);
+           (if not THIS(guienv).private.fonts.defaultfont.loaded then
+               (if debug_fonts then
+                   'not loaded - using 8x13' -> putline;
+               if);
+               '8x13' -> THIS(guienv).private.fonts.defaultfont.name;
+               THIS(guienv).private.fonts.defaultfont[] -> XLoadFontFromName;
+            else
+               (if debug_fonts then
+                   'loaded' -> putline;
+               if);
+           if);
+           (if not THIS(guienv).private.fonts.defaultfont.loaded then
+               'FATAL ERROR: Failed to open defaultfont '->warntxt.puttext;
+               THIS(guienv).private.fonts.defaultfont.name[]->warntxt.putline;
+               (NONE, warntxt[], 'FATAL ERROR') ->alertUser;
+               -1 -> result;
+           if);
+        #)
+   do
+      (if debug_fonts then 'InitFonts ... ' -> puttext if);
+      MakeInstances;
       
       InitXFontNames;
-      (if THIS(guienv).private.fonts.scalableExists then
-          THIS(guienv).private.fonts.defaultfont.name.clear;
-          THIS(guienv).private.fonts.scalableName[]
-            -> THIS(guienv).private.fonts.defaultfont.name.putformat
-          (#
-          do 1->d;
-          #);
-       else
-          10->smallest;
-          (for nam: THIS(guienv).private.fonts.xfonts.range repeat
-               (for sty: THIS(guienv).private.fonts.xfonts[nam].style.range repeat
-                    THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range->sizerange;
-                    (if sizerange>10 then smallest->sizerange; if);
-                    loop:
-                      (for siz: sizerange repeat
-                           (if not ((nam,sty,siz)->GetXF).name.empty then
-                               (if smallest>siz then
-                                   siz->smallest;
-                                   (nam,sty,siz) -> GetXF ->df[];
-                               if);
-                               leave loop;
-                           if);
-                      for);
-               for);
-          for);
-          (if df[]=NONE then
-              '8x13' -> THIS(guienv).private.fonts.defaultfont.name;
-           else
-              df.name -> THIS(guienv).private.fonts.defaultfont.name;
-          if);
-      if);
-      THIS(guienv).private.fonts.defaultfont[] -> XLoadFontFromName;
-      (if not THIS(guienv).private.fonts.defaultfont.loaded then
-          '8x13' -> THIS(guienv).private.fonts.defaultfont.name;
-          THIS(guienv).private.fonts.defaultfont[] -> XLoadFontFromName;
-      if);
-      (if not THIS(guienv).private.fonts.defaultfont.loaded then
-          'FATAL ERROR: Failed to open defaultfont '->warntxt.puttext;
-          THIS(guienv).private.fonts.defaultfont.name[]->warntxt.putline;
-          (NONE, warntxt[], 'FATAL ERROR') ->alertUser;
-          -1 -> result;
-      if);
+      FindDefaultFont;
       true->THIS(guienv).private.fonts.initialized;
-      (if debugGraphic then 'done' -> putwarnline if);
+      (if debug_fonts then 'done' -> putline if);
    #)
 
 -- XLoadFontFromName: dopart --
-do (if ((xdisplay, xf.name) -> XLoadQueryFont -> xf.fi)
-    //0 then
+do (if ((xdisplay, xf.name) -> XLoadQueryFont -> xf.fi) = 0 then
        (* font does not exist *)
        false -> xf.loaded;
        false -> xf.fixedWidth;
@@ -340,13 +349,11 @@ do (if ((xdisplay, xf.name) -> XLoadQueryFont -> xf.fi)
        xf.fi.id
          -> xf.XFontId;
        
-       (xf.fi.maxBounds.width =
-       xf.fi.minBounds.width)
+       (xf.fi.maxBounds.width = xf.fi.minBounds.width)
          -> xf.fixedWidth;
        xf.fi.maxBounds.width
          -> xf.width;
-       xf.fi.maxBounds.ascent 
-       + xf.fi.maxBounds.descent
+       xf.fi.maxBounds.ascent + xf.fi.maxBounds.descent
          -> xf.height;
        xf.fi.ascent
          -> xf.baseLine;
@@ -359,115 +366,155 @@ do (if ((xdisplay, xf.name) -> XLoadQueryFont -> xf.fi)
        xf.fi.maxbounds.descent -> xf.maxdescent;
        xf.fi.maxbounds.ascent -> xf.maxascent;
    if);
+   
 -- XCheckFontLoaded: descriptor --
-(# GetXF:
-     (# siz: @integer;
-     enter siz
-     exit THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz][]
+(# ExtendSizeArray:
+     (# xf: ^THIS(guienv).private.xfont; 
+        fsize: @integer;
+        realname, fname: ^text;
+     do true -> subst;
+        siz-range -> THIS(guienv).private.fonts.xfonts[nam].style[sty].size.extend;
+        (for i:(siz-range) repeat
+             (&THIS(guienv).private.xfont[], nam,sty,range+i) -> SetXF;
+             false -> ((nam,sty,range+i)->GetXF).loaded;
+        for);
+        (if debug_fonts then
+            ' XCheckFontLoaded: Extended to: ' -> puttext;
+            (nam,sty,siz) -> Font2Text -> putline;
+        if);
+        (* Check if there is a scalable *)
+        (nam,sty,1)->GetXF->xf[];
+        (if debug_fonts then
+            'Looking for scalable at index 1: ' -> puttext;
+            (if xf.name.empty then
+                '(empty)' -> putline;
+             else
+                xf.name[] -> putline;
+            if);
+        if);
+        (if xf.loaded then
+            (if debug_fonts then
+                'Extending with scalable names' -> putline;
+            if);
+            xf.name.copy -> realname[];
+            realname[] -> putline;
+            insertPercentD:
+              (# done: @boolean;
+              do '--' -> realname.findTextAll
+                 (# 
+                 do (if not done then
+                        true -> done;
+                        (inx+2,inx+2) -> realname.delete;
+                        ('%d', inx+2) -> realname.insert;
+                    if);
+                 #);
+              #);
+            realname[] -> putline;
+            &text[] -> fname[];
+            (for i:siz-range repeat
+                 i+range -> fsize;
+                 fname.clear;
+                 realname[]->fname.putformat(# do fsize->d; #);
+                 (fname[],nam,sty,fsize) -> SetXFontName;
+            for);
+         else
+            (* FIXME: Should list fonts again and check if there 
+             * are any in between range and siz.
+             * Or the initial scan should save all sizes found,
+             * ignoring max. The SetXFontName could handle the extend 
+             * of arrays.
+             *)
+        if);
+        true -> legalsiz (* siz can now be used as index *);
      #);
-   SetXF:
-     (# xf: ^THIS(guienv).private.xfont;
-        siz: @integer;
-     enter (xf[], siz)
-     do xf[] -> THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz][]
+   CheckRanges:
+     (#
+     do true -> legalsiz -> legalnam -> legalsty;
+        (if ((nam<1) or (nam>THIS(guienv).private.fonts.xfonts.range)) then
+            (* no such fontname *)
+            true -> subst;
+            Courier -> nam;
+            false -> legalnam;
+        if);
+        (if ((sty<1) or (sty>THIS(guienv).private.fonts.xfonts[nam].style.range)) then
+            true -> subst;
+            Plain -> sty;
+            false -> legalsty;
+        if);
+        (if (siz<1) then
+            true -> subst;
+            1->siz;
+            false -> legalsiz;
+        if);
+        THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range -> range;
+        (if siz>range then
+            (* Due to zoom, this may often happen. *)
+            ExtendSizeArray;
+            
+        if);
      #);
 do
-   (if debugGraphic then
-       'XCheckFontLoaded: Name style size ' -> putwarntext;
-       (nam,6) -> putwarnintwidth;
-       (sty,6) -> putwarnintwidth;
-       (siz,6) -> putwarnintwidthline;
+   (if debug_fonts then
+       'XCheckFontLoaded: ' -> puttext;
+       (nam,sty,siz) -> Font2Text -> puttext;
    if);
    siz -> origsiz;
    nam -> orignam;
    sty -> origsty;
    false -> subst;
 
-   (* range checks *)
-   true -> legalsiz -> legalnam -> legalsty;
-   (if ((nam<1) or (nam>THIS(guienv).private.fonts.xfonts.range)) then
-       (* no such fontname *)
-       true -> subst;
-       Courier -> nam;
-       false -> legalnam;
-   if);
-   (if ((sty<1) or (sty>THIS(guienv).private.fonts.xfonts[nam].style.range)) then
-       true -> subst;
-       Plain -> sty;
-       false -> legalsty;
-   if);
-   (if (siz<1) then
-       true -> subst;
-       1->siz;
-       false -> legalsiz;
-   if);
-   THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range -> range;
-   (if siz>range then
-       (* Due to zoom, this may often happen. Extend array to allow
-        * caching of substitution font.
-        *)
-       true -> subst;
-       siz-range -> THIS(guienv).private.fonts.xfonts[nam].style[sty].size.extend;
-       (for i:(siz-range) repeat
-            (&THIS(guienv).private.xfont[], range+i) -> SetXF;
-            false -> ((range+i)->GetXF).loaded;
-       for);
-       (if debugGraphic then
-           'XCheckFontLoaded: Extended to Name style size ' -> putwarntext;
-           (nam,6) -> putwarnintwidth;
-           (sty,6) -> putwarnintwidth;
-           (THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range,6)
-             -> putwarnintwidthline;
-       if);
-       true -> legalsiz (* Can now be used as index *);
-   if);
+   CheckRanges;
    (* check that it is loaded, and if not, do it *)
-   THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz][]->xf[];
-   (if (not xf.loaded) and xf.name.empty and THIS(guienv).private.fonts.scalableExists then
-       true -> subst;
-       THIS(guienv).private.fonts.scalableName[] -> xf.name.putformat
-       (#
-       do siz->d;
-       #);
+   (nam,sty,siz) -> GetXF -> xf[];
+   (if not xf.name.empty then
        xf[] -> XLoadFontFromName;
-    else
+   if);
+   (if debug_fonts then
+       ', found: ' ->puttext;
+       (if xf.name.empty then
+           '(empty)' -> putline;
+        else
+           xf.name[] -> puttext;
+           (if xf.loaded then
+               ' (loaded)' -> putline;
+            else
+               ' (not loaded)' -> putline;
+           if)
+       if)
+   if);
+   (if (not xf.loaded) or xf.name.empty then
+       (* Search though smaller sizes for a substitution font *)
        siz->tmpsiz;
-       findfont:
+       findsmallerfont:
          (#
-         do tmpsiz -> GetXF -> xf[];
+         do 'findsmallerfont: '->puttext;
+            (nam,sty,tmpsiz) -> font2text -> putline;
+            (nam,sty,tmpsiz) -> GetXF -> xf[];
             (if not xf.loaded then
                 (if xf.name.empty then
+                    (if debug_fonts then 'subst1' -> putline if);
                     true -> subst;
                     (if tmpsiz>1 then
                         tmpsiz-1->tmpsiz;
-                        restart findfont;
+                        restart findsmallerfont;
                     if);
-                    tmpsiz -> GetXF -> xf[];
+                    (nam,sty,tmpsiz) -> GetXF -> xf[];
                 if);
                 xf[] -> XLoadFontFromName;
                 tmpsiz->siz;
-            if)
+            if);
+            'findsmallerfont: result: '->puttext;
+            (nam,sty,tmpsiz) -> font2text -> puttext;
+            ', '->puttext;
+            xf.name[] -> putline;
+
          #);
    if);
    (if subst then
        'Sorry, the X server has no font corresponding to '->putwarntext;
-       (if orignam
-        // Helvetica then 'Helvetica-' -> putwarntext;
-        // Times then 'Times-' -> putwarntext;
-        // Courier then 'Courier-' -> putwarntext;
-        else
-           '<' -> putwarntext; orignam->putwarnint; '>' -> putwarntext;
-       if);
-       (if origsty
-        // Plain then 'Plain-' -> putwarntext;
-        // Bold then 'Bold-' -> putwarntext;
-        // Italic then 'Italic-' -> putwarntext;
-        else
-           '<' -> putwarntext; origsty->putwarnint; '>' -> putwarntext;
-       if);
-       origsiz -> putwarnintline;
+       (orignam, origsty, origsiz) -> Font2Text -> putwarnline;
    if);
-   (* here kan vi være sikker på at  "xf[] -> XLoadFontFromName;" er kaldt *)
+   (* here its certain that "xf[] -> XLoadFontFromName;" has been called *)
    (if not xf.loaded then
        'Sorry, the X server has no font matching \''->putwarntext;
        xf.name[] -> putwarntext;
@@ -482,24 +529,19 @@ do
        '\''->putwarnline;
        (if legalnam and legalsty and legalsiz then
            (* cache it to avoid work on next call of XCheckFontLoaded *)
-           (if debugGraphic then
-               'XCheckFontLoaded: Caching ' -> putwarntext;
-               (nam, 6) -> putwarnintwidth;
-               (sty, 6) -> putwarnintwidth;
-               (siz, 6) -> putwarnintwidth;
-               xf.name[] -> putwarnline;
+           (if debug_fonts then
+               'XCheckFontLoaded: Caching ' -> puttext;
+               (nam,sty,siz)->Font2Text -> puttext;
+               xf.name[] -> putline;
            if);
-           true ->
-           THIS(guienv).private.fonts.xfonts[orignam]
-           .style[origsty].size[origsiz].loaded;
-           xf[] -> THIS(guienv).private.fonts.xfonts[orignam]
-           .style[origsty].size[origsiz][];
+           true -> xf.loaded;
+           (xf[], orignam, origsty, origsiz) -> SetXF;
        if)
    if);
 
-   (if debugGraphic then
-       'Font to be used: ' -> putwarntext;
-       xf.name[] -> putwarntext;
+   (if debug_fonts then
+       'Font to be used: ' -> puttext;
+       xf.name[] -> puttext;
        (xf.xfontid, 10) -> putwarnintwidthline
    if);
 #)
@@ -507,8 +549,10 @@ do
 -- InitX11r3: descriptor --
 (#
    warntxt: @text;
-do (*true->displaywarnings;*)
-   warntxt[]->SearchAnyScalableFont;
+do (if debug_fonts then
+       true->displaywarnings;
+       &defaultscreen[] -> screen[] (* override possible logwindow capture *)
+   if);
    (Times,Plain,warntxt[],'Times,Plain')->buildFontNames;
    (Times,Bold,warntxt[],'Times,Bold')->buildFontNames;
    (Times,Italic,warntxt[],'Times,Italic')->buildFontNames;
