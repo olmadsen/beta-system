@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-public class PcreClrHelper
+public class PcreClrWrapper
 {
 
   [ DllImport("PcreDLL.dll", CallingConvention=CallingConvention.Cdecl) ]
