@@ -23,7 +23,6 @@
 #  endif
 #  include <limits.h>
 #else
-#  define SOCKLEN_T socklen_t
 #  define SUPPORT_TIMESTAMPING
 #  include <fcntl.h>
 #  include <unistd.h>
@@ -34,8 +33,10 @@
 #      include <netinet/in.h>
 #      undef __STRICT_ANSI__
 #    endif /* __STRICT_ANSI__  */
+#    define SOCKLEN_T socklen_t
 #  else
 #    include <netinet/in.h>
+#    define SOCKLEN_T int
 #  endif /* linux */
 #  include <sys/socket.h>         /* to see SOL_SOCKET, SO_TYPE */
 #  include <sys/param.h>		/* to see NOFILE */
