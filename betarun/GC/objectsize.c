@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: objectsize.c,v $, rel: %R%, date: $Date: 1991-01-30 10:52:11 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: objectsize.c,v $, rel: %R%, date: $Date: 1992-06-02 15:15:42 $, SID: $Revision: 1.2 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -13,6 +13,9 @@ long ObjectSize(theObj)
 
   if( (long) theProto < 0 ){
     switch((long) theProto){
+    case ByteRepPTValue:
+      return ValRepStructSize + toValRep(theObj)->HighBorder/4;
+      printf("OOOPS: objectsize of ByteRep);
     case ValRepPTValue:
       return ValRepStructSize + toValRep(theObj)->HighBorder;
     case RefRepPTValue:

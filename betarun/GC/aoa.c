@@ -265,6 +265,7 @@ static FollowObject( theObj)
 
   if( (long) theProto < 0 ){  
     switch( (long) theProto ){
+    case ByteRepPTValue: 
     case ValRepPTValue: return;
       /* No references in a Value Repetition, so do nothing*/
 
@@ -634,6 +635,7 @@ AOACheckObject( theObj)
 
   if( (long) theProto < 0 ){  
     switch( (long) theProto ){
+    case ByteRepPTValue: 
     case ValRepPTValue: return; /* No references in the type of object, so do nothing*/
 
     case RefRepPTValue:
@@ -743,6 +745,7 @@ AOACheckObjectSpecial( theObj)
 
   if( (long) theProto < 0 ){  
     switch( (long) theProto ){
+    case ByteRepPTValue: 
     case ValRepPTValue: return;
     case RefRepPTValue: return;
     case ComponentPTValue:
