@@ -667,6 +667,7 @@ sub print_trailer
     &print_valid_html_button($up);
 
     print<<EOT;
+<!-- Footer -->
 <P></P>
 <!--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 <HR>
@@ -688,6 +689,7 @@ EOT
 </TD>
 </TABLE>
 <P></P>
+<!-- End Footer -->
 </BODY>
 </HTML>
 EOT
@@ -2760,12 +2762,7 @@ sub filter_for_pdf
     #print STDERR "read_file($distfile)\n";
     $contents = &read_file($distfile);
 
-    ### This eats too much because it matches from start of first
-    ### script to end of last.
-    # $contents =~ s%\<SCRIPT.+\<\/SCRIPT\>%%gsi;
-    #
-    # However it suffices to filter out <LAYER> ... </LAYER>
-    # And there is only one on each page.
+    # Filter out the <LAYER> ... </LAYER>
     # NOTE: Could probably skip this too, when SCRIPT contents is properly
     # SGML commented out. However, we don't need it in the PDF anyway...
     $contents =~ s%\<LAYER.+\<\/LAYER\>%%gsi;
@@ -2774,31 +2771,12 @@ sub filter_for_pdf
     # Hmm, no - removes style sheet too.
     # $contents =~ s%\<LINK REL=[^>]+>%%gi;
 
-    # And htmldoc has problems with &COPY; / &#169;
-    # No - not htmldoc 1.8.8
-    #$contents =~ s%\&COPY;%(C)%gi;
-    #$contents =~ s%\&\#169;%(C)%gi;
-    # However, the copyright file is not present as part of pdf
+    # The copyright file is not present as part of pdf
     # Remove link:
     $contents =~ s%<A HREF="[./]*copyright.html">&#169;</A>%&#169;%gi;
 
-    # Remove definitions of javascript variables used
-    # for navigation
-    # Not needed when <SCRIPT> content properly SGML commented out
-    #$contents =~ s/var next     = '[^']+';//;
-    #$contents =~ s/var prev     = '[^']+';//;
-    #$contents =~ s/var content  = '[^']+';//;
-    #$contents =~ s/var inx      = '[^']+';//;
-    #$contents =~ s/var help     = '[^']+';//;
-    #$contents =~ s/var manuals  = '[^']+';//;
-
-    # Remove modification notices
-    $contents =~ s&\<TD width\=\"40\%\" align\=\"right\">\s*\<DIV STYLE=\".+\"\>\[Modified:[^\]]+\]\s*</DIV>\s*</TD>&&gsi;
-    $contents =~ s&\<TD width\=\"40\%\" align\=\"right\">\s*\<DIV STYLE=\".+\"\>\[Generated:[^\]]+\]\s*</DIV>\s*</TD>&&gsi;
-    # Then the middle column of the footer may be 50% and right aligned:
-    $contents =~ s&<TD width="20%" align="center">&<TD width="50%" align="right">&gi;
-    # And the left column may be 50%:
-    $contents =~ s&<TD width="40%" align="left">&<TD width="50%" align="left">&gi;
+    # Remove entire footer
+    $contents =~ s/<!-- Footer -->.*<!-- End Footer -->//is;
 
     #print STDERR "open($file)\n";
     open (STDOUT, ">$file") || die "Cannot open $file for writing: $!\n";
@@ -2821,7 +2799,6 @@ sub generate_pdf
 	print STDERR "Generating $pdf\n" if ($verbose);
 	&generate_pdf_titlepage();
 	# Construct list of generated files
-	push @sequence, $pdftitlefile;
 	if ($do_program_list){
 	    push @sequence, $programsfile;
 	}
@@ -2842,15 +2819,13 @@ sub generate_pdf
 	}
 	push @sequence, $indexfile if (-f $indexfile);
 
-	# htmldoc does not handle <script>...</script> too well
-	# We filter it out in copies of the files in sequence
 	foreach $f (@sequence){
 	    &filter_for_pdf($f, "$f-dist")
 	}
-
+	&filter_for_pdf($pdftitlefile, "$pdftitlefile-dist");
 	# run htmldoc
 	$v = "-v" if $verbose;
-	$cmd = "$htmldoc $v -t pdf -f $pdf --compression=9 --linkstyle plain --linkcolor #00557A --toclevels 3 --bodycolor \#ffffff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.i --firstpage p1 --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Arial --bodyfont Arial --headfootsize 11.0 --headfootfont Arial " . join (' ', @sequence);
+	$cmd = "$htmldoc $v -t pdf -f $pdf --titlefile $pdftitlefile --compression=9 --linkstyle plain --linkcolor #00557A --toclevels 3 --bodycolor \#ffffff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.i --firstpage p1 --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Arial --bodyfont Arial --headfootsize 11.0 --headfootfont Arial " . join (' ', @sequence);
 
 	print STDERR "Calling HTMLDOC\n" if ($verbose);
 	print STDERR "$cmd\n" if $debug;
@@ -2864,12 +2839,10 @@ sub generate_pdf
 	};
 	unlink @sequence;
 	foreach $f (@sequence){
-	    if ($f eq $pdftitlefile){
-		unlink "$f-dist";
-	    } else {
-		&rename_file("$f-dist", $f);
-	    }
+	    &rename_file("$f-dist", $f);
 	}
+	unlink "$pdftitlefile";
+	unlink "$pdftitlefile-dist";
 	if (-f $pdf){
 	    print STDERR "Wrote $pdf\n" if $verbose;
 	} else {
@@ -2887,13 +2860,25 @@ sub generate_pdf_titlepage()
 	&print_header("$title", "", "", "", "", "", 0);
     }
     print<<"EOT";
-<H1>Copyright Notice</H1>
+<P></P>
+&nbsp;
+<P></P>
+<H1 ALIGN=CENTER>$title</H1>
+<P></P>
+&nbsp;
+<P></P>
 <center><B>
 Mjølner Informatics Report<BR>
 $mia<BR>
 $date
 </B>
-<P>
+<P></P>
+&nbsp;
+<P></P>
+&nbsp;
+<P></P>
+&nbsp;
+<P></P>
 <TABLE border=1 cellpadding=3>
 <TR><TD align=center>
 Copyright &#169; $copyrightyears <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A>.<BR>
