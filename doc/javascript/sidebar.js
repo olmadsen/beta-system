@@ -64,3 +64,12 @@ function drawstep(){
     clearInterval(hdraw)
 }
 
+function out(){
+  if (document.all)
+     document.all.SideBar2.style.pixelLeft=leftboundary
+  else if(document.layers)
+     document.layers.SideBar.left=leftboundary
+  else if (window.hdraw)
+    clearInterval(hdraw)
+}
+
