@@ -632,7 +632,9 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   case SIGSEGV: txt = "SIGSEGV"; break;
   case SIGINT:  txt = "SIGINT"; break;
   case SIGQUIT: txt = "SIGQUIT"; break;
-#ifndef linux
+#ifdef linux
+  case SIGTRAP:  txt = "SIGTRAP"; break;
+#else
   case SIGEMT:  txt = "SIGEMT"; break;
 #endif
   default: txt = "UNKNOWN"; break;
@@ -673,7 +675,9 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   InstallSigHandler(SIGILL);
   InstallSigHandler(SIGBUS);
   InstallSigHandler(SIGSEGV);
-#ifndef linux
+#ifdef linux
+  InstallSigHandler(SIGTRAP);
+#else
   InstallSigHandler(SIGEMT);
 #endif
   InstallSigHandler(SIGINT);

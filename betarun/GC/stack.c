@@ -872,9 +872,13 @@ static void PrintSkipped(long *current)
   struct Object *ref = (struct Object *)*current;
   if (ref && inBetaHeap(ref)){
     fprintf(output, "*** Suspicious stack-skip: 0x%x: 0x%x", (int)current, (int)ref);
+    fflush(output);
     if (isObject(ref)){ 
       fprintf(output, " proto: 0x%x (%s)", (int)ref->Proto, ProtoTypeName(ref->Proto));
     } 
+    if (isValRep((struct ValRep*)((long)ref-headsize(ValRep)))){
+	fprintf(output, " (body of rep)");
+    }
     if (inIOA(ref)) 
       fprintf(output, " (is in IOA)");
     if (inAOA(ref)) 
