@@ -1,0 +1,832 @@
+ORIGIN 'UI/valhallaGUI';
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-96
+ *   All rights reserved.
+ *)
+
+INCLUDE '~beta/sourcebrowser/v1.0/codemoveable';
+INCLUDE 'breakpoints';
+INCLUDE '~beta/objectbrowser/v2.0/mpsinterface';
+INCLUDE '~beta/objectbrowser/v2.0/mpsutils';
+INCLUDE '~beta/editor/v5.0/codeeditor';
+INCLUDE '~beta/guienv/v1.3.1/utils/prompts';
+
+--- valhallaGUIlib:attributes ---
+BreakpointController:
+  (# getFocus:<
+       (# node: ^astInterface.ast
+       do INNER
+       exit node[]
+       #);
+     getCfe:<
+       (# fe: ^window.codeEditor
+       do INNER
+       exit fe[]
+       #);
+     infoMsg:<
+       (# msg: ^text
+       enter msg[]
+       do INNER
+       #);
+     newCodeView:<
+       (# node: ^astInterface.ast
+       enter node[]
+       do INNER
+       #);
+     valhallaMenu: menu
+       (# item: menuitem
+            (# new:
+                 (# t: ^text 
+                 enter t[]
+                 do open; t[]->name; this(item)[]->append 
+                 #);
+               newkey:
+                 (# t: ^text; c: @char
+                 enter (t[],c)
+                 do open; t[]->name; c->key; this(item)[]->append 
+                 #);
+            #);
+          newseparator:
+            (# sep: ^separator
+            do &separator[]->sep[]; sep.open; sep[]->append
+            #);
+       #);
+     valhallaControlMenu: valhallaMenu
+       (# citem: item
+            (# eventhandler::<
+                 (# onStatus::<
+                      (#
+                      do (debuggee[]<>NONE) and debuggeeStatus
+                           ->value;
+                         INNER
+                      #);
+                    onSelect::< 
+                      (# do (if debuggeeStatus then INNER if) #);
+                 #);
+            #);
+          ccitem: citem
+            (# eventhandler::<
+                 (# onStatus::<
+                      (#
+                      do value and (getCfe<>NONE) ->value
+                      #)
+                 #)
+            #);
+          icontinue: @item
+            (# eventhandler::<
+                 (# onSelect:: (# do debuggeeContinue #);
+                    onStatus:: (# do continueStatus->value #);
+                 #);
+            #);
+          istepo: @item
+            (# eventhandler::<
+                 (# onSelect:: (# do debuggeeStepOver #);
+                    onStatus:: (# do stepOverStatus->value #);
+                 #);
+            #);
+          istepi: @item
+            (# eventhandler::<
+                 (# onSelect:: (# do debuggeeStepInto #);
+                    onStatus:: (# do stepIntoStatus->value #);
+                 #);
+            #);
+          istop: @item
+            (# eventhandler::<
+                 (# onSelect:: (# do debuggeeStop #);
+                    onStatus:: (# do stopStatus->value #);
+                 #);
+            #);
+          irerun: @item
+            (# eventhandler::<
+                 (# onSelect:: (# do debuggeeRerun #);
+                    onStatus:: (# do rerunStatus->value #);
+                 #);
+            #);
+          ikill: @item
+            (# eventhandler::<
+                 (# onSelect:: (# do killDebuggee #);
+                    onStatus:: (# do killStatus->value #);
+                 #);
+            #);
+          iuntil: @citem
+            (# eventhandler:: (# onSelect:: (# do doStepUntil #)#) #);
+          ibreak: @ccitem
+            (# eventhandler::
+                 (# onSelect::
+                      (# do (getFocus,FALSE,debuggee[])->setStandardBreakpoint #) #)
+            #);
+          ioneshot: @ccitem
+            (# eventhandler::
+                 (# onSelect::
+                      (# do (getFocus,FALSE,debuggee[])->setOneShotBreakpoint #) #)
+            #);
+          ibreakafter: @ccitem
+            (# eventhandler::
+                 (# onSelect::
+                      (# do (getFocus,TRUE,debuggee[])->setStandardBreakpoint #) #)
+            #);
+          ioneshotafter: @ccitem
+            (# eventhandler::
+                 (# onSelect::
+                      (# do (getFocus,TRUE,debuggee[])->setOneShotBreakpoint #) #)
+            #);
+          itrace: @ccitem
+            (# eventhandler::
+                 (# onSelect::
+                      (# do (getFocus,FALSE,debuggee[],none)->setTracepoint #) #)
+            #);
+          itraceafter: @ccitem
+            (# eventhandler::
+                 (# onSelect::
+                      (# do (getFocus,TRUE,debuggee[],none)->setTracepoint #) #)
+            #);
+          iclear: @ccitem
+            (# eventhandler::
+                 (# onSelect::
+                      (# do (getFocus,FALSE,debuggee[])->clearBreakPoint #) #)
+            #);
+          iclearafter: @ccitem
+            (# eventhandler::
+                 (# onSelect::
+                      (# do (getFocus,TRUE,debuggee[])->clearBreakPoint #)#)
+            #);
+          iintobreaks: @ccitem 
+            (# eventhandler::
+                 (# onSelect:: 
+                      (#
+                      do debuggee[]->setStepIntoBreaks 
+                         (# forEachNode:: (# do node[]->newCodeView #) #)
+            #)   #) #);
+          ioverbreaks: @ccitem
+            (#  eventhandler::
+                 (# onSelect:: 
+                      (#
+                      do debuggee[]->setStepOverBreaks 
+                         (# forEachNode:: (# do node[]->newCodeView #) #)
+            #)   #) #);
+          breakPointListMenu: @menu
+            (# breakPointItem: menuitem
+                 (# eventhandler::
+                      (# onSelect::
+                           (# 
+                           do (if bm.impi[]<>NONE then
+                                  bm.impi.cast[]->newCodeView
+                              if);
+                           #);
+                      #);
+                    bm: ^processInterface.breakManager;
+                 #);
+               newItem:
+                 (# mi: ^menuitem; num: ^text;
+                 enter num[]
+                 do &menuitem[]->mi[];
+                    mi.open;
+                    mi[]->append;
+                    num[]->mi.name;
+                 #);
+               newBreak: 
+                 (# bpi: ^breakPointItem; num: ^text;
+                    bm: ^processInterface.breakManager;
+                 enter (num[],bm[])
+                 do &breakPointItem[]->bpi[];
+                    bpi.open;
+                    bpi[]->append;
+                    num[]->bpi.name; bm[]->bpi.bm[]
+                 #);
+               eventHandler::<
+                 (# onSelect::<
+                      (# bml: ^processInterface.breakManagerList;
+                         bm: ^processInterface.breakManager;
+                      do clear;
+                         (if debuggeeStatus then
+                             (debuggee[]).getBreakManagerList->bml[];
+                             (if bml.size=0 then
+                                 'No Breakpoints'->newItem;
+                              else
+                                 bml.scan
+                                 (# bps: @Text;
+                                 do current[]->bm[];
+                                    bm.scan
+                                    (# i: @integer
+                                    do bps.clear;
+                                       bm.number->bps.putint;
+                                       (if bm.breaks.range>1 then
+                                           '.'->bps.put;
+                                           i+1->i->bps.putint;
+                                       if);
+                                       (if bm.impi[]<>NONE then
+                                           ': '->bps.append;
+                                           bm.impi.cast.frag.name
+                                             ->bps.append;
+                                       if);
+                                       (if current##=debuggee.traceBreak## then
+                                           (# tb: ^debuggee.traceBreak
+                                           do current[]->tb[];
+                                              ' "'->bps.append;
+                                              (1,10)->tb.message.sub->bps.puttext;
+                                              '"'->bps.put
+                                           #);
+                                       if);
+                                       (bps[],bm[])->newBreak;
+                                    #)
+                                 #)
+                             if)
+                          else
+                             'No Process'->newItem;
+                         if);
+                      #);
+                 #);
+            #);
+          iBreakpoints: @menuItem
+            (# open::
+                 (#
+                 do 'Breakpoint list'->name; breakpointListMenu[]->submenu
+                 #)
+            #);
+          iBreakpointSave: @Item
+            (# eventHandler::<
+                 (# onSelect::<
+                      (# fn: ^text; f: @file;
+                         bml: ^processInterface.breakManagerList;
+                         bm: ^processInterface.breakManager;
+                      do save:
+                           (if debuggeeStatus then
+                               getEXECNAMEparam->f.name;
+                               fileCreationDialog
+                               (#
+                               do 'Breakpoints Database: Save'->label[];
+                                  f.entry.path.head->path[];
+                                  '.*'->((f.entry.path.name).copy).append
+                                    ->filter[];
+                               #)->fn[];
+                               (if fn[]=none then
+                                   leave save
+                               if);
+                               fn[]->f.name; f.openWrite;
+                               (debuggee[]).getBreakManagerList->bml[];
+                               bml.scan
+                               (# bps: @Text; i: @integer
+                               do current[]->bm[];
+                                  bm.scan
+                                  (#
+                                  do bps.clear;
+                                     (if bm.impi[]<>NONE then
+                                         i+1->i->bps.putint;
+                                         ' : '->bps.append;
+                                         (bm.impi.cast.frag.father).fullname
+                                           ->bps.puttext;
+                                         ' : '->bps.append;
+                                         (bm.impi.cast.frag.father).modtime
+                                         ->bps.putint;
+                                         ' : '->bps.append;
+                                         bm.impi.cast.frag.name
+                                           ->bps.append;
+                                         ' : '->bps.append;
+                                         bm.impi.cast.index->bps.putint;
+                                      else
+                                         -1->bps.putint;
+                                     if);
+                                     ' : '->bps.append;
+                                     (if current##
+                                      // debuggee.standardBreak## then
+                                         'standardBreak : '->bps.append
+                                      // debuggee.userOneShotBreak## then
+                                         'userOneShotBreak : '->bps.append
+                                      // debuggee.traceBreak## then
+                                         'traceBreak : '->bps.append;
+                                         (# tb: ^debuggee.traceBreak
+                                         do current[]->tb[];
+                                            tb.message[]->bps.puttext
+                                         #);
+                                      else
+                                         'UNKNOWN : '->bps.puttext
+                                     if);    
+                                     ' : '->bps.append;
+                                     bps[]->f.putline
+                                  #)
+                               #);
+                               f.close;
+                           if)
+                      #)
+                 #)
+            #);
+          iBreakpointLoad: @Item
+            (# eventHandler::<
+                 (# onSelect::<
+                      (# fn,l,fgName,ffName,breakType,message: ^text;
+                         f: @file; i,modtime,index: @integer
+                      do getEXECNAMEparam->f.name;
+                         fileSelectionDialog
+                         (#
+                         do 'Breakpoints Database: Load'->label[];
+                            f.entry.path.head->path[];
+                            '.*'->((f.entry.path.name).copy).append->filter[];
+                         #)->fn[];
+                         (if fn[]<>none then
+                             fn[]->f.name;
+                             f.openRead;
+                             loop:
+                               (if not f.eos then
+                                   f.getline->l[];
+                                   l.reset;
+                                   l.getint->i;
+                                   (if i>0 then
+                                       l.getAtom;
+                                       l.getAtom->fgName[];
+                                       l.getAtom;
+                                       l.getint->modtime;
+                                       l.getAtom;
+                                       l.getAtom->ffName[];
+                                       l.getAtom;
+                                       l.getInt->index;
+                                       l.getAtom;
+                                       l.getAtom->breakType[];
+                                       (if true
+                                        // 'standardBreak'
+                                             ->breakType.equalNCS then
+                                        // 'userOneShotBreak'
+                                             ->breakType.equalNCS then
+                                        // 'traceBreak'
+                                             ->breakType.equalNCS then
+                                           l.getAtom;
+                                           l.getAtom->message[];
+                                        // 'UNKNOWN'
+                                             ->breakType.equalNCS then
+                                       if);
+                                       (* all info read *)
+                                       (fgname[],modtime,ffName[],index,
+                                       breakType[],message[])
+                                         ->setBreak;
+                                       restart loop;
+                                   if)
+                               if);
+                             f.close;
+                         if)
+                      #)
+                 #)
+            #)
+       #);
+     setBreak:
+       (# fgName,ffName,breakType,message: ^text;
+          modtime,index: @integer;
+          fg: ^mps.ast.fragmentGroup;
+          ff: ^mps.ast.fragmentForm;
+          cast: ^mps.ast.ast;
+       enter (fgname[],modtime,ffName[],index,breakType[],message[])
+       do fgname[]        
+            ->debuggee.mps.fragmentGroupTable.getFragmentGroup
+            ->fg[];
+          (if fg.modtime<>modtime then
+              'SOMETHING WRONG WITH MODTIME - SOME FRAGMENT MODIFIED'->putline;
+           else
+              (ffName[],screen[])->fg.open->ff[];
+              index->ff.indexToNode->cast[];
+              (if true
+               // 'standardBreak'->breakType.equalNCS then
+                  (cast[],FALSE,debuggee[])->setStandardBreakpoint
+               // 'userOneShotBreak'->breakType.equalNCS then
+                  (cast[],FALSE,debuggee[])->setOneShotBreakpoint
+               // 'traceBreak'->breakType.equalNCS then
+                  (cast[],FALSE,debuggee[],message[])->setTracepoint
+               // 'UNKNOWN'->breakType.equalNCS then
+                  'UNKNOWN BREAKPOINT TYPE - IGNORED'->putline
+              if)
+          if)
+       #);
+     controlMenu: valhallaControlMenu
+       (# open::<
+            (# 
+            do ('Go','g')         ->icontinue.newkey;
+               ('Step','i')       ->istepi.newkey;
+               ('Step Over','j')  ->istepo.newkey;
+               'Stop'             ->istop.new;
+               newseparator;
+               ('Rerun','r')      ->irerun.newkey;
+               ('Kill','y')       ->ikill.newkey;
+            #);
+       #);
+     breakPulldownMenu: valhallaControlMenu
+       (# open::
+            (# 
+            do ('Go Until Mark','m')->iuntil.newkey;
+               newseparator;
+               ('Set Break','k')    ->ibreak.newkey;
+               ('Set OneShot','h')  ->ioneshot.newkey;
+               'Set Trace...'       ->itrace.new;
+               newseparator;
+               'Set Break After'    ->ibreakafter.new;
+               'Set OneShot After'  ->ioneshotafter.new;
+               'Set Trace After...' ->itraceafter.new;
+               newseparator;
+               ('Erase Break','e') ->iclear.newkey;
+               'Erase Break After' ->iclearafter.new;
+               'debugValhalla'->(getOptionDB).getBooleanOption
+               (# found::
+                    (# 
+                    do (if value then
+                           newseparator;
+                           'Set and Show Step Breaks'      ->iintobreaks.new;
+                           'Set and Show Step Over Breaks' ->ioverbreaks.new;
+                       if)
+                    #)
+               #);
+               newseparator;
+               breakpointListMenu.open;
+               'Breakpoints'->breakpointListMenu.name; 
+               iBreakpoints.open; iBreakpoints[]->append;
+               'Breakpoints: Save'->iBreakpointSave.new;
+               'Breakpoints: Load'->iBreakpointLoad.new;
+            #)
+       #);
+     breakPopupMenu: valhallaControlMenu
+       (# open::
+            (# 
+            do 'Go'                 ->icontinue.new;
+               'Step'               ->istepi.new;
+               'Step Over'          ->istepo.new;
+               'Stop'               ->istop.new;
+               newseparator;
+               'Rerun'              ->irerun.new;
+               'Kill'               ->ikill.new;
+               newseparator;
+               'Go Until Mark'      ->iuntil.new;
+               newseparator;
+               'Set Break'          ->ibreak.new;
+               'Set OneShot'        ->ioneshot.new;
+               'Set Trace...'       ->itrace.new;
+               newseparator;
+               'Set Break After'    ->ibreakafter.new;
+               'Set OneShot After'  ->ioneshotafter.new;
+               'Set Trace After...' ->itraceafter.new;
+               newseparator;
+               'Erase Break'        ->iclear.new;
+               'Erase Break After'  ->iclearafter.new;
+               'debugValhalla'->(getOptionDB).getBooleanOption
+               (# found::
+                    (# 
+                    do (if value then
+                           newseparator;
+                           'Set and Show Step Breaks'      ->iintobreaks.new;
+                           'Set and Show Step Over Breaks' ->ioverbreaks.new;
+                       if)
+                    #)
+               #);
+               newseparator;
+               breakpointListMenu.open;
+               'Breakpoints'->breakpointListMenu.name; 
+               iBreakpoints.open; iBreakpoints[]->append;
+            #)
+       #);
+
+     noComment: (# exit - 1 #);
+     normalComment: (# exit 1 #);
+     breakpointComment: (# exit 4 #);
+
+     breakpointClearer:
+       (# node: ^astInterface.ast; pos: @Integer;
+          onBreakpointClear:
+            (# 
+            do (if node.hasComment then ('',pos,1)->node.setSubcomment if);
+               noComment->node.typeOfComment;
+               node[]->updateViews;
+            #);
+       enter (node[],pos)
+       exit onBreakPointClear##
+       #);
+
+     updateViews:
+       (# node,contractionNode: ^astInterface.ast; 
+          cel: ^codemoveableEditorList;
+          inContr: @Boolean;
+       enter node[]
+       do 
+          getcodemoveableEditorList->cel[];
+          (* Update views showing the fragment containing cleared breakpoint. *)
+          cel.newscan
+          (# 
+          do (if cur.frag[]<>NONE then
+                 (if cur.frag.root[]->node.frag.root.equal then
+                     node[]
+                       ->(getCfe).inContraction
+                       ->(inContr,contractionNode[]);
+                     (if inContr then
+                         (* The node is not visible, so there is no need to 
+                          * update the view. *)
+                      else
+                         (node[],node[])->cur.SifViewer.astView.pp.update;
+                         cur.SifViewer.cs->cur.SifViewer.setFocus;
+                     if)
+                 if);
+             if);
+          #);
+       #);
+
+     showBreakPoint:
+       (# node: ^astInterface.ast;
+          bm: ^processInterface.breakManager;
+          debuggee: ^processInterface;
+          pos: @Integer;
+          marker: @Text;
+          before:< object;
+          after:< object;
+       enter (node[],bm[],debuggee[])
+       do     
+          (if node.symbol=debuggee.MPS.BETA.Imperatives then
+              before;
+              node[]->debuggee.mps.lastInList->node[];
+              (node[],marker.copy,FALSE)
+                ->(getCfe).setBreakpointAfter
+                ->pos;
+           else
+              after;
+              (node[],marker.copy,FALSE)
+                ->(getCfe).setBreakPointBefore
+                ->pos;
+          if);
+          (node[],pos)->breakpointClearer->bm.clearActions.appendAction;
+          node[]->updateViews;
+       #);
+
+     showBreak: showBreakPoint
+       (# before::
+            (# do '<<%d<<'->marker.putformat(# do bm.number->d #) #);
+          after::
+            (# do '>>%d>>'->marker.putformat(# do bm.number->d #) #);
+       #);
+
+     showOneShot: showBreakPoint
+       (# before::
+            (# do '<<%d<<'->marker.putformat(# do bm.number->d #) #);
+          after::
+            (# do '>>%d>>'->marker.putformat(# do bm.number->d #) #);
+       #);
+
+     showTrace: showBreakPoint
+       (# before::
+            (#
+            do '<<%d:"%10s"<<'->marker.putformat(# do bm.number->d; m[]->s #)
+            #);
+          after::
+            (#
+            do '>>%d:"%10s">>'->marker.putformat(# do bm.number->d; m[]->s #)
+            #);
+          m: ^text
+       enter m[]
+       #);
+
+     setbreakprefix:
+       (# impi: ^processInterface.ImperativeInfo; 
+          bm: ^processInterface.breakManager;
+          node, breaknode: ^astInterface.ast;
+          debuggee: ^processInterface;
+          ok,after: @Boolean;
+          afterError:< 
+            (# 
+            do false->ok;
+               INNER;
+            #);
+          error:< Object;
+       enter (node[],after,debuggee[])
+       do TRUE->ok;
+         getimpi: node[]->debuggee.ImperativeToCodeAddress
+          (# noEnclosingDoPart:: (# do leave getimpi  #);
+          #)->impi[];
+          
+          (if impi[]=NONE then
+              error;
+              FALSE->ok;
+          else
+              (if after then
+                  impi.cast[]->debuggee.mps.nextbrother->breaknode[];
+                  (if breaknode[]=NONE then
+                      node.father->breaknode[];
+                      (if breaknode.symbol<>debuggee.mps.BETA.Imperatives then
+                          afterError;
+                          leave setbreakprefix;
+                      if)
+                  if);
+                  getimpi: breaknode[]->debuggee.ImperativeToCodeAddress
+                  (# noEnclosingDoPart:: (# do leave getimpi  #);
+                  #)->impi[];
+                  (if impi[]=NONE then
+                      afterError;
+                      leave setbreakprefix;
+                  if);
+              if);
+              
+              (impi.start,MNGR_NEWNUMBER)->debuggee.ensureBreakManager->bm[];
+              impi[]->bm.impi[];
+              
+              INNER;
+          if);
+       exit ok
+       #);
+
+     Setstandardbreakpoint: setbreakprefix
+       (# sb: ^processInterface.standardBreak;
+          msg: @Text;
+          afterError::
+            (# 
+            do 'ERROR - Cannot set breakpoint after'->infoMsg;
+            #);
+          error::
+            (# 
+            do 'ERROR - Cannot set breakpoint at selected node'->infoMsg;
+            #);
+       do 
+          checkPresence: bm.scan
+            (# 
+            do (if current##=debuggee.standardBreak## then
+                   current[]->sb[];
+                   leave checkPresence;
+               if);
+            #);
+          (if sb[]=NONE then
+              bm[]->(&debuggee.standardBreak[]).init;
+              'Breakpoint %d set'->msg.putformat (# do bm.number->d #);
+              msg[]->infoMsg;
+              (impi.cast[],bm[],debuggee[])->showBreak;
+              (impi.cast[],0,0,0)->(getCfe).setFocus;
+           else
+              'Breakpoint already set'->infoMsg;
+          if);
+       #);
+     
+     SetTracepoint: setbreakprefix
+       (# tb: ^processInterface.traceBreak;
+	  msg: @Text;
+	  afterError::
+	    (# 
+	    do 'ERROR - Cannot set tracepoint after'->infoMsg
+	    #);
+	  error::
+	    (# 
+	    do 'ERROR - Cannot set tracepoint at selected node'->infoMsg
+	    #);
+          traceMessage: ^Text;
+       enter traceMessage[]
+       do (if traceMessage[]=none then
+              (none,'Tracepoint','Trace message','')->promptForText
+              (# ok:: (# do usertext.copy->traceMessage[] #) #)
+          if);
+	  checkPresence: bm.scan
+	    (# 
+	    do (if current##=debuggee.traceBreak## then
+		   current[]->tb[];
+		   leave checkPresence;
+	       if);
+	    #);
+	  (if tb[]=NONE then
+	      (bm[],traceMessage[])->(&debuggee.traceBreak[]).init;
+	      'Tracepoint %d set'->msg.putformat (# do bm.number->d #);
+	      msg[]->infoMsg;
+	      (impi.cast[],bm[],debuggee[],traceMessage[])->showTrace;
+	      (impi.cast[],0,0,0)->(getCfe).setFocus;
+	   else
+	      'Tracepoint already set'->infoMsg;
+	  if);
+       #);
+     
+     setOneShotBreakPoint: setbreakprefix
+       (# osb: ^processInterface.userOneShotBreak;
+          msg: @Text;
+          afterError::
+            (# 
+            do 'ERROR - Cannot set breakpoint after'->infoMsg;
+            #);
+          error::
+            (# 
+            do 'ERROR - Cannot set breakpoint at selected node'->infoMsg;
+            #);
+       do
+          checkPresence: bm.scan
+            (# 
+            do (if current##=debuggee.userOneShotBreak## then
+                   current[]->osb[];
+                   leave checkPresence;
+               if);
+            #);
+          (if osb[]=NONE then
+              bm[]->(&debuggee.userOneShotBreak[]).init;
+              'One-shot breakpoint %d set'->msg.putformat (# do bm.number->d #);
+              msg[]->infoMsg;
+              (impi.cast[],bm[],debuggee[])->showOneShot;
+              (impi.cast[],0,0,0)->(getCfe).setFocus;
+           else
+              'Breakpoint already set'->infoMsg;
+          if);
+       #);
+
+     setStepIntoBreaks:
+       (# forEachNode:<
+            (# node: ^astInterface.ast;
+            enter node[]
+            do INNER;
+            #);
+          value: @Boolean;
+          debuggee: ^processInterface;
+          ussBreaker: debuggee.userSingleStepBreaker
+            (# init::<
+                 (# cancelled:: (# do TRUE->continue #);
+                    unknownCode::
+                      (#
+                      do 'ERROR - Missing debug info. Cannot step.'->infoMsg;
+                         TRUE->continue;
+                      #);
+                    forEachImpNode::
+                      (# 
+                      do (impi.cast[],bm[],debuggee[])->showBreak;
+                         impi.cast[]->forEachNode;
+                      #);
+                 #);
+            #);
+          uss: ^ussBreaker;
+       enter debuggee[]
+       do &ussBreaker[]->uss[]; not uss.init ->value
+       exit value
+       #);
+
+     setStepOverBreaks:
+       (# forEachNode:<
+            (# node: ^astInterface.ast;
+            enter node[]
+            do INNER;
+            #);
+          value: @Boolean;
+          debuggee: ^processInterface;
+          ussBreaker: debuggee.userStepOverBreaker
+            (# init::<
+                 (# cancelled:: (# do TRUE->continue #);
+                    unknownCode::
+                      (#
+                      do 'ERROR - Missing debug info. Cannot step.'->infoMsg;
+                         TRUE->continue;
+                      #);
+                    forEachImpNode::
+                      (# 
+                      do (impi.cast[],bm[],debuggee[])->showBreak;
+                         impi.cast[]->forEachNode;
+                      #);
+                 #);
+            #);
+          uss: ^ussBreaker;
+       enter debuggee[]
+       do &ussBreaker[]->uss[]; not uss.init->value
+       exit value
+       #);
+
+     doStepOver:
+       (#
+       do (if debuggeeStatus then
+              (if debuggee[]->setStepOverBreaks then debuggeeContinue if);
+          if);
+       #);
+
+     doStepInto: 
+       (# 
+       do (if debuggeeStatus then
+              (if debuggee[]->setStepIntoBreaks then debuggeeContinue if);
+          if);
+       #);
+
+     doStepUntil:
+       (# 
+       do (if debuggeeStatus then
+              (if (getFocus,FALSE,debuggee[])->setOneShotBreakpoint then debuggeeContinue if)
+          if);
+       #);
+
+     clearBreakPoint: setbreakprefix
+       (# sb: ^processInterface.breakPoint;
+          msg: @Text;
+          afterError::
+            (# 
+            do 'ERROR - Cannot clear breakpoint after'->infoMsg;
+            #);
+          error::
+            (# 
+            do 'ERROR - Cannot clear breakpoint at selected node'->infoMsg;
+            #);
+       do 
+          impi.start->debuggee.findBreakManager->bm[];
+          (if bm[]<>NONE then
+              clearAll: bm.scan 
+                (# 
+                do current[]->sb[]; sb.doclear;
+                #);
+          if);
+          (if sb[]=NONE then
+              (if after then
+                  'No breakpoint after selected node'->infoMsg;
+               else
+                  'No breakpoint at selected node'->infoMsg;
+              if);
+           else
+              'Breakpoint %d cleared'->msg.putformat 
+              (# do bm.number->d #);
+              msg[]->infoMsg;
+          if);
+          (impi.cast[],0,0,0)->(getCfe).setFocus;
+       #);
+  #)
