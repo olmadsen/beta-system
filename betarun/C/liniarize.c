@@ -92,8 +92,8 @@ static void insertInOriginTable(long byteOffset,
                                 struct liniarization *l);
 
 /* stat functions */
-static void setStartOfLiniarization(struct liniarization *l);
-static void setEndOfLiniarization(struct liniarization *l);
+static void setStartOfLiniarization();
+static void setEndOfLiniarization();
 static void setStartOfLoad(struct liniarization *l);
 static void setEndOfLoad(struct liniarization *l);
 static void setStartOfSave(struct liniarization *l);
@@ -121,6 +121,7 @@ static long getLastSwizzleIndirOriginsTime(struct liniarization *l);
 
 struct liniarization *l = NULL;
 long returnPC, returnSP, absAddr;
+
 struct statistics stats;
 
 /* LOCAL VARIABLES */
@@ -139,7 +140,7 @@ long scanFromRoot(struct Object *root)
 
     indirRefsFollowed = 0;
     
-    setStartOfLiniarization(l);
+    setStartOfLiniarization();
     linearizeInGC(root);
     copyToLiniarization(root);
     id = createIndirTable(root);
@@ -166,8 +167,8 @@ long scanFromRoot(struct Object *root)
        liniarization?  */
     
     swizzleIndirOrigins(l);
-    setEndOfLiniarization(l);
-    
+    setEndOfLiniarization();
+
     return id;
 }
 
@@ -200,7 +201,7 @@ void copyToLiniarization(ptr(Object) root)
 
     /* While there still are unhandled objects in the list */
     for (obj = root; obj; obj = next) {
-        next = (ptr(Object))(obj->GCAttr);
+        next = (ptr(Object))(-obj->GCAttr);
         
         /* The object is now moved to the liniarization */
         offset = copyObjectToLiniarization(l, obj);
@@ -243,7 +244,7 @@ long createIndirTable(ptr(Object) root)
         origobj->GCAttr = id;
 
         /* Next. */
-        origobj = (ptr(Object))(copyobj->GCAttr);
+        origobj = (ptr(Object))(-copyobj->GCAttr);
 
         /* Mark the copy of the object with its own id for reverse lookup */
         copyobj->GCAttr = id;
@@ -361,7 +362,6 @@ void SwizzleToIndirect(void)
     }
     
     setEndOfSwizzleToIndirect(l);
-    
 }
 
  
@@ -439,6 +439,9 @@ static void insertIndirTableEntry(struct liniarization *l, long id, long byteOff
 static long copyObjectToLiniarization(struct liniarization *l, struct Object *theObj) {
     long        size;
     long        offset;
+    
+    if (l -> liniarizationTop == 0)
+        l -> liniarizationTop =4;
     
     offset = l -> liniarizationTop;
 
@@ -627,7 +630,7 @@ void swizzleIndirOrigins(struct liniarization *l) {
     
     for (i = 0; i < l -> indirTableLength; i++) {
         byteOffset = l -> indirTable[i].byteOffset;
-        
+
         if (byteOffset != -1) {
             
             /* get a pointer to the object in the liniarization */
@@ -635,21 +638,24 @@ void swizzleIndirOrigins(struct liniarization *l) {
             theObj = (struct Object *)absAddr;
             
             /* get a pointer to the cell holding the origin */
-            originOffset = theObj -> Proto -> OriginOff;
-            origin = (long *)((char *)theObj + originOffset*4);
-            
-            /* get the origin reference */
-            indirOriginRef = *origin;
-            
-            /* save enough info to enable unswizzling */
-            insertInOriginTable((long) ((char *)origin - l -> liniarization), indirOriginRef, l);
-            
-            /* calculate the absolute address instead */
-            byteOffset = l -> indirTable[MAPTOINDEX(indirOriginRef)].byteOffset;
-            absOriginRef = (long) (l -> liniarization + byteOffset);
-            
-            /* set the origin reference */
-            *origin = absOriginRef;
+            if (!isSpecialProtoType(theObj -> Proto))
+            {
+                originOffset = theObj -> Proto -> OriginOff;
+                origin = (long *)((char *)theObj + originOffset*4);
+                
+                /* get the origin reference */
+                indirOriginRef = *origin;
+                
+                /* save enough info to enable unswizzling */
+                insertInOriginTable((long) ((char *)origin - l -> liniarization), indirOriginRef, l);
+                
+                /* calculate the absolute address instead */
+                byteOffset = l -> indirTable[MAPTOINDEX(indirOriginRef)].byteOffset;
+                absOriginRef = (long) (l -> liniarization + byteOffset);
+                
+                /* set the origin reference */
+                *origin = absOriginRef;
+            }
         }
     }
     
@@ -843,11 +849,11 @@ static struct stackElement *allocStackElement(long id, long offset) {
 }
 #endif
 
-static void setStartOfLiniarization(struct liniarization *l) {
+static void setStartOfLiniarization(void) {
     gettimeofday(&(stats.startOfLastLiniarize), NULL);
 }
 
-static void setEndOfLiniarization(struct liniarization *l) {
+static void setEndOfLiniarization(void) {
     gettimeofday(&(stats.endOfLastLiniarize), NULL);
 }
 
@@ -1174,11 +1180,13 @@ static void insertInOriginTable(long byteOffset,
 
 /* MG: */
 
-static long minIndirRef = -1000000;  /* minimum indirectref. */
+static long minIndirRef = -200000;  /* minimum indirectref. */
 
 /* Build a linked list of all objects reachable from root
  * in the GCfield of the objects.
  * This often conflicts with the GC'er, so be careful...
+ * The refernces are negated when written to GCAttr so that they can
+ * be distinguished from forward pointers left by the GC.
  */
 
 void linearizeInGC(ptr(Object) root)
@@ -1193,13 +1201,17 @@ void linearizeInGC(ptr(Object) root)
      * Cannot be zero-term, as that would make it look unmarked
      * for the scanner.
      */
-    root->GCAttr = (long)root; 
+    root->GCAttr = -(long)root; 
 
     /* Tail is where new objects are appended to the list. */
     tail = root;
     
-    for (theObj = root; theObj; theObj=(struct Object*)(theObj->GCAttr)) {
+    for (theObj = root; theObj; theObj=(struct Object*)(-theObj->GCAttr)) {
         theProto = theObj->Proto;
+#if 0
+        fprintf(output, "Found object at %08X with proto %08X\n",
+                (int)theObj, (int)theProto);
+#endif        
         if (isSpecialProtoType(theProto)) {
             switch (SwitchProto(theProto)) {
               case SwitchProto(ByteRepPTValue):
@@ -1231,7 +1243,7 @@ void linearizeInGC(ptr(Object) root)
                           
                           if (obj->GCAttr > minIndirRef) {
                               /* Not in the list yet: Append it. */
-                              tail->GCAttr = (long)obj;
+                              tail->GCAttr = -(long)obj;
                               tail=obj;
                           }
                       }
@@ -1282,10 +1294,10 @@ void linearizeInGC(ptr(Object) root)
         
             /* Handle all the references in the Object. */
             for (refs_ofs = (short *)&tab->StaticOff+1; *refs_ofs; ++refs_ofs) {
-                const int REFTYPE_DYNAMIC = 0;
-                const int REFTYPE_OFFLINE = 1;
-                const int REFTYPE_ORIGIN = 2;
-
+/*               const int REFTYPE_DYNAMIC = 0;
+ *               const int REFTYPE_OFFLINE = 1;
+ *               const int REFTYPE_ORIGIN = 2;
+ */
                 /* sbrandt 24/1/1994: 2 least significant bits in prototype 
                  * dynamic offset table masked out. As offsets in this table are
                  * always multiples of 4, these bits may be used to distinguish
@@ -1297,7 +1309,7 @@ void linearizeInGC(ptr(Object) root)
                     ptr(Object) obj = (struct Object*)(*theCell);
                     if (obj->GCAttr > minIndirRef) {
                         /* Not in the list yet: Append it. */
-                        tail->GCAttr = (long)obj;
+                        tail->GCAttr = -(long)obj;
                         tail=obj;
                     }
                 }

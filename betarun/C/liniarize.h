@@ -32,7 +32,6 @@ typedef struct liniarization {
     long originTableTop;
     long originTableLength;
     struct originRefIndicator *originTable;
-    
 } liniarization;
 
 typedef struct statistics {
