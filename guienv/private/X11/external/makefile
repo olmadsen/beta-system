@@ -1,4 +1,4 @@
-BASEDIR = $(BETALIB)guienv/v1.2/private/X11
+BASEDIR = $(BETALIB)guienv/fix/private/X11
 OBJDIR = $(BASEDIR)/$(MACHINETYPE)
 SRCDIR = $(BASEDIR)/external
 
