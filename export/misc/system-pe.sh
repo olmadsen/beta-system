@@ -28,7 +28,7 @@ echo "ren /Q betarun.lib  betarun.lib.orig"           >> $DST/system-pe.cmd
 echo "ren /Q betarunv.lib betarunv.lib.orig"          >> $DST/system-pe.cmd
 echo "copy /Q betarun.pe betarun.lib"                 >> $DST/system-pe.cmd
 echo "copy /Q betarun.pe betarunv.lib"                >> $DST/system-pe.cmd
-echo "copy /Q bin\\README.txt README.txt              >> $DST/system-pe.cmd
+echo "copy /Q bin\\README.txt README.txt"             >> $DST/system-pe.cmd
 echo ""                                               >> $DST/system-pe.cmd
 cat $DST/system.cmd                                   >> $DST/system-pe.cmd
 echo ""                                               >> $DST/system-pe.cmd
