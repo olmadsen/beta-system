@@ -103,11 +103,13 @@ function onKey(e)
    } else if (document.all){
      if (event.keyCode==104) {
         // 'h'
-        document.all.SideBar2.style.visibility = "hidden";
+        //document.all.SideBar2.style.visibility = "hidden";
+	document.all.SideBar2.style.display = "none";
      }
      if (event.keyCode==115) {
 	// 's'
-        document.all.SideBar2.style.visibility = "show";
+        //document.all.SideBar2.style.visibility = "visible"; // IE4: "show"?
+	document.all.SideBar2.style.display = "block";
      }
      if (event.keyCode==110) {
         // 'n'
