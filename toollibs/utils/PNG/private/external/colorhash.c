@@ -103,13 +103,16 @@ long  ColorHashLookup(ColorHash *hash, Color *color)
 void ColorHashFree(ColorHash *hash)
 {
   ColorHashEntryPtr current;
+  ColorHashEntryPtr next;
+
   long index;
 
   for(index = 0; index < hash->nbuckets; index++) {
     current = hash->buckets[index];
     while(current) {
+      next = current->next;
       free(current);
-      current = current->next;
+      current = next;
     }
   }
   
