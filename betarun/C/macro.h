@@ -1,5 +1,11 @@
 /* macroes */
 
+#ifdef RTLAZY
+#define isLazyRef(ref) ((lastDangler <= ((int) ref)) && (((int) ref) < -101))
+#else
+#define isLazyRef(ref) 0
+#endif
+
 #ifdef macintosh
 #define Notify(s1)           CPrompt(s1, "", "", "");
 #define Notify2(s1,s2)       CPrompt(s1, s2, "", "");
@@ -219,3 +225,27 @@
 		      ((long)(addr) < (long)&BETA_end) )
 #define isProto(addr) (isSpecialProtoType(addr) || \
 		       (isData(addr) && (((int)(addr) & 3) == 0)))
+
+
+#ifdef sparc
+
+#ifdef sun4s
+extern long *start asm("_start");
+#else
+extern long *start asm("start");
+#endif
+extern long *etext;
+#define isCode(addr) ( ((unsigned long)&start <= (unsigned long)(addr)) &&  \
+                       ((unsigned long)(addr) < (unsigned long)&etext) )
+
+#endif sparc
+
+#ifdef hppa
+extern long *etext;
+#define isCode(addr) ( ((unsigned long)0 <= (unsigned long)(addr)) &&  \
+                       ((unsigned long)(addr) < (unsigned long)&etext) )
+#endif hppa
+
+#ifndef isCode
+#define isCode(addr) 0
+#endif
