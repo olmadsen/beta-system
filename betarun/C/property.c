@@ -101,6 +101,7 @@ static void BooleanProperty(char *name)
   ENTRY("DebugSockets", DebugSockets = TRUE);
   ENTRY("DebugLazy", DebugLazy = TRUE);
   ENTRY("FastIsObject", FastIsObject = TRUE);
+  ENTRY("NoHeapClear", NoHeapClear = TRUE);
   ENTRY("DebugLabels", DebugLabels = TRUE);
   /* Trace GroupName() */
   ENTRY("TraceGroup", TraceGroup = TRUE); 

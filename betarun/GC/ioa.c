@@ -72,9 +72,15 @@ void IOAGc()
             (int)NumIOAGc, (int)ReqObjectSize*4);
   });
   
-  /* Clear ToSpace to trigger errors earlier */
-  DEBUG_CODE(memset(ToSpace, 0, IOASize));
-  DEBUG_CODE(if (NumIOAGc==DebugStackAtGcNum) DebugStack=1);
+  DEBUG_CODE({
+    if (!NoHeapClear) {
+      /* Clear ToSpace to trigger errors earlier */
+      memset(ToSpace, 0, IOASize);
+    }
+    if (NumIOAGc==DebugStackAtGcNum) {
+      DebugStack=1;
+    }
+  });
   
   InfoS_LabA();
   
@@ -307,7 +313,9 @@ void IOAGc()
 #ifdef RTDEBUG
   else {
     /* Clear the part of ToSpace used for AOArootstable */
-    memset(AOArootsPtr, 0, AOArootsLimit-AOArootsPtr);
+    if (!NoHeapClear) {
+      memset(AOArootsPtr, 0, AOArootsLimit-AOArootsPtr);
+    };
   }
 #endif
   
@@ -434,7 +442,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
   }
 #endif /* MT */
   
-  DEBUG_CODE(memset(ToSpace, 0, IOASize));
+  DEBUG_CODE(if (!NoHeapClear) { memset(ToSpace, 0, IOASize); });
 
   DEBUG_IOA(
             fprintf(output,

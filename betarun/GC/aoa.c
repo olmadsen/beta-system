@@ -233,13 +233,8 @@ Object *AOAallocate(long numbytes)
   if (newObj) {
     totalFree -= numbytes;
     newObj->GCAttr = DEADOBJECT;
-    if 
-#ifdef PERSIST
-	 (totalFree > IOASize) 
-#else
-	 ((totalFree/(totalAOASize/100) < AOAPercentage) ||
-	  (totalFree < AOAMinFree))
-#endif /* PERSIST */
+    if ((totalFree/(totalAOASize/100) > AOAPercentage) &&
+	(totalFree > AOAMinFree))
       {
 	return newObj;
       } else {
