@@ -860,7 +860,7 @@ static void addLabel(long adr, char *id)
   int i;
   char* buf;
 
-  if (getLabelExact(adr)) {
+  if (labels && getLabelExact(adr)) {
     /* There is already a symbol on that addr.  Ignore new one */
     return;
   }
@@ -889,6 +889,14 @@ static void addLabel(long adr, char *id)
   strcpy(lab->id, id+lastslash);
   lab->address = adr;
 
+  if (!labels) {
+    labels=(label**)MALLOC(maxLabels * sizeof(label*));
+    if (!labels) {
+      INFO_LABELS(fprintf(output, "Failed to allocate memory for labels\n"));
+      labels = 0; 
+    }
+    INFO_ALLOC(maxLabels * sizeof(label *));
+  }
   if (numLabels>=maxLabels){
     maxLabels *= 2;
     INFO_LABELS(fprintf(output, "*"); fflush(output));
@@ -914,18 +922,17 @@ static void addLabelsFromGroupTable(void)
   long mPart;
   long gPart;
 
+  if (labels) {
+    qsort(labels, numLabels, sizeof(label**), cmpLabel);
+  }
+
   gh = NextGroup(0);
   while (gh) {
     long* proto = &(gh->protoTable[1]);
     int i, NoOfPrototypes;
     
     NoOfPrototypes = gh->protoTable[0];
-    TRACE_GROUP(fprintf(output, 
-			">>>addLabelsFromGroupTable(group=0x%x, addr=0x%x)\n",
-			(int)gh,
-			(int)data_addr));
     for (i=0; i<NoOfPrototypes; i++) {
-      TRACE_GROUP(fprintf(output,">>>addLabelsFromGroupTable: Try 0x%x\n", (int)*proto));
       sprintf(theLabel, "%s:T%d", NameOfGroupMacro(gh), i+1);
       addLabel((long)(*proto), theLabel);
 
@@ -944,9 +951,7 @@ static void addLabelsFromGroupTable(void)
     gh = NextGroup(gh);
   }
 
-  fprintf(output, "qsort(labels)...");
   qsort(labels, numLabels, sizeof(label**), cmpLabel);
-  fprintf(output, "done\n");
 }
 
 
@@ -964,6 +969,7 @@ static void initLabels(void)
   long labelAddress;
 
 #ifdef ppcmac
+  addLabelsFromGroupTable();
   return;
 #endif /* ppcmac */
 
@@ -991,12 +997,6 @@ static void initLabels(void)
   process_offset = getProcessOffset(table, getMainPhysical());
   /*fprintf(output, "initLabels: ProcessOffset: 0x%x\n", process_offset);*/
 #endif /* nti */
-  labels=(label**)MALLOC(maxLabels * sizeof(label*));
-  if (!labels) {
-    INFO_LABELS(fprintf(output, "Failed to allocate memory for labels\n"));
-    labels = 0; 
-  }
-  INFO_ALLOC(maxLabels * sizeof(label *));
   /* Read labels */
   for (;;) {
     labelAddress = nextAddress(table);
