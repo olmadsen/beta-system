@@ -65,7 +65,8 @@ DisplayObject(output,aObj,retAddress)
 	  ref(Object)    staticObj;
 	  activeProto = theProto;
 	  activeDist  = retAddress - theProto->GenPart; 
-	  while( theProto->Prefix->Prefix != theProto->Prefix){
+	  while(theProto->Prefix &&
+		theProto->Prefix->Prefix != theProto->Prefix){
 	    theProto = theProto->Prefix;
 	    if((retAddress - theProto->GenPart > 0) &&
 	       (retAddress - theProto->GenPart < activeDist)){ 
@@ -76,13 +77,16 @@ DisplayObject(output,aObj,retAddress)
 	}
 	theProto = aItem->Proto;
 	if(theProto==activeProto || /* active prefix */
-	   (!activeProto && theProto->Prefix->Prefix==theProto->Prefix)) /* no prefix */
+	   (!activeProto && 
+	    theProto->Prefix &&
+	    theProto->Prefix->Prefix==theProto->Prefix)) /* no prefix */
 	  fprintf(output,"  comp <%s>", ProtoTypeName(theProto));
 	else
 	  fprintf(output,"  comp %s", ProtoTypeName(theProto));
 
 	/* Print chain of prefixes */
-	while( theProto->Prefix->Prefix != theProto->Prefix){
+	while(theProto->Prefix &&
+	      theProto->Prefix->Prefix != theProto->Prefix){
 	  theProto = theProto->Prefix;
 	  if( theProto == activeProto )
 	    fprintf(output,"<%s>", ProtoTypeName(theProto));
@@ -122,7 +126,8 @@ DisplayObject(output,aObj,retAddress)
     if( retAddress ){
       activeProto = theProto;
       activeDist  = retAddress - theProto->GenPart; 
-      while( theProto->Prefix->Prefix != theProto->Prefix){
+      while(theProto->Prefix && 
+	    theProto->Prefix->Prefix != theProto->Prefix){
 	theProto = theProto->Prefix;
         if((retAddress - theProto->GenPart > 0) &&
 	   (retAddress - theProto->GenPart < activeDist)){ 
@@ -135,11 +140,14 @@ DisplayObject(output,aObj,retAddress)
     /* Print chain of prefixes */
     theProto = aObj->Proto;
     if(theProto==activeProto || /* active prefix */
-       (!activeProto && theProto->Prefix->Prefix==theProto->Prefix)) /* no prefix */
+       (!activeProto && 
+	theProto->Prefix &&
+	theProto->Prefix->Prefix==theProto->Prefix)) /* no prefix */
       fprintf(output,"<%s>", ProtoTypeName(theProto));
     else
       fprintf(output,"%s", ProtoTypeName(theProto));
-    while( theProto->Prefix->Prefix != theProto->Prefix){
+    while(theProto->Prefix &&
+	  theProto->Prefix->Prefix != theProto->Prefix){
       theProto = theProto->Prefix;
       if( theProto == activeProto )
 	fprintf(output,"<%s>", ProtoTypeName(theProto));
@@ -149,19 +157,27 @@ DisplayObject(output,aObj,retAddress)
     fprintf(output, " in %s\n", theFormName(aObj));
     
     /* Print Static Environment Object. */
-    if (!activeProto) activeProto = theProto;
-    staticObj = *(handle(Object))((long)aObj + (4*(long)activeProto->OriginOff));
-    if( staticObj )
-      if( isObject( staticObj ) ){
-	fprintf(output,"    -- ");
-	theProto = staticObj->Proto;
-	fprintf(output,"%s", ProtoTypeName(theProto));
-	while( theProto->Prefix->Prefix != theProto->Prefix){
-	  theProto = theProto->Prefix;
+    { long addr;
+      if (!activeProto) activeProto = theProto;
+      if (!activeProto) return;
+      addr=(long)aObj + (4*(long)activeProto->OriginOff);
+      if (addr) 
+	staticObj = *(handle(Object))addr;
+      else
+	staticObj = 0;
+      if( staticObj )
+	if( isObject( staticObj ) ){
+	  fprintf(output,"    -- ");
+	  theProto = staticObj->Proto;
 	  fprintf(output,"%s", ProtoTypeName(theProto));
+	  while(theProto->Prefix &&
+		theProto->Prefix->Prefix != theProto->Prefix){
+	    theProto = theProto->Prefix;
+	    fprintf(output,"%s", ProtoTypeName(theProto));
+	  }
+	  fprintf(output, " in %s\n", theFormName(aObj));
 	}
-	fprintf(output, " in %s\n", theFormName(aObj));
-      }
+    }
   }
 }
 
