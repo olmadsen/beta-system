@@ -631,7 +631,7 @@ void DisplayNEWRUNStack(long *PC)
 
 #ifdef intel
 
-#define NotInHeap(address) (!(inIOA(address) || inAOA(address)))
+#define InHeap(address) (inIOA(address) || inAOA(address))
 
 /* Traverse the StackArea [low..high] and Process all references within it. 
  * Stop when theComp is reached.
@@ -642,39 +642,58 @@ void DisplayStackPart(long *low,
 		      Component *theComp,
 		      CellDisplayFunc func)
 {
-  long    *current = low;
-  Object  *theObj;
-  Object **theCell;
-  long     retAddr=0;
+  long *current = low;
+  long  retAddr=0;
+  Object *lastObj;
 
   TRACE_DUMP(fprintf(output, ">>>TraceDump: StackPart [0x%x..0x%x]\n", (int)low, (int)high));
   while (current<=high){
     retAddr=0;
+    TRACE_DUMP(fprintf(output, ">>>TraceDump: 0x%x: 0x%x ", (int)current, *(int*)current));
     if(inBetaHeap((Object *)(*current))){
-      theCell = (Object **) current;
-      theObj  = *theCell;
-      if (inIOA(theObj)||inAOA(theObj)){
-	if (isObject(theObj) 
-	    /* && NotInHeap(*(current+1)) 
-	     * NIX, INNER chains pushes PC's subsequently
-	     */){
-	  if (theComp && (Object *)theComp->Body==theObj){
-	    retAddr=*(current+1); /* pc of theComp, when it was left */
-	    break;
-	  }
+      Object *theObj = *(Object **)current;
+      if (InHeap(theObj) && isObject(theObj)){
+	/* Previously also condition !InHeap(*(current+1)) 
+	 * Does not work: INNER chains pushes PC's subsequently
+	 */
+	if (theComp && (Object *)theComp->Body==theObj){
+	  TRACE_DUMP(fprintf(output, "found component item\n"));
+	  retAddr=*(current+1); /* pc of theComp, when it was left */
+	  break;
 	}
 	func((long)*(current+1), theObj);
+      } else {
+	TRACE_DUMP(fprintf(output, "skipped (illegal)"));
       }
-    }else{
+    } else {
+      TRACE_DUMP({
+	if ((-8<=(*current)) && ((*current)<=-5))
+	  fprintf(output, 
+		  "(%d: SKIP NEXT %d)", 
+		  (int)*current, 
+		  -(int)*current-4
+		  );
+      });
       switch (*current){
-      case -8: current++;
-      case -7: current++;
-      case -6: current++;
-      case -5: current++;
+      case -8: 
+	current++;
+	/* Deliberately no break here */
+      case -7: 
+	current++;
+	/* Deliberately no break here */
+      case -6: 
+	current++;
+	/* Deliberately no break here */
+      case -5: 
+	current++;
+	break;
+      default:
+	TRACE_DUMP(fprintf(output, "ignored (not in heap)"));
 	break;
       }
     }
     current++;
+    TRACE_DUMP(fprintf(output, "\n"));
   }
   if (theComp){
     func(retAddr, (Object*)theComp);
