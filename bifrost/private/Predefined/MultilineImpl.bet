@@ -59,15 +59,61 @@ MiterLength:
 
 -- MultiLineShapeFirstPoint: dopart --
 do (if points.p.npoints>0 then 1 -> points.p.getpoint -> p if) 
+
+-- MultiLineShapeLastPoint: dopart --
+do (if points.p.npoints>0 then points.p.npoints -> points.p.getpoint -> p if) 
    
 -- MultiLineShapeOpenBody: dopart --
-do (if points//NONE then
+do (if points=NONE then
        &PointArray[] -> points;
        points.p.initpoints;
    if);
    Invalidate;
    
-   
+-- MultiLineShapeclosestLineSegment: descriptor --
+(# distanceToLine: (* algorithm from Graphical Gems II, p. 10-13 *)
+     (# A, B, P: @point;
+        idist: (* algorithm from Graphical Gems, p. 427-431 *)
+          (# X, Y: @point; res: @integer
+          enter (X, Y)
+          do Y.x-X.x->abs->Y.x;
+             Y.y-X.y->abs->Y.y;
+             Y.x+Y.y-(((Y.x,Y.y)->min) div 2)->res;
+          exit res
+          #);
+        d1: (* algorithm from Graphical Gems II, p. 10-13 *)
+          (# a2: @integer; res: @integer
+          do (P.y-A.y)*(B.x-A.x)-(P.x-A.x)*(B.y-A.y)->abs->a2;
+             (((B.x-A.x)->abs)+((B.y-A.y)->abs)
+             -((((B.x-A.x)->abs,(B.y-A.y)->abs)->min) div 2))->res;
+             a2 div res->res
+          exit res
+          #);
+        d2: @integer;
+     enter (A, B, P)
+     do (if (P.x-A.x)*(B.x-A.x) + (P.y-A.y)*(B.y-A.y)<0 then
+            (A,P)->idist->d2
+         else
+            (if (B.x-P.x)*(B.x-A.x) + (B.y-P.y)*(B.y-A.y)<0 then
+                (B,P)->idist->d2
+             else
+                d1->d2
+            if)
+        if)
+     exit d2
+     #);
+   d, dMin: @integer
+do maxint->dMin;
+   (for inx: points.p.npoints-1 repeat
+        (inx->points.p.getPoint,
+        inx+1->points.p.getPoint,
+        p)->distanceToLine->d;
+        (if (d>=0) and (d<dMin) then
+            d->dMin; inx->i
+        if)
+   for)
+#)
+
 -- MultiLineShapeGetBoundsBody: descriptor --
 (# minx,miny,maxx,maxy: @Integer;
    p: @point;
@@ -103,7 +149,7 @@ do
                 i+1 -> points.p.GetPoint 
                   -> privatePart.Go2CanvasTM.M.TransformPoint
                   -> p;
-                (if Join//JoinMiter then
+                (if Join=JoinMiter then
                     (i -> points.p.GetPoint 
                       -> privatePart.Go2CanvasTM.M.TransformPoint,
                     p,
@@ -143,13 +189,13 @@ do (for i:points.p.npoints repeat (* transform points into BifrostCanvas coord *
 -- MultiLineShapeCopyBody: descriptor --
 (# aML: ^MultiLineShape;
    (* p: ^PointArray; *)
-do (if aCopy[]//NONE then (* Not done in inner *)
+do (if aCopy[]=NONE then (* Not done in inner *)
        &MultiLineShape[] -> aML[];
        points.p.copy -> aML.points;
        cap -> aML.cap;
        join -> aML.join;
        width -> aML.width;
-       (if dashes.d[]//none then else dashes.d.copy -> aML.dashes; if);
+       (if dashes.d[]<>none then dashes.d.copy -> aML.dashes; if);
        
        (* 
         &PointArray[] -> p[];
@@ -167,7 +213,7 @@ do (if aCopy[]//NONE then (* Not done in inner *)
 (# devicepoints: @pointarray;
 do points.p.npoints -> devicepoints.initpoints;
    
-   (if TM[] //NONE then
+   (if TM[]=NONE then
        (for i:points.p.npoints repeat
             i -> points.p.getpoint
               -> privatepart.Go2CanvasTM.M.Transformpoint
@@ -338,10 +384,17 @@ do INNER;
 do p -> points.p.addpoint 
    
 -- MultiLineShapeDelete: dopart --
-do INNER;
+do find:
+     points.p.scanPoints
+     (#
+     do (if (p,current)->equalpoint then
+            inx->points.p.deletePoint;
+            leave find
+        if)
+     #)
    
 -- MultiLineShapeInsert: dopart --
-do INNER;
+do (p,i)->points.p.insertpoint
    
 -- MultiLineShapeCalculate: dopart --
 do (if privatepart.invalid then
@@ -364,3 +417,8 @@ do (if privatepart.invalid then
        false -> privatepart.invalid;
    if);
    
+-- MultiLineShapeGetPoint: dopart --
+do i->points.p.getpoint->p
+   
+-- MultiLineShapeSetPoint: dopart --
+do (p,i)->points.p.setpoint
