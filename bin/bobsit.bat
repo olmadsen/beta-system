@@ -26,8 +26,8 @@ goto getopts
 :execute
 rem Start the excutable
 
-echo bobsit version 1.5
-%BETALIB%\bobsgen\v1.5\NTIexbobs < %_opts_%-parser.bobs
+echo bobsit version 1.6
+%BETALIB%\bobsgen\v1.6\NTIexbobs < %_opts_%-parser.bobs
 
 if not exist bobslist goto KEEPGOING
 if exist %_opts_%-parser.lst del %_opts_%-parser.lst
@@ -38,8 +38,8 @@ echo "End-of-BOBS"
 
 if not exist tables goto gramerrors
 
-echo Creating tables (tabc version 1.5)
-%BETALIB%\bobsgen\v1.5\NTItabc tables %_opts_%-parser
+echo Creating tables (tabc version 1.6)
+%BETALIB%\bobsgen\v1.6\NTItabc tables %_opts_%-parser
 
 rem Clean-up
 set _opts_=

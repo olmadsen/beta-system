@@ -25,8 +25,8 @@ goto getopts
 
 :execute
 rem Start the excutable
-echo morepretty version v5.1 
-"%BETALIB%"\prettygen\v5.1\NTImorepretty %_opts_%
+echo morepretty version v5.2 
+"%BETALIB%"\prettygen\v5.2\NTImorepretty %_opts_%
 
 rem Clean-up
 set _opts_=

@@ -25,8 +25,8 @@ goto getopts
 
 :execute
 rem Start the eexcutable
-echo generator version 5.1
-"%BETALIB%"\meta\v5.1\NTIgen %_opts_%
+echo generator version 5.2
+"%BETALIB%"\meta\v5.2\NTIgen %_opts_%
 
 rem Clean-up
 set _opts_=
