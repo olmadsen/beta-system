@@ -11,15 +11,15 @@ void AlloVR1(struct Object* theObj,
 	     int range, 
 	     long *SP)
 {
-    struct ValRep *theRep;
-    register unsigned Size;
+    struct ValRep *theRep=0;
+    register unsigned size;
 
     DEBUG_CODE(NumAlloVR1++);
 
     if (range < 0) range = 0;
 
     Ck(theObj);
-    Size = ByteRepSize(range);
+    size = ByteRepSize(range);
 
     if (range > LARGE_REP_SIZE) {
 	theRep = (struct ValRep *)LVRACAlloc(ByteRepPTValue, range);
@@ -33,11 +33,21 @@ void AlloVR1(struct Object* theObj,
 	}
     }
 
-    Protect(theObj, theRep = (struct ValRep *)IOAcalloc(Size, SP));
+    push(theObj);
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "AlloVR1 allocates in AOA\n"));
+      theRep = (struct ValRep *)AOAcalloc(size, SP);
+      DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
+    }
+    if (!theRep) {
+      theRep = (struct ValRep *)IOAcalloc(size, SP);
+      theRep->GCAttr = 1;
+    }
+    pop(theObj);
     Ck(theObj);
   
     theRep->Proto = ByteRepPTValue;
-    theRep->GCAttr = 1;
+    /* theRep->GCAttr set above if in IOA */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
     
@@ -49,14 +59,14 @@ void AlloVR2(struct Object* theObj,
 	     int range, 
 	     long *SP)
 {
-    struct ValRep *theRep;
-    register unsigned Size;
+    struct ValRep *theRep=0;
+    register unsigned size;
 
     DEBUG_CODE(NumAlloVR2++);
 
     if (range < 0) range = 0;
 
-    Size = WordRepSize(range);
+    size = WordRepSize(range);
 
     if (range > LARGE_REP_SIZE) {
 	theRep = (struct ValRep *)LVRACAlloc(WordRepPTValue, range);
@@ -70,11 +80,21 @@ void AlloVR2(struct Object* theObj,
 	}
     }
 
-    Protect(theObj, theRep = (struct ValRep *)IOAcalloc(Size, SP));
+    push(theObj);
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "AlloVR2 allocates in AOA\n"));
+      theRep = (struct ValRep *)AOAcalloc(size, SP);
+      DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
+    }
+    if (!theRep) {
+      theRep = (struct ValRep *)IOAcalloc(size, SP);
+      theRep->GCAttr = 1;
+    }
+    pop(theObj);
     Ck(theObj);
 
     theRep->Proto = WordRepPTValue;
-    theRep->GCAttr = 1;
+    /* theRep->GCAttr set above if in IOA */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
     
@@ -86,14 +106,14 @@ void AlloVR4(struct Object* theObj,
 	     int range, 
 	     long *SP)
 {
-    struct ValRep *theRep;
-    register unsigned Size;
+    struct ValRep *theRep=0;
+    register unsigned size;
 
     DEBUG_CODE(NumAlloVR4++);
 
     if (range < 0) range = 0;
 
-    Size = ValRepSize(range);
+    size = ValRepSize(range);
 
     if (range > LARGE_REP_SIZE) {
 	theRep = (struct ValRep *)LVRACAlloc(ValRepPTValue, range);
@@ -107,11 +127,21 @@ void AlloVR4(struct Object* theObj,
 	}
     }
 
-    Protect(theObj, theRep = (struct ValRep *)IOAcalloc(Size, SP));
+    push(theObj);
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "AlloVR4 allocates in AOA\n"));
+      theRep = (struct ValRep *)AOAcalloc(size, SP);
+      DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
+    }
+    if (!theRep) {
+      theRep = (struct ValRep *)IOAcalloc(size, SP);
+      theRep->GCAttr = 1;
+    }
+    pop(theObj);
     Ck(theObj);
     
     theRep->Proto = ValRepPTValue;
-    theRep->GCAttr = 1;
+    /* theRep->GCAttr set above if in IOA */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
 
@@ -124,14 +154,14 @@ void AlloVR8(struct Object* theObj,
 	     int range, 
 	     long *SP)
 {
-    struct ValRep *theRep;
-    register unsigned Size;
+    struct ValRep *theRep=0;
+    register unsigned size;
 
     DEBUG_CODE(NumAlloVR8++);
 
     if (range < 0) range = 0;
 
-    Size = DoubleRepSize(range);
+    size = DoubleRepSize(range);
 
     if (range > LARGE_REP_SIZE) {
 	theRep = (struct ValRep *)LVRACAlloc(DoubleRepPTValue, range);
@@ -145,11 +175,21 @@ void AlloVR8(struct Object* theObj,
 	}
     }
 
-    Protect(theObj, theRep = (struct ValRep *)IOAcalloc(Size, SP));
+    push(theObj);
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "AlloVR8 allocates in AOA\n"));
+      theRep = (struct ValRep *)AOAcalloc(size, SP);
+      DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
+    }
+    if (!theRep) {
+      theRep = (struct ValRep *)IOAcalloc(size, SP);
+      theRep->GCAttr = 1;
+    }
+    pop(theObj);
     Ck(theObj);
 
     theRep->Proto = DoubleRepPTValue;
-    theRep->GCAttr = 1;
+    /* theRep->GCAttr set above if in IOA */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
 

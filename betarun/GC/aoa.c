@@ -1,7 +1,8 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
  * aoa.c
- * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann 
+ * and S|ren Brandt
  */
 #include "beta.h"
 
@@ -15,19 +16,47 @@ static void Phase3(void);
 extern void DoGC(long *SP);
 #endif
 
-/* EXPORTING:
- *
- *  CopyObjectToAOA move an object to AOA and return the address of the new location
- *  If the allocation in AOA failed the function returns 0;
- *
- *    ref(Object) CopyObjectToAOA( theObj)
- *      ref(Object) theObj;
- *
- *  AOAGc perform a mark/sweep garbagecollection on the AOA heap.
- *  Should be called after IOAGc when AOANeedCompaction == TRUE;
- *
- *    void AOAGc();
+/* tempAOArootsAlloc:
+ *  Not enough room for the AOAroots table in ToSpace.
+ *  Instead allocate offline and copy existing part of table over
  */
+
+void tempAOArootsAlloc(void)
+{
+    ptr(long) oldPtr;
+    ptr(long) pointer = ToSpaceLimit; /* points to end of old table */
+
+    if ( ! (tempAOAroots = (long *) MALLOC(IOASize)) ){
+      char buf[300];
+      sprintf(buf, "Could not allocate temporary AOAroots table.");
+#ifdef macintosh
+      EnlargeMacHeap(buf);
+#endif
+      Notify(buf);
+      exit(1);
+    } 
+    AOArootsLimit = (long *) ((char *) tempAOAroots + IOASize);
+    INFO_IOA(fprintf(output, "\nallocated temporary AOAroots table, "));
+    DEBUG_IOA(fprintf(output, " [0x%x] ", tempAOAroots));
+    oldPtr = AOArootsPtr; /* start of old table */
+    AOArootsPtr = AOArootsLimit; /* end of new table */
+    
+    /* Copy old table backwards */
+    while(pointer > oldPtr) *--AOArootsPtr = *--pointer; 
+
+}
+
+void tempAOArootsFree(void)
+{
+#ifdef RTDEBUG
+  long roots = (long)tempAOAroots;
+  Claim(tempAOAroots!=NULL, "tempAOArootsFree: tempAOAroots allocated");
+#endif
+  FREE(tempAOAroots);
+  tempAOAroots = NULL;
+  INFO_IOA(fprintf(output, "freed temporary AOAroots table\n"));
+  DEBUG_IOA(fprintf(output, " [0x%x]", roots));
+}
 
 long AOACreateNewBlock = FALSE;
 
@@ -113,10 +142,6 @@ static struct Object *AOAallocate(long numbytes)
 
 #ifdef NEWRUN
 
-#ifdef RTDEBUG
-int NumAOAAlloc=0;
-#endif
-
 struct Object *AOAalloc(long numbytes, long *SP)
 {
   struct Object *theObj = AOAallocate(numbytes);
@@ -140,6 +165,11 @@ struct Object *AOAcalloc(long numbytes, long *SP)
 }
 #endif
 
+
+/* CopyObjectToAOA:
+ *  move an object to AOA and return the address of the new location
+ *  If the allocation in AOA failed the function returns 0;
+ */
 ref(Object) CopyObjectToAOA( theObj)
      ref(Object) theObj;
 {
@@ -198,7 +228,10 @@ ref(Object) CopyObjectToAOA( theObj)
   return newObj;
 }
 
-
+/*
+ *  AOAGc: perform a mark/sweep garbagecollection on the AOA heap.
+ *  Should be called after IOAGc when AOANeedCompaction == TRUE;
+ */
 void AOAGc()
 {
   /* Remember that AOAGc is called before ToSpace <-> IOA, so

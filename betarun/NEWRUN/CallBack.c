@@ -7,7 +7,7 @@
 #include "crun.h"
 
 
-/* UNSOLVED PROBLEM:
+/* FIXME:
  * if valhallaisstepping, we should call valhalla after callback returns to C 
  */
 
@@ -47,7 +47,7 @@
  * Called from BETA to generate callback code, i.e. the code
  * called from C before re-entering BETA world.
  */
-void *CopyCPP(struct Structure *theStruct, struct Structure *dummy) 
+void *CopyCPP(struct Structure *theStruct) 
 {
   unsigned long entry;     /* Beta code stub, e.g. _foo */
   unsigned long strucaddr; /* Address of struc */
@@ -56,14 +56,6 @@ void *CopyCPP(struct Structure *theStruct, struct Structure *dummy)
 
   if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
  
-  if (theStruct->Proto != StructurePTValue){
-    printf("\n*** CopyCPP: dummy used\n");
-    theStruct = dummy;
-  }
-  if (theStruct->Proto != StructurePTValue){
-    printf("\n*** CopyCPP: dummy ILLEGAL\n");
-  }
-  
   /* Take the next free entry in the Call Back Functions Area.	*/
   /* This area is defined by 
    * [ lastCBFABlock->entries <= CBFATop < CBFALimit ].

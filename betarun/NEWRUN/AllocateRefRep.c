@@ -8,17 +8,30 @@
 
 void AlloRR(struct Object* theObj, unsigned offset, int range, long *SP)
 {
-    struct RefRep *theRep;
+    struct RefRep *theRep=0;
+    unsigned long size;
 
     DEBUG_CODE(NumAlloRR++);
 
     Ck(theObj);
     if (range<0) range=0; 
-    Protect(theObj, theRep = (struct RefRep *)IOAcalloc(RefRepSize(range), SP));
+
+    push(theObj);
+    size = RefRepSize(range);
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "AlloRR allocates in AOA\n"));
+      theRep = (struct RefRep *)AOAcalloc(size, SP);
+      DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
+    }
+    if (!theRep) {
+      theRep = (struct RefRep *)IOAcalloc(size, SP);
+      theRep->GCAttr = 1;
+    }
+    pop(theObj);
     Ck(theObj);
 
     theRep->Proto = RefRepPTValue;
-    theRep->GCAttr = 1;
+    /* theRep->GCAttr set above if in IOA */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
 

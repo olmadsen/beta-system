@@ -74,6 +74,8 @@ void BetaExit( number )
   fprintf(stderr, "Susp:     %-8d  ", (int)NumSusp);
   fprintf(stderr, "TermComp: %-8d\n", (int)NumTermComp);
   fprintf(stderr, "\n");
+  fprintf(stderr, "AOAAlloc: %-8d\n", (int)NumAOAAlloc);
+  fprintf(stderr, "\n");
 #endif /* UNIX */
 #endif /* RTDEBUG */
 

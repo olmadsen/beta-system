@@ -50,12 +50,12 @@ extern long 		    ltS(struct Structure *arg1, struct Structure *arg2, long *SP);
 /* Routines that do not cause GC */
 extern long 		    eqS(struct Structure *arg1, struct Structure *arg2);
 extern long 		    neS(struct Structure *arg1, struct Structure *arg2);
-extern void 		    Qua(struct ProtoType *dstQuaProto, struct Object **theCell, struct Object *dstQuaOrigin, long *SP);
+extern void 		    Qua(struct Object *dstQuaOrigin, struct ProtoType *dstQuaProto, struct Object **theCell, long *SP);
 extern void		    Return(void);
 extern void		    SetArgValues(long argc, char *argv[]);
 extern void		    FailureExit(long *SP, struct Object *this);
 extern void		    HandleIndexErr(long *SP, struct Object *this);
-extern void *               CopyCPP(struct Structure *theStruct, struct Structure *dummy);
+extern void *               CopyCPP(struct Structure *theStruct);
 extern void 		    CinitT(void);
 extern char *		    CpkVT(struct ValRep *theRep, long *SP);
 extern char *		    CpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP);

@@ -56,10 +56,15 @@ void IOAGc()
   
   DEBUG_AOA( AOAtoIOACheck() );
   DEBUG_AOA( AOACheck() );
+
 #ifdef KEEP_STACKOBJ_IN_IOA
   IOAStackObjectSum = IOAStackObjectNum = 0;
 #endif
+
+  /* AOA roots start out by residing in upper part of ToSpace */
   AOArootsLimit = AOArootsPtr = ToSpaceLimit;
+
+  /* Clear IOAAgeTable */
   { long i; for(i=0; i < IOAMaxAge;i++) IOAAgeTable[i] = 0; }
   /* Save the state of AOA, this state is used at end of IOAGc, to proceed 
    * not handled objects.
@@ -224,7 +229,7 @@ void IOAGc()
     
     if (tempAOAroots) {
       /* ToSpace was not big enough to hold both objects and table.
-       * Free the table that was allocated in CopyObject().
+       * Free the table that was allocated by saveAOAroot().
        */
       tempAOArootsFree();
     }
@@ -379,10 +384,17 @@ void DoIOACell(struct Object **theCell, struct Object *theObj)
 	  ProcessReference(theCell);
 	} else {
 #ifdef RTDEBUG
-	  fprintf(output, "[DoIOACell: ***Illegal: 0x%x: 0x%x]\n", 
-		  (int)theCell,
-		  (int)theObj);
-	  Illegal();
+	  if (isValRep(theObj)){
+	    if (inLVRA(theObj))
+	      fprintf(output, "[DoIOACell: ***InLVRA: 0x%x: 0x%x]\n", 
+		      (int)theCell, 
+		      (int)theObj);
+	  } else {
+	    fprintf(output, "[DoIOACell: ***Illegal: 0x%x: 0x%x]\n", 
+		    (int)theCell,
+		    (int)theObj);
+	    Illegal();
+	  }
 #endif /* RTDEBUG */
 	}
 #endif /* RTLAZY */
@@ -962,10 +974,13 @@ void CompleteScavenging()
     theObj = (ref(Object)) HandledInToSpace;
     HandledInToSpace = (ptr(long)) (((long) HandledInToSpace)
 				    + 4*ObjectSize(theObj));
+    DEBUG_IOA( fprintf(output, "CompleteScavenging: theObj=0x%x proto=0x%x\n", theObj, theObj->Proto));
+    DEBUG_IOA( fprintf(output, "CompleteScavenging: HandledInToSpace=0x%x\n", HandledInToSpace));
     DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#CompleteScavenging: ObjectSize(theObj) > 0") );
     ProcessObject( theObj);
   }
-  DEBUG_IOA( Claim( HandledInToSpace == ToSpaceTop,
+  DEBUG_IOA( fprintf(output, "CompleteScavenging: ToSpaceTop=0x%x\n", ToSpaceTop));
+  DEBUG_CODE( Claim( HandledInToSpace == ToSpaceTop,
 		   "CompleteScavenging: HandledInToSpace == ToSpaceTop"));
 }
 

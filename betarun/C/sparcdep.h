@@ -85,16 +85,6 @@ register long   retAddress   asm("%i7");
   (*(long *)p = 0x40000000| (((unsigned) ((char*)f-(char*)p)) >> 2))
 #define NOP 0x1000000
 
-
-/* Redefine inIOA as to make gcc generate optimal code */
-#ifdef inIOA
-#undef inIOA
-#endif
-
-/* Isn't life swell? This generates optimal code $^)*/
-#define inIOA(x) (((unsigned) x - (unsigned) IOA) < (unsigned) IOATopOff)
-
-
 /* Defining this in the head of a module, together with a
    GCable_Entry and GCable_Exit in every routine in that module makes
    the activation record look like BETA, but *BEWARE*!:

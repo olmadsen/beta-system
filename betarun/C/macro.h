@@ -85,8 +85,15 @@ register unsigned IOATopOff asm("%g7");
 #endif
 #endif
 
-#define inHeap(x)    (inIOA(x) || inLVRA(x))
+
+
+#if defined(sparc) || defined(NEWRUN)
+#define inIOA(x)     (((unsigned)(x) - (unsigned)(IOA)) < (unsigned)(IOATopOff))
+#else
 #define inIOA(x)     (((long)IOA <= (long)(x)) && ((long)(x) < (long)IOATop))
+#endif
+
+#define inHeap(x)    (inIOA(x) || inLVRA(x))
 #define inToSpace(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceTop)) 
 #define inAOA(x)     inArea(AOABaseBlock, (struct Object *)(x))
 

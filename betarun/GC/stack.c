@@ -510,10 +510,14 @@ void ProcessRefStack(size, bottom)
           && (theObj!=(struct Object *)ExternalMarker)
 	  ) {
 	if (isValRep(theObj)){
-	  fprintf(output, "[ProcessRefStack: ***ValRep: 0x%x: 0x%x]\n", (int)theCell, (int)theObj);
+	  if (inLVRA(theObj))
+	    fprintf(output, "[ProcessRefStack: ***InLVRA: 0x%x: 0x%x]\n", 
+		    (int)theCell,
+		    (int)theObj);
 	} else {
-	  extern void Illegal();
-	  fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", (int)theCell, (int)theObj);
+	  fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
+		  (int)theCell, 
+		  (int)theObj);
 	  Illegal();
 	}
       }
@@ -619,11 +623,13 @@ void ProcessRefStack(size, bottom)
           && (theObj!=(struct Object *)ExternalMarker)
 	  ) {
 	if (isValRep(theObj)){
-	  fprintf(output, "[ProcessRefStack: ***ValRep: 0x%x: 0x%x]\n", (int)theCell, 
-		  (int)theObj);
+	  if (inLVRA(theObj))
+	    fprintf(output, "[ProcessRefStack: ***InLVRA: 0x%x: 0x%x]\n", 
+		    (int)theCell, 
+		    (int)theObj);
 	} else {
-	  extern void Illegal();
-	  fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", (int)theCell,
+	  fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
+		  (int)theCell,
 		  (int)theObj);
 	  Illegal();
 	}

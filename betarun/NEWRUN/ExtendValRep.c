@@ -70,10 +70,9 @@ void ExtVR(struct Object *theObj,
     /* NOT REACHED if LVRAcalloc successfully called */
 
     /* Allocate and nullify new repetition: There is a little overhead here;
-     * only extension needs to be nullified. TODO!
+     * only extension needs to be nullified. FIXME!
      */
     push(theObj);
-    push(theRep);
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "ExtVR allocates in AOA\n"));
       newRep = (struct ValRep *)AOAcalloc(size, SP);
@@ -83,9 +82,11 @@ void ExtVR(struct Object *theObj,
       newRep = (struct ValRep *)IOAcalloc(size, SP);
       newRep->GCAttr = 1;
     }
-    pop(theRep);
     pop(theObj);
-    
+
+    /* Reload theRep - may have been moved in IOAGc */
+    theRep = *(struct ValRep **)((long *) theObj + offset);
+
     Ck(theObj); Ck(theRep);
     
     /* Assign structural part of new repetition */

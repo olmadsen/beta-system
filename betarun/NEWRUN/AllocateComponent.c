@@ -8,7 +8,8 @@
 
 struct Component *AlloC(struct Object *origin, struct ProtoType *proto, long *SP)
 {
-  struct Component *comp;
+  struct Component *comp=0;
+  unsigned long size;
 
   DEBUG_CODE(NumAlloC++);
 
@@ -16,14 +17,24 @@ struct Component *AlloC(struct Object *origin, struct ProtoType *proto, long *SP
   
   DEBUG_CODE( Claim(proto->Size > 0, "AlloC: proto->Size > 0") );
   
-  Protect(origin, 
-	  comp = (struct Component *)IOAcalloc(ComponentSize(proto), SP));
+  push(origin);
+  size = ComponentSize(proto);
+  if (size>IOAMAXSIZE){
+    DEBUG_AOA(fprintf(output, "AlloC allocates in AOA\n"));
+    comp = (struct Component *)AOAcalloc(size, SP);
+    DEBUG_AOA(if (!comp) fprintf(output, "AOAcalloc failed\n"));
+  }
+  if (!comp) {
+    comp = (struct Component *)IOAcalloc(size, SP);
+    comp->GCAttr = 1;
+  }
+  pop(origin);
 
   /* The new Component is now allocated, but not initialized yet! */
   
   /* Initialize the structual part; prototype, age etc. */
   comp->Proto = ComponentPTValue;
-  comp->GCAttr = 1;
+  /* comp->GCAttr set above if in IOA */
   comp->StackObj = (struct StackObject *)0;
   comp->CallerObj = (struct Object *)0;
   comp->CallerComp = (struct Component *)0;

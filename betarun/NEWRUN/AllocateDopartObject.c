@@ -16,6 +16,7 @@ struct DopartObject *AlloDO(unsigned size, struct Object *this, long *SP)
 
     DEBUG_CODE( Claim(size > 0, "AlloDO: size > 0") );
 
+    /* No need to check for IOAMAXSIZE */
     Protect(this, 
 	    theObj = (struct DopartObject *)IOAalloc(DopartObjectSize(size), SP));
     Ck(this);

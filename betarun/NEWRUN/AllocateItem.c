@@ -24,12 +24,11 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
   Ck(origin);
   DEBUG_CODE(Claim(proto->Size > 0, "AlloI: proto->Size > 0") );
 
+  push(origin);
   size = ItemSize(proto);
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "AlloI allocates in AOA\n"));
-    push(origin);
     item = (struct Item *)AOAcalloc(size, SP);
-    pop(origin);
     DEBUG_AOA(if (!item) fprintf(output, "AOAcalloc failed\n"));
   }
   if (!item) {
@@ -37,19 +36,15 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
     DEBUG_CODE(Claim(size>0, "AlloI: size>0"));
     DEBUG_CODE(Claim( ((long)size&7)==0 , "AlloI: (size&7)==0"));
     DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "AlloI: (IOATop&7)==0"));
-    
-    push(origin);
     while ((char *) IOATop+size > (char *)IOALimit) {
       doGC(SP, GetThis(SP), size / 4);
     }
-    pop(origin);
-    
     item = (struct Item *)IOATop;
     IOATopOff += size;
-    
     long_clear(item->Body, size-headsize(Item));
     DEBUG_CODE(zero_check(item->Body, size-headsize(Item)));
   }
+  pop(origin);
 
   /* The new Item is now allocated, but not initialized yet! */
   
@@ -73,7 +68,18 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
 
 struct Item *AlloH(struct ProtoType *proto, long *SP)
 {
-  struct Item *item = (struct Item *) IOAcalloc(ItemSize(proto), SP);
+  struct Item *item=0;
+  unsigned long size;
+
+  size= ItemSize(proto);
+  if (size>IOAMAXSIZE){
+    DEBUG_AOA(fprintf(output, "AlloH allocates in AOA\n"));
+    item = (struct Item *) AOAcalloc(size, SP);
+    DEBUG_AOA(if (!item) fprintf(output, "AOAcalloc failed\n"));
+  }
+  if (!item){
+    item = (struct Item *) IOAcalloc(size, SP);
+  }
   
   /* The new Object is now allocated, but not initialized yet! */
   

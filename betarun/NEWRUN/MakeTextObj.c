@@ -12,8 +12,8 @@ void MkTO(char *asciz,
 	  long *SP
 	  )
 {
-    struct TextObject* theText;
-    unsigned long range, i, repsize, size;
+    struct TextObject* theText=0;
+    unsigned long range, i, repsize, size, isInAOA;
     struct ValRep *theRep=0;
     
     DEBUG_CODE(NumMkTO++);
@@ -42,13 +42,28 @@ void MkTO(char *asciz,
       size=ItemSize(TextProto) + repsize;
     }
 
-    /* Allocate in IOA */
+    /* Allocate in IOA/AOA */
+    push(theItem);
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "MkTO allocates in AOA\n"));
+      theText=(struct TextObject*)AOAcalloc(size, SP);
+      DEBUG_AOA(if (!theText) fprintf(output, "AOAcalloc failed\n"));
+    }
+    if (theText) {
+      isInAOA=1;
+    } else {
+      isInAOA=0;
+      theText=(struct TextObject*)IOAcalloc(size, SP);
+      theText->GCAttr = 1;
+    }
+    pop(theItem);
+
     Protect(theItem, theText=(struct TextObject*)IOAcalloc(size, SP));
 
     /* The new TextObject and Repetition are now allocated */
     /* No need to call setup_item - no inlined partobjects in Text */
     theText->Proto = TextProto;
-    theText->GCAttr = 1; 
+    /* theText->GCAttr set above if in IOA */
     theText->Origin = (struct Object *)BasicItem;   
 
     /* No need to call Gpart - the repetition will be overwritten anyway */
@@ -59,7 +74,7 @@ void MkTO(char *asciz,
       /* An uninitialized value repetition is at the end of theText */
       theRep = (struct ValRep *)((long)theText+ItemSize(TextProto));
       theRep->Proto = ByteRepPTValue;
-      theRep->GCAttr = 1;
+      if (!isInAOA) theRep->GCAttr = 1;
       theRep->LowBorder = 1;
       theRep->HighBorder = range;
     }
@@ -69,8 +84,8 @@ void MkTO(char *asciz,
       theRep->Body[i] = *((long *)asciz + i);
     }
   
-    /* No need for AssignReference. Either both theText and theRep are in IOA
-     * or theText is in IOA and theRep in LVRA.
+    /* No need for AssignReference. Either both theText and theRep are in IOA/AOA
+     * or theText is in IOA/AOA and theRep in LVRA.
      */
     theText->T = theRep;
 

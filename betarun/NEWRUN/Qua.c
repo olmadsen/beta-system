@@ -20,9 +20,9 @@
 
 /* Sloppy qua-check, only prototypes are considered */
 
-void Qua(struct ProtoType *dstQuaProto,
+void Qua(struct Object *dstQuaOrigin,
+	 struct ProtoType *dstQuaProto,
 	 struct Object **theCell,
-	 struct Object *dstQuaOrigin,
 	 long *SP
 	 )
 {
@@ -32,16 +32,20 @@ void Qua(struct ProtoType *dstQuaProto,
 
   DEBUG_CODE(NumQua++);
 
-  return; /* TODO: get parameters right */
+  /* fprintf(output, "\nQua called with dstQuaProto=0x%x, theCell=0x%x, dstQuaOrigin=0x%x\n",
+   * 	  dstQuaProto, theCell, dstQuaOrigin); 
+   * fflush(output);
+   */
 
   src = *theCell;
 
 #ifdef RTDEBUG
   if ((src) && !(inIOA(src) || inAOA(src) || inLVRA(src) || isLazyRef(src))) {
     char buf[100];
-    sprintf (buf, "Qua: src check failed. src = %d, theCell = %d\n", 
+    sprintf (buf, "Qua: *theCell not in heap: *theCell=0x%x, theCell=0x%x\n", 
 	     (int) src, (int) theCell);
-    Notify(buf);
+    fprintf(output, "%s", buf); fflush(output); return;
+    /* Notify(buf); */
   }
   Ck(src);
 #endif    
@@ -119,7 +123,9 @@ void Qua(struct ProtoType *dstQuaProto,
 }
 
 
-/* Strict qua-check, also checking origins */
+/* Strict qua-check, also checking origins.
+ * FIXME: Does not work anymore!
+ */
 
 #ifdef STRICT_QUA
 void OQua(struct Object **theCell,

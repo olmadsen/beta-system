@@ -212,8 +212,8 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   case SIGSEGV:
     todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
   case SIGTRAP:
-    fprintf(stderr, "SIGTRAP caught; code is %d\n", code);
-    fflush(stderr);
+    DEBUG_CODE(fprintf(stderr, "SIGTRAP caught; code is %d\n", code);
+	       fflush(stderr));
     switch(code){
     case 14:
       todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;

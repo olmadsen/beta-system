@@ -104,6 +104,8 @@ void AOAtoIOAReport(void);
 #endif
 
 /* GC/aoa.c */
+extern void tempAOArootsAlloc(void);
+extern void tempAOArootsFree(void);
 #ifdef NEWRUN
 extern struct Object *AOAalloc(long numbytes, long *SP);
 extern struct Object *AOAcalloc(long numbytes, long *SP);
@@ -136,8 +138,6 @@ extern void ProcessAOAReference(handle(Object));
 extern void ProcessAOAObject(ref(Object));
 extern void CompleteScavenging(void);
 extern long GetDistanceToEnclosingObject(ref(Object));
-extern void tempAOArootsAlloc(void);
-extern void tempAOArootsFree(void);
 #ifdef NEWRUN
 extern void DoIOACell(struct Object **theCell, struct Object *theObj);
 #endif

@@ -45,8 +45,9 @@ long LVRAAlive(ref(ValRep) theRep)
     return FALSE;
   }
   
-  /* Why not this ?????
+  /* FIXME: Why does this make lvra go bananas?
   if (inToSpace(theRep->GCAttr)){
+    / LVRAAlive is never called during IOAGc, so pointers from ToSpace are not roots /
     return FALSE;
   }
   */
@@ -80,7 +81,7 @@ long LVRARepSize(struct ValRep *rep)
       rep->GCAttr = 0;
       rep->HighBorder =
 	DispatchValRepSize(rep->Proto, rep->HighBorder-rep->LowBorder+1);
-      /* Use LVRAKill instead !!! */
+      /* FIXME: Use LVRAKill instead !!! */
     }
     /* rep->GCAttr == 0 */
     DEBUG_LVRA( Claim( rep->HighBorder>= headsize(ValRep), 
@@ -171,7 +172,7 @@ static void LVRAInsertFreeElement(ref(ValRep) freeRep)
 	      } );
   headRep = LVRATable[index];  LVRATable[index] = freeRep;
   freeRep->Proto  = (ref(ProtoType)) headRep;
-  freeRep->GCAttr = 0; /* NOT NEEDED ??? */
+  freeRep->GCAttr = 0; /* FIXME: NOT NEEDED always done before this func is called? */
   DEBUG_CODE( if( index == TableMAX )
 	     fprintf(output, "(LVRAInsertFreeElement: size=%d (0x%x))", 
 		     (int)freeRep->HighBorder,
@@ -473,7 +474,7 @@ void LVRAkill(struct ValRep *rep)
 				       rep->HighBorder-rep->LowBorder+1);
   rep->Proto = 0;
   rep->GCAttr = 0;
-  /* evt s{tte ind i free-list ? */
+  LVRAInsertFreeElement(rep); /* datpete 5 feb 1996 */
 }
 
 #ifdef CHECK_LVRA_IN_IOA

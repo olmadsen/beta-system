@@ -16,9 +16,10 @@ void CopySRR(struct RefRep *theRep,
 	     long *SP
 	     )
 {
-    struct RefRep *newRep;
+    struct RefRep *newRep=0;
     register long range;
     register long i;
+    unsigned long size;
     
     DEBUG_CODE(NumCopySRR++);
 
@@ -36,8 +37,22 @@ void CopySRR(struct RefRep *theRep,
     
     /* range is now converted to the range of the resulting repetition. */
     
-    Protect2(theItem, theRep, 
-	     newRep = (struct RefRep *) IOAalloc(RefRepSize(range), SP));
+    push(theItem);
+    push(theRep);
+    size = RefRepSize(range);
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "CopySRR allocates in AOA\n"));
+      newRep = (struct RefRep *)AOAalloc(size, SP);
+      DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+    }
+    if (newRep) {
+      newRep->GCAttr = 0; /* In AOA */
+    } else {
+      newRep = (struct RefRep *)IOAalloc(size, SP);
+      newRep->GCAttr = 1; /* In IOA */
+    }
+    pop(theRep);
+    pop(theItem);
     
     Ck(theRep); Ck(theItem);
 
@@ -45,17 +60,14 @@ void CopySRR(struct RefRep *theRep,
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = RefRepPTValue;
-    newRep->GCAttr = 1;
+    /* newRep->GCAttr set above */
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
     
     /* Copy the body part of the repetition. */
-    
-    for (i = 0; i < range; ++i)
-      /* AssignReference not needed:
-       * only needed when dest may be in aoa and src may be in ioa.
-       */
-      newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder]; 
+    for (i = 0; i < range; ++i){
+      AssignReference(&newRep->Body[i], theRep->Body[i+low-theRep->LowBorder]);
+    }
     
     AssignReference((long *)theItem + offset, (struct Item *)newRep);
 }

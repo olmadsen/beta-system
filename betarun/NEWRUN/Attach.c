@@ -31,12 +31,12 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
    
    if ((long)comp->CallerLSC == -1) {
      BetaError(RecursiveAttErr, this, (long *)SPx);
-     /* TODO: Probably SPx should be adjusted for SPoff */
+     /* FIXME: Probably SPx should be adjusted for SPoff */
    }
 
    if ((long)comp->CallerLSC == -2) {
      BetaError(CompTerminatedErr, this, (long *)SPx); 
-     /* TODO: Probably SPx should be adjusted for SPoff */
+     /* FIXME: Probably SPx should be adjusted for SPoff */
    }
 
    isFirst = (comp->CallerLSC == 0);

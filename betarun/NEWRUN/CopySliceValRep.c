@@ -72,31 +72,47 @@ void CopySVR(struct ValRep *theRep,
 	newRep->GCAttr = (long) ((long *) theItem + offset);
 	*(struct ValRep **)((long *)theItem + offset) = newRep;
       } else{
-	/* Allocate in IOA */
+	/* Allocate in IOA/AOA */
 	size  = DispatchValRepSize(theRep->Proto, range);
-	Protect2(theRep,theItem,newRep = (struct ValRep *)IOAalloc(size, SP));
+
+	push(theItem);
+	push(theRep); /* Is NOT is LVRA and may thus not cause LVRA cycle problems */
+	if (size>IOAMAXSIZE){
+	  DEBUG_AOA(fprintf(output, "CopySVR allocates in AOA\n"));
+	  newRep = (struct ValRep *)AOAalloc(size, SP);
+	  DEBUG_AOA(if (!theRep) fprintf(output, "AOAalloc failed\n"));
+	}
+	if (newRep) {
+	  newRep->GCAttr = 0; /* In AOA */
+	} else {
+	  newRep = (struct ValRep *)IOAalloc(size, SP);
+	  newRep->GCAttr = 1; /* In IOA */
+	}
+	pop(theRep);
+	pop(theItem);
 	Ck(theRep); Ck(theItem);
 	
 	/* Initialize the structual part of the repetition. */
 	newRep->Proto = theRep->Proto;
-	newRep->GCAttr = 1;
+	/* newRep->GCAttr set above */
 	newRep->LowBorder = 1;
 	newRep->HighBorder = range;
       }
     } else {
       /* Object rep */
       size = DispatchObjectRepSize(theRep->Proto, range, REP->iProto);
-      push(theRep);
+      push(theRep); /* Is NOT is LVRA and may thus not cause LVRA cycle problems */
       push(theItem);
       if (size>IOAMAXSIZE){
 	DEBUG_AOA(fprintf(output, "CopySVR allocates in AOA\n"));
 	newRep = (struct ValRep *)AOAalloc(size, SP);
-	if (newRep) newRep->GCAttr = 0;
 	DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
       } 
-      if (!newRep){
+      if (newRep){
+	newRep->GCAttr = 0; /* In AOA */
+      } else {
 	newRep = (struct ValRep *)IOAalloc(size, SP);
-	newRep->GCAttr = 1;
+	newRep->GCAttr = 1; /* In IOA */
       }
       pop(theItem);
       pop(theRep);

@@ -16,12 +16,13 @@ struct StackObject *AlloSO(unsigned size, long *SP)
     if (stacksize>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "AlloSO allocates in AOA\n"));
       sObj = (struct StackObject *)AOAalloc(stacksize, SP);
-      if (sObj) sObj->GCAttr = 0;
       DEBUG_AOA(if (!sObj) fprintf(output, "AOAalloc failed\n"));
     }
-    if (!sObj){
+    if (sObj){
+      sObj->GCAttr = 0; /* In AOA */
+    } else {
       sObj = (struct StackObject *)IOAalloc(stacksize, SP);
-      sObj->GCAttr = 1;
+      sObj->GCAttr = 1; /* In IOA */
     }
 
     sObj->Proto = StackObjectPTValue;

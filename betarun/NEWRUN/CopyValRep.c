@@ -16,13 +16,12 @@ void CopyVR(struct ValRep *theRep,
 	    long *SP
 	    )
 {
-    struct ValRep * newRep;
-    register unsigned range, i, size;
+    struct ValRep * newRep=0;
+    register unsigned long range, i, size;
    
     DEBUG_CODE(NumCopyVR++);
 
     Ck(theRep); Ck(theObj);
-    newRep = NULL;
     
     range = theRep->HighBorder;
 
@@ -57,18 +56,31 @@ void CopyVR(struct ValRep *theRep,
       if (newRep) {
 	/* Make the LVRA-cycle of the new repetition */
 	newRep->GCAttr = (long) ((long *) theObj + offset);
-      }
-      else
-	{
-	  Protect2(theObj, theRep,
-		   newRep = (struct ValRep *)IOAalloc(size, SP));
-	  
-	  Ck(theObj);
-	  newRep->Proto = theRep->Proto;
-	  newRep->GCAttr = 1;
-	  newRep->LowBorder = 1;
-	  newRep->HighBorder = range;
+      } else {
+	/* Allocate newRep in IOA/AOA */
+	push(theObj);
+	push(theRep); /* Is NOT is LVRA and may thus not cause LVRA cycle problems */
+	if (size>IOAMAXSIZE){
+	  DEBUG_AOA(fprintf(output, "CopyVR allocates in AOA\n"));
+	  newRep = (struct ValRep *)AOAalloc(size, SP);
+	  DEBUG_AOA(if (!theRep) fprintf(output, "AOAalloc failed\n"));
 	}
+	if (newRep) {
+	  newRep->GCAttr = 0; /* In AOA */
+	} else {
+	  newRep = (struct ValRep *)IOAalloc(size, SP);
+	  newRep->GCAttr = 1; /* In IOA */
+	}
+	pop(theRep);
+	pop(theObj);
+	
+	Ck(theObj); Ck(theRep);
+
+	newRep->Proto = theRep->Proto;
+	/* newRep->GCAttr set above */
+	newRep->LowBorder = 1;
+	newRep->HighBorder = range;
+      }
 
       size -= headsize(ValRep); /* adjust size to be bodysize */
 
@@ -81,23 +93,25 @@ void CopyVR(struct ValRep *theRep,
       size = DispatchObjectRepSize(theRep->Proto, range, REP->iProto);
 
       push(theObj);
-      push(theRep);
+      push(theRep); /* Is NOT is LVRA and may thus not cause LVRA cycle problems */
       if (size>IOAMAXSIZE){
 	DEBUG_AOA(fprintf(output, "CopyVR allocates in AOA\n"));
 	newRep = (struct ValRep *)AOAalloc(size, SP);
 	if (newRep) newRep->GCAttr = 0;
 	DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
       } 
-      if (!newRep){
+      if (newRep){
+	newRep->GCAttr = 0; /* In AOA */
+      } else {
 	newRep = (struct ValRep *)IOAalloc(size, SP);
-	newRep->GCAttr = 1;
+	newRep->GCAttr = 1; /* In IOA */
       }
       pop(theRep);
       pop(theObj);
       
       Ck(theObj);
       newRep->Proto = theRep->Proto;
-      /* newRep->GCAttr set above if in IOA */
+      /* newRep->GCAttr set above */
       newRep->LowBorder = 1;
       newRep->HighBorder = range;
       AssignReference(&NEWREP->iOrigin, REP->iOrigin);

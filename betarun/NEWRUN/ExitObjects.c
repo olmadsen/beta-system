@@ -31,7 +31,7 @@ long *ExO(long *jumpAdr,
       if (this==exitObj){
 	/* ExO to frame just before callback */
 	fprintf(output, "Error: cannot determine SP in ExO\n");
-	/* Problem: We have a pointer to the BOTTOM of the frame, 
+	/* FIXME: We have a pointer to the BOTTOM of the frame, 
 	 * and no PC for the frame to determine the SPoff with.
 	 */
 	return 0;

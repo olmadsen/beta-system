@@ -36,12 +36,24 @@ struct Item *CopyT(char *asciz,
     theRep->GCAttr = (long) ((long *) theItem + offset);
     *(struct ValRep **)((long *)theItem + offset) = theRep;
   } else {
-    /* Allocate in IOA */
-    Protect(theItem, theRep = (struct ValRep *)IOAalloc(size, SP));
+    /* Allocate in IOA/AOA */
+    push(theItem);
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "CopyT allocates in AOA\n"));
+      theRep = (struct ValRep *)AOAalloc(size, SP);
+      DEBUG_AOA(if (!theRep) fprintf(output, "AOAalloc failed\n"));
+    }
+    if (theRep) {
+      theRep->GCAttr = 0; /* In AOA */
+    } else {
+      theRep = (struct ValRep *)IOAalloc(size, SP);
+      theRep->GCAttr = 1; /* In IOA */
+    }
+    pop(theItem);
     Ck(theItem);
   
     theRep->Proto = ByteRepPTValue;
-    theRep->GCAttr = 1;
+    /* theRep->GCAttr set above */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
   }

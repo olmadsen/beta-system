@@ -11,7 +11,7 @@
 #include "valhallaComm.h"
 #endif
 
-/* TODO: check for suspend involving callback */
+/* FIXME: check for suspend involving callback */
 
 /*
  * STACK LAYOUT at suspend:

@@ -28,6 +28,13 @@
 #include <CRUN/crun.h>
 #endif
 
+#ifndef sparc
+#if defined(macintosh) || defined(nti) || defined(MAC) || defined(sgi)
+#define INLINE
+#else
+#define INLINE inline
+#endif
+
 /* #define LAZYDEBUG 1 */
 
 static int negAOAmax = 0; 
@@ -83,11 +90,7 @@ void preLazyGC ()
   /* fprintf (stderr, "preLazyGC done\n"); */
 }
 
-#if defined(macintosh) || defined(nti) || defined(MAC)
-static int danglerLookup (int* danglers, int low, int high, int dangler)
-#else
-static inline int danglerLookup (int* danglers, int low, int high, int dangler)
-#endif
+static INLINE int danglerLookup (int* danglers, int low, int high, int dangler)
 { int mid;
 
   /* fprintf (stderr, "danglerLookup(%d)\n", dangler); */
@@ -113,14 +116,8 @@ int getNextDangler ()
   return lastDangler;
 }
 
-#ifndef sparc
-#if defined(macintosh) || defined(nti) || defined(MAC)
-   static void
-#else
-   static inline void
-#endif
 
-AssignReference(long *theCell, ref(Item) newObject)
+static INLINE void AssignReference(long *theCell, ref(Item) newObject)
 /* If theCell is in AOA and will now reference an object in IOA, then insert in table */
 {
   *(struct Item **)theCell = newObject;

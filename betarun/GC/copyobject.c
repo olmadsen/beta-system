@@ -6,48 +6,6 @@
 
 #include "beta.h"
 
-/* tempAOArootsAlloc:
- *  Not enough room for the AOAroots table in ToSpace.
- *  Instead allocate offline and copy existing part of table over
- */
-
-void tempAOArootsAlloc(void)
-{
-    ptr(long) oldPtr;
-    ptr(long) pointer = ToSpaceLimit; /* points to end of old table */
-
-    if ( ! (tempAOAroots = (long *) MALLOC(IOASize)) ){
-      char buf[300];
-      sprintf(buf, "Could not allocate temporary AOAroots table.");
-#ifdef macintosh
-      EnlargeMacHeap(buf);
-#endif
-      Notify(buf);
-      exit(1);
-    } 
-    AOArootsLimit = (long *) ((char *) tempAOAroots + IOASize);
-    INFO_IOA(fprintf(output, "\nallocated temporary AOAroots table, "));
-    DEBUG_IOA(fprintf(output, " [0x%x] ", tempAOAroots));
-    oldPtr = AOArootsPtr; /* start of old table */
-    AOArootsPtr = AOArootsLimit; /* end of new table */
-    
-    /* Copy old table backwards */
-    while(pointer > oldPtr) *--AOArootsPtr = *--pointer; 
-
-}
-
-void tempAOArootsFree(void)
-{
-#ifdef RTDEBUG
-  long roots = (long)tempAOAroots;
-  Claim(tempAOAroots!=NULL, "tempAOArootsFree: tempAOAroots allocated");
-#endif
-  FREE(tempAOAroots);
-  tempAOAroots = NULL;
-  INFO_IOA(fprintf(output, "freed temporary AOAroots table\n"));
-  DEBUG_IOA(fprintf(output, " [0x%x]", roots));
-}
-
 /*
  * CopyObject:
  *  Copy an object refered by theObj from IOASpace to ToSpace.
@@ -90,14 +48,15 @@ static ref(Object) CopyObject(ref(Object) theObj)
 	DEBUG_IOA( Claim(theEnd<ToSpaceLimit, "theEnd<ToSpaceLimit") );
 	
 	ToSpaceTop = theEnd;
+
+	/* Check if ToSpace grows into AOAroots table 
+	 * (residing in upper part of ToSpace) 
+	 */
 	if( !tempAOAroots &&
 	   (char *) ToSpaceTop+size > (char *) AOArootsPtr ){
 	  tempAOArootsAlloc();
-#ifdef RTDEBUG
-	  Claim(size<=IOASize, 
-		"CopyObject: Size of AOAroots table <= IOASize");
-#endif
 	}
+
 	src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
 
 	while( dst < theEnd) *dst++ = *src++; 
@@ -118,7 +77,11 @@ static ref(Object) CopyObject(ref(Object) theObj)
  *  Copy an object refered by theObj from IOASpace to ToSpace.
  *  If theCell is not 0 it should be treated as an AOA root, in case
  *  theObj is moved to AOA.
- *  The function used by IOAGc.
+ *  The function is used by IOAGc.
+ * 
+ * FIXME: better parameters: (struct Object **theCell, int useForAOAroot)
+ *        will allow for all LVRA reps in ioa to be handled (and will
+ *        be more readable)
  */
 ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
 {

@@ -12,8 +12,9 @@ void CopyRR(struct ValRep *theRep,
 	    long *SP
 	    )
 {
-    struct RefRep * newRep;
+    struct RefRep * newRep=0;
     register unsigned range, i;
+    unsigned long size;
     
     DEBUG_CODE(NumCopyRR++);
 
@@ -22,22 +23,34 @@ void CopyRR(struct ValRep *theRep,
     
     range = theRep->HighBorder;
 
-    Protect2(theObj, theRep,
-	     newRep = (struct RefRep *)IOAcalloc(RefRepSize(range), SP));
-    
+    push(theObj);
+    push(theRep);
+    size = RefRepSize(range);
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "CopyRR allocates in AOA\n"));
+      newRep = (struct RefRep *)AOAalloc(size, SP);
+      DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+    }
+    if (newRep) {
+      newRep->GCAttr = 0; /* In AOA */
+    } else {
+      newRep = (struct RefRep *)IOAalloc(size, SP);
+      newRep->GCAttr = 1; /* In IOA */
+    }
+    pop(theRep);
+    pop(theObj);
+
     Ck(theRep); Ck(theObj);
 
     newRep->Proto = theRep->Proto;
-    newRep->GCAttr = 1;
+    /* newRep->GCAttr set above */
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
     
     /* Copy theRep to newRep */
-    for (i = 0; i < range; ++i)
-      /* AssignReference not needed:
-       * only needed when dest may be in aoa and src may be in ioa.
-       */
-      newRep->Body[i] = theRep->Body[i];
+    for (i = 0; i < range; ++i){
+      AssignReference(&newRep->Body[i], theRep->Body[i]);
+    }
     
     AssignReference((long *)theObj + offset, (struct Item *)newRep);
 }

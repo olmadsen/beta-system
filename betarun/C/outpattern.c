@@ -1197,6 +1197,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
    * This is the NEWRUN specifics of DisplayBetaStack
    */
   {
+    /* FIXME: */
     fprintf(output, "DisplayBetaStack NYI\n");
   }
 #endif
