@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1992-06-10 14:50:18 $, SID: $Revision: 1.16 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1992-06-11 17:22:30 $, SID: $Revision: 1.17 $
  * by Lars Bak
  */
 
@@ -9,37 +9,20 @@
 static ptr(char) ProtoTypeName(theProto)
   ref(ProtoType) theProto;
 {
-  ptr(short) Tab;
-  long  TabValue;
-  int   index;
+  ref(GCEntry) stat = cast(GCEntry) ((long) theProto + theProto->GCTabOff);
+  ptr(short) dyn;
 
-  TabValue  = (long) theProto->GCTabOff;
-  TabValue += (long) theProto;
-  Tab = (ptr(short)) TabValue;
+  while (*(short *) stat) stat++;	/* Step over static gc entries */ 
+  dyn = ((short *) stat) + 1;		/* Step over the zero */
+  while (*dyn++);			/* Step over dynamic gc entries */
 
-  index = 0;
-  while( Tab[index]   != 0 ) index += 4;
-  while( Tab[index++] != 0 );
-      
-  return (ptr(char)) &Tab[index+1];
+  return (ptr(char)) dyn;
 }
 
 static ptr(char) theItemName(theItem)
   ref(Item) theItem;
 {
-  ptr(short) Tab;
-  long  TabValue;
-  int   index;
-
-  TabValue  = (long) theItem->Proto->GCTabOff;
-  TabValue += (long) theItem->Proto;
-  Tab = (ptr(short)) TabValue;
-
-  index = 0;
-  while( Tab[index]   != 0 ) index += 4;
-  while( Tab[index++] != 0 );
-      
-  return (ptr(char)) &Tab[index+1];
+  return ProtoTypeName(theItem->Proto);
 }
 
 static ptr(char) theFormName(theItem)
