@@ -430,7 +430,7 @@ void AOAGc()
   Object *target;
   
   Block *currentBlock;
-  long starttime;
+  long starttime = 0;
 
   if (!AOABaseBlock)
     return;
