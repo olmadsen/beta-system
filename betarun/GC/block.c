@@ -3,14 +3,16 @@
  * block.c
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
-
 #include "beta.h"
+
+#if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi)
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <errno.h>
+#endif
 
 #define inBlock( theB, addr) (((BlockStart( theB)) <= (ptr(long)) addr) \
                               && ((ptr(long)) addr < theB->top) )
