@@ -10,7 +10,7 @@ OBJFILE default '$/filedirmisc.obj';
 -- myRename: DoPart --
 do
    thisOp:
-     (# exists: @boolean; oldf: @file
+     (# error: @boolean; newf: @file
      do
         (f.name,newName[])
           ->renameWin32File_Dir
@@ -19,26 +19,31 @@ do
                  (# 
                  do
                     true->continue;
-                    true->exists;
+                    true->error;
+                    msg.copy->t[];
                     (* (none ,msg[],none )->noteUser; *)
                     msg[]->putLine
                  #);
                
             #);
-        (if exists then
-            newName[]->oldf.name;
-            oldf.delete;
-            (f.name,newName[])
-              ->renameWin32File_Dir
-                (#
-                   error:: 
-                     (# 
-                     do
-                        true->continue;
-                        newName[]->msg.append;
-                        (none ,msg[],none )->noteUser
-                     #)
-                #)
+        (if error then
+            newName[]->newf.name;
+            (if newf.entry.exists then
+                newf.delete;
+                (f.name,newName[])
+                  ->renameWin32File_Dir
+                    (#
+                       error::
+                         (# 
+                         do
+                            true->continue;
+                            newName[]->msg.append;
+                            (none ,msg[],none )->noteUser
+                         #)
+                    #)
+             else
+                newName[]->t.append; (none ,t[],none )->noteUser
+            if)
         if)
      #)  
 
@@ -91,6 +96,16 @@ MoveFileEx: external
   do 'MoveFileExA'->callStd; 
   exit result
   #);
+MoveFile: external
+  (#
+     lpExistingFileName: [1] @char;
+     lpNewFileName: [1] @char;
+     result: @integer;
+     
+  enter (lpExistingFileName,lpNewFileName)
+  do 'MoveFileA'->callStd; 
+  exit result
+  #);
 renameWin32File_Dir:
   (#
      oldName: ^text;
@@ -102,15 +117,31 @@ renameWin32File_Dir:
      error:< exception (#  do errorMsg[]->msg.append; INNER ;  #);
      dwFlags: @integer;
      formatRes: @integer;
+     errorNo: @integer;
+     ERROR_CALL_NOT_IMPLEMENTED: (#  exit 120 #);
      
   enter (oldName[],newName[])
   do
      (oldName,newName,MOVEFILE_COPY_ALLOWED)->MoveFileEx->result;
+     errorCheckL:
      (if result = 0 then (* Rename failed. *)
+     (* Check if we are on Win95. MoveFileEx is not implemented on
+      * Win95 yet. *)
+         GetLastError->errorNo;
+         (if errorNo = ERROR_CALL_NOT_IMPLEMENTED then
+         (* We try using MoveFile instead. *)
+             (oldName,newName)->MoveFile->result;
+             (if result = 0 then
+                 GetLastError->errorNo; 
+              else
+                 leave errorCheckL; 
+             if);
+             
+         if);
          FORMAT_MESSAGE_FROM_SYSTEM->dwFlags;
          &cString[]->errorMsgCstr[];
          256->errorMsgCstr.init;
-         (dwFlags,0,GetLastError,(LANG_NEUTRAL,SUBLANG_DEFAULT)->myMAKELANGID,
+         (dwFlags,0,errorNo,(LANG_NEUTRAL,SUBLANG_DEFAULT)->myMAKELANGID,
           errorMsgCstr,256,0)->FormatMessage->formatRes;
          (if formatRes = 0 then
              'FormatMessage failed. Error= '->screen.putText;
