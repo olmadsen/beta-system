@@ -55,7 +55,6 @@ void NewVR(ref(Object) theObj,
 	    setD0Reg(offset * 4);
 	    setD1Reg(range);
 #endif
-	    if (range<0) range=0;
 	    theRep = (casthandle(ValRep)theObj)[offset];
 	    
 	    switch( (long) theRep->Proto){
@@ -126,7 +125,7 @@ void NewVR(ref(Object) theObj,
 	    setThisReg(popReference());
 #endif
 	    );
-    if (! inIOA((struct Object **)theObj+offset) &&
-	inIOA(*(struct Object **)theObj+offset))
-      AOAtoIOAInsert((struct Object **)theObj+offset);
+    /* datpete 31-8-95: deleted check for AOAtoIOAinsert below:
+     * it is handled by the AlloXXX above.
+     */
 }
