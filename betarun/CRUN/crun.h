@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: crun.h,v 1.17 1992-09-04 14:24:51 beta Exp $
+ * Mod: $Id: crun.h,v 1.18 1992-09-07 15:38:59 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -41,28 +41,6 @@ extern void             ChkRA() asm("ChkRA");
 extern ref(Component)   Susp() asm("Susp");
 extern char	      * IOAalloc();
 extern char	      * IOAcalloc();
-
-/*
-static inline long DispatchValRepSize(ref(ValRep) theRep, unsigned range)
-{
-  switch ( (int) (theRep)->Proto){
-  case (int) ByteRepPTValue:   return ByteRepSize(range);
-  case (int) WordRepPTValue:   return WordRepSize(range);
-  case (int) ValRepPTValue:    return ValRepSize(range);
-  case (int) DoubleRepPTValue: return ByteRepSize(range);
-  }
-}
-
-static inline long DispatchValRepBodySize(ref(ValRep) theRep, unsigned range)
-{
-  switch ( (int) (theRep)->Proto){
-  case (int) ByteRepPTValue:   return ByteRepBodySize(range);
-  case (int) WordRepPTValue:   return WordRepBodySize(range);
-  case (int) ValRepPTValue:    return ValRepBodySize(range);
-  case (int) DoubleRepPTValue: return ByteRepBodySize(range);
-  }
-}
-*/
 
 static inline void
 AssignReference(long *theCell, ref(Item) newObject)
