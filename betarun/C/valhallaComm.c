@@ -1,4 +1,4 @@
-#include "define.h"
+#include "beta.h"
 
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 #include <stdio.h>
@@ -287,7 +287,7 @@ void valhallaInit (int debug_valhalla)
 	shutdown (psock,2);
 	return;
       }
-      DebugValhalla = debug_valhalla;
+      DEBUG_CODE(DebugValhalla = debug_valhalla);
       
     } else {
       char valhallaname[200];
