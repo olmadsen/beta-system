@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: sighandler.c,v $, rel: %R%, date: $Date: 1991-01-30 11:27:47 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: sighandler.c,v $, rel: %R%, date: $Date: 1991-03-19 11:45:51 $, SID: $Revision: 1.3 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -9,6 +9,18 @@
 #include <signal.h>
 #endif
 
+/* This procedure is called if a nasty signal is recieved
+ * during execution og SignalHandler.
+ * Please Exit nicely.
+ */
+static void ExitHandler(sig, code, scp, addr)
+  int sig, code;
+  struct sigcontext *scp;
+  char *addr;
+{ 
+  BetaExit(-1); 
+}
+
 void SignalHandler(sig, code, scp, addr)
   int sig, code;
   struct sigcontext *scp;
@@ -16,6 +28,18 @@ void SignalHandler(sig, code, scp, addr)
 {
   handle(Object) theCell;
   ref(Object)    theObj = 0;
+
+  { /* Setup signal handles for the Beta system */
+    signal( SIGFPE,  ExitHandler);
+    signal( SIGILL,  ExitHandler);
+    signal( SIGBUS,  ExitHandler);
+    signal( SIGSEGV, ExitHandler);
+#ifdef apollo
+    signal( SIGINT,  ExitHandler);
+    signal( SIGQUIT, ExitHandler);
+#endif
+   }
+
 
 
   /* Set StackEnd to the stack pointer just before trap. */
