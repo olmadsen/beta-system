@@ -603,9 +603,12 @@ namespace beta.converter
 	      return _mapType(userClass, type.GetElementType(), doIncludes, isSuper);
 	    }
 
-	    if (name.Equals("void")){
-		return null;
+	    switch (name){
+	    case "System.Void":
+	    case "void":
+	      return null;
 	    }
+
 	    String primitive = mapPrimitiveType(name);
 	    if (primitive != null){
 		return primitive;
@@ -846,7 +849,7 @@ namespace beta.converter
 		namespaceName = slashToDot(thisClass.Namespace);
 		className = stripNamespace(thisClass.FullName);
 		Type sup = thisClass.BaseType;
-		resolution = stripPath(stripExtension(codebase(thisClass.FullName)));
+		resolution = getResolution(thisClass);
 		isValue = false;
 		// Special case: classes with immediate base type System.ValueType must have keyword valuetype in resolution
 		if (sup != null && sup.FullName == "System.ValueType"){
@@ -956,11 +959,14 @@ namespace beta.converter
 	    return null;
 	  }
 
-	internal static String codebase(String cls)
+	internal static String getResolution(Type cls)
 	  {
-	    Type t = gettype(cls);
-	    if (t != null){
-	      return t.Assembly.CodeBase;
+	    if (cls != null){
+	      string name = cls.Assembly.FullName;
+	      // e.g. System.Windows.Forms, Version=1.0.5000.0, Culture=neutral, PublicKeyToken=b77a5c561934e089
+	      int commaPos = name.IndexOf(',');
+	      if (commaPos>0) return name.Substring(0, commaPos);
+	      return name;
 	    } else {
 	      return "";
 	    } 
