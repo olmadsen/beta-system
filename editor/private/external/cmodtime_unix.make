@@ -1,2 +1,2 @@
 ../$(MACHINETYPE)/cmodtime.o: cmodtime.c
-	gcc -O -c -o ../$(MACHINETYPE)/cmodtime.o cmodtime.c
+	$(CC) -c -o ../$(MACHINETYPE)/cmodtime.o cmodtime.c
