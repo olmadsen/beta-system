@@ -211,8 +211,12 @@ char *GroupName(long address, int isCode)
     last = current;
     current = NextGroup (current);
   }
-  
+#ifdef macintosh
+  /* on MAC: code_end is an offset */
+  if ((isCode && (address>(last->code_start+last->code_end))) 
+#else
   if ((isCode && (address>last->code_end)) 
+#endif
       || (!isCode && (address>(long)last->next)) ){ 
     c_on_top++; 
     return ""; 
