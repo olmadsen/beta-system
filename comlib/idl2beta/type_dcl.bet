@@ -59,8 +59,12 @@ do (* Add basic types to global_types. The types are
    ('octet',              'int8') -> global_types.add_basic_type;
    ('any',                'int32') -> global_types.add_basic_type;
    
-   (* Add types from comlib.bet/wtypes.bet to global_types *)
+   (* Add types from comtypes.bet to global_types *)
+   ('HRESULT',            'HRESULT') -> global_types.add_basic_type;
    ('BSTR',               'BSTR') -> global_types.add_basic_type;
+   ('GUID',               'GUID') -> global_types.add_basic_type;
+   ('CLSID',              'CLSID') -> global_types.add_basic_type;
+   ('IID',                'IID') -> global_types.add_basic_type;
    
    (if false then
        ('IUnknown',           'IUnknown') -> global_types.add_interface_type;
@@ -136,6 +140,7 @@ do_type_spec:
      types: ^type_list;
      found: @boolean;
      name: ^text;
+     msg: ^text;
      is_definition: @boolean;
   enter (info[],types[],t[],is_definition)
   do (* First handle basic types. They can be found in types *)
@@ -194,11 +199,9 @@ do_type_spec:
                 current.name.copy->info.name[];
             if);
             (if current.representation[]=NONE then
-                (# msg: ^text
-                do 'Type representation is NONE for type '-> msg[];
-                   current.name[] -> msg.puttext;
-                   msg[] -> error;
-                #)
+                'Type representation is NONE for type '-> msg[];
+                current.name[] -> msg.puttext;
+                msg[] -> error;
             if);
             current.representation.copy
               ->info.representation[];
@@ -262,7 +265,16 @@ do_type_spec:
                  #);
              if);
           // idl.void_type_spec then
-             'void' -> info.representation[];
+             (if info.name[]<>NONE then
+                 info.name.copy -> msg[];
+                 ': ' -> msg.puttext;
+              else
+                 &text[]->msg[];
+             if);
+             'Using \'int32\' for type \'void\'.' -> msg.puttext;
+             msg[] -> warning;
+             'int32' -> info.representation[];
+             type_cat_basic -> info.category;
           // idl.constr_struct_type then
              (* Both emit the definition of the construction mapping, and
               * add the type to types.
@@ -424,13 +436,22 @@ do_struct_body:
                    '@' -> output.put;
                if);
                
+               
                (info[], local_types[], sd.gettype_spec, false) 
                  -> do_type_spec;
                info.representation[] -> output.puttext;
-               info.as_text -> output.spacecomment;
-               (if info.pointer_level>1 then
+               (if dcl_info.pointer_level+info.pointer_level
+                // 0 then
+                   (* not holder *)
+                // 1 then
+                   (if info.category=type_cat_basic then
+                       (* pointer to basic type *)
+                       'Holder' -> output.puttext;
+                   if)
+                else
                    'Holder' -> output.puttext;
                if);
+               info.as_text -> output.spacecomment;
                (if info.attributes[]=NONE then
                    &idl_attributes[]->info.attributes[];
                if);
