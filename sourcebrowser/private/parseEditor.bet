@@ -3,6 +3,8 @@ ORIGIN  '~beta/guienv/v1.3/guienv';
 INCLUDE '~beta/guienv/v1.3/fields';
 INCLUDE '~beta/guienv/v1.3/stddialogs';
 
+INCLUDE '../xprompts';
+
 INCLUDE '~beta/basiclib/v1.4/file';
 
 INCLUDE '../dynpane';
@@ -11,26 +13,32 @@ INCLUDE '~beta/objectbrowser/v2.0/UI/labelled';
 
 --- guienvlib: attributes ---
 parseEditor: window
-  (# menubarType::
+  (# path: ^text;
+     loadFiles:
+       (# 
+       enter path[]
+       do (if path[]<>NONE then
+              (* load BETA text file *)
+              '.bet'
+                ->path.copyAppend
+                ->contents.theTextEditor.contents.loadFile;
+              
+              (* load LST text file *)
+              '.lst'
+                ->path.copyAppend
+                ->contents.theLSTView.contents.loadFile;
+          if)
+       #);
+     menubarType::
        (# fileMenu: @menu
-            (# openItem: @menuItem
+            (# revertItem: @menuItem
                  (# eventHandler::
                       (# onSelect::
-                           (# path: ^text
-                           do this(parseEditor)[]->fileSelectionDialog->path[];
-                              (if path[]<>NONE then
-                                  (* load BETA text file *)
-                                  path[]
-                                    ->contents.theTextEditor.contents.loadFile;
-                                  
-                                  (* load LST text file *)
-                                  'lst'
-                                    ->((1,path.length-3)->path.sub).append
-                                    ->contents.theLSTView.contents.loadFile;
-                              if)
+                           (#
+                           do path[]->loadFiles;
                            #)
                       #);
-                    open:: (# do 'Open'->name #)
+                    open:: (# do 'Revert'->name #)
                  #);
                saveItem: @menuItem
                  (# eventHandler::
@@ -44,24 +52,83 @@ parseEditor: window
                  (# inx: @integer;
                     eventHandler:: 
                       (# onSelect::
-                           (#
-                           do inx+10
-                                ->inx
-                                ->contents.theTextEditor.contents.selectLine
+                           (# askuser: promptForBoolean
+                                (# ok::
+                                     (#
+                                     do this(parseEditor).contents.theTextEditor.contents.saveFile;
+                                        this(parseEditor).close
+                                     #);
+                                   notok:: (# do this(parseEditor).close #)
+                                #)
+                           do (this(parseEditor)[],'Quit','Save before close?')
+                                ->(&askUser[]).popup
                            #)
                       #);
                     open:: 
-                      (# do 'Goto 10*n'->name #)
+                      (# do 'Close'->name #)
                  #);
                open::
                  (#
                  do 'File'->name;
-                    openItem.open; openItem[]->append;
+                    revertItem.open; revertItem[]->append;
                     saveItem.open; saveItem[]->append;
                     quitItem.open; quitItem[]->append
             #)#);
+          editMenu: @menu
+            (# clipboard: @text;
+               cutItem: @menuItem
+                 (# eventHandler::
+                      (# onStatus::
+                           (#
+                           do (contents.theTextEditor.contents.contents.selection.start<>contents.theTextEditor.contents.contents.selection.end)->value #);
+                         onSelect::
+                           (#
+                           do clipboard.clear;
+                              contents.theTextEditor.contents.contents.selection.contents->clipboard.append;
+                              contents.theTextEditor.contents.contents.delete
+                           #)
+                      #);
+                    open:: (# do 'Cut'->name #)
+                 #);
+               copyItem: @menuItem
+                 (# eventHandler::
+                      (# onStatus::
+                           (# do (contents.theTextEditor.contents.contents.selection.start<>contents.theTextEditor.contents.contents.selection.end)->value #);
+                         onSelect::
+                           (#
+                           do clipboard.clear;
+                              contents.theTextEditor.contents.contents.selection.contents->clipboard.append;
+                           #)
+                      #);
+                    open:: 
+                      (# do 'Copy'->name #)
+                 #);
+               pasteItem: @menuItem
+                 (# inx: @integer;
+                    eventHandler:: 
+                      (#  onStatus::
+                           (# do (clipboard.length<>0)->value #);
+                         onSelect::
+                           (#
+                           do clipboard[]
+                                ->contents.theTextEditor.contents.contents.insert
+                           #)
+                      #);
+                    open:: 
+                      (# do 'Paste'->name #)
+                 #);
+               open::
+                 (#
+                 do 'Edit'->name;
+                    cutItem.open; cutItem[]->append;
+                    copyItem.open; copyItem[]->append;
+                    pasteItem.open; pasteItem[]->append
+            #)#);
           open:: 
-            (# do fileMenu.open; fileMenu[]->append #)
+            (#
+            do fileMenu.open; fileMenu[]->append;
+               editMenu.open; editMenu[]->append
+            #)
        #); (* menubarType *)
      contents: @dynpane
        (# dobind:
@@ -76,39 +143,62 @@ parseEditor: window
                  (# path: ^text;
                     textFile: @file;
                     lineStarts: [1000]@integer;
+                    lineMax: @integer;
                     loadFile:
-                      (# theText: @StyledText;
+                      (#  t: ^text;
+                         theText: @StyledText;
                          pos, lineInx: @integer;
                       enter path[]
                       do true->loading;
                          path[]->textFile.name;
-                         textFile.openRead;
-                         1->pos->lineInx->lineStarts[1];
-                         textFile.scan
-                         (# while:: (# do true->value #);
-                         do pos+1->pos;
-                            ch->theText.put;
-                            (if ch=ascii.newLine then
-                                lineInx+1->lineInx;
-                                (if lineInx=lineStarts.range then
-                                    1000->lineStarts.extend if);
-                                pos->lineStarts[lineInx];
-                            if)
-                         #);
-                         lineInx+1->lineInx;
-                         (if lineInx=lineStarts.range then
-                             1000->lineStarts.extend if);
-                         pos->lineStarts[lineInx];
-                         theText[]->contents.contents;
-                         textFile.close;
+                         (if textFile.entry.exists
+                             and textfile.entry.readable then
+                             textFile.openRead;
+                             1->pos->lineInx->lineStarts[1];
+                             textFile.scan
+                             (# while:: (# do true->value #);
+                             do pos+1->pos;
+                                ch->theText.put;
+                                (if ch=ascii.newLine then
+                                    lineInx+1->lineInx;
+                                    (if lineInx=lineStarts.range then
+                                        1000->lineStarts.extend if);
+                                    pos->lineStarts[lineInx];
+                                if)
+                             #);
+                             lineInx+1->lineInx;
+                             (if lineInx=lineStarts.range then
+                                 1000->lineStarts.extend if);
+                             pos->lineStarts[lineInx];
+                             lineInx->lineMax;
+                             theText[]->contents.contents;
+                             textFile.close;
+                          else
+                             'No read permissions to the file:\n     '->t[];
+                             textFile.name->t.puttext;
+                             (this(parseEditor)[], t[],'Read Error')
+                               ->alertUser;
+                             'no file'->theText.puttext;
+                             1->pos->lineInx->lineStarts[1];
+                             9->lineStarts[2];
+                             theText[]->contents.contents;
+                         if);
                          false->loading;
                       #);
                     saveFile:
-                      (#
+                      (# t: ^text
                       do true->loading;
-                         textFile.openWrite;
-                         contents.contents->textFile.puttext;
-                         textFile.close;
+                         (if textFile.entry.exists
+                             and textfile.entry.writeable then
+                             textFile.openWrite;
+                             contents.contents->textFile.puttext;
+                             textFile.close;
+                          else
+                             'No write permissions to the file:\n     '->t[];
+                             textFile.name->t.puttext;
+                             (this(parseEditor)[], t[],'Write Error')
+                               ->alertUser
+                         if);
                          false->loading;
                       #);
                     selectLine:
@@ -135,49 +225,91 @@ parseEditor: window
                dobind:
                  (# do installResizeRelativeAction #);
                open::<
-                 (# w,h: @integer
+                 (#
                  do INNER;
-                    this(parseEditor).size->(w,h); (w/2-2,h)->size;
                     contents.dobind;
                  #)
             #);
           theTextEditor: @fileEditor
-            (# open:: (# do 'BETA Text File'->label #) #);
+            (# open::
+                 (# w,h: @integer
+                 do 'BETA Text File'->label;
+                    this(parseEditor).size->(w,h);
+                    (w,((h*2)/3)-1)->size;
+                 #)
+            #);
           theLSTView: @fileEditor
             (# contentsType::
                  (# contentsType::
                       (# eventhandler::
                            (# onBeforeChange:: (# do loading->allow #);
+                              lineInx: @integer;
+                              selectLine:
+                                (# lineInx: @integer;
+                                   t: @text;
+                                enter lineInx
+                                do (lineStarts[lineInx]-1,lineStarts[lineInx+1]-1)
+                                     ->scanText(# do ch->t.put #);
+                                   t.reset;
+                                   l: (if t.get='#' then
+                                          t.getInt(# syntaxError::
+                                                       (#
+                                                       do lineInx-1->lineInx;
+                                                          (if lineInx>0 then
+                                                              restart l
+                                                           else leave l
+                                                       if);
+                                               #) #)
+                                         ->theTextEditor.contents.selectLine;
+                                    else lineInx-1->lineInx;
+                                       (if lineInx>0 then restart l if);
+                                   if)
+                                #);
+                              onKeyDown::
+                                (# 
+                                do (if ch
+                                    // ascii.cr
+                                    // ascii.nl then
+                                       (if lineInx=0 then
+                                           1->lineInx
+                                        else
+                                           lineInx+1->lineInx;
+                                           (if lineInx>lineMax then 1->lineInx if)
+                                       if);
+                                       (lineStarts[lineInx]-1,lineStarts[lineInx+1]-1)
+                                         ->selection;
+                                       lineInx->selectLine
+                                   if)
+                                #);
                               onMouseDown::
-                                (# t: ^text; lineInx: @integer;
+                                (#
                                 do localPosition
                                      ->ptToPos
                                      ->locateLine
                                      ->lineInx
                                      ->selectLine;
-                                   selection.contents->t[]; t.reset;
-                                   l: (if t.get='#' then
-                                          t.getInt(# syntaxError:: (# do leave l #) #)
-                                            ->theTextEditor.contents.selectLine;
-                                      if)
                                 #)
                            #)
                       #);
                  #);
                open:: 
-                 (# do 'Parse Errors'->label #)
+                 (# w,h: @integer;
+                 do 'Parse Errors'->label;
+                    this(parseEditor).size->(w,h);
+                    (w,(h/3)-1)->size;
+                 #)
             #);
           open::
-            (#
+            (# setDefaults:: (# do true->verticalStacking #)
             do theTextEditor.open; theLSTView.open;
-               theTextEditor[]->appendMember; theLSTView[]->appendMember;
+               theLSTView[]->appendMember; theTextEditor[]->appendMember;
                appendsDone; dobind
             #)
        #);
-     open::
+     open::<
        (#
        do 'Parse Errors Editor'->title;
-          (800,400)->size;
+          INNER;
           contents.open
        #)
   #)

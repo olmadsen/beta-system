@@ -1,0 +1,210 @@
+ORIGIN  '../ymer';
+
+INCLUDE '~beta/guienv/v1.3/fields';
+INCLUDE '~beta/guienv/v1.3/stddialogs';
+INCLUDE '~beta/guienv/v1.3/utils/listview';
+
+INCLUDE '../xprompts';
+
+INCLUDE '~beta/betaast/v4.9.1/semanticerrortext';
+
+INCLUDE '~beta/basiclib/v1.4/file';
+
+INCLUDE '../dynpane';
+INCLUDE '~beta/objectbrowser/v2.0/UI/obguienvadds';
+INCLUDE '~beta/objectbrowser/v2.0/UI/labelled';
+
+--- browserlib: attributes ---
+semanticEditor: window
+  (# ff: ^mps.AST.fragmentForm;
+     menubarType::
+       (# fileMenu: @menu
+            (# saveItem: @menuItem
+                 (# eventHandler::
+                      (# onSelect::
+                           (# do 'NOT IMPLEMENTED'->putline #)
+                      #);
+                    open:: 
+                      (# do 'Save'->name #)
+                 #);
+               quitItem: @menuItem
+                 (# inx: @integer;
+                    eventHandler:: 
+                      (# onSelect::
+                           (# askuser: promptForBoolean
+                                (# ok::
+                                     (#
+                                     do 'NOT IMPLEMENTED'->putline;
+                                        this(semanticEditor).close
+                                     #);
+                                   notok:: (# do this(semanticEditor).close #)
+                                #)
+                           do (this(semanticEditor)[],'Quit','Save before close?')
+                                ->(&askUser[]).popup
+                           #)
+                      #);
+                    open:: 
+                      (# do 'Close'->name #)
+                 #);
+               open::
+                 (#
+                 do 'File'->name;
+                    saveItem.open; saveItem[]->append;
+                    quitItem.open; quitItem[]->append
+            #)#);
+          open:: 
+            (#
+            do fileMenu.open; fileMenu[]->append
+            #)
+       #); (* menubarType *)
+     contents: @dynpane
+       (# dobind:
+            (# 
+            do TRUE->bindTop->bindLeft->bindRight->bindBottom;
+               theASTeditor.dobind;
+               theLSTView.dobind;
+            #);
+          theASTeditor: @labelled
+            (# loading: @boolean;
+               changing: @boolean;
+               dobind:
+                 (#
+                 do installResizeRelativeAction;
+                    contents.dobind
+                 #);
+               contentsType::< codemoveableEditor
+                 (# dobind:
+                      (# do true->bindRight->bindBottom->bindLeft->bindTop #);
+                    selectNode:: 
+                      (# do node[]->browser.selectNode #);
+                    open::
+                      (# t: ^text;
+                      do
+                      #); 
+                    charWidthType::
+                      (#
+                      do theASTeditor.private.theLabel.style
+                           ->ts[]
+                      #);
+                    getEncloser:: (# do ffEncloser[]->theEncloser[] #);
+                    ffEncloser: @codemoveableEditorEncloser
+                      (# getAST:: (# do this(ymerApplication).mps.AST[]->AST[]; (if mps[]=none then 'mps NONE ERROR'->putline if) #);
+                         getBETACFL:: (# do this(ymerApplication).mps.BETACFL[]->BETACFL[] #);
+                      #);
+                 #); 
+               open:: 
+                 (# sz: @point;
+                    openContents::
+                      (# t: ^text
+                      do (theASTeditor[],sz)->contents.open;
+                         theASTeditor.contents[]
+                           ->browser.onCodeViewOpen;
+                         (contents.ffEncloser.getAST,contents.ffEncloser.getBETACFL,
+                         ff[],NONE)
+                           ->contents.newFragment;
+                         browser.currentGroup.name.copy->t[];
+                         '-'->t.put;ff.name->t.append;
+                         t[]->label; true->doneInInner
+                      #);
+                    w,h: @integer
+                 do this(semanticEditor).size->(w,h);
+                    (w,((h*2)/3)-1)->sz->size;
+                 #);
+            #);
+          theLSTView: @labelled
+            (# dobind:
+                 (#
+                 do installResizeRelativeAction;
+                    contents.dobind
+                 #);
+               contentsType:: listView
+                 (# current: ^listitems.theCellType;
+                    dobind:
+                      (# do TRUE->bindTop->bindLeft->bindRight->bindBottom #);
+                    eventhandler::
+                      (# onKeyDown::
+                           (#
+                           do (if ch
+                               // ascii.cr
+                               // ascii.nl then
+                                  (if current[]=NONE then
+                                      listitems.head->current[];
+                                   else
+                                      current.succ[]->current[];
+                                      (if current[]=NONE then
+                                          listitems.head->current[]
+                                      if);
+                                  if);
+                                  (if current[]<>NONE then
+                                      current.elm.select
+                                  if)
+                              if)
+                           #)
+                      #);
+                    errorItem: listItem
+                      (# node: ^mps.AST.ast;
+                         errorText: ^text;
+                         onSelect::
+                           (#
+                           do
+(if theASTeditor[]=none then 'NONE'->putline else 'OK'->putline if);
+(if theASTeditor.contents[]=none then 'NONE'->putline else 'OK'->putline if);
+(if theASTeditor.contents.SifViewer[]=none then 'NONE'->putline else 'OK'->putline if);
+                              (node[],1,0,0)
+                                ->theASTeditor.contents.SifViewer.setFocus
+                           #);
+                      #);
+                    open::
+                      (# registerSemanticErrors:
+                           (# exp: ^mps.AST.expanded;
+                              ei: ^errorItem;
+                           do scan:
+                                (#
+                                do (if ff.root.kind=mps.AST.kinds.interior then
+                                       ff.root[]->exp[];
+                                       exp.suffixWalk
+                                       (# 
+                                       do (if current.hasSemanticError then
+                                              &errorItem[]->ei[];
+                                              ei.init;
+                                              current[]->ei.node[];
+                                              ei.node.semanticError
+                                                ->semanticErrorText
+                                                ->ei.errorText[]->ei.name;
+                                          if)
+                                       #)
+                                   if)
+                                #)
+                           #)
+                      do 'Semantic Errors and Warnings'->label;
+                         registerSemanticErrors;
+                      #)
+                 #);
+               open:: 
+                 (# w,h: @integer;
+                 do 'Semantic Errors'->label;
+                    this(semanticEditor).size->(w,h);
+                    (w,(h/3)-1)->size;
+                 #)
+            #);
+          open::
+            (# setDefaults::
+                 (#
+                 do true->verticalStacking;
+                    50->minsize;
+                    2->panewidth
+                 #)
+            do theASTeditor.open; theLSTView.open;
+               theLSTView[]->appendMember; theASTeditor[]->appendMember;
+               appendsDone;
+               dobind
+            #)
+       #);
+     open::<
+       (# w,h: @integer;
+       do 'Semantic Errors Editor'->title;
+          (400,800)->size;
+          INNER;
+          contents.open
+       #)
+  #)
