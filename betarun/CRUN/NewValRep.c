@@ -10,6 +10,17 @@
 
 #define REP ((struct ObjectRep *)theRep)
 
+#ifdef hppa
+#define SetObjOriginProtoOffRange() \
+  setD1Reg(range);                  \
+  setOriginReg(REP->iOrigin);       \
+  setCallReg(REP->iProto);          \
+  setThisReg(theObj);               \
+  setD0Reg(4*offset);
+#else
+#define SetObjOriginProtoOffRange() 
+#endif
+
 #ifdef sparc
 asmlabel(NewVR, "
 	mov	%o1, %o2
@@ -87,15 +98,19 @@ void NewVR(ref(Object) theObj,
 	      AlloVR8(theObj, offset*4, range); 
 	      break;
 	    case (long) DynItemRepPTValue:
+	      SetObjOriginProtoOffRange();
 	      AlloORR(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 	      break;
 	    case (long) DynCompRepPTValue:
+	      SetObjOriginProtoOffRange();
 	      AlloORRC(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 	      break;
 	    case (long) StatItemRepPTValue:
+	      SetObjOriginProtoOffRange();
 	      AlloORG(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 	      break;
 	    case (long) StatCompRepPTValue:
+	      SetObjOriginProtoOffRange();
 	      AlloORGC(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 	      break;
 #endif
