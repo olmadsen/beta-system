@@ -5,6 +5,8 @@
 #endif
 
 #define PCRE_C_LOCALE 65536 /* Keep in sync with definition in perlregexp.bet */
+#define PCRE_NONBETAOPTIONS 65535
+#define PCRE_DO_STUDY 131072
 
 static const char *precalc_tables = 0;
 

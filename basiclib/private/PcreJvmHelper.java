@@ -8,5 +8,6 @@ public class PcreJvmHelper
     }
     
     // native methods
+    public static native int[] initialize (java.lang.String exp, int options);
   
 }
