@@ -127,6 +127,7 @@ void freeBlock(Block * theBlock)
 #endif /* USEMMAP */
 }
 
+#if 0
 long inArea(Block *  theBlock, Object * theObj)
 {
     while( theBlock != 0 ){
@@ -138,6 +139,7 @@ long inArea(Block *  theBlock, Object * theObj)
     }
     return FALSE;
 }
+#endif
 
 #ifdef USEMMAP
 /* Flags for mmap:

@@ -1,7 +1,14 @@
-char betarun_version[] = "BETARUN VERSION 5.3(31)";
+char betarun_version[] = "BETARUN VERSION 5.3(32)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.31  2001/08/09 20:11:37  corry
+ * Add nodebug_pg profiling version of betarun on GNUC platforms
+ * Add comments to Makefile-toplev to tell you how to use the library versions
+ * Add EXTRA_C_OPTIONS, an environment variable you can set before doing mbs_make
+ * Use $(PROF) variable on all builds, incl optimising ones
+ * Betarun version number: 31
+ *
  * Revision 1.30  2001/08/03 10:45:43  datpete
  * Fixed groupname in beta.dump to be that of the prototype, not the mPart.
  * Betarun version number: 30

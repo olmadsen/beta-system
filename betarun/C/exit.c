@@ -193,7 +193,9 @@ void BetaExit(long number)
 #else /* NOT MT */
 
   TIME_IOA(fprintf(output,"[Accumulated ioatime = %dms]\n", (int)ioatime));
+  TIME_IOA(fprintf(output,"[IOAs = %d]\n", (int)NumIOAGc));
   TIME_AOA(fprintf(output,"[Accumulated aoatime = %dms]\n", (int)aoatime));
+  TIME_IOA(fprintf(output,"[AOAs = %d]\n", (int)NumAOAGc));
   INFO_AOA(fprintf(output,"NumAOAtoIOAInsert=%d\n", (int)NumAOAtoIOAInsert));
 
   fflush(stdout);
