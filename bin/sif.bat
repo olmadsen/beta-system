@@ -24,7 +24,7 @@ goto getopts
 
 :execute
 rem Start the executable
-"%BETALIB%"\editor\v5.1\nti\%sdk%\sif %_opts_%
+"%BETALIB%"\editor\v5.2\nti\%sdk%\sif %_opts_%
 
 rem Clean-up
 set _opts_=
