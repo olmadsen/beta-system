@@ -1,4 +1,5 @@
-origin '~beta/basiclib/betaenv'
+origin '~beta/basiclib/betaenv';
+INCLUDE '~beta/containers/list'
 ---lib:attributes---
 parseIMAP:
   (# next:
@@ -9,13 +10,17 @@ parseIMAP:
                 else
                    ascii.eot ->ch
                if);
+               (*'#'->put; ch->put*)
             #);
           getName:
             (#
             do L: (#
                   do nextCh;
                      (if (('A' <= ch) and (ch <= 'Z')) or
-                         (('a' <= ch) and (ch <= 'z')) then
+                         (('a' <= ch) and (ch <= 'z')) or
+                         (('0' <= ch) and (ch <= '9')) or
+                         (ch = '.') or
+                         (ch = '/') then
                          ch -> tok.put;
                          restart L
                   if)#)
@@ -32,9 +37,11 @@ parseIMAP:
            // ' ' 
            // '(' 
            // ')'
+           // '{'
+           // '}'
               then ch -> tok; nextCh;
            // '\\' then
-              ch -> Tok;;
+              ch -> Tok;
               getName
            // '"' then
               L: (#
@@ -46,32 +53,89 @@ parseIMAP:
                     ch -> tok.put;
                     nextCh
                  #)
-           else
-              L:
+           else (*'&'->put; ch ->putint; newline;*)
                 (if (('A' <= ch) and (ch <= 'Z')) or
                     (('a' <= ch) and (ch <= 'z')) or
-                    (ch = '/') then
+                    (ch = '/') then 
                     ch -> tok.put;
-                    nextCh; 
-                    restart L
+                    getName
                  else
+                    0 -> value;
                     L:
                       (if ('0' <= ch) and (ch <= '9') then
-                          '0' -> tok;
-                        nextCh;
+                          value*10 + ch - '0' -> value;
+                          nextCh;
                         restart L
-                    if)
-                if)
+                      if);
+                    '0' -> tok;                    
+                if);
+             (* '%'->put; tok[] -> putline*)
           if);  
           (if false then
-              '<'->put; tok[] -> puttext; '>'->put;
+              '<'->put; tok[] -> puttext; '>'->put; newline
           if)
        #);
+     bodyText:
+       (# msg: ^text
+       do (*'bodytext:'->puttext; value -> putint; newline;*)
+          &text[] -> msg[];
+          (for i: value repeat
+               T.get -> msg.put;
+          for);
+          (* msg[] -> putline;*)
+       exit msg[]
+       #);
+     msg_att_data:
+       (# size: @integer; V: @mvalue
+       do (if true 
+           // '(' -> tok.equal then
+              next;
+              L:
+                (#
+                do 
+                   msg_att_data;
+                   (if not (')'->tok.equal) then
+                       restart L
+                   if)
+                #);
+              next
+           // '{' -> tok.equal then
+              next; (* a number *)
+              next; 
+              (if not ('}' -> tok.equal) then if);
+              bodyText -> V.V[];
+              next;
+           else
+              tok[] -> V.V[];
+              next;
+          if)
+       exit V[]
+       #);
+     msg_att:
+       (# RL: @rList; tg: ^text; V: ^mvalue
+       do (if '(' -> tok.equal then
+              next;
+              L: (#
+                 do tok[] -> tg[];
+                   (* 'TAG:'->puttext; tok[] -> putline;*)
+                    next;
+                    msg_att_data -> V[];
+                    (tg[],V[]) -> RL.add;
+                    (if not (')'->tok.equal) then
+                        (* a name/attribute *)                       
+                        restart L
+                    if)
+                 #)
+          if);
+       exit RL[]
+       #);
      ch: @char;
-     T: ^text; tok: ^text;
+     T: ^stream; 
+     tok: ^text; value: @integer;
      R: ^response
   enter T[]
-  do T.reset; next;
+  do (*T.reset;*)
+     next;
      (if true
       // '*' -> tok.equal then
          next; 
@@ -100,86 +164,52 @@ parseIMAP:
           // '0' -> tok.equal then
              next;
              (if 'fetch' -> tok.equalNCS then
-                 'Parse msg'->putline;
                  (# MR: @messageResponse;
-                 do 
-                    T[] -> skipToNL;
-                    MR[] -> R[]
-                 #)             
+                 do next;
+                    msg_att -> MR.M[];
+                    MR[] -> R[];
+                 #);
              if)
+          else
+             T[] -> skipToNl
          if)
+      else
+         (* tag assumed *)
+         (# CR: @ completedResponse
+         do tok[] -> CR.tag[];
+           (* 'Comp:'->puttext; tok[] -> putline;*)
+            ' '->tok.put;
+            T[] -> skipToNl;
+            CR[] -> R[]
+         #)
      if)
   exit R[]
   #);
 skipToNL:
-  (# T,V: ^text; ch: @char
+  (# T,V: ^stream; ch: @char
   enter T[]
   do &text[] -> V[];
-     T.get -> ch; (*ch -> put; '!'->put;*)
+     T.get -> ch;(* ch -> put; '!'->put;*)
      L: (if not T.eos and (ch <> ascii.newline) then
             T.get -> ch -> V.put;
-            (*ch->put; '?'->put;*)
+            (* ch->put; '?'->put;*)
             (if ch 
              // ascii.cr //ascii.nl then
              else
                 restart L
             if);
-        if)
+        if);
   exit V[]
   #);
-parseMsg:
-  (# getTag:
-       (# ch: @char
-       do &text[] -> tag[];
-          ''->tag[];
-          L: (if ch <> ':' then
-                 msg.get -> ch;
-                 ch ->Tag.put;
-                 restart L
-             if);
-          ''-> val[];
-          L: (#
-             do msg[] -> skipToNl->val.append;
-                (*msg.peek -> put; '"'->put; msg.peek->putint; '"'->put;*)
-                (if msg.peek 
-                 // ascii.ht // ' ' then restart L if);
-             #)          
-       #);
-     tag,val,V: ^text;
-     msg: ^text;     
-     MR: @messageResponse
-  enter msg[]
-  do 'PARSEMSG:'->putline;(* msg[] -> putline;*)
-     msg.reset;
-     L:
-       msg.scanAll
-       (#
-       do getTag;
-          newline; 
-          'TAG: ' -> puttext;
-          tag[] -> putline;
-          'Val: ' -> puttext;
-          val[] -> putline;
-          (if true
-           // 'TO:' -> tag.equalNCS then
-              val[] -> MR.sender[]
-           // 'subject:' -> tag.equalNCS then
-              val[] -> MR.subject[]
-          if);
-          (if msg.peek = ascii.cr then
-              msg.get;
-              (if msg.peek = ')' then
-                  msg.get;
-                  leave L
-          if)if)
-       #)
-  exit MR[]
-  #);
 response:
-  (# isList:< BooleanValue;
+  (# isCompleted:< booleanValue;
+     isList:< BooleanValue;
      isMsg:< BooleanValue
   #);
-
+CompletedResponse: Response
+  (# isCompleted:: trueValue;
+     tag: ^text
+  #);
 ListResponse: response
   (# isList::TrueValue;
      NoSelect: @boolean;
@@ -187,7 +217,26 @@ ListResponse: response
   #);
 MessageResponse: response
   (# isMsg::TrueValue;
-     sender,subject: ^text
-  #)
+     sender,subject,msg: ^text;
+     M: ^rList
+  #);
+rList: list
+  (# element::
+       (# tag: ^text; val: ^mvalue #);
+     add:
+       (# T: ^text; V: ^mvalue; E: ^element
+       enter (T[],V[])
+       do &element[] -> E[];
+          T[] -> E.tag[];
+          V[] -> E.val[];
+          E[] -> append
+       #)
+  #);
+mvalue: 
+  (# V: ^text; next: ^mvalue
+  enter V[]
+  exit this(mvalue)[]
+  #);
+
 
 

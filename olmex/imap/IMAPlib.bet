@@ -84,7 +84,10 @@ IMAP: system
      sendFETCH: command
        (#
        do 'FETCH:'->log.putline;
-          'FETCH 4 (FLAGS BODY[HEADER])\n' -> outSocket.puttext
+          (*'FETCH 4 FULL\n' -> outSocket.puttext;*)
+          'FETCH 4 (FLAGS INTERNALDATE RFC822.size ENVELOPE BODY RFC822.TEXT)\n' 
+            -> outSocket.puttext;
+          (*'FETCH 4 (FLAGS BODY[HEADER])\n' -> outSocket.puttext*)
        #);
      sendLIST: command
        (# done:: (# do listCompleted #);
@@ -143,37 +146,55 @@ IMAP: system
                    'EOS'->log.putline;
                    leave L 
                if);
-               getResponse -> R[] -> putline;
-              (* R[] -> log.putline;*)
-               R[] -> parseImap -> resp[];
+               (if true then
+                   outSocket[] -> parseImap -> resp[];
+                else
+                   getResponse -> R[] -> putline;
+                   (* R[] -> log.putline;*)
+                   R[] -> parseImap -> resp[];
+               if);
                (if (resp[]<>none) then
                    (if true
+                    // resp.isCompleted then
+                       (# CR: ^completedResponse
+                       do resp[] -> CR[];
+                         (* 'Completed?'->puttext;
+                          CR.tag[] -> puttext; '?'->put;
+                          currentid[] ->puttext; '?'->put; newline;*)
+                          (if CR.tag[] -> currentID.equal then
+                              'Completed:'->puttext;
+                              CR.tag[]->putline;
+                              none -> currentID[]
+                       if)#)
                     // resp.isMsg then
                        (# msg: @text; MR: ^messageResponse
-                       do cycle
-                          (#
-                          do getResponse -> R[];
-                             (if R[] -> isOk then 
-                                 msg[] -> parseMsg -> MR[];
-                                 'Subject: ' -> msg;
-                                 MR.subject[] -> msg.putline;
-                                 'To: ' -> msg.puttext;
-                                 MR.sender[] -> msg.putline;
-                                 msg[] -> message;
-                                 restart L 
-                             if);
-                             R[] -> msg.append;
-                          #)
+                       do resp[] -> MR[];
+                          (if true then
+                              'MSG:'->putline;
+                              MR.M.scan
+                              (#
+                              do current.tag[] -> puttext;
+                                 ':' -> put;
+                                 (if current.val[] <> none then
+                                     current.val.V[] -> putline
+                                 if);
+                                 (if true
+                                  // 'RFC822.TEXT' -> current.tag.equalNCS then
+                                     current.val.V[] -> message
+                                 if)
+                              #) 
+                          if)
                        #);
-                    // resp.isList then
-                       resp[] -> listResp
-                   if)
+                        // resp.isList then
+                           resp[] -> listResp
+                       if)
                if);       
-               R.reset;
+              (* R.reset;
                R.getAtom -> A[]; ' '->A.put;
                (if A[] -> currentID.equal then
                    none -> currentID[]
                if);
+               none -> currentID[]*)
             #);
           
           outSocket.close;        (* close down the socket *)
