@@ -364,7 +364,7 @@ Object *AOAallocate(long numbytes)
 			       / (totalAOASize / 100)) 
 	    > (unsigned long)AOAPercentage)) {
 #else
-    if (totalAOASize > AOAMinSizeForGC) {
+    if ((unsigned long)totalAOASize > AOAMinSizeForGC) {
 #endif
 
       OverFullFlag = 2;
@@ -1566,11 +1566,11 @@ void scanOrigins(Object *theObj, void (*originAction)(Object **theCell))
 void SetAOANeedCompaction(void)
 {
   if (OverFullFlag) {
-    if (totalAOASize > AOAMinSizeForGC) {
+    if ((unsigned long)totalAOASize > AOAMinSizeForGC) {
       AOANeedCompaction = TRUE;
     }
   } else {
-    if (totalFree < AOAFreeAtGC/2) {
+    if ((unsigned long)totalFree < AOAFreeAtGC/2) {
       AOANeedCompaction = TRUE;
     }
   }
