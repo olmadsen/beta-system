@@ -49,6 +49,9 @@ char *IOAalloc(unsigned size)
 #ifdef crts
   IOATop = (long*)((long)IOATop+size);
 #endif
+
+  DEBUG_CODE(zero_check(p, size));
+
   return p;
 }
 

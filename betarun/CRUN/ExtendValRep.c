@@ -196,7 +196,7 @@ ParamObjOffRange(ExtVR4)
   
   if (newRange < 0) newRange = 0;
   
-  copyRange = (ValRepBodySize((add < 0) ? newRange : oldRange))>>2;
+  copyRange = (LongRepBodySize((add < 0) ? newRange : oldRange))>>2;
   size = LongRepSize(newRange);
   
   if (newRange > LARGE_REP_SIZE) {

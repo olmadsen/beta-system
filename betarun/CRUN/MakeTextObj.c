@@ -8,6 +8,8 @@
 #include "beta.h"
 #include "crun.h"
 
+/* FIXME: Only allocate ONCE (like in NEWRUN) */
+
 /* long offset of rep. within text obj. TEXT ATTRIBUTE HARDCODED:3.
  */
 #define REP_OFF 3
