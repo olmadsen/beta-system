@@ -1,8 +1,10 @@
 ORIGIN '~beta/basiclib/systemenv';
+INCLUDE '~beta/sysutils/pathhandler';
 INCLUDE '~beta/sysutils/envstring';
 INCLUDE '~beta/process/processmanager';
-INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/basiclib/directory';
 INCLUDE '~beta/containers/list';
+INCLUDE '~beta/toollibs/utils/fileExtensions';
 
 --- SDKlib:attributes ---
 sdkType: 
@@ -19,6 +21,13 @@ sdkType:
      as:< executer;
      asText:<  (# T: ^Text; do INNER; exit T[] #);
      fixPath:< (# T: ^Text; enter T[] do INNER #);
+     checkDst:<(# path: ^Text;
+                  e: @diskentry;
+               enter path[] 
+               do path[] -> e.path;
+                  e.path.head -> &ensureDirectory;
+                  INNER; 
+               #);
   #);
 
 
@@ -81,7 +90,7 @@ Microsoft: sdkType
      fixPath::< (# do '/' -> T.findAll(# do ('\\',inx) -> T.inxPut #) #);
   #);
 
-Gnu: sdkType
+Nti_gnu: sdkType
   (# cc::< (# 
            do 'gcc' -> c.putText;
               (if not theProgram.nodebug then '-g ' -> a.putText if);
@@ -99,8 +108,69 @@ Gnu: sdkType
               dst[] -> a.putText; ' -c ' -> a.putText; src[]-> a.putText
            #);
      as::< (# do 'as' -> c.putText #);
-     asText::< (# do 'gnu' -> t #);
+     asText::< (# do 'Nti_gnu' -> t #);
      fixPath::< (# do '\\' -> T.findAll(# do ('/',inx) -> T.inxPut #) #);
+  #);
+
+Gnu: sdkType
+  (# options: 
+       (# a: ^text;
+       do &text[] -> a[];
+          (if not theProgram.nodebug then '-g ' -> a.putText if);
+          ('-D', a[]) -> theProgram.defines.output;
+          ('-I', a[]) -> theProgram.includedirs.output;
+          '-D' -> a.putText; asText -> a.putText; ' '->a.putText;
+          (if dynamic_library then
+              '-fpic -shared ' -> a.putText;
+           else
+              ' -c ' -> a.putText;
+          if);
+          '-O6 -o ' -> a.putText;
+          dst[] -> a.putText; ' '->a.putText;
+          src[] -> a.putText;
+       exit a[]
+       #);
+     
+     prependPath:
+       (# prog: ^text;
+       enter prog[]
+       do exeFileExtension -> prog.appendExtension;
+          findpath: scanSearchPath
+            (# e: @diskentry;
+            do path.length->path.setpos;
+               DirectoryChar -> path.put;
+               prog[] -> (path.copy).append -> e.path;
+               (if e.exists then e.path -> prog[]; leave findpath if);
+            #);
+       exit prog[] 
+       #);
+       
+     cc::< (# 
+           do 'gcc' -> prependPath -> c.putText;
+              options -> a.puttext;
+           #);
+     cpp::<(# 
+           do 'g++' -> prependPath -> c.putText;
+              options -> a.puttext;
+           #);
+     as::< (# do 'as' -> c.putText #);
+     asText::< (# do machine_type -> t[] #);
+     fixPath::< (# do '\\' -> T.findAll(# do ('/',inx) -> T.inxPut #) #);
+  #);
+
+ensureDirectory:
+  (# dir: ^text;
+     d: @directory
+  enter dir[]
+  do dir[] -> d.name;
+     (if d.entry.exists and d.entry.isDirectory then
+         (* We're done *)
+      else
+         (* Recursively ensure father directory exists *)
+         d.entry.path.head -> &ensureDirectory;
+         (* Create this directory *)
+         d.touch;
+     if);
   #);
 
 --- program:descriptor ---
@@ -124,21 +194,41 @@ systemenv
           #);
      #);
    defines, includedirs: @proplist;
-   waitingfordefine,waitingforincludedir,verbose,nodebug: @boolean;
+   waitingfordefine,waitingforincludedir,verbose,nodebug,dynamic_library,trace: @boolean;
    startoffilenames: @integer;
    run: @Process;
    sf,df: @DiskEntry;
    
    usage:
      (# 
-     do 'Usage: betacc [ -v ] [ -d ] [ -D symbol ] [ -I dir ] outputfile sourcefile'
+     do 'Usage: betacc [ -v ] [ -d ] [ -D symbol ] [ -I dir ] [ -G ] [ -T ] outputfile sourcefile'
           -> putline;
         '  -v          Verbose: echo commands before executing them.' -> putline;
         '  -d          Do not produce debug info in outputfile' -> putline;
         '  -D symbol   Pass symbol to preprocessor' -> putline;
         '  -I dir      Pass include directory to preprocessor' -> putline;
+        '  -G          Build a dynamic shared library' -> putline;
+        '  -T          Trace betacc' -> putline;
         (failure, 'betacc terminated.') -> stop;
-     #);        
+     #);      
+   
+   getAssemblerVersion:
+     (# 
+     do '$(asm_version)' -> &expandEnvVar
+        (# defaultValue::<
+             (# 
+             do (if true
+                 // 'ms' -> sdktext.equalNCS then '6' -> envvarvalue[];
+                 // 'bor' -> sdktext.equalNCS then '4' -> envvarvalue[];
+                 // 'nti_gnu' -> sdktext.equalNCS then '1' -> envvarvalue[];
+                if)
+             #)
+        #) -> asmtext[];
+        
+        asmtext.reset;
+        asmtext.getInt -> SDK.assemblerversion;
+     #);
+   
    
 do '$(MIASDK)' -> &expandEnvVar(# defaultValue::<
                                  (# Type: ^Text;
@@ -148,33 +238,27 @@ do '$(MIASDK)' -> &expandEnvVar(# defaultValue::<
                                      // 'nti_ms'->Type.equal then
                                         'ms' -> envvarvalue[] 
                                      // 'nti_gnu'->Type.equal then
-                                        'gnu' -> envvarvalue[] 
+                                        'nti_gnu' -> envvarvalue[] 
                                      // 'nti_bor'->Type.equal then
-                                        'bor' -> envvarvalue[] 
+                                        'bor' -> envvarvalue[]
+                                     else
+                                        Type.copy -> envvarvalue[];
                                     if)
                                  #);
                             #) -> sdktext[];
    (if true
-    // 'ms' -> sdktext.equalNCS then &Microsoft[] -> SDK[];
-    // 'bor' -> sdktext.equalNCS then &Borland[] -> SDK[];
-    // 'gnu' -> sdktext.equalNCS then &Gnu[] -> SDK[];
+    // 'ms' -> sdktext.equalNCS then 
+       &Microsoft[] -> SDK[]; getAssemblerVersion
+    // 'bor' -> sdktext.equalNCS then 
+       &Borland[] -> SDK[]; getAssemblerVersion
+    // 'nti_gnu' -> sdktext.equalNCS then 
+       &Nti_gnu[] -> SDK[]; getAssemblerVersion
+    // 'sun4s' -> sdktext.equalNCS 
+    // 'linux' -> sdktext.equalNCS 
+       then &Gnu[] -> SDK[];
     else
-       (failure, 'betacc: Error: Unknown SDK.') -> stop;
+       (failure, 'betacc: Error: Unknown Platform: '->sdktext.prepend) -> stop;
    if);       
-   
-   '$(asm_version)' -> &expandEnvVar
-   (# defaultValue::<
-        (# 
-        do (if true
-            // 'ms' -> sdktext.equalNCS then '6' -> envvarvalue[];
-            // 'bor' -> sdktext.equalNCS then '4' -> envvarvalue[];
-            // 'gnu' -> sdktext.equalNCS then '1' -> envvarvalue[];
-           if)
-        #)
-   #) -> asmtext[];
-   
-   asmtext.reset;
-   asmtext.getInt -> SDK.assemblerversion;
    
    (* Parse arguments *)
    (if noOfArguments < 3 then usage if);
@@ -197,8 +281,15 @@ do '$(MIASDK)' -> &expandEnvVar(# defaultValue::<
              // '-v' ->arg.equal then 
                 true->verbose;
                 startoffilenames+1 -> startoffilenames;
+             // '-G' ->arg.equal then 
+                true->dynamic_library;
+                startoffilenames+1 -> startoffilenames;
              // '-D'->arg.equal then
                 true->waitingfordefine;
+                startoffilenames+1 -> startoffilenames;
+             // '-T'->arg.equal then
+                'betacc: trace enabled' -> screen.putline;
+                true->trace;
                 startoffilenames+1 -> startoffilenames;
              // '-I'->arg.equal then
                 true->waitingforincludedir;
@@ -211,16 +302,17 @@ do '$(MIASDK)' -> &expandEnvVar(# defaultValue::<
    (if startoffilenames+1 <> NoOfArguments then usage if);
    startoffilenames   -> arguments -> dst[] -> &sdk.fixPath;
    startoffilenames+1 -> arguments -> src[] -> &sdk.fixPath;
+   dst[] -> &sdk.checkDst;
    
    src[] -> sf.path;
    dst[] -> df.path;
    
    (if not sf.isFile then
-       (failure, 'Sourcefile does not exist') -> stop;
+       (failure, 'betacc: Sourcefile does not exist') -> stop;
    if);
    sf.path.name.extension -> tmptext[];
    (if tmptext[]=NONE then
-       (failure, 'No source file extension??') -> stop;
+       (failure, 'betacc: No source file extension.') -> stop;
    if);
    (if true
        // 'c' -> tmptext.equalNCS then 
@@ -230,18 +322,27 @@ do '$(MIASDK)' -> &expandEnvVar(# defaultValue::<
        // 'asm' -> tmptext.equalNCS then 
        (src[],dst[]) -> &SDK.as -> (cmd[], arg[]);
     else
-       (failure, 'Unknown source file extension??') -> stop;
+       (failure, 'betacc: Unknown source file extension.') -> stop;
    if);
    
-   cmd[] -> run.init;
    (if verbose then
-       cmd[] -> puttext; ' '->put; arg[] -> putline;
+       cmd[] -> puttext; '  '->puttext; arg[] -> putline;
    if);
+   
+   (if trace then
+       'betacc: command: ' -> screen.puttext;
+       cmd[] -> screen.putline;
+   if);
+   cmd[] -> run.init;
    
    arg.reset;
    L: (# 
       do arg.getAtom -> tmptext[];
          (if not tmptext.empty then 
+             (if trace then
+                 'betacc: argument: ' -> screen.puttext;
+                 tmptext[] -> screen.putline;
+             if);
              tmptext[] -> run.argument.append;
              restart L
          if);
@@ -255,12 +356,12 @@ do '$(MIASDK)' -> &expandEnvVar(# defaultValue::<
     *)
    (if not df.exists then
        (failure, 
-       'outputfile does not exist. (external compilation failed)')
+       'betacc: Outputfile does not exist. (external compilation failed)')
          -> stop;
    if);
    (if df.modtime <= sf.modtime then
        (failure, 
-       'outputfile is older than sourcefile. (external compilation failed)') 
+       'betacc: Outputfile is older than sourcefile. (external compilation failed)') 
          -> stop;
    if);
 #)
