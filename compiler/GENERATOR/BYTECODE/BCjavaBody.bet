@@ -55,6 +55,54 @@ FIXME:
      (* Possibly generate an IOcall with T[] too *)         
   #);
 
+GenerateClassExOException:
+  (* Called when BetaObject has just been generated.
+   * Generate ExOException.class in the same directory.
+   *)
+  (# exo: ^JavaImage;
+     e: @diskentry;
+     fn: ^text;
+  do &JavaImage[] -> exo[];
+     not common.switch[188] -> exo.traceClassFileName;
+     common.switch[190] -> exo.traceClassFile;
+     jcf.cf.name -> e.path;
+     e.path.head -> fn[];
+     DirectoryChar -> fn.put;
+     'ExOException.class' -> fn.append;
+     fn[] -> exo.init;
+     (* Class file ready to start emitting to *)
+     
+     'ExOException'
+       -> exo.constant_pool.classes.addtext
+       -> exo.thisClassIndex;
+     'java/lang/Exception'
+       -> exo.constant_pool.classes.addtext 
+       -> exo.superClassIndex;
+     
+     ('exitobj', 'Ljava/lang/Object;') -> exo.emitFieldDef;
+     ('labno', 'I')                    -> exo.emitFieldDef;
+     ('restart', 'Z')                  -> exo.emitFieldDef;
+     
+     (* Method: <init> *)
+     (ACC_PUBLIC, '<init>', '(Ljava/lang/Object;IZ)V', 2,  4) -> exo.currentmethod.new;
+     aload_0       -> exo.emit;
+     invokespecial -> exo.emit; ('java/lang/Exception', '<init>', '()V') -> exo.emitMethodRef;
+     aload_0       -> exo.emit;
+     aload_1       -> exo.emit;
+     putfield      -> exo.emit; ('ExOException', 'exitobj', 'Ljava/lang/Object;') -> exo.emitFieldRef;
+     aload_0       -> exo.emit;
+     iload_2       -> exo.emit;
+     putfield      -> exo.emit; ('ExOException', 'labno', 'I') -> exo.emitFieldRef;
+     aload_0       -> exo.emit;
+     iload_3       -> exo.emit;
+     putfield      -> exo.emit; ('ExOException', 'restart', 'Z') -> exo.emitFieldRef;
+     _return       -> exo.emit;
+     
+     exo.emitToFile;
+     
+     (*(fn[],false,asmLink.objKind,false) -> putInJobFile;*)
+  #);
+
 --FieldsNewJasmin:descriptor--
 (# name_index, descriptor_index: @integer;
 do (if methodClassTag 
@@ -552,8 +600,8 @@ do (# commentstream: @stream (* maybe something more useful *);
                 
                 BCstate.fields.init
                 
-             // endClass then (* skip *)
-
+             // endClass then 
+   
              // methodDef then
                 (# aux,noOfEnterArgs: @integer; (* 0 or 1 *)
                    methodname: ^text;
@@ -601,7 +649,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                                (0, 65535, 'this', thisClassName.copy->makeSignature) 
                                  -> jcf.emitLocalVariableDefinition;
                            if);
-                           _return -> jcf.currentmethod._code.putByte;
+                           _return -> jcf.emit;
                        if);
                        thisSignature[] 
                          -> splitSignature 
@@ -968,8 +1016,22 @@ do (# commentstream: @stream (* maybe something more useful *);
                    re_start: @integer;
                 do BC.getLong -> labno;
                    BC.get -> re_start;
-                   'break' -> fixme;
-                #);
+                   (* exitObj already pushed *)
+                   new           -> jcf.emit; 'ExOException' -> jcf.emitClassRef;
+                   (* stack: ExOException; exitObj *)
+                   dup_x1        -> jcf.emit;
+                   (* stack: ExOException; exitObj, ExOException *)
+                   swap          -> jcf.emit;
+                   (* stack: exitObj, ExOException; ExOException *)
+                   ldc           -> jcf.emit;
+                   labno         -> jcf.emitIntegerConstant; (* potentially 32 bit constant *)
+                   (* stack: labno, exitObj, ExOException; ExOException *)
+                   bipush        -> jcf.emit; 
+                   re_start      -> jcf.emit; (* 8 bit constant *)
+                   (* stack: restart, labno, exitObj, ExOException; ExOException *)
+                   invokespecial -> jcf.emit; ('ExOException', '<init>', '(Ljava/lang/Object;IZ)V') -> jcf.emitMethodRef;
+                   athrow        -> jcf.emit;
+                 #)
              // cmpToBool then
                 'cmpToBool' -> commentstream.puttext;
                 (* 0:      if_xxx L1
@@ -1078,7 +1140,10 @@ do (# commentstream: @stream (* maybe something more useful *);
              // nop then
                 _nop -> jcf.emit;
              // end then
-                (* 'bytecode end' -> fixme; -- no problem *)
+                (if (thisClassName[]<>NONE) and ('BetaObject' -> thisClassName.equal) then
+                    (* Just finished generating BetaObject (in betaenv). *)
+                    GenerateClassExOException;
+                if);
              // index then
                 Unused1 -> jcf.emit; 'bytecode index' -> fixme;
              // newVirt then 
