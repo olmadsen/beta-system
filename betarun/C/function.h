@@ -39,7 +39,7 @@ extern struct group_header* NextGroup (struct group_header*);
 extern char* NameOfGroup (struct group_header *);
 extern char *GroupName(long, int);
 #ifdef RTDEBUG
-extern char *DescribeObject(struct Object *);
+extern void DescribeObject(struct Object *);
 #endif
 
 /* C/exit.c */
