@@ -1,14 +1,20 @@
-generated: interface pdf
+doc: always
+	@echo Generating documentation without PDF
+	@perl -s ../bin/makedoc -v -p lidskjalv-ref.book
 
-interface: always
-	@echo Generating interface descriptions
-	@cd interface; ./makeHTML
-	@cd interface-utils; ./makeHTML
-	@cd interface-multimedia; ./makeHTML
-	@cd interface-openGL; ./makeHTML
+dist: always
+	@echo Generating documentation with PDF
+	@perl -s ../bin/makedoc lidskjalv-ref.book
 
-pdf:
-	@../bin/html2pdf.perl
+tags:
+	etags src/*.html
+
+clean:
+	-/bin/rm -f *~ src/*~
+
+distclean: clean
+	-/bin/rm -f *.html *.pdf
+	if [ -d interface ]; then /bin/rm -rf interface; fi
 
 always:
 	@echo ""
