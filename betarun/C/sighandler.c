@@ -113,6 +113,7 @@ void BetaSignalHandler(sig, code, scp, addr)
   /* Set StackEnd to the stack pointer just before trap. */
 #ifndef linux
   StackEnd = (long *) scp->sc_sp;
+#ifndef hppa
   PC = (long *) scp->sc_pc;
 #endif
 
@@ -227,6 +228,8 @@ void BetaSignalHandler(sig, code, scp, addr)
 
 #ifdef hppa
   /* Try to fetch the address of current Beta object in %r3 (This).*/
+  /* See /usr/include/sys/signal.h and /usr/include/machine/save_state.h */
+  PC = (long *) scp->sc_ret1;
   theCell = (handle(Object)) &scp->sc_gr3;
   if( inIOA( *theCell))
     if( isObject( *theCell)) theObj  = *theCell;
