@@ -23,21 +23,22 @@ ValRep *CopyCT(unsigned char *textPtr, long *SP)
     range = textPtr ? strlen((char*)textPtr) : 0;
     size = ByteRepSize(range);
 
-#ifdef RTDEBUG
-    if (range > LARGE_REP_SIZE) {
-      fprintf(output, "CopyCT: should allocate in AOA (range=%d)\n", range);
-    }
-    /* FIXME: Allocate in AOA
-     */
-#endif
+    do {
+        if (range > LARGE_REP_SIZE) {
+            theRep = (ValRep *)LVRAAlloc(ByteRepPTValue, range);
+        }
 
-    theRep = (ValRep *)IOAalloc(size, SP);
-
-    SETPROTO(theRep, ByteRepPTValue);
-    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-    theRep->LowBorder = 1;
-    theRep->HighBorder = range;
-
+        if (!theRep) {
+            theRep = (ValRep *)IOATryAlloc(size, SP);
+            if (theRep) {
+                SETPROTO(theRep, ByteRepPTValue);
+                if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+                theRep->LowBorder = 1;
+                theRep->HighBorder = range;
+            }
+        }
+    } while (!theRep);
+    
     /* Assign the text to the body part of the repetition. */
     if (textPtr) strcpy((char *)theRep->Body, (char*)textPtr);
 
@@ -59,20 +60,22 @@ ValRep *CopyCT_W(unsigned char *textPtr, long *SP)
     range = textPtr ? strlen((char*)textPtr) : 0;
     size = ShortRepSize(range);
 
-#ifdef RTDEBUG
-    if (range > LARGE_REP_SIZE) {
-      fprintf(output, "CopyCT_W: should allocate in AOA (range=%d)\n", range);
-    }
-    /* FIXME: Allocate in AOA
-     */
-#endif
+    do {
+        if (range > LARGE_REP_SIZE) {
+            theRep = (ValRep *)LVRAAlloc(ShortRepPTValue, range);
+        }
 
-    theRep = (ValRep *)IOAalloc(size, SP);
+        if (!theRep) {
+            theRep = (ValRep *)IOATryAlloc(size, SP);
+            if (theRep) {
+                SETPROTO(theRep, ShortRepPTValue);
+                if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+                theRep->LowBorder = 1;
+                theRep->HighBorder = range;
+            }
+        }
+    } while (!theRep);
 
-    SETPROTO(theRep, ShortRepPTValue);
-    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-    theRep->LowBorder = 1;
-    theRep->HighBorder = range;
 
     /* Assign the text to the body part of the repetition. */
     for (i = 0; i < (size-headsize(ValRep)); i++){
