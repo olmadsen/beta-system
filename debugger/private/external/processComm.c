@@ -10,6 +10,7 @@
 #include <Files.h>
 #include <Processes.h>
 #include <Resources.h>
+#include <Events.h>
 
 static Str255 valhallart;
 
@@ -134,34 +135,48 @@ char **environ;
 
 
 
+static void convert(char *in, char *out)
+{
+	int count;
+	count = 0;
+	
+	while(in[count]) {
+		out[count+1] = in[count];
+		count++;
+	}
+	out[0] = (char) count;
+	out[count+1] = 0;
+	return;
+}
 
-int executeProcess (unsigned char *execName)
+
+
+int executeProcess (char *execName)
 {
 	FSSpec 				spec;
 	LaunchParamBlockRec params;
 	OSErr				err;
 	short				refnum;
 	StringHandle		resource;
+	Str255				macname;
+	Str255				betart;
+	
 	
 	Handle				oldresource;
 	
-	c2pstr(execName);
-	FSMakeFSSpec(0, 0, execName, &spec);
-	
+	convert(execName, (char *)macname);
+	err = FSMakeFSSpec(0, 0, macname, &spec);
 	refnum = FSpOpenResFile(&spec, fsCurPerm);
 	
+	
 	resource = NewString(valhallart);
-	
-	
-	oldresource = Get1Resource('STR ', 200);
+	oldresource = Get1Resource('STR ', 197);
 	if (oldresource) {
 		RemoveResource(oldresource);
 	}
+	AddResource((Handle) resource, 'STR ', 197, "\pVALHALLART");  
 	
-	AddResource((Handle) resource, 'STR ', 200, "\pVALHALLART");  
 	CloseResFile(refnum);
-	
-	
 	params.launchBlockID = extendedBlock;
 	params.launchEPBLength = extendedBlockLen;
 	params.launchFileFlags = 0;
@@ -170,7 +185,7 @@ int executeProcess (unsigned char *execName)
 	params.launchAppParameters = nil;
 	
 	err = LaunchApplication(&params);
-	
+		
 	if (err == noErr) {
 		return 1;
 	}
@@ -179,9 +194,19 @@ int executeProcess (unsigned char *execName)
 	}
 }
 
-char *strdup (char *in)
+static char *strdup (char *in)
 {
-	return in;
+	char *out;
+	
+	
+	out = (char *) malloc(strlen(in) + 1);
+	while(*in) {
+		*out = *in;
+		in++;
+		out++;
+	}
+	*out = *in;
+	return out;
 }
 
 
