@@ -329,38 +329,42 @@ void RTEndGC(void)
     if (entry -> GCAttr == POTENTIALLYDEAD) {
       entry -> offset = 0;
       entry -> store = 0;
-
+      
     } else if (entry -> GCAttr == ENTRYALIVE) {
-      u_long newInx;
-      RTEntry *newEntry;
-      
-      newEntry = (RTEntry *)malloc(sizeof(RTEntry));
-      newEntry -> GCAttr = ENTRYALIVE;
-      newEntry -> store = entry -> store;
-      newEntry -> offset = entry -> offset;
-      newEntry -> IOAclients = entry -> IOAclients;
-      newEntry -> AOAclients = entry -> AOAclients;
-      entry -> IOAclients = NULL;
-      entry -> AOAclients = NULL;
-      
-      newInx = STInsert(&newTable, newEntry);
-      
-      redirectCells(newEntry -> IOAclients, 
-		    (Object *)newPUID(inx), 
-		    (Object *)newPUID(newInx));
+      if (!closingGC) {
+	u_long newInx;
+	RTEntry *newEntry;
+	
+	newEntry = (RTEntry *)malloc(sizeof(RTEntry));
+	newEntry -> GCAttr = ENTRYALIVE;
+	newEntry -> store = entry -> store;
+	newEntry -> offset = entry -> offset;
+	newEntry -> IOAclients = entry -> IOAclients;
+	newEntry -> AOAclients = entry -> AOAclients;
+	entry -> IOAclients = NULL;
+	entry -> AOAclients = NULL;
+	
+	newInx = STInsert(&newTable, newEntry);
+	
+	redirectCells(newEntry -> IOAclients, 
+		      (Object *)newPUID(inx), 
+		      (Object *)newPUID(newInx));
 
-      redirectCells(newEntry -> AOAclients, 
-		    (Object *)newPUID(inx), 
-		    (Object *)newPUID(newInx));
-
-      
-      insertStoreOffsetRT(newEntry -> store, newEntry -> offset, newInx + 1);
+	redirectCells(newEntry -> AOAclients, 
+		      (Object *)newPUID(inx), 
+		      (Object *)newPUID(newInx));
+	
+	
+	insertStoreOffsetRT(newEntry -> store, newEntry -> offset, newInx + 1);
+      } else {
+	clearCells(entry -> IOAclients);
+	clearCells(entry -> AOAclients);
+      }
     } else {
-      Claim((entry -> GCAttr == ENTRYDEAD),
-	    "What is GCAttr ?");
+      Claim((entry -> GCAttr == ENTRYDEAD), "What is GCAttr ?");
     }
   }
-
+  
   STFree(&currentTable);
   currentTable = newTable;
   

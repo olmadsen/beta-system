@@ -171,6 +171,13 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
   
   theObj = *theCell;
   
+  /* If this is the closing GC, then the live object containing this
+     reference is retained in memory after close. This is because it
+     might be the origin of some transient object. All persistent
+     objects referred by the object containing this reference should
+     no longer be reachable, since the store is closed. The reference
+     is set to NULL. */
+  
   if (inPIT((void *)theObj)) {
     /* The reference is in proper format already */
     referenceAlive((void *)theObj);
@@ -178,38 +185,38 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
     INFO_PERSISTENCE(PtoD++);
     return;
   } else {
-    u_long newEntryInx, distanceToPart;
-    
-    realObj = getRealObject(theObj);
-    distanceToPart = (u_long)theObj - (u_long)realObj;
-    
-    Claim(inAOA(realObj), "Where is the object?");
-    Claim(AOAISPERSISTENT(realObj), 
-	  "Reference from persistent to non persistent object");
-    
-    inx = getPUID((void *)(realObj -> GCAttr));
-    objectLookup(inx,
-		 &GCAttr,
-		 &store,
-		 &offset,
-		 &theObj);
-    
-    if (GCAttr == POTENTIALLYDEAD) {
-      /* The referred object will be removed so we need to unswizzle
-         the reference to it. */
-      if ((newEntryInx = indexLookupRT(store, offset + distanceToPart)) == -1) {
-	/* A new entry is created */
-	newEntryInx = insertReference(ENTRYALIVE,
-				      store,
-				      offset + distanceToPart);
+      u_long newEntryInx, distanceToPart;
+      
+      realObj = getRealObject(theObj);
+      distanceToPart = (u_long)theObj - (u_long)realObj;
+      
+      Claim(inAOA(realObj), "Where is the object?");
+      Claim(AOAISPERSISTENT(realObj), 
+	    "Reference from persistent to non persistent object");
+      
+      inx = getPUID((void *)(realObj -> GCAttr));
+      objectLookup(inx,
+		   &GCAttr,
+		   &store,
+		   &offset,
+		   &theObj);
+      
+      if (GCAttr == POTENTIALLYDEAD) {
+	/* The referred object will be removed so we need to unswizzle
+	   the reference to it. */
+	if ((newEntryInx = indexLookupRT(store, offset + distanceToPart)) == -1) {
+	  /* A new entry is created */
+	  newEntryInx = insertReference(ENTRYALIVE,
+					store,
+					offset + distanceToPart);
+	}
+	*theCell = newPUID(newEntryInx);
+	referenceAlive((void *)*theCell);
+	newAOAclient(newEntryInx, theCell);
+	INFO_PERSISTENCE(PtoD++);
+      } else {
+	Claim(GCAttr == ENTRYALIVE, "What is GC mark ?");
       }
-      *theCell = newPUID(newEntryInx);
-      referenceAlive((void *)*theCell);
-      newAOAclient(newEntryInx, theCell);
-      INFO_PERSISTENCE(PtoD++);
-    } else {
-      Claim(GCAttr == ENTRYALIVE, "What is GC mark ?");
-    }
   }
 }
 
@@ -279,10 +286,10 @@ void getKeyForObject(ObjectKey *ok, Object *theObj)
   
 }
 
-void setTerminatingGC(void)
+void setClosingGC(void)
 {
   forceAOAGC = TRUE;
-  terminatingGC = TRUE;
+  closingGC = TRUE;
 }
 
 void setForceAOAGG(void)

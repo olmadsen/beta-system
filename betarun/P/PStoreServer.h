@@ -11,5 +11,6 @@ u_long deleteExt(u_long name_r);
 u_long createExt(u_long name_r);
 u_long putExt(u_long dooverwrite, u_long name_r, Object *theObj);
 void closeExt(void);
+u_long isOpen(void);
 
 #endif /* _P_PSTORESERVER_H_ */

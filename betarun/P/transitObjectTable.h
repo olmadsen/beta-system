@@ -11,5 +11,6 @@ u_long insertObjectInTransit(BlockID store,
 void TOTFlush(void);
 Object *indexLookupTOT(BlockID store, u_long offset);
 void redirectCells(Array *clients, Object *from, Object *to);
+void clearCells(Array *clients);
 
 #endif /* _TRANSITOBJECTTABLE_H_ */

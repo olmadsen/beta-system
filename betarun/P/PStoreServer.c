@@ -394,6 +394,13 @@ void closeExt(void)
     DEBUG_CODE(Illegal());
     BetaExit(1);
   }
+  free(currentStore);
+  currentStore = NULL;
+}
+
+u_long isOpen(void)
+{
+  return (currentStore != NULL);
 }
 
 u_long getExt(u_long name_r, Object **theCell)

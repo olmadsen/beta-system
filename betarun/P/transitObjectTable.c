@@ -127,6 +127,23 @@ void redirectCells(Array *clients, Object *from, Object *to)
   }
 }
 
+void clearCells(Array *clients)
+{
+  u_long max, count;
+  Object **theCell;
+  
+  if (clients) {
+    max = clients -> top;
+    
+    for (count = 0; count < max; count++) {
+      theCell = (Object **)(clients -> theCells[count]);
+      if (inPIT((void *)(*theCell))) {
+	*theCell = (Object *)NULL;
+      }
+    }
+  }
+}
+
 void TOTFlush(void)
 {
   u_long inx, maxIndex, inserted = 0;

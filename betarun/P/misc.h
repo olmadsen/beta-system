@@ -20,7 +20,7 @@ void resetStatistics(void);
 void showStatistics(void);
 void handlePersistentCell(REFERENCEACTIONARGSTYPE);
 void getKeyForObject(ObjectKey *ok, Object *theObj);
-void setTerminatingGC(void);
+void setClosingGC(void);
 void keyToObject(ObjectKey *ok, Object **theObj);
 void setForceAOAGG(void);
 

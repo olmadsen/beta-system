@@ -1,6 +1,7 @@
 #include "beta.h"
 #include "PException.h"
 #include "unswizzle.h"
+#include "PStoreServer.h"
 
 void pexp_dummy() {
   
@@ -182,6 +183,9 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   void *ip;
   
   INFO_PERSISTENCE(numPF++);
+
+  Claim(isOpen(), 
+	"proxyTrapHandler: Lazy reference in memory eventhough store is closed");
   
   /* Fetch the faulting instruction. */
   dummy = instruction = (* (long *) (ucon->uc_mcontext.gregs[REG_PC]));
@@ -190,7 +194,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   returnPC = ucon->uc_mcontext.gregs[REG_PC]; 
   /* SP to restore when fetch has completed: */
   returnSP = ucon->uc_mcontext.gregs[REG_SP]; 
-  
+
   if (sourceReg(instruction, ucon)) {
     
     if (sourcereg != -1) {

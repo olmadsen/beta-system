@@ -245,20 +245,21 @@ void OTEndGC(void)
       INFO_PERSISTENCE(numD++);
       
     } else if (entry -> GCAttr == ENTRYALIVE) {
-      u_long newInx;
-      OTEntry *newEntry;
-      
-      newEntry = (OTEntry *)malloc(sizeof(OTEntry));
-      newEntry -> GCAttr = ENTRYALIVE;
-      newEntry -> store = entry -> store;
-      newEntry -> offset = entry -> offset;
-      newEntry -> theObj = entry -> theObj;
-      
-      newInx = STInsert(&newTable, newEntry);
-      entry -> theObj -> GCAttr = (long)newPUID(newInx);
-      registerObjectAndParts(entry -> store, entry -> offset, entry -> theObj, newInx + 1);
-      INFO_PERSISTENCE(numP++);
-      
+      if (!closingGC) {
+	u_long newInx;
+	OTEntry *newEntry;
+	
+	newEntry = (OTEntry *)malloc(sizeof(OTEntry));
+	newEntry -> GCAttr = ENTRYALIVE;
+	newEntry -> store = entry -> store;
+	newEntry -> offset = entry -> offset;
+	newEntry -> theObj = entry -> theObj;
+	
+	newInx = STInsert(&newTable, newEntry);
+	entry -> theObj -> GCAttr = (long)newPUID(newInx);
+	registerObjectAndParts(entry -> store, entry -> offset, entry -> theObj, newInx + 1);
+	INFO_PERSISTENCE(numP++);
+      }
     } else {
       Claim(entry -> theObj == NULL, "What is the object ??");
     }
@@ -354,37 +355,11 @@ static void updateObjectInStore(Object *theObj, BlockID store, u_long offset)
   }
 }
 
-#if 0
-
-static u_long currentStore;
-
-static void handleObjects(contentsBox *cb)
-{
-  u_long currentOffset;
-  OTEntry *entry;  
-
-  currentOffset = cb -> key;
-  
-  entry = STLookup(currentTable, (u_long)(cb -> contents));
-  if (entry -> GCAttr == POTENTIALLYDEAD) {
-    updateObjectInStore(entry ->theObj,
-			entry ->store,
-			entry ->offset);
-    entry -> GCAttr = EXPORTED;
-  }
-}
-
-static void handleStore(contentsBox *cb)
-{
-  currentStore = cb -> key;
-  TIVisit((Node *)(cb -> contents), handleObjects);
-}
-#endif 
 /* After GC all unused objects currently in memory should be
    checkpointed and removed */
 void removeUnusedObjects()
 {
-  u_long count, forceTermination;
+  u_long count;
   u_long maxIndex;
   OTEntry *entry;  
   /* All objects in the ObjectTable that are marked as POTENTIALLYDEAD
@@ -399,57 +374,43 @@ void removeUnusedObjects()
   /* If an object is alive and kept in memory we cannot move its
      origin, so we have to mark the origin alive as well. */
   
-  if (!terminatingGC) {
-    void (*temp)(Object *theObj);
-
-    INFO_PERSISTENCE(fprintf(output, "  markOriginsAlive\n "));
-    maxIndex = STSize(currentTable);
-    temp = objectAction;
-    objectAction = markOriginsAlive;
-    for (count=0; count<maxIndex; count++) {
-      entry = STLookup(currentTable, count);
-      if (entry -> GCAttr == ENTRYALIVE) {
-	Claim(inAOA(entry ->theObj), "Where is theObj?");      
-	Claim(AOAISPERSISTENT(entry ->theObj), "not persistent??");
-	/* handle origin */
-	scanObject(entry ->theObj,
-		   NULL,
-		   TRUE);
-      }       
-    }
-    objectAction = temp;
-
-    INFO_PERSISTENCE(fprintf(output, " handlePersistentCell\n"));    
-    /* Handle references from live to dead persistent objects */
-    maxIndex = STSize(currentTable);
-    for (count=0; count<maxIndex; count++) {
-      entry = STLookup(currentTable, count);
-      if (entry ->GCAttr == ENTRYALIVE) {
-	Claim(inAOA(entry ->theObj), "Where is theObj?");      
-	Claim(AOAISPERSISTENT(entry ->theObj), "not persistent??");
-	/* handle live entry */
-	scanObject(entry ->theObj,
-		   handlePersistentCell,
-		   TRUE);
-      }
-    }
-  } else {
-    /* Mark all entries DEAD regardless */
-    forceTermination = 0;
-    maxIndex = STSize(currentTable);
-    for (count=0; count<maxIndex; count++) {
-      entry = STLookup(currentTable, count);
-      
-      if (entry ->GCAttr == ENTRYALIVE) {
-	forceTermination = 1;
-	entry ->GCAttr = POTENTIALLYDEAD;
-      }
+  void (*temp)(Object *theObj);
+  
+  INFO_PERSISTENCE(fprintf(output, "  markOriginsAlive\n "));
+  maxIndex = STSize(currentTable);
+  temp = objectAction;
+  objectAction = markOriginsAlive;
+  for (count=0; count<maxIndex; count++) {
+    entry = STLookup(currentTable, count);
+    if (entry -> GCAttr == ENTRYALIVE) {
+      Claim(inAOA(entry ->theObj), "Where is theObj?");      
+      Claim(AOAISPERSISTENT(entry ->theObj), "not persistent??");
+      /* handle origin */
+      scanObject(entry ->theObj,
+		 NULL,
+		 TRUE);
+    }       
+  }
+  objectAction = temp;
+  
+  INFO_PERSISTENCE(fprintf(output, " handlePersistentCell\n"));    
+  /* Handle references from live to dead persistent objects */
+  maxIndex = STSize(currentTable);
+  for (count=0; count<maxIndex; count++) {
+    entry = STLookup(currentTable, count);
+    if (entry ->GCAttr == ENTRYALIVE) {
+      Claim(inAOA(entry ->theObj), "Where is theObj?");      
+      Claim(AOAISPERSISTENT(entry ->theObj), "not persistent??");
+      /* handle live entry */
+      scanObject(entry ->theObj,
+		 handlePersistentCell,
+		 TRUE);
     }
   }
   
   INFO_PERSISTENCE(fprintf(output, "  updateObjectInStore "));    
+
   /* Handles dead entries and exports dead objects */
-#if 1
   maxIndex = STSize(currentTable);
   INFO_PERSISTENCE(bytesExported = 0);
   INFO_PERSISTENCE(objectsExported = 0);
@@ -459,14 +420,24 @@ void removeUnusedObjects()
       updateObjectInStore(entry ->theObj,
 			  entry ->store,
 			  entry ->offset);
+    } else if (entry ->GCAttr == ENTRYALIVE) {
+      if (closingGC) {
+	Object *tmp;
+	
+	tmp = (Object *)malloc(sizeof(char) * 4*ObjectSize(entry ->theObj));
+	memcpy(tmp, entry ->theObj, 4*ObjectSize(entry ->theObj));
+	updateObjectInStore(entry ->theObj,
+			    entry ->store,
+			    entry ->offset);
+	memcpy(entry ->theObj, tmp, 4*ObjectSize(entry ->theObj));
+	
+      }
     }
   }
+  
   INFO_PERSISTENCE(fprintf(output, "(exported 0x%X objects 0x%X bytes)\n", 
 			   (int)objectsExported,
 			   (int)bytesExported));
-#else
-  TIVisit(loadedObjectsST, handleStore);
-#endif /* */
   
   /* mark dead objects dead and clean up tables */
   INFO_PERSISTENCE(fprintf(output, "  OTEndGC\n"));    
@@ -478,18 +449,12 @@ void removeUnusedObjects()
   saveCurrentObjectStore();
   saveCurrentCrossStoreTable();
   
-  INFO_PERSISTENCE(fprintf(output, "]\n"));    
-  if (terminatingGC && forceTermination) {
-    /* We cannot return to BETA code as live objects have been
-       exported. This will give problems. Therefor we exit now. */
-    STFree(&currentTable);
-    freeProtoHandling();
-#ifdef PROFILE_PERSISTENCE
-    show_vtimer();
-#endif /* PROFILE_PERSISTENCE */
+  if (closingGC) {
     closeExt();
-    BetaExit(42);
+    closingGC = FALSE;
   }
+
+  INFO_PERSISTENCE(fprintf(output, "]\n"));    
 }
 
 #endif /* PERSIST */
