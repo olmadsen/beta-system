@@ -59,6 +59,8 @@ void doGC() /* The one called from IOA(c)alloc */
 		  );
 #endif
     asmemptylabel(EndGC);
+    fprintf(output,"\n\ndoGC NYI\n\n");
+    exit(1);
 }
 
 void DoGC() /* The one called directly from betaenv */
