@@ -1,5 +1,0 @@
-OBJDIR = ../$(MACHINETYPE)
-CFLAGS = -c -D$(MACHINETYPE) -I$(MOTIFINC)
-
-$(OBJDIR)/getdesigndisplay.o: getdesigndisplay.c
-	$(CC) $(CFLAGS) getdesigndisplay.c -o $(OBJDIR)/getdesigndisplay.o

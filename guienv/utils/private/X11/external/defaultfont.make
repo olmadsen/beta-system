@@ -1,9 +1,5 @@
 OBJDIR = ../$(MACHINETYPE)
+CFLAGS = -c -D$(MACHINETYPE) -I$(MOTIFINC)
 
-CFLAGS = -c -D$(MACHINETYPE) -I$(MOTIFINC) -O -g
-
-
-defaultfont = $(OBJDIR)/defaultfont.o
-
-$(defaultfont): defaultfont.c
-	gcc $(CFLAGS) defaultfont.c -o $(defaultfont)
+$(OBJDIR)/defaultfont.o: defaultfont.c
+	$(CC) $(CFLAGS) defaultfont.c -o $(OBJDIR)/defaultfont.o

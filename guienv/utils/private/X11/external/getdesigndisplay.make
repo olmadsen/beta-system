@@ -1,9 +1,5 @@
 OBJDIR = ../$(MACHINETYPE)
+CFLAGS = -c -D$(MACHINETYPE) -I$(MOTIFINC)
 
-CFLAGS = -c -D$(MACHINETYPE) -I$(MOTIFINC) -O -g
-
-
-getdesigndisplay = $(OBJDIR)/getdesigndisplay.o
-
-$(getdesigndisplay): getdesigndisplay.c
-	gcc $(CFLAGS) getdesigndisplay.c -o $(getdesigndisplay)
+$(OBJDIR)/getdesigndisplay.o: getdesigndisplay.c
+	$(CC) $(CFLAGS) getdesigndisplay.c -o $(OBJDIR)/getdesigndisplay.o
