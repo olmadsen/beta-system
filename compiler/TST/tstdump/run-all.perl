@@ -1,10 +1,11 @@
 #!/usr/local/bin/perl -s
 #-*-Perl-*-
 
-# usage: perl -s run-all.perl [-u] [-f]
+# usage: perl -s run-all.perl [-u] [-f] [-c]
 
 $UseDefaults = 1 if ($u);
 $FastMode = 1 if ($f);
+$Context = "-c" if ($c);
 
 push(@INC, $ENV{'BETALIB'} . "/bin/admin");
 
@@ -71,7 +72,7 @@ foreach $f (@files) {
 	system("$f >$f.out 2>$f.err");
     }
     if ( -f "output/$f.out" ) {
-	if (system("diff -i output/$f.out $f.out") == 0){
+	if (system("diff $Context -i output/$f.out $f.out") == 0){
 	    print "[stdout is correct]\n";
 	    &rm("$f.out");
 	} else {
@@ -92,7 +93,7 @@ foreach $f (@files) {
 	    }
 	    close IN;
 	    close OUT;
-	    if (system("diff -i output/$f.err $f.ref") == 0){
+	    if (system("diff $Context -i output/$f.err $f.ref") == 0){
 		print "[stderr is correct]\n";
 		&rm("$f.err");
 	    } else {
@@ -110,6 +111,7 @@ foreach $f (@files) {
 	    while(<IN>) {
 		s/MACHINE_TYPE/$objdir/g;
 		s/address 0x[0-9a-f]+/address 0xXXXXXXXX/g;
+		s/Segmentation fault/Bus error/g;
 		print OUT;
 	    }
 	    close IN;
@@ -121,12 +123,13 @@ foreach $f (@files) {
 		next if (/\{/);
 		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
 		s/address 0x[0-9a-f]+/address 0xXXXXXXXX/g;
+		s/Segmentation fault/Bus error/g;
 		print OUT;
 	    }
 	    close IN;
 	    close OUT;
 	    
-	    if (system("diff -i $f.ref $f.app") == 0){
+	    if (system("diff $Context -i $f.ref $f.app") == 0){
 		print "[Dump is correct]\n";
 		&rm("$f.dump");
 		&rm("$f.ref");
@@ -134,7 +137,7 @@ foreach $f (@files) {
 		&rm("$f$exe") unless $FastMode;
 	    } else {
 		print "[Difference in dump]\n";
-		system("diff -i $f.ref $f.app > $f.diff");
+		system("diff $Context -i $f.ref $f.app > $f.diff");
 	    }
 	} else {
 	    print "[No reference dump exists. Creating $f.candidate]\n";
