@@ -8,8 +8,8 @@ INCLUDE '~beta/containers/v1.4/arrayContainer';
 INCLUDE '~beta/interfacebuilder/v1.0/code/generate';
 INCLUDE '~beta/interfacebuilder/v1.0/asteditor/asteditor';
 INCLUDE '~beta/interfacebuilder/v1.0/palettes/palette';
-INCLUDE '~beta/interfacebuilder/v1.0/guienvstuff/guienvstuff';
-INCLUDE '~beta/interfacebuilder/v1.0/guienvstuff/walkingants';
+INCLUDE '~beta/guienv/v1.3/utils/guienvstuff';
+INCLUDE '~beta/guienv/v1.3/utils/walkingants';
 INCLUDE '~beta/interfacebuilder/v1.0/guienvstuff/killtranslations';
 INCLUDE '~beta/interfacebuilder/v1.0/mpsstuff/mpsutils';
 INCLUDE '~beta/interfacebuilder/v1.0/dialogs/spacingdialog';
@@ -200,16 +200,35 @@ createVirtual:
 reEstablishNode:
   (# gram: @grammar;
      theExpanded: ^astInterface.expanded;
-  do this(graphicalEditor).private.contentsEditor.private.privateAttributes[] -> theExpanded[];
-     l: gram.simpleDecl -> theExpanded.suffixWalkForProd
+  do (* trace:
+      *        (#
+      *        do 'Reestablish node: p-name = ' -> putText;
+      *           this(windowItemEditor)[] -> getPatternName -> putText;
+      *           ' ID = ' -> puttext;
+      *           data.ID -> putInt;
+      *        #);
+      *)
+     this(graphicalEditor).private.contentsEditor.private.privateAttributes[] -> theExpanded[];
+     l: theExpanded.suffixWalk
      (# 
-     do (if current.hasGUIcomment then
-            (if data.ID = current.guiInfo then
-                current[] -> astControl.init;
-                leave l;
+     do (if (current.symbol = gram.simpleDecl) OR (current.symbol = gram.patternDecl) then
+            (if current.hasGUIcomment then
+                (if data.ID = current.guiInfo then
+                    current[] -> astControl.init;
+                    leave l;
+                if);
             if);
         if);
      #);
+     (* trace:
+      *        (# 
+      *        do (if astControl.node[] = None then
+      *               ' NOT found' -> putLine;
+      *            else
+      *               ' found' -> putLine;
+      *           if);
+      *        #);
+      *)
   #);
 
 createTheWindowItem:
@@ -511,7 +530,7 @@ do
 do inner;
 
 -- iconButtonEditornew: doPart --
-do 'nothing' -> data.theRaster[];
+do 
    inner;
 
 -- optionButtonEditornew: doPart --
@@ -561,8 +580,10 @@ do this(graphicalEditor).private.editorGenerator[type] -> theEditor[];
 
 
 -- graphicalEditorOpen: doPart --
-do (#
-   do hide;
+do (# server: ^graphicalEditorServer;
+   do getGraphicalEditorServer -> server[];
+      this(graphicalEditor)[] -> server.insert;
+      hide;
       'Graphical Objects' -> title;
       getMPS -> MPS[];
       getClassInfo -> private.theClassInfo[];
@@ -596,10 +617,14 @@ do (#
    #);
 
 -- graphicalEditorClose: doPart --
-do inner;
-   selection.makeEmpty;
-   private.contentsEditor.close;
-
+do (# server: ^graphicalEditorServer;
+   do inner close;
+      selection.makeEmpty;
+      private.contentsEditor.close;
+      
+      getGraphicalEditorServer -> server[];
+      this(graphicalEditor)[] -> server.delete;
+   #);
 -- graphicalEditorOnMouseDown: doPart --
 do 
    
@@ -637,6 +662,7 @@ scriptEditor: astEditor
                if);
             #);
        #);
+     
   #);
 
 initialize:
@@ -898,7 +924,7 @@ findBody:
         'button' -> names[9][];
         'pushButton' -> names[10][];
         'iconButton' -> names[11][];
-        'menuButton' -> names[12][];
+        'optionButton' -> names[12][];
         'staticText' -> names[13][];
         'toggleButton' -> names[14][];
         'radioButton' -> names[15][];
@@ -1320,9 +1346,22 @@ do (* Nothing *)
 
 -- GraphicalEditorWindowItemEditorEditAttributes: doPart --
 do (# theEditor: ^astEditor;
-   do &scriptEditor[] -> theEditor[];
-      astControl.node[] -> theEditor.init;
-      (* true -> theEditor.readOnly; *)
+      server: ^astEditorServer;
+      makeTitle:
+        (# theTitle: ^text;
+        do astControl.node[] -> betaGram.getName -> theTitle[];
+           ' : attributes' -> theTitle.append;
+        exit theTitle[]
+        #);
+   do getAstEditorServer -> server[];
+      astControl.node[] -> server.find -> theEditor[];
+      (if theEditor[] = none then
+          &scriptEditor[] -> theEditor[];
+          astControl.node[] -> theEditor.init;
+          makeTitle -> theEditor.title;
+       else
+          theEditor.bringToFront;
+      if);
    #);
 
 -- GraphicalEditorWindowItemEditorShowInfoDialog: doPart --
@@ -1363,7 +1402,14 @@ do (# theAttribute, theVirtual, theEventHandler: ^astInterface.beta.attributeDec
       doPartFrag: ^astInterface.fragmentForm;
       group: ^astInterface.fragmentGroup;
       theAst: ^astInterface.AST;
-      
+      server: ^astEditorServer;
+      makeTitle:
+        (# theTitle: ^text;
+        do astControl.node[] -> betaGram.getName -> theTitle[];
+           ' : ' -> theTitle.append;
+           name[] -> theTitle.append;
+        exit theTitle[]
+        #);
    do astControl.node[] -> theAttribute[];
       name[] -> findVirtual -> theVirtual[];
       (if theVirtual[] = none then
@@ -1403,8 +1449,15 @@ do (# theAttribute, theVirtual, theEventHandler: ^astInterface.beta.attributeDec
               theVirtual[] -> astToEdit[];
           if);
       if);
-      &scriptEditor[] -> theEditor[];
-      astToEdit[] -> theEditor.init;
+      getAstEditorServer -> server[];
+      astToEdit[] -> server.find -> theEditor[];
+      (if theEditor[] = none then
+          &scriptEditor[] -> theEditor[];
+          astToEdit[] -> theEditor.init;
+          makeTitle -> theEditor.title;
+       else
+          theEditor.bringToFront;
+      if);
    #)
    
    
@@ -1495,6 +1548,7 @@ do type -> theObjectStore.new -> data[];
    false -> data.bindBottom;
    true -> data.visible;
    true -> data.enabled;
+   borderStyles.shadowOut -> data.borderStyle;
    inner
 
 -- GraphicalEditorCanvasEditorNewData: doPart --
@@ -1527,7 +1581,7 @@ do
    inner
 
 -- GraphicalEditorIconButtonEditorNewData: doPart --
-do 
+do 'nothing' -> data.theRaster[];
    (40, 40) -> data.size;
    inner
 
@@ -1546,6 +1600,9 @@ do inner
 
 -- GraphicalEditorScrollBarEditorNewData: doPart --
 do (100,16) -> data.size;
+   100 -> data.maxValue;
+   16 -> data.scrollAmount;
+   50 -> data.pageScrollAmount;
    inner
 
 -- GraphicalEditorEditTextEditorNewData: doPart --
@@ -1560,7 +1617,9 @@ do inner
 do inner
 
 -- GraphicalEditorTextScrollListEditorNewData: doPart --
-do inner
+do &textStyleData[] -> data.style[];
+   'Courier' -> data.style.name[];
+   inner
    
 -- GraphicalEditorRadioButtonEditorNewData: doPart --
 do inner;
@@ -1926,3 +1985,29 @@ alignSetup:
      #);
      startAnts;
   #);
+
+-- graphicalEditorServerInit: doPart --
+do private.editors.init;
+   
+-- graphicalEditorServerInsert: doPart --
+do editor[] -> private.editors.append;
+
+-- graphicalEditorServerDelete: doPart --
+do editor[] -> private.editors.at -> private.editors.delete;
+
+-- graphicalEditorServerFind: doPart --
+do search:
+     private.editors.iterate
+     (# 
+     do (if node[] -> current.elm.astControl.node.equal then
+            current.elm[] -> editor[];
+            leave search;
+        if);
+     #);
+   
+-- graphicalEditorServerPrivate: descriptor --
+(# editors: @list
+     (# element:: graphicalEditor;
+     #);
+#)
+
