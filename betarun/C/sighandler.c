@@ -250,13 +250,32 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 
   switch( sig){
     case SIGFPE:
+      /* We can't use code for dispatching, c.f. signal(2):
+       * For SIGFPE, code has the following values:
+       *    12      overflow trap;
+       *    13      conditional trap;
+       *    14      assist exception trap;
+       *    22      assist emulation trap.
+       *
+       * FIXME:
+       * By inspection using debugger, I have determined, that
+       * code is 0xd for integer division by zero and 0xe
+       * for floating point division by zero.
+       * I use this below.
+       * Other possibilities might be to look at the VZOUIC flags of
+       * the floating point status register. But the manual says, that
+       * the architecture need not set these bits, when the trap is
+       * *taken*.
+       * A more thorough method might be to fetch the instruction 
+       * address from the context, and decode the instruction found at that
+       * address to determine what has happened.
+       */
       switch(code){
-      case FPE_INTDIV_TRAP: /* int div by zero */
+      case 0xd: /* int div by zero */
 	todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
-      case FPE_FLTDIV_TRAP:
-      case FPE_FLTDIV_FAULT: /* fp div by zero */
+      case 0xe: /* fp div by zero */
 	todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
-      default: /* arithmetic exception */
+      default: /* other floating point exception */
 	todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig);
       }
       break;

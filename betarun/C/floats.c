@@ -69,8 +69,10 @@
 #endif
 
 #ifdef hpux9pa
-#if 0 /* NOT TESTET */
-trye: man -k float trap exception fpu fpe
+/* See chapter 6 in "HP Precision Architecture and Instruction Set 
+ * Reference Manual
+ * Floating Point Status Register: see table 6-1 and figure 6-6.
+ */
 #define FPU_ZERODIVISION  (1L<<3)
 #define FPU_INVALID       (1L<<4)
 #define FPU_DENORMALIZED  0
@@ -78,16 +80,18 @@ trye: man -k float trap exception fpu fpe
 #define FPU_UNDERFLOW     (1L<<1)
 #define FPU_PRECISIONLOST (1L<<0)
 #define EnableFPUexceptions(mask) \
-{ unsigned double status; \
-  register double *statusaddr = &status; \
-  __asm__ volatile ("\tFSTDS\t%%fr0,0(0,%0)" :: "=r" (statusaddr)); \
-  status |= (mask)<<16; \
-  __asm__ volatile ("\tFLDDS\t%%fr0,0(0,%0)" : "r" (statusaddr)); \
+{ \
+  unsigned long fpsr; /* gdb's name for this register */\
+  register unsigned long *addr; \
+  addr = &fpsr; \
+  __asm__ volatile ("FSTWS %%fr0,0(0,%0)" :: "r" (addr)); \
+  /*fprintf(output, "SetupFPU: old: 0x%08x\n", (int)fpsr);*/ \
+  fpsr |= (mask); \
+  /*fprintf(output, "SetupFPU: new: 0x%08x\n", (int)fpsr);*/ \
+  addr = &fpsr; \
+  __asm__ volatile ("FLDWS 0(0,%0),%%fr0" :: "r" (addr)); \
 }
-#
 #endif
-#endif
-
 
 #ifdef sgi
 /* see <sys/fpu.h> */
