@@ -658,7 +658,7 @@ void ProcessReference(Object ** theCell, long refType)
   
   theObj = *theCell;
   
-  if( inIOA(theObj)){
+  if (inIOA(theObj)) {
     /* 'theObj' is inside IOA */
 #ifdef RTDEBUG
     {
