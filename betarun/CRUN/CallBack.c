@@ -5,6 +5,9 @@
 
 #include "beta.h"
 #include "crun.h"
+
+#ifndef MT
+
 #ifdef __powerc
 #include <MixedMode.h>
 #endif
@@ -486,3 +489,5 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
     return retval;
 }
 #endif /* hppa */
+
+#endif /* MT */

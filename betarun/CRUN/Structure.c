@@ -8,6 +8,7 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifndef MT
 ParamOriginProto(struct Structure *, AlloS)
 {
   register ref(Structure) newStruct;
@@ -34,6 +35,105 @@ ParamOriginProto(struct Structure *, AlloS)
 #else
   RETURN(newStruct);
 #endif
+}
+
+ParamStruc(struct Item *, AlloSI)
+{
+  struct Item *ss;
+  
+  GCable_Entry();
+  FetchStruc();
+
+  DEBUG_CODE(NumAlloSI++);
+
+  Ck(struc); Ck(struc->iOrigin);
+#ifdef sparc
+  ss = SPARC_AlloI(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0);
+#endif
+#ifdef hppa
+  ss = CAlloI(cast(Object) struc->iOrigin, struc->iProto);
+#endif
+#ifdef crts
+  ss = AlloI(cast(Object) struc->iOrigin, struc->iProto);
+#endif
+
+  Ck(ss); 
+
+#ifdef sparc
+  return_in_i1(ss);
+#else
+  RETURN(ss);
+#endif
+}
+
+ParamStruc(struct Component *, AlloSC)
+{
+  struct Component *ss;
+  
+  GCable_Entry();
+  FetchStruc();
+
+  DEBUG_CODE(NumAlloSC++);
+
+  Ck(struc);
+#ifdef sparc
+  ss = SPARC_AlloC(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0);
+#endif
+#ifdef hppa
+  ss = CAlloC(cast(Object) struc->iOrigin, struc->iProto);
+#endif
+#ifdef crts
+  ss = AlloC(cast(Object) struc->iOrigin, struc->iProto));
+#endif
+
+  Ck(ss);
+
+#ifdef sparc
+  return_in_i1(ss);
+#else
+  RETURN(ss);
+#endif
+}    
+
+ref(Structure) ObjS(ref(Object) theObj)
+{
+  /* Allocate a structObject for theObj. 
+   * Used in this way:
+   *
+   * R: ^T
+   * R##
+   *
+   * Unlike ThisS the object and not the origin should be used in the 
+   * generated struc object.
+   */
+  
+  register ref(Structure) newStruct;
+  
+  GCable_Entry();
+  
+  /* Allocate a StructObject. */
+
+  DEBUG_CODE(NumObjS++);
+
+#ifdef RTDEBUG
+  if (theObj->Proto == DopartObjectPTValue){
+    fprintf(output, "ObjS: called with DoPartObject: 0x%x\n", (int)theObj);
+    theObj = ((struct DopartObject *)theObj)->Origin; /* the "real" object */
+  }
+#endif
+  
+  Ck(theObj);
+  Protect(theObj, newStruct = cast(Structure) IOAalloc(StructureSize));
+  
+  newStruct->Proto = StructurePTValue;
+  newStruct->GCAttr = 1;
+  
+  newStruct->iProto = theObj->Proto;
+  newStruct->iOrigin = (casthandle(Object)theObj)[theObj->Proto->OriginOff];
+
+  Ck(newStruct); Ck(theObj);
+  
+  return newStruct; 
 }
 
 #ifdef sparc
@@ -97,108 +197,9 @@ ref(Structure) ThisS(ref(Object) this)
   return newStruct;
 }
 
-ref(Structure) ObjS(ref(Object) theObj)
-{
-  /* Allocate a structObject for theObj. 
-   * Used in this way:
-   *
-   * R: ^T
-   * R##
-   *
-   * Unlike ThisS the object and not the origin should be used in the 
-   * generated struc object.
-   */
-  
-  register ref(Structure) newStruct;
-  
-  GCable_Entry();
-  
-  /* Allocate a StructObject. */
-
-  DEBUG_CODE(NumObjS++);
-
-#ifdef RTDEBUG
-  if (theObj->Proto == DopartObjectPTValue){
-    fprintf(output, "ObjS: called with DoPartObject: 0x%x\n", (int)theObj);
-    theObj = ((struct DopartObject *)theObj)->Origin; /* the "real" object */
-  }
-#endif
-  
-  Ck(theObj);
-  Protect(theObj, newStruct = cast(Structure) IOAalloc(StructureSize));
-  
-  newStruct->Proto = StructurePTValue;
-  newStruct->GCAttr = 1;
-  
-  newStruct->iProto = theObj->Proto;
-  newStruct->iOrigin = (casthandle(Object)theObj)[theObj->Proto->OriginOff];
-
-  Ck(newStruct); Ck(theObj);
-  
-  return newStruct; 
-}
-
-ParamStruc(struct Item *, AlloSI)
-{
-  struct Item *ss;
-  
-  GCable_Entry();
-  FetchStruc();
-
-  DEBUG_CODE(NumAlloSI++);
-
-  Ck(struc); Ck(struc->iOrigin);
-#ifdef sparc
-  ss = SPARC_AlloI(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0);
-#endif
-#ifdef hppa
-  ss = CAlloI(cast(Object) struc->iOrigin, struc->iProto);
-#endif
-#ifdef crts
-  ss = AlloI(cast(Object) struc->iOrigin, struc->iProto);
-#endif
-
-  Ck(ss); 
-
-#ifdef sparc
-  return_in_i1(ss);
-#else
-  RETURN(ss);
-#endif
-}
-
-ParamStruc(struct Component *, AlloSC)
-{
-  struct Component *ss;
-  
-  GCable_Entry();
-  FetchStruc();
-
-  DEBUG_CODE(NumAlloSC++);
-
-  Ck(struc);
-#ifdef sparc
-  ss = SPARC_AlloC(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0);
-#endif
-#ifdef hppa
-  ss = CAlloC(cast(Object) struc->iOrigin, struc->iProto);
-#endif
-#ifdef crts
-  ss = AlloC(cast(Object) struc->iOrigin, struc->iProto));
-#endif
-
-  Ck(ss);
-
-#ifdef sparc
-  return_in_i1(ss);
-#else
-  RETURN(ss);
-#endif
-}    
-
 long eqS(ref(Structure) arg1, ref(Structure) arg2)
 {
-  GCable_Entry();
+  /*GCable_Entry();*/
   
   DEBUG_CODE(NumeqS++);
 
@@ -219,7 +220,7 @@ long eqS(ref(Structure) arg1, ref(Structure) arg2)
 
 long neS(ref(Structure) arg1, ref(Structure) arg2)
 {
-  GCable_Entry();
+  /* GCable_Entry(); */
   
   DEBUG_CODE(NumneS++);
   Ck(arg1); Ck(arg2);
@@ -330,3 +331,4 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
   return 0; 
 }
 
+#endif /* MT */

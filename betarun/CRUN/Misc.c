@@ -34,6 +34,7 @@ void Return()
  * to prevent gcc from inlining it.
  */
 
+#ifndef MT
 struct Item *SPARC_AlloSI(struct Structure *s, int i1, int i2, int i3, int i4)
 {
   struct Item *CAlloSI(struct Structure *s, int i1, int i2, int i3, int i4);
@@ -41,6 +42,7 @@ struct Item *SPARC_AlloSI(struct Structure *s, int i1, int i2, int i3, int i4)
   return CAlloSI(s, i1, i2 ,i3, i4);
   GCable_Exit(1);
 }
+#endif /* MT */
 
 struct Component *SPARC_AlloC(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4)
 {

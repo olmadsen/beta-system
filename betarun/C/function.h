@@ -76,10 +76,6 @@ extern void CBFACheck(void);
 
 /* C/sighandler.c */
 #ifdef sun4s
-#ifdef MT
-extern void SetupVirtualTimerHandler(unsigned usec);
-extern void SetupVirtualTimer(unsigned usec);
-#endif /* MT */
 extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
 #else
 #ifdef crts
@@ -95,6 +91,14 @@ extern void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char
 #endif /* linux || nti */
 #endif /* crts */
 #endif /* sun4s */
+
+#ifdef MT
+/* C/multithread.c */
+extern int numProcessors(int online);
+extern int attToProcessor(struct Component *comp);
+extern void SetupVirtualTimerHandler(unsigned usec);
+extern void SetupVirtualTimer(unsigned usec);
+#endif /* MT */
 
 /* C/valhallaComm.c */
 extern void valhallaInit (int debug_valhalla);

@@ -8,6 +8,8 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifndef MT
+
 /* parameters:
  *   prim1 = originReg = origin, 
  *   prim2 = callReg = proto, NOTE that on some platforms,
@@ -18,7 +20,6 @@
  *   prim5 = this (SGI/PPC)
  *   prim6 = SP   (SGI/PPC)
  */
-
 
 ParamObjOriginProtoOffRange(AlloVRI)
 {
@@ -111,3 +112,5 @@ ParamObjOriginProtoOffRange(AlloVRC)
 
   Ck(theObj); Ck(theRep);
 }
+
+#endif /* MT */

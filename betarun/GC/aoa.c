@@ -141,11 +141,13 @@ static struct Object *AOAallocate(long numbytes)
 }
 
 #ifdef NEWRUN
-struct Object *AOAalloc(long numbytes, long *SP)
-#else
+#define AOA_ALLOC_PARAMS long numbytes, long *SP
 extern void DoGC(void);
-struct Object *AOAalloc(long numbytes)
-#endif
+#else
+#define AOA_ALLOC_PARAMS long numbytes
+#endif 
+
+struct Object *AOAalloc(AOA_ALLOC_PARAMS)
 {
   struct Object *theObj = AOAallocate(numbytes);
   DEBUG_CODE(NumAOAAlloc++);
@@ -154,46 +156,16 @@ struct Object *AOAalloc(long numbytes)
      * true now. Force an IOAGc.
      */
     DEBUG_AOA(fprintf(output, "AOAalloc: forcing IOAGc and AOAGc\n"));
+#ifdef MT
+    ReqObjectSize = numbytes/4;
+    IOAGc();
+#else
 #ifdef NEWRUN
     DoGC(SP);
 #else
     DoGC();
 #endif
-    /* Try again */
-    theObj = AOAallocate(numbytes);
-  }
-  return theObj;
-}
-
-#ifdef NEWRUN
-struct Object *AOAcalloc(long numbytes, long *SP)
-#else /* NEWRUN */
-struct Object *AOAcalloc(long numbytes)
-#endif /* NEWRUN */
-{
-  struct Object *theObj;
-#ifdef NEWRUN
-  theObj = AOAalloc(numbytes, SP);
-#else
-  theObj = AOAalloc(numbytes);
-#endif
-  if (theObj) memset(theObj, 0, numbytes);
-  return theObj;
-}
-
-#ifdef MT
-
-struct Object *AOAalloc(long numbytes)
-{
-  struct Object *theObj = AOAallocate(numbytes);
-  DEBUG_CODE(NumAOAAlloc++);
-  if (!theObj){
-    /* AOAallocate failed. This means that AOANeedCompaction will be
-     * true now. Force an IOAGc.
-     */
-    DEBUG_AOA(fprintf(output, "AOAalloc: forcing IOAGc and AOAGc\n"));
-    ReqObjectSize = numbytes/4;
-    IOAGc();
+#endif /* MT */
     /* Try again */
     theObj = AOAallocate(numbytes);
   }
@@ -204,14 +176,19 @@ struct Object *AOAalloc(long numbytes)
   }
   return theObj;
 }
-struct Object *AOAcalloc(long numbytes)
+
+struct Object *AOAcalloc(AOA_ALLOC_PARAMS)
 {
-  struct Object *theObj = AOAalloc(numbytes);
-  if (theObj) memset(theObj, 0, numbytes);
+  struct Object *theObj;
+#ifdef NEWRUN
+  theObj = AOAalloc(numbytes, SP);
+#else
+  theObj = AOAalloc(numbytes);
+#endif
+  /* No need to check theObj!=0 since this is done in AOAalloc */
+  memset(theObj, 0, numbytes);
   return theObj;
 }
-#endif
-
 
 /* CopyObjectToAOA:
  *  move an object to AOA and return the address of the new location

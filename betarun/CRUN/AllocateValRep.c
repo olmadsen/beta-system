@@ -7,6 +7,8 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifndef MT
+
 /* parameters:
  *   primreg1 = off
  *   primreg2 = range, 
@@ -169,3 +171,5 @@ ParamThisOffRange(AlloVR8)
   AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
   Ck(theObj); Ck(theRep);
 }
+
+#endif /* MT */

@@ -97,6 +97,7 @@ void freeCBF(external_entry)
 #ifdef RTDEBUG
   Claim(inBetaHeap((ref(Object))(theCBE->theStruct)), 
 	"inBetaHeap(theCBE->theStruct)");
+#ifndef MT
 #ifdef sparc
   Claim(theCBE->mov_o7_g1 == MOV_O7_G1, 
 	"theCBE->mov_o7_g1 is \"mov o7,i7\"");
@@ -105,6 +106,7 @@ void freeCBF(external_entry)
   Claim(theCBE->nop == NOP,
 	"theCBE->nop is \"nop\"");
 #endif /* sparc */
+#endif /* MT */
   Claim(CBFABlockSize != 0, "CBFABlockSize != 0");
   Claim(CBFATop != CBFA->entries, "CBFATop != CBFA->entries");
   

@@ -428,6 +428,11 @@ void Initialize()
 #endif /* UNIX || crts */
 
 #else /* sun4s */
+
+#ifdef MT
+   fprintf(output, "Standard signalhandlers temporarily disabled for MT\n");
+   SetupVirtualTimerHandler(100000); /* interrupt every 0.1 second */
+#endif
   /* sbrandt 9/7 93. See man sigaction and <sys/signal.h>. */
   { /* Setup signal handlers for the Beta system */
     struct sigaction sa;
@@ -450,9 +455,6 @@ void Initialize()
     sigaction( SIGEMT,  &sa, 0);
 #ifdef RTDEBUG
     sigaction( SIGINT,  &sa, 0);
-#endif
-#ifdef MT
-    SetupVirtualTimerHandler(100000); /* interrupt every 0.1 second */
 #endif
   }
 #endif /* sun4s */

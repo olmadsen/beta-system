@@ -12,6 +12,9 @@
 #endif
 #endif
 
+#ifdef MT
+#define _REEENTRANT 1
+#endif
 
 #define BETARUN_ID "3.0"
 

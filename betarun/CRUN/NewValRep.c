@@ -8,6 +8,8 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifndef MT
+
 ParamObjOffRange(NewVR1)
 {
   GCable_Entry();
@@ -135,5 +137,4 @@ ParamObjOffRange(NewVRC)
   
 } /* NewVRC */
 
-
-
+#endif /* MT */

@@ -8,6 +8,8 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifndef MT
+
 ParamThisOffRange(AlloRR)
 {
     DeclReference1(struct RefRep *, theRep);
@@ -27,3 +29,5 @@ ParamThisOffRange(AlloRR)
     AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
     Ck(theObj); Ck(theRep); 
 }
+
+#endif /* MT */

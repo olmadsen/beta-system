@@ -4,8 +4,11 @@
  */
 
 #define GCable_Module
+
 #include "beta.h"
 #include "crun.h"
+
+#ifndef MT
 
 #ifdef sparc
 asmlabel(ExO, 
@@ -76,3 +79,5 @@ void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
 }
 
 #endif /* sparc */
+
+#endif /* MT */
