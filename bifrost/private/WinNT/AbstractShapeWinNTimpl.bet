@@ -2,7 +2,185 @@ ORIGIN '../Impl/AbstractShapeImpl';
 INCLUDE 'BifrostWinNTimpl';
 
 -- AShapeRecalculatePrivatePartBody: descriptor --
-(# #)
+(# thePointList: ^PointArrayList;
+   EndPoints: [100] ^Point;
+   firstFree, firstFreeEnds: @Integer;
+   minx,miny,maxx,maxy: @Integer;
+   tp: @Point;
+   tmTODevice: ^Matrix;
+   
+   updateBound: @
+     (# p: @Point;
+        mini: @Min;
+        maxi: @Max;
+     enter p
+     do
+        (minx,p.x) -> mini -> minx;
+        (miny,p.y) -> mini -> miny;
+        (maxx,p.x) -> maxi -> maxx;
+        (maxy,p.y) -> maxi -> maxy
+     #);
+   
+   tempPoints: [63] ^Point;  (* "dynamic" array; extended when needed *)
+   oldRange: @integer;
+do (for i:EndPoints.range repeat
+        &point[] -> EndPoints[i][];
+   for);
+   (for i:tempPoints.range repeat
+        &point[] -> tempPoints[i][];
+   for);
+   
+   MaxInt -> minx -> miny;
+   MinInt -> maxx -> maxy;
+   
+   &PointArrayList[] -> thePointList[];
+   
+   (NONE, thePointList[]) -> calculatePoints;
+   
+   (if not thePointList.empty then
+       (if privatePart.implPart[] = NONE then
+           &privatePart.implPartType[] -> privatePart.implPart[];
+           &win32PointDesc[] ->privatePart.implPart.win32Points[];
+           63 -> privatePart.implPart.win32Points.p.extend;
+           (if debugGraphic then 'Recalculate: win32point generated' ->putline;
+           if);
+       if);
+       1 -> firstFree -> firstFreeEnds;
+       (if theCanvas.TM[]=NONE then
+           privatePart.go2canvasTM -> tmTODevice[];
+        else
+           (privatePart.go2canvasTM,theCanvas.TM[])
+             -> MatrixMul -> tmToDevice[];
+       if);
+       (* scan list of polygons in thePointlist *)
+       thePointList.scanPointArrays
+       (# more: @Integer;
+       do (******)
+           (if debugGraphic then
+           'Recalculate: no of points: ' -> puttext; 
+           p.npoints -> putint;
+           ' range: ' -> puttext; 
+           tempPoints.range -> putint; newline;
+           if);
+           (******)
+          (if tempPoints.range<firstFree+p.npoints then
+              firstFree+p.npoints-tempPoints.range
+                -> more;
+              tempPoints.range -> oldRange;
+              (more,tempPoints.range) -> max -> more
+                -> tempPoints.extend;
+              
+              (for i:more repeat
+                   &point[] -> tempPoints[oldRange+i][];
+              for);
+              (******)
+              (if debugGraphic then 
+                  'Recalculate: tempPoints extended by: ' ->puttext;
+                  more -> putint; newline;
+                  ' range: ' -> puttext; 
+                  tempPoints.range-> putint;
+                  newline;
+              if);
+              (******)
+          if);
+          (for i:p.npoints repeat
+               i->p.GetPoint -> privatePart.go2canvasTM.m.transformPoint 
+                 -> updateBound;
+               
+               i -> p.GetPoint -> tmTODevice.transformPoint -> tp;
+               (* tp is in device coordinates *)
+               
+               (* Encode x,y as two shorts in one integer *)
+               (********)
+                (if debugGraphic then
+                    'i: ' -> puttext; i -> putint;
+                    ' firstfree+i-1: ' -> puttext; firstFree+i-1 -> putint;
+                    newline;
+                if);
+               (*********)
+               tp -> tempPoints[firstFree+i-1];
+          for);
+          
+          firstFree + p.npoints -> firstFree;
+          (****)
+          (if debugGraphic then 
+              'firstfree-1: ' -> puttext; firstFree-1 -> putint; newline;
+          if);
+          (****)
+          tempPoints[firstFree-1] 
+            -> endPoints[firstFreeEnds];
+          
+          firstFreeEnds + 1 -> firstFreeEnds;
+       #);
+       (********)
+       (if debugGraphic then
+           'Recalculate: scanpolys end.' -> putline;
+           'firstFree: ' -> puttext; firstfree -> putint; newline;
+           'firstFreeEnds - 1: ' -> puttext; firstFreeEnds - 1 -> putint;
+           newline;
+       if);
+       (********)
+       firstFreeEnds - 1 -> firstFreeEnds; 
+       (* we don't want the last end point *)
+       (minx,maxy,maxx-minx+2,maxy-miny+2) -> privatepart.bound;
+       (* upperleft(x,y),width,height *)
+       false -> privatepart.boundinvalid;
+       false -> privatepart.invalid;
+       
+       (if tempPoints.range <firstFree+firstFreeEnds-2 then 
+           tempPoints.range -> oldRange;
+           tempPoints.range -> tempPoints.extend;
+           (for i:oldRange repeat
+                &point[] -> tempPoints[oldRange+i][];
+           for);
+           (if debugGraphic then 'Recalculate: tempPoints extended 2'->putline;
+           if);
+       if);
+       (for i:firstFreeEnds-1 repeat
+            endPoints[firstFreeEnds-i] 
+              -> tempPoints[firstFree+i-1];
+       for);
+       firstFree + firstFreeEnds - 2 -> privatePart.implPart.NoOfPoints;
+       
+       (if privatePart.implPart.win32Points.p.range < (2*tempPoints.range) then
+           (2*tempPoints.range) - privatePart.implPart.win32Points.p.range
+             -> privatePart.implPart.win32Points.p.extend;
+       if);
+       (for i:privatePart.implPart.NoOfPoints repeat
+            tempPoints[i].x -> privatePart.implPart.win32Points.p[(i*2)-1];
+            tempPoints[i].y -> privatePart.implPart.win32Points.p[i*2];
+       for);
+       
+    else
+       (if privatePart.implPart[] = NONE then
+           &privatePart.implPartType[] -> privatePart.implPart[];
+           &win32PointDesc[] ->privatePart.implPart.win32Points[];
+           63 -> privatePart.implPart.win32Points.p.extend;
+           (if debugGraphic then 'Recalculate: win32point generated' ->putline;
+           if);
+       if);
+       
+       0 -> privatePart.implPart.NoOfPoints;
+       (0,0,0,0) -> privatepart.bound;
+       (if displayWarnings then
+           'ShapeRecalculatePrivatePart: empty shape' -> putline;
+       if);
+   if);
+   
+   (if debugGraphic then 'AShapeRecalculatePrivatePart done.'->putline; if);
+#)
 
 -- AShapeTransformRecalc: descriptor --
-(# #)
+(# xp: @Point;
+do (if privatePart.implPart[]<>NONE then
+       (* THIS(AbstractShape) is represented using real controlpoints *)
+       (for i:privatePart.implPart.noOfPoints repeat
+            (0,0) -> xp;
+            privatePart.implPart.win32Points.p[(i*2)-1] -> xp.x;
+            privatePart.implPart.win32Points.p[i*2] -> xp.y;
+            xp -> m.transformPoint -> xp;
+            xp.x -> privatePart.implPart.win32Points.p[(i*2)-1];
+            xp.y -> privatePart.implPart.win32Points.p[i*2];
+       for);
+   if);
+#)

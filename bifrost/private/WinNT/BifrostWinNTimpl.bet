@@ -8,36 +8,84 @@ BODY 'CanvasWinNTimpl';
 BODY 'ShapeWinNTimpl';
 
 INCLUDE 'DatatypesWinNTimpl';
+INCLUDE 'utils';
 INCLUDE '../Impl/RectangleList';
+INCLUDE '~beta/guienv/v1.4/private/winnt/guienv_ntiprivate';
+
+INCLUDE '~beta/win32lib/v1.2/wingdiconsts';
+INCLUDE '~beta/win32lib/v1.2/devicecapabilities';
+INCLUDE '~beta/win32lib/v1.2/dcmanagement';
+INCLUDE '~beta/win32lib/v1.2/mousecursorsupport';
+
+INCLUDE '~beta/sysutils/v1.5/cstring';
 
 (***************  Cap and join constants *****************)
 
 -- CapButtBody: dopart --
-do 1->s 
+do PS_ENDCAP_FLAT->s 
 
 -- CapRoundedBody: dopart --
-do 2->s 
+do PS_ENDCAP_ROUND->s 
 
 -- CapSquareBody: dopart --
-do 3->s (* CapProjecting *) 
+do PS_ENDCAP_SQUARE->s (* CapProjecting *) 
 
 
 -- JoinMiterBody: dopart --
-do 0->s 
+do PS_JOIN_MITER->s 
 
 -- JoinRoundBody: dopart --
-do 1->s 
+do PS_JOIN_ROUND->s 
 
 -- JoinBevelBody: dopart --
-do 2->s 
+do PS_JOIN_BEVEL->s 
 
 
 (**** ABSTRACT SHAPE *****)
 
 -- AShapeImplPrivatePart: descriptor --
-(# #)
+(# win32Points: ^win32PointDesc;
+   noOfPoints: @Integer;
+   HilitePoints: ^win32PointDesc ; (* used to draw outline hilite *)
+#)
 
 
+-- BifrostAttributes: attributes --
+SetWin32Font:
+  (# theCanvas: ^BifrostCanvas;
+     nam: @FontName;
+     sty: @Style;
+     siz: @Integer;
+     theWin32Font: ^win32Font;
+  enter (theCanvas[], nam, sty, siz)
+  do 
+     (* find the win32font to be used from nam, sty, siz and
+      * set it as current font in theCanvas.
+      *)
+     (nam, sty, siz) 
+       -> theCanvas.implpart.theWin32Fonts.theFontTable.find 
+       -> theWin32Font[];
+     (if theWin32Font[]=NONE then
+         'Trying to create font: ' -> puttext;
+         nam -> putint; ', size= ' -> puttext; siz -> putint; newline;
+         
+         (theCanvas.implpart.hdc, nam, sty, siz) 
+           -> theCanvas.implpart.theWin32Fonts.createWin32Font;
+         (nam, sty, siz) 
+           -> theCanvas.implpart.theWin32Fonts.theFontTable.find 
+           -> theWin32Font[];
+     if);
+     
+     (if theWin32Font[]<>NONE then
+         (theCanvas.implpart.hdc, theWin32Font.hFont) 
+           -> SelectObject;
+         theWin32Font[] -> theCanvas.implpart.currentWin32Font[];
+      else
+         'SetWin32Font failed.' -> screen.putLine;
+     if);
+     
+  exit (nam, sty, siz)
+  #);
 
 (********** RASTER ***********)
 
@@ -51,6 +99,122 @@ do 2->s
 (# #)
 
 (********** BifrostCanvas ***********)
+-- CanvasAttributes: attributes --
+
+SetCanvasBorderColor: 
+  (# theColor: @Integer; 
+  enter theColor
+  do theColor     -> implpart.theBorderColor;
+     true  -> implpart.borderColorSet;
+     false -> implpart.borderBitmapSet;
+  #);
+
+SetCanvasBackgroundColor: 
+  (# theColor: @Integer; 
+  enter theColor
+  do theColor     -> implpart.backGroundColor;
+     true  -> implpart.backGroundColorSet;
+     false -> implpart.backGroundBitmapSet;
+     true -> implpart.custumbackground;
+  #);
+
+SetCanvasBorderBitmap: 
+  (# bitmapH: @Integer; 
+  enter bitmapH
+  do bitmapH     -> implpart.theBorderBitmapH;
+     true  -> implpart.backGroundBitmapSet;
+     false -> implpart.backGroundColorSet;
+  #);
+
+SetCanvasBackgroundBitmap: 
+  (# BitmapH: @Integer; 
+  enter bitmapH
+  do bitmapH     -> implpart.backGroundBitmapH;
+     true  -> implpart.backGroundBitmapSet;
+     false -> implpart.backGroundColorSet;
+  #);
 
 -- canvasPrivateimplPart: descriptor --
-(# #)
+(# 
+   
+   windowId: @integer;
+   hdc, screenHdc, printerHdc: @integer;
+   
+   borderwidth: @integer;
+   theBorderColor: @integer;
+   theBorderBitmapH: @integer;
+   borderColorSet, borderBitmapSet: @boolean;
+   
+   backGroundColor,backGroundBitmapH: @integer;
+   backGroundBitmapSet, backGroundColorSet: @boolean;
+   custumbackground: @boolean;
+   
+   win32Points: ^win32PointDesc;   (* used in immediatemultiline *)
+   opened,firstRefresh: @boolean;
+   DamagedList: ^RectangleList;
+   clipRegion: @Integer;      
+   
+   currentWin32Font: ^win32Font;
+   theWin32Fonts: ^win32Fonts;
+   
+   message: @integer;
+   where: @point;
+   theBtn: @integer; (* used in interaction *)
+   theKey: @char;       (* used in interaction *)
+   lastbut, prevbut, dbltime: @integer
+     (* Used to detect doubleclicks *);
+   doubleClickPossible: @boolean;
+   
+   CanvasInteractionHandlerActive: @boolean;
+   
+   bifrostCanvasMethods: windowItemMethods
+     (# dispatchMessage::
+          (#  processEraseBackground:
+               (# ntFillRect2: external
+                    (# hdc: @integer; (* HDC *)
+                       theRect: ^ntRECT; (* const RECT FAR* *)
+                       hbr: @integer; (* HBRUSH *)
+                       result: @integer; (* int *)
+                    enter (hdc,theRect[],hbr)
+                    do 'FillRect' -> callStd;
+                    exit result
+                    #);
+                  theNTRect: @ntRECT;
+                  theBrush: @integer;
+                  hdc: @integer;
+                  width,height: @integer; theColor: @integer;
+               do (if custumbackground then
+                      TRUE -> didSomething;
+                      info.wParam -> hdc;
+                      
+                      0 -> theNTRect.left;
+                      0 -> theNTRect.top;
+                      size -> (width,height);
+                      width -> theNTRect.right;
+                      height -> theNTRect.bottom;
+                      (if backGroundColorSet then
+                          (hdc,backGroundColor) 
+                            -> GetNearestColor -> theColor;
+                          theColor -> CreateSolidBrush -> theBrush;
+                          
+                          (* backGroundColor-> CreateSolidBrush-> theBrush; *)
+                       else
+                          
+                      if);
+                      (if ((hdc,theNTRect[],theBrush) -> ntFillRect2) =0 then
+                          'processEraseBackground. Rectangle failed!! Errorcode: ' -> puttext;
+                          GetLastError -> putint; newline;
+                      if);
+                      theBrush -> DeleteObject;
+                  if);
+               #);
+             
+             didSomething: @boolean;
+          do false -> didSomething;
+             (if info.message=WM_ERASEBKGND then
+                 processEraseBackground;
+             if);
+             didSomething or info.handled -> info.handled;
+          #);
+     #);
+#)

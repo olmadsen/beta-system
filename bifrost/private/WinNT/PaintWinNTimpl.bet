@@ -1,8 +1,27 @@
 ORIGIN '../Impl/PaintImpl';
 INCLUDE 'BifrostWinNTimpl';
+INCLUDE 'utils';
+
+INCLUDE '~beta/guienv/v1.4/private/winnt/guienv_ntiprivate';
+INCLUDE '~beta\win32lib\v1.2\wingdi';
+
 
 -- PaintFillShapeBody: dopart --
-do
+do (# polyFillMode: @integer;
+   do (if not theShape.isClosed then
+          (if displayWarnings then
+              'Trying to fill non-closed Shape; ignoring request' -> putline;
+          if);
+       else
+          (if polyFillMode=EvenOddRule then
+              ALTERNATE -> polyFillMode;
+           else
+              WINDING -> polyFillMode;
+          if);
+          (theCanvas.implpart.hdc, polyFillMode) -> SetPolyFillMode;
+          INNER fillShape;
+      if);
+   #);
    
 -- PaintFillLineBody: dopart --
 do INNER;
@@ -10,13 +29,19 @@ do INNER;
 -- PaintFillMultiLineBody: dopart --
 do INNER;
 
-
 -- PaintFillTextBody: dopart --
-do INNER;
+do (# prevBkMode: @integer;
+   do (theCanvas.implpart.hdc,TRANSPARENT) -> SetBkMode -> prevBkMode;       
+      (theCanvas[],theText.theFontName, theText.theStyle, theText.Size) 
+        -> SetWin32Font;
+      INNER fillText;
+      (theCanvas.implpart.hdc,prevBkMode) -> SetBkMode;
+   #);
+
 
 -- PaintFillPieBody: dopart --
 do INNER;   
-
+   
 -- PaintFillArcBody: dopart --
 do INNER;
 
@@ -27,112 +52,632 @@ do INNER;
 do INNER;
 
 -- SolidColorImplPart: descriptor --
-(# #)
+(# 
+   theWin32Color: @win32Color;
+   allocated: @integer;
+#)
 
 -- SolidColorInitBody: dopart --
-do INNER
+do 0 -> implpart.allocated; 
+   INNER;
 
 -- SolidColorChangedBody: descriptor --
-(# #)
+(# 
+do 0 -> implpart.allocated;
+   
+   privatepart.red -> implpart.theWin32Color.red;
+   privatepart.green -> implpart.theWin32Color.green;
+   privatepart.blue -> implpart.theWin32Color.blue;
+   
+   0 -> implpart.theWin32Color.reserved;
+#)
 
 -- MaxRGBBody: dopart --
-do  
+do 65535 -> max;
 
 -- SolidColorCopyImplPart: descriptor --
-(# #)
+(# 
+do implpart.theWin32Color.red
+     -> sc.implpart.theWin32Color.red;
+   implpart.theWin32Color.green
+     -> sc.implpart.theWin32Color.green;
+   implpart.theWin32Color.blue
+     -> sc.implpart.theWin32Color.blue;
+   implpart.allocated
+     -> sc.implpart.allocated;
+#)
 
 -- SolidColorSetCanvasPaintBody: dopart --
-do 
+do (if debugGraphic then
+       'SolidColorSetCanvasPaintBody begin.' -> screen.putline; 
+   if);
+   INNER;
+   (theCanvas.implpart.hdc,
+   (theCanvas.implpart.hdc,implpart.theWin32Color[] -> makeColorRef)->GetNearestColor)
+     ->SetTextColor;
+   
+   (if debugGraphic then
+       'SolidColorSetCanvasPaintBody done.' -> screen.putline; 
+   if);
    
 -- SolidColorSetBorderPaintBody: dopart --
-do 
+do implpart.theWin32Color[] -> makeColorRef -> theCanvas.implpart.theBorderColor;
 
 -- SolidColorSetBackgroundPaintBody: dopart --
-do 
+do implpart.theWin32Color[]-> makeColorRef -> theCanvas.SetCanvasBackgroundColor; 
+   (if theCanvas.implpart.hdc<>0 then
+       (* setting of background paint is handled upon open *)
+       (theCanvas.implpart.hdc,
+       (theCanvas.implpart.hdc,theCanvas.implpart.backGroundColor) -> GetNearestColor)
+         -> SetBkColor;
+   if);
 
 -- SolidColorFillShapeBody: dopart --
-do 
-
+do (# theBrush, theOldBrush: @integer; thePen, theOldPen: @integer; theColor: @integer;
+   do (if debugGraphic then 
+          'SolidColorFillShapeBody begin' -> screen.putLine;
+      if);
+      (if theShape.isclosed then
+          
+          theCanvas[]->setCanvasPaint;
+          
+          (if theShape.Invalid then
+              theCanvas[] -> theShape.recalculatePrivatePart;
+          if);
+          
+          (* debug *)
+          (if debugGraphic then
+              (if theShape.privatepart.implpart.win32Points.p.range <> theShape.privatepart.implpart.NoOfPoints then
+                  'WARNING: SolidColorFillShapeBody, ' -> screen.putText;
+                  'theShape.privatepart.implpart.win32Points.p.range <> ' -> putline;
+                  'theShape.privatepart.implpart.NoOfPoints.' -> putline;
+              if);
+          if);
+          (* debug end *)
+          
+          (* 'SolidColorFillShapeBody begin' -> screen.putLine;
+           *           (for i:theShape.privatepart.implpart.NoOfPoints repeat
+           *                theShape.privatepart.implpart.win32Points.p[(i*2)-1]-> putint;
+           *                ', ' -> putText;
+           *                theShape.privatepart.implpart.win32Points.p[i*2]-> putint;
+           *                newline;
+           *           for);
+           *           'SolidColorFillShapeBody end' -> screen.putLine;
+           *)
+          
+          implpart.theWin32Color[] -> makeColorRef -> theColor;
+          (theCanvas.implpart.hdc,implpart.theWin32Color[] -> makeColorRef) 
+            -> GetNearestColor -> theColor;
+          theColor -> CreateSolidBrush -> theBrush;
+          
+          (* implpart.theWin32Color[] 
+           -> makeColorRef -> CreateSolidBrush -> theBrush; *)
+          (theCanvas.implpart.hdc, theBrush) -> SelectObject -> theOldBrush;
+          
+          NULL_PEN -> GetStockObject -> thePen;
+          (theCanvas.implpart.hdc, thePen) -> SelectObject -> theOldPen;
+          (if ((theCanvas.implpart.hdc,
+              @@theShape.privatepart.implpart.win32Points.p[1],
+              theShape.privatepart.implpart.NoOfPoints) 
+                -> Polygon) = 0 then
+              'Polygon failed in SolidColorFillShapeBody. ErrorCode= ' 
+                -> screen.putText; GetLastError -> putint; newline;
+          if);
+          (theCanvas.implpart.hdc, theOldPen)->SelectObject;
+          (theCanvas.implpart.hdc, theOldBrush)->SelectObject ->DeleteObject;
+      if);
+   #)
+   
 -- SolidColorFillLineBody: descriptor --
-(# #)
+(# devBegin,devEnd: @Point;
+   ntpPtr: @integer; pt: @point; result: @integer;
+   theHPen, theOldHpen, penStyle, lineWidth: @integer;
+   theLogbrush: @LOGBRUSH;
+do (if debugGraphic then
+       'SolidColorFillLineBody begin.' -> screen.putLine;
+   if);
+   
+   theCanvas[]->setCanvasPaint;
+   theLine.begin 
+     -> theLine.privatepart.go2canvasTM.m.transformPoint 
+     -> theCanvas.CanvasToDevice
+     -> devBegin; 
+   theLine.end 
+     -> theLine.privatepart.go2canvasTM.m.transformPoint 
+     -> theCanvas.CanvasToDevice
+     -> devEnd;
+   
+   8 -> malloc -> ntpPtr;
+   (if ntpPtr<>0 then
+       theLine.Width -> lineWidth;
+       ((PS_GEOMETRIC,PS_SOLID) -> tos'%or')-> penStyle;
+       ((penStyle,PS_INSIDEFRAME) -> tos'%or')-> penStyle;
+       ((penStyle,theline.cap) -> tos'%or')-> penStyle;
+       
+       BS_SOLID -> theLogBrush.lbStyle;
+       
+       implpart.theWin32Color[] 
+         -> makeColorRef
+         -> theLogBrush.lbColor; 
+       (penStyle,lineWidth,theLogbrush[],0,0) -> ExtCreatePen -> theHPen;
+       
+       (theCanvas.implpart.hdc, theHPen) -> SelectObject -> theOldHPen;
+       
+       (theCanvas.implpart.hdc,devBegin.x,devBegin.y,ntpPtr) -> MoveToEx;
+       (theCanvas.implpart.hdc,devEnd.x,devEnd.y) -> LineTo;
+       (* restore the penposition *)
+       ntpPtr -> getPointFromNtPointPtr -> (pt.x,pt.y);
+       (theCanvas.implpart.hdc,pt.x,pt.y,0) -> MoveToEx;
+       ntpPtr -> free;
+       
+       (theCanvas.implpart.hdc, theOldHPen) -> SelectObject -> DeleteObject;
+    else
+       'malloc failed in SolidColorFillLineBody.' -> screen.putLine;
+   if);
+#)
 
 -- SolidColorFillMultiLineBody: dopart --
-do 
-
+do (# thePen, theOldPen, multiLineWidth, penStyle: @integer;
+      theLogBrush: @LOGBRUSH;
+   do (if debugGraphic then
+          'SolidColorFillMultiLineBody begin' -> screen.putLine;
+      if);
+      
+      theCanvas[]->setCanvasPaint;
+      (if theMultiLine.privatepart.implpart[]=NONE then
+          &theMultiLine.privatepart.implparttype[]
+            -> theMultiLine.privatepart.implpart[]
+      if);
+      (if theMultiLine.Invalid then
+          (theMultiLine.privatePart.go2canvastm,
+          theCanvas.TM[]) 
+            -> MatrixMul
+            -> theMultiLine.points.p.ToWin32Points
+            -> theMultiLine.privatepart.implpart.win32Points[];
+          theMultiLine.points.p.npoints 
+            -> theMultiLine.privatepart.implpart.noofpoints;
+      if);
+      (if theMultiLine.dashes<>NONE then
+          'MultiLine dashes not yet implemented' -> putline;
+      if);
+      
+      (if theMultiLine.privatepart.implpart.noofpoints > 0 then
+          
+          theMultiLine.width -> multiLineWidth;
+          ((PS_GEOMETRIC,PS_SOLID) -> tos'%or')-> penStyle;
+          ((penStyle,PS_INSIDEFRAME) -> tos'%or')-> penStyle;
+          
+          BS_SOLID -> theLogBrush.lbStyle;
+          
+          implpart.theWin32Color[] 
+            -> makeColorRef
+            -> theLogBrush.lbColor; 
+          (penStyle,multiLineWidth,theLogbrush[],0,0)-> ExtCreatePen -> thePen;
+          (theCanvas.implpart.hdc, thePen) -> SelectObject -> theOldPen;
+          
+          (if debugGraphic then
+              (* debug *)
+              (if theMultiLine.privatepart.implpart.win32Points.p.range <> theMultiLine.privatepart.implpart.NoOfPoints then
+                  'WARNING: SolidColorFillMultiLineBody, ' -> screen.putText;
+                  'theMultiLine.privatepart.implpart.win32Points.p.range <> ' -> putline;
+                  'theMultiLine.privatepart.implpart.NoOfPoints.' -> putline;
+              if);
+          if);
+          (* debug end *)
+          
+          
+          (if ((theCanvas.implpart.hdc,
+              @@theMultiLine.privatepart.implpart.win32Points.p[1],
+              theMultiLine.privatepart.implpart.noofpoints)
+                -> Polyline) = 0 then
+              'Polyline failed in SolidColorFillMultiLineBody. Errorcode= ' 
+                -> screen.putText; GetLastError -> putint; newline;
+          if);
+       else
+          'SolidColorFillMultiLineBody. noofpoints=0' -> screen.puttext;
+          theMultiLine.privatepart.implpart.noofpoints -> putint; newline;
+      if);
+      (theCanvas.implpart.hdc, theOldPen) -> SelectObject -> DeleteObject;
+   #);
+      
 -- SolidColorFillTextBody: descriptor --
-(# #)
+(# origin: @Point;
+   string: @text; txtLgth: @integer;
+   nam: @FontName;
+   sty: @Style;
+   siz: @integer;
+   r: @rectangle;
+   upos, uthick: @integer; x,y: @integer;
+do (if debugGraphic then
+       'SolidColorFillTextBody begin.' -> screen.putLine;
+   if);
+   
+   theCanvas[]->setCanvasPaint;
+   theText.Position 
+     -> theText.privatePart.go2canvastm.m.transformPoint 
+     -> theCanvas.CanvasToDevice
+     -> origin;
+   
+   (* temporary hack *)
+   origin.y -> y;
+   origin.x -> x;
+   
+   thetext.thetext -> string;
+   string.length -> txtLgth;
+   (if txtLgth>0 then
+       
+       (theCanvas.implpart.hdc,implpart.theWin32Color[] -> makeColorRef)->SetTextColor;
+       
+       (if ((theCanvas.implpart.hdc, x, y,@@string.T[1],txtLgth) 
+             -> TextOut)=0 then
+           'TextOut failed in SolidColorFillTextBody. ErrorCode= ' 
+             -> screen.putText;
+           GetLastError -> putInt; screen.newline;
+       if);
+   if);
+   
+   (* (if theText.underline then
+    *        theText.theFontName -> nam;
+    *        theText.theStyle    -> sty;
+    *        theText.size        -> siz;
+    *        thetext.getbounds   -> r;
+    *        THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz].upos 
+    *          -> upos;
+    *        THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz].uthick
+    *          -> uthick;
+    *        
+    *        (xdisplay,
+    *        theCanvas.implpart.xdrawable, 
+    *        theCanvas.implpart.xgc,
+    *        origin.x,
+    *        origin.y + upos,
+    *        r.width,
+    *        uthick) -> XFillRectangle;
+    *    if);
+    *)
+#)
 
 -- SolidColorFillPieBody: descriptor --
-(# #)
+(# devUpperLeft: @Point;
+   ch,cv: @integer; (* center of rectangle *)
+   xRadial1,yRadial1,xRadial2,yRadial2: @integer;
+   angle1,angle2: @Real;
+   theBrush, theOldBrush: @integer;
+   left,right,top,bottom: @integer;
+   center: @Point;
+   thePen, theOldPen: @integer;
+do (if debugGraphic then 'SolidColorFillPieBody begin.' -> putline; if);
+   
+   theCanvas[]->setCanvasPaint;
+   thePie.center -> thePie.privatePart.go2canvasTM.m.transformPoint
+     -> theCanvas.CanvasToDevice 
+     -> devupperleft;
+   devupperleft -> (ch,cv);
+   (devupperleft.x-thePie.horizontalRadius,
+   devupperleft.y-thePie.verticalRadius) -> devupperleft;
+   
+   devupperleft.x -> left; 
+   devupperleft.x + 2*thePie.horizontalRadius -> right;
+   devupperleft.y -> top;
+   devupperleft.y + 2*thePie.verticalRadius  -> bottom;
+   
+   (thePie.angle1/180) * pi -> angle1;
+   (thePie.angle2/180) * pi -> angle2;
+
+   ch + thePie.horizontalRadius * (angle1 -> cos) -> xRadial1;
+   cv + thePie.verticalRadius * (angle1 -> sin) -> yRadial1; 
+   ch + thePie.horizontalRadius * (angle2 -> cos) -> xRadial2;
+   cv + thePie.verticalRadius * (angle2 -> sin) -> yRadial2;
+   (2 * cv) - yRadial1 -> yRadial1;
+   (2 * cv) - yRadial2 -> yRadial2;
+   
+   implpart.theWin32Color[] 
+     -> makeColorRef -> CreateSolidBrush -> theBrush;
+   (theCanvas.implpart.hdc, theBrush) -> SelectObject -> theOldBrush;
+   NULL_PEN -> GetStockObject -> thePen;
+   (theCanvas.implpart.hdc, thePen) -> SelectObject -> theOldPen;
+   
+   (if ( ((theCanvas.implpart.hdc,left,top,right,bottom,
+       xRadial1,yRadial1,xRadial2,yRadial2)  -> Pie) = 0) then
+       'Pie failed in SolidColorFillPieBody. ErrorCode= ' -> screen.putText;
+       GetLastError -> putInt; newline;
+   if);
+   (theCanvas.implpart.hdc, theOldBrush) -> SelectObject -> DeleteObject;
+   (theCanvas.implpart.hdc, theOldPen) -> SelectObject;
+   
+   (if debugGraphic then 'SolidColorFillPieBody done.' -> putline; if);
+#)
 
 -- SolidColorFillArcBody: descriptor --
-(# #)
+(# ch,cv: @integer; (* center of rectangle *)
+   xRadial1,yRadial1,xRadial2,yRadial2: @integer;
+   angle1,angle2: @Real;
+   result: @integer;
+   left,right,top,bottom: @integer;
+   devUpperLeft: @Point;
+   
+   theHPen, theOldHpen, penStyle, arcWidth: @integer;
+   theLogbrush: @LOGBRUSH;
+   
+do (if debugGraphic then 'SolidColorFillArcBody begin.' -> putline; if);
+   
+   (if (theCanvas.implpart.windowID>0) then
+              
+       theCanvas[]->setCanvasPaint;
+       
+       theArc.center -> theArc.privatePart.go2canvasTM.m.transformPoint
+         -> theCanvas.CanvasToDevice
+         -> devupperleft;
+       devupperleft -> (ch,cv);
+       (devupperleft.x-theArc.horizontalRadius,
+       devupperleft.y-theArc.verticalRadius) -> devupperleft;
+       
+       devUpperLeft.x -> left; 
+       devUpperLeft.x+2*theArc.horizontalRadius -> right;
+       devUpperleft.y -> top;
+       devUpperleft.y+2*theArc.verticalRadius -> bottom;
+       
+       (theArc.angle1/180) * pi -> angle1;
+       (theArc.angle2/180) * pi -> angle2;
+       
+       ch + theArc.horizontalRadius * (angle1 -> cos) -> xRadial1;
+       cv + theArc.verticalRadius * (angle1 -> sin) -> yRadial1; 
+       ch + theArc.horizontalRadius * (angle2 -> cos) -> xRadial2;
+       cv + theArc.verticalRadius * (angle2 -> sin) -> yRadial2;
+       (2 * cv) - yRadial1 -> yRadial1;
+       (2 * cv) - yRadial2 -> yRadial2;
+       
+       theArc.arcWidth -> arcWidth;
+       ((PS_GEOMETRIC,PS_SOLID) -> tos'%or')-> penStyle;
+       ((penStyle,PS_INSIDEFRAME) -> tos'%or')-> penStyle;
+       
+       BS_SOLID -> theLogBrush.lbStyle;
+       
+       implpart.theWin32Color[] 
+         -> makeColorRef
+         -> theLogBrush.lbColor; 
+       
+       (penStyle,arcWidth,theLogbrush[],0,0) -> ExtCreatePen -> theHPen;
+       
+       (theCanvas.implpart.hdc, theHPen) -> SelectObject -> theOldHPen;
+       
+       (theCanvas.implpart.hdc,left,top,right,bottom,xRadial1,yRadial1,xRadial2,yRadial2)
+         -> Arc -> result; 
+       (theCanvas.implpart.hdc, theOldHPen) -> SelectObject -> DeleteObject;
+   if);
+   
+   (if debugGraphic then 'SolidColorFillArcBody done.' -> putline; if);
+#)
 
 -- SolidColorFillRectBody: descriptor --
-(# #)
+(# devUpperLeft: @Point;
+   result: @integer; hbr: @integer; hRgn: @integer; 
+   hbrushOld: @integer;
+   
+   ntFillRect2: external
+     (# hdc: @integer; (* HDC *)
+        theRect: ^ntRECT; (* const RECT FAR* *)
+        hbr: @integer; (* HBRUSH *)
+        result: @integer; (* int *)
+     enter (hdc,theRect[],hbr)
+     do 'FillRect' -> callStd;
+     exit result
+     #);
+   theNTRect: @ntRECT;
+   theBrush: @integer;
+   thePen, theOldPen, strokeWidth, penStyle: @integer;
+   theLogBrush: @LOGBRUSH;
+do theCanvas[]->setCanvasPaint;
+   theRect.upperleft 
+     -> theRect.privatepart.go2canvasTM.m.transformPoint
+     -> theCanvas.CanvasToDevice
+     -> devUpperLeft;
+   
+   theRect.strokewidth -> strokeWidth;
+   ((PS_GEOMETRIC,PS_SOLID) -> tos'%or')-> penStyle;
+   ((penStyle,PS_INSIDEFRAME) -> tos'%or')-> penStyle;
+   
+   BS_SOLID -> theLogBrush.lbStyle;
+   
+   implpart.theWin32Color[] 
+     -> makeColorRef
+     -> theLogBrush.lbColor; 
+   (penStyle,strokeWidth,theLogbrush[],0,0) -> ExtCreatePen -> thePen;
+   (theCanvas.implpart.hdc, thePen) -> SelectObject -> theOldPen;
+   
+   (if theRect.stroked then
+       NULL_BRUSH -> GetStockObject -> hbr;
+       (theCanvas.implpart.hdc, hbr) -> SelectObject -> hbrushOld;
+       (theCanvas.implpart.hdc,
+       devUpperleft.x,devUpperleft.y,
+       devUpperleft.x+theRect.width,devUpperleft.y+theRect.height) 
+         -> ntRectangle -> result;
+       (if result=0 then
+           'Rectangle failed in SolidColorFillRectBody. Errorcode: ' 
+             -> puttext;
+           GetLastError -> putint; newline;
+       if);
+       (theCanvas.implpart.hdc, hbrushOld) -> SelectObject;
+    else
+       devUpperleft.x -> theNTRect.left;
+       devUpperleft.y -> theNTRect.top;
+       devUpperleft.x + theRect.width -> theNTRect.right;
+       devUpperleft.y + theRect.height -> theNTRect.bottom;
+       implpart.theWin32Color[] 
+         -> makeColorRef -> CreateSolidBrush -> theBrush;
+       
+       (theCanvas.implpart.hdc,theNTRect[],theBrush) 
+         -> ntFillRect2 -> result;
+       (if result=0 then
+           'graphicsDrawRect. Rectangle failed!! Errorcode: ' -> puttext;
+           GetLastError -> putint; newline;
+       if);
+       theBrush -> DeleteObject;
+   if);
+   (theCanvas.implpart.hdc, theOldPen) -> SelectObject -> DeleteObject;
+#)
 
 -- SolidColorFillEllipseBody: descriptor --
-(# #)
+(# devUpperLeft: @Point;
+   theOldBrush, theBrush: @integer;
+   thePen, theOldPen, strokeWidth, penStyle: @integer;
+   theLogBrush: @LOGBRUSH;
+do (if thecanvas[]//none then 'SolidColorFillEllipseBody: canvas is none'->putline if);
+   theCanvas[]->setCanvasPaint;
+   theEllipse.center -> theEllipse.privatepart.go2canvasTM.m.transformPoint
+     -> theCanvas.CanvasToDevice -> devupperleft;
+   (devupperleft.x-theEllipse.horizontalRadius,
+   devupperleft.y-theEllipse.verticalRadius) -> devupperleft;      
+   
+   (if theEllipse.stroked then
+       theEllipse.strokewidth -> strokeWidth;
+       ((PS_GEOMETRIC,PS_SOLID) -> tos'%or')-> penStyle;
+       ((penStyle,PS_INSIDEFRAME) -> tos'%or')-> penStyle;
+       
+       BS_SOLID -> theLogBrush.lbStyle;
+       
+       implpart.theWin32Color[] 
+         -> makeColorRef
+         -> theLogBrush.lbColor; 
+       (penStyle,strokeWidth,theLogbrush[],0,0) -> ExtCreatePen -> thePen;
+       (theCanvas.implpart.hdc, thePen) -> SelectObject -> theOldPen;
+       
+       (theCanvas.implpart.hdc, (NULL_BRUSH -> GetStockObject)) 
+         -> SelectObject -> theOldBrush;
+       (if ((theCanvas.implpart.hdc,
+           devUpperleft.x, 
+           devUpperleft.y,
+           devUpperleft.x + 2*theEllipse.horizontalradius,
+           devUpperleft.y + 2*theEllipse.verticalradius) 
+             -> Ellipse)=0 then
+           'Ellipse failed in SolidColorFillEllipseBody. ErrorCode= ' 
+             -> screen.putText; GetLastError -> putint; newline;
+       if);
+       (theCanvas.implpart.hdc, theOldBrush) -> SelectObject;
+       (theCanvas.implpart.hdc, theOldPen) -> SelectObject -> DeleteObject;
+    else
+       implpart.theWin32Color[] 
+         -> makeColorRef -> CreateSolidBrush -> theBrush;
+       (theCanvas.implpart.hdc, theBrush) -> SelectObject -> theOldBrush;
+       NULL_PEN -> GetStockObject -> thePen;
+       (theCanvas.implpart.hdc, thePen) -> SelectObject -> theOldPen;
+       (if ((theCanvas.implpart.hdc,
+           devUpperleft.x, 
+           devUpperleft.y,
+           devUpperleft.x + 2*theEllipse.horizontalradius,
+           devUpperleft.y + 2*theEllipse.verticalradius) 
+             -> Ellipse)=0 then
+           'Ellipse failed in SolidColorFillEllipseBody. ErrorCode= ' 
+             -> screen.putText; GetLastError -> putint; newline;
+       if);
+       (theCanvas.implpart.hdc, theOldBrush) -> SelectObject -> DeleteObject;
+       (theCanvas.implpart.hdc, theOldPen) -> SelectObject;
+   if);   
+#)
 
 
 -- TiledSolidFillShapeBody: dopart --
 do INNER; 
+   theShape[] -> tiledprivate.theShape[];
+   (* The rest is handled by SetCanvasPaint and SolidColor.FillShape *) 
    
 -- TiledSolidFillLineBody: dopart --
 do INNER; 
+   theLine[] -> tiledprivate.theShape[];
+   (* The rest is handled by SetCanvasPaint and SolidColor.FillLine *) 
 
 -- TiledSolidFillMultiLineBody: dopart --
 do INNER; 
+   theMultiLine[] -> tiledprivate.theShape[];
+   (* The rest is handled by SetCanvasPaint and SolidColor.FillMultiline *) 
 
 -- TiledSolidFillTextBody: dopart --
 do INNER; 
+   theText[] -> tiledprivate.theShape[];
+   (* The rest is handled by SetCanvasPaint and SolidColor.FillText *) 
 
 -- TiledSolidFillArcBody: dopart --
 do INNER; 
+   theArc[] -> tiledprivate.theShape[];
+   (* The rest is handled by SetCanvasPaint and SolidColor.FillArc*) 
 
 -- TiledSolidFillPieBody: dopart --
 do INNER; 
+   thePie[] -> tiledprivate.theShape[];
+   (* The rest is handled by SetCanvasPaint and SolidColor.FillPie *) 
 
 -- TiledSolidFillRectBody: dopart --
 do INNER; 
+   theRect[] -> tiledprivate.theShape[];
+   (* The rest is handled by SetCanvasPaint and SolidColor.FillRect *) 
 
 -- TiledSolidFillEllipseBody: dopart --
 do INNER; 
+   theEllipse[] -> tiledprivate.theShape[];
+   (* The rest is handled by SetCanvasPaint and SolidColor.FillEllipse *) 
+   
+-- BifrostAttributes: attributes --
 
 -- TiledSolidSetBorderPaintBody: descriptor --
-(# #)
+(# 
+do 'TiledSolidSetBorderPaintBody not impl.' ->putline;
+#)
 -- TiledSolidSetCanvasPaintBody: descriptor --
-(# #)
+(# 
+do 'TiledSolidSetCanvasPaintBody not impl.' ->putline;
+#) 
 -- TiledSolidSetBackgroundPaintBody: descriptor --
-(# #)
+(# 
+do 'TiledSolidSetBackgroundPaintBody not impl.' ->putline;
+#)
 
 
 
 
 -- RasterPaintFillMultiLineBody: dopart --
-do INNER
+do INNER;
+   ' not impl.' ->putline;
+   
 -- RasterPaintFillArcBody: dopart --
-do INNER
+do INNER;
+   ' not impl.' ->putline;
+   
 -- RasterPaintFillPieBody: dopart --
-do INNER
+do INNER;
+   ' not impl.' ->putline;
 
 -- RasterPaintFillShapeBody: descriptor --
-(# #)
+(# 
+do ' not impl.' ->putline;
+#)
 
 -- RasterPaintFillLineBody: dopart --
-do INNER
+do INNER;
+   ' not impl.' ->putline;
+   
 -- RasterPaintFillRectBody: dopart --
-do INNER
+do INNER;
+   ' not impl.' ->putline;
+   
 -- RasterPaintFillTextBody: dopart --
-do INNER
+do INNER;
+   ' not impl.' ->putline;
+   
 -- RasterPaintFillEllipseBody: dopart --
-do INNER
+do INNER;
+   ' not impl.' ->putline;
 
 -- RasterPaintSetBorderPaintBody: descriptor --
-(# #)
+(# 
+do ' not impl.' ->putline;
+#)
 
 -- RasterPaintSetBackgroundPaintBody: descriptor --
-(# #)
+(# 
+do ' not impl.' ->putline;
+#)
 
 -- RasterPaintSetCanvasPaintBody: descriptor --
-(# #)
+(# 
+do 'RasterPaintSetCanvasPaintBody: not impl.' ->putline;
+#)

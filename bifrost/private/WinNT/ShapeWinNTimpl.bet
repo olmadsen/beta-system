@@ -1,20 +1,192 @@
 ORIGIN '../Impl/ShapeImpl';
 INCLUDE 'BifrostWinNTimpl';
 
+INCLUDE '~beta/win32lib/v1.2/wingdi';
+INCLUDE '~beta/win32lib/v1.2/wingdiconsts';
+
 -- ShapeGetBounds: descriptor --
-(# #)
+(# thePointList: ^PointArrayList;
+   minx,miny,maxx,maxy: @Integer;
+   
+   updateBound: @
+     (# p: @Point;
+        mini: @Min;
+        maxi: @Max;
+     enter p
+     do
+        (minx,p.x) -> mini -> minx;
+        (miny,p.y) -> mini -> miny;
+        (maxx,p.x) -> maxi -> maxx;
+        (maxy,p.y) -> maxi -> maxy
+     #);
+do maxint  -> minx -> miny;
+   minint -> maxx -> maxy;
+   
+   &PointArrayList[] -> thePointList[];
+   (NONE, thePointList[]) -> calculatePoints;
+   
+   (if not thePointList.empty then
+       (* scan list of polygons in thePointlist *)
+       thePointList.scanPointArrays
+       (#
+       do (for i:p.npoints repeat
+               i->p.GetPoint -> privatePart.go2canvasTM.m.transformPoint 
+                 -> updateBound;
+          for);	    
+       #);
+       (minx,maxy,maxx-minx+2,maxy-miny+2) -> privatepart.bound;
+    else
+       (if displayWarnings then
+           'ShapeGetbounds: empty shape' -> putline;
+       if);
+       (0,0,0,0) -> privatepart.bound;
+   if);
+#)
 
 -- ShapeContainsPoint: descriptor --
-(# #)
+(# theRegion,result: @Integer;
+do (if privatePart.implPart[]=NONE then
+       theCanvas[] -> recalculateprivatepart;
+       (if debugGraphic then
+           'shapeContainsPoint: implpart was NONE' -> putline;
+       if);
+   if);
+   
+   (* convert privatePart.implPart.win32Points to a region *)
+   thePoint 
+     -> theCanvas.CanvasToDevice
+     -> thepoint;
+   
+   (if displayWarnings then 
+       (* debug *)
+       (if privatepart.implpart.win32Points.p.range <> privatepart.implpart.NoOfPoints then
+           'WARNING: ShapeContainsPoint, ' -> screen.putText;
+           'privatepart.implpart.win32Points.p.range = ' -> putText;
+           privatepart.implpart.win32Points.p.range -> putint; newline;
+           
+           'privatepart.implpart.NoOfPoints= ' -> putText;
+           privatepart.implpart.NoOfPoints -> putint; newline;
+       if);
+   if); 
+   (* debug end *)
+   
+   (if privatePart.implPart.win32Points.p.range>0 then
+       (if FillRule
+        //EvenOddRule then
+           (@@privatePart.implPart.win32Points.p[1],
+           privatepart.implpart.NoOfPoints,
+           ALTERNATE) 
+             -> CreatePolygonRgn 
+             -> theRegion;
+        else
+           (@@privatePart.implPart.win32Points.p[1],
+           privatepart.implpart.NoOfPoints,
+           WINDING) 
+             -> CreatePolygonRgn 
+             -> theRegion;
+       if);
+       
+       
+       (theRegion,thePoint.x,thePoint.y) 
+         -> PtInRegion
+         -> result;
+       
+       theRegion -> DeleteObject;
+   if);
+   (result=1) -> value;
+   
+#)
 
 -- shapeMakeRegion: dopart --
-do
-
+do (# theFillRule: @integer;
+   do (if debuggraphic then 'shapeMakeRegion begin.' -> putline; if);
+      (if Invalid then (* make sure that the win32Points is uptodate *)
+          theCanvas[] -> recalculatePrivatePart;
+      if);
+      (if FillRule
+       //EvenOddRule then
+          ALTERNATE -> theFillRule;
+       else
+          WINDING -> theFillRule;
+      if);
+      
+      (if displayWarnings then
+          (* debug *)
+          (if privatepart.implpart.win32Points.p.range <> privatepart.implpart.NoOfPoints then
+              'WARNING: shapeMakeRegion, ' -> screen.putText;
+              'privatepart.implpart.win32Points.p.range = ' -> putText;
+              privatepart.implpart.win32Points.p.range -> putint; newline;
+              
+              'privatepart.implpart.NoOfPoints= ' -> putText;
+              privatepart.implpart.NoOfPoints -> putint; newline;
+              
+          if);
+          (* debug end *)
+      if);
+      
+      
+      (if privatePart.implPart.win32Points.p.range > 0 then
+          (if ((@@privatePart.implPart.win32Points.p[1],
+              privatepart.implpart.NoOfPoints,
+              theFillRule) 
+                -> CreatePolygonRgn
+                -> theRegion)=0 then
+              'CreatePolygonRgn failed in shapeMakeRegion. ErrorCode= '
+                -> screen.putText; GetLastError -> putint; newline;
+          if);
+      if);
+      
+      (if debuggraphic then 'shapeMakeRegion done.' -> putline; if);
+   #);
+   
 -- ShapeHiliteOutlineImplBody: descriptor --
-(# #)
+(# Xoffset: @Integer;
+   theoffset: @point;
+do (* RESTRICTION: ASSUME TM IS TRANSLATION ONLY *)
+   (if TM[]=NONE then
+       (0,0) -> theOffSet;
+    else
+       (firstpoint -> TM.transformpoint, firstpoint)
+         -> subpoints -> theoffset;
+       (theoffset.x,-theoffset.y) -> theoffset;
+   if);
+   
+   &win32PointDesc[] -> privatePart.implPart.HilitePoints[];
+   2*privatePart.implPart.noofpoints 
+     -> privatePart.implPart.HilitePoints.p.extend;
+   (for i: privatePart.implPart.noofpoints repeat
+        privatePart.implPart.win32Points.p[(i*2)-1]+theOffSet.x
+          -> privatePart.implPart.HilitePoints.p[(i*2)-1];
+        privatePart.implPart.win32Points.p[(i*2)]+theOffSet.y
+          -> privatePart.implPart.HilitePoints.p[(i*2)];
+   for);
+   
+   (if ((theCanvas.implpart.hdc,
+       @@privatePart.implPart.HilitePoints.p[1],
+       privatepart.implpart.noofpoints)
+         -> Polyline) = 0 then
+       'Polyline failed in ShapeHiliteOutlineImplBody. Errorcode= ' 
+         -> screen.putText; GetLastError -> putint; newline;
+   if);
+#)
 
 -- ShapeRubberCreateButtonBody: dopart --
-do 
+do (if button = 1 then (* LeftButton *)
+       (if (startPoint,myShapeBegin) -> EqualPoint then
+           (* erase the first line; it will be drawn in next pass *)
+           (myShapeBegin, mousePoint) 
+             -> theCanvas.immediateLine;   
+       if);
+       (if theModifier -> IsModifierOn then 
+           mousePoint
+             -> theCanvas.DeviceToCanvas 
+             -> SplineTo;
+        else 
+           mousePoint -> theCanvas.DeviceToCanvas
+             -> LineTo;
+       if);
+       mousePoint -> startPoint;
+   if);
 
 
 

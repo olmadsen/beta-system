@@ -1,3 +1,548 @@
 ORIGIN '../Impl/DatatypesImpl';
--- LIB: attributes --
-dummy: (# #);
+
+INCLUDE '~beta/containers/v1.5/hashtable';
+INCLUDE '~beta/win32lib/v1.2/wingdiconsts';
+INCLUDE '~beta/win32lib/v1.2/devicecapabilities';
+INCLUDE '~beta/win32lib/v1.2/dcmanagement';
+INCLUDE '~beta/guienv/v1.4/private/winnt/guienv_ntiprivate';
+INCLUDE '~beta/sysutils/v1.5/cstring';
+
+-- BifrostAttributes: attributes --
+
+(* Descriptor for dynamic reference to win32 points *)
+
+win32Pointdesc: (# p: [2] @ Integer; #);
+
+NUMCOLORS: (# exit 24 #);
+
+RASTER_FONTTYPE: (# exit 16x0001 #);
+DEVICE_FONTTYPE: (# exit 16x002 #);
+TRUETYPE_FONTTYPE: (# exit 16x004 #);
+
+TMPF_FIXED_PITCH: (# exit 16x01 #);
+TMPF_VECTOR: (# exit  16x02 #);
+TMPF_DEVICE: (#  exit 16x08 #);
+TMPF_TRUETYPE: (# exit 16x04 #);
+
+DEFAULT_QUALITY: (# exit 0 #);
+DRAFT_QUALITY: (# exit 1 #);
+
+CLIP_STROKE_PRECIS: (# exit 2 #);
+CLIP_CHARACTER_PRECIS: (# exit 1 #);
+
+OUT_DEFAULT_PRECIS: (# exit 0 #);
+OUT_STRING_PRECIS: (# exit 1 #);
+OUT_STROKE_PRECIS: (# exit 3 #);
+
+ANSI_VAR_FONT: (# exit 12 #);
+
+ANSI_CHARSET: (# exit             0 #);
+DEFAULT_CHARSET: (# exit          1 #);
+SYMBOL_CHARSET: (# exit           2 #);
+SHIFTJIS_CHARSET: (# exit         128 #);
+HANGEUL_CHARSET: (# exit          129 #);
+GB2312_CHARSET: (# exit           134 #);
+CHINESEBIG5_CHARSET: (# exit      136 #);
+OEM_CHARSET: (# exit              255 #);
+(* The following is only for WINVER >= 0x0400 *)
+JOHAB_CHARSET: (# exit           130 #);
+HEBREW_CHARSET: (# exit          177 #);
+ARABIC_CHARSET: (# exit          178 #);
+GREEK_CHARSET: (# exit           161 #);
+TURKISH_CHARSET: (# exit         162 #);
+THAI_CHARSET: (# exit            222 #);
+EASTEUROPE_CHARSET: (# exit      238 #);
+RUSSIAN_CHARSET: (# exit         204 #);
+
+win32Font:
+  (# hFont: @integer;
+     nam,
+     sty,
+     siz: @integer;
+     fontType: @integer;
+  enter (nam,sty,siz)
+  exit (nam,sty,siz)
+  #);
+
+win32Fonts: 
+  (# theFontTable: @hashTable
+       (# element:: win32Font;
+          rangeInitial:: (# do 17 -> value; #);
+          equal::
+            (# 
+            do ((left.nam=right.nam) 
+               and
+               (left.sty=right.sty)
+               and
+               (left.siz=right.siz))
+                 -> value; 
+            #);
+          hashfunction:: 
+            (# do e.nam->value #);
+          
+          find: @
+            (# nam,sty,siz: @integer;
+               theWin32Font: ^win32Font;
+               fi: @findIndexed
+                 (# predicate:: 
+                      (# 
+                      do (if (sty<>0) and (siz<>0) then
+                             (current.sty=sty) and (current.siz=siz)
+                               -> value; 
+                          else
+                             (if sty<>0 then
+                                 (current.sty=sty) -> value;
+                              else
+                                 (if siz<>0 then
+                                     (current.siz=siz) -> value;
+                                  else
+                                     true -> value;
+                                 if);
+                             if);
+                         if);
+                      #);
+                    notFound:: (# do NONE -> theWin32Font[]; #);
+                 do current[] -> theWin32Font[];
+                 #);
+            enter (nam,sty,siz)
+            do (* 'win32Fonts. Looking for ' -> screen.puttext;
+                *           nam -> putint; ', ' -> puttext; sty -> putint; 
+                *           ', ' -> puttext; siz -> putint; newline;
+                *)
+               
+               nam -> fi;
+               
+               (* (if theWin32Font[]<>NONE then
+                *               'Found: theWin32Font.siz= ' -> puttext; theWin32Font.siz->putint;
+                *               newline;
+                *           if);
+                *)
+            exit theWin32Font[]
+            #);                    
+       #); (* End of theFontTable *)
+     
+     (* fonts *)
+     lstrcpy: External
+       (# charptr1, charptr2: @integer;
+          result_ptr: @integer;
+       enter (charptr1, charptr2)
+       do 'lstrcpyA' -> callStd;
+       exit result_ptr
+       #);
+     
+     lstrlen: external
+       (# charPtr: @integer;
+          length: @integer;
+       enter charPtr
+       do 'lstrlenA' -> callStd;
+       exit length
+       #);
+     
+     (* HFONT   WINAPI CreateFontIndirect(const LOGFONT FAR* ); *)
+     CreateFontIndirect: external
+       (#
+          ptr2LogFont: @integer; (* const LOGFONT FAR* *)
+          hFont: @integer; (* HFONT *)
+       enter ptr2LogFont
+       do 'CreateFontIndirectA' -> callStd;
+       exit hFont
+       #);
+     
+     CreateFontIndirect2: external
+       (#
+          ptr2LogFont: ^LOGFONTA; (* const LOGFONT FAR* *)
+          hFont: @integer; (* HFONT *)
+       enter ptr2LogFont[]
+       do 'CreateFontIndirectA' -> callStd;
+       exit hFont
+       #);
+
+     LF_FULLFACESIZE: (# exit 64 #);
+
+     ENUMLOGFONTA: ExternalRecord
+       (# (* bytesize::< (# do 156 -> value; #); *)
+          lfHeight: @long (# pos::< (# do 0 -> value; #); #);  
+          lfWidth: @long (# pos::< (# do 4 -> value; #); #);  
+          lfEscapement: @long (# pos::< (# do 8 -> value; #); #);  
+          lfOrientation: @long (# pos::< (# do 12 -> value; #); #);  
+          lfWeight: @long (# pos::< (# do 16 -> value; #); #);  
+          lfItalic: @byte (# pos::< (# do 20 -> value; #); #);  
+          lfUnderline: @byte (# pos::< (# do 21 -> value; #); #);  
+          lfStrikeOut: @byte (# pos::< (# do 22 -> value; #); #);  
+          lfCharSet: @byte (# pos::< (# do 23 -> value; #); #);  
+          lfOutPrecision: @byte (# pos::< (# do 24 -> value; #); #);  
+          lfClipPrecision: @byte (# pos::< (# do 25 -> value; #); #);  
+          lfQuality: @byte (# pos::< (# do 26 -> value; #); #);  
+          lfPitchAndFamily: @byte (# pos::< (# do 27 -> value; #); #);  
+          lfFaceName: @long (# pos::< (# do 28 -> value; #); #);  
+          elfFullName: @long (# pos::< (# do 60 -> value; #); #);  
+          elfStyle: @long (# pos::< (# do 124  -> value; #); #);  
+       #);
+     
+     printLogFont:
+       (# lf: ^LOGFONTA; cstr: @cstring; offset: @integer;
+       enter lf[]
+       do '******* LOGFONT BEGIN ****' -> putline;
+          
+          'lfHeight: ' -> puttext; lf.lfHeight -> putInt; newline;
+          'lfWidth: ' -> puttext; lf.lfWidth -> putInt; newline;
+          'lfEscapement: ' -> puttext; lf.lfEscapement -> putInt; newline;
+          'lfOrientation: ' -> puttext; lf.lfOrientation -> putInt; newline;
+          'lf.lfWeight: ' -> puttext; lf.lfWeight -> putInt; newline;
+          'lf.lfItalic: ' -> puttext; 
+          (if lf.lfItalic<>0 then
+              'TRUE' -> putline;
+           else
+              'FALSE' -> putline; 
+          if);
+          'lfUnderline: ' -> puttext; lf.lfUnderline -> putInt; newline;
+          'lf.lfStrikeOut: ' -> puttext; lf.lfStrikeOut -> putInt; newline;
+          'lf.lfCharSet: ' -> puttext; lf.lfCharSet -> putInt; newline;
+          'lfOutPrecision: ' -> puttext; 
+          (if lf.lfOutPrecision
+           //OUT_DEFAULT_PRECIS then
+              'OUT_DEFAULT_PRECIS' -> putline;
+           //OUT_STRING_PRECIS then
+              'OUT_STRING_PRECIS' -> putline;
+           //OUT_STROKE_PRECIS then
+              'OUT_STROKE_PRECIS' -> putline;
+           else
+              lf.lfOutPrecision -> putInt; newline;
+          if);
+          'lf.lfClipPrecision: ' -> puttext; 
+          (if lf.lfClipPrecision
+           //CLIP_DEFAULT_PRECIS then
+              'CLIP_DEFAULT_PRECIS' -> screen.putLine;
+           //CLIP_STROKE_PRECIS then
+              'CLIP_STROKE_PRECIS' -> screen.putLine;
+              (* //CLIP_EMBEDDED then
+               'CLIP_EMBEDDED' -> putline;
+               //CLIP_LH_ANGLES then
+               'CLIP_LH_ANGLES' -> putline;
+               *)
+           else
+              lf.lfClipPrecision -> putInt; newline;
+          if);
+          'lf.lfQuality: ' -> puttext; 
+          (if lf.lfQuality
+           //PROOF_QUALITY then 
+              'PROOF_QUALITY' -> putline;
+           //DRAFT_QUALITY then
+              'DRAFT_QUALITY' -> putline;
+           //DEFAULT_QUALITY then
+              'DEFAULT_QUALITY' -> putline;
+           else
+              lf.lfQuality  -> putInt; newline;
+          if);
+          'lf.lfPitchAndFamily: ' -> puttext; lf.lfPitchAndFamily -> putInt; newline;
+          
+          'Face name: ' -> screen.putText;
+          cstr.init;
+          @@lf.lfHeight+28 -> offset;
+          (cstr,offset ) -> lstrcpy;
+          cstr.get -> screen.putLine;
+          cstr.free;
+          
+          '******* LOGFONT DONE ****' -> putline;
+       #);
+     
+     printEnumLogFont:
+       (# lf: ^ENUMLOGFONTA; cstr: @cstring;
+       enter lf[]
+       do '******* ENUMLOGFONT BEGIN ****' -> putline;
+          
+          'lfHeight: ' -> puttext; lf.lfHeight -> putInt; newline;
+          'lfWidth: ' -> puttext; lf.lfWidth -> putInt; newline;
+          'lfEscapement: ' -> puttext; lf.lfEscapement -> putInt; newline;
+          'lfOrientation: ' -> puttext; lf.lfOrientation -> putInt; newline;
+          'lf.lfWeight: ' -> puttext; lf.lfWeight -> putInt; newline;
+          'lf.lfItalic: ' -> puttext; 
+          (if lf.lfItalic<>0 then
+              'TRUE' -> putline;
+           else
+              'FALSE' -> putline; 
+          if);
+          'lfUnderline: ' -> puttext; lf.lfUnderline -> putInt; newline;
+          'lf.lfStrikeOut: ' -> puttext; lf.lfStrikeOut -> putInt; newline;
+          'lf.lfCharSet: ' -> puttext; lf.lfCharSet -> putInt; newline;
+          
+          'lfOutPrecision: ' -> puttext; 
+          (if lf.lfOutPrecision
+           //OUT_DEFAULT_PRECIS then
+              'OUT_DEFAULT_PRECIS' -> putline;
+           //OUT_STRING_PRECIS then
+              'OUT_STRING_PRECIS' -> putline;
+           //OUT_STROKE_PRECIS then
+              'OUT_STROKE_PRECIS' -> putline;
+           else
+              lf.lfOutPrecision -> putInt; newline;
+          if);
+          
+          'lf.lfClipPrecision: ' -> puttext; 
+          (if lf.lfClipPrecision
+           //CLIP_DEFAULT_PRECIS then
+              'CLIP_DEFAULT_PRECIS' -> screen.putLine;
+           //CLIP_STROKE_PRECIS then
+              'CLIP_STROKE_PRECIS' -> screen.putLine;
+              (* //CLIP_EMBEDDED then
+               'CLIP_EMBEDDED' -> putline;
+               //CLIP_LH_ANGLES then
+               'CLIP_LH_ANGLES' -> putline;
+               *)
+           else
+              lf.lfClipPrecision -> putInt; newline;
+          if);
+          'lf.lfQuality: ' -> puttext; 
+          (if lf.lfQuality
+           //PROOF_QUALITY then 
+              'PROOF_QUALITY' -> putline;
+           //DRAFT_QUALITY then
+              'DRAFT_QUALITY' -> putline;
+           //DEFAULT_QUALITY then
+              'DEFAULT_QUALITY' -> putline;
+           else
+              lf.lfQuality  -> putInt; newline;
+          if);
+          'lf.lfPitchAndFamily: ' -> puttext; lf.lfPitchAndFamily -> putInt; newline;
+          
+          'Face name: ' -> screen.putText;
+          cstr.init;
+          (cstr, lf.Ptr+28) -> lstrcpy;
+          cstr.get -> screen.putLine;
+          cstr.free;
+          
+          '******* ENUM LOGFONT DONE ****' -> putline;
+       #);
+
+
+     EnumFontFamProcToPtr: external
+       (# func: ##EnumFontFamProc;
+          int: @integer;
+       enter func##
+       do 'copyinput'->callC
+       exit int
+       #);
+
+     EnumFontFamProc: external
+       (# ptr2elf: @integer;
+          ptr2ntm: @integer;
+          fontType: @integer;
+          lParam: @integer;
+          result: @integer;
+          theFamilieName: ^text; 
+          cstr: @cString;
+       enter (ptr2elf,ptr2ntm,fontType,lParam)
+       do StdExternalEntry;
+          33 -> cstr.init;
+          (cstr, ptr2elf+28) -> lstrcpy;
+          cstr.get -> theFamilieName[];
+          theFamilieName.reset;
+          cstr.free;
+          
+          'theFamilieName= ' -> screen.putText; theFamilieName[] -> putLine;
+          
+          1 -> result;
+       exit result
+       #);
+
+     EnumFontFaceProcToPtr: external
+       (# func: ##EnumFontFacesProc;
+          int: @integer;
+       enter func##
+       do 'copyinput'->callC
+       exit int
+       #);
+
+     EnumFontFacesProc: external
+       (# ptr2elf: @integer;
+          ptr2ntm: @integer;
+          fontType: @integer;
+          requestedPointSize: @integer; 
+          result: @integer;
+          theENUMLOGFONTA: @ENUMLOGFONTA;
+          theFaceName,theFullFaceName,theStyle: ^text; 
+          cstr: @cstring;
+          lfCharSet: @integer;
+          theWin32Font: ^win32Font;
+          lfWeight, lfHeight: @integer;
+          lfItalic: @integer;
+          lfPitchAndFamily: @integer;
+          theTextStyle: ^textStyle;
+          lf: ^LOGFONTA;
+       enter (ptr2elf,ptr2ntm,fontType,requestedPointSize)
+       do StdExternalEntry;
+          ptr2elf -> theENUMLOGFONTA.ptr;
+          
+          newline;
+          '************* FACE NAME *****************' -> screen.putLine;
+          
+          &win32Font[] -> theWin32Font[];
+          
+          64 -> cstr.init;
+          (cstr, ptr2elf+28) -> lstrcpy;
+          cstr.get -> theFaceName[];
+          theFaceName.reset;
+          
+          'theFaceName= ' -> screen.putText; theFaceName[] -> putLine; 
+          
+          (* Calculate pointSize/lfHeight *)
+          (if fontType
+           //TRUETYPE_FONTTYPE then
+              (requestedPointSize, (gHdc, LOGPIXELSY) -> GetDeviceCaps, 72) 
+                -> MulDiv -> lfHeight;
+              -lfHeight -> theENUMLOGFONTA.lfHeight;
+              requestedPointSize -> theWin32Font.siz;
+              0 -> result;
+           //DEVICE_FONTTYPE then
+              'DEVICE_FONTTYPE.' -> screen.putLine;
+           //RASTER_FONTTYPE then
+              theENUMLOGFONTA.lfHeight -> lfHeight;
+              (72, lfHeight, (gHdc, LOGPIXELSY) -> GetDeviceCaps) 
+                -> MulDiv 
+                -> theWin32Font.siz;
+              1 -> result;
+          if);
+          fontType -> theWin32Font.fontType;
+          
+          (* Get the character set *)
+          23 -> theENUMLOGFONTA.GetByte -> lfCharSet;
+          (* Get Pitch and Family *)
+          27 -> theENUMLOGFONTA.GetByte -> lfPitchAndFamily;
+          
+          (* Translate Face name to Bifrost font name *)
+          (if true
+           //'Courier New' -> theFaceName.equalNCS then
+              Courier -> theWin32Font.nam;
+           //'Times' -> theFaceName.equalNCS then
+              Times -> theWin32Font.nam;
+           //'Helvetica' -> theFaceName.equalNCS then
+              Helvetica -> theWin32Font.nam;
+          if);
+          
+          FW_REGULAR -> lfWeight;
+          0 -> lfItalic;
+          (if requestedStyle
+           //Plain then
+              FW_REGULAR -> lfWeight;
+           //Bold then
+              FW_BOLD -> lfWeight;
+           //Italic then
+              1 -> lfItalic;
+              1 -> theENUMLOGFONTA.lfItalic;
+          if);
+          lfWeight -> theENUMLOGFONTA.lfWeight;
+          requestedStyle -> theWin32Font.sty;
+          
+          OUT_DEFAULT_PRECIS -> theENUMLOGFONTA.lfOutPrecision;
+          PROOF_QUALITY ->  theENUMLOGFONTA.lfQuality;
+          0 -> theENUMLOGFONTA.lfWidth;
+          
+          (* theENUMLOGFONTA[] -> printEnumLogFont; *)
+          theENUMLOGFONTA.ptr -> CreateFontIndirect -> theWin32Font.hFont; 
+          
+          
+          (if theWin32Font.hFont=0 then
+              'CreateFontIndirect failed in EnumFontFacesProc. ErrorCode= '
+                -> screen.putText; GetLastError -> putint; newline;
+           else
+              (* 'Inserting font: ' -> puttext; 
+               *             theWin32Font.nam -> putint; ', ' -> puttext; 
+               *             theWin32Font.sty -> putint; 
+               *             ', ' -> puttext; theWin32Font.siz -> putint; 
+               *             ', theWin32Font.hFont= ' -> puttext; theWin32Font.hFont -> putInt;
+               *             newline;
+               *)
+              
+              theWin32Font[] -> theFontTable.insert;
+              
+              &textStyle[] -> theTextStyle[];
+              theWin32Font.hFont -> theTextStyle.textStyleID; 
+              theTextStyle[] -> this(guienv).private.textStyles.append; 
+          if);
+          
+          '************* FACE NAME DONE *****************' -> screen.putLine;
+          newline;        
+       exit result
+       #);
+
+     EnumFontFamilies: external
+       (# hdc: @integer;  (* handle to device control *)
+          familyName: @integer; (* pointer to family-name string *)
+          ptr2EnumFontFamProc: @integer;   (* pointer to callback function *)
+          lParam: @integer;
+          result: @integer;
+       enter (hdc,familyName,ptr2EnumFontFamProc,lParam)
+       do 'EnumFontFamiliesA' -> callStd;
+       exit result
+       #);
+
+     EnumFontFaces: external
+       (# hdc: @integer;  (* handle to device control *)
+          faceName: [1] @char; (* pointer to face-name string *)
+          ptr2EnumFontFaceProc: @integer;   (* pointer to callback function *)
+          lParam: @integer;
+          result: @integer;
+       enter (hdc,faceName,ptr2EnumFontFaceProc,lParam)
+       do 'EnumFontFamiliesA' -> callStd;
+       exit result
+       #);
+     
+          
+     requestedStyle: @integer;
+     gHdc: @integer;
+     
+     createWin32Font:
+       (# hdc: @integer;
+          nam, sty, siz: @integer;
+       enter (hdc, nam, sty, siz)
+       do sty -> requestedStyle;
+          hdc -> gHdc;
+          (if nam
+           //Courier then
+              (hdc,'Courier New',EnumFontFaceProcAddress,siz) -> EnumFontFaces;
+           //Times then
+              (hdc,'Times',EnumFontFaceProcAddress,siz) -> EnumFontFaces;
+           //Helvetica then
+              (hdc,'Helvetica',EnumFontFaceProcAddress,siz) -> EnumFontFaces;
+          if);
+       #);
+     
+     EnumFontFamProcAddress: @integer;
+     EnumFontFaceProcAddress: @integer;
+     
+     initBifrostFonts: 
+       (# d: @Text;
+          theHdc: @integer;
+       enter theHdc
+       do (* EnumFontFamProc## -> EnumFontFamProcToPtr -> EnumFontFamProcAddress;
+           (theHdc,0,EnumFontFamProcAddress,0) -> EnumFontFamilies->putint; newline;
+           *);
+          
+          EnumFontFacesProc##->EnumFontFaceProcToPtr->EnumFontFaceProcAddress;
+          (* (theHdc,'Courier New',EnumFontFaceProcAddress,0) -> EnumFontFaces;
+           *         (theHdc,'Times',EnumFontFaceProcAddress,0) -> EnumFontFaces;
+           *         (theHdc,'Helvetica',EnumFontFaceProcAddress,0) -> EnumFontFaces;
+           *)
+          
+       #);
+     
+     (* fonts end *)
+  #);
+
+-- PointArrayAttributes: Attributes --
+
+ToWin32Points:
+  (# win32Points: @win32Pointdesc;
+     p: @Point;
+     TM: ^Matrix
+  enter TM[]
+  do 2*npoints -> win32Points.p.extend;
+     (for i:npoints repeat
+          (* transform point using TM *)
+          private.points[i] -> TM.transformPoint -> p;
+          p.x -> win32Points.p[(i*2)-1];
+          p.y -> win32Points.p[i*2];
+     for);
+  exit win32Points[]
+  #);
+

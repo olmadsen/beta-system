@@ -1,103 +1,706 @@
 ORIGIN '../Impl/CanvasImpl';
+BODY 'CanvasWinNTImplUtils';
 INCLUDE 'BifrostWinNTimpl';
+INCLUDE 'PaintWinNtimpl';
+INCLUDE 'utils';
+INCLUDE '~beta/guienv/v1.4/private/winnt/guienv_ntiprivate';
+INCLUDE '~beta/sysutils/v1.5/cstring';
+INCLUDE '~beta/win32lib/v1.2/windowsmisc.bet';
+INCLUDE '~beta/win32lib/v1.2/mousecursorsupport';
+INCLUDE '~beta/win32lib/v1.2/bitmapsupport';
 
 -- canvasInitPrivatePart: descriptor --
-(# #)
+(# registerBifrostWindowClass:
+     (# cstr: @cString;
+        theClass: @WndClass;
+        result: @integer;
+     do 'BifrostWindowClass' -> cstr.set;
+        CS_OWNDC %Bor CS_DBLCLKS -> theClass.style;
+        uienvStandardWindowProcAddress -> theClass.lpfnWndProc;
+        uienvHInstance -> theClass.hInstance;
+        (0,IDI_APPLICATION)-> LoadIconInteger -> theClass.hIcon -> result;
+        (0,IDC_ARROW) -> LoadCursorInteger -> theClass.hCursor -> result; 
+        COLOR_WINDOW -> GetSysColor -> CreateSolidBrush -> backgroundBrush;
+        backgroundBrush -> theClass.hbrBackGround;
+        0 -> theClass.lpszMenuName;
+        cstr.charPtr -> theClass.lpszClassName;
+        0 -> theClass.cbClsExtra;
+        0 -> theClass.cbWndExtra;
+        theClass[] -> RegisterClass -> result; 
+        cstr.free;
+        (if result=0 then
+            'registerBifrostWindowClass failed.' -> screen.putLine;
+         else
+            
+        if);
+     #);
+   isBifrostWindowClassReg: booleanValue
+     (# theClass: @integer;
+        result: @integer;
+     do 40 -> malloc -> theClass;
+        (if theClass<>0 then 
+            (uienvHInstance, 'BifrostWindowClass', theClass)
+              -> GetClassInfo -> result;
+            theClass -> free;
+        if);
+        (result<>0) -> value;
+     #);
+      
+   
+do (if not isBifrostWindowClassReg then
+       registerBifrostWindowClass;
+   if);
+   'BifrostWindowClass' -> windowItemClass;
+#)
 
 -- canvasDamagedArea: descriptor --
-(# #)
-
+RectangleList
+(# intersect: @
+     (# myRect: @Rectangle;
+        res: @Boolean;
+     enter myRect
+     do
+        False -> res;
+        scanList: scan
+          (# b1, b2, b3: @boolean;
+          do
+             (* (if (((current.x <= myrect.x) and (myrect.x <= current.x+current.width)) or
+              *     ((myrect.x <= current.x) and (current.x <= myrect.x+myrect.width)))
+              *     and
+              *     (((current.y-current.height <= myrect.y) and (myrect.y <= current.y)) or
+              *     ((myrect.y-myrect.height <= current.y) and (current.y <= myrect.y)))
+              *  CODE GEN. ERROR! ON SNAKE
+              *)
+             (current.x <= myrect.x) -> b1;
+             (myrect.x <= current.x+current.width) and b1 -> b1;
+             (myrect.x <= current.x) -> b2;
+             (current.x <= myrect.x+myrect.width) and b2 -> b2;
+             b1 or b2 -> b3;
+             (current.y-current.height <= myrect.y) -> b1;
+             (myrect.y <= current.y) and b1 -> b1;
+             (myrect.y-myrect.height <= current.y) -> b2;
+             (current.y <= myrect.y) and b2 -> b2;
+             b3 and (b1 or b2) -> b1;
+             (if b1 then
+                 True -> res;
+                 leave scanList;
+             if);
+          #);
+     exit res
+     #);
+#)
+   
 -- CanvasRefresh: descriptor --
-(# #)
+(# r: ^rectangle;
+do (if implpart.firstRefresh then
+       false -> implpart.firstRefresh;
+       theEventhandler.onOpen;
+    else
+       &Rectangle[] -> r[];
+       updateRect -> translateUpdateRect -> (r.x, r.y, r.width, r.height);
+       r[] -> implpart.damagedList.append;
+       expose;       
+   if);
+   (if borderwidth>0 then
+       drawTheBorder;
+   if);
+   INNER onrefresh;
+#)
 
 -- canvasDamagedBody: descriptor --
-(# #)
+(# rect: ^rectangle;
+do (if (debugGraphic or privatepart.canvasdebug) then 'damaged ' -> puttext; r -> putrect;
+   if);
+   &rectangle[] -> rect[];
+   r -> rect;
+   rect[] -> privatepart.damagedArea.append;
+#)
 
 -- canvasRepairBody: descriptor --
-(# #)
+(# mainShape,myShape: ^Shape;
+do (if (debugGraphic or privatepart.canvasdebug) then 
+       'repair BifrostCanvas.TM: ' -> puttext;
+       TM[] -> putmatrix;
+   if); 
+   (if not privatepart.damagedArea.empty then
+       (* Set clip region for next drawing operations *)
+       &Shape[] -> mainShape[];
+       (0,0) -> mainShape.open;
+       (if debugGraphic then 'DAMAGED RECTANGLES:' -> putline if);
+       privatepart.damagedArea.scan 
+       (#
+       do (if debugGraphic then current -> putrect; if);
+          &Shape[] -> myShape[];
+          (current.x              ,current.y)                -> myShape.open;
+          (current.x+current.width,current.y)                -> myShape.lineto;
+          (current.x+current.width,current.y-current.height) -> myShape.lineto;
+          (current.x              ,current.y-current.height) -> myShape.lineto;
+          myShape.close;
+          
+          (if debugGraphic then 'Before mainShape.CombineShape.'->putline; if);
+          
+          (idmatrix,myShape[]) -> mainShape.CombineShape;
+          
+          (if debugGraphic then 'After mainShape.CombineShape.'->putline; if);
+          
+          current -> clearRect;
+       #);
+       mainShape.close;
+       (if debugGraphic then 'Before mainShape[] -> SetClip;' -> putline; if);
+       mainShape[] -> SetClip; 
+       (if debugGraphic then 'After mainShape[] -> SetClip;' -> putline; if);
+       
+       (* Check which GOs should be redrawn *)
+       (if debugGraphic then 'BOUNDING BOXES:' -> putline if);
+       
+       (if thepicture[]=none then
+           'thepicture is none!!'->putline;
+       if);
+
+       thePicture.scanGOs
+       (# r: @rectangle;
+       do
+          (* only check first level of GOs !!!! *)
+          go.getBounds -> r;
+          (if debugGraphic then
+              'GO with shape '->puttext;
+              go.theshape[] -> getpatternname -> puttext; 
+              ': '->puttext;
+              r -> putrect;
+          if);
+          (if (r -> privatepart.damagedArea.intersect) then 
+              (if (debugGraphic or privatepart.canvasdebug) then 
+                  'redraw GO with shape ' -> puttext;
+                  go.theshape[] -> getpatternname -> putline;
+              if);
+              THIS(BifrostCanvas)[] -> go.draw;
+          if);
+       #);
+       privatepart.damagedArea.init;
+       visualShape[] -> SetClip;
+       (if borderwidth>0 then drawTheBorder; if);
+    else
+       'privatepart.damagedArea is empty.' -> screen.putLine;
+   if);
+   
+   (if debugGraphic then 'canvasRepairBody done.' -> putLine; if); 
+#)
 
 -- CanvasUpdateCoordImpl: descriptor --
-(# #)   
+(# 
+do &Matrix[] -> TM[];
+   1.0  -> TM.a;
+   -1.0 -> TM.d;
+   0.0  -> TM.c;
+   0.0  -> TM.b;
+   0.0  -> TM.tx;
+   s.y -> TM.ty;
+   
+   (if visualShape[] = NONE then
+       &Shape[] -> visualShape[];
+       visualShape[] -> clipShape[];
+   if);
+   
+   (* clear the visible shape *)
+   none -> visualShape.privatepart.SegmentList[];
+   
+   (* set visibleShape to size of the BifrostCanvas window *)
+   (0,0) -> visualShape.open;
+   (s.x,0) -> visualShape.lineto;
+   (s.x,s.y) -> visualShape.lineto;
+   (0,s.y) -> visualShape.lineto;
+   visualShape.close;
+   
+   (* force recalculation of go's according to new coordinatesystem *)
+   thepicture.scanGOs(# do go.theshape.invalidate #);
+#)   
    
 -- canvasSetClipImplBody: descriptor --
-(# #)
+(# myRegion: @Integer;
+do (if debuggraphic then 'canvasSetClipImplBody begin.' -> putline; if);
+   (if implpart.hdc=0 then
+       (* ignore *)
+    else
+       (* clear the Win32 region *)
+       (if (implpart.clipRegion<>0) then
+           implpart.clipregion -> DeleteObject;
+           0 -> implpart.clipRegion;
+       if);
+       THIS(BifrostCanvas)[]
+         ->clipShape.makeRegion -> implpart.clipRegion;(* clip region *)
+       (if (clipShape[]<>visualShape[]) then
+           THIS(BifrostCanvas)[]
+             ->visualShape.makeRegion -> myRegion;  (* visible region *)
+           (* make resulting clip region *)
+           (implpart.clipRegion,
+           myRegion,
+           implpart.clipRegion,
+           RGN_AND
+           ) -> CombineRgn;
+       if);
+       (* set the clipRegion as clipmask in theCanvas GC *)
+       (if debuggraphic then
+           'BifrostCanvas.setclip: hdc: '->puttext;implpart.hdc->putint; newline;
+       if);
+       (implpart.hdc, implpart.clipRegion) -> SelectClipRgn
+   if);
+   
+   (if debuggraphic then 'canvasSetClipImplBody done.' -> putline; if);
+#)
 
 -- canvasprepareInteractionBody: descriptor --
-(# #)
+(#  
+do (implpart.hdc, R2_NOTXORPEN ) -> SetROP2;
+#)
 
 -- canvasEndInteractionBody: descriptor --
-(# #)
+(# 
+do (implpart.hdc, R2_COPYPEN ) -> SetROP2;
+#)
    
 -- canvasSetImmediateLineWidthBody: dopart --
-do
+do 
+   
 -- canvasImmediateTextBody: descriptor --
-(# #)
+(# length: @integer; x,y: @integer; 
+do (if theString.length>0 then
+       theString.length -> length;
+       pos.y -> y;
+       pos.x -> x;
+       (THIS(BifrostCanvas)[],theFontName, theStyle, theSize) 
+        -> SetWin32Font;
+       (if ((implpart.hdc, x, y,@@theString.T[1],length) 
+             -> TextOut)=0 then
+           'TextOut failed in canvasImmediateTextBody. ErrorCode= ' 
+             -> screen.putText;
+           GetLastError -> putInt; screen.newline;
+       if);
+   if);
+#)
 
 -- CanvasImmediateSpot: dopart --
-do
+do (# ntpPtr: @integer; pt: @point; 
+      theHPen, theOldHpen, penStyle: @integer;
+      theLogbrush: @LOGBRUSH; 
+   do (if (implpart.windowId>0) then
+          8 -> malloc -> ntpPtr;
+          (if ntpPtr<>0 then
+              ((PS_GEOMETRIC,PS_SOLID) -> tos'%or')-> penStyle;
+              ((penStyle,PS_INSIDEFRAME) -> tos'%or')-> penStyle; 
+              ((penStyle,CapSquare) -> tos'%or')-> penStyle; 
+              BS_SOLID -> theLogBrush.lbStyle;
+              16x00000000  -> theLogBrush.lbColor; 
+              (penStyle,5,theLogbrush[],0,0) -> ExtCreatePen -> theHPen;
+              
+              (implpart.hdc, theHPen) -> SelectObject -> theOldHPen;
+              
+              (implpart.hdc,center.x-1,center.y-1,ntpPtr) -> MoveToEx;
+              (implpart.hdc,center.x,center.y-1) -> LineTo;
+              (* (implpart.hdc,center.x-1,center.y,ntpPtr) -> MoveToEx;
+               (implpart.hdc,center.x,center.y) -> LineTo; *)
+              (* restore the penposition *)
+              ntpPtr -> getPointFromNtPointPtr -> (pt.x,pt.y);
+              (implpart.hdc,pt.x,pt.y,0) -> MoveToEx;
+              (implpart.hdc, theOldHPen) -> SelectObject -> DeleteObject;
+              ntpPtr -> free;
+           else
+              'malloc failed in SolidColorFillLineBody.' -> screen.putLine;
+          if);
+      if);
+   #);
    
 -- canvasImmediateLineBody: dopart --
-do 
+do (# ntpPtr: @integer; pt: @point; 
+   do (if (implpart.windowId>0) then
+          8 -> malloc -> ntpPtr;
+          (if ntpPtr<>0 then
+              (implpart.hdc,p1.x,p1.y,ntpPtr) -> MoveToEx;
+              (implpart.hdc,p2.x,p2.y) -> LineTo;
+              (* restore the penposition *)
+              ntpPtr -> getPointFromNtPointPtr -> (pt.x,pt.y);
+              (implpart.hdc,pt.x,pt.y,0) -> MoveToEx;
+              ntpPtr -> free;
+           else
+              'malloc failed in SolidColorFillLineBody.' -> screen.putLine;
+          if);
+      if);
+   #);
    
 -- canvasImmediateDot: dopart --
-do
+do (# makeNtRectPtrBifrost:
+        (# r: ^rectangle;
+           ntRectPtr: @integer;
+        enter r[]
+        do 16 -> malloc -> ntRectPtr;
+           (ntRectPtr ,     r.x) -> TOS'%PutLong';
+           (ntRectPtr + 4,  r.y) -> TOS'%PutLong';
+           (ntRectPtr + 8,  r.x+r.width) -> TOS'%PutLong';
+           (ntRectPtr + 12, r.y+r.height) -> TOS'%PutLong';
+        exit ntRectPtr
+        #);
+      r: @rectangle;
+      x,y,width,height: @integer; 
+      theNtRectPtr: @integer; 
+      backgroundBrush: @integer;
+   do (if implpart.windowID > 0 then
+          p1 -> CanvasToDevice -> p1;
+          (p1.x-1,p1.y-1) -> (r.x,r.y);
+          (1,1) -> (r.width,r.height);
+          
+          r[] -> makeNtRectPtrBifrost -> theNtRectPtr;
+          BLACK_BRUSH -> GetStockObject -> backgroundBrush;
+          
+          (if ((implpart.hdc,theNtRectPtr,backgroundBrush)->ntFillRect)=0 then
+              'ntFillRect failed. ErrorCode= ' -> putText;
+              GetLastError -> putint; newline;
+          if);
+          theNtRectPtr -> free;
+      if);
+   #);
    
 -- canvasImmediateMultiLineBody: descriptor --
-(# #)
+(# myP: @Point; noOfPoints: @integer;
+do (if debugGraphic then
+       'canvasImmediateMultiLineBody begin.' -> screen.putLine;
+   if);
+   
+   (if (implpart.windowID>0) then
+       (if p.npoints = 0 then 
+           'ImmediateMultiLine: no points' -> putline;
+        else
+           idmatrix -> p.ToWin32Points -> implpart.win32Points[];
+           
+           (if close then
+               1 -> p.GetPoint -> myP;
+               (* There IS room for ONE extra point in implpart.win32Points *)
+               
+               myP.x -> implPart.win32Points.p[((p.npoints+1)*2)-1];
+               myP.y -> implPart.win32Points.p[(p.npoints+1)*2];
+               p.npoints+1 -> noOfPoints;
+               (if ((implpart.hdc,@@implpart.win32Points.p[1],noOfPoints)
+                     -> Polyline) = 0 then
+                   'Polyline failed in canvasImmediateMultiLineBody. Errorcode= ' 
+                     -> screen.putText; GetLastError -> putint; newline;
+               if);
+            else
+               p.npoints -> noOfPoints;
+               (if ((implpart.hdc,@@implpart.win32Points.p[1],noOfPoints)
+                     -> Polyline) = 0 then
+                   'Polyline failed in canvasImmediateMultiLineBody. Errorcode= ' 
+                     -> screen.putText; GetLastError -> putint; newline;
+               if);
+           if);
+       if);
+   if);
+   
+   (if debugGraphic then
+       'canvasImmediateMultiLineBody done.' -> screen.putLine;
+   if);
+#)
 
 -- CanvasImmediateArc: dopart --
-do
+do (# hbr, hBrushOld: @integer;
+      ch,cv: @integer; (* center of rectangle *)
+      a,b: @Real; (* half height and half width of rectangle *)
+      xRadial1,yRadial1,xRadial2,yRadial2: @integer;
+      angle1,angle2: @Real;
+      result: @integer;
+      left,right,top,bottom: @integer;
+   do (if debugGraphic then 'CanvasImmediateArc begin' -> putline; if);
+      
+      (if (implpart.windowID>0) then
+          NULL_BRUSH -> GetStockObject -> hbr;
+          (implpart.hdc, hbr) -> SelectObject -> hbrushOld;
+          
+          cx-hr -> left; 
+          cx+hr -> right;
+          cy-vr -> top;
+          cy+vr -> bottom;
+          
+          hr + left -> ch;
+          vr + top -> cv;
+          (a1/180) * pi -> angle1;
+          (a2/180) * pi -> angle2;
+          ch + hr * (angle1 -> cos) -> xRadial1;
+          cv + vr * (angle1 -> sin) -> yRadial1; 
+          ch + hr * (angle2 -> cos) -> xRadial2;
+          cv + vr * (angle2 -> sin) -> yRadial2;
+          (2 * cv) - yRadial1 -> yRadial1;
+          (2 * cv) - yRadial2 -> yRadial2;
+          
+          (implpart.hdc,left,top,right,bottom,xRadial1,yRadial1,xRadial2,yRadial2)
+            -> Pie -> result; 
+          (if result=0 then
+              'Pie failed in CanvasImmediateArc. ErrorCode= ' ->screen.putText;
+              GetLastError -> putint; newline;
+          if);
+          (implpart.hdc, hbrushOld) -> SelectObject;
+      if);
+      
+      (if debugGraphic then 'CanvasImmediateArc done' -> putLine; if);
+   #);
    
--- canvasImmediaterectBody: dopart --
-do
+-- canvasImmediaterectBody: dopart --   
+do (# result: @integer; hbr: @integer; hRgn: @integer; 
+      hbrushOld: @integer;
+   do (if (implpart.windowID>0) then
+          NULL_BRUSH -> GetStockObject -> hbr;
+          (implpart.hdc, hbr) -> SelectObject -> hbrushOld;
+          (implpart.hdc,
+          r.x,r.y,
+          r.x+r.width,r.y+r.height) 
+            -> ntRectangle -> result;
+          (if result=0 then
+              'Rectangle failed in canvasImmediaterectBody. Errorcode: ' 
+                -> puttext;
+              GetLastError -> putint; newline;
+          if);
+          (implpart.hdc, hbrushOld) -> SelectObject;
+      if);
+   #);
    
 -- canvasClearRectBody: dopart --
-do 
+do (# theBrush: @integer;
+   do (if (implpart.windowId>0) then
+          r -> TM.transformRectangle -> r; 
+          (if implpart.custumbackground then
+              (if implpart.backGroundColorSet then
+                  (implpart.hdc,implpart.backGroundColor) 
+                    -> GetNearestColor -> CreateSolidBrush -> theBrush;
+               else
+                  (if implpart.backGroundBitmapSet then
+                      
+                  if);
+              if);
+           else
+              COLOR_WINDOW -> GetSysColor -> CreateSolidBrush -> theBrush;
+          if);
+          (r.x,r.y,r.width,r.height,implpart.hdc,theBrush)
+            -> win32ClearArea; 
+          theBrush -> DeleteObject;
+      if);
+   #);
    
 -- NoModifierBody: dopart --
-do 
+do 0 -> m;
    
 -- ShiftModifierBody: dopart --
-do 
+do VK_SHIFT -> m; 
    
 -- ControlModifierBody: dopart --
-do 
+do VK_CONTROL -> m;
    
 -- LockModifierBody: dopart --
-do 
+do (* VK_CAPITAL *) 0 -> m;
    
 -- MetaModifierBody: dopart --
-do 
+do VK_MENU -> m;
    
 -- CommandModifierBody: dopart --
-do 
+do 'CommandModifierBody not impl ' -> screen.putline;
+   
+-- CanvasAttributes: attributes --
+drawTheBorder:
+  (# theHPen: @integer; borderStyle, theBorderWidth: @integer;
+     width,height: @integer;
+     theLogbrush: @LOGBRUSH; penStyle: @integer;
+     p: ^paint;
+  do 1 -> borderStyle;
+     ((PS_GEOMETRIC,PS_SOLID) -> tos'%or')-> penStyle;
+     ((penStyle,PS_INSIDEFRAME) -> tos'%or')-> penStyle; 
+     ((penStyle,CapSquare) -> tos'%or')-> penStyle; 
+     
+     borderwidth -> theBorderWidth;
+     borderpaint -> p[];
+     (if p[]<>NONE then
+         (if p##
+          //SolidColor## then
+             BS_SOLID -> theLogBrush.lbStyle;
+             implpart.theBorderColor -> theLogBrush.lbColor; 
+          //TiledSolidColor## then
+             
+          //RasterPaint## then
+             
+          else
+             BS_SOLID -> theLogBrush.lbStyle;
+             0 -> theLogBrush.lbColor; 
+         if);
+      else
+         BS_SOLID -> theLogBrush.lbStyle;
+         0 -> theLogBrush.lbColor; 
+     if);
+     (penStyle,theBorderWidth,theLogbrush[],0,0) -> ExtCreatePen -> theHPen;
+     
+     size -> (width,height);
+     
+     (implpart.windowID, theHPen, borderStyle,0,0,width,height) 
+       -> drawBorderBifrost;     
+  #);
+
+GetDamagedRectangles:
+  (# 
+  do implpart.DamagedList.scan
+     (# 
+     do (Current.x, Current.y)
+          -> TM.inverseTransformPoint
+          -> (Current.x, Current.y);
+        Current -> damaged;
+     #);
+     &RectangleList[] -> implpart.DamagedList[];
+     implpart.DamagedList.init;
+  #);
+
+Expose:
+  (* Draw the GOs intersecting the damaged list reported in expose events *)
+  (#
+  do GetDamagedRectangles;
+     repair;
+  #);
+
+win32ButtonPress: (# exit 1 #);
+win32ButtonRelease: (# exit 2 #);
+win32KeyPress: (# exit 3 #);
+win32KeyRelease: (# exit 4 #);
+win32Motion: (# exit 4 #);
+
    
 -- CanvasInteractionHandlerDoBody: descriptor --
-(# #)
+(# buttonID : @Integer;
+   ch: @char;
+   allbuttons: @integer;
+   
+   theMotion: @Motion;
+   theButtonPress: @ButtonPress;
+   theButtonRelease: @ButtonRelease;
+   theTerminateCondition: @TerminateCondition;
+   theKeyPress: @KeyPress;
+   theKeyRelease: @KeyRelease;
+   getNextMessage: @<<SLOT getNextMessageImpl: descriptor>>;     
+   msg, message: @integer;
+   windowId: @integer;
+do implpart.windowID -> windowID;
+   windowID -> SetCapture;
+   this(bifrostCanvas)[] -> target; 
+   Initialize;
+   TRUE -> implpart.CanvasInteractionHandlerActive;
+   28 -> malloc -> msg;
+   (if msg<>0 then
+       loop:
+         (#  
+         do getNextMessage;
+            (if implpart.message
+             // win32Motion then
+                theMotion;
+                (* (failureTrace,'') -> stop; *)
+             // win32ButtonPress then
+                implpart.theBtn -> theButtonPress;
+                (if ((3=implpart.theBtn) -> TerminateCondition) then 
+                    leave loop
+                if);
+                
+             // win32ButtonRelease then
+                theButtonRelease;
+                (if theTerminateCondition then leave loop if);
+                
+             // win32KeyPress then
+                implpart.theKey -> theKeyPress;
+                
+             // win32KeyRelease then
+                implpart.theKey -> theKeyRelease;
+                
+            if);
+            (if theTerminateCondition then leave loop
+             else restart loop
+            if);
+         #); (* end loop *)
+       msg -> free;
+   if);
+   FALSE -> implpart.CanvasInteractionHandlerActive;
+   ReleaseCapture;
+   Terminated;
+   
+#)
 
 -- CanvasGetPointerBody: descriptor --
-(# #)
+(# 
+do implpart.where.x -> thePoint.x;
+   implpart.where.y -> thePoint.y;
+#)
 
 -- CanvasIsModifierOnBody: descriptor --
-(# #)
+(# 
+do (if themodifier 
+    // 0 then (* NoModifier *)
+       false -> value;
+       (* //VK_CAPITAL then VK_CAPITAL -> isVKeyToggled -> value; *)
+    else
+       theModifier -> isVKeyDown -> value;
+       
+       (* 'isVKeyDown= ' -> screen.putText;
+        *        (if value then
+        *            'TRUE' -> putline;
+        *         else
+        *            'FALSE' -> putline;
+        *        if);
+        *)
+   if);
+#)
 
 -- CanvasTerminateCondition: dopart --
-do INNER
+do INNER;
    
 -- CanvasDoubleClickBody: dopart --
-do 
+do implpart.doubleClickPossible -> value;
    
 -- CanvasMMtoPixel: descriptor --
-(# #)
+(# 
+do 'CanvasMMtoPixel not impl ' -> putline;
+#)
 
 -- CanvasPixelToMM: descriptor --
-(# #)
+(# 
+do 'CanvasPixelToMM not impl ' -> putline;
+#)
 
 -- OpenCanvas: dopart --
-do
+do this(bifrostCanvas).interfaceObjectID -> implPart.windowId;
+   implPart.windowId -> GetDC -> implpart.hdc;
+   &RectangleList[] -> implpart.DamagedList[];
+   implpart.DamagedList.init;
+   &implpart.bifrostCanvasMethods[] -> theMethods;   
+   (implpart.hdc,COLOR_WINDOW -> GetSysColor) -> SetBkColor;
+   objectPool.scan
+   (# type:: win32Fonts;
+   do current[] -> implpart.theWin32Fonts[];
+   #);
+   (if implpart.theWin32Fonts[]=NONE then
+       &win32Fonts[] -> implpart.theWin32Fonts[];
+       implpart.theWin32Fonts.theFontTable.init;
+       implpart.theWin32Fonts[]
+         -> objectPool.Put
+       (# alreadyThere::
+            (# 
+            do 'ERROR, objectPool already contains theWin32Fonts!!' 
+                 -> screen.putline;
+            #);
+       #);
+       implpart.hdc -> implpart.theWin32Fonts.initBifrostFonts;
+   if);
+   
+   (if ((implpart.hdc,TA_BASELINE+TA_LEFT) -> SetTextAlign)=GDI_ERROR then
+       'SetTextAlign failed. Errorcode= ' -> screen.putText; 
+       GetLastError -> putInt; newline;
+   if);
+   
+   (* (implpart.hdc, 15 -> GetStockObject, 0) -> SelectPalette; *)
+   
+   INNER;
+   updatecoordinatesystem;
+   true -> implpart.opened;
+   true -> implpart.firstRefresh;
    
 -- changecanvasborderwidth: dopart --
-do
+do value -> implpart.borderwidth;
    
 -- canvasborderwidth: dopart --
-do 
+do implpart.borderwidth -> value;
