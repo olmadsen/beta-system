@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-08-21 04:22:15 $, SID: $Revision: 1.12 $
+ * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-08-22 02:08:25 $, SID: $Revision: 1.13 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,45 +9,39 @@
 #include "beta.h"
 #include "crun.h"
 
-asmlabel(AlloC, "
-	mov	%i1,%o0
-	call	_CAlloC
-	mov	%i2,%o1
-");
-
-struct Component *
-CAlloC(struct ProtoType *prototype, struct Object *origin)
+ParamOriginProto(AlloC)
 {
-    /* AlloC calls BETA code, thus we need to make AlloC's stack look
-       like BETA stack, and use our BETA register convention.
-       Summary: %o0 - 3 (%i0 - 3): only references or garbage */
+  /* AlloC calls BETA code, thus we need to make sure GC can
+     find and update the reference in comp. */
 
+    DeclReferences1(struct Component *comp) 
     GCable_Entry
+    FetchOriginProto
 
-    Ck(origin);
-      
-#define theComp (cast(Component) GCreg3)
+#ifdef DEBUG_IOA
+    if (origin) /* origin is none first time, and only there */
+      Ck(origin);
+#endif
 
-    theComp = cast(Component) IOAcalloc(ComponentSize(prototype->Size));
+    comp = cast(Component) IOAcalloc(ComponentSize(proto->Size));
 
     /* The new Component is now allocated, but not initialized yet! */
 
-    /* printf("\nAllocateComponent: theComp = %x", theComp); */
+    /* printf("\nAllocateComponent: comp = %x", comp); */
 
     /* Initialize the structual part; prototype, age etc. */
-    theComp->Proto = ComponentPTValue;
-    theComp->GCAttr = 1;
-    theComp->StackObj = cast(StackObject) 0;
-    theComp->CallerObj = cast(Object) 0;
-    theComp->CallerComp = cast(Component) 0;
-    theComp->CallerLSC = 0;
+    comp->Proto = ComponentPTValue;
+    comp->GCAttr = 1;
+    comp->StackObj = cast(StackObject) 0;
+    comp->CallerObj = cast(Object) 0;
+    comp->CallerComp = cast(Component) 0;
+    comp->CallerLSC = 0;
 
-    setup_item(cast(Item) &theComp->Body, prototype, origin);
+    setup_item(cast(Item) &comp->Body, proto, origin);
 
-    (cast(Item) &theComp->Body)->GCAttr = - headsize(Component)/4;
+    (cast(Item) &comp->Body)->GCAttr = - headsize(Component)/4;
 
-    (* (void (*)())prototype->GenPart)(cast(Item) &theComp->Body);
-    return theComp;
+    CallBetaEntry(proto->GenPart,&comp->Body);
+
+    ReturnDual(comp);
 }
-
-

@@ -11,17 +11,20 @@
 
 static TerminateBasicComponent() { BetaExit(0); }
 
-void AttBC(ref(Component) theComp)
+ParamThisComp(AttBC)
 {
-    register void (*entrypoint)();
+    register long *entrypoint;
 
+#ifdef sparc
     register ref(CallBackFrame) callBackFrame asm("%l5");
     register ref(RegWin)	nextCompBlock asm("%l6");
     register long 		level 	      asm("%l7");
+#endif
 
     GCable_Entry
+    FetchThisComp
 
-    Ck(theComp);
+    Ck(comp);
     /* Push the bottom component block. */
     /* Terminates the list of component blocks on the stack. */
 
@@ -29,24 +32,26 @@ void AttBC(ref(Component) theComp)
     nextCompBlock = cast(RegWin) 0;
     level = 0;
 
-    BasicItem = cast(Item) &theComp->Body;
+    BasicItem = cast(Item) &comp->Body;
 
     ActiveCallBackFrame = 0; lastCompBlock = cast(ComponentBlock) StackPointer;
     
-    getret(theComp->CallerLSC);
+    getret(comp->CallerLSC);
 
-    ActiveComponent = theComp;
+    ActiveComponent = comp;
 
-    entrypoint = ((void (**)()) BasicItem->Proto)[-1];
-    /* ?? should set theComp = 0 as done in Att.BasicComp.run */
-    (*entrypoint)(&theComp->Body);
+    /* ?? should set comp = 0 as done in Att.BasicComp.run */
+    CallBetaEntry( *((long *)BasicItem->Proto-1), &comp->Body);
 
     /* TerminateBasicComponent: */
     BetaExit(0);
 
+
+#ifdef sparc
     /* The following volapyk is to fool gcc into beliving that
      * callBackFrame, nextCompBlock and level is used in this function */
 
     asm(""::"r" (callBackFrame), "r" (nextCompBlock), "r" (level));
+#endif
 }
 

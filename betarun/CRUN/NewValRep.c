@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: NewValRep.c,v $, rel: %R%, date: $Date: 1992-08-19 15:45:12 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: NewValRep.c,v $, rel: %R%, date: $Date: 1992-08-22 02:08:50 $, SID: $Revision: 1.5 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -45,6 +45,7 @@ void CNewVR(int range,
     fprintf(output, "NewValRep: wrong prototype\n");
     exit(1);
   }
-  if (!inIOA((long *)theObj+offset)) CCheckRefAsgn((long *)theObj+offset);
+  if (!inIOA((long *)theObj+offset))
+    CCheckRefAsgn((struct Object **)theObj+offset);
 }
   

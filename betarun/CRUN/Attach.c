@@ -14,7 +14,10 @@
 #include "beta.h"
 #include "crun.h"
 
-asmlabel(Att, "ba _CAtt; mov %i0, %o1");
+asmlabel(Att, "
+	b	_CAtt
+	mov	%i0, %o1
+");
 
 ref(Component)
 CAtt(ref(Component) theComp, ref(Object) theObj)

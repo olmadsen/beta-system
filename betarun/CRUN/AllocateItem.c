@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateItem.c,v $, rel: %R%, date: $Date: 1992-08-21 04:22:11 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: AllocateItem.c,v $, rel: %R%, date: $Date: 1992-08-22 02:08:34 $, SID: $Revision: 1.10 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,36 +9,21 @@
 #include "beta.h"
 #include "crun.h"
 
-asmlabel(AlloI, "
-	mov	%i1,%o0
-	call	_CAlloI
-	mov	%i2,%o1
-");
-
-struct Item *
-CAlloI(ref(ProtoType) prototype, ref(Object) origin)
+ParamOriginProto(AlloI)
 {
-    ref(Item) theItem;
-
+    DeclReferences1(struct Item *item)
     GCable_Entry
+    FetchOriginProto
 
     Ck(origin);
 
-    theItem = cast(Item) IOAcalloc(4*prototype->Size);
+    item = (struct Item *) IOAcalloc(4*proto->Size);
 
     /* The new Object is now allocated, but not initialized yet! */
 
-    setup_item(theItem, prototype, origin);
+    setup_item(item, proto, origin);
 
-    /* (* (void (*)())prototype->GenPart)(theItem);
-     *
-     * Jump to it instead; Avoid RunTime Stack in the middle.
-     */
-
-    asm("jmpl %0, %%g0;restore %1, 0, %%o0"::
-	"r" (prototype->GenPart), "r" (theItem));
+    CallBetaEntry(proto->GenPart,item);
     
-    return theItem;
+    ReturnDual(item);
 }
-
-

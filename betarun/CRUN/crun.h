@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-21 04:32:02 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-22 02:08:59 $, SID: $Revision: 1.10 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -8,9 +8,8 @@
 #ifndef _CRUN_H_
 #define _CRUN_H_
 
-#define asmlabel(label, code) \
-  asm(".text;.align 4;.global " #label ";" #label ":" code)
-
+extern void	      * CAlloC();
+extern void	      * CAlloI();
 extern ref(ValRep) 	AlloVR();
 extern char 	      * LVRAAlloc();
 extern char 	      * LVRAByteAlloc();
@@ -129,7 +128,14 @@ setup_item(ref(Item) theItem,
   ((int *)theItem)[prototype->OriginOff] = (int) origin;
 }
 
+#ifdef DEBUG_IOA
+/* Consistency checks - Checks for valid references */
 #define Ck(r) \
   (r && Claim(inIOA(r) || inAOA(r) || inLVRA(r), \
 	      #r ": none or inside IOA, AOA, or LVRA"))
+
+#else
+#define Ck(r)
+#endif
+
 #endif

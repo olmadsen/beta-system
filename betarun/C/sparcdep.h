@@ -1,10 +1,13 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-08-19 15:41:46 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-08-22 02:06:55 $, SID: $Revision: 1.4 $
  * by Tommy Thorn
  */
 
 /* SPARC Specifics, requires the use of GCC */
+
+#ifndef _SPARC_H_
+#define _SPARC_H_ 1
 
 struct RegWin {
     int l0, l1, l2, l3, l4, l5, l6, l7;
@@ -79,8 +82,9 @@ register long   retAddress   asm("%i7");
 #undef inIOA
 #endif
 
-/* Isn't life swell? */
+/* Isn't life swell? This generates optimal code $^)*/
 #define inIOA(x) (((unsigned) x - (unsigned) IOA) < (unsigned) IOATopoff)
+
 
 /* Defining this in the head of a module, together with a
    GCable_Entry and GCable_Exit in every routine in that module makes
@@ -97,6 +101,43 @@ register volatile void *GCreg3 asm("%o4");
 #define GCable_Entry \
   StackPointer = FramePointer-16; /* = 64 */ \
   GCreg0 = GCreg1 = GCreg2 = GCreg3 = 0;
-
 #endif
 
+#define DeclReferences1(r1)		\
+  register r1 asm("%o4");
+
+#define asmlabel(label, code) \
+  asm(".text;.align 4;.global " #label ";" #label ":" code)
+
+/* C procs that gets origin and proto, and return an Object
+   That mess of code just moves (i2,i1)->(o0,o1) and jumps
+   to Cname
+*/
+
+#define ParamOriginProto(name)		          \
+  __asm__(".text;.align 4;.global "#name";"#name":\
+          mov %i1,%o1;b _C"#name";mov %i2,%o0");\
+ void *C##name(struct Object *origin, struct ProtoType *proto)
+
+#define FetchOriginProto
+
+/* C procs that gets this and component */
+#define ParamThisComp(name)			  \
+  __asm__(".text;.align 4;.global "#name";"#name":\
+          mov %i0,%o0;b	_C"#name";mov %i1,%o1");   \
+ void C##name(struct Item *this, struct Component *comp)
+
+#define FetchThisComp
+
+/* On the SPARC we need to skip the first instruction */
+#define CallBetaEntry(entry,item)			\
+  (* (void (*)()) ((long*)entry+1) )(item)
+
+/* Returns value in both C return reg, %o0, and BETA return reg %i1
+   so the routine call be called from both C and BETA ;^)
+ */
+#define ReturnDual(value)					\
+  __asm__("mov %0, %%i0;ret;restore %%i0, 0, %%i1"::"r" (value)); \
+  return (void *) 0 /* dummy */
+
+#endif

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-08-21 04:31:59 $, SID: $Revision: 1.13 $
+ * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-08-22 02:08:54 $, SID: $Revision: 1.14 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,18 +9,12 @@
 #include "beta.h"
 #include "crun.h"
 
-asmlabel(AlloS, "
-	mov	%i1,%o0
-	call	_CAlloS
-	mov	%i2,%o1
-");
-
-ref(Structure)
-CAlloS(struct ProtoType *proto, struct Object *origin)
+ParamOriginProto(AlloS)
 {
     register ref(Structure) newStruct;
 
     GCable_Entry
+    FetchOriginProto
 
     /* Allocate a StructObject. */
 
@@ -30,7 +24,8 @@ CAlloS(struct ProtoType *proto, struct Object *origin)
     newStruct->GCAttr = 1;
     newStruct->iOrigin = origin;
     newStruct->iProto = proto;
-    return newStruct;
+
+    ReturnDual(newStruct);
 }
 
 ref(Structure) ThisS(ref(Object) this)
@@ -64,14 +59,14 @@ ref(Item) AlloSI(ref(Structure) theStruct)
 {
     GCable_Entry
     Ck(theStruct);
-    return CAlloI(theStruct->iProto, cast(Object) theStruct->iOrigin);
+    return CAlloI(cast(Object) theStruct->iOrigin, theStruct->iProto);
 }
 
 ref(Component) AlloSC(ref(Structure) theStruct)
 {
     GCable_Entry
     Ck(theStruct);
-    return CAlloC(theStruct->iProto, cast(Object) theStruct->iOrigin);
+    return CAlloC(cast(Object) theStruct->iOrigin, theStruct->iProto);
 }
 
 int EqS(ref(Structure) arg1, ref(Structure) arg2)
