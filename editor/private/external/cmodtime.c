@@ -17,8 +17,12 @@
 #define SYSV
 #endif
 
-#if defined(linux) || defined(nti)
-#include <utime.h>
+#if defined(linux) || defined(nti_bor)
+# include <utime.h>
+#else 
+# if defined(nti_ms)
+#  include <sys/utime.h>
+# endif
 #endif
 
 
@@ -29,7 +33,8 @@ int setEntryModtime(path, time)
   if((char)(*path)=='\0')
     return -1; 			   /* test for empty string */
 #if defined(SYSV) || defined(nti)
-  { struct utimbuf times;
+  { 
+    struct utimbuf times;
     times.actime=times.modtime=time;
     if(utime(path,&times)<0) return -1;
   }
