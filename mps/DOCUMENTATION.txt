@@ -1,0 +1,163 @@
+Documentation of MPS (file and storage structures)
+--------------------------------------------------
+
+This file contains the detailed documentaion of the MPS file structures, 
+as well as the storage structures used by MPS during runtime.
+
+Please note, that this documentation may not be totally accurate, since 
+it is written partly based on experience, and partly based on the code, 
+implementing MPS, thus errors may occur.  Please also note, that this 
+documentation (for the same reasons) are not complete.  Those parts that 
+are documented, are those for which we have had a need for documentation 
+(e.g. in order to understand MPS in order to make changes, etc.)
+
+AST-file stucture
+.................
+
+An AST-file (xx.ast or xx.astL) is:
+
+	Integer, containing a magic number (groupBlackNumber=131453937)
+	Integer containing ?total size of fragment forms in this group.
+	Integer, containing the number of fragment forms in this group
+	
+	For each fragment form in this group, there are the following:
+		Integer describing type of fragment form
+		Text, containing the local name of this fragment form
+		If this form is linkType, then:
+			Text, containing ????
+			Text, containing local name???
+
+	Integer, containing the number of properties in this fragment 
+	group.
+	For each property in this group, there are the following:
+		Text, containing the name of this property
+		Integer, containing the number of values of this property
+		For each value, there are the following:
+			Integer, containing the type of the value.
+			If constType: 	Integer
+			   stringType:	Text
+			   nameType:	Text
+
+	For each fragment form in this group, there are then the following:
+		Integer, containing the size of this fragment form (curtop)
+		Integer, containing the index of the root ast of this form 
+			(rootIndex)
+		Integer, containing the grammar version (gramVersion)
+		Text, containing the grammar name (gram.grammarIdentification)
+		Integer, containing the index to the first slot in this form 
+			(firstSlot)
+		Integer, containing the modification status 
+			(modificationStatus)
+		Repetition, containing the properties of this form.
+
+		Integer, containing the number of fragments imported in this 
+			form.
+		For each fragmeng imported:
+			Text, containing the name of the imported fragment
+
+	For each fragment form in this group, there are then the following:
+		Repetition, containing the actual ast-data.
+
+The sequence of these elements of the file is important.  If the fragment 
+group is only semi-opened (i.e. not realOpen), then only the data until the 
+last sequence of information on fragment forms are actually read.  This last 
+list of repetitions (one for each fragment form) is the major part of the 
+data in the entire fragment group file.
+
+
+MPS fragment data structure
+...........................
+
+This is only a very limited description.  More will be added as needs 
+demands it.
+
+A fragment in MPS consists at runtime of a number of attributes.  The 
+most important attribute is the private attribute 'a'.  This attribute 
+contains the actual AST, encoded as an integer repetition.  An AST (MPS 
+data structure) is referring to a part of a fragment AST (i.e. the AST 
+referred to by the 'rootast' attribute of an fragment).
+
+Internally in MPS, references internal to ASTs (references to AST nodes) 
+are represented in the form of AST index'es.  An AST index is an integer, 
+which is a reference into the 'a' repetition.  AST index'es are limited 
+to 17 bits, i.e. the values between 0..131071.  This limitation is for 
+efficiency reasons (saving storage when AST index'es are stored in AST's).  
+An AST index is actually not referring directly into the 'a' attribute.  
+It is referring into every 4'th position of the 'a' attribute, implying 
+that the maximum size of the 'a' repetition is 131.071*4 = 524.284 (i.e. 
+approx. 1/2 MB).
+
+A fragment has, besides the 'a' attribute a 'curtop' attribute.  This 
+attribute contains the next free index in 'a'. 
+
+AST nodes  are always allocated in 'a' from 'curtop', i.e. no storage 
+are ever reclaimed.  The AST nodes are allocated as sequential words 
+in 'a', starting from 'index' - i.e. every AST node (when represended 
+by an AST object) has an 'index' attribute, which is referring to the 
+first word of the representation of this node in 'a'.
+
+We can picture this as follows:
+
+	                |      ....     |
+	                -----------------
+	      index ->  |  first word   |
+	                -----------------
+	                |  second word  |
+	                -----------------
+	                |     ....      |
+
+The first word has the following layout:
+
+	bit  0:     'bit7' - iff true, this node represents a slot
+	bit  1:     semantic error - iff true, this node has a semantic 
+			error
+	bit  2:     last brother - iff true, this node is the last 
+			brother.
+	bits 4..12: symbol - the integer value representing the grammar 
+			symbol of this node
+
+The second word has the following layout:
+
+	byte 0+1:    brother inx - index of next brother 
+			(if nagative: -index to father)
+	byte 2+3:    son inx - index of the first son of this node
+
+If the type of node is _not_ lexemText (nameAppl, nameDecl, etc.), then 
+the layout is as above.  However, if the grammar specifies semantic 
+attributes for the given node type, these semantic attributes are stored 
+in the third, etc. words (the number of words is specified in the grammar 
+for the node types - default is 0).  To illustrate, if we assume, that 
+the node type has specified one semantiv attribute, the layout will be:
+
+	                |      ....     |
+	                -----------------
+	      index ->  |  first word   |
+	                -----------------
+	                |  second word  |
+	                -----------------
+	                |  third word   |
+	                -----------------
+	      index ->  |     ....      |
+
+where the third word contains the semantic attribute.  The 'index ->' 
+indicates the beginning of another node.
+
+If the type of node is lexemText (nameAppl, nameDecl, etc.),  the layout 
+is differently
+
+	                |      ....     |
+	                -----------------
+	      index ->  |  first word   |
+	                -----------------
+	                |  second word  |
+	                -----------------
+	      index ->  |     ....      |
+
+
+The first word is identical to the general layout.  
+
+The second word has the following new layout:
+
+	byte 0+1:   length of the text of this lexemText
+	byte 2+3:   index in 'a' where the text of this lexemText is stored
+
