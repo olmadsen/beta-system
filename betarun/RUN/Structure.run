@@ -4,7 +4,7 @@ AlloS: public
      { Allocate a StructObject. }
      
      { Input variable. }
-     origin: Object    = RegAdr;
+     origin: Object    = DataReg1;
      proto:  ProtoType = RegArg;
      
      { Output variable. }
@@ -37,7 +37,9 @@ AlloS: public
      (if MacOS then pop AddrReg2 if);
      { The IOA heap is full, so we need a garbage collection.             }
      4 -> ReqObjectSize;      { Set the requested Object Size.            }
+     push origin; { save (and force GC update of) origin }
      call DoGC;               { Call the Garbage Collector.               }
+     pop origin;              { restore (updated) origin }
      goto AlloS               { Go back to the beginning of this routine. }
   #);
 
@@ -49,53 +51,69 @@ ThisS: public
      result: Long   = DataRegA;
      
      { Used variable.  }
-     theObj: Object    = RegObj;
-     theStruct: Structure = RegArg;
-     origin: Object    = RegAdr;
-     proto:  ProtoType = RegAdr;
-     Index:  Word      = DataReg1;
-     newTop: DataArea  = AddrReg1;
-     newObj: Object  = AddrReg1
+     theStruct: Structure = AddrReg2;
+    
+     newTop:    DataArea  = AddrReg1;
+     newObj:    Object    = AddrReg1;
+     theObj:    Object    = RegObj; { Current Object }
+     
+     proto:     ProtoType = RegArg; { saved and restored }
+     
+     origin:    Object    = DataReg2;
+
+     Index:     Word      = DataReg1;
   do
+     (if MacOS then push AddrReg2 if);
      IOATop -> theStruct;
      theStruct[16][] -> newTop;
      (if newTop > IOALimit then goto GC if);
      newTop -> IOATop;
      
-     { Initialize the structual part of the StackObject.             }
+     { Initialize the structual part of the StrucObject. }
      
      -3      -> theStruct.ProtoType;
      1       -> theStruct.Age;
      
+     push RegArg; { save RegArg }
      theObj.ProtoType -> proto;
      
-     proto.OrigOff -> Index;
-     theObj[Index*4] -> newObj;
+     proto.OrigOff    -> Index;
+     theObj[Index*4]  -> newObj; { Find origin = THIS }
      newObj.ProtoType -> proto;
-     proto.OrigOff -> Index;
-     proto   -> theStruct.iProto;
-     newObj[Index*4] -> origin;
-     origin  -> theStruct.iOrigin;
+     proto            -> theStruct.iProto;
+     
+     proto.OrigOff    -> Index;
+     newObj[Index*4]  -> origin; { Find origin = origin of THIS }
+     origin           -> theStruct.iOrigin;
      
      theStruct -> result;
      
+     pop RegArg; { save RegArg }
+     
+     (if MacOS then pop AddrReg2 if);
      return;
      
      GC:
      { The IOA heap is full, so we need a garbage collection.             }
      4 -> ReqObjectSize;      { Set the requested Object Size.            }
+     (if MacOS then pop AddrReg2 if);
      call DoGC;               { Call the Garbage Collector.               }
      goto ThisS               { Go back to the beginning of this routine. }
   #);
 
 AlloSI: public
   (#
+     { Allocate item given struc object }
+     
      { Input variable. }
      theStruct: Structure = RegArg;
      
+     { output variables }
+     Implicit:  DataArea  = RegArg;
+
      { Used variable. }
-     origin:    Object    = RegAdr;
-     proto:     ProtoType = RegArg
+     origin:    Object    = DataReg1;
+     proto:     ProtoType = RegArg;
   do
      theStruct.iOrigin -> origin;
      theStruct.iProto  -> proto;
@@ -105,11 +123,16 @@ AlloSI: public
 
 AlloSC: public
   (#
+     { Allocate component given struc object }
+     
      { Input variable. }
      theStruct: Structure = RegArg;
      
+     { output variables }
+     Implicit:  DataArea  = RegArg;
+     
      { Used variable. }
-     origin:    Object    = RegAdr;
+     origin:    Object    = DataReg1;
      proto:     ProtoType = RegArg
   do
      theStruct.iOrigin -> origin;
