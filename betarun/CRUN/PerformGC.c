@@ -8,7 +8,16 @@
 #include "beta.h"
 #include "crun.h"
 
-
+#ifdef RTDEBUG
+#define CkReg(value, reg)                                                   \
+{ struct Object *theObj = (struct Object *)(value);                         \
+  if (theObj && !(inBetaHeap(theObj) && isObject(theObj)))                  \
+    fprintf(output,                                                         \
+	    "DoGC: ***Illegal reference register %s: 0x%x\n", reg, theObj); \
+}
+#else
+#define CkReg(reg)
+#endif
 
 void doGC() /* The one called from IOA(c)alloc */
 {
@@ -31,6 +40,10 @@ void doGC() /* The one called from IOA(c)alloc */
 		  /*"\tSTWS,MA\t%r8,4(0,%r14)\n"*/
 		  "\tSTW\t%r14,RR'RefSP(0,%r1)\n"
 		  );
+    CkReg(*(RefSP-1), "%r7");
+    CkReg(*(RefSP-2), "%r6");
+    CkReg(*(RefSP-3), "%r4");
+    CkReg(*(RefSP-4), "%r3");
     IOAGc();
     asm volatile ("\tLDIL\tLR'RefSP,%r1\n"
 		  "\tLDW\tRR'RefSP(%r1),%r14\n"
