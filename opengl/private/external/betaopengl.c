@@ -4,10 +4,11 @@
 
 #include <stdio.h>
 
+#if 0
 #ifndef nti
 extern long glwMDrawingAreaWidgetClass;
 #endif
-
+#endif
 
 
 long FloatToLong(float c)
@@ -76,11 +77,13 @@ WINGDIAPI void APIENTRY gluPartialDisk(void*,double,double,int,int,double,double
 WINGDIAPI void APIENTRY gluNurbsProperty(void*,int,float);
 
 /*----------HELPERS-------------*/
+#if 0
 #ifndef nti
 long openGLWidgetClass(void) 
 {
   return glwMDrawingAreaWidgetClass;
 }
+#endif
 #endif
 
 #ifdef nti
