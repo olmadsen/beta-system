@@ -14,8 +14,8 @@
 #endif
 
 /* COM prototypes */
-#define COM 1 /* RUN: must match define in Declaration.run */
-/*#undef COM*/
+/* #define COM 1 */ /* RUN: must match define in Declaration.run */
+#undef COM
 
 #ifdef RTDEBUG
 /* Trigger unconditional GC at every allocation.
@@ -169,6 +169,13 @@
 
 #define headsize(x) (sizeof(x) - sizeof(long))
 
+#undef RTSTAT /* only set when measuring! */
+#ifdef RTSTAT
+#  define STAT_AOA(code)  if (StatAOA ) { code; }
+#else
+#  define STAT_AOA(code)
+#endif
+
 /********* Debug macros *******/
 #ifdef RTDEBUG
 #ifdef MT
@@ -176,7 +183,6 @@
 #else
 #  define DEBUG_MT(code)
 #endif
-#  define STAT_AOA(code)  if (StatAOA ) { code; }
 #  define DEBUG_IOA(code)  if( DebugIOA )  { code; }
 #  define CHECK_HEAP(code)  if( CheckHeap )  { code; }
 #  define DEBUG_ALLOI(code)  if( DebugAlloI )  { code; }
@@ -216,7 +222,6 @@
 #  define TRACE_GROUP(code)
 #  define TRACE_DUMP(code)
 #  define TRACE_CODEENTRY(code)
-#  define STAT_AOA(code)
 #endif
 
 #ifdef RTINFO

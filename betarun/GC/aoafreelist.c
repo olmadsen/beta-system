@@ -65,9 +65,16 @@
 			      * Make sure there are enoudh to handle 2^31.
 			      */
 
-/* Controls when a block is split into a freelist for the small blocks. */   
-#define AOAFreeListMorePlease 100
-#define AOAFreeListTooMany    200
+/* Controls when a block is split into a freelist for the small blocks:
+ * If there are less than AOAFreeListPleaseMoreBytes in the freelist for a 
+ * given restsize, it is okay to split a block generating one of that size
+ * even if that freelistindex is below MinGap.
+ * If there are more than AOAFreeListTooManyBytes in a freelist, MinGap is
+ * set so that no chunks are inserted through splitting blocks in the
+ * freelist.
+ */   
+#define AOAFreeListPleaseMoreBytes 8192
+#define AOAFreeListTooManyBytes  (2*8192)
 
 /* LOCAL TYPES */
 typedef struct AOAFreeChunk {
@@ -160,7 +167,7 @@ static int AOAWantsMore(long numbytes)
   
   index = AOAFreeListIndex(numbytes);
   
-  return (AOAFreeListSize[index] < AOAFreeListMorePlease);
+  return (AOAFreeListSize[index]*numbytes < AOAFreeListPleaseMoreBytes);
 }
 
 /* AOAInsertFreeElement:
@@ -342,6 +349,7 @@ Object *AOAAllocateFromFreeList(long numbytes)
 #endif
   newObj = (Object *)AOAFindInFree(numbytes);
   STAT_AOA({
+    fprintf(output, "AOAalloc:%d:%d\n", (int)newObj, (int)numbytes);
     if (newObj) {
       objectsInAOA++;
       sizeOfObjectsInAOA += numbytes;
@@ -432,7 +440,7 @@ static long doAnalysis(void)
   for (index = 0; index < FreeListSmallMAX ; index++) {
     addsize /= 2;
     addsize += AOAFreeListSize[index];;
-    if (addsize > AOAFreeListTooMany) {
+    if (addsize*AOASmallIndex2Size(index) > AOAFreeListTooManyBytes) {
       maxindex = index;
     }
   }
@@ -517,6 +525,12 @@ long AOAScanMemoryArea(long *start, long *end)
 	} else {
 	  size = 4 * ObjectSize((Object *)current);
 	  STAT_AOA({
+	    if (freeChunkStart == current) {
+	      fprintf(output, "AOAfree:%d:%d\n", (int)current, (int)size);
+     	    } else {
+	      fprintf(output, "AOAfree:%d:%d:C:%d \n",
+		      (int)current, (int)size, (int)freeChunkStart);
+	    }
 	    objectsInAOA--;
 	    sizeOfObjectsInAOA -= size;
 	    collectedMem += size;
@@ -554,7 +568,7 @@ void GCInfo(void)
   });
 }
 
-#ifdef RTDEBUG
+#if defined(RTDEBUG) || defined(RTSTAT)
 /* AOADisplayMemoryArea: */
 void AOADisplayMemoryArea(long *start, long *end) 
 {

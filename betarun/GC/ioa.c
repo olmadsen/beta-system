@@ -205,23 +205,30 @@ void IOAGc()
 
     DEBUG_CODE(dump_aoa=(AOANeedCompaction && DumpAOA));
     
+#ifdef RTSTAT
+    if (StatAOA && AOABaseBlock) {
+      AOANeedCompaction = TRUE;
+    }
+#endif
+
     if (AOANeedCompaction || forceAOAGC) {
+      if (!noAOAGC) {
         AOAGc();
-        forceAOAGC = FALSE;
+      }
+      forceAOAGC = FALSE;
     }
     
     if (tempAOAroots) {
-        /* ToSpace was not big enough to hold both objects and table.
-         * Free the table that was allocated by saveAOAroot().
-         */
-        tempAOArootsFree();
-    }
-    
+      /* ToSpace was not big enough to hold both objects and table.
+       * Free the table that was allocated by saveAOAroot().
+       */
+      tempAOArootsFree();
+    }    
     
 #ifdef RTDEBUG
     else {
-        /* Clear the part of ToSpace used for AOArootstable */
-        memset(AOArootsPtr, 0, AOArootsLimit-AOArootsPtr);
+      /* Clear the part of ToSpace used for AOArootstable */
+      memset(AOArootsPtr, 0, AOArootsLimit-AOArootsPtr);
     }
 #endif
   

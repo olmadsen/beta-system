@@ -130,7 +130,7 @@ static void AOANewBlock(long newBlockSize)
     /* Insert the new block in the freelist */
     AOAInsertFreeBlock((char *)AOATopBlock -> top, newBlockSize);
     INFO_AOA({
-      fprintf(output,"Allocated new block of %dkb\n", 
+      fprintf(output,"AOA: Allocated new block of %dkb\n", 
 	      (int)newBlockSize/1024);
       fflush(output);
     });
@@ -208,7 +208,6 @@ Object *AOAallocate(long numbytes)
   Object *newObj;
     
   Claim(numbytes > 0, "AOAallocate: numbytes > 0");
-  STAT_AOA(fprintf(output,"#(AOAallocate(%d))", (int)numbytes));
    
   /* Try to find a chunk of memory in the freelist */
   newObj = AOAAllocateFromFreeList(numbytes);
@@ -234,7 +233,7 @@ Object *AOAallocate(long numbytes)
   /* IOA/NewCopyObject handles that we return 0
    * by just moving the object to ToSpace once more.
    */
-  if (IOAActive && IOALooksFullCount==0) {
+  if (IOAActive && IOALooksFullCount==0 && !noAOAGC) {
     AOANeedCompaction = TRUE;
     return 0;
   }
@@ -435,6 +434,11 @@ void AOAGc()
     
   /* Scan AOA and insert dead objects in the freelist */
     
+  INFO_AOA({
+    fprintf(output, "AOA-%d startsweep, marktime=%dms\n", 
+	    (int)NumAOAGc, (int)(getmilisectimestamp() - starttime));
+  });
+
   /* Clear the free lists */
   DEBUG_AOA(fprintf(output,"[AOACleanFreeList]\n"));
   AOACleanFreeList();

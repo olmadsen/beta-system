@@ -15,6 +15,7 @@
 #endif
 
 #ifdef nti
+#  define SOCKLEN_T int
 #  ifdef nti_gnu
 #    include <Windows32/Sockets.h> 
 #  else
@@ -22,6 +23,7 @@
 #  endif
 #  include <limits.h>
 #else
+#  define SOCKLEN_T socklen_t
 #  define SUPPORT_TIMESTAMPING
 #  include <fcntl.h>
 #  include <unistd.h>
@@ -183,10 +185,6 @@ unsigned long getTimeStamp(long fd)
 
 #define LINGER_ONOFF 0
 #define LINGER_INTERVAL 0
-
-#ifndef linux
-#define socklen_t int
-#endif
 
 /********************************************************************
  *                                                                  *
@@ -776,7 +774,7 @@ int createPassiveSocket(long *port, int nonblock)
   /* If the port number was 0, we must lookup the randomly chosen no. */
   if (!*port) {
     size = sizeof(sockaddr);
-    if (0 > getsockname(listenSock,(struct SOCKADDR_type*)&sockaddr,(socklen_t*)&size)) {
+    if (0 > getsockname(listenSock,(struct SOCKADDR_type*)&sockaddr,(SOCKLEN_T*)&size)) {
       INFO_SOCKETS("createPassiveSocket,4");
 #ifdef nti
       ERRNO = WSAGetLastError();
@@ -834,7 +832,7 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
 
   do 
   {
-    newSock = accept(sock, &from, (socklen_t*)&fromaddrlen);
+    newSock = accept(sock, &from, (SOCKLEN_T*)&fromaddrlen);
     
 #ifdef nti
     if (newSock == INVALID_SOCKET) 
@@ -879,7 +877,7 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
     struct sockaddr_in peer;
     int size = sizeof(peer);
 
-    if (0 > getpeername(newSock,(struct SOCKADDR_type*)&peer,(socklen_t*)&size)) 
+    if (0 > getpeername(newSock,(struct SOCKADDR_type*)&peer,(SOCKLEN_T*)&size)) 
     {
       INFO_SOCKETS("acceptConn,2");
 #ifdef nti
