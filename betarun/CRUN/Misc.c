@@ -191,7 +191,8 @@ void CCk(ref(Object) r)
 #ifdef crts
 
 /* Global address registers */
-char *a0,*a1,*a2,*a3,*a4,*a7;
+/*char *a0,*a1,*a2,*a3,*a4,*a7;*/
+long a0, a1, a2, a3, a4, a7; 
 long leave;
 
 /* New RT routines for crts */
@@ -218,6 +219,8 @@ int CallBackPar(off)
 
 void Trap()
 {
+  fprintf(output, "Trap called... Exiting\n");
+  exit(0);
 }
 
 char GetByte(unsigned long a, int byteNo /* 0-3 */)
@@ -351,7 +354,7 @@ jmp_buf *UseJmpBuf(int addr, int off)
   jmpInfoElem *p;
   jmp_buf *jbuf;
 
-  a0 = (char *)addr;                                
+  a0 = (long)addr;                                
   p = *(jmpInfoElem **)(addr+off); 
   reftop = p->refTop;                               
   CRTSjbp = p->jumpBuffer;
