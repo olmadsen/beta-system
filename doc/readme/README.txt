@@ -1,10 +1,10 @@
-Mjolner Informatics                                Phone:       +45 86 20 20 00
-Science Park Aarhus				   Fax.         +45 86 20 12 22
+Mjolner Informatics                                Phone:       +45 70 27 43 43
+Science Park Aarhus				   Fax.         +45 70 27 89 70
 Gustav Wieds Vej 10				   E-mail:  support@mjolner.com
 DK-8000 Aarhus C, Denmark			   URL:  http://www.mjolner.com
 
 
-                         The Mjolner System release 5.0
+                         The Mjolner System release 5.2
 
 			         RELEASE NOTES
 
@@ -39,7 +39,7 @@ You may find introductory material in the distribution in
 
 A summary of the most important changes in this release can be found
 in
-   	doc/changes/r5.0-CHANGES.html
+   	doc/changes/r5.2-CHANGES.html
                 
 Installation guide
 ==================
@@ -52,7 +52,7 @@ Software updates
 
 Updates and corrections for this release will be available at
 
-	http://www.mjolner.com/mjolner-system/download
+	http://www.mjolner.com/mjolner-system/download.html
 
 Limitations
 ===========
@@ -67,9 +67,9 @@ Mjolner System are listed in the following URLs:
 	For UNIX:
 	  Silicon Graphics MIPS/IRIX:
 	  http://www.daimi.au.dk/~beta/doc/faq/beta-language-faq.html#SectionIX
-	  SUN Sparc/Solaris:
+	SUN Sparc/Solaris:
 	  http://www.daimi.au.dk/~beta/doc/faq/beta-language-faq.html#SectionX
-	  Intel PC/Linux:
+	Intel PC/Linux:
 	  http://www.daimi.au.dk/~beta/doc/faq/beta-language-faq.html#SectionVIII
-	  Hewlett-Packard HP-PA/HP-UX:
+	Hewlett-Packard HP-PA/HP-UX:
 	  http://www.daimi.au.dk/~beta/doc/faq/beta-language-faq.html#SectionVII
