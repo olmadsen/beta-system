@@ -10,6 +10,9 @@
 
 ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORG)
 {
+  /* AllocateObjectRepetitionGeneral: Allocate repetition of plain items,
+   * inlined in repetition 
+   */
   DeclReference1(struct ObjectRep *, theRep);
   struct Item *item;
   GCable_Entry();
@@ -23,17 +26,15 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORG)
 
   Ck(theObj);
   Protect(theObj, 
-	  theRep = cast(ObjectRep)IOAcalloc(StatObjectRepSize(range,proto)));
+	  theRep = cast(ObjectRep)IOAcalloc(StatItemRepSize(range,proto)));
   Ck(theObj);
 
-  theRep->Proto = ObjectRepPTValue;
+  theRep->Proto = StatItemRepPTValue;
   theRep->GCAttr = 1;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
   theRep->iProto = proto;
   theRep->iOrigin = origin;
-  /* theRep->isComp = 0; not needed because of calloc */
-  /* theRep->isDynamic = 0; not needed because of calloc */
 
   SaveVar(theObj);
 
@@ -52,6 +53,9 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORG)
 
 ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORGC)
 {
+  /* AllocateObjectRepetitionGeneralComponent: Allocate repetition of plain components,
+   * inlined in repetition 
+   */
   DeclReference1(struct ObjectRep *, theRep);
   struct Component *comp;
   GCable_Entry();
@@ -68,14 +72,12 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORGC)
 	  theRep = cast(ObjectRep)IOAcalloc(StatCompRepSize(range,proto)));
   Ck(theObj);
 
-  theRep->Proto = ObjectRepPTValue;
+  theRep->Proto = StatCompRepPTValue;
   theRep->GCAttr = 1;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
   theRep->iProto = proto;
   theRep->iOrigin = origin;
-  theRep->isComp = 1;
-  /* theRep->isDynamic = 0; not needed because of calloc */
 
   SaveVar(theObj);
 
@@ -104,6 +106,8 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORGC)
 
 ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORR)
 {
+  /* AllocateObjectRepetitionReference: Allocate repetition of offline items
+   */
   DeclReference1(struct ObjectRep *, theRep);
   struct Item *item;
   GCable_Entry();
@@ -120,14 +124,12 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORR)
 	  theRep = cast(ObjectRep)IOAcalloc(DynObjectRepSize(range)));
   Ck(theObj);
 
-  theRep->Proto = ObjectRepPTValue;
+  theRep->Proto = DynItemRepPTValue;
   theRep->GCAttr = 1;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
   theRep->iProto = proto;
   theRep->iOrigin = origin;
-  /* theRep->isComp = 0; not needed because of calloc */
-  theRep->isDynamic = 1;
 
   SaveVar(theObj);
 
@@ -156,6 +158,8 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORR)
 
 ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORRC)
 {
+  /* AllocateObjectRepetitionComponent: Allocate repetition of offline components
+   */
   DeclReference1(struct ObjectRep *, theRep);
   struct Component *comp;
   GCable_Entry();
@@ -172,14 +176,12 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORRC)
 	  theRep = cast(ObjectRep)IOAcalloc(DynObjectRepSize(range)));
   Ck(theObj);
 
-  theRep->Proto = ObjectRepPTValue;
+  theRep->Proto = DynCompRepPTValue;
   theRep->GCAttr = 1;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
   theRep->iProto = proto;
   theRep->iOrigin = origin;
-  theRep->isComp = 0; 
-  theRep->isDynamic = 1;
 
   SaveVar(theObj);
 
