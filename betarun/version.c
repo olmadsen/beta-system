@@ -1,7 +1,11 @@
-char betarun_version[] = "11";
+char betarun_version[] = "12";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.11  2001/05/10 13:08:10  datpete
+ * Fixed sparc scanComponentStack for find_activation
+ * Betarun version number: 11
+ *
  * Revision 1.10  2001/05/10 12:53:00  corry
  * Make CRUN Makefile more pretty
  * Some support for rungen.exe dependency on x86 targets
