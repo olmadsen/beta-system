@@ -1,0 +1,295 @@
+ORIGIN '~beta/mps/astlevel';
+LIB_DEF 'betaastindex' '../lib';
+INCLUDE '~beta/mps/utils/getslotbinding';
+INCLUDE '~beta/mps/private/indexPrivate';
+INCLUDE 'gram';
+BODY 'private/newindexImpl';
+-- astInterfaceLib: Attributes --
+(* This form contains the patterns neccessary to interface the
+ * ast-interface to the beta-Compiler. This is done via "index",
+ * which gives an interface the ast's, which is functional equivalent
+ * to the old interface used by the compiler.
+
+ * This interface is only to be used by the compiler.
+ * All other tools needing to access beta-ast's should use
+ * the interface given in '~beta/betaast/betasematt'
+
+ * Please do not look at the code. In the search of efficiency it is
+ * some of the ugliest beta-code ever written
+ *
+ *
+ * for people interested in the interiors of the ast-implementation,
+ * here is the layout of an ast-node:
+ *
+ *   frag.a:       |   ..............   |
+ *		   ----------------------
+ *	 inx->     |   misc  |  comment |
+ *		   ----------------------
+ *		   | brother |  son     |
+ *		   ----------------------
+ *		   | attribute 1 of ast |
+ *		   ----------------------
+ *		   | attribute 2 of ast |
+ *		   ----------------------
+ *		   | .................. |
+ *
+ *
+ *   misc is 16 bit describing:
+ *		   byte 0           byte 1
+ *		   0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
+ *		   ---------------------------------
+ *		   |S|E|F|       label             |
+ *		   ---------------------------------
+ *
+ *	   F: 1 if this ast is last brother of the father.
+ *		   then "brother" is used as father-link instead of brother
+ *	    : 0 else
+ *
+ *	   E: 1 if this ast has an semantic error
+ *	    : 0 else
+ *
+ *	   S: 1 if this ast is a slot
+ *	    : 0 else
+ *
+ * son,brother,comment is known always to be even. Therefore the least
+ * significant bit is not stored, and all index-value less than 2**17
+ * can be saved
+ *)
+AstAsAstIndex:
+  (# N: ^AST
+  enter N[]
+  exit N[]
+  #);
+NULL: (#  exit none #);
+ASTindex: 
+  (# <<SLOT ASTindexLib:attributes>>;
+     theAst: ^AST;
+     
+     asAST: (# exit theAst[] #);
+     isNull: (# exit theAst[] = none #);
+     theFragmentForm: (#exit theAst.frag[] #);
+     nodeId: (# exit theAst.index #);
+     equal:
+       (# anAst: ^AST; B: @boolean
+       enter anAst[]
+       do (if (anAst[] <> NONE) and (theAST[] <> NONE) then
+              theAst[] -> anAST.equal -> B 
+          if)
+       exit B
+       #);
+     brother: (# exit theAst.nextBrother #);
+     son: (# exit theAst.son #);
+     sonRef:
+       (# S: @ASTindex
+       do son -> S
+       exit S[]
+       #);
+     father: (# exit theAST.father #);
+     label:
+       (#
+       enter theAst.symbol
+       exit theAst.symbol
+       #);
+     isSlot: 
+       (# un: ^unExpanded; B: @boolean
+       do (* this should be optimized be declaring
+           * isSlot as an attribute of AST
+           *)
+          (if label = prodNo.unExpanded then
+              theAst[] -> un[];
+              un.isSlot -> B
+          if)
+       exit B
+       #);
+     theSlotName:
+       (# un: ^unExpanded; sd: ^slotDesc
+       do theAst[]->un[]; un.theSlot->sd[]
+       exit sd.name
+       #);
+     stringLength: 
+       (# LX: ^lexemText
+       do theAst.son -> LX[]
+       exit LX.curLength
+       #);
+     getText:
+       (# LT: ^lexemText
+       do theAst.son -> LT[]
+       exit LT.getText
+       #);
+     textEq: (# t: @text enter t exit (getText->t.equalNCS) #);
+     internal: (#  exit (label > 0) #);
+     astKind: (#  exit label->theAst.frag.grammar.kindOfSymbol #);
+     nodeClass: (#  exit grammarTable.beta.nodeClassArray[label] #);
+     
+     putAttribute: (# enter theAST.putAttribute #);
+     getAttribute:
+       (# attributeNo: @integer
+       enter attributeNo
+       exit attributeNo -> theAst.getAttribute
+       #);
+     putPossibleSlot:
+       (# val,attributeNo: @integer;
+       enter (val,attributeNo)
+       do (if label = prodNo.unExpanded then
+	      (val,attributeNo) -> theAst.putSlotAttribute
+	   else
+	      (val,attributeNo) -> theAst.PutAttribute
+	  if)
+       #);
+     getPossibleSLot:
+       (# attributeNo,val: @integer;
+       enter attributeNo
+       do (if label = prodNo.unExpanded then
+	      attributeNo -> theAst.getSlotAttribute -> val
+	   else
+              attributeNo -> theAst.getAttribute -> val
+	  if)
+       exit val
+       #);
+     putNodePossibleSlot:
+       (# val: ^AST; attributeNo: @integer; 
+       enter (val[],attributeNo)
+       do (if label = prodNo.unExpanded then
+	      (val[],attributeNo) -> theAst.putSlotNodeAttribute
+	   else
+              (val[],attributeNo) -> theAst.putNodeAttribute
+	  if)
+       #);
+     getNodePossibleSlot:
+       (# attributeNo: @integer;
+	  val: ^ast;
+       enter attributeNo
+       do (if label = prodNo.unExpanded then
+	      attributeNo -> theAst.getSlotNodeAttribute -> val[]
+	   else
+              attributeNo -> theAst.getNodeAttribute -> val[]
+	  if)
+       exit val[]
+       #);
+  enter theAst[]
+  exit theAst[]
+  #);
+addPrefix:
+  (* desc must be a descriptor with empty prefix;
+   * a non empty prefix node is inserted;
+   * the name of the prefix is the empty string;
+   * Is used for virtual categories like v::< (# ... #)
+   *)
+  (# desc: ^expanded;
+     f: ^fragmentForm;
+     pref: ^expanded;
+     napl: ^expanded;
+     na: ^nameAppl;
+     gram: @grammar;
+  enter desc[]
+  do desc.frag[]->f[];
+     (gram.Prefix,f[])->grammarTable.beta.newAst->pref[];
+     (gram.NameApl,f[])->grammarTable.beta.newAst->napl[];
+     (nameAppl,f[])->grammarTable.beta.newAst->na[];
+     ''->na.putText;
+     na[]->napl.putson1;
+     napl[]->pref.putson1;
+     pref[]->desc.putson1;
+  exit napl[]
+  #);
+adjustForm:
+  (# f: ^fragmentForm; a: ^expanded; gram: @grammar
+  enter f[]
+  do (if f.root.symbol
+      // gram.Attributes (* OLM: was AttributeL in old grammar/index *) then
+	 (gram.AttributesForm,f[])->grammarTable.beta.newAst->a[];
+	 f.root[]->a.putson1;
+	 a[]->f.root[]
+      // gram.ObjectDescriptor then
+	 (gram.DescriptorForm,f[])->grammarTable.beta.newAst->a[];
+	 f.root[]->a.putson1;
+	 a[]->f.root[]
+     if)
+  #);
+less: (#  exit 0 #);
+equal: (#  exit 1 #);
+greater: (#  exit 2 #);
+CMP: (* compare two names *)
+  (# res: @integer;
+     lowerCaseDoesNotMatter: (#  exit 0xDFDFDFDF #);
+     (* the hex-value dfdfdfdf:
+      * the bitvalue to be used to mask such that
+      * lower and upper case does not matter *)
+     N1,N2: ^AST;
+     NT1,NT2: ^lexemText;
+     T1,T2: ^text;
+     c1,c2: @char;
+     l1,l2: @integer
+  enter(N1[],N2[]) 
+  do N1.son -> NT1[];
+     N2.son -> NT2[];
+     NT1.getText -> T1[]; 
+     NT2.getText -> T2[]; 
+     L:
+     (if (T1.length->l1) = (T2.length->l2) then
+         equal -> res;
+         T1.makeLC;
+         T2.makeLC;
+         (for i: T1.length repeat
+              (if (T1.T[i]->c1) <> (T2.T[i]->c2) then
+                  less -> res;
+                  (if c1 > c2 then greater -> res if);
+                  leave L
+         if)for)
+      else
+         (if l1 < l2 then
+             less -> res
+          else
+             greater -> res
+         if)
+     if)
+  exit res
+  #);
+EQS: (* compare two names *)
+  (# n1,n2: ^AST
+  enter(n1[],n2[])
+  exit((n1[],n2[])->CMP) = equal 
+  #);
+scanList:
+  (* scan the elements of the list;
+   * currentNode will exit t1, t2, ... Tn+1
+   * tail will exit the tail of the list.
+   *)
+  (# sCurrent: ^AST;
+     currentNode: (# exit sCurrent[] #);
+     tail: (# exit sCurrent.nextBrother #);
+     anAst: ^AST;
+     EX: ^expanded;
+     symbol: @integer
+  enter anAst[]
+  do (if (anAst.symbol->symbol) > 0 (* expanded *) then
+         (if grammarTable.beta.nodeClassArray[symbol] = kinds.list then
+             anAst[] -> EX[];    (* we assume expanded here! *)
+             EX.scan
+             (# 
+             do (if current.symbol <> prodNo.optional then
+                    current[] -> sCurrent[]; 
+                    INNER scanList 
+                if)
+             #)
+          else
+             anAst[] -> sCurrent[];
+             INNER scanList
+     if)if)
+  #);
+prettyPrinter: 
+  (# thePP: @<<SLOT prettyPrinterBody:Descriptor>>;
+     st: ^stream;
+     a: ^ast;
+     level: @integer;
+     editorMode: @boolean
+  enter (a[],st[],level,editorMode)
+  do thePP
+  #);
+
+---fragmentFormLib:attributes---
+theGSForm: (# exit root[] #)
+
+---slotDescLib:attributes---
+theNode: (# exit father #)
+
