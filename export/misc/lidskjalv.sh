@@ -14,15 +14,15 @@ if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
 	echo "Creating $DST/lidskjalv.cmd"
-	FILES=`/users/beta/export/distribution/r4.0.1/files/lidskjalv.files`
-	echo "$FILES" | /users/beta/export/distribution/r4.0.1/misc/icomp $DST/lidskjalv.cmd
+	FILES=`${BETALIB}/export/files/lidskjalv.files`
+	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/lidskjalv.cmd
 
 else
 	echo ""
 	echo "Creating $DST/lidskjalv.tar.${ZEXT} "
 	echo "(Listing in $DST/lidskjalv.lst)"
 
-	FILES=`/users/beta/export/distribution/r4.0.1/files/lidskjalv.files`
+	FILES=`${BETALIB}/export/files/lidskjalv.files`
 	if [ "$TARGET" = "mac" ]
 	then
 	  echo $0: packing \"macintosh\" too...
@@ -30,12 +30,12 @@ else
 	  FILES="$FILES ./guienv/v1.2/utils/private/macintosh"
 	fi
 
-	cd ${BETALIB}; echo cd ${BETALIB}
+	cd ${BETALIB}; 
 
 	tar -covhf -  $FILES \
 	2> $DST/lidskjalv.lst \
 	| $COMPRESS >  $DST/lidskjalv.tar.${ZEXT}
 fi
 
-. /users/beta/export/distribution/r4.0.1/misc/check_problems.sh
+. ${BETALIB}/export/misc/check_problems.sh
 check_pack lidskjalv

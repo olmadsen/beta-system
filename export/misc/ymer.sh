@@ -14,8 +14,8 @@ if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
 	echo "Creating $DST/ymer.cmd"
-	FILES=`/users/beta/export/distribution/r4.0.1/files/ymer.files`
-	echo "$FILES" | /users/beta/export/distribution/r4.0.1/misc/icomp $DST/ymer.cmd
+	FILES=`${BETALIB}/export/files/ymer.files`
+	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/ymer.cmd
 
 else
 
@@ -23,14 +23,14 @@ else
 	echo "Creating $DST/ymer.tar.${ZEXT} "
 	echo "(Listing in $DST/ymer.lst)"
 
-	FILES=`/users/beta/export/distribution/r4.0.1/files/ymer.files`
+	FILES=`${BETALIB}/export/files/ymer.files`
 
-	cd ${BETALIB}; echo cd ${BETALIB}
+	cd ${BETALIB}; 
 
 	tar -covhf -  $FILES \
 	2> $DST/ymer.lst \
 	| $COMPRESS >  $DST/ymer.tar.${ZEXT}
 fi
 
-. /users/beta/export/distribution/r4.0.1/misc/check_problems.sh
+. ${BETALIB}/export/misc/check_problems.sh
 check_pack ymer

@@ -14,21 +14,21 @@ if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
 	echo "Creating $DST/valhalla.cmd"
-	FILES=`/users/beta/export/distribution/r4.0.1/files/valhalla.files`
-	echo "$FILES" | /users/beta/export/distribution/r4.0.1/misc/icomp $DST/valhalla.cmd
+	FILES=`${BETALIB}/export/files/valhalla.files`
+	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/valhalla.cmd
 else
 	echo ""
 	echo "Creating $DST/valhalla.tar.${ZEXT} "
 	echo "(Listing in $DST/valhalla.lst)"
 
-	FILES=`/users/beta/export/distribution/r4.0.1/files/valhalla.files`
+	FILES=`${BETALIB}/export/files/valhalla.files`
 
-	cd ${BETALIB}; echo cd ${BETALIB}
+	cd ${BETALIB}; 
 
 	tar -covhf -  $FILES \
 	2> $DST/valhalla.lst \
 	| $COMPRESS >  $DST/valhalla.tar.${ZEXT}
 fi
 
-. /users/beta/export/distribution/r4.0.1/misc/check_problems.sh
+. ${BETALIB}/export/misc/check_problems.sh
 check_pack valhalla

@@ -16,22 +16,22 @@ then
 	echo ""
 	echo "Xt not packed for Windows - packing Lidskjalv instead."
 	echo "Creating $DST/lidskjalv.cmd"
-	FILES=`/users/beta/export/distribution/r4.0.1/files/lidskjalv.files`
-	echo "$FILES" | /users/beta/export/distribution/r4.0.1/misc/icomp $DST/lidskjalv.cmd
+	FILES=`${BETALIB}/export/files/lidskjalv.files`
+	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/lidskjalv.cmd
 else
 
 	echo ""
 	echo "Creating $DST/xt.tar.${ZEXT} "
 	echo "(Listing in $DST/xt.lst)"
 
-	FILES=`/users/beta/export/distribution/r4.0.1/files/xt-pe.files`
+	FILES=`${BETALIB}/export/files/xt-pe.files`
 
-	cd ${BETALIB}; echo cd ${BETALIB}; 
+	cd ${BETALIB}; ; 
 
 	tar -covhf -  $FILES \
 	2> $DST/xt.lst \
 	| $COMPRESS >  $DST/xt.tar.${ZEXT}
 fi
 
-. /users/beta/export/distribution/r4.0.1/misc/check_problems.sh
+. ${BETALIB}/export/misc/check_problems.sh
 check_pack xt

@@ -14,8 +14,8 @@ if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
 	echo "Creating $DST/editor.cmd"
-	FILES=`/users/beta/export/distribution/r4.0.1/files/editor.files`
-	echo "$FILES" | /users/beta/export/distribution/r4.0.1/misc/icomp $DST/editor.cmd
+	FILES=`${BETALIB}/export/files/editor.files`
+	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/editor.cmd
 
 else
 
@@ -23,14 +23,14 @@ else
 	echo "Creating $DST/editor.tar.${ZEXT} "
 	echo "(Listing in $DST/editor.lst)"
 
-	FILES=`/users/beta/export/distribution/r4.0.1/files/editor.files`
+	FILES=`${BETALIB}/export/files/editor.files`
 
-	cd ${BETALIB}; echo cd ${BETALIB}
+	cd ${BETALIB}; 
 
 	tar -covhf -  $FILES \
 	2> $DST/editor.lst \
 	| $COMPRESS >  $DST/editor.tar.${ZEXT}
 fi
 
-. /users/beta/export/distribution/r4.0.1/misc/check_problems.sh
+. ${BETALIB}/export/misc/check_problems.sh
 check_pack editor

@@ -13,21 +13,21 @@ if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
 	echo "Creating $DST/contrib.cmd"
-	FILES=`/users/beta/export/distribution/r4.0.1/files/contrib.files`
-	echo "$FILES" | /users/beta/export/distribution/r4.0.1/misc/icomp $DST/contrib.cmd
+	FILES=`${BETALIB}/export/files/contrib.files`
+	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/contrib.cmd
 else
 	echo ""
 	echo "Creating $DST/contrib.tar.${ZEXT} "
 	echo "(Listing in $DST/contrib.lst)"
 
-	FILES=`/users/beta/export/distribution/r4.0.1/files/contrib.files`
+	FILES=`${BETALIB}/export/files/contrib.files`
 
-	cd ${BETALIB}; echo cd ${BETALIB}
+	cd ${BETALIB}; 
 
 	tar -covhf - $FILES \
 	2> $DST/contrib.lst \
 	| $COMPRESS >  $DST/contrib.tar.${ZEXT}
 fi
 
-. /users/beta/export/distribution/r4.0.1/misc/check_problems.sh
+. ${BETALIB}/export/misc/check_problems.sh
 check_pack contrib

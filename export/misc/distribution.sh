@@ -14,21 +14,21 @@ if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
 	echo "Creating $DST/distribution.cmd"
-	FILES=`/users/beta/export/distribution/r4.0.1/files/distribution.files`
-	echo "$FILES" | /users/beta/export/distribution/r4.0.1/misc/icomp $DST/distribution.cmd
+	FILES=`${BETALIB}/export/files/distribution.files`
+	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/distribution.cmd
 else
 	echo ""
 	echo "Creating $DST/distribution.tar.${ZEXT} "
 	echo "(Listing in $DST/distribution.lst)"
 
-	FILES=`/users/beta/export/distribution/r4.0.1/files/distribution.files`
+	FILES=`${BETALIB}/export/files/distribution.files`
 
-	cd ${BETALIB}; echo cd ${BETALIB}
+	cd ${BETALIB}; 
 
 	tar -covhf -  $FILES \
 	2> $DST/distribution.lst \
 	| $COMPRESS >  $DST/distribution.tar.${ZEXT}
 fi
 
-. /users/beta/export/distribution/r4.0.1/misc/check_problems.sh
+. ${BETALIB}/export/misc/check_problems.sh
 check_pack distribution

@@ -2,7 +2,7 @@ default:
 	@echo You must specify a target.
 
 tags:
-	etags tar/*.dotar files/*.files misc/*.sh
+	etags dotar/*.dotar dotar/MakeAll* files/*.files misc/*.sh
 
 clean:
-	/bin/rm -f *~ tar/*~  files/*~ misc/*~
+	/bin/rm -f *~ dotar/*~  files/*~ misc/*~

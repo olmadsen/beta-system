@@ -14,21 +14,21 @@ if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
 	echo "Creating $DST/oodb.cmd"
-	FILES=`/users/beta/export/distribution/r4.0.1/files/oodb.files`
-	echo "$FILES" | /users/beta/export/distribution/r4.0.1/misc/icomp $DST/oodb.cmd
+	FILES=`${BETALIB}/export/files/oodb.files`
+	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/oodb.cmd
 else
 	echo ""
 	echo "Creating $DST/oodb.tar.${ZEXT} "
 	echo "(Listing in $DST/oodb.lst)"
 
-	FILES=`/users/beta/export/distribution/r4.0.1/files/oodb.files`
+	FILES=`${BETALIB}/export/files/oodb.files`
 
-	cd ${BETALIB}; echo cd ${BETALIB}
+	cd ${BETALIB}; 
 
 	tar -covhf -  $FILES \
 	2> $DST/oodb.lst \
 	| $COMPRESS >  $DST/oodb.tar.${ZEXT}
 fi
 
-. /users/beta/export/distribution/r4.0.1/misc/check_problems.sh
+. ${BETALIB}/export/misc/check_problems.sh
 check_pack oodb

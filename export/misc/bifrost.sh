@@ -13,21 +13,21 @@ if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
 	echo "Creating $DST/bifrost.cmd"
-	FILES=`/users/beta/export/distribution/r4.0.1/files/bifrost.files`
-	echo "$FILES" | /users/beta/export/distribution/r4.0.1/misc/icomp $DST/bifrost.cmd
+	FILES=`${BETALIB}/export/files/bifrost.files`
+	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/bifrost.cmd
 else
 	echo ""
 	echo "Creating $DST/bifrost.tar.${ZEXT} "
 	echo "(Listing in $DST/bifrost.lst)"
 
-	cd ${BETALIB}; echo cd ${BETALIB}
+	cd ${BETALIB}; 
 
-	FILES=`/users/beta/export/distribution/r4.0.1/files/bifrost.files`
+	FILES=`${BETALIB}/export/files/bifrost.files`
 
 	tar -covhf - $FILES \
 	2> $DST/bifrost.lst \
 	| $COMPRESS >  $DST/bifrost.tar.${ZEXT}
 fi
 
-. /users/beta/export/distribution/r4.0.1/misc/check_problems.sh
+. ${BETALIB}/export/misc/check_problems.sh
 check_pack bifrost

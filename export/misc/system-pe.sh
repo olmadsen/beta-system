@@ -15,13 +15,13 @@ then
 	# Special windows packing
 	echo ""
 	echo "Creating $DST/system.cmd"
-	FILES=`/users/beta/export/distribution/r4.0.1/files/system-pe.files`
+	FILES=`${BETALIB}/export/files/system-pe.files`
 	echo "\
 $FILES \
 ./betarun/${BETARUN}/${CODEDIR}/betarun.lib \
 ./betarun/${BETARUN}/${CODEDIR}/betarunv.lib\
 " \
-| /users/beta/export/distribution/r4.0.1/misc/icomp $DST/system.cmd
+| ${BETALIB}/export/misc/icomp $DST/system.cmd
 
 echo "cd %BETALIB%\\betarun\\${BETARUN}\\${CODEDIR}" > $DST/system-pe.cmd
 echo "ren  betarun.lib  betarun.lib.orig"          >> $DST/system-pe.cmd
@@ -46,16 +46,17 @@ else
 	echo "Creating $DST/system.tar "
 	echo "(Listing in $DST/system.lst)"
 
-	cd ${BETALIB}; echo cd ${BETALIB}
+	cd ${BETALIB}; 
 
-	FILES=`/users/beta/export/distribution/r4.0.1/files/system-pe.files`
+	FILES=`${BETALIB}/export/files/system-pe.files`
 
 
 	tar -covhf - $FILES \
 	2> $DST/system.lst \
 	 > $DST/system.tar
 
-	cd ${BETALIB}; echo cd ${BETALIB}/test
+	if [ ! -d ${BETALIB}/test ]; then mkdir ${BETALIB}/test; fi
+	cd ${BETALIB}/test
 	echo "Adding betarun.pe as betarun.o and betarunv.o from directory"
 	pwd
 
@@ -63,8 +64,8 @@ else
 	mkdir betarun
 	mkdir betarun/${BETARUN}
 	mkdir betarun/${BETARUN}/$TARGET
-	cp /users/beta/betarun/${BETARUN}/$TARGET/betarun.pe ./betarun/${BETARUN}/$TARGET/betarun.o
-	cp /users/beta/betarun/${BETARUN}/$TARGET/betarun.pe ./betarun/${BETARUN}/$TARGET/betarunv.o
+	cp ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun.pe ./betarun/${BETARUN}/$TARGET/betarun.o
+	cp ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun.pe ./betarun/${BETARUN}/$TARGET/betarunv.o
 
 	tar -rovhf $DST/system.tar \
 	  ./betarun/${BETARUN}/${CODEDIR}/betarun.o \
@@ -80,5 +81,5 @@ else
 
 fi
 
-. /users/beta/export/distribution/r4.0.1/misc/check_problems.sh
+. ${BETALIB}/export/misc/check_problems.sh
 check_pack system
