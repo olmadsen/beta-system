@@ -5,11 +5,11 @@
  */
 #include "beta.h"
 
-#ifdef UNIX
+#if defined(UNIX) || defined(nti)
 #include <signal.h>
-#endif /* UNIX */
+#endif /* UNIX || nti */
 
-#ifdef linux
+#if defined(linux) || defined(nti)
 /* Header files do not declare this! */
 struct sigcontext {
   unsigned short gs, __gsh;
@@ -35,7 +35,7 @@ struct sigcontext {
   unsigned long oldmask;
   unsigned long cr2;
 };
-#endif /* linux */
+#endif /* linux || nti */
 
 #ifdef sun4s
 
@@ -63,7 +63,9 @@ void BetaSignalHandler (sig, info, ucon)
   /* Setup signal handlers for the Beta system */
   signal( SIGFPE,  ExitHandler);
   signal( SIGILL,  ExitHandler);
+#ifndef nti
   signal( SIGBUS,  ExitHandler);
+#endif
   signal( SIGSEGV, ExitHandler);
   signal( SIGEMT,  ExitHandler);
 
@@ -120,7 +122,7 @@ static void ExitHandler(sig, code, scp, addr)
   BetaExit(-1); 
 }
 
-#ifdef linux
+#if defined(linux) || defined(nti)
 void BetaSignalHandler(sig, scp)
      long sig;
      struct sigcontext scp;
@@ -138,7 +140,9 @@ void BetaSignalHandler(sig, code, scp, addr)
   /* Setup signal handles for the Beta system */
   signal( SIGFPE,  ExitHandler);
   signal( SIGILL,  ExitHandler);
+#ifndef nti
   signal( SIGBUS,  ExitHandler);
+#endif
   signal( SIGSEGV, ExitHandler);
 #ifdef SIGEMT
   signal( SIGEMT,  ExitHandler);
@@ -149,12 +153,12 @@ void BetaSignalHandler(sig, code, scp, addr)
 #endif
 
   /* Set StackEnd to the stack pointer just before trap. */
-#ifndef linux
+#if !(defined(linux) || defined(nti))
   StackEnd = (long *) scp->sc_sp;
 #ifndef hppa
   PC = (long *) scp->sc_pc;
-#endif /* hppa */
-#endif /* linux */
+#endif /* !hppa */
+#endif /* !(linux || nti) */
 
 #ifdef sun3
   /* Try to fetch the address of current Beta object in a0.*/
@@ -222,7 +226,7 @@ void BetaSignalHandler(sig, code, scp, addr)
   }
 #endif
 
-#ifdef linux
+#if defined(linux) || defined(nti)
 
   theObj = cast(Object) scp.edx;
   if ( ! (inIOA(theObj) && isObject (theObj)))
@@ -235,8 +239,10 @@ void BetaSignalHandler(sig, code, scp, addr)
       DisplayBetaStack( ArithExceptErr, theObj, PC); break;
     case SIGILL:
       DisplayBetaStack( IllegalInstErr, theObj, PC); break;
+#ifndef nti
     case SIGBUS:
       DisplayBetaStack( BusErr, theObj, PC); break;
+#endif
     case SIGSEGV:
       DisplayBetaStack( SegmentationErr, theObj, PC); break;
     default: 
