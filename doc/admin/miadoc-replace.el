@@ -163,3 +163,12 @@
 
 " "<PRE CLASS=beta>
 " nil)))
+
+(defun miadoc-replace17 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Replacing &iquest;")
+    (tags-query-replace "&iquest;" "&oslash;" nil)))
+
