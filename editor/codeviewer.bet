@@ -8,7 +8,7 @@ INCLUDE '~beta/guienv/v1.3.1/guienv'
         '~beta/guienv/v1.3.1/guienvactions'
         '~beta/guienv/v1.3.1/stddialogs'
         '~beta/guienv/v1.3.1/utils/textfieldadds'
-        '~beta/guienv/v1.3.1/utils/xprompts'
+        '~beta/guienv/v1.3.1/utils/prompts'
         '~beta/guienv/v1.3.1/utils/timer'
         '~beta/pretty/v4.9.1/pplib'
         '~beta/betaast/v4.9.1/betasematt'
@@ -298,21 +298,11 @@ sifTextEditor: textEditor
        exit tt[]
        #);
      before:
-       (#
-          lineno: @integer;
-          tt: ^text;
-          
-       enter lineno
+       (# 
        do
           <<SLOT sdeWtexteditorbefore:Descriptor>>
-       exit tt[]
        #);
-     after:
-       (# lineno: @integer; tt: ^text; 
-       enter lineno
-       do <<SLOT sdeWtexteditorafter:Descriptor>>
-       exit tt[]
-       #);
+     after: (#  do <<SLOT sdeWtexteditorafter:Descriptor>> #);
      refresh:
        (#
           lineno: @integer; tt: ^text; 
@@ -341,21 +331,8 @@ sifTextEditor: textEditor
        <<SLOT sdeWtexteditorlineCharToPos:DoPart>>
        exit pos
        #);
-     open::< 
-       (#
-          defaultSize:<
-            (# value: @Point; 
-            do
-               (600,300)->value;
-               INNER
-            exit value
-            #);
-          
-       do
-       (*contents.afterButtonUpAction[]->appendAction;*)
-          defaultSize->size; INNER ; 
-       #);
-     closeGroup: (* if value then close is OK *) booleanValue
+     closeGroup:
+     (* if value then close is OK *) booleanValue
        (#  <<SLOT siftexteditorCloseGroup:DoPart>> #);
      saveGroup:
        (# 
@@ -378,7 +355,17 @@ sifTextEditor: textEditor
        <<SLOT siftexteditorNewfragment:DoPart>>
        exit ed[]
        #);
-     
+     open::< 
+       (#
+          defaultSize:<
+            (# value: @Point;  do (600,300)->value; INNER exit value #);
+          
+       <<SLOT siftexteditorOpen:DoPart>>
+       #);
+     close::< 
+       (# 
+       <<SLOT siftexteditorClose:DoPart>>
+       #)
   #);
 codeviewer:
   (#
@@ -397,10 +384,6 @@ codeviewer:
      (* root of this editor normally the same as frag.root, except in subeditors *)
      ^astInterface.ast;
      start,end: @integer;
-     (* if editorRoot is a listNode, that is not the root of the AST 
-      * (i.e. we have an editor on an subAST), 
-      * start and end indicates which sublist is in the editor 
-      *)
      fragDotRoot: @
        (#
           setRoot: @
@@ -793,6 +776,11 @@ codeviewer:
        enter newCS
        do <<SLOT codeviewerSetFocus:Descriptor>>
        #);
+     setNode:
+       (# node: ^astInterface.ast
+       enter node[]
+       <<SLOT codeviewerSetNode:DoPart>>
+       #);
      astToSelection:
        (# 
        enter cs
@@ -1113,85 +1101,6 @@ codeviewer:
                  #);
                
             #);
-          (*
-           onOpenTool::< 
-           (# 
-           do
-           (commentEditorPrivate.node[],commentEditorPrivate.subCommentInx1,
-           commentEditorPrivate.subCommentInx2)
-           ->commentEditorPrivate.writeComment;
-           INNER
-           #);
-           onCloseTool::< 
-           (# 
-           do
-           search: commentWindows.scan
-           (# 
-           do
-           (if
-           (Current.commentEditorPrivate.node[]
-           ->commentEditorPrivate.node.equal) and
-           (Current.commentEditorPrivate.subcommentInx1 =
-           commentEditorPrivate.subcommentInx1) and
-           (Current.commentEditorPrivate.subcommentInx2 =
-           commentEditorPrivate.subcommentInx2) then
-           Current[]->commentWindows.at->commentWindows.delete;
-           leave search
-           if)
-           #);
-           INNER
-           #);
-           onActivateWindow::< 
-           (# 
-           do
-           (#
-           testNode: ^astInterface.ast;
-           i,subCommentInx1,subCommentInx2: @integer;
-           
-           do
-           sde.getFocus->(testNode[],i,subCommentInx1,subCommentInx2);
-           ' UI.setTextCursor;'->putLine;'->putLine;
-           
-           #);
-           INNER
-           #);
-           onDeactivateWindow::< 
-           (# 
-           do
-           (if commentEditorPrivate.commentTouched
-           then commentEditorPrivate.exitCommentEditing; 
-           if);
-           INNER
-           #);
-           onTermPos::<  (#  do ; INNER #);
-           onTermSeq::<  (#  do ; INNER ;  #);
-           onKeyPressed::< 
-           (# 
-           do
-           (if ch
-           // ascii.esc then
-           commentEditorPrivate.undoCommentEditing;
-           false->commentEditorPrivate.commentTouched;
-           sde.fragmentDetouched;
-           
-           // 3 [* MPW enter key *] then
-           commentEditorPrivate.exitCommentEditing
-           else
-           (if not commentEditorPrivate.commentTouched
-           then
-           sde.fragmentTouched;
-           true->commentEditorPrivate.commentTouched;
-           
-           if);
-           
-           if);
-           INNER
-           #);
-           onShowNode::< 
-           (# 
-           do (commentEditorPrivate.node[],1,0,0)->sde.setFocus; INNER
-           #);
-           *)
           
        #);
      printComment:
@@ -1396,7 +1305,7 @@ codeviewer:
        do
           INNER makeSearchSlotBinding;
           (if doneInInner then
-              (if a[] <> none then a[]->selectNode;  if)
+              (if a[] <> none then (a[],false)->selectNode;  if)
            else
               cs.node[]
                 ->searchSlotBinding
@@ -1407,8 +1316,15 @@ codeviewer:
                           (if ff[] = none then
                               'bindingFound: ff is none!! '->putLine
                            else
-                              ff.root[]->selectNode
+                              (ff.root[],false)->selectNode
                           if)
+                       #);
+                     bindingNotFound:: 
+                       (# help: ^text
+                       do
+                          slotName[]->help[];
+                          ' not found'->help.append;
+                          (none ,help[],'Search SLOT')->UI.alertUser
                        #)
                   #)
           if)
@@ -1598,9 +1514,13 @@ codeviewer:
           (if not found then slotName[]->bindingNotFound if)
        #);
      selectNode:<
-       (# node: ^astInterface.ast
-       enter node[]
+       (#
+          node: ^astInterface.ast;
+          separate: @boolean;
+          newNode: ^astInterface.ast
+       enter (node[],separate)
        <<SLOT codeviewerSelectNode:DoPart>>
+       exit newNode[]
        #);
      updateHistory:<
        (# node: ^astInterface.ast
@@ -1638,7 +1558,9 @@ codeviewer:
               (if theNode.symbol
                // betaGrammar.nameApl then
                     (# theNameApl: ^betaGrammar.nameApl
-                    do theNode[]->theNameApl[]; theNameApl.dclRef->selectNode
+                    do
+                       theNode[]->theNameApl[];
+                       (theNameApl.dclRef,false)->selectNode
                     #)
                // betaGrammar.nameDcl then
                     (# theNameDcl: ^betaGrammar.nameDcl; f: ^astInterface.ast
@@ -1651,7 +1573,7 @@ codeviewer:
                             // betaGrammar.bindingDecl // betaGrammar.finalDecl
                             then
                                theNode[]->theNameDcl[];
-                               theNameDcl.virtDcl->selectNode;
+                               (theNameDcl.virtDcl,false)->selectNode;
                                (* use findDescriptor instead? 
                                 (if itemSelected
                                 // 1 then
@@ -2416,6 +2338,7 @@ codeviewer:
        #);
      openSubeditor:<
        (# node: ^astInterface.ast enter node[] do INNER #);
+     close:< object;
      init:<
        (# 
        enter

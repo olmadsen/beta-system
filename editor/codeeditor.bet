@@ -23,6 +23,7 @@ BODY 'private/misc'
      'private/slotbody'
      'private/propertyeditorbody'
      'private/subeditorbody'
+     'private/fragmentgrouphandlerbody'
      'private/fragmentformhandlerbody';
 -- windowlib: Attributes --
 codeEditor: codeViewer
@@ -42,6 +43,7 @@ codeEditor: codeViewer
      structureMode: (#  exit 0 #);
      editLexemMode: (#  exit 1 #);
      editAndParseMode: (#  exit 2 #);
+     adaptivePrettyprinting: @boolean;
      TEexit: @
        (#
           escape: (#  exit 0 #);
@@ -282,9 +284,12 @@ codeEditor: codeViewer
           <<SLOT autoSaveLimitBody:Descriptor>>;
           INNER
        #);
-     autoSave:< (#  <<SLOT autoSaveBody:DoPart>> #);
+     autoSave: (#  <<SLOT codeeditorAutoSave:DoPart>> #);
      onPopUpButton::< 
-       (#  <<SLOT onPopUpButton:DoPart>> #);
+       (# 
+       <<SLOT onPopUpButton:DoPart>>
+       #);
+     notificationPrivate: @<<SLOT notificationPrivate:Descriptor>>;
      fragmentChangedEvent:
        (#
           byMe: @boolean;
@@ -344,8 +349,8 @@ codeEditor: codeViewer
           <<SLOT notificationAstReplacedSequence:Descriptor>>
        #);
      listElementInsertedEvent:< fragmentChangedEvent
-       (# position: @integer; fatherNode: ^astInterface.expanded; 
-       enter (fatherNode[],position)
+       (# position: @integer; listNode: ^astInterface.expanded; 
+       enter (listNode[],position)
        do
           <<SLOT frejaCommListElementInserted:Descriptor>>;
           <<SLOT notificationListElementInserted:Descriptor>>
@@ -364,10 +369,10 @@ codeEditor: codeViewer
      aListElementsDeletedEvent: @listElementsDeletedEvent;
      listElementsReplacedEvent:< fragmentChangedEvent
        (#
-          oldElement: ^editorEnv.partList;
+          oldElements: ^editorEnv.partList;
           listNode: ^astInterface.expanded;
           position,length,newLength: @integer
-       enter (listNode[],position,length,oldElement[],newLength)
+       enter (listNode[],position,length,oldElements[],newLength)
        do
           <<SLOT frejaCommListElementsReplaced:Descriptor>>;
           <<SLOT notificationListElementsReplaced:Descriptor>>
@@ -469,7 +474,9 @@ codeEditor: codeViewer
        <<SLOT subeditorOpenSubeditor:DoPart>>
        #);
      subeditors: @list (# element::< codeeditor #);
-     init::<  (#  <<SLOT codeeditorinit:DoPart>> #)
+     close::<  (#  <<SLOT codeeditorclose:DoPart>> #);
+     init::< 
+       (#  <<SLOT codeeditorinit:DoPart>> #)
   #);
 mysimplemenu: menu
 (* Special menu type with interdependant check marks, some other 
@@ -618,23 +625,27 @@ codeeditorEditMenu: mysimplemenu
             #)
        #);
      cfe: ^codeeditor;
-     edenv: ^editorEnv;
-     attach: (#  enter (cfe[],edenv[]) #);
+     attach: (#  enter cfe[] #);
      writeStatus:< (# t: ^text enter t[] do INNER #);
-     formEditorExists:
-       (# exists: @boolean
-       do not cfe.theSifTexteditor.textediting->exists; INNER
-       exit exists
+     formEditorExists:<
+       (# value: @boolean
+       do
+          INNER ;
+          (if cfe[] <> none then
+              not cfe.theSifTexteditor.textediting->value; 
+          if)
+       exit value
        #);
-     ongoingTextediting: @boolean;
      iUndo: @item
        (#
           onStatus:: 
             (# 
             do
-               false->value;
-               formEditorExists
-                 (#  do cfe.askUndoPermission->value #)
+               (if formEditorExists then
+                   cfe.askUndoPermission->value
+                else
+                   false->value
+               if)
             #);
           onSelect::  (#  do cfe.doUndo #)
        #);
@@ -653,9 +664,11 @@ codeeditorEditMenu: mysimplemenu
           onStatus:: 
             (# 
             do
-               false->value;
-               formEditorExists
-                 (#  do cfe.askPastePermission->value #)
+               (if formEditorExists then
+                   cfe.askPastePermission->value
+                else
+                   false->value
+               if)
             #);
           onSelect::  (#  do cfe.doPaste #)
        #);
@@ -664,25 +677,15 @@ codeeditorEditMenu: mysimplemenu
           onStatus:: 
             (# 
             do
-               false->value;
-               formEditorExists
-                 (# 
-                 do
-                    (if cfe.askTextEditMode then
-                        'Parse Text'->THIS(item).name
-                     else
-                        'Edit Text'->THIS(item).name
-                    if);
-                    true->value;
-                    
-                 #);
-               (if ongoingTextediting then
+               (if cfe[] <> none then
                    (if cfe.askTextEditMode then
                        'Parse Text'->THIS(item).name
                     else
                        'Edit Text'->THIS(item).name
                    if);
                    true->value
+                else
+                   false->value
                if)
             #);
           onSelect:: 
@@ -700,11 +703,7 @@ codeeditorEditMenu: mysimplemenu
        (#
           onStatus:: 
             (# 
-            do
-               false->value;
-               formEditorExists
-                 (#  do cfe.askTexteditMode->value #);
-               ongoingTextEditing->value
+            do (if cfe[] <> none then cfe.askTextEditMode->value if)
             #);
           onSelect::  (#  do cfe.doRevertTextEdit; ''->writestatus #)
        #);
@@ -713,10 +712,11 @@ codeeditorEditMenu: mysimplemenu
           onStatus:: 
             (# 
             do
-               false->value;
-               formEditorExists
-                 (#  do cfe.askTexteditMode->value #);
-               ongoingTextEditing->value
+               (if cfe[] <> none then
+                   cfe.askTexteditMode->value
+                else
+                   false->value
+               if)
             #);
           onSelect::  (#  do cfe.doShowTexteditCommands;  #)
        #);
@@ -725,9 +725,11 @@ codeeditorEditMenu: mysimplemenu
           onStatus:: 
             (# 
             do
-               false->value;
-               formEditorExists
-                 (#  do cfe.askInsertPermission->value #)
+               (if formEditorExists then
+                   cfe.askInsertPermission->value
+                else
+                   false->value
+               if)
             #);
           onSelect::  (#  do cfe.doInsertBefore #)
        #);
@@ -736,9 +738,11 @@ codeeditorEditMenu: mysimplemenu
           onStatus:: 
             (# 
             do
-               false->value;
-               formEditorExists
-                 (#  do cfe.askInsertPermission->value #)
+               (if formEditorExists then
+                   cfe.askInsertPermission->value
+                else
+                   false->value
+               if)
             #);
           onSelect::  (#  do cfe.doInsertAfter #)
        #);
@@ -762,9 +766,11 @@ codeeditorEditMenu: mysimplemenu
           onStatus:: 
             (# 
             do
-               false->value;
-               formEditorExists
-                 (#  do cfe.askOpenSubeditorPermission->value #)
+               (if formEditorExists then
+                   cfe.askOpenSubeditorPermission->value
+                else
+                   false->value
+               if)
             #);
           onSelect::  (#  do cfe.openSubeditor #)
        #);
@@ -790,7 +796,7 @@ codeeditorEditMenu: mysimplemenu
           ('Search...','s')->iSearch.newKey;
           newSeparator;
           ('Create subeditor','j')->iSubeditor.newKey;
-          
+          'Edit'->name
        #);
      
   #);
@@ -810,11 +816,15 @@ codeeditorViewMenu: mysimplemenu
        #);
      cfe: ^codeeditor;
      edenv: ^editorEnv;
-     attach: (#  enter (cfe[],edenv[]) #);
-     formEditorExists:
-       (# exists: @boolean
-       do not cfe.theSifTexteditor.textediting->exists; INNER
-       exit exists
+     attach: (#  enter cfe[] #);
+     formEditorExists:<
+       (# value: @boolean
+       do
+          INNER ;
+          (if cfe[] <> none then
+              not cfe.theSifTexteditor.textediting->value
+          if)
+       exit value
        #);
      iAbstract: @item
        (#
@@ -851,40 +861,6 @@ codeeditorViewMenu: mysimplemenu
           onStatus::  (#  do formEditorExists->value #);
           onSelect::  (#  do cfe.cs.node[]->cfe.doShowAst;  #)
        #);
-     iBack: @item
-       (#
-          onStatus:: 
-            (# 
-            do
-               false->value;
-               formEditorExists
-                 (#  do cfe.cs.node[]->edenv.history.BackPossible->value #)
-            #);
-          onSelect:: 
-            (# 
-            do
-               cfe.cs.node[]->edenv.history.back
-                 ->edenv.ymerCallback.findAndSelect
-            #)
-       #);
-     iForward: @item
-       (#
-          onStatus:: 
-            (# 
-            do
-               false->value;
-               formEditorExists
-                 (# 
-                 do cfe.cs.node[]->edenv.history.ForwardPossible->value
-                 #)
-            #);
-          onSelect:: 
-            (# 
-            do
-               cfe.cs.node[]->edenv.history.forward
-                 ->edenv.ymerCallback.findAndSelect
-            #)
-       #);
      open:: 
        (# 
        do
@@ -896,10 +872,7 @@ codeeditorViewMenu: mysimplemenu
           newSeparator;
           ('Reprettyprint','p')->iReprettyprint.newKey;
           'Show AST Current Selection'->iShowAstCS.new;
-          newSeparator;
-          ('Back','b')->iBack.newKey;
-          ('Forward','f')->iForward.newKey;
-          
+          'View'->name
        #);
      
   #);
@@ -918,19 +891,26 @@ codeeditorSLOTsMenu: mysimplemenu
             #)
        #);
      cfe: ^codeeditor;
-     edenv: ^editorEnv;
-     attach: (#  enter (cfe[],edenv[]) #);
-     formEditorExists:
-       (# exists: @boolean
-       do not cfe.theSifTexteditor.textediting->exists; INNER
-       exit exists
+     attach: (#  enter cfe[] #);
+     formEditorExists:<
+       (# value: @boolean
+       do
+          INNER ;
+          (if cfe[] <> none then
+              not cfe.theSifTexteditor.textediting->value
+          if)
+       exit value
        #);
      iSearchSlotBinding: @item
        (#
           onStatus:: 
             (# 
             do
-               false->value; formEditorExists (#  do cfe.cs.isSlot->value #)
+               (if formEditorExists then
+                   cfe.cs.isSlot->value
+                else
+                   false->value
+               if)
             #);
           onSelect::  (#  do cfe.makeSearchSlotBinding #)
        #);
@@ -939,9 +919,11 @@ codeeditorSLOTsMenu: mysimplemenu
           onStatus:: 
             (# 
             do
-               false->value;
-               formEditorExists
-                 (#  do cfe.askMakeDoPartSlot->value #)
+               (if formEditorExists then
+                   cfe.askMakeDoPartSlot->value
+                else
+                   false->value
+               if)
             #);
           onSelect::  (#  do cfe.doMakeDoPartSlot;  #)
        #);
@@ -950,9 +932,11 @@ codeeditorSLOTsMenu: mysimplemenu
           onStatus:: 
             (# 
             do
-               false->value;
-               formEditorExists
-                 (#  do cfe.askMakeDescriptorSlot->value #)
+               (if formEditorExists then
+                   cfe.askMakeDescriptorSlot->value
+                else
+                   false->value
+               if)
             #);
           onSelect::  (#  do cfe.doMakeDescriptorSlot;  #)
        #);
@@ -961,9 +945,11 @@ codeeditorSLOTsMenu: mysimplemenu
           onStatus:: 
             (# 
             do
-               false->value;
-               formEditorExists
-                 (#  do cfe.askMakeAttributesSlot->value #)
+               (if formEditorExists then
+                   cfe.askMakeAttributesSlot->value
+                else
+                   false->value
+               if)
             #);
           onSelect::  (#  do cfe.doMakeAttributesSlot;  #)
        #);
@@ -972,9 +958,11 @@ codeeditorSLOTsMenu: mysimplemenu
           onStatus:: 
             (# 
             do
-               false->value;
-               formEditorExists
-                 (#  do cfe.askPasteFragmentForm->value #)
+               (if formEditorExists then
+                   cfe.askPasteFragmentForm->value
+                else
+                   false->value
+               if)
             #);
           onSelect::  (#  do cfe.doPasteFragmentForm;  #)
        #);
@@ -988,7 +976,11 @@ codeeditorSLOTsMenu: mysimplemenu
           onStatus:: 
             (# 
             do
-               false->value; formEditorExists (#  do cfe.cs.isSlot->value #)
+               (if formEditorExists then
+                   cfe.cs.isSlot->value
+                else
+                   false->value
+               if)
             #);
           onSelect::  (#  do cfe.doFillSlot;  #)
        #);
@@ -1010,7 +1002,7 @@ codeeditorSLOTsMenu: mysimplemenu
           'Paste Fragment Form'->iPasteFragmentForm.new;
           'Fill SLOT...'->iFillSlot.new;
           'Fill All SLOTs'->iFillAllSlots.new;
-          
+          'SLOTs'->name
        #);
      
   #);
@@ -1018,7 +1010,10 @@ propertyEditor: codeeditor
   (#
      theGroupEditor: ^editorEnv.groupeditor;
      updateProperties:
-       (#  <<SLOT propertyeditorUpdateProperties:DoPart>> #);
+       (# byMe: @boolean
+       enter byMe
+       <<SLOT propertyeditorUpdateProperties:DoPart>>
+       #);
      astReplacedEvent::< 
        (# 
        <<SLOT propertyeditorAstReplaced:DoPart>>
@@ -1044,6 +1039,7 @@ editorenv: sifEditorEnv
      UI: ^guienv;
      initiator: ^text;
      contractOnOpen,onlyNotifyFreja: @boolean;
+     adaptivePrettyprinting: @boolean;
      doQuit: @boolean;
      onGoingRecovery: @boolean;
      partList: (# elm: [50] ^astInterface.ast #);
@@ -1067,15 +1063,13 @@ editorenv: sifEditorEnv
        (#  do formEditorNo+1->formEditorNo exit formEditorNo #);
      setWaitCursor: (#  do ui.cursors.watch[]->UI.mouse.busyCursor #);
      setStructureCursor: (#  do none ->UI.mouse.busyCursor #);
-     fragmentGroupHandler: @
-       (# groupEditors: @list (# element:: groupEditor #);  #);
      doCommand:
        (#  do setWaitCursor; INNER doCommand; setStructureCursor #);
      history: @
        (#
           historyList: list (# element:: mps.ast;  #);
           h: ^historyList;
-          init: (#  do &historyList[]->h[]; h.init #);
+          init: (#  do &historyList[]->h[]; h.init; true->doUpdate #);
           currentCell: ^h.theCellType;
           private: @<<SLOT editorenvhistoryprivate:Descriptor>>;
           current:
@@ -1122,28 +1116,36 @@ editorenv: sifEditorEnv
             enter currentNode[]
             <<SLOT editorenvHistoryForward:DoPart>>
             exit newNode[]
+            #);
+          doUpdate: @boolean;
+          protect:
+            (# 
+            do
+               <<SLOT editorenvHistoryProtect:Descriptor>>
             #)
        #);
      trace: [10] @boolean;
-     editorenvPrivate:
-       @<<SLOT editorenvPrivate:Descriptor>>;
+     editorenvPrivate: @<<SLOT editorenvPrivate:Descriptor>>;
      new:
-       (# name: ^text; isAFrejaEditor: @boolean; ge: ^groupeditor
-       enter (name[],isAfrejaEditor)
-       <<SLOT editorenvNew:DoPart>>
-       exit ge[]
-       #);
-     newBetaProgram: doCommand
        (#
           name: ^text;
           isAFrejaEditor: @boolean;
           ge: ^groupeditor
        enter (name[],isAfrejaEditor)
+       <<SLOT editorenvNew:DoPart>>
+       exit ge[]
+       #);
+     newBetaProgram: doCommand
+       (# name: ^text; isAFrejaEditor: @boolean; ge: ^groupeditor
+       enter (name[],isAfrejaEditor)
        <<SLOT editorEnvNewBetaProgram:DoPart>>
        exit ge[]
        #);
      newBetaLibrary: doCommand
-       (# name: ^text; isAFrejaEditor: @boolean; ge: ^groupeditor
+       (#
+          name: ^text;
+          isAFrejaEditor: @boolean;
+          ge: ^groupeditor
        enter (name[],isAfrejaEditor)
        <<SLOT editorenvNewBetaLibrary:DoPart>>
        exit ge[]
@@ -1152,15 +1154,16 @@ editorenv: sifEditorEnv
        (#
           name: ^text;
           index: @integer;
-          ff:
-            ^astInterface.fragmentForm;
+          ff: ^astInterface.fragmentForm;
           node: ^astInterface.ast
        enter (name[],index)
-       do
-          <<SLOT openFormBody:Descriptor>>
+       do <<SLOT openFormBody:Descriptor>>
        exit (ff[],node[])
        #);
-     saveAll: (#  <<SLOT editorenvSaveAll:DoPart>> #);
+     saveAll:
+       (# 
+       <<SLOT editorenvSaveAll:DoPart>>
+       #);
      groupEditor:
        (#
           fg: ^astInterface.fragmentGroup;
@@ -1171,15 +1174,12 @@ editorenv: sifEditorEnv
           needToUpdateTextFile: @boolean;
           autoSaveFileExists: @boolean;
           thePropertyEditor: ^codeeditor;
+          fgh: ^fragmentGroupHandler;
           formEditorList: @list
             (#
                element:: codeeditor;
                findOrCreateEditor:
-                 (#
-                    ff:
-                      ^astInterface.
-                         fragmentForm;
-                    fe: ^codeviewer
+                 (# ff: ^astInterface.fragmentForm; fe: ^codeviewer
                  enter ff[]
                  <<SLOT groupeditorFormeditorListFindOrCreateEditor:DoPart>>
                  exit fe[]
@@ -1218,15 +1218,17 @@ editorenv: sifEditorEnv
             <<SLOT groupeditorRecover:DoPart>>
             #);
           revert: doCommand (#  <<SLOT groupeditorRevert:DoPart>> #);
+          autoSave:
+            (# 
+            <<SLOT groupeditorAutoSave:DoPart>>
+            #);
           resetGroupTouch:
+            (#  <<SLOT groupeditorResetGroupTouch:DoPart>> #);
+          groupTouched:
             (# 
-            <<SLOT groupeditorResetGroupTouch:DoPart>>
+            <<SLOT groupeeditorGroupTouched:DoPart>>
             #);
-          groupTouched: (#  <<SLOT groupeeditorGroupTouched:DoPart>> #);
-          groupDetouched:
-            (# 
-            <<SLOT groupeditorGroupDetouched:DoPart>>
-            #);
+          groupDetouched: (#  <<SLOT groupeditorGroupDetouched:DoPart>> #);
           myAddFragment:
             (#
                g: ^astInterface.fragmentGroup;
@@ -1320,14 +1322,55 @@ editorenv: sifEditorEnv
             (# fg: ^astInterface.fragmentGroup
             enter fg[]
             do <<SLOT groupeditorCompilerSavedGroup:Descriptor>>; 
+            #);
+          groupeditorNotificationPrivate:
+            @<<SLOT groupeditorNotificationPrivate:Descriptor>>;
+          groupChangedEvent:
+            (# byMe: @boolean
+            enter byMe
+            <<SLOT groupeditorGroupChanged:DoPart>>
+            #);
+          propertiesChanged:
+           groupChangedEvent
+            (#  <<SLOT groupeditorPropertiesChanged:DoPart>> #);
+          fragmentChanged:
+           groupChangedEvent
+            (# ff: ^astInterface.fragmentForm
+            enter ff[]
+            <<SLOT groupeditorFragmentChanged:DoPart>>
+            #);
+          fragmentInserted:
+           groupChangedEvent
+            (# ff: ^astInterface.fragmentForm
+            enter ff[]
+            <<SLOT groupeditorFragmentInserted:DoPart>>
+            #);
+          fragmentDeleted:
+           groupChangedEvent
+            (# ff: ^astInterface.fragmentForm
+            enter ff[]
+            <<SLOT groupeditorFragmentDeleted:DoPart>>
             #)
        #);
      groupEditorList: @list
        (#
-          element::
-           groupEditor;
+          element:: groupEditor;
+          CreateGroupEditor:
+            (#
+               fg:
+                 ^astInterface.
+                    fragmentGroup;
+               ge: ^groupEditor
+            enter fg[]
+            <<SLOT editorenvCreateGroupEditor:DoPart>>
+            exit ge[]
+            #);
           findOrCreateGroupEditor:
-            (# fg: ^astInterface.fragmentGroup; ge: ^groupEditor
+            (#
+               fg:
+                 ^astInterface.
+                    fragmentGroup;
+               ge: ^groupEditor
             enter fg[]
             <<SLOT editorenvFindOrCreateGroupEditor:DoPart>>
             exit ge[]
@@ -1346,12 +1389,26 @@ editorenv: sifEditorEnv
      findOrCreateGroupEditor:
       groupEditorList.
         findOrCreateGroupEditor (#  #);
-     findOrCreateFormEditor:
+     createGroupEditor: groupEditorList.CreateGroupEditor (#  #);
+     createFormEditor:
        (#
           ff: ^astInterface.fragmentForm;
           theSifTextEditor: ^sifTexteditor;
+          ge: ^groupEditor;
           fe: ^codeeditor
-       enter (ff[],theSifTexteditor[])
+       enter (ff[],theSifTexteditor[],ge[])
+       do <<SLOT editorEnvCreateFormEditor:Descriptor>>
+       exit fe[]
+       #);
+     findOrCreateFormEditor:
+       (#
+          ff:
+            ^astInterface.
+               fragmentForm;
+          theSifTextEditor: ^sifTexteditor;
+          ge: ^groupEditor;
+          fe: ^codeeditor
+       enter (ff[],theSifTexteditor[],ge[])
        do <<SLOT editorEnvFindOrCreateFormEditor:Descriptor>>
        exit fe[]
        #);
@@ -1385,9 +1442,55 @@ editorenv: sifEditorEnv
           <<SLOT editorenvNonterminalsExist:Descriptor>>
        exit (unexpandedExist,unexp[])
        #);
+     fgHandler: @list
+       (#
+          element:: fragmentGroupHandler;
+          subscribe:
+            (# ge: ^groupEditor
+            enter ge[]
+            <<SLOT fragmentGroupHandlerSubscribe:DoPart>>
+            #);
+          unsubscribe:
+            (# ge: ^groupEditor
+            enter ge[]
+            <<SLOT fragmentGroupHandlerUnsubscribe:DoPart>>
+            #)
+       #);
+     fragmentGroupHandler:
+       (#
+          fg: ^astInterface.fragmentGroup;
+          groupEditors: @list (# element:: groupEditor #);
+          groupChangedEvent:
+            (# byEditor: ^groupEditor
+            enter byEditor[]
+            <<SLOT fragmentGroupHandlerGroupChanged:DoPart>>
+            #);
+          propertiesChanged:
+           groupChangedEvent
+            (#  <<SLOT fragmentGroupHandlerPropertiesChanged:DoPart>> #);
+          fragmentChanged:
+           groupChangedEvent
+            (# ff: ^astInterface.fragmentForm
+            enter ff[]
+            <<SLOT fragmentGroupHandlerFragmentChanged:DoPart>>
+            #);
+          fragmentInserted:
+           groupChangedEvent
+            (# ff: ^astInterface.fragmentForm
+            enter ff[]
+            <<SLOT fragmentGroupHandlerFragmentInserted:DoPart>>
+            #);
+          fragmentDeleted:
+           groupChangedEvent
+            (# ff: ^astInterface.fragmentForm
+            enter ff[]
+            <<SLOT fragmentGroupHandlerFragmentDeleted:DoPart>>
+            #)
+       #);
      ffHandler: @list
        (#
-          element:: fragmentFormHandler;
+          element::
+           fragmentFormHandler;
           subscribe:
             (# fe: ^codeeditor
             enter fe[]
@@ -1421,8 +1524,8 @@ editorenv: sifEditorEnv
             <<SLOT fragmentFormHandlerAstReplacedSequence:DoPart>>
             #);
           listElementInsertedEvent: fragmentChangedEvent
-            (# position: @integer; fatherNode: ^astInterface.expanded; 
-            enter (fatherNode[],position)
+            (# position: @integer; listNode: ^astInterface.expanded; 
+            enter (listNode[],position)
             <<SLOT fragmentFormHandlerListElementInserted:DoPart>>
             #);
           aListElementInsertedEvent: @listElementInsertedEvent;
@@ -1437,10 +1540,10 @@ editorenv: sifEditorEnv
           aListElementsDeletedEvent: @listElementsDeletedEvent;
           listElementsReplacedEvent: fragmentChangedEvent
             (#
-               oldElement: ^editorEnv.partList;
+               oldElements: ^editorEnv.partList;
                listNode: ^astInterface.expanded;
                position,length,newLength: @integer
-            enter (listNode[],position,length,oldElement[],newLength)
+            enter (listNode[],position,length,oldElements[],newLength)
             <<SLOT fragmentFormHandlerListElementsReplaced:DoPart>>
             #);
           aListElementsReplacedEvent: @listElementsreplacedEvent;

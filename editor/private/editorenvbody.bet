@@ -218,8 +218,6 @@ INCLUDE '~beta/mps/v4.9.1/propertyparser'
                                ff.grammar[]->newff.grammar[];
                                fg[]->newff.father;
                                newff[]->current.f[];
-                               'ASTGC: do something about open form editors'
-                                 ->putLine;
                                leave loop
                            if)
                         #);
@@ -464,7 +462,8 @@ INCLUDE '~beta/mps/v4.9.1/propertyparser'
                                      help.newLine;
                                      'Consider using the Recover Command'
                                        ->help.putText;
-                                     (none ,help[],'Recover?')->UI.alertUser
+                                     (none ,help[],'Recover?')->UI.alertUser;
+                                     
                                  if)
                              if);
                              
@@ -476,56 +475,6 @@ INCLUDE '~beta/mps/v4.9.1/propertyparser'
             if)
         if)
      exit writeAccess
-     #);
-   recoverGroup:
-     (#
-        g: ^astInterface.fragmentGroup;
-        fileName,groupName: ^text;
-        ge: ^groupEditor;
-        parseErrors: @boolean;
-        f: @file;
-        
-     enter g[]
-     do
-     (*g.name->help[];
-      help.copy->oldName[];
-      '#'->oldName.put;
-      (g[],oldName[])->groupEnvPrivate.changeGroupFromFile;
-      * *)
-        g[]->groupEditorList.findGroupEditor->ge[];
-        (if ge[]
-         // none then 'no groupEditor, should not happen'->putLine; 
-         else
-            g.fullname->groupName[];
-            ' ge.closeGroup;'->putLine;
-            '  groupName[]->groupEnvPrivate.openGroupFile->(g[],parseErrors);'
-              ->putLine;
-            '#'->g.restoreBackup;
-            '#'->(g.diskFileName).copyAppend->f.name;
-            (if f.entry.exists
-             // true then
-             (* temporarily rename to avoid recover question on 
-              recovered group *)
-                '##'->(g.diskFileName).copyAppend->f.entry.rename; 
-             else
-                f.name->putText; ' does not exist!'->putLine; 
-            if);
-            ' (g[],false)->editoernvnvPrivate.openGroupOrForm;'->putLine;
-            '##'->(g.diskFileName).copyAppend->f.name;
-            (if f.entry.exists
-             // true then '#'->(g.diskFileName).copyAppend->f.entry.rename; 
-             else
-                f.name->putText; ' does not exist!'->putLine; 
-            if);
-            g[]->groupEditorList.findGroupEditor->ge[];
-            (if ge[] = none then
-                'no groupEditor, should not happen'->putLine
-             else
-                ge.groupTouched
-            if);
-            
-        if);
-        
      #);
    nonterminalExists:
      (#
@@ -1024,11 +973,37 @@ do
             (none ,'Save group',help[])
               ->UI.promptForBoolean
                 (#
-                   ok::<  (#  do (true,true)->current.save #);
+                   ok::<  (#  do (true,false)->current.save #);
                    notOK::<  (#  do  #);
                    cancel::<  (#  do leave l #);
                    
                 #)
+        if)
+     #)  
+
+-- editorenvCreateGroupEditor: DoPart --
+do
+     (# textfile: @file
+     do
+        (if trace[2] then 'creating groupEditor'->putLine;  if);
+        &groupEditor[]->ge[];
+        fg[]->ge.fg[];
+        fg[]->editorenvPrivate.checkWriteAccess->ge.writeAccess;
+        (if trace[2] then
+            'writeAccess: '->putText;
+            (if ge.writeAccess then 'true'->putLine else 'false'->putLine if)
+        if);
+        fg.textfilename->textfile.name;
+        (if not textfile.entry.exists then
+            '### Text file does not exist'->putLine;
+            true->ge.needToUpdateTextFile;
+            
+        if);
+        fg[]->editorenvPrivate.getGrammarName->ge.grammarName[];
+        ge[]->fgHandler.subscribe;
+        ge[]->append;
+        (if not onGoingRecovery then
+            ge.fg[]->editorenvPrivate.checkAutoSaveFile
         if)
      #)  
 
@@ -1037,72 +1012,59 @@ do
      (# textfile: @file
      do
         fg[]->findGroupEditor->ge[];
-        (if ge[] = none then
-            (if trace[2] then 'creating groupEditor'->putLine;  if);
-            &groupEditor[]->ge[];
-            fg[]->ge.fg[];
-            fg[]->editorenvPrivate.checkWriteAccess->ge.writeAccess;
-            (if trace[2] then
-                'writeAccess: '->putText;
-                (if ge.writeAccess then
-                    'true'->putLine
-                 else
-                    'false'->putLine
-                if)
-            if);
-            fg.textfilename->textfile.name;
-            (if not textfile.entry.exists then
-                '### Text file does not exist'->putLine;
-                true->ge.needToUpdateTextFile;
-                
-            if);
-            fg[]->editorenvPrivate.getGrammarName->ge.grammarName[];
-            ge[]->append;
-            (if not onGoingRecovery then
-                ge.fg[]->editorenvPrivate.checkAutoSaveFile
-            if)
-        if)
+        (if ge[] = none then fg[]->createGroupEditor->ge[] if)
      #)  
 
--- editorenvFindOrCreateFormEditor: Descriptor --
-(# ge: ^groupEditor; help: ^text; 
+-- editorenvCreateFormEditor: Descriptor --
+(# help: ^text; 
 do
-   ff.father->groupeditorList.findOrCreateGroupEditor->ge[];
+   (if ge[] <> none then
+       ff[]->ge.formeditorList.findEditor->fe[];
+       (if trace[2] then 'creating formeditor'->putLine;  if);
+       (if theSifTextEditor[] <> none then
+           &theSifTextEditor.codeviewerType[]->fe[];
+           fe[]->theSifTexteditor.SifViewer[];
+           theSifTextEditor[]->fe.theSifTextEditor[];
+           ff[]->theSifTexteditor.frag[];
+           ff.root[]->theSifTexteditor.editorRoot[];
+           (mps[],ff.grammar[],UI[],theSifTextEditor[],ff.root[],none )
+             ->fe.init;
+           fe[]->ge.formeditorList.append;
+           ge[]->fe.thisGroupEditor[];
+           not ge.writeAccess->fe.theSifTextEditor.isReadOnly;
+           (if false then
+               'readOnly: '->putText;
+               (if fe.theSifTextEditor.readOnly then
+                   'true'->putLine
+                else
+                   'false'->putLine
+               if);
+               
+           if);
+           
+        else
+           'CreateFormEditor: theSifTexteditor is none!'->putLine
+       if)
+    else
+       'CreateFormEditor: ge is none!'->putLine
+   if);
+   
+#)  
+
+-- editorenvFindOrCreateFormEditor: Descriptor --
+(# help: ^text; 
+do
    (if ge[] <> none then
        ff[]->ge.formeditorList.findEditor->fe[];
        (if fe[] <> none then
-       (* (if (selectedNode[] <> none ) then
-        (selectedNode[],1,0,0)->fe.setFocus
+           fe.doReprettyprint;
+           fe.cs->fe.setFocus;
+           fe[]->theSifTexteditor.SifViewer[]
         else
-        fe.cs->fe.setFocus
-        if)*)
-           fe.doReprettyprint; fe.cs->fe.setFocus
-        else
-           (if trace[2] then 'creating formeditor'->putLine;  if);
-           (if theSifTextEditor[] <> none then
-               &theSifTextEditor.codeviewerType[]->fe[];
-               fe[]->theSifTexteditor.SifViewer[];
-               ff[]->theSifTexteditor.frag[];
-               ff.root[]->theSifTexteditor.editorRoot[];
-               (mps[],ff.grammar[],UI[],theSifTextEditor[],ff.root[],none )
-                 ->fe.init;
-               fe[]->ge.formeditorList.append;
-               ge[]->fe.thisGroupEditor[];
-               not ge.writeAccess->fe.theSifTextEditor.isReadOnly;
-               (if false then
-                   'readOnly: '->putText;
-                   (if fe.theSifTextEditor.readOnly then
-                       'true'->putLine
-                    else
-                       'false'->putLine
-                   if);
-                   
-               if);
-               
-            else
-               'findOrCreateFormEditor: theSifTexteditor is none!'->putLine
-           if)
+           (ff[],theSifTexteditor[],ge[])->createFormEditor->fe[]
        if)
+    else
+       'findOrCreateFormEditor: ge is none!'->putLine
    if);
    
 #)  

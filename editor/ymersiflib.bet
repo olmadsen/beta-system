@@ -15,7 +15,9 @@ fragmentBrowser: ymerApplication
           open::  (#  #);
           theSifTextEditor: ^sifTextEditor;
           cbg: (* current browser group *) ^browser.projects.group;
-          cff: (* current fragment form *) ^astInterface.fragmentform;
+          cff:
+          (* current fragment form, not used anymore only in oldfromeditorExists *)
+          ^astInterface.fragmentform;
           ymerCallback: @ymerCall
             (#
                refreshGroup::  (#  do (fg[],none )->updateBrowser #);
@@ -33,18 +35,15 @@ fragmentBrowser: ymerApplication
                if)
             exit value
             #);
-          formEditorExists:
+          oldformEditorExists:
             (# exists: @boolean
             do
                browser.getFragmentFormEditor->theSifTextEditor[];
                (if theSifTextEditor[] <> none then
                    (if theSifTextEditor.sifViewer[] <> none then
                        theSifTextEditor.sifViewer[]->ymerBrowserPrivate.cfe[];
-                       (ymerBrowserPrivate.cfe[],edenv[])->edit.attach;
-                       (ymerBrowserPrivate.cfe[],edenv[])->view.attach;
-                       (ymerBrowserPrivate.cfe[],edenv[])->slots.attach;
                        (if not theSifTextEditor.textediting then
-                           true->exists; INNER formEditorExists
+                           true->exists; INNER oldformEditorExists
                         else
                            true->ongoingTextediting
                        if)
@@ -52,7 +51,22 @@ fragmentBrowser: ymerApplication
                if)
             exit exists
             #);
-          groupEditorExists:
+          formEditorExists:
+            (# exists: @boolean
+            do
+               (if ymerBrowserPrivate.cfe[] <> none then
+                   (if ymerBrowserPrivate.cfe.theSifTextEditor[] <> none then
+                       (if not
+                       ymerBrowserPrivate.cfe.theSifTextEditor.textediting then
+                           true->exists; 
+                        else
+                           true->ongoingTextediting
+                       if)
+                   if)
+               if)
+            exit exists
+            #);
+          oldgroupEditorExists:
             (# exists: @boolean
             do
                (if browser[] <> none then
@@ -66,7 +80,7 @@ fragmentBrowser: ymerApplication
                                  ->cge[];
                                (if cge[] <> none then
                                    (if not checkOngoingTextediting then
-                                       true->exists; INNER groupEditorExists
+                                       true->exists; INNER oldgroupEditorExists
                                    if)
                                if)
                            if)
@@ -75,16 +89,57 @@ fragmentBrowser: ymerApplication
                if)
             exit exists
             #);
+          groupEditorExists:
+            (# exists: @boolean
+            do
+               (if cge[] <> none then
+                   (if not checkOngoingTextediting then true->exists if)
+               if)
+            exit exists
+            #);
           updateBrowser:
             (#
-               fg: ^astInterface.fragmentGroup; ff: ^astInterface.fragmentForm
+               cbg: (* current browser group *) ^browser.projects.group;
+               fg: ^astInterface.fragmentGroup;
+               ff: ^astInterface.fragmentForm
             enter (fg[],ff[])
             do
+               browser.currentgroup[]->cbg[];
                (browser.currentProject[],none )->browser.setGroup;
                (browser.currentProject[],cbg[])->browser.setGroup;
                (if ff[] <> none then
                    (browser.currentProject[],cbg[],ff[])
                      ->browser.setFragmentForm
+               if)
+            #);
+          oldFindAndSelect:
+            (# node: ^astInterface.ast
+            enter node[]
+            do
+               (if node[] <> none then
+                   (if ymerBrowserPrivate.cfe[] <> none then
+                       (if node.frag[] <> ymerBrowserPrivate.cfe.frag[] then
+                           ((node.frag.father).fullName,node.frag.name)
+                             ->browser.selectFragmentForm;
+                           (if oldformEditorExists then
+                               (node[],1,0,0)->ymerBrowserPrivate.cfe.setFocus
+                            else
+                               'formeditor not found'->putLine
+                           if)
+                        else
+                           (node[],1,0,0)->ymerBrowserPrivate.cfe.setFocus
+                       if)
+                    else
+                       ((node.frag.father).fullName,node.frag.name)
+                         ->browser.selectFragmentForm;
+                       (if oldformEditorExists then
+                           (node[],1,0,0)->ymerBrowserPrivate.cfe.setFocus
+                        else
+                           'formEditor not found'->putLine
+                       if)
+                   if)
+                else
+                   'findAndSelect: node is none!'->putLine
                if)
             #);
           findAndSelect:
@@ -96,22 +151,14 @@ fragmentBrowser: ymerApplication
                        (if node.frag[] <> ymerBrowserPrivate.cfe.frag[] then
                            ((node.frag.father).fullName,node.frag.name)
                              ->browser.selectFragmentForm;
-                           (if formEditorExists then
-                               (node[],1,0,0)->ymerBrowserPrivate.cfe.setFocus
-                            else
-                               'formeditor not found'->putLine
-                           if)
+                           (node[],1,0,0)->ymerBrowserPrivate.cfe.setFocus
                         else
                            (node[],1,0,0)->ymerBrowserPrivate.cfe.setFocus
                        if)
                     else
                        ((node.frag.father).fullName,node.frag.name)
                          ->browser.selectFragmentForm;
-                       (if formEditorExists then
-                           (node[],1,0,0)->ymerBrowserPrivate.cfe.setFocus
-                        else
-                           'formEditor not found'->putLine
-                       if)
+                       (node[],1,0,0)->ymerBrowserPrivate.cfe.setFocus
                    if)
                 else
                    'findAndSelect: node is none!'->putLine
@@ -310,11 +357,6 @@ fragmentBrowser: ymerApplication
             (# g: ^astInterface.fragmentGroup; ge: ^editorEnv.groupEditor; 
             enter ge[]
             do
-            (*g.name->help[];
-             help.copy->oldName[];
-             '#'->oldName.put;
-             (g[],oldName[])->groupEnvPrivate.changeGroupFromFile;
-             * *)
                ge.fg[]->g[];
                (if ge[]
                 // none then 'no groupEditor, should not happen'->putLine; 
@@ -346,11 +388,6 @@ fragmentBrowser: ymerApplication
                
             enter ge[]
             do
-            (*g.name->help[];
-             help.copy->oldName[];
-             '#'->oldName.put;
-             (g[],oldName[])->groupEnvPrivate.changeGroupFromFile;
-             * *)
                ge.fg[]->g[];
                (if ge[]
                 // none then 'no groupEditor, should not happen'->putLine; 
@@ -373,9 +410,19 @@ fragmentBrowser: ymerApplication
                
             #);
           Edit: @codeEditorEditMenu
-            (# writeStatus::  (#  do t[]->writeInfoView #) #);
-          View: @codeEditorViewMenu;
-          SLOTs: @codeEditorSLOTsMenu;
+            (#
+               formEditorExists:: 
+                 (#  do ymerBrowserPrivate.cfe[]->cfe[] #);
+               writeStatus::  (#  do t[]->writeInfoView #)
+            #);
+          View: @codeEditorViewMenu
+            (#
+               formEditorExists::  (#  do ymerBrowserPrivate.cfe[]->cfe[] #)
+            #);
+          SLOTs: @codeEditorSLOTsMenu
+            (#
+               formEditorExists::  (#  do ymerBrowserPrivate.cfe[]->cfe[] #)
+            #);
           menubarType:: 
             (#
                GroupFile: @simplemenu
@@ -431,13 +478,7 @@ fragmentBrowser: ymerApplication
                       #);
                     iClose: @item
                       (#
-                         onStatus:: 
-                           (# 
-                           do
-                              false->value;
-                              groupEditorExists
-                                (#  do true->value #)
-                           #);
+                         onStatus::  (#  do groupEditorExists->value;  #);
                          onSelect:: 
                            (# 
                            do
@@ -448,25 +489,12 @@ fragmentBrowser: ymerApplication
                       #);
                     iSave: @item
                       (#
-                         onStatus:: 
-                           (# 
-                           do
-                              false->value;
-                              groupEditorExists
-                                (#  do true->value #)
-                           #);
-                         onSelect::  (#  do (true,true)->cge.save #)
+                         onStatus::  (#  do groupEditorExists->value #);
+                         onSelect::  (#  do (true,false)->cge.save #)
                       #);
                     iSaveAs: @item
                       (#
-                         onStatus:: 
-                           (# 
-                           do
-                              false->value;
-                              groupEditorExists
-                                (#  do true->value #);
-                              
-                           #);
+                         onStatus::  (#  do groupEditorExists->value #);
                          onSelect:: 
                            (# newName: ^text
                            do
@@ -483,14 +511,7 @@ fragmentBrowser: ymerApplication
                       #);
                     iSaveAbstract: @item
                       (#
-                         onStatus:: 
-                           (# 
-                           do
-                              false->value;
-                              groupEditorExists
-                                (#  do true->value #);
-                              
-                           #);
+                         onStatus::  (#  do groupEditorExists->value #);
                          onSelect::  (#  do cge.saveabstract #)
                       #);
                     iRecover: @item
@@ -498,9 +519,11 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (#  do cge.autoSaveFileExists->value #)
+                              (if groupEditorExists then
+                                  cge.autoSaveFileExists->value
+                               else
+                                  false->value
+                              if)
                            #);
                          onSelect::  (#  do cge[]->recoverGroup #)
                       #);
@@ -510,14 +533,12 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (# 
-                                do
-                                   '~'->(cge.fg.diskFileName).copyAppend
-                                     ->f.name;
-                                   f.entry.exists->value
-                                #)
+                              (if groupEditorExists then
+                                  '~'->(cge.fg.diskFileName).copyAppend->f.name;
+                                  f.entry.exists->value
+                               else
+                                  false->value
+                              if)
                            #);
                          onSelect::  (#  do cge[]->revertGroup #)
                       #);
@@ -545,13 +566,15 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (#  do cge.askUndoPermission->value #)
+                              (if groupEditorExists then
+                                  cge.askUndoPermission->value
+                               else
+                                  false->value
+                              if)
                            #);
                          onSelect:: 
                            (# 
-                           do cge.undo; (cge.fg[],none )->updateBrowser
+                           do cge.undo; 
                            #)
                       #);
                     iCut: @item
@@ -559,15 +582,16 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (#  do (cff[] <> none )->value #)
+                              (if groupEditorExists then
+                                  formEditorExists->value
+                               else
+                                  false->value
+                              if)
                            #);
                          onSelect:: 
                            (# 
                            do
-                              cff[]->cge.cutForm;
-                              (cge.fg[],none )->updateBrowser
+                              ymerBrowserPrivate.cfe.frag[]->cge.cutForm;
                            #)
                       #);
                     iCopy: @item
@@ -575,31 +599,38 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (#  do (cff[] <> none )->value #)
+                              (if groupEditorExists then
+                                  formEditorExists->value
+                               else
+                                  false->value
+                              if)
                            #);
-                         onSelect::  (#  do cff[]->cge.copyForm #)
+                         onSelect:: 
+                           (# 
+                           do ymerBrowserPrivate.cfe.frag[]->cge.copyForm
+                           #)
                       #);
                     iPaste: @item
                       (#
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (# 
-                                do
-                                   (if cff[] <> none then
-                                       cff[]->cge.askPastePermission->value
-                                   if)
-                                #)
+                              (if groupEditorExists then
+                                  (if formEditorExists then
+                                      ymerBrowserPrivate.cfe.frag[]
+                                        ->cge.askPastePermission->value
+                                   else
+                                      false->value
+                                  if)
+                               else
+                                  false->value
+                              if)
                            #);
                          onSelect:: 
                            (# ff: ^astInterface.fragmentForm
                            do
-                              cff[]->cge.pasteForm->ff[];
-                              (cge.fg[],ff[])->updateBrowser
+                              ymerBrowserPrivate.cfe.frag[]->cge.pasteForm
+                                ->ff[];
                            #)
                       #);
                     iAppend: @item
@@ -607,17 +638,21 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (# 
-                                do none ->cge.askPastePermission->value
-                                #)
+                              (if groupEditorExists then
+                                  (if formEditorExists then
+                                      ymerBrowserPrivate.cfe.frag[]
+                                        ->cge.askPastePermission->value
+                                   else
+                                      false->value
+                                  if)
+                               else
+                                  false->value
+                              if)
                            #);
                          onSelect:: 
                            (# ff: ^astInterface.fragmentForm
                            do
                               none ->cge.pasteForm->ff[];
-                              (cge.fg[],ff[])->updateBrowser
                            #)
                       #);
                     iInsertDescriptorFragmentForm: @item
@@ -625,15 +660,17 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (#  do cge.askInsertPermission->value #)
+                              (if groupEditorExists then
+                                  cge.askInsertPermission->value
+                               else
+                                  false->value
+                              if)
                            #);
                          onSelect:: 
                            (# ff: ^astInterface.fragmentForm
                            do
-                              (cff[],2)->cge.insertForm->ff[];
-                              (cge.fg[],ff[])->updateBrowser
+                              (ymerBrowserPrivate.cfe.frag[],2)->cge.insertForm
+                                ->ff[];
                            #)
                       #);
                     iInsertAttributesFragmentForm: @item
@@ -641,15 +678,17 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (#  do cge.askInsertPermission->value #)
+                              (if groupEditorExists then
+                                  cge.askInsertPermission->value
+                               else
+                                  false->value
+                              if)
                            #);
                          onSelect:: 
                            (# ff: ^astInterface.fragmentForm
                            do
-                              (cff[],3)->cge.insertForm->ff[];
-                              (cge.fg[],ff[])->updateBrowser
+                              (ymerBrowserPrivate.cfe.frag[],3)->cge.insertForm
+                                ->ff[];
                            #)
                       #);
                     iInsertDoPartFragmentForm: @item
@@ -657,31 +696,26 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (#  do cge.askInsertPermission->value #)
+                              (if groupEditorExists then
+                                  cge.askInsertPermission->value
+                               else
+                                  false->value
+                              if)
                            #);
                          onSelect:: 
                            (# ff: ^astInterface.fragmentForm
                            do
-                              (cff[],31)->cge.insertForm->ff[];
-                              (cge.fg[],ff[])->updateBrowser
+                              (ymerBrowserPrivate.cfe.frag[],31)->cge.insertForm
+                                ->ff[];
                            #)
                       #);
                     iEditProperties: @item
                       (#
-                         onStatus:: 
-                           (# 
-                           do
-                              false->value;
-                              groupEditorExists
-                                (#  do true->value #)
-                           #);
+                         onStatus::  (#  do groupEditorExists->value #);
                          onSelect:: 
                            (# 
                            do
                               cge.editProperties;
-                              (cge.fg[],none )->updateBrowser
                            #)
                       #);
                     iEditFormName: @item
@@ -689,15 +723,17 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (#  do (cff[] <> none )->value #)
+                              (if groupEditorExists then
+                                  formEditorExists->value
+                               else
+                                  false->value
+                              if)
                            #);
                          onSelect:: 
                            (# ff: ^astInterface.fragmentForm
                            do
-                              cff[]->cge.editFormName;
-                              (cge.fg[],cff[])->updateBrowser
+                              ymerBrowserPrivate.cfe.frag[]->cge.editFormName;
+                              (cge.fg[],ymerBrowserPrivate.cfe.frag[])
                            #)
                       #);
                     iSearchSLOT: @item
@@ -705,14 +741,17 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (#  do (cff[] <> none )->value #)
+                              (if groupEditorExists then
+                                  formEditorExists->value
+                               else
+                                  false->value
+                              if)
                            #);
                          onSelect:: 
                            (# node: ^astInterface.ast
                            do
-                              cff[]->cge.searchSLOT->node[];
+                              ymerBrowserPrivate.cfe.frag[]->cge.searchSLOT
+                                ->node[];
                               (if node[] <> none then
                                   node[]->findandselect
                               if);
@@ -746,13 +785,7 @@ fragmentBrowser: ymerApplication
                  (#
                     iCheck: @item
                       (#
-                         onStatus:: 
-                           (# 
-                           do
-                              false->value;
-                              groupEditorExists
-                                (#  do true->value #)
-                           #);
+                         onStatus::  (#  do groupEditorExists->value #);
                          onSelect:: 
                            (# 
                            do cge.fg[]->lastCompiledFg[]; cge.fg[]->check
@@ -763,21 +796,17 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (#  do (lastCompiledFg[] <> none )->value #)
+                              (if groupEditorExists then
+                                  (lastCompiledFg[] <> none )->value
+                               else
+                                  false->value
+                              if)
                            #);
                          onSelect::  (#  do lastCompiledFg[]->check #)
                       #);
                     iCompile: @item
                       (#
-                         onStatus:: 
-                           (# 
-                           do
-                              false->value;
-                              groupEditorExists
-                                (#  do true->value #)
-                           #);
+                         onStatus::  (#  do groupEditorExists->value #);
                          onSelect:: 
                            (# 
                            do cge.fg[]->lastCompiledFg[]; cge.fg[]->compile
@@ -788,45 +817,27 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (#  do (lastCompiledFg[] <> none )->value #)
+                              (if groupEditorExists then
+                                  (lastCompiledFg[] <> none )->value
+                               else
+                                  false->value
+                              if)
                            #);
                          onSelect::  (#  do lastCompiledFg[]->compile #)
                       #);
                     iExecute: @item
                       (#
-                         onStatus:: 
-                           (# 
-                           do
-                              false->value;
-                              groupEditorExists
-                                (#  do true->value #);
-                              false->value
-                           #);
+                         onStatus::  (#  do groupEditorExists->value #);
                          onSelect::  (#  do  #)
                       #);
                     iReExecute: @item
                       (#
-                         onStatus:: 
-                           (# 
-                           do
-                              false->value;
-                              groupEditorExists
-                                (#  do true->value #);
-                              false->value
-                           #);
+                         onStatus::  (#  do groupEditorExists->value #);
                          onSelect::  (#  do  #)
                       #);
                     iCompileAndExecute: @item
                       (#
-                         onStatus:: 
-                           (# 
-                           do
-                              false->value;
-                              groupEditorExists
-                                (#  do true->value #)
-                           #);
+                         onStatus::  (#  do groupEditorExists->value #);
                          onSelect:: 
                            (# 
                            do cge.fg[]->lastCompiledFg[]; cge.fg[]->compile
@@ -837,33 +848,22 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              false->value;
-                              groupEditorExists
-                                (#  do (lastCompiledFg[] <> none )->value #)
+                              (if groupEditorExists then
+                                  (lastCompiledFg[] <> none )->value
+                               else
+                                  false->value
+                              if)
                            #);
                          onSelect::  (#  do lastCompiledFg[]->compile #)
                       #);
                     iDebug: @item
                       (#
-                         onStatus:: 
-                           (# 
-                           do
-                              false->value;
-                              groupEditorExists
-                                (#  do true->value #);
-                              false->value
-                           #);
+                         onStatus::  (#  do groupEditorExists->value #);
                          onSelect::  (#  do  #)
                       #);
                     iSemanticErrors: @item
                       (#
-                         onStatus:: 
-                           (# 
-                           do
-                              false->value;
-                              groupEditorExists
-                                (#  do true->value #)
-                           #);
+                         onStatus::  (#  do groupEditorExists->value #);
                          onSelect:: 
                            (#  do cge.fg[]->openSemanticErrorEditor #)
                       #);
@@ -873,11 +873,17 @@ fragmentBrowser: ymerApplication
                            (# 
                            do
                               false->value;
-                              formEditorExists
-                                (#  do ymerBrowserPrivate.cfe.cs.hasSemanticLink->value #)
+                              (if ymerBrowserPrivate.cfe[] <> none then
+                                  ymerBrowserPrivate.cfe.cs.hasSemanticLink
+                                    ->value
+                              if)
                            #);
                          onSelect:: 
-                           (#  do ymerBrowserPrivate.cfe.cs.node[]->ymerBrowserPrivate.cfe.followSemanticLink #)
+                           (# 
+                           do
+                              ymerBrowserPrivate.cfe.cs.node[]
+                                ->ymerBrowserPrivate.cfe.followSemanticLink
+                           #)
                       #);
                     open:: 
                       (# 
@@ -902,13 +908,10 @@ fragmentBrowser: ymerApplication
                     GroupEdit.new;
                     'Tools'->GroupPerform.new;
                     Edit.new;
-                    'Edit'->Edit.name;
                     Edit[]->append;
                     View.new;
-                    'View'->View.name;
                     View[]->append;
                     SLOTs.new;
-                    'SLOTs'->SLOTs.name;
                     SLOTs[]->append
                  #)
             #)

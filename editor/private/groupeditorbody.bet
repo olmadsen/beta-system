@@ -30,6 +30,7 @@ do
         cleanUp:
           (# 
           do
+             this(groupEditor)[]->fgHandler.unsubscribe;
              formEditorList.scan
                (#  do current.closeForm #);
              position[]->groupEditorList.delete
@@ -44,6 +45,7 @@ do
                 'Save changes to '->help[];
                 fg.name->help.putText;
                 '?'->help.put;
+                help[]->putline;
                 (none ,'Close group',help[])
                   ->UI.promptForBoolean
                     (#
@@ -218,12 +220,16 @@ do
             if)
         if)
      #)  
+   
+-- groupeditorAutoSave: DoPart --
+do
+   ('#',fg[])->editorenvPrivate.extendedSaveBackup
 
 -- groupeditorRecover: DoPart --
-do   
+do  (* is done in ymersiflib *)
 
 -- groupeditorRevert: DoPart --
-do   
+do    (* is done in ymersiflib *) 
 
 -- groupeditorResetGroupTouch: DoPart --
 do 0->touched; formEditorList.scan (#  do current.resetFragmentTouch #);   
@@ -331,7 +337,7 @@ do
             'CutForm: the corresponding formEditor should be closed (if open)'
               ->putLine;
             ff.name->fg.fragmentList.deleteLocalName;
-            groupTouched
+            (true,ff[])->fragmentDeleted
         if)
      #)  
 
@@ -349,7 +355,9 @@ do
         pasteFrag[]->clippedFrag.root.copy->pasteFrag.root[];
         (clippedFrag.name).copy->pasteFrag.name;
         ff[]->getFragmentListElement->fle[];
-        (if ((fg[],pasteFrag[],fle[])->myAddFragment) then groupTouched;  if)
+        (if ((fg[],pasteFrag[],fle[])->myAddFragment) then
+            (true,pasteFrag[])->fragmentInserted
+        if)
      #)  
 
 -- groupeditorInsertForm: DoPart --
@@ -391,7 +399,7 @@ do
                     if);
                     ff[]->getFragmentListElement->fle[];
                     (if ((fg[],newff[],fle[])->myAddFragment) then
-                        groupTouched; 
+                        (true,newff[])->fragmentInserted; 
                     if)
                  #)
             #);
@@ -407,6 +415,9 @@ do
         propertyWindow: window
           (#
              editor: @sifTextEditor (# codeViewerType::< propertyEditor #);
+             Edit: @codeEditorEditMenu;
+             menubarType:: 
+               (# open::  (#  do Edit.new; Edit[]->append;  #) #);
              open:: 
                (#
                   ff: ^astInterface.fragmentForm;
@@ -428,12 +439,13 @@ do
                       (if ped[] <> none then
                           ped[]->thePropertyEditor[];
                           THIS(GroupEditor)[]->ped.theGroupEditor[];
-                          
+                          ped[]->Edit.attach
                        else
                           'no propertyeditor created!'->putLine
                       if);
                       editor.size->size;
                       true->editor.bindBottom->editor.bindRight
+                   else 'propertyWindow: node is none! '->putLine
                   if);
                   
                #);
@@ -476,7 +488,9 @@ do
                 (#
                    ok::< 
                      (# 
-                     do userText[]->fle.name[]->fle.f.name; groupTouched; 
+                     do
+                        userText[]->fle.name[]->fle.f.name;
+                        (true,fle.f[])->fragmentChanged
                      #)
                 #)
         if)
@@ -562,3 +576,82 @@ do
    if)
 #)  
 
+-- groupeditorNotificationPrivate: Descriptor --
+(#
+   refresh: 
+     (#
+     do 
+        (if ymerCallBack[] <> none then
+            fg[]->ymerCallback.refreshGroup;
+         else
+            'ymercallback is none!!'->putLine
+        if)  
+     #)
+#)
+
+-- groupeditorGroupChanged: DoPart --
+do 
+   groupTouched;
+   (if byMe then
+       autoSave
+   if);
+   INNER GroupChangedEvent  
+
+-- groupeditorPropertiesChanged: DoPart --
+do
+   (if trace[7] then
+       'groupeditorPropertiesChanged '->putText;
+       (if byMe then 'byMe'->putText if);
+       newLine;
+   if);
+   (if byMe then
+       groupeditorNotificationPrivate.refresh;
+       this(groupeditor)[]->fgh.propertiesChanged
+    else
+       groupeditorNotificationPrivate.refresh
+   if)
+       
+-- groupeditorFragmentChanged: DoPart --
+do
+   (if trace[7] then
+       'groupeditorFragmentChanged '->putText;
+       (if byMe then 'byMe'->putText if);
+       newLine;
+   if);
+   groupeditorNotificationPrivate.refresh;
+   (if byMe then
+       groupeditorNotificationPrivate.refresh;
+       (this(groupeditor)[],ff[])->fgh.fragmentChanged
+    else
+       groupeditorNotificationPrivate.refresh
+   if)
+
+-- groupeditorFragmentInserted: DoPart --
+do
+   (if trace[7] then
+       'groupeditorFragmentInserted '->putText;
+       (if byMe then 'byMe'->putText if);
+       newLine;
+   if);
+   groupeditorNotificationPrivate.refresh;
+   (if byMe then
+       groupeditorNotificationPrivate.refresh;
+       (this(groupeditor)[],ff[])->fgh.fragmentInserted
+    else
+       groupeditorNotificationPrivate.refresh
+   if)
+
+-- groupeditorFragmentDeleted: DoPart --
+do
+   (if trace[7] then
+       'groupeditorFragmentDeleted '->putText;
+       (if byMe then 'byMe'->putText if);
+       newLine;
+   if);
+   groupeditorNotificationPrivate.refresh;
+   (if byMe then
+       groupeditorNotificationPrivate.refresh;
+       (this(groupeditor)[],ff[])->fgh.fragmentDeleted
+    else
+       groupeditorNotificationPrivate.refresh
+   if)
