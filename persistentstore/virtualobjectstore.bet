@@ -1,0 +1,385 @@
+ORIGIN '~beta/basiclib/betaenv';
+(* 
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-98
+ *       All rights reserved.
+ *)
+
+---- lib: attributes ----
+
+persistentstore:
+  (# lastupdate:@integer;
+     init:
+       (#
+       do 
+       #);
+     
+     commit:
+       (# doUpdateInMemoryObjects:< BooleanValue 
+            (# do false-> value; INNER #);
+          doCheckpoint:< BooleanValue 
+            (# do true -> value; INNER #);
+       do 
+       #);
+     
+      reget:
+       (# NotFound:< PSException
+            (# 
+            do 'persistentstore.reget: Root "' -> msg.putText; 
+               fullname[] -> msg.putText;
+               '" has been overwritten by another client.' -> msg.putText;
+               'Your references are not longer valid.'->msg.puttext;
+               msg[]->putline;
+               true->continue;
+               INNER
+            #);
+          theObject: ^Object;
+       enter theObject[]   
+       do 
+       #);
+     
+     openReadExt: external (# name, rcode: @integer enter name exit rcode #);
+     
+     ACCESSERRORERROR: (# exit 1#);
+     NOTFOUNDERROR: (# exit 2 #);
+     ALREADYOPENERROR: (# exit 3 #);
+     
+     openRead:
+       (# alreadyOpen:< PSexception
+            (# 
+            do 'persistentstore.openRead: "' 
+                 -> msg.putText; fullName[] -> msg.putText;
+               '" already open' -> msg.putText; 
+               INNER
+            #);
+          notFound:< PSexception 
+            (# 
+            do 'persistentstore.openRead: "' 
+                 -> msg.putText; fullName[] -> msg.putText;
+               '" not found' -> msg.putText; 
+               INNER
+            #);
+          accessError:< PSexception
+            (# 
+            do 'persistentstore.openRead: No access to "' 
+                 -> msg.putText; fullName[] -> msg.putText;
+               '" ' -> msg.putText; 
+               INNER 
+            #);
+          name: ^Text;
+       enter name[]
+       do 
+          (if ((%getLongAt (@@ name)) -> openReadExt)
+           // (ALREADYOPENERROR) then
+              name[] -> alreadyOpen
+           // (NOTFOUNDERROR) then
+              name[] -> notFound
+           // (ACCESSERRORERROR) then
+              name[] -> accessError
+          if)
+       #);
+     
+     openWriteExt: external (# name, rcode: @integer enter name exit rcode #);
+     
+     openWrite:
+       (# alreadyOpen:< PSexception
+            (# 
+            do 'persistentstore.openWrite: "' 
+                 -> msg.putText; fullName[] -> msg.putText;
+               '" already open' -> msg.putText; 
+               INNER
+            #);
+          notFound:< PSexception 
+            (# 
+            do 'persistentstore.openWrite: "' 
+                 -> msg.putText; fullName[] -> msg.putText;
+               '" not found' -> msg.putText; 
+               INNER
+            #);
+          accessError:< PSexception
+            (# 
+            do 'persistentstore.openWrite: No access to"' 
+                 -> msg.putText;  fullName[] -> msg.putText; 
+               '"' -> msg.putText;
+               INNER
+            #);
+          name: ^Text;
+       enter name[]
+       do (if ((%getLongAt (@@ name)) -> openWriteExt)
+           // (ALREADYOPENERROR) then
+              name[] -> alreadyOpen
+           // (NOTFOUNDERROR) then
+              name[] -> notFound
+           // (ACCESSERRORERROR) then
+              name[] -> accessError
+          if)
+       #);
+     
+     createExt: external (# name, rcode:@integer enter name exit rcode #);
+     deleteExt: external (# name, rcode:@integer enter name exit rcode #);
+
+     EXISTSERROR: (# exit 4 #);
+     CREATIONERRORERROR: (# exit 5 #);
+     
+     create:
+       (# alreadyOpen:< PSexception
+            (# 
+            do 'persistentstore.create: "' 
+                 -> msg.putText; fullName[] -> msg.putText;
+               '" already open' -> msg.putText; 
+               INNER
+            #);
+          exists:< PSexception 
+            (* The old store is deleted if exists returns. 
+             *)
+            (# 
+            do 'persistentstore.create: "' 
+                 -> msg.putText; fullName[] -> msg.putText;
+               '" already exists' -> msg.putText; 
+               INNER
+            #);
+          creationError:< PSexception
+            (# 
+            do 'persistentstore.create: Failed creating "'
+                 -> msg.putText; fullName[] -> msg.putText; 
+               '"' -> msg.putText;
+               INNER
+            #);
+          name: ^Text;
+       enter name[]
+       do (if ((%getLongAt (@@ name)) -> createExt)
+           // (ALREADYOPENERROR) then
+              name[] -> alreadyOpen
+           // (EXISTSERROR) then
+              name[] -> exists;
+              (if ((%getLongAt (@@ name)) -> deleteExt) > 0 then
+                  name[] -> creationError
+               else
+                  name[] -> create;
+              if)
+           // (CREATIONERRORERROR) then
+              name[] -> creationError
+          if)
+       #);
+     
+     checkpoint:
+       (# do #);
+     
+     closeExt: external(# #);
+     setTerminatingGC: external (#  #);
+
+     close:
+       (# danglersExists:< 
+            (# toDo: @Integer;
+               kill:   (# exit 0 #); 
+               (* Kill the process. Default action. *)
+               fetch:  (# exit 1 #); 
+               (* Fetch the missing objects.        *)
+               ignore: (# exit 2 #); 
+               (* Ignore the dangling references.   *)
+            do kill -> toDo; INNER
+            exit toDo
+            #);
+          doCheckpoint:< BooleanValue 
+            (# do true -> value; INNER #);
+       do (if doCheckpoint then
+              checkpoint
+          if);
+          closeExt;
+          setTerminatingGC; doGC
+       #);
+     
+     getExt: external(# name, theCell, rcode: @integer enter (name, theCell) exit rcode #);
+     
+     get:
+       (# quaError:< Exception
+            (# 
+            do 'persistentstore.get: Qua error getting "' 
+                 -> msg.putText; name[] -> msg.putText;
+               '"' -> msg.putText;
+               INNER 
+            #);
+          notFound:< Exception
+            (# 
+            do 'persistentstore.get: "' -> msg.putText; 
+               name[] -> msg.putText;
+               '" not found' -> msg.putText;
+               INNER
+            #);
+          allowLazyFetch:< BooleanValue
+            (# 
+            do THIS(persistentstore).allowLazyFetch 
+                 -> value;
+               INNER
+            #);
+          name: ^Text; type: ##Object;
+          theObject: ^Object;
+       enter (name[],type##)
+       do (if (((%getLongAt (@@ name)), (@@ theObject)) -> getExt)
+           // (NOTFOUNDERROR) then
+              notFound
+          if)
+       exit theObject[]
+       #);
+     
+     ALREADYTHEREERROR: (# exit 6 #);
+     HASOVERWRITTENERROR: (# exit 7 #);
+     
+     putExt: external
+       (# dooverwrite:@boolean; name, obj, rcode:@integer
+       enter (dooverwrite, name, obj)
+       exit rcode
+       #);
+     
+     markPersistentObject: external (# theObj: @integer enter theObj #);
+     
+     markObjectPersistent:
+       (# theObj: ^Object
+       enter theObj[]
+       do (if true then (%getLongAt (@@ theObj))->markPersistentObject if)
+       #);
+     
+     setForceAOAGG: external (#  #);
+     
+     put:
+       (# 
+          
+         AlreadyThere:< PSexception 
+            (# 
+            do 'persistentstore.put: Root "' 
+                 -> msg.putText; fullName[] -> msg.putText;
+               '" ' -> msg.putText; 'already there.'->msg.puttext;
+               true->continue;
+               INNER
+               
+            #);
+     
+          HasOverWritten:< PSexception 
+            (# 
+            do 'persistentstore.put: Root "' 
+                 -> msg.putText; fullName[] -> msg.putText;
+               '" ' -> msg.putText; 'will overwrite an already existing root with same name at checkpoint time.'->msg.puttext;
+               true->continue;
+               INNER
+               
+            #); 
+          dooverwrite:< BooleanValue 
+            (# do true -> value; INNER #);
+          obj: ^Object; name: ^text;
+       enter (obj[],name[])
+       do obj[] -> markObjectPersistent;
+          setForceAOAGG;
+          doGC;
+          (if ((dooverwrite, (%getLongAt (@@ name)), (%getLongAt (@@ obj))) -> putExt)
+           // (ALREADYTHEREERROR) then
+              AlreadyThere;
+              (if dooverwrite then
+                  HasOverWritten
+              if)
+          if)
+       #);
+     
+     
+     scanRootNames:
+       (# current: ^Text;
+       do 
+       #);
+     
+     registerSpecialObject:
+        (# alreadyThere:< Exception
+            (# 
+            do 'registerSpecialObject: Special object "' 
+                 -> msg.putText; name[] -> msg.putText; 
+               '" already exists: ' -> msg.putText;
+               INNER; 
+               false -> continue;
+            #);
+          name: ^Text; type: ##Object;
+       enter (name[],type##)
+       do 
+       #);
+     
+     registerSpecialInstance:
+       (# quaError:< Exception
+            (#
+            do 'registerSpecialInstance: Qua error on "'
+                 -> msg.putText; name[] -> msg.putText;
+               '" instance' -> msg.putText;
+               INNER; 
+               false -> continue;
+            #);
+          notFound:< Exception
+            (# 
+            do 'registerSpecialInstance: Special object "'
+                 -> msg.putText; name[] -> msg.putText;
+               '" not registered.' -> msg.putText;
+               INNER; 
+               false -> continue;
+            #);
+          o: ^Object; name: ^Text;
+       enter (o[],name[])
+       do 
+       #);
+    
+     registerRuntimeType:
+       (# type: ##Object
+       enter type##
+       do 
+       #);
+     
+     
+     allowLazyFetch:<
+       BooleanValue;
+     
+     maxCountOnDanglerHit:< IntegerValue
+       (# do 100 -> value; INNER #);
+     
+     OnDanglerHit:<
+       Object;
+     AfterDanglerHit:< 
+       (# theObject: ^Object;
+       enter theObject[]
+       do INNER
+       #);
+    
+     openpstore:<
+       (# psname: ^Text;
+          ps: ^persistentstore;
+       enter psname[]
+       do INNER
+       exit ps[]
+       #);
+     
+  do INNER;
+  #);
+
+deletePersistentStore: 
+  (# alreadyOpen:< PSexception
+       (# 
+       do 'persistentstore.delete: "' -> msg.putText;
+          fullName[] -> msg.putText;
+          '" is currently open' -> msg.putText;
+          INNER;
+       #);
+     accessError:< PSexception
+       (# 
+       do 'persistetstore.delete: Unable to delete "' -> msg.putText; 
+          fullName[] -> msg.putText; '"' -> msg.putText;
+          INNER;
+       #);
+     notFound:< PSexception
+       (# 
+       do 'persistetstore.delete: "' -> msg.putText; 
+          fullName[] -> msg.putText; '" not found' -> msg.putText;
+          INNER;
+       #);
+     name: ^Text;
+  enter name[]
+  do 
+  #);
+
+PSexception: exception
+  (# fullName: ^Text;
+  enter fullName[]
+  do INNER
+  #)
