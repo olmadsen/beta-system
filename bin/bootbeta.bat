@@ -9,7 +9,7 @@ rem location and duplicate the beta script.
 
 rem --- configuration---
 set OLD_BETALIB="e:\\beta\\r4.1.boot"
-set OLD_BETARUN="e:\\beta\\r4.1.boot\\betarun\\v3.0\\nti\\%SDK%\\betarun.lib
+set OLD_BETARUN="e:\\beta\\r4.1.boot\\betarun\\v3.0\\nti\\%SDK%\\betarun.lib"
 
 rem --- don't change below ---
 
