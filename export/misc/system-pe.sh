@@ -24,19 +24,19 @@ $FILES \
 | ${BETALIB}/export/misc/icomp $DST/system.cmd
 
 echo "cd %BETALIB%\\betarun\\${BETARUN}\\${CODEDIR}" > $DST/system-pe.cmd
-echo "ren  betarun.lib  betarun.lib.orig"          >> $DST/system-pe.cmd
-echo "ren  betarunv.lib betarunv.lib.orig"         >> $DST/system-pe.cmd
-echo "copy betarun.pe betarun.lib"                 >> $DST/system-pe.cmd
-echo "copy betarun.pe betarunv.lib"                >> $DST/system-pe.cmd
+echo "ren /Q betarun.lib  betarun.lib.orig"          >> $DST/system-pe.cmd
+echo "ren /Q betarunv.lib betarunv.lib.orig"         >> $DST/system-pe.cmd
+echo "copy /Q betarun.pe betarun.lib"                 >> $DST/system-pe.cmd
+echo "copy /Q betarun.pe betarunv.lib"                >> $DST/system-pe.cmd
 echo ""                                            >> $DST/system-pe.cmd
 cat $DST/system.cmd                                >> $DST/system-pe.cmd
 echo ""                                            >> $DST/system-pe.cmd
 echo ""                                            >> $DST/system-pe.cmd
 echo "cd %BETALIB%\\betarun\\${BETARUN}\\${CODEDIR}">> $DST/system-pe.cmd
-echo "del betarun.lib"                             >> $DST/system-pe.cmd
-echo "del betarunv.lib"                            >> $DST/system-pe.cmd
-echo "ren betarunv.lib.orig betarunv.lib"          >> $DST/system-pe.cmd
-echo "ren betarun.lib.orig  betarun.lib"           >> $DST/system-pe.cmd
+echo "del /Q betarun.lib"                             >> $DST/system-pe.cmd
+echo "del /Q betarunv.lib"                            >> $DST/system-pe.cmd
+echo "ren /Q betarunv.lib.orig betarunv.lib"          >> $DST/system-pe.cmd
+echo "ren /Q betarun.lib.orig  betarun.lib"           >> $DST/system-pe.cmd
 echo "cd %BETALIB%"                                >> $DST/system-pe.cmd
 mv $DST/system-pe.cmd  $DST/system.cmd
 
