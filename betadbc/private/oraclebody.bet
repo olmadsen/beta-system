@@ -1,4 +1,4 @@
-ORIGIN '../betadbc_oracle';
+ORIGIN '~beta/betadbc/betadbc_oracle';
 INCLUDE '~beta/containers/list'
 '~beta/containers/dictionary'
 '~beta/basiclib/numberio'
@@ -9,7 +9,6 @@ INCLUDE '~beta/containers/list'
 '~beta/basiclib/pcre'
 'oracle'
 'patternparser';
-
 BUILD
 nti     '$$/betaoracle.o' 'external/betaoracle.c' 'betacc -I %ORACLE_HOME%/oci/include $0 $1'
 default '$$/betaoracle.o' 'external/betaoracle.c' '$CC -g -I $ORACLE_HOME/rdbms/demo -I $ORACLE_HOME/rdbms/public -c -o $0 $1';
@@ -20,8 +19,8 @@ sun4s  '$(ORACLE_HOME)/lib/libclntsh.so $(ORACLE_HOME)/lib/libwtc8.so'
 linux  '$(ORACLE_HOME)/lib/libclntst8.a -lpthread'
 
 (* For dynamic linking:
-linux   '$(ORACLE_HOME)/lib/libclntsh.so.8.0 $(ORACLE_HOME)/lib/libclntsh.so $(ORACLE_HOME)/lib/libwtc8.so'
-*)
+linux  '$(ORACLE_HOME)/lib/libclntsh.so.8.0 $(ORACLE_HOME)/lib/libclntsh.so $(ORACLE_HOME)/lib/libwtc8.so'
+ *)
 ;
 
 -- lib: Attributes --
@@ -93,7 +92,7 @@ do (#
       (THIS(Connection).private.svchp,
        THIS(Connection).private.errhp,
        THIS(Connection).private.authp, OCI_DEFAULT) -> OCISessionEnd -> status;
-      (if (status<>OCI_SUCCESS) then (status, THIS(Connection).private.errhp)->closeException; if);
+      (if (status<>OCI_SUCCESS) then (none, status, THIS(Connection).private.errhp)->closeException; if);
       
       (THIS(Connection).private.srvhp, THIS(Connection).private.errhp, OCI_DEFAULT)->OCIServerDetach;
       (THIS(Connection).private.authp, OCI_HTYPE_SESSION)->OCIHandleFree;
@@ -128,24 +127,24 @@ do
            
            (* Connecting to default server *)
            (srvhp, errhp, (* connectString*) 0, (*connectString.length*) 0, 0)->OCIServerAttach->status->putint;
-           (if (status<>OCI_SUCCESS) then (status, errhp)->openConnectionException; if);
+           (if (status<>OCI_SUCCESS) then (none, status, errhp)->openConnectionException; if);
            
            (svchp, OCI_HTYPE_SVCCTX, srvhp, 0, OCI_ATTR_SERVER, errhp)->OCIAttrSet->status;
-           (if (status<>OCI_SUCCESS) then (status, errhp)->openConnectionException; if);
+           (if (status<>OCI_SUCCESS) then (none, status, errhp)->openConnectionException; if);
            
            (envhp, @@authp, OCI_HTYPE_SESSION, 0, 0)->OCIHandleAlloc;
            
            (authp, OCI_HTYPE_SESSION, usernameString, username.length, OCI_ATTR_USERNAME, errhp)->OCIAttrSet->status;
-           (if (status<>OCI_SUCCESS) then (status, errhp)->openConnectionException; if);
+           (if (status<>OCI_SUCCESS) then (none, status, errhp)->openConnectionException; if);
            
            (authp, OCI_HTYPE_SESSION, passwordString, password.length, OCI_ATTR_PASSWORD, errhp)->OCIAttrSet->status;
-           (if (status<>OCI_SUCCESS) then (status, errhp)->openConnectionException; if);
+           (if (status<>OCI_SUCCESS) then (none, status, errhp)->openConnectionException; if);
       
            (svchp, errhp, authp, OCI_CRED_RDBMS, 0)->OCISessionBegin->status;
-           (if (status<>OCI_SUCCESS) then (status, errhp)->openConnectionException; if);
+           (if (status<>OCI_SUCCESS) then (none, status, errhp)->openConnectionException; if);
            
            (svchp, OCI_HTYPE_SVCCTX, authp, 0, OCI_ATTR_SESSION, errhp)->OCIAttrSet->status;
-           (if (status<>OCI_SUCCESS) then (status, errhp)->openConnectionException; if);
+           (if (status<>OCI_SUCCESS) then (none, status, errhp)->openConnectionException; if);
            
            true -> private.isOpen;
            envhp -> private.envhp;
@@ -154,18 +153,16 @@ do
            envhp -> private.envhp;
            authp -> private.authp;
         #);
-      twiceOpen: exception
-        (# 
+      twiceOpen:
+        (# tmpMsg: ^text;
         do
-           'Attempt to open '->msg;
-           THIS(Connection)[]->getPatternName->msg.append;
-           ' twice.'->msg.append
+           'Attempt to open '->tmpMsg;
+           THIS(Connection)[]->getPatternName->tmpMsg.append;
+           ' twice.'->tmpMsg.append;
+           (tmpMsg[],0,0)->openConnectionException;
         #)
    do (if name[] = none then
-          exception
-          (# 
-          do 'Name of connection is NONE in open of connection'->msg
-          #)
+          ('Name of connection is NONE in open connection',0,0)->openConnectionException;
       if);
       (if THIS(connection).private.isOpen then
           twiceOpen
@@ -185,22 +182,26 @@ do (#
       errTxt: @text;
       
    do
-      (* the arguments (handletype, handle) are the values of (status, errhp) *)
-      (if handletype 
-       // OCI_SUCCESS then 'Internal OraIntf. error: OCI_SUCCESS'->msg.append;
-       // OCI_SUCCESS_WITH_INFO then 'Internal OraIntf. error: OCI_SUCCESS_WITH_INFO'->msg.append;
-       // OCI_NEED_DATA then 'Internal OraIntf. error: OCI_NEED_DATA'->msg.append;
-       // OCI_NO_DATA then 'Internal OraIntf. error: OCI_NO_DATA'->msg.append;
-       // OCI_ERROR then 
-          (handle, 1, 0, @@errCode, @@errBuf[1], MaxErrorSize, OCI_HTYPE_ERROR)->OCIErrorGet;          
-          errBuf->charRepToText->errMsg[];
-          'OraIntf. error: Errorcode %i, Error message: %s'->errTxt.putFormat(# do errCode->i; errMsg[]->s; #);
-          errTxt[]->msg.append;
-       // OCI_INVALID_HANDLE then 'Internal OraIntf. error: INVALID_HANDLE'->msg.append;
-       // OCI_STILL_EXECUTING then 'Internal OraIntf. error: STILL_EXECUTING'->msg.append;
-       // OCI_CONTINUE then 'Internal OraIntf. error: CONTINUE'->msg.append;
+      (if (KnownErrorMsg[] = NONE) or (KnownErrorMsg.length=0) then
+          (* i argumenterne (handletype, handle) ligger (status, errhp) *)
+          (if handletype 
+           // OCI_SUCCESS then 'Internal OraIntf. error: OCI_SUCCESS'->msg.append;
+           // OCI_SUCCESS_WITH_INFO then 'Internal OraIntf. error: OCI_SUCCESS_WITH_INFO'->msg.append;
+           // OCI_NEED_DATA then 'Internal OraIntf. error: OCI_NEED_DATA'->msg.append;
+           // OCI_NO_DATA then 'Internal OraIntf. error: OCI_NO_DATA'->msg.append;
+           // OCI_ERROR then 
+              (handle, 1, 0, @@errCode, @@errBuf[1], MaxErrorSize, OCI_HTYPE_ERROR)->OCIErrorGet;          
+              errBuf->charRepToText->errMsg[];
+              'OraIntf. error: Errorcode %i, Error message: %s'->errTxt.putFormat(# do errCode->i; errMsg[]->s; #);
+              errTxt[]->msg.append;
+           // OCI_INVALID_HANDLE then 'Internal OraIntf. error: INVALID_HANDLE'->msg.append;
+           // OCI_STILL_EXECUTING then 'Internal OraIntf. error: STILL_EXECUTING'->msg.append;
+           // OCI_CONTINUE then 'Internal OraIntf. error: CONTINUE'->msg.append;
+           else
+              'Internal OraIntf. error. Unknown error type!'->msg.append;
+          if);
        else
-          'Internal OraIntf. error. Unknown error type!'->msg.append;
+          KnownErrorMsg[] -> msg.append;
       if);
    #);
    INNER;
@@ -220,23 +221,23 @@ do
             
       (* Allocate handle for the statement *)
       (THIS(Connection).private.envhp, @@stmthp, OCI_HTYPE_STMT, 0, 0) -> OCIHandleAlloc -> status;
-      (if (status<>OCI_SUCCESS) then (status, THIS(Connection).private.errhp)->ExecDirectException; if);
+      (if (status<>OCI_SUCCESS) then (none, status, THIS(Connection).private.errhp)->ExecDirectException; if);
 
       (* Prepare statement *)
       (stmthp, THIS(Connection).private.errhp, cont.t, cont.length-1, OCI_NTV_SYNTAX, OCI_DEFAULT) 
         -> OCIStmtPrepare -> status;
-      (if (status<>OCI_SUCCESS) then (status, THIS(Connection).private.errhp)->ExecDirectException; if);
+      (if (status<>OCI_SUCCESS) then (none, status, THIS(Connection).private.errhp)->ExecDirectException; if);
       
       (* Execute statement *)
       (* Note that OCI_DEFAULT should be OCI_COMMIT_ON_SUCCESS, but the latter does not 
        * work as intended, so an explicit commit has been added below *)
       (THIS(Connection).private.svchp, stmthp, THIS(Connection).private.errhp, iterations, 0, 0, 0, OCI_DEFAULT) 
         -> OCIStmtExecute -> status;
-      (if (status<>OCI_SUCCESS) then (status, THIS(Connection).private.errhp)->ExecDirectException; if);
+      (if (status<>OCI_SUCCESS) then (none, status, THIS(Connection).private.errhp)->ExecDirectException; if);
       
       (* Explicitly commit any changes made *)
       (THIS(Connection).private.svchp, THIS(Connection).private.errhp, OCI_DEFAULT) -> OCITransCommit -> status;
-      (if (status<>OCI_SUCCESS) then (status, THIS(Connection).private.errhp)->ExecDirectException; if);
+      (if (status<>OCI_SUCCESS) then (none, status, THIS(Connection).private.errhp)->ExecDirectException; if);
       
       (* Fetch result if needed *)
       (if isSelect then
@@ -283,7 +284,7 @@ do
      (# 
      do
         (if isOpen then
-            exception (#  do 'Attempt to open SQLStatement twice'->msg #)
+            ('Attempt to open SQLStatement twice',0,0)->SQLStatementException;
         if)
      #);
    
@@ -291,10 +292,7 @@ do
      (# 
      do
         (if not isOpen then
-            exception
-            (# 
-            do 'Attempt to use SQLStatement before calling open'->msg
-            #)
+            ('Attempt to use SQLStatement before calling open',0,0)->SQLStatementException;
         if)
      #);
    
@@ -302,8 +300,7 @@ do
      (# 
      do        
         (if t[] = none then
-            exception
-            (#  do 'Attempt to execute SQLStatement before set'->msg #)
+            ('Attempt to execute SQLStatement before set',0,0)->SQLStatementException;
         if);
         
      #)
@@ -327,7 +324,7 @@ do (#
       (* cursor type ignored *)
       
       (if not THIS(Connection).private.isOpen then 
-          exception(# do 'Connection not open!'->msg.append;#) 
+          ('Connection not open!',0,0)->SQLStatementException;
       if);      
       private.assertSet;
       private.theResultSet.assertClosed;
@@ -409,9 +406,9 @@ do (#
 (#
    statement: @
      (#
-        noStatement: exception
+        noStatement:
           (# 
-          do 'Attempt to use DirectSQLStatement before calling set'->msg
+          do ('Attempt to use DirectSQLStatement before calling set',0,0)->SQLStatementException;
           #);
         elm: ^PatternParser.StatementPattern;
         set: (#  enter elm[] #);
@@ -780,7 +777,7 @@ do private.getText->value[];
 -- resultSetTupleB: DoPart --
 do private.getBoolean->value;
 
--- ConnnectionDeclareVar: DoPart --
+-- ConnectionDeclareVar: DoPart --
 do private.declareVars.assertInitialised;
    (varName[],THIS(declareVar)[])->private.declareVars.associate;
    INNER  
@@ -795,7 +792,7 @@ do
            EOT->result[]
        if)
     else
-       (0,0)->resultSetException
+       ('ERROR in resultset fetch: the statement handle is null!',0,0)->resultSetException
    if);
    INNER fetch
    
@@ -852,8 +849,7 @@ do private.EOT[]->value[]
                         // var## <= declareTime## then
                            var[]->t[]; columnNo->result.private.getTime->t.set
                         else
-                           exception
-                           (#  do 'Unknown datatype in scan'->msg #)
+                           ('Unknown datatype in scan',0,0)->resultSetException;
                        if);
                     #);
                   setValueByName:
@@ -947,9 +943,9 @@ do private.EOT[]->value[]
      #);
    resultSetPtn: @
      (#
-        noResultSetPtn: exception
+        noResultSetPtn:
           (# 
-          do 'Attempt to use pattern in resultSet before setting it'->msg
+          do ('Attempt to use pattern in resultSet before setting it',0,0)->resultSetException;
           #);
         elm: ^PatternParser.ResultSetPattern;
         set: (#  enter elm[] #);
@@ -1024,7 +1020,7 @@ do private.EOT[]->value[]
                       (* Then get the integer code for the datatype *)
                       (paramhp, OCI_DTYPE_PARAM, @@datatypeCode, 0, OCI_ATTR_DATA_TYPE, errhp)
                         -> OCIAttrGet -> paramStatus;
-                      (if (paramStatus<>OCI_SUCCESS) then (paramStatus, errhp)->resultSetException; if);
+                      (if (paramStatus<>OCI_SUCCESS) then (none, paramStatus, errhp)->resultSetException; if);
                       datatypeCode -> theInfo.DataTypeNo;
                       
                       (* Then get the datatype pattern and name *)
@@ -1036,7 +1032,7 @@ do private.EOT[]->value[]
 
                       (* Finally, get the name of the column *)
                       (paramhp, @@nameBuf[1], maxsize, errhp) -> OracleGetColName -> paramStatus;
-                      (if (paramStatus<>OCI_SUCCESS) then (paramStatus, errhp) -> resultSetException; if);
+                      (if (paramStatus<>OCI_SUCCESS) then (none, paramStatus, errhp) -> resultSetException; if);
                       nameBuf -> charRepToText -> theInfo.name[];
                       
 		      (* theInfo now contains all required information - insert it among its peers *)
@@ -1209,7 +1205,7 @@ do 'Variable named \''->msg.append;
 -- SQLStatementOpen: DoPart --
 do private.assertNotOpened;
    (if not THIS(Connection).private.isOpen then 
-       BetaDBCException(# do 'Connection not open!'->msg.append; #);
+       ('Trying to open statement but connection is not open!',0,0)->BetaDBCException;
    if);
    true->private.isOpen;
    value[]->set  
@@ -1265,5 +1261,3 @@ do
    c.sec->value.putint (#  do 2->width; true->zeroPadding #);
    '\''->value.put;
    INNER  
-
-

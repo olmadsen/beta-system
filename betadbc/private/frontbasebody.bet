@@ -10,7 +10,7 @@ INCLUDE '~beta/containers/list'
 'patternparser';
 BUILD default '$$/betafrontbase.o' 'external/betafrontbase.c' '$CC -g  -c -o $0 $1';
 LINKOPT sun4s '/opt/FrontBase/lib/FBCAccess.o'
-linux '/usr/local/FrontBase/lib/FBCAccess.o'
+        linux '/usr/local/FrontBase/lib/FBCAccess.o'
 -- lib: Attributes --
 trueText: (#  exit 'true' #);
 falseText: (#  exit 'false' #);
@@ -51,16 +51,20 @@ do
         (# con, md, exechandler:@integer;
            startsucceeds: @boolean;
         do 
-           (if private.host[]=NONE then exception(# do 'No host selected'->msg.append; #) if);
+           (if private.host[]=NONE then 
+               ('ERROR: Hostname is NONE. No host selected',0,0)->OpenConnectionException; 
+           if);
            (name, private.host, password) -> fbcdcConnectToDatabase 
              -> con -> private.connection;
            (if (con=0) then 
                (* 0 below means unknown client type *)
                (private.host, 0) -> fbcehHandlerForHost -> exechandler; 
-               (if exechandler=0 then openConnectionException;
+               (if exechandler=0 then 
+                   openConnectionException;
                 else
                    (exechandler, name) -> fbcehStartDatabaseNamed -> startsucceeds;
-                   (if (not startsucceeds) then openConnectionException; 
+                   (if (not startsucceeds) then 
+                       openConnectionException; 
                    if);
                if);
            if);
@@ -72,20 +76,19 @@ do
            (* Set auto-commit *) 
            (private.connection, 'SET COMMIT TRUE;') -> fbcdcExecuteDirectSQL -> md;      
            (if ((md -> fbcmdErrorCount) > 0) then openConnectionException if);
-           md -> fbcmdRelease;        
+           md -> fbcmdRelease;
+           
         #);
-      twiceOpen: exception
-        (# 
+      twiceOpen:
+        (# msg: ^text;
         do
            'Attempt to open '->msg;
            THIS(Connection)[]->getPatternName->msg.append;
-           ' twice.'->msg.append
+           ' twice.'->msg.append;
+           (msg[],0,0)->openConnectionException;
         #)
    do (if name[] = none then
-          exception
-          (# 
-          do 'Name of connection is NONE in open of connection'->msg
-          #)
+          ('Name of connection is NONE in Open Connection',0,0) -> openConnectionException;
       if);
       (if THIS(connection).private.isOpen then
           twiceOpen
@@ -99,16 +102,20 @@ do
 do (# errormsg: @cstring;
       md: @integer;
    do
-      (if (handle<>0) then
-          (handletype,handle) -> fbcdcErrorMetaData -> md;
-          md -> fbcemdAllErrorMessages -> errormsg;
-          errormsg.get -> msg.append;
-          errormsg -> fb_free; 
-          md -> fbcemdRelease;
+      (if (KnownErrorMsg[] = NONE) or (KnownErrorMsg.length = 0) then 
+          (if (handle<>0) then
+              (handletype,handle) -> fbcdcErrorMetaData -> md;
+              md -> fbcemdAllErrorMessages -> errormsg;
+              errormsg.get -> msg.append;
+              errormsg -> fb_free; 
+              md -> fbcemdRelease;
+           else 
+              'Database unreachable. Error opening connection.\n'->msg.append;
+              'Make sure to open the connection before opening statements.\n'->msg.append;
+              'Also: check host, name and password for errors.\n'->msg.append;
+          if);
        else 
-          'Database unreachable. Error opening connection.\n'->msg.append;
-          'Make sure to open the connection before opening statements.\n'->msg.append;
-          'Also: check host, name and password for errors.\n'->msg.append;
+          KnownErrorMsg[] -> msg.append;
       if);
    #);
    INNER;
@@ -123,7 +130,7 @@ do
       getExpanded->cont[]; 
       (THIS(Connection).private.connection, cont.t) -> fbcdcExecuteDirectSQL -> md;      
       (if ((md -> fbcmdErrorCount) > 0) then         
-          (THIS(Connection).private.connection, md)->ExecDirectException;
+          (NONE, THIS(Connection).private.connection, md)->ExecDirectException;
        else
           (if ((md->fbcmdRowCount->rows)=0) then 
               0->THIS(SQLStatement).private.theResultSet.numofrows
@@ -171,7 +178,7 @@ do
      (# 
      do
         (if isOpen then
-            exception (#  do 'Attempt to open SQLStatement twice'->msg #)
+            ('Attempt to open SQLStatement twice',0,0)->SQLStatementException;
         if)
      #);
    
@@ -179,10 +186,7 @@ do
      (# 
      do
         (if not isOpen then
-            exception
-            (# 
-            do 'Attempt to use SQLStatement before calling open'->msg
-            #)
+            ('Attempt to use SQLStatement before calling open',0,0)->SQLStatementException;
         if)
      #);
    
@@ -190,8 +194,7 @@ do
      (# 
      do        
         (if t[] = none then
-            exception
-            (#  do 'Attempt to execute SQLStatement before set'->msg #)
+            ('Attempt to execute SQLStatement before set',0,0)->SQLStatementException;
         if);
         
      #)
@@ -305,9 +308,9 @@ do (#
 (#
    statement: @
      (#
-        noStatement: exception
+        noStatement:
           (# 
-          do 'Attempt to use DirectSQLStatement before calling set'->msg
+          do ('Attempt to use DirectSQLStatement before calling set',0,0)->SQLStatementException;
           #);
         elm: ^PatternParser.StatementPattern;
         set: (#  enter elm[] #);
@@ -628,7 +631,7 @@ do private.getText->value[];
 -- resultSetTupleB: DoPart --
 do private.getBoolean->value;
 
--- ConnnectionDeclareVar: DoPart --
+-- ConnectionDeclareVar: DoPart --
 do private.declareVars.assertInitialised;
    (varName[],THIS(declareVar)[])->private.declareVars.associate;
    INNER  
@@ -643,7 +646,7 @@ do
            EOT->result[]
        if)
     else
-       (0,0)->resultSetException
+       ('ERROR in resultset fetch: the rowhandler is null!',0,0)->resultSetException
    if);
    INNER fetch
    
@@ -700,8 +703,7 @@ do private.EOT[]->value[]
                         // var## <= declareTime## then
                            var[]->t[]; columnNo->result.private.getTime->t.set
                         else
-                           exception
-                           (#  do 'Unknown datatype in scan'->msg #)
+                           ('Unknown datatype in scan',0,0)->resultSetException;
                        if);
                     #);
                   setValueByName:
@@ -795,9 +797,9 @@ do private.EOT[]->value[]
      #);
    resultSetPtn: @
      (#
-        noResultSetPtn: exception
+        noResultSetPtn:
           (# 
-          do 'Attempt to use pattern in resultSet before setting it'->msg
+          do ('Attempt to use pattern in resultSet before setting it',0,0)->resultSetException;
           #);
         elm: ^PatternParser.ResultSetPattern;
         set: (#  enter elm[] #);
@@ -1041,15 +1043,13 @@ do 'Variable named \''->msg.append;
    INNER 
    
 -- SQLStatementOpen: DoPart --
-do (# 
-   do
-      private.assertNotOpened;
-      (if not THIS(Connection).private.isOpen then 
-          BetaDBCException(# do 'Connection not open!'->msg.append; #);
-      if);
-      true->private.isOpen;
-      value[]->set
-   #)
+do
+   private.assertNotOpened;
+   (if not THIS(Connection).private.isOpen then 
+       ('Trying to open a statement, but the connection is not open!',0,0)->BetaDBCException;
+   if);
+   true->private.isOpen;
+   value[]->set
    
 -- resultSetSetVarNotDeclared: DoPart --
 do 'Variable named \''->msg.append;
@@ -1107,6 +1107,3 @@ do
 --selecthost:dopart--
 do
    host[]->THIS(connection).private.host[];
-
-
-

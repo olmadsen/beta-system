@@ -107,18 +107,19 @@ do
      (# 
      do
           (#
-             twiceClose: exception
-               (# 
+             twiceClose:
+               (# msg: ^text;
                do
                   'Attempt to close '->msg;
                   THIS(Connection)[]->getPatternName->msg.append;
-                  ' that is not open.'->msg.append
+                  ' that is not open.'->msg.append;
+                  (msg[], 0, 0)->closeException;
                #);
              checkError:
                (# 
                do
                   (if rc <> SQL_SUCCESS then
-                      (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)
+                      (none, SQL_HANDLE_DBC, THIS(Connection).private.hdbc)
                         ->closeException
                   if)
                #);
@@ -137,12 +138,13 @@ do
 -- ConnectionOpen: DoPart --
 do
      (#
-        twiceOpen: exception
-          (# 
+        twiceOpen: 
+          (# msg:^text
           do
              'Attempt to open '->msg;
              THIS(Connection)[]->getPatternName->msg.append;
-             ' twice.'->msg.append
+             ' twice.'->msg.append;
+             (msg[], 0, 0)->openConnectionException;
           #);
         allocateHDBC:
           (# rc: @int16; henv: @integer
@@ -150,7 +152,7 @@ do
           do
              (henv,@@ THIS(connection).private.hdbc)->SQLAllocConnect->rc;
              (if rc <> SQL_SUCCESS then
-                 (SQL_HANDLE_ENV,henv)->openConnectionException
+                 (none, SQL_HANDLE_ENV, henv)->openConnectionException
              if)
           #);
         openConnection:
@@ -172,7 +174,7 @@ do
              (if rc = SQL_SUCCESS then
                  true->THIS(connection).private.isOpen
               else
-                 (SQL_HANDLE_DBC,THIS(connection).private.hdbc)
+                 (none, SQL_HANDLE_DBC, THIS(connection).private.hdbc)
                    ->openConnectionException
              if)
           #);
@@ -184,7 +186,7 @@ do
              (if rc = SQL_SUCCESS then
                  true->THIS(connection).private.isOpen
               else
-                 (SQL_HANDLE_DBC,THIS(connection).private.hdbc)
+                 (none, SQL_HANDLE_DBC, THIS(connection).private.hdbc)
                    ->openConnectionException
              if)
           #);
@@ -194,16 +196,13 @@ do
           (*(private.hdbc,SQL_ATTR_ODBC_CURSORS,SQL_CUR_USE_ODBC,0)
            ->SQLSetConnectAttr->rc;*)
              (if rc <> SQL_SUCCESS then
-                 (SQL_HANDLE_DBC,THIS(connection).private.hdbc)
+                 (none, SQL_HANDLE_DBC, THIS(connection).private.hdbc)
                    ->openConnectionException
              if)
           #)
      do
         (if name[] = none then
-            exception
-              (# 
-              do 'Name of connection is none in open of connection'->msg
-              #)
+            ('Name of connection is none in Open Connection',0,0) -> openConnectionException;
         if);
         (if THIS(connection).private.isOpen then
             twiceOpen
@@ -221,17 +220,21 @@ do
    THIS(exception)[]->getPatternName->msg.putLine;
      (# Messages,SQLStates: [0] ^text; NativeErrors: [0] @integer
      do
-        (HandleType,Handle)->getErrors->(Messages,SQLStates,NativeErrors);
-        (for i: Messages.range repeat
-          Messages[i][]->msg.append; msg.newline
-        for);
-        (for i: SQLStates.range repeat
-          (if i > 1 then ','->SqlState.append if); SQLStates[i][]->msg.append
-        for);
-        (for i: NativeErrors.range repeat
-          (if i > 1 then ','->NativeError.append if);
-          NativeErrors[i]->msg.putint
-        for)
+        (if (KnownErrorMsg[] = NONE) or (KnownErrorMsg.length = 0) then
+            (HandleType,Handle)->getErrors->(Messages,SQLStates,NativeErrors);
+            (for i: Messages.range repeat
+                 Messages[i][]->msg.append; msg.newline
+            for);
+            (for i: SQLStates.range repeat
+                 (if i > 1 then ','->SqlState.append if); SQLStates[i][]->msg.append
+            for);
+            (for i: NativeErrors.range repeat
+                 (if i > 1 then ','->NativeError.append if);
+                 NativeErrors[i]->msg.putint
+            for);
+         else 
+            KnownErrorMsg[] -> msg.append;
+        if);
      #);
    INNER  
 
@@ -241,14 +244,13 @@ do
      do
         getExpanded->cont[];
         (THIS(SQLStatement).private.hstmt,cont.t,SQL_NTS)->SQLExecDirect->rc;
-        (if rc = SQL_SUCCESS then
-            
+        (if (rc = SQL_SUCCESS) or (rc<-1000000) then            
          else
             (if rc = SQL_SUCCESS_WITH_INFO then
-                (SQL_HANDLE_STMT,THIS(SQLStatement).private.hstmt)
+                (none, SQL_HANDLE_STMT,THIS(SQLStatement).private.hstmt)
                   ->execDirectNotification
              else
-                (SQL_HANDLE_STMT,THIS(SQLStatement).private.hstmt)
+                (none, SQL_HANDLE_STMT, THIS(SQLStatement).private.hstmt)
                   ->execDirectException
             if)
         if);
@@ -279,7 +281,7 @@ do
           do
              (private.hstmt,SQL_CLOSE)->SQLFreeStmt->rc;
              (if rc <> SQL_SUCCESS then
-                 (SQL_HANDLE_STMT,private.hstmt)->SQLStatementException
+                 (none, SQL_HANDLE_STMT,private.hstmt)->SQLStatementException
              if);
              false->exists;
              none ->ref[]
@@ -289,25 +291,21 @@ do
      (# 
      do
         (if isOpen then
-            exception (#  do 'Attempt to open SQLStatement twice'->msg #)
+            ('Attempt to open SQLStatement twice',0,0)->SQLStatementException;
         if)
      #);
    assertOpen:
      (# 
      do
         (if not isOpen then
-            exception
-              (# 
-              do 'Attempt to use SQLStatement before calling open'->msg
-              #)
+            ('Attempt to use SQLStatement before calling open',0,0)->SQLStatementException;
         if)
      #);
    assertSet:
      (# 
      do
         (if t[] = none then
-            exception
-              (#  do 'Attempt to execute SQLStatement before set'->msg #)
+            ('Attempt to execute SQLStatement before set',0,0)->SQLStatementException;
         if)
      #)
 #)  
@@ -340,9 +338,9 @@ do
                   // SQL_SUCCESS then
                      
                   // SQL_SUCCESS_WITH_INFO then
-                     (private.hstmt,SQL_HANDLE_STMT)->SQLStatementNotification
+                     (none, private.hstmt, SQL_HANDLE_STMT)->SQLStatementNotification
                   else
-                     (private.hstmt,SQL_HANDLE_STMT)->SQLStatementException
+                     (none, private.hstmt, SQL_HANDLE_STMT)->SQLStatementException
                  if)
               #)
         if);
@@ -365,9 +363,9 @@ do
              // SQL_SUCCESS then
                 
              // SQL_SUCCESS_WITH_INFO then
-                (SQL_HANDLE_STMT,private.hstmt)->SQLStatementNotification
+                (none, SQL_HANDLE_STMT, private.hstmt)->SQLStatementNotification
              else
-                (SQL_HANDLE_STMT,private.hstmt)->SQLStatementException
+                (none, SQL_HANDLE_STMT, private.hstmt)->SQLStatementException
             if)
         if);
         &resultSetType[]->res[];
@@ -384,7 +382,7 @@ do
         private.theResultSet.assertClosed;
         (private.hstmt,SQL_CLOSE)->SQLFreeStmt->rc;
         (if rc <> SQL_SUCCESS then
-            (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)
+            (none, SQL_HANDLE_DBC, THIS(Connection).private.hdbc)
               ->SQLStatementException
         if);
         false->private.isOpen;
@@ -519,9 +517,9 @@ do
 (#
    statement: @
      (#
-        noStatement: exception
+        noStatement:
           (# 
-          do 'Attempt to use DirectSQLStatement before calling set'->msg
+          do ('Attempt to use DirectSQLStatement before calling set',0,0)->SQLStatementException;
           #);
         elm: ^PatternParser.StatementPattern;
         set: (#  enter elm[] #);
@@ -673,9 +671,9 @@ do
      do
         (if rc <> SQL_SUCCESS then
             (if rc = SQL_SUCCESS_WITH_INFO then
-                (SQL_HANDLE_DBC,hdbc)->connectionNotification
+                (none, SQL_HANDLE_DBC, hdbc)->connectionNotification
              else
-                (SQL_HANDLE_DBC,hdbc)->connectionException
+                (none, SQL_HANDLE_DBC, hdbc)->connectionException
             if)
         if)
      #);
@@ -718,8 +716,7 @@ do
         (* (SQL_HANDLE_ENV,SQL_NULL_HANDLE,@@ henv)->SQLAllocHandle->rc;
          (henv,SQL_ATTR_ODBC_VERSION,SQL_OV_ODBC3,0)->SQLSetEnvAttr->rc; *)
         (if rc <> SQL_SUCCESS then
-            exception
-              (#  do 'Failed to allocate environment for connection'->msg #)
+            ('Fatal error: Failed to allocate environment for connection',0,0)->betaDBCexception;
         if)
      #)  
 
@@ -767,7 +764,7 @@ do
               // SQL_NO_DATA then
                  leave L
               else
-                 (THIS(resultSet).private.hstmt,SQL_HANDLE_STMT)
+                 (none, THIS(resultSet).private.hstmt, SQL_HANDLE_STMT)
                    ->resultSetException
              if)
           #);
@@ -802,7 +799,7 @@ do
             extRes.second->res.sec;
             extRes.ptr->free
          else
-            exception (#  do 'Failed to allocate TIME_STRUCT'->msg #)
+            ('malloc exhausted: Failed to allocate TIME_STRUCT',0,0)->betaDBCexception;
         if)
      exit res
      #);
@@ -818,7 +815,7 @@ do
             extRes.day->res.day;
             extRes.ptr->free
          else
-            exception (#  do 'Failed to allocate DATE_STRUCT'->msg #)
+            ('malloc exhausted: Failed to allocate DATE_STRUCT',0,0)->betaDBCexception;
         if)
      exit res
      #);
@@ -837,7 +834,7 @@ do
             extRes.second->res.sec;
             extRes.ptr->free
          else
-            exception (#  do 'Failed to allocate TIMESTAMP_STRUCT'->msg #)
+            ('malloc exhausted: Failed to allocate TIMESTAMP_STRUCT',0,0)->betaDBCexception;
         if)
      exit res
      #);
@@ -847,9 +844,9 @@ do
      do
         (if rc <> SQL_SUCCESS then
             (if rc = SQL_SUCCESS_WITH_INFO then
-                (SQL_HANDLE_STMT,hstmt)->resultSetNotification
+                (none, SQL_HANDLE_STMT, hstmt)->resultSetNotification
              else
-                (SQL_HANDLE_STMT,hstmt)->resultSetException
+                (none, SQL_HANDLE_STMT, hstmt)->resultSetException
             if)
         if)
      #)
@@ -877,7 +874,7 @@ do
                    // SQL_SUCCESS // SQL_SUCCESS_WITH_INFO then
                       ResultSetName.get->value.append
                    else
-                  (*    (THIS(ResultSet).private.hstmt,SQL_HANDLE_STMT)
+                  (*    (none, THIS(ResultSet).private.hstmt,SQL_HANDLE_STMT)
                    ->resultSetException *)
                       
                   if)
@@ -909,7 +906,7 @@ do private.getText->value[]
 -- resultSetTupleB: DoPart --
 do private.getBoolean->value  
 
--- ConnnectionDeclareVar: DoPart --
+-- ConnectionDeclareVar: DoPart --
 do
    private.declareVars.assertInitialised;
    (varName[],THIS(declareVar)[])->private.declareVars.associate;
@@ -926,10 +923,10 @@ do
          // SQL_NO_DATA then
             EOT->result[]
          // SQL_SUCCESS_WITH_INFO then
-            (SQL_HANDLE_STMT,THIS(resultSet).private.hstmt)
+            (none, SQL_HANDLE_STMT,THIS(resultSet).private.hstmt)
               ->resultSetNotification
          else
-            (SQL_HANDLE_STMT,THIS(resultSet).private.hstmt)->resultSetException
+            (none, SQL_HANDLE_STMT, THIS(resultSet).private.hstmt)->resultSetException
         if);
         INNER fetch
      #)  
@@ -983,8 +980,7 @@ do private.EOT[]->value[]
                         // var## <= declareTime## then
                            var[]->t[]; columnNo->result.private.getTime->t.set
                         else
-                           exception
-                             (#  do 'Unknown datatype in scan'->msg #)
+                           ('Unknown datatype in scan',0,0)->resultSetException;
                        if)
                     #);
                   setValueByName:
@@ -1072,9 +1068,9 @@ do private.EOT[]->value[]
      #);
    resultSetPtn: @
      (#
-        noResultSetPtn: exception
+        noResultSetPtn:
           (# 
-          do 'Attempt to use pattern in resultSet before setting it'->msg
+          do ('Attempt to use pattern in resultSet before setting it',0,0)->resultSetException;
           #);
         elm: ^PatternParser.ResultSetPattern;
         set: (#  enter elm[] #);
@@ -1168,9 +1164,9 @@ do private.EOT[]->value[]
      do
         (if rc <> SQL_SUCCESS then
             (if rc = SQL_SUCCESS_WITH_INFO then
-                (SQL_HANDLE_STMT,hstmt)->resultSetNotification
+                (none, SQL_HANDLE_STMT, hstmt)->resultSetNotification
              else
-                (SQL_HANDLE_STMT,hstmt)->resultSetException
+                (none, SQL_HANDLE_STMT, hstmt)->resultSetException
             if)
         if)
      #);
@@ -1342,12 +1338,12 @@ do
      do
         private.assertNotOpened;
         (if not THIS(Connection).private.isOpen then 
-            BetaDBCException(# do 'Connection not open!'->msg.append; #);
+            ('Trying to open a statement, but the connection is not open!',0,0)->BetaDBCException;
         if);
         (THIS(Connection).private.hdbc,@@ THIS(SQLStatement).private.hstmt)
           ->SQLAllocStmt->rc;
         (if rc <> SQL_SUCCESS then
-            (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)
+            (none, SQL_HANDLE_DBC, THIS(Connection).private.hdbc)
               ->SQLStatementException
          else
             true->private.isOpen
