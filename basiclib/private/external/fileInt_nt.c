@@ -21,6 +21,8 @@
 
 #define BSIZE BUFSIZ
 
+struct stat statBuffer;        /* used for all calls to stat */
+
 /* Return NT variable errno */
 int getErrno()
 {
@@ -191,6 +193,13 @@ int touchEntry(path)
     return -1;
 }
 
+int getEntryModtime(char *path)
+{ 
+  int entryType;
+  if (stat(path,&statBuffer)<0) return -1;
+  return (int) statBuffer.st_mtime;
+} 
+
 int setEntryModtime(path, time)
      char *path;
      time_t time;
@@ -253,7 +262,7 @@ int chownNtEntry(path, owner, group)
 
 int entryExists(path, follow)
      char *path;
-     int follow;
+     int follow /* not used */;
 {
   if((char)(*path)=='\0')
     return -1;                     /* test for empty string */

@@ -80,28 +80,6 @@ execPerm: External
   exit result
   #);
 
-entryStatus: External 
-  (#
-     (* The BETA version of stat.  This version is more portable than
-      * using a BETA cStruc because this way, the definition of the C-struct
-      * stat is not hardcoded into Beta but instead translated into a suitable
-      * repetition of integers.
-      *)
-     path: [1]@char;
-     statBuffer: @integer; 
-     (* The start addr. of an int-rep of 20 integers denoting
-      * the file status of the entry with path. 
-      *)
-     protectionBuffer: @integer; 
-     (* The start address of an int-rep of 9 integers denoting
-      * the protection bits of the entry with path.
-      *) 
-     follow: @boolean; (* Follow links ? *)
-     status: @integer; (* -1 => error *)
-  enter(path,statBuffer,protectionBuffer, follow)
-  exit status
-  #);
-
 EOFpeek: External
   (# ntStream: @integer;
      eof: @boolean;
@@ -154,7 +132,7 @@ chownNtEntry: External
 
 entryExists: External
   (# path: [1]@char;
-     followlinks: @boolean;
+     followlinks: @boolean (* ignored for NT *);
      status: @integer; (* -1 => error, 1 => exists, 0 => non-existing *)
   enter (path, followlinks)
   exit status
@@ -234,9 +212,6 @@ do 'Disk entry exception for '''->msg.puttext;
 (# path: @text;
    pathchanged: @boolean;
    head, name, main, suf: @text;
-   follow: @boolean;
-   followset: @boolean;
-   checkfollow: @(# do (if not private.followset then true -> follow -> followset; if) #);
    decomposepath: @
      (# i: @integer;
      do (if pathchanged then
@@ -262,35 +237,6 @@ do 'Disk entry exception for '''->msg.puttext;
 	    false -> pathchanged
 	if);
      #);
-   FullPath: @
-     (# p: ^text;
-     do (if true
-	 // path.t[1]='\\'
-         // (path.length>1) and (path.t[2]=':') then
-	    (* Already full path *)
-	    &text[]->p[]; path -> p;
-	 // '.' -> private.path.equal then
-	    getCurrentDir -> p[];
-	 else
-	    (* path relative to CWD *)
-	    getCurrentDir -> p[];
-            (if p.t[p.length] // '\\' // ':' then else
-	        '\\' -> p.append; if);
-	    path[] -> p.append;
-	if);
-     exit p[]
-     #);
-    
-   statBuf: [20] @integer;
-   permBuf: [9] @integer;
-   
-   codegenerationerror: @(# exit ( ((path,@@statBuf[1],@@permBuf[1], follow) -> entryStatus)<0 ) #);
-   (* path becomes empty string, @@permBuf[1] and follow are swapped *)
-   
-   dostat: @(# result: @boolean
-            do ( ((path,@@statBuf[1],@@permBuf[1], follow) -> entryStatus)<0 ) -> result;
-            exit result
-            #);
 #)
 
 --DiskEntryPathHead: dopart--
@@ -316,14 +262,12 @@ do INNER;
    (if p[]=NONE then &text[]->p[] if);
    p -> private.path;
    true -> private.pathchanged;
-   private.checkfollow;
 
 --DiskEntryPathGet: dopart--
-do INNER; &text[]->p[]; private.path -> p
+do INNER; private.path.copy -> p[]
 
 --DiskEntryExists: dopart--
-do private.checkfollow;
-   (if ((private.path, private.follow) -> entryExists)
+do (if ((private.path, 0) -> entryExists)
     // 0  then false -> value;
     // 1  then true -> value;
     // -1 then error;
@@ -333,7 +277,8 @@ do private.checkfollow;
 do INNER;
    (if not isDirectory then
       (if (private.path -> touchEntry)=-1 then error;
-   if)if);
+      if)
+   if);
    
 --DiskEntrySize: dopart--
 do (if private.dostat then -1 -> value; error;
@@ -350,8 +295,7 @@ do (if ((private.path,time) -> setEntryModtime)=-1 then error if);
 
 --DiskEntryRename: dopart--
 do (if newpath[]=NONE then &text[]->newpath[] if);
-   private.checkfollow;
-   (if ((private.path, private.follow) -> entryExists) <> 1 then error
+   (if ((private.path, 0) -> entryExists) <> 1 then error
     else
        (if ((private.path, newpath) -> renameNtEntry)=-1 then error;
         else newpath -> private.path;
@@ -423,8 +367,7 @@ do 'Error in system call: ' -> msg.puttext;
    INNER
 
 --FileTouch: dopart--
-do entry.private.checkfollow;
-   (if ((entry.private.path, entry.private.follow) -> entryExists) 
+do (if ((entry.private.path, 0) -> entryExists) 
     // -1 then error;
     // 0 then
        (if (entry.private.path -> createntfile)=-1 then error if);
