@@ -36,7 +36,9 @@ ParamThisComp(void, AttBC)
     /* Terminates the list of component blocks on the stack. */
 
 #ifdef crts
-   lastCompBlock = (void *)RefSP;
+    lastCompBlock = (void *)RefSP;
+    GetStackPointer(baseStackPtr);
+    getret(comp->CallerLSC);
 #endif
 
 #ifdef sparc
@@ -61,7 +63,7 @@ ParamThisComp(void, AttBC)
 
     BasicItem = cast(Item) &comp->Body;
 
-    ActiveCallBackFrame = 0;
+    /* ActiveCallBackFrame = 0; */
     ActiveComponent = comp;
 
 #ifdef crts
