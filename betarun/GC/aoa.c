@@ -381,7 +381,7 @@ static void extendRAFStackArea(void)
     BetaExit(1);
   }
   memcpy(newBase, RAFStackBase, oldSize);
-  if (RAFStackBase != IOA) {
+  if (RAFStackBase != GLOBAL_IOA) {
     FREE(RAFStackBase);
     INFO_AOA(fprintf(output, 
 		     "#(AOA: RAF stack area freed: %d longs)\n", (int)oldSize/4));
@@ -394,7 +394,7 @@ static void extendRAFStackArea(void)
 static void freeRAFStackArea(void)
 /* Free any external space allocated to hold unprocessed RAF-references */
 {
-  if (RAFStackBase != IOA) {
+  if (RAFStackBase != GLOBAL_IOA) {
     FREE(RAFStackBase);
     INFO_AOA(fprintf(output, "#(AOA: RAF stack area freed: %d longs)\n", 
 		     (int)((long)RAFStackLimit - (long)RAFStackBase)/4));
@@ -453,7 +453,7 @@ static void ReverseAndFollow(void)
       if (inAOA(theCell) && inLVRA(theObj)) { 
 	/* Save the theCell for later use */
 	if ((long *)RAFStackTop >= AOAtoLVRAtable)
-	  if (AOAtoLVRAtable > IOA) 
+	  if (AOAtoLVRAtable > GLOBAL_IOA) 
 	    extendRAFStackArea(); 
 	  else
 #ifdef NEWRUN	   
@@ -463,7 +463,7 @@ static void ReverseAndFollow(void)
 #endif
 	*--AOAtoLVRAtable = (long)theCell;
 	AOAtoLVRAsize++;
-	if (RAFStackBase == IOA)
+	if (RAFStackBase == GLOBAL_IOA)
 	  RAFStackLimit--;
 	DEBUG_LVRA( Claim( isValRep(*theCell), "Phase1: LVRA cycle"));
 	DEBUG_LVRA( Claim( (*theCell)->GCAttr == (long) theCell,
@@ -696,10 +696,10 @@ static void Phase1(void)
 
   ptr(long) pointer = AOArootsLimit;
 
-  AOAtoLVRAtable = IOALimit;
+  AOAtoLVRAtable = GLOBAL_IOALimit;
   AOAtoLVRAsize = 0;
-  RAFStackBase = IOA;
-  RAFStackTop = IOA;
+  RAFStackBase = GLOBAL_IOA;
+  RAFStackTop = GLOBAL_IOA;
   RAFStackLimit = AOAtoLVRAtable;
   
 #ifdef RTDEBUG
@@ -958,8 +958,8 @@ static void Phase3()
     }
   }
   
-  if ((long)AOAtoLVRAtable - (long)IOA > AOAtoIOACount * 4)
-    table = IOA;
+  if ((long)AOAtoLVRAtable - (long)GLOBAL_IOA > AOAtoIOACount * 4)
+    table = GLOBAL_IOA;
   else {
     if( !(table = (long *) MALLOC( AOAtoIOACount * 4))){
       char buf[300];
@@ -1083,7 +1083,7 @@ static void Phase3()
   }
   
   /* if table was allocated with malloc, please free it. */
-  if( table != IOA ){
+  if( table != GLOBAL_IOA ){
     FREE( table);
     INFO_AOA( fprintf(output, "#(AOA: block for table freed %d longs)\n",
 		      (int)AOAtoIOACount));

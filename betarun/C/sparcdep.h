@@ -98,8 +98,7 @@ register volatile void *GCreg4 __asm__("%o4");
 #define SaveVar(var) push(var)
 #define RestoreVar(var) pop(var)
 
-/* C procs that gets origin and proto, and return an Object */
-
+/* AlloC, AlloI, AlloH, AlloS */
 #define ParamOriginProto(type, name)			\
   asmlabel(name,					\
 	   "clr %o1;"					\
@@ -115,7 +114,7 @@ register volatile void *GCreg4 __asm__("%o4");
                int i4)
 
 
-/* C procs that gets this and component */
+/* Att, AttBC, HandleIndexErr */
 #define ParamThisComp(type, name)			\
   asmlabel(name, 					\
 	   "clr %o3; "					\
@@ -127,7 +126,7 @@ register volatile void *GCreg4 __asm__("%o4");
               int i2, int i3, int i4)
 
 
-/* C procs that gets this */
+/* Susp */
 #define ParamThis(type, name)	\
   asmlabel(name, 		\
 	   "clr %o1; " 		\
@@ -137,18 +136,18 @@ register volatile void *GCreg4 __asm__("%o4");
 	   "mov %i0,%o0; ");	\
  type C##name(struct Object *this, int i1, int i2, int i3, int i4)
 
-/* C procs that gets a Structure parameter, and returns in this */
+/* AlloSI, AlloSC */
 #define ParamStruc(type, name)				\
   asmlabel(name,					\
 	   "clr %o1;"					\
 	   "clr %o3;"					\
 	   "clr %o4;"					\
 	   "ba "CPREF#name";"				\
-	   "mov %i1,%o0;"				\
+	   "mov %i1,%o0;"  /* struc */			\
 	   );			                        \
  type C##name(struct Structure *struc, int i1, int i2, int i3, int i4)
 
-/* C procs that uses this, offset and range */
+/* AlloRR, AlloVR1, AlloVR2, AlloVR4, AlloVR8 */
 #define ParamThisOffRange(name)		        	\
   asmlabel(name, 					\
            "mov %o1, %o5; " /* range */			\
@@ -165,7 +164,7 @@ register volatile void *GCreg4 __asm__("%o4");
 	      int i4,					\
 	      /*unsigned*/ int range)
 
-/* C procs that uses a specified object, offset and range */
+/* ExtRR, ExtVRx, NewRR, NewVRx */
 #define ParamObjOffRange(name)			        \
   asmlabel(name, 					\
            "mov %o1, %o5; " /* offset */		\
@@ -180,16 +179,19 @@ register volatile void *GCreg4 __asm__("%o4");
 	      int i4,					\
 	      unsigned offset /* in bytes */)
 
+/* CopyRR, CopyVR1, CopyVR2, CopyVR4, CopyVR8 */
 #define ParamRepObjOff(name)                            \
 void name(struct ValRep *theRep,                        \
 	   struct Object *theObj,                       \
 	   unsigned offset /* in ints */)
 
+/* CopySVRI, CopySVRC, CopyVRI, CopyVRC */
 #define ParamORepObjOff(name)                           \
 void name(struct ObjectRep *theRep,                     \
 	   struct Object *theObj,                       \
 	   unsigned offset /* in ints */)
 
+/* CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
 #define ParamRepObjOffLowHigh(name)                     \
 void name(struct ValRep *theRep,                        \
 	   struct Object *theObj,                       \
@@ -197,6 +199,7 @@ void name(struct ValRep *theRep,                        \
            unsigned low,                                \
 	   long high)
 
+/* CopySVRI, CopySVRC CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
 #define ParamORepObjOffLowHigh(name)                    \
 void name(struct ObjectRep *theRep,                     \
 	   struct Object *theObj,                       \
@@ -241,6 +244,7 @@ void name(struct ObjectRep *theRep,                     \
   { code; }						\
   pop(v2); pop(v1);					\
 
+#ifndef MT
 static __inline__ void USE()
 { int x;
   x=(int)IOA;
@@ -249,6 +253,7 @@ static __inline__ void USE()
   x=(int)FramePointer;
   x=(int)retAddress;
 }
+#endif
 
 /* Routines called from others */
 extern void      CAlloRR (ref(Object), int, unsigned, int, int, int);

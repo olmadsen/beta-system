@@ -286,6 +286,22 @@ void Initialize()
 
   GetBetaEnv();
 
+#ifdef MT
+if (NumIOASlices) {
+  IOASliceSize = IOASize / NumIOASlices;
+} else {
+  if (IOASliceSize) {
+    NumIOASlices = IOASize / IOASliceSize;
+  }
+}
+/* IOASize, NumIOASlices, and IOASliceSize now match */
+if (NumIOASlices < numProcessors(TRUE)){
+  /* There should at least be one slice per scheduler */
+  NumIOASlices = numProcessors(TRUE);
+  IOASliceSize = IOASize / NumIOASlices;
+}
+#endif
+
 #ifdef PE  
   {
     char *p;
@@ -335,18 +351,23 @@ void Initialize()
   }
   AllocateHeap((long*)&tmpIOA,
 	       (long*)&tmpIOATop,
-	       (long*)&IOALimit, 
+	       (long*)&GLOBAL_IOALimit, 
 	       IOASize,
 	       "IOA heap");
 #if defined(sparc) || defined(NEWRUN)
+#ifdef MT
+  gIOA = tmpIOA;
+  gIOATop = tmpIOATop;
+#else
   IOA = tmpIOA;
   IOATopOff = tmpIOATop - IOA;
+#endif /* MT */
 #else
   IOA = tmpIOA;
   IOATop = tmpIOATop;
 #endif
   /* Clear the initial IOA heap */
-  memset(IOATop, 0, IOASize);
+  memset(GLOBAL_IOATop, 0, IOASize);
 
   AllocateHeap((long*)&ToSpace, 
 	       (long*)&ToSpaceTop, 

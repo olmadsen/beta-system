@@ -8,6 +8,7 @@
  */
 
 #include "beta.h"
+#ifndef MT 
 
 #define GC_PANIC_MSG "\n\n\tPANIC: object scan stopped because of GC!!\n\n"
 #define MSG_DEST stdout
@@ -275,3 +276,4 @@ lowScanAOA(long printVisited, long printOrigin, long printSize,
 		     rootProto,
 		     cb);
 }
+#endif /* !MT */

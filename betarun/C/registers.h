@@ -13,13 +13,6 @@
  * used as temp register by gcc unless -ffixed-g2 is used.
  * Using %g7 makes programs linked with -lthread crash.
  */
-register long     *IOA            __asm__("%g5");
-register unsigned  IOATopOff      __asm__("%g6");
-
-register long     *StackPointer   __asm__("%sp");
-register long     *FramePointer   __asm__("%fp");
-register long     retAddress      __asm__("%i7");
-
 #ifdef MT
 /* Most of the following are not actually used from RTS, but
  * by defining them here, we prevent gcc from using them.
@@ -30,7 +23,19 @@ register unsigned *DataTopOffReg  __asm__("%g3");
 register TSD      *TSDReg         __asm__("%g4");
 register long     *G7Reg          __asm__("%g7");
 
+register long     *IOATop         __asm__("%g5");
+register long      G6Reg          __asm__("%g6");
+
+#else
+
+register long     *IOA            __asm__("%g5");
+register unsigned  IOATopOff      __asm__("%g6");
+
 #endif /* MT */
+
+register long     *StackPointer   __asm__("%sp");
+register long     *FramePointer   __asm__("%fp");
+register long     retAddress      __asm__("%i7");
 
 #endif
 

@@ -44,10 +44,10 @@ extern mutex_t cbfa_lock;
 #include "betaerror.h"
 #include "object.h"
 #include "heap.h"
+#include "registers.h"
 #include "macro.h"
 #include "function.h"
 #include "data.h"
-#include "registers.h"
 
 #ifdef crts
 #include "crtsdep.h"

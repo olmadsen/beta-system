@@ -103,7 +103,21 @@ static void ValueProperty(char *name, char *value)
 #ifdef RTDEBUG
   ENTRY("debugstackatgcnum", DebugStackAtGcNum = intScan(name, value));
 #endif
-  ENTRY("ioa", IOASize = 1024 * intScan(name, value));
+
+  ENTRY("ioa", 
+	IOASize = 1024 * intScan(name, value);
+	);
+#ifdef MT
+  ENTRY("ioaslicesize",
+	IOASliceSize = 1024 * intScan(name, value); 
+	NumIOASlices = 0;
+	);
+  ENTRY("numioaslices",
+	NumIOASlices = intScan(name, value); 
+	IOASliceSize = 0;
+	);
+#endif
+
   ENTRY("aoa",  
 	AOABlockSize  = 1024 * intScan(name, value);
 	if (AOAMinFree>AOABlockSize) AOAMinFree=AOABlockSize;

@@ -4,7 +4,7 @@
  * called from IOA(c)lloc or DoGC.
  */
 #ifdef MT
-extern struct Object *doGC(unsigned);
+extern struct Object *getNewIOASlice(unsigned long);
 #else
 extern void doGC();
 #endif
@@ -19,39 +19,43 @@ char *IOAalloc(unsigned size)
   
   /*GCable_Entry();*/
   
-  /*fprintf(output, "IOAalloc: IOATop=0x%x, size=0x%x\n", IOATop, size);*/
+  /*fprintf(output, "IOAalloc: IOATop=0x%x, size=0x%x\n", GLOBAL_IOATop, size);*/
   
   DEBUG_CODE(Claim(size>0, "IOAalloc: size>0"));
 #if (defined(sparc) || defined(hppa) || defined(crts))
   DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAalloc: (size&7)==0"));
-  DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAalloc: (IOATop&7)==0"));
+  DEBUG_CODE(Claim( ((long)GLOBAL_IOATop&7)==0 , "IOAalloc: (GLOBAL_IOATop&7)==0"));
 #endif
   
 #ifdef MT
+  /* Manipulate thread specific IOA */
   if ((char *)IOATop+size > (char *)IOALimit){
-    return (char *)doGC(size);
+    return (char *)getNewIOASlice(size);
   }
+  p = (char *)IOATop;
+  IOATop = (long*)((long)IOATop + size);
+  DEBUG_CODE(zero_check(p, size));
+  return p;
 #else /* MT */
-  while ((char *)IOATop+size > (char *)IOALimit) {
+  while ((char *)GLOBAL_IOATop+size > (char *)GLOBAL_IOALimit) {
     ReqObjectSize = size / 4;
     doGC();
   } 
-#endif /* MT */
- 
-  p = (char *)IOATop;
+
+  p = (char *)GLOBAL_IOATop;
 #ifdef hppa
-  /* setIOATopoffReg(getIOATopoffReg() + size); */
-  IOATop = (long*)((long)IOATop+size);
+  GLOBAL_IOATop = (long*)((long)GLOBAL_IOATop+size);
 #endif
 #ifdef sparc
   IOATopOff += size;
 #endif
 #ifdef crts
-  IOATop = (long*)((long)IOATop+size);
+  GLOBAL_IOATop = (long*)((long)GLOBAL_IOATop+size);
 #endif
 
   DEBUG_CODE(zero_check(p, size));
 
   return p;
+#endif /* MT */
 }
 

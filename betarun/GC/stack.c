@@ -873,7 +873,7 @@ void ProcessStack()
     DEBUG_STACK(fprintf(output, "\n ***** Trace of stack *****\n"));
     DEBUG_STACK(fprintf(output,
 			"IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
-			(int)IOA, (int)IOATop, (int)IOALimit));
+			(int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit));
 
     /* StackEnd points to the activation record of doGC, which in turn was called
      * from either DoGC, or IOA(c)alloc.

@@ -164,7 +164,7 @@ void Claim( expr, message)
     fprintf(output, "\n\nAssumption failed: %s\n\n", message);
     fprintf(output,
 	    "IOA:     0x%x, IOATop:     0x%x, IOALimit:     0x%x\n",
-	    (int)IOA, (int)IOATop, (int)IOALimit);
+	    (int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit);
     fprintf(output,
 	    "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
 	    (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
@@ -206,6 +206,11 @@ void CCk(void *r, char *fname, int lineno, char *ref)
       /* Check it's in a heap */
       Claim(inIOA(rr) || inAOA(rr) || inLVRA(rr) || isLazyRef(rr), __CkString);
     }
+}
+
+long isInIOA(long x)
+{
+  return (long)inIOA(x);
 }
 #endif
 

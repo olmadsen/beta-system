@@ -85,6 +85,7 @@ extern int numProcessors(int online);
 extern int attToProcessor(struct Component *comp);
 extern void SetupVirtualTimerHandler(unsigned usec);
 extern void SetupVirtualTimer(unsigned usec);
+extern void* MT_malloc(int size);
 #endif /* MT */
 
 /* C/valhallaComm.c */

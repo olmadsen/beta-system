@@ -271,7 +271,7 @@ typedef struct TSD
   /*  0 */ struct Component   * _ActiveComponent;
   /*  4 */ struct StackObject * _ActiveStack;
   /*  8 */ long               * _IOALimit;
-  /* 12 */ long               * _MallocExhausted;
+  /* 12 */ long                 _MallocExhausted;
   /* 16 */ char               * _CTextPoolEnd;
   /* 20 */ long                 _CTextPool [MAXCTEXTPOOL/4];
 } TSD;
@@ -282,4 +282,15 @@ typedef struct TSD
 #define MallocExhausted TSDReg->_MallocExhausted
 #define CTextPoolEnd    TSDReg->_CTextPoolEnd
 #define CTextPool       TSDReg->_CTextPool
+#endif /* MT */
+
+
+#ifdef MT
+# define GLOBAL_IOA gIOA
+# define GLOBAL_IOATop gIOATop
+# define GLOBAL_IOALimit gIOALimit
+#else /* MT */
+# define GLOBAL_IOA IOA
+# define GLOBAL_IOATop IOATop
+# define GLOBAL_IOALimit IOALimit
 #endif /* MT */

@@ -15,7 +15,11 @@
 #  ifdef RTDEBUG
 #    ifdef sparc
        /* 64 bit alignment because of the reals */
-#      define MALLOC(size) memset((void *)memalign(64, (size)), 0, (size))
+#      ifdef MT
+#        define MALLOC(size) MT_malloc(size)
+#      else
+#        define MALLOC(size) memset((void *)memalign(64, (size)), 0, (size))
+#      endif
 #    else
 #      define MALLOC(size) calloc(size,1)
 #    endif
@@ -93,10 +97,14 @@ do {                               \
 #define SwitchProto(proto)      ((signed char) ((int)(proto)))
 
 #if defined(sparc) || defined(NEWRUN)
+#ifdef MT
+#define inIOA(x)     ((x) && (/*(unsigned)(gIOA) <= (unsigned)(x) &&*/ (unsigned)(x)< (unsigned)(gIOATop)))
+#else
 #define inIOA(x)     (((unsigned)(x) - (unsigned)(IOA)) < (unsigned)(IOATopOff))
+#endif /* MT */
 #else
 #define inIOA(x)     (((long)IOA <= (long)(x)) && ((long)(x) < (long)IOATop))
-#endif
+#endif /* sparc || newrun */
 
 #define inHeap(x)    (inIOA(x) || inLVRA(x))
 #define inToSpace(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceTop)) 

@@ -9,6 +9,60 @@
 #include "crun.h"
 
 #ifdef MT
+struct Object *doGC(unsigned numbytes);
+
+struct Object *getNewIOASlice(unsigned long numbytes)
+{
+  /* Allocate an IOA slice. 
+   * -Attempts to allocate (numbytes+IOASliceSize) bytes.
+   * -At least numbytes are allocated.
+   *  A GC is triggered, if there is not room for max(numbytes,IOASliceSize).
+   */
+
+  struct Object *newObj;
+  unsigned long reqsize = numbytes;
+
+  /* FIXME: Lock gIOA vars */
+  if (reqsize < IOASliceSize)
+    reqsize = IOASliceSize;
+
+  if (!IOATop) {
+    /* IOATop is zero => this thread either has not had a slice yet,
+     * or a GC has occured in another thread.  
+     */
+    IOATop = gIOATop;
+  } 
+  
+  IOALimit = (long*)((long)IOATop + reqsize);
+  
+  if (gIOALimit <= IOALimit) {
+    /* FIXME: Stop all other threads! */
+
+    /* Force GC */
+    newObj = doGC(numbytes);
+
+    /* FIXME: Restart all threads. 
+     * -They should set their IOALimit to 0, to make sure they 
+     *  do not alloc in old heap 
+     */
+
+    IOATop = gIOATop; 
+    IOALimit = (long*)((long)IOATop + IOASliceSize);
+  } else {
+    newObj = (struct Object*)gIOATop;
+    IOATop = (long*)((long)gIOATop + numbytes); /* size of object */
+    gIOATop = (long*)((long)gIOATop + reqsize); /* size of slice */
+    
+    IOALimit =  (long*)((long)IOATop + IOASliceSize);
+    /* FIXME:                          ^^^reqsize?? */
+  }
+  if (gIOALimit < IOALimit)
+    IOALimit = gIOALimit;
+
+  /* FIXME:  Unlock */
+
+  return newObj;
+}
 
 struct Object *doGC(unsigned numbytes)
 { 
@@ -22,7 +76,7 @@ struct Object *doGC(unsigned numbytes)
     if ((long)IOATop+numbytes <= (long)IOALimit) {
       /* There is now room in IOA for the new object */
       newObj = (struct Object *)IOATop;
-      IOATopOff += numbytes;
+      IOATop += numbytes;
       return newObj;
     } else {
       INFO_IOA(fprintf(output, "[%d]\n", i+1));
@@ -36,7 +90,7 @@ struct Object *doGC(unsigned numbytes)
 	if ((long)IOATop+numbytes <= (long)IOALimit) {
 	  /* There is now room in IOA for the new object */
 	  newObj = (struct Object *)IOATop;
-	  IOATopOff += numbytes;
+	  IOATop += numbytes;
 	  return newObj;
 	} else {
 	  /* Have now tried everything to get enough space in IOA */

@@ -1,5 +1,5 @@
 #define Kb                1024
-#define Mb             Kb * Kb
+#define Mb             (Kb * Kb)
 
 /* Heap is the structure of IOA and ToSpace heaps */
 
@@ -29,7 +29,9 @@ typedef struct Heap {
  *    IOALimit: First not available byte
  */
 
+#ifndef MT
 #define IOATop        ((long *) ((long)IOA+IOATopOff))
+#endif
 #endif
 
 #ifdef mac68k

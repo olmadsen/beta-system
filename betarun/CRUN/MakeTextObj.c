@@ -14,9 +14,9 @@
 
 #ifdef sparc
 asmlabel(MkTO,
-	 "mov %o0,%o5;"	
-	 "mov %o1,%o0;"	
-	 /* "mov %o2,%o2;" */
+	 "mov %o0,%o5;"	       /* asciz */
+	 "mov %o1,%o0;"	       /* theItem */
+	 /* "mov %o2,%o2;" */  /* offset already in place */
          "clr %o1;"
 	 "clr %o3;"
 	 "ba "CPREF"MkTO;"

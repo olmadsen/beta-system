@@ -46,11 +46,12 @@ void IOAGc()
   DEBUG_IOA(
 	    fprintf(output,
 		    "Before: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
-		    (int)IOA, (int)IOATop, (int)IOALimit);
+		    (int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit);
 	    fprintf(output,
 		    "Before: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
 		    (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
 	    );
+
   DEBUG_CODE(memset(ToSpace, 0, IOASize));
   
   NumIOAGc++;
@@ -276,31 +277,21 @@ void IOAGc()
     {
       ptr(long) Tmp; ptr(long) TmpTop; 
       
-      Tmp = IOA; TmpTop = IOATop; 
+      Tmp    = GLOBAL_IOA; 
+      TmpTop = GLOBAL_IOATop; 
       
+      GLOBAL_IOA       = ToSpace;                          
+      GLOBAL_IOALimit  = ToSpaceLimit;
+
 #if defined(NEWRUN) || defined(sparc)
-      IOA       = ToSpace;                          
+#ifdef MT
+      gIOATop    = ToSpaceTop; 
+#else /* MT */
       IOATopOff = (char *) ToSpaceTop - (char *) IOA;
-#endif
-#ifdef hppa
-      /*setIOAReg(ToSpace);
-      setIOATopoffReg((char *) ToSpaceTop - (char *) IOA);*/
-      IOA       = ToSpace;                          
+#endif /* MT */
+#else
       IOATop    = ToSpaceTop; 
 #endif
-#ifdef mc68020
-      IOA       = ToSpace;                          
-      IOATop    = ToSpaceTop; 
-#endif
-#ifdef crts
-      IOA       = ToSpace;                          
-      IOATop    = ToSpaceTop; 
-#endif
-#if defined(linux) || defined(nti)
-      IOA       = ToSpace;                          
-      IOATop    = ToSpaceTop; 
-#endif
-      IOALimit     = ToSpaceLimit;
       
       ToSpace = Tmp; 
       ToSpaceTop = TmpTop; 
@@ -311,7 +302,9 @@ void IOAGc()
     
     /* Determine new tenuring threshold */
     {
-      long limit = areaSize(IOA,IOALimit) / 10;long sum = 0;
+      long limit;
+      long sum = 0;
+      limit = areaSize(GLOBAL_IOA,GLOBAL_IOALimit) / 10;
 #ifdef KEEP_STACKOBJ_IN_IOA
       limit -= IOAStackObjectSum;
       if (limit < 0) {
@@ -336,8 +329,8 @@ void IOAGc()
 		       (int)areaSize(AOArootsPtr,AOArootsLimit)));
     
     INFO_IOA(fprintf(output," %d%% used)\n",
-		      (int)((100 * areaSize(IOA,IOATop))/areaSize(IOA,IOALimit))));
-    
+		     (int)((100 * areaSize(GLOBAL_IOA,GLOBAL_IOATop))/areaSize(GLOBAL_IOA,GLOBAL_IOALimit))));
+	
     DEBUG_IOA( IOACheck() );
     DEBUG_CBFA( CBFACheck() );
     DEBUG_AOA( AOACheck() );
@@ -346,7 +339,6 @@ void IOAGc()
     /* Clear all of the unused part of IOA, so that RT routines does
      * not need to clear cells.
      */
-    memset(IOATop, 0, IOASize - ((long)IOATop-(long)IOA) );
 
     InfoS_LabB();
     
@@ -382,14 +374,19 @@ Program terminated.\n", (int)(4*ReqObjectSize));
 #endif /* MT */
     
     DEBUG_IOA(
-	      fprintf(output,
-		      "After: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
-		      (int)IOA, (int)IOATop, (int)IOALimit);
-	      fprintf(output,
-		      "After: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
-		      (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
-	      )
+		fprintf(output,
+			"After: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+			(int)GLOBAL_IOA, 
+			(int)GLOBAL_IOATop,
+			(int)GLOBAL_IOALimit);
+		fprintf(output,
+			"After: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+			(int)ToSpace, 
+			(int)ToSpaceTop, 
+			(int)ToSpaceLimit);
+		)
       
+
 #ifdef hpux
       /*    cachectl(CC_FLUSH, 0, 0); */
 #endif
@@ -944,9 +941,12 @@ void CompleteScavenging()
       ref(Object) theObj;
       long        theObjectSize;
       
-      theObj = (ref(Object)) IOA;
+      theObj = (ref(Object)) GLOBAL_IOA;
+
       lastObj=0;
-      while ((long *) theObj < IOATop) {
+      while (
+	(long *) theObj < GLOBAL_IOATop
+	) {
 #if 0
 	long i;
 	fprintf(output, "IOACheck: 0x%x\n", theObj);

@@ -50,6 +50,10 @@ void create_TSD(void)
     return;
   }
   MallocExhausted = 0;
+  IOALimit = NULL;
+  IOATop = NULL;
+  ActiveComponent = NULL;
+  ActiveStack = NULL;
 }
 
 int numProcessors(int online)
@@ -131,6 +135,14 @@ void SetupVirtualTimer(unsigned usec)
     printf("setitimer failed. Errno=%d (%s)\n", errno, strerror(errno));
     BetaExit(1);
   }  
+}
+
+void* MT_malloc(int size) 
+{ 
+  void* p = memalign(64, (size));
+  DEBUG_CODE(fprintf(output,"Malloc at 0x%0x\n", (int)p));
+  memset(p, 0, (size));
+  return p;
 }
 
 #endif /* MT */

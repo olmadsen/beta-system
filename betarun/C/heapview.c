@@ -1,4 +1,5 @@
 #include "beta.h"
+#ifndef MT
 
 typedef int *intptr;
 extern long LVRANumOfBlocks;
@@ -51,3 +52,4 @@ int getHeapInfo(int infoId)
     return 0;
   };
 }
+#endif /* !MT */
