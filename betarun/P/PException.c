@@ -627,6 +627,8 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
     if ( ! (inIOA(theObj) && isObject (theObj)))
       theObj  = 0;
     /* Normal refNone:  Handle as regular refNone. */
+    /* PC = (long *) scp.eip; */
+    StackEnd = (long *) scp.esp_at_signal;
     if (!DisplayBetaStack(RefNoneErr, theObj, (long*)PC, sig)) {
       BetaExit(1);
     }

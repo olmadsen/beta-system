@@ -74,21 +74,25 @@ foreach $f (@files) {
        print "[No reference stderr exists]"
     fi
     if [ -f dumps/$f.dump ]; then
-       sed -e "s/MACHINE_TYPE/$objdir/g" < dumps/$f.dump > $f.ref
-       grep -v '{' $f.dump                               > $f.app
-       diff $f.ref $f.app
-       if [ $? = 0 ]; then
-	  print "[Dump is correct]"
-	  rm $f.dump
-	  rm $f.ref
-	  rm $f.app
-	  rm $f
+       if [ -f $f.dump ]; then
+	  sed -e "s/MACHINE_TYPE/$objdir/g" < dumps/$f.dump > $f.ref
+	  grep -v '{' $f.dump                               > $f.app
+          diff $f.ref $f.app
+          if [ $? = 0 ]; then
+	     echo "[Dump is correct]"
+	     rm $f.dump
+	     rm $f.ref
+	     rm $f.app
+	     rm $f
+          else
+	     echo "[Difference in dump]"
+	     diff $f.ref $f.app > $f.diff
+          fi
        else
-	  print "[Difference in dump]"
-	  diff $f.ref $f.app > $f.diff
+          echo "[No dump created]"
        fi
     else
-       print "[No reference dump exists]"
+       echo "[No reference dump exists]"
     fi
     print "--------------------------"
 done

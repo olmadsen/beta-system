@@ -29,7 +29,7 @@ static void NotifySignalDuringDump(int sig)
 #endif /* UNIX */
   default: err=UnknownSigErr;
   }
-  NotifyErrorDuringDump(err, SignalErr);
+  NotifyErrorDuringDump((BetaErr)isMakingDump, err);
 }
 
 #ifdef RTVALHALLA 
