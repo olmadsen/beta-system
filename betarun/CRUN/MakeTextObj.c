@@ -60,7 +60,7 @@ void MkTO(char *cText,
 #ifdef sparc
     ClearCParams(); /* OK here: is not called from RT */
     Protect(theItem, theText = SPARC_AlloI((struct Object *)BasicItem, 0, 
-					   TextProto, 0, 0));
+				      TextProto, 0, 0));
 #endif
 #ifdef hppa
     Protect(theItem, theText = CAlloI((struct Object *)BasicItem, TextProto));
