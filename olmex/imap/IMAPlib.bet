@@ -91,7 +91,7 @@ IMAP: system
      sendFETCH: command
        (# msgNo: @integer; withText: @boolean
        enter(msgNo,withText)
-       do 'FETCH:'->ilog.putline;
+       do 'FETCH:'->ilog.puttext; msgNo -> ilog.putint; ilog.newline;
           'FETCH ' -> outSocket.puttext;
           msgNo -> outSocket.putint;
           ' (FLAGS INTERNALDATE RFC822.size ENVELOPE BODY'
@@ -100,6 +100,7 @@ IMAP: system
               ' RFC822.TEXT'-> outSocket.puttext;
           if);
           ')\n'-> outSocket.puttext;
+          'inner'->ilog.putline;
           INNER
        #);
      sendLIST: command
@@ -116,15 +117,6 @@ IMAP: system
           msg[] -> ilog.putline;
           msg[] -> outSocket.puttext
        #);
-     parse:
-       (# T: ^text; last: @integer; R: ^response;
-          IP: @parseIMAP
-       enter T[]
-       do ilog[] -> IP.init;
-          T[] -> IP -> R[];
-          (if R[] <> none then R[] -> listResp; if);
-       #);     
-
      sender: @ | system
        (#
        do 
@@ -150,7 +142,32 @@ IMAP: system
        #);
      parseMesg: @boolean;
      receiver: @ | system
-       (# R,A: ^text; resp: ^response;
+       (# waitResponse:
+            (# 
+            enter handler[]
+            do wait:
+                 (if gotResponse then 
+                     false -> gotResponse;
+                  else
+                     'waitResponse: ' -> ilog.putline;
+                     pause;
+                     restart wait
+                 if)
+            exit resp[]
+            #);
+          handler: ^| system;
+          gotResponse: @boolean;
+          sendResponse:
+            (#
+            do 'sendResponse:'->ilog.putline;
+               (if handler[] <> none then
+                   true -> gotResponse;
+                   none -> handler[];
+                   wait:
+                     (if gotResponse then pause; restart wait if)
+               if);
+            #);  
+          R,A: ^text; resp: ^response;
           IP: @parseIMAP
        do ilog[] -> IP.init;
           L: cycle
@@ -159,16 +176,12 @@ IMAP: system
                    'EOS'->ilog.putline;
                    leave L 
                if);
-               (if false then
-                   getResponse -> R[] -> putline;
-                   R.reset;
-                   R.getAtom -> A[]; ' '->A.put;
-                   (if A[] -> currentID.equal then
-                       none -> currentID[]
-                   if)
-                else
-                   outSocket[] -> IP -> resp[];
-                   (if (resp[]<>none) then
+               'outSocket:get'->ilog.putline;
+               outSocket[] -> IP -> resp[];
+               (if (resp[]<>none) then
+                   (if handler[] <> none then
+                       sendResponse
+                    else
                        (if true
                         // resp.isCompleted then
                            (# CR: ^completedResponse
@@ -200,7 +213,7 @@ IMAP: system
                            resp[] -> exists;
                        if)
                    if)
-               if);
+               if)
             #);
           
           outSocket.close;        (* close down the socket *)
@@ -232,8 +245,9 @@ IMAP: system
         (* connection established *)
         'Connected' -> screen.putline;
         'Connected' -> ILOG.putline;
-        sender[] -> fork;
         receiver[] -> fork;
+        sender[] -> fork;
+
         (*fromUser[] -> fork;*)
      #)
   #)

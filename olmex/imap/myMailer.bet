@@ -2,6 +2,7 @@ ORIGIN '~beta/guienv/guienvsystemenv';
 INCLUDE '~beta/guienv/fields';
 INCLUDE '~beta/guienv/utils/treeview';
 INCLUDE '~beta/guienv/scrolllists';
+INCLUDE '~beta/sysutils/objinterface';
 INCLUDE 'IMAPlib';
 INCLUDE 'mailFolder';
 INCLUDE '~beta/basiclib/numberio';
@@ -214,6 +215,7 @@ systemenv
                (# 
                do txt[] -> log.puttext
                #);
+             put:: (# do ch -> log.put #)
           #);
         listResp::
           (#
@@ -263,84 +265,50 @@ systemenv
              myWindowEnv.theWindow.TE.contents.paste;             
              (0,10) -> myWindowEnv.theWindow.TE.scroll;
           #);
-        coded2iso:
-          (# T,S1: ^text; S: @text; i: @integer; ch: @char; 
-             isHex: booleanValue
-               (# C: @char
-               enter C
-               do (if ('0' <= C) and (C <= '9') then
-                      true -> value
-                   else
-                      (if ('a' <= C) and (C <= 'f') then
-                          true -> value
-                       else
-                          (if ('A' <= C) and (C <= 'F') then
-                              true -> value
-                  if)if)if)
-               #);
+        do_coded2iso:
+          (# T,S: ^text
           enter T[]
           do 'match: ' -> log.puttext; T[] -> log.putline;
-             T.reset;
-             loop:
-               (if not T.eos then
-                   (if T.isMimeCoded
-                       (# iso_8859_1::
-                            (#
-                            do (if true
-                                // isQuotedPrintable then
-                                   T.QuotedPrintabletoText 
-                                   (#
-                                   do ch -> S.put
-                                   #)
-                                // isBase64 then
-                                   T.base64toText
-                                   (#
-                                   do ch -> S.put
-                                   #)
-                                else
-                                   '\n*** Unknown coding for iso-8859-1'
-                                     ->putline;
-                               if)
-                            #);
-                          utf8::
-                            (# R: @text;
-                            do (if true
-                                // isQuotedPrintable then
-                                   '\n***Mising UTF8:QP'->putline
-                                // isBase64 then
-                                   '\n\n**** UTF8/Base64 string. '
-                                   'Never tried before: ' 
-                                     -> screen.putline;
-                                   T[] -> screen.putline;
-                                   T.base64toText
-                                   (#
-                                   do ch -> R.put
-                                   #);
-                                   R[] -> screen.putline;
-                                   R.reset;
-                                   R.utf8ToText(#do ch -> S.put #);;
-                                   S[] -> screen.putline;
-                                else
-                                   '\n*** Unknown coding for UTF8'
-                                     ->putline;
-                               if)
-                            #);
-                       do T.get -> ch -> S.put;
-                       #) then
-                   if);
-                   restart loop
-               if);
+             T[] -> coded2iso -> S[];
              S.reset;
              '\nDONE: ' -> log.puttext; S[] -> log.puttext; log.newline;
           exit S[] 
           #);
-        awaitCompleted:
-          (# C: ^response
-          do (if false then
+        awaitResponse: @ | system
+          (# resp: ^response
+          do cycle
+             (#
+             do 'awaitResponse:'->putline;
+                this(awaitResponse)[] 
+                  -> objectToComponent
+                  -> receiver.waitResponse 
+                  -> resp[];
+                'got response'->putline;
+                SUSPEND;
+             #)
+          exit resp[]
+          #);
+                
+        awaitCompleted:  @ | system
+          (* OBS! waitResponse executes pause, which implies
+           * a suspend - pause ONLY works when we use scheduling
+           * via fork. I.e we should make our own scheduler
+           *)
+          (#              C: ^response
+          do (if true then 'AWAITCOMPLETED:'->log.putline;
                  loop:
-                   (# do
-                      getresponse -> putline;
-                      restart Loop
+                   (#
+                   do this(awaitCompleted)[] 
+                        -> objectToComponent
+                        -> receiver.waitResponse 
+                        -> C[];
+                      'AwaitCompleted:'->log.putline;
+                      (if (C[] = none) or not C.isCompleted then
+                          restart loop
+                       else
+                          SUSPEND;
+                          restart loop
+                      if)
                    #)
               else
                  Loop:
@@ -375,28 +343,40 @@ systemenv
                                restart Loop
                   if)#)if)
                #);
-             lastNonDeleted: @integer
+             lastNonDeleted: @integer;
           do 'EXIST: fetching mailbox: '-> log.puttext;
              R.value -> log.putint; log.newline;
              awaitCompleted; (* OK from SELECT *)
+             'After awaitCompleted'->log.putline;
              (for i: R.value repeat
                   (*i -> putint; ','->put;*)
                   (i,false) -> sendFetch
                   (#
                   do Loop:
                        (#
-                       do outSocket[] -> IP -> msg[];
+                       do (if false then
+                              (* do not work since we call
+                               * exists from receiver and
+                               * awaitResponse will call
+                               * receiver recursively and
+                               * we will deadlock
+                               *)
+                              awaitResponse -> msg[];                      
+                           else
+                              outSocket[] -> IP -> msg[];
+                          if);
                           (if (msg[]=none) or not msg.isMsg then
                               restart Loop
-                       if)#);
+                          if)
+                       #);
                      log.newline;
                      (if not msg.isDeleted then
                          i -> lastNonDeleted
                      if);
                      msg.M.PP -> log.puttext; log.newline;
-                     msg.subject -> coded2iso -> header[];
+                     msg.subject -> do_coded2iso -> header[];
                      '   ' -> header.append;
-                     msg.sender  -> coded2iso -> header.append;
+                     msg.sender  -> do_coded2iso -> header.append;
                      '   ' -> header.append;
                      msg.date -> header.append;
                      (mno+1->mno,header[]) 
@@ -451,22 +431,37 @@ systemenv
           enter name[]
           do name[] -> sendSelect
           #);
-        showMessage:
+        showMessage: @ | system
           (# msgNo: @integer; C: ^response; msg: ^messageResponse
           enter msgNo
-          do (msgNo,true) -> sendFetch
-             (# s,e: @integer
-             do outSocket[] -> IP -> C[];
-                (if C.isMsg then
-                    C[] -> msg[];
-                    msg.getFlags;
-                    msg.message -> myWindowEnv.theWindow.TE.puttext
-                 else
-                    '\nFECTH: missing message response'->putline;
-                if);
-                awaitCompleted; (* OK FETCH *)
-                none -> currentID[];
-             #)
+          do cycle
+               (#
+               do 'Showmessage:'->log.putline;
+                  (msgNo,true) -> sendFetch
+                  (# s,e: @integer
+                  do 'getresponse:'->log.putline;
+                     (if true then
+                         this(showMessage)[] 
+                           -> objectToComponent
+                           -> receiver.waitResponse 
+                           -> C[];                      
+                      else
+                         outSocket[] -> IP -> C[];
+                     if);
+                     'got response'->log.putline;
+                     (if C.isMsg then
+                         C[] -> msg[];
+                         msg.M.pp -> log.putline;
+                         msg.getFlags;
+                         msg.message -> myWindowEnv.theWindow.TE.puttext
+                      else
+                         '\nFECTH: missing message response'->putline;
+                     if);
+                     awaitCompleted; (* OK FETCH *)
+                     none -> currentID[];
+                  #);
+                  SUSPEND;
+               #)
           #);
         T: @styledtext;
      #);
@@ -481,7 +476,11 @@ systemenv
           do (if trace then
                  'myMailer-log.txt' -> name; 
                  openWrite;
-                 logF[] -> log[];
+                 (if false then
+                     screen[] -> log[]
+                  else
+                     logF[] -> log[];
+                 if)
               else 
                  &stream[] -> log[]
              if);
