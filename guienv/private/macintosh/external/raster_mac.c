@@ -6,7 +6,7 @@
 
 #define Check(error) if(error) goto clean;
 
-int CreateBitmapFromPictureFile (char *name,BitMapHandle *bitmap,Handle *data)
+int CreateBitmapFromPictureFile (unsigned char *name,BitMapHandle *bitmap,Handle *data)
 {
 	OSErr error = 0;
 	short theRefnum = 0;
@@ -120,7 +120,7 @@ void UnlockPix (BitMapHandle bits,Handle data)
 	(**bits).baseAddr = nil;
 }
 
-void CreatePixmapFromPictureFile (char *name,PixMapHandle *pixmap,Handle *data)
+void CreatePixmapFromPictureFile (unsigned char *name,PixMapHandle *pixmap,Handle *data)
 {
 	OSErr error = 0;
 	short theRefnum = 0;
