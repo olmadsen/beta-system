@@ -39,6 +39,11 @@ static BooleanProperty( name)
 	Info0 = TRUE; InfoIOA = TRUE; InfoAOA = TRUE; 
 	InfoLVRA = TRUE; InfoCBFA = TRUE; InfoLVRAAlloc = TRUE);
   ENTRY("quacont",  QuaCont = TRUE);
+
+#ifdef valhallaRT
+  ENTRY("valhallatest", valhallaTest = TRUE);
+#endif valhallaRT
+
 #ifdef sparc
   ENTRY("suspcont", SuspCont = TRUE);
 #endif
@@ -66,6 +71,9 @@ static BooleanProperty( name)
 static ValueProperty( name, value)
   char *name, *value;
 {
+#ifdef valhallaRT
+  ENTRY("valhallaid", valhallaID = strdup (value));
+#endif valhallaRT
 
   ENTRY("ioa", IOASize = 1024 * intScan(name, value));
   ENTRY("aoa",  

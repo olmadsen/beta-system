@@ -75,7 +75,8 @@ void BetaError(errorNo, theObj)
 #endif
 #endif
       }
-      DisplayBetaStack( errorNo, theObj, thePC);  
+      if (DisplayBetaStack( errorNo, theObj, thePC, 0))
+	break; /*  DisplayBetaStack <> 0 => continue execution */
     }    
     BetaExit(1);
   } while (FALSE);

@@ -87,6 +87,15 @@ static char *machine_name()
   return ""; 
 }
 
+#ifdef valhallaRT
+extern int valhallaOnError (long,ref(Object),long*,long*,long);
+/*    long errorNumber;
+ *    ref(Object) theObj;
+ *    long* thePC;
+ *    long* theSP;
+ *    long theSignal; */
+#endif
+
 static ptr(char) ProtoTypeName(theProto)
      ref(ProtoType) theProto;
 {
@@ -105,15 +114,6 @@ static ptr(char) ProtoTypeName(theProto)
  * external code.
  */
 static int c_on_top;
-
-typedef struct group_header
-{
-  struct group_header *self;
-  long                *protoTable;
-  struct group_header *next;
-  long                code_start;
-  long                code_end;
-} group_header;
 
 /* NextGroup is used by objectserver/persistent store to scan through the
  * data-segments, in order to implement InitFragment.
@@ -491,12 +491,22 @@ void
 }
 #endif
 
-void DisplayBetaStack( errorNumber, theObj, thePC)
+/* If DisplayBetaStack returns non-zero, the debugger was invoked, and
+ * the process should continue execution. */
+
+int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
      long errorNumber;
      ref(Object) theObj;
      long *thePC;
+     long theSignal; /* theSignal is zero if not applicable. */
 {
-  
+
+#ifdef valhallaRT
+  if (valhallaTest)
+    if (valhallaOnError (errorNumber,theObj,thePC,stackEnd,theSignal))
+      return 1;
+#endif
+
 #ifndef sparc
   ref(Component)      currentComponent;
 #endif
@@ -822,6 +832,8 @@ P("      [ EXTERNAL ACTIVATION PART ]")
 #undef P
   
   fclose(output);
+
+  return 0;
 }
 
 

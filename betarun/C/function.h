@@ -25,7 +25,10 @@ extern void DumpIOA();
 /* C/outpattern.c */
 extern void  DisplayObject(ptr(FILE),ref(Object),long);
 extern char *ErrorMessage(long);
-extern void  DisplayBetaStack(long, ref(Object), long *);
+extern int  DisplayBetaStack(long, ref(Object), long *, long);
+extern struct group_header* NextGroup (struct group_header*);
+extern char* NameOfGroup (struct group_header *);
+extern char *GroupName(long, int);
 #ifdef RTDEBUG
 extern char *DescribeObject(struct Object *);
 #endif
