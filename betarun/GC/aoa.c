@@ -202,10 +202,14 @@ static Block *sector_map[SECTOR_COUNT*2];
 static void
 mark_sector(unsigned long addr, Block *block)
 {
-  if (sector_map[SECTOR_INDEX(addr) * 2])
-    sector_map[SECTOR_INDEX(addr) * 2 + 1] = block;
+  int i = SECTOR_INDEX(addr) * 2;
+  Claim(!sector_map[i] || !sector_map[i + 1], "No space in sector map");
+  Claim(sector_map[i] || !sector_map[i + 1], "Wrong entry unused in sector map");
+  Claim(sector_map[i] != block, "Block already in sector map");
+  if (sector_map[i])
+    sector_map[i + 1] = block;
   else
-    sector_map[SECTOR_INDEX(addr) * 2] = block;
+    sector_map[i] = block;
 }
 
 static void
@@ -224,13 +228,15 @@ insert_block_in_sector_map(
   mark_sector(addr+len, block);
 }
 
+/* This is as fast as possible */
+
 int
 SectorBasedInAOA(Object *o)
 {
   Block *b;
   b = sector_map[SECTOR_INDEX(o) * 2];
   if (!b)
-    return 0;
+    return 0;         /* Fast path exits here for objects not in AOA */
   if (inBlock(b, o))
     return 1;
   b = sector_map[SECTOR_INDEX(o) * 2 + 1];
