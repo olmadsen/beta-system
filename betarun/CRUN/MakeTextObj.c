@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: MakeTextObj.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:47 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: MakeTextObj.c,v $, rel: %R%, date: $Date: 1992-09-03 09:48:52 $, SID: $Revision: 1.9 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,8 +9,10 @@
 #include "beta.h"
 #include "crun.h"
 
-/* long offset of rep. within text obj. TEXT ATTRIBUTE HARDCODED:3. */
-#define REP_OFF 3
+/* long offset of rep. within text obj. TEXT ATTRIBUTE HARDCODED:4.
+ * It is 4 and not 3 because of 64 bit alignment. 
+ */
+#define REP_OFF 4
 
 void MkTO() asm("MkTO");
 
@@ -32,13 +34,13 @@ void MkTO(char *cText,
     
     /* Prepare for copying of the asciz into the repetition of the text object */
     
-    CopyT(cText, theText, REP_OFF); 
+    Protect(theText, CopyT(cText, theText, REP_OFF)); 
     
-    /* store range in lgth. TEXT ATTRIBUTE HARDCODED:16.
-     * store range in pos. TEXT ATTRIBUTE HARDCODED:20.
-     * (headsize(Item) + 2*sizeof(long) == 16)
+    /* store range in lgth.
+     * store range in pos.
      */
-    theText->Body[2] =
-      theText->Body[3] = (casthandle(ValRep)theText)[REP_OFF]->HighBorder;
+    ((long *)theText)[REP_OFF+1] =
+      ((long *)theText)[REP_OFF+2] =
+	(casthandle(ValRep)theText)[REP_OFF]->HighBorder;
 }
 
