@@ -37,7 +37,7 @@ static void *self=0;
  * valhalla. 
 */
 
-static int exelevel = 1;
+int valhalla_exelevel = 1;
 static int invops = 0;
 
 
@@ -759,10 +759,10 @@ static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "Calling callback function\n"));
       old_valhallaIsStepping = valhallaIsStepping;
       valhallaIsStepping = FALSE;
-      exelevel++;
+      valhalla_exelevel++;
       /* cb() may cause GC */
       cb();
-      exelevel--;
+      valhalla_exelevel--;
       valhallaIsStepping = old_valhallaIsStepping;
       DEBUG_VALHALLA(fprintf(output, "VOP_EXECUTEOBJECT done.\n"));
       valhalla_writeint (opcode);
@@ -889,7 +889,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   char *txt; int res;
   DEBUG_VALHALLA(fprintf(output,"debuggee: ValhallaOnProcessStop: PC=%d, SP=0x%x, curObj=%d,sig=%d,errorNumber=%d\n",(int) PC, (int) SP, (int) curObj, (int) sig, (int) errorNumber));
   invops++;
-  if (invops > exelevel) {
+  if (invops > valhalla_exelevel) {
     fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
 #ifdef UNIX
     DEBUG_CODE(fprintf(output,"debuggee: sleeping for 10 minuttes...\n"); sleep(10*60));

@@ -890,8 +890,10 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
        * six parameters (compiler allocates 12, that may be too much...)
        */
 #ifdef RTVALHALLA
-      if (valhallaID){
-	/* If run under valhalla, an evaluator may be under execution.
+      extern int valhalla_exelevel;
+      if (valhallaID && (valhalla_exelevel>1)){
+	/* We are running under valhalla, and at least one evaluator is
+	 * under execution.
 	 * In this case a callback is simulated by setting BetaStackTop
 	 * to the value of SP at the time valhallaOnProcess was called.
 	 * This resembles a C call (BETA code was left, external code
@@ -902,8 +904,10 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	 * the 12 words in this case.
 	 * FIXME: This will NOT work, if BETA frame had pushed 6 or more
 	 * things on stack (each decrements stack with 8).
-	 * A better test would analyze the code at the PC of the frame
-	 * to see if the stack space was allocated.
+	 * A better solution could be saving the SP values in 
+	 * valhallaOnProcessStop in a local stack, and comparing the 
+	 * frame-SP-before-callback values with this list to uniquely 
+	 * determine if we actually hit a frame before a valhalla evaluator.
 	 */
 	if ((long)theCell+48>=(long)ar->fp){
 	  skipCparams = 0;
