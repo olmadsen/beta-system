@@ -8,8 +8,8 @@ rem So we introduce a variable OLD_BETALIB to point to the old
 rem location and duplicate the beta script.
 
 rem --- configuration---
-set OLD_BETALIB=d:\beta\r5.0.boot
-set OLD_BETARUN=d:\beta\r5.0.boot\betarun\nti_%MIASDK%\betarun.lib
+set OLD_BETALIB=\beta\r5.0.boot
+set OLD_BETARUN=\beta\r5.0.boot\betarun\nti_%MIASDK%\betarun.lib
 
 rem --- don't change below ---
 
