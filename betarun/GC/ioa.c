@@ -15,29 +15,7 @@
 #include "../CRUN/crun.h"
 #endif
 
-#ifdef hpux
-/* #include <sys/cache.h> */
-#endif
-
 #define REP ((ObjectRep *)theObj)
-
-#ifndef MT
-GLOBAL(static int IOALooksFullCount) = 0; /* consecutive unsuccessful IOAGc's */
-#endif
-
-/* GLOBAL FUNCTIONS, defined in C/function.h
- *
- *   void IOAGc()
- *   void ProcessReference(Object ** theCell)
- *   void ProcessObject(Object * theObj)
- *   void CompleteScavenging()
- *
- *   #ifdef RTDEBUGGC/
- *   void IOACheck()
- *   void IOACheckObject (Object *theObj)
- *   void IOACheckReference(REFERENCEACTIONARGSTYPE)
- *   #endif 
- */
 
 /* LOCAL FUNTIONS */
 static void ProcessAOAReference(Object ** theCell);
@@ -57,9 +35,7 @@ static void IOACheckPrintIOA(void);
  */
 void IOAGc()
 {
-#if defined(MAC)
-    RotateTheCursor();
-#endif
+  MAC_CODE(RotateTheCursor());
   
     DEBUG_IOA(
         fprintf(output,
@@ -126,9 +102,7 @@ void IOAGc()
     if (!ActiveComponent && NumIOAGc == 1) {
         char buf[512];
         sprintf(buf, "Could not allocate basic component");
-#ifdef MAC
-        EnlargeMacHeap(buf);
-#else
+        MAC_CODE(EnlargeMacHeap(buf));
         Notify(buf);
 #endif
         BetaExit(1);
