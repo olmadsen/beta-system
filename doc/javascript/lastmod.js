@@ -5,9 +5,9 @@
 var month_names = new Array("January","February","March","April","May","June","July","August","September","October","November","December");
 var day_names   = new Array("Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday");
 var sup_date;
-var century;
 var lastmodnumber = Date.parse(document.lastModified);
 var lastmod = new Date(document.lastModified);
+var year = lastmod.getYear();
 var hours;
 var minutes;
 var sup = new Array();
@@ -44,16 +44,20 @@ if (lastmodnumber == 0) {
     
     if ((lastmod.getDate()==1)  || (lastmod.getDate()==2)  || (lastmod.getDate()==3) ||
 	  (lastmod.getDate()==21) || (lastmod.getDate()==22) || (lastmod.getDate()==23) ||
-	  (lastmod.getDate()==31)) 
+	  (lastmod.getDate()==31)) {
 		 sup_date = sup[lastmod.getDate()];
-    else
+    } else {
 		 sup_date = lastmod.getDate()+"<SUP>th</SUP>";
+    }
 	
-    if (lastmod.getYear() >= 98 )
-	  century = "19";
-    else
-	  century = "20";
-	      
+    // Y2K hack
+    // NetScape reports year=100;
+    // Internet explorer reports year=2000;
+    year %= 100;
+    if (year<10){
+      year = "0" + year;
+    }
+ 	      
     document.writeln("<NOBR><FONT size=\"-1\">"
 		     + "[Modified: " 
 		     + day_names[lastmod.getDay()] 
@@ -62,7 +66,7 @@ if (lastmodnumber == 0) {
 		     + " " 
 		     + sup_date
 		     + " " 
-		     + century + lastmod.getYear() 
+		     + "20" + year 
 		     + " at " 
 		     + hours + ":" + minutes
 		     + "]"
