@@ -1,15 +1,10 @@
 ORIGIN 'guienv_unixprivate';
 INCLUDE '../datastructures/association'
-        '../pathmanager';
+        '../pathmanager'
+        '~beta/toollibs/utils/PNG/private/xpnginterface';
 LIB_ITEM 'guienv';
 MAKE default 'external/xpm/Makefile';
 LIBFILE default '$/libXpm.a';
-
-INCLUDE '~beta/toollibs/utils/PNG/private/xpnginterface';
-
-
-
-
 -- lib: Attributes --
 getPixmapPathManager: objectPool.get
   (#
@@ -86,6 +81,7 @@ XpmReadFileToPixmap: external
   enter (display,drawable,filename,pixmap_return,shapemask_return,attributes)
   exit status
   #);
+  
 
 -- pixmapLib: Attributes --
 search:
@@ -150,7 +146,19 @@ expandPixmapName:
                       '.png'->(name.copy).append->name[]; 
                   if);
                   name[]->search->expandedName[];
-                  (if expandedName[] = none then wasNotFound;  if);
+                  (if expandedName[] = none then
+                        (# file: @diskentry; 
+                        do
+                           applDirectory->name.prepend;
+                           name[]->putline;
+                           name[]->file.path;
+                           (if file.exists then
+                               name.copy->expandedName[]; 
+                            else
+                               wasNotFound; 
+                           if)
+                        #)
+                  if);
                   
               if);
               
@@ -193,10 +201,7 @@ guessPixmapFormat:
           f.get->ch;
           (if ch
            // 0x89 then
-              'P'->accept;
-              'N'->accept;
-              'G'->accept;
-              PNGformat->format;
+              'P'->accept; 'N'->accept; 'G'->accept; PNGformat->format; 
            // '/' then
               '*'->accept;
               ' '->accept;
@@ -217,6 +222,7 @@ guessPixmapFormat:
               fail; 
           if);
           f.close;
+          
        #);
      
   exit format
@@ -224,7 +230,7 @@ guessPixmapFormat:
 unknown: (#  exit 0 #);
 XPMformat: (#  exit 1 #);
 XBMformat: (#  exit 2 #);
-PNGformat: (# exit 3 #);
+PNGformat: (#  exit 3 #);
 readXBMfile:
   (# name: ^text; error:< (# msg: ^text;  enter msg[] do INNER ;  #); 
   enter name[]
@@ -367,9 +373,9 @@ readXPMfile:
           
        #)
   #);
-
- XImage: data
-  (# width: @integer;
+XImage: data
+  (#
+     width: @integer;
      height: @integer;
      xoffset: @integer;
      format: @integer;
@@ -385,66 +391,65 @@ readXPMfile:
      green_mask: @integer;
      blue_mask: @integer;
      obdata: @integer;
-     hook1, hook2, hook3, hook4, hook5, hook6: @integer;
+     hook1,hook2,hook3,hook4,hook5,hook6: @integer;
+     
   #);
 XPutImage: External (* 6.7 *)
-  (# display,drawable,gc,srcX,srcY,dstX,dstY,width,height: @integer;
+  (#
+     display,drawable,gc,srcX,srcY,dstX,dstY,width,height: @integer;
      image: ^XImage;
+     
   enter (display,drawable,gc,image[],srcX,srcY,dstX,dstY,width,height)
   #);
 YAllocColor: external
-  (# display: @integer;
-     cmap: @integer;
-     c: ^XColor;
-     result: @integer;
-  enter (display, cmap, c[])
+  (# display: @integer; cmap: @integer; c: ^XColor; result: @integer; 
+  enter (display,cmap,c[])
   exit result
-  #); 
+  #);
 readPNG: external
-  (# display: @integer;
-     name: [1]@char;
+  (#
+     display: @integer;
+     name: [1] @char;
      image: @integer;
      mask: @integer;
      error: @integer;
-  enter (display, name, image, mask)
+     
+  enter (display,name,image,mask)
   exit error
   #);
-
-
 readPNGfile:
-  (# name: ^text; error:< (# msg: ^text;  enter msg[] do INNER ;  #); 
+  (#
+     name: ^text;
+     error:< (# msg: ^text;  enter msg[] do INNER ;  #);
      gc,errorCode,dpy: @integer;
      image: ^XImage;
      mask: @integer;
      
   enter name[]
   do
-     THIS(guienv).private.display -> dpy;
-     (dpy, name, @@image, @@mask) -> readPNG -> errorCode;
-     
+     THIS(guienv).private.display->dpy;
+     (dpy,name,@@ image,@@ mask)->readPNG->errorCode;
      (if errorCode
-      //0 then
+      // 0 then
          (image.width,image.height)->init;
-         (dpy,private.pixmapID,0,0)
-           ->XCreateGC
-           ->gc;
-         (dpy, private.pixmapID, gc, image[], 0, 0, 0, 0, image.width, image.height) 
-           -> XPutImage;
+         (dpy,private.pixmapID,0,0)->XCreateGC->gc;
+         (dpy,private.pixmapID,gc,image[],0,0,0,0,image.width,image.height)
+           ->XPutImage;
+         dpy->XFlush;
+         (dpy,gc)->XFreeGC;
+         %getLongAt (@@ image)->XDestroyImage;
+         mask->private.maskID;
          
-         dpy -> XFlush;
-         
-         (dpy,gc)->XFreeGC; 
-         %getLongAt(@@image) -> XDestroyImage;
-         mask -> private.maskID;
-
-      //1 then
-         'No such file' -> error;
-      //2 then
-         'Wrong format' -> error;
-      //3 then
-         'Not enough memory' -> error;
+      // 1 then
+         'No such file'->error; 
+      // 2 then
+         'Wrong format'->error; 
+      // 3 then
+         'Not enough memory'->error; 
      if);
+     
   #);
+  
 
 -- pixMapRead: DoPart --
 do
@@ -471,7 +476,7 @@ do
              // PNGformat then
                 expandedName[]
                   ->readPNGfile
-                (# error::  (#  do msg[]->THIS(read).error #) #);
+                    (# error::  (#  do msg[]->THIS(read).error #) #);
                 
              // unknown then
                 &text[]->msg[];
@@ -485,6 +490,7 @@ do
         if);
         
      #);
+     
 
 -- pixmapClear: DoPart --
 do
@@ -495,7 +501,8 @@ do
         cmap: @integer;
         screen: @integer;
         result: @integer;
-        myGc:@integer;
+        myGc: @integer;
+        
      do
         theColor.red->theXColor.red;
         theColor.green->theXColor.green;
@@ -508,21 +515,18 @@ do
             'XAllocColor failed in "pixmap.clear'->putLIne; 
          else
             theXColor.pixel->pixel;
-            
             (THIS(guienv).private.display,private.pixmapID,0,0)->XCreateGC
               ->myGC;
-            
             (dpy,myGC,pixel)->XSetForeground;
             (dpy,private.pixmapID,myGC,0,0,private.width,private.height)
               ->XFillRectangle;
-            
-            dpy -> XFlush;
-
-            (THIS(guienv).private.display,myGC)->XFreeGC; 
+            dpy->XFlush;
+            (THIS(guienv).private.display,myGC)->XFreeGC;
             
         if)
      #);
      
+
 -- pixmapInit: DoPart --
 do
    (THIS(guienv).private.display,THIS(guienv).private.defaultdrawable,width,
@@ -549,7 +553,8 @@ do
    0->private.depth;
    (if private.maskID <> 0 then
        (THIS(guienv).private.display,private.maskID)->XFreePixmap; 
-   if);     
+   if);
+     
 
 -- pixmapWidth: DoPart --
 do assertInitialized; private.width->value;   
@@ -588,27 +593,27 @@ do
        if);
        
    if);
-   private.stippleID -> stippleID;
-   
---- pixmapSettransparent:dopart---
-do
-   
----pixmapGettransparent:dopart---
-do
-   
--- pixMapSettransparentColor:dopart --
-do
-   
---- pixMapGettransparentColor:dopart ---
-do
-   
---- pixmapSetMask:dopart ---
-do
-   
---- pixmapGetMask:dopart ---
-do
+   private.stippleID->stippleID;
+     
 
-   
----pixmapDrawPixmap:dopart---
-do
- 
+-- pixmapSettransparent: DoPart --
+do   
+
+-- pixmapGettransparent: DoPart --
+do   
+
+-- pixMapSettransparentColor: DoPart --
+do   
+
+-- pixMapGettransparentColor: DoPart --
+do   
+
+-- pixmapSetMask: DoPart --
+do   
+
+-- pixmapGetMask: DoPart --
+do   
+
+-- pixmapDrawPixmap: DoPart --
+do   
+
