@@ -269,8 +269,12 @@ static inline char *IOAcalloc(unsigned size)
   IOATop = (long*)((long)IOATop+size);
 #endif
   
-  /* Not needed anymore since IOA is cleared after IOAGc */
-  /*long_clear(p, size);*/
+  /* Not needed anymore since IOA is cleared after IOAGc.
+   * YES still needed. The memset solution turned out to
+   * be slower or at best marginally faster than using 
+   * long_clear.
+   */
+  long_clear(p, size);
 #ifdef RTDEBUG
   zero_check(p, size);
 #endif
