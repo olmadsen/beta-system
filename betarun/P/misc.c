@@ -15,6 +15,8 @@ void miscp_dummy() {
 
 #ifdef PERSIST
 
+/* */
+
 /* LOCAL VARIABLES */
 
 /* LOCAL FUNCTION DECLARATIONS */
@@ -309,7 +311,9 @@ void showStatistics(void)
   INFO_PERSISTENCE(fprintf(output, " Traps              : %d\n", (int)numPF));
   INFO_PERSISTENCE(fprintf(output, " Objects Loaded     : %d\n", (int)objectsLoaded));
   INFO_PERSISTENCE(fprintf(output, " Objects Exported   : %d\n", (int)objectsExported));
-  INFO_PERSISTENCE(fprintf(output, " Memory used(kB)    : %d]\n", (int)totalAOASize/(int)1024));
+  INFO_PERSISTENCE(fprintf(output, " Memory used(kB)    : %d\n", (int)totalAOASize/(int)1024));
+  INFO_PERSISTENCE(fprintf(output, " Num IOA-GC         : %d\n", (int)NumIOAGc));
+  INFO_PERSISTENCE(fprintf(output, " Mum AOA-GC         : %d]\n", (int)NumAOAGc));
 }
 
 /* */
