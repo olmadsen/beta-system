@@ -9,8 +9,8 @@
 #include "crun.h"
 
 #ifdef PERSIST
-#include "../P/PException.h"
-#include "../P/unswizzle.h"
+#include "PException.h"
+#include "unswizzle.h"
 #endif /* PERSIST */
 
 /* Qua check.

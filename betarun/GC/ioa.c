@@ -12,12 +12,12 @@
 #include "dot.h"
 
 #ifdef PERSIST
-#include "../P/objectTable.h"
-#include "../P/misc.h"
-#include "../P/referenceTable.h"
-#include "../P/PException.h"
-#include "../P/transitObjectTable.h"
-#include "../P/specialObjectsTable.h"
+#include "objectTable.h"
+#include "misc.h"
+#include "referenceTable.h"
+#include "PException.h"
+#include "transitObjectTable.h"
+#include "specialObjectsTable.h"
 #endif /* PERSIST */
 
 #define REP ((ObjectRep *)theObj)

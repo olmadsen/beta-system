@@ -1,9 +1,11 @@
 #include "beta.h"
 
 #ifdef PERSIST
+#ifndef MAC
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#endif
 #ifdef UNIX
 #include <unistd.h>
 #endif
@@ -109,12 +111,16 @@ void writeSome(int fd, void *buffer, unsigned long size)
 
 long fileExists(char *name)
 {
+
+#ifndef MAC
   struct stat st;
   if (stat(name, &st) < 0) {
     return 0;
   } else {
     return 1;
   }
+#endif
+	return 1;
 }
 
 /* isDir: Returns true if name is a directory. */
@@ -160,6 +166,9 @@ long isDir(char *name)
 unsigned long preferredBufferSize(int fd)
 {
   unsigned long res;
+#ifdef MAC
+  res = 8192;
+#else
 #ifdef nti
   res = 8192;
 #else /* nti */
@@ -174,6 +183,7 @@ unsigned long preferredBufferSize(int fd)
     res = 8192;
   }
 #endif /* nti */
+#endif /* MAC */
   return res;
 }
 

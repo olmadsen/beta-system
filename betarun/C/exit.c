@@ -7,8 +7,10 @@
 #include "beta.h"
 
 #ifdef PERSIST
-#include "../P/misc.h"
-#include "../P/PStore.h"
+
+
+#include "misc.h"
+#include "PStore.h"
 #endif /* PERSIST */
 
 #ifdef RTVALHALLA

@@ -7,6 +7,12 @@
 
 #ifdef PERSIST
 
+#ifdef MAC
+
+
+#endif
+
+
 #ifdef nti
 #include <io.h>
 #include <direct.h>

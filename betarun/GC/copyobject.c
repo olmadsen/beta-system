@@ -7,8 +7,8 @@
 #include "beta.h"
 
 #ifdef PERSIST
-#include "../P/misc.h"
-#include "../P/specialObjectsTable.h"
+#include "misc.h"
+#include "specialObjectsTable.h"
 #endif /* PERSIST */
 
 /*

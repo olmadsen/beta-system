@@ -93,6 +93,10 @@
 
 /********* Definition of RUN, CRUN, NEWRUN *********/
 
+#ifdef MAC
+#define PERSIST
+#endif
+
 #ifdef intel
 #define RUN 1
 #endif

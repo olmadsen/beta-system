@@ -29,7 +29,7 @@ static long maxprim = 0;
 #endif /* USEMMAP */
 
 #ifdef PERSIST
-#include "../P/PException.h"
+#include "PException.h"
 #endif /* PERSIST */
 
 /* Some primes to use as the size of the AOAtoIOAtable.

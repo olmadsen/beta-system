@@ -2,12 +2,17 @@
 #define _PSFILE_H_
 #include "beta.h"
 
+#ifndef MAC
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#ifndef nti
-#include <unistd.h>
 #endif
+
+#ifndef nti
+#ifndef MAC
+#include <unistd.h>
+#endif /* MAC */
+#endif /* nti */
 #include <errno.h>
 
 void readLong(int fd, unsigned long *n);

@@ -6,9 +6,9 @@
 #include "beta.h"
 
 #ifdef PERSIST
-#include "../P/PException.h"
-#include "../P/objectTable.h"
-#include "../P/referenceTable.h"
+#include "PException.h"
+#include "objectTable.h"
+#include "referenceTable.h"
 #endif /* PERSIST */
 
 /* Policy regarding when to perform a GC rather than extending AOA:

@@ -7,7 +7,7 @@
 #include "beta.h"
 
 #ifdef PERSIST
-#include "../P/PException.h"
+#include "PException.h"
 #endif /* PERSIST */
 
 /************************ THE AOA FREE LIST ***************************

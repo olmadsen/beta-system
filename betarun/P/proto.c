@@ -3,7 +3,9 @@
 
 /* */
 #ifdef PERSIST
+#ifndef MAC
 #include <sys/types.h>
+#endif
 #ifdef PSENDIAN
 #  include <netinet/in.h>
 #endif
