@@ -181,8 +181,9 @@ You may order an unconstrained version from\n",
 		     */
 		    limit = (long)cbfa->entries + CBFABlockSize;
 		}
-		if (current->theStruct)
+		if (current->theStruct){
 		  ProcessReference(&current->theStruct);
+		}
 	    }
 	    CompleteScavenging();
 	}
