@@ -1391,7 +1391,7 @@ do (# findBetaenv:
           (if hasClass then
               enterP.label <> gram.empty -> hasEnterMethod;
               doP.label <> gram.empty -> hasDoMethod;
-              exitP.label <> gram.empty -> hasExitMethod;
+              true or (exitP.label <> gram.empty) -> hasExitMethod;
               true -> inEnterDoExitMethod;
               (if hasEnterMethod then
                   (* extra isEnter arg needed *)
@@ -1824,29 +1824,30 @@ do (# className,path: ^text; EH: @evalHandler;
    #)
 
 ---genExitMethod:doPart---
-do (# sig: @Signature;
-      exitVal: ^ASTindex;
-      exitId: @integer;
-      EH: @EvalHandler;
-      V: ^EH.evVal;
-      aR: ^mch.RegAdr;
-      T: ^ASTindex;
-      xScan: @ | EH.scanXadr; more: @boolean;
-      aD,OA: @mch.RegAdr;
-      destField: @text; xNo,xNo1: @integer;
-      methodName: @text;
-      xTypes: ^EH.ExitTypes;
-      fields: @
-        (# field:
-             (# name,type: ^text; kind: @char
-             enter(name[],type[],kind)
-             exit this(field)[]
-             #);
-           add:
-             (# name,type: ^text; kind: @char
-             enter(name[],type[],kind)
-             do (if (top+1->top) > F.range then
-                    F.range -> F.extend
+do genExit:
+     (# sig: @Signature;
+        exitVal: ^ASTindex;
+        exitId: @integer;
+        EH: @EvalHandler;
+        V: ^EH.evVal;
+        aR: ^mch.RegAdr;
+        T: ^ASTindex;
+        xScan: @ | EH.scanXadr; more: @boolean;
+        aD,OA: @mch.RegAdr;
+        destField: @text; xNo,xNo1: @integer;
+        methodName: @text;
+        xTypes: ^EH.ExitTypes;
+        fields: @
+          (# field:
+               (# name,type: ^text; kind: @char
+               enter(name[],type[],kind)
+               exit this(field)[]
+               #);
+             add:
+               (# name,type: ^text; kind: @char
+               enter(name[],type[],kind)
+               do (if (top+1->top) > F.range then
+                      F.range -> F.extend
                 if);
                 (name[],type[],kind) -> Field -> F[top][]
              #);
@@ -1862,7 +1863,7 @@ do (# sig: @Signature;
         #)
    do 311->trace(#
                 do 'GenExitMethod:'->xT; desc[]->xA
-                #);      
+                #);   
       (if desc.isSlot then
           '\nOBS! Slots not handled by genExitMethod'->putline
        else
@@ -1870,7 +1871,10 @@ do (# sig: @Signature;
           sig.noEnter;
           (thisDesc[],thisSuperChain,false)->sig.setMethodDesc;
           exitP[] -> sig.addExit;
-
+          (if sig.XXsig.elmType = 10 then
+              (* void: no exit part in any super chain *)
+              leave genExit
+          if);
           'exit' -> methodName;
           methodName[] -> sig.addMethod;
           sig.exitId -> exitId;
@@ -1878,20 +1882,22 @@ do (# sig: @Signature;
           (exitP.nodeId,methodName[],false,sig.asText,sig.noOfEnterArgs) 
             -> mch.initDo;
           313->trace(#do 'genExitMethod:ExpEval: '->xT; exitVal[] -> xA #);
+          
+
+          (desc[],gen.thisRegAdr,0,thisSuperChain) 
+            -> xScan 
+            -> more;
           (if sig.isMultiValExit then
-              (desc[],gen.thisRegAdr,0,thisSuperChain) 
-                -> xScan 
-                -> more;
+
               'exit_' -> destField;
               (desc[] -> fieldSignature).asText -> aD.receiverType[];
               true -> OA.isOrigin;
-              (*'\nExitTypes: ' -> puttext;*)
               loop:
                 (if more then
                     (OA[],none) -> mch.ldVal;
                     gen.thisRegAdr->aR[];
                     'exit'->aR.fieldName[];
-                    (aR[],xScan.thisEv[],true,ThisSuperChain) 
+                    (aR[],xScan.thisEv[],true,xScan.thisChain[](*ThisSuperChain*)) 
                       -> EH.ExpEval 
                       -> V[];
                     311 -> trace(#
@@ -1948,13 +1954,22 @@ do (# sig: @Signature;
                     (if more then restart loop if)
                 if);
               PushThis;
-              (*newline;              *)
            else
               gen.thisRegAdr->aR[];
               'exit'->aR.fieldName[];
-              (aR[],exitVal[],true,ThisSuperChain) 
-                -> EH.ExpEval 
-                -> V[];
+              (if false then
+                  (aR[],exitVal[],true,ThisSuperChain) 
+                    -> EH.ExpEval 
+                    -> V[]
+               else
+                  (*1->trace(#
+                          do 'genExit:chain:'->xT; xScan.thisEv[] -> xA; xN;
+                             xScan.thisChain
+                          #);*)
+                  (aR[],xScan.thisEv[],true,xScan.thisChain[])
+                    -> EH.ExpEval 
+                    -> V[]
+              if);
               301 -> trace(#
                           do 'genExitMethod: ' -> xT;
                              V.display
