@@ -525,9 +525,10 @@ do
 do (* true->OKtoChange;*)
    currentFocus[]->oldFocus[];
    newObject[]
-     ->CurrentFocus[] (*  else
-                       oldObject[]->currentObject
-                       if)*) ;
+     ->CurrentFocus[]
+     (*  else
+      oldObject[]->currentObject
+      if)*) ;
    (* (if OKToChange then*)
    INNER changedFocus
 #)  
@@ -608,8 +609,6 @@ do
                                
                             #)
                        #)->newAST[];
-                   (*Check if we have just created a dyn. ref. relation,
-                    if so, insert it in DynReferenceList.*)
                    (if private.dynamicReferenceQual[] <> none then
                        (newAST[],private.dynamicReferenceQual[])
                          ->patternDiagrams.DynReferenceList.insert
@@ -732,7 +731,6 @@ do
          #)
    if);
    autosave;
-   (* refresh the page, due to update delay *)
    
 #)  
 
@@ -740,7 +738,7 @@ do
 (#
 (* listElementInserted:
  * # <editorId> listElementInserted <fatherIndex> <position> <synCatNo> <synCatName>
- *) father: ^expanded; newAst,firstBorn: ^ast; pos: @integer
+ *) father: ^expanded; newAst,firstBorn: ^ast; pos,noOfSons,i: @integer
 do
    (if switch[22]
     // true then
@@ -767,48 +765,80 @@ do
        'Gpp listElementInserted: father not found'->putLine
     else
        father.getson1->firstBorn[];
-       (ff[],firstBorn.index)
-         ->updateASTfromDisk
-           (# 
-           do
-              (if (newff[] <> none )
-               // true then
-                  fatherIndex
-                    ->newff.indexToNode
-                      (#
-                         indexOutOfRange::< 
-                           (# 
-                           do 'indexOutOfRange'->putLine; true->continue; 
-                           #);
-                         noSuchSymbol::< 
-                           (# 
-                           do 'noSuchSymbol'->putLine; true->continue; 
-                           #);
-                         grammarGenRefArrayError::< 
-                           (# 
-                           do
-                              'grammarGenRefArrayError'->putLine;
-                              true->continue;
-                              
-                           #)
-                      #)->father[];
-                  (if (father[] <> none )
+       (if firstBorn.kind = kinds.optional then
+           father.noOfSons->noOfSons;
+           2->i;
+           loop:
+             (# 
+             do
+                (if noOfSons >= i then
+                    i->father.get->firstBorn[];
+                    (if firstBorn.kind = kinds.optional then
+                        i+1->i; restart loop
+                    if)
+                 else
+                    none ->firstBorn[]
+                if)
+             #)
+       if);
+       (if firstBorn[] <> none then
+           (ff[],firstBorn.index)
+             ->updateASTfromDisk
+               (# 
+               do
+                  (if (newff[] <> none )
                    // true then
-                      position->pos->father.get->newAST[];
-                      (pos-1,newAST[])
-                        ->(theObject.theDiagram).insertDiagramNode;
+                      fatherIndex
+                        ->newff.indexToNode
+                          (#
+                             indexOutOfRange::< 
+                               (# 
+                               do 'indexOutOfRange'->putLine; true->continue; 
+                               #);
+                             noSuchSymbol::< 
+                               (# 
+                               do 'noSuchSymbol'->putLine; true->continue; 
+                               #);
+                             grammarGenRefArrayError::< 
+                               (# 
+                               do
+                                  'grammarGenRefArrayError'->putLine;
+                                  true->continue;
+                                  
+                               #)
+                          #)->father[];
+                      (if (father[] <> none )
+                       // true then
+                          position->pos->father.get->newAST[];
+                          1->i;
+                          scanner: father.scan
+                            (# 
+                            do
+                               (if not (i = position) then
+                                   (if current.kind = kinds.optional then
+                                       pos-1->pos
+                                   if);
+                                   i+1->i
+                                else
+                                   leave scanner
+                               if)
+                            #);
+                          (pos-1,newAST[])
+                            ->(theObject.theDiagram).insertDiagramNode;
+                          
+                       else
+                          'Gpp ------- listElementInserted: father is none'
+                            ->putLine;
+                          
+                      if);
                       
                    else
-                      'Gpp ------- listElementInserted: father is none'
-                        ->putLine;
+                      'Gpp ------- listElementInserted: newff is none'->putLine;
                       
                   if);
                   
-               else
-                  'Gpp ------- listElementInserted: newff is none'->putLine; 
-              if);
-              
-           #);
+               #)
+       if);
        Redraw
    if);
    autosave;
@@ -927,7 +957,7 @@ do
    father: ^expanded;
    oldAst,newAst,anAST: ^ast;
    theDiagram: ^Diagram;
-   pos,oldIndex: @integer
+   pos,oldIndex,j: @integer
 do
    (if switch[22]
     // true then
@@ -1031,10 +1061,26 @@ do
                if);
                (for i: newlength repeat
                  position+i-1->pos->father.get->newAST[];
-                 (if theDiagram[] = none then
-                     'Gpp: ListElementsReplaced: theDiagram is none!!'->putLine
-                  else
-                     (pos-1,newAST[])->theDiagram.insertDiagramNode
+                 (if not (newAST.kind = kinds.optional) then
+                     (if theDiagram[] = none then
+                         'Gpp: ListElementsReplaced: theDiagram is none!!'
+                           ->putLine
+                      else
+                         1->j;
+                         scanner: father.scan
+                           (# 
+                           do
+                              (if not (j = position+i-1) then
+                                  (if current.kind = kinds.optional then
+                                      pos-1->pos
+                                  if);
+                                  j+1->j
+                               else
+                                  leave scanner
+                              if)
+                           #);
+                         (pos-1,newAST[])->theDiagram.insertDiagramNode
+                     if)
                  if);
                  
                for);
@@ -1079,9 +1125,8 @@ do
 
 -- removeExtension: Descriptor --
 (# rest: ^Text; index: @Integer; 
-do
-(*(if ('.bet'->rest.equal) or (astFileExtension->rest.equal)
- // true then*)
+do (*(if ('.bet'->rest.equal) or (astFileExtension->rest.equal)
+    // true then*)
    '.'->name.findCh (#  do inx->index;  #);
    (index,name.length)->name.sub->rest[];
    (* if);*)
@@ -1437,11 +1482,9 @@ do
     // true then
        'Opening: '->mess.puttext;
        name[]->mess.puttext;
-       mess[]
-         ->putLine
-         (*
-          * mess->statusbar.set; 
-          *)
+       mess[]->putLine (*
+                        * mess->statusbar.set; 
+                        *)
    if);
    '.ast'->name.copyAppend->groupFile.name;
    '.ast#'->name.copyAppend->autosaveGroupFile.name;
