@@ -8,7 +8,7 @@ sub usage
     print STDERR "  -f   use full urls in HREFs (http://www.mjolner.com/...)\n";
     print STDERR "  -p   do not generate PDF\n";
     print STDERR "  -h   print this summary\n";
-    print STDERR "  -s   special treatment of headings in interface files\n";
+    print STDERR "  -s   split interface files at special comments\n";
     print STDERR "  -v   verbose output\n";
     print STDERR "  -d   debug makedoc script\n";
     print STDERR "  If .book file is given as argument, a full manual set is generated.\n";
@@ -511,6 +511,8 @@ sub print_header
 {
     local ($title, $prev, $prevtip, $next, $nexttip, $inx, $up) = @_;
 
+    #print STDERR "print_header($title, $prev, $prevtip, $next, $nexttip, $inx, $up)\n";
+
     print_head_begin($title, $up);
     &print_rel_link("next", $next) if ($next ne "");
     &print_rel_link("prev", "$prev") if ($prev ne "");
@@ -581,11 +583,6 @@ sub print_src_header
 		$next .= "/index.html";
 	    } else {
 		print STDERR "Error: print_src_header: No interface header?\n";
-		#$num_h[1]++; # pretend we're at next chapter now
-		#$nexttip =  &generate_int_title($intsrcfile);
-		#$num_h[1]--; # go back again
-		#$num_h[2]--; # was counted up by generate_int_title
-		#$next = intdstfile;
 	    }
 	} else {
 	    $next = $indexfile;
@@ -712,9 +709,33 @@ sub find_next_interface_file
 {
     local ($number, $up) = @_;
     local ($next, $nexttip);
-    #print STDERR "\nfind_next_interface_file($number, $up) = ";
+    #printf STDERR "\nfind_next_interface_file(%d, %d) = ", $number, $up;
     $number++;
-    if ($number>$#intsrcfiles){
+    if ($special_headers){
+	# Find heading number n, which does not have local anchor
+	local ($i,$n);
+	$n=-1;
+	for ($i=0; $i<=$#intheadings; $i++){
+	    ($nexttip, $next) = split("\@", $intheadings[$i]);
+	    #print STDERR "check: \"$next\"";
+	    if ($next !~ m%\#H\d+_\d+$%){
+		$n++;
+		#printf STDERR " - counts (n=$n)\n";
+	    } else {
+		#print STDERR "\n";
+	    };
+	    if ($n==$number){
+		# Found the real index
+		#print STDERR "Real index for $number is $i\n";
+		$number = $i;
+		last;
+	    } elsif ($i==$#intheadings){
+		# Not found
+		$number = $#intheadings+1;
+	    }
+	}
+    } 
+    if ($number>$#intheadings){
 	# passed last interface file
 	$next = $indexfile;
 	$nexttip = "Alphabetic Index";
@@ -725,6 +746,7 @@ sub find_next_interface_file
 	    ($nexttip, $next) = &parse_int_chap($nexttip);
 	    $next .= "/index.html";
 	} 
+	
     }
     $next = &go_up($next, $up);
     #print STDERR "($next, $nexttip)\n";
@@ -737,6 +759,27 @@ sub find_prev_interface_file
     local ($prev, $prevtip);
     #print STDERR "\nfind_prev_interface_file($number, $up) = ";
     $number--;
+    if ($special_headers){
+	# Find heading number n, which does not have local anchor
+	local ($i,$n);
+	$n=-1;
+	for ($i=0; $i<=$#intheadings; $i++){
+	    ($prevtip, $prev) = split("\@", $intheadings[$i]);
+	    #print STDERR "check: \"$prev\"";
+	    if ($prev !~ m%\#H\d+_\d+$%){
+		$n++;
+		#printf STDERR " - counts (n=$n)\n";
+	    } else {
+		#print STDERR "\n";
+	    };
+	    if ($n==$number){
+		# Found the real index
+		#print STDERR "Real index for $number is $i\n";
+		$number = $i;
+		last;
+	    } 
+	}
+    } 
     if ($number<0){
 	# passed first interface file
 	$prev = $dstfiles[$#dstfiles];
@@ -759,7 +802,9 @@ sub print_interface_toc_header
     local ($title, $up, $intfilenumber) = @_;
     local ($next, $nexttip, $prev, $prevtip, $nextno) = 0;
     
+    
     ($next, $nexttip) = &find_next_interface_file($intfilenumber, $up);
+    #print STDERR "print_interface_toc_header: up=$up, next=$next\n";
     if ($intfilenumber==0){
 	$prev = $dstfiles[$#dstfiles];
 	$prevtip = $prev;
@@ -824,6 +869,16 @@ sub read_book_file
 	if (-f "${src}$_"){
 	    push @srcfiles, $src . $_;
 	    push @dstfiles, $dst . &strip_path($_);
+	} elsif (m/^options:\s*(.*)$/){
+	    local ($options) = $1;
+	    if ($options !~ m%^\s*$%){
+		printf STDERR "Fixed options (from $book_file_name): $options\n";
+		$special_headers=1 if ($options =~ m%-s%);
+		$verbose  = 1 if ($options =~ m%-v%);
+		$debug    = 1 if ($options =~ m%-d%);
+		$fullpath = 1 if ($options =~ m%-f%);
+		$skippdf  = 1 if ($options =~ m%-p%);
+	    }
 	} elsif (m/^date:\s*(.*)$/){ 
 	    $date = $1;
 	} elsif (m/^inx:\s*(.*)$/){ 
@@ -1360,11 +1415,14 @@ sub parse_special_tags
 
 sub make_special_header
 {
-    local ($title, $htmlfile) = @_;
+    local ($title, $htmlfile,$build_headings) = @_;
     local ($intnum) = "" . $num_h[1] . "." . ++$num_h[2];
     local ($anchor) = "H$num_h[1]_$num_h[2]";
 
-    push (@intheadings, "$intnum $title\@$htmlfile#$anchor");
+    if ($build_headings){
+	# Called from build_intheadings
+	push (@intheadings, "$intnum $title\@$htmlfile#$anchor");
+    }
 
     $title = "\005\/PRE\006\005H2\006\005A name=\"$anchor\"\006$intnum\007nbsp;$title\005\/A\006\005\/H2\006\005PRE CLASS=interface\006\n";
 
@@ -1373,19 +1431,10 @@ sub make_special_header
 
 sub parse_special_header
 {
-    local ($contents, $htmlfile) = @_;
+    local ($contents, $htmlfile, $build_headings) = @_;
 
-    $contents =~ s/\(\*\*+\*\)\s+\(\*+\s+([^\*]+)\s+\*+\)\s+\(\*\*+\*\)\s+/make_special_header($1, $htmlfile)/seg;
+    $contents =~ s/\(\*\*+\*\)\s+\(\*+\s+([^\*]+)\s+\*+\)\s+\(\*\*+\*\)\s+/make_special_header($1, $htmlfile,$build_headings)/seg;
 
-
-    # Delete copyrigth comments of the form
-    # (*
-    #  * COPYRIGHT
-    #  *       Copyright Mjolner Informatics, 199x-9x
-    #  *       All rights reserved.
-    #  *)
-    #$contents =~ s/\(\*\s+\*\s+COPYRIGHT[\s\w\*\,\-\.]+\*\)\s*//sg;
-    
     return $contents;
 }
 
@@ -1577,7 +1626,7 @@ sub read_and_abstract_beta
 
     # Now perform multiline editing
     if ($special_headers){
-	$betaline = &parse_special_header($betaline, $htmlfile);
+	$betaline = &parse_special_header($betaline, $htmlfile,0);
     }
 
     # delete RCS/CVS stuff
@@ -1950,6 +1999,8 @@ sub generate_interface_toc_page
     local ($up) = &countdirs($inttocfile);
     printf STDERR "\nWriting interface toc page $inttocfile ... " if $verbose==1;
     open (STDOUT, ">$inttocfile") || die "\nCannot open $inttocfile for writing: $!\n";
+    $headinglevel = 1;
+    $num_h[2] = $num_h[3] = $num_h[4] = $num_h[5] = $num_h[6] = 0;
     &print_interface_toc_header($title, $up, $intfilenumber);
 
     print<<EOT;
@@ -1990,9 +2041,16 @@ sub build_intheadings
 	} else {
 	    local ($inttitle) = &generate_int_title($intsrcfile);
 	    push (@intheadings, "$inttitle\@$intdstfile");
+	    if ($special_headers){
+		&parse_special_header(&read_file($intsrcfile), $intdstfile,1);
+	    }
 	}
     }
     @num_h = @old_num_h;
+    #print STDERR "intheadings:\n";
+    #for ($filenumber=0; $filenumber<=$#intheadings; $filenumber++){
+    #    print STDERR "$filenumber : $intheadings[$filenumber]\n";
+    #}
 }
 
 sub process_interface_files
@@ -2016,6 +2074,7 @@ sub process_interface_files
 	if ($intsrcfile eq ""){
 	    # new interface chapter
 	    $num_h[1]++;
+	    $num_h[2] = $num_h[3] = $num_h[4] = $num_h[5] = $num_h[6] = 0;
 	} else {
 	    &generate_interface_file($intsrcfile, $intdstfile);
 	}
