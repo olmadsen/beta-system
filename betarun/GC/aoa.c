@@ -428,16 +428,7 @@ Object *AOAallocate(long numbytes)
   }
 
   if (OverFullFlag == 1) {
-#if 0    
-    if ((unsigned long)(totalAOASize-AOASizeAtGC) >= (unsigned long)AOAMinFree
-	|| ((unsigned long)totalAOASize > 100 
-	    && (unsigned long)((totalAOASize - AOASizeAtGC) 
-			       / (totalAOASize / 100)) 
-	    > (unsigned long)AOAPercentage)) {
-#else
     if ((unsigned long)totalAOASize > AOAMinSizeForGC) {
-#endif
-
       OverFullFlag = 2;
       if (OverFullSize < numbytes) {
 	OverFullSize = numbytes;
@@ -726,13 +717,13 @@ void AOAGc()
    if (totalAOASize > 100) { 
      if ((unsigned long)(freed / (totalAOASize / 100)) 
 	 < (unsigned long)AOAPercentage) {
-       /* We do not want a GC, untill AOA has grown this much: /*
-       AOAMinSizeForGC = totalAOASize + (totalAOASize / 100) * AOAPercentage;
        /* Still overfull. */
+       OverFullFlag = 2;
+       /* We do not want a GC, untill AOA has grown this much: */
+       AOAMinSizeForGC = totalAOASize + (totalAOASize / 100) * AOAPercentage;
      } else {
-       if (OverFullFlag) {
-	 OverFullFlag = 3;
-       }
+       AOAMinSizeForGC = totalAOASize;
+       OverFullFlag = 3;
      }
    }
 
@@ -762,9 +753,10 @@ void AOAGc()
   
    INFO_AOA({
       fprintf(output, "AOA-%d done, freed 0x%x, free 0x%x, size 0x%x,\n"
-              "OF=%d, aoatime=%dms)\n", 
+              "OF=%d, aoatime=%dms, AOAMinSizeForGC=0x%x)\n", 
               (int)NumAOAGc, (int)freed, (int)totalFree, (int)totalAOASize,
-              (int)OverFullFlag, (int)(getmilisectimestamp() - starttime));
+              (int)OverFullFlag, (int)(getmilisectimestamp() - starttime),
+	      (int)AOAMinSizeForGC);
    });
 
    AOANeedCompaction = FALSE;
@@ -1633,13 +1625,22 @@ void scanOrigins(Object *theObj, void (*originAction)(Object **theCell))
 
 void SetAOANeedCompaction(void)
 {
-  if (OverFullFlag) {
+  if (OverFullFlag >= 2) {
     if ((unsigned long)totalAOASize > AOAMinSizeForGC) {
+      AOAMinSizeForGC = (unsigned long)totalAOASize;
       AOANeedCompaction = TRUE;
     }
-  } else {
-    if ((unsigned long)totalFree < AOAFreeAtGC/2) {
-      AOANeedCompaction = TRUE;
-    }
+  } else if (OverFullFlag == 1) {
+    OverFullFlag = 2;
+    AOAMinSizeForGC = (unsigned long)totalAOASize;
+    AOANeedCompaction = TRUE;
   }
+   INFO_AOA({
+      fprintf(output, "(SetAOANeedCompaction: free 0x%x, size 0x%x,\n"
+              "OF=%d, AOAMinSizeForGC=0x%x) GC=%c\n", 
+              (int)totalFree, (int)totalAOASize,
+              (int)OverFullFlag, (int)AOAMinSizeForGC,
+	      (AOANeedCompaction ? 'Y' : 'N'));
+   });
 }
+    

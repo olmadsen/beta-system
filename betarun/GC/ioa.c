@@ -336,8 +336,8 @@ void IOAGc()
 #ifdef PERSIST
          if (AOANeedCompaction || forceAOAGC) {
             /* before we do AOAGC we need to do an additional IOAGC */
-            if (repeatIOAGc) {
-               /* We have done the extra IOAGC */
+            if (repeatIOAGc || !callRebinderC) {
+               /* We have done the extra IOAGC, or we are not using PS */
 
                /* All persistent objects have now been moved to AOA
                 * and inserted in the PObjects table. All persistent
