@@ -28,14 +28,14 @@
 
 #ifdef sparc
 /* Objects must be multiples of 8 bytes because of reals */
-# define ComponentSize(size)   ((((4*(size) + headsize(Component))+7) >> 3) << 3)
-# define StructureSize         (((headsize(Structure)+7) >> 3) << 3)
-# define RefRepSize(range)     (((((range)*4 + headsize(RefRep))+7) >> 3) << 3)
-# define ValRepSize(range)     ((((ValRepBodySize(range) + headsize(ValRep))+7) >> 3) << 3)
-# define ByteRepSize(range)    ((((ByteRepBodySize(range) + headsize(ValRep))+7) >> 3) << 3)
-# define WordRepSize(range)    ((((WordRepBodySize(range) + headsize(ValRep))+7) >> 3) << 3)
-# define DoubleRepSize(range)  ((((DoubleRepBodySize(range) + headsize(ValRep))+7) >> 3) << 3)
-# define StackObjectSize(size) ((((4*(size) + headsize(StackObject))+7) >> 3) << 3)
+# define ComponentSize(size)   ((4*(size) + headsize(Component) +7) & ~7)
+# define StructureSize         ((headsize(Structure)+7) & ~7)
+# define RefRepSize(range)     (((range)*4 + headsize(RefRep)+7) & ~7)
+# define ValRepSize(range)     (((ValRepBodySize(range) + headsize(ValRep))+7) & ~7)
+# define ByteRepSize(range)    ((ByteRepBodySize(range) + headsize(ValRep)+7) & ~7)
+# define WordRepSize(range)    ((WordRepBodySize(range) + headsize(ValRep)+7) & ~7)
+# define DoubleRepSize(range)  ((DoubleRepBodySize(range) + headsize(ValRep)+7) & ~7)
+# define StackObjectSize(size) ((4*(size) + headsize(StackObject)+7) & ~7)
 #else
 # define ComponentSize(size)   (4*(size) + headsize(Component))
 # define StructureSize         headsize(Structure)
