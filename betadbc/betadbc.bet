@@ -6,8 +6,8 @@ Connection: (* A connection to a relational DBMS *)
   (#
      <<SLOT ConnectionLib:Attributes>>;
      declareVar:
-     (* Used to declare a wrapper on a BETA object so that
-      * object may be used in SQLStatements *)
+     (* Used to declare a wrapper of a BETA object so that
+      * the object may be used in SQLStatements *)
        (#
           <<SLOT DeclareVarLib:Attributes>>;
           varName: ^text;
@@ -139,11 +139,12 @@ Connection: (* A connection to a relational DBMS *)
      SQLStatement:
      (* The abstract superpattern for all SQL statements.
       * To use an instance of a subclass of SQLStatement:
-      *    1. Open the statement by calling 'open'
-      *    2. Set the statements SQL contents by evaluating the enter part
-      *    3. Call 'execute'. Repeat 2, as necessary.
-      *    4. Go to 2., if necessary
-      *    5. Call 'close'
+      *    1. Open the statement by calling 'open',
+      *      1a. specifying an enter parameter to, or
+      *      1b. setting the statement's SQL contents by evaluating the enter part.
+      *    2. Call 'execute'. 
+      *    3. Go to 1b., if necessary
+      *    4. Call 'close'
       *)
        (#
           <<SLOT SQLStatementLib:Attributes>>;
@@ -203,7 +204,7 @@ Connection: (* A connection to a relational DBMS *)
        #);
      directSQLStatement:
      (* Use this statement type if a statement will be executed at most 
-      * a few times. The contents may contain placeholders in the form
+      * a few times. The contents may contain variable placeholders in the form
       *    :varname
       * designating that the shared variable named 'varname' 
       * will be bound to that place. In addition, also
@@ -216,17 +217,17 @@ Connection: (* A connection to a relational DBMS *)
       *    %t for time
       * may be used when setting the contents of this(directSQLStatement)
       * Furthermore, placeholders may be named as in
-      *    aname:%f
-      * signifying that the value of the %f placeholder may be set/get
-      * by calling setPlaceholderByName/getPlaceholderByName 
+      *    aname%f or aname:varname
+      * signifying that the value of the %f or :varname placeholder may be set/get
+      * by calling setByName/getByName 
       * with "aname" as parameter
       *) SQLStatement
        (#
           <<SLOT DirectSQLStatementLib:Attributes>>;
           currentMarker:
-          (* The current marker decides which placeholder will be set
+          (* The current marker decides which non-variable placeholder will be set
            * if one of the subpatterns of "marker" is used
-           *) @
+           *)
             (#
                set:
                  (# 
@@ -357,14 +358,14 @@ Connection: (* A connection to a relational DBMS *)
             enter value
             <<SLOT directSQLStatementSetTimeByName:DoPart>>
             #);
-          execute:: 
+          execute::
             (# 
             <<SLOT directSQLStatementExecute:DoPart>>
             #);
           execDirectException:< BetaDBCException;
           execDirectNotification:< BetaDBCNotification;
           private: @<<SLOT directSQLStatementPrivate:Descriptor>>;
-          set::< 
+          set::<
             (#
                varNotDeclared:<
                 exception
@@ -391,8 +392,8 @@ Connection: (* A connection to a relational DBMS *)
        (# <<SLOT preparedSQLStatementLib:Attributes>> do INNER #);
      resultSet:
      (* A result of an SQLStatement. 
-      * If columnCount <> 0 then the resultSet is scanable.
-      * A resultSet can be scanned at most once.
+      * If columnCount <> 0 then the resultSet is can be scanned or fetched from.
+      * The tuples of a resultSet can be read at most once.
       *)
        (#
           <<SLOT resultSetLib:Attributes>>;
@@ -448,15 +449,14 @@ Connection: (* A connection to a relational DBMS *)
             exit value[]
             #);
           tuple:
-          (* A row in this(resultSet). If the enter parameter of the 
-           * scan operation that created this result contained
-           * %_ placeholders the values of these may be retrieved 
-           * by using the markers below
+          (* A row in this(resultSet). If this(resultSet) has been set
+           * with a value that contained non-variable placeholders,
+           * the values may be retrieved by using the markers below 
            *)
             (#
                <<SLOT ResultLib:Attributes>>;
                marker:
-               (* Gets the value of a %_ placeholder and advances 
+               (* Gets the value of a non-variable placeholder and advances 
                 * the placeholder currently referred to 
                 *) (#  <<SLOT resultSetTupleMarker:DoPart>> #);
                b: marker
@@ -500,17 +500,8 @@ Connection: (* A connection to a relational DBMS *)
           (* If current = EOT then no more tuples are
            * available in this(resultSet) *)
             (# value: ^tuple <<SLOT resultSetEOT:DoPart>> exit value[] #);
-          current:
-          (* Evaluate 'current' to get the current tuple 
-           * in this(resultSet) *)
-            (# currentTuple: ^tuple
-            <<SLOT resultSetCurrent:DoPart>>
-            exit currentTuple[]
-            #);
           set:
-          (* Should be called before using fetch on this(resultSet)
-           * Sets the current tuple to the first tuple in the relation
-           * over which the resultSet ranges
+          (* May called before using fetch on this(resultSet)
            * The pattern entered may either 
            * contain
            * 1. Named columns of the form
@@ -518,7 +509,7 @@ Connection: (* A connection to a relational DBMS *)
            *     which means that the column named 'name1'('name3') 
            *     is bound to the variable named 'var1'('var2') and the 
            *     column named 'name2' may be retrieved from the 
-           *     current tuple using the 'i'-marker.
+           *     current tuple using the 'i'-marker,
            * or
            * 2. Consecutive columns of the form
            *          ':var1 %i :var2'
@@ -526,11 +517,6 @@ Connection: (* A connection to a relational DBMS *)
            *     is bound to the variable named 'var1'('var3') and that 
            *     the value of the second column may be retrieved from the 
            *     current tuple using the 'i'-marker
-           * or
-           * 3. Nothing
-           *     which means that the values of the column may be 
-           *     retrieved from the current tuple using the markers 
-           *     corresponding to the types of the values in the tuple
            *)
             (#
                varNotDeclared:<
@@ -549,19 +535,22 @@ Connection: (* A connection to a relational DBMS *)
                  #);
                pattern: ^text
             enter pattern[]
-            <<SLOT resultSetOpen:DoPart>>
+            <<SLOT resultSetSet:DoPart>>
             #);
           fetch:
           (* Get the current tuple of the relation over which the resultSet ranges.
-           * If no more tuples exist, current will be EOT 
+           * If no more tuples exist, 'current' will be EOT 
            * Advance current tuple if possible *)
-            (#  <<SLOT resultSetFetch:DoPart>> #);
+            (# result: ^tuple
+            <<SLOT resultSetFetch:DoPart>>
+            exit result[]
+            #);
           scan:
           (* Scans over the tuples of this(resultSet) starting from the current tuple.
-           * A pattern may be entered. See 'set' for details.
+           * A text pattern may be entered. See 'set' for details.
            *)
             (#
-               current: (#  exit THIS(resultSet).current #);
+               current: ^tuple;
                varNotDeclared:<
                (* Raised if variable used in the entered 
                 * pattern was not found *) exception

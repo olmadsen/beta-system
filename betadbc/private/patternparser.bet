@@ -1,6 +1,91 @@
 ORIGIN '~beta/basiclib/betaenv';
 INCLUDE '~beta/containers/list'
         '~beta/basiclib/formatio';
+-- textlib: Attributes --
+getNextStatementStringOrSpecifier:
+  (#
+     value: ^text;
+     isStatementString: @boolean;
+     ch: @char;
+     isVarChar: booleanValue
+       (# ch: @char
+       enter ch
+       do ((ch->ascii.isDigit) or (ch->ascii.isLetter) or (ch = '_'))->value
+       #);
+     getVariable:
+       (# 
+       do
+          false->isStatementString;
+          get->value.put;
+          scan
+            (# while::  (#  do ch->isVarChar->value #)
+            do ch->value.put
+            #)
+       #);
+     getNonVariable:
+       (# 
+       do
+          false->isStatementString;
+          get->value.put;
+          (if not eos then get->value.put if)
+       #);
+     getNamedPlaceholder:
+       (# 
+       do
+          get->value.put;
+          scan
+            (# while::  (#  do ch->isVarChar->value #)
+            do ch->value.put
+            #);
+          (if not eos then
+              (if peek
+               // ':' then getVariable // '%' then getNonVariable
+              if)
+          if)
+       #);
+     getNonPlaceholder:
+       (# skip: @boolean
+       do
+          scan
+            (#
+               while:: 
+                 (# 
+                 do
+                    (if ch
+                     // ':' // '%' then skip->value
+                     else
+                        (not (ch->isVarChar))->value;
+                        (if ch = '\\' then true->skip if)
+                    if)
+                 #)
+            do ch->value.put
+            #)
+       #)
+  do
+     true->isStatementString;
+     &text[]->value[];
+     (if not eos then
+         peek->ch;
+         (if true
+          // ch->isVarChar then
+             getNamedPlaceholder
+          // ch = ':' then
+             getVariable
+          // ch = '%' then
+             getNonVariable
+          else
+             getNonPlaceholder
+         if)
+     if)
+  exit (value[],isStatementString)
+  #);
+hasNonWhiteSpace: booleanValue
+  (# 
+  do
+     scanAll
+       (#  do (if not (ch->ascii.isWhiteSpace) then true->value if) #)
+  #)  
+
 -- lib: Attributes --
 PatternParser:
   (#
@@ -98,20 +183,8 @@ PatternParser:
      unParseNode: NodeVisitor
        (#
           t: ^text;
-          visitVariable:: 
-            (# 
-            do
-               ':'->t.append;
-               elm.value[]->t.append;
-               (if not lastElm then ' '->t.put if)
-            #);
-          visitPlaceholder:: 
-            (# 
-            do
-               '%'->t.put;
-               elm.mark->t.put;
-               (if not lastElm then ' '->t.put if)
-            #);
+          visitVariable::  (#  do ':'->t.append; elm.value[]->t.append #);
+          visitPlaceholder::  (#  do '%'->t.put; elm.mark->t.put #);
           visitNameDecl::  (#  do elm.value[]->t.append #);
           visitStatementString:: 
             (# 
@@ -122,8 +195,7 @@ PatternParser:
                     'visitStatementString: "%s"\n'
                       ->format (#  do elm.value[]->s #)
                  #);
-               elm.value[]->t.append;
-               (if not lastElm then ' '->t.put if)
+               elm.value[]->t.append
             #);
           theNode: ^node
        enter theNode[]
@@ -197,18 +269,20 @@ PatternParser:
                       ->format (#  do t[]->s #)
                  #);
                L:
-                 (# elm: ^UnnamedSpecifier
+                 (# elm: ^UnnamedSpecifier; isString: @boolean
                  do
-                    t.getAtom->atom[];
+                    t.getNextStatementStringOrSpecifier->(atom[],isString);
                     (if not atom.empty then
-                        atom.reset;
-                        (if '%' = atom.peek then
-                            &Placeholder[]->elm[]
-                         else
-                            &Variable[]->elm[]
+                        (if not isString then
+                            atom.reset;
+                            (if '%' = atom.peek then
+                                &Placeholder[]->elm[]
+                             else
+                                &Variable[]->elm[]
+                            if);
+                            elm[]->UnnamedSpecifiers.append;
+                            atom[]->elm.parse
                         if);
-                        elm[]->UnnamedSpecifiers.append;
-                        atom[]->elm.parse;
                         restart L
                     if)
                  #)
@@ -219,7 +293,9 @@ PatternParser:
           NamedSpecifiers: @list (# element:: NamedSpecifier #);
           accept:: 
             (# 
-            do THIS(NamedResultSetPattern)[]->theVisitor.visitNamedResultSetPattern
+            do
+               THIS(NamedResultSetPattern)[]
+                 ->theVisitor.visitNamedResultSetPattern
             #);
           parse:: 
             (# atom: ^text
@@ -231,13 +307,15 @@ PatternParser:
                       ->format (#  do t[]->s #)
                  #);
                L:
-                 (# elm: ^NamedSpecifier
+                 (# elm: ^NamedSpecifier; isString: @boolean
                  do
-                    t.getAtom->atom[];
+                    t.getNextStatementStringOrSpecifier->(atom[],isString);
                     (if not atom.empty then
-                        &NamedSpecifier[]->elm[]->NamedSpecifiers.append;
-                        atom.reset;
-                        atom[]->elm.parse;
+                        (if not isString then
+                            &NamedSpecifier[]->elm[]->NamedSpecifiers.append;
+                            atom.reset;
+                            atom[]->elm.parse
+                        if);
                         restart L
                     if)
                  #)
@@ -339,30 +417,7 @@ PatternParser:
             do THIS(StatementPattern)[]->theVisitor.visitStatementPattern
             #);
           parse:: 
-            (#
-               pos: @integer;
-               atom: ^text;
-               isStatementString: booleanValue
-                 (# atom: ^text
-                 enter atom[]
-                 do
-                    true->value;
-                    atom.reset;
-                    atom.scan
-                      (# 
-                      do
-                         (if ((ch = ':') or (ch = '%')) then
-                             (if atom.getPos > 1 then
-                                 (if not
-                                 ('\\' = ((atom.getPos-1)->atom.inxGet)) then
-                                     false->value
-                                 if)
-                              else
-                                 false->value
-                             if)
-                         if)
-                      #)
-                 #)
+            (# pos: @integer; atom: ^text; isStatementString: @boolean
             do
                trace
                  (# 
@@ -372,7 +427,9 @@ PatternParser:
                  (# 
                  do
                     t.pos->pos;
-                    (if t.getAtom->atom[]->isStatementString then
+                    t.getNextStatementStringOrSpecifier
+                      ->(atom[],isStatementString);
+                    (if isStatementString then
                         &StatementString[]->StatementStringOrSpecifiers.append
                      else
                         &StatementSpecifier[]
