@@ -98,3 +98,20 @@ public class BetaHelpers
     return s.ToString();
   }
 }
+
+public class ThreadWrapper {
+  // Needed since we cannot give a delegate from beta to ThreadStart constructor
+  System.Threading.Thread _thread;
+  public ThreadWrapper(){
+    _thread = new Thread(new ThreadStart(run));
+  }
+  public void start(){
+    // Start run.  On a uniprocessor, the thread does not get 
+    // any processor time until the main thread yields.  Uncomment 
+    // the Thread.Sleep that follows t.Start() to see the difference.
+    _thread.Start();
+    Thread.Sleep(0);
+  }
+  public virtual void run(){
+  }
+}
