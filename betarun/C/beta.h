@@ -27,6 +27,10 @@ extern struct group_header *BETA_DATA; /* Defined in BETA */
 # include <stdlib.h>
 #endif
 
+#ifdef nti
+#include <windows.h>
+#endif
+
 #ifdef MT
 #include <thread.h>
 /* synchronization variables */

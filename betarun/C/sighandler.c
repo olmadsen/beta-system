@@ -5,9 +5,13 @@
  */
 #include "beta.h"
 
-#if defined(UNIX) || defined(nti)
+/***************************************************************************/
+/************************ INCLUDES and DEFINITIONS *************************/
+/***************************************************************************/
+
+#if defined(UNIX)
 #include <signal.h>
-#endif /* UNIX || nti */
+#endif /* UNIX  */
 
 #ifdef sun4s
 #include <siginfo.h>
@@ -15,7 +19,7 @@
 #include <sys/ucontext.h>
 #endif
 
-#if defined(linux) || defined(nti)
+#if defined(linux) 
 /* Header files do not declare this! */
 struct sigcontext {
   unsigned short gs, __gsh;
@@ -41,108 +45,19 @@ struct sigcontext {
   unsigned long oldmask;
   unsigned long cr2;
 };
-#endif /* linux || nti */
+#endif /* linux */
 
-#ifdef crts
-void BetaSignalHandler (long sig)
-{
-  fprintf(output, "\nBetaSignalHandler: Caught signal %d. Exiting.\n", sig);
-  BetaExit(1);
-}
-#endif
 
-#ifdef sun4s
 
-/****** BEGIN sun4s *****/
+/***************************************************************************/
+/******************** Handlers for various platforms  **********************/
+/***************************************************************************/
 
-static void ExitHandler(int sig)
-{
-  DEBUG_CODE(fprintf(stderr, 
-		     "ExitHandler: Caught signal %d during signal handling\n",
-		     (int)sig);
-	     fflush(stderr);
-	     );
-  BetaExit(1);
-}
 
-void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
-{
-  handle(Object) theCell;
-  ref(Object)    theObj = 0;
-  long *PC;
-  long todo = 0;
+/******************** BEGIN general UNIX handler ***************************/
+#if defined(UNIX) && !defined(sun4s) && !defined(crts)
 
-  /* Setup signal handlers for the Beta system */
-  signal( SIGFPE,  ExitHandler);
-  signal( SIGILL,  ExitHandler);
-  signal( SIGBUS,  ExitHandler);
-  signal( SIGSEGV, ExitHandler);
-  signal( SIGEMT,  ExitHandler);
-
-  
-  /* Set StackEnd to the stack pointer just before trap. */
-#ifndef MT
-  StackEnd = (long *) ucon->uc_mcontext.gregs[REG_SP];
-#endif
-  PC = (long *) ucon->uc_mcontext.gregs[REG_PC];
-
-#ifndef MT
-  DEBUG_VALHALLA(fprintf(output,"BetaSignalHandler: StackEnd set to 0x%x\n",(int) StackEnd));
-#endif /* MT */
-
-  /* Try to fetch the address of current Beta object from i0.*/
-  theCell = casthandle(Object) &(cast(RegWin)ucon->uc_mcontext.gregs[REG_SP])->i0;
-  if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
-
-  switch(sig){
-  case SIGFPE: 
-    switch(info->si_code){
-    case FPE_INTDIV: /* div by zero */
-      todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
-    default: /* arithmetic exception */
-      todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig);
-    }
-    break;
-  case SIGEMT:
-    todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
-  case SIGILL: /* Illegal instruction or trap */
-    switch(info->si_code){
-    case ILL_ILLTRP:
-      switch(info->si_trapno-17){
-      case 0x80: /* Solaris 2.3, 2.4, 2.5 */
-      case 0x100: /* Solaris 2.5.1 */
-	/* tle 17 trap => ref none */
-	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
-      default:
-	todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
-      }
-      break;
-    default:
-      todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
-    }
-    break;
-  case SIGBUS: /* Bus error */
-    todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
-  case SIGSEGV: /* Segmentation fault */
-    todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
-#ifdef RTDEBUG
-  case SIGINT: /* Interrupt */
-    todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
-#endif
-  default:  /* Unknown signal */
-    todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
-  }
-
-  if (!todo) BetaExit(1);
-}
-  
-/***** END sun4s ****/
-#endif /* sun4s */
-
-#if !defined(sun4s) && !defined(crts) && !defined(ppcmac)
-/***** BetaSignalHandler: the one used for all but sun4s, crts, ppcmac *****/
-
-#if (defined(linux) || defined(nti))
+#if (defined(linux) 
 #define GetPCandSP() { PC = (long *) scp.eip; StackEnd = (long *) scp.esp_at_signal; }
 #endif
 
@@ -185,15 +100,15 @@ static static void ExitHandler(sig, code, scp, addr)
   BetaExit(1); 
 }
 
-#if defined(linux) || defined(nti)
+#if defined(linux) 
 void BetaSignalHandler(long sig, struct sigcontext scp)
 #else
 void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #endif
 {
-#if !(defined(linux) || defined(nti))
+#ifndef linux
   handle(Object) theCell;
-#endif /* !(linux || nti)*/
+#endif
   ref(Object)    theObj = 0;
   long *PC;
   long todo = 0;
@@ -203,9 +118,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   /* Setup signal handles for the Beta system */
   signal( SIGFPE,  ExitHandler);
   signal( SIGILL,  ExitHandler);
-#ifndef nti
   signal( SIGBUS,  ExitHandler);
-#endif
   signal( SIGSEGV, ExitHandler);
 #ifdef SIGEMT
   signal( SIGEMT,  ExitHandler);
@@ -298,7 +211,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   }
 #endif
 
-#if defined(linux) || defined(nti)
+#if defined(linux)
   theObj = cast(Object) scp.edx;
   if ( ! (inIOA(theObj) && isObject (theObj)))
     theObj  = 0;
@@ -319,14 +232,11 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
     break;
   case SIGILL:
     todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
-#ifndef nti
   case SIGBUS:
     todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
-#endif
 #ifdef RTDEBUG
   case SIGINT: /* Interrupt */
     todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
-#ifndef nti
   case SIGTRAP: 
     if ( (*((char*)PC-1)) == (char)0xcc ){
       /* int3 break */
@@ -335,7 +245,6 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
       DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)PC));
     }
     todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
-#endif
 #endif
   case SIGSEGV:
     if (scp.trapno == 5) /* Interrupt 5 generated by boundl */
@@ -346,7 +255,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   default: 
     todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
   }
-#endif /* defined(linux) || defined(nti) */
+#endif /* defined(linux) */
 
 #if defined(hpux9mc)
   /* Try to fetch the address of current Beta object in a0.
@@ -435,9 +344,184 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   if (!todo) BetaExit(1);
 }
 
-#endif /* !sun4s, !crts, !ppcmac */
+#endif /* UNIX, !sun4s, !crts */
+/******************** END general UNIX handler ****************************/
 
 
+
+/***************************** BEGIN crts/b2c *****************************/
+#ifdef crts
+void BetaSignalHandler (long sig)
+{
+  fprintf(output, "\nBetaSignalHandler: Caught signal %d. Exiting.\n", sig);
+  BetaExit(1);
+}
+#endif /* crts */
+/***************************** END crts/b2c *******************************/
+
+
+
+/******************************** BEGIN sun4s *****************************/
+#ifdef sun4s
+
+static void ExitHandler(int sig)
+{
+  DEBUG_CODE(fprintf(stderr, 
+		     "ExitHandler: Caught signal %d during signal handling\n",
+		     (int)sig);
+	     fflush(stderr);
+	     );
+  BetaExit(1);
+}
+
+void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
+{
+  handle(Object) theCell;
+  ref(Object)    theObj = 0;
+  long *PC;
+  long todo = 0;
+
+  /* Setup signal handlers for the Beta system */
+  signal( SIGFPE,  ExitHandler);
+  signal( SIGILL,  ExitHandler);
+  signal( SIGBUS,  ExitHandler);
+  signal( SIGSEGV, ExitHandler);
+  signal( SIGEMT,  ExitHandler);
+
+  
+  /* Set StackEnd to the stack pointer just before trap. */
+#ifndef MT
+  StackEnd = (long *) ucon->uc_mcontext.gregs[REG_SP];
+#endif
+  PC = (long *) ucon->uc_mcontext.gregs[REG_PC];
+
+#ifndef MT
+  DEBUG_VALHALLA(fprintf(output,"BetaSignalHandler: StackEnd set to 0x%x\n",(int) StackEnd));
+#endif /* MT */
+
+  /* Try to fetch the address of current Beta object from i0.*/
+  theCell = casthandle(Object) &(cast(RegWin)ucon->uc_mcontext.gregs[REG_SP])->i0;
+  if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
+
+  switch(sig){
+  case SIGFPE: 
+    switch(info->si_code){
+    case FPE_INTDIV: /* div by zero */
+      todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
+    default: /* arithmetic exception */
+      todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig);
+    }
+    break;
+  case SIGEMT:
+    todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
+  case SIGILL: /* Illegal instruction or trap */
+    switch(info->si_code){
+    case ILL_ILLTRP:
+      switch(info->si_trapno-17){
+      case 0x80: /* Solaris 2.3, 2.4, 2.5 */
+      case 0x100: /* Solaris 2.5.1 */
+	/* tle 17 trap => ref none */
+	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
+      default:
+	todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
+      }
+      break;
+    default:
+      todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
+    }
+    break;
+  case SIGBUS: /* Bus error */
+    todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
+  case SIGSEGV: /* Segmentation fault */
+    todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
+#ifdef RTDEBUG
+  case SIGINT: /* Interrupt */
+    todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
+#endif
+  default:  /* Unknown signal */
+    todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
+  }
+
+  if (!todo) BetaExit(1);
+}
+  
+#endif /* sun4s */
+/***************************** END sun4s ********************************/
+
+
+/***************************** BEGIN nti ********************************/
+#ifdef nti
+
+int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
+{ 
+  EXCEPTION_RECORD SavedExceptRec;
+  CONTEXT SavedContextRec;
+  struct Object *theObj = 0;
+  long *PC;
+  long todo = 0;
+
+  SavedExceptRec =  *(lpEP)->ExceptionRecord;  
+  SavedContextRec = *(lpEP)->ContextRecord;
+  
+  if (SavedContextRec.ContextFlags & CONTEXT_CONTROL){
+    PC = SavedContextRec.Eip;
+    StackEnd = SavedContextRec.Esp;
+  } else {
+    /* Can't display stack if SP unknown */
+    return EXCEPTION_CONTINUE_SEARCH;
+  }
+  if (SavedContextRec.ContextFlags & CONTEXT_INTEGER){
+    theObj = SavedContextRec.Edx;
+  }
+
+  switch (SavedExceptRec.ExceptionCode){
+  case EXCEPTION_ACCESS_VIOLATION:  
+  case EXCEPTION_DATATYPE_MISALIGNMENT:  
+    todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
+  case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
+    todo=DisplayBetaStack( RepRangeErr, theObj, PC, sig);
+  case EXCEPTION_INT_DIVIDE_BY_ZERO:
+    todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
+  case EXCEPTION_ILLEGAL_INSTRUCTION:
+  case EXCEPTION_PRIV_INSTRUCTION:
+    todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
+  case EXCEPTION_FLT_DENORMAL_OPERAND:
+  case EXCEPTION_FLT_INEXACT_RESULT:
+  case EXCEPTION_FLT_OVERFLOW:
+  case EXCEPTION_FLT_UNDERFLOW:
+  case EXCEPTION_FLT_STACK_CHECK:
+    todo=DisplayBetaStack( UnorderedFval, theObj, PC, sig); break;
+  case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+  case EXCEPTION_FLT_INVALID_OPERATION:
+    todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig); break;
+  default:
+    todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
+  }
+  
+  if (!todo) BetaExit(1);
+  
+  return EXCEPTION_CONTINUE_SEARCH;
+}
+
+/* beta_main: called from main */
+void beta_main()
+{
+  /* enable floating point exceptions */
+  controlfp(EM_INEXACT | EM_DENORMAL, MCM_EM);
+
+  __try 
+    { 
+      /* Start BETA execution */
+    }
+    __except ( BetaSignalHandler( GetExceptionInformation())) {
+    }
+}
+
+#endif /* nti */
+/***************************** END nti ********************************/
+
+
+/***************************** BEGIN ppcmac ********************************/
 #ifdef ppcmac
 
 #include <MachineExceptions.h>
@@ -488,10 +572,15 @@ OSStatus BetaSignalHandler(ExceptionInformation *info)
 }
 
 #endif /* ppcmac */
+/***************************** END ppcmac ********************************/
 
-/* 
- * InstallSigHandler: install a handler for sig.
- */
+
+
+
+/************************************************************************/ 
+/************ InstallSigHandler: install a handler for sig **************/
+/************************************************************************/ 
+
 void InstallSigHandler (int sig)
 {
 #ifndef sun4s

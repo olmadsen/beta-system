@@ -522,7 +522,11 @@ errorTable[] =
   { EmulatorTrapErr,   "Emulator trap" },
   { IllegalInstErr,    "Illegal instruction" },
   { BusErr,            "Bus error" },
+#ifdef UNIX
   { SegmentationErr,   "Segmentation fault" },
+#else
+  { SegmentationErr,   "Access violation" },
+#endif /* UNIX */
   { AOAtoIOAfullErr,   "AOAtoIOAtable is full" },
   { AOAtoLVRAfullErr,  "AOAtoLVRAtable is full" },
   { CTextPoolErr,      "Text parameter to C routine too big (max. 1000 bytes)" },
