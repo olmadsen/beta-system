@@ -29,7 +29,7 @@ sub GetDirsRecursively {
     return @result;
 }
 
-sub GetFilesInDirs {
+sub GetFilesInDir {
     my (@result,$file,$dir);
     $dir = shift @_;
     print "Scanning $dir\n" if (defined $debug);
@@ -50,7 +50,13 @@ sub GetFilesInDirs {
     return @result;
 }
     
-
+sub GetFilesInDirs {
+    my (@result);
+    foreach $dir (@_){
+	push @result, &GetFilesInDir($dir);
+    }
+    return @result;
+}
     
 sub FileCopy {
     my ($src, $dst) = (@_);
