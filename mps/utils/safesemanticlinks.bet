@@ -1,0 +1,276 @@
+ORIGIN '~beta/mps/astlevel';
+INCLUDE '~beta/basiclib/file'
+        '~beta/betaast/semanticerrortext';
+-- astInterfaceLib: Attributes --
+safeIndexToNode:
+  (#
+     inx: @integer;
+     as: ^astInterface.ast;
+     indexOutOfRange:< astInterfaceException;
+     noSuchSymbol:< astInterfaceException;
+     grammarGenRefArrayError:< astInterfaceException;
+     symbol,val: @integer;
+     errorMsg:
+       (# n: @integer; msg: ^text
+       enter n
+       do
+          '*** Error in IndexToNode:'->msg[];
+          '\nIndex='->msg.puttext;
+          inx->msg.putint;
+          '\nSymbol='->msg.puttext;
+          symbol->msg.putint;
+          '\nVal='->msg.puttext;
+          val->msg.putint;
+          msg.newline
+       exit msg[]
+       #);
+     ff: ^astInterface.fragmentForm
+  enter (inx,ff[])
+  do
+     l:
+     (if true
+      // (0 < inx) and (inx <= ff.a.range) then
+         ff.a[inx]->val->tos'%GetSignedBits[4,12]'->symbol;
+         (if (0 < symbol) and (symbol <= ff.grammar.genRefArray.range) then
+             (if &ff.grammar.genRefArray[symbol][]->as[]
+              // none then (* IndexToNode: genRefArray problem *)
+                 errorMsg->grammarGenRefArrayError; leave l
+             if)
+          else
+             (if symbol
+              // prodNo.unExpanded then
+                 &UnExpanded[]->as[]
+              // prodNo.optional then
+                 &Optional[]->as[]
+              // prodNo.nameDecl then
+                 &NameDecl[]->as[]
+              // prodNo.nameAppl then
+                 &NameAppl[]->as[]
+              // prodNo.string then
+                 &String[]->as[]; 
+              // prodNo.Const then
+                 &Const[]->as[]; 
+              // prodNo.Comment then
+                 &Comment[]->as[]
+              // prodNo.SlotDesc then
+                 &SlotDesc[]->as[]
+              else
+             (* IndexToNode: no match for symbol! *)
+                 none ->as[]; errorMsg->noSuchSymbol; leave l
+             if)
+         if);
+         inx->as.index;
+         ff[]->as.frag[]
+      // (0 = inx) then (* Zero index is the same as a NONE ast *)
+         none ->as[]
+      else
+     (* IndexToNode: index out of range *)
+         none ->as[]; errorMsg->indexOutOfRange
+     if)
+  exit as[]
+  #);
+safeGetGroup:
+(* Private: The inverse of GetIndex; If the group is not open then open it *)
+  (#
+     ff,f: ^astInterface.FragmentForm;
+     Index: @integer;
+     importException:< AstInterfaceException;
+     error: ^stream;
+     openForm:
+       (# fg: ^astInterface.fragmentGroup; name: ^Text; i: @Integer; 
+       enter name[]
+       do
+          '-'->name.findAll (#  do inx->i #);
+          thisOperation:
+          ((1,i-1)->name.sub,screen[])
+            ->top.open
+              (#
+                 safeException:
+                   (# msg,help: ^text
+                   enter msg[]
+                   do
+                      ': '->help[];
+                      (1,i-1)->name.sub->help.putText;
+                      help[]->msg.append;
+                      msg[]->putLine;
+                      none ->f[];
+                      none ->theCatcher[];
+                      leave thisOperation
+                   #);
+                 readAccessError::< 
+                   (#  do 'Read access error'->safeException #);
+                 fragmentNotExisting::< 
+                   (#  do 'Non-existent fragment file'->safeException #);
+                 grammarNotFound::< 
+                   (#  do 'Grammar not found for'->safeException #);
+                 badFormat::<  (#  do 'Bad AST format'->safeException #);
+                 WriteAccessOnLstFileError::< 
+                   (# 
+                   do
+                      'Access error on .lst file'->safeException;
+                      true
+                        ->continue (*'Access error on .lst file'->myException*)
+                   #);
+                 writeAccessError::< 
+                   (# 
+                   do
+                      'No write access'->safeException;
+                      true
+                        ->continue
+                        (*'Write access error'->myException
+                         * *)
+                   #);
+                 startingParsing::< 
+                   (# 
+                   do
+                      'Parsing '->putText;
+                      (1,i-1)->name.sub->putText;
+                      '...'->putLine;
+                      'safeStartingParsing'->putLine;
+                      
+                   #);
+                 ParseErrors::< 
+                   (# 
+                   do (*none ->f[];*)
+                      'safeParseErrors'->putline; ; leave thisOperation
+                   #);
+                 DoubleFormDeclaration::< 
+                   (# 
+                   do
+                      'Two forms are declared with the same name'->safeException
+                   #);
+                 fatalParseError::< 
+                   (# 
+                   do (*none ->f[];*)
+                      'errNo->safeFatalParseError'->putLine; leave thisOperation
+                   #);
+                 OtherFileError::< 
+                   (# fil: @file
+                   do
+                      (1,i-1)->name.sub->fil.name;
+                      (if fil.entry.exists
+                       // true then
+                          (if fil.entry.isDirectory
+                           // true then 'Is a directory'->safeException
+                           else
+                              'Other file error'->safeException
+                          if)
+                      if)
+                   #)
+              #)->fg[];
+          (if fg[] <> none then
+              ((i+1,name.lgth)->name.sub,screen[])->fg.open->f[]
+          if)
+       #)
+  enter (ff[],index)
+  do
+     (if (ff[] <> none ) and (ff.import.impL[] <> none ) and
+     (index <= ff.import.impL.l.range) and (index <> 0) and
+     (ff.import.impL.l[index][] <> none ) then
+         (if (ff.import.impL.l[index].f[]->f[]) = none then
+               (# t: ^text
+               do
+                  (ff.father).fullName->stripPathName->t[];
+                  (if t[] = none then
+                      (ff.import.impL.l[index].n.copy,
+                       thePathHandler.currentDirectory)
+                        ->thePathHandler.convertFilePath->openForm;
+                      (if f[] <> none then
+                          f[]->ff.import.impL.l[index].f[]
+                      if)
+                   else
+                      (ff.import.impL.l[index].n.copy,t[])
+                        ->thePathHandler.convertFilePath->openForm;
+                      (if f[] <> none then
+                          f[]->ff.import.impL.l[index].f[]
+                      if)
+                  if)
+               #);
+             (if f[] = none then
+                   (# t: ^text
+                   do
+                      &text[]->t[];
+                      'Import error!! '->t.putLine;
+                      'There is something wrong with the file "'->t.putText;
+                      (ff.father).diskFileName->t.putText;
+                      '"\n. It refers to the fragment "'->t.putText;
+                      ff.import.impL.l[index].n[]->t.putText;
+                      '" which was not found \n\n.'->t.putText;
+                      (*t[]->ImportException*)
+                      
+                   #)
+             if)
+         if)
+     if)
+  exit f[]
+  #);
+safeValueToAst: (* Private *)
+  (# val: @integer; a: ^astInterface.Ast; ff,f: ^astInterface.fragmentForm
+  enter (val,ff[])
+  do
+     (if val = 0 then
+         none ->a[]
+      else
+         (ff[],val->tos'%getShort[0]')->safeGetGroup->f[];
+         val->tos'%getShort[1]'->tos'%ShiftLeft[1]'->val;
+         (if f[] <> none then
+             (if not (f.father).isRealOpen then (f.father).realOpen if);
+             (if val <> 0 then
+                 (val,f[])
+                   ->safeIndextoNode
+                     (#
+                        indexOutOfRange::< 
+                          (# 
+                          do
+                             'SafeValueToAst: indexOutOfRange'->putLine;
+                             true->continue
+                          #);
+                        noSuchSymbol::< 
+                          (# 
+                          do
+                             'SafeValueToAst: noSuchSymbol'->putLine;
+                             true->continue
+                          #);
+                        grammarGenRefArrayError::< 
+                          (# 
+                          do
+                             'SafeValueToAst: grammarGenRefArrayError'->putLine;
+                             true->continue
+                          #)
+                     #)->a[]
+             if)
+         if)
+     if)
+  exit a[]
+  #);
+safeGetNodeAttribute:
+  (# aplNode,val: ^astInterface.ast; attributNo: @integer
+  enter (attributNo,aplNode[])
+  do
+     attributNo->aplNode.checkAttributNo;
+     (aplNode.frag.a[aplNode.index+ (*offset.attribute*) 2+attributno-1],
+      aplNode.frag[])->safeValueToAst->val[]
+  exit val[]
+  #);
+safeDclRef:
+  (* like betasematt.declRef except that it does not crash if the
+   * the semantic link is undefined, instead it returns NONE
+   *)
+  (# aplNode,dclNode: ^astInterface.ast
+  enter aplNode[]
+  do ((1,aplNode[])->safeGetNodeAttribute)->dclNode[]; 
+  exit dclNode[]
+  #);
+safeVirtDcl:
+   (* like betasematt.virtDecl except that it does not crash if the
+   * the semantic link is undefined, instead it returns NONE
+   *)
+ (# aplNode,dclNode: ^astInterface.ast; f: ^astInterface.ast
+  enter aplNode[]
+  do
+     aplNode.father->f[];
+     f.father->f[];
+     ((1,f[])->safeGetNodeAttribute)->dclNode[]
+  exit dclNode[]
+  #)  
+
