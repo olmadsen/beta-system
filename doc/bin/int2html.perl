@@ -55,9 +55,10 @@ if ($fullpath){
     if ($extradir){
 	print "int2html.perl: Both -f and -x specified: -x is ignored\n";
     }
-    $css = "/~beta/doc/style/miadoc.css";
-    $lastmodscript = "/~beta/doc/javascript/lastmod.js";
-    $imagedir = "/~beta/doc/images/";
+    $css = "http:///~beta/doc/style/miadoc.css";
+    $lastmodscript = "http:///~beta/doc/javascript/lastmod.js";
+    $imagedir = "http:///~beta/doc/images/";
+    $topfile = "http:///~beta/doc/index.html";
 } else {
     if ($extradir){
 	$css = "../../../style/miadoc.css";
@@ -68,10 +69,10 @@ if ($fullpath){
 	$lastmodscript = "../../javascript/lastmod.js";
 	$imagedir = "../../images/";
     }
+    $topfile = "../index.html";
 }
 
-# File names:
-$topfile = "../index.html";
+# Other file names:
 $indexfile = "inx.html";
 $contentsfile = "index.html";
 
