@@ -154,7 +154,7 @@ void SetupVirtualTimer(unsigned usec)
 void* MT_malloc(int size) 
 { 
   void* p = memalign(64, (size));
-  DEBUG_CODE(fprintf(output,"Malloc at 0x%0x\n", (int)p));
+  DEBUG_CODE(fprintf(output,"[malloc at 0x%0x]\n", (int)p));
   memset(p, 0, (size));
   return p;
 }

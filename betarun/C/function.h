@@ -59,6 +59,9 @@ int IsBetaCodeAddr(long addr);
 
 /* C/exit.c */
 extern void BetaExit(long);
+#ifdef MT
+extern void ThreadExit(void);
+#endif
 #ifdef NEWRUN
 extern void BetaError(enum BetaErr err, struct Object *theObj, long *SP, long *thePC);
 #else

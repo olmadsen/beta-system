@@ -14,7 +14,7 @@ struct Object *doGC(unsigned numbytes);
 struct Object *getNewIOASlice(unsigned long numbytes)
 {
   /* Allocate an IOA slice. 
-   * -Attempts to allocate (numbytes+IOASliceSize) bytes.
+   * -Attempts to allocate max(numbytes,IOASliceSize) bytes.
    * -At least numbytes are allocated.
    *  A GC is triggered, if there is not room for max(numbytes,IOASliceSize).
    */
@@ -34,9 +34,7 @@ struct Object *getNewIOASlice(unsigned long numbytes)
     IOATop = gIOATop;
   } 
   
-  IOALimit = (long*)((long)IOATop + reqsize);
-  
-  if (gIOALimit <= IOALimit) {
+  if (gIOALimit <= (long*)((long)IOATop + reqsize)) {
     /* FIXME: Stop all other threads! */
 
     /* Force GC */
@@ -47,19 +45,31 @@ struct Object *getNewIOASlice(unsigned long numbytes)
      *  do not alloc in old heap 
      */
 
-    IOATop = gIOATop; 
-    IOALimit = (long*)((long)IOATop + IOASliceSize);
+    IOATop = gIOATop; /* size of object is already added in doGC */ 
+    gIOATop = (long*)((long)gIOATop + reqsize-numbytes); /* size of slice */
+    if (gIOALimit < gIOATop) {
+      gIOATop = gIOALimit;
+    }
   } else {
-    newObj = (struct Object*)gIOATop;
-    IOATop = (long*)((long)gIOATop + numbytes); /* size of object */
-    gIOATop = (long*)((long)gIOATop + reqsize); /* size of slice */
-    
-    IOALimit =  (long*)((long)IOATop + IOASliceSize);
-    /* FIXME:                          ^^^reqsize?? */
+    /* max(numbytes,IOASliceSize) will fit into [gIOATop..gIOALimit[ */
+    if (IOALimit == gIOATop){
+      /* No other threads have been given a new slice since we got 
+       * our last slice. So we can extend the current slice, and thus
+       * utilize the remaining space in this slice, even though numbytes 
+       * may be bigger.
+       */
+      newObj = (struct Object*)IOATop;
+      IOATop = (long*)((long)IOATop + numbytes); /* size of object */
+      gIOATop = (long*)((long)IOATop + reqsize-numbytes); /* size of slice */
+    } else {
+      newObj = (struct Object*)gIOATop;
+      IOATop = (long*)((long)gIOATop + numbytes); /* size of object */
+      gIOATop = (long*)((long)gIOATop + reqsize); /* size of slice */
+    }
   }
-  if (gIOALimit < IOALimit)
-    IOALimit = gIOALimit;
 
+  IOALimit =  gIOATop;
+  
   mutex_unlock(&ioa_lock);
 
   return newObj;

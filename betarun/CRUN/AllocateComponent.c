@@ -3,11 +3,12 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#ifndef MT
 #define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
+
+#ifndef MT
 
 ParamOriginProto(struct Component *,AlloC)
 {
