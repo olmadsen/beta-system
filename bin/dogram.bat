@@ -9,7 +9,7 @@ echo generator
 call gen %1
 
 echo bobsit version 1.6
-call NTIexbobs < %1-parser.bobs
+call exbobs < %1-parser.bobs
 if not exist bobslist goto KEEPGOING
 if exist %1-parser.lst del %1-parser.lst
 rename bobslist %1-parser.lst
