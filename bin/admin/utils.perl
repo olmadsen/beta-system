@@ -95,7 +95,9 @@ sub path {			# Convert path to LOCAL convention
     my($p)=@_;
     $p =~ s/\~beta/$betalib/gi;	# Replace ~beta with unix-style betalib.
     if ($OS eq 'WIN'){
-	$p =~ s#/#\\#g;
+	if ($ENV{'TERM'} ne 'cygwin'){
+	    $p =~ s#/#\\#g;
+	}
     } elsif ($OS eq 'MAC'){
 	$p =~ s#/#:#g;
     } 
