@@ -10,6 +10,8 @@
 #ifdef nti
 #  include <io.h>
 #  ifdef nti_ms
+#    include <windows.h>
+#    include <winbase.h>
 #    include <sys/utime.h>
 #    define S_IXUSR _S_IEXEC
 #    define S_IWUSR _S_IWRITE
@@ -49,57 +51,56 @@ static int strptrcmp(const void *s1, const void *s2)
 #ifdef nti_ms
 typedef struct _DIR
 {
-  struct _finddata_t entry;
-  long hFile;
+  WIN32_FIND_DATA entry;
+  HANDLE hFile;
   int result;
-  char *d_name;
+  char d_name[MAX_PATH];
 } DIR;
 
-DIR *opendir(char *path)
+struct _DIR *opendir(char *path)
 {
-  DIR *dirp = malloc(sizeof(DIR));
-  char *match = malloc(strlen(path)+3);
+  char match[MAX_PATH+8];
+  struct _DIR *dirp = malloc(sizeof(struct _DIR));
+  int pathlen;
   strcpy(match,path);
-  if (match[strlen(match)-1] != '\\')
-    strcat(match, "\\");
-  strcat(match, "*");
-  dirp->hFile = _findfirst(match, &(dirp->entry));
-  if (dirp->hFile == -1L) {
+  pathlen=strlen(match);
+  if (match[pathlen-1] != '\\') {
+    match[pathlen]='\\';
+    match[++pathlen]=0;
+  }
+  match[pathlen]='*';
+  match[++pathlen]='.';
+  match[++pathlen]='*';
+  match[++pathlen]=0;
+  dirp->hFile = FindFirstFile(match, &(dirp->entry));
+  if (dirp->hFile == INVALID_HANDLE_VALUE) {
     free(dirp);
-    free(match);
-    /* Error: nothing allocated */
-    dirp->result = -1;
     return NULL;
   }
-  free(match);
   /* Allocated only the return value (dirp) */
-  dirp->d_name = NULL;
-  dirp->result = 0;
+  dirp->result = 1;
   return dirp;
 }
 
-struct DIRENT *readdir(DIR *dirp)
+struct _DIR *readdir(struct _DIR *dirp)
 {
-  if (dirp->result == -1L) {
-    free(dirp->d_name);
-    free(dirp);
+  if (dirp->result == 0) {
     return NULL;
   }
-  dirp->d_name = realloc(dirp->d_name, strlen(dirp->entry.name)+1);
-  strcpy(dirp->d_name, dirp->entry.name);
-  dirp->result = _findnext(dirp->hFile, &(dirp->entry));
+  strcpy(dirp->d_name, dirp->entry.cFileName);
+  dirp->result = FindNextFile(dirp->hFile, &(dirp->entry));
   return dirp;
 }
 
-int closedir(DIR *dirp)
+int closedir(struct _DIR *dirp)
 {
-  free(dirp->d_name);
+  FindClose(dirp->hFile);
   free(dirp);
 }
-#endif /* dir_ms */
+#endif /* nti_ms */
 
 
-/* Scan enties in dir. Return the length of the longest entryname via
+/* Scan entries in dir. Return the length of the longest entryname via
  * LongestFnc, Apply CallbackFnc to each entry found.
  * Return number of entries found, -1 if error 
  */
@@ -110,24 +111,24 @@ void (*LongestFnc)();
 { int i, dnamlen, num = 0;
   int longest = 0;
   char **list;
-  int listlen = 20;
-  DIR *dirp; 
+  int listlen = 64;
+  struct _DIR *dirp; 
   char *tmp;
   struct DIRENT *dp;
 
-  if((dirp = opendir(dir))==NULL) 
+  if (!(dirp = opendir(dir)))
     return -1;
 
-  list = (char **) malloc (listlen*sizeof(char **));
+  list = (char **) malloc (listlen*sizeof(char *));
 
   for(dp=readdir(dirp); dp != NULL; dp = readdir(dirp)) {
     dnamlen = strlen(dp->d_name);
     tmp = (char *)malloc(dnamlen+1);
     tmp[0] ='\0'; /* In case of empty name */
-    strcpy(tmp, dp->d_name);
+    memcpy(tmp, dp->d_name, dnamlen+1);
     if (num == listlen) {
       listlen = 2*listlen;
-      list = (char **) realloc (list, listlen*sizeof(char **));
+      list = (char **) realloc (list, listlen*sizeof(char *));
     }
     list[num++] = tmp;
     if (dnamlen > longest) longest = dnamlen;
@@ -135,8 +136,12 @@ void (*LongestFnc)();
 
   closedir(dirp);
 
-  if (num > 0) (*LongestFnc)(longest);
-  else { free(list); return -1; }
+  if (num > 0) {
+    (*LongestFnc)(longest);
+  } else { 
+    free(list);
+    return -1; 
+  }
 
   qsort((char*)list, num, sizeof(char *), strptrcmp);
 
@@ -176,10 +181,10 @@ char *name;
    return -2;
  for(dp=readdir(dirp); dp != NULL; dp = readdir(dirp)) {
     dnamlen = strlen(dp->d_name); /* SUN4S CORRECTION !! */
-    if(dnamlen  ==  len  &&  !strcmp(dp->d_name, name)) 
-      {closedir(dirp);
-       return 1;
-      }
+    if (dnamlen  ==  len  &&  !strcmp(dp->d_name, name)) {
+      closedir(dirp);
+      return 1;
+    }
   }
  /* Did not locate entry */
  closedir(dirp);
