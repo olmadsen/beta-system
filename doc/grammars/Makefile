@@ -1,15 +1,20 @@
-MAKEHTML = ../bin/gram2frames.perl -v
+MAKEHTML = ../bin/gram2frames.perl
 
 all:	beta idl metagrammar prettyprint property
 	@echo Done.
 
 beta:
-	$(MAKEHTML) ${BETALIB}/grammars/beta/beta-meta.gram
+	@echo Generating beta.html
+	@$(MAKEHTML) ${BETALIB}/grammars/beta/beta-meta.gram
 idl:
-	$(MAKEHTML) ${BETALIB}/grammars/idl/idl-meta.gram
+	@echo Generating idl.html
+	@$(MAKEHTML) ${BETALIB}/grammars/idl/idl-meta.gram
 metagrammar:
-	$(MAKEHTML) ${BETALIB}/grammars/metagram/metagrammar-meta.gram
+	@echo Generating metagrammar.html
+	@$(MAKEHTML) ${BETALIB}/grammars/metagram/metagrammar-meta.gram
 prettyprint:
-	$(MAKEHTML) ${BETALIB}/grammars/pretty/prettyprint-meta.gram
+	@echo Generating prettyprint.html
+	@$(MAKEHTML) ${BETALIB}/grammars/pretty/prettyprint-meta.gram
 property:
-	$(MAKEHTML) ${BETALIB}/grammars/property/property-meta.gram
+	@echo Generating property.html
+	@$(MAKEHTML) ${BETALIB}/grammars/property/property-meta.gram

@@ -21,6 +21,9 @@
 
 ### main #######
 
+# Command line options
+$verbose = $v;
+
 if ($old){
     $htmldoc = "htmldoc";
 } else {
@@ -56,9 +59,10 @@ while (<SEQUENCE>){
 $pdfexisted=1 if ( -f $pdf );
 &make_titlepage();
 $files = join (' ', @sequence);
-$cmd = "$htmldoc -v -t pdf -f $pdf --toclevels 4 --bodycolor #ffffff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.i --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Helvetica --bodyfont Helvetica --headfootsize 11.0 --headfootfont Helvetica $files";
+$cmd = "$htmldoc $verbose -t pdf -f $pdf --toclevels 4 --bodycolor #ffffff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.i --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Helvetica --bodyfont Helvetica --headfootsize 11.0 --headfootfont Helvetica $files";
 
-print "$cmd\n";
+print "Generating $pdf\n";
+print "$cmd\n" if $verbose;
 $ENV{'LD_LIBRARY_PATH'} = "/usr/local/lib";
 system "$cmd" || die "ERROR in HTMLDOC !!!";
 unlink "title.html";

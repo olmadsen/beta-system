@@ -21,6 +21,8 @@ if [ "$MAKEHTML" = "" ]; then echo "$0: no MAKEHTML script specified"; exit 1; f
 
 /bin/rm -f *.int
 
+QUIET=${QUIET:+"1"}
+
 if [ "$QUIET" != "1" ]; then
     echo Making interface descriptions for \"$SRC\" ...
     echo ""

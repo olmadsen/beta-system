@@ -1,12 +1,12 @@
 all: generated link-check
 
-# Update all the generated files in the various manuals.
+# Re-generate all the generated files in the various manuals.
 generated:
-	sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then cd $$d; make; cd ..; fi; done'
+	@env -i PATH=$$PATH BETALIB=$$BETALIB QUIET=1 sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then cd $$d; echo ""; echo ---$$d---; make; cd ..; fi; done'
 
-# Update interface files only.
+# Re-generate interface files only.
 interface:
-	sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then cd $$d; make interface; cd ..; fi; done'
+	@env -i PATH=$$PATH BETALIB=$$BETALIB QUIET=1 sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then /usr/xpg4/bin/grep -q interface: $$d/Makefile; status=$$?; if [ $$status -eq 0 ] ; then cd $$d; echo ""; echo "---$$d---"; make interface; cd ..; fi; fi; done'
 
 
 link-check:
@@ -19,6 +19,8 @@ make-check:
 	@echo Checking Makefiles
 	sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then echo $$d; cd $$d; make -n; cd ..; fi; done'
 
+interface-check:
+	sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then /usr/xpg4/bin/grep -q interface: $$d/Makefile; status=$$?; if [ $$status -eq 0 ] ; then cd $$d; echo $$d; cd ..; fi; fi; done'
 
 up: update
 

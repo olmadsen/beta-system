@@ -7,4 +7,4 @@ appendix:
 	rm subway7.bet
 
 pdf:
-	../bin/html2pdf.perl
+	@../bin/html2pdf.perl

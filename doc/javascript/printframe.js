@@ -19,7 +19,7 @@ if (navigator.appName.substring(0,9) == "Microsoft"){
 function printIEFrame(frame, onfinish) {
   if ( !frame ) frame = window;
 
-  if ( frame.document.readyState !== "complete" &&
+  if ( frame.document.readyState != "complete" &&
        !confirm("The document to print is not downloaded yet! Continue with printing?") )
   {
     if ( onfinish ) onfinish();

@@ -1,4 +1,4 @@
 generated: pdf
 
 pdf:
-	../bin/html2pdf.perl
+	@../bin/html2pdf.perl

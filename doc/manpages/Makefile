@@ -1,5 +1,5 @@
 generated:
-	./makeHTML
+	@./makeHTML
 
 tags:
 	etags *.html

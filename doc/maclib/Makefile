@@ -1,5 +1,8 @@
+generated: interface
+
 interface: always
-	cd interface; ./makeHTML
+	@echo Generating interface descriptions
+	@cd interface; ./makeHTML
 
 tags:
 	etags demo/copyexpand interface/makeRTF interface/headers.perl
