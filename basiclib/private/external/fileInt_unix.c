@@ -36,16 +36,15 @@ extern int utimes(char *file, struct timeval *tvp);
 #endif
 
 
-int entryStatus(path,status,permission,follow)
-     char *path;       /* IN par. denoting the path of the entry to be statted */
+int entryStatus(path,status,follow)
+/* In essence an "lstat" call on the entry with absolute path, path.
+ * The status of the entry is passed on to Beta by means of the
+ * two buffers, status and permission. A return of -1 indicates
+ * an error in the stat call, whereas a return of 1 means succes.
+ */
+     char *path;       /* IN par. The path of the entry to be stat'ed */
      int  *status;     /* OUT par. The buffer must be allocated by Beta. */
-     int  *permission; /* OUT par. ---------------||-------------------- */ 
-     /* In essence an "lstat" call on the entry with absolute path, path.
-        The status of the entry is passed on to Beta by means of the
-        two buffers, status and permission. A return of -1 indicates
-        an error in the stat call, whereas a return of 1 means succes.
-        */
-     int follow; /* follow links ? */
+     int follow;       /* follow links ? */
 {
   int entryType;
   struct stat statBuffer;
@@ -83,32 +82,6 @@ int entryStatus(path,status,permission,follow)
   status[18]=(int) statBuffer.st_blksize;
   status[19]=(int) statBuffer.st_blocks;
   
-  /* The mode of the entry denoted by the full path name, path, is 
-     is changed according to the supplied permission buffer.
-     The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
-     related to the mode for the "other" category, the next 3 give the mode
-     for "group" and the last 3 denote the mode of "owner". The integers 
-     should be inetrpreted as follows :
-     
-     |other                |group                |owner
-     -----------------------------------------------------------------
-     protection :exec | write | read  | exec | write | read | exec | write | read
-     -----------------------------------------------------------------
-     
-     If for example the (other,exec) integer is 1, the "other" category are
-     given execute permission to the entry.
-     */
-  
-  /* fill in the permission buffer */
-  permission[0]=( S_IXOTH & statBuffer.st_mode ) ? 1 : 0;
-  permission[1]=( S_IWOTH & statBuffer.st_mode ) ? 1 : 0;
-  permission[2]=( S_IROTH & statBuffer.st_mode ) ? 1 : 0;
-  permission[3]=( S_IXGRP & statBuffer.st_mode ) ? 1 : 0;
-  permission[4]=( S_IWGRP & statBuffer.st_mode ) ? 1 : 0;
-  permission[5]=( S_IRGRP & statBuffer.st_mode ) ? 1 : 0;
-  permission[6]=( S_IXUSR & statBuffer.st_mode ) ? 1 : 0;
-  permission[7]=( S_IWUSR & statBuffer.st_mode ) ? 1 : 0;
-  permission[8]=( S_IRUSR & statBuffer.st_mode ) ? 1 : 0;
   return 1;
 } 
 
