@@ -443,6 +443,7 @@ errorTable[] =
   { StackErr,          "Stack Overflow" },
 #endif
   { InternalErr,       "Internal Error" },
+  { SignalErr,         "Unexpected Signal" },
 #ifdef UNIX
   { UnknownSigErr,     "Unknown signal" },
 #else

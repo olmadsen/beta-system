@@ -1553,6 +1553,14 @@ int DisplayBetaStack(BetaErr errorNumber,
 		     (int)StackStart
 		     ));
 
+  if (isMakingDump){
+    /* Something went wrong during the dump. Stop here! */
+    NotifyErrorDuringDump((BetaErr)isMakingDump, errorNumber);
+    BetaExit(1);
+  } else {
+    isMakingDump=(int)errorNumber;
+  }
+  
 #ifdef NEWRUN
   /* If a signal was the reason program stopped, the NEWRUN
    * stack pointer should be adjusted to point to second topmost frame.
@@ -1593,10 +1601,13 @@ int DisplayBetaStack(BetaErr errorNumber,
     });
     switch(ValhallaOnProcessStop(thePC,STACKEND,theObj,theSignal,errorNumber)){
     case CONTINUE: 
+      /* Do not create dump file and terminate */
       DEBUG_VALHALLA(fprintf(output, "DisplayBetaStack: returning after ValhallaOnProcessStop\n"));
+      isMakingDump = 0;
       return 1;
     case TERMINATE: 
-      DEBUG_VALHALLA(fprintf(output, "DisplayBetaStack: breaking after ValhallaOnProcessStop\n"));
+      /* Go through with the dump and eventually terminate */
+      DEBUG_VALHALLA(fprintf(output, "DisplayBetaStack: breaking out of switch after ValhallaOnProcessStop\n"));
       break;
     }
   } else {
@@ -1625,14 +1636,6 @@ int DisplayBetaStack(BetaErr errorNumber,
       /* FIXME: Restore registers */
       if (skip_dump) return 0;
     }
-  }
-
-  if (isMakingDump){
-    /* Something went wrong during the dump. Stop here! */
-    NotifyErrorDuringDump(errorNumber);
-    BetaExit(1);
-  } else {
-    isMakingDump=1;
   }
 
   error_pc = (unsigned long)thePC;
@@ -1693,10 +1696,12 @@ int DisplayBetaStack(BetaErr errorNumber,
   return 0;
 } /* DisplayBetaStack */
 
-void NotifyErrorDuringDump(BetaErr errorNumber)
+void NotifyErrorDuringDump(BetaErr errorNumber, BetaErr errorNumber2)
 {
-  fprintf(output, "\n# Error during dump: ");
+  fprintf(output, "\n# Beta execution aborted: ");
   fprintf(output, ErrorMessage(errorNumber));
+  fprintf(output, "\n# Error during dump: ");
+  fprintf(output, ErrorMessage(errorNumber2));
   fprintf(output, ". Aborting.\n\n");
   fflush(output);
   fflush(stdout);
@@ -1765,7 +1770,7 @@ unsigned long CodeEntry(ProtoType *theProto, long PC)
 	    protoArg,
 	    PC);
     if (isMakingDump){
-      NotifyErrorDuringDump(InternalErr);
+      NotifyErrorDuringDump((BetaErr)isMakingDump, InternalErr);
     }
     DEBUG_CODE(ILLEGAL);
     BetaExit(1);
@@ -1776,7 +1781,7 @@ unsigned long CodeEntry(ProtoType *theProto, long PC)
 	    protoArg,
 	    PC);
     if (isMakingDump){
-      NotifyErrorDuringDump(InternalErr);
+      NotifyErrorDuringDump((BetaErr)isMakingDump, InternalErr);
     }
     DEBUG_CODE(ILLEGAL);
     BetaExit(1);

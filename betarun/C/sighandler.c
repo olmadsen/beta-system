@@ -29,7 +29,7 @@ static void NotifySignalDuringDump(int sig)
 #endif /* UNIX */
   default: err=UnknownSigErr;
   }
-  NotifyErrorDuringDump(err);
+  NotifyErrorDuringDump(err, SignalErr);
 }
 
 #ifdef RTVALHALLA 
@@ -429,15 +429,30 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
     if( !(inBetaHeap(theObj) && isObject(theObj))) theObj  = 0;
     switch( sig){
     case SIGFPE: 
-      if (code==7){
-	/* break 7 instruction: integer division by zero */
+      /* From <sys/signal.h>:
+       * #define BRK_USERBP      0       //user bp (used by debuggers)
+       * #define BRK_OVERFLOW    6       //overflow check
+       * #define BRK_DIVZERO     7       //divide by zero check
+       * #define BRK_RANGE       8       //range error check
+       * #define BRK_MULOVF      1023    //multiply overflow detected
+       */
+      switch((int)code){
+      case BRK_DIVZERO:
 	todo=DisplayBetaStack(ZeroDivErr , theObj, PC, sig); break;
-      } else if (scp->sc_fpc_csr & (1<<15)){
-	/* Floating point division by zero cause bit set */
-	todo=DisplayBetaStack(FpZeroDivErr , theObj, PC, sig); break;
-      } else {
-	todo=DisplayBetaStack(FpExceptErr, theObj, PC, sig); break;
+      case BRK_OVERFLOW:
+      case BRK_MULOVF:
+	todo=DisplayBetaStack(ArithExceptErr , theObj, PC, sig); break;
+      default:
+	if (scp->sc_fpc_csr & (1<<15)){
+	  /* Floating point division by zero cause bit set.
+	   * <sys/fpu.h>: ((union fpc_csr)scp->sc_fpc_csr).fc_struct.ex_divide0
+	   */
+	  todo=DisplayBetaStack(FpZeroDivErr , theObj, PC, sig); break;
+	} else {
+	  todo=DisplayBetaStack(FpExceptErr, theObj, PC, sig); break;
+	};
       }
+      break;
     case SIGEMT:
       todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
     case SIGILL:

@@ -67,7 +67,7 @@ extern void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func);
 extern long *DisplayCallbackFrames(CallBackFrame *cbFrame, long *low, Object *currentObject, CellDisplayFunc func);
 extern void DisplayStackPart(long *low, long *high, Object *currentObject, CellDisplayFunc func);
 #endif
-extern void NotifyErrorDuringDump(BetaErr errorNumber);
+extern void NotifyErrorDuringDump(BetaErr errorNumber, BetaErr errorNumber2);
 #ifdef NEWRUN
 extern unsigned long CodeEntry(ProtoType *theProto, long PC);
 #endif
