@@ -13,29 +13,58 @@ public class BetaOutput
     File entry;
     File existing = null;
 
+    boolean local;
+
     public BetaOutput(String betalib, 
 		      String pkg, 
 		      String cls, 
 		      String supPkg, 
 		      String sup, 
 		      int overwrite,
+		      boolean local,
 		      PrintStream outstream)
 	throws Throwable
     {
-        
-	openStream(betalib, pkg, "_" + cls, overwrite, outstream);
+        this.local = local;
+	openStream(betalib, pkg, "_" + cls, overwrite, local, outstream);
 	if (out!=null) putWrapper(pkg, cls, supPkg, sup);
-	openStream(betalib, pkg, cls, overwrite, outstream);
+	openStream(betalib, pkg, cls, overwrite, local, outstream);
+    }
+
+    File getParent(File entry)
+    {
+	File parent = entry.getParentFile();
+	if (parent==null){
+	    /* File.getParentFile can return null when the file is specified without
+	     * a directory.
+	     */
+	    if (entry.isAbsolute()){
+		parent = new File(File.separator);
+	    } else {
+		parent = new File(System.getProperty("user.dir"));
+	    }
+	}
+	return parent;
     }
 
     void openStream(String betalib, 
 		    String pkg, 
 		    String cls, 
 		    int overwrite,
+		    boolean local,
 		    PrintStream outstream)
 	throws Throwable
     {
-	entry   = new File(betalib + "/javalib/" + pkg + "/" + cls + ".bet");
+	if (pkg==null){
+	    pkg = "";
+	} else {
+	    pkg = pkg + "/";
+	}
+	if (local){
+	    entry = new File(pkg + cls + ".bet");
+	} else {
+	    entry = new File(betalib + "/javalib/" + pkg + cls + ".bet");
+	}
 	if (entry.exists()){
 	    if (overwrite==-1){
 		// Ignore if already converted
@@ -46,10 +75,12 @@ public class BetaOutput
 	    if (overwrite==0){
 		existing = entry;
 		// System.err.println("BetaOutput: .new: " + entry.getAbsolutePath() + "\"");
-		entry = new File(entry.getAbsolutePath() + ".new");
+		// entry = new File(entry.getAbsolutePath() + ".new");
+		out = null;
+		return;
 	    }
 	}
-	entry.getParentFile().mkdirs();
+	getParent(entry).mkdirs();
 	if (outstream != null){
 	    // System.err.println("BetaOutput: existing outstream");
 	    out = outstream;
@@ -63,20 +94,22 @@ public class BetaOutput
 
     public void reportFileName()
     {
-	if (out == null){
-	    // class ignored
-	    return;
-	}
 	if (out == System.out){
 	    // no file involved
 	    return;
 	}
-	System.err.println("Output file:\n\t\"" + entry.getAbsolutePath() + "\"");
 	if (existing!=null){
-	    System.err.println("NOTICE: Not overwriting existing\n\t\"" 
+	    System.err.println("Existing \"" 
 			       + existing.getAbsolutePath()
-			       + "\"");
-	    System.err.println("\tUse -f or -F option if overwrite desired.");
+			       + "\"\n"
+			       + "\t is up-to-date.");
+	    System.err.println("\t Use -f or -F option if overwrite desired.");
+	} else {
+	    if (local){
+		System.err.println("     --> \"./" + entry.getPath() + "\"");
+	    } else {
+		System.err.println("     --> \"" + entry.getAbsolutePath() + "\"");
+	    }
 	}
     }
 

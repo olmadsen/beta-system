@@ -15,6 +15,8 @@ class JavaConverter
     String packageName;
     String superClass;
     String superPkg;
+    static boolean verbose;
+    static boolean local;
   
     Map includes = new HashMap(10);
     static Map converted = new HashMap(10);
@@ -22,15 +24,17 @@ class JavaConverter
     static void usage(String msg){
 	if (msg!=null) System.err.println("\n" + msg + "\n");
 	System.err.println("Usage:\n");
-	System.err.println("Script: java2beta [-h][-f|-F|-] <java class name>");
+	System.err.println("Script: java2beta [-h][-v][-l][-f|-F|-] <java class name>");
 	System.err.println(" e.g.   java2beta java.lang.String\n");
-	System.err.println("Java:   java JavaConverter [-h][-f|-F|-] <java class name> <BETALIB>");
+	System.err.println("Java:   java JavaConverter [-h][-v][-l][-f|-F|-] <java class name> <BETALIB>");
 	System.err.println(" e.g.   java JavaConverter java.lang.String /users/beta/r5.3\n");
-	System.err.println("Output files will be placed in $BETALIB/javalib in a directory");
-	System.err.println("structure corresponding to the package of the class.");
+	System.err.println("Output files will be by default be placed in $BETALIB/javalib in a");
+	System.err.println("directory structure corresponding to the package of the class.");
 	System.err.println(" e.g.   $BETALIB/javalib/java/lang/String.bet\n");
 	System.err.println("Options:");
 	System.err.println("   -h  Display this help");
+	System.err.println("   -v  Verbose output");
+	System.err.println("   -l  Generate to local directory instead of to $BETALIB/javalib");
 	System.err.println("   -f  Force overwrite of existing output file");
 	System.err.println("   -F  Force overwrite of existing output file ");
 	System.err.println("       AND files for refered classes");
@@ -50,6 +54,10 @@ class JavaConverter
 			usage(null);
 		    } else if (args[i].equals("-f")){
 			overwrite=1;
+		    } else if (args[i].equals("-v")){
+			verbose=true;
+		    } else if (args[i].equals("-l")){
+			local=true;
 		    } else if (args[i].equals("-F")){
 			overwrite=2;
 		    } else if (args[i].equals("-")){
@@ -69,6 +77,23 @@ class JavaConverter
 	    usage("Not enough arguments");
 	}
     }
+
+    static Class getClass(String name) {
+	// See http://www.javageeks.com/Papers/ClassForName/ClassForName.pdf
+	// No need - the simple solution works even for homemade classes
+	// if just CLASSPATH is appropriately set.
+	Class result = null;
+	try{
+	    result = Class.forName(name);
+	    //result = Class.forName(name, true, ClassLoader.getSystemClassLoader());
+	    //result = Thread.currentThread().getContextClassLoader().loadClass(name);
+	} catch (ClassNotFoundException e){
+	    System.err.println("Cannot find class \"" + name + "\".");
+	    System.err.println("Check your CLASSPATH environment variable.");
+	    System.exit(-1);
+	}
+	return result;
+    };
 
     void doFields(Class cls) throws Throwable
     {
@@ -311,7 +336,7 @@ class JavaConverter
 
     String prependClassWithUnderscore(String name){
 	try {
-	    Class cls = Class.forName(slashToDot(name));
+	    Class cls = getClass(slashToDot(name));
 	    return dotToSlash(cls.getPackage().getName()) + "/" + "_" + stripPackage(name);
 	} 
 	catch (Throwable e){
@@ -527,9 +552,12 @@ class JavaConverter
     {
 	Object[] inc = includes.keySet().toArray();
 	for (int i=0; i<inc.length; i++){
-	    System.err.println("\nRefered by "
-			       + slashToDot(packageName + "." + className) + ": "
-			       + slashToDot((String)inc[i]));
+	    if (verbose){
+		System.err.println("\nRefered by \""
+				   + slashToDot(packageName + "." + className) + "\": \""
+				   + slashToDot((String)inc[i])
+				   + "\"");
+	    }
 	    JavaConverter java2beta = new JavaConverter();
 	    if (java2beta.needsConversion(slashToDot((String)inc[i]), betalib, overwrite, out) != null){
 		int status = java2beta.convert(slashToDot((String)inc[i]), betalib, overwrite, out);
@@ -538,10 +566,12 @@ class JavaConverter
 		    return status;
 		}
 	    } else {
-		if (converted.get(slashToDot((String)inc[i])) != null){
-		    System.err.println("  --> skipped: already converted by this program execution");
-		} else {
-		    System.err.println("  --> ignored: already converted (use -F to force overwrite)");
+		if (verbose){
+		    if (converted.get(slashToDot((String)inc[i])) != null){
+			System.err.println("     --> skipped: already converted by this program execution");
+		    } else {
+			System.err.println("     --> ignored: already converted (use -F to force overwrite)");
+		    }
 		}
 	    }
 	}
@@ -557,15 +587,17 @@ class JavaConverter
 	}
 	thisClass = null;
 	try {
-	    thisClass = Class.forName(className);
-	    packageName = dotToSlash(thisClass.getPackage().getName());
+	    thisClass = getClass(className);
+	    Package pkg = thisClass.getPackage();
+	    if (pkg!=null) packageName = dotToSlash(pkg.getName());
 	    className   = stripPackage(thisClass.getName());
 	    Class sup   = thisClass.getSuperclass();
 	    if (sup!=null){
-		superPkg   = dotToSlash(sup.getPackage().getName());
+		pkg = sup.getPackage();
+		if (pkg!=null) superPkg = dotToSlash(pkg.getName());
 		superClass = stripPackage(sup.getName());
 	    }
-	    beta = new BetaOutput(betalib, packageName, className, superPkg, superClass, overwrite, out);
+	    beta = new BetaOutput(betalib, packageName, className, superPkg, superClass, overwrite, local, out);
 	    if (beta.out == null) return null;
 	} catch (Throwable e) {
 	    e.printStackTrace();
@@ -579,16 +611,15 @@ class JavaConverter
 	    if (thisClass == null) {
 		thisClass = needsConversion(clsname, betalib, overwrite, out);
 	    }
-	    if (thisClass == null) return 0;
-	    System.err.println("Converting class\n\t\"" + thisClass.getName() + "\"");
+	    System.err.println("Class:   \"" + clsname.replaceAll("/",".") + "\"");
 	    beta.reportFileName();
+	    if (thisClass == null) return 0;
 	    processClass(null, thisClass);
 	} catch (Throwable e) {
 	    e.printStackTrace();
 	    return 1;
 	}
 	converted.put(slashToDot(clsname), clsname);
-	System.err.println("Done.");
 	return convertIncludes(betalib, ((overwrite==2)?2:-1), ((out==System.out)?out:null));
     }
 }
