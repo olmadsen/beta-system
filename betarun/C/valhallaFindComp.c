@@ -184,9 +184,11 @@ int scanComponentStack (struct Component* comp,
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: other component blocks done\n"));
   }
   {
+#ifdef linux
     extern void Att(void);
     DEBUG_VALHALLA(fprintf(output, "Dummy Attach Pair: PC=0x%x, obj=0x%x\n", (int)&Att, 0));
     forEach(0, (int)&Att);
+#endif
   }
   DEBUG_VALHALLA(fprintf(output, "scanComponentStack: machinestack done\n"));
 

@@ -183,7 +183,8 @@ void AOAtoIOAInsert(handle( Object) theCell)
 	goto exit;
       }
       index++;
-      if (index==AOAtoIOAtableSize) index=0; /* cheaper than modulus */
+      if (index==(unsigned long)AOAtoIOAtableSize) index=0
+	/* cheaper than modulus */;
     } while(--count);
 
     /* Both functions failed */
