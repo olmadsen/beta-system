@@ -1,0 +1,242 @@
+ORIGIN '~beta/guienv/v1.6/guienv';
+INCLUDE '~beta/guienv/v1.6/private/winnt/guienv_ntiprivate';
+INCLUDE '~beta/win32lib/v1.6/gdistructs';
+INCLUDE '~beta/win32lib/v1.6/wingdiconsts';
+INCLUDE '~beta/win32lib/v1.6/winuserconsts';
+INCLUDE '~beta/win32lib/v1.6/windowsmisc';
+INCLUDE '~beta/win32lib/v1.6/windowmanagement';
+
+-- windowLib: attributes --
+(* border styles *)
+BDR_RAISEDOUTER: (# exit  16x0001 #);
+BDR_SUNKENOUTER: (# exit  16x0002 #);
+BDR_RAISEDINNER: (# exit  16x0004 #);
+BDR_SUNKENINNER: (# exit  16x0008 #);
+
+BDR_OUTER: (# exit        16x0003 #);
+BDR_INNER: (# exit        16x000c #);
+BDR_RAISED: (# exit       16x0005 #);
+BDR_SUNKEN: (# exit       16x000a #);
+
+EDGE_RAISED: (# exit      (BDR_RAISEDOUTER + BDR_RAISEDINNER) #);
+EDGE_SUNKEN: (# exit      (BDR_SUNKENOUTER + BDR_SUNKENINNER) #);
+EDGE_ETCHED: (# exit      (BDR_SUNKENOUTER + BDR_RAISEDINNER) #);
+EDGE_BUMP: (# exit        (BDR_RAISEDOUTER + BDR_SUNKENINNER) #);
+
+(* Border flags *)
+BF_LEFT: (# exit          16x0001 #);
+BF_TOP: (# exit           16x0002 #);
+BF_RIGHT: (# exit         16x0004 #);
+BF_BOTTOM: (# exit        16x0008 #);
+
+BF_TOPLEFT: (# exit       (BF_TOP + BF_LEFT) #);
+BF_TOPRIGHT: (# exit      (BF_TOP + BF_RIGHT) #);
+BF_BOTTOMLEFT: (# exit    (BF_BOTTOM + BF_LEFT) #);
+BF_BOTTOMRIGHT: (# exit   (BF_BOTTOM + BF_RIGHT) #);
+BF_RECT: (# exit          (BF_LEFT + BF_TOP + BF_RIGHT + BF_BOTTOM) #);
+
+BF_MIDDLE: (# exit       0x0800 #); (* Fill in the middle *)
+BF_SOFT: (# exit         0x1000 #);
+BF_FLAT: (# exit         16x4000 #); (* For flat rather than 3D borders *)
+BF_MONO: (# exit         16x8000 #);
+BF_ADJUST: (# exit       16x2000 #);
+
+BF_DIAGONAL: (# exit      16x0010 #);
+(* For diagonal lines, the BF_RECT flags specify the end point of the
+ * vector bounded by the rectangle parameter.
+ *)
+BF_DIAGONAL_ENDTOPRIGHT: (# exit     (BF_DIAGONAL + BF_TOP + BF_RIGHT) #);
+BF_DIAGONAL_ENDTOPLEFT: (# exit      (BF_DIAGONAL + BF_TOP + BF_LEFT) #);
+BF_DIAGONAL_ENDBOTTOMLEFT: (# exit   (BF_DIAGONAL + BF_BOTTOM + BF_LEFT) #);
+BF_DIAGONAL_ENDBOTTOMRIGHT: (# exit  (BF_DIAGONAL + BF_BOTTOM + BF_RIGHT) #);
+
+DrawEdge: external
+  (# hdc: @integer;
+     theRect: ^ntRECT;
+     edge: @integer;
+     flags: @integer;
+     result: @integer;
+  enter (hdc,theRect[],edge,flags)
+  do callStd
+  exit result
+  #);
+
+
+drawBorderLine:
+  (# 
+     drawTheEdge: 
+       (# theRect: ^ntRECT;
+          hdc: @integer;
+          left,right,top,bottom: @integer;
+          edgeType: @integer;
+          flags: @integer;
+       enter (left,right,top,bottom,edgeType,flags)
+       do (* theWindowItem.interfaceObjectID -> GetDC -> hdc; *)
+          
+          (theWindowItem.interfaceObjectID,0,DCX_PARENTCLIP 
+          + DCX_CLIPSIBLINGS + DCX_CLIPCHILDREN ) 
+            -> GetDCEx -> hdc; 
+          
+          &ntRect[] -> theRect[];
+          left -> theRect.left;
+          right -> theRect.right;
+          top -> theRect.top;
+          bottom -> theRect.bottom;        
+          (hdc,theRect[],edgeType,flags) -> DrawEdge;
+          (theWindowItem.interfaceObjectID,hdc) -> ReleaseDC;
+       #);
+     
+     drawShadowOut:
+       (# drawBtnShadowLines: 
+            (# prevPen,pen,theColor: @integer;
+            do COLOR_BTNSHADOW -> GetSysColor -> theColor;
+               (PS_SOLID, 1, theColor) -> CreatePen -> pen;
+               (hdc, pen) -> SelectObject -> prevPen; 
+               
+               (hdc,x+dx+w-1,y,0) -> MoveToEx;
+               (hdc,x+2*dx+w-1,y+h2) -> LineTo;
+               (hdc,x+dx+w,y+h-1) -> LineTo;
+               (hdc,x+1,y+h-1) -> LineTo;
+               
+               (hdc,prevPen) -> SelectObject -> deleteObject;
+            #);
+          
+          drawWindowFrameLines:
+            (# prevPen,pen,theColor: @integer;
+            do COLOR_WINDOWFRAME -> GetSysColor -> theColor;
+               (PS_SOLID, 1, theColor) -> CreatePen -> pen;
+               (hdc, pen) -> SelectObject -> prevPen; 
+               
+               (hdc,x+dx+w,y,0) -> MoveToEx;
+               (hdc,x+2*dx+w,y+h2) -> LineTo;
+               (hdc,x+dx+w,y+h) -> LineTo;
+               (hdc,x,y+h) -> LineTo;
+               
+               (hdc,prevPen) -> SelectObject -> deleteObject;
+            #);
+          
+          drawBtnHighLightLines:
+            (# pen,prevPen,theColor: @integer;
+            do COLOR_BTNHIGHLIGHT -> GetSysColor -> theColor;
+               (PS_SOLID, 1, theColor) -> CreatePen -> pen;
+               (hdc, pen) -> SelectObject -> prevPen; 
+               
+               (hdc,x+1,y+h-1,0) -> MoveToEx;
+               (hdc,x+dx,y+h2) -> LineTo;
+               (hdc,x,y) -> LineTo;
+               (hdc,x+dx+w,y) -> LineTo;
+               
+               (hdc,prevPen) -> SelectObject -> deleteObject;
+            #);
+          
+          drawBtnFaceLines:
+            (# prevPen,pen,theColor: @integer;
+            do COLOR_BTNFACE -> GetSysColor -> theColor;
+               (PS_SOLID, 1, theColor) -> CreatePen -> pen;
+               (hdc, pen) -> SelectObject -> prevPen; 
+               
+               (hdc,x+2,y+h-1,0) -> MoveToEx;
+               (hdc,x+dx+1,y+h2) -> LineTo;
+               (hdc,x+2,y+1) -> LineTo;
+               (hdc,x+dx+w,y+1) -> LineTo;
+               
+               (hdc,prevPen) -> SelectObject -> deleteObject;
+            #);
+          
+          hdc: @integer;
+       do theWindowItem.interfaceObjectID -> GetDC -> hdc; 
+          drawBtnShadowLines;
+          drawWindowFrameLines;
+          drawBtnHighLightLines;
+          (* drawBtnFaceLines;  *)
+          (theWindowItem.interfaceObjectID,hdc) -> ReleaseDC;
+       #);
+     
+     drawShadowIn:
+       (# drawBtnShadowLines: 
+            (# prevPen,pen,theColor: @integer;
+            do COLOR_BTNSHADOW -> GetSysColor -> theColor;
+               (PS_SOLID, 1, theColor) -> CreatePen -> pen;
+               (hdc, pen) -> SelectObject -> prevPen; 
+               
+               (hdc,x+2,y+h-1,0) -> MoveToEx;
+               (hdc,x+dx+1,y+h2) -> LineTo;
+               (hdc,x+2,y+1) -> LineTo;
+               (hdc,x+dx+w-1,y+1) -> LineTo;
+               
+               (hdc,prevPen) -> SelectObject -> deleteObject;
+            #);
+          
+          drawWindowFrameLines:
+            (# prevPen,pen,theColor: @integer;
+            do COLOR_WINDOWFRAME -> GetSysColor -> theColor;
+               (PS_SOLID, 1, theColor) -> CreatePen -> pen;
+               (hdc, pen) -> SelectObject -> prevPen; 
+               
+               (hdc,x+1,y+h-1,0) -> MoveToEx;
+               (hdc,x+dx,y+h2) -> LineTo;
+               (hdc,x,y) -> LineTo;               
+               (hdc,x+dx+w,y) -> LineTo;
+               
+               (hdc,prevPen) -> SelectObject -> deleteObject;
+            #);
+          
+          drawBtnHighLightLines:
+            (# pen,prevPen,theColor: @integer;
+            do COLOR_BTNHIGHLIGHT -> GetSysColor -> theColor;
+               (PS_SOLID, 1, theColor) -> CreatePen -> pen;
+               (hdc, pen) -> SelectObject -> prevPen; 
+               
+               (hdc,x+dx+w,y,0) -> MoveToEx;
+               (hdc,x+2*dx+w,y+h2) -> LineTo;
+               (hdc,x+dx+w,y+h) -> LineTo;
+               (hdc,x-1,y+h) -> LineTo;
+               
+               
+               (hdc,prevPen) -> SelectObject -> deleteObject;
+            #);
+          
+          drawBtnFaceLines:
+            (# prevPen,pen,theColor: @integer;
+            do COLOR_BTNFACE -> GetSysColor -> theColor;
+               (PS_SOLID, 1, theColor) -> CreatePen -> pen;
+               (hdc, pen) -> SelectObject -> prevPen; 
+               
+               (hdc,x+dx+w-1,y+1,0) -> MoveToEx;
+               (hdc,x+2*dx+w-1,y+h2) -> LineTo;
+               (hdc,x+dx+w-1,y+h-1) -> LineTo;
+               (hdc,x+2,y+h-1) -> LineTo;               
+               
+               (hdc,prevPen) -> SelectObject -> deleteObject;
+            #);
+          
+          hdc: @integer;
+       do theWindowItem.interfaceObjectID -> GetDC -> hdc; 
+          drawBtnShadowLines;
+          drawWindowFrameLines;
+          drawBtnHighLightLines;
+          drawBtnFaceLines;
+          (theWindowItem.interfaceObjectID,hdc) -> ReleaseDC;
+       #);
+          
+     theWindowItem: ^windowItem;
+     x,y,w,h,w2,h2,dx: @integer;
+     theStyle: @integer;
+  enter (theWindowItem[],theStyle,x,y,w,h,dx)
+  do w div 2 -> w2; h div 2 -> h2;     
+     (if theStyle
+      //borderStyles.simple then
+         (x,x+w,y,y+h,EDGE_SUNKEN,BF_RECT+BF_MONO) -> drawTheEdge;
+      //borderStyles.shadowIn then
+         drawShadowIn;
+         
+      //borderStyles.shadowOut then
+         drawShadowOut;
+
+      //borderStyles.etchedIn then
+         (x,x+w,y,y+h,EDGE_ETCHED,BF_RECT) -> drawTheEdge;
+      //borderStyles.etchedOut then
+         (x,x+w,y,y+h,EDGE_BUMP,BF_RECT) -> drawTheEdge;
+     if);
+
+  #);
