@@ -57,7 +57,6 @@ void Qua(ref(ProtoType) dstQuaProto,
 	     (int) src, (int) theCell);
     Notify(buf);
   }
-  Ck(src);
 #endif    
   
   if (src){
@@ -76,6 +75,8 @@ void Qua(ref(ProtoType) dstQuaProto,
 #endif
       if (! inIOA(theCell) && inIOA(src))
 	AOAtoIOAInsert(theCell);
+
+    Ck(src);
 
     /* 2. Qua Check */
 #ifdef RTLAZY

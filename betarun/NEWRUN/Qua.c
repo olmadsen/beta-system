@@ -47,7 +47,6 @@ void Qua(struct Object *dstQuaOrigin,
     fprintf(output, "%s", buf); fflush(output); return;
     /* Notify(buf); */
   }
-  Ck(src);
 #endif    
   
   if (src){
@@ -66,6 +65,8 @@ void Qua(struct Object *dstQuaOrigin,
 #endif
       if (! inIOA(theCell) && inIOA(src))
 	AOAtoIOAInsert(theCell);
+    
+    Ck(src);
 
     /* 2. Qua Check */
 #ifdef RTLAZY

@@ -140,7 +140,9 @@ void AOAtoIOAInsert(handle( Object) theCell)
     
     MT_CODE(mutex_lock(&aoatoioa_lock));
 
+#if 0
     DEBUG_CODE(fprintf(output, "\n*** AOAtoIOAInsert(0x%x)\n", (int)theCell));
+#endif
 
     table = (unsigned long *)BlockStart( AOAtoIOAtable);
     /* First Hash function. */

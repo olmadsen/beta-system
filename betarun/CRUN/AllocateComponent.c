@@ -42,7 +42,11 @@ ParamOriginProto(struct Component *,AlloC)
     (cast(Item) &comp->Body)->GCAttr = -((headsize(Component))/4);
 
     if (proto->GenPart){
+#ifdef RTDEBUG
+      Protect2(origin, comp, CallBetaEntry(proto->GenPart,&comp->Body));
+#else
       Protect(comp, CallBetaEntry(proto->GenPart,&comp->Body));
+#endif
     }
 
     Ck(origin); Ck(comp);

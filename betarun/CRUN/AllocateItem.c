@@ -36,7 +36,11 @@ ParamOriginProto(struct Item *,AlloI)
     setup_item(item, proto, origin); 
 
     if (proto->GenPart){
+#ifdef RTDEBUG
+      Protect2(origin, item, CallBetaEntry(proto->GenPart,item));
+#else
       Protect(item, CallBetaEntry(proto->GenPart,item));
+#endif
     }
 
     Ck(origin); Ck(item);

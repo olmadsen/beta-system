@@ -1003,6 +1003,7 @@ void CompleteScavenging()
     theObj = (ref(Object)) HandledInToSpace;
     HandledInToSpace = (ptr(long)) (((long) HandledInToSpace)
 				    + 4*ObjectSize(theObj));
+#if 0
     DEBUG_CODE(fprintf(output, 
 		       "CompleteScavenging#%d: theObj=0x%x, proto=0x%x, size=0x%x\n", 
 		       NumCompleteScavenging,
@@ -1015,6 +1016,7 @@ void CompleteScavenging()
 		       NumCompleteScavenging,
 		       (int)HandledInToSpace));
     
+#endif
     DEBUG_CODE(Claim(ObjectSize(theObj)>0, "CompleteScavenging: ObjectSize(theObj)>0"));
     ProcessObject( theObj);
   }
@@ -1170,7 +1172,9 @@ void IOACheckObject (struct Object *theObj)
 #ifdef NEWRUN
       ProcessStackObject((struct StackObject *)theObj, CheckIOACell);
 #else
+#if 0
       DEBUG_STACK(fprintf(output,"IOACheckObject: no check of stackobject 0x%x\n", (int)theObj));
+#endif
 #endif
       return;
     
