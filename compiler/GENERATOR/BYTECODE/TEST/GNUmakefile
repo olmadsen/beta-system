@@ -5,6 +5,7 @@ clean:
 	-rm -f *.manifest
 	-rm -f googleapi/dotnet/GoogleSearchService.dll
 	-rm -f googleapi/dotnet/GoogleSearchService.pdb
+	-rm -rf amazon/dotnet
 	-jbeta -w tstenv > /dev/null
 	-jbeta -w betaenv > /dev/null
 	-nbeta -w tstenv > /dev/null
