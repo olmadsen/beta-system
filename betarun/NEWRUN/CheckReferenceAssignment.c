@@ -5,20 +5,32 @@
 
 #include "beta.h"
 #include "crun.h"
-void ChkRA(Object **theObjHandle)
+
+#ifdef PERSIST
+#include "../P/PException.h"
+#include "../P/referenceTable.h"
+#endif /* PERSIST */
+
+void ChkRA(Object **theCell)
 {
-  /* The Assignment *theObjHandle = theObj has just been
-   * done. We know the theObjHandle is in AOA, now check if
-   * *theObjHandle is in IOA.
+  /* The Assignment *theCell = theObj has just been
+   * done. We know the theCell is in AOA, now check if
+   * *theCell is in IOA.
    */
 
   DEBUG_CODE(NumChkRA++);
 
-  if (!inIOA(*theObjHandle)) {
+  if (!inIOA(*theCell)) {  
+#ifdef PERSIST
+    Claim(!inPIT(theCell), "ChkRA: theCell in PIT??");
+    if (inPIT((void *)*theCell)) {
+      newAOAcell(*theCell, theCell);
+    }
+#endif /* PERSIST */
     return; 
   }
 
   /* Remember this target cell. */
-  AOAtoIOAInsert(theObjHandle);
+  AOAtoIOAInsert(theCell);
 
 }
