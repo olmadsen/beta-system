@@ -13,8 +13,13 @@ public class Eclipse
 	System.out.println("Eclipse: creating BetaAutoIndentStrategy.");
 	bais = new BetaAutoIndentStrategy();
 	System.out.println("Eclipse: calling customizeDocumentCommand.");
-	bais.customizeDocumentCommand(new IDocument(), new DocumentCommand());
+	bais.customizeDocumentCommand(new IDocumentImpl(), new DocumentCommand());
 	System.out.println("Eclipse: done.");
     }
 
+}
+
+class IDocumentImpl implements IDocument
+{
+    public String get() { return "IDocumentImpl"; }
 }

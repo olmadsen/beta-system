@@ -1,5 +1,5 @@
 package org.eclipse.jface.text;
 
-public class IDocument {
-
+public interface IDocument {
+    public String get();
 }
