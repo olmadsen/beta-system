@@ -6,36 +6,43 @@ require "$BETALIB/bin/admin/env.perl";
 #### Configuration
 
 $beta          = "$BETALIB/boot/bin/$objdir/beta";
-$dotnetoptions = "-s 23";
-$javaoptions   = "-qwp -s 188 23";
+$dotnetoptions = "-qw -s 23";
+$javaoptions   = "-qw -s 188 23";
 
-# Files to compile for both java and dotnet
-@files    = ("hello", 
-	     "Bmini0", 
-	     "Bmini1", 
-	     "Server", 
-	     "Calculator", 
-	     "Counter", 
-	     "List", 
-	     "NumList",
-	     "Aclass", 
-	     "Singular", 
-	     "SuperFields",
-	     "Ptn", 
-	     "array",
-             "small",
-	     "stackuser",
-	     "multiple",
-	     );
+# Programs to compile for both java and dotnet
+@programs = 
+    ("hello", 
+     "Bmini0", 
+     "Bmini1", 
+     "Server", 
+     "Calculator", 
+     "Counter", 
+     "List", 
+     "NumList",
+     "Aclass", 
+     "Singular", 
+     "SuperFields",
+     "Ptn", 
+     "array",
+     "small",
+     "stackuser",
+     "multiple",
+     );
 
-# Files currently only working for java, or specific for java
-@javaonly =   ("jstring",
-	       "greetings"
-	       );
+%programs_with_input =
+    ("google" => "",
+     );
 
-# Files specific for dotnet
-@dotnetonly = ("nstring"
-	       );
+# Programs currently only working for java, or specific for java
+@javaonly =   
+    ("jstring",
+     "greetings"
+     );
+
+# Programs specific for dotnet
+@dotnetonly = 
+    ("nstring",
+     );
 
 
 ##################### Don't change below ########################
@@ -64,17 +71,18 @@ EOT
 }
 
 &usage("Compile and execute all test programs") if ($h);
+if (-d "/cygdrive" || -d "C:"){
+    $host   = "windows";
+    $target = "dotnet";
+} else {
+    $host   = "unix";
+    $target = "javabc";
+}
+
 &usage("Both -d and -f specified") if ($d && $j);
 $target="dotnet" if ($d);
 $target="javabc" if ($j);
-if ($target eq ""){
-    # Try to guess
-    if (-d "/cygdrive" || -d "C:"){
-	$target = "dotnet";
-    } else {
-	$target = "javabc";
-    }
-}
+
 print "*** Testing for target $target ***\n";
 
 $verbose = $v;
@@ -104,10 +112,11 @@ unless ($C || $runonly){
     system "$beta -qw -o $sbeta $sbetasrc"                if ($verbose);
 }
 
-$options = $dotnetoptions  if ($target eq "dotnet");
-$options = $javaoptions    if ($target eq "javabc");
-push @files, @dotnetonly   if ($target eq "dotnet");
-push @files, @javaonly     if ($target eq "javabc");
+$options = $dotnetoptions     if ($target eq "dotnet");
+$options = $javaoptions       if ($target eq "javabc");
+push @programs, keys %programs_with_input;
+push @programs, @dotnetonly   if ($target eq "dotnet");
+push @programs, @javaonly     if ($target eq "javabc");
 
 $compilecmd = "$sbeta $options"; # -t $target 
 
@@ -121,11 +130,20 @@ print "-"x20 . "Compiling $f" . "-"x20  . "\n"; # if ($verbose);
 system "$compilecmd $f > $f.out" if (! $verbose);
 system "$compilecmd $f" if ($verbose);
 
-foreach $f (@files){
+foreach $f (@programs){
+    if ($host eq "windows"){
+	if ($target eq "javabc"){
+	    $exec = "$f.bat";
+	} else {
+	    $exec = "$f.exe";
+	}
+    } else {
+	$exec = "$f";
+    }
     unless ($runonly){
 	# Recompile
-	print "-"x20 . "Removing $f/$f.exe" . "-"x20  . "\n" if ($verbose);
-	unlink ("$f $f.exe");
+	print "-"x20 . "Removing $exec" . "-"x20  . "\n" if ($verbose);
+	unlink ("$exec");
 	unlink ("program.dll") if (-e "program.dll");
 	print "-"x20 . "Compiling $f" . "-"x20  . "\n"; # if ($verbose);
 	system "$compilecmd $f > $f.out" if (! $verbose);
@@ -133,10 +151,15 @@ foreach $f (@files){
     }
     unless ($compileonly){
 	# Execute
-	print "-"x20 . "Executing $f" . "-"x20  . "\n"; # if ($verbose);
-	system "./$f > $f.run";
+	if (defined($programs_with_input{$f})){
+	    print "-"x20 . "Executing $exec with input \"" . $programs_with_input{$f} . "\" " . "-"x20  . "\n"; # if ($verbose);
+	    system "echo " . $programs_with_input{$f} . "|./$exec > $f.run";
+	} else {
+	    print "-"x20 . "Executing $exec" . "-"x20  . "\n"; # if ($verbose);
+	    system "./$exec > $f.run";
+	};
 	unless ($keepprograms) {
-	    unlink "./$f$EXESUFFIX";
+	    unlink "./$exec";
 	}
 	open(IN, "<$f.run");
 	open(OUT, ">$f.out") || die "Unable to write processed output:$!";
@@ -193,6 +216,13 @@ if ($target eq "dotnet"){
     if (scalar @javaonly){
 	print "  Not tested for .NET:\n    ";
 	print join "\n    ", @javaonly;
+	print "\n\n";
+    }
+}
+if ($target eq "javabc"){
+    if (scalar @dotnetonly){
+	print "  Not tested for JVM:\n    ";
+	print join "\n    ", @dotnetonly;
 	print "\n\n";
     }
 }
