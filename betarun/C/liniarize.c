@@ -1,3 +1,6 @@
+#include "beta.h"
+
+#if defined(LIN)
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -11,18 +14,16 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "constant.h"
-#include "define.h"
-#include "object.h"
-#include "macro.h"
+#include "liniarize.h"
 
-#if defined(LIN)
+
+#define USEREFSTACK 0
 
 /* GC/objectsize.c */
-extern long ObjectSize(ref(Object));
+/* extern long ObjectSize(ref(Object)); */
 
 /* data.h */
-extern   long     noAOAGC  ;
+/* extern   long     noAOAGC  ; */
 
 /* sighandler.c */
 extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
@@ -36,44 +37,7 @@ extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
 
 /* LOCAL TYPE DEFINITIONS */
 
-typedef struct indirTableEntry {
-    long byteOffset; /* Byte offset to object in liniarization */
-} indirTableEntry;
-
-typedef struct originRefIndicator {
-    long byteOffset;
-    long indirRef;
-} originRefIndicator;
-
-typedef struct liniarization {
-    long nextId;                 /* next available local id                    */
-    
-    long indirTableLength;       /* number of entries (used
-                                    and unsused)                               */
-    indirTableEntry *indirTable; /* the indirection table                      */
-
-    long liniarizationTop;       /* first unused byte in liniarization         */
-    long liniarizationLength;    /* number of bytes available in liniarization 
-                                    (used and unused)                          */
-    char *liniarization;         /* the liniarization itself                   */
-    long noObjects;              /* number of objects moved to this liniarization */
-
-    /* */
-    long originTableTop;
-    long originTableLength;
-    struct originRefIndicator *originTable;
-    
-    struct timeval startOfLastLiniarize;
-    struct timeval endOfLastLiniarize;
-    
-    struct timeval startOfLastLoad;
-    struct timeval endOfLastLoad;
-    
-    struct timeval startOfLastSave;
-    struct timeval endOfLastSave;
-
-} liniarization;
-
+#if USEREFSTACK
 typedef struct stackElement {
     /* a stack element identifies a reference in an object that needs
      * to be handled. This reference is identified by the id of the
@@ -82,6 +46,7 @@ typedef struct stackElement {
     long id;
     long offset; /* Offset in bytes */
 } stackElement;
+#endif
 
 /* GLOBAL FUNCTION DECLARATIONS */
 
@@ -92,9 +57,25 @@ void doPrintLiniarizationStatistics();
 void dumpLiniarizationToDisk(void);
 long loadLiniarizationFromDisk(void);
 
+/* And more of those by MG:  Use GC field for linked list */
+void copyToLiniarization(ptr(Object) root);
+long createIndirTable(ptr(Object) root);
+void SwizzleToIndirect(void);
+void linearizeInGC(ptr(Object) root);
+
+
 /* LOCAL FUNCTION DECLARATIONS */
 
-static long scanRefs(struct Object *theObj);
+#if USEREFSTACK
+static long scanRefs(struct Object *theObj); */
+static void pushRef(struct stackElement ***stack,
+                    int *t,
+                    int *l,
+                    struct stackElement *next);
+static struct stackElement *popRef(struct stackElement **stack, int *t, int *l);
+static struct stackElement *allocStackElement(long id, long offset);
+#endif
+
 static long copyObjectToLiniarization(struct liniarization *l, struct Object *theObj);
 static void insertIndirTableEntry(struct liniarization *l, long id, long byteOffset);
 static long getNextId(struct liniarization *l);
@@ -102,12 +83,6 @@ static struct liniarization *createLiniarization();
 static void freeLiniarization(struct liniarization *l);
 static void indirTrap(long sig, siginfo_t *info, ucontext_t *ucon);
 static void swizzleIndirOrigins(struct liniarization *l);
-static void pushRef(struct stackElement ***stack,
-                    int *t,
-                    int *l,
-                    struct stackElement *next);
-static struct stackElement *popRef(struct stackElement **stack, int *t, int *l);
-static struct stackElement *allocStackElement(long id, long offset);
 static void setStartOfLiniarization(struct liniarization *l);
 static void setEndOfLiniarization(struct liniarization *l);
 static void printLiniarizationStatistics(struct liniarization *l);
@@ -130,96 +105,206 @@ struct liniarization *l = NULL;
 long returnPC, returnSP, absAddr;
 
 /* LOCAL VARIABLES */
+#if USEREFSTACK
 static struct stackElement **stack = NULL;
 static int top = 0;
 static int length = 0;
+#endif
+
 long indirRefsFollowed = 0;
 
-long scanFromRoot(struct Object *root) {
-    struct stackElement *currentStackElement;
-    long id, offset;
+/* scanFromRoot: Wrapper for use from beta */
+long scanFromRoot(struct Object *root)
+{
+    long id;
+
+    linearizeInGC(root);
+    copyToLiniarization(root);
+    id = createIndirTable(root);
+    SwizzleToIndirect();
+
+    return id;
+}
+
+
+/* Copy all objects reachable from root into newly created liniarization.
+ * Assumes that 
+ *      linearizeInGC(root);
+ * has just been performed and that no mutator/garbage collector work has 
+ * taken place since that, so that the linked list in still valid.
+ */
+
+void copyToLiniarization(ptr(Object) root) 
+{
+    ptr(Object) next;
+    ptr(Object) obj;
+    long offset;
     
-    /* We can reenter scanFromRoot and needs to clean up previous data */
+    /* Clean up previous data, if any */
     if (l) {
         freeLiniarization(l);
         l = NULL;
     }
     
-    /* l will point to the liniarization into wich scanned objects are
-       moved */
+    /* l will point to the liniarization into
+     * wich the objects are moved
+     */
     l = createLiniarization();
     setStartOfLiniarization(l);
-    
-    /* We scan the object pointed to by root and push all references
-       contained in this object on the stack so that they may be
-       handled later. */
-    id = scanRefs(root);
-    
-    /* The object is now moved to the liniarization */
-    offset = copyObjectToLiniarization(l, root);
-    
-    /* We indicate in the indirection table that object with id 'id'
-       is located in the liniarization at offset 'offset' */
-    insertIndirTableEntry(l, id, offset);
-    
-    /* While there still are unhandled references on the stack */
-    
-    while((currentStackElement = popRef(stack, &top, &length))) {
-        long absAddr;
-        struct Object *currentObj;
-        long idOfObjectContainingCell, offsetInObjectContainingCell;
-        
-        idOfObjectContainingCell = currentStackElement -> id;
-        offsetInObjectContainingCell = currentStackElement -> offset;
-        
-        /* 'idOfObjectContainingCell' and
-           'offsetInObjectContainingCell' indirectly points to a cell
-           in the object with id 'idOfObjectContainingCell'. In this
-           cell there is an unhandled reference, which we need to
-           follow */
-        absAddr = (long) (l -> liniarization +
-                          l -> indirTable[MAPTOINDEX(idOfObjectContainingCell)].byteOffset +
-                          offsetInObjectContainingCell);
-        
-        /* 'absAddr' now contains the absolute address of the cell
-           holding the unhandled reference */
-        currentObj = *(struct Object **)absAddr;
-        
-        /* 'currentObj' is now a pointer to the actual object
-           referred, and this object is scanned */
-        if (currentObj->GCAttr >= IOAMinAge) {
-            /* This object contains an ordinary value in the
-             * GCattribute. This means that the traversal has not
-             * encountered this object before.
-             */
-            id = scanRefs(currentObj);
 
-            /* the object scanned is moved to the liniarization */
-            offset = copyObjectToLiniarization(l, currentObj);
-            
-            /* and we save info on where object with id 'id' is located */
-            insertIndirTableEntry(l, id, offset);        
-        } else {
-            /* this object has been visited before, so we know that
-               the GCAttribute contains the id of the object */
-            id = currentObj->GCAttr;
-        }
-        /* 'id' now holds the allocated id of the object just scanned,
-           and the cell referring this object should be overwritten
-           with it's id. Thus, at this point, the reference is turned
-           into an indirect reference */
+    /* While there still are unhandled objects in the list */
+    for (obj = root; obj; obj = next) {
+        next = (ptr(Object))(obj->GCAttr);
         
-        absAddr = (long) (l -> liniarization +
-                          l -> indirTable[MAPTOINDEX(idOfObjectContainingCell)].byteOffset +
-                          offsetInObjectContainingCell);
-        assignIndirRef((struct Object **)absAddr, id);
-        
-        /* now we can move on to other unhandled references, and if we
-           should meet the same object more than once a mark has been
-           left in the GCAttribute of the object indicating the id of
-           the object in the liniarization */
+        /* The object is now moved to the liniarization */
+        offset = copyObjectToLiniarization(l, obj);
+
+        /* Overwrite linked list in original objects with
+         * offset in liniarization.  (A forwarding pointer)
+         */
+        obj->GCAttr = offset;
+    }
+}
+
+#define LIN_OFFSETTOOBJECT(l, offset) ((ptr(Object))(l -> liniarization + offset))
+
+long createIndirTable(ptr(Object) root)
+{
+    long id, offset;
+    ptr(Object) origobj;
+    ptr(Object) copyobj;
+
+    origobj = root;
+
+    while (origobj) {
+        id = getNextId(l);
+
+        /* Find copied object from original */
+        offset = origobj->GCAttr;
+        copyobj = LIN_OFFSETTOOBJECT(l, offset);
+
+        /* We indicate in the indirection table that object with id 'id'
+         * is located in the liniarization at offset 'offset'
+         */
+        insertIndirTableEntry(l, id, offset);
+
+        /* Mark the original object with its own id for reverse lookup */
+        origobj->GCAttr = id;
+
+        /* Next. */
+        origobj = (ptr(Object))(copyobj->GCAttr);
+
+        /* Mark the copy of the object with its own id for reverse lookup */
+        copyobj->GCAttr = id;
     }
     
+    /* return id of root */
+    return root->GCAttr;
+}
+
+        
+void SwizzleToIndirect(void)
+{
+    long id, index,offset;
+    ptr(Object) obj;
+    ptr (ProtoType) theProto;
+
+    for (id = -1; id > l->nextId; id--) {
+        index = MAPTOINDEX(id);
+        offset = (l -> indirTable)[index].byteOffset;
+        obj = LIN_OFFSETTOOBJECT(l, offset);
+
+        theProto = obj->Proto;
+        if (isSpecialProtoType(theProto)) {
+            switch (SwitchProto(theProto)) {
+              case SwitchProto(ByteRepPTValue):
+              case SwitchProto(ShortRepPTValue):
+              case SwitchProto(DoubleRepPTValue):
+              case SwitchProto(LongRepPTValue): 
+                  break; /* No references in this type of object, so do nothing*/
+                  
+              case SwitchProto(DynItemRepPTValue):
+                  fprintf(output, "liniarize.c: DynItemRepPTValue not handled\n");
+                  break;
+                  
+              case SwitchProto(DynCompRepPTValue):
+                  fprintf(output, "liniarize.c: DynCompRepPTValue not handled\n");
+                  break;
+                  
+              case SwitchProto(RefRepPTValue):
+                  /* Scan the repetition and change them to indirect */
+              {
+                  ptr(long) pointer;
+                  register long size, index;
+                  
+                  size = toRefRep(obj)->HighBorder;
+                  pointer =  (ptr(long)) &toRefRep(obj)->Body[0];
+                  
+                  for (index=0; index<size; index++) {
+                      if (*pointer) {
+                          *pointer  = ((struct Object*)(*pointer))->GCAttr;
+                      }
+                      pointer++;
+                  }
+                  break;
+              }
+              
+              case SwitchProto(ComponentPTValue):
+                  fprintf(output, "liniarize.c: ComponentPTValue not handled\n");
+                  break;
+                  
+              case SwitchProto(StackObjectPTValue):
+                  fprintf(output, "liniarize.c: StackObjectPTValue not handled\n");
+                  break;
+                  
+              case SwitchProto(StructurePTValue):
+                  fprintf(output, "liniarize.c: StructurePTValue not handled\n");
+                  break;
+                  
+              case SwitchProto(DopartObjectPTValue):
+                  break;
+            }
+        } else {
+            struct GCEntry *tab =
+                (struct GCEntry *) ((char *) theProto + theProto->GCTabOff);
+            ptr(short) refs_ofs;
+            ptr(long)  theCell;
+            
+            /* Handle all the static objects. 
+             *
+             * The static table, tab[0], tab[1], ..., 0,
+             * contains all static objects on all levels.
+             * The way to determine the level of an static object is to 
+             * compare the Offset (StaticOff) and the
+             * Distance_To_Inclosing_Object (OrigOff).
+             */
+        
+            for (;tab->StaticOff; ++tab) {
+                if (tab->StaticOff == -tab->OrigOff) {
+                    /* What should be done here?
+                     * If all refs are in the table handled below,
+                     * there is nothing to do.  Otherwise, there must
+                     * be refs that can only be found be scanning the ref
+                     * tables of these partobjects...?
+                     */
+                }
+            }
+        
+            /* Handle all the references in the Object. */
+            for (refs_ofs = (short *)&tab->StaticOff+1; *refs_ofs; ++refs_ofs) {
+                long refType = (*refs_ofs) & 3;
+                theCell = (ptr(long)) ((char *)obj + *refs_ofs - refType);
+                /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+                 * dynamic offset table masked out. As offsets in this table are
+                 * always multiples of 4, these bits may be used to distinguish
+                 * different reference types. */ 
+                if (*theCell) {
+                    *theCell = ((struct Object*)(*theCell))->GCAttr;
+                }
+            }
+        }
+    }
+
     /* l now contains the liniarization of the transitive closure of
        the root. All references within this liniarization has been
        changed to indirect references. The ref-none check made by the
@@ -243,135 +328,8 @@ long scanFromRoot(struct Object *root) {
     swizzleIndirOrigins(l);
     
     setEndOfLiniarization(l);
-    
-    return (long) root -> GCAttr;
 }
 
-
-/* ScanRefs:
- *
- * Given a reference to an object all reference slots in this object
- * are scanned and pushed on the stack.
- *
- * - theObj is the reference to the object
- * */
-
-static long scanRefs(struct Object *theObj) { 
-    struct ProtoType *theProto;
-    long id;
-    
-    /* Allocate new id to this object */
-    id = getNextId(l);
-    
-    /* Mark object as visited by writing the new id in the
-     * GCAttribute of the referred object. If this object should
-     * be encountered later we can detect that it has been handled
-     */
-        
-    theObj -> GCAttr = id;
-    
-    theProto = theObj->Proto;
-    
-    if( isSpecialProtoType(theProto) ){  
-        switch( SwitchProto(theProto) ){
-          case SwitchProto(ByteRepPTValue):
-          case SwitchProto(ShortRepPTValue):
-          case SwitchProto(DoubleRepPTValue):
-          case SwitchProto(LongRepPTValue): 
-              return id; /* No references in this type of object, so do nothing*/
-              
-          case SwitchProto(DynItemRepPTValue):
-              fprintf(stderr, "liniarize.c: DynItemRepPTValue not handled\n");
-              return id;
-              
-          case SwitchProto(DynCompRepPTValue):
-              fprintf(stderr, "liniarize.c: DynCompRepPTValue not handled\n");
-              return id;
-              
-          case SwitchProto(RefRepPTValue):
-              /* Scan the repetition and follow all entries */
-          { ptr(long) pointer;
-          register long size, index;
-          
-          size = toRefRep(theObj)->HighBorder;
-          pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
-          
-          for(index=0; index<size; index++) 
-              if( *pointer ) {
-                  pushRef(&stack,
-                          &top,
-                          &length,
-                          allocStackElement(id, (long) (handle(Object))(pointer++)) - (long)theObj);
-              }
-              else {
-                  pointer++;
-              }
-          }
-          return id;
-          
-          case SwitchProto(ComponentPTValue):
-              fprintf(stderr, "liniarize.c: ComponentPTValue not handled\n");
-              return id;
-              
-          case SwitchProto(StackObjectPTValue):
-              fprintf(stderr, "liniarize.c: StackObjectPTValue not handled\n");
-              return id;
-              
-          case SwitchProto(StructurePTValue):
-              fprintf(stderr, "liniarize.c: StructurePTValue not handled\n");
-              return id;
-              
-          case SwitchProto(DopartObjectPTValue):
-              pushRef(&stack,
-                      &top,
-                      &length,
-                      allocStackElement(id, (long)&(cast(DopartObject)(theObj))->Origin - (long) theObj) );
-              return id;
-        }
-    } else {
-        struct GCEntry *tab =
-            (struct GCEntry *) ((char *) theProto + theProto->GCTabOff);
-        short *refs_ofs;
-        struct Object **theCell;
-        
-        /* Handle all the static objects. 
-         *
-         * The static table, tab[0], tab[1], 0,
-         * contains all static objects on all levels.
-         * Here we only need to perform ProcessObject on static objects
-         * on 1 level. The recursion in ProcessObject handle other
-         * levels. 
-         * The way to determine the level of an static object is to 
-         * compare the Offset (StaticOff) and the
-         * Distance_To_Inclosing_Object (OrigOff).
-         */
-        
-        for (;tab->StaticOff; ++tab) {
-            if (tab->StaticOff == -tab->OrigOff) {
-                /* Static part objects are handled right away.
-                 */
-                scanRefs((struct Object *)((long *)theObj + tab->StaticOff)); 
-            }
-        }
-        
-        /* Handle all the references in the Object. */
-        for (refs_ofs = (short *)&tab->StaticOff + 1; *refs_ofs; ++refs_ofs) {
-            theCell = (struct Object **) ((char *) theObj + ((*refs_ofs) & (short) ~3));
-            /* sbrandt 24/1/1994: 2 least significant bits in prototype 
-             * dynamic offset table masked out. As offsets in this table are
-             * always multiples of 4, these bits may be used to distinguish
-             * different reference types. */ 
-            if (*theCell) {
-                pushRef(&stack,
-                        &top,
-                        &length,
-                        allocStackElement(id, (long) theCell - (long) theObj));
-            }
-        }
-        return id;
-    }
-    return 0;
-}
  
 
 void assignIndirRef(struct Object **theCell, long id) {
@@ -403,12 +361,14 @@ static struct liniarization *createLiniarization() {
     return l;
 }
 
+/* getNextId: */
 static long getNextId(struct liniarization *l) {
 
     /* id counts from -1 and downwards */
     return (l -> nextId--);
 }
 
+/* insertIndirTableEntry: */ 
 static void insertIndirTableEntry(struct liniarization *l, long id, long byteOffset) {
     int i;
     
@@ -672,6 +632,133 @@ static void unSwizzleIndirOrigins(struct liniarization *l) {
     }
 }
 
+#if 0
+/* ScanRefs:
+ *
+ * Given a reference to an object all reference slots in this object
+ * are scanned and pushed on the stack.
+ *
+ * - theObj is the reference to the object
+ * */
+
+static long scanRefs(struct Object *theObj) { 
+    ptr(ProtoType) theProto;
+    long id;
+    
+    /* Allocate new id to this object */
+    id = getNextId(l);
+    
+    /* Mark object as visited by writing the new id in the
+     * GCAttribute of the referred object. If this object should
+     * be encountered later we can detect that it has been handled
+     */
+        
+    theObj -> GCAttr = id;
+    
+    theProto = theObj->Proto;
+    
+    if( isSpecialProtoType(theProto) ){  
+        switch( SwitchProto(theProto) ){
+          case SwitchProto(ByteRepPTValue):
+          case SwitchProto(ShortRepPTValue):
+          case SwitchProto(DoubleRepPTValue):
+          case SwitchProto(LongRepPTValue): 
+              return id; /* No references in this type of object, so do nothing*/
+              
+          case SwitchProto(DynItemRepPTValue):
+              fprintf(output, "liniarize.c: DynItemRepPTValue not handled\n");
+              return id;
+              
+          case SwitchProto(DynCompRepPTValue):
+              fprintf(output, "liniarize.c: DynCompRepPTValue not handled\n");
+              return id;
+              
+          case SwitchProto(RefRepPTValue):
+              /* Scan the repetition and follow all entries */
+          { ptr(long) pointer;
+          register long size, index;
+          
+          size = toRefRep(theObj)->HighBorder;
+          pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
+          
+          for(index=0; index<size; index++) 
+              if( *pointer ) {
+                  pushRef(&stack,
+                          &top,
+                          &length,
+                          allocStackElement(id, (long) (handle(Object))(pointer++)) - (long)theObj);
+              }
+              else {
+                  pointer++;
+              }
+          }
+          return id;
+          
+          case SwitchProto(ComponentPTValue):
+              fprintf(output, "liniarize.c: ComponentPTValue not handled\n");
+              return id;
+              
+          case SwitchProto(StackObjectPTValue):
+              fprintf(output, "liniarize.c: StackObjectPTValue not handled\n");
+              return id;
+              
+          case SwitchProto(StructurePTValue):
+              fprintf(output, "liniarize.c: StructurePTValue not handled\n");
+              return id;
+              
+          case SwitchProto(DopartObjectPTValue):
+              pushRef(&stack,
+                      &top,
+                      &length,
+                      allocStackElement(id, (long)&(cast(DopartObject)(theObj))->Origin - (long) theObj) );
+              return id;
+        }
+    } else {
+        struct GCEntry *tab =
+            (struct GCEntry *) ((char *) theProto + theProto->GCTabOff);
+        short *refs_ofs;
+        struct Object **theCell;
+        
+        /* Handle all the static objects. 
+         *
+         * The static table, tab[0], tab[1], 0,
+         * contains all static objects on all levels.
+         * Here we only need to perform ProcessObject on static objects
+         * on 1 level. The recursion in ProcessObject handle other
+         * levels. 
+         * The way to determine the level of an static object is to 
+         * compare the Offset (StaticOff) and the
+         * Distance_To_Inclosing_Object (OrigOff).
+         */
+        
+        for (;tab->StaticOff; ++tab) {
+            if (tab->StaticOff == -tab->OrigOff) {
+                /* Static part objects are handled right away.
+                 */
+                scanRefs((struct Object *)((long *)theObj + tab->StaticOff)); 
+            }
+        }
+        
+        /* Handle all the references in the Object. */
+        for (refs_ofs = (short *)&tab->StaticOff + 1; *refs_ofs; ++refs_ofs) {
+            theCell = (struct Object **) ((char *) theObj + ((*refs_ofs) & (short) ~3));
+            /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+             * dynamic offset table masked out. As offsets in this table are
+             * always multiples of 4, these bits may be used to distinguish
+             * different reference types. */ 
+            if (*theCell) {
+                pushRef(&stack,
+                        &top,
+                        &length,
+                        allocStackElement(id, (long) theCell - (long) theObj));
+            }
+        }
+        return id;
+    }
+    return 0;
+}
+
+
 /* pushRef, popRef: Implements a simple efficient stack
  */
 
@@ -715,6 +802,7 @@ static struct stackElement *allocStackElement(long id, long offset) {
     next -> offset = offset;
     return next;
 }
+#endif
 
 static void setStartOfLiniarization(struct liniarization *l) {
     gettimeofday(&(l -> startOfLastLiniarize), NULL);
@@ -830,7 +918,7 @@ static void dumpToDisk(struct liniarization *l) {
         
         close(fd);
     } else {
-        fprintf(stderr, "could not open file for write\n");
+        fprintf(output, "could not open file for write\n");
     }
 }
 
@@ -890,7 +978,7 @@ static struct liniarization *loadFromDisk(void) {
         
         close(fd);
     } else {
-        fprintf(stderr, "could not open file for read\n");
+        fprintf(output, "could not open file for read\n");
     }
 
     return l;
@@ -919,5 +1007,141 @@ static void insertInOriginTable(long byteOffset,
     l -> originTable[l -> originTableTop].indirRef=indirRef;
     l -> originTableTop = l -> originTableTop + 1;
 }
+
+/* MG: */
+
+static long minIndirRef = -1000000;  /* minimum indirectref. */
+
+/* Build a linked list of all objects reachable from root
+ * in the GCfield of the objects.
+ * This often conflicts with the GC'er, so be careful...
+ */
+
+void linearizeInGC(ptr(Object) root)
+{
+    ptr(Object) tail;
+    ptr(Object) theObj;
+    ptr(ProtoType) theProto;
+
+    /* point to self to end list.
+     * Cannot be zero-term, as that would make it look unmarked
+     * for the scanner.
+     */
+    root->GCAttr = (long)root; 
+
+    /* Tail is where new objects are appended to the list. */
+    tail = root;
+    
+    for (theObj = root; theObj; theObj=(struct Object*)(theObj->GCAttr)) {
+        theProto = theObj->Proto;
+        if (isSpecialProtoType(theProto)) {
+            switch (SwitchProto(theProto)) {
+              case SwitchProto(ByteRepPTValue):
+              case SwitchProto(ShortRepPTValue):
+              case SwitchProto(DoubleRepPTValue):
+              case SwitchProto(LongRepPTValue): 
+                  break; /* No references in this type of object, so do nothing*/
+                  
+              case SwitchProto(DynItemRepPTValue):
+                  fprintf(output, "liniarize.c: DynItemRepPTValue not handled\n");
+                  break;
+                  
+              case SwitchProto(DynCompRepPTValue):
+                  fprintf(output, "liniarize.c: DynCompRepPTValue not handled\n");
+                  break;
+                  
+              case SwitchProto(RefRepPTValue):
+                  /* Scan the repetition and follow all entries */
+              {
+                  ptr(long) pointer;
+                  register long size, index;
+                  
+                  size = toRefRep(theObj)->HighBorder;
+                  pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
+                  
+                  for (index=0; index<size; index++) {
+                      if (*pointer) {
+                          ptr(Object) obj = (struct Object*)(*pointer);
+                          
+                          if (obj->GCAttr > minIndirRef) {
+                              /* Not in the list yet: Append it. */
+                              tail->GCAttr = (long)obj;
+                              tail=obj;
+                          }
+                      }
+                      pointer++;
+                  }
+                  break;
+              }
+              
+              case SwitchProto(ComponentPTValue):
+                  fprintf(output, "liniarize.c: ComponentPTValue not handled\n");
+                  break;
+                  
+              case SwitchProto(StackObjectPTValue):
+                  fprintf(output, "liniarize.c: StackObjectPTValue not handled\n");
+                  break;
+                  
+              case SwitchProto(StructurePTValue):
+                  fprintf(output, "liniarize.c: StructurePTValue not handled\n");
+                  break;
+                  
+              case SwitchProto(DopartObjectPTValue):
+                  break;
+            }
+        } else {
+            struct GCEntry *tab =
+                (struct GCEntry *) ((char *) theProto + theProto->GCTabOff);
+            short *refs_ofs;
+            long *theCell;
+        
+            /* Handle all the static objects. 
+             *
+             * The static table, tab[0], tab[1], 0,
+             * contains all static objects on all levels.
+             * Here we only need to perform ProcessObject on static objects
+             * on 1 level. The recursion in ProcessObject handle other
+             * levels. 
+             * The way to determine the level of an static object is to 
+             * compare the Offset (StaticOff) and the
+             * Distance_To_Inclosing_Object (OrigOff).
+             */
+        
+            for (;tab->StaticOff; ++tab) {
+                /* Do nothing; they ARE statically inlined,
+                 * and does as such get included in the list
+                 * through their container.
+                 */
+            }
+        
+            /* Handle all the references in the Object. */
+            for (refs_ofs = (short *)&tab->StaticOff+1; *refs_ofs; ++refs_ofs) {
+                const int REFTYPE_DYNAMIC = 0;
+                const int REFTYPE_OFFLINE = 1;
+                const int REFTYPE_ORIGIN = 2;
+
+                /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+                 * dynamic offset table masked out. As offsets in this table are
+                 * always multiples of 4, these bits may be used to distinguish
+                 * different reference types. */ 
+                long refType = (*refs_ofs) & 3;
+                theCell = (long *) ((char *)theObj + *refs_ofs - refType);
+                /* All types of references are followed here */
+                if (*theCell) {
+                    ptr(Object) obj = (struct Object*)(*theCell);
+                    if (obj->GCAttr > minIndirRef) {
+                        /* Not in the list yet: Append it. */
+                        tail->GCAttr = (long)obj;
+                        tail=obj;
+                    }
+                }
+            }
+        }
+    }
+    /* NULL ternimate list: */
+    tail->GCAttr=0;
+}
+
+   
 
 #endif /* LIN */

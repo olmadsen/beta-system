@@ -19,7 +19,7 @@
 #define do_unconditional_gc 0
 #endif
 
-#ifdef sun4s
+#ifdef sparc
 #define LIN     /* Include support for new Persistence system (void+mg). */
 #endif
 
