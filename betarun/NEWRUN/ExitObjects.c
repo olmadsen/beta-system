@@ -53,7 +53,9 @@ long *ExO(long *jumpAdr,
       DEBUG_CODE(printf("ExO: passing comp 0x%x\n", (int)comp));
       SP     = (long*) *--CSP; CSP--; /* count down one before reading and one after */
       PC   = (long *)callerComp->CallerLSC;
+
       /* TerminateComponent: (see Attach.c) */
+      DEBUG_CODE(NumTermComp++);
       ActiveComponent  = comp->CallerComp;
       this             = comp->CallerObj;
       comp->CallerLSC  = -2; /* indicate that comp is terminated */
