@@ -61,6 +61,14 @@ sub usage
 #    Subpatterns and superpatterns should be handled as in word.
 #
 # 2. superpatterns are not even generated?
+#
+# 3. sub/superpatterns should probably be completely removed from script.
+#    - index (and script!) is big enough without them!
+#
+# 4. ANONYMOUS.1:(.*)\@betaenv.html could probably be replaced
+#    with betaenv.1:$1\@betaenv.html.
+#    Requires emission of an index entry for betaenv (href=betaenv.html) when the
+#    first such match is found in index.
 
 # Style sheet:
 $css = "../../style/miadoc.css";
@@ -77,6 +85,8 @@ sub print_button
 {
     local ($type, $href) = @_;
     local ($alt) = ucfirst ($type);
+    # special case for "prev":
+    $type =~ s/Prev/Previous/g;
     if ("$href" eq ""){
 	print "<A><IMG ALIGN=BOTTOM SRC=\"../../images/";
 	print $type . "g.gif\" ALT=";
