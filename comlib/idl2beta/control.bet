@@ -4,11 +4,14 @@ INCLUDE '~beta/containers/v1.6/list';
 BODY   'translate';
 INCLUDE 'outfile';
 INCLUDE 'idl_attributes';
+--StreamLib: attributes--
+Line:
+  (# do '--------------------------------------------------------'->putline #);
 --Lib: Attributes--
 Control:
   (#
      Outfile: @OutputFile;
-     Debug, trace, preserve, quiet: @boolean;
+     Debug, trace, mps_trace, preserve, quiet: @boolean;
    
      StartOfFilenames: @integer; 
      aText: ^text;
@@ -30,16 +33,35 @@ Control:
        #);
      type_list: list
        (# element::type_info;
+          outer_scope: ^type_list;
+          findtype: 
+            (# name: ^text;
+               found: @boolean;
+               current: ^element;
+            enter name[]
+            do find
+               (# predicate::(# do (current.name[]->name.equal)->value #);
+               do current[] -> THIS(findtype).current[];
+                  INNER findtype; 
+                  true -> found;
+               #);
+               (if (not found) and (outer_scope[]<>NONE) then
+                   (* continue recursive search in outer_scope *)
+                   name[] -> &outer_scope.findtype
+                   (# do current[]->THIS(findtype).current[]; INNER findtype #)
+               if);
+            #);
           print:
             (# 
-            do 'Registered types: ' -> putline;
-               'name    pointer basic   alias   attributes'
-                 -> putline;
-               '---------------------------------------------------------'
-                 -> putline;
+            do 'name    pointer basic   alias   attributes'-> putline;
+               screen.line;
                scan
                (# 
-               do current.name[] -> puttext;
+               do (if current.name[]=NONE then
+                      '<NONE>' -> puttext;
+                   else
+                      current.name[] -> puttext;
+                  if);
                   '\t' -> puttext;
                   (for current.pointer_level repeat
                        '*' -> put;
@@ -53,21 +75,24 @@ Control:
                       current.is_alias_for.name[] -> puttext;
                   if);
                   '\t' -> puttext;
-                  (if current.attributes[]<>NONE then
+                  (if current.attributes[]=NONE then
+                      '<NONE>' -> puttext;
+                   else
                       screen[] -> current.attributes.print;
                   if);
                   newline;
                #);
+               newline;
             #);
        #);
      global_types: @type_list (* globally known types *);
      local_types: @type_list (* types local to current file *);
      
      declarator_info:
-       (# attributes: ^idl_attributes;
-          pointer_level: @integer;
-          name: ^text;
+       (# name: ^text;
           type: ^type_info;
+          attributes: ^idl_attributes;
+          pointer_level: @integer;
        #);
      
      declarator_list: list
@@ -78,11 +103,44 @@ Control:
             enter name[]
             do INNER
             #);
+          print:
+            (# 
+            do 'name    pointer type    attributes' -> putline;
+               screen.line;
+               scan
+               (# 
+               do (if current.name[]=NONE then
+                      '<NONE>' -> puttext;
+                   else
+                      current.name[] -> puttext;
+                  if);
+                  '\t' -> puttext;
+                  (for current.pointer_level repeat
+                       '*' -> put;
+                  for);
+                  '\t' -> puttext;
+                  (if current.type[]=NONE then
+                      '<NONE>' -> puttext;
+                   else
+                      current.type.name[] -> puttext;
+                  if);
+                  '\t' -> puttext;
+                  (if current.attributes[]=NONE then
+                      '<NONE>' -> puttext;
+                   else
+                      screen[] -> current.attributes.print;
+                  if);
+                  newline;
+               #);
+               newline;
+            #);
        #);
      
-     symbols: @declarator_list (* symbols (name,type) local to current file *);
+     symbols: @ 
+       (* symbols (name,type) local to current function *)
+       declarator_list;
      
-  do
+  do global_types[] -> local_types.outer_scope[];
      block:
        (#
           Usage:(# 
@@ -100,6 +158,8 @@ Control:
                    '  --debug\tEnable debug of bidl' -> putline;
                    '  -t' -> putline; 
                    '  --trace\tEnable tracing of bidl' -> putline;
+                   '  -T' -> putline; 
+                   '  --mps_trace\tEnable tracing of mps' -> putline;
                 #);
        do
           (if (NoOfArguments <= 1) then Usage; leave block if);
@@ -141,6 +201,11 @@ Control:
                 // ('-t' -> aText.equal)  
                 // ('--trace' -> aText.equal) then 
                    true -> trace;
+                   StartOfFilenames+1 -> StartOfFilenames;
+                   restart args;
+                // ('-T' -> aText.equal)  
+                // ('--mps_trace' -> aText.equal) then 
+                   true -> mps_trace;
                    StartOfFilenames+1 -> StartOfFilenames;
                    restart args;
                if);
@@ -190,11 +255,14 @@ Control:
                Outfile.Epilog;
                Outfile.Close;
                (if debug then
-                   'Global types:'->putline;
-                   '-------------'->putline;
+                   newline;
+                   'Trace: Global types:'->putline;
+                   screen.line;
                    global_types.print;
-                   'Local types:'->putline;
-                   '------------'->putline;
+                   'Trace: Local types for file '->puttext;
+                   IdlFileName[] -> puttext;
+                   ':' -> putline;
+                   screen.line;
                    local_types.print;
                if);
                
