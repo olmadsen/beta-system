@@ -616,8 +616,13 @@ static CellDisplayFunc DoForEach;
 
 static void ShowCell(long pc, Object *theObj)
 {
+  if (!theObj) return;
   if (!strongIsObject(theObj)) {
-    fprintf(output, "(showcell: strongIsObject failed!?)\n") ;
+    TRACE_DUMP({
+      fprintf(output, 
+	      "(showcell: strongIsObject(0x%08x) failed!)\n", 
+	      (int)theObj);
+    });
     return;
   }
   if (compfound) DoForEach(pc, theObj);
