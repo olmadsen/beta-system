@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <signal.h>
 #include <unistd.h>
-/*#include "valhallaFIFOS.h"*/
 #include "valhallaComm.h"
 #include "valhallaFindComp.h"
 #include "dot.h"
@@ -39,15 +38,7 @@
 /* SOCKET OPERATIONS
  * ================= */
 
-/* Declarations of methods from ~beta/process/v1.4/sockets.c.
- * To avoid space overhead in debug rts, consider moving used functions
- * from sockets.c to valhalla specific file (with new names). */
-
-int openActiveSocket(unsigned long inetAddr, long port);
-int writeDataMax(int fd, char *srcbuffer, int length);
-int readDataMax(int fd, char *destbuffer, int buflen);
-unsigned long inetAddrOfThisHost(void);
-
+#include "valhallaSOCKETS.h"
 
 #define commbufsize 8192
 #define WSPACE (commbufsize-wnext)
@@ -57,19 +48,38 @@ char *wbuf, *rbuf;
 int *wheader, *rheader;
 int wnext, rnext, rlen;
 
-int sock;
+int sock;  /* active socket */
+int psock; /* passive socket. Used if this process started valhalla. */
 
-void valhalla_init_sockets (int valhallaport)
+void valhalla_create_buffers ()
 {
-  sock = openActiveSocket (inetAddrOfThisHost(),valhallaport);
-
-  if (sock==-1)
-    fprintf (output, "WARNING -- valhalla_init_sockets failed. errno=%d\n",errno);
-  
   wheader = (int *) malloc (commbufsize+2*sizeof(int)); wnext = 0;
   rheader = (int *) malloc (commbufsize+2*sizeof(int)); rnext = 0; rlen = 0;
   wbuf = (char *) &wheader[2];
   rbuf = (char *) &rheader[2];
+}
+
+
+void valhalla_init_sockets (int valhallaport)
+{
+  sock = valhalla_openActiveSocket (valhalla_inetAddrOfThisHost(),valhallaport);
+  if (sock==-1) {
+    fprintf (output, "valhalla_init_sockets failed. errno=%d\n",errno);
+  } else {
+    valhalla_create_buffers ();
+  }
+}
+
+void valhalla_await_connection ()
+{ int blocked;
+  unsigned long inetAdr;
+  sock = valhalla_acceptConn (psock,&blocked,&inetAdr);
+  if (sock==-1) {
+    fprintf (output,"valhalla_await_connection: acceptConn failed\n");
+    exit (99);
+  } else {
+    valhalla_create_buffers ();
+  }
 }
 
 void valhalla_socket_flush ()
@@ -77,10 +87,10 @@ void valhalla_socket_flush ()
   wheader[0] = (wnext+3)/4; /* len = number of longs of data */
   wheader[1] = wnext; /* header = number of bytes of data. */
   DEBUG_VALHALLA (fprintf(output,"valhalla_socket_flush: len=%d,header=%d\n",wheader[0],wheader[1]));
-  if (writeDataMax (sock,(char *) wheader, (4*wheader[0])+8) != (4*wheader[0])+8) {
+  if (valhalla_writeDataMax (sock,(char *) wheader, (4*wheader[0])+8) != (4*wheader[0])+8) {
     fprintf (output, "WARNING -- valhalla_socket_flush failed. errno=%d\n",errno);
   }
-  DEBUG_VALHALLA (fprintf(output,"valhalla_socket_flush: Done"));
+  DEBUG_VALHALLA (fprintf(output,"valhalla_socket_flush: Done\n"));
   wnext=0;
 }
 
@@ -114,12 +124,12 @@ void valhalla_writetext (char* txt)
 
 void valhalla_fill_buffer ()
 { 
-  DEBUG_VALHALLA (fprintf(output,"valhalla_fill_buffer"));
-  if (readDataMax (sock,(char *) &rheader[0],sizeof(int)) != sizeof(int)) {
+  DEBUG_VALHALLA (fprintf(output,"valhalla_fill_buffer\n"));
+  if (valhalla_readDataMax (sock,(char *) &rheader[0],sizeof(int)) != sizeof(int)) {
     fprintf (output, "valhalla_fill_buffer failed (1) \n");
     exit (99);
   }
-  if (readDataMax (sock,(char *) &rheader[1],sizeof(int)) != sizeof(int)) {
+  if (valhalla_readDataMax (sock,(char *) &rheader[1],sizeof(int)) != sizeof(int)) {
     fprintf (output, "valhalla_fill_buffer failed (2) \n");
     exit (99);
   }
@@ -127,12 +137,12 @@ void valhalla_fill_buffer ()
     fprintf (output, "valhalla_fill_buffer failed (3) \n");
     exit (99);
   }
-  if (readDataMax (sock,rbuf,rheader[0]*4) != rheader[0]*4) {
+  if (valhalla_readDataMax (sock,rbuf,rheader[0]*4) != rheader[0]*4) {
     fprintf (output, "valhalla_fill_buffer failed (4) \n");
     exit (99);
   }
   rnext=0; rlen=rheader[1];
-  DEBUG_VALHALLA (fprintf(output,"valhalla_fill_buffer: Done"));
+  DEBUG_VALHALLA (fprintf(output,"valhalla_fill_buffer: Done\n"));
 }
 
 void valhalla_readbytes (char* buf, int bytes)
@@ -234,10 +244,9 @@ void InstallHandler (int sig)
  * is textual form. */
 
 void valhallaInit ()
-{ /*char tmp[20];*/
-  int valhallaPORT/*, pid*/;
-  
+{ 
   if (valhallaID) {
+    int valhallaPORT;
 
     /* Valhalla is already running. */
     valhallaPORT = atoi (valhallaID);
@@ -245,42 +254,53 @@ void valhallaInit ()
     valhalla_init_sockets (valhallaPORT);
 
   } else {
-    
-    /* Valhalla is not running. */
+    long port=0;
+    unsigned long inetAdr = 0;
+    int valhallaPID;
+    int pid = getpid ();
 
-    fprintf (output,"Start Valhalla is currently not supported\n");
-    return;
-    /*
-    pid = getpid (); 
-    createFIFOS (pid);
-    valhallaPID = vfork ();
+    /* Valhalla is not running. */
     
+    psock = valhalla_createPassiveSocket (&port,&inetAdr);
+    if (psock==-1) {
+      fprintf (output,"Failed to create passive socket\n");
+      return;
+    }
+    
+    valhallaPID = fork ();
+
     if (valhallaPID) {
 
       if (valhallaPID!=-1) {
-	sprintf (tmp,"%d",valhallaPID); valhallaID = strdup (tmp);
-	openFIFOS (pid,&fifoFrom,&fifoTo);
-      } else
+	fprintf (output,"Waiting for valhalla (pid=%d) to connect\n",valhallaPID);
+	valhallaID = malloc (20);
+	sprintf (valhallaID,"%d",(int)port);
+	valhalla_await_connection ();
+      } else {
 	fprintf (output, "Could not fork\n");
-
+	shutdown (psock,2);
+	return;
+      }
+      
     } else {
       char valhallaname[200];
+      char tmppid[20], tmpport[20];
       char* betalib;
-
+      
       betalib = getenv ("BETALIB");
       if (!betalib) {
 	betalib="/users/beta";
 	DEBUG_VALHALLA(fprintf(output,"BETALIB not found\n"));
       }
-      sprintf (valhallaname,"%s/%s",betalib,"bin/valhalla2.0");
-      sprintf (tmp,"%d",pid);
+      /*sprintf (valhallaname,"%s/%s",betalib,"bin/valhalla2.0");*/
+      sprintf (valhallaname,"%s/%s",betalib,"debugger/v2.0/valhalla");
+      sprintf (tmppid,"%d",pid);
+      sprintf (tmpport,"%d",(int) port);
       
-      execl (valhallaname,valhallaname,"-PID",tmp,"-EXECNAME",Argv(1),(char *) 0);
+      execl (valhallaname,valhallaname,"-PORT",tmpport,"-PID",tmppid,"-EXECNAME",Argv(1),(char *) 0);
       fprintf (output, "Could not exec\n");
-      _exit (0);
-      
+      _exit (99);
     }
-    */
   }
 
   /* Make BetaSignalHandler handle the SIGINT signal.
