@@ -7,7 +7,7 @@ $UseDefaults = 1 if ($u);
 
 require "env.perl";
 
-$exe = ".exe" if ($OS eq "WIN");
+$exe = "\.exe" if ($OS eq "WIN");
 
 $ENV{'BETART'}="";
 $ENV{'LD_LIBRARY_PATH'}= $ENV{'LD_LIBRARY_PATH'} . ":../lib/${objdir}";
@@ -21,16 +21,20 @@ print "======================================================\n";
 &rm("*.app");
 &rm("*.diff");
 
-print "\nCompiling all...\n";
-print "======================================================\n";
-&beta("-qw tstdump??.bet");
+if (!$s) {
+    print "\nCompiling all...\n";
+    print "======================================================\n";
+    &beta("-qw tstdump??.bet");
+}
 
 print "\nRunning and diffing all (left is correct version)...\n";
 print "======================================================\n";
 
 @files = &GetFilesInDirs(".");
-$match = "tstdump\d\d$exe";
+$match = "tstdump\\d\\d";
 foreach $f (@files) {
+    $f =~ s/^\.\///;
+    $f =~ s/${exe}$//;
     next if ($f !~ m/^$match$/);
     print "\n-------- $f: -------\n";
     if ( $f eq "tstdump24" ){
@@ -51,8 +55,8 @@ foreach $f (@files) {
        
     #FIXME: stderr og stdout redirect missing...
     system("$f >$f.out 2>$f.err");
-    if ( -f output/$f.out ) {
-	if (system("diff output/$f.out $f.out") == 0){
+    if ( -f "output/$f.out" ) {
+	if (system("diff -i output/$f.out $f.out") == 0){
 	    print "[stdout is correct]\n";
 	    &rm("$f.out");
 	} else {
@@ -61,8 +65,8 @@ foreach $f (@files) {
     } else {
 	print "[No reference output exists]\n";
     }
-    if ( -f output/$f.err ) {
-	if (system("diff output/$f.err $f.err") == 0){
+    if ( -f "output/$f.err" ) {
+	if (system("diff -i output/$f.err $f.err") == 0){
 	    print "[stderr is correct]\n";
 	    &rm("$f.err");
 	} else {
@@ -71,12 +75,27 @@ foreach $f (@files) {
     } else {
 	print "[No reference stderr exists]\n";
     }
-    if ( -f dumps/$f.dump ) {
-	if ( -f $f.dump ) {
-	    #FIXME: sed from perl
-	    system("sed -e \"s/MACHINE_TYPE/$objdir/g\" < dumps/$f.dump > $f.ref");
-	    system("grep -v '{' $f.dump                               > $f.app");
-	    if (system("diff $f.ref $f.app") == 0){
+    if ( -f "dumps/$f.dump" ) {
+	if ( -f "$f.dump") {
+	    open(IN, "<dumps/$f.dump");
+	    open(OUT, ">$f.ref") || die "Unable to write ref dump:$!";
+	    while(<IN>) {
+		s/MACHINE_TYPE/$objdir/g;
+		print OUT;
+	    }
+	    close IN;
+	    close OUT;
+
+	    open(IN, "<$f.dump");
+	    open(OUT, ">$f.app") || die "Unable to write app dump: $!";
+	    while(<IN>) {
+		next if (/\{/);
+		print OUT;
+	    }
+	    close IN;
+	    close OUT;
+	    
+	    if (system("diff -i $f.ref $f.app") == 0){
 		print "[Dump is correct]\n";
 		&rm("$f.dump");
 		&rm("$f.ref");
@@ -84,7 +103,7 @@ foreach $f (@files) {
 		&rm("$f");
 	    } else {
 		print "[Difference in dump]\n";
-		system("diff $f.ref $f.app > $f.diff");
+		system("diff -i $f.ref $f.app > $f.diff");
 	    }
 	} else {
 	    print "[No dump created]\n";
