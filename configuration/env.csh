@@ -137,10 +137,10 @@ case "IP[23][012]":
 	# No need to set LD_LIBRARY_PATH - MOTIFHOME is in a standard place
 	# And setting LD_LIBRARY_PATH on sgi's where LD_LIBRARYN32_PATH is
 	# also used by the linker results in annoying runtime warnings.
-	#if ( $?LD_LIBRARY_PATH ) then
-	#	setenv LD_LIBRARY_PATH $BETALIB/lib/sgi:${MOTIFHOME}:$LD_LIBRARY_PATH
-	#else
-	#	setenv LD_LIBRARY_PATH $BETALIB/lib/sgi:${MOTIFHOME}
+	if ( $?LD_LIBRARY_PATH ) then
+	    setenv LD_LIBRARY_PATH ./sgi:$BETALIB/lib/sgi:$LD_LIBRARY_PATH
+	else
+	    setenv LD_LIBRARY_PATH ./sgi:$BETALIB/lib/sgi
 	#endif
 	#
 	breaksw
