@@ -184,7 +184,7 @@ long BETA_Invoke(struct idispatch *pdisp
     printf("BETA_Invoke: %s noOfArgs=%i types=%s\n",pszName,noOfArgs,pszFmt);
 
   argList = InitDispatch(noOfArgs);
-  va_start(ap,noOfArgs);
+  va_start(ap,pszFmt);
 
   //for (i=0; i<noOfArgs; i++) types[i] = (long) va_arg(ap,long);
 
@@ -207,6 +207,11 @@ long BETA_Invoke(struct idispatch *pdisp
 	if (test) printf("%i\n",arg);    
         argList = AddDispatchInt32(argList,arg,12);
         break;
+      case 's': // BSTR
+        arg = (long) va_arg(ap,long *);
+	if (test) printf("%i\n",arg);    
+        argList = AddDispatchInt32(argList,arg,17);
+        break;        
       case '&': // holder
         { j = j+1;
           switch (pszFmt[j]) {   
