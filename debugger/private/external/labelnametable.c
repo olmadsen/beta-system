@@ -47,7 +47,7 @@ char NextLabel[100]; /* The last label read from the fd. */
 #define Hexadecimal
 #define NMOUTFILE "temp.nmoutfile"
 #define NMSORTOUTFILE "temp.nmsortoutfile"
-#define pclose(fd) fclose(fd); unlink(NMSORTOUTFILE); fprintf(stderr,"Close & deleting %s\n",NMSORTOUTFILE)
+#define pclose(fd) fclose(fd); unlink(NMSORTOUTFILE) /* ; fprintf(stderr,"Close & deleting %s\n",NMSORTOUTFILE)*/
 void DumpFile(LPSTR filename);
 extern long processOffset;  /* from coreaccess.c */
 #else
@@ -113,7 +113,7 @@ void initReadNameTable (char* execFileName) {
   sprintf (command,nmcommand,execFileName);
   fd = popen (command, "r");
 #else
-  fprintf(stderr,"Opening %s\n",NMOUTFILE);
+  /*fprintf(stderr,"Opening %s\n",NMOUTFILE);*/
   if ((fd = fopen(NMOUTFILE,"w+"))==NULL) {
     fprintf(stderr,"couldn't open file %s\n",NMOUTFILE); 
     return;
