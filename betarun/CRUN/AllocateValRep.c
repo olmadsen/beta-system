@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateValRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:05 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: AllocateValRep.c,v $, rel: %R%, date: $Date: 1992-09-01 11:34:53 $, SID: $Revision: 1.11 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -66,7 +66,7 @@ ref(ValRep) CAlloVR1(ref(Object) theObj,
     theRep->HighBorder = range;
     
     AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
-    return theRep;
+    RETURN(theRep);
 }
 
 asmlabel(AlloVR2, "
@@ -103,7 +103,7 @@ ref(ValRep) CAlloVR2(ref(Object) theObj,
 	    theRep->GCAttr = (int) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
 	    int_clear((char*)theRep->Body, Size - headsize(ValRep));
-	    return theRep;
+	    RETURN(theRep);
 	}
     }
 
@@ -116,7 +116,7 @@ ref(ValRep) CAlloVR2(ref(Object) theObj,
     theRep->HighBorder = range;
     
     AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
-    return theRep;
+    RETURN(theRep);
 }
 
 asmlabel(AlloVR4, "
@@ -154,7 +154,7 @@ ref(ValRep) CAlloVR4(ref(Object) theObj,
 	    theRep->GCAttr = (int) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
 	    int_clear((char*)theRep->Body, Size - headsize(ValRep));
-	    return theRep;
+	    RETURN(theRep);
 	}
     }
 
@@ -169,7 +169,7 @@ ref(ValRep) CAlloVR4(ref(Object) theObj,
 
     AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
 
-    return theRep;
+    RETURN(theRep);
 }
 
 
@@ -208,7 +208,7 @@ ref(ValRep) CAlloVR8(ref(Object) theObj,
 	    theRep->GCAttr = (int) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
 	    int_clear((char*)theRep->Body, Size - headsize(ValRep));
-	    return theRep;
+	    RETURN(theRep);
 	}
     }
 
@@ -221,5 +221,5 @@ ref(ValRep) CAlloVR8(ref(Object) theObj,
     theRep->HighBorder = range;
 
     AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
-    return theRep;
+    RETURN(theRep);
 }

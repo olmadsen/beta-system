@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateItem.c,v $, rel: %R%, date: $Date: 1992-08-31 10:03:56 $, SID: $Revision: 1.13 $
+ * Mod: $RCSfile: AllocateItem.c,v $, rel: %R%, date: $Date: 1992-09-01 11:34:56 $, SID: $Revision: 1.14 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -18,7 +18,7 @@ ParamOriginProto(struct Item *,AlloI)
     Ck(origin);
 
 #if defined(hppa) && defined(RTDEBUG)
-    if((unsigned)getRefSP() > (unsigned)ReferenceStack + 500*4) {
+    if((unsigned)getRefSP() > (unsigned)ReferenceStack + 490*4) {
       fprintf(stderr,"#ReferenceStack overflow!!!\n");
     }
 #endif
