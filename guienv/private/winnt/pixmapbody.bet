@@ -6,6 +6,11 @@ INCLUDE '~beta/toollibs/utils/PNG/png'
         '~beta/win32lib/windowsmisc'
         '~beta/sysutils/cstring';
 BUILD default '$$/loadBitmapFile.obj' 'external/loadBitmapFile.c' 'external/loadBitmapFile.h' 'betacc $0 $1';
+BUILD default '$$/readjpgfile.obj' 'external/readjpgfile.c' 'betacc $0 $1';
+
+LIBFILE nti 'external/ijl15l.lib';
+
+
 -- lib: Attributes --
 GlobalFree: external
   (#
@@ -234,7 +239,9 @@ expandPixmapName:
   exit expandedName[]
   #);
 guessPixmapFormat:
-  (# name: ^text; cstr: @cstring; format: @integer; 
+  (# name: ^text; cstr: @cstring; format: @integer;
+     extension: ^Text;
+     slash, dot: @integer;
   enter name[]
   do
      l:
@@ -244,7 +251,26 @@ guessPixmapFormat:
           (if true
            // ((cstr->isBMPfile) <> 0) then BMPformat->format; 
            else
-              PNGFormat->format; (* fail; *) 
+              name.scanAll
+              (# inx: @integer;
+              do inx + 1 -> inx;
+                 (if ch = '\\' then
+                     inx -> slash;
+                 if);
+                 (if ch = '.' then
+                     inx -> dot;
+                 if);
+              #);
+              (if dot > slash then
+                  (dot, name.length) -> name.sub -> extension[];
+                  (if '.jpg' -> extension.equalNCS then
+                      JPGFormat -> format;
+                   else
+                      PNGFormat -> format;
+                  if);
+               else
+                  PNGFormat->format;
+              if);
           if);
           
        #);
@@ -293,6 +319,8 @@ unknown: (#  exit 0 #);
 BMPformat: (#  exit 1 #);
 MetaFileformat: (#  exit 2 #);
 PNGFormat: (#  exit 3 #);
+JPGFormat: (# exit 4 #);
+
 readBMPfile:
   (#
      name: ^text;
@@ -359,6 +387,27 @@ ReadPNGalpha: external
   enter (name,hbmp,pixels,width,height,mask)
   exit result
   #);
+ReadJPGtoDibSection: external
+  (# name: [1] @char;
+     hbmp: @integer;
+     pixels: @integer;
+     width: @integer;
+     height: @integer;
+     result: @integer;
+  enter (name,hbmp,pixels,width,height)
+  exit result
+  #);
+readJPGfile:
+  (# name: ^text;
+     error:< (# msg: ^text;  enter msg[] do INNER ;  #);
+     result: @integer;
+     
+  enter name[]
+  do (name,@@ private.handleToPixmap,@@ private.pixels,@@ private.width,@@private.height)
+       -> ReadJPGtoDibSection->result;
+     
+  #);
+
 readPNGfile:
   (#
      name: ^text;
@@ -413,19 +462,18 @@ do
             theExpandedName[]->guessPixmapFormat->format;
             (if format
              // BMPformat then
-                theExpandedName[]
-                  ->readBMPfile
-                    (# error::  (#  do msg[]->THIS(read).error #) #);
+                theExpandedName[] ->readBMPfile
+                (# error::  (#  do msg[]->THIS(read).error #) #);
                 
              // MetaFileformat then
-                theExpandedName[]
-                  ->readMetafile
-                    (# error::  (#  do msg[]->THIS(read).error #) #);
-                
+                theExpandedName[] ->readMetafile
+                (# error::  (#  do msg[]->THIS(read).error #) #);
              // PNGFormat then
-                theExpandedName[]
-                  ->readPNGFile
-                    (# error::  (#  do msg[]->THIS(read).error #) #);
+                theExpandedName[]  ->readPNGFile
+                (# error::  (#  do msg[]->THIS(read).error #) #);
+             // JPGFormat then
+                theExpandedName[] -> readJPGfile
+                (# error:: (# do msg[] -> THIS(read).error; #) #);
                 
              // unknown then
                 &text[]->msg[];
