@@ -1,5 +1,8 @@
 ORIGIN 'objectview';
-INCLUDE '~beta/compiler/DYN/UI/evaluator';
+INCLUDE '~beta/compiler/DYN/UI/evaluator' 
+'~beta/guienv/utils/labelled'
+'~beta/sourcebrowser/codemoveable'
+'~beta/guienv/utils/pane';
 -- windowLib: Attributes --
 moveableObjectViewEvaluator: moveableObjectView
   (#
@@ -9,6 +12,43 @@ moveableObjectViewEvaluator: moveableObjectView
      onEvaluateButton:< (#  do INNER #);
      onFindAttribute:< (#  do INNER #);
      onCloseEvaluator:< (#  do INNER #);
+     onEvaluatorOpened:<
+       (# cfe:^codeeditor
+       enter cfe[]
+       do inner
+       #);
+     ShowCodeView:
+       (# 
+       do theBo[]->theBo.dumper.betaObjectObjectDescriptor->onOpenCodeView
+       #);
+     onOpenCodeView:<
+       (#
+          scv: ^contents.codePane.stackCodeView;
+          father: ^interfaceObject;
+          cast: ^astInterface.ast;
+          x,y: @integer;
+          cv,listSize: @point
+       enter cast[]
+       do 
+          contents.list.size->listSize;
+          contents.codepane.show;
+          contents.codepane.calculatesize;
+          contents.codepane.size->cv;
+          (listSize.h+2*bw,listSize.v+cv.v)->newPreferredContentsSize;
+          cast[]->contents.codepane.codeViews.show->scv[];
+          (if scv[] <> none then contents.codePane[]->father[]; INNER if);
+          true->contents.codepane.opened;
+          true->contents.codepane.bindBottom
+       #);
+     closeCodeView:
+       (# evalSize,listSize: @point
+       do contents.list.size->listSize;
+          (2*bw,0)->listSize.add;
+          listSize->newPreferredContentsSize;
+          true->contents.list.bindBottom;
+          contents.codepane.hide;
+          false->contents.codepane.opened
+       #);
      moveableMenu::< 
        (#
           open::< 
@@ -35,12 +75,39 @@ moveableObjectViewEvaluator: moveableObjectView
                         (listSize.h+2*bw,listSize.v+evalSize.v)
                           ->newPreferredContentsSize;
                         contents.evaluator.calculateSize;
-                        contents.evaluator.show
+                        contents.evaluator.show;
+                        false->contents.evaluator.editor.sifviewer.isReadOnly;
+                        false->contents.evaluator.editor.sifviewer.setIsReadOnly;
+                        contents.evaluator.editor.sifviewer[]->onEvaluatorOpened;
                     if)
                  #);
                findAttributeAction:actionedMenuItemAction
                  (# 
                  do onFindAttribute
+                 #);
+               codeviewAction: actionedMenuItemAction 
+                 (#  
+                 do (if contents.codepane.opened then
+                        closeCodeView;
+                        THIS(moveableMenu).scan
+                        (# 
+                        do
+                           (if closeCodeViewMenuName->(current.name).equal
+                               then
+                               openCodeViewMenuName->current.name
+                           if)
+                        #)
+                     else
+                        ShowCodeView; 
+                        THIS(moveableMenu).scan
+                        (# 
+                        do
+                           (if openCodeViewMenuName->(current.name).equal
+                               then
+                               closeCodeViewMenuName->current.name
+                           if)
+                        #)
+                    if)
                  #)
             do
                (if openEvaluatorMenuEntry then
@@ -52,7 +119,9 @@ moveableObjectViewEvaluator: moveableObjectView
                    &actionedMenuItem[]->mi[];
                    (findAttributeAction##,none ,none ,findAttributeMenuName)
                      ->mi.open
-               if)
+               if);
+               &actionedMenuItem[]->mi[];
+               (codeviewAction##,none ,none ,openCodeViewMenuName)->mi.open
             #)
        #);
      hideEvaluatorAction:
@@ -75,8 +144,158 @@ moveableObjectViewEvaluator: moveableObjectView
        #);
      contentsType::< 
        (#
+           overlayView: labelled
+            (#
+               zoomed: @boolean;
+               eventhandler::< 
+                 (#
+                    onMouseDown:: 
+                      (# 
+                      do
+                         (*
+                          (if doubleclick then
+                          (if zoomed then
+                          false->zoomed; THIS(browserType).unzoom; 
+                          else
+                          true->zoomed;
+                          THIS(overlayView).father[]
+                          ->THIS(browserType).zoomMember;
+                          
+                          if)
+                          if) *) 
+                      #);
+                    onFatherFrameChanged:: 
+                      (#  do (if visible then father.size->size if) #);
+                    onVisibleChanged:: 
+                      (#  do (if visible then father.size->size if) #);
+                    
+                 #);
+               open::<  (# sz: @point enter sz do sz->size; INNER #)
+            #);
+          codepane:@canvas
+            (# opened:@boolean;
+               calculateSize:
+                 (# listPosition,listSize: @point
+                 do
+                    list.size->listSize;
+                    list.position->listPosition;
+                    (listPosition.h,listSize.v)->position;
+                    false->list.bindBottom
+                 #);
+               b: @pushbutton (# open::  (#  do hide #) #);
+               currentView: ^overlayView;
+               codeViews: @containerlist
+                 (#
+                    element:: 
+                      (# cast: ^astInterface.ast; scv: ^stackCodeView #);
+                    closeAll: iterate
+                      (# 
+                      do
+                         none ->currentView[];
+                         current.elm.scv.close;
+                         current[]->delete
+                      #);
+                    show:
+                      (# cast: ^astInterface.ast; scv: ^stackCodeView; 
+                      enter cast[]
+                      do
+                         find
+                         (#
+                            predicate:: 
+                              (# 
+                              do (cast.frag[] = current.cast.frag[])->value
+                              #);
+                            notFound:: 
+                              (# e: ^element
+                              do
+                                 'find.notfound'->screen.putline;
+                                 &stackCodeView[]->scv[];
+                                 (codePane[],codePane.size)->scv.open;
+                                 &element[]->e[];
+                                 cast[]->e.cast[];
+                                 scv[]->e.scv[]->currentView[];
+                                 e[]->append
+                              #)
+                         do
+                            'find.inner'->screen.putline;
+                            (if currentView[] <> current.scv[] then
+                                (if currentView[] <> none then
+                                    currentView.hide
+                                if);
+                                current.scv[]->currentView[];
+                                currentView.show;
+                                (cast[],1,0,0)
+                                  ->current.scv.contents.sifViewer.setFocus
+                            if)
+                         #)
+                      exit scv[]
+                      #)
+                 #);
+               codeViewer: codemoveableEditor
+                 (#
+                    isolated:: trueObject;
+                    selectNode:: 
+                      (# 
+                      do (* node[]->theStackbrowserEncloser.selectCodeView *)
+                         (* node[]->onOpenCodeView *)
+                      #);
+                    initialContractionLevel::  (#  do 2->value #);
+                    charWidthType:: 
+                      (# do b.style->ts[] #);
+                    getEncloser:: 
+                      (#  do editorEncloser[]->theEncloser[] #);
+                    codeViewerType::
+                      (# adaptivePrettyprinting::
+                           (# get::(# do true->v #)
+                           #)
+                      #);
+                    open:: 
+                      (#  
+                      do b.open
+                      #)
+                 #);
+               editorEncloserType:< codemoveableEditorEncloser
+                 (# onHighLight::  (#  do wriggle #) #);
+               editorEncloser: @editorEncloserType;
+               stackCodeView: overlayView
+                 (#
+                    contentsType:: codeViewer;
+                    open:: 
+                      (#
+                         openContents:: 
+                           (# cel: ^codemoveableEditorList
+                           do
+                              (THIS(stackCodeView)[],sz)->contents.open;
+                              true->doneInInner
+                           #)
+                      do 'Code View'->label
+                      #)
+                 #);
+               doBindings:
+                 (# 
+                 do true->bindRight->bindLeft->bindBottom; false->bindTop
+                 #);
+               open:: 
+                 (# sz: @point enter sz 
+                 do sz->size; (0,200)->position; 
+                    hide;
+                    true->bindRight
+                 #)
+            #);
           evaluatorType:< evaluatorCanvas
             (#
+               editorType::codemoveableEditor
+                 (#
+                    (* isolated:: trueObject; *)
+                    codeViewerType::
+                      (# adaptivePrettyprinting::
+                           (# get::(# do true->v #)
+                           #);
+                         askValhallaBeforeTextEditing::
+                           (# do false->value #);
+                         readOnly::(# do false->value; inner #)
+                      #)
+                 #);
                onEvaluateButton::< 
                  (# 
                  do THIS(moveableObjectViewEvaluator).onEvaluateButton
@@ -93,7 +312,11 @@ moveableObjectViewEvaluator: moveableObjectView
                  #)
             #);
           evaluator: @evaluatorType;
-          open::<  (#  do contents[]->evaluator.open; evaluator.hide #)
+          open::<  
+            (#  
+            do contents[]->evaluator.open; evaluator.hide;
+               (contents[],(200,100))->codepane.open
+            #)
        #);
      listEncloserType::< 
        (#
@@ -105,6 +328,8 @@ moveableObjectViewEvaluator: moveableObjectView
 
 -- lib: Attributes --
 openEvaluatorMenuName: (#  exit 'Open Evaluator' #);
+openCodeViewMenuName: (#  exit 'Open Codeview' #);
+closeCodeViewMenuName: (#  exit 'Close Codeview' #);
 closeEvaluatorMenuName: (#  exit 'Close Evaluator' #);
 findAttributeMenuName: (# exit 'Find Attribute' #)
 
