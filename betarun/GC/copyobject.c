@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-08-20 16:20:37 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-08-25 09:32:53 $, SID: $Revision: 1.9 $
  * by Lars Bak.
  */
 
@@ -38,22 +38,23 @@ static ref(Object) CopyObject( theObj)
     
     ToSpaceTop = theEnd;
 #ifdef AO_Area
-    if( ToSpaceTop >= ToSpacePtr ){
-      /* Not enough room for the ToSpaceToAOAtable in ToSpace.
+    if( ToSpaceTop > ToSpacePtr ){
+      /* Not enough room for the ToSpaceToAOA table in ToSpace.
        * Instead allocate offline and copy existing part of table over
        */
       ptr(long) oldPtr;
-      ptr(long) pointer = ToSpaceToAOAtable; /* points to start of old table */
+      ptr(long) pointer = ToSpaceLimit; /* points to end of old table */
 
-      if ( ! (ToSpaceToAOAtable = (long *) malloc(IOASize)) ){
-	fprintf(output, "Could not allocate ToSpaceToAOAtable.\n");
+      if ( ! (ToSpaceToAOA = (long *) malloc(IOASize)) ){
+	fprintf(output, "Could not allocate ToSpaceToAOA table.\n");
 	exit(1);
       } 
-      INFO_AOA( fprintf(output,"#(AOA: temporary ToSpaceToAOAtable allocated %dKb.)\n", IOASize/Kb));
+      ToSpaceToAOALimit = (long *) ((char *) ToSpaceToAOA + IOASize);
+      INFO_AOA( fprintf(output,"#(AOA: temporary ToSpaceToAOA table allocated %dKb.)\n", IOASize/Kb));
       
-      oldPtr = ToSpacePtr; /* end of old table */
-      ToSpacePtr = ToSpaceToAOAtable; /* start of new table */
-      while(pointer > oldPtr) *--ToSpacePtr = *--pointer;
+      oldPtr = ToSpacePtr; /* start of old table */
+      ToSpacePtr = ToSpaceToAOALimit; /* end of new table */
+      while(pointer > oldPtr) *--ToSpacePtr = *--pointer; /* Copy old table backwards */
     }
 #endif
     src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
@@ -106,10 +107,10 @@ ref(Object) NewCopyObject( theObj, theCell)
     if( !isStackObject(theObj) ){
       ref(Object) newObj; 
       if( newObj = CopyObjectToAOA( theObj) ){
-        /* Insert theCell in ToSpaceToAOAtable. 
+        /* Insert theCell in ToSpaceToAOA table. 
 	 * Used as roots in mark-sweep if an AOA GC is invoked after IOAGc.
 	 */
-        if( ToSpacePtr && theCell ) *--ToSpacePtr = (long) theCell;
+        if (theCell) *--ToSpacePtr = (long) theCell;
 	return newObj;
       } else {
 	return CopyObject( theObj);

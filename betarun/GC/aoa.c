@@ -310,7 +310,7 @@ static void FollowObject( theObj)
  */
 static void Phase1()
 { /* Call FollowReference for each root to AOA. */
-  ptr(long) pointer = ToSpaceToAOAtable;
+  ptr(long) pointer = ToSpaceToAOALimit?ToSpaceToAOALimit:ToSpaceLimit;
 
   /* temporarily use IOA for table. Only ToSpace contains usefull informations */
   AOAtoLVRAtable = (ptr(long)) Offset(IOA, IOASize/2) ;
@@ -318,11 +318,12 @@ static void Phase1()
 
   while( pointer > ToSpacePtr) ReverseAndFollow( *--pointer );
 
-  if (ToSpaceToAOAtable != ToSpaceLimit){
+  if (ToSpaceToAOA) {
     /* ToSpace was not big enough to hold both objects and table.
-     * Free the tabel that was allocated in CopyObject().
+     * Free the table that was allocated in CopyObject().
      */
-    free(ToSpaceToAOAtable);
+    free(ToSpaceToAOA);
+    ToSpaceToAOA = NULL;
   }
     
 }
@@ -665,7 +666,7 @@ void AOACheckObject( theObj)
 
         theComponent = Coerce( theObj, Component);
         if (theComponent->StackObj == (ref(StackObject))-1) {
-	  printf("\nAOACheckObject: theComponent->StackObj=-1, skipped!\n");
+	 /* printf("\nAOACheckObject: theComponent->StackObj=-1, skipped!\n"); */
 	} else {
 	  AOACheckReference( &theComponent->StackObj);
 	}
