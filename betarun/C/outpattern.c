@@ -111,6 +111,20 @@ return MACHINE_TYPE;
 
 }
 
+static void print_setenv(char *var, char *val)
+{
+#ifdef UNIX
+  fprintf(output, "  setenv %s %s", var, val);
+#endif /* UNIX */
+#ifdef nti
+  fprintf(output, "  set %s=%s", var, val);
+#endif /* nti */
+#ifdef MAC
+  fprintf(output, "  set -e %s %s", var, val);
+#endif /* MAC */
+  fflush(output);
+}
+
 static void PrintLegend(void)
 {
 #undef P
@@ -168,15 +182,8 @@ static void PrintLegend(void)
   P("      [ EXTERNAL ACTIVATION PART ]");
   if (SimpleDump) return;
   P("7. The section labeled \"Low level information\" can be avoided by");
-#ifdef UNIX
-  P("       setenv BETART SimpleDump");
-#endif /* UNIX */
-#ifdef nti
-  P("       set BETART=SimpleDump");
-#endif /* nti */
-#ifdef MAC
-  P("       set -e BETART SimpleDump");
-#endif /* MAC */
+  fprintf(output, "    ");
+  print_setenv("BETART", "SimpleDump");
   P("   before subsequent executions of the program.");
 #undef P
 }
@@ -1523,6 +1530,19 @@ static void AuxInfo(Object *theObj, BetaErr errorNumber)
 {
   /******** Additional info for some error types **************/
   switch (errorNumber){
+  case IOAFullErr:
+    if (4*(long)ReqObjectSize>(long)IOASize){
+      char buf[100];
+      fprintf(output, 
+	      "\nRequested object size (%d bytes) is larger than\n", 
+	      4*(int)ReqObjectSize);
+      fprintf(output, "IOA heap size (%d Kb).\n", (int)IOASize/1024);
+      fprintf(output, "Try increasing IOA size using BETART:\n");
+      sprintf(buf, "IOA=%d", 2*(int)IOASize/1024);
+      print_setenv("BETART", buf);
+      fprintf(output, "\n");
+    }
+    break;
   case QuaErr:
     fprintf(output, "\nReference being assigned:\n");
     DisplayObject(output, QuaSrc, 0);
