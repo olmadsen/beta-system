@@ -20,7 +20,7 @@ echo "======================================================"
 beta -qw tstdump??.bet
 
 echo ""
-echo Running all...
+echo "Running and diffing all (left is correct version)..."
 echo "======================================================"
 for f in tstdump??
 do
@@ -64,18 +64,8 @@ do
     else
        echo "[No reference stderr exists]"
     fi
-    echo "--------------------------"
-done
-
-echo ""
-echo "Diffing all (left is correct version)..."
-echo "======================================================"
-for f in tstdump??.dump
-do
-    echo ""
-    echo "--------" $f: "-------"
-    if [ -f dumps/$f ]; then
-       sed -e "s/MACHINE_TYPE/$objdir/g" < dumps/$f | diff - $f
+    if [ -f dumps/$f.dump ]; then
+       sed -e "s/MACHINE_TYPE/$objdir/g" < dumps/$f.dump | diff - $f.dump
        if [ $? = 0 ]; then
 	  echo "[Dump is correct]"
 	  rm $f
@@ -85,10 +75,8 @@ do
     else
        echo "[No reference dump exists]"
     fi
-    echo "--------------------------------"
+    echo "--------------------------"
 done
 
-echo ""
-echo "======================================================"
 echo Done.
 
