@@ -183,7 +183,7 @@ int readyBytes (int fd)
 }
 
 int sysenvKeyboardEOS()
-{ char ch;
+{ int ch;
 
   ungetc(ch = getchar(),stdin);
 
@@ -194,7 +194,7 @@ int sysenvKeyboardEOS()
 }
 
 char sysenvKeyboardPeek()
-{ char ch;
+{ int ch;
 
   ch = getchar();
   if (ch != EOF) ungetc(ch, stdin);
@@ -363,8 +363,7 @@ selectSockets (int *readCandidates, int *writeCandidates, int *exceptCandidates,
     case EBADF:
 #endif
       fprintf(stderr, 
-	      "selectSockets: error: select returned EBADF\n", 
-	      res);
+	      "selectSockets: error: select returned EBADF\n");
       break;
     default:
       fprintf(stderr, 
