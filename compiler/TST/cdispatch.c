@@ -94,7 +94,7 @@ void PutDispId(long dispId, long *dispList)
 struct struct_tagDISPPARAMS *MkArgList(long noOfArgs,...)
 { struct struct_tagDISPPARAMS *S;
 
-  long types = malloc(noOfBytes*4);
+  long *types = (long *)malloc(noOfArgs*4);
 
   long i;
   va_list ap;
@@ -153,7 +153,7 @@ long BETA_Invoke(struct idispatch *pdisp
   long * resList;
   long HR,dispid;
   struct struct_tagDISPPARAMS *argList;
-  long *types = malloc(noOfBytes*4);
+  long *types = (long *)malloc(noOfArgs*4);
   va_list ap;
   long i;
 
