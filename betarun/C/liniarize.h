@@ -2,13 +2,21 @@
 #define _LINIARIZE_H_
 
 #ifdef LIN
-#include <sys/time.h>
 
 /* GLOBAL TYPE DEFINITIONS */
 
-typedef struct indirTableEntry {
-    long byteOffset; /* Byte offset to object in liniarization */
-} indirTableEntry;
+typedef struct infoTableEntry {
+
+    /* These entries will be collected in an array. The index will be
+       the id of the object in the linearization. The GC-attributes of
+       the objects are used for various purposes, and below are slots
+       for saving the original value of the GC-attribute and a pointer
+       to the original object corrosponding to this index.  */
+    
+    long oldGC;      /* The original value of the GC-attribute */
+    long *original;  /* A pointer to the original Object */
+    long byteOffset; /* holds the offset of the object in the linearization */
+} infoTableEntry;
 
 typedef struct originRefIndicator {
     long byteOffset;
@@ -18,10 +26,10 @@ typedef struct originRefIndicator {
 typedef struct liniarization {
     long nextId;                 /* next available local id                    */
     
-    long indirTableLength;       /* number of entries (used
+    long infoTableLength;       /* number of entries (used
                                     and unsused)                               */
-    indirTableEntry *indirTable; /* the indirection table                      */
-
+    infoTableEntry *infoTable;  /* */
+    
     long liniarizationTop;       /* first unused byte in liniarization         */
     long liniarizationLength;    /* number of bytes available in liniarization 
                                     (used and unused)                          */
@@ -33,32 +41,6 @@ typedef struct liniarization {
     long originTableLength;
     struct originRefIndicator *originTable;
 } liniarization;
-
-typedef struct statistics {
-    struct timeval startOfLastLiniarize;
-    struct timeval endOfLastLiniarize;
-    
-    struct timeval startOfLastLoad;
-    struct timeval endOfLastLoad;
-    
-    struct timeval startOfLastSave;
-    struct timeval endOfLastSave;
-
-    struct timeval startOfLastBuildLinkedList;
-    struct timeval endOfLastBuildLinkedList;
-    
-    struct timeval startOfLastCopyToLiniarization;
-    struct timeval endOfLastCopyToLiniarization;
-    
-    struct timeval startOfLastCreateIndirTable;
-    struct timeval endOfLastCreateIndirTable;
-    
-    struct timeval startOfLastSwizzleToIndirect;
-    struct timeval endOfLastSwizzleToIndirect;
-    
-    struct timeval startOfLastSwizzleIndirOrigins;
-    struct timeval endOfLastSwizzleIndirOrigins;
-} statistics;
 
 /* GLOBAL VARIABLES */
 
