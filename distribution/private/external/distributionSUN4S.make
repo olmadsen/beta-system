@@ -1,5 +1,5 @@
-dir = $(BETALIB)/distribution/v1.01/private/external/
-odir = $(BETALIB)/distribution/v1.01/private/$(MACHINETYPE)/
+dir = ./
+odir = ../$(MACHINETYPE)/
 debug =
 
 make: $(odir)extShellSockets.o $(odir)getUser.o \
@@ -29,10 +29,10 @@ $(odir)startAsDeamon.o: $(dir)startAsDeamon.c
 	gcc $(debug) -D$(MACHINETYPE) -O -c $(dir)startAsDeamon.c -o $(odir)startAsDeamon.o
 	
 $(odir)thisHost.o: $(dir)thisHost.c
-	gcc $(debug) -D$(MACHINETYPE) -O -c $(dir)thisHost.c -o $(odir)thisHost.o
+	gcc $(debug) -D$(MACHINETYPE) -I $(BETALIB)/process/v1.4/private/external -O -c $(dir)thisHost.c -o $(odir)thisHost.o
 
 $(dir)$(MACHINETYPE):
 	mkdir $(dir)$(MACHINETYPE)
 
-$(dir)$(MACHINETYPE)/startAsDeamon: $(odir)startAsDeamon.o $(odir)deamonStart.o 
+$(dir)$(MACHINETYPE)/startAsDeamon: $(dir)$(MACHINETYPE) $(odir)startAsDeamon.o $(odir)deamonStart.o 
 	gcc $(debug) -D$(MACHINETYPE) $(odir)startAsDeamon.o $(odir)deamonStart.o -o $(dir)$(MACHINETYPE)/startAsDeamon

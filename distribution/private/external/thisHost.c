@@ -7,7 +7,7 @@
 
 /* Create well-defined symbols for architecture */
 
-#include "/users/beta/process/v1.4/private/external/arch.h"
+#include <arch.h>
 
 #if defined(A_SUN4)
 #include <sys/types.h>
