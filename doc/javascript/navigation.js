@@ -217,8 +217,8 @@ function onKey(e)
     c  = event.keyCode;
     ch = String.fromCharCode(event.keyCode);
   } else if (document.getElementById){
-    c  = e.keyCode;
-    ch = String.fromCharCode(e.keyCode);
+    c  = e.charCode;
+    ch = String.fromCharCode(e.charCode);
   } else {
     c  = 1;
     ch = '*';
@@ -264,12 +264,7 @@ function onKey(e)
   }
 }
 
-if (!document.all && document.getElementById){
-   // onkeypress does not seem to work
-   document.onkeydown=onKey;
-} else {
-   if (document.layers){
-      document.captureEvents(Event.KEYPRESS);
-   }
-   document.onkeypress=onKey;
+if (document.layers){
+   document.captureEvents(Event.KEYPRESS);
 }
+document.onkeypress=onKey;
