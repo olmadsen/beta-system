@@ -1,0 +1,438 @@
+ORIGIN '~beta/sourcebrowser/v1.2/ymer';
+INCLUDE '~beta/guienv/v1.6/utils/pane';
+INCLUDE '~beta/guienv/v1.6/utils/listview';
+
+-- browserlib: Attributes --
+searchBrowser: ymerLocalWindow
+  (#
+     checkNode:<
+       (# node: ^astInterface.ast; value: @boolean; t: ^text
+       enter node[]
+       do INNER
+       exit (value,t[])
+       #);
+     setTitle:<
+       (# noHits: @boolean; t: ^text
+       enter noHits
+       do INNER ; t[]->title
+       exit t[]
+       #);
+     setNodesListLabel:< (# t: ^text do INNER exit t[] #);
+     showSourceLine:< booleanValue;
+     clear: contents.clear (#  #);
+     fg: ^mps.AST.fragmentGroup;
+     fgName: ^text;
+     (* isWarning:
+      *        {* findes i mps/v5.0.ess.ess.ess - blot her for at
+      *         * kunne filtrere warnings fra allerede i
+      *         * v5.0.1 - skal fjernes senere
+      *         *}
+      *        (# no: @integer; boo: @boolean
+      *        enter no
+      *        do
+      *           (if no
+      *            //24//25//86//95//97//99//106//109
+      *            //26 {*not used *} then
+      *               true->boo
+      *           if)
+      *        exit boo
+      *        #);
+      *)
+     includeWarnings: @boolean;
+     noErrors: @boolean;
+     aspect:< integerValue (#  do 6->value; INNER #);
+     markCurrentError: (#  do contents.errorsList.markCurrent #);
+     unmarkCurrentError: (#  do contents.errorsList.unmarkCurrent #);
+     contents: @contentsType;
+     contentsType:< pane
+       (#
+	  clear: (#  do FFlist.clear; errorsList.clear #);
+	  dobind:<
+	    (#
+	    do
+	       TRUE->bindTop->bindLeft->bindRight->bindBottom;
+	       FFlist.dobind;
+	       errorsList.dobind;
+	       INNER dobind
+	    #);
+	  onNewFragmentGroup:<
+	    (# ff: ^mps.AST.fragmentForm; name: ^text;
+	    enter (ff[],name[])
+	    do INNER onNewFragmentGroup
+	    #);
+	  onNewSemanticError:<
+	    (# node: ^mps.AST.ast;
+	    enter node[]
+	    do INNER onNewSemanticError
+	    #);
+	  FFlist: @labelled
+	    (#
+	       clear: contents.clear (#  #);
+	       dobind: (#  do contents.dobind #);
+	       contentsType:: listView
+		 (#
+		    clear:
+		      (#
+		      do
+			 listitems.scanReverse
+			   (#  do current.delete #);
+			 listitems.clear;
+
+		      #);
+		    current: ^listitems.theCellType;
+		    dobind:
+		      (#
+		      do TRUE->bindTop->bindLeft->bindRight->bindBottom
+		      #);
+		    eventhandler::
+		      (#
+			 onKeyDown::
+			   (#
+			   do
+			      (if ch
+			       // ascii.cr // ascii.nl then
+				  (if current[] = none then
+				      listitems.head->current[];
+				   else
+				      current.succ[]->current[];
+				      (if current[] = none then
+					  listitems.head->current[]
+				      if);
+
+				  if);
+				  (if current[] <> none then
+				      current.elm.select;
+				      selection.scrollIntoView
+				  if)
+			      if)
+			   #)
+		      #);
+		    fgItem: listItem
+		      (#
+			 ff: ^mps.AST.fragmentForm;
+			 onSelect::
+			   (# fi: ^listitems.theCellType
+			   do
+			      THIS(fgItem)[]->listitems.at->fi[];
+			      (if fi[] <> current[] then
+				  fi[]->current[];
+				  (ff[],name)->onNewFragmentGroup;
+				  ff[]->errorsList.contents.registerNodes
+			      if)
+			   #);
+
+		      #);
+		    registerFragmentForms:
+		      (#
+			 exp: ^mps.AST.expanded;
+			 fi: ^fgItem;
+			 fg: ^mps.AST.fragmentGroup;
+			 ff: ^mps.AST.fragmentForm;
+			 OK: @boolean
+		      enter fg[]
+		      do
+			 true->noErrors;
+			 none ->errorsList.contents.current[];
+			 (if fg[] <> none then
+			     fg.fragmentList.scan
+			       (#
+			       do
+				  (if current.type
+				   // mps.AST.formType then
+					(#
+					do
+					   current.open->ff[];
+					   (if ff[] <> none then
+					       (if ff.root.kind =
+					       mps.AST.kinds.interior then
+						   ff.root[]->exp[];
+						   l: exp.suffixWalk
+						     (# t,dummy: ^text
+						     do
+							current[]->checkNode
+							  ->(OK,dummy[]);
+							(if OK then
+							    &fgItem[]->fi[];
+							    fi.init;
+							    ff[]->fi.ff[];
+							    fgName.copy->t[];
+							    '-'->t.append;
+							    ff.name->t.append;
+							    t[]->fi.name;
+							    leave l
+							if)
+						     #)
+					       if)
+					    else
+					       'registerFragmentForms: could not open fragmentform'
+						 ->putLine
+					   if)
+					#)
+				  if)
+			       #);
+			     (if fi[] = none then
+				 ''->errorsList.label; true->noErrors;
+			      else
+				 setNodesListLabel->errorsList.label;
+				 false->noErrors;
+				 (listitems.head).elm.select
+			     if)
+			 if)
+		      #);
+		    open::  (#  do 'Fragment Forms'->label #);
+
+		 #);
+	       open::
+		 (# w,h: @integer;
+		 do
+		    THIS(searchBrowser).size->(w,h);
+		    (w,(h div aspect)-1)->size;
+
+		 #);
+
+	    #);
+	  errorsList: @labelled
+	    (#
+	       clear: contents.clear (#  #);
+	       dobind: (#  do contents.dobind #);
+	       markCurrent:
+		 (# t: ^text
+		 do
+		    (if contents.current[] <> none then
+			contents.current.elm.name->t[];
+			(if (1->t.inxget) <> '*' then
+			    '*'->t.prepend; t[]->contents.current.elm.name
+			if)
+		    if)
+		 #);
+	       unmarkCurrent:
+		 (# t: ^text
+		 do
+		    (if contents.current[] <> none then
+			contents.current.elm.name->t[];
+			(if (1->t.inxget) = '*' then
+			    (1,1)->t.delete; t[]->contents.current.elm.name
+			if)
+		    if)
+		 #);
+	       contentsType:: listView
+		 (#
+		    clear:
+		      (#
+		      do
+			 listitems.scanReverse
+			   (#  do current.delete #);
+			 listitems.clear;
+
+		      #);
+		    current: ^listitems.theCellType;
+		    dobind:
+		      (#
+		      do TRUE->bindTop->bindLeft->bindRight->bindBottom
+		      #);
+		    eventhandler::
+		      (#
+			 onKeyDown::
+			   (#
+			   do
+			      (if ch
+			       // ascii.cr // ascii.nl then
+				  (if current[] = none then
+				      listitems.head->current[];
+				   else
+				      current.succ[]->current[];
+				      (if current[] = none then
+					  listitems.head->current[]
+				      if);
+
+				  if);
+				  (if current[] <> none then
+				      current.elm.select;
+				      selection.scrollIntoView;
+
+				  if)
+			      if)
+			   #)
+		      #);
+		    errorItem: listItem
+		      (#
+			 node: ^mps.AST.ast;
+			 itemTextUpdated: @boolean;
+			 onSelect::
+			   (# currentPosition: @integer
+			   do
+			      THIS(errorItem)[]->listitems.at->current[];
+			      position->currentposition;
+			      node[]->onNewSemanticError;
+			      (currentposition,false)->selection.select
+			   #);
+
+		      #);
+		    registerNodes:
+		      (#
+			 exp: ^mps.AST.expanded;
+			 ei: ^errorItem;
+			 ff: ^mps.AST.fragmentForm;
+			 OK: @boolean;
+			 t: ^text;
+
+		      enter ff[]
+		      do
+			 clear;
+			 (if ff.root.kind = mps.AST.kinds.interior then
+			     ff.root[]->exp[];
+			     exp.suffixWalk
+			       (#
+			       do
+				  current[]->checkNode->(OK,t[]);
+				  (if OK then
+				      &errorItem[]->ei[];
+				      ei.init;
+				      current[]->ei.node[];
+				      (if t[] <> none then
+					  t.copy->ei.name
+				      if)
+				  if)
+			       #)
+			 if);
+			 (if ei[] = none then
+			     true->noErrors
+			  else
+			     (listitems.head).elm.select
+			 if)
+		      #);
+		    open::  (#  do setNodesListLabel->label #);
+
+		 #);
+	       open::
+		 (# w,h: @integer;
+		 do
+		    THIS(searchBrowser).size->(w,h);
+		    (w,(h div aspect)-1)->size;
+
+		 #)
+	    #);
+	  open::<
+	    (#
+	       setDefaults::
+		 (#  do true->verticalStacking; 50->minsize; 2->panewidth #)
+	    do
+	       FFlist.open;
+	       errorsList.open;
+	       FFlist[]->appendMember;
+	       errorsList[]->appendMember;
+	       INNER open;
+	       appendsDone;
+	       dobind;
+
+	    #)
+       #);
+     menubarType::<
+       (#
+	  fileMenu: @menu
+	    (#
+	       reloadItem: @menuItem
+		 (#
+		    eventHandler::
+		      (# onSelect::  (#  do fg[]->registerFragmentGroup #)
+		      #);
+		    open::  (#  do 'r'->key; 'Reload'->name #)
+		 #);
+	       quitItem: @menuItem
+		 (#
+		    eventHandler::
+		      (# onSelect::  (#  do THIS(searchBrowser).close #)
+		      #);
+		    open::  (#  do 'w'->key; 'Close'->name #)
+		 #);
+	       open::
+		 (#
+		 do
+		    'File'->name;
+		    reloadItem.open;
+		    reloadItem[]->append;
+		    quitItem.open;
+		    quitItem[]->append
+		 #)
+	    #);
+	  open::<  (#  do fileMenu.open; fileMenu[]->append #);
+
+       #);
+     registerFragmentGroup:
+       (# fgSet: @set (# element:: mps.ast.fragmentgroup #)
+       enter fg[]
+       do
+	  clear;
+	  contents.FFlist.clear;
+	  (if fg[] <> none then
+	      fg.name->fgName[];
+	      fg[]->contents.FFlist.contents.registerFragmentForms;
+	      noErrors->setTitle
+	   else
+	      (if browser.currentProject[] <> none then
+		  browser.currentProject.groups.scan
+		    (# fg: ^astinterface.fragmentGroup
+		    do
+		       current.getfg->fg[];
+		       (if fg[] <> none then
+			   (if not (fg[]->fgSet.has) then
+			       fg[]->fgSet.insert;
+			       fg.name->fgName[];
+			       fg[]
+				 ->
+				   contents.FFlist.contents.
+				     registerFragmentForms
+			   if)
+		       if)
+		    #);
+		  'Search hits in current project'->title
+	       else
+		  'No current project'->title
+	      if)
+	  if);
+
+       #);
+     open::<
+       (# w,h: @integer;
+       do hide; INNER open; contents.open; fg[]->registerFragmentGroup; show;
+       #)
+  #);
+searchViewer: searchBrowser
+  (#
+     aspect::  (#  do 2->value #);
+     contentsType::<
+       (#
+	  onNewFragmentGroup::<
+	    (#
+	    do
+	       ((ff.father).fullname,ff.name)->browser.selectFragmentForm;
+	       INNER
+	    #);
+	  onNewSemanticError::<
+	    (# l1,c1,l2,c2: @integer
+	    do
+	       (node.frag.root[],node[],false)->browser.selectNode;
+	       (if showSourceLine then
+		   (if browser.cfe[] <> none then
+		       contents.errorslist.contents.listitems.scan
+			 (# i: ^contents.errorslist.contents.errorItem
+			 do
+			    current[]->i[];
+			    (if not i.itemTextUpdated then
+				(i.node[],1,0,0)->cfe.selectArea->(l1,c1,l2,c2);
+				(if not
+				((l1 = 1) and (c1 = 1) and (l2 = 1) and
+				 (c2 = 1)) then
+				    l1->cfe.theSifTexteditor.getLine->i.name;
+				    true->i.itemTextUpdated
+				if)
+			    if)
+			 #)
+		   if)
+	       if);
+	       (node.frag.root[],node[],false)->browser.selectNode
+	    #)
+       #);
+     open::<  (#  do (500,300)->size; INNER open;  #);
+
+  #)
