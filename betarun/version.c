@@ -1,7 +1,14 @@
-char betarun_version[] = "BETARUN VERSION 5.3(16)";
+char betarun_version[] = "BETARUN VERSION 5.3(17)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.16  2001/06/20 08:50:40  corry
+ * * Add variables with system-independent versions of mv, rm, cp, echo (use perl)
+ * * Move Betarun version number to major.minor(release) number and add access
+ *   functions
+ * * Pretty up output so commands are more clearly visible (mostly Unix)
+ * Betarun version number: 16
+ *
  * Revision 1.15  2001/06/19 11:41:13  datpete
  * Added support for -O2 instead of -O6 on sgi in Makefile-vpath's
  * Betarun version number: 15
