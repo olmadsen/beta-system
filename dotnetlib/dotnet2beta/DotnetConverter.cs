@@ -850,16 +850,14 @@ namespace beta.converter
 		className = stripNamespace(thisClass.FullName);
 		Type sup = thisClass.BaseType;
 		resolution = getResolution(thisClass);
-		isValue = false;
-		// Special case: classes with immediate base type System.ValueType must have keyword valuetype in resolution
-		if (sup != null && sup.FullName == "System.ValueType"){
-		  isValue = true;
+		// Special case: classes which inherit from System.ValueType
+		// must have keyword 'valuetype' in resolution.
+		// This includes Enums.
+		isValue = thisClass.IsValueType;
+		if (sup != null){
+		  superNs = dotToSlash(sup.Namespace);
+		  superClass = stripNamespace(sup.FullName);
 		}
-		if (sup != null)
-		  {
-		    superNs = dotToSlash(sup.Namespace);
-		    superClass = stripNamespace(sup.FullName);
-		  }
 		beta = new BetaOutput(betalib, resolution, dotToSlash(namespaceName), className, dotToSlash(superNs), superClass, overwrite, output, isValue);
 		if (beta.output == null)
 		  return null;
