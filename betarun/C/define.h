@@ -28,15 +28,6 @@
 #define FALSE	0
 #define TRUE	1
 
-/* Machines supported 
- * sun3       'sun3'        is defined.
- * sun4       'sparc'       is defined.
- * hp         'hpux'        is defined.
- * dx200      'DX200'       is defined.
- * macintosh  'macintosh'   is defined.
- * apollo     'apollo'      is defined.
- */
-
 #define ptr(x)    x *
 #define ref(x)    struct x *
 #define handle(x) struct x **
@@ -59,7 +50,13 @@
 
 #ifdef sun
 #  define UNIX
-#  ifndef sparc
+#  ifdef sparc
+#    ifdef __svr4__
+#      define sun4s
+#    else
+#      define sun4
+#    endif
+#  else
 #    define sun3
 #  endif
 #endif
