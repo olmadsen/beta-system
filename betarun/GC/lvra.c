@@ -428,7 +428,7 @@ static LVRACompaction()
     else
       LVRACreateNewBlock = FALSE;
   }
-  DEBUG_AOA( if( LVRACreateNewBlock ) fprintf( output, "new block needed, "));
+  DEBUG_AOA( if( LVRACreateNewBlock ) fprintf( output, " new block needed, "));
 
   INFO_LVRA( fprintf( output, " %dKb in %d blocks, %d%% free)\n",
 		     toKb(sizeBlocks), numBlocks, (100*saved)/sizeBlocks));

@@ -172,7 +172,7 @@ void AOAGc()
     else
       AOACreateNewBlock = FALSE;
   }
-  DEBUG_AOA( if( AOACreateNewBlock )fprintf( output, "new block needed, "));
+  DEBUG_AOA( if( AOACreateNewBlock )fprintf( output, " new block needed, "));
 
   INFO_AOA( fprintf( output, "%dKb in %d blocks, %d%% free)\n", 
 		    toKb(size), blocks, 100 - (100 * used)/size));
