@@ -21,6 +21,11 @@
 
 #define USEMMAP /* HACK! used by proxy.c, but not used for aoa, etc */
 
+void blo_dummy()
+{
+  USE();
+}
+
 Block * newBlock(long size)
 {
   Block * theBlock;

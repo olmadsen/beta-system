@@ -18,6 +18,11 @@ static void AOACheckObjectRefSpecial(REFERENCEACTIONARGSTYPE);
 /* LOCAL VARIABLES */
 static long totalFree = 0;
 
+/* GLOBAL VARIABLES */
+/* If not NULL this function gets called for every object scanned by
+   scanObject. */
+void (*objectAction)(Object *theObj) = NULL;
+
 /* tempAOArootsAlloc:
  *  Not enough room for the AOAroots table in ToSpace.
  *  Instead allocate offline and copy existing part of table over
@@ -564,7 +569,7 @@ void AOAGc()
     sweepAndCollectProxySpace();
     forceAOAGC = FALSE;
   } else {
-    DEBUG_PERSISTENCE(checkPersistentAOA());
+    /* DEBUG_PERSISTENCE(checkPersistentAOA()); */
   }
 #endif /* PERSIST */
   
@@ -1143,8 +1148,6 @@ Object *isCellInObjectInList(Object **theCell, Object *root)
   }
   return NULL;
 }
-
-void (*objectAction)(Object *theObj) = NULL;
 
 /* scanObject: */
 void scanObject(Object *obj,

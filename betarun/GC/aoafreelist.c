@@ -6,6 +6,11 @@
 
 #include "beta.h"
 
+void aoaf_dummy() 
+{
+  USE();
+}
+
 /************************ THE AOA FREE LIST ***************************
  * AOA freelist description:
  *   All chunks are multiples of 8 bytes.
