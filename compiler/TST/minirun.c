@@ -1,5 +1,25 @@
+#include <stdio.h>
 #define trace true 
 #define fulltrace 1
+
+#if 1
+#define TRACE(code) code
+#else
+#define TRACE(code)
+#endif
+
+#if 0
+#define TRACE_COMP(code) code
+#else
+#define TRACE_COMP(code)
+#endif
+#ifdef __powerc
+#define PPC
+#endif
+
+#ifdef sgi
+#define SGI
+#endif
 
 /* this betarun may exists in several versions
  * (1) SGI or PPC;
@@ -21,22 +41,31 @@
  *                  this is the entry of the main-entry point
  */
 
-#include <sys/cachectl.h>
-/* MIPS 
-
-#define SPinstOff 3
-#define INNERinVDB 0
-*/
-
-/*  PPC */
-#define SPinstOff 3
 #define INNERinVDB 1
 
+#ifdef SGI
+
+#include <sys/cachectl.h>
 #define mainEntry  -1
+#define SPinstOff 3
+#define pcOff -1
+#define callerOff -2
+
+#endif
+
+#ifdef PPC
+#define SPinstOff 2
+
+#define mainEntry 0
+  /* 0 signals that the inner-dispatch table is NOT before the prototype */
 #define mEntryOff 3
     /* offset in prototype for offset to M-entry point 
      * when inner-dispatch is merged with virtual-dispatch
      */
+#define pcOff 2
+#define callerOff -1
+
+#endif /* PPC */
 
 #define ref(x)    struct x *
 
@@ -46,7 +75,7 @@ long BetaStackTop,BetaThis;
 
 long oldHT=0;
 long heap[heapMax];
-long _IOA= (long) &heap[0];
+long IOA= (long) &heap[0];
 long IOAused=0;
 long IOAtop = 0; /*&heap[heapMax];*/
 long heapTop=0;
@@ -88,11 +117,11 @@ void put(char ch){ write(1,&ch,1); }
 
 void dumpHeap(long start, long end) {
    int i;
-   printf("Heap:\n");
-   for (i=start; i <= end; i++)  {
-       printf("%x: %x\t", &heap[i],heap[i]);
-       if ((i % 4) == 0) printf("\n");
-     };
+   TRACE(printf("Heap:\n");
+         for (i=start; i <= end; i++)  {
+           printf("%x: %x\t", &heap[i],heap[i]);
+           if ((i % 4) == 0) printf("\n");
+        };)
  }
 
 void FatalErr(int n) {
@@ -110,6 +139,22 @@ void BetaError(int n, long * this, long SP, long RA)
 { FatalErr(2);
 }
 
+typedef void (* EntryPoint)(long,long *);
+
+EntryPoint theMainEntry(long * proto)
+{ int i;
+#ifdef INNER_IN_VDT
+ /* printf("MainEntry: mentryoff=%i, mentryoff2=%i, mentry=0x%x\n"
+  , mEntryOff, (proto[mEntryOff] & 0xffff) / 4,  proto[(proto[mEntryOff] & 0xffff) / 4]);
+  fflush(stdout);
+  for (i=0; i < 10; i++) printf("\nProto: i:%i, proto: 0x%x\n",i, proto[i]);*/
+  
+  return (void (*)(long,long *)) proto[(proto[mEntryOff] & 0xffff) / 4];
+#else
+  return(EntryPoint) proto[-1];
+#endif
+}
+
 long super(long *pt) {
    long sup;
    sup = pt[2];
@@ -125,7 +170,7 @@ long AllocHeap(int size) {
    /* the following is to experiment with ChkRA: by redefining
     * _IOA, the oldest objects becomes logically outside _IOA
     */
-   if ((heapTop > 1000) && (heapTop < 2000)) { _IOA= &heap[heapTop]; }
+   if ((heapTop > 1000) && (heapTop < 2000)) { IOA= &heap[heapTop]; }
    for (i=0; i<size; i++) ((long *)start)[i]=0;
    if (heapTop > heapMax) FatalErr(1);
   /* printf("AllocHeap: 0x%x %i 0x%x\n",start,size,start+size*4);*/
@@ -435,16 +480,45 @@ long cbTop=0;
 */
 long CopyCPP(long *struc, long *dummy) {
   long start,entry,res;
-  /*printf("\nCopyCPP: struc=0x%x, dummy=0x%x, proto=0x%x\n",struc,dummy,struc[3]);*/
-   if (struc[0] != -3) {
-     printf("\n***CopyCPP: using dummy! Should NOT happen!\n"); 
-     struc = dummy;
-   }
+
    if (struc[0] != -3) printf("\n*** CopyCPP: illegal struc parameter\n");
    entry= ((long *)struc[3])[5];
    start = &CallBack[cbTop];
    /* printf("\nentry=%x\n",entry); */
 
+#ifdef PPC
+  /* callBack[cbTop]   = struc
+    * callBack[cbTop+1] = lis r12,     entry >> 16
+    * callBack[cbTop+2] = ori r12,r12, entry & 0xffff
+    * callBack[cbTop+3] = lwz r0, 0(r12)
+    * callBack[cbTop+4] = stw  RTOC,20(SP)
+    * callBack[cbTop+5] = mtctr r0			
+    * callBack[cbTop+6] = lis r25,     start >> 16         -- dataReg0
+    * callBack[cbTop+7] = lwz RTOC, 4(r12)
+    * callBack[cbTop+8] = ori r25,r25, start & 0xffff
+    * callBack[cbTop+9] = bctr
+    */
+
+   CallBack[cbTop] = (long)struc;
+   CallBack[cbTop+1] = 0x3c000000 | (12 << 21) | (entry >> 16);
+   CallBack[cbTop+2] = 0x60000000 | (12 << 21) | (12 << 16) | (entry & 0xffff);
+   CallBack[cbTop+3] = 0x80000000 | (12 << 16);
+   CallBack[cbTop+4] = 0x90000000 | ( 2 << 21) | ( 1 << 16) | 20;
+   CallBack[cbTop+5] = 0x7c0903a6 ;
+   CallBack[cbTop+6] = 0x3c000000 | (25 << 21) | (start >> 16);
+   CallBack[cbTop+7] = 0x80000000 | ( 2 << 21) | (12 << 16) | 4;
+   CallBack[cbTop+8] = 0x60000000 | (25 << 21) | (25 << 16) | (start & 0xffff);
+   CallBack[cbTop+9] = 0x4e800420;
+
+
+   cbTop = cbTop + 10;
+
+
+   res=_flush_cache((long *)&CallBack[0],(long)&CallBack[cbTop+1],BCACHE);
+   return(long)&CallBack[cbTop-9];
+#endif
+
+#ifdef SGI
    /* callBack[cbTop]   = struc
     * callBack[cbTop+1] = lui t9,    entry>>16
     * callBack[cbTop+2] = ori t9,t9, entry & 0xffff
@@ -465,8 +539,9 @@ long CopyCPP(long *struc, long *dummy) {
    cbTop = cbTop + 6;
 
    /* printf("\nCopyCPP, funcPtr=%x\n",funcPtr);*/
-   res=_flush_cache((long *)&CallBack[0],(long)&CallBack[cbTop+1],BCACHE);
+   /*res=_flush_cache((long *)&CallBack[0],(long)&CallBack[cbTop+1],BCACHE);*/
    return(long)&CallBack[cbTop-5];
+#endif
 }
 
 /* NOT in official betarun */
@@ -718,9 +793,12 @@ long *dyn(long * obj, long SP, long LSC) {
 
 long findMentry(long *proto, long PC)
  { long mEntry, PCdist, minPC=0x3fffffff,theMentry;
+   /*printf("findMentry1: proto=0x%x, PC=0x%x, mEoff=%i\n",proto,PC,(proto[mEntryOff] / 4)); 
+   fflush(stdout);*/
    while (proto != 0) {
       mEntry = proto[(proto[mEntryOff] / 4) & 0xffff];
-      /* printf("findMentry:0x%x\n",mEntry); */
+	  mEntry = ((long *) mEntry)[0]; 
+      /*printf("findMentry2:0x%x\n",mEntry); fflush(stdout);*/
       PCdist = PC - mEntry;
       if ((PCdist > 0) && (PCdist < minPC)) {
          minPC = PCdist;
@@ -728,7 +806,8 @@ long findMentry(long *proto, long PC)
       };
       proto = super(proto);
    };
-   /* printf("findMentry min:0x%x\n",theMentry);*/
+   
+  /* printf("findMentry3 min:0x%x\n",theMentry);fflush(stdout);*/
    return theMentry;
  }
 
@@ -742,8 +821,9 @@ long *dyn2(long * obj, long SP, long LSC) {
    *                          SPglobal, LSCglobal
    */
    long * proto, * codeStart, * caller;
-   long SPoff,SPx,PL,inst,opCode,destReg,baseReg,offset;
+   long SPoff,SPx,PL,inst,opCode,destReg,baseReg,offset,i;
    struct Component *callerComp;
+   /*printf("dyn2a: obj=0x%x, SP=0x%x, LSC=0x%x\n", obj,SP,LSC); fflush(stdout);*/
    if ((long) obj == 4 ) {
       SPglobal= ((long *)SP)[0];
       LSCglobal= 0; /* how do we find the real one? */
@@ -759,12 +839,16 @@ long *dyn2(long * obj, long SP, long LSC) {
      return ((struct Component *)obj)->CallerObj;
    }
    codeStart = (long *) findMentry(proto,LSC);
+   /*for (i=-3; i<=3; i++) {
+      printf("code: %i, 0x%x, 0x%x\n", i, codeStart[i], (codeStart[i] & 0xffff) | 0xffff0000 ); fflush(stdout);
+	  };
+	  printf("codeStart: %i, 0x%x\n",SPinstOff,codeStart[SPinstOff]); fflush(stdout);*/
    SPoff = (codeStart[SPinstOff] & 0xffff) | 0xffff0000; 
    SPoff = - SPoff;
    SPx = SP + SPoff;
-   LSCglobal= ((long *)SPx)[-1];
-   caller =  (long *)((long *)SPx)[-2];
-   /*  printf("Dyn: SPoff=%i, caller=0x%x\n\n",SPoff,caller);  */
+   LSCglobal= ((long *)SPx)[pcOff];
+   caller =  (long *)((long *)SPx)[callerOff];
+   /*printf("dyn2b: SPoff=%i, caller=0x%x\n\n",SPoff,caller); */
    SPglobal = SPx;
 
    return caller;
@@ -782,7 +866,7 @@ long ExO(long jumpAdr,long * exitObj, long PC, long * this, long SP) {
   void (* compAdr)(long a0,long * a1);
 
   /*printf("\nExO: jumpAdr=0x%x, exitObj=0x%x, PC=0x%x, this=0x%x\n",
-        jumpAdr,exitObj,PC,this);*/
+        jumpAdr,exitObj,PC,this); fflush(stdout);*/
   a = this; SPx = SP; LSCglobal = PC; SPxGlobalTop = SPtop; /* missing */
   while (a != exitObj) {
 #ifdef INNERinVDB
@@ -800,7 +884,33 @@ void Terminated(){
   FatalErr(4);
 }
 
+void printCompStack(long * SPz, long dummy, long SPsize)
+{ int i;
+ /* for (i=0; i < (SPsize / 4)+4; i++) {
+		 printf("StackElm: %i: &SPz[i]= 0x%x, SPz[i]=0x%x\n"
+		 ,i*4, &((long *)SPz)[i],((long *)SPz)[i]); fflush(stdout);
+ }*/
+}
 
+void terminate()
+{ long SPx;
+  ref(object) this;
+  EntryPoint compAdr;
+  
+  SPx = SPxStack[SPtop];
+  SPtop = SPtop - 1;
+  ActiveComponent->CallerLSC = -1;
+  this = ActiveComponent->CallerObj;
+  ActiveComponent = ActiveComponent->CallerComp;
+  compAdr = (EntryPoint) ActiveComponent->CallerLSC;
+  
+  TRACE_COMP(printf("Terminating component: activeComponent=0x%x, this=0x%x, SPx=0x%x, compAdr=0x%x\n"
+  ,ActiveComponent,this,SPx,compAdr); fflush(stdout);)
+  /* we get here when the component terminates; we must return a proper
+   * a0 and a1, since th and SP are set after Att
+   */
+  compAdr(SPx,(long *)this);
+}
 
 /* NO RA and SPx in official betarun */
 void Att(ref(Object) this, struct Component * comp, long RA, long SPx)
@@ -808,10 +918,9 @@ void Att(ref(Object) this, struct Component * comp, long RA, long SPx)
   long * compObj;
   long * compProto;
   void (* compAdr)(long a0,long * a1);
-  long SPy,SPz,SPsize;
+  long SPy,SPz,SPsize,sp,spLoc;
   int isFirst,i;
-  long * sObj;
-  long * topObj;
+  long * sObj, * topObj;
 
   SPy = GetSP();
   if (ActiveComponent != 0) {
@@ -822,26 +931,29 @@ void Att(ref(Object) this, struct Component * comp, long RA, long SPx)
     SPxStack[SPtop] = SPx;
     SPyStack[SPtop] = SPy;
   } else { printf("ActiveComponet == 0 \n");};
-  /* printf("\nAtt: comp=0x%x, this=0x%x, SPx=0x%x, SPy=0x%x\n"
-	 ,(long)comp,(long)this,SPx,SPy); */
+  TRACE_COMP(printf("\nAtt: comp=0x%x, this=0x%x, SPx=0x%x, SPy=0x%x, RA=0x%x\n"
+	 ,(long)comp,(long)this,SPx,SPy,RA); fflush(stdout);)
   /* dumpObj("Attach comp",comp); */
    
   topObj = comp->CallerObj; 
   compAdr = (void (*)(long,long *)) comp->CallerLSC;
-  /* printf("\ncompAdr=0x%x\n",compAdr);*/
+  TRACE_COMP(printf("\ncompAdr=0x%x\n",compAdr); fflush(stdout);)
   if ((long)compAdr == -1) Terminated(); 
 
   isFirst = compAdr == 0;
 
   compObj = comp->Body;
-  /*printf("\nBody=0x%x\n",compObj);*/
+  TRACE_COMP(printf("\nBody=0x%x\n",compObj); fflush(stdout);)
 
   compProto =  (long *) compObj[0];
-  /* printf("\nCompProto=0x%x\n",compProto);*/
-
+  TRACE_COMP(printf("\nCompProto=0x%x\n",compProto);fflush(stdout);)
+  
+ 
   if (isFirst) { 
-    /* printf("***First\n");*/
-    compAdr = (void (*)(long,long *)) compProto[-1];
+    /* printf("***First\n");*/ 
+    /* compAdr = (void (*)(long,long *)) compProto[-1];*/
+	compAdr = theMainEntry(compProto);
+	TRACE_COMP(printf("First: compAdr=0x%x\n",compAdr);fflush(stdout);)
     topObj = compObj;
    } else {
      /* pack current component to stack object */
@@ -850,16 +962,35 @@ void Att(ref(Object) this, struct Component * comp, long RA, long SPx)
      SPsize = ((long *)sObj)[2];
 
      SPz = SPy - SPsize; 
-     for (i=0; i < SPsize / 4; i++)
-         ((long *)SPz)[i] = sObj[3 + i];
+
+     /* Unpack Stack Object. 
+	  * NOTE: after unpacking the stack object you CANNOT call other C-functions
+	  * since this will DESTROY the stack!
+	  */
+     for (i=0; i < SPsize / 4; i++) {
+         ((long *)SPz)[0+i] = sObj[3 + i];
+	 }	
+	 /* on PPC the stack contains SP pointers that links stack segments;
+	  * these have been made relative, since the stack may be unpacked
+	  * at another place in memory
+	  */
+	 spLoc = 0; sp = ((long *)SPz)[spLoc];
+	 ((long *) SPz)[spLoc] = SPz + sp;
+	 
+	 while (sp < SPsize / 4) {
+		spLoc = sp;
+		sp = ((long *)SPz)[sp];
+		((long *) SPz)[spLoc] = SPz + sp;
+	 }
+	 /* DONT do this! Will DESTROY stack: printCompStack(SPz,0,SPsize);*/
    }
   
   /* if (ActiveComponent != 0) ActiveComponent->StackObj =  -1; */
-
+  
   comp->CallerComp = ActiveComponent;
   comp->CallerObj = this;
   comp->CallerLSC = -1; 
-  /* printf("\ndo attach\n");*/
+  
   ActiveComponent = comp;
 
    /* Execute comp.
@@ -867,14 +998,16 @@ void Att(ref(Object) this, struct Component * comp, long RA, long SPx)
     * in this situation, since M111FOO adjusts SP as usual.
     * Subsequent calls after Attach; a0=SPz, a1=ca;
     */
-  compAdr(SPz,topObj);
 
-  /* we get here when the component terminates; we must return a proper
-   * a0 and a1, since th and SP are set after Att
+  compAdr(SPz,topObj,SPsize);
+  
+  /* Since compAdr has executed BETA code, registers may have been destroyed.
+   * On SGI this does NOT cause problmes;
+   * On PPC it apparently cause problmes; we can thus NOT reply on local 
+   * variables in Att being unchanged.
+   * We restore SPx from SPxStack and RA from ActiveComponent.
    */
-  comp->CallerLSC = -1; /* (long) &Terminated;*/
-  compAdr = (void (*)(long,long *))RA;
-  compAdr(SPx,(long *)this);
+  terminate();
 }
 
 /* No RA and SPz in official betarun.h */
@@ -883,10 +1016,10 @@ void Susp(long * this, long oldSP, long RA, long SPz){
    struct Component * returnComp;
    long * returnObj;
    void (* callingRA)(long SP , long * this);
-   long SPx, SPy;
+   long SPx, SPy, spLoc, sp;
    int i;
    long * sObj; 
-   /* printf("\n*** Suspend: 0x%x\n",ActiveComponent);*/
+   TRACE_COMP(printf("\nSusp:  ActiveComponent=0x%x\n",ActiveComponent); fflush(stdout);)
 
    returnComp = (struct Component*) ActiveComponent->CallerComp;
    returnObj = ActiveComponent->CallerObj;
@@ -905,9 +1038,26 @@ void Susp(long * this, long oldSP, long RA, long SPz){
    /* pack stack SPz - SPy to  activeCompSP*/
    sObj = AlloSO(SPy - SPz);
 
+   /* on PPC the stack contains SP pointers that links stack segments;
+	* these must be made relative, since the stack may be unpacked
+	* at another place in memory
+	*/  
+   TRACE_COMP(printCompStack(SPz,0,(SPy - SPz));)
+	
+   spLoc = SPz; sp = ((long *)SPz)[0];
+   while (sp < SPx) { 
+        TRACE_COMP(printf(" spLoc=0x%x, sp=0x%x\n", spLoc,sp); fflush(stdout);)
+	    ((long *)spLoc)[0] = sp - SPz ;
+		spLoc = sp;
+		sp = ((long *)sp)[0];
+   };
    /* copy SPz[0],  SPz[1], ... , SPz[(SPy - SPz - 4) / 4] = SPy[-1] */
-   for (i=0;  i < (SPy - SPz) / 4; i++)
+   
+   for (i=0;  i < (SPy - SPz) / 4; i++) {
        sObj[3+i] = ((long *)SPz)[0 + i];
+   };	
+   
+   TRACE_COMP(printCompStack(&sObj[3],0,SPy-SPz);)
 
    dumpObj("Suspend stackObj",sObj);
    ActiveComponent->StackObj = sObj;
@@ -979,7 +1129,7 @@ void Initialize() {
 void SetProtos(long *adr, long *textP) {
    T1BETAENVadr = adr;
    TextProto= textP;
-   printf("T1BETAENV = 0x%x\n",T1BETAENVadr);
+   printf("T1BETAENV = 0x%x\n",T1BETAENVadr); fflush(stdout);
 
 }
 
@@ -987,18 +1137,24 @@ void main() {
   long a0;
    char ch;
    void (* M1BETAENV)(long a0,long * a1);
-   printf("Starting simple betarun!\n");
+   printf("Starting simple betarun!\n"); fflush(stdout);
    betaTextArea = (char *)malloc(1000);
    /*   heapTop = (long *) malloc(100000);*/
 	     printf("SetProtos: %x\n",SetProtos);
+   Debugger();
    BETA_main();
    ActiveComponent = (struct Component *)AlloC(0,T1BETAENVadr,GetSP());
    topObj = ActiveComponent->Body;
 
    /*G1BETAENV(0,topObj);*/
-   M1BETAENV =  (void (*)(long,long *)) T1BETAENVadr[mainEntry];
+   if (mainEntry == -1) 
+      M1BETAENV =  (void (*)(long,long *)) T1BETAENVadr[mainEntry];
+   else	{
+      M1BETAENV = (void (*)(long,long *)) 
+               T1BETAENVadr[(T1BETAENVadr[mEntryOff] / 4) & 0xffff];
+   };
    M1BETAENV(0,topObj);
-   printf("End simple betarun\n");
+   printf("End simple betarun\n"); fflush(stdout);
  }
 
 void AttBC(){}
