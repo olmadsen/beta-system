@@ -20,7 +20,38 @@ do
    left.private.data[private.index][]->leftData[];
    right.private.data[private.index][]->rightData[];
    INNER ;
-   (if not doneInInner then leftData[]->rightData.less->value;  if);
+   (if not doneInInner then
+       less:
+       (if leftData[] <> none then
+           (if rightData[] <> none then
+               (if true
+                // (leftData.lgth < rightData.lgth) then
+                   (for i: leftData.lgth repeat
+                     (if leftData.T[i] <> rightData.T[i] then
+                         (leftData.T[i] < rightData.T[i])->value; leave less; 
+                     if)
+                   for);
+                   true->value;
+                   
+                // (leftData.lgth >= rightData.lgth) then
+                   (for i: rightData.lgth repeat
+                     (if leftData.T[i] <> rightData.T[i] then
+                         (leftData.T[i] < rightData.T[i])->value; leave less; 
+                     if)
+                   for);
+                   false->value;
+                   
+               if);
+               
+            else
+               false->value; 
+           if);
+           
+        else
+           true->value; 
+       if);
+       
+   if);
      
 
 -- abstractColumnOpen: DoPart --
@@ -59,11 +90,11 @@ do
        (#  do current.private.index+1->current.private.index;  #);
      
 
--- tableViewHorizontalScrollbarVisibleEnter: DoPart --
-do visible->private.horizontalScrollbar.visible;   
-
--- tableViewHorizontalScrollBarVisibleExit: DoPart --
+-- tableViewHorizontalScrollbarVisibleExit: DoPart --
 do private.horizontalScrollbar.visible->visible;   
+
+-- tableViewHorizontalScrollbarVisibleEnter: DoPart --
+do visible->private.horizontalScrollbar.visible; updateScrollbars;   
 
 -- tableViewVerticalScrollbarVisibleEnter: DoPart --
 do
@@ -126,16 +157,6 @@ do
      (# box,iconBox: @rectangle; icon: ^pixmap; expLeft,expTop: @integer; 
      do
         bounds->box;
-        (if theTableItem.expander then
-            box.left+5->expLeft;
-            box.top+(rowHeight-12) div 2->expTop;
-            (if theTableItem.private.expanded then
-                (expLeft,expTop,g.expanderEnabledDown)->g.drawExpander; 
-             else
-                (expLeft,expTop,g.expanderEnabledRight)->g.drawExpander; 
-            if);
-            
-        if);
         theTableItem.icon->icon[];
         (if icon[] <> none then
             box->iconBox;
@@ -251,12 +272,6 @@ do value->private.theIconIndent;
 -- tableItemGetIconIndent: DoPart --
 do private.theIconIndent->value;   
 
--- tableItemSetExpander: DoPart --
-do value->private.isExpander;   
-
--- tableItemGetExpander: DoPart --
-do private.isExpander->value;   
-
 -- tableItemSelected: DoPart --
 do private.selected->value;   
 
@@ -272,25 +287,13 @@ do
 do INNER ;   
 
 -- tableItemLib: Attributes --
-toggle:
-  (# 
-  do
-     not private.expanded->private.expanded;
-     (if private.expanded then
-         theEventHandler.onExpand; 
-      else
-         theEventHandler.onColapse; 
-     if);
-     updateMainView;
-     
-  #);
-  
+toggle: (#  do updateMainView;  #);   
 
 -- tableItemPrivate: Descriptor --
 (#
    data: [1] ^text;
    theIcon: ^pixmap;
-   selected,isExpander,expanded: @boolean;
+   selected: @boolean;
    theIconIndent: @integer;
    theTextIndent: @integer;
    pos: ^tableItemList.theCellType;
@@ -304,6 +307,7 @@ do
        theTableItem[]->private.topItem[]; 
    if);
    updateMainView;
+   updateScrollBars;
      
 
 -- tableViewPrepend: DoPart --
@@ -339,7 +343,6 @@ do
 do
    (if not theTableItem.selected then
        theTableItem[]->private.theSelection.append;
-       theTableItem.theEventHandler.onSelect;
        true->theTableItem.private.selected;
        updateMainView;
        
@@ -408,6 +411,7 @@ do
         maxX-width->maxX;
         (if maxX < 0 then 0->maxX;  if);
         private.tableItems.size*(rowHeight+rowDist)->maxY;
+        (if horizontalScrollbarvisible then maxY+scrollbarHeight->maxY;  if);
         maxY-height->maxY;
         (if maxY < 0 then 0->maxY;  if);
         
@@ -437,6 +441,7 @@ do
    true->border.visible;
    borderStyles.shadowIn->border.style;
    layout;
+   (0xFFFF,52428,26214)->private.hilitecolor;
    INNER ;
    updateScrollbars;
      
@@ -527,7 +532,6 @@ updateScrollBars:
      false->private.updatingScrollbars;
      
   #);
-hiliteColor: (#  exit (0xFFFF,52428,26214) #);
 columnList: list
   (# theCellType::  (#  #); element:: abstractColumn;  #);
 tableItemList: list
@@ -566,6 +570,7 @@ tableItemClick:
   enter (theEvent[],theTableItem[],bounds[])
   do
      bounds[]->getExpanderBox->box;
+     theEvent.doubleClick->theTableItem.theEventHandler.onSelect;
      (if theEvent.localPosition->box.containsPoint then
          theTableItem.toggle; 
       else
@@ -607,6 +612,7 @@ rowdist: (#  exit 1 #);
    xOffset,yOffset: @integer;
    pendingUpdate: @boolean;
    updatingScrollbars: @boolean;
+   hiliteColor: @ (# theColor: @Color enter theColor exit theColor #);
    columns: @columnList;
    tableItems: @tableItemList;
    titleStyle,bodyStyle: @textStyle;
@@ -853,4 +859,45 @@ rowdist: (#  exit 1 #);
      #);
    
 #)  
+
+-- tableViewonMouseUp: DoPart --
+do INNER  
+
+-- tableViewdelete: DoPart --
+do theTableItem[]->private.tableItems.at->private.tableItems.delete;   
+
+-- tableViewDeleteSelection: DoPart --
+do
+     (# aTableItem: ^tableItemType; 
+     do
+        (if not private.theSelection.empty then
+            (if
+            ((private.theSelection.last).elm[] <>
+             (private.tableItems.last).elm[]) then
+                ((private.theSelection.last).elm[]->private.tableItems.at).succ.
+                  elm[]->atableItem[]
+            if);
+            private.theSelection.scan
+              (# 
+              do
+                 current.theEventHandler.onDeSelect;
+                 false->current.private.selected;
+                 current[]->delete;
+                 
+              #);
+            private.theSelection.clear;
+            (if (atableItem[] = none ) and
+            ((private.tableItems.head <> private.tableItems.last)) then
+                (private.tableItems.last).elm[]->atableItem[]
+            if);
+            (if atableItem[] <> none then atableItem[]->selection.set if);
+            updateMainView;
+            updateScrollbars;
+            updateScrollCache;
+            
+        if)
+     #)  
+
+-- tableViewChangeHiliteColor: DoPart --
+do aColor->private.hiliteColor; updateMainView;   
 
