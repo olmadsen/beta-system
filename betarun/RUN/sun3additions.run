@@ -1,0 +1,112 @@
+[[
+
+------- sun3additions: System ----
+
+ArgCount:  cvar;
+ArgVector: cvar;
+
+{ SetArgValues sets to runtime variable which makes it posible   }
+{ to retrieve the arguments from the command line.               }
+SetArgValues: public
+  (#
+     stackPointer: StackArea = SP;
+     theVector:    StackArea = AddrReg1
+  do
+     stackPointer[20]   -> ArgCount;
+     stackPointer[24][] -> theVector;
+     theVector -> ArgVector;
+     return
+  #);
+
+{ Routine called from betaenvbody in case of detected failure. }
+FailureExit: public = '_FailureExit'
+(#
+   { Called from betaenvbody: (FailureTrace,'') -> Stop }
+   CurrentObject: Object = RegObj
+do
+   push CurrentObject;
+   push -8;
+   call BetaError
+#)
+
+------- CallBack: System ----
+
+HandleCB:      proc;
+
+CopyCPP: public
+  (#
+     theCBStruct: DataArea = AddrReg1;
+     newTop:      DataArea = AddrReg2;
+     
+     stackTop: StackArea  = SP;
+     theRoutine: CodeArea = AddrReg2
+  do
+     { Find a free entry in the Call Back Functions Area. }
+     { This area is defined by [ CBFA <= CBFATop <= CBFALimit ]. }
+     
+     CBFATop -> theCBStruct;
+     theCBStruct[12][] -> newTop;
+     (if newTop > CBFALimit then
+         { Search through the area to find a free one.
+           Not yet implemented: No one are ever freed }
+         call CBFArelloc;
+         goto CopyCPP
+     if);
+     
+     newTop -> CBFATop;
+     
+     stackTop[4] -> theCBStruct[0];
+     20153 -> theCBStruct[4]!w;  { Write the first word of the jsr instruction 4eb9.}
+     HandleCB[] -> theRoutine;
+     theRoutine -> theCBStruct[6];
+     20085 -> theCBStruct[10]!w; { Write the rts instruction 4e75.}
+     theCBStruct[4][] -> theCBStruct;
+     theCBStruct -> stackTop[4];
+     
+     return
+  #);
+
+HandleCB: public
+  (#
+     stackPointer: StackArea = SP;
+     dataPointer: DataArea = RegArg;
+     theStruct:   Structure = RegArg;
+     theProto:    ProtoType = RegArg;
+     resObj:      Object    = RegArg;
+     
+     theOrigin:   Object    = RegAdr;
+     
+     newProto:    ProtoType = RegAdr;
+     codePointer: CodeArea  = RegAdr;
+     
+     theObj: Object = RegObj
+  do
+     (code '	moveml	#0x3f7e,sp@-' code);
+     
+     { Push CallBackFrame = (next, betaTop, tmp). }
+     push 0;
+     push BetaStackTop;
+     push ActiveCallBackFrame;
+     
+     stackPointer -> ActiveCallBackFrame;
+     
+     stackPointer[60] -> dataPointer; { 16 = Offset after the previous push. }
+     dataPointer[-10] -> theStruct;
+     theStruct.iOrigin -> theOrigin;
+     theStruct.iProto -> theProto;
+     call AlloI;
+     resObj -> theObj;
+     resObj.ProtoType ->  newProto;
+     newProto.CallBackRoutine -> codePointer;
+     call codePointer;
+     
+     pop ActiveCallBackFrame;
+     pop BetaStackTop;
+     4 -> stackPointer+;
+     
+     (code '	moveml	sp@+,#0x7efc' code);
+     
+     return
+  #)
+
+--]]
