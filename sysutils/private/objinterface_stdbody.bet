@@ -1,0 +1,512 @@
+ORIGIN 'objinterfacebody';
+LIB_ITEM 'sysutilsobjint';
+MDBODY  linux   'objint_littlebody'
+        nti     'objint_littlebody'
+        x86sol  'objint_littlebody'
+        default 'objint_bigbody';
+
+-- LIB: attributes --
+
+percentPrimitivesFullyImplemented:
+  (# exit false #);
+
+-- PrototypeBeta: descriptor--
+(#  
+   getCString: @
+     (# address: @integer; 
+        t: @text;
+     enter address
+     do address -> extGetCstring -> t;
+     exit t[]
+     #);
+#)
+
+-- PrototypeGCtab: dopart --
+do address + ((%getShortAt(address+2*0))) -> value
+   (* Above line tos_converted from: do address + (address -> tos'%adrGetShort[0]') -> value *)
+
+-- PrototypeOriginOff: dopart --
+do %getShortAt(address+2*1) -> value
+   (* Above line tos_converted from: do address -> tos'%adrGetShort[1]' -> value *)
+
+-- PrototypeGPart: dopart --
+do %getLongAt(address+4) -> value
+   (* Above line tos_converted from: do address + 4 -> tos'%adrGetLong' -> value *)
+
+-- PrototypeSize: dopart --
+do %getShortAt(address+12+2*0) -> value;
+   (* Above line tos_converted from: do address + 12 -> tos'%adrGetLong' -> tos'%getShort[0]' -> value *)
+
+-- PrototypePrefix: dopart --
+do (%getLongAt(address+8)) -> value
+   (* Above line tos_converted from: do address + 8 -> tos'%adrGetLong' -> value *)
+
+--- PrototypeAstIndexBody:dopart ---
+do %getShortAt(address+16+2*1) -> value;
+   (* Above line tos_converted from: do address + 16 -> tos'%adrGetLong' -> tos'%getShort[1]' -> value *)
+   
+--- PrototypeFormIndexBody:dopart ---
+do %getShortAt(address+16+2*0) -> value
+   (* Above line tos_converted from: do address + 16 -> tos'%adrGetLong' -> tos'%getShort[0]' -> value *)
+
+-- PrototypeScanRefs: descriptor --
+(#
+do GcTab -> thisAddr;
+   (* Scan static part objects:
+    * struct GCEntry {
+    *  0: unsigned short StaticOff;
+    *  2: short OriginOff;
+    *  4: ref(ProtoType) Proto;
+    * };
+    *)
+   true -> isStatic;
+   loop: 
+     (# 
+     do %getShortAt(thisAddr) * 4 -> thisOffset;
+        (if thisOffset <> 0 then 
+            %getSignedShortAt(thisAddr + 2) * 4 -> thisOriginOff;
+            %getLongAt(thisAddr + 4) -> thisProto;
+            INNER scanrefs;
+            thisAddr + 8 -> thisAddr;
+            restart loop
+        if)
+     #);
+   thisAddr + 2 -> thisAddr;
+   false -> isStatic;
+   (* Scan dynamic references *)
+   loop: 
+     (# 
+     do %getShortAt(thisAddr)->thisOffset;
+        (if thisOffset<>0 then
+            thisOffset mod 4 -> refType;
+            thisOffset - refType -> thisOffset;
+            INNER scanrefs;
+            thisAddr + 2 -> thisAddr; 
+            restart loop 
+        if)
+     #)
+#)
+
+
+-- PrototypeScanSimples: descriptor --
+(* EndianTable:	
+ *              The endian table holds information about the location in
+ * 		the object about possible integer, short and real values
+ * 		that must be converted from/to big/little endian when
+ * 		the object is exchanged between big/little endian machines.
+ * 		As of writing, this table is always generated for little
+ * 		endian machines. Switch 47 will generate it for big endian
+ * 		machines as well.
+ * 
+ * 		However, the format and generation of the table is currently
+ * 		being revisited. Ths current format is:
+ * 
+ * 		NOTE!  Bits are counted "as they are laid out in memory".
+ * 		This means that bit 0 is 0x80 in the byte, and bit 7 is 0x01
+ * 
+ *              a	A bit vector describing offsets holding a long 
+ * 			attributes (i.e 4 bytes). Ig e.g. bit 12 is 1,
+ * 			then byte offset 48 holds a long.
+ * 
+ * 			The length of the bit vector in bytes is:
+ * 
+ * 				((size - 1 ) div 32) + 1
+ * 
+ * 			Each byte holds information about 8 longs, one
+ * 			pr. bit.
+ * 
+ * 		b	A zero-terminated list of shorts (2 bytes) holding 
+ * 			byte offsets to attributes holding a short.
+ * 
+ * 		c	A zero-terminated list of shorts (2 bytes) holding
+ * 			byte offsets to attributes holding a real.
+ * 
+ * 		Note: the bit vector is paded with a possible byte to make
+ * 		sure that the short- and real-lists are half-word aligned.
+ * 
+ * 		A further compaction is performed:
+ * 
+ * 			Objects rarely have shorts or reals.  In case
+ * 			of shorts/reals, a bit indicate that the 
+ *			corresponding list is present.
+ * 
+ * 			The first 2 bits in the long bit vector represents
+ * 			information about offset 0 (zero) and 4. Offset 0
+ * 			is the protytype pointer of the object and offset 4
+ * 			is the GC-field. Since this is always the case, bits
+ * 			0 and 1 can be used to represent information about 
+ * 			shorts and reals:
+ * 
+ * 			Bit 0 (0x80) is set if a short-list is present.
+ * 			Bit 1 (0x40) is set if the real-list is present.
+ *)
+
+(# b, (* Current byte of the bitvector *)
+   N, (* no. of bytes to represent longs *)
+   ptr, (* points at current byte/word in endiantable. *)
+   pos: @Integer; (* thisOffset at start of the current byte *)
+   do_int16, do_real64: @Boolean;
+do
+   (* THIS VERSION READS THE COMPACT VERSION DESCRIBED ABOVE! *)
+   
+   (* Make ptr point at first byte in EndianTable *)
+   GcTab -> ptr;
+   loop: (* Skip through "Static-object-table" *)
+     (#
+     do (if %getShortAt(ptr)<>0 then 
+            ptr + 8 -> ptr; (* Skip 2 shorts and a long. *)
+            restart loop;
+        if)
+     #);
+   ptr + 2 -> ptr; (* Skip terminating zero. *)
+   
+   loop: (* Skip through "Dyn-ref-table" *)
+     (#
+     do (if %getShortAt(ptr)<>0 then 
+            ptr + 2 -> ptr; (* Skip 1 short. *)
+            restart loop;
+        if)
+     #);
+   ptr + 2 -> ptr; (* Skip terminating zero. *)
+   
+   SIMPLETYPE_INT32->simpleType;
+   %getByteAt(ptr) -> b; (* First get flags from first two bits.*)
+   ptr+1->ptr; 
+   
+   ((b %Band 0x80)=0x80) -> do_int16;
+   ((b %Band 0x40)=0x40) -> do_real64;
+   
+   (if b<>0 then        (* process remaining 6 bits *)
+       8 -> thisOffset;
+       loop:
+         (#
+         do (if (b %Band 0x20) then INNER scanSimples if);
+            thisOffset+4->thisOffset;
+            b %sll 1 ->b;
+            (if b<>0 then restart loop if);
+         #);                 
+   if);
+   
+   32->pos; (* Ready for rest of bytestream representing longs. *)
+   (Size-1) div 8 -> N;
+   
+   (for i: N repeat
+        %getByteAt(ptr) -> b;
+        (if b<>0 then
+            (* process bits *)
+            pos->thisOffset;
+            loop:
+              (#
+              do (if (b %Band 0x80) then INNER scanSimples if);
+                 thisOffset+4->thisOffset;
+                 b %sll 1 ->b;
+                 (if (b %Band 0xff) then restart loop if);
+              #);                 
+        if);
+        ptr+1->ptr; pos+32->pos;
+   for);
+   
+   (if (ptr %Band 1) then ptr+1->ptr if);
+   
+   (if do_int16 then 
+       SIMPLETYPE_INT16->simpleType;
+       loop:
+         (#
+         do %getShortAt(ptr) -> thisOffset;
+            (if thisOffset=0 then 
+                ptr + 2 -> ptr; 
+                leave loop 
+            if);
+            INNER scanSimples;
+            ptr + 2 -> ptr;
+            restart loop;
+         #);
+   if);
+   
+   (if do_real64 then 
+       SIMPLETYPE_REAL64->simpleType;
+       loop:
+         (#
+         do %getShortAt(ptr) -> thisOffset;
+            (if thisOffset=0 then 
+                ptr + 2 -> ptr; 
+                leave loop 
+            if);
+            INNER scanSimples;
+            ptr + 2 -> ptr;
+            restart loop;
+         #);
+   if);
+#)
+
+-- PrototypeGetStrucProto: dopart --
+do %getLongAt(((%getLongAt(@@structure))) + 12) -> protoAdr;
+   (* Above line tos_converted from: do (@@structure -> tos'%AdrGetLong') + 12 -> tos'%AdrGetLong' -> protoAdr; *)
+   
+--- isComponentBody:dopart ---
+do (obj[] -> getProtoField) = ComponentPTvalue -> value;
+   
+--- objectToComponentBody:descriptor ---
+(# ato: @addressToObject;
+   compAddr: @integer;
+   protoAddr: @integer;
+do (if obj[]<>NONE then
+       (if obj[]->isComponent then
+           (@@comp,@@obj)->assignRef
+        else
+           (if (obj[]->getGCField) = -6 then
+               ((%getLongAt(@@obj)))-24 -> compAddr;
+               (* Above line tos_converted from: (@@obj->tos'%AdrGetLong')-24 -> compAddr; *)
+               (%getLongAt(compAddr)) -> protoAddr;
+               (* Above line tos_converted from: compAddr->tos'%AdrGetLong' -> protoAddr; *)
+               (if COMProtoTypes then
+                   protoAddr-DISP_OFF -> protoAddr;
+               if);
+               (if (protoAddr) = ComponentPTvalue then
+                   (@@comp,compAddr)->assignRef
+               if)
+           if)
+       if)
+   if)
+#)
+
+--- componentToObjectBody:descriptor ---
+(# ato: @addressToObject;
+do (if comp[]<>NONE then
+       ((%getLongAt(@@comp))) + 24 -> ato -> obj[]
+       (* Above line tos_converted from: (@@comp -> tos'%AdrGetLong') + 24 -> ato -> obj[] *)
+   if);
+#)
+
+--- getProtoFieldBody:dopart ---
+do
+   0 -> value; 
+   (if obj[] <> NONE then
+       (if percentPrimitivesFullyImplemented then
+           obj.%getLong -> value; (* crashes compiler *)
+        else
+           %getLongAt(%getLongAt(@@obj)) -> value;
+       if);
+       (* Above line tos_converted from: @@obj -> tos'%AdrGetLong' -> tos'%AdrGetLong' -> value; *)
+       (if COMProtoTypes then
+           value-DISP_OFF -> value;
+       if);
+   if)
+--- putProtoFieldBody:dopart ---
+do
+   (if obj[] <> NONE then
+       (if COMProtoTypes then
+           value+DISP_OFF -> value;
+       if);
+       (value,0)->obj.%putLong;
+   if)
+
+-- GetPrototype: dopart --
+do 
+   (if percentPrimitivesFullyImplemented then
+       obj.%getLong -> protoAdr; (* crashes compiler *)
+    else
+       %getLongAt(%getLongAt(@@obj)) -> protoAdr;
+   if);
+   (* Above line tos_converted from: (@@obj -> tos'%AdrGetLong') -> tos'%AdrGetLong' -> protoAdr; *)
+   (if COMProtoTypes then
+       protoAdr-DISP_OFF -> protoAdr;
+   if);
+   (if protoAdr = ComponentPTvalue then
+       %getLongAt(%getLongAt(@@obj) + 24) -> protoAdr;
+       (* Above line tos_converted from: (@@obj -> tos'%AdrGetLong') + 24 -> tos'%AdrGetLong' -> protoAdr; *)
+       (if COMProtoTypes then
+           protoAdr-DISP_OFF -> protoAdr;
+       if);
+   if)
+
+-- GetPatternName: descriptor --
+(# proto: @prototype;
+do obj[] -> getProtoType -> proto;
+   proto.labId -> name[];
+   (if (name.length -> name.inxGet)='#' then
+       (1,name.length-1) -> name.sub -> name[]
+   if)
+#)
+
+--- getGCFieldBody:dopart ---
+do
+   (if obj[] <> NONE then
+       %getLongAt(((%getLongAt(@@obj))) + 4) -> value
+       (* Above line tos_converted from: (@@obj -> tos'%AdrGetLong') + 4 -> tos'%AdrGetLong' -> value *)
+   if)
+
+-- GetOrigin: descriptor --
+(# pt: @prototype;
+   off: @integer;
+   getObject: @addressToObject;
+do obj[] -> getProtoType -> pt;
+   pt.originOff -> off;
+   %getLongAt(((%getLongAt(@@obj))) + off*4) -> getObject -> obj[];
+   (* Above line tos_converted from: (@@obj -> tos'%adrGetLong') + off*4 -> tos'%adrGetLong' -> getObject -> obj[]; *)
+   (if obj[]<>NONE then
+       (if (obj[] -> getPrototype) = DopartObjectPTValue then
+           (* Go one more out !! *)
+           %getLongAt(((%getLongAt(@@obj)))+8) -> getObject -> obj[];
+           (* Above line tos_converted from: (@@obj->tos'%AdrGetLong')+8->tos'%AdrGetLong' -> getObject -> obj[]; *)
+       if);
+   if);
+#)
+
+--- PrototypeGroupId: descriptor ---
+(# GroupName: external (* in betarun/C/outpattern.c *)
+     (# address: @Integer;
+        isCode: @Integer;
+        name: [1]@Char;
+     enter (address,isCode)
+     exit name
+     #);
+do 
+   &Text[] -> id[]; (address,0) -> GroupName -> id;
+#)
+
+-- AddressToObject: dopart --
+do (@@obj, addr) -> assignRef
+
+-- PrintObject: descriptor --
+(# pt: @protoType;
+   addrToObject: @addresstoobject;
+do (if s[]=NONE then screen[] -> s[] if);
+   (if obj[]=NONE then
+       'NONE'->s.puttext
+    else
+       obj[] -> getPrototype -> pt;
+       (# offsetTable: [pt.size-1]@integer;
+          
+          gcField:     (# exit 2 #);
+          originField: (# exit 5 #);
+          staticPart:  (# exit 1 #);
+          dynamicRef:  (# exit 3 #);
+          simpleVal:   (# exit 4 #);
+          
+          fillOutTable : 
+     	    (# pt,pt1: @protoType;
+	       inx,pref: @integer;
+	       o1: ^ object;
+     	    enter (pt,inx)
+     	    do gcField -> offsetTable[inx+1];
+               originField -> offsetTable[inx+pt.originOff];
+	       pt -> pt1;
+	       loop: (* find origins in all prefixes *)
+	         (# 
+                 do pt1.prefix -> pref;
+                    (if pref 
+                     // 0
+                     // pt1 (* Object *) then
+                     else 
+                        pref -> pt1;
+                        originField -> offsetTable[inx+pt1.originOff];
+                        restart loop
+                    if)
+	         #);
+	       pt.scanRefs
+	       (#
+	       do 
+	          (if isStatic then 
+	       	      (if offsetTable[inx + thisOffset div 4] = 0 then
+		          inx * 4 + thisOffset + ((%getLongAt(@@obj))) 
+		          (* Above line tos_converted from: inx * 4 + thisOffset + (@@obj -> tos'%adrGetLong') *)
+		            -> addrToObject-> o1[];
+		          (o1[] -> getProtoType,inx + thisOffset div 4)
+ 		            -> fillOutTable;
+		          staticPart -> offsetTable[inx + thisOffset div 4];
+	       	      if);
+	           else 
+	       	      (if offsetTable[inx +  thisOffset div 4] = 0 then 
+                          dynamicRef -> offsetTable[inx + thisOffset div 4];
+	       	      if);
+	          if);
+	       #);
+	       (for i: pt.size-1 repeat
+	     	    (if offsetTable[inx+i]=0 then simpleVal -> offsetTable[inx+i] if)
+	       for);
+     	    #);
+          
+          printFrom: 
+     	    (# inx: @integer;
+	       o1,o2: ^ object;
+	       pt: @protoType;
+	       i: @integer;
+	       sp: @
+	         (# havePrintedSome: @boolean
+	         do (if havePrintedSome then 
+                        ' ' -> s.put
+	      	     else 
+                        true -> havePrintedSome
+	            if)
+                 #);
+     	    enter (o1[],inx)
+     	    do o1[] -> getProtoType -> pt;
+	       (if o1##=text## then
+	           (# t: ^text;
+	           do o1[] -> t[];
+	      	      '"' -> s.put;
+	      	      t[] -> s.putText;
+	      	      '"' -> s.put;
+	           #)
+      	        else
+	           2 -> i;
+	           '(' -> s.put;
+	           loop: 
+	     	     (if (i < pt.size) then
+	      	         (if offsetTable[inx+i]
+	       	          // gcField then i + 1 -> i; 
+	       	          // simpleVal then
+		     	     sp;
+		     	     %getLongAt((inx + i) * 4 + ((%getLongAt(@@obj))))
+		     	     (* Above line tos_converted from: (inx + i) * 4 + (@@obj -> tos'%adrGetLong') -> tos'%adrGetLong' *)
+                               -> s.putInt;
+		     	     i + 1 -> i;
+	       	          // staticPart then
+		     	     sp;
+		     	     (inx+i) * 4 + ((%getLongAt(@@obj)))
+		     	     (* Above line tos_converted from: (inx+i) * 4 + (@@obj -> tos'%adrGetLong') *)
+ 			       -> addrToObject -> o2[];
+		     	     o2[] -> getPatternName -> s.putText;
+		     	     i + 1 + ((o2[],inx+i) -> printFrom) -> i;
+	       	          // dynamicRef then
+		     	     sp;
+		     	     '^' -> s.put;
+		     	     i + 1 -> i;
+	       	          // originField then i + 1 -> i;
+	      	         if); 
+	      	         restart loop;
+	     	     if);
+	           ')' -> s.put
+     	       if);
+   	    exit pt.size-1
+   	    #);
+       do
+          obj[] -> getPatternName -> s.putText;
+          (pt,0) -> fillOutTable;
+          (obj[],0) -> printFrom
+       #)
+   if);
+   s.newLine;
+#)
+--- ObjIntgetOIDforObject:DoPart ---
+do (# getOIDforObject: external
+        (# obj: @Integer;
+           OID: @Integer;
+        enter obj
+        exit OID
+        #);
+   do %GetLongAt(@@obj)->getOIDforObject->OID;
+   #);
+   
+--- ObjIntgetObjectByOID:DoPart ---
+do (# getObjectByOID: external
+        (# obj: @Integer;
+           OID: @Integer;
+        enter OID
+        exit obj
+        #);
+   do (OID->getObjectByOID) %putLongAt(@@obj);
+      (* Above line tos_converted from: do (@@obj,OID->getObjectByOID)->TOS'%PutLong'; *)
+   #);
+   
