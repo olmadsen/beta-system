@@ -83,7 +83,11 @@ void ProcessStackObj(struct StackObject *theStackObject)
 extern struct RegWin* lazyTrapAR;
 #endif
 
+#ifdef sun4s
 extern long *start asm("_start");
+#else
+extern long *start asm("start");
+#endif
 extern long *etext;
 extern long *end;
 #define isCode(addr) ( ((long*)&start <= (long*)(addr)) && ((long*)(addr) < (long*)&etext) )
