@@ -14,13 +14,14 @@ AlloCOM: public
      Argument:      DataArea  = RegCall;
      
      { Used variables. }
-     Size:          Long      = DataReg2;
+     Size:          Word      = DataReg2;
      Offset:        Word      = DataReg2;
      DataReg2Long:  Long      = DataReg2; 
      Tmp:           Long      = DataReg1;
      initTab:       CodeArea  = AddrReg1; { index in GC table in prototype }
      Entry:         CodeArea  = AddrReg1;
      theItem:       Item      = AddrReg2;
+     theCell:       DataArea  = AddrReg1;
           
   do
      (if debug then 1 -> NumAlloCOM+ if); 
@@ -28,17 +29,18 @@ AlloCOM: public
      
      push AddrReg1, AddrReg2, DataReg2Long;
      
+     { Save registers before calling C }
      push RegThis;
      push a2;
      push a3;
      push a4;
-     SP -> StackEnd;
+     SP -> StackEnd; { Not really needed, AOAcalloc cannot trigger IOAGc }
      push RegAdr;
      push DataReg2;
      push protoType;
 
      0 -> Size!l;
-     protoType.Size -> Size!W;
+     protoType.Size -> Size;
      4 -> Size*;
      push Size!l; {numbytes}
      call AOAcalloc;
@@ -129,12 +131,23 @@ AlloCOM: public
      pReg1 -> Tmp!l;
      0 -> Offset!l;
      protoType.OrigOff -> Offset;
-     protoType.GenPart -> Entry; { Must be before theItem -> Argument }
+     { Store origin }
      Tmp!l -> theItem[Offset*4];
-     theItem[Offset*4][] -> Tmp;
-     push Tmp;
-     call ChkRA;
-     pop Tmp;
+     { Now since theItem is allocated OUTSIDE IOA, we need to do
+       a ChkRA here after having stored origin.
+     }
+     theItem[Offset*4][] -> theCell;
+     
+     (if call_chkra_unconditionally then
+         call ChkRA_EBP;
+      else
+         { No need to check theCell outside IOA - we know that! }
+         push theCell;
+         call ChkRA { No need to remove parameter. }
+     if);
+     
+     { Get the G-part }
+     protoType.GenPart -> Entry; { Must be before theItem -> Argument }
      theItem -> Argument;
 
      (if Entry<>0 then

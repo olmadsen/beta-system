@@ -160,7 +160,7 @@ static struct Object *AOAallocate(long numbytes)
 #define AOA_ALLOC_PARAMS long numbytes
 #endif 
 
-#ifdef RUN
+#ifdef nti /*RUN*/ 
 /* FIXME:  We cannot call DoGC, as it is declared in RUN.
  * But we do not really need to, as long as AOAGC is disabled.
  */
