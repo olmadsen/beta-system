@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-02-26 16:24:13 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-02-26 16:38:12 $, SID: $Revision: 1.11 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -262,8 +262,8 @@ ProcessReference( theCell)
 
   theObj = *theCell;
 
-  if( inIOA(*theCell)){ /* '*theCell' is inside IOA */
-    DEBUG_IOA( Claim(isObject(*theCell),"ProcessReference: theObj is consistent."));
+  if( inIOA(theObj)){ /* 'theObj' is inside IOA */
+    DEBUG_IOA( Claim(isObject(theObj),"ProcessReference: theObj is consistent."));
     GCAttribute = (*theCell)->GCAttr;
     if( isForward(GCAttribute) ){ /* theObj has a forward pointer. */
       *theCell = (ref(Object)) GCAttribute;
