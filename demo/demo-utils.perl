@@ -9,6 +9,8 @@ sub usage(){
     print "Usage:\n";
     print "perl -s run.demos [-h] [-c] [-j] [-d]\n";
     print "  -h  print this help\n";
+    print "  -v  verbose mode\n";
+    print "  -O  do not display correct outputs, only errors\n";
     print "  -p  preserve executables after execution\n";
     print "  -c  skip compilation (run only)\n";
     print "  -d  target clr (.NET bytecode)\n";
@@ -30,6 +32,8 @@ sub read_command_options()
     $target       = "jvm" if (defined($j));
     $skip_compile = 1     if (defined($c));
     $preserve     = 1     if (defined($p));
+    $verbose      = 1     if (defined($v));
+    $skipoutput   = 1     if (defined($O));
 };
 
 sub findprogs
@@ -151,16 +155,17 @@ sub init()
     &read_command_options();
     &find_local_progs();
     &setup_variables();
-    &compile_all_demos();
 }
 
 sub setup_demo_run
 {
     &init();
 
-    print( "Testing demos against reference output in directory 'reference'\n");
-    print  "BETALIB: $betalib\n";
-    print  "Platform: $target\n";
+    if ($verbose){
+	print( "Testing demos against reference output in directory 'reference'\n");
+	print  "BETALIB: $betalib\n";
+	print  "Platform: $target\n";
+    }
 }
 
 sub setup_graphics_demo_run
@@ -214,10 +219,13 @@ sub run_demo
 
     chdir "$dir" || die "cannot chdir($dir): $!\n";
     unlink "$exec.dump $exec.run";
-    print "-"x10 . "$executing $exec" . "-"x10  . "\n"; 
+    &compile_demo($exec);
+    print "-"x10 . "Executing $exec" . "-"x10  . "\n"; 
     system "$exec > $exec.run";
-    
     $progs{&trim_path("$dir/$exec")}=$?;
+
+    &cat("$exec.run") unless ($skipoutput);
+    
     chdir ("../" x $numdirs) if ($numdirs>0);
     &compare_expected($dir, $exec);
 
@@ -236,7 +244,8 @@ sub write_to_demo
 
     chdir "$dir" || die "cannot chdir($dir): $!\n";
     unlink "$exec.dump $exec.run";
-    print "-"x10 . "$executing $exec with input" . "-"x10  . "\n";
+    &compile_demo($exec);
+    print "-"x10 . "Executing $exec with input" . "-"x10  . "\n";
     open(SAVEOUT, ">&STDOUT");
     select(SAVEOUT); $| = 1;       # make unbuffered
     open(STDOUT, ">$exec.run") || die "Can't redirect stdout";
@@ -247,37 +256,33 @@ sub write_to_demo
     close EXEC;
     close(STDOUT);
     open(STDOUT, ">&SAVEOUT");
-
     $progs{&trim_path("$dir/$exec")}=$?;
+
+    &cat("$exec.run") unless ($skipoutput);
+
     chdir ("../" x $numdirs) if ($numdirs>0);
     &compare_expected($dir, $exec);
 
 }
 
-sub compile_all_demos
-# find all .bet files in current directory and
-# attempt to compile them
+sub compile_demo()
 {
+    my ($f) = @_;
     return if ($skip_compile);
-    $beta = "beta";
-    $beta = "jbeta -s 188" if ($target eq "jvm");
-    $beta = "nbeta" if ($target eq "clr");
-    print "############# Compiling all .bet files recursively using \"$beta -qw\"\n";
-    system "$beta -qw " . join(' ', sort keys %progs);
+    $compilecmd = "beta";
+    $compilecmd = "jbeta -s 188" if ($target eq "jvm");
+    $compilecmd = "nbeta" if ($target eq "clr");
+
+    print "-"x10 . "Compiling $f" . "-"x10  . "\n"; 
+    system "$compilecmd $f > $f.out 2>&1" if (!$verbose);
+    system "$compilecmd $f" if ($verbose);
 }
 
 sub run_all_demos
 # find all .bet files in current directory and
 # run all corresponding programs
 {
-    local($all) =0;
-    undef %progs;
-    &findprogs('.');
-    if (length(keys %progs) == 0){
-	print "Warning: no .bet files found!\n";
-    }
-    #print "keys: \n" . join("\n", keys %progs) . "\n";
-    #print "sort: \n" . join("\n", sort keys %progs) . "\n";
+    local($all) = 0;
     foreach $prog (sort keys %progs){
 	next if ($progs{$prog}!=999);
 	if (!$all) {
@@ -318,6 +323,7 @@ sub run_all_demos
 		$program = $prog;
 		$numdirs = 0;
 	    }
+	    &compile_demo($program);
 	    system("$program");
 	    $progs{$prog}=$?;
 	    #print "chdir (" . "../" x $numdirs . ")\n" if ($numdirs>0);
