@@ -4,7 +4,7 @@ $BETALIB=~s%\\%/%g;
 if ($ENV{'MIASDK'} eq ""){
     $ENV{'MIASDK'} = ms;
 }
-require "$BETALIB/bin/admin/env.perl";
+require "$BETALIB/bin/admin/utils.perl";
 %options                = 0;
 
 ###########################################################
@@ -140,21 +140,21 @@ if ($options{'list'}){
 }
 
 &compile_compiler();
+&make_clean();
 
 print "\nTesting console programs\n";
 print "========================================================\n";
-&make_clean();
 &test_programs(@programs);
 
 &test_externals();
 
 &test_tst();
 
+&test_standard_libraries();
+
 &test_graphics();
 
 &print_summary();
-
-&test_standard_libraries();
 
 ###########################################################
 ############ End of main. Library below ###################
@@ -357,20 +357,15 @@ sub test_tst()
     }
     print "========================================================\n";
     $testdir = `pwd`; chomp $testdir;
-    if (chdir "../../../TST"){
-	unlink ("tstenv." . $AstExt{$objdir});
-	$exec = &compile_program("btst");
-	print "-"x10 . "Testing $exec" . "-"x10  . "\n";
-	system "$exec > $testdir/btst.run";
-	unless ($options{'keepprograms'}) {
-	    unlink "$exec";
-	}
-    } else {
-	print "Cannot chdir(../../../TST): $!\n";
+    &pushd("../../../TST");
+    unlink ("tstenv." . $AstExt{$objdir});
+    $exec = &compile_program("btst");
+    print "-"x10 . "Testing $exec" . "-"x10  . "\n";
+    system "$exec > $testdir/btst.run";
+    unless ($options{'keepprograms'}) {
+	unlink "$exec";
     }
-    if (!chdir("$testdir")){
-	print "Cannot change dir back to $test: $!\n";
-    }
+    &popd();
     &compare_expected("btst");
 }
 
@@ -382,7 +377,7 @@ sub test_standard_library(){
 	exit(1);
     }
     if (-d "$BETALIB/$dir/demo"){
-	chdir "$BETALIB/$dir/demo" || die "Cannot chdir($BETALIB/$dir/demo): $!\n";
+	&pushd("$BETALIB/$dir/demo");
 	my $command = "perl -s run.demos";
 	$command .= " -j" if     ($options{'target'} eq "jvm");
 	$command .= " -d" if     ($options{'target'} eq "clr");
@@ -393,6 +388,8 @@ sub test_standard_library(){
 	$command .= " " . join " ", @matchdirs;
 	print "\n*** Testing $dir demos using command '$command'***\n\n";
 	system "$command";
+	push @stdlibs, $dir;
+	&popd();
     } else {
 	print "Cannot test standard library $dir\nas directory $BETALIB/$dir/demo does not exist.\n";
     }
@@ -513,7 +510,7 @@ sub compare_expected()
     close OUT;
     if ( -f "reference/$f.run" ){
 	if (system("diff $diffoptions reference/$f.run $f.out") == 0){
-	    system "cat $f.run" if $options{'showoutput'};
+	    &cat("$f.run") if $options{'showoutput'};
 	    print "[output is correct]\n";
 	    system "rm $f.run";
 	    system "rm $f.out";
@@ -525,7 +522,7 @@ sub compare_expected()
 	    $status{$f} = 0;
 	}
     } else {
-	system "cat $f.run";
+	&cat("$f.run");
 	system "cp $f.run reference";
 	print "[No reference existed. Output above used for future reference]\n";
 	print "[Please do a manual 'cvs add reference/$f.run']\n";
@@ -537,13 +534,28 @@ sub print_summary()
 {
     local $summaryfile = "testall.$options{'target'}.summary";
     open (SUMMARY, ">$summaryfile") or die "Cannot open $summaryfile: $!\n";
+    print SUMMARY "\n" . "*"x47 . "\n";
     print SUMMARY "\n" . "*"x19 . " Summary " . "*"x19  . "\n";
+    print SUMMARY "\n" . "*"x47 . "\n";
     print SUMMARY "Test summary for target $options{'target'}:\n\n";
     print SUMMARY "  Succeeded:\n";
-    print SUMMARY "  =========\n";
+    print SUMMARY "  =========";
+    my $longest = 0;
     foreach $key (sort keys(%status)){
-	print SUMMARY "    $key\n" if ($status{$key} == 1);
+	$longest = length($key) if (length($key)>$longest);
     }
+    my $numcols = int((80-4) / $longest);
+    my $col = 0;
+    foreach $key (sort keys(%status)){
+	if ($status{$key} == 1){
+	    $col %= $numcols;
+	    print SUMMARY "\n    " if ($col == 0);
+	    print SUMMARY "$key";
+	    print SUMMARY " "x($longest-length($key));
+	    $col++;
+	}
+    }
+    print print SUMMARY "\n\n";
 
     if (scalar %status){
 	print SUMMARY "  Failed:\n";
@@ -584,8 +596,13 @@ sub print_summary()
 	}
     }
     close SUMMARY;
-    system "cat $summaryfile";
+    system &cat("$summaryfile");
     print "\n(Above summary available on file $summaryfile)\n";
+
+    foreach $lib (@stdlibs){
+	print "\n" . "*"x10 . " Summary of standard library test for $lib " . "*"x10  . "\n";
+	&cat("$BETALIB/$lib/demo/run.demos." . $options{'target'} . ".summary");
+    }
 }
 
 sub IntHandler 
