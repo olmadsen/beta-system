@@ -138,7 +138,7 @@ void objectLookup(unsigned long inx,
   }   
 }
 
-/* Returns inx of entry containing (??, store, object, ??). Returns -1 if
+/* Returns inx of entry containing (??, store, object, ?? ). Returns -1 if
    not found. */
 unsigned long indexLookupOT(unsigned long store, unsigned long offset)
 {
