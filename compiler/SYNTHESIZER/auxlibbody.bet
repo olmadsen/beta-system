@@ -408,7 +408,14 @@ do (# isLocal: booleanValue
              enter desc[]
              do 317->trace(#do xU; 'OriginId:'->xT; desc[] -> xA; xD#);
                 (if not desc.isNull then
-                    desc[] -> sematt.enclosingDesc -> origin[];
+                    (if desc.label = gram.objectDescriptor then
+                        desc[] -> sematt.enclosingDesc -> origin[]
+                     else
+                        (* virtual, final, etc.
+                         * This could probably be simpler
+                         *)
+                        desc[] -> sematt.encDescOfNode -> origin[]
+                    if);
                     (origin[],true) -> getDescName -> id[];
                     (if true
                      // 'tstenv' -> id.equal
@@ -454,26 +461,40 @@ do (# isLocal: booleanValue
              exit T[]
              #);
            isDescriptorForm: @boolean;
-           lastDesc: @ASTindex;
+           lastDesc: @ASTindex; (* the desc we are computing descName for;
+                                 * is used to store desc while we are
+                                 * going via father-ref to find enclosing
+                                 * construct defining the name; e.g.
+                                 * when descname is called with a desc
+                                 * we need the enclosing decl, like
+                                 * patternDecl, virtualDecl, etc. to
+                                 * find the name, e.g.pattern name
+                                 *)
            id: ^text;
            desc: ^ASTindex;
            addOriginId: @boolean;
            name: ^text
         enter(desc[],addOriginId)
-        do (*(if not switch182 then
-               (dumpStack,'Descname Called with switch182 = false') -> stop
-           if);*)
-           (if desc.isNull then (* perhaps we should avoid calling with null?*)
+        do (if desc.isNull then 
+               (* perhaps we should avoid calling with null?*)
                'object' -> name[];
             else
-               317->trace(# do 'DescName:Begin: '->xT; xN; desc[] -> xA;#);
+               317->trace(# 
+                         do 'DescName:Begin:level: '->xT; dLevel -> xI; xN; 
+                            desc[] -> xA
+                         #);
+               dLevel+1 -> dLevel;
                desc -> F;
+               (* onlye some of the cases below may happen with an
+                * initail call of descName; others may happen from 
+                * restart to L
+                *)
                L:
                  (if F.label
                   // gram.doPart 
                   // gram.mainPart then 
                      317 -> trace(# 
-                                 do 'descName:do/MainPartForm:'->xT; F[] -> xA 
+                                 do 'descName:do:MainPartForm:'->xT; F[] -> xA 
                                  #);
                      F.xOrigin -> F;
                      restart L
@@ -521,40 +542,65 @@ do (# isLocal: booleanValue
                         restart L;
                      #)
                   // gram.objectDescriptor then
-                     317 -> trace(# do 'descName:descriptor:'->xT; F[] -> xA #);
+                     317 -> trace(#do 'descName:descriptor:'->xT; F[]->xA#);
                      F -> lastDesc;
                      F.father -> F;
                      restart L
                   // gram.patternDecl
                   // gram.virtualDecl then
+                     (* never come here via an initial call
+                      * to descName; but only via a restart L.
+                      * SO lastDesc should never be null
+                      *)
                      313-> trace(#
                                 do 'descName:ptn/virt:'->xT;
                                    F[] -> xA 
                                 #);
                      F -> getFirstNameDecl -> name[];
-                     
+
+                     (if addOriginId and lastDesc.isNull then
+                         (* not understood *)
+                         F -> lastDesc;
+                         1 -> trace(#
+                                   do 'OBS! DescName:ptn/virtual:' 
+                                      'lastDesc was null!'
+                                        -> xH;
+                                      F[] -> xA; N[] -> xA; xN;
+                                      'lastDesc: ' -> xT;
+                                      lastDesc[] -> xA;
+                                   #);                         
+                     if)                     
                   // gram.bindingDecl
                   // gram.finalDecl then
+                     (* never via initial call - as for virtual case above *)
                      317 -> trace(#
                                  do 'descName:bind/final:'->xT;
                                     F[] -> xA 
                                  #);
-                     
                      (* we must use the name at the virtual
                       * declaration to ge the correct case
                       *)
                      (# N: @ASTindex
                      do F.son -> sematt.singleName -> N;
+                        (if addOriginId and lastDesc.isNull then
+                            F -> lastDesc;
+                            1 -> trace(#
+                                      do 'OBS! DescName:bind/final:' 
+                                         'lastDesc was null!'
+                                           -> xT; xN;
+                                         F[] -> xA; N[] -> xA; xN;
+                                         'lastDesc: ' -> xT;
+                                         lastDesc[] -> xA;
+                                      #);
+                            
+                        if);
+                        
                         L: (#
-                           do
-                              N.virtDcl -> N;
+                           do N.virtDcl -> N;
                               N.sort -> F;
                               (if F.label <> gram.virtualDecl then
                                   restart L
                            if)#);
-                        317 -> trace(#
-                                    do F[] -> xA; N[] -> xA
-                                    #);
                         N.gettext -> name[];
                      #)                       
                   // gram.staticItem // gram.staticComponent then
@@ -577,6 +623,14 @@ do (# isLocal: booleanValue
                       // gram.virtualDecl
                       // gram.bindingDecl
                       // gram.finalDecl then
+                         (if addOriginId and lastDesc.isNull then
+                             1->trace(#
+                                     do 'OBS! DescName:nameApl:'
+                                        'lastDesc is null:'
+                                          ->xT;
+                                        F[] -> xA
+                                     #);
+                         if);
                          restart L
                       else
                          (* Some F where F: ##T *)
@@ -629,9 +683,13 @@ do (# isLocal: booleanValue
                    (if not lastDesc.isNull then
                        lastDesc[] -> originId -> id[]
                     else
-                       '\nDescName:LastDesc is null; called with  desc:' 
-                         -> putline;
-                       (desc[],screen[],500) -> thePP                      
+                       1->trace(#
+                               do 'DescName:LastDesc is null;'
+                                  'called with desc:' -> xT; xN;
+                                  desc[] -> xA; xN;
+                                  'name: ' -> xT; name[] -> xT; xN;
+                                  'addOriginId: ' -> xT; addOriginId -> xB;
+                               #)
                    if);
                    317->trace(#
                              do 'Got:OriginId: '->xt; id[] -> xT
@@ -644,18 +702,14 @@ do (# isLocal: booleanValue
            if);
         exit name[]
         #);
-      p: ^text
+      p: ^text;
+      dLevel: @integer
    do (desc[],addOriginId) -> getDescName -> name[];
       (if isJava then
           (* Add package name *)
           (if addOriginId then
-              (if true
-               // common.BetaObjectClass->name.equal then
+              (if common.BetaObjectClass->name.equal then
                   (* default package already there *)
-              (* // ((desc -> sematt.descKind) = sematt.externalClassKind )*)
-                  (* and not (desc[] -> theGen.isBETAsubOfExternalClass) *)
-               (*   then *)
-                  (* Don't add package to external name - user specified *)
                else
                   (if (desc[] -> isLocal) then
                       thisPackagePath[] -> name.prepend;
