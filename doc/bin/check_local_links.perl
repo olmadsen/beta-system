@@ -1,8 +1,7 @@
 #!/usr/local/bin/perl
 
-if (-f "../bin/webxref.perl"){
-    system "perl ../bin/webxref.perl -xref -depth 0 index.html\n";
-} else {
-    print "Don't know where I am. Do something like this in your shell:\n\t";
-    print "perl doc/bin/webxref.perl -xref -depth 0 index.html\n";
-}
+print<<EOT
+Can't figure out how to make linklint do this. 
+Try a full doc check by issuing 'make link-check' from the top 
+directory of this documentation.
+EOT

@@ -112,10 +112,18 @@ sub print_button
 {
     local ($type, $href) = @_;
     local ($alt) = ucfirst ($type);
+    local ($javascript) = "";
 
     # special case for "prev":
     $alt =~ s/Prev/Previous/g;
-    if ("$href" eq ""){
+
+    if ($href =~ m/^javascript:/ ){
+	print<<"EOT";
+<A HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}${type}g-jsr.gif" ALT="${alt} (JavaScript Required)" NAME="$alt" BORDER=0></A>
+EOT
+        $javascript = "document.images.$alt.src = \"${imagedir}${type}.gif\";";
+
+    } elsif ("$href" eq ""){
 	print "<A><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC=\"$imagedir";
 	print $type . "g.gif\" ALT=";
 	print $alt . " NAME=\"$alt\" BORDER=0></A>\n";
@@ -125,6 +133,8 @@ sub print_button
 	print $type . ".gif\" ALT=";
 	print $alt . " NAME=\"$alt\" BORDER=0></A>\n";
     }
+    
+    return $javascript;
 }
 
 sub print_std_buttons
@@ -150,18 +160,12 @@ sub print_std_buttons
     &print_button("top", $topfile) if (!$wiki);
     &print_button("content", $tocfile);
     &print_button("index", $indexfile);
-    &print_button("print", "javascript:parent.${basename}Body.printframe(parent.${basename}Body);");
-    print<<EOT;
-<NOSCRIPT>
-</TD>
-<TD NOWRAP WIDTH="99%" ALIGN=LEFT VALIGN=CENTER><FONT SIZE="-1">(JavaScript Required)</FONT>
-</NOSCRIPT>
-EOT
+    return &print_button("print", "javascript:parent.${basename}Body.printframe(parent.${basename}Body);");
 }
 
 sub print_header
 {
-    local ($title, $js) = @_;
+    local ($title, $flags) = @_;
 
     print<<EOT;
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
@@ -172,15 +176,15 @@ sub print_header
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
 EOT
 
-    print <<"EOT" if ($js>=1);
+    print <<"EOT" if ($flags&1);
 <SCRIPT DEFER TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$hashfromparent"></SCRIPT>
 EOT
 
-    print <<"EOT" if ($js>=2);
+    print <<"EOT" if ($flags&2);
 <SCRIPT DEFER TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$printframe"></SCRIPT>
 EOT
 
-    print <<"EOT"
+    print <<"EOT" if ($flags&4);
 <BASE TARGET="_top">
 </HEAD>
 EOT
@@ -220,7 +224,7 @@ sub print_frameset()
     
     local ($title, $basename, $height) = @_;
 
-    &print_header($title,0);
+    &print_header($title,4);
 
     print<<"EOT";
 <FRAMESET border=0 noresize scrolling=no ROWS="$height,*">
@@ -248,8 +252,9 @@ EOT
 sub print_nav_frame
 {
     local ($title) = @_;
+    local ($javascript);
 
-    &print_header($title,0);
+    &print_header($title,4);
 
     print <<EOT;
 <BODY>
@@ -258,14 +263,22 @@ sub print_nav_frame
 <TD NOWRAP>
 EOT
 
-    &print_std_buttons;
+    $javascript = &print_std_buttons();
 
     print<<EOT;
 </TD>
 <TH NOWRAP ALIGN=right>$title</TH>
 </TR>
 </TABLE>
+EOT
 
+    print<<"EOT" if ("$javascript" ne "");
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript">
+$javascript
+</SCRIPT>
+EOT
+
+    print<<EOT;
 </BODY>
 </HTML>
 EOT
@@ -274,7 +287,7 @@ EOT
 sub print_body_frame(){
     local ($title, $basename, $contents) = @_;
     
-    &print_header($title,2);
+    &print_header($title,4+2+1);
     print<<"EOT";
 <BODY onLoad='HashFromParent()'>
 <H1><A name="$basename">$title</A></H1>
@@ -294,7 +307,7 @@ sub print_index_nav_frame
 {
     local ($title, $basename) = @_;
 
-    &print_header($title,0);
+    &print_header($title,4);
 
     print <<EOT;
 <BODY>
@@ -349,7 +362,7 @@ sub print_index_header()
 {
     local ($title) = @_;
 
-    &print_header($title,0);
+    &print_header($title,4);
 
     print<<"EOT";
 <BODY>
@@ -530,7 +543,7 @@ sub print_toc_nav_frame
 {
     local ($title) = @_;
 
-    &print_header($title,0);
+    &print_header($title,4);
 
     print <<EOT;
 <BODY>
@@ -560,7 +573,7 @@ sub print_toc_header
 {
     local ($title) = @_;
 
-    &print_header($title,0);
+    &print_header($title,4);
 
     print<<EOT;
 <BODY>

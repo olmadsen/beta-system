@@ -1,4 +1,4 @@
-MAKEHTML = ../bin/gram2html.perl -v
+MAKEHTML = ../bin/gram2frames.perl -v
 
 all:	beta idl metagrammar prettyprint property
 	@echo Done.
