@@ -43,7 +43,7 @@ $simulate    = 1 if (defined $n);
 $UseDefaults = 1 if (defined $u);
 $verbose     = 1 if (defined $v);
 $jvm         = 1 if (defined $j);
-$clr         = 1 if (defined $c);
+$clr         = 1 if (defined $d); # *d*otnet
 
 $std_options = "[-h][-u][-n][-v]";
 
