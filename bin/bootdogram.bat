@@ -4,18 +4,13 @@ rem Used to boot grammars by invoking the
 rem grammar tools of the previous release.
 
 rem --- configuration---
-set OLD_BETALIB=e:\beta\r4.0.3
-set META_VERSION=v5.1
-set BOBSGEN_VERSION=v1.5
-set PRETTYGEN_VERSION=v5.1
+set OLD_BETALIB=e:\beta\r4.1.boot
+set META_VERSION=v5.2
+set BOBSGEN_VERSION=v1.6
+set PRETTYGEN_VERSION=v5.2
 
 rem --- don't change below ---
 
-rem Try to guess which SDK is being used
-if not exist "%BETALIB%"\system\nti\ms\beta.exe set sdk=bor
-if not exist "%BETALIB%"\system\nti\bor\beta.exe set sdk=ms
-
-rem Set SDK to either "bor" or "ms" for either Borland or Microsoft SDK.
 if "%sdk%"=="" goto usage
 if "%1"=="" goto missing
 

@@ -122,14 +122,14 @@ if (-e "c:\\") {
 
 $betalib =~ s#/$##g;               # betalib is now  std unixstyle.
 
-if ($betalib =~ /\/(r\d+\.\d+\.?\d*)/i) {
+#print "Checking release...\n";
+
+if ($betalib =~ /\/(r\d+\.\d+\.?[\w\d]*)/i) {
     $RELEASE=$1;
 } else {
     print "env.perl: Fatal: Could not find release-number in BETALIB\n";
     exit(1);
 }
-
-
 
 sub setup_sun4_5_23 {
     if (!defined $ENV{'MOTIFHOME'}) {

@@ -25,7 +25,7 @@ goto getopts
 
 :execute
 rem Start the excutable
-"%BETALIB%"\utils\betafs\v1.2\nti\%sdk%\betafs %_opts_%
+"%BETALIB%"\utils\betatar\v1.2\nti\%sdk%\betatar %_opts_%
 
 rem Clean-up
 set _opts_=
@@ -39,12 +39,17 @@ echo   set SDK=bor
 goto done
 
 :install
-echo Please read the installation notes before trying to run betafs.
+echo Please read the installation notes before trying to run betawc.
 echo Thank you.
 goto done
 
 :missing
-echo "Usage: betafs <fragment-name>"
+echo "Usage:"
+echo "  betatar [--help|-h] [--extent|-e] [--domain|-d] [--full|-f]"
+echo "          [--ast|-a] [--asm|-s] [--code|-c] [--debug|-b] [--job|-j]"
+echo "          [--dump|-u] [--total|-t] [--ignore|-x rexps ]" 
+echo "          [--include|-irexps ][--verbose|-v] [--compress|-m]"
+echo "          [--gzip|-g] [--zip|-z][--list|-l]  <fragment-name>"
 goto done
 
 :done

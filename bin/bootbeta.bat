@@ -8,18 +8,11 @@ rem So we introduce a variable OLD_BETALIB to point to the old
 rem location and duplicate the beta script.
 
 rem --- configuration---
-set OLD_BETALIB="e:\\beta\\r4.0.2"
-set OLD_COMPILER_VERSION="v5.2"
-set OLD_BETARUN="%OLD_BETALIB%\\betarun\\v2.9"
+set OLD_BETALIB="e:\\beta\\r4.1.boot"
 
 rem --- don't change below ---
 
 if "%BETALIB%"=="" goto install
-if NOT "%SDK"=="" goto SDK_OK
-
-rem Try to guess which SDK is being used
-if not exist "%OLD_BETALIB%"\system\%OLD_COMPILER_VERSION%\nti\ms\beta.exe set sdk=bor
-if not exist "%OLD_BETALIB%"\system\%OLD_COMPILER_VERSION%\nti\bor\beta.exe set sdk=ms
 
 rem Set SDK to either "bor" or "ms" for either Borland or Microsoft SDK.
 if "%sdk%"=="" goto usage
@@ -40,7 +33,7 @@ goto getopts
 
 :compile
 rem Start the compiler
-"%OLD_BETALIB%"\system\%OLD_COMPILER_VERSION%\nti\%SDK%\beta.exe --betarun %OLD_BETARUN%\nti\%SDK\betarunv.lib %BETAOPTS% %_opts_%
+"%OLD_BETALIB%"\compiler\nti\%SDK%\beta.exe %BETAOPTS% %_opts_%
 
 rem Clean-up
 set _opts_=
