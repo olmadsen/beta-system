@@ -84,20 +84,26 @@ allocLocal:
      findSlot:
        (for i:BCstate.fields.LocalVariables.range repeat
             (if BCstate.fields.LocalVariables[i] = 0 then
-                slot = i;
+                i -> slot;
                 leave findSlot;
             if);
        for);
-     (if slot>0 then
-         BCstate.fields.LocalVariables[slot] = -1;
-      else
+     (if slot=0 then
          (* Get a new slot *)
          BCstate.fields.LocalVariables.range+1 -> slot;
          BCstate.fields.LocalVariables.range (* at least 1 *)
-           -> BCstate.fields.LocalVariables.extend;
+           -> BCstate.fields.LocalVariables.extend;         
      if);
+     -1 -> BCstate.fields.LocalVariables[slot];
      (if generateDebugInfo and (name[]<>NONE) and (type[]<>NONE) then
          (65535, 0, name[], type[]) -> jcf.emitLocalVariableDefinition;
+     if);
+     (if false then
+         'allocLocal: allocated slot '->puttext; 
+         slot-> putint; 
+         ', LIP=' -> puttext;
+         jcf.currentmethod.LIP -> putint;
+         newline;
      if);
   exit slot
   #);
@@ -289,6 +295,47 @@ do (# commentstream: @stream (* maybe something more useful *);
       loadLocal: 
         iOpLocal(# do iload->op; iload_0->op0 #);
       
+      MappedLocals: [1]@integer;
+      lastMappedLocal: @integer;
+      allocMappedLocal:
+        (# num: @integer;
+           locnum: @integer;
+        enter (num)
+        do -num -> num;
+           (if num>MappedLocals.range then
+               (MappedLocals.range, num-MappedLocals.range)
+                 -> max
+                 -> MappedLocals.extend;
+           if);
+           (if MappedLocals[num]=0 then
+               (allocLocal -> locnum) + 1 -> MappedLocals[num];
+               (* adding 1 to distingguish local 0 from unassigned *)
+               num -> lastMappedLocal; 
+               (if false then
+                   'allocMappedLocal: offset='->puttext; 
+                   num->putint; 
+                   ' mapped to slot '->puttext; 
+                   locnum-> putint; 
+                   ', LIP=' -> puttext;
+                   jcf.currentmethod.LIP -> putint;
+                   newline;
+               if);
+            else
+               MappedLocals[num]- 1 -> locnum;
+               num -> lastMappedLocal; (* needed? *)
+               (if false then
+                   'allocMappedLocal: offset='->puttext; 
+                   num->putint; 
+                   ' looked-up to slot '->puttext; 
+                   locnum-> putint; 
+                   ', LIP=' -> puttext;
+                   jcf.currentmethod.LIP -> putint;
+                   newline;
+               if);
+           if);
+        exit locnum
+        #);
+
       dumpReg:
         (# 
         do 'assume register on stack: regno=' -> commentstream.puttext;
@@ -306,7 +353,12 @@ do (# commentstream: @stream (* maybe something more useful *);
                     BC.gettext -> fieldName[]
                 if);
                 
-                BC.get->off; BC.get->size; 
+                (*BC.get->off;*)
+                (# c: @int8 (* CAREFULL: char is unsigned! *);
+                do BC.get->c;
+                   c -> off(* sign extend *);
+                #);
+                BC.get->size; 
                 BC.get->ONlevel; 
                 (if ONlevel > 0 then
                     (failureTrace,'ONlevel>0') -> stop 
@@ -395,21 +447,22 @@ do (# commentstream: @stream (* maybe something more useful *);
                             emitFieldAndType;
                          else
                             (* method field *)
-                            (if fieldType[] <> none then
-                                (if true
-                                 // 'I' -> fieldType.equal 
-                                 // 'C' -> fieldType.equal then
-                                    (iload, iload_0, off) -> emitMemOp
-                                 // 'D' -> fieldType.equal (* double/real *)then
+                            (if (fieldType[] <> none) and ('D' -> fieldType.equal) (* double/real *) then
+                                (if off<0 then
+                                    'load: mapped local double NYI' -> fixme;
+                                 else
                                     (dload, dload_0, off) -> emitMemOp
-                                 else 
+                                if);
+                             else 
+                                (if off<0 then
+                                    (off) -> allocMappedLocal -> loadLocal;                                    
+                                 else
                                     (iload, iload_0, off) -> emitMemOp
                                 if)
-                             else
-                                (iload, iload_0, off) -> emitMemOp
                             if)
                         if)
-                if)if)
+                    if);
+                if)
              #);
            store:
              (# 
@@ -446,15 +499,20 @@ do (# commentstream: @stream (* maybe something more useful *);
                             putfield  -> jcf.emit;
                             emitFieldAndType;
                          else
-                            (* FIXME: datpete: I think stuf is missing here for other types than int. See Load above *)
+                            (* FIXME: datpete: 
+                             * I think stuf is missing here for other types than int AND for mapped locals. 
+                             * See Load above 
+                             *)
                             (istore, istore_0, off) -> emitMemOp
                         if)
                 if)if)
              #);
            storeRef:
-             (# withQua,isOrigin: @boolean; class: ^text
+             (# withQua,isOrigin,isRef: @boolean; 
+                class: ^text;
              enter(withQua,isOrigin)
              do BC.gettext -> class[];
+                ((class.lgth>=1) and ((class.T[1] = 'L') or (class.T[1]='['))) -> isRef;
                 (if withQua then
                     checkcast  -> jcf.emit;
                     (if true then
@@ -467,7 +525,9 @@ do (# commentstream: @stream (* maybe something more useful *);
                               -> jcf.emitClassRef
                          else
                             (2,class.length-1) -> class.sub -> jcf.emitClassRef
-                if)if)if);
+                        if)
+                    if)
+                if);
                 (if ONlevel > 0 then
                     putfield  -> jcf.emit; 
                     isOrigin -> emitFieldAndType(# do class.copy -> TheFieldType[] #); 
@@ -479,14 +539,35 @@ do (# commentstream: @stream (* maybe something more useful *);
                         (if isField = 2 then
                             aastore -> jcf.emit;
                          else                       
-                            (astore, astore_0, off) -> emitMemOp
-                    if)if)
+                            (if off<0 then
+                                (if false then
+                                    '\nstoreref: negative off: '->puttext; 
+                                    off->putint; ' class: ' -> puttext; 
+                                    class[] -> puttext; 
+                                    ', isRef: '->puttext; 
+                                    isRef->putboolean; 
+                                    ', LIP='->puttext; 
+                                    jcf.currentmethod.LIP->putint; 
+                                    newline;
+                                if);
+                                (if isRef then
+                                    (off) -> allocMappedLocal -> astoreLocal;
+                                 else
+                                    (off) -> allocMappedLocal -> storeLocal;                                    
+                                if);
+                             else
+                                (astore, astore_0, off) -> emitMemOp
+                            if);
+                        if)
+                    if)
                 if);
              #);
            loadRef:
-             (# withQua: @boolean; sig: ^text
+             (# withQua,isRef: @boolean;
+                sig: ^text
              enter withQua
              do BC.gettext -> sig[];
+                ((sig.lgth>=1) and ((sig.T[1] = 'L') or (sig.T[1]='['))) -> isRef;
                 (if ONlevel > 0 then
                     getfield  -> jcf.emit;
                     emitFieldAndType(# do sig.copy -> TheFieldType[] #);
@@ -498,8 +579,27 @@ do (# commentstream: @stream (* maybe something more useful *);
                         (if isField = 2 then
                             aaload -> jcf.emit;
                          else 
-                            (aload, aload_0, off) -> emitMemOp
-                    if)if)
+                            (if off<0 then
+                                (if false then
+                                    '\nloadref: negative off: '->puttext; 
+                                    off->putint; ' sig: ' -> puttext; 
+                                    sig[] -> puttext; 
+                                    ', isRef: '->puttext; 
+                                    isRef->putboolean; 
+                                    ', LIP='->puttext; 
+                                    jcf.currentmethod.LIP->putint; 
+                                    newline;
+                                if);
+                                (if isRef then
+                                    (off) -> allocMappedLocal -> aloadLocal;
+                                 else
+                                    (off) -> allocMappedLocal -> loadLocal;
+                                if);
+                             else
+                                (aload, aload_0, off) -> emitMemOp
+                            if);
+                        if)
+                    if)
                 if); 
                 (if withQua then
                     (*sig[] -> puttext;*)
@@ -515,7 +615,9 @@ do (# commentstream: @stream (* maybe something more useful *);
                               -> jcf.emitClassRef
                          else
                             (2,class.length-1) -> class.sub -> jcf.emitClassRef
-                if)if)if);
+                        if)
+                    if)
+                if);
              #);
            pushAdr:
              (#
@@ -735,9 +837,11 @@ do (# commentstream: @stream (* maybe something more useful *);
                    access: @integer;
                    argn: ^text;
                 do jcf.labs.clear;
+                   1 -> BCstate.fields.LocalVariables.new;
+                   1 -> MappedLocals.new;
+                   
                    BC.gettext -> thisInnerMethodName[];  
                    BC.gettext -> thisSignature[];
-                   1                       -> BCstate.fields.LocalVariables.new;
                    BC.get -> noOfEnterArgs -> BCstate.fields.numArguments;
                    BC.get -> aux;
                    (if false then
@@ -1249,10 +1353,11 @@ do (# commentstream: @stream (* maybe something more useful *);
                 (# T: ^text
                 do BC.gettext -> T[];
                    (if common.switch[319]
-                       and (T.length > 0)
                        and 
-                       ((T.length > 0) and ((1 -> T.inxget) <> '!') 
-                       or common.switch[185])  then
+                       (T.length > 0)
+                       and 
+                       ((T.length > 0) and ((1 -> T.inxget) <> '!') or common.switch[185])  
+                       then
                        T[] -> jcf.emitComment;
                     else
                        restart read (* skip newline *)
@@ -1268,11 +1373,17 @@ do (# commentstream: @stream (* maybe something more useful *);
                 if);
              // pushVal then 
                 A.get; 
-                (*'\nload: '->puttext; A.display;*)
+                (if false then
+                    '\npushVal: '->puttext; A.display;
+                    ', LIP=' -> puttext; jcf.currentmethod.LIP->putint; newline;
+                if);
                 A.load; 
              // stVal then
                 A.get; 
-                (*'\nload: '->puttext; A.display;*)
+                (if false then
+                    '\nstVal: '->puttext; A.display; 
+                    ', LIP=' -> puttext; jcf.currentmethod.LIP->putint; newline;
+                if);
                 A.store
              // loadRef then
                 A.get; A.loadRef
@@ -1398,6 +1509,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                    leaveLabno: @integer;
                    handler_pc: @integer;
                    restart_pc: @integer;
+                   loc: @integer;
                 do BC.getLong -> restartlabno;
                    BC.getLong -> leavelabno;
                    (* End try clause by jumping over handler *)
@@ -1416,21 +1528,20 @@ do (# commentstream: @stream (* maybe something more useful *);
 		    * throw e;
                     *)
                    jcf.currentmethod.LIP -> handler_pc;
-                   (* FIXME: Using local variable 1 hardcoded *)
-                   astore_1  -> jcf.emit; 
-                   aload_1   -> jcf.emit; 
+                   allocLocal -> loc -> astoreLocal;
+                   loc -> aloadLocal; 
                    getfield  -> jcf.emit; ('ExOException', 'exitobj', 'Ljava/lang/Object;') -> jcf.emitfieldref;
                    aload_0   -> jcf.emit; 
                    if_acmpne -> jcf.emit; (leavelabno -> jcf.labs.off)-2 -> jcf.emitShort; (* Lrethrow*)
                    (* Ltestrestart: *)
-                   aload_1   -> jcf.emit; 
+                   loc -> aloadLocal; 
                    getfield  -> jcf.emit; ('ExOException', 'labno', 'I') -> jcf.emitfieldref;
                    restartlabno -> jcf.emitLoadIntegerConstant;
                    if_icmpne -> jcf.emit; 6 -> jcf.emitShort; (* Ltestleave *)
                    (* We have a restart in this Object *)
                    goto      -> jcf.emit; restartlabno -> jcf.labs.off -> jcf.emitShort; (* Lrestart *)
                    (* Ltestleave: *)
-                   aload_1   -> jcf.emit; 
+                   loc -> aloadLocal; 
                    getfield  -> jcf.emit; ('ExOException', 'labno', 'I') -> jcf.emitfieldref;
                    leavelabno -> jcf.emitLoadIntegerConstant;
                    if_icmpne -> jcf.emit; 6 -> jcf.emitShort; (* Lrethrow *)
@@ -1438,7 +1549,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                    goto      -> jcf.emit; leavelabno -> jcf.labs.off -> jcf.emitShort; (* Lleave *)
                    (* Lrethrow: *)
                    (* Not the right label in this Object - propagate further *)
-                   aload_1-> jcf.emit; 
+                   loc -> aloadLocal; 
                    athrow-> jcf.emit; 
                    (* Lleave: *)
                    
@@ -1459,6 +1570,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                    (jcf.currentmethod.LIP + restart_pc - 1) -> restart_pc;
                    (restart_pc (*start_pc*), handler_pc (*end_pc*), handler_pc (*handler_pc*), 'ExOException') 
                      -> jcf.emitExceptionHandlerDef;
+                   loc -> releaseLocal;
                 #);
              // break then
                 (# labno: @integer;
@@ -1584,13 +1696,6 @@ do (# commentstream: @stream (* maybe something more useful *);
                 _pop -> jcf.emit;
              // pop2 then
                 _pop2 -> jcf.emit;
-             // allocAndStoreLocal then
-                allocLocal -> lastLocalAllocated;
-                (if 'I' -> (BC.getText).equal then
-                    lastLocalAllocated -> storeLocal
-                 else
-                    lastLocalAllocated -> astoreLocal;
-                if)
              // _loadLocal then (* compiler dies if this is without the underscore!! *)
                 (if BCstate.fields.LocalVariables[lastLocalAllocated]
                  // -1 then
