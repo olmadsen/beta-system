@@ -1,14 +1,14 @@
 /*
   Compilation statements: 
     nbeta -x Bclass.bet
-    csc /nologo /r:System.dll /r:dotnet/tstenv.dll /r:dotnet/Bclass.dll BclassUser.cs 
+    csc /nologo /r:System.dll /r:dotnet/betaenv.dll /r:dotnet/Bclass.dll BclassUser.cs 
 */ 
 using System;
 
 class Cclass: Bclass
 {
   // C# constructor must transfer origin object to BETA constructor
-  public Cclass(tstenv origin):base(origin)
+  public Cclass(betaenv origin):base(origin)
     {
     }
 
@@ -23,7 +23,9 @@ class BclassUser
 {
   public static void Main() 
     {
-      Bclass b = new Cclass(new tstenv(null));
+      betaenv env = new betaenv(null);
+      env.init();
+      Bclass b = new Cclass(env);
       b.set(9);
       Console.WriteLine(b.get());
       b.compute(10);
