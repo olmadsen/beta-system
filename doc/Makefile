@@ -16,6 +16,7 @@ generated:
 	cd win32lib; make
 	cd comlib; make
 	cd compiler; make
+	cd manpages; make
 
 up: update
 
