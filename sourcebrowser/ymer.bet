@@ -10,88 +10,84 @@ INCLUDE '~beta/basiclib/v1.4/formatio'
         '~beta/dependency/v1.0/dependency'
         '~beta/guienv/v1.3.1/utils/prompts'
         'sourcebrowser';
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-96
+ *   All rights reserved.
+ *)
 -- lib: Attributes --
 ymerApplication: guienv
   (#
      <<SLOT ymerApplicationLib:Attributes>>;
-     mps: @mpsinterface
+     mps: @mpsType;
+     mpsType:< mpsinterface
        (#
-          onGroupNotFound:: 
-            (# t: @text
-            do
-               'Fragment: '->t.puttext;
-               groupName[]->t.puttext;
-               ' does not exist.'->t.putline;
-               'Fragment ignored'->t.puttext;
-               (none ,t[],'Notification')->alertUser;
-               true->continue
+          onGroupNotFound::< 
+            (# t: @text; doneInInner: @boolean
+            do INNER;
+               (if not doneInInner then
+                   'Fragment: '->t.puttext;
+                   groupName[]->t.puttext;
+                   ' does not exist.'->t.putline;
+                   'Fragment ignored'->t.puttext;
+                   (none ,t[],'Notification')->alertUser;
+                   true->continue
+               if);
             #);
-          onOldGroup:: 
-            (# t: @text
-            do
-               'Fragment: '->t.puttext;
-               groupName[]->t.puttext;
-               ' need to be parsed.'->t.putline;
-               'Should this be done?'->t.puttext;
-               (ymerBrowser[],'Notification',t[])
-                 ->promptForBoolean
+          onOldGroup::<
+            (# t: @text; doneInInner: @boolean
+            do INNER;
+               (if not doneInInner then
+                   'Fragment: '->t.puttext;
+                   groupName[]->t.puttext;
+                   ' need to be parsed.'->t.putline;
+                   'Should this be done?'->t.puttext;
+                   (none,'Notification',t[])
+                     ->promptForBoolean
                    (#
                       ok::  (#  do true->allowParsing #);
                       notok:: 
                         (# 
                         do
                            false->allowParsing;
-                           (ymerBrowser.browser.currentProject[],none )
-                             ->ymerBrowser.browser.setGroup
                         #);
                       cancel:: 
                         (# 
                         do
                            false->allowParsing;
-                           (ymerBrowser.browser.currentProject[],none )
-                             ->ymerBrowser.browser.setGroup
                         #);
                       
                    #);
-               true->continue
+                   true->continue
+               if)
             #);
-          onUncheckedGroup:: 
-            (# t: @text
-            do
-            (* 'Fragment: '->t.puttext;
-             * groupName[]->t.puttext;
-             * ' not checked (i.e. no semantic information available).'->t.putline;
-             * 'Should this be done?'t.puttext;
-             * (ymerBrowser[],groupName[],t[])
-             *   ->promptForBoolean
-             *     (#
-             *        ok::  (#  do true->allowChecking #);
-             *        notok::  (#  do true->allowChecking #);
-             *        cancel::  (#  do false->allowChecking #);
-             *     #);
-             *) true->allowChecking; true->continue
-            #);
-          onParseErrors::  (#  <<SLOT ymerMPSparseErrors:DoPart>> #);
-          onNewGroup:: 
+          onParseErrors::<
+            (#  <<SLOT ymerMPSparseErrors:DoPart>> #);
+          onFatalParseError::<
+            (# do true->continue; INNER #);
+          onUncheckedGroup::<
+            (# do true->continue; true->allowChecking; INNER #);
+          onNewGroup::< 
             (# 
-            do true->continue 
+            do true->continue; true->allowNewGroup; INNER 
             #);
-          onOtherError:: 
-            (# 
-            do
-               (none ,errorText[],
-               'Error during opening of group')->alertUser;
-               (ymerBrowser.browser.currentProject[], none)
-                 ->ymerBrowser.browser.setGroup;
-               true->continue
+          onOtherError::<
+            (# doneInInner: @boolean
+            do INNER;
+               (if not doneInInner then
+                   (none ,errorText[],
+                   'Error during opening of group')->alertUser;
+                   true->continue
+               if);
             #);
           betaparserinit: <<SLOT ymerMPSbetaparserinit:Descriptor>>;
-          init:: 
+          init::<
             (# 
             do
                betagrammarinit;
                betaparserinit;
                dg.graphInit;
+               INNER
                
             #);
           dg: @AST.dependencyGraph;
@@ -100,7 +96,15 @@ ymerApplication: guienv
      browsers: @list (# element:: ymerBrowserWindow #);
      browserCount: @integer (* private *) ;
      isActive: @boolean (* true, iff any of ymer's windows are active *);
-     ymerBrowser: @ymerBrowserWindow;
+     editMode:< (* trueObject => all code views are read only *)
+       booleanObject; 
+     readOnlyMode: booleanObject(# do true->value #);
+     writeMode: booleanObject(# do false->value #);
+     helpDocument:
+       (# title, path: ^text
+       enter (title[], path[])
+       <<SLOT ymerHelpDocument: dopart>>
+       #);
      ymerBrowserWindow:< window
        (#
           <<SLOT fragmentBrowserLib:Attributes>>;
@@ -108,7 +112,22 @@ ymerApplication: guienv
             ^editorEnv.groupEditor;
           cfe: (* current form editor *)
             ^codeEditor;
-          loadEditorEnv: (#  <<SLOT loadEditorEnv:DoPart>> #);
+          edenv: ^editorEnv;
+          onWorkspaceOpen:<
+            (# theWorkspace: ^window
+            enter theWorkspace[]
+            do inner
+            #);
+          onSeparateCodeEditorOpen:<
+            (# theEditor: ^window
+            enter theEditor[]
+            do inner
+            #);
+          onCodeViewOpen:<
+            (# theCodeView: ^codemoveableeditor
+            enter theCodeView[]
+            do inner
+            #);
           ymerLocalWindow: window
             (#
                opened: @boolean;
@@ -118,15 +137,16 @@ ymerApplication: guienv
                     true->opened;
                     INNER ;
                     (if opened then
-                        THIS(ymerLocalWindow)[]
-                          ->(THIS(ymerBrowserWindow).theMenubar).windowsMenu.insertWindow;
-                        
+                        (if THIS(ymerBrowserWindow)[]->browsers.has then
+                            THIS(ymerLocalWindow)[]
+                              ->(THIS(ymerBrowserWindow).theMenubar).windowsMenu.insertWindow
+                        if)
                     if);
                     
                  #);
                eventhandler::< 
-                 (# onActivate::< (# do true->isActive #);
-                    onDeactivate::< (# do false->isActive #);
+                 (# onActivate::< (# do true->isActive; INNER #);
+                    onDeactivate::< (# do false->isActive; INNER #);
                     onAboutToClose::< 
                       (# 
                       do
@@ -139,8 +159,10 @@ ymerApplication: guienv
                closeDown:<
                  (# okToClose: @boolean
                  do true->okToClose;
-                    THIS(ymerLocalWindow)[]
-                      ->(THIS(ymerBrowserWindow).theMenubar).windowsMenu.deleteWindow;
+                    (if THIS(ymerBrowserWindow)[]->browsers.has then
+                        THIS(ymerLocalWindow)[]
+                          ->(THIS(ymerBrowserWindow).theMenubar).windowsMenu.deleteWindow
+                    if);
                     INNER closeDown;
                  exit okToClose
                  #);
@@ -174,8 +196,9 @@ ymerApplication: guienv
             enter location[]
             <<SLOT ymerAddProject:DoPart>>
             #);
-          ph: @pathHandler;
-          browser: @sourcebrowser
+          browser: @browserType;
+          browserType:< ymerSourceBrowser;
+          ymerSourceBrowser: sourcebrowser
             (#
                <<SLOT browserLib:Attributes>>;
                selectNode:: 
@@ -384,7 +407,7 @@ ymerApplication: guienv
                          theProjects.scan
                            (#  do current[]->thescan.foreach #)
                       #);
-                    init::  (#  do ph.init; theProjects.init;  #);
+                    init::  (#  do theProjects.init;  #);
                     
                  #);
                projectsLabel::  (#  do 'Projects'->t[] #);
@@ -392,6 +415,11 @@ ymerApplication: guienv
                  (#  do 'No Project selected'->t[] #);
                onProjectListOpen::  (#  <<SLOT onProjectListOpen:DoPart>> #);
                onGroupListOpen::  (#  <<SLOT onGroupListOpen:DoPart>> #);
+               onCodeViewOpen::<
+                 (#
+                 do thecodeview[]->this(ymerBrowserWindow).onCodeViewOpen;
+                    INNER
+                 #);
                onFragmentgroupViewOpen:: 
                  (# 
                  <<SLOT onFragmentgroupViewOpen:DoPart>>
@@ -458,8 +486,8 @@ ymerApplication: guienv
                open: (#  do 'Info: '->locationView.contents.label #)
             #);
           eventhandler::< 
-            (# onActivate::< (# do true->isActive #);
-               onDeactivate::< (# do false->isActive #);
+            (# onActivate::< (# do true->isActive; INNER #);
+               onDeactivate::< (# do false->isActive; INNER #);
                onAboutToClose::<  (#  <<SLOT ymerOnAboutToClose:DoPart>> #)
             #);
           close::<  (#  <<SLOT ymerClose:DoPart>> #);
@@ -479,12 +507,6 @@ ymerApplication: guienv
             (# 
             do
                <<SLOT ymerOpen:Descriptor>>
-            #);
-          edenv: ^editorEnv;
-          helpDocument:
-            (# title, path: ^text
-            enter (title[], path[])
-            <<SLOT ymerHelpDocument: dopart>>
             #);
           menubarType::< 
             (#
@@ -957,7 +979,7 @@ ymerApplication: guienv
                            #);
                          open::  (#  do 'Save'->name #)
                       #);
-                    iRename: @menuItem
+                    iSaveAs: @menuItem
                       (# eventhandler:: 
                            (# onStatus:: 
                                 (# 
@@ -966,13 +988,13 @@ ymerApplication: guienv
                                      ->value
                                 #);
                               onSelect:: 
-                                (# 
-                                do <<SLOT menuProjectsRenameOnSelect: descriptor>>
+                                (# cp: ^browser.projects.project; t: ^text
+                                do <<SLOT menuProjectsSaveAsOnselect:Descriptor>>
                                 #)
                            #);
                          open::  (#  do 'Save As...'->name #)
                       #);
-                    iRelocate: @menuItem
+                    iRename: @menuItem
                       (#
                          eventhandler:: 
                            (#
@@ -982,13 +1004,32 @@ ymerApplication: guienv
                                 #);
                               onSelect:: 
                                 (# cp: ^browser.projects.project; t: ^text
-                                <<SLOT menuProjectsRelocateOnselect:DoPart>>
+                                do <<SLOT menuProjectsRenameOnSelect: descriptor>>
                                 #)
                            #);
                          open:: 
                            (# 
                            do
                               'Rename...'->name
+                           #)
+                      #);
+                    iReload: @menuItem
+                      (#
+                         eventhandler:: 
+                           (#
+                              onStatus:: 
+                                (# 
+                                do browser.currentProject[] <> none ->value
+                                #);
+                              onSelect:: 
+                                (# cp: ^browser.projects.project
+                                do <<SLOT menuProjectsReloadOnSelect: descriptor>>
+                                #)
+                           #);
+                         open:: 
+                           (# 
+                           do
+                              'Reload'->name
                            #)
                       #);
                     iDelete: @menuitem
@@ -1018,15 +1059,17 @@ ymerApplication: guienv
                          iNew[]->append;
                          iLoad.open;
                          iLoad[]->append;
+                         iReload.open;
+                         iReload[]->append;
                          &separator[]->sep[];
                          sep.open;
                          sep[]->append;
                          iSave.open;
                          iSave[]->append;
+                         iSaveAs.open;
+                         iSaveAs[]->append;
                          iRename.open;
                          iRename[]->append;
-                         iRelocate.open;
-                         iRelocate[]->append;
                          &separator[]->sep[];
                          sep.open;
                          sep[]->append;
@@ -1126,8 +1169,6 @@ ymerApplication: guienv
                historyMenu: @menu
                  (# <<SLOT historyMenuLib: attributes>>;
                     protected: @(* private *)boolean;
-                    eventhandler::
-                      (# (*onStatus:: (# do not hon->hon->value #)*) #);
                     open::  (# <<SLOT historyMenuOpen: dopart>> #);
                  #);
                windowsMenu: @menu
@@ -1246,19 +1287,32 @@ ymerApplication: guienv
                       #);
                     
                  #);
+               editMenu: @codeEditorEditMenu
+                 (#
+                    formEditorExists:: 
+                      (#  do THIS(ymerBrowserWindow).cfe[]->cfe[] #);
+                    writeStatus::  (#  do t[]->infoView.msg #)
+                 #);
+               viewMenu: @codeEditorViewMenu
+                 (# formEditorExists::
+                      (#  do THIS(ymerBrowserWindow).cfe[]->cfe[] #)
+                 #);
+               slotsMenu: @codeEditorSLOTsMenu
+                 (# formEditorExists::
+                      (#  do THIS(ymerBrowserWindow).cfe[]->cfe[] #)
+                 #);
                <<SLOT additionalMenus:Attributes>>;
                open::< 
                  (# 
                  do
-                    fileMenu.open;
-                    fileMenu[]->append;
-                    projectsMenu.open;
-                    projectsMenu[]->append;
+                    fileMenu.open; fileMenu[]->append;
+                    editMenu.open; editMenu[]->append;
+                    viewMenu.open; viewMenu[]->append;
+                    slotsMenu.open; slotsMenu[]->append;
+                    projectsMenu.open; projectsMenu[]->append;
                     INNER ;
-                    historyMenu.open;
-                    historyMenu[]->append;
-                    windowsMenu.open;
-                    windowsMenu[]->append;
+                    historyMenu.open; historyMenu[]->append;
+                    windowsMenu.open; windowsMenu[]->append;
                     
                  #)
             #);
@@ -1266,6 +1320,9 @@ ymerApplication: guienv
           ymerBrowserPrivate: @<<SLOT ymerBrowserPrivate:Descriptor>>;
          
        #);
+     
+     loadEditorEnv: (#  <<SLOT loadEditorEnv:DoPart>> #);
+     
      ymerPrivate: @<<SLOT ymerPrivate:Descriptor>>;
      
      BETAlib,BETAexecutable,SIFexecutable,FREJAexecutable,
