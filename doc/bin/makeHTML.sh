@@ -14,7 +14,7 @@
 #  OPTIONS  Extra options for $MAKEHTML 
 #  QUIET    Be quiet
 
-if [ "$BETALILB" = "" ]; then echo "$0: no BETALIB directory specified"; exit 1; fi
+if [ "$BETALIB"  = "" ]; then echo "$0: no BETALIB directory specified"; exit 1; fi
 if [ "$SRC"      = "" ]; then echo "$0: no SRC directory specified"; exit 1; fi
 if [ "$FILES"    = "" ]; then echo "$0: no FILES list specified"; exit 1; fi
 if [ "$MAKEINT"  = "" ]; then echo "$0: no MAKEINT script specified"; exit 1; fi

@@ -477,6 +477,7 @@ sub print_toc
 	print "<DT><A HREF=\"" . $htmlfiles[$i] . ".html\">";
 	print $htmlfiles[$i] ." Interface</A>\n<DD>\n";
     }
+    print "<DT>&nbsp;\n<DD>\n";
     print "<DT><A HREF=\"" . $indexfile . "\">Index</A>\n<DD>\n";
     print "</DL>\n";
     print "</DL>\n";
