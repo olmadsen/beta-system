@@ -28,7 +28,10 @@ namespace beta.converter
 	    openStream(betalib, ns, cls, overwrite, outstream);
 	  }
 		
-	internal virtual void  openStream(System.String betalib, System.String ns, System.String cls, int overwrite, System.IO.TextWriter outstream)
+	internal virtual void  openStream(System.String betalib, 
+					  System.String ns, System.String cls, 
+					  int overwrite, 
+					  System.IO.TextWriter outstream)
 	  {
 	    entry = new System.IO.FileInfo(betalib + "/dotnetlib/" + ns + "/" + cls + ".bet");
 	    if (System.IO.File.Exists(entry.FullName) || System.IO.Directory.Exists(entry.FullName)) {
@@ -43,7 +46,7 @@ namespace beta.converter
 	      }
 	    }
 	    if (trace){
-	      System.Console.Error.WriteLine("Creating directory " + entry.Directory.FullName);
+	      System.Console.Error.Write("Creating directory " + entry.Directory.FullName + "\n");
 	    }
 	    System.IO.Directory.CreateDirectory(entry.Directory.FullName);
 	    if (outstream != null) {
@@ -69,10 +72,10 @@ namespace beta.converter
 	      // no file involved
 	      return ;
 	    }
-	    System.Console.Error.WriteLine("Output file:\n\t\"" + entry.FullName + "\"");
+	    System.Console.Error.Write("Output file:\n\t\"" + entry.FullName + "\"" + "\n");
 	    if (existing != null) {
-	      System.Console.Error.WriteLine("NOTICE: Not overwriting existing\n\t\"" + existing.FullName + "\"");
-	      System.Console.Error.WriteLine("\tUse -f or -F option if overwrite desired.");
+	      System.Console.Error.Write("NOTICE: Not overwriting existing\n\t\"" + existing.FullName + "\"" + "\n");
+	      System.Console.Error.Write("\tUse -f or -F option if overwrite desired." + "\n");
 	    }
 	  }
 		
@@ -128,138 +131,66 @@ namespace beta.converter
 	    if (word.StartsWith("^")) {
 	      prefix = "^";
 	      word = word.Substring(1, (word.Length) - (1));
-	    }
-	    else if (word.StartsWith("[0]^")) {
+	    } else if (word.StartsWith("[0]^")) {
 	      prefix = word.Substring(0, (4) - (0));
 	      word = word.Substring(4, (word.Length) - (4));
-	    }
-	    else if (word.StartsWith("@")) {
+	    } else if (word.StartsWith("@")) {
 	      return word;
-	    }
-	    else if (word.StartsWith("[0]@")) {
+	    } else if (word.StartsWith("[0]@")) {
 	      return word;
 	    }
 			
 	    // compare word against grammatically reserved BETA words
-	    if (word.ToUpper().Equals("enter".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("exit".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("do".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("for".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("repeat".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("if".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("restart".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("inner".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("suspend".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("code".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("then".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("else".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("tos".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("this".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("or".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("xor".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("div".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("mod".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("and".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("not".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("none".ToUpper())) {
+	    switch (word.ToLower()){
+	    case "enter":
+	    case "exit":
+	    case "do":
+	    case "for":
+	    case "repeat":
+	    case "if":
+	    case "restart":
+	    case "inner":
+	    case "suspend":
+	    case "code":
+	    case "then":
+	    case "else":
+	    case "tos":
+	    case "this":
+	    case "or":
+	    case "xor":
+	    case "div":
+	    case "mod":
+	    case "and":
+	    case "not":
+	    case "none":
 	      return prefix + "Dotnet" + word;
 	    }
 			
 	    // Compare word against basic patterns
-	    if (word.ToUpper().Equals("integer".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("shortInt".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("char".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("boolean".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("false".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("true".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("real".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("int8".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("int8u".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("int16".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("int16u".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("int32".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("int32u".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("int64".ToUpper())) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.ToUpper().Equals("int64u".ToUpper())) {
+	    switch(word.ToLower()){
+	    case "integer":
+	    case "shortInt":
+	    case "char":
+	    case "boolean":
+	    case "false":
+	    case "true":
+	    case "real":
+	    case "int8":
+	    case "int8u":
+	    case "int16":
+	    case "int16u":
+	    case "int32":
+	    case "int32u":
+	    case "int64":
+	    case "int64u":
 	      return prefix + "Dotnet" + word;
 	    }
 			
 	    // Compare against other patterns that may confuse 
-	    switch (word){
+	    switch (word.ToLower()){
 	    case "File":
-	      return prefix + "Dotnet" + word;
 	    case "Hashtable":
-	      return prefix + "Dotnet" + word;
 	    case "Class":
-	      return prefix + "Dotnet" + word;
 	    case "Process":
 	      return prefix + "Dotnet" + word;
 	    }
@@ -293,7 +224,11 @@ namespace beta.converter
 	    indent(+ 3);
 	  }
 		
-	public virtual void  putWrapper(System.String resolution, System.String namespaceName, System.String className, System.String superNs, System.String superClass)
+	public virtual void  putWrapper(System.String resolution, 
+					System.String namespaceName, 
+					System.String className, 
+					System.String superNs, 
+					System.String superClass)
 	  {
 	    putln("ORIGIN '~beta/basiclib/betaenv';");
 	    if ((superClass != null) && !superClass.Equals("Object")) {
@@ -339,16 +274,18 @@ namespace beta.converter
 	    putln(mapReserved(name) + ": (# exit " + value_Renamed + " #);");
 	  }
 		
-	public virtual void  putMethod(System.String name, System.String mangledName, System.String[] parameters, System.String returnType, bool isStatic) {
+	public virtual void  putMethod(System.String name, 
+				       System.String mangledName, 
+				       System.String[] parameters, 
+				       System.String returnType, 
+				       bool isStatic) {
 	  bool isConstructor = name.Equals("_init");
 	  System.String proctype = (isConstructor)?"cons":((isStatic)?"static_proc":"proc");
 	  if (mangledName != null) {
 	    putln(mangledName + ": " + proctype + " " + comment(((isConstructor)?"constructor":name)));
+	  } else {
+	    putln(mapReserved(name) + ": " + proctype);
 	  }
-	  else
-	    {
-	      putln(mapReserved(name) + ": " + proctype);
-	    }
 			
 	  indent(+ 2);
 	  indent(); put("(# ");
@@ -396,7 +333,9 @@ namespace beta.converter
 	  indent(- 2);
 	}
 		
-	public virtual void  putTrailer(System.String resolution, System.String namespaceName, System.String className)
+	public virtual void  putTrailer(System.String resolution, 
+					System.String namespaceName, 
+					System.String className)
 	  {
 	    indent(- 3);
 	    putln("do '[" + resolution + ']' + namespaceName + '.' + className + "' -> className;");

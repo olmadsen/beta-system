@@ -103,14 +103,14 @@ namespace beta.converter
 		bool isStatic = f.IsStatic;
 		if (first){
 		  beta.nl();
-		  beta.commentline("Public/protected fields");
+		  beta.commentline("Public/protected CLS compliant fields");
 		  beta.nl();
 		}
 		first = false;
 		if (trace){
 		  beta.commentline("Field: " + f.Name + ", type: " + f.FieldType);
 		}
-		beta.putField(dollarToUnderscore(f.Name), mapType(cls, f.FieldType, false), isStatic);
+		beta.putField(dollarToUnderscore(f.Name), mapType(f.FieldType, false), isStatic);
 	      }
 	    }
 	  }
@@ -132,7 +132,7 @@ namespace beta.converter
 	      if (isRelevant(ct)) {
 		if (first){
 		  beta.nl();
-		  beta.commentline("Public/protected constructors");
+		  beta.commentline("Public/protected CLS compliant constructors");
 		  beta.nl();
 		}
 		first = false;
@@ -141,7 +141,7 @@ namespace beta.converter
 		bool isStatic = ct.IsStatic;
 		System.String[] parameternames = new System.String[parameters.Length];
 		for (int j = 0; j < parameters.Length; j++){
-		  parameternames[j] = mapType(cls, parameters[j].ParameterType, false);
+		  parameternames[j] = mapType(parameters[j].ParameterType, false);
 		}
 		if (ctorlist.Length > 1){
 		  mangledName = dollarToUnderscore(mangle(name, parameternames));
@@ -152,6 +152,9 @@ namespace beta.converter
 		  } else {
 		    mangledName = dollarName;
 		  }
+		}
+		if (trace){
+		  beta.commentline("Constructor: " + name + ", parameters: " + parameternames.ToString());
 		}
 		beta.putMethod(name, mangledName, parameternames, "^" + stripNamespace(cls.FullName), isStatic);
 	      }
@@ -185,17 +188,17 @@ namespace beta.converter
 	      if (isRelevant(m)){
 		if (first){
 		  beta.nl();
-		  beta.commentline("Public/protected methods");
+		  beta.commentline("Public/protected CLS compliant methods");
 		  beta.nl();
 		}
 		first = false;
 		System.String name = m.Name;
 		bool isStatic = m.IsStatic;
-		System.String returnType = mapType(cls, m.ReturnType, false);
+		System.String returnType = mapType(m.ReturnType, false);
 		System.Reflection.ParameterInfo[] parameters = m.GetParameters();
 		System.String[] parameternames = new System.String[parameters.Length];
 		for (int j = 0; j < parameters.Length; j++){
-		  parameternames[j] = mapType(cls, parameters[j].ParameterType, false);
+		  parameternames[j] = mapType(parameters[j].ParameterType, false);
 		}
 		if (methodcount.val(name) > 1){
 		  mangledName = dollarToUnderscore(mangle(name, parameternames));
@@ -208,7 +211,7 @@ namespace beta.converter
 		  }
 		}
 		if (trace){
-		  beta.commentline("Method: " + name + ", returns: " + returnType + " , parameters: " + parameternames.ToString());
+		  beta.commentline("Method: " + name + ", returns: " + returnType + ", parameters: " + parameternames.ToString());
 		}
 		beta.putMethod(name, mangledName, parameternames, returnType, isStatic);
 	      }
@@ -238,7 +241,7 @@ namespace beta.converter
 	    // are used as formal parameters, thus causing a need for a BETA INCLUDE.
 			
 	    // Super class
-	    mapType(cls, cls.BaseType, true);
+	    mapType(cls.BaseType, true);
 			
 	    // scan fields 
 	    System.Reflection.FieldInfo[] fieldlist;
@@ -250,7 +253,7 @@ namespace beta.converter
 		System.Reflection.FieldInfo f = fieldlist[i];
 		if (isRelevant(f))
 		  {
-		    mapType(cls, f.FieldType, true);
+		    mapType(f.FieldType, true);
 		  }
 	      }
 			
@@ -267,7 +270,7 @@ namespace beta.converter
 		    System.Reflection.ParameterInfo[] parameters = ct.GetParameters();
 		    for (int j = 0; j < parameters.Length; j++)
 		      {
-			mapType(cls, parameters[j].ParameterType, true);
+			mapType(parameters[j].ParameterType, true);
 		      }
 		  }
 	      }
@@ -280,11 +283,11 @@ namespace beta.converter
 	    for (int i = 0; i < methlist.Length; i++){
 	      System.Reflection.MethodInfo m = methlist[i];
 	      if (isRelevant(m)){
-		mapType(cls, m.ReturnType, true);
+		mapType(m.ReturnType, true);
 		System.Reflection.ParameterInfo[] parameters = m.GetParameters();
 		for (int j = 0; j < parameters.Length; j++)
 		  {
-		    mapType(cls, parameters[j].ParameterType, true);
+		    mapType(parameters[j].ParameterType, true);
 		  }
 	      }
 	    }
@@ -318,7 +321,7 @@ namespace beta.converter
 	      }
 	    catch (System.Exception)
 	      {
-		System.Console.Error.WriteLine("prependClassWithUnderscore: class not found: " + name + "\n");
+		System.Console.Error.Write("prependClassWithUnderscore: class not found: " + name + "\n");
 		return null;
 	      }
 	  }
@@ -335,225 +338,177 @@ namespace beta.converter
 		
 	internal virtual bool isRelevant(System.Reflection.MethodBase m)
 	  {
-	    return m.IsPublic || m.IsFamily;
+	    if (! (m.IsPublic || m.IsFamily)) return false;
+	    /* Ignore unsafe methods */
+	    System.Object[] attributes = m.GetCustomAttributes(typeof(System.CLSCompliantAttribute),true);
+	    for (int i=0; i<attributes.Length; i++){
+	      if (! ((System.CLSCompliantAttribute)attributes[i]).IsCompliant){
+		if (trace) {
+		  System.Console.Error.Write("UNSAFE (ignored): ");
+		  print_method(m);
+		}
+		return false;
+	      }
+	    }
+	    return true;
 	  }
+
+	internal virtual void print_method(System.Reflection.MethodBase m)
+	  {
+	    bool needComma=false;
+	    System.Console.Error.Write(m.DeclaringType.Name 
+				       + "." 
+				       + m.Name 
+				       + "(");
+	    System.Reflection.ParameterInfo[] parameters = m.GetParameters();
+	    for (int j=0; j<parameters.Length; j++){
+	      if (needComma) System.Console.Error.Write(", ");
+	      needComma=true;
+	      System.Console.Error.Write(parameters[j].ParameterType.ToString());
+	    }		  
+	    System.Console.Error.Write(")\n");
+	}
 	
 	internal virtual System.String mangleType(System.String type)
 	  {
-	    if (type.StartsWith("["))
-	      {
-		return "ArrayOf" + mangleType(type.Substring(1, (type.Length) - (1)));
-	      }
-	    else if (type.StartsWith("L"))
-	      {
-		return stripNamespace(type.Substring(1, (type.Length - 1) - (1)));
-	      }
-	    else if (type.Equals("byte"))
-	      {
-		return "B";
-	      }
-	    else if (type.Equals("void"))
-	      {
-		return "V";
-	      }
-	    else if (type.Equals("short"))
-	      {
-		return "S";
-	      }
-	    else if (type.Equals("int"))
-	      {
-		return "I";
-	      }
-	    else if (type.Equals("long"))
-	      {
-		return "J";
-	      }
-	    else if (type.Equals("float"))
-	      {
-		return "F";
-	      }
-	    else if (type.Equals("double"))
-	      {
-		return "D";
-	      }
-	    else if (type.Equals("char"))
-	      {
-		return "C";
-	      }
-	    else if (type.Equals("boolean"))
-	      {
-		return "Z";
-	      }
-	    else
-	      {
-		if (trace)
-		  System.Console.Error.WriteLine("mangleType(" + type + ") returns unchanged");
-		return stripNamespace(type);
-	      }
+	    if (type.StartsWith("[0]")){
+	      return "ArrayOf" + CapitalizeFirst(mangleType(type.Substring(3)));
+	    }
+	    if (type.StartsWith("@")){
+	      return type.Substring(1);
+	    }
+	    if (type.StartsWith("^")){
+	      return type.Substring(1);
+	    }
+	    return type;
 	  }
 		
 	internal virtual System.String mangle(System.String name, System.String[] parameters)
 	  {
 	    System.String mangled = new System.String(name.ToCharArray());
 	    for (int i = 0; i < parameters.Length; i++){
-	      mangled = System.String.Concat(mangled, "_" + mangleType(parameters[i]));
+	      System.String mangledType = mangleType(parameters[i]);
+	      if (mangledType[0] != '_') mangledType = "_" + mangledType;
+	      mangled = mangled + mangledType;
 	    }
 	    if (trace){
-	      System.Console.Error.WriteLine("mangle: " + name + " -> " + mangled);
+	      System.Console.Error.Write("mangle: " + name + " -> " + mangled + "\n");
 	    }
 	    return mangled;
 	  }
-		
-	internal virtual System.String mapType(System.Type user, System.Type type, bool doIncludes)
+
+	static System.String CapitalizeFirst(System.String s) 
 	  {
-	    if (type == null)
-	      {
-		return null; // can happen for empty superclass
+	    if (char.IsLower(s[0])){
+	      return char.ToUpper(s[0]) + s.Substring(1, s.Length-1);
 	      }
-	    System.String name = type.FullName;
-	    if (name.Equals("void"))
-	      {
-		return null;
-	      }
-	    else if (name.Equals("byte"))
-	      {
-		return "@int8";
-	      }
-	    else if (name.StartsWith("["))
-	      {
-		return mapInternalType(name, doIncludes);
-	      }
-	    else if (name.Equals("short"))
-	      {
-		return "@int16";
-	      }
-	    else if (name.Equals("int"))
-	      {
-		return "@int32";
-	      }
-	    else if (name.Equals("long"))
-	      {
-		return "@int64";
-	      }
-	    else if (name.Equals("float"))
-	      {
-		return "@real32";
-	      }
-	    else if (name.Equals("double"))
-	      {
-		return "@real";
-	      }
-	    else if (name.Equals("char"))
-	      {
-		return "@char";
-	      }
-	    else if (name.Equals("boolean"))
-	      {
-		return "@boolean";
-	      }
-	    else
-	      {
-				// Reference to a class
-				// Find out if that class is an inner class of some outmost class
-		System.Type outmost = null;
-		System.Type outer = type.DeclaringType;
-		while (outer != null)
-		  {
-		    outmost = outer;
-		    outer = outer.DeclaringType;
-		  }
-		if (outmost != null)
-		  {
-		    name = unmangle(outmost, name);
-		    if (doIncludes)
-		      include(outmost.FullName);
-		  }
-		else
-		  {
-		    if (doIncludes)
-		      include(name);
-		  }
-		return makeBetaReference(name);
-	      }
+	    return s;
+	  }
+
+	internal virtual System.String mapPrimitiveType(System.String name)
+	  {
+	    switch (name){
+	    case "bool":
+	    case "System.Boolean":
+	      return "@boolean";
+	    case "sbyte":
+	    case "System.SByte":
+	      return "@int8";
+	    case "short":
+	    case "System.Int16":
+	      return "@int16";
+	    case "int":
+	    case "System.Int32":
+	      return "@int32";
+	    case "long":
+	    case "System.Int64":
+	      return "@int64";
+	    case "byte":
+	    case "System.Byte":
+	      return "@int8u";
+	    case "ushort":
+	    case "System.UInt16":
+	      return "@int16u";
+	    case "uint":
+	    case "System.UInt32":
+	      return "@int32u";
+	    case "ulong":
+	    case "System.UInt64":
+	      return "@int64u";
+	    case "float":
+	    case "System.Single":
+	      return "@real32";
+	    case "double":
+	    case "System.Double":
+	      return "@real";
+	    case "char":
+	    case "System.Char":
+	      return "@char";
+	    default:
+	      return null;
+	    }
+	  }
+
+	internal virtual System.String mapType(System.Type type, bool doIncludes)
+	  {
+	    System.String result = _mapType(type, doIncludes);
+	    if (trace){
+	      System.Console.Error.Write("maptype: " + type.FullName + " -> " + result + "\n");
+	    }
+	    return result;
 	  }
 		
-	internal virtual System.String mapInternalType(System.String name, bool doIncludes)
+	internal virtual System.String _mapType(System.Type type, bool doIncludes)
 	  {
-	    // name == "[..."
-	    name = name.Substring(1, (name.Length) - (1));
-	    if (name.StartsWith("["))
-	      {
-		System.Console.Error.WriteLine("Warning: mapInternalType: [" + name + ": Cannot map multidimensional arrays to BETA");
-		beta.fixme("[" + name + ": Cannot map multidimensional arrays to BETA");
-		return "[0]" + mapInternalType(name, doIncludes);
+	    if (type == null){
+		return null; // can happen for empty superclass
+	    }
+	    System.String name = type.FullName;
+	    /* Test for array types */
+	    if (name.EndsWith("[]")){
+	      return "[0]" + mapPrimitiveType(name.Substring(0, name.Length-2));
+	    }
+	    /* Test for reference types FIXME */
+	    if (name.EndsWith("&")){
+	      return "^" + mapPrimitiveType(name.Substring(0, name.Length-1));
+	    }
+	    /* Test for pointer types FIXME */
+	    if (name.EndsWith("*")){
+	      return "^" + mapPrimitiveType(name.Substring(0, name.Length-1));
+	    }
+	    if (name.Equals("void")){
+		return null;
+	    }
+	    System.String primitive = mapPrimitiveType(name);
+	    if (primitive != null){
+		return primitive;
+	    } else {
+	      // Reference to a class
+	      // Find out if that class is an inner class of some outmost class
+	      if (doIncludes) {
+		include(name);
 	      }
-	    else if (name.Equals("B"))
-	      {
-		return "[0]@int8";
-	      }
-	    else if (name.Equals("C"))
-	      {
-		return "[0]@char";
-	      }
-	    else if (name.Equals("D"))
-	      {
-		return "[0]@real";
-	      }
-	    else if (name.Equals("F"))
-	      {
-		return "[0]@real32";
-	      }
-	    else if (name.Equals("I"))
-	      {
-		return "[0]@int32";
-	      }
-	    else if (name.Equals("J"))
-	      {
-		return "[0]@int64";
-	      }
-	    else if (name.Equals("S"))
-	      {
-		return "[0]@int16";
-	      }
-	    else if (name.Equals("Z"))
-	      {
-		return "[0]@boolean";
-	      }
-	    else if (name.Equals("V"))
-	      {
-		System.Console.Error.WriteLine("Warning: mapInternalType: [V: Array of void???");
-		beta.fixme("[V: Array of void???");
-		return "[0]@int32";
-	      }
-	    else if (name.StartsWith("L"))
-	      {
-		name = name.Substring(1, (name.Length - 1) - (1));
-		if (doIncludes)
-		  include(name);
-		return "[0]" + makeBetaReference(name);
-	      }
-	    else
-	      {
-		System.Console.Error.WriteLine("Warning: mapInternalType: [" + name + ": unknown type");
-		return "[0]@int32";
-	      }
+	      return makeBetaReference(name);
+	    }
 	  }
 		
 	internal virtual System.String makeBetaReference(System.String name)
 	  {
-	    if (stripNamespace(name).Equals(className))
-	      {
+	    if (stripNamespace(name).Equals(className)){
+	      name = "^" + stripNamespace(dollarToUnderscore(name));
+	    } else {
+	      switch (name){
+	      case "[mscorlib]System.Object":
+	      case "System.Object":
+	      case "object":
 		name = "^" + stripNamespace(dollarToUnderscore(name));
-	      }
-	    else if (name.Equals("java.lang.Object"))
-	      {
-		name = "^" + stripNamespace(dollarToUnderscore(name));
-	      }
-	    else
-	      {
-				// Make reference to wrapper class
+		break;
+	      default:
+		// Make reference to wrapper class
 		name = "^" + "_" + stripNamespace(dollarToUnderscore(name));
+		break;
 	      }
+	    }
 	    return name;
 	  }
 		
@@ -612,7 +567,7 @@ namespace beta.converter
 	  {
 	    if (trace)
 	      {
-		System.Console.Error.WriteLine("processClass(" + ((outer == null)?"null":outer.FullName) + "," + ((cls == null)?"null":cls.FullName) + ")");
+		System.Console.Error.Write("processClass(" + ((outer == null)?"null":outer.FullName) + "," + ((cls == null)?"null":cls.FullName) + ")" + "\n");
 	      }
 	    System.String innerClass = null;
 	    System.String innerName = null;
@@ -659,7 +614,7 @@ namespace beta.converter
 	    includes.Values.CopyTo(inc,0);
 	    for (int i = 0; i < inc.Length; i++)
 	      {
-		System.Console.Error.WriteLine("\nRefered by " + slashToDot(namespaceName + "." + className) + ": " + slashToDot((System.String) inc[i]));
+		System.Console.Error.Write("\nRefered by " + slashToDot(namespaceName + "." + className) + ": " + slashToDot((System.String) inc[i]) + "\n");
 		DotnetConverter dotnet2beta = new DotnetConverter();
 		if (dotnet2beta.needsConversion(slashToDot((System.String) inc[i]), betalib, overwrite, output) != null)
 		  {
@@ -674,11 +629,11 @@ namespace beta.converter
 		  {
 		    if (converted[slashToDot((System.String) inc[i])] != null)
 		      {
-			System.Console.Error.WriteLine("  --> skipped: already converted by this program execution");
+			System.Console.Error.Write("  --> skipped: already converted by this program execution" + "\n");
 		      }
 		    else
 		      {
-			System.Console.Error.WriteLine("  --> ignored: already converted (use -F to force overwrite)");
+			System.Console.Error.Write("  --> ignored: already converted (use -F to force overwrite)" + "\n");
 		      }
 		  }
 	      }
@@ -728,7 +683,7 @@ namespace beta.converter
 		  }
 		if (thisClass == null)
 		  return 0;
-		System.Console.Error.WriteLine("Converting class\n\t\"" + thisClass.FullName + "\"");
+		System.Console.Error.Write("Converting class\n\t\"" + thisClass.FullName + "\"" + "\n");
 		beta.reportFileName();
 		processClass(null, thisClass);
 	      }
@@ -738,7 +693,7 @@ namespace beta.converter
 		return 1;
 	      }
 	    converted[slashToDot(clsname)] = clsname;
-	    System.Console.Error.WriteLine("Done.");
+	    System.Console.Error.Write("Done." + "\n");
 	    return convertIncludes(betalib, ((overwrite == 2)?2:- 1), ((output == System.Console.Out)?output:null));
 	  }
 
