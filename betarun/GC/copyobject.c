@@ -33,13 +33,17 @@ void tempAOArootsAlloc()
     
     /* Copy old table backwards */
     while(pointer > oldPtr) *--AOArootsPtr = *--pointer; 
+
 }
 
 void tempAOArootsFree()
 {
-    FREE(tempAOAroots);
-    tempAOAroots = NULL;
-    INFO_IOA(fprintf(output, "freed temporary AOAroots table\n"));
+#ifdef RTDEBUG
+  Claim(tempAOAroots!=NULL, "tempAOArootsFree: tempAOAroots allocated");
+#endif
+  FREE(tempAOAroots);
+  tempAOAroots = NULL;
+  INFO_IOA(fprintf(output, "freed temporary AOAroots table\n"));
 }
 
 /*
@@ -82,8 +86,13 @@ static ref(Object) CopyObject( theObj)
 	
 	ToSpaceTop = theEnd;
 	if( !tempAOAroots &&
-	   (char *) ToSpaceTop+size > (char *) AOArootsPtr )
+	   (char *) ToSpaceTop+size > (char *) AOArootsPtr ){
 	  tempAOArootsAlloc();
+#ifdef RTDEBUG
+	  Claim(size<=IOASize, 
+		"CopyObject: Size of AOAroots table <= IOASize");
+#endif
+	}
 	src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
 
 	while( dst < theEnd) *dst++ = *src++; 
