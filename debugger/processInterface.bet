@@ -1,5 +1,7 @@
 ORIGIN '~beta/objectbrowser/v2.0/mpsinterface';
 
+INCLUDE '~beta/objectbrowser/v2.0/groupsinfo';
+
 INCLUDE '~beta/sysutils/v1.4/pathhandler';
 
 INCLUDE 'valhallaparams';
@@ -559,7 +561,17 @@ processInterface: mpsinterface
           
           execPrivate: @<<SLOT executablePrivate:descriptor>>;
        #);
-
+     
+     
+     (* GROUPSINFO
+      * ==========
+      * 
+      * Table performing the mapping from the prototype number in the
+      * to data segment to the corresponding  ObjectDescriptor. *)
+     
+     groupsInfoTableType:< groupsInfoTable;
+     groupsInfo: @groupsInfoTableType;
+     
      
      (* OBJECTFILEINFO, BASICOBJECTFILEINFO
       * ===================================
@@ -630,6 +642,14 @@ processInterface: mpsinterface
                for);
             #);
           
+          findFragmentInfo:
+            (# fragmentName: ^Text; fragmentType: @Integer;
+               fi: ^fragmentInfo;
+            enter (fragmentName[],fragmentType)
+            <<SLOT findFragmentInfo:dopart>>
+            exit fi[]
+            #);
+          
           ScanVisibleGroups:
             (* Scans the names of the fragment groups that are visible from
              * this one. *)
@@ -638,6 +658,7 @@ processInterface: mpsinterface
             #);
           
           fg: ^AST.fragmentGroup;
+          originOfi: ^ObjectFileInfo; (* ObjectFileInfo of origin group. *)
           fgLoadFailed: @Boolean; (* Set to true if load of fg failed. *)
        #);
      
@@ -653,6 +674,33 @@ processInterface: mpsinterface
        #);
      
      
+     (* CODEADDRESSTOOBJECTFILEINFO
+      * ===========================
+      * 
+      * Locate the ObjectFileInfo containing the code address entered. *)
+     
+     codeAddressToObjectFileInfo:
+       (# adr: @Integer;
+          ofi: ^ObjectFileInfo;
+       enter adr
+       <<SLOT codeAddressToObjectFileInfo:dopart>>
+       exit ofi[]
+       #);
+     
+     
+     (* DATAADDRESSTOOBJECTFILEINFO
+      * ===========================
+      * 
+      * Locate the ObjectFileInfo containing the data address entered. *)
+     
+     dataAddressToObjectFileInfo:
+       (# adr: @Integer;
+          ofi: ^ObjectFileInfo;
+       enter adr
+       <<SLOT dataAddressToObjectFileInfo:dopart>>
+       exit ofi[]
+       #);
+     
      
      (* FRAGMENTINFO
       * ============ *)
@@ -660,6 +708,8 @@ processInterface: mpsinterface
      FragmentInfo:
        (# fragmentName: ^Text;
           fragmentType: @shortInt;
+          
+          frag: ^AST.fragmentForm; (* Cached here when first found. *)
           
           (* doparts in fragment
            * ===================
@@ -670,6 +720,13 @@ processInterface: mpsinterface
           
           dopartCount: @Integer;     (* Number of doparts in fragment. *)
           doparts: [0]^dopartInfo;
+          
+          findDopartInfo:
+            (# astRef: @Integer; dpi: ^dopartInfo;
+            enter astRef
+            <<SLOT findDopartInfo:dopart>>
+            exit dpi[]
+            #);
        #);
      
      
@@ -682,10 +739,20 @@ processInterface: mpsinterface
      dopartInfo: 
        (# astRef: @ShortInt;         (* Ast index of dopart.              *)
           fragRef: @ShortInt;        (* Fragment index.                   *)
-          Mentry: @Integer;          (* Filled out when it becomes known. *)
+          
           impAddresses: [0]@Integer; (* Imperative memory addresses.      *
                                       * Relative to M entry point.        *)
           impAstRefs: [0]@ShortInt;  (* Imperative ast indices.           *)
+          
+          Mentry: @Integer;          (* Mentry point of this dopart. *)
+          ofi: ^ObjectFileInfo;      (* ObjectFileInfo of fragment group
+                                      * containing this dopart. *)
+          dp: ^BETACFL.doPart;      (* The ast itself. *)
+          (* Mentry, ofi and dp are filled out by 
+           * utilities.codeAddressToImperative before caching this dopartInfo 
+           * in the doparts attribute of the ObjectFileInfo containing the 
+           * prototype whose dopart is this dopartInfo. *)
+          
        #);
      
      
@@ -695,21 +762,20 @@ processInterface: mpsinterface
       * Information corresponding to an imperative. *)
      
      ImperativeInfo:
-       (# ofi: ^ObjectFileInfo; (* BETA group containing this imperative.    *)
-          dpi: ^dopartInfo;     (* Info on enclosing dopart.                 *)
+       (# dpi: ^dopartInfo;     (* Info on enclosing dopart.                 *)
           inx: @Integer;        (* Index in dpi.impAddresses and impAstRefs. *)
-          cast: ^AST.ast;       (* For caching. May be found from ofi, dpi and
-                                 * inx. *)
+          cast: ^AST.ast;       (* Imperative ast.                           *)
           start: (# exit dpi.impAddresses[inx] + dpi.Mentry #);
-          after: 
-            (# value: @Integer;
-            do (if (inx < dpi.impAddresses.range) //true then
-                   dpi.impAddresses[inx+1] + dpi.Mentry -> value
-                else
-                   0 -> value
-               if)
-            exit value
-            #);
+          (* after: 
+           *             (# value: @Integer;
+           *             do (if (inx < dpi.impAddresses.range) //true then
+           *                    dpi.impAddresses[inx+1] + dpi.Mentry -> value
+           *                 else
+           *                    0 -> value
+           *                if)
+           *             exit value
+           *             #);
+           *)
        #);
      
      
@@ -849,7 +915,16 @@ processInterface: mpsinterface
            * Returns NONE in case of failure. *)
           
           codeAddressToImperative:
-            (# codeAdr: @Integer;
+            (# onGentry:< 
+                 (* Called if a G entry is found. *)
+                 (# protoAdr: @Integer; 
+                    (* Address of prototype whose Gpart contains address *)
+                    offset: @Integer;
+                    (* Offset from Gentry point to address. *)
+                 enter (protoAdr,offset)
+                 do INNER
+                 #);
+               codeAdr: @Integer;
                imp: ^ImperativeInfo;
             enter codeAdr
             <<SLOT codeAddressToImperativ:dopart>>
