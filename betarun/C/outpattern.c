@@ -1009,12 +1009,14 @@ int DisplayBetaStack(enum BetaErr errorNumber,
   
   DEBUG_CODE(fprintf(output,
 		     "\nIOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
-		     (int)IOA, (int)IOATop, (int)IOALimit);
-	     fprintf(output,
+		     (int)GLOBAL_IOA, 
+		     (int)GLOBAL_IOATop, 
+		     (int)GLOBAL_IOALimit));
+  DEBUG_CODE(fprintf(output,
 		     "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
-		     (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
-	     fflush(output);
-	     );
+		     (int)ToSpace, 
+		     (int)ToSpaceTop, 
+		     (int)ToSpaceLimit));
 
   fprintf(output,"\nCall chain: (%s)\n\n", machine_type());
   fflush(output);
