@@ -941,22 +941,31 @@ void beta_main(void (*AttBC)(Component *), Component *comp)
 /***************************** BEGIN ppcmac ********************************/
 #ifdef ppcmac
 
+
 OSStatus BetaSignalHandler(ExceptionInformation *info)
 {
   Object * theObj;
   long *PC;
   long todo = 0;
-  ExceptionKind sig = info->theKind;
   
-  DEBUG_CODE(fprintf(output, "BetaSignalHandler called\n"));
-
+  
+  ExceptionKind sig = info->theKind;
   /* Set StackEnd to the stack pointer just before exception */
-  StackEnd = (long *)info->registerImage->R1.lo;
+  StackEnd = StackEndAtSignal = (long *)info->registerImage->R1.lo;
   PC = (long *) info->machineState->PC.lo;
-
   /* Try to fetch the address of current Beta object from i0.*/
   theObj = (Object *) info->registerImage->R31.lo;
   if( !inIOA(theObj) || !isObject(theObj)) theObj = 0;
+  
+  DEBUG_CODE({
+    fprintf(output, "\nBetaSignalHandler: Caught signal %d", (int)sig);
+    PrintSignal((int)sig);
+    fprintf(output, ", PC = 0x%08x, StackEnd = 0x%08x, obj = 0x%08x", (int) PC, (int) StackEnd, (int) theObj);
+	fflush(output);
+	PrintRef(theObj);
+	fprintf(output, ".\n");
+  });
+
 
   switch(sig){
 #if 0 /* Not used on PPC */
@@ -1027,6 +1036,8 @@ void SetupBetaSignalHandlers(void)
 {
 
 #ifdef ppcmac
+
+  
 
   default_exceptionhandler = InstallExceptionHandler((ExceptionHandler)BetaSignalHandler);
 #else /* ppcmac */
