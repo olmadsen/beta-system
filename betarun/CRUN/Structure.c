@@ -115,22 +115,6 @@ ref(Structure) ObjS(ref(Object) theObj)
   return newStruct;
 }
 
-#ifdef sparc
-/* Functions used to call RT routines directly from C.
- * Needed because %i1 in calling regwin is destroyed by (C)AlloSI
- * Must be here before AlloSI to prevent gcc from inlining it.
- */
-
-struct Item *SPARC_AlloSI(struct Structure *s, int i1, int i2, int i3, int i4)
-{
-  struct Item *CAlloSI(struct Structure *s, int i1, int i2, int i3, int i4);
-  GCable_Entry();
-  return CAlloSI(s, i1, i2 ,i3, i4);
-  GCable_Exit(1);
-}
-
-#endif
-
 ParamStruc(struct Item *, AlloSI)
 {
   struct Item *ss;
