@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Attach.c,v 1.19 1993-02-16 14:57:51 datpete Exp $
+ * Mod: $Id: Attach.c,v 1.20 1993-02-19 09:38:40 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -22,6 +22,9 @@ ParamThisComp(struct Component *, Att)
     register long              * nextCompBlock asm("%l6");
     register long                level         asm("%l7");
     long first = comp->CallerLSC == 0;
+
+    register long              * tmp asm("%i1") 
+      /* Needed for lastCompBlock assignment */;
     
     GCable_Entry();
     FetchThisComp
