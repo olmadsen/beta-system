@@ -449,6 +449,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 	register_handles handles = {-1, -1, -1, -1, -1};
 	DEBUG_CODE(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
 	SaveSGIRegisters(scp, &handles);
+	/* Hit RefNone or breakpoint */
 	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); 
 	RestoreSGIRegisters(scp, &handles);
       } else {

@@ -683,9 +683,7 @@ static void DumpCell(Object **theCell, Object *theObj)
 void DisplayNEWRUNStack(long *PC, Object *theObj, int signal)
 { 
 
-  /* First check for errors occured outside BETA and adjust StackEnd to
-   * BETA part of stack, if possible.
-   */
+  /* First check for errors occured outside BETA */
   if (!IsBetaCodeAddrOfProcess((long)PC)){
     long *betatop = BetaStackTop[0];
     fprintf(output, 
@@ -694,6 +692,9 @@ void DisplayNEWRUNStack(long *PC, Object *theObj, int signal)
     PrintCodeAddress((long)error_pc);
     fprintf(output, ") ]\n");
     
+    /* 
+     * Adjust StackEnd to BETA part of stack, if possible.
+     */
 #ifdef ppcmac
     /* FIXME: could wind down through frame pointers */
 #endif /* ppcmac */
@@ -712,26 +713,6 @@ void DisplayNEWRUNStack(long *PC, Object *theObj, int signal)
       BetaExit(1);
     }
 #endif /* sgi */
-  }
-
-  /* Second, if a signal was the reason program stopped, the NEWRUN
-   * stack pointer should be adjusted to point to second topmost frame.
-   */
-  if (signal){
-    if (IsBetaCodeAddrOfProcess((long)PC)){ 
-      DEBUG_CODE(fprintf(output, "DisplayBetaStack: Adjusting StackEnd\n"));
-      StackEnd = (long*)WindBackSP((long)StackEndAtSignal, theObj, (long)PC);
-      DEBUG_CODE({
-	fprintf(output, 
-		"DisplayBetaStack: "
-		"Adjusted StackEnd from 0x%08x to 0x%08x\n", 
-		(int)StackEndAtSignal,
-		(int)StackEnd);
-      });
-    } else {
-      fprintf(output, "DisplayBetaStack: Cannot adjust StackEnd.\n");
-      fflush(output);
-    }
   }
 
   /* Dump the stack */
@@ -1507,7 +1488,7 @@ static void DisplayCurrentObjectAndStack(BetaErr errorNumber,
 #endif /* sparc */
 
 #ifdef MT
-  fprintf(output, "DisplayBetaStack: NYI for MT\n"); 
+  fprintf(output, "DisplayCurrentObjectAndStack: NYI for MT\n"); 
   fflush(output);
   return
 #endif
@@ -1559,31 +1540,63 @@ int DisplayBetaStack(BetaErr errorNumber,
     fprintf(output, ")\n");
     fflush(output);
   });
-#ifndef MT
-  TRACE_DUMP(fprintf(output, "StackEnd=0x%x, StackStart=0x%x\n", 
-		     (int)StackEnd, 
-		     (int)StackStart
-		     ));
+
+#ifdef UseRefStack
+#define STACKEND RefSP
+#else
+#define STACKEND StackEnd
 #endif
 
 #ifndef MT
+  TRACE_DUMP(fprintf(output, "StackEnd=0x%x, StackStart=0x%x\n", 
+		     (int)STACKEND, 
+		     (int)StackStart
+		     ));
+
+#ifdef NEWRUN
+  /* If a signal was the reason program stopped, the NEWRUN
+   * stack pointer should be adjusted to point to second topmost frame.
+   */
+  if (theSignal){
+    if (IsBetaCodeAddrOfProcess((long)thePC)){ 
+      DEBUG_CODE(fprintf(output, "DisplayBetaStack: Adjusting StackEnd\n"));
+      StackEnd = (long*)WindBackSP((long)StackEndAtSignal, theObj, (long)thePC);
+      DEBUG_CODE({
+	fprintf(output, 
+		"DisplayBetaStack: "
+		"Adjusted StackEnd from 0x%08x to 0x%08x\n", 
+		(int)StackEndAtSignal,
+		(int)StackEnd);
+      });
+    } else {
+      fprintf(output, "DisplayBetaStack: Cannot adjust StackEnd.\n");
+      fflush(output);
+    }
+  }
+#endif /* NEWRUN */
+
 #ifdef RTVALHALLA
   if (valhallaID){
-#ifdef UseRefStack
-    printf("DisplayBetaStack: calling Valhalla\n");
-    switch (ValhallaOnProcessStop (thePC,RefSP,theObj,theSignal,errorNumber))
-#else
-    DEBUG_VALHALLA(fprintf(output, "DisplayBetaStack: calling ValhallaOnProcessStop\n"));
-    switch (ValhallaOnProcessStop (thePC,StackEnd,theObj,theSignal,errorNumber))
-#endif
-      {
-      case CONTINUE: 
-	DEBUG_VALHALLA(fprintf(output, "DisplayBetaStack: continuing after ValhallaOnProcessStop\n"));
-	return 1;
-      case TERMINATE: 
-	DEBUG_VALHALLA(fprintf(output, "DisplayBetaStack: breaking after ValhallaOnProcessStop\n"));
-	break;
-      }
+    DEBUG_VALHALLA({
+      fprintf(output, 
+	      "DisplayBetaStack: "
+	      "calling ValhallaOnProcessStop"
+	      "(PC=0x%x, SP=0x%x, Object=0x%x, signal=0x%x, err=%d\n",
+	      (int)thePC,
+	      (int)STACKEND,
+	      (int)theObj,
+	      (int)theSignal,
+	      (int)errorNumber
+	      );
+    });
+    switch(ValhallaOnProcessStop(thePC,STACKEND,theObj,theSignal,errorNumber)){
+    case CONTINUE: 
+      DEBUG_VALHALLA(fprintf(output, "DisplayBetaStack: returning after ValhallaOnProcessStop\n"));
+      return 1;
+    case TERMINATE: 
+      DEBUG_VALHALLA(fprintf(output, "DisplayBetaStack: breaking after ValhallaOnProcessStop\n"));
+      break;
+    }
   } else {
     /*DEBUG_CODE(fprintf(output, "DisplayBetaStack: valhallaID is 0\n"));*/
   }

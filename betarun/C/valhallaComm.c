@@ -466,9 +466,11 @@ void HandleStackCell(long returnAdr, Object *returnObj)
   valhalla_writeint ((int)returnObj);
   DEBUG_VALHALLA({
     fprintf(output,
-            "debuggee: forEachStackEntry: returnAdr=%d, returnObj=%d\n",
+            "debuggee: forEachStackEntry: returnAdr=0x%x, returnObj=0x%x",
             (int)returnAdr,
             (int)returnObj);
+    PrintRef((Object*)returnObj);
+    fprintf(output, "\n");
   });
 }
 
@@ -857,7 +859,11 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       int stacktype;
       
       comp = (Component *) valhalla_readint ();
-      DEBUG_VALHALLA(fprintf (output,"debuggee: Received component: %d, pt = %d\n",(int)comp, (int) GETPROTO(comp)));
+      DEBUG_VALHALLA({
+	fprintf (output,"debuggee: Received component: 0x%x, pt = %d",(int)comp, (int) GETPROTO(comp));
+	PrintRef((Object*)comp);
+	fprintf(output, "\n");
+      });
       
       DEBUG_VALHALLA(fprintf (output,"debuggee: Scanning ComponentStack.\n"));
       stacktype=scanComponentStack (comp,curObj,PC,HandleStackCell);
@@ -1293,13 +1299,22 @@ int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj,
                            long sig, long errorNumber)
 { 
   char *txt; int res;
-  DEBUG_VALHALLA(fprintf(output,"debuggee: ValhallaOnProcessStop: PC=%d, SP=0x%x, curObj=%d,sig=%d,errorNumber=%d\n",(int) PC, (int) SP, (int) curObj, (int) sig, (int) errorNumber));
+  DEBUG_VALHALLA(fprintf(output,"debuggee: ValhallaOnProcessStop: PC=0x%x, SP=0x%x, curObj=%d,sig=%d,errorNumber=%d\n",(int) PC, (int) SP, (int) curObj, (int) sig, (int) errorNumber));
   invops++;
   if (invops > valhalla_exelevel+1) {
     fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
 #ifdef UNIX
-    DEBUG_CODE(fprintf(output,"debuggee: sleeping for 10 minuttes...\n"); sleep(10*60));
-    DEBUG_CODE(fprintf(output, "debuggee: 10 minuttes past - dying...\n"));
+    DEBUG_CODE({
+      fprintf(output,
+	      "debuggee(PID=%d): sleeping for 10 minuttes...\n",
+	      (int)getpid()
+	      );
+      sleep(10*60);
+      fprintf(output, 
+	      "debuggee(PID=%d): 10 minuttes past - dying...\n",
+	      (int)getpid()
+	      );
+    });
 #endif /* UNIX */
     exit(99);
   }
@@ -1323,6 +1338,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj,
   valhalla_writeint (sig);
 
   switch (sig) {
+    /* FIXME: Use a (modified) PrintSignal here */
 #ifndef MAC
 #ifndef nti
   case SIGILL:  txt = "SIGILL"; break;
@@ -1331,9 +1347,10 @@ int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj,
   case SIGSEGV: txt = "SIGSEGV"; break;
   case SIGINT:  txt = "SIGINT"; break;
   case SIGQUIT: txt = "SIGQUIT"; break;
-#ifdef linux
+#ifdef SIGTRAP
   case SIGTRAP: txt = "SIGTRAP"; break;
-#else
+#endif
+#ifdef SIGEMT
   case SIGEMT:  txt = "SIGEMT"; break;
 #endif
 #endif /* nti */

@@ -3,7 +3,7 @@
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 #include "valhallaFindComp.h"
 
-#if 0
+#if 1
 /* Trace scanComponentStack() */
 #define TRACE_SCAN(code) code; fflush(output)
 #else
@@ -271,6 +271,10 @@ int scanComponentStack (Component* comp,
   DoForEach = forEach;
   TheComponent = comp;
   BasicItemShown=0;
+
+  DEBUG_VALHALLA(fprintf(output, 
+			 "scanComponentStack(comp=0x%x, obj=0x%x, PC=0x%x)\n",
+			 (int)comp, (int)curObj, PC));
 
   if (comp->StackObj){
     StackObject *sObj = comp->StackObj;
