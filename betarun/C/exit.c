@@ -1,7 +1,7 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-93 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
  * exit.c
- * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 
 #include "beta.h"
@@ -26,17 +26,21 @@ void BetaError(errorNo, theObj)
      long errorNo;
      ref(Object) theObj;
 {
+  long *thePC;
+
   do {
     if( errorNo < 0 ){
 #ifdef sparc
       asm("ta 3");
       StackEnd = (long *) ((struct RegWin *)FramePointer)->fp;
+      thePC = (long *) ((struct RegWin *)FramePointer)->i7;
 #else
       StackEnd = (ptr(long)) &theObj; StackEnd++;
       /* Current object was pushed as the first thing, when
        * the error was detected. The "thing" just below
        * is the first real part of the Beta stack
        */
+      thePC = 0;
 #endif
       if (errorNo==QuaErr || errorNo==QuaOrigErr){
 	if (QuaCont) {
@@ -57,13 +61,20 @@ void BetaError(errorNo, theObj)
 	  break; /* Don't BetaExit() */
 	} 
 #ifndef sparc
-	(long *)StackEnd+=13;
+#if defined(linux) || defined(nti)
+	(long *)StackEnd += 9;
+	/* We have performed 'pushad', and also we have a return
+	 * address from call Qua to ignore.; see Qua.run.
+	 */
+#else
+	(long *)StackEnd += 14;
 	/* We have saved a0-a4, d0-d7, and also we have a return
 	 * address from jsr Qua to ignore.; see Qua.run.
 	 */
 #endif
+#endif
       }
-      DisplayBetaStack( errorNo, theObj);  
+      DisplayBetaStack( errorNo, theObj, thePC);  
     }    
     BetaExit(1);
   } while (FALSE);
