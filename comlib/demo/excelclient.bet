@@ -9,23 +9,47 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
 --PROGRAM: descriptor--
 (# CLSID_XL: ^CLSID;
    clsstr: @BSTR;
-   lcid: @integer;
    IID_IDispatch: @IID;
    hr: @HRESULT;
-   dispid: @int32holder;
-   wstr, error: @wstring;
-   rgszNames: @ExternalRepetition(# elementSize::(# do 4->value #)#);
    params: @DISPPARAMS;
    varg, varg1, varg2: @VARIANT;
+   status: @boolean;
    
-   pDispExcelApp, pdispWorkBooks, pdispWorkBook, pdispWorksheet, pdispRange, pdispCrt: 
-     ^IDispatch;
+   pDispExcelApp, pdispWorkBooks, pdispWorkBook, pdispWorksheet, 
+   pdispRange, pdispCrt: ^IDispatch;
    
    excel_progid: (# exit 'Excel.Application' #);
    
-   use_dual: (# exit false (* does NOT work?? *)#);
-   dual: ^Workbooks;
-   RHS: @int32holder;
+   use_dual: (# exit false #);
+   
+   CleanUp:
+     (# 
+     do 'Awaiting key-press before releasing interface: ' -> puttext;
+        getline;
+        'Releasing interfaces' -> putline;
+        (if pDispExcelApp[]<>NONE then 
+            pDispExcelApp.Release; 
+        if);
+        (if pdispWorkBooks[]<>NONE then 
+            pdispWorkBooks.Release; 
+        if);
+        (if pdispWorkBook[]<>NONE then 
+            pdispWorkBook.Release; 
+        if);
+        (if pdispWorksheet[]<>NONE then 
+            pdispWorksheet.Release; 
+        if);
+        (if pdispRange[]<>NONE then 
+            pdispRange.Release; 
+        if);
+        (if pdispCrt[]<>NONE then 
+            pdispCrt.Release; 
+        if);
+        dparms.release;
+        'CoUninitialize'->putline;
+        CoUninitialize;
+        'CoUninitialize done'->putline;
+     #);
    
    DispatchParams: 
      (# varg: @VARIANT;
@@ -132,13 +156,17 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
         cNamedArgs: @integer;
         dispidMember: @integer;
         hr: @HRESULT;
+        status: @boolean;
+        lcid: @integer;
      enter (pdisp[], member[], params[], wAction, vReturn[])
-     do params.cNamedArgs -> cNamedArgs;
+     do true -> status;
+        LOCALE_USER_DEFAULT -> lcid;
+        params.cNamedArgs -> cNamedArgs;
         (* Look up DISPIDs of member name, and any possibly arguments
          * previously put to params.
          *)
         member[] -> params.check
-        (# 
+        (# wstr: @wstring;
         do name[] -> wstr.set; 
            (wstr, 0) -> params.alpszArgNames.inxPut;
         #);
@@ -154,6 +182,7 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
             newline;
          else
             ('GetIdsOfNames Failed', hr.value) -> ComErrorMessage;
+            false -> status;
             leave CallInvoke;
         if);
         
@@ -182,74 +211,83 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
             'Invoke succeeded' -> putline;
          else
             ('Invoke Failed', hr.value) -> ComErrorMessage;
+            false -> status;
+            leave CallInvoke;
         if);
+     exit status
      #);
    
    dParms: @DispatchParams;
    
-do 0->CoInitialize;
-   LOCALE_USER_DEFAULT -> lcid;
+do ControlExcel:
+     (# 
+     do 0->CoInitialize;   
+        excel_progid -> clsstr.setText;
+        clsstr[] -> CLSIDFromProgID -> CLSID_XL[];
+        IDispatch_IID -> IID_IDispatch; 
    
-   excel_progid -> clsstr.setText;
-   clsstr[] -> CLSIDFromProgID -> CLSID_XL[];
-   IDispatch_IID -> IID_IDispatch; 
-   
-   'Create component and get dispinterface'->putLine;
-   
-   (CLSID_XL[], NONE, CLSCTX_LOCAL_SERVER, IID_IDispatch[])
-     -> CoCreateInstance->pDispExcelApp[];
-   
-   'CoCreateInstance done'->putLine;
+        'Create component and get dispinterface'->putLine;
+        (CLSID_XL[], NONE, CLSCTX_LOCAL_SERVER, IID_IDispatch[])
+          -> CoCreateInstance->pDispExcelApp[];
+        
+        (if pDispExcelApp[]<>NONE then
+            'Succeeded creating component.'->putLine;
+         else
+            'failed creating component.'->putLine;
+            leave ControlExcel;
+        if);
 
-   (if pDispExcelApp[]<>NONE then
-       'Succeeded creating component.'->putLine;
-       
-       'Invoking pDispExcelApp.Visible:' -> putline;
-       (NONE, true) -> dParms.putBoolean;
-       (pDispExcelApp[], 'Visible', dparms[], DISPATCH_PROPERTYPUT, NONE) 
-         -> CallInvoke;
-       dparms.release;
+        'Invoking pDispExcelApp.Visible:' -> putline;
+        (NONE, true) -> dParms.putBoolean;
+        (pDispExcelApp[], 'Visible', dparms[], DISPATCH_PROPERTYPUT, NONE) 
+          -> CallInvoke
+          -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
        
        'Adding a sheet to the workbook' -> putline;
        (pDispExcelApp[], 'Workbooks', dparms[], DISPATCH_PROPERTYGET, varg1[]) 
-         -> CallInvoke;
-       
+          -> CallInvoke
+          -> status;
+        (if not status then
+           leave ControlExcel;
+       if);
+        
        'Invoking pDispExcelApp.WorkBooks.Add:' -> putline;
-           
        varg1[] -> VARIANT_init(# do pdispVal->pdispWorkbooks[] #);
-       
-       (if use_dual then 
-           'Calling Add using vtable' -> putline;
-           pdispWorkbooks[] -> dual[]; (* should be a QIF? *)
-           (*(# dummy:@char do (varg, lcid, RHS[]) -> dual.add -> hr;#);*)
-           (if hr.succeeded then
-               'pdispWorkbooks.Add(template:=xlWorksheet) succeeded' -> putline;
-            else
-               ('pdispWorkbooks.Add(template:=xlWorksheet) failed',hr.value) -> ComErrorMessage;
+        (if use_dual then 
+            (# dual: ^Workbooks;
+               RHS: @int32holder;
+            do 'Calling Add using vtable' -> putline;
+               pdispWorkbooks[] -> dual[]; (* should be a QIF? *)
+               (*(varg, lcid, RHS[]) -> dual.add -> hr;*)
+            #);
+            (if hr.succeeded then
+                'pdispWorkbooks.Add(template:=xlWorksheet) succeeded' 
+                  -> putline;
+             else
+                ('pdispWorkbooks.Add(template:=xlWorksheet) failed',hr.value) 
+                  -> ComErrorMessage;
+                leave ControlExcel;
            if);
         else
-           ('Template', xlWorksheet) -> dParms.putInt16;
-           (pdispWorkbooks[], 'Add', dparms[], DISPATCH_METHOD, varg2[]) 
-             -> CallInvoke;
-           dparms.release;
-           varg2[] -> VARIANT_init(# do pdispVal->pdispWorkBook[] #);
+            'Calling Add using invoke' -> putline;
+            ('Template', xlWorksheet) -> dParms.putInt16;
+            (pdispWorkbooks[], 'Add', dparms[], DISPATCH_METHOD, varg2[]) 
+              -> CallInvoke
+              -> status;
+            (if not status then
+                leave ControlExcel;
+            if);
+            dparms.release;
+            varg2[] -> VARIANT_init(# do pdispVal->pdispWorkBook[] #);
        if);
-       
-       
-       'Awaiting key-press before releasing interface: ' -> puttext;
-       getline;
-       
-       'Releasing interfaces' -> putline;
-       (if pDispExcelApp[]<>NONE then 
-           pDispExcelApp.Release; 
-           'Succeeded releasing dispinterface'->putline;
-       if);
-    else
-       'Could not create component'->putline;
-   if); 
-   'CoUninitialize'->putline;
-   CoUninitialize;
-   'CoUninitialize done'->putline;
+     #);
+   
+   CleanUp;
+   
 #)
 
 
