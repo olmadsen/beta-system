@@ -63,14 +63,9 @@ ParamThis(Component *, Susp)
   __asm__("ta 3");
   Size = (long *) ((RegWin *)lastCompBlock)->fp - FramePointer + 1;
 
-  theStackObj = ActiveComponent->StackObj;
-  if ((long)theStackObj == 0
-      || (long)theStackObj == -1
-      || Size > theStackObj->BodySize)
-    {
-      theStackObj = AlloSO(Size);
-      AssignReference((long *)&ActiveComponent->StackObj, (Item *) theStackObj);
-    }
+  theStackObj = AlloSO(Size);
+  AssignReference((long *)&ActiveComponent->StackObj, (Item *) theStackObj);
+
   /* FillStackObj */
   theStackObj->StackSize = Size;
   theStackObj->Body[0] = (long) FramePointer;

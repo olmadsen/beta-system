@@ -61,6 +61,7 @@ ParamThisComp(void, AttBC)
 
     /* ActiveCallBackFrame = 0; */
     ActiveComponent = comp;
+    ActiveComponent->StackObj = (StackObject *) -1;
 
     /* ?? should set comp = 0 as done in AttachBasicComponent.run */
     CallBetaEntry( BasicItem->Proto->TopMpart, &comp->Body);

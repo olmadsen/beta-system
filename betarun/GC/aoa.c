@@ -11,7 +11,7 @@
 /* LOCAL FUNCTIONS */
 static long AllocateBaseBlock(void);
 static void AOANewBlock(long newBlockSize);
-static void AOANewBlock2(long minNewBlockSize);
+static void AOAMaybeNewBlock(long minNewBlockSize);
 #ifdef RTDEBUG
 static void AOACheckObjectRefSpecial(REFERENCEACTIONARGSTYPE);
 #endif /* RTDEBUG */
@@ -131,7 +131,7 @@ static void AOANewBlock(long newBlockSize)
     /* Insert the new block in the freelist */
     AOAInsertFreeBlock((char *)AOATopBlock -> top, newBlockSize);
     INFO_AOA({
-      fprintf(output,"Allocated new block of 0x%0X bytes\n", newBlockSize);
+      fprintf(output,"Allocated new block of 0x%0X bytes\n", (int)newBlockSize);
       fflush(output);
     });
   } else {
@@ -141,7 +141,7 @@ static void AOANewBlock(long newBlockSize)
   }
 }
 
-static void AOAMaybeNewBlock2(long minNewBlockSize) 
+static void AOAMaybeNewBlock(long minNewBlockSize) 
 {
   long newBlockSize = minNewBlockSize;
   if (minNewBlockSize>0 && minNewBlockSize<AOABlockSize) {
@@ -252,8 +252,8 @@ Object *AOAallocate(long numbytes)
   INFO_AOA(fprintf(output,"Could not allocate 0x%0X bytes, "
 		   "allocating new block now\n"
 		   "and requesting AOAGc from next IOAGc.\n",
-		   numbytes));
-  AOAMaybeNewBlock2(numbytes);
+		   (int)numbytes));
+  AOAMaybeNewBlock(numbytes);
   AOANeedCompaction = TRUE;
   
   return AOAallocate(numbytes);
@@ -337,12 +337,13 @@ Object *CopyObjectToAOA(Object *theObj)
   /* Set the forward reference in theObj to newObj */
   theObj->GCAttr = (long) newObj;
   
-  DEBUG_AOA({ 
-    AOAcopied += size;
-    
+  DEBUG_AOA(AOAcopied += size);
+
+  DEBUG_STACKOBJ({ 
     if (isStackObject(theObj)) {
       fprintf(output, 
-	      "CopyObjectToAOA: moved StackObject to 0x%x\n", (int)newObj);
+	      "CopyObjectToAOA: moved StackObject from 0x%0x to 0x%x\n",
+	      (int)theObj, (int)newObj);
     }
   });
   
@@ -467,7 +468,7 @@ void AOAGc()
   INFO_AOA(fprintf(output,"]\n"));
 
   /* Make sure there is sufficient free memory */
-  AOAMaybeNewBlock2(0);
+  AOAMaybeNewBlock(0);
     
   INFO_AOA(fprintf(output,"AOAGC finished, free space "));
   INFO_AOA(fprintf(output,"0x%X",(int)totalFree));
@@ -481,11 +482,11 @@ void AOAGc()
       
   AOAFreeListAnalyze2();
   INFO_AOA({
-    fprintf(output, "AOA-%lu aoasize=0x%08X aoafree=0x%08X "
+    fprintf(output, "AOA-%d aoasize=0x%08X aoafree=0x%08X "
 	    "VR=0x%08X objects=0x%08X\n",
-	    NumAOAGc, totalAOASize, totalFree,
-	    LVRSizeSum,  objectsInAOA);
-    fprintf(output, "AOA-%lu)\n", NumAOAGc);
+	    (int)NumAOAGc, (int)totalAOASize, (int)totalFree,
+	    (int)LVRSizeSum,  (int)objectsInAOA);
+    fprintf(output, "AOA-%d)\n", (int)NumAOAGc);
     fflush(output);
   });
 
@@ -1007,6 +1008,13 @@ void scanObject(Object *obj,
 	theComponent = ((Component*)obj);
 	if ((theComponent->StackObj) &&
 	    (long)(theComponent->StackObj) != -1) {
+	  DEBUG_STACKOBJ({
+	    fprintf(output, 
+		    "Processing stackobj 0x%08x of component 0x%08x "
+		    "with func=0x%08x\n",
+		    (int)theComponent->StackObj, (int)theComponent, 
+		    (int)referenceAction);
+	  });
 	  referenceAction((Object **)&(theComponent->StackObj));
 	}
 	if (theComponent->CallerComp) {

@@ -41,7 +41,7 @@ ParamThisComp(Component *, Att)
 
   Ck(comp); Ck(this);
   
-  if (comp->StackObj == (StackObject *) -1 || comp == ActiveComponent)
+  if (comp->StackObj == (StackObject *) -1)
     BetaError(RecursiveAttErr, this);
   if ((!first) && (comp->StackObj == 0)){
     /* printf("\nAttach: comp->StackObj == 0, comp=%x", (long)comp); */
@@ -62,6 +62,13 @@ ParamThisComp(Component *, Att)
   AssignReference((long *)&comp->CallerObj, (Item *) this);
   
   /* -1 tells that ActiveComponent is active */
+  DEBUG_CODE({
+    if (ActiveComponent 
+	&& ActiveComponent->StackObj 
+	&& (long)ActiveComponent->StackObj != -1) {
+      ActiveComponent->StackObj->StackSize=0;
+    }
+  });
   ActiveComponent->StackObj = (StackObject *) -1;
   
   /* Push a new Component Block. (It lives in our RegWin) */
@@ -87,6 +94,9 @@ ParamThisComp(Component *, Att)
      * other way to check this!
      */
     comp->CallerLSC = -1;
+
+    /* Indicate that comp is now active */
+    comp->StackObj = (StackObject *) -1;
 
     ActiveComponent = comp;
     /* Fool gcc into believing that %i1 is used */
@@ -157,6 +167,8 @@ ParamThisComp(Component *, Att)
     StackObject * theStackObj = ActiveComponent->StackObj;
     long size = theStackObj->StackSize * 4 - 4;
     RegWin * rw;
+
+    ActiveComponent->StackObj = (StackObject *) -1;
     
     /* Fool gcc into believing that %i1 is used */
     __asm__(""::"r" (tmp));

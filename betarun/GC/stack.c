@@ -912,8 +912,7 @@ static void ProcessSPARCStack(void)
 GLOBAL(long lastPC)=0;
 #endif
 
-static
-void ProcessSPARCStackObj(StackObject *sObj, CellProcessFunc func)
+static void ProcessSPARCStackObj(StackObject *sObj, CellProcessFunc func)
 {
     RegWin *theAR;
     long delta;
@@ -945,6 +944,15 @@ void ProcessSPARCStackObj(StackObject *sObj, CellProcessFunc func)
     });
 
     if (!sObj->StackSize) {
+      if (do_unconditional_gc) {
+	/* OK - can happen in gc triggered by AlloSO */
+      } else {
+	DEBUG_CODE({
+	  fprintf(output, 
+		  "stackobject 0x%x has stacksize=0\n", (int)sObj);
+	    Illegal();
+	});
+      }
       return;
     }
     /* Start at sObj->Body[1], since sObj->Body[0] is saved FramePointer */

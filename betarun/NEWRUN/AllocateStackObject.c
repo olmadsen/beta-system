@@ -28,7 +28,7 @@ StackObject *AlloSO(unsigned size, long *SP)
     sObj->Proto = StackObjectPTValue;
     /* sObj->GCAttr set above if in IOA */
     sObj->BodySize = size;
-    sObj->StackSize = 0;
+    /* No need: IOA is memset(0) sObj->StackSize = 0; */
 
     /*fprintf(output, "AlloSO: theObj: 0x%x, size=0x%x\n", sObj, size);*/
 

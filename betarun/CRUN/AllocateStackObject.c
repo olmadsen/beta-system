@@ -31,12 +31,16 @@ StackObject * AlloSO(unsigned size)
 
     DEBUG_CODE(NumAlloSO++);
 
+    /* Do not try to allocate directly in AOA, unless Suspend 
+     * is fixed to process every reference on the stack 
+     * (As NEWRUN does)
+     */
     theStack = (StackObject *) IOAalloc(StackObjectSize(size));
 
     theStack->Proto = StackObjectPTValue;
     if (IOAMinAge!=0) theStack->GCAttr = IOAMinAge;
     theStack->BodySize = size;
-    theStack->StackSize = 0;
+    /* No need: IOA is memset(0) theStack->StackSize = 0; */
 
     /* fprintf(output, "AlloSO: theObj: 0x%x\n", theStack); */
 
