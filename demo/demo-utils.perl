@@ -215,6 +215,8 @@ sub trim_path
     $path =~ s%/$%%;
     # delete initial ./
     $path =~ s%^\./%%;
+    # delete initial /
+    $path =~ s%^/%%;
     return $path;
 }
 
