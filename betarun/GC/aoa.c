@@ -491,13 +491,15 @@ void AOAGc()
   AOANeedCompaction = FALSE;
 }
 
-    
+ 
 #ifdef RTDEBUG
+#if 0   
 static void CheckAOACell(Object **theCell,Object *theObj)
 {
   DEBUG_CODE(if (!CheckHeap) Ck(theObj));
   AOACheckReference(theCell);
 }
+#endif
 
 Object * lastAOAObj=0;
 
