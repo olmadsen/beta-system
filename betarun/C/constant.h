@@ -45,15 +45,19 @@
 #define MININT (signed long)0x80000000
 
 #ifdef NEWRUN
-/* Special "dyn" mark */
+/* Special "dyn" mark used after callback */
 #define CALLBACKMARK ((struct Object *)4)
+/* Special "dyn" mark used after Gparts */
+#define GENMARK      ((struct Object *)8)
 
 /* Offset for dyn on stack frame */
 #ifdef sgi
 #define DYNOFF 2
+#define PC_OFF -1
 #endif
 #ifdef macppc
 #define DYNOFF 1
+#define PC_OFF 2
 #endif
 
 #define IOAMAXSIZE           (IOASize/8)

@@ -25,7 +25,7 @@ long *ExO(long *jumpAdr,
  fprintf(output, "New SP:     0x%x\n", (long)SP);           \
  fprintf(output, "New PC:     0x%x\n", (long)PC);           \
  fprintf(output, "New object: 0x%x", (long)this);           \
- if (this&&(this!=CALLBACKMARK)){                           \
+ if (this&&(this!=CALLBACKMARK)&&(this!=GENMARK)){          \
    fprintf(output, " (proto: 0x%x)", this->Proto);          \
    fprintf(output, " (%s)\n", ProtoTypeName(this->Proto));  \
  }                                                          \
@@ -37,8 +37,11 @@ long *ExO(long *jumpAdr,
 
   while (this != exitObj) {
     /* Check for passing of a callback - see STACK LAYOUT in stack.c */
-    if (this == CALLBACKMARK ) {
-      DEBUG_CODE(fprintf(output, "ExO: passing cb\n"); fflush(output));
+    if ((this == CALLBACKMARK) || (this == GENMARK)) {
+      DEBUG_CODE(fprintf(output, 
+			 "ExO: passing %s\n", 
+			 (this==GENMARK)?"allocation/main":"callback"); 
+		 fflush(output));
       SP = (long*)GetSPbeta(SP);
       /* No need to check for SP=0 (can happen from main), 
        * since leaving of basic component is detected otherwise.

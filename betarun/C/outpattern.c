@@ -495,7 +495,7 @@ errorTable[] =
   { CBFAfullErr,       "Call back function area (CBFA) is full" },
   { PascalCallBackErr, "Call back Pascal function has wrong return size" },
   { CompCallBackErr,   "Suspending component involving call backs" },
-  { LeaveBasicCompErr, "Attempt to leave basic component" },
+  { LeaveBasicCompErr, "Illegal leave/restart" },
   { QuaErr,            "Qualification error in reference assignment" },
   { QuaOrigErr,        "Qualification error in reference assignment; origins differ" },
   { RecursiveAttErr,   "Attach of component that is already attached" },
@@ -537,7 +537,9 @@ char *ErrorMessage(enum BetaErr errorNumber)
 #ifdef NEWRUN
 
 static void DumpCell(struct Object **theCell,struct Object *theObj)
-{ register long PC=-1;
+{ 
+  register long PC=-1;
+  long *SP;
 
   /* theObj is dyn in a frame. This is the current object in the 
    * previous frame. 
@@ -548,10 +550,13 @@ static void DumpCell(struct Object **theCell,struct Object *theObj)
   
 
   /* First check if theObj is CALLBACKMARK */
-  if (theObj==CALLBACKMARK){
-    long *SP;
-    TRACE_DUMP(fprintf(output, "  cb: "));
-    fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
+  if ((theObj==CALLBACKMARK)||(theObj==GENMARK)){
+    if (theObj==CALLBACKMARK){
+      TRACE_DUMP(fprintf(output, "  cb: "));
+      fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
+    } else {
+      TRACE_DUMP(fprintf(output, "  allo: "));
+    }
     /* Since ProcessStackFrames now skips to previous frame before
      * BETA called C, we will not see the current object in the
      * frame before C as a dyn-pointer in any frame (it is hidden
@@ -560,10 +565,14 @@ static void DumpCell(struct Object **theCell,struct Object *theObj)
      * find the current object for that frame and dump it.
      * See figure in stack.c.
      */
-    SP = (long *)theCell+2;	/* Frame starts 2 longs above dyn */
-    SP = *(long **)SP;		/* SP-beta */
+    SP = (long *)theCell+DYNOFF; /* Frame starts DYNOFF longs above dyn */
+    SP = (long*)GetSPbeta(SP);	 /* SP-beta */
+    if (SP==0){
+      /* We passed the main+CallB frames */
+      return;
+    }
     theObj = GetThis(SP);
-    PC = 0;			/* not known - is somewhere in the C frames */
+    PC = 0;			 /* not known - is somewhere in the C frames */
   }
     
   /* Check if theObj IS a component */
@@ -583,8 +592,8 @@ static void DumpCell(struct Object **theCell,struct Object *theObj)
   } 
     
   if (PC==-1){
-    /* PC for previous frame is per default found just above dyn */
-    PC = *((long *)theCell+1);
+    SP = (long *)theCell+DYNOFF; /* Frame starts DYNOFF longs above dyn */
+    PC = *((long *)SP+PC_OFF);
   }
 
   TRACE_DUMP(fprintf(output, ", PC=0x%x *\n", PC));

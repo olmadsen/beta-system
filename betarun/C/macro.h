@@ -448,7 +448,7 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 
 /* Call Gpart with 4 as first parameter, and item as second argument */
 #define CallGPart(gpart, item, SP) \
-   CallB(CALLBACKMARK, (struct Object*)(item), (long)gpart, (long)SP)
+   CallB(GENMARK, (struct Object*)(item), (long)gpart, (long)SP)
 
 #ifdef RTDEBUG
 #define zero_check(p, bytesize)                         \

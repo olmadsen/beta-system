@@ -28,10 +28,10 @@ void main(long argc, char *argv[])
   DEBUG_STACK(fprintf(output, "StackStart=0x%x\n", StackStart));
 
   /* M1BETAENV(0,BasicItem) */
-  CallB( CALLBACKMARK /*dyn*/, 
-	 (struct Object *)BasicItem, 
-	 (long)(BasicItem->Proto->TopMpart), 
-	 0);
+  CallB( GENMARK /*dyn*/, 
+	 (struct Object *)BasicItem, /* object */
+	 (long)(BasicItem->Proto->TopMpart), /* entrypoint */
+	 0); /* SP */
 
   /* TerminateBasicComponent: */
   BetaExit(0);

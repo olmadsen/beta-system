@@ -126,7 +126,7 @@ DEBUG_STACK(fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__)); \
 DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));                \
 DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));                \
 DEBUG_STACK(fprintf(output, "New object: 0x%x", theObj));              \
-DEBUG_STACK(if (theObj&&(theObj!=CALLBACKMARK)){                       \
+DEBUG_STACK(if (theObj&&(theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){    \
               fprintf(output, " (proto: 0x%x)", theObj->Proto);        \
               fprintf(output, " (%s)\n", ProtoTypeName(theObj->Proto));\
 	    })
@@ -200,7 +200,7 @@ void ProcessStackFrames(long SP,
 
     /* Check for passing of a callback/Gpart.
      * When a callback/gpart is called, the callbackentry is called
-     * with dyn=CALLBACKMARK.
+     * with dyn=CALLBACKMARK/GENMARK.
      *  
      * Before this the compiler pushes the SP pointing to the *end* of 
      * the frame for this previous object (saved in BetaStackTop[1]).
@@ -219,7 +219,7 @@ void ProcessStackFrames(long SP,
      *      SP->|___SP-beta__|--'              _  Pseudo frame / CallB frame
      *          |   RTS      | = PC in stub     |
      *          |   dyn      | = CALLBACKMARK   |
-     *          |            |                  |
+     *          |            |   or GENMARK     |
      *          |            |                  |  Frame for first beta frame 
      *          |            |                  |  after callback 
      *          |            |                  |  or for first Gpart
@@ -228,9 +228,13 @@ void ProcessStackFrames(long SP,
      *          |            |
      * 
      */
-    if (theObj == CALLBACKMARK ) {
+    if ((theObj == CALLBACKMARK)||(theObj == GENMARK)) {
       DEBUG_CODE(long oldSP);
-      DEBUG_STACK(fprintf(output, "Passing callback/allocation/main at SP=0x%x.", SP));
+      DEBUG_STACK(if (theObj==CALLBACKMARK){
+	fprintf(output, "Passing callback at SP=0x%x.", SP);
+      } else {
+	fprintf(output, "Passing allocation/main at SP=0x%x.", SP);
+      })
       DEBUG_CODE(oldSP=SP);
       SP = GetSPbeta(SP);
       if (SP==0){

@@ -16,7 +16,7 @@ enum BetaErr {
   CBFAfullErr =       -11 /* Call back function area (CBFA) is full (obsolete) */,
   PascalCallBackErr = -12 /* Call back Pascal function has wrong return size */,
   CompCallBackErr =   -13 /* Suspending component involving call backs */,
-  LeaveBasicCompErr = -14 /* Attempt to leave basic component */,
+  LeaveBasicCompErr = -14 /* Illegal leave/restart */,
   QuaErr =            -15 /* Qualification error in reference assignment */,
   QuaOrigErr =        -16 /* Qualification error in reference assignment; origins differ */,
   RecursiveAttErr =   -17 /* Attempt to attach a component that is already attached */,

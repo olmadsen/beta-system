@@ -50,7 +50,9 @@ static void ShowCell(int PC, struct Object *theObj)
 }
 
 static void DoStackCell(struct Object **theCell,struct Object *theObj)
-{ register long PC;
+{ 
+  register long PC;
+  long *SP;
 
   TRACE_SCAN(fprintf(output, 
 		     ">>>DoStackCell: theCell=0x%x, theObj=0x%x",
@@ -72,10 +74,9 @@ static void DoStackCell(struct Object **theCell,struct Object *theObj)
   if (CompFound){
     /* We are processing the relevant part of the stack */
     
-    /* First check if theObj is CALLBACKMARK */
-    if (theObj==CALLBACKMARK){
-      long *SP;
-      TRACE_SCAN(fprintf(output, "  cb: "));
+    /* First check if theObj is CALLBACKMARK/GENMARK */
+    if ((theObj==CALLBACKMARK)||(theObj==GENMARK)){
+      TRACE_SCAN(fprintf(output, "  cb/allo: "));
       /* Since ProcessStackFrames now skips to previous frame before
        * BETA called C, we will not see the current object in the
        * frame before C as a dyn-pointer in any frame (it is hidden
@@ -84,13 +85,17 @@ static void DoStackCell(struct Object **theCell,struct Object *theObj)
        * find the current object for that frame and dump it.
        * See figure in stack.c.
        */
-      SP = (long *)theCell+2; /* Frame starts 2 longs above dyn */
-      SP = *(long **)SP; /* SP-beta */
+      SP = (long *)theCell+DYNOFF; /* Frame starts DYNOFF longs above dyn */
+      SP = (long*)GetSPbeta(SP);   /* SP-beta */
+      if (SP==0){
+      /* We passed the main+CallB frames */
+      return;
+      }
       theObj = GetThis(SP);
-      PC = 0; /* not known - is somewhere in the C frames */
+      PC = 0;  /* not known - is somewhere in the C frames */
     } else {
-      /* PC for previous frame is per default found just above dyn */
-      PC = *((long *)theCell+1);
+      SP = (long *)theCell+DYNOFF; /* Frame starts DYNOFF longs above dyn */
+      PC = *((long *)SP+PC_OFF);
     }
     
     /* Check if theObj is a component */

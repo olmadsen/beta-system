@@ -128,6 +128,13 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 			    lineno));
 	return;
       }
+      if (r==GENMARK){
+	DEBUG_STACK(fprintf(output, 
+			    "Ck ignoring GENMARK at %s:%d\n", 
+			    fname, 
+			    lineno));
+	return;
+      }
 #endif /* NEWRUN */
       Claim( ((long)r&3)==0, __CkString);
       Claim(inIOA(rr) || inAOA(rr) || inLVRA(rr) || isLazyRef(rr), __CkString);
