@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Structure.c,v 1.23 1992-10-12 12:30:05 beta Exp $
+ * Mod: $Id: Structure.c,v 1.24 1992-10-23 15:24:32 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -160,7 +160,11 @@ int GtS(ref(Structure) arg1, ref(Structure) arg2)
   proto1 = arg1->iProto;
   proto2 = arg2->iProto;
   
-  if (proto1 == proto2) return 0;
+  if (proto1 == proto2)
+    return 0;
+
+  if (proto1->Prefix == proto1) /* proto1 is Object## */
+    return 1;
   
   /* Prefix of proto2 is the first try */
   
