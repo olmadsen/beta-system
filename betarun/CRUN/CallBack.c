@@ -227,6 +227,7 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
      * (ap) = arg#4, -4(ap) = arg#5,...
      * Unfortunately this doesn't work for doubles :-(
      */
+    setThisReg(0); /* To prevent pushing of garbage in the CallBackRoutine */
     setCallReg(theObj);
     retval = theObj->Proto->CallBackRoutine(a1, a2, a3, a4, &FOR - 128/4);
 
