@@ -91,9 +91,6 @@ void ProcessRefStack(size, bottom)
 
 void ProcessStack()
 {
-#if 0
-  struct SnakeSF *top;
-#endif
 
   ProcessRefStack(((unsigned)/*getRefSP()*/RefSP-(unsigned)&ReferenceStack[0]) >> 2,
                   &ReferenceStack[0]);
@@ -134,7 +131,7 @@ void PrintRefStack()
   long size = ((long)RefSP - (long)&ReferenceStack[0])/4;
   fprintf(output, "RefStk: [%x .. %x[\n", (int)&ReferenceStack[0], (int)RefSP);
   for(; size > 0; size--, theCell++){
-    if (!isLazyRef(*theCell) /*&& ((*theCell)!=ExternalMarker) && (*theCell & 1)*/){ 
+    if (!isLazyRef(*theCell) && ((*theCell)!=ExternalMarker) && (*theCell & 1)){ 
       /* Used in beta.dump */
       fprintf(output, "  0x%08x: 0x%08x #\n", (int)theCell, (int)*theCell);
     } else {
@@ -155,20 +152,16 @@ void ProcessRefStack(size, bottom)
   /*DEBUG_IOA(PrintRefStack());*/
   theCell = (struct Object **)bottom;
   for(; size > 0; size--, theCell++) {
-#if 0
     if (!isLazyRef(*theCell)) {
       i = ((unsigned)*theCell & 1) ? 1 : 0; 
       *theCell = (struct Object *)((unsigned)*theCell & ~1);
     } else {
       i = 0;
     }
-#else
-    i=0;
-#endif
-    /* DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", (int)theCell, (int)*theCell));*/
+    /* DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", (int)theCell,
+                         (int)*theCell));*/
     theObj = *theCell;
-    if(theObj && 
-       /* (theObj!=(struct Object *)ExternalMarker) && */
+    if(theObj && (theObj!=(struct Object *)ExternalMarker) && 
        inBetaHeap(theObj) && isObject(theObj)) {
       if( inLVRA( theObj)){
 	DEBUG_IOA( fprintf( output, "(STACK(%x) is *ValRep)", (int)theCell));
@@ -189,13 +182,15 @@ void ProcessRefStack(size, bottom)
       if (theObj 
 	  && !isProto(theObj) /* e.g. AlloI is called with prototype in ref. reg. */
 	  && !isCode(theObj)  /* e.g. at INNER a ref. reg contains code address */
-          /* && (theObj!=(struct Object *)ExternalMarker)*/
+          && (theObj!=(struct Object *)ExternalMarker)
 	  ) {
 	if (isValRep(theObj)){
-	  fprintf(output, "[ProcessRefStack: ***ValRep: 0x%x: 0x%x]\n", (int)theCell, (int)theObj);
+	  fprintf(output, "[ProcessRefStack: ***ValRep: 0x%x: 0x%x]\n", (int)theCell, 
+		  (int)theObj);
 	} else {
 	  extern void Illegal();
-	  fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", (int)theCell, (int)theObj);
+	  fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", (int)theCell,
+		  (int)theObj);
 	  Illegal();
 	}
       }
@@ -221,9 +216,6 @@ void ProcessStack()
  */
 void ProcessStackObj(struct StackObject *theStackObject)
 {
-#if 0
-  long *        stackptr;
-#endif
   long *        theEnd;
 
   DEBUG_IOA(fprintf(output, "ProcessStackObj: theStack: 0x%x, size: 0x%x\n", 
@@ -233,10 +225,6 @@ void ProcessStackObj(struct StackObject *theStackObject)
 
   theEnd = &theStackObject->Body[1] + theStackObject->StackSize;
 
-  /* fprintf(output, "ProcessStackObj: theStack: 0x%x, StackSize: 0x%x, BodySize: 0x%x\n", 
-     (int)theStackObject, (int)(theStackObject->StackSize), (int)(theStackObject->BodySize)); */
-  
-  /* ProcessRefStack(*theEnd, theEnd+1); */
   ProcessRefStack(theStackObject->BodySize-theStackObject->StackSize-1, theEnd);
 }
 

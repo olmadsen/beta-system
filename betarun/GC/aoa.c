@@ -200,7 +200,7 @@ void AOAGc()
   }
   DEBUG_AOA( if( AOACreateNewBlock )fprintf( output, " new block needed, "));
 
-#ifdef hppa
+#ifdef UseRefStack
   {
       long **pointer = (long **)AOArootsLimit;
 
@@ -507,7 +507,7 @@ static void Phase1()
     long old=0;
     WordSort((unsigned long *)AOArootsPtr, AOArootsLimit-AOArootsPtr);
     while (pointer > AOArootsPtr){
-#ifdef hppa
+#if defined(hppa) || defined (crts)
       /* See below... */
       if(!isLazyRef(*((long *)*(pointer-1))) && (*((long *)*(pointer-1)) & 1)) {
 	*((long *)*(pointer-1)) &= ~1; /* clear tag bit */
@@ -525,7 +525,7 @@ static void Phase1()
 #else /* RTDEBUG */
   while( pointer > AOArootsPtr) {
     pointer--;
-#ifdef hppa
+#ifdef UseRefStack
     /*
      * Dreadful hack. We have to remove the tag bits from those references
      * in stackobjects that have them, so the Follow*() can handle them,
