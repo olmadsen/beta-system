@@ -11,10 +11,6 @@
 #include <String.h>
 #endif
 
-#ifndef DEFAULT_PROPTERY
-#define DEFAULT_PROPERTY "IOA#512"
-#endif
-
 #ifndef DEFAULT_PROPERTY_NAME
 #define DEFAULT_PROPERTY_NAME "BETART"
 #endif
@@ -36,13 +32,9 @@ GetBetaEnv()
   }else{
     if( betaEnv = getenv( DEFAULT_PROPERTY_NAME) )
       SetupProperties( betaEnv);
-    else
-      SetupProperties( DEFAULT_PROPERTY);
   }
 #else
   if( betaEnv = getenv( DEFAULT_PROPERTY_NAME) )
     SetupProperties( betaEnv);
-  else
-    SetupProperties( DEFAULT_PROPERTY);
 #endif
 }
