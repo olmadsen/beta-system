@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(95)";
+char betarun_version[] = "BETARUN VERSION 5.3(96)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.117  2002/07/11 13:58:07  datpete
+ *     Support for DLL linking on windows
+ * Betarun version number: 95
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.116  2002/07/10 12:15:33  datpete
  *     Allocation in AOA of large objects on sparc
  * Betarun version number: 94
