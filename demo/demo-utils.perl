@@ -412,6 +412,10 @@ sub run_demo
     # foo and the '[1]' just used to distinguish multiple executions.
     
     my ($dir, $exec, $args) = @_;
+    my $command = $exec;
+    if ($OS eq "WIN" && $target eq "jvm"){
+	$command = "$command.bat";
+    }
 
     $dir = '.' if ($dir eq "");
     if (!&inMatchList($dir)){
@@ -426,8 +430,8 @@ sub run_demo
     return if (!&check_compiled($dir, $exec));
     &pushd($dir);
     &cleanup($exec);
-    print "-"x10 . "Executing " . &trim_path("$dir/$exec") . "-"x10  . "\n"; 
-    system "./$exec $args > $exec.run 2>&1";
+    print "-"x10 . "Executing " . &trim_path("$dir/$command") . "-"x10  . "\n"; 
+    system "./$command $args > $exec.run 2>&1";
     &register_prog_status($dir, $exec, $?);
 
     &cat("$exec.run") unless ($skipoutput);
@@ -440,6 +444,10 @@ sub run_demo
 sub write_to_demo
 {
     my ($dir, $exec, $args, @inputlines) = @_;
+    my $command = $exec;
+    if ($OS eq "WIN" && $target eq "jvm"){
+	$command = "$command.bat";
+    }
 
     $dir = '.' if ($dir eq "");
         if (!&inMatchList($dir)){
@@ -455,12 +463,12 @@ sub write_to_demo
     return if (!&check_compiled($dir, $exec));    
     &pushd("$dir");
     &cleanup($exec);
-    print "-"x10 . "Executing " . &trim_path("$dir/$exec") . " with input" . "-"x10  . "\n";
+    print "-"x10 . "Executing " . &trim_path("$dir/$command") . " with input" . "-"x10  . "\n";
     open(SAVEOUT, ">&STDOUT");
     select(SAVEOUT); $| = 1;       # make unbuffered
     open(STDOUT, ">$exec.run") || die "Can't redirect stdout";
     select(STDOUT); $| = 1;       # make unbuffered
-    open (EXEC, "| $exec $args");
+    open (EXEC, "| $command $args");
     foreach $input (@inputlines){
 	print EXEC $input;
     }
@@ -527,7 +535,7 @@ sub compile_demo()
 	system "$compilecmd > $f.out 2>&1";
     }
     &popd();
-    if ((-f &trim_path("$dir/$f")) || (-f &trim_path("$dir/$f.exe"))){
+    if ((-f &trim_path("$dir/$f")) || (-f &trim_path("$dir/$f.exe") || (-f &trim_path("$dir/$f.bat")))){
 	#print "Setting status of $dir/$f to 999\n";
 	&register_prog_status($dir, $f, 999);
     }
