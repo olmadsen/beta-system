@@ -9,15 +9,15 @@ rem location and duplicate the beta script.
 
 rem --- configuration---
 set OLD_BETALIB=d:\beta\r4.2.boot
-set OLD_BETARUN=d:\beta\r4.2.boot\betarun\nti\%SDK%\betarun.lib
+set OLD_BETARUN=d:\beta\r4.2.boot\betarun\nti\%MIASDK%\betarun.lib
 
 rem --- don't change below ---
 
 if "%BETALIB%"=="" goto set_betalib
 
-if "%sdk%"=="gnu" goto sdk_set 
-if "%sdk%"=="ms" goto sdk_set 
-if "%sdk%"=="bor" goto sdk_set 
+if "%miasdk%"=="gnu" goto sdk_set 
+if "%miasdk%"=="ms" goto sdk_set 
+if "%miasdk%"=="bor" goto sdk_set 
 echo Environment variable SDK is not set.
 goto install_notes
 
@@ -32,7 +32,7 @@ goto getopts
 
 :compile
 rem Start the compiler
-%OLD_BETALIB%\compiler\nti\%SDK%\beta.exe --betarun %OLD_BETARUN% %BETAOPTS% %_opts_%
+%OLD_BETALIB%\compiler\nti\%MIASDK%\beta.exe --betarun %OLD_BETARUN% %BETAOPTS% %_opts_%
 
 rem Clean-up
 set _opts_=
