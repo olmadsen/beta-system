@@ -562,15 +562,21 @@ static ProtoType *activation_proto;
 static Object *activation_object;
 static void find_foreach(long PC, Object *theObj)
 {
+  ProtoType *proto;
   if (activation_object) return;
   if (!theObj) return;
-  if (GETPROTO(theObj) == activation_proto){
+  proto = GETPROTO(theObj);
+  if (isSpecialProtoType(proto) {
+    /* at least DoPartObjectPT can happen */
+    /* This cannot be the object sought */
+    return;
+  }
+  if (proto == activation_proto){
     /* exact qualification found */
     activation_object = theObj;
     return;
   } else {
     /* See if prefix matches */
-    ProtoType *proto = GETPROTO(theObj);
     if (proto->Prefix == proto){
       /* proto is Object## */
       return;
