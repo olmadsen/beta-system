@@ -3,13 +3,16 @@
 # (c) Copyright 2002 Mjølner Informatics
 # Written by Erik Corry
 
-# Utility for committing in betarun.
+# Utility for committing in betarun and compiler.
 # You don't have to use this script if you don't want to.
 # It has the function of:
-#   Incrementing the version number in version.c
-#   Ensuring that version.c is committed together with other files
+#   Incrementing the version number in version.c or compilerrcmversion.bet
+#   Ensuring that version.c/compilerrcmversion.bet is committed together
+#       with other files
 #   Ensuring that there is a line that says:
 #        Betarun version number: 123
+#      or
+#        Compiler version number: 123
 #      in the commit message.
 #   If you are trying to commit as beta or root or administrator
 #      then you also need a line that says:
@@ -23,6 +26,7 @@
 
 use Cwd;
 use File::Copy;
+use File::stat;
 
 $minorupdate = 0;
 
@@ -50,6 +54,9 @@ while (1) {
     } elsif ($ARGV[0] eq "-n") {
 	$donothing = 1;
 	shift @ARGV;
+    } elsif ($ARGV[0] eq "-d") {
+	$nodiff = 1;
+	shift @ARGV;
     } elsif ($ARGV[0] eq "--") {
 	shift @ARGV;
         last;
@@ -58,7 +65,8 @@ while (1) {
         print STDERR "   -m \"message\"\n";
         print STDERR "   -u username_to_log\n";
         print STDERR "   -n    # Don't actually commit (do everything else!)\n";
-        print STDERR "   -k    # Keep version.c (don't delete it and get the newest from the server\n";
+        print STDERR "   -d    # Don't run diff to see changes\n";
+        print STDERR "   -k    # Keep version.c or compilerrcmversion.bet (don't delete it and get\n            the newest from the server\n";
         print STDERR "   +     # Don't increase version number, just add +\n";
         print STDERR "   -     # Don't increase version number at all\n";
         print STDERR "   --    # no more options\n";
@@ -80,7 +88,7 @@ print STDERR "CWD is '$cwd'\n";
 # Find the top dir of betarun by looking for a dir where there is a file
 # called version.c.  Also, since there is a version.c in the C subdir, we
 # also check that there is no file called initialize.c
-while (! -f "version.c" || -f "initialize.c") {
+while ((! -f "version.c" || -f "initialize.c") && (! -f "compilerrcmversion.bet")) {
     # Remove trailing slash from dir name
     # Unless the path is just /
     if ($cwd !~ /^([a-zA-Z]:)?[\\\/]$/) {
@@ -95,15 +103,23 @@ while (! -f "version.c" || -f "initialize.c") {
         print STDERR "CDed up to $cwd\n";
         chdir("..");
     } else {
-        print STDERR "Couldn't find version.c starting from `$origcwd'\n";
+        print STDERR "Couldn't find version.c/compilerrcmversion.bet starting from `$origcwd'\n";
         exit (1);
     }
+}
+
+if (-f "version.c") {
+    $versionfile = "version.c";
+} elsif (-f "compilerrcmversion.bet") {
+    $versionfile = "compilerrcmversion.bet";
+} else {
+    die "Where did the version file suddenly go";
 }
 
 # If we are updating version.c then open a new file for the new version.c
 
 if (!$dontupdate) {
-    open(NEWVERSION, ">newversion.c") || die "Can't open the file newversion.c for writing\n";
+    open(NEWVERSION, ">new$versionfile") || die "Can't open the file new$versionfile for writing\n";
 }
 
 # Delete version.c and get a fresh version.c from CVS.  Means we always
@@ -111,44 +127,51 @@ if (!$dontupdate) {
 # avoids not-up-to-date errors on version.c
 
 if (!$dontdeleteversion) {
-    move("version.c", "oldversion.c");
+    move($versionfile, "old$versionfile");
 
-    print STDERR "Getting newest version.c with cvs\n";
-    if (system("cvs up version.c")) {
-	print STDERR "Couldn't get version.c from CVS server\n";
-	move("oldversion.c", "version.c") || print STDERR "Failed to restore version.c!\n";
+    print STDERR "Getting newest $versionfile with cvs\n";
+    if (system("cvs up $versionfile")) {
+	print STDERR "Couldn't get $versionfile from CVS server\n";
+	move("old$versionfile", "$versionfile") || print STDERR "Failed to restore $versionfile!\n";
 	exit(2);
     } else {
-	unlink("oldversion.c") || die "Couldn't delete oldversion.c\n";
+	unlink("old$versionfile") || die "Couldn't delete old$versionfile\n";
     }
 }
 
-open(VERSION, "version.c") || die "Can't open the file version.c\n";
+open(VERSION, "$versionfile") || die "Can't open the file $versionfile\n";
 
 # Increment the version number in version.c
 
 while (defined($line = <VERSION>)) {
-    if ($line =~ /(BETARUN VERSION \d+.\d+\()(\d+)(\+*)\)/) {
+    if ($line =~ /(BETARUN VERSION \d+.\d+\()(\d+)(\+*)(\))/ ||
+        $line =~ /(do ')(\d+)(\+*)(' -> value)/) {
         if ($minorupdate) {
-	    $line = "$`$1$2$3+)$'";
+	    $line = "$`$1$2$3+$4$'";
             $version = "$2$3+";
         } elsif (!$dontupdate) {
-	    $line = "$`$1" . ($2 + 1) . ")$'";
+	    $line = "$`$1" . ($2 + 1) . "$4$'";
             $version = $2 + 1;
         } else {
 	    $version = $2;
         }
+	$foundversionline = 1;
     }
     if (!$dontupdate) {
-	print NEWVERSION $line || die "Errors with newversion.c\n";
+	print NEWVERSION $line || die "Errors with new$versionfile\n";
     }
+}
+
+if (!$foundversionline) {
+    print "Couldn't find version line in $versionfile\n";
+    exit (2);
 }
 
 close (VERSION);
 
 if (!$dontupdate) {
-    close (NEWVERSION) || die "Errors with newversion.c\n";
-    move("newversion.c", "version.c") || die "Couldn't move newversion.c over version.c\n";
+    close (NEWVERSION) || die "Errors with new$versionfile\n";
+    move("new$versionfile", "$versionfile") || die "Couldn't move new$versionfile over $versionfile\n";
 }
 
 open(MESSAGE, ">message.txt") || die "Couldn't open message.txt for writing\n";
@@ -173,7 +196,7 @@ if (defined($message)) {
 if (-f "CVS/Template") {
     open(TEMPLATE, "CVS/Template") || die "Couldn't open CVS/Template for reading\n";
     while (defined ($line = <TEMPLATE>)) {
-        if ($line =~ /Betarun version number:/) {
+        if ($line =~ /(Betarun|Compiler) version number:/) {
             $line = "$`$& $version$'";
         } elsif ($line =~ /Developer:/ && defined($user)) {
             $line = "$& $user$'";
@@ -184,20 +207,24 @@ if (-f "CVS/Template") {
     if (defined($user)) {
         print MESSAGE "Developer: $user\n";
     }
-    print MESSAGE "Betarun version number: $version\n";
+    if ($versionfile eq "version.c") {
+	print MESSAGE "Betarun version number: $version\n";
+    } else {
+	print MESSAGE "Compiler version number: $version\n";
+    }
 }
 
 # We run a diff and put the result in the editor file so the user
 # can see what has changed.  This is preceeded with CVS: so that it
 # doesn't end up in the actual commit message.
 
-if (!defined($message)) {
+if (!defined($message) && !$nodiff) {
     print STDERR "Getting differences with cvs\n";
 
     if (defined($ARGV[0])) {
-        $cmd = "cvs diff -u version.c " . join(" ", map {&gluename($_)} @ARGV);
+        $cmd = "cvs diff -u $versionfile " . join(" ", map {&gluename($_)} @ARGV);
     } elsif($path ne "") {
-        $cmd = "cvs diff -u version.c $path";
+        $cmd = "cvs diff -u $versionfile $path";
     } else {
         $cmd = "cvs diff -u";
     }
@@ -223,13 +250,24 @@ if (!defined($message)) {
         } elsif (defined($ENV{"EDITOR"})) {
             $editor = $ENV{"EDITOR"};
         } else {
+            # $editor = "ed";  I'm not that evil :-)
             $editor = "vi";
         }
     }
+    $oldsb = stat("message.txt") || die "message.txt disappeared";
     $return = system("$editor message.txt");
     if ($return) {
         print STDERR "Editor '$editor' failed!\n";
         exit (2);
+    }
+    $sb = stat("message.txt") || die "message.txt disappeared";
+    if ($sb->mtime <= $oldsb->mtime) {
+        print "**************************************************\n";
+        print "***                                            ***\n";
+        print "*** Message file unchanged - abandoning commit ***\n";
+        print "***                                            ***\n";
+        print "**************************************************\n";
+	exit(2);
     }
 }
 
@@ -248,9 +286,9 @@ move("newmessage.txt", "message.txt") || die "Couldn't overwrite message.txt wit
 # Actually commit
 
 if (defined($ARGV[0])) {
-    @args = ("cvs", "commit", "-F", "message.txt", "version.c", map {&gluename($_)} @ARGV);
+    @args = ("cvs", "commit", "-F", "message.txt", "$versionfile", map {&gluename($_)} @ARGV);
 } elsif ($path ne "") {
-    @args = ("cvs", "commit", "-F", "message.txt", "version.c", "$path");
+    @args = ("cvs", "commit", "-F", "message.txt", "$versionfile", "$path");
 } else {
     @args = ("cvs", "commit", "-F", "message.txt");
 }
