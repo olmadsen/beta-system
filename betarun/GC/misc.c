@@ -1,10 +1,11 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: misc.c,v $, rel: %R%, date: $Date: 1992-05-04 14:45:32 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: misc.c,v $, rel: %R%, date: $Date: 1992-06-01 14:06:23 $, SID: $Revision: 1.8 $
  * by Lars Bak.
  */
 
 #include "beta.h"
+#include "misc.h"
 
 #ifdef macintosh
 #include <CursorCtl.h>
@@ -56,7 +57,7 @@ long ObjectType(aObj)
   }else return ItemType;
 }
 
-Claim( expr, message)
+void Claim( expr, message)
   int  expr;
   ptr(char) message;
 {

@@ -1,9 +1,10 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-02-28 17:09:05 $, SID: $Revision: 1.12 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-01 14:04:22 $, SID: $Revision: 1.13 $
  * by Lars Bak.
  */
 #include "beta.h"
+#include "scavenging.h"
 
 extern ref(Object) NewCopyObject();
 
@@ -44,7 +45,7 @@ void ProcessStackPart( low, high)
   }
 }
 
-ProcessStack()
+void ProcessStack()
 {
   ptr(long)          theTop;
   ptr(long)          theBottom;
@@ -84,12 +85,19 @@ ProcessStack()
   }
 }
 
+
+static int FreePercentage( bottom, top, limit)
+  int bottom, top, limit;
+{
+  return (100 * areaSize(top, limit))/areaSize(bottom, limit); 
+}
+
 /*
  * IOAGc:
  *  Called from PerformGC in the assembly part of the runtime system.
  *  Make a scavenging garbage collection on IOA.
  */
-IOAGc()
+void IOAGc()
 {
 #ifdef macintosh
   RotateTheCursor();
@@ -200,7 +208,15 @@ IOAGc()
   { ptr(long) Tmp; ptr(long) TmpTop; ptr(long) TmpLimit;
 
     Tmp     = IOA;     TmpTop     = IOATop;     TmpLimit     = IOALimit; 
-    IOA     = ToSpace; IOATop     = ToSpaceTop; IOALimit     = ToSpaceLimit;
+
+    IOA     = ToSpace;                          
+#ifndef sparc
+    IOATop    = ToSpaceTop; 
+#else
+    IOATopoff = ToSpaceTop - IOA;
+#endif
+    IOALimit     = ToSpaceLimit;
+
     ToSpace = Tmp;     ToSpaceTop = TmpTop;     ToSpaceLimit = TmpLimit;
   }
 
@@ -234,12 +250,6 @@ IOAGc()
   }
 } 
 
-static int FreePercentage( bottom, top, limit)
-  int bottom, top, limit;
-{
-  return (100 * areaSize(top, limit))/areaSize(bottom, limit); 
-}
-
 /*
  * ProcessReference:
  *  Takes as input a reference to a cell residing outside IOA.
@@ -250,7 +260,7 @@ static int FreePercentage( bottom, top, limit)
  *  TIPS: USE theObj instead of newObj and inline GetDistanceToEnc....
  */
 
-ProcessReference( theCell)
+void ProcessReference( theCell)
   handle(Object) theCell;
 {
   ref(Object) theObj;
@@ -331,7 +341,7 @@ ProcessReference( theCell)
  *  It traverse the object and process all the references in it.    
  */
 
-ProcessObject(theObj)
+void ProcessObject(theObj)
   ref(Object) theObj;
 { ref(ProtoType) theProto;
 
@@ -448,7 +458,7 @@ ProcessObject(theObj)
  *  Furthermore one forward reference in the most enclosing
  *  object is inserted in the GC-attribute.
  */
-ProcessAOAReference( theCell)
+void ProcessAOAReference( theCell)
   handle(Object) theCell;
 {
   ref(Object) theObj;
@@ -513,7 +523,7 @@ ProcessAOAReference( theCell)
  *  It traverse the object and process all the references in it.    
  */
 
-ProcessAOAObject(theObj)
+void ProcessAOAObject(theObj)
   ref(Object) theObj;
 { ref(ProtoType) theProto;
 
@@ -595,7 +605,7 @@ ProcessAOAObject(theObj)
  *  unneseccary swapping. 
  */
 
-CompleteScavenging()
+void CompleteScavenging()
 {
   ref(Object) theObj;
 
@@ -631,7 +641,7 @@ int GetDistanceToEnclosingObject( theObj)
 }
 
 #ifdef RTDEBUG
-IOACheck()
+void IOACheck()
 { ref(Object) theObj;
   long        theObjectSize;
 
@@ -643,7 +653,7 @@ IOACheck()
   }
 } 
 
-IOACheckObject( theObj)
+void IOACheckObject( theObj)
   ref(Object) theObj;
 { ref(ProtoType) theProto;
 
@@ -750,7 +760,7 @@ IOACheckObject( theObj)
   }
 }
 
-IOACheckReference( theCell)
+void IOACheckReference( theCell)
   handle(Object) theCell;
 {
   if( *theCell ){

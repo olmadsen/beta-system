@@ -19,6 +19,7 @@
 #define StructureType           6
 
 
+/* This *WILL* be changed soon, to something nicer */
 #define ItemStructSize          2
 #define ComponentStructSize     6
 #define StackObjectStructSize   4
@@ -27,3 +28,7 @@
 #define StructureStructSize     4
 
 #define IOAMaxAge             128
+
+#define MAXCTEXTPOOL	     1000
+
+#define LARGE_REP_SIZE	      200

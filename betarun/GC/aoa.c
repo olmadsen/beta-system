@@ -1,9 +1,10 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1992-03-03 14:02:11 $, SID: $Revision: 1.12 $
+ * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1992-06-01 14:04:24 $, SID: $Revision: 1.13 $
  * by Lars Bak
  */
 #include "beta.h"
+#include "aoa.h"
 
 /* EXPORTING:
  *
@@ -143,6 +144,8 @@ ref(Object) CopyObjectToAOA( theObj)
 }
 
 
+static void Phase1(), Phase2(), Phase3();
+
 void AOAGc()
 {
   /* Remember that AOAGc is called before ToSpace <-> IOA, so
@@ -179,6 +182,8 @@ void AOAGc()
   INFO_AOA( fprintf( output, "%dKb in %d blocks, %d%% free)\n", 
 		    toKb(size), blocks, 100 - (100 * used)/size));
 }
+
+static void FollowObject();
 
 /* ReverseAndFollow is used during Phase1 of the Mark-Sweep GC. 
  * It reverse the pointer and calls FollowObject iff the refered
@@ -256,7 +261,7 @@ static FollowItem( theObj)
  * For each referernce inside theObj it calls ReverseAndFollow.
  */
 
-static FollowObject( theObj)
+static void FollowObject( theObj)
   ref(Object) theObj;
 { 
   ref(ProtoType) theProto;
@@ -308,7 +313,7 @@ static FollowObject( theObj)
  * all cells in root(AOA),
  * all cells in AOA, where cells point into AOA
  */
-static Phase1()
+static void Phase1()
 { /* Call FollowReference for each root to AOA. */
   ptr(long) pointer = ToSpaceLimit;
 
@@ -401,7 +406,7 @@ static handleAliveObject( theObj, freeObj)
 
 
 
-static Phase2( numAddr, sizeAddr, usedAddr)
+static void Phase2( numAddr, sizeAddr, usedAddr)
   ptr(long) numAddr;
   ptr(long) sizeAddr;
   ptr(long) usedAddr;
@@ -491,7 +496,7 @@ BubbleSort( table, size)
 /* Remember to update AOAtoIOATable. 
  * So sort the Table in area[ToSpaceLimit..ToSpaceTop].
  */
-static Phase3()
+static void Phase3()
 {
   ptr(long)   table;
 
@@ -604,7 +609,7 @@ static Phase3()
 }
 
 #ifdef RTDEBUG
-AOACheck()
+void AOACheck()
 {
   ref(Block)  theBlock  = AOABaseBlock;
   ref(Object) theObj;
@@ -621,7 +626,7 @@ AOACheck()
   }
 } 
 
-AOACheckObject( theObj)
+void AOACheckObject( theObj)
   ref(Object) theObj;
 { ref(ProtoType) theProto;
 
@@ -705,7 +710,7 @@ AOACheckObject( theObj)
   }
 }
 
-AOACheckReference( theCell)
+void AOACheckReference( theCell)
   handle(Object) theCell;
 {
   int i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
@@ -729,7 +734,7 @@ AOACheckReference( theCell)
 }
 
 
-AOACheckObjectSpecial( theObj)
+void AOACheckObjectSpecial( theObj)
   ref(Object) theObj;
 { ref(ProtoType) theProto;
 

@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-02-27 13:23:18 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-06-01 14:05:42 $, SID: $Revision: 1.5 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -25,6 +25,10 @@ long AllocateHeap( base, top, limit, size)
 
 Initialize()
 {
+  /* This hack is to cope with the sparc, where
+     IOA and IOATop(off) is register vars */
+
+  long *tmpIOA, *tmpIOATop;
 #ifdef macintosh
   InitTheCursor();
 #endif
@@ -41,10 +45,16 @@ Initialize()
   INFO( fprintf( output, ", CBFA=%dKb\n", CBFASize/Kb) );
 
   /* Setup the Infant Object Area */
-  if( !AllocateHeap( &IOA,     &IOATop,     &IOALimit, IOASize ) ){
+  if( !AllocateHeap( &tmpIOA,     &tmpIOATop,     &IOALimit, IOASize ) ){
     fprintf(output,"#Beta: Couldn't allocate IOA (%dKb)\n", IOASize/Kb);
     exit(1);
   }
+  IOA = tmpIOA;
+#ifdef sparc
+  IOATopoff = tmpIOATop - IOA;
+#else
+  IOATop = tmpIOATop;
+#endif
   if( !AllocateHeap( &ToSpace, &ToSpaceTop, &ToSpaceLimit, IOASize ) ){
     fprintf(output,"#Beta: Couldn't allocate ToSpace (%dKb)\n", IOASize/Kb);
     exit(1);

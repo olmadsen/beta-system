@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: dumper.c,v $, rel: %R%, date: $Date: 1992-02-27 13:20:35 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: dumper.c,v $, rel: %R%, date: $Date: 1992-06-01 14:05:40 $, SID: $Revision: 1.4 $
  * by Lars Bak
  */
 #include <ctype.h>
@@ -82,7 +82,7 @@ static DumpObject( theObj)
     }
     if( inIOA( theObj)){
       if( isSpecialProtoType( theObj->Proto )){
-        switch( theObj->Proto ){
+        switch( (int) theObj->Proto ){
 	case ComponentPTValue:
   	    DumpFormat('C', theObj->GCAttr, 4 * ObjectSize(theObj),
                        DumpItemName( ComponentItem( theObj) ),

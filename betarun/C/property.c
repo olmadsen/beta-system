@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1992-02-27 13:23:34 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1992-06-01 14:05:49 $, SID: $Revision: 1.9 $
  * by Lars Bak
  */
 
@@ -12,6 +12,8 @@
  */
 #include <stdio.h>
 #include "beta.h"
+
+static int intScan(), CmpStr();
 
 /* 
  * If you want to add properties, change BooleanProperty or ValueProperty. 
@@ -109,7 +111,7 @@ static ValueProperty( name, value)
 /* PRIVATE PART ---- do'nt change below ---- PRIVATE PART */
 /**********************************************************/
 
-static intScan( name, value)
+static int intScan( name, value)
   char *name, *value;
 {
   int result = 0; char *pointer = value;
