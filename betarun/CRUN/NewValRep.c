@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: NewValRep.c,v $, rel: %R%, date: $Date: 1992-08-31 21:58:45 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: NewValRep.c,v $, rel: %R%, date: $Date: 1992-09-02 12:31:29 $, SID: $Revision: 1.9 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -57,7 +57,7 @@ void CNewVR(ref(Object) theObj, int offset /* in ints */, int range)
 	      exit(1);
 	    }
 	    );
-    if (!inIOA((long *)theObj+offset))
-      CCheckRefAsgn((struct Object **)theObj+offset);
+    if (! inIOA((struct Object **)theObj+offset) &&
+	inIOA(*(struct Object **)theObj+offset))
+      AOAtoIOAInsert((struct Object **)theObj+offset);
 }
-
