@@ -6,6 +6,7 @@ sub usage()
     print "tos_convert [-h][-r][-n][-d] files/directories\n";
     print "  -h  print this help\n";
     print "  -r  recurse into subdirectories\n";
+    print "  -i  interactive mode (ask before replacing)\n";
     print "  -q  quiet mode\n";
     print "  -d  debug mode\n";
     print "  -n  simulate: do nothing\n";
@@ -19,10 +20,11 @@ require "utils.perl";
 my ($recurse, $simulate, $verbose, $debug);
 $verbose  = 1;
 
-$recurse  = 1 if (defined($r));
-$simulate = 1 if (defined($n));
-$verbose  = 0 if (defined($q));
-$debug    = 1 if (defined($d));
+$recurse     = 1 if (defined($r));
+$simulate    = 1 if (defined($n));
+$verbose     = 0 if (defined($q));
+$debug       = 1 if (defined($d));
+$interactive = 1 if (defined($i));
 
 $verbose  = 1 if ($debug);
 $simulate = 1 if ($debug);
@@ -51,77 +53,89 @@ sub replace(){
 
     ##### Byte
 
+    # replace "X->TOS'%getByte[byteNo]'" with "(byteNo->X.%getByte)"
+    if ($line =~ /([\w\.]+)\s*->\s*tos\s*\'\%getByte\[([^\]]+)\]\'/i){
+	$replace = "($2->$1.%getByte)";
+	$line = $` . $replace . $' if (&ask_replace($&, $replace));
+    }
+
+    # replace "R[expression]->TOS'%getByte[byteNo]'" with "(byteNo->R[expression].%getByte)"
+    if ($line =~ /([\w\.]+\[[^\]]+\])\s*->\s*tos\s*\'\%getByte\[([^\]]+)\]\'/i){
+	$replace =  "($2->$1.%getByte)";
+	$line = $` . $replace . $' if (&ask_replace($&, $replace));
+    }
+
     # replace "@@X->TOS'%adrGetByte[n]'" with n -> X.%getByte
     if ($line =~ /\@\@(\w+)\s*->\s*tos\s*\'\%adrGetByte\[([^\]]+)\]\'/i){
-	$substitution++;
-	$line = $` . "($2->$1.%getByte)" . $';
+	$replace = "($2->$1.%getByte)";
+	$line = $` . $replace . $' if (&ask_replace($&, $replace));
     }
 
 
     ##### Short
 
     # replace "X->TOS'%getShort[shortNo]'" with "(shortNo->X.%getShort)"
-    if ($line =~ /(\w+)\s*->\s*tos\s*\'\%getShort\[([^\]]+)\]\'/i){
-	$substitution++;
-	$line = $` . "($2->$1.%getShort)" . $';
+    if ($line =~ /([\w\.]+)\s*->\s*tos\s*\'\%getShort\[([^\]]+)\]\'/i){
+	$replace = "($2->$1.%getShort)";
+	$line = $` . $replace . $' if (&ask_replace($&, $replace));
     }
 
     # replace "R[expression]->TOS'%getShort[shortNo]'" with "(shortNo->R[expression].%getShort)"
     if ($line =~ /([\w\.]+\[[^\]]+\])\s*->\s*tos\s*\'\%getShort\[([^\]]+)\]\'/i){
-	$substitution++;
-	$line = $` . "($2->$1.%getShort)" . $';
+	$replace = "($2->$1.%getShort)";
+	$line = $` . $replace . $' if (&ask_replace($&, $replace));
     }
 
     #### Long
 
     # replace "@@X->TOS'%adrGetLong[n]'" with n -> X.%getLong
     if ($line =~ /\@\@([\w\.]+)\s*->\s*tos\s*\'\%adrGetLong\[([^\]]+)\]\'/i){
-	$substitution++;
-	$line = $` . "($2->$1.%getLong)" . $';
+	$replace = "($2->$1.%getLong)";
+	$line = $` . $replace . $' if (&ask_replace($&, $replace));
     }
 
     # replace "@@X->TOS'%adrGetLong'" with 0 -> X.%getLong
     if ($line =~ /\@\@([\w\.]+)\s*->\s*tos\s*\'\%adrGetLong\'/i){
-	$substitution++;
-	$line = $` . "(0->$1.%getLong)" . $';
+	$replace = "(0->$1.%getLong)";
+	$line = $` . $replace . $' if (&ask_replace($&, $replace));
     }
 
     # replace "addr+off->TOS'%adrGetLong'" with "%getLongAt(addr+off)";
     if ($line =~ /([\w\.]+)\s*\+\s*(\d+)\s*->\s*tos\s*\'\%adrGetLong\'/i){
-	$substitution++;
-	$line = $` . "(%getLongAt($1+$2))" . $';
+	$replace = "(%getLongAt($1+$2))";
+	$line = $` . $replace . $' if (&ask_replace($&, $replace));
     }
 
     # replace "addr->TOS'%adrGetLong'" with "%getLongAt(addr)";
     if ($line =~ /([\w\.]+)\s*->\s*tos\s*\'\%adrGetLong\'/i){
-	$substitution++;
-	$line = $` . "(%getLongAt($1))" . $';
+	$replace = "(%getLongAt($1))";
+	$line = $` . $replace . $' if (&ask_replace($&, $replace));
     }
 
     #### Bits
 
     # replace "->TOS'%ShiftLeft[n]'" with " %sll n"
     if ($line =~ /\s*->\s*tos\s*\'\%shiftleft\[([^\]]+)\]\'/i){
-	$substitution++;
-	$line = $` . " %sll $1" . $';
+	$replace = " %sll $1";
+	$line = $` . $replace . $' if (&ask_replace($&, $replace));
     }
 
     # replace "X->TOS'%getSignedBits[bitNo,noOfBits]'" with "X; ((bitNo,noOfBits)->X.%getSignedBits)"
     if ($line =~ /(\w+)\s*->\s*tos\s*\'\%getSignedBits\[([^\]]+\s*,\s*[^\]]+)\]\'/i){
-	$substitution++;
-	$line = $` . "$1; (($2)->$1.%getSignedBits)" . $';
+	$replace = "$1; (($2)->$1.%getSignedBits)";
+	$line = $` . $replace . $' if (&ask_replace($&, $replace));
     }
 
     # replace "(x,y)->TOS'%or'" with "x %Bor y"
     if ($line =~ /\(\s*([\w\.]+)\s*,\s*([\w\.]+)\s*\)\s*->\s*tos\s*\'\%or\'/i){
-	$substitution++;
-	$line = $` . "$1 %Bor $2" . $';
+	$replace = "$1 %Bor $2";
+	$line = $` . $replace . $' if (&ask_replace($&, $replace));
     }
 
     # replace "(x,y)->TOS'%and'" with "x %Band y"
     if ($line =~ /\(\s*([\w\.]+)\s*,\s*([\w\.]+)\s*\)\s*->\s*tos\s*\'\%and\'/i){
-	$substitution++;
-	$line = $` . "$1 %Band $2" . $';
+	$replace = "$1 %Band $2";
+	$line = $` . $replace . $' if (&ask_replace($&, $replace));
     }
 
 
@@ -137,6 +151,44 @@ sub replace(){
     }
 
     return $line;
+}
+
+sub ask_replace(){
+    my ($line, $replace) = @_;
+
+    return 0 if ($quit);
+    if ($interactive){
+	print "-" x 10 . " replace this original code: " . "-" x 10 . "\n\n";
+	print $line . "\n\n";
+	print "-" x 10 . " with this new code: " . "-" x 10 . "\n\n";
+	print $replace . "\n\n";
+      get_answer: 
+	{
+	    print "-" x 10 . "Answer: (y/n/a/q/?) ";
+	    my $answer = &GetAnswer();
+	    if      ($answer eq "n"){
+		return 0;
+	    } elsif ($answer eq "y"){
+		# fall through
+	    } elsif ($answer eq "q"){
+		$quit = 1;
+		return 0;
+	    } elsif ($answer eq "a"){
+		$interactive = 0;
+		# fall through
+	    } elsif ($answer eq "?"){
+		print "Possible answers:\n";
+		print "  y  - accept this replacement, ask for subsequent replacements\n";
+		print "  n  - reject this replacement, ask for subsequent replacements\n";
+		print "  a  - accept this and all subsequent replacements\n";
+		print "  q  - quit: ignore this and subsequent replacements\n";
+		print "  ?  - print this help\n";
+		redo get_answer;
+	    }
+	}
+    } 
+    $substitution++;
+    return 1;
 }
 
 sub tos_convert()
