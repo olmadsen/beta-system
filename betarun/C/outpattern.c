@@ -628,43 +628,82 @@ void DisplayNEWRUNStack(long *PC)
 /************************* End NEWRUN ***************************/
 
 /************************* Begin INTEL ****************************/
-
 #ifdef intel
 
-#define InHeap(address) (inIOA(address) || inAOA(address))
+#ifdef RTDEBUG
+static void PrintSkipped(long *current)
+{
+  Object *ref = (Object *)*current;
+  fprintf(output, "0x%08x: 0x%08x ", (int)current, (int)ref);
+  if (ref && 
+      inBetaHeap(ref) && 
+      isObject(ref) && 
+      IsPrototypeOfProcess((long)ref->Proto)){ 
+    fprintf(output, "*** SUSPICIOUS STACK-SKIP!");
+    fflush(output);
+    fprintf(output, 
+	    " proto: 0x%08x (%s)\n", 
+	    (int)ref->Proto,
+	    ProtoTypeName(ref->Proto)); 
+  } else {
+    fprintf(output, "- SKIPPED\n");
+  } 
+  fflush(output);
+}
+#endif /* RTDEBUG */
 
-/* Traverse the StackArea [low..high] and Process all references within it. 
+/* DisplayStackPart:
+ * Traverse the StackArea [low..high] and Process all references within it. 
  * Stop when theComp is reached.
  */
-
 void DisplayStackPart(long *low, 
 		      long *high,
-		      Component *theComp,
+		      Object *currentObject,
 		      CellDisplayFunc func)
 {
   long *current = low;
-  long  retAddr=0;
+  Object *lastObj;
 
   TRACE_DUMP(fprintf(output, ">>>TraceDump: StackPart [0x%x..0x%x]\n", (int)low, (int)high));
+
+  lastObj = currentObject;
+  TRACE_DUMP(fprintf(output, ">>>TraceDump: Initial lastObj: "); DescribeObject(lastObj); fprintf(output, "\n"));
+  if (!isComponent(lastObj) && IsComponentItem(lastObj)){
+    lastObj = (Object*)EnclosingComponent(lastObj);
+    TRACE_DUMP({
+      fprintf(output, 
+	      " is item of component 0x%x\n", 
+	      (int)lastObj);
+    });
+  }  
   while (current<=high){
-    retAddr=0;
+    Object *theObj = *(Object **)current;
     TRACE_DUMP(fprintf(output, ">>>TraceDump: 0x%x: 0x%x ", (int)current, *(int*)current));
-    if(inBetaHeap((Object *)(*current))){
-      Object *theObj = *(Object **)current;
-      if (InHeap(theObj) && isObject(theObj)){
-	/* Previously also condition !InHeap(*(current+1)) 
-	 * Does not work: INNER chains pushes PC's subsequently
-	 */
-	if (theComp && (Object *)theComp->Body==theObj){
-	  TRACE_DUMP(fprintf(output, "found component item\n"));
-	  retAddr=*(current+1); /* pc of theComp, when it was left */
-	  break;
+    if (inBetaHeap(theObj)){
+      if (isObject(theObj)){
+	if ((!inBetaHeap((Object*)*(current+1))) &&
+	    IsBetaCodeAddrOfProcess(*(current+1))){
+	  /* Found an object with a PC just before it on stack */
+	  lastObj = theObj;
+	  TRACE_DUMP(fprintf(output,"new lastObj: "); DescribeObject(lastObj));
+	  if (!isComponent(lastObj) && IsComponentItem(lastObj)){
+	    lastObj = (Object*)EnclosingComponent(lastObj);
+	    TRACE_DUMP({
+	      fprintf(output, 
+		      " is item of component 0x%x\n", 
+		      (int)lastObj);
+	    });
+	  }
+	  TRACE_DUMP(fprintf(output, "\n"));
+	} else {
+	  /* Probably a pushed register */
+	  TRACE_DUMP(fprintf(output, "(object with no PC)\n"));
 	}
-	func((long)*(current+1), theObj);
       } else {
-	TRACE_DUMP(fprintf(output, "skipped (illegal)"));
+	TRACE_DUMP(fprintf(output, "(illegal pointer inside heap)\n"));
       }
     } else {
+      /* Not in heap - may be protect tag or PC */
       TRACE_DUMP({
 	if ((-8<=(*current)) && ((*current)<=-5))
 	  fprintf(output, 
@@ -675,51 +714,121 @@ void DisplayStackPart(long *low,
       });
       switch (*current){
       case -8: 
+	TRACE_DUMP(PrintSkipped(current));
 	current++;
 	/* Deliberately no break here */
       case -7: 
+	TRACE_DUMP(PrintSkipped(current));
 	current++;
 	/* Deliberately no break here */
       case -6: 
+	TRACE_DUMP(PrintSkipped(current));
 	current++;
 	/* Deliberately no break here */
       case -5: 
+	TRACE_DUMP(PrintSkipped(current));
 	current++;
 	break;
       default:
-	TRACE_DUMP(fprintf(output, "ignored (not in heap)"));
+	if (IsBetaCodeAddrOfProcess(*current)){
+	  long PC=*current;
+	  TRACE_DUMP(PrintCodeAddress(PC));
+	  if (lastObj){
+	    TRACE_DUMP(fprintf(output, "\n"));
+	    func(PC, lastObj);
+	  } else {
+	    TRACE_DUMP(fprintf(output, " (no lastObj)"));
+	  }
+	}
 	break;
       }
     }
     current++;
     TRACE_DUMP(fprintf(output, "\n"));
   }
-  if (theComp){
-    func(retAddr, (Object*)theComp);
+  TRACE_DUMP(fprintf(output, ">>>TraceDump: StackPart done.\n"));
+}
+
+long *DisplayCallbackFrames(CallBackFrame *cbFrame,
+			    long *low,
+			    Object *currentObject,
+			    CellDisplayFunc func)
+{
+  TRACE_DUMP({
+    fprintf(output, 
+	    ">>>DisplayCallbackFrames: cbFrame: 0x%x, low: 0x%x\n", 
+	    (int)cbFrame,
+	    (int)low);
+  });
+  while (cbFrame) {
+    DisplayStackPart(low, (long *)cbFrame-2, currentObject, func);
+    /* -2 because 2 longs are not shown:
+     *    1. The last of the three pushed words in the callback frame
+     *    2. The address of the call back stub.
+     */
+    TRACE_DUMP(fprintf(output, "  cb: "));
+    fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n"); 
+    low = cbFrame->betaTop;
+    low += 4;
+    /* low+4 because the compiler saves 4 intel registers
+     * before setting BetaStackTop.
+     */
+    cbFrame = cbFrame->next;
+    if (isObject((Object *)(*low))) {
+      Object *obj = (Object*)(*low);
+      TRACE_DUMP({
+	fprintf(output, 
+		">>>DisplayCallbackFrames: low: 0x%x: 0x%x ",
+		(int)low,
+		(int)obj);
+	DescribeObject(obj);
+	fprintf(output, "\n"); 
+      });
+      if (!isComponent(obj) && IsComponentItem(obj)){
+	  obj = (Object*)EnclosingComponent(obj);
+	  TRACE_DUMP({
+	    fprintf(output, 
+		    " is item of component 0x%x\n", 
+		    (int)obj);
+	  });
+      }
+      func(0, obj);
+    }
+    low += 2;
+    TRACE_DUMP({
+      fprintf(output, 
+	      ">>>DisplayCallbackFrames: cbFrame: 0x%x, low: 0x%x\n", 
+	      (int)cbFrame,
+	      (int)low);
+    });
   }
+  TRACE_DUMP({
+    fprintf(output, 
+	    ">>>DisplayCallbackFrames: returning low: 0x%x\n",
+	    (int)low);
+  });
+  return low;
 }
 
 void DisplayINTELStack(BetaErr errorNumber, 
-		       Object *theObj, 
-		       long *thePC, 
+		       Object *currentObject, 
+		       long PC, 
 		       long theSignal /* theSignal is zero if not applicable. */
 		       )
 { 
-  long            *lowAddr;
-  long            *highAddr;
+  long            *low;
+  long            *high;
   CallBackFrame   *cbFrame;
   ComponentBlock  *currentBlock;
   Component       *currentComponent;
-  Object          *currentObject;
-  long             retAddr;
 
   /* First check for errors occured outside BETA */
-  if (!IsBetaCodeAddrOfProcess((long)thePC)){
+  if (!IsBetaCodeAddrOfProcess(PC)){
     fprintf(output, 
 	    "  [ EXTERNAL ACTIVATION PART (address 0x%x",
 	    (int)error_pc
 	    );
-    DEBUG_CODE(PrintCodeAddress((long)error_pc));
+    DEBUG_CODE(PrintCodeAddress((long)PC));
     fprintf(output, ") ]\n");
   }
 
@@ -728,44 +837,22 @@ void DisplayINTELStack(BetaErr errorNumber,
    * StackEnd, ActiveCallbackFrame and lastCompBlock.
    */
   currentComponent = ActiveComponent;
-  lowAddr  = (long *) StackEnd;
-  highAddr = (long *) lastCompBlock;
-  cbFrame  = ActiveCallBackFrame; 
+  low              = (long *) StackEnd;
+  high             = (long *) lastCompBlock;
+  cbFrame          = ActiveCallBackFrame; 
 
-  /* Follow the stack */
-  while (cbFrame) {
-    DisplayStackPart(lowAddr, (long *)cbFrame-2, 0, DisplayCell);
-    /* -2 because 2 longs are not shown:
-     *    1. The last of the three pushed words in the callback frame
-     *    2. The address of the call back stub.
-     */
-    TRACE_DUMP(fprintf(output, "  cb: "));
-    fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n"); 
-    lowAddr = cbFrame->betaTop;
-    lowAddr += 4;
-    /* lowAddr+4 because the compiler saves 4 intel registers
-     * before setting BetaStackTop.
-     */
-    cbFrame = cbFrame->next;
-    if( isObject( (Object *)(*lowAddr)) ) {
-      TRACE_DUMP(fprintf(output, ">>> lowAddr: 0x%x\n", (int)lowAddr));
-      DisplayObject( output, (void *)(*lowAddr), 0);
-    }
-    lowAddr += 2;
-  }
+  /* Display callbackframes in the component */
+  low = DisplayCallbackFrames(cbFrame, low, currentObject, DisplayCell);
 
   /* Displays the objects from the last callback was initiated
    * (if any) and onwards to the ComponentBlock.
    */
-  DisplayStackPart(lowAddr, highAddr-3, currentComponent, DisplayCell);  
+  DisplayStackPart(low, high-3, currentObject, DisplayCell);  
   /* -3 because 3 longs are not shown: 
    *    1. The last of the three pushed words in the comp block
    *    2. The address of the M-part for the component.
    *    3. The current object saved by the M-part.
    */
-  /* Make an empty line after the component */
-  fprintf( output, "\n");
-  fflush( output);
   
   /*
    * Then handle the remaining component blocks designated by the linked
@@ -773,63 +860,46 @@ void DisplayINTELStack(BetaErr errorNumber,
    */
   currentBlock     = lastCompBlock;
   currentObject    = currentComponent->CallerObj;
-  retAddr          = currentComponent->CallerLSC;
+  PC               = currentComponent->CallerLSC;
   currentComponent = currentComponent->CallerComp;
   
   while (currentBlock->next){
-    lowAddr  = (long *)((long)currentBlock+sizeof(ComponentBlock))+1
+    low  = (long *)((long)currentBlock+sizeof(ComponentBlock))+1
       /* +1 because the compiler always pushes the component before calling
        * attach.
        */;
-    highAddr = (long *) currentBlock->next;
+    high = (long *) currentBlock->next;
     cbFrame  = currentBlock->callBackFrame;
     
     /* Display current object in ComponentBlock */
     if (cbFrame){
-      TRACE_DUMP(fprintf(output, ">>>TraceDump: current: 0x%x\n", (int)currentObject));
       /* Current object will be shown along with the first CB frame */
+      TRACE_DUMP(fprintf(output, ">>>TraceDump: current: 0x%x\n", (int)currentObject));
     } else {
-      DisplayObject(output, currentObject, retAddr);
+      if (!isComponent(currentObject) && IsComponentItem(currentObject)){
+	DisplayObject(output, (Object*)EnclosingComponent(currentObject), PC);
+      } else {
+	DisplayObject(output, currentObject, PC);
+      }
     }
 
     /* Display callbackframes in the component */
-    while (cbFrame) {
-      DisplayStackPart(lowAddr, (long *)cbFrame-2, 0, DisplayCell);
-      /* -2 because 2 longs are not shown:
-       *    1. The last of the three pushed words in the callback frame
-       *    2. The address of the call back stub.
-       */
-      TRACE_DUMP(fprintf(output, "  cb: "));
-      fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
-      lowAddr = cbFrame->betaTop;
-      lowAddr += 4;
-      /* lowAddr+4 because the compiler saves 4 intel registers
-       * before setting BetaStackTop.
-       */
-      cbFrame = cbFrame->next;
-      if (isObject( (Object *)(*lowAddr)) ){
-	TRACE_DUMP(fprintf(output, ">>>TraceDump: lowAddr: 0x%x\n", (int)lowAddr));
-	DisplayObject( output, (void *)(*lowAddr), 0);
-      }
-      lowAddr += 2;
-    }
+    low = DisplayCallbackFrames(cbFrame, low, currentObject, DisplayCell);
     
     /* Displays the objects from the last callback was initiated
      * (if any) and onwards to the ComponentBlock.
      */
-    DisplayStackPart(lowAddr, highAddr-3, currentComponent, DisplayCell); 
+    DisplayStackPart(low, high-3, currentObject, DisplayCell); 
     /* -3 because:
      *  3 longs are not shown: 
      *    1. The last of the three pushed words in the comp block
      *    2. The address of the M-part for the component.
      *    3. The current object saved by the M-part.
      */
-    /* Make an empty line after the component */
-    fprintf( output, "\n");
-    fflush( output);
-    currentBlock = currentBlock->next;
+
+    currentBlock     = currentBlock->next;
     currentObject    = currentComponent->CallerObj;
-    retAddr          = currentComponent->CallerLSC;
+    PC               = currentComponent->CallerLSC;
     currentComponent = currentComponent->CallerComp;
   }
 }
@@ -1064,6 +1134,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
 
 /********************** DisplayCurrentObject ************/
 
+#ifndef sparc
 void DisplayCurrentObject(Object *theObj, long *thePC)
 {
   TRACE_DUMP(fprintf(output, ">>>TraceDump: Current object 0x%x\n", (int)theObj));
@@ -1101,6 +1172,7 @@ void DisplayCurrentObject(Object *theObj, long *thePC)
     fprintf(output,"Current object is zero!\n");
   }
 }
+#endif /* sparc */
 
 /********************** OpenDumpFile: ********************/
 
@@ -1464,7 +1536,7 @@ int DisplayBetaStack(BetaErr errorNumber,
   DisplaySPARCStack(errorNumber, theObj, thePC, theSignal);
 #endif
 #ifdef intel
-  DisplayINTELStack(errorNumber, theObj, thePC, theSignal);
+  DisplayINTELStack(errorNumber, theObj, (long)thePC, theSignal);
 #endif
 
 #undef P
@@ -1504,6 +1576,7 @@ int DisplayBetaStack(BetaErr errorNumber,
 #undef P
   
   fflush(output);
+  fclose(output);
   if (old_output) output = old_output; 
 
 #if defined(MAC)

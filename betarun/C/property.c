@@ -6,72 +6,112 @@
 
 /* EXPORTING:
  *
- *  SetupProperties( betart)
- *    char *betart;
+ *  SetupProperties(char *betart)
+ *    
  *  Ex: SetupProperties("InfoIOA:IOA#2333");
  */
 #include "beta.h"
+
+#define MAX_NAME 100
+#define MAX_VALUE 100
 
 static long intScan(char*,char*);
 static void ValueProperty(char *name, char *value);
 static void BooleanProperty(char *name);
 
+#undef HELP_PROPERTY
+#ifdef HELP_PROPERTY
+/* FIXME: Does not work - only reports the used entries */
+static int   PropertiesSize=0;
+static char *Properties=0;
+static int   ReportProperties;
+#endif /* HELP_PROPERTY */
+
 /* 
  * If you want to add properties, change BooleanProperty or ValueProperty. 
  */
 
-#define ENTRY( string, code) if( EqualNCS(name, string) ){ code; return; }
+#ifdef HELP_PROPERTY
+#define ENTRY(string, code)                                      \
+  if (EqualNCS(name, string)){                                   \
+    if (!Properties){                                            \
+      PropertiesSize = MAX_NAME;                                 \
+      Properties = (char*)MALLOC(PropertiesSize*sizeof(char));   \
+      Properties[0]=0;                                           \
+    } else {                                                     \
+      if (strlen(Properties)+strlen(name)+5>PropertiesSize){     \
+        PropertiesSize += 5+MAX_NAME;                            \
+        Properties = (char*)                                     \
+          REALLOC(Properties, PropertiesSize*sizeof(char));      \
+      }                                                          \
+    }                                                            \
+    strcat(Properties, "  ");                                    \
+    strcat(Properties, name);                                    \
+    strcat(Properties, "\n");                                    \
+    code;                                                        \
+    return;                                                      \
+  }
+#else /* !HELP_PROPERTY */
+#define ENTRY(string, code)                                      \
+  if (EqualNCS(name, string)){                                   \
+    code;                                                        \
+    return;                                                      \
+  }
+#endif /* HELP_PROPERTY */
 
 static void BooleanProperty(char *name)
 {
-   ENTRY("info",     Info0 = TRUE); 
-   ENTRY("infoioa",  InfoIOA = TRUE);
-   ENTRY("infoaoa",  InfoAOA = TRUE);
-   ENTRY("infocbfa", InfoCBFA = TRUE);
-   ENTRY("infodot", InfoDOT = TRUE);
-   ENTRY("infolabels", InfoLabels = TRUE);
-   ENTRY("infoall", 
-	 Info0 = TRUE; InfoIOA = TRUE; InfoAOA = TRUE; 
-	 InfoCBFA = TRUE; 
-	 InfoHeapUsage = TRUE;
-	 );
-   ENTRY("infoheapusage", InfoHeapUsage = TRUE);
-   ENTRY("infoheap", InfoHeapUsage = TRUE);
-   ENTRY("quacont",  QuaCont = TRUE);
-   ENTRY("noaoagc",  noAOAGC = TRUE);
+#ifdef HELP_PROPERTY
+  ENTRY("Help",     ReportProperties = TRUE); 
+#endif /* HELP_PROPERTY */
+  ENTRY("Info",     Info0 = TRUE); 
+  ENTRY("InfoIOA",  InfoIOA = TRUE);
+  ENTRY("InfoAOA",  InfoAOA = TRUE);
+  ENTRY("InfoCBFA", InfoCBFA = TRUE);
+  ENTRY("InfoDOT", InfoDOT = TRUE);
+  ENTRY("InfoLabels", InfoLabels = TRUE);
+  ENTRY("InfoAll", 
+	Info0 = TRUE; InfoIOA = TRUE; InfoAOA = TRUE; 
+	InfoCBFA = TRUE; 
+	InfoHeapUsage = TRUE;
+	);
+  ENTRY("InfoHeapUsage", InfoHeapUsage = TRUE);
+  ENTRY("InfoHeap", InfoHeapUsage = TRUE);
+  ENTRY("QuaCont",  QuaCont = TRUE);
+  ENTRY("NoAOAGc",  noAOAGC = TRUE);
 #ifdef sparc
-  ENTRY("suspcont", SuspCont = TRUE);
+  ENTRY("SuspCont", SuspCont = TRUE);
 #endif
 
 #ifdef RTDEBUG
-  ENTRY("debugioa",   DebugIOA = TRUE);
-  ENTRY("checkheap",   CheckHeap = TRUE);
-  ENTRY("stopatillegal",   StopAtIllegal = TRUE);
-  ENTRY("debugalloi",   DebugAlloI = TRUE);
-  ENTRY("debugcbfa",  DebugCBFA = TRUE);
-  ENTRY("dumpaoa",   DumpAOA = TRUE);
-  ENTRY("debugaoa",   DebugAOA = TRUE);
-  ENTRY("debugaoatoioa",   DebugAOAtoIOA = TRUE);
-  ENTRY("debuglin",  DebugLIN = TRUE);
-  ENTRY("debugstack", DebugStack = TRUE);
-  ENTRY("debugstackobj", DebugStackObj = TRUE);
-  ENTRY("debugsockets", DebugSockets = TRUE);
-  ENTRY("debuglazy", DebugLazy = TRUE);
-  ENTRY("debuglabels", DebugLabels = TRUE);
+  ENTRY("DebugIOA",   DebugIOA = TRUE);
+  ENTRY("CheckHeap",   CheckHeap = TRUE);
+  ENTRY("StopAtIllegal",   StopAtIllegal = TRUE);
+  ENTRY("DebugAlloI",   DebugAlloI = TRUE);
+  ENTRY("DebugCBFA",  DebugCBFA = TRUE);
+  ENTRY("DumpAOA",   DumpAOA = TRUE);
+  ENTRY("DebugAOA",   DebugAOA = TRUE);
+  ENTRY("DebugAOAToIOA",   DebugAOAtoIOA = TRUE);
+  ENTRY("DebugLIN",  DebugLIN = TRUE);
+  ENTRY("DebugStack", DebugStack = TRUE);
+  ENTRY("DebugStackObj", DebugStackObj = TRUE);
+  ENTRY("DebugSockets", DebugSockets = TRUE);
+  ENTRY("DebugLazy", DebugLazy = TRUE);
+  ENTRY("DebugLabels", DebugLabels = TRUE);
   /* Trace GroupName() */
-  ENTRY("tracegroup", TraceGroup = TRUE); 
+  ENTRY("TraceGroup", TraceGroup = TRUE); 
   /* Trace DisplayBetaStack() */
-  ENTRY("tracedump", TraceDump = TRUE); 
+  ENTRY("TraceDump", TraceDump = TRUE); 
   /* Trace search for prefix in ObjectDescription */
-  ENTRY("tracecodeentry", TraceCodeentry = TRUE); 
+  ENTRY("TraceCodeEntry", TraceCodeentry = TRUE); 
 #ifdef MT
-  ENTRY("debugmt", DebugMT = TRUE);
+  ENTRY("DebugMT", DebugMT = TRUE);
 #endif
 #ifdef RTVALHALLA
-  ENTRY("debugvalhalla", DebugValhalla = TRUE);
+  ENTRY("DebugValhalla", DebugValhalla = TRUE);
 #endif
 #ifdef MT
-  ENTRY("debugall", 
+  ENTRY("DebugAll", 
 	DebugMT = TRUE;
 	DebugIOA = TRUE; 
 	DebugAOA = TRUE;
@@ -81,7 +121,7 @@ static void BooleanProperty(char *name)
 	DebugLazy = TRUE;
 	DebugCBFA=TRUE);
 #else
-  ENTRY("debugall",   
+  ENTRY("DebugAll",   
 	DebugIOA = TRUE; 
 	DebugAOA = TRUE;
 	DebugAOAtoIOA = TRUE;
@@ -92,9 +132,9 @@ static void BooleanProperty(char *name)
 #endif
 #endif
 
-  ENTRY("infos", isStatRecordOn = TRUE);
-  ENTRY("nocatch", NoCatchException = TRUE);
-  ENTRY("nocatchexception", NoCatchException = TRUE);
+  ENTRY("InfoS", isStatRecordOn = TRUE);
+  ENTRY("NoCatch", NoCatchException = TRUE);
+  ENTRY("NoCatchException", NoCatchException = TRUE);
 
   /* IF NO ENTRY IS SELECTED REPORT UNKNOWN PROPERTY */
   { char buf[512];
@@ -243,8 +283,12 @@ static long intScan( name, value)
 
 void SetupProperties(char *betart)
 { long pos; long start = 0; long finish; long i, sep;
-  char name[100];
-  char value[100];
+  char name[MAX_NAME];
+  char value[MAX_VALUE];
+
+#ifdef HELP_PROPERTY
+  ReportProperties = 0;
+#endif /* HELP_PROPERTY */
   
   while( (betart[start] == ' ')
 	|| (betart[start] == '\t')
@@ -287,6 +331,16 @@ void SetupProperties(char *betart)
       while( (betart[pos] != '\0') && (betart[pos] != ':') ) pos++;
     }
   }
+
+#ifdef HELP_PROPERTY
+  if (ReportProperties){
+    fprintf(output, "The supported entries in \"%s\" are:\n", betart);
+    fprintf(output, "%s", Properties);
+    fflush(output);
+    ReportProperties=0;
+  }
+#endif /* HELP_PROPERTY */
+
 #if defined(MAC)
   if ((output == stderr) && StandAlone) {
      char *infoname; 

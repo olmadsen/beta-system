@@ -125,15 +125,40 @@
 #else
 #define MAC_CODE(code)
 #endif
-#ifdef PPCMAC
+#ifdef ppcmac
 #define PPCMAC_CODE(code) code;
 #else
 #define PPCMAC_CODE(code)
 #endif
-#ifdef SUN4S
+#ifdef sun4s
 #define SUN4S_CODE(code) code;
 #else
 #define SUN4S_CODE(code)
+#endif
+#ifdef sparc
+#define SPARC_CODE(code) code;
+#else
+#define SPARC_CODE(code)
+#endif
+#ifdef intel
+#define INTEL_CODE(code) code;
+#else
+#define INTEL_CODE(code)
+#endif
+#ifdef hppa
+#define HPPA_CODE(code) code;
+#else
+#define HPPA_CODE(code)
+#endif
+#ifdef linux
+#define LINUX_CODE(code) code;
+#else
+#define LINUX_CODE(code)
+#endif
+#ifdef nti
+#define NTI_CODE(code) code;
+#else
+#define NTI_CODE(code)
 #endif
 
 

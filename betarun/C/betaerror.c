@@ -129,7 +129,7 @@ void BetaError(BetaErr err, Object *theObj)
 	}
       }
       StackEnd = SP;
-#endif
+#endif /* NEWRUN */
 
 
 #ifdef sparc
@@ -182,15 +182,22 @@ void BetaError(BetaErr err, Object *theObj)
 	StackEnd++;  /* Two below */
 	break;
       case StopCalledErr:
-	/* betaenv.stop   -> FailureExit -> BetaError */
-	/* betaenvbody.bet   Misc.{c,run}   exit.c    */
+	/* betaenv.stop   -> FailureExit        -> BetaError   */
+	/* betaenvbody.bet   linuxadditions.run    betaerror.c */
 	StackEnd = BetaStackTop;
 	/* BetaStackTop was written just before calling FailureExit,
 	 * i.e. the instruction pointer can be found one up
 	 * on the stack (the call instruction puts it there).
 	 */
 	thePC = *(long**)(StackEnd-1);
-	/* edx, edi, ebp, esi were pushed before calling FailureExit */
+	/* edx, edi, ebp, esi were pushed before calling FailureExit:
+	 *   pushl  %edx
+	 *   pushl  %edi
+	 *   pushl  %ebp
+	 *   pushl  %esi
+	 *   movl   %esp,BetaStackTop
+	 *   call   FailureExit
+	 */
 	StackEnd += 4;
 	break;
       default:
@@ -269,17 +276,7 @@ void BetaError(BetaErr err, Object *theObj)
 	   *
 	   * Fetch the register number from the "cmpl $0,%reg" instruction.
            * This is the register containing the lazy or NONE reference. */ 
-	  
-#ifdef nti_bor
-	  /*   The assembler generates this, regardless of which register:
-	   *        
-	   *   0000 83F800                cmpl    $0x0,%eax
-	   *   0003 7F05                  jg      L1
-	   *   0005 E8FCFFFF FF           call    RefNone
-	   *   000a                    L1:  
-	   */
-	  regnum = (* (unsigned char *) (RefNonePC-9)) & 7;
-#else /* nti_ms, nti_gnu or linux */
+
 	  /* Binary compiler generates this, regardless of which register:
 	   * 0:      testl  reg,reg    # register is in lower 3 bits of second byte
 	   * 2:      jg     L1
@@ -287,7 +284,6 @@ void BetaError(BetaErr err, Object *theObj)
 	   * 9:  L1:      
 	   */
 	  regnum = (* (unsigned char *) (RefNonePC-8)) & 7;
-#endif
 	  DEBUG_LAZY(switch(regnum){
 	  case 0:
 	    fprintf(output, "Dangler in %%eax\n"); break;
@@ -375,10 +371,11 @@ void BetaError(BetaErr err, Object *theObj)
 	}
 	/* Normal RefNone error: Display BETA stack.
 	 * Adjust StackEnd before calling DisplayBetaStack.
+	 * Ignore 12 pushed registers/tags (see RefNone in Misc.run)
+	 * AND the return address to current object (current object
+	 * is displayed specially).
 	 */
-	StackEnd += 12
-	  /* Ignore 12 pushed registers/tags (see RefNone in Misc.run)
-	   */;
+	StackEnd += 12+1;
 	thePC=(long *)RefNonePC;
       }
 #endif /* linux || nti */

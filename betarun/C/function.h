@@ -60,7 +60,8 @@ extern int  DisplayBetaStack(BetaErr, Object *, long *, long);
 extern void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func);
 #endif
 #ifdef intel
-extern void DisplayStackPart(long *low, long *high, Component *theComp, CellDisplayFunc func);
+extern long *DisplayCallbackFrames(CallBackFrame *cbFrame, long *low, Object *currentObject, CellDisplayFunc func);
+extern void DisplayStackPart(long *low, long *high, Object *currentObject, CellDisplayFunc func);
 #endif
 #ifdef NEWRUN
 extern unsigned long CodeEntry(ProtoType *theProto, long PC);

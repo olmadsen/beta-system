@@ -46,6 +46,7 @@ do
        diff output/$f.out $f.out
        if [ $? = 0 ]; then
 	  echo "[Output is correct]"
+	  rm $f.out
        else
 	  echo "[Difference in output]"
        fi
@@ -66,6 +67,7 @@ do
        sed -e "s/$objdir/MACHINE_TYPE/g" < $f | diff dumps/$f -
        if [ $? = 0 ]; then
 	  echo "[Dump is correct]"
+	  rm $f
        else
 	  echo "[Difference in dump]"
        fi

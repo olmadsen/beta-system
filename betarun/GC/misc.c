@@ -970,7 +970,6 @@ void DescribeObject(Object *theObj)
     case SwitchProto(ComponentPTValue):
       fprintf(output, "Component: ");
       DescribeObject((Object *)((Component *)theObj)->Body);
-      PrintWhichHeap(theObj);
       return;
     case SwitchProto(StackObjectPTValue):
       fprintf(output, "StackObj");

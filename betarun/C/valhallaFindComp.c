@@ -22,7 +22,13 @@ int scanComponentStack (Component* comp,
 #endif
 
 #ifdef intel
+static int compfound;
+static CellDisplayFunc DoForEach;
 
+static void ShowCell(long PC, Object *theObj)
+{
+  if (compfound) DoForEach(PC, theObj);
+}
 
 int scanComponentStack (Component* comp,
 			Object *curObj,
@@ -33,11 +39,14 @@ int scanComponentStack (Component* comp,
    * PC is the top code-address.
    * calling "forEach" for each (code-address, object) pair on the stack.
    */
-  int stacktype, compfound;
-
+  int stacktype;
+  
   DEBUG_VALHALLA(fprintf(output, 
 			 "scanComponentStack(comp=0x%x, obj=0x%x, PC=0x%x)\n",
 			 (int)comp, (int)curObj, PC));
+
+  compfound = 0;
+  DoForEach = forEach;
 
   if ((long)(comp->StackObj)>0 /* -1 means active */
       && (comp!=ActiveComponent) /* ActiveComponent may have a stack object,
@@ -48,8 +57,8 @@ int scanComponentStack (Component* comp,
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: scanning stackObject 0x%x\n", (int)comp->StackObj));
     DisplayStackPart((long*)sObj->Body, 
 		     (long*)((long)sObj->Body + sObj->StackSize),
-		     comp,
-		     forEach);
+		     0, 
+		     ShowCell);
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: stackObject done\n"));
     return CS_STACKOBJ;
   }
@@ -59,7 +68,7 @@ int scanComponentStack (Component* comp,
     compfound = TRUE;
     stacktype = CS_ACTIVECOMPONENT;
     DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", (int)PC, (int)curObj));
-    forEach(PC, curObj);
+    ShowCell(PC, curObj);
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: ActiveComponent done\n"));
   } else {
     compfound=0;
@@ -74,34 +83,23 @@ int scanComponentStack (Component* comp,
    * See also doc/RunDoc.txt for a figure of the stack layout.
    */
   { 
-    long           *lowAddr;
-    long           *highAddr;
+    long           *low;
+    long           *high;
     CallBackFrame  *cbFrame;
     ComponentBlock *currentBlock;
     Object         *currentObject;
     Component      *currentComponent;
-    long                  PC=0;
     
     /* First handle the topmost component block */
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: topmost component block\n"));
+    currentObject = curObj;
     currentComponent = ActiveComponent;
-    lowAddr  = (long *) StackEnd;
-    highAddr = (long *) lastCompBlock;
+    low  = (long *) StackEnd;
+    high = (long *) lastCompBlock;
     cbFrame  = ActiveCallBackFrame; 
 
-    while (cbFrame) {
-      if (compfound) {
-	DisplayStackPart((long*)lowAddr, (long *)cbFrame-2, currentComponent, forEach);
-      }
-      lowAddr = cbFrame->betaTop;
-      lowAddr += 4;
-      cbFrame = cbFrame->next;
-      if(compfound && isObject((Object *)(*lowAddr))) forEach(0,(Object*)(*lowAddr));
-      lowAddr += 2;
-    }
-    if (compfound) {
-      DisplayStackPart(lowAddr, highAddr-3, currentComponent, forEach); 
-    } 
+    low = DisplayCallbackFrames(cbFrame, low, currentObject, ShowCell);
+    DisplayStackPart(low, high-3, currentObject, ShowCell); 
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: topmost component block done\n"));
     
     /* Then handle the remaining component blocks */
@@ -118,30 +116,15 @@ int scanComponentStack (Component* comp,
 	break;
       }
       if (currentComponent==comp) compfound=TRUE;
-      lowAddr  = (long *)((long)currentBlock+sizeof(ComponentBlock))+1;
-      highAddr = (long *) currentBlock->next;
+      low  = (long *)((long)currentBlock+sizeof(ComponentBlock))+1;
+      high = (long *) currentBlock->next;
       cbFrame  = currentBlock->callBackFrame;
-      if (compfound && !cbFrame) {
+      if (!cbFrame) {
 	DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", (int)PC, (int)currentObject));
-
-	forEach(PC, currentObject);
+	ShowCell(PC, currentObject);
       }
-      while (cbFrame) {
-	if (compfound) {
-	  DisplayStackPart(lowAddr, (long *)cbFrame-2, currentComponent, forEach);
-	}
-	lowAddr = cbFrame->betaTop;
-	lowAddr += 4;
-	cbFrame = cbFrame->next;
-	if(compfound && isObject((Object *)(*lowAddr))){
-	  DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", 0, (int)(*lowAddr)));
-	  forEach(0, (Object*)(*lowAddr));
-	}
-	lowAddr += 2;
-      }
-      if (compfound) {
-	DisplayStackPart(lowAddr, highAddr-3, currentComponent, forEach); 
-      }
+      low = DisplayCallbackFrames(cbFrame, low, currentObject, ShowCell);
+      DisplayStackPart(low, high-3, currentObject, ShowCell); 
       currentBlock     = currentBlock->next;
       currentObject    = currentComponent->CallerObj;
       PC               = currentComponent->CallerLSC;
@@ -149,13 +132,13 @@ int scanComponentStack (Component* comp,
     }
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: other component blocks done\n"));
   }
-  {
-#ifdef linux
+  LINUX_CODE({
     extern void Att(void);
-    DEBUG_VALHALLA(fprintf(output, "Dummy Attach Pair: PC=0x%x, obj=0x%x\n", (int)&Att, 0));
-    forEach(0, (Object*)&Att);
-#endif
-  }
+    DEBUG_VALHALLA({
+      fprintf(output, "Dummy Attach Pair: PC=0x%x, obj=0x%x\n", (int)&Att, 0);
+    });
+    ShowCell(0, (Object*)&Att);
+  })
   DEBUG_VALHALLA(fprintf(output, "scanComponentStack: machinestack done\n"));
 
   if (!stacktype){
