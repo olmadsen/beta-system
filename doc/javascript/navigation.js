@@ -265,12 +265,15 @@ function onKey(e)
   var c;
   var ch;
   if (document.layers){
+    if (e.modifiers){ return true; }
     c  = e.which;
     ch = String.fromCharCode(e.which);
   } else if (document.all){
     c  = event.keyCode;
+    if (event.modifiers){ return true; }
     ch = String.fromCharCode(event.keyCode);
   } else if (document.getElementById){
+    if (e.cntlKey || e.metaKey){ return true; }
     c  = e.charCode;
     ch = String.fromCharCode(e.charCode);
   } else {
@@ -286,7 +289,7 @@ function onKey(e)
   ch = ch.toLowerCase();
   if (ch=='h'){
     hide();
-    return;
+    return false;
   }
   if (ch=='s') {
     show();
