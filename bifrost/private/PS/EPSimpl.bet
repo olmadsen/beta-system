@@ -1,24 +1,42 @@
 ORIGIN '../Impl/BifrostImpl';
 INCLUDE '~beta/basiclib/v1.4/file';
 INCLUDE '~beta/sysutils/v1.4/time';
+INCLUDE '../Impl/SegmentList';
 
 --StreamLib: attributes--
 sep: (# do ' '->put #);
 putpoint: 
   (# x,y: @integer;
      puti: @putint;
+     s: @sep;
   enter (x,y) 
-  do x->puti; sep;
-     y->puti; sep
+  do x->puti; s;
+     y->puti; s
   #);
 putrect:
   (# x,y,w,h: @integer;
      puti: @putint;
+     s: @sep;
   enter ((x,y),w,h)
-  do x -> puti; sep;
-     y -> puti; sep;
-     w -> puti; sep;
-     h -> puti; sep;
+  do x -> puti; s;
+     y -> puti; s;
+     w -> puti; s;
+     h -> puti; s;
+  #);
+putmatrix:
+  (# a,b,c,d,tx,ty: @Real;
+     putr: @putreal;
+     s: @sep;
+     putt: @puttext;
+  enter (a,b,c,d,tx,ty)
+  do '[ '->putt;
+     a->putr; s;
+     b->putr; s;
+     c->putr; s;
+     d->putr; s;
+     tx->putr; s;
+     ty->putr; s;
+     '] '->putt;
   #);
 debugps:
   (# comment: ^text;
@@ -26,10 +44,53 @@ debugps:
   do '% '->puttext; comment[] -> putline;
   #);
 
---ShapeWritePS: descriptor--
+--LineSegmentWritePS: descriptor--
 (#
+do 'LineSegment' -> out.debugps;
+   (* begin->out.putpoint;
+    * ' moveto'->out.putline;
+    *)
+   end->out.putpoint;
+   ' lineto'->out.putline;
+   INNER writePS;
+#)
+--SplineSegmentWritePS: descriptor--
+(#
+do 'SplineSegment' -> out.debugps;
+   INNER writePS;
+#)
+--CircularSplineSegmentWritePS: descriptor--
+(#
+do 'CircularSplineSegment' -> out.debugps;
+   (for i:controls.npoints repeat
+        i->controls.getpoint->out.putpoint
+   for);
+   controls.npoints -> out.putint;
+   ' CBSpl'->out.putline;
+   INNER writePS;
+#)
+--NonCircularSplineSegmentWritePS: descriptor--
+(#
+do 'NonCircularSplineSegment' -> out.debugps;
+   (for i:controls.npoints repeat
+        i->controls.getpoint->out.putpoint
+   for);
+   controls.npoints -> out.putint;
+   ' BSpl'->out.putline;
+   INNER writePS;
+#)
+
+--ShapeWritePS: descriptor--
+(# points: @PointArray;
+   npoints: @integer;
+   firstseg: ^Segment;
 do 'Shape' -> out.debugps;
-   'Not yet Implemented' -> out.debugps;
+   privatepart.segmentlist.firstsegment -> firstseg[];
+   (if firstseg##<=CircularSplineSegment##//false then
+       firstpoint -> out.putpoint; 
+       ' moveto' -> out.putline;
+   if);
+   privatepart.segmentlist.scan(# do out[] -> current.writePS #);
    INNER writePS;
 #)
 
@@ -57,28 +118,91 @@ do 'LineShape' -> out.debugps;
 --MultilineShapeWritePS: descriptor--
 (#
 do 'MultiLineShape' -> out.debugps;
-   'Not yet Implemented' -> out.debugps;
+   (for i:points.p.npoints-1 repeat
+        i -> points.p.GetPoint -> out.putpoint;
+   for);
+   points.p.nPoints-1 -> out.putint; out.sep;
+   points.p.lastpoint -> out.putpoint;
+   (if join
+    // JoinMiter  then 0->out.putint; out.sep;
+    // JoinRound  then 1->out.putint; out.sep;
+    // Joinbevel  then 2->out.putint; out.sep;
+   if);
+   (if cap
+    // CapButt    then 0->out.putint; out.sep;
+    // CapRounded then 1->out.putint; out.sep;
+    // CapSquare  then 2->out.putint; out.sep;
+    if);
+   width -> out.putint;
+   ' m' -> out.putline;
    INNER writePS;
 #)
 
 --TextShapeWritePS: descriptor--
-(#
+(# putt: @out.puttext;
 do 'TextShape' -> out.debugps;
-   'Not yet Implemented' -> out.debugps;
+   '(' -> out.put;
+   theText -> mkTextRef -> putt;
+   ') '-> putt;
+   (if underline then
+       'true '->putt;
+    else
+       'false '->putt;
+   if);
+   position -> out.putpoint;
+   size -> out.putint; out.newline;
+   (if theFontName
+    // Helvetica then '/Helvetica'->putt;
+    // Times then '/Times'->putt;
+    // Courier then '/Courier'->putt;
+    else
+       'TextShapeWritePS: Unsupported font number: '->screen.puttext;
+       theFontName -> screen.putint; screen.newline;
+   if);
+   (if theStyle
+    // Plain then
+       (if theFontName//Times then
+           '-Roman' -> putt;
+       if)
+    // Italic then 
+       (if theFontName//Times then
+           '-Italic'->putt;
+        else
+           '-Oblique'->putt;
+       if);
+    // Bold then '-Bold'->putt;
+    else
+       'TextShapeWritePS: Unsupported style number: '->screen.puttext;
+       theStyle -> screen.putint; screen.newline;
+   if);
+   ' t' -> out.putline;
    INNER writePS;
 #)
 
 --PieShapeWritePS: descriptor--
-(#
+(# r: @real;
 do 'PieShape' -> out.debugps;
-   'Not yet Implemented' -> out.debugps;
+   center.p -> out.putpoint;
+   angle1 -> out.putreal; out.sep;
+   angle2 -> out.putreal; out.sep;
+   horizontalradius -> out.putint; out.sep;
+   verticalradius -> r;
+   r / horizontalradius -> out.putreal; out.sep;
+   'p'->out.putline;
    INNER writePS;
 #)
 
 --ArcShapeWritePS: descriptor--
-(#
+(# r: @real;
 do 'ArcShape' -> out.debugps;
-   'Not yet Implemented' -> out.debugps;
+   center.p -> out.putpoint;
+   angle1 -> out.putreal; out.sep;
+   angle2 -> out.putreal; out.sep;
+   horizontalradius -> out.putint; out.sep;
+   verticalradius -> r;
+   r / horizontalradius -> out.putreal; out.sep;
+   arcwidth -> out.putint; out.sep;
+   'a'->out.putline;
    INNER writePS;
 #)
 
@@ -87,11 +211,13 @@ do 'ArcShape' -> out.debugps;
 do 'StrokeableShape' -> out.debugps;
    (if stroked then
        strokewidth -> out.putint; ' setlinewidth' -> out.putline;
-       'true ' -> out.putline;
-    else
-       'false ' -> out.putline;
    if);
    INNER writePS;
+   (if stroked then
+       'stroke' -> out.putline;
+    else
+       'fill' -> out.putline;
+   if);
 #)
 
 --RectShapeWritePS: descriptor--
@@ -143,11 +269,26 @@ do 'TiledSolidColor' -> out.debugps;
 --GoWritePS: descriptor--
 (#
 do 'AbstractGraphicalObject' -> out.debugps;
+   'gsave' -> out.putline;
+   'newpath'->out.putline;
+   (if TM.m[]<>NONE then 
+       TM.m -> out.putmatrix; 'concat' -> out.putline;
+   if);
    out[] -> thePaint.writePS;
    out[] -> theShape.writePS;
    INNER writePS;
+   'grestore' -> out.putline;
 #)
-
+--UserDefGOWritePS: descriptor--
+(# 
+do (if theshape.fillRule
+    // WindingRule then
+       'fill' -> out.putline;
+    // EvenOddRule then
+       'eofill' -> out.putline;
+   if);
+   INNER writePS;
+#)
 --PictureShapeWritePS: descriptor--
 (#
 do 'PictureShape' -> out.debugps;
@@ -157,17 +298,26 @@ do 'PictureShape' -> out.debugps;
 --PictureWritePS: descriptor--
 (#
 do 'Picture' -> out.debugps;
-   'Local transformation should be applied' -> out.debugps;
    scanGOs(# do out[] -> go.writePS #);
    INNER writePS;
 #)
 
 --CanvasWriteEPS: descriptor--
 (# header: @file;
-   size: @point; r: @rectangle; 
+   size: @point; 
+   r: @rectangle; 
    scale: @real;
-   page: @vector;
+   translate: @point;
+   page: @point;
+   m: @point;
+   margin: (# exit (20, 20) #);
 do (if out[]//NONE then screen[]->out[] if);
+   
+   THIS(BifrostCanvas).size -> size;
+   (pagesize.width-pagesize.x, pagesize.height-pagesize.y) -> page;
+   margin -> m;
+   (page.x-2*m.x, page.y-2*m.y) -> page;
+   thePicture.getbounds -> r;
    
    (* Write the header *)
    '%!PS-Adobe-3.0 EPSF-3.0' -> out.putline;
@@ -175,7 +325,8 @@ do (if out[]//NONE then screen[]->out[] if);
    1 -> arguments -> header.name;
    header.entry.path.name -> out.puttext;
    out.newline;
-   '%%BoundingBox: atend' -> out.putline;
+   '%%Boundingbox: atend'->out.puttext; 
+   out.newline;   
    '%%Title: Bifrost Drawing' -> out.puttext;
    out.newline;
    '%%CreationDate: ' -> out.puttext;
@@ -192,13 +343,7 @@ do (if out[]//NONE then screen[]->out[] if);
          restart loop;
      if);
    header.close;
-   
-   (* Scale Canvas to pagesize *)
-   THIS(BifrostCanvas).size -> size;
-   (pagesize.width-pagesize.x, pagesize.height-pagesize.y) -> page;
-   (page.x / size.x,  page.y / size.y) -> fmin -> scale;
-   scale->out.putreal; out.sep; scale->out.putreal; ' scale' -> out.putline;
-   
+    
    (* Handle vertical and noOfCopies *)
    (if vertical//false then
        'CanvasWriteEPS: horizontal print not yet handled' -> putline;
@@ -207,8 +352,26 @@ do (if out[]//NONE then screen[]->out[] if);
        '/#copies '->out.puttext; noOfCopies-> out.putint; ' def' -> out.putline;
    if);
    
+   (* Scale Canvas to fit page *)
+   (if page.x-size.x < page.y-size.y then
+       (* Scale to fit in x direction *)
+       page.x -> scale;
+       scale / size.x -> scale;
+       0 -> translate.x;
+       ((page.y-size.y) div 2) div scale-> translate.y;
+    else
+       (* scale to fit in y direction *)
+       page.y -> scale;
+       scale / size.y -> scale;
+       0 -> translate.y;
+       ((page.x-size.x) div 2) div scale -> translate.x;
+   if);
+   scale->out.putreal; out.sep; scale->out.putreal; 
+   ' scale' -> out.putline;
+   (margin, translate) -> addpoints -> out.putpoint;
+   'translate' -> out.putline;
+    
    (* Draw a thin frame around canvas *)
-   '10 10 translate' -> out.putline;
    'newpath' -> out.putline;
    '0.1 setlinewidth'-> out.putline;
    '0 setgray'-> out.putline;
@@ -220,16 +383,19 @@ do (if out[]//NONE then screen[]->out[] if);
    'stroke'-> out.putline;
    
    (* Process the graphics *)
+   'Begin' -> out.putline;
    out[] -> thePicture.writePS;
    
    (* Showpage & Epilogue *)
    'showpage' -> out.putline;
+   'End' -> out.putline;
+
    '%%Boundingbox: '->out.puttext; 
-   thePicture.getbounds -> r;
-   r.x          -> out.putint; ' '->out.put;
-   r.y-r.height -> out.putint; ' '->out.put;
-   r.x+r.width  -> out.putint; ' '->out.put;
-   r.y          -> out.putint; 
+   r.x+translate.x          -> out.putint; ' '->out.put;
+   r.y-r.height+translate.x -> out.putint; ' '->out.put;
+   r.x+r.width+translate.y  -> out.putint; ' '->out.put;
+   r.y+translate.y          -> out.putint; 
    out.newline;
+
    '%%EOF' -> out.putline;
 #)
