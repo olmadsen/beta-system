@@ -8,10 +8,6 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifdef hppa
-#  define CCopyCT CopyCT
-#endif
-
 #ifdef sparc
 asmlabel(CopyCT,
 	 "clr %o0;"
@@ -23,7 +19,7 @@ asmlabel(CopyCT,
 );
 ref(ValRep) CCopyCT(int i0, int i1, unsigned char *textPtr)
 #else
-ref(ValRep) CCopyCT(unsigned char *textPtr)
+ref(ValRep) CopyCT(unsigned char *textPtr)
 #endif
 {
     DeclReference1(struct ValRep *, theRep);
