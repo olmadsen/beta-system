@@ -192,16 +192,6 @@ static int AOAtoIOAInsertImpl(Object **theCell)
     unsigned long index, count;
     DEBUG_CODE(long conflictcount);
 
-#ifdef PERSIST
-    DEBUG_CODE(if (!(inAOA(theCell) || inPersistentAOA((long)theCell))) {
-      fprintf(output, 
-	      "AOAtoIOAInsert: the cell 0x%x is not in AOA! ", 
-	      (int)theCell);
-      PrintWhichHeap((Object*)theCell);
-      fprintf(output, "\n\n");
-      Illegal(); /* useful to break in */
-    });
-#else 
     DEBUG_CODE(if (!inAOA(theCell)) {
       fprintf(output, 
 	      "AOAtoIOAInsert: the cell 0x%x is not in AOA! ", 
@@ -210,12 +200,7 @@ static int AOAtoIOAInsertImpl(Object **theCell)
       fprintf(output, "\n\n");
       Illegal(); /* useful to break in */
     });
-#endif /* PERSIST */
-    
-#ifdef PERSIST
-    if (!inProxy(*(long*)theCell)) {
-#endif /* PERSIST */
-      
+
 #ifdef RTDEBUG    
       if (*(long*)theCell & 7) {
 	fprintf(output, "\n*theCell is not 8-aligned. Proto=0x%08X\n",
@@ -224,11 +209,6 @@ static int AOAtoIOAInsertImpl(Object **theCell)
       }
 #endif
       
-#ifdef PERSIST
-    }
-#endif /* PERSIST */
-    
-
 #ifdef RTLAZY
     if ( isNegativeRef(*theCell)) {
         /* This could happen if called from extobjinterface.assignRef. */
@@ -342,12 +322,7 @@ void AOAtoIOACheck(void)
     /* fprintf(output, "#AOAtoIOACheck: AOAtoIOAtableSize: %d\n", (int)AOAtoIOAtableSize); */
     for(i=0; i<AOAtoIOAtableSize; i++){
 	if (pointer[i]){
-#ifdef PERSIST
-	  Claim( inAOA( pointer[i]) || inPersistentAOA( pointer[i]),
-		 "AOAtoIOACheck: *pointer in AOA" );
-#else
 	  Claim( inAOA( pointer[i]),"AOAtoIOACheck: *pointer in AOA" );
-#endif /* PERSIST */
 	  Claim((((*(long*)(pointer[i])) & 7)==0), "AOAToIOACheck: **pointer 8 aligned");
 	}
     }

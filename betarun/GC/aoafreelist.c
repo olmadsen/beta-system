@@ -6,6 +6,10 @@
 
 #include "beta.h"
 
+#ifdef PERSIST
+#include "../P/PException.h"
+#endif /* PERSIST */
+
 void aoaf_dummy() 
 {
 #ifdef sparc
@@ -525,13 +529,21 @@ long AOAScanMemoryArea(long *start, long *end)
 	}
       });
       DEBUG_AOA(memoryAreaSize += size);
+#ifdef PERSIST
+      /* We do not want to clear the persistent mark in persistent
+         objects */
+      if (!inPIT((void *)(current -> GCAttr))) {
+	current->GCAttr = DEADOBJECT;
+      } 
+#else 
       current->GCAttr = DEADOBJECT;
+#endif /* PERSIST */
       current = (AOAFreeChunk *)((char *)current + size);
     } else {
       /* DEAD or FREE or Error */
       long freeChunkSize;
       AOAFreeChunk *freeChunkStart;
-	  
+      
       /* Group chunks together if possible */
       freeChunkStart = current;
       do {

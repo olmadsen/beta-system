@@ -6,6 +6,16 @@
 
 #include "beta.h"
 
+#ifdef PERSIST
+#include "../P/misc.h"
+#endif /* PERSIST */
+
+void copyobj_dummy() {
+#ifdef sparc
+  USE();
+#endif /* sparc */
+}
+
 /*
  * CopyObject:
  *  Copy an object refered by theObj from IOASpace to ToSpace.
@@ -76,16 +86,23 @@ static Object * CopyObject(Object * theObj)
 Object * NewCopyObject(Object * theObj, Object ** theCell)
 {
   MCHECK();
-
+  
   if (theObj->GCAttr < IOAtoAOAtreshold) {
     /* theObj is not old enough for AOA */
     return CopyObject(theObj);
-
+    
   } else {
     /* theObj is old enough to go into AOA */
     Object * newObj;
-    
+#ifdef PERSIST
+    long GCAttribute;
+#endif /* PERSIST */
     MCHECK();
+
+#ifdef PERSIST
+    GCAttribute = theObj -> GCAttr;
+#endif /* PERSIST */
+
     if ((newObj = CopyObjectToAOA(theObj))) {
       /* Insert theCell in AOAroots table. 
        * Used as roots in AOA GC if invoked after IOAGc.
@@ -97,11 +114,38 @@ Object * NewCopyObject(Object * theObj, Object ** theCell)
 	saveAOAroot(theCell);
 	MCHECK();
       }
-      return newObj;
 
+#ifdef PERSIST
+      if (GCAttribute == IOAPersist) {
+	/* KKK: We have just moved a persistent object to AOA. The
+	   object is registered so that we can create an entry for it
+	   in the ObjectTable, and mark it as persistent when this
+	   IOAGc has finished. We cannot do it now as the GCAttribute
+	   of the new object in AOA is needed by IOAGc. */
+	delayedInsert(newObj);
+      }
+#endif /* PERSIST */
+      return newObj;
+      
     } else {
       /* CopyObjectToAOA failed */
+#ifdef PERSIST
+      if (theObj -> GCAttr != IOAPersist) {
+	return CopyObject(theObj);
+      } else {
+	Object *theAOAObj;
+	
+	forceAOAAllocation = TRUE;
+	theAOAObj = NewCopyObject(theObj, theCell);
+	forceAOAAllocation = FALSE;
+	
+	Claim(inAOA(theAOAObj), "Where is theAOAObj?");
+	
+	return theAOAObj;
+      }
+#else 
       return CopyObject(theObj);
+#endif /* PERSIST */
     }
   }
 }
