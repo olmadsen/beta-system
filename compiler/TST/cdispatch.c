@@ -115,12 +115,25 @@ struct vtbl
 { long (STDCALL *QI)(struct idispatch *this);
   long (STDCALL *AddRef)(struct idispatch *this);
   long (STDCALL *DeleteRef)(struct idispatch *this);
+  long (STDCALL *GTIC)();
+  long (STDCALL *GTI)();
+  /* GetIdsOfNames does NOT have the correct parameters
+   * corresponding to the official IDISPATCH interface */
   long (STDCALL *GetIdsOfNames)(struct idispatch *this
-				, char *names
-				, long *resList);
+				, long *riid
+				, char *rgzNames
+				, char *cNames
+				, long lcid
+				, long *rgDispId);
   long (STDCALL *Invoke)(struct idispatch *this
 			 ,long dispIdMember
-			 ,struct struct_tagDISPPARAMS *pDispParams );
+			 , long riid
+			 , long _lcid
+			 , long wFlags
+			 , struct struct_tagDISPPARAMS *pDispParams 
+			 , VARIANT *pVarResult
+			 , VARIANT *pExcepInfo
+			 , long *puArgErr);
 };
 
 struct idispatch
@@ -199,10 +212,10 @@ long BETA_Invoke(struct idispatch *pdisp
   resList = MkResList();
 
 
-  HR = pdisp->proto->GetIdsOfNames(pdisp,nameList,resList);
+  HR = pdisp->proto->GetIdsOfNames(pdisp,0,nameList,0,0,resList);
   dispid = resList[0];
 
-  pdisp->proto->Invoke(pdisp,dispid,argList);
+  pdisp->proto->Invoke(pdisp,dispid,0,0,0,argList,NULL,NULL,NULL);
 
   return 1;
 }
