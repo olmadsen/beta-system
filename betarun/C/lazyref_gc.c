@@ -271,17 +271,13 @@ int FindDanglingProto (int dangler)
 
 unsigned long lazyTrapHandler(unsigned long dangler)
 {  
-  /* Ok, so this is a genuine lazy reference, and not simply a NONE
-   * reference. */
-  
-  /* call beta object handling the lazy fetch */
+  LazyDangler = dangler;
 
-  /* A reference in this object is saved in 'LazyItem'. */
-  lazyDangler = dangler;
-  
-  /* The lazyItem is an object receiving no arguments and exiting no
-     results. How this can yield an absolute address to patch back
-     into the register holding the lazy reference is complete
+  /* call beta object handling the lazy fetch */
+  /* A reference to this object is saved in 'LazyItem'. */
+  /* sek: The lazyItem is an object receiving no arguments and exiting
+     no results. How this can yield an absolute address to patch back
+     into the register holding the lazy reference is completely
      unclear. The current author does not have enough knowledge about
      the implementation of the old persistent store in order to
      discover how the lazyItem can help to load the referred
