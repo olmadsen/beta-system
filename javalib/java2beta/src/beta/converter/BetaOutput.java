@@ -296,6 +296,11 @@ public class BetaOutput
 
     public void putHeader(String packageName, String className, Object[] includes)
     {
+	if (packageName==null){
+	    packageName = "";
+	} else {
+	    packageName = packageName + '/';
+	}
 	putln("ORIGIN '" + "_" + className + "';");
 	if (includes!=null){
 	    for (int i = 0; i<includes.length; i++){
@@ -305,8 +310,10 @@ public class BetaOutput
 	putln("--LIB: attributes--\n");
 	putln("(* Java " + className + " class members.");
 	putln(" * See " + "_" + className + " for class declaration.");
-	putln(" * See http://java.sun.com/j2se/1.4.1/docs/api/" 
-	      + packageName + '/' + className + ".html");
+	putln(" * See http://java.sun.com/j2se/" 
+	      + System.getProperty("java.version") 
+	      + "/docs/api/" 
+	      + packageName + className + ".html");
 	putln(" *)");
 	putPatternBegin(className, "_" + className);
     }
@@ -386,7 +393,12 @@ public class BetaOutput
     public void putTrailer(String packageName, String className)
     {
 	indent(-3);
-	putln("do '" + packageName + '/' + className + "' -> className;");
+	if (packageName==null){
+	    packageName = "";
+	} else {
+	    packageName = packageName + '/';
+	}
+	putln("do '" + packageName + className + "' -> className;");
 	indent(+3);
 	putln("INNER;");
 	indent(-3);
