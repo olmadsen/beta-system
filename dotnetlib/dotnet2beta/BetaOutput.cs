@@ -97,7 +97,9 @@ namespace beta.converter
 	      }
 	      if (overwrite == 0) {
 		existing = entry;
-		entry = new FileInfo(entry.FullName + ".new");
+		//entry = new FileInfo(entry.FullName + ".new");
+		output = null;
+		return;
 	      }
 	    }
 	    if (trace){
@@ -116,22 +118,22 @@ namespace beta.converter
 	      output = new StreamWriter(new FileStream(entry.FullName, FileMode.Create));
 	    }
 	  }
-		
+	
 		
 	public virtual void  reportFileName()
 	  {
-	    if (output == null) {
-	      // class ignored
-	      return ;
-	    }
 	    if (output == Console.Out) {
 	      // no file involved
 	      return ;
 	    }
-	    Console.Error.Write("    --> \"" + entry.FullName + "\"" + "\n");
 	    if (existing != null) {
-	      Console.Error.Write("NOTICE:\n\tNot overwriting existing\n\t\"" + existing.FullName + "\"" + "\n");
-	      Console.Error.Write("\tUse -f or -F option if overwrite desired." + "\n");
+		Console.Error.Write("Existing \"" 
+				   + existing.FullName
+				   + "\"\n"
+				   + "\t is up-to-date.");
+		Console.Error.Write("\tUse -f or -F option if overwrite desired." + "\n");
+	    } else {
+		Console.Error.Write("    -->  \"" + entry.FullName + "\"" + "\n");
 	    }
 	  }
 		

@@ -794,7 +794,7 @@ namespace beta.converter
 				  + outer.FullName 
 				  + ", " 
 				  + nested.FullName 
-				  + ") --> " 
+				  + ") -->  " 
 				  + plusToDot(unmangled) 
 				  + "\n");
 	    return plusToDot(unmangled);
@@ -809,7 +809,7 @@ namespace beta.converter
 				    + "," 
 				    + ((cls == null)?"null":cls.FullName) 
 				    + ")" + "\n");
-		beta.commentline("Class: " + cls.FullName + ": " + cls.BaseType);
+		beta.commentline("Class:  " + cls.FullName + ": " + cls.BaseType);
 	      }
 
 	    if (outer == null){
@@ -866,11 +866,11 @@ namespace beta.converter
 		// See checkForNestedName
 		i = i.Substring(1);
 	      }
-	      if (verbose) Console.Error.Write("\nRefered by " 
+	      if (verbose) Console.Error.Write("\nRefered by \"" 
 					       + slashToDot(namespaceName + "." + className) 
-					       + ": " 
+					       + "\": \"" 
 					       + slashToDot(i) 
-					       + "\n");
+					       + "\"\n");
 	      DotnetConverter dotnet2beta = new DotnetConverter();
 	      if (dotnet2beta.needsConversion(slashToDot(i), betalib, overwrite, output) != null){
 		int status = dotnet2beta.convert(slashToDot(i), betalib, overwrite, output);
@@ -881,9 +881,9 @@ namespace beta.converter
 	      } else {
 		if (verbose){
 		  if (converted[slashToDot(i)] != null){
-		    Console.Error.Write("  --> skipped: already converted by this program execution" + "\n");
+		    Console.Error.Write("    -->  skipped: already converted by this program execution" + "\n");
 		  } else {
-		    Console.Error.Write("  --> ignored: already converted (use -F to force overwrite)" + "\n");
+		    Console.Error.Write("    -->  ignored: already converted (use -F to force overwrite)" + "\n");
 		  }
 		}
 	      }
@@ -932,14 +932,12 @@ namespace beta.converter
 	    try
 	      {
 #endif
-		if (thisClass == null)
-		  {
-		    thisClass = needsConversion(clsname, betalib, overwrite, output);
-		  }
-		if (thisClass == null)
-		  return 0;
-		Console.Error.Write("Class:  \"" + thisClass.FullName + "\"" + "\n");
+		if (thisClass == null){
+		  thisClass = needsConversion(clsname, betalib, overwrite, output);
+		}
+		Console.Error.Write("Class:   \"" + clsname.Replace("/",".") + "\"" + "\n");
 		beta.reportFileName();
+		if (thisClass == null) return 0;
 		processClass(null, thisClass);
 #if CATCH
 	      }
