@@ -14,11 +14,7 @@
  */
 #define REP_OFF 3
 
-
-/*void MkTO() __asm__("MkTO");*/
-
 #ifdef sparc
-
 asmlabel(MkTO,
 	 "mov %o0,%o5;"	
 	 "mov %o1,%o0;"	
@@ -33,67 +29,97 @@ void CMkTO(ref(Item) theItem,
 	   unsigned offset, /* i ints */
 	   int i3,
 	   int i4,
-	   char *cText)
+	   char *asciz)
+#endif /* sparc */
 
-#else
-
-#ifdef crts
-     extern long a1, a2;
-#endif
-
-void MkTO(char *cText,
+#ifdef hppa
+void MkTO(char *asciz,
 	  ref(Item) theItem,
 	  unsigned offset /* i ints */ )
-#endif
+#endif /* hppa */
+
 {
-    DeclReference1(struct Item *, theText);
-    GCable_Entry();
+    struct TextObject* theText=0;
+    unsigned long range, i, repsize, size, isInAOA;
+    struct ValRep *theRep=0;
     
     DEBUG_CODE(NumMkTO++);
 
     Ck(theItem); Ck(BasicItem);
+    range = strlen(asciz);
+    repsize = ByteRepSize(range);
 
-    /* fprintf(output, "MkTO: ");
-     * fflush(output);
-     * fprintf(output, 
-     *         "theItem: 0x%x, offset: %d, string:  '%s'\n", 
-     *         theItem, offset, cText);
-     * fflush(output);
-    */
+    if (range > LARGE_REP_SIZE) {
+      DEBUG_LVRA(fprintf(output, "MkTO allocates in LVRA\n"));
+      theRep = (struct ValRep *)LVRAAlloc(ByteRepPTValue, range);
+    }
 
-#ifdef sparc
-    Protect(theItem, theText = SPARC_AlloI((struct Object *)BasicItem, 0, 
-				      TextProto, 0, 0));
-#endif
-#ifdef hppa
-    Protect(theItem, theText = CAlloI((struct Object *)BasicItem, TextProto));
-#endif
-#ifdef crts
-    *RefSP++=a1;
-    *RefSP++=a2;
-    Protect(theItem, theText = (struct Item *)AlloI((struct Object *)BasicItem, TextProto));
-    a2 = *(--RefSP);
-    a1 = *(--RefSP);
-#endif
+    if (theRep) {
+      DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
+		       "MkTO: lvra structure ok"));
+      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
+      theRep->GCAttr = (long) ((long *) theItem + offset);
+      *(struct ValRep **)((long *)theItem + offset) = theRep;
+      /* theRep is now allocated, and the header of it is initialized */
+      
+      /* Allocate only theText in IOA */
+      size = ItemSize(TextProto);
+    } else {
+      /* Allocate both theText and theRep in IOA */
+      size=ItemSize(TextProto) + repsize;
+    }
 
-    AssignReference((long *)theItem + offset, theText);
+    /* Allocate in IOA/AOA */
+    SaveVar(theItem);
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "MkTO allocates in AOA\n"));
+      theText=(struct TextObject*)AOAcalloc(size);
+      DEBUG_AOA(if (!theText) fprintf(output, "AOAcalloc failed\n"));
+    }
+    if (theText) {
+      isInAOA=1;
+    } else {
+      isInAOA=0;
+      theText=(struct TextObject*)IOAalloc(size);
+      theText->GCAttr = 1;
+    }
+    RestoreVar(theItem);
+
+    /* The new TextObject and Repetition are now allocated */
+    /* No need to call setup_item - no inlined partobjects in Text */
+    theText->Proto = TextProto;
+    /* theText->GCAttr set above if in IOA */
+    theText->Origin = (struct Object *)BasicItem;   
+
+    /* No need to call Gpart - the repetition will be overwritten anyway */
+
+    AssignReference((long *)theItem + offset, (struct Item *)theText);
+      
+    if (!theRep){
+      /* An uninitialized value repetition is at the end of theText */
+      theRep = (struct ValRep *)((long)theText+ItemSize(TextProto));
+      theRep->Proto = ByteRepPTValue;
+      if (!isInAOA) theRep->GCAttr = 1;
+      theRep->LowBorder = 1;
+      theRep->HighBorder = range;
+    }
     
-    /* Prepare for copying of the asciz into the repetition of the text object */
-    
-#ifdef sparc
-    Protect(theText, CCopyT(0, theText, REP_OFF, 0, 0, cText)); 
-#else
-    Protect(theText, CopyT(cText, theText, REP_OFF)); 
-#endif
-
-    /* store range in lgth.
-     * store range in pos.
+    /* Assign the text to the body part of the repetition. */
+    for (i = 0; i < (repsize-headsize(ValRep))/4; i++){
+      theRep->Body[i] = *((long *)asciz + i);
+    }
+  
+    /* No need for AssignReference. 
+     * Either both theText and theRep are in IOA/AOA
+     * or theText is in IOA/AOA and theRep in LVRA.
      */
-    ((long *)theText)[REP_OFF+1] =
-      ((long *)theText)[REP_OFF+2] =
-	(casthandle(ValRep)theText)[REP_OFF]->HighBorder;
+    theText->T = theRep;
+
+    /* store range in lgth and pos */
+    theText->Pos = range;
+    theText->Lgth = range;
 
     Ck(theText);
-
+    Ck(theRep);
 }
 

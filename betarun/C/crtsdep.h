@@ -2,7 +2,7 @@
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * crtsdep.h
  * by Ole Lehrmann Madsen, Peter Andersen, Kim Jensen M¿ller, and Peter Ryberg Jensen
- * $Id: crtsdep.h,v 1.18 1996-10-08 16:18:46 beta Exp $
+ * $Id: crtsdep.h,v 1.19 1996-10-22 14:31:49 beta Exp $
  */
 
 #define JUMPSTACK 1
@@ -112,9 +112,6 @@ extern void AlloVRC(struct Object *iOrigin,
 		     unsigned offset, /* in bytes */
 		     struct ProtoType *proto,
 		     int range);
-extern void CopyT(char *asciz, 
-		  struct Item *theItem,
-		  unsigned offset);
 
 extern struct StackObject *     AlloSO(unsigned size);
 

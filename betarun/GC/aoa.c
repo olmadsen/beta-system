@@ -141,8 +141,11 @@ static struct Object *AOAallocate(long numbytes)
 }
 
 #ifdef NEWRUN
-
 struct Object *AOAalloc(long numbytes, long *SP)
+#else
+extern void DoGC(void);
+struct Object *AOAalloc(long numbytes)
+#endif
 {
   struct Object *theObj = AOAallocate(numbytes);
   DEBUG_CODE(NumAOAAlloc++);
@@ -151,19 +154,32 @@ struct Object *AOAalloc(long numbytes, long *SP)
      * true now. Force an IOAGc.
      */
     DEBUG_AOA(fprintf(output, "AOAalloc: forcing IOAGc and AOAGc\n"));
+#ifdef NEWRUN
     DoGC(SP);
+#else
+    DoGC();
+#endif
     /* Try again */
     theObj = AOAallocate(numbytes);
   }
   return theObj;
 }
+
+#ifdef NEWRUN
 struct Object *AOAcalloc(long numbytes, long *SP)
+#else /* NEWRUN */
+struct Object *AOAcalloc(long numbytes)
+#endif /* NEWRUN */
 {
-  struct Object *theObj = AOAalloc(numbytes, SP);
+  struct Object *theObj;
+#ifdef NEWRUN
+  theObj = AOAalloc(numbytes, SP);
+#else
+  theObj = AOAalloc(numbytes);
+#endif
   if (theObj) memset(theObj, 0, numbytes);
   return theObj;
 }
-#endif
 
 #ifdef MT
 

@@ -122,6 +122,9 @@ extern void tempAOArootsFree(void);
 #ifdef NEWRUN
 extern struct Object *AOAalloc(long numbytes, long *SP);
 extern struct Object *AOAcalloc(long numbytes, long *SP);
+#else
+extern struct Object *AOAalloc(long numbytes);
+extern struct Object *AOAcalloc(long numbytes);
 #endif
 #ifdef MT
 extern struct Object *AOAalloc(long numbytes);

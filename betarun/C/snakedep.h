@@ -457,7 +457,6 @@ extern void   AlloVRC(struct Object *origin,
 		      unsigned offset,
 		      int range,
 		      struct ProtoType *proto);
-extern struct Item *CopyT(char *asciz, struct Item *theItem, unsigned offset);
 
 static __inline__ struct Item *CAlloI(struct Object *org, struct ProtoType *prot)
 {

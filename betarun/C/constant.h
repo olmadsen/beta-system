@@ -23,6 +23,7 @@
 #endif
 
 #define IOAMaxAge             128
+#define IOAMAXSIZE           (IOASize/8)
 
 #define MAXCTEXTPOOL	     1000
 
@@ -51,5 +52,4 @@
 #define PC_OFF 2
 #endif
 
-#define IOAMAXSIZE           (IOASize/8)
 #endif

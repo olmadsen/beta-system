@@ -251,7 +251,6 @@ static __inline__ void USE()
 }
 
 /* Routines called from others */
-extern ref(Item) CCopyT  (int, ref(Item), unsigned, int, int, char *);
 extern void      CAlloRR (ref(Object), int, unsigned, int, int, int);
 extern void      CAlloVR1(ref(Object), int, unsigned, int, int, int);
 extern void      CAlloVR2(ref(Object), int, unsigned, int, int, int);

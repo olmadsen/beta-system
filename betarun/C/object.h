@@ -150,11 +150,16 @@ typedef struct CallBackEntry {
 #endif
 #endif
 #ifdef sparc
+#ifdef MT
+    ref(Structure)	theStruct;
+    long		code[8];
+#else
     ref(Structure)	theStruct;
     long		mov_o7_g1;
     long		call_HandleCallBack;
     long		nop;
-#endif
+#endif /* MT */
+#endif /* sparc */
 #ifdef hppa
     ref(Structure)      theStruct;
     unsigned long       code[7];
