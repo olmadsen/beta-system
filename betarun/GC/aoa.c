@@ -878,17 +878,20 @@ void AOACheck()
   ref(Object) theObj;
   long        theObjectSize;
   
-  /*fprintf(output, "AOACheck: AOABaseBlock: 0x%x, top: 0x%x\n", AOABaseBlock, AOABaseBlock->top);*/
+  /* if (theBlock != 0)
+     fprintf(output, "AOACheck: AOABaseBlock: 0x%x, top: 0x%x\n", AOABaseBlock, AOABaseBlock->top); */
   while( theBlock ){
     theObj = (ref(Object)) BlockStart(theBlock);
     while( (ptr(long)) theObj < theBlock->top ){
       theObjectSize = 4*ObjectSize( theObj);
+      fprintf(output,"AOACheck: ObjectSize=0x%x, ", theObjectSize);
       Claim(ObjectSize(theObj) > 0, "#AOACheck: ObjectSize(theObj) > 0");
       AOACheckObject( theObj);
       theObj = (ref(Object)) Offset( theObj, theObjectSize);
     }
     theBlock = theBlock->next;
-    /*fprintf(output, "AOACheck: block: 0x%x, top: 0x%x\n", theBlock, theBlock->top);*/
+    /* if (theBlock != 0)
+      fprintf(output, "AOACheck: block: 0x%x, top: 0x%x\n", theBlock, theBlock->top); */
   }
 } 
 
@@ -898,8 +901,6 @@ void AOACheckObject( theObj)
   
   theProto = theObj->Proto;
 
-  /*fprintf(output, "AOACheckObject: theObj: 0x%x, proto: 0x%x\n", theObj, theObj->Proto);*/
-  
   Claim( !inBetaHeap((ref(Object))theProto),
 	"#AOACheckObject: !inBetaHeap(theProto)");
   
@@ -918,13 +919,14 @@ void AOACheckObject( theObj)
 	size = toRefRep(theObj)->HighBorder;
 	pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
 	
-	for(index=0; index<size; index++) 
+	for(index=0; index<size; index++) {
 #ifdef RTLAZY
 	  if( *pointer > 0) AOACheckReference( (handle(Object))(pointer++) );
 #else
 	  if( *pointer != 0) AOACheckReference( (handle(Object))(pointer++) );
 #endif
 	  else pointer++;
+	}
       }
       
       return;
@@ -1033,10 +1035,8 @@ void AOACheckReference( theCell)
 	if( *pointer ) found = (*pointer == (long) theCell);
 	pointer++;
       }
-      if (!found){
-	fprintf(output, "AOACheckReference: theCell: 0x%x, *theCell: 0x%x\n", theCell, *theCell);
-      }
-      Claim( found, "AOACheckReference: *theCell in IOA but not in AOAtoIOAtable");
+      if (!found)
+	Claim( found, "AOACheckReference: *theCell in IOA but not in AOAtoIOAtable");
     }
     if( inLVRA(*theCell) )
       Claim( ((ref(ValRep)) *theCell)->GCAttr == (long) theCell,
