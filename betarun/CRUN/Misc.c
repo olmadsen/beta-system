@@ -208,10 +208,6 @@ void FailureExit()
 #endif
 
 #ifdef RTDEBUG
-void Illegal()
-{ 
-  /* used to break in! */
-}
 #ifndef hppa
 void CCk(ref(Object) r)
 {
