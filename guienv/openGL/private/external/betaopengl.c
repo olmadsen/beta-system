@@ -2,9 +2,15 @@
    Flemming Gram, gram@mjolner.dk 
    */
 
+#ifndef nti
 extern long glwMDrawingAreaWidgetClass;
+#endif
 
 /*-----C-function definitions -----*/
+#ifdef nti
+#include <windows.h>
+#include <GL/gl.h>
+#else
 void glClearIndex( float c );
 void glClearColor(float red,float green,float blue,float alpha);
 void glPointSize(float size);
@@ -27,23 +33,25 @@ void glMaterialf(int face,int pname, float param );
 void glMaterialfv(int,int,float*);
 void glPixelZoom(float,float);
 void glPixelStoref(int,float);
-void glBitmap(int,int,float,float,float,float,int);
+void glBitmap(int,int,float,float,float,float,char*);
 void glTexEnvf(int,int,float);
 void glTexParameterf(int,int,float);
-void glMap2d( int target, double u1, double u2, int ustride, int uorder, double v1, double v2, int vstride, int vorder, int points );
+void glMap2d( int target, double u1, double u2, int ustride, int uorder, double v1, double v2, int vstride, int vorder, double* points );
 void glMapGrid2d(int,double,double,int,double,double);
 void glFogf(int,float);
 void glPassThrough(float);
 void glBlendColorEXT(float,float,float,float);
 void glPolygonOffsetEXT(float,float);
 /*void glPointParameterfEXT(int,float);*/
+#endif
 
 /*----------HELPERS-------------*/
+#ifndef nti
 long openGLWidgetClass(void) 
 {
   return glwMDrawingAreaWidgetClass;
 }
-
+#endif
 
 /*----------WRAPPERS------------*/
 /*mostly wrap double to float, and double limits (3) */
@@ -249,7 +257,7 @@ wrapglPixelTransferf(int pname,double param)
 
 wrapglBitmap(int width,int height,double ymove,int bitmap)
 {
-  glBitmap(width,height,first,second,third,ymove,bitmap);
+  glBitmap(width,height,first,second,third,ymove,(char*)bitmap);
 }
 
 
@@ -265,7 +273,7 @@ wrapglTexParameterf(int target,int pname,double param)
 
 wrapglMap2d(double v2,int target,int ustride,int uorder,int vstride,int vorder,int points)
 {
-  glMap2d(target,first,second,ustride,uorder,third,v2,vstride,vorder,points);
+  glMap2d(target,first,second,ustride,uorder,third,v2,vstride,vorder,(double*)points);
 }
 
 wrapglMapGrid2d(double v2,int un,int vn)
@@ -283,12 +291,13 @@ wrapglPassThrough(double token)
   glPassThrough((float)token);
 }
 
+/* these aren't supported at all platforms. 
 wrapglBlendColorEXT(double alpha)
 {
   glBlendColorEXT((float)first,(float)second,(float)third,(float)alpha);
 }
 
-/* these aren't supported on sun 
+
 wrapglPolygonOffsetEXT(double factor,double bias)
 {
   glPolygonOffsetEXT((float)factor,(float)bias);
