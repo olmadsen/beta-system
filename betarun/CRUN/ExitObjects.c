@@ -1,9 +1,10 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: ExitObjects.c,v $, rel: %R%, date: $Date: 1992-08-24 02:31:10 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: ExitObjects.c,v $, rel: %R%, date: $Date: 1992-08-31 09:25:14 $, SID: $Revision: 1.6 $
  * by Peter Andersen and Tommy Thorn.
  */
 
+#define GCable_Module
 #include "beta.h"
 #include "crun.h"
 
@@ -21,6 +22,8 @@ void CExitO(ref(Object) exitObj, long exitAddr, ref(Object) theObj)
 {
     ref(Component) theComp;
     ref(RegWin) rw; /* Callers Register Window */
+
+    GCable_Entry();
 
     Ck(exitObj); Ck(theObj);
     /* We return to exitAddr (the -8 is the SPARC convention) */
