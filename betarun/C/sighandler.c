@@ -9,7 +9,7 @@
 void BetaSignalHandler (sig)
   long sig;
 {
-  fprintf(output, "BetaSignalHandler: Caught signal %d. Exiting.\n", sig);
+  fprintf(output, "\nBetaSignalHandler: Caught signal %d. Exiting.\n", sig);
   exit(1);
 }
 #endif
