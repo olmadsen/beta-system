@@ -204,6 +204,7 @@ ptr(long) base; /* points out a cell which should refer the base. */
     return 0;
 }
 
+#if defined(PE) || defined(DEMO)&&!defined(macintosh)
 static void showScrambledString(unsigned char *p, int len, int sum)
 {
   int i, chk;
@@ -219,6 +220,7 @@ static void showScrambledString(unsigned char *p, int len, int sum)
     exit(1);
   fflush(stdout);
 }
+#endif /* defined(PE) || defined(DEMO)&&!defined(macintosh) */
 
 Initialize()
 {
