@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(116)";
+char betarun_version[] = "BETARUN VERSION 5.3(117)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.138  2003/05/21 09:09:39  datpete
+ *     removed DEBUG_PERSISTENCE in unswizzle.c
+ * Betarun version number: 116
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.137  2003/03/19 12:23:38  datpete
  *     Added info check for allocation of AOA objects larger than AOA block sector size
  * Betarun version number: 115

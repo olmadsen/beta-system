@@ -182,3 +182,7 @@ void SetupFPU(void)
 		      );
 }
  
+void DisableFPUexceptions(void)
+{
+  EnableFPUexceptions(0);
+}
