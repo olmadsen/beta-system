@@ -11,6 +11,23 @@ INCLUDE '../GENERATOR/registerContent';
 INCLUDE '~beta/basiclib/formatio';
 INCLUDE 'signature'
 ------evalLib:attributes-------
+getDclName:
+  (# VN: ^ASTindex; N: @ASTindex; T: ^text
+  enter VN[]
+  do VN -> N;
+     L:
+       (if N.label
+        // gram.nameApl then
+           N.dclref -> N;
+           N.gettext -> T[]
+        // gram.remote then
+           N.son -> N; N.brother -> N;
+           restart L
+        else
+           '\ngetDclName: case not covered ' ->putline
+       if)
+  exit T[]
+  #);
 findReceiver:
   (# EV,rD,mD: ^ASTindex; (* EV = (remote <R> <foo>) 
                            * rD = possible receiver desc
@@ -20,7 +37,8 @@ findReceiver:
      R: ^ASTindex;
      descKind: @integer
   enter(EV[],rD[],mD[])
-  do (if EV.label 
+  do L:
+       (if EV.label 
       // gram.remote then
          EV.sonRef -> R[];
          (thisDesc[],R[]) 
@@ -29,7 +47,7 @@ findReceiver:
          301->trace(#
                  do 'findReceiver:' -> xT; R[] -> xA; xN;
                     D[] -> xA; xN; rD[] -> xA
-                 #);
+                 #); 
          (if R.label = gram.thisObject then
              (* is this always correct?*)
              D[] ->rD[]
@@ -42,9 +60,12 @@ findReceiver:
                         (if not common.switch[188] then
                             'Receiver: Got it'->putline;
                         if);
-                        D[] -> rD[]
+                        D[] -> rD[];
+                        leave L
                     if)
-                 #)
+                 #);
+                 (* no match??? *)
+                 D[] -> rD[]
          if)if)
       // gram.nameApl then
          (* added to handle call from gram.virtual case *)
@@ -1083,11 +1104,17 @@ mkByteCodeCall:
             (EV.sonRef,mdo[],md[]) -> findReceiver -> mdo[];
             mdo -> receiverDesc;
             true -> isRemote;
-
+            (if true then
+                (* compute receiver as actual desc of R in R.foo 
+                 * previously we could not do this for virtuals
+                 * bound to global patterns???
+                 *)
+                
+            if);
             301 -> trace(# 
                         do 'mkByteCodeCall:remote:2: ' -> xH;
-                           'method: ' -> xT; md[] -> xA; xN;
-                           'receiver: '->xT; receiverDesc[] -> xA;
+                           'methodDesc: ' -> xT; md[] -> xA; xN;
+                           'receiverDesc: '->xT; receiverDesc[] -> xA;
                         #)
          #)
       // gram.nameApl then
@@ -1319,7 +1346,15 @@ mkByteCodeCall:
          (if (sig.thisMethodDesc -> sematt.descKind) = sematt.procKind then
              method[]  -> theGen.getExternalClassName -> sig.addMethod
           else
-             (method[],false) -> descName -> sig.addMethod
+             (*1->trace(#do 'addMethod: ' -> xT; method[] -> xA; xN;
+                        'VN: ' -> xT; VN[] -> xA;
+                        'VN.text: ' -> xT; VN[] -> getDclName -> xT
+                     #);*)
+             (if isFinal and isRemote then
+                 VN[] -> getDclName -> sig.addMethod 
+              else
+                 (method[],false) -> descName -> sig.addMethod
+             if)
          if)
      if);
      (* the following should be generalised? *)
@@ -1430,9 +1465,14 @@ mkByteCodeCall:
                                                    *)
          #)
       else
-         (baseAdr.copy,theThisDesc[],VN[],EHchain[])
-           -> genOrgAdrToOrgReg
-           -> OA[];
+         (if isFinal and isRemote then
+             (baseAdr.copy,VN.sonRef,false,EHchain[])->genAdr->OA[];
+             (OA[],mch.adrTop[]) -> mch.ldVal
+          else
+             (baseAdr.copy,theThisDesc[],VN[],EHchain[])
+               -> genOrgAdrToOrgReg
+               -> OA[];
+         if);
          INNER;         
          (class[]->mch.newTextOp,'M',local,isStatic)->mch.gJsr;  
      if);
