@@ -255,10 +255,14 @@ Object *AOAallocate(long numbytes)
   /* IOA/NewCopyObject handles that we return 0
    * by just moving the object to ToSpace once more.
    */
+#ifdef PERSIST
   if (IOAActive && IOALooksFullCount==0 && !noAOAGC && !forceAOAAllocation) {
+#else 
+  if (IOAActive && IOALooksFullCount==0 && !noAOAGC) {    
     AOANeedCompaction = TRUE;
     return 0;
   }
+#endif /* PERSIST */
 
   /* Only get here is caller cannot handle a NULL result.
    * We add a new block and indicate that we want an AOAGC ASAP 
