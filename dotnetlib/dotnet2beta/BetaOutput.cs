@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+
 namespace beta.converter
   {
     using System;
@@ -7,19 +10,19 @@ namespace beta.converter
 	internal int indentlevel = 0;
 	internal bool trace = false;
 		
-	public System.IO.TextWriter output;
+	public TextWriter output;
 		
-	internal System.IO.FileInfo entry;
-	internal System.IO.FileInfo existing = null;
+	internal FileInfo entry;
+	internal FileInfo existing = null;
 		
-	public BetaOutput(System.String betalib, 
-			  System.String resolution, 
-			  System.String ns, 
-			  System.String cls, 
-			  System.String supNs, 
-			  System.String sup, 
+	public BetaOutput(String betalib, 
+			  String resolution, 
+			  String ns, 
+			  String cls, 
+			  String supNs, 
+			  String sup, 
 			  int overwrite, 
-			  System.IO.TextWriter outstream)
+			  TextWriter outstream)
 	  {
 			
 	    openStream(betalib, ns, "_" + cls, overwrite, outstream);
@@ -28,13 +31,13 @@ namespace beta.converter
 	    openStream(betalib, ns, cls, overwrite, outstream);
 	  }
 		
-	internal virtual void  openStream(System.String betalib, 
-					  System.String ns, System.String cls, 
+	internal virtual void  openStream(String betalib, 
+					  String ns, String cls, 
 					  int overwrite, 
-					  System.IO.TextWriter outstream)
+					  TextWriter outstream)
 	  {
-	    entry = new System.IO.FileInfo(betalib + "/dotnetlib/" + ns + "/" + cls + ".bet");
-	    if (System.IO.File.Exists(entry.FullName) || System.IO.Directory.Exists(entry.FullName)) {
+	    entry = new FileInfo(betalib + "/dotnetlib/" + ns + "/" + cls + ".bet");
+	    if (File.Exists(entry.FullName) || Directory.Exists(entry.FullName)) {
 	      if (overwrite == - 1) {
 		// Ignore if already converted
 		output = null;
@@ -42,13 +45,13 @@ namespace beta.converter
 	      }
 	      if (overwrite == 0) {
 		existing = entry;
-		entry = new System.IO.FileInfo(entry.FullName + ".new");
+		entry = new FileInfo(entry.FullName + ".new");
 	      }
 	    }
 	    if (trace){
-	      System.Console.Error.Write("Creating directory " + entry.Directory.FullName + "\n");
+	      Console.Error.Write("Creating directory " + entry.Directory.FullName + "\n");
 	    }
-	    System.IO.Directory.CreateDirectory(entry.Directory.FullName);
+	    Directory.CreateDirectory(entry.Directory.FullName);
 	    if (outstream != null) {
 	      output = outstream;
 	    }
@@ -57,7 +60,7 @@ namespace beta.converter
 		if (output != null) {
 		  output.Close();
 		}
-		output = new System.IO.StreamWriter(new System.IO.FileStream(entry.FullName, System.IO.FileMode.Create));
+		output = new StreamWriter(new FileStream(entry.FullName, FileMode.Create));
 	      }
 	  }
 		
