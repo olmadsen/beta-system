@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Structure.c,v 1.18 1992-09-03 12:56:24 beta Exp $
+ * Mod: $Id: Structure.c,v 1.19 1992-09-10 10:16:28 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -59,8 +59,8 @@ ref(Structure) ThisS(ref(Object) this)
     newStruct->iOrigin = (casthandle(Object)origin)[origin->Proto->OriginOff];
 
 #ifdef sparc
-    /* MP */
-    asm volatile ("restore %0, %%g0, %%l0;retl;nop"::"r" (newStruct));
+    /* Fixed in compiler */
+    /* asm volatile ("restore %0, %%g0, %%l0;retl;nop"::"r" (newStruct)); */
 #endif
 #ifdef hppa
     setD0Reg((int)newStruct);
