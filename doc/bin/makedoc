@@ -23,6 +23,7 @@ sub usage
 my @srcfiles = ();         # array of file names from src subdirectory
 my @interfaces = ();       # array of file names to convert to interface files
 my @headings = ();         # used to build table of contents
+my @intheadings = ();      # used to build interface descriptions part of table of contents
 my @index = ();            # used to build index
 my @num_h = (0,0,0,0,0,0); # array of occurrences of headings 1 to 6
 
@@ -31,6 +32,7 @@ my $filenumber = 0;    # used to index @srcfiles and @headings
 my $num_beta   = 0;    # Number of occurences of <BETA>
 my $num_fig    = 0;    # Number of occurences of <FIG>
 my $num_inx    = 0;    # Number of occurences of <INX>
+my $level      = 0;    # Current heading level
 # ...
 
 sub set_default_variable_values
@@ -568,7 +570,7 @@ sub read_book_file
 
 sub parse_special_tags
 {
-    local ($done, $before, $match, $after);
+    local ($done, $before, $match, $after, $number, $i);
     local ($htmlfile) = &strip_extension(&strip_path("$srcfiles[$filenumber]")) . ".html";   
 
     #$*=1;
@@ -587,13 +589,32 @@ sub parse_special_tags
 	    $done .= $match;
 	    local ($h, $heading);
 	    $h = $1;
+	    if ($h<$level){
+		# Going from sub section to section/chapter
+		for (; $level>$h; $level--){
+		    $num_h[$level]=0;
+		}
+	    }
+	    if ($h>$level){
+		# Going from section/chapter to (sub)section
+		$level++;
+		for (; $level<$h; $level++){
+		    $num_h[$level]++;
+		}
+	    }
 	    $num_h[$h]++;
+	    # Generate number for heading
+	    $number = "";
+	    for ($i=1; $i<=$h; $i++){
+		$number .= "$num_h[$i].";
+	    }
+	    chop $number; # remove trailing dot
 	    # Start anchor to refer from TOC
 	    $done .= "<A NAME=\"H${h}_$num_h[$h]\">";
 	    if ($after =~ m%(.*)\</H$h\>%i){
-		$done .= $1 . "</A></H$h>";
+		$heading = "$number&nbsp;$1";
+		$done .= $heading . "</A></H$h>";
 		$after = $';
-		$heading = $1;
 	    } else {
 		printf STDERR "Unterminated heading? (<H$h>)\n";
 	    }
@@ -694,7 +715,7 @@ sub process_src_files
 sub print_toc
 {
 
-    local ($headinfo, $link, $heading, $headnum, $level, $hlevel);
+    local ($headinfo, $link, $heading, $headnum, $hlevel);
 
     #print STDERR "\nheadings:++++++++++++++++++++\n";
     #print STDERR join ("\n", @headings);
@@ -733,12 +754,10 @@ EOT
     if ($#interfaces>0){
 	print "  <DT><I>Interface Descriptions:</I><DD>\n";
 	print "    <DL>\n";
-        for ($filenumber=0; $filenumber<=$#interfaces; $filenumber++){
-	    local ($f);
-	    $f = $interfaces[$filenumber];
-	    $f = &strip_extension(&strip_path($f));
-	    print "    <DT><A HREF=\"interface/$f.html\">";
-	    print ucfirst($f) . " Interface</A><DD>\n";
+	for ($headnum=0; $headnum<=$#intheadings; $headnum++){
+	    $headinfo = $intheadings[$headnum];
+	    ($heading, $link) = split("\@", $headinfo);
+	    print "    ", "<DT><A HREF=\"$link\">$heading</A><DD>\n";
 	}
 	print "    </DL>\n";
     }
@@ -840,6 +859,10 @@ sub make_interface_file
     local ($htmlfile) = "interface/" . &strip_extension(&strip_path("$betafile")) . ".html";   
     local ($inttitle) = ucfirst(&strip_extension(&strip_path("$betafile"))) . " Interface";
 
+    # Add number for title
+    $inttitle = "" . ++$num_h[1] . "&nbsp;" . $inttitle;
+
+    push (@intheadings, "$inttitle\@$htmlfile");
     printf STDERR "\nMaking $htmlfile\n  from $betafile ... \n" if $verbose==1;
     &read_and_abstract_beta();
 
