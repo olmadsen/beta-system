@@ -58,32 +58,47 @@ void PrintHeapUsage(char *prompt)
 #ifndef MT
 
 typedef int *intptr;
+/* constants for diff. heap informations */
 
-#define GetIOA 0
-/* ... */
-/* Replicate defines in beta file */
+#define HeapInfoIOA            0
+#define HeapInfoIOALimit       1
+#define HeapInfoIOATop         2
+#define HeapInfoIOASize        3
+#define HeapInfoIOAActive      4
+#define HeapInfoIOAspace       5
+#define HeapInfoCBFA          10
+#define HeapInfoCBFALimit     11
+#define HeapInfoCBFATop       12
+#define HeapInfoCBFABlockSize 13
+#define HeapInfoCBFAsize      15
+#define HeapInfoAOABaseBlock  30
+#define HeapInfoAOATopBlock   31
+#define HeapInfoAOABlockSize  33
+#define HeapInfoAOATotalSize  35
+#define HeapInfoAOATotalFree  36
+
 
 int getHeapInfo(int infoId)
 {
   switch (infoId) {
-    case 0 :  return (int)IOA;
-    case 1 :  return (int)IOALimit;
-    case 2 :  return (int)IOATop;
-    case 3 :  return (int)IOASize;
-    case 4 :  return (int)IOAActive;
-    case 5 :  return (IOATop - IOA);
-    case 10 : return (int)CBFA;
-    case 11 : return (int)CBFALimit;
-    case 12 : return (int)CBFATop;
-    case 13 : return (int)CBFABlockSize;
-    case 15 : return (int)((int)CBFATop - (int)CBFA);
-    case 30 : return (int)AOABaseBlock;
-    case 31 : return 0; /* (int)AOATopBlock; */
-    case 33 : return (int)AOABlockSize;
-    case 35 : return (int)totalAOASize;
-    case 36 : return (int)AOAFreeListTotalFree();
+    case HeapInfoIOA :  return (int)IOA;
+    case HeapInfoIOALimit :  return (int)IOALimit;
+    case HeapInfoIOATop :  return (int)IOATop;
+    case HeapInfoIOASize :  return (int)IOASize;
+    case HeapInfoIOAActive :  return (int)IOAActive;
+    case HeapInfoIOAspace :  return (IOATop - IOA);
+    case HeapInfoCBFA : return (int)CBFA;
+    case HeapInfoCBFALimit : return (int)CBFALimit;
+    case HeapInfoCBFATop : return (int)CBFATop;
+    case HeapInfoCBFABlockSize : return (int)CBFABlockSize;
+    case HeapInfoCBFAsize : return (int)((int)CBFATop - (int)CBFA);
+    case HeapInfoAOABaseBlock : return (int)AOABaseBlock;
+    case HeapInfoAOATopBlock : return  0; /* (int)AOATopBlock; */
+    case HeapInfoAOABlockSize : return (int)AOABlockSize;
+    case HeapInfoAOATotalSize : return (int)totalAOASize;
+    case HeapInfoAOATotalFree : return (int)AOAFreeListTotalFree();
   default:
-    fprintf(output, "getHeapInfo: illegal opcode %d\n", (int)infoId);
+    fprintf(output, "getHeapInfo: illegal opcode:%d\n",infoId);
     return 0;
   };
 }
