@@ -37,3 +37,38 @@ ParamOriginProto(struct Item *,AlloI)
     GCable_Exit(1);    
     RETURN(item);
 }
+
+
+/* AlloH:
+ * Like AlloI, but does not have an origin, and does not 
+ * call G-entry ("AllocateHeap") 
+ */
+
+ParamOriginProto(struct Item *,AlloH)
+{
+    DeclReference1(struct Item *, item);
+    GCable_Entry();
+    FetchOriginProto
+
+    /*Ck(origin);*/
+
+#if defined(hppa) && defined(RTDEBUG)
+    if((unsigned)getRefSP() > (unsigned)ReferenceStack + 990*4) {
+      fprintf(stderr,"#ReferenceStack overflow!!!\n");
+    }
+#endif
+
+    /*Protect(origin, item = (struct Item *) IOAcalloc(4*proto->Size));*/
+    item = (struct Item *) IOAcalloc(4*proto->Size);
+
+    /* The new Object is now allocated, but not initialized yet! */
+
+    setup_item(item, proto, /*origin*/ 0);
+
+    /*Protect(item, CallBetaEntry(proto->GenPart,item));*/
+
+    Ck(item);
+
+    GCable_Exit(1);    
+    RETURN(item);
+}
