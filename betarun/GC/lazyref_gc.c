@@ -17,17 +17,8 @@ static int negIOAmax = 0;
 
 #define DEFAULTNEGTABLESIZE 25
 
-void negAOArefsRESET () 
-{ 
-  /* printf ( "negAOArefsRESET\n"); */
-  negAOAsize = 0;  
-}
-
-void negIOArefsFREE ()
-{
-  free (negIOArefs);
-  negIOArefs = 0;
-}
+void negAOArefsRESET () { negAOAsize = 0; }
+void negIOArefsFREE () { free (negIOArefs); negIOArefs = 0; }
    
 void negAOArefsINSERT(long fieldAdr)  
 {     
@@ -84,12 +75,6 @@ static inline int danglerLookup (int* danglers, int low, int high, int dangler)
 void setupDanglers (long* danglers, long* objects, int count)
 { int i, dangler, inx;
 
-/*
-printf ( "negIOArefs:\n");
-for (i = 0; i < negIOAsize; i++)
-  printf ( "%d %d\n", (*((int *) negIOArefs[i])), (int) negIOArefs[i]);
-*/
-
   for (i = 0; i < negIOAsize; i++)
     if isLazyRef(dangler = (*((int *) negIOArefs[i])))
       if ((inx = danglerLookup (danglers, 0, count - 1, dangler)) >= 0)
@@ -104,13 +89,6 @@ for (i = 0; i < negIOAsize; i++)
 	  AssignReference ((long *) negIOArefs[i], cast(Item) objects[inx]);
   
   negIOArefsFREE();
-/*
-if (negAOArefs) {
-  printf ("negAOArefs:\n");
-  for (i = 0; i < negAOAsize; i++)
-    printf ("%d %d\n", (*((int *) negAOArefs[i])), (int) negAOArefs[i]);
-}
-*/
 
   if (negAOArefs) {
     i = 0;
@@ -240,15 +218,16 @@ int findDanglingProto (int dangler)
  * 
  * 
  * SPARC: 
- *      tst %ln         (pseudo instruction for xorcc %ln, %g0, %g0)
+ *      tst %ln         (pseudo instruction for orcc %ln, %g0, %g0)
  *      tle 17
  * 
  * The tst (xorcc) instruction should thus have the following format.
  *
  * SPARC: 31 30  29 28 27 26 25  24 23 22 21 20 19   18 17 16 15 14  13  12 11 10 9 8 7 6 5  4 3 2 1 0
- *                  DestReg        xorcc opcode         Source1             Dummys            Source2
+ *                  DestReg         orcc opcode         Source1             Dummys            Source2
  *         1  0   0  0  0  0  0   0  1  0  0  1  0    ?  ?  ?  ?  ?   0                      0 0 0 0 0
- *
+ *                                                                                           ^
+ *                                                                                   Viser sig at v{re 1?????
  * 
  *
  * 
@@ -268,43 +247,75 @@ int (*fetchFromDisc)(int); /* BETA callback function. */
  * ===== */
 
 #ifdef sparc
-#define FilterUnknown 0xFFF8201F
+/* #define FilterUnknown 0xFFF8201F */
+#define FilterUnknown 0xFFF8200F  /* ???????? */
 #define KnownMask 0x80900000
-#define instructionOk(instruction) ((instruction && FilterUnknown) == KnownMask)
+#define instructionOk(instruction) ((instruction & FilterUnknown) == KnownMask)
 
-#define sourceReg(instruction) ((instruction >> 14) && 0x0000001F)
+#define sourceReg(instruction) ((instruction >> 14) & 0x0000001F)
 
+struct RegWin* lazyTrapAR = 0;
+
+void DoLazyFetchGC()
+{ 
+  /* This wrapper adds an activation record around doGC, which skips two AR's */
+  preLazyGC();
+  doGC();
+}
 
 void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 {
-  int instruction, sreg, dangler, newObject;
+  int instruction, sreg, dangler;
+
+  fprintf (stderr, "trapHandler\n");
 
   if (code == ILL_TRAP_FAULT(17)) {
-    /* Ok, this has been a "tle 17" instruction meaning either "reference is NONE" or
-     * a dangling reference. */
-
-    BetaStackTop = scp->sc_sp;  /* Stacktop at trap time */
+    /* Ok, this has been a "tle 17" instruction meaning either 
+     *"reference is NONE" or a dangling reference. */
+    
+    /* Set up BetaStackTop. It is normally set up by the compiler on
+     * external calls.
+     * Furthermore lazyTrapAR is used to avoid skipping the stack references
+     * during GC as is usually done for compiler generated external calls. */
+    BetaStackTop = (long *) lazyTrapAR = (struct RegWin*) (scp->sc_sp);
     
     /* Fetch the 'tst %lm' instruction. */
-    instruction = (long) *(scp->sc_pc - 4);
+    instruction = (* (long *) (scp->sc_pc - 4));
 
     if (instructionOk(instruction)) {
       sreg = sourceReg(instruction);
       dangler = ((int *) scp->sc_sp)[sreg];
 
-      printf ("Dangler = %d, sreg = %d\n", dangler, sreg);
-
       if (isLazyRef(dangler)) {
-	((int *) scp->sc_sp)[sreg] = fetchFromDisc (dataReg(destReg(movInst)));
+	((int *) scp->sc_sp)[sreg] = fetchFromDisc (dangler);
+
+	/* IOA GC has changed contents of register %g6 (IOA) and %g7 (IOATopoff). 
+         * The corresponding saved registers from before the trap
+         * needs to be updated to avoid loosing the change made by GC.
+         * AS FAR AS I KNOW THE LOCATION OF THE SAVED GLOBAL REGISTERS IS NOT 
+         * DOCUMENTED AND MIGHT CHANGE. THE LOCATION USED BELOW IS
+         * FOUND SIMPLY BY DUMPING THE STATE SAVED ON STACK BY SunOs 
+         * TRAPHANDLER!!!!!!!! */
+
+	BetaStackTop[-557] = IOATopoff;
+	BetaStackTop[-558] = IOA;
+
+
       } else
 	SignalHandler (sig, code, scp, addr);
-	
+
+      lazyTrapAR = 0;
+
+      scp->sc_pc -= 4;  /* Perform tst and tle again. */
+      scp->sc_npc -= 4;  
       
     } else
       SignalHandler (sig, code, scp, addr);
     
   } else
     SignalHandler (sig, code, scp, addr);
+
+  fprintf (stderr, "trapHandler returning\n");
 }
 
 #endif

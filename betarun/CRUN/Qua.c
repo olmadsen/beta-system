@@ -51,23 +51,29 @@ void CQua(ref(Object) this,
 
   src = *theCell;
 
-  Ck(src);
+  /* Ck(src); */
+  if ((src) && !(inIOA(src) || inAOA(src) || inLVRA(src) || isLazyRef(src))) {
+    fprintf (stderr, "Qua: src check failed. src = %d, theCell = %d\n", 
+	     (int) src, (int) theCell);
+  }
+    
   
   if (src){
     /* If src is NONE, all is well */
     
-    srcProto = 0;
-
-    /* 1. Check reference assignment */
-    if (! inIOA(theCell))
-      if (inIOA(src))
-	AOAtoIOAInsert(theCell);
 #ifdef RTLAZY
-      else if (isLazyRef(src)) {
+    srcProto = 0;
+    /* 1. Check reference assignment */
+    if (isLazyRef(src)) {
+      /* Qua check on lazy reference */
+      if (! inIOA(theCell)) 
+	/* in AOA area. */
 	negAOArefsINSERT(theCell);
-	srcProto = findDanglingProto(src);
-      }
+      srcProto = cast(ProtoType) findDanglingProto(src);
+    } else 
 #endif
+      if (! inIOA(theCell) && inIOA(src))
+	AOAtoIOAInsert(theCell);
 
     /* 2. Qua Check */
 #ifdef RTLAZY
@@ -84,10 +90,8 @@ void CQua(ref(Object) this,
 	src       = cast(Object)(cast(Component)src)->Body;
 	srcProto  = src->Proto;
 	break;
-      case 0:
-	/* 
-	  default:
-	  /* It was a normal reference assignment: src is normal object */
+      default:
+	/* It was a normal reference assignment: src is normal object */
 	  srcProto  = src->Proto;
 	break;
       }

@@ -79,6 +79,10 @@ void ProcessStackObj(struct StackObject *theStackObject)
 /*************************** SPARC *********************************/
 #ifdef sparc
 
+#ifdef RTLAZY
+extern struct RegWin* lazyTrapAR;
+#endif
+
 extern long *start asm("start");
 extern long *etext;
 extern long *end;
@@ -132,26 +136,35 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
     if (inBetaHeap(ar->i0) && isObject(ar->i0) && !objIsValRep(cast(Object)(ar->i0))) {
       if (isProto((cast(Object)ar->i0)->Proto)) ProcessReference(&ar->i0); } 
 #ifdef RTLAZY
-    else if (isLazyRef(ar->i0))
+    else if (isLazyRef(ar->i0)) {
+      fprintf (stderr, "Lazy ref in i0: %d\n", ar->i0);
       ProcessReference(&ar->i0);
+    }
 #endif
     if (inBetaHeap(ar->i1) && isObject(ar->i1) && !objIsValRep(cast(Object)(ar->i1))) {
       if (isProto((cast(Object)ar->i1)->Proto)) ProcessReference(&ar->i1); }
 #ifdef RTLAZY
-    else if (isLazyRef(ar->i1))
+    else if (isLazyRef(ar->i1)) {
+      fprintf (stderr, "Lazy ref in i1: %d\n", ar->i1);
       ProcessReference(&ar->i1);
+    }
 #endif
     if (inBetaHeap(ar->i3) && isObject(ar->i3) && !objIsValRep(cast(Object)(ar->i3))) {
       if (isProto((cast(Object)ar->i3)->Proto)) ProcessReference(&ar->i3); }
 #ifdef RTLAZY
-    else if (isLazyRef(ar->i3))
+    else if (isLazyRef(ar->i3)) {
+      fprintf (stderr, "Lazy ref in i3: %d\n", ar->i3);
       ProcessReference(&ar->i3);
+    }
 #endif
     if (inBetaHeap(ar->i4) && isObject(ar->i4) && !objIsValRep(cast(Object)(ar->i4))) {
       if (isProto((cast(Object)ar->i4)->Proto)) ProcessReference(&ar->i4); }
 #ifdef RTLAZY
-    else if (isLazyRef(ar->i4))
+    else if (isLazyRef(ar->i4)) {
+      fprintf (stderr, "Lazy ref in i4: %d\n", ar->i4);
       ProcessReference(&ar->i4);
+      fprintf (stderr, "Lazy ref in i4 handled\n");
+    }
 #endif
     CompleteScavenging();
 
@@ -222,15 +235,34 @@ void ProcessStack()
 	    /* This is AR of HandleCB. Don't GC this, but
 	     * skip to betaTop and update nextCBF */
 	    nextCBF = (struct RegWin *) theAR->l5;
-	    skipCparams = TRUE;
+	    
 	    DEBUG_STACK({ /* Wind down the stack until betaTop is reached */
 			  struct RegWin *cAR;
+#ifdef RTLAZY
+			  for (cAR = theAR; cAR != lazyTrapAR;
+			       PC = cAR->i7 +8, cAR = (struct RegWin *) cAR->fp) {
+			    
+			    if (((long) cAR < (long) lazyTrapAR)
+				&& ((long) lazyTrapAR < (long) cAR->fp))
+			      break;
+			    else
+			      PrintCAR(cAR);
+			  }
+#else
 			  for (cAR = theAR;
 			       cAR != (struct RegWin *) theAR->l6;
 			       PC = cAR->i7 +8, cAR = (struct RegWin *) cAR->fp)
 			    PrintCAR(cAR);
+#endif
 			});
+
 	    theAR = (struct RegWin *) theAR->l6; /* Skip to betaTop */
+#ifdef RTLAZY
+	    skipCparams = (theAR != lazyTrapAR);
+#else
+	    skipCparams = TRUE;
+#endif
+
 	  }
 	}
 	ProcessAR(theAR, (struct RegWin *) theAR->fp);
@@ -648,16 +680,36 @@ void PrintStack()
 	/* This is AR of HandleCB. Skip this and
 	 * skip to betaTop and update nextCBF
 	 */
-	{ /* Wind down the stack until betaTop is reached */
-	  struct RegWin *cAR;
-	  for (cAR = theAR;
-	       cAR != (struct RegWin *) theAR->l6;
-	       PC = cAR->i7 +8, cAR = (struct RegWin *) cAR->fp)
-	    PrintCAR(cAR);
-	};
-	nextCBF = (struct RegWin *) theAR->l5;
-	skipCparams = TRUE;
-	theAR = (struct RegWin *) theAR->l6;
+	    nextCBF = (struct RegWin *) theAR->l5;
+
+	    DEBUG_STACK({ /* Wind down the stack until betaTop is reached */
+			  struct RegWin *cAR;
+#ifdef RTLAZY
+			  for (cAR = theAR; cAR != lazyTrapAR;
+			       PC = cAR->i7 +8, cAR = (struct RegWin *) cAR->fp) {
+			    
+			    if (((long) cAR < (long) lazyTrapAR)
+				&& ((long) lazyTrapAR < (long) cAR->fp))
+			      break;
+			    else
+			      PrintCAR(cAR);
+			  }
+#else
+			  for (cAR = theAR;
+			       cAR != (struct RegWin *) theAR->l6;
+			       PC = cAR->i7 +8, cAR = (struct RegWin *) cAR->fp)
+			    PrintCAR(cAR);
+#endif
+			});
+
+	    theAR = (struct RegWin *) theAR->l6; /* Skip to betaTop */
+#ifdef RTLAZY
+	    skipCparams = (theAR != lazyTrapAR);
+	    /* This "C-call" was caused by a trap during execution of ordinary
+             * BETA code. Therefore there are no C parameters to skip. */
+#else
+	    skipCparams = TRUE;
+#endif
       }
     }
     PrintAR(theAR, (struct RegWin *) theAR->fp);
