@@ -93,3 +93,13 @@
     (message "Removing META")
     (tags-query-replace "<META.*>" "" nil))
 )
+
+(defun miadoc-replace11 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Removing &middot;")
+    (tags-query-replace "<LI>&middot;" "<LI>" nil))
+)
+

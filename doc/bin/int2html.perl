@@ -408,14 +408,12 @@ EOT
 <!---------------------------------------------------------->
 
 <H1><A name="Interface.TOC">Table of Contents</A></H1>
-<PRE CLASS=interface>
 EOT
 }
 
 sub print_toc_trailer
 {
     print<<EOT;
-</PRE>
 <!---------------------------------------------------------->
 <HR>
 <P></P>
@@ -443,13 +441,15 @@ EOT
 sub print_toc
 {
     &print_toc_header;
-    print "<UL>\n";
+    print "<DL>\n";
+    print "<DL>\n";
     for ($i=0; $i<=$#htmlfiles; $i++){
-	print "<LI><A HREF=\"" . $htmlfiles[$i] . ".html\">";
-	print $htmlfiles[$i] ." Interface</A></LI>\n";
+	print "<DT><A HREF=\"" . $htmlfiles[$i] . ".html\">";
+	print $htmlfiles[$i] ." Interface</A>\n<DD>\n";
     }
-    print "<LI><A HREF=\"" . $indexfile . "\">Index</A></LI>\n";
-    print "</UL>\n";
+    print "<DT><A HREF=\"" . $indexfile . "\">Index</A>\n<DD>\n";
+    print "</DL>\n";
+    print "</DL>\n";
     &print_toc_trailer;
 }
 
