@@ -10,6 +10,5 @@ int setCurrentCrossStoreTable(BlockID store);
 unsigned long newStoreProxy(BlockID store,
 		     unsigned long offset);
 StoreProxy *lookupStoreProxy(unsigned long inx);
-void printCrossStoreStatistics(void);
 
 #endif /* _CROSSSTORETABLE_H_ */

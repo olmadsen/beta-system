@@ -42,6 +42,7 @@ typedef struct crossStoreTable {
 } crossStoreTable;
 
 /* LOCAL VARIABLES */
+static unsigned long touched;
 
 /* To achive effeciency we load an entire table into memory at a time */
 static crossStoreTable *currentTable = NULL;   /* The current table loaded */
@@ -81,12 +82,14 @@ BlockID createCrossStoreTable(BlockID store)
     } else {
       writeSome(fd, newTable, tableSize(newTable));
       close(fd);
+      INFO_PERSISTENCE(numSW++);
       if (currentTable) {
 	saveCurrentCrossStoreTable();
 	free(currentTable);
 	currentTable = NULL;
       }
       currentTable = newTable;
+      touched = 0;
       return store;
     }
   } else {
@@ -106,7 +109,7 @@ BlockID getCurrentCrossStoreTable()
 
 int saveCurrentCrossStoreTable()
 {
-  if (currentTable) {
+  if (currentTable && touched) {
     char *file_name;
     int fd;
     
@@ -122,6 +125,7 @@ int saveCurrentCrossStoreTable()
       } else {
 	writeSome(fd, currentTable, tableSize(currentTable));
 	close(fd);
+	INFO_PERSISTENCE(numSW++);
       }
     } else {
       return 0;
@@ -161,28 +165,17 @@ int setCurrentCrossStoreTable(BlockID store)
       
       readLong(fd, &length);
       currentTable = (crossStoreTable *)calloc(tableSizeLength(length), 1);
+      touched = 0;
       Rewind(fd);
       readSome(fd, currentTable, tableSizeLength(length));
       close(fd);
-      INFO_PERSISTENCE(numCSL++);
+      INFO_PERSISTENCE(numSL++);
     }
   } else {
     return 0;
   }
   return 1;
 }
-
-#ifdef RTINFO
-void printCrossStoreStatistics(void)
-{
-  fprintf(output, "[ numCSL: 0x%X]\n", (int)numCSL);
-}
-#else
-void printCrossStoreStatistics(void)
-{
-  ;
-}
-#endif /* RTINFO */
 
 /* Allocates and inserts space for a new cross store reference in the
    current store. It checks for duplicates. */
@@ -213,7 +206,8 @@ unsigned long newStoreProxy(BlockID store,
       currentTable -> body[nextFree].store = store;
       currentTable -> body[nextFree].offset = offset;
       currentTable -> nextFree++;
-      
+      touched = 1;
+	    
       Claim(isCrossStoreReference(MAP(nextFree)), "newStoreProxy: Could not generate new proxy");
 
       return MAP(nextFree);
@@ -226,7 +220,6 @@ unsigned long newStoreProxy(BlockID store,
       newTable -> length = (currentTable -> length) * 2;
       free(currentTable);
       currentTable = newTable;
-      
       return newStoreProxy(store, offset);
     }
   } else {

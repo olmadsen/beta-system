@@ -27,6 +27,7 @@ typedef struct ObjectStore {
 /* LOCAL VARIABLES */
 
 static ObjectStore *currentTable = NULL;   /* The current table loaded */
+static unsigned long touched;
 
 #define BLOCKSINSTORE 1
 
@@ -78,10 +79,12 @@ static int createObjectStore(BlockID store, unsigned long minSize)
       
       writeSome(fd, newTable, newTable -> maxSize);
       close(fd);
+      INFO_PERSISTENCE(numSW++);      
       
       Claim(currentTable == NULL, "What is currentTable ?");
       currentTable = newTable;
-      
+      touched = 0;
+
       return store;
     }
   } else {
@@ -93,7 +96,7 @@ static int createObjectStore(BlockID store, unsigned long minSize)
 
 int saveCurrentObjectStore()
 {
-  if (currentTable) {
+  if (currentTable && touched) {
     char *file_name;
     int fd;
     
@@ -110,6 +113,7 @@ int saveCurrentObjectStore()
       } else {
 	writeSome(fd, currentTable, currentTable -> maxSize);
 	close(fd);
+	INFO_PERSISTENCE(numSW++);
       }
     } else {
       DEBUG_CODE(Illegal());
@@ -151,6 +155,7 @@ int setCurrentObjectStore(BlockID store)
       
       readLong(fd, &maxSize);
       currentTable = (ObjectStore *)calloc(maxSize, 1);
+      touched = 0;
       Rewind(fd);
       readSome(fd, currentTable, maxSize);
       close(fd);
@@ -167,6 +172,7 @@ int setCurrentObjectStore(BlockID store)
 void printObjectStoreStatistics(void)
 {
   fprintf(output, "[ numSL: 0x%X]\n", (int)numSL);
+  fprintf(output, "[ numSW: 0x%X]\n", (int)numSW);
 }
 #else
 void printObjectStoreStatistics(void)
@@ -196,6 +202,7 @@ StoreProxy *newStoreObject(Object *theObj)
       sp -> store = currentTable -> store;
       sp -> offset = currentTable -> nextFree;
       currentTable -> nextFree += size;
+      touched = 1;
       
       return sp;
     } 
@@ -240,7 +247,7 @@ int setStoreObject(BlockID store, unsigned long offset, Object *theObj)
       Claim(theObj == getRealObject(theObj), "Unexpected part object");
       ObjectInStore = (Object *)((unsigned long)currentTable + offset);
       memcpy(ObjectInStore, theObj, ObjectSize(theObj)*4);
-      
+      touched = 1;
       /* Handle prototype */
       exportProtoTypes(ObjectInStore);
       
