@@ -376,33 +376,28 @@ do
                 t.T[1]->ch;
                 (if ch
                  // '{' then
-                    (if not (controlQPressed) then
+                    (if constructAllowed then
                         regexp.blockreg[1].begin.copy->tmp[];
                         ' '->tmp.append;
                         tmp[]->insert;
                         (* NOTE: it is important that it is 
                          * insert and not insertText that is being 
-                         * called. GlobalRow and globalCol doesn't 
+                         * called. GlobalRow and globalCol doesnt 
                          * have the right values
                          *)
-                        false->allow
-                    if);
-                    false->controlQPressed
+                        false->allow;
+                    if)                    
                  // '}' then
-                    (if not (controlQPressed) then
+                    (if constructAllowed then
                         close_construct->insertText;
                         frozen_indent_line;
                         false->allow
-                    if);
-                    false->controlQPressed
+                    if)
                 if)
-             else
-                false->controlQPressed; INNER onBeforeChange
             if)
-         else
-            INNER onBeforeChange
-        if)
-     #)  
+        if);
+        INNER onBeforeChange
+     #)
 
 -- strip_comment: DoPart --
 do
@@ -675,6 +670,48 @@ do (# pos,mem,min,max: @integer;
       if)
    #)
    
+-- inside_comment: doPart --
+do
+   (#
+      pos,mem,min,max: @integer;
+      star,left,right,notFound: @boolean
+   do
+      selection.start -> pos -> mem;
+      texteditingExtent -> (min,max);
+      (if not(globalFresh) then contents->globalText[]; true -> globalFresh if);
+      pos -> globalText.pos;
+      mem -> pos;
+      scanBackward: cycle
+        (# 
+        do          
+           (if globalText.T[pos]
+            // '*' then 
+               (if right then
+                   false -> value;
+                   leave scanBackward
+               if);
+               true -> star;
+               false -> right;
+            // '(' then
+               (if star then
+                   true -> value;
+                   leave scanBackward 
+               if);
+               false -> star -> right
+            // ')' then
+               false -> star;
+               true -> right
+            else
+               false -> star -> right
+           if);
+           pos-1 -> pos;
+           (if pos<min then 
+               false -> value;
+               leave scanBackward
+           if)
+        #)
+   #)           
+   
 -- find_rigid: DoPart --
 do
      (# dummy: @integer; firstblock,b: @boolean
@@ -720,7 +757,6 @@ do
                 (if left then
                     indent+j-1->global.col;
                     (global,(global.row,global.col+1))->deleteText;
-                    true->controlQPressed;
                     '{'->insertText
                 if);
                 true->star;
@@ -729,7 +765,6 @@ do
                 (if star then
                     indent+j->global.col;
                     (global,(global.row,global.col+1))->deleteText;
-                    true->controlQPressed;
                     '}'->insertText
                 if);
                 false->left->star
@@ -867,3 +902,36 @@ do
         for)
      #)  
 
+   
+-- constructAllowed: doPart --
+do
+   (# begin, end: @rowcol;
+      t: ^text;
+      lastBackslash, inText: @boolean;
+      pos: @integer;
+   do 
+      selection.start -> pos -> posToRowCol -> end -> global;
+      beginning_of_line;
+      global -> begin;
+      (begin,end) -> getSelection -> t[];
+      false->lastBackslash->inText;
+      (for i: t.length repeat
+           (if t.T[i]
+            // '\\' then
+               true->lastBackslash; 
+            // '\'' then
+               (if not (lastBackslash) then
+                   not (inText)->inText; 
+                else
+                   false->lastBackslash; 
+               if)
+            else
+               false->lastBackslash; 
+           if)
+      for);
+      not(inText) -> value;
+      (pos,pos) -> selection;
+      (if value then 
+          not(inside_comment) -> value
+      if)
+   #)   
