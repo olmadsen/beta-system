@@ -3,7 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-
 #include "beta.h"
 #include "crun.h"
 
@@ -14,7 +13,7 @@
 void Att(struct Object *this, struct Component *comp, long RA, long SPx)
 {
    struct Object *compObj;
-   struct StackObject *sObj;
+   struct StackObject *sObj=0;
    long address, arg0, arg1;
    long SPy,SPz;
    int isFirst,i;
@@ -47,23 +46,28 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
      arg0    = (long)comp;
      arg1    = (long)compObj;
    } else {
-     /* pack current component to stack object */
      sObj = comp->StackObj;
      SPz = SPy - sObj->BodySize; 
-     for (i=0; i < sObj->BodySize/4; i++)
-       *((long *)SPz+i) = *((long *)sObj->Body+i);
      address = (long)comp->CallerLSC;
      arg0    = (long)SPz;
      arg1    = (long)comp->CallerObj; 
    }
   
-   AssignReference(&comp->CallerComp, ActiveComponent);
-   AssignReference(&comp->CallerObj, this);
+   AssignReference(&comp->CallerComp, ActiveComponent); /* may call AOAtoIOAinsert */
+   AssignReference(&comp->CallerObj, this); /* may call AOAtoIOAinsert */
    comp->StackObj   = 0;
    comp->CallerLSC = -1; /* indicate that comp is attached */
 
    ActiveComponent = comp;
 
+   if (sObj){
+     /* Unpack sObj on stack. Must be done as the last thing to prevent
+      * calls to other functions to destroy the new stack part.
+      */
+     for (i=0; i < sObj->BodySize/4; i++){
+       *((long *)SPz+i) = *((long *)sObj->Body+i);
+     }
+   }
    /* Execute comp.
     * 1st call starts at M111FOO-4; arg0=comp, arg1=ca.
     * Subsequent attachments: arg0=SPz, arg1=ca;

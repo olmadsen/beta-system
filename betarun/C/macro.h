@@ -348,7 +348,10 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
    register struct GCEntry *initTab;                                            \
                                                                                 \
    ((struct Item *)(theItem))->Proto = ((struct ProtoType *)(proto));           \
-   ((struct Item *)(theItem))->GCAttr = 1; /* Set item age to 1 */              \
+   if (inIOA(theItem))                                                          \
+      ((struct Item *)(theItem))->GCAttr = 1; /* Set item age to 1 */           \
+   else                                                                         \
+      ((struct Item *)(theItem))->GCAttr = 0; /* Set item age to 0 */           \
                                                                                 \
    /* Initialize the body part of the item, according to the genTable. */       \
                                                                                 \

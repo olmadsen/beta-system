@@ -79,13 +79,14 @@ void ExtVR(struct Object *theObj,
     } 
     if (!newRep){
       Protect2(theObj, theRep, newRep = (struct ValRep *)IOAcalloc(size, SP));
+      newRep->GCAttr = 1;
     }
     
     Ck(theObj); Ck(theRep);
     
     /* Assign structural part of new repetition */
     newRep->Proto = theRep->Proto;
-    newRep->GCAttr = 1;
+    /* newRep->GCAttr set above if in IOA */
     newRep->LowBorder = theRep->LowBorder;
     newRep->HighBorder = newRange;
 

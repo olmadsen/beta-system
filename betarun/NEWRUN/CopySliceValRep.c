@@ -87,17 +87,18 @@ void CopySVR(struct ValRep *theRep,
       /* Object rep */
       size = DispatchObjectRepSize(theRep->Proto, range, REP->iProto);
       if (size>IOAMAXSIZE){
-	DEBUG_AOA(fprintf(output, "ExtVR allocates in AOA\n"));
+	DEBUG_AOA(fprintf(output, "CopySVR allocates in AOA\n"));
 	newRep = (struct ValRep *)AOAalloc(size);
 	DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
       } 
       if (!newRep){
 	Protect2(theRep, theItem, newRep = (struct ValRep *)IOAalloc(size, SP));
+	newRep->GCAttr = 1;
       }
 
       Ck(theRep); Ck(theItem); Ck(newRep);
       newRep->Proto = theRep->Proto;
-      newRep->GCAttr = 1;
+      /* newRep->GCAttr set above if in IOA */
       newRep->LowBorder = 1;
       newRep->HighBorder = range;
       AssignReference(&NEWREP->iOrigin, REP->iOrigin);

@@ -155,7 +155,7 @@ ref(Object) CopyObjectToAOA( theObj)
   /* DEBUG_AOA( fprintf(output, "#ToAOA: IOA-address: 0x%x AOA-address: 0x%x proto: 0x%x size: %d\n", 
 		     (int)theObj, (int)newObj, (int)(theObj->Proto), (int)size)); */
   
-  /* Return the new object in ToSpace */
+  /* Return the new object in AOA */
   return newObj;
 }
 

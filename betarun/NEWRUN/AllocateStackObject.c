@@ -20,10 +20,11 @@ struct StackObject *AlloSO(unsigned size, long *SP)
     }
     if (!sObj){
       sObj = (struct StackObject *)IOAalloc(stacksize, SP);
+      sObj->GCAttr = 1;
     }
 
     sObj->Proto = StackObjectPTValue;
-    sObj->GCAttr = 1;
+    /* sObj->GCAttr set above if in IOA */
     sObj->BodySize = size;
     sObj->StackSize = 0;
 

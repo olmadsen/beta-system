@@ -53,9 +53,10 @@
  */
 static void CheckReferences(struct Object **theCell, struct Object *theObj)
 {
-  /* theCell is known to be in AOA (part of stack object */
+  /* theCell is known to be in AOA (part of stack object in AOA) */
   if (inIOA(theObj)) AOAtoIOAInsert(theCell);
 }
+
 
 void Susp(struct Object *this, long prevSP, long RA, long SPz)
 {
@@ -67,8 +68,8 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
 
    DEBUG_CODE(NumSusp++);
 
-   comppop(SPx);
-   comppop(SPy);
+   /* Get SPy. Do NOT pop, since this will confuse a GC during AlloSO below */
+   SPy = *(CompSP-2);
 
    /* Allocate stackobject for ActiveComponent.
     * Must be done before changing ActiveComponent, since
@@ -78,6 +79,8 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
     */
    Protect(this, sObj = AlloSO(SPy - SPz, (long *)prevSP));
 
+   comppop(SPx);
+   comppop(SPy);
    returnComp = ActiveComponent->CallerComp;
    returnObj  = ActiveComponent->CallerObj;
 

@@ -37,13 +37,14 @@ void AlloORR(struct Object *origin,
   } 
   if (!theRep) {
     Protect2(theObj, origin, theRep = (struct ObjectRep *)IOAcalloc(size, SP));
+    theRep->GCAttr = 1;
   }
 
   Ck(theObj); Ck(origin); Ck(theRep);
 
   /* Set up the header */
   theRep->Proto = DynItemRepPTValue;
-  theRep->GCAttr = 1;
+  /* theRep->GCAttr set above if in IOA */
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
   theRep->iProto = proto;
@@ -88,13 +89,14 @@ void AlloORRC(struct Object *origin,
   } 
   if (!theRep){
     Protect2(theObj, origin, theRep = (struct ObjectRep *)IOAcalloc(size, SP));
+    theRep->GCAttr = 1;
   }
 
   Ck(theObj); Ck(origin); Ck(theRep);
 
   /* Set up the header */
   theRep->Proto = DynCompRepPTValue;
-  theRep->GCAttr = 1;
+  /* theRep->GCAttr set above if in IOA */
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
   theRep->iProto = proto;

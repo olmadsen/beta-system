@@ -378,11 +378,11 @@ void DoIOACell(struct Object **theCell, struct Object *theObj)
 #ifdef RTLAZY
 	if (isLazyRef(theObj)) {
 	  DEBUG_IOA(fprintf(output, 
-			    "ProcessRefStack: Lazy ref: %d\n", (int)theObj));
-	  ProcessReference(casthandle(Object)(theCell));
+			    "DoIOACell: Lazy ref: %d\n", (int)theObj));
+	  ProcessReference(theCell);
 	} else {
 #ifdef RTDEBUG
-	  fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
+	  fprintf(output, "[DoIOACell: ***Illegal: 0x%x: 0x%x]\n", 
 		  (int)theCell,
 		  (int)theObj);
 	  Illegal();
@@ -392,6 +392,13 @@ void DoIOACell(struct Object **theCell, struct Object *theObj)
       }
     }
   }
+#ifdef RTDEBUG
+  else {
+    fprintf(output, 
+	    "DoIOACell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
+    Illegal();
+  }
+#endif
 }
 
 /* DoAOACell:

@@ -264,15 +264,15 @@ struct Object *ProcessStackFrames(long SP,
 
     /* Check for passing of a component.
      * 
-     * STACK LAYOUT for component:                          ____________        
-     * 							,->| Proto = -1 |       
-     *                                                 |   | GCAttr     |       
-     *          |            |			       |   | StackObj   |       
-     *          |            |                         |   | CallerObj  |       
-     *          |            |      ____________       |   | CallerComp |       
-     *          |            |     |            |<--.  |   | CallerLSC  |=PC(X) 
-     *          |            |     |  X item    |   |  |   |------------|                
-     *          |            |     |            |   |  |   | ......     |                
+     * STACK LAYOUT for component:                          ____________      
+     * 							,->| Proto = -1 |     
+     *                                                 |   | GCAttr     |     
+     *          |            |			       |   | StackObj   |     
+     *          |            |                         |   | CallerObj  |     
+     *          |            |      ____________       |   | CallerComp |     
+     *          |            |     |            |<--.  |   | CallerLSC  |=PC(X)
+     *          |            |     |  X item    |   |  |   |------------|     
+     *          |            |     |            |   |  |   | ......     |    
      *          |            |     |____________|   |  |        
      *          | Frame for  |                      |  |   CompStack:     
      *          |  item X    |                      |  |    ____________
