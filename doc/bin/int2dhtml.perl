@@ -20,7 +20,7 @@ $fullpath=$f;
 $nocopyright=$c;
 $wiki=$w;
 
-$leftmargin=15;
+$leftmargin=25;
 
 # Insert World Wide Web tags for declarations (HTML format).
 # Outermost declaration is indexed by its own name, inner declarations are 
@@ -107,7 +107,7 @@ sub print_button
     local ($type, $href) = @_;
     local ($label) = ucfirst ($type);
     if ($href ne ""){
-	print "document.write(\'<A HREF=$href>$label</A><BR>');\n";
+	print "document.write(\'\\<A HREF=\"$href\" CLASS=\"SideBar\"\\>$label\\</A\\>\\<BR\\>');\n";
     }
 }
 
@@ -139,10 +139,14 @@ sub print_std_buttons
 sub print_layer_begin
 {
     print<<EOT;
-<LAYER id="SideBar" onMouseover="pull()" onMouseout="draw()" STYLE="position: absolute; layer-background-color:lightyellow; padding:5px; left:-16px; top:10px; height:100px; width:80px; line-height:20px;">
+<LAYER id="SideBar" onMouseover="pull()" onMouseout="draw()" style="position:absolute;left:-95px;top:24px;height:100px;width:80px;layer-background-color:#00557A;padding:5px;line-height:25px; ">
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript">
-if (document.all)
-  document.write('<DIV id="SideBar2" onMouseover="pull()" onMouseout="draw()" STYLE="position: absolute; border:1px solid black; background-color:lightyellow; padding:5px; left:0px; top:10px; height:100px; width:80px; line-height:20px;">');
+if (document.all){
+  document.write('\\<DIV id="SideBar2" onMouseover="pull()" onMouseout="draw()" STYLE="position:absolute;left:-70px;top:15px;height:100px;width:90px;background-color:#00557A;padding:5px;line-height:25px;"\\>');
+  document.write('\\<IMG SRC="$imagedir/navigation.gif" STYLE="position:absolute;left:74;top:5" WIDTH=13 HEIGHT=63 ALT=""\\>');
+} else {
+  document.write('\\<IMG SRC="$imagedir/navigation.gif" ALIGN=RIGHT WIDTH=13 HEIGHT=63 ALT=""\\>');
+}
 EOT
 }
 
@@ -150,9 +154,10 @@ sub print_layer_end
 {
     print<<EOT;
 if (document.all)
-  document.write('</DIV>');
+  document.write('\\</DIV\\>');
+else
+  document.write('\\<P\\>\\</P\\>');
 SetupSideBar();
-document.close;
 </SCRIPT>
 </LAYER>
 EOT
@@ -194,7 +199,7 @@ sub print_trailer
 
     print<<EOT;
 </PRE>
-<!---------------------------------------------------------->
+<!--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 <HR>
 <P></P>
 <TABLE cols=3 border=0 width=100%>
@@ -246,7 +251,7 @@ sub print_index_trailer()
 {
     print<<EOT;
 </PRE>
-<!---------------------------------------------------------->
+<!--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 <HR>
 <P></P>
 <TABLE cols=3 border=0 width=100%>
@@ -450,7 +455,7 @@ EOT
 sub print_toc_trailer
 {
     print<<EOT;
-<!---------------------------------------------------------->
+<!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 <HR>
 <P></P>
 <TABLE cols=3 border=0 width=100%>

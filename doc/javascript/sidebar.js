@@ -1,30 +1,29 @@
+var StartVisible = 0;
+
 function AdjustSideBar() {
   if (document.layers) { 
-     document.layers.SideBar.top = top.pageYOffset+10; 
+     document.layers.SideBar.top = top.pageYOffset+15; 
   } else if (document.all) { 
-     document.all.SideBar2.style.top=document.body.scrollTop+10; 
+     document.all.SideBar2.style.top=document.body.scrollTop+15; 
   }
   return true;
 }
 
 function SetupSideBar() {
   if (document.layers) { 
-     rightboundary=20
-     leftboundary=-28
+     rightboundary=94
+     leftboundary=36
   } else if (document.all) { 
      rightboundary=0
      leftboundary=-67
   }
   setInterval("AdjustSideBar()", 200);
-  hdraw=setTimeout("draw()",2000);
+  if (StartVisible) hdraw=setTimeout("draw()",2000);
 }
 
 function pull(){
   if (window.hdraw)
     clearInterval(hdraw);
-  // Hide arrow after first pull
-  // if (document.all)
-  //   document.all.Arrow.style.display = "none";
   hpull=setInterval("pullstep()",30)
 }
 
