@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-08-19 15:45:19 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-08-20 19:37:48 $, SID: $Revision: 1.11 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,7 +9,14 @@
 #include "beta.h"
 #include "crun.h"
 
-ref(Structure) AlloS(ref(ProtoType) proto, ref(Object) origin)
+asmlabel(AlloS, "
+	mov	%i1,%o0
+	call	CAlloS
+	mov	%i2,%o1
+");
+
+ref(Structure)
+CAlloS(struct ProtoType *proto, struct Object *origin)
 {
     register ref(Structure) newStruct;
 
