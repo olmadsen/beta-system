@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
- * by Peter Andersen and Tommy Thorn.
+ * by Peter Andersen, Tommy Thorn, and Jacob Seligmann
  */
 
 #define GCable_Module
