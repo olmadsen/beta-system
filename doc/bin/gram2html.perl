@@ -137,9 +137,20 @@ sub make_href2
 	return $string;
     }
 }
+sub make_comment
+{
+    local ($string) = @_[0];
+    if ($string =~ m/\(\*(.*\*\))/) {
+	$string =~ s/&/&amp\;/g;
+	$string =~ s/>/&gt\;/g;
+	$string =~ s/</&lt\;/g;
+    }
+    return $string;
+}
 sub make_hrefs
 {
     local ($string) = @_[0];
+    $string =~ s/(\(\*.*\*\))/&make_comment($1)/ge;
     $string =~ s/(<[-\w]+>)/&make_href1($1)/ge;
     $string =~ s/(<[-\w]+:[-\w]+>)/&make_href2($1)/ge;
     return $string;

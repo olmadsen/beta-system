@@ -1868,6 +1868,12 @@ local($file) = @_;
 
 $file =~ s/^$ServerRootExpr//o if (!$FullPath); # delete root from path
 $file =~ s/^$SiteRootExpr//o if (!$FullPath); # delete root from path
+
+# datpete: hack: because we place output HTML in subdirectory 'admin'
+# we need to add '../':
+
+$file = "../" . $file if (!$FullPath && (substr($file,1,4) ne "http"));
+
 return $file;
 
 }  #
