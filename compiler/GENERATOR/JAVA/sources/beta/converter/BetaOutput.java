@@ -210,6 +210,8 @@ public class BetaOutput
 	// Compare against other patterns that may confuse 
 	if (word.equals("File")){
 	    return prefix + "Java" + word;
+	} else if (word.equals("Hashtable")){
+	    return prefix + "Java" + word;
 	} 
 
 	// Not reserved
@@ -222,7 +224,7 @@ public class BetaOutput
 	if (superClass==null || superClass.equals("Object")){
 	    put("ExternalClass");
 	} else {
-	    put(superClass);
+	    put(mapReserved(superClass));
 	}
 	nl();
 	indent(+2);
