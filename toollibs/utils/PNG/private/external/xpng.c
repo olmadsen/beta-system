@@ -70,7 +70,6 @@ int betaImage2Mask(BetaImage *src, BetaImage *dst)
 
 int readPNG(Display *display, char *name, XImage **ximage, Pixmap *xmask)
 {
-  Colormap cmap;
   
   int screen;
   Visual *visual;
@@ -80,18 +79,13 @@ int readPNG(Display *display, char *name, XImage **ximage, Pixmap *xmask)
   
   int error;
   int byte_order;
-  static initialized=0;
   
   screen = DefaultScreen(display);
   visual = DefaultVisual(display, screen);
   defaultdrawable = DefaultRootWindow(display);
-  cmap = DefaultColormap(display, screen);
 
     
-  if (!initialized) {
-    BetaInitColor(display, cmap);
-    initialized=1;
-  };
+  BetaInitColor(display);
   
 
   

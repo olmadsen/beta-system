@@ -33,34 +33,6 @@ static int free_bits_at_bottom( Uint32 a )
 }
 
 
-static unsigned long r_pix[256];
-static unsigned long g_pix[256];
-static unsigned long b_pix[256];
-
-void static InitMakePixel
-(unsigned long Rmask, unsigned long Gmask, unsigned long Bmask)
-{
-  int i;
-  static int initialized = 0;
-
-  if(!initialized) {
-    for ( i=0; i<256; ++i ) {
-      r_pix[i] = i >> (8 - number_of_bits_set(Rmask));
-      r_pix[i] <<= free_bits_at_bottom(Rmask);
-      g_pix[i] = i >> (8 - number_of_bits_set(Gmask));
-      g_pix[i] <<= free_bits_at_bottom(Gmask);
-      b_pix[i] = i >> (8 - number_of_bits_set(Bmask));
-      b_pix[i] <<= free_bits_at_bottom(Bmask);
-    }
-    initialized = 1;
-  }
-}
-
-unsigned long MakePixel
-(unsigned char red, unsigned char green, unsigned char blue)
-{
-  return r_pix[red] | g_pix[green] | b_pix[blue];
-}
 
 
 static void BetaSwapBig(BetaImage *image)
@@ -449,7 +421,6 @@ int BetaImageToXImage24(Display *display, BetaImage *image, XImage **ximage)
 {
 
   Visual *visual;
-  int  byte_order;
   XImage *im;
   int depth;
   unsigned char *row;
@@ -460,11 +431,8 @@ int BetaImageToXImage24(Display *display, BetaImage *image, XImage **ximage)
   
   visual = DefaultVisual(display, DefaultScreen(display));
 
-  InitMakePixel
-    (visual->red_mask, visual->green_mask, visual->blue_mask);
 
   depth = DefaultDepth(display, DefaultScreen(display));
-  byte_order = ImageByteOrder(display);
 
   im = XCreateImage
     (display, visual, depth, ZPixmap,0, 0,
@@ -588,9 +556,8 @@ void MandelbrotImage(Display* display, XImage **ximage)
   height = 600;
   screen = DefaultScreen(display);
   visual = DefaultVisual(display, screen);
-  cmap = DefaultColormap(display, screen);
   
-  BetaInitColor(display, cmap);
+  BetaInitColor(display);
 
   BetaCreateImage(&image, width, height, 32, NULL);
   image.pixel_size = 24;

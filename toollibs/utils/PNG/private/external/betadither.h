@@ -30,7 +30,7 @@
   
  **********************************************************************/
 
-void BetaInitColor(Display *display, Colormap cmap);
+void BetaInitColor(Display *display);
 
 
 /**********************************************************************
@@ -68,5 +68,6 @@ long BetaAllocColor (Color *color, Color* actual);
 void BetaDitherImage (BetaImage *image);
 void BetaOrderedDitherImage (BetaImage *image);
 void BetaDitherImage24To8 (BetaImage *image, BetaImage *image8);
-
+unsigned long MakePixel
+(unsigned char red, unsigned char green, unsigned char blue);
 #endif

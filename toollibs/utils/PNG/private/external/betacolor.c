@@ -2,6 +2,34 @@
 #include <math.h>
 #include "betadither.h"
 
+typedef unsigned int Uint32;
+typedef int Sint32;
+
+
+/*
+ * How many 1 bits are there in the Uint32.
+ * Low performance, do not call often.
+ */
+static int number_of_bits_set( Uint32 a )
+{
+    if(!a) return 0;
+    if(a & 1) return 1 + number_of_bits_set(a >> 1);
+    return(number_of_bits_set(a >> 1));
+}
+
+
+/*
+ * How many 0 bits are there at least significant end of Uint32.
+ * Low performance, do not call often.
+ */
+static int free_bits_at_bottom( Uint32 a )
+{
+      /* assume char is 8 bits */
+    if(!a) return sizeof(Uint32) * 8;
+    if(((Sint32)a) & 1l) return 0;
+    return 1 + free_bits_at_bottom ( a >> 1);
+}
+
 
 static int gammascreen[256];
 static int gammafile[256];
@@ -19,6 +47,34 @@ void inv_cmap (int colors,
 static unsigned char rgbmap[32768];
 static Color stdcolormap[256];
 
+static unsigned long r_pix[256];
+static unsigned long g_pix[256];
+static unsigned long b_pix[256];
+
+static void InitMakePixel
+(unsigned long Rmask, unsigned long Gmask, unsigned long Bmask)
+{
+  int i;
+  static int initialized = 0;
+
+  if(!initialized) {
+    for ( i=0; i<256; ++i ) {
+      r_pix[i] = i >> (8 - number_of_bits_set(Rmask));
+      r_pix[i] <<= free_bits_at_bottom(Rmask);
+      g_pix[i] = i >> (8 - number_of_bits_set(Gmask));
+      g_pix[i] <<= free_bits_at_bottom(Gmask);
+      b_pix[i] = i >> (8 - number_of_bits_set(Bmask));
+      b_pix[i] <<= free_bits_at_bottom(Bmask);
+    }
+    initialized = 1;
+  }
+}
+
+unsigned long MakePixel
+(unsigned char red, unsigned char green, unsigned char blue)
+{
+  return r_pix[red] | g_pix[green] | b_pix[blue];
+}
 
 
 
@@ -198,8 +254,10 @@ void GetXColorMap(Display *display, Colormap cmap, Color *colormap)
   }
 }
 
-void BetaInitColor(Display *display, Colormap cmap)
+void BetaInitColor(Display *display)
 {
+  static int initialized = 0;
+
   unsigned char *colormap[3];
   long index = 0;
   int colors;
@@ -207,10 +265,18 @@ void BetaInitColor(Display *display, Colormap cmap)
   unsigned long *dist_buf;
   Status result;
   double gamma;
+  Colormap cmap;
+
 
   Visual *visual;
 
+  if(initialized)
+    return;
+
+  initialized = 1;
+
   visual = DefaultVisual(display, DefaultScreen(display));
+
 
   switch(visual->class) {
   case PseudoColor:
@@ -225,6 +291,8 @@ void BetaInitColor(Display *display, Colormap cmap)
   if(!truecolor) {
     gamma = 2.2;
     
+    cmap = DefaultColormap(display, DefaultScreen(display));
+
     for ( i = 0; i < 256; i++ )
       gammascreen[i] = (int)(0.5 + 255 * pow( i / 255.0, 1.0/gamma ));
     
@@ -258,10 +326,34 @@ void BetaInitColor(Display *display, Colormap cmap)
     free(colormap[0]);
     free(colormap[1]);
     free(colormap[2]);
+  } else {
+    InitMakePixel(visual->red_mask, visual->green_mask, visual->blue_mask);
   }
 }
 
 
+int YAllocColor(Display *display, Colormap cmap, XColor *xcolor)
+{
+  long pixel;
+  pixel = AllocColor(display, xcolor);
+  return 1;
+}
+
+long AllocColor(Display *display, XColor *xcolor)
+{
+  Color color;
+  Color actual;
+  long  pixel;
+
+  BetaInitColor(display);
+
+  color.red = xcolor->red >> 8;
+  color.green = xcolor->green >> 8;
+  color.blue = xcolor->blue >> 8;
+  pixel = BetaAllocColor(&color, &actual);
+  xcolor->pixel = pixel;
+  return pixel;
+}
 
 
 long BetaAllocColor (Color *color, Color* actual)
@@ -276,7 +368,7 @@ long BetaAllocColor (Color *color, Color* actual)
   blue = color->blue;
   
   if (truecolor) {
-    return (red << 16) | (green << 8) | blue;
+    return MakePixel(color->red, color->green, color->blue);
   }
   else {
     red = red >> 3;
