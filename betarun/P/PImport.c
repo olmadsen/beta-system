@@ -25,6 +25,9 @@
     
 /* LOCAL VARIABLES */
 static u_long prefetch;
+static Object *importScanObjectTop;
+static u_long importScanObjectSize;
+
 
 /* LOCAL FUNCTION DECLARATIONS */
 /* 'refhandler' is called for each reference in the object that is
@@ -56,6 +59,23 @@ static void refhandler(REFERENCEACTIONARGSTYPE, ObjInfo *objInfoEnc)
     * references.
     */
    offset = (u_long)(*theCell) - 1;
+   if (offset - objInfoEnc->offset >= 0
+       && offset - objInfoEnc->offset <= importScanObjectSize) {
+     /* Reference to somewhere in the same object,
+      * e.g partobject of origin reference.
+      */
+#ifdef DEBUG_PERSISTENCE
+     printf("Import-refhandler: Internal reference 0x%08x 0x%08x %d %d %d\n",
+            (int)theCell,
+            (int)((char*)importScanObjectTop
+                  + offset - objInfoEnc->offset),
+            (int)offset, (int)objInfoEnc->offset, (int)importScanObjectSize);
+#endif
+     *theCell = (Object*)((char*)importScanObjectTop
+                          + offset - objInfoEnc->offset);
+     return;
+   }
+
    if (!isOutReference(offset)) {
       CAStorage *store;
       store = objInfoEnc -> store;
@@ -354,7 +374,6 @@ static void importScanObject(Object *obj,
              }
              case SwitchProto(RefRepPTValue): 
              {
-#ifdef PSENDIAN
                 long *pointer;
                 long offset, offsetTop;
                 
@@ -364,12 +383,13 @@ static void importScanObject(Object *obj,
                 while (offset < offsetTop) {
                    pointer = (long *)((char*)vobj + offset);
                    if (*pointer) {
+#ifdef PSENDIAN
                       *pointer = ntohl(*pointer);
+#endif
                       refhandler((Object **)pointer, REFTYPE_DYNAMIC, objInfo);
                    }
                    offset += 4;
                 }
-#endif
                 break;
              }
              case SwitchProto(DynItemRepPTValue):
@@ -496,7 +516,7 @@ static void importScanObject(Object *obj,
 void importStoreObject(Object *theObj,
                        CAStorage *store,
                        u_long offset,
-                       u_long inx,
+                       u_long size,
                        u_long forced)
 {
    /* 'theObj' 
@@ -516,11 +536,10 @@ void importStoreObject(Object *theObj,
     *
     * Is the offset of 'theObj' in the store.
     *
-    * 'inx'
+    * 'size'
     *
-    * Is passed to enable some optimization that is so clever that I
-    * cannot remember what it is about. It has got nothing to do with
-    * the basic actions of importing an object.
+    * Is passed to enable the refhandler to resolve references internal
+    * to the object from offsets.
     */
 
    ObjInfo *objInfo;
@@ -528,6 +547,7 @@ void importStoreObject(Object *theObj,
    Claim(theObj -> GCAttr == 0, "Unexpected part object?");
    
    /* Create an object info object for the object */
+   
    objInfo = (ObjInfo *)AOAallocate(sizeof(struct _ObjInfo), TRUE);
    SETPROTO(objInfo, ObjInfoPTValue);
    
@@ -535,6 +555,14 @@ void importStoreObject(Object *theObj,
    objInfo -> theObj = theObj;
    objInfo -> store = currentcsb = store;
    objInfo -> offset = offset;
+
+#ifdef DEBUG_PERSISTENCE
+   printf("importScanObjectTop=%d, importScanObjectSize=%d, %d\n",
+          (int)theObj, (int)size, (int)offset);
+#endif
+
+   importScanObjectTop  = theObj;
+   importScanObjectSize = size;
    
    importScanObject(theObj, TRUE, objInfo, forced);
    

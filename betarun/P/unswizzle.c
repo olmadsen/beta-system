@@ -61,13 +61,34 @@ Object *unswizzleReference(void *ip)
    refInfo = PITlookup(ip);
 
    if (refInfo -> objInTransit) {
-      Claim(AOAISPERSISTENT(refInfo -> objInTransit), "Object not persistent?");
+      Claim(isStatic(refInfo -> objInTransit -> GCAttr)
+            || AOAISPERSISTENT(refInfo -> objInTransit),
+            "Object not persistent?");
       
       return refInfo -> objInTransit;
    } else {
       if (!isOutReference(refInfo -> offset)) {
          if (!isSpecialReference(refInfo -> offset)) {
-            refInfo -> objInTransit = USloadObject(refInfo -> store, refInfo -> offset, -1, 0);
+            Object *obj;
+            ObjInfo * objInfo = lookupObjectInfo(refInfo -> store,
+                                                refInfo -> offset);
+            if (objInfo) {
+               obj = objInfo -> theObj;
+            } else {
+               obj = USloadObject(refInfo -> store, refInfo -> offset, -1, 0);
+            }
+            refInfo -> objInTransit = obj;
+            obj = getRealObject(obj);
+            if (obj == refInfo -> objInTransit) {
+               refInfo -> bytesize = 4 * ObjectSize(obj);
+               updateOtherReferences(refInfo->store, refInfo->offset,
+                                     refInfo->bytesize, obj);
+            } else {
+               refInfo -> bytesize = (char*)obj - (char*)refInfo->objInTransit;
+               updateOtherReferences(refInfo->store,
+                                     refInfo->offset + refInfo -> bytesize,
+                                     4 * ObjectSize(obj), obj);
+            }
             return refInfo -> objInTransit;
          } else {
             /* handle special reference */
@@ -88,7 +109,7 @@ Object *USloadObject(CAStorage *store,
                      unsigned long inx,
                      u_long forced)
 {
-   unsigned long size, distanceToPart;
+   unsigned long size = 0, distanceToPart;
    unsigned long enclosing;
    Object *theRealObj;
    
@@ -96,7 +117,6 @@ Object *USloadObject(CAStorage *store,
    Claim(enclosing, "Could not look up store object");
 
    distanceToPart = offset - enclosing;
-   
    theRealObj = AOAallocate(2*size, TRUE);
    loadedBytes += 2*size;
    if (AllowLazyFetch && loadedBytes > MAXPERSISTENTBYTES) {
@@ -118,9 +138,15 @@ Object *USloadObject(CAStorage *store,
    }
 
    SBOBJload(store, enclosing, theRealObj, size);
+#ifdef DEBUG_PERSISTENCE
+   printf("USloadObject: %d %d %d %d\n",
+          (int)offset, (int)distanceToPart,
+          (int)theRealObj,
+          (int)((Object *)((u_long)theRealObj + distanceToPart))->GCAttr);
+#endif
    
    /* The real object is imported - change from disk format to in-memory/heap format */
-   importStoreObject(theRealObj, store, offset, inx, forced);
+   importStoreObject(theRealObj, store, enclosing, size, forced);
    
    /* A copy/shadow of the object is saved after the object itself. */
    memcpy((char*)theRealObj+size, theRealObj, size);

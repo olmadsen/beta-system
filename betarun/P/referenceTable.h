@@ -26,12 +26,14 @@ typedef struct _RefInfo {
    Array     *AOAcells;     /* List of cells in AOA containing ip to this ref info obj */
    Object    *objInTransit; /* See comment LLL in 'unswizzle.c' */
    void      *ip;           /* The proxy corresponding to this reference info object */
-   void      *filler;
+   u_long    bytesize;
 } RefInfo;
 
 void initReferenceTable(void);
 void *referenceInfo(CAStorage *store, u_long offset);
 void *lookupReferenceInfo(CAStorage *store, u_long offset);
+void updateOtherReferences(CAStorage *store, u_long offset, u_long bytesize,
+                           Object *obj);
 void referenceCheck(Object **theCell);
 void referenceAlive(void *ip, RefInfo *refInfo);
 void newAOAcell(void *ip, Object **theCell);

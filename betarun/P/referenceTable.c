@@ -57,6 +57,7 @@ void *referenceInfo(CAStorage *store, u_long offset)
    refInfo -> offset = offset;
    refInfo -> AOAcells = newArray();
    refInfo -> objInTransit = NULL;
+   refInfo -> bytesize = 0;
    
    /* Insert reference info in map */
    ip = PITinsert(refInfo);
@@ -82,6 +83,41 @@ void *lookupReferenceInfo(CAStorage *store, u_long offset)
       }
    }
    return NULL;
+}
+
+static u_long visitRefOffset;
+static u_long visitRefBytesize;
+static Object *visitRefObj;
+
+static void visitReferenceFunc(contentsBox *cb)
+{
+    RefInfo *current;
+    
+    current = PITlookup((void*)(cb -> contents));
+    if (!current->objInTransit && current->offset - visitRefOffset > 0) {
+       if (current->offset - visitRefOffset < visitRefBytesize) {
+          /* current points somewhere inside the object we're looking up. */
+#ifdef RTDEBUG
+          fprintf(output, "visitReferenceFunc: 0x%08x 0x%08x 0x%08x\n",
+                  (int)current->offset, (int)visitRefOffset,
+                  (int)visitRefBytesize);
+#endif
+          current->objInTransit = (Object*)((char*)visitRefObj
+                                            + current->offset-visitRefOffset);
+       }
+    }
+}
+void updateOtherReferences(CAStorage *store,
+                           u_long offset, u_long bytesize,
+                           Object *obj)
+{
+   Trie *storeST;
+   if ((storeST = (Trie *)TILookup((u_long)store, loadedObjectsST))) {
+      visitRefOffset = offset;
+      visitRefBytesize = bytesize;
+      visitRefObj = obj;
+      TIVisit(storeST, visitReferenceFunc);
+   }
 }
 
 void newAOAcell(void *ip, Object **theCell)
