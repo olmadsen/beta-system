@@ -16,6 +16,23 @@
 #ifdef hppa
 /***************************** SNAKE ****************************/
 
+#ifdef RTDEBUG
+void PrintRefStack()
+{
+  long *theCell = (long *)&ReferenceStack[0];
+  long size = ((long)RefSP - (long)&ReferenceStack[0])/4;
+  fprintf(output, "RefStk: [%x .. %x[\n", (long)&ReferenceStack[0], (long)RefSP);
+  for(; size > 0; size--, theCell++){
+    if (*theCell & 1){ 
+      /* Used in beta.dump */
+      fprintf(output, "  0x%08x: 0x%08x #\n", theCell, *theCell);
+    } else {
+      fprintf(output, "  0x%08x: 0x%08x\n", theCell, *theCell);
+    }
+  }
+}
+#endif
+
 void ProcessRefStack(size, bottom)
      unsigned size; /* number of pointers to process */
      long **bottom;
@@ -24,13 +41,12 @@ void ProcessRefStack(size, bottom)
   struct Object **theCell;
   struct Object *theObj;
 
-  DEBUG_IOA(fprintf(output, "RefStk: [%x .. %x[\n", (long)bottom, (long)(bottom+size)));
-  DEBUG_IOA(fprintf(output, "&ReferenceStack[0]: 0x%x, RefSP: 0x%x\n", &ReferenceStack[0], RefSP));
+  DEBUG_IOA(PrintRefStack());
   theCell = (struct Object **)bottom;
   for(; size > 0; size--, theCell++) {
-    DEBUG_IOA(fprintf(output, "  0x%x: 0x%x\n", theCell, *theCell));
     i = ((unsigned)*theCell & 1) ? 1 : 0;
     *theCell = (struct Object *)((unsigned)*theCell & ~1);
+    DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", theCell, *theCell));
     theObj = *theCell;
     if(theObj && inBetaHeap(theObj) && isObject(theObj)) {
       if( inLVRA( theObj)){
@@ -40,6 +56,12 @@ void ProcessRefStack(size, bottom)
         CompleteScavenging();
       }
     }
+#ifdef RTDEBUG
+    else {
+      if (theObj) fprintf(output, "ProcessRefStack: ***Illegal: 0x%x: 0x%x\n", theCell, theObj);
+      /*Claim(!theObj, "ProcessRefStack: Illegal object should be zero!");*/
+    }
+#endif
     if(i) *theCell = (struct Object *)((unsigned)*theCell | 1);
   }
 }
@@ -67,10 +89,10 @@ void ProcessStackObj(struct StackObject *theStackObject)
   ptr(long)        stackptr;
   ptr(long)        theEnd;
 
-  DEBUG_IOA(printf("ProcessStackObj()\n"));
+  DEBUG_IOA(fprintf(output, "ProcessStackObj: theStack: 0x%x, size: 0x%x\n", theStackObject, theStackObject->StackSize));
 
   DEBUG_IOA( Claim(theStackObject->StackSize <= theStackObject->BodySize,
-                   "ProcessReference: StackObjectType: Stack > Object") );
+                   "ProcessReference: StackObjectType: Stack <= Object") );
 
   theEnd = &theStackObject->Body[0] + theStackObject->StackSize;
 
