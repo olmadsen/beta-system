@@ -1,13 +1,35 @@
 ORIGIN '../guienvbody';
 BODY 'guienv_macbody' 'guienv_macbody2';
 
-INCLUDE 'eventsstuff';
-INCLUDE 'quickdrawstuff';
 INCLUDE '~beta/containers/v1.5/list';
 INCLUDE '~beta/maclib/v3.0/memory';
+INCLUDE '~beta/maclib/v3.0/events';
+INCLUDE '~beta/maclib/v3.0/quickdraw';
 INCLUDE '~beta/maclib/v3.0/windows';
 INCLUDE '~beta/maclib/v3.0/osutils';
+INCLUDE '../../figureitems';
+INCLUDE '~beta/sysutils/v1.5/objinterface';
+INCLUDE '../linkedlist';
 
+-- interfaceObjectLib: attributes --
+
+assertOpen:
+	(# location:<
+			(# t: ^text;
+			do	INNER;
+			exit t[]
+			#);
+	do (if private.isOpen then
+			INNER;
+		else
+			location -> notOpenedError;
+		if);
+	#);
+
+actionList: linkedList
+  (# element:: action;
+  #);
+  
 -- guienvLib: attributes --
 
 EraseRectangle: external
@@ -326,7 +348,7 @@ doUpdateCursor: (# <<SLOT GUIENVdoUpdateCursor: doPart>> #);
 				do e[] -> at -> delete;
 				#);
 		#);
-	theMenubar: ^menubar;
+	theMenubar: ^menubarType;
 	globalMacMenubar: @macMenuBar;
 	lastMenuID: @integer;
 	appleMenu: @integer;
@@ -478,7 +500,7 @@ windowSize:
 		#);
 	lastObjectClicked: ^windowItem;
 	windowDefaultButton: ^windowItem;
-	windowMenuBar: ^menuBar;
+	windowMenuBar: ^menuBarType;
 #)
 
 -- menuLib: attributes --
@@ -551,6 +573,12 @@ menuitemIsSeparator:
 
 -- windowitemLib: attributes --
 
+
+
+clickable: booleanValue
+	(#
+	do private.enabledFlag AND private.visibleFlag -> value;
+	#);
 debugMe:
 	(#
 	enter private.debugMe
@@ -674,12 +702,35 @@ invalVisibleRgn:
 			do getVisibleRgn -> visRgn;
 				(if false then
 					(#
-					do  ResetPen;
+					do ResetPen;
 						(visRgn, this(guienv).private.globals.grayAddress) -> FillRgn;
 						30 -> system.wait;
 					#);
 				if);
 				visRgn -> InvalRgn;
+			#);
+	#);
+invalFrame:
+	(#  r: @rectangle;
+	do privateOrigin -> r.topLeft;
+		size -> r.size;
+		(if true then
+			this(windowItem)[] -> getPatternName -> putText;
+			'.invalFrame ' -> putText;
+			'[' -> put;
+			r.left -> putInt;
+			' ' -> put;
+			r.top -> putInt;
+			' ' -> put;
+			r.right -> putInt;
+			' ' -> put;
+			r.bottom -> putInt;
+			']' -> put;
+			newLine;
+		if);
+		setupPortWideClip
+			(# 
+			do r[] -> makeMacRect -> InvalRect;
 			#);
 	#);
 
@@ -709,6 +760,11 @@ toScreenCoordinates:
 	<<SLOT GUIENVwindowItemToScreenCoordinates: doPart>>
 	exit q
 	#);
+	
+-- GUIENVinterfaceObjectPrivate: descriptor --
+(# beforeActions,afterActions: ^actionList;
+	isOpen: @boolean;
+#)
 
 -- GUIENVwindowitemPrivate: descriptor --
 (# originX, originY: @integer;
@@ -716,25 +772,31 @@ toScreenCoordinates:
 	backGroundStyle: @integer;
 	left, top, right, bottom: @integer;
 	visibleFlag,enabledFlag,hiliteFlag,
-	automaticUpdate,updateOnResize, borderVisibleFlag: @boolean;
+	automaticUpdate,updateOnResize, borderVisibleFlag, isFigureItem: @boolean;
 	borderStyle: @integer;
 	windowItemCursor: ^cursor;
 	eraseWhenUpdating: @boolean;
-	debugMe: @boolean
+	debugMe: @boolean;
+	
 #)
 
 -- canvasLib: attributes --
 
+
 getChildPosition:
+	(*
+	 * Cannot be used to find a figureitem, since they are
+	 * placed in the  "figs" list
+	 *)
 	(# child: ^windowItem;
-		pos: ^list.theCellType;
+		pos: ^private.children.theCellType;
 	enter	child[]
 	do child[] -> private.children.at -> pos[]
 	exit pos[]
 	#);
 getPrevSibling:
 	(# child: ^windowItem;
-		pos: ^list.theCellType;
+		pos: ^private.children.theCellType;
 		prevSibling: ^windowItem;
 	enter child[]
 	do child[] -> getChildPosition -> pos[];
@@ -757,7 +819,7 @@ findObjectClicked:
 
 -- GUIENVcanvasPrivate: descriptor --
 (# children: @list
-		(# element::< windowItem;
+		(# element:: windowItem;
 			remove:
 				(# e: ^element;
 				enter e[]
@@ -770,7 +832,33 @@ findObjectClicked:
 				do l: scanReverse
 						(# where::<
 								(#
-								do (if (current.private.enabledFlag and current.private.visibleFlag) then
+								do (if current.clickable then
+										pt -> current.hit -> value;
+									else
+										false -> value;
+									if);
+								#);
+						do current[] -> e[];
+							leave l;
+						#);
+				exit e[]
+				#);
+		#);
+	figs: @list
+		(# element:: figureItem;
+			remove:
+				(# e: ^element;
+				enter e[]
+				do e[] -> at -> delete;
+				#);
+			findObjectClicked:
+				(# pt: @point;
+					e: ^element;
+				enter pt
+				do l: scanReverse
+						(# where::<
+								(#
+								do (if current.clickable then
 										pt -> current.hit -> value;
 									else
 										false -> value;

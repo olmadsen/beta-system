@@ -1,10 +1,10 @@
-ORIGIN '../fieldsbody'
-[[
--- Include 'guienv_macprivate'
--- Include 'texteditstuff'
--- Include '~beta/maclib/v3.0/scrap'
--- Include 'quickdrawstuff'
--- Include 'windowsstuff'
+ORIGIN '../fieldsbody';
+
+INCLUDE 'guienv_macprivate';
+INCLUDE '~beta/maclib/v3.0/textedit';
+INCLUDE '~beta/maclib/v3.0/scrap';
+INCLUDE '~beta/maclib/v3.0/quickdraw';
+INCLUDE '~beta/maclib/v3.0/windows';
 
 -- lib: attributes --
 between:
@@ -54,12 +54,7 @@ do
 #)
 
 -- GUIENVtextFieldonFrameChanged: descriptor --
-(# TextEditUpdateViewRect: external
-		(# teHandle: @integer;
-			view: ^macRect;
-		enter (teHandle,view[])
-		#);
-	view: ^macRect;
+(# view: ^macRect;
 do calcViewRect -> makeMacRect -> view[];
 	(textFieldHandle,view[]) -> TextEditUpdateViewRect;
 	adjustScrollvaluesMaybe;
@@ -82,7 +77,7 @@ do selection -> (start,end);
 			(start,1) -> theEventHandler.onBeforeChange -> peformEdit;
 		if);
 		(if peformEdit then
-			setupClipForDrawing
+			focusTextField
 				(# 
 				do  (ch,textFieldHandle) -> TEKey
 				#);
@@ -96,10 +91,9 @@ do selection -> (start,end);
 (#
 do inner onMouseDown;
 	this(textField)[] -> target;
-	setupClipForDrawing
+	focusTextField
 		(# macPt: @macPoint;
-		do ResetPen;
-			localPosition -> macPt.setPoint;
+		do localPosition -> macPt.setPoint;
 			(macPt,false,textfieldHandle) -> TEClick;
 			adjustScrollValuesMaybe;
 			onMouseUp;
@@ -116,10 +110,9 @@ do inner onMouseUp;
 	r: @rectangle;
 do ((0,0),size) -> r;
 	r[] -> makeMacRect -> view[];
-	setupClipForDrawing
+	focusTextField
 		(# 
-		do ResetPen;
-		   view[] -> EraseRect;
+		do view[] -> EraseRect;
 		   (view[],textFieldHandle) -> TEUpdate;
 		#);
 	(if private.textFieldScroller[] = NONE then
@@ -130,10 +123,9 @@ do ((0,0),size) -> r;
 
 -- GUIENVtextFieldOnEnableTarget: descriptor --
 (#
-do setupClipForDrawing
+do focusTextField
 		(#
-		do ResetPen;
-		   textFieldHandle -> TEActivate;
+		do textFieldHandle -> TEActivate;
 		#);
 	private.installTimer;
 	inner onEnableTarget;
@@ -141,10 +133,9 @@ do setupClipForDrawing
 
 -- GUIENVtextFieldOnDisableTarget: descriptor --
 (#
-do setupClipForDrawing
+do focusTextField
 		(#
-		do ResetPen;
-			textFieldHandle -> TEDeactivate;
+		do textFieldHandle -> TEDeactivate;
 		#);
 	private.deleteTimer;
 	inner onDisableTarget;
@@ -152,7 +143,7 @@ do setupClipForDrawing
 
 -- GUIENVtextFieldonIdle: descriptor --
 (#
-do setupClipForDrawing
+do focusTextField
 		(#
 		do textFieldHandle -> TEIdle;
 		#);
@@ -166,7 +157,8 @@ do setupClipForDrawing
 	clipboardLength: @integer;
 	start,end,length: @integer;
 	performEdit: @boolean;
-do getClipboardLength -> clipboardLength;
+do assertOpen;
+	getClipboardLength -> clipboardLength;
 	(if (clipboardLength + length < 32000) then
 		(if clipboardLength<>0 then
 			selection -> (start,end);
@@ -179,7 +171,7 @@ do getClipboardLength -> clipboardLength;
 				(start,clipboardLength) -> theEventHandler.onBeforeChange -> performEdit;
 				(if performEdit then
 					TEFromScrap -> error;
-					setupClipForDrawing
+					focusTextField
 						(#
 						do textFieldHandle -> TEstylePaste;
 						#);
@@ -192,7 +184,8 @@ do getClipboardLength -> clipboardLength;
 
 -- GUIENVtextFieldDoCopy: descriptor --
 (# error: @integer;
-do ZeroScrap -> error;
+do assertOpen;
+	ZeroScrap -> error;
 	(if error//0 then
 		textFieldHandle -> TECopy;
 		TEToScrap -> error;
@@ -203,14 +196,15 @@ do ZeroScrap -> error;
 (# error: @integer;
 	start,end,length: @integer;
 	performEdit: @boolean;
-do ZeroScrap -> error;
+do assertOpen;
+	ZeroScrap -> error;
 	(if error//0 then
 		selection -> (start,end);
 		end - start -> length;
 		(if length<>0 then
 			(start,-length) -> theEventHandler.onBeforeChange -> performEdit;
 			(if performEdit then
-				setupClipForDrawing
+				focusTextField
 					(#
 					do textFieldHandle -> TECut;
 					#);
@@ -224,12 +218,13 @@ do ZeroScrap -> error;
 -- GUIENVtextFieldDoClear: descriptor --
 (# start,end,length: @integer;
 	performEdit: @boolean;
-do selection -> (start,end);
+do assertOpen;
+	selection -> (start,end);
 	end - start -> length;
 	(if length<>0 then
 		(start,-length) -> theEventHandler.onBeforeChange -> performEdit;
 		(if performEdit then
-			setupClipForDrawing
+			focusTextField
 				(#
 				do textFieldHandle -> TEDelete;
 				#);
@@ -240,16 +235,12 @@ do selection -> (start,end);
 
 -- GUIENVtextFieldSetContents: descriptor --
 (#
-do textFieldDefaultStyle -> useTextStyle;
-	(if (theText[] <> none) and (theText.length > 0) then
-	(@@theText.T[1],theText.lgth,textFieldHandle) -> TESetText;
+do assertOpen;
+	textFieldDefaultStyle -> useTextStyle;
+	(theText[], textFieldHandle) -> TextEditSetText;
 	(if theText.styleInfo<>0 then
 		(0, theText.lgth, theText.styleInfo, false, textFieldHandle)
 			-> TEUseStyleScrap;
-	if);
-	(textFieldHandle,0,0) -> TextEditSetSelection;
-	else
-		(0, 0, textFieldHandle) -> TESetText;
 	if);
 	(textFieldHandle,0,0) -> TextEditSetSelection;
 	adjustScrollValuesMaybe;
@@ -261,24 +252,21 @@ do textFieldDefaultStyle -> useTextStyle;
 	textHandle: @integer;
 	address: @integer;
 	start,end: @integer;
-do	&styledText[] -> theText[];
-	(if length > 0 then
-	length -> len;
-	len - theText.T.range -> theText.extend;
-	textFieldHandle -> TEGetText -> textHandle;
-	textHandle -> TOS'%adrGetLong' -> address;
-	(address,@@theText.T[1],len) -> BlockMove;
-	len -> theText.lgth -> theText.pos;
+	t: ^text;
+do	assertOpen;
+	&styledText[] -> theText[];
+	textFieldHandle -> TextEditGetText -> t[];
+	t -> theText;
 	(0,len) -> withSelection
 		(#
 		do textFieldHandle -> TEGetStyleScrapHandle -> theText.styleInfo;
 		#);
-	if);
 #)
 
 -- GUIENVtextFieldGetChar: descriptor --
 (#
-do (textFieldHandle,pos) -> TextEditGetChar -> ch;
+do assertOpen;
+	(textFieldHandle,pos) -> TextEditGetChar -> ch;
 #)
 
 -- GUIENVtextFieldLength: descriptor --
@@ -288,14 +276,16 @@ do (textFieldHandle,pos) -> TextEditGetChar -> ch;
 		enter teHandle
 		exit length
 		#);
-do textFieldHandle -> TextEditGetLength -> value;
+do assertOpen;
+	textFieldHandle -> TextEditGetLength -> value;
 #)
 
 -- GUIENVtextFieldScanText: descriptor --
 (#	teHandle: @integer;
 	current,increment: @integer;
 	
-do	(0,start,length) -> between -> start;
+do	assertOpen;
+	(0,start,length) -> between -> start;
 	(0,end,length) -> between -> end;
 	(if start<>end then
 		textFieldHandle -> teHandle;
@@ -317,13 +307,15 @@ do	(0,start,length) -> between -> start;
 
 -- GUIENVtextFieldPosToPt: descriptor --
 (# macPt: ^macPoint;
-do (pos,textFieldHandle) -> TEGetPoint -> macPt[];
+do assertOpen;
+	(pos,textFieldHandle) -> TEGetPoint -> macPt[];
 	macPt.getPoint -> pt;
 #)
 
 -- GUIENVtextFieldPtToPos: descriptor --
 (# macPt: @macPoint;
-do	pt -> macPt.setPoint;
+do	assertOpen;
+	pt -> macPt.setPoint;
 	(macPt,textFieldHandle) -> TEGetOffset -> pos;
 #)
 
@@ -334,7 +326,8 @@ do	pt -> macPt.setPoint;
 		enter teHandle
 		exit start
 		#);
-do textFieldHandle -> TextEditGetSelectionStart -> value;
+do assertOpen;
+	textFieldHandle -> TextEditGetSelectionStart -> value;
 #)
 
 -- GUIENVtextFieldSelectionEnd: descriptor --
@@ -344,12 +337,14 @@ do textFieldHandle -> TextEditGetSelectionStart -> value;
 		enter teHandle
 		exit end
 		#);
-do textFieldHandle -> TextEditGetSelectionEnd -> value;
+do assertOpen;
+	textFieldHandle -> TextEditGetSelectionEnd -> value;
 #)
 
 -- GUIENVtextFieldSelectionContents: descriptor --
 (# 
-do &text[] -> theText[];
+do assertOpen;
+	&text[] -> theText[];
 	(start,end) -> scanText
 		(#
 		do ch -> theText.put;
@@ -358,7 +353,8 @@ do &text[] -> theText[];
 
 -- GUIENVtextFieldSelectionScrollIntoView: descriptor --
 (#
-do setupClipForDrawing
+do assertOpen;
+	focusTextField
 		(#
 		do textFieldHandle -> TESelView;
 		#);
@@ -367,8 +363,9 @@ do setupClipForDrawing
 
 -- GUIENVtextFieldSelectionSet: descriptor --
 (#
-do (if privateAutomaticUpdate then
-		setupClipForDrawing
+do assertOpen;
+	(if privateAutomaticUpdate then
+		focusTextField
 			(#
 			do (theStart,theEnd,textFieldHandle) -> TESetSelect;
 			#);
@@ -382,12 +379,14 @@ do (if privateAutomaticUpdate then
 
 -- GUIENVtextFieldSetDefaultStyle: descriptor --
 (#
-do style[] -> textFieldDefaultStyle;
+do assertOpen;
+	style[] -> textFieldDefaultStyle;
 #)
 
 -- GUIENVtextFieldGetDefaultStyle: descriptor --
 (#
-do textFieldDefaultStyle -> style[];
+do assertOpen;
+	textFieldDefaultStyle -> style[];
 #)
 
 -- GUIENVtextFieldIsOneStyle: descriptor --
@@ -397,27 +396,31 @@ do (* Not implemented !!! *)
 
 -- GUIENVtextFieldSetOneSize: descriptor --
 (#	macStyle: @textStyleRec;
-do	theSize -> macStyle.tsSize;
+do	assertOpen;
+	theSize -> macStyle.tsSize;
 	(macStyle[],doSize,start,end) -> setStyleElement;
 #)
 
 -- GUIENVtextFieldSetOneFont: descriptor --
 (#	macStyle: @textStyleRec;
 	style: @textStyle;
-do	theFont[] -> style.name;
+do	assertOpen;
+	theFont[] -> style.name;
 	style.familyID -> macStyle.tsFont;
 	(macStyle[],doFont,start,end) -> setStyleElement;
 #)
 
 -- GUIENVtextFieldSetOneFace: descriptor --
 (#	macStyle: @textStyleRecord;
-do	theFace -> macStyle.face;
+do	assertOpen;
+	theFace -> macStyle.face;
 	(macStyle[],doFace,start,end) -> setStyleElement;
 #)
 
 -- GUIENVtextFieldSetOneStyle: descriptor --
 (#	macStyle: @textStyleRec;
-do	theStyle.familyID -> macStyle.tsFont;
+do	assertOpen;
+	theStyle.familyID -> macStyle.tsFont;
 	theStyle.size -> macStyle.tsSize;
 	theStyle.face -> macStyle.tsFace;
 	(macStyle[],doSize + doFace + doFont,start,end) -> setStyleElement;
@@ -429,37 +432,42 @@ do (* Not implemented !!! *)
 #)
 
 -- GUIENVtextFieldSetMargin: descriptor --
-(#
-do	(leftMargin,topMargin) -> textFieldMargin;
+(# view: ^macRect;
+do	assertOpen;
+	(leftMargin,topMargin) -> textFieldMargin;
+	calcViewRect -> makeMacRect -> view[];
+	(textFieldHandle,view[]) -> TextEditUpdateViewRect;
+	adjustScrollvaluesMaybe;
 #)
 
 -- GUIENVtextFieldGetMargin: descriptor --
 (#
-do textFieldMargin ->  (leftMargin,topMargin);
+do assertOpen;
+	textFieldMargin ->  (leftMargin,topMargin);
 #)
 
 -- GUIENVtextFieldInsert: descriptor --
 (#
-do (if (theText[] <> none) and (theText.lgth <> 0) then
-		(if privateAutomaticUpdate then
-		setupClipForDrawing
+do assertOpen;
+	(if privateAutomaticUpdate then
+		focusTextField
 			(#
-			do (@@theText.T[1],theText.lgth,textFieldHandle) -> TEInsert
+			do (theText[], textFieldHandle) -> TextEditInsert;
 			#);
 	else
 		setupPortClipEmpty
 			(#
-			do (@@theText.T[1],theText.lgth,textFieldHandle) -> TEInsert
+			do (theText[], textFieldHandle) -> TextEditInsert;
 			#);
 	if);
 	adjustScrollvaluesMaybe;
-	if);
 #)
 
 -- GUIENVtextFieldDelete: descriptor --
 (#
-do (if privateAutomaticUpdate then
-		setupClipForDrawing
+do assertOpen;
+	(if privateAutomaticUpdate then
+		focusTextField
 			(#
 			do textFieldHandle -> TEDelete;
 			#);
@@ -487,7 +495,7 @@ do &textStyle[] -> style[];
 	textFieldDefaultStyle -> useTextStyle;
 	(4,4) -> textFieldMargin;
 	((0,0),(1000,1000)) -> privateWindowItemFrame;
-	setupClipForDrawing
+	focusTextField
 		(# view,dest: ^macRect;
 		do calcViewRect -> makeMacRect -> view[];
 			calcInitialDestRect -> makeMacRect -> dest[];
@@ -510,9 +518,27 @@ do &textStyle[] -> style[];
 (#
 do inner close;
 	textFieldHandle -> TEDispose;
+	0 -> textFieldHandle;
+	NONE -> private.textFieldDefaultStyle[];
+	(0, 0) -> private.textFieldMargin;
+	NONE -> private.textFieldScroller[];
+	
 #)
 
 -- textFieldLib: attributes --
+
+focusTextField: setupClipForDrawing
+	(#
+	do ResetPen;
+		INNER;
+	#);
+	
+TextEditUpdateViewRect: external
+	(# teHandle: @integer;
+		view: ^macRect;
+	enter (teHandle,view[])
+	#);
+	
 handleTextChanged:
 	(# 
 	do adjustScrollvaluesMaybe;
@@ -537,10 +563,10 @@ calcViewRect:
 		t: @text;
 	do &rectangle[] -> r[];
 		textFieldMargin -> (left,top);
-		(left+1,top+1) -> r.topLeft;
+		(left+2,top+2) -> r.topLeft;
 		size -> (width,height);
-		width - 1 -> r.right;
-		height - 1 -> r.bottom;
+		width - 2 -> r.right;
+		height - 2 -> r.bottom;
 	exit r[]
 	#);
 calcInitialDestRect:
@@ -549,10 +575,10 @@ calcInitialDestRect:
 		width,height: @integer;
 	do &rectangle[] -> r[];
 		textFieldMargin -> (left,top);
-		(left+1,top+1) -> r.topLeft;
+		(left+2,top+2) -> r.topLeft;
 		size -> (width,height);
 		1000 -> r.right;
-		height - top - 1 -> r.bottom;
+		height - top - 2 -> r.bottom;
 	exit r[]
 	#);
 textFieldHandle:
@@ -610,7 +636,7 @@ setStyleElement:
 	do	selection -> (curStart,curEnd);
 		(curStart = start) and (curEnd = end) -> currentSelection;
 		(if currentSelection then
-			setupClipForDrawing
+			focusTextField
 				(#
 				do (element,macStyle[],true,textFieldHandle) -> TESetStyle;
 				#);
@@ -637,7 +663,7 @@ setStyleElement:
 		do theTimer[] -> this(GUIenv).private.timerQueue.delete;
 		#);
 	theTimer: @timerAction
-		(# doIt:@ setupClipForDrawing
+		(# doIt:@ focusTextField
 			(#
 			do textFieldHandle -> TEIdle;
 			#);
@@ -650,7 +676,8 @@ setStyleElement:
 
 -- GUIENVabstractScrollerScroll: descriptor --
 (#
-do inner scroll;
+do assertOpen;
+	inner scroll;
 #)
 
 -- GUIENVabstractScrollerCreate: descriptor --
@@ -672,8 +699,8 @@ do ((0,0),(200,200)) -> privateWindowItemFrame;
 -- GUIENVabstractScrollerClose: descriptor --
 (#
 do inner close;
-	THIS(abstractScroller).private.VerticalScrollbar.close;
-	THIS(abstractScroller).private.HorizontalScrollbar.close;
+	NONE -> private.HorizontalScrollbar[];
+	NONE -> private.VerticalScrollbar[];
 #)
 
 -- abstractScrollerLib: attributes --
@@ -784,7 +811,8 @@ adjustScrollValues:
 	#);
 -- GUIENVtextEditorScroll: descriptor --
 (#
-do contents.setupClipForDrawing
+do contents.assertOpen;
+	contents.focusTextField
 		(#
 		do (-dh,-dv,contents.textFieldHandle) -> TEPinScroll;
 		#);
@@ -959,5 +987,3 @@ do
 
 -- GUIENVtextFieldBeforeChangeTheText: doPart --
 do this(guienv).private.globalTheText.copy -> value[];
-
---]]

@@ -5,12 +5,11 @@ BUILD default ':$$/windowmanagement.obj' ':external/windowmanagement.c' 'mrc -pr
 
 RESOURCE default 'external/guienv.r';
 
-INCLUDE 'eventsstuff';
 INCLUDE '~beta/maclib/v3.0/osutils';
 INCLUDE '~beta/maclib/v3.0/debug';
-INCLUDE 'windowsstuff';
+INCLUDE '~beta/maclib/v3.0/windows';
 INCLUDE '~beta/maclib/v3.0/fonts';
-INCLUDE 'quickdrawstuff';
+INCLUDE '~beta/maclib/v3.0/quickdraw';
 INCLUDE '~beta/maclib/v3.0/dialogs';
 INCLUDE '~beta/maclib/v3.0/toolutils';
 INCLUDE '~beta/maclib/v3.0/scrap';
@@ -18,9 +17,10 @@ INCLUDE '~beta/maclib/v3.0/textedit';
 INCLUDE '~beta/maclib/v3.0/desk';
 INCLUDE '~beta/maclib/v3.0/menus';
 INCLUDE '~beta/maclib/v3.0/memory';
+INCLUDE '~beta/maclib/v3.0/diskinit';
+INCLUDE '~beta/maclib/v3.0/events';
 INCLUDE '~beta/containers/v1.5/list';
 INCLUDE '~beta/sysutils/v1.5/objinterface';
-INCLUDE 'diskinitstuff';
 INCLUDE '../linkedlist';
 INCLUDE 'raster_macprivate';
 INCLUDE '../../fields';
@@ -33,7 +33,10 @@ processMouseDown:
 		theCanvas: ^canvas;
 	enter pt
 	do pt -> private.children.findObjectClicked -> theObjectClicked[];
-		(if theObjectClicked[]//none then
+		(if theObjectClicked[] = none then
+			pt -> private.figs.findObjectClicked -> theObjectClicked[];
+		if);
+		(if theObjectClicked[] = none then
 			pt -> currentLocalPosition;
 			this(canvas)[] -> lastObjectClicked;
 			theEventHandler.onMouseDown;
@@ -476,14 +479,13 @@ do this(guienv).private.event.charCode -> theChar;
 do	inner delay;
 #)
 
--- interfaceObjectLib: attributes --
-actionList: linkedList
-  (# element::< action;
-  #);
+
 
 -- GUIENVinterfaceObjectPrependAction: descriptor --
+
 (# 
-do (if private.beforeActions[]//none then
+do assertOpen;
+	(if private.beforeActions[]//none then
        &actionList[] -> private.beforeActions[];
    if);
    (if not (theAction[] -> private.beforeActions.member) then
@@ -492,8 +494,10 @@ do (if private.beforeActions[]//none then
 #)
 
 -- GUIENVinterfaceObjectAppendAction: descriptor --
+
 (# 
-do (if private.afterActions[]//none then
+do assertOpen;
+	(if private.afterActions[]//none then
        &actionList[] -> private.afterActions[];
    if);
    (if not (theAction[] -> private.afterActions.member) then
@@ -502,8 +506,9 @@ do (if private.afterActions[]//none then
 #)
 
 -- GUIENVinterfaceObjectDeleteAction: descriptor --
+
 (# 
-do 
+do assertOpen;
    (if private.beforeActions[]<>none then
        theAction[] -> private.beforeActions.delete;
    if);
@@ -519,13 +524,23 @@ do inner create;
 
 -- GUIENVinterfaceObjectOpen: descriptor --
 (#
-do create;
-	inner open;
+do (if not private.isOpen then
+		true -> private.isOpen;
+		create;
+		inner open;
+	if);
 #)
 
 -- GUIENVinterfaceObjectClose: descriptor --
-(#
-do inner close;
+
+(# 
+do assertOpen;
+	(if private.isOpen then
+		false -> private.isOpen;
+		inner close;
+		NONE -> private.beforeActions[];
+		NONE -> private.afterActions[];
+	if);
 #)
 
 -- GUIENVenableEventType: descriptor --
@@ -553,14 +568,22 @@ do (* Not Implemented !!! *)
 do (* Not Implemented !!! *)
 #)
 -- GUIENVseparatorSetStyle: doPart --
-do (if value <> private.style then
-		value -> private.style;
-		theEventHandler.onStyleChanged;
-		updateMaybe;
-	if);
+do 
+		(# 
+		do assertOpen;
+			(if value <> private.style then
+				value -> private.style;
+				theEventHandler.onStyleChanged;
+				updateMaybe;
+			if);
+		#);
 	
 -- GUIENVseparatorGetStyle: doPart --
-do private.style -> value;
+do 
+		(# 
+		do assertOpen;
+			private.style -> value;
+		#);
 
 -- GUIENVwindowseparatorCreate: doPart --
 do inner create;
@@ -576,6 +599,7 @@ do (if this(window).style = plain then
 	
 -- GUIENVwindowseparatorClose: doPart --
 do inner close;
+	0 -> private.style;
 
 -- GUIENVwindowSeparatorOnRefresh: doPart --
 do graphics
@@ -663,9 +687,7 @@ initialLayout:
 	#);
 	
 
--- GUIENVinterfaceObjectPrivate: descriptor --
-(# beforeActions,afterActions: ^actionList;
-#)
+
 
 -- menubarLib: attributes --
 adjust:
@@ -695,8 +717,10 @@ changeMacMenubar:
 	#);
 
 -- GUIENVmenubarAppend: descriptor --
-(#
-do (if not (theMenu[] -> private.menus.has) then
+
+(# 
+do assertOpen;
+	(if not (theMenu[] -> private.menus.has) then
 		theMenu[] -> private.menus.append;
 		this(menubar)[] -> theMenu.owner;
 		(if private.theMacMenuBar[]<>none then
@@ -706,8 +730,10 @@ do (if not (theMenu[] -> private.menus.has) then
 #)
 
 -- GUIENVmenubarDelete: descriptor --
-(#
-do	(if theMenu[] -> private.menus.has then
+
+(# 
+do	assertOpen;
+	(if theMenu[] -> private.menus.has then
 		theMenu[] -> private.menus.remove;
 		none -> theMenu.owner;
 		(if private.theMacMenuBar[]<>none then
@@ -717,8 +743,10 @@ do	(if theMenu[] -> private.menus.has then
 #)
 
 -- GUIENVmenubarClear: descriptor --
-(#
-do	scan
+
+(#  
+do	assertOpen;
+	scan
 		(#
 		do current[] -> delete;
 		#);
@@ -740,8 +768,10 @@ do 	(* not implemented *)
 #)
 
 -- GUIENVmenubarScan: descriptor --
-(#
-do	private.menus.scan
+
+(# 
+do	assertOpen;
+	private.menus.scan
 		(#
 		do current[] -> this(scan).current[];
 			inner scan;
@@ -761,6 +791,8 @@ do inner open;
 -- GUIENVmenubarClose: descriptor --
 (#
 do inner close;
+	private.menus.clear;
+	NONE -> private.theMacMenubar[];
 #)
 -- GUIENVmenubarPutLayout: doPart --
 do
@@ -793,15 +825,19 @@ do
 #)
 
 -- GUIENVmenuSetName: descriptor --
-(#
-do theName -> private.name;
+
+(# 
+do assertOpen;
+	theName -> private.name;
 	destroyMenu;
 	buildMenu;
 #)
 
 -- GUIENVmenuGetName: descriptor --
-(#
-do private.name.copy -> theName[];
+
+(# 
+do assertOpen;
+	private.name.copy -> theName[];
 #)
 
 -- menuitemLib: attributes --
@@ -875,75 +911,63 @@ buildItem:
 			updateAll;
 		if);
 	#);
-(**********
--- UIENVmenuitemSetMark: descriptor --
-(#
-do c -> private.mark;
-	(if private.number<>0 then
-		updateMark;
-	if);
-#)
 
--- UIENVmenuitemGetMark: descriptor --
-(#
-do  private.mark -> c;
-#)
-******)
 -- GUIENVmenuitemSetKey: descriptor --
-(#
-do c -> private.key;
+
+(# 
+do assertOpen;
+	c -> private.key;
 	(if private.number<>0 then
 		updateKey;
 	if);
 #)
 
 -- GUIENVmenuitemGetKey: descriptor --
-(#
-do private.key -> c;
-#)
-(*********
--- UIENVmenuitemSetFace: descriptor --
-(#
-do f -> private.face;
-	(if private.number<>0 then
-		updateFace;
-	if);
+
+(# 
+do assertOpen;
+	private.key -> c;
 #)
 
--- UIENVmenuitemGetFace: descriptor --
-(#
-do private.face -> f;
-#)
-*****)
 -- GUIENVmenuitemSetName: descriptor --
-(#
-do t -> private.name;
+
+(# 
+do assertOpen;
+	t -> private.name;
 	(if private.number<>0 then
 		updateName;
 	if);
 #)
 
 -- GUIENVmenuitemGetName: descriptor --
-(#
-do private.name.copy -> t[];
+
+(# 
+do assertOpen;
+	private.name.copy -> t[];
 #)
 
 -- GUIENVmenuitemSetChecked: descriptor --
-(#
-do checked -> private.checked;
+
+(# 
+do assertOpen;
+	checked -> private.checked;
 	(if private.number<>0 then
 		updateChecked;
 	if);
 #)
 
 -- GUIENVmenuitemGetChecked: descriptor --
-(#
-do private.checked -> checked;
+
+(# 
+do assertOpen;
+	private.checked -> checked;
 #)
 
 -- GUIENVsetSubMenu: descriptor --
-(#
-do (if private.subMenu[]<>none then
+
+(# 
+do assertOpen;
+	(if private.subMenu[]<>none then
 		private.subMenu.menuID -> DeleteMenu;
 		none -> private.subMenu[];
 	if);
@@ -957,13 +981,17 @@ do (if private.subMenu[]<>none then
 #)
 
 -- GUIENVgetSubMenu: descriptor --
-(#
-do private.subMenu[] -> theMenu[];
+
+(# 
+do assertOpen;
+	private.subMenu[] -> theMenu[];
 #)
 
 -- GUIENVmenuitemPosition: descriptor --
-(#
-do private.number -> value;
+
+(# 
+do assertOpen;
+	private.number -> value;
 #)
 
 -- GUIENVmenuitemPutLayout: doPart --
@@ -989,8 +1017,10 @@ do inner open;
 #)
 
 -- GUIENVmenuitemAttach: descriptor --
-(#
-do (if theAction[]<>none then
+
+(# 
+do assertOpen;
+	(if theAction[]<>none then
 		none -> theAction.theMenuitem[];
 	if);
 	anAction[] -> theAction[];
@@ -1000,13 +1030,15 @@ do (if theAction[]<>none then
 #)
 
 -- GUIENVmenuitemDetach: descriptor --
-(#
-do	none -> attach;
+
+(# 
+do	assertOpen;
+	none -> attach;
 #)
 
 -- GUIENVdynamicMenuitemOnStatus: descriptor --
 (#
-do	(if theAction[]//none then
+do	(if theAction[] = NONE then
 		false -> value;
 	else
 		theAction.onStatus -> value;
@@ -1015,7 +1047,7 @@ do	(if theAction[]//none then
 
 -- GUIENVdynamicMenuitemOnSelect: descriptor --
 (#
-do (if theAction[]//none then
+do (if theAction[] = NONE then
 	else
 		theAction.onSelect;
 	if);
@@ -1040,7 +1072,8 @@ do	true -> menuitemIsSeparator;
 
 -- GUIENVseparatorClose: descriptor --
 (#
-do	inner close;
+do	false -> menuitemIsSeparator;
+	inner close;
 #)
 
 -- menuLib: attributes --
@@ -1097,8 +1130,10 @@ destroyMenu:
 		if);
 	#);
 -- GUIENVmenuAppend: descriptor --
-(#
-do (if not (theMenuitem[] -> private.menuitems.has) then
+
+(# 
+do assertOpen;
+	(if not (theMenuitem[] -> private.menuitems.has) then
 		theMenuitem[] -> private.menuitems.append;
 		private.menuitems.size -> theMenuitem.private.number;
 		(if theMenuitem.menuitemIsSeparator then
@@ -1111,8 +1146,11 @@ do (if not (theMenuitem[] -> private.menuitems.has) then
 #)
 
 -- GUIENVmenuDelete: descriptor --
-(# pos: ^private.menuitems.theCellType;
-do (if theMenuitem[] -> private.menuitems.has then
+
+(# 
+	pos: ^private.menuitems.theCellType;
+do assertOpen;
+	(if theMenuitem[] -> private.menuitems.has then
 		(handle,theMenuitem.number) -> DeleteMenuItem;
 		theMenuitem[] -> private.menuitems.at -> pos[];
 		pos[] -> private.menuitems.iterateFrom
@@ -1124,8 +1162,10 @@ do (if theMenuitem[] -> private.menuitems.has then
 #)
 
 -- GUIENVmenuScan: descriptor --
-(#
-do private.menuItems.scan
+
+(# 
+do assertOpen;
+	private.menuItems.scan
 		(#
 		do current[] -> this(scan).current[];
 			inner scan;
@@ -1133,22 +1173,29 @@ do private.menuItems.scan
 #)
 
 -- GUIENVmenuClear: descriptor --
-(#
-do scan
+
+(# 
+do assertOpen;
+	scan
 		(#
 		do current[] -> delete;
 		#);
 #)
 
 -- GUIENVmenuNoOfMenuitems: descriptor --
-(#
-do	private.menuitems.size -> value;
+
+(# 
+do	assertOpen;
+	private.menuitems.size -> value;
 #)
 
 -- GUIENVmenuPopUp: descriptor --
-(# result: @longInt;
+
+(# 
+	result: @longInt;
 	p: @point;
-do	popupAt -> popupIn.toScreenCoordinates -> p;
+do	assertOpen;
+	popupAt -> popupIn.toScreenCoordinates -> p;
 	adjust;
 	(handle, -1) -> InsertMenu;
 	(handle,p.v,p.h,popupWith) -> PopUpMenuSelect -> result;
@@ -1159,25 +1206,33 @@ do	popupAt -> popupIn.toScreenCoordinates -> p;
 #)
 
 -- GUIENVmenuGetMenuitemByNumber: descriptor --
-(#
-do number -> private.menuitems.findByNumber -> theMenuitem[];
+ 
+(# 
+do assertOpen;
+	number -> private.menuitems.findByNumber -> theMenuitem[];
 #)
 
 -- GUIENVmenuEnable: descriptor --
-(#
-do	(handle,0) -> EnableItem;
+
+(# 
+do	assertOpen;
+	(handle,0) -> EnableItem;
 	true -> menuEnabled;
 #)
 
 -- GUIENVmenuDisable: descriptor --
-(#
-do (handle,0) -> DisableItem;
+
+(# 
+do assertOpen;
+	(handle,0) -> DisableItem;
 	false -> menuEnabled;
 #)
 
 -- GUIENVmenuEnabled: descriptor --
-(#
-do menuEnabled -> value;
+
+(# 
+do assertOpen;
+	menuEnabled -> value;
 #)
 
 -- GUIENVmenuCreate: descriptor --
@@ -1199,10 +1254,16 @@ do this(Menu)[] -> getPatternName -> t[];
 -- GUIENVmenuClose: descriptor --
 (#
 do inner close;
+	
 	this(menu)[] -> this(guienv).private.menus.remove;
 	menuID -> DeleteMenu;
 	handle -> DisposeMenu;
 	0 -> handle;
+	0 -> menuID;
+	false -> private.menuEnabled;
+	private.name.clear;
+	private.menuitems.clear;
+	NONE -> private.owner[];
 #)
 
 -- GUIENVmenuPutLayout: doPart --
@@ -1276,7 +1337,8 @@ do undoMenuitem.open;
 	inner open;
 #)
 -- GUIENVwindowGetContents: doPart --
-do windowContents -> theContents[];
+do assertOpen;
+	windowContents -> theContents[]; 
 
 
 
@@ -1432,7 +1494,9 @@ processUpdate:
 	do private.windowPointer -> BeginUpdate;
 		private.windowContents.theEventHandler.onRefresh;
 		theEventHandler.onRefresh;
+		ResetPen;
 		drawDefaultButton;
+		ResetPen;
 		drawGrow;
 		private.windowPointer -> EndUpdate;
 	#);
@@ -1537,7 +1601,7 @@ drawGrow:
 			getGrowIconBounds -> mr;
 			mr[] -> ClipRect;
 			(0,0) -> SetOrigin;
-			(* this(guienv).private.grayPixPat -> BackPixPat; *)
+			ResetPen;
 			private.windowPointer -> DrawGrowIcon;
 		if);
 	#);
@@ -1590,8 +1654,8 @@ do (# rgnTop: (# exit 2 #);
 		
 		visibleRgn: @integer;
 		address: @integer;
-		theWindowItem: ^window.windowItem;
-	do this(interfaceObject)[] -> theWindowItem[];
+		(* theWindowItem: ^window.windowItem; *)
+	do (* this(interfaceObject)[] -> theWindowItem[]; *)
 		&rectangle[] -> value[];
 		
 		this(GUIenv).private.wideRgn -> visibleRgn;
