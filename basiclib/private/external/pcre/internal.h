@@ -1,3 +1,6 @@
+#ifndef PCRE_INTERNAL_H
+#define PCRE_INTERNAL_H 1
+
 /*************************************************
 *      Perl-Compatible Regular Expressions       *
 *************************************************/
@@ -374,3 +377,5 @@ total length. */
 #define tables_length (ctypes_offset + 256)
 
 /* End of internal.h */
+
+#endif /* PCRE_INTERNAL_H */
