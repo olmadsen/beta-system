@@ -1,0 +1,75 @@
+#!/usr/local/bin/perl5
+#-*-Perl-*-
+
+$betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
+$betalib =~ s#\\#/#g;
+$dirs=require "$betalib/bin/admin/dirlist";
+
+$|=1;
+
+sub getlines {
+    print "Newlines are accepted. ";
+    print "End by typing Cntl-D or '.' alone on a line:\n";
+    local($result);
+    while(<STDIN>){
+        if ($_ eq ".\n"){
+            last;
+        } else {
+            chop $_;
+            s/^[ .]+//g;
+            $result .= "$_\\n";
+        }
+    }
+    $result =~ s/\t/ /g;
+    return $result;
+}
+
+print "This script will do a 'cvs commit' in each directory in $RELEASE.\n";
+
+print "Are you sure that you want to commit in all of these directories? (no/yes) ";
+
+$yes = <STDIN>;
+chop $yes;
+exit if ($yes ne 'yes');
+
+print "Really sure? ";
+$yes = <STDIN>;
+chop $yes;
+exit if ($yes ne 'yes');
+
+print "\nWould you like to see local changes before committing? (yes/no) ";
+$doprompt = <STDIN>;
+chop $doprompt;
+
+foreach $dir (split ' ', $dirs) {
+    ($basedir ="$betalib/$dir") =~ s#/$##;
+    next if (! -d $basedir);
+    print "********** Examining $basedir\n";
+    chdir "$basedir" or die "Unable to chdir: $!";
+    $diff = `cvs -Q diff`;
+    if (2 < length($diff)) {
+	print "Commit needed.\n";
+	if ($doprompt eq 'yes') {
+	    print "Local changes:\n$diff\n";	    
+	}
+	print  "\nIn $basedir:\nCommit local changes? (y/n/q) ";
+	$answer=<STDIN>;
+	chop $answer;
+	if ($answer eq "y"){
+	    # just go on
+	} elsif ($answer eq "n"){
+	    next;
+	} elsif ($answer eq "q"){
+	    exit 0;
+	}
+	if ($MACHINETYPE ne 'NTI') {
+	    print "Enter logmessage for commit:\n";
+	    $msg = &getlines;
+	    system("cvs -q commit -m '$msg'");
+	} else {
+	    # '-m' does not work with stupid PC-shell.
+	    system("cvs -q commit");
+	}
+    }
+}
+
