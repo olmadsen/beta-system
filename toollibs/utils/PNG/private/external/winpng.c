@@ -251,7 +251,6 @@ void write_dib_to_png(HDC hdc, HBITMAP hbmp, char *file_name)
   unsigned char *data;
   unsigned char *line1;
   unsigned char *line2;
-  long bytesize;
   
   result = GetObject((HGDIOBJ) hbmp, sizeof(BITMAP), (void *) &bitmap);
 
@@ -259,7 +258,6 @@ void write_dib_to_png(HDC hdc, HBITMAP hbmp, char *file_name)
     return;
   }
 
-  bytesize = bitmap.bmHeight * bitmap.bmWidthBytes;
 
   
   data = bitmap.bmBits;
@@ -337,6 +335,109 @@ void write_dib_to_png(HDC hdc, HBITMAP hbmp, char *file_name)
   return;
 }
 
+void write_pixels_to_png(HBITMAP hbmp, int width, int height, char *file_name)
+{
+
+  BITMAP bitmap;
+  int result;
+
+  FILE *fp;
+  png_structp png_ptr;
+  png_infop info_ptr;
+  unsigned char **rows;
+  unsigned char *image;
+  long k; 
+  png_color_8 sig_bit;
+  
+  unsigned char *data;
+  unsigned char *line1;
+  unsigned char *line2;
+  
+
+  result = GetObject((HGDIOBJ) hbmp, sizeof(BITMAP), (void *) &bitmap);
+  
+  if(!result) {
+    return;
+  }
+  
+
+  
+  data = bitmap.bmBits;
+  
+  
+
+  
+  if(!data) {
+    return;
+  }
+  fp = fopen(file_name, "wb");
+
+  if(!fp) {
+    return;
+  }
+
+  png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+
+  if(!png_ptr) {
+    fclose(fp);
+    return;
+  }
+
+  info_ptr = png_create_info_struct(png_ptr);
+
+  if(!info_ptr) {
+    fclose(fp);
+    png_destroy_write_struct(&png_ptr, NULL);
+    return;
+  }
+
+  if(setjmp(png_ptr->jmpbuf)) {
+    fclose(fp);
+    png_destroy_write_struct(&png_ptr, NULL);
+    return;
+  }
+
+
+  png_init_io(png_ptr, fp);
+  png_set_IHDR(png_ptr, info_ptr, width, height, 8,
+               PNG_COLOR_TYPE_RGB_ALPHA, PNG_INTERLACE_NONE,
+               PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+
+  png_write_info(png_ptr, info_ptr);
+  png_set_bgr(png_ptr);
+
+  {
+    int i;
+    int j;
+    unsigned char *row;
+    unsigned char *pixel;
+
+    row = data;
+    for(i = 0; i < height; i++) {
+      pixel = row;
+      for(j = 0; j < width; j++) {
+        pixel[3] = 255;
+        pixel += 4;
+      }
+      row += bitmap.bmWidthBytes;
+    }
+  }
+    
+  rows = (unsigned char **) malloc(height * sizeof(unsigned char *));
+  image = data;
+  for(k = 0; k < height; k++) {
+    rows[k] = image;
+    image += bitmap.bmWidthBytes;
+  }
+
+  png_write_image(png_ptr, rows);
+  png_write_end(png_ptr, info_ptr);
+  
+  fclose(fp);
+  free(rows);
+  png_destroy_write_struct(&png_ptr, NULL);
+  return;
+}
 
 
 int betaImage2Mask(BetaImage *src, BetaImage *dst)
