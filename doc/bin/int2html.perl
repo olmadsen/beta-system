@@ -15,7 +15,7 @@ sub print_header
 </HEAD>
 <BODY>
 <H1>$title</H1>
-<PRE CLASS=gram>
+<PRE CLASS=interface>
 EOT
 }
 
@@ -30,13 +30,24 @@ EOT
 
 ################ MAIN ####################
 
-&print_header("Interface Description");
+if ($#ARGV!=1){
+    print "Usage: int2html.perl <interfacefile> <title>\n";
+    exit 1;
+}
+
+$file=$ARGV[0];
+$title=$ARGV[1];
+
+&print_header($title);
 
 # Read entire input-stream into $line.
 
-while ( <> ) {
+open(INT, $file) || die "Cannot open $file: $!\n";
+
+while (<INT>) {
     $line .= $_;
 };
+close (INT);
 
 $_ = $line;		
 				
@@ -235,12 +246,12 @@ while ( m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i
 		$bid = "<b>$id</b>"; # anchored identifier
 		if ( "$patterns" eq "" ){
 		    if ( $prefix eq "" ){
-			$before .= "$bid<A name=\"$idxid\"> </a>";
+			$before .= "$bid<A name=\"$idxid\"></a>";
 		    } else { # prefix is present
 			# Insert super- and sub pattern information
 			$super{$prefix} .= "$idxid-";
 			$l = $level; $l1 = $level+1; $l2 = $level+2;
-			$before .= "$bid<A name=\"$idxid\"> </a><A name=\"$prefix.$l:$subpatterns.$l1:$id.$l2\"> </a>";
+			$before .= "$bid<A name=\"$idxid\"></a><A name=\"$prefix.$l:$subpatterns.$l1:$id.$l2\"></a>";
 			$index[$indexid] = "$idxid";
 			$indexid += 1;
 			$index[$indexid] = "$prefix.$l:$subpatterns.$l1:$id.$l2";
@@ -248,7 +259,7 @@ while ( m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i
 		    }
 		} else { # inner scope
 		    if ( $prefix eq "" ){
-			$before .= "$bid<A name=\"$patterns$idxid\"> </a><A name=\"$idxid\"> </a>";
+			$before .= "$bid<A name=\"$patterns$idxid\"></a><A name=\"$idxid\"></a>";
 			$index[$indexid] = "$idxid";
 			$indexid += 1;
 			$index[$indexid] = "$patterns$idxid";
@@ -257,7 +268,7 @@ while ( m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i
 			# Insert super- and sub pattern information
 			$super{$prefix} .= "$patterns$idxid-";
 			$l = $level; $l1 = $level+1; $l2 = $level+2;
-			$before .= "$bid<A name=\"$patterns$idxid\"> </a><A name=\"$idxid\"> </a><A name=\"$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\"> </a>";
+			$before .= "$bid<A name=\"$patterns$idxid\"></a><A name=\"$idxid\"></a><A name=\"$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\"></a>";
 			$index[$indexid] = "$idxid";
 			$indexid += 1;
 			$index[$indexid] = "$patterns$idxid";
@@ -282,7 +293,7 @@ while ( m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i
 		
 $_ = $line."\n";
 
-s/\n/<br>\n/g;
+#s/\n/<br>\n/g;
 		
 # Now insert the superpatterns collected in %super at the right places:
 $external = "___Externally defined";
@@ -351,12 +362,10 @@ for($i = 0; $i <= $#index; $i++) {
     $id = $1; $level = $2;
     $indents = $indent x ($level-1);
     s/([ \:])$id\.$level([\:])/$1$indents$id$2/;
-}				# 
-
-print "<A href=\"#".$index[$i]."\">".$_."</a><br>\n"
 }
-				# 
-print "<HR>";
+
+print "<A href=\"#".$index[$i]."\">".$_."</a>\n"
+}
 
 &print_trailer();
 
