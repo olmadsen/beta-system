@@ -17,15 +17,17 @@
 #define COM 1 /* RUN: must match define in Declaration.run */
 /*#undef COM*/
 
+#ifndef do_unconditional_gc
 #ifdef RTDEBUG
 /* Trigger unconditional GC at every allocation.
  * MT: Should match define i BetaRun.bet!
  * RUN: Should match define in Declaration.run
  */
 #define do_unconditional_gc 0 /*1*/ 
-#else
+#else /* RTDEBUG */
 #define do_unconditional_gc 0
-#endif
+#endif /* RTDEBUG */
+#endif /* do_unconditional_gc */
 
 #define RTINFO  /* Include support for runtime info */
 #ifdef RTDEBUG

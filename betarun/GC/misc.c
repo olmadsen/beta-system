@@ -1019,6 +1019,8 @@ static void initLabels(void)
 	  "most symbols will be missing!] ");
 #endif
 
+#if 0 
+  /* datpete: what is lastLab? */
   DEBUG_LABELS({
     fprintf(output, "Labels:\n");
     { 
@@ -1029,6 +1031,8 @@ static void initLabels(void)
     }
     fflush(output);
   });
+#endif
+
 }
 
 char *getLabel (long addr)
