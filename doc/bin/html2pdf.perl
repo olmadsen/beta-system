@@ -10,7 +10,8 @@
 #    cvs add sequence.
 # 4. Add a "pdf:" target to your Makefile (create one if you don't have one).
 #    And add "pdf" as the last thing made by 'make generated'.
-#    See bifrost-ref/Makefile for an example.
+#    See bifrost-ref/Makefile for an example. Notice that it's the *body*
+#    files from the interface directory!
 # 5. Run 'make pdf' once. This will create and cvs add the pdf file for you.
 # 6. Add PDF button in top and bottom panel in your index.html.
 #    See bifrost-ref/index.html for an example.
