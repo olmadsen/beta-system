@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.38 1992-08-31 19:14:38 poe Exp $
+ * Mod: $Id: scavenging.c,v 1.39 1992-09-02 12:35:35 tthorn Exp $
  * by Lars Bak, Peter Andersen and Tommy Thorn.
  */
 
@@ -241,6 +241,10 @@ void IOAGc()
 #ifdef macintosh
     RotateTheCursor();
 #endif
+
+#ifdef RTDEBUG
+    memset(ToSpace, 0, IOASize);
+#endif
     
     NumIOAGc++;
     IOAActive = TRUE;
@@ -394,7 +398,7 @@ void IOAGc()
       
 	limit -= IOAStackObjectSum;
 	if (limit < 0) {
-	    INFO_IOA( fprintf(output, "#IOA: %d StackObjects fill up more than 10%% of IOA (%d)\n", IOAStackObjectNum, IOAStackObjectSum));
+	    DEBUG_IOA( fprintf(output, "#IOA: %d StackObjects fill up more than 10%% of IOA (%d)\n", IOAStackObjectNum, IOAStackObjectSum));
 	    limit = 0;
 	}
 	IOAtoAOAtreshold = 0;
@@ -403,7 +407,8 @@ void IOAGc()
 	      sum += IOAAgeTable[IOAtoAOAtreshold++];
 	  } while ((sum < limit) && (IOAtoAOAtreshold < IOAMaxAge));
 	
-	if (limit) IOAtoAOAtreshold +=1;
+	if (limit)
+	  IOAtoAOAtreshold +=1; 
     }
     DEBUG_IOA( fprintf( output, " treshold=%d", IOAtoAOAtreshold));
     DEBUG_IOA( fprintf( output, " ToSpaceToAOA=%d", 
