@@ -38,7 +38,7 @@ public abstract class BetaArray {
     return newArray;
   }
 
-  public static char[] CopySVR1(char[] array, int low, int high) 
+  public static char[] CopySVR1(int low, int high,char[] array) 
     throws ArrayIndexOutOfBoundsException
   {
 
