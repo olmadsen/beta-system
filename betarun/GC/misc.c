@@ -5,6 +5,7 @@
  */
 
 #include "beta.h"
+#include "../P/trie.h"
 
 void misc_dummy()
 {
@@ -26,6 +27,8 @@ void misc_dummy()
 #include <Events.h>
 #include <Windows.h>
 #endif
+
+static Node *trie;
 
 /* Used by 
  *    objinterface.bet for: extGetCstring
@@ -903,7 +906,16 @@ static void addLabel(long adr, char *id)
     labels=REALLOC(labels, maxLabels * sizeof(label*));
   }
   labels[numLabels] = lab;
+
+  /* Register label in trie */
+  TInsert((unsigned long)(lab -> address), 
+	  (void *)(lab -> id), 
+	  trie, 
+	  (unsigned long)(lab -> address));
+  
   numLabels++;
+
+  
 }
 
 static int cmpLabel(const void *left, const void *right);
@@ -978,6 +990,8 @@ static void initLabels(void)
   /* dl_self = dlopen(NULL, (RTLD_NOW | RTLD_GLOBAL) ); */
 #endif /* hppa */
 #endif /* UNIX */
+  
+  trie = TInit();
 
   INFO_LABELS(fprintf(output, "[initLabels ... "); fflush(output););
   strcpy(exefilename, ArgVector[0]);
@@ -1031,7 +1045,6 @@ static void initLabels(void)
 
 char *getLabelExact(long addr)
 {
-  long n;
   if (!labels) initLabels();
   if (!addr) {
     return NULL;
@@ -1040,13 +1053,7 @@ char *getLabelExact(long addr)
   addr -= process_offset;
 #endif
   if (labels) {
-    for (n=numLabels-1; n>=0; n--) {
-      if (labels[n]->address == addr) {
-	return labels[n]->id;
-      } else if (labels[n]->address > addr){
-	return NULL;
-      }
-    }
+    return TILookup(addr, trie);
   }
   return NULL;
 }
