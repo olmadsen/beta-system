@@ -9,74 +9,50 @@
 /*************************** crts ***************************/
 #ifdef crts
 
-/* HandleCallBack is called from a CallBackEntry, setup like
-   below. This means that the real return address is in %g1
-   and our %i7 pointes to the call instruction in the
-   CallBackEntry. */
+/* HandleCallBack is called from a CallBackEntry, setup like below. */ 
 
-register long retAddress asm("%i7");
-extern long a0;
+long * oldSP;
 
 long HandleCB(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
 {
-  /* g1 is used to hold the adress of the calling C-funktion */
-  register long g1 asm("%g1"); 
-  
-  /* A CallBackFrame: */
   struct Item * theObj;
-  struct CallBackFrame cbf;
   struct CallBackEntry * cb;
   long retval;
   long (*cbr)();
-  long oldStackPtr; /* Used to hold the frame pointer */
+  long retAddr, *FP;
   
+  getret_CB(retAddr); /* Get return address */
+  GetFramePointer(FP); /* Get framepointer */
   /* Calculate the address of the CallBackEntry. As our return
      address points to the call in the middle of the CallBackEntry,
      we subtract the offset (notice that the value of cb is not used.)
-     THIS NEED TO BE DONE HERE AT FRONT AS %g1 HOLDS OUR REAL RETURN-
-     ADDRESS, AND WE NEED TO RESTORE THIS VALUE BEFORE ANYTHING HAPPENS
-     TO IT. (%g1 is not generally safe to use, but ok here. (I hope :^)
-     */
-  
-  cb = cast(CallBackEntry)
-    ((char *) retAddress - ((char *)&cb->call_HandleCallBack - (char *)cb));
-  asm("mov %%g1, %0":"=r" (retAddress)); /* retAddress = g1; */ 
-  asm("mov %%i6, %0":"=r" (oldStackPtr)); /* oldStackPtr = i6 (frame pointer) */
+   */
+  cb = cast(CallBackEntry) (retAddr - NUMBER_TO_STRUCT);
 
   if (!cb->theStruct) { freeCallbackCalled(); return 0; }
   
-  /* Push CallBackFrame. */
-  cbf.next = ActiveCallBackFrame;
-  ActiveCallBackFrame = &cbf;
-  
-  Ck(cb->theStruct); Ck(cb->theStruct->iOrigin);
+  Ck(cb->theStruct); 
+  Ck(cb->theStruct->iOrigin);
   theObj = AlloI(cb->theStruct->iOrigin, cb->theStruct->iProto);
 
-  /* Call the CallBack stub, with out first four args in %i1..%i4, and
-     the rest on stack from %i4 and onwards */
-  
-  /* As usual, skip the first instruction */
+  /* Call the CallBack stub. Gcc push the necessary parameters to stack */
   cbr = (long (*)()) ((long*)theObj->Proto->CallBackRoutine);
-  /* Current object is located in the global variable a1 */
-  retval = cbr(theObj, oldStackPtr, arg1, arg2, arg3, &arg4);
+  retval = cbr(theObj, oldSP, arg1, arg2, arg3, arg4, arg5, arg6);  
   
-  /* Pop CallBackFrame */
-  ActiveCallBackFrame = cbf.next;
-  
- /* Fool gcc into believing that the address of a6 is taken, thus
-    making it save it on stack. */
-  
-  asm(""::"r" (&arg5)); 
-
   return retval;
 }
 
+#if 0
+/* DO NOT REMOVE!!! Used to create code for new call back stubs to fill in CBFA->code[x] */
+long CBstub(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
+{
+  GetStackPointer(oldSP);
+  return HandleCB(arg1, arg2, arg3, arg4, arg5, arg6);
+}
+#endif
 
 void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 {
-  /* fprintf(output, "CRTS: CopyCPP NYI\n");
-     fflush(output);
-   */
   /* Take the next free entry in the Call Back Functions Area.	*/
   /* This area is defined by 
    * [ lastCBFABlock->entries <= CBFATop < CBFALimit ].
@@ -89,16 +65,10 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
   Ck(theStruct);
   Ck(theObj);
   CBFATop->theStruct = theStruct;
-  CBFATop->mov_o7_g1 = MOV_O7_G1;
-  MK_CALL(&CBFATop->call_HandleCallBack, HandleCB);
-  CBFATop->nop       = NOP;
-  /* Flush the Instruction Cache, not nessesary I think [tthorn] */
-  /* So I removed it - prj */
-  /* __asm__("iflush %0"::"r" (&CBFATop->mov_o7_g1));
-  __asm__("iflush %0"::"r" (&CBFATop->call_HandleCallBack));
-  __asm__("iflush %0"::"r" (&CBFATop->nop)); */
+  MK_CALL( HandleCB);
+  FlushCache;
   ++CBFATop;
-  return (void *)&(CBFATop-1)->mov_o7_g1;
+  return (void *)(&(CBFATop-1)->code[0]);
 }
 
 #endif /* crts */
