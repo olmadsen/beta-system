@@ -923,7 +923,7 @@ long GetDistanceToEnclosingObject( theObj)
       if (!(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell))) {
 	fprintf (output, "theCell = 0x%x, *theCell = 0x%x\n", theCell, *theCell);
 	Claim( inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell),
-	      "IOACheckReference: *theCell inside IOA, AOA or LVRA");
+	      "IOACheckReference: *theCell lazy ref or inside IOA, AOA or LVRA");
       }
       if( inLVRA(*theCell) ){
 	Claim( ((ref(ValRep)) *theCell)->GCAttr == (long) theCell,
