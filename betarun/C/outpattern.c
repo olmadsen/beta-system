@@ -343,7 +343,7 @@ DisplayBetaStack( errorNumber, theObj)
     currentComponent = ActiveComponent;
     theTop    = StackEnd;
     theBottom = (ptr(long)) lastCompBlock;
-    theFrame  = ActiveCallBackFrame;
+    theFrame  = ActiveCallBackFrame; 
     /* Follow the stack */
     while( theFrame){
       DisplayStackPart( output, theTop+1, (long *)theFrame-1);
@@ -353,7 +353,7 @@ DisplayBetaStack( errorNumber, theObj)
       if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
       theTop += 2;
     }
-    DisplayStackPart(output, theTop, theBottom-1);
+    DisplayStackPart(output, theTop, theBottom-2);
     
     DisplayObject( output, (ref(Object)) currentComponent, 0);
     /* Make an empty line after the component */
@@ -369,8 +369,7 @@ DisplayBetaStack( errorNumber, theObj)
     currentComponent = currentComponent->CallerComp;
     
     while( currentBlock->next ){
-      theTop    = (long *) ((long) currentBlock +
-			    sizeof(struct ComponentBlock) );
+      theTop    = (long *) ((long) currentBlock + sizeof(struct ComponentBlock) );
       theBottom = (ptr(long)) currentBlock->next;
       theFrame  = currentBlock->callBackFrame;
       
@@ -383,7 +382,7 @@ DisplayBetaStack( errorNumber, theObj)
 	if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
 	theTop += 2;
       }
-      DisplayStackPart( output, theTop, theBottom-1); 
+      DisplayStackPart( output, theTop, theBottom-2); 
       
       DisplayObject( output, (ref(Object)) currentComponent, 0);
       /* Make an empty line after the component */
