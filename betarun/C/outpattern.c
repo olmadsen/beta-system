@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: outpattern.c,v 1.20 1992-09-04 14:35:17 poe Exp $
+ * Mod: $Id: outpattern.c,v 1.21 1992-09-04 17:13:37 tthorn Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
@@ -203,6 +203,17 @@ static DisplayStackPart( output, low, high)
   }
 }
 
+#ifdef sparc
+void
+DisplayAR(FILE *output, struct RegWin *theAR, struct RegWin *nextAR)
+{
+    struct Object *theObj = (struct Object *) theAR->i0;
+
+    if ((inIOA(theObj) || inAOA(theObj)) && isObject(theObj))
+      DisplayObject(output, theObj, theAR->i7);
+}
+#endif
+
 DisplayBetaStack( errorNumber, theObj)
   int errorNumber;
   ref(Object) theObj;
@@ -233,6 +244,8 @@ DisplayBetaStack( errorNumber, theObj)
 
   fprintf(output,"\nCall chain:\n");
 
+
+#ifndef sparc
   /* If we are able to retrieve information about the current object
    * dump it.
    */
@@ -244,6 +257,7 @@ DisplayBetaStack( errorNumber, theObj)
     }
   }else
     fprintf(output,"Current object is 0!\n");
+#endif
 
 #ifdef hppa
   fprintf(output, "Unable to do stack-trace on the snake, sorry!\n");
@@ -251,6 +265,54 @@ DisplayBetaStack( errorNumber, theObj)
   return;
 #endif
 
+#ifdef sparc
+  /*
+   * This is the SPARC specifics of DisplayBetaStack
+   */
+  {
+      struct RegWin *theAR;
+      struct RegWin *nextCBF = (struct RegWin *) ActiveCallBackFrame;
+      struct RegWin *nextCompBlock = (struct RegWin *) lastCompBlock;
+    
+      currentComponent = ActiveComponent;
+      /* Flush register windows to stack */
+      asm("ta 3");
+    
+      for (theAR =  (struct RegWin *) StackEnd;
+	   theAR != (struct RegWin *) 0;
+	   theAR =  (struct RegWin *) theAR->fp) {
+	  if (theAR == nextCompBlock) {
+	      /* This is the AR of attach. Continue GC, but get
+	       * new values for nextCompBlock and nextCBF. 
+	       * Please read StackLayout.doc
+	       */
+
+	      DisplayObject(output, currentComponent, 0);
+	      /* Make an empty line after the component */
+	      fprintf(output, "\n"); fflush(output);
+
+	      nextCBF = (struct RegWin *) theAR->l5;
+	      nextCompBlock = (struct RegWin *) theAR->l6;
+	      if (nextCompBlock == 0)
+		break; /* we reached the bottom */
+	  }
+	  else if (theAR == nextCBF) {
+	      /* This is AR of HandleCB. Don't GC this, but
+	       * skip to betaTop and update nextCBF */
+
+	      fprintf( output,"  [ C ACTIVATION PART ]\n");
+
+	      nextCBF = (struct RegWin *) theAR->l5;
+	      theAR = (struct RegWin *) theAR->l6;
+	  }
+	  if (theAR->fp != nextCompBlock)
+	    DisplayAR(output, theAR, (struct RegWin *) theAR->fp);
+      }
+  }
+#endif
+
+#ifndef hppa
+#ifndef sparc
    /*
    * First handle the topmost component block
    */
@@ -306,7 +368,8 @@ DisplayBetaStack( errorNumber, theObj)
     currentObject    = currentComponent->CallerObj;
     currentComponent = currentComponent->CallerComp;
   }
+#endif
+#endif
 
   fclose(output);
 }
-
