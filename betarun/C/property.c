@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: property.c,v 1.14 1992-10-19 13:15:58 beta Exp $
+ * Mod: $Id: property.c,v 1.15 1992-10-30 12:34:43 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
@@ -31,6 +31,7 @@ static BooleanProperty( name)
   ENTRY("InfoLVRA", InfoLVRA = TRUE);
   ENTRY("InfoCBFA", InfoCBFA = TRUE);
   ENTRY("InfoLVRAAlloc", InfoLVRAAlloc = TRUE);
+  ENTRY("QuaCont",  QuaCont = TRUE);
 
 #ifdef RTDEBUG
   ENTRY("DebugIOA",  DebugIOA = TRUE);
