@@ -73,7 +73,9 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
   long gPart, gDist, mPart, mDist, minDist, newMin;
   struct ProtoType *activeProto;
 
-#if 0
+#undef TRACE_CODEENTRY
+
+#ifdef TRACE_CODEENTRY
   printf("CodeEntry(theProto=0x%x, PC=0x%x)\n", theProto, PC);
 #endif
   mPart = M_Part(theProto);
@@ -83,26 +85,25 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
   activeProto = theProto;
   if (gDist < 0) gDist = MAXINT;
   if (mDist < 0) mDist = MAXINT;
-#if 0
+#ifdef TRACE_CODEENTRY
   printf("CodeEntry(initial gDist: 0x%x, proto=0x%x)\n", gDist, theProto);
   printf("CodeEntry(initial mDist: 0x%x, proto=0x%x)\n", mDist, theProto);
 #endif 
   minDist = newMin = (gDist<mDist) ? gDist : mDist;
     
-  while(theProto->Prefix && 
-	theProto->Prefix->Prefix != theProto->Prefix){
+  while(theProto && theProto->Prefix != theProto){
     theProto = theProto->Prefix;
     mPart = M_Part(theProto);
     gPart = G_Part(theProto);
     if((PC-gPart > 0) && (PC-gPart < minDist)){ 
       newMin = gDist = PC-gPart; 
-#if 0
+#ifdef TRACE_CODEENTRY
       printf("CodeEntry(gDist: 0x%x, proto=0x%x)\n", gDist, theProto);
 #endif 
     }
     if((PC-mPart > 0) && (PC-mPart < minDist)){ 
       newMin = mDist = PC-mPart; 
-#if 0
+#ifdef TRACE_CODEENTRY
       printf("CodeEntry(mDist: 0x%x, proto=0x%x)\n", mDist, theProto);
 #endif 
     }
@@ -113,7 +114,7 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
   }
   if (minDist == MAXINT) {
     fprintf(output, "CodeEntry: minDist == MAXINT\n");
-    return 0;
+    BetaExit(1);
   }
   if (minDist == gDist) {
     return (unsigned long)G_Part(activeProto);
@@ -122,38 +123,51 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
   }
 }
 
-void ProcessMachineStack(void)
+struct Object *ProcessStackPart(long SP, long StackStart, long stopAtComp)
 {
   /* At entry two variables are defined:
-   *  - StackEnd points to address just above last BETA stack frame,
+   *  - SP points to address just above last BETA stack frame,
    *    i.e. to the top of the next-to-last frame.
-   *  - CurrentObject points to current BETA object, corresponding to the
-   *    last BETA frame.
+   *  - StackStart point just above the bottom frame to process.
+   * Returns:
+   *  - dynamic link of last frame processed.
+   *
    * These are used as the starting point of the stack traversal.
    * 
    *  STACK LAYOUT:
    * 
-   *  StackEnd->|____________|     = stack top in previous frame
-   *            |   RTS      |     = current PC for previous frame
-   *            |   dyn      |     = current object for previous frame
-   *            |            |     
    *            |            |   
+   *StackStart->|____________|   
+   *            |            |   
+   *            |            |   
+   *            | frames     |   
+   *            | to proces  |   
+   *            |            |   
+   *            |            |   
+   *            |            |   
+   *            |            |   
+   *        SP->|____________|     = stack top in next-to-last frame
+   *            |   RTS      |     = current PC for next-to-last frame
+   *            |   dyn      |     = current object for next-to-last frame
+   *            |            |     
    *            |            |  
    *            |            |    
    *            |____________|   
    *            |  AlloXXX   |
    *            |   IOAGC    |
    */
-  long SP = (long)StackEnd;
   struct Object *theObj;
   struct Object *this;
   long **TSP = TraceSP;
   long SPoff, PC;
 
-  /* Process the top frame */
+  DEBUG_STACK(fprintf(output, "ProcessStackPart(SP=0x%x, StackStart=0x%x)\n",
+		      SP, StackStart));
   DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
+
+  /* Process the top frame */
   DEBUG_STACK(fprintf(output, "Top: Frame for object 0x%x, prevSP=0x%x\n",
-		      CurrentObject,
+		      GetThis((long *)SP),
 		      SP));
   ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
   PC = *((long *)SP-1);
@@ -185,7 +199,11 @@ void ProcessMachineStack(void)
 	ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
 	PC = *((long*)SP-1);
 	theObj = *((struct Object **)SP-2); 
-	continue; /* Restart do-loop */
+	if (SP<StackStart) {
+	  continue; /* Restart do-loop */
+	} else {
+	  break; /* Leave do-loop */
+	}
       }
     }
 
@@ -231,7 +249,11 @@ void ProcessMachineStack(void)
       ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
       PC = *((long*)SP-1);
       theObj = *((struct Object **)SP-2); 
-      continue; /* Restart do-loop */
+      if (SP<StackStart) {
+	continue; /* Restart do-loop */
+      } else {
+	break; /* Leave do-loop */
+      }
     }
 
     /* Check for passing of a component.
@@ -269,14 +291,27 @@ void ProcessMachineStack(void)
     if ((long)theObj->Proto == (long)ComponentPTValue) {
       struct Component *comp = (struct Component *)theObj;
       struct Component *callerComp = comp->CallerComp;
-      DEBUG_STACK(fprintf(output, "Passing component 0x%x\n", comp));
+
+      if (stopAtComp){
+	/* Processing stackobject:
+	 * Stop processing when the component is reached
+	 */
+	DEBUG_STACK(fprintf(output, "Stopping at component 0x%x\n", comp));
+	break;
+      } else {
+	DEBUG_STACK(fprintf(output, "Passing component 0x%x\n", comp));
+      }
       SP     = (long)callerComp->SPx;
       PC     = (long)callerComp->CallerLSC;
       theObj = comp->CallerObj;
       DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));
       DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));
       DEBUG_STACK(fprintf(output, "New object: 0x%x (proto: 0x%x)\n", theObj, theObj->Proto));
-      continue; /* Restart do-loop */
+      if (SP<StackStart) {
+	continue; /* Restart do-loop */
+      } else {
+	break; /* Leave do-loop */
+      }
     }
 
     /* INVARIANT: 
@@ -329,13 +364,14 @@ void ProcessMachineStack(void)
     DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
     DEBUG_STACK(fprintf(output, "Frame for object 0x%x\n", this));
     ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
-  } while (theObj);
+  } while (SP<StackStart);
   DEBUG_CODE(Claim(SP==(long)StackStart, "SP==StackStart"));
+  return theObj;
 }
 
 void ProcessStack()
 {
-  void *null;
+  struct Object *last;
   /* There are two set of GC roots:
    * 1. The ReferenceStack contains roots
    *    saved during an active AlloI etc. via the Protect macro.
@@ -346,11 +382,16 @@ void ProcessStack()
   DEBUG_STACK(fprintf(output, "\nProcessReferenceStack.\n"));
   ProcessRefStack(RefSP-1); /* RefSP points to first free */
   DEBUG_STACK(fprintf(output, "ProcessMachineStack.\n"));
-  ProcessMachineStack();
+  last = ProcessStackPart((long)StackEnd, (long)StackStart, FALSE);
+  Claim(last==0, "ProcessMachineStack: last dyn==0\n");
 }
 
-void ProcessStackObj(struct StackObject *theStackObject)
+void ProcessStackObj(struct StackObject *sObj)
 {
+  DEBUG_STACK(fprintf(output, "\nProcessStackObject 0x%x\n", sObj));
+  ProcessStackPart((long)sObj->Body+(long)sObj->StackSize, /* top frame off */
+		   (long)sObj->Body+(long)sObj->BodySize, /* bottom */
+		   TRUE); /* Stop at component */
 }
 #endif
 

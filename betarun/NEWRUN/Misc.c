@@ -7,7 +7,17 @@
 #include "crun.h"
 
 struct Object *GetThis(long *SP)
-{
+{ 
+  /* OLM: to test fix made by placing this in 
+   *   
+   *     SP ->  | end-of-previous-frame |
+   *            |-----------------------|
+   *     SP-1:  |    return address     |
+   *     SP-2:  |    dyn                |
+   *     SP-3:  |    this               |
+   *            |    ...                |
+   */
+
   /* Find current object in stack frame starting in SP-1.
    * (SP points to top of previous frame).
    * By now it is always the last reference pushed.
@@ -15,6 +25,9 @@ struct Object *GetThis(long *SP)
   struct Object **FP; 
   struct Object *top; 
   struct Object *next;
+
+  /* OLM */
+  /*return (struct Object *) SP[-3]; ud igen:-) */
   
   FP = (struct Object **)SP-2;
   top  = *FP--; /* dyn */

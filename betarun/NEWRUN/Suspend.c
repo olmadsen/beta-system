@@ -78,8 +78,14 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
    /* copy SPz[0],  SPz[1], ... , SPz[(SPy-SPz-4)/4] = SPy[-1] */
    for (i=0;  i < (SPy-SPz)/4; i++)
      *((long *)sObj->Body+i) = *((long *)SPz+i);
+   /* Save size of top frame in sObj->StackSize.
+    * Used by ProcessStackObj in stack.c.
+    */
+   sObj->StackSize = (long)prevSP - (long)SPz;
+   /* Save sObj in ActiveComponent */
    ActiveComponent->StackObj = (struct StackObject *)sObj;
 
+   /* Switch ActiveComponent */
    ActiveComponent = ActiveComponent->CallerComp; 
    CallBetaEntry((long)returnComp->CallerLSC, 
 		 (void *)SPx, 

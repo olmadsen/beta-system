@@ -17,7 +17,7 @@ struct StackObject *AlloSO(unsigned size, long *SP)
     theStack->Proto = StackObjectPTValue;
     theStack->GCAttr = 1;
     theStack->BodySize = size;
-    theStack->StackSize = size; /* always identical to BodySize in NEWRUN */
+    theStack->StackSize = 0;
 
     /*fprintf(output, "AlloSO: theObj: 0x%x, size=0x%x\n", theStack, size);*/
 

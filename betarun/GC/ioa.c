@@ -318,7 +318,7 @@ void IOAGc()
 Program terminated.\n", (int)(4*ReqObjectSize));
 	Notify(buf);
 #ifdef NEWRUN
-	BetaError(IOAFullErr, 0, 0);
+	BetaError(IOAFullErr, CurrentObject, StackEnd);
 #else
 	BetaError(IOAFullErr, 0);
 #endif

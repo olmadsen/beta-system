@@ -116,7 +116,6 @@ extern void AOACheckObjectSpecial(ref(Object));
 extern ref(Object) NewCopyObject(ref(Object), handle(Object));
 
 /* GC/stack.c */
-extern void ProcessStackPart(long *, long *);
 extern void ProcessStack(void);
 extern void ProcessStackObj(struct StackObject *);
 

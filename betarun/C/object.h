@@ -49,7 +49,9 @@ typedef struct StackObject{
     ref(ProtoType)  Proto;     /* Reference to the Prototype  */
     long            GCAttr;    /* The GC attribute            */
     long            BodySize;  /* The size of the body part   */
-    long            StackSize; /* Size of the packed stack    */
+    long            StackSize; /* Size of the packed stack   
+				* Size of top frame in NEWRUN 
+				*/
     long            Body[1];   /* The body part               */ 
 } StackObject;
 
