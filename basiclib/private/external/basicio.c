@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <errno.h>
+#include <sys/time.h>
 
 void PutToScreen(char ch)
   {
@@ -10,19 +12,43 @@ void PutTextToScreen(char *str)
    fputs(str,stdout);
    fflush(stdout);
   }
+
+static int my_getchar(void)
+{
+    int ch;
+    ch=getchar();
+    if (ch == EOF && errno==EAGAIN) {
+        fd_set fdset;
+        int fd = fileno(stdin);
+        FD_ZERO(&fdset);
+        FD_SET(fd, &fdset);
+        select(1, &fdset,NULL,NULL,NULL);
+        ch=getchar();
+    }
+    return ch;
+}
+
+    
 char GetFromKeyboard(void)
   {
-   return(getchar());
+   return(my_getchar());
   }
 int KeyboardEOS(void)
-  {
-   int ch;
-   ungetc(ch=getchar(),stdin);
-   return(ch==EOF); 
-  }
+{
+    int ch;
+    ch=my_getchar();
+    ungetc(ch, stdin);
+    return(ch==EOF); 
+}
 int KeyboardPeek(void)
-{ int ch;
-  if ((ch=getchar()) != EOF) ungetc(ch, stdin);
+{
+  int ch;
+  ch=my_getchar();
+ 
+  if (ch != EOF) {
+      ungetc(ch, stdin);
+  }
+  
   return (ch);
 }
 
