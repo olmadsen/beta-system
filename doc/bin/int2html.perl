@@ -86,7 +86,7 @@ sub print_button
     local ($type, $href) = @_;
     local ($alt) = ucfirst ($type);
     # special case for "prev":
-    $type =~ s/Prev/Previous/g;
+    $alt =~ s/Prev/Previous/g;
     if ("$href" eq ""){
 	print "<A><IMG ALIGN=BOTTOM SRC=\"../../images/";
 	print $type . "g.gif\" ALT=";
