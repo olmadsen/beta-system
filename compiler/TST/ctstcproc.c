@@ -5,7 +5,10 @@ int  giveMe1Argument(a,b,c) int a,b,c; { return a; }
 int  giveMe2Argument(a,b,c) int a,b,c; { return b; }
 int  giveMe3Argument(a,b,c) int a,b,c; { return c; }
 int sumMany(a,b,c,d,e,f,g,h,i,j) int a,b,c,d,e,f,g,h,i,j;
-{return a+b+c+d+e+f+g+h+i+j; }
+{
+  /*printf("\n%i %i %i %i %i %i %i %i %i %i\n",a,b,c,d,e,f,g,h,i,j);*/
+  return a+b+c+d+e+f+g+h+i+j; 
+}
 
 void doCallBar(f)
      void (*f)();
