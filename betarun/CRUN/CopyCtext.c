@@ -8,53 +8,39 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifdef sparc
-asmlabel(CopyCT,
-	 "clr %o0\n"
-	 "clr %o1\n"
-	 "clr %o3\n"
-	 "clr %o4\n"
-	 "ba "CPREF"CopyCT\n"
-	 "mov %l0,%o2\n"
-);
-ref(ValRep) CCopyCT(int i0, int i1, unsigned char *textPtr)
-#else
-ref(ValRep) CopyCT(unsigned char *textPtr)
-#endif
+ParamAscii(struct ValRep *, CopyCT)
 {
-    DeclReference1(struct ValRep *, theRep);
-    register unsigned range, size;
-
-    GCable_Entry();
-
+  DeclReference1(struct ValRep *, theRep);
+  register unsigned range, size;
+  
+  GCable_Entry();
+  
+  FetchAscii();
+  
+  DEBUG_CODE(NumCopyCT++);
+  
+  /* Allocate a ValueRepetition and initialize it with some text.    */
+  
+  range = ascii ? strlen((const char *)ascii) : 0;
+  size = ByteRepSize(range);
+  
+  /* LVRA missing */
+  theRep = cast(ValRep) IOAalloc(size);
+  
+  theRep->Proto = ByteRepPTValue;
+  if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+  theRep->LowBorder = 1;
+  theRep->HighBorder = range;
+  
+  /* Assign the text to the body part of the repetition. */
+  
+  if (ascii) strcpy((char *)theRep->Body, (char *)ascii);
+  
+  Ck(theRep);
+  
 #ifdef hppa
-    textPtr = (unsigned char *) getD0Reg();
+  setOriginReg(theRep);
 #endif
-
-    DEBUG_CODE(NumCopyCT++);
-
-    /* Allocate a ValueRepetition and initialize it with some text.    */
-
-    range = textPtr ? strlen((const char *)textPtr) : 0;
-    size = ByteRepSize(range);
-
-    /* LVRA missing */
-    theRep = cast(ValRep) IOAalloc(size);
-
-    theRep->Proto = ByteRepPTValue;
-    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-    theRep->LowBorder = 1;
-    theRep->HighBorder = range;
-
-    /* Assign the text to the body part of the repetition. */
-
-    if (textPtr) strcpy((char *)theRep->Body, (char *)textPtr);
-
-    Ck(theRep);
-
-#ifdef hppa
-    setOriginReg(theRep);
-#endif
-
-    return theRep;
+  
+  return theRep;
 }

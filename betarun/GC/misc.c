@@ -264,6 +264,22 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 	return;
       }
 #endif /* NEWRUN */
+#ifdef MT
+      if (r==(void*)16){
+	DEBUG_MT(fprintf(output, 
+			 " [Ck: ignoring 0x10 (origin?) at %s:%d]", 
+			 fname, 
+			 lineno));
+	return;
+      }
+      if (r==(void*)-1){
+	DEBUG_MT(fprintf(output, 
+			 " [Ck: ignoring -1 (origin?) at %s:%d]", 
+			 fname, 
+			 lineno));
+	return;
+      }
+#endif /* NEWRUN */
       /* Check alignment */
       Claim(isLazyRef(r) || (((long)r&3)==0), __CkString);
       /* Check it's in a heap */
@@ -279,11 +295,15 @@ long isInToSpace(long x)
 {
   return (long)inToSpace(x);
 }
+#endif /* RTDEBUG */
+
+#if defined(MT) || defined(RTDEBUG)
 long isInAOA(long x)
 {
   return (long)inAOA(x);
 }
 #endif
+
 
 #if defined(MAC)
 GLOBAL(static long gcRotateCursor)=0;

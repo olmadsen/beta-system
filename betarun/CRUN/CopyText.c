@@ -8,27 +8,7 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifdef sparc
-asmlabel(CopyT,
-	 "mov %o0,%o5;"	 /* Don't allow asciiz in %o0 */
-         "clr %o0;"
-	 "clr %o3;"
-	 "ba "CPREF"CopyT;"
-         "clr %o4;"
-         );	
-struct Item *CCopyT(int i0,
-		    ref(Item) theItem,
-		    unsigned offset, /* i ints */
-		    int i3,
-		    int i4,
-		    char *asciz
-		    )
-#else
-struct Item *CopyT(char *asciz,
-		   ref(Item) theItem,
-		   unsigned offset /* i ints */
-		   )
-#endif
+ParamItemAscii(struct Item *, CopyT)
 {
   DeclReference1(struct ValRep *, theRep);
   register unsigned range, size, i;
@@ -40,7 +20,7 @@ struct Item *CopyT(char *asciz,
   Ck(theItem);
   /* Allocate a ValueRepetition and initialize it with some text.    */
   
-  range = strlen(asciz);
+  range = strlen(ascii);
   
   /* LVRA missing */
   
@@ -57,8 +37,8 @@ struct Item *CopyT(char *asciz,
   /* Assign the text to the body part of the repetition. */
   
   for (i = 0; i < (size-headsize(ValRep))/4; i++){
-    /* printf("CopyT: %.4s\n", (long *)asciz + i); */
-    theRep->Body[i] = *((long *)asciz + i);
+    /* printf("CopyT: %.4s\n", (long *)ascii + i); */
+    theRep->Body[i] = *((long *)ascii + i);
   }
   
   AssignReference((long *)theItem + offset, cast(Item) theRep);

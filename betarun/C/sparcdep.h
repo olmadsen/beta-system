@@ -83,6 +83,11 @@ register volatile void *GCreg4 __asm__("%o4");
     __asm__("ret; restore %0, 0, %%i1"::"r" (value));   \
     return value /* keep gcc happy */
 
+#define return_in_i0(value)                             \
+    __asm__ volatile("":: "r" (value));                 \
+    __asm__("ret; restore %0, 0, %%i0"::"r" (value));   \
+    return value /* keep gcc happy */
+
 #define FetchOriginProto()
 #define FetchObjOriginProtoOffRange()
 #define FetchObjOffRange()
@@ -94,23 +99,51 @@ register volatile void *GCreg4 __asm__("%o4");
 #define FetchORepObjOff()
 #define FetchORepObjOffLowHigh()
 #define FetchStruc()
+#define FetchOriginSize()
+#define FetchAscii()
+#define FetchItemAscii()
+#define FetchParamProtoCellOriginThis()  
 
 #define SaveVar(var) push(var)
 #define RestoreVar(var) pop(var)
 
 #ifdef MT
-#define CallWithFullSave(name)                          \
+#define CallAndSave_I0_I1_O0(name)                      \
            "mov %o7,%l7; "                              \
            "st %i0,[%g4+32]; " /* TSD->_CurrentObject */\
-           "st %o0,[%g4+36]; " /* TSD->_Origin */\
+           "st %o0,[%g4+36]; " /* TSD->_Origin */       \
            "call "CPREF#name"; "                        \
-           "st %i1,[%g4+40]; " /* TSD->_SavedCallO */\
+           "st %i1,[%g4+40]; " /* TSD->_SavedCallO */   \
            "mov %l7,%o7; "                              \
            "ld [%g4+32],%i0; "                          \
            "ld [%g4+36],%o0; "                          \
            "ld [%g4+40],%i1; "                          \
+           "st %g0,[%g4+32];  "                         \
+           "st %g0,[%g4+36];  "                         \
            "retl; "                                     \
-           "st %g0,[%g4+32];  "
+           "st %g0,[%g4+40];  "
+#define CallAndSave_I1_O0(name)                         \
+           "mov %o7,%l7; "                              \
+           "st %o0,[%g4+36]; " /* TSD->_Origin */       \
+           "call "CPREF#name"; "                        \
+           "st %i1,[%g4+40]; " /* TSD->_SavedCallO */   \
+           "mov %l7,%o7; "                              \
+           "ld [%g4+36],%o0; "                          \
+           "ld [%g4+40],%i1; "                          \
+           "st %g0,[%g4+36];  "                         \
+           "retl; "                                     \
+           "st %g0,[%g4+40];  "
+#define CallAndSave_I0_I1(name)                         \
+           "mov %o7,%l7; "                              \
+           "st %i0,[%g4+32]; " /* TSD->_CurrentObject */\
+           "call "CPREF#name"; "                        \
+           "st %i1,[%g4+40]; " /* TSD->_SavedCallO */   \
+           "mov %l7,%o7; "                              \
+           "ld [%g4+32],%i0; "                          \
+           "ld [%g4+40],%i1; "                          \
+           "st %g0,[%g4+32];  "                         \
+           "retl; "                                     \
+           "st %g0,[%g4+40];  "
 #endif /* MT */
 
 
@@ -131,7 +164,7 @@ register volatile void *GCreg4 __asm__("%o4");
                int i4)
 
 #else /* MT */
-/* AlloC, AlloI, AlloH, AlloS done in beta */
+/* AlloC, AlloI, AlloH, AlloS generated in BetaRun.bet */
 #endif /* MT */
 
 
@@ -155,7 +188,7 @@ register volatile void *GCreg4 __asm__("%o4");
   asmlabel(name,                                        \
 	   "mov %i0,%o0; "				\
 	   "mov %i1,%o1; "				\
-	   CallWithFullSave(name)                       \
+	   CallAndSave_I0_I1_O0(name)                   \
 	   );                                           \
  type C##name(struct Object *this, struct Component *comp)
 
@@ -234,7 +267,7 @@ register volatile void *GCreg4 __asm__("%o4");
 /* ExtRR, ExtVRx */
 #define ParamObjOffRange(name)			        \
   asmlabel(name, 					\
-	   CallWithFullSave(name)                       \
+	   CallAndSave_I0_I1_O0(name)                   \
            );                                           \
  void C##name(struct Object *theObj,			\
 	      unsigned offset, /* in bytes */           \
@@ -255,7 +288,7 @@ void name(struct ValRep *theRep,                        \
 /* CopyRR, CopyVR1, CopyVR2, CopyVR4, CopyVR8 */
 #define ParamRepObjOff(name)                            \
   asmlabel(name,                                        \
-	   CallWithFullSave(name)                       \
+	   CallAndSave_I0_I1_O0(name)                   \
 	   );                                           \
 void C##name(struct ValRep *theRep,                     \
 	     struct Object *theObj,                     \
@@ -276,7 +309,7 @@ void name(struct ObjectRep *theRep,                     \
 /* CopySVRI, CopySVRC, CopyVRI, CopyVRC */
 #define ParamORepObjOff(name)                           \
   asmlabel(name,                                        \
-	   CallWithFullSave(name)                       \
+	   CallAndSave_I0_I1_O0(name)                   \
 	   );                                           \
 void C##name(struct ObjectRep *theRep,                  \
 	     struct Object *theObj,                     \
@@ -300,7 +333,7 @@ void name(struct ValRep *theRep,                        \
 /* CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
 #define ParamRepObjOffLowHigh(name)                     \
   asmlabel(name,                                        \
-	   CallWithFullSave(name)                       \
+	   CallAndSave_I0_I1_O0(name)                   \
 	   );                                           \
 void C##name(struct ValRep *theRep,                     \
 	     struct Object *theObj,                     \
@@ -325,7 +358,7 @@ void name(struct ObjectRep *theRep,                     \
 /* CopySVRI, CopySVRC CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
 #define ParamORepObjOffLowHigh(name)                    \
   asmlabel(name,                                        \
-	   CallWithFullSave(name)                       \
+	   CallAndSave_I0_I1_O0(name)                   \
 	   );                                           \
 void C##name(struct ObjectRep *theRep,                  \
 	     struct Object *theObj,                     \
@@ -349,6 +382,116 @@ void C##name(struct ObjectRep *theRep,                  \
 	      int range,			        \
 	      int i4,					\
 	      struct ProtoType *proto)
+#endif /* MT */
+
+#ifdef MT
+/* AlloDO */
+#define ParamOriginSize(type, name)	                \
+  asmlabel(name, 					\
+	   "mov  %o0,%o2;"                              \
+	   "mov  %i0,%o0;"                              \
+	   CallAndSave_I1_O0(name)                      \
+           );                                           \
+  type C##name(struct Object *origin,                   \
+               int i1,                                  \
+               unsigned size)
+#else /* MT */
+/* AlloDO */
+#define ParamOriginSize(type, name)	                \
+  asmlabel(name, 					\
+	   "mov  %o0,%o2;"                              \
+	   "mov  %i0,%o0;"                              \
+	   "clr  %o1;"                                  \
+	   "clr  %o3;"                                  \
+	   "ba "CPREF#name"; "				\
+	   "clr  %o4; ");				\
+  type C##name(struct Object *origin,                   \
+               int i1,                                  \
+               unsigned size)
+
+#endif /* MT */
+
+
+#ifdef MT
+/* CopyCT */
+#define ParamAscii(type, name)                          \
+  asmlabel(name, 					\
+           "mov %l0,%o2; "                              \
+	   CallAndSave_I0_I1(name)                      \
+           );                                           \
+type C##name(int i0, int i1, unsigned char *ascii)
+#else /* MT */
+/* CopyCT */
+#define ParamAscii(type, name)                          \
+asmlabel(name,                                          \
+	 "clr %o0; "                                    \
+	 "clr %o1; "                                    \
+	 "clr %o3; "                                    \
+	 "clr %o4; "                                    \
+	 "ba "CPREF#name"; "                            \
+	 "mov %l0,%o2; "                                \
+         );                                             \
+type C##name(int i0, int i1, unsigned char *ascii)
+
+#endif /* MT */
+
+#ifdef MT
+/* CopyT */
+#define ParamItemAscii(type, name)                      \
+asmlabel(name,                                          \
+	 "mov %o0,%o5;"                                 \
+         CallAndSave_I0_I1(name)                        \
+         );                                             \
+type C##name(int i0,                                    \
+	     struct Item *theItem,                      \
+	     unsigned offset, /* i ints */              \
+	     int i3,                                    \
+	     int i4,                                    \
+	     char *ascii)
+#else /* MT */
+/* CopyT */
+#define ParamItemAscii(type, name)                      \
+asmlabel(name,                                          \
+	 "mov %o0,%o5;"                                 \
+         "clr %o0;"                                     \
+	 "clr %o3;"                                     \
+	 "ba "CPREF#name"; "                            \
+         "clr %o4;"                                     \
+         );                                             \
+type C##name(int i0,                                    \
+	     struct Item *theItem,                      \
+	     unsigned offset, /* i ints */              \
+	     int i3,                                    \
+	     int i4,                                    \
+	     char *ascii)
+
+#endif /* MT */
+
+#ifdef MT
+/* Qua */
+#define ParamProtoCellOriginThis(name)                  \
+asmlabel(name,                                          \
+	 "mov %i1,%o2; " /* dstQuaProto */              \
+	 "mov %i0,%o3; " /* This */                     \
+         CallAndSave_I0_I1_O0(name)                     \
+         );                                             \
+void C##name(ref(Object) dstQuaOrigin,                  \
+	     struct Object **theCell,                   \
+	     ref(ProtoType) dstQuaProto,                \
+	     ref(Object) this)
+#else /* MT */
+/* Qua */
+#define ParamProtoCellOriginThis(name)                  \
+asmlabel(name,                                          \
+	 "mov %i1,%o2; " /* dstQuaProto */              \
+	 "ba "CPREF#name"; "                            \
+	 "mov %i0,%o3; " /* This */                     \
+         );                                             \
+void C##name(ref(Object) dstQuaOrigin,                  \
+	     struct Object **theCell,                   \
+	     ref(ProtoType) dstQuaProto,                \
+	     ref(Object) this)
+
 #endif /* MT */
 
 /* On the SPARC we need to skip the first instruction */

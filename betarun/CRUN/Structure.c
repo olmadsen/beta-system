@@ -97,8 +97,6 @@ ref(Structure) ObjS(ref(Object) theObj)
    * R: ^T
    * R##
    *
-   * Unlike ThisS the object and not the origin should be used in the 
-   * generated struc object.
    */
   
   register ref(Structure) newStruct;
@@ -127,67 +125,6 @@ ref(Structure) ObjS(ref(Object) theObj)
   Ck(newStruct); Ck(theObj);
   
   return newStruct; 
-}
-
-#ifdef sparc
-asmlabel(ThisS,
-	 "mov %i0,%o0;"
-	 "clr %o1;"
-	 "clr %o3;"
-	 "ba "CPREF"ThisS;"
-	 "clr %o4;"
-	 );
-ref(Structure) CThisS(ref(Object) this)
-#else
-ref(Structure) ThisS(ref(Object) this)
-#endif
-{
-  /* Allocate a structObject for thisObject. 
-   * Used in this way:
-   *
-   * object: (# struc: (# ... do ... TOS'ThisS' ... #) do ... #)
-   * R: ^T
-   * R.struc
-   *
-   * Since ThisS is called from within the struc pattern, we must use
-   * the origin in the generated struc object.
-   */
-  
-  register ref(Structure) newStruct;
-  register ref(Object) origin;
-  
-  GCable_Entry();
-  
-#ifdef hppa
-  this = cast(Object) getCallReg();
-#endif
-  
-  DEBUG_CODE(NumThisS++);
-
-  /* Allocate a StructObject. */
-  
-  Ck(this);
-  Protect(this, newStruct = cast(Structure) IOAalloc(StructureSize));
-  
-  newStruct->Proto = StructurePTValue;
-  if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
-  
-  origin = (casthandle(Object)this)[this->Proto->OriginOff];
-  /* origin is the object we really want origin and proto of */
-  
-#ifdef RTDEBUG
-  if (origin->Proto == DopartObjectPTValue){
-    fprintf(output, "ThisS: called with DoPartObject: 0x%x\n", (int)this);
-    origin = ((struct DopartObject *)origin)->Origin; /* the "real" object */
-  }
-#endif
-
-  newStruct->iProto = origin->Proto;
-  newStruct->iOrigin = (casthandle(Object)origin)[origin->Proto->OriginOff];
-  
-  Ck(newStruct); Ck(this);
-
-  return newStruct;
 }
 
 long eqS(ref(Structure) arg1, ref(Structure) arg2)

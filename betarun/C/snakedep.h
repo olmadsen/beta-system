@@ -438,6 +438,41 @@ void name(struct ObjectRep *theRep,                     \
   /* offset and range are in correct registers */       \
   proto  = (struct ProtoType *) getCallReg()
 
+
+/* AlloDO */
+#define ParamOriginSize(type, name)	                \
+type name(unsigned size, struct Object *origin)         
+#define FetchOriginSize()			        \
+  /* size is in correct register */                     \
+  origin = (struct Object *) getThisReg();              \
+
+
+/* CopyCT */
+#define ParamAscii(type, name)                          \
+    type name(unsigned char *ascii)
+#define FetchAscii                                      \
+    ascii = (unsigned char *) getD0Reg();
+
+
+#define ParamItemAscii(type, name)                      \
+type name(char *ascii,                                  \
+	  ref(Item) theItem,                            \
+	  unsigned offset /* i ints */)
+
+#define FetchItemAscii()                                \
+     /* All are in correct registers */
+
+/* Qua */
+#define ParamProtoCellOriginThis(name)                  \
+void name(ref(ProtoType) dstQuaProto,                   \
+	 struct Object **theCell,                       \
+	 ref(Object) dstQuaOrigin,                      \
+	 ref(Object) this) 
+
+#define FetchParamProtoCellOriginThis()                 \
+  this = cast(Object)getThisReg();                      \
+  dstQuaProto = cast(ProtoType)getCallReg();
+
 /* Wrappers for functions called directly from RTS */
 extern struct Component *AlloC();
 extern struct Item *AlloI();

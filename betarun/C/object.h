@@ -345,7 +345,7 @@ typedef struct TSD
   /* 24 */ thread_t             _thread_id;
   /* 28 */ nums               * _nums;
   /* 32 */ struct Object      * _CurrentObject;
-  /*       NB: This offset is hardcoded into CallWithSave in sparcdep.h */
+  /*       NB: This offset is hardcoded into CallAndSave* in sparcdep.h */
   /* 36 */ struct Object      * _Origin;
   /* 40 */ struct Object      * _SavedCallO;
   /* 44 */ long                 _TSDinx;

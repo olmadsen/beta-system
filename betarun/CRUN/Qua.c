@@ -9,42 +9,23 @@
 #include "crun.h"
 
 /* Qua check.
- * The reference assignment src[]->dst[] has just been made. dst resides in theCell.
+ * The reference assignment src[]->dst[] has just been made. dst resides in 
+ * theCell.
  * Perform.
  *   1. CheckReferenceAssigment
- *   2. Qua Check: Check if the actual qualification of src is less than or equal than
- *                 qualification of dst, as given by dstQuaProto and dstQuaOrigin.
+ *   2. Qua Check: Check if the actual qualification of src is less than 
+ *      or equal to qualification of dst, as given by dstQuaProto and 
+ *      dstQuaOrigin.
  */
 
 /* Sloppy qua-check, only prototypes are considered */
 
-#ifdef sparc
-asmlabel(Qua,
-	 "mov %i1,%o2;" /* dstQuaProto */
-	 "ba "CPREF"Qua;"
-	 "mov %i0,%o3;" /* This */
-	 );
-void CQua(ref(Object) dstQuaOrigin,
-	  struct Object **theCell,
-	  ref(ProtoType) dstQuaProto,
-	  ref(Object) this)
-#else
-void Qua(ref(ProtoType) dstQuaProto,
-	 struct Object **theCell,
-	 ref(Object) dstQuaOrigin,
-	 ref(Object) this)
-#endif
+ParamProtoCellOriginThis(Qua)
 {
   ref(Object) src;
-    /* the source can be found in theCell since the assignment *has* been done. */
+  /* the source can be found in theCell since the assignment *has* been done */
   ref(ProtoType) srcProto;
   GCable_Entry();
-
-#ifdef hppa
-  this = cast(Object)getThisReg();
-  dstQuaProto = cast(ProtoType)getCallReg();
-  /*dstQuaOrigin = cast(Object)getOriginReg();*/
-#endif
 
   DEBUG_CODE(NumQua++);
 
