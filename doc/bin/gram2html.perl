@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/local/bin/perl -s
 
 # Create HTML file on stdout for the xxx-meta.gram file
 # specified as argument 1.
@@ -6,8 +6,25 @@
 # Requires rule specifier and '::' to be on the same line in order to
 # work.
 
-# Style sheet:
-$css = "../style/miadoc.css";
+sub usage()
+{
+    print "usage: gram2html [-c] [-f] <grammar-meta.gram>\n";
+    print "  -c:  leave out Mjolner Infromatics Copyright\n";
+    print "  -f:  use full paths to style sheets, images, javascripts\n";
+}
+
+if ($f){
+    $css = "/~beta/doc/style/miadoc.css";
+    $lastmodscript = "/~beta/doc/javascript/lastmod.js";
+} else {
+    $css = "../style/miadoc.css";
+    $lastmodscript = "../javascript/lastmod.js";
+}
+if ($c){
+    $copyright = "";
+} else {
+    $copyright = "FONT size=-1>&COPY; <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A></FONT>";
+}
 
 $in_rules = 0;
 
@@ -40,8 +57,8 @@ sub print_trailer
 <TABLE cols=3 border=0 width=100%>
 <TR>
 <TD width="33%" align="left"><ADDRESS>$title</ADDRESS></TD>
-<TD width="34%" align="center"><FONT size=-1>&COPY; <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A></FONT></TD>
-<TD width="33%" align="right"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC="../javascript/lastmod.js"></SCRIPT></FONT></TD>
+<TD width="34%" align="center">$copyright</TD>
+<TD width="33%" align="right"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></FONT></TD>
 </TABLE>
 </BODY>
 </HTML>
