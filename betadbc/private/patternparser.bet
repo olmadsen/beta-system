@@ -1,0 +1,453 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/containers/list'
+        '~beta/basiclib/formatio';
+-- lib: Attributes --
+PatternParser:
+  (#
+     tracer:
+       (#
+          value: @boolean;
+          t: @text;
+          s:<
+            (# value: ^stream
+            do screen[]->value[]; INNER
+            exit value[]
+            #);
+          trace:
+            (# format: t.putFormat (#  do INNER #)
+            do (if value then t.clear; INNER ; t[]->(s).puttext if)
+            #)
+       enter value
+       exit value
+       #);
+     theTracer: @tracer;
+     trace: theTracer.trace (#  do INNER #);
+     NodeVisitor: Visitor
+       (#
+          lastElm: @boolean;
+          visitUnnamedResultSetPattern:< visit
+            (# element::< UnnamedResultSetPattern
+            do
+               INNER ;
+               elm.unnamedSpecifiers.scan
+                 (# 
+                 do
+                    (if current[] = (elm.unnamedSpecifiers.last).elm[] then
+                        true->lastElm
+                     else
+                        false->lastElm
+                    if);
+                    THIS(Visitor)[]->current.accept
+                 #)
+            #);
+          visitNamedResultSetPattern:< visit
+            (# element::< NamedResultSetPattern
+            do
+               INNER ;
+               elm.namedSpecifiers.scan
+                 (# 
+                 do
+                    (if current[] = (elm.namedSpecifiers.last).elm[] then
+                        true->lastElm
+                     else
+                        false->lastElm
+                    if);
+                    THIS(Visitor)[]->current.accept
+                 #)
+            #);
+          visitNamedSpecifier:< visit
+            (# element::< NamedSpecifier
+            do
+               INNER ;
+               THIS(Visitor)[]->elm.theNameDecl.accept;
+               THIS(Visitor)[]->elm.theUnnamedSpecifier.accept
+            #);
+          visitVariable:< visit (# element::< Variable do INNER #);
+          visitPlaceholder:< visit (# element::< Placeholder do INNER #);
+          visitNameDecl:< visit (# element::< NameDecl do INNER #);
+          visitStatementPattern:< visit
+            (# element::< StatementPattern
+            do
+               INNER ;
+               elm.StatementStringOrSpecifiers.scan
+                 (# 
+                 do
+                    (if current[] = (elm.StatementStringOrSpecifiers.last).elm[]
+                     then
+                        true->lastElm
+                     else
+                        false->lastElm
+                    if);
+                    THIS(Visitor)[]->current.accept
+                 #)
+            #);
+          visitStatementString:< visit
+            (# element::< StatementString do INNER #);
+          visitStatementSpecifier:< visit
+            (# element::< StatementSpecifier
+            do INNER ; THIS(Visitor)[]->elm.value.accept
+            #)
+       do INNER
+       #);
+     ;
+     parseError:< exception
+       (# t: ^text
+       enter t[]
+       do 'Parse Error! ('->msg; t[]->msg.append; ')'->msg.put
+       #);
+     unParseNode: NodeVisitor
+       (#
+          t: ^text;
+          visitVariable:: 
+            (# 
+            do
+               ':'->t.append;
+               elm.value[]->t.append;
+               (if not lastElm then ' '->t.put if)
+            #);
+          visitPlaceholder:: 
+            (# 
+            do
+               '%'->t.put;
+               elm.mark->t.put;
+               (if not lastElm then ' '->t.put if)
+            #);
+          visitNameDecl::  (#  do elm.value[]->t.append #);
+          visitStatementString:: 
+            (# 
+            do
+               trace
+                 (# 
+                 do
+                    'visitStatementString: "%s"\n'
+                      ->format (#  do elm.value[]->s #)
+                 #);
+               elm.value[]->t.append;
+               (if not lastElm then ' '->t.put if)
+            #);
+          theNode: ^node
+       enter theNode[]
+       do &text[]->t[]; THIS(visitor)[]->theNode.accept
+       exit t[]
+       #);
+     parseResultSetPatternString:<
+       (# t: ^text; res: ^ResultSetPattern
+       enter t[]
+       do
+          (if t[] = none then
+              &resultSetPattern[]->res[]
+           else
+              t.reset;
+              t.scanWhiteSpace;
+              (if not t.eos then
+                  (if (':' = t.peek) or ('%' = t.peek) then
+                      &UnnamedResultSetPattern[]->res[]
+                   else
+                      &NamedResultSetPattern[]->res[]
+                  if);
+                  t[]->res.parse
+               else
+                  &resultSetPattern[]->res[]
+              if)
+          if);
+          INNER
+       exit res[]
+       #);
+     parseStatementPatternString:<
+       (# t: ^text; res: ^StatementPattern
+       enter t[]
+       do
+          trace
+            (# 
+            do
+               'parseStatementPatternString: "%s"\n'
+                 ->format (#  do t[]->s #)
+            #);
+          &StatementPattern[]->res[];
+          t[]->res.parse;
+          INNER
+       exit res[]
+       #);
+     ;
+     Node:
+       (#
+          accept:<
+            (# theVisitor: ^NodeVisitor enter theVisitor[] do INNER #);
+          parse:< (# t: ^text enter t[] do INNER #);
+          getVariableList: (#  #);
+          getPlaceholderList: (#  #)
+       #);
+     ResultSetPattern: Node (#  #);
+     UnnamedResultSetPattern: ResultSetPattern
+       (#
+          UnnamedSpecifiers: @list (# element:: UnnamedSpecifier #);
+          accept:: 
+            (# 
+            do
+               THIS(UnnamedResultSetPattern)[]
+                 ->theVisitor.visitUnnamedResultSetPattern
+            #);
+          parse:: 
+            (# atom: ^text
+            do
+               trace
+                 (# 
+                 do
+                    'parseUnNamedResultSetPattern: "%s"\n'
+                      ->format (#  do t[]->s #)
+                 #);
+               L:
+                 (# elm: ^UnnamedSpecifier
+                 do
+                    t.getAtom->atom[];
+                    (if not atom.empty then
+                        atom.reset;
+                        (if '%' = atom.peek then
+                            &Placeholder[]->elm[]
+                         else
+                            &Variable[]->elm[]
+                        if);
+                        elm[]->UnnamedSpecifiers.append;
+                        atom[]->elm.parse;
+                        restart L
+                    if)
+                 #)
+            #)
+       #);
+     NamedResultSetPattern: ResultSetPattern
+       (#
+          NamedSpecifiers: @list (# element:: NamedSpecifier #);
+          accept:: 
+            (# 
+            do THIS(NamedResultSetPattern)[]->theVisitor.visitNamedResultSetPattern
+            #);
+          parse:: 
+            (# atom: ^text
+            do
+               trace
+                 (# 
+                 do
+                    'parseNamedResultSetPattern: "%s"\n'
+                      ->format (#  do t[]->s #)
+                 #);
+               L:
+                 (# elm: ^NamedSpecifier
+                 do
+                    t.getAtom->atom[];
+                    (if not atom.empty then
+                        &NamedSpecifier[]->elm[]->NamedSpecifiers.append;
+                        atom.reset;
+                        atom[]->elm.parse;
+                        restart L
+                    if)
+                 #)
+            #)
+       #);
+     Specifier: Node (#  #);
+     NamedSpecifier: Specifier
+       (#
+          theNameDecl: ^NameDecl;
+          theUnnamedSpecifier: ^UnnamedSpecifier;
+          accept:: 
+            (# 
+            do THIS(NamedSpecifier)[]->theVisitor.visitNamedSpecifier
+            #);
+          parse:: 
+            (# atom: ^text
+            do
+               trace
+                 (# 
+                 do 'parseNamedSpecifier: "%s"\n'->format (#  do t[]->s #)
+                 #);
+               t.scan
+                 (#
+                    while:: 
+                      (#  do (not ((ch = ':') or (ch = '%')))->value #)
+                 #);
+               (1,t.pos)->t.sub->atom[];
+               atom.reset;
+               &NameDecl[]->theNameDecl[];
+               atom[]->theNameDecl.parse;
+               (t.pos+1,t.length)->t.sub->atom[];
+               atom.reset;
+               (if '%' = atom.peek then
+                   &Placeholder[]->theUnnamedSpecifier[]
+                else
+                   &Variable[]->theUnnamedSpecifier[]
+               if);
+               atom[]->theUnnamedSpecifier.parse
+            #)
+       #);
+     UnnamedSpecifier: Specifier (#  #);
+     Variable: UnnamedSpecifier
+       (#
+          value: ^text;
+          accept::  (#  do THIS(Variable)[]->theVisitor.visitVariable #);
+          parse:: 
+            (# 
+            do
+               trace
+                 (# 
+                 do 'parseVariable: "%s"\n'->format (#  do t[]->s #)
+                 #);
+               (if t.length < 2 then t[]->parseError if);
+               (2,t.length)->t.sub->value[]
+            #)
+       #);
+     Placeholder: UnnamedSpecifier
+       (#
+          mark: @char;
+          value: ^text;
+          accept:: 
+            (#  do THIS(Placeholder)[]->theVisitor.visitPlaceholder #);
+          parse:: 
+            (# 
+            do
+               trace
+                 (# 
+                 do 'parsePlaceholder: "%s"\n'->format (#  do t[]->s #)
+                 #);
+               (if t.length < 2 then t[]->parseError if);
+               (if 2->t.inxGet->mark
+                // 'b' // 'c' // 'd' // 'f' // 'i' // 's' // 't' then
+                   2->t.inxGet->mark
+                else
+                   t[]->parseError
+               if)
+            #)
+       #);
+     NameDecl: Node
+       (#
+          value: ^text;
+          accept::  (#  do THIS(NameDecl)[]->theVisitor.visitNameDecl #);
+          parse:: 
+            (# 
+            do
+               trace
+                 (# 
+                 do 'parseNameDecl: "%s"\n'->format (#  do t[]->s #)
+                 #);
+               t.copy->value[]
+            #)
+       #);
+     StatementPattern: Node
+       (#
+          StatementStringOrSpecifiers: @list
+            (# element:: StatementStringOrSpecifier #);
+          accept:: 
+            (# 
+            do THIS(StatementPattern)[]->theVisitor.visitStatementPattern
+            #);
+          parse:: 
+            (#
+               pos: @integer;
+               atom: ^text;
+               isStatementString: booleanValue
+                 (# atom: ^text
+                 enter atom[]
+                 do
+                    true->value;
+                    atom.reset;
+                    atom.scan
+                      (# 
+                      do
+                         (if ((ch = ':') or (ch = '%')) then
+                             (if atom.getPos > 1 then
+                                 (if not
+                                 ('\\' = ((atom.getPos-1)->atom.inxGet)) then
+                                     false->value
+                                 if)
+                              else
+                                 false->value
+                             if)
+                         if)
+                      #)
+                 #)
+            do
+               trace
+                 (# 
+                 do 'statementPattern: "%s"\n'->format (#  do t[]->s #)
+                 #);
+               L:
+                 (# 
+                 do
+                    t.pos->pos;
+                    (if t.getAtom->atom[]->isStatementString then
+                        &StatementString[]->StatementStringOrSpecifiers.append
+                     else
+                        &StatementSpecifier[]
+                          ->StatementStringOrSpecifiers.append
+                    if);
+                    atom.reset;
+                    atom[]->(StatementStringOrSpecifiers.last).elm.parse;
+                    (if not t.eos then restart L if)
+                 #)
+            #)
+       #);
+     StatementStringOrSpecifier: Node (#  #);
+     StatementString: StatementStringOrSpecifier
+       (#
+          value: ^text;
+          accept:: 
+            (# 
+            do THIS(StatementString)[]->theVisitor.visitStatementString
+            #);
+          parse:: 
+            (# 
+            do
+               trace
+                 (# 
+                 do 'statementString: "%s"\n'->format (#  do t[]->s #)
+                 #);
+               t.copy->value[]
+            #)
+       #);
+     StatementSpecifier: StatementStringOrSpecifier
+       (#
+          value: ^Specifier;
+          accept:: 
+            (# 
+            do THIS(StatementSpecifier)[]->theVisitor.visitStatementSpecifier
+            #);
+          parse:: 
+            (# isNamed,isVariable: @boolean; pos: @integer
+            do
+               trace
+                 (# 
+                 do
+                    'parseStatementSpecifier: "%s"\n'
+                      ->format (#  do t[]->s #)
+                 #);
+               t.getPos->pos;
+               t.scan
+                 (# 
+                 do
+                    (if ((ch = ':') or (ch = '%')) then
+                        (if t.getPos > 1 then
+                            (if not (' ' = ((t.getPos-1)->t.inxGet)) then
+                                true->isNamed
+                            if)
+                        if);
+                        (if ch = ':' then true->isVariable if)
+                    if)
+                 #);
+               pos->t.setPos;
+               (if isNamed then
+                   &NamedSpecifier[]->value[]
+                else
+                   (if isVariable then
+                       &Variable[]->value[]
+                    else
+                       &Placeholder[]->value[]
+                   if)
+               if);
+               t[]->value.parse
+            #)
+       #)
+  #);
+Visitor:
+  (#
+     visit: (# element:< object; elm: ^element enter elm[] do INNER #)
+  do INNER
+  #)  
+
