@@ -198,6 +198,23 @@ register volatile void *GCreg3 asm("%o4");
 
 #define FetchStruc
 
+/* C procs that gets object, offset and range */
+#define ParamObjOffRange(type, name)			\
+  asmlabel(name, 					\
+	   "mov %i0, %o0; "				\
+           "clr %o1; "					\
+           "mov %l0, %o2; "				\
+           "clr %o3; "					\
+           "clr %o4; "					\
+	   "ba _C"#name"; "				\
+	   "mov %l1, %o5; ");				\
+ type C##name(struct Object *theObj,			\
+	      int i1,					\
+	      unsigned offset, /* in bytes */		\
+	      int i3,					\
+	      int i4,					\
+	      unsigned range)
+
 /* On the SPARC we need to skip the first instruction */
 #define CallBetaEntry(entry,item)			\
     (* (void (*)()) ((long*)entry+1) )(item);
