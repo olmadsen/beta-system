@@ -62,10 +62,18 @@ void free();
 
 #define null (void *) 0
 
+#ifdef nti
 static int strptrcmp(const void**s1, const void **s2)
 { 
   return strcmp(*s1,*s2);
 }
+#else
+static int strptrcmp(const void *s1, const void *s2)
+{ 
+  return strcmp(*(const char**)s1,*(const char**)s2);
+}
+#endif
+
 #ifdef nti_ms
 typedef struct _DIR
 {
