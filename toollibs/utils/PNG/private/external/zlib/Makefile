@@ -12,7 +12,7 @@
 # To install in $HOME instead of /usr/local, use:
 #    make install prefix=$HOME
 
-CC=cc
+CC=gcc
 
 CFLAGS=-O
 #CFLAGS=-O -DMAX_WBITS=14 -DMAX_MEM_LEVEL=7
@@ -57,7 +57,18 @@ DISTFILES = README FAQ INDEX ChangeLog configure Make*[a-z0-9] *.[ch] *.mms \
   contrib/minizip/[CM]*[pe] contrib/minizip/*.[ch] contrib/minizip/*.[td]?? \
   contrib/delphi*/*.???
 
-all: example minigzip
+
+OBJDIR = ../../$(MACHINETYPE)
+
+
+all: $(OBJDIR)/libz.a
+
+$(OBJDIR)/libz.a:
+	make lib
+
+lib: $(OBJS)
+	$(AR) $(OBJDIR)/libz.a $(OBJS)
+	$(RM) *.o
 
 test: all
 	@LD_LIBRARY_PATH=.:$(LD_LIBRARY_PATH) ; export LD_LIBRARY_PATH; \

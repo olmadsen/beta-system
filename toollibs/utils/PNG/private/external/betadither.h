@@ -1,5 +1,6 @@
 #ifndef _BETADITHER_H
 #define _BETADITHER_H
+#include <X11/Xlib.h>
 
 #include "betaimage.h"
 
@@ -67,3 +68,4 @@ void BetaDitherImage (BetaImage *image);
 void BetaOrderedDitherImage (BetaImage *image);
 void BetaDitherImage24To8 (BetaImage *image, BetaImage *image8);
 
+#endif
