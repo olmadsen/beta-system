@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopyValRep.c,v 1.18 1992-10-21 09:31:10 beta Exp $
+ * Mod: $Id: CopyValRep.c,v 1.19 1992-10-27 16:13:17 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -49,7 +49,7 @@ void CopyVR(ref(ValRep) theRep,
 #endif
       {
 	  Protect2(theObj, theRep,
-		   newRep = cast(ValRep) IOAcalloc(size);
+		   newRep = cast(ValRep) IOAalloc(size);
 		   );
 	  
 	  Ck(theObj);
