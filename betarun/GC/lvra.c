@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: lvra.c,v $, rel: %R%, date: $Date: 1991-02-11 14:27:52 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: lvra.c,v $, rel: %R%, date: $Date: 1991-02-26 15:20:18 $, SID: $Revision: 1.4 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -272,7 +272,7 @@ ref(ValRep) LVRAAlloc( range)
     LVRATopBlock = LVRATopBlock->next;
     if( newRep = LVRAAllocInBlock( range) ) return newRep;       
   }
-  if( (LVRACreateNewBlock&&(LVRANumOfBlocks < 2)) || (range > LVRABigRange) ){
+  if( LVRACreateNewBlock || (range > LVRABigRange) ){
     if( MallocExhausted ) return 0;
     if( ValRepSize(range) > LVRABlockSize) size = ValRepSize(range);
     else size = LVRABlockSize;
@@ -474,7 +474,21 @@ LVRAConstructFreeList()
     currentLVRABlock = currentLVRABlock->next;
       
   }
-  LVRACreateNewBlock = ((saved*100)/sizeBlocks) < 20;
+
+  if( LVRAMinFree ){
+    if( saved < LVRAMinFree )
+      /* if freeArea < LVRAMinFree  then ... */
+      LVRACreateNewBlock = TRUE;
+    else
+      LVRACreateNewBlock = FALSE;
+  }else{
+    if( (100*saved)/sizeBlocks < LVRAPercentage )
+      /* if freeArea < LVRAPercentage  then ... */
+      LVRACreateNewBlock = TRUE;
+    else
+      LVRACreateNewBlock = FALSE;
+  }
+  DEBUG_AOA( if( LVRACreateNewBlock ) fprintf( output, "new block needed, "));
 
   INFO_LVRA( fprintf( output, "  %dKb in %d blocks, %dKb free)\n",
 		     toKb(sizeBlocks), numBlocks, toKb(saved)));
