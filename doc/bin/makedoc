@@ -17,8 +17,8 @@ sub usage
 # TODO:
 #   PDF generation: problem with Javascript getting into output
 #   use strict and -w, and define remaining global variables below.
-#   Fix titles for src-generated files (OK for interfaces)
-#   Fix prev/next TITLE for src-generated files (OK for interfaces)
+#   Fix titles for src-generated files (OK for intsrcfiles)
+#   Fix prev/next TITLE for src-generated files (OK for intsrcfiles)
 #   help file (+rel link)
 #   copyright file (+rel link)
 # IDEAS:
@@ -33,7 +33,8 @@ sub usage
 # arrays
 my @srcfiles = ();         # array of file names from src subdirectory
 my @dstfiles = ();         # array of file names to store output files in
-my @interfaces = ();       # array of file names to convert to interface files
+my @intsrcfiles = ();      # array of file names to convert to interface files
+my @intdstfiles = ();      # array of file names to store output interface files in
 my @programs = ();         # used to build list of programs
 my @figures = ();          # used to build list of figures
 my @headings = ();         # used to build table of contents
@@ -44,6 +45,8 @@ my @num_h = (0,0,0,0,0,0); # array of occurrences of headings 1 to 6
 # variables
 my $src = "src/";
 my $dst = "";
+my $intsrc = "";
+my $intdst = "interface/";
 my $book_file_name = "";   # Name of BOOK file
 my $filenumber = 0;        # used to index @srcfiles and @headings
 my $num_beta   = 0;        # Number of occurences of <BETA LIST> 
@@ -100,6 +103,20 @@ sub read_file
     return $line;
 }
 
+sub SmartMkdir {
+    my ($path) = @_;
+    my ($full) = '';
+    foreach $dir (split '/', $path) {
+	$full .= $dir . '/';
+	if (!-d $full){
+	    print STDERR "mkdir $full\n" if ($verbose);
+	    if (!mkdir ($full, 0755)){
+		print STDERR "Cannot create directory \"$full\": $!\n";
+		return;
+	    }
+	}
+    }
+}
 sub one_up
 {
     local ($path) = @_;
@@ -408,7 +425,7 @@ sub print_src_header
 
     if ($filenumber==$#srcfiles){
 	# last file
-	if ($#interfaces>0){
+	if ($#intsrcfiles>0){
 	    $next = "interface/index.html";
 	    $nexttip = "Interface Descriptions";
 	} else {
@@ -495,9 +512,9 @@ sub print_index_header
     local ($i, $ch, $n);
 
     print_head_begin($title, 0);
-    if ($#interfaces>0){
+    if ($#intsrcfiles>0){
 	# Previous was last interface file
-	$prev = &strip_extension(&strip_path($interfaces[$#interfaces]));
+	$prev = &strip_extension(&strip_path($intsrcfiles[$#intsrcfiles]));
 	&print_rel_link("prev", "interface/$prev.html");
     } else {
 	$prev = $dstfiles[$#dstfiles];
@@ -511,9 +528,9 @@ sub print_index_header
 EOT
 
     &print_layer_begin(0);
-    if ($#interfaces>0){
+    if ($#intsrcfiles>0){
 	# Previous was last interface file
-	$prev = &strip_extension(&strip_path($interfaces[$#interfaces]));
+	$prev = &strip_extension(&strip_path($intsrcfiles[$#intsrcfiles]));
 	&print_nav_link("prev", "interface/$prev.html", "Previous: " . ucfirst($prev) . " Interface");
     } else {
 	$prev = $dstfiles[$#srcfiles];
@@ -548,7 +565,7 @@ sub print_interface_toc_header
     local ($title) = @_;
     local ($next, $nexttip, $prev, $prevtip);
 
-    $next = &strip_extension(&strip_path($interfaces[0]));
+    $next = &strip_extension(&strip_path($intsrcfiles[0]));
     $nexttip = ucfirst($next) . " Interface";
     $next .= ".html";
     $prev = $dstfiles[$#dstfiles];
@@ -563,12 +580,12 @@ sub print_interface_header
 
     print_head_begin($title, 1);
 
-    if ($filenumber==$#interfaces){
+    if ($filenumber==$#intsrcfiles){
 	# last interface file
 	$next = &one_up($indexfile);
 	$nexttip = "Alphabetic Index";
     } else {
-	$next = &strip_extension(&strip_path($interfaces[$filenumber+1]));
+	$next = &strip_extension(&strip_path($intsrcfiles[$filenumber+1]));
 	$nexttip = ucfirst($next) . " Interface";
 	$next .= ".html";
     }
@@ -577,7 +594,7 @@ sub print_interface_header
 	$prev = "index.html";
 	$prevtip = "Interface Descriptions"; # interface/index.html
     } else {
-	$prev = &strip_extension(&strip_path($interfaces[$filenumber-1]));
+	$prev = &strip_extension(&strip_path($intsrcfiles[$filenumber-1]));
 	$prevtip = ucfirst($prev) . " Interface";
 	$prev .= ".html";
     }
@@ -618,9 +635,27 @@ sub read_book_file
 	    push @srcfiles, "${src}$_";
 	    push @dstfiles, ${dst} . &strip_path($_);
 	} else { 
-	    if (m/^date:\s*(.*)$/){ $date = $1 };
-	    if (m/^src:\s*(.*)$/){ $src = $1 . "/" };
-	    if (m/^dst:\s*(.*)$/){ $dst = $1 . "/" };
+	    if (m/^date:\s*(.*)$/){ 
+		$date = $1;
+	    };
+	    if (m/^src:\s*(.*)$/){ 
+		$src = &expand($1) . "/";
+	    };
+	    if (m/^dst:\s*(.*)$/){ 
+		$dst = &expand($1) . "/";
+		&SmartMkdir($dst);
+	    };
+	    if (m/^intsrc:\s*(.*)$/){ 
+		$intsrc = &expand($1) . "/";
+	    };
+	    if (m/^intdst:\s*(.*)$/){ 
+		local $cap = $1;
+		$intdst = &expand($1) . "/";
+		&SmartMkdir($intdst);
+		$cap = &strip_extension(&strip_path($cap)) . " Interface:";
+		push @intsrcfiles, "";
+		push @intdstfiles, $cap;
+	    };
 	    if (m/^mia:\s*(.*)$/){ $mia = $1 };
 	    if (m/^title:\s*(.*)$/){ $title = $1 };
 	    if (m/^copyright:\s*(.*)$/){ 
@@ -639,7 +674,10 @@ sub read_book_file
 		}
 	    };
 	    if (m/^pdf:\s*(.*)$/){ $pdf= $1 };
-	    if (m/^int:\s*(.*)$/){ push @interfaces, &expand($1) };
+	    if (m/^int:\s*(.*)$/){ 
+		push @intsrcfiles, &expand("${intsrc}$1");
+		push @intdstfiles, ${intdst} . &strip_extension(&strip_path(&expand("$1"))) . ".html";
+	    };
 	}
     }
     if ($debug){
@@ -654,8 +692,8 @@ sub read_book_file
         print STDERR "    figures\n"  if $do_figure_list;
 	print STDERR "  sequence:\n    ";
 	print STDERR join("\n    ",@srcfiles);
-	print STDERR "\n  interfaces:\n    ";
-	print STDERR join("\n    ",@interfaces);
+	print STDERR "\n  intsrcfiles:\n    ";
+	print STDERR join("\n    ",@intsrcfiles);
 	print STDERR "\n";
     }
 }
@@ -1120,8 +1158,12 @@ sub read_and_abstract_beta
 
 sub generate_interface_file
 {
-    local ($betafile) = @_;
-    local ($htmlfile) = "interface/" . &strip_extension(&strip_path("$betafile")) . ".html";   
+    local ($betafile, $htmlfile) = @_;
+    if ($betafile eq ""){
+	# Special case used to force a new heading 
+	push (@intheadings, "$htmlfile\@");
+	return;
+    }
     local ($inttitle) = ucfirst(&strip_extension(&strip_path("$betafile"))) . " Interface";
 
     # Add number for title
@@ -1397,12 +1439,13 @@ sub print_interface_toc
     local ($chop_interface_dir) = @_;
 
     local ($headinfo, $link, $heading, $headnum);
+    local ($intcap) = "";
 
     #print STDERR "\nintheadings:++++++++++++++++++++\n";
     #print STDERR join ("\n", @intheadings);
     #print STDERR "\n++++++++++++++++++++\n";
 
-    if ($#interfaces>0){
+    if ($#intsrcfiles>0){
 	$headinfo = $intheadings[0];
 	($heading, $link) = split("\@", $headinfo);
 	if ($chop_interface_dir){
@@ -1414,10 +1457,23 @@ sub print_interface_toc
 	for ($headnum=1; $headnum<=$#intheadings; $headnum++){
 	    $headinfo = $intheadings[$headnum];
 	    ($heading, $link) = split("\@", $headinfo);
-	    if ($chop_interface_dir){
-		$link =~ s%^interface/%%;
+	    if ($link eq ""){
+		if ($intcap ne ""){
+		    print "    </DL>\n";
+		}
+		$intcap = $heading;
+		print "    ", "<DT><I>$heading</I><DD>\n";
+		print "    <DL>\n";
+	    } else {
+		if ($chop_interface_dir){
+		    $link =~ s%^interface/%%;
+		}
+		print "    ", "<DT><A HREF=\"$link\">$heading</A><DD>\n";
 	    }
-	    print "    ", "<DT><A HREF=\"$link\">$heading</A><DD>\n";
+	}
+	if ($intcap ne ""){
+	    print "    </DL>\n";
+	    $intcap = "";
 	}
 	print "    </DL>\n";
     }
@@ -1458,23 +1514,18 @@ sub process_interface_files
 {
     local ($intheading);
 
-    return if ($#interfaces<=0);
+    return if ($#intsrcfiles<=0);
 
-    print STDERR "Generating $#interfaces interface descriptions...\n" if $verbose;
+    print STDERR "Generating $#intsrcfiles interface descriptions...\n" if $verbose;
 
-    if (! -d "interface"){
-	if (!mkdir("interface",0755)){
-	    print STDERR "Cannot create directory \"interface\": $!\n";
-	    return;
-	}
-    }
+    &SmartMkdir($intdst); # also here in case no intdst in book file
 
     $intheading = "" . ++$num_h[1] . "&nbsp;Interface Descriptions";
 
     push (@intheadings, "<I>$intheading:</I>\@interface/index.html");
     
-    for ($filenumber=0; $filenumber<=$#interfaces; $filenumber++){
-	&generate_interface_file("$interfaces[$filenumber]");
+    for ($filenumber=0; $filenumber<=$#intsrcfiles; $filenumber++){
+	&generate_interface_file($intsrcfiles[$filenumber], $intdstfiles[$filenumber]);
     }
 
     &generate_interface_toc_page($intheading);
@@ -1681,7 +1732,7 @@ sub print_program_list
     #print STDERR join ("\n", @programs);
     #print STDERR "\n++++++++++++++++++++\n";
 
-    if ($#interfaces>0){
+    if ($#intsrcfiles>0){
 	print "    ", "<DT><A HREF=\"$programsfile\"><B>List of Programs</B></A><DD>\n";
 	print "    <DL>\n";
 	for ($headnum=0; $headnum<=$#programs; $headnum++){
@@ -1742,7 +1793,7 @@ sub print_figure_list
     #print STDERR join ("\n", @figures);
     #print STDERR "\n++++++++++++++++++++\n";
 
-    if ($#interfaces>0){
+    if ($#intsrcfiles>0){
 	print "    ", "<DT><A HREF=\"$figuresfile\"><B>List of Figures</B></A><DD>\n";
 	print "    <DL>\n";
 	for ($headnum=0; $headnum<=$#figures; $headnum++){
@@ -1878,19 +1929,14 @@ sub generate_pdf
 	    push @sequence, $figuresfile;
 	}
 	push @sequence, @srcfiles;
-	for ($filenumber=0; $filenumber<=$#interfaces; $filenumber++){
-	    push @sequence, "interface/" . &strip_extension(&strip_path($interfaces[$filenumber])) . ".html";
+	for ($filenumber=0; $filenumber<=$#intsrcfiles; $filenumber++){
+	    push @sequence, "interface/" . &strip_extension(&strip_path($intsrcfiles[$filenumber])) . ".html";
 	}
 	push @sequence, $indexfile;
 
 	# htmldoc does not handle <script>...</script> too well
 	# We filter it out in copies of the files in sequence
-	if (! -d "pdf_interface"){
-	    if (!mkdir("pdf_interface",0755)){
-		print STDERR "Cannot create directory \"pdf_interface\": $!\n";
-		return;
-	    }
-	}
+	&SmartMkdir("pdf_interface");
 	foreach $f (@sequence){
 	    push (@pdfsequence, &filter_for_pdf($f));
 	}
