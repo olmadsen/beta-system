@@ -52,6 +52,8 @@ do (* Add basic types to global_types. The types are
    ('any',                'int32') -> global_types.add_basic_type;
    
    (* Add types from comlib.bet/wtypes.bet to global_types *)
+   ('IUnknown',           'IUnknown') -> global_types.add_interface_type;
+   ('IDispatch',          'IDispatch') -> global_types.add_interface_type;
    ('HRESULT',            'int32') -> global_types.add_basic_type;
    ('BSTR',               'BSTR') -> global_types.add_basic_type;
    ('VARIANT',            'VARIANT') -> global_types.add_union_type;
@@ -190,27 +192,43 @@ do_type_declarator:
         (* done with dcl_info *)
         (* Fill in the rest of the type *)
         (info[], types[], t.gettype_spec) -> do_type_spec;
-        outfile.newline;
-        outfile.indent;
-        outfile.CommentBegin;
-        'typedef: ' -> outfile.puttext;
-        info.name[] -> outfile.puttext;
-        ': '-> outfile.puttext;
-        (for info.pointer_level repeat '*' -> outfile.put for);
-        info.representation[] -> outfile.puttext;
-        outfile.CommentEnd;
+        (if debug then
+            outfile.indent;
+            outfile.CommentBegin;
+            'typedef: ' -> outfile.puttext;
+            info.name[] -> outfile.puttext;
+            ': '-> outfile.puttext;
+            (for info.pointer_level repeat '*' -> outfile.put for);
+            info.representation[] -> outfile.puttext;
+            outfile.CommentEnd;
+            outfile.newline;
+        if);
         outfile.newline;
      #);
   #);
 
 do_typedef:
   (# t: ^idl.typedef;
-     x: ^idl.attributeX;
+     s: ^idl.type_att_spec;
+     a: ^idl.type_attributes;
+     th: ^idl.type_helpstring;
      att: ^idl_attributes;
   enter (t[])
-  do (if t.getattribute_opt -> optionalPresent then
-         (&idl_attributes[]->att[], t.getattribute_opt)
-           -> do_attributeX;
+  do outfile.newline;
+     outfile.indent;
+     (if t.gettype_att_opt -> optionalPresent then
+         t.gettype_att_opt -> s[];
+         s.gettype_attributes -> a[];
+         a.newscan
+         (# 
+         do (* only interested in helpstring *)
+            (if current.symbol
+             // idl.type_helpstring then
+                (current[] -> th[]).gethelpstring 
+                  -> do_helpstring
+                  -> outfile.commentline;
+            if)
+         #);
      if);
      (local_types[], att[], t.gettype_declarator) -> do_type_declarator;
   #);
@@ -289,11 +307,11 @@ do_enum_type:
      initializer_met: @boolean;
   enter (t[])
   do 'IntegerObject(\# ' -> outfile.puttext;
-     outfile.indent;
      outfile.CommentBegin;
      'enum ' -> outfile.puttext;
      t.getidentifier -> IdentifierToText -> outfile.puttext;
      outfile.CommentEnd;
+     ' '->outfile.put;
      outfile.PatternEnd;
      (* Process each enumerator *) 
      t.getenumerators -> es[];
@@ -303,11 +321,29 @@ do_enum_type:
      false -> initializer_met;
      es.newscan
      (# v: ^idl.value;
+        s: ^idl.enumerator_att_spec;
+        a: ^idl.enumerator_attributes;
+        eh: ^idl.enumerator_helpstring;
+        help: ^text;
      do ';' -> outfile.putline;
         outfile.indent;
         id[] -> previous_id[];
-        current[] -> EmitComments;
-        current.getidentifier -> EmitComments;
+        (if current.getenumerator_att_opt -> optionalPresent then
+            current.getenumerator_att_opt -> s[];
+            s.getenumerator_attributes -> a[];
+            a.newscan
+            (# 
+            do (* only interested in helpstring *)
+               (if current.symbol 
+                // idl.enumerator_helpstring then
+                   (current[]->eh[]).gethelpstring 
+                     -> do_helpstring 
+                     -> help[]
+               if);
+            #);
+         else
+            NONE -> help[];
+        if);
         current.getidentifier -> IdentifierToText -> id[] ->outfile.puttext;
         ': ' -> outfile.puttext;
         (* FIXME: missing
@@ -315,14 +351,15 @@ do_enum_type:
          * info.name[] -> outfile.puttext; 
          * outfile.CommentEnd;
          *)
+        (if help[]<>NONE then
+            help[] -> outfile.comment;
+        if);
         outfile.PatternBegin;
         'exit ' -> outfile.puttext;
         (if current.getvalue_opt -> optionalPresent then
             (current.getvalue_opt -> v[]).getconst_exp 
               -> do_const_exp
               -> outfile.puttext;
-            v[] -> EmitComments; 
-            v.getconst_exp -> EmitComments;
             true -> initializer_met;
          else
             (if initializer_met then
