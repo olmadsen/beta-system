@@ -35,7 +35,7 @@ void CopyVR1(ValRep *theRep,
       pop(theRep);
       pop(theObj);
       
-      newRep->Proto = ByteRepPTValue;
+      SETPROTO(newRep, ByteRepPTValue);
       /* newRep->GCAttr set above */
       newRep->LowBorder = 1;
       newRep->HighBorder = range;
@@ -82,7 +82,7 @@ void CopyVR2(ValRep *theRep,
       pop(theRep);
       pop(theObj);
       
-      newRep->Proto = ShortRepPTValue;
+      SETPROTO(newRep, ShortRepPTValue);
       /* newRep->GCAttr set above */
       newRep->LowBorder = 1;
       newRep->HighBorder = range;
@@ -129,7 +129,7 @@ void CopyVR4(ValRep *theRep,
       pop(theRep);
       pop(theObj);
       
-      newRep->Proto = LongRepPTValue;
+      SETPROTO(newRep, LongRepPTValue);
       /* newRep->GCAttr set above */
       newRep->LowBorder = 1;
       newRep->HighBorder = range;
@@ -176,7 +176,7 @@ void CopyVR8(ValRep *theRep,
       pop(theRep);
       pop(theObj);
       
-      newRep->Proto = DoubleRepPTValue;
+      SETPROTO(newRep, DoubleRepPTValue);
       /* newRep->GCAttr set above */
       newRep->LowBorder = 1;
       newRep->HighBorder = range;
@@ -227,7 +227,7 @@ void CopyVRI(ObjectRep *theRep,
     pop(theRep);
     pop(theObj);
       
-    newRep->Proto = DynItemRepPTValue;
+    SETPROTO(newRep, DynItemRepPTValue);
     /* newRep->GCAttr set above */
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
@@ -278,7 +278,7 @@ void CopyVRC(ObjectRep *theRep,
     pop(theRep);
     pop(theObj);
       
-    newRep->Proto = DynCompRepPTValue;
+    SETPROTO(newRep, DynCompRepPTValue);
     /* newRep->GCAttr set above */
     newRep->LowBorder = 1;
     newRep->HighBorder = range;

@@ -49,7 +49,7 @@ void CCopySVR1(ValRep *theRep,
     pop(theItem);
     
     /* Initialize the structual part of the repetition. */
-    newRep->Proto = ByteRepPTValue;
+    SETPROTO(newRep, ByteRepPTValue);
     /* newRep->GCAttr set above */
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
@@ -115,7 +115,7 @@ void CCopySVR2(ValRep *theRep,
     pop(theItem);
     
     /* Initialize the structual part of the repetition. */
-    newRep->Proto = ShortRepPTValue;
+    SETPROTO(newRep, ShortRepPTValue);
     /* newRep->GCAttr set above */
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
@@ -179,7 +179,7 @@ void CCopySVR4(ValRep *theRep,
     pop(theItem);
     
     /* Initialize the structual part of the repetition. */
-    newRep->Proto = LongRepPTValue;
+    SETPROTO(newRep, LongRepPTValue);
     /* newRep->GCAttr set above */
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
@@ -239,7 +239,7 @@ void CCopySVR8(ValRep *theRep,
     pop(theItem);
     
     /* Initialize the structual part of the repetition. */
-    newRep->Proto = DoubleRepPTValue;
+    SETPROTO(newRep, DoubleRepPTValue);
     /* newRep->GCAttr set above */
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
@@ -304,7 +304,7 @@ void CCopySVRI(ObjectRep *theRep,
   pop(theItem);
   pop(theRep);
   
-  newRep->Proto = DynItemRepPTValue;
+  SETPROTO(newRep, DynItemRepPTValue);
   /* newRep->GCAttr set above if in IOA */
   newRep->LowBorder = 1;
   newRep->HighBorder = range;
@@ -365,7 +365,7 @@ void CCopySVRC(ObjectRep *theRep,
   pop(theItem);
   pop(theRep);
   
-  newRep->Proto = DynCompRepPTValue;
+  SETPROTO(newRep, DynCompRepPTValue);
   /* newRep->GCAttr set above if in IOA */
   newRep->LowBorder = 1;
   newRep->HighBorder = range;

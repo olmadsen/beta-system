@@ -55,7 +55,7 @@ void CCopySRR(RefRep *theRep,
     /* The new Object is now allocated, but not assigned yet! */
     
     /* Initialize the structual part of the repetition. */
-    newRep->Proto = RefRepPTValue;
+    SETPROTO(newRep, RefRepPTValue);
     /* newRep->GCAttr set above */
     newRep->LowBorder = 1;
     newRep->HighBorder = range;

@@ -39,7 +39,7 @@ void CopyRR(RefRep *theRep,
     pop(theRep);
     pop(theObj);
 
-    newRep->Proto = theRep->Proto;
+    SETPROTO(newRep, GETPROTO(theRep));
     /* newRep->GCAttr set above */
     newRep->LowBorder = 1;
     newRep->HighBorder = range;

@@ -20,7 +20,7 @@ DopartObject *AlloDO(unsigned size, Object *this, long *SP)
     Protect(this, 
 	    theObj = (DopartObject *)IOAalloc(DopartObjectSize(size), SP));
 
-    theObj->Proto  = DopartObjectPTValue;
+    SETPROTO(theObj, DopartObjectPTValue);
     if (IOAMinAge!=0) theObj->GCAttr = IOAMinAge;
     theObj->Origin = this;
     theObj->Size   = size;

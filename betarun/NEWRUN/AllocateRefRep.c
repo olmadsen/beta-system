@@ -32,7 +32,7 @@ void AlloRR(unsigned offset /* in bytes */,
     }
     pop(theObj);
 
-    theRep->Proto = RefRepPTValue;
+    SETPROTO(theRep, RefRepPTValue);
     /* theRep->GCAttr set above if in IOA */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;

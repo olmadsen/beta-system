@@ -34,7 +34,7 @@ void AlloVR1(unsigned offset /* in bytes */,
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     pop(theObj);
   
-    theRep->Proto = ByteRepPTValue;
+    SETPROTO(theRep, ByteRepPTValue);
     /* theRep->GCAttr set above if in IOA */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
@@ -73,7 +73,7 @@ void AlloVR2(unsigned offset /* in bytes */,
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     pop(theObj);
 
-    theRep->Proto = ShortRepPTValue;
+    SETPROTO(theRep, ShortRepPTValue);
     /* theRep->GCAttr set above if in IOA */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
@@ -111,7 +111,7 @@ void AlloVR4(unsigned offset /* in bytes */,
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     pop(theObj);
     
-    theRep->Proto = LongRepPTValue;
+    SETPROTO(theRep, LongRepPTValue);
     /* theRep->GCAttr set above if in IOA */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
@@ -150,7 +150,7 @@ void AlloVR8(unsigned offset /* in bytes */,
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     pop(theObj);
 
-    theRep->Proto = DoubleRepPTValue;
+    SETPROTO(theRep, DoubleRepPTValue);
     /* theRep->GCAttr set above if in IOA */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;

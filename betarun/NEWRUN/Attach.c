@@ -81,7 +81,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
      */
     long SPoff;
     /* adjust SPx to be SP of previous frame. */
-    GetSPoff(SPoff, CodeEntry(this->Proto, RA)); 
+    GetSPoff(SPoff, CodeEntry(GETPROTO(this), RA)); 
     SPx = ((long)SPx+SPoff);
     BetaError(CompTerminatedErr, this, (long *)SPx, (long *)RA); 
   }
@@ -92,7 +92,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
      */
     long SPoff;
     /* adjust SPx to be SP of previous frame. */
-    GetSPoff(SPoff, CodeEntry(this->Proto, RA)); 
+    GetSPoff(SPoff, CodeEntry(GETPROTO(this), RA)); 
     SPx = ((long)SPx+SPoff);
     BetaError(RecursiveAttErr, this, (long *)SPx, (long *)RA);
   }
@@ -141,7 +141,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
       */
      CallB((Object *)comp, 
            (Object *)comp->Body, 
-	   ((Object *)comp->Body)->Proto->TopMpart, 
+	   OBJPROTOFIELD(((Object *)comp->Body), TopMpart), 
 	   0);    
   } else {
     long spSize = sObj->BodySize;
@@ -149,7 +149,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
        
     TRACE_SO({ int i;
     fprintf(output, "Att#%d: about to unpack stack object:\n", NumAtt);
-    fprintf(output, "proto   = %d\n",   sObj->Proto);
+    fprintf(output, "proto   = %d\n",   GETPROTO(sObj));
     fprintf(output, "gc      = %d\n",   sObj->GCAttr);
     fprintf(output, "size    = 0x%x\n", sObj->BodySize);
     fprintf(output, "topsize = 0x%x\n", sObj->StackSize);
@@ -175,7 +175,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
       }
       TRACE_SO({ int i;
       fprintf(output, "Att#%d: stack object after adjustment:\n", NumAtt);
-      fprintf(output, "proto   = %d\n",   sObj->Proto);
+      fprintf(output, "proto   = %d\n",   GETPROTO(sObj));
       fprintf(output, "gc      = %d\n",   sObj->GCAttr);
       fprintf(output, "size    = 0x%x\n", sObj->BodySize);
       fprintf(output, "topsize = 0x%x\n", sObj->StackSize);
@@ -226,7 +226,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
      */
     long SPoff;
     /* adjust SPx to be SP of previous frame. */
-    GetSPoff(SPoff, CodeEntry(this->Proto, RA)); 
+    GetSPoff(SPoff, CodeEntry(GETPROTO(this), RA)); 
     SPx = ((long)SPx+SPoff);
     BetaError(CompTerminatedErr, this, (long *)SPx, (long *)RA); 
   }
@@ -237,7 +237,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
      */
     long SPoff;
     /* adjust SPx to be SP of previous frame. */
-    GetSPoff(SPoff, CodeEntry(this->Proto, RA)); 
+    GetSPoff(SPoff, CodeEntry(GETPROTO(this), RA)); 
     SPx = ((long)SPx+SPoff);
     BetaError(RecursiveAttErr, this, (long *)SPx, (long *)RA);
   }
@@ -260,7 +260,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
   isFirst = (comp->CallerLSC == 0);
   if (isFirst) { 
     compObj = (Object *)comp->Body;
-    address = (long)compObj->Proto->TopMpart;
+    address = (long)GETPROTO(compObj)->TopMpart;
     arg0    = (long)comp;
     arg1    = (long)compObj;
   } else {

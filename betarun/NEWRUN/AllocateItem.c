@@ -17,7 +17,7 @@ Item *AlloI(Object *origin, ProtoType *proto, long *SP)
 		      "AlloI#%d: origin=0x%x (%s), proto=0x%x (%s)\n",
 		      num,
 		      (int)origin, 
-		      ProtoTypeName(origin->Proto), 
+		      ProtoTypeName(GETPROTO(origin)), 
 		      (int)proto, 
 		      ProtoTypeName(proto)));
 

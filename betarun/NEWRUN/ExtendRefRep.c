@@ -41,7 +41,7 @@ void ExtRR(Object *theObj,
     pop(theRep);
     pop(theObj);
 
-    newRep->Proto = RefRepPTValue;
+    SETPROTO(newRep, RefRepPTValue);
     /* newRep->GCAttr set above if in IOA */
     newRep->LowBorder = 1;
     newRep->HighBorder = newRange;

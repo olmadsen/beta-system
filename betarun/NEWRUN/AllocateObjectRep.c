@@ -52,7 +52,7 @@ void AlloVRI(Object *origin,
   pop(theObj);
 
   /* Set up the header */
-  theRep->Proto = DynItemRepPTValue;
+  SETPROTO(theRep, DynItemRepPTValue);
   /* theRep->GCAttr set above if in IOA */
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
@@ -109,7 +109,7 @@ void AlloVRC(Object *origin,
   pop(theObj);
 
   /* Set up the header */
-  theRep->Proto = DynCompRepPTValue;
+  SETPROTO(theRep, DynCompRepPTValue);
   /* theRep->GCAttr set above if in IOA */
   theRep->LowBorder = 1;
   theRep->HighBorder = range;

@@ -34,7 +34,7 @@ Item *CopyT(char *asciz,
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge; /* In IOA */
     pop(theItem);
   
-    theRep->Proto = ByteRepPTValue;
+    SETPROTO(theRep, ByteRepPTValue);
     /* theRep->GCAttr set above */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;

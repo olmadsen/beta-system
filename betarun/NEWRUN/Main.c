@@ -28,7 +28,7 @@ void main(long argc, char *argv[])
   /* M1BETAENV(0,BasicItem) */
   CallB( GENMARK /*dyn*/, 
 	 (Object *)BasicItem, /* object */
-	 (long)(BasicItem->Proto->TopMpart), /* entrypoint */
+	 (long)(GETPROTO(BasicItem)->TopMpart), /* entrypoint */
 	 0); /* SP */
 
   /* TerminateBasicComponent: */

@@ -348,17 +348,17 @@ extern void CClaim(long cond, char *description, char *fname, int lineno);
 
 #define setup_item(theItem, proto, origin )                                     \
 {                                                                               \
-   register GCEntry *initTab;                                            \
+   register GCEntry *initTab;                                                   \
                                                                                 \
-   SETPROTO(((Item *)(theItem)), ((ProtoType *)(proto)));           \
+   SETPROTO(((Item *)(theItem)), ((ProtoType *)(proto)));                       \
    if (inIOA(theItem))                                                          \
-      if (IOAMinAge!=0) ((Item *)(theItem))->GCAttr = IOAMinAge; /* Set item age to IOAMinAge */           \
+      if (IOAMinAge!=0) ((Item *)(theItem))->GCAttr = IOAMinAge; /* Set item age to IOAMinAge */  \
    else                                                                         \
-      ((Item *)(theItem))->GCAttr = 0; /* Set item age to 0 */           \
+      ((Item *)(theItem))->GCAttr = 0; /* Set item age to 0 */                  \
                                                                                 \
    /* Initialize the body part of the item, according to the genTable. */       \
                                                                                 \
-   initTab = (GCEntry *)((char *)(proto)+((ProtoType *)(proto))->GCTabOff); \
+   initTab = (GCEntry *)((char *)(proto)+((ProtoType *)(proto))->GCTabOff);     \
                                                                                 \
    /* initTab is now pointing to the static GCTable.                            \
     * This table has zero or more elements terminated with a zero word.         \
@@ -369,16 +369,16 @@ extern void CClaim(long cond, char *description, char *fname, int lineno);
     */                                                                          \
                                                                                 \
    for (; initTab->StaticOff; ++initTab) {                                      \
-      register PartObject *po;                                           \
-      po = (PartObject *)(((long *)(theItem)) + initTab->StaticOff);     \
-      SETPROTO(po,GETPROTO(initTab));                                               \
+      register PartObject *po;                                                  \
+      po = (PartObject *)(((long *)(theItem)) + initTab->StaticOff);            \
+      SETPROTO(po,initTab->Proto);                                              \
       po->OrigOff = initTab->OrigOff;                                           \
    }                                                                            \
                                                                                 \
    /* Assign origin into theItem. Since theItem may now be allocaed directly in \
     * AOA, it is necessary to use AssignReference.                              \
     */                                                                          \
-   AssignReference(((long*)(theItem))+((ProtoType*)(proto))->OriginOff,  \
+   AssignReference(((long*)(theItem))+((ProtoType*)(proto))->OriginOff,         \
                    (origin));                                                   \
 }
 

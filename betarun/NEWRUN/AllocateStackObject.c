@@ -25,7 +25,7 @@ StackObject *AlloSO(unsigned size, long *SP)
       if (IOAMinAge!=0) sObj->GCAttr = IOAMinAge; /* In IOA */
     }
 
-    sObj->Proto = StackObjectPTValue;
+    SETPROTO(sObj, StackObjectPTValue);
     /* sObj->GCAttr set above if in IOA */
     sObj->BodySize = size;
     /* No need: IOA is memset(0) sObj->StackSize = 0; */

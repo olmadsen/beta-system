@@ -18,7 +18,7 @@ Structure *AlloS(Object *origin, ProtoType *proto, long *SP)
   Ck(origin);
   Protect(origin, newStruct = (Structure *)IOAalloc(StructureSize, SP));
   
-  newStruct->Proto = StructurePTValue;
+  SETPROTO(newStruct, StructurePTValue);
   if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
   AssignReference(&newStruct->iOrigin, origin);
   newStruct->iProto = proto;
@@ -70,11 +70,11 @@ Structure *ObjS(Object *theObj, long *SP)
   Ck(theObj);
   Protect(theObj, newStruct= (Structure *)IOAalloc(StructureSize, SP));
   
-  newStruct->Proto = StructurePTValue;
+  SETPROTO(newStruct, StructurePTValue);
   if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
   
-  newStruct->iProto = theObj->Proto;
-  AssignReference(&newStruct->iOrigin, ((Object **)theObj)[theObj->Proto->OriginOff]);
+  newStruct->iProto = GETPROTO(theObj);
+  AssignReference(&newStruct->iOrigin, ((Object **)theObj)[GETPROTO(theObj)->OriginOff]);
 
   Ck(theObj); Ck(newStruct);
   

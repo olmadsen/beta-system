@@ -26,8 +26,8 @@ long *ExO(long *jumpAdr,
  fprintf(output, "New PC:     0x%x\n", (long)PC);           \
  fprintf(output, "New object: 0x%x", (long)this);           \
  if (this&&(this!=CALLBACKMARK)&&(this!=GENMARK)){          \
-   fprintf(output, " (proto: 0x%x)", this->Proto);          \
-   fprintf(output, " (%s)\n", ProtoTypeName(this->Proto));  \
+   fprintf(output, " (proto: 0x%x)", GETPROTO(this));          \
+   fprintf(output, " (%s)\n", ProtoTypeName(GETPROTO(this)));  \
  }                                                          \
  fflush(output)
  
@@ -66,14 +66,14 @@ long *ExO(long *jumpAdr,
     }
     
     /* Check for passing of a DoPart object */
-    if ((long)this->Proto == (long)DopartObjectPTValue) {
+    if ((long)GETPROTO(this) == (long)DopartObjectPTValue) {
       this = ((DopartObject *)this)->Origin;
       TRACE_EXO();
       continue;
     }
     
     /* Check for passing of a component */
-    if ((long)this->Proto == (long)ComponentPTValue) {
+    if ((long)GETPROTO(this) == (long)ComponentPTValue) {
       Component *comp = (Component *)this;
       Component *callerComp = comp->CallerComp;
       DEBUG_CODE(fprintf(output, "ExO: passing comp 0x%x\n", (int)comp); fflush(output));
@@ -106,7 +106,7 @@ long *ExO(long *jumpAdr,
       {
         long SPoff;
         /* size allocated on stack when this became active */
-        GetSPoff(SPoff, CodeEntry(this->Proto, (long)PC)); 
+        GetSPoff(SPoff, CodeEntry(GETPROTO(this), (long)PC)); 
         SP = (long *)((long)SP+SPoff);    
       }
 #endif

@@ -102,7 +102,7 @@ long proxyAlive(Object **theCell)
   return 0;
 }
 
-static void findNextFree() 
+static void findNextFree(void) 
 {
   long once=0;
   

@@ -171,6 +171,10 @@ unsigned long getTimeStamp(long fd)
 #define LINGER_ONOFF 0
 #define LINGER_INTERVAL 0
 
+#ifndef linux
+#define socklen_t int
+#endif
+
 /********************************************************************
  *                                                                  *
  * Initialization of this module                                    *

@@ -75,7 +75,7 @@ void CQua(Object *dstQuaOrigin,
     if (srcProto == 0) {
       /* src was not a dangler so its prototype has not been looked up yet. */
 #endif
-      switch(SwitchProto(src->Proto)){
+      switch(SwitchProto(GETPROTO(src))){
       case SwitchProto(StructurePTValue):
 	/* It was a pattern variable assignment: src is a struc-object */
 	srcProto  = ((Structure *)src)->iProto;
@@ -83,11 +83,11 @@ void CQua(Object *dstQuaOrigin,
       case SwitchProto(ComponentPTValue):
 	/* It was a componentreference assignment: src points to a component */
 	src       = (Object *)((Component *)src)->Body;
-	srcProto  = src->Proto;
+	srcProto  = GETPROTO(src);
 	break;
       default:
 	/* It was a normal reference assignment: src is normal object */
-	srcProto  = src->Proto;
+	srcProto  = GETPROTO(src);
 	break;
       }
 #ifdef RTLAZY

@@ -33,7 +33,7 @@ Component *AlloC(Object *origin, ProtoType *proto, long *SP)
   /* The new Component is now allocated, but not initialized yet! */
   
   /* Initialize the structual part; prototype, age etc. */
-  comp->Proto = ComponentPTValue;
+  SETPROTO(comp, ComponentPTValue);
   /* comp->GCAttr set above if in IOA */
   
   setup_item((Item *)&comp->Body, proto, origin);

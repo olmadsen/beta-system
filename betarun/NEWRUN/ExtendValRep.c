@@ -54,7 +54,7 @@ void ExtVR1(Object *theObj,
     theRep = *(ValRep **)((long *) theObj + offset);
 
     /* Assign structural part of new repetition */
-    newRep->Proto = ByteRepPTValue;
+    SETPROTO(newRep, ByteRepPTValue);
     /* newRep->GCAttr set above if in IOA */
     newRep->LowBorder = theRep->LowBorder;
     newRep->HighBorder = newRange;
@@ -118,7 +118,7 @@ void ExtVR2(Object *theObj,
     theRep = *(ValRep **)((long *) theObj + offset);
 
     /* Assign structural part of new repetition */
-    newRep->Proto = ShortRepPTValue;
+    SETPROTO(newRep, ShortRepPTValue);
     /* newRep->GCAttr set above if in IOA */
     newRep->LowBorder = theRep->LowBorder;
     newRep->HighBorder = newRange;
@@ -182,7 +182,7 @@ void ExtVR4(Object *theObj,
     theRep = *(ValRep **)((long *) theObj + offset);
 
     /* Assign structural part of new repetition */
-    newRep->Proto = LongRepPTValue;
+    SETPROTO(newRep, LongRepPTValue);
     /* newRep->GCAttr set above if in IOA */
     newRep->LowBorder = theRep->LowBorder;
     newRep->HighBorder = newRange;
@@ -246,7 +246,7 @@ void ExtVR8(Object *theObj,
     theRep = *(ValRep **)((long *) theObj + offset);
 
     /* Assign structural part of new repetition */
-    newRep->Proto = DoubleRepPTValue;
+    SETPROTO(newRep, DoubleRepPTValue);
     /* newRep->GCAttr set above if in IOA */
     newRep->LowBorder = theRep->LowBorder;
     newRep->HighBorder = newRange;
@@ -307,7 +307,7 @@ void ExtVRI(Object *theObj,
   theRep = *(ObjectRep **)((long *) theObj + offset);
   
   /* Assign structural part of new repetition */
-  newRep->Proto = DynItemRepPTValue;
+  SETPROTO(newRep, DynItemRepPTValue);
   /* newRep->GCAttr set above if in IOA */
   newRep->LowBorder = theRep->LowBorder;
   newRep->HighBorder = newRange;
@@ -383,7 +383,7 @@ void ExtVRC(Object *theObj,
   theRep = *(ObjectRep **)((long *) theObj + offset);
   
   /* Assign structural part of new repetition */
-  newRep->Proto = DynCompRepPTValue;
+  SETPROTO(newRep, DynCompRepPTValue);
   /* newRep->GCAttr set above if in IOA */
   newRep->LowBorder = theRep->LowBorder;
   newRep->HighBorder = newRange;
