@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopyValRep.c,v 1.12 1992-09-07 15:37:46 beta Exp $
+ * Mod: $Id: CopyValRep.c,v 1.13 1992-09-25 22:02:30 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -15,7 +15,7 @@ void CopyVR(ref(ValRep) theRep,
 	    )
 {
     DeclReference1(struct ValRep *, newRep);
-    register unsigned range, i;
+    register unsigned range, i, size;
     
     GCable_Entry();
     
@@ -23,6 +23,7 @@ void CopyVR(ref(ValRep) theRep,
     newRep = NULL;
     
     range = theRep->HighBorder;
+    size = DispatchValRepSize(theRep->Proto,range);
 
 #ifdef LVR_Area
     if (range > LARGE_REP_SIZE) newRep = LVRAAlloc(theRep->Proto, range);
@@ -34,8 +35,7 @@ void CopyVR(ref(ValRep) theRep,
 #endif
       {
 	  Protect2(theObj, theRep,
-		   newRep = cast(ValRep) 
-		   IOAcalloc(DispatchValRepSize(theRep->Proto,range))
+		   newRep = cast(ValRep) IOAcalloc(size);
 		   );
 	  
 	  Ck(theObj);
@@ -45,8 +45,8 @@ void CopyVR(ref(ValRep) theRep,
 	  newRep->HighBorder = range;
       }
     
-    /* Copy theRep to newRep */
-    for (i = 0; i < range; ++i)
+    /* Copy theRep to newRep. Copy the whole body as longs */
+    for (i = 0; i < (size-headsize(ValRep))/4; ++i)
       newRep->Body[i] = theRep->Body[i];
     
     AssignReference((long *)theObj + offset, cast(Item) newRep);
