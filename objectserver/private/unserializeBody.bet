@@ -1,6 +1,6 @@
 ORIGIN '../ObjectSerializer';
 (* 
- * $RCSfile: unserializeBody.bet,v $ $Revision: 1.7 $ $Date: 1996-06-04 14:36:56 $
+ * $RCSfile: unserializeBody.bet,v $ $Revision: 1.8 $ $Date: 1996-06-12 13:50:31 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -199,21 +199,89 @@ do
                   remPos: @Integer;
                   ote: ^ObjectTableElement;
                   tmpOID: @OIDtype;
-
-               enter byteinx
+                  reftype: @Integer;
+                  group,proto: @Integer;
+                  ptAdr: @Integer;
+                  tmpOff: @Integer;
+                  startoffset: @Integer;
+                  elmrefType: @Integer;
+               enter (byteinx,reftype)
                do
                   rep.get -> low;
                   rep.get -> high;
+                  
+                  (if refType
+                   //RefRepPTValue then
+                      
+                      (o[], byteinx, low, high) -> ra.allocRefRep;
+                      12->startoffset;
+                      REFTYPE_DYNAMIC->elmreftype;
+                   //DynItemRepPTValue then
+                      
+                      20->startoffset;
+                      REFTYPE_OFFLINE->elmreftype;
+                      
+                      (* HACK: Using allocRefRep to allocate DynItemRep *)
+                      (o[], byteinx, low, high+2) -> ra.allocRefRep; 
+                      
+                      ((@@o -> tos'%adrGetLong') + byteinx -> tos'%adrGetLong',
+                      DynItemRepPTValue) -> tos'%putLong';
+                      
+                      (((@@o -> tos'%adrGetLong') + byteinx -> tos'%adrGetLong')+12,
+                      high) -> tos'%putLong';                      
+                      
+                      rep.get->group; rep.get->proto;
+                      (group,proto,thisOID,thisOID)->objects.gp 
+                        -> (ptAdr,group);
+                      (if ptAdr=-1 then (group,proto) -> unknownProtoType if);
+                      
+                      (((@@o -> tos'%adrGetLong') + byteinx -> tos'%adrGetLong')+16,
+                      ptAdr) -> tos'%putLong';                      
+                      
+                      (* Mask out reference type tag bits: *)
+                      rep.get - REFTYPE_ORIGIN -> tmpOff;
+                      rep.get -> tmpOID.a;
+                      rep.get -> tmpOID.b;
+                      
+                      rep.pos -> remPos;
 
-                  (o[], byteinx, low, high) -> ra.allocRefRep;
+                      (tmpOID, thisOID, REFTYPE_ORIGIN, NONE, FALSE) 
+                        -> registerObject 
+                        -> refElm[];
+                      
+                      (if refElm.ote.o[] //NONE then
+                          (* This reference will be dealt with later.
+                           * Put it into missingRefs. *)
+                          
+                          (thisElm.ote[],dInRep,tmpOff,byteinx,20,refElm[])
+                            -> missingRefs.insertDangling;
+                          
+                       else
+                          (* Ok, set up the iOrigin at once. *)
+                          ((@@o->tos'%adrGetLong')+byteinx
+                            ->tos'%adrGetLong') + 20 -> fieldAdr;
+                          
+                          (@@refElm.ote.o -> tos'%adrGetLong') + tmpOff
+                            -> targetAdr;
+                          
+                          (fieldAdr,targetAdr) -> assignRef;
+                      if);
+
+                      remPos -> rep.pos;
+                      (* NONE -> ote[]; NONE -> refElm[]; *)
+                      
+
+                   //DynCompRepPTValue then
+                      (failure,'unserializeBody.HandleRefRep: unexpected component repetition')->stop;
+                  if);
 
                   (for i: high repeat
-                       rep.get -> tmpOff; (* zero tag bits (REFTYPE_DYNAMIC) *)
+                       rep.get-elmreftype -> tmpOff;
                        rep.get -> tmpOID.a;
                        rep.get -> tmpOID.b;
                        (if (theNoneOID,tmpOID) -> oideq //false then
                            rep.pos -> remPos;
-                           (tmpOID, thisOID, REFTYPE_DYNAMIC, NONE, FALSE)
+                           (tmpOID, thisOID, elmreftype, NONE, FALSE)
                              -> registerObject -> refElm[];
 
                            remPos -> rep.pos;
@@ -221,15 +289,15 @@ do
                                (* This reference will be dealt with later.
                                 * Put it into missingRefs. *)
 
-                               (thisElm.ote[],dInRep,tmpOff,byteinx,i,refElm[])
+                               (thisElm.ote[],dInRep,tmpOff,byteinx,startoffset+4*i,refElm[])
                                  -> missingRefs.insertDangling;
 
                             else
                                (* Ok, set up the reference at once. *)
                                ((@@o->tos'%adrGetLong')+byteinx
                                  ->tos'%adrGetLong')
-                               + 12 + 4*i -> fieldAdr;
-
+                               + startoffset + 4*i -> fieldAdr;
+                               
                                (@@refElm.ote.o -> tos'%adrGetLong') + tmpOff
                                  -> targetAdr;
 
@@ -406,8 +474,10 @@ do
                               poff.dynRefs[inx] -> HandleValRep
                            //ByteRepPTValue   then
                               poff.dynRefs[inx] -> HandleByteRep
-                           //RefRepPTValue    then
-                              poff.dynRefs[inx] -> HandleRefRep
+                           //RefRepPTValue
+                           //DynItemRepPTValue
+                           //DynCompRepPTValue then
+                              (poff.dynRefs[inx],tmpOff) -> HandleRefRep
                            //DoubleRepPTValue then
                               poff.dynRefs[inx] -> HandleDoubleRep
                            //WordRepPTValue   then
@@ -486,7 +556,7 @@ do
                            -> doGet -> doIt;
                      if);
 
-                     (if doIt //false then
+                     (if not doIt then
                          (if ose.ote[] //NONE then
                              (* The object is not instantiated, neither should
                               * it be unserialized. *)
@@ -644,7 +714,7 @@ do
               * containing the dangling references or the field containing a
               * reference to a reference repetition or structure variable. *)
              inxs: [1]@Integer;
-             (* If type = dInRep, inx contains the index in the rep.
+             (* If type = dInRep, inx contains the byte offset from the start of rep.
               * If type = dInStruc, inx contains the prototype address.
               * Otherwise it has no meaning. *)
              ose: ^OIDstateElement;
@@ -773,12 +843,12 @@ do
                                 -> dangling;
                           if);
                           (((@@e.otes[i].o -> tos'%adrGetLong') + e.loffs[i])
-                            -> tos'%adrGetLong') + 12 + 4*e.inxs[i]
+                            -> tos'%adrGetLong') + e.inxs[i]
                             -> fieldAdr;
                           (fieldAdr, dangling) -> assignRef;
                        else
                           (((@@e.otes[i].o -> tos'%adrGetLong') + e.loffs[i])
-                            -> tos'%adrGetLong') + 12 + 4*e.inxs[i]
+                            -> tos'%adrGetLong') + e.inxs[i]
                             -> fieldAdr;
                           (@@o -> tos'%adrGetLong') + e.roffs[i] -> objAdr;
                           (fieldAdr, objAdr) -> assignRef;

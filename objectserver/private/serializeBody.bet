@@ -1,6 +1,6 @@
 ORIGIN '../ObjectSerializer';
 (* 
- * $RCSfile: serializeBody.bet,v $ $Revision: 1.7 $ $Date: 1996-05-31 12:00:33 $
+ * $RCSfile: serializeBody.bet,v $ $Revision: 1.8 $ $Date: 1996-06-12 13:50:30 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -235,22 +235,62 @@ INCLUDE '../ObjectSerializerTables';
                   byteinx: @Integer;
                   refType: @Integer;
                   fromOID: @OIDtype;
+                  tmpOID: @OIDtype;
+                  tmpOff: @Integer;
+                  group,proto: @Integer;
                   ose: ^OIDstateElement;
+                  iProto: @ProtoType;
+                  startoffset: @Integer;
                   
                enter (byteinx, refType)
                do
                   (byteinx -> getInxLong) + 8 -> tos'%adrGetLong' -> low;
                   (byteinx -> getInxLong) + 12 -> tos'%adrGetLong' -> high;
                   
-                  (if refType //RefRepPTValue then
+                  (if refType 
+                   //RefRepPTValue 
+                   //DynItemRepPTValue
+                   //DynCompRepPTValue then
+                      
                       (* 'RefRep' -> screen.putLine; *)
-                      3 + 3*high -> rep.makeSpace;
+                      
+                      (if refType=RefRepPTValue then
+                          3 + 3*high -> rep.makeSpace;
+                          12->startoffset;
+                       else
+                          8 + 3*high -> rep.makeSpace;
+                          20->startoffset;
+                      if);
                       
                       refType -> rep.cheapPut; (* ProtoType value. *)
                       low -> rep.cheapPut;
                       high -> rep.cheapPut;
+                      
+                      (if refType<>RefRepPTValue then
+                          
+                          ((byteinx->getInxLong)+16->tos'%adrGetLong',objElm.OID) 
+                            ->objects.ggapid 
+                            ->(group, proto); 
+                          
+                          ((byteinx->getInxLong)+20
+                            ->tos'%adrGetLong'->ato,objElm.OID,
+                          REFTYPE_ORIGIN, NONE, FALSE) 
+                            ->RegisterObject->(tmpOID, tmpOff);
+                                  
+                          group -> rep.cheapPut;
+                          proto -> rep.cheapPut;
+                          
+                          tmpOff + REFTYPE_ORIGIN -> rep.cheapPut;
+                          tmpOID.a -> rep.cheapPut;
+                          tmpOID.b -> rep.cheapPut;
+                                  
+                          (if not ((tmpOID,theBetaEnvOID) -> oideq) then
+                              (objElm.OID, tmpOID) -> fers;
+                          if);   
+                      if);
+                      
                       (for cur: high repeat
-                           (byteinx -> getInxLong) + 12 + 4*cur 
+                           (byteinx -> getInxLong) + startoffset + 4*cur 
                              -> tos'%adrGetLong' 
                              -> tmpAdr;
                            (if true
@@ -272,7 +312,11 @@ INCLUDE '../ObjectSerializerTables';
                                (objElm.OID, tmpOID) -> fers;
                                
                            if);
-                           tmpOff + REFTYPE_DYNAMIC -> rep.cheapPut;
+                           (if refType=refRepPTValue then
+                               tmpOff + REFTYPE_DYNAMIC -> rep.cheapPut;
+                            else
+                               tmpOff + REFTYPE_OFFLINE -> rep.cheapPut;
+                           if);
                            tmpOID.a -> rep.cheapPut;
                            tmpOID.b -> rep.cheapPut;
                            
@@ -447,7 +491,8 @@ INCLUDE '../ObjectSerializerTables';
                               (if refType 
                                //ValRepPTValue
                                //ByteRepPTValue//WordRepPTValue
-                               //DoubleRepPTValue//RefRepPTValue then
+                               //DoubleRepPTValue//RefRepPTValue
+                               //DynItemRepPTValue//DynCompRepPTValue then
                                   (if sr[] //NONE then
                                       &saveRepetition[] -> sr[]
                                   if);
