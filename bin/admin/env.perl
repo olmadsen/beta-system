@@ -41,6 +41,8 @@ $verbose     = 1 if (defined $v);
 
 $|=1;
 
+push(@INC, $ENV{'BETALIB'} . "/bin/admin");
+
 require "utils.perl";
 
 $betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
