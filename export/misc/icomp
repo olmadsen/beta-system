@@ -1,0 +1,77 @@
+#!/usr/local/bin/perl 
+
+# usage: icomp cmd-file-name
+# standard input should be one line of whitespace separated 
+# file names.
+
+# Allow multiline matching
+$*=1;
+
+$cmdfile = $ARGV[0];
+
+if (defined $ENV{'ZIPLIST'}){
+    $dozip=1;
+    print STDERR "icomp: cmd file will be a file list for ZIP\n";
+    print STDERR "icomp: Unset environment variable ZIPLIST if you want\n";
+    print STDERR "icomp: a command file for InstallShield instead.\n";
+} else {
+    $dozip=0;
+    print STDERR "icomp: cmd file will be a command file for InstallShield\n";
+    print STDERR "icomp: Set environment variable ZIPLIST if you want\n";
+    print STDERR "icomp: a plain file list for ZIP instead.\n";
+};
+
+if ($dozip==0){
+    $zfile = $cmdfile;
+    $zfile =~ s%^.*/(\w+)\.cmd$%$1%;
+    if (length($zfile)>8){
+	$ofile = $zfile;
+	$zfile = substr($zfile, 0, 8);
+	printf (STDERR "icomp: length(\"%s\") is %d - truncating to \"%s\"\n",
+		$ofile, 
+		length($ofile),
+		$zfile);
+    }
+    $zfile .= ".z";
+}
+
+# open cmd file
+open(CMD, ">$cmdfile") || die "cannot open $cmdfile for writing";
+
+# read line from standard input
+$files = <STDIN>;
+
+# change whitespace into one space
+$files =~ s%\s+% %g;	
+
+# one file for each line         
+@FILES = split(/ /, $files);
+$files = join("\n", @FILES);  
+
+if ($dozip==0){
+    # change '/' to '\'                      
+    $files =~ s%\/%\\%g;
+
+    # build icomp command line
+    $files =~ s%^(.+)\\([^\\]+)$%icomp $1\\$2 $zfile $1 -h%g;
+
+    # print header for cmd file
+    print CMD "cd %BETALIB%\n";
+    print CMD "del /p $zfile\n";
+    print CMD "echo \"Pack of $zfile\"\n\n";
+} else {
+    # change "%SDK%" to "bor" (hardcode SDK to borland)
+    $files =~ s|%SDK%|bor|g;
+    # change "%ASM_VERSION% to 4 (borland assembler version)
+    # $files =~ s|%ASM_VERSION%|4|g;
+
+    # remove initial ".\"
+    $files =~ s%^\.\\%%g;
+}
+
+# print out the files
+print CMD $files;
+print CMD "\n";
+
+# close cmd file
+close(CMD);
