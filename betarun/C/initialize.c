@@ -29,7 +29,7 @@ QDGlobals qd;
 
 #define CPromptID 7130
 
-static void EnlargeMacHeap(char *buf)
+void EnlargeMacHeap(char *buf)
 {
   if (StandAlone){
     sprintf(buf, "\nTry enlarging the application heap");

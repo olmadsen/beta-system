@@ -28,7 +28,7 @@ Objects¥PPC  = ¶
 		{ObjDir¥PPC}:C:cbfa.o ¶
 		{ObjDir¥PPC}:C:dot.o ¶
 		{ObjDir¥PPC}:C:exit.o ¶
-		{ObjDir¥PPC}:C:float.o ¶
+		{ObjDir¥PPC}:C:floats.o ¶
 		{ObjDir¥PPC}:C:group.o ¶
 		{ObjDir¥PPC}:C:initialize.o ¶
 		{ObjDir¥PPC}:C:lazyref_gc.o ¶
@@ -86,7 +86,7 @@ ppcbetarun ÄÄ {¥MondoBuild¥} {Objects¥PPC}
 		{Sym¥PPC} ¶
 		{Objects¥PPC} ¶
 		-xm library
-	duplicate -y betarun.obj betarunv.obj
+	duplicate -y betarun.obj betarun_v.obj
 
 :C:data.o Ä :C:data.gen {¥MondoBuild¥}
 	# generating :C:data.h
