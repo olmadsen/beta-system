@@ -38,11 +38,29 @@ static void IOACheckPrintSkipped(long *ptr, Object *theObj);
 typedef struct {
   Object *objInIOA;
   Object *objInAOA;
+  unsigned long OID;
 } OIDCacheElm;
 
 static OIDCacheElm *OIDCache = NULL;
 static long OIDCacheSize = 0;
 static long OIDCacheMax = 0;
+
+Object *getObjectByOID(unsigned long OID)
+{
+  int i;
+  Object *obj;
+
+  for (i=0; i < OIDCacheSize; i++) {
+    if (OID == OIDCache[i].OID) {
+      return OIDCache[i].objInIOA;
+    }
+  }
+
+  obj = (Object*)(OID<<3);
+  Claim(inAOA(obj), "getObjectByOID: object outside AOA");
+
+  return obj;
+}
 
 unsigned long getOIDforObject(Object *obj)
 {
@@ -61,6 +79,10 @@ unsigned long getOIDforObject(Object *obj)
       if (autObj == OIDCache[i].objInIOA) {
 	newpos = OIDCache[i].objInAOA;
 	OID = (unsigned long)((long)newpos+(long)obj-(long)autObj);
+	OIDCache[OIDCacheSize].objInIOA = autObj;
+	OIDCache[OIDCacheSize].objInAOA = NULL;
+	OIDCache[OIDCacheSize].OID = OID;
+	OIDCacheSize++;
 	return OID>>3;
       }
     }
@@ -76,10 +98,12 @@ unsigned long getOIDforObject(Object *obj)
       }
       OIDCache = REALLOC(OIDCache, OIDCacheMax*sizeof(OIDCacheElm));
     }
+    OID = (unsigned long)((long)newpos+(long)obj-(long)autObj);
+
     OIDCache[OIDCacheSize].objInIOA = autObj;
     OIDCache[OIDCacheSize].objInAOA = newpos;
+    OIDCache[OIDCacheSize].OID = OID;
     OIDCacheSize++;
-    OID = (unsigned long)((long)newpos+(long)obj-(long)autObj);
     return OID>>3;
   }
 
@@ -93,7 +117,9 @@ static void HandlePostponedIODs(void)
   int i;
 
   for (i=0; i < OIDCacheSize; i++) {
-    CopyObjectToAOA(OIDCache[i].objInIOA, OIDCache[i].objInAOA);
+    if (OIDCache[i].objInAOA) {
+      CopyObjectToAOA(OIDCache[i].objInIOA, OIDCache[i].objInAOA);
+    }
   }
   OIDCacheSize = 0;
 }
