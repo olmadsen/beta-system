@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/local/bin/perl -s
 
 # How to use:
 # 1. Currently only possible at UNIX Sparc (because I only installed the
@@ -21,6 +21,12 @@
 
 ### main #######
 
+if ($old){
+    $htmldoc = "htmldoc";
+} else {
+    $htmldoc = "htmldoc-1.8b4";
+}
+
 $sequence_file = "sequence";
 if ($#ARGV == 0){ $sequence_file = $ARGV[0] };
 
@@ -41,18 +47,23 @@ while (<SEQUENCE>){
 $pdfexisted=1 if ( -f $pdf );
 &make_titlepage();
 $files = join (' ', @sequence);
-$cmd = "htmldoc-1.8b4 -v -t pdf -f $pdf --toclevels 4 --bodycolor #ffffff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.1 --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Helvetica --bodyfont Helvetica --headfootsize 11.0 --headfootfont Helvetica $files";
+$cmd = "$htmldoc -v -t pdf -f $pdf --toclevels 4 --bodycolor #ffffff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.1 --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Helvetica --bodyfont Helvetica --headfootsize 11.0 --headfootfont Helvetica $files";
 
 print "$cmd\n";
 $ENV{'LD_LIBRARY_PATH'} = "/usr/local/lib";
 system "$cmd";
 unlink "title.html";
-print "Wrote $pdf\n";
-if (!$pdfexisted) {
-    print "Seems to be first generation of $pdf. CVS adding...\n";
-    $cmd = "cvs add -kb $pdf";
-    print "$cmd\n";
-    system($cmd);
+
+if (-f $pdf){
+    print "Wrote $pdf\n";
+    if (!$pdfexisted) {
+	print "Seems to be first generation of $pdf. CVS adding...\n";
+	$cmd = "cvs add -kb $pdf";
+	print "$cmd\n";
+	system($cmd);
+    }
+} else {
+    print "\n***FAILED to generate $pdf!\n\n";
 }
 
 exit 0;
