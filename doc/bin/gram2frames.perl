@@ -160,28 +160,29 @@ sub unplus_html
 
 sub print_button
 {
-    local ($type, $href) = @_;
-    local ($alt) = ucfirst ($type);
+    local ($type, $href, $alt) = @_;
+    local ($name) = ucfirst ($type);
     local ($javascript) = "";
-
-    # special case for "prev":
-    $alt =~ s/Prev/Previous/g;
 
     if ($href =~ m/^javascript:/ ){
 	print<<"EOT";
-<A HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}${type}g-jsr.gif" ALT="${alt} (JavaScript Required)" NAME="$alt" BORDER=0></A>
+<A NAME="A$name" HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}${type}g-jsr.gif" ALT="${alt} (JavaScript Required)" NAME="$name" BORDER=0></A>
 EOT
-        $javascript = "document.images.$alt.src = \"${imagedir}${type}.gif\";";
-
+        $javascript = <<"EOT";
+if (navigator.appName.substring(0,9) == "Microsoft"){
+  document.all.APrint.outerHTML = '<A NAME="A$name" HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}${type}.gif" ALT="${alt}" NAME="$name" BORDER=0></A>';
+} else {
+  document.images.$name.src = \"${imagedir}${type}.gif\";
+}
+EOT
     } elsif ("$href" eq ""){
-	print "<A><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC=\"$imagedir";
-	print $type . "g.gif\" ALT=";
-	print $alt . " NAME=\"$alt\" BORDER=0></A>\n";
+	print<<"EOT";
+<A><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="$imagedir${type}g.gif" ALT="$alt" NAME="$name" BORDER=0></A>
+EOT
     } else {
-	print "<A HREF=\"" . $href . "\"" . ">";
-	print "<IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC=\"$imagedir";
-	print $type . ".gif\" ALT=";
-	print $alt . " NAME=\"$alt\" BORDER=0></A>\n";
+	print<<"EOT";
+<A HREF="$href"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="$imagedir$type.gif" ALT="$alt" NAME="$name" BORDER=0></A>
+EOT
     }
     
     return $javascript;
@@ -277,10 +278,12 @@ sub print_nav_frame
 <TD NOWRAP>
 EOT
 
-    &print_button("top", $topfile);
-    &print_button("index", $inxfile);
-    &print_button("content", $tocfile);
-    $javascript = &print_button("print", "javascript:parent.${basename}Body.printframe(parent.${basename}Body);");
+    &print_button("top", $topfile, "Top: Manuals Main Entry");
+    &print_button("index", $inxfile, "\u$basename Grammar Index");
+    &print_button("content", $tocfile, "Contents: List of Grammars");
+    $javascript = &print_button("print", 
+				"javascript:parent.${basename}Body.printframe(parent.${basename}Body);",
+				"Print \u$basename Grammar Frame");
 
     print<<EOT;
 </TD>
@@ -289,6 +292,7 @@ EOT
 </TABLE>
 EOT
 
+    chomp $javascript;
     print<<"EOT" if ("$javascript" ne "");
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript">
 $javascript
@@ -396,9 +400,10 @@ sub print_index_nav_frame
 <TD>
 EOT
 
-    &print_button("top", $topfile);
-    &print_button("up", $htmlfile);
-    &print_button("content", $tocfile);
+    $basename =~ s/-inx$//;
+    &print_button("top", $topfile, "Top: Manuals Main Entry");
+    &print_button("up", $htmlfile, "Up: \u$basename Grammar");
+    &print_button("content", $tocfile, "Contents: List of Grammars");
 
     print<<EOT;
 </TD>
