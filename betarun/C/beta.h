@@ -20,6 +20,7 @@ extern long *BETA_end; /* C-variable */
 #ifdef macintosh
 # include <Memory.h>
 # include <StdLib.h>
+# include <String.h>
 # ifdef RTDEBUG
 #  include <Types.h>
 # endif
