@@ -17,8 +17,10 @@ void unswizzle_dummy()
 }
 
 #ifdef PERSIST
+#define MAXPERSISTENTBYTES 2048 * Kb
 
 /* LOCAL VARIABLES */
+static loadedBytes = 0;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static Object *loadObject(unsigned long store, u_long offset, unsigned long inx);
@@ -96,6 +98,12 @@ static Object *loadObject(unsigned long store, unsigned long offset, unsigned lo
   } else {
     size = 4*StoreObjectSize(theRealStoreObj);
     theRealObj = AOAallocate(2*size);
+    loadedBytes += 2*size;
+    if (loadedBytes > MAXPERSISTENTBYTES) {
+      loadedBytes = 0;
+      AOANeedCompaction = TRUE;
+      DEBUG_CODE(fprintf(output, "Max persistent bytes exceeded\n"))
+	}
     if (AOANeedCompaction) {
       DEBUG_CODE(fprintf(output, "Requesting GC at next allocation\n"));
       /* Request GC at next IOAAllocation */
