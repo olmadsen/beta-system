@@ -26,53 +26,65 @@ do ';'->delimiter
    slashInx,index: @integer;
    pathlength,basislength: @integer;
    path,basis: ^Text;
+   found: @boolean;
    ch: @char;
    isWin32Path: BooleanValue
      (# p: ^Text; 
      enter p[]
      do '\'->p.findAll (# do true->value #); 
      #);
-   
-do (if THIS(ConvertFilePath).path[]
-    // none then 
-    else
-       &text[]->path[];
-       THIS(ConvertFilePath).path->path;
+   tildeExpand:
+     (# 
+     do (* try look in table:
+         * We cannot expand usernames on Win32
+         *)
+        private.nameTable.scan
+        (# 
+        do (if ((1,currentSize)->path.sub->thisHome.equal) then
+               (1,currentSize)->path.delete;
+               thisDir[]->path.prepend;
+               path.length->pathlength;
+               true -> found;
+           if)
+        #);
+        (if found then leave tildeExpand if);
+        (* not found in table: expand ~ as betalib *)
+        (1,1)->path.delete;
+        private.betalib[]->path.prepend;
+        path.length->pathlength;
+     #);
+do (if THIS(ConvertFilePath).path[]<>none then 
+       THIS(ConvertFilePath).path.copy->path[];
        path.length->pathlength;
-       (if pathlength <> 0
-        // true then
+       (if pathlength <> 0 then
            (if (pathlength->path.inxget)
             // '/' // '\' then true->endedBySlash
            if);
            &text[]->basis[];
-           (if THIS(ConvertFilePath).basis[]
-            // none then private.CurrentDirectory->basis; 
+           (if THIS(ConvertFilePath).basis[]=none then 
+               private.CurrentDirectory->basis; 
             else
                THIS(ConvertFilePath).basis->basis; 
            if);
-           (if basis.length // 0 then private.CurrentDirectory->basis if);
+           (if basis.length = 0 then private.CurrentDirectory->basis if);
            basis.length->basislength;
            (if ((pathlength->path.inxget) <> '/') and
-           ((pathlength->path.inxget) <> '\')
-            // true then
-               (if path[]->isWin32Path
-                // true then '\'->path.put; 
+               ((pathlength->path.inxget) <> '\') then
+               (if path[]->isWin32Path then 
+                   '\'->path.put; 
                 else
                    '/'->path.put; 
                if);
                pathlength+1->pathlength;
-               
            if);
            (if ((basislength->basis.inxget) <> '/') and
-           ((basislength->basis.inxget) <> '\')
-            // true then
-               (if basis[]->isWin32Path
-                // true then '\'->basis.put; 
+               ((basislength->basis.inxget) <> '\') then
+               (if basis[]->isWin32Path then 
+                   '\'->basis.put; 
                 else
                    '/'->basis.put; 
                if);
                basislength+1->basislength;
-               
            if);
            path[]->expandEnvVar->path[];
            (* Expand environment variables *)
@@ -82,45 +94,22 @@ do (if THIS(ConvertFilePath).path[]
            basis.length->basislength;
            converter:
              (#
-                T: ^text;
-                index: @integer;
-                firstCh: @char;
-                found: @boolean;
                 unknownPrefix:
-                  (#
-                  (* The prefix of path is unknown.
-                   * It must be a local file
-                   *) 
+                  (# (* The prefix of path is unknown.
+                      * It must be a local file
+                      *) 
                   do ('./',1)->path.insert;
                      pathlength+2->pathlength;
                      restart converter
                   #);
-                
              do (if (1->path.inxGet)
-                 // '/' // '\' then (* absolute path *)
+                 // '/' 
+                 // '\' then (* absolute path *)
                     leave converter
                  // '~' then
-                    (* try look in table:
-                     * We cannot expand usernames on Win32
-                     *)
-                    test: 
-                      (if true then
-                          private.nameTable.scan
-                          (# 
-                          do (if ((1,currentSize)->path.sub->thisHome.equal) then
-                                 (1,currentSize)->path.delete;
-                                 thisDir[]->path.prepend;
-                                 path.length->pathlength;
-                                 leave test;
-                             if)
-                          #);
-                          (* not found in table: expand ~ as betalib *)
-                          (1,1)->path.delete;
-                          private.betalib[]->path.prepend;
-                          path.length->pathlength;
-                      if)
-                    
-                 // '.' then (* this is new from unix version *)
+                    tildeExpand;
+                    leave converter;
+                 // '.' then 
                     (if ('./'->basis.equal) or ('.\\'->basis.equal) then
                         leave converter
                     if);
@@ -129,135 +118,119 @@ do (if THIS(ConvertFilePath).path[]
                      *)
                     (if (2->path.inxGet)
                      // '.' then
-                     (* path starts with '..'
-                      * Since path is always terminated by '/',
-                      * length is >=3
-                      *)
+                        (* path starts with '..'
+                         * Since path is always terminated by '/',
+                         * length is >=3
+                         *)
                         (if (3->path.inxGet)
-                         // '/' // '\' then
-                         (* path starts with '../' or '..\'
-                          * delete prefix of path
-                          * and last component of basis
-                          * and rerun converter
-                          *)
+                         // '/' 
+                         // '\' then
+                            (* path starts with '../' or '..\'
+                             * delete prefix of path
+                             * and last component of basis
+                             * and rerun converter
+                             *)
                             (1,3)->path.delete;
                             pathlength-3->pathlength;
                             0->index;
-                            '/'
-                              ->basis.findAll
+                            '/'->basis.findAll
+                            (# 
+                            do (if inx=basislength then
+                                   (* found the terminating slash *)
+                                   (if index <> 0 then
+                                       (* found slash before the last one
+                                        * in basis
+                                        *)
+                                       (index+1,basislength)->basis.delete;
+                                       basis.length->basislength;
+                                       (if pathlength=0 then
+                                           basis->path;
+                                           basislength->pathlength;
+                                           leave converter
+                                       if);
+                                    else
+                                       (* only terminating slash in basis. *)
+                                       (if inx=1 then (* basis='/' *)
+                                           NoFather;
+                                           (* in case NoFather continues: *)
+                                           '../'->path.prepend;
+                                           pathlength+3->pathlength;
+                                           leave converter;
+                                        else
+                                           '../'->path.prepend;
+                                           pathlength+3->pathlength;
+                                           './'->basis.prepend;
+                                           basislength+2->basislength;
+                                       if)
+                                   if);
+                                   restart converter
+                                else
+                                   (* save the position of this slash *)
+                                   inx->index
+                               if)
+                            #);
+                            (if index=0 then
+                                (* Did not find any '/'.
+                                 * Try 'directoryChar' in basis
+                                 *)
+                                '\'->basis.findAll
                                 (# 
-                                do (if inx
-                                    // basislength then
-                                    (* found the terminating slash *)
-                                       (if index <> 0
-                                        // true then
-                                        (* found slash before the last one
-                                         * in basis
-                                         *)
-                                           (index+1,basislength)->basis.delete;
+                                do (if inx=basislength then
+                                       (* found the terminating
+                                        * 'directoryChar'
+                                        *)
+                                       (if index <> 0 then
+                                           (* found 'directoryChar'
+                                            * before the last one in basis
+                                            *)
+                                           (index+1,basislength)
+                                             ->basis.delete;
                                            basis.length->basislength;
-                                           (if pathlength
-                                            // 0 then
+                                           (if pathlength=0 then
                                                basis->path;
                                                basislength->pathlength;
                                                leave converter
                                            if);
-                                           
-                                        // false then
-                                        (* only terminating slash in basis. *)
-                                           (if inx
-                                            // 1 then (* basis='/' *)
-                                               NoFather;
-                                               (* in case NoFather continues: *)
-                                               '../'->path.prepend;
-                                               pathlength+3->pathlength;
-                                               leave converter;
-                                               
-                                            else
-                                               '../'->path.prepend;
-                                               pathlength+3->pathlength;
-                                               './'->basis.prepend;
-                                               basislength+2->basislength;
-                                               
-                                           if)
+                                        else
+                                           (* only 'directoryChar'
+                                            * last in basis:
+                                            * basis is a volume name
+                                            *)
+                                           '../'->path.prepend;
+                                           pathlength+3->pathlength;
                                        if);
                                        restart converter
                                     else
-                                   (* save the position of this slash *)
-                                       inx->index
-                                   if)
-                                #);
-                            (if index
-                             // 0 then
-                             (* Did not found any '/'.
-                              * Try 'directoryChar' in basis
-                              *)
-                                '\'
-                                  ->basis.findAll
-                                    (# 
-                                    do (if inx
-                                        // basislength then
-                                        (* found the terminating
-                                         * 'directoryChar'
-                                         *)
-                                           (if index <> 0
-                                            // true then
-                                            (* found 'directoryChar'
-                                             * before the last one in basis
-                                             *)
-                                               (index+1,basislength)
-                                                 ->basis.delete;
-                                               basis.length->basislength;
-                                               (if pathlength
-                                                // 0 then
-                                                   basis->path;
-                                                   basislength->pathlength;
-                                                   leave converter
-                                               if);
-                                               
-                                            // false then
-                                            (* only 'directoryChar'
-                                             * last in basis:
-                                             * basis is a volume name
-                                             *)
-                                               '../'->path.prepend;
-                                               pathlength+3->pathlength;
-                                               
-                                           if);
-                                           restart converter
-                                        else
                                        (* save the position of this
                                         * 'directoryChar'
                                         *)
-                                           inx->index
-                                       if)
-                                    #);
-                                
+                                       inx->index
+                                   if)
+                                #);
                             if);
-                            
                          else
-                        (* path starts with ..something,
-                         * it must be a local file/directory
-                         * named '..something'
-                         *)
+                            (* path starts with ..something,
+                             * it must be a local file/directory
+                             * named '..something'
+                             *)
                             unknownprefix; 
                         if)
-                     // '/' // '\' then
-                     (* Path starts with './', i.e. a path local to basis
-                      * delete prefix of path, concatenate basis and path
-                      * and return path 
-                      *)
+                     // '/' 
+                     // '\' then
+                        (* Path starts with './', i.e. a path local to basis
+                         * delete prefix of path, concatenate basis and path
+                         * and return path 
+                         *)
                         (1,2)->path.delete;
                         basis[]->path.prepend;
                         path.length->pathlength;
                         leave converter
                      else
-                    (* path starts with .something,
-                     * it must be a local file/directory
-                     *)
+                        (* path starts with .something,
+                         * it must be a local file/directory
+                         *)
                         unknownPrefix
                     if);
-                    
                  else
                     false->found;
                     ':' (* ':' separates the volume from the path *)
@@ -265,62 +238,46 @@ do (if THIS(ConvertFilePath).path[]
                     (* if we have a 'directoryChar',
                      * we have a global name on Win32
                      *)
-                    (if found // false then unknownPrefix if);
+                    (if not found then unknownPrefix if);
                     leave converter
-                if)
-             #);
-           (* Converter done *)
-           (* Check that the path is ended by slash iff the original one was *)
-           (if ((pathlength->path.inxget) = '/') or
-           ((pathlength->path.inxget) = '\')
-            // true then
-               (if endedBySlash
-                // false then
-                   (if pathlength
-                    // 1 then (* special case: the result was '/' *) 
-                    else
-                       (pathlength,pathlength)->path.delete; 
-                   if);
-                   
-               if)
-            else
-               (if endedBySlash // true then '\'->path.put; if)
-           if);
-           (* replace / with \ *)
-           ('/','\',path[])->substChars;
-           (* Check that there are no '\\' in the path unless first *)
-           - 1->slashInx;
-           '\'
-             ->path.findAll
-               (# 
-               do (if inx > slashInx
-                   // true then
-                      (if inx = slashInx+1
-                       // true then
-                          (if inx > 2
-                           // true then (* two consecutive 'directoryChar' *)
-                              (inx,inx)->path.delete
-                          if);
-                          
-                       // false then
-                       (* remember position of last 'directoryChar' *)
-                          inx->slashInx
-                      if)
-                  if)
-               #);
-           &text[]->convertedpath[];
-           path->convertedpath;
-           loop: (* on Win32: case in file names is not significant *)
-           (for i: convertedpath.length repeat
-             (if (convertedpath.T[i]->ch)
-              // '-' then leave loop
-              else
-                 ch->ascii.lowCase->convertedpath.T[i]; 
-             if)
-           for)
-       if)
+                if);
+             #)
+       if);
+       (* Converter done *)
+       (* Check that the path is ended by slash iff the original one was *)
+       (if ((pathlength->path.inxget) = '/')  or
+           ((pathlength->path.inxget) = '\') then
+           (if not endedBySlash then
+               (if pathlength=1 then 
+                   (* special case: the result was '/' *) 
+                else
+                   (pathlength,pathlength)->path.delete; 
+               if);
+           if)
+        else
+           (if endedBySlash then '\'->path.put; if)
+       if);
+       (* replace / with \ *)
+       ('/','\',path[])->substChars;
+       (* Check that there are no '\\' in the path unless first *)
+       -1->slashInx;
+       '\'->path.findAll
+       (# 
+       do (if inx > slashInx then
+              (if inx = slashInx+1 then
+                  (if inx > 2 then (* two consecutive 'directoryChar' *)
+                      (inx,inx)->path.delete
+                  if);
+               else
+                  (* remember position of last 'directoryChar' *)
+                  inx->slashInx
+              if)
+          if)
+       #);
+       (* on Win32: case in file names is not significant *)
+       path.copy -> lowcasepath -> convertedpath[];
    if)
-#)  
+#)
 
 
 -- PathHandlerInitNameTable: descriptor --
