@@ -88,10 +88,13 @@ long AOAtoIOAalloc()
 		       (int)primes[MAXAOATOIOAPRIM]));
       alternateAOAtoIOAtable = reserveBlock(numbytes);
       if (alternateAOAtoIOAtable) {
-	InsertGuardPage();
-	AOAtoIOAtable = reserveBlock(numbytes);
+	if (InsertGuardPage()) {
+	  AOAtoIOAtable = reserveBlock(numbytes);
+	  if (AOAtoIOAtable) {
+	    AllocateFromReserve();
+	  }
+	}
       }
-      AllocateFromReserve();
     }
 #else
     if (AOAtoIOAtable) {

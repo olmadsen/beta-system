@@ -163,7 +163,8 @@ extern long inArea(Block *, Object *);
 #ifdef USEMMAP
 void mmapInitial(unsigned long numbytes);
 unsigned long mmapUnusedSize(void);
-void InsertGuardPage(void);
+int InsertGuardPage(void);
+unsigned long mmapUnusedSize(void);
 Block * reserveProtectedBlock(long numbytes);
 Block * reserveBlock(long numbytes);
 int extendBlock(Block * theBlock, long numbytes);

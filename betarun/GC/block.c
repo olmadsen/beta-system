@@ -230,9 +230,15 @@ void mmapInitial(unsigned long numbytes)
 	       (int)mmapHeap, (int)mmapHeapLimit));
 }
 
-void InsertGuardPage(void)
+int InsertGuardPage(void)
 {
+  if ((void*)((char*)mmapHeapTop + MMAPPageSize) >= mmapHeapLimit) {
+    /* Out of memory */
+    return 0;
+  }
+
   mmapHeapTop = (char*)mmapHeapTop + MMAPPageSize;
+  return 1;
 }
 
 unsigned long mmapUnusedSize(void)
@@ -251,6 +257,11 @@ Block * reserveBlock(long numbytes)
   Claim((long)mmapHeapLimit, "reserveBlock: mmapHeapLimit=0");
   Claim(numbytes >= 0, "reserveBlock: with negative numbytes");
   Claim(((numbytes & (MMAPPageSize-1))==0), "reserveBlock: numbytes must be aligned to MMAPPageSize");
+
+  if ((void*)((char*)mmapHeapTop + numbytes) >= mmapHeapLimit) {
+    /* Out of memory */
+    return NULL;
+  }
 
 #if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi)
   if (mprotect(mmapHeapTop, MMAPPageSize, 
@@ -302,6 +313,11 @@ Block * reserveProtectedBlock(long numbytes)
   Claim((long)mmapHeapLimit, "reserveBlock: mmapHeapLimit=0");
   Claim(numbytes >= 0, "reserveBlock: with negative numbytes");
   Claim(((numbytes & (MMAPPageSize-1))==0), "reserveBlock: numbytes must be aligned to MMAPPageSize");
+
+  if ((void*)((char*)mmapHeapTop + numbytes) >= mmapHeapLimit) {
+    /* Out of memory */
+    return NULL;
+  }
 
   theBlock = mmapHeapTop;
   mmapHeapTop = (void*)((char*)mmapHeapTop + numbytes);

@@ -185,11 +185,19 @@ Mjølner BETA System and may not be used for commercial\npurposes\n\
 static void AllocateHeapFailed(char *name, int numbytes)
 {
   char buf[512];
+#ifdef USEMMAP
+  sprintf(buf,
+	  "%s: Cannot reserve virtual space for %s (%dKb)\n", 
+	  ArgVector[0],
+	  name,
+	  (int)numbytes/Kb);
+#else
   sprintf(buf,
 	  "%s: Cannot allocate the %s (%dKb)\n", 
 	  ArgVector[0],
 	  name,
 	  (int)numbytes/Kb);
+#endif
 #ifdef MAC
   EnlargeMacHeap(buf);
 #else
@@ -399,15 +407,24 @@ void Initialize()
 #ifdef USEMMAP
   mmapInitial(MMAPMaxSize);
   /* The order of allocation here determines the order of adresses. */
-  InsertGuardPage();
+  if (!InsertGuardPage()) {
+    AllocateHeapFailed("InsertGuardPage", MMAPPageSize);
+  }
   mmapAllocateHeap(&IOABaseBlock, IOASize, "IOA heap");
-  InsertGuardPage();
+  if (!InsertGuardPage()) {
+    AllocateHeapFailed("AOAtoIOATable", IOASize);
+  }
   mmapAllocateHeap(&ToSpaceBaseBlock, IOASize, "ToSpace heap");
-  InsertGuardPage();
-  AOAtoIOAalloc();
-  InsertGuardPage();
-  AOAtoIOAalloc();
-  InsertGuardPage();
+  if (!InsertGuardPage()) {
+    AllocateHeapFailed("InsertGuardPage", MMAPPageSize);
+  }
+  if (!AOAtoIOAalloc()) {
+    AllocateHeapFailed("AOAtoIOATable", 2*12977971*8);
+  }
+  if (!InsertGuardPage()) {
+    AllocateHeapFailed("InsertGuardPage", MMAPPageSize);
+  }
+
   AOAMaxSize = mmapUnusedSize();
   AOAMaxSize -= PERSIST_MAXENTRIES; /* Leave room for persistense */
   AOAMaxSize -= 64 * MMAPPageSize; /* Leave 64 pages for other things */

@@ -1107,6 +1107,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
     break;
 
     case VOP_PROGRAM_PATH: {
+#ifndef nti
       extern void (M1PROGRAM)(void); /* probably problem with underscore on NTI */
       DEBUG_VALHALLA(fprintf(output,
                              "VOP_PROGRAM_PATH()=%s\n",
@@ -1114,6 +1115,13 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       valhalla_writeint(opcode);
       valhalla_writetext(GroupName((long)M1PROGRAM,1));
       valhalla_socket_flush();
+#else
+      DEBUG_VALHALLA(fprintf(output,
+                             "VOP_PROGRAM_PATH()=NOT IMPLEMENTED ON NTI\n"));
+      valhalla_writeint(opcode);
+      valhalla_writetext("VOP_PROGRAM_PATH()=NOT IMPLEMENTED ON NTI\n");
+      valhalla_socket_flush();
+#endif
       
     }
     break;
