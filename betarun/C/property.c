@@ -53,12 +53,7 @@ static ValueProperty( name, value)
   char *name, *value;
 {
 
-#ifdef MADA
-  fprintf( output, "\
-# Value properties are not supported in this DEMO version of\n\
-# The Mjolner BETA System.  '%s#%s' ignored.\n\
-", name, value);
-#else
+#ifndef MADA
   ENTRY("IOA",  IOASize       = 1024 * intScan(name, value));
   ENTRY("AOA",  AOABlockSize  = 1024 * intScan(name, value));
   ENTRY("LVRA", LVRABlockSize = 1024 * intScan(name, value));
