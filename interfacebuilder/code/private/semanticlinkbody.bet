@@ -1,0 +1,283 @@
+ORIGIN '../semanticlink';
+INCLUDE '~beta/betaast/v5.1/betasematt';
+
+-- nameAplEnterDeclaration: doPart --
+do theDeclaration[] -> dclRef;
+   
+-- nameAplExitDeclaration: doPart --
+do (# 
+      myIndexToNode:
+        (#
+           inx: @integer;
+           as: ^ast;
+           indexOutOfRange:< astInterfaceException;
+           noSuchSymbol:< astInterfaceException;
+           grammarGenRefArrayError:< astInterfaceException;
+           symbol,val: @integer;
+           errorMsg:
+             (# n: @integer; msg: ^text
+             enter n
+             do
+                '*** Error in IndexToNode:'->msg[];
+                '\nIndex='->msg.puttext;
+                inx->msg.putint;
+                '\nSymbol='->msg.puttext;
+                symbol->msg.putint;
+                '\nVal='->msg.puttext;
+                val->msg.putint;
+                msg.newline
+             exit msg[]
+             #);
+           ff: ^fragmentForm;
+           
+        enter (inx,ff[])
+        do
+           l:
+             (if true
+              // (0 < inx) and (inx <= ff.a.range) then
+                 ff.a[inx]->val->tos'%GetSignedBits[4,12]'->symbol;
+                 (if true
+                  // (0 < symbol) and (symbol <= ff.grammar.genRefArray.range) then
+                     (if ff.grammar.genRefArray[symbol]->as[]
+                      // none then (* IndexToNode: genRefArray problem *)
+                         errorMsg->grammarGenRefArrayError; leave l
+                     if)
+                  else
+                     (if symbol
+                      // prodNo.unExpanded then
+                         &UnExpanded[]->as[]
+                      // prodNo.optional then
+                         &Optional[]->as[]
+                      // prodNo.nameDecl then
+                         &NameDecl[]->as[]
+                      // prodNo.nameAppl then
+                         &NameAppl[]->as[]
+                      // prodNo.string then
+                         &String[]->as[]; 
+                      // prodNo.Const then
+                         &Const[]->as[]; 
+                      // prodNo.Comment then
+                         &Comment[]->as[]
+                      // prodNo.SlotDesc then
+                         &SlotDesc[]->as[]
+                      else
+                         (* IndexToNode: no match for symbol! *)
+                         none ->as[]; errorMsg->noSuchSymbol; leave l
+                     if)
+                 if);
+                 inx->as.index;
+                 ff[]->as.frag[]
+              // (0 = inx) then (* Zero index is the same as a NONE ast *)
+                 none ->as[]
+              else
+                 (* IndexToNode: index out of range *)
+                 none ->as[]; errorMsg->indexOutOfRange
+             if)
+        exit as[]
+        #);
+
+      myIsRealOpen:
+        (# fg: ^fragmentGroup; isOpen: @boolean
+        enter fg[]
+        do
+           scanner: fg.fragmentList.scan
+             (# 
+             do
+                (if current.type = formType then
+                    (if (current.f[] <> none ) then
+                        true->isOpen
+                     else
+                        false->isOpen; leave scanner
+                    if)
+                if)
+             #)
+        exit isOpen
+        #);
+
+      myGetGroup:
+        (* Private: The inverse of GetIndex; If the group is not open then open it *)
+        (#
+           ff,f: ^FragmentForm;
+           Index: @integer;
+           importException:< AstInterfaceException;
+           error: ^stream;
+           openForm:
+             (# fg: ^fragmentGroup; name: ^Text; i: @Integer; 
+             enter name[]
+             do
+                '-'->name.findAll (#  do inx->i #);
+                ((1,i-1)->name.sub,screen[])->top.open->fg[];
+                ((i+1,name.lgth)->name.sub,screen[])->fg.open->f[];
+                
+             #);
+           
+        enter (ff[],index)
+        do
+           thisOp:
+             (# 
+             do
+                (if (ff[] = none ) then leave thisOp;  if);
+                (if (ff.import.impL[] = none ) then leave thisOp;  if);
+                (if (index > ff.import.impL.l.range) then leave thisOp;  if);
+                (if (index = 0) then leave thisOp;  if);
+                (if (ff.import.impL.l[index][] = none ) then leave thisOp;  if);
+                (if (ff.import.impL.l[index].f[]->f[])
+                 // none then
+                    (# t: ^text
+                    do
+                       (ff.father).fullName->stripPathName->t[];
+                       (if t[]
+                        // none then
+                           (ff.import.impL.l[index].n.copy,
+                           thePathHandler.currentDirectory)
+                             ->thePathHandler.convertFilePath->openForm;
+                           f[]->ff.import.impL.l[index].f[]
+                        else
+                           (ff.import.impL.l[index].n.copy,t[])
+                             ->thePathHandler.convertFilePath->openForm;
+                           f[]->ff.import.impL.l[index].f[]
+                       if);
+                       
+                    #);
+                    (if f[]
+                     // none then
+                        (# t: ^text
+                        do
+                           &text[]->t[];
+                           'Import error!! '->t.putLine;
+                           'There is something wrong with the file "'->t.putText;
+                           (ff.father).diskFileName->t.putText;
+                           '"\n. It refers to the fragment "'->t.putText;
+                           ff.import.impL.l[index].n[]->t.putText;
+                           '" which was not found \n\n.'->t.putText;
+                           t[]->ImportException
+                        #)
+                    if)
+                if)
+             #)
+        exit f[]
+        #);
+      myValueToAst: (* Private *)
+        (#
+           val: @integer; a: ^Ast; ff,f: ^fragmentForm
+        enter (val,ff[])
+        do
+           (if val
+            // 0 then none ->a[]
+            else
+               (ff[],val->tos'%getShort[0]')->myGetGroup->f[];
+               val->tos'%getShort[1]'->tos'%ShiftLeft[1]'->val;
+               (if f[] <> none then
+                   (if not (f.father).isRealOpen then
+                       (f.father).fullName-> screen.putText;
+                       '-'->screen.put;
+                       ' was not real open'->screen.putLine;
+                       (f.father).realOpen
+                   if);
+                   (if val <> 0 then
+                       (val,f[])
+                         ->myindextoNode
+                       (#
+                          indexOutOfRange::< 
+                            (# 
+                            do 'indexOutOfRange'->putLine; true->continue; 
+                            #);
+                          noSuchSymbol::< 
+                            (# 
+                            do 'noSuchSymbol'->putLine; true->continue; 
+                            #);
+                          grammarGenRefArrayError::< 
+                            (# 
+                            do
+                               'grammarGenRefArrayError'->putLine;
+                               true->continue;
+                               
+                            #)
+                       #)->a[]
+                   if)
+               if)
+           if)
+        exit a[]
+        #);
+      myGetNodeAttribute:
+        (# aplNode,val: ^ast; attributNo: @integer
+        enter (attributNo,aplNode[])
+        do
+           attributNo->aplNode.checkAttributNo;
+           (aplNode.frag.a[aplNode.index+ (*offset.attribute*) 2+attributno-1],
+           aplNode.frag[])->myValueToAst->val[]
+        exit val[]
+        #);
+      myDclRef:
+        (# aplNode,dclNode: ^ast
+        enter aplNode[]
+        do ((1,aplNode[])->myGetNodeAttribute)->dclNode[]; 
+        exit dclNode[]
+        #);
+      myVirtDcl:
+        (# aplNode,dclNode: ^ast; f: ^ast
+        enter aplNode[]
+        do
+           aplNode.father->f[];
+           f.father->f[];
+           ((1,f[])->myGetNodeAttribute)->dclNode[]
+        exit dclNode[]
+        #);
+      
+      theNode,fatherNode,testNode: ^ast;
+   do 
+      thisCommand:
+        (# 
+        do
+           (if kind
+            // kinds.nameAppl // kinds.nameDecl then
+               father->theNode[]->testNode[]
+            else
+               this(nameApl)[]->theNode[]->testNode[]
+           if);
+           checkForSemanticErrors:
+             (if testNode.hasSemanticError then
+                 (if testNode.semanticError <> 0 then
+                     leave thisCommand
+                 if)
+              else
+                 testNode.father->testNode[];
+                 (if testNode[] <> none then restart checkForSemanticErrors if)
+             if);
+           (if theNode[] = none then
+               'followSemanticLink: theNode is none!!'->putLine
+            else
+               (if theNode.symbol
+                // nameApl then
+                   (#
+                      theNameApl: ^nameApl;
+                   do
+                      theNode[]->theNameApl[];
+                      theNameApl[]->myDclRef->theDeclaration[];
+                      
+                   #)
+                // nameDcl then
+                   (#
+                      theNameDcl: ^nameDcl;
+                      f: ^ast
+                   do
+                      theNode.father->f[];
+                      (if f.symbol
+                       // names then
+                          f.father->f[];
+                          (if f.symbol
+                           // bindingDecl
+                           // finalDecl then
+                              theNode[]->theNameDcl[];
+                              theNameDcl[]->myVirtDcl->theDeclaration[];
+                              
+                              
+                          if)
+                      if);
+                   #)
+               if)
+           if)
+        #)
+   #)  
+   
+   

@@ -1,0 +1,233 @@
+ORIGIN '../friggapplication';
+
+-- friggApplicationLib: attributes --
+
+stripExtension:
+  (# path: ^text;
+     lastDotInx, lastSlashInx: @integer;
+  enter path[]
+  do '.' -> path.findAll (# do inx -> lastDotInx #);
+     MPS.ast.thePathHandler.directoryChar -> path.findAll (# do inx -> lastSlashInx #);
+     (if (lastDotInx > 0) and (lastDotInx > lastSlashInx) then
+         (lastDotInx, path.length) -> path.delete;
+     if);
+  #);
+
+createFile:
+  (# fileName: ^text;
+     msg: ^text;
+  enter msg[]
+  do ymerBrowser[] -> fileCreationDialog
+     (# 
+     do (* msg[] -> label[]; *)
+     #) -> fileName[];
+     (if fileName[] <> none then
+         fileName[] -> stripExtension;
+     if);
+  exit fileName[]
+  #);
+
+
+externalFragmentFormHandler: ymerBrowser.browser.edenv.externalFragmentFormHandler
+  (# astReplacedEvent::
+       (# 
+       do (false, ff[], oldAst[], newAst[]) -> theFragServer.notifyAstReplaced;
+       #);
+     astReplacedSequenceEvent::
+       (# 
+       do (false, ff[], rootOfSequence[]) -> theFragServer.notifyAstReplacedSequence;
+       #);
+     listElementInsertedEvent::
+       (#
+       do (false, ff[], listNode[], position) -> theFragServer.notifylistElementInserted;
+       #);
+     makeAstList:
+       (# thePartList: ^window.editorEnv.partList;
+          theAstList: ^astInterface.astList;
+          length: @integer;
+       enter (length, thePartList[])
+       do &mps.ast.astList[] -> theAstList[];
+          theAstList.init;
+          (for inx: length repeat
+               thePartList.elm[inx][] -> theAstList.insert;
+          for);
+       exit theAstList[]
+       #);
+     listElementsDeletedEvent::
+       (#
+       do (false, ff[], listNode[], position, length, (length, oldElements[]) -> makeAstList)
+            -> theFragServer.notifyListElementsDeleted;
+       #);
+     listElementsReplacedEvent::
+       (#
+       enter (listNode[],position,length,oldElements[],newLength)
+       do (false, ff[], listNode[], position, length, 
+          (length, oldElements[]) 
+            -> makeAstList, newLength)
+            -> theFragServer.notifyListElementsReplaced;
+       #);
+  #);
+
+findGroupEditor:
+  (# fg: ^astInterface.fragmentGroup;
+     theGroupEditor: ^window.editorEnv.groupEditor;
+  enter fg[]
+  do (ymerBrowser.browser[], fg[]) 
+       -> ymerBrowser.browser.edenv.groupEditorList.findGroupEditor -> theGroupEditor[];
+     (if theGroupEditor[] = none then
+         'The groupeditor for ' -> putText;
+         fg.name -> putText;
+         ' was not found' -> putLine;
+     if);
+  exit theGroupEditor[]
+  #);
+
+makeSavePrompt:
+  (# fg: ^astInterface.fragmentGroup;
+     str: ^text;
+  enter fg[]
+  do 'Save changes to ' -> str[];
+     fg.name -> str.putText;
+     '?' -> str.put;
+  exit str[]
+  #);
+
+-- friggApplicationOnGroupSaved: doPart --
+do
+
+-- friggApplicationOnGroupNotSaved: doPart --
+do
+
+-- friggApplicationOnGroupClosed: doPart --
+do
+   
+-- theFragServerLib: attributes --
+
+findFFhandler:
+  (# frag: ^astInterface.fragmentForm;
+     ffh: ^window.editorEnv.fragmentFormHandler;
+  enter frag[]
+  do l: ymerBrowser.browser.edenv.ffhandler.scan
+       (# 
+       do 
+          (if current.ff[] = frag[] then
+              current[] -> ffh[];
+              leave l;
+          if);
+       #);
+  exit ffh[]
+  #);
+withFFH:
+  (# ffh: ^window.editorEnv.fragmentFormHandler;
+     frag: ^astInterface.fragmentForm;
+     fromInterfaceBuilder: @boolean;
+  enter (frag[],  fromInterfaceBuilder)
+  do (if fromInterfaceBuilder then
+         frag[] -> findFFhandler -> ffh[];
+         (if ffh[] <> none then
+             inner;
+         if);
+     if);
+  #);
+
+makePartList:
+  (# theAstList: ^astInterface.astList;
+     thePartList: ^window.editorEnv.partList;
+     inx: @integer;
+  enter theAstList[]
+  do &ymerBrowser.browser.edenv.partList[] -> thePartList[];
+     theAstList.size -> thePartList.elm.new;
+     0 -> inx;
+     theAstList.scan
+     (# 
+     do inx + 1 -> inx;
+        current[] -> thePartList.elm[inx][];
+     #);
+  exit thePartList[]
+  #);
+
+--- theFragServerSubscribeDopart: dopart ---
+do (# effh: ^externalFragmentFormHandler
+   do &externalFragmentFormHandler[] -> effh[];
+      fragHandler.frag[] -> effh.ff[];
+      effh[] -> ymerBrowser.browser.edenv.ffhandler.externalSubscribe;
+   #);
+   
+--- theFragServerNotifyAstReplacedDopart: dopart ---
+do (frag[], fromInterfaceBuilder) -> withFFH
+   (# 
+   do (none, oldAst[], newAst[]) -> ffh.anAstReplacedEvent;
+   #);
+   
+--- theFragServerNotifyListElementInsertedDopart: dopart ---
+do (frag[], fromInterfaceBuilder) -> withFFH
+   (# 
+   do (none, listNode[], position) -> ffh.aListElementInsertedEvent;
+   #);
+--- theFragServerNotifyAstReplacedSequenceDopart: dopart ---
+do (frag[], fromInterfaceBuilder) -> withFFH
+   (# 
+   do (none, rootOfSequence[]) -> ffh.astReplacedSequenceEvent;
+   #);
+   
+   
+--- theFragServerNotifyListElementsDeletedDopart: dopart ---
+do 
+   (frag[], fromInterfaceBuilder) -> withFFH
+   (# 
+   do 
+      (none, listNode[], position, length, oldElements[] -> makePartList) 
+        -> ffh.aListElementsDeletedEvent;
+   #);
+--- theFragServerNotifyListElementsReplacedDopart: dopart ---
+do (frag[], fromInterfaceBuilder) -> withFFH
+   (# 
+   do 
+      (none, listNode[], position, length, oldElements[] -> makePartList, newLength) 
+        -> ffh.aListElementsReplacedEvent;
+   #);
+   
+--- theGraphicalEditorEnvSaveDopart: dopart ---
+do 'Calling save all' -> putLine;
+   ymerBrowser.saveAll;
+   
+--- theGraphicalEditorEnvOpenAstEditorDopart: dopart ---
+do node.frag[] -> ymerBrowser.findForm;
+   (node[], node[]) -> ymerBrowser.browser.cfe.openSubEditor;
+   
+--- theGraphicalEditorEnvAutoSaveGroupDopart: dopart ---
+do ('#', fg[]) -> ymerBrowser.browser.edenv.editorenvPrivate.extendedSaveBackup
+   
+--- theGraphicalEditorEnvOnGroupOpenDopart: dopart ---
+do fg[] -> ymerBrowser.findGroup;
+   
+--- theGraphicalEditorEnvSaveFragmentGroupDopart: dopart ---
+do  (# theGroupEditor: ^window.editorEnv.groupEditor;
+    do fg[] -> findGroupEditor -> theGroupEditor[];
+       (if theGroupEditor[] = none then
+           'The groupeditor is NONE!' -> putLine;
+        else
+           (true, false,true) -> theGroupEditor.save;
+       if);
+    #);
+
+--- theGraphicalEditorEnvOnGroupChangedDopart: dopart ---
+do (# theGroupEditor: ^window.editorEnv.groupEditor;
+   do fg[] -> findGroupEditor -> theGroupEditor[];
+      (if theGroupEditor[] = none then
+          'The groupeditor is NONE!' -> putLine;
+       else
+          theGroupEditor.groupTouched;
+      if);
+   #);
+   
+--- theGraphicalEditorEnvOnGroupSavedDopart: dopart ---
+do (# theGroupEditor: ^window.editorEnv.groupEditor;
+   do fg[] -> findGroupEditor -> theGroupEditor[];
+      (if theGroupEditor[] = none then
+          'The groupeditor is NONE!' -> putLine;
+       else
+          theGroupEditor.resetGroupTouch;
+      if);
+   #);
+   

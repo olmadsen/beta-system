@@ -2,7 +2,10 @@ ORIGIN '../pattern';
 INCLUDE '../generate';
 INCLUDE '../../mpsstuff/mpsutils';
 INCLUDE '../../datastructures/sequence';
-
+INCLUDE '~beta/betaast/v5.1/gram';
+INCLUDE '~beta/betaast/v5.1/betasematt';
+INCLUDE '../semanticlink';
+INCLUDE '../match';
 -- fragmentGroupLib: attributes --
 
 scanBody:
@@ -150,3 +153,249 @@ do (# findFragment:
           failure;
       if);
    #);
+   
+-- astLib: attributes --
+
+isInterior: booleanValue
+  (#
+  do kind = kinds.interior -> value;
+  #);
+isPatternDecl: booleanValue
+  (# gram: @grammar;
+  do (symbol = gram.patternDecl) -> value;
+  #);
+isAttributeDecl: booleanValue
+  (# gram: @grammar;
+  do (if symbol
+      //gram.patternDecl
+      //gram.simpleDecl
+      //gram.repetitionDecl
+      //gram.virtualDecl
+      //gram.bindingDecl
+      //gram.finalDecl then
+         true -> value
+      else
+         false -> value
+     if);
+         
+  #);
+
+-- nameDclAttributes: attributes --
+
+putText:
+  (# theText: ^text;
+  enter theText[]
+  do (# theNameDecl: ^astInterface.nameDecl;
+     do getNameDecl -> theNameDecl[];
+        theText[] -> theNameDecl.putText;
+     #);
+  #);
+
+-- lib: attributes --
+
+makePattern:
+  (# node: ^astInterface.beta.attributeDecl;
+     p: ^pattern;
+  enter node[]
+  do &pattern[] -> p[];
+     node[] -> p.init;
+  exit p[]
+  #);
+
+-- astWrapperLib: attributes --
+
+check:
+  (# a: ^astInterface.ast;
+  enter a[]
+  do (if a[] <> NONE then
+         (if NOT a.isInterior then
+             NONE -> a[];
+         if);
+     if);
+  exit a[]
+  #);
+
+assertNode:
+  (# error:< exception
+       (#
+       do 'node is NONE' -> msg.putText;
+          INNER;
+       #);
+  do (if node[] <> NONE then
+         INNER;
+      else
+         error;
+     if);
+  #);
+
+fatalError: exception
+  (# what: ^text;
+  enter what[]
+  do what[] -> msg.append;
+  #);
+
+-- astWrapperExpand: doPart --
+do assertNode
+   (# father: ^astInterface.expanded;
+   do (if NOT node.isInterior then
+          INNER expand;
+          (if theExpanded[] <> NONE then
+              node.father -> father[];
+              (node.sonNo, theExpanded[]) -> father.put;
+           else
+              'theExpanded is NONE in "expand"' -> fatalError;
+          if);
+      if);
+   #);
+   
+-- astWrapperInit: doPart --
+do assertNode (# do INNER init #);
+
+-- attributeInit: doPart --
+do (if node.isInterior then
+       (# theAttributeDecl: ^astInterface.beta.attributeDecl;
+       do node[] -> theAttributeDecl[];
+          1 -> theAttributeDecl.get -> theNames.init;
+       #);
+   if);
+   INNER;
+   
+-- attributeTheNamesEnterFirst: doPart --
+do assertNode
+   (# theNames: ^astInterface.beta.Names;
+      theNameDcl: ^astInterface.beta.NameDcl;
+   do expand;
+      node[] -> theNames[];
+      1 -> theNames.get -> check -> theNameDcl[];
+      (if theNameDcl[] <> NONE then
+          theName[] -> theNameDcl.putText;
+       else
+          (node.frag[], theName[], gram.nameDcl) -> parseTextRequired -> theNameDcl[];
+          (1, theNameDcl[]) -> theNames.put;
+      if);
+   #);
+   
+-- attributeTheNamesExitFirst: doPart --
+do
+   
+-- attributeTheNamesExpand: doPart --
+do 
+   
+-- attributeEnterName: doPart --
+do assertNode
+   (# theAttributeDecl: ^astInterface.beta.attributeDecl;
+      theNames: ^astInterface.beta.attributeDecl;
+      theNameDcl: ^astInterface.beta.nameDcl;
+   do (if node.isAttributeDecl then
+          node[] -> theAttributeDecl[];
+          1 -> theAttributeDecl.get -> check -> theNames[];
+          (if theNames[] <> NONE then
+              (if theNames.noOfSons = 1 then
+                  1 -> theNames.get -> check -> theNameDcl[];
+                  (if theNameDcl[] <> NONE then
+                      theName[] -> theNameDcl.putText;
+                   else
+                      (node.frag[], theName[], gram.nameDcl) -> parseTextRequired -> theNameDcl[];
+                      (1, theNameDcl[]) -> theNames.put;
+                  if);
+               else
+                  'theNames.noOfSons > 1' -> fatalError;
+              if);
+           else
+              (node.frag[], theName[], gram.names) -> parseTextRequired -> theNames[];
+              (1, theNames[]) -> theAttributeDecl.put;
+          if);
+       else
+          'node is not an attributeDecl' -> fatalError;
+      if);
+   #)
+   
+-- attributeExitName: doPart --
+do assertNode
+   (# theAttributeDecl: ^astInterface.beta.attributeDecl;
+      theNames: ^astInterface.beta.names;
+      theNameDcl: ^astInterface.beta.nameDcl;
+   do (if node.isAttributeDecl then
+          node[] -> theAttributeDecl[];
+          1 -> theAttributeDecl.get -> check -> theNames[];
+          (if theNames[] <> NONE then
+              1 -> theNames.get -> check -> theNameDcl[];
+              (if theNameDcl[] <> NONE then
+                  theNameDcl.getText -> theName[];
+               else
+                  NONE -> theName[];
+              if);
+           else
+              NONE -> theName[];
+          if);
+       else
+          'node is not an attributeDecl' -> fatalError;
+      if);
+   #);
+
+-- patternInit: doPart --
+do (if node.isPatternDecl then
+       (# thePatternDecl: ^astInterface.beta.PatternDecl;
+          theObjectDescriptor: ^astInterface.beta.ObjectDescriptor;
+       do node[] -> thePatternDecl[];
+          thePatternDecl.getObjectDescriptor -> check -> theObjectDescriptor[];
+       #);
+       INNER;
+    else
+       'node is not a patternDecl' -> fatalError;
+   if);
+   
+-- patternEnterSuper: doPart --
+do assertNode
+   (# 
+      
+   do (if node.isPatternDecl then
+          
+       else
+          'node is not a patternDecl' -> fatalError;
+      if);
+   #);
+
+-- patternExitSuper: doPart --
+do 
+
+-- patternEnterPrefix: doPart --
+do
+
+-- patternExitPrefix: doPart --
+do
+
+-- patternInherits: doPart --
+do
+   
+-- patternExpand: doPart --
+do (node.frag[], '<<nameDcl>>: <<prefix>> (#  #)', gram.patternDecl) 
+     -> parseTextRequired -> theExpanded[];
+
+-- itemEnterSuper: doPart --
+do
+
+-- itemExitSuper: doPart --
+do
+
+-- itemEnterPrefix: doPart --
+do
+
+-- itemExitPrefix: doPart --
+do
+
+-- descriptorInit: doPart --
+do
+
+-- descriptorVirtuals: doPart --
+do
+
+-- descriptorSimpleDecls: doPart --
+do
+
+-- descriptorInitImperatives: doPart --
+do
+
+-- descriptorOpenImperatives: doPart --
+do
+
