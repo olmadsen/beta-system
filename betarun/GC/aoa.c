@@ -209,7 +209,8 @@ Object *AOAallocate(long numbytes)
   Object *newObj;
     
   Claim(numbytes > 0, "AOAallocate: numbytes > 0");
-    
+  STAT_AOA(fprintf(output,"#(AOAallocate(%d))", (int)numbytes));
+   
   /* Try to find a chunk of memory in the freelist */
   newObj = AOAAllocateFromFreeList(numbytes);
   if (newObj) {
@@ -249,7 +250,7 @@ Object *AOAallocate(long numbytes)
    * We add a new block and indicate that we want an AOAGC ASAP 
    */
   
-  INFO_AOA(fprintf(output,"Could not allocate 0x%0X bytes, "
+  STAT_AOA(fprintf(output,"Could not allocate 0x%0X bytes, "
 		   "allocating new block now\n"
 		   "and requesting AOAGc from next IOAGc.\n",
 		   (int)numbytes));
@@ -272,7 +273,6 @@ Object *AOAalloc(AOA_ALLOC_PARAMS)
   MT_CODE(mutex_lock(&aoa_lock));
 
   DEBUG_CODE(NumAOAAlloc++);
-  INFO_AOA(fprintf(output,"AOAalloc(numbytes=%d)",(int)numbytes));
   theObj = AOAallocate(numbytes);
   if (theObj) {
     MT_CODE(mutex_unlock(&aoa_lock));
@@ -386,7 +386,7 @@ void AOAGc()
     
   INFO_AOA(fprintf(output,"#(AOA-%lu:", NumAOAGc));
   AOAFreeListAnalyze1();
-  INFO_AOA(AOADisplayFreeList());
+  STAT_AOA(AOADisplayFreeList());
     
 
   /* Based on the AOARoots all objects reachable from those roots
@@ -407,7 +407,7 @@ void AOAGc()
    * extend- and initialCollectList. */
   AOAtoIOAClear();
     
-  INFO_AOA(fprintf(output,"[Marking all Live Objects in AOA]\n"));
+  DEBUG_AOA(fprintf(output,"[Marking all Live Objects in AOA]\n"));
   if (pointer < AOArootsLimit) {
     /* Make cellptr point to the cell that contains an AOAroot. */
     cellptr = (long*)(*pointer & ~1);
@@ -418,7 +418,7 @@ void AOAGc()
     /* It is necessary to call a special collecter the first
      * time.
      */
-    initialCollectList(target, appendToListInAOA);
+    initialCollectList(target, prependToListInAOA);
         
     pointer++;
         
@@ -426,7 +426,7 @@ void AOAGc()
     while (pointer < AOArootsLimit) {
       cellptr = (long*)(*pointer & ~1);
       target = (Object *)*cellptr;
-      extendCollectList(target, appendToListInAOA);
+      extendCollectList(target, prependToListInAOA);
       pointer++;
     }
   }
@@ -438,13 +438,13 @@ void AOAGc()
   /* Scan AOA and insert dead objects in the freelist */
     
   /* Clear the free lists */
-  INFO_AOA(fprintf(output,"[AOACleanFreeList]\n"));
+  DEBUG_AOA(fprintf(output,"[AOACleanFreeList]\n"));
   AOACleanFreeList();
 
   /* All space is alive until proven dead */
   totalFree = 0;
 
-  INFO_AOA(fprintf(output,"[Blocks: freed/free/total:\n"));
+  STAT_AOA(fprintf(output,"[Blocks: freed/free/total:\n"));
 
   /* Scan each block in AOA. */
   LVRSizeSum = 0;
@@ -459,21 +459,20 @@ void AOAGc()
 				    currentBlock -> limit);
     totalFree += freeInBlock;
         
-    INFO_AOA(fprintf(output,"[0x%08X/0x%08X/0x%08X] ",
+    STAT_AOA(fprintf(output,"[0x%08X/0x%08X/0x%08X] ",
 		     (int)collectedMem, (int)freeInBlock, (int)BlockNumBytes(currentBlock)));
         
     currentBlock = currentBlock -> next;
   }
   
-  INFO_AOA(fprintf(output,"]\n"));
+  STAT_AOA(fprintf(output,"]\n"));
 
   /* Make sure there is sufficient free memory */
   AOAMaybeNewBlock(0);
     
-  INFO_AOA(fprintf(output,"AOAGC finished, free space "));
-  INFO_AOA(fprintf(output,"0x%X",(int)totalFree));
-  INFO_AOA(fprintf(output," bytes\n"));
-  INFO_AOA(AOADisplayFreeList());
+  INFO_AOA(fprintf(output,"AOAGC finished, free space 0x%X bytes\n",
+		   (int)totalFree));
+  STAT_AOA(AOADisplayFreeList());
       
   /* Now all blocks have been scanned and all dead objects inserted
    * in the freelists. 
@@ -481,7 +480,7 @@ void AOAGc()
    */
       
   AOAFreeListAnalyze2();
-  INFO_AOA({
+  STAT_AOA({
     fprintf(output, "AOA-%d aoasize=0x%08X aoafree=0x%08X "
 	    "VR=0x%08X objects=0x%08X\n",
 	    (int)NumAOAGc, (int)totalAOASize, (int)totalFree,
@@ -671,8 +670,9 @@ void AOACheckObjectSpecial(Object *theObj)
  * reachable from some root in the GCfield of the objects.  
  */
 
-static Object * head;   /* Head of list build by collectList */
-static Object * tail;   /* Tail of list build by collectList */
+static Object * head;        /* Head of list build by collectList */
+static Object * insertPoint; /* insertpoint of list build by collectList */
+static Object * tail;        /* Tail of list build by collectList */
 static long totalsize;
 
 /* static */ void (*StackRefAction)(REFERENCEACTIONARGSTYPE) = NULL;
@@ -814,11 +814,100 @@ void appendToListInAOA(REFERENCEACTIONARGSTYPE)
   }
 }
 
+/* Prepend objects to the list regardless of where they are */
+void prependToList(Object *target)
+{
+  long GCAttribute;
+    
+  /* We are about to prepend 'target' to the list. We will only do so
+   * if target points to an object that is not already part of the
+   * list. Whether this is the case can be inferred by looking at
+   * the GC-Attribute. The GCAttribute can be,
+
+   (1) Before AOAGc the value of the GCAttribute of all objects that
+   is reachable should be DEADOBJECT. This goes for all autonomous
+   objects, but not staticly inlined objects. The GCAttr of staticly
+   inlined objects contains the offset to the enclosing object. This
+   offset is a negative offset allways.
+
+   (2) During AOAGc all live objects are linked together in their GC
+   attribute. Of course only autonomous objects may be linked
+   together. Thus if we have a reference to a staticly inlined
+   object we should not link this object into the list but link the
+   enclosing object into the list.
+
+   */
+
+  /* Since this is a highly central function for the GC'er, we do
+     not check for NULL refrences in the normal case. It is the
+     responsibillity of the caller. */
+
+  GCAttribute = target -> GCAttr;
+    
+  if (GCAttribute == DEADOBJECT) {
+    /* Normal case. All objects in AOA are initially dead and
+     * not linked into the list.
+     */
+    target->GCAttr = insertPoint->GCAttr;
+    insertPoint->GCAttr = (long)target;
+    totalsize += 4 * ObjectSize(target);
+  } else if (GCAttribute == LISTEND) {
+    /* target is already in the list (it is the tail actually) */
+    ;
+  } else if (GCAttribute < 0) {
+    /* We have encountered a staticly inlined object or a component. */
+    prependToList(getRealObject(target));
+  } else {
+    /* 'target' has a reference in it's GCField. 
+     * Thus it is already in the list. */
+#ifdef RTDEBUG
+    if ((GCAttribute == FREECHUNK) ||
+	(GCAttribute == (long) NULL)) {
+      fprintf(output,"prependToList: Unexpected GCAttribute\n");
+      Illegal();
+    }
+#endif
+  }
+}
+
+/* Prepend objects to the list not including objects in IOA */
+void prependToListNoIOA(REFERENCEACTIONARGSTYPE)
+{
+#ifdef RTDEBUG
+  if (!*theCell) {
+    fprintf(output,"prependToListNoIOA: Target is NULL!\n");
+    Illegal();
+  }
+#endif
+    
+  if (!inIOA(*theCell)) {
+    prependToList(*theCell);
+  }
+}
+
+/* Prepend objects to the list including only objects in AOA. */
+void prependToListInAOA(REFERENCEACTIONARGSTYPE)
+{
+  Claim(inAOA(theCell), "prependToListInAOA:inAOA(theCell)");
+  Claim((int)*theCell, "prependToListInAOA:*theCell");
+  Claim(!inIOA(*theCell), "!inIOA(*theCell)");
+
+  if (inToSpace(*theCell)) {
+    /* insert theCell in AOAtoIOAtable. */
+    AOAtoIOAInsert(theCell);
+  } else {
+    /* The cell is assumed to be in AOA if not in ToSpace. 
+     * There should be nothing in IOA, as IOAGc has just completed,
+     * and the semispaces have not been swapped yet.
+     */
+    Claim(inAOA(*theCell), "inAOA(*theCell)");
+    prependToList(*theCell);
+  }
+}
+
 void initialCollectList(Object * root,
                         void (*referenceAction)(REFERENCEACTIONARGSTYPE))
 {
-  Object * theObj;
-
   /* If root is a pointer to a staticly inlined part object, then
    * 'getRealObject' will return the enclosing object.
    */
@@ -829,6 +918,7 @@ void initialCollectList(Object * root,
   if (!root) {
     totalsize = 0;
     head = tail = (Object *)LISTEND;
+    insertPoint = head;
     return;
   }
 
@@ -846,10 +936,12 @@ void initialCollectList(Object * root,
    */
     
   /* Tail is where new objects are appended to the list.
+   * insertPoint is where new objects are inserted in the list.
    */
   tail = root;
+  insertPoint = root;
   tail -> GCAttr = LISTEND;
-    
+
   /* Head is the first object in the list. All objects in the
    * list may be reached through head.  
    */
@@ -858,38 +950,41 @@ void initialCollectList(Object * root,
   /* There are no objects in the list yet. */
   totalsize = 0;
     
-  for (theObj = root; !isEnd((long)theObj); theObj=(Object*)(theObj->GCAttr)) {
-    scanObject(theObj, referenceAction, TRUE);
+  while (1) {
+    scanObject(insertPoint, referenceAction, TRUE);
+    if (!isEnd(insertPoint->GCAttr)) {
+      insertPoint=(Object*)(insertPoint->GCAttr);
+    } else {
+      break;
+    }
   }
-  /* set_end_time("initialCollectList"); */
 }
 
 void extendCollectList(Object *root,
                        void (*referenceAction)(REFERENCEACTIONARGSTYPE))
 {
-  Object *theObj;
-
   /* set_start_time("extendCollectList"); */
     
   Claim((int)tail, "extendCollectList without initialCollectList");
 
   Claim(inAOA(root), "inAOA(root)");
-  appendToList(root);
+  prependToList(root);
     
-  /* root has now been appended to the list, if not already
+  /* root has now been prepended to the list, if not already
    * there.
    */
-    
-  for (theObj = tail; !isEnd((long)theObj); theObj=(Object*)(theObj->GCAttr)) {
-    /* if root has not been appended to the list, then we scan
-     * tail again, which must have been scanned previously. This
-     * should not matter as no new objects will be appended since
-     * they allready have been appended previously.
-     */
-        
-    scanObject(theObj, referenceAction, TRUE);
+  
+  if (!isEnd(insertPoint->GCAttr)) {
+    insertPoint=(Object*)(insertPoint->GCAttr);
+    while (1) {
+      scanObject(insertPoint, referenceAction, TRUE);
+      if (!isEnd(insertPoint->GCAttr)) {
+	insertPoint=(Object*)(insertPoint->GCAttr);
+      } else {
+	break;
+      }
+    }
   }
-  /* set_end_time("extendCollectList"); */
 }
 
 void scanList(Object * root, void (foreach)(Object * current))

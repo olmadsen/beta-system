@@ -284,6 +284,7 @@ extern void scanObject(Object *obj,
                        int doPartObjects);
 extern Object * getRealObject(Object * obj);
 extern void appendToListInAOA(REFERENCEACTIONARGSTYPE);
+extern void prependToListInAOA(REFERENCEACTIONARGSTYPE);
 extern void initialCollectList(Object * root,
                                void (*referenceAction)(REFERENCEACTIONARGSTYPE));
 extern void extendCollectList(Object * root,

@@ -175,6 +175,7 @@
 #else
 #  define DEBUG_MT(code)
 #endif
+#  define STAT_AOA(code)  if (StatAOA ) { code; }
 #  define DEBUG_IOA(code)  if( DebugIOA )  { code; }
 #  define CHECK_HEAP(code)  if( CheckHeap )  { code; }
 #  define DEBUG_ALLOI(code)  if( DebugAlloI )  { code; }
@@ -214,24 +215,25 @@
 #  define TRACE_GROUP(code)
 #  define TRACE_DUMP(code)
 #  define TRACE_CODEENTRY(code)
+#  define STAT_AOA(code)
 #endif
 
 #ifdef RTINFO
-#  define INFO( code)      if( Info0    ){ code; }
-#  define INFO_IOA( code)  if( InfoIOA  ){ code; }
-#  define INFO_AOA( code)  if( InfoAOA  ){ code; fflush(output); }
-#  define INFO_CBFA( code) if( InfoCBFA ){ code; }
-#  define INFO_HEAP_USAGE( code) if( InfoHeapUsage ){ code; }
-#  define INFO_DOT( code)  if( InfoDOT  ){ code; }
-#  define INFO_LABELS( code) if( InfoLabels ){ code; }
-#  define INFO_CODE( code) code;
+#  define INFO(code)      if (Info0   ) { code; }
+#  define INFO_IOA(code)  if (InfoIOA ) { code; }
+#  define INFO_AOA(code)  if (InfoAOA ) { code; }
+#  define INFO_CBFA(code) if (InfoCBFA) { code; }
+#  define INFO_DOT(code)  if (InfoDOT ) { code; }
+#  define INFO_LABELS(code) if(InfoLabels) { code; }
+#  define INFO_CODE(code) code;
+#  define INFO_HEAP_USAGE(code) if (InfoHeapUsage) { code; }
 #else
-#  define INFO( code)
-#  define INFO_IOA( code)
-#  define INFO_AOA( code)
-#  define INFO_LABELS( code)
-#  define INFO_CODE( code)
-#  define INFO_HEAP_USAGE( code) 
+#  define INFO(code)
+#  define INFO_IOA(code)
+#  define INFO_AOA(code)
+#  define INFO_LABELS(code)
+#  define INFO_CODE(code)
+#  define INFO_HEAP_USAGE(code) 
 #endif
 
 

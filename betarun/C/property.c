@@ -67,6 +67,7 @@ static void BooleanProperty(char *name)
   ENTRY("Info",     Info0 = TRUE); 
   ENTRY("InfoIOA",  InfoIOA = TRUE);
   ENTRY("InfoAOA",  InfoAOA = TRUE);
+  ENTRY("StatAOA",  StatAOA = TRUE);
   ENTRY("InfoCBFA", InfoCBFA = TRUE);
   ENTRY("InfoDOT", InfoDOT = TRUE);
   ENTRY("InfoLabels", InfoLabels = TRUE);
