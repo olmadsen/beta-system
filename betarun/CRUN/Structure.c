@@ -84,9 +84,6 @@ ref(Structure) ThisS(ref(Object) this)
   newStruct->iProto = origin->Proto;
   newStruct->iOrigin = (casthandle(Object)origin)[origin->Proto->OriginOff];
   
-#ifdef hppa
-  /* setD0Reg((long)newStruct); */
-#endif
   return newStruct;
 }
 
@@ -106,10 +103,6 @@ ref(Structure) Struc(ref(Object) theObj)
   
   GCable_Entry();
   
-#ifdef hppa
-  theObj = cast(Object) getCallReg();
-#endif
-  
   /* Allocate a StructObject. */
   
   Ck(theObj);
@@ -122,9 +115,6 @@ ref(Structure) Struc(ref(Object) theObj)
   newStruct->iProto = theObj->Proto;
   newStruct->iOrigin = (casthandle(Object)theObj)[theObj->Proto->OriginOff];
   
-#ifdef hppa
-  /* setD0Reg((long)newStruct); */
-#endif
   return newStruct;
 }
 
@@ -134,7 +124,8 @@ ParamStruc(struct Item *, AlloSI)
   
   GCable_Entry();
   FetchStruc
-    Ck(struc);
+  Ck(struc);
+  Ck(struc->iOrigin);
 #ifdef sparc
   Protect(struc, 
 	  ss = CAlloI(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0));
