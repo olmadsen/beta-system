@@ -16,15 +16,16 @@ void pimport_dummy() {
 #ifdef PERSIST
 
 /* LOCAL VARIABLES */
-static unsigned long currentStore;
+static unsigned long storeOfEnclosingObject;
 static Object *theRealObj;
-static unsigned long currentOffset;
-static unsigned long currentInx;
+static unsigned long offsetOfEnclosingObject;
+static unsigned long inxOfEnclosingObject;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static void storeReferenceToProcessReference(REFERENCEACTIONARGSTYPE);
-static Object *importReference(unsigned long store, unsigned long offset, Object **theCell);
-static Object *updateReferenceTable(unsigned long store, unsigned long offset, Object **theCell);
+static Object *updateReferenceTable(unsigned long storeOfReferredObject, 
+				    unsigned long offsetOfReferredObject, 
+				    Object **theCell);
 static void getOriginOfflineObject(Object **theCell);
 
 /* FUNCTIONS */
@@ -32,25 +33,30 @@ static void getOriginOfflineObject(Object **theCell)
 {
   Object *theObj;
   
+  /* This function forces a load of all objects referred from the
+     loaded object through a reference that is not ref none
+     checked. These are origin objects and static part objects
+     allocated offline. */
+
   theObj = *theCell;
   if (inPIT((void *)theObj)) {
     Object *absAddr;
-    unsigned long _currentStore;
+    unsigned long _storeOfEnclosingObject;
     Object *_theRealObj;
-    unsigned long _currentOffset;
-    unsigned long _currentInx;
+    unsigned long _offsetOfEnclosingObject;
+    unsigned long _inxOfEnclosingObject;
     
-    _currentStore = currentStore;
+    _storeOfEnclosingObject = storeOfEnclosingObject;
     _theRealObj = theRealObj;
-    _currentOffset = currentOffset;
-    _currentInx = currentInx;
+    _offsetOfEnclosingObject = offsetOfEnclosingObject;
+    _inxOfEnclosingObject = inxOfEnclosingObject;
     
     absAddr = unswizzleReference((void *)theObj);
     
-    currentStore = _currentStore;
+    storeOfEnclosingObject = _storeOfEnclosingObject;
     theRealObj = _theRealObj;
-    currentOffset = _currentOffset;
-    currentInx = _currentInx;
+    offsetOfEnclosingObject = _offsetOfEnclosingObject;
+    inxOfEnclosingObject = _inxOfEnclosingObject;
     
     /* Insert absolute reference in theCell */
     *theCell = absAddr;
@@ -60,16 +66,18 @@ static void getOriginOfflineObject(Object **theCell)
 
 static void storeReferenceToProcessReference(REFERENCEACTIONARGSTYPE)
 {
-  unsigned long offset;
+  unsigned long offsetOfReferredObject;
   
-  offset = (unsigned long)*theCell;
-  *theCell = importReference(currentStore, offset, theCell);
+  offsetOfReferredObject = (unsigned long)*theCell;
+  *theCell = importReference(storeOfEnclosingObject, 
+			     offsetOfReferredObject, 
+			     theCell);
   
   Claim(*theCell != NULL, "Assigning NULL");
   
   /* theCell is in AOA. The reference returned by 'importReference'
      may be in IOA if the rebinder is called */
-  if (isSpecialReference(offset)) {
+  if (isSpecialReference(offsetOfReferredObject)) {
     if (inIOA(*theCell)) {
       AOAtoIOAInsert( theCell);
     }
@@ -83,7 +91,9 @@ static void storeReferenceToProcessReference(REFERENCEACTIONARGSTYPE)
   }
 }
 
-static Object *importReference(unsigned long store, unsigned long offset, Object **theCell)
+Object *importReference(unsigned long storeOfReferredObject, 
+			unsigned long offsetOfReferredObject, 
+			Object **theCell)
 {
   StoreProxy *sp;
   unsigned long inxOT;
@@ -92,9 +102,12 @@ static Object *importReference(unsigned long store, unsigned long offset, Object
   unsigned long OToffset;
   Object *theRealObj;
   
-  if (!isCrossStoreReference(offset)) {
-    if (!isSpecialReference(offset)) {
-      if ((inxOT = indexLookupOT(store, offset)) != -1) {
+  if (!isCrossStoreReference(storeOfReferredObject, offsetOfReferredObject)) {
+    if (!isSpecialReference(offsetOfReferredObject)) {
+      if ((inxOT = indexLookupOT(storeOfReferredObject, 
+				 offsetOfReferredObject)) != -1) {
+	/* The object is in memory allready */
+	
 	objectLookup(inxOT,
 		     &OTGCAttr,
 		     &OTstore,
@@ -102,48 +115,68 @@ static Object *importReference(unsigned long store, unsigned long offset, Object
 		     &theRealObj);
 	
 	Claim(OTGCAttr == ENTRYALIVE, "Lookup on dead object");
-	Claim(store == OTstore, "Table mismatch");
-	Claim((offset >= OToffset) && (offset < OToffset + 4*ObjectSize(theRealObj)),
+	Claim(storeOfReferredObject == OTstore, "Table mismatch");
+	Claim((offsetOfReferredObject >= OToffset) && (offsetOfReferredObject < OToffset + 4*ObjectSize(theRealObj)),
 	      "Table mismatch");
 	
-	return (Object *)((unsigned long)theRealObj + (offset - OToffset));
+	return (Object *)((unsigned long)theRealObj + (offsetOfReferredObject - OToffset));
       } else {
-	/* */
-	return updateReferenceTable(store, offset, theCell);
+	/* The object is not in memory allready */
+	return updateReferenceTable(storeOfReferredObject, 
+				    offsetOfReferredObject, 
+				    theCell);
       }
     } else {
-      return handleSpecialReference(offset);
+      return handleSpecialReference(offsetOfReferredObject);
     }
   } else {
-    setCurrentPStore(currentStore);
-    sp = lookupStoreProxy(offset);
+    /* The referred object is in reality a proxy object. We will now
+       lookup the proxy object and retreive the actual store and ofset
+       of the referred object. */
+    
+    sp = lookupStoreProxy(storeOfReferredObject, offsetOfReferredObject);
     return importReference(sp -> storeID, sp -> offset, theCell);
   }
 }
 
-static Object *updateReferenceTable(unsigned long store, unsigned long offset, Object **theCell)
+static Object *updateReferenceTable(unsigned long storeOfReferredObject, 
+				    unsigned long offsetOfReferredObject, 
+				    Object **theCell)
 {
   unsigned long inxRT;
   
-  if ((inxRT = indexLookupRT(store, offset)) == -1) { 
+  if ((inxRT = indexLookupRT(storeOfReferredObject, 
+			     offsetOfReferredObject)) == -1) { 
+    /* There is no entry for this object in the reference table */
     inxRT = insertReference(ENTRYALIVE,
-			    store,
-			    offset);
+			    storeOfReferredObject,
+			    offsetOfReferredObject);
   }
-  newAOAclient(inxRT, theCell);
+  if (theCell) {
+    newAOAclient(inxRT, theCell);
+  }
   return (Object *)newPUID(inxRT);
 } 
 
 static void updateTransitObjectTable(Object *theObj)
 {
   unsigned long distanceToPart;
+
+  /* We are importing an object and must insert a notification in the
+     transit objects table that this particular object has been
+     imported. This goes for the object itself as well as for any
+     static part objects of the object. This function is called by
+     'scanObject' for the object itself and all its static parts. */
+  
   distanceToPart = (unsigned long)theObj - (unsigned long)theRealObj;
-  insertObjectInTransit(currentStore,
-			currentOffset + distanceToPart,
+  
+  insertObjectInTransit(storeOfEnclosingObject,
+			offsetOfEnclosingObject + distanceToPart,
 			theObj);
+
   if (distanceToPart == 0) {
-    if (currentInx != -1) {
-      theObj -> GCAttr = currentInx + 1;
+    if (inxOfEnclosingObject != -1) {
+      theObj -> GCAttr = inxOfEnclosingObject + 1;
     } else {
       theObj -> GCAttr = 0;
     }
@@ -155,15 +188,38 @@ void importStoreObject(Object *theObj,
 		       unsigned long offset, 
 		       unsigned long inx)
 {
-  DEBUG_CODE(fflush(output));
+  /* 'theObj' 
+
+     Is an object in store format. This means that all references
+     within 'theObj' to objects in the same store as 'theObj' are
+     implemented as offsets. References to objects in other stores can
+     be identified as such and are implemented as offsets to a proxy
+     object. The tast of 'importStoreObject' is to translate all
+     references in 'theObj' to in memory format.
+     
+     'store' 
+
+     Is the context local store id of the store holding 'theObj'.
+
+     'offset'
+
+     Is the offset of 'theObj' in the store.
+
+     'inx'
+
+     Is passed to enable some optimization that is so clever that I
+     cannot remember what it is about. It has got nothing to do with
+     the basic actions of importing an object.
+  */
+  
   Claim(theObj == getRealObject(theObj), "Unexpected part object");
   Claim(inAOA(theObj), "Where is theObj?");
   
   theRealObj = theObj;
   /* Scan references, and turn into PUID's */
-  currentStore = store;
-  currentOffset = offset;
-  currentInx = inx;
+  storeOfEnclosingObject = store;
+  offsetOfEnclosingObject = offset;
+  inxOfEnclosingObject = inx;
 
   scanObject(theObj,
 	     storeReferenceToProcessReference,

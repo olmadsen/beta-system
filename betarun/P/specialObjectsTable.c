@@ -21,7 +21,7 @@ typedef struct SOTEntry { /* Special Object Table Entry */
 
 /* LOCAL VARIABLES */
 static sequenceTable *currentTable = NULL;
-static Node *SOTags = NULL;
+static Trie *SOTags = NULL;
 
 /* FUNCTIONS */
 static int isFree(void *entry)
@@ -147,7 +147,7 @@ unsigned long getTag(Object *theObj)
 void saveTagForObject(Object *realObj, unsigned long tag)
 {
   if (SOTags) {
-    TInsert((unsigned long)realObj, (void *)tag, SOTags, (unsigned long)realObj);
+    TInsert((unsigned long)realObj, (void *)tag, &SOTags, (unsigned long)realObj);
   } else {
     SOTags = TInit();
     saveTagForObject(realObj, tag);

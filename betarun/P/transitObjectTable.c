@@ -4,6 +4,7 @@
 #include "trie.h"
 #include "objectTable.h"
 #include "PException.h"
+#include "misc.h"
 
 void tobjt_dummy() {
 #ifdef sparc
@@ -24,7 +25,7 @@ typedef struct TOTEntry { /* Object Table Entry */
 
 /* LOCAL VARIABLES */
 static sequenceTable *currentTable = NULL;
-static Node *loadedObjectsST;
+static Trie *loadedObjectsST;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static int isFree(void *entry);
@@ -75,7 +76,7 @@ unsigned long insertObjectInTransit(unsigned long store,
 
 Object *indexLookupTOT(unsigned long store, unsigned long offset)
 {
-  Node *loadedObjectsOF;
+  Trie *loadedObjectsOF;
   
   /* Check if store is member of 'loadedObjects' */
   if ((loadedObjectsOF = TILookup(store, loadedObjectsST))) {
@@ -92,22 +93,12 @@ Object *indexLookupTOT(unsigned long store, unsigned long offset)
 
 static void insertStoreOffsetTOT(unsigned long store, unsigned long offset, unsigned long inx)
 {
-  Node *loadedObjectsOF;
-  
-  /* Check if store is member */
-  if ((loadedObjectsOF = TILookup(store, loadedObjectsST)) == NULL) {
-    /* insert new table for store */
-    loadedObjectsOF = TInit();
-    TInsert(store, (void *)loadedObjectsOF, loadedObjectsST, store);
-  }
-  
-  /* insert inx in loadedObjectsOF */
-  TInsert(offset, (void *)inx, loadedObjectsOF, offset);
+  insertStoreOffset(store, offset, inx, &loadedObjectsST);
 }
 
 static void freeLoadedObjectsOF(void *contents)
 {
-  TIFree((Node *)contents, NULL);
+  TIFree((Trie *)contents, NULL);
 }
 
 void redirectCells(Array *clients, Object *from, Object *to)
@@ -196,6 +187,9 @@ void TOTFlush(void)
 
       if (theObj == getRealObject(theObj)) {
 	unsigned long OTinx;
+	
+	/* The FLAG_INSTORE flag indicates that this object is loaded
+           from the store, thus it has a copy of itself following it */
 	
 	OTinx = insertObject(ENTRYALIVE, FLAG_INSTORE, 
 			     entry -> store,

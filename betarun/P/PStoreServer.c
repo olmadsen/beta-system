@@ -1,10 +1,13 @@
 #include "beta.h"
-#include "PStore.h"
 #include "PSfile.h"
 #include "misc.h"
 #include "unswizzle.h"
 #include "transitObjectTable.h"
 #include "objectTable.h"
+#include "PStoreServer.h"
+#include "crossStoreReferences.h"
+#include "PImport.h"
+#include "PException.h"
 
 void pstoreserver_dummy() {
 #ifdef sparc
@@ -26,7 +29,6 @@ void pstoreserver_dummy() {
 #define SMALLTEXTSIZE       512
 #define ACCESSERRORERROR    1
 #define NOTFOUNDERROR       2
-#define ALREADYOPENERROR    3
 #define EXISTSERROR         4
 #define CREATIONERRORERROR  5
 #define ALREADYTHEREERROR   6
@@ -34,294 +36,242 @@ void pstoreserver_dummy() {
 
 #define SIZEOFNAMEMAP   MAXNAMES * (MAXNAMELENGTH + sizeof(ObjectKey))
 
-/* LOCAL TYPES */
-typedef struct charRep {
-  unsigned long Proto;
-  unsigned long GCAttr;
-  unsigned long LowBorder;
-  unsigned long HighBorder;
-  char elements[1];
-} charRep;
+#define MAXDBNAMELENGTH 512
+#define DBNAME "db"
 
-typedef struct Text {
-  unsigned long Proto;
-  unsigned long GCAttr;
-  unsigned long Origin;
-  charRep *theRep;
-} Text;
+/* LOCAL TYPES */
 
 /* LOCAL VARIABLES */
-static char storename[SMALLTEXTSIZE];
-static char *currentStore = NULL;
-static unsigned long permission;
+static char dbname[MAXDBNAMELENGTH];
 
 /* LOCAL FUNCTION DECLARATIONS */
-static unsigned long nameToID(char *name);
-static char *getBetaText(unsigned long name_r);
-static unsigned long openExt(unsigned long name_r, unsigned long perm);
+static char *getBetaText(unsigned long str);
+static unsigned long openExt(unsigned long host_r,
+			     unsigned long path_r, 
+			     unsigned long perm);
 
 /* IMPLEMENTATION */
-char *objectStoreName(unsigned long store)
+char *DBname(char *path)
 {
-  /* maps BlockID's to store names. For now stores cannot survive
-     across runs and cannot be shared between clients. */
-  if (currentStore) {
-    sprintf(storename, "%s/OS%d", currentStore, (int)store);
+  if (strlen(path) + strlen(DBNAME) + 1 < MAXDBNAMELENGTH) {
+    sprintf(dbname, "%s/%s", path, DBNAME);
+    return &dbname[0];
   } else {
-    fprintf(output, "crossStoreTableName: Could not calculate new name\n");
-    DEBUG_CODE(Illegal());
+    fprintf(output, "DBname: path name length exceeded only %d characters are allowed\n", MAXDBNAMELENGTH - strlen(DBNAME) - 1);
     BetaExit(1);
+    return NULL;
   }
-  return &storename[0];
+}
+  
+static char *getBetaText(unsigned long str)
+{
+  return strdup((char*)str);
 }
 
-static char *getBetaText(unsigned long name_r)
+static unsigned long openExt(unsigned long host_r, 
+			     unsigned long path_r, 
+			     unsigned long perm)
 {
-  return strdup((char*)name_r);
-
-#if 0
-  Text *currentText;
-  charRep *theRep;
-  char *name;
-  unsigned long j;
+  char *path, *host;
+  unsigned long r;
   
-  currentText = (Text *)name_r;
-  theRep = currentText -> theRep;
-      
-  name = (char *)malloc(sizeof(char)*(theRep -> HighBorder - theRep -> LowBorder + 1 + 1));
+  if (host_r) {
+    if (path_r) {
+      host = getBetaText(host_r);
+      path = getBetaText(path_r);
+      /* Ensure that the store file exists */
+      if (!fileExists(DBname(path))) {
+	r = NOTFOUNDERROR;
+      } else {
+	unsigned long storeID;
 	
-  for (j = theRep -> LowBorder; j <= theRep -> HighBorder; j++) {
-    name[j - theRep -> LowBorder] = theRep -> elements[j - 1];
-  }
-  name[j - 1] = '\0';
-
-  return name;
-#endif
-}
-
-static unsigned long openExt(unsigned long name_r, unsigned long perm)
-{
-  char *name;
-  
-  if (name_r) {
-    name = getBetaText(name_r);
-    
-    /* Ensure directory containing the store */
-    if (!isDir(name)) {
-      free(name);
-      return NOTFOUNDERROR;
+	if ((storeID = registerNewStore(host, path)) != -1) {
+	  setCurrentPStore(storeID);
+	  markStoreAsOpen(storeID);
+	  r = 0;
+	} else {
+	  r = ACCESSERRORERROR;
+	}
+      }
+      free(host);
+      free(path);
+    } else {
+      r = ACCESSERRORERROR;
     }
-    
-    if (currentStore) {
-      free(currentStore);
-      currentStore = NULL;
-
-      fprintf(output, "openExt: Only one open store allowed!\n");
-      BetaExit(1);
-      return 0;
-      
-    }
-    currentStore = name;
-    permission = perm;
-    
-    setCurrentPStore(nameToID(currentStore));
-    
-    DEBUG_CODE(fprintf(output, "openExt: Opening store (%s)\n", currentStore));
-    return 0;
   } else {
-    return ACCESSERRORERROR;
+    r = ACCESSERRORERROR;
+  }
+  return r;
+}
+
+unsigned long openWriteExt(unsigned long host_r, unsigned long path_r)
+{
+  return openExt(host_r, path_r, S_IWRITE);
+}
+
+unsigned long openReadExt(unsigned long host_r, unsigned long path_r)
+{
+  return openExt(host_r, path_r, S_IREAD);
+}
+
+void closeExt(unsigned long host_r, unsigned long path_r)
+{
+  char *path, *host;
+  unsigned long storeID;
+  
+  if (host_r) {
+    if (path_r) {
+      host = getBetaText(host_r);
+      path = getBetaText(path_r);
+      if ((storeID = nameToID(host, path)) != -1) {
+	markStoreAsClosed(storeID);
+	saveStore(storeID);
+	closeStore(storeID);
+      }
+      free(host); free(path);
+    }
   }
 }
 
-unsigned long openWriteExt(unsigned long name_r)
-{
-  return openExt(name_r, S_IWRITE);
-}
-
-unsigned long openReadExt(unsigned long name_r)
-{
-  return openExt(name_r, S_IREAD);
-}
-
-unsigned long deleteExt(unsigned long name_r)
+unsigned long deleteExt(unsigned long host_r, unsigned long path_r)
 {
   fprintf(output, "deleteExt: Not implemented yet!\n");
   BetaExit(1);
   return 0;
 }
 
-static unsigned long nameToID(char *name)
+unsigned long createExt(unsigned long host_r, unsigned long path_r)
 {
-  return 1;
-}
+  char *path, *host;
+  unsigned long r=0, storeID;
 
-unsigned long createExt(unsigned long name_r)
-{
-  char *name;
+  /* Current applications using the persistence facilities assumes
+     that the persistent store is placed in a directory. There seems
+     no need for this any more since the store is placed in one file
+     only. Still to support 'legacy' software the store is placed in
+     its one directory */
   
-  if (name_r) {
-    name = getBetaText(name_r);
-    if (isDir(name)) {
-      free(name);
-      return EXISTSERROR;
+  if (host_r && path_r) {
+    host = getBetaText(host_r);
+    path = getBetaText(path_r);
+    
+    if (isDir(path) && fileExists(DBname(path))) {
+      r = EXISTSERROR;
     } else {
-      /* make new directory */
-      if (mkdir(name
-		
-#ifdef UNIX
-		, S_IFDIR | S_IREAD | S_IWRITE | S_IEXEC 
-#endif
-		) < 0) 
-	{
-	  perror("createExt:");
-	  free(name);
-	  return CREATIONERRORERROR;
-	} else {
-	  if (currentStore) {
-	    free(currentStore);
-	    currentStore = NULL;
-	    
-	    fprintf(output, "openExt: Only one open store allowed!\n");
-	    BetaExit(1);
-	    return 0;
-	    
-	  }
-	  currentStore = name;
-	  createPStore(nameToID(name));
-	  return 0;
-	}
+      if ((storeID = createPStore(host, path))) {
+	markStoreAsOpen(storeID);
+      } else {
+	r = CREATIONERRORERROR;
+      }
     }
+    
+    free(host); 
+    free(path);
+
   } else {
-    return CREATIONERRORERROR;
+    r = CREATIONERRORERROR;
   }
+  
+  return r;
+
 }
 
-unsigned long putExt(unsigned long dooverwrite, unsigned long name_r, Object *theObj)
+unsigned long putExt(unsigned long dooverwrite, 
+		     unsigned long host_r, 
+		     unsigned long path_r,
+		     unsigned long name_r,
+		     Object *theObj)
 {
-  ObjectKey ok;
-  unsigned long return_value;
-
-  return_value = 0;
-  if (name_r) {
-    getKeyForObject(&ok, theObj);
-    
-    if (ok.store != -1) {
-      unsigned long count;
-      char *name;
-      nameMapEntry *nameMap;
-      
-      name = getBetaText(name_r);
-      getNameMap((void **)&nameMap);
-      for (count = 0; count <  MAXNAMES; count++) {
-	if (nameMap[count].name[0] == '\0') {
-	  if (strlen(name) < MAXNAMELENGTH) {
-	    sprintf(&(nameMap[count].name[0]), "%s", name);
-	    nameMap[count].offset = ok.offset;
-	    free(name);
-	    return return_value;
-	  } else {
-	    fprintf(output, "putExt: Could not put new object to store (name too long)\n");
-	    DEBUG_CODE(Illegal());
-	    BetaExit(1);
-	  }
+  char *host, *path, *name;
+  unsigned long offset, storeID, r=-1;
+  Object *theRealObj;
+  
+  Claim(host_r, "getExt: Illegal host (is NULL)");
+  Claim(path_r, "getExt: Illegal path (is NULL)");
+  Claim(name_r, "getExt: Illegal name (is NULL)");
+  
+  host = getBetaText(host_r);
+  path = getBetaText(path_r);
+  name = getBetaText(name_r);
+  
+  if (inPIT(theObj)) {
+    /* The object is a proxy reference. */
+    theRealObj = unswizzleReference((void *)theObj);
+  } else {
+    theRealObj = getRealObject(theObj);
+  }
+  
+  if (!inIOA(theRealObj)) {
+    if (!AOAISPERSISTENT(theRealObj)) {
+      if ((storeID = nameToID(host, path)) != -1) {
+	if (setCurrentPStore(storeID)) {
+	  offset = newPersistentObject(storeID, theRealObj);
 	} else {
-	  if (strcmp(&(nameMap[count].name[0]), name) == 0) {
-	    if (dooverwrite) {
-	      nameMap[count].name[0] = '\0';
-	      return_value = ALREADYTHEREERROR;
-	      count--;
-	    } else {
-	      free(name);
-	      return ALREADYTHEREERROR;
-	    }
-	  }
+	  fprintf(output, "putExt: Could not set store (%d)\n", (int)(storeID));
+	  BetaExit(1);
 	}
+      } else {
+	fprintf(output, "putExt: Could not map store name to ID (%s)\n", path);
+	BetaExit(1);
       }
-      
-      fprintf(output, "putExt: Could not put new object to store (too many names)\n");
-      DEBUG_CODE(Illegal());
-      BetaExit(1);
     } else {
-      fprintf(output, "putExt: Could not put new object to store\n");
-      DEBUG_CODE(Illegal());
-      BetaExit(1);
+      unsigned short GCAttr;
+      Object *dummy;
+      
+      objectLookup(getPUID((void *)(theRealObj -> GCAttr)),
+		   &GCAttr,
+		   &storeID,
+		   &offset,
+		   &dummy);
+      
+      Claim(GCAttr == ENTRYALIVE, "Reference to dead entry!");
+      Claim(dummy == theObj, "Table mismatch");
+    }
+    if (getRootOffset(storeID, name) != -1) {
+      r = ALREADYTHEREERROR;
+      if (dooverwrite) {
+	insertRoot(storeID, name, offset);
+      } 
+    } else {
+      /* Insert */
+      insertRoot(storeID, name, offset);
+      r = 0;
     }
   } else {
-    fprintf(output, "putExt: Could not put new object to store (name is NULL)\n");
-    DEBUG_CODE(Illegal());
+    fprintf(output, "putExt: Object not in AOA\n");
     BetaExit(1);
   }
   
-  fprintf(output, "putExt: Could not put new object to store (impossible error)\n");
-  DEBUG_CODE(Illegal());
-  BetaExit(1);
-  return 0;
+  free(host); free(path); free(name);
+  return r;
 }
 
-void closeExt(void)
+unsigned long getExt(unsigned long host_r, 
+		     unsigned long path_r, 
+		     unsigned long name_r)
 {
-  DEBUG_CODE(fprintf(output, "openExt: Closed store (%s)\n", currentStore));
-  saveCurrentStore();
-  free(currentStore);
-  currentStore = NULL;
-  closeCurrentStore();
-}
-
-unsigned long isOpen(void)
-{
-  return (currentStore != NULL);
-}
-
-unsigned long getExt(unsigned long name_r)
-{
-  unsigned long count;
+  unsigned long offset, storeID;
+  char *host, *path, *name;
+  Object *target = NULL;
   
-  if (name_r) {
-    char *name;
-    nameMapEntry *nameMap;
-    
-    name = getBetaText(name_r);
-    getNameMap((void **)&nameMap);
-    
-    for (count = 0; count <  MAXNAMES; count++) {
-      if (strcmp(&(nameMap[count].name[0]), name) == 0) {
-	Object *target;
-
-	/* First we check if the object is loaded already */
-	if ((target = indexLookupTOT(getCurrentStoreID(), nameMap[count].offset)) == 0) {
-	  unsigned long inx;
-	  
-	  if ((inx = indexLookupOT(getCurrentStoreID(), nameMap[count].offset)) == -1) {
-	    /* The target is not in memory */
-#ifdef sparc
-	    target = lookUpReferenceEntry(getCurrentStoreID(), nameMap[count].offset, -1);
-#else
-	    target = lookUpReferenceEntry(getCurrentStoreID(), 
-					  nameMap[count].offset, -1);
-#endif
-	  } else {
-	    unsigned short GCAttr;
-	    unsigned long store;
-	    unsigned long offset;
-	    
-	    objectLookup(inx,
-			 &GCAttr,
-			 &store,
-			 &offset,
-			 &target);
-	    
-	    Claim(GCAttr == ENTRYALIVE, "Reference to dead entry");
-	    Claim(store == getCurrentStoreID(), "Table mismatch!!");
-	    Claim(offset == nameMap[count].offset, "Table mismatch!!");
-	  }
-	}
-	free(name);
-	return (unsigned long)target;
+  Claim(host_r, "getExt: Illegal host (is NULL)");
+  Claim(path_r, "getExt: Illegal path (is NULL)");
+  Claim(name_r, "getExt: Illegal name (is NULL)");
+  
+  host = getBetaText(host_r);
+  path = getBetaText(path_r);
+  name = getBetaText(name_r);
+  
+  /* Set the current store */
+  if ((storeID = nameToID(host, path)) != -1) {
+    if (setCurrentPStore(storeID)) {
+      /* Look up the name */
+      if ((offset = getRootOffset(storeID, name)) != -1) {
+	target = importReference(storeID, offset, NULL);
       }
     }
-    free(name);
   }
-  return 0;
+  free(host); free(path); free(name);
+  return (unsigned long)target;
 }
-
 #endif /* PERSIST */

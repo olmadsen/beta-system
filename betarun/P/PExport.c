@@ -18,15 +18,15 @@ void pexport_dummy() {
 static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE);
 
 /* LOCAL VARIABLES */
-static unsigned long currentStore;
-static Object *currentObj;
+static unsigned long storeOfEnclosingObject;
+static Object *enclosingObject;
 
 /* */
 static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
 {
   unsigned short GCAttr;
-  unsigned long store;
-  unsigned long offset, distanceToPart;
+  unsigned long storeOfReferredObject;
+  unsigned long offsetOfReferredObject, distanceToPart;
   Object *theObj, *realObj;
   void *puid;  /* puid of referred object */
   Array *IOAclients;
@@ -37,8 +37,8 @@ static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
     puid = (void *)theObj;
     referenceLookup(getPUID(puid), 
 		    &GCAttr, 
-		    &store, 
-		    &offset,
+		    &storeOfReferredObject, 
+		    &offsetOfReferredObject,
 		    &IOAclients,
 		    &AOAclients);
     
@@ -52,12 +52,12 @@ static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
     
     if (AOAISPERSISTENT(realObj)) {
       Claim(inAOA(realObj), "Where is theObj ?");
-
+      
       puid = (void *)(realObj -> GCAttr);
       objectLookup(getPUID(puid), 
 		   &GCAttr, 
-		   &store, 
-		   &offset,
+		   &storeOfReferredObject, 
+		   &offsetOfReferredObject,
 		   &dummy);
       
       Claim(dummy == realObj, "Table mismatch ?");
@@ -75,37 +75,36 @@ static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
     }
   }
 
-  if (compareStoreID(store, currentStore)) {
+  if (storeOfReferredObject == storeOfEnclosingObject) {
     /* the reference is simply replaced by the offset of the referred object */
-    *theCell = (Object *)(offset + distanceToPart);
+    *theCell = (Object *)(offsetOfReferredObject + distanceToPart);
     Claim(*theCell != NULL, "Assigning NULL to cell");
-
+    
   } else {
     /* We create a proxy for this object */
-    setCurrentPStore(currentStore);
-    
-    *theCell = (Object *)newPProxy(store, offset + distanceToPart);
+    *theCell = (Object *)newPProxy(storeOfEnclosingObject,
+				   storeOfReferredObject,
+				   offsetOfReferredObject + distanceToPart);
     Claim(*theCell != NULL, "Assigning NULL");
     
 #ifdef RTDEBUG
     if (!inPIT(theObj)) {
       INFO_PERSISTENCE(fprintf(output, "[ CrossReference: (%s, %d) -> (%s, %d, %d) ]\n",
-			       ProtoTypeName(GETPROTO(currentObj)),
-			       (int)(currentStore),
+			       ProtoTypeName(GETPROTO(enclosingObject)),
+			       (int)(storeOfEnclosingObject),
 			       ProtoTypeName(GETPROTO(theObj)),
-			       (int)(store),
-			       (int)(offset + distanceToPart)));
+			       (int)(storeOfReferredObject),
+			       (int)(offsetOfReferredObject + distanceToPart)));
     } else {
       INFO_PERSISTENCE(fprintf(output, "[ CrossReference: (%s, %d) -> (%s, %d, %d) ]\n",
-			       ProtoTypeName(GETPROTO(currentObj)),
-			       (int)(currentStore),
+			       ProtoTypeName(GETPROTO(enclosingObject)),
+			       (int)(storeOfEnclosingObject),
 			       "Unknown",
-			       (int)(store),
-			       (int)(offset + distanceToPart)));
+			       (int)(storeOfReferredObject),
+			       (int)(offsetOfReferredObject + distanceToPart)));
       
     }
 #endif /* RTDEBUG */
-    Claim((unsigned long)*theCell != 0, "??");
   }
 }
 
@@ -114,8 +113,8 @@ extern void checkOrigins(Object *theObj, void *generic);
 /* Exports the object to 'store' */
 void exportObject(Object *theObj, unsigned long store)
 {
-  currentStore = store;
-  currentObj = theObj;
+  storeOfEnclosingObject = store;
+  enclosingObject = theObj;
   
   scanObject(theObj,
 	     processReferenceToStoreReference,

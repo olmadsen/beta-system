@@ -21,8 +21,8 @@ typedef struct protoID {
 static ProtoType *PrototypeNoToProto(group_header *gh, unsigned long protoNo);
 
 /* Maps prototype references to prototype ID's (group, protoNo) */
-static Node *PtoICache;
-static Node *ItoPCache;
+static Trie *PtoICache;
+static Trie *ItoPCache;
 
 void initProtoHandling(void)
 {
@@ -78,7 +78,7 @@ void protoAddrToID(ProtoType *theProto, unsigned long *group, unsigned long *pro
 	  id -> group = *group;
 	  id -> protoNo = *protoNo;
 	  
-	  TInsert((unsigned long)theProto, (void *)id, PtoICache, (unsigned long)theProto);
+	  TInsert((unsigned long)theProto, (void *)id, &PtoICache, (unsigned long)theProto);
 	}
 	return;
       }
@@ -113,7 +113,7 @@ ProtoType *IDtoProtoAddr(unsigned long group, unsigned long protoNo)
   
   if (gh) {
     theProto = PrototypeNoToProto(gh, protoNo);
-    TInsert(key, (void *)theProto, ItoPCache, key);
+    TInsert(key, (void *)theProto, &ItoPCache, key);
     return theProto;
   }
   

@@ -2,8 +2,11 @@
 #define _PSTORE_H_
 #include "beta.h"
 
-#define MAXNAMELENGTH 100
-#define MAXNAMES      10
+#define MAXNAMELENGTH     100
+#define MAXNAMES          10
+#define MAXHOSTNAMELENGTH 128
+#define MAXPATHNAMELENGTH 256
+#define INITIALNUMLOCATIONS 2
 
 typedef struct StoreProxy {
   unsigned long storeID;     /* Store in which to find referred object */
@@ -15,34 +18,82 @@ typedef struct nameMapEntry {
   unsigned long offset;
 } nameMapEntry;
 
-#define ILLEGALSTOREPROXY NULL
-#define ILLEGALStoreID 0
+typedef struct storeLocation { /* Identifies locations of stores */
+  char host[MAXHOSTNAMELENGTH];
+  char path[MAXPATHNAMELENGTH];
+  unsigned long open;
+} storeLocation;
+
+typedef struct storeIDMap { /* Maps store ID's to file locations */
+  unsigned long top;
+  unsigned long size;
+  storeLocation locations[INITIALNUMLOCATIONS];  /* Can be extended */
+} storeIDMap;
+
+typedef struct PStoreHeader {
+  unsigned long headerSize;        /* Size in bytes of this header */
+  
+  /* Naming stores referred from this store */
+  storeIDMap referredStores;
+
+  /* Root names */
+  nameMapEntry nameMap[MAXNAMES];
+  
+  /* Blocks in this store */
+  unsigned long maxNumBlocks;      /* This store holds a max of so many blocks */
+  unsigned long blockSize;         /* Size of each block in bytes */
+  unsigned long topBlock;          
+  unsigned long nextFree;          /* Offset to next free byte within
+				      the top block */
+  
+  /* Cross store references are implemented through proxies. Space are
+     reserved for proxies at the other end of the store. The proxy
+     insertion point grows downwards. When proxies and objects meet it's
+     time for a reallocation.  */
+  
+  unsigned long crossStoreTop;
+
+  /* To handle objects spanning several blocks. If an object starts at
+     the beginning of a block this block is marked using vector below */
+  unsigned long startMarkers[1];   /* */
+  
+} PStoreHeader;
 
 /* Different types of references in the store */
 #define NORMALTYPE       0
-#define CROSSSTORETYPE   1
-#define SPECIALTYPE      2
+#define SPECIALTYPE      1
+#define CROSSSTORETYPE   2
 #define MAXTYPE          8
 
-#define isNormalReference(inx)     ((inx) % MAXTYPE == NORMALTYPE)
-#define isCrossStoreReference(inx) ((inx) % MAXTYPE == CROSSSTORETYPE)
-#define isSpecialReference(inx)    ((inx) % MAXTYPE == SPECIALTYPE)
-#define isIllegalReference(inx)    (((inx) % MAXTYPE > SPECIALTYPE) && ((inx) % MAXTYPE < MAXTYPE))
+#define isNormalReference(inx)            ((inx) % MAXTYPE == NORMALTYPE)
+#define isSpecialReference(inx)           ((inx) % MAXTYPE == SPECIALTYPE)
+#define isCrossStoreReference(store, inx) ((inx) % MAXTYPE == CROSSSTORETYPE)
+#define isIllegalReference(inx)           (((inx) % MAXTYPE > CROSSSTORETYPE) && ((inx) % MAXTYPE < MAXTYPE))
 
-int createPStore(unsigned long storeID);
+int createPStore(char *host, char *path);
 int setCurrentPStore(unsigned long storeID);
-StoreProxy *allocateObject(unsigned long size);
-Object *lookupStoreObject(unsigned long storeID, unsigned long offset);
-int setStoreObject(unsigned long storeID, unsigned long offset, Object *theObj);
-unsigned long newPProxy(unsigned long storeID,
+StoreProxy *allocateObject(unsigned long storeID,
+			   unsigned long size);
+Object *lookupStoreObject(unsigned long storeID, 
+			  unsigned long offset);
+int setStoreObject(unsigned long storeID, 
+		   unsigned long offset, 
+		   Object *theObj);
+unsigned long newPProxy(unsigned long storeContainingProxy,
+			unsigned long storeID,
 			unsigned long offset);
-StoreProxy *lookupStoreProxy(unsigned long inx);
+StoreProxy *lookupStoreProxy(unsigned long storeID, 
+			     unsigned long inx);
 void printObjectStoreStatistics(void);
-int compareStoreID(unsigned long a, unsigned long b);
-void getNameMap(void **nameMap);
 void saveCurrentStore(void);
-unsigned long getCurrentStoreID(void);
 void closeCurrentStore(void);
+void closeStore(unsigned long storeID);
+void saveStore(unsigned long storeID);
+unsigned long getRootOffset(unsigned long storeID, 
+			    char *name);
+void insertRoot(unsigned long storeID, 
+		char *name, 
+		unsigned long offset);
 
 #endif /* _PSTORE_H_ */
 

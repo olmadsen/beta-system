@@ -31,5 +31,6 @@ void insertStoreOffsetOT(unsigned long store, unsigned long offset, unsigned lon
 #define DELAYEDENTRYALIVE 4     
 
 #define FLAG_INSTORE      1
+#define FLAG_INMEM        0
 
 #endif /* _OBJECTTABLE_H_ */

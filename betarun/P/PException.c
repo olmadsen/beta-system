@@ -1,7 +1,6 @@
 #include "beta.h"
 #include "PException.h"
 #include "unswizzle.h"
-#include "PStoreServer.h"
 
 void pexp_dummy() {
   
@@ -240,8 +239,6 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
       
       /* Ok, so this is a genuine proxy reference. */
   
-      Claim(isOpen(), 
-	    "proxyTrapHandler: Lazy reference in memory eventhough store is closed");
       Claim(!BETAREENTERED, "Proxy met during rebinding!");
       
       ip = getRegisterContents(sourcereg, ucon, returnSP);
@@ -260,26 +257,25 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 
       /* Calculate absolute address by looking in appropriate tables */
       
-      absAddr = (long)unswizzleReference(ip);
-      
-      popSP();
-      
-      /* We have fetched the object, and should continue execution.
-       * With the introduction of dynamic compilation into debuggee, the 
-       * debuggee may have allocated in IOA and even caused GC.
-       * That is, the current value (right here in the signal handler)
-       * of the two global sparc registers holding IOA and IOATopOff
-       * MUST be written back into the ucontext to prevent the signal-
-       * handler from restoring these registers to the old values.
-       * Otherwise objects allocated during valhalla evaluators will
-       * be forgotten!.
-       * See register binding in registers.h.
-       */
-      
-      ucon->uc_mcontext.gregs[REG_IOA] = (long)IOA;
-      ucon->uc_mcontext.gregs[REG_IOATOPOFF] = (long)IOATopOff;
-      
-      if (absAddr) {
+      if ((absAddr = (long)unswizzleReference(ip))) {
+	
+	popSP();
+	
+	/* We have fetched the object, and should continue execution.
+	 * With the introduction of dynamic compilation into debuggee, the 
+	 * debuggee may have allocated in IOA and even caused GC.
+	 * That is, the current value (right here in the signal handler)
+	 * of the two global sparc registers holding IOA and IOATopOff
+	 * MUST be written back into the ucontext to prevent the signal-
+	 * handler from restoring these registers to the old values.
+	 * Otherwise objects allocated during valhalla evaluators will
+	 * be forgotten!.
+	 * See register binding in registers.h.
+	 */
+	
+	ucon->uc_mcontext.gregs[REG_IOA] = (long)IOA;
+	ucon->uc_mcontext.gregs[REG_IOATOPOFF] = (long)IOATopOff;
+	
 	switch (sourcereg) {
 	case 0x0: /* g0 */
 	  fprintf(output, "proxyTrapHandler: "
@@ -329,6 +325,9 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 	  BetaExit(1);
 	}
 	return;
+      } else {
+	/* loading failed. We pass on control to the real signal handler */
+	Claim(FALSE, "Object could not be loaded");
       }
     }
   }
@@ -337,9 +336,9 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   signal (SIGSEGV, (void (*)(int)) proxyTrapHandler);
   signal (SIGBUS, (void (*)(int)) proxyTrapHandler);
   
-  /* If we get here, it was an ordinary SIGBUS */
+  /* If we get here, it was an ordinary SIGBUS, SIGSEGV or object
+     could not be loaded */
   BetaSignalHandler (sig, info, ucon);
-  
 }
 /******************************* SPARC end ******************************/
 #endif /* sparc */

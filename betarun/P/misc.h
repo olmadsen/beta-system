@@ -1,6 +1,7 @@
 #ifndef _P_MISC_H_
 #define _P_MISC_H_
 #include "../C/beta.h"
+#include "trie.h"
 
 typedef struct ObjectKey {
   unsigned long theProto;
@@ -10,18 +11,20 @@ typedef struct ObjectKey {
   unsigned long offset;
 } ObjectKey;
 
-void delayedInsert(Object *theObj);
-void markPersistentObject(Object *theObj);
-void newPersistentObject(Object *theObj);
+unsigned long newPersistentObject(unsigned long storeID,
+				  Object *theObj);
 void markReachableObjects(REFERENCEACTIONARGSTYPE);
-void handleNewPersistentObject(Object *theObj);
 void markOfflineAndOriginObjectsAlive(REFERENCEACTIONARGSTYPE);
 void resetStatistics(void);
 void showStatistics(void);
 void handlePersistentCell(REFERENCEACTIONARGSTYPE);
 void getKeyForObject(ObjectKey *ok, Object *theObj);
-void setClosingGC(void);
 void setForceAOAGG(void);
 void markSpecialObject(unsigned long tag, Object *theObj);
+void insertStoreOffset(unsigned long store, 
+		       unsigned long offset, 
+		       unsigned long inx,
+		       Trie **loadedObjects);
+void forceObjectToAOA(Object *theObj);
 
 #endif /* _P_MISC_H_ */

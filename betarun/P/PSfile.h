@@ -16,6 +16,7 @@ void Rewind(int fd);
 void writeLong(int fd, unsigned long *n);
 void windTo(int fd, unsigned long pos); 
 void writeSome(int fd, void *buffer, unsigned long size);
+long fileExists(char *name);
 long isDir(char *name); 
 unsigned long preferredBufferSize(int fd);
 int ScanDir(char *dir, int *longestP, int *numP, void (*CallbackFnc)(char*));

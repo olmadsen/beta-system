@@ -5,6 +5,7 @@
 #include "trie.h"
 #include "proto.h"
 #include "transitObjectTable.h"
+#include "misc.h"
 
 void reft_dummy() {
 #ifdef sparc
@@ -31,7 +32,7 @@ typedef struct RTEntry {          /* Reference Table Entry */
 
 /* LOCAL VARIABLES */
 static sequenceTable *currentTable = NULL;
-static Node *loadedObjectsST;
+static Trie *loadedObjectsST;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static void insertStoreOffsetRT(unsigned long store, unsigned long offset, unsigned long inx);
@@ -245,17 +246,7 @@ unsigned long insertReference(unsigned short GCAttr,
 
 static void insertStoreOffsetRT(unsigned long store, unsigned long offset, unsigned long inx)
 {
-  Node *loadedObjectsOF;
-  
-  /* Check if store is member */
-  if ((loadedObjectsOF = TILookup(store, loadedObjectsST)) == NULL) {
-    /* insert new table for store */
-    loadedObjectsOF = TInit();
-    TInsert(store, (void *)loadedObjectsOF, loadedObjectsST, store);
-  }
-  
-  /* insert inx in loadedObjectsOF */
-  TInsert(offset, (void *)inx, loadedObjectsOF, offset);
+    insertStoreOffset(store, offset, inx, &loadedObjectsST);
 }
 
 /* Looks up GCAttr, store and offset based on index into table */
@@ -281,7 +272,7 @@ void referenceLookup(unsigned long inx,
    not found. */
 unsigned long indexLookupRT(unsigned long store, unsigned long offset)
 {
-  Node *loadedObjectsOF;
+  Trie *loadedObjectsOF;
   
   /* Check if store is member of 'loadedObjects' */
   if ((loadedObjectsOF = TILookup(store, loadedObjectsST))) {
@@ -331,7 +322,7 @@ void referenceAlive(void *ip)
 
 static void freeLoadedObjectsOF(void *contents)
 {
-  TIFree((Node *)contents, NULL);
+  TIFree((Trie *)contents, NULL);
 }
 
 void RTEndGC(void)
@@ -356,37 +347,32 @@ void RTEndGC(void)
       entry -> store = 0;
       
     } else if (entry -> GCAttr == ENTRYALIVE) {
-      if (!closingGC) {
-	unsigned long newInx;
-	RTEntry *newEntry;
-	
-	newEntry = (RTEntry *)malloc(sizeof(RTEntry));
-	newEntry -> GCAttr = ENTRYALIVE;
-	newEntry -> store = entry -> store;
-	newEntry -> offset = entry -> offset;
-	newEntry -> IOAclients = entry -> IOAclients;
-	newEntry -> AOAclients = entry -> AOAclients;
-	newEntry -> objInTransit = NULL;
-	
-	entry -> IOAclients = NULL;
-	entry -> AOAclients = NULL;
-	
-	newInx = STInsert(&newTable, newEntry);
-	
-	redirectCells(newEntry -> IOAclients, 
-		      (Object *)newPUID(inx), 
-		      (Object *)newPUID(newInx));
-
-	redirectCells(newEntry -> AOAclients, 
-		      (Object *)newPUID(inx), 
-		      (Object *)newPUID(newInx));
-	
-	
-	insertStoreOffsetRT(newEntry -> store, newEntry -> offset, newInx + 1);
-      } else {
-	clearCells(entry -> IOAclients);
-	clearCells(entry -> AOAclients);
-      }
+      unsigned long newInx;
+      RTEntry *newEntry;
+      
+      newEntry = (RTEntry *)malloc(sizeof(RTEntry));
+      newEntry -> GCAttr = ENTRYALIVE;
+      newEntry -> store = entry -> store;
+      newEntry -> offset = entry -> offset;
+      newEntry -> IOAclients = entry -> IOAclients;
+      newEntry -> AOAclients = entry -> AOAclients;
+      newEntry -> objInTransit = NULL;
+      
+      entry -> IOAclients = NULL;
+      entry -> AOAclients = NULL;
+      
+      newInx = STInsert(&newTable, newEntry);
+      
+      redirectCells(newEntry -> IOAclients, 
+		    (Object *)newPUID(inx), 
+		    (Object *)newPUID(newInx));
+      
+      redirectCells(newEntry -> AOAclients, 
+		    (Object *)newPUID(inx), 
+		    (Object *)newPUID(newInx));
+      
+      
+      insertStoreOffsetRT(newEntry -> store, newEntry -> offset, newInx + 1);
     } else {
       Claim((entry -> GCAttr == ENTRYDEAD), "What is GCAttr ?");
     }

@@ -6,6 +6,7 @@
 #include "PException.h"
 #include "unswizzle.h"
 #include "specialObjectsTable.h"
+#include "trie.h"
 
 void miscp_dummy() {
 #ifdef sparc
@@ -20,29 +21,21 @@ void miscp_dummy() {
 /* LOCAL VARIABLES */
 
 /* LOCAL FUNCTION DECLARATIONS */
-static void prependToListRegardless(REFERENCEACTIONARGSTYPE);
 
 /* FUNCTIONS */
-void delayedInsert(Object *theObj) 
+void forceObjectToAOA(Object *theObj)
 {
-  Claim(theObj == getRealObject(theObj), "Unexpected part object");
-  
-  insertObject(DELAYEDENTRYALIVE, 0, 
-	       0,       /* Not used */
-	       0,       /* Not used */
-	       theObj);
-}
+  Object *theRealObj;
 
-void markPersistentObject(Object *theObj)
-{
-  Object *realObj;
-  
-  realObj = getRealObject(theObj);
-  
-  if (inIOA(realObj)) {
-    realObj -> GCAttr = IOAPersist;
+  if (!inPIT(theObj)) {
+    theRealObj = getRealObject(theObj);
+    if (inIOA(theRealObj)) {
+      theRealObj -> GCAttr = IOAMaxAge;
+    }
   } else {
-    newPersistentObject(realObj);
+    /* theObj is a proxy reference. This means that the referred
+       object is either in the store or AOA. */
+    ;
   }
 }
 
@@ -61,11 +54,14 @@ void markSpecialObject(unsigned long tag, Object *theObj)
 }
 
 /* 'theObj' is a new object just declared persistent. */
-void newPersistentObject(Object *theObj) 
+unsigned long newPersistentObject(unsigned long storeID, Object *theObj) 
 {
   unsigned long inx, GCMark;
   StoreProxy *sp;
   
+  /* 'storeID' is the context local store id of the store into which
+     this objects should be saved. */
+
   Claim(theObj == getRealObject(theObj), "Unexpected part object");
   Claim(!inPIT((void *)(theObj -> GCAttr)), "Allready persistent?");
   
@@ -74,82 +70,97 @@ void newPersistentObject(Object *theObj)
   } else {
     GCMark = ENTRYALIVE;
   }
-  /* Create space for the object in the current store */
-  sp = allocateObject(4*ObjectSize(theObj));
+  /* Create space for the object in which store ?? */
+  sp = allocateObject(storeID, 4*ObjectSize(theObj));
   
   Claim(sp != NULL, "Could not create new object in store");
   
   /* Create new entry in the objectTable */
-  inx = insertObject(GCMark, 0,
+  /* The flag FLAG_INMEM indicates that this object is not loaded from
+     the store. It has no copy following it */
+  inx = insertObject(GCMark, FLAG_INMEM,
 		     sp -> storeID,
 		     sp -> offset,
 		     theObj);
-  free(sp);
   theObj -> GCAttr = PERSISTENTMARK(inx);
+  return sp -> offset;
 }
 
-/* Given a cell in a persistent object, all objects referred
-   (transitively) are appended to the list of persistent objects. */
+unsigned long currentStoreID;
+
 void markReachableObjects(REFERENCEACTIONARGSTYPE)
 {
   Object *realObj;
-  Claim(inAOA(theCell), "Where is theCell ?");
+  /* This function initially gets called for each object reachable
+     from the persistent objects currently in the object table. */
   
   if (!inPIT((void *)*theCell)) {
     realObj = getRealObject(*theCell);
     if (!inPIT((void *)(realObj -> GCAttr))) {
       /* Dont follow references to special objects */
       if (inToSpace(realObj)) {
-	if (!(realObj -> GCAttr == IOASpecial)) {
-	  /* New persistent Object */
-	  collectList(realObj, prependToListRegardless);
+	if (realObj -> GCAttr != IOAPersist) {
+	  Claim(realObj -> GCAttr != IOASpecial, 
+		"markReachableObjects: There should not be any special objects in IOA at this point");
+	  
+	  /* We have encountered a new persistent object in IOA. It
+	     cannot be made persistent all at once since it needs to be
+	     moved to AOA first. In order to force a move to AOA we
+	     insert in the GC field of the object an indication to the
+	     IOA collector that it should force this object into IOA at
+	     the next IOA GC. But we still insert the object in the
+	     object table. The object table entry will point to the
+	     object in IOA. This reference must be redirected when the
+	     object is moved to AOA. */
+	  
+	  realObj -> GCAttr = IOAPersist;
+	  
+	  insertObject(DELAYEDENTRYALIVE, 
+		       0, 
+		       currentStoreID,
+		       0,       /* Not assigned yet */
+		       realObj);
+	  
+	  /* The referred object should be scanned as well */
+	  scanObject(realObj,
+		     markReachableObjects,
+		     NULL,
+		     TRUE);
+	} else {
+	  /* This object has been persistified already */
+	  ;
 	}
       } else {
 	Claim(inAOA(realObj), "markReachableObjects: Where is theObj?");
 	if (!(realObj -> GCAttr == AOASpecial)) {
-	  /* New persistent Object */
-	  collectList(realObj, prependToListRegardless);
+	  /* We have encountered a new persistent object in AOA, and
+             we can now proceed to allocate space for it in the store
+             and in the object table. */
+	  /* What is the store into which this object should be saved ?" */
+	  newPersistentObject(currentStoreID, realObj);
+	  
+	  /* The referred object should be scanned as well */
+	  scanObject(realObj,
+		     markReachableObjects,
+		     NULL,
+		     TRUE);
+	} else {
+	  /* The referred object is marked as a special object and
+             should not be followed */
+	  ;
 	}
       }
+    } else {
+      /* The referred object is marked as persistent already */
+      ;
     }
+  } else {
+    /* The reference is in persistent format and can be skipped. */
+    ;
   }
   
   /* AOAToIOATable need not be updated since all persistent objects in
      IOA will be moved to AOA at the next IOAGC. */
-  
-  /* collectList can handle references to part objects */
-}
-
-static void prependToListRegardless(REFERENCEACTIONARGSTYPE)
-{
-  Object *realObj;
-
-  if (!inPIT((void *)*theCell)) {
-    realObj = getRealObject(*theCell);
-    if (!inPIT((void *)(realObj -> GCAttr))) {
-      /* Dont follow references to special objects. There is no
-         special objects in IOA at this point since we have just
-         finished an IOAGC */
-      if ((!inToSpace(realObj) /* inAOA */) && (realObj -> GCAttr == AOASpecial)) {
-	Claim(inAOA(realObj), "prependToListRegardless: Where is theObj?");
-	;
-      } else {
-	prependToList(*theCell);
-      }
-    }
-  }
-}
-
-void handleNewPersistentObject(Object *theObj)
-{
-  Claim(theObj == getRealObject(theObj), "Unexpected part object");
-  
-  if (inToSpace(theObj)) {
-    theObj -> GCAttr = IOAPersist;
-  } else {
-    Claim(inAOA(theObj), "Where is theObj ??");
-    newPersistentObject(theObj);
-  }
 }
 
 void markOfflineAndOriginObjectsAlive(REFERENCEACTIONARGSTYPE)
@@ -304,6 +315,33 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
   }
 }
 
+/* Used by objectTable, transitObjectTable and referenceTable to map
+   (store,offset) pairs to table entries. */
+void insertStoreOffset(unsigned long store, 
+		       unsigned long offset, 
+		       unsigned long inx,
+		       Trie **loadedObjects)
+{
+  Trie *loadedObjectsOFbefore, *loadedObjectsOFafter;
+  
+  /* Check if store is member */
+  if ((loadedObjectsOFbefore = loadedObjectsOFafter = TILookup(store, *loadedObjects))
+      == NULL) {
+    /* insert new table for store */
+    loadedObjectsOFafter = TInit();
+  }
+  
+  /* insert inx in loadedObjectsOF */
+  TInsert(offset, (void *)inx, &loadedObjectsOFafter, offset);
+  
+  /* */
+  if (loadedObjectsOFbefore == loadedObjectsOFafter) {
+    return;
+  } else {
+    TInsert(store, (void *)loadedObjectsOFafter, loadedObjects, store);
+  }
+}
+
 void resetStatistics(void)
 {
   ;
@@ -353,12 +391,6 @@ void getKeyForObject(ObjectKey *ok, Object *theObj)
   ok -> store = store;
   ok -> offset = offset;
   
-}
-
-void setClosingGC(void)
-{
-  forceAOAGC = TRUE;
-  closingGC = TRUE;
 }
 
 void setForceAOAGG(void)

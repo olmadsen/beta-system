@@ -10,6 +10,7 @@
 #include "transitObjectTable.h"
 #include "PStoreServer.h"
 #include "PStore.h"
+#include "crossStoreReferences.h"
 
 void objt_dummy() {
 #ifdef sparc
@@ -29,15 +30,23 @@ typedef struct OTEntry {  /* Object Table Entry */
 
 /* LOCAL DEFINITIONS */
 #define INITIALTABLELENGTH 128 /* Initial size of the objectTable */
+#define INITIALBUFFERSIZE 1024
+#define SIZEOFPROTOANDGCATTRIBUTE 8
 
 /* LOCAL VARIABLES */
 static sequenceTable *currentTable = NULL;
-static Node *loadedObjectsST;
+static Trie *loadedObjectsST;
+static char *temporaryObjectBuffer = NULL;
+static unsigned long size;
 
 /* GLOBAL VARIABLES */
 
 /* LOCAL FUNCTION DECLARATIONS */
-static void updateObjectInStore(Object *theObj, unsigned long store, unsigned long offset);
+static void updateObjectInStore(Object *theObj,
+				unsigned long objSize,
+				unsigned long store, 
+				unsigned long offset,
+				unsigned short Flags);
 static void freeLoadedObjectsOF(void *contents);
 
 /* FUNCTIONS */
@@ -58,6 +67,9 @@ void initObjectTable(void)
   currentTable = STInit(INITIALTABLELENGTH, isFree, Free, sizeof(OTEntry));
   loadedObjectsST = TInit();
   initTransitObjectTable();
+  
+  temporaryObjectBuffer = (char *)malloc(INITIALBUFFERSIZE);
+  size = INITIALBUFFERSIZE;
 }
 
 unsigned long OTSize(void)
@@ -139,7 +151,7 @@ void objectLookup(unsigned long inx,
    not found. */
 unsigned long indexLookupOT(unsigned long store, unsigned long offset)
 {
-  Node *loadedObjectsOF;
+  Trie *loadedObjectsOF;
   
   /* Check if store is member of 'loadedObjects' */
   if ((loadedObjectsOF = TILookup(store, loadedObjectsST))) {
@@ -179,7 +191,8 @@ void OTStartGC(void)
     if (entry -> GCAttr == ENTRYALIVE) {
       entry -> GCAttr = POTENTIALLYDEAD;
     } else {
-      Claim(entry -> GCAttr == ENTRYDEAD, "What is GCAttr ?");
+      Claim(((entry -> GCAttr == DELAYEDENTRYALIVE) || (entry -> GCAttr == ENTRYDEAD)) , 
+	    "What is GCAttr ?");
     }
   }
 }
@@ -200,22 +213,12 @@ void objectAlive(Object *theObj)
 
 void insertStoreOffsetOT(unsigned long store, unsigned long offset, unsigned long inx)
 {
-  Node *loadedObjectsOF;
-  
-  /* Check if store is member */
-  if ((loadedObjectsOF = TILookup(store, loadedObjectsST)) == NULL) {
-    /* insert new table for store */
-    loadedObjectsOF = TInit();
-    TInsert(store, (void *)loadedObjectsOF, loadedObjectsST, store);
-  }
-  
-  /* insert inx in loadedObjectsOF */
-  TInsert(offset, (void *)inx, loadedObjectsOF, offset);
+  insertStoreOffset(store, offset, inx, &loadedObjectsST);
 }
 
 static void freeLoadedObjectsOF(void *contents)
 {
-  TIFree((Node *)contents, NULL);
+  TIFree((Trie *)contents, NULL);
 }
 
 void OTEndGC(void)
@@ -223,6 +226,8 @@ void OTEndGC(void)
   unsigned long inx, maxIndex;
   OTEntry *entry;
   sequenceTable *newTable = NULL;
+  Object *objcopy;
+  unsigned long objSize;
   
   newTable = STInit(INITIALTABLELENGTH, isFree, Free, sizeof(OTEntry));
   
@@ -236,20 +241,28 @@ void OTEndGC(void)
     entry = STLookup(currentTable, inx);
     if (entry -> GCAttr == POTENTIALLYDEAD) {
       entry -> theObj -> GCAttr = DEADOBJECT;
-      entry -> theObj = NULL;
       
-    } else if (entry -> GCAttr == ENTRYALIVE) {
-      if (!closingGC) {
-	unsigned long newInx;
-	OTEntry *newEntry;
-	
-	newEntry = (OTEntry *)malloc(sizeof(OTEntry));
-	memcpy(newEntry, entry, sizeof(OTEntry));
-	
-	newInx = STInsert(&newTable, newEntry);
-	entry -> theObj -> GCAttr = (long)newPUID(newInx);
-	registerObjectAndParts(entry -> store, entry -> offset, entry -> theObj, newInx + 1);
+      if (entry -> Flags & FLAG_INSTORE) {
+	/* The object copy should be freeed as well */
+	objSize = 4*ObjectSize(entry -> theObj);
+	objcopy = (Object *)((char *)(entry -> theObj) + objSize);
+	Claim(ObjectSize(entry -> theObj) == ObjectSize(objcopy), "Copy mismatch");
+	objcopy -> GCAttr = DEADOBJECT;
+	entry -> theObj = NULL;
+      } else {
+	;
       }
+    } else if (entry -> GCAttr == ENTRYALIVE) {
+      unsigned long newInx;
+      OTEntry *newEntry;
+      
+      newEntry = (OTEntry *)malloc(sizeof(OTEntry));
+      memcpy(newEntry, entry, sizeof(OTEntry));
+      
+      newInx = STInsert(&newTable, newEntry);
+      entry -> theObj -> GCAttr = (long)newPUID(newInx);
+      registerObjectAndParts(entry -> store, entry -> offset, entry -> theObj, newInx + 1);
+
     } else {
       Claim(entry -> theObj == NULL, "What is the object ??");
     }
@@ -275,17 +288,22 @@ void flushDelayedEntries(void)
     if (entry -> GCAttr == DELAYEDENTRYALIVE) {
       Object *theObj;
       theObj = entry -> theObj;
+
+      Claim(inIOA(theObj), "flushDelayedEntries: Delayed object not in from space?");
+      Claim(inAOA(theObj -> GCAttr), "flushDelayedEntries: Delayed object not moved to AOA ?");
+      
       entry -> GCAttr = ENTRYDEAD;
       entry -> theObj = NULL;
-      newPersistentObject(theObj);
+      newPersistentObject(entry -> store, (Object *)(theObj -> GCAttr));
     }
   }  
 }
 
+extern unsigned long currentStoreID; /* defined in misc.c */
+
 /* Collects the transitive closure of the persistent objects */
 void updatePersistentObjects(void)
 {
-  Object *root;
   unsigned long count;
   unsigned long maxIndex;
   OTEntry *entry;
@@ -296,9 +314,21 @@ void updatePersistentObjects(void)
   maxIndex = STSize(currentTable);
   for (count=0; count<maxIndex; count++) {
     entry = STLookup(currentTable, count);
-    if (entry -> GCAttr == ENTRYALIVE) {
-      Claim(inAOA(entry -> theObj), "Where is theObj?");      
-      Claim(AOAISPERSISTENT(entry -> theObj), "not persistent??");
+    if ((entry -> GCAttr == ENTRYALIVE) || (entry -> GCAttr == DELAYEDENTRYALIVE)) {
+      Claim(entry -> theObj == getRealObject(entry -> theObj), "Prt object in object table?");
+#ifdef RTDEBUG
+      if (!inToSpace(entry -> theObj)) {
+	Claim(inAOA(entry -> theObj), "Where is theObj?");      
+	Claim(AOAISPERSISTENT(entry -> theObj), "not persistent??");
+      } else {
+	Claim(entry -> theObj -> GCAttr == IOAPersist, "Object in IOA with unexpected GCAttr");
+      }
+#endif /* RTDEBUG */
+      
+      /* All new persistent objects reachable from this object will be
+         assigned the same store as the referring object. */
+      
+      currentStoreID = entry -> store;
       
       scanObject(entry -> theObj,
 		 markReachableObjects,
@@ -308,45 +338,43 @@ void updatePersistentObjects(void)
       Claim(entry -> GCAttr == ENTRYDEAD, "What is GCAttr ?");
     }
   }
-
-  /* All new persistent objects have now been linked together. */
-  if ((root = getHead())) {
-    scanList(root, handleNewPersistentObject);
-    repeatIOAGc = 1;
-  } else {
-    /* No new persistent objects */
-    repeatIOAGc = 0;
-  }
 }
 
-static void updateObjectInStore(Object *theObj, unsigned long store, unsigned long offset)
+static void updateObjectInStore(Object *theObj,
+				unsigned long objSize,
+				unsigned long store, 
+				unsigned long offset,
+				unsigned short Flags)
 {
-  long size;
   int docopy = 0;
-  OTEntry *entry;  
   Object *objcopy;
-
+  
   Claim(inAOA(theObj), "Where is theObj?");      
   Claim(AOAISPERSISTENT(theObj), "not persistent??");
   Claim(theObj == getRealObject(theObj), "Unexpected part object");
   
-  entry = STLookup(currentTable, getPUID((void*)(theObj->GCAttr)));
-
   /* The object is exported. 'exportObject' does not export the proto
      types. */
+  
+  setCurrentPStore(store);
   exportObject(theObj, store);
   
-  if ((!entry->Flags & FLAG_INSTORE)) {
+  if ((!Flags & FLAG_INSTORE)) {
     docopy = TRUE;
   } else {
-    size = 4*ObjectSize(theObj);
-    objcopy = (Object*)((char*)theObj+size);
-    objcopy->GCAttr = theObj->GCAttr;
-    if (memcmp(theObj, objcopy, size)) {
+    objcopy = (Object*)((char*)theObj+objSize);
+    /* We compare the objects disregarding the protypes and
+       GCattribute values */
+    if (memcmp((char *)(theObj) + SIZEOFPROTOANDGCATTRIBUTE, 
+	       (char *)(objcopy) + SIZEOFPROTOANDGCATTRIBUTE, 
+	       objSize - SIZEOFPROTOANDGCATTRIBUTE)) {
       docopy = TRUE;
     }
-    objcopy->GCAttr = DEADOBJECT;
   }
+  
+  /* If the store has been closed the object is not saved in the
+     store. */
+  docopy = docopy && storeIsOpen(store);
   
   if (docopy) {
     setCurrentPStore(store);
@@ -366,6 +394,7 @@ void removeUnusedObjects()
   unsigned long count;
   unsigned long maxIndex;
   OTEntry *entry;  
+
   /* All objects in the ObjectTable that are marked as POTENTIALLYDEAD
      are no longer referred from this process and can be updated in
      the store and released. */
@@ -393,6 +422,7 @@ void removeUnusedObjects()
 		 TRUE);
     }
   }
+
   /* Handle references from live to dead persistent objects */
   maxIndex = STSize(currentTable);
   for (count=0; count<maxIndex; count++) {
@@ -414,31 +444,45 @@ void removeUnusedObjects()
     entry = STLookup(currentTable, count);
     if (entry -> GCAttr == POTENTIALLYDEAD) {
       updateObjectInStore(entry ->theObj,
+			  4*ObjectSize(entry ->theObj),
 			  entry ->store,
-			  entry ->offset);
+			  entry ->offset,
+			  entry -> Flags);
+      /* This object will be removed */
     } else if (entry ->GCAttr == ENTRYALIVE) {
-      if (closingGC) {
-	Object *tmp;
-	
-	tmp = (Object *)malloc(sizeof(char) * 4*ObjectSize(entry ->theObj));
-	memcpy(tmp, entry ->theObj, 4*ObjectSize(entry ->theObj));
-	updateObjectInStore(entry ->theObj,
-			    entry ->store,
-			    entry ->offset);
-	memcpy(entry ->theObj, tmp, 4*ObjectSize(entry ->theObj));
-	
+      unsigned long objSize;
+      /* The objects are kept in memory but updated on the store
+         anyhow */
+      
+      objSize = 4*ObjectSize(entry ->theObj);
+      
+      /* The function 'updateObjectInStore' will change the first copy
+	 of the object (remember that each object loaded is followed
+	 by a copy of itself as it looked at load time), but since we
+	 are keeping this object in memory we have to chage it
+	 back. This is why the object is copied and restored from the
+	 copy. Remember that benchmark programs indicate that only a
+	 handfull of objects are kept in memory after each AOA-GC. */
+      
+      while (objSize > size) {
+	free(temporaryObjectBuffer);
+	temporaryObjectBuffer = (char *)malloc(size * 2);
+	size = size * 2;
       }
+      
+      memcpy(temporaryObjectBuffer, entry ->theObj, objSize);
+      updateObjectInStore(entry ->theObj,
+			  objSize,
+			  entry ->store,
+			  entry ->offset,
+			  entry ->Flags);
+      memcpy(entry ->theObj, temporaryObjectBuffer, objSize);
     }
   }
   
   /* mark dead objects dead and clean up tables */
   OTEndGC();
   RTEndGC();
-  
-  if (closingGC) {
-    closeExt();
-    closingGC = FALSE;
-  }
 }
 
 #endif /* PERSIST */

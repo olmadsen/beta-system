@@ -113,6 +113,16 @@ void writeSome(int fd, void *buffer, unsigned long size)
   }
 }
 
+long fileExists(char *name)
+{
+  struct stat st;
+  if (stat(name, &st) < 0) {
+    return 0;
+  } else {
+    return 1;
+  }
+}
+
 /* isDir: Returns true if name is a directory. */
 long isDir(char *name) 
 {

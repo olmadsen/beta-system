@@ -7,6 +7,7 @@
 #include "unswizzle.h"
 #include "transitObjectTable.h"
 #include "PStore.h"
+#include "crossStoreReferences.h"
 
 /* */
 void unswizzle_dummy()
@@ -22,6 +23,9 @@ void unswizzle_dummy()
 /* LOCAL VARIABLES */
 static loadedBytes = 0;
 static forceAOACompaction = 0;
+
+/* IMPORTS */
+extern PStoreHeader *currentPStore;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static Object *loadObject(unsigned long store, u_long offset, unsigned long inx);
@@ -59,10 +63,13 @@ Object *unswizzleReference(void *ip)
 		    &AOAclients);
     
     Claim(GCAttr == ENTRYALIVE, "Reference to dead entry");
-    Claim(!isCrossStoreReference(offset), "Unhandled crossStoreReference");
     
-    theObj = lookUpReferenceEntry(store, offset, inx);
-    setObjInTransit(inx, theObj);
+    if ((theObj = lookUpReferenceEntry(store, offset, inx))) {
+      setObjInTransit(inx, theObj);
+    }
+    /* 'lookUpReferenceEntry' might return NULL (currently only if the
+       store from which we are trying to load is closed). This should
+       be handled by the proxy traphandler as a fatal error. */
     return theObj;
   }
 }
@@ -83,57 +90,61 @@ static Object *loadObject(unsigned long store, unsigned long offset, unsigned lo
   unsigned long size, distanceToPart;
   Object *theStoreObj, *theRealStoreObj, *theRealObj;
 
-  setCurrentPStore(store);
-  theStoreObj = lookupStoreObject(store, offset);
-  
-  Claim(theStoreObj != NULL, "Could not look up store object");
-  
-  theRealStoreObj = getRealObject(theStoreObj);
-  distanceToPart = (unsigned long)theStoreObj - (unsigned long)theRealStoreObj;
-  
-  if (distanceToPart) {
-    Object *theRealObj;
+  if (storeIsOpen(store)) {
+    setCurrentPStore(store);
+    theStoreObj = lookupStoreObject(store, offset);
     
-    theRealObj = lookUpReferenceEntry(store, offset - distanceToPart, -1);
-    return (Object *)((unsigned long)theRealObj + distanceToPart);
-  } else {
-    size = 4*StoreObjectSize(theRealStoreObj);
-    theRealObj = AOAallocate(2*size);
-    loadedBytes += 2*size;
-    if (loadedBytes > MAXPERSISTENTBYTES) {
-      loadedBytes = 0;
-      forceAOACompaction = TRUE;
-      DEBUG_CODE(fprintf(output, "Max persistent bytes exceeded\n"))
-	}
-    if (forceAOACompaction) {
-      DEBUG_CODE(fprintf(output, "Requesting GC at next allocation\n"));
-      /* Request GC at next IOAAllocation */
-      AOANeedCompaction = TRUE;
+    Claim(theStoreObj != NULL, "Could not look up store object");
+    
+    theRealStoreObj = getRealObject(theStoreObj);
+    distanceToPart = (unsigned long)theStoreObj - (unsigned long)theRealStoreObj;
+    
+    if (distanceToPart) {
+      Object *theRealObj;
+      
+      theRealObj = lookUpReferenceEntry(store, offset - distanceToPart, -1);
+      return (Object *)((unsigned long)theRealObj + distanceToPart);
+    } else {
+      size = 4*StoreObjectSize(theRealStoreObj);
+      theRealObj = AOAallocate(2*size);
+      loadedBytes += 2*size;
+      if (loadedBytes > MAXPERSISTENTBYTES) {
+	loadedBytes = 0;
+	forceAOACompaction = TRUE;
+	DEBUG_CODE(fprintf(output, "Max persistent bytes exceeded\n"))
+	  }
+      if (forceAOACompaction) {
+	DEBUG_CODE(fprintf(output, "Requesting GC at next allocation\n"));
+	/* Request GC at next IOAAllocation */
+	AOANeedCompaction = TRUE;
 #if defined(NEWRUN) || defined(sparc)
-      IOATopOff = (char *)IOALimit  - (char *) IOA;
+	IOATopOff = (char *)IOALimit  - (char *) IOA;
 #else
-      IOATop = IOALimit;
+	IOATop = IOALimit;
 #endif
+      }
+      memcpy(theRealObj, theRealStoreObj, size);
+      importProtoTypes(theRealObj);
+      
+      /* A copy of the object is save after the object it self. This
+	 copy is still in store format apart from the prototypes which
+	 are in in memory format. */
+      memcpy((char*)theRealObj+size, theRealObj, size);
+      /* The copy is marked as a persistent object. This marking is only
+	 used to indicate to the GC'er that it should not free the space
+	 taken up by the object. */
+      ((Object*)((char*)theRealObj+size))->GCAttr = (long)newPUID(0);
+      
+      /* The real object is imported */
+      importStoreObject(theRealObj, store, offset, inx);
+      
+      Claim(ObjectSize(((Object*)((char*)theRealObj+size)))
+	    == ObjectSize(theRealObj), "Claim");
+      INFO_PERSISTENCE(objectsLoaded++);
+      return theRealObj;
     }
-    memcpy(theRealObj, theRealStoreObj, size);
-    importProtoTypes(theRealObj);
-    
-    /* A copy of the object is save after the object it self. This
-       copy are still in store format apart from the prototypes which
-       are in in memory format. */
-    memcpy((char*)theRealObj+size, theRealObj, size);
-    /* The copy is marked as a persistent object. This marking is only
-       used to indicate to the GC'er that it should not free the space
-       taken up by the object. */
-    ((Object*)((char*)theRealObj+size))->GCAttr = (long)newPUID(0);
-
-    /* The real object is imported */
-    importStoreObject(theRealObj, store, offset, inx);
-
-    Claim(ObjectSize(((Object*)((char*)theRealObj+size)))
-	  == ObjectSize(theRealObj), "Claim");
-    INFO_PERSISTENCE(objectsLoaded++);
-    return theRealObj;
+  } else {
+    return NULL;
   }
 }
 

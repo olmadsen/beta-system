@@ -1,26 +1,26 @@
 #ifndef _TRIE_H_
 #define _TRIE_H_
-#include "beta.h"
+#include "../C/beta.h"
 
 /* */
+#define INITIALTRIESIZE 8192  /* bytes */
+
+typedef struct trie {
+  unsigned long size;
+  unsigned long top;
+  char buffer[INITIALTRIESIZE];
+} Trie;
+
 typedef struct contentsBox {
   void *contents;
   unsigned long key;
 } contentsBox;
 
-typedef struct Node Node;
-
-struct Node {
-  signed char d; /* digit [0-9] */
-  contentsBox *contents;
-  Node *right;
-  Node *down;
-};
-
-Node *TInit(void);
-void TInsert(unsigned long key, void *contents, Node *current, unsigned long insertKey);
-void *TILookup(unsigned long key, Node *current);
-void TIVisit(Node *current, void (*visitFunc)(contentsBox *));
-void TIFree(Node *current, void (*freeFunc)(void *));
+Trie *TInit(void);
+void TInitp(Trie *new);
+void TInsert(unsigned long key, void *contents, Trie **current, unsigned long insertKey);
+void *TILookup(unsigned long key, Trie *current);
+void TIVisit(Trie *current, void (*visitFunc)(contentsBox *));
+void TIFree(Trie *current, void (*freeFunc)(void *));
 
 #endif /* _TRIE_H_ */
