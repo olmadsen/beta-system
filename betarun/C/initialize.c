@@ -388,13 +388,15 @@ void Initialize()
   tmpIOATop       = IOABaseBlock->top;
   GLOBAL_IOALimit = IOABaseBlock->limit;
 #else /* USEMMAP */
-  AllocateHeap((long*)&tmpIOA,
-	       (long*)&tmpIOATop,
-	       (long*)&GLOBAL_IOALimit, 
-	       IOASize,
-	       "IOA heap");
+  tmpIOA = NULL;
+  while((long)tmpIOA <= IOASize) {
+    AllocateHeap((long*)&tmpIOA,
+                 (long*)&tmpIOATop,
+                 (long*)&GLOBAL_IOALimit, 
+                 IOASize,
+                 "IOA heap");
+  }
 #endif /* USEMMAP */
-
 
 #if defined(sparc) || defined(NEWRUN)
 #ifdef MT
