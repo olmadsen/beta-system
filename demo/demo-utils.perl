@@ -20,7 +20,8 @@ sub usage(){
     print "  -P  no disassembly for JVM\n";
     print "  -c  skip compilation (run only)\n";
     print "  -R  Remove all code for target from entire BETALIB before compilation\n";
-    print "  -C  Force removal of all generated files (output, diff, ...)\n";
+    print "  -C  Force removal of all generated files after run (output, diff, ...)\n";
+    print "  -X  clean directory for generated files without running demos\n";
     print "  -d  target clr (.NET bytecode)\n";
     print "  -j  target jvm (Java bytecode)\n";
     print "  [dir1] ... [dirN] specify optional directories to test (ignoring others)\n";
@@ -46,6 +47,7 @@ sub read_command_options()
     $nodisassembly= 1     if (defined($P));
     $rmcode       = 1     if (defined($R));
     $forceclean   = 1     if (defined($C));
+    $cleanall     = 1     if (defined($X));
 
     if ($#ARGV>=0){
 	print "Only testing directories matching: " . join (" ", @ARGV) . "\n";
@@ -152,14 +154,45 @@ sub expand_envvar
 sub cleanup()
 {
     my ($prog) = @_;
-    unlink "$prog.dump", "$prog.run", "$prog.out", "$prog.ref", "$prog.diff";
+    my @files = ("$prog.dump", "$prog.run", "$prog.out", "$prog.ref", "$prog.diff");
+    foreach $f (@files){
+	#print "  cleanup: $f\n";
+	if (-e $f){
+	    print "Removing $f\n" if ($verbose);
+	    unlink $f;
+	}
+    }
 }
 
 sub cleanup_exec()
 {
     my ($prog) = @_;
-    unlink "$prog" unless ($preserve);
-    unlink "$prog-jdb" if ($target eq "jvm" && !$preserve);
+    my @files = ("$prog", "$prog-jdb");
+    foreach $f (@files){
+	#print "  cleanup_exec: $f\n";
+	if (-e $f){
+	    if ($preserve){
+		print "Preserving $f (run.demos -p)\n" if ($verbose);
+	    } else {
+		print "Removing $f\n" if ($verbose);
+		unlink $f;
+	    }
+	}
+    }
+}
+
+sub cleanup_all
+{
+    local($all) = 0;
+    foreach $prog (sort keys %progs){
+	#print "   clean: $prog\n";
+	&cleanup($prog);
+	&cleanup_exec($prog);
+    }
+    foreach $summary (glob("*.summary")){
+	print "Removing $summary\n" if ($verbose);
+	unlink $summary;
+    }
 }
 
 sub compare_expected()
@@ -241,6 +274,11 @@ sub init()
     &read_command_options();
     &find_local_progs();
     &setup_variables();
+    if ($cleanall){
+	print "Cleaning local directory.\n\n";
+	&cleanup_all();
+	exit 0;
+    }
 }
 
 sub rmcode(){
