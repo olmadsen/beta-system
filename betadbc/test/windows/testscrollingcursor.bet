@@ -6,18 +6,24 @@ INCLUDE '../../scrollingresultset'
    testScrollingResultSet: testSuite
      (#
         sqlCon: @connection;
+        supports: @boolean;
         stmt: ^connection.directSQLStatement;
-        startTestCase::
+        startTestCase:: 
           (# 
           do
              &sqlCon.directSQLStatement
-               (# resultSetType:: sqlCon.scrollingResultSet #)[]->stmt[];
+               (#
+                  cursorType:: 
+                    (# scrollable::  (#  do true->value #) #);
+                  resultSetType:: sqlCon.scrollingResultSet
+               #)[]->stmt[];
              stmt.open
           #);
-        start::
+        start:: 
           (# stmt: @sqlCon.directSQLStatement
           do
              (2->arguments,3->arguments,4->arguments)->sqlCon.open;
+             sqlCon.scrollingCursorsSupported->supports;
              stmt.open;
              'CREATE TABLE myTable (myTuple VARCHAR(55))'->stmt;
              stmt.execute;
@@ -29,25 +35,113 @@ INCLUDE '../../scrollingresultset'
              stmt.execute;
              stmt.close
           #);
-        end::
+        end:: 
           (# stmt: @sqlCon.directSQLStatement
-          do 'DROP TABLE myTable'->stmt; stmt.execute; stmt.close; sqlCon.close
+          do
+             stmt.open;
+             'DROP TABLE myTable'->stmt;
+             stmt.execute;
+             stmt.close;
+             sqlCon.close
           #);
         testSimple: testCase
           (# res: ^sqlCon.scrollingResultSet
-          do 'SELECT * FROM myTable'->stmt; stmt.execute->res[]; stmt.close
+          do
+             'SELECT * FROM myTable'->stmt;
+             stmt.execute->res[];
+             true->assert;
+             stmt.close
+          #);
+        testFetchFirst: testCase
+          (# res: ^sqlCon.scrollingResultSet
+          do
+             'SELECT * FROM myTable'->stmt;
+             stmt.execute->res[];
+             ((res.fetchFirst).s,'a')->assertTextEqual;
+             ((res.fetchNext).s,'b')->assertTextEqual;
+             'SELECT * FROM myTable WHERE myTuple = \'d\''->stmt;
+             stmt.execute->res[];
+             (res.fetchFirst = res.EOT)->assert;
+             stmt.close
+          #);
+        testFetchLast: testCase
+          (# res: ^sqlCon.scrollingResultSet
+          do
+             'SELECT * FROM myTable'->stmt;
+             stmt.execute->res[];
+             ((res.fetchLast).s,'c')->assertTextEqual;
+             ((res.fetchPrior).s,'b')->assertTextEqual;
+             'SELECT * FROM myTable WHERE myTuple = \'d\''->stmt;
+             stmt.execute->res[];
+             (res.fetchLast = res.EOT)->assert;
+             stmt.close
+          #);
+        testFetchPrior: testCase
+          (# res: ^sqlCon.scrollingResultSet
+          do
+             'SELECT * FROM myTable'->stmt;
+             stmt.execute->res[];
+             res.fetchLast;
+             ((res.fetchPrior).s,'b')->assertTextEqual;
+             stmt.close
+          #);
+        testFetchRelative: testCase
+          (# res: ^sqlCon.scrollingResultSet
+          do
+             'SELECT * FROM myTable'->stmt;
+             stmt.execute->res[];
+             res.fetchNext;
+             res.fetchNext;
+             ((1->res.fetchRelative).s,'c')->assertTextEqual;
+             ((- 2->res.fetchRelative).s,'a')->assertTextEqual;
+             stmt.close
           #);
         testFetchAbsolute: testCase
           (# res: ^sqlCon.scrollingResultSet
           do
              'SELECT * FROM myTable'->stmt;
              stmt.execute->res[];
-             (for i: 3 repeat
-               i->res.fetchAbsolute; (res.current).s->putline
-             for);
+             res.fetchNext;
+             ((3->res.fetchAbsolute).s,'c')->assertTextEqual;
+             ((1->res.fetchAbsolute).s,'a')->assertTextEqual;
+             ((- 2->res.fetchAbsolute).s,'b')->assertTextEqual;
+             ((res.fetchNext).s,'c')->assertTextEqual;
+             stmt.close
+          #);
+        testScanReverse: testCase
+          (# res: ^sqlCon.scrollingResultSet; i: @integer
+          do
+             'SELECT * FROM myTable'->stmt;
+             stmt.execute->res[];
+             res.scanReverse
+               (# 
+               do
+                  i+1->i;
+                  (if i
+                   // 1 then
+                      (current.s,'c')->assertTextEqual
+                   // 2 then
+                      (current.s,'b')->assertTextEqual
+                   // 3 then
+                      (current.s,'a')->assertTextEqual
+                  if)
+               #);
+             'SELECT * FROM myTable'->stmt;
+             stmt.execute->res[];
+             res.fetch;
+             res.scan;
              stmt.close
           #)
-     do &testSimple[]->addTest; &testFetchAbsolute[]->addTest
+     do
+        (if supports then
+            &testSimple[]->addTest;
+            &testFetchFirst[]->addTest;
+            &testFetchLast[]->addTest;
+            &testFetchPrior[]->addTest;
+            &testFetchRelative[]->addTest;
+            &testFetchAbsolute[]->addTest;
+            &testScanReverse[]->addTest
+        if)
      #)
 do &writingTestResult[]->testScrollingResultSet
 #)  
