@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $Id: aoatoioa.c,v 1.9 1992-09-09 13:50:37 tthorn Exp $
+ * Mod: $Id: aoatoioa.c,v 1.10 1992-09-22 19:36:52 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -117,7 +117,7 @@ AOAtoIOAReport()
     int used = 0;
     if( AOAtoIOAtable ){
 	MACRO_ScanBlock( AOAtoIOAtable, if( *thisCell) used++ );
-	printf( output, "#AOAtoIOATable size=%d filled=%d%%\n",
+	fprintf( output, "#AOAtoIOATable size=%d filled=%d%%\n",
 	       AOAtoIOAtableSize, (100*used)/AOAtoIOAtableSize);
     }
 }
