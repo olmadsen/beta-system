@@ -24,9 +24,9 @@ void initProtoHandling(void)
   ItoPCache = TInit();
 }
 
-static void freeFunc(void *contents)
+static void freeFunc(unsigned long contents)
 {
-  free(contents);
+  free((void *)contents);
 }
 
 void freeProtoHandling(void)
@@ -40,7 +40,7 @@ void protoAddrToID(ProtoType *theProto, unsigned long *group, unsigned long *pro
   group_header *gh;
   protoID *id;
   
-  if ((id = TILookup((unsigned long)theProto, PtoICache))) {
+  if ((id = (protoID *)TILookup((unsigned long)theProto, PtoICache))) {
     *group = id -> group;
     *protoNo = id -> protoNo;
     return;
@@ -72,7 +72,7 @@ void protoAddrToID(ProtoType *theProto, unsigned long *group, unsigned long *pro
 	  id -> group = *group;
 	  id -> protoNo = *protoNo;
 	  
-	  TInsert((unsigned long)theProto, (void *)id, &PtoICache, (unsigned long)theProto);
+	  TInsert((unsigned long)theProto, (unsigned long)id, &PtoICache, (unsigned long)theProto);
 	}
 	return;
       }
@@ -93,7 +93,7 @@ ProtoType *IDtoProtoAddr(unsigned long group, unsigned long protoNo)
   Claim(protoNo < 0xFFFF, "protoNo too large");
   
   key = ((group << 16) | protoNo);
-  if ((theProto = TILookup(key, ItoPCache))) {
+  if ((theProto = (ProtoType *)TILookup(key, ItoPCache))) {
     return theProto;
   }
   
@@ -107,7 +107,7 @@ ProtoType *IDtoProtoAddr(unsigned long group, unsigned long protoNo)
   
   if (gh) {
     theProto = PrototypeNoToProto(gh, protoNo);
-    TInsert(key, (void *)theProto, &ItoPCache, key);
+    TInsert(key, (unsigned long)theProto, &ItoPCache, key);
     return theProto;
   }
   
@@ -117,7 +117,7 @@ ProtoType *IDtoProtoAddr(unsigned long group, unsigned long protoNo)
 static ProtoType *PrototypeNoToProto(group_header *gh, unsigned long protoNo) 
 { 
   long* proto=&gh->protoTable[1];
-  int NoOfPrototypes;
+  unsigned long NoOfPrototypes;
   
   NoOfPrototypes = gh->protoTable[0];
   if (protoNo < NoOfPrototypes) {
