@@ -32,6 +32,8 @@ struct unixPipe
   int writeIndex;
 };
 
+#define isEOF(ch) (((signed char)ch)==EOF)
+
 #define MAX_NO_OF_ARGS 100
 
 #define SEPARATOR      1 
@@ -101,7 +103,7 @@ static signed char streamStatus;
 int StreamError()
   /* Return whether or not last call to GetTExtFromStream succeeded. */
   {
-   return(streamStatus==EOF);
+   return(isEOF(streamStatus));
   }
  
 
@@ -116,7 +118,8 @@ char *GetTextFromStream(F,toEOL)
   {
    register FILE *F1;        /* We use a lot of registers for efficiency. */
    register char *Buffer1;
-   register int  i,ch;
+   register int  i;
+   register unsigned char ch;
    int           oldSize;
 
    if(!BufferSize)            /* The first time, initialize Buffer. */
@@ -125,9 +128,9 @@ char *GetTextFromStream(F,toEOL)
    oldSize=0;                 /* This much of Buffer currently used. */
    if(!toEOL)                 /* Skip to first non-blank. */
      {
-      while((ch=getc(F1))<=' ' && ch!=EOF) 
+      while((ch=getc(F1))<=' ' && !isEOF(ch)) 
         /* SKIP */ ;
-      if(ch==EOF || ungetc(ch,F1)==EOF)
+      if(isEOF(ch) || ungetc(ch,F1)==EOF)
         {
          streamStatus=ch;
          return("");
@@ -144,7 +147,7 @@ char *GetTextFromStream(F,toEOL)
         {
          while(i--)           /* While more room in Buffer. */
            {
-            if((*Buffer1++=ch=getc(F1))=='\n' || ch==EOF)
+            if((*Buffer1++=ch=getc(F1))=='\n' || isEOF(ch))
               {
                streamStatus=ch;
                Buffer1[-1]=0; /* Skip the stop char. */
@@ -156,7 +159,7 @@ char *GetTextFromStream(F,toEOL)
         {
          while(i--)           /* While more room in Buffer. */
            {
-            if((*Buffer1++=ch=getc(F1))<=' ' || ch==EOF)
+            if((*Buffer1++=ch=getc(F1))<=' ' || isEOF(ch))
               {
                streamStatus=ch;
                Buffer1[-1]=0; /* Skip the stop char. */
