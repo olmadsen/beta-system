@@ -7,6 +7,7 @@ INCLUDE '~beta/guienv/v1.6/utils/guienvadds'
         '~beta/guienv/v1.6/private/datastructures/sequence'
         '~beta/containers/v1.6/list'
         '../../dialogs/editinfo'
+        '../../dialogs/confirmdialog'
         '../../dialogs/coloreditor'
         '../../dialogs/namedialog'
         '../../dialogs/integerfield'
@@ -920,10 +921,11 @@ do
    (theFragServer[],MPS[],pretty[])->theAstEditorEnv.init;
    private.theScrap.init;
    private.borderConsts.init;
-   private.alignmentConsts.init;
+   private.hAlignmentConsts.init;
+   private.vAlignmentConsts.init;
    ('border.style',private.borderConsts[])->registerConstants;
-   ('vertical.alignment',private.alignmentConsts[])->registerConstants;
-   ('horizontal.alignment',private.alignmentConsts[])->registerConstants;
+   ('vertical.alignment',private.vAlignmentConsts[])->registerConstants;
+   ('horizontal.alignment',private.hAlignmentConsts[])->registerConstants;
    INNER ;
      
 
@@ -1498,7 +1500,7 @@ do
      (# frag: ^astInterface.fragmentForm
      do
         (name[],'guienvlib')->createSourceFile->frag[];
-        (frag[],name[],'window')->createWindow
+        (if frag[] <> none then (frag[],name[],'window')->createWindow if)
      #)  
 
 -- createSourceFile: DoPart --
@@ -1551,35 +1553,127 @@ do
              
           exit shortName[]
           #);
+        isOpen: booleanValue
+          (# name: ^text
+          enter name[]
+          do (name[]->mps.top.groupTable.find) <> none ->value
+          #);
         
      do
-        (if fileName[] <> none then
-            fileName[]->stripExtension;
-            (fileName[],currentDirectory)->MPS.thePathHandler.convertFilePath
-              ->fileName[];
-            '.ast'->(fileName.copy).append->astFileName[];
-            '.bet'->(fileName.copy).append->betFileName[];
-            (if (astFileName[]->entryExists) or (betFileName[]->entryExists)
-             then
-                'does already exist'->displayMessage; 
-             else
-                fileName[]->createFragmentGroup->group[];
-                (if group[] <> none then
-                    'ORIGIN'
-                      ->group.prop.addProp
-                        (#  do guienvLocation->addString;  #);
-                    fragName[]->betagram.newAttributesFrag->frag[];
-                    frag[]->group.fragmentList.addFragment;
-                    fileName[]->putLine;
-                    group.markAsChanged;
-                    (group[],betFileName[])->prettyprintFragment;
-                    INNER createSourceFile;
-                    
-                if);
-                
-            if);
-            
-        if);
+        creating:
+          (#
+             ok: @boolean;
+             deleteFile:
+               (# fName: ^text; ok: @boolean
+               enter fName[]
+               do
+                  deleting:
+                    (#
+                       f: @file
+                         (#
+                            reportError:
+                              (# reason: ^text; msg: ^text
+                              enter reason[]
+                              do
+                                 &text[]->msg[];
+                                 'The file "'->msg.putText;
+                                 entry.path.name->msg.putText;
+                                 '" cannot be deleted, because '->msg.putText;
+                                 reason[]->msg.putText;
+                                 msg[]->displayMessage;
+                                 false->ok;
+                                 leave deleting
+                              #);
+                            otherError:: 
+                              (# 
+                              do 'of unspecified error.'->reportError
+                              #);
+                            AccessError:: 
+                              (# 
+                              do
+                                 'of insufficient access priviligies.'
+                                   ->reportError
+                              #);
+                            NoSpaceError:: 
+                              (# 
+                              do
+                                 'there is no space left on device.'
+                                   ->reportError
+                              #);
+                            FileExistsError:: 
+                              (# 
+                              do 'of unspecified error.'->reportError
+                              #);
+                            NoSuchFileError::  (#  do true->continue #);
+                            
+                         #)
+                    do fName[]->f.name; true->ok; f.delete
+                    #)
+               exit ok
+               #);
+             f: @file
+          do
+             (if fileName[] <> none then
+                 fileName[]->stripExtension;
+                 (fileName[],currentDirectory)
+                   ->MPS.thePathHandler.convertFilePath->fileName[];
+                 '.ast'->(fileName.copy).append->astFileName[];
+                 '.bet'->(fileName.copy).append->betFileName[];
+                 (if (astFileName[]->entryExists) or
+                 (betFileName[]->entryExists) then
+                     (if fileName[]->isOpen then
+                         composeMsg:
+                           (# str: @text
+                           do
+                              'The fragment group "'->str.putText;
+                              fileName[]->f.entry.path;
+                              f.entry.path.name->str.putText;
+                              '" cannot be created, because it is already open.'
+                                ->str.putText;
+                              str[]->displayMessage
+                           #)
+                      else
+                         askUser:
+                           (# msg: @text
+                           do
+                              'Replace existing "'->msg.putText;
+                              fileName[]->f.entry.path;
+                              f.entry.path.name->msg.putText;
+                              '" ?'->msg.putText;
+                              (msg[],'Replace',true)
+                                ->confirm
+                                  (#
+                                     onConfirm:: 
+                                       (# 
+                                       do
+                                          (if astFileName[]->deleteFile then
+                                              betFileName[]->deleteFile->ok
+                                          if)
+                                       #)
+                                  #)
+                           #)
+                     if)
+                  else
+                     true->ok
+                 if);
+                 (if ok then
+                     fileName[]->createFragmentGroup->group[];
+                     (if group[] <> none then
+                         'ORIGIN'
+                           ->group.prop.addProp
+                             (#  do guienvLocation->addString;  #);
+                         fragName[]->betagram.newAttributesFrag->frag[];
+                         frag[]->group.fragmentList.addFragment;
+                         fileName[]->putLine;
+                         group.markAsChanged;
+                         (group[],betFileName[])->prettyPrintGroup;
+                         INNER createSourceFile;
+                         
+                     if)
+                 if);
+                 
+             if)
+          #);
         
      #)  
 
@@ -1735,9 +1829,6 @@ do
         false->data.bindRight;
         true->data.bindTop;
         false->data.bindBottom;
-        true->data.visible;
-        true->data.enabled;
-        false->data.hilite;
         borderStyles.shadowOut->data.borderStyle;
         false->data.borderVisible;
         (contents).backgroundColor->data.backgroundColor
