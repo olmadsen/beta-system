@@ -1,5 +1,6 @@
 ORIGIN '~beta/basiclib/v1.6/betaenv';
-INCLUDE '~beta/containers/v1.6/list';
+INCLUDE '~beta/containers/v1.6/list'
+        'shortintobject';
 BODY 'private/bdbcbody';
 -- lib: Attributes --
 DBEnv:
@@ -83,7 +84,23 @@ DBEnv:
             (#  <<SLOT ConnectionRollBack:DoPart>> #);
           SQLStatement:
             (#
-               Contents: @text;
+               ContentsType:<
+                 (#
+                    get:<
+                      (# 
+                      do INNER get
+                      exit t[]
+                      #);
+                    set:<
+                      (# 
+                      enter t[]
+                      do INNER set
+                      #);
+                    t: ^text
+                 enter set
+                 exit get
+                 #);
+               Contents: @ContentsType;
                execute:<
                  (# res: ^ResultSet
                  <<SLOT SQLStatementExecute:DoPart>>
@@ -92,15 +109,36 @@ DBEnv:
                private: @<<SLOT SQLStatementPrivate:Descriptor>>
             #);
           DirectSQLStatement:
-           SQLStatement
+          (* 1. Set 'Contents'  
+           * 2. Call 'execute'
+           * Use this statement type if a statement will be executed at most a few times *)
+          SQLStatement
             (#
-               execDirectException:< BDBCException
-                 (#  do INNER execDirectException #);
+               execute::  (#  <<SLOT DirectSQLStatementExecute:DoPart>> #);
+               execDirectException:<
+                BDBCException (#  do INNER execDirectException #);
                execDirectWarning:< BDBCWarning
                  (#  do INNER execDirectWarning #);
-               execute::  (#  <<SLOT DirectSQLStatementExecute:DoPart>> #);
-               private:
-                 @<<SLOT DirectSQLStatementPrivate:Descriptor>>
+               private: @<<SLOT DirectSQLStatementPrivate:Descriptor>>
+            #);
+          PreparedSQLStatement:
+          (* 1. Set 'Contents' using '?' as placeholder
+           * 2. Bind values to placeholders using the set... methods.
+           * 3. Call 'execute'. Repeat 2 & 3 as necessary.
+           * Use this statement type if a statement will be executed multiple 
+           * times with different bindings.
+           * NOT IMPLEMENTED
+           *) SQLStatement
+            (#
+               setColumn: (# i: @integer enter i do INNER setColumn #);
+               setInteger: setColumn
+                 (# value: @integer enter value do INNER setInteger #);
+               setReal: setColumn
+                 (# value: @real enter value do INNER setReal #);
+               setText: setColumn
+                 (# value: ^text enter value[] do INNER setText #);
+               setBoolean: setColumn
+                 (# value: @boolean enter value do INNER setBoolean #)
             #);
           ResultSet:
           (* Result of a SQLStatement. 
@@ -133,6 +171,7 @@ DBEnv:
                       <<SLOT ResulGetBoolean:DoPart>>
                       exit res
                       #);
+                    ;
                     getColumnByName:
                     (* Get the data in the first column in the result designated by 'name'*)
                       (# name: ^text
