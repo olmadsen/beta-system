@@ -152,7 +152,7 @@ static unsigned long timestamps[MORE_THAN_MAXFD];
 static size_t max_fd;
 
 
-#define CHECK_FD(fd,th,el) ((0<=fd && fd<max_fd)? (th):(el))
+#define CHECK_FD(fd,th,el) ((0<=(unsigned int)fd && (unsigned int)fd<(unsigned int)max_fd)? (th):(el))
 
 #define INIT_TIMESTAMP() (max_fd=MAXFD)
 #define GET_TIMESTAMP(fd) CHECK_FD(fd,(timestamps[(fd)]),0)

@@ -544,7 +544,7 @@ void IOAGc()
 #ifdef MT
    /* doGC checks for this */
 #else
-   if (4*ReqObjectSize < (char*)IOALimit-(char*)IOA) {
+   if ((long)(4*ReqObjectSize) < (long)((char*)IOALimit-(char*)IOA)) {
      /* For an object, that would fit in IOA, actually. */
      if ((long)IOATop+4*(long)ReqObjectSize > (long)IOALimit) {
        /* Not enough freed by this GC. */

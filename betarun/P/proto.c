@@ -198,12 +198,12 @@ void exportProtoType(Object *theObj)
            (int)protoNo);
 #endif /* DEBUGPERSISTENCE */
    
-   if (group == -1) {
+   if (group == 0xffffffff) {
       /* the prototype is a special prototype and thus no conversion
          is necessary */
       ;
    } else {
-      Claim(protoNo != -1, "exportProtoType: Export of proto pointer failed");
+      Claim(protoNo != 0xffffffff, "exportProtoType: Export of proto pointer failed");
       Claim(group < ( 1 << 16), "exportProtoType: Group too large");
       Claim(protoNo < ( 1 << 16), "exportProtoType: protoNo too large");
       SETPROTO(theObj, (ProtoType *)((group << 16) | protoNo));

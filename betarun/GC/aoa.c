@@ -706,7 +706,7 @@ void AOAGc()
 
    INFO_AOA(fprintf(output, "Lettting heap expand by %d%%\n", expand_percent););
 
-   if (AOAMinSizeForGC < AOAMinFree)
+   if ((long)AOAMinSizeForGC < (long)AOAMinFree)
            AOAMinSizeForGC = AOAMinFree;
 
    AOASizeAtGC = totalAOASize;

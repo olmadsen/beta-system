@@ -275,10 +275,10 @@ do {                               \
 /*** Object sizes in BYTES ****/
 
 /* Objects must be multiples of 8 bytes because of reals */
-#define ObjectAlign(numbytes)     ((unsigned long)(((unsigned)(numbytes)+7) & ~7))
-#define ObjectAlignDown(numbytes) ((unsigned long)(((unsigned)(numbytes))   & ~7))
-#define LongAlign(numbytes)       ((unsigned long)(((unsigned)(numbytes)+3) & ~3))
-#define LongAlignDown(numbytes)   ((unsigned long)(((unsigned)(numbytes))   & ~3))
+#define ObjectAlign(numbytes)     ((unsigned long)(((unsigned)(numbytes)+7) & (unsigned)~7))
+#define ObjectAlignDown(numbytes) ((unsigned long)(((unsigned)(numbytes))   & (unsigned)~7))
+#define LongAlign(numbytes)       ((unsigned long)(((unsigned)(numbytes)+3) & (unsigned)~3))
+#define LongAlignDown(numbytes)   ((unsigned long)(((unsigned)(numbytes))   & (unsigned)~3))
 
 /* It is INTENTIONAL that we use of LongAlign instead of ObjectAlign below.
  * This meens that RepSize <> RepBodySize + HeadSize (the latter may be 4 less). 

@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(100)";
+char betarun_version[] = "BETARUN VERSION 5.3(101)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.122  2002/10/15 23:31:10  datpete
+ *     macosx: new implementation of signal handling using ucontext_t instead of sigcontext+assembly. Now works on MacOS 10.2.1
+ * Betarun version number: 100
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.121  2002/09/27 22:18:11  datpete
  *     Temporary signal solution for MacOS 10.2
  * Betarun version number: 99

@@ -104,10 +104,11 @@ static unsigned long AOAMinGap = 16;          /* Must be at least 16 */
  *    for the given size.
  */
 
-#define AOAFreeListIndex(n)                                          \
-  ((((unsigned long)(n)) <= FreeListSmallMAX*8) ?                    \
-   ((unsigned long)(n)) / 8 :                                        \
-   AOAFreeListIndexComplex(n))                                       \
+static unsigned long AOAFreeListIndex(unsigned long n)
+{
+  if (n <= FreeListSmallMAX*8) return n/8;
+  return AOAFreeListIndexComplex(n);
+}
 
 #ifdef RTDEBUG
 static unsigned long AOASmallIndex2Size(unsigned long index)
@@ -182,7 +183,7 @@ static int AOAWantsMore(long numbytes)
   if (8*FreeListSmallMAX <= numbytes)
     return 1;
   
-  index = AOAFreeListIndex(numbytes);
+  index = (long)AOAFreeListIndex(numbytes);
 
   return (AOAFreeListSize[index]*numbytes < AOAFreeListPleaseMoreBytes);
 }
@@ -192,7 +193,7 @@ static int AOAWantsMore(long numbytes)
  */
 static void AOAInsertFreeElement(AOAFreeChunk *freeChunk, long numbytes)
 { 
-  long index = AOAFreeListIndex(numbytes);
+  long index = (long) AOAFreeListIndex(numbytes);
     
 #ifdef RTDEBUG  
   if (!freeChunk) {
@@ -251,7 +252,7 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
   unsigned long index, startindex, bestFitIndex = 0;
   unsigned long sizeOfRestChunk, sizeOfFoundChunk, stepSize, bestFitSize;
 
-  index = startindex = AOAFreeListIndex(numbytes);
+  index = startindex = (unsigned long)AOAFreeListIndex(numbytes);
   if (index < FreeListSmallMAX && AOAFreeList[index]) {
     /* Exact match. Perfect */
     newChunk = AOAFreeList[index];
@@ -614,7 +615,7 @@ long AOAScanMemoryArea(long *start, long *end)
 	} else {
 	  size = 4 * ObjectSize((Object *)current);
 	  {
-	    long index = AOAFreeListIndex(size);
+	    long index = (long)AOAFreeListIndex(size);
 	    AOAInUseCount[index]--;
 	    AOAInUseSize[index] -= size;
 	  }

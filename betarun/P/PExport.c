@@ -136,14 +136,14 @@ static void exportPrototype(unsigned long *cell)
 
   protoAddrToID(*(ProtoType**)cell, &group, &protoNo);
               
-  if (group == -1) {
+  if (group == 0xffffffff) {
     /* the prototype is a special prototype 
      * and thus no conversion is necessary */
 #ifdef PSENDIAN
     *cell = htonl(*cell);
 #endif
   } else {
-    Claim(protoNo != -1, "exportProtoType: Export of proto pointer failed");
+    Claim(protoNo != 0xffffffff, "exportProtoType: Export of proto pointer failed");
     Claim(group < ( 1 << 16), "exportProtoType: Group too large");
     Claim(protoNo < ( 1 << 16), "exportProtoType: protoNo too large");
 #ifdef PSENDIAN
