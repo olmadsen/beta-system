@@ -1,21 +1,68 @@
 ------- CopyValRep: System ----
 
-CopyVR: public
+CopyVR1: proc;
+CopyVR2: proc;
+CopyVR4: proc;
+CopyVR8: proc;
+CopyORR: proc;
+CopyORRC: proc;
+
+CopyVR: public { FIXME: Compiler should call specific functions directly }
   (#
      { Copy a Value Repetition. }
+     { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
+     
+     { Used variables. }
+     stack:       StackArea        = SP;
+     theRep:      Repetition       = AddrReg2; { saved and restored }
+     offset:      Long             = DataReg2;
+     proto:       Long             = DataReg2;
+  do 
+     push AddrReg2;
+     stack[12] -> theRep;
+     stack[8] -> offset;
+     theRep[offset*4] -> theRep;
+     theRep.ProtoType -> proto;
+     pop AddrReg2;
+     (if proto = -6 then { ByteRepetition }
+         goto CopyVR1;
+     if);
+     (if proto = -5 then { IntegerRepetition }
+         goto CopyVR4;
+     if);
+     (if proto = -7 then { ShortRepetition }
+         goto CopyVR2;
+     if);
+     (if proto = -8 then { DoubleRepetition }
+         goto CopyVR8;
+     if);
+     (if proto = -10 then { ItemRepetition }
+         goto CopyORR;
+     if);
+     (if proto = -11 then { CompRepetition }
+         goto CopyORRC;
+     if);
+     (if debug then
+         push RegThis;
+         push -200;
+         call BetaError;
+     if);
+     return;
+  #);
+
+CopyVR1: public
+  (#
+     { Copy a Byte Repetition. }
      { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
         
      stack: StackArea = SP;
      
      { Used variable.  }
      theRep:    Repetition        = AddrReg1;
-     theObjRep: ObjectRepetition  = AddrReg1;
      theCell:   DataArea          = AddrReg1;
 
      newTop:    DataArea          = AddrReg2;
      newRep:    Repetition        = AddrReg2;
-     newObjRep: ObjectRepetition  = AddrReg2;
-     proto:     DataArea          = DataReg2;
      cycleCell: DataArea          = AddrReg2;
      
      range:     Long              = DataReg1;
@@ -55,14 +102,6 @@ CopyVR: public
      if);
      theRep.HighBorder -> range;
      
-     (if theRep.ProtoType <= -10 then { ObjectRepetition }
-         IOATop -> newRep;
-         { range -> BodySize; // no need; it is the same register }
-         4 -> BodySize*;
-         newRep[24+BodySize][] -> newTop;
-         goto CheckGC;
-     if);
-     
      (if range > 256 then
          (if intel then
              push RegCall, RegThis;
@@ -70,7 +109,6 @@ CopyVR: public
              push RegCall, RegThis, DataRegA, DataRegB;
          if);
          
-         theRep.ProtoType -> proto;
          cycleCell -> cycleCell-; {Stupid MC680x0 assembler won't clear addrreg !}
          (if theRep outside IOA then { theRep is in LVRA }
              theRep.Age -> cycleCell { save pointer to cell refering theRep }
@@ -79,7 +117,7 @@ CopyVR: public
          push cycleCell;
 
          push range; { Parameter to LVRAAlloc. }
-         push proto; { Parameter to LVRAAlloc. }
+         push -6; { Parameter to LVRAAlloc. }
          call LVRAAlloc;
          stack[8] -> cycleCell; {Restore cycleCell}
          (if cycleCell <> 0 then
@@ -133,54 +171,19 @@ CopyVR: public
          
          (if newRep <> 0 then
              { range -> BodySize; // no need; it is the same register }
-             (if theRep.ProtoType = -5 then { long rep }
-                 4 -> BodySize*;
-                 goto copyBodyPush
-             if);
-             (if theRep.ProtoType = -7 then { word rep }
-                 2 -> BodySize*;
-                 3 -> BodySize+;
-                 4 -> BodySize/;
-                 4 -> BodySize*;
-                 goto copyBodyPush
-             if);
-             (if theRep.ProtoType = -6 then { byte rep }
-                 4 -> BodySize+;
-                 4 -> BodySize/;
-                 4 -> BodySize*;
-                 goto copyBodyPush
-             if);
-             (if theRep.ProtoType = -8 then { double rep }
-                 2 -> BodySize*;
-                 4 -> BodySize*;
-                 goto copyBodyPush
-             if)
+             4 -> BodySize+;
+             4 -> BodySize/;
+             4 -> BodySize*;
+             goto copyBodyPush
          if)
      if);
      
      IOATop -> newTop;
      { range -> BodySize; // no need; it is the same register }
-     (if theRep.ProtoType = -7 then { word rep }
-         2 -> BodySize*;
-         3 -> BodySize+;
-         4 -> BodySize/;
-         goto IOAalloc
-     if);
-     (if theRep.ProtoType = -6 then { byte rep }
-         4 -> BodySize+;
-         4 -> BodySize/;
-         goto IOAalloc
-     if);
-     (if theRep.ProtoType = -8 then { double rep }
-         2 -> BodySize*;
-         {goto IOAalloc} {No need, save a jump}
-     if);
-     
-     IOAalloc:
+     4 -> BodySize+;
+     4 -> BodySize/;
      4 -> BodySize*;
      newRep[16+BodySize][] -> newTop;
-     
-     CheckGC:
      (if newTop > IOALimit then goto GC if);
      
      IOATop -> tmp;
@@ -190,20 +193,10 @@ CopyVR: public
      { The new Object is now allocated, but not assigned yet!}
      
      { Initialize the structual part of the repetition. }
-     theRep.ProtoType  -> newRep.ProtoType;
+     -6                -> newRep.ProtoType;
      1                 -> newRep.Age;
      1                 -> newRep.LowBorder;
      theRep.HighBorder -> newRep.HighBorder;
-     
-     (if theRep.ProtoType <= -10 then { ObjectRepetition }
-         { set up iProto and iOrigin }
-         theObjRep.iProto -> newObjRep.iProto;
-         theObjRep.iOrigin -> newObjRep.iOrigin;
-         push newRep;
-         8 -> newRep+; { larger header }
-         8 -> theRep+; { larger header }
-         goto copyBody;
-     if);
      
      copyBodyPush:
      push newRep;
@@ -256,5 +249,863 @@ CopyVR: public
      (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      call doGC;         { Call the Garbage Collector.               }
-     goto CopyVR        { Go back to the beginning of this routine. }
+     goto CopyVR1        { Go back to the beginning of this routine. }
+  #);
+
+CopyVR2: public
+  (#
+     { Copy a Short Repetition. }
+     { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
+        
+     stack: StackArea = SP;
+     
+     { Used variable.  }
+     theRep:    Repetition        = AddrReg1;
+     theCell:   DataArea          = AddrReg1;
+
+     newTop:    DataArea          = AddrReg2;
+     newRep:    Repetition        = AddrReg2;
+     cycleCell: DataArea          = AddrReg2;
+     
+     range:     Long              = DataReg1;
+     BodySize:  Long              = DataReg1; { number of bytes to allocate }
+     
+     tmp:       Long              = DataReg2;
+     value:     Long              = DataReg2;
+     offset:    Long              = DataReg2;
+  do
+     (if debug then 1 -> NumCopyVR+ if); 
+     (if debug then call Ck if);
+     
+     {
+       General stack layout:
+       <Intel: DataReg2>   Intel: +0
+       <Intel: DataReg1>   Intel: +4
+       <Intel: AddrReg2>   Intel: +8
+       <Intel: AddrReg1>   Intel: +12
+       <Mac: AddrReg2>                  Mac: +0    
+       <return address>    Intel: +16   Mac: +4    Default: +0
+       <offset>            Intel: +20   Mac: +8    Default: +4
+       <item>              Intel: +24   Mac: +12   Default: +8
+       <valrep>            Intel: +28   Mac: +16   Default: +12
+     }
+     
+     (if MacOS then push AddrReg2 if);
+     (if intel then push AddrReg1, AddrReg2, DataReg1, DataReg2 if);
+     
+     (if intel then
+         stack[28] -> theRep;
+      else 
+         (if MacOS then
+             stack[16] -> theRep;
+          else
+             stack[12] -> theRep;
+         if)
+     if);
+     theRep.HighBorder -> range;
+     
+     (if range > 256 then
+         (if intel then
+             push RegCall, RegThis;
+          else
+             push RegCall, RegThis, DataRegA, DataRegB;
+         if);
+         
+         cycleCell -> cycleCell-; {Stupid MC680x0 assembler won't clear addrreg !}
+         (if theRep outside IOA then { theRep is in LVRA }
+             theRep.Age -> cycleCell { save pointer to cell refering theRep }
+         if);
+         
+         push cycleCell;
+
+         push range; { Parameter to LVRAAlloc. }
+         push -7; { Parameter to LVRAAlloc. }
+         call LVRAAlloc;
+         stack[8] -> cycleCell; {Restore cycleCell}
+         (if cycleCell <> 0 then
+             { restore theRep from pointer to cell. The reason for this is that 
+               theRep may have been moved by an LVRACompaction 
+             }
+             cycleCell[0] -> theRep;
+             goto endifCycleCell;
+         if);
+         {Restore theRep, may have been destroyed by LVRAAlloc}
+         (if intel then
+             stack[48{28+(3+2)*4}] -> theRep
+          else
+             (if MacOS then
+                 stack[44{16+(3+4)*4}] -> theRep
+              else
+                 stack[40{12+(3+4)*4}] -> theRep
+             if);
+         if);
+         endifCycleCell:
+         
+         DataRegA -> newRep; {Fetch LVRAAlloc result}
+         4 -> SP+; {Discard proto}
+         pop range; {Restore range}
+         4 -> SP+; {Discard cycleCell}
+         
+         (if newRep <> 0 then
+             { Make the LVRA-cycle: theCell -> newRep.Age }
+             (if intel then
+                 stack[28{20+2*4}] -> tmp; 
+                 4 -> tmp*;
+                 stack[32{24+2*4}] -> tmp+;
+              else
+                 (if MacOS then
+                     stack[24{8+4*4}] -> tmp; 
+                     4 -> tmp*;
+                     stack[28{12+4*4}] -> tmp+;
+                  else
+                     stack[20{4+4*4}] -> tmp; 
+                     4 -> tmp*;
+                     stack[24{8+4*4}] -> tmp+;
+                 if);
+             if);
+             tmp -> newRep.Age
+         if);
+         (if intel then
+             pop RegThis, RegCall;
+          else
+             pop DataRegB, DataRegA, RegThis, RegCall;
+         if);
+         
+         (if newRep <> 0 then
+             { range -> BodySize; // no need; it is the same register }
+             2 -> BodySize*;
+             3 -> BodySize+;
+             4 -> BodySize/;
+             4 -> BodySize*;
+             goto copyBodyPush
+         if)
+     if);
+     
+     IOATop -> newTop;
+     { range -> BodySize; // no need; it is the same register }
+     2 -> BodySize*;
+     3 -> BodySize+;
+     4 -> BodySize/;
+     4 -> BodySize*;
+     newRep[16+BodySize][] -> newTop;
+     (if newTop > IOALimit then goto GC if);
+     
+     IOATop -> tmp;
+     newTop -> IOATop;
+     tmp    -> newRep;
+     
+     { The new Object is now allocated, but not assigned yet!}
+     
+     { Initialize the structual part of the repetition. }
+     -7                -> newRep.ProtoType;
+     1                 -> newRep.Age;
+     1                 -> newRep.LowBorder;
+     theRep.HighBorder -> newRep.HighBorder;
+     
+     copyBodyPush:
+     push newRep;
+
+     copyBody:
+     { Copy the body part of the repetition. }
+     (if BodySize <> 0 then
+         4 -> BodySize-;
+         loop:
+         theRep[16+BodySize] -> value;
+         value -> newRep[16+BodySize];
+         4 -> range-;
+         (if FLAGS >= 0 then goto loop if)
+     if);
+     
+     pop newRep; { pop unmodified newRep }
+     
+     AssignReference:
+     
+     (if intel then
+         stack[24] -> theCell;
+         stack[20]  -> offset;
+      else
+         (if MacOS then 
+             stack[12] -> theCell;
+             stack[8]  -> offset;
+          else
+             stack[8] -> theCell;
+             stack[4] -> offset;
+         if);
+     if);
+     theCell[offset*4][] -> theCell;
+     newRep -> theCell[0];
+     
+     (if theCell outside IOA then  { The theCell resides in AOA. }
+         push theCell;
+         call ChkRA { No need to remove parameter. }
+     if);
+     
+     (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if debug then call Ck if);
+     return 12;
+     
+     GC:
+     { The IOA heap is full, so we need a garbage collection.            }
+     4 -> ReqObjectSize;     { Set the requested Object Size.            }
+     4 -> BodySize/;
+     BodySize -> ReqObjectSize+;
+     (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     call doGC;         { Call the Garbage Collector.               }
+     goto CopyVR2        { Go back to the beginning of this routine. }
+  #);
+
+CopyVR4: public
+  (#
+     { Copy an Integer Repetition. }
+     { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
+        
+     stack: StackArea = SP;
+     
+     { Used variable.  }
+     theRep:    Repetition        = AddrReg1;
+     theCell:   DataArea          = AddrReg1;
+
+     newTop:    DataArea          = AddrReg2;
+     newRep:    Repetition        = AddrReg2;
+     cycleCell: DataArea          = AddrReg2;
+     
+     range:     Long              = DataReg1;
+     BodySize:  Long              = DataReg1; { number of bytes to allocate }
+     
+     tmp:       Long              = DataReg2;
+     value:     Long              = DataReg2;
+     offset:    Long              = DataReg2;
+  do
+     (if debug then 1 -> NumCopyVR+ if); 
+     (if debug then call Ck if);
+     
+     {
+       General stack layout:
+       <Intel: DataReg2>   Intel: +0
+       <Intel: DataReg1>   Intel: +4
+       <Intel: AddrReg2>   Intel: +8
+       <Intel: AddrReg1>   Intel: +12
+       <Mac: AddrReg2>                  Mac: +0    
+       <return address>    Intel: +16   Mac: +4    Default: +0
+       <offset>            Intel: +20   Mac: +8    Default: +4
+       <item>              Intel: +24   Mac: +12   Default: +8
+       <valrep>            Intel: +28   Mac: +16   Default: +12
+     }
+     
+     (if MacOS then push AddrReg2 if);
+     (if intel then push AddrReg1, AddrReg2, DataReg1, DataReg2 if);
+     
+     (if intel then
+         stack[28] -> theRep;
+      else 
+         (if MacOS then
+             stack[16] -> theRep;
+          else
+             stack[12] -> theRep;
+         if)
+     if);
+     theRep.HighBorder -> range;
+     
+     (if range > 256 then
+         (if intel then
+             push RegCall, RegThis;
+          else
+             push RegCall, RegThis, DataRegA, DataRegB;
+         if);
+         
+         cycleCell -> cycleCell-; {Stupid MC680x0 assembler won't clear addrreg !}
+         (if theRep outside IOA then { theRep is in LVRA }
+             theRep.Age -> cycleCell { save pointer to cell refering theRep }
+         if);
+         
+         push cycleCell;
+
+         push range; { Parameter to LVRAAlloc. }
+         push -5; { Parameter to LVRAAlloc. }
+         call LVRAAlloc;
+         stack[8] -> cycleCell; {Restore cycleCell}
+         (if cycleCell <> 0 then
+             { restore theRep from pointer to cell. The reason for this is that 
+               theRep may have been moved by an LVRACompaction 
+             }
+             cycleCell[0] -> theRep;
+             goto endifCycleCell;
+         if);
+         {Restore theRep, may have been destroyed by LVRAAlloc}
+         (if intel then
+             stack[48{28+(3+2)*4}] -> theRep
+          else
+             (if MacOS then
+                 stack[44{16+(3+4)*4}] -> theRep
+              else
+                 stack[40{12+(3+4)*4}] -> theRep
+             if);
+         if);
+         endifCycleCell:
+         
+         DataRegA -> newRep; {Fetch LVRAAlloc result}
+         4 -> SP+; {Discard proto}
+         pop range; {Restore range}
+         4 -> SP+; {Discard cycleCell}
+         
+         (if newRep <> 0 then
+             { Make the LVRA-cycle: theCell -> newRep.Age }
+             (if intel then
+                 stack[28{20+2*4}] -> tmp; 
+                 4 -> tmp*;
+                 stack[32{24+2*4}] -> tmp+;
+              else
+                 (if MacOS then
+                     stack[24{8+4*4}] -> tmp; 
+                     4 -> tmp*;
+                     stack[28{12+4*4}] -> tmp+;
+                  else
+                     stack[20{4+4*4}] -> tmp; 
+                     4 -> tmp*;
+                     stack[24{8+4*4}] -> tmp+;
+                 if);
+             if);
+             tmp -> newRep.Age
+         if);
+         (if intel then
+             pop RegThis, RegCall;
+          else
+             pop DataRegB, DataRegA, RegThis, RegCall;
+         if);
+         
+         (if newRep <> 0 then
+             { range -> BodySize; // no need; it is the same register }
+             4 -> BodySize*;
+             goto copyBodyPush
+         if)
+     if);
+     
+     IOATop -> newTop;
+     { range -> BodySize; // no need; it is the same register }
+     4 -> BodySize*;
+     newRep[16+BodySize][] -> newTop;
+     (if newTop > IOALimit then goto GC if);
+     
+     IOATop -> tmp;
+     newTop -> IOATop;
+     tmp    -> newRep;
+     
+     { The new Object is now allocated, but not assigned yet!}
+     
+     { Initialize the structual part of the repetition. }
+     -5                -> newRep.ProtoType;
+     1                 -> newRep.Age;
+     1                 -> newRep.LowBorder;
+     theRep.HighBorder -> newRep.HighBorder;
+     
+     copyBodyPush:
+     push newRep;
+
+     copyBody:
+     { Copy the body part of the repetition. }
+     (if BodySize <> 0 then
+         4 -> BodySize-;
+         loop:
+         theRep[16+BodySize] -> value;
+         value -> newRep[16+BodySize];
+         4 -> range-;
+         (if FLAGS >= 0 then goto loop if)
+     if);
+     
+     pop newRep; { pop unmodified newRep }
+     
+     AssignReference:
+     
+     (if intel then
+         stack[24] -> theCell;
+         stack[20]  -> offset;
+      else
+         (if MacOS then 
+             stack[12] -> theCell;
+             stack[8]  -> offset;
+          else
+             stack[8] -> theCell;
+             stack[4] -> offset;
+         if);
+     if);
+     theCell[offset*4][] -> theCell;
+     newRep -> theCell[0];
+     
+     (if theCell outside IOA then  { The theCell resides in AOA. }
+         push theCell;
+         call ChkRA { No need to remove parameter. }
+     if);
+     
+     (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if debug then call Ck if);
+     return 12;
+     
+     GC:
+     { The IOA heap is full, so we need a garbage collection.            }
+     4 -> ReqObjectSize;     { Set the requested Object Size.            }
+     4 -> BodySize/;
+     BodySize -> ReqObjectSize+;
+     (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     call doGC;         { Call the Garbage Collector.               }
+     goto CopyVR4        { Go back to the beginning of this routine. }
+  #);
+
+CopyVR8: public
+  (#
+     { Copy a Double Repetition. }
+     { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
+        
+     stack: StackArea = SP;
+     
+     { Used variable.  }
+     theRep:    Repetition        = AddrReg1;
+     theCell:   DataArea          = AddrReg1;
+
+     newTop:    DataArea          = AddrReg2;
+     newRep:    Repetition        = AddrReg2;
+     cycleCell: DataArea          = AddrReg2;
+     
+     range:     Long              = DataReg1;
+     BodySize:  Long              = DataReg1; { number of bytes to allocate }
+     
+     tmp:       Long              = DataReg2;
+     value:     Long              = DataReg2;
+     offset:    Long              = DataReg2;
+  do
+     (if debug then 1 -> NumCopyVR+ if); 
+     (if debug then call Ck if);
+     
+     {
+       General stack layout:
+       <Intel: DataReg2>   Intel: +0
+       <Intel: DataReg1>   Intel: +4
+       <Intel: AddrReg2>   Intel: +8
+       <Intel: AddrReg1>   Intel: +12
+       <Mac: AddrReg2>                  Mac: +0    
+       <return address>    Intel: +16   Mac: +4    Default: +0
+       <offset>            Intel: +20   Mac: +8    Default: +4
+       <item>              Intel: +24   Mac: +12   Default: +8
+       <valrep>            Intel: +28   Mac: +16   Default: +12
+     }
+     
+     (if MacOS then push AddrReg2 if);
+     (if intel then push AddrReg1, AddrReg2, DataReg1, DataReg2 if);
+     
+     (if intel then
+         stack[28] -> theRep;
+      else 
+         (if MacOS then
+             stack[16] -> theRep;
+          else
+             stack[12] -> theRep;
+         if)
+     if);
+     theRep.HighBorder -> range;
+     
+     (if range > 256 then
+         (if intel then
+             push RegCall, RegThis;
+          else
+             push RegCall, RegThis, DataRegA, DataRegB;
+         if);
+         
+         cycleCell -> cycleCell-; {Stupid MC680x0 assembler won't clear addrreg !}
+         (if theRep outside IOA then { theRep is in LVRA }
+             theRep.Age -> cycleCell { save pointer to cell refering theRep }
+         if);
+         
+         push cycleCell;
+
+         push range; { Parameter to LVRAAlloc. }
+         push -8; { Parameter to LVRAAlloc. }
+         call LVRAAlloc;
+         stack[8] -> cycleCell; {Restore cycleCell}
+         (if cycleCell <> 0 then
+             { restore theRep from pointer to cell. The reason for this is that 
+               theRep may have been moved by an LVRACompaction 
+             }
+             cycleCell[0] -> theRep;
+             goto endifCycleCell;
+         if);
+         {Restore theRep, may have been destroyed by LVRAAlloc}
+         (if intel then
+             stack[48{28+(3+2)*4}] -> theRep
+          else
+             (if MacOS then
+                 stack[44{16+(3+4)*4}] -> theRep
+              else
+                 stack[40{12+(3+4)*4}] -> theRep
+             if);
+         if);
+         endifCycleCell:
+         
+         DataRegA -> newRep; {Fetch LVRAAlloc result}
+         4 -> SP+; {Discard proto}
+         pop range; {Restore range}
+         4 -> SP+; {Discard cycleCell}
+         
+         (if newRep <> 0 then
+             { Make the LVRA-cycle: theCell -> newRep.Age }
+             (if intel then
+                 stack[28{20+2*4}] -> tmp; 
+                 4 -> tmp*;
+                 stack[32{24+2*4}] -> tmp+;
+              else
+                 (if MacOS then
+                     stack[24{8+4*4}] -> tmp; 
+                     4 -> tmp*;
+                     stack[28{12+4*4}] -> tmp+;
+                  else
+                     stack[20{4+4*4}] -> tmp; 
+                     4 -> tmp*;
+                     stack[24{8+4*4}] -> tmp+;
+                 if);
+             if);
+             tmp -> newRep.Age
+         if);
+         (if intel then
+             pop RegThis, RegCall;
+          else
+             pop DataRegB, DataRegA, RegThis, RegCall;
+         if);
+         
+         (if newRep <> 0 then
+             { range -> BodySize; // no need; it is the same register }
+             8 -> BodySize*;
+             goto copyBodyPush
+         if)
+     if);
+     
+     IOATop -> newTop;
+     { range -> BodySize; // no need; it is the same register }
+     8 -> BodySize*;
+     newRep[16+BodySize][] -> newTop;
+     
+     CheckGC:
+     (if newTop > IOALimit then goto GC if);
+     
+     IOATop -> tmp;
+     newTop -> IOATop;
+     tmp    -> newRep;
+     
+     { The new Object is now allocated, but not assigned yet!}
+     
+     { Initialize the structual part of the repetition. }
+     -8                -> newRep.ProtoType;
+     1                 -> newRep.Age;
+     1                 -> newRep.LowBorder;
+     theRep.HighBorder -> newRep.HighBorder;
+          
+     copyBodyPush:
+     push newRep;
+
+     copyBody:
+     { Copy the body part of the repetition. }
+     (if BodySize <> 0 then
+         4 -> BodySize-;
+         loop:
+         theRep[16+BodySize] -> value;
+         value -> newRep[16+BodySize];
+         4 -> range-;
+         (if FLAGS >= 0 then goto loop if)
+     if);
+     
+     pop newRep; { pop unmodified newRep }
+     
+     AssignReference:
+     
+     (if intel then
+         stack[24] -> theCell;
+         stack[20]  -> offset;
+      else
+         (if MacOS then 
+             stack[12] -> theCell;
+             stack[8]  -> offset;
+          else
+             stack[8] -> theCell;
+             stack[4] -> offset;
+         if);
+     if);
+     theCell[offset*4][] -> theCell;
+     newRep -> theCell[0];
+     
+     (if theCell outside IOA then  { The theCell resides in AOA. }
+         push theCell;
+         call ChkRA { No need to remove parameter. }
+     if);
+     
+     (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if debug then call Ck if);
+     return 12;
+     
+     GC:
+     { The IOA heap is full, so we need a garbage collection.            }
+     4 -> ReqObjectSize;     { Set the requested Object Size.            }
+     4 -> BodySize/;
+     BodySize -> ReqObjectSize+;
+     (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     call doGC;         { Call the Garbage Collector.               }
+     goto CopyVR8        { Go back to the beginning of this routine. }
+  #);
+
+CopyORR: public
+  (#
+     { Copy an Item Repetition. }
+     { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
+        
+     stack: StackArea = SP;
+     
+     { Used variable.  }
+     theRep:    Repetition        = AddrReg1;
+     theObjRep: ObjectRepetition  = AddrReg1;
+     theCell:   DataArea          = AddrReg1;
+
+     newTop:    DataArea          = AddrReg2;
+     newRep:    Repetition        = AddrReg2;
+     newObjRep: ObjectRepetition  = AddrReg2;
+     cycleCell: DataArea          = AddrReg2;
+     
+     range:     Long              = DataReg1;
+     BodySize:  Long              = DataReg1; { number of bytes to allocate }
+     
+     tmp:       Long              = DataReg2;
+     value:     Long              = DataReg2;
+     offset:    Long              = DataReg2;
+  do
+     (if debug then 1 -> NumCopyVR+ if); 
+     (if debug then call Ck if);
+     
+     {
+       General stack layout:
+       <Intel: DataReg2>   Intel: +0
+       <Intel: DataReg1>   Intel: +4
+       <Intel: AddrReg2>   Intel: +8
+       <Intel: AddrReg1>   Intel: +12
+       <Mac: AddrReg2>                  Mac: +0    
+       <return address>    Intel: +16   Mac: +4    Default: +0
+       <offset>            Intel: +20   Mac: +8    Default: +4
+       <item>              Intel: +24   Mac: +12   Default: +8
+       <valrep>            Intel: +28   Mac: +16   Default: +12
+     }
+     
+     (if MacOS then push AddrReg2 if);
+     (if intel then push AddrReg1, AddrReg2, DataReg1, DataReg2 if);
+     
+     (if intel then
+         stack[28] -> theRep;
+      else 
+         (if MacOS then
+             stack[16] -> theRep;
+          else
+             stack[12] -> theRep;
+         if)
+     if);
+     theRep.HighBorder -> range;
+     
+     IOATop -> newRep;
+     { range -> BodySize; // no need; it is the same register }
+     4 -> BodySize*;
+     newRep[24+BodySize][] -> newTop;
+     (if newTop > IOALimit then goto GC if);
+     
+     IOATop -> tmp;
+     newTop -> IOATop;
+     tmp    -> newRep;
+     
+     { The new Object is now allocated, but not assigned yet!}
+     
+     { Initialize the structual part of the repetition. }
+     -10               -> newRep.ProtoType;
+     1                 -> newRep.Age;
+     1                 -> newRep.LowBorder;
+     theRep.HighBorder -> newRep.HighBorder;
+     theObjRep.iProto  -> newObjRep.iProto;
+     theObjRep.iOrigin -> newObjRep.iOrigin;
+     
+     copyBodyPush:
+     push newRep;
+
+     copyBody:
+     { Copy the body part of the repetition. }
+     (if BodySize <> 0 then
+         4 -> BodySize-;
+         loop:
+         theRep[24+BodySize] -> value;
+         value -> newRep[24+BodySize];
+         4 -> range-;
+         (if FLAGS >= 0 then goto loop if)
+     if);
+     
+     pop newRep; { pop unmodified newRep }
+     
+     AssignReference:
+     
+     (if intel then
+         stack[24] -> theCell;
+         stack[20]  -> offset;
+      else
+         (if MacOS then 
+             stack[12] -> theCell;
+             stack[8]  -> offset;
+          else
+             stack[8] -> theCell;
+             stack[4] -> offset;
+         if);
+     if);
+     theCell[offset*4][] -> theCell;
+     newRep -> theCell[0];
+     
+     (if theCell outside IOA then  { The theCell resides in AOA. }
+         push theCell;
+         call ChkRA { No need to remove parameter. }
+     if);
+     
+     (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if debug then call Ck if);
+     return 12;
+     
+     GC:
+     { The IOA heap is full, so we need a garbage collection.            }
+     6 -> ReqObjectSize;     { Set the requested Object Size.            }
+     4 -> BodySize/;
+     BodySize -> ReqObjectSize+;
+     (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     call doGC;         { Call the Garbage Collector.               }
+     goto CopyORR        { Go back to the beginning of this routine. }
+  #);
+
+CopyORRC: public
+  (#
+     { Copy a Component Repetition. }
+     { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
+        
+     stack: StackArea = SP;
+     
+     { Used variable.  }
+     theRep:    Repetition        = AddrReg1;
+     theObjRep: ObjectRepetition  = AddrReg1;
+     theCell:   DataArea          = AddrReg1;
+
+     newTop:    DataArea          = AddrReg2;
+     newRep:    Repetition        = AddrReg2;
+     newObjRep: ObjectRepetition  = AddrReg2;
+     cycleCell: DataArea          = AddrReg2;
+     
+     range:     Long              = DataReg1;
+     BodySize:  Long              = DataReg1; { number of bytes to allocate }
+     
+     tmp:       Long              = DataReg2;
+     value:     Long              = DataReg2;
+     offset:    Long              = DataReg2;
+  do
+     (if debug then 1 -> NumCopyVR+ if); 
+     (if debug then call Ck if);
+     
+     {
+       General stack layout:
+       <Intel: DataReg2>   Intel: +0
+       <Intel: DataReg1>   Intel: +4
+       <Intel: AddrReg2>   Intel: +8
+       <Intel: AddrReg1>   Intel: +12
+       <Mac: AddrReg2>                  Mac: +0    
+       <return address>    Intel: +16   Mac: +4    Default: +0
+       <offset>            Intel: +20   Mac: +8    Default: +4
+       <item>              Intel: +24   Mac: +12   Default: +8
+       <valrep>            Intel: +28   Mac: +16   Default: +12
+     }
+     
+     (if MacOS then push AddrReg2 if);
+     (if intel then push AddrReg1, AddrReg2, DataReg1, DataReg2 if);
+     
+     (if intel then
+         stack[28] -> theRep;
+      else 
+         (if MacOS then
+             stack[16] -> theRep;
+          else
+             stack[12] -> theRep;
+         if)
+     if);
+     theRep.HighBorder -> range;
+     
+     IOATop -> newRep;
+     { range -> BodySize; // no need; it is the same register }
+     4 -> BodySize*;
+     newRep[24+BodySize][] -> newTop;
+     (if newTop > IOALimit then goto GC if);
+     
+     IOATop -> tmp;
+     newTop -> IOATop;
+     tmp    -> newRep;
+     
+     { The new Object is now allocated, but not assigned yet!}
+     
+     { Initialize the structual part of the repetition. }
+     -11               -> newRep.ProtoType;
+     1                 -> newRep.Age;
+     1                 -> newRep.LowBorder;
+     theRep.HighBorder -> newRep.HighBorder;
+     theObjRep.iProto -> newObjRep.iProto;
+     theObjRep.iOrigin -> newObjRep.iOrigin;
+    
+     copyBodyPush:
+     push newRep;
+
+     copyBody:
+     { Copy the body part of the repetition. }
+     (if BodySize <> 0 then
+         4 -> BodySize-;
+         loop:
+         theRep[24+BodySize] -> value;
+         value -> newRep[24+BodySize];
+         4 -> range-;
+         (if FLAGS >= 0 then goto loop if)
+     if);
+     
+     pop newRep; { pop unmodified newRep }
+     
+     AssignReference:
+     
+     (if intel then
+         stack[24] -> theCell;
+         stack[20]  -> offset;
+      else
+         (if MacOS then 
+             stack[12] -> theCell;
+             stack[8]  -> offset;
+          else
+             stack[8] -> theCell;
+             stack[4] -> offset;
+         if);
+     if);
+     theCell[offset*4][] -> theCell;
+     newRep -> theCell[0];
+     
+     (if theCell outside IOA then  { The theCell resides in AOA. }
+         push theCell;
+         call ChkRA { No need to remove parameter. }
+     if);
+     
+     (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if debug then call Ck if);
+     return 12;
+     
+     GC:
+     { The IOA heap is full, so we need a garbage collection.            }
+     6 -> ReqObjectSize;     { Set the requested Object Size.            }
+     4 -> BodySize/;
+     BodySize -> ReqObjectSize+;
+     (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     call doGC;         { Call the Garbage Collector.               }
+     goto CopyORRC        { Go back to the beginning of this routine. }
   #)

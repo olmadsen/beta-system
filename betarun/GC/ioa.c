@@ -30,10 +30,10 @@ void IOAGc()
   
   DEBUG_IOA(
 	    fprintf(output,
-		    "IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+		    "Before: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
 		    (int)IOA, (int)IOATop, (int)IOALimit);
 	    fprintf(output,
-		    "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+		    "Before: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
 		    (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
 	    );
   DEBUG_CODE(memset(ToSpace, 0, IOASize));
@@ -348,10 +348,10 @@ Program terminated.\n", (int)(4*ReqObjectSize));
     
     DEBUG_IOA(
 	      fprintf(output,
-		      "IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+		      "After: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
 		      (int)IOA, (int)IOATop, (int)IOALimit);
 	      fprintf(output,
-		      "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+		      "After: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
 		      (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
 	      )
       

@@ -17,11 +17,14 @@ static ref(Object) CopyObject(ref(Object) theObj)
     long        size;
     
     size = 4*ObjectSize( theObj);
+#if 0
+    fprintf(output, "theObj: 0x%x, proto: 0x%x, size: 0x%x\n", theObj, theObj->Proto, size);
+#endif
     DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#CopyObject: ObjectSize(theObj) > 0") );
     
     /* Assume that theObj->GCAttr <= IOAMaxAge. */
     DEBUG_IOA( Claim( theObj->GCAttr<=IOAMaxAge,
-		     "CopyObject: Age of object > IOAMaxAge."));
+		     "CopyObject: Age of object<=IOAMaxAge."));
     
 #ifdef KEEP_STACKOBJ_IN_IOA
     if (!isStackObject(theObj))
@@ -45,7 +48,7 @@ static ref(Object) CopyObject(ref(Object) theObj)
 	newObj     = (ref(Object)) ToSpaceTop;
 	theEnd     = (ptr(long)) (((long) newObj) + size); 
 	
-	DEBUG_IOA( Claim(theEnd<ToSpaceLimit, "theEnd<ToSpaceLimit") );
+	DEBUG_IOA( Claim(theEnd<=ToSpaceLimit, "theEnd<=ToSpaceLimit") );
 	
 	ToSpaceTop = theEnd;
 

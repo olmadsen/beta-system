@@ -1,146 +1,78 @@
 ------- NewValRep: System ----
-NewVR: public
-  (#
+
+NewVR: public 
+  (# { FIXME: Compiler should call specific functions directly }
      { Allocate a value repetition based on existing repetition }
-     
-     { SIMPLIFICATION: Could call AlloVR* }
-     
      { stack on entry [return(0),offset(4),Item(8),...] }
      { Input register new range = DataReg1 (pReg1 in intel version) }
      
-     { input variables }
-     range:     Long       = DataReg1; { non-intel only }
-     
      { Used variables. }
-     stack:     StackArea        = SP;
-     theRep:    Repetition       = AddrReg1;
-     theObjRep: ObjectRepetition = AddrReg1;
-     theItem:   DataArea         = RegThis;
-     offset:    Long             = DataRegA;
-     rangeArg:  Long             = DataRegB;
-     originArg: Long             = DataReg1;
-  do
+     stack:        StackArea        = SP;
+     theRep:       Repetition       = AddrReg2; { saved and restored }
+     theObjectRep: ObjectRepetition = AddrReg2; { saved and restored }
+     offset:       Long             = DataReg2;
+  do 
      (if debug then call Ck if);
-     (if debug then 1 -> NumNewVR+ if); 
      
-     {
-       General stack layout:
-       <tag>                 Intel: +0    Default: +0
-       <Intel: DataRegB/2>   Intel: +4
-       <Intel: DataRegA/1>   Intel: +8
-       <Intel: AddrReg2>     Intel: +12
-       <Intel: AddrReg1>     Intel: +16
-       <default: DataRegB>                Default: +4
-       <default: DataRegA>                Default: +8
-       <Current Object>      Intel: +20   Default: +12
-       <return address>      Intel: +24   Default: +16
-       <offset>              Intel: +28   Default: +20
-       <item>                Intel: +32   Default: +24
+     push AddrReg2; { stack: [AddrReg2(0),return(4),offset(8),Item(12),...] }
+     stack[12] -> theRep;
+     stack[8] -> offset;
+     theRep[offset*4] -> theRep;
+     push RegThis, DataRegA, DataRegB, -6;
+     { stack: 
+       [tag(0),DataRegB(4),DataRegA(8),RegThis(12),AddrReg2(16),return(20),offset(24),Item(28),...]
      }
-     
-     push RegThis; { save current object }
-     
-     (if intel then 
-         push AddrReg1, AddrReg2, DataRegA, DataRegB;
-         push -6; { tag }
+     stack[28]    -> RegThis;  { Item parameter }
+     stack[24]    -> DataRegA; { offset parameter }
+     4            -> DataRegA*;
+     (if intel then
+         pReg1    -> DataRegB; { Range parameter }
       else
-         push DataRegA, DataRegB;
-         push -6 { tag }
+         DataReg1 -> DataRegB; { Range parameter }
      if);
-          
-     { find the repetition }
-     (if intel then 
-         stack[32] -> theItem; { set new current object }
-         stack[28]  -> offset;
-      else
-         stack[24] -> theItem; { set new current object }
-         stack[20] -> offset;
-     if);
-     4 -> offset*;
-     theItem[offset] -> theRep;
      
-     (if theRep.ProtoType > -10 then
-         { Set up parameters for AlloVRx }
-         (if intel then
-             { theItem is in place in RegThis }
-             { Offset is in place in DataRegA }
-             pReg1-> rangeArg; { DataRegB: Range }
-          else
-             { theItem is in place in RegThis }
-             { Offset is in place in DataRegA }
-             range -> rangeArg; { DataRegB: Range }
-         if);
-         
-         { AlloVRx destroys:
-           DataRegA, DataRegB, DataReg1, DataReg2, AddrReg1, AddrReg2
-         }
-         
-         (if theRep.ProtoType = -6 then { byte rep }
-             call AlloVR1; 
-             goto VReturn;
-         if);
-         (if theRep.ProtoType = -7 then { short rep }
-             call AlloVR2;
-             goto VReturn;
-         if);
-         (if theRep.ProtoType = -5 then { long rep }
-             call AlloVR4;
-             goto VReturn;
-         if);
-         (if theRep.ProtoType = -8 then { double rep }
-             call AlloVR8;
-             { goto VReturn; }
-         if);
-         
+     (if theRep.ProtoType = -6 then { ByteRepetition }
+         call AlloVR1;
+         goto Finish;
+     if);
+     (if theRep.ProtoType = -5 then { IntegerRepetition }
+         call AlloVR4;
+         goto Finish;
+     if);
+     (if theRep.ProtoType = -7 then { ShortRepetition }
+         call AlloVR2;
+         goto Finish;
+     if);
+     (if theRep.ProtoType = -8 then { DoubleRepetition }
+         call AlloVR8;
+         goto Finish;
      if);
      
      { Only reached for Object Repetitions }
-
-     { Set up parameters for AlloORR(C) }
-     push RegCall; { save RegCall during AlloORR(C) }
+     push RegCall;
+     theObjectRep.iProto  -> RegCall;      { iProto parameter }
      (if intel then
-         { theItem is in place in RegThis }
-         { Offset is in place in DataRegA }
-         pReg1-> rangeArg; { DataRegB: Range }
-         theObjRep.iOrigin -> pReg1;
-         theObjRep.iProto -> RegCall;
-      else
-         { theItem is in place in RegThis }
-         { Offset is in place in DataRegA }
-         range -> rangeArg; { DataRegB: Range }
-         theObjRep.iOrigin -> originArg;
-         theObjRep.iProto -> RegCall;
+         theObjectRep.iOrigin -> pReg1;    { iProto parameter }
+      else 
+         theObjectRep.iOrigin -> DataReg1; { iProto parameter }
      if);
      
-     { AlloORR(C) destroys:
-       RegCall, DataReg1, DataReg2, AddrReg1, AddrReg2.
-     }
-     
-     (if theRep.ProtoType = -10 then { item rep }
+     (if theRep.ProtoType = -10 then { ItemRepetition }
          call AlloORR;
-         goto OReturn;
+         goto popRegCall;
      if);
-     (if theRep.ProtoType = -11 then { comp rep }
+     (if theRep.ProtoType = -11 then { CompRepetition }
          call AlloORRC;
-         { goto OReturn; }
      if);
-         
-     OReturn:
-     { Return after having called AlloORR(C) }
+     
+     popRegCall:
      pop RegCall;
-     { fall through }
-     
-     VReturn:
-     { Return after having called AlloVRx }
-     4 -> SP+; { tag }
-     (if intel then 
-         pop DataRegB, DataRegA, AddrReg2, AddrReg1;
-      else
-         pop DataRegB, DataRegA;
-     if);
-     pop RegThis;
 
-     (if debug then call Ck; if);
-     return 8;
+     Finish:
      
- #)
+     4 -> SP+; { pop tag }
+     pop DataRegB, DataRegA, RegThis, AddrReg2;
+     (if debug then call Ck if);
+     return 8;
+  #)
+

@@ -293,10 +293,10 @@ register unsigned IOATopOff asm("%g7");
 /* Safe way to save AOAroots references */
 #define saveAOAroot(cell)				   \
   { if (ToSpaceTop == AOArootsPtr) tempAOArootsAlloc();    \
-    DEBUG_AOA(fprintf(output,                              \
+    if (0) { DEBUG_AOA(fprintf(output,                     \
                       "saveAOAroot: *0x%x=0x%x\n",         \
                       (int)(AOArootsPtr-1),                \
-                      (int)(cell)));                       \
+                      (int)(cell))); }                     \
     *--AOArootsPtr = (long) (cell);                        \
   }
 #ifdef NEW_NEXTGROUP_IMPL

@@ -353,13 +353,54 @@ void BetaError(enum BetaErr err, struct Object *theObj)
            * This is the register containing the lazy or NONE reference. */ 
 	  
 #ifdef nti
+	  /*   The assembler does not use the opcode 3D form, since this would
+	   *   fill up 5 bytes as opposed to the general for, that only
+	   *   requieres 3 bytes when the immediate is 0.
+	   *        
+	   *   0000 83F800                cmpl    $0x0,%eax
+	   *   0003 7F05                  jg      L1
+	   *   0005 E8FCFFFF FF           call    RefNone
+	   *   000a                    L1:  
+	   */
 	  regnum = (* (unsigned char *) (RefNonePC-9)) & 7;
 #else
 	  /* FIXME: Binary compiler should optimize TstNone SLOT, so that
 	   * a short cmpl and a short forward jump is generated.
 	   * When this is done, the following code should be fixed too.
 	   */
-	  regnum = (* (unsigned char *) (RefNonePC-15)) & 7;
+
+	  /* The binary compiler currently generates:
+	   * For eax:
+	   * 
+	   *  0000 85C0              testl  %eax,%eax  
+	   *  0002 3D00000000        cmpl   $0x0,%eax  # should not have been generated!
+	   *       ^^
+	   *  0007 0F8F05000000      jg      L1
+	   *  000d E8FCFFFF FF       call    RefNone
+	   *  0012               L1:
+	   *  (cmpl begins 16 bytes before L1)
+	   * 
+	   * For other registers:
+	   * 
+	   *  0000 85DB              testl  %ebx,%ebx  
+	   *  0002 81FB00000000      cmpl   $0x0,%ebx  # should not have been generated!
+	   *         ^^
+	   *  0008 0F8F05000000      jg      L1
+	   *  000e E8FCFFFF FF       call    RefNone
+	   *  0013               L1:
+	   *  (cmpl begins 17 bytes before L1)
+	   *
+	   */
+	  /* Get byte at offset -16 from RefNonePC (L1). This is the ones marked with ^^ */
+	  regnum = (* (unsigned char *) (RefNonePC-16));
+
+	  if (regnum==0x3d){
+	    regnum=0; /* eax */
+	  } else {
+	    regnum &= 7; /* mask out 3 lower bits */
+	    DEBUG_CODE(Claim((*(unsigned char*)(RefNonePC-17))==0x81, 
+			     "RefNone: must match cmpl opcode"));
+	  }
 #endif
 	  
 	  /* RefNone pushed data registers as shown below. The register

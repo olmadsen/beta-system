@@ -4,28 +4,31 @@
 { For the current being this address is allways inserted in a hash-  }
 { table. This table is used during IOAGc, because it points out the  }
 { roots in AOA, which refer objects in IOA.                          }
+
+lastDangler:       cvar;
+AOAtoIOAInsert:    cproc;
+negAOArefsINSERT:  cvar;
 AOAtoIOAtableSize: cvar;
 AOAtoIOAtable:     cvar;
-{ CheckAOAtoIOAtableSize: cproc; }
 
 ChkRA: public
   (#
      { Used variables. }
-     stack:   StackArea = SP;
-     address: Long = DataReg1;  { d7/eax }
-     value:   Long = DataReg2;  { d6 } {Not used in Intel version}
+     stack:      StackArea = SP;
+     theCell:    Long = DataReg1;  { d7/eax }
+     value:      Long = DataReg2;  { d6 } {Not used in Intel version}
      IntelValue: Long = RegThis; { edx } {Only used in Intel version}
-     tmp:     DataArea = AddrReg1;
-     table:   DataArea = AddrReg1;
-     index:   Long     = DataReg3; { Saved and restored. }
+     theObj:     DataArea = AddrReg1;
+     table:      DataArea = AddrReg1;
+     index:      Long     = DataReg3; { Saved and restored. }
   do 
      {
        General stack layout:
-       <Intel: RegThis>     Intel: +0
+       <Intel: RegThis>    Intel: +0
        <Intel: DataReg1>   Intel: +4
        <Intel: AddrReg1>   Intel: +8
        <return address>    Intel: +12   Default: +0
-       <address>           Intel: +16   Default: +4
+       <theCell>           Intel: +16   Default: +4
      }
      
      { (if debug then call Ck if); }
@@ -36,84 +39,63 @@ ChkRA: public
      again:
      
      (if intel then
-         stack[16] -> tmp; 
+         stack[16] -> theObj; 
       else
-         stack[4] -> tmp; 
+         stack[4] -> theObj; 
      if);
-     tmp -> address; 
-     tmp[0] -> tmp;
+     theObj -> theCell; 
+     theObj[0] -> theObj;
      
-     (if tmp outside IOA then 
-         (if tmp < -101 then 
-             { Save registers before entering c-world }
-             (if linux then
-                 (code '	pushal' code);
+     (if theObj outside IOA then 
+         (if theObj < -101 then 
+             (if lastDangler <= theObj  then
+                 { Save registers before entering c-world }
+                 (if linux then
+                     (code '	pushal' code);
+                 if);
+                 (if nti then
+                     (code '	pushad' code);
+                 if);
+                 (if hp then
+                     (code '      movm.l  %a0-%a4,-(%sp)' code);
+                     (code '      movm.l  %d0-%d7,-(%sp)' code);
+                 if);
+                 (if MacOS then
+                     (code '      movem.l  a0-a4,-(sp)' code);
+                     (code '      movem.l  d0-d7,-(sp)' code);
+                 if);
+                 
+                 push theCell;
+                 negAOArefsINSERT -> AddrReg1;
+                 call AddrReg1;
+                 pop theCell;
+
+                 (if linux then
+                     (code '	popal' code);
+                 if);
+                 (if nti then
+                     (code '	popad' code);
+                 if);
+                 (if hp then
+                     (code '      movm.l  (%sp)+,%d0-%d7' code);
+                     (code '      movm.l  (%sp)+,%a0-%a4' code);
+                 if);
+                 (if MacOS then
+                     (code '      movem.l  (sp)+,d0-d7' code);
+                     (code '      movem.l  (sp)+,a0-a4' code);
+                 if);
              if);
-             (if nti then
-                 (code '	pushad' code);
-             if);
-             (if hp then
-                 (code '      movm.l  %a0-%a4,-(%sp)' code);
-                 (code '      movm.l  %d0-%d7,-(%sp)' code);
-             if);
-             (if MacOS then
-                 (code '      movem.l  a0-a4,-(sp)' code);
-                 (code '      movem.l  d0-d7,-(sp)' code);
-             if);
-             push address;
-             (if MacOS then
-                 (code '      IMPORT negAOArefsINSERT:DATA' code);
-                 (code '      move.l negAOArefsINSERT,a0' code);
-                 (code '      jsr (a0)' code);
-             if);
-             (if hp then
-                 (code '      mov.l _negAOArefsINSERT,%a0' code);
-                 (code '      jsr (%a0)' code);
-             if);
-             (if linux then
-                 (code '    movl negAOArefsINSERT,%esi' code);
-                 (code '    call *%esi' code);
-             if);
-             (if nti then
-                 (code 'extrn	_negAOArefsINSERT:dword' code);
-                 (code '	mov	esi, _negAOArefsINSERT' code);
-                 (code '	call	esi' code);
-             if);
-             pop address;
-             (if linux then
-                 (code '	popal' code);
-             if);
-             (if nti then
-                 (code '	popad' code);
-             if);
-             (if hp then
-                 (code '      movm.l  (%sp)+,%d0-%d7' code);
-                 (code '      movm.l  (%sp)+,%a0-%a4' code);
-             if);
-             (if MacOS then
-                 (code '      movem.l  (sp)+,d0-d7' code);
-                 (code '      movem.l  (sp)+,a0-a4' code);
-             if);
+             (if intel then pop RegThis, DataReg1, AddrReg1 if);
+             {(if debug then call Ck if);}
+             return 4;
          if);
-         (if intel then pop RegThis, DataReg1, AddrReg1 if);
-         {(if debug then call Ck if);}
-         return 4;
      if);
      
-     (if debug then
-         {
-         (if intel then
-             push stack[12];
-          else
-             push stack[0];
-         if);
-         push address;
-         call CheckAOAtoIOAtableSize;
-         }
-     if);
-          
+     { Insert in hash table }
+     { ALTERNATIVE: Could call AOAtoIOAInsert }
+     
      { Compute hash1.                                  }
-     { hash1(address) = address MOD AOAtoIOAtableSize. }
+     { hash1(theCell) = theCell MOD AOAtoIOAtableSize. }
      (if hp then
          (code '	divul.l	_AOAtoIOAtableSize,%d6:%d7' code)
      if);
@@ -139,25 +121,25 @@ ChkRA: public
      if);
      
      { So the hash1 entry is occupied, check if the entry }
-     { matches the address. In case of match the address  }
+     { matches the theCell. In case of match the theCell  }
      { is already inserted, leave the function.           }
      (if intel then
-         stack[16] -> address;
-         (if table[16+IntelValue*4] = address then 
+         stack[16] -> theCell;
+         (if table[16+IntelValue*4] = theCell then 
              pop RegThis, DataReg1, AddrReg1;
              {(if debug then call Ck if);}
              return 4;
          if);
       else
-         stack[4] -> address;
-         (if address = table[16+value*4] then
+         stack[4] -> theCell;
+         (if theCell = table[16+value*4] then
              {(if debug then call Ck if);}
              return 4 
          if);
      if);
      
      { Compute hash2.                                      }
-     { hash2(address) = (address*16) MOD AOAtoIOAtableSize. }
+     { hash2(theCell) = (theCell*16) MOD AOAtoIOAtableSize. }
      (if hp then
          (code '	lsl.l	&4,%d7                  ' code);
          (code '	divul.l	_AOAtoIOAtableSize,%d6:%d7' code)
@@ -186,29 +168,29 @@ ChkRA: public
      if);
      
      { So the hash2 entry is occupied, check if the entry }
-     { matches the address. In case of match the address  }
+     { matches the theCell. In case of match the theCell  }
      { is already inserted, leave the function.           }
      (if intel then
-         stack[16] -> address;
-         (if table[16+IntelValue*4] = address then 
+         stack[16] -> theCell;
+         (if table[16+IntelValue*4] = theCell then 
              pop RegThis, DataReg1, AddrReg1;
              {(if debug then call Ck if);}
              return 4;
          if);
       else
-         stack[4] -> address;
-         (if address = table[16+value*4] then return 4 if);
+         stack[4] -> theCell;
+         (if theCell = table[16+value*4] then return 4 if);
      if);
      
-     { Both the hash1(address) and hash2(address) entries are }
-     { occupied with others addresses.                        }
+     { Both the hash1(theCell) and hash2(theCell) entries are }
+     { occupied with others theCelles.                        }
      
-     { Try to find an entry after hash2(address). }
+     { Try to find an entry after hash2(theCell). }
      push index;
      0 -> index;
      loop:
      (if index < 100 then
-         1 -> index+; index -> address+;
+         1 -> index+; index -> theCell+;
          { value MOD AOAtoIOAtableSize -> value. }
          {******************************************************}
          {*  GROSSLY INEFFICIENT: NO NEED TO USE MODULO HERE!  *}
@@ -235,8 +217,8 @@ ChkRA: public
                  pop index;
                  goto insert
              if);
-             stack[20{16+4}] -> address;
-             (if table[16+IntelValue*4] = address then 
+             stack[20{16+4}] -> theCell;
+             (if table[16+IntelValue*4] = theCell then 
                  pop index; 
                  pop RegThis, DataReg1, AddrReg1;
                  {(if debug then call Ck if);}
@@ -247,8 +229,8 @@ ChkRA: public
                  pop index;
                  goto insert;
              if);
-             stack[8{4+4}] -> address;
-             (if address = table[16+value*4] then 
+             stack[8{4+4}] -> theCell;
+             (if theCell = table[16+value*4] then 
                  pop index; 
                  {(if debug then call Ck if);}
                  return 4; 
@@ -278,12 +260,12 @@ ChkRA: public
      
      insert:
      (if intel then     
-         stack[16] -> address;
-         address -> table[16+IntelValue*4];
+         stack[16] -> theCell;
+         theCell -> table[16+IntelValue*4];
          pop RegThis, DataReg1, AddrReg1;
       else
-         stack[4] -> address;
-         address -> table[16+value*4];
+         stack[4] -> theCell;
+         theCell -> table[16+value*4];
      if);
      {(if debug then call Ck if);}
      return 4;
