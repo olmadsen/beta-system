@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CallBack.c,v 1.24 1992-09-21 17:04:55 tthorn Exp $
+ * Mod: $Id: CallBack.c,v 1.25 1992-10-02 16:52:39 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -256,6 +256,9 @@ int CHandleCB(int a1, int a2, int a3, int a4, int FOR)
     /* Pop CallBackFrame */
     ActiveCallBackFrame = cbf.next;
     BetaStackTop        = cbf.betaTop;
+
+    savedIOA       = getIOAReg();
+    savedIOATopoff = getIOATopoffReg();
 
     return retval;
 }
