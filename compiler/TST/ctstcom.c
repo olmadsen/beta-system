@@ -292,20 +292,17 @@ struct data1 { long x; };
 struct data2 { long x; long y; };
 struct data3 { long x; long y; long z; };
 
-struct data1 setData1(struct data1 d1)
-{ d1.x = 101;
-  return d1;
+static void setData1(struct data1 *d1)
+{ d1->x = 101;
 }
-struct data2 setData2(struct data2 d2)
-{ d2.x = 201;
-  d2.y = 202;
-  return d2;
+static void setData2(struct data2 *d2)
+{ d2->x = 201;
+  d2->y = 202;
 }
-struct data3 setData3(struct data3 d3)
-{ d3.x = 301;
-  d3.y = 302;
-  d3.z = 303;
-  return d3;
+static void setData3(struct data3 *d3)
+{ d3->x = 301;
+  d3->y = 302;
+  d3->z = 303;
 }
 
 void hansen()
@@ -313,11 +310,11 @@ void hansen()
   struct data2 d2;
   struct data3 d3;
  
-  d1 = setData1(d1);
+  setData1(&d1);
   printf("d1:%i\n",d1.x);
-  d2 = setData2(d2);
+  setData2(&d2);
   printf("d2:%i,%i\n",d2.x,d2.y);
-  d3 = setData3(d3);
+  setData3(&d3);
   printf("d3:%i,%i,%i\n",d3.x,d3.y,d3.z);
 }
 
