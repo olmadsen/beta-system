@@ -13,11 +13,13 @@ com:
      (if true then
          A.display -> T.append
       else
-         ' :receiverType:'->T.append;
+         ' :receiverType:"'->T.append;
          (if A.receiverType[] <> none then A.receiverType[] -> T.append if);
-         ' :fieldType:'->T.append;
+         '" :fieldName:' -> T.append;
+         (if A.fieldName[] <> none then A.fieldName[] -> T.append if);
+         '" :fieldType:'->T.append;
          (if A.fieldType[] <> none then A.fieldType[] -> T.append if);
-         ' :off:' -> T.append;
+         '"'->T.put
      if);
      T -> mch.comment;
      (*302 ->trace(#do T[] -> xT #)*)
@@ -29,7 +31,7 @@ do (&gen.thisRegAdr,ad[],isOrigin,chain[])->GenAdr->A[]
 #)
 --GenAdr:descriptor---
 (* think about deRef in old version *)
-(# dcl,descRef,rDen,EV,N1: @ASTindex; N,spec,localDesc: ^ASTindex;
+(# dcl,descRef,rDen,EV,N1: @ASTindex; N,spec,localDesc,D: ^ASTindex;
    EH: @EvalHandler;  V: ^EH.EvVal;
    descKind,size,
    baseOff: @integer; (* 0 if item, compHeadSize if component *)
@@ -160,6 +162,7 @@ do (&gen.thisRegAdr,ad[],isOrigin,chain[])->GenAdr->A[]
         (3,A[]) -> doCom;
      #);
    isSimple: @boolean; isVirt,MN,access: @integer;
+   nD: ^sematt.AttDesc;
    (* A is baseAdr *)
 do (if stest then
        302->ctrace(#
@@ -169,6 +172,7 @@ do (if stest then
                      mch.dumpreg 
                   #)
    if);
+   (ad[],chain[]) -> sematt.AttDesc -> nD[];
    (if ad.label
     // gram.nameApl then
        (if stest then
@@ -177,7 +181,11 @@ do (if stest then
               mch.dumpreg
            #)
        if);
-       (chain[],ad) -> DH.theDesc -> (descRef,MN,chain[],isVirt);
+       (if switch182 then
+           nD.dclDesc[] -> D[]; D -> descRef
+        else
+           (chain[],ad) -> DH.theDesc -> (descRef,MN,chain[],isVirt);
+       if);
        ad.dclRef->dcl;
        
        (* A refers to the start of the object that has 'ad' as attribute *)
@@ -264,23 +272,22 @@ do (if stest then
                    else
                       dcl.getText -> RA.fieldName[]
                   if);
-                  313->trace(#
+                  302->trace(#
                             do 'genAdr:fieldName: ' -> xT;
                                dcl[] -> xA; 
-                               dcl.gettext -> xT
+                               dcl.gettext -> xT;
+                               A.display -> xT; xN;
+                               descRef[] -> xA; xN;
+                               nD.display
                             #);
                   (1,RA[]) -> aCom;  
-                  (*A.fieldClass[] -> RA.descName[];*)
                   A.fieldType[] -> RA.receiverType[];
                   (* why not descName below:??*)
                   (if sort.label = gram.repetitionDecl then
-                      (*(descRef[] -> theGen.mkArraySig).asText
-                        -> RA.fieldClass[];*)
                       (* do we need an arrayFieldSignature?*)
                       (descRef[] -> theGen.mkArraySig).asText
                         -> RA.fieldType[];
                    else
-                      (*descRef[] -> theGen.mkSignature -> RA.fieldClass[];*)
                       (descRef[] -> theGen.fieldSignature).asText 
                         -> RA.fieldType[];
                   if);
@@ -554,7 +561,7 @@ do (if stest then
            (if switch182 then
                (# aR: @mch.RegAdr;
                   T: @text;
-                  sort: @ASTindex
+                  sort: @ASTindex;
                do 0 -> aR.ONlevel; 
                   true -> aR.isField ;
                   dcl.off+baseOff -> aR.off;
@@ -563,37 +570,28 @@ do (if stest then
                               do 'genadr:remote:fieldname: ' -> xT;
                                  dcl[] -> xA; dcl.gettext -> xt
                               #);
-                  'genAdr:remote:fieldname' -> mch.comment;
                   (if rDen.pn > 0 then 
                       (A[],rDen.pn,A[]) -> SetSuperDesc -> A[]; 
-                      (*(A.bAdr.localDesc[],true) 
-                        -> EH.descName -> aR.descName[];*)
-                      (A.bAdr.localDesc[] -> theGen.fieldSignature).asText 
-                        -> aR.receiverType[];
-                   else
-                      (* probably just do as before else *)
-                     (* (A.bAdr.localDesc[],true) 
-                        -> EH.descName -> aR.descName[];*)
-                      (A.bAdr.localDesc[] -> theGen.fieldSignature).asText 
-                        -> aR.receiverType[]
                   if);
+                  (A.bAdr.localDesc[] -> theGen.fieldSignature).asText 
+                    -> aR.receiverType[];
+
                   aR[] -> A[];
-                  'loadField: F' -> T; aR.off -> T.putint;
-                  (*aR.descName[] -> T.append;*)
-                  ' PN:' -> T.append; rDen.pn -> T.putint;
-                  ' receiverType: ' -> T.append;
-                  A.receiverType[] -> T.append;
-                  T -> mch.comment;
                   dcl.sort -> sort;
                   (if sort.label = gram.repetitionDecl then
                       (descRef[] -> theGen.mkArraySig).asText
                         -> A.fieldType[];
                    else
-                      (descRef[] -> theGen.fieldSignature).asText 
+                      (nD.dclDesc[](*descRef[]*)
+                        -> theGen.fieldSignature).asText 
                         -> A.fieldType[];
                   if);
                   '!loadField2: ' -> T; A.display->T.append;
-                  T -> mch.comment
+                  T -> mch.comment;
+                  311->trace(#
+                            do 'genAdr.remote.loadField: ' -> xT;
+                               nD.display
+                            #);
                #)
             else
                dcl.off+baseOff -> A.addOff -> A[];           
@@ -894,13 +892,8 @@ do (if stest then
               (chain[],ad) -> DH.theDesc -> (descRef,MN,chain[],isVirt);
               descRef[] -> A.bAdr.localDesc[];
               (if switch182 then
-                  (*(chain[],(EV.sonRef).son) -> DH.theDesc -> (EVdesc,MN,chain[],isVirt);
-                  (EVdesc[],true) -> EH.descName -> A.descName[];
-                  (EVdesc[] 
+                  (nD.dclDesc[] (*descRef[]*)
                     -> theGen.fieldSignature).asText 
-                    -> A.receiverType[];
-                  *)
-                  (descRef[] -> theGen.fieldSignature).asText 
                     -> A.fieldType[];
                 (*  (A[],&mch.adrRegOperand[]) -> mch.ldVal*)
               if);
