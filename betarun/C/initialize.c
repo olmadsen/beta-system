@@ -4,7 +4,7 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 #include "beta.h"
-
+/**/
 #if defined(UNIX) /*|| defined (crts)*/
 
 #ifdef sg
