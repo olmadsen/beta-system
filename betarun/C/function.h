@@ -212,19 +212,25 @@ extern struct Object * GetThis(long *SP);
 #endif
 
 
-#if defined(sparc) || defined(crts)
+#if defined(sun4)
 /* Fucking header files on sun4 do not include function prototypes?? */
+
 extern void *memalign(/*unsigned alignment, unsigned size*/);
 extern int fprintf(FILE *, const char *, ...);
 extern int fflush(FILE *);
 extern int tolower(int);
 extern int fclose(FILE *);
-/*
-#if defined(sun4s) || defined(SUN4S)
 extern int pclose(FILE *);
-#else
-extern void pclose(FILE *);
-#endif
-*/
 extern int fscanf(FILE *stream, const char *format, ...);
+extern int shutdown(int s, int how);
+#include <sys/types.h>
+#include <sys/socket.h>
+extern int socket(int domain, int type, int protocol);
+extern int connect(int s, struct sockaddr *name, int namelen);
+extern int bind(int s, struct sockaddr *name, int namelen);
+extern int getsockname(int s, struct sockaddr *name, int *namelen);
+extern int accept(int s, struct sockaddr *name, int *namelen);
+extern int getpeername(int s, struct sockaddr *name, int *namelen);
+extern int listen(int s, int backlog);
+extern int sigsetmask(int mask);
 #endif

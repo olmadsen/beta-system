@@ -19,6 +19,7 @@
  *                    *
  **********************/
 
+#if 0
 static char *
 stripName(char *s)
 {
@@ -29,7 +30,7 @@ stripName(char *s)
       s = p+1;
   return s;
 }
-
+#endif
 
 static int
 isPrefix(ref(ProtoType) fst, ref(ProtoType) snd)

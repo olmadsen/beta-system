@@ -43,9 +43,11 @@ void assignRef(long *theCell, ref(Item) newObject)
 
 #ifdef RTDEBUG
 
+#ifdef NEWRUN
 static void DoNothing(struct Object **theCell,struct Object *theObj)
 {
 }
+#endif
 
 void Illegal()
 { 
@@ -73,8 +75,11 @@ void Illegal()
     __asm__("int3");
 #endif
 
-#ifdef sparc
+#ifdef sun4s
     __asm__("illtrap 0");
+#endif
+#ifdef sun4
+    __asm__("unimp 0");
 #endif
 
 #ifdef sgi
