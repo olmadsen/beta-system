@@ -5,7 +5,7 @@
  * Copyright (C) 1992-94 Mjolner Informatics Aps.
  * Written by Ole Lehrmann Madsen, Jacob Seligmann, and Peter Andersen.
  *
- * $Id: betarun.h,v 1.2 1994-05-05 12:13:20 beta Exp $
+ * $Id: betarun.h,v 1.3 1994-07-19 11:01:15 beta Exp $
  *
  */
 
@@ -65,7 +65,7 @@ struct RefRep {
   long            	HighBorder;
 };
 
-struct structure {
+struct Structure {
   struct ProtoType *  	Proto;
   long            	GCAttr;
   struct Object *     	iOrigin;
@@ -85,11 +85,12 @@ struct PartObject {
 
 extern long *IOA;
 
-extern char *a0,*a1,*a2,*a3,*a4,*a7;
+/* extern char *a0,*a1,*a2,*a3,*a4,*a7; */
+extern long a0, a1, a2, a3, a4, a7; 
 extern long leave;
 extern void *CRTSjbp;
 
-extern void pushAdr();
+extern void pushAdr(long *);
 extern long *popAdr();
 extern long CallBackPar(long off);
 extern void Trap();
@@ -97,6 +98,7 @@ extern void Trap();
 #include <setjmp.h>
 jmp_buf *UseJmpBuf(int,int);
 jmp_buf *GetJmpBuf(int,int);
+void FreeJmpBuf(int, int);
 
 extern char 		GetByte(unsigned long a, int byteNo /* 0-3 */);
 extern unsigned short 	GetShort(unsigned long a,int shortNo /* 0-1 */);
