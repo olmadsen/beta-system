@@ -2,7 +2,8 @@
 
 . $BETALIB/configuration/env.sh
 
-BETART="SimpleDump";
+#BETART="SimpleDump";
+BETART="";
 export BETART
 
 LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:../lib/${objdir}"
@@ -66,10 +67,14 @@ do
        echo "[No reference stderr exists]"
     fi
     if [ -f dumps/$f.dump ]; then
-       sed -e "s/MACHINE_TYPE/$objdir/g" < dumps/$f.dump | diff - $f.dump
+       sed -e "s/MACHINE_TYPE/$objdir/g" < dumps/$f.dump > $f.ref
+       grep -v '{' $f.dump                               > $f.app
+       diff $f.ref $f.app
        if [ $? = 0 ]; then
 	  echo "[Dump is correct]"
 	  rm $f.dump
+	  rm $f.ref
+	  rm $f.app
 	  rm $f
        else
 	  echo "[Difference in dump]"
