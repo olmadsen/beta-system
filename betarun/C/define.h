@@ -117,12 +117,7 @@
 #define USEMMAP 
 #endif /* sparc || intel */
 
-#ifdef PERSIST
-#undef RTLAZY
-#else
 #define RTLAZY /* Include support for lazy fetch */
-#endif /* PERSIST */
-
 
 /******** Misc. *******/
 #define FALSE	0

@@ -269,29 +269,38 @@ int FindDanglingProto (int dangler)
   return 0;
 }
 
-unsigned long lazyTrapHandler(unsigned long lazyDangler)
+unsigned long lazyTrapHandler(unsigned long dangler)
 {  
   /* Ok, so this is a genuine lazy reference, and not simply a NONE
    * reference. */
   
   /* call beta object handling the lazy fetch */
-  /* A reference in this object is saved in 'LazyItem'. Since
-     callback back into BETA code have not been implemented
-     completely yet, it is not possible to handle this lazy
-     reference. */
+
+  /* A reference in this object is saved in 'LazyItem'. */
+  lazyDangler = dangler;
+  
+  /* The lazyItem is an object receiving no arguments and exiting no
+     results. How this can yield an absolute address to patch back
+     into the register holding the lazy reference is complete
+     unclear. The current author does not have enough knowledge about
+     the implementation of the old persistent store in order to
+     discover how the lazyItem can help to load the referred
+     object. Callbacks to beta are implemented on all platforms, thus
+     this is not the problem. The problem is that the code loading the
+     lazyly referred object cannot be located anywhere in either
+     'objectserver' or 'persistentstore'. */
   
   fprintf(output, 
 	  "lazyTrapHandler: \n"
-	  "             Lazy reference encountered. In order to handle\n"
-	  "             the lazy reference a call back to BETA code must\n"
-	  "             be made. This is not implemented completely yet.\n"
+	  "             Lazy reference encountered. This is not implemented.\n"
 	  "               Please disallow the use of lazy references by\n"
 	  "             setting 'allowLazyFetch' in the persistentstore to\n"
 	  "             false.\n"
-	  "               If large amount of data is scanned the new\n"
-	  "             persistent store can be used instead of the old."
+	  "               If large amounts of data are scanned, the new\n"
+	  "             persistent store can be used instead of the old.\n"
 	  "             Include '~beta/persistentstore/virtualobjectstore'\n"
 	  "             instead to use the new persistent store.\n"); 
+  fflush(output);
   return 0;
 } 
 
