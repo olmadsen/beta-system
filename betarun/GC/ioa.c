@@ -228,6 +228,7 @@ You may order an unconstrained version from\n",
 		  *current = (long) (ref(Object)) (cast(Object)(*current))->GCAttr;
 		} else {
 		  *current = 0;
+                  DOTSize--;
 		}
 	      }
 	    }
