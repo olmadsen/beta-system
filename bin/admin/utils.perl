@@ -343,5 +343,28 @@ sub popd()
     }
 }
 
+sub do_perl()
+{
+    local ($file) = @_;
+    local $return;
+    #if ($cygwin){
+    #	$file = `cygpath -u $file`;
+    #}
+    if (! -e $file){
+	print "do_perl: perl file does not exist: $file\n";
+	exit;
+    }
+    print "Calling $file\n";
+    if (0){
+	# Fails on Oles newly installed cygwin?? 2003-10-03
+	unless ($return = do $file) {
+	    die "couldn't parse $file: $@\n" if $@;
+	    die "couldn't do $file: $!\n"    unless defined $return;
+	    die "couldn't run $file\n"       unless $return;
+	}
+    } else {
+	eval `cat $file`;
+    }
+}
 
 1;
