@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: ExitObjects.c,v 1.8 1992-10-23 15:24:02 beta Exp $
+ * Mod: $Id: ExitObjects.c,v 1.9 1992-11-03 11:28:26 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -15,6 +15,12 @@ asmlabel(ExitO, "
 	mov	%i0, %o2
 ");
 
+asmlabel(ExO, "
+        mov     %i1, %o0
+        mov     %i2, %o1
+        b       _CExitO
+        mov     %i0, %o2
+");
 /* Note: The offset parameter is complely ignored. It's not needed
    on the SPARC */
 
