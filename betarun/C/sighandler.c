@@ -557,6 +557,11 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
       /* See figure 15-2 in
        * Intel486 Microprocessor Family Programmer's Reference Manual
        */
+      DEBUG_CODE({
+	fprintf(output, 
+		"Linux sighandler: Floating Point Error, fpu_sw=0x%08x\n",
+		(int)fpu_sw);
+      });
       if (fpu_sw & (1L<<6)){
 	/* SF: floating point stack fault */
 	if (fpu_sw & (1L<<9)){
