@@ -197,7 +197,7 @@ void PrintRefStack(void)
       /* Normal object */
     } 
 #ifdef RTLAZY
-    else if (isLazystruct theObj *) {
+    else if (isLazyref(theObj)) {
       DEBUG_LAZY(fprintf (output, "ProcessRefStack: Lazy ref: %d\n", (int)theObj));
       ProcessReference((Object **)(theCell));
     }
@@ -231,7 +231,7 @@ void ProcessRefStack(void)
       CompleteScavenging();
     }
 #ifdef RTLAZY
-    else if (isLazystruct theObj *) {
+    else if (isLazyref(theObj)) {
       ProcessReference(theCell);
     }
 #endif /* RTLAZY */
@@ -1170,7 +1170,7 @@ void ProcessStackPart(long *low, long *high)
 	DEBUG_STACK(PrintSkipped(current)); 
 	break;
       default:
-	if (isLazyRef (*current)){
+	if (isLazyRef(*current)) {
 	  /* (*current) is a dangling reference */
 	  DEBUG_STACK(fprintf(output, "0x%08x: %d - LAZY\n", (int)current, (int)*current));
 	  ProcessReference ((Object **)current);
@@ -1256,7 +1256,7 @@ void ProcessStackObj(StackObject *theStack, CellProcessFunc func)
       break;
     default:
       DEBUG_LAZY({
-	if (isLazyRef (*stackptr)){
+	if (isLazyRef(*stackptr)) {
 	  fprintf(output, "dangler on stack: %d\n", (int)*stackptr);
 	}
       });
@@ -1354,7 +1354,7 @@ void PrintStackPart(long *low, long *high)
 	PrintSkipped(current); 
 	break;
       default:
-	if (isLazyRef (*current)){
+	if (isLazyRef(*current)) {
 	  /* (*current) is a dangling reference */
             fprintf(output, "0x%08x: %d - LAZY\n", (int)current, (int)*current);
         } else {
