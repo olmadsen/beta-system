@@ -664,7 +664,7 @@ void PrintRefStack()
   long size = ((long)RefSP - (long)&ReferenceStack[0])/4;
   fprintf(output, "RefStk: [%x .. %x[\n", (int)&ReferenceStack[0], (int)RefSP);
   for(; size > 0; size--, theCell++){
-    if (!isLazyRef(*theCell) && !isIndirRef(*theCell) && ((*theCell)!=ExternalMarker) && (*theCell & 1)){ 
+    if (!isLazyRef(*theCell) && ((*theCell)!=ExternalMarker) && (*theCell & 1)){ 
       /* Used in beta.dump */
       fprintf(output, "  0x%08x: 0x%08x #\n", (int)theCell, (int)(*theCell));
     } else {
@@ -685,7 +685,7 @@ void ProcessRefStack(size, bottom)
   DEBUG_IOA(PrintRefStack());
   theCell = (struct Object **)bottom;
   for(; size > 0; size--, theCell++) {
-    if (!isLazyRef(*theCell) && !isIndirRef(*theCell)) {
+    if (!isLazyRef(*theCell)) {
       i = ((unsigned)*theCell & 1) ? 1 : 0; 
       *theCell = (struct Object *)((unsigned)*theCell & ~1);
     } else {
@@ -1328,9 +1328,6 @@ void PrintStackPart(long *low, long *high)
 	break;
       default:
 	if (isLazyRef (*current)){
-	  /* (*current) is a dangling reference */
-            fprintf(output, "0x%08x: %d - LAZY\n", (int)current, (int)*current);
-        } else if (isIndirRef (*current)){
 	  /* (*current) is a dangling reference */
             fprintf(output, "0x%08x: %d - LAZY\n", (int)current, (int)*current);
         } else {

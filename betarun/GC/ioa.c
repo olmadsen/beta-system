@@ -1182,10 +1182,6 @@ void IOACheckReference(theCell)
       fprintf(output, "Lazy in IOA: 0x%x: %d\n", (int)theCell, (int)*theCell);
       return;
     }
-    if (isIndirRef(*theCell)){
-      fprintf(output, "Indir in IOA: 0x%x: %d\n", (int)theCell, (int)*theCell);
-      return;
-    }
     if (!(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell))) {
       fprintf (output, "theCell = 0x%x, *theCell = 0x%x\n", 
 	       (int)theCell, (int)(*theCell));

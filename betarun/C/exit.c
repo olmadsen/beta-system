@@ -270,6 +270,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
       case CompCallBackErr:
       case RecursiveAttErr:
       case CompTerminatedErr:
+      case QuaErr:
 	/* Should be caught by valhalla, so thePC must be set up.
 	 * Current object was pushed as the first thing, when
 	 * the error was detected, but the PC was left on stack.
@@ -324,19 +325,17 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	  fflush(output);
 	  break; /* Don't BetaExit() */
 	}
-	/* Normal Qua error: Display BETA stack.
-	 * Adjust StackEnd before calling DisplayBetaStack.
-	 */
-#ifndef sparc
+	/* Normal Qua error: Display BETA stack */
 #ifdef intel
-	StackEnd = (long*)((long)StackEnd+10);
-	/* We have performed 'pushad', and also we have a return
+	/* Adjust StackEnd before calling DisplayBetaStack.
+	 * We have performed 'pushad' (8 longs), and also we have a return
 	 * address from call Qua to ignore.; see Qua.run.
 	 * Also the compiler has pushed %edi during the qua-check.
+	 * This sums up to 10 longs to skip.
 	 */
-#else
-#endif
-#endif
+	thePC=(long*)(StackEnd[8]); /* StackEnd is long* */
+	StackEnd+=10; /* StackEnd is long* */
+#endif /* intel */
       }
 
 #ifdef RTLAZY
