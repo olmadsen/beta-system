@@ -394,13 +394,14 @@ static void timeout_event( XtPointer client_data, XtIntervalId *id)
 #define BorderPix 2
 	struct liteClue_context_str * obj = (struct liteClue_context_str *) client_data;
 	XcgLiteClueWidget cw = obj->cw;
-	Position  abs_x, abs_y;
-
+	Position  mouse_x,abs_x, abs_y;
+	
 	XRectangle ink;
 	XRectangle logical;
 	Position   w_height;	
 	Position   w_width;
 	Widget w;
+	int    mouse_x_int,dummy;
 
 	if (cw->liteClue.interval_id == (XtIntervalId)0)
 		return;	/* timeout was removed but callback happened anyway */
@@ -412,7 +413,15 @@ static void timeout_event( XtPointer client_data, XtIntervalId *id)
 	XtVaGetValues(w, XtNheight, &w_height, NULL );
 	/* position just below the widget */
 	XtVaGetValues(w, XtNwidth, &w_width,NULL);
-	XtTranslateCoords(w, w_width/4, w_height, &abs_x, &abs_y);
+	/* abs_w og abs_y bruges til overstevenstrehjoerne. */
+
+	/* Dette placerer tooltip i nederste venstre hjoerne. */
+	XtTranslateCoords(w, w_width, w_height,&abs_x, &abs_y);
+
+	/* FGC find mousepos */
+	XQueryPointer(XtDisplay(w),XtWindow(w),(Window*)&dummy,(Window*)&dummy,&mouse_x_int,&dummy,&dummy,&dummy,&dummy);
+	mouse_x=mouse_x_int;
+	abs_x=mouse_x;
 
 #if XtSpecificationRelease < 5		/* R4 hack */
 	{
