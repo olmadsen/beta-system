@@ -77,7 +77,7 @@ LIB_ITEM 'bobs'
      exit result
      #);
    
-   parseStack: [stackMax] @ integer;
+   parseStack,startPos,endPos: [stackMax] @ integer;
    stackTop, validTop, pseudoTop,top,start : @ integer;
    
    Redu: @
@@ -88,7 +88,8 @@ LIB_ITEM 'bobs'
           (# rs, prodNo: @ integer;
           enter (rs,prodNo)
           do (if (top+1->top) > prod.range  then 
-	         10->prod.extend; 10->oldTop.extend; 10->newTop.extend
+	         10->prod.extend; 10->oldTop.extend; 10->newTop.extend;
+                 10-> startPos.extend; 10->endPos.extend
              if);
              prodNo -> prod[top];
              stackTop -> oldTop[top];
@@ -110,19 +111,33 @@ LIB_ITEM 'bobs'
    
    PseudoShift: @
      (#
-     do (if (parseStack.range <= pseudoTop)   then 1 -> FatalError
-         else
-            stackTop + 1 -> stackTop;
-            top + (stackTop - validTop) -> pseudoTop;
-            lookAhead.startInx -> parsestack[pseudoTop];
-     if)#);
+     do (if parseStack.range <= pseudoTop then
+            10 -> parseStack.extend;
+            (*1 -> FatalError*)
+        if);
+        stackTop + 1 -> stackTop;
+        top + (stackTop - validTop) -> pseudoTop;
+        lookAhead.startInx -> parsestack[pseudoTop];
+     #);
    
    Advance: @
-     (# newTop: @ integer;
+     (# oldTop,newTop: @ integer;
      do (* call coder with productions buffered in redu *)
         (for i: redu.top repeat
-             (redu.oldTop[i],redu.newTop[i] -> newTop
-             ,redu.prod[i]) -> Reducer;
+             redu.newTop[i] -> newTop;
+             redu.oldTop[i] -> oldTop;
+             (if newTop > oldTop then
+                 (* reducing an empty production *)
+                 endPos[oldTop] -> endPos[newTop] -> startPos[newTop]
+              else
+                 endPos[oldTop] -> endPos[newTop]
+             if);
+             (* 'Reducing: prod='->puttext; redu.prod[i] -> putint;
+              ' start='->puttext; startPos[newTop] -> putint;
+              ' end='->puttext; endPos[newTop] -> putint; newline;*)
+
+             (oldTop,newTop,redu.prod[i],startPos[newTop],endPos[newTop]) 
+               -> Reducer;
         for);
 
         (* update stack *)
@@ -134,6 +149,10 @@ LIB_ITEM 'bobs'
         (if (stackTop >= stackMax)  then 1 -> FatalError if);
         stackTop + 1 -> stackTop;
         lookAhead.startInx -> parsestack[stackTop];
+        lex.first -> startPos[stackTop];
+        lex.pos-1 -> endPos[stackTop];
+       (* 'Shift: '->puttext; lex.first->putint; 
+        ' '->put; lex.pos-1 ->putint; newline;*)
         (newSymb,lex.first,lex.pos-1) -> Shifter;
         
         (* freeze new stack situation, ready for new lookahead *)
