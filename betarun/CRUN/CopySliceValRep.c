@@ -17,14 +17,14 @@ register long _dummy9 asm("%r16"); /* really tmp data 2 */
 #include "beta.h"
 #include "crun.h"
 
+#ifdef sparc
 asmlabel(CopySVR, "
 	mov	%l7, %o3
 	ba	"CPREF"CopySVR
 	mov	%l6, %o4
 ");
-
-#ifdef hppa
-#  define CCopySVR CopySVR
+#else
+#define CCopySVR CopySVR
 #endif
 
 void CCopySVR(ref(ValRep) theRep,
