@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: exit.c,v 1.3 1992-09-03 12:54:18 beta Exp $
+ * Mod: $Id: exit.c,v 1.4 1992-09-04 17:13:04 tthorn Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
@@ -23,7 +23,8 @@ BetaError(errorNo, theObj)
 {
   if( errorNo < 0 ){
 #ifdef sparc
-    StackEnd = FramePointer;
+    asm("ta 3");
+    StackEnd = (long *) ((struct RegWin *)FramePointer)->fp;
 #else
     StackEnd = (ptr(long)) &theObj; StackEnd++;
 #endif
