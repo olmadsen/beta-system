@@ -178,7 +178,7 @@ static int AOAtoIOAInsertImpl(Object **theCell)
     unsigned long index, count;
     DEBUG_CODE(long conflictcount);
 
-    DEBUG_CODE(if (!inAOA( theCell)) {
+    DEBUG_CODE(if (!inAOA(theCell)) {
       fprintf(output, 
 	      "AOAtoIOAInsert: the cell 0x%x is not in AOA! ", 
 	      (int)theCell);
@@ -244,18 +244,18 @@ static int AOAtoIOAInsertImpl(Object **theCell)
     DEBUG_AOAtoIOA(fprintf(output, "\nAOAtoIOAInsert collision"));
     /* linear search at most MAX_PROBES forward */
     count = MAX_PROBES;
-    index = ((unsigned long) theCell+1) % AOAtoIOAtableSize;
+    index = ((unsigned long)theCell + 1) % AOAtoIOAtableSize;
     DEBUG_CODE(conflictcount = 4);
     do {
       DEBUG_AOAtoIOA(fprintf(output, "[%d]", MAX_PROBES-(int)count));
       if (table[index]==0){
 	/* Found free */
-	table[index] = (unsigned long) theCell; 
+	table[index] = (unsigned long)theCell; 
 	DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=%d)",
 			       (int)conflictcount));
 	return 0;
       }
-      if (table[index]==(unsigned long) theCell){
+      if (table[index]==(unsigned long)theCell){
 	/* Already there */
 	DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=%d)",
 			       (int)(conflictcount+1)));
