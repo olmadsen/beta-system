@@ -1,0 +1,169 @@
+/*
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-01-30 10:55:27 $, SID: $Revision: 1.1 $
+ * by Lars Bak
+ */
+
+#include "beta.h"
+
+static ptr(char) theItemName(theItem)
+  ref(Item) theItem;
+{
+  ptr(short) Tab;
+  long  TabValue;
+  int   index;
+
+  TabValue  = (long) theItem->Proto->GCTabOff;
+  TabValue += (long) theItem->Proto;
+  Tab = (ptr(short)) TabValue;
+
+  index = 0;
+  while( Tab[index++] != 0 );
+  while( Tab[index]   != 0 ) index += 4;
+      
+  return (ptr(char)) &Tab[index+1];
+}
+
+static ptr(char) theFormName(theItem)
+  ref(Item) theItem;
+{
+  long  TabValue;
+
+  TabValue  = (long) theItem->Proto;
+  TabValue += (int)  theItem->Proto->FormOff;
+
+  return (ptr(char)) TabValue;
+}
+
+
+DisplayObject(output,aObj)
+  ptr(FILE)   output;
+  ref(Object) aObj;
+{ 
+  ref(Item) aItem;
+
+  if( isSpecialProtoType(aObj->Proto) ){
+    switch ((long) aObj->Proto){
+      case ComponentPTValue:
+        aItem = ComponentItem(aObj);
+        fprintf(output,"  comp '%s' in '%s'\n", 
+		theItemName(aItem), theFormName(aItem));
+        break;
+      case StackObjectPTValue:
+        fprintf(output,"  stackobject\n");
+        break;
+      case ValRepPTValue:
+        fprintf(output,"  ValRep\n");
+        break;
+      case RefRepPTValue:
+        fprintf(output,"  RefRep\n");
+        break;
+    } 
+  }else
+    fprintf(output,"  item '%s' in '%s'\n", 
+	   theItemName(aObj), theFormName(aObj));
+}
+
+
+ErrorMessage(output, errorNumber)
+  ptr(FILE) output;
+  int errorNumber;
+{
+  if( errorNumber == -1){
+      fprintf(output,"Reference is none"); return;
+    }
+  if( errorNumber == -2){
+      fprintf(output,"Executing terminated component"); return;
+    }
+  if( errorNumber == -3){
+      fprintf(output,"Repetition index out of range"); return;
+    }
+  if( errorNumber == -4){
+      fprintf(output,"Arithmetic execption"); return;
+    }
+  if( errorNumber == -5){
+      fprintf(output,"Repetition subrange out of range"); return;
+    }
+  if( errorNumber == -6){
+      fprintf(output,"Repetition subrange out of range"); return;
+    }
+  if( errorNumber == -7){
+      fprintf(output,"Repetition subrange out of range"); return;
+    }
+  if( errorNumber == -8){
+      fprintf(output,"Stop is called"); return;
+    }
+  if( errorNumber == -9){
+      fprintf(output,"LVRA is full, please implement next step!"); return;
+    }
+  if( errorNumber == -10){
+      fprintf(output,"Integer division by zero"); return;
+    }
+  if( errorNumber == -11){
+      fprintf(output,"Call back function area is full"); return;
+    }
+  if( errorNumber == -30){
+      fprintf(output,"Illegal instruction"); return;
+    }
+  if( errorNumber == -31){
+      fprintf(output,"Bus error"); return;
+    }
+  if( errorNumber == -32){
+      fprintf(output,"Segmentation fault"); return;
+    }
+
+  if( errorNumber == -100){
+      fprintf(output,"Unknown signal"); return;
+    }
+  fprintf(output,"Unknown error (%d)", errorNumber);
+}
+
+DisplayBetaStack( errorNumber, theObj)
+  int errorNumber;
+  ref(Object) theObj;
+{
+  ptr(long) stackptr;
+  ptr(FILE) output;
+
+  fprintf(stderr,"# Beta execution aborted: ");
+  ErrorMessage(stderr, errorNumber);
+
+  if( (output = fopen("beta.dump","w")) == NULL){
+    output = stderr;
+    fprintf( output, ".\n");
+  }else{
+    fprintf(stderr,", look at 'beta.dump'.\n");
+    fprintf(output,"Beta execution aborted: ");
+    ErrorMessage(output, errorNumber);
+    fprintf( output, ".\n");
+  }
+
+  if( theObj != 0 ){
+    if( isObject(theObj)){
+      fprintf(output,"Current Object:\n");
+      DisplayObject(output, theObj);
+    }else{
+      fprintf(output,"Current Object can't be retrieved!\n");
+    }
+  }else
+    fprintf(output,"Current Object is 0!\n");
+
+  fprintf(output,"Dump of stack:\n");
+
+  for( stackptr = StackEnd; stackptr <= StackStart; stackptr++){
+    if( inIOA(*stackptr)){
+      if( isObject( *stackptr) && !inHeap(*(stackptr+1)))
+        DisplayObject(output, *stackptr);
+    }else{
+      switch( *stackptr){
+      case -8: stackptr++;
+      case -7: stackptr++;
+      case -6: stackptr++;
+      case -5: stackptr++;
+               break;
+      }
+    }
+  }
+  fclose(output);
+}
+
