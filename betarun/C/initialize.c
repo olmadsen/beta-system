@@ -195,7 +195,7 @@ static long  AllocateHeap(ptr(long) base,
     return 0;
   }
 }
-
+#ifdef USEMMAP
 static int mmapAllocateHeap(Block **BaseBlock, 
 			    long numbytes, char *name)
 {
@@ -221,6 +221,7 @@ static int ReserveHeap(Block **BaseBlock,
     return 0;
   }
 }
+#endif /* USEMMAP */
 
 #ifdef PE
 static char *unscrambleString(unsigned char *p, int len, int sum)
