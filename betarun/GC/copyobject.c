@@ -22,7 +22,9 @@ static ref(Object) CopyObject(ref(Object) theObj)
 #endif
     DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#CopyObject: ObjectSize(theObj) > 0") );
     
-    /* Assure that theObj->GCAttr <= IOAMaxAge. */
+    /* Assure that 0 <= theObj->GCAttr <= IOAMaxAge. */
+    DEBUG_IOA( Claim(0 <= theObj->GCAttr,
+		     "CopyObject: 0 <= Age of object."));
     DEBUG_IOA( Claim( theObj->GCAttr<=IOAMaxAge,
 		     "CopyObject: Age of object<=IOAMaxAge."));
     

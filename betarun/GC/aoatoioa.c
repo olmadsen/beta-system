@@ -23,7 +23,7 @@ static void AOAtoIOAInsert(handle( Object) theCell);
 /* Allocates the initial AOAtoIOAtable. */
 long AOAtoIOAalloc()
 {
-    AOAtoIOAtableSize = primes[0];
+    AOAtoIOAtableSize = primes[prim_index];
     if ((AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long)))){
 	AOAtoIOAtable->top = AOAtoIOAtable->limit;
 	AOAtoIOAClear();

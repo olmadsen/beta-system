@@ -92,6 +92,7 @@ void IOAGc()
     for(i=0; i<AOAtoIOAtableSize; i++){ 
       if(*pointer){
 	AOAtoIOACount++;
+	DEBUG_IOA(Claim(inAOA(*pointer), "AOAtoIOAtable has a cell outside AOA"));
 	ProcessAOAReference( (handle(Object))*pointer);
       }
       pointer++;
