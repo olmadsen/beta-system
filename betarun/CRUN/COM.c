@@ -40,7 +40,8 @@ ParamOriginProto(struct Item *,AlloCOM)
     /* COM objects have their prototype point AFTER the static part of 
      * the proto type struct 
      */
-    item->Proto++;
+    /* item->Proto++; does not work - adds 28 */
+    item->Proto = (struct ProtoType *)((long)item->Proto+sizeof(ProtoType)-4);
 
     if (proto->GenPart){
 #ifdef RTDEBUG
