@@ -452,6 +452,7 @@ u_long SBGNtop(CAStorage *csb)
 u_long /* object id */ SBOBJcreate(CAStorage *csb, char *obj, u_long nb)
 {
     u_long oid, alignedsize;
+    u_long nbendian;
     
     Claim(csb -> open, "Store closed");
 
@@ -478,7 +479,8 @@ u_long /* object id */ SBOBJcreate(CAStorage *csb, char *obj, u_long nb)
     oid = CAallocate(csb, SBObjects, alignedsize);
     
     /* Write object size */
-    CAsave(csb, SBObjects, (char *)&nb, oid, sizeof(u_long));
+    nbendian = ntohl(nb);
+    CAsave(csb, SBObjects, (char *)&nbendian, oid, sizeof(u_long));
 
     /* Write object to area */
     CAsave(csb, SBObjects, obj, oid + sizeof(u_long), nb);
@@ -489,11 +491,14 @@ u_long /* object id */ SBOBJcreate(CAStorage *csb, char *obj, u_long nb)
 
 void SBOBJsave(CAStorage *csb, char *obj, u_long oid, u_long nb)
 {
+   u_long nbendian;
+   
    Claim(csb -> open, "Store closed");
    /* The object must not be a part object */
    
    /* Write object size */
-   CAsave(csb, SBObjects, (char *)&nb, oid - sizeof(u_long), sizeof(u_long));
+   nbendian = ntohl(nb);
+   CAsave(csb, SBObjects, (char *)&nbendian, oid - sizeof(u_long), sizeof(u_long));
    
    /* Write object to area */
    CAsave(csb, SBObjects, obj, oid, nb);
@@ -521,7 +526,8 @@ char *SBOBJlookup(CAStorage *csb, u_long oid, u_long *distanceToPart, u_long *ob
     if (ntohl(GCAttr) == 0) {
        /* read size */
        CAload(csb, SBObjects, (char *)objSize, oid - sizeof(u_long), sizeof(u_long));
-
+       *objSize = ntohl(*objSize);
+       
        if (*objSize <= size) {
           /* read object */
           CAload(csb, SBObjects, obj, oid, *objSize);
