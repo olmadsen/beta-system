@@ -2,6 +2,7 @@
 #include <pwd.h>
 #include <malloc.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 char *getPassWdHome(char *name)
      /* Only to be called on arguments of the form "~/" or "~name/".

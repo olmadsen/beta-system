@@ -1,4 +1,5 @@
 #include "beta.h"
+#include "../C/function.h"
 #include "PException.h"
 #include "unswizzle.h"
 #include "../C/rtsighandler.h"
@@ -551,13 +552,13 @@ static long* decodeModRM(struct sigcontext_struct *scp,
 
 void proxyTrapHandler(long sig, struct sigcontext_struct scp)
 {
-  long *proxy, *absAddr = 0;
+  long *proxy = 0, *absAddr = 0;
   unsigned char* PC;
   unsigned char modrm;
 
   if (scp.trapno==5 || scp.trapno==12) {
     BetaSignalHandler(sig, scp);
-    Illegal();
+    DEBUG_CODE(Illegal());
   }
   INFO_PERSISTENCE(numPF++);
   PC = (unsigned char*) scp.eip;

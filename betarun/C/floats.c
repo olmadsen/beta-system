@@ -65,7 +65,12 @@
 #define FPU_OVERFLOW      _FPU_MASK_OM
 #define FPU_UNDERFLOW     _FPU_MASK_UM
 #define FPU_PRECISIONLOST _FPU_MASK_PM
-#define EnableFPUexceptions(mask) __setfpucw(_FPU_DEFAULT & ~(mask))
+/* changed from by mannan
+ * #define EnableFPUexceptions(mask) __setfpucw(_FPU_DEFAULT & ~(mask))
+ */
+void mysetfpucw(int word) {  _FPU_SETCW(word); }
+#define EnableFPUexceptions(mask) mysetfpucw(_FPU_DEFAULT & ~(mask))
+
 #endif
 
 #ifdef hpux9pa

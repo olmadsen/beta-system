@@ -1145,7 +1145,7 @@ char *getLabel (long addr)
       }
     }
   }
-#if defined(sparc) || defined(linux)
+#if defined(sparc) /*|| defined(linux)*/
   /* Fall back on dladdr (for dynamic symbols not found by nm) */
   {
     static Dl_info info;

@@ -985,8 +985,8 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       const char *sym=0;
       long off=0;
       DEBUG_VALHALLA(fprintf(output,"VOP_LOOKUP_SYM_OFF(%d)\n",(int)addr));
-#if defined(sun4s) || defined(linux) 
-      /* Not available for sgi - grrrr... */
+#if defined(sun4s) /*|| defined(linux) */
+      /* Not available for sgi/linux redhat6 - grrrr... */
       {
         static Dl_info info;
         if (dladdr((void*)addr, &info)){
