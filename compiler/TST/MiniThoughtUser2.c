@@ -14,9 +14,9 @@ struct IID
 struct MiniThought; /* forward */
 
 struct vtbl /* virtual dispatch table for MiniThought */
-{ long (*queryIf)(struct MiniThought *this, struct IID *iid, void **ppv);
+{ long (*QueryInterface)(struct MiniThought *this, struct IID *iid, void **ppv);
   long (*addRef)(struct MiniThought *this);
-  long (*deleteRef)(struct MiniThought *this);
+  long (*release)(struct MiniThought *this);
 };
 
 struct MiniThought
@@ -27,9 +27,9 @@ struct MiniThought
 struct calculator; /* forward declaration */
  
 struct vtbl2 /* virtual dispatch table for calculator */
-{ long (*queryIf)(struct calculator *this, struct IID *iid, void **ppv);
+{ long (*QueryInterface)(struct calculator *this, struct IID *iid, void **ppv);
   long (*addRef)(struct calculator *this);
-  long (*deleteRef)(struct calculator *this);
+  long (*release)(struct calculator *this);
   long (*add)(struct calculator *this,long n);
   long (*sub)(struct calculator *this,long n);
   long (*display)(struct calculator *this);
@@ -42,9 +42,9 @@ struct calculator
 /************************ displayer interface *****************/
 struct displayer ;
 struct vtbl3
-{ struct displayer *(*queryIf)(struct displayer *this, struct IID *iid, void **ppv);
+{ struct displayer *(*QueryInterface)(struct displayer *this, struct IID *iid, void **ppv);
   long (*addRef)(struct displayer *this);
-  long (*deleteRef)(struct displayer *this);
+  long (*release)(struct displayer *this);
   long (*displayEnglish)(struct displayer *this);
   long (*displayDanish)(struct displayer *this);
 };
@@ -65,13 +65,13 @@ void PutMiniThought(struct MiniThought * R)
   iid->id2 = 2;
   iid->id3 = 3;
   iid->id4 = 4;
-  H = R->proto->queryIf(R,iid,(void**)&S); /* get calculator IF */
+  H = R->proto->QueryInterface(R,iid,(void**)&S); /* get calculator IF */
 
   S->proto->add(S,100);
   S->proto->sub(S,31);
 
   iid->id1 = 2;
-  H = R->proto->queryIf(R,iid,(void**)&D);  /* get displayer IF */
+  H = R->proto->QueryInterface(R,iid,(void**)&D);  /* get displayer IF */
   D->proto->displayEnglish(D);
   S->proto->add(S,50);
   D->proto->displayDanish(D);
