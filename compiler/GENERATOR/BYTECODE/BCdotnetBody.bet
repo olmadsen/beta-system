@@ -118,12 +118,20 @@ ConvertType:
          (DumpStack, 'ConvertType: T[] is none') -> Stop;
       // 'I' -> T.equal then
          'int32' -> T[];   (if trace_convert then  ' /*I*/' -> T.append if);
-      // 'C' -> T.equal then
-         'char' -> T[];    (if trace_convert then  ' /*C*/' -> T.append if);
       // '[I' -> T.equal then
          'int32[]' -> T[]; (if trace_convert then  ' /*[I*/' -> T.append if);
+      // 'C' -> T.equal then
+         'char' -> T[];    (if trace_convert then  ' /*C*/' -> T.append if);
       // '[C' -> T.equal then
          'char[]' -> T[];  (if trace_convert then  ' /*[C*/' -> T.append if);
+      // 'D' -> T.equal then
+         'float64' -> T[]; (if trace_convert then  ' /*D*/' -> T.append if);
+      // '[D' -> T.equal then
+         'float64[]' -> T[];  (if trace_convert then ' /*[D*/' -> T.append if);
+      // 'Z' -> T.equal then
+         'bool' -> T[]; (if trace_convert then  ' /*Z*/' -> T.append if);
+      // '[Z' -> T.equal then
+         'bool[]' -> T[];  (if trace_convert then ' /*[Z*/' -> T.append if);
      if);
      INNER;
   exit T[]
@@ -419,6 +427,7 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
         // 'I' -> currentType.equal
            then
            'ldc.i4.0' -> out.puttext;
+        // 'float64' -> currentType.equal 
         // 'D' -> currentType.equal (* double/real *) then
            'ldc.r8 0' -> out.puttext; 
         else
@@ -1542,7 +1551,11 @@ do init;
      (if opCode <> end then
          BC.get->opCode; 
          (if trace_opcodes then
-             '/* Opcode %d: %s */' -> out.putformat(# do opCode -> d; opCode->asText->s #);
+             '/* Opcode %d: %s ' -> out.putformat(# do opCode -> d;  opCode->asText->s; #);
+             (if (32<=opcode) and (opcode<=126) then
+                 '\'%c\' ' -> out.putformat(# do opcode->c #);
+             if);
+             '*/' -> out.puttext;
          if);
          (if opCode
           // classDef then
@@ -1831,6 +1844,16 @@ do init;
                     out.nl;
                     'newobj  instance void class [mscorlib]System.String::.ctor(char[])' -> out.puttext;
                     0 -> stack_delta;
+                 // 'AlloS_init' -> prim.equal then
+                    'AlloS_init' -> FIXME;
+                 // 'AlloS_main' -> prim.equal then
+                    'AlloS_main' -> FIXME;
+                 // 'ObjS_init' -> prim.equal then
+                    'ObjS_init' -> FIXME;
+                 // 'ObjS_main' -> prim.equal then
+                    'ObjS_main' -> FIXME;
+                 // 'AlloSI' -> prim.equal then
+                    'AlloSI' -> FIXME;
                  // 'Att' -> prim.equal then
                     'missing call of attach here' -> emitcomment;
                     'we pop the stack to avoid overflow' -> emitcomment;
@@ -2142,7 +2165,8 @@ do init;
                     out.nl;
                     'throw' -> out.puttext;
                  #)
-              // cmpToBool then
+              // cmpToBool
+              // cmpToBoolFloat then
                  (if trace_compares then
                      'cmpToBool' -> emitcomment;
                  if);
@@ -2156,7 +2180,9 @@ do init;
                  (if trace_compares then
                      'cmpAndJmp' -> emitcomment;
                  if);
-                 (BC.get,BC.get,BC.getShort,BC.get) -> emitCmpJmp  
+                 (BC.get,BC.get,BC.getShort,BC.get) -> emitCmpJmp
+              // cmpAndJmpFloat then
+                 (BC.get,BC.get,BC.getShort,0) -> emitCmpJmp
               // cmpBoolAndJmp then
                  (if trace_compares then
                      'cmpBoolAndJmp' -> emitcomment;
@@ -2187,7 +2213,7 @@ do init;
               // dup then
                  BC.get -> arg1;
                  (if BC.get=1 then
-                     'IL has no dup2 instruction' -> FIXME;
+                     (* Same dup is used for doubles on .net *)
                  if);
                  'dup' -> out.puttext;
                  1 -> stack_delta;
@@ -2198,8 +2224,8 @@ do init;
                  'pop' -> out.puttext;
                  -1 -> stack_delta;
               // pop2 then
-                 'pop2' -> FIXME;
-                 -2 -> stack_delta;
+                 'pop' -> out.puttext;
+                 -1 -> stack_delta;
               // allocAndStoreLocal then
                  'BCdotnetBody: bytecode AllocAndStoreLocal should not be used anymore' 
                    -> FIXME;
@@ -2212,16 +2238,6 @@ do init;
               // pushReg then
                  '// pushReg '->out.puttext;
                  dumpReg
-              // stVal then
-                 'stVal'->fixme
-              // index then
-                 'index'->fixme
-              // newVirt then 
-                 'newVirt' ->fixme
-              // label then
-                 'opcode label' -> fixme;
-              // callPrim then
-                 'callPrim'->fixme
               // end then
                  '\n/* end */' -> out.putline;
               // pushText then
@@ -2266,30 +2282,6 @@ do init;
               // double2int then
                  'conv.i4'->out.puttext;
                  -1 -> stack_delta;
-              // cmpAndJmpFloat then
-                 'emitCmpBoolJmp' -> FIXME;
-                 (* dcmpg -> jcf.emit; *)
-                 (BC.get,BC.get,BC.getShort) (* -> emitCmpBoolJmp *);
-                 0 -> stack_delta;
-              // cmpToBoolFloat then
-                 'cmpToBoolFloat' -> FIXME;
-                 BC.get;
-                 (* dcmpg -> jcf.emit;
-                  * (if BC.get
-                  *  // 1 {* =  *} then ifeq -> jcf.emit
-                  *  // 2 {* <> *} then ifne -> jcf.emit
-                  *  // 3 {* <  *} then iflt -> jcf.emit
-                  *  // 4 {* <= *} then ifle -> jcf.emit
-                  *  // 5 {* >  *} then ifgt -> jcf.emit
-                  *  // 6 {* >= *} then ifge -> jcf.emit
-                  * if);
-                  * 8-0 -> jcf.emitShort; {* L1 *}
-                  * bipush -> jcf.emit; 0 -> jcf.emit;
-                  * goto -> jcf.emit;
-                  * 10-5 -> jcf.emitShort; {* L2 *}
-                  * bipush -> jcf.emit; 1 -> jcf.emit;
-                  *)
-                 0 -> stack_delta;
               // func then
                  (# f: @integer;
                     delta: @integer;
@@ -2490,7 +2482,13 @@ do init;
                         #);
                      else
                         (# msg: ^text;
-                        do 'Unhandled bytecode func.' -> msg[];
+                           _f: @integer;
+                        do 'Unhandled bytecode' -> msg[];
+                           (if (32<=f) and (f<=126) then
+                               f -> _f;
+                               ' \'%c\'' -> msg.putformat(# do _f->c #);
+                           if);
+                           ' func.' -> msg.append;
                            f -> asText -> msg.append;
                            ' ('->msg.append;
                            f->msg.putint;
@@ -2505,6 +2503,9 @@ do init;
               else
                  (# msg: ^text;
                  do 'Unhandled bytecode ' -> msg[];
+                    (if (32<=opcode) and (opcode<=126) then
+                        '\'%c\' ' -> msg.putformat(# do opcode->c #);
+                    if);
                     opcode -> asText -> msg.append;
                     ' ('->msg.append;
                     opcode->msg.putint;
