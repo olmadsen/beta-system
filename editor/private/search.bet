@@ -1,4 +1,4 @@
-ORIGIN '../codeviewer';
+ORIGIN '../codeeditor';
 INCLUDE '../searchdialog';
 (*
  * COPYRIGHT
@@ -7,8 +7,8 @@ INCLUDE '../searchdialog';
  *)
 -- searchPrivate: Descriptor --
 (#
-   searchNode: ^astInterface.ast;
    theSearchName: ^text;
+   searchNode: ^astInterface.ast;
    textWithFindSub: text
      (#
         FindCh:
@@ -25,7 +25,7 @@ INCLUDE '../searchdialog';
              for)
           #);
         findSubstring:
-          (# texttofind: ^text; firstch: @char; 
+          (# texttofind: ^text; firstch: @char; startInx: @integer; 
           enter texttofind[]
           do
              1->texttofind.inxget->firstch
@@ -34,18 +34,21 @@ INCLUDE '../searchdialog';
                  do
                     (inx,inx+texttofind.length-1)->sub->foundtext[];
                     (if (foundtext[]->texttofind.equalNCS) then
-                        INNER findSubstring; 
+                        inx->startInx; INNER findSubstring; 
                     if)
                  #)
           #);
         isSubstring:
-          (# string: ^text; found: @boolean; 
+          (# string: ^text; found: @boolean; startInxOfString: @integer; 
           enter string[]
           do
              FALSE->found;
-             l: string[]->findSubstring (#  do TRUE->found; leave l #);
+             l:
+             string[]
+               ->findSubstring
+                 (#  do TRUE->found; startInx->startInxOfString; leave l #);
              
-          exit found
+          exit (found,startInxOfString)
           #);
         
      #);
@@ -94,36 +97,31 @@ INCLUDE '../searchdialog';
         help: ^text;
         help2: @searchPrivate.textWithFindSub;
         found: @boolean;
+        startInx: @integer;
         
      enter direction
      do
-        (if searchNode.frag[] <> cs.node.frag[] then
-            '<>'->putLine;
-            (searchNode[],searchNode[],false)->selectNodeInFormeditor
-         else
-            '='->putLine
-        if);
-        (if (searchNode[] <> none ) and (theSearchName[] <> none ) then
+        (if theSearchName[] <> none then
             (if (theSearchName.length > 0) then
                 cs.node[]->current[];
                 loop:
                   (# 
                   do
                      direction->select;
-                     (if (current[]->cs.node.equal) then false->found;  if);
+                     (if (current[]->cs.node.equal) then
+                         false->found; leave loop; 
+                     if);
                      (if cs.node.kind
                       // mps.kinds.nameDecl // mps.kinds.nameAppl
                       // mps.kinds.string then
                          cs.node[]->lexText[];
                          lexText.getText->help[];
                          help->help2;
-                         (if (theSearchName[]->help2.isSubString) then
-                             true->found;
-                             cs.node[]->searchPrivate.searchNode[];
-                             (cs.node[],1,0,0)->setFocus;
-                             
+                         theSearchname[]->help2.isSubstring->(found,startInx);
+                         (if found then
+                             (cs.node[],1,0,0)->setFocus; 
                           else
-                             restart loop; 
+                             direction->select; restart loop; 
                          if);
                          
                       else
@@ -136,6 +134,43 @@ INCLUDE '../searchdialog';
         if);
         
      exit found
+     #);
+   editLexem:
+     (#
+        node: ^astInterface.ast;
+        oldText,newText: ^text;
+        lexText: ^astInterface.lexemText;
+        help: ^text;
+        help2: @searchPrivate.textWithFindSub;
+        found: @boolean;
+        startInx: @integer
+     enter (node[],oldText[],newText[])
+     do
+        (if (node[] <> none ) and (oldText[] <> none ) and (newText[] <> none )
+         then
+            (if node.kind
+             // mps.kinds.nameDecl // mps.kinds.nameAppl // mps.kinds.string
+             then
+                node[]->lexText[];
+                lexText.getText->help[];
+                help->help2;
+                oldText[]->help2.isSubstring->(found,startInx);
+                (if found then
+                    (startInx,startInx+oldText.length-1)->help.delete;
+                    (newText[],startInx)->help.insert;
+                    help[]->lexText.putText;
+                    true->cs.undoPermit;
+                    (node.father,node.sonNo,cs,1,false)->makeUndoElem;
+                    makeASTreplacedEvent;
+                    cs->setFocus
+                 else
+                    oldText[]->putText;
+                    ' not found in: '->putText;
+                    newText[]->putLine;
+                    
+                if)
+            if)
+        if)
      #);
    
 #)  
@@ -152,17 +187,7 @@ do
    cs.node[]->parsingSynCatNo->(synCatNo,isList,theListElement[]);
    0->t.setPos;
    (synCatNo,screen[],t[],frag[])->ag.parser->parseOK;
-   (if parseOK then
-       (if isList then
-           editorRoot[]->rootNode[];
-           1->rootNode.get->searchPrivate.searchNode[];
-           
-        else
-           editorRoot[]->searchPrivate.searchNode[]; 
-       if);
-       dir.down->searchPrivate.search;
-       
-   if);
+   (if parseOK then dir.down->searchPrivate.search;  if);
    
 #)  
 
@@ -183,6 +208,7 @@ do cs.node[]->searchPrivate.searchNode[]; dir.down->searchPrivate.search;
    lexText: ^astInterface.lexemText;
    help: ^text;
    help2: @searchPrivate.textWithFindSub;
+   startInx: @integer;
    
 do
    (if editorRoot.kind
@@ -197,9 +223,8 @@ do
                 current[]->lexText[];
                 lexText.getText->help[];
                 help->help2;
-                (if (name[]->help2.isSubString) then
-                    true->found;
-                    exp[]->searchPrivate.searchNode[];
+                name[]->help2.isSubstring->(found,startInx);
+                (if found then
                     name[]->searchPrivate.theSearchName[];
                     (current[],1,0,0)->setFocus;
                     leave search;
@@ -209,11 +234,7 @@ do
             if);
             
          #);
-       (if not found then
-           none ->searchPrivate.searchNode[];
-           &text[]->searchPrivate.theSearchName[];
-           
-       if)
+       (if not found then &text[]->searchPrivate.theSearchName[];  if)
    if)
 #)  
 
@@ -225,19 +246,37 @@ do
              next:: 
                (# 
                do
-                  (if searchPrivate.theSearchName[] = none then
-                      ''->searchPrivate.theSearchName[]
-                  if);
-                  (if searchPrivate.theSearchName[]->userText.equal then
-                      searchNext
+                  (if theSifTextEditor[] <> none then
+                      (if searchPrivate.theSearchName[] = none then
+                          ''->searchPrivate.theSearchName[]
+                      if);
+                      (if searchPrivate.theSearchName[]->userText.equal then
+                          (if not searchNext then
+                              (none ,' not found'->usertext.copyAppend,'Search')
+                                ->UI.alertUser
+                          if)
+                       else
+                          (if not (userText[]->searchName) then
+                              (none ,' not found'->usertext.copyAppend,'Search')
+                                ->UI.alertUser
+                          if)
+                      if)
                    else
-                      (if not (userText[]->searchName) then
+                      'not active'->putline
+                  if)
+               #);
+             previous:: 
+               (# 
+               do
+                  (if theSifTextEditor[] <> none then
+                      (if not searchPrev then
                           (none ,' not found'->usertext.copyAppend,'Search')
                             ->UI.alertUser
                       if)
+                   else
+                      'not active'->putline
                   if)
                #);
-             previous::  (#  do searchPrev #);
              cancel::  (#  do  #);
              
           #);
@@ -247,7 +286,69 @@ do
         ((frag.father).name).copy->fragmentDefaultName->help[];
         '-'->help.append;
         frag.name->help.append;
-        (none ,help[],'Search for:',searchPrivate.theSearchName[])
+        (none ,help[],'Search in lexems for:',searchPrivate.theSearchName[])
           ->searchd.popup
+     #)  
+
+-- doReplace: DoPart --
+do
+     (#
+        replaced: @UI.replaceWindow
+          (#
+             next:: 
+               (# 
+               do
+                  (if theSifTextEditor[] <> none then
+                      (if searchPrivate.theSearchName[] = none then
+                          ''->searchPrivate.theSearchName[]
+                      if);
+                      (if searchPrivate.theSearchName[]->searchText.equal then
+                          (if not searchNext then
+                              (none ,' not found'->searchtext.copyAppend,
+                               'Search')->UI.alertUser
+                          if)
+                       else
+                          (if not (searchText[]->searchName) then
+                              (none ,' not found'->searchtext.copyAppend,
+                               'Search')->UI.alertUser
+                          if)
+                      if)
+                   else
+                      'not active'->putline
+                  if)
+               #);
+             previous:: 
+               (# 
+               do
+                  (if theSifTextEditor[] <> none then
+                      (if not searchPrev then
+                          (none ,' not found'->searchText.copyAppend,'Search')
+                            ->UI.alertUser
+                      if)
+                   else
+                      'not active'->putline
+                  if)
+               #);
+             replace:: 
+               (# 
+               do
+                  (if theSifTextEditor[] <> none then
+                      (cs.node[],searchText[],replaceText[])
+                        ->searchPrivate.editLexem
+                   else
+                      'not active'->putline
+                  if)
+               #);
+             cancel::  (#  do  #);
+             
+          #);
+        help: ^text
+     do
+        replaced.open;
+        ((frag.father).name).copy->fragmentDefaultName->help[];
+        '-'->help.append;
+        frag.name->help.append;
+        (none ,help[],'Search in lexems for:','Replace with:',
+         searchPrivate.theSearchName[])->replaced.popup
      #)  
 
