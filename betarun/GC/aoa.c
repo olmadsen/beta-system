@@ -26,7 +26,6 @@ static void Phase3();
 
 long AOACreateNewBlock = FALSE;
 
-
 /* AOAalloc allocate 'size' number of bytes in the Adult object area.
  * If the allocation succeeds the function returns a reference to the allocated
  * object, 0 otherwise.
@@ -223,49 +222,112 @@ void AOAGc()
   asmemptylabel(EndAOA);
 }
 
+
+static long *RAFStackBase;
+static long *RAFStackTop;
+static long *RAFStackLimit;
+
+static extendRAFStackArea(void)
+/* Extend (temporary) space used to hold unprocessed reverse-and-follow references. */
+{
+  long oldSize;
+  long newSize;
+  long *newBase;
+
+  oldSize = (long)RAFStackTop - (long)RAFStackBase;
+  newSize = oldSize * 2;
+  if ((newBase = (long *)MALLOC(newSize)) != NULL) {
+    INFO_AOA(fprintf(output, 
+		     "#(AOA: RAF stack area allocated: %d longs)\n", 
+		     newSize/4));
+  } else {
+    fprintf(output,"AOA GC: Failed to malloc RAF stack area: %d longs.\n", 
+	    newSize/4);
+    exit(-1);
+  }
+  memcpy(newBase, RAFStackBase, oldSize);
+  if (RAFStackBase != IOA) {
+    FREE(RAFStackBase);
+    INFO_AOA(fprintf(output, 
+		     "#(AOA: RAF stack area freed: %d longs)\n", oldSize/4));
+  }
+  RAFStackBase = newBase;
+  RAFStackLimit = (long*) ((long)RAFStackBase + newSize);
+  RAFStackTop = (long*)((long)RAFStackBase + oldSize);
+}
+
+static freeRAFStackArea(void)
+/* Free any external space allocated to hold unprocessed RAF-references */
+{
+  if (RAFStackBase != IOA) {
+    FREE(RAFStackBase);
+    INFO_AOA(fprintf(output, "#(AOA: RAF stack area freed: %d longs)\n", 
+		     ((long)RAFStackLimit - (long)RAFStackBase)/4));
+  }
+}
+
+#define RAFPush(p) { \
+    if (RAFStackTop >= RAFStackLimit) \
+      extendRAFStackArea(); \
+    *RAFStackTop++ = (long)(p); \
+  }
+
 /* ReverseAndFollow is used during Phase1 of the Mark-Sweep GC. 
- * It reverse the pointer and calls FollowObject iff the refered
+ * It reverses the pointer and calls FollowObject iff the referenced 
  * object has not been followed.
  */
-static ReverseAndFollow( theCell)
-     handle(Object) theCell;
+
+static ReverseAndFollow(void)
 {
-  ref(Object) theObj = *theCell;
+  handle(Object) theCell;
+  ref(Object) theObj;
   ref(Object) autObj;
+
+  while (RAFStackTop > RAFStackBase) {
+    theCell = casthandle(Object)(*--RAFStackTop);
+    theObj = *theCell;
   
-  if( inAOA( theObj) ){
-    if( theObj->GCAttr == 0 ){
-      /* theObj is autonomous and not marked. */
-      *theCell = (ref(Object)) 1; theObj->GCAttr = (long) theCell;
-      FollowObject( theObj);
-      return;
+    if( inAOA( theObj) ){
+      if( theObj->GCAttr == 0 ){
+	/* theObj is autonomous and not marked. */
+	*theCell = (ref(Object)) 1; theObj->GCAttr = (long) theCell;
+	FollowObject( theObj);
+	continue;
     }
-    if( !(isStatic(theObj->GCAttr)) ){
-      /* theObj is marked. */
-      *theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
-      return;
-    }
-    /* theObj-GCAttr < 0, so theObj is a static Item. */
-    autObj = theObj;
-    while( isStatic(autObj->GCAttr) )
-      autObj = (struct Object *) Offset( autObj, autObj->GCAttr*4 );
-    if( autObj->GCAttr == 0){
-      /* The autonomous objects is not marked: so mark it and follow the object.
-       */
-      autObj->GCAttr = 1;    
-      *theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
-      FollowObject( autObj);
+      if( !(isStatic(theObj->GCAttr)) ){
+	/* theObj is marked. */
+	*theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
+	continue;
+      }
+      /* theObj-GCAttr < 0, so theObj is a static Item. */
+      autObj = theObj;
+      while( isStatic(autObj->GCAttr) )
+	autObj = (struct Object *) Offset( autObj, autObj->GCAttr*4 );
+      if( autObj->GCAttr == 0){
+	/* The autonomous objects is not marked: so mark it and follow the object.
+	 */
+	autObj->GCAttr = 1;    
+	*theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
+	FollowObject( autObj);
+      }else{
+	*theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
+      }
     }else{
-      *theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
-    }
-  }else{
-    if(  inAOA(theCell) && inLVRA( theObj) ){
-      /* Save the theCell for later use */
-      AOAtoLVRAtable[AOAtoLVRAsize++] = (long) theCell;
-      DEBUG_LVRA( Claim( isValRep(*theCell), "Phase1: LVRA cycle"));
-      DEBUG_LVRA( Claim( (*theCell)->GCAttr == (long) theCell,
-			"Phase1: LVRA cycle"));
-      if( AOAtoLVRAsize > (IOASize/4) ) BetaError(AOAtoLVRAfullErr, 0);
+      if (inAOA(theCell) && inLVRA(theObj)) { 
+	/* Save the theCell for later use */
+	if ((long *)RAFStackTop >= AOAtoLVRAtable)
+	  if (AOAtoLVRAtable > IOA) 
+	    extendRAFStackArea(); 
+	  else
+	    BetaError(AOAtoLVRAfullErr, 0);
+	*--AOAtoLVRAtable = (long)theCell;
+	AOAtoLVRAsize++;
+	if (RAFStackBase == IOA)
+	  RAFStackLimit--;
+	DEBUG_LVRA( Claim( isValRep(*theCell), "Phase1: LVRA cycle"));
+	DEBUG_LVRA( Claim( (*theCell)->GCAttr == (long) theCell,
+			  "Phase1: LVRA cycle"));
+      }
     }
   }
 }
@@ -296,10 +358,14 @@ static FollowItem( theObj)
      * always multiples of 4, these bits may be used to distinguish
      * different reference types. */ 
 #ifdef RTLAZY
-    if( *theCell > 0 ) ReverseAndFollow( theCell );
-    else if (isLazyRef (*theCell)) negAOArefsINSERT ((long) theCell);
+    if (*theCell > 0)
+      {RAFPush(theCell);}
+    else 
+      if (isLazyRef (*theCell)) 
+	negAOArefsINSERT ((long) theCell);
 #else
-    if( *theCell != 0 ) ReverseAndFollow( theCell );
+    if (*theCell != 0) 
+      RAFPush(theCell);
 #endif
   }
 }
@@ -331,18 +397,19 @@ static void FollowObject( theObj)
 	size = toRefRep(theObj)->HighBorder;
 	pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
 	
-	for(index=0; index<size; index++) 
+	for (index=0; index<size; index++) {
 #ifdef RTLAZY
-	  if( *pointer > 0) ReverseAndFollow( pointer++ );
+	  if( *pointer > 0) 
+	    {RAFPush(pointer);} 
 	  else 
 	    if (isLazyRef (*pointer))
-	      negAOArefsINSERT ((long) pointer++);
-	    else
-	      pointer++;
+	      negAOArefsINSERT ((long)pointer);
 #else
-	if( *pointer != 0) ReverseAndFollow( pointer++ );
-	else pointer++;
+	  if( *pointer != 0) 
+	    RAFPush(pointer);
 #endif
+	  pointer++;
+	}
       }
       return;
       
@@ -350,9 +417,9 @@ static void FollowObject( theObj)
       { ref(Component) theComponent;
 	
 	theComponent = Coerce( theObj, Component);
-	ReverseAndFollow( &theComponent->StackObj);
-	ReverseAndFollow( &theComponent->CallerComp);
-	ReverseAndFollow( &theComponent->CallerObj);
+	RAFPush(&theComponent->StackObj);
+	RAFPush(&theComponent->CallerComp);
+	RAFPush(&theComponent->CallerObj);
 	FollowItem( ComponentItem( theComponent));
       }
       return;
@@ -362,11 +429,11 @@ static void FollowObject( theObj)
       return;
       
     case (long) StructurePTValue:
-      ReverseAndFollow( &(toStructure(theObj))->iOrigin );
+      RAFPush(&(toStructure(theObj))->iOrigin);
       return;
 
     case (long) DopartObjectPTValue:
-      ReverseAndFollow( &(cast(DopartObject)(theObj))->Origin );
+      RAFPush(&(cast(DopartObject)(theObj))->Origin);
       return;
     }
   }else FollowItem( theObj);
@@ -378,11 +445,30 @@ static void FollowObject( theObj)
  */
 static void Phase1()
 { /* Call FollowReference for each root to AOA. */
+
+  /*  During AOA GC, IOA (ie. from-space) is unused; during Phase 1, it is   */
+  /*  utilized as follows:                                                   */
+  /*  Unprocessed reverse-and-follow references are stored from IOA upwards; */
+  /*  references from AOA to LVRA are stored from IOALimit downwards.        */
+  /*  On clash, RAF area is allocated externally and freed at end of phase.  */
+  /*  If RAF area runs full, it is dynamically resized; if AOA-to-LVRA       */
+  /*  reference table runs full, AOAtoLVRAfullErr error is signalled.        */
+  /*                                                                         */
+  /*  IOA                                AOAtoLVRAtable          IOALimit    */
+  /*  v                                  v                       v           */
+  /*  +----------------+----------------+-----------------------+            */
+  /*  |xxxxxxxxxxxxxxxx|                |xxxxxxxxxxxxxxxxxxxxxxx|            */
+  /*  +----------------+----------------+-----------------------+            */
+  /*  ^                 ^                ^                                   */
+  /*  RAFStackBase      RAFStackTop      RAFStackLimit                       */
+
   ptr(long) pointer = AOArootsLimit;
-  
-  /* temporarily use IOA for table. Only ToSpace contains usefull informations */
-  AOAtoLVRAtable = (ptr(long)) Offset(IOA, IOASize/2) ;
-  AOAtoLVRAsize  = 0;
+
+  AOAtoLVRAtable = IOALimit;
+  AOAtoLVRAsize = 0;
+  RAFStackBase = IOA;
+  RAFStackTop = IOA;
+  RAFStackLimit = AOAtoLVRAtable;
   
 #ifdef RTDEBUG
   { /* Make sure that there are no duplicate AOA roots! */
@@ -400,7 +486,7 @@ static void Phase1()
 	INFO_AOA(fprintf(output, "Phase1: Duplicate AOA root: 0x%x\n", old));
       } else {
 	old = *pointer;
-	ReverseAndFollow(*pointer & ~1);
+	RAFPush(*pointer & ~1);
       }
     }
   }
@@ -420,9 +506,11 @@ static void Phase1()
       *pointer |= 1;         /* set it in table */
     }
 #endif
-    ReverseAndFollow( *pointer & ~1);
+    RAFPush(*pointer & ~1);
   }
-#endif
+#endif /* RTDEBUG */
+  ReverseAndFollow();
+  freeRAFStackArea();
 }
 
 #define isAlive(x)  (toObject(x)->GCAttr != 0)
@@ -628,8 +716,7 @@ static void Phase3()
     }
   }
   
-  if( ((long) IOALimit - (long) IOA) > (AOAtoIOACount * 8) )
-    /* Only use half of IOA area. */
+  if ((long)AOAtoLVRAtable - (long)IOA > AOAtoIOACount * 4)
     table = IOA;
   else {
     if( !(table = (ptr(long)) MALLOC( AOAtoIOACount * 4))){
