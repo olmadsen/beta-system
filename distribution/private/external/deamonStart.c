@@ -23,7 +23,7 @@ long deamonStart (int ignsigcld)
 #ifdef hpux
 #define _USE_SYSTEMV 1
 #else
-  #if (defined(sun4s) || defined(linux))
+  #if (defined(sun4s) || defined(linux) || defined(x86sol))
   #define _USE_SYSTEMV 1
   #else
     #ifdef SIGTSTP
