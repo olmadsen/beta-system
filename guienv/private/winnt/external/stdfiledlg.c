@@ -7,7 +7,7 @@
 #include <malloc.h>
 #endif
 
-LPSTR stdopenfiledlg( HWND owner, char* szFilterIn, char* szDirNameIn, char* szFileIn, char* inDialogTitle)
+LPSTR stdopenfiledlg( HWND owner, char* szFilterIn, char* szDirNameIn, char* szFileIn, char* szDefExt, char* inDialogTitle)
 {
   char* szDirName;
   char* szFile;
@@ -54,6 +54,7 @@ LPSTR stdopenfiledlg( HWND owner, char* szFilterIn, char* szDirNameIn, char* szF
   ofn.nMaxFileTitle = 0;
   ofn.lpstrInitialDir = szDirName;
   ofn.lpstrTitle = szDialogTitle;
+  ofn.lpstrDefExt = szDefExt;
   ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
   if (GetOpenFileName(&ofn))
     {
@@ -75,7 +76,7 @@ LPSTR stdopenfiledlg( HWND owner, char* szFilterIn, char* szDirNameIn, char* szF
     }
 }
 
-LPSTR stdsavefiledlg( HWND owner, char* szFilterIn, char* szDirNameIn, char* szFileIn, char* inDialogTitle)
+LPSTR stdsavefiledlg( HWND owner, char* szFilterIn, char* szDirNameIn, char* szFileIn, char* szDefExt, char* inDialogTitle)
 {
   char* szDirName;
   char* szFile;
@@ -120,6 +121,7 @@ LPSTR stdsavefiledlg( HWND owner, char* szFilterIn, char* szDirNameIn, char* szF
   ofn.nMaxFileTitle = 0;
   ofn.lpstrInitialDir = szDirName;
   ofn.lpstrTitle = szDialogTitle;
+  ofn.lpstrDefExt = szDefExt;
   ofn.Flags = OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY;
   if (GetSaveFileName(&ofn))
     {
