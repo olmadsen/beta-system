@@ -348,13 +348,17 @@ EOT
     print <<"EOT" if ($flags&$flag_hash);
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$hashfromparent"></SCRIPT>
 EOT
-    print <<"EOT" if ($flags&$flag_hash);
+    if ($flags&$flag_hash){
+	my ($b) = $basename;
+	$b =~ s/\./_/g;
+	print <<"EOT";
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript">
 <!--
-    CheckParent("$basename");
+    CheckParent("$b");
 //-->
 </SCRIPT>
 EOT
+}
 
     print <<"EOT" if ($flags&$flag_print);
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$printframe"></SCRIPT>
