@@ -8,7 +8,7 @@
 ;; (if (not betalib) (setq betalib "/usr/local/lib/beta"))
 ;; 
 ;; (setq load-path (append load-path 
-;; 			(list (format "%s/emacs/current" betalib))))
+;; 			(list (format "%s/emacs" betalib))))
 ;;
 ;; (autoload 'beta-mode "beta-mode")
 ;; (setq auto-mode-alist (append (list (cons "\\.bet$" 'beta-mode))
@@ -17,8 +17,8 @@
 ;; When in beta-mode, you can get to know more about beta-mode by using
 ;; M-x describe-mode.
 
-;; This mode was programmed by Peter |rb{k (poe@daimi.aau.dk).
-;; Peter Andersen (datpete@mjolner.dk), Kim Jensen M|ller (kjm@mjolner.dk)
+;; This mode was programmed by Peter Ørbæk (poe@daimi.aau.dk).
+;; Peter Andersen (pa@mjolner.dk), Kim Jensen M|ller (kjm@mjolner.dk)
 ;; Tommy Thorn (tthorn@daimi.au.dk) all contributed with additions, 
 ;; suggestions and bugfixes.
 ;; J|rgen Lindskov (jlk@mjolner.dk) provided the comment-justify etc. 

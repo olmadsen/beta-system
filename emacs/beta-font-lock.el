@@ -41,7 +41,7 @@
 ;;; To make it possible for emacs to find this file, you must have the 
 ;;; path to it in your 'load-path'.  This might already be the case, 
 ;;; otherwise you can use something like
-;;; '(setq load-path (cons "/usr/local/lib/beta/emacs/v1.6" load-path))'.
+;;; '(setq load-path (cons "/usr/local/lib/beta/emacs" load-path))'.
 ;;;
 ;;; NB: If you _do_not_ want to use "beta-menu19" you can execute
 ;;; '(setq beta-font-lock-insert-menus-p nil)'.  By default,
@@ -53,7 +53,7 @@
 ;;;
 ;;; Executive summary:
 ;;;
-;;;  (setq load-path (cons "/users/beta/emacs/v1.6" load-path)); if needed
+;;;  (setq load-path (cons "/users/beta/emacs" load-path)); if needed
 ;;; 
 ;;;  (defun mybeta () 
 ;;;    (interactive)
