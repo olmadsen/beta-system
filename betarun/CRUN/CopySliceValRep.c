@@ -313,7 +313,7 @@ ParamORepObjOffLowHigh(CopySVRI)
 
     size = DynObjectRepSize(range);
 
-    { FIXME: AOA alloc missing }
+    /* FIXME: AOA alloc missing */
 
     Protect2(theRep,theObj,newRep = (ObjectRep *) IOAalloc(size));
     
@@ -367,7 +367,7 @@ ParamORepObjOffLowHigh(CopySVRC)
 
     size = DynObjectRepSize(range);
 
-    { FIXME: AOA alloc missing }
+    /* FIXME: AOA alloc missing */
 
     Protect2(theRep,theObj,newRep = (ObjectRep *) IOAalloc(size));
     

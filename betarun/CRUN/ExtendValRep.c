@@ -320,7 +320,7 @@ ParamObjOffRange(ExtVRI)
 
   /* Allocate new repetition */
   
-  { FIXME: AOA alloc missing }
+  /* FIXME: AOA alloc missing */
 
   Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
   
@@ -399,7 +399,7 @@ ParamObjOffRange(ExtVRC)
 
   /* Allocate new repetition */
   
-  { FIXME: AOA alloc missing }
+  /* FIXME: AOA alloc missing */
 
   Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
   
