@@ -16,6 +16,9 @@
 #define QuaOrigErr         -16 /* Qualification error in reference assignment; origins differ */
 #define RecursiveAttErr    -17 /* Attempt to attach a component that is already attached */
 
+#ifdef RTDEBUG
+#define InterruptErr       -28 /* User Interupt */
+#endif
 #define EmulatorTrapErr    -29 /* Emulator trap */
 #define IllegalInstErr     -30 /* Illegal instruction */
 #define BusErr             -31 /* Bus error */
