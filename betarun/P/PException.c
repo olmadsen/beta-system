@@ -703,7 +703,7 @@ static unsigned long DecodeFormatI(struct sigcontext *scp,
   unsigned long proxy;
 
   DEBUG_CODE({
-    fprintf(output, "DecodeFormatI: instruction=0x%08x\n",instruction);
+    fprintf(output, ", DecodeFormatI: instruction=0x%08x",instruction);
   });
 
   rs = (instruction >> 21) & 0x1f;
@@ -711,7 +711,7 @@ static unsigned long DecodeFormatI(struct sigcontext *scp,
 
   proxy = getRegisterContents(scp, rs);
   DEBUG_CODE({
-    fprintf(output, "DecodeFormatI: reg=%d, value=0x%08x\n", 
+    fprintf(output, ", DecodeFormatI: reg=%d, value=0x%08x", 
 	    (int)rs, (int)proxy);
   });
   if (!proxy) { /* RefNone */
@@ -738,81 +738,79 @@ static void proxyTrapHandler(long sig, long code, struct sigcontext * scp, char 
 {
   unsigned long instruction, opcode;
   unsigned long proxy = 0;
-  int isBeta;
   long *PC;
-
+  
+  static int reentered = 0;
+  
+  /* Make sure signal handler is reinstalled. */
+  InstallProxyHandler();
+  
   PC = (long *) scp->sc_pc;
 
   INFO_PERSISTENCE(numPF++);
   DEBUG_CODE({
-    fprintf(output, "(proxyTrapHandler:PC=0x%08x, ", (int)PC);
+    fprintf(output, "(proxyTrapHandler:PC=0x%08x", (int)PC);
     fflush(output);
   });
-
-  isBeta = !((int)PC&3) && IsBetaCodeAddrOfProcess((unsigned long)PC);
-  if (!isBeta){
-    DEBUG_CODE({
-      fprintf(output, "(outside BETA code))\n");
-      fflush(output);
-    });
-  } else {
-    DEBUG_CODE({
-      fprintf(output, "is BETA code address: ");
-      fflush(output);
-      fprintf(output, "instr=0x%08x)\n", (int)*PC);
-      fflush(output);
-    });
     
-    /* Fetch the faulting instruction. */
-    dummy = instruction = *PC;
-    opcode = (instruction & 0xfc000000);
-    switch (opcode) {
-    case /* LW   */ 0x8c000000: 
-      proxy = DecodeFormatI(scp, instruction);
-      break;
-    default:
-      fprintf(output, "proxyTrapHandler: instruction=0x%08x\n",instruction);
-    }
+  /* Fetch the faulting instruction. */
+  if (!reentered) {
+    reentered = 1;
     
-    if (proxy > 1) {
-      proxy = (unsigned long)unswizzleReference((long*)proxy);
-      DEBUG_CODE({
-	fprintf(output, "proxyTrapHandler: reg=%d set to value=0x%08x\n", 
-		(int)regToSet, (int)proxy);
-      });
-      setRegisterContents(scp, regToSet, proxy);
-      InstallProxyHandler();
-      return;
-    }
-    
-    if (proxy == 1) {
-      long todo;
-      Object *theObj = CurrentObject = (Object *)scp->sc_regs[30];
-      if (!(inBetaHeap(theObj) && isObject(theObj))) {
-	theObj = NULL;
+    if ((dummy = (instruction = *PC))) {
+      opcode = (instruction & 0xfc000000);
+      if (opcode == /* LW   */ 0x8c000000) {
+	proxy = DecodeFormatI(scp, instruction);
+	if (proxy >= (unsigned long)PIT) {
+	  if (proxy <= (unsigned long)PITLimit) {
+	    proxy = (unsigned long)unswizzleReference((long*)proxy);
+	    DEBUG_CODE({
+	      fprintf(output, ", reg=%d set to value=0x%08x)\n", 
+		      (int)regToSet, (int)proxy);
+	    });
+	    setRegisterContents(scp, regToSet, proxy);
+	    reentered = 0;
+	    return;
+	  } else {
+	    DEBUG_CODE({fprintf(output, ", proxy = 0x%X > limit)\n", (int)proxy);};);
+	  }
+	} else {
+	  DEBUG_CODE({fprintf(output, ", proxy = 0x%X < limit)\n", (int)proxy);};);
+	}
+      } else {
+	DEBUG_CODE({fprintf(output, ", opcode = 0x%X != LW)\n", (int)opcode);};);
       }
-      StackEndAtSignal = StackEnd = (long*)scp->sc_regs[29];
+    } else {
+      DEBUG_CODE({fprintf(output, ", opcode == 0x0)\n");};);      
+    }
+  } else {
+    DEBUG_CODE({fprintf(output, ", reentered)\n");};);     
+  }
+  
+  {
+    long todo;
+    Object *theObj = CurrentObject = (Object *)scp->sc_regs[30];
+    if (!(inBetaHeap(theObj) && isObject(theObj))) {
+      theObj = NULL;
+    }
+    StackEndAtSignal = StackEnd = (long*)scp->sc_regs[29];
 #ifdef RTVALHALLA
-      if (valhallaID) {
-	/* We are running under valhalla */
-	register_handles handles = {-1, -1, -1, -1, -1};
-	DEBUG_CODE(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
-	SaveSGIRegisters(scp, &handles);
-	todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); 
-	RestoreSGIRegisters(scp, &handles);
-	if (!todo) BetaExit(1);
-	return;
-      } 
-#endif /* RTVALHALLA */
-      /* Not running under valhalla */
+    if (valhallaID) {
+      /* We are running under valhalla */
+      register_handles handles = {-1, -1, -1, -1, -1};
+      DEBUG_CODE(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
+      SaveSGIRegisters(scp, &handles);
       todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); 
+      RestoreSGIRegisters(scp, &handles);
       if (!todo) BetaExit(1);
       return;
-    }
+    } 
+#endif /* RTVALHALLA */
+    /* Not running under valhalla */
+    todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); 
+    if (!todo) BetaExit(1);
+    return;
   }
-  /* If we get here, it was an ordinary SIGBUS, SIGSEGV or object
-     could not be loaded */
-  BetaSignalHandler(sig, code, scp, addr);
 }
 /******************************* SGI end ******************************/
 #endif /* sgi */
@@ -866,4 +864,38 @@ void printProxyStatistics(void)
 }
 #endif /* RTINFO */
 
+#ifdef RTDEBUG
+void chrashSIGSEGV(void)
+{
+  long *addr, cont;
+   
+  fprintf(stderr, "chrashSIGSEGV (0x%X):\n", (int)chrashSIGSEGV);
+
+  addr = (long *)0x0;
+  cont = *addr;
+   
+  fprintf(stderr, "Contents of 0x%X = 0x%X\n", (int)addr, (int)cont);
+}
+
+void chrashSIGBUS(void)
+{
+  long *addr, cont;
+   
+  fprintf(stderr, "chrashSIGBUS (0x%X):\n", (int)chrashSIGBUS);
+
+  addr = (long *)0x1;
+  cont = *addr;
+   
+  fprintf(stderr, "Contents of 0x%X = 0x%X\n", (int)addr, (int)cont);
+}
+
+void chrashFuncNULL(void)
+{
+  long (*func)(void) = NULL;
+  
+  fprintf(stderr, "chrashFuncNULL (0x%X):\n", (int)chrashFuncNULL);
+
+  fprintf(stderr, "Func val = %X\n", func());
+}
+#endif /* DEBUG */
 #endif /* PERSIST */
