@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Misc.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:49 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: Misc.c,v $, rel: %R%, date: $Date: 1992-08-31 19:17:58 $, SID: $Revision: 1.9 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -48,7 +48,6 @@ IOAalloc(unsigned size)
 
   GCable_Entry();
 
-  if(size & 7) { p = 1; *((long *)p) = 0; }
   while ((char *)IOATop+size > (char *)IOALimit) {
       ReqObjectSize = size / 4;
       DoGC();
