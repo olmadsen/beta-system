@@ -33,9 +33,15 @@
 
 #ifdef hppa
 #ifdef UseRefStack
-#define GetPCandSP() { PC = 0; /* StackEnd not used */ }
+#define GetPCandSP() { \
+  PC = (long *) (scp->sc_pcoq_head & (~3)); \
+  /* StackEnd not used */\
+}
 #else /* UseRefStack */
-#define GetPCandSP() { PC = 0; StackEnd = (long *) scp->sc_sp; }
+#define GetPCandSP() { \
+  PC = (long *) (scp->sc_pcoq_head & (~3)); \
+  StackEnd = (long *) scp->sc_sp; \
+}
 #endif /* UseRefStack */
 #endif /* hppa */
 
@@ -243,7 +249,6 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #ifdef hppa
   /* Try to fetch the address of current Beta object in %r3 (This).*/
   /* See /usr/include/sys/signal.h and /usr/include/machine/save_state.h */
-  PC = (long *) scp->sc_ret1;
   theCell = (handle(Object)) &scp->sc_gr3;
   if( inIOA( *theCell))
     if( isObject( *theCell)) theObj  = *theCell;
@@ -272,6 +277,12 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
        */
       switch(code){
       case 0xd: /* int div by zero */
+	/* The current BETA compiler calls the leaf routine IDiv with r31 
+	 * as return register. 
+	 * Thus the actual BETA code address is in r31. However, the two
+	 * LSB seems to be used for some tagging, so we mask them off.
+	 */
+	PC = (long*)((scp->sc_gr31 & (~3)) - 8);
 	todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
       case 0xe: /* fp div by zero */
 	todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
