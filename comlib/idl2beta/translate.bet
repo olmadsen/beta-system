@@ -10,7 +10,7 @@ BODY 'attributes';
 
 --Translate: Descriptor --
 (#
-   BobsTab: (# exit '~beta/grammars/idl/v2.0/idl-parser.btab' #);
+   BobsTab: (# exit '$(BETALIB)/grammars/idl/v2.0/idl-parser.btab' #);
    
    ast: @astInterface
      (* An instance of the AST interface *)
@@ -34,7 +34,7 @@ BODY 'attributes';
    
    InitAstEnv:
      (* Initialization of the meta programming system *)
-     (# 
+     (# parser_entry, bidl_entry: @diskentry;
      do 
 	(if Debug then
             (ast.trace.topOpen,true) -> ast.trace.set;
@@ -46,9 +46,16 @@ BODY 'attributes';
             (ast.trace.getBinding,true) -> ast.trace.set;
             (ast.trace.getBindingMark,true) -> ast.trace.set;
         if);
+        BobsTab -> ast.expandToFullPath -> parser_entry.path;
+        1 -> Arguments -> bidl_entry.path;
+        (if bidl_entry.modtime < parser_entry.modtime then
+            'Parser is newer than bidl executable - recompile bidl!'
+              -> screen.putline;
+            stop;
+        if);
 	ast.astLevelInit;
         idl.init; 
-	BobsTab -> ast.expandToFullPath 
+	parser_entry.path
           -> idl.parser.initialize(# EOLasComEnd::(#do true->value#) #);
      #);
    
@@ -139,21 +146,27 @@ BODY 'attributes';
    do_definitions:
      (# d: ^idl.definitions;
      enter d[]
-     do d.newscan
+     do Outfile.Origin;
+        (* First handle imports *)
+        d.newscan
+	(# 
+	do (if current.symbol=idl.import then current[] -> do_import if)
+        #);
+        outfile.Lib;
+        d.newscan
 	(# t: ^text;
-	do 
-	   (if current.symbol
+	do (if current.symbol
             // idl.def_type_dcl then current[] -> do_def_type_dcl 
             // idl.const_dcl then current[] -> do_const_dcl;
             // idl.except_dcl then current[] -> do_except_dcl;
             // idl.interface_dcl then current[] -> do_interface_dcl;
             // idl.forward_dcl then current[] -> do_forward_dcl;
             // idl.module then current[] -> do_module;
-            // idl.import then current[] -> do_import;
+            // idl.import then (* handled above *)
             // idl.library
             // idl.coclass
             // idl.importlib then 
-               'Type Library Information not Translated' -> t[];
+               'type-library information not translated' -> t[];
                '    ['-> screen.puttext; t[] -> screen.puttext;
                ']' -> screen.putline;
                t[] -> outfile.commentline;
@@ -270,9 +283,13 @@ BODY 'attributes';
    
    do_import: 
      (# m: ^idl.import;
+        lib: ^text;
      enter m[]
-     do outfile.indent;
-        'do_import NYI' -> outfile.commentline;
+     do 'INCLUDE \'' -> outfile.puttext;
+        m.getstring -> StringToText -> lib[];
+        '.idl' -> lib.stripExtension;
+        lib[] -> outfile.puttext;
+        '\';' -> outfile.putline;
      #);
    
    do_definition_error: 
