@@ -420,43 +420,62 @@ do_struct_body:
             (# d: ^idl.declarator;
                dcl_info: ^declarator_info;
                info: ^type_info;
+               isArray: @boolean;
             do (if first_done then
                    output.indent;
                 else
                    true -> first_done;
                if);
-               &type_info[] -> info[];
+               
                &declarator_info[] -> dcl_info[];
+               &idl_attributes[] -> dcl_info.attributes[];
+               (dcl_info.attributes[], sd.getattributes_specs) -> do_attributes_specs;
                (dcl_info[], current[]) -> do_declarator;
                dcl_info.name[] -> output.puttext;
                ': '->output.puttext;
-               (if dcl_info.pointer_level>0 then
-                   '^' -> output.put;
-                else
-                   '@' -> output.put;
-               if);
                
-               
+               &type_info[] -> info[];
                (info[], local_types[], sd.gettype_spec, false) 
                  -> do_type_spec;
-               info.representation[] -> output.puttext;
-               (if dcl_info.pointer_level+info.pointer_level
-                // 0 then
-                   (* not holder *)
-                // 1 then
-                   (if info.category=type_cat_basic then
-                       (* pointer to basic type *)
-                       'Holder' -> output.puttext;
-                   if)
+               (if dcl_info.type[]=NONE then
+                   info[] -> dcl_info.type[];
+               if);
+               
+               (* Emit BETA representation of member type *)
+               (* Find out if it is an array *)
+               (((info.attributes[]<>NONE) and
+                ((info.attributes.array_size.size_is[]<>NONE) or
+                 (info.attributes.array_size.length_is[]<>NONE)))
+                or
+                ((dcl_info.attributes[]<>NONE) and
+                 ((dcl_info.attributes.array_size.size_is[]<>NONE) or
+                  (dcl_info.attributes.array_size.length_is[]<>NONE)))) 
+                 -> isArray;
+               (if isArray then
+                   '@int32' -> output.puttext;
+                   '(Build argument array in ExternalRecord)' -> output.spacecomment;
                 else
-                   'Holder' -> output.puttext;
+                   (if (info.representation[]<>NONE) and (info.representation.length>0) then
+                       (if dcl_info.pointer_level+info.pointer_level>0 then
+                           '^' -> output.put;
+                        else
+                           '@' -> output.put;
+                       if);
+                       info.representation[] -> output.puttext;
+                       (if dcl_info.pointer_level+info.pointer_level
+                        // 0 then
+                           (* not holder *)
+                        // 1 then
+                           (if info.category=type_cat_basic then
+                               (* pointer to basic type *)
+                               'Holder' -> output.puttext;
+                           if)
+                        else
+                           'Holder' -> output.puttext;
+                       if);
+                   if);
+                   dcl_info.as_text -> output.spacecomment;
                if);
-               info.as_text -> output.spacecomment;
-               (if info.attributes[]=NONE then
-                   &idl_attributes[]->info.attributes[];
-               if);
-               (info.attributes[],sd.getattributes_specs)
-                 -> do_attributes_specs;
                ';' -> output.putline;
             #);
         if)
@@ -747,8 +766,10 @@ do_union_type:
               output.indent;
               name[] -> output.puttext;
               ': ' -> output.puttext;
+              'holder' -> output.puttext (* to allow for parameter *);
+           else
+              '@holder' -> output.puttext (* to allow for parameter *);
           if);
-          'holder' -> output.puttext (* to allow for parameter *);
           2 -> output.indent.inc;
           output.newline;
           output.indent;

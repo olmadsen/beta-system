@@ -71,7 +71,20 @@ do_export_op_dcl:
                       do (s.getscoped_name -> do_scoped_name, NONE) -> 
                          local_types.findtype
                          (# pointer_level: @integer;
-                            isString, isWide, isOutParam: @boolean;
+                            isString, isWide, isOutParam, isArray: @boolean;
+                            removebrackets:
+                              (# 
+                              do (* FIXME: arrrgh: The put_arg has
+                                  * added '[]' to the end of 
+                                  * enter_parameters, since it is 
+                                  * actually a reference. 
+                                  * I have to delete it - it's the 
+                                  * only way
+                                  *)
+                                 (enter_parameters.length-1,
+                                 enter_parameters.length) 
+                                   -> enter_parameters.delete;
+                              #);
                          do current[] -> dcl_info.type[];
                             put_arg;
                             (* We must add pointer levels from
@@ -96,6 +109,16 @@ do_export_op_dcl:
                             dcl_info.attributes.directional.out)) 
                               -> isOutParam;
                             
+                            (* Find out if it is an array param *)
+                            (((current.attributes[]<>NONE) and
+                             ((current.attributes.array_size.size_is[]<>NONE) or
+                              (current.attributes.array_size.length_is[]<>NONE)))
+                             or
+                             ((dcl_info.attributes[]<>NONE) and
+                              ((dcl_info.attributes.array_size.size_is[]<>NONE) or
+                               (dcl_info.attributes.array_size.length_is[]<>NONE))))
+                              -> isArray;
+                            
                             (if true 
                              // isString then
                                 (* scoped name which is string attributed *)
@@ -108,6 +131,7 @@ do_export_op_dcl:
                                 if);
                                 (if pointer_level
                                  // 0 then
+                                    (* Can this happen? *)
                                     (if isWide then
                                         '[0]@wchar' -> output.puttext;
                                         '@wtext NYI' -> output.spacecomment;
@@ -116,6 +140,7 @@ do_export_op_dcl:
                                         '@text NYI' -> output.spacecomment;
                                     if);
                                  // 1 then
+                                    (* E.g. OLECHAR *str *)
                                     (if isWide then
                                         '[0]@wchar' -> output.puttext;
                                         '^wtext NYI' -> output.spacecomment;
@@ -123,28 +148,30 @@ do_export_op_dcl:
                                         '[0]@char' -> output.puttext;
                                         '^text NYI' -> output.spacecomment;
                                     if);
-
-                                    (* FIXME: arrrgh: The put_arg above has
-                                     * added '[]' to the end of 
-                                     * enter_parameters, since it is 
-                                     * actually a reference (:-(. 
-                                     * I have to delete it - it's the 
-                                     * only way
-                                     *)
-                                    (enter_parameters.length-1,
-                                    enter_parameters.length) 
-                                      -> enter_parameters.delete;
+                                    removebrackets;
                                  // 2 then
-                                    (if isWide then
-                                        '^wtextHolder' -> output.puttext;
+                                    (* e.g. OLECHAR **rgszNames *)
+                                    (if isOutParam then
+                                        (* String array is RESULT *)
+                                        (if isWide then
+                                            '^wtextHolder' -> output.puttext;
+                                         else
+                                            '^textHolder' -> output.puttext;
+                                        if);
                                      else
-                                        '^textHolder' -> output.puttext;
+                                        (* String array is parameter TO func *)
+                                        '@int32' -> output.puttext;
+                                        '(Build argument string array in ExternalRecord)' -> output.spacecomment;
+                                        removebrackets;
                                     if);
                                  else
-                                    'pointerlevel>2 for string!;' 
-                                      -> output.puttext;
-                                    'pointerlevel>2 for string not supported!' 
-                                      -> error;
+                                    '@int32' -> output.puttext;
+                                    (if isOutParam then
+                                        '(Allocate return structure in ExternalRecord)' -> output.spacecomment;
+                                     else
+                                        '(Build argument structure in ExternalRecord)' -> output.spacecomment;
+                                    if);
+                                    removebrackets;
                                 if);
                              // current.representation[] <> NONE then
                                 (* Scoped name which is not string *)
@@ -167,8 +194,7 @@ do_export_op_dcl:
                                     (if current.category
                                      // type_cat_basic 
                                      // type_cat_enum 
-                                        then
-                                        (* pointer to basic type *)
+                                        then (* pointer to basic type *)
                                         (if isOutParam then
                                             '^' -> output.put;
                                             current.representation[]
@@ -303,7 +329,8 @@ do_export_op_dcl:
                     t: ^idl.param_type_spec;
                     dcl_info: ^declarator_info;
                  enter (dcl_info[], t[])
-                 do (if t.symbol
+                 do (* do_param_type_spec *)
+                    (if t.symbol
                      // idl.param_base_type_spec then
                         t[] -> do_param_base_type_spec;
                      // idl.param_string_type then
