@@ -27,7 +27,7 @@ class BclassUser
     public static void main(String args[])
     {
 	betaenv env = new betaenv(null);
-	env.betaenvinit(); System.out.println("env.init");
+	env.init();
 	Bclass b = new Jclass(env);
 	b.set(9);
 	System.out.println(b.get());
