@@ -75,15 +75,16 @@ long ObjectType(aObj)
 {
   if( isSpecialProtoType(aObj->Proto)){
     switch( (long) aObj->Proto){
-    case (long) ComponentPTValue:   return ComponentType; 
-    case (long) StackObjectPTValue: return StackObjectType;
-    case (long) WordRepPTValue:     return WordRepType;    
-    case (long) DoubleRepPTValue:   return DoubleRepType;    
-    case (long) ByteRepPTValue:     return ByteRepType;    
-    case (long) ValRepPTValue:      return ValRepType;    
-    case (long) RefRepPTValue:      return RefRepType;    
-    case (long) StructurePTValue:   return StructureType; 
-    case (long) DopartObjectPTValue:      return DopartType; 
+    case (long) ComponentPTValue:     return ComponentType; 
+    case (long) StackObjectPTValue:   return StackObjectType;
+    case (long) WordRepPTValue:       return WordRepType;    
+    case (long) DoubleRepPTValue:     return DoubleRepType;    
+    case (long) ByteRepPTValue:       return ByteRepType;    
+    case (long) ValRepPTValue:        return ValRepType;    
+    case (long) ObjectRepPTValue:     return ObjectRepType;
+    case (long) RefRepPTValue:        return RefRepType;    
+    case (long) StructurePTValue:     return StructureType; 
+    case (long) DopartObjectPTValue:  return DopartType; 
     default: 
       fprintf(output, "ObjectType: unknown object\n");
       fflush(output);

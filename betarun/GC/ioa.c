@@ -494,6 +494,24 @@ void ProcessObject(theObj)
     case (long) DoubleRepPTValue:
     case (long) ValRepPTValue: return; /* No references in the type of object, so do nothing*/
       
+    case (long) ObjectRepPTValue:
+      { struct ObjectRep *rep = (struct ObjectRep *)theObj;
+	long *pointer;
+	register long size, index;
+	if (rep->isDynamic) {
+	  /* Scan the repetition and follow all entries */
+	  { 
+	    size = rep->HighBorder;
+	    pointer = (long *)&rep->Body[0];
+
+	    for (index=0; index<size; index++) {
+	      ProcessReference( (handle(Object))(pointer++) );
+	    }
+	  }
+	}
+      }
+      return;
+
     case (long) RefRepPTValue:
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
@@ -506,7 +524,6 @@ void ProcessObject(theObj)
 	  if( *pointer != 0 ) ProcessReference( (handle(Object))(pointer++) );
 	  else pointer++;
       }
-      
       return;
       
     case (long) ComponentPTValue:
@@ -657,6 +674,24 @@ void ProcessAOAObject(theObj)
     case (long) DoubleRepPTValue: 
     case (long) ValRepPTValue: 
       return; /* No references in the type of object, so do nothing*/
+    case (long) ObjectRepPTValue:
+      { struct ObjectRep *rep = (struct ObjectRep *)theObj;
+	long *pointer;
+	register long size, index;
+	if (rep->isDynamic) {
+	  /* Scan the repetition and follow all entries */
+	  { 
+	    size = rep->HighBorder;
+	    pointer = (long *)&rep->Body[0];
+
+	    for (index=0; index<size; index++) {
+	      ProcessAOAReference( (handle(Object))(pointer++) );
+	    }
+	  }
+	}
+      }
+      return;
+
     case (long) RefRepPTValue:
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
@@ -843,6 +878,24 @@ long GetDistanceToEnclosingObject( theObj)
 	/* No references in the type of object, so do nothing*/
 	return;
 	
+      case (long) ObjectRepPTValue:
+	{ struct ObjectRep *rep = (struct ObjectRep *)theObj;
+	  long *pointer;
+	  register long size, index;
+	  if (rep->isDynamic) {
+	    /* Scan the repetition and follow all entries */
+	    { 
+	      size = rep->HighBorder;
+	      pointer = (long *)&rep->Body[0];
+	      
+	      for (index=0; index<size; index++) {
+		IOACheckReference( (handle(Object))(pointer++) );
+	      }
+	    }
+	  }
+	}
+	return;
+
       case (long) RefRepPTValue:
 	/* Scan the repetition and follow all entries */
 	{ ptr(long) pointer;

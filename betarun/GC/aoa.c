@@ -399,6 +399,34 @@ static void FollowObject( theObj)
     case (long) ValRepPTValue: return;
       /* No references in a Value Repetition, so do nothing*/
       
+    case (long) ObjectRepPTValue:
+      { struct ObjectRep *rep = (struct ObjectRep *)theObj;
+	long *pointer;
+	register long size, index;
+	if (rep->isDynamic) {
+	  /* Scan the repetition and follow all entries */
+	  { 
+	    size = rep->HighBorder;
+	    pointer = (long *)&rep->Body[0];
+
+	    for (index=0; index<size; index++) {
+#ifdef RTLAZY
+	      if( isPositiveRef(*pointer) ) 
+		{RAFPush(pointer);} 
+	      else 
+		if (isLazyRef (*pointer))
+		  negAOArefsINSERT ((long)pointer);
+#else
+	      /* no need to test for zero - the object is always there */
+	      RAFPush(pointer);
+#endif
+	      pointer++;
+	    }
+	  }
+	}
+      }
+      return;
+
     case (long) RefRepPTValue:
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
@@ -939,6 +967,30 @@ void AOACheckObject( theObj)
     case (long) DoubleRepPTValue:
     case (long) ValRepPTValue: return; /* No references in the type of object, so do nothing*/
       
+    case (long) ObjectRepPTValue:
+      { struct ObjectRep *rep = (struct ObjectRep *)theObj;
+	long *pointer;
+	register long size, index;
+	if (rep->isDynamic) {
+	  /* Scan the repetition and follow all entries */
+	  { 
+	    size = rep->HighBorder;
+	    pointer = (long *)&rep->Body[0];
+
+	    for (index=0; index<size; index++) {
+#ifdef RTLAZY
+	      if( isPositiveRef(*pointer) ) 
+		AOACheckReference( (handle(Object))(pointer) );
+#else
+	      AOACheckReference( (handle(Object))(pointer) );
+#endif
+	      pointer++;
+	    }
+	  }
+	}
+      }
+      return;
+
     case (long) RefRepPTValue:
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
@@ -1109,6 +1161,7 @@ void AOACheckObjectSpecial( theObj)
     case (long) WordRepPTValue:
     case (long) DoubleRepPTValue:
     case (long) ValRepPTValue: return;
+    case (long) ObjectRepPTValue: return;
     case (long) RefRepPTValue: return;
     case (long) ComponentPTValue:
       AOACheckObjectSpecial( (ref(Object))(ComponentItem( theObj)));
