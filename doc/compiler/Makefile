@@ -16,7 +16,7 @@ files/MakeMsgList: files/MakeMsgList.bet $(BETALIB)/betaast/semanticerrortext.be
 	beta files/MakeMsgList
 
 files/syntaxerror.err: files/syntaxerror.bet
-	beta syntaxerror.bet>files/syntaxerror.err
+	-beta syntaxerror.bet>files/syntaxerror.err
 
 clean:
 	-/bin/rm -rf *~ src/*~ files/*~ files/*.ast files/*.astL files/MakeMsgList files/sun4s files/sgi files/linux files/hpux9pa files/nti_ms files/nti_gnu
