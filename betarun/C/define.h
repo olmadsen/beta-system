@@ -23,7 +23,7 @@
 #define casthandle(x) (struct x **)
 
 #ifdef RTLAZY
-#define isLazyRef(ref) ((lastDangler <= ((int) ref)) && (((int) ref) < -20))
+#define isLazyRef(ref) ((lastDangler <= ((int) ref)) && (((int) ref) < -101))
 #else
 #define isLazyRef(ref) 0
 #endif

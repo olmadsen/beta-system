@@ -1,7 +1,8 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
  * exit.c
- * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann, and
+ *    S|ren Brandt
  */
 
 #include "beta.h"
@@ -22,6 +23,20 @@ void BetaExit( number )
   exit( number );
 #endif
 }
+
+#ifdef RTLAZY
+#if defined(linux) || defined(nti)
+long RefNonePC = 0; 
+int *RefNoneStackEnd = 0;
+/* SBRANDT 7/6/94: RefNonePC is set by RefNone in Misc.run to point to return 
+ * address after the "call RefNone" instruction during RefNone check. 
+ * RefNoneStackEnd is set, also by RefNone, to point out the stackpart 
+ * containing the lazy reference. */
+static unsigned char regnum;
+static volatile int InLazyHandler;
+#endif
+#endif
+
 
 void BetaError(errorNo, theObj)
      long errorNo;
@@ -74,7 +89,83 @@ void BetaError(errorNo, theObj)
 	 */
 #endif
 #endif
+	
+#ifdef RTLAZY
+#if defined(linux) || defined(nti)
+      } else if (errorNo==RefNoneErr) {
+	/* Check whether it is a genuine error or whether the RefNoneErr was 
+	 * caused by a lazy persistent reference */
+	if (LazyItem) {
+	  /* If LazyItem is 0, the reference cannot be a dangler, since
+	   * the objectserver has not been initialized. */
+	    
+	  
+	  regnum = (* (unsigned char *) (RefNonePC-9)) & 7;
+	  
+	  /* RefNone pushed data registers as shown below. The register
+	   * (if any) containing a lazy reference must be updated by the
+	   * garbage collector. This is ensured by clearing the "-5" pushed
+	   * after the relevant register.
+	   *
+	   * Notice: Stack grows downwards.
+	   *                      _____
+	   *                     | eax |
+	   *                     | -5  |
+	   *                     | ecx |
+	   *                     | -5  |
+	   *                     | ebx |
+	   * RefNoneStackEnd ->  | -5  |
+	   *                      -----                              */
+	  
+	  switch (regnum) {
+	  case 0: 
+	    LazyDangler = RefNoneStackEnd[5]; RefNoneStackEnd[4] = 0;
+	    break;
+	  case 3: 
+	    LazyDangler = RefNoneStackEnd[1]; RefNoneStackEnd[0] = 0;
+	    break;
+	  case 1: 
+	    LazyDangler = RefNoneStackEnd[3]; RefNoneStackEnd[2] = 0;
+	    break;
+	  default:
+	    LazyDangler = 0; break;
+	  }
+	  
+	  if (LazyDangler) {
+	    
+	    if (InLazyHandler)
+	      fprintf (output,"WARNING: Lazy fetch reentered !\n");
+	    
+	    /* The stack now hopefully has a layout that wont setup the
+	     * garbage collector. Call back to BETA to fetch the missing
+	     * object. */
+	    
+	    InLazyHandler = 1;
+
+	    if (LazyDangler == -149) 
+		fprintf (stderr, "dyt");
+	    
+	    /* call beta object handling the lazy fetch.
+	     * To ensure that the C return statement works correctly, we
+	     * need to save %ebp, the stack-base register. There's no 
+	     * need to save other registers, since we will be returning 
+	     * to RefNone immediately after calling BETA. */
+	    
+	    asm volatile ("pushl %ebp # Save base pointer for C");
+	    asm volatile ("movl _LazyItem,%edi # Call lazy handler");
+	    asm volatile ("movl (%edi),%edx");
+	    asm volatile ("movl -4(%edx),%edx");
+	    asm volatile ("call *%edx");
+	    asm volatile ("popl %ebp #restore base pointer");
+	    
+	    InLazyHandler = 0;
+		  
+	    return;
+	  }
+	}
       }
+#endif
+#endif
       if (DisplayBetaStack( errorNo, theObj, thePC, 0))
 	break; /*  DisplayBetaStack <> 0 => continue execution */
     }    
@@ -82,4 +173,3 @@ void BetaError(errorNo, theObj)
   } while (FALSE);
   asmemptylabel(BetaErrorEnd);
 }
-
