@@ -40,16 +40,16 @@ int  CallInvoke() {}
 int  AddDispatchInt8() {}
 int  AddDispatchInt16() {}
 
-struct T * AddDispatchInt32(struct T *S,long N) 
+struct T * AddDispatchInt32(struct T *S,long arg, long argType) 
 { long next;
   next = S->rgvarg;
-  if (test) printf("AddDispatchInt32, next=%i, arg=%i\n",next,N);
+  if (test) 
+     printf("AddDispatchInt32, next=%i, arg=%i, type=%i\n",next,arg,argType);
 
-  S->b[next].argType   = 1; /* integer*/
-  S->b[next].a = N;
-  next = next +1;
+  S->b[next].argType = argType;
+  S->b[next].a = arg;
+  next = next + 1;
   S->rgvarg = next;
-
   return S;
 }
 int  AddDispatchTxtCst() {}
@@ -64,6 +64,11 @@ int getArg(struct arg *S,long N)
 { if (test)  
      printf("getArg: N=%i type=%i arg=%i\n",N,S[N-1].argType,S[N-1].a);
   return S[N-1].a;
+}
+char *getTextArg(struct arg *S,long N) 
+{ if (test)  
+     printf("getArg: N=%i type=%i arg=%S\n",N,S[N-1].argType,S[N-1].a);
+  return (char *)S[N-1].a;
 }
 long MkResList()
 { if (test) printf("MkResList\n");
@@ -81,20 +86,36 @@ void PutDispId(long dispId, long *dispList)
 
 struct T *MkArgList(long noOfArgs,...)
 { struct T *S;
+
+  long types[noOfArgs];
+
   long i;
   va_list ap;
   
   if (test) printf("MkArgList: %i\n",noOfArgs);
   S = InitDispatch(noOfArgs);
 
+  
   va_start(ap,noOfArgs);
 
+  for (i=0; i<noOfArgs; i++) types[i] = (long) va_arg(ap,long);
 
   for (i=0; i<noOfArgs; i++)
     { long arg = va_arg(ap,long);
-      long type = va_arg(ap,long);
-      if (test) printf("Arg: %i, %i\n",arg,type);
-      S= AddDispatchInt32(S,arg);
+      long type =types[i];
+      if (test) printf("type= %i arg=",type);
+      switch (types[i]) {
+      case 3: // long
+         if (test) printf("%i\n",arg);    
+         S= AddDispatchInt32(S,arg,type);
+	 break;
+      case 4: // text
+         if (test) printf("%s\n",arg);    
+         S= AddDispatchInt32(S,arg,type);
+	 break;
+      default:
+	printf("MkArgList: unknown argument type: %i\n",types[i]);
+      };
     };
   va_end(ap);
   return S;
