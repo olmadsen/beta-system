@@ -68,20 +68,44 @@ typedef struct group_header
 
 static int c_on_top;
 
+struct group_header* NextGroup (struct group_header* current)
+/* Return group in executable following current. 
+ * If current is NULL, first group is returned. */
+{ 
+#ifdef macintosh
+#error Function NextGroup not yet implemented for Macintosh / sbrandt
+#else /* Not macintosh */
+
+  extern long *data1 asm("BETA_data1");
+  long *limit;
+
+  if (current) {
+    /* Get next data segment if any. Padding by linker 
+     * may have moved it some longs down */
+    current=current->next;
+    for (limit=((long *)current)+10; 
+	 (long*)current < limit; 
+	 ((long*)current)++)
+      if (current->self == current) return current;
+    /* No next group. */
+    return 0;
+  } else
+    return (struct group_header *)&data1;
+
+#endif /* not macintosh */
+}
+
 char *GroupName(long address, int isCode)
 {
 #ifdef macintosh
 #error Function GroupName not yet implemented for Macintosh / datpete
 #else /* Not macintosh */
-  extern long *data1 asm("BETA_data1");
   struct group_header *group;
   struct group_header *current;
   struct group_header *last;
-  long *limit;
-  int  more_segments=1;
   long dist, distance;
 
-  current = last = group = (struct group_header *)&data1;  /* betaenv data segment */
+  current = last = group = NextGroup (0);  /* first (betaenv) data segment */
   if ((isCode && (address<current->code_start)) || 
       (!isCode && (address<(long)current))){  
     c_on_top++;
@@ -90,9 +114,11 @@ char *GroupName(long address, int isCode)
 
   distance = MAXINT;
   
-  while (more_segments){
+  while (current){
 
-    /* Check if the address is closer to the start of current segment than previous segments */
+    /* Check if the address is closer to the start 
+     * of current segment than previous segments */
+    
     if (isCode)
       dist = address - current->code_start;
     else
@@ -101,19 +127,9 @@ char *GroupName(long address, int isCode)
       distance = dist;
       group = current;
     }
-
-    /* Get next data segment if any. Padding by linker may have moved it some longs down */
-    more_segments = 0;
-    last=current;
-    current=current->next;
-    for (limit=((long *)current)+10;
-	 (long*)current < limit;
-	 ((long*)current)++) {
-      if (current->self == current) {
-	more_segments=1;
-	break; 
-      }
-    }
+    
+    last = current;
+    current = NextGroup (current);
   }
 
   if ((isCode && (address>last->code_end)) 
