@@ -1768,11 +1768,25 @@ do (# commentstream: @stream (* maybe something more useful *);
                 #);
                 (* Lleave: *)
              // endLab then
+                (* stack: ExoException object *)
                 (# restartLabno: @integer;
                    leaveLabno: @integer;
                    handler_pc: @integer;
                    restart_pc: @integer;
-                   loc: @integer;
+                   loc: @integer; (* Save exception object into this local *)
+                   rethrowOff: integerValue
+                     (* Calculate offset to rethrow label from current PC.
+                      * Code between the two labels:
+                      *   loc -> aloadLocal;  (1 or 2 bytes)
+                      *   athrow-> jcf.emit;  (1 byte)
+                      *)
+                     (# 
+                     do (if loc<=3 then
+                            (leavelabno -> jcf.labs.off)-2 -> value
+                         else
+                            (leavelabno -> jcf.labs.off)-3 -> value
+                        if)                            
+                     #);
                 do BC.getLong -> restartlabno;
                    BC.getLong -> leavelabno;
                    (* End try clause by jumping over handler *)
@@ -1795,7 +1809,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                    loc -> aloadLocal; 
                    getfield  -> jcf.emit; ('ExOException'->(common.BetaPackage).append, 'exitobj', 'Ljava/lang/Object;') -> jcf.emitfieldref;
                    aload_0   -> jcf.emit; 
-                   if_acmpne -> jcf.emit; (leavelabno -> jcf.labs.off)-2 -> jcf.emitShort; (* Lrethrow*)
+                   if_acmpne -> jcf.emit; rethrowOff -> jcf.emitShort; (* Lrethrow*)
                    (* Ltestrestart: *)
                    loc -> aloadLocal; 
                    getfield  -> jcf.emit; ('ExOException'->(common.BetaPackage).append, 'labno', 'I') -> jcf.emitfieldref;
@@ -1807,10 +1821,11 @@ do (# commentstream: @stream (* maybe something more useful *);
                    loc -> aloadLocal; 
                    getfield  -> jcf.emit; ('ExOException'->(common.BetaPackage).append, 'labno', 'I') -> jcf.emitfieldref;
                    leavelabno -> jcf.emitLoadIntegerConstant;
-                   if_icmpne -> jcf.emit; 6 -> jcf.emitShort; (* Lrethrow *)
+                   if_icmpne -> jcf.emit; rethrowOff -> jcf.emitShort; (* Lrethrow *)
                    (* We have a restart in this Object *)
                    goto      -> jcf.emit; leavelabno -> jcf.labs.off -> jcf.emitShort; (* Lleave *)
                    (* Lrethrow: *)
+
                    (* Not the right label in this Object - propagate further *)
                    loc -> aloadLocal; 
                    athrow-> jcf.emit; 
@@ -2005,7 +2020,7 @@ do (# commentstream: @stream (* maybe something more useful *);
              // return then
                 _return -> jcf.emit;
              // endMethod then
-                (* skip *)
+                jcf.labs.check_all_relocated;
              // label then
                 Unused1 (*L*) -> jcf.emit; 'bytecode label' -> fixme;
                 'LIP=' -> puttext;
