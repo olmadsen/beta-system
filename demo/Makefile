@@ -13,7 +13,7 @@ check:
 
 clean:
 	@echo removing garbage...
-	@find . -follow \( -name 'run.out' -o -name '*.dbc' -o -name 'so_locations' -o -name '*.~group' -o -name '*.#group' -o -name '*.diag' -o -name '.??*.pjt' -o -name '*.~astL' -o -name '*.#astL' -o -name '*.#ast' -o -name '*.#ast' -o -name 'lst' -o -name '*.lst' -o -name '*.dump' -o -name 'core' -o -name '*~' \) -print -exec /bin/rm -f '{}' \;
+	@find . -follow \( -name 'run-demos.tar' -o -name 'run.out' -o -name 'run.def' -o -name '*.dbc' -o -name 'so_locations' -o -name '*.~group' -o -name '*.#group' -o -name '*.diag' -o -name '.??*.pjt' -o -name '*.~astL' -o -name '*.#astL' -o -name '*.#ast' -o -name '*.#ast' -o -name 'lst' -o -name '*.lst' -o -name '*.dump' -o -name 'core' -o -name '*~' \) -print -exec /bin/rm -f '{}' \;
 	@echo removing ast and a2s files...
 	@find . -follow \( -name '*.group' -o -name '*.ast' -o -name '*.astL' -o -name '*.a2s' \) -print -exec /bin/rm -f '{}' \;
 	@echo removing executables...
@@ -25,4 +25,4 @@ clean:
 
 tar:
 	@echo Creating run-demos.tar with all run.demos scripts
-	find . -name 'run.*' -print | xargs tar cvf run-demos.tar
+	sh -c "find . -name 'run.*' -print; echo demo-utils.perl; echo ./basiclib/systemenv/demo.txt" | xargs tar cvf run-demos.tar
