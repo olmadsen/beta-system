@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(28)";
+char betarun_version[] = "BETARUN VERSION 5.3(29)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.28  2001/08/01 09:05:13  corry
+ * fmt -t only works on GNU fmt.  Restrict its use to Linux.
+ * Betarun version number: 28
+ *
  * Revision 1.27  2001/07/31 14:22:49  datpete
  * Fix in lowlevel beta.dump
  * Betarun version number: 27
