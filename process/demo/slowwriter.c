@@ -4,7 +4,7 @@
 #ifdef __WIN32
 #define SLEEPFACTOR *10
 #else
-#define SLEEPFACTOR /100
+#define SLEEPFACTOR /1000
 #endif
 
 static void
@@ -36,5 +36,5 @@ main(int argc, char **argv)
 		sleep(i SLEEPFACTOR);
 	}
 	if (sleepatend)
-		sleep(10 SLEEPFACTOR);
+		sleep(1000 SLEEPFACTOR);
 }

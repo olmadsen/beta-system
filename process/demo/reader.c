@@ -1,12 +1,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
-#include <windows.h>
 
 #ifdef __WIN32
+#include <windows.h>
 #define SLEEPFACTOR *10
 #else
-#define SLEEPFACTOR /100
+#define SLEEPFACTOR /1000
 #endif
 
 static void
@@ -26,6 +26,7 @@ main(int argc, char **argv)
         if (argc > 1)
 		if (argv[1][0] != '-')
 			usage();
+#ifdef __WIN32
 	if (argc > 1 && strchr(argv[1], 'w')) {
 		HANDLE in = GetStdHandle(STD_INPUT_HANDLE);
 		HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -43,12 +44,13 @@ main(int argc, char **argv)
                     lasterror != ERROR_BROKEN_PIPE) {
 			fprintf(stderr, "Reader got error %d!\n", lasterror);
 		} else {
-			sleep(1000);
+			sleep(100 SLEEPFACTOR);
 			WriteFile(out, "Reader normal exit\n",
 				strlen("Reader normal exit\n"), &byteswritten,
 				0);
 		}
 	} else {
+#endif /* def __WIN32 */
 		while ((c = getchar()) != EOF) {
 			if (c >= 'A' && c <= 'Z')
 				c -= 'A' - 'a';
@@ -59,9 +61,11 @@ main(int argc, char **argv)
 		if (errno) {
 			perror("reading from pipe");
 		} else {
-			sleep(1000);
+			sleep(100 SLEEPFACTOR);
 			printf("Reader normal exit\n");
 		}
+#ifdef __WIN32
 	}
+#endif __WIN32
 	exit(0);
 }
