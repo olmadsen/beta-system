@@ -227,7 +227,7 @@ static unsigned long ensureBlock(unsigned long blockNo)
       free(currentBlock);
       currentBlock = NULL;
     }
-    currentBlock = (char *)malloc(sizeof(char)*((delta + 1) * currentPStore -> blockSize));
+    currentBlock = (char *)calloc(sizeof(char)*((delta + 1) * currentPStore -> blockSize), 1);
     windTo(currentFd, currentPStore -> headerSize + blockStart * currentPStore -> blockSize);
     readSome(currentFd, currentBlock, ((delta + 1) * currentPStore -> blockSize));
     currentBlockStart = blockStart;

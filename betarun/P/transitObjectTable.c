@@ -206,8 +206,6 @@ void TOTFlush(void)
     }
   }
   TIFree(loadedObjectsST, freeLoadedObjectsOF);
-  loadedObjectsST = NULL;
-  loadedObjectsST = TInit();
   STFree(&currentTable);
   initTransitObjectTable();
 }
