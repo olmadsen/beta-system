@@ -106,6 +106,9 @@ struct vtblX
   void (*g1)(struct bCOMclass *this, char ch);
   long (*g2)(struct bCOMclass *this, long a, long b, long c);
   long (*g3)(struct bCOMclass *this, char * s);
+  long (*g4)(struct bCOMclass *this, 
+	     long a, long b, long c, long d, long e,
+             long f, long g, long h);
   char(*ch)(struct bCOMclass *this);
 };
 
@@ -128,5 +131,6 @@ void PutBobj(struct bCOMclass * R)
   S[2] = 0;
   if (test) printf("\n   s: %s\n",S);
   R->proto->g3(R,S);
+  R->proto->g4(R,111,112,113,114,115,116,117,118);
   if (test) printf("\n   Leaving C PutbCOMclass\n");
 }
