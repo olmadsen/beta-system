@@ -15,8 +15,9 @@ class JavaConverter
     Map includes = new HashMap(10);
 
     static void usage(){
-	System.err.println("Usage: java JavaConverter <java class name>");
-	System.err.println("e.g.:  java JavaConverter java.lang.String");
+	System.err.println("Usage: java JavaConverter <BETALIB> <java class name>");
+	System.err.println("e.g.:  java JavaConverter /users/beta/r5.3 java.lang.String");
+	System.err.println("(BETALIB argument is a workaround for the deprecated System.getenv()).");
 	System.exit(1);
     }
 
@@ -286,8 +287,8 @@ class JavaConverter
 	return (i >= 0) ? name.substring(i+1, name.length()) : name;
     }
 
-    int convert(String classname){
-	System.err.println("Converting class \"" + classname + "\".");
+    int convert(String betalib, String classname){
+	System.err.println("Converting class\n\t\"" + classname + "\"");
 	try {
 	    Class cls = Class.forName(classname);
 	    thisClass = cls;
@@ -304,7 +305,7 @@ class JavaConverter
 		superName = stripPackage(superName);
 		superPkg  = dotToSlash(superPkg);
 	    }
-	    out = new BetaOutput(pkg, name, superPkg, superName);
+	    out = new BetaOutput(betalib, pkg, name, superPkg, superName);
 	    out.putHeader(doIncludes(cls));
 	    doFields(cls);
 	    doConstructors(cls);
@@ -318,8 +319,8 @@ class JavaConverter
     }
 
     public static void main(String[] args){
-	if (args.length == 1){
-	    System.exit(new JavaConverter().convert(args[0]));
+	if (args.length == 2){
+	    System.exit(new JavaConverter().convert(args[0], args[1]));
 	} else {
 	    usage();
 	}

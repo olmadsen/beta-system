@@ -2,6 +2,7 @@ package beta.converter;
 
 import java.lang.*;
 import java.util.*;
+import java.io.*;
 
 public class BetaOutput
 {
@@ -11,16 +12,32 @@ public class BetaOutput
     String superPackage;
     int    indentlevel = 0;
 
-    public BetaOutput(String pkg, String cls, String superPkg, String superCls)
+    PrintWriter out;
+
+    public BetaOutput(String betalib, String pkg, String cls, String superPkg, String superCls)
+	throws Throwable
     {
 	className    = cls;
 	packageName  = pkg;
 	superClass   = superCls;
 	superPackage = superPkg;
+	File entry   = new File(betalib + "/javalib/" + pkg + "/" + cls + ".bet");
+	File existing = null;
+	if (entry.exists()){
+	    existing = entry;
+	    entry = new File(entry.getAbsolutePath() + ".new");
+	}
+	entry.getParentFile().mkdirs();
+	out = new PrintWriter(new FileOutputStream(entry));
+	System.err.println("Output file:\n\t\"" + entry.getAbsolutePath() + "\"");
+	if (existing!=null) 
+	    System.err.println("NOTICE: Not overwriting existing\n\t\"" 
+			       + existing.getAbsolutePath()
+			       + "\"");
     }
 
     public void indent(){
-	for (int i=0; i<indentlevel; i++) System.out.print(" ");
+	for (int i=0; i<indentlevel; i++) put(" ");
     }
 
     public void indent(int delta){
@@ -40,16 +57,16 @@ public class BetaOutput
     }
 
     public void put(String txt){
-	System.out.print(txt);
+	out.print(txt);
     };
 
     public void putln(String line){
 	indent();
-	System.out.println(line);
+	out.println(line);
     }
 
     public void nl(){
-	System.out.println("");
+	out.println("");
     }
 
     public void putHeader(Object[] includes)
@@ -143,5 +160,6 @@ public class BetaOutput
 	putln("do '" + packageName + '/' + className + "' -> className;");
 	putln("#);");
 	indent(-2);
+	out.close();
     }
 }
