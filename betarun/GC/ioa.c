@@ -177,6 +177,8 @@ void IOAGc()
               "Before: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
               (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
    });
+
+   Claim(GLOBAL_IOATop<=GLOBAL_IOALimit, "GLOBAL_IOATop<=GLOBAL_IOALimit");
   
    NumIOAGc++;
 
@@ -582,15 +584,15 @@ Program terminated.\n", (int)(4*ReqObjectSize));
      }
    }
 #endif /* MT */
-  
+
+   DEBUG_CODE(if (!NoHeapClear) { memset(ToSpace, 0, IOASize); });
+
    INFO_IOA({
       fprintf(output," %d%% used, ioatime=%dms)\n",
               (int)((100*areaSize(GLOBAL_IOA,GLOBAL_IOATop))
                     / areaSize(GLOBAL_IOA,GLOBAL_IOALimit)),
               (int)(getmilisectimestamp() - starttime));
    });
-
-   DEBUG_CODE(if (!NoHeapClear) { memset(ToSpace, 0, IOASize); });
 
    DEBUG_IOA(
       fprintf(output,
@@ -605,6 +607,9 @@ Program terminated.\n", (int)(4*ReqObjectSize));
               (int)ToSpaceLimit);
       fflush(output);
       );
+
+   Claim(GLOBAL_IOATop<=GLOBAL_IOALimit, "GLOBAL_IOATop<=GLOBAL_IOALimit");
+
    INFO_HEAP_USAGE(PrintHeapUsage("after IOA GC"));
 
    ALLOC_TRACE_CODE(

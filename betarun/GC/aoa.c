@@ -1098,7 +1098,7 @@ static void prependToListInIOA(Object *target)
 {
   long GCAttribute;
 
-  Claim(inToSpace(target), "Where is the object?");
+  Claim(inToSpace(target), "inToSpace(target) (Where is the object)?");
 
   GCAttribute = target -> GCAttr;  
   
@@ -1185,10 +1185,16 @@ void prependToListInAOA(REFERENCEACTIONARGSTYPE)
 {
    Object *realObj, *theObj;
 
-   Claim(inAOA(theCell), "prependToListInAOA:inAOA(theCell)");
-   Claim((int)*theCell, "prependToListInAOA:*theCell");
-   Claim(!inIOA(*theCell), "!inIOA(*theCell)");
-  
+   DEBUG_CODE({
+     char buf[200];
+     sprintf(buf, "prependToListInAOA: inAOA(theCell == 0x%08x)", (int)theCell);
+     Claim(inAOA(theCell), buf);
+     sprintf(buf, "prependToListInAOA: *theCell!=0, theCell=0x%08x", (int)theCell);
+     Claim((int)*theCell, buf);
+     sprintf(buf, "prependToListInAOA: !inIOA(*theCell), theCell=0x%08x, *theCell=0x%08x", (int)theCell, (int)*theCell);
+     Claim(!inIOA(*theCell), buf);
+   });
+
    theObj = *theCell;
 #ifdef PERSIST
    if (!inPIT((void *)theObj)) {
