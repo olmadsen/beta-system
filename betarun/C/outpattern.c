@@ -62,7 +62,6 @@ DisplayObject(output,aObj,retAddress)
 	if( retAddress ){
 	  /* try finding active prefix */
 	  long           activeDist;
-	  ref(Object)    staticObj;
 	  activeProto = theProto;
 	  activeDist  = retAddress - theProto->GenPart; 
 	  while(theProto->Prefix &&
@@ -299,7 +298,9 @@ DisplayBetaStack( errorNumber, theObj)
      ref(Object) theObj;
 {
   ptr(FILE) output;
+#ifndef sparc
   ref(Component)      currentComponent;
+#endif
   
   fprintf(stderr,"\n# Beta execution aborted: ");
   ErrorMessage(stderr, errorNumber);
@@ -368,7 +369,6 @@ DisplayBetaStack( errorNumber, theObj)
     struct RegWin *nextCBF = (struct RegWin *) ActiveCallBackFrame;
     struct RegWin *nextCompBlock = (struct RegWin *) lastCompBlock;
     
-    currentComponent = ActiveComponent;
     /* Flush register windows to stack */
     asm("ta 3");
     
@@ -381,14 +381,21 @@ DisplayBetaStack( errorNumber, theObj)
 	 * Please read StackLayout.doc
 	 */
 	
-	DisplayObject(output, currentComponent, 0);
+	nextCBF = (struct RegWin *) theAR->l5;
+	nextCompBlock = (struct RegWin *) theAR->l6;
+
+	if (nextCompBlock == 0)
+	  {
+	    DisplayObject(output, (struct Object *)theAR->i1, 0); /* AttBC */
+	    fprintf(output, "\n"); fflush(output);
+	    break; /* we reached the bottom */
+	  }
+
+	DisplayObject(output, (struct Object *) theAR->i0, 0); /* Att */
 	/* Make an empty line after the component */
 	fprintf(output, "\n"); fflush(output);
 	
-	nextCBF = (struct RegWin *) theAR->l5;
-	nextCompBlock = (struct RegWin *) theAR->l6;
-	if (nextCompBlock == 0)
-	  break; /* we reached the bottom */
+	continue;
       }
       else if (theAR == nextCBF) {
 	/* This is AR of HandleCB. Don't GC this, but
