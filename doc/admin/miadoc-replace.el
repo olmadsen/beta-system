@@ -289,7 +289,23 @@
 
   (let ((case-replace t))
     (message "Appending beta captions")
-    (tags-query-replace "<P> \\([a-zA-Z0-9_]+\\.bet\\)</P>" "<H4 CLASS=betacaption>\\1</H4>" nil)))
+    (tags-query-replace "<P> \\([a-zA-Z0-9_]+\\.bet\\)</P>" "<A NAME=\\1><H4 CLASS=betacaption>\\1</H4></A>" nil)))
+
+(defun miadoc-replace28-1 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Appending NAME to old beta captions")
+    (tags-query-replace "<H4 CLASS=betacaption>\\([a-zA-Z0-9_]+\\.bet\\)</H4>" "<A NAME=\\1><H4 CLASS=betacaption>\\1</H4></A>" nil)))
+
+(defun miadoc-replace28-2 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Appending NAME to old beta captions")
+    (tags-query-replace "<H4 NAME=\\([a-zA-Z0-9_]+\\.bet\\) CLASS=betacaption>\\1</H4>" "<A NAME=\\1><H4 CLASS=betacaption>\\1</H4></A>" nil)))
 
 (defun miadoc-replace29 ()
   (interactive)
