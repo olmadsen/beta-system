@@ -123,12 +123,10 @@ void AOAtoIOAInsert(handle( Object) theCell)
     unsigned long *table;
     unsigned long index, count;
 
-#ifdef RTDEBUG
-    if (!inAOA( theCell)) {
+    DEBUG_CODE(if (!inAOA( theCell)) {
       fprintf(output, "AOAtoIOAInsert: 0x%x not in AOA!\n", (int)theCell);
       Illegal(); /* useful to break in */
-    }
-#endif
+    });
 
 #ifdef RTLAZY
     if ( isNegativeRef(*theCell)) {
@@ -142,7 +140,7 @@ void AOAtoIOAInsert(handle( Object) theCell)
     
     MT_CODE(mutex_lock(&aoatoioa_lock));
 
-    fprintf(output, "\n*** AOAtoIOAInsert(0x%x)\n", (int)theCell);
+    DEBUG_CODE(fprintf(output, "\n*** AOAtoIOAInsert(0x%x)\n", (int)theCell));
 
     table = (unsigned long *)BlockStart( AOAtoIOAtable);
     /* First Hash function. */
