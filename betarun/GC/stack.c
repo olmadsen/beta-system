@@ -137,21 +137,7 @@ static void find_foreach(long PC, Object *theObj)
   fprintf(output, "\n");
   fflush(output);
   if (!theObj) return;
-  if (activation_start){
-    if (activation_start == theObj){
-      /* Found start object */
-      if (activation_start_found){
-	fprintf(output, "find_foreach: found start object 0x%x AGAIN - using it\n", (int)activation_start);
-	/* Do not return */
-      } else {
-	fprintf(output, "find_foreach: found start object 0x%x\n", (int)activation_start);
-      activation_start_found = 1;
-      /* Do not consider this object */
-      return;
-      }
-    }
-    if (!activation_start_found) return;
-  }
+
   proto = GETPROTO(theObj);
   if (isSpecialProtoType(proto)) {
     if (proto==DopartObjectPTValue){
@@ -164,6 +150,23 @@ static void find_foreach(long PC, Object *theObj)
       return;
     }
   }
+
+  if (activation_start){
+    if (activation_start == theObj){
+      /* Found start object */
+      if (activation_start_found){
+	fprintf(output, "find_foreach: found start object 0x%x AGAIN - ignoring it\n", (int)activation_start);
+	return;
+      } else {
+	fprintf(output, "find_foreach: found start object 0x%x\n", (int)activation_start);
+	activation_start_found = 1;
+	/* Do not consider this object */
+	return;
+      }
+    }
+    if (!activation_start_found) return;
+  }
+
   if (proto == activation_proto){
     /* exact qualification found */
     activation_object = theObj;
@@ -203,6 +206,12 @@ Object *find_activation(ProtoType *proto, Object *startObj)
 {
   Component *comp = ActiveComponent;
   long *oldStackEnd = StackEnd;
+  fprintf(output, "find_activation(proto=0x%x, startObj=0x%x)\n ", (int)proto, (int)startObj); 
+  PrintProto(proto);
+  fprintf(output, "\n");
+  PrintRef(startObj);
+  fprintf(output, "\n");
+  fflush(output);
 #ifdef hppa
   fprintf(output, "find_activation: NYI\n");
   return 0;
