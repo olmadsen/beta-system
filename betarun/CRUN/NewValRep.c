@@ -13,7 +13,7 @@ asmlabel(NewVR, "
 	mov	%l7, %o5
         clr     %o1
         clr     %o3
-	b	_CNewVR
+	ba	"CPREF"NewVR
         clr     %o4
 ");
 

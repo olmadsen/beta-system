@@ -22,7 +22,7 @@ asmlabel(Qua,
 	 "mov %i1,%o1;"
 	 "mov %i2,%o3;"
 	 "mov %o0,%o2;"
-	 "ba _CQua;"
+	 "ba "CPREF"Qua;"
 	 "mov %i0,%o0;");
 
 #ifdef hppa
@@ -131,7 +131,7 @@ asmlabel(OQua,
 	 "mov %i1,%o1;"
 	 "mov %i2,%o3;"
 	 "mov %o0,%o2;"
-	 "ba _COQua;"
+	 "ba "CPREF"OQua;"
 	 "mov %i0,%o0;");
 
 #ifdef hppa

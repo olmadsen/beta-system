@@ -19,7 +19,7 @@ register long _dummy9 asm("%r16"); /* really tmp data 2 */
 
 asmlabel(CopySVR, "
 	mov	%l7, %o3
-	ba	_CCopySVR
+	ba	"CPREF"CopySVR
 	mov	%l6, %o4
 ");
 

@@ -41,9 +41,9 @@ SetArgValues(long argc, char *argv[])
 /* Need to do this in assembler, as the arguments to
    my caller normally isn't accesseable */
 asmlabel(SetArgValues, "
-	set _ArgCount, %g1
+	set "USCORE"ArgCount, %g1
 	st %i0, [%g1]
-	set _ArgVector, %g1
+	set "USCORE"ArgVector, %g1
 	retl
 	st %i1, [%g1]
 ");
@@ -114,12 +114,21 @@ IOAcalloc(unsigned size)
 }
 
 #ifdef sparc
+#ifdef sun4s
+asmlabel(FailureExit, "
+	mov	%i0, %o1
+	call	BetaError
+	mov	-8, %o0
+");
+#else
 asmlabel(_FailureExit, "
 	mov	%i0, %o1
 	call	_BetaError
 	mov	-8, %o0
 ");
 #endif
+#endif
+
 #ifdef hppa
 void FailureExit()
 {

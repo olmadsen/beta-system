@@ -24,7 +24,7 @@ asmlabel(MkTO,
 	 /* "mov %o2,%o2;" */
          "clr %o1;"
 	 "clr %o3;"
-	 "ba _CMkTO;"
+	 "ba "CPREF"MkTO;"
          "clr %o4;"
 );	
 void CMkTO(ref(Item) theItem,

@@ -17,7 +17,7 @@ asmlabel(AlloSO,
 	 "clr %o0;"        \
 	 "clr %o1;"        \
 	 "clr %o3;"        \
-	 "ba  _CAlloSO;"   \
+	 "ba  "CPREF"AlloSO;"   \
 	 "clr %o4;"        \
 	 );
 ref(StackObject)

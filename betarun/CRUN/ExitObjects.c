@@ -10,14 +10,14 @@
 asmlabel(ExitO, "
 	mov	%i1, %o0
 	mov	%i2, %o1
-	b	_CExitO
+	ba	"CPREF"ExitO
 	mov	%i0, %o2
 ");
 
 asmlabel(ExO, "
         mov     %i1, %o0
         mov     %i2, %o1
-        b       _CExitO
+        ba       "CPREF"ExitO
         mov     %i0, %o2
 ");
 /* Note: The offset parameter is complely ignored. It's not needed

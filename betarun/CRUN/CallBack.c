@@ -86,7 +86,7 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 #ifdef sparc
 
 asmlabel(CopyCPP, "
-	ba	_CCopyCPP
+	ba	"CPREF"CopyCPP
 	mov	%i0, %o1
 ");
 

@@ -14,7 +14,7 @@ void CinitT(void)
 
 asmlabel(CpkVT, "
 	mov %o0, %o1
-        ba _CCpkVT
+        ba "CPREF"CpkVT
 	mov %i0, %o0
 ");
 
@@ -53,7 +53,7 @@ asmlabel(CpkSVT, "
 	mov %o2, %o3
 	mov %o1, %o2
 	mov %o0, %o1
-        ba _CCpkSVT
+        ba "CPREF"CpkSVT
 	mov %i0, %o0
 ");
 

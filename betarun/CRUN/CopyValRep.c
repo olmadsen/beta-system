@@ -10,7 +10,7 @@
 
 asmlabel(CopyVR, "
         clr     %o3
-	ba	_CCopyVR
+	ba	"CPREF"CopyVR
         clr     %o4
 ");
 

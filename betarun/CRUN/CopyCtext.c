@@ -18,7 +18,7 @@ asmlabel(CopyCT,
 	 "clr %o1;"
 	 "clr %o3;"
 	 "clr %o4;"
-	 "ba _CCopyCT;"
+	 "ba "CPREF"CopyCT;"
 	 "mov %l0, %o2;"
 );
 ref(ValRep) CCopyCT(int i0, int i1, unsigned char *textPtr)

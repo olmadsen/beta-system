@@ -41,7 +41,7 @@ asmlabel(ThisS,
 	 "mov %i0,%o0;"
 	 "clr %o1;"
 	 "clr %o3;"
-	 "ba _CThisS;"
+	 "ba "CPREF"ThisS;"
 	 "clr %o4;"
 	 );
 ref(Structure) CThisS(ref(Object) this)
@@ -175,7 +175,7 @@ long GtS(ref(Structure) arg1, ref(Structure) arg2)
 asmlabel(ltS, "
 	 clr %o2
          clr %o3
-         b   _CLtS
+         ba   "CPREF"LtS
          clr %o4");
 long CLtS(ref(Structure) arg1, ref(Structure) arg2, int i2, int i3, int i4)
 #else

@@ -10,7 +10,7 @@
 
 asmlabel(CopyRR, "
         clr     %o3
-	ba	_CCopyRR
+	ba	"CPREF"CopyRR
         clr     %o4
 ");
 

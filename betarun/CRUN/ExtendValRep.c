@@ -18,7 +18,7 @@ asmlabel(ExtVR, "
 	mov	%l7, %o5
         clr     %o1
         clr     %o3
-	ba	_CExtVR
+	ba	"CPREF"ExtVR
         clr     %o4
 ");
 

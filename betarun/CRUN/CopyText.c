@@ -27,7 +27,7 @@ asmlabel(CopyT,
 	 /* "mov %o2,%o2;" */
          "clr %o1;"
 	 "clr %o3;"
-	 "ba _CCopyT;"
+	 "ba "CPREF"CopyT;"
          "clr %o4;"
          );	
 void CCopyT(ref(Item) theItem,
