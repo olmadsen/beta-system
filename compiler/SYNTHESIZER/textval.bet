@@ -1,7 +1,8 @@
 ORIGIN 'evlib';
 LIB_ITEM 'betacodegen';
 INCLUDE 'auxlib';
-INCLUDE 'computedval'
+INCLUDE 'computedval';
+INCLUDE 'signature'
 ---mkTxtCstEvVal:descriptor---
 (# TV: ^TxtCstVal
 do &TxtCstVal[]->TV[]->V[]; T->TV.T; 
@@ -32,6 +33,11 @@ TxtCstVal: EvVal
      release::(#do (if cTxt[] <> NONE then cTxt.deAlloc if)#);
      loadVal::<(#do this(TxtCstVal)[]->V[] #);
      loadVal2::<(#do this(TxtCstVal)[]->V[] #);
+     pushVal:: 
+       (#
+       do (common.textXpar,sematt.cExt,0,0)
+            -> pushCpar
+       #);
      toDataRegA::<(#do (thisChOp,mch.DataRegA[])->mch.ldCst#);
      toDataRegX::<(#do (thisChOp,mch.DataRegX[])->mch.ldCst#);
      toDataRegY::<(#do (thisChOp,mch.DataRegY[])->mch.ldCst#);
@@ -192,7 +198,41 @@ TxtCstVal: EvVal
        #);
      asgToMethod::
        (#
-       do thisChOp -> mch.pushClong
+       do (if true then 
+              (*  'asgToMethod:range:'->puttext; enterTypes.range -> putint;
+               ' '->put; next->putint; newline;
+               *)
+              (if (0 < next) and (next <= enterTypes.range) then
+                  (if enterTypes[next]
+               // 2  (* char *)     then
+                  '! BETA char' -> mch.comment;
+                  thisChOp -> mch.pushClong
+               // 11 (* text ref *) then
+                  '! push text const and convert to beta text' -> mch.comment;
+                  pushVal;
+                  'Text2BetaText'->mch.callPrim 
+               // 12 (* char rep *) then
+                  '!Char rep ' -> mch.comment;
+                  pushVal;
+                  'Text2CharArray'->mch.callPrim 
+               else
+                  '\nOBS Unknown enter type (txtCstVal:asgToMethod)' 
+                    -> putline
+                  if)
+               else
+                  '\nOBS! textVal:asgToMethod:index error' -> puttext;
+                  next -> putint; '/'->put; 
+                  enterTypes.range -> putint; newline
+              if)
+           else
+              (if T.isBetaChar then
+                  'OOPS! this may a text with one element and not a char' 
+                    -> mch.comment
+                  ;thisChOp -> mch.pushClong
+               else
+                  pushVal;
+                  'Text2CharArray'->mch.callPrim 
+          if)if)
        #);
      asgToNXoffSets::
        (# off: @integer; A: ^mch.address; N: ^ASTindex
@@ -240,7 +280,12 @@ TxtCstVal: EvVal
        #);
      asgToCproc::<
        (# CP: @ExTernalCall
-       do (externalName,Desc[],extKind,EV.son)->CP; (* init *)
+       do (if stest then 301->ctrace
+              (#
+              do 'txtCstVal:asgToCproc: '->xT; T[] -> xT
+          #)if);
+          
+          (externalName,Desc[],extKind,EV.son)->CP; (* init *)
           (CP.getEnterP,extKind,CP.getEnterP.size,CP.pascExtProcInfo)
             -> pushCpar;
           CP.call;
@@ -455,6 +500,10 @@ TxtVarVal: EvVal
        #);
      loadVal::< (#do cError(#do 'TxtVarVal:loadVal'->xT #)#);
      loadVal2::< (#do cError(#do 'TxtVarVal:loadVal2'->xT #)#);
+     pushVal::
+       (# 
+       do toDataReg
+       #);
      toTmp::<
 	(#
 	do (if baseAdr.useCallReg then
@@ -472,6 +521,12 @@ TxtVarVal: EvVal
            (baseAdr.copy,EV1[],false,EHchain[])->genAdr->A[];
 	   common.cstInd->A.access; 
            4->A.size; (* ugly, fix for SPARC *)
+           (if switch182 then 
+               (A.bAdr.localDesc[] 
+                 -> theGen.valueSignature 
+                 -> theGen.array).asText
+                 -> A.fieldType[]
+           if);
            (A[],dReg[])->mch.ldVal; 
            A.freeAdr; 
            release; (*!!*)
@@ -648,18 +703,33 @@ TxtVarVal: EvVal
                else 1->mch.initPrimCall
               if)
 	  if);
-          EV.son->EV1; (baseAdr.copy,EV1[],false,chain1[])->genAdr->A[];
-          4->A.size; (* ugly, fix for SPARC *)
-          1->mch.getPrimReg->pReg[];
-          (A[],pReg[])->mch.ldVal;
+          EV.son->EV1; 
+          (if false (*switch182*) then
+              'CharArray2String' -> mch.CallPrim
+          if);
+          (baseAdr.copy,EV1[],false,chain1[]) -> genAdr -> A[];
+          '!textVal:pushCpar1' -> mch.comment;
+          4 -> A.size; (* ugly, fix for SPARC *)
+          1 -> mch.getPrimReg -> pReg[];   
+          (if switch182 then
+              A.bAdr.localDesc[] -> theGen.mkArraySignature -> A.fieldType[]
+          if);
+          (A[],pReg[]) -> mch.ldVal;
           A.freeAdr; (* OLM: 2/5/99 *)
+          '!textVal:pushCpar2' -> mch.comment;
           (if not slice then
               (if common.switch[79(*61*)] then (2,0) -> mch.SpToPrimReg if);
               protectCallReg
-              (#do (if extKind // sematt.pascExt // semAtt.pascTrapExt then
-                       'PpkVT' -> mkEntry -> mch.callPrim
-	            else 'CpkVT' -> mkEntry -> mch.callprim 
-              if)#)
+              (#
+              do (if extKind 
+                  // sematt.pascExt // semAtt.pascTrapExt then
+                     'PpkVT' -> mkEntry -> mch.callPrim
+                  else 
+                     (if switch182 then
+                         'CharArray2String' -> mch.CallPrim
+                      else
+                         'CpkVT' -> mkEntry -> mch.callprim 
+              if)if)#)
            else (* OBS new primitive OPs to be called here *)
               (* Note: on some architectures (e.g. mips), primReg2 and
                * callreg is the same register; V2 may use callReg and
@@ -672,9 +742,11 @@ TxtVarVal: EvVal
               do 2->V1.toPrimDest;
                  (* should V1, V2 be  released? Perhaps also in asgToRepAdr?*)
                  (if common.switch[79(*61*)] then (4,0) -> mch.SpToPrimReg if);
-	         (if extKind // sematt.pascExt // semAtt.pascTrapExt then
+	         (if extKind 
+                  // sematt.pascExt // semAtt.pascTrapExt then
                      'PpkSVT' -> mkEntry -> mch.callPrim
-	          else 'CpkSVT' -> mkEntry -> mch.callprim 
+	          else 
+                     'CpkSVT' -> mkEntry -> mch.callprim 
                  if)
               #)
           if);
@@ -709,6 +781,31 @@ TxtVarVal: EvVal
            this(TxtVarVal)[]->nScan.asgToNelm -> rAx[];
            nScan.reset
 	#);
+     asgToMethod::
+       (#
+       do  
+          (if (0 < next) and (next <= enterTypes.range) then
+              (if enterTypes[next]
+               // 2  (* char *)     then
+                  '! BETA char' -> mch.comment;
+                  (*77-> mch.cstOperand -> mch.pushClong*)
+               // 11 (* text ref *) then
+                  '! push text const and convert to beta text' -> mch.comment;
+                  pushVal;
+                  'CharRep2BetaText'->mch.callPrim 
+               // 12 (* char rep *) then
+                  '!Char rep ' -> mch.comment;
+                  pushVal;
+               else
+                  '\nOBS Unknown enter type (txtCstVal:asgToMethod)' 
+                    -> putline
+              if)
+           else
+              '\nOBS! txtVarVal:asgToMethod:index error' -> puttext;
+              next -> putint; '/'->put; 
+              enterTypes.range -> putint; newline
+          if)
+       #);
      asgToNXoffSets::
        (* baseadr = basis address for this(txtVarVal)
         * rA = address in enter part (nxoffSets)

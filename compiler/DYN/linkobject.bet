@@ -1,0 +1,195 @@
+ORIGIN '../GENERATOR/machine';
+INCLUDE '~beta/basiclib/v1.5/numberio'
+        '~beta/sysutils/v1.5/objinterface'
+        '../CONTROL/system'
+        '../GENERATOR/SPARC/SPARCmachine'
+        '../GENERATOR/SPARC/sparc'
+        'nameTable';
+OBJFILE sun4s 'betaLink.o';
+-- machineatt: Attributes --
+linkObject:
+  (#
+     NT: ^nameTable;
+     codeStart,dataStart: @integer;
+     pList: [1] @integer;
+     struc: @integer;
+     F: ##Object;
+     dummy: @integerObject;
+     theOrigin: ^object;
+     org: @integer;
+     trace: @boolean;
+     PT: @protoType
+  enter (NT[],theOrigin[],trace)
+  do
+     (@@ mstate.B.buffer[1],mstate.B.LIP)->loadObject->codeStart;
+     (@@ mstate.D.buffer[1],mstate.D.LIP)->loadObject->dataStart;
+     (if trace then
+         'Code start: '->puttext;
+         codeStart->putHex;
+         newline;
+         'Data start: '->puttext;
+         dataStart->putHex;
+         newline;
+         
+     if);
+     (NT[],mstate.b[],codeStart,dataStart,true,trace)->Relocate;
+     (NT[],mstate.d[],codeStart,dataStart,false,trace)->Relocate->pList;
+     (if trace then
+         'Main proto: '->puttext;
+         pList[2]->putHex;
+         newline;
+         (for i: 10 repeat
+           (%getLongAt (pList[2]+(i-1)*4))->putHex; newline
+         for);
+         newline;
+         
+     if);
+     (if theOrigin[] <> none then
+         %getLongAt (@@ theOrigin)->org
+      else
+         %getLongAt ((@@ dummy)+8)->org
+     if);
+     (if trace then
+         pList[2]->PT;
+         'Descriptor:'->puttext;
+         PT.labId->putline;
+         'Origin: '->puttext;
+         'Origin proto: '->puttext;
+         (%getLongAt (org))->PT;
+         PT.labId->putline;
+         (org,8)->dumpObject
+     if);
+     (pList[2],org)->MakeStruc->struc;
+     (struc) %putLongAt (@@ F)
+  exit F##
+  #);
+loadObject: external
+  (# bufAdr,length,start: @integer enter (bufAdr,length) exit start #);
+MakeStruc: External
+  (# proto,origin: @integer; F: @integer enter (proto,origin) exit F #);
+relocate:
+  (#
+     NT: ^nameTable;
+     im: ^mstate.image;
+     codeStart,dataStart,mark,off,adr: @integer;
+     name: ^text;
+     ep: ^entryPoints.element;
+     isCode,trace: @boolean;
+     instr: @integer;
+     pList: [4] @integer;
+     pInx: @integer;
+     dump:
+       (# isDef: @boolean; 
+       enter isDef
+       do (*true->trace;*)
+          (if not trace then leave dump if);
+          name[]->puttext;
+          (if name.length < 8 then '\t'->put if);
+          (if isDef then
+              '\t Entry:'->puttext;
+              off->putHex;
+              (if ep.export then '\t --export'->puttext if);
+              
+           else
+              '\t Ref: '->puttext;
+              off->putHex;
+              '\t Def: '->puttext;
+              adr->putHex;
+              (if mark
+               // callMark then
+                  '\t --callmark'->puttext
+               // setHiMark then
+                  '\t --setHiMark'->puttext
+               // setLoMark then
+                  '\t --setLoMark'->puttext; 
+               // setLoMarkSt then
+                  
+               // setLoMarkJmp then
+                  
+               // setLoMarkLdd then
+                  
+               // setLoMarkLd then
+                  
+               // wordMark then
+                  '\t --wordMark'->puttext; 
+               // jmpMark then
+                  
+               // bgtuMark then
+                  
+               else
+                  ' --unknown mark'->putText
+              if);
+              
+          if);
+          newline
+       #)
+  enter (NT[],im[],codeStart,dataStart,isCode,trace)
+  do
+     (for i: im.marktop repeat
+       im.epElm[i][]->ep[];
+       ep.t[]->name[];
+       (im.marks[i]-1)*4->off;
+       (if isCode then codeStart+off->off else dataStart+off->off if);
+       (if ep.local then
+           (if ep.data then
+               dataStart+ep.m.LIP->adr
+            else
+               codeStart+ep.m.LIP->adr
+           if);
+           
+        else
+           name[]->NT.lookUp->adr; 
+       if);
+       (if im.types[i]->mark
+        // entryDefMark then
+           true->dump;
+           (if ep.export then
+               (name[],off)->NT.add;
+               (if not isCode then
+                   (if (pInx+1->pInx) > pList.range then
+                       pList.range->pList.extend
+                   if);
+                   off->pList[pInx]
+               if)
+           if)
+        else
+           false->dump;
+           (if mark
+            // callMark then
+               ((adr-off)->CALL) %putLongAt (off); 
+            // setHiMark then
+               (%getLongAt (off))->instr;
+               (instr %bor (adr->HI)) %putLongAt (off)
+            // setLoMark 
+            // setLoMarkSt 
+            // setLoMarkJmp
+            // setLoMarkLd
+            // setLoMarkLdd then
+               (%getLongAt (off))->instr;
+               (instr %bor (adr->LO)) %putLongAt (off)
+            // wordMark then
+               (adr) %putLongAt (off); 
+            // jmpMark then
+               'OBS! Missing relocation for jmpMark!'->putline
+            // bgtuMark then
+               'OBS! Missing relocation for bgtuMark!'->putline
+            else
+               'OBS! Missing relocation for unknown mark!'->putline
+           if);
+           
+       if);
+       
+     for)
+  exit pList
+  #);
+dumpObject:
+  (# start,length: @integer
+  enter (start,length)
+  do
+     'Object: '->puttext;
+     start->putHex;
+     newline;
+     (for i: length repeat (%getLongAt (start+(i-1)*4))->putHex; newline for)
+  #);
+  
+

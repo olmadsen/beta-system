@@ -1,0 +1,871 @@
+ORIGIN '../PPC/MACHOmachine';
+
+INCLUDE '../MACHO/machofile';
+
+---emitCodeToFile:descriptor---
+(# 
+   header: @mach_header;
+   segment: @segment_command;
+   textsection: @section;
+   datasection: @section;
+   picsymsection: @section;
+   lazysection: @section;
+   nonlazysection: @section;
+   
+   symtab: @symtab_command;
+   
+   ncoderelocs: @integer;
+   ndatarelocs: @integer;
+   
+   align4: @
+     (# n: @integer
+     enter n
+     exit (n + 3) %band (%bnot 3)
+     #);
+   
+   IndirectSymbolTable:
+     (# table: [16] ^EntryPoints.ElementType;
+        top: @integer;
+        add:
+          (# epx: ^EntryPoints.ElementType;
+          enter epx[]
+          do top + 1 -> top;
+             (if top > table.range then
+                 table.range -> table.extend;
+             if);
+             epx[] -> table[top][];
+             top -> epx.m.TOCEntry;
+          #);
+        scan:
+          (# current: ^EntryPoints.ElementType;
+          do (for inx: top repeat
+                  table[inx][] -> current[];
+                  INNER;
+             for);
+          #);
+     #);
+   DirectSymbolTable:
+     (# table: [16] ^EntryPoints.ElementType;
+        top: @integer;
+        add:
+          (# epx: ^EntryPoints.ElementType;
+          enter epx[]
+          do top + 1 -> top;
+             (if top > table.range then
+                 table.range -> table.extend;
+             if);
+             epx[] -> table[top][];
+             top -> epx.m.symtabinx;
+          #);
+        scan:
+          (# current: ^EntryPoints.ElementType;
+          do (for inx: top repeat
+                  table[inx][] -> current[];
+                  INNER;
+             for);
+          #);
+     #);
+   
+   localsyms: @IndirectSymbolTable;
+   definedsyms: @IndirectSymbolTable;
+   undefinedsyms: @IndirectSymbolTable;
+   
+   lazysyms: @IndirectSymbolTable;
+   nonlazysyms: @IndirectSymbolTable;
+   
+   symbols: @DirectSymbolTable;
+   
+   dyld_binder: ^EntryPoints.ElementType;
+   
+   SectionImage:
+     (# address: @integer;
+        size: @integer;
+        LIP: @integer;
+        buffer: [1000] @integer;
+        emit: @
+          (# instr,top: @integer
+          enter instr
+          do (* LIP = [0,4,8,...], top = [1,2,3,...] *)
+             (if ((LIP div 4) + 1 ->top) > buffer.range then
+                 buffer.range->buffer.extend;
+             if);
+             instr->buffer[top];
+             LIP + 4 -> LIP;
+          #);
+     #);
+   
+   pic_sym_stubs: @SectionImage;
+   lazy_sym_ptrs: @SectionImage;
+   nl_sym_ptrs: @SectionImage;
+   
+   TextAddress: (# exit 0 #);
+   TextSize: @(# exit b.LIP->align4 #);
+   DataAddress: (# exit TextAddress + TextSize #);
+   DataSize: @(# exit d.LIP->align4 #);
+   
+   stub_size: (# exit 36 #);
+   hi16:
+     (# value: @int32u;
+        hi: @int16u;
+     enter value
+     do value %srl 16 -> hi;
+     exit hi
+     #);
+   lo16:
+     (# value: @int32u;
+        lo: @int16u;
+     enter value
+     do value %band 0x0000FFFF -> lo;
+     exit lo
+     #);
+   ha16:
+     (* Hi 16 bits incremented by 1 if
+      * Lo 16 bits is negative interpreted
+      * as signed int16
+      *)
+     (# value: @integer;
+        lo: @int16;
+        hi: @int16u;
+     enter value
+     do value -> lo16 -> lo;
+        value -> hi16 -> hi;
+        (if lo < 0 then
+            hi + 1 -> hi;
+        if);
+     exit hi
+     #);
+   
+   GenerateExtraSections:
+     (# 
+        lazy_sym_size: (# exit 4 #);
+        CollectSymbols:
+          (#
+          do EntryPoints.scan
+             (#
+             do (if current.local then
+                    (if current.export then
+                        current[] -> definedsyms.add;
+                     else
+                        current[] -> localsyms.add;
+                    if);
+                 else
+                    (if current.m.nonlazy then
+                        current[] -> nonlazysyms.add;
+                     else
+                        (if current.data then
+                            current[] -> undefinedsyms.add;
+                         else
+                            current[] -> lazysyms.add;
+                        if);
+                    if);
+                if);
+             #);
+             
+             (*** Add dyld_stub_binding_helper ***)
+             ('dyld_stub_binding_helper', false)
+               -> EntryPoints.add;
+             EntryPoints.add.E[] -> dyld_binder[];
+             
+             localsyms.scan
+             (#
+             do current[] -> symbols.add;
+             #);
+             definedsyms.scan
+             (#
+             do current[] -> symbols.add;
+             #);
+             undefinedsyms.scan
+             (#
+             do current[] -> symbols.add;
+             #);
+             nonlazysyms.scan
+             (#
+             do current[] -> symbols.add;
+             #);
+             lazysyms.scan
+             (#
+             do current[] -> symbols.add;
+             #);
+             dyld_binder[] -> symbols.add;
+          #);
+        PrepareSections:
+          (# 
+          do (* Precompute address and size of the
+              * extra sections to be able to relocate
+              * on the fly
+              *)
+             DataAddress + DataSize -> pic_sym_stubs.address;
+             lazysyms.top * stub_size -> pic_sym_stubs.size; 
+             pic_sym_stubs.address + pic_sym_stubs.size 
+               -> lazy_sym_ptrs.address;
+             lazysyms.top * lazy_sym_size
+               -> lazy_sym_ptrs.size;
+             lazy_sym_ptrs.address + lazy_sym_ptrs.size
+               ->  nl_sym_ptrs.address;
+             nonlazysyms.top * lazy_sym_size -> nl_sym_ptrs.size;
+             
+          #);
+        GeneratePICSymStubs:
+          (# 
+          do lazysyms.scan
+             (# name: ^text;
+                inx: @integer;
+                
+                here: @integer;
+                there: @integer;
+                offset: @integer;
+                
+                
+             do GPR0 -> MFLR -> pic_sym_stubs.emit;
+                4 -> BL -> pic_sym_stubs.emit;
+                
+                
+                (* Compute offset from here to
+                 * the lazy pointer.
+                 *)
+                
+                
+                pic_sym_stubs.address + pic_sym_stubs.LIP
+                  -> here;
+                lazy_sym_ptrs.address + (inx * lazy_sym_size)
+                  -> there;
+                
+                there - here -> offset;
+                
+                
+                GPR11 ->  MFLR -> pic_sym_stubs.emit;
+                GPR0 -> MTLR -> pic_sym_stubs.emit;
+                (GPR11, GPR11, offset -> ha16) -> ADDIS -> pic_sym_stubs.emit;
+                (GPR12, GPR11, offset -> lo16) -> LWZ -> pic_sym_stubs.emit; 
+                GPR12 -> MTCTR -> pic_sym_stubs.emit;
+                (GPR11, GPR11, offset -> lo16) -> ADDI -> pic_sym_stubs.emit;
+                BCTR -> pic_sym_stubs.emit;
+                inx + 1 -> inx;
+             #);
+          #);
+        GenerateLazyPtrs:
+          (#
+          do lazysyms.scan
+             (#
+             do 0 -> lazy_sym_ptrs.emit;
+             #);
+          #);
+        GenerateNonLazyPtrs:
+          (#
+          do nonlazysyms.scan
+             (#
+             do 0 -> nl_sym_ptrs.emit;
+             #);
+          #);
+     do CollectSymbols;
+        
+        PrepareSections;
+        GeneratePICSymStubs;
+        GenerateLazyPtrs;
+        GenerateNonLazyPtrs;
+     #);
+   
+   SegmentSize:
+     (# exit segment_command_size + (5 * section_size) #);
+   CommandsSize: 
+     (# 
+     exit SegmentSize 
+        + symtab_command_size 
+        + dysymtab_command_size 
+     #);
+   BodyStart: (# exit CommandsSize + mach_header_size #);
+   
+   TextStart: (# exit BodyStart + TextAddress #);
+   DataStart: (# exit BodyStart + DataAddress #);
+   CodeSize:
+     (# 
+     exit TextSize + DataSize  + pic_sym_stubs.size 
+        + lazy_sym_ptrs.size +  nl_sym_ptrs.size #);
+   RelocationSize: 
+     (# exit (ncoderelocs + ndatarelocs + lazysyms.top*7) * reloc_size #);
+     
+   IndirectStart:
+     (# exit BodyStart + CodeSize + RelocationSize#);
+   IndirectSize:
+     (# exit lazysyms.top * 4 * 2 + nonlazysyms.top * 4#);
+   
+   
+   SymtabStart: (# exit IndirectStart + IndirectSize #);
+   SymtabSize: 
+     (# 
+     exit symbols.top  * 12  
+     #);
+   StringTableStart: (# exit SymtabStart + SymtabSize #);
+   StringTableSize: (# exit mstate.strTbl.str.lgth #);
+   
+   EmitHeader:
+     (#
+     do MH_MAGIC -> header.magic;
+        18 -> header.cputype;
+        0 -> header.cpusubtype;
+        MH_OBJECT -> header.filetype;
+        3  -> header.ncmds; (* LC_SEGMENT + LC_SYMTAB + LC_DYSYMTAB *)
+        CommandsSize -> header.sizeofcmds;
+        0 -> header.flags;
+        header[]  -> MF.putMachHeader;
+     #);
+   EmitSegmentCommand:
+     (#
+     do LC_SEGMENT -> segment.cmd;
+        SegmentSize -> segment.cmdsize;
+        0 -> segment.vmaddr;
+        CodeSize -> segment.vmsize;
+        BodyStart -> segment.fileoff;
+        CodeSize -> segment.filesize;
+        0x7 -> segment.maxprot;
+        0x7 -> segment.initprot;
+        5 -> segment.nsects;
+        0 -> segment.flags;
+        segment[] -> MF.putMachSegment;
+     #);
+   EmitSectionHeaderText:
+     (# textSectName: [6] @char;
+        textSegName: [6] @char;
+     do '__text' -> textSectName;
+        '__TEXT' -> textSegName;
+        (@@textsection.sectname1, @@textSectName[1], 6) -> memcpy;
+        (@@textsection.segname1, @@textSegName[1], 6) -> memcpy;
+        TextAddress -> textsection.address;
+        TextSize -> textsection.size;
+        TextStart -> textsection.offset;
+        2 -> textsection.align;
+        BodyStart + CodeSize -> textsection.reloff;
+        ncoderelocs -> textsection.nreloc;
+        0x80000400 -> textsection.flags;
+        0 -> textsection.reserved1;
+        0 -> textsection.reserved2;
+        
+        textsection[] -> MF.putMachSection;
+     #);
+   EmitText:
+     (# pb: @MF.putBytes;
+     do (@@b.buffer[1],textsize)->pb;
+     #);
+   EmitSectionHeaderData:
+     (# dataSectName: [6] @char;
+        dataSegName: [6] @char;
+     do '__data' -> dataSectName;
+        '__DATA' -> dataSegName;
+        (@@datasection.sectname1, @@dataSectName[1], 6) -> memcpy;
+        (@@datasection.segname1, @@dataSegName[1], 6) -> memcpy;
+        DataAddress -> datasection.address;
+        DataSize -> datasection.size;
+        DataStart -> datasection.offset;
+        2 -> datasection.align;
+        BodyStart + CodeSize + ncoderelocs*reloc_size
+          -> datasection.reloff;
+        ndatarelocs -> datasection.nreloc;
+        0x00000000 -> datasection.flags;
+        0 -> datasection.reserved1;
+        0 -> datasection.reserved2;
+        
+        datasection[] -> MF.putMachSection;
+     #);
+   EmitData:
+     (# pb: @MF.putBytes;
+     do (@@d.buffer[1],datasize)->pb;
+     #);
+   EmitSectionHeaderPIC:
+     (# sectName: [16] @char;
+        segName: [6] @char;
+     do '__picsymbol_stub' -> sectName;
+        '__TEXT' -> segName;
+        (@@picsymsection.sectname1, @@sectName[1], 16) -> memcpy;
+        (@@picsymsection.segname1, @@segName[1], 6) -> memcpy;
+        pic_sym_stubs.address -> picsymsection.address;
+        pic_sym_stubs.size -> picsymsection.size;
+        BodyStart + pic_sym_stubs.address 
+          -> picsymsection.offset;
+        2 -> picsymsection.align;
+        BodyStart + CodeSize + (ncoderelocs + ndatarelocs)*reloc_size
+          -> picsymsection.reloff;
+        
+        6 * lazysyms.top -> picsymsection.nreloc;
+        0x80000408 -> picsymsection.flags;
+        0 -> picsymsection.reserved1;
+        36 -> picsymsection.reserved2;
+        picsymsection[] -> MF.putMachSection;
+     #);
+   EmitPIC:
+     (# pb: @MF.putBytes;
+     do (@@pic_sym_stubs.buffer[1],pic_sym_stubs.size)->pb;
+     #);
+   EmitSectionHeaderLazy:
+     (# sectName: [15] @char;
+        segName: [6] @char;
+     do '__la_symbol_ptr' -> sectName;
+        '__DATA' -> segName;
+        (@@lazysection.sectname1, @@sectName[1], 15) -> memcpy;
+        (@@lazysection.segname1, @@segName[1], 6) -> memcpy;
+        lazy_sym_ptrs.address -> lazysection.address;
+        lazy_sym_ptrs.size -> lazysection.size;
+        BodyStart + lazy_sym_ptrs.address 
+          -> lazysection.offset;
+        2 -> lazysection.align;
+        BodyStart + CodeSize + (ncoderelocs + ndatarelocs + 6*lazysyms.top)*reloc_size
+          -> lazysection.reloff;
+        lazysyms.top -> lazysection.nreloc;
+        0x7 -> lazysection.flags;
+        lazysyms.top -> lazysection.reserved1;
+        0 -> lazysection.reserved2;
+        lazysection[] -> MF.putMachSection;
+     #);
+   EmitLazy:
+     (# pb: @MF.putBytes;
+     do (@@lazy_sym_ptrs.buffer[1],lazy_sym_ptrs.size)->pb;
+     #);
+   EmitSectionHeaderNonLazy:
+     (# sectName: [15] @char;
+        segName: [6] @char;
+     do '__nl_symbol_ptr' -> sectName;
+        '__DATA' -> segName;
+        (@@nonlazysection.sectname1, @@sectName[1], 15) -> memcpy;
+        (@@nonlazysection.segname1, @@segName[1], 6) -> memcpy;
+        nl_sym_ptrs.address -> nonlazysection.address;
+        nl_sym_ptrs.size -> nonlazysection.size;
+        BodyStart + nl_sym_ptrs.address 
+          -> nonlazysection.offset;
+        2 -> nonlazysection.align;
+        0 -> nonlazysection.reloff;
+        0 -> nonlazysection.nreloc;
+        0x6 -> nonlazysection.flags;
+        lazysyms.top * 2 -> nonlazysection.reserved1;
+        0 -> nonlazysection.reserved2;
+        nonlazysection[] -> MF.putMachSection;
+     #);
+   EmitNonLazy:
+     (# pb: @MF.putBytes;
+     do (@@nl_sym_ptrs.buffer[1],nl_sym_ptrs.size)->pb;
+     #);
+   EmitSymTabHeader:
+     (#
+     do LC_SYMTAB -> symtab.cmd;
+        symtab_command_size -> symtab.cmdsize;
+        SymtabStart -> symtab.symoff;
+        symbols.top -> symtab.nsyms;
+        StringTableStart -> symtab.stroff;
+        StringTableSize -> symtab.strsize;
+        symtab[] -> MF.putSymTab;
+     #);
+   EmitSymTab:
+     (# emitEntry:
+          (# current: ^EntryPoints.ElementType;
+             type: @int8u;
+             cect: @int8u;
+             desc: @int16u;
+             strinx: @int32u;
+             value: @int32u;
+          enter current[]
+          do current.m.strinx -> strinx;
+             (if current.local then
+                 (if current.data then
+                     (if current.export then
+                         N_SECT + N_EXT -> type;
+                      else
+                         N_SECT -> type;
+                     if);
+                     2 -> cect; (* __data section *)
+                     dataaddress + current.LIP -> value; (* Should be file relative *)
+                  else
+                     (if current.export then
+                         N_SECT + N_EXT -> type;
+                      else
+                         N_SECT -> type;
+                     if);
+                     1 -> cect; (* __text section *)
+                     current.LIP -> value;
+                 if);
+              else
+                 N_UNDF + N_EXT -> type;
+                 NO_SECT -> cect;
+                 0 -> value;
+             if);
+             
+             strinx -> MF.putLong;
+             type -> MF.putByte;
+             cect -> MF.putByte;
+             desc -> MF.putShort;
+             value -> MF.putLong;
+          #);
+        
+     do symbols.scan
+        (#
+        do current[] -> emitEntry;
+        #);
+     #);
+   EmitDySymtabHeader:
+     (# cmd: @dysymtab_command;
+     do LC_DYSYMTAB -> cmd.cmd;
+        dysymtab_command_size -> cmd.cmdsize;
+        0 -> cmd.ilocalsym;
+        localsyms.top -> cmd.nlocalsym;
+        cmd.ilocalsym + cmd.nlocalsym -> cmd.iextdefsym;
+        definedsyms.top -> cmd.nextdefsym;
+        
+        cmd.iextdefsym + cmd.nextdefsym -> cmd.iundefsym;
+        lazysyms.top + nonlazysyms.top + undefinedsyms.top -> cmd.nundefsym;
+        
+        IndirectStart -> cmd.indirectsymoff;
+        lazysyms.top * 2  + nonlazysyms.top -> cmd.nindirectsyms;
+        cmd[] -> MF.putDysymtab;
+     #);
+   EmitDySymtab:
+     (#
+     do lazysyms.scan
+        (#
+        do current.m.symtabinx - 1 -> MF.putLong;
+        #);
+        lazysyms.scan
+        (#
+        do current.m.symtabinx - 1 -> MF.putLong;
+        #);
+        nonlazysyms.scan
+        (#
+        do current.m.symtabinx - 1 -> MF.putLong;
+        #);
+     #);
+   EmitRelocationText:
+     (# type: @int32u;
+        field, value, address: @integer;
+        epx: ^EntryPoints.ElementType;
+        labaddress: @integer;
+     do (for inx: mstate.b.markTop repeat
+             (if mstate.b.types[inx]
+              //callMark then
+                 mstate.b.epElm[inx][] -> epx[];
+                 (mstate.b.marks[inx]-1)*4 -> address;
+                 R_PCREL + R_LONG + PPC_RELOC_BR24 -> type;
+                 (if epx.local then
+                     1 -> value;
+                  else
+                     3 -> value;
+                 if);
+                 (value %sll 8) %bor type -> field;
+                 
+                 address -> MF.putlong;
+                 field -> MF.putlong;
+              //dataMark then
+                 (mstate.b.marks[inx]-1)*4 -> labaddress;
+              //codeMark then
+                 (mstate.b.marks[inx]-1)*4 -> labaddress;
+              //ha16Mark then
+                 (mstate.b.marks[inx]-1)*4 -> address;
+                 mstate.b.epElm[inx][] -> epx[];
+                 (if epx.local then
+                     (if epx.data then
+                         dataaddress + epx.LIP -> value;
+                      else
+                         textaddress + epx.LIP -> value;
+                     if);
+                  else
+                     nl_sym_ptrs.address + (EPX.m.TOCEntry - 1) * 4 -> value;
+                 if);
+                 PR_SCATTERED + PR_LONG + PPC_RELOC_HA16_SECTDIFF -> type;
+                 (type %sll 24) %bor address -> field;
+                 
+                 field -> MF.putlong;
+                 value -> MF.putlong;
+                 
+                 
+                 (value - labaddress) -> lo16 -> address;
+                 PR_SCATTERED + PR_LONG + PPC_RELOC_PAIR -> type;
+                 (type %sll 24) %bor address -> field;
+                 
+                 field -> MF.putlong;
+                 labaddress -> MF.putlong;
+                 
+                 
+              //lo16Mark then
+                 (mstate.b.marks[inx]-1)*4 -> address;
+                 mstate.b.epElm[inx][] -> epx[];
+                 
+                 (if epx.local then
+                     (if epx.data then
+                         dataaddress + epx.LIP -> value;
+                      else
+                         textaddress + epx.LIP -> value;
+                     if);
+                  else
+                     nl_sym_ptrs.address + (EPX.m.TOCEntry - 1) * 4 -> value;
+                 if);
+                 PR_SCATTERED + PR_LONG + PPC_RELOC_LO16_SECTDIFF -> type;
+                 (type %sll 24) %bor address -> field;
+                 
+                 field -> MF.putlong;
+                 value -> MF.putlong;
+                 
+                 (value - labaddress) -> hi16 -> address;
+                 PR_SCATTERED + PR_LONG + PPC_RELOC_PAIR -> type;
+                 (type %sll 24) %bor address -> field;
+                 
+                 field -> MF.putlong;
+                 labaddress -> MF.putlong;
+             if);
+        for);
+     #);
+   EmitRelocationData:
+     (# epx: ^EntryPoints.ElementType;
+        
+        address: @integer;
+        type: @int8u;
+        value: @integer;
+     do (for inx: d.markTop repeat
+             (if d.types[inx]
+              //wordMark then
+                 (d.marks[inx]-1) * 4 -> address;
+                 d.epElm[inx][] -> epx[];
+                 (if epx.local then
+                     PPC_RELOC_VANILLA + R_LONG -> type;
+                     (if epx.data then
+                         2 -> value; (* __data section *)
+                      else
+                         1 -> value; (* __text section *)
+                     if);
+                  else
+                     PPC_RELOC_VANILLA + R_LONG + R_EXTERN -> type;
+                     epx.m.symtabinx - 1
+                       -> value; (* sym number *)
+                 if);
+                 address -> MF.putlong;
+                 (value %sll 8) %bor type -> MF.putlong;
+             if);
+        for);
+        
+     #);
+   EmitRelocationPIC:
+     (# stubLIP: @integer; (* Address of current symbol_stub  *)
+        stubLabLIP: @integer; (* Address of local label in
+                               * current symbol_stub
+                               *)
+        symLIP: @integer; (* Address into lazy_symbols *)
+        offset: @integer;
+        
+        theLo16: @int16u;
+        theHa16: @int16u;
+        address, value, field, type: @integer;
+        
+     do (* We need 6 relocation entries for each symbol_stub *)
+        (* The entries can be generated based on the index of the
+         * symbol_stub
+         *)
+        
+        pic_sym_stubs.address -> stubLIP;
+        lazy_sym_ptrs.address -> symLIP;
+        (for inx: lazysyms.top repeat
+             stubLIP + 8 -> stubLabLIP; (* See GeneratePICSymStubs *)
+             
+             symLIP - stubLabLIP -> offset;
+             offset -> lo16 -> theLo16;
+             offset -> ha16 -> theHa16;
+             
+             (* ha16 mark *)
+             stubLIP + 16 - pic_sym_stubs.address -> address; 
+             PR_SCATTERED + PR_LONG + PPC_RELOC_HA16_SECTDIFF -> type;
+             
+             (type %sll 24) %bor address -> MF.putlong;
+             symLIP -> MF.putlong;
+             
+             PR_SCATTERED + PR_LONG + PPC_RELOC_PAIR -> type;
+             
+             
+             (type %sll 24) %bor theLo16 -> MF.putlong;
+             stubLabLIP -> MF.putlong;
+             
+             address + 4 -> address; (* lo16 mark *)
+             PR_SCATTERED + PR_LONG + PPC_RELOC_LO16_SECTDIFF -> type;
+             
+             (type %sll 24) %bor address -> MF.putlong;
+             symLIP -> MF.putlong;
+             
+             PR_SCATTERED + PR_LONG + PPC_RELOC_PAIR -> type;
+             
+             (type %sll 24) %bor theHa16 -> MF.putlong;
+             stubLabLIP -> MF.putlong;
+             
+             address + 8 -> address; (* lo16 mark *)
+             PR_SCATTERED + PR_LONG + PPC_RELOC_LO16_SECTDIFF -> type;
+             
+             (type %sll 24) %bor address -> MF.putlong;
+             symLIP -> MF.putlong;
+             
+             PR_SCATTERED + PR_LONG + PPC_RELOC_PAIR -> type;
+             
+             (type %sll 24) %bor theHa16 -> MF.putlong;
+             stubLabLIP -> MF.putlong;
+             
+             stubLIP + stub_size -> stubLIP;
+             symLIP + 4 -> symLIP;
+        for);
+     #);
+   EmitRelocationLazy:
+     (# address: @integer;
+        type: @int8u;
+        value: @integer;
+        field: @integer;
+     do PPC_RELOC_VANILLA + R_LONG + R_EXTERN -> type;
+        dyld_binder.m.symtabinx - 1-> value; (* Index of dyld_binder *)
+        (value %sll 8) %bor type  -> field;
+        0x0 -> address;
+        (for lazysyms.top repeat
+             address -> MF.putlong;
+             field -> MF.putlong;
+             address + 0x4 -> address;
+        for);
+     #);
+   PatchText:
+     (# epx: ^EntryPoints.ElementType;
+        offset: @integer;
+        codelip: @integer;
+        instruction1, instruction2: @integer;
+        theHa16, theLo16: @int16u;
+     do (for inx: mstate.b.markTop repeat
+             (if mstate.b.types[inx]
+              //callMark then
+                 
+                 ncoderelocs + 1 -> ncoderelocs;
+                 mstate.b.epElm[inx][] -> epx[];
+                 (mstate.b.marks[inx]-1)*4 -> codelip;
+                 (if epx.local then
+                     epx.LIP - codelip  -> offset;
+                  else
+                     (pic_sym_stubs.address 
+                     + (epx.m.TOCEntry - 1) * stub_size) - codelip
+                       -> offset;
+                     
+                 if);
+                 (offset div 4, 6,24) 
+                   -> mstate.b.buffer[mstate.b.marks[inx]].%putBits;
+              //dataMark then
+                 (mstate.b.marks[inx]-1)*4 -> codelip;
+                 mstate.b.epElm[inx][] -> epx[];
+                 mstate.b.marks[inx] + 1 -> instruction1;
+                 mstate.b.marks[inx] + 2 -> instruction2;
+                 (if epx.local then
+                     (dataaddress + epx.LIP) - codelip -> offset;
+                     
+                     offset -> ha16 -> theHa16;
+                     offset -> lo16 -> theLo16;
+                     mstate.b.buffer[instruction1] %bor theHa16
+                       -> mstate.b.buffer[instruction1];
+                     mstate.b.buffer[instruction2] %bor theLo16
+                       -> mstate.b.buffer[instruction2];
+                     mstate.b.buffer[instruction2] %bor 0x38000000
+                       -> mstate.b.buffer[instruction2];
+                  else
+                     nl_sym_ptrs.address + (epx.m.TOCEntry - 1) * 4 -> offset;
+                     offset - codelip -> offset;
+                     offset -> ha16 -> theHa16;
+                     offset -> lo16 -> theLo16;
+                     mstate.b.buffer[instruction1] %bor theHa16
+                       -> mstate.b.buffer[instruction1];
+                     mstate.b.buffer[instruction2] %bor theLo16
+                       -> mstate.b.buffer[instruction2];
+                     mstate.b.buffer[instruction2] %bor 0x80000000
+                       -> mstate.b.buffer[instruction2];
+                     
+                 if);
+              //codeMark then
+                 (mstate.b.marks[inx]-1)*4 -> codelip;
+                 mstate.b.epElm[inx][] -> epx[];
+                 mstate.b.marks[inx] + 1 -> instruction1;
+                 mstate.b.marks[inx] + 2 -> instruction2;
+                 (if epx.local then
+                     (textaddress + epx.LIP) - codelip -> offset;
+                     
+                     offset -> ha16 -> theHa16;
+                     offset -> lo16 -> theLo16;
+                     mstate.b.buffer[instruction1] %bor theHa16
+                       -> mstate.b.buffer[instruction1];
+                     mstate.b.buffer[instruction2] %bor theLo16
+                       -> mstate.b.buffer[instruction2];
+                     mstate.b.buffer[instruction2] %bor 0x38000000
+                       -> mstate.b.buffer[instruction2];
+                  else
+                     nl_sym_ptrs.address + (epx.m.TOCEntry - 1) * 4 -> offset;
+                     offset - codelip -> offset;
+                     offset -> ha16 -> theHa16;
+                     offset -> lo16 -> theLo16;
+                     mstate.b.buffer[instruction1] %bor theHa16
+                       -> mstate.b.buffer[instruction1];
+                     mstate.b.buffer[instruction2] %bor theLo16
+                       -> mstate.b.buffer[instruction2];
+                     mstate.b.buffer[instruction2] %bor 0x80000000
+                       -> mstate.b.buffer[instruction2];
+                     
+                 if);
+              //ha16Mark//lo16Mark then
+                 ncoderelocs + 2 -> ncoderelocs;
+             if);
+             
+        for);
+     #);
+   PatchData:
+     (# epx: ^EntryPoints.ElementType;
+     do (for inx: d.markTop repeat
+             d.epElm[inx][] -> epx[];
+             (if d.types[inx]
+              //wordMark then
+                 (if epx.local then
+                     (if epx.data then
+                         dataaddress + epx.LIP -> d.buffer[d.marks[inx]];
+                      else
+                         epx.LIP -> d.buffer[d.marks[inx]];
+                     if);
+                 if);
+                 ndatarelocs + 1 -> ndatarelocs;
+             if);
+        for);
+     #);
+   EmitStringTable:
+     (# size: @integer;
+        pb: @MF.putBytes;
+     do StringTableSize -> size;
+        (@@mstate.strTbl.str.T[1],size) -> pb;
+     #);
+   T: ^Text;
+   MF: @machofile;
+   
+   
+   memcpy: external
+     (# s1, s2, n: @integer;
+        s3: @integer;
+     enter (s1, s2, n)
+     exit s3
+     #);
+     
+do (BC.name).copy->T[];
+   '.o'->T.append->MF.name;
+   
+   GenerateExtraSections;
+   PatchText;
+   PatchData;
+   MF.openWrite;
+   EmitHeader;
+   EmitSegmentCommand;
+   EmitSectionHeaderText;
+   EmitSectionHeaderData;
+   EmitSectionHeaderPIC;
+   EmitSectionHeaderLazy;
+   EmitSectionHeaderNonLazy;
+   EmitSymTabHeader;
+   EmitDySymtabHeader;
+   EmitText;
+   EmitData;
+   EmitPIC;
+   EmitLazy;
+   EmitNonLazy;
+   
+   EmitRelocationText;
+   EmitRelocationData;
+   EmitRelocationPIC;
+   EmitRelocationLazy;
+   EmitDySymtab;
+   EmitSymTab;
+   EmitStringTable;
+   MF.close;
+#)

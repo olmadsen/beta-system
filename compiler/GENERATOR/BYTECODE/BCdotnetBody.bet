@@ -1,15 +1,17 @@
-ORIGIN 'BCmachineBody'; INCLUDE '~beta/basiclib/formatio'; INCLUDE
-'~beta/basiclib/pcre'; INCLUDE '~beta/toollibs/utils/fileExtensions';
+ORIGIN 'BCmachineBody'; 
+INCLUDE '~beta/basiclib/formatio'; 
+INCLUDE '~beta/basiclib/pcre'; 
+INCLUDE '~beta/toollibs/utils/fileExtensions';
 
 --BCmachineLib: attributes--
 trace_opcodes: 
   (# exit false #);
 trace_class:
-  (# exit false #);
+  (# exit true #);
 trace_mem:
   (# exit false #);
 trace_sig:
-  (# exit false #);
+  (# exit true #);
 comment:
   (# T: ^text
   enter T[]
@@ -23,37 +25,36 @@ fixme: comment
   (# 
   do 'FIXME:' -> out.puttext;
   #);
-ConvertFromJavaType:
-  (# T: ^text;
-     type: ^text;
+ConvertJavaType:
+  (# T: ^text
   enter T[]
   do (if true 
       // 'I' -> T.equal then
-         'int32/*FIXME:ConvertFromJavaType*/' -> type[];
-      // '[mscorlib]System.Object' -> T.equal then
-         '' -> type[];
-         INNER;
-         '[mscorlib]System.Object' -> type.append;
-      else
-         '' -> type[];
-         INNER;
-         (if not common.switch[184] then
-             '[.module ' -> type.puttext;
-             (*BCstate.thisModulename[]*) T.copy -> type.puttext;
-             '.dll' -> type.puttext;
-             ']' -> type.puttext;
-         if);
-         T.copy -> type.puttext;
-         type[] -> T[];
-     if)
-  exit type[]
+         'int32 /*FIXME:ConvertJavaType I*/' -> T[];
+      // 'C' -> T.equal then
+         'char /*FIXME:ConvertJavaType C*/' -> T[];
+     if);
+     INNER;
+  exit T[]
   #);
-ClassConvertFromJavaType: ConvertFromJavaType
+AddClass: ConvertJavaType
   (# 
-  do (if trace_class then
-         'class/*ClassConvertFromJavaType*/ ' -> type.puttext;
+  do (if true 
+      // 'int32'   -> T.equal 
+      // 'char'    -> T.equal 
+      // 'void '   -> ((1,5)->T.sub).equal
+      // 'int32 '  -> ((1,6)->T.sub).equal
+      // 'char '   -> ((1,5)->T.sub).equal
+      // 'char[]'  -> ((1,6)->T.sub).equal
+      // 'int32[]' -> ((1,7)->T.sub).equal
+         then
+         (* nothing *)
+      // 'tstenv' -> T.equal then
+         (if trace_class then 'AddClass' -> emitcomment if);
+         'class [/*FIXME:hardcoded:*/tstenv]' -> T.prepend;
       else
-         'class ' -> type.puttext;
+         (if trace_class then 'AddClass' -> emitcomment if);
+         'class ' -> T.prepend;
      if);
   #);
 ReplaceJavaSlash:
@@ -68,12 +69,7 @@ ReplaceJavaSlash:
      (T[], '') -> regExp.replace
      (# rep::
           (# 
-          do (if not common.switch[184] then
-                 '[.module ' -> value[];
-                 sub1->value.puttext;
-                 '.dll]' -> value.puttext;
-             if);
-             sub2->value.puttext; (* return-type *)
+          do sub2->value.puttext; (* return-type *)
              ' '->value.put;
              sub1->value.puttext; (* class *)
              '::' -> value.puttext;
@@ -93,8 +89,12 @@ do (if methodClassTag
     // 'c' 
     // 'p' then
        '  .field public '->out.puttext;
-       T[] -> ClassConvertFromJavaType -> out.puttext;
+       T[] -> AddClass -> out.puttext;
        ' ' -> out.puttext; F[] -> out.putline;
+    // '[' then
+       '  .field public '->out.puttext;
+       T[] -> AddClass -> out.puttext;
+       ' [] ' -> out.puttext; F[] -> out.putline;
     // 'm' then
        (if numLocals>=numArguments then
            (if numLocals>numArguments then 
@@ -105,7 +105,7 @@ do (if methodClassTag
            '[' -> out.puttext;
            numLocals-numArguments -> out.putint;
            '] ' -> out.puttext;
-           T[] -> ClassConvertFromJavaType -> out.puttext;
+           T[] -> AddClass -> out.puttext;
            ' V_' -> out.puttext;
            numLocals-numArguments -> out.putint;
        if);
@@ -132,8 +132,8 @@ do '\tldarg.0\n' -> out.puttext;
     else
        '\tldnull \n' -> out.puttext
    if);
-   '\tstfld\t' -> out.puttext;
-   currentType[] -> ClassConvertFromJavaType -> out.puttext;
+   '\tstfld/*1*/\t' -> out.puttext;
+   currentType[] -> ConvertJavaType -> out.puttext;
    ' ' -> out.puttext;
    thisClassName[] -> out.puttext;
    '::' -> out.puttext;
@@ -149,8 +149,7 @@ do '\tldarg.0\n' -> out.puttext;
    ,thisInnerMethodName         (* name of a possible inner method;
                                  * or the name of method 'main'
                                  *)
-   ,thisModuleName
-   ,thisExeName: ^text;
+   ,thisModuleName: ^text;
    thisBlockLevel,
    subLevel: @integer; (* current subpattern level *)
    noOfArguments: @integer;
@@ -158,20 +157,13 @@ do '\tldarg.0\n' -> out.puttext;
                  * used by subsequent init - ugly
                  *)
    isMainMethod: @boolean; (* true if generating code for main method *)
-   isMainModule: @boolean; (* true if generating code for module containing main method *)
    init:
      (# 
      do 
-        '/*FIXME*/Main' -> thisExeName[]; (* FIXME *)
         out.entry.path.name -> thisModuleName[];
         '.il' -> thisModuleName.stripExtension;
         thisModuleName.copy -> BCstate.thisModuleName[];
-        'Main' -> thisModuleName.equal -> isMainModule;
-        (if isMainModule or common.switch[184] then
-            emitAssemblyHeader;
-         else
-            emitModuleHeader;
-        if);
+        emitAssemblyHeader;
      #);
    swap:
      (# st0, st1: ^text;
@@ -217,20 +209,23 @@ do '\tldarg.0\n' -> out.puttext;
              '	.hash algorithm 32772	// selected algorithm is SHA1\n'
              '	.ver 1:0:0:0		// version 1.0\n'
              '}\n\n' 
-               -> out.putFormat(# do thisExeName[]->s #);
+               -> out.putFormat(# do thisModuleName[]->s #);
           #);
         emitAssemblyReferences:
           (# 
           do '/* The assembly references. */\n'
-             '.assembly extern mscorlib {\n'
-             '}\n'
+             '.assembly extern mscorlib {}\n'
                ->out.puttext;
+             '// FIXME: hardcoded:\n'
              '.assembly extern System.Windows.Forms {\n'
              '  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)\n'
              '  .ver 1:0:3300:0\n'
              '}\n'
                ->out.puttext;
-             out.newline;
+             '// FIXME: hardcoded:\n'
+             '.assembly extern tstenv {}\n'
+               -> out.puttext;
+              out.newline;
           #);
         
         emitFileReferences:
@@ -240,7 +235,7 @@ do '\tldarg.0\n' -> out.puttext;
              ' */\n'
                -> out.puttext;
              '// FIXME: hardcoded:\n'
-             '//.file Bmini0.dll\n'
+             '.file tstenv.dll\n'
                -> out.puttext;
              out.newline;
           #);
@@ -252,8 +247,8 @@ do '\tldarg.0\n' -> out.puttext;
              '/********************************************/\n'
              '\n'
              '/* The module declaration. */\n'
-             '.module %s.exe\n\n'
-               ->  out.putFormat(# do thisExeName[]->s #);
+             '.module %s.dll\n\n'
+               ->  out.putFormat(# do thisModuleName[]->s #);
           #);
         
         emitModuleReferences:
@@ -263,15 +258,15 @@ do '\tldarg.0\n' -> out.puttext;
              ' */\n'
                -> out.puttext;
              '// FIXME: hardcoded:\n'
-             '//.module extern Bmini0.dll\n'
+             '.module extern tstenv.dll\n'
                -> out.puttext;
           #);
      do 
         emitAssemblyInfo;
         emitAssemblyReferences;
-        emitFileReferences;
-        emitModuleDeclaration;
-        emitModuleReferences;
+        (*emitFileReferences;*)
+        (*emitModuleDeclaration;*)
+        (*emitModuleReferences;*)
      #);
    emitModuleHeader:
      (# 
@@ -344,7 +339,7 @@ do '\tldarg.0\n' -> out.puttext;
    Address:
      (#
         reg,off,size,isField,ONlevel: @integer; 
-        descName: ^text;
+        descName,fieldType: ^text;
         get: 
           (#  
           do getReg->reg; 
@@ -354,7 +349,14 @@ do '\tldarg.0\n' -> out.puttext;
              BC.get -> isField; 
              (if isField = 1 then
                  BC.getText -> descName[]
+             else
+                 none -> descName[]
              if);
+             (if BC.get = 1 then
+                 BC.getText -> fieldType[]
+              else
+                 none -> fieldType[]
+             if)
           #);
         emitField:
           (# isOrigin: @boolean
@@ -420,15 +422,14 @@ do '\tldarg.0\n' -> out.puttext;
                  '\n\t'->out.puttext
              if);
              (if ONlevel > 0 then
-                 (*(NONE, class[]) -> swap;*)
-                 'stfld\t' -> out.puttext;
-                 class[] -> emitSignature;
+                 'stfld/*2*/\t' -> out.puttext;
+                 class[] -> AddClass -> emitSignature;
                  ' '->out.put;
                  isOrigin -> emitField;
               else           
                  (if isField = 1 then
-                     'stfld\t' -> out.puttext;
-                     class[] -> emitSignature;
+                     'stfld/*3*/\t' -> out.puttext;
+                     class[] -> AddClass -> emitSignature;
                      ' '->out.put;
                      isOrigin -> emitField;
                   else
@@ -442,13 +443,13 @@ do '\tldarg.0\n' -> out.puttext;
           do BC.gettext -> sig[];
              (if ONlevel > 0 then
                  'ldfld\t' -> out.puttext;
-                 sig[] -> emitSignature;
+                 sig[] -> AddClass -> emitSignature;
                  ' '->out.put;
                  emitField;
               else 
                  (if isField = 1 then
                      'ldfld\t' -> out.puttext;
-                     class[] -> emitSignature;
+                     class[] -> AddClass -> emitSignature;
                      ' '->out.put;
                      emitField;
                   else
@@ -502,13 +503,8 @@ do '\tldarg.0\n' -> out.puttext;
    emitSignature:
      (# sig: ^text
      enter sig[]
-     do (if false then 'emitsignature' -> emitcomment; if);
-        (if (sig[]=NONE) or (sig.length=0) then
-            'class [mscorlib]System.Object' -> out.puttext;
-         else
-            'class ' -> out.puttext;
-            sig[] -> out.puttext; 
-        if);
+     do (if trace_sig then 'emitsignature' -> emitcomment; if);
+        sig[] -> out.puttext; 
      #);
    emitCmpJmp:
      (# cond,L,lab: @integer
@@ -560,8 +556,8 @@ do init;
              'class [mscorlib]System.Object'->thisSuperOrgName[];
              BC.get -> subLevel; 
              BC.gettext -> thisOrgName[];
-             '  .field public class ' -> out.puttext;
-             thisOrgName[] -> out.puttext;
+             '  .field public ' -> out.puttext;
+             thisOrgName[] -> AddClass -> out.puttext;
              ' origin'-> out.putline;
              313->ctrace(# do '%%%class: "'->xT;
                            thisClassName[] -> xT;
@@ -596,7 +592,7 @@ do init;
                         '  }\n' -> out.puttext;
                     if);
                     '\n  .method public virtual ' -> out.puttext;
-                    thisSignature[] -> out.puttext; 
+                    thisSignature[] -> AddClass -> out.puttext; 
                     ' cil managed \n  {' -> out.putline
                 if);    
                 emitLocals;
@@ -606,33 +602,9 @@ do init;
              '  .method public rtspecialname specialname hidebysig instance void .ctor('
                -> out.puttext;
              (if thisOrgname[]<>NONE then
-                 'class ' -> out.puttext;
-                 thisOrgName[] -> out.puttext;
+                 thisOrgName[] (*-> AddClass*) -> out.puttext;
              if);
              ')\n  {' -> out.putline;
-             (if false then (* not callprim.initsuper *)
-                 '\tldarg.0\n' -> out.puttext;
-                 (if subLevel > 0 then
-                     '\tldarg.1\n' -> out.puttext
-                 if);
-                 '\tcall\tinstance void '->out.puttext;
-                 thisSuperName[] -> out.puttext;
-                 '::.ctor(' -> out.puttext;
-                 (if subLevel > 0 then
-                     thisSuperOrgName[] -> out.puttext;
-                 if);
-                 ')\n' -> out.puttext;
-                 (* initialize origin *)
-                 '\tldarg.0\n'
-                 '\tldarg.1\n'
-                 '\tstfld\tclass ' -> out.puttext;
-                 thisOrgName[] -> out.puttext;
-                 ' '-> out.put;
-                 thisClassName[] -> out.puttext;
-                 '::origin'->out.puttext;
-                 out.newline;
-                 BCstate.fields.emitInit
-             if);
           // field then
              (# F: @text
              do 'F' -> F; BC.get->F.putInt;
@@ -654,21 +626,16 @@ do init;
                     thisSuperName[] -> out.puttext;
                     '::.ctor(' -> out.puttext;
                     (if not ('-'->arg.equal) then
-                        arg[] -> emitSignature
+                        arg[] -> AddClass -> emitSignature
                     if);
                     ')\n' -> out.puttext;
                     BCstate.fields.emitInit
                  // 'init' -> prim.equal then
                     '\tnewobj\tinstance void '-> out.puttext;
-                    (if not common.switch[184] then
-                        '[.module ' -> out.puttext;
-                        arg[] (* class name*) -> out.puttext;
-                        '.dll]' -> out.puttext;
-                    if);
-                    class[] (* class name *) -> out.puttext;
+                    class[] (* class name *) -> AddClass -> out.puttext;
                     '::.ctor(' -> out.puttext;
                     (if not ('-'->arg.equal) then
-                        arg[] (* origin name *) -> emitsignature;
+                        arg[] (* origin name *) -> AddClass -> emitsignature;
                     if);
                     ')' -> out.puttext;
                 if);
@@ -683,11 +650,11 @@ do init;
                     'void [mscorlib]System.Console::WriteLine()' 
                       -> out.puttext
                  // 'put' -> prim.equalNCS then
-                    'void [mscorlib]System.Console::Write(class System.String)' -> out.puttext
+                    'void [mscorlib]System.Console::Write(char)' -> out.puttext
                  // 'puttext' -> prim.equalNCS then
-                    'void [mscorlib]System.Console::Write(class System.String)' -> out.puttext
+                    'void [mscorlib]System.Console::Write(string)' -> out.puttext
                  // 'putline' -> prim.equalNCS then
-                    'void [mscorlib]System.Console::WriteLine(class System.String)' -> out.puttext
+                    'void [mscorlib]System.Console::WriteLine(string)' -> out.puttext
                  // 'putint' -> prim.equalNCS then 
                     'void [mscorlib]System.Console::Write(int32)' -> out.puttext
                  else
@@ -710,6 +677,12 @@ do init;
                 (*T[] -> putline;*) T[] -> out.puttext;
                 ' */ ' -> out.putline;
              #)
+          // position then
+             '\t//.line ' -> out.puttext; 
+             BC.getShort -> out.putint;
+             ' \'' -> out.puttext;
+             thisModuleName[] -> out.puttext;
+             '\'' -> out.putline;
           // func then
              (*'FUNC'->out.puttext;*)
              (*BC.get->asText->out.puttext;*)
@@ -751,7 +724,7 @@ do init;
                          else
                             'ldfld\t' -> out.puttext;
                             (if tag = 1 then
-                                className[] -> emitSignature
+                                className[] -> AddClass -> emitSignature
                              else
                                 ONlevel 
                                   -> BCstate.blocks.orgClass
@@ -869,7 +842,7 @@ do init;
               // logicalShiftLeft then 
                  'shl'->out.puttext
               else
-                 '<?'->out.puttext; opCode->out.putint; '?>'->out.puttext
+                 opCode -> THIS(BCmachine).astext ->out.puttext;
              if);
              out.newline;
          if);

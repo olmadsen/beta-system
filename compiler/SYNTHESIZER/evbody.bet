@@ -59,7 +59,9 @@ newBCobject:
   exit W[]
   #);
 methodCall: evVal
-  (# asgToAdr::
+  (# loadVal:: (# do this(methodCall)[] -> V[]; (* ???*) #);
+     evType:: (#do 1 -> type (*???*) #);
+     asgToAdr::
        (# dr: @mch.dataRegOperand
        do (* we assume a value on top of the stack *)
           dr.alloc;
@@ -71,7 +73,27 @@ methodCall: evVal
        do (rAbase[],destEV[],rChain[]) 
             ->((0,false,none,rChain [](*??*))
             -> mkComputedRefEvVal).asgToRefAdr
-       #)
+       #);
+     add::< (# do '\nOBS! methodCall:add'->putline #);
+     adrAdd::<
+       (# 
+       do '\nOBS! methodCall:adrAdd'->putline
+       #);
+     cstAdd::<
+       (# 
+       do '\nOBS! methodCall:cstAdd'->putline; this(methodCall)[] -> V[] 
+       #);
+     regAdd::<
+       (# do '\nOBS! methodCall:regAdd'->putline #);
+
+     divMod:: (# do '\nOBS! methodCall:divMod:' -> putline #);
+     adrDivMod:: (# do '\nOBS! methodCall:adrDivMod:' -> putline #);
+     cstDivMod:: 
+       (# 
+       do '\nOBS! methodCall:cstDivMod:' -> putline;
+          this(methodCall)[] -> V[] 
+       #);
+     regDivMod:: (# do  '\nOBS! methodCall:regDivMod:' -> putline; #);
   #);
 CoerceTypes:
   (# lv,rv: ^EvVal; binType: @integer
@@ -159,12 +181,12 @@ mkByteCodeCall:
      isSingular: @boolean
   enter EV
   do EV.son->VN;
-     'mkByteCodeCall:'->mch.comment;
+     '!mkByteCodeCall:'->mch.comment;
      313->trace(# do 'mkBytecodeCall: ' -> xT; EV[] -> xA; VN[] -> xA #);
      (baseAdr.copy,thisDesc[],VN[],EHchain[])
        -> genOrgAdrToOrgReg
        -> OA[];
-     'mkByteCall:afterOrigin'->mch.comment;
+     '!mkByteCall:afterOrigin'->mch.comment;
 
      EV.sonRef -> sig.setDesc;
      &ASTindex[] -> receiverDesc[];
@@ -228,7 +250,7 @@ mkByteCodeCall:
                    descId[]->xT; descno -> xI;  ' ~> ' -> xT
                 #);
      ('G',receiverDesc[]) -> mkEntryPoint -> (class[],local);
-     '/'->class.put;
+     class[]-> sig.addReceiver;
 
      (if isSingular then
       else
@@ -253,9 +275,9 @@ mkByteCodeCall:
                method.brother -> method; (* assume desc here *)
            if);
          313 -> trace(# 
-                     do 'call2:receiver:'->xT; 
+                     do 'call2:receiver:'->xH;
                         receiverDesc[] -> xA; xN; 
-                        'method:'->xT; method[] -> xA; 
+                        'method: '->xT; method[] -> xA; 
                      #);
          
      if);
@@ -273,7 +295,8 @@ mkByteCodeCall:
          sig.setVoidXSig
       else
          (# p,mp,att,n,doP,exitP,EV: ^ASTindex; S: ^text
-         do method[] 
+         do (*method[] *)
+            sig.thisDesc[] (* descriptor for method *)
               -> sematt.descSonsRef
               ->(p[],mp[],att[],n[],doP[],exitP[]);
         
@@ -283,7 +306,11 @@ mkByteCodeCall:
                 sig.setVoidXSig
             if)
      #)if);
-     sig -> class.append;
+     (if true then
+         sig -> class[]
+      else
+         sig -> class.append;
+     if);
      313->trace(#do 'class: ' -> xT; class[] -> xT #);
      (if not local then T[]->mch.import if);
      (class[]->mch.newTextOp,'M',local)->mch.gJsr;  
@@ -877,14 +904,32 @@ do (if stest then
       RepOp::<
         (# RN,RN1: @ASTindex; A: ^mch.address
         do (*350->cTrace(#do 'RepOp'->t #);*)
-           EV.son->RN; (* RN = R.x *) RN.son->RN1;
-           (baseAdr.copy,RN1[],false,chain1[])->genAdr->A[];
+           EV.son -> RN; (* RN = R.x *) RN.son -> RN1;
+           '!evbody:repOp' -> mch.comment;
+           (baseAdr.copy,RN1[],false,chain1[]) -> genAdr -> A[];
            (if (RN[]->semAtt.repAttId) = 1 (* range *) then 
-               (# 
-               do common.cstInd->A.access; 4->A.size;
-                  common.rangeOff*4->A.addOff->mkSImpleVal->V[]
+               (#                   
+               do (if switch182 then
+                      '!evbody:repOp:range' -> mch.comment;
+                      A.bAdr.localDesc[] 
+                        -> theGen.mkArraySignature 
+                        -> A.fieldType[];
+                      (A[],none) -> mch.ldVal;
+                      mch.loadRange;
+                      (* currently we allocate index 0
+                       * in arrays - must be fixed
+                       *)
+                      (1->mch.newCstOp,&mch.dataRegOperand[]) -> mch.ldCst;
+                      (&mch.dataRegOperand[],&mch.dataRegOperand[],4) 
+                        -> mch.gSub; 
+                      mkComputedEvVal -> V[]
+                   else
+                      common.cstInd -> A.access; 4 -> A.size;
+                      common.rangeOff*4 -> A.addOff -> mkSimpleVal -> V[]
+                  if)
                #)
-            else 'Illegal RepOp in RepOp->E' ->bugstream.putline
+            else 
+               'Illegal RepOp in RepOp->E' ->bugstream.putline
            if);
         #);
       cProcDesc::<
@@ -1375,10 +1420,15 @@ do lEV[]->lEV1[];
                (if switch182 then                   
                    EV -> mkBytecodeCall
                    (# 
-                   do 'asgToMethod'->mch.comment;
-                      (*true -> baseAdr.isRef;
-                      (baseAdr[],none) -> mch.ldVal;*)
-                      sig.noOfEnterArgs->lEV1.asgToMethod
+                   do '!assignValToEval:insert:asgToMethod'->mch.comment;
+                      (# T: [sig.noOfEnterArgs] @integer;
+                         top: @integer
+                      do sig.scanEnter
+                         (#
+                         do current.elmType -> T[top+1 -> top]
+                         #);
+                         (T,top,1) -> lEV1.asgToMethod 
+                      #)
                    #)-> V[]
                 else
                    (baseAdr.copy,EV[],false,chain1[],false,lEV1[])

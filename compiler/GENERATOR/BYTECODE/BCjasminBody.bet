@@ -14,9 +14,14 @@ do (if methodClassTag
 
 --FieldsEmitInitItemJasmin:descriptor--
 (# class: ^ text
-do (if currentTag <> 'p' (* part object*) then
+do (if currentTag 
+    // 'p' (* part object*) 
+    // '[' then (* skip *)
+    else        
        '\taload_0\n' -> out.puttext;
-       (if 'I' -> currentType.equal then
+       (if true
+        // 'I' -> currentType.equal 
+        // 'C' -> currentType.equal then
            '\tbipush 0\n' -> out.puttext;
         else
            '\taconst_null \n' -> out.puttext
@@ -26,6 +31,7 @@ do (if currentTag <> 'p' (* part object*) then
        '/' -> out.puttext;
        currentField[] -> out.puttext;
        ' ' -> out.puttext;
+       (if currentTag = '[' then '[' -> out.put if);
        currentType[] -> out.putline
    if)     
 #)
@@ -107,6 +113,7 @@ do (# thisClassName                (* name of current class           *)
             // storeQref then
                'storeQref'->T
             // dup then 'dup' -> T
+            // loadRange then 'arraylength' -> T
             // jmp then
                'jmp'->T
             // func then
@@ -128,7 +135,7 @@ do (# thisClassName                (* name of current class           *)
             // divv then
                'idiv'->T
             // modd then
-               'mod'->T
+               'irem'->T
             // nott then
                'not'->T
             // logNot then
@@ -171,14 +178,21 @@ do (# thisClassName                (* name of current class           *)
       Address:
         (#
            reg,off,size,isField,ONlevel: @integer; 
-           descName: ^text;
+           descName,fieldType: ^text;
            get: 
              (#  
              do getReg->reg; BC.get->off; BC.get->size; 
                 BC.get->ONlevel; BC.get -> isField; 
                 (if isField = 1 then
                     BC.getText -> descName[]
+                 else
+                    none -> descName[]
                 if);
+                (if BC.get = 1 then
+                    BC.getText -> fieldType[]
+                 else
+                    none -> fieldType[]
+                if)
              #);
            emitField:
              (# isOrigin: @boolean
@@ -197,22 +211,44 @@ do (# thisClassName                (* name of current class           *)
                     ' '->out.put;
                 if)
              #);
+           emitType:
+             (#
+             do (if fieldType[] <> none then
+                    fieldType[] -> out.puttext
+                 else
+                    'I' -> out.put;
+                    '   ; OBS! missing type info (fieldType)' -> out.puttext;
+                if)
+             #);
            load:
              (#
              do (* local field - object/method ??*)
                 (if isField = 2 then
                     (* array *)
-                    'iaload' -> out.puttext
+                    (if fieldType[] <> none then
+                        (if true
+                         // 'I' -> fieldType.equal then
+                            'iaload' -> out.puttext
+                         // 'C' -> fieldType.equal then
+                            'caload' -> out.puttext
+                         else
+                            'iaload' -> out.puttext;
+                            ' ; wrong fieldType ' -> out.puttext
+                        if)
+                     else
+                        'iaload' -> out.puttext;
+                        ' ; missing fieldType ' -> out.puttext
+                   if)
                  else
                     (if ONlevel > 0 then
                         'getfield ' -> out.puttext;
                         emitField;
-                        'I' -> out.put;
+                        emitType
                      else
                         (if isField=1 then
                             'getfield ' -> out.puttext;
                             emitField;
-                            'I' -> out.put;
+                            emitType
                          else
                             (* method field *)
                             ('iload',off) -> emitMemOp
@@ -224,17 +260,30 @@ do (# thisClassName                (* name of current class           *)
              do (* local field - object/method ??*)
                 (if isField = 2 then
                     (* array *)
-                    'iastore' -> out.puttext
+                    (if fieldType[] <> none then
+                        (if true
+                         // 'I' -> fieldType.equal then
+                            'iastore' -> out.puttext
+                         // 'C' -> fieldType.equal then
+                            'castore' -> out.puttext
+                         else
+                            'iastore' -> out.puttext;
+                            ' ; unknown fieldType ' -> out.puttext
+                        if)
+                     else
+                        'iastore' -> out.puttext;
+                        ' ; missing fieldType ' -> out.puttext
+                    if)
                  else
                     (if ONlevel > 0 then
                         'putfield ' -> out.puttext;
                         emitField;
-                        'I' -> out.put
+                        emitType;
                      else
                         (if isField=1 then
                             'putfield ' -> out.puttext;
                             emitField; 
-                            'I' -> out.put
+                            emitType;
                          else
                             ('istore',off) -> emitMemOp
                         if)
@@ -275,7 +324,7 @@ do (# thisClassName                (* name of current class           *)
                      (if isField = 1 then
                          'getfield ' -> out.puttext; 
                          emitField; 
-                         class[] -> emitSignature
+                         sig[] -> emitSignature
                       else 
                          ('aload',off) -> emitMemOp
                 if)if); 
@@ -374,6 +423,18 @@ do (# thisClassName                (* name of current class           *)
               if)
            #);
            '"'->out.put; 
+        #);
+      newArray:
+        (# type: ^text
+        enter type[]
+        do (* java arrays are 0:range-1;
+            * we add one to BETA range; 
+            * this gives an extra index 0
+            * which will not give rise to index errors
+            * must be fixed in some way
+            *)
+           '\tbipush 1\n\tiadd\n' -> out.puttext;
+           '\tnewarray ' -> out.puttext; type[] -> out.puttext
         #);
       emitCmpJmp:
         (# cond,L,lab: @integer
@@ -534,9 +595,46 @@ do (# thisClassName                (* name of current class           *)
                            arg[] -> emitSignature
                        if);
                        ')V' -> out.puttext
+                    // 'AlloVR4' -> prim.equal then
+                       'int' -> newArray
+                    // 'AlloVR1' -> prim.equal then
+                       'char' -> newArray  
+                    // 'Text2CharArray' -> prim.equal then
+                       '\tinvokevirtual java/lang/String/toCharArray()[C'
+                         -> out.puttext
+                    // 'Text2BetaText' -> prim.equal then
+                       (* Note! Hardcoding of pattern 'text'
+                        * including case, etc. Should be handled
+                        * more generally
+                        *)
+                       (if true then
+                           '\tinvokevirtual '
+                           'java/lang/String/toCharArray()[C\n'
+                           '\tnew text\n'
+	                   '\tdup_x1\n'
+	                   '\tdup_x1\n'
+	                   '\taconst_null\n'
+	                   '\tinvokespecial text/<init>(Ltstenv;)V\n'
+	                   '\tinvokevirtual text/enter([C)V'
+                           -> out.puttext
+                        else
+                           '\tgetstatic tstenv Ltstenv;\n'
+                           '\tinvokestatic ' 
+                             -> out.puttext;
+                           betaenv -> out.puttext;
+                           '/Text2BetaText'
+                           '(Ljava/lang/String;)Ltext;'
+                             -> out.puttext        
+                       if)
+                    // 'CharArray2String' -> prim.equal then
+                       '\tnew java/lang/String\n'
+                       '\tdup_x1\n'
+                       '\tswap\n'
+                       '\tinvokespecial java/lang/String/<init>([C)V'
+                         -> out.puttext
                     else
                        '; Primitive: '->out.puttext; 
-                       prim[] -> out.puttext;
+                       prim[] -> out.puttext; ' ' ->out.put;
                        arg[] -> out.puttext;
                    if);
                 #)
@@ -564,8 +662,7 @@ do (# thisClassName                (* name of current class           *)
                            'java/io/PrintStream/print(I)V' -> out.puttext
                         else
                            prim[] -> out.puttext;
-                           '\nPrim:'->puttext;
-                           prim[] -> putline
+                           (* '\nPrim:'->puttext; prim[] -> putline *)
                    if)if)
                 #)
              // callInner then

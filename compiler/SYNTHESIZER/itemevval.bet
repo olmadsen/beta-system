@@ -3,6 +3,7 @@ LIB_ITEM 'betacodegen';
 INCLUDE 'genlib';
 INCLUDE 'auxlib';
 INCLUDE 'asgtoitem';
+INCLUDE 'genlib_bytecode';
 INCLUDE '../CHECKER/nxoffsets';
 INCLUDE '../CHECKER/setnxoffsets';
 INCLUDE '../CHECKER/nxallocbody';
@@ -182,6 +183,33 @@ do (baseAdr.theReg,V[],desc[],A[],EVchain[]) -> doTransferComEnter -> A[]
 ---doEnterCompTransferEnter:dopart---   
 do (baseAdr.theReg,V[],desc[],A[],EVchain[]) -> doTransferComEnter -> A[]
 
+---getExitVal:doPart---
+do (#EH : @evalHandler; 
+   do (if stest then
+       179->Trace
+       (# a1: ^mch.address; 
+       do 'GetExitVal: '->xT; thisEV[]->xA; 
+          '  hasNXlist: ' -> xT; withNXO -> xB;
+          xN; 'baseAdr= ' -> xT;  baseAdr->a1[]; a1.display->xT; 
+          xN; 'baseAdr.localDesc: ' -> xT; a1.bAdr.localDesc[]->xA;
+          mch.dumpreg
+       #)
+   if);
+   (if withNXO then
+       (baseAdr,thisEv[],NXO[],false) -> mkNXoffSetsVal -> V[]
+    else
+       (if switch182 then
+           (thisEV[],thisChain[]) -> ExitArgs -> V[]
+        else
+           (baseAdr,thisEv[],false,thisChain[]) -> EH.expEval -> V[]
+   if)if);
+   (if stest then
+       179->trace(#
+                 do 'GetExitVal2:'->xT; 
+                    (baseAdr).display->xT; mch.dumpreg
+                 #)
+   if)
+   #)
 ---GenerateObject:descriptor---
 (# max: @integer;
    OA: ^mch.address; VN: @ASTindex
@@ -514,6 +542,7 @@ do (if stest then
             callRegOnStack2->popCall
         if);
         (if isComponent then common.compHeadSize*4->A.addOff->A[] if);
+        
         (if switch180 AND (desc[] -> sematt.hasXcode) then
             (* hasXcode may fail if newindex.bet *)
             (# NO,XO: ^sematt.NXOffSets; exitStartOff: @integer
@@ -534,7 +563,11 @@ do (if stest then
                (A[],desc[],XO[],false) -> mkNXOffSetsVal -> W[];
             #)
          else
-            (EV[],ES[],desc[],A[],EVchain[])->mkItemEvVal->W[];
+            (*(if switch182 then                
+                (ES[],desc[],A[],EVchain[])->ExitArgs->W[];
+             else*)
+                (EV[],ES[],desc[],A[],EVchain[])->mkItemEvVal->W[];
+            (*if);*)
             (if switch181 then
                 (# WW: ^ItemEvVal
                 do W[] -> WW[];
@@ -553,6 +586,101 @@ do (if stest then
      #)
 #)
 ---EvalLib:attributes------
+ExitArgs: evVal
+  (# evId:: (# do 'ExitArgs:'->id[] #);
+     display:: (# do lEV[] -> xA#);
+     asgToCproc::
+       (# xScan: @ | scanXadr; 
+          XV: ^evVal;
+          more: @boolean;
+          CP: @ExternalCall;
+       do ExeExit;
+          (*(externalName,Desc[],extKind,EV.son) -> CP; 
+          (lDesc[],lA[],0,lChain[])->xScan->more;
+          L:
+            (if more then
+                Xscan.getExitVal -> XV[];
+                (true->CP.getEnterP,extKind,CP.getEnterP.size
+                ,CP.pascExtProcInfo)
+                -> XV.pushCpar;
+                xScan -> more;
+                restart L
+            if)*)
+       #);
+     pushCpar::
+       (#
+       do '!exitArgs:' -> mch.comment;
+          'CharArray2String' -> mch.CallPrim;
+       #);
+     
+     ExeExit:
+       (# ES: @AStindex; MN: @integer; 
+          chain: ^DH.SuperChain; virtKind: @integer
+       do (if not exitPartExecuted then
+              true -> exitPartExecuted;
+              lEV.son -> ES;
+              (if ES.label = gram.objectDescriptor then
+                  ES -> lDesc;
+               else
+                  (lChain[],ES)->DH.theDesc->(lDesc,MN,chain[],virtKind);
+              if);
+                  
+              ('X',lDesc[],0) -> CallEntry;
+          if);
+       #);
+     exitPartExecuted: @boolean;
+     lEV: ^ASTindex;
+     lDesc: @ASTindex;
+     lA: ^mch.address;
+     lCHain: ^DH.SuperChain
+  enter(lEV[],lChain[])
+  exit this(exitArgs)[]
+  #);
+ExitArgs2: evVal
+  (# evId:: (# do 'ExitArgs:'->id[] #);
+     display:: (# do lES[] -> xA#);
+     asgToCproc::
+       (# xScan: @ | scanXadr; 
+          XV: ^evVal;
+          more: @boolean;
+          CP: @ExternalCall;
+       do ExeExit;
+          (externalName,Desc[],extKind,EV.son) -> CP; (* init *)
+          (lDesc[],lA[],0,lChain[])->xScan->more;
+          L:
+            (if more then
+                Xscan.getExitVal -> XV[];
+                (true->CP.getEnterP,extKind,CP.getEnterP.size
+                ,CP.pascExtProcInfo)
+                -> XV.pushCpar;
+                xScan -> more;
+                restart L
+            if)
+       #);
+     pushCpar::
+       (#
+       do '!exitArgs:' -> mch.comment;
+          'CharArray2String' -> mch.CallPrim;
+          ExeExit;
+          'CpkVT' -> mch.callprim 
+       #);
+     
+     ExeExit:
+       (# 
+       do (if not exitPartExecuted then
+              true -> exitPartExecuted;
+              lA.toCallReg;
+              ('X',lDesc[],0) -> CallEntry;
+          if);
+       #);
+     exitPartExecuted: @boolean;
+     lES: ^ASTindex;
+     lDesc: ^ASTindex;
+     lA: ^mch.address;
+     lCHain: ^DH.SuperChain
+  enter(lES[],lDesc[],lA[],lChain[])
+  exit this(exitArgs2)[]
+  #);
 doTransferEnter:
   (# NO: ^sematt.NXoffSets;
      (* V is the leftSide of V -> thisItem
@@ -779,12 +907,19 @@ itemEvVal: EvVal
           none->lEV[]->lES[]->lDesc[];
           none->lA[];
        #);
+     ExeExit:
+       (#
+       do (if switch182 then 
+              ('X',lDesc[],0) -> CallEntry;
+          if);
+       #);
      theReg:: (# do (* what about baseReg? *) lA.theReg -> aR #);
      loadVal::<
        (#
        do (* The ItemEv cannot be released since
            * V[] is an address using callReg *) 
           (if stest then 301->itemTrace(#do 'loadVal:A ' -> xT #)if);
+          ExeExit;
           (if switch181 then
               (* Use of thisRegAdr is to force scanExit 
                * not to restore baseAdr
@@ -1167,7 +1302,8 @@ itemEvVal: EvVal
           xScan: @ | scanXadr; V: ^evVal;
           unfreeze: @boolean
        enter rA[]
-       do (if switch181 then
+       do ExeExit;
+          (if switch181 then
               rA[] -> scanExit
               (#
               do XV[] -> V[]; INNER FixXadr
@@ -1496,10 +1632,7 @@ itemEvVal: EvVal
                  rEv[] -> xA;
                  mch.dumpreg                 
           #)if);
-         (* scanExit
-          (#
-          do (rBaseAdr[],rEv[],rChain[]) -> XV.asgToSimpleEV -> V[]
-          #)*)
+          ExeExit;
           loadVal -> V[];
           (rBaseAdr[],rEv[],rChain[]) -> V.asgToSimpleEV -> V[];
           true -> inInner
@@ -1580,6 +1713,7 @@ itemEvVal: EvVal
           rAtmp,rA1: ^mch.address;
           lHasCode: @boolean
        do (* rA in [a0,a1] *)
+          ExeExit;
           (if switch181 then
               (lDesc[] -> sematt.hasXcode)  -> lHasCode;
               (if rA.useCallReg and lHasCode then
@@ -1874,6 +2008,12 @@ itemEvVal: EvVal
               (*freeLA; done in transferEnter *)
           if)
        #);
+     asgToMethod::
+       (# class: ^text
+       do lDesc[] -> descName -> class[];
+          (lA[],class[],none) -> mch.loadRef;
+          ExeExit;          
+       #);
      asgToNXoffSets::
        (* lA is some object, rA is an NXoffSetsVal
         * lA  = this
@@ -1936,6 +2076,7 @@ itemEvVal: EvVal
        do (if stest then
               301->cTrace(#do 'itemVal:asgToInLineItem: '->xT; display #)
           if);
+          ExeExit;
           lA.toCallReg; (* is this the right thing to do? See asgToItem;
                          * probably NOT. lA may be released *)
           (lDesc[],lA[],0(*??nOff*),lChain[])->xScan;
@@ -2051,12 +2192,14 @@ itemEvVal: EvVal
               301->cTrace(#do 'ItemVal:asgToCproc: '->xT; lEV[] -> xA ; EV[]->xA #)
           if);
           (lDesc->sematt.descKind) = sematt.dataKind  -> isDataKind;
+
           (if not isDataKind then
               (if not lA.isCallReg then
                   AllocCallReg -> callRegOnStack; 
                   lA.toCallReg -> lA[] 
               if);
           if);
+          ExeExit;
           (externalName,Desc[],extKind,EV.son) -> CP; (* init *)
           (if stest then
               301->cTrace
@@ -2519,4 +2662,3 @@ itemEvVal: EvVal
      
   enter(lEV[],lES[],lDesc[],lA[],lChain[])
   #)
-

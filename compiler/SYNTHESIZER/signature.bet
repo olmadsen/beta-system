@@ -5,6 +5,7 @@ INCLUDE 'auxlib';
 Type: 
   (# isRef: < booleanValue;
      isList:< booleanValue;
+     elmType:<  integerValue;
      asText:<
        (# T: ^text
        do inner
@@ -14,34 +15,38 @@ Type:
   exit this(Type)[]
   #);
 int32Value: Type 
-  (# asText::
+  (# elmType::(#do 1 -> value #);
+     asText::
        (#
        do (if isJava then 'I'->T[] else 'int32'->T[] if)
        #)
   #);
 charValue: Type 
-  (# asText::
+  (# elmType::(#do 2 -> value #);
+     asText::
        (#
-       do (if isJava then 'C'->T[] else 'Char'->T[] if)
+       do (if isJava then 'C'->T[] else 'char'->T[] if)
        #)
   #);
 
 Void: Type
-  (# asText:: 
+  (# elmType::(# do 10 -> value #);
+     asText:: 
        (#
        do (if isJava then 'V'->T[] else 'void'->T[] if)
        #)
   #);
-            
+
 Reference: Type 
   (# class: ^text;
      isRef:: TrueValue;
+     elmType:: (# do 11 -> value #);
      asText::
        (# 
        do (if isJava then
               'L' -> T[]; class[] -> T.append; ';'->T.put;
            else 
-              'class ' -> T[]; class[] -> T.append
+              ''->T[]; (*'class ' -> T[];*) class[] -> T.append
           if)
        #)
   enter class[]
@@ -59,6 +64,7 @@ Reference: Type
 Array: Type
   (# element: ^Type;
      isRef:: trueValue;
+     elmType:: (# do 12 -> value #);
      asText::
        (#
        do (if isJava then 
@@ -70,11 +76,17 @@ Array: Type
        #)
   enter element[]
   #);
-List: Type
+mkListSignature:
+  (# T:  ^type; L:@ListSignature
+  enter T[]
+  do T[] -> L.append
+  exit L[]
+  #);
+ListSignature: Type
   (# L: [3] ^Type; top: @integer;
      isList::trueValue;
      append:
-       (# T: ^Type; TL: ^List
+       (# T: ^Type; TL: ^ListSignature
        enter T[]
        do (if T.isList then
               T[] -> TL[];
@@ -108,6 +120,36 @@ List: Type
           if)
        #)
   #);
+BetaTextSignatureId: (# exit 1 #);
+JavaStringSignatureId: (# exit 2 #);
+
+specialSignature: Type
+  (# sigId: @integer;
+     astext::
+       (#
+       do &text[] -> T[];
+          (if isJava then
+              (if sigId
+               // BetaTextSignatureId then
+                  'Ltext;' -> T.append
+               // JavaStringSignatureId then
+                  'Ljava/lang/String;' -> T.append
+               else
+                  'LUnknowSpecialSignature;' -> T.append
+              if)
+           else
+              (if sigId
+               // BetaTextSignatureId then
+                  '>>>>>text' -> T.append
+               // JavaStringSignatureId then
+                  '>>>>>.NET/lang/String;' -> T.append
+               else
+                  '>>>>>UnknowSpecialSignature' -> T.append
+              if)
+          if)
+       #)
+  enter sigId
+  #);
 
 valueSignature:
   (# desc: ^ASTindex; sig: ^Type
@@ -123,11 +165,56 @@ valueSignature:
   exit sig[]
   #);
 
+mkSignature:
+  (# desc: ^ASTindex; sig: ^Type; tsig: ^text;
+     EH: @evalHandler
+  enter desc[]
+  do (if (desc -> sematt.descKind) = sematt.standardKind then
+         (desc[] -> valueSignature -> sig[]).astext -> tsig[]
+      else
+         (desc[] -> EH.descName -> Reference).asText -> tsig[]
+     if)
+  exit tsig[]
+  #);
+mkArraySignature:
+  (* we should simplify mkSignature and this one *)
+  (# desc: ^ASTindex; tsig: ^text;
+     EH: @evalHandler
+  enter desc[]
+  do (if (desc -> sematt.descKind) = sematt.standardKind then
+         (desc[] -> valueSignature ->array).astext -> tsig[]
+      else
+         (desc[] -> EH.descName -> Reference->array).asText -> tsig[]
+     if)
+  exit tsig[]
+  #);
+  
 Signature:
-  (# NNsig: ^List;
-     XXsig: ^Type;
-     method: ^text;
-
+  (* A signature may have the following two abstract forms:
+   * 1. Method def :           method, input arguments, return type;
+   * 2. Method call: receiver, method, input arguments, return type
+   * As can be seen the difference is the receiver present in
+   * the method call
+   *)
+  (# receiver: ^text; (* an optional receiver *)
+     method: ^text;   (* method name *)
+     NNsig: ^ListSignature;    (* input arguments *)
+     XXsig: ^Type;    (* return type *)
+     
+     
+     thisDesc: @ASTindex;      (* descriptor of this method (pattern) *)
+     thisChain: ^DH.superChain;(* desc chain of def- or call-location *)
+     
+     setDesc:
+       (# EV: ^ASTindex; MN,vKind: @integer
+       enter EV[]
+       do (thisSuperChain,EV) 
+            -> DH.theDesc
+            -> (thisDesc,MN,thisChain[],vKind);
+       #);
+     addReceiver: (# enter receiver[] #);     
+     addMethod: (# enter method[] #);
+     
      noOfEnterArgs: 
        (# N: @integer 
        do (if NNsig[] <> none then NNsig.top -> N if) 
@@ -154,14 +241,21 @@ Signature:
        exit T[]
        #);
      asText:
+       (* producec a textual representation of this signature *)
        (# noNsig,noXsig: @boolean;
           T: ^text
        enter(noNsig,noXsig)          
        do (if isJava then
-              (if method[] <> none then
-                  method.copy -> T[]
+              (if receiver[] <> NONE then
+                  (* method call signature *)
+                  receiver[] -> T[];
+                  '/' -> T.put
                else
-                  &text[] -> T[];
+                  &text[] -> T[]
+              if);
+              (if method[] <> none then
+                  method.copy -> T.append
+               else
                   '\n*** method is none ' -> putline
               if);
               noNsig-> enterSig -> T.append;
@@ -169,6 +263,11 @@ Signature:
            else
               noXsig -> exitSig -> T[];
               ' '->T.append;
+              (if receiver[] <> none then
+                  (* method call signature *)
+                  receiver[] -> T.append;
+                  '::' -> T.append
+              if);
               (if method[] <> none then
                   '\'' -> T.put; (* Quote to avoid clash with IL reserved words, e.g. add *)
                   method.copy -> T.append;
@@ -181,18 +280,8 @@ Signature:
        exit T[]
        #);
 
-     thisDesc: @ASTindex;
-     thisChain: ^DH.superChain;
-     
-     setDesc:
-       (# EV: ^ASTindex; MN,vKind: @integer
-       enter EV[]
-       do (thisSuperChain,EV) 
-            -> DH.theDesc
-            -> (thisDesc,MN,thisChain[],vKind);
-       #);
-     addMethod: (# enter method[] #);
-     noEnter: (# do List -> NNsig[] #);
+     noEnter: (# do ListSignature -> NNsig[] #);
+     setEnter: (# enter NNsig[] #);
      addEnter:
        (# EH: @EvalHandler;
           nScan: @ | EH.scanNAdr;   
@@ -203,14 +292,15 @@ Signature:
        do 313->trace(#
                     do 'addEnter:'->xT; theDesc[] -> xA
                     #);
-          List -> NNsig[];
+          ListSignature -> NNsig[];
           (if thisChain[] <> none then
               (if not (theDesc->thisDesc.equal) then 
                   'addEnter:desc not equal'->putline
               if);
               313->trace(#
-                        do 'addEnter-B:'->xT;
+                        do 'addEnter:theDesc(from enter):'->xT;
                            theDesc[]->xA; xN;
+                           'thisDesc( for setDesc): ' -> xT;
                            thisDesc[] -> xA;
                            (if thisChain[] <> none then
                                thisChain
@@ -231,10 +321,11 @@ Signature:
           313->trace(#do 'enterNsig: '->xT; NNsig.asText -> xT #);
        #);
      scanEnter:
-       (# isRef,doInner,skip: @boolean
+       (# current: ^type; isRef,doInner,skip: @boolean
        do NNsig.scan
           (#
-          do current.isRef -> isRef; 
+          do current[] -> this(scanEnter).current[];
+             current.isRef -> isRef; 
              INNER scanEnter
           #)
        #);
@@ -253,6 +344,7 @@ Signature:
        do setVoidXsig;
           desc[] -> EH.descName -> Reference -> XXsig[];
        #);
+     setExit: (# enter XXsig[] #);
      addExit:
        (# EH: @EvalHandler;
           xScan: @ | EH.scanXadr;
@@ -266,7 +358,7 @@ Signature:
                            thisChain
                        if)
                     #);
-                       
+          
           setVoidXsig;
 
           (if thisChain[] <> none then
@@ -285,7 +377,7 @@ Signature:
                           ->putline
                     if);
                     restart loop
-              if)
+                if)
            else
               '\n***OBS. thisChain is none '->putline;
               (if (exitP[]->theGen.scanXarg -> exitVal[]) <> NONE then
@@ -307,10 +399,10 @@ scanNargs:
      nD: ^sematt.AttDesc; 
      theDesc: ^ASTindex;
      more: @boolean;
-     xSig: ^List
+     xSig: ^ListSignature
   enter theDesc[]
   do (theDesc[],gen.thisRegAdr,0,ThisSuperChain,true) -> nScan -> more;
-     List -> xSig[];
+     ListSignature -> xSig[];
      Loop:
        (if more then
            313->trace(#
@@ -395,6 +487,10 @@ getAttSig:
             AD.dclRef -> AD;
             AD.getText -> Reference -> xSig[]
          #)
+      // gram.assignmentEvaluation then
+         (* preliminary *)
+         '\nOBS! Incomplete signature of assignment' -> putline;
+         sematt.integerDesc[] -> valueSignature -> xSig[]
       else
          (if (EV.label -> sematt.evalClass) = sematt.evalClass.binOp then
              int32Value -> xSig[]

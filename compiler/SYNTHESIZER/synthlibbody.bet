@@ -79,6 +79,13 @@ do (&gen.thisRegAdr,ad[],isOrigin,chain[])->GenAdr->A[]
                 (A[],ad.pn,A[]) -> SetSuperDesc -> A[] 
             if);
             A.bAdr.localDesc[] -> EH.descName -> A.descName[];
+            A.bAdr.localDesc[] -> theGen.mkSignature -> A.fieldType[];
+            (# T: @text
+            do '! doGoorigin: ' -> T;
+               A.descName[] -> T.append;
+               T -> mch.comment
+            #);
+
             (* A.descName[] = name of descriptor where ad is declared;
              * if ad = 'foo' and 'fisk: (# ...; foo: ... #)'
              * then A.descName[] = 'fisk'
@@ -184,6 +191,7 @@ do (if stest then
                         -> T.append;
                       true -> A.isField;
                   if);
+                  descRef[] -> theGen.mkSignature -> A.fieldType[];
                   A.descName[] -> T.append;
                   ' PN:'-> T.append; ad.pn -> T.putint;
                   T -> mch.comment
@@ -392,7 +400,7 @@ do (if stest then
               ad.son->rDen; rDen.brother->EV; 
               (* load array reference: *)
               '!loadArray1'->mch.comment;
-              (A.copy,rDen[],false,chain[])->&GenAdr->Ax[];
+              (A.copy,rDen[],false,chain[]) -> GenAdr -> Ax[];
               Ax.bAdr.localDesc[]->localDesc[]
                 -> theGen.valueSignature 
                 -> theGen.Array 
@@ -408,6 +416,11 @@ do (if stest then
               (A.copy,EV[],false,chain[])->&EH.ExpEval->V[]; 
               '!loadIndex2'->mch.comment; 
               
+              (localDesc[]-> theGen.valueSignature).astext
+                -> AR.fieldType[]; (* array element type *)
+              '! inxReg: descName: ' -> T; AR.descName[] -> T.append;
+              '! fieldType:' -> T; AR.fieldType[] -> T.append;
+              T -> mch.comment;
               AR[] -> A[];
            #)
         else
@@ -602,10 +615,15 @@ do (if ES.label = gram.objectDescriptor then
 #)
 ---callEntry:descriptor---
 (# T: ^text; local: @boolean
-do (if switch182 then
+do call:
+     (if switch182 then
        (# EH: @evalHandler; class: ^text; sig: @theGen.signature;
-       do desc[]->EH.descName->class[];
-          '/' -> class.put;
+       do (if true then
+              desc[]->EH.descName->sig.addReceiver
+           else
+              desc[]->EH.descName->class[];
+              '/' -> class.put;
+          if);
           (if L
            // 'M' then 
               'do'->sig.addMethod;
@@ -616,13 +634,24 @@ do (if switch182 then
               desc[] -> sig.addEnter;
               sig.exitVoid
            // 'X' then 
-              'exit'->sig.addMethod;
-              '\n**callNetry:Missing exit signature'->putline
+              (# p,mp,att,n,doP,exitP: ^ASTindex
+              do desc[]-> sematt.descSonsRef
+                   ->(p[],mp[],att[],n[],doP[],exitP[]);  
+                 (if exitP[] = none then
+                     leave call
+                 if);
+                 'exit' -> sig.addMethod;
+                 exitP[] -> sig.addExit;
+                 sig.noEnter
+              #)
            else
               '??callEntry??'->sig.addMethod
           if);          
-          
-          sig -> class.append;
+          (if true then
+              sig -> class[]
+           else
+              sig -> class.append;
+          if);
           (class[]->mch.newTextOp,L,false(*?*)) -> mch.gJsr
        #)
     else
@@ -645,7 +674,7 @@ do (if stest then
        desc[] -> sematt.MainPartDesc -> desc[]
    if);
    (if desc.label
-    //gram.objectDescriptor then
+    // gram.objectDescriptor then
        desc.descId->(formId[],descNo);
        (if switch182 then
            (# id: ^text;
@@ -689,7 +718,8 @@ do (if stest then
                   ' '->put; formId[] -> puttext;  descNo -> putint; newline
                else
                   desc[] -> EH.descName -> EP[]
-              if)
+              if);
+              formId.makeUC (* used for testing locality below *)
            #)              
         else
            descNo->EP.putInt; 
@@ -711,13 +741,15 @@ do (if stest then
                    (* desc has do-part slot *)
                    N.theSlotName->S[];
                    S.makeUC;
-                   (S[]->formSet.isLocal)<>0 ->local;
+                   (S[]->formSet.isLocal) <> 0 ->local ;
                    (*312->trace(#do 'Slot:'->xT; N.theSlotName->xT #);*)
                 else
-                   (formId[]->formSet.isLocal)<>0->local
+                   (formId[]->formSet.isLocal) <> 0 -> local
                if)
             else
-               (formId[]->formSet.isLocal)<>0->local
+               (formId[]->formSet.isLocal) <> 0 -> local;
+               (*'isLocal:'->puttext;
+               (if local then 'yes'->putline else 'no' -> putline if)*)
        if)if)
     // gram.unExpanded then
        (if switch182 then

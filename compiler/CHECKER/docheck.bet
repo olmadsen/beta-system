@@ -1,17 +1,13 @@
-ORIGIN 'checker';
-LIB_ITEM 'betacompiler';
-BODY 'chkformbody';
+ORIGIN 'check';
 BODY 'docheckbody';
-BODY 'chkevalbody';
 BODY 'searchbody';
-BODY 'chklst' 
----CheckerDoPart:doPart---
-do
+BODY 'chkevalbody'
+---doCheck:descriptor---
 (* Fragment structure:
  |      
- |    ---CheckerDoPart:descriptor---
+ |    ---doCheck:descriptor---
  |    (# ...    
- |       ChkForm: 
+ |       ChkDesc: 
  |       (# <<SLOT CheckerLib:attributes>>;
  |          ...         
  |          ActualDesc:                 
@@ -24,62 +20,76 @@ do
  |             ...
  |          #); 
  |          ...         
- |          <<SLOT ChkFormBody:>> ... ChkFormbody.bet
+ |          <<SLOT chkDescBody:>> ... chkdescbody.bet
  |         ...  
  |       #)                                     
  |    #)                                                                *)
-(# ChkForm: 
+
+(* Switch[161:190] *)
+(* 161 getName *)
+(* 162 getSort *)
+(* 163 getSpecOfSort *)
+(* 164 getDesc *)
+(* 165 setUp *)
+(* 166: evCheck trace      *)
+(* 167: qua trace #)
+(* 168: actual desc *)
+(* 169: SemiSearch *)
+(* 170: print virtual descriptor with added prefix *)
+(* 171: trace lib search *)
+(* 172: trace getPreDesc *)
+(* 173: trace chkVB *)
+(# ChkDesc: 
      (*********** Checking of a descriptor, attributes or doPart *********)
-     (# <<SLOT ChkFormLib: attributes>>; 
+     (# <<SLOT CheckerLib: attributes>>; 
         isSingleName: @
-          (# N: @ASTindex; V: @integer
+          (# N: @AST.index; V: @integer
           enter N
           do 0->V;
-             N->ScanList (* might be prettyer *)
-             (#do  V+1->V; (if V=2 then (N,12)->WE.SemError if);
+             N->AST.ScanList (* might be prettyer *)
+             (#do  V+1->V; (if V=2 then (N,12)->semError if);
                 currentNode->N
              #)
           exit N
           #);
         isVirtual: @
-          (# V,B: @ ASTindex; (* B is a virtual binding; V is the decl. *)
+          (# V,B: @ AST.index; (* B is a virtual binding; V is the decl. *)
              ok: @boolean
           enter(V,B)
           do false->ok;
              (if V.label // gram.virtualDecl // gram.bindingDecl then true->ok
-              else (B,13)->WE.SemError
+              else (B,13)->SemError
              if)
           exit ok
           #);
         
-        ThisDesc,preDesc: @ASTindex; (* the descriptor being translated *)
-        (*pre,mainP,att,entP,exitP,doP: ^ ASTindex;*)
+        ThisDesc,preDesc: @AST.index; (* the descriptor being translated *)
+        (*pre,mainP,att,entP,exitP,doP: ^ AST.index;*)
         
         innerFound: @boolean; (* true if INNER or SLOT in do-part*)
         
         ScanCatLst:
                (* (for Desc in [D, D.prefixDesc,... ] repeat INNER for) *)
-          (# desc,head,pre: @ASTindex
+          (# desc,head,pre: @AST.index
           enter(desc->head) 
-          do L: (if desc.label = gram.objectDescriptor then
+          do L: (if desc.label // gram.objectDescriptor then
                     inner;
                     desc.son->pre;
-                    (if pre.label = gram.prefix then
+                    (if pre.label // gram.prefix then
                         pre.son->&GetDesc->desc;
                         (if (desc->head.equal) then
-                            (desc,19)->&WE.SemError;
+                            (desc,19)->&SemError;
                             leave L
                         if);
                         restart L
-                if)if)
-          exit desc (* descriptor for top-most superpattern *)
-          #);
+          if)if)#);
         
         ActualDesc: @
           (* ES may be either a denotation or a descriptor *)
-          (# DB: @ BindVirtual
+          (# 
+             DB: @ BindVirtual
                (# GetDclAndDesc::< (#do N->&SetUp->(dclRef,DescRef) #);
-                  VirtualError::<(#do (T,no)->&WE.SemError #);
+                  VirtualError::<(#do (T,no)->&SemError #);
                   CheckVirtualBinding::<(#do VD->&ChkVB #);
                   QuaDist::<(# ok:@boolean do(aDesc,vDesc)->ChkQua->(PD,ok)#);
                   GetTheDesc::<(#do iD->&GetDesc->oD #);
@@ -87,18 +97,16 @@ do
                     (#
                     do (*175->trace(#do 'ActualDesc:chkCompEV'->T #);*)
                        (EV[],DB[],chain[])
-                         -> ChkComputedEval
-                       (# error::<
-                            (#do (no,EV[],desc[])->WE.ComputedRemoteError#)#)
-                         ->
-                       (remEv[],N[],ref[],refDesc[],chain[]);
+                         ->ChkComputedEval
+                          (# error::<(#do (EV[],no)->VirtualError#)#)
+                         ->(remEv[],N[],ref[],refDesc[],chain[]);
                    #)
                #);
              (* The item DB is used by Form cmpLstBody      *)
              
-             thisDesc,ES,desc: @ ASTindex; MN: @integer
+             thisDesc,ES,desc: @ AST.index; MN: @integer
           enter(thisDesc,ES)
-          do (if ctst then 168->trace(#do ES[]->xA #)if);
+               do (*168->trace(#do ES[]->A #);*)
              (thisDesc,ES)->dB.ActualDesc->(desc,MN)
           exit(desc,MN)
           #);
@@ -108,7 +116,7 @@ do
         (* node= (nameApl) | (remote <den> <name>) | (inx <den> <eval>) *)
         
         GetName: @
-          (# node,n: @ ASTindex; remote : @ boolean;
+          (# node,n: @ AST.index; remote : @ boolean;
           enter(node)
           do false->remote;
              L:(if node.label
@@ -124,7 +132,7 @@ do
         
         GetSort: 
           (* gets the sort of a denotation *)
-          (# node,sort,n,dclRef: @ ASTindex; remote: @ boolean;
+          (# node,sort,n,dclRef: @ AST.index; remote: @ boolean;
           enter node
           do node->getName->(n,remote); N.dclRef->dclRef;
              (if dclRef.isNull  then node->&setUp if);
@@ -133,23 +141,19 @@ do
           exit sort
           #);
         GetCatSort:
-          (# sort,spec,descRef,son: @ ASTindex
+          (# sort,spec,descRef,son: @ AST.index
           enter sort
           do sort.son->son;
              (if sort.label
               // gram.simpleDecl then (* getSpecOfSort *)
                  son.brother->son;
-                 (if son.label = gram.variablePattern then 
-                     son->descRef
-                  else 
-                     son.son->&GetDesc->descRef
+                 (if son.label//gram.variablePattern then son->descRef
+                  else son.son->&GetDesc->descRef
                  if)
               // gram.repetitionDecl then (* GetSpecOfSort *)
                  son.brother->son; son.brother->son;
-                 (if son.label = gram.variablePattern then 
-                     son->descRef
-                  else 
-                     son.son->&GetDesc->descRef
+                 (if son.label//gram.variablePattern then son->descRef
+                  else son.son->&GetDesc->descRef
                  if)
               // gram.patternDecl then 
                  son.brother->&GetDesc->descRef
@@ -167,7 +171,7 @@ do
         
         GetDesc: 
           (* returns the descriptor of a this entity-spec*)
-          (# node,catSort,dclRef: @ ASTindex
+          (# node,catSort,dclRef: @ AST.index
           enter node
           do (if node.label 
               // gram.objectDescriptor then 
@@ -181,13 +185,79 @@ do
           exit catSort
           #);
         
+        ChkVB:
+          (* vDcl is a declaration of a virtual or a binding of a virtual *)
+          (* if vDcl is a binding, it may have the form:                  *)
+             (*  vDcl = vName ::< (# ... #)                                  *)
+        (* In this case the (empty) prefix may not have been set up.    *)
+        (* This pattern test for this situation and performs the set up *)
+        (# vDcl,vName,vSpec,vSpecN,vDclOrigin,vDclPref,vdpDesc,vDclref,
+           son,dclRef: @AST.index; node: ^AST.index;
+           rem:@boolean
+        enter vDcl
+        do (*173->trace(#do vDcl->&Dump #);*)
+           L:
+             (if vDcl.label // gram.bindingDecl //gram.finalDecl (*?*) then
+                 vDcl.son->son->singleName->vName;
+                 (* Error if more than one name. Will be handled by CheckBind*)
+                 vName.virtDcl->vDclRef; (* just aux var *)
+                 (if vDclRef.isNull  then
+                     son.brother->vSpec;
+                     (if vSpec.label 
+                      // gram.objectDescriptor then
+                         vSpec.origin->vDclOrigin
+                      // gram.unExpanded then (* thisis a semantic error *)
+                         vSpec.slotOrigin -> vDclOrigin;
+                         (*173->trace(#DO vDclOrigin[] -> xA #);*)
+                      else (* name apl *)
+                         vSpec->GetName->(vSpecN,rem);
+                         (* here was an error when vSpecN was vSpec:
+                          *  V::<R.P *)
+
+                         vSpecN.dclRef->dclRef;
+                         (**********************
+                          * the following check was made, since only if
+                          * dclRef.isNull, vSpecN.origin is well-defined.
+                          * Apparently the situation happens in practice.
+                          * Instead, the EncDesc-pattern is used to find
+                          * the origin. Note that EncDesc will NOT
+                          * work for insertable patterns, but cannot happen
+                          * here since insertable patterns CANNOT have 
+                          * virtual attributes (insertable means (#do ... #)).
+                          * If the def. of insertable is changed, encDesc 
+                          * cannot be used below.
+                          * (if not dclRef.isNull then
+                          *   ( * vDcl is currently being checked ????!!!!* )
+                          *  leave L
+                          *if);
+                          *vSpecN.origin->vDclOrigin
+                          *)
+                         vSpecN[]->&EncDesc->node[]; 
+                         node->vDclOrigin;
+                     if);
+                     vDclOrigin->&GetPreDesc->vdpDesc;
+                     (****
+                      vDclOrigin.son->vDclPref;
+                      (if vDclPref.label 
+                      * // gram.prefix ( * must be * ) then
+                      vDclPref.son->&GetDesc->vdpDesc
+                      else 'OOPS: ChkVB: no prefix' -> bugstream.puttext
+                      if);
+                      ****)  
+                     (vDcl,vName,vSpec,vdpDesc)->&CheckBinding;
+                     (if not vdpDesc.isNull then
+                         (* error message in CheckBinding if isNull *)
+                         vName.virtDcl->vDclref;
+                         vDclRef.sort->&ChkVB
+        if)if)if)#);
+        
         ChkQua:
           (* check qualification of actualDesc and the original virtual *)
-          (# sub,super,pref,firstSub: @ASTindex; 
+          (# sub,super,pref,firstSub: @AST.index; 
              PD: @integer; Found: @boolean;
              Error:< object
           enter(sub,super)
-          do (*167->trace(#do sub[]->xA; super[]->xA #);*)
+          do (*167->trace(#do sub[]->A; super[]->A #);*)
              sub->firstSub;
              L:
              (if (sub->super.equal)  then (* finito *)
@@ -196,7 +266,7 @@ do
                  sub.son->pref;
                  (if pref.label
                   // gram.prefix then
-                     pref.son -> &GetDesc -> sub;
+                     pref.son->&GetDesc->sub;
                      (if sub.label
                       //gram.virtualDecl //gram.bindingDecl //gram.finalDecl then 
                          (* to handle V ::< (# ... #)   *)
@@ -223,28 +293,28 @@ do
           #);
         
         dump: 
-          (# N: @ASTindex
+          (# N: @AST.index
           enter N
           do (if N.isNull then
                  '\nNull descriptor\n'->tracestream.puttext
               else
-                 (if common.switch[100] then 0->&N.LispPrint
+                 (if switch[100] then 0->&N.LispPrint
                   else tracestream.newline; (N[],messagestream[],5) ->thePP
           if)if)#);
         
         GetPreDesc:
-          (# node,desc,pre,preName,dclRef,vName,originPreDesc: @ASTindex;
-             rem: @boolean; D: ^ASTindex
+          (# node,desc,pre,preName,dclRef,vName,originPreDesc: @AST.index;
+             rem: @boolean
           enter node
-          do L :
+          do 
+             L :
                (if node.isNull then 
                    'GetPreDesc: NULL descriptor'->bugstream.puttext
                 else
                    (*172->trace(#do node[]->A #);*)
-                   (if node.label 
-                    // gram.objectDescriptor then
+                   (if node.label // gram.objectDescriptor then
                        node.son->pre;
-                       (if pre.label = gram.prefix then
+                       (if pre.label // gram.prefix then
                            pre.son->GetName->(preName,rem);
                            preName.dclRef->dclRef;
                            (if dclRef.isNull  then
@@ -252,8 +322,7 @@ do
                                    (* the prefix is the empty string added to some
                                     V ::< (# ... #)   *)
                                    preName.descRef -> &chkVB;
-                                else 
-                                   pre.son->&SetUp->(dclRef,desc)
+                                else (*preName*)pre.son->&SetUp->(dclRef,desc)
                                if)
                            if);
                            preName.descRef ->desc;
@@ -262,13 +331,9 @@ do
                        if)
                     // gram.descriptorForm // gram.attributesForm then
                        node.xOrigin->node; restart L
-                    // gram.mainPart then
-                       node[] -> MainPartDesc -> D[];
-                       D -> node;
-                       restart L
                     // gram.unExpanded then (* should not happen *)
                        'OOPS: look at docheck.getPreDesc ' -> bugstream.puttext;
-                       node.slotOrigin->node; restart L
+                       node.slotOrigin->node; restart l 
                     else node.origin->node; restart L
                if)if);
              (if not desc.isNull then (*172->trace(#do desc[]->A #)*)if)
@@ -276,110 +341,78 @@ do
           #);
         
         (* a descriptor node has the form desc[PRE,ATT,ACP] *)
-        theCMP: @CMP;
+        CMP: @AST.CMP;
         LocalSearch: 
-          (# subject: ^ASTindex; desc: @ASTindex; 
+          (# subject,desc,dclRef,node: @ AST.index;
              (* subject is the nameApl to be searched *)
-             (* desc is a descriptor to be searched: 
-              * is overwritten by localsearch 
-              *)
-             isFound: @ boolean; 
-             pn: @ integer;
-             dclRef: @ ASTindex;
-          enter(subject[],desc)
+             (* desc is a descriptor to be searched   *)
+             pn,pn1: @ integer; isFound,inSuper: @ boolean;
+             
+          enter(subject,desc)
           <<SLOT LocalSearch:doPart>>
           exit(isFound,pn,dclRef)
           #) (* localSearch *);
+        
         semiSearch: 
-          (# index,name,n: @ ASTindex; (*index=namedIndex[nameDcl] *)
+          (# index,name,n: @ AST.index; (*index=namedIndex[nameDcl] *)
           enter(index,n)
           do (*169->trace(#do index[]->A#)*); index.son->name;
-          exit( (n,name)->EQS, 0, name)
+          exit( (n,name)->AST.EQS, 0, name)
           #);
         SetUp:
-          (# node,N,descRef: @ASTindex; 
+          (# node,N,descRef: @AST.index; 
           enter node
           do <<SLOT SetUp:descriptor>>;
              N.descRef->descRef;
           exit(N.dclRef,descRef)
           #);
         ChkEval: 
-          (# ThisDesc,EV: @ASTindex;
-             way: @integer;
-             inNXlist: @boolean; (* EV is in an enter/exit list;
-                                  * all objectDenotations must be checked,
-                                  * i.e. ;X; must bechecked
-                                  *)
+          (# ThisDesc,EV: @AST.index;
              expKind: @integer; (* eval classification - see chkEvalBody *)
              hasCode: @boolean; (*this eval implies execution of an object*)
-
+             way,
              cstVal, (* if isCst then the value *)
              dRegNo, (*no. of data registers needed for computing this eval*)
              type       (* type of this eval *)
              : @integer
-          enter(ThisDesc,EV,way,inNXlist)
+          enter(ThisDesc,EV,way)
           do <<SLOT ChkEvalBody: descriptor>>
           exit(expKind,cstVal,dRegNo,hasCode,type)
           #);
-      
         binaryCompKind: (#exit 1 #);
         unaryCompKind:  (#exit 2 #);
         assignCompKind: (#exit 3 #);
         CmpLst: 
-          (# ThisDesc,EV,LV,RV: @ ASTindex; 
+          (# ThisDesc,EV,LV,RV: @ AST.index; 
              compKind,typeKind,Ltype,Rtype: @integer
           enter(ThisDesc,EV,compKind,LV,Ltype,RV,Rtype)
           do <<SLOT CmpLstBody: descriptor>>;
           exit typeKind
           #);
-        ChkVB:
-          (* vDcl is a declaration of a virtual or a binding of a virtual
-           * if vDcl is a binding, it may have the form:
-           *    vDcl = vName ::< (# ... #)
-           * In this case the (empty) prefix may not have been set up.
-           * This pattern test for this situation and performs the set up
-           *)
-          (# vDcl,vName,vSpec,vSpecN,vDclOrigin,vDclPref,vdpDesc,vDclref,
-             son,dclRef: @ASTindex; node: ^ASTindex;
-             rem:@boolean
-          enter vDcl
-          <<SLOT ChkVB:doPart>>
-          #);
         CheckBinding:
-          (# vDcl,vName,vDclRef,BindSpec,originPreDesc: @ASTindex; 
-             (* why is it called originPreDesc? It is the prefic
-              * descriptor where to search for the virtual binding?
-              *)
-             theOriginDesc: ^ASTindex
-          enter(vDcl,vName,BindSpec,originPreDesc,theOriginDesc[])
+          (# vDcl,vName,vDclRef,BindSpec,originPreDesc: @AST.index; 
+          enter(vDcl,vName,BindSpec,originPreDesc)
           <<SLOT CheckBinding:doPart>>
           #);
         
         (* Attributes used for storage allocation *)
-        offCount,     (* offset of allocated storage *)
-        insMax,       (* current max. of storage for insertions*)
-        relInsOff,    (* relative offset of insertion from insertion start!*)
-        virtOff:      (* offset of virtual patterns in prototype *)
+        offCount,               (* offset of allocated storage *)
+        insMax,         (* current max. of storage for insertions*)
+        relInsOff,      (* relative offset of insertion from insertion start!*)
+        virtOff:                (* offset of virtual patterns in prototype *)
           @ integer;
         
-        NXtmp: @
-          (* for switch 181 to generate simple N/X code *)
-          (# maxNXdepth: @integer;
-             alloc:
-               (# L: @integer
-               enter L
-               do (L,maxNXdepth) -> Max -> maxNXdepth
-               #)
-          #);
         TmpSto: @
           (* allocation of temporary storage for for-imp, expressions, etc *)
-          (# Alloc: @ (* allocate N consequtive locations *)
+          (#
+             Alloc: @ (* allocate N consequtive locations *)
                (# N,off: @Integer
                enter N
                do offCount->off; offCount+N->offCount
                exit off
                #);
-             DeAlloc: (* de-allocate N consequtive locations starting from off *)
+             
+             DeAlloc:  (* de-allocate N consequtive locations starting from off *)
                (# N,off: @Integer
                enter(off,N) 
                   (* not yet implemented *)
@@ -389,9 +422,9 @@ do
         insLst: @
           (* list of insertions in this descriptor *)
           (# head: ^ Elm;
-             Elm: (# R: ^ASTindex; relInsOff: @integer; next: ^Elm #);
+             Elm: (# R: ^AST.index; relInsOff: @integer; next: ^Elm #);
              Insert:
-               (# R: ^ASTindex; size: @integer; E: ^Elm
+               (# R: ^AST.Index; size: @integer; E: ^Elm
                enter(R[],size)
                do &Elm[]->E[]; R[]->E.R[]; 
                   relInsOff->E.relInsOff; relInsOff+size->relInsOff;
@@ -413,55 +446,96 @@ do
 
         descOK: @boolean;
         
-        desc,id: ^ASTindex; singular: @boolean; insertOff: @integer
+        desc,id: ^AST.index; singular: @boolean; insertOff: @integer
      enter(desc[],singular,id[],insertOff)
-     do <<SLOT ChkFormBody: descriptor>>
+     do <<SLOT ChkDescBody: descriptor>>
      exit descOK
      #);
-   Prepare:
-     (#
-     do (common[],gram[],theGroup[],lst[],messageStream[],verboseLevel)
-          -> WE.init;
-        DS.init;
-        ClearErrorMsgList;
-        false -> error -> fatalError -> fatalInitFormError;
-        theGroup[] -> theLibCash.init;
-        theGroup.FragmentList.Scan
-        (# F: ^FragmentForm
-        do (if current.type = formType then current.open->F[]; F.Reset if)
-        #);   
-     #);
+   
    (* form     = (descriptor ... )                                    *)
    (*          | (form <name> <descriptor> )                          *)
-   (* formDesc = (descriptor <prefix> <attribute-part> <action-part>) *)   
-
-do Prepare;
-   
-   (* Initialize forms *)
-   theGroup.FragmentList.Scan   
-   (# 
-   do (if current.type = formType then
-          current.open -> InitForm
-      if)
-   #);
-   
-   (* InitForm has been called to initialize the AST.
-    * During InitForm, various semantic checks have been performed,
+   (* formDesc = (descriptor <prefix> <attribute-part> <action-part>) *)
+   Desc,ID: ^AST.index; (* either object-descriptor or attDescriptor *)
+   errCount,warnCount,Kind,cons: @integer
+do (* initTerm has been called to initialize the AST.
+    * During initTerm, various semantic checks have been performed,
     * including check for double declarations, unexpanded nonterminals, etc.
-    * The pattern ChkForm performs the remaining semantic checks.
-    * ChkForm may fail, if the AST has unexpanded nonterminals, so to be
-    * safe, ChkForm is NOT performed if InitForm discovers such errors.
-    * Other errors will first be discovered by a subsequent compiler call.
+    * The pattern doCheck performs the remaining semantic checks.
+    * DoCheck may fail, if the AST has unexpanded nonterminals, so to be
+    * safe, doCheck is NOT performed if initTerm discovers such errors.
+    * Other errors will then first be discovered by a subsequent compiler call.
     *) 
-   (if not fatalInitFormError then
-       DS.getAllForms
-       (#
-       do (form[],(kind>0),id[],-1) -> ChkForm;
-       #)
+   (if not fatalInitTermError then
+       WhileMore:
+         (# more: @boolean
+         do loop:
+              (#
+              do DS.get->(Desc[],kind,cons,ID[]);
+                 (if Desc[] <> NONE then
+                    (Desc[],(kind>0),id[],-1)->&ChkDesc;  (* !!! *)
+                     restart loop
+              if)#);
+            Loop:
+              (# doP,origin: ^AST.index
+              do DS.getDo->(doP[],origin[]);
+                 (if doP[] <> NONE then
+                     (doP[],false,origin[],-1)->&ChkDesc;
+                     true->more;
+                     restart Loop
+              if)#);
+            (if more then false->more; restart whileMore if)
+   #)if);
+   (*46->trace
+   (#do libCash.scanAll
+      (#
+      do '\nDescriptor: \n'->T; currentDesc[]->A; 'Bindings:\n'->tracestream.puttext;
+         currentDesc->LibCash.scan(#do thisForm.fullName->tracestream.putline #)
+      #)
+    #);*)
+   
+   EmitDelayedMsg->(errCount,warnCount);
+   (if errCount>0 then
+       '\nNo. of fatal errors: '->messagestream.puttext; errCount->messagestream.putInt
+   if);
+   (if warnCount>0 then
+       '\nNo. of warnings:     '->messagestream.puttext; 
+       warnCount->messagestream.putint
    if);
    
-   WE.EmitWarningsAndErrors -> (error,fatalError);
-   
-   theLibCash.clear
+   (if error then 
+       (if verboseLevel<verboseLevel.actions then
+           '\n\nA detailed marking of '->messagestream.puttext;
+           (if true
+            // (errCount>0) and (warnCount=0) then 'semantic errors '->messagestream.puttext
+            // (errCount=0) and (warnCount>0) then 'warnings '->messagestream.puttext
+            // (errCount>0) and (warnCount>0) then 
+               'semantic errors and warnings '->messagestream.puttext
+           if);
+           (if switch[32] then 
+               'can be generated by turning\nthe--nolist (-l) option off\n\n'
+                 ->messagestream.puttext;
+            else 
+               'may be found in the file:\n\t'->messagestream.puttext;
+               theGroup.fullName->messagestream.puttext; '.lst'->messagestream.puttext;
+               errorPrint 
+           if)
+        else
+           (* compiler called with --mute *)
+           '\n\n'->messagestream.puttext (* to complete error/warning output *);
+           (if not switch[32] then
+               errorPrint
+           if);
+       if);
+       (* 
+        * '\n\nOBS! The above mentioned lst-file has NOT been printed since option 32 is set!'
+        * ->messagestream.putline;
+        * 'To get a lst-file you must run the compiler without option 32'
+        * ->messagestream.puttext
+        *)
+   if);
+   (for i: libCash.inx repeat 
+        none->libcash.B[i][];
+        none->libcash.DD[i][]
+   for)
 #)
 

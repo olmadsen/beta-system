@@ -1,0 +1,404 @@
+ORIGIN '../INTELBmachine';
+INCLUDE 'cofffile';
+INCLUDE 'coff_ms';
+INCLUDE '~beta/sysutils/v1.5/time';
+
+--Cidentifier: dopart--
+do '_' -> id.prepend;
+   
+--DefineMainMD: descriptor--
+(# 
+do (if isBorland then 'WinMain' -> T else '_WinMain@16' -> T if);
+   T[] -> export; T[] -> labelDef;
+   '_SetupArgValues'->jsrT;
+   commonentry[] -> gjmp;
+   (* The following does not work because the mstate.labs patch 
+    * mechanism for forward jumps expects 32 bit offsets.
+    * 
+    * jmp_short -> emitbyte;
+    * commonentry[] -> mstate.labs.val -> emitrel8off;
+    *)
+#)
+--VirtLabDef:descriptor--
+(# 
+do '== VirtLabDef' -> comment;
+   (if type = interFragment then
+       asText -> export;
+       asText -> labelDef
+    else
+       (asText,entryDefMark) -> mstate.b.mark
+   if);
+   THIS(locallab)[]->mstate.labs.def;
+   eoo;
+#)
+
+--LocalLabDef:dopart--
+do '== LocalLabDef' -> comment;
+   (if type
+    // dataToCode then
+       'dataToCode' -> comment;
+       (asText,entryDefMark) -> mstate.d.mark
+    // codeToData then
+       'codeToData' -> comment;
+       (asText,entryDefMark) -> mstate.b.mark
+    // codeLocal then
+       'codeLocal' -> comment;
+       (asText,entryDefMark) -> mstate.b.mark
+    // interFragment then
+       'interFragment' -> comment;
+       asText->export; 
+       (asText,entryDefMark)->mstate.b.mark
+    else
+       (if isTextAdr then
+           (* label in data segment for asciz-text or real-const *)
+           'isTextAdr' -> comment;
+           (asText,entryDefMark)->mstate.d.mark
+        else
+           (*label in code segment *)
+           'code lab' -> comment;
+           (if betaLabel then
+               (* as in L: (if ... leave L ; ...if)
+                * or start label of  case-imp
+                *)
+               'betaLabel' -> comment;
+               (asText,entryDefMark)->mstate.b.mark
+           if)
+       if);
+   if);
+   THIS(locallab)[]->mstate.labs.def;
+   eoo;
+--LocalLabPutWithReloc:descriptor--
+(# 
+do (* All locallabels are relocated using asText *)
+   0->off;
+   
+   (if mstate.incode then
+       'in code' -> comment;
+       (L.asText,wordMark)->mstate.b.mark;
+    else
+       'in data' -> comment;
+       (L.asText,wordMark)->mstate.d.mark;
+   if);
+#)
+
+---emitCodeToFile:descriptor---
+(# 
+   (*    puthexa: 
+    *      (# i: @integer;
+    *         printf: external
+    *           (# fmt: [0]@char;
+    *              val: @integer;
+    *           enter (fmt,val)
+    *           #);
+    *      enter i
+    *      do ('0x%x', i) -> printf; 10 -> screen.put;
+    *      #);
+    *)   
+   
+   align4: @
+     (# n: @integer
+     enter n
+     exit (n + 3) %band (%bnot 3)
+     #);
+   
+   dataCoffName:
+     (* exit encoding of '.data' *)
+     (# 
+     exit (0x7461642e, 0x00000061)
+        (*   t a d .           a *) 
+     #);
+   textCoffName:
+     (* exit encoding of '.text' *)
+     (# 
+     exit (0x7865742e, 0x00000074)
+        (*   x e t .           t *) 
+     #);
+   
+   (* constants *)
+   textSize:    (# exit mstate.b.LIP->align4 #);
+   dataSize:    (# exit mstate.d.LIP->align4 #);
+   dataStart:   (# exit textSize #);
+   stringSize:  (# exit mstate.strTbl.str.lgth (* must be static *) #);
+   reltextNum:  (# exit mstate.b.noOfRel #);
+   relTextSize: (# exit mstate.b.noOfRel * IMAGE_SIZEOF_RELOCATION #);
+   reldataNum:  (# exit mstate.d.noOfRel #);
+   relDataSize: (# exit mstate.d.noOfRel * IMAGE_SIZEOF_RELOCATION #);
+   
+   EmitHeader:
+     (* Construct COFF header *)
+     (# h: @IMAGE_FILE_HEADER;
+     do (* 'EmitHeader' -> putline; *)
+        IMAGE_FILE_MACHINE_I386 -> h.Machine;
+        2                       -> h.NumberOfSections; (* .text, .data *)
+        systemtime              -> h.TimeDateStamp;
+        IMAGE_SIZEOF_FILE_HEADER+
+        2*IMAGE_SIZEOF_SECTION_HEADER+
+        textSize+
+        dataSize+
+        relTextSize+
+        relDataSize                    -> h.PointerToSymbolTable;
+        mstate.symtabTop+2 (* 2 aux *) -> h.NumberOfSymbols;
+        0                              -> h.SizeOfOptionalHeader;
+        0                              -> h.Characteristics;
+        h[] -> CF.putfilehdr;
+     #);
+   EmitText:
+     (# patchaddr: @integer;
+     do (* 'EmitText at address '->screen.puttext;
+         * CF.getpos->puthexa;
+         *)
+        (for i: mstate.b.markTop repeat
+             (if mstate.b.types[i]=jmpMark then
+                 (* The value at the use site must be 4 greater
+                  * on windows than on linux: Patch it up.
+                  *)
+                 @@mstate.b.buffer[1] + mstate.b.marks[i] -> patchaddr;
+                 (%getLongAt patchaddr + 4) %putLongAt patchaddr;
+             if);
+        for);
+        (@@b.buffer[1],textsize)->putB;
+     #);
+   EmitData:
+     (# 
+     do (* 'EmitData at address '->screen.puttext;
+         * CF.getpos->puthexa;
+         *)
+        (@@d.buffer[1],datasize)->putB;
+     #);
+   EmitRel:
+     (# im: ^Image;
+        relType: [markMax] @integer; 
+        mark, n: @integer;
+        R: @IMAGE_RELOCATION;
+     do IMAGE_REL_I386_ABSOLUTE -> relType[entryDefMark];
+        IMAGE_REL_I386_DIR32    -> relType[wordMark];
+        IMAGE_REL_I386_REL32    -> relType[jmpMark];
+        IMAGE_REL_I386_DIR32    -> relType[_dataMark];
+        IMAGE_REL_I386_DIR32    -> relType[_textMark];
+
+        INNER; (* define im to be one of mstate.d or mstate.b *)
+        
+        (for i: im.markTop repeat
+             (if im.types[i]->mark
+              // entryDefMark then
+                 (* ignore *)
+              // _dataMark then
+                 cError(# do '_dataMark used' -> T #);
+              // _textMark then
+                 cError(# do '_textMark used' -> T #);
+              else
+                 (* symtab indexes are counted 0,1,2,...
+                  * AND there are 2 AUX symbols in the beginning of the 
+                  * symbol table that must be skipped. 
+                  *)
+                 im.epElm[i].m.symtabInx-1+2 -> R.SymbolTableIndex;
+                 relType[mark]               -> R.Type;
+                 im.marks[i]                 -> R.VirtualAddress; 
+                 R[]->CF.putReloc;
+                 n+1->n;
+             if)
+        for);
+        (if n <> im.noOfRel then 
+            '\nWARNING rel count inconsistencies: '->putText;
+            n->putint; ' '->put; im.noOfRel->putint; newline
+        if)
+     #);
+   EmitRelText: EmitRel(#do (*'EmitRelText'->putline;*) mstate.b[]->im[] #);
+   EmitRelData: EmitRel(#do (*'EmitRelData'->putline;*) mstate.d[]->im[] #);
+   
+   (* Indices of .data and .text in symbol table *)
+   textSectionSymbolIndex: (# exit 1 #);
+   dataSectionSymbolIndex: (# exit 2 #);
+   
+   EmitSymbolTable:
+     (# n: @integer; 
+        ep: [mstate.symtabTop] ^entryPoints.element;
+        current: ^ entryPoints.element;
+        S: @IMAGE_SYMBOL;
+        AUX: @IMAGE_AUX_SYMBOL_SECTION;
+        section, value, class: @integer;
+     do (*'EmitSymbolTable'->putline;*)
+        entryPoints.scan
+        (#
+        do current[]->ep[current.m.symtabInx][] ; n+1->n
+        #);
+        (if (n + 2) <> mstate.symtabTop then
+            '\n WARNING: inconsistencies in symtab size:'->puttext;
+            n->putint; ' '->put; mstate.symtabTop->putint; newline;
+        if);
+        
+        (* possibly add .file section here *)
+        
+        textCoffName           -> (S.N1_4, S.N5_8);
+        0                      -> S.value; (* represents section name *)
+        1                      -> S.SectionNumber;
+        IMAGE_SYM_TYPE_NULL    -> S.Type;
+        IMAGE_SYM_CLASS_STATIC -> S.StorageClass;
+        1                      -> S.NumberOfAuxSymbols;
+        S[]   -> CF.putSymEnt; (* 0 *)
+        
+        textSize   -> AUX.Length;
+        relTextNum -> AUX.NumberOfRelocations;
+        0          -> AUX.NumberOfLinenumbers;
+        0          -> AUX.CheckSum;
+        1          -> AUX.Number;
+        
+        AUX[] -> CF.putAuxEnt; (* 1 *)
+        
+        dataCoffName           -> (S.N1_4, S.N5_8);
+        0                      -> S.value; (* represents section name *)
+        2                      -> S.SectionNumber;
+        IMAGE_SYM_TYPE_NULL    -> S.Type;
+        IMAGE_SYM_CLASS_STATIC -> S.StorageClass;
+        1                      -> S.NumberOfAuxSymbols;
+        S[]   -> CF.putSymEnt; (* 2 *)
+        
+        dataSize   -> AUX.Length;
+        relDataNum -> AUX.NumberOfRelocations;
+        0          -> AUX.NumberOfLinenumbers;
+        0          -> AUX.CheckSum;
+        2          -> AUX.Number;
+        
+        AUX[] -> CF.putAuxEnt; (* 3 *)
+        
+        (* NB. If other symbols are put in before the .data and .text 
+         * symbol, case dataSectionSymbolIndex and dataSectionSymbolIndex
+         * above must be changed accordingly, as emitRel use these 
+         * special symbols.
+         *)
+        
+        201->trace(#do 'Symboltable:\n'->xT #);
+        (for i: ep.range-2 repeat (* offset 2: skip the two .sect syms *)
+             ep[i+2][]->current[];
+             201->trace
+             (#
+             do current.display;
+                (*current.m.strInx->strTbl.scan(#do ch->screen.put #)*)
+             #);
+             (if current.local then (* defined in this fragment *)
+                 (* define a symtab entry for a label dCF. *)
+                 (if current.export then 
+                     (* exported from this fragment *)
+                     IMAGE_SYM_CLASS_EXTERNAL -> class; 
+                  else 
+                     IMAGE_SYM_CLASS_STATIC   -> class;
+                 if);
+                 (if current.data then (* defined in data fragment *)
+                     dataSectionSymbolIndex -> section;
+                  else
+                     textSectionSymbolIndex -> section;
+                 if);
+                 current.m.LIP -> value;
+              else
+                 IMAGE_SYM_UNDEFINED      -> section;
+                 IMAGE_SYM_CLASS_EXTERNAL -> class;
+                 0                        -> value;
+             if);
+             
+             (* Always use string table for BETA symbols - most are 
+              * longer than 8 bytes, so there is not much gained by
+              * attempting to use the in-line symbol style for short
+              * symbols.
+              *)
+             0                      -> S.N1_4;
+             current.m.strInx       -> S.N5_8;
+             value                  -> S.value; 
+             section                -> S.SectionNumber;
+             IMAGE_SYM_TYPE_NULL    -> S.Type;
+             class                  -> S.StorageClass;
+             0                      -> S.NumberOfAuxSymbols;
+             
+             201->trace
+             (# pi: @screen.putint;
+             do '\n  S.N1_4:          ' -> puttext; S.N1_4 -> pi; 
+                '\n  S.N5_8:          ' -> puttext; S.N5_8 -> pi; 
+                '\n  S.value:         ' -> puttext; S.value -> pi; 
+                '\n  S.SectionNumber: ' -> puttext; S.SectionNumber ->pi;
+                '\n  S.Type:          ' -> puttext; S.Type -> pi; 
+                '\n  S.StorageClass:  ' -> puttext; S.StorageClass -> pi;
+             #);
+             
+             S[]->CF.putSymEnt;
+        for);
+     #);
+   EmitStringTable:
+     (# size: @integer;
+     do (* 'String Table at file address ' -> screen.puttext; 
+         * CF.getpos->puthexa;
+         *)
+        stringSize->align4 -> size;
+        size -> CF.putLong;
+        (@@mstate.strTbl.str.T[5],size-4)->putB;
+     #);
+   EmitSectionHeaderText:
+     (# h: @IMAGE_SECTION_HEADER;
+     do textCoffName                  -> (h.Name1_4, h.Name5_8);
+        0                             -> h.PhysicalAddress;
+        0                             -> h.VirtualAddress;
+        textSize                      -> h.SizeOfRawData;
+        IMAGE_SIZEOF_FILE_HEADER+
+        2*IMAGE_SIZEOF_SECTION_HEADER -> h.PointerToRawData;
+        IMAGE_SIZEOF_FILE_HEADER+
+        2*IMAGE_SIZEOF_SECTION_HEADER+
+        textsize+
+        datasize                      -> h.PointerToRelocations;
+        0                             -> h.PointerToLinenumbers;
+        relTextNum                    -> h.NumberOfRelocations;
+        0                             -> h.NumberOfLinenumbers;
+        IMAGE_SCN_CNT_CODE+
+        IMAGE_SCN_ALIGN_4BYTES+
+        IMAGE_SCN_MEM_EXECUTE+
+        IMAGE_SCN_MEM_READ            -> h.Characteristics;
+        h[] -> CF.putscnhdr;
+     #);
+   EmitSectionHeaderData:
+     (# h: @IMAGE_SECTION_HEADER;
+     do dataCoffName                  -> (h.Name1_4, h.Name5_8);
+        0                             -> h.PhysicalAddress;
+        0                             -> h.VirtualAddress;
+        dataSize                      -> h.SizeOfRawData;
+        IMAGE_SIZEOF_FILE_HEADER+
+        2*IMAGE_SIZEOF_SECTION_HEADER+
+        textsize                      -> h.PointerToRawData;
+        IMAGE_SIZEOF_FILE_HEADER+
+        2*IMAGE_SIZEOF_SECTION_HEADER+
+        textsize+
+        datasize+
+        reltextsize                   -> h.PointerToRelocations;
+        0                             -> h.PointerToLinenumbers;
+        relDataNum                    -> h.NumberOfRelocations;
+        0                             -> h.NumberOfLinenumbers;
+        IMAGE_SCN_CNT_INITIALIZED_DATA+
+        IMAGE_SCN_ALIGN_4BYTES+
+        IMAGE_SCN_MEM_WRITE+
+        IMAGE_SCN_MEM_READ            -> h.Characteristics;
+        h[] -> CF.putscnhdr;
+     #);
+   
+   CF: @cofffile;
+
+   putb: @CF.putbytes;
+   
+   T: ^text;
+do (BC.name).copy->T[];
+   (if common.switch[55] then
+       '.obj'->T.append->CF.name;
+    else
+       '.obj'->T.append->CF.name;
+   if);
+   CF.openWrite;
+   
+   EmitHeader; 
+   EmitSectionHeaderText; 
+   EmitSectionHeaderData; 
+   EmitText; 
+   EmitData; 
+   EmitRelText; 
+   EmitRelData; 
+   EmitSymbolTable; 
+   EmitStringTable; 
+   
+   CF.close;
+   
+#)
+
