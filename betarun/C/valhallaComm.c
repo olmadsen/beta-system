@@ -479,7 +479,7 @@ void HasRefDoObj(Object* obj)
   ProtoType * proto;
   long size;
   HasRefToFlag = FALSE;
-  scanObject(obj, HasRefToCheck, TRUE);
+  scanObject(obj, HasRefToCheck, NULL, TRUE);
   if (HasRefToFlag) {
     proto = GETPROTO(obj);
     size = 4*ObjectSize(obj);

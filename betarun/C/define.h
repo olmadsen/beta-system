@@ -299,7 +299,7 @@
 #define LISTEND 3
 #endif /* PERSIST */
 
-#define REFERENCEACTIONARGSTYPE Object **theCell
+#define REFERENCEACTIONARGSTYPE Object **theCell, long refType
 #define REFERENCEACTIONARGS theCell
 
 #define UNKNOWNSTORE "AOA"

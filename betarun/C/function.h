@@ -186,7 +186,6 @@ void scanOrigins(Object *theObj, void (*originAction)(Object **theCell));
 void clearTail(void);
 Object *getHead(void);
 void prependToList(Object *target);
-extern void (*objectAction)(Object *theObj);
 extern void tempAOArootsAlloc(void);
 extern void tempAOArootsFree(void);
 extern long sizeOfAOA(void);
@@ -208,7 +207,7 @@ extern ValRep * LVRAXAlloc(ProtoType *, long, long);
 #ifdef RTDEBUG
 extern void AOACheck(void);
 extern void AOACheckObject(Object *);
-extern void AOACheckReference(Object **);
+extern void AOACheckReference(Object **, long);
 extern void AOACheckObjectSpecial(Object *);
 #endif
 
@@ -232,7 +231,7 @@ extern void PrintStack(long *StackEnd);
 
 /* GC/ioa.c */
 extern void IOAGc(void);
-extern void ProcessReference(Object **);
+extern void ProcessReference(Object **, long refType);
 extern void ProcessObject(Object *);
 extern void CompleteScavenging(void);
 extern void DoStackCell(Object **theCell,Object *theObj);
@@ -290,6 +289,7 @@ extern Object * GetThis(long *SP);
 /* aoa.c */
 extern void scanObject(Object *obj,
                        void (*referenceAction)(REFERENCEACTIONARGSTYPE),
+		       void (*objectAction)(Object *),
                        int doPartObjects);
 extern Object * getRealObject(Object * obj);
 extern void appendToListInAOA(REFERENCEACTIONARGSTYPE);

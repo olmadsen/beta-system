@@ -100,24 +100,19 @@ static void updateTransitObjectTable(Object *theObj)
 
 void importStoreObject(Object *theObj, BlockID store, unsigned long offset)
 {
-  void (*temp)(Object *theObj);
-  
   DEBUG_CODE(fflush(output));
   Claim(theObj == getRealObject(theObj), "Unexpected part object");
   Claim(inAOA(theObj), "Where is theObj?");
-
+  
   theRealObj = theObj;
   /* Scan references, and turn into PUID's */
   currentStore = store;
   currentOffset = offset;
-  temp = objectAction; 
-  objectAction = updateTransitObjectTable;
   
   scanObject(theObj,
 	     storeReferenceToProcessReference,
+	     updateTransitObjectTable,
 	     TRUE);
-  
-  objectAction = temp;
 }
 
 #endif /* PERSIST */

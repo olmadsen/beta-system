@@ -218,7 +218,7 @@ void ProcessCBFA(void)
 	}
 	/*DEBUG_CBFA(fprintf(output, "ProcessCBFA: current=0x%x\n", current));*/
 	if (current->theStruct){
-	  ProcessReference((Object **)(&current->theStruct));
+	  ProcessReference((Object **)(&current->theStruct), REFTYPE_DYNAMIC);
 	}
       }
       CompleteScavenging();

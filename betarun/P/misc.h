@@ -15,7 +15,7 @@ void markPersistentObject(Object *theObj);
 void newPersistentObject(Object *theObj);
 void markReachableObjects(REFERENCEACTIONARGSTYPE);
 void handleNewPersistentObject(Object *theObj);
-void markOriginsAlive(Object *theObj);
+void markOfflineAndOriginObjectsAlive(REFERENCEACTIONARGSTYPE);
 void resetStatistics(void);
 void showStatistics(void);
 void handlePersistentCell(REFERENCEACTIONARGSTYPE);

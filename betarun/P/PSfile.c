@@ -110,7 +110,7 @@ long isDir(char *name)
 #ifdef UNIX
   int fd;
   
-  if ((fd = open(name,O_RDWR | _O_BINARY ))<0) {
+  if ((fd = open(name,O_RDWR))<0) {
     switch(errno) {
     case EISDIR:
       return 1;

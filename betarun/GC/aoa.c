@@ -26,16 +26,11 @@ static void AOANewBlock(long newBlockSize);
 static void AOAMaybeNewBlock(long minNewBlockSize);
 #ifdef RTDEBUG
 static void AOACheckObjectRefSpecial(REFERENCEACTIONARGSTYPE);
-void scanPartObjects(Object *obj);
+void scanPartObjects(Object *obj, void (*)(Object *));
 #endif /* RTDEBUG */
 
 /* LOCAL VARIABLES */
 static long totalFree = 0;
-
-/* GLOBAL VARIABLES */
-/* If not NULL this function gets called for every object scanned by
-   scanObject. */
-void (*objectAction)(Object *theObj) = NULL;
 
 /* tempAOArootsAlloc:
  *  Not enough room for the AOAroots table in ToSpace.
@@ -611,7 +606,7 @@ void AOAGc()
 static void CheckAOACell(Object **theCell,Object *theObj)
 {
   DEBUG_CODE(if (!CheckHeap) Ck(theObj));
-  AOACheckReference(theCell);
+  AOACheckReference(theCell, REFTYPE_DYNAMIC);
 }
 #endif
 
@@ -701,11 +696,12 @@ void AOACheckObject(Object *theObj)
   
   scanObject(theObj,
 	     AOACheckReference,
+	     NULL,
 	     TRUE);
 }
 
 /* AOACheckReference: Consistency check on AOA reference */
-void AOACheckReference(Object **theCell)
+void AOACheckReference(Object **theCell, long refType)
 {
   long i; long * pointer = BlockStart( AOAtoIOAtable);
   long found = FALSE;
@@ -772,6 +768,7 @@ void AOACheckObjectSpecial(Object *theObj)
 
   scanObject(theObj,
 	     AOACheckObjectRefSpecial,
+	     NULL,
 	     TRUE);
   
 }
@@ -806,7 +803,7 @@ void StackRefActionWrapper(Object **theCell,Object *theObj)
   if (theObj
       && inBetaHeap(theObj)
       && isObject(theObj)) {
-    StackRefAction(theCell);
+    StackRefAction(theCell, REFTYPE_DYNAMIC);
   }
 }
 
@@ -1111,7 +1108,7 @@ static void initialCollectList(Object * root,
   totalsize = 0;
     
   while (1) {
-    scanObject(insertPoint, referenceAction, TRUE);
+    scanObject(insertPoint, referenceAction, NULL, TRUE);
     if (!isEnd(insertPoint->GCAttr)) {
       insertPoint=(Object *)(insertPoint->GCAttr);
     } else {
@@ -1139,7 +1136,7 @@ void collectList(Object *root,
   if (!isEnd(insertPoint->GCAttr)) {
     insertPoint=(Object*)(insertPoint->GCAttr);
     while (1) {
-      scanObject(insertPoint, referenceAction, TRUE);
+      scanObject(insertPoint, referenceAction, NULL, TRUE);
       if (!isEnd(insertPoint->GCAttr)) {
 	insertPoint=(Object*)(insertPoint->GCAttr);
       } else {
@@ -1183,6 +1180,7 @@ Object *isCellInObjectInList(Object **theCell, Object *root)
 /* scanObject: */
 void scanObject(Object *obj,
 		void (*referenceAction)(REFERENCEACTIONARGSTYPE),
+		void (*objectAction)(Object *),
 		int doPartObjects)
 {
   ProtoType * theProto;
@@ -1224,7 +1222,7 @@ void scanObject(Object *obj,
     if (doPartObjects) {
       for (;tab->StaticOff; ++tab) {
 	scanObject((Object *)((long *)obj + tab->StaticOff),
-		   referenceAction, FALSE);
+		   referenceAction, objectAction, FALSE);
       }
     }
     else {
@@ -1237,14 +1235,18 @@ void scanObject(Object *obj,
     for (refs_ofs = (short *)&tab->StaticOff+1; *refs_ofs; refs_ofs++) {
       long offset  = (*refs_ofs) & ~3;
       long *pointer = (long *)((long)obj + offset);
-      /* long refType = (*refs_ofs) & 3; */
+      long refType = (*refs_ofs) & 3;
       /* sbrandt 24/1/1994: 2 least significant bits in prototype 
        * dynamic offset table masked out. As offsets in this table are
        * always multiples of 4, these bits may be used to distinguish
-       * different reference types. */ 
+       * different reference types.
+       REFTYPE_DYNAMIC: (# exit 0 #);
+       REFTYPE_OFFLINE: (# exit 1 #);
+       REFTYPE_ORIGIN: (# exit 2 #);
+      */ 
       if (*pointer) {
 	if (referenceAction) {
-	  referenceAction((Object **)pointer);
+	  referenceAction((Object **)pointer, refType);
 	}
       }
     }
@@ -1263,7 +1265,7 @@ void scanObject(Object *obj,
               
       /* Process iOrigin */
       if (referenceAction) {
-	referenceAction(&(((ObjectRep *)obj) -> iOrigin));
+	referenceAction(&(((ObjectRep *)obj) -> iOrigin), REFTYPE_ORIGIN);
       }
       
       /* Process rest of repetition */
@@ -1273,7 +1275,7 @@ void scanObject(Object *obj,
       for (index=0; index<size; index++) {
 	if (*pointer) {
 	  if (referenceAction) {
-	    referenceAction((Object **)pointer);
+	    referenceAction((Object **)pointer, REFTYPE_DYNAMIC);
 	  }
 	}
 	pointer++;
@@ -1294,7 +1296,7 @@ void scanObject(Object *obj,
 	  pointer = (long *)((long)obj + offset);
 	  if (*pointer) {
 	    if (referenceAction) {
-	      referenceAction((Object **)pointer);
+	      referenceAction((Object **)pointer, REFTYPE_DYNAMIC);
 	    }
 	  }
 	  offset += 4;
@@ -1317,22 +1319,22 @@ void scanObject(Object *obj,
 		    (int)referenceAction);
 	  });
 	  if (referenceAction) {
-	    referenceAction((Object **)&(theComponent->StackObj));
+	    referenceAction((Object **)&(theComponent->StackObj), REFTYPE_DYNAMIC);
 	  }
 	}
 	if (theComponent->CallerComp) {
 	  if (referenceAction) {
-	    referenceAction((Object **)&(theComponent->CallerComp));
+	    referenceAction((Object **)&(theComponent->CallerComp), REFTYPE_DYNAMIC);
 	  }
 	}
 	if (theComponent->CallerObj) {
 	  if (referenceAction) {
-	    referenceAction(&(theComponent->CallerObj));
+	    referenceAction(&(theComponent->CallerObj), REFTYPE_DYNAMIC);
 	  }
 	}
 	if (doPartObjects) { 
 	  scanObject((Object *)ComponentItem( theComponent),
-		     referenceAction, TRUE);
+		     referenceAction, objectAction, TRUE);
 	}
 	break;
       }
@@ -1359,13 +1361,13 @@ void scanObject(Object *obj,
               
     case SwitchProto(StructurePTValue):
       if (referenceAction) {
-	referenceAction(&(((Structure*)(obj))->iOrigin));
+	referenceAction(&(((Structure*)(obj))->iOrigin), REFTYPE_ORIGIN);
       }
       break;
               
     case SwitchProto(DopartObjectPTValue):
       if (referenceAction) {
-	referenceAction(&(((DopartObject *)(obj))->Origin));
+	referenceAction(&(((DopartObject *)(obj))->Origin), REFTYPE_ORIGIN);
       }
       break;
     default:
@@ -1472,14 +1474,10 @@ static void checkOrigin(Object *theObj)
 
 void checkOrigins(Object *theObj, void *generic)
 {
-  void (*temp)(Object *theObj);
-  temp = objectAction;
-  objectAction = checkOrigin;
-  scanPartObjects(theObj);
-  objectAction = temp;
+  scanPartObjects(theObj, checkOrigin);
 }
 
-void scanPartObjects(Object *obj)
+void scanPartObjects(Object *obj, void (*objectAction)(Object *))
 {
   ProtoType * theProto;
   
@@ -1523,7 +1521,7 @@ void scanPartObjects(Object *obj)
 	Component * theComponent;
 	
 	theComponent = ((Component*)obj);
-	scanPartObjects((Object *)ComponentItem( theComponent));
+	scanPartObjects((Object *)ComponentItem( theComponent), objectAction);
 	break;
       }
     case SwitchProto(StackObjectPTValue):

@@ -18,7 +18,6 @@ void miscp_dummy() {
 /* LOCAL VARIABLES */
 
 /* LOCAL FUNCTION DECLARATIONS */
-static void markOriginAlive(Object **theCell);
 static void prependToListRegardless(REFERENCEACTIONARGSTYPE);
 
 /* FUNCTIONS */
@@ -146,49 +145,66 @@ void handleNewPersistentObject(Object *theObj)
   }
 }
 
-static void markOriginAlive(Object **theCell)
+void markOfflineAndOriginObjectsAlive(REFERENCEACTIONARGSTYPE)
 {
-  Object *theOrigin, *theRealOrigin;
+  Object *theObj, *theRealObj;
   unsigned long inx;
   char GCAttr;
   BlockID store;
   unsigned long offset;
-  Object *theObj;
-
-  if ((theOrigin = *theCell)) {
-    theRealOrigin = getRealObject(theOrigin);
-    
-    if (AOAISPERSISTENT(theRealOrigin)) {
-      Claim(inAOA(theRealOrigin), "Where is the origin ?");
-      
-      inx = getPUID((void *)(theRealOrigin -> GCAttr));
-      objectLookup(inx,
-		   &GCAttr,
-		   &store,
-		   &offset,
-		   &theObj);
-      
-      Claim(GCAttr != ENTRYDEAD, "Origin is dead ??");
-      Claim(theObj == theRealOrigin, "Table mismatch ?");
-      
-      if (GCAttr != ENTRYALIVE) {
-	objectAlive(theRealOrigin);
-	Claim(objectAction == markOriginsAlive, "What is the object action?");
-	/* Call recursively on the origin object */
-	scanObject(theRealOrigin,
-		   NULL,
-		   TRUE);
+  
+  if (!inPIT(*theCell)) {
+    if (refType == REFTYPE_DYNAMIC) {
+#ifdef RTDEBUG
+      if ((theObj = *theCell)) {
+	ProtoType * theProto;
+	theProto = GETPROTO(theObj);
+	
+	if (isSpecialProtoType(theProto)) {
+	  switch (SwitchProto(theProto)) {
+	  case SwitchProto(DynItemRepPTValue):
+	  case SwitchProto(DynCompRepPTValue): 
+	  case SwitchProto(RefRepPTValue): 
+	    Claim(FALSE, "markOfflineAndOriginObjectsAlive: Splitting up part");
+	    break;
+	  }
+	}
       }
+#endif /* RTDEBUG */
+      return;
     } else {
-      /* Origin is special object and not in table */
-      ;
+      if ((theObj = *theCell)) {
+	
+	theRealObj = getRealObject(theObj);
+	
+	if (AOAISPERSISTENT(theRealObj)) {
+	  Claim(inAOA(theRealObj), "Where is the origin ?");
+	  
+	  inx = getPUID((void *)(theRealObj -> GCAttr));
+	  objectLookup(inx,
+		       &GCAttr,
+		       &store,
+		       &offset,
+		       &theObj);
+	  
+	  Claim(GCAttr != ENTRYDEAD, "Obj is dead ??");
+	  Claim(theObj == theRealObj, "Table mismatch ?");
+	  
+	  if (GCAttr != ENTRYALIVE) {
+	    objectAlive(theRealObj);
+	    /* Call recursively on the origin or offline object */
+	    scanObject(theRealObj,
+		       markOfflineAndOriginObjectsAlive,
+		       NULL,
+		       TRUE);
+	  }
+	} else {
+	  /* Origin is special object and not in table */
+	  ;
+	}
+      }
     }
   }
-}
-
-void markOriginsAlive(Object *theObj)
-{
-  scanOrigins(theObj, markOriginAlive);
 }
 
 void handlePersistentCell(REFERENCEACTIONARGSTYPE)
@@ -215,40 +231,43 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
     INFO_PERSISTENCE(PtoD++);
     return;
   } else {
-      unsigned long newEntryInx, distanceToPart;
+    unsigned long newEntryInx, distanceToPart;
+    
+    realObj = getRealObject(theObj);
+    distanceToPart = (unsigned long)theObj - (unsigned long)realObj;
+    
+    if (AOAISPERSISTENT(realObj)) {
+      Claim(inAOA(realObj), "Where is the object?");
+      inx = getPUID((void *)(realObj -> GCAttr));
+      objectLookup(inx,
+		   &GCAttr,
+		   &store,
+		   &offset,
+		   &theObj);
       
-      realObj = getRealObject(theObj);
-      distanceToPart = (unsigned long)theObj - (unsigned long)realObj;
-      
-      if (AOAISPERSISTENT(realObj)) {
-	Claim(inAOA(realObj), "Where is the object?");
+      if (GCAttr == POTENTIALLYDEAD) {
 	
-	inx = getPUID((void *)(realObj -> GCAttr));
-	objectLookup(inx,
-		     &GCAttr,
-		     &store,
-		     &offset,
-		     &theObj);
+	Claim(refType == REFTYPE_DYNAMIC, "handlePersistentCell: Illegal referencetype");
 	
-	if (GCAttr == POTENTIALLYDEAD) {
-	  /* The referred object will be removed so we need to unswizzle
-	     the reference to it. */
-	  if ((newEntryInx = indexLookupRT(store, offset + distanceToPart)) == -1) {
-	    /* A new entry is created */
-	    newEntryInx = insertReference(ENTRYALIVE,
-					  store,
-					  offset + distanceToPart);
-	  }
-	  *theCell = newPUID(newEntryInx);
-	  referenceAlive((void *)*theCell);
-	  newAOAclient(newEntryInx, theCell);
-	  INFO_PERSISTENCE(PtoD++);
-	} else {
-	  Claim(GCAttr == ENTRYALIVE, "What is GC mark ?");
+	/* The referred object will be removed so we need to unswizzle
+	   the reference to it. */
+	
+	if ((newEntryInx = indexLookupRT(store, offset + distanceToPart)) == -1) {
+	  /* A new entry is created */
+	  newEntryInx = insertReference(ENTRYALIVE,
+					store,
+					offset + distanceToPart);
 	}
+	*theCell = newPUID(newEntryInx);
+	referenceAlive((void *)*theCell);
+	newAOAclient(newEntryInx, theCell);
+	INFO_PERSISTENCE(PtoD++);
       } else {
-	;
+	Claim(GCAttr == ENTRYALIVE, "What is GC mark ?");
       }
+    } else {
+      ;
+    }
   }
 }
 

@@ -68,8 +68,14 @@ BlockID createCrossStoreTable(BlockID store)
   newTable -> store = store;
   
   if ((file_name = crossStoreTableName(store))) {
+#ifdef nti
     if ((fd = open(file_name,O_RDWR | O_CREAT | _O_BINARY,
 		   S_IWRITE | S_IREAD))<0) {
+#endif
+#ifdef UNIX
+    if ((fd = open(file_name,O_RDWR | O_CREAT,
+		   S_IWRITE | S_IREAD))<0) {
+#endif
       perror("createCrossStoreTable");
       return ILLEGALBlockID;
     } else {
@@ -105,7 +111,12 @@ int saveCurrentCrossStoreTable()
     int fd;
     
     if ((file_name = crossStoreTableName(currentTable -> store))) {
+#ifdef nti
       if ((fd = open(file_name,O_RDWR | _O_BINARY))<0) {
+#endif
+#ifdef UNIX
+      if ((fd = open(file_name,O_RDWR))<0) {
+#endif
 	perror("saveCurrentCrossStoreTable");
 	return 0;
       } else {
@@ -137,7 +148,12 @@ int setCurrentCrossStoreTable(BlockID store)
   }
   
   if ((file_name = crossStoreTableName(store))) {
+#ifdef nti
     if ((fd = open(file_name,O_RDWR | _O_BINARY))<0) {
+#endif
+#ifdef UNIX
+    if ((fd = open(file_name,O_RDWR))<0) {
+#endif
       perror("setCurrentCrossStoreTable");
       return 0;
     } else {

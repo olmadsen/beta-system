@@ -86,15 +86,11 @@ static void registerObjectAndParts(BlockID store, unsigned long offset, Object *
   currentStore = store;
   currentOffset = offset;
   theRealObj = theObj;
-  { 
-    void (*temp)(Object *theObj);
-    temp = objectAction; 
-    objectAction = registerReverse;
-    scanObject(theObj,
-	       NULL,
-	       TRUE);
-    objectAction = temp;
-  }
+  
+  scanObject(theObj,
+	     NULL,
+	     registerReverse,
+	     TRUE);
 }
 
 unsigned long insertObject(char GCAttr,
@@ -312,6 +308,7 @@ void updatePersistentObjects(void)
       
       scanObject(entry -> theObj,
 		 markReachableObjects,
+		 NULL,
 		 TRUE);
       INFO_PERSISTENCE(numPB++);
     } else {
@@ -370,26 +367,24 @@ void removeUnusedObjects()
   */
   
   /* If an object is alive and kept in memory we cannot move its
-     origin, so we have to mark the origin alive as well. */
-  
-  void (*temp)(Object *theObj);
+     origin or any references from within the object to offline
+     allocated objects, so we have to mark the origin alive as well as
+     offline allocated objects referred from within the object. */
   
   INFO_PERSISTENCE(fprintf(output, "  markOriginsAlive\n "));
   maxIndex = STSize(currentTable);
-  temp = objectAction;
-  objectAction = markOriginsAlive;
   for (count=0; count<maxIndex; count++) {
     entry = STLookup(currentTable, count);
     if (entry -> GCAttr == ENTRYALIVE) {
       Claim(inAOA(entry ->theObj), "Where is theObj?");      
       Claim(AOAISPERSISTENT(entry ->theObj), "not persistent??");
-      /* handle origin */
+      /* handle origin and offline allocated objects */
       scanObject(entry ->theObj,
+		 markOfflineAndOriginObjectsAlive,
 		 NULL,
 		 TRUE);
-    }       
+    }
   }
-  objectAction = temp;
   
   INFO_PERSISTENCE(fprintf(output, " handlePersistentCell\n"));    
   /* Handle references from live to dead persistent objects */
@@ -402,6 +397,7 @@ void removeUnusedObjects()
       /* handle live entry */
       scanObject(entry ->theObj,
 		 handlePersistentCell,
+		 NULL,
 		 TRUE);
     }
   }

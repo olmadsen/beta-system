@@ -43,7 +43,7 @@ void mmapInitial(unsigned long numbytes);
 #define MAXENTRIES 0x160000
 
 /* LOCAL VARIABLES */
-static long returnPC, returnSP, absAddr, sourcereg;
+static long sourcereg;
 static unsigned long rd;
 static unsigned long rs1;
 static unsigned long rs2;
@@ -53,8 +53,8 @@ static void *PIT, *PITTop, *PITLimit;
 
 /* LOCAL FUNCTION DECLARATIONS */
 #ifdef sparc
-static void *getRegisterContents(unsigned long reg, ucontext_t *ucon);
-static long sourceReg(unsigned long instruction, ucontext_t *ucon);
+static void *getRegisterContents(unsigned long reg, ucontext_t *ucon, long returnSP);
+static long sourceReg(unsigned long instruction, ucontext_t *ucon, long returnSP);
 static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon);
 #endif
 
@@ -103,7 +103,7 @@ int inPIT(void *ip)
    stack. The stack pointer is in the global variable 'returnSP'. Why
    this separation has been made between the O/G and I/L registers is
    unclear to me but it is imposed by the system. */
-static void *getRegisterContents(unsigned long reg, ucontext_t *ucon) 
+static void *getRegisterContents(unsigned long reg, ucontext_t *ucon, long returnSP) 
 {
   if (reg == 0) {
     return 0;
@@ -124,7 +124,7 @@ static void *getRegisterContents(unsigned long reg, ucontext_t *ucon)
 
 /* sourceReg: Decodes the instruction and returns the register
    containing the proxy. */
-static long sourceReg(unsigned long instruction, ucontext_t *ucon) 
+static long sourceReg(unsigned long instruction, ucontext_t *ucon, long returnSP) 
 {
   
   unsigned long op3;
@@ -190,16 +190,16 @@ static long sourceReg(unsigned long instruction, ucontext_t *ucon)
       
       /* its assumed that only rs1 or sr2 can be the culprit, not both */
       if (simm13 != -1) {
-	if (inPIT(getRegisterContents(rs1, ucon))) {
+	if (inPIT(getRegisterContents(rs1, ucon, returnSP))) {
 	  sourcereg = rs1;
 	} 
       } else {
-	if (inPIT(getRegisterContents(rs1, ucon))) {
+	if (inPIT(getRegisterContents(rs1, ucon, returnSP))) {
 	  sourcereg = rs1;
-	  Claim(!inPIT(getRegisterContents(rs2, ucon)), "sourceReg: proxy in both rs1 and rs2\n");
-	} else if (inPIT(getRegisterContents(rs2, ucon))) {
+	  Claim(!inPIT(getRegisterContents(rs2, ucon, returnSP)), "sourceReg: proxy in both rs1 and rs2\n");
+	} else if (inPIT(getRegisterContents(rs2, ucon, returnSP))) {
 	  sourcereg = rs2;
-	  Claim(!inPIT(getRegisterContents(rs1, ucon)), "sourceReg: proxy in both rs1 and rs2\n");
+	  Claim(!inPIT(getRegisterContents(rs1, ucon, returnSP)), "sourceReg: proxy in both rs1 and rs2\n");
 	}
       }
       /* Source reg is now set to the register containing the
@@ -217,7 +217,7 @@ static unsigned long dummy;
    containing the proxy. */
 static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 {
-  unsigned long instruction;
+  unsigned long instruction, returnPC, returnSP, absAddr;
   void *ip;
   
   INFO_PERSISTENCE(numPF++);
@@ -230,7 +230,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   /* SP to restore when fetch has completed: */
   returnSP = ucon->uc_mcontext.gregs[REG_SP]; 
 
-  if (sourceReg(instruction, ucon)) {
+  if (sourceReg(instruction, ucon, returnSP)) {
     
     if (sourcereg != -1) {
       
@@ -240,7 +240,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 	    "proxyTrapHandler: Lazy reference in memory eventhough store is closed");
       Claim(!BETAREENTERED, "Proxy met during rebinding!");
       
-      ip = getRegisterContents(sourcereg, ucon);
+      ip = getRegisterContents(sourcereg, ucon, returnSP);
       
       /* Before calling unswizzleReference, which may call the callback entry 
        * 'callRebinderC' the C variable  BetaStackTop should be set to the value of the

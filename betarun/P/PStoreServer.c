@@ -66,11 +66,9 @@ typedef struct storeInfo {
 static char storename[SMALLTEXTSIZE];
 static char *currentStore = NULL;
 static unsigned long permission;
-static char *currentDir;
 static storeInfo si;
 
 /* LOCAL FUNCTION DECLARATIONS */
-static void CallbackFnc(char *s);
 static char *getBetaText(unsigned long name_r);
 static unsigned long openExt(unsigned long name_r, unsigned long perm);
 static int getNameMap(void);
@@ -87,8 +85,14 @@ static int getStoreInfo(void)
       int fd;
       
       sprintf(filename, "%s/%s", currentStore, STOREINFO);
+#ifdef nti
       if ((fd = open(filename,O_RDWR | O_CREAT | _O_BINARY,
 		     S_IWRITE | S_IREAD))<0) {
+#endif
+#ifdef UNIX
+      if ((fd = open(filename,O_RDWR | O_CREAT,
+		     S_IWRITE | S_IREAD))<0) {
+#endif
 	perror("getStoreInfo");
 	free(filename);
 	return 1;
@@ -116,8 +120,14 @@ static int setStoreInfo(void)
       int fd;
       
       sprintf(filename, "%s/%s", currentStore, STOREINFO);
+#ifdef nti
       if ((fd = open(filename,O_RDWR | O_CREAT | _O_BINARY,
 		     S_IWRITE | S_IREAD))<0) {
+#endif
+#ifdef UNIX
+      if ((fd = open(filename,O_RDWR | O_CREAT,
+		     S_IWRITE | S_IREAD))<0) {
+#endif
 	perror("setStoreInfo");
 	free(filename);
 	return 1;
@@ -250,6 +260,7 @@ unsigned long deleteExt(unsigned long name_r)
 {
   fprintf(output, "deleteExt: Not implemented yet!\n");
   BetaExit(1);
+  return 0;
 }
 
 unsigned long createExt(unsigned long name_r)

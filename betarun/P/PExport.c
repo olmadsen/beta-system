@@ -118,6 +118,7 @@ void exportObject(Object *theObj, BlockID store)
   
   scanObject(theObj,
 	     processReferenceToStoreReference,
+	     NULL,
 	     TRUE);
 }
 

@@ -21,9 +21,9 @@ void unswizzle_dummy()
 /* LOCAL VARIABLES */
 
 /* LOCAL FUNCTION DECLARATIONS */
-static void originReferenceAction(Object **theCell);
-static void getOriginChain(Object *theObj);
-static Object *loadObject(BlockID store, unsigned long offset);
+static void getSpecialRefs(REFERENCEACTIONARGSTYPE);
+static Object *loadObject(BlockID store, u_long offset);
+static void getSpecialRefs(REFERENCEACTIONARGSTYPE);
 
 /* FUNCTIONS */
 
@@ -95,38 +95,43 @@ static Object *loadObject(BlockID store, unsigned long offset)
 			     (int)offset,
 			     ProtoTypeName(GETPROTO(theRealObj))));
 #endif /* RTDEBUG */
-    /* get the origin chain of the object */
-    { 
-      void (*temp)(Object *theObj);
-      temp = objectAction; 
-      objectAction = getOriginChain;
-      scanObject(theRealObj,
-		 NULL,
-		 TRUE);
-      objectAction = temp;
-    }
+
+    /* Some types of references are not ref-none checked before they
+       are used. These types are,
+       
+       * Origin references
+       * Offline allocated part objects
+       * Repetitions
+       
+       If the object we just loaded contains such references they need
+       to be unswizzled as well.
+    */
+    
+    scanObject(theRealObj,
+	       getSpecialRefs,
+	       NULL,
+	       TRUE);
     return theRealObj;
   }
 }
 
-static void originReferenceAction(Object **theCell)
+static void getSpecialRefs(REFERENCEACTIONARGSTYPE)
 {
-  Object *theOrigin;
-  
-  if ((theOrigin = *theCell)) {
-    Object *absAddr;
+  if (refType == REFTYPE_DYNAMIC) {
+    return;
+  } else {
+    Object *theObj;
     
-    if (inPIT((void *)theOrigin)) {
-      absAddr = unswizzleReference((void *)theOrigin);
-      /* Insert absolute reference in origin */
-      *theCell = absAddr;
-    }
-  } 
-}
-
-static void getOriginChain(Object *theObj)
-{
-  scanOrigins(theObj, originReferenceAction);
+    if ((theObj = *theCell)) {
+      if (inPIT((void *)theObj)) {
+	Object *absAddr;
+	
+	absAddr = unswizzleReference((void *)theObj);
+	/* Insert absolute reference in theCell */
+	*theCell = absAddr;
+      }
+    } 
+  }
 }
 
 /* If the implementation of the UNKNOWNTAG in virtualobjectstore.bet is
@@ -142,7 +147,6 @@ Object *handleSpecialReference(unsigned long specRef)
 {
   unsigned long tag, distanceToPart;
   Object *target;
-  void (*temp)(Object *theObj);
   
   Claim(isSpecialReference(specRef), "handleSpecialReference: Is not special reference");
   
@@ -155,12 +159,9 @@ Object *handleSpecialReference(unsigned long specRef)
      should be possible to support all these events only an IOAGC is
      legal at this point in time. */
 
-  temp = objectAction;
-  objectAction = NULL;
   BETAREENTERED = TRUE;
   target = callRebinderC(tag, UNKNOWNTAG);
   BETAREENTERED = FALSE;
-  objectAction = temp;
   
   target = (Object *)((unsigned long)getRealObject(target) + distanceToPart);
 

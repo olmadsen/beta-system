@@ -888,7 +888,7 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
     Claim((long)theCell+48>=(long)ar->fp, "C Skip must be inside frame");
     if ((valhallaID && (valhalla_exelevel>0)) 
 #ifdef PERSIST
-	|| (CallRebinderC)
+	|| (callRebinderC)
 #endif
 	) {
       /* We are running under valhalla, and at least one evaluator is

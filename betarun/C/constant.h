@@ -69,3 +69,8 @@
 
 /* Offset to TopMpart field in prototypes */
 #define DISP_OFF (sizeof(ProtoType)-4)
+
+/* Reference types */
+#define REFTYPE_DYNAMIC  0
+#define REFTYPE_OFFLINE  1
+#define REFTYPE_ORIGIN   2

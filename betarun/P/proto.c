@@ -157,14 +157,10 @@ static void exportProtoType(Object *theObj)
 
 void exportProtoTypes(Object *theObj)
 {
-  void (*temp)(Object *theObj);
-	
-  temp = objectAction; 
-  objectAction = exportProtoType;
   scanObject(theObj,
 	     NULL,
+	     exportProtoType,
 	     TRUE);
-  objectAction = temp;
 }
 
 ProtoType *translateStoreProto(ProtoType *theProto)
@@ -190,16 +186,12 @@ static void importProtoType(Object *theObj)
 
 void importProtoTypes(Object *theObj) 
 {
-  void (*temp)(Object *theObj);
-  
-  temp = objectAction;
-  objectAction = importProtoType;
   dontCheckProtoTypes = TRUE;
   scanObject(theObj,
 	     NULL,
+	     importProtoType,
 	     TRUE);
   dontCheckProtoTypes = FALSE;
-  objectAction = temp;
 }
 
 unsigned long StoreObjectSize(Object * theObj)

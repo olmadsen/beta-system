@@ -26,7 +26,7 @@
 #define REP ((ObjectRep *)theObj)
 
 /* LOCAL FUNTIONS */
-static void ProcessAOAReference(Object ** theCell);
+static void ProcessAOAReference(Object ** theCell, long refType);
 static void ProcessAOAObject(Object * theObj);
 static void DoAOACell(Object **theCell,Object *theObj);
 
@@ -113,7 +113,7 @@ void IOAGc()
       if(*pointer){
         AOAtoIOACount++;
         Claim(inAOA(*pointer), "AOAtoIOAtable has a cell outside AOA");
-        ProcessAOAReference( (Object **)*pointer);
+        ProcessAOAReference( (Object **)*pointer, REFTYPE_DYNAMIC);
       }
       pointer++;
     }
@@ -142,23 +142,23 @@ void IOAGc()
 #endif /* MT */
 #endif /* NEWRUN */
   DEBUG_IOA(fprintf(output, " #(IOA: Root: ActiveComponent"); fflush(output));
-  ProcessReference( (Object **)&ActiveComponent);
+  ProcessReference( (Object **)&ActiveComponent, REFTYPE_DYNAMIC);
   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 
   DEBUG_IOA(fprintf(output, " #(IOA: Root: BasicItem"); fflush(output));
-  ProcessReference( (Object **)&BasicItem );
+  ProcessReference( (Object **)&BasicItem, REFTYPE_DYNAMIC);
   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 
 #ifdef INTERPRETER
   /* Only used by Jawahar's interpreter */
   if (InterpretItem[0]) {
     DEBUG_IOA(fprintf(output, " #(IOA: Root: InterpretItem[0]"); fflush(output));
-    ProcessReference( (Object **)(&InterpretItem[0]) );
+    ProcessReference( (Object **)(&InterpretItem[0]), REFTYPE_DYNAMIC );
     DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
   }
   if (InterpretItem[1]) {
     DEBUG_IOA(fprintf(output, " #(IOA: Root: InterpretItem[1]"); fflush(output));
-    ProcessReference( (Object **)(&InterpretItem[1]) );
+    ProcessReference( (Object **)(&InterpretItem[1]), REFTYPE_DYNAMIC );
     DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
   }
 #endif /* INTERPRETER */
@@ -166,7 +166,7 @@ void IOAGc()
 #ifdef RTLAZY
   if (LazyItem) {
     DEBUG_IOA(fprintf(output, " #(IOA: Root: LazyItem"); fflush(output));
-    ProcessReference( (Object **)(&LazyItem) );
+    ProcessReference( (Object **)(&LazyItem), REFTYPE_DYNAMIC );
     DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
   }
 #endif /* RTLAZY */
@@ -471,7 +471,7 @@ void DoStackCell(Object **theCell,Object *theObj)
   if (inBetaHeap(theObj)) {
     if (isObject(theObj)){
       DEBUG_CODE(if (!CheckHeap) Ck(theObj));
-      ProcessReference(theCell);
+      ProcessReference(theCell, REFTYPE_DYNAMIC);
       CompleteScavenging();
     } else {
       DEBUG_CODE({
@@ -486,7 +486,7 @@ void DoStackCell(Object **theCell,Object *theObj)
     if (isLazyRef(theObj)) {
       DEBUG_LAZY(fprintf(output, 
                          "DoStackCell: Lazy ref: %d\n", (int)theObj));
-      ProcessReference(theCell);
+      ProcessReference(theCell, REFTYPE_DYNAMIC);
     } 
 #endif /* RTLAZY */
 #if defined(RTDEBUG) && defined(NEWRUN)
@@ -515,7 +515,7 @@ static void DoAOACell(Object **theCell,Object *theObj)
   if (inBetaHeap(theObj)) {
     if (isObject(theObj)) {
       DEBUG_CODE(if (!CheckHeap) Ck(theObj));
-      ProcessAOAReference(theCell);
+      ProcessAOAReference(theCell, REFTYPE_DYNAMIC);
     } else {
       DEBUG_CODE({
         fprintf(output, "[DoStackCell: ***Illegal: 0x%x: 0x%x]\n", 
@@ -529,7 +529,7 @@ static void DoAOACell(Object **theCell,Object *theObj)
     if (isLazyRef(theObj)) {
       DEBUG_LAZY(fprintf(output, 
                          "DoAOACell: Lazy ref: %d\n", (int)theObj));
-      ProcessAOAReference(theCell);
+      ProcessAOAReference(theCell, REFTYPE_DYNAMIC);
     }
 #endif /* RTLAZY */
 #if defined(RTDEBUG) && defined(NEWRUN)
@@ -572,7 +572,7 @@ static void IOAUpdateAOARoots(Object **theCell, long GCAttribute)
  *  FIXME: use theObj instead of newObj
  */
 
-void ProcessReference(Object ** theCell)
+void ProcessReference(Object ** theCell, long refType)
 {
   Object * theObj;
   long GCAttribute;
@@ -681,6 +681,7 @@ void ProcessObject(theObj)
 { 
   scanObject(theObj,
              ProcessReference,
+	     NULL,
              TRUE);
 }
 
@@ -693,7 +694,7 @@ void ProcessObject(theObj)
  *  object is inserted in the GC-attribute.
  */
 
-static void ProcessAOAReference(Object ** theCell)
+static void ProcessAOAReference(Object ** theCell, long refType)
 {
   Object * theObj;
   long GCAttribute;
@@ -789,6 +790,7 @@ static void ProcessAOAObject(Object * theObj)
 { 
   scanObject(theObj,
              ProcessAOAReference,
+	     NULL,
              TRUE);
 }
 
@@ -969,7 +971,7 @@ void IOACheckReference(REFERENCEACTIONARGSTYPE)
 
 void IOACheckObject (Object *theObj)
 {
-  scanObject(theObj, IOACheckReference, TRUE);
+  scanObject(theObj, IOACheckReference, NULL, TRUE);
 }
 
 #endif /* RTDEBUG */
