@@ -35,34 +35,34 @@ endif
 
 # Now I would like to get the settings from .login, but that is noisy...
 # source $HOME/.login >& /dev/null
-set path=(/users/beta/bin /users/beta/bin/admin /usr/local/bin /usr/ucb /bin /usr/bin /usr/bin/X11  /usr/bsd /usr/lib/tex /usr/etc /usr/share/etc/supervise/bin /usr/etc/supervise/bin /etc .)
-setenv CVSROOT /users/beta/.CVSHOME
+set path=(~/bin ~/bin/admin /usr/local/bin /usr/ucb /bin /usr/bin /usr/bin/X11  /usr/bsd /usr/lib/tex /usr/etc /usr/share/etc/supervise/bin /usr/etc/supervise/bin /etc .)
+setenv CVSROOT ~/.CVSHOME
 set OSTYPE = `uname -rs`
 
 switch("$OSTYPE")
 case "SunOS 5.*"
 	set path = (/opt/SUNWspro/bin $path)
-	set path = (/users/beta/GNU/bin/sun4s /usr/sbin /usr/ccs/bin $path)
+	set path = (~/GNU/bin/sun4s /usr/sbin /usr/ccs/bin $path)
 	breaksw
 case "SunOS 4.*"
-	set path = ( /users/beta/GNU/bin/sun4 $path )
+	set path = ( ~/GNU/bin/sun4 $path )
 	breaksw
 case "HP-UX B.08.*"
-	set path = ( /users/beta/GNU/bin/hpux8 $path )
+	set path = ( ~/GNU/bin/hpux8 $path )
 	breaksw
 case "HP-UX B.09.*"
 	switch("`uname -m`")
 	case "9000/[34]??":
-		set path = ( /users/beta/GNU/bin/hpux9mc $path )
+		set path = ( ~/GNU/bin/hpux9mc $path )
 		breaksw
 	case "9000/7??":
-		set path = ( /users/beta/GNU/bin/hpux9pa $path )
+		set path = ( ~/GNU/bin/hpux9pa $path )
 		breaksw
 	endsw
 	breaksw
 case "IRIX*"
 	if( $?prompt != 0 ) stty erase "^?" intr "^C" # sgiterm
-	set path = ( /users/beta/GNU/bin/sgi /usr/sbin /usr/bsd $path )
+	set path = ( ~/GNU/bin/sgi /usr/sbin /usr/bsd $path )
 	breaksw
 case "Linux*"
 	stty erase "^?" intr "^C"
@@ -74,7 +74,7 @@ setenv REMOVEASTS $2
 source ${BETALIB}/configuration/env.csh >& /dev/null
 
 setenv LOG ${BETALIB}/log/rebuildall.$MACHINETYPE
-setenv RAGNAROOT /users/beta/.Ragnarok
+setenv RAGNAROOT ~/.Ragnarok
 
 
 # Hack:  HP machines have too little space on /tmp.  Use ~beta/tmp instead.
@@ -130,8 +130,8 @@ if ( $REMOVEASTS == "yes" ) then
     #make all >>& $LOG
     mbs_make >>& $LOG
     date >>& $LOG
-    echo "rebuildall.sh: Building compiler." >>& $LOG
-    mbs_compiletools compiler >>& $LOG
+    echo "rebuildall.sh: Building compiler using boot compiler." >>& $LOG
+    mbs_compiletools -b compiler >>& $LOG
     date >>& $LOG
     echo "rebuildall.sh: mbs_compile -- --nocode." >>& $LOG
     mbs_compile -- --nocode >> $LOG
@@ -159,8 +159,8 @@ else
     mbs_make >>& $LOG
     cd $BETALIB
     date >>& $LOG
-    echo "rebuildall.sh: Building compiler." >>& $LOG
-    mbs_compiletools compiler >>& $LOG
+    echo "rebuildall.sh: Building compiler using boot compiler." >>& $LOG
+    mbs_compiletools -b compiler >>& $LOG
     date >>& $LOG
     echo "rebuildall.sh: mbs_compile." >>& $LOG
     mbs_compile >> $LOG
