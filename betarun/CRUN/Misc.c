@@ -142,7 +142,7 @@ asmlabel(_FailureExit, "
 #ifdef hppa
 void FailureExit()
 {
-  BetaError(StopCalledErr, getD0Reg());
+  BetaError(StopCalledErr, cast(Object)(getD0Reg()));
 }
 #endif
 

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
- * by Peter Orbaek, Tommy Thorn and Peter Andersen
+ * by Peter Orbaek, Tommy Thorn, Peter Andersen, and Jacob Seligmann
  */
 
 #include "beta.h"
@@ -13,5 +13,5 @@ ParamThisComp(void, HandleIndexErr)
     this = (struct Item *)getThisReg();
 #endif
 
-    BetaError(RepRangeErr, this);
+    BetaError(RepRangeErr, cast(Object)this);
 }

@@ -611,7 +611,7 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
 	theObj = (struct Object *)((unsigned)*theCell & ~1);
 	/* PC = ?????? */
 	if(theObj && isObject(theObj)) {
-	  DisplayObject(output, theObj, PC);
+	  DisplayObject(output, theObj, (long)PC);
 	} else {
 	  fprintf(output, "[Damaged object!: %x]\n", (long)theObj);
 	}

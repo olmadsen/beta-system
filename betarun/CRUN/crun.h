@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
- * by Peter Andersen, Tommy Thorn and Jacob Seligmann
+ * by Peter Andersen, Tommy Thorn, and Jacob Seligmann
  */
 
 
@@ -101,7 +101,7 @@ setup_item(ref(Item) theItem,
   static char __CkString[80];
 #  define Ck(r) \
    { sprintf(__CkString, "%s: %d: Ck failed: %s (0x%x)", __FILE__, __LINE__, #r, r); \
-     if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r) || isLazyRef(r), __CkString); }
+     if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(cast(Object)(r)) || isLazyRef(r), __CkString); }
 # else
 /*#  define Ck(r) \
  *  if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r), __FILE__":" #r ": none or inside IOA, AOA, or LVRA")
