@@ -6,51 +6,78 @@ INCLUDE
 
 
 -- pixmapLib: attributes --
+IMAGE_BITMAP: (# exit 0 #);
+IMAGE_ICON: (# exit 1 #);
+IMAGE_CURSOR: (# exit 2 #);
 
-iconGetWidth: external
+GetIconInfo: external
   (# hIcon: @integer;
-     width: @integer;
+     piconinfo: @integer; (* PICONINFO *)
+     result: @integer;
+  enter (hIcon, piconinfo)
+  do callStd;
+  exit result
+  #);
+
+ICONINFO: ExternalRecord
+  (# fIcon: @long (# pos::< (# do 0 -> value; #); #);    (* BOOL *)
+     xHotspot: @long (# pos::< (# do 4 -> value; #); #); (* DWORD *)
+     yHotspot: @long (# pos::< (# do 8 -> value; #); #); (* DWORD *)
+     hbmMask: @long (# pos::< (# do 12 -> value; #); #);  (* HBITMAP *)
+     hbmColor: @long (# pos::< (# do 16 -> value; #); #); (* HBITMAP *)
+  #);
+
+sizeOf_ICONINFO: (# exit 20 #);
+
+BITMAPext: ExternalRecord
+  (# 
+     bmType: @long (# pos::< (# do 0 -> value; #); #); (* LONG *)
+     bmWidth: @long (# pos::< (# do 4 -> value; #); #); (* LONG *)
+     bmHeight: @long (# pos::< (# do 8 -> value; #); #); (* LONG *)
+     bmWidthBytes: @long (# pos::< (# do 12 -> value; #); #); (* LONG *)
+     bmPlanes: @short (# pos::< (# do 16 -> value; #); #); (* WORD *)
+     bmBitsPixel: @short (# pos::< (# do 18 -> value; #); #); (* WORD *)
+     bmBits: @long (# pos::< (# do 20 -> value; #); #); (* LPVOID *)
+  #);
+
+sizeOf_BITMAPext: (# exit 24 #);
+
+iconGetWidthHeight:
+  (# hIcon: @integer;
+     pIconInfo: @ICONINFO;
+     pbm: @BITMAPext;
+     width,height: @integer;
   enter hIcon
-  do callC;
-  exit width
-  #);
-
-
-LoadIconById: external
-  (# hInstance: @integer; (* HINSTANCE *)
-     id: @integer; (* LPCSTR *)
-     hIcon: @integer; (* HICON *)
-  enter (hInstance,id)
-  do 'LoadIconA' -> callStd;
-  exit hIcon
-  #);
-
-LoadIconByName: external
-  (# hInstance: @integer; (* HINSTANCE *)
-     name: [1] @char; (* LPCSTR *)
-     hIcon: @integer; (* HICON *)
-  enter (hInstance,name)
-  do 'LoadIconA' -> callStd;
-  exit hIcon
-  #);
-
-loadFromIconRes:
-  (# id: @integer;
-  enter id
-  do (if id=0 then
-         '****Warning icon id is 0. Cannot load icon.' -> putline;
-      else
-         (uienvHInstance,id) -> loadIconById -> private.handleToPixmap;
-         (if private.handleToPixmap=0 then
-             'LoadIcon failed: Error: ' -> screen.puttext;
-             GetLastError -> screen.putInt; screen.newline;
-          else
-             true -> private.isIcon;
-             true -> private.isFromResource;
-             SM_CXICON -> GetSystemMetrics -> private.width;
-             SM_CYICON -> GetSystemMetrics -> private.height;
+  do 
+     sizeOf_ICONINFO -> malloc -> pIconInfo.ptr;
+     (if pIconInfo.ptr<>0 then
+         (if (((hIcon,pIconInfo.ptr) -> GetIconInfo) <> 0) then
+             sizeOf_BITMAPext -> malloc -> pbm.ptr;
+             (if pbm.ptr<>0 then
+                 (pIconInfo.hbmMask,sizeOf_BITMAPext,pbm.ptr) -> GetObject;
+                 pIconInfo.hbmMask -> DeleteObject;
+                 pIconInfo.hbmColor -> DeleteObject;
+                 pbm.bmWidth -> width;
+                 pbm.bmHeight -> height;
+                 pbm.ptr -> free;
+             if);
          if);
+         pIconInfo.ptr -> free;
      if);
+  exit (width,height)
+  #);
+
+LoadImage: external
+  (# hinst: @integer;     (* handle of the instance that contains the image *)
+     lpszName: @integer;  (* name or identifier of image *)
+     uType: @integer;     (* type of image *)
+     cxDesired: @integer; (* desired width *)
+     cyDesired: @integer; (* desired height *)
+     fuLoad: @integer;    (* load flags *)
+     theHandle: @integer;
+  enter (hinst,lpszName,uType,cxDesired,cyDesired,fuLoad)
+  do 'LoadImageA' -> callStd;
+  exit theHandle
   #);
 
 
@@ -91,7 +118,18 @@ loadFromBitmapRes:
 
 -- iconLoadById: descriptor --
 (# 
-do id -> loadFromIconRes;
+do 
+   (uienvHinstance,id,IMAGE_ICON,0,0,0)->LoadImage->private.handleToPixmap;
+   
+   (if private.handleToPixmap=0 then
+       'LoadImage failed. Error: ' -> screen.putText;
+       GetLastError -> putint; newline;
+    else
+       private.handleToPixmap -> iconGetWidthHeight->(private.width,private.height);
+   if);
+   
+   true -> private.isIcon;
+   true -> private.isFromResource;
 #)
 
 
