@@ -2,12 +2,18 @@
 ;;
 ;; By putting the following lines of Emacs-Lisp code into your .emacs
 ;; file, you can make Emacs automagically recognize your BETA source code
-;; file if they have the suffix .bet, as required by the BETA compiler.
+;; file if they have the suffix .bet (textual BETA files).
 
-;; (autoload 'beta-mode "/usr/local/lib/beta/emacs/current/beta-mode")
+;; (setq betalib (getenv "BETALIB"))
+;; (if (not betalib) (setq betalib "/usr/local/lib/beta"))
+;; 
+;; (setq load-path (append load-path 
+;; 			(list (format "%s/emacs/current" betalib))))
+;;
+;; (autoload 'beta-mode "beta-mode")
 ;; (setq auto-mode-alist (append (list (cons "\\.bet$" 'beta-mode))
 ;;                               auto-mode-alist))
-;;
+
 ;; When in beta-mode, you can get to know more about beta-mode by using
 ;; M-x describe-mode.
 
