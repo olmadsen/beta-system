@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AttachBasicComponent.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:19 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: AttachBasicComponent.c,v $, rel: %R%, date: $Date: 1992-06-11 17:14:50 $, SID: $Revision: 1.3 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -13,6 +13,7 @@ void AttachBasicComponent(ref(Component) theComp)
 {
     register void (*entrypoint)();
 
+    register ref(Item)		betaenv	      asm("%l4");
     register ref(CallBackFrame) callBackFrame asm("%l5");
     register ref(RegWin)	nextCompBlock asm("%l6");
     register long 		level 	      asm("%l7");
@@ -20,11 +21,12 @@ void AttachBasicComponent(ref(Component) theComp)
     /* Push the bottom component block. */
     /* Terminates the list of component blocks on the stack. */
 
+    betaenv = cast(Item) theComp->Body; /* Save betaenv obj. for mkTextObj */ 
     callBackFrame = cast(CallBackFrame) 0;
     nextCompBlock = cast(RegWin) 0;
     level = 0;
 
-    StackStart = StackPointer;
+    BasicItemHandle = StackPointer - 4; /* Needs to be thought about !! */
 
     ActiveCallBackFrame = 0; lastCompBlock = cast(ComponentBlock) StackPointer;
 
