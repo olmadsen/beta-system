@@ -40,10 +40,13 @@ sub print_header()
     local ($file, $title) = @_;
 
     print<<"EOT";
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+                      "http://www.w3.org/TR/REC-html40/loose.dtd"
+>
+<!-- Generated from $file by gram2html.perl -->
 <HTML>
 <HEAD>
-<!-- Generated from $file by gram2html.perl -->
+<META http-equiv="Content-Type" CONTENT="text/html; CHARSET=ISO-8859-1">
 <TITLE>$title</TITLE>
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
 </HEAD>
@@ -277,9 +280,12 @@ sub print_button
 sub print_index_header
 {
     print<<EOT;
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+                      "http://www.w3.org/TR/REC-html40/loose.dtd"
+>
 <HTML>
 <HEAD>
+<META http-equiv="Content-Type" CONTENT="text/html; CHARSET=ISO-8859-1">
 <TITLE>Index for $title</TITLE>
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
 </HEAD>

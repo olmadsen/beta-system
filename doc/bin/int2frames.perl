@@ -337,6 +337,9 @@ EOT
 
     print <<"EOT" if ($flags&$flag_base);
 <BASE TARGET="_parent">
+EOT
+
+    print<<EOT;
 </HEAD>
 EOT
 }

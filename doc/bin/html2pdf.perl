@@ -88,9 +88,12 @@ sub make_titlepage()
 {
     open TITLE, ">title.html" || die "Cannot open title.html for writing: $!\n";
     print TITLE <<"EOT";
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+                      "http://www.w3.org/TR/REC-html40/loose.dtd"
+>
 <HTML>
 <HEAD>
+<META http-equiv="Content-Type" CONTENT="text/html; CHARSET=ISO-8859-1">
 <TITLE>$mia: $title</TITLE>
 <LINK REL=stylesheet HREF=../style/miadoc.css TYPE=text/css>
 </HEAD>

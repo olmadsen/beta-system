@@ -36,10 +36,12 @@ while ($#ARGV>=0) {
 &usage() if ($waiting_for_next || $waiting_for_prev || $waiting_for_title);
 
 print<<"EOT";
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+                      "http://www.w3.org/TR/REC-html40/loose.dtd"
+>
 <HTML>
-
 <HEAD>
+<META http-equiv="Content-Type" CONTENT="text/html; CHARSET=ISO-8859-1">
 <TITLE>List of figures</TITLE>
 <LINK REL="stylesheet" HREF="../style/miadoc.css" TYPE="text/css">
 </HEAD>

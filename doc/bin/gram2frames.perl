@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl -s
+#!/usr/local/bin/perl -s -w
 
 # Create HTML file on stdout for the xxx-meta.gram file
 # specified as argument 1.
@@ -14,19 +14,49 @@ sub usage()
     print "  -v:  verbose\n";
 }
 
-$verbose = $v;
-$fullpath = $f;
+########## Global variables #############################################
+# Flags for sub print_header
+my $flag_hash  = 1;
+my $flag_print = 2;
+my $flag_base  = 4;
+my $flag_frame = 8;
+
+my $in_rules  = 0;
+
+# Command line
+my $verbose     = (defined($v)) ? 1 : 0;
+my $fullpath    = (defined($f)) ? 1 : 0;
+
+# Other global variables
+my $scriptdir = "";
+my $imagedir = "";
+my $topfile = "";
+my $upfile = "";
+my $copyright = "";
+my $lastmodscript = "";
+my $hashfromparent = "";
+my $printframe = "";
+my $fixprintbutton = "";
+my $indexfile = "";
+my $indexnavfile = "";
+my $indexdocfile = "";
+my $tocfile = "";
+my $css = "";
+my $wiki = 0;
 
 if ($fullpath){
-    if ($extradir){
-	print "int2html.perl: Both -f and -x specified: -x is ignored\n";
-    }
-    $css = "http://www.mjolner.com/mjolner-system/documentation/style/miadoc.css";
-    $scriptdir = "http://www.mjolner.com/mjolner-system/documentation/javascript";
+    #if ($extradir){
+    #   print "int2html.perl: Both -f and -x specified: -x is ignored\n";
+    #}
+    $css = <<EOT;
+<LINK REL="stylesheet" HREF="http://www.mjolner.com/mjolner-system/documentation/style/miadoc.css" TYPE="text/css">
+EOT
     $imagedir = "http://www.mjolner.com/mjolner-system/documentation/images/";
     $topfile = "http://www.mjolner.com/mjolner-system/documentation/index.html";
 } else {
-    $css = "../style/miadoc.css";
+    $css = <<EOT;
+<LINK REL="stylesheet" HREF="../style/miadoc.css" TYPE="text/css">
+EOT
     $scriptdir = "../javascript";
     $imagedir = "../images/";
     $topfile = "../index.html";
@@ -40,20 +70,22 @@ if ($wiki){
     $tocfile = "index.html";
 }
 
-if ($c){
+if (defined($c)){
     $copyright = "";
 } else {
     $copyright = "<FONT size=-1>&COPY; <A HREF=\"http://www.mjolner.com\" TARGET=\"_top\">Mj&oslash;lner Informatics</A></FONT>";
 }
 
-$in_rules = 0;
+# Mentioning of option variables once more to prevent "used only once" warns
+$v = $f = $c = "";
+
 
 ########## Helper functions #############################################
 
 sub quote_html
 # replace '<', '>', '&' with their HTML equivalents
 {
-    local ($string) = @_[0];
+    local ($string) = $_[0];
     $string =~ s/\&/\&amp\;/g;
     $string =~ s/\</\&lt\;/g;
     $string =~ s/\>/\&gt\;/g;
@@ -62,7 +94,7 @@ sub quote_html
 
 sub make_anchor
 {
-    local ($name) = @_[0];
+    local ($name) = $_[0];
     push (@index, $name);
     $name = "<A CLASS=leftside NAME=\"" . lc($name) . "\">&lt;$name&gt;</A>";
     return $name;
@@ -70,14 +102,14 @@ sub make_anchor
 
 sub isLexem
 {
-    local ($name) = @_[0];
+    local ($name) = $_[0];
     $name = lc($name);
     return (($name eq "const") || ($name eq "string") || ($name eq "nameappl") || ($name eq "namedecl"));
 }
 
 sub make_href1
 { 
-    local ($string) = @_[0];
+    local ($string) = $_[0];
     if ($string =~ m/<([-\w]+)>/) {
 	return "&lt;$1&gt;" if (&isLexem($1));
 	return "<A HREF=\"#" . "\L$1" . "\">&lt;$1&gt;<\/A\>";
@@ -87,7 +119,7 @@ sub make_href1
 }
 sub make_href2
 { 
-    local ($string) = @_[0];
+    local ($string) = $_[0];
     if ($string =~ m/<([-\w]+):([-\w]+)>/) {
 	return "&lt;$1:$2&gt;" if (&isLexem($2));
 	return "<A HREF=\"#" . "\L$2" . "\">&lt;$1:$2&gt;<\/A\>";
@@ -97,7 +129,7 @@ sub make_href2
 }
 sub make_comment
 {
-    local ($string) = @_[0];
+    local ($string) = $_[0];
     if ($string =~ m/\(\*(.*\*\))/) {
 	$string =~ s/&/&amp\;/g;
 	$string =~ s/>/&gt\;/g;
@@ -107,7 +139,7 @@ sub make_comment
 }
 sub make_hrefs
 {
-    local ($string) = @_[0];
+    local ($string) = $_[0];
     $string =~ s/(\(\*.*\*\))/&make_comment($1)/ge;
     $string =~ s/(<[-\w]+>)/&make_href1($1)/ge;
     $string =~ s/(<[-\w]+:[-\w]+>)/&make_href2($1)/ge;
@@ -116,14 +148,14 @@ sub make_hrefs
 
 sub make_h2
 {
-    local ($string) = @_[0];
+    local ($string) = $_[0];
     return "<P><HR><P><H2>$string</H2>";
 }
 
 sub quote_strings
 # boldface literals and quote HTML in string constants
 {
-    local ($line) = @_[0];
+    local ($line) = $_[0];
     local ($processedline) = "";
 
     while (1){
@@ -150,7 +182,7 @@ sub quote_strings
 sub unplus_html
 # replace '<+' with '<' and , '+>' with '>'
 {
-    local ($string) = @_[0];
+    local ($string) = $_[0];
     $string =~ s/\<\+/\</g;
     $string =~ s/\+\>/\>/g;
     return $string;
@@ -194,26 +226,44 @@ EOT
 sub print_header
 {
     local ($title, $flags) = @_;
+    local ($doctype);
 
+    if ($flags&$flag_frame){
+	$doctype=<<EOT
+"-//W3C//DTD HTML 4.0 Frameset//EN"
+                      "http://www.w3.org/TR/REC-html40/frameset.dtd"
+EOT
+    } else {
+	$doctype=<<EOT
+"-//W3C//DTD HTML 4.0 Transitional//EN"
+                      "http://www.w3.org/TR/REC-html40/loose.dtd"
+EOT
+    }
+    
     print<<EOT;
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<!DOCTYPE HTML PUBLIC $doctype>
 <HTML>
-<!-- Autogenerated from $basename-meta.gram by gram2frames.perl - do not edit -->
+<!-- Autogenerated file - do not edit -->
 <HEAD>
+<META http-equiv="Content-Type" CONTENT="text/html; CHARSET=ISO-8859-1">
 <TITLE>$title</TITLE>
-<LINK REL="stylesheet" HREF="$css" TYPE="text/css">
+$css
 EOT
 
-    print <<"EOT" if ($flags&1);
-<SCRIPT DEFER TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$hashfromparent"></SCRIPT>
+    print <<"EOT" if ($flags&$flag_hash);
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$hashfromparent"></SCRIPT>
 EOT
 
-    print <<"EOT" if ($flags&2);
-<SCRIPT DEFER TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$printframe"></SCRIPT>
+    print <<"EOT" if ($flags&$flag_print);
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$printframe"></SCRIPT>
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$fixprintbutton"></SCRIPT>
 EOT
 
-    print <<"EOT" if ($flags&4);
-<BASE TARGET="_top">
+    print <<"EOT" if ($flags&$flag_base);
+<BASE TARGET="_parent">
+EOT
+
+    print <<"EOT";
 </HEAD>
 EOT
 }
@@ -222,12 +272,12 @@ sub print_trailer
 {
     local ($title) = @_;
 
-    print<<EOT;
+    print<<"EOT";
 </PRE>
 <!---------------------------------------------------------->
 <HR>
 <P></P>
-<TABLE cols=3 border=0 width=100%>
+<TABLE border=0 width=100%>
 <TR>
 <TD width="40%" align="left"><ADDRESS>$title</ADDRESS></TD>
 <TD width="20%" align="center">$copyright</TD>
@@ -241,7 +291,7 @@ sub print_frameset()
     
     local ($title, $basename, $height) = @_;
 
-    &print_header($title,4);
+    &print_header($title,$flag_base|$flag_frame);
 
     print<<"EOT";
 <FRAMESET border=0 noresize scrolling=no ROWS="$height,*">
@@ -272,7 +322,7 @@ sub print_nav_frame
     local ($title) = @_;
     local ($javascript);
 
-    &print_header($title,4);
+    &print_header($title,$flag_base);
 
     print <<EOT;
 <BODY>
@@ -312,9 +362,9 @@ EOT
 sub print_body_frame()
 {
 
-    local ($file) = @_[0];
+    local ($file) = $_[0];
     
-    &print_header($title, 2+1);
+    &print_header($title, $flag_print|$flag_hash);
 
     print<<"EOT";
 <BODY onLoad='HashFromParent();'>
@@ -394,7 +444,7 @@ sub print_index_nav_frame
 {
     local ($title, $basename) = @_;
 
-    &print_header($title,4);
+    &print_header($title,$flag_base);
 
     print <<EOT;
 <BODY>
@@ -453,7 +503,7 @@ sub print_index_header()
 {
     local ($title) = @_;
 
-    &print_header($title,4);
+    &print_header($title,$flag_base);
 
     print<<"EOT";
 <BODY>
@@ -477,10 +527,11 @@ EOT
 
 sub print_index_trailer()
 {
+    local $title = $_[0];
     print<<EOT;
 </PRE>
 EOT
-    &print_trailer();
+    &print_trailer($title);
 
     print<<EOT;
 </BODY>
