@@ -23,7 +23,7 @@ int KeyboardEOS()
    return(ch==EOF); 
   }
 char KeyboardPeek()
-{ signed char ch;
+{ int ch;
   if ((ch=getchar()) != EOF) ungetc(ch, stdin);
   return (ch);
 }
