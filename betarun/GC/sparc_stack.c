@@ -126,85 +126,85 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
 void
 GeneralProcessStack(CellProcessFunc func)
 {
-    RegWin *theAR;
-    RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
-    RegWin *nextCompBlock = (RegWin *) lastCompBlock;
+   RegWin *theAR;
+   RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
+   RegWin *nextCompBlock = (RegWin *) lastCompBlock;
     
-    DEBUG_STACK(fprintf(output, "\n ***** Trace of stack *****\n"));
-    DEBUG_STACK(fprintf(output,
-			"IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
-			(int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit));
+   DEBUG_STACK(fprintf(output, "\n ***** Trace of stack *****\n"));
+   DEBUG_STACK(fprintf(output,
+                       "IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+                       (int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit));
 
-    for (theAR =  (RegWin *) StackEnd;
-	 theAR != (RegWin *) 0;
+   for (theAR =  (RegWin *) StackEnd;
+        theAR != (RegWin *) 0;
 #ifdef RTDEBUG
-	 frame_PC = theAR->i7 +8,
+        frame_PC = theAR->i7 +8,
 #endif
 	   theAR = (RegWin *) theAR->fp) {
       
       DEBUG_STACK({
-	fprintf(output, 
-		"\n *** theAR=0x%08x, nextCompBlock=0x%08x, lastCompBlock=0x%08x) ***\n",
-		(int)theAR,
-		(int)nextCompBlock,
-		(int)lastCompBlock);});
+         fprintf(output, 
+                 "\n *** theAR=0x%08x, nextCompBlock=0x%08x, lastCompBlock=0x%08x) ***\n",
+                 (int)theAR,
+                 (int)nextCompBlock,
+                 (int)lastCompBlock);});
       if (theAR == nextCompBlock) {
-	/* This is the AR of attach. Continue GC, but get
-	 * new values for nextCompBlock and nextCBF. 
-	 * Please read StackLayout.doc
-	 */
-	DEBUG_STACK(fprintf(output, " *** Passing Attach ***\n"));
-	nextCBF = (RegWin *) theAR->l5;
-	nextCompBlock = (RegWin *) theAR->l6;
-	if (nextCompBlock == 0){
-	  DEBUG_STACK({
-	    fprintf(output, 
-		    " *** reached the bottom (theAR=0x%08x, theAR->l6=0x%08x) ***\n",
-		    (int)theAR,
-		    (int)theAR->l6);});
-	  break; /* we reached the bottom */
-	}
+         /* This is the AR of attach. Continue GC, but get
+          * new values for nextCompBlock and nextCBF. 
+          * Please read StackLayout.doc
+          */
+         DEBUG_STACK(fprintf(output, " *** Passing Attach ***\n"));
+         nextCBF = (RegWin *) theAR->l5;
+         nextCompBlock = (RegWin *) theAR->l6;
+         if (nextCompBlock == 0){
+            DEBUG_STACK({
+               fprintf(output, 
+                       " *** reached the bottom (theAR=0x%08x, theAR->l6=0x%08x) ***\n",
+                       (int)theAR,
+                       (int)theAR->l6);});
+            break; /* we reached the bottom */
+         }
       } else {
-	if (theAR == nextCBF) {
-	  /* This is AR of HandleCB. Don't GC this, but
-	   * skip to betaTop and update nextCBF */
-	  nextCBF = (RegWin *) theAR->l5;
-	  DEBUG_STACK({ 
-	    fprintf(output, 
-		    "Met frame of HandleCB at SP=0x%08x, %%l5=0x%08x, %%l6=0x%08x.\n",
-		    (int)theAR,
-		    (int)theAr->l5,
-		    (int)theAr->l6,
-		    );
-	    if (valhallaID) {
-	      fprintf(output, "Cannot wind down past signal handler.\n");
-	      fprintf(output, "Skipping directly to SP=0x%x.\n", (int)theAR->l6);
-	    } else {
-	      /* Wind down the stack until betaTop is reached */
-	      RegWin *cAR;
-	      fprintf(output, "Winding down to frame with %%fp=betatop (0x%x)",(int)theAR->l6);
-	      fprintf(output, " (BetaStackTop)\n");
-	      for (cAR = theAR;
-		   cAR != (RegWin *) theAR->l6;
-		   frame_PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp){
-		if (!cAR) {
-		  fprintf(output, "ProcessStack: gone past _start - exiting...!\n");
-		  ILLEGAL;
-		  BetaExit(1);
-		}
-		PrintCAR(cAR);
-	      }
-	    }
-	  });
-	  DEBUG_STACK(fprintf(output, "Skip to betaTop=0x%08x\n", (int)theAR->l6));
-	  theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
-	}
+         if (theAR == nextCBF) {
+            /* This is AR of HandleCB. Don't GC this, but
+             * skip to betaTop and update nextCBF */
+            nextCBF = (RegWin *) theAR->l5;
+            DEBUG_STACK({ 
+               fprintf(output, 
+                       "Met frame of HandleCB at SP=0x%08x, %%l5=0x%08x, %%l6=0x%08x.\n",
+                       (int)theAR,
+                       (int)theAR->l5,
+                       (int)theAR->l6
+                       );
+               if (valhallaID) {
+                  fprintf(output, "Cannot wind down past signal handler.\n");
+                  fprintf(output, "Skipping directly to SP=0x%x.\n", (int)theAR->l6);
+               } else {
+                  /* Wind down the stack until betaTop is reached */
+                  RegWin *cAR;
+                  fprintf(output, "Winding down to frame with %%fp=betatop (0x%x)",(int)theAR->l6);
+                  fprintf(output, " (BetaStackTop)\n");
+                  for (cAR = theAR;
+                       cAR != (RegWin *) theAR->l6;
+                       frame_PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp){
+                     if (!cAR) {
+                        fprintf(output, "ProcessStack: gone past _start - exiting...!\n");
+                        ILLEGAL;
+                        BetaExit(1);
+                     }
+                     PrintCAR(cAR);
+                  }
+               }
+            });
+            DEBUG_STACK(fprintf(output, "Skip to betaTop=0x%08x\n", (int)theAR->l6));
+            theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
+         }
       }
       ProcessAR(theAR, (RegWin *) theAR->fp, func);
       DEBUG_CODE(lastAR = theAR);
-    }
-    DEBUG_CODE(if (BottomAR) Claim(lastAR==BottomAR, "lastAR==BottomAR"));
-    DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
+   }
+   DEBUG_CODE(if (BottomAR) Claim(lastAR==BottomAR, "lastAR==BottomAR"));
+   DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
 }
 
 #ifdef RTDEBUG
