@@ -27,7 +27,7 @@ ParamThisOffRange(AlloVR1)
       Ck(theObj);
       Size = ByteRepSize(range);
 
-      if (range > LARGE_REP_SIZE) {
+      if (range > LARGE_REP_SIZE || Size>IOAMAXSIZE) {
         theRep = (ValRep *) LVRACAlloc(ByteRepPTValue, range);
         if (theRep) {
 	  Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
@@ -63,7 +63,7 @@ ParamThisOffRange(AlloVR2)
     Ck(theObj);
     Size = ShortRepSize(range);
 
-    if (range > LARGE_REP_SIZE) {
+    if (range > LARGE_REP_SIZE|| Size>IOAMAXSIZE) {
       theRep = (ValRep *) LVRACAlloc(ShortRepPTValue, range);
       if (theRep) {
 	Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
@@ -100,7 +100,7 @@ ParamThisOffRange(AlloVR4)
     Ck(theObj);
     Size = LongRepSize(range);
 
-    if (range > LARGE_REP_SIZE) {
+    if (range > LARGE_REP_SIZE|| Size>IOAMAXSIZE) {
       theRep = (ValRep *) LVRACAlloc(LongRepPTValue, range);
       if (theRep) {
 	Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
@@ -136,7 +136,7 @@ ParamThisOffRange(AlloVR8)
     Ck(theObj);
     Size= DoubleRepSize(range);
 
-    if (range > LARGE_REP_SIZE) {
+    if (range > LARGE_REP_SIZE|| Size>IOAMAXSIZE) {
       theRep = (ValRep *) LVRACAlloc(DoubleRepPTValue, range);
       if (theRep) {
 	Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");

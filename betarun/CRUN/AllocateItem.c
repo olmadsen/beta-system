@@ -15,6 +15,7 @@ ParamOriginProto(Item *,AlloI)
 #ifdef PROTO_STATISTICS
     int proto_i, proto_found;
 #endif
+    unsigned int size;
 
     DeclReference1(Item *, item); /*= Item * item; */
     MCHECK();
@@ -61,7 +62,35 @@ ParamOriginProto(Item *,AlloI)
       }
     });
 
-    Protect(origin, item = (Item *) IOAalloc(ItemSize(proto)));
+    /* Protect(origin, item = (Item *) IOAalloc(ItemSize(proto))); */
+    
+    push(origin);
+    size = ItemSize(proto);
+    item = 0;
+    do {
+      if (size>IOAMAXSIZE){
+	DEBUG_AOA(fprintf(output, "AlloI allocates in AOA\n"));
+	item = (Item *)AOAcalloc(size);
+	DEBUG_AOA(if (!item) fprintf(output, "AOAcalloc failed\n"));
+      }
+      if (!item) {
+	DEBUG_CODE(Claim(size>0, "AlloI: size>0"));
+	DEBUG_CODE(Claim( ((long)size&7)==0 , "AlloI: (size&7)==0"));
+	DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "AlloI: (IOATop&7)==0"));
+	if (do_unconditional_gc && (DoUGC) && ActiveComponent /* don't do this before AttBC */){
+	  doGC();
+	}
+	if ((char *) IOATop+size > (char *)IOALimit) {
+	  doGC();
+	}
+	if ((char *) IOATop+size <= (char *)IOALimit) {
+	  item = (Item *)IOATop;
+	  IOATopOff += size;
+	}
+      }
+    } while (!item);
+    
+    pop(origin);
     
     /* The new Object is now allocated, but not initialized yet! */
     

@@ -23,7 +23,7 @@ ParamRepObjOff(CopyVR1)
     size = ByteRepSize(range);
     
     do {
-      if (range > LARGE_REP_SIZE){
+      if (range > LARGE_REP_SIZE|| size>IOAMAXSIZE){
         newRep = LVRAAlloc(ByteRepPTValue, range);
       } 
       if (!newRep) {
@@ -72,7 +72,7 @@ ParamRepObjOff(CopyVR2)
     size = ShortRepSize(range);
     
     do {
-      if (range > LARGE_REP_SIZE){
+      if (range > LARGE_REP_SIZE|| size>IOAMAXSIZE){
         newRep = LVRAAlloc(ShortRepPTValue, range);
       } 
       if (!newRep) {
@@ -120,7 +120,7 @@ ParamRepObjOff(CopyVR4)
     size = LongRepSize(range);
     
     do {
-      if (range > LARGE_REP_SIZE){
+      if (range > LARGE_REP_SIZE|| size>IOAMAXSIZE){
         newRep = LVRAAlloc(LongRepPTValue, range);
       } 
       if (!newRep) {
@@ -169,7 +169,7 @@ ParamRepObjOff(CopyVR8)
     size = DoubleRepSize(range);
     
     do {
-      if (range > LARGE_REP_SIZE){
+      if (range > LARGE_REP_SIZE|| size>IOAMAXSIZE){
         newRep = LVRAAlloc(DoubleRepPTValue, range);
       } 
       if (!newRep) {
@@ -214,10 +214,24 @@ ParamORepObjOff(CopyVRI)
     range = theRep->HighBorder;
     size = DynObjectRepSize(range);
 
-    /* FIXME: AOA alloc missing */
-    
-    Protect2(theObj, theRep, newRep = (ObjectRep *) IOAalloc(size));
-    
+    /*Protect2(theObj, theRep, newRep = (ObjectRep *) IOAalloc(size));*/
+    newRep = 0;
+    push(theObj);
+    push(theRep); 
+    do {
+      if (size>IOAMAXSIZE){
+	DEBUG_AOA(fprintf(output, "CopyVRI allocates in AOA\n"));
+	newRep = (ObjectRep *)AOAalloc(size);
+	DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+      } 
+      if (!newRep) {
+	newRep = (ObjectRep *)IOATryAlloc(size);
+	if (newRep && IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+      }
+    } while (!newRep);
+    pop(theRep);
+    pop(theObj);
+
     SETPROTO(newRep,DynItemRepPTValue);
 
     if (IOAMinAge!=0) {
@@ -255,10 +269,24 @@ ParamORepObjOff(CopyVRC)
     range = theRep->HighBorder;
     size = DynObjectRepSize(range);
     
-    /* FIXME: AOA alloc missing */
+    /*Protect2(theObj, theRep, newRep = (ObjectRep *) IOAalloc(size));*/
+    newRep = 0;
+    push(theObj);
+    push(theRep); 
+    do {
+      if (size>IOAMAXSIZE){
+	DEBUG_AOA(fprintf(output, "CopyVRC allocates in AOA\n"));
+	newRep = (ObjectRep *)AOAalloc(size);
+	DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+      } 
+      if (!newRep) {
+	newRep = (ObjectRep *)IOATryAlloc(size);
+	if (newRep && IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+      }
+    } while (!newRep);
+    pop(theRep);
+    pop(theObj);
 
-    Protect2(theObj, theRep, newRep = (ObjectRep *) IOAalloc(size));
-    
     SETPROTO(newRep,DynCompRepPTValue);
 
     if (IOAMinAge!=0) {

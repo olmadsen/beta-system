@@ -1,7 +1,14 @@
-char betarun_version[] = "BETARUN VERSION 5.3(93)";
+char betarun_version[] = "BETARUN VERSION 5.3(94)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.115  2002/05/07 09:27:44  datpete
+ * Minor dladdr() fix
+ * Betarun version number: 93
+ * Changed files:
+ *     GC/misc.c
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.114  2002/04/08 19:00:35  datpete
  * macosx floating point stuff
  * Betarun version number: 92+

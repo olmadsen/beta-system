@@ -36,7 +36,7 @@ ParamObjOffRange(ExtVR1)
   copyRange = (ByteRepBodySize((add < 0) ? newRange : oldRange))>>2;
   
   while (1) {
-    if (newRange > LARGE_REP_SIZE) {
+    if (newRange > LARGE_REP_SIZE|| ByteRepSize(newRange)>IOAMAXSIZE) {
       newRep = LVRAXAlloc(ByteRepPTValue, oldRange, newRange);
       if (newRep) {
 	*(ValRep **) ((long *) theObj + offset) = newRep;
@@ -106,7 +106,7 @@ ParamObjOffRange(ExtVR2)
   copyRange = (ShortRepBodySize((add < 0) ? newRange : oldRange))>>2;
   
   while (1) {
-    if (newRange > LARGE_REP_SIZE) {
+    if (newRange > LARGE_REP_SIZE|| ShortRepSize(newRange)>IOAMAXSIZE) {
       newRep = LVRAXAlloc(ShortRepPTValue, oldRange, newRange);
       if (newRep) {
 	*(ValRep **) ((long *) theObj + offset) = newRep;
@@ -178,7 +178,7 @@ ParamObjOffRange(ExtVR4)
   copyRange = (LongRepBodySize((add < 0) ? newRange : oldRange))>>2;
   
   while (1) {
-    if (newRange > LARGE_REP_SIZE) {
+    if (newRange > LARGE_REP_SIZE|| LongRepSize(newRange)>IOAMAXSIZE) {
       newRep = LVRAXAlloc(LongRepPTValue, oldRange, newRange);
       if (newRep) {
 	*(ValRep **) ((long *) theObj + offset) = newRep;
@@ -244,7 +244,7 @@ ParamObjOffRange(ExtVR8)
   copyRange = (DoubleRepBodySize((add < 0) ? newRange : oldRange))>>2;
   
   while (1) {
-    if (newRange > LARGE_REP_SIZE) {
+    if (newRange > LARGE_REP_SIZE|| DoubleRepSize(newRange)>IOAMAXSIZE) {
       newRep = LVRAXAlloc(DoubleRepPTValue, oldRange, newRange);
       if (newRep) {
 	*(ValRep **) ((long *) theObj + offset) = newRep;
@@ -293,8 +293,8 @@ ParamObjOffRange(ExtVR8)
 
 ParamObjOffRange(ExtVRI)
 {
-  DeclReference1(ValRep *, theRep);
-  DeclReference2(ValRep *, newRep);
+  DeclReference1(ObjectRep *, theRep);
+  DeclReference2(ObjectRep *, newRep);
   long add = range;
   long oldRange; /* range of old repetition */
   long newRange; /* Range of new repetition */
@@ -307,8 +307,8 @@ ParamObjOffRange(ExtVRI)
   DEBUG_CODE(NumExtVRI++);
   Ck(theObj);
 
-  newRep = (ValRep *)0;
-  theRep = *(ValRep **) ((long *) theObj + offset);
+  newRep = 0;
+  theRep = *(ObjectRep **) ((long *) theObj + offset);
   oldRange = theRep->HighBorder;
   newRange = oldRange + add; /* Range of new repetition */
   
@@ -319,18 +319,30 @@ ParamObjOffRange(ExtVRI)
   size = DynObjectRepSize(newRange);
 
   /* Allocate new repetition */
-  
-  /* FIXME: AOA alloc missing */
+  /* Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size)); */
+  push(theObj);
+  push(theRep);
+  do {
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "ExtVRI allocates in AOA\n"));
+      newRep = (ObjectRep *)AOAcalloc(size);
+      DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
+    } 
+    if (!newRep){
+      newRep = (ObjectRep *)IOATryAlloc(size);
+      if (newRep && IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+    }
+  } while (!newRep);
+  pop(theRep);
+  pop(theObj);
 
-  Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
-  
   /* Assign structural part of new repetition */
   SETPROTO(newRep,DynItemRepPTValue);
   if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
   newRep->LowBorder = theRep->LowBorder;
   newRep->HighBorder = newRange;
-  NEWREP->iProto = REP->iProto;
-  NEWREP->iOrigin = REP->iOrigin;
+  newRep->iProto = theRep->iProto;
+  newRep->iOrigin = theRep->iOrigin;
 
   /* Assign into theObj */
   AssignReference((long *) theObj + offset, (Item *) newRep);
@@ -338,10 +350,10 @@ ParamObjOffRange(ExtVRI)
   /* Copy contents of old rep to new rep */
   for (i = 0; i < copyRange; ++i){
 #ifdef MT
-    AssignReference((long*)&NEWREP->Body[i], (Item *)REP->Body[i]);
+    AssignReference((long*)&newRep->Body[i], (Item *)theRep->Body[i]);
 #else
-    NEWREP->Body[i] = REP->Body[i];
-    /* No need to use AssignReference: NEWREP is in IOA */
+    newRep->Body[i] = theRep->Body[i];
+    /* No need to use AssignReference: newRep is in IOA */
 #endif
   }
 
@@ -354,17 +366,17 @@ ParamObjOffRange(ExtVRI)
 #ifdef MT
       Protect2(theRep, newRep,
 	       item = (Item *)
-	              CallVEntry((void (*)())REP->iProto,REP->iOrigin));
+	              CallVEntry((void (*)())theRep->iProto,theRep->iOrigin));
 #else
       Protect2(theRep, newRep,
-	       item = OAlloI((Object *) REP->iOrigin, 0, REP->iProto, 0, 0));
+	       item = OAlloI((Object *) theRep->iOrigin, 0, theRep->iProto, 0, 0));
 #endif /* MT */
 #endif
 #ifdef hppa
       Protect2(theRep, newRep,
-	       item = CAlloI((Object *) REP->iOrigin, REP->iProto));
+	       item = CAlloI((Object *) theRep->iOrigin, theRep->iProto));
 #endif
-      AssignReference((long *)((long)&NEWREP->Body + (oldRange+add)*4), item);
+      AssignReference((long *)((long)&newRep->Body + (oldRange+add)*4), item);
     }
   }
   Ck(theRep); Ck(newRep); Ck(theObj);
@@ -372,8 +384,8 @@ ParamObjOffRange(ExtVRI)
 
 ParamObjOffRange(ExtVRC)
 {
-  DeclReference1(ValRep *, theRep);
-  DeclReference2(ValRep *, newRep);
+  DeclReference1(ObjectRep *, theRep);
+  DeclReference2(ObjectRep *, newRep);
   long add = range;
   long oldRange; /* range of old repetition */
   long newRange; /* Range of new repetition */
@@ -386,8 +398,8 @@ ParamObjOffRange(ExtVRC)
   DEBUG_CODE(NumExtVRC++);
   Ck(theObj);
 
-  newRep = (ValRep *)0;
-  theRep = *(ValRep **) ((long *) theObj + offset);
+  newRep = 0;
+  theRep = *(ObjectRep **) ((long *) theObj + offset);
   oldRange = theRep->HighBorder;
   newRange = oldRange + add; /* Range of new repetition */
   
@@ -398,18 +410,30 @@ ParamObjOffRange(ExtVRC)
   size = DynObjectRepSize(newRange);
 
   /* Allocate new repetition */
-  
-  /* FIXME: AOA alloc missing */
+  /* Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size)); */
+  push(theObj);
+  push(theRep);
+  do {
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "ExtVRC allocates in AOA\n"));
+      newRep = (ObjectRep *)AOAcalloc(size);
+      DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
+    } 
+    if (!newRep){
+      newRep = (ObjectRep *)IOATryAlloc(size);
+      if (newRep && IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+    }
+  } while (!newRep);
+  pop(theRep);
+  pop(theObj);
 
-  Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
-  
   /* Assign structural part of new repetition */
   SETPROTO(newRep,DynCompRepPTValue);
   if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
   newRep->LowBorder = theRep->LowBorder;
   newRep->HighBorder = newRange;
-  NEWREP->iProto = REP->iProto;
-  NEWREP->iOrigin = REP->iOrigin;
+  newRep->iProto = theRep->iProto;
+  newRep->iOrigin = theRep->iOrigin;
 
   /* Assign into theObj */
   AssignReference((long *) theObj + offset, (Item *) newRep);
@@ -417,10 +441,10 @@ ParamObjOffRange(ExtVRC)
   /* Copy contents of old rep to new rep */
   for (i = 0; i < copyRange; ++i){
 #ifdef MT
-    AssignReference((long*)&NEWREP->Body[i], (Item *)REP->Body[i]);
+    AssignReference((long*)&newRep->Body[i], (Item *)theRep->Body[i]);
 #else
-    NEWREP->Body[i] = REP->Body[i];
-    /* No need to use AssignReference: NEWREP is in IOA */
+    newRep->Body[i] = theRep->Body[i];
+    /* No need to use AssignReference: newRep is in IOA */
 #endif
   }
 
@@ -433,18 +457,18 @@ ParamObjOffRange(ExtVRC)
 #ifdef sparc
 #ifdef MT
       Protect2(theRep, newRep,
-	       comp = CallAlloC(REP->iProto, REP->iOrigin));
+	       comp = CallAlloC(theRep->iProto, theRep->iOrigin));
 #else
       Protect2(theRep, newRep,
-	       comp = OAlloC((Object *) REP->iOrigin, 0, REP->iProto, 0, 0));
+	       comp = OAlloC((Object *) theRep->iOrigin, 0, theRep->iProto, 0, 0));
 #endif /* MT */
 #endif
 #ifdef hppa
       Protect2(theRep, newRep,
-	       comp = CAlloC((Object *) REP->iOrigin, REP->iProto));
+	       comp = CAlloC((Object *) theRep->iOrigin, theRep->iProto));
 #endif
 
-      AssignReference((long *)((long)&NEWREP->Body + (oldRange+add)*4), 
+      AssignReference((long *)((long)&newRep->Body + (oldRange+add)*4), 
 		      (Item *)comp);
     }
   }
