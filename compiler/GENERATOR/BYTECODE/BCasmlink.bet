@@ -109,6 +109,7 @@ jarfilename:
 (# link_line_length: @integer;
    verifylist: @containerlist(# element::text #);
    program_path: ^text;
+   jvmregexp: @pcre;
 #)
 --HasSharedLibs:descriptor--
 (#do false -> value #)
@@ -132,6 +133,7 @@ do (if true
              ->AFF.putText;
        if);
     // isJava then
+       'jvm\\/' -> asmstate.jvmregexp; (* used by linkObj *)
        '#! /bin/sh '->AFF.putLine;
        'BETALIB='->AFF.putText; BetaLib[]->AFF.putLine;
        'export BETALIB'->AFF.putLine;
@@ -565,8 +567,7 @@ do 'asmlinkdynamic'->TODO
 #)
 ---linkObj:descriptor ---
 (# e: @diskentry;
-   path, name: ^text;
-   jvm: ^text;
+   path, name, jvm: ^text;
    ldAputText:
      (# T: ^text
      enter T[]
@@ -574,10 +575,21 @@ do 'asmlinkdynamic'->TODO
         T[] -> ldA.puttext;
      #);
    addClassFile:
-     (# path: ^text
+     (# path: ^text;
+        jvmpath: ^text;
+        start,end: @integer;
      enter path[]
-     do ' -C ' -> ldAputtext;
-        'jvm' -> quote -> ldAputtext;
+     do path.copy -> path[]; (* avoid aliasing *)
+        (* Find jvm directory in path *)
+        (if path[] -> asmstate.jvmregexp.match(# do matchPos->(start,end) #) then
+            (1,end) -> path.sub -> jvmpath[];
+            (end+1, path.length) -> path.sub -> path[]
+        if);
+        
+        (if jvmpath[]<>none then
+            ' -C ' -> ldAputtext;
+            jvmpath[] -> quote -> ldAputtext;
+        if);
         ' ' -> ldA.putText;
         (if hostIsWindows then
             path[] -> quote -> ldAputtext;
@@ -596,13 +608,13 @@ do
            ' \\\n\t' -> ldA.puttext;
            0 -> asmstate.link_line_length;
        if);
-       lObj[] -> unquote -> name[];
-       '.J.dep' -> name.stripExtension; (* When coming from a newly generated file *)
-       '.dep'   -> name.stripExtension; (* When coming from a .clst file *)
-       '.class' -> name.AppendExtension;
-       name[] -> e.path;
+       lObj[] -> unquote -> path[];
+       '.J.dep' -> path.stripExtension; (* When coming from a newly generated file *)
+       '.dep'   -> path.stripExtension; (* When coming from a .clst file *)
+       '.class' -> path.AppendExtension;
+       path[] -> addClassFile;
+       
        (* Extract path of lObj as a relative path from jvm subdirectory *)
-       e.path -> path[];
        thePathHandler.CurrentDirectory -> jvm[];
        '/jvm' -> jvm.append;
        (if hostIsWindows then
@@ -610,15 +622,18 @@ do
            path.T[1] -> ascii.upcase -> path.T[1];
            jvm.T[1]  -> ascii.upcase -> jvm.T[1];
        if);
-       (path[], jvm[]) -> thePathHandler.localPath -> path[] -> addClassFile;
-       path[] -> e.path;
+       (path[], jvm[]) -> thePathHandler.localPath -> e.path;
        e.path.name -> name[];
-       e.path.head -> path[];
-       (if 'program.class'->name.equal then
-           path.copy -> asmstate.program_path[];
-       if);
-       (if 'BetaObject.class'->name.equal then
+       (if true
+        // 'program.class'->name.equal then
+           (* Get directory of program.class as relative path to jvm.
+            * Used for java execution command.
+            *)
+           e.path.head -> asmstate.program_path[];
+        // 'BetaObject.class'->name.equal then
            (* Add compiler generated special classes too *)
+           (* Get directory of BetaObject.class as full path *)
+           path[] -> e.path; e.path.head -> path[]; 
            (# packagepath: ^text;
            do (if path.length>0 then
                   path.copy -> packagepath[];
@@ -712,6 +727,10 @@ do (if isJava then AFF.newline; if);
          else
             'java '                      -> AFF.puttext;
         if);
+        (* (if verboseLevel <= verboseLevel.verbose then
+         *     '-verbose '                  -> AFF.puttext;
+         * if);
+         *)
         (if use_java_classpath then
             '-cp '                       -> AFF.puttext;
          else
