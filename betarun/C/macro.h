@@ -41,17 +41,24 @@
 
 #define ComponentItem(x) ((ref(Item)) (((long)(x)) + headsize(Component)))
 
+#define ItemSize(proto)          (4*((proto)->Size))
+#define ComponentSize(proto)     (headsize(Component)+4*((proto)->Size))
+
 /* Object sizes in BYTES */
 #define ByteRepBodySize(range)   ((((range)+4)/4)*4)
 #define WordRepBodySize(range)   (((2*(range)+3)/4)*4)
 #define ValRepBodySize(range)    ((range)*4)
 #define DoubleRepBodySize(range) ((range)*8)
+#define StatObjectRepSize(range, proto) \
+      (((range)*4*((proto)->Size)) + headsize(ObjectRep))
+#define StatCompRepSize(range, proto) \
+      (((range)*(headsize(Component)+4*((proto)->Size))) + headsize(ObjectRep))
 
 #if defined(sparc) || defined(hppa) || defined(crts)
 /* Objects must be multiples of 8 bytes because of reals */
-# define ComponentSize(size)    ((4*(size) + headsize(Component) +7) & ~7)
 # define StructureSize          ((headsize(Structure)+7) & ~7)
 # define RefRepSize(range)      (((range)*4 + headsize(RefRep)+7) & ~7)
+# define DynObjectRepSize(range)(((range)*4 + headsize(ObjectRep)+7) & ~7)
 # define ValRepSize(range)      (((ValRepBodySize(range) + headsize(ValRep))+7) & ~7)
 # define ByteRepSize(range)     ((ByteRepBodySize(range) + headsize(ValRep)+7) & ~7)
 # define WordRepSize(range)     ((WordRepBodySize(range) + headsize(ValRep)+7) & ~7)
@@ -59,9 +66,9 @@
 # define StackObjectSize(size)  ((4*(size) + headsize(StackObject) +7) & ~7)
 # define DopartObjectSize(size) (((size) + headsize(DopartObject) +7) & ~7)
 #else
-# define ComponentSize(size)    (4*(size) + headsize(Component))
 # define StructureSize          headsize(Structure)
 # define RefRepSize(range)      ((range)*4 + headsize(RefRep))
+# define DynObjectRepSize(range)(((range)*4 + headsize(ObjectRep))
 # define ValRepSize(range)      (ValRepBodySize(range) + headsize(ValRep))
 # define ByteRepSize(range)     (ByteRepBodySize(range) + headsize(ValRep))
 # define WordRepSize(range)     (WordRepBodySize(range) + headsize(ValRep))
