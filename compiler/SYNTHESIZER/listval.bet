@@ -1584,6 +1584,119 @@ ListVal: EvVal
                (mch.dataTop[],mch.dataTop[],4)->mch.gOr;
                (mch.dataTop[],A[]) -> mch.stVal; (*using adr from duplicate*)
             #);
+          gPutBitsForByteCode:
+            (# val,pos,length: @integer;
+               V,Vpos,Vlength: ^evVal;
+               isRep: @boolean;
+               lengthTemp,posTemp,maskTemp: ^mch.address;
+               isComputed: @boolean
+            enter(val,V[],Vpos[],pos,Vlength[],length,isRep)
+            do (* duplicate adr of object with field addressed by A *)
+               (if isRep then
+                   (0,2,A.fieldType[],A.receiverType[]) -> mch.duplicate
+                else
+                   mch.duplicate
+               if);
+               (A[],mch.dataTop[]) -> mch.ldVal;
+               (* stack = ..., A,M[A] *)
+               
+               (* create mask *)
+               (-1 -> mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+               (if Vlength[] = none then
+                   (32-length -> mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                else
+                   (32 -> mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                   Vlength.pushVal; 
+                   (* save length in tmp *)
+                   mch.duplicate;
+                   (&theGen.int32Value[]).asText 
+                     -> theGen.allocAndStoreTmp 
+                     -> lengthTemp[];
+                   (mch.dataTop[],mch.dataTop[],4) -> mch.gSub;
+               if);
+               (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftRight;
+               
+               (* save mask *)
+               mch.duplicate;
+               (&theGen.int32Value[]).asText 
+                 -> theGen.allocAndStoreTmp 
+                 -> maskTemp[];
+               
+               (* compute 32-pos-length *)
+               (if true 
+                // (Vpos[] = none) and (Vlength[] = none) then
+                   (* 32-pos-length is constant *)
+                   (32-pos-length->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
+                // (Vpos[] = none) and (Vlength[] <> none) -> isComputed then
+                   (32-pos -> mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                   (lengthTemp[],mch.dataTop[]) -> mch.ldVal;
+                // (Vpos[] <> none) and (Vlength[] = none) -> isComputed then
+                   (32-length -> mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                   Vpos.pushVal;
+                // (Vpos[] <> none) and (Vlength[] <> none) -> isComputed then
+                   (32-> mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                   Vpos.pushVal;
+                   (mch.dataTop[],mch.dataTop[],4) -> mch.gSub;
+                   (lengthTemp[],mch.dataTop[]) -> mch.ldVal;
+               if);
+               (if isComputed then
+                   (mch.dataTop[],mch.dataTop[],4) -> mch.gSub;
+                   (* save 32-pos-length *)
+                   mch.duplicate;
+                   (&theGen.int32Value[]).asText 
+                     -> theGen.allocAndStoreTmp 
+                     -> posTemp[];  
+               if);
+               
+               (* shift mask to bitpos *)
+               (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftLeft;
+               (* invert mask *)
+               (mch.dataTop[],4) -> mch.logNot;
+               (* clear bitfield *)
+               (mch.dataTop[],mch.dataTop[],4) -> mch.gAnd;
+               
+               (* load value to be stored in field *)
+               (V[],val)->const2Reg->lDr[];
+               (* mask off bits outside field size *)
+               (maskTemp[],mch.dataTop[]) -> mch.ldVal;
+               (mch.dataTop[],mch.dataTop[],4) -> mch.gAnd;
+               
+               (* shift value to bit pos *)
+               (if isComputed then
+                   (posTemp[],mch.dataTop[]) -> mch.ldVal;
+                else
+                   (32-pos-length->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
+               if);
+               (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftLeft;
+               (* or value into field *)
+               (mch.dataTop[],mch.dataTop[],4) -> mch.gOr;
+               
+               (* store resulting value *)
+               (mch.dataTop[],A[]) -> mch.stVal;
+            #);
+          getBitsForByteCode:
+            (# pos,length,opCode: @integer;
+               Vpos,Vlength: ^evVal;
+            enter(Vpos[],pos,Vlength[],length,opCode)
+            do (if Vpos[] = none then
+                   (pos->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
+                else
+                   Vpos.pushVal
+               if);
+               (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftLeft;
+               (if Vlength[] = none then
+                   (32-length->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
+                else
+                   (32->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                   Vlength.pushVal;
+                   (mch.dataTop[],mch.dataTop[],4) -> mch.gSub
+               if);
+               (if opCode = 19 then
+                   (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftRight
+                else
+                   (mch.dataTop[],mch.dataTop[]) -> mch.arithShiftRight
+               if)
+            #);
 	  ClrAndDeAlloc:
             (# ar: @mch.adrRegOperand
             enter ar
@@ -1630,20 +1743,23 @@ ListVal: EvVal
 	         (* V1[]=nil => pos is constant
 	          * V2[]=nil => length is constant
 	          *)                 
-	         (if (V1[]<>none) or (V2[]<>none)  then
-                     (V1[],pos)->const2Reg->pDr[];
-                     (V2[],length)->const2Reg->wDr[];
-                     (if opCode=19 then
-                         (dr[],pDr[],wDr[])->mch.gGetBits
-                      else
-                         (dr[],pDr[],wDr[])->mch.gGetSignedBits
-                     if)
+                 (if switch182 then
+                     (V1[],pos,V2[],length,opCode) -> getBitsForByteCode
                   else
-	             (if opCode = 19 then 
-                         (dr[],pos,length,dr[],none)->mch.getBits
-	              else 
-                         (dr[],pos,length,dr[],none)->mch.getSignedBits
-	         if)if);
+	             (if (V1[]<>none) or (V2[]<>none)  then
+                         (V1[],pos)->const2Reg->pDr[];
+                         (V2[],length)->const2Reg->wDr[];
+                         (if opCode=19 then
+                             (dr[],pDr[],wDr[])->mch.gGetBits
+                          else
+                             (dr[],pDr[],wDr[])->mch.gGetSignedBits
+                         if)
+                      else
+	                 (if opCode = 19 then 
+                             (dr[],pos,length,dr[],none)->mch.getBits
+	                  else 
+                             (dr[],pos,length,dr[],none)->mch.getSignedBits
+                 if)if)if);
 	         (dr,false,false,false)->mkComputedEvval->V[];
 	      #)
            // 21 (* (Val,pos,length)->R.%putbits *) then 
@@ -1657,8 +1773,20 @@ ListVal: EvVal
                  if);
               #);
               (if switch182 then
-                  (val,V[],pos,length,EV1.label=gram.indexed)
-                    -> putBitsForByteCode
+                  (if v1[] = none then
+                      (if v2[] = none then
+                          (* pos, length are constant values *)
+                          (val,V[],pos,length,EV1.label=gram.indexed)
+                            -> putBitsForByteCode
+                       else
+                          (val,V[],V1[],pos,V2[],length,EV1.label=gram.indexed)
+                            -> gPutBitsForByteCode
+                      if)
+                   else
+                      (val,V[],V1[],pos,V2[],length,EV1.label=gram.indexed)
+                            -> gPutBitsForByteCode
+                  if);
+                 &mch.dataRegOperand[] -> lDr[]; (* just make it <> none *)
                else
 	          A.toReg2->ar; ar.mkIndirect;
                   (V[],val)->const2Reg->lDr[];
