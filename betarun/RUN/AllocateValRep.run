@@ -4,40 +4,68 @@ AlloVR1: public
   (#
      { Allocate a byte repetition and assign it to the reference at theObj[offset] }
      
-     { Input variable.  }
+     { Input variables. }
      theObj: Item     = RegObj;   { The object, which refer the valrep. }
-     Offset: Long     = DataRegA; { Offset in the theObj.               }
-     Range:  Long     = DataRegB; { The range of the valRep.            }
+     Offset: Long     = DataReg1; { Offset in the theObj.               }
+     Range:  Long     = DataReg2; { The range of the valRep.            }
      
-     { Used variable.   }
+     { Used variable. }
      BodySize:  Long    = DataReg1; { the number of bytes to allocate     }
      newTop: DataArea   = AddrReg1;
      theCell: DataArea  = AddrReg1;
      theRep: Repetition = AddrReg2;
-     Value:  Long       = DataReg1
+     Value:  Long       = DataReg2;
   do
+     { 
+       General stack layout:
+       <Linux: AddrReg2>
+       <Linux: AddrReg1>
+       <Mac: AddrReg2>
+       ... 
+     }
+     
+     {*** TO BE REMOVED ***}
+     (if linux then ; else DataRegA -> DataReg1; DataRegB -> DataReg2; if);
+     
      (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2 if);
+     
+     again:
+     
      (if Range < 0 then 0 -> Range if);
      (if Range > 256 then 
-         push DataRegA, RegObj, RegArg; { save registers }
+         (if linux then
+             push RegObj, RegArg, Offset; { save registers }
+          else
+             push DataRegA, RegObj, RegArg, Offset; { save registers }
+         if);
          push Range; { Parameters to LVRACAlloc. }
          push -6; { Parameters to LVRACAlloc. }
          call LVRACAlloc;
          DataRegA -> theRep;
          4 -> SP+;
-         pop  Range;
-         pop  RegArg, RegObj, DataRegA;
+         pop Range;
+         (if linux then
+             pop Offset, RegArg, RegObj;
+          else
+             pop Offset, RegArg, RegObj, DataRegA;
+         if);
          (if theRep <> 0 then
              { Make the LVRA-cycle: theCell -> theRep.Age }
              Offset -> Value; theObj -> Value+;
              Value -> theRep.Age;
              theRep -> theObj[Offset]; 
+             (if linux then pop AddrReg2, AddrReg1 if);
              (if MacOS then pop AddrReg2 if);
              return
          if)
      if);
+     
      allocIOA: { allocate 16+((range+1+3)/4)*4 bytes }
      IOATop -> theRep;
+     
+     push Offset; {BodySize assignment destroys Offset}
+     
      Range -> BodySize;
      4 -> BodySize+;
      4 -> BodySize/;
@@ -62,6 +90,8 @@ AlloVR1: public
      4 -> BodySize-;
      (if FLAGS >= 0 then goto loop if);
      
+     pop Offset; {We're finished using BodySize, so restore Offset}
+     
      theObj[Offset][] -> theCell;
      theRep -> theCell[0];
      
@@ -69,6 +99,8 @@ AlloVR1: public
          push theCell;
          call ChkRA { No need to remove parameter. }
      if);
+     
+     (if linux then pop AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      return;
      
@@ -77,50 +109,71 @@ AlloVR1: public
      4 -> ReqObjectSize;     { Set the requested Object Size.            }
      4 -> BodySize/;
      BodySize -> ReqObjectSize+;
-     (if MacOS then pop AddrReg2 if);
+     pop Offset; {Restore Offset}
      call DoGC;              { Call the Garbage Collector.               }
-     goto AlloVR1            { Go back to the beginning of this routine. }
+     goto again
   #);
+
+
 
 AlloVR2: public
   (#
      { Allocate a word repetition and assign it to the reference at theObj[offset] }
      
-     { Input variable.  }
+     { Input variables. }
      theObj: Item     = RegObj;   { The object, which refer the valrep. }
-     Offset: Long     = DataRegA; { Offset in the theObj.               }
-     Range:  Long     = DataRegB; { The range of the valRep.            }
+     Offset: Long     = DataReg1; { Offset in the theObj.               }
+     Range:  Long     = DataReg2; { The range of the valRep.            }
      
-     { Used variable.   }
+     { Used variables. }
      BodySize:  Long    = DataReg1; { the number of bytes to allocate     }
      newTop: DataArea   = AddrReg1;
      theCell: DataArea  = AddrReg1;
      theRep: Repetition = AddrReg2;
-     Value:  Long       = DataReg1
+     Value:  Long       = DataReg2;
   do
+     {*** TO BE REMOVED ***}
+     (if linux then ; else DataRegA -> DataReg1; DataRegB -> DataReg2; if);
+     
      (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1,AddrReg2 if);
+     
+     again:
+     
      (if Range < 0 then 0 -> Range if);
      (if Range > 256 then 
-         push DataRegA, RegObj, RegArg; 
+         (if linux then
+             push RegObj, RegArg, Offset; { save registers }
+          else
+             push DataRegA, RegObj, RegArg, Offset; { save registers }
+         if);
          push Range; { Parameter to LVRACAlloc. }
          push -7;    { Parameter to LVRACAlloc. }
          call LVRACAlloc;
          DataRegA -> theRep;
          4 -> SP+;
-         pop  Range;
-         pop  RegArg, RegObj, DataRegA;
+         pop Range;
+         (if linux then
+             pop Offset, RegArg, RegObj;
+          else
+             pop Offset, RegArg, RegObj, DataRegA;
+         if);
          (if theRep <> 0 then
              { Make the LVRA-cycle: theCell -> theRep.Age }
              Offset -> Value; theObj -> Value+;
              Value -> theRep.Age;
              
              theRep -> theObj[Offset];
+             (if linux then pop AddrReg2, AddrReg1; if);
              (if MacOS then pop AddrReg2 if);
              return
          if)
      if);
      allocIOA: { allocate 16+((2*range+3)/4)*4 bytes }
      IOATop -> theRep;
+     
+     push Offset; {BodySize assignment destroys Offset}
+     
      Range -> BodySize;
      2 -> BodySize*;
      3 -> BodySize+;
@@ -146,6 +199,8 @@ AlloVR2: public
      4 -> BodySize-;
      (if FLAGS >= 0 then goto loop if);
      
+     pop Offset; {We're finished using BodySize, so restore Offset}
+          
      theObj[Offset][] -> theCell;
      theRep -> theCell[0];
      
@@ -153,6 +208,8 @@ AlloVR2: public
          push theCell;
          call ChkRA { No need to remove parameter. }
      if);
+     
+     (if linux then pop AddrReg2, AddrReg1; if);
      (if MacOS then pop AddrReg2 if);
      return;
      
@@ -161,48 +218,67 @@ AlloVR2: public
      4 -> ReqObjectSize;     { Set the requested Object Size.            }
      4 -> BodySize/;
      BodySize -> ReqObjectSize+;
-     (if MacOS then pop AddrReg2 if);
+     pop Offset; {Restore Offset}
      call DoGC;              { Call the Garbage Collector.               }
-     goto AlloVR2            { Go back to the beginning of this routine. }
+     goto again              { Go back to the beginning of this routine. }
   #);
+
 
 
 AlloVR4: public
   (#
      { Allocate a value repetition of longs. }
      
-     { Input variable.  }
+     { Input variables. }
      theObj: Item  = RegObj;   { The object, which refer the valrep.}
-     Offset: Long  = DataRegA; { Offset in the theObj.              }
-     Range:  Long  = DataRegB; { The range of the valRep.           }
+     Offset: Long  = DataReg1; { Offset in the theObj.              }
+     Range:  Long  = DataReg2; { The range of the valRep.           }
      
-     { Used variable.   }
+     { Used variables. }
      newTop: DataArea   = AddrReg1;
      theCell: DataArea  = AddrReg1;
      theRep: Repetition = AddrReg2;
-     Value:  Long       = DataReg1
+     Value:  Long       = DataReg2;
   do
+     {*** TO BE REMOVED ***}
+     (if linux then ; else DataRegA -> DataReg1; DataRegB -> DataReg2; if);
+     
      (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2 if);
+     
+     again:
+     
      (if Range < 0 then 0 -> Range if);
      (if Range > 256 then
-         push DataRegA, RegObj, RegArg; 
+         (if linux then
+             push RegObj, RegArg, Offset; { save registers }
+          else
+             push DataRegA, RegObj, RegArg, Offset; { save registers }
+         if);
          push Range; { Parameter to LVRACAlloc. }
          push -5;    { Parameter to LVRACAlloc. }
          call LVRACAlloc;
          DataRegA -> theRep;
          4 -> SP+;
-         pop  Range;
-         pop  RegArg, RegObj, DataRegA;
+         pop Range;
+         (if linux then
+             pop Offset, RegArg, RegObj;
+          else
+             pop Offset, RegArg, RegObj, DataRegA;
+         if);
          (if theRep <> 0 then
              { Make the LVRA-cycle: theCell -> theRep.Age }
              Offset -> Value; theObj -> Value+;
              Value -> theRep.Age;
              theRep -> theObj[Offset];  
+             (if linux then pop AddrReg2, AddrReg1 if);
              (if MacOS then pop AddrReg2 if);
              return
          if)
      if);
+     
      allocIOA:
+     
      IOATop -> theRep;
      theRep[16+Range*4][] -> newTop;
      (if newTop > IOALimit then goto GC if);
@@ -231,6 +307,8 @@ AlloVR4: public
          push theCell;
          call ChkRA { No need to remove parameter. }
      if);
+     
+     (if linux then pop AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      return;
      
@@ -238,50 +316,69 @@ AlloVR4: public
      { The IOA heap is full, so we need a garbage collection.            }
      4 -> ReqObjectSize;     { Set the requested Object Size.            }
      Range -> ReqObjectSize+;
-     (if MacOS then pop AddrReg2 if);
      call DoGC;              { Call the Garbage Collector.               }
-     goto AlloVR4            { Go back to the beginning of this routine. }
+     goto again              { Go back to the beginning of this routine. }
   #);
+
 
 
 AlloVR8: public
   (#
      { Allocate a double repetition and assign it to the reference at theObj[offset] }
      
-     { Input variable.  }
+     { Input variables. }
      theObj: Item     = RegObj;   { The object, which refer the valrep. }
-     Offset: Long     = DataRegA; { Offset in the theObj.               }
-     Range:  Long     = DataRegB; { The range of the valRep.            }
+     Offset: Long     = DataReg1; { Offset in the theObj.               }
+     Range:  Long     = DataReg2; { The range of the valRep.            }
      
-     { Used variable.   }
+     { Used variables. }
      BodySize:  Long    = DataReg1; { the number of bytes to allocate     }
      newTop: DataArea   = AddrReg1;
      theCell: DataArea  = AddrReg1;
      theRep: Repetition = AddrReg2;
-     Value:  Long       = DataReg1
+     Value:  Long       = DataReg2;
   do
+     {*** TO BE REMOVED***}
+     (if linux then ; else DataRegA -> DataReg1; DataRegB -> DataReg2; if);
+     
      (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2 if);
+     
+     again:
+     
      (if Range < 0 then 0 -> Range if);
      (if Range > 256 then 
-         push DataRegA, RegObj, RegArg; 
+         (if linux then
+             push RegObj, RegArg, Offset; { save registers }
+          else
+             push DataRegA, RegObj, RegArg, Offset; { save registers }
+         if);
          push Range; { Parameter to LVRACAlloc. }
          push -8;    { Parameter to LVRACAlloc. }
          call LVRACAlloc;
          DataRegA -> theRep;
          4 -> SP+;
-         pop  Range;
-         pop  RegArg, RegObj, DataRegA;
+         pop Range;
+         (if linux then
+             pop Offset, RegArg, RegObj;
+          else
+             pop Offset, RegArg, RegObj, DataRegA;
+         if);
          (if theRep <> 0 then
              { Make the LVRA-cycle: theCell -> theRep.Age }
              Offset -> Value; theObj -> Value+;
              Value -> theRep.Age;
              theRep -> theObj[Offset];
+             (if linux then pop AddrReg2, AddrReg1 if);
              (if MacOS then pop AddrReg2 if);
              return
          if)
      if);
      allocIOA: { allocate 16+range*8 bytes }
      IOATop -> theRep;
+          
+     push Offset; {BodySize assignment destroys Offset}
+     
      Range -> BodySize;
      8 -> BodySize*;
      theRep[16+BodySize][] -> newTop;
@@ -304,6 +401,8 @@ AlloVR8: public
      4 -> BodySize-;
      (if FLAGS >= 0 then goto loop if);
      
+     pop Offset; {We're finished using BodySize, so restore Offset}
+          
      theObj[Offset][] -> theCell;
      theRep -> theCell[0];
      
@@ -311,6 +410,8 @@ AlloVR8: public
          push theCell;
          call ChkRA { No need to remove parameter. }
      if);
+     
+     (if linux then pop AddrReg2, AddrReg1; if);
      (if MacOS then pop AddrReg2 if);
      return;
      
@@ -319,7 +420,7 @@ AlloVR8: public
      4 -> ReqObjectSize;     { Set the requested Object Size.            }
      4 -> BodySize/;    
      BodySize -> ReqObjectSize+;
-     (if MacOS then pop AddrReg2 if);
+     pop Offset; {Restore Offset}
      call DoGC;              { Call the Garbage Collector.               }
-     goto AlloVR8            { Go back to the beginning of this routine. }
+     goto again              { Go back to the beginning of this routine. }
   #)

@@ -12,8 +12,7 @@ CopyVR: public
      newTop: DataArea    = AddrReg2;
      newRep: Repetition  = AddrReg2;
      theCell: DataArea   = AddrReg1;
-     proto: DataArea     = DataRegA;
-     zero: DataArea      = DataRegB; { saved and restored }
+     proto: DataArea     = DataReg2;
      cycleCell: DataArea = AddrReg2;
      
      range:  Long        = DataReg1;
@@ -22,23 +21,48 @@ CopyVR: public
      value:  Long        = DataReg2;
      offset: Long        = DataReg2
   do
-     stack[12] -> theRep;
-     theRep.HighBorder -> range;
+     {
+       General stack layout:
+       <Linux: DataReg2>   Linux: +0
+       <Linux: DataReg1>   Linux: +4
+       <Linux: AddrReg2>   Linux: +8
+       <Linux: AddrReg1>   Linux: +12
+       <Mac: AddrReg2>                  Mac: +0    
+       <return address>    Linux: +16   Mac: +4    Default: +0
+       <offset>            Linux: +20   Mac: +8    Default: +4
+       <item>              Linux: +24   Mac: +12   Default: +8
+       <valrep>            Linux: +28   Mac: +16   Default: +12
+     }
      
      (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2, DataReg1, DataReg2 if);
+     
+     (if linux then
+         stack[28] -> theRep;
+      else 
+         (if MacOS then
+             stack[16] -> theRep;
+          else
+             stack[12] -> theRep;
+         if)
+     if);
+     theRep.HighBorder -> range;
      
      { stack: [return,offset,Item,ValRep...]          }
      { mac:   [AddrReg2,return,offset,Item,ValRep...] }
      
      (if range > 256 then
-         push RegArg, RegObj, DataRegA, DataRegB;
+         (if linux then
+             push RegArg, RegObj;
+          else
+             push RegArg, RegObj, DataRegA, DataRegB;
+         if);
          
          { stack: [DataRegB,DataRegA,RegObj,RegArg,return,offset,Item,ValRep...]          }
          { mac:   [DataRegB,DataRegA,RegObj,RegArg,AddrReg2,return,offset,Item,ValRep...] }
 
          theRep.ProtoType -> proto;
-         0 -> zero;
-         zero -> cycleCell;
+         0 -> cycleCell;
          (if theRep outside IOA then { theRep is in LVRA }
              theRep.Age -> cycleCell { save pointer to cell refering theRep }
          if);
@@ -50,32 +74,58 @@ CopyVR: public
          push range; { Parameter to LVRAAlloc. }
          push proto; { Parameter to LVRAAlloc. }
          call LVRAAlloc;
-         4 -> SP+;
-         pop range;
-         pop cycleCell;
+         stack[8] -> cycleCell; {Restore cycleCell}
          (if cycleCell <> 0 then
              { restore theRep from pointer to cell. The reason for this is that 
                theRep may have been moved by an LVRACompaction 
              }
-             cycleCell[0] -> theRep
+             cycleCell[0] -> theRep;
+             goto endifCycleCell;
          if);
-         DataRegA -> newRep;
+         {Restore theRep, may have been destroyed by LVRAAlloc}
+         (if linux then
+             stack[48{28+(3+2)*4}] -> theRep
+          else
+             (if MacOS then
+                 stack[44{16+(3+4)*4}] -> theRep
+              else
+                 stack[40{12+(3+4)*4}] -> theRep
+             if);
+         if);
+         endifCycleCell:
+         
+         DataRegA -> newRep; {Fetch LVRAAlloc result}
+         4 -> SP+; {Discard proto}
+         pop range; {Restore range}
+         4 -> SP+; {Discard cycleCell}
          
          { stack: [DataRegB,DataRegA,RegObj,RegArg,return,offset,Item,ValRep...]          }
          { mac:   [DataRegB,DataRegA,RegObj,RegArg,AddrReg2,return,offset,Item,ValRep...] }
 
          (if newRep <> 0 then
              { Make the LVRA-cycle: theCell -> newRep.Age }
-             (if MacOS then
-                 stack[24 { =  4 + 4 + 4*4 } ] -> DataRegA; 4 -> DataRegA*;
-                 stack[28 { =  4 + 8 + 4*4 } ] -> DataRegA+
+             (if linux then
+                 stack[28{20+2*4}] -> tmp; 
+                 4 -> tmp*;
+                 stack[32{24+2*4}] -> tmp+;
               else
-                 stack[20 { =  4 + 4*4 } ] -> DataRegA; 4 -> DataRegA*;
-                 stack[24 { =  8 + 4*4 } ] -> DataRegA+
+                 (if MacOS then
+                     stack[24{8+4*4}] -> tmp; 
+                     4 -> tmp*;
+                     stack[28{12+4*4}] -> tmp+;
+                  else
+                     stack[20{4+4*4}] -> tmp; 
+                     4 -> tmp*;
+                     stack[24{8+4*4}] -> tmp+;
+                 if);
              if);
-             DataRegA -> newRep.Age
+             tmp -> newRep.Age
          if);
-         pop  DataRegB, DataRegA, RegObj, RegArg;
+         (if linux then
+             pop RegObj, RegArg;
+          else
+             pop DataRegB, DataRegA, RegObj, RegArg;
+         if);
          
          { stack: [return,offset,Item,ValRep...]          }
          { mac:   [AddrReg2,return,offset,Item,ValRep...] }
@@ -155,11 +205,14 @@ CopyVR: public
      { stack: [return,offset,Item,ValRep...]          }
      { mac:   [AddrReg2,return,offset,Item,ValRep...] }
 
-     (if MacOS then
-         { AddrReg2 in on the stack. }
-         stack[16] -> theRep
+     (if linux then
+         stack[28] -> theRep
       else
-         stack[12] -> theRep
+         (if MacOS then
+             stack[16] -> theRep
+          else
+             stack[12] -> theRep
+         if);
      if);
      
      { Copy the body part of the repetition. }
@@ -172,12 +225,17 @@ CopyVR: public
          (if FLAGS >= 0 then goto loop if)
      if);
      
-     (if MacOS then 
-         stack[12] -> theCell;
-         stack[8]  -> offset
+     (if linux then
+         stack[24] -> theCell;
+         stack[20]  -> offset;
       else
-         stack[8] -> theCell;
-         stack[4] -> offset
+         (if MacOS then 
+             stack[12] -> theCell;
+             stack[8]  -> offset;
+          else
+             stack[8] -> theCell;
+             stack[4] -> offset;
+         if);
      if);
      theCell[offset*4][] -> theCell;
      newRep -> theCell[0];
@@ -190,6 +248,7 @@ CopyVR: public
      { stack: [return,offset,Item,ValRep...]          }
      { mac:   [AddrReg2,return,offset,Item,ValRep...] }
 
+     (if linux then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      return 12;
      
@@ -201,8 +260,8 @@ CopyVR: public
      4 -> ReqObjectSize;     { Set the requested Object Size.            }
      4 -> BodySize/;
      BodySize -> ReqObjectSize+;
+     (if linux then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      call DoGC;         { Call the Garbage Collector.               }
      goto CopyVR         { Go back to the beginning of this routine. }
   #)
-

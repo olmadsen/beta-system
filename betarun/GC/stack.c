@@ -323,8 +323,125 @@ void ProcessStackObj(struct StackObject *theStack)
 
 /* Traverse the StackArea [low..high] and Process all references within it. */
 void ProcessStackPart(low, high)
+     ptr(long) low;
+     ptr(long) high;
 {
-  fprintf(output, "Don't know how to process the stack, sorry! (NYI)\n");
+    ptr(long) current = low;
+    ref(Object) theObj;
+    handle(Object) theCell;
+    
+    DEBUG_IOA(fprintf(output, "StackPart: [0x%x..0x%x]\n", low, high);
+	      fprintf(output, "ComponentBlock/CallbackFrame: [0x%x, 0x%x, 0x%x]\n", 
+		      *(high+1), *(high+2), *(high+3));
+	      );
+    Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
+    
+    while( current <= high ){
+	if( inBetaHeap( *current)){
+	    theCell = (handle(Object)) current;
+	    theObj  = *theCell;
+	    if( isObject( theObj) ){
+		if( inLVRA( theObj) || isValRep(theObj) ){
+		    DEBUG_IOA( fprintf( output, "(STACK(%d) is *ValRep)", current-low));
+		}else{
+		    ProcessReference( current);
+		    CompleteScavenging();
+		}
+	    }
+	}else{
+	    /* handle value register objects on the stack ref. ../Asm/DataRegs.s */
+	    switch( *current){
+	      case -8: current++;
+	      case -7: current++;
+	      case -6: current++;
+	      case -5: current++;
+		break;
+#ifdef RTLAZY
+	      default:
+		if (isLazyRef (*current))
+		  /* (*current) is a dangling reference */
+		  ProcessReference (current);
+		break;
+#endif
+            }
+	}
+	current++;
+    }
+}
+
+void ProcessStack()
+{
+    ptr(long)          theTop;
+    ptr(long)          theBottom;
+    
+    ref(CallBackFrame)  theFrame;
+    ref(ComponentBlock) currentBlock;
+    
+    /*
+     * First handle the topmost component block
+     */
+    theTop    = StackEnd;
+    theBottom = (ptr(long)) lastCompBlock;
+    theFrame  = ActiveCallBackFrame;
+    /* Follow the stack */
+    while( theFrame){
+	ProcessStackPart( theTop, (long *)theFrame-1);
+	theTop   = theFrame->betaTop;
+	theFrame = theFrame->next;
+    }
+    ProcessStackPart( theTop, theBottom-1);  
+    
+    /*
+     * Then handle the remaining component blocks.
+     */
+    currentBlock = lastCompBlock;
+    while( currentBlock->next ){
+	theTop    = (long *) ((long) currentBlock +
+			      sizeof(struct ComponentBlock) );
+	theBottom = (long *) currentBlock->next;
+	theFrame  = currentBlock->callBackFrame;
+	while( theFrame){
+	    ProcessStackPart( theTop, (long *)theFrame-1);
+	    theTop   = theFrame->betaTop;
+	    theFrame = theFrame->next;
+	}
+	ProcessStackPart( theTop, theBottom-1);  
+	currentBlock = currentBlock->next;
+    }
+}
+
+void ProcessStackObj(theStack)
+     struct StackObject *theStack;
+{ ptr(long)        stackptr; 
+  handle(Object)   theCell; 
+  ptr(long)        theEnd;
+	    
+  DEBUG_IOA( Claim(theStack->StackSize <= theStack->BodySize,
+		   "ProcessReference: StackObjectType: Stack > Object") );
+	    
+  theEnd = &theStack->Body[0] + theStack->StackSize;
+	    
+  for( stackptr = &theStack->Body[0]; stackptr < theEnd; stackptr++){
+    if( inBetaHeap( *stackptr)){
+      theCell = (handle(Object)) stackptr;
+      if( isObject( *theCell ) )
+	ProcessReference( stackptr);
+    }else{
+      switch( *stackptr ){
+      case -8: stackptr++;
+      case -7: stackptr++;
+      case -6: stackptr++;
+      case -5: stackptr++;
+	break;
+#ifdef RTLAZY
+      default:
+	if (isLazyRef (*stackptr))
+	  /* Dangling reference. */
+	  ProcessReference (stackptr);
+#endif
+      }
+    }
+  }
 }
 
 #endif /* linux */

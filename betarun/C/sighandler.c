@@ -10,6 +10,9 @@
 #endif
 
 #ifdef sun4s
+
+/****** BEGIN sun4s *****/
+
 #include <siginfo.h>
 #include <sys/regset.h>
 #include <sys/ucontext.h>
@@ -73,8 +76,9 @@ void BetaSignalHandler (sig, info, ucon)
 
 }
   
+/***** END sun4s ****/
 
-#else
+#else /* sun4s */
 
 /* This procedure is called if a nasty signal is recieved
  * during execution of BetaSignalHandler.
@@ -102,7 +106,7 @@ void BetaSignalHandler(sig, code, scp, addr)
   signal( SIGILL,  ExitHandler);
   signal( SIGBUS,  ExitHandler);
   signal( SIGSEGV, ExitHandler);
-#ifndef linux
+#ifdef SIGEMT
   signal( SIGEMT,  ExitHandler);
 #endif
 #ifdef apollo
@@ -185,7 +189,26 @@ void BetaSignalHandler(sig, code, scp, addr)
 #endif
 
 #ifdef linux
-  fprintf(output, "Don't know how to catch signals, sorry! (NYI)\n");
+
+  /* Try to fetch the address of current Beta object in a0.*/
+  theCell = (handle(Object)) (((long) scp) - ((long) 24));
+  if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
+
+  PC = 0; /* ??? */
+  StackEnd = 0; /* ??? */
+
+  switch(sig){
+    case SIGFPE: 
+      DisplayBetaStack( ArithExceptErr, theObj, PC); break;
+    case SIGILL:
+      DisplayBetaStack( IllegalInstErr, theObj, PC); break;
+    case SIGBUS:
+      DisplayBetaStack( BusErr, theObj, PC); break;
+    case SIGSEGV:
+      DisplayBetaStack( SegmentationErr, theObj, PC); break;
+    default: 
+      DisplayBetaStack( UnknownSigErr, theObj, PC);  
+  }
 #endif
 
 #if defined(hpux) && !defined(hppa)

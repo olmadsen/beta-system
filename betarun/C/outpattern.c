@@ -537,6 +537,7 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
     /* beta.dump cannot be opened */
 #ifdef macintosh
     if (StandAlone){
+      /* macintosh, failed to open dump file: running as standalone application */
       int i=2;
       char *lookat;
       do {
@@ -546,12 +547,14 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
       sprintf(lookat, "\n\nLook at '%s'", dumpname);
       CPrompt("Beta execution aborted:\n\n", ErrorMessage(errorNumber), lookat, "");
     } else {
+      /* macintosh, failed to open dump file: running as tool under MPW */
       output = stderr;
       fprintf(output, "\n# Beta execution aborted: ");
       fprintf(output, ErrorMessage(errorNumber));
       fprintf(output, ".\n");
     }
 #else
+    /* UNIX: failed to open dump file */
     output = stderr;
     fprintf(output, "\n# Beta execution aborted: ");
     fprintf(output, ErrorMessage(errorNumber));
@@ -561,19 +564,23 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
     /* beta.dump opened successfully */
 #ifdef macintosh
     if (StandAlone){
+      /* macintosh, dump file opened OK: running as stand alone application */
       lookat = MALLOC(strlen(dumpname)+12);
       sprintf(lookat, "\n\nLook at '%s'", dumpname);
       CPrompt("Beta execution aborted:\n\n", ErrorMessage(errorNumber), lookat, "");
     } else {
+      /* macintosh, dump file opened OK: running as tool under MPW */
       fprintf(stderr, "\n# Beta execution aborted: ");
       fprintf(stderr, ErrorMessage(errorNumber));
       fprintf(stderr, ".\n# Look at '%s'.\n", dumpname);
     }
 #else
+    /* UNIX, dump file opened OK */
     fprintf(stderr, "\n# Beta execution aborted: ");
     fprintf(stderr, ErrorMessage(errorNumber));
     fprintf(stderr, ".\n# Look at '%s'.\n", dumpname);
 #endif
+    /* Dump file opened OK: Write diagnostics to dump file too */
     fprintf(output, "Beta execution aborted: ");
     fprintf(output, ErrorMessage(errorNumber));
     fprintf(output, ".\n");

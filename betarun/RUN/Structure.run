@@ -3,18 +3,24 @@ AlloS: public
   (#
      { Allocate a StructObject. }
      
-     { Input variable. }
+     { Input variables. }
      origin: Object    = DataReg1;
      proto:  ProtoType = RegArg;
      
      { Output variable. }
      theStruct: Structure = RegArg;
      
-     { Used variable.  }
+     { Used variables. }
      newStruct: Structure = AddrReg2;
      newTop: DataArea      = AddrReg1
   do
+     (if linux then pReg1 -> DataReg1 if);
+     
+     again:
+     
      (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2 if);
+     
      IOATop -> newStruct;
      newStruct[16][] -> newTop;
      (if newTop > IOALimit then goto GC if);
@@ -30,40 +36,44 @@ AlloS: public
      proto   -> newStruct.iProto;
      
      newStruct -> theStruct;
+     
+     (if linux then pop AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
+     
      return;
      
      GC:
+     (if linux then pop AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      { The IOA heap is full, so we need a garbage collection.             }
      4 -> ReqObjectSize;      { Set the requested Object Size.            }
      push origin; { save (and force GC update of) origin }
      call DoGC;               { Call the Garbage Collector.               }
      pop origin;              { restore (updated) origin }
-     goto AlloS               { Go back to the beginning of this routine. }
+     goto again               { Go back to the beginning of this routine. }
   #);
+
+
 
 ThisS: public
   (#
      { Allocate a structObject for thisObject. }
      
-     { Output variable.  }
-     result: Long   = DataRegA;
+     { Output variable. }
+     result: Long   = DataReg1;
      
-     { Used variable.  }
+     { Used variables. }
      theStruct: Structure = AddrReg2;
-    
      newTop:    DataArea  = AddrReg1;
      newObj:    Object    = AddrReg1;
      theObj:    Object    = RegObj; { Current Object }
-     
      proto:     ProtoType = RegArg; { saved and restored }
-     
      origin:    Object    = DataReg2;
-
      Index:     Word      = DataReg1;
   do
      (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2, DataReg2 if);
+     
      IOATop -> theStruct;
      theStruct[16][] -> newTop;
      (if newTop > IOALimit then goto GC if);
@@ -75,6 +85,7 @@ ThisS: public
      1       -> theStruct.Age;
      
      push RegArg; { save RegArg }
+     
      theObj.ProtoType -> proto;
      
      proto.OrigOff    -> Index;
@@ -88,18 +99,25 @@ ThisS: public
      
      theStruct -> result;
      
-     pop RegArg; { save RegArg }
+     pop RegArg; { restore RegArg }
      
      (if MacOS then pop AddrReg2 if);
+     (if linux then pop DataReg2, AddrReg2, AddrReg1 if);
+     
+     (if linux then ; else DataReg1 -> DataRegA if); {*** TO BE REMOVED ***}
+         
      return;
      
      GC:
      { The IOA heap is full, so we need a garbage collection.             }
      4 -> ReqObjectSize;      { Set the requested Object Size.            }
      (if MacOS then pop AddrReg2 if);
+     (if linux then pop DataReg2, AddrReg2, AddrReg1 if);
      call DoGC;               { Call the Garbage Collector.               }
      goto ThisS               { Go back to the beginning of this routine. }
   #);
+
+
 
 Struc: public
   (#
@@ -108,20 +126,24 @@ Struc: public
      { Input variable. }
      theObjArg: Long      = DataReg1;
      
-     { Output variable.  }
-     result: Long         = DataRegA;
+     { Output variable. }
+     result: Long         = DataReg1;
      
-     { Used variable.  }
+     { Used variables. }
      theStruct: Structure = AddrReg2;
      theObj:    Object    = AddrReg1;
-    
      newTop:    DataArea  = AddrReg1;
-     
      proto:     ProtoType = RegArg; { saved and restored }
      origin:    Object    = AddrReg1;
      Index:     Word      = DataReg1;
   do
+     (if linux then pReg1 -> DataReg1 if);
+     
+     again:
+     
      (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2 if);
+     
      IOATop -> theStruct;
      theStruct[16][] -> newTop;
      (if newTop > IOALimit then goto GC if);
@@ -148,17 +170,24 @@ Struc: public
      pop RegArg; { restore RegArg }
      
      (if MacOS then pop AddrReg2 if);
+     (if linux then pop AddrReg2, AddrReg1 if);
+     
+     (if linux then ; else DataReg1 -> DataRegA if); {*** TO BE REMOVED ***}
+     
      return;
      
      GC:
      { The IOA heap is full, so we need a garbage collection.             }
      4 -> ReqObjectSize;      { Set the requested Object Size.            }
      (if MacOS then pop AddrReg2 if);
+     (if linux then pop AddrReg2, AddrReg1 if);
      push theObjArg;
      call DoGC;               { Call the Garbage Collector.               }
      pop theObjArg;
-     goto Struc               { Go back to the beginning of this routine. }
+     goto again               { Go back to the beginning of this routine. }
   #);
+
+
 
 AlloSI: public
   (#
@@ -167,18 +196,23 @@ AlloSI: public
      { Input variable. }
      theStruct: Structure = RegArg;
      
-     { output variables }
+     { Output variable. }
      Implicit:  DataArea  = RegArg;
 
-     { Used variable. }
-     origin:    Object    = DataReg1;
+     { Used variables. }
+     origin:    Object    = DataReg1; { Not used in Linux version }
      proto:     ProtoType = RegArg;
   do
-     theStruct.iOrigin -> origin;
+     (if linux then
+         theStruct.iOrigin -> pReg1;
+      else
+         theStruct.iOrigin -> origin;
+     if);
      theStruct.iProto  -> proto;
-     call AlloI;
-     return
+     goto AlloI;
   #);
+
+
 
 AlloSC: public
   (#
@@ -187,36 +221,52 @@ AlloSC: public
      { Input variable. }
      theStruct: Structure = RegArg;
      
-     { output variables }
+     { Output variable. }
      Implicit:  DataArea  = RegArg;
      
-     { Used variable. }
-     origin:    Object    = DataReg1;
+     { Used variables. }
+     origin:    Object    = DataReg1; { Not used in Linux version }
      proto:     ProtoType = RegArg
   do
-     theStruct.iOrigin -> origin;
+     (if linux then
+         theStruct.iOrigin -> pReg1;
+      else
+         theStruct.iOrigin -> origin;
+     if);
      theStruct.iProto  -> proto;
-     call AlloC;
-     return
+     goto AlloC;
   #);
 
+
+
 gtS: proc;
+
+
+
 ltS: proc;
+
+
 
 eqS: public
   (#
+     { Input variables. }
      input1: Structure = DataReg1;
      input2: Structure = DataReg2;
      
+     { Output variable. }
+     result: Long = DataReg1;
+     
+     { Used variables. }
      arg1: Structure = AddrReg1;
      arg2: Structure = AddrReg2;
-     
      value1: Long = DataReg1;
      value2: Long = DataReg2;
-     
-     result: Long = DataRegA
-     
   do
+     (if linux then pReg1 -> DataReg1; pReg2 -> DataReg2 if);
+     
+     (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2 if);
+     
      input1 -> arg1;
      input2 -> arg2;
      
@@ -238,27 +288,41 @@ eqS: public
      
      success:
      1 -> result;
+     (if linux then pop AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if linux then ; else DataReg1 -> DataRegA if); {*** TO BE REMOVED ***}
      return;
      
      failure:
      0 -> result;
+     (if linux then pop AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if linux then ; else DataReg1 -> DataRegA if); {*** TO BE REMOVED ***}
      return
   #);
 
+
+
 neS: public
   (#
+     { Input variables. }
      input1: Structure = DataReg1;
      input2: Structure = DataReg2;
      
+     { Output variable. }
+     result: Long = DataReg1;
+     
+     { Used variables. }
      arg1: Structure = AddrReg1;
      arg2: Structure = AddrReg2;
-     
      value1: Long = DataReg1;
      value2: Long = DataReg2;
-     
-     result: Long = DataRegA
-     
   do
+     (if linux then pReg1 -> DataReg1; pReg2 -> DataReg2 if);
+     
+     (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2 if);
+     
      input1 -> arg1;
      input2 -> arg2;
      
@@ -279,41 +343,50 @@ neS: public
      (if value1 <> value2 then goto success if);
      
      failure:
+     (if linux then pop AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if linux then ; else DataReg1 -> DataRegA if); {*** TO BE REMOVED ***}
      0 -> result;
      return;
      
      success:
+     (if linux then pop AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if linux then ; else DataReg1 -> DataRegA if); {*** TO BE REMOVED ***}
      1 -> result;
      return
   #);
-     
+
+
+
 ltS: public
   (#
+     { Input variables. }
      input1: Structure = DataReg1;
      input2: Structure = DataReg2;
 
+     { Output variable. }
+     result: Long = DataReg1;
+     
+     { Used variables. }
      arg1: Structure = AddrReg1;
      arg2: Structure = AddrReg2;
-     
      proto1: ProtoType = AddrReg1;
      proto2: ProtoType = AddrReg2;
-     
      value1: Long = DataReg1;
      value2: Long = DataReg2;
-     
      wordIndex: Word = DataReg2;
      longValue: Long = DataReg2;
-     
      offset2: Word = DataReg1;
-     
      newObject: Object    = RegArg;
      argument:  Structure = RegArg;
-     
      stack:   StackArea = SP;
-     
-     result: Long = DataRegA
-     
   do
+     (if linux then pReg1 -> DataReg1; pReg2 -> DataReg2 if);
+         
+     (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2 if);
+     
      input1 -> arg1;
      input2 -> arg2;
      push arg1, arg2;
@@ -353,7 +426,7 @@ ltS: public
          { test the resulting origin fra the new object.    }
          stack[4] -> argument;
          call AlloSI;
-         
+
          { Return (newObject[offset*4] = arg2.iOrigin) . }
          
          stack[0] -> arg2;
@@ -375,13 +448,21 @@ ltS: public
      failure:
      0 -> result;
      8 -> SP+;
+     (if linux then pop AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if linux then ; else DataReg1 -> DataRegA if); {*** TO BE REMOVED ***}
      return;
      
      success:
      1 -> result;
      8 -> SP+;
+     (if linux then pop AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if linux then ; else DataReg1 -> DataRegA if); {*** TO BE REMOVED ***}
      return
   #);
+
+
 
 gtS: public
   (# 
@@ -389,25 +470,36 @@ gtS: public
      input2: Structure = DataReg2;
      tmp:    Structure = AddrReg1
   do
-     input1 -> tmp;
-     input2 -> input1;
-     tmp -> input2;
+     (if linux then push AddrReg1 if);
+     pReg1 -> tmp;
+     pReg2 -> pReg1;
+     tmp -> pReg2;
+     (if linux then pop AddrReg1 if);
      goto ltS
   #);
 
+
+
 leS: public
   (#
+     { Input variables. }
      input1: Structure = DataReg1;
      input2: Structure = DataReg2;
-
-     arg1: Structure = AddrReg1;
-     arg2: Structure = AddrReg2;
      
+     { Output variable. }
+     result: Long = DataReg1;
+     
+     { Used variables. }
+     arg1: Structure = AddrReg1;
+     arg2: Structure = AddrReg2;     
      value1: Long = DataReg1;
      value2: Long = DataReg2;
-
-     result: Long = DataRegA
   do
+     (if linux then pReg1 -> DataReg1; pReg2 -> DataReg2 if);
+     
+     (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2 if);
+     
      input1 -> arg1;
      input2 -> arg2;
      
@@ -424,33 +516,54 @@ leS: public
      (if value1 <> value2 then goto failure if);
      
      success:
+     (if linux then pop AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if linux then ; else DataReg1 -> DataRegA if); {*** TO BE REMOVED ***}
      1 -> result;
      return;
      
      failure:
+     (if linux then pop AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if linux then ; else DataReg1 -> DataRegA if); {*** TO BE REMOVED ***}
      0 -> result;
      return;
      
      nextTry:
      { Please perform a less than test on the two struc. }
-     arg1 -> input1;
-     arg2 -> input2;
+     (if linux then 
+         ; { No need to restore DataRegs 1&2, since input is taken from pRegs 1&2 }
+      else 
+         arg1 -> input1;
+         arg2 -> input2;
+     if);
+     (if MacOS then pop AddrReg2 if);
+     (if linux then pop AddrReg2, AddrReg1 if);
      goto ltS
   #);
 
+
+
 geS: public
   (#
+     { Input variables. }
      input1: Structure = DataReg1;
      input2: Structure = DataReg2;
 
+     { Output variable. }
+     result: Long = DataReg1;
+     
+     { Used variables. }
      arg1: Structure = AddrReg1;
      arg2: Structure = AddrReg2;
-     
      value1: Long = DataReg1;
      value2: Long = DataReg2;
-     
-     result: Long = DataRegA
   do
+     (if linux then pReg1 -> DataReg1; pReg2 -> DataReg2 if);
+     
+     (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2 if);
+     
      input1 -> arg1;
      input2 -> arg2;
      
@@ -469,16 +582,28 @@ geS: public
      (if value1 <> value2 then goto failure if);
      
      success:
+     (if linux then pop AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if linux then ; else DataReg1 -> DataRegA if); {*** TO BE REMOVED ***}
      1 -> result;
      return;
      
      failure:
+     (if linux then pop AddrReg2, AddrReg1 if);
+     (if MacOS then pop AddrReg2 if);
+     (if linux then ; else DataReg1 -> DataRegA if); {*** TO BE REMOVED ***}
      0 -> result;
      return;
      
      nextTry:
      { Please perform a greater than test on the two struc. }
-     arg1 -> input1;
-     arg2 -> input2;
+     (if linux then 
+         ; { No need to restore DataRegs 1&2, since input is taken from pRegs 1&2 }
+      else 
+         arg1 -> input1;
+         arg2 -> input2;
+     if);
+     (if MacOS then pop AddrReg2 if);
+     (if linux then pop AddrReg2, AddrReg1 if);
      goto gtS
   #)

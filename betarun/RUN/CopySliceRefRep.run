@@ -6,11 +6,11 @@ CopySRR: public
      { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
      { and registers DataReg1=low, DataReg2=high. }
      
-     { Input variable.  }
+     { Input variables. }
      low:     Long    = DataReg1;
      high:    Long    = DataReg2;
      
-     { Used variable.  }
+     { Used variables. }
      stack:  StackArea  = SP;    
      theRep: Repetition = AddrReg1;
      theObj: Object     = RegObj;
@@ -21,17 +21,49 @@ CopySRR: public
      theItem: Item      = AddrReg1;
      theCell: DataArea  = AddrReg1
   do
-     stack[12] -> theRep;
-     { Check that low and high usable. }
-     (if low  < theRep.LowBorder   then push theObj; push -6; call BetaError if);
-     (if high > theRep.HighBorder  then push theObj; push -7; call BetaError if);
+     {
+       General stack layout:
+       <Linux: AddrReg2>   Linux: +0
+       <Linux: AddrReg1>   Linux: +4
+       <Mac: AddrReg2>                  Mac: +0    
+       <return address>    Linux: +8    Mac: +4    Default: +0
+       <offset>            Linux: +12   Mac: +8    Default: +4
+       <item>              Linux: +16   Mac: +12   Default: +8
+       <valrep>            Linux: +20   Mac: +16   Default: +12
+     }
+
+     (if linux then pReg1 -> DataReg1; pReg2 -> DataReg2; if);
+     
+     (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2 if);
+     
+     (if linux then
+         stack[20] -> theRep;
+      else 
+         (if MacOs then
+             stack[16] -> theRep;
+          else
+             stack[12] -> theRep;
+         if);
+     if);
+     
+     { Check that low and high are usable. }
+     (if low  < theRep.LowBorder then 
+         (if linux then 8 -> stack+ if);
+         (if MacOS then pop AddrReg2 if);
+         push theObj; push -6; call BetaError 
+     if);
+     (if high > theRep.HighBorder then 
+         (if linux then 8 -> stack+ if);
+         (if MacOS then pop AddrReg2 if);
+         push theObj; push -7; call BetaError 
+     if);
  
      { Calculate the range of the new repetition. }
      low  -> high-; 1 -> high+;
      (if high < 0 then 0 -> high if);
      { high is now converted to the range of the resulting repetition. }
      
-     (if MacOS then push AddrReg2 if);
      again:
      
      IOATop -> newRep;
@@ -39,11 +71,14 @@ CopySRR: public
      (if newTop > IOALimit then goto GC if);
      newTop -> IOATop;
      
-     (if MacOS then
-         { AddrReg2 is on the stack. }
-         stack[16] -> theRep
+     (if linux then
+         stack[20] -> theRep;
       else
-         stack[12] -> theRep
+         (if MacOS then
+             stack[16] -> theRep;
+          else
+             stack[12] -> theRep;
+         if);
      if);
      
      { The new Object is now allocated, but not assigned yet!}
@@ -67,13 +102,17 @@ CopySRR: public
          (if FLAGS >= 0 then goto loop if)
      if);
      
-     (if MacOS then
-         { AddrReg2 is on the stack. }
-         stack[12] -> theItem;
-         stack[8] -> offset
-      else
-         stack[8] -> theItem;
-         stack[4] -> offset
+     (if linux then
+         stack[16] -> theItem;
+         stack[12] -> offset;
+      else         
+         (if MacOS then
+             stack[12] -> theItem;
+             stack[8] -> offset;
+          else
+             stack[8] -> theItem;
+             stack[4] -> offset;
+         if);
      if);
      
      newRep -> theItem[offset*4];
@@ -84,6 +123,7 @@ CopySRR: public
          call ChkRA                { No need to remove parameter. }
      if);
      
+     (if linux then pop AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      return 12;
      
@@ -94,4 +134,3 @@ CopySRR: public
      call DoGC;              { Call the Garbage Collector.               }
      goto again              { Go back to the beginning of this routine. }
   #)
-

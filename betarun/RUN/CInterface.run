@@ -1,32 +1,55 @@
 ----- CInterface: system -----
 
 CinitT: public
-  (# thePoolAddr: DataArea = AddrReg1
+  (# 
+     { Used variable. }
+     thePoolAddr: DataArea = AddrReg1
   do
+     (if linux then push AddrReg1 if);
      CTextPool[] -> thePoolAddr;
      thePoolAddr -> CTextPoolEnd;
+     (if linux then pop AddrReg1 if);
      return
   #);
 
+
+
 CpkVT: public
   (#
-     { input parameters }
+     { Input variable. }
      repArg:      Repetition = DataReg1;
      
-     { variables }
+     { Used variables. }
      a1:          Long       = RegArg;
      theRep:      Repetition = RegArg;
      theTextAddr: DataArea   = AddrReg2;
      FreeSpace:   Long       = DataReg1;
      nextText:    DataArea   = AddrReg1;
-     
      BodySize:    Long       = DataReg2;
-     index:       Long       = DataRegA;
+     index:       Long       = DataReg3; { Saved/restored }
      Value:       Long       = DataReg1;
-     
-     RetAddr:     CodeArea   = AddrReg1 
+     stack:   StackArea  = SP;
   do 
+     {
+       General stack layout:
+       <a1>                Linux: +0    Mac: +0    Default: +0
+       <Linux: DataReg2>   Linux: +4
+       <Linux: AddrReg2>   Linux: +8
+       <Linux: AddrReg1>   Linux: +12
+       <Mac: AddrReg2>                  Mac: +4    
+       <return address>    Linux: +16   Mac: +8    Default: +4
+       <C argument>        Linux: +20   Mac: +12   Default: +8
+     }
+     
+     (if linux then pReg1 -> DataReg1 if);
+     
+     {Reserve room for C argument below return address}
+     4 -> stack-; 
+     stack[4] -> stack[0]; 
+     
      (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2, DataReg2 if);
+     
      push a1;
      repArg -> theRep;
      
@@ -52,6 +75,8 @@ CpkVT: public
          call BetaError
      if);
      
+     push DataReg3;
+     
      { Copy the contents of the repetition to the CTextPool. }
      (if BodySize <> 0 then
          0 -> index;
@@ -62,48 +87,75 @@ CpkVT: public
          (if index < BodySize then goto loop if)
      if);
      
+     pop DataReg3;
+     
      { Update CTextPool. }
      theTextAddr[BodySize][] -> nextText;
      nextText -> CTextPoolEnd;
      
+     {Install C argument}
+     (if linux then
+         theTextAddr -> stack[20];
+      else
+         (if MacOS then
+             theTextAddr -> stack[12];
+          else
+             theTextAddr -> stack[8];
+         if);
+     if);
+     
      pop a1;
+     (if linux then pop DataReg2, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
-     pop  RetAddr;
-     push theTextAddr; { leave argument for C }
-     goto RetAddr
+     return;
   #);
 
-CpkSVT: proc;
-CpkVTS: public
-(# do goto CpkSVT #);
+
 
 CpkSVT: public
   (#
-     { input parameters }
+     { Input variables. }
      repArg:      Repetition = DataReg1;
-     
-     { variables }
-     a1:          Long       = RegArg;
-     theRep:      Repetition = RegArg;
      low:         Long       = DataReg2;
      high:        Long       = DataReg3;
+     
+     { Used variables. }
+     a1:          Long       = RegArg;
+     theRep:      Repetition = RegArg;
      theTextAddr: DataArea   = AddrReg2;
-     FreeSpace:   Long       = DataRegA;
+     FreeSpace:   Long       = DataReg2;
      nextText:    DataArea   = AddrReg1;
-     
      BodySize:    Long       = DataReg1; 
-     index:       Long       = DataReg2; { same as low }
-     Value:       Byte       = DataRegA; { same as FreeSpace }
-     
-     RetAddr:     CodeArea   = AddrReg1
+     index:       Long       = DataReg2;
+     Value:       Byte       = DataReg1;
+     stack:   StackArea  = SP;
   do 
+     {
+       General stack layout:
+       <a1>                Linux: +0    Mac: +0    Default: +0
+       <Linux: DataReg3>   Linux: +4
+       <Linux: AddrReg2>   Linux: +8
+       <Linux: AddrReg1>   Linux: +12
+       <Mac: AddrReg2>                  Mac: +4    
+       <return address>    Linux: +16   Mac: +8    Default: +4
+       <C argument>        Linux: +20   Mac: +12   Default: +8
+     }
+     
+     {Reserve room for C argument below return address}
+     4 -> stack-; 
+     stack[4] -> stack[0]; 
+     
      (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2, DataReg3 if);
+     
+     (if linux then pReg1 -> DataReg1; pReg2 -> DataReg2; pReg3 -> DataReg3 if);
+
      push a1;
      repArg -> theRep;
      
      { Check bounds and transform high into number of bytes to copy }
-     (if low  < theRep.LowBorder   then push RegObj; push -6; call BetaError if);
-     (if high > theRep.HighBorder  then push RegObj; push -7; call BetaError if);
+     (if low  < theRep.LowBorder then push RegObj; push -6; call BetaError if);
+     (if high > theRep.HighBorder then push RegObj; push -7; call BetaError if);
      low  -> high-; 1 -> high+;
      (if high < 0 then 0 -> high if);
      
@@ -113,6 +165,9 @@ CpkSVT: public
      { Check range overflow on CTextPool.                               }
      { nextText is used as a tmp. register only.                        }
      { Size_left_in_CTextPool = (Adr(CTextPool) + 1000) - CTextPoolEnd. }
+     
+     push low; {Save low; is about to be destroyed by FreeSpace assignment}
+     
      CTextPool[] -> nextText;
      nextText -> FreeSpace;
      1000 -> FreeSpace+;
@@ -128,16 +183,20 @@ CpkSVT: public
          call BetaError
      if);
      
+     pop low; {Restore low; finished using FreeSpace}
+     
      { Copy the contents of the repetition to the CTextPool. }
      (if high <> 0 then
          1 -> low-;
          theRep[low][] -> theRep; { Start at low. }
          0 -> index;
+         push BodySize; {Save BodySize; is about to be destroyed by Value assignment}
          loop:
          theRep[16+index]!b -> Value; { copy as bytes }
          Value -> theTextAddr[index]!b;
          1 -> index+;
-         (if index < high then goto loop if)
+         (if index < high then goto loop if);
+         pop BodySize; {Restore Bodysize; finished using Value}
      if);
      0 -> theTextAddr[high]!b; { NULL termination }
      
@@ -145,9 +204,19 @@ CpkSVT: public
      theTextAddr[BodySize][] -> nextText;
      nextText -> CTextPoolEnd;
      
+     {Install C argument}
+     (if linux then
+         theTextAddr -> stack[20];
+      else
+         (if MacOS then
+             theTextAddr -> stack[12];
+          else
+             theTextAddr -> stack[8];
+         if);
+     if);
+     
      pop  a1;
+     (if linux then pop DataReg3, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
-     pop  RetAddr;
-     push theTextAddr;
-     goto RetAddr
+     return;
   #)

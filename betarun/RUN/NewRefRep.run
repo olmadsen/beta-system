@@ -6,15 +6,32 @@ NewRR: public
      { stack on entry [return(0),offset(4),Item(8),...] }
      { Input register range = DataReg1.                 }
      
-     { Used variable.   }
+     { Input variable. }
+     range:   Long       = DataReg1; { The range of the valRep. }
+     
+     { Used variables. }
      stack:   StackArea = SP;
      theRep:  Repetition = AddrReg1;
      newTop:  DataArea   = AddrReg2;
      theCell: DataArea   = AddrReg2;
-     range:   Long       = DataReg1; { The range of the valRep. }
      offset:  Long       = DataReg1
   do
+     {
+       General stack layout:
+       <Linux: AddrReg2>   Linux: +0
+       <Linux: AddrReg1>   Linux: +4
+       <Mac: AddrReg2>                  Mac: +0    
+       <return address>    Linux: +8    Mac: +4    Default: +0
+       <offset>            Linux: +12   Mac: +8    Default: +4
+       <item>              Linux: +16   Mac: +12   Default: +8
+     }
+     
+     (if linux then pReg1 -> DataReg1 if);
+     
+     again:
+     
      (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2 if);
      
      (if range<0 then 0 -> range if);
      IOATop -> theRep;
@@ -38,14 +55,19 @@ NewRR: public
      1 -> range-;
      (if FLAGS >= 0 then goto loop if);
      
-     (if MacOS then 
-         stack[12] -> theCell;
-         stack[8]  -> offset
+     (if linux then 
+         stack[16] -> theCell;
+         stack[12]  -> offset;
       else
-         stack[8] -> theCell;
-         stack[4] -> offset
+         (if MacOS then 
+             stack[12] -> theCell;
+             stack[8]  -> offset;
+          else
+             stack[8] -> theCell;
+             stack[4] -> offset;
+         if);
      if);
-     
+          
      theCell[offset*4][] -> theCell;
      theRep -> theCell[0];
      (if theCell outside IOA then  { The theCell resides in AOA. }
@@ -53,6 +75,7 @@ NewRR: public
          call ChkRA { No need to remove parameter. }
      if);
      
+     (if linux then pop AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      return 8;
      
@@ -60,8 +83,8 @@ NewRR: public
      { The IOA heap is full, so we need a garbage collection.            }
      4 -> ReqObjectSize;     { Set the requested Object Size.            }
      range -> ReqObjectSize+;
+     (if linux then pop AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      call DoGC;              { Call the Garbage Collector.               }
-     goto NewRR              { Go back to the beginning of this routine. }
+     goto again              { Go back to the beginning of this routine. }
   #)
-

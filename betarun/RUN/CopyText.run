@@ -5,7 +5,7 @@ CopyT: public
      { Allocate a (byte)ValueRepetition and initialize it with some text.    }
      { stack on entry [return(0),offset(4),item(8),asciiz(12),...]     }
      
-     { Used variable.  }
+     { Used variables. }
      stack:   StackArea  = SP;
      theText: CodeArea   = AddrReg1; { Address to the ascii text. }
      newTop:  DataArea   = AddrReg1;
@@ -16,35 +16,74 @@ CopyT: public
      Value:   Long       = DataReg2;
      offset:  Long       = DataReg2
   do
+     {
+       General stack layout:
+       <Linux: DataReg2>   Linux: +0
+       <Linux: DataReg1>   Linux: +4
+       <Linux: AddrReg2>   Linux: +8
+       <Linux: AddrReg1>   Linux: +12
+       <Mac: AddrReg2>                  Mac: +0    
+       <return address>    Linux: +16   Mac: +4    Default: +0
+       <offset>            Linux: +20   Mac: +8    Default: +4
+       <item>              Linux: +24   Mac: +12   Default: +8
+       <asciiz>            Linux: +28   Mac: +16   Default: +12
+     }
+          
+     (if MacOS then push AddrReg2 if);
+     (if linux then push AddrReg1, AddrReg2, DataReg1, DataReg2 if);
+     
      { Calculate the length of the text. }
-     stack[12] -> theText;
+     (if linux then
+         stack[28] -> theText;
+      else 
+         (if MacOS then
+             stack[16] -> theText;
+          else
+             stack [12] -> theText;
+         if)
+     if);
+     
      0 -> Range;
      goto LoopB;
      LoopA: 1  -> Range+;
      LoopB: (if theText[Range]!b <> 0 then goto LoopA if);
      
-     (if MacOS then push AddrReg2 if);
-     
-     (if Range > 256 then 
-         push DataRegA, DataRegB, RegObj, RegArg; { save registers }
+     (if Range > 256 then
+         (if linux then
+             push RegObj, RegArg; { save registers }
+          else
+             push DataRegA, DataRegB, RegObj, RegArg; { save registers }
+         if);
          push Range; { Parameters to LVRAAlloc. }
          push -6; { Parameters to LVRAAlloc. }
          call LVRAAlloc;
          DataRegA -> newRep;
          (if newRep <> 0 then
              { Make the LVRA-cycle: theCell -> newRep.Age }
-             (if MacOS then
-                 stack[32  { 8 + 6*4 }] -> DataRegA; 4 -> DataRegA*;
-                 stack[36 { 12 + 6*4 }] -> DataRegA+
+             (if linux then 
+                 stack[36{20+(2+2)*4}] -> DataRegA; 
+                 4 -> DataRegA*;
+                 stack[40{24+(2+2)*4}] -> DataRegA+
               else
-                 stack[28 { 4 + 6*4 }] -> DataRegA; 4 -> DataRegA*;
-                 stack[32 { 8 + 6*4 }] -> DataRegA+
+                 (if MacOS then
+                     stack[32{8+(2+4)*4}] -> DataRegA; 
+                     4 -> DataRegA*;
+                     stack[36{12+(2+4)*4}] -> DataRegA+
+                  else
+                     stack[28{4+(2+4)*4}] -> DataRegA; 
+                     4 -> DataRegA*;
+                     stack[32{8+(2+4)*4}] -> DataRegA+
+                 if);
              if);
              DataRegA -> newRep.Age
          if);
          4 -> SP+;
          pop  Range;
-         pop  RegArg, RegObj, DataRegB, DataRegA;
+         (if linux then
+             pop  RegArg, RegObj;
+          else
+             pop  RegArg, RegObj, DataRegB, DataRegA;
+         if);
          (if newRep <> 0 then
              goto copyBody
          if)
@@ -70,10 +109,14 @@ CopyT: public
      
      copyBody:
      
-     (if MacOS then 
-         stack[16] -> theText
-      else
-         stack[12] -> theText
+     (if linux then
+         stack[28] -> theText
+      else 
+         (if MacOS then 
+             stack[16] -> theText
+          else
+             stack[12] -> theText
+         if);
      if);     
      
      { Assign the text to the body part of the repetition. }
@@ -90,12 +133,17 @@ CopyT: public
          (if FLAGS >= 0 then goto loop if)
      if);
      
-     (if MacOS then 
-         stack[12] -> theCell;
-         stack[8]  -> offset
+     (if linux then
+         stack[24] -> theCell;
+         stack[20]  -> offset;
       else
-         stack[8] -> theCell;
-         stack[4] -> offset
+         (if MacOS then 
+             stack[12] -> theCell;
+             stack[8]  -> offset;
+          else
+             stack[8] -> theCell;
+             stack[4] -> offset;
+         if);
      if);
      theCell[offset*4][] -> theCell;
      newRep -> theCell[0];
@@ -105,6 +153,7 @@ CopyT: public
          call ChkRA { No need to remove parameter. }
      if);
      
+     (if linux then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      return 12;
      
@@ -113,6 +162,7 @@ CopyT: public
      4 -> ReqObjectSize;     { Set the requested Object Size.            }
      4 -> BodySize/;
      BodySize -> ReqObjectSize+;
+     (if linux then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      call DoGC;              { Call the Garbage Collector.               }
      goto CopyT              { Go back to the beginning of this routine. }
