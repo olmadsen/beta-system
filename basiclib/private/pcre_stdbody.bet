@@ -1,0 +1,195 @@
+ORIGIN 'pcrebody';
+INCLUDE 'pcrelib';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 2000
+ *       All rights reserved.
+ *       Written by Erik Corry
+ *)
+
+
+---- PcrePrivate: descriptor ----
+(#
+  (* Private internal state *)
+  compiled_regexp: @Integer;
+  extra: @Integer;
+  oVector: [1] @Integer;
+#)
+
+---- PcreInit: dopart ----
+  do options -> opt;
+     (if opt %Band pcre_C_LOCALE <> 0 then
+	(@@exp.T[1],
+	 opt %Band pcre_NONBETAOPTIONS,
+	 @@errtext,
+	 @@erroffset, 0) -> pcre_compile -> private.compiled_regexp;
+     else
+	(@@exp.T[1],
+	 opt %Band pcre_NONBETAOPTIONS,
+	 @@errtext,
+	 @@erroffset) -> locale_pcre_compile -> private.compiled_regexp;
+     if);
+     (if private.compiled_regexp = 0 then
+	 &CString[] -> error[];
+	 errtext -> error;
+	 error.get -> compilation_error;
+     else
+         (if opt %Band pcre_DO_STUDY <> 0 then
+	    (private.compiled_regexp, opt %Band pcre_NONBETAOPTIONS, @@errtext) ->
+	       pcre_study -> private.extra;
+	    (if errtext <> 0 then
+	       &CString[] -> error[];
+	       errtext -> error;
+	       error.get -> compilation_error;
+	    if);
+	 if);
+	 (private.compiled_regexp, private.extra, pcre_INFO_CAPTURECOUNT, @@subpatterns) ->
+	    pcre_fullinfo;
+	 ((subpatterns + 1) * 3) -> private.oVector.new;
+     if);
+
+---- PcreMatchPos: dopart ----
+     do private.oVector[1] + 1 -> start;
+	private.oVector[2] -> end;
+
+---- PcrePreMatchText: dopart ----
+     do (1, private.oVector[1]) -> subject.sub -> result[];
+
+---- PcrePostMatchText: dopart ----
+     do (private.oVector[2] + 1, subject.lgth) -> subject.sub -> result[];
+
+---- PcreSubMatchPos: dopart ----
+     do (if index <= subPatterns then
+           private.oVector[index * 2 + 1] + 1 -> start;
+	   private.oVector[index * 2 + 2] -> end;
+        if);
+
+---- PcreSubMatchText: dopart ----
+     do index -> subMatchPos -> (start, end);
+	(if start = 0 then
+	   (if opt %Band pcre_RETURN_NONE then
+	       NONE -> result[];
+	   else
+	       '' -> result[];
+	   if);
+        else
+	   (start, end) -> subject.sub -> result[];
+        if);
+
+---- PcreMatch: dopart ----
+  do options -> opt;
+     0 -> subMatchCounter;
+     pre;
+     private.oVector.range -> private.oVector.new;
+     (if subject.T.range = 0 then 1 -> subject.T.extend; 0 -> subject.T[1] if);
+     position - 1 -> psn;
+     (private.compiled_regexp, private.extra, @@subject.T[1], subject.lgth,
+           psn, opt %Band pcre_NONBETAOPTIONS, 
+	   @@private.oVector[1], private.oVector.range) -> pcre_exec -> result;
+     (result <> pcre_ERROR_NOMATCH) -> matched;
+     (if matched then
+        INNER;
+     else
+        noMatch;
+     if);
+
+---- PcreMatchAllPrivate: descriptor ----
+(#
+  (* Private internal state *)
+  endOfPreviousMatch: @Integer;
+  splitPositions: [20] @Integer;
+#)
+
+
+---- PcreMatchAllPre: dopart ----
+  do 0 -> privatema.endOfPreviousMatch;
+     0 -> matches;
+     privatema.splitPositions.range -> privatema.splitPositions.new;
+     INNER;
+
+---- PcreMatchAllSplitPos: dopart ----
+  do privatema.endOfPreviousMatch + 1 -> start;
+     private.oVector[1] -> end;
+
+---- PcreMatchAllSplit: dopart ----
+  do matches + 1 -> thismatch;
+     (if thismatch * 2 > privatema.splitPositions.range then
+         privatema.splitPositions.range + 2 -> privatema.splitPositions.extend;
+     if);
+     splitPos ->
+       (privatema.splitPositions[thismatch * 2 - 1], privatema.splitPositions[thismatch * 2]);
+     INNER;
+
+---- PcreMatchAllNoMatch: dopart ----
+     (* Fix up private.oVector so you can call splitText and splitPos one
+      * last time.
+      *)
+  do subject.lgth -> private.oVector[1];
+     subject.lgth -> private.oVector[2];
+     split;
+     post;
+     INNER;
+
+---- PcreMatchAllSpn: dopart ----
+  do (if num > matches + 1 then
+	 (if not (opt %Band pcre_RETURN_NONE) then
+	     '' -> result[];
+	 if);
+     else
+	 (privatema.splitPositions[num * 2 - 1], privatema.splitPositions[num * 2]) ->
+	    subject.sub ->  result[];
+     if);
+     INNER;
+
+
+---- PcreMatchAllRestn: dopart ----
+  do (if num > matches + 1 then
+	 (if not (opt %Band pcre_RETURN_NONE) then
+	     '' -> result[];
+	 if);
+     else
+	 (privatema.splitPositions[num * 2 - 1], subject.lgth) ->
+	    subject.sub ->  result[];
+     if);
+     INNER;
+
+---- PcreMatchAll: dopart ----
+  do split;
+     matches + 1 -> matches;
+     INNER matchAll;
+     loop:
+     (#
+     do private.oVector[2] -> privatema.endOfPreviousMatch;
+        (if private.oVector[2] >= subject.lgth then
+	   leave loop;  (* Got to end of string *)
+	if);
+	(private.compiled_regexp, private.extra, @@subject.T[1], subject.lgth,
+         private.oVector[2], opt %Band pcre_NONBETAOPTIONS,
+         @@private.oVector[1], private.oVector.range) -> pcre_exec -> result;
+	 (result <> pcre_ERROR_NOMATCH) -> matched;
+	 (if matched then
+	    split;
+	    matches + 1 -> matches;
+	    INNER matchAll;
+	 else
+	    (* Fix up private.oVector so you can call splitText and splitPos one
+	     * last time.
+	     *)
+	    subject.lgth -> private.oVector[1];
+	    subject.lgth -> private.oVector[2];
+	    split;
+	    post;
+	    true -> matched; (* At least one match occurred *)
+	    leave loop;
+	 if);
+	 restart loop;
+     #);
+
+
+---- PcreReplace: dopart ----
+  do
+     (1, private.oVector[1]) -> subject.sub -> new[];
+     replacement[] -> rep -> new.append;
+     (private.oVector[2] + 1, subject.lgth) -> subject.sub -> new.append;
+     INNER;
+
