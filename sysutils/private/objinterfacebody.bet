@@ -56,28 +56,22 @@ do address + 16 -> tos'%adrGetLong' -> tos'%getShort[1]' -> value
 do address + 16 -> tos'%adrGetLong' -> tos'%getShort[0]' -> value
 
 -- PrototypeScanRefs: descriptor --
-(# l: @longWord;
-   longAligned: @boolean;
-do
-   
-   
-   GcTab -> thisAddr;
-   false -> isStatic;
+(#
+do GcTab -> thisAddr;
    (* Scan static part objects:
     * struct GCEntry {
-    *   unsigned short StaticOff;
-    *   short OrigOff;
-    *   ref(ProtoType) Proto;
+    *  0: unsigned short StaticOff;
+    *  2: short OriginOff;
+    *  4: ref(ProtoType) Proto;
     * };
     *)
    true -> isStatic;
    loop: 
      (# 
-     do
-        thisAddr -> tos'%adrGetLong' -> l;
-        (0 -> l.getShort) * 4 -> thisOffset;
+     do %getShortAt(thisAddr) * 4 -> thisOffset;
         (if thisOffset <> 0 then 
-            thisAddr + 4 -> tos'%adrGetLong' -> thisProto;
+            %getShortAt(thisAddr + 2) * 4 -> thisOriginOff;
+            %getLongAt(thisAddr + 4) -> thisProto;
             INNER scanrefs;
             thisAddr + 8 -> thisAddr;
             restart loop
@@ -85,17 +79,10 @@ do
      #);
    thisAddr + 2 -> thisAddr;
    false -> isStatic;
-   false -> longAligned;
    (* Scan dynamic references *)
    loop: 
      (# 
-     do
-        (if longAligned then
-            thisAddr -> TOS'%adrGetShort[0]' -> thisOffset;
-         else
-            thisAddr-2 -> TOS'%adrGetShort[1]' -> thisOffset;
-        if);
-        not longAligned -> longAligned;
+     do %getShortAt(thisAddr)->thisOffset;
         (if thisOffset<>0 then
             thisOffset mod 4 -> refType;
             thisOffset - refType -> thisOffset;
@@ -189,7 +176,6 @@ do
    ptr + 2 -> ptr; (* Skip terminating zero. *)
    
    SIMPLETYPE_INT32->simpleType;
-   
    %getByteAt(ptr) -> b; (* First get flags from first two bits.*)
    ptr+1->ptr; 
    
@@ -208,7 +194,7 @@ do
    if);
    
    32->pos; (* Ready for rest of bytestream representing longs. *)
-   ((Size-1) div 32) -> N;
+   (Size-1) div 8 -> N;
    
    (for i: N repeat
         %getByteAt(ptr) -> b;
