@@ -10,12 +10,12 @@
 
 #ifdef sparc
 asmlabel(CopyCT,
-	 "clr %o0;"
-	 "clr %o1;"
-	 "clr %o3;"
-	 "clr %o4;"
-	 "ba "CPREF"CopyCT;"
-	 "mov %l0, %o2;"
+	 "clr %o0\n"
+	 "clr %o1\n"
+	 "clr %o3\n"
+	 "clr %o4\n"
+	 "ba "CPREF"CopyCT\n"
+	 "mov %l0,%o2\n"
 );
 ref(ValRep) CCopyCT(int i0, int i1, unsigned char *textPtr)
 #else
