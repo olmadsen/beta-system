@@ -66,6 +66,36 @@ DeferWindowPos: external
   exit theHDWP
   #);
 
+TCHITTESTINFO_ext: ExternalRecord
+  (# pt: @
+       (# x: @long (# pos::< (# do 0 -> value; #); #); (* int x *)
+          y: @long (# pos::< (# do 4 -> value; #); #); (* int y *)
+       enter (x,y)
+       exit (x,y)
+       #);
+     flags: @long (# pos::< (# do 8 -> value; #); #);
+  #);
+
+sizeOf_TCHITTESTINFO: (# exit 12 #);
+
+TCM_HITTEST: (# exit TCM_FIRST + 13 #);
+
+TabCtrl_HitTest:
+  (# hwnd,x,y: @integer;
+     result: @integer;
+     ptInfo: @TCHITTESTINFO_ext;
+  enter (hwnd,x,y)
+  do sizeOf_TCHITTESTINFO -> malloc -> ptInfo.ptr;
+     (if ptInfo.ptr<>0 then
+         (x,y) -> ptInfo.pt;
+         (hwnd, TCM_HITTEST, 0, ptInfo.ptr) -> SendMessage -> result;
+         
+         ptInfo.ptr -> free;
+         0 -> ptInfo.ptr;
+     if);
+  exit result
+  #);
+
 TC_ITEM: ExternalRecord
   (# (* value specifying which members to retrieve or set *)
      mask: @long (# pos::< (# do 0 -> value; #); #);  
@@ -105,6 +135,26 @@ TCS_TOOLTIPS: (# exit            0x4000 #);
 TCS_FOCUSNEVER: (# exit          0x8000 #);
 
 TCM_FIRST: (# exit                0x1300 #);
+
+TCM_SETITEMA: (# exit          (TCM_FIRST + 6) #);
+TCM_SETITEM: (# exit TCM_SETITEMA #);
+
+TabCtrl_SetItem:
+  (# hwnd, iItem, pitem: @integer;
+     result: @integer;
+  enter (hwnd, iItem, pitem)
+  do (hwnd, TCM_SETITEM, iItem, pitem) -> SendMessage -> result;
+  exit result
+  #);
+
+TCM_GETCURFOCUS: (# exit TCM_FIRST + 47 #);
+TabCtrl_GetCurFocus:
+  (# hwnd: @integer;
+     result: @integer;
+  enter hwnd
+  do (hwnd, TCM_GETCURFOCUS , 0, 0) -> SendMessage -> result;
+  exit result
+  #);
 
 TCM_GETCURSEL: (# exit (TCM_FIRST + 11) #);
 TabCtrl_GetCurSel:
@@ -178,14 +228,6 @@ PatBlt: external
   exit result
   #);
 
-tab:
-  (# label: ^text;
-     icon: ^pixmap;
-     inx: @integer;
-     theCanvas: ^canvas;
-  #);
-
-
 tabControlNotiMethods: windowItemNotificationMethods
   (# handleNotification::
        (# 
@@ -199,24 +241,11 @@ tabControlNotiMethods: windowItemNotificationMethods
                        private.hwndTab -> TabCtrl_GetCurSel
                          -> private.theTabs.findTab -> theTab[];
                        (if theTab[]<>NONE then
-                           (if private.current_canvas[]<>NONE then
-                               (if private.current_canvas.visible then
-                                   private.current_canvas.hide;
-                               if);
-                           if);
-                           theTab.theCanvas[] 
-                             -> private.current_canvas[];
-                           private.current_canvas.interfaceObjectID 
-                             -> private.current_hwndDisplay;
-                           
-                           (if not theTab.theCanvas.visible then
-                               theTab.theCanvas.show;
-                           if);
-                           theTab.theCanvas.bringToFront;
-                           theTab.theCanvas[] -> onSelect;
+                           theTab[] -> private.updateCurVisibleCanvas;
+                           theTab.onSelect;
                        if);
                     //TCN_SELCHANGING then
-                       (if onBeforeSelect then
+                       (if onBeforeSelectionChange then
                            0 -> info.result;
                         else
                            1 -> info.result;
@@ -257,42 +286,71 @@ tabControlNotiMethods: windowItemNotificationMethods
        #);
   #);
 
--- GUIEnvTabControlAdd: doPart --
+   
+-- GUIEnvTabSetLabel: doPart --
+do theLabel[] -> tabPrivate.privLabel[];
+   (if tabPrivate.openDone then
+       tabPrivate.updateLabel;
+   if);
+   
+-- GUIEnvTabGetLabel: doPart --
+do tabPrivate.privLabel[] -> theLabel[];
+   
+-- GUIEnvTabSetIcon: doPart --
+do theIcon[] -> tabPrivate.privIcon[];
+   
+-- GUIEnvTabGetIcon: doPart --
+do tabPrivate.privIcon[] -> theIcon[]
+   
+-- GUIEnvTabSetPage: doPart --
+do (if private.current_canvas[]=tabPrivate.theCanvas[] then
+       thePage[] -> private.current_canvas[];
+   if);
+   thePage[] -> tabPrivate.theCanvas[];
+   (if tabPrivate.openDone then
+       private.handleSize;
+   if);
+   (if private.current_canvas[]<>NONE then
+       private.current_canvas.bringToFront;
+   if);
+   
+-- GUIEnvTabGetPage: doPart --
+do tabPrivate.theCanvas[] -> thePage[];
+   
+-- GUIEnvTabOpen: doPart --
 do (# tie: @TC_ITEM; 
       tempLabel: @cString;
       mask: @integer;
-      theTab: ^tab;
       insertRes: @integer;
-   do (if theCanvas[]<>NONE then
-          
-          &tab[] -> theTab[];
-          theCanvas[] -> theTab.theCanvas[];
-          theLabel[] -> theTab.label[];
-          theIcon[] -> theTab.icon[];
-          
+   do false -> tabPrivate.openDone;
+      
+      inner open;
+      
+      (if tabPrivate.theCanvas[]=NONE then
+          'Page is NONE in tab.open.' -> useError;
+       else
           0 -> mask;
           
           sizeOfTC_ITEM -> malloc -> tie.ptr; 
           
           (if tie.ptr<>0 then
-              (if theLabel[]<>NONE then
-                  (if theLabel.length>0 then
+              (if tabPrivate.privLabel[]<>NONE then
+                  (if tabPrivate.privLabel.length>0 then
                       (mask, TCIF_TEXT) -> tos'%or' -> mask; 
-                      theLabel[] -> tempLabel.set;
+                      tabPrivate.privLabel[] -> tempLabel.set;
                       tempLabel -> tie.pszText;
                   if);
               if);
               
-              (if theIcon[]<>NONE then
+              (if tabPrivate.privIcon[]<>NONE then
                   (mask, TCIF_IMAGE) -> tos'%or' -> mask; 
-                  
                else
                   -1 -> tie.iImage; 
               if);
               mask -> tie.mask;
-                            
-              private.hwndTab -> TabCtrl_GetItemCount -> theTab.inx;
-              (private.hwndTab, theTab.inx, tie.ptr) 
+              
+              private.hwndTab -> TabCtrl_GetItemCount -> tabPrivate.inx;
+              (private.hwndTab, tabPrivate.inx, tie.ptr) 
                 -> TabCtrl_InsertItem -> insertRes;
               
               (if (insertRes = -1) then
@@ -301,65 +359,110 @@ do (# tie: @TC_ITEM;
                   0 -> tie.ptr;
                   (* failed; *)
                else
-                  theTab[] -> private.theTabs.append;
+                  this(tab)[] -> private.theTabs.append;
                   
-                  (if private.current_canvas[]<>NONE then
-                      (if private.current_canvas.visible then
-                          private.current_canvas.hide;
-                      if);
-                  if);
-                  theCanvas.interfaceObjectID 
-                    -> private.current_hwndDisplay;
-                  theCanvas[] -> private.current_canvas[];
-                  
-                  private.handleSize; 
-                  
-                  (private.hwndTab, theTab.inx) -> TabCtrl_SetCurSel;
-                  (if not theCanvas.visible then
-                      theCanvas.show;
-                  if);
-                  theCanvas.bringToFront;
+                  this(tab)[] -> private.updateCurVisibleCanvas
+                  (# 
+                  do private.handleSize; 
+                     (private.hwndTab, tabPrivate.inx) -> TabCtrl_SetCurSel;
+                  #);
               if);
               
               (if tempLabel.charPtr<>0 then 
                   tempLabel.free; 
               if);
               (if (tie.ptr<>0) then
+                  tie.ptr -> free;
                   0 -> tie.ptr;
               if);
+           else
+              'Failled to allocate TC_ITEM  while adding tab.'
+                -> resourceAllocationError;
           if);
       if);
+      true -> tabPrivate.openDone;
    #);
    
--- GUIEnvTabControlDelete: doPart --
-do (# theTab: ^tab;
-      deleteRes: @integer;
-   do L:
-        private.theTabs.scan
-        (# 
-        do (if current.theCanvas[]=theCanvas[] then
-               current[] -> theTab[];
-               leave L
-           if);
-        #);
-      (if theTab[]<>NONE then
+-- GUIEnvTabClose: doPart --
+do (# deleteRes: @integer;
+      errMsg: ^text;
+   do 
+      (if tabPrivate.inx<>0 then
           
-          (private.hwndTab, theTab.inx) -> TabCtrl_DeleteItem -> deleteRes;
+          (private.hwndTab, tabPrivate.inx) -> TabCtrl_DeleteItem -> deleteRes;
           
           (if deleteRes=0 then
-              'TabCtrl_DeleteItem failed. Error= ' -> screen.putText;
-              GetLastError -> screen.putInt; newline;
+              &text[] -> errMsg[];
+              'TabCtrl_DeleteItem failed. Error= ' -> errMsg.putText;
+              GetLastError -> errMsg.putInt; errMsg.newline;
+              errMsg[] -> apiError;
           if);
           
-          theTab[] -> private.theTabs.at -> private.theTabs.delete;
+          this(tab)[] -> private.theTabs.at -> private.theTabs.delete;
           private.theTabs.scan
           (# 
-          do (if current.inx > theTab.inx then
-                 current.inx - 1 -> current.inx;
+          do (if current.tabPrivate.inx > tabPrivate.inx then
+                 current.tabPrivate.inx - 1 -> current.tabPrivate.inx;
              if);
           #);
       if);
    #);
+        
+-- GUIEnvTabSelect: doPart --
+do this(tab)[] -> selection;
+   
+-- GUIenvTabPrivate: descriptor --
+(# 
+   privLabel: ^text;
+   privIcon: ^pixmap;
+   theCanvas: ^canvas;
+   inx: @integer;
+   openDone: @boolean;
+   
+   updateLabel:
+     (# tie: @TC_ITEM; 
+        tempLabel: @cString;
+        mask: @integer;
+     do sizeOfTC_ITEM -> malloc -> tie.ptr; 
+        (if tie.ptr<>0 then
+            (if privLabel[]<>NONE then
+                (if privLabel.length>0 then
+                    TCIF_TEXT -> mask; 
+                    privLabel[] -> tempLabel.set;
+                    tempLabel -> tie.pszText;
+                    mask -> tie.mask;
+                    
+                    (private.hwndTab, inx, tie.ptr) 
+                      -> TabCtrl_SetItem;
+                    
+                    (if tempLabel.charPtr<>0 then 
+                        tempLabel.free; 
+                    if);
+                if);
+            if);
+            (if (tie.ptr<>0) then
+                tie.ptr -> free;
+                0 -> tie.ptr;
+            if);
+        if);
+     #);
+#)
+
+-- GUIEnvTabsSize: doPart --
+do private.theTabs.size -> value;
+   
+-- GUIEnvTabsScan: doPart --
+do private.theTabs.scan
+   (# 
+   do (if current.tabPrivate.theCanvas[]<>NONE then
+          current[] -> THIS(scan).current[];
+          inner scan;
+      if);
+   #);
+   
+-- GUIenvTabsPrivate: descriptor --
+(# 
+#)
 
 -- GUIenvTabControlCreate: doPart --
 do InitCommonControls; 
@@ -368,7 +471,11 @@ do InitCommonControls;
    isSubClass  -> windowItemClassStatus; 
    'SysTabControl32' -> windowItemClass;
    
-   (TCS_MULTILINE,TCS_FOCUSONBUTTONDOWN) -> tos'%or' -> windowItemStyle;
+   (if multiLine then
+       TCS_MULTILINE %Bor TCS_FOCUSONBUTTONDOWN -> windowItemStyle;
+    else
+       TCS_FOCUSONBUTTONDOWN -> windowItemStyle;
+   if);
    
    inner;
    
@@ -410,42 +517,37 @@ do (# rcClient: @ntRECT2;
 -- GUIEnvTabControlClose: doPart --
 do inner;
    
--- GUIEnvTabControlSelect: doPart --
-do theCanvas[] -> selection;
    
 -- GUIEnvTabControlSetSelection: doPart --
-do (if theCanvas[]<>NONE then
-       L: private.theTabs.scan
-         (# 
-         do (if current.theCanvas[]=theCanvas[] then
-                (private.hwndTab, current.inx) -> TabCtrl_SetCurSel;
-                
-                (if private.current_canvas[]<>NONE then
-                    (if private.current_canvas.visible then
-                        private.current_canvas.hide;
+do (if theTab[]<>NONE then
+       (if theTab.tabPrivate.theCanvas[]<>NONE then
+           L: private.theTabs.scan
+             (# 
+             do (if current.tabPrivate.theCanvas[]=theTab.tabPrivate.theCanvas[] then
+                    (private.hwndTab, current.tabPrivate.inx) -> TabCtrl_SetCurSel;
+                    
+                    (if private.current_canvas[]<>NONE then
+                        (if private.current_canvas.visible then
+                            private.current_canvas.hide;
+                        if);
                     if);
+                    
+                    theTab.tabPrivate.theCanvas[] -> private.current_canvas[];
+                    private.current_canvas.interfaceObjectID 
+                      -> private.current_hwndDisplay;
+                    (if not theTab.tabPrivate.theCanvas.visible then
+                        theTab.tabPrivate.theCanvas.show;
+                    if);
+                    theTab.tabPrivate.theCanvas.bringToFront;
+                    leave L
                 if);
-                
-                theCanvas[] -> private.current_canvas[];
-                private.current_canvas.interfaceObjectID 
-                  -> private.current_hwndDisplay;
-                (if not theCanvas.visible then
-                    theCanvas.show;
-                if);
-                theCanvas.bringToFront;
-                leave L
-            if);
-         #);
-   if);   
+             #);
+       if);   
+   if);
    
 -- GUIEnvTabControlGetSelection: doPart --
-do (# theTab: ^tab;
-   do private.hwndTab -> TabCtrl_GetCurSel
-        -> private.theTabs.findTab -> theTab[];
-      (if theTab[]<>NONE then
-          theTab.theCanvas[] -> theCanvas[];
-      if);
-   #);
+do private.hwndTab -> TabCtrl_GetCurSel
+     -> private.theTabs.findTab -> theTab[];
    
 -- GUIenvTabControlEventHandlerOnMouseUp: doPart --
 do inner;
@@ -475,13 +577,39 @@ do (if private.current_canvas[]<>NONE then
           do L:
                scan
                (# 
-               do (if current.inx=inx then
+               do (if current.tabPrivate.inx=inx then
                       current[] -> theTab[];
                       leave L
                   if);
                #);
           exit theTab[]
           #);
+     #);
+   
+   updateCurVisibleCanvas:
+     (# theTab: ^tab;
+        
+     enter theTab[]
+     do (if theTab[]<>NONE then
+            (if current_canvas[]<>NONE then
+                (if current_canvas.isOpen then
+                    (if current_canvas.visible then
+                        current_canvas.hide;
+                    if);
+                if);
+            if);
+            theTab.tabPrivate.theCanvas[] 
+              -> current_canvas[];
+            current_canvas.interfaceObjectID 
+              -> private.current_hwndDisplay;
+            
+            inner updateCurVisibleCanvas;
+            
+            (if not theTab.tabPrivate.theCanvas.visible then
+                theTab.tabPrivate.theCanvas.show;
+            if);
+            theTab.tabPrivate.theCanvas.bringToFront;
+        if);
      #);
 
    hwndTab: @integer;
@@ -507,9 +635,9 @@ do (if private.current_canvas[]<>NONE then
             (* Size the tab control to fit the client area. *)            
             theTabs.scan
             (# 
-            do (rc.left, rc.top) -> current.theCanvas.position;
+            do (rc.left, rc.top) -> current.tabPrivate.theCanvas.position;
                ((rc.right - rc.left),(rc.bottom - rc.top))
-                 -> current.theCanvas.size;
+                 -> current.tabPrivate.theCanvas.size;
             #);
             
             rc.ptr -> free;
