@@ -1,79 +1,313 @@
 ORIGIN '~beta/basiclib/private/basicsystemenv_mac';
-INCLUDE '~beta/guienv/private/macintosh/guienv_macprivate';
+
+INCLUDE '../../guienv';
+INCLUDE 'guienv_macbody';
+INCLUDE '~beta/sysutils/cstring';
+
+--- lib:attributes---
+XtInputNoneMask:   (# exit 0 #);
+XtInputReadMask:   (# exit 1 #);
+XtInputWriteMask:  (# exit 2 #);
+XtInputExceptMask: (# exit 4 #);
 
 -- installKeyboard: Descriptor --
 (# 
 do 
 #)  
 
+
 ---BasicScheduler:descriptor---
-sysHead
-(# attachNext:
-     (# result: @integer;
-        realres: @Real; res: @Integer;
-        oldTheActive: ^|sysHead;
-     do (if theActive[] =NONE then
-            NONE -> oldTheActive[]
-         else
-            (* We are about to reenter attNext. It is therefore 
-             * necessary to remove theActive from the active queue
-             * to ensure that it is not reattached before we are done
-             * with this idle call. *)
-            theActive[] -> oldTheActive[];
-            theActive.ce[] -> private.active.delete;
-        if);
-        
-        private.attNext -> realres;
-        (if oldTheActive[]<>NONE then
-           (* 0 -> attNext.value; *)
-            oldTheActive.ce[] -> private.active.append;
-            oldTheActive[] -> theActive[];
-            NONE->oldTheActive[];
-        if);
-	 	(* private.mdpriv.check; *)
-     #);
+SysHead
+(# 
 do initBeforeScheduler;
-   setWindowEnv;
-   (if theWindowEnv[] = NONE then
-        'Error: theWindowEnv is NONE' -> putLine;
-   		'       theWindowEnv should refer to an instance of GUIenv' -> putLine;
-		newLine;
-		'Your program should look like this:' -> putLine;
-		newLine;
-		'systemenv' -> putLine;
-		'  (# GUI: @GUienv (# do ... #);' -> putLine;
-		'     setWindowEnv:: (# do GUI[] -> theWindowEnv[] #);' -> putLine;
-		'   #)' -> putLine;
-		
-	else
-		(if NOT (theWindowEnv## <= GUIenv##) then
-			'theWindowEnv is not a specialization of GUIenv!' -> putText;
-			'theWindowEnv should refer to an instance of GUIenv' -> putLine;
-			newLine;
-			'Your program should look like this:' -> putLine;
-			newLine;
-			'systemenv' -> putLine;
-			'  (# GUI: @GUienv (# do ... #);' -> putLine;
-			'     setWindowEnv:: (# do GUI[] -> theWindowEnv[] #);' -> putLine;
-			'   #)' -> putLine;
-		else
-			theWindowEnv[] -> QUA
-				(# as:: GUIenv;
-				do (* Hook into the GUIenv eventhandler. *)
-					&attachNext[] -> thisObj.private.eventHook[];
-				#);
-			theWindowEnv;
-		if);
-	if);
+   private.mdpriv.pioPrivate.start;
 #)
 
 --- forksecond:descriptor ---
-(# #)
+(# do private.mdpriv.pioPrivate.ensure #)
 
 --- pioEnsure:descriptor ---
-(##)
+(# do private.mdpriv.pioPrivate.ensure #)
 
 --- pioPrivate:descriptor ---
-(#
+(# 
+   theUIenv: ^guienv;
+   sockethWND: @Integer;     (* Handle of hidden socket-window *)
+   IdleTimer: @integer;
+   
+   
+   UIIdle: BooleanValue
+          (# res: @Real; intres: @Integer;
+             oldTheActive: ^|sysHead;
+          do false->value;
+             (if theActive[] =NONE then
+                 NONE -> oldTheActive[]
+              else
+                 (* We are about to reenter attNext. It is therefore 
+                  * necessary to remove theActive from the active queue
+                  * to ensure that it is not reattached before we are done
+                  * with this idle call. *)
+                 theActive[] -> oldTheActive[];
+                 theActive.ce[] -> private.active.delete;
+             if);
+             attNext -> res;
+             this(systemenv).private.mdpriv.check;
+             (if res<0 then
+                 (* There is nothing to do right now, but someone is
+                  * sleeping. Setup a timer. *)
+                 false ->  active;
+                 
+                 true -> value;
+                 (if IdleTimer <> 0 then
+                     (* (sockethWND, IdleTimer) -> KillTimer;*)
+                 if);
+                 (* -1000 * res->intres;
+                 (sockethWND, 0, intres, NONE) 
+                   -> SetTimer -> IdleTimer;
+				   *)
+                 
+                 true -> timerOn;
+              else
+                 res->intres;
+                 (if intres=0 then
+                     (if not active then
+                         (* active must have been set to false 
+                          * by a nested idle call. *)
+                         ensure;
+                     if);
+                  else
+                     (* Currently nothing to do. *)
+                     true -> value;
+                     false-> active;
+                 if)
+             if);
+             
+             (if oldTheActive[]<>NONE then
+                 oldTheActive.ce[] -> private.active.append;
+                 oldTheActive[] -> theActive[];
+                 NONE->oldTheActive[];
+             if);
+          #);
+   
+
+   
+   
+   start:
+     (# 
+     do setWindowEnv;
+        
+        (if theWindowEnv[] =NONE then
+            (failure, 
+            'GuienvSystemEnv ERROR: setWindowEnv did not set theWindowEnv.') 
+              -> stop;
+        if);
+        
+        pioInsertInner[] -> pioInsert.doInner[];
+        pioDeleteInner[] -> pioDelete.doInner[];
+        
+        (if theWindowEnv## <= guienv##  then
+            theWindowEnv[] -> theUIEnv[];
+         else
+            (failure, 
+            'GuienvSystemEnv ERROR: TheWindowEnv is not a subpattern of guienv.') 
+              -> stop;
+        if);
+        
+        true -> theUIenv.XsystemEnvPresent;
+        &UIIdle[] -> theUIenv.private.eventhook[];
+        
+        theUIenv.doSetup;
+        
+        xcbt[] -> xcbt.init;
+        &registerCallback[] -> theUIEnv.XsystemEnvHandleCallback[];
+        
+        ensure;
+        theUIEnv;
+     #);
+   
+   XcallbackThread: System
+     (# 
+        cb: ^Object;
+        forked: @Boolean;
+        active: @Boolean;
+        thisXcbt: ^|XcallbackThread;
+        oldTheActive: ^|sysHead;
+        
+        init: (# enter thisXcbt[] #);
+        
+        next: @
+          (# firstTime: @Boolean;
+          enter cb[]
+          do
+             true -> active;
+             
+             (if theActive[] =NONE then
+                 NONE -> oldTheActive[]
+              else
+                 (* We are about to reenter attNext. It is therefore 
+                  * necessary to make sure that theActive is not scheduled
+                  * before this XcallbackThread is finished doing its 
+                  * work (corresponding to a callback from some local 
+                  * event loop). Logically this XcallbackThread and theActive
+                  * are one and the same thread. *)
+                 theActive[] -> oldTheActive[];
+                 theActive.ce[] -> private.active.delete;
+             if);
+             
+             (if not forked then
+                 thisXcbt[] -> fork;
+                 ce[] -> private.active.first[];
+                 true -> forked;
+              else
+                 ce[] -> private.active.prepend;
+             if);
+             true -> firstTime;
+             loop:
+               (if cb[] =NONE then
+                   (* The callback was executed until end. 
+                    * So we may forget about this XcallbackThread
+                    * and return to X. *)
+                   ce[] -> private.active.delete;
+                   ensure;
+                else
+                   (if firstTime  then
+                       false -> firstTime;
+                       private.attNext;
+                    else
+                       (* The callback blocked or paused. *) 
+                       TheUIEnv.processOneEvent;
+                   if);
+                   restart loop;
+               if);
+             
+             (if oldTheActive[]<>NONE then
+                 0 -> attNext.value;
+                 oldTheActive.ce[] -> private.active.append;
+                 oldTheActive[] -> theActive[];
+             if);
+             
+             false -> active;
+          #);
+        
+     do cycle (# do cb; NONE -> cb[]; pause #);
+     #);
+   
+   xcbt: @|XcallbackThread; 
+   (* This XcallbackThread is used in most cases. We only need multiple
+    * XcallbackThread in the case where some local event loop starts
+    * doing callbacks. In that case we need a XcallbackThread for callbacks
+    * from each of these eventloops. *)
+   
+   registerCallback: theUIenv.XsystemEnvHandleCallbackP
+     (# newxcbt: ^|XcallbackThread;
+     do (if xcbt.active  then
+            (* This is a callback from a local event loop. It is necessary
+             * to create a temporary XcallbackThread to handle the callback. *)
+            &|XcallbackThread[] -> newxcbt[] -> newxcbt.init;
+            cb[] -> newxcbt.next;
+         else
+            cb[] -> xcbt.next 
+        if);
+        NONE->newxcbt[]
+     #);
+   
+   theId: @Integer;
+   active: @Boolean;
+   
+   timerId: @Integer;
+   timerOn: @Boolean;
+   
+   ensure: @
+     (# 
+     do (if not active then 
+            (if theUIenv[]<>NONE then
+                (if timerOn then false -> timerOn if);
+                true -> active;
+            if);
+        if)
+     #);
+   
+              
+            
+   iomsextend: (# exit 8 #);
+   ioms: [iomsextend]^IOmask;
+   
+   RemoveIOmask: 
+     (# iom: ^IOmask;
+     enter iom[]
+     do scan: 
+          (for i: ioms.range repeat
+               (if ioms[i][] = iom[] then 
+                   NONE -> ioms[i][]; 
+                   leave scan
+               if)
+          for)
+     #);
+   FindIOmaskByFd:
+     (# fd, pos: @integer;
+     enter fd
+     do scan: 
+          (for i: ioms.range repeat
+               (if ioms[i][] <> NONE then
+                   ioms[i].scan 
+                   (#
+                   do (if curFD = fd then
+                          i -> pos;
+                          leave scan
+                      if)
+                   #)
+               if)
+          for)
+     exit pos
+     #);
+   AppendIOmask: 
+     (# iom: ^IOmask;
+        found: @Boolean;
+        free: @Integer;
+     enter iom[]
+     do scan: (# (* Do not insert if already present.
+                  * Find first free entry if there is one.
+                  *)
+              do (for i: ioms.range repeat
+                      (if ioms[i][] 
+                       // iom[] then true->found; leave scan
+                       // NONE then (if free=0 then i->free if)
+                      if)
+                 for);
+                 (if free<>0 then
+                     iom[] -> ioms[free][];
+                  else
+                     iomsextend -> ioms.extend;
+                     iom[] -> ioms[ioms.range - iomsextend + 1][];
+                 if)
+              #)
+     #);
+     
+   pioInsertInner: @pioinsert.doInnerP
+     (# 
+     do elm[] -> AppendIOmask;
+        elm.scan
+        (# 
+           mask: @integer;
+           (* The masks below may need adjustment; 
+            * Exactly what is except in this context?
+            *)
+        do (if read then 
+           if);
+           (if write then 
+           if);
+           (if except then 
+           if);
+        #);
+     #);
+
+   pioDeleteInner: @piodelete.doInnerP
+     (#
+     do elm[] -> RemoveIOmask;
+        elm.scan
+        (# 
+        do 
+        #);
+     #)
 
 #)
