@@ -1,0 +1,275 @@
+ORIGIN '~beta/guienv/guienv';
+BODY 'private/moveablebody';
+
+(* MOVEABLE (Created by Soren Brandt, 16/8-1994)
+ * ========
+ * 
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1994
+ *       All rights reserved.
+ *)
+
+INCLUDE '~beta/guienv/utils/obguienvadds';
+INCLUDE '~beta/guienv/controls';
+INCLUDE '~beta/guienv/figureitems';
+INCLUDE '../utils/coroutinespawner';
+
+--- windowLib: attributes ---
+
+moveableList: list 
+  (* SINGULAR instance in objectPool. Use getmoveableList to get this instance.
+   * New moveables are automatically inserted and removed again when closed.
+   * A subpattern of moveableList may be inserted into objectPool, but this
+   * should be done before the first moveable is created. 
+   *
+   * onInsert is called immediately before a new moveable is inserted into the
+   * list.
+   * 
+   * onDelete is called immediately after a moveable has been deleted from the
+   * list. *)
+  (# element::< moveable;
+     onInsert:<
+       (# theMoveable: ^moveable;
+       enter theMoveable[]
+       do INNER
+       #);
+     onDelete:<
+       (# theMoveable: ^moveable;
+       enter theMoveable[]
+       do INNER
+       #);
+  #); 
+
+getmoveableList: objectPool.get
+  (# type::< moveableList; init:: (# do obj.init #)#);
+
+selectedMoveablesList: list 
+  (* SINGULAR instance in objectPool. See installSelectHandlers for a 
+   * description of the use of this list. *)
+  (# element:: moveable;
+     deselect:
+       (# 
+       do scan
+          (# 
+          do (if not current.wasClosed then current.UnSelectFrame if);
+          #);
+          clear;
+       #);
+  #);
+
+getSelectedMoveablesList:
+  (# sml: ^selectedMoveablesList;
+  do find: objectPool.scan
+       (# type:: selectedMoveablesList;
+       do current[]->sml[]; leave find
+       #);
+  exit sml[]   
+  #);
+
+borderWidth: (# exit 2 #); 
+(* Pixel width of moveable border. Fixed by guienv. *)
+
+(* MOVEABLE
+ * ========
+ * 
+ * Superpattern for objects to move around inside a canvas.
+ * 
+ * To specialize moveable, further bind the contentsType virtual. *)
+
+moveable: Canvas
+  (# <<SLOT moveableLib: attributes>>;
+     
+     title: 
+       (* The string to be displayed in the header. It can be set in 
+        * moveable.open, or at any later point in time. *)
+       (# 
+       enter (# t: ^Text enter t[] <<SLOT VEUmoveableTitleEnter:dopart>> #)
+       exit  (# t: ^Text <<SLOT VEUmoveableTitleExit:dopart>> exit t[] #)
+       #); 
+     
+     moveableIconify: @iconButton
+       (# open:: (# do <<SLOT VEUmoveableIconifyOpen:descriptor>>#);
+          dobindings: (# <<SLOT VEUmoveableIconifyBindings:dopart>>#);
+          eventHandler::
+            (# onMouseDown:: 
+                 (# do <<SLOT VEUmoveableIconifyOnMouseDown:descriptor>>#);
+               onBorderStyleChanged::
+                 (# <<SLOT VEUmoveableIconifyOnBorderStyleChanged:dopart>>#);
+               onMouseUp::
+                 (# do <<SLOT VEUmoveableIconifyOnMouseUp:descriptor>>#);
+            #)
+       #);
+     moveableHeader: @staticText
+       (# draggedByMouseDown: @Boolean;
+          open:: (# <<SLOT VEUmoveableHeaderOpen:dopart>> #);
+          dobindings: (# do <<SLOT VEUmoveableHeaderBindings:descriptor>>#);
+          eventHandler::
+            (# onMouseDown::
+                 (# do <<SLOT VEUmoveableHeaderOnMouseDown:descriptor>>#);
+               onBorderVisibleChanged::
+                 (# <<SLOT VEUmoveableHeaderOnBorderVisibleChanged:dopart>>#);
+               onMouseUp::
+                 (# <<SLOT VEUmoveableHeaderOnMouseUp:dopart>>#);
+            #);
+       #);
+     
+     onResized:< Object; (* Called by if the user has resized this moveable. *)
+     
+     contentsType:< Canvas
+       (* Further bind contentsType in order to specialize moveables. *)
+       (# dobindings:<
+            (# 
+            do true -> bindBottom -> bindRight -> bindTop -> bindLeft;
+               INNER;
+            #);
+          open::<
+            (# defaultSize: @Point; (* Set before calling INNER *)
+            do <<SLOT moveableContentsOpen:descriptor>>
+            #);
+       #);
+     contents: @contentsType;
+     
+     newPreferredContentsSize:
+       (* Call this to notify this movable that its contents would prefer
+        * a new size. The moveable will react by resizing itself to the
+        * new size plus the size needed for the headers. Since the contents 
+        * are by default fully bound to the moveable, this should change the 
+        * size of the contents to the preferred size.
+        * If the moveable becomes too big to fit in the father canvas, the
+        * size and position is adjusted. *)
+       (# sz: @Point;
+       enter sz
+       <<SLOT newPrefContentsSize:dopart>>
+       #);
+     
+     doUpdate:< Object;
+     (* Called if it may be time to update this moveable. Iconified moveables
+      * may decide to ignore or defer the update. *)
+     
+     icon:<
+       (* Further bind to return the raster to be used as icon for 
+        * this moveable *)
+       (# theIcon: ^pixmap;
+       do INNER
+       exit theIcon[]
+       #);
+     iconified: @Boolean; (* TRUE iff this moveable is currently iconified. *)
+     
+     (* These virtuals are called immediately before this moveable is
+      * iconified or deiconified. *)
+     onIconify:< Object;
+     onDeIconify:< Object;
+     
+     (* onDraggedOutside is called if the used drags this used completely
+      * outside the father canvas. If onDraggedOutside returns TRUE, the
+      * drag action is not completed. Use this callback to e.g. open the
+      * contents of this(moveable) in a separate window. *)
+     onDraggedOutside:< BooleanValue;
+     
+     bw: @Integer; (* Width of border of this(moveable).  Set by open. *)
+     hh: @Integer; (* Heigth of header. Set by open. *)
+     
+     open::< 
+       (# defaultFrame: @rectangle;
+       enter defaultFrame
+       do <<SLOT VEUmoveableOpen:descriptor>> 
+       #);
+     
+     wasClosed: @Boolean; (* TRUE iff close has been called. *)
+     close::< (# <<SLOT moveableOnClose:dopart>> #);
+     
+     moveableMenu:< menu
+       (# <<SLOT moveableMenuLib:attributes>>;
+          (* Called immediately before the moveableMenu is popped up. *)
+          open::< (# do <<SLOT moveableMenuOpen:descriptor>> #);
+          
+          (* Lists of actions to be performed when this menu is opened
+           * or popped up: *)
+          onOpen: @ActionList;
+          onPopup: @ActionList;
+       #);
+     movMenu: @moveableMenu;
+     
+     moveableOnCloseAction: actionedMenuItemAction 
+       (# 
+       do close; INNER
+       #);
+     
+     moveableIconifyAction:< actionedMenuItemAction
+       (* Called whenever the iconify state of this moveable changes.
+        * Switches the current iconify state and calls onIconify or
+        * onDeiconify. *)
+       (#
+       <<SLOT moveableIconifyAction:dopart>>
+       #);
+     
+     wriggle:< (# <<SLOT moveableWriggle:dopart>> #);
+     
+     inRect:< BooleanValue
+       (* Returns TRUE iff this moveable is contained in the rectangle r. *)
+       (# r: @rectangle;
+       enter r
+       <<SLOT moveableInRect:dopart>>
+       #);
+     
+     SelectFrame:
+       (* Draws a running outline around this moveable. The outline is
+        * removed again by calling UnSelectFrame. If no coroutinespawner
+        * is implemented, the outline drawn is simply a black border *)
+       (# <<SLOT moveableSelectFrame:dopart>> #);
+     UnSelectFrame:
+       (# <<SLOT moveableUnSelectFrame:dopart>> #);
+     FrameSelected: BooleanValue (# <<SLOT moveableFrameSelected:dopart>> #);
+     
+     resizeCursor:<
+       (* The mouse curser when on top of the borders of this moveable.
+        * Signals that the moveable may be resized. *)
+       (# theCursor: ^cursor;
+       do cursors.cross[]->theCursor[];
+          INNER;
+       exit theCursor[]
+       #);
+     
+     eventHandler::<
+       (# onMouseDown::< (# <<SLOT VEUmoveableOnMouseDown:dopart>> #);
+       #);
+     
+     ensureFrame:
+       (* Ensures that the frame entered is fully visible within the father 
+        * canvas, and big enough t o leave at least the iconifyButton visible.
+        * If the newFrame entered is completely outside the father canvas,
+        * wasOutside is called. *)
+       (# wasOutside:< Object;
+          newFrame: @rectangle;
+       enter newFrame
+       do <<SLOT VEUmoveableEnsureFrame:descriptor>> 
+       exit newFrame
+       #);
+     
+     moveablePrivate: @<<SLOT VEUmoveablePrivate:descriptor>>;
+  #);
+
+
+--- canvasLib:attributes ---
+
+installSelectHandlers:
+  (* installHandlers should be called on the canvas that is used as the
+   * father of moveables.
+   * 
+   * Installs actions to keep a list of selected moveables up to date.
+   * The list is inserted into the objectPool (and returned from 
+   * installSelectHandler). When installed, the following interaction is
+   * defined:
+   * 
+   *   1. A moveable can be selected by clicking and holding the mouse down
+   *      for more than 10 ticks inside the name header.
+   *   2. The set of selected moveables can be extended by clicking a moveable
+   *      as in 1, but with the shift key depressed.
+   *   3. By dragging an outline in this canvas, multiple moveables can be
+   *      selected at once.
+   *   4. As in 3, but with the shift key depressed, the set of moveables
+   *      is extended. 
+   *)
+  (#
+  do <<SLOT VEUinstallSelectHandlers:descriptor>>
+  #);
