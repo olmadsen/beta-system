@@ -487,7 +487,7 @@ void
   struct Object *theObj = (struct Object *) theAR->i0;
   
   if ((inIOA(theObj) || inAOA(theObj)) && isObject(theObj))
-    DisplayObject(output, theObj, PC);
+    DisplayObject(output, theObj, (long)PC);
 }
 #endif
 
@@ -517,7 +517,7 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
     localname = &localname[1];
   else
     localname = execname;
-  dumpname = MALLOC(strlen(localname)+9); /* Allow for ".dump", possibly 3 digits, and NULL */
+  dumpname = (char *)MALLOC(strlen(localname)+9); /* Allow for ".dump", possibly 3 digits, and NULL */
   strcpy(dumpname, localname);
   strcat(dumpname, ".dump");
   
