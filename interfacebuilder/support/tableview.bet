@@ -1,21 +1,125 @@
 ORIGIN '~beta/guienv/v1.6/guienv';
 INCLUDE '~beta/guienv/v1.6/graphics';
+INCLUDE 'panorama';
 
 -- windowLib: attributes --
+
+alignLeft: (#  exit 1 #);
+alignRight: (#  exit 2 #);
+alignCenter: (#  exit 3 #);
 
 tableView: canvas
 	(# rowHeight: @integer;
 		style: ^textStyle;
+		sizeTimer: @timer
+			(# action::
+					(#
+					do stop;
+						computeSize;
+					#);
+			#);
+		changedSize:
+			(#
+			do (if not changedSizeFlag then
+					true -> changedSizeFlag;
+					1 -> sizeTimer.start;
+				if);
+			#);
+		changedSizeFlag: @boolean;
+	   computeSize:
+			(# width, height: @integer;
+				pWidth, pHeight: @integer;
+				count: @integer;
+			do false -> changedSizeFlag;
+				columnIndent -> width;
+				(for inx: columns.range repeat
+					 width + columns[inx].width -> width;
+				for);
+				pane.scan (# do count + 1 -> count #);
+				(rowHeight + 1) * count -> height;
+				tablePanorama.size -> (pWidth, pHeight);
+				(width, pWidth) -> max -> width;
+				(width, height) -> pane.size;
+			#);
 		
-		columnWidth: [0] @integer;
+		columnInfo:
+			(# title: ^text;
+				width: @integer;
+				alignment: @integer;
+			#);
+		columns: [0] ^columnInfo;
 		
 		numberOfColumns:
 			(# n: @integer;
 			enter n
-			do n -> columnWidth.new;
-				(for inx: columnWidth.range repeat
-					30 -> columnWidth[inx];
+			do n -> columns.new;
+				(for inx: columns.range repeat
+					&columnInfo[] -> columns[inx][];
+					50 -> columns[inx].width;
+					'Title' -> columns[inx].title[];
+					alignLeft -> columns[inx].alignment;
 				for);
+				changedSize;
+			#);
+			
+			
+		columnIndent: (# exit 150 #);
+		headerHeight: (# exit 20 #);
+		pane: @canvas
+			(# open::
+					(#
+					do (0xFFFF, 0xFFFF, 0xFFFF) -> backGroundColor;
+					#);
+			#);
+		tablePanorama: @panorama
+			(# open::
+					(#
+					do (0xDDDD, 0xDDDD, 0xDDDD) -> backgroundColor;
+						(2, 1 + headerHeight) -> position;
+						(300 - 4 - 15, 200 - 3 - headerHeight) -> size;
+						true -> bindRight;
+						true -> bindBottom;
+					#);
+			#);
+		tableScrollbar: @panoramaScrollbar
+			(# vertical:: (# do true -> value #);
+				open::
+					(#
+					do (300 - 2 - 15, 1 + headerHeight) -> position;
+						(16, 200 - 2 - headerHeight) -> size;
+						false -> bindLeft;
+						true -> bindRight;
+						true -> bindBottom;
+					#);
+			#);
+		header: @canvas
+			(# titleItem: windowItem
+					(# open::
+							(#
+							do true -> border.visible;
+								borderStyles.shadowOut -> border.style;
+							#);
+					#);
+				build:
+					(# left: @integer;
+						anItem: ^titleItem;
+					do &titleItem[] -> anItem[];
+						anItem.open;
+						(columnIndent, headerHeight) -> anItem.size;
+						columnIndent -> left;
+						(for inx: columns.range repeat
+							&titleItem[] -> anItem[];
+							anItem.open;
+							((left, 0), (left + columns[inx].width, headerHeight)) -> anItem.frame;
+							left + columns[inx].width -> left;
+						for);
+					#);
+				open::
+					(#
+					do (1, 1) -> position;
+						(300 - 2, headerHeight) -> size;
+						true -> bindRight;
+					#);
 			#);
 		tableItem: windowItem
 			(# icon: ^pixmap;
@@ -24,14 +128,17 @@ tableView: canvas
 				
 				iconIndent: (# exit 5 #);
 				nameIndent: (# exit 25 #);
-				columnIndent: (# exit 150 #);
+
 				open::<
 					(# tableWidth, tableHeight: @integer;
+						create:: (# do pane[] -> father[] #);
 					do (0xDDDD, 0xDDDD, 0xDDDD) -> backgroundColor;
 						THIS(tableView).size -> (tableWidth, tableHeight);
 						((0, currentY), (tableWidth, currentY + rowHeight)) -> frame;
 						currentY + rowHeight + 1 -> currentY;
-						columnWidth.range -> subText.new;
+						columns.range -> subText.new;
+						true -> bindRight;
+						changedSize;
 						INNER;
 					#);
 					
@@ -45,6 +152,7 @@ tableView: canvas
 										nameLeft, nameTop: @integer;
 										sub: ^text;
 										subLeft: @integer;
+										subWidth: @integer;
 									do (if icon[] <> NONE then
 											icon.width -> iconWidth;
 											icon.height -> iconHeight;
@@ -61,13 +169,22 @@ tableView: canvas
 											name[] -> drawText;
 										if);
 										columnIndent -> subLeft;
-										(for inx: columnWidth.range repeat
+										(for inx: columns.range repeat
 											subText[inx][] -> sub[];
 											(if sub[] <> NONE then
-												(subLeft, nameTop) -> moveTo;
+												(if columns[inx].alignment
+													//alignLeft then
+														(subLeft, nameTop) -> moveTo;
+													//alignRight then
+														sub[] -> this(tableView).style.widthOfText -> subWidth;
+														(subLeft + columns[inx].width - subWidth, nameTop) -> moveTo;
+													//alignCenter then
+														sub[] -> this(tableView).style.widthOfText -> subWidth;
+														(subLeft + (columns[inx].width - subWidth) div 2, nameTop) -> moveTo;
+												if);
 												sub[] -> drawText;
 											if);
-											subLeft + columnWidth[inx] -> subLeft; 
+											subLeft + columns[inx].width -> subLeft; 
 										for);
 									#);
 								INNER;
@@ -77,12 +194,22 @@ tableView: canvas
 			
 		open::<
 			(#
-			do (0xFFFF, 0xFFFF, 0xFFFF) -> backGroundColor;
+			do (300, 200) -> size;
+				(0xDDDD, 0xDDDD, 0xDDDD) -> backgroundColor;
 				&textStyle[] -> style[];
 				'Times' -> style.name;
 				12 -> style.size;
 				18 -> rowHeight;
+				true -> border.visible;
+				borderStyles.shadowIn -> border.style;
+				header.open;
+				tablePanorama.open;
+				tablePanorama[] -> pane.open;
+				tableScrollbar.open;
+				tablePanorama[] -> tableScrollbar.attach;
+				changedSize;
 				INNER;
+				header.build;
 			#);
 		currentY: @integer;
 	#);
