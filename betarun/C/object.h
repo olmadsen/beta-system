@@ -112,7 +112,7 @@ typedef struct LVRABlock{
 
 typedef struct CallBackFrame {
     ref(CallBackFrame)  next;
-#if !(defined(hppa) && defined(REFSTACK))
+#if !(defined(hppa) && defined(UseRefStack))
     ptr(long)           betaTop;
 #endif
     long                tmp;
