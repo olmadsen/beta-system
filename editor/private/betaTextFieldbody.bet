@@ -536,88 +536,133 @@ do
 
 -- remove_surrounding_comment: DoPart --
 do
-     (#
-        depth,pos,endpos,indent: @integer;
-        comBegin,comEnd,mem: @rowCol;
-        inComment: @boolean;
-        t: ^text
-     do
-        true->inComment;
-        selection.start->posToRowCol->global;
-        loop: cycle
-          (# star: @boolean
-          do
-             current_line->eat_indent->(indent,t[]);
-             l:
-             (for i: t.length repeat
-               (if star and (t.T[i] = ')') then
-                   indent+i-1->global.col; leave l
+   (#
+      depth,pos,endpos,indent: @integer;
+      mem: @rowCol;
+      t: ^text
+   do
+      comEnd.row-comBegin.row+1->depth;
+      ((comEnd.row,comEnd.col-3),comEnd)->getSelection->t[];
+      (if t.T[1] = ascii.sp then
+          ((comEnd.row,comEnd.col-3),comEnd)->deleteText;
+          comEnd.col-3->comEnd.col
+       else
+          ((comEnd.row,comEnd.col-2),comEnd)->deleteText;
+          comEnd.col-2->comEnd.col
+      if);
+      (comBegin,(comBegin.row,comBegin.col+3))
+        ->getSelection->t[];
+      (if t.T[3] = ascii.sp then
+          (comBegin,(comBegin.row,comBegin.col+3))
+            ->deleteText;
+          (if depth = 1 then comEnd.col-3->comEnd.col if)
+       else
+          (comBegin,(comBegin.row,comBegin.col+2))
+            -> deleteText;
+          (if depth = 1 then comEnd.col-2 -> comEnd.col if)
+      if);
+      (comBegin,comEnd)->make_real_comments;
+      (if depth>1 then
+          comBegin->global;
+          next_line;
+          beginning_of_line;
+          (for depth-2 repeat
+               current_line->t[];
+               t[]->eat_indent->(mem.col,t[]);
+               (if (t.length > 0) and (t.T[1] = '*') then
+                   ((global.row,global.col+mem.col),
+                   (global.row,global.col+mem.col+1))->deleteText
                if);
-               (t.T[i] = '*')->star
-             for);
-             (if star then leave loop if);
-             (if last_line then
-                 false->inComment; leave loop
-              else
-                 next_line
-             if)
-          #);
-        (if inComment then
-            global->comEnd;
-            beginning_of_line;
-            (global,comEnd)->getSelection->commentBeginPos->comBegin;
-            ((comEnd.row,comEnd.col-1),comEnd)->getSelection->t[];
-            (if t.T[1] = ascii.sp then
-                ((comEnd.row,comEnd.col-1),comEnd)->deleteText;
-                comEnd.col-1->comEnd.col
-            if);
-            ((comBegin.row,comBegin.col+2),(comBegin.row,comBegin.col+3))
-              ->getSelection->t[];
-            comEnd.row-comBegin.row+1->depth;
-            (if t.T[1] = ascii.sp then
-                ((comBegin.row,comBegin.col+2),(comBegin.row,comBegin.col+3))
-                  ->deleteText;
-                (if depth = 1 then comEnd.col-1->comEnd.col if)
-            if);
-            (comBegin,comEnd)->make_real_comments;
-            (if (depth = 1) then
-                (comEnd,(comEnd.row,comEnd.col+2))->deleteText;
-                (comBegin,(comBegin.row,comBegin.col+2))->deleteText;
-                
-             else
-                (comBegin,(comBegin.row,comBegin.col+2))->deleteText;
-                comBegin->global;
-                next_line;
-                beginning_of_line;
-                (for depth-2 repeat
-                  current_line->t[];
-                  t[]->eat_indent->(mem.col,t[]);
-                  (if (t.length > 0) and (t.T[1] = '*') then
-                      ((global.row,global.col+mem.col),
-                       (global.row,global.col+mem.col+1))->deleteText
-                  if);
-                  next_line
-                for);
-                (comEnd,(comEnd.row,comEnd.col+2))->deleteText;
-                comEnd->global;
-                current_line->eat_indent->(mem.col,t[]);
-                (if (t.length > 0) and (t.T[1] = '*') then
-                    mem.col+1->global.col;
-                    (global,(global.row,global.col+1))->deleteText
-                if);
-                (if t[]->CheckWhite then
-                    beginning_of_line;
-                    global->mem;
-                    (if last_line then end_of_line else next_line if);
-                    (mem,global)->deleteText
-                if);
-                comBegin->rowColToPos->pos;
-                global->rowColToPos->endpos;
-                (pos,endpos)->indentHandler
-            if)
-        if)
-     #)  
-
+               next_line
+          for);
+          comEnd->global;
+          current_line->eat_indent->(mem.col,t[]);
+          (if (t.length > 0) and (t.T[1] = '*') then
+              mem.col+1->global.col;
+              (global,(global.row,global.col+1))->deleteText
+          if);
+          (if t[]->CheckWhite then
+              beginning_of_line;
+              global->mem;
+              (if last_line then end_of_line else next_line if);
+              (mem,global)->deleteText
+          if);
+          comBegin->rowColToPos->pos;
+          global->rowColToPos->endpos;
+          (pos,endpos)->indentHandler
+      if);
+      (pos,pos) -> selection
+   #)
+   
+-- surrounding_comment: doPart --
+do (# pos,mem,min,max: @integer;
+      star,left,right,notFound: @boolean
+   do
+      selection.start -> pos -> mem;
+      texteditingExtent -> (min,max);
+      (if not(globalFresh) then contents->globalText[]; true -> globalFresh if);
+      pos -> globalText.pos;
+      scanForward: cycle
+        (# 
+        do
+           (if globalText.T[pos]
+            // '*' then 
+               (if left then
+                   true -> notFound;
+                   leave ScanForward
+               if);
+               true -> star;
+               false -> left
+            // '(' then
+               true -> left;
+               false -> star;
+            // ')' then
+               (if star then 
+                   pos -> posToRowCol -> endPos;
+                   leave scanForward 
+               if);
+               false -> star -> left
+            else 
+               false -> star -> left;
+           if);
+           pos+1 -> pos;
+           (if pos>max then true->notFound; leave scanForward if);
+        #);
+      (if notFound then
+          (-1,-1) -> beginPos -> endPos
+       else
+          mem -> pos;
+          scanBackward: cycle
+            (# do          
+               (if globalText.T[pos]
+                // '*' then 
+                   (if right then
+                       (-1,-1) -> beginPos -> endPos;
+                       leave scanBackward
+                   if);
+                   true -> star;
+                   false -> right;
+                // '(' then
+                   (if star then
+                       pos-1 -> posToRowCol -> beginPos;
+                       leave scanBackward 
+                   if);
+                   false -> star -> right
+                // ')' then
+                   false -> star;
+                   true -> right
+                else
+                   false -> star -> right
+               if);
+               pos-1 -> pos;
+               (if pos<min then 
+                   (-1,-1) -> beginPos -> endPos;
+                   leave scanBackward
+               if)
+            #)
+      if)
+   #)
+   
 -- find_rigid: DoPart --
 do
      (# dummy: @integer; firstblock,b: @boolean
