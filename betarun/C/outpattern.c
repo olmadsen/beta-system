@@ -42,14 +42,54 @@ DisplayObject(output,aObj,retAddress)
      ref(Object) aObj;
      ptr(long)   retAddress;
 { 
-  ref(Item) aItem;
+  ref(Item) aItem=0;
+  ref(ProtoType) theProto=0;
+  ref(ProtoType) activeProto=0;
   
   if( isSpecialProtoType(aObj->Proto) ){
     switch ((long) aObj->Proto){
     case (long) ComponentPTValue:
       aItem = ComponentItem(aObj);
-      fprintf(output,"  comp %s in %s\n", 
-	      theItemName(aItem), theFormName(aItem));
+      if (aItem==BasicItem) {
+	fprintf(output,"  basic component in %s\n", 
+		theFormName(aItem));
+      } else {
+	if (activeProto){
+	  if( theProto == activeProto )
+	    fprintf(output,"<%s>", ProtoTypeName(theProto));
+	  else
+	    fprintf(output,"%s", ProtoTypeName(theProto));
+	} else {
+	  fprintf(output,"  comp <%s>", theItemName(aItem));
+	}
+	theProto = aItem->Proto;
+	if( retAddress ){
+	  long           activeDist;
+	  ref(Object)    staticObj;
+	  activeProto = theProto;
+	  activeDist  = retAddress - theProto->GenPart; 
+	  while( theProto->Prefix->Prefix != theProto->Prefix){
+	    theProto = theProto->Prefix;
+	    if(    (retAddress - theProto->GenPart > 0)
+	       && (retAddress - theProto->GenPart < activeDist)){ 
+	      activeProto = theProto;
+	      activeDist  = retAddress - theProto->GenPart; 
+	    }
+	  }
+	} else {
+	  activeProto = theProto;
+	}
+
+	theProto = aItem->Proto;
+	while( theProto->Prefix->Prefix != theProto->Prefix){
+	  theProto = theProto->Prefix;
+	  if( theProto == activeProto )
+	    fprintf(output,"<%s>", ProtoTypeName(theProto));
+	  else
+	    fprintf(output,"%s", ProtoTypeName(theProto));
+	}
+	fprintf(output," in %s\n", theFormName(aItem));
+      }
       break;
     case (long) StackObjectPTValue:
       fprintf(output,"  stackobject\n");
@@ -71,8 +111,6 @@ DisplayObject(output,aObj,retAddress)
       break;
     } 
   }else{
-    ref(ProtoType) theProto;
-    ref(ProtoType) activeProto;
     long           activeDist;
     ref(Object)    staticObj;
     
@@ -88,8 +126,9 @@ DisplayObject(output,aObj,retAddress)
 	  activeDist  = retAddress - theProto->GenPart; 
 	}
       }
-    }else activeProto = theProto;
-    
+    } else {
+      activeProto = theProto;
+    }
     fprintf(output,"  item ");
     theProto = aObj->Proto;
     if( theProto == activeProto )
@@ -177,15 +216,19 @@ NotInHeap( address)
 }
 
 #ifndef sparc
-/* Traverse the StackArea [low..high] and Process all references within it. */
-static DisplayStackPart( output, low, high)
+/* Traverse the StackArea [low..high] and Process all references within it. 
+ * Stop when theComp is reached.
+ */
+static DisplayStackPart( output, low, high, theComp)
      ptr(long) low;
      ptr(long) high;
      FILE *output;
+     ref(Component) theComp;
 {
   ptr(long) current = low;
   ref(Object) theObj;
   handle(Object) theCell;
+  long retAddr=0;
   
   while( current <= high ){
     if( inBetaHeap( *current)){
@@ -193,6 +236,9 @@ static DisplayStackPart( output, low, high)
       theObj  = *theCell;
       if( inIOA(theObj) || inAOA(theObj) ){
 	if( isObject( theObj) && NotInHeap(*(current+1)))
+	  if (theComp && cast(Object)theComp->Body==theObj){
+	    break;
+	  }
 	  DisplayObject(output, theObj, *(current+1));
       }
     }else{
@@ -205,6 +251,11 @@ static DisplayStackPart( output, low, high)
       }
     }
     current++;
+  }
+  if (theComp){
+    DisplayObject( output, (ref(Object)) theComp, theComp->CallerLSC);
+    /* Make an empty line after the component */
+    fprintf( output, "\n");
   }
 }
 #endif
@@ -240,7 +291,7 @@ DisplayBetaStack( errorNumber, theObj)
     fprintf( output, ".\n");
   }
   
-  fprintf(output,"\nCall chain:\n");
+  fprintf(output,"\nCall chain:\n\n");
   
   
 #ifndef sparc
@@ -249,12 +300,12 @@ DisplayBetaStack( errorNumber, theObj)
    */
   if( theObj != 0 ){
     if( isObject(theObj)){
-      DisplayObject(output, theObj, 0);
+      if (theObj!=cast(Object)ActiveComponent->Body) DisplayObject(output, theObj, 0);
     }else{
       fprintf(output,"Current object is damaged!\n");
     }
   }else
-    fprintf(output,"Current object is 0!\n");
+    fprintf(output,"Current object is damaged!\n");
 #endif
   
 #ifdef hppa
@@ -346,31 +397,20 @@ DisplayBetaStack( errorNumber, theObj)
     theFrame  = ActiveCallBackFrame; 
     /* Follow the stack */
     while( theFrame){
-      DisplayStackPart( output, theTop+1, (long *)theFrame-1);
+      DisplayStackPart( output, theTop+1, (long *)theFrame-1, 0);
       fprintf( output,"  [ C ACTIVATION PART ]\n");
       theTop   = theFrame->betaTop;
       theFrame = theFrame->next;
       if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
       theTop += 2;
     }
-    DisplayStackPart(output, theTop, theBottom-1 -4);
 
-    /* theBottom-1 -4 because:
-     *    in attach, after the push of the componentblock, four
-     *    longs are pushed, that we do not want to show now:
-     *    1. the address of TerminateComponent
-     *    2. the previous current object is pushed at entry of the 
-     *       do part of the component
-     *    3-4. when the component activates another object, it it done
-     *       by rts'ing to the M-entry of that object.
-     *       This pushes the return address, and in the  M-entry,
-     *       the current object (the component) is pushed.
-     *       But we show the component separately later.
+    DisplayStackPart(output, theTop, theBottom-1 -2, currentComponent);  
+    /* -2 because:
+     *  There will always be at least 2 longs, not needed above the
+     *  ComponentBlock: the exitAddress (TerminateComponent) and
+     *  the Saved previous object when the component starts executing.
      */
-    
-    DisplayObject( output, (ref(Object)) currentComponent, 0);
-    /* Make an empty line after the component */
-    fprintf( output, "\n");
     
     fflush( output);
     
@@ -388,25 +428,20 @@ DisplayBetaStack( errorNumber, theObj)
       
       DisplayObject(output, currentObject, 0);
       while( theFrame){
-	DisplayStackPart( output, theTop+1, (long *)theFrame-1);
+	DisplayStackPart( output, theTop+1, (long *)theFrame-1, 0);
 	fprintf( output,"  [ C ACTIVATION PART ]\n");
 	theTop   = theFrame->betaTop;
 	theFrame = theFrame->next;
 	if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
 	theTop += 2;
       }
-      DisplayStackPart( output, theTop +1, theBottom-1 -4); 
 
+      DisplayStackPart( output, theTop +1, theBottom-1 -2, currentComponent); 
       /* theTop +1 because the component to be attached is always
        * pushed before attach is called. We don't want to show
        * it here, since we have just shown it as separate component
        * block.
        */
-
-      
-      DisplayObject( output, (ref(Object)) currentComponent, 0);
-      /* Make an empty line after the component */
-      fprintf( output, "\n");
       
       currentBlock = currentBlock->next;
       currentObject    = currentComponent->CallerObj;
