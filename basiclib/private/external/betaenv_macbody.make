@@ -1,4 +1,8 @@
+(evaluate ("{0}" =~ /(Å)¨0:Å/)) > dev:null
+set Current "{¨0}:"
+export Current
 If "{BetaLinkType}" =~ /APPL/
-	Rez -o "{1}" -a "{rincludes}"Types.r "{betalib}"basiclib:v1.2:private:external:console.r 
+	echo 'Include $$Shell("Current")"console.rsrc";' | rez -a -o "{1}" 
 End
-Rez -o "{1}" -a "{rincludes}"Types.r "{betalib}"basiclib:v1.2:private:external:betaenv_macbody.r
+echo 'Include $$Shell("Current")"betaenv_macbody.rsrc";' | rez -a -o "{1}"
+unset Current

@@ -1,708 +1,614 @@
-ORIGIN  'filebody';
-OBJFILE mac '$/fileInt.c.o';
-INCLUDE '~beta/maclib/v2.7/mactypes';
-INCLUDE '~beta/maclib/v2.7/macdirectory';
+ORIGIN 'filebody';
+OBJFILE default '$/fileInt.c.o';
 INCLUDE '../external';
-(*
- * COPYRIGHT
- *       Copyright (C) Mjolner Informatics, 1984-95
- *       All rights reserved.
- *
- * This fragment is the implementation part of file pattern.
- * It uses a lot of calls to external C-routines from MacOS.
+INCLUDE '~beta/maclib/v3.0/files';
+INCLUDE '~beta/maclib/v3.0/resources';
+INCLUDE '~beta/maclib/v3.0/gestaltequ';
+INCLUDE '~beta/maclib/v3.0/macdirectory';
+INCLUDE '~beta/maclib/v3.0/toolutils'
+-- lib: Attributes --
+(* this fragment is the implementation part of file pattern.
+ * It uses a lot of calls to external functions in Mac Toolbox.
  *)
-
----LIB:attributes---
-   readMode: External
-   (# result: @integer;
-                        do CallC
-                        exit result #);
-
-   (* open for write - the file is created if not already present *)
-   writeCreateMode: External
-   (# result: @integer;
-                               do CallC
-                               exit result #);
-
-   (* open for read/write - the file is created if not already present *)
-   readWriteCreateMode: External
-   (# result: @integer;
-                                   do CallC
-                                   exit result #);
-
-appendCreateMode: External
-  (* Open for writing at the end, create if not existing *)
-  (# result: @integer;
-  do CallC
-  exit result
-  #);
-
+readMode: External (# result: @Integer;  do CallC exit result #);
+writeCreateMode: External (* open for write - the file is created if not already present *)
+  (# result: @Integer;  do CallC exit result #);
+readWriteCreateMode: External (* open for read/write - the file is created if not already present *)
+(# result: @Integer;  do CallC exit result #);
+appendCreateMode: External (* Open for writing at the end, create if not existing *)
+  (# result: @Integer;  do CallC exit result #);
 readAppendCreateMode: External
-  (* Open for reading and writing writing at the end, create if not existing *)
-  (# result: @integer;
+(* Open for reading and writing writing at the end, create if not existing *)
+  (# result: @Integer;  do CallC exit result #);
+unlink: External (# name: [1] @Char; status: @Integer enter name do CallC exit status #);
+EOFfunction: External
+  (# macStream: @Integer; yes: @Boolean;  enter macStream do CallC exit yes #);
+ungetc: External
+  (# macStream: @Integer; ch: @Integer;  enter (ch,macStream) do CallC exit ch #);
+StreamError: External (# yes: @Boolean do CallC exit yes #);
+GetTextFromStream: External
+  (# macStream: @Integer; toEOL: @Integer; T: [1] @Char; 
+  enter (macStream,toEOL)
   do CallC
-  exit result
+  exit T
   #);
-
-   lengthIndex: 
-   (* byte address of length in status buf *)
-   (# lengthOffset: External(# result: @integer
-                            do CallC
-                            exit result #);
-   exit lengthOffset
-   #);
-
-   GETEOF : external
-   (#
-     pRes : @shortInt;
-     refNum : @shortInt;
-     logEofAddr : @integer;
-   enter (refNum,logEofAddr)
-   do pascal
-   exit pRes
-   #);
-
-   ioctl : external
-   (#
-     fildes : @integer;
-     cmd : @integer;
-     argAdr : ^cstruct;
-     err : @integer
-   enter  (fildes,cmd,argAdr[])
-   do callC
-   exit err
-   #);
-   
-   FIOINTERACTIVE : (# exit 'f'*256+2 #);
-   FIOBUFSIZE : (# exit 'f'*256+3 #);
-   FIOFNAME : (# exit 'f'*256+4 #);
-   FIOREFNUM : (# exit 'f'*256+5 #);
-   FIOSETEOF : (# exit 'f'*256+6 #);
-   TIOFLUSH : (# exit 't'*256 #);
-
-   FileParam : cstruct
-   (#
-     byteSize ::< (# do 100 -> value #);
+lengthIndex: (* byte address of length in status buf *)
+  (# lengthOffset: External (# result: @Integer do CallC exit result #); 
+  exit lengthOffset
+  #);
+GetEOF: External
+  (# pRes: @ShortInt; refNum: @ShortInt; logEofAddr: @Integer; 
+  enter (refNum,logEofAddr)
+  do (*'GETEOF'->*) CallPascal
+  exit pRes
+  #);
+ioctl: External
+  (# fildes: @Integer; cmd: @Integer; argAdr: ^cstruct; err: @Integer
+  enter (fildes,cmd,argAdr[])
+  do callC
+  exit err
+  #);
+FIOINTERACTIVE: (# exit 'f'*256+2 #);
+FIOBUFSIZE: (# exit 'f'*256+3 #);
+FIOFNAME: (# exit 'f'*256+4 #);
+FIOREFNUM: (# exit 'f'*256+5 #);
+FIOSETEOF: (# exit 'f'*256+6 #);
+TIOFLUSH: (# exit 't'*256 #);
+FileParam: cstruct
+  (# byteSize::< (# do 100->value #);
+     ioCompletion: long (# pos::< (# do 12->value;  #);  #);
+     ioVRefNum: long (# pos::< (# do 22->value;  #);  #);
      
-     ioCompletion : long(# pos ::< (# do 12 -> value #)#);
-     ioVRefNum: long(# pos ::< (# do 12 -> value #)#);
-   #);
-
-   getErrno: External (* returns MAC variable 'errno' *)
-     (# N: @integer
-     do CallC
-     exit N
-     #);
-
-   EPERM:   (# exit  1 #); (* Not owner *)
-   ENOENT:  (# exit  2 #); (* No such file or directory *)
-   EACCESS: (# exit 13 #); (* Permission denied *)
-   EEXIST:  (# exit 17 #); (* File exists *)
-   EINVAL:  (# exit 22 #); (* invalid argument (empty filename) *)
-   ENOSPC:  (# exit 28 #); (* No space left on device *)
-
-fseek: External
-  (# macStream,p,mode,status: @integer;
-  enter(macStream,p,mode)
-  do CallC
-  exit status
   #);
-ftell: External
-  (# macStream,pos: @integer;
-  enter macStream
-  do CallC
-  exit pos
-  #);
-EOFvalue: External (* returns the EOF value *)
-  (# N: @integer
-  do CallC
-  exit N
-  #);
-isDir: External
-  (# path: [1]@char;
-     result: @integer;
-  enter path
+getErrno: External (* returns MAC variable 'errno' *) (# N: @Integer do CallC exit N #);
+EPERM: (# exit 1 #);
+(* Not owner *)
+ENOENT: (# exit 2 #);
+(* No such file or directory *)
+EACCESS: (# exit 13 #);
+(* Permission denied *)
+EEXIST: (# exit 17 #);
+(* File exists *)
+EINVAL: (# exit 22 #);
+(* invalid argument (empty filename) *)
+ENOSPC: (# exit 28 #);
+(* No space left on device *)
+EOFpeek: External
+  (# macStream: @Integer; eof: @Boolean;  enter macStream do CallC exit eof #);
+EOFvalue: External (* returns the EOF value *) (# N: @Integer do CallC exit N #);
+FSpIsDir: External (# fs: ^FSSpec; result: @ShortInt;  enter fs[] exit result #);
+FSpIsLocked: External (# fs: ^FSSpec; result: @ShortInt;  enter fs[] exit result #);
+FSpEntryExists: External (# fs: ^FSSpec; result: @Integer;  enter fs[] exit result #);
+FSpEntryTouch: External (# fs: ^FSSpec; result: @ShortInt;  enter fs[] exit result #);
+FSpEntryRename: External
+  (# fs: ^FSSpec; newpath: [1] @Char; result: @ShortInt; 
+  enter (fs[],newpath)
   exit result
   #);
-isLocked: External
-  (# path: [1]@char;
-     result: @integer;
-  enter path
+FSpGetModTime: External (# fs: ^FSSpec; result: @Integer;  enter fs[] exit result #);
+FSpGetDirID: External (# fs: ^FSSpec; itsID: @Integer;  enter fs[] do callC exit itsID #);
+Convert:
+  (# int: @Integer; 
+  enter int
+  do (@@ int,int)->tos'%putShort[0]'; @@ int->tos'%adrGetSignedShort'->int
+  exit int
+  #);
+HasFSSpecCalls:
+  (# response: @LongInt; Attr,err: @Integer; result: @Boolean; 
+  do
+     gestaltFSAttr->Text2ResType->Attr;
+     (Attr,response[])->gestalt->convert->err;
+     (if err
+      // 0 then
+         (@@ response.R[1],31-gestaltHasFSSpecCalls)->bittst->result; 
+      // - 5550 then
+         exception (# do 'gestaltUnknownErr'->msg.putline;  #); 
+      // - 5551 then
+         exception (# do 'gestaltUndefSelectorErr'->msg.putline;  #); 
+     if);
+     
   exit result
   #);
-entryExists: External
-  (# path: [1]@char;
-     result: @integer;
-  enter path
+GetDirectoryName:
+  (# a: [200] @Integer; d: [1] @Char; ID,volRef: @Integer; 
+  enter (ID,volRef)
+  do (ID,volRef,@@ a[1])->pathNameFromDirID->pToC->d
+  exit d
+  #);
+HMakeFSSpec: External
+  (# vRefNum: @ShortInt;
+     dirID: @Integer;
+     filename: [1] @Char;
+     spec: ^FSSpec;
+     result: @ShortInt;
+     
+  enter (vRefNum,dirID,filename,spec[])
+  do callC
   exit result
   #);
-entryTouch: External
-  (# path: [1]@char;
-     result: @integer;
-  enter path
+MakeFSSpec:
+  (# vRefNum: @ShortInt;
+     dirID: @Integer;
+     filename: [1] @Char;
+     spec: ^FSSpec;
+     result: @Integer;
+     
+  enter (vRefNum,dirID,filename,spec[])
+  do
+     (if HasFSSpecCalls
+      // true then (vRefNum,dirID,filename,spec[])->FSMakeFSSpec->convert->result; 
+      else
+         (vRefNum,dirID,filename,spec[])->HMakeFSSpec->convert->result; 
+     if);
+     
   exit result
   #);
-entryRename: External
-  (# path,newpath: [1]@char;
-     result: @integer;
-  enter (path,newpath)
-  exit result
+RenameEntry:
+  (# fs: ^FSSpec; newpath: ^Text; res: @Integer; 
+  enter (fs[],newpath[])
+  do
+     (if HasFSSpecCalls
+      // true then
+         (fs[],newpath)->FSpRename->convert->res;
+         (fs.vRefNum,fs.parID,newpath,fs[])->FSMakeFSSpec->convert->res;
+         
+      else
+         (fs[],newpath)->FSpEntryRename->convert->res; 
+     if);
+     
+  exit res
   #);
-getmodtime: External
-  (# path: [1]@char;
-     result: @integer;
-  enter path
-  exit result
+decomposeName: (* get name of path in beta/mac style! *)
+  (# i: @integer; path,name: ^text; 
+  enter path[]
+  do
+     '/'->path.findall (# do inx->i #);
+     (if i // 0 then ':'->path.findall (# do inx->i #);  if);
+     &text[]->name[];
+     (if i // 0 then path->name;  else path.t[i+1:path.length]->name;  if)
+  exit name[]
   #);
   
 
---FormatTime: descriptor--
-(# (* change 'time' to human readable text 'readable' *)
-   getdatestring: external
-     (# dateTime: @Integer;
-	    result: ^pascalString;
-	 enter (dateTime,result[])
-	 #);
-   t: @pascalstring;
-do (time,t[]) -> getdatestring;
-   t.gettext -> readable[];
-#)
+-- DiskEntryPrivate: Descriptor --
+(# FSpCheckNil: @
+     (# do
+        (if fs[]
+         // none then
+            exception
+              (# do 'The diskentry''s path must be set before accessing it.'->msg.putline;  #);
+            
+        if);
+        
+     #);
+   fs: ^FSSpec;
+   dirID: @LongInt;
+   FSSpecValid: @Boolean;
+   path: @Text;
+   (* Only used when this(DiskEntry) doesn't exist. *)
+   
+#)  
 
---DiskEntryException: descriptor--
-(# 
-do 'Disk entry exception for '''->msg.puttext;
-   path -> msg.puttext;
+-- DiskEntryException: DoPart --
+do
+   'Disk entry exception for '''->msg.putText;
+   (if private.FSSpecValid then path->msg.putText;  else private.path[]->msg.puttext;  if);
    ''''->msg.putline;
-#)
+   INNER ;
+     
 
---DiskEntryPrivate: descriptor--
-(# path: @text;
-   pathchanged: @boolean;
-   head, name, main, suf: @text;
-   follow: @boolean;
-   followset: @boolean;
-   checkfollow: @(# do (if not private.followset then true -> follow -> followset; if) #);
-   decomposepath: @
-     (# i: @integer;
-     do (if pathchanged then
-	    (* decompose path *)
-	    ':' -> path.findCh(# do inx -> i #);
-	    (if i = 0 then head.clear; path -> name;
-	     else
-		path.t[1:i-1] -> head;
-		path.t[i+1:path.length] -> name;
-	    if);
-	    (* decompose name *)
-            0->i;
-	    '.' -> name.findCh(# do inx -> i #);
-	    (if i = 0 then suf.clear; name -> main;
-	     else
-		name.t[1:i-1] -> main;
-		name.t[i:name.length] -> suf;
-	    if);
-	    false -> pathchanged
-	if);
-     #);
-   FullPath:
-     (# p: ^text;
-	    i: @Integer;
-     do (if path.t[1]=':' then
-	    (* path relative to CWD *)
-	    getCurrentDir -> p[];
-	    path[] -> p.append;
-	 else
-	    ':' -> name.findCh(# do inx -> i #);
-		(if i<>0 then
-		    (* full path with volume first *)
-	        &text[]->p[]; path -> p;
-		 else
-	       getCurrentDir -> p[];
-		   ':' -> p.append;
-	       path[] -> p.append;
-		if);
-	if);
-     exit p[]
-     #);
-#)
+-- DiskEntryPathHead: DoPart --
+do &Text[]->h[]; private.FSpCheckNil; (private.fs.parID,private.fs.vRefNum)->GetDirectoryName->h  
 
---DiskEntryPathHead: descriptor--
-(# do &text[]->h[]; private.decomposepath; private.head -> h #)
+-- DiskEntryPathNamePref: DoPart --
+do
+     (# temp: ^Text; 
+     do
+        private.FSpCheckNil;
+        private.fs.name->temp[];
+        &Text[]->p[];
+        temp.scanall
+          (# FoundDot: @Boolean; 
+          do
+             (if FoundDot
+              // false then (if ch // '.' then true->FoundDot;  else ch->p.put;  if); 
+             if);
+             
+          #)
+     #)  
 
---DiskEntryPathNamePref: descriptor--
-(# do &text[] -> p[]; private.decomposepath; private.main -> p #)
+-- DiskEntryPathNameSuf: DoPart --
+do
+     (# temp: ^Text; 
+     do
+        private.FSpCheckNil;
+        private.fs.name->temp[];
+        &Text[]->s[];
+        temp.scanall
+          (# FoundDot: @Boolean; 
+          do
+             (if FoundDot
+              // false then (if ch // '.' then true->FoundDot; ch->s.put;  if); 
+              else
+                 ch->s.put; 
+             if);
+             
+          #);
+        
+     #)  
 
---DiskEntryPathNameSuf: descriptor--
-(# do &text[]->s[]; private.decomposepath; private.suf -> s #)
+-- DiskEntryPathNameExt: DoPart --
+do
+     (# temp: ^Text; 
+     do
+        private.FSpCheckNil;
+        private.fs.name->temp[];
+        &Text[]->e[];
+        temp.scanall
+          (# FoundDot: @Boolean; 
+          do
+             (if FoundDot
+              // false then (if ch // '.' then true->FoundDot;  if); 
+              else
+                 ch->e.put; 
+             if);
+             
+          #);
+        
+     #)  
 
---DiskEntryPathNameExt: descriptor--
-(# 
-do &text[]->e[]; 
-   private.decomposepath; 
-   private.suf.t[2:private.suf.length] -> e
-#)
-
---DiskEntryPathNameGet: descriptor--
-(# do &text[]->n[]; private.decomposepath; private.name -> n #)
-
---DiskEntryPathSet: descriptor--
-(# 
-do (if p[]=NONE then &text[]->p[] if);
-   p -> private.path;
-   true -> private.pathchanged;
-   private.checkfollow;
-#)
-
---DiskEntryPathGet: descriptor--
-(# do &text[]->p[]; private.path -> p #)
-
---DiskEntryExists: descriptor--
-(# 
-do (if (private.path -> entryExists -> value)<0 then 
-       error; false -> value;
-   if);
-#)
-
---DiskEntryTouch: descriptor--
-(#
-do (if (private.path -> entryTouch) =0 then error if);
-#)
-
---DiskEntrySize: descriptor--
-(# 
-do 
-#)
-
----DiskEntryModTime:descriptor---
-(# (*Bmtime: external
-     (# p: [1]@char;
-	    statblok: @integer;
-	    mTime: @integer
-     enter (p,statBlok)
-     do callC
-     exit mTime 
-     #);
-   p: [1]@char;
-   statusBlok: [100]@integer*)
-do (*private.path -> cToP -> p;
-   (p,@@statusBlok[1]) -> Bmtime -> value;*)
-   private.path -> getmodtime -> value;
-#)
-
---DiskEntryRename: descriptor--
-(# 
-do (if ((private.path,newpath) -> entryRename) = -1 then
-	   error;
+-- DiskEntryPathNameGet: DoPart --
+do
+   private.FSpCheckNil;
+   (if exists or private.FSSpecValid then
+       private.fs.name->n[]
     else
-	   newpath -> private.path;
-   if);
-#)
+       private.path[]->decomposeName->n[]; 
+   if)  
 
---DiskEntryReadable: descriptor--
-(# 
-do true -> value;
-#)
-
---DiskEntryWriteable: descriptor--
-(# 
-do (if (private.path -> isLocked -> value)<0 then 
-       error;
+-- DiskEntryPathSet: DoPart --
+do
+   &FSSpec[]->private.fs[];
+   (*'Path set: '->screen.puttext; p[]->screen.puttext;*)
+   (if ((0,0,p,private.fs[])->MakeFSSpec)
+    // - 43 then (* FSSpec is valid but entry does not exist *)
+    (*'FSSpec is valid but entry does not exist'->screen.putline;*)
+       TRUE->private.FSSpecValid; 
+    // 0 then
+       TRUE->private.FSSpecValid;
+       (if isDirectory
+        // true then private.fs[]->FSpGetDirID->private.dirID; (*' isDir '->screen.puttext;*) 
+       if);
+       (*'FSSpec is valid'->screen.putline;*)
+       
     else
-	   not value -> value;
+   (*'FSSpec is invalid'->screen.putline;*)
+       p->private.path; FALSE->private.FSSpecValid; 
    if);
-#)
+     
 
---DiskEntryIsDir: descriptor--
-(# 
-do (if (private.path -> isDir -> value)<0 then 
-       error;
-   if);
-#)
-
---DiskEntryIsFile: descriptor--
-(#
-do (if (private.path -> isDir -> value)<0 then 
-       error;
+-- DiskEntryPathGet: DoPart --
+do
+   &Text[]->p[];
+   private.FSpCheckNil;
+   (if exists or private.FSSpecValid then
+       (private.fs.parID,private.fs.vRefNum)->GetDirectoryName->p;
+       private.fs.name->p.append;
+       (if private.FSSpecValid then (if isDirectory then ':'->p.append if) if);
+       
     else
-	   not value -> value;
+   (* if the entry and the path does not exists try use private.part as entry name *)
+       private.path->p; 
    if);
-#)
+     
 
----FilePrivate:descriptor---
-   (# macStream: @integer; (* MAC FILE (cf. stdio.h)  pointer for file. *)
-      MacErrNo (* may contain Mac variable 'errno'*) : @ integer; 
-      outputFile: @boolean; (* True iff this file is opened for writing. *)
-      index: @Integer;
-	  
-      fdopen: External
-      (# fildes: @integer; type: [1]@char; macStream: @integer;
-      enter(fildes,type)
-      do CallC
-      exit(macStream)
-      #);
-      
-      ProcessError:
-      (# msg: @text
-      enter msg
-      do (if (getErrno->MacErrNo)
-          // EPERM
-          // EACCESS then msg[] -> AccessError
-          // ENOENT  then msg[] -> NoSuchFileError
-          // EEXIST  then msg[] -> FileExistsError
-          // EINVAL  then 'Empty file name' -> OtherError
-          // ENOSPC  then msg[] -> NoSpaceError
-          else inner
-         if);
-      #);
-
-      SetUpMacStream:
-      (# type: @text;
-      enter type
-      do
-         (index,type) -> fdopen -> private.macStream;
-         (if private.macStream=0 then
-             private.processError(# do 'Cannot open file' -> OtherError #);
-         if);
-      #);
-   #)
-
-
----FileDoOpen:descriptor---
-   (# 
-      open:External
-      (# mode,index: @integer; name: [1]@char
-      enter(name,mode)
-      do CallC
-      exit index
-      #);
-
-   do (name,mode) -> &open -> private.index;
-      (if (private.index<0) then 
-          private.processError(# do 'Cannot open file'->OtherError #);
-      if);
-   #)
-
----FileOpenRead:descriptor---
-   (# z: [1]@char;
-   do
-      (entry.private.path[],readMode,false) -> doOpen; 
-	  'r' -> z[1];
-      z -> private.SetUpMacStream;
-   #)
-
----FileOpenWrite:descriptor---
-   (# z: [1]@char;
-   do (entry.private.path[],writeCreateMode,false) -> doOpen;
-	  true -> private.outputFile;
-      'w' -> z[1];
-      z -> private.SetUpMacStream;
-   #)
-
----FileOpenReadWrite:descriptor---
-   (#
-   do
-      (entry.private.path[],readWriteCreateMode,false) -> doOpen;
-	  true -> private.outputFile;
-      'r+' -> private.SetUpMacStream;
-   #)
-
-
---FileOpenAppend:descriptor--
-(# 
-do 
-      (entry.private.path[],appendCreateMode,false) -> doOpen;
-	  true -> private.outputFile;
-      'r+' -> private.SetUpMacStream;
-#)
-
---FileOpenReadAppend:descriptor--
-(# 
-do 
-      (entry.private.path[],readAppendCreateMode,false) -> doOpen;
-	  true -> private.outputFile;
-      'r+' -> private.SetUpMacStream;
-#)
-
----FileTouch:descriptor--- 
-(#	Text2ResType:
-		(# const3: (# exit 16777216 #);
-			const2: (# exit 65536 #);
-			const1: (# exit 256 #);
-			newtxt: [4] @Char;
-			result: @Integer;
-		enter newtxt
-		do	newtxt[1] * const3 -> result;
-			(newtxt[2] * const2) + result -> result;
-			(newtxt[3] * const1) + result -> result;
-			newtxt[4] + result -> result;
-		exit result
-		#);
-	Create: External
-		(#	fileName: [1] @Char;
-			vRefNum: @ShortInt;
-			Creator,Type,error: @Integer;
-		enter (fileName,vRefNum,Creator,Type)
-		do 'CREATE' -> CallPascal
-		exit error
-		#);
-	theName: ^Text;
-	res,theCreator,theType: @Integer;
-do (if not entry.exists then
-	   Name -> theName[];
-		'MPS ' -> Text2ResType -> theCreator;
-		'TEXT' -> Text2ResType -> theType;
-	   (theName,theCreator,theType,0) -> Create -> res;
-		(if res<>0 then (* Error *) if);
+-- DiskEntryExists: DoPart --
+do
+   private.FSpCheckNil;
+   (if not private.FSSpecValid then (* FSSpec not valid, try again *)
+       private.path[]->path.set; 
    if);
-#)
+   (if not private.FSSpecValid then (* FSSpec still not valid, entry does not exists *)
+       false->value; 
+    else
+   (* FSSpec valid, try see if the file exists *)
+       (if private.fs[]->FSpEntryExists
+        // 0 then false->value;  
+        // 1 then true->value; 
+        else
+           (if private.path.length > 0 then false->value;  
+            else error; 
+           if); 
+       if)
+   if);
+     
 
----FileDelete:descriptor---
-   (# unlink: External
-      (# name: [1]@char; status: @integer
-      enter name
-      do CallC
-      exit status
-      #);
-   do 
-   (if (entry.private.path->unlink)<0 then
-       private.processError(# do 'Cannot delete file'->OtherError#)
-   if)
-   #)
+-- DiskEntryTouch: DoPart --
+do INNER ; private.FSpCheckNil; private.fs[]->FSpEntryTouch  
 
----FileLength:descriptor---
-   (#
-      open:external
-        (# exe,mode,permission,index: @integer; name: [1]@char
-        enter(name,mode)
-		do callC
-        exit index
-        #);
+-- DiskEntrySize: DoPart --
+do   
 
-      close: external
-        (# index: @integer
-        enter index
-		do CallC
-        #);
-
-      index,err: @integer; 
-	  val,len: @integer;
-	   
-	  frefNum : @cstruct
-	    (# byteSize ::< (# do 4 -> value #);
- 	       value: short(# pos ::< (# do 0 -> value #) #);
-	    enter value
-	    exit value 
-	    #)
-   do (entry.private.path,readMode) -> open -> index;
-      (index , FIOREFNUM, fRefNum[]) -> ioctl -> err;
-      (if err = -1 then 'Error in "length"' -> AccessError
-        else 
-	      fRefNum -> val; 
-		  (val,@@len) -> geteof -> err;
-		  len -> value;
-      if);
-      index -> close;
-  #)
-
----FileSetPos:descriptor---
-(#
-do (private.macStream,p,mode) -> fseek -> newpos;      (* Ignore status. *)
-   private.macStream -> ftell -> newpos;  (* Get resulting absolute pos. *)
-#)
-
----FILEGETPOS: descriptor--- 
-(#
-do private.macStream -> ftell -> value;
-#)
-
----FileEos:descriptor---
-   (# EOFpeek: External
-      (# macStream: @integer;
-         eof: @boolean;
-      enter macStream
-      do CallC
-      exit eof
-      #);
-   do 
-      private.macStream -> EOFpeek -> value; 
-   #)
-
----FilePut:descriptor---
-   (# fputc: External
-      (# macStream: @integer;
-         ch: @integer;
-         status: @integer;
-      enter(ch,macStream)
-      do CallC
-      exit status
-      #);
-   do 
-      (if ((ch,private.macStream)->fputc) = EOFvalue then WriteError if);
-   #)
-
----FileGet:descriptor---
-   (# fgetc: External
-      (# macStream: @integer;
-         ch: @integer;
-      enter macStream
-      do CallC
-      exit ch
-      #);
-      EOFfunction: External
-     (# macStream: @integer; 
-        yes: @boolean; 
-      enter macStream
-      do CallC
-      exit yes
-      #);
-   do
-      private.macStream -> fgetc -> ch;
-      (if ch = EOFvalue then   (* Either a read error or simply end of file. *)
-          (if private.macStream -> EOFfunction then
-              EOSError;
-           else
-              ReadError;
-          if);
-      if);
-   #)
-
----FilePeek:descriptor---
-   (# fgetc: External
-      (# macStream: @integer;
-         ch: @integer;
-      enter macStream
-      do CallC
-      exit ch
-      #);
-      ungetc: External
-      (# macStream: @integer;
-         ch: @integer;
-      enter (ch,macStream)
-      do CallC
-      exit ch
-      #);
-      EOFfunction: External
-     (# macStream: @integer; 
-        yes: @boolean; 
-      enter macStream
-      do CallC
-      exit yes
-      #);
-   do
-      private.macStream -> fgetc -> ch;
-      (if ((ch,private.macStream) -> ungetc) = EOFvalue 
-      then   (* Either a read error or simply end of file. *)
-          (if private.macStream -> EOFfunction then
-              EOSError;
-           else
-              ReadError;
-          if);
-      if);
-   #)
-
----FilePutText:descriptor---
-   (# fputs: External
-      (# macStream: @integer;
-         T: @integer;
-         status: @integer;
-      enter(T,macStream)
-      do CallC
-      exit status
-      #);
-   do (if txt.lgth> 0 then
-	      (if txt.lgth < txt.T.range then 0 -> txt.T[txt.lgth+1] if);
-		  (if ((@@txt.T[1],private.macStream)->fputs) = EOFvalue then WriteError
-	   if)if)
-   #)
-
----FileGetAtom:descriptor---
-   (# StreamError: External(# yes: @boolean 
-                           do CallC
-                           exit yes #);
-
-      GetTextFromStream: External
-      (# macStream: @integer;
-         toEOL: @integer;
-         T: [1]@char;
-      enter(macStream,toEOL)
-      do CallC
-      exit T
-      #);
-   do
-      (private.macStream,false) -> GetTextFromStream -> txt;
-      (if StreamError then '' -> txt if);
-   #)
+-- DiskEntryGetModTime: DoPart --
+do private.FSpCheckNil; private.fs[]->FSpGetModTime->time 
    
----FileGetLine:descriptor---
-   (# StreamError: External(# yes: @boolean 
-                           do CallC
-                           exit yes #);
-
-      GetTextFromStream: External
-      (# macStream: @integer;
-         toEOL: @integer;
-         T: [1]@char;
-      enter(macStream,toEOL)
-      do CallC
-      exit T
-      #);
-   do
-      (private.macStream,true) -> GetTextFromStream -> txt;
-      (if StreamError then '' -> txt if);
-   #)
-
----GetRep:descriptor---
-   (# fread: External
-      (# addr, size, n, macStream: @integer; (* n is no of elems. to read. *)
-         n1: @integer; (* The number of elements successfully read. *)
-      enter(addr,size,n,macStream)
-      do CallC   
-      exit n1
-      #);
-   do
-      (repAdr,1,length*4,private.macStream) -> fread -> length;
-   #)
-
----PutRep:descriptor---
-   (# fwrite: External
-      (# addr, size, n, macStream: @integer; (* n is no of elems. to write. *)
-         n1: @integer; (* The number of elements successfully written. *)
-      enter(addr,size,n,macStream)
-      do CallC
-      exit n1
-      #);
-   do
-      (repAdr,1,length*4,private.macStream) -> fwrite -> length;
-   #)
-
----FileFlush:descriptor---
-   (# fflush: External
-      (# macStream,status: @integer; 
-      enter macStream
-      do CallC
-      exit status 
-      #);
-   do
-      (if private.OutputFile then
-         (if (private.macStream->fflush) = EOFvalue then WriteError; if);
-      if);
-   #)
+-- DiskEntrySetModTime: DoPart --
+do 'DiskEntrySetModTime: Not Yet Implemented' -> putline;
    
----FileClose:descriptor---
-   (# fclose: External
-      (# macStream,status: @integer; 
-      enter macStream
-      do CallC 
-      exit status 
-      #);
-   do (if (private.macStream->fclose) = EOFvalue then OtherError; if);
-      (* Note that the fclose call closes both the macStream and the
-         filedescriptor (index). *)
-   #)
+-- DiskEntryRename: DoPart --
+do
+   private.FSpCheckNil;
+   (if exists // true then  else error if);
+   (if (private.fs[],newpath[])->RenameEntry // 0 then  else error if);
+     
 
----- FILEOTHEREXCEPTION:descriptor--- 
-(#
-do 'Error in system call: ' -> msg.puttext;
-   getErrno -> msg.putint; msg.newline;
-#)
+-- DiskEntryReadable: DoPart --
+do
+   private.FSpCheckNil;
+   (private.fs[]->FSpEntryExists) <> 0 ->value;
+   (* a file is only readable if it exists!! *)
+     
 
+-- DiskEntryWriteable: Descriptor --
+(# do private.FSpCheckNil; ((private.fs[]->FSpIsLocked->convert) <> 0)->value;  #)  
+
+-- DiskEntryIsDir: DoPart --
+do
+   private.FSpCheckNil;
+   (if private.FSSpecValid then
+       ((private.fs[]->FSpIsDir->convert) = 1)->value; 
+    else
+       DiskEntryException (# do '\nIsDirectory failed; FSSpec invalid.'->msg.append #); 
+   if);
+     
+
+-- DiskEntryIsFile: DoPart --
+do not isDirectory->value  
+
+-- FilePrivate: Descriptor --
+(# macStream: @Integer;
+   (* MAC FILE (cf. stdio.h)  pointer for file. *)
+   MacErrNo (* may contain Mac variable 'errno'*) : @Integer;
+   outputFile: @Boolean;
+   (* True iff this file is opened for writing. *)
+   index: @Integer;
+   fdopen: External
+     (# fildes: @Integer; type: [1] @Char; macStream: @Integer; 
+     enter (fildes,type)
+     do CallC
+     exit macStream
+     #);
+   ProcessError:
+     (# msg: @Text
+     enter msg
+     do
+        (if (getErrno->MacErrNo)
+         // EPERM // EACCESS then
+            msg[]->AccessError
+         // ENOENT then
+            msg[]->NoSuchFileError
+         // EEXIST then
+            msg[]->FileExistsError
+         // EINVAL then
+            'Empty file name'->OtherError
+         // ENOSPC then
+            msg[]->NoSpaceError
+         else
+            INNER
+        if);
+        
+     #);
+   SetUpMacStream:
+     (# type: @Text; 
+     enter type
+     do
+        (index,type)->fdopen->private.macStream;
+        (if private.macStream
+         // 0 then private.processError (# do 'Cannot open file'->OtherError #); 
+        if);
+        
+     #);
+   
+#)  
+
+-- FileOtherException: DoPart --
+do 'Error in system call: '->msg.putText; getErrno->msg.putint; msg.newline; INNER  
+
+-- FileTouch: DoPart --
+do
+     (# p: ^Text; theCreator,theType,res: @Integer; 
+     do
+        entry.private.FSpCheckNil;
+        (if entry.exists
+         // false then
+            'MPS '->Text2ResType->theCreator;
+            'TEXT'->Text2ResType->theType;
+            entry.private.fs.name->p[];
+            (if hasFSSpecCalls
+             // true then
+                (if p.length = 0 then
+                    entry.private.path[]->p[];
+                    (if ((0,0,p,entry.private.fs[])->MakeFSSpec)
+                     // 0 // - 43 then 
+                     else
+                        error; 
+                    if);
+                    
+                if);
+                (entry.private.fs[],theCreator,theType,- 1)->FSpCreate->convert->res;
+                
+             else
+                (if p.length = 0 then entry.private.path[]->p[];  if);
+                (entry.private.fs.vRefNum,entry.private.dirID,p,theCreator,theType)->HCreate
+                  ->convert->res;
+                
+            if);
+            (if res
+             // 0 then (* now we have a FSSpec; do not use private.path *)
+                entry.private.path.clear; 
+             else
+                error; 
+            if);
+            
+        if);
+        
+     #)  
+
+-- FileLength: DoPart --
+do
+     (# open: External
+          (# exe,mode,permission,index: @Integer; name: [1] @Char
+          enter (name,mode)
+          do callC
+          exit index
+          #);
+        close: External (# index: @Integer enter index do CallC;  #);
+        index,err: @Integer;
+        val,len: @Integer;
+        frefNum: @cstruct
+          (# byteSize::< (# do 4->value #);
+             value: short (# pos::< (# do 0->value;  #);  #);
+             
+          enter value
+          exit value
+          #);
+        p: ^Text;
+        
+     do
+        entry.path->p[];
+        (p,readMode)->open->index;
+        (index,FIOREFNUM,fRefNum[])->ioctl->err;
+        (if err
+         // - 1 then 'Error in "length"'->AccessError
+         else
+            fRefNum->val; (val,@@ len)->geteof->err; len->value; 
+        if);
+        index->close;
+        
+     #)  
+
+-- FileDoOpen: Descriptor --
+(# open: External
+     (# mode,index: @Integer; name: [1] @Char enter (name,mode) do CallC exit index #);
+   
+do
+   (name,mode)->&open->private.index;
+   (if (private.index < 0)
+    // true then private.processError (# do 'Cannot open file'->OtherError #); 
+   if);
+   
+#)  
+
+-- FileOpenRead: DoPart --
+do (entry.path,readMode,false)->doOpen; 'r'->private.SetUpMacStream;   
+
+-- FileOpenWrite: DoPart --
+do
+   (entry.path,writeCreateMode,false)->doOpen;
+   true->private.outputFile;
+   'w'->private.SetUpMacStream;
+     
+
+-- FileOpenReadWrite: DoPart --
+do
+   (entry.path,readWriteCreateMode,false)->doOpen;
+   true->private.outputFile;
+   'r+'->private.SetUpMacStream;
+     
+
+-- FileOpenAppend: DoPart --
+do
+   (entry.path,appendCreateMode,false)->doOpen;
+   true->private.outputFile;
+   'r+'->private.SetUpMacStream;
+     
+
+-- FileOpenReadAppend: DoPart --
+do
+   (entry.path,readAppendCreateMode,false)->doOpen;
+   true->private.outputFile;
+   'r+'->private.SetUpMacStream;
+     
+
+-- FileDelete: DoPart --
+do
+     (# t: ^text; 
+     do
+        entry.path->t[];
+        (if ((t->unlink) < 0)
+         // true then private.processError (# do 'Cannot delete file'->OtherError #)
+        if)
+     #)  
+
+-- FilePut: DoPart --
+do (if ((ch,private.macStream)->fputc) // EOFvalue then WriteError if);   
+
+-- FileGet: DoPart --
+do
+   private.macStream->fgetc->ch;
+   (if ch
+    // EOFvalue then (* Either a read error or simply end of file. *)
+       (if (private.macStream->EOFfunction) // true then EOSError;  else ReadError;  if); 
+   if)  
+
+-- FilePeek: DoPart --
+do
+   private.macStream->fgetc->ch;
+   (if ((ch,private.macStream)->ungetc)
+    // EOFvalue then (* Either a read error or simply end of file. *)
+       (if (private.macStream->EOFfunction) // true then EOSError;  else ReadError;  if); 
+   if)  
+
+-- FilePutText: DoPart --
+do
+   (if Txt.lgth > 0
+    // true then
+       (if Txt.lgth < Txt.T.range // true then 0->Txt.T[Txt.lgth+1];  if);
+       (if ((@@ Txt.T[1],private.macStream)->fputs) // EOFvalue then WriteError;  if);
+       
+   if);
+
+-- FileGetAtom: DoPart --
+do
+   (private.macStream,0)->GetTextFromStream->Txt;
+   (if true // StreamError then ''->Txt if);
+
+-- FileGetLine: DoPart --
+do
+   (private.macStream,1)->GetTextFromStream->Txt;
+   (if true // StreamError then ''->Txt if);
+
+-- FileGetPos: DoPart --
+do private.macStream->ftell->value  
+
+-- FileSetPos: DoPart --
+do
+   (private.macStream,p,mode)->fseek->newpos;
+   (* Ignore status. *)
+   private.macStream->ftell->newpos;
+   (* Get resulting absolute pos. *)
+     
+
+-- FileEos: DoPart --
+do private.macStream->EOFpeek->value;   
+
+-- GetRep: DoPart --
+do (repAdr,1,length*4,private.macStream)->fread->length  
+
+-- PutRep: DoPart --
+do (repAdr,1,length*4,private.macStream)->fwrite->length  
+
+-- FileFlush: DoPart --
+do
+   (if true
+    // private.OutputFile then
+       (if (private.macStream->fflush) // EOFvalue then WriteError;  if); 
+   if)  
+
+-- FileClose: DoPart --
+do
+   (if (private.macStream->fclose) // EOFvalue then OtherError;  if);
+   (* Note that the fclose call closes both the macStream and the
+    filedescriptor (index). *)
+     
 
