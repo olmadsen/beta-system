@@ -3,7 +3,7 @@
 #define inHeap(x)      (inIOA(x) || inLVRA(x))
 #define inIOA(x)       (((long) IOA <= (long) x) && ((long) x < (long) IOATop))
 #define inToSpace(x)   (((long) ToSpace <= (long) x) && ((long) x < (long) ToSpaceTop)) 
-#define inAOA(x)       inArea( AOABaseBlock, x)
+#define inAOA(x)       inArea( AOABaseBlock, (struct Object *)(x))
 
 #define isSpecialProtoType(x) ((MinPTValue <= (long) x) \
                               && ( (long) x <= MaxPTValue))
