@@ -11,8 +11,68 @@
 
 #ifdef crts
 ParamThisComp(struct Component *, Att)
-{
-  fprintf(output, "<Attach NYI>");
+/* struct Component * Att(struct Object *this, struct Component *comp) */
+{  
+  /* By now the following variables are declared as locals. Should be
+   * global addressable when a component stack is implemented.
+   */
+  register ref(CallBackFrame)  callBackFrame;
+  register long              * nextCompBlock;
+  register long                level; /* This is SPARC specific? Needed*/
+
+  long first = comp->CallerLSC == 0;
+
+  GCable_Entry();
+  FetchThisComp();
+  Ck(comp); 
+  Ck(this);
+  if (comp->StackObj == cast(StackObject) -1 || comp == ActiveComponent)
+    BetaError(RecursiveAttErr, this);
+
+  getret(ActiveComponent->CallerLSC);	/* Save our return address */
+  AssignReference((long *)&comp->CallerComp, cast(Item) ActiveComponent);
+  AssignReference((long *)&comp->CallerObj, cast(Item) this);
+  
+  /* -1 tells that ActiveComponent is active */
+  ActiveComponent->StackObj = cast(StackObject) -1;
+  
+  /* Push a new Component Block. */
+  /* This is SPARC code! The components are pushed in register windows */
+  level = 0;
+  nextCompBlock = (long *) lastCompBlock;
+  callBackFrame = ActiveCallBackFrame;
+ 
+  /* Clear the CallBackFrame list */
+  ActiveCallBackFrame = 0;
+  lastCompBlock = cast(ComponentBlock) RefSP; 
+
+  if (first) {
+    /* Hack to indicate that comp has now been attached once.
+     * If this attachment of comp does not execute a suspend, there is no
+     * other way to check this!
+     */
+    comp->CallerLSC = -1;
+    ActiveComponent = comp;
+    
+    CallBetaEntry(*((long *)((long)((cast(Item) &comp->Body)->Proto)+sizeof(struct ProtoType)+4)), &comp->Body);
+    
+    /* TerminateComponent: */
+    comp = ActiveComponent;
+    printf("\nAttach: comp TERMINATED: 0x%08x\n", comp);
+    fflush(stdout);
+    ActiveComponent  = comp->CallerComp;
+    this             = comp->CallerObj;
+    comp->StackObj   = 0;
+    comp->CallerComp = 0;
+    comp->CallerObj  = 0;
+    
+    /* Pop the Component Block */
+    ActiveCallBackFrame = callBackFrame;
+    lastCompBlock = cast(ComponentBlock) nextCompBlock;
+    setret(ActiveComponent->CallerLSC);
+    
+    return comp;  
+  } 
 }
 #endif
 
