@@ -1,0 +1,305 @@
+ORIGIN 'pathhandlerbody';
+INCLUDE '../envstring';
+INCLUDE '~beta/containers/hashTable';
+INCLUDE '~beta/javalib/betahelpers';
+INCLUDE '~beta/javalib/java/lang/System';
+INCLUDE '~beta/javalib/java/io/File';
+
+-- LIB: Attributes --
+homeDirectories: (#  exit 'configuration/homeDirectories' #);   
+use_static_fields:
+  (# exit false #);
+
+-- PathHandlerDirectoryChar: DoPart --
+do (if use_static_fields then
+       (*File.separatorChar -> value*)
+    else
+       1 -> ('file.separator'-> System.getProperty_String->String2Text).inxGet -> value
+   if);
+
+-- PathHandlerDirectoryCharRegExp: DoPart --
+do  (if use_static_fields then
+        (*File.separator -> t[]*)
+     else
+        'file.separator' -> System.getProperty_String->t[]  
+    if);
+
+-- PathHandlerIsDirectoryChar: DoPart --
+do (if use_static_fields then
+       (*c = File.separatorChar -> value*)
+    else
+       c = (1 -> ('file.separator'-> System.getProperty_String->String2Text).inxGet) -> value
+   if);
+
+-- PathhandlerSearchPath: DoPart --
+do  ('java.library.path') -> System.getProperty_String -> path[]  
+
+-- PathhandlerSearchPathDelimiter: DoPart --
+do  (if use_static_fields then
+        (*File.pathSeparatorChar -> value*)
+     else
+        1 -> (('directory.separator') -> System.getProperty_String->String2Text).inxGet -> value
+    if);
+
+-- PathHandlerCurrentDirectory: DoPart --
+do ('.' -> JavaFile._init_String).getCanonicalPath->cwd[];   
+
+-- ConvertFilePathBody: Descriptor --
+(#
+   endedBySlash: @boolean;
+   slashInx,index: @integer;
+   path,basis: ^text;
+   pathlength,basislength: @integer;
+   
+   tildeExpand: (* tilde expand path, disregarding basis *)
+     (# t,h,n: ^text; found: @boolean; 
+     do
+        Private.Nametable.Scan
+        (# 
+        do
+           (if ((1,currentSize)->path.sub->thisHome.equal) then
+               (1,currentSize)->path.delete;
+               thisDir[]->path.prepend;
+               path.length->pathlength;
+               true->found;
+               (* leave not allowed here *)
+               
+           if)
+        #);
+        (if found then leave tildeExpand if);
+        (* not found in table: expand ~ as betalib *)
+        (1,1)->path.delete;
+        private.betalib[]->path.prepend;
+        path.length->pathlength;
+     #);
+   
+do (* FIXME: Use File.getCanonicalPath? *)
+   
+   (if THIS(ConvertFilePath).path[] <> none then
+       (* Copy path to avoid side-effects *)
+       THIS(ConvertFilePath).path.copy->path[];
+       path.length->pathlength;
+       (if pathlength <> 0 then
+           (if (pathlength->path.inxget) = '/' then true->endedBySlash if);
+           (if THIS(ConvertFilePath).basis[] = none then
+               CurrentDirectory->basis[]; 
+            else
+               (* Copy basis to avoid side-effects *)
+               THIS(ConvertFilePath).basis.copy->basis[]; 
+           if);
+           (if basis.length = 0 then currentdirectory->basis[] if);
+           basis.length->basislength;
+           (if (pathlength->path.inxget) <> '/' then
+               '/'->path.append;
+               pathlength+1->pathlength;
+               
+           if);
+           (if (basislength->basis.inxget) <> '/' then
+               '/'->basis.append; basislength+1->basislength; 
+           if);
+           (* Expand environment variables *)
+           path[]->expandEnvVar->path[];
+           path.length->pathlength;
+           converter:
+             (#
+                unknownPrefix:
+                  (* The prefix of path is unknown. It must be a local file *)
+                  (# 
+                  do
+                     (if './'->basis.equal then leave converter if);
+                     ('./',1)->path.insert;
+                     pathlength+2->pathlength;
+                     restart converter
+                  #);
+                
+             do
+                (if pathlength = 0 then leave converter if);
+                (if basislength = 0 then leave converter if);
+                (if (1->path.inxGet)
+                 // '/' then (* absolute path *)
+                    leave converter
+                 // '~' then
+                    tildeExpand; leave converter; 
+                 // '.' then
+                    (if './'->basis.equal then leave converter if);
+                    (* path is a relative path starting with .
+                     * since path is '/'-terminated, length >=2
+                     *)
+                    (if (2->path.inxGet)
+                     // '.' then
+                        (* path starts with '..'
+                         * Since path is always terminated by '/', 
+                         * length is >=3
+                         *)
+                        (if (3->path.inxGet) = '/' then
+                            (* path starts with '../'
+                             * delete prefix of path and last component 
+                             * of basis and rerun converter
+                             *)
+                            (1,3)->path.delete;
+                            pathlength-3->pathlength;
+                            0->index;
+                            '/'
+                              ->basis.findAll
+                            (# 
+                            do
+                               (if inx = basislength then
+                                   (* found the terminating slash *)
+                                   (if index <> 0 then
+                                       (* found slash before the last one in basis *)
+                                       (index+1,basislength)->basis.delete;
+                                       basis.length->basislength;
+                                       (if pathlength = 0 then
+                                           basis->path;
+                                           basislength->pathlength;
+                                           leave converter
+                                       if);
+                                       
+                                    else
+                                       (* only terminating slash in basis. *)
+                                       (if inx = 1 then (* basis = '/' *)
+                                           NoFather;
+                                           (* in case NoFather continues: *)
+                                           '../'->path.prepend;
+                                           pathlength+3->pathlength;
+                                           leave converter;
+                                           
+                                        else
+                                           '../'->path.prepend;
+                                           pathlength+3->pathlength;
+                                           './'->basis.prepend;
+                                           basislength+2->basislength;
+                                           
+                                       if)
+                                   if);
+                                   restart converter
+                                else
+                                   (* save the position of this slash *)
+                                   inx->index
+                               if)
+                            #);
+                            
+                         else
+                            (* path starts with ..something, 
+                             * it must be a local file/directory
+                             * named '..something'
+                             *)
+                            unknownprefix; 
+                        if)
+                     // '/' then
+                        (* Path starts with './', i.e. a path local to basis
+                         * delete prefix of path, concatenate basis and path
+                         * and return path 
+                         *)
+                        (1,2)->path.delete;
+                        basis[]->path.prepend;
+                        path.length->pathlength;
+                        leave converter
+                     else
+                        (* path starts with .something, 
+                         * it must be a local file/directory
+                         *)
+                        unknownPrefix
+                    if);
+                    
+                 else
+                    (* path does not start with '/', '~' or'.' *)
+                    unknownPrefix; 
+                if);
+                
+             #);
+           (path[],'/',1)->removeDoubleCh;
+           path.length->pathlength;
+           (* Check that the path is ended by slash iff the original one was *)
+           (if (pathlength->path.inxget) = '/' then
+               (if not endedBySlash then
+                   (if pathlength = 1 then
+                       (* special case: the result was '/' *)
+                       
+                    else
+                       (pathlength,pathlength)->path.delete;
+                       pathlength-1->pathlength;
+                       
+                   if);
+                   
+               if)
+            else
+               (if endedBySlash then '/'->path.append;  if)
+           if);
+       if);
+       path.copy->THIS(ConvertFilePath).convertedpath[];
+   if);
+   
+#)  
+
+-- PathHandlerInitNameTable: Descriptor --
+(# 
+do
+   (if false then
+       (if use_static_fields then
+           (*File.separatorChar -> directoryChar *)
+        else
+           1 -> ('file.separator'-> System.getProperty_String->String2Text).inxGet -> directoryChar
+       if);
+   if);
+   '$(BETALIB)'->expandEnvVar->BetaLib[];
+   (if BetaLib.length = 0 then
+       '/usr/local/lib/beta/'->BetaLib[]; 
+    else
+       (if (private.BetaLib.length->private.BetaLib.inxGet) <> '/' then
+           '/'->private.BetaLib.append; 
+       if);
+       
+   if);
+   ('.' -> JavaFile._init_String).getCanonicalPath->private.CurrentDirectory[];
+   '/'->private.CurrentDirectory.append;
+   ('~beta/',betalib[])->&newHomeDir;
+   '.homedirectories'->readHomeDirectoriesFile;
+   '$(HOME)/.homedirectories'->expandenvvar->readHomeDirectoriesFile;
+   homeDirectories->(private.BetaLib.Copy).Append->readHomeDirectoriesFile;
+   L: scan
+     (# newCur: ^Text; 
+     do
+        (private.CurrentDirectory[],thisHome[])->localPath->newCur[];
+        (if newCur.length < private.CurrentDirectory.length then
+            newCur[]->private.CurrentDirectory[]; leave L; 
+        if);
+        
+     #);
+   (private.CurrentDirectory[],'.ignored')->convertfilepath
+     ->private.CurrentDirectory[];
+   
+#)  
+
+-- fcPrivate: Descriptor --
+(#  #)  
+
+-- fcInit: DoPart --
+do   
+
+-- fcConvertFilePath: Descriptor --
+(#  #)  
+
+-- PathHandlerApplDirectory: DoPart --
+do
+   (#
+      fullpath: @boolean;
+      entry: @diskentry;
+      fileName: ^text (* OBS! overrides the one declared in origin! *)
+   do
+      1->Arguments->fileName[];
+      '/'->filename.findAll (#  do true->fullPath;  #);
+      (if (fullpath) then
+          filename[]->entry.path
+       else
+          scanSearchPath
+          (# 
+          do
+             path.length->path.setpos;
+             DirectoryChar->path.put;
+             fileName[]->(path.copy).append->entry.path
+          #)
+      if);
+      (if entry.exists then entry.path.head->path[]; '/'->path.append if)
+   #)  
+   
