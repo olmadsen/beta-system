@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: objectsize.c,v $, rel: %R%, date: $Date: 1992-07-21 17:19:47 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: objectsize.c,v $, rel: %R%, date: $Date: 1992-07-23 17:16:21 $, SID: $Revision: 1.11 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -34,5 +34,5 @@ long ObjectSize(theObj)
     }
   }else
     /* This is an item, so find the size in the protoType. */
-    return (theProto->Size + 1);
+    return theProto->Size;
 }
