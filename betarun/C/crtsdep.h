@@ -2,7 +2,7 @@
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * crtsdep.h
  * by Ole Lehrmann Madsen, Peter Andersen, Kim Jensen M¿ller, and Peter Ryberg Jensen
- * $Id: crtsdep.h,v 1.15 1996-02-29 12:50:21 beta Exp $
+ * $Id: crtsdep.h,v 1.16 1996-10-01 09:50:20 beta Exp $
  */
 
 #define JUMPSTACK 1
@@ -102,25 +102,12 @@ extern struct ValRep *		AlloVR4(struct Object* theObj,
 extern struct ValRep *		AlloVR8(struct Object* theObj, 
 					unsigned offset, 
 					int range);
-#ifdef STATIC_OBJECT_REPETITIONS
-extern void AlloORG(struct Object *iOrigin,
+extern void AlloVRI(struct Object *iOrigin,
 		    struct Object *theObj,
 		    unsigned offset, /* in bytes */
 		    struct ProtoType *proto,
 		    int range);
-extern void AlloORGC(struct Object *iOrigin,
-		     struct Object *theObj,
-		     unsigned offset, /* in bytes */
-		     struct ProtoType *proto,
-		     int range);
-#endif /* STATIC_OBJECT_REPETITIONS */
-
-extern void AlloORR(struct Object *iOrigin,
-		    struct Object *theObj,
-		    unsigned offset, /* in bytes */
-		    struct ProtoType *proto,
-		    int range);
-extern void AlloORRC(struct Object *iOrigin,
+extern void AlloVRC(struct Object *iOrigin,
 		     struct Object *theObj,
 		     unsigned offset, /* in bytes */
 		     struct ProtoType *proto,

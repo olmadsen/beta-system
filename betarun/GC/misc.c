@@ -10,9 +10,13 @@
 #include <CursorCtl.h>
 #endif
 
-/* Used by objinterface.bet */
-char* extGetCstring (char *s)
-{ return s; }
+/* Used by 
+ *    objinterface.bet for: extGetCstring
+ *    Xt for: copyInput
+ *    basiclib/external: makeCBF
+ */
+long copyInput (long input)
+{ return input; }
 
 
 /* Used by objinterface.bet and lazyref_gc.c */

@@ -407,25 +407,13 @@ extern struct ValRep *		AlloVR4(struct Object* theObj,
 extern struct ValRep *		AlloVR8(struct Object* theObj, 
 					unsigned offset, 
 					int range);
-#ifdef STATIC_OBJECT_REPETITIONS
-extern void AlloORG(struct Object *iOrigin,
-		    struct Object *theObj,
-		    unsigned offset, /* in bytes */
-		    struct ProtoType *proto,
-		    int range);
-extern void AlloORGC(struct Object *iOrigin,
-		     struct Object *theObj,
-		     unsigned offset, /* in bytes */
-		     struct ProtoType *proto,
-		     int range);
-#endif /* STATIC_OBJECT_REPETITIONS */
 
-extern void AlloORR(struct Object *iOrigin,
+extern void AlloVRI(struct Object *iOrigin,
 		    struct Object *theObj,
 		    unsigned offset, /* in bytes */
 		    struct ProtoType *proto,
 		    int range);
-extern void AlloORRC(struct Object *iOrigin,
+extern void AlloVRC(struct Object *iOrigin,
 		     struct Object *theObj,
 		     unsigned offset, /* in bytes */
 		     struct ProtoType *proto,

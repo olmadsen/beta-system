@@ -591,10 +591,6 @@ void ProcessObject(theObj)
       
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):
-#ifdef STATIC_OBJECT_REPETITIONS
-    case SwitchProto(StatItemRepPTValue):
-    case SwitchProto(StatCompRepPTValue):
-#endif /* STATIC_OBJECT_REPETITIONS */
       /* Process iOrigin */
       ProcessReference( (handle(Object))(&REP->iOrigin) );
       /* Process rest of repetition */
@@ -614,40 +610,6 @@ void ProcessObject(theObj)
 	  }
 	}
 	break;
-#ifdef STATIC_OBJECT_REPETITIONS
-      case SwitchProto(StatItemRepPTValue):
-	{ struct Item *theItem;
-	  register long size, index;
-	  
-	  /* Scan the repetition and follow all entries */
-	  { 
-	    size = REP->HighBorder;
-	    theItem = (struct Item *)&REP->Body[0];
-	    
-	    for (index=0; index<size; index++) {
-	      ProcessObject((struct Object *)theItem);
-	      theItem = (struct Item *)((long)theItem + ItemSize(REP->iProto));
-	    }
-	  }
-	}
-	break;
-      case SwitchProto(StatCompRepPTValue):
-	{ struct Component *theComp;
-	  register long size, index;
-	  
-	  /* Scan the repetition and follow all entries */
-	  { 
-	    size = REP->HighBorder;
-	    theComp = (struct Component *)&REP->Body[0];
-	    
-	    for (index=0; index<size; index++) {
-	      ProcessObject((struct Object *)theComp);
-	      theComp = (struct Component *)((long)theComp + ComponentSize(REP->iProto));
-	    }
-	  }
-	}
-	break;
-#endif /* STATIC_OBJECT_REPETITIONS */
       }
       return;
 
@@ -822,10 +784,6 @@ void ProcessAOAObject(theObj)
 
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):
-#ifdef STATIC_OBJECT_REPETITIONS
-    case SwitchProto(StatItemRepPTValue):
-    case SwitchProto(StatCompRepPTValue):
-#endif /* STATIC_OBJECT_REPETITIONS */
       /* Process iOrigin */
       ProcessAOAReference( (handle(Object))(&REP->iOrigin) );
       /* Process rest of repetition */
@@ -845,40 +803,6 @@ void ProcessAOAObject(theObj)
 	  }
 	}
 	break;
-#ifdef STATIC_OBJECT_REPETITIONS
-      case SwitchProto(StatItemRepPTValue):
-	{ struct Item *theItem;
-	  register long size, index;
-	  
-	  /* Scan the repetition and follow all entries */
-	  { 
-	    size = REP->HighBorder;
-	    theItem = (struct Item *)&REP->Body[0];
-	    
-	    for (index=0; index<size; index++) {
-	      ProcessAOAObject((struct Object *)theItem);
-	      theItem = (struct Item *)((long)theItem + ItemSize(REP->iProto));
-	    }
-	  }
-	}
-	break;
-      case SwitchProto(StatCompRepPTValue):
-	{ struct Component *theComp;
-	  register long size, index;
-	  
-	  /* Scan the repetition and follow all entries */
-	  { 
-	    size = REP->HighBorder;
-	    theComp = (struct Component *)&REP->Body[0];
-	    
-	    for (index=0; index<size; index++) {
-	      ProcessAOAObject((struct Object *)theComp);
-	      theComp = (struct Component *)((long)theComp + ComponentSize(REP->iProto));
-	    }
-	  }
-	}
-	break;
-#endif /* STATIC_OBJECT_REPETITIONS */
       }
       return;
 
@@ -1064,10 +988,6 @@ void IOACheckObject (theObj)
 	
       case SwitchProto(DynItemRepPTValue):
       case SwitchProto(DynCompRepPTValue):
-#ifdef STATIC_OBJECT_REPETITIONS
-      case SwitchProto(StatItemRepPTValue):
-      case SwitchProto(StatCompRepPTValue):
-#endif /* STATIC_OBJECT_REPETITIONS */
 	/* Check iOrigin */
 	IOACheckReference( (handle(Object))(&REP->iOrigin) );
 	/* Check rest of repetition */
@@ -1088,40 +1008,6 @@ void IOACheckObject (theObj)
 	    }
 	  }
 	  break;
-#ifdef STATIC_OBJECT_REPETITIONS
-	case SwitchProto(StatItemRepPTValue):
-	  { struct Item *theItem;
-	    register long size, index;
-	    
-	    /* Scan the repetition and follow all entries */
-	    { 
-	      size = REP->HighBorder;
-	      theItem = (struct Item *)&REP->Body[0];
-	      
-	      for (index=0; index<size; index++) {
-		IOACheckObject((struct Object *)theItem);
-		theItem = (struct Item *)((long)theItem + ItemSize(REP->iProto));
-	      }
-	    }
-	  }
-	  break;
-	case SwitchProto(StatCompRepPTValue):
-	  { struct Component *theComp;
-	    register long size, index;
-	    
-	    /* Scan the repetition and follow all entries */
-	    { 
-	      size = REP->HighBorder;
-	      theComp = (struct Component *)&REP->Body[0];
-	      
-	      for (index=0; index<size; index++) {
-		IOACheckObject((struct Object *)theComp);
-		theComp = (struct Component *)((long)theComp + ComponentSize(REP->iProto));
-	      }
-	    }
-	  }
-	  break;
-#endif /* STATIC_OBJECT_REPETITIONS */
 	}
 	return;
 

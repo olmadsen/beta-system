@@ -94,13 +94,8 @@ extern long mcheck_line;
 
 #define isValRep(x)      (((long)(DoubleRepPTValue) <= (long)((x)->Proto))\
 			  && ((long)((x)->Proto) <= (long)(ValRepPTValue)))
-#ifdef STATIC_OBJECT_REPETITIONS
-#define isObjectRep(x)   (((long)(StatCompRepPTValue) <= (long)((x)->Proto))\
-			  && ((long)((x)->Proto) <= (long)(DynItemRepPTValue)))
-#else /* STATIC_OBJECT_REPETITIONS */
 #define isObjectRep(x)   (((long)(DynCompRepPTValue) <= (long)((x)->Proto))\
 			  && ((long)((x)->Proto) <= (long)(DynItemRepPTValue)))
-#endif /* STATIC_OBJECT_REPETITIONS */
 
 #define isStackObject(x) ((long)((x)->Proto) == (long)(StackObjectPTValue))
 #define isComponent(x)   ((long)((x)->Proto) == (long)(ComponentPTValue))
@@ -115,12 +110,6 @@ extern long mcheck_line;
 #define WordRepBodySize(range)   (((2*(range)+3)/4)*4)
 #define ValRepBodySize(range)    ((range)*4)
 #define DoubleRepBodySize(range) ((range)*8)
-#ifdef STATIC_OBJECT_REPETITIONS
-#define StatItemRepSize(range, proto) \
-      (((range)*4*((proto)->Size)) + headsize(ObjectRep))
-#define StatCompRepSize(range, proto) \
-      (((range)*(headsize(Component)+4*((proto)->Size))) + headsize(ObjectRep))
-#endif /* STATIC_OBJECT_REPETITIONS */
 
 #if defined(sparc) || defined(hppa) || defined(crts) || defined(NEWRUN)
 /* Objects must be multiples of 8 bytes because of reals */
@@ -261,20 +250,8 @@ extern long mcheck_line;
   (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepBodySize(range) :	\
    WordRepBodySize(range))))
 
-#ifdef STATIC_OBJECT_REPETITIONS
-
-#define DispatchObjectRepSize(proto, range, iproto)		                          \
-((((long)(proto) == (long)(DynItemRepPTValue)) ||                                 \
- ((((long)proto) == (long)(DynCompRepPTValue))) ? DynObjectRepSize(range) :	  \
-  (((long)(proto) == (long)(StatItemRepPTValue)) ? StatItemRepSize(range, iproto):\
-   StatCompRepSize(range, iproto))))
-
-#else /* STATIC_OBJECT_REPETITIONS */
-
 #define DispatchObjectRepSize(proto, range, iproto)                      \
   DynObjectRepSize(range)
-
-#endif /* STATIC_OBJECT_REPETITIONS */
 
 /* Safe way to save AOAroots references */
 #define saveAOAroot(cell)				   \

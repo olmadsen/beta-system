@@ -35,8 +35,8 @@ void BetaExit(long number)
   fprintf(stderr, "AlloVR2:  %-8d\n", (int)NumAlloVR2);
   fprintf(stderr, "AlloVR4:  %-8d  ", (int)NumAlloVR4);
   fprintf(stderr, "AlloVR8:  %-8d  ", (int)NumAlloVR8);
-  fprintf(stderr, "AlloORR:  %-8d\n", (int)NumAlloORR);
-  fprintf(stderr, "AlloORRC: %-8d  ", (int)NumAlloORRC);
+  fprintf(stderr, "AlloVRI:  %-8d\n", (int)NumAlloVRI);
+  fprintf(stderr, "AlloVRC:  %-8d  ", (int)NumAlloVRC);
   fprintf(stderr, "CopyCT:   %-8d  ", (int)NumCopyCT);
   fprintf(stderr, "CopyRR:   %-8d\n", (int)NumCopyRR);
   fprintf(stderr, "CopySRR:  %-8d  ", (int)NumCopySRR);

@@ -69,10 +69,6 @@ printMessage(FILE *fp,
     case SwitchProto(ComponentPTValue): name = "[Component]"; break;
     case SwitchProto(StackObjectPTValue): name = "[Stack_Object]"; break;
     case SwitchProto(StructurePTValue): name = "[Struc_Object]"; break;
-#ifdef STATIC_OBJECT_REPETITIONS
-    case SwitchProto(StatItemRepPTValue):
-    case SwitchProto(StatCompRepPTValue):
-#endif /* STATIC_OBJECT_REPETITIONS */
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue): name = "[Object_Repetition]"; break;
     case SwitchProto(RefRepPTValue): name = "[Reference_Repetition]"; break;

@@ -78,12 +78,6 @@ void CCopySVR(ref(ValRep) theRep,
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):
       size = DynObjectRepSize(range); break;
-#ifdef STATIC_OBJECT_REPETITIONS
-    case SwitchProto(StatItemRepPTValue):
-      size = StatItemRepSize(range, REP->iProto); break;
-    case SwitchProto(StatCompRepPTValue):
-      size = StatCompRepSize(range, REP->iProto); break;
-#endif /* STATIC_OBJECT_REPETITIONS */
     default:
       fprintf(output, "CopySliceValRep: unknown repetition\n");
       size=0;
@@ -147,20 +141,6 @@ void CCopySVR(ref(ValRep) theRep,
 	  /* No need to use AssignReference: NEWREP is in IOA */
 	}
 	break;
-#ifdef STATIC_OBJECT_REPETITIONS
-      case SwitchProto(StatItemRepPTValue):
-	/* copy as longs */
-	for (i = 0; i < range*ItemSize(REP->iProto)/4; ++i)
-	  NEWREP->Body[i] 
-	    = REP->Body[i+(low-theRep->LowBorder)*ItemSize(REP->iProto)/4];
-	break;
-      case SwitchProto(StatCompRepPTValue):
-	/* copy as longs */
-	for (i = 0; i < range*ComponentSize(REP->iProto)/4; ++i)
-	  NEWREP->Body[i] 
-	    = REP->Body[i+(low-theRep->LowBorder)*ComponentSize(REP->iProto)/4];
-	break;
-#endif /* STATIC_OBJECT_REPETITIONS */
 
       default:
 	Notify("CopySliceValRep: wrong prototype");

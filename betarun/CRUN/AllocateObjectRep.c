@@ -8,12 +8,9 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifdef STATIC_OBJECT_REPETITIONS
-ParamObjOriginProtoOffRange(AlloORG)
+ParamObjOriginProtoOffRange(AlloVRI)
 {
-  /* AllocateObjectRepetitionGeneral: Allocate repetition of plain items,
-   * inlined in repetition 
-   */
+  /* Allocate repetition of offline items */
   DeclReference1(struct ObjectRep *, theRep);
   struct Item *item;
   GCable_Entry();
@@ -25,110 +22,7 @@ ParamObjOriginProtoOffRange(AlloORG)
   offset = getD0Reg();
 #endif
 
-  DEBUG_CODE(NumAlloORG++);
-
-  Ck(theObj);
-  Protect2(theObj, origin,  
-	  theRep = cast(ObjectRep)IOAcalloc(StatItemRepSize(range,proto)));
-  Ck(theObj);
-
-  theRep->Proto = StatItemRepPTValue;
-  theRep->GCAttr = 1;
-  theRep->LowBorder = 1;
-  theRep->HighBorder = range;
-  theRep->iProto = proto;
-  theRep->iOrigin = origin;
-
-  SaveVar(theObj);
-
-  while(--range>=0){
-    item=(struct Item *)((long)(&theRep->Body) + range*ItemSize(proto));
-    setup_item(item, proto, origin); 
-    if (proto->GenPart){
-      Protect(theRep, CallBetaEntry(proto->GenPart,item));
-    }
-  }
-
-  RestoreVar(theObj);
-
-  AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
-
-  return;
-}
-
-ParamObjOriginProtoOffRange(AlloORGC)
-{
-  /* AllocateObjectRepetitionGeneralComponent: Allocate repetition of plain components,
-   * inlined in repetition 
-   */
-  DeclReference1(struct ObjectRep *, theRep);
-  struct Component *comp;
-  GCable_Entry();
-#ifdef hppa
-  range  = getD1Reg();
-  origin = (struct Object *)getOriginReg();
-  proto  = (struct ProtoType *)getCallReg();
-  theObj = (struct Object *)getThisReg();
-  offset = getD0Reg();
-#endif
-
-  DEBUG_CODE(NumAlloORGC++);
-  Ck(theObj);
-  Protect2(theObj, origin,  
-	  theRep = cast(ObjectRep)IOAcalloc(StatCompRepSize(range,proto)));
-  Ck(theObj);
-
-  theRep->Proto = StatCompRepPTValue;
-  theRep->GCAttr = 1;
-  theRep->LowBorder = 1;
-  theRep->HighBorder = range;
-  theRep->iProto = proto;
-  theRep->iOrigin = origin;
-
-  SaveVar(theObj);
-
-  while(--range>=0){
-    comp=(struct Component *)((long)(&theRep->Body) + range*ComponentSize(proto));
-
-    comp->Proto = ComponentPTValue;
-    comp->GCAttr = 1;
-    comp->StackObj = cast(StackObject) 0;
-    comp->CallerObj = cast(Object) 0;
-    comp->CallerComp = cast(Component) 0;
-    comp->CallerLSC = 0;
-
-    setup_item(cast(Item) &comp->Body, proto, origin);
-    (cast(Item) &comp->Body)->GCAttr = -((headsize(Component))/4);
-
-    if (proto->GenPart){
-      Protect(theRep, CallBetaEntry(proto->GenPart,&comp->Body));
-    }
-  }
-
-  RestoreVar(theObj);
-
-  AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
-
-  return;
-}
-#endif /* STATIC_OBJECT_REPETITIONS */
-
-ParamObjOriginProtoOffRange(AlloORR)
-{
-  /* AllocateObjectRepetitionReference: Allocate repetition of offline items
-   */
-  DeclReference1(struct ObjectRep *, theRep);
-  struct Item *item;
-  GCable_Entry();
-#ifdef hppa
-  range  = getD1Reg();
-  origin = (struct Object *)getOriginReg();
-  proto  = (struct ProtoType *)getCallReg();
-  theObj = (struct Object *)getThisReg();
-  offset = getD0Reg();
-#endif
-
-  DEBUG_CODE(NumAlloORR++);
+  DEBUG_CODE(NumAlloVRI++);
   Ck(theObj);
   Protect2(theObj, origin,  
 	  theRep = cast(ObjectRep)IOAcalloc(DynObjectRepSize(range)));
@@ -166,7 +60,7 @@ ParamObjOriginProtoOffRange(AlloORR)
   return;
 }
 
-ParamObjOriginProtoOffRange(AlloORRC)
+ParamObjOriginProtoOffRange(AlloVRC)
 {
   /* AllocateObjectRepetitionComponent: Allocate repetition of offline components
    */
@@ -181,7 +75,7 @@ ParamObjOriginProtoOffRange(AlloORRC)
   offset = getD0Reg();
 #endif
 
-  DEBUG_CODE(NumAlloORRC++);
+  DEBUG_CODE(NumAlloVRC++);
   Ck(theObj);
   Protect2(theObj, origin,  
 	  theRep = cast(ObjectRep)IOAcalloc(DynObjectRepSize(range)));

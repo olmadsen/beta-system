@@ -25,17 +25,6 @@ long ObjectSize(theObj)
     case SwitchProto(ValRepPTValue):
       return ValRepSize(toValRep(theObj)->HighBorder) >> 2;
 
-#ifdef STATIC_OBJECT_REPETITIONS
-    case SwitchProto(StatItemRepPTValue):
-      return StatItemRepSize(((struct ObjectRep *)theObj)->HighBorder,
-			     ((struct ObjectRep *)theObj)->iProto
-			     ) >> 2;
-    case SwitchProto(StatCompRepPTValue):
-      return StatCompRepSize(((struct ObjectRep *)theObj)->HighBorder,
-			     ((struct ObjectRep *)theObj)->iProto
-			     ) >> 2;
-#endif /* STATIC_OBJECT_REPETITIONS */
-
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):
       return DynObjectRepSize(((struct ObjectRep *)theObj)->HighBorder) >> 2;

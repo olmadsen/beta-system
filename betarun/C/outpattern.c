@@ -342,10 +342,6 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
 	staticObj = (cast(DopartObject)theObj)->Origin;
 	break;
 
-#ifdef STATIC_OBJECT_REPETITIONS
-      case SwitchProto(StatItemRepPTValue):
-      case SwitchProto(StatCompRepPTValue):
-#endif /* STATIC_OBJECT_REPETITIONS */
       case SwitchProto(DynItemRepPTValue):
       case SwitchProto(DynCompRepPTValue):
       case SwitchProto(StackObjectPTValue):
@@ -462,10 +458,6 @@ void DisplayObject(output,theObj,retAddress)
     case SwitchProto(ValRepPTValue):
       fprintf(output,"  ValRep\n");
       break;
-#ifdef STATIC_OBJECT_REPETITIONS
-    case SwitchProto(StatItemRepPTValue):
-    case SwitchProto(StatCompRepPTValue):
-#endif /* STATIC_OBJECT_REPETITIONS */
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):
       fprintf(output, "  ObjectRep\n"); 
@@ -1327,10 +1319,6 @@ void DescribeObject(theObject)
 	      "Dopart: origin: 0x%x", 
 	      (int)((cast(DopartObject)theObject)->Origin));
       return;
-#ifdef STATIC_OBJECT_REPETITIONS
-    case SwitchProto(StatItemRepPTValue):
-    case SwitchProto(StatCompRepPTValue):
-#endif /* STATIC_OBJECT_REPETITIONS */
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):
       fprintf(output, "ObjectRep\n"); return;

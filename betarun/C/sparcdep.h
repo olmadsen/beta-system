@@ -320,28 +320,13 @@ extern struct ValRep *CAlloVR8(struct Object *theObj,
 			       int i4,
 			       /*unsigned*/ int range);
 
-#ifdef STATIC_OBJECT_REPETITIONS
-extern void CAlloORG(struct Object *iOrigin,
+extern void CAlloVRI(struct Object *iOrigin,
 		     struct Object *theObj,
 		     unsigned offset, /* in bytes */
 		     struct ProtoType *proto,
 		     int i4,
 		     int range);
-extern void CAlloORGC(struct Object *iOrigin,
-		      struct Object *theObj,
-		      unsigned offset, /* in bytes */
-		      struct ProtoType *proto,
-		      int i4,
-		      int range);
-#endif /* STATIC_OBJECT_REPETITIONS */
-
-extern void CAlloORR(struct Object *iOrigin,
-		     struct Object *theObj,
-		     unsigned offset, /* in bytes */
-		     struct ProtoType *proto,
-		     int i4,
-		     int range);
-extern void CAlloORRC(struct Object *iOrigin,
+extern void CAlloVRC(struct Object *iOrigin,
 		      struct Object *theObj,
 		      unsigned offset, /* in bytes */
 		      struct ProtoType *proto,

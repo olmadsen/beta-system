@@ -85,10 +85,10 @@ void NewVR(ref(Object) theObj,
 			 CAlloVR8(theObj, 0, offset*4, 0, 0, range); 
 			 break;
 			 case SwitchProto(DynItemRepPTValue):
-			 CAlloORR(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
+			 CAlloVRI(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
 			 break;
 			 case SwitchProto(DynCompRepPTValue):
-			 CAlloORRC(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
+			 CAlloVRC(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
 			 break);
 	      
 	      NON_SPARC_CODE(case SwitchProto(ByteRepPTValue):
@@ -105,11 +105,11 @@ void NewVR(ref(Object) theObj,
 			     break;
 			     case SwitchProto(DynItemRepPTValue):
 			     SetObjOriginProtoOffRange();
-			     AlloORR(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
+			     AlloVRI(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 			     break;
 			     case SwitchProto(DynCompRepPTValue):
 			     SetObjOriginProtoOffRange();
-			     AlloORRC(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
+			     AlloVRC(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 			     break);
 	    default:
 	      Notify("NewValRep: wrong prototype");
