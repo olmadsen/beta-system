@@ -358,19 +358,24 @@ void Illegal(char *file, int line)
 #endif
 
   /* used to break in! */
-  fprintf(output, "Illegal() called from %s, line %d\n",file,line);
+  fprintf(output, "\nIllegal() called from %s, line %d\n",file,line);
+  fflush(output);
+  if (output != stderr){
+      fprintf(stderr, "\nIllegal() called from %s, line %d\n",file,line);
+      fflush(stderr);
+  }
   fflush(stdout);
-  fflush(stderr);
-  fflush(output) /* not necessarily same as stderr */;
 
 #ifdef NEWRUN
   if (IOAActive){
     /* An IOAGc is going on. Thus StackEnd should be well defined */
-    fprintf(output, "Attempting to do a stack dump\n");
-    DebugStack=1;
-    if (!isMakingDump){
-      isMakingDump=1;
-      ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, EmptyCellProcessFunc);
+    if (!DebugStack){
+      fprintf(output, "Attempting to do a stack dump\n");
+      DebugStack=1;
+      if (!isMakingDump){
+	isMakingDump=1;
+	ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, EmptyCellProcessFunc);
+      }
     }
   }
 #endif /* NEWRUN */

@@ -81,7 +81,7 @@
 #define DYN_OFF 2 /* FIXME: should be -2 and ADDED when used!!! */
 #define PC_OFF -1
 #endif
-#ifdef macppc
+#ifdef ppcmac
 #define DYN_OFF 1 /* FIXME: should be -1 and ADDED when used!!! */
 #define PC_OFF 2
 #endif

@@ -54,6 +54,7 @@ DoStackCell(Object **theCell,Object *theObj)
 	      "0x%08x: 0x%08x stack cell points outside BETA. COM?\n", 
 	      (int)theCell, 
 	      (int)theObj);
+      fflush(output);
       NEWRUN_CODE({
 	/* Because of the very well-defined structure of stackframes
 	 * there should be no GC-able cells, that refer outside BETA heaps.

@@ -246,7 +246,7 @@ void ProcessStackFrames(long SP,
   Object *theObj;
   long *CSP = CompSP;
   pc_t PC;
-#ifdef macppc
+#if defined(ppcmac) || defined(macosx)
   long SPz = StackObjEnd; /* Used for stackobjects */
 #endif
 #ifdef RTDEBUG

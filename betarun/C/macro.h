@@ -440,11 +440,11 @@ extern long *etext;
 #define isCode(addr) 0
 #endif
 
-#ifdef macppc
+#ifdef ppcmac
 #define G_Part(proto) ( (proto->GenPart) ? *(pc_t *)proto->GenPart : 0)
 #else
 #define G_Part(proto) (pc_t) proto->GenPart
-#endif /* macppc */
+#endif /* ppcmac */
 
 #ifdef RTDEBUG
 extern long isObject(void *obj);
@@ -552,7 +552,7 @@ typedef union FormatI
 }
 #endif /* sgi */
 
-#ifdef macppc
+#ifdef ppcmac
 
 #define GetPC(SP)     (*((pc_t*)(SP)+PC_OFF))
 #define GetDyn(SP) (*((long*)(SP)-DYN_OFF))
@@ -575,7 +575,7 @@ typedef union FormatI
   /* Get the stack size allocated for this frame */            \
   SPoff = -stwu.instr.d;                                       \
 }
-#endif /* macppc */
+#endif /* ppcmac */
 
 
 #ifdef macosx

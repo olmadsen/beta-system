@@ -56,7 +56,7 @@ double i2f(long n)
 #endif
 
 
-#ifdef macppc
+#ifdef ppcmac
 double i2f(long n) 
 { 
   return (double)n;
@@ -75,7 +75,7 @@ void printCompStack(long * SPz, long dummy, long SPsize)
 #endif
 }
 #endif /* RTDEBUG */
-#endif /* macppc */
+#endif /* ppcmac */
 
 #ifndef __GNUC__
 /* Only gcc is able to inline. If not inlined, the functions in

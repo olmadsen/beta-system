@@ -119,8 +119,7 @@ void Susp(Object *this, long prevSP, pc_t RA, long SPz)
 	     (long)((long *)SPz+i), 
 	     *((long *)SPz+i)));
 
-#ifdef macppc
-#if 1
+#if defined(ppcmac) || defined(macosx)
    {
      /* on PPC the stack contains SP pointers that links stack segments;
       * these must be made relative, since the stack may be unpacked
@@ -140,19 +139,6 @@ void Susp(Object *this, long prevSP, pc_t RA, long SPz)
        oldSP = *(long *)sp;
      }
    }
-#else
-   {
-      long sp, spLoc;
-	  
-      sp=(long)GetSP();
-      spLoc = SPz; sp = ((long *)SPz)[0];
-      while (sp <= SPy) { 
-	    ((long *)spLoc)[0] = sp - SPz ;
-	    spLoc = sp;
-	    sp = ((long *)sp)[0];
-      }
-   }
-#endif
 #endif /* PPC */
 
    /* copy SPz[0],  SPz[1], ... , SPz[(SPy-SPz-4)/4] = SPy[-1] */

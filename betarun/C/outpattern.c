@@ -57,7 +57,7 @@ pc_t M_Part(ProtoType * proto)
   }
   
   if (proto->MpartOff){
-#ifdef macppc
+#ifdef ppcmac
     return **(pc_t **)((long)proto+proto->MpartOff);
 #else
     return *(pc_t *)((long)proto+proto->MpartOff);
@@ -90,7 +90,7 @@ char *machine_type(void)
 #endif
 
   /* Macintosh */
-#ifdef macppc
+#ifdef ppcmac
 #define MACHINE_TYPE "ppcmac"
 #endif
 

@@ -1,7 +1,76 @@
-char betarun_version[] = "BETARUN VERSION 5.3(73++)";
+char betarun_version[] = "BETARUN VERSION 5.3(74)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.80  2002/03/10 17:37:05  henryml
+ * Betarun version number: 73+++ (hml)
+ *
+ *
+ * cvs -nq update
+ *
+ * M C/beta.h
+ * M C/betaenv.c
+ * M C/constant.h
+ * M C/define.h
+ * M C/labelnametable.c
+ * M C/macro.h
+ * M C/object.h
+ * M C/outpattern.c
+ * M C/sockets.c
+ * M GC/block.c
+ * M GC/misc.c
+ * M NEWRUN/Attach.c
+ * M NEWRUN/CallBack.c
+ * M NEWRUN/ExitObjects.c
+ * M NEWRUN/Misc.c
+ *
+ *
+ * * C/beta.h
+ *
+ * Removed #include <malloc.h>
+ *
+ * * C/betaenv.c
+ *
+ * Implemented memalign on macosx
+ *
+ * * C/constant.h
+ * * C/define.h
+ * * C/labelnametable.c
+ * * C/macro.h
+ * * C/object.h
+ * * C/outpattern.c
+ *
+ * Added code for macosx
+ *
+ * * C/sockets.c
+ *
+ * Added _empty_ implementation for macosx.
+ *
+ *
+ * * GC/block.c
+ *
+ * Implemented newProtectedArea on macosx.
+ *
+ * * GC/misc.c
+ *
+ * Added includes for macosx (based on unix).
+ *
+ * * NEWRUN/Attach.c
+ *
+ * Treats attach on macosx like on ppcmac.
+ *
+ * * NEWRUN/CallBack.c
+ *
+ * Implemented GENB_CB_STUB on macosx.
+ *
+ * * NEWRUN/ExitObjects.c
+ *
+ * Implemented WIND_BACK_SP on macosx.
+ *
+ * * NEWRUN/Misc.c
+ *
+ * Implemented i2f (int to float) on macosx.
+ *
  * Revision 1.79  2002/03/05 22:44:43  corry
  * Stupid syntax error in CRUN/Makefile-vpath
  * Betarun version number: 73++

@@ -134,7 +134,7 @@ void AddGroup(group_header *new_group)
   return;
 }
 
-#ifdef macppc
+#ifdef ppcmac
 #define GroupCodeStart(group) ((pc_t)(*(unsigned long*)((group)->code_start)))
 #define GroupCodeEnd(group)   ((pc_t)(*(unsigned long*)((group)->code_end)))
 #else

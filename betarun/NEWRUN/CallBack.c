@@ -36,7 +36,7 @@
 
 #endif /* sgi */
 
-#ifdef macppc
+#ifdef ppcmac
 #define GEN_CB_STUB()                                                         \
                                                                               \
  /*  0: &CBFATop->code[2]                                                     \
@@ -63,7 +63,7 @@
   CBFATop->code[9] = 0x4e800420;                                              \
   FlushCodeCache(&CBFATop->code[0], &CBFATop->code[9])
  
-#endif /* macppc */
+#endif /* ppcmac */
 
 #ifdef macosx
 #define GEN_CB_STUB()                                                         \

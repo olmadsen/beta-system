@@ -221,7 +221,7 @@ void Initialize()
   FixupPrefetch();
 #endif
    
-#ifdef macppc
+#ifdef ppcmac
   InitToolbox();
 #endif
 

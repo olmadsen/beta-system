@@ -204,7 +204,7 @@ typedef struct _CallBackEntry {
   Structure    *theStruct;
   unsigned long code[5];
 #endif
-#ifdef macppc
+#ifdef ppcmac
   Structure    *theStruct;
   unsigned long code[10];
 #endif

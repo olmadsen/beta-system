@@ -65,14 +65,14 @@
 #endif
 
 /************* Macintosh defines ***************
- *  macppc is for PowerPC macintosh platforms (native)
+ *  ppcmac is for PowerPC macintosh platforms (native)
  *  MAC    is for all macintosh platforms. Defined by -D MAC for C compiler
  */
  
 #ifdef MAC
 #ifdef powerc
 #define OLDROUTINENAMES 1
-#define macppc
+#define ppcmac
 typedef unsigned long u_long;
 typedef unsigned short u_short;
 #define ppcmac /* alias */
@@ -124,7 +124,7 @@ typedef unsigned short u_short;
 #define CRUN 1
 #endif
 
-#if defined(sgi) || defined(macppc) || defined(macosx)
+#if defined(sgi) || defined(ppcmac) || defined(macosx)
 #undef RUN
 #define NEWRUN 1
 #endif
