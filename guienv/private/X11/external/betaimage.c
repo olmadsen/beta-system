@@ -463,7 +463,7 @@ void MandelbrotImage(Display* display, XImage **ximage)
 	}
 	else {
 	  red = 255;
-	  green = min(pow(((inside - 10) * 255 /(levels - 10)), 1.1), 255);
+	  green = (inside - 10) * 255 /(levels - 10);
 	  blue = 0;
 	}
 	((long *) row)[x] = MakeColor(red, green, blue);

@@ -231,8 +231,9 @@ void BetaInitColor(Display *display, Colormap cmap)
     
     MakeColorMap1(stdcolormap, &colors);
     
-    result = BetaAllocateColormap(display, cmap, colors, stdcolormap);
-    
+    /*  result = BetaAllocateColormap(display, cmap, colors, stdcolormap); */
+    result = 0;
+
     if (!result) {
       colors = 256;
       GetXColorMap(display, cmap, stdcolormap);
