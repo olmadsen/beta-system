@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <COMMCTRL.H>
 /* #include <shlwapi.h> */
 /* From shlwapi.h which is a new header file included with INetSDK. */
 
@@ -88,3 +89,12 @@ if(hComCtl)
 return E_FAIL;
 }
 
+BOOL isFullDragSet( HWND hWndListCtrl )
+{
+  BOOL bIsSet;
+  if( SystemParametersInfo( SPI_GETDRAGFULLWINDOWS, 0, &bIsSet, 0 ) )
+    {
+      return bIsSet;
+    }
+  return FALSE;
+} 

@@ -37,6 +37,14 @@ GetComCtlVersion: external
   do callC
   #);
 
+isFullDragSet: external
+  (# hwnd: @integer;
+     res: @integer;
+  enter hwnd
+  do callC;
+  exit res
+  #);
+
 WM_UPDATEHEADERWIDTH: (# exit WM_USER+10 #);
 
 PostMessage: external
@@ -339,9 +347,6 @@ do (if theIcon[]<>NONE then
                   LVIF_IMAGE -> lvI.mask;
                   private.uid->getIndex -> lvI.iItem;
                   private.imageID -> lvI.iImage;
-                  
-                  'private.imageID = ' -> puttext; private.imageID -> putint; newline;
-                  'listViewId = ' -> puttext; listViewId -> putint; newline;
                   
                   (listViewId,lvI.ptr) -> ListView_SetItem -> res;
                   (if res=0 then
@@ -1123,9 +1128,7 @@ listViewNotiMethods: windowItemNotificationMethods
            //WM_DRAWITEM then
               info.lParam+20 -> TOS'%adrGetLong' -> hwndItem;
               (if hwndItem=this(listView).interfaceObjectID then
-                  (if not private.dontDrawItems then
-                      processDrawitem;
-                  if);
+                  processDrawitem;
                else
                   false -> didSomething;
               if);
@@ -1156,17 +1159,18 @@ listViewMethods: windowItemMethods
                (if code1
                 //HDN_ENDTRACK then
                    info.lParam+12 -> TOS'%adrGetLong' -> iItem;
-                   true -> private.dontDrawItems;
                    (this(listView).interfaceObjectId,WM_UPDATEHEADERWIDTH, hwndFrom,iItem)
-                     -> PostMessage;
-                   false -> private.dontDrawItems;
-                   true -> this(listView).update;
+                    -> PostMessage;
+                   true -> didSomething;
+                   (if private.dragfullwindows then
+                       true -> update; 
+                   if);
                 //HDN_ITEMCHANGED
                 //HDN_ITEMCHANGEDW then
                    info.lParam+12 -> TOS'%adrGetLong' -> iItem;
-                   true -> private.dontDrawItems;
                    (this(listView).interfaceObjectId,WM_UPDATEHEADERWIDTH, hwndFrom,iItem)
-                     -> PostMessage; 
+                    -> PostMessage; 
+                   true -> didSomething;
                if);
                
             #);
@@ -1181,18 +1185,19 @@ listViewMethods: windowItemMethods
                    theHD_ITEM_extR.cxy -> private.columnWidths[info.lParam+1]; 
                    theHD_ITEM_extR.ptr -> free;
                    true -> didSomething;
-                   false -> private.dontDrawItems;
-                   (* update; *)
+                   (if (not private.dragfullwindows) then
+                       true -> update; 
+                   if); 
                 else
                    'Failled to allocate HD_ITEM  while processing WM_UPDATEHEADERWIDTH.'
                      -> resourceAllocationError;
                if);
             #);
-       do 
+       do  
           (if info.message
-           //WM_NOTIFY then processNotify
+           //WM_NOTIFY then processNotify 
            //WM_UPDATEHEADERWIDTH then processUpdateHeaderWidth;
-          if);
+           if); 
           didSomething or info.handled -> info.handled;
        #);
   #);
@@ -1440,8 +1445,13 @@ do (# wStyle: @integer;
           LVS_SINGLESEL %Bor wStyle -> wStyle;
       if);
       
-      wStyle %Bor WS_BORDER %Bor LVS_SHOWSELALWAYS %Bor LVS_OWNERDRAWFIXED
+      wStyle %Bor WS_BORDER %Bor LVS_SHOWSELALWAYS  
         -> windowItemStyle;
+      
+      (if report_view then
+          wStyle %Bor LVS_OWNERDRAWFIXED -> windowItemStyle;
+      if);
+      
       inner create;
    #);
 
@@ -1455,6 +1465,10 @@ do private.open;
    (if (private.dllMajor>=4) and (private.dllMinor>=70) then
        (interfaceObjectID,LVM_SETEXTENDEDLISTVIEWSTYLE,0,LVS_EX_FULLROWSELECT )
          -> SendMessage;
+   if);
+   
+   (if (interfaceObjectID -> isFullDragSet)<>0 then
+       true -> private.dragfullwindows;
    if);
    
 -- GUIEnvListViewClose: doPart --
@@ -1512,7 +1526,7 @@ do inner;
         0 -> guid;
      #);
    
-   dontDrawItems: @boolean;
+   dragfullwindows: @boolean;
    
    columnIndex: @integer; (* Zero based *)
    nextColumnIndex: integerValue
