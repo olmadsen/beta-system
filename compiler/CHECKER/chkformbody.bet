@@ -206,7 +206,7 @@ INCLUDE 'setnxoffsets'
                            then true->Reuse;
                    if)if);
                 else
-                   (if isCom or isDispatch then
+                   (if isComOrHolder or isDispatch then
                        (*'\ncomKind:'->puttext;*)
                        (preDesc -> comDesc.equal)
                        or (preDesc -> dispatchDesc.equal)
@@ -249,7 +249,7 @@ INCLUDE 'setnxoffsets'
                    else
                       (* if access//common.cstInd then 55->preError*)
 
-                      (kind = comKind) -> isCOM;
+                      (kind = comKind) or (kind = holderKind) -> isComOrHolder;
                       (kind = dispatchKind) -> isDispatch;
                       (kind = ExternalKind)->isCproc;
                       (*super is sub of External*)
@@ -341,7 +341,7 @@ INCLUDE 'setnxoffsets'
                   198->trace
                   (#
                   do 'ChkPre: ' ->xT; N[]->xA;
-                     'isCom='->xT; isCom->xB;
+                     'isComOrHolder='->xT; isComOrHolder->xB;
                      'isDispatch=' -> xT; isdispatch -> xB;
                      'kind=' -> xT; kind -> kindAsText->xT;
                      ' type='->xT; preType -> xI; 
@@ -352,14 +352,15 @@ INCLUDE 'setnxoffsets'
               12 (* prototype + gcCount + origin*) -> offCount;
               4 -> virtOff; 
               (* inefficient to test descKind as below: *)
-              (if true
-               // (ThisDesc -> ComDesc.equal -> isCom) then
+              (if ThisDesc -> ComDesc.equal then
+                  true -> isComOrHolder;
                   comKind -> descKind
                else
                   (if (ThisDesc -> HolderDesc.equal) then
                       (if ctst then 
                           191->trace(#do 'ChkPre:holder'-> xT #)
                       if);
+                      true -> isComOrHolder;
                       holderKind -> descKind
                    else
                       (if (ThisDesc -> StateDesc.equal) then
@@ -387,7 +388,7 @@ INCLUDE 'setnxoffsets'
             (* used to be integerDesc, but superObject has an inner *)
         if);
         (* NO - if part of COM then direct else cstInd
-         * (if isCom then common.cstInd -> descAccess if)
+         * (if isComOrHolder then common.cstInd -> descAccess if)
          *)
      exit kind
      #);
@@ -430,38 +431,54 @@ INCLUDE 'setnxoffsets'
                   // generalKind then
                      true->hasAcode;
                      (*// comKind *)
-                  // holderKind then
-                     (* this used NOT to be done, but 
-                      * hasAcode should be true if code is needed in
-                      * the G-part and it is to set the origin, even
-                      * if no dopart of the part object*)
-                     (if ctst then 
-                         192 -> trace(#do 'HolderPart: '->xT; isCOM ->xB #)
-                     if);
-                     true -> hasAcode
                   // dataKind then
                      (if not 
-                         (isCom 
+                         (isComOrHolder 
                          or isCproc
                          or (preKind = dataKind)
                          or (preKind = holderKind)) then
                          (*NOTE: isData and dataKind is NOT the same??*)
                          (* (spec,116) -> WE.warning;*)
                      if);
+                  // holderKind then
+                     (* this used NOT to be done, but 
+                      * hasAcode should be true if code is needed in
+                      * the G-part and it is to set the origin, even
+                      * if no dopart of the part object*)
+                     true -> hasAcode;
+                     (if ctst then 
+                         192 -> trace(#
+                                     do 'HolderPart: '->xT; 
+                                        isComOrHolder ->xB #)
+                     if);
+                     (if not isComOrHolder then
+                         (* holder objects are allocated
+                          *  - offline in non COM/Holder-objects
+                          *  - inline  in     COMIHolder-objects
+                          *)
+                         common.refSize*4 -> specSize;
+                         common.cstInd -> access 
+                     if);
                   // comKind then
                      (* A COM part object is inlined if part of a COM object;
                       * but is allocated offline if part of a 
                       * general objects *)
                      (if ctst then 
-                         192 -> trace(#do 'ComPart: '->xT; isCOM -> xB #)
+                         192 -> trace(#
+                                     do 'ComPart: '->xT; isComOrHolder -> xB
+                                     #)
                      if);
-                     (if not isCOM then
+                     (if not isComOrHolder then
+                         (* COM objects are allocated
+                          *  - offline in non COM/Holder-objects
+                          *  - inline  in     COMIHolder-objects
+                          *)                         
                          common.refSize*4 -> specSize;
-                         common.cstInd->access;
+                         common.cstInd -> access
                      if);
                      true->hasAcode; (* see comment for holderKind *)
                   // externalVirtualKInd then
-                     (if not isCOM then
+                     (if not isComOrHolder then
                          (* Enclosing object is NOT a COM object*)
                          (spec,117) -> WE.SemError; 
                      if)
@@ -1154,7 +1171,7 @@ INCLUDE 'setnxoffsets'
    hasSuper,hasNpart,hasXpart,hasAttributes, sameOriginAsSuper
    ,hasNcode,hasDo,hasXcode,inlineNX,inlineDO,hasOnlyNX
    ,isData,insertable,hasAcode,hasOnlyInner
-   ,isCom, isDispatch,isState: @boolean;  
+   ,isComOrHolder, isDispatch,isState: @boolean;  
    descAccess: @integer; 
    (* action-part of ChkForm;
     * enter par. id is origin if desc.label = doPart
@@ -1363,7 +1380,7 @@ INCLUDE 'setnxoffsets'
                     AllocReturn;
                 if);
              else
-                (if ((pre.label = gram.prefix) or isCom or isDispatch)
+                (if ((pre.label = gram.prefix) or isComOrHolder or isDispatch)
                     and not mainP.isSlot then
                     (* deallocate INNER-dispatch;
                      * No do-part and a superPtn
