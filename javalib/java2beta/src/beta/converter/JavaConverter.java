@@ -550,11 +550,17 @@ class JavaConverter
 
     int convertIncludes(String betalib, int overwrite, PrintStream out)
     {
+	String pkg = packageName;
+	if (pkg==null){
+	    pkg = "";
+	} else {
+	    pkg = pkg + ".";
+	}
 	Object[] inc = includes.keySet().toArray();
 	for (int i=0; i<inc.length; i++){
 	    if (verbose){
 		System.err.println("\nRefered by \""
-				   + slashToDot(packageName + "." + className) + "\": \""
+				   + slashToDot(pkg + className) + "\": \""
 				   + slashToDot((String)inc[i])
 				   + "\"");
 	    }

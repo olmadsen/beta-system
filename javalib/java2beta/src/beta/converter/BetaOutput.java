@@ -60,7 +60,7 @@ public class BetaOutput
 	} else {
 	    pkg = pkg + "/";
 	}
-	if (local){
+	if (local && !pkg.startsWith("java/")){
 	    entry = new File(pkg + cls + ".bet");
 	} else {
 	    entry = new File(betalib + "/javalib/" + pkg + cls + ".bet");
@@ -106,7 +106,7 @@ public class BetaOutput
 	    System.err.println("\t Use -f or -F option if overwrite desired.");
 	} else {
 	    if (local){
-		System.err.println("     --> \"./" + entry.getPath() + "\"");
+		System.err.println("     --> " + entry.getPath() + "\"");
 	    } else {
 		System.err.println("     --> \"" + entry.getAbsolutePath() + "\"");
 	    }
@@ -282,7 +282,18 @@ public class BetaOutput
 	putln("ORIGIN '~beta/basiclib/betaenv';");
 	if ((superClass!=null) && !superClass.equals("Object")){
 	    // Include non-wrapper version of superclass
-	    putln("INCLUDE '~beta/javalib/" + superPkg + "/" + superClass + "';");
+	    String path;
+	    if (superPkg==null){
+		superPkg = "";
+	    } else {
+		superPkg = superPkg + "/";
+	    };
+	    if (local && !superPkg.startsWith("java/")){
+		path = "";
+	    } else {
+		path = "~beta/javalib/";
+	    }
+	    putln("INCLUDE '" + path + superPkg + superClass + "';");
 	};
 	putln("--LIB: attributes--\n");
 	putln("(* Java " + className + " class declaration.");
@@ -304,7 +315,14 @@ public class BetaOutput
 	putln("ORIGIN '" + "_" + className + "';");
 	if (includes!=null){
 	    for (int i = 0; i<includes.length; i++){
-		putln("INCLUDE '~beta/javalib/" + (String)includes[i] + "';");
+		String path;
+		String include = (String)includes[i];
+		if (local && !include.startsWith("java/")){
+		    path = "";
+		} else {
+		    path = "~beta/javalib/";
+		}
+		putln("INCLUDE '" + path + include + "';");
 	    };
 	};
 	putln("--LIB: attributes--\n");
