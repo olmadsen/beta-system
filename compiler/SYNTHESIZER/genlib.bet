@@ -12,29 +12,33 @@ BODY 'genlib_bytecode';
 (#
    thisPT: ^ProtoType;
    (* must be dynamic *)
-   (**** not used : ***)
-   InsStack: @
-     (#
-        DS: [1] ^ASTindex;
-        top: @integer;
-        push:
-          (# d: @ASTindex
-          enter d
-          do
-             (if ((top+1->top) <= DS.range) then
-                 d[]->DS[top][]
-              else
-                 'OOPS'->bugstream.puttext
-             if)
-          #);
-        pop: (# d: @ASTindex do top-1->top;  exit (DS[top]) #);
-        init: (#  do 0->top #)
-     #);
-   insSwitch: @boolean;
-   (* if true then insert insertions *)
-   insOff: @integer;
-   (* offset to be added when translating insertions *)
    
+   externals: @
+     (* Collection of external descriptors for generation
+      * of external bytecode class
+      *)
+     (# L: [3] ^ASTindex; top: @integer;
+        add:
+          (# D: ^AStindex
+          enter D[]
+          do (if (top+1->top) > L.range then L.range -> L.extend if);
+             &ASTindex[] -> L[top][];
+             D -> L[top]
+          #);
+        scan:
+          (# current: ^ASTindex;
+          do (for i: top repeat
+                  L[i][] -> current[];
+                  inner
+          for)#);
+        display: 
+          (#
+          do '\nExternals: ' -> putline;
+             scan(# do 1->trace(#do current[] -> xA #)#)
+          #);
+        
+     #);
+        
 do none ->thisPT[]
 #)  
 
@@ -517,96 +521,7 @@ ScanCOMArgs:
   exit(noOfCOMargs,dataByValueByteSize,RL[])
   #);
   
-GenCproc: (* call back *) <<SLOT genCallBack:Descriptor>>;
-
-(****Not used: **************)
-GenProc:
-(* generate code for a descriptor used as a procedure *) (#  #);
-insAtt:
-  (# pref,att: @ASTindex; p,a,n,d,x: ^ASTindex
-  enter (pref,att)
-  do
-     (pref,common.itemKind)
-       ->GenPrefix
-         (# 
-         do
-            pref[]->preDescSons->(p[],a[],n[],d[],x[]);
-            GS.insOff+common.preStrucSize->GS.insOff;
-            (p,a)->&insAtt;
-            GS.insOff-common.preStrucSize->GS.insOff;
-            
-         #);
-     (att,0,&RepList[])->&GenAlloc
-  #);
-insEnter:
-  (# pref,entP: @ASTindex; p,a,n,d,x: ^ASTindex
-  enter (pref,entP)
-  do
-     (if pref.label
-      // gram.prefix then
-         pref[]->preDescSons->(p[],a[],n[],d[],x[]);
-         (p,n)->&insEnter;
-         GS.insOff-common.preStrucSize->GS.insOff;
-         
-     if);
-     (*      entP -> &genEnter*)
-     
-  #);
-insDo:
-  (# pref,doP: @ASTindex; p,a,n,d,x: ^ASTindex
-  enter (pref,doP)
-  do
-     (if (pref.label = gram.prefix) then
-         (doP)->GS.InsStack.push;
-         GS.insOff+common.preStrucSize->GS.insOff;
-         pref[]->preDescSons->(p[],a[],n[],d[],x[]);
-         (p,d)->&insDo;
-         GS.InsStack.pop;
-         GS.insOff-common.preStrucSize->GS.insOff;
-         
-      else
-     (* doP -> &genDo*)
-         
-     if)
-  #);
-insExit:
-  (# pref,exitP: @ASTindex; p,a,n,d,x: ^ASTindex
-  enter (pref,exitP)
-  do (*exitP -> &genExit;*)
-     (if pref.label
-      // gram.prefix then
-         pref[]->preDescSons->(p[],a[],n[],d[],x[]);
-         GS.insOff+common.preStrucSize->GS.insOff;
-         (p,x)->&insExit;
-         GS.insOff-common.preStrucSize->GS.insOff;
-         
-     if)
-  #);
-insItem:
-  (# 
-  do (* way skal med som param. *) (* gen.begInsItem; *)
-  (* (start,ThisDesc,pref) -> *) Insertion
-  #);
-PreDescSons: (* preliminary **)
-  (# desc,descRef: @ASTindex; pref,p,m,a,n,d,x: ^ASTindex
-  enter pref[]
-  do pref.son->SemAtt.descrip-> descRef;
-     descRef[]->semAtt.descSonsRef->(p[],m[],a[],n[],d[],x[])
-  exit (p[],a[],n[],d[],x[])
-  #);
-Insertion:
-  (# start: @integer; desc,pref: @ASTindex
-  enter (start,desc,pref)
-  do
-     start+GS.insOff->GS.insOff;
-     (pref,att)->insAtt;
-     (pref,enterP)->insEnter;
-     (pref,acP)->insDo;
-     (pref,exitP)->insExit;
-     start-GS.insOff->GS.insOff;
-     
-  #);
-  
+GenCallBack: <<SLOT genCallBack:Descriptor>>;
 
 ImportClrLocations:
   (# class: ^text;
@@ -627,7 +542,8 @@ ImportClrLocations:
                    (if not ('mscorlib' -> location.equal) then
                        location[] -> mch.import;
                        (if false then
-                           'ImportClrLocations: importing location: '->screen.puttext;
+                           'ImportClrLocations: importing location: '
+                             -> screen.puttext;
                            location[] -> screen.puttext;
                            ' from class ' -> screen.puttext;
                            class[] -> screen.putline;
