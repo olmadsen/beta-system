@@ -121,9 +121,9 @@ sub which {
     my(@path);
     print "which($cmd)\n" if($verbose);
     if ($OS eq 'MAC'){
-	@path = split(',', $ENV{'Commands'});
+	@path = split(',', $ENV{'COMMANDS'});
     } elsif ($OS eq 'WIN'){
-	@path = split(';', $ENV{'Path'});
+	@path = split(';', $ENV{'PATH'});
     } else {
 	@path = split(':', $ENV{'PATH'});
     }
@@ -162,7 +162,7 @@ sub execute_script {
     	print "execute_script: NYI for mac\n";
     } elsif ($OS eq 'WIN'){
 	my(@cmd) = split(' ', $cmd);
-	my($comspec) = $ENV{'ComSpec'};
+	my($comspec) = $ENV{'COMSPEC'};
 	#@cmd[0] = &which(@cmd[0]);
 	print "$comspec /C @cmd\n";
 	system "$comspec /C @cmd";
