@@ -23,6 +23,11 @@
 #endif 
 #endif /* PERSIST */
 
+#ifndef MIN
+# define MIN(x, y) (((x) < (y)) ? (x) : (y))
+# define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#endif
+
 /* Policy regarding when to perform a GC rather than extending AOA:
  *
  * AOA may fail in delivering a block upon allocation, if
@@ -67,7 +72,6 @@
 #ifdef USEMMAP
 static Object* ExtendBaseBlock(unsigned long numbytes);
 #else
-static long AllocateBaseBlock(void);
 static void AOANewBlock(long newBlockSize);
 /* static void AOAMaybeNewBlock(long minNewBlockSize); */
 #endif
@@ -84,11 +88,14 @@ void scanPartObjects(Object *obj, void (*)(Object *));
 static long totalFree = 0;
 static long lastAOAGCAt = -1000;  /* NumIOAGc of last AOAGC */
 
-static int OverFullFlag = 0;
-static unsigned long OverFullSize = 0;
 static unsigned long AOASizeAtGC = 0;
 static unsigned long AOAFreeAtGC = 0;
-static unsigned long AOAMinSizeForGC = 0;
+/*  We allocate 4Mbyte at a time in AOA so try to do an AOAGc
+ *  before the first time we have to expand
+ */
+
+/* actually set in AOANewBlock */
+static unsigned long AOAMinSizeForGC = 1000000;
 
 
 /* tempAOArootsAlloc:
@@ -296,16 +303,25 @@ static void AOANewBlock(long newBlockSize)
     AOAInsertFreeBlock((char *)newblock->top,
                  (char *)newblock->limit - (char *)newblock->top);
 
-    newblock->top = newblock->limit;
+    newblock->top = newblock->limit;  /* Mark this block as already used */
     totalFree += newBlockSize;
     totalAOASize += newBlockSize;
 
         
     AOABlocks++;
     if (!AOABaseBlock) {
+      AOAMinSizeForGC = AOAMinFree;
       AOABaseBlock = newblock;
       AOATopBlock = newblock;
       AOATopBlock -> next = NULL;
+      /* Check if the AOAtoIOAtable is allocated. If not then allocate it. */
+      if (AOAtoIOAtable == 0)
+      if (AOAtoIOAalloc() == 0) {
+	  fprintf(output,
+		"#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
+		 (int)AOAtoIOAtableSize);
+		BetaExit(1);
+      }
     } else {
       AOATopBlock -> next = newblock;
       AOATopBlock = newblock;
@@ -321,53 +337,6 @@ static void AOANewBlock(long newBlockSize)
   }
 }
 
-/* AllocateBaseBlock:
- * Some of The functionality has been taken out of 'AOAallocate below
- * and put in a function by itself. This function is only called the
- * first time around where it allocates the first block in AOA. The
- * jump to this code is very rarely taken. In such cases it improves
- * both performance and readabillity to put such code in a function by
- * itself.
- */
-
-static long AllocateBaseBlock()
-{
-  unsigned long blksize = SECTOR_SIZE;
-  /* Check if the AOAtoIOAtable is allocated. If not then allocate it. */
-  if (AOAtoIOAtable == 0) 
-    if (AOAtoIOAalloc() == 0) {
-      fprintf(output,
-	      "#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
-	      (int)AOAtoIOAtableSize);
-      BetaExit(1);
-    }
-  /* Try to allocate a new AOA block. */
-  if ((AOABaseBlock = newBlock(blksize))) {
-    INFO_AOA( fprintf(output, "#(AOA: new block allocated %dKb.)\n",
-		      (int)blksize/Kb));
-
-    insert_block_in_sector_map(AOABaseBlock,
-                               (unsigned long)BlockStart(AOABaseBlock),
-			       blksize);
-    
-    /* Insert the new block in the freelist */
-    AOAInsertFreeBlock((char *)AOABaseBlock->top,
-                 (char *)AOABaseBlock->limit - (char *)AOABaseBlock->top);
-
-    AOABaseBlock->top = AOABaseBlock->limit;
-    AOATopBlock  = AOABaseBlock;
-    AOABlocks++;
-    totalFree += blksize;
-    totalAOASize += blksize;
-        
-    INFO_HEAP_USAGE(PrintHeapUsage("after new AOA block"));
-  }else{
-    fprintf(output, "#(AOA: baseblock allocation failed %dKb.)\n",
-	    (int)blksize/Kb);
-    BetaExit(1);
-  }
-  return 0;
-}
 #endif /* ndef USE_MMAP */
 
 /* AOAallocate allocate 'size' number of bytes in the Adult object area.
@@ -379,73 +348,45 @@ Object *AOAallocate(long numbytes)
     
   Claim(numbytes > 0, "AOAallocate: numbytes > 0");
 
+  /*
+   * Note we compare the size _before the allocation_ with the size
+   * where the next GC is scheduled.  This means that one huge allocation
+   * can go through even though it busts through the boundary (which is
+   * just a heuristic anyway
+   */
+  if ((unsigned long)(totalAOASize - totalFree) > AOAMinSizeForGC) {
+      if (totalAOASize && !noAOAGC && !(IOALooksFullCount > 1)
+#ifdef PERSIST
+	  && !forceAOAAllocation
+#endif
+	 )
+      {
+	  AOANeedCompaction = 1;
+	  return NULL;
+      }
+  }
+
   /* Try to find a chunk of memory in the freelist */
   newObj = AOAAllocateFromFreeList(numbytes);
   if (newObj) {
     newObj->GCAttr = DEADOBJECT;
     totalFree -= numbytes;
-    if (OverFullFlag == 3) {
-      OverFullFlag = 0;
-    }
     return newObj;
   }
-
-#ifndef USEMMAP
-  if (!AOABaseBlock) {
-    AllocateBaseBlock();
-    return AOAallocate(numbytes);
-  }
-#endif
 
   DEBUG_CODE({
     if (!IOAActive) {
       INFO_AOA(fprintf(output,"AOAallocate failed: "
-		       "numbytes=%d, OFflag=%d\n",
-		       (int)numbytes, OverFullFlag));
+		       "numbytes=%d\n",
+		       (int)numbytes));
     }
   }); 
   
-  if (!totalAOASize || noAOAGC || IOALooksFullCount
-#ifdef PERSIST
-      || forceAOAAllocation
-#endif
-      ) {
-    OverFullFlag = 1;
 #ifdef USEMMAP
-    return ExtendBaseBlock(numbytes);
+  return ExtendBaseBlock(numbytes);
 #else
-    AOANewBlock(numbytes);
-    return AOAallocate(numbytes);
-#endif
-  } 
-
-  if (!OverFullFlag){
-    OverFullFlag = 1;
-    if (OverFullSize < numbytes) {
-      OverFullSize = numbytes;
-    }
-    return NULL;  /* perform GC */
-  }
-
-  if (OverFullFlag == 1) {
-    if ((unsigned long)totalAOASize > AOAMinSizeForGC) {
-      OverFullFlag = 2;
-      if (OverFullSize < numbytes) {
-	OverFullSize = numbytes;
-      }
-      return NULL;  /* perform GC */
-    }
-  }
-
-  /* IOA/NewCopyObject handles that we return 0
-   * by just moving the object to ToSpace once more.
-   */
-
-#ifdef USEMMAP
-    return ExtendBaseBlock(numbytes);
-#else
-    AOANewBlock(numbytes);
-    return AOAallocate(numbytes);
+  AOANewBlock(numbytes);
+  return AOAallocate(numbytes);
 #endif
 }
 
@@ -597,6 +538,7 @@ void AOAGc()
    long starttime = 0;
    unsigned long freeAtStart = totalFree;
    unsigned long freed;
+   int expand_percent;
 
    if (!AOABaseBlock)
       return;
@@ -713,19 +655,25 @@ void AOAGc()
    DETAILEDSTAT_AOA(fprintf(output,"]\n"));
 
    AOARefStackUnHack();
-  
-   if (totalAOASize > 100) { 
-     if ((unsigned long)(freed / (totalAOASize / 100)) 
-	 < (unsigned long)AOAPercentage) {
-       /* Still overfull. */
-       OverFullFlag = 2;
-       /* We do not want a GC, untill AOA has grown this much: */
-       AOAMinSizeForGC = totalAOASize + (totalAOASize / 100) * AOAPercentage;
-     } else {
-       AOAMinSizeForGC = totalAOASize;
-       OverFullFlag = 3;
-     }
-   }
+
+   /* 0-8Mbyte    expand by 40%  (AOAPercentage * 4)
+    * 8-32Mbyte   expand by 20%  (AOAPercentage * 2)
+    * 32+ Mbyte   expand by 10%  (AOAPercentage    )
+    */
+   if (totalAOASize - totalFree < (8 << 20))
+       expand_percent = AOAPercentage * 4;
+   else if (totalAOASize - totalFree < (32 << 20))
+       expand_percent = AOAPercentage * 2;
+   else
+       expand_percent = AOAPercentage;
+
+   AOAMinSizeForGC = ((totalAOASize - totalFree) / 100) *
+                                 (100 + expand_percent);
+
+   INFO_AOA(fprintf(output, "Lettting heap expand by %d%%\n", expand_percent););
+
+   if (AOAMinSizeForGC < AOAMinFree)
+           AOAMinSizeForGC = AOAMinFree;
 
    AOASizeAtGC = totalAOASize;
    AOAFreeAtGC = totalFree;
@@ -752,10 +700,13 @@ void AOAGc()
    });
   
    INFO_AOA({
-      fprintf(output, "AOA-%d done, freed 0x%x, free 0x%x, size 0x%x,\n"
-              "OF=%d, aoatime=%dms, AOAMinSizeForGC=0x%x)\n", 
-              (int)NumAOAGc, (int)freed, (int)totalFree, (int)totalAOASize,
-              (int)OverFullFlag, (int)(getmilisectimestamp() - starttime),
+      fprintf(output, "AOA-%d done, freed 0x%x (%d%%), free 0x%x, size 0x%x,\n"
+              "used = 0x%08x, aoatime=%dms, AOAMinSizeForGC=0x%x)\n", 
+              (int)NumAOAGc, (int)freed,
+	      (int)((freed) / ((freed + totalAOASize - totalFree) / 100 + 1)),
+	      (int)totalFree, (int)totalAOASize,
+	      (int)(totalAOASize - totalFree),
+              (int)(getmilisectimestamp() - starttime),
 	      (int)AOAMinSizeForGC);
    });
 
@@ -1622,25 +1573,3 @@ void scanOrigins(Object *theObj, void (*originAction)(Object **theCell))
     }
   }
 }
-
-void SetAOANeedCompaction(void)
-{
-  if (OverFullFlag >= 2) {
-    if ((unsigned long)totalAOASize > AOAMinSizeForGC) {
-      AOAMinSizeForGC = (unsigned long)totalAOASize;
-      AOANeedCompaction = TRUE;
-    }
-  } else if (OverFullFlag == 1) {
-    OverFullFlag = 2;
-    AOAMinSizeForGC = (unsigned long)totalAOASize;
-    AOANeedCompaction = TRUE;
-  }
-   INFO_AOA({
-      fprintf(output, "(SetAOANeedCompaction: free 0x%x, size 0x%x,\n"
-              "OF=%d, AOAMinSizeForGC=0x%x) GC=%c\n", 
-              (int)totalFree, (int)totalAOASize,
-              (int)OverFullFlag, (int)AOAMinSizeForGC,
-	      (AOANeedCompaction ? 'Y' : 'N'));
-   });
-}
-    

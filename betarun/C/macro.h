@@ -67,7 +67,7 @@ extern void *ReAlloc(void *p, Size size);
  * 2M      2048                  16k
  */
 
-#ifdef RTDEBUG
+#ifdef RTDEBUG_not_right_now_i_need_to_debug_the_normal_aoa
 #define SECTOR_BITS (2+10) /* Force frequent AOAGc */
 #else
 #define SECTOR_BITS (2+10+10)  /* 4 Mbyte */
