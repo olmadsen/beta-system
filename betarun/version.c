@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(21)";
+char betarun_version[] = "BETARUN VERSION 5.3(22)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.21  2001/07/23 11:34:14  sosh
+ * Added Protoype trace to AllocateItem.c and exit.c so that it is possible to see how many times different objects are allocated. Uncomment the define in defines.h to activate
+ * Betarun version number: 21
+ *
  * Revision 1.20  2001/07/20 09:47:32  sosh
  * Changed the placement of database files. See changes
  * Betarun version number: 20
