@@ -153,7 +153,7 @@ Initialize()
   IOATop = tmpIOATop;
 #endif
 
-#ifdef linux
+#if defined(linux) || defined(nti)
   IOA = tmpIOA;
   IOATop = tmpIOATop;
 #endif
