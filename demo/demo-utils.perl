@@ -9,10 +9,11 @@ undef %status;
 undef @dirstack;
 undef @matchlist;
 
+my $diffoptions = "-u";
 
 sub usage(){
     print "Usage:\n";
-    print "perl -s run.demos [-h] [-c] [-j] [-d] [dir1] ... [dirN]\n";
+    print "perl -s run.demos <options> [dir1] ... [dirN]\n";
     print "  -h  print this help\n";
     print "  -v  verbose mode\n";
     print "  -O  do not display correct outputs, only errors\n";
