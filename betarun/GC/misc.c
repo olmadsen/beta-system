@@ -943,11 +943,18 @@ GLOBAL(long labelOffset) = 0;
 GLOBAL(label **labels) = 0;
 GLOBAL(long numLabels) = 0;
 GLOBAL(long maxLabels) = 2048;
+GLOBAL(label **grouplabels) = 0;
+GLOBAL(long numGroupLabels) = 0;
+GLOBAL(long maxGroupLabels) = 2048;
 #ifdef nti
 GLOBAL(long process_offset) = 0;
 #endif
 
-char *getLabelExact(long addr);
+/* Prototypes */
+static void addLabelsFromGroupTable(void);
+static char *getLabelExact(long addr);
+static void addLabel(long adr, char *id);
+static int cmpLabel(const void *left, const void *right);
 
 static long lastAddress = 0;
 
@@ -979,7 +986,6 @@ static int isLocalLab(char *lab)
   return 1;
 }
 
-static void addLabel(long adr, char *id);
 static void addLabel(long adr, char *id)
 {
   label *lab;
@@ -1066,7 +1072,50 @@ static void addLabel(long adr, char *id)
   
 }
 
-static int cmpLabel(const void *left, const void *right);
+static void addGroupLabel(long adr, char *id)
+{
+  label *lab;
+  char* buf;
+  int len = strlen(id);
+
+  /* No need to check for locallabs, duplicates or slashes */
+
+  buf = MALLOC(sizeof(label)+len+1);
+  if (!buf) {
+    INFO_LABELS(fprintf(output, "Allocation of label failed\n"));
+    /* free previously allocated labels */
+    FREE(grouplabels);
+    grouplabels = 0;
+    return;
+  }
+  INFO_ALLOC(sizeof(label)+len+1);
+
+  lab = (label *) buf;
+  lab->id = buf+sizeof(label);
+
+  strcpy(lab->id, id);
+  lab->address = adr;
+
+  if (!grouplabels) {
+    grouplabels=(label**)MALLOC(maxGroupLabels * sizeof(label*));
+    if (!grouplabels) {
+      INFO_LABELS(fprintf(output, "Failed to allocate memory for group labels\n"));
+      grouplabels = 0; 
+    }
+    INFO_ALLOC(maxLabels * sizeof(label *));
+  }
+  if (numGroupLabels>=maxGroupLabels){
+    maxGroupLabels *= 2;
+    INFO_LABELS(fprintf(output, "*"); fflush(output));
+    grouplabels=REALLOC(grouplabels, maxGroupLabels * sizeof(label*));
+  }
+  grouplabels[numGroupLabels] = lab;
+
+  numGroupLabels++;
+  
+}
+
+
 static int cmpLabel(const void *left, const void *right)
 {
   label **l = (label**)left, **r = (label**)right;
@@ -1138,7 +1187,6 @@ static int cmpLabelApprox(const void *key, const void *candidate)
   return 1;
 }
 
-static void addLabelsFromGroupTable(void);
 static void addLabelsFromGroupTable(void)
 {
   group_header *gh;
@@ -1146,17 +1194,6 @@ static void addLabelsFromGroupTable(void)
   long mPart;
   long gPart;
 
-#ifdef FAST_DUMP
-  /* Hmm labels are already sorted before - no need to do again */
-#else
-  if (labels) {
-    qsort(labels, numLabels, sizeof(label**), cmpLabel);
-  }
-#endif
-
-  /* FIXME: Could add into another table, since these are only
-   * used for fallback lookup. Would make sorting cheaper.
-   */
   gh = NextGroup(0);
   while (gh) {
     long* proto = &(gh->protoTable[1]);
@@ -1165,16 +1202,16 @@ static void addLabelsFromGroupTable(void)
     NoOfPrototypes = gh->protoTable[0];
     for (i=0; i<NoOfPrototypes; i++) {
       sprintf(theLabel, "%s:T%d", NameOfGroupMacro(gh), i+1);
-      addLabel((long)(*proto), theLabel);
+      addGroupLabel((long)(*proto), theLabel);
 
       gPart=  G_Part(((ProtoType*)(*proto)));
       sprintf(theLabel, "%s:G%d", NameOfGroupMacro(gh), i+1);
-      addLabel(gPart, theLabel);
+      addGroupLabel(gPart, theLabel);
       
       mPart =  M_Part(((ProtoType*)(*proto)));
       if (mPart != MAXINT) {
 	sprintf(theLabel, "%s:M%d", NameOfGroupMacro(gh), i+1);
-	addLabel(mPart, theLabel);
+	addGroupLabel(mPart, theLabel);
       }
 
       proto++;
@@ -1182,7 +1219,7 @@ static void addLabelsFromGroupTable(void)
     gh = NextGroup(gh);
   }
 
-  qsort(labels, numLabels, sizeof(label**), cmpLabel);
+  qsort(grouplabels, numGroupLabels, sizeof(label**), cmpLabel);
 }
 
 #ifdef UNIX
@@ -1263,12 +1300,10 @@ static void initLabels(void)
 
 }
 
-char *getLabelExact(long addr)
+static char *getLabelExact(long addr)
 {
-  if (!labels) initLabels();
-  if (!addr) {
-    return NULL;
-  }
+  if (!addr) return NULL;
+  
 #ifdef nti
   addr -= process_offset;
 #endif
@@ -1292,7 +1327,7 @@ char *getLabel (long addr)
   return "<unknown>";
 #endif /* ppcmac */
 
-  if (!labels) initLabels();
+  if (!labels && !grouplabels) initLabels();
 
   if (!addr){
     labelOffset=0;
@@ -1317,7 +1352,7 @@ char *getLabel (long addr)
   }
 #endif /* sparc || linux */
 
-  /* binary search for largest label smaller than addr */
+  /* Try nm labels: binary search for largest label smaller than addr */
   if (labels && 
       ((unsigned long)addr<(unsigned long)labels[numLabels-1]->address)) {
     label_candidate = labels[0];
@@ -1326,6 +1361,16 @@ char *getLabel (long addr)
     return label_candidate->id;
   }
 
+  /* Try Group labels: binary search for largest grouplabel smaller than addr */
+  if (grouplabels && 
+      ((unsigned long)addr<(unsigned long)grouplabels[numGroupLabels-1]->address)) {
+    label_candidate = grouplabels[0];
+    labelsearch((void*)addr, (void*)grouplabels, numGroupLabels, sizeof(label**), cmpLabelApprox);
+    labelOffset = addr-(label_candidate->address);
+    return label_candidate->id;
+  }
+
+  /* Give up: */
   labelOffset=0;
   return "<unknown>";
 }

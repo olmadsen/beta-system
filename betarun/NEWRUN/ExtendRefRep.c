@@ -47,7 +47,7 @@ void ExtRR(Object *theObj,
     newRep->HighBorder = newRange;
     
     for (i = 0; i < copyRange; ++i){
-      AssignReference(&newRep->Body[i], theRep->Body[i]);
+      AssignReference(&newRep->Body[i], (long*)(theRep->Body[i]));
     }
     
     AssignReference((long *)theObj + offset, (Item *)newRep);
