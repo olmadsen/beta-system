@@ -44,7 +44,7 @@ void initSynchVariables(void)
 
 void create_TSD(void)
 {
-  TSDreg = MALLOC(sizeof(TSD));
+  TSDReg = MALLOC(sizeof(TSD));
   if (!TSDReg){
     fprintf(output, "create_TSD failed for thread %d\n", thr_self());
     return;
