@@ -125,6 +125,10 @@ if ($wiki){
 EOT
     $copyright = "";
     $tocfile = $ENV{'TOCURL'};
+    $wikiroot = $ENV{'WIKIROOT'};
+    ($wikidoc = $wikiroot ) =~ s%.*/([^/]+)/?$%$1%;
+    ($wikihelp = $wikiroot) =~ s%(.*/)[^/]+/?$%$1%;
+    $wikihelp .= "/wiki/help.wiki";
     $bodyatt = " bgcolor=\"white\" text=\"black\"";
 }
 
@@ -331,6 +335,7 @@ sub print_frameset()
     local ($title, $basename, $height) = @_;
     local ($header) = &H1("", $title);
     local ($targetbase);
+    local ($marginheight) = ($wiki)? "" : "MARGINHEIGHT=1";
 
     ($targetbase = $basename) =~ s/\./_/g;
 
@@ -350,7 +355,7 @@ sub print_frameset()
    </UL>
    </BODY>
    </NOFRAMES>
-   <FRAME SRC="$basename-nav.html" NAME="${targetbase}Nav" SCROLLING=NO MARGINHEIGHT=1>
+   <FRAME SRC="$basename-nav.html" NAME="${targetbase}Nav" SCROLLING=NO $marginheight>
    <FRAME SRC="$basename-body.html" NAME="${targetbase}Body">
 </FRAMESET>
 </HTML>
@@ -382,6 +387,16 @@ EOT
 </TD>
 <TD align=right>
 <SPAN CLASS=navigation>
+EOT
+
+        &print_button("Home page", $wikiroot . "/_home.wiki", "");
+        print " | ";
+        &print_button("Site map",  $wikiroot . "/_sitemap.wiki", "");
+        print " | ";
+        &print_button("Recent changes", $wikiroot . "/_recent.wiki", "");
+        print " | ";
+        &print_button("Help", $wikihelp, "");
+        print<<"EOT";
 </SPAN>
 </TD>
 </TR>
@@ -393,7 +408,7 @@ EOT
 <SPAN CLASS=title>$file</span>
 </TD>
 <TD align=right>
-<SPAN CLASS=logo><A href="$tocurl">Top</A></SPAN>
+<SPAN CLASS=logo><A href="$wikiroot">$wikidoc</A></SPAN>
 </TD>
 </TR>
 <TR VALIGN=BOTTOM>
@@ -401,6 +416,12 @@ EOT
 <SPAN CLASS=description>
 Interface Description
 </SPAN>
+</TD>
+<TD align=right>
+<SPAN CLASS=description>
+EOT
+        &print_button("Documentation", $wikiroot . "/documentation.wiki", "");
+	print <<EOT;
 </TD>
 </TR>
 </TABLE>
@@ -481,6 +502,16 @@ EOT
 </TD>
 <TD align=right>
 <SPAN CLASS=navigation>
+EOT
+
+        &print_button("Home page", $wikiroot . "/_home.wiki", "");
+        print " | ";
+        &print_button("Site map",  $wikiroot . "/_sitemap.wiki", "");
+        print " | ";
+        &print_button("Recent changes", $wikiroot . "/_recent.wiki", "");
+        print " | ";
+        &print_button("Help", $wikihelp, "");
+        print<<"EOT";
 </SPAN>
 </TD>
 </TR>
@@ -494,13 +525,20 @@ Index of Identifiers
 </SPAN>
 </TD>
 <TD align=right>
-<SPAN CLASS=logo><A href="$tocurl">Top</A></SPAN>
+<SPAN CLASS=logo><A href="$wikiroot">$wikidoc</A></SPAN>
 </TD>
 </TR>
 <TR VALIGN=BOTTOM>
 <TD>
 <SPAN CLASS=description>
 Interface Description
+</SPAN>
+</TD>
+<TD align=right>
+<SPAN CLASS=description>
+EOT
+        &print_button("Documentation", $wikiroot . "/documentation.wiki", "");
+	print <<EOT;
 </SPAN>
 </TD>
 </TR>
