@@ -112,6 +112,7 @@ static void BooleanProperty(char *name)
 #endif
 #ifdef RTVALHALLA
   ENTRY("DebugValhalla", DebugValhalla = TRUE);
+  ENTRY("TraceValhallaComm", TraceValhallaComm = TRUE);
 #endif
 #ifdef MT
   ENTRY("DebugAll", 
