@@ -148,10 +148,9 @@ CopyPPP: public
      theCBStruct[12][] -> newTop;
      (if newTop > CBFALimit then
          { Search through the area to find a free one! }
-         { if Not call Error. }
-         push RegObj;
-         push -11;
-         call BetaError     
+         { NYI }
+         call CBFArelloc;
+         goto CopyPPP     
      if);
      newTop -> CBFATop;
      
@@ -184,7 +183,7 @@ HandlePCB: public
      { Stack on exit:   0: [ slot for return value       ]!(0,2,4)  }
      
      { The size of 'pascal parametre block' and 'slot for return value'  }
-     { are described in the coresponding CBFA block.                     }
+     { are described in the corresponding CBFA block.                    }
      
      { NOTE: Pascal register conventions (MPW C, Appendix C): }
      { d0, d1, d2, a0, and a1 are scratch registers.          }
@@ -268,7 +267,7 @@ HandlePCB: public
 
 ----- PascalInterface: system -----
 
-PPackCT: public
+PpkCT: public
   (#
      { RegAdr points to a ascii string }
      stack:  StackArea = SP;
@@ -294,7 +293,7 @@ PPackCT: public
      { Set the first byte in the pascal string eq the length. }
      Size!b -> theTextAddr[0]!b;
      
-     { Copy the contents of the repetition to the CTextPool. }
+     { Copy the contents of the ascii to the CTextPool. }
      (if Size <> 0 then
          0 -> index;
          loop:
@@ -312,37 +311,60 @@ PPackCT: public
      goto RetAddr
   #);
 
-PPackVT: public
-  (#
-     theRep: Repetition = RegAdr;
-     Size: Long = DataReg2;
-     index: Long = DataRegA;
-     theTextAddr: DataArea = RegArg;
-     Value: Byte = DataReg1;
-     nextText: DataArea = AddrReg1;
-     RetAddr:  CodeArea = AddrReg1
-  do 
-     theRep[0] -> theRep;
-     theRep.HighBorder -> Size;
+PpkVT: public
+  (#     
+     { input parameters }
+     repArg:      Repetition = DataReg1;
      
+     { variables }
+     theRep:      Repetition = RegAdr;
+     theTextAddr: DataArea   = RegArg;
+     FreeSpace:   Long       = DataReg1;
+     nextText:    DataArea   = AddrReg1;
+     
+     Range:       Long       = DataReg2;
+     index:       Long       = DataRegA;
+     Value:       Byte       = DataReg1;
+
+     RetAddr:     CodeArea   = AddrReg1
+  do 
+     repArg -> theRep;
+    
      { Compute the text start point. }
      CTextPoolEnd -> theTextAddr;
      
+     { Check range overflow on CTextPool.                               }
+     { nextText is used as a tmp. register only.                        }
+     { Size_left_in_CTextPool = (Adr(CTextPool) + 1000) - CTextPoolEnd. }
+     CTextPool[] -> nextText;
+     nextText -> FreeSpace;
+     1000 -> FreeSpace+;
+     CTextPoolEnd -> FreeSpace-;
+
+     { Calculate BodySize of theRep }
+     theRep.HighBorder -> Range;
+          
+     (if FreeSpace <= Range then
+         push RegObj;
+         push -35;
+         call BetaError
+     if);
+     
      { Set the first byte in the pascal string eq the length. }
-     Size!b -> theTextAddr[0]!b;
+     Range!b -> theTextAddr[0]!b;
      
      { Copy the contents of the repetition to the CTextPool. }
-     (if Size <> 0 then
+     (if Range <> 0 then
          0 -> index;
          loop:
-         theRep[16+index*4]!l -> Value!l; { Get as long to avoid byte-ordering. }
+         theRep[16+index]!l -> Value!l; { Get as longs to avoid byte ordering }
          Value -> theTextAddr[1+index]!b;
          1 -> index+;
-         (if index < Size then goto loop if)
+         (if index < Range then goto loop if)
      if);
      
      { Update CTextPool. }
-     theTextAddr[1+Size][] -> nextText;
+     theTextAddr[1+Range][] -> nextText;
      nextText -> CTextPoolEnd;
      
      pop  RetAddr;
