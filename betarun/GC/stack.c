@@ -810,7 +810,7 @@ static void initLabels()
 #endif /* SPARC_LD_SEGMENT_TEST */
   numLabels=0;
   for (;;){
-    if (fscanf(thePipe, "%x %c %s", (int)&labelAddress, &ch, theLabel) == EOF)
+    if (fscanf(thePipe, "%x %c %s", (int *)&labelAddress, &ch, theLabel) == EOF)
       break;
     numLabels++;
   }
@@ -829,14 +829,14 @@ static void initLabels()
 #ifdef SPARC_LD_SEGMENT_TEST
       /* Skip to etext */
       for (;;){
-	fscanf(thePipe, "%x %c %s", &labelAddress, &ch, theLabel);
+	fscanf(thePipe, "%x %c %s", (int *)&labelAddress, &ch, theLabel);
 	if (labelAddress==(long)&etext) break;
       }
 #endif /* SPARC_LD_SEGMENT_TEST */
       /* Read labels */
       for (;;lastLab++){
 	struct label *lab;
-	if (fscanf(thePipe, "%x %c %s", (int)&labelAddress, &ch, theLabel) == EOF)
+	if (fscanf(thePipe, "%x %c %s", (int *)&labelAddress, &ch, theLabel) == EOF)
 	  break;
 	if (! (lab = (struct label *) malloc(sizeof(struct label)))){
 	  fprintf(output, "Allocation of struct label failed\n");
