@@ -147,22 +147,19 @@ static long sourceReg(unsigned long instruction, ucontext_t *ucon, long returnSP
   case 0:
     /* Bicc, FBfcc, CBccc, SETHI. These instructions does not access
        memory, but should they be able to cause a SIGBUS. */
-    fprintf(output,"getSourceRegister: SIGBUS caused by optype = 0 ??\n");
+    DEBUG_CODE(fprintf(output,"getSourceRegister: SIGBUS caused by optype = 0 ??\n"));
     DEBUG_CODE(Illegal());
-    BetaExit(1);
     break;
   case 1:
     /* CALL. Should these be able to cause a SIGBUS? */
-    fprintf(output,"getSourceRegister: SIGBUS caused by optype = 1 ??\n");
+    DEBUG_CODE(fprintf(output,"getSourceRegister: SIGBUS caused by optype = 1 ??\n"));
     DEBUG_CODE(Illegal());
-    BetaExit(1);
     break;
   case 2:
     /* Arithmetic, logical, shift and remaining. Should these be able
      * to cause a SIGBUS? */
-    fprintf(output,"getSourceRegister: SIGBUS caused by optype = 3 (type 2) ??\n");
+    DEBUG_CODE(fprintf(output,"getSourceRegister: SIGBUS caused by optype = 3 (type 2) ??\n"));
     DEBUG_CODE(Illegal());
-    BetaExit(1);
     break;
   case 3: 
     {

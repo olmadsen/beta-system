@@ -1,6 +1,7 @@
 #ifndef _TRANSITOBJECTTABLE_H_
 #define _TRANSITOBJECTTABLE_H_
 #include "beta.h"
+#include "referenceTable.h"
 
 void initTransitObjectTable(void);
 unsigned long TOTSize(void);

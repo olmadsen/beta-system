@@ -3,6 +3,8 @@
 #include "PSfile.h"
 #include "misc.h"
 #include "unswizzle.h"
+#include "transitObjectTable.h"
+#include "objectTable.h"
 
 void pstoreserver_dummy() {
 #ifdef sparc
@@ -113,12 +115,18 @@ static unsigned long openExt(unsigned long name_r, unsigned long perm)
     if (currentStore) {
       free(currentStore);
       currentStore = NULL;
+
+      fprintf(output, "openExt: Only one open store allowed!\n");
+      BetaExit(1);
+      return 0;
+      
     }
     currentStore = name;
     permission = perm;
     
     setCurrentPStore(nameToID(currentStore));
     
+    DEBUG_CODE(fprintf(output, "openExt: Opening store (%s)\n", currentStore));
     return 0;
   } else {
     return ACCESSERRORERROR;
@@ -172,6 +180,11 @@ unsigned long createExt(unsigned long name_r)
 	  if (currentStore) {
 	    free(currentStore);
 	    currentStore = NULL;
+	    
+	    fprintf(output, "openExt: Only one open store allowed!\n");
+	    BetaExit(1);
+	    return 0;
+	    
 	  }
 	  currentStore = name;
 	  createPStore(nameToID(name));
@@ -247,11 +260,11 @@ unsigned long putExt(unsigned long dooverwrite, unsigned long name_r, Object *th
 
 void closeExt(void)
 {
+  DEBUG_CODE(fprintf(output, "openExt: Closed store (%s)\n", currentStore));
   saveCurrentStore();
   free(currentStore);
   currentStore = NULL;
   closeCurrentStore();
-  
 }
 
 unsigned long isOpen(void)
@@ -273,12 +286,35 @@ unsigned long getExt(unsigned long name_r)
     for (count = 0; count <  MAXNAMES; count++) {
       if (strcmp(&(nameMap[count].name[0]), name) == 0) {
 	Object *target;
+
+	/* First we check if the object is loaded already */
+	if ((target = indexLookupTOT(getCurrentStoreID(), nameMap[count].offset)) == 0) {
+	  unsigned long inx;
+	  
+	  if ((inx = indexLookupOT(getCurrentStoreID(), nameMap[count].offset)) == -1) {
+	    /* The target is not in memory */
 #ifdef sparc
-	target = lookUpReferenceEntry(getCurrentStoreID(), nameMap[count].offset, -1);
+	    target = lookUpReferenceEntry(getCurrentStoreID(), nameMap[count].offset, -1);
 #else
-	target = lookUpReferenceEntry(getCurrentStoreID(), 
-				      nameMap[count].offset, -1);
+	    target = lookUpReferenceEntry(getCurrentStoreID(), 
+					  nameMap[count].offset, -1);
 #endif
+	  } else {
+	    unsigned short GCAttr;
+	    unsigned long store;
+	    unsigned long offset;
+	    
+	    objectLookup(inx,
+			 &GCAttr,
+			 &store,
+			 &offset,
+			 &target);
+	    
+	    Claim(GCAttr == ENTRYALIVE, "Reference to dead entry");
+	    Claim(store == getCurrentStoreID(), "Table mismatch!!");
+	    Claim(offset == nameMap[count].offset, "Table mismatch!!");
+	  }
+	}
 	free(name);
 	return (unsigned long)target;
       }
