@@ -21,6 +21,8 @@
 /*************************** HELPER FUNCTIONS ******************************/
 /***************************************************************************/
 
+#ifdef RTDEBUG
+
 static void NotifySignalDuringDump(int sig)
 {
   BetaErr err;
@@ -35,6 +37,8 @@ static void NotifySignalDuringDump(int sig)
   }
   NotifyErrorDuringDump((BetaErr)isMakingDump, err);
 }
+#endif /* RTDEBUG */
+
 
 #ifdef UNIX
 static int HandleInterrupt(Object *theObj, long *PC, int sig)
