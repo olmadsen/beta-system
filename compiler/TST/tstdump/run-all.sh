@@ -1,19 +1,24 @@
 #!/bin/sh
 
+. $BETALIB/configuration/env.sh
+
 echo ""
-echo removing old dump files...
+echo Removing old dump files...
+echo "======================================================"
 /bin/rm -f *.dump
 
 echo ""
-echo compiling all...
+echo Compiling all...
+echo "======================================================"
 beta -qw tstdump??.bet
 
 echo ""
-echo running all...
+echo Running all...
+echo "======================================================"
 for f in tstdump??
 do
     echo ""
-    echo "--------" $f "-------":
+    echo "--------" $f: "-------"
     if [ $f = "tstdump24" ]; then
        echo $f skipped.
        echo "--------------------------"
@@ -33,5 +38,21 @@ do
 done
 
 echo ""
-echo done.
+echo "Diffing all (left is correct version)..."
+echo "======================================================"
+for f in tstdump??.dump
+do
+    echo ""
+    echo "--------" $f: "-------"
+    if [ -f dumps/$f ]; then
+       sed -e "s/$objdir/MACHINE_TYPE/g" < $f | diff dumps/$f -
+    else
+       echo No reference exists
+    fi
+    echo "--------------------------------"
+done
+
+echo ""
+echo "======================================================"
+echo Done.
 

@@ -6,6 +6,13 @@
 
 #include "beta.h"
 
+#if 0
+/* comment in if you want tracing of dump for non-debug betarun */
+#undef TRACE_DUMP
+#define PrintCodeAddress(x) {}
+#define TRACE_DUMP(code) { code; }
+#endif
+
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
@@ -427,7 +434,7 @@ void DisplayObject(FILE   *output, /* Where to dump object */
       /* Check whether theItem is actually an item or is the
        * body part of a component.
        */
-      if (IsComponentItem(theItem)) {
+      if (!isComponent(theItem) && IsComponentItem(theItem)) {
 	DisplayObject(output, 
 		      (Object *)EnclosingComponent(theItem),
 		      PC);
@@ -521,7 +528,7 @@ static void DumpCell(Object **theCell,Object *theObj)
   } 
     
   /* Check if theObj is inlined in a component */
-  if (IsComponentItem(theObj)) {
+  if (!isComponent(theObj) && IsComponentItem(theObj)) {
     TRACE_DUMP(fprintf(output, " dump as comp"));
     theObj = (Object *)EnclosingComponent(theObj);
   } 
@@ -602,22 +609,30 @@ static void DisplayStackPart(FILE *output,
 #ifdef sparc
 void DisplayAR(FILE *output, RegWin *theAR, long PC)
 {
-  Object *theObj /* used for attempts to find objects */; 
   Object *lastObj /* used for last successfully identified object */;
   long* this, *end;
 
-  /* First handle current object in this frame */
-  
   TRACE_DUMP({
-    fprintf(output, ">>>TraceDump: DisplayAR: %%sp: 0x%x, %%i0: 0x%x, PC: 0x%x", (int)theAR, (int)theAR->i0, (int)PC);
+    fprintf(output, 
+	    "\n\n>>>TraceDump: DisplayAR: [%%sp=0x%x..%%fp=0x%x[, %%i0: 0x%x, PC: 0x%x", 
+	    (int)theAR, 
+	    (int)theAR->fp, 
+	    (int)theAR->i0, 
+	    (int)PC);
     PrintCodeAddress(PC);
     fprintf(output, "\n");
   });
+
+  /* Handle current object in this frame */
   lastObj  = (Object *) theAR->i0;
   if (inBetaHeap(lastObj) && isObject(lastObj)){
-    if (IsComponentItem(lastObj)){
+    if (!isComponent(lastObj) && IsComponentItem(lastObj)){
       lastObj = (Object*)EnclosingComponent(lastObj);
-      TRACE_DUMP(fprintf(output, ">>>TraceDump: DisplayAR: Current object is item of component 0x%x\n", (int)lastObj));
+      TRACE_DUMP({
+	fprintf(output, 
+		">>>TraceDump: DisplayAR: Current object is item of component 0x%x\n", 
+		(int)lastObj);
+      });
     } 
     DisplayObject(output, lastObj, PC);
   }
@@ -627,10 +642,28 @@ void DisplayAR(FILE *output, RegWin *theAR, long PC)
    * In case of INNER P, the previous current object has been
    * pushed before the code address.
    */
-  this = (long *) (((long) theAR)+sizeof(RegWin));
-  end = (long *) (((long) theAR->fp)-4);
-  while (this<=end) {
-    TRACE_DUMP(fprintf(output, ">>>TraceDump: DisplayAR: stackpart 0x%08x: 0x%08x\n", (int)this, (int)this[0]));
+  this = (long *) (((long)theAR)+sizeof(RegWin));
+  end  = (long *) (((long)theAR->fp));
+  TRACE_DUMP({
+    if (this<end){
+      fprintf(output, 
+	      ">>>TraceDump: DisplayAR: stackpart is [0x%x..0x%x[\n", 
+	      (int)this, 
+	      (int)end);
+    } else {
+      fprintf(output, 
+	      ">>>TraceDump: DisplayAR: no stackpart (this=0x%x, end=0x%x)\n",
+	      (int)this,
+	      (int)end);
+    }
+  });
+  while (this<end) {
+    TRACE_DUMP({
+      fprintf(output, 
+	      ">>>TraceDump: DisplayAR: stackpart 0x%08x: 0x%08x\n", 
+	      (int)this, 
+	      (int)this[0]);
+    });
     PC = this[0];
     if (isCode(PC)) {
       /* isCode is a real macro on sparc. So now we know that
@@ -638,16 +671,27 @@ void DisplayAR(FILE *output, RegWin *theAR, long PC)
        * Add 8 to get the real SPARC return address.
        */
       PC+=8;
-      TRACE_DUMP(fprintf(output, ">>>TraceDump: DisplayAR: PC 0x%x\n", (int)PC));
-      /* See if the next on the stack is an object (in case of INNER P) */
-      theObj = (Object *) this[2];
-      if (inBetaHeap(theObj) && isObject(theObj)) {
-	/* It was an object - it was an INNER P */
-	TRACE_DUMP(fprintf(output, ">>>TraceDump: DisplayAR: INNER P object 0x%x\n", (int)theObj));
-	lastObj = theObj;
-	if (IsComponentItem(lastObj)){
+      TRACE_DUMP({
+	fprintf(output, 
+		">>>TraceDump: DisplayAR: PC 0x%x\n",
+		(int)PC);
+      });
+      if ((this+2<end) && inBetaHeap((Object*)this[2]) && isObject((Object*)this[2])) {
+	/* There was an object, assumed to be from an INNER P */
+	lastObj = (Object*)this[2];
+	TRACE_DUMP({
+	  fprintf(output, 
+		  ">>>TraceDump: DisplayAR: stackpart 0x%08x: 0x%08x INNER P object\n", 
+		  (int)(this+2), 
+		  (int)lastObj);
+	});
+	if (!isComponent(lastObj) && IsComponentItem(lastObj)){
 	  lastObj = (Object*)EnclosingComponent(lastObj);
-	  TRACE_DUMP(fprintf(output, ">>>TraceDump: DisplayAR: object is item of component 0x%x\n", (int)lastObj));
+	  TRACE_DUMP({
+	    fprintf(output,
+		    ">>>TraceDump: DisplayAR: object is item of component 0x%x\n",
+		    (int)lastObj);
+	  });
 	} 
 	DisplayObject(output, lastObj, PC);
 	this+=2; /* Skip the object */
@@ -1042,7 +1086,7 @@ int DisplayBetaStack(BetaErr errorNumber,
   } else {
     fprintf(output,"Current object is zero!\n");
   }
-#endif
+#endif /* sparc */
   
 
 #ifdef MT
@@ -1082,7 +1126,7 @@ int DisplayBetaStack(BetaErr errorNumber,
 #endif
 	if(theObj && isObject(theObj)) {
 	  /* Check if theObj is inlined in a component */
-	  if (IsComponentItem(theObj)) {
+	  if (!isComponent(theObj) && IsComponentItem(theObj)) {
 	    DisplayObject(output, 
 			  (Object *)EnclosingComponent(theObj), 
 			  (long)PC);
@@ -1132,13 +1176,47 @@ int DisplayBetaStack(BetaErr errorNumber,
     TRACE_DUMP(fprintf(output, ">>>TraceDump: StackEnd:   0x%x\n", (int)StackEnd));
     TRACE_DUMP(fprintf(output, ">>>TraceDump: StackStart: 0x%x\n", (int)StackStart));
 
-    for (theAR =  (RegWin *) StackEnd;
+    theAR = (RegWin *) StackEnd;
+
+    /* First check for errors occured outside BETA and wind down
+     * to BETA part of stack, if possible.
+     */
+    if (!IsBetaCodeAddrOfProcess((long)PC)){
+      fprintf(output, 
+	      "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
+	      (int)PC);
+      DEBUG_CODE(PrintCodeAddress((long)error_pc));
+      fprintf(output, ") ]\n");
+
+      TRACE_DUMP(fprintf(output, "  Winding back through C frames on top\n"));
+      for (PC = (long *)theAR->i7, theAR = (RegWin *) theAR->fp;
+	   !IsBetaCodeAddrOfProcess((long)PC);
+	   PC = (long *)theAR->i7, theAR = (RegWin *) theAR->fp){
+	DEBUG_CODE({
+	  fprintf(output, "    [");
+	  PrintCodeAddress((int)PC);
+	  fprintf(output, " ]\n");
+	});
+	if ((theAR->fp==0) || (theAR->fp==StackStart) || (PC = 0)){
+	  TRACE_DUMP({
+	    fprintf(output, 
+		    "Wierd: Did not find any BETA frames... At theAR=0x%x\n",
+		    (int)theAR);
+	  });
+	  return 0;
+	}
+      }
+      TRACE_DUMP(fprintf(output, "  Winding through frames on top done."));
+      c_on_top=0; /* No more C frames on top */
+    }
+
+    for (;
 	 theAR != (RegWin *) 0;
 	 PC = (long*)theAR->i7, theAR =  (RegWin *) theAR->fp) {
       /* PC is execution point in THIS frame. The update of PC
        * in the for-loop is not done until it is restarted.
        */
-      TRACE_DUMP(fprintf(output, ">>>TraceDump: theAR->fp: 0x%x\n", (int)theAR->fp));
+      TRACE_DUMP(fprintf(output, ">>>TraceDump: DisplayBetaStack: theAR->fp: 0x%x\n", (int)theAR->fp));
       if (theAR->fp == (long)nextCBF) {
 	/* This is AR of the code stub (e.g. <foo>) called from HandleCB. 
 	 * Don't display objects in this, but skip to betaTop and update 
