@@ -33,7 +33,7 @@ do
 done
 
 echo Creating HTML:
-$MAKEHTML $OPTIONS $INTFILES
+$MAKEHTML -v $OPTIONS $INTFILES
 /bin/rm -f *.int
 echo done.
 

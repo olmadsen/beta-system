@@ -20,3 +20,8 @@ up: update
 
 update:
 	cvs update -dP
+
+# Tags: Only include html files that are not
+# generated
+tags:
+	etags *.html */*.html xwindows/interface/index.html

@@ -177,9 +177,11 @@ sub print_trailer
 <!---------------------------------------------------------->
 <HR>
 <P></P>
-<TABLE border=0 width=100%>
-<TR><TD><ADDRESS>Interface Description</ADDRESS></TD>
-<SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT>
+<TABLE cols=3 border=0 width=100%>
+<TR>
+<TD width="33%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
+<TD width="34%" align="center"><FONT size=-1>&COPY; <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A></FONT></TD>
+<TD width="33%" align="right"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></FONT></TD>
 </TABLE>
 <P></P>
 EOT
@@ -229,9 +231,11 @@ sub print_index_trailer
 <!---------------------------------------------------------->
 <HR>
 <P></P>
-<TABLE border=0 width=100%>
-<TR><TD><ADDRESS>Interface Description</ADDRESS></TD>
-<SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT>
+<TABLE cols=3 border=0 width=100%>
+<TR>
+<TD width="33%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
+<TD width="34%" align="center"><FONT size=-1>&COPY; <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A></FONT></TD>
+<TD width="33%" align="right"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></FONT></TD>
 </TABLE>
 <P></P>
 EOT
@@ -319,7 +323,7 @@ sub print_index
 	# Generate caps heading at first occurrence of a letter.
 	$initial_ch = ucfirst (substr($index[$i], 0, 1));
 	if (! $caps{$initial_ch} ){
-	    $html_index .= "</PRE><H3><A name=\"_$initial_ch\">$initial_ch<\/A><\/H3><PRE CLASS=interface>\n";
+	    $html_index .= "</PRE><H2><A name=\"_$initial_ch\">$initial_ch<\/A><\/H2><PRE CLASS=interface>\n";
 	    $caps{$initial_ch} = 1;
 	}
 
@@ -345,7 +349,7 @@ sub print_index
 	#$html_index .= "[[$_]]\n" if $trace;
 	if ($_ =~ m/^ANONYMOUS:/){
 	    if (!$entries{"ANONYMOUS"}){
-		$html_index .= "<I>Anonymous pattern</I>\n";
+		$html_index .= "  <I>Anonymous pattern</I>\n";
 		$entries{"ANONYMOUS"} = 1;
 	    }
 	}
@@ -354,14 +358,14 @@ sub print_index
 	    $id = $2;
 	    if ($entries{$scopes}){
 		# foo:bar already emitted
-		$html_index .= "&nbsp;" x (2* (1+&num_chars(':', $scopes)));
-		$html_index .= "<A href=\"$htmlfile\#" . $index[$i] . "\">" . $id . "</A>\n";
+		$html_index .= "  " x (1+&num_chars(':', $scopes));
+		$html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\">" . $id . "</A>\n";
 		$entries{$_} = 1;
 	    } else {
 		$html_index .= "Index Error: $_ ($scopes) ($id)\n";
 	    }
 	} else {
-	    $html_index .= "<A href=\"$htmlfile\#" . $index[$i] . "\">" . $_ . "</A>\n";
+	    $html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\">" . $_ . "</A>\n";
 	    $entries{$_} = 1;
 	}
     }
@@ -408,9 +412,11 @@ sub print_toc_trailer
 <!---------------------------------------------------------->
 <HR>
 <P></P>
-<TABLE border=0 width=100%>
-<TR><TD><ADDRESS>Interface Description</ADDRESS></TD>
-<SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT>
+<TABLE cols=3 border=0 width=100%>
+<TR>
+<TD width="33%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
+<TD width="34%" align="center"><FONT size=-1>&COPY; <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A></FONT></TD>
+<TD width="33%" align="right"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></FONT></TD>
 </TABLE>
 <P></P>
 EOT
