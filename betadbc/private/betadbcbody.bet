@@ -191,8 +191,8 @@ do
         setResultSetCapabilities:
           (# rc: @shortint
           do
-             (*(private.hdbc,SQL_ATTR_ODBC_CURSORS,SQL_CUR_USE_ODBC,0)
-               ->SQLSetConnectAttr->rc;*)
+          (*(private.hdbc,SQL_ATTR_ODBC_CURSORS,SQL_CUR_USE_ODBC,0)
+           ->SQLSetConnectAttr->rc;*)
              (if rc <> SQL_SUCCESS then
                  (SQL_HANDLE_DBC,THIS(connection).private.hdbc)
                    ->openConnectionException
@@ -480,50 +480,6 @@ findMarker: findDelimited
   (#
      start::  (#  do (ch = '%')->value #);
      end::  (#  do (pos = startPos+1)->value #)
-  #);
-BetaDBCPutClock:
-(* SQL2 standard representation of time is of the form "TIME '17:46:30.5'" *)
-  (# c: @time
-  enter c
-  do
-     '\''->put;
-     c.hour->putint (#  do 2->width; true->zeroPadding #);
-     ':'->put;
-     c.minute->putint (#  do 2->width; true->zeroPadding #);
-     ':'->put;
-     c.sec->putint (#  do 2->width; true->zeroPadding #);
-     '\''->put
-  #);
-BetaDBCPutDate:
-(* SQL2 standard representation of dates is of the form "DATE '1974-11-30'" *)
-  (# d: @time
-  enter d
-  do
-     '\''->put;
-     d.year->putint;
-     '-'->put;
-     d.month->putint;
-     '-'->put;
-     d.day->putint;
-     '\''->put
-  #);
-BetaDBCPutTime:
-  (# t: @time
-  enter t
-  do
-     '\''->put;
-     t.year->putint;
-     '-'->put;
-     t.month->putint;
-     '-'->put;
-     t.day->putint;
-     ascii.sp->put;
-     t.hour->putint (#  do 2->width; true->zeroPadding #);
-     ':'->put;
-     t.minute->putint (#  do 2->width; true->zeroPadding #);
-     ':'->put;
-     t.sec->putint (#  do 2->width; true->zeroPadding #);
-     '\''->put
   #)  
 
 -- resultSetScan: DoPart --
@@ -709,89 +665,6 @@ do
           enter name[]
           do ((name[]->lookup) <> none )->value
           #);
-        old:
-          (#
-             getAsText:
-               (# key,value: ^text; var: ^declareVar
-               enter key[]
-               do
-                  &text[]->value[];
-                  key[]->THIS(connection).private.declareVars.lookup->var[];
-                  (if true
-                   // var## <= declareInteger## then
-                      (var[]->qua (# as:: declareInteger #)).get->value.putint
-                   // var## <= declareText## then
-                      '\''->value.puttext;
-                      (var[]->qua (# as:: declareText #)).get->value.puttext;
-                      '\''->value.puttext
-                   // var## <= declareBoolean## then
-                      (if (var[]->qua (# as:: declareBoolean #)).get then
-                          trueText->value.puttext
-                       else
-                          falseText->value.puttext
-                      if)
-                   // var## <= declareReal## then
-                      (var[]->qua (# as:: declareReal #)).get->value.putReal
-                   // var## <= declareClock## then
-                      (var[]->qua (# as:: declareClock #)).get
-                        ->value.BetaDBCPutClock
-                   // var## <= declareDate## then
-                      (var[]->qua (# as:: declareDate #)).get
-                        ->value.BetaDBCPutDate
-                   // var## <= declareTime## then
-                      (var[]->qua (# as:: declareTime #)).get
-                        ->value.BetaDBCPutTime
-                   else
-                      exception
-                        (# 
-                        do
-                           'Unknown variable type found while getting value'
-                             ->msg
-                        #)
-                  if)
-               exit value[]
-               #);
-             setAsText:
-               (# key,value: ^text; var: ^declareVar
-               enter (key[],value[])
-               do
-                  &text[]->value[];
-                  key[]->THIS(connection).private.declareVars.lookup->var[];
-                  (if true
-                   // var## <= declareInteger## then
-                      (var[]->qua (# as:: declareInteger #)).get->value.putint
-                   // var## <= declareText## then
-                      '\''->value.puttext;
-                      (var[]->qua (# as:: declareText #)).get->value.puttext;
-                      '\''->value.puttext
-                   // var## <= declareBoolean## then
-                      (if (var[]->qua (# as:: declareBoolean #)).get then
-                          trueText->value.puttext
-                       else
-                          falseText->value.puttext
-                      if)
-                   // var## <= declareReal## then
-                      (var[]->qua (# as:: declareReal #)).get->value.putReal
-                   // var## <= declareClock## then
-                      (var[]->qua (# as:: declareClock #)).get
-                        ->value.BetaDBCPutClock
-                   // var## <= declareDate## then
-                      (var[]->qua (# as:: declareDate #)).get
-                        ->value.BetaDBCPutDate
-                   // var## <= declareTime## then
-                      (var[]->qua (# as:: declareTime #)).get
-                        ->value.BetaDBCPutTime
-                   else
-                      exception
-                        (# 
-                        do
-                           'Unknown variable type found while getting value'
-                             ->msg
-                        #)
-                  if)
-               exit value[]
-               #)
-          #);
         private: @ (# initialised: @boolean; h: @honeyman #)
      #);
    checkError:
@@ -830,6 +703,8 @@ do
             text##->Pattern##
          // SQL_TIME // SQL_DATETIME // SQL_TIMESTAMP then
             time##->Pattern##
+         // SQL_UNKNOWN_TYPE then (* Text can be anything in ODBC *)
+            text##->Pattern##
         if)
      exit Pattern##
      #)
@@ -1216,12 +1091,14 @@ do private.EOT[]->value[]
         elms: [0] ^Column;
         isInitialised: @boolean;
         assertInitialised:
-          (# 
-	rc1,rc2:@shortint
- do (if not isInitialised then init->(rc1,rc2);
-(rc1,SQL_HANDLE_STMT)->checkError;
-(rc2,SQL_HANDLE_STMT)->checkError
- if) #);
+          (# rc1,rc2: @shortint
+          do
+             (if not isInitialised then
+                 init->(rc1,rc2);
+                 (rc1,SQL_HANDLE_STMT)->checkError;
+                 (rc2,SQL_HANDLE_STMT)->checkError
+             if)
+          #);
         getColumnByName:
           (# name: ^text; res: @integer
           enter name[]
@@ -1344,13 +1221,13 @@ do (if value then trueText->t else falseText->t if)
 do private.getExpanded->value[]  
 
 -- directSQLStatementC: DoPart --
-do value->t.BetaDBCPutClock  
+do value->formatClock->t.puttext  
 
 -- directSQLStatementD: DoPart --
-do value->t.BetaDBCPutDate  
+do value->formatDate->t.puttext  
 
 -- directSQLStatementT: DoPart --
-do value->t.BetaDBCPutTime  
+do value->formatTime->t.puttext  
 
 -- resultSetTupleD: DoPart --
 do private.getDate->value  
@@ -1412,7 +1289,7 @@ do (if get then 'true'->value[] else 'false'->value[] if); INNER
 do value.reset; value.getTime->set; INNER  
 
 -- declareTimeGetAsText: DoPart --
-do value.clear; get->value.putTime; INNER  
+do value.clear; get->formatTime->value.putText; INNER  
 
 -- directSQLStatementSetByNameNameNotFound: DoPart --
 do
@@ -1433,10 +1310,10 @@ do
 do (if value then trueText->t else falseText->t if)  
 
 -- directSQLStatementSetClockByName: DoPart --
-do value->t.BetaDBCPutClock  
+do value->formatClock->t.puttext  
 
 -- directSQLStatementSetDateByName: DoPart --
-do value->t.BetaDBCPutDate  
+do value->formatDate->t.puttext  
 
 -- directSQLStatementSetFloatByName: DoPart --
 do value->t.putreal  
@@ -1448,7 +1325,7 @@ do value->t.putint
 do value[]->t.append  
 
 -- directSQLStatementSetTimeByName: DoPart --
-do value->t.BetaDBCPutTime  
+do value->formatTime->t.puttext  
 
 -- directSQLStatementSetVarNotDeclared: DoPart --
 do
@@ -1487,5 +1364,47 @@ do
    'Unknown column: \''->msg.append;
    name[]->msg.append;
    '\' is not in the resultSet'->msg.append;
+   INNER  
+
+-- formatTime: DoPart --
+do
+   &text[]->value[];
+   '\''->value.put;
+   t.year->value.putint;
+   '-'->value.put;
+   t.month->value.putint;
+   '-'->value.put;
+   t.day->value.putint;
+   ascii.sp->value.put;
+   t.hour->value.putint (#  do 2->width; true->zeroPadding #);
+   ':'->value.put;
+   t.minute->value.putint (#  do 2->width; true->zeroPadding #);
+   ':'->value.put;
+   t.sec->value.putint (#  do 2->width; true->zeroPadding #);
+   '\''->value.put;
+   INNER  
+
+-- formatDate: DoPart --
+do
+   &text[]->value[];
+   '\''->value.put;
+   d.year->value.putint;
+   '-'->value.put;
+   d.month->value.putint;
+   '-'->value.put;
+   d.day->value.putint;
+   '\''->value.put;
+   INNER  
+
+-- formatClock: DoPart --
+do
+   &text[]->value[];
+   '\''->value.put;
+   c.hour->value.putint (#  do 2->width; true->zeroPadding #);
+   ':'->value.put;
+   c.minute->value.putint (#  do 2->width; true->zeroPadding #);
+   ':'->value.put;
+   c.sec->value.putint (#  do 2->width; true->zeroPadding #);
+   '\''->value.put;
    INNER  
 
