@@ -341,11 +341,15 @@ void initLazyTrapHandler (Item * lazyHandler)
  */
 int lazyFetchImplemented(void)
 {
+#ifdef PERSIST
+  return 0;
+#else
 #if defined (sun4s) || defined(hpux9pa) || defined(nti) || defined(linux)
   return 1;
 #else
   return 0;
 #endif
+#endif /* PERSIST */
 }
 
 #endif /* RTLAZY */
