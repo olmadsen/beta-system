@@ -93,6 +93,7 @@ if ($fullpath){
 # Other file names:
 $lastmodscript = "$scriptdir/lastmod.js";
 $hashfromparent = "$scriptdir/hashfromparent.js";
+$printframe = "$scriptdir/printframe.js";
 $indexfile = "inx.html";
 ($indexnavfile = $indexfile) =~ s/\.html$/-nav.html/;
 ($indexdocfile = $indexfile) =~ s/\.html$/-body.html/;
@@ -115,14 +116,14 @@ sub print_button
     # special case for "prev":
     $alt =~ s/Prev/Previous/g;
     if ("$href" eq ""){
-	print "<A><IMG ALIGN=BOTTOM SRC=\"$imagedir";
+	print "<A><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC=\"$imagedir";
 	print $type . "g.gif\" ALT=";
-	print $alt . " BORDER=0></A>\n";
+	print $alt . " NAME=\"$alt\" BORDER=0></A>\n";
     } else {
 	print "<A HREF=\"" . $href . "\"" . ">";
-	print "<IMG ALIGN=BOTTOM SRC=\"$imagedir";
+	print "<IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC=\"$imagedir";
 	print $type . ".gif\" ALT=";
-	print $alt . " BORDER=0></A>\n";
+	print $alt . " NAME=\"$alt\" BORDER=0></A>\n";
     }
 }
 
@@ -149,11 +150,25 @@ sub print_std_buttons
     &print_button("top", $topfile) if (!$wiki);
     &print_button("content", $tocfile);
     &print_button("index", $indexfile);
+    &print_button("print", "javascript:parent.${basename}Body.printframe();");
+    print<<EOT;
+<SCRIPT>
+<!--
+    if (document.all && (navigator.userAgent.indexOf("IE 5")<=-1)){
+	document.all.Print.src = "$imagedir/printg.gif";
+    }
+//-->
+</SCRIPT>
+<NOSCRIPT>
+</TD>
+<TD ALIGN=LEFT VALIGN=CENTER><FONT SIZE="-1">(JavaScript Required)</FONT>
+</NOSCRIPT>
+EOT
 }
 
 sub print_header
 {
-    local ($title, $hashtoo) = @_;
+    local ($title, $js) = @_;
 
     print<<EOT;
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
@@ -164,8 +179,12 @@ sub print_header
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
 EOT
 
-    print <<"EOT" if ($hashtoo);
+    print <<"EOT" if ($js>=1);
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$hashfromparent"></SCRIPT>
+EOT
+
+    print <<"EOT" if ($js>=2);
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$printframe"></SCRIPT>
 EOT
 
     print <<"EOT"
@@ -258,10 +277,10 @@ EOT
 EOT
 }
 
-sub print_doc_frame(){
+sub print_body_frame(){
     local ($title, $basename, $contents) = @_;
     
-    &print_header($title,1);
+    &print_header($title,2);
     print<<"EOT";
 <BODY onLoad='HashFromParent()'>
 <H1><A name="$basename">$title</A></H1>
@@ -279,7 +298,7 @@ EOT
 
 sub print_index_nav_frame
 {
-    local ($title) = @_;
+    local ($title, $basename) = @_;
 
     &print_header($title,0);
 
@@ -338,8 +357,20 @@ sub print_index_header()
 
     &print_header($title,0);
 
-    print<<EOT;
+    print<<"EOT";
 <BODY>
+
+<NOSCRIPT>
+<IMG SRC="$imagedir/warning.gif" ALT="Warning!" width=16 height=16 align=left>
+<EM>JavaScript Required!</EM>
+<BLOCKQUOTE>
+<P>It appears, that either your browser does not support JavaScript, or you
+have disabled scripting.<BR>
+The links to identifiers below will not work correctly without JavaScript.<BR>
+They will, however, take you to the correct file. But you must use your
+browser's Find facility to get to the correct location within the page.</P>
+</BLOCKQUOTE>
+</NOSCRIPT>
 
 <H1><A name="Index.identifiers">Index of Identifiers</A></H1>
 <PRE CLASS=interface>
@@ -492,7 +523,7 @@ sub calculate_index()
     }
 }
 
-sub print_index_doc_frame()
+sub print_index_body_frame()
 {
     &print_index_header;
     print $html_index;
@@ -557,7 +588,7 @@ sub print_toc_trailer
 EOT
 }
 
-sub print_toc_doc_frame
+sub print_toc_body_frame
 {
     local ($title) = @_;
     local ($htmlfile);
@@ -910,7 +941,7 @@ sub process_file
 	return;
     }
     
-    &print_doc_frame($title, $basename, $_);
+    &print_body_frame($title, $basename, $_);
     close (STDOUT);
     printf STDERR "done.\n" if $verbose==1;
 
@@ -951,7 +982,7 @@ if (!open (STDOUT, ">$indexnavfile")){
     print "\nCannot open $indexnavfile for writing: $!\n";
     return;
 }
-&print_index_nav_frame("Interface Descriptions: Index");
+&print_index_nav_frame("Interface Descriptions: Index", "inx");
 close (STDOUT);
 printf STDERR "done.\n" if $verbose==1;
 
@@ -960,7 +991,7 @@ if (!open (STDOUT, ">$indexdocfile")){
     print "\nCannot open $indexdocfile for writing: $!\n";
     return;
 }
-&print_index_doc_frame("Interface Descriptions: Index");
+&print_index_body_frame("Interface Descriptions: Index");
 close (STDOUT);
 printf STDERR "done.\n" if $verbose==1;
 
@@ -992,7 +1023,7 @@ if (!$wiki){
 	print "\nCannot open $tocdocfile for writing: $!\n";
 	return;
     }
-    &print_toc_doc_frame("Interface Descriptions: Contents");
+    &print_toc_body_frame("Interface Descriptions: Contents");
     close (STDOUT);
     printf STDERR "done.\n" if $verbose==1;
 }
