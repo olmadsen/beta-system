@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: outpattern.c,v 1.19 1992-09-03 12:54:24 beta Exp $
+ * Mod: $Id: outpattern.c,v 1.20 1992-09-04 14:35:17 poe Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
@@ -244,6 +244,12 @@ DisplayBetaStack( errorNumber, theObj)
     }
   }else
     fprintf(output,"Current object is 0!\n");
+
+#ifdef hppa
+  fprintf(output, "Unable to do stack-trace on the snake, sorry!\n");
+  fflush(output);
+  return;
+#endif
 
    /*
    * First handle the topmost component block
