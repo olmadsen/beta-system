@@ -36,8 +36,8 @@ ParamThisComp(struct Component *, Att)
     /* Needed for lastCompBlock assignment */;
   
   GCable_Entry();
-  FetchThisComp
-    Ck(comp); Ck(this);
+  FetchThisComp();
+  Ck(comp); Ck(this);
   
   if (comp->StackObj == cast(StackObject) -1 || comp == ActiveComponent)
     BetaError(RecursiveAttErr, this);

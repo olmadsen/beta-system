@@ -16,7 +16,7 @@ ParamOriginProto(struct Item *,AlloI)
 {
     DeclReference1(struct Item *, item);
     GCable_Entry();
-    FetchOriginProto
+    FetchOriginProto();
 
     DEBUG_CODE(NumAlloI++);
 
@@ -54,7 +54,7 @@ ParamOriginProto(struct Item *,AlloH)
 {
     DeclReference1(struct Item *, item);
     GCable_Entry();
-    FetchOriginProto
+    FetchOriginProto();
 
     /*Ck(origin);*/
 

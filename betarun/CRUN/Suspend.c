@@ -25,7 +25,7 @@ ParamThis(struct Component *, Susp)
   ref(StackObject) theStackObj;
 
   GCable_Entry();
-  FetchThis
+  FetchThis();
   
   /* Before the block on the stack is packed, we must ensure
    * that ActiveComponent do not envolve callBacks.

@@ -13,11 +13,11 @@ ParamOriginProto(struct Structure *, AlloS)
   register ref(Structure) newStruct;
   
   GCable_Entry();
-  FetchOriginProto
+  FetchOriginProto();
     
-    /* Allocate a StructObject. */
+  /* Allocate a StructObject. */
     
-    Ck(origin);
+  Ck(origin);
   Protect(origin, newStruct = cast(Structure) IOAalloc(StructureSize));
   Ck(origin);
   
@@ -116,7 +116,7 @@ ParamStruc(struct Item *, AlloSI)
   struct Item *ss;
   
   GCable_Entry();
-  FetchStruc
+  FetchStruc();
   Ck(struc);
   Ck(struc->iOrigin);
 #ifdef sparc
@@ -139,8 +139,8 @@ ParamStruc(struct Component *, AlloSC)
   struct Component *ss;
   
   GCable_Entry();
-  FetchStruc
-    Ck(struc);
+  FetchStruc();
+  Ck(struc);
 #ifdef sparc
   Protect(struc, 
 	  ss = CAlloC(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0));

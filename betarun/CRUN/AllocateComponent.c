@@ -15,7 +15,7 @@ ParamOriginProto(struct Component *,AlloC)
 
     DeclReference1(struct Component *, comp);
     GCable_Entry();
-    FetchOriginProto
+    FetchOriginProto();
 
     Ck(origin);
 
