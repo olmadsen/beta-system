@@ -23,19 +23,27 @@ parse:
       * 
       *     <subprojects> ::= <projects> DASH
       *  
-      * Lexical tokens: NAME STRING DASH{--+}
+      *     <name>        ::= stringname | NAME
+      *     <stringname>  ::= HASH NAME | HASH
+      * 
+      * Lexical tokens:
+      *     NAME          {[a-zA-Z]+[a-zA-Z]*}
+      *     STRING        {'[^']*'}           {* embedded '' allowed as ' *}
+      *     DASH          {--+}
+      *     HASH          {#}
       *)
      filename, projectname: ^text;
      input: @file;
      
      dash: (# exit -1 #);
-     name: (# exit - 4 #);
-     string: (# exit - 5 #);
-     const: (# exit - 6 #);
-     EOF: (# exit - 7 #);
-     project: (# exit - 8 #);
-     group: (# exit - 9 #);
-     form: (# exit - 10 #);
+     name: (# exit -2 #);
+     stringname: (# exit -4 #);
+     string: (# exit -5 #);
+     const: (# exit -6 #);
+     EOF: (# exit -7 #);
+     project: (# exit -8 #);
+     group: (# exit -9 #);
+     form: (# exit -10 #);
      semiColon: (# exit ';' #);
      colon: (# exit ':' #);
      inputPos,lastOKPos: @integer;
@@ -45,7 +53,8 @@ parse:
        (# msg: @text
        enter msg
        do msg[]->screen.puttext;
-          ' at position: '->screen.puttext; lastOKpos->screen.putint; screen.newline
+          ' at position: '->screen.puttext; lastOKpos->screen.putint;
+          ' in file: '->screen.puttext; input.name->screen.putline
        #);
      get: @
        (# eos: @input.eos
@@ -58,12 +67,10 @@ parse:
      currentToken: @ (# val: @integer; enter val exit val #);
      advance: @|
        (#
-       do
-          get;
+       do get;
           cycle
           (#
-          do
-             inputPos->lastOKPos;
+          do inputPos->lastOKPos;
              (if nextCh
               // '-' then
                  (if get = '-' then
@@ -116,6 +123,19 @@ parse:
                  if)
               // EOF // ascii.fs then
                  EOF->currentToken; SUSPEND;
+              // '#' then
+                 theText.clear;
+                 (if get//'''' then
+                     loop:
+                       (if get
+                        // '''' // EOF then ;
+                        else
+                           nextCh->theText.put; restart loop
+                       if)
+                 if);
+                 stringname->currentToken;
+                 SUSPEND;
+                 get
               else
                  (if true
                   // ('0' <= nextCh) and ('9' >= nextCh) then
@@ -127,8 +147,7 @@ parse:
                        if);
                      const->currentToken;
                      SUSPEND;
-                  //
-                     ('A' <= (nextCh->ascii.upcase))
+                  // ('A' <= (nextCh->ascii.upcase))
                      and
                      ('Z' >= (nextCh->ascii.upcase)) then
                      theText.clear;
@@ -136,8 +155,7 @@ parse:
                      get;
                      loop:
                        (if true
-                        //
-                           ('A' <= (nextCh->ascii.upcase))
+                        // ('A' <= (nextCh->ascii.upcase))
                            and
                            ('Z' >= (nextCh->ascii.upcase))
                         // '_' = nextCh
@@ -261,7 +279,7 @@ parse:
                          advance;
                          &currGroupList.element[]->newGroup[];
                          (if currentToken
-                          // name then
+                          // name // stringname then
                              theText.copy->newGroup.name[];
                              theText->newGroup.location;
                              advance
@@ -323,10 +341,7 @@ parse:
                advance;
                &currProjList.element[]->newProj[];
                (if currentToken
-                // name then
-                   theText.copy->newProj.name[];
-                   advance;
-                // string then
+                // name // stringname then
                    theText.copy->newProj.name[];
                    advance;
                if);
@@ -414,60 +429,27 @@ do (projectFile[],ph.currentDirectory)->ph.convertFilePath->projectFile[];
 --- ymerParseProjectsRC: descriptor ---
 (# newProj: ^project;
    projectFile: ^text;
-do (if not ('.'->(('.',ph.currentDirectory)->ph.localpath).equal) then
-       &element[]->newProj[];
-       ('./.projects.pjt',ph.currentDirectory)
-         ->ph.convertFilePath
-         ->projectFile[];
-       (if projectFile[]->fileReadable then
-           true->newProj.isProjectFile;
-           './+'->newProj.name[];
-           projectFile->newProj.location;
-           (projectFile[],newProj[])->parse;
-           newProj[]->append
-       if)
-   if);   
-  
-   (if not ('.'->(('~',ph.currentDirectory)->ph.localpath).equal) then
-       &element[]->newProj[];
-       ('~/.projects.pjt',ph.currentDirectory)
-         ->ph.convertFilePath
-         ->projectFile[];
-       (if projectFile[]->fileReadable then
-           true->newProj.isProjectFile;
-           '~/+'->newProj.name[];
-           projectFile->newProj.location;
-           (projectFile[],newProj[])->parse;
-           newProj[]->append
-       if)
-   if);   
-   
-   (if not ('.'->(('$(BETALIB)',ph.currentDirectory)->ph.localpath).equal) then
-       &element[]->newProj[];
-       ('$(BETALIB)/.projects.pjt',ph.currentDirectory)
-         ->ph.convertFilePath
-         ->projectFile[];
-       (if projectFile[]->fileReadable then
-           true->newProj.isProjectFile;
-           '$(BETALIB)/+'->newProj.name[];
-           projectFile->newProj.location;
-           (projectFile[],newProj[])->parse;
-           newProj[]->append
-       if)
-   if);   
-   
-   
-   (if not ('.'->(('~beta/configuration/r3.0',ph.currentDirectory)->ph.localpath).equal) then
-       &element[]->newProj[];
-       ('~beta/configuration/r3.0/.projects.pjt',ph.currentDirectory)
-         ->ph.convertFilePath
-         ->projectFile[];
-       (if projectFile[]->fileReadable then
-           true->newProj.isProjectFile;
-           '~beta/configuration/r3.0/+'->newProj.name[];
-           projectFile->newProj.location;
-           (projectFile[],newProj[])->parse;
-           newProj[]->append
-       if)
+do ('~/.ymer.pjt',ph.currentDirectory)
+     ->ph.convertfilepath->projectFile[];
+   (if projectFile[]->fileReadable then
+       &projects.theProjects.element[]->newProj[];
+       (projectFile[], newProj[])->projects.theProjects.parseProjectFile;
+       newProj.subprojects.scan
+       (# do current[]->projects.theProjects.append #);
+   if);
+   (if projects.theProjects.size=0 then
+       (if not ('.'->(('~beta/configuration/r3.0',ph.currentDirectory)->ph.localpath).equal) then
+           &element[]->newProj[];
+           ('~beta/configuration/r3.0/ymer.pjt',ph.currentDirectory)
+             ->ph.convertFilePath
+             ->projectFile[];
+           (if projectFile[]->fileReadable then
+               true->newProj.isProjectFile;
+               'Std. Libraries/+'->newProj.name[];
+               projectFile->newProj.location;
+               (projectFile[],newProj[])->parse;
+               newProj[]->append
+           if)
+       if);   
    if);
 #)
