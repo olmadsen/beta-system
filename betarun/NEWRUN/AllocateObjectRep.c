@@ -21,6 +21,14 @@ void AlloVRI(struct Object *origin,
   struct Item *item;
   unsigned long size;
 
+#if 0
+  fprintf(output, 
+	  "AlloVRI(origin=0x%x, proto=0x%x, offset=%d, range=%d, "
+	  "theObj=0x%x, SP=0x%x\n",
+	  origin, proto, offset, range, theObj, SP);
+  fflush(output);
+#endif
+
   DEBUG_CODE(NumAlloVRI++);
   Ck(theObj); Ck(origin);
   
@@ -60,7 +68,7 @@ void AlloVRI(struct Object *origin,
     AssignReference((long *)((long)&theRep->Body[0]+range*4), item);
   }
 
-  Ck(theObj); Ck(origin); Ck(theRep);
+  Ck(theRep);
 
 }
 
@@ -118,5 +126,5 @@ void AlloVRC(struct Object *origin,
 		    (struct Item *)comp);
   }
 
-  Ck(theObj); Ck(origin); Ck(theRep);
+  Ck(theRep);
 }

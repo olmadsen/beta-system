@@ -370,7 +370,8 @@ void ExtVRI(struct Object *theObj,
   
   if (newRange < 0) newRange = 0;
   
-  copyRange = DynObjectRepSize((add < 0) ? newRange : oldRange) >> 2;
+  copyRange = (DynObjectRepSize((add < 0) ? newRange : oldRange)
+	       - headsize(ObjectRep))>> 2;
   size = DynObjectRepSize(newRange);
   
   /* Allocate new repetition */
@@ -418,7 +419,7 @@ void ExtVRI(struct Object *theObj,
     }
   }
   
-  Ck(theObj); Ck(theRep); Ck(newRep);
+  Ck(theRep); Ck(newRep);
 } /* ExtVRI */
 
 
@@ -445,7 +446,8 @@ void ExtVRC(struct Object *theObj,
   
   if (newRange < 0) newRange = 0;
   
-  copyRange = DynObjectRepSize((add < 0) ? newRange : oldRange) >> 2;
+  copyRange = (DynObjectRepSize((add < 0) ? newRange : oldRange) 
+	       - headsize(ObjectRep))>> 2;
   size = DynObjectRepSize(newRange);
   
   /* Allocate new repetition */
@@ -479,7 +481,7 @@ void ExtVRC(struct Object *theObj,
   for (i = 0; i < copyRange; ++i){
     AssignReference(&newRep->Body[i], theRep->Body[i]);
   }
-  
+
   if (add>0){
     /* Allocate and Initialize new extra elements */
     while(--add>=0){
@@ -493,6 +495,6 @@ void ExtVRC(struct Object *theObj,
     }
   }
   
-  Ck(theObj); Ck(theRep); Ck(newRep);
+  Ck(theRep); Ck(newRep);
 } /* ExtVRC */
 

@@ -14,7 +14,7 @@
 #endif
 
 #ifdef RTDEBUG
-#define do_unconditional_gc 0 /*1*/ /* Should match define i BetaRun.bet! */
+#define do_unconditional_gc 0 /*1*/ /* SPARC: Should match define i BetaRun.bet! */
 #else
 #define do_unconditional_gc 0
 #endif
