@@ -8,6 +8,8 @@ ExO: public
      offset:  Long     = DataReg1; { Offset in theObj where to get to 
                                      old sp-value
                                    }
+     addr:    CodeArea = AddrReg1; { Address to go to - pReg1 }
+
      
      { Used variables. }
      stackPointer: StackArea = SP;
@@ -18,7 +20,6 @@ ExO: public
      
      stackValue:   DataArea  = AddrReg1;
      tempSp:       DataArea  = AddrReg1;
-     addr:         CodeArea  = AddrReg1;
      
   do
      (if debug then 1 -> NumExO+ if); 
@@ -86,6 +87,112 @@ ExO: public
      
      exitLabel:
      exitObj[offset]!l -> stackPointer;
+     lastCompBlock -> stackPointer+;
+     pReg1 -> addr;
+     (if debug then call Ck if);
+     clear AddrReg2;
+     clear DataReg2;
+     goto addr; {AddrRegs ok; stack ok, too}
+  #);
+
+ExOx: public
+  (#
+     { Input variables. }
+     theObj:  Item     = RegThis; {edx} { the object we are leaving }
+     exitObj: Item     = RegCall; {edi} { the object to exit to. }
+     offset:  Long     = DataReg1;{eax} { Offset in theObj where to get to 
+                                     old sp-value
+                                   }
+     addr:    CodeArea = AddrReg1; { Address to go to - pReg1 }
+     
+     { Used variables. }
+     stackPointer: StackArea = SP;
+     theComp:      Component = AddrReg2;
+     lastComp:     DataArea  = AddrReg2;
+     
+     OrigObj:      DataArea  = DataReg2;
+     
+     stackValue:   DataArea  = AddrReg1;
+     tempSp:       DataArea  = AddrReg1;
+     
+  do
+     (if debug then 1 -> NumExO+ if); 
+     (if debug then call Ck if);
+     
+     theObj -> OrigObj;
+     stackPointer -> BetaStackTop; 
+     lastCompBlock -> lastComp;
+     
+     (if theObj = exitObj then 
+         { found the object to exit to }
+         goto exitLabel
+     if);
+     
+     again:
+     (if stackPointer = lastComp then
+         { passing component. terminate it as in AttachComponent }
+         ActiveComponent -> theComp; { Destroys lastComp }
+         
+         (if theComp.CallerComp = 0 then 
+             { attempt to leave basic component! }
+             { BetaStackTop points to where return address from ExO was stored on stack }
+             BetaStackTop -> stackPointer;
+             push OrigObj; { These are wrong: ActiveComponent, ActiveCallBackFrame, lastCompBlock }
+             push LeaveBasicCompErr; 
+             {
+               Stack: 
+               
+               +0: LeaveBasicCompErr
+               +4: theObj
+               +8: Address ExO was called from 
+               
+               This is just what BetaError expects
+             }
+             call BetaError;
+             { BetaError will only be able to display topmost component stack, since
+               all components have now been terminated. Would require a scan that does not
+               terminate components followed by a scan of components (via CallerComp) 
+               for terminating in the regular case.
+             }
+         if);
+         
+         (if debug then 1 -> NumTermComp+ if);
+         theComp.CallerComp -> ActiveComponent; 
+         theComp.CallerObj  -> theObj;         
+         0 -> theComp.StackObj;
+         0 -> theComp.CallerComp;
+         0 -> theComp.CallerObj;
+         ActiveComponent -> theComp;
+         
+         { Pop the component block }
+         pop ActiveCallBackFrame;
+         pop lastComp;
+         4 -> SP+; { dummy: level not used }
+         lastComp -> lastCompBlock;
+         
+         (if theObj = exitObj then 
+             { found the object to exit to }
+             goto exitLabel
+         if);
+     if);
+     pop stackValue;
+     (if stackValue <> exitObj then goto again if);
+     
+     exitLabel:
+     { Found the object. We now have to go one more object back }
+     pop stackValue;
+     PushAll;
+     push stackValue;
+     call strongIsObject;
+     pop stackValue;
+     (if RegEax=0 then 
+         PopAll;
+         goto exitLabel
+     if);
+     PopAll;
+     
+     stackValue -> theObj;
+     theObj[offset]!l -> stackPointer;
      lastCompBlock -> stackPointer+;
      pReg1 -> addr;
      (if debug then call Ck if);
