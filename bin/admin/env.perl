@@ -6,6 +6,7 @@
 #
 #   MACHINETYPE     set to machine type in UPPER CASE (e.g SUN4)
 #   objdir          set to machine type in lower case (e.g sun4)
+#   SDK             set to SDK used (NTI only)
 #   LD_LIBRARY_PATH (see man ld)
 #   LD_RUN_PATH     (see man ld)
 #   TMP             set to either $TMP or '/tmp' or 'c:\temp' whichever exists.
@@ -30,8 +31,9 @@ if ($betalib =~ /(r\d+\.\d+\.?\d*)/i) {
 
 if (-e "c:\\") {
     $MACHINETYPE = "NTI";
-    $objdir = "nti";
-    # LD_ stuff cannot beset here on nti. If you need it, you should set it!
+    $SDK = $ENV{'SDK'} || "ms";
+    $objdir = "nti/$SDK";
+    # LD_ stuff cannot be set here on nti. If you need it, you should set it!
     $TMP = $ENV{'TMP'} || $ENV{'TEMP'} || "c:\\temp";
     if (! -e $TMP) {
 	print "Unable to find TMP directory. Please create/setup env-vars!\n";
