@@ -2,10 +2,7 @@ ORIGIN  'filebody';
 INCLUDE '~beta/javalib/betahelpers';
 INCLUDE '~beta/javalib/java/io/File';
 INCLUDE '~beta/javalib/java/util/Date';
-INCLUDE '~beta/javalib/java/io/PushbackInputStream';
-INCLUDE '~beta/javalib/java/io/FileInputStream';
-INCLUDE '~beta/javalib/java/io/PrintStream';
-INCLUDE '~beta/javalib/java/io/FileOutputStream';
+INCLUDE '~beta/javalib/java/io/RandomAccessFile';
 
 INCLUDE 'betaenv_jvmbody';
 (*
@@ -16,25 +13,7 @@ INCLUDE 'betaenv_jvmbody';
  * This fragment group is the JVM dependent implementation of files.
  *)
 
---FileLib:attributes--
-ensure_channel: booleanValue
-  (# 
-  do (if private.fc[]=NONE then
-       (if private.fos[]<>NONE then
-           private.fos.getChannel -> private.fc[];
-        else
-           (if private.fis[]<>NONE then
-               private.fis.getChannel -> private.fc[];
-           if);
-       if)
-     if);
-     (if private.fc[]<>NONE then
-         true -> value;
-      else
-         false -> value;
-         'ensure_channel: could not get FileChannel - file not open?' -> screen.putline;
-     if);
-  #);
+ (************************ DISKENTRY: ****************************) 
 
 --DiskEntryException: dopart-- 
 do 'Disk entry exception for \''->msg.puttext;
@@ -150,22 +129,16 @@ do (* FIXME: static methods does not support int64:
    private.jfile.length -> BetaHelper.long2int -> value
 
 --DiskEntrySetModTime:dopart--
-do (* FIXME: static methods does not support int64: 
-    * time -> int2long -> private.jfile.setLastModified
-    *)
-   (* FIXME: missing * for int64: 
+do (* FIXME: missing * for int64: 
     * (time -> BetaHelper.int2Long)*(1000->BetaHelper.int2Long) -> private.jfile.setLastModified;
     *)
-   (time -> BetaHelper.int2long) -> private.jfile.setLastModified;
+   (time -> BetaHelper.int2longMul1000) -> private.jfile.setLastModified;
    
 --DiskEntryGetModTime:dopart--
-do (* FIXME: static methods does not support int64:
-    * private.jfile.lastModified -> long2int -> time
-    *)
-   (* FIXME: missing * for int64: 
+do (* FIXME: missing * for int64: 
     * private.jfile.lastModified/(1000->BetaHelper.int2long) -> BetaHelper.long2int -> time
     *)
-   private.jfile.lastModified -> BetaHelper.long2int -> time
+   private.jfile.lastModified -> BetaHelper.long2intDiv1000 -> time
    
 --DiskEntryRename: dopart--
 do 'DiskEntryRename' -> NYI;
@@ -183,13 +156,12 @@ do private.jfile.isDirectory -> value
    
 --DiskEntryIsFile: dopart--
 do private.jfile.isFile -> value
+   
+   
+ (************************ FILE: ****************************) 
 
 --FilePrivate:descriptor--
-(# fis: ^FileInputStream;
-   fos: ^FileOutputStream;
-   pis: ^PushbackInputStream;
-   ps: ^PrintStream;
-   fc: ^FileChannel;
+(# raf: ^RandomAccessFile;
    i: @integer;
 #)
 
@@ -199,100 +171,110 @@ do 'Error in system call: ' -> msg.puttext;
    INNER
 
 --FileTouch: dopart--
-do 'FileTouch' -> NYI;
+do entry.touch
 
 --FileLength: dopart--
 do entry.private.jfile.length -> BetaHelper.long2int -> value
 
 --FileDoOpen:descriptor--
-(#
-do 'FileDoOpen' -> NYI;
-#)
+(# (* Not needed *) #)
 
 --FileOpenRead:dopart--
-do entry.private.jfile[] -> &FileInputStream[] -> private.fis[];
-   private.fis[] -> &PushbackInputStream[] -> private.pis[];
+do (entry.private.jfile[], 'r') -> &RandomAccessFile[] -> private.raf[];
+   0 -> BetaHelper.int2long -> private.raf.seek; (* position at beginning *)
    
 --FileOpenWrite:dopart--
-do entry.private.jfile[] -> &FileOutputStream[] -> private.fos[];
-   private.fos[] -> &PrintStream[] -> private.ps[];
+do (entry.private.jfile[], 'rw') -> &RandomAccessFile[] -> private.raf[];
+   0 -> BetaHelper.int2long -> private.raf.setLength; (* truncate *)
    
 --FileOpenReadWrite:dopart--
-do 'FileOpenReadWrite' -> NYI;
-   
+do (entry.private.jfile[], 'rw') -> &RandomAccessFile[] -> private.raf[];
+   0 -> BetaHelper.int2long -> private.raf.setLength; (* truncate *)
+
 --FileOpenAppend:dopart--
-do 'FileOpenAppend' -> NYI;
+do (entry.private.jfile[], 'rw') -> &RandomAccessFile[] -> private.raf[];
+   private.raf.length -> private.raf.seek; (* position at end *)
    
 --FileOpenReadAppend:dopart--
-do 'FileOpenReadAppend' -> NYI;
+do (entry.private.jfile[], 'rw') -> &RandomAccessFile[] -> private.raf[];
+   private.raf.length -> private.raf.seek; (* position at end *)
    
 --FileDelete:dopart--
 do 'FileDelete' -> NYI;
 
 --FilePut:dopart--
-do ch -> private.ps.write_I; private.ps.flush
+do ch -> private.raf.write_I; 
 
 --FileGet:dopart--
-do private.pis.read -> ch;
+do private.raf.read -> ch;
 
 --FilePeek:dopart--
-do private.pis.read -> private.i -> ch;
-   private.i -> private.pis.unread_I;
+do private.raf.read -> ch;
+   (private.raf.getFilePointer -> BetaHelper.long2int) - 1
+     -> BetaHelper.int2long
+     -> private.raf.seek;
    
 --FilePutText:dopart--
-do txt[] -> private.ps.print_String
+do txt[] -> private.raf.writeBytes
 
 --FileGetAtom:dopart--
-do 'FileGetAtom' -> NYI;
+do (* Could probably use a FileTokenizer *)
+   private.raf.read -> private.i;
+   skipBlanks:
+     (if private.i<> -1 then
+           (if private.i->ascii.isWhiteSpace then
+               private.raf.read -> private.i;
+               restart skipBlanks;
+            else
+               scan:
+                 (* atom not yet complete *)
+                 (if txt.pos+1 > txt.T.range then
+                     txt.T.range+16->txt.T.extend;
+                     restart scan;
+                  else
+                     txt.pos+1->txt.pos;
+                     private.i ->txt.T[txt.pos]; 
+                     txt.lgth+1->txt.lgth;
+                     (if private.i = -1 then
+                         (* End of file - stop here *)
+                      else
+                         (if private.raf.read -> private.i ->ascii.isWhiteSpace then
+                             (* end of atom - unread the whitespace and stop *)
+                             (private.raf.getFilePointer -> BetaHelper.long2int) - 1
+                               -> BetaHelper.int2long
+                               -> private.raf.seek;
+                          else
+                             restart scan;
+                         if)
+                     if)
+                 if);
+           if);
+      else 
+         (* EOF while skipping blanks *)
+     if)
 
 --FileGetLine:dopart--
-do (* Cannot use BufferedReader.readline, since we have a 
-    * PushbackInputReader in work here: 
-    * The buffered reader apparently does not know about 
-    * the pushback character? 
-    *)
-   scan:
-     (if (private.pis.read->private.i)=ascii.newline then
-         (* eat the newline *)
-      else
-         (* more to come *)
-         (if (txt.pos+1->txt.pos) > txt.T.range then 
-             txt.T.range+16->txt.T.extend 
-         if);
-         private.i->txt.T[txt.pos]; 
-         txt.lgth+1->txt.lgth;
-         restart scan
-     if)
+do private.raf.readline -> txt[]
    
 --FileGetPos:dopart--
-do (if ensure_channel then
-       private.fc.position -> BetaHelper.long2int -> value
-   if);
+do private.raf.getFilePointer -> BetaHelper.long2int -> value
    
 --FileSetPos:dopart--
-do (if ensure_channel then
-       p -> BetaHelper.int2long -> private.fc.position_J
-   if);
+do p -> BetaHelper.int2long -> private.raf.seek;
    
 --FileEos:dopart--
-do private.pis.read -> private.i -> private.pis.unread_I;
-   private.i=-1 -> value;
+do (private.raf.getFilePointer -> BetaHelper.long2int)
+   = (private.raf.length -> BetaHelper.long2int)
+     -> value;
    
 --FileGetRep:dopart--
-do 'FileGetRep' -> NYI;
+do 'FileGetRep (OBSOLETE!)' -> NYI;
 
 --FilePutRep:dopart--
-do 'FilePutRep' -> NYI;
+do 'FilePutRep (OBSOLETE!)' -> NYI;
 
 --FileFlush:dopart--
-do private.ps.flush
+do 'FileFlush' -> NYI;
 
 --FileClose:dopart--
-do (* Close input stream *)
-   (if private.pis[]<>NONE then
-       private.pis.close;
-   if);
-   (* Close output stream *)
-   (if private.ps[]<>NONE then
-       private.ps.close;
-   if);
+do private.raf.close;
