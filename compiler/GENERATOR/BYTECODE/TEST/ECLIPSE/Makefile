@@ -1,5 +1,5 @@
 ECLIPSE_INSTALLDIR=C:/eclipse2/eclipse/workspace/org.eclipse.ui.betaeditor
-JBETA=jbeta -qw -s 188 # --mute 
+JBETA=BETART=simpledump; export BETART; jbeta -qw -s 188 # --mute 
 JAVAC=javac -classpath jvm -d jvm
 
 fastbeta: BetaAutoIndentStrategy eclipse
