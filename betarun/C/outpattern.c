@@ -36,8 +36,6 @@
 GLOBAL(static int basic_dumped)=0;
 GLOBAL(static int isMakingDump)=0;
 
-char *machine_name(void);
-
 long M_Part(ref(ProtoType) proto)
      /* Return the address og of the M-entry for the prototype proto.
       *
@@ -65,50 +63,50 @@ long M_Part(ref(ProtoType) proto)
 
 }
 
-char *machine_name()
+char *machine_type()
 {
-#undef MACHINE_NAME
+#undef MACHINE_TYPE
 
   /* Sun variants */
 #ifdef sun4s
-#define MACHINE_NAME "sun4s"
+#define MACHINE_TYPE "sun4s"
 #endif
  
   /* HP variants */
 #ifdef hpux9pa
-#define MACHINE_NAME "hpux9pa"
+#define MACHINE_TYPE "hpux9pa"
 #endif
   
   /* SGI */
 #ifdef sgi
-#define MACHINE_NAME "sgi"
+#define MACHINE_TYPE "sgi"
 #endif
 
   /* Macintosh */
 #ifdef macppc
-#define MACHINE_NAME "ppcmac"
+#define MACHINE_TYPE "ppcmac"
 #endif
 
   /* Linux */
 #ifdef linux
-#define MACHINE_NAME "linux"
+#define MACHINE_TYPE "linux"
 #endif
   
   /* NTI */
 #ifdef nti_bor
-#define MACHINE_NAME "nti_bor"
+#define MACHINE_TYPE "nti_bor"
 #endif
 #ifdef nti_ms
-#define MACHINE_NAME "nti_ms"
+#define MACHINE_TYPE "nti_ms"
 #endif
   
-#ifndef MACHINE_NAME
-#error MACHINE_NAME should be defined
+#ifndef MACHINE_TYPE
+#error MACHINE_TYPE should be defined
 #endif
 
-return MACHINE_NAME;
+return MACHINE_TYPE;
 
-#undef MACHINE_NAME
+#undef MACHINE_TYPE
 
 }
 
@@ -999,7 +997,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
   if (!OpenDumpFile(errorNumber))
     return 0;
   
-  fprintf(output,"\nCall chain: (%s)\n\n", machine_name());
+  fprintf(output,"\nCall chain: (%s)\n\n", machine_type());
   
 #ifndef sparc
   /* If we are able to retrieve information about the current object
