@@ -61,7 +61,6 @@ void CBFArelloc()
     CBFALimit = cast(CallBackEntry) ((long) lastCBFA->entries + CBFABlockSize);
     
     INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb); );
-    
 }
 
 void freeCBF(cb)
