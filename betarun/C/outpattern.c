@@ -879,14 +879,19 @@ long *DisplayCallbackFrames(CallBackFrame *cbFrame,
       /* beta.dump */
       fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n"); 
     } else {
-      /* valhalla? */
+      /* valhalla/system exceptions */
     }
     low = cbFrame->betaTop;
-    low += 3;
-    /* low+3 because the compiler pushes %edx, %edi, %ebp, %esi
-     * before setting BetaStackTop.
-     * Of these we only want to see %edx (current object).
-     */
+    if (idMakingDump) {
+      low += 3;
+      /* low+3 because the compiler pushes %edx, %edi, %ebp, %esi
+       * before setting BetaStackTop.
+       * Of these we only want to see %edx (current object).
+       */
+    } else {
+      TRACE_DUMP(fprintf(output, 
+			 ">>>DisplayCallbackFrames: not skipping 3 words before callback\n"));
+    }
     cbFrame = cbFrame->next;
     if (isObject((Object *)(*low))) {
       Object *obj = (Object*)(*low);
@@ -1790,11 +1795,7 @@ int DisplayBetaStack(BetaErr errorNumber,
        * Is now partly fixed: For (some) errors coming from signals, the valhalla
        * solution is now used.
        */
-#ifdef intel
-      set_BetaStackTop(StackEnd-3); /* DisplayCallBackFrames skips 3 first words */
-#else
       set_BetaStackTop(StackEnd);
-#endif
       isMakingDump = 0; /* In case the user leaves the handler */
       skip_dump = systemexceptionhandler(errorNumber, theObj, thePC, StackEnd);
       isMakingDump = old_isMakingDump;
