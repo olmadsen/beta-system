@@ -488,8 +488,8 @@ void ProcessRefStack(size, bottom)
     theObj = *theCell;
     if(theObj && (theObj!=(struct Object *)ExternalMarker) && 
        inBetaHeap(theObj) && isObject(theObj)) {
-      if( inLVRA( theObj)){
-	DEBUG_IOA( fprintf( output, "(STACK(%x) is *ValRep)", (int)theCell));
+      if(inLVRA( theObj)){
+	DEBUG_IOA( fprintf( output, "(STACK(%x) is pointer into LVRA)", (int)theCell));
       } else {
 	ProcessReference(theCell);
 	CompleteScavenging();
@@ -508,11 +508,10 @@ void ProcessRefStack(size, bottom)
 	  && !isCode(theObj)  /* e.g. at INNER a ref. reg contains code address */
           && (theObj!=(struct Object *)ExternalMarker)
 	  ) {
-	if (isValRep(theObj)){
-	  if (inLVRA(theObj))
-	    fprintf(output, "[ProcessRefStack: ***InLVRA: 0x%x: 0x%x]\n", 
-		    (int)theCell,
-		    (int)theObj);
+	if (inLVRA(theObj)){
+	  fprintf(output, "[ProcessRefStack: pointer into LVRA: 0x%x: 0x%x]\n", 
+		  (int)theCell,
+		  (int)theObj);
 	} else {
 	  fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
 		  (int)theCell, 
@@ -600,8 +599,8 @@ void ProcessRefStack(size, bottom)
     theObj = *theCell;
     if(theObj && (theObj!=(struct Object *)ExternalMarker) && 
        inBetaHeap(theObj) && isObject(theObj)) {
-      if( inLVRA( theObj)){
-	DEBUG_IOA( fprintf( output, "(STACK(%x) is *ValRep)", (int)theCell));
+      if(inLVRA( theObj)){
+	DEBUG_IOA( fprintf( output, "(STACK(%x) is pointer into LVRA)", (int)theCell));
       } else {
 	ProcessReference(theCell);
 	CompleteScavenging();
@@ -621,9 +620,8 @@ void ProcessRefStack(size, bottom)
 	  && !isCode(theObj)  /* e.g. at INNER a ref. reg contains code address */
           && (theObj!=(struct Object *)ExternalMarker)
 	  ) {
-	if (isValRep(theObj)){
-	  if (inLVRA(theObj))
-	    fprintf(output, "[ProcessRefStack: ***InLVRA: 0x%x: 0x%x]\n", 
+	if (inLVRA(theObj)){
+	    fprintf(output, "[ProcessRefStack: pointer into LVRA: 0x%x: 0x%x]\n", 
 		    (int)theCell, 
 		    (int)theObj);
 	} else {
@@ -714,19 +712,19 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
     /* Process GC registers of the activation record. */
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i0)) 
 		  && inLVRA(cast(Object)(ar->i0)))
-	      fprintf(output, "ProcessAR: ar->i0 (0x%x) is *ValRep\n", (int)(ar->i0)));
+	      fprintf(output, "ProcessAR: ar->i0 (0x%x) is pointer into LVRA\n", (int)(ar->i0)));
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i1)) 
 		  && inLVRA(cast(Object)(ar->i1)))
-	      fprintf(output, "ProcessAR: ar->i1 (0x%x) is *ValRep\n", (int)(ar->i1)));
+	      fprintf(output, "ProcessAR: ar->i1 (0x%x) is pointer into LVRA\n", (int)(ar->i1)));
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i2)) 
 		  && inLVRA(cast(Object)(ar->i2)))
-	      fprintf(output, "ProcessAR: ar->i2 (0x%x) is *ValRep\n", (int)(ar->i2)));
+	      fprintf(output, "ProcessAR: ar->i2 (0x%x) is pointer into LVRA\n", (int)(ar->i2)));
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i3)) 
 		  && inLVRA(cast(Object)(ar->i3)))
-	      fprintf(output, "ProcessAR: ar->i3 (0x%x) is *ValRep\n", (int)(ar->i3)));
+	      fprintf(output, "ProcessAR: ar->i3 (0x%x) is pointer into LVRA\n", (int)(ar->i3)));
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i4)) 
 		  && inLVRA(cast(Object)(ar->i4)))
-	      fprintf(output, "ProcessAR: ar->i4 (0x%x) is *ValRep\n", (int)(ar->i4)));
+	      fprintf(output, "ProcessAR: ar->i4 (0x%x) is pointer into LVRA\n", (int)(ar->i4)));
 
     if (inBetaHeap(cast(Object)(ar->i0)) 
 	&& isObject(cast(Object)(ar->i0)) 
@@ -794,8 +792,8 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
     for (; theCell != (struct Object **) theEnd; theCell+=2)
       /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
       if (inBetaHeap(*theCell) && isObject(*theCell))
-	if( inLVRA(*theCell) ){
-	  DEBUG_IOA( fprintf(output, "STACK(%d) (0x%x) is *ValRep", 
+	if(inLVRA(*theCell) ){
+	  DEBUG_IOA( fprintf(output, "STACK(%d) (0x%x) is pointer into LVRA", 
 			     (int)((long)theCell-(long)&ar[1]), (int)(*theCell)));
 	} else {
 	  if (isProto((cast(Object)*theCell)->Proto)){
@@ -950,8 +948,8 @@ void ProcessStackPart(long *low, long *high)
       theCell = (handle(Object)) current;
       theObj  = *theCell;
       if( isObject( theObj) ){
-	if( /*inLVRA( theObj) ||*/ isValRep(theObj) ){
-	  DEBUG_IOA( fprintf( output, "(STACK(%d) is *ValRep)", current-low));
+	if(inLVRA(theObj)){
+	  DEBUG_IOA( fprintf( output, "(STACK(%d) is pointer into LVRA)", current-low));
 	}else{
 	  ProcessReference( (handle(Object))current);
 	  CompleteScavenging();
@@ -1083,8 +1081,8 @@ void ProcessStackPart(long *low, long *high)
 	    theCell = (handle(Object)) current;
 	    theObj  = *theCell;
 	    if( isObject( theObj) ){
-		if( /*inLVRA( theObj) ||*/ isValRep(theObj) ){
-		    DEBUG_IOA( fprintf(output, "(STACK(%d) is *ValRep)", 
+		if(inLVRA(theObj)){
+		    DEBUG_IOA( fprintf(output, "(STACK(%d) is pointer into LVRA)", 
 				       (int)(current-low)));
 		}else{
 		    ProcessReference(casthandle(Object)current);

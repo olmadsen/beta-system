@@ -17,7 +17,12 @@ int ContinueFromClaim=0;
 void Illegal()
 { 
   /* used to break in! */
-#ifdef sun4s
+#if defined(linux)
+  fprintf(output, "Illegal: hardcoded break!\n");
+  asm("int3");
+#endif
+
+#if (defined(sun4s))
   int (*f)();
   /* force seg fault */
   fprintf(output, "Illegal: forcing bus error to ensure break!\n");
@@ -175,8 +180,21 @@ ref(Object) CkP5;
 #if defined(mc68020)||defined(nti)||defined(linux)
 static void RegError(long pc, char *reg, ref(Object) value)
 {
-  fprintf(output, "\nIllegal value for GC register at PC=0x%x: %s=0x%x\n", 
+  fprintf(output, "\nIllegal value for GC register at PC=0x%x: %s=0x%x ", 
 	  (int)pc, reg, (int)value);
+  if (inIOA(value)){
+    fprintf(output, "(is in IOA, but is not a legal object)\n");
+  }
+  if (inAOA(value)){
+    fprintf(output, "(is in AOA, but is not a legal object)\n");
+  }
+  if (inLVRA(value)){
+    fprintf(output, "(is in LVRA)\n");
+  }
+  if (inToSpace(value)){
+    fprintf(output, "(is in ToSpace)\n");
+  }
+  fprintf(output, "\n");
   fflush(stdout);
   Illegal();
 }
@@ -185,7 +203,10 @@ static long CheckCell(struct Object *theCell)
 {
   if(theCell) {
     if (inBetaHeap(theCell)) {
-      if (isObject(theCell) || isValRep(theCell)) 
+      if (isObject(theCell) ||
+	  isValRep(theCell) ||
+	  inLVRA(theCell)  /* may point to old place in LVRA if there has just been an LVRA GC */
+	  ) 
 	return TRUE;
       return FALSE;
     }
@@ -208,6 +229,16 @@ void CheckRegisters(void)
   ref(Object) esi = CkP2;
   ref(Object) edx = CkP3;
   ref(Object) edi = CkP4;
+#if 0
+  if (a2 &&inLVRA(a2)) fprintf(output, "a2 warning: 0x%x points to LVRA at PC 0x%x\n", a2, pc);
+  if (a3 &&inLVRA(a3)) fprintf(output, "a3 warning: 0x%x points to LVRA at PC 0x%x\n", a3, pc);
+  if (a4 &&inLVRA(a4)) fprintf(output, "a4 warning: 0x%x points to LVRA at PC 0x%x\n", a4, pc);
+  if (ebp &&inLVRA(ebp)) fprintf(output, "ebp warning: 0x%x points to LVRA at PC 0x%x\n", ebp, pc);
+  if (esi &&inLVRA(esi)) fprintf(output, "esi warning: 0x%x points to LVRA at PC 0x%x\n", esi, pc);
+  if (edx &&inLVRA(edx)) fprintf(output, "edx warning: 0x%x points to LVRA at PC 0x%x\n", edx, pc);
+  if (edi &&inLVRA(edi)) fprintf(output, "edi warning: 0x%x points to LVRA at PC 0x%x\n", edi, pc);
+  fflush(output);
+#endif
   if (!CheckCell(a2)) RegError(pc, "_a2", a2);
   if (!CheckCell(a3)) RegError(pc, "_a3", a3);
   if (!CheckCell(a4)) RegError(pc, "_a4", a4);

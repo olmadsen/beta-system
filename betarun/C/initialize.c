@@ -437,6 +437,9 @@ void Initialize()
 #ifdef sgi
      signal( SIGTRAP, (void (*)(int))BetaSignalHandler);
 #endif
+#if (defined(RTDEBUG) && defined(linux))
+     signal( SIGTRAP, (void (*)(int))BetaSignalHandler);
+#endif
 #endif
 #ifdef SIGFPE
      signal( SIGFPE,  (void (*)(int))BetaSignalHandler);
