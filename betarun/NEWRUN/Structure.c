@@ -223,7 +223,7 @@ long ltS(struct Structure *arg1, struct Structure *arg2, long *SP)
 	    */
 	   
 	   Protect(arg2, newObject = AlloSI(0,arg1, SP));
-	   Ck(arg1); Ck(arg2);
+	   Ck(arg2);
 	   return (struct Object *)((long*)newObject)[proto2->OriginOff] == (arg2->iOrigin);
 	 }
        }

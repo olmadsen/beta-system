@@ -15,7 +15,7 @@ MAKEFILE     = ppcbetarun.make
 		:C:valhallaSOCKETS.h
 		
 Includes     = -i :C:
-Sym¥PPC      = -sym full 
+Sym¥PPC      = 
 ObjDir¥PPC   =
 
 PPCC         = MrC

@@ -43,8 +43,6 @@ static void DoNothing(struct Object **theCell,struct Object *theObj)
 {
 }
 
-int ContinueFromClaim=0;
-
 void Illegal()
 { 
 #if defined(sgi)
@@ -164,11 +162,7 @@ void Claim( expr, message)
     fprintf(output,
 	    "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
 	    (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
-#ifdef RTDEBUG
     Illegal(); /* Usefull to break in */
-    if (! ContinueFromClaim)
-#endif
-      BetaExit(0);
   }
 }
 #endif
