@@ -9,7 +9,7 @@ struct ProtoType{
     short           OriginOff; /* Where should the origin be        */
     ptr(long)       GenPart;   /* Reference to the generation code  */
     ref(ProtoType)  Prefix;    /* Reference to the prefix prototype */
-    short           Size;      /* Object size -1 in longs           */
+    short           Size;      /* Object size in longs              */
     short int       FormOff;   /* Reference to the FormID string    */
     short           AstRef;    /* AST reference of this object-desc.*/
     short	    pad;
