@@ -124,9 +124,10 @@ void BetaError(errorNo, theObj)
 	 */
 #else
 #ifdef mc68020
-	(long *)StackEnd += 14;
+	(long *)StackEnd += 15;
 	/* We have saved a0-a4, d0-d7, and also we have a return
 	 * address from jsr Qua to ignore.; see Qua.run.
+	 * Also the compiler has pushed a1 during the qua-check.
 	 */
 #endif
 #endif
