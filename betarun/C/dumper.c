@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: dumper.c,v $, rel: %R%, date: $Date: 1992-06-01 14:05:40 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: dumper.c,v $, rel: %R%, date: $Date: 1992-06-02 15:22:56 $, SID: $Revision: 1.5 $
  * by Lars Bak
  */
 #include <ctype.h>
@@ -91,6 +91,10 @@ static DumpObject( theObj)
 	case StackObjectPTValue:
 	    DumpFormat('S', theObj->GCAttr, 4 * ObjectSize(theObj), 0, 0);
 	    break;
+        case ByteRepPTValue:
+	    DumpFormat('B', theObj->GCAttr, 4 * ObjectSize(theObj), 
+                       DumpValContents( theObj), "" );
+	  break;
         case ValRepPTValue:
 	    DumpFormat('V', theObj->GCAttr, 4 * ObjectSize(theObj), 
                        DumpValContents( theObj), "" );
