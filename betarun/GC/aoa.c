@@ -372,8 +372,8 @@ static void Phase1()
     }
 #endif
     ReverseAndFollow( *pointer & ~1);
-#endif
   }
+#endif
 }
 
 #define isAlive(x)  (toObject(x)->GCAttr != 0)
