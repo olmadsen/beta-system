@@ -49,7 +49,7 @@ static unsigned long rs1;
 static unsigned long rs2;
 
 /* The indirection table */
-static void *PIT, *PITTop, *PITLimit; 
+void *PIT, *PITTop, *PITLimit; 
 
 /* LOCAL FUNCTION DECLARATIONS */
 #ifdef sparc
