@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl -s -w
+#!/usr/local/bin/perl -s # -w
 
 #use strict;
 
@@ -17,6 +17,8 @@ sub usage
 }
 
 ##### Global variables ####
+# Mentioning of option variables once more to prevent "used only once" warns
+$v = $t = $x = $f = $c = $w = "";
 # Variables set from command options
 my $verbose     = (defined($v)) ? 1 : 0;
 my $trace       = (defined($t)) ? 1 : 0;
@@ -24,8 +26,6 @@ my $extradir    = (defined($x)) ? 1 : 0;
 my $fullpath    = (defined($f)) ? 1 : 0;
 my $nocopyright = (defined($c)) ? 1 : 0;
 my $wiki        = (defined($w)) ? 1 : 0;
-# Mentioning of option variables once more to prevent "used only once" warns
-$v = $t = $x = $f = $c = $w = "";
 
 # Other global variables
 my $insert_validhtml40 = 0;
@@ -163,8 +163,8 @@ if ($wiki){
 </STYLE>
 EOT
     $copyright = "";
-    $tocfile = $ENV{'TOCURL'};
-    $wikiroot = $ENV{'WIKIROOT'};
+    $tocfile = $ENV{'TOCURL'} || "";
+    $wikiroot = $ENV{'WIKIROOT'} || "";
     ($wikidoc = $wikiroot ) =~ s%.*/([^/]+)/?$%$1%;
     ($wikihelp = $wikiroot) =~ s%(.*/)[^/]+/?$%$1%;
     $wikihelp .= "/wiki/help.wiki";
@@ -346,6 +346,8 @@ EOT
 
     print <<"EOT" if ($flags&$flag_hash);
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$hashfromparent"></SCRIPT>
+EOT
+    print <<"EOT" if (($flags&$flag_hash) && !$wiki);
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript">
 <!--
     CheckParent("$basename");
@@ -504,7 +506,7 @@ EOT
 EOT
     } else {
 	print <<EOT;
-<BODY$bodyatt onLoad='fixPrintButton("$imagedir")'>
+<BODY$bodyatt onLoad='fixPrintButton("$imagedir", "\u$basename", "Interface")'>
 <TABLE WIDTH="100%" CELLPADDING=0 CELLSPACING=2>
 <TR>
 <TD NOWRAP>
@@ -1003,6 +1005,8 @@ sub num_chars
     return $num;
 }
 
+$INTERFACE="";
+
 sub process_file
 {
     local ($file) = @_;
@@ -1018,17 +1022,17 @@ sub process_file
     # Read entire input-stream into $line.
 
     printf STDERR "\nReading $file ...\n" if $verbose==1;
-
-    if (!open(INT, $file)){
-	print "Cannot open $file for reading: $!\n";
+    $INTERFACE=$file;
+    if (!open(INTERFACE)){
+	print STDERR "Cannot open $INTERFACE for reading: $!\n";
 	return;
     }
 
     $line="";
-    while (<INT>) {
+    while (<INTERFACE>) {
 	$line .= $_;
     };
-    close (INT);
+    close (INTERFACE);
 
     $_ = $line;		
 

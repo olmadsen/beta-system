@@ -330,7 +330,7 @@ sub print_nav_frame
     &print_header($title,"",$flag_base|$flag_print);
 
     print <<EOT;
-<BODY onLoad='fixPrintButton("$imagedir")'>
+<BODY onLoad='fixPrintButton("$imagedir", "\u$basename", "Grammar")'>
 <TABLE WIDTH="100%" CELLPADDING=0 CELLSPACING=2>
 <TR VALIGN=MIDDLE>
 <TD NOWRAP>

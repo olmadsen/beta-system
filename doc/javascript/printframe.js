@@ -62,9 +62,10 @@ function printIEFrame(frame, onfinish) {
 
 // helpers
 function printIsNativeSupport() {
-  var agent = window.navigator.userAgent;
-  var i = agent.indexOf("MSIE ")+5;
-  return parseInt(agent.substr(i)) >= 5 && agent.indexOf("5.0b1") < 0;
+  //var agent = window.navigator.userAgent;
+  //var i = agent.indexOf("MSIE ")+5;
+  //return parseInt(agent.substr(i)) >= 5 && agent.indexOf("5.0b1") < 0;
+  return window.print;
 }
 
 function printFireEvent(frame, obj, name) {
