@@ -32,11 +32,6 @@ void ChkRA()
    * *theObjHandle is in IOA.
    */
    
-#ifndef sparc 
-  /* Gcc dies (:-( */
-  Ck(*theObjHandle);
-#endif
-
   if (!inIOA(*theObjHandle)) {
 #ifdef RTLAZY
     /* It may be a dangling (negative) reference */

@@ -584,9 +584,9 @@ void ProcessObject(theObj)
   if( isSpecialProtoType(theProto) ){  
     switch( SwitchProto(theProto) ){
     case SwitchProto(ByteRepPTValue):
-    case SwitchProto(WordRepPTValue):
+    case SwitchProto(ShortRepPTValue):
     case SwitchProto(DoubleRepPTValue):
-    case SwitchProto(ValRepPTValue): 
+    case SwitchProto(LongRepPTValue): 
       return; /* No references in the type of object, so do nothing*/
       
     case SwitchProto(DynItemRepPTValue):
@@ -777,9 +777,9 @@ void ProcessAOAObject(theObj)
   if( isSpecialProtoType(theProto) ){  
     switch( SwitchProto(theProto) ){
     case SwitchProto(ByteRepPTValue): 
-    case SwitchProto(WordRepPTValue): 
+    case SwitchProto(ShortRepPTValue): 
     case SwitchProto(DoubleRepPTValue): 
-    case SwitchProto(ValRepPTValue): 
+    case SwitchProto(LongRepPTValue): 
       return; /* No references in the type of object, so do nothing*/
 
     case SwitchProto(DynItemRepPTValue):
@@ -980,9 +980,9 @@ void IOACheckObject (theObj)
     if( isSpecialProtoType(theProto) ){  
       switch( SwitchProto(theProto) ){
       case SwitchProto(ByteRepPTValue):
-      case SwitchProto(WordRepPTValue):
+      case SwitchProto(ShortRepPTValue):
       case SwitchProto(DoubleRepPTValue):
-      case SwitchProto(ValRepPTValue):
+      case SwitchProto(LongRepPTValue):
 	/* No references in the type of object, so do nothing*/
 	return;
 	

@@ -41,17 +41,11 @@ AlloDO(unsigned size,ref(Object) origin)
     DEBUG_CODE( Claim(size > 0, "AlloDO: size > 0") );
 
     Protect(origin, theObj = cast(DopartObject) IOAalloc(DopartObjectSize(size)));
-    Ck(origin);
 
     theObj->Proto  = DopartObjectPTValue;
     theObj->GCAttr = 1;
     theObj->Origin = origin;
     theObj->Size   = size;
-
-#ifdef crts
-    /* Clear temporary variables (for-indexes, stack offsets for leave etc) */
-    long_clear((char *)theObj->Body, size - headsize(DopartObject));
-#endif
 
 #ifdef sparc
     /* hack hack. Olm wants the result in %i0 */
@@ -62,6 +56,8 @@ AlloDO(unsigned size,ref(Object) origin)
 #ifdef hppa
     setThisReg(theObj);
 #endif
+
+    Ck(origin); Ck(theObj);
 
     return theObj; /* Keeps gcc happy */
 }

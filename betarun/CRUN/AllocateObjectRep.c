@@ -25,8 +25,7 @@ ParamObjOriginProtoOffRange(AlloVRI)
   DEBUG_CODE(NumAlloVRI++);
   Ck(theObj);
   Protect2(theObj, origin,  
-	  theRep = cast(ObjectRep)IOAcalloc(DynObjectRepSize(range)));
-  Ck(theObj);
+	  theRep = cast(ObjectRep)IOAalloc(DynObjectRepSize(range)));
 
   theRep->Proto = DynItemRepPTValue;
   theRep->GCAttr = 1;
@@ -57,6 +56,8 @@ ParamObjOriginProtoOffRange(AlloVRI)
 
   AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
 
+  Ck(theObj); Ck(theRep);
+
   return;
 }
 
@@ -78,8 +79,7 @@ ParamObjOriginProtoOffRange(AlloVRC)
   DEBUG_CODE(NumAlloVRC++);
   Ck(theObj);
   Protect2(theObj, origin,  
-	  theRep = cast(ObjectRep)IOAcalloc(DynObjectRepSize(range)));
-  Ck(theObj);
+	  theRep = cast(ObjectRep)IOAalloc(DynObjectRepSize(range)));
 
   theRep->Proto = DynCompRepPTValue;
   theRep->GCAttr = 1;
@@ -110,6 +110,8 @@ ParamObjOriginProtoOffRange(AlloVRC)
   RestoreVar(theObj);
 
   AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+
+  Ck(theObj); Ck(theRep);
 
   return;
 }

@@ -2,7 +2,7 @@
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * crtsdep.h
  * by Ole Lehrmann Madsen, Peter Andersen, Kim Jensen M¿ller, and Peter Ryberg Jensen
- * $Id: crtsdep.h,v 1.16 1996-10-01 09:50:20 beta Exp $
+ * $Id: crtsdep.h,v 1.17 1996-10-01 12:14:30 beta Exp $
  */
 
 #define JUMPSTACK 1
@@ -11,7 +11,7 @@
   retType name(struct Object *origin, struct ProtoType *proto)
 #define ParamThisComp(retType,name)                            \
   retType name(struct Object *this, struct Component *comp)
-#define ParamObjOffRange(retType, name)			 \
+#define ParamThisOffRange(retType, name)			 \
   retType name(struct Object *theObj,			         \
 	 unsigned offset, /* in bytes */		 \
 	 int range				         \

@@ -93,7 +93,7 @@ extern long mcheck_line;
 #define isForward(x)      ((x) > 2048 )
 
 #define isValRep(x)      (((long)(DoubleRepPTValue) <= (long)((x)->Proto))\
-			  && ((long)((x)->Proto) <= (long)(ValRepPTValue)))
+			  && ((long)((x)->Proto) <= (long)(LongRepPTValue)))
 #define isObjectRep(x)   (((long)(DynCompRepPTValue) <= (long)((x)->Proto))\
 			  && ((long)((x)->Proto) <= (long)(DynItemRepPTValue)))
 
@@ -107,7 +107,7 @@ extern long mcheck_line;
 
 /* Object sizes in BYTES */
 #define ByteRepBodySize(range)   ((((range)+4)/4)*4)
-#define WordRepBodySize(range)   (((2*(range)+3)/4)*4)
+#define ShortRepBodySize(range)   (((2*(range)+3)/4)*4)
 #define ValRepBodySize(range)    ((range)*4)
 #define DoubleRepBodySize(range) ((range)*8)
 
@@ -116,9 +116,9 @@ extern long mcheck_line;
 # define StructureSize          ((headsize(Structure)+7) & ~7)
 # define RefRepSize(range)      (((range)*4 + headsize(RefRep)+7) & ~7)
 # define DynObjectRepSize(range)(((range)*4 + headsize(ObjectRep)+7) & ~7)
-# define ValRepSize(range)      (((ValRepBodySize(range) + headsize(ValRep))+7) & ~7)
+# define LongRepSize(range)      (((ValRepBodySize(range) + headsize(ValRep))+7) & ~7)
 # define ByteRepSize(range)     ((ByteRepBodySize(range) + headsize(ValRep)+7) & ~7)
-# define WordRepSize(range)     ((WordRepBodySize(range) + headsize(ValRep)+7) & ~7)
+# define ShortRepSize(range)     ((ShortRepBodySize(range) + headsize(ValRep)+7) & ~7)
 # define DoubleRepSize(range)   ((DoubleRepBodySize(range) + headsize(ValRep)+7) & ~7)
 
 #ifdef MT
@@ -137,9 +137,9 @@ extern long mcheck_line;
 # define StructureSize          headsize(Structure)
 # define RefRepSize(range)      ((range)*4 + headsize(RefRep))
 # define DynObjectRepSize(range)((range)*4 + headsize(ObjectRep))
-# define ValRepSize(range)      (ValRepBodySize(range) + headsize(ValRep))
+# define LongRepSize(range)      (ValRepBodySize(range) + headsize(ValRep))
 # define ByteRepSize(range)     (ByteRepBodySize(range) + headsize(ValRep))
-# define WordRepSize(range)     (WordRepBodySize(range) + headsize(ValRep))
+# define ShortRepSize(range)     (ShortRepBodySize(range) + headsize(ValRep))
 # define DoubleRepSize(range)   (DoubleRepBodySize(range) + headsize(ValRep))
 # define StackObjectSize(size)  (4*(size) + headsize(StackObject))
 # define DopartObjectSize(size) ((size) + headsize(DopartObject))
@@ -191,18 +191,6 @@ extern long mcheck_line;
   while( thisCell < XXe){  code;  thisCell++; }\
 }
 
-#ifndef __GNUC__
-#define long_clear(p, bytesize)                                     \
-{                                                                   \
-  register long i;                                                  \
-  DEBUG_CODE(if ((bytesize)&3)                                      \
-	     fprintf(stderr, "long_clear: bytesize&3 != 0\n"));     \
-  for (i = (long)(bytesize)/4-1; i >= 0; i--) {                     \
-    *((long *)(p)+i) = 0;                                           \
-  }                                                                 \
-}
-#endif
-
 /*
  * GetDistanceToEnclosingObject:
  *  Find the offset (negative) to the most inclosing object e.g.
@@ -240,15 +228,15 @@ extern long mcheck_line;
 
 #define DispatchValRepSize(proto, range)			                        \
 (((long)(proto) == (long)(ByteRepPTValue)) ? ByteRepSize(range) :		\
- (((long)(proto) == (long)(ValRepPTValue))   ? ValRepSize(range)  :		\
+ (((long)(proto) == (long)(LongRepPTValue))   ? LongRepSize(range)  :		\
   (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepSize(range) :    	\
-   WordRepSize(range))))
+   ShortRepSize(range))))
 
 #define DispatchValRepBodySize(proto, range)			                        \
 (((long)(proto) == (long)(ByteRepPTValue)) ? ByteRepBodySize(range) :      	\
- (((long)(proto) == (long)(ValRepPTValue))   ? ValRepBodySize(range)  : 	\
+ (((long)(proto) == (long)(LongRepPTValue))   ? ValRepBodySize(range)  : 	\
   (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepBodySize(range) :	\
-   WordRepBodySize(range))))
+   ShortRepBodySize(range))))
 
 #define DispatchObjectRepSize(proto, range, iproto)                      \
   DynObjectRepSize(range)

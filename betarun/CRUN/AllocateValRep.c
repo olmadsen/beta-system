@@ -7,7 +7,7 @@
 #include "beta.h"
 #include "crun.h"
 
-ParamObjOffRange(ref(ValRep), AlloVR1)
+ParamThisOffRange(ref(ValRep), AlloVR1)
 {
     DeclReference1(struct ValRep *, theRep);
     register unsigned Size;
@@ -41,20 +41,20 @@ ParamObjOffRange(ref(ValRep), AlloVR1)
 	}
     }
 
-    Protect(theObj, theRep = cast(ValRep) IOAcalloc(Size));
+    Protect(theObj, theRep = cast(ValRep) IOAalloc(Size));
 
-    Ck(theObj);
-  
     theRep->Proto = ByteRepPTValue;
     theRep->GCAttr = 1;
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
     
     AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+
+    Ck(theObj); Ck(theRep);
     RETURN(theRep);
 }
 
-ParamObjOffRange(ref(ValRep), AlloVR2)
+ParamThisOffRange(ref(ValRep), AlloVR2)
 {
     DeclReference1(struct ValRep *, theRep);
     register unsigned Size;
@@ -68,13 +68,14 @@ ParamObjOffRange(ref(ValRep), AlloVR2)
 #endif
 
     DEBUG_CODE(NumAlloVR2++);
+    Ck(theObj);
 
     if (range < 0) range = 0;
 
-    Size = WordRepSize(range);
+    Size = ShortRepSize(range);
 
     if (range > LARGE_REP_SIZE) {
-	theRep = cast(ValRep) LVRACAlloc(WordRepPTValue, range);
+	theRep = cast(ValRep) LVRACAlloc(ShortRepPTValue, range);
 	if (theRep) {
 	    DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 			     "AlloVR2: lvra structure ok"));
@@ -85,19 +86,19 @@ ParamObjOffRange(ref(ValRep), AlloVR2)
 	}
     }
 
-    Protect(theObj, theRep = cast(ValRep) IOAcalloc(Size));
-    Ck(theObj);
+    Protect(theObj, theRep = cast(ValRep) IOAalloc(Size));
 
-    theRep->Proto = WordRepPTValue;
+    theRep->Proto = ShortRepPTValue;
     theRep->GCAttr = 1;
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
     
     AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+    Ck(theObj); Ck(theRep);
     RETURN(theRep);
 }
 
-ParamObjOffRange(ref(ValRep), AlloVR4)
+ParamThisOffRange(ref(ValRep), AlloVR4)
 {
     DeclReference1(struct ValRep *, theRep);
     register unsigned Size;
@@ -111,14 +112,15 @@ ParamObjOffRange(ref(ValRep), AlloVR4)
 #endif
 
     DEBUG_CODE(NumAlloVR4++);
+    Ck(theObj);
 
     if (range < 0)
       range = 0;
 
-    Size = ValRepSize(range);
+    Size = LongRepSize(range);
 
     if (range > LARGE_REP_SIZE) {
-	theRep = cast(ValRep) LVRACAlloc(ValRepPTValue, range);
+	theRep = cast(ValRep) LVRACAlloc(LongRepPTValue, range);
 	if (theRep) {
 	    DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 			     "AlloVR4: lvra structure ok"));
@@ -129,21 +131,19 @@ ParamObjOffRange(ref(ValRep), AlloVR4)
 	}
     }
 
-    Protect(theObj, theRep = cast(ValRep) IOAcalloc(Size));
-    Ck(theObj);
+    Protect(theObj, theRep = cast(ValRep) IOAalloc(Size));
     
-    theRep->Proto = ValRepPTValue;
+    theRep->Proto = LongRepPTValue;
     theRep->GCAttr = 1;
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
 
-
     AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
-
+    Ck(theObj); Ck(theRep);
     RETURN(theRep);
 }
 
-ParamObjOffRange(ref(ValRep), AlloVR8)
+ParamThisOffRange(ref(ValRep), AlloVR8)
 {
     DeclReference1(struct ValRep *, theRep);
     register unsigned Size;
@@ -157,6 +157,7 @@ ParamObjOffRange(ref(ValRep), AlloVR8)
 #endif
 
     DEBUG_CODE(NumAlloVR8++);
+    Ck(theObj);
 
     if (range < 0)
       range = 0;
@@ -175,8 +176,7 @@ ParamObjOffRange(ref(ValRep), AlloVR8)
 	}
     }
 
-    Protect(theObj, theRep = cast(ValRep) IOAcalloc(Size));
-    Ck(theObj);
+    Protect(theObj, theRep = cast(ValRep) IOAalloc(Size));
 
     theRep->Proto = DoubleRepPTValue;
     theRep->GCAttr = 1;
@@ -184,5 +184,6 @@ ParamObjOffRange(ref(ValRep), AlloVR8)
     theRep->HighBorder = range;
 
     AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+    Ck(theObj); Ck(theRep);
     RETURN(theRep);
 }

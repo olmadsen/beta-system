@@ -8,7 +8,7 @@
 #include "beta.h"
 #include "crun.h"
 
-ParamObjOffRange(ref(RefRep), AlloRR)
+ParamThisOffRange(ref(RefRep), AlloRR)
 {
     DeclReference1(struct RefRep *, theRep);
     GCable_Entry();
@@ -21,8 +21,7 @@ ParamObjOffRange(ref(RefRep), AlloRR)
     DEBUG_CODE(NumAlloRR++);
 
     Ck(theObj);
-    Protect(theObj, theRep = cast(RefRep) IOAcalloc(RefRepSize(range)));
-    Ck(theObj);
+    Protect(theObj, theRep = cast(RefRep) IOAalloc(RefRepSize(range)));
 
     theRep->Proto = RefRepPTValue;
     theRep->GCAttr = 1;
@@ -30,5 +29,6 @@ ParamObjOffRange(ref(RefRep), AlloRR)
     theRep->HighBorder = range;
 
     AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+    Ck(theObj); Ck(theRep); 
     RETURN(theRep);
 }

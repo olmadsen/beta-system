@@ -40,10 +40,6 @@ void CCopySRR(ref(RefRep) theRep,
     
     GCable_Entry();
 
-#ifdef sparc
-    ClearCParams(); /* OK here: is not called from RT */
-#endif
-
 #ifdef hppa
     low =  (unsigned) getR2Reg(); 
     high = (unsigned) getR1Reg();
@@ -71,8 +67,6 @@ void CCopySRR(ref(RefRep) theRep,
     
     Protect2(theItem, theRep, newRep = cast(RefRep) IOAalloc(RefRepSize(range)));
     
-    Ck(theRep); Ck(theItem);
-
     /* The new Object is now allocated, but not assigned yet! */
     
     /* Initialize the structual part of the repetition. */
@@ -87,6 +81,9 @@ void CCopySRR(ref(RefRep) theRep,
       newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder]; /* AssignReference? */
     
     AssignReference((long *)theItem + offset, cast(Item) newRep);
+
+    Ck(newRep); Ck(theRep); Ck(theItem);
+
 }
 
 

@@ -77,7 +77,7 @@ static struct Object *AOAallocate(long numbytes)
     if( MallocExhausted || (AOABlockSize == 0) ) return 0;
     /* Check if the AOAtoIOAtable is allocated. If not then allocate it. */
     if( AOAtoIOAtable == 0 ) 
-      if( AOAtoIOAAlloc() == 0 ){
+      if( AOAtoIOAalloc() == 0 ){
 	MallocExhausted = TRUE;
 	INFO_AOA( fprintf(output,
 			  "#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
@@ -538,9 +538,9 @@ static void FollowObject(ref(Object) theObj)
   if( isSpecialProtoType(theProto) ){  
     switch( SwitchProto(theProto) ){
     case SwitchProto(ByteRepPTValue):
-    case SwitchProto(WordRepPTValue):
+    case SwitchProto(ShortRepPTValue):
     case SwitchProto(DoubleRepPTValue):
-    case SwitchProto(ValRepPTValue): return;
+    case SwitchProto(LongRepPTValue): return;
       /* No references in a Value Repetition, so do nothing*/
       
     case SwitchProto(DynItemRepPTValue):
@@ -1135,9 +1135,9 @@ void AOACheckObject( theObj)
   if( isSpecialProtoType(theProto) ){  
     switch( SwitchProto(theProto) ){
     case SwitchProto(ByteRepPTValue):
-    case SwitchProto(WordRepPTValue):
+    case SwitchProto(ShortRepPTValue):
     case SwitchProto(DoubleRepPTValue):
-    case SwitchProto(ValRepPTValue): return; /* No references in the type of object, so do nothing*/
+    case SwitchProto(LongRepPTValue): return; /* No references in the type of object, so do nothing*/
       
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):
@@ -1340,9 +1340,9 @@ void AOACheckObjectSpecial( theObj)
   if( isSpecialProtoType(theProto) ){  
     switch(SwitchProto(theProto)){
     case SwitchProto(ByteRepPTValue):
-    case SwitchProto(WordRepPTValue):
+    case SwitchProto(ShortRepPTValue):
     case SwitchProto(DoubleRepPTValue):
-    case SwitchProto(ValRepPTValue): return;
+    case SwitchProto(LongRepPTValue): return;
     case SwitchProto(DynItemRepPTValue): return;
     case SwitchProto(DynCompRepPTValue): return;
     case SwitchProto(RefRepPTValue): return;

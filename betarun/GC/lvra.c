@@ -345,7 +345,7 @@ ref(ValRep) LVRAAlloc(ref(ProtoType) proto, long range)
   INFO_LVRA_ALLOC({
     char type[30];
     switch (SwitchProto(proto)){
-    case SwitchProto(ValRepPTValue):
+    case SwitchProto(LongRepPTValue):
       sprintf(type, "integer repetition");
       break;
     case SwitchProto(ByteRepPTValue):
@@ -354,7 +354,7 @@ ref(ValRep) LVRAAlloc(ref(ProtoType) proto, long range)
     case SwitchProto(DoubleRepPTValue):
       sprintf(type, "real repetition");
       break;
-    case SwitchProto(WordRepPTValue):
+    case SwitchProto(ShortRepPTValue):
       sprintf(type, "shortint repetition");
       break;
     default:
@@ -454,12 +454,6 @@ ref(ValRep) LVRACAlloc(ref(ProtoType) proto, long range)
   if (newRep){
     /* Clear the body of newRep */
     memset(newRep->Body, 0, DispatchValRepBodySize(proto, range));
-    /* Old code contained in comments below. TO BE REMOVED */
-    /* register char *p = (char*)newRep->Body; */
-    /* register unsigned size = DispatchValRepBodySize(proto,range); */
-    /* register long i; */
-    /* for (i = size-4; i >= 0; i -= 4) */
-    /*  *(long *)(p+i) = 0; */
   }
   return newRep;
 }
@@ -823,9 +817,9 @@ void LVRAStatistics(void)
 	fprintf(output, 
 		"addr=0x%-6x type=%-7s size=%-6d LVRACycle=%s ref=%-6x (%s)\n",
 		(int)rep, 
-		rep->Proto==ValRepPTValue?"integer":
+		rep->Proto==LongRepPTValue?"integer":
 		rep->Proto==ByteRepPTValue?"char":
-		rep->Proto==WordRepPTValue?"short":
+		rep->Proto==ShortRepPTValue?"short":
 		rep->Proto==DoubleRepPTValue?"double":
 		"???",
 		(int)theObjectSize,

@@ -72,10 +72,10 @@ printMessage(FILE *fp,
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue): name = "[Object_Repetition]"; break;
     case SwitchProto(RefRepPTValue): name = "[Reference_Repetition]"; break;
-    case SwitchProto(ValRepPTValue): name = "[Value_Repetition]"; break;
-    case SwitchProto(ByteRepPTValue): name = "[Byte_Repetition]"; break;
-    case SwitchProto(WordRepPTValue): name = "[Word_Repetition]"; break;
-    case SwitchProto(DoubleRepPTValue): name = "[Double_Repetition]"; break;
+    case SwitchProto(LongRepPTValue): name = "[Integer_Repetition]"; break;
+    case SwitchProto(ByteRepPTValue): name = "[Char_Repetition]"; break;
+    case SwitchProto(ShortRepPTValue): name = "[Shortint_Repetition]"; break;
+    case SwitchProto(DoubleRepPTValue): name = "[Real_Repetition]"; break;
     default: name = "[???]"; break;
     }
   else {

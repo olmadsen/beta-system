@@ -42,18 +42,14 @@ void CCopySVR(ref(ValRep) theRep,
     
     GCable_Entry();
 
-#ifdef sparc
-    ClearCParams(); /* OK here: is not called from RT */
-#endif
-
 #ifdef hppa
   low = (unsigned) getR2Reg();
   high = (unsigned) getR1Reg();
 #endif
     
     DEBUG_CODE(NumCopySVR++);
-
     Ck(theItem); Ck(theRep);
+
     /* Copy a slice of a Value Repetition. */
     
     /* Check that low and high are usable. */
@@ -69,12 +65,12 @@ void CCopySVR(ref(ValRep) theRep,
     switch(SwitchProto(theRep->Proto)){
     case SwitchProto(ByteRepPTValue):
       size = ByteRepSize(range); break;
-    case SwitchProto(ValRepPTValue):
-      size = ValRepSize(range); break;
+    case SwitchProto(LongRepPTValue):
+      size = LongRepSize(range); break;
     case SwitchProto(DoubleRepPTValue):
       size = DoubleRepSize(range); break;
-    case SwitchProto(WordRepPTValue):
-      size = WordRepSize(range); break;
+    case SwitchProto(ShortRepPTValue):
+      size = ShortRepSize(range); break;
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):
       size = DynObjectRepSize(range); break;
@@ -87,8 +83,6 @@ void CCopySVR(ref(ValRep) theRep,
     
     Protect2(theRep,theItem,newRep = cast(ValRep) IOAalloc(size));
     
-    Ck(theRep); Ck(theItem);
-
     /* The new Object is now allocated, but not assigned yet! */
     
     /* Initialize the structual part of the repetition. */
@@ -114,7 +108,7 @@ void CCopySVR(ref(ValRep) theRep,
 	      /* Null termination */;
 	}
 	break;
-      case SwitchProto(WordRepPTValue):
+      case SwitchProto(ShortRepPTValue):
 	{ /* Since the slice may start on any word we copy it word by word */
 	    short *newBody= (short *)newRep->Body;
 	    short *oldBody= (short *)((unsigned)theRep->Body+2*(low-theRep->LowBorder));
@@ -122,7 +116,7 @@ void CCopySVR(ref(ValRep) theRep,
 	      *(short *)((unsigned)newBody+2*i) = *(short *)((unsigned)oldBody+2*i);
 	}
 	break;
-      case SwitchProto(ValRepPTValue):
+      case SwitchProto(LongRepPTValue):
 	for (i = 0; i < range; ++i){
 	  newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
 	}
@@ -148,6 +142,9 @@ void CCopySVR(ref(ValRep) theRep,
     }
         
     AssignReference((long *)theItem + offset, cast(Item) newRep);
+
+    Ck(newRep); Ck(theRep); Ck(theItem);
+
 }
 
 

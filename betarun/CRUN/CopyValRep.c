@@ -30,10 +30,6 @@ void CCopyVR(ref(ValRep) theRep,
     register unsigned range, i, size;
     
     GCable_Entry();
-
-#ifdef sparc
-    ClearCParams(); /* OK here: is not called from RT */
-#endif
     
     DEBUG_CODE(NumCopyVR++);
 
@@ -80,7 +76,6 @@ void CCopyVR(ref(ValRep) theRep,
 		   newRep = cast(ValRep) IOAalloc(size);
 		   );
 	  
-	  Ck(theObj);
 	  newRep->Proto = theRep->Proto;
 	  newRep->GCAttr = 1;
 	  newRep->LowBorder = 1;
@@ -101,7 +96,6 @@ void CCopyVR(ref(ValRep) theRep,
 	       newRep = cast(ValRep) IOAalloc(size);
 	       );
       
-      Ck(theObj);
       newRep->Proto = theRep->Proto;
       newRep->GCAttr = 1;
       newRep->LowBorder = 1;
@@ -119,5 +113,8 @@ void CCopyVR(ref(ValRep) theRep,
     }
         
     AssignReference((long *)theObj + offset, cast(Item) newRep);
+
+    Ck(newRep); Ck(theRep); Ck(theObj);
+
 }
 

@@ -28,13 +28,9 @@ void CCopyRR(ref(RefRep) theRep,
     
     GCable_Entry();
     
-#ifdef sparc
-    ClearCParams(); /* OK here: is not called from RT */
-#endif
-    
     DEBUG_CODE(NumCopyRR++);
 
-    Ck(theRep);Ck(theObj);
+    Ck(theRep); Ck(theObj);
     newRep = NULL;
     
     range = theRep->HighBorder;
@@ -42,7 +38,6 @@ void CCopyRR(ref(RefRep) theRep,
     Protect2(theObj, theRep,
 	     newRep = cast(RefRep) IOAalloc(RefRepSize(range)));
     
-    Ck(theRep); Ck(theObj);
 
     newRep->Proto = theRep->Proto;
     newRep->GCAttr = 1;
@@ -54,5 +49,7 @@ void CCopyRR(ref(RefRep) theRep,
       newRep->Body[i] = theRep->Body[i];	/* Beautiful! */
     
     AssignReference((long *)theObj + offset, cast(Item) newRep);
+
+    Ck(newRep); Ck(theRep); Ck(theObj);
 }
 

@@ -57,10 +57,8 @@ void ExtRR(ref(Object) theObj,
       newRange = 0;
 
     Protect2(theRep, theObj,
-	     newRep = cast(RefRep) IOAcalloc(RefRepSize(newRange)));
+	     newRep = cast(RefRep) IOAalloc(RefRepSize(newRange)));
    
-    Ck(theObj);
-
     newRep->Proto = RefRepPTValue;
     newRep->GCAttr = 1;
     newRep->LowBorder = 1;
@@ -70,5 +68,8 @@ void ExtRR(ref(Object) theObj,
       newRep->Body[i] = theRep->Body[i];
     
     AssignReference((long *)theObj + offset, cast(Item) newRep);
+
+    Ck(theRep); Ck(newRep); Ck(theObj);
+
 }
 

@@ -60,7 +60,6 @@ void MkTO(char *cText,
     */
 
 #ifdef sparc
-    ClearCParams(); /* OK here: is not called from RT */
     Protect(theItem, theText = SPARC_AlloI((struct Object *)BasicItem, 0, 
 				      TextProto, 0, 0));
 #endif
@@ -80,7 +79,6 @@ void MkTO(char *cText,
     /* Prepare for copying of the asciz into the repetition of the text object */
     
 #ifdef sparc
-    /* Avoid ClearCParams in CopyT */ 
     Protect(theText, CCopyT(0, theText, REP_OFF, 0, 0, cText)); 
 #else
     Protect(theText, CopyT(cText, theText, REP_OFF)); 

@@ -19,13 +19,12 @@ ParamOriginProto(struct Component *,AlloC)
     FetchOriginProto();
 
     DEBUG_CODE(NumAlloC++);
-
     Ck(origin);
 
     DEBUG_CODE( Claim(proto->Size > 0, "AlloC: proto->Size > 0") );
 
     Protect(origin, 
-	    comp = cast(Component) IOAcalloc(ComponentSize(proto)));    
+	    comp = cast(Component) IOAalloc(ComponentSize(proto)));    
 
     /* The new Component is now allocated, but not initialized yet! */
 
@@ -45,7 +44,7 @@ ParamOriginProto(struct Component *,AlloC)
       Protect(comp, CallBetaEntry(proto->GenPart,&comp->Body));
     }
 
-    Ck(comp);
+    Ck(origin); Ck(comp);
 
     GCable_Exit(1);
 

@@ -40,7 +40,6 @@ void NewRR(ref(Object) theObj,
 {
     GCable_Entry();
 
-    Ck(theObj);
 #ifdef hppa
     range = (long)getR2Reg();
 
@@ -56,6 +55,7 @@ void NewRR(ref(Object) theObj,
 #endif
 
     DEBUG_CODE(NumNewRR++);
+    Ck(theObj);
 
 #ifdef sparc
     Protect(theObj,if (range<0) range=0; CAlloRR(theObj, 0, offset*4, 0, 0, range));

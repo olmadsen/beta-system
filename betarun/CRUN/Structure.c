@@ -21,14 +21,13 @@ ParamOriginProto(struct Structure *, AlloS)
     
   Ck(origin);
   Protect(origin, newStruct = cast(Structure) IOAalloc(StructureSize));
-  Ck(origin);
   
   newStruct->Proto = StructurePTValue;
   newStruct->GCAttr = 1;
   newStruct->iOrigin = origin;
   newStruct->iProto = proto;
 
-  Ck(newStruct);
+  Ck(newStruct); Ck(origin);
   
 #ifdef sparc
     return_in_i1(newStruct);
@@ -76,7 +75,6 @@ ref(Structure) ThisS(ref(Object) this)
   
   Ck(this);
   Protect(this, newStruct = cast(Structure) IOAalloc(StructureSize));
-  Ck(this);
   
   newStruct->Proto = StructurePTValue;
   newStruct->GCAttr = 1;
@@ -94,7 +92,7 @@ ref(Structure) ThisS(ref(Object) this)
   newStruct->iProto = origin->Proto;
   newStruct->iOrigin = (casthandle(Object)origin)[origin->Proto->OriginOff];
   
-  Ck(newStruct);
+  Ck(newStruct); Ck(this);
 
   return newStruct;
 }
@@ -128,7 +126,6 @@ ref(Structure) ObjS(ref(Object) theObj)
   
   Ck(theObj);
   Protect(theObj, newStruct = cast(Structure) IOAalloc(StructureSize));
-  Ck(theObj);
   
   newStruct->Proto = StructurePTValue;
   newStruct->GCAttr = 1;
@@ -136,9 +133,9 @@ ref(Structure) ObjS(ref(Object) theObj)
   newStruct->iProto = theObj->Proto;
   newStruct->iOrigin = (casthandle(Object)theObj)[theObj->Proto->OriginOff];
 
-  Ck(newStruct);
+  Ck(newStruct); Ck(theObj);
   
-  return newStruct;
+  return newStruct; 
 }
 
 ParamStruc(struct Item *, AlloSI)
@@ -150,22 +147,18 @@ ParamStruc(struct Item *, AlloSI)
 
   DEBUG_CODE(NumAlloSI++);
 
-  Ck(struc);
-  Ck(struc->iOrigin);
+  Ck(struc); Ck(struc->iOrigin);
 #ifdef sparc
-  Protect(struc, 
-	  ss = SPARC_AlloI(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0));
+  ss = SPARC_AlloI(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0);
 #endif
 #ifdef hppa
-  Protect(struc, 
-	  ss = CAlloI(cast(Object) struc->iOrigin, struc->iProto));
+  ss = CAlloI(cast(Object) struc->iOrigin, struc->iProto);
 #endif
 #ifdef crts
-  Protect(struc, 
-	  ss = AlloI(cast(Object) struc->iOrigin, struc->iProto));
+  ss = AlloI(cast(Object) struc->iOrigin, struc->iProto);
 #endif
 
-  Ck(ss);
+  Ck(ss); 
 
 #ifdef sparc
   return_in_i1(ss);
@@ -185,16 +178,13 @@ ParamStruc(struct Component *, AlloSC)
 
   Ck(struc);
 #ifdef sparc
-  Protect(struc, 
-	  ss = SPARC_AlloC(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0));
+  ss = SPARC_AlloC(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0);
 #endif
 #ifdef hppa
-  Protect(struc, 
-	  ss = CAlloC(cast(Object) struc->iOrigin, struc->iProto));
+  ss = CAlloC(cast(Object) struc->iOrigin, struc->iProto);
 #endif
 #ifdef crts
-  Protect(struc, 
-	  ss = AlloC(cast(Object) struc->iOrigin, struc->iProto));
+  ss = AlloC(cast(Object) struc->iOrigin, struc->iProto));
 #endif
 
   Ck(ss);
@@ -332,10 +322,11 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
 #ifdef crts
 	   Protect(arg2, newObject = AlloSI(arg1));
 #endif
+	   Ck(arg2);
 	   return cast(Object)((long*)newObject)[proto2->OriginOff] == (arg2->iOrigin);
 	 }
        }
-
+  Ck(arg1); Ck(arg2);
   return 0; 
 }
 

@@ -148,9 +148,9 @@ char *ProtoTypeName(struct ProtoType *theProto)
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):   return "[ObjectRep]";
     case SwitchProto(RefRepPTValue):       return "[RefRep]";
-    case SwitchProto(ValRepPTValue):       return "[IntegerRep]";
+    case SwitchProto(LongRepPTValue):       return "[IntegerRep]";
     case SwitchProto(ByteRepPTValue):      return "[CharRep]";
-    case SwitchProto(WordRepPTValue):      return "[ShortRep]";
+    case SwitchProto(ShortRepPTValue):      return "[ShortRep]";
     case SwitchProto(DoubleRepPTValue):    return "[RealRep]";
     }
   }
@@ -346,9 +346,9 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       case SwitchProto(DynCompRepPTValue):
       case SwitchProto(StackObjectPTValue):
       case SwitchProto(ByteRepPTValue):
-      case SwitchProto(WordRepPTValue):
+      case SwitchProto(ShortRepPTValue):
       case SwitchProto(DoubleRepPTValue):
-      case SwitchProto(ValRepPTValue):
+      case SwitchProto(LongRepPTValue):
       case SwitchProto(RefRepPTValue):
 	/* This is an error */
 	fprintf(output,
@@ -449,13 +449,13 @@ void DisplayObject(output,theObj,retAddress)
     case SwitchProto(ByteRepPTValue):
       fprintf(output,"  ByteRep\n");
       break;
-    case SwitchProto(WordRepPTValue):
-      fprintf(output,"  WordRep\n");
+    case SwitchProto(ShortRepPTValue):
+      fprintf(output,"  ShortRep\n");
       break;
     case SwitchProto(DoubleRepPTValue):
       fprintf(output,"  DoubleRep\n");
       break;
-    case SwitchProto(ValRepPTValue):
+    case SwitchProto(LongRepPTValue):
       fprintf(output,"  ValRep\n");
       break;
     case SwitchProto(DynItemRepPTValue):
@@ -1324,7 +1324,7 @@ void DescribeObject(theObject)
       fprintf(output, "ObjectRep\n"); return;
     case SwitchProto(RefRepPTValue):
       fprintf(output, "RefRep"); return;
-    case SwitchProto(ValRepPTValue):
+    case SwitchProto(LongRepPTValue):
       fprintf(output, "IntegerRep"); return;
     case SwitchProto(ByteRepPTValue):
       fprintf(output, "CharRep: '");
@@ -1336,7 +1336,7 @@ void DescribeObject(theObject)
 	fprintf(output, "'");
       }
       return;
-    case SwitchProto(WordRepPTValue):
+    case SwitchProto(ShortRepPTValue):
       fprintf(output, "ShortRep");
       return;
     case SwitchProto(DoubleRepPTValue):

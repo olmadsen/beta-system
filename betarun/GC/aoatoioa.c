@@ -14,7 +14,7 @@ static long primes[] =
 
 static long prim_index = 0;
 /* Allocates the initial AOAtoIOAtable. */
-long AOAtoIOAAlloc()
+long AOAtoIOAalloc()
 {
     AOAtoIOAtableSize = primes[0];
     if( (AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long))) ){

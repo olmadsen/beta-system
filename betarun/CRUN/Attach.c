@@ -46,8 +46,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
 
   GCable_Entry();
   FetchThisComp();
-  Ck(comp); 
-  Ck(this);
+  Ck(comp); Ck(this);
   push(this); /* Push this (=a0) to refrence stack */
 
   if (comp->StackObj == cast(StackObject) -1 || comp == ActiveComponent)

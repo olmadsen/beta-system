@@ -186,8 +186,8 @@ register volatile void *GCreg4 asm("%o4");
 
 #define FetchStruc()
 
-/* C procs that gets object, offset and range */
-#define ParamObjOffRange(type, name)			\
+/* C procs that uses this, offset and range */
+#define ParamThisOffRange(type, name)			\
   asmlabel(name, 					\
 	   "mov %i0, %o0; "				\
            "clr %o1; "					\
@@ -197,6 +197,22 @@ register volatile void *GCreg4 asm("%o4");
 	   "ba "CPREF#name"; "				\
 	   "mov %l1, %o5; ");				\
  type C##name(struct Object *theObj,			\
+	      int i1,					\
+	      unsigned offset, /* in bytes */		\
+	      int i3,					\
+	      int i4,					\
+	      /*unsigned*/ int range)
+
+/* C procs that uses a specified object, offset and range */
+#define ParamObjOffRange(name)			        \
+  asmlabel(name, 					\
+           "mov %o2, %o5; " /* range */			\
+           "mov %o1, %o2; " /* offset */		\
+           "clr %o1; "					\
+           "clr %o3; "					\
+	   "ba "CPREF#name"; "				\
+	   "clr %o4; ");				\
+ void C##name(struct Object *theObj,			\
 	      int i1,					\
 	      unsigned offset, /* in bytes */		\
 	      int i3,					\
@@ -262,20 +278,6 @@ register volatile void *GCreg4 asm("%o4");
   { code; }						\
   pop(v2); pop(v1);					\
   asmcomment( -- Protect-end)
-
-#define ClearCParams() \
-  FramePointer[16] =   \
-  FramePointer[17] =   \
-  FramePointer[18] =   \
-  FramePointer[19] =   \
-  FramePointer[20] =   \
-  FramePointer[21] =   \
-  FramePointer[22] =   \
-  FramePointer[23] =   \
-  FramePointer[24] =   \
-  FramePointer[25] =   \
-  FramePointer[26] =   \
-  FramePointer[27] = 0
 
 #endif
 

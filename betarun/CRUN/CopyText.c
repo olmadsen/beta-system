@@ -10,18 +10,6 @@
 
 #ifdef sparc
 asmlabel(CopyT,
-	 "clr [%sp+0x6c];" /* ClearCParams */
-	 "clr [%sp+0x68];"
-	 "clr [%sp+0x64];"
-	 "clr [%sp+0x60];"
-	 "clr [%sp+0x5c];"
-	 "clr [%sp+0x58];"
-	 "clr [%sp+0x54];"
-	 "clr [%sp+0x50];"
-	 "clr [%sp+0x4c];"
-	 "clr [%sp+0x48];"
-	 "clr [%sp+0x44];"
-	 "clr [%sp+0x40];"
 	 "mov %o0,%o5;"	 /* Don't allow asciiz in %o0 */
          "clr %o0;"
 	 "clr %o3;"
@@ -60,8 +48,6 @@ struct Item *CopyT(char *asciz,
   size = ByteRepSize(range);
 
   Protect(theItem, theRep = cast(ValRep) IOAalloc(size));
-  
-  Ck(theItem);
   
   theRep->Proto = ByteRepPTValue;
   theRep->GCAttr = 1;

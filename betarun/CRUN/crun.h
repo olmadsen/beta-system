@@ -89,22 +89,6 @@ AssignReference(long *theCell, ref(Item) newObject)
     AOAtoIOAInsert(casthandle(Object)theCell);
 }
 
-#ifdef __GNUC__
-static inline void 
-#else
-static  void 
-#endif
-long_clear(char *p, unsigned bytesize)
-{
-  register long i;
-#ifdef RTDEBUG
-  if (bytesize&3)
-    fprintf(stderr, "What! bytesize&3 != 0\n");
-#endif
-  for (i = bytesize-4; i >= 0; i -= 4)
-    *(long *)(p+i) = 0;	/* Ugly Hacks Work Fast */
-}
-
 /* inline version of memcpy; works only for 4 byte aligned */
 #define MEMCPY(dst,src,bytesize)            \
 {  register long i;                         \
@@ -112,6 +96,7 @@ long_clear(char *p, unsigned bytesize)
        *(long *)(((char *)(dst))+i) = *(long *)(((char *)(src))+i); \
 }
 
+#ifdef RTDEBUG
 #ifdef __GNUC__
 static inline void 
 #else
@@ -127,6 +112,7 @@ zero_check(char *p, unsigned bytesize)
   for (i = bytesize-4; i >= 0; i -= 4)
     if (*(long *)(p+i) != 0) fprintf(output, "zero_check failed\n");	
 }
+#endif
 
 #ifdef __GNUC__
 static inline void 
@@ -171,11 +157,10 @@ setup_item(ref(Item) theItem,
   ((long *)theItem)[prototype->OriginOff] = (long) origin;
 }
 
-#endif
+#endif /* __GNUC__ */
 
 #ifdef __GNUC__
 #include "IOAAlloc.h"
 #else
 extern char	       *IOAalloc();
-extern char	       *IOAcalloc();
 #endif

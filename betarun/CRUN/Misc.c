@@ -146,7 +146,7 @@ void SetArgValues(int argc, char *argv[])
 #endif
 
 #ifndef __GNUC__
-#include "IOAAlloc.h"
+#include "IOAalloc.h"
 #endif
 
 #ifdef sparc

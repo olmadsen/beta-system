@@ -284,7 +284,7 @@ static inline long getRPReg()
 #define ParamThisComp(t,name)                       \
   t name(struct Item *this, struct Component *comp)
 
-#define ParamObjOffRange(type, name)			\
+#define ParamThisOffRange(type, name)			\
  type name(struct Object *theObj,			\
 	      unsigned offset, /* in bytes */		\
 	      /*unsigned*/ int range			\

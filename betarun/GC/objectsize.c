@@ -13,8 +13,8 @@ long ObjectSize(theObj)
 
   if( isSpecialProtoType(theProto) ){
     switch(SwitchProto(theProto)){
-    case SwitchProto(WordRepPTValue):
-      return WordRepSize(toValRep(theObj)->HighBorder) >> 2;
+    case SwitchProto(ShortRepPTValue):
+      return ShortRepSize(toValRep(theObj)->HighBorder) >> 2;
 
     case SwitchProto(ByteRepPTValue):
       return ByteRepSize(toValRep(theObj)->HighBorder) >> 2;
@@ -22,8 +22,8 @@ long ObjectSize(theObj)
     case SwitchProto(DoubleRepPTValue):
       return DoubleRepSize(toValRep(theObj)->HighBorder) >> 2;
 
-    case SwitchProto(ValRepPTValue):
-      return ValRepSize(toValRep(theObj)->HighBorder) >> 2;
+    case SwitchProto(LongRepPTValue):
+      return LongRepSize(toValRep(theObj)->HighBorder) >> 2;
 
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):

@@ -40,13 +40,13 @@ char *
 #endif
 
     DEBUG_CODE(NumCpkVT++);
+    Ck(currentObj); Ck(theRep);
 
     /* Check range overflow on CTextPool.
      * nextText is used as a tmp. register only.
      * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
      */
 
-    Ck(currentObj); Ck(theRep);
     if (bodysize > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
       BetaError(CTextPoolErr, currentObj);
     

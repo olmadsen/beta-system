@@ -19,13 +19,6 @@ ParamOriginProto(struct Item *,AlloI)
 
     DEBUG_CODE(NumAlloI++);
 
-#if 0
-    if ((NumAlloI > 15000) && (NumAlloI<20000)) {
-      fprintf(output, "AlloI\n");
-      fprintf(output, "NumAlloI: %d\n", (int)NumAlloI);
-    }
-#endif
-
     Ck(origin);
 
 #if (defined(hppa) && defined(RTDEBUG)) || defined(crts)
@@ -36,7 +29,7 @@ ParamOriginProto(struct Item *,AlloI)
 
     DEBUG_CODE( Claim(proto->Size > 0, "AlloI: proto->Size > 0") );
 
-    Protect(origin, item = (struct Item *) IOAcalloc(ItemSize(proto)));
+    Protect(origin, item = (struct Item *) IOAalloc(ItemSize(proto)));
 
     /* The new Object is now allocated, but not initialized yet! */
 
@@ -46,7 +39,7 @@ ParamOriginProto(struct Item *,AlloI)
       Protect(item, CallBetaEntry(proto->GenPart,item));
     }
 
-    Ck(item);
+    Ck(origin); Ck(item);
 
     GCable_Exit(1);    
 #ifdef sparc
@@ -74,7 +67,7 @@ ParamOriginProto(struct Item *,AlloH)
     }
 #endif
 
-    item = (struct Item *) IOAcalloc(4*proto->Size);
+    item = (struct Item *) IOAalloc(4*proto->Size);
 
     /* The new Object is now allocated, but not initialized yet! */
 

@@ -43,8 +43,8 @@ long HandleCB(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
 
   if (!cb->theStruct) { freeCallbackCalled(); return 0; }
   
-  Ck(cb->theStruct); 
-  Ck(cb->theStruct->iOrigin);
+  Ck(cb->theStruct); Ck(cb->theStruct->iOrigin);
+
   theObj = AlloI(cb->theStruct->iOrigin, cb->theStruct->iProto);
 
   /* Call the CallBack stub. Gcc push the necessary parameters to stack */
@@ -78,8 +78,8 @@ long pascal HandlePCB(long arg1, long arg2, long arg3, long arg4, long arg5, lon
 
   if (!cb->theStruct) { freeCallbackCalled(); return 0; }
   
-  Ck(cb->theStruct); 
-  Ck(cb->theStruct->iOrigin);
+  Ck(cb->theStruct); Ck(cb->theStruct->iOrigin);
+
   theObj = AlloI(cb->theStruct->iOrigin, cb->theStruct->iProto);
 
   /* Call the CallBack stub. Pascal parameters on stack */
@@ -115,8 +115,7 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
     CBFArelloc();
   }
   
-  Ck(theStruct);
-  Ck(theObj);
+  Ck(theStruct); Ck(theObj);
   CBFATop->theStruct = theStruct;
   MK_CALL( HandleCB);
   FlushCache;
