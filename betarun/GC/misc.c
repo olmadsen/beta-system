@@ -13,11 +13,11 @@
 long isObject( theObj)
   ref(Object) theObj;
 { 
-#if defined(sparc) || defined(hppa)
+#if defined(sparc) || defined(hppa) || defined(crts)
     /* For the SPARC isObject also checks alignment constraints */
     if (((unsigned)theObj & 7) != 0)
       return FALSE;
-#endif /* defined(sparc) || defined(hppa) */
+#endif /* defined(sparc) || defined(hppa) || defined(crts) */
   /* Check that theObj is non-negative */
   if ((long) theObj <= 0) return FALSE;
 
@@ -40,11 +40,11 @@ long isObject( theObj)
 long inBetaHeap( theObj)
   ref(Object) theObj;
 { 
-#if defined(sparc) || defined(hppa)
+#if defined(sparc) || defined(hppa) || defined(crts)
     /* For the SPARC inBetaHeap also checkes alignment constraints */
     if (((unsigned)theObj & 7) != 0)
       return FALSE;
-#endif /* defined(sparc) || defined(hppa) */
+#endif /* defined(sparc) || defined(hppa) || defined(crts) */
   if ((long) theObj <= 0) return FALSE;
   if (inIOA( theObj)) return TRUE;
   if (inAOA( theObj)) return TRUE;
@@ -106,7 +106,7 @@ ref(Object) CkP4;
 ref(Object) CkP5;
 
 #ifdef RTDEBUG
-#if !(defined(sparc)||defined(hppa))
+#if defined(mc68020)||defined(nti)||defined(linux)
 static void RegError(long pc, char *reg, ref(Object) value)
 {
   fprintf(output, "\nIllegal value for GC register at PC=0x%x: %s=0x%x\n", 
@@ -125,7 +125,7 @@ static long CheckCell(theCell)
   }
   return TRUE;
 }
-#endif /* !(defined(sparc)||defined(hppa)) */
+#endif /* defined(mc68020)||defined(nti)||defined(linux) */
 #endif /* RTDEBUG */
 
 /* Only used in debug version, but declared unconditionally in Declaration.run */
