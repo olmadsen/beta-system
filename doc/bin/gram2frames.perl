@@ -15,13 +15,13 @@ sub usage()
 }
 
 ########## Global variables #############################################
-# Flags for sub print_header
+# Flags for sub print_gram_header
 my $flag_hash  = 1;
 my $flag_print = 2;
 my $flag_base  = 4;
 my $flag_frame = 8;
 
-my $in_rules  = 0;
+my $in_gram_rules  = 0;
 
 # Command line
 my $verbose     = (defined($v)) ? 1 : 0;
@@ -83,7 +83,7 @@ $v = $f = $c = "";
 
 ########## Helper functions #############################################
 
-sub quote_html
+sub quote_gram_html
 # replace '<', '>', '&' with their HTML equivalents
 {
     local ($string) = $_[0];
@@ -93,7 +93,7 @@ sub quote_html
     return $string;
 }
 
-sub make_anchor
+sub make_gram_anchor
 {
     local ($name) = $_[0];
     push (@index, $name);
@@ -108,7 +108,7 @@ sub isLexem
     return (($name eq "const") || ($name eq "string") || ($name eq "nameappl") || ($name eq "namedecl"));
 }
 
-sub make_href1
+sub make_gram_href1
 { 
     local ($string) = $_[0];
     if ($string =~ m/<([-\w]+)>/) {
@@ -118,7 +118,7 @@ sub make_href1
 	return $string;
     }
 }
-sub make_href2
+sub make_gram_href2
 { 
     local ($string) = $_[0];
     if ($string =~ m/<([-\w]+):([-\w]+)>/) {
@@ -128,7 +128,7 @@ sub make_href2
 	return $string;
     }
 }
-sub make_comment
+sub make_gram_comment
 {
     local ($string) = $_[0];
     if ($string =~ m/\(\*(.*\*\))/) {
@@ -138,22 +138,22 @@ sub make_comment
     }
     return $string;
 }
-sub make_hrefs
+sub make_gram_hrefs
 {
     local ($string) = $_[0];
-    $string =~ s/(\(\*.*\*\))/&make_comment($1)/ge;
-    $string =~ s/(<[-\w]+>)/&make_href1($1)/ge;
-    $string =~ s/(<[-\w]+:[-\w]+>)/&make_href2($1)/ge;
+    $string =~ s/(\(\*.*\*\))/&make_gram_comment($1)/ge;
+    $string =~ s/(<[-\w]+>)/&make_gram_href1($1)/ge;
+    $string =~ s/(<[-\w]+:[-\w]+>)/&make_gram_href2($1)/ge;
     return $string;
 }
 
-sub make_h2
+sub make_gram_h2
 {
     local ($string) = $_[0];
     return "</PRE>\n<H2>$string</H2>\n<PRE>";
 }
 
-sub quote_strings
+sub quote_gram_strings
 # boldface literals and quote HTML in string constants
 {
     local ($line) = $_[0];
@@ -164,11 +164,11 @@ sub quote_strings
 	    $processedline .= $`;
 	    $after = $';
 	    $literal = $1;
-	    $literal = &quote_html($literal);
+	    $literal = &quote_gram_html($literal);
 	    # HTML tags are generated as <+...+> to avoid
 	    # interpreting, e.g. <B> as a rule in later
-	    # processing. The plus signs are removed by unquote_html.
-	    $literal = "<+B+>$literal<+/B+>" if ($in_rules);
+	    # processing. The plus signs are removed by unquote_gram_html.
+	    $literal = "<+B+>$literal<+/B+>" if ($in_gram_rules);
 	    $literal = "\'$literal\'";
 	    $processedline .= $literal;
 	    $line = $after;
@@ -180,7 +180,7 @@ sub quote_strings
     return  $processedline;
 }
 
-sub unplus_html
+sub unplus_gram_html
 # replace '<+' with '<' and , '+>' with '>'
 {
     local ($string) = $_[0];
@@ -224,7 +224,7 @@ EOT
     return $javascript;
 }
 
-sub print_header
+sub print_gram_header
 {
     local ($title, $basename, $flags) = @_;
     local ($doctype);
@@ -274,7 +274,7 @@ EOT
 EOT
 }
 
-sub print_trailer
+sub print_gram_trailer
 {
     local ($title) = @_;
 
@@ -291,12 +291,12 @@ sub print_trailer
 EOT
 }
 
-sub print_frameset()
+sub print_gram_frameset()
 {
     
     local ($title, $basename, $height) = @_;
 
-    &print_header($title,"",$flag_base|$flag_frame);
+    &print_gram_header($title,"",$flag_base|$flag_frame);
 
     print<<"EOT";
 <FRAMESET FRAMEBORDER=0 FRAMESPACING=0 BORDER=0 ROWS="$height,*">
@@ -322,12 +322,12 @@ EOT
 
 ###### Functions for body file ###############################
 
-sub print_nav_frame
+sub print_gram_nav_frame
 {
     local ($title) = @_;
     local ($javascript);
 
-    &print_header($title,"",$flag_base|$flag_print);
+    &print_gram_header($title,"",$flag_base|$flag_print);
 
     print <<EOT;
 <BODY onLoad='fixPrintButton("$imagedir", "\u$basename", "Grammar")'>
@@ -354,12 +354,12 @@ EOT
 }
 
 
-sub print_body_frame()
+sub print_gram_body_frame()
 {
 
     local ($file) = $_[0];
     
-    &print_header($title, $basename, $flag_hash);
+    &print_gram_header($title, $basename, $flag_hash);
 
     print<<"EOT";
 <BODY onLoad='HashFromParent();'>
@@ -372,32 +372,32 @@ EOT
 	$line = $_;
 	chomp($line);
 	if (/^\s*Option\s*$/i){
-	    $line=&make_h2($line);
+	    $line=&make_gram_h2($line);
 	} elsif (/^\s*Rule\s*$/i){
-	    $line=&make_h2($line);
-	    $in_rules = 1;
+	    $line=&make_gram_h2($line);
+	    $in_gram_rules = 1;
 	} elsif (/^\s*Attribute\s*$/i){
-	    $line=&make_h2($line);
-	} elsif ($in_rules){
-	    $line = &quote_strings($line);
+	    $line=&make_gram_h2($line);
+	} elsif ($in_gram_rules){
+	    $line = &quote_gram_strings($line);
 	    if ($line =~ m/^(\s*)<([-\w]+)>(\s*)::/) {
 		# line with rule definition
 		#   <name>   :: ...
 		#             ^ matched to here
 		$w1 = $1; $name = $2; $w2 = $3; 
 		$rest = $';
-		$name = &make_anchor($name);
+		$name = &make_gram_anchor($name);
 		# insert link from rightsides to corresponding leftsides:
-		$rest = &make_hrefs($rest);
+		$rest = &make_gram_hrefs($rest);
 		$line = $w1 . $name . $w2 . "::" . $rest;
 	    } else {
 		#line without rule definition
-		$line = &make_hrefs($line);
+		$line = &make_gram_hrefs($line);
 	    }
-	    $line = &unplus_html($line);
+	    $line = &unplus_gram_html($line);
 	} else {
 	    # Not yet in rules section
-	    $line = &quote_html($line);
+	    $line = &quote_gram_html($line);
 	}
 	print "$line\n";
     }
@@ -407,7 +407,7 @@ EOT
 </PRE>
 EOT
 
-    &print_trailer($title);
+    &print_gram_trailer($title);
 
 print<<EOT;
 </BODY>
@@ -419,7 +419,7 @@ EOT
 
 ######## Functions for index generation ##############################
 
-sub print_index_toc()
+sub print_gram_index_toc()
 {
     local ($i, $ch);
     print "<HR>\n";
@@ -435,11 +435,11 @@ sub print_index_toc()
     print "<HR>\n<P></P>\n";
 }
 
-sub print_index_nav_frame
+sub print_gram_index_nav_frame
 {
     local ($title, $basename) = @_;
 
-    &print_header($title,"",$flag_base|$flag_print);
+    &print_gram_header($title,"",$flag_base|$flag_print);
 
     print <<EOT;
 <BODY onLoad="fixPrintButton()">
@@ -461,8 +461,8 @@ EOT
 <TD colspan=2>
 EOT
 
-    &calculate_index();
-    &print_index_toc();
+    &calculate_gram_index();
+    &print_gram_index_toc();
 
     print<<EOT;
 </TD>
@@ -473,7 +473,7 @@ EOT
 EOT
 }
 
-sub calculate_index()
+sub calculate_gram_index()
 {
     local ($initial_ch, $i, $htmlbodyfile);
 
@@ -491,15 +491,15 @@ sub calculate_index()
 	($htmlbodyfile = $htmlfile) =~ s/\.html$/-body.html/;
 	$html_index .= "  <A href=\"$htmlbodyfile\#" . lc($index[$i]) . "\">&lt;" . $index[$i] . "&gt</A>\n";
     }
-    &print_index_toc;
+    &print_gram_index_toc;
     print "<PRE CLASS=gram>\n$html_index</PRE>\n";
 }
 
-sub print_index_header()
+sub print_gram_index_header()
 {
     local ($title) = @_;
 
-    &print_header($title,"",$flag_base);
+    &print_gram_header($title,"",$flag_base);
 
     print<<"EOT";
 <BODY>
@@ -521,13 +521,13 @@ browser's Find facility to get to the correct location within the page.</P>
 EOT
 }
 
-sub print_index_trailer()
+sub print_gram_index_trailer()
 {
     local $title = $_[0];
     print<<EOT;
 </PRE>
 EOT
-    &print_trailer($title);
+    &print_gram_trailer($title);
 
     print<<EOT;
 </BODY>
@@ -535,13 +535,13 @@ EOT
 EOT
 }
 
-sub print_index_frame()
+sub print_gram_index_frame()
 {
     local ($title) = @_;
 
-    &print_index_header($title);
+    &print_gram_index_header($title);
     print $html_index;
-    &print_index_trailer($title);
+    &print_gram_index_trailer($title);
 }
 
 ######## MAIN #######
@@ -572,17 +572,17 @@ printf STDERR "\nProcessing $file ... \n" if $verbose;
 
 printf STDERR "Writing frameset to $htmlfile ... \n" if $verbose==1;
 open (STDOUT, ">$htmlfile") || die "\nCannot open $htmlfile for writing: $!\n";
-&print_frameset($title, $basename,45);
+&print_gram_frameset($title, $basename,45);
 close (STDOUT);
 
 printf STDERR "Writing navigation frame to $htmlnavfile ... \n" if $verbose==1;
 open (STDOUT, ">$htmlnavfile") || die "\nCannot open $htmlnavfile for writing: $!\n";
-&print_nav_frame($title);
+&print_gram_nav_frame($title);
 close (STDOUT);
 
 printf STDERR "Writing body file to $htmlbodyfile ... \n" if $verbose==1;
 open (STDOUT, ">$htmlbodyfile") || die "\nCannot open $htmlbodyfile for writing: $!\n";
-&print_body_frame($file);
+&print_gram_body_frame($file);
 close (STDOUT);
 printf STDERR "done.\n" if $verbose;
 
@@ -590,17 +590,17 @@ printf STDERR "done.\n" if $verbose;
 
 printf STDERR "\nWriting index frameset to $inxfile ... \n" if $verbose;
 open (STDOUT, ">$inxfile") || die "\nCannot open $inxfile for writing: $!\n";
-&print_frameset("$title: Index", $inxbasename, 100);
+&print_gram_frameset("$title: Index", $inxbasename, 100);
 close (STDOUT);
 
 printf STDERR "Writing index navigation frame to $inxnavfile ... \n" if $verbose;
 open (STDOUT, ">$inxnavfile") || die "\nCannot open $inxnavfile for writing: $!\n";
-&print_index_nav_frame("$title: Index", $inxbasename);
+&print_gram_index_nav_frame("$title: Index", $inxbasename);
 close (STDOUT);
 
 printf STDERR "Writing index body to $inxbodyfile ... \n" if $verbose;
 open (STDOUT, ">$inxbodyfile") || die "\nCannot open $inxbodyfile for writing: $!\n";
-&print_index_frame("$title: Index");
+&print_gram_index_frame("$title: Index");
 close (STDOUT);
 printf STDERR "done.\n" if $verbose;
 
