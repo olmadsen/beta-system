@@ -1,6 +1,6 @@
 #ifndef _PSTORE_H_
 #define _PSTORE_H_
-#include "../C/beta.h"
+#include "beta.h"
 
 #ifdef sparc
 #define OURINLINE __inline__

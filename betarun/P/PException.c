@@ -1,8 +1,8 @@
 #include "beta.h"
-#include "../C/function.h"
+#include "function.h"
 #include "PException.h"
 #include "unswizzle.h"
-#include "../C/rtsighandler.h"
+#include "rtsighandler.h"
 
 #ifdef PERSIST
 

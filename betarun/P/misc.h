@@ -1,6 +1,6 @@
 #ifndef _P_MISC_H_
 #define _P_MISC_H_
-#include "../C/beta.h"
+#include "beta.h"
 #include "trie.h"
 
 typedef struct ObjectKey {

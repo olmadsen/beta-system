@@ -9,7 +9,7 @@
 #include "PStore.h"
 #include "crossStoreReferences.h"
 #include "misc.h"
-#include "../C/dot.h"
+#include "dot.h"
 
 /* */
 #ifdef PERSIST
