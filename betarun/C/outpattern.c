@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1992-01-01 22:21:06 $, SID: $Revision: 1.11 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1992-03-03 14:02:44 $, SID: $Revision: 1.12 $
  * by Lars Bak
  */
 
@@ -215,7 +215,6 @@ DisplayBetaStack( errorNumber, theObj)
   int errorNumber;
   ref(Object) theObj;
 {
-  ptr(long) stackptr;
   ptr(FILE) output;
 
   ptr(long)          theTop;

@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1992-02-27 13:18:30 $, SID: $Revision: 1.11 $
+ * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1992-03-03 14:02:11 $, SID: $Revision: 1.12 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -38,7 +38,6 @@ static ref(Object) AOAAllocate( size)
   long size;
 { ref(Block) newBlock(); /* Extern routine in block.c */
   ptr(long)  oldTop;
-  ref(Block) theBlock;
 
   if( AOABaseBlock == 0){
     if( MallocExhausted || (AOABlockSize == 0) ) return 0;
@@ -235,9 +234,6 @@ static FollowItem( theObj)
 
     ptr(short)     Tab;
     ptr(long)      theCell;
-    ref(ProtoType) statProto;
-    ptr(short)     statTab;
-    ref(Object)    statObj;
 
     /* Calculate a pointer to the GCTabel inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
