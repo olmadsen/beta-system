@@ -96,101 +96,12 @@ B.   Java specific
 B1.  Make (some) graphical Java debugger able to handle BETA?
      -> ask SUN
 
-B2.  Problem med foreløbige process implementation
-
-     Prøv at oversætte process/demo/lsl.bet med jbeta og start den:
-     
-     [r5.3] alex(421) ./lsl
-     Not yet implemented for JVM: systemenv_jvmbody:pioPrivate
-     Not yet implemented for JVM: processmanger_jvm:ProcessStillRunning
-     java.lang.VerifyError: (class: beta/slot$ProcessStartMDBody, method: d
-     o signature: ()V) Expecting to find object/array on stack
-	     at beta.SystemEnv$Process$start.slot$ProcessStartMDBody(../../
-     processmanagerbody.bet:1)
-	     at beta.SystemEnv$Process$start.do(../../processmanagerbody.be
-     t:55)
-	     at beta.SystemEnv$Process.start(../../processmanager.bet:1)
-	     at beta.program.do_2(../../lsl.bet:13)
-	     at beta.SystemEnv.do_1(../../basicsystemenv.bet:311)
-	     at beta.SysHead.do(../../basicsystemenv.bet:379)
-	     at beta.Component.run(Unknown Source)
-     Not yet implemented for JVM: systemenv:jvmbody:BasicScheduler: private
-     .mdpriv.check
-     
-     Jeg har endnu ikke kigget på hvad porblemet er, men det har at gøremed
-     at jeg i process/private/processmanager_jvm har lavet en klasse
-     OutErrHandler, som nedarver fra Java's thread klasse.
-     En sådan skal jeg instantiere til håndtering af processens stdout og
-     stderr, og det er denne instantiering jeg har problemer med.
-     Som du ser har jeg prøvet at erklære to forskellige constructors for
-     denne klasse, men begge har problemer: Det committede opfører sig som
-     ovenfor, mens man kan ændre til at bruge den anden constructor ved at
-     ændre en (if true ... if) i ---ProcessStartMDBody:descriptor--- til 
-     (if false ... if).
-     Den opfører sig anderledes, men det er også noget med forkert
-     initialisering.
-
-     ***** MERE:
-	  
-     Ole,
-     
-     jeg har checket en processmanager_jvm.bet ind , hvor der er puttet
-     lidt flere patterns ind, så kodestumperne bliver lidt mindre.
-     Hermed tror jeg jeg har fundet ud af hvad problemet med den ene type
-     instantiering er.
-     
-     Følgende kode
-     
-	    (# fisk1: @char;
-	    do private.jp.getInputStream 
-		 -> OutErrHandler._init_InputStream
-		 -> private.out[];
-	    #);
-     
-     giver følgende fejl (reformateret for læsbarhed):
-     
-     java.lang.VerifyError: 
-       class: beta/slot$ProcessStartMDBody$singular_3
-       method: do 
-       signature: ()V
-       Expecting to find object/array on stack
-     
-     En jcf-dump af den ser således ud (bred):
-     
-     Method name:"do" public Signature: 18=()void
-     Attribute "Code", length:99, max_stack:100, max_locals:100, code_length:49
-       0: aload_0
-       1: getfield #22=<Field beta.slot$ProcessStartMDBody$singular_3.origin beta.slot$ProcessStartMDBody>
-       4: getfield #30=<Field beta.slot$ProcessStartMDBody.origin beta.SystemEnv$Process$start>
-       7: getfield #35=<Field beta.SystemEnv$Process$start.origin beta.SystemEnv$Process>
-      10: getfield #41=<Field beta.SystemEnv$Process.private beta.SystemEnv$Process$private>
-      13: new #43=<Class beta.OutErrHandler>
-      16: dup
-      17: aload_0
-      18: getfield #22=<Field beta.slot$ProcessStartMDBody$singular_3.origin beta.slot$ProcessStartMDBody>
-      21: getfield #30=<Field beta.slot$ProcessStartMDBody.origin beta.SystemEnv$Process$start>
-      24: getfield #35=<Field beta.SystemEnv$Process$start.origin beta.SystemEnv$Process>
-      27: getfield #41=<Field beta.SystemEnv$Process.private beta.SystemEnv$Process$private>
-      30: getfield #49=<Field beta.SystemEnv$Process$private.jp java.lang.Process>
-      33: invokevirtual #55=<Method java.lang.Process.getInputStream ()java.io.InputStream>
-      36: invokespecial #58=<Method beta.OutErrHandler.<init> (beta.betaenv,java.io.InputStream)void>
-      39: checkcast #43=<Class beta.OutErrHandler>
-      42: checkcast #43=<Class beta.OutErrHandler>
-      45: putfield #62=<Field beta.SystemEnv$Process$private.out beta.OutErrHandler>
-      48: return
-     
-     Så vidt jeg kan se er problemet at constructoren for
-     beta.OutErrHandler forventer et beta.betaenv argument som første
-     argument, men at dette ikke er puttet på stakken.
-     Det er vel rigtigt nok at der forventes et betaenv argument, da det er
-     en klasse erklæret i BETA i LIB:attributes.
-     Men det er sikkert mekanismen med kald af statiske metoder, der ikke
-     tager højde for at en i BETA erklæret metode skal have origin med?
-     
+B2.  (Work around for problem implemented)     
 
 B3.  (Problem disappeared after recoding)
 
-B4.  Problem med objinterface (%asComponent og beta/lang/Object).
+B4.  * [OLM]
+     Problem med objinterface (%asComponent og beta/lang/Object).
 
      Jeg har prøvet at implementere lidt mere af objinterface til jvm (jeg
      skulle lige have en pause fra JNI (:-)).
@@ -214,7 +125,8 @@ B4.  Problem med objinterface (%asComponent og beta/lang/Object).
      
      Denne sidste fejl kommer ved at ændre print_field_values til true.
 
-B5.  Program:
+B5.  *** [OLM]
+     Program:
 
      Origin '~beta/basiclib/betaenv';
      --lib: attributes--
@@ -252,12 +164,59 @@ B5.  Program:
    java.lang.NoSuchFieldError: contents
         at beta.betaIndenter$setContents.do_1(../../indenter.bet:26)
 
+B6. * [OLM]
+    In the following code (can be activated by trying the demo
+    process/demo/lsl), the two temporary variables isr and temp are
+    needed.
+    If they are left out, verification errors will occur at run time:
+    Part of process/private/processmanager_jvm.bet:
+
+       OutErrHandler: Thread
+	 (# 
+	    is: ^InputStream;
+	    
+	    setstream: 
+	      (# 
+	      enter is[]
+	      #);
+	    
+	    run:
+	      (# br: ^BufferedReader;
+		 temp: ^String;
+		 isr: ^InputStreamReader;
+	      do is[] 
+		   -> InputStreamReader._init_InputStream
+		   -> isr[]; (* FIXME *)
+		 isr[]
+		   -> BufferedReader._init_Reader -> br[];
+		 read:
+		   (if (br.readLine->temp[] (* FIXME *))<>NONE then
+		       temp[] -> screen.putline;
+		       restart read;
+		   if);
+		 is.close;
+	      #);
+	 #);  
+
+    The first FIXME indicates that if the assignment is done as
+ 
+                 is[] 
+		   -> InputStreamReader._init_InputStream
+		   -> BufferedReader._init_Reader -> br[]
+
+    a verification error "call to wrong initialization method" occurs.
+    This has something to do with order of calls of <init> and
+    super-<init>
+    The second FIXME indicates that if temp is declared as Text
+    instead of String, the verification error "Unable to pop operand
+    off an empty stack" occurs.
 
 
 C.   .NET specific
 ==================
 
-C0.  Problem med nbeta (2003-09-04)
+C0.  *** [OLM/PA]
+     Problem med nbeta (2003-09-04)
 
      $ nbeta hello
      Mjolner BETA Compiler: 5.3(5.5.1303/117) - clr
