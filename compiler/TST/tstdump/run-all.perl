@@ -112,7 +112,7 @@ foreach $f (@files) {
 	    open(IN, "<output/$f.err");
 	    open(OUT, ">$f.ref") || die "Unable to write processed reference stderr: $!";
 	    while(<IN>) {
-		#s/MACHINE_TYPE/$objdir/g;
+		s/MACHINE_TYPE/$objdir/g;
 		s/\(address 0x\w+\)\s*//g;
 		s/\(address 0x\w+ <[^>]+>\)\s*//g;
 		s/Segmentation fault/Bus error/g;
@@ -139,7 +139,7 @@ foreach $f (@files) {
 	    open(IN, "<dumps/$f.dump");
 	    open(OUT, ">$f.ref") || die "Unable to write processed reference dump:$!";
 	    while(<IN>) {
-		#s/MACHINE_TYPE/$objdir/g;
+		s/MACHINE_TYPE/$objdir/g;
 		s/\(address 0x\w+\)\s*//g;
 		s/\(address 0x\w+ <[^>]+>\)\s*//g;
 		s/Segmentation fault/Bus error/g;
@@ -179,7 +179,7 @@ foreach $f (@files) {
 	    open(OUT, ">$f.candidate") || die "Unable to write candidate dump: $!";
 	    while(<IN>) {
 		next if (/\{/);
-		#s/$objdir/MACHINE_TYPE/g;
+		s/$objdir/MACHINE_TYPE/g;
 		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
 		s/address 0x[0-9a-f]+/address 0xXXXXXXXX/g;
 		print OUT;
