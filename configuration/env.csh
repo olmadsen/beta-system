@@ -141,7 +141,7 @@ case "IP[23][012]":
 	    setenv LD_LIBRARY_PATH ./sgi:$BETALIB/lib/sgi:$LD_LIBRARY_PATH
 	else
 	    setenv LD_LIBRARY_PATH ./sgi:$BETALIB/lib/sgi
-	#endif
+	endif
 	#
 	breaksw
 default:

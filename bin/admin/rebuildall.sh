@@ -1,5 +1,8 @@
 #! /usr/local/bin/tcsh
 
+# Der er frysning nu, lad vaer med at blande dig!!!
+exit 0
+
 ### Usage:
 # Put in crontab on machines where a periodical recompilation 
 # of all files and programs is desired.

@@ -119,7 +119,8 @@ case "`uname -m`" in
 		# And setting LD_LIBRARY_PATH on sgi's where LD_LIBRARYN32_PATH is
 		# also used by the linker may result in annoying runtime 
 		# warnings.
-		# LD_LIBRARY_PATH=$BETALIB/lib/sgi:$MOTIFHOME:$LD_LIBRARY_PATH
+		LD_LIBRARY_PATH=$BETALIB/lib/sgi:$LD_LIBRARY_PATH
+		export LD_LIBRARY_PATH
 		export PATH
 		objdir=sgi
 		;;

@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Any 16 bit integer as key for REAL-betarun;  Just don't forget the key!!
-PRODKEY=17439
+PRODKEY=23594
 
 if [ -z "$TARGET" ]; then echo "TARGET not set"; exit 1 ;fi
 MACHINE=`echo "$TARGET" | tr "[a-z]" "[A-Z]"`
