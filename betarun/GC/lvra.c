@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: lvra.c,v $, rel: %R%, date: $Date: 1991-02-26 15:20:18 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: lvra.c,v $, rel: %R%, date: $Date: 1991-03-04 11:40:42 $, SID: $Revision: 1.5 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -13,6 +13,11 @@ struct LVRABlock *LVRATopBlock;
 long LVRAFreeListAvailable = FALSE;
 long LVRACreateNewBlock    = FALSE;
 long LVRANumOfBlocks       = 0;
+
+/* LVRALastIOAGc contains the value of NumIOAGc last time
+ * LVRAConstructFreeList was executed.
+ */
+long LVRALastIOAGc         = 0;
 
 long LVRAFreeListMemory;
 
@@ -256,6 +261,7 @@ ref(ValRep) LVRAAlloc( range)
   }
   if( LVRAFreeListAvailable )
     if( newRep = LVRAFindInFree(range) ) return newRep;
+
   if( newRep = LVRAAllocInBlock( range) ) return newRep;
   rest = (LVRARestInBlock(LVRATopBlock)/4) - 4;
   if( rest >= 0 ){
@@ -266,26 +272,37 @@ ref(ValRep) LVRAAlloc( range)
       newRep->HighBorder = rest;
       LVRATopBlock->top =  (ptr(long)) Offset(LVRATopBlock->top, 4*(rest+4));
   }
-  LVRAConstructFreeList();
-  if( newRep = LVRAFindInFree(range) ) return newRep;
-  if( LVRATopBlock->next ){
-    LVRATopBlock = LVRATopBlock->next;
-    if( newRep = LVRAAllocInBlock( range) ) return newRep;       
-  }
-  if( LVRACreateNewBlock || (range > LVRABigRange) ){
-    if( MallocExhausted ) return 0;
-    if( ValRepSize(range) > LVRABlockSize) size = ValRepSize(range);
-    else size = LVRABlockSize;
-    if( (LVRATopBlock->next = newLVRABlock( size) ) == 0 ){
-      MallocExhausted = TRUE; return 0;
+  if( LVRALastIOAGc != NumIOAGc){
+    LVRAConstructFreeList();
+    if( newRep = LVRAFindInFree(range) ) return newRep;
+    if( LVRATopBlock->next ){
+      LVRATopBlock = LVRATopBlock->next;
+      if( newRep = LVRAAllocInBlock( range) ) return newRep;       
     }
-    LVRATopBlock = LVRATopBlock->next;
-    LVRACreateNewBlock = FALSE;
-    if( newRep = LVRAAllocInBlock( range) ) return newRep;
-  };
+    if( LVRACreateNewBlock || (range > LVRABigRange) ){
+      if( MallocExhausted ) return 0;
+      if( ValRepSize(range) > LVRABlockSize) size = ValRepSize(range);
+      else size = LVRABlockSize;
+      if( (LVRATopBlock->next = newLVRABlock( size) ) == 0 ){
+	MallocExhausted = TRUE; return 0;
+      }
+      LVRATopBlock = LVRATopBlock->next;
+      LVRACreateNewBlock = FALSE;
+      if( newRep = LVRAAllocInBlock( range) ) return newRep;
+    }
+  }
   LVRACompaction();
   if( newRep = LVRAAllocInBlock( range) ) return newRep;
   if( newRep = LVRAFindInFree(range) ) return newRep;
+  if( MallocExhausted ) return 0;
+  if( ValRepSize(range) > LVRABlockSize) size = ValRepSize(range);
+  else size = LVRABlockSize;
+  if( (LVRATopBlock->next = newLVRABlock( size) ) == 0 ){
+    MallocExhausted = TRUE; return 0;
+  }
+  LVRATopBlock = LVRATopBlock->next;
+  LVRACreateNewBlock = FALSE;
+  if( newRep = LVRAAllocInBlock( range) ) return newRep;
   return 0;
 }
 
@@ -398,6 +415,7 @@ LVRACompaction()
 
   INFO_LVRA( fprintf( output, " %dKb in %d blocks, %d%% free)\n",
 		     toKb(sizeBlocks), numBlocks, (100*saved)/sizeBlocks));
+  LVRALastIOAGc = 0;
 }
 
 LVRAAlive( theRep)
@@ -493,6 +511,7 @@ LVRAConstructFreeList()
   INFO_LVRA( fprintf( output, "  %dKb in %d blocks, %dKb free)\n",
 		     toKb(sizeBlocks), numBlocks, toKb(saved)));
   DEBUG_LVRA( LVRADisplayTable() );
+  LVRALastIOAGc = NumIOAGc;
 }
 
 LVRAStatistics()
