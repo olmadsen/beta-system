@@ -81,7 +81,12 @@ void AOAtoIOAInsert( theCell)
     ptr(long) table = BlockStart( AOAtoIOAtable);
     long      index, count;
 
-    /*fprintf(output, "AOAtoIOAInsert: 0x%x\n", theCell);*/
+#ifdef RTDEBUG
+    if (!inAOA( theCell)) {
+      fprintf(output, "AOAtoIOAInsert: 0x%x not in AOA!\n", theCell);
+      Illegal(); /* useful to break in */
+    }
+#endif
 
 #ifdef RTLAZY
     if ( isNegativeProto(*(int *) theCell)) {
