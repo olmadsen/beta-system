@@ -87,6 +87,12 @@ register volatile void *GCreg4 __asm__("%o4");
     __asm__("ret; restore %0, 0, %%i1"::"r" (value));   \
     return value /* keep gcc happy */
 
+#define return_in_i1_and_i0(value)                             \
+    __asm__ volatile("":: "r" (value));                 \
+    __asm__("mov %0, %%i0"::"r" (value));   \
+    __asm__("ret; restore %i0, 0, %i1");   \
+    return value /* keep gcc happy */
+
 #define return_in_i0(value)                             \
     __asm__ volatile("":: "r" (value));                 \
     __asm__("ret; restore %0, 0, %%i0"::"r" (value));   \

@@ -31,7 +31,7 @@ ParamOriginProto(Structure *, AlloS)
   Ck(newStruct); Ck(origin);
   
 #ifdef sparc
-    return_in_i1(newStruct);
+    return_in_i1_and_i0(newStruct);
 #else
   RETURN(newStruct);
 #endif

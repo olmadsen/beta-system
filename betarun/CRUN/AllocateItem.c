@@ -87,11 +87,7 @@ ParamOriginProto(Item *,AlloH)
 
     GCable_Exit(1);    
 
-#ifdef sparc
-    return_in_i1(item);
-#else
     RETURN(item);
-#endif
 }
 
 
