@@ -59,7 +59,11 @@ extern void *ReAlloc(void *p, Size size);
  * 2M      2048                  16k
  */
 
+#ifdef RTDEBUG
+#define SECTOR_BITS (2+10) /* Force frequent AOAGc */
+#else
 #define SECTOR_BITS (2+10+10)  /* 4 Mbyte */
+#endif
 
 #define SECTOR_SIZE (1 << SECTOR_BITS)
 #define SECTOR_MASK (SECTOR_SIZE-1)
@@ -194,17 +198,21 @@ do {                               \
 #define AOAISDEAD(obj)       ((obj)->GCAttr == DEADOBJECT)
 #define AOAISFREE(obj)       ((obj)->GCAttr == FREECHUNK)
 #define AOAISALIVE(obj)      ((unsigned long)((obj)->GCAttr) >=  LISTEND)
+
 #ifdef PERSIST
+#define PERSISTENTTAG        1
+#define PUTOI(objInfo)       ((u_long)objInfo | PERSISTENTTAG)
+#define GETOI(objInfo)       ((u_long)objInfo & ~PERSISTENTTAG)
 #define inPIT(ip)            (((void *)(ip) < PITLimit) && ((void *)(ip) >= PIT))
-#define AOAISPERSISTENT(obj) (inPIT((void *)((obj)->GCAttr)))
-#define PERSISTENTMARK(inx)  ((long)newPUID(inx))
+#define AOAISPERSISTENT(obj) ((((obj)->GCAttr) > LISTEND) && (((obj)->GCAttr) & PERSISTENTTAG))
+#define IOAISPERSISTENT(obj) (((obj)->GCAttr) == IOAPersist)
 #endif /* PERSIST */
 #define isLink(gcattr)       ((unsigned long)(gcattr) > LISTEND)
 #define isEnd(gcattr)        ((gcattr) == LISTEND)
 
 #ifdef PERSIST
 #define isAutonomous(gc)   ((IOAMinAge <= (gc)) && ((gc) <= IOAPersist))
-#define isForward(gc)      (!isStatic(gc) && (unsigned long)(gc) > LISTEND)
+#define isForward(gc)      (!isStatic(gc) && (unsigned long)(gc) > IOAPersist)
 #else 
 #define isAutonomous(gc)   ((IOAMinAge <= (gc)) && ((gc) <= IOAMaxAge))
 #define isForward(gc)      (!isStatic(gc) && (unsigned long)(gc) > IOAMaxAge)
@@ -233,7 +241,7 @@ do {                               \
 #define LongAlign(numbytes)       ((unsigned long)(((numbytes)+3) & ~3))
 #define LongAlignDown(numbytes)   ((unsigned long)(((numbytes))   & ~3))
 
-/* It is INTENSIONAL that we use of LongAlign instead of ObjectAlign below.
+/* It is INTENTIONAL that we use of LongAlign instead of ObjectAlign below.
  * This meens that RepSize <> RepBodySize + HeadSize (the latter may be 4 less). 
  */
 #define ByteRepBodySize(range)   LongAlign((range)+1) /* +1 for NULL termination */

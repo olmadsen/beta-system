@@ -18,5 +18,6 @@ unsigned long STSize(sequenceTable *currentTable);
 unsigned long STInsert(sequenceTable **tableSite, void *elm);
 void *STLookup(sequenceTable *currentTable, unsigned long inx);
 void STFree(sequenceTable **currentTable);
+unsigned long STtop(sequenceTable *currentTable);
 
 #endif /* _SEQUENCETABLE_H_ */

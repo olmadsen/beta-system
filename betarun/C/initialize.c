@@ -23,8 +23,9 @@ GLOBAL(long mcheck_line);
 #endif /* DMALLOC */
 
 #ifdef PERSIST
-extern void initObjectTable(void);
+extern void initLoadedObjects(void);
 extern void initReferenceTable(void);
+extern void SMinit(void);
 #endif /* PERSIST */
 
 #ifdef RTVALHALLA
@@ -375,7 +376,8 @@ void Initialize()
 #endif /* nti_bor */
 
 #ifdef PERSIST
-  initObjectTable();
+  SMinit();
+  initLoadedObjects();
   initReferenceTable();
 #endif /* PERSIST */
 }

@@ -94,7 +94,7 @@
 /********* Definition of RUN, CRUN, NEWRUN *********/
 
 #ifdef MAC
-#define PERSIST
+/* #define PERSIST */
 #endif
 
 #ifdef intel
@@ -111,7 +111,7 @@
 #endif
 
 /* New persistence */
-#if defined(sparc) || defined(intel) || defined(sgi)
+#if defined(sparc) /* || defined(intel) || defined(sgi) */
 #define PERSIST
 /* #define USEMMAP  uses to mych RAM */
 #endif /* sparc || intel || defined(sgi) */
@@ -304,18 +304,5 @@
 #  define InfoS_End()
 #endif
 
-
-#define DEADOBJECT 1
-#define FREECHUNK 2
-#ifdef PERSIST
-#define AOASpecial 3
-#define LISTEND IOAPersist + 1
-#else
-#define LISTEND 3
-#endif /* PERSIST */
-
 #define REFERENCEACTIONARGSTYPE Object **theCell, long refType
 #define REFERENCEACTIONARGS theCell
-
-#define UNKNOWNSTORE "AOA"
-#define UNKNOWNID 0

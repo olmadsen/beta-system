@@ -1,18 +1,21 @@
 #ifndef _UNSWIZZLE_H_
 #define _UNSWIZZLE_H_
 #include "beta.h"
+#include "storageblock.h"
 
 #define BETAENVOBJ 42 /* must match tag for BETAENVOBJ in virtualobjectstore.bet */
 #define PRGOBJ 43 /* must match tag for PROGRAM in virtualobjectstore.bet */
 
-Object *unswizzleReference(void *ip);
-Object *lookUpReferenceEntry(unsigned long store, unsigned long offset, unsigned long inx);
+Object *unswizzleReference(void *ip, u_long follow);
+Object *lookUpReferenceEntry(CAStorage *store,
+                             unsigned long offset,
+                             unsigned long inx,
+                             u_long follow);
 Object *handleSpecialReference(unsigned long specRef);
-void registerRebinderFunc(Object *(*rebinderFunc)(unsigned long objectTag, 
-						  unsigned long typeTag));
-void registerOpenCrossStoreFunc(void (*openCrossStoreFunc)(char *host, 
-							   char *path));
+void registerRebinderFunc(Object *(*rebinderFunc)(unsigned long tag));
 void showUnswizzleStatistics(void);
-void registerBETAENV(Object *theObj);
-
+Object *USloadObject(CAStorage *store,
+                     unsigned long offset,
+                     unsigned long inx,
+                     u_long follow);
 #endif /* _UNSWIZZLE_H_ */

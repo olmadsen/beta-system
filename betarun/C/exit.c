@@ -5,14 +5,6 @@
  *    S|ren Brandt and S|ren Pingel Dalsgaard
  */
 #include "beta.h"
-
-#ifdef PERSIST
-
-
-#include "misc.h"
-#include "PStore.h"
-#endif /* PERSIST */
-
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
@@ -169,9 +161,6 @@ void BetaExit(long number)
     thr_exit(NULL);
   }
 #else
-#ifdef PERSIST
-  INFO_PERSISTENCE(showStatistics());
-#endif /* PERSIST */
 
   TIME_IOA(fprintf(output,"[Accumulated ioatime = %dms]\n", (int)ioatime));
   TIME_AOA(fprintf(output,"[Accumulated aoatime = %dms]\n", (int)aoatime));
@@ -189,13 +178,7 @@ void BetaExit(long number)
     int fd = fileno(stdin);
     fcntl(fd, F_SETFL, 0); 
   }
-#endif /* UNIX */
-
-#ifdef PERSIST
-  saveCurrentStore();
-  closeCurrentStore();
-#endif /* PERSIST */
-  
+#endif /* UNIX */  
   exit(number);
 #endif
 }

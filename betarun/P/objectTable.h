@@ -2,35 +2,44 @@
 #define _OBJECTTABLE_H_
 
 #include "beta.h"
+#include "storageblock.h"
+#include "referenceTable.h"
 
-unsigned long insertObject(unsigned short GCAttr,
-			   unsigned short Flags,
-			   unsigned long store,
-			   unsigned long offset,
-			   Object *theObj);
-void objectLookup(unsigned long inx,
-		  unsigned short *GCAttr,
-		  unsigned long *store,
-		  unsigned long *offset,
-		  Object **theObj);
-unsigned long indexLookupOT(unsigned long store, unsigned long offset);
-void OTCheck(void (*checkAction)(Object *theObj, void *generic));
-void OTStartGC(void);
+/* Persistent objects contain, in their GCAttribute, a reference to a
+ * runtime object containing some information on the persistent
+ * object.  */
+typedef struct _ObjInfo {
+#ifdef COM
+   long *vtbl;
+#else /* !COM */
+   ProtoType *Proto;     
+#endif /* COM */
+   u_long     GCAttr;       /* The GC attribute            */
+   u_long     flags;        /* Misc. flags for this entry. */
+   CAStorage *store;        /* The store in which this object is saved */
+   u_long     offset;       /* The byte offset in the store of the object */  
+   Object    *theObj;       /* The object in memory */
+} ObjInfo;
+
+void initLoadedObjects(void);
+void insertStoreOffset(CAStorage *store, u_long offset, u_long info, Trie **loadedObjects);
+ObjInfo *objectInfo(u_short flags,
+                    CAStorage *store,
+                    u_long offset,
+                    Object *theObj);
+ObjInfo *lookupObjectInfo(CAStorage *store, u_long offset);
+void markObject(Object *obj, int follow);
 void objectAlive(Object *theObj);
+u_long objectIsDead(Object *theObj);
+void setCurrentStoreID(CAStorage *ID);
+void phaseOne(void);
+void handlePersistentCell(REFERENCEACTIONARGSTYPE);
+void phaseThree(void);
+void phaseFive();
 void OTEndGC(void);
-void flushDelayedEntries(void);
-void updatePersistentObjects(void);
-void removeUnusedObjects(void);
-void initObjectTable(void);
-unsigned long OTSize(void);
-void insertStoreOffsetOT(unsigned long store, unsigned long offset, unsigned long inx);
-
-#define ENTRYDEAD         0     
-#define ENTRYALIVE        1     
-#define POTENTIALLYDEAD   3     
-#define DELAYEDENTRYALIVE 4     
 
 #define FLAG_INSTORE      1
 #define FLAG_INMEM        0
 
 #endif /* _OBJECTTABLE_H_ */
+

@@ -53,8 +53,6 @@ newBlock(long size)
     theBlock->next  = 0;
     theBlock->top   = BlockStart( theBlock );
     theBlock->limit = (long *) ((long) BlockStart( theBlock) + (long) size);
-    theBlock -> dummy = (void *)UNKNOWNSTORE;
-    theBlock -> id = UNKNOWNID;
   }
   return theBlock;
 }

@@ -176,24 +176,24 @@ void assignRef(long *theCell, Item * newObject)
  * then insert in AOAtoIOA table.
  */
 {
-  *(Item **)theCell = newObject;
-  if (!inIOA(theCell)){
-    /* theCell is in AOA */
-    if (inIOA(newObject)){
+   *(Item **)theCell = newObject;
+   if (!inIOA(theCell)){
+      /* theCell is in AOA */
+      if (inIOA(newObject)){
 #ifdef MT
-      MT_AOAtoIOAInsert((Object **)theCell);
+         MT_AOAtoIOAInsert((Object **)theCell);
 #else /* MT */
-      AOAtoIOAInsert((Object **)theCell);
+         AOAtoIOAInsert((Object **)theCell);
 #endif /* MT */
-      return;
-    }
+         return;
+      }
 #ifdef PERSIST
-    else if (inPIT(newObject)) {
-      newAOAclient((unsigned long)newObject, (Object **)theCell);
-      return;
-    }
+      else if (inPIT(newObject)) {
+         /* newAOAclient(newObject, (Object **)theCell); */
+         return;
+      }
 #endif /* PERSIST */
-  }
+   }
 }
 
 void PrintProto(ProtoType *proto)

@@ -163,7 +163,6 @@ void TInsert(unsigned long key,
 }
 
 #define TRIEFACTOR 8
-
 static void _TInsert(unsigned long key, 
 		     unsigned long contents, 
 		     Node *current, 
@@ -282,6 +281,22 @@ static void _TIFree(Node *current, Trie *trie, void (*freeFunc)(unsigned long))
   if (current -> right != 0) {
     _TIFree(NODE(current -> right), trie, freeFunc);
   }
+}
+
+static Trie **_dst;
+
+void addFunc(contentsBox *cb)
+{ 
+    TInsert(cb -> key, 
+            cb -> contents, 
+            _dst, 
+            cb -> key);
+}
+
+void TIadd(Trie **dst, Trie *src)
+{
+    _dst = dst;
+    TIVisit(src, addFunc);
 }
 
 /* Below we include functions very similar to the above, only the key

@@ -577,179 +577,180 @@ static void AOARefStackUnHack(void)
 
 void AOAGc()
 {
-  long *pointer;
-  long *cellptr;
-  Object *target;
-  Block *currentBlock;
-  long starttime = 0;
-  unsigned long freeAtStart = totalFree;
-  unsigned long freed;
+   long *pointer;
+   long *cellptr;
+   Object *target;
+   Block *currentBlock;
+   long starttime = 0;
+   unsigned long freeAtStart = totalFree;
+   unsigned long freed;
 
-  if (!AOABaseBlock)
-    return;
+   if (!AOABaseBlock)
+      return;
 
-  NumAOAGc++;
+   NumAOAGc++;
   
-  TIME_AOA(starttime = getmilisectimestamp());
+   TIME_AOA(starttime = getmilisectimestamp());
   
-  INFO_AOA({
-    starttime = getmilisectimestamp();
-    fprintf(output,"\n#(AOA-%d[ioa#%d]:", (int)NumAOAGc, (int)NumIOAGc);
-  });
+   INFO_AOA({
+      starttime = getmilisectimestamp();
+      fprintf(output,"\n#(AOA-%d[ioa#%d]:", (int)NumAOAGc, (int)NumIOAGc);
+   });
 
-  MAC_CODE(RotateTheCursorBack());
+   MAC_CODE(RotateTheCursorBack());
   
-  AOARefStackHack();
+   AOARefStackHack();
   
-  AOAFreeListAnalyze1();
-  STAT_AOA(AOADisplayFreeList());
+   AOAFreeListAnalyze1();
+   STAT_AOA(AOADisplayFreeList());
   
-  /* Based on the AOARoots all objects reachable from those roots
-   * are collected in a linked list. After that AOA is scanned and
-   * objects not in the list are considered dead and inserted in the
-   * free lists.
-   */
+   /* Based on the AOARoots all objects reachable from those roots
+    * are collected in a linked list. After that AOA is scanned and
+    * objects not in the list are considered dead and inserted in the
+    * free lists.
+    */
   
-  pointer = AOArootsPtr;
+   pointer = AOArootsPtr;
   
-  /* Clear AOAtoIOAtable. It will be rebuild by 
-   * extend- and initialCollectList. */
-  AOAtoIOAClear();
+   /* Clear AOAtoIOAtable. It will be rebuild by 
+    * extend- and initialCollectList. */
+   AOAtoIOAClear();
+   
+   /* AOAGc clears the free list and rebuilds it during the scan of the
+      live objects. Because AOA skips the scan of persistent objects,
+      references from such objects into IOA are not inserted in
+      AOAToIOATable. But this is not a problem, since there are no
+      references from persistent AOA objects to IOA at this point. The
+      entire transitive closure of the persistent objects have been
+      moved to AOA. */
+   MAC_CODE(RotateTheCursorBack());
   
-  /* AOAGc clears the free list and rebuilds it during the scan of the
-     live objects. Because AOA skips the scan of persistent objects,
-     references from such objects into IOA are not inserted in
-     AOAToIOATable. But this is not a problem, since there are no
-     references from persistent AOA objects to IOA at this point. The
-     entire transitive closure of the persistent objects have been
-     moved to AOA. */
-  MAC_CODE(RotateTheCursorBack());
-  
-  DEBUG_AOA(fprintf(output,"[Marking all Live Objects in AOA]\n"));
-  if (pointer < AOArootsLimit) {
-    /* Clear old tail (if any) */
-    clearTail();
+   DEBUG_AOA(fprintf(output,"[Marking all Live Objects in AOA]\n"));
+   if (pointer < AOArootsLimit) {
+      /* Clear old tail (if any) */
+      clearTail();
     
-    while (pointer < AOArootsLimit) {
-      cellptr = (long*)(*pointer & ~1);
+      while (pointer < AOArootsLimit) {
+         cellptr = (long*)(*pointer & ~1);
 #ifdef PERSIST
-      Claim(!inPIT((void *)*cellptr), "What ??");
+         Claim(!inPIT((void *)*cellptr), "What ??");
 #endif /* PERSIST */
-      target = getRealObject((Object *)*cellptr);
+         target = getRealObject((Object *)*cellptr);
 #ifdef PERSIST
-      if (!AOAISPERSISTENT(target)) {
-	collectList(target, prependToListInAOA);
-      } else {
-	objectAlive(target);
-      }
+         if (!AOAISPERSISTENT(target)) {
+            collectList(target, prependToListInAOA);
+         } else {
+            objectAlive(target);
+         }
 #else
-      collectList(target, prependToListInAOA);
+         collectList(target, prependToListInAOA);
 #endif /* PERSIST */
-      pointer++;
-    }
-  }
+         pointer++;
+      }
+   }
   
-  /* The object pointed to by root is now the head of the linked list
-   * of all live objects in AOA.  */
+   /* The object pointed to by root is now the head of the linked list
+    * of all live objects in AOA.  */
   
 #ifdef PERSIST
-  /* All persistent objects not directly referred by live objects are
-     now marked as POTENTIALLYDEAD in the PObjectsTabel. They should
-     be checkpointed to the store and declared DEAD so that the
-     ensuing sweep will collect them. */
-  removeUnusedObjects();
+   /* All persistent objects not directly referred by live objects are
+      now marked as DEAD in their object info object . They should be
+      checkpointed to the store and declared DEAD so that the ensuing
+      sweep will collect them.
+   */
+   phaseFive();
 #endif /* PERSIST */
 
-  /* Scan AOA and insert dead objects in the freelist */
+   /* Scan AOA and insert dead objects in the freelist */
   
-  MAC_CODE(RotateTheCursorBack());
+   MAC_CODE(RotateTheCursorBack());
   
-  INFO_AOA({
-    fprintf(output, "AOA-%d startsweep, marktime=%dms\n", 
-	    (int)NumAOAGc, (int)(getmilisectimestamp() - starttime));
-  });
+   INFO_AOA({
+      fprintf(output, "AOA-%d startsweep, marktime=%dms\n", 
+              (int)NumAOAGc, (int)(getmilisectimestamp() - starttime));
+   });
   
-  /* Clear the free lists */
-  DEBUG_AOA(fprintf(output,"[AOACleanFreeList]\n"));
-  AOACleanFreeList();
+   /* Clear the free lists */
+   DEBUG_AOA(fprintf(output,"[AOACleanFreeList]\n"));
+   AOACleanFreeList();
   
-  /* All space is alive until proven dead */
-  totalFree = 0;
+   /* All space is alive until proven dead */
+   totalFree = 0;
   
-  DETAILEDSTAT_AOA(fprintf(output,"[Blocks: freed/free/total:\n"));
+   DETAILEDSTAT_AOA(fprintf(output,"[Blocks: freed/free/total:\n"));
   
-  /* Scan each block in AOA. */
-  LVRSizeSum = 0;
-  currentBlock = AOABaseBlock;
-  while (currentBlock) {
-    long freeInBlock;
-    /* Then each chunk in the block is examined */
+   /* Scan each block in AOA. */
+   LVRSizeSum = 0;
+   currentBlock = AOABaseBlock;
+   while (currentBlock) {
+      long freeInBlock;
+      /* Then each chunk in the block is examined */
     
-    freeInBlock = AOAScanMemoryArea(BlockStart(currentBlock),
-				    currentBlock -> top);
-    totalFree += freeInBlock;
+      freeInBlock = AOAScanMemoryArea(BlockStart(currentBlock),
+                                      currentBlock -> top);
+      totalFree += freeInBlock;
 
-    DETAILEDSTAT_AOA(fprintf(output,"[0x%08x/0x%08x/0x%08x] ",
-			     (int)collectedMem, (int)freeInBlock, (int)BlockNumBytes(currentBlock)));
+      DETAILEDSTAT_AOA(fprintf(output,"[0x%08x/0x%08x/0x%08x] ",
+                               (int)collectedMem, (int)freeInBlock, (int)BlockNumBytes(currentBlock)));
     
-    currentBlock = currentBlock -> next;
-  }
-  freed = totalFree-freeAtStart;
+      currentBlock = currentBlock -> next;
+   }
+   freed = totalFree-freeAtStart;
 
-  DETAILEDSTAT_AOA(fprintf(output,"]\n"));
+   DETAILEDSTAT_AOA(fprintf(output,"]\n"));
 
-  AOARefStackUnHack();
+   AOARefStackUnHack();
   
-  if (totalAOASize > 100 
-      && (unsigned long)(freed / (totalAOASize / 100)) 
-      < (unsigned long)AOAPercentage) {
-    AOAMinSizeForGC = totalAOASize + (totalAOASize / 100) * AOAPercentage;
-    /* Still overfull. */
-  } else {
-    OverFullFlag = 0;
-  }
-  AOASizeAtGC = totalAOASize;
-  AOAFreeAtGC = totalFree;
+   if (totalAOASize > 100 
+       && (unsigned long)(freed / (totalAOASize / 100)) 
+       < (unsigned long)AOAPercentage) {
+      AOAMinSizeForGC = totalAOASize + (totalAOASize / 100) * AOAPercentage;
+      /* Still overfull. */
+   } else {
+      OverFullFlag = 0;
+   }
+   AOASizeAtGC = totalAOASize;
+   AOAFreeAtGC = totalFree;
 
 #ifndef USEMMAP
-  if (totalFree < AOAMinFree) {
-    AOANewBlock(0);  /* alloc block of min size */
-  }
+   if (totalFree < AOAMinFree) {
+      AOANewBlock(0);  /* alloc block of min size */
+   }
 #endif
 
-  STAT_AOA(AOADisplayFreeList());
+   STAT_AOA(AOADisplayFreeList());
 
-  /* Now all blocks have been scanned and all dead objects inserted
-   * in the freelists. 
-   * Analyze freelists to determine the strategy for allocation. 
-   */
+   /* Now all blocks have been scanned and all dead objects inserted
+    * in the freelists. 
+    * Analyze freelists to determine the strategy for allocation. 
+    */
       
-  MAC_CODE(RotateTheCursorBack());
+   MAC_CODE(RotateTheCursorBack());
 
-  AOAFreeListAnalyze2();
-  STAT_AOA({
-    fprintf(output, "AOA-%d aoasize=0x%08x aoafree=0x%08x\n",
-	    (int)NumAOAGc, (int)totalAOASize, (int)totalFree);
-    fflush(output);
-  });
-  DETAILEDSTAT_AOA({
-    fprintf(output, "AOA-%d VR=0x%08x numobjects=0x%08x\n",
-	    (int)NumAOAGc, (int)LVRSizeSum,  (int)objectsInAOA);
-    fflush(output);
-  });
+   AOAFreeListAnalyze2();
+   STAT_AOA({
+      fprintf(output, "AOA-%d aoasize=0x%08x aoafree=0x%08x\n",
+              (int)NumAOAGc, (int)totalAOASize, (int)totalFree);
+      fflush(output);
+   });
+   DETAILEDSTAT_AOA({
+      fprintf(output, "AOA-%d VR=0x%08x numobjects=0x%08x\n",
+              (int)NumAOAGc, (int)LVRSizeSum,  (int)objectsInAOA);
+      fflush(output);
+   });
   
-  INFO_AOA({
-    fprintf(output, "AOA-%d done, freed 0x%x, free 0x%x, size 0x%x,\n"
-	    "OF=%d, aoatime=%dms)\n", 
-	    (int)NumAOAGc, (int)freed, (int)totalFree, (int)totalAOASize,
-	    (int)OverFullFlag, (int)(getmilisectimestamp() - starttime));
-  });
+   INFO_AOA({
+      fprintf(output, "AOA-%d done, freed 0x%x, free 0x%x, size 0x%x,\n"
+              "OF=%d, aoatime=%dms)\n", 
+              (int)NumAOAGc, (int)freed, (int)totalFree, (int)totalAOASize,
+              (int)OverFullFlag, (int)(getmilisectimestamp() - starttime));
+   });
 
-  AOANeedCompaction = FALSE;
-  forceAOAGC = FALSE;
-  TIME_AOA(aoatime += (int)(getmilisectimestamp() - starttime));
+   AOANeedCompaction = FALSE;
+   forceAOAGC = FALSE;
+   TIME_AOA(aoatime += (int)(getmilisectimestamp() - starttime));
 
-  lastAOAGCAt = NumIOAGc;
+   lastAOAGCAt = NumIOAGc;
 }
 
  
@@ -1094,7 +1095,7 @@ static void prependToListInIOA(Object *target)
   } else {
     /* 'target' has a reference in it's GCField.  Thus it is already
      * in the list. */
-    Claim(isForward((long)target), "Target is not in the list");
+    Claim(isLink((long)target), "Target is not in the list");
   }
 }
 
@@ -1150,7 +1151,7 @@ void prependToList(Object *target)
     } else {
       /* 'target' has a reference in it's GCField. 
        * Thus it is already in the list. */
-      Claim(isForward((long)target), "Target is not in the list");
+      Claim(isLink((long)target), "Target is not in the list");
     }
   } else {
     /* target is outside the heap. Okay for e.g. COM objects. */
@@ -1164,46 +1165,45 @@ void prependToList(Object *target)
 /* Prepend objects to the list including only objects in AOA. */
 void prependToListInAOA(REFERENCEACTIONARGSTYPE)
 {
-  Object *realObj, *theObj;
+   Object *realObj, *theObj;
 
-  Claim(inAOA(theCell), "prependToListInAOA:inAOA(theCell)");
-  Claim((int)*theCell, "prependToListInAOA:*theCell");
-  Claim(!inIOA(*theCell), "!inIOA(*theCell)");
+   Claim(inAOA(theCell), "prependToListInAOA:inAOA(theCell)");
+   Claim((int)*theCell, "prependToListInAOA:*theCell");
+   Claim(!inIOA(*theCell), "!inIOA(*theCell)");
   
-  theObj = *theCell;
+   theObj = *theCell;
 #ifdef PERSIST
-  if (!inPIT((void *)theObj)) {
-    realObj = getRealObject(theObj);
+   if (!inPIT((void *)theObj)) {
+      realObj = getRealObject(theObj);
     
-    if (inToSpace(realObj)) {
-      AOAtoIOAInsert(theCell);
-    } else if (inAOA(realObj)) {
-      if (AOAISPERSISTENT(realObj)) {
-	/* The object is marked as persistent. */
-	objectAlive(realObj);
-      } else { 
-	prependToList(realObj);
+      if (inToSpace(realObj)) {
+         AOAtoIOAInsert(theCell);
+      } else if (inAOA(realObj)) {
+         if (AOAISPERSISTENT(realObj)) {
+            /* The object is marked as persistent. */
+            objectAlive(realObj);
+         } else { 
+            prependToList(realObj);
+         }
       }
-    }
-  } else {
-    /* This reference is a proxy reference */
-    referenceAlive((void *)theObj);
-    newAOAclient(getPUID((void *)theObj), theCell);
-  }
+   } else {
+      /* This reference is a proxy reference */
+      referenceCheck(theCell);
+   }
 #else
-  realObj = getRealObject(theObj);
+   realObj = getRealObject(theObj);
   
-  if (inToSpace(realObj)) {
-    AOAtoIOAInsert(theCell);
-  } else if (inAOA(realObj)) {
-    prependToList(realObj);
-  } else {
-    /* target is outside the heap. Okay for e.g. COM objects. */
-    DEBUG_CODE({
-      fprintf(output, "[prependToListInAOA: warning, target outside betaheaps: *0x%x=0x%x]\n", 
-	      (int)theCell, (int)theObj);
-    });
-  }
+   if (inToSpace(realObj)) {
+      AOAtoIOAInsert(theCell);
+   } else if (inAOA(realObj)) {
+      prependToList(realObj);
+   } else {
+      /* target is outside the heap. Okay for e.g. COM objects. */
+      DEBUG_CODE({
+         fprintf(output, "[prependToListInAOA: warning, target outside betaheaps: *0x%x=0x%x]\n", 
+                 (int)theCell, (int)theObj);
+      });
+   }
 #endif /* PERSIST */
 }
 

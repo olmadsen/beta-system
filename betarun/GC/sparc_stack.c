@@ -171,7 +171,8 @@ GeneralProcessStack(CellProcessFunc func)
 	  nextCBF = (RegWin *) theAR->l5;
 	  DEBUG_STACK({ 
 	    fprintf(output, "Met frame of HandleCB at SP=0x%x.\n",(int)theAR);
-	    if (valhallaID || callRebinderC) {
+
+	    if (valhallaID) {
 	      fprintf(output, "Cannot wind down past signal handler.\n");
 	      fprintf(output, "Skipping directly to SP=0x%x.\n", (int)theAR->l6);
 	    } else {

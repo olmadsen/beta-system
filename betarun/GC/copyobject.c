@@ -7,8 +7,8 @@
 #include "beta.h"
 
 #ifdef PERSIST
-#include "misc.h"
 #include "specialObjectsTable.h"
+#include "objectTable.h"
 #endif /* PERSIST */
 
 /*
@@ -113,28 +113,34 @@ Object * NewCopyObject(Object * theObj, Object ** theCell)
 #ifdef PERSIST
       if (GCAttribute == IOASpecial) {
 	insertSpecialObject(getTagForObject(theObj), newObj);
-      }
+      } else if (GCAttribute == IOAPersist) {
+         /* The object was a persistent object that has been moved to
+          * AOA. The object info for the object has been allocated,
+          * but is no longer correct since it has been moved. The info
+          * will be updated after the IOAGc has finished */
+         ;
+      }     
 #endif /* PERSIST */
       return newObj;
       
     } else {
       /* CopyObjectToAOA failed */
 #ifdef PERSIST
-      if ((theObj -> GCAttr != IOASpecial) && (theObj -> GCAttr != IOAPersist)) {
-	return CopyObject(theObj);
-      } else {
-	Object *theAOAObj;
-	
-	forceAOAAllocation = TRUE;
-	theAOAObj = NewCopyObject(theObj, theCell);
-	forceAOAAllocation = FALSE;
-	
-	Claim(inAOA(theAOAObj), "Where is theAOAObj?");
-	
-	return theAOAObj;
-      }
+       if ((GCAttribute == IOASpecial) || (GCAttribute  == IOAPersist)) {
+          Object *theAOAObj;
+          
+          forceAOAAllocation = TRUE;
+          theAOAObj = NewCopyObject(theObj, theCell);
+          forceAOAAllocation = FALSE;
+          
+          Claim(inAOA(theAOAObj), "Where is theAOAObj?");
+          
+          return theAOAObj;
+       } else {
+          return CopyObject(theObj);
+       } 
 #else 
-      return CopyObject(theObj);
+       return CopyObject(theObj);
 #endif /* PERSIST */
     }
   }

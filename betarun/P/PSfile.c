@@ -1,11 +1,13 @@
 #include "beta.h"
 
 #ifdef PERSIST
+
 #ifndef MAC
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #endif
+
 #ifdef MAC
 #include <fcntl.h>
 #include <IOCtl.h>
@@ -78,35 +80,35 @@ void Rewind(int fd)
 /* writeLong: writes a long to fd. */
 void writeLong(int fd, unsigned long *n)
 {
-  int nb;
+   int nb;
   
-  if ((nb = write(fd, n, sizeof(unsigned long))) < 0) {
-    perror("writeLong");
-    DEBUG_CODE(ILLEGAL);
-    BetaExit(1);
-  }
+   if ((nb = write(fd, n, sizeof(unsigned long))) < 0) {
+      perror("writeLong");
+      DEBUG_CODE(ILLEGAL);
+      BetaExit(1);
+   }
   
-  if (nb != sizeof(unsigned long)) {
-    fprintf(output, "putName: Could not write long\n");
-    DEBUG_CODE(ILLEGAL);
-    BetaExit(1);
-  }
+   if (nb != sizeof(unsigned long)) {
+      fprintf(output, "putName: Could not write long\n");
+      DEBUG_CODE(ILLEGAL);
+      BetaExit(1);
+   }
 }
 
 /* windTo: Goes to position pos in fd. */
 void windTo(int fd, unsigned long pos) 
 {
 #ifdef MAC	
-	if(lseek(fd, 0, SEEK_END) < pos) {
-		ioctl(fd, FIOSETEOF, (long *) pos);
-	}
+   if(lseek(fd, 0, SEEK_END) < pos) {
+      ioctl(fd, FIOSETEOF, (long *) pos);
+   }
 #endif
-
-  if (lseek(fd, pos, SEEK_SET) < 0) {
-    perror("windTo");
-    DEBUG_CODE(ILLEGAL);
-    BetaExit(1);
-  }
+   
+   if (lseek(fd, pos, SEEK_SET) < 0) {
+      perror("windTo");
+      DEBUG_CODE(ILLEGAL);
+      BetaExit(1);
+   }
 }
 
 /* writeSome: writes size bytes from buffer onto fd. */
@@ -123,38 +125,35 @@ void writeSome(int fd, void *buffer, unsigned long size)
 
 long fileExists(char *name)
 {
-
 #ifndef MAC
-  struct stat st;
-  if (stat(name, &st) < 0) {
-    return 0;
-  } else {
-    return 1;
-  }
+   struct stat st;
+   if (stat(name, &st) < 0) {
+      return 0;
+   } else {
+      return 1;
+   }
 #else
-	OSErr result;
-	FSSpec fs;
-	Str255 path;
-	int i = 0;
-	
-	fprintf(output, "fileExists(%s)\n", name);
-	
-	while(name[i] != '\0') {
-		path[i+1] = (unsigned char) name[i];
-		i++;
-	}
-	path[0] = (unsigned char) i; 
-	
-	result = FSMakeFSSpec(0, 0, path, &fs);
-	if(result < 0) {
-		return 0;
-	} 
-	else {
-		return 1;	
-	}
+   OSErr result;
+   FSSpec fs;
+   Str255 path;
+   int i = 0;
+   
+   fprintf(output, "fileExists(%s)\n", name);
+   
+   while(name[i] != '\0') {
+      path[i+1] = (unsigned char) name[i];
+      i++;
+   }
+   path[0] = (unsigned char) i; 
+   
+   result = FSMakeFSSpec(0, 0, path, &fs);
+   if(result < 0) {
+      return 0;
+   } 
+   else {
+      return 1;	
+   }
 #endif
-
-	return 1;
 }
 
 /* isDir: Returns true if name is a directory. */
@@ -209,12 +208,12 @@ unsigned long preferredBufferSize(int fd)
   struct stat st;
   
   if (fstat (fd, &st) == 0) {
-    res = st.st_blksize;
+     res = st.st_blksize;
   } else {
-    res = 8192;
+     res = 8192;
   }
   if (res<8192) {
-    res = 8192;
+     res = 8192;
   }
 #endif /* nti */
 #endif /* MAC */

@@ -4,6 +4,7 @@
 #include "beta.h"
 
 void initSpecialObjectTable(void);
+void destroySpecialObjectTable(void);
 unsigned long SOTSize(void);
 unsigned long insertSpecialObject(unsigned long tag, Object *theObj);
 void SOStartGC(void);

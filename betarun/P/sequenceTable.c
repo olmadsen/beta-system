@@ -68,6 +68,11 @@ unsigned long STSize(sequenceTable *currentTable)
   return currentTable -> maxIndex;
 }
 
+unsigned long STtop(sequenceTable *currentTable)
+{
+  return currentTable -> nextFree;
+}
+
 unsigned long STInsert(sequenceTable **tableSite, void *elm)
 {
   unsigned long inx;
@@ -115,19 +120,6 @@ void *STLookup(sequenceTable *currentTable, unsigned long inx)
 
 void STFree(sequenceTable **currentTable)
 {
-  unsigned long count, maxIndex;
-  void **body;
-  
-  if ((*currentTable) -> Free) {
-    maxIndex = (*currentTable) -> maxIndex;
-    body = &((*currentTable) -> body[0]);
-    
-    for (count = 0; count < maxIndex; count++) {
-      ((*currentTable) -> Free)((void *)((unsigned long)body + 
-					 count * (*currentTable) -> elemSize)); 
-      /* Respect to Ice-T */
-    }
-  }
   free(*currentTable);
   *currentTable = (void *)0;
 }

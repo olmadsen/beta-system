@@ -20,6 +20,8 @@ void TInsert(unsigned long key, unsigned long contents, Trie **current, unsigned
 unsigned long TILookup(unsigned long key, Trie *current);
 void TIVisit(Trie *current, void (*visitFunc)(contentsBox *));
 void TIFree(Trie *current, void (*freeFunc)(unsigned long));
+void TIadd(Trie **dst, Trie *src);
+
 /* TEXT TRIES, may use the init, visit and free functions from above */
 void TTInsert(char *key, unsigned long contents, Trie **trie);
 unsigned long TTLookup(char *key, Trie *trie);

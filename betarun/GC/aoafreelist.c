@@ -8,6 +8,8 @@
 
 #ifdef PERSIST
 #include "PException.h"
+#include "objectTable.h"
+#include "pit.h"
 #endif /* PERSIST */
 
 /************************ THE AOA FREE LIST ***************************
@@ -570,9 +572,15 @@ long AOAScanMemoryArea(long *start, long *end)
 #ifdef PERSIST
       /* We do not want to clear the persistent mark in persistent
          objects */
-      if (!inPIT((void *)(current -> GCAttr))) {
-	current->GCAttr = DEADOBJECT;
-      } 
+      if (AOAISPERSISTENT(current)) {
+         /* Skip the clearing of the GCAttribute, since it contains a
+          * reference to the object info object. Persistent objects
+          * are explicitly killed elsewhere
+          */
+         ;
+      } else {
+         current->GCAttr = DEADOBJECT;
+      }
 #else 
       current->GCAttr = DEADOBJECT;
 #endif /* PERSIST */
@@ -614,6 +622,11 @@ long AOAScanMemoryArea(long *start, long *end)
 	    sizeOfObjectsInAOA -= size;
 	    collectedMem += size;
 	  });
+#ifdef PERSIST
+          if (GETPROTO((Object *)current) == RefInfoPTValue) {
+             PITfree((RefInfo *)current);
+          }
+#endif /* PERSIST */
 	}
 #ifdef PERSIST
 	current -> GCAttr = FREECHUNK;

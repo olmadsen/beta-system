@@ -2,11 +2,9 @@
 #define _PROTO_H_
 #include "beta.h"
 
-void protoAddrToID(ProtoType *theProto, unsigned long *group, unsigned long *protoNo);
-ProtoType *IDtoProtoAddr(unsigned long group, unsigned long protoNo);
-void exportProtoTypes(Object *theObj);
-void importProtoTypes(Object *theObj);
-unsigned long StoreObjectSize(Object * theObj);
+void importProtoTypes(Object *theObj, CAStorage *store);
+void exportProtoTypes(Object *theObj, CAStorage *store);
+unsigned long StoreObjectSize(Object * theObj, CAStorage *store);
 void initProtoHandling(void);
 void freeProtoHandling(void);
 

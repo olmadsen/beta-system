@@ -35,25 +35,32 @@ void initSpecialObjectTable(void)
   currentTable = STInit(INITIALTABLELENGTH, isFree, Free, sizeof(SOTEntry));
 }
 
+void destroySpecialObjectTable(void)
+{
+    if (currentTable) {
+        STFree(&currentTable);
+    }
+}
+
 unsigned long SOTSize(void)
 {
   return STSize(currentTable);
 }
 
+static SOTEntry newEntry;
+
 unsigned long insertSpecialObject(unsigned long tag, Object *theObj)
 {
-  SOTEntry *newEntry;
   unsigned long inx;
   
   if (currentTable) {
     Claim(theObj == getRealObject(theObj), "Unexpected part object");
     Claim(inAOA(theObj), "insertSpecialObject: Where is theObj");
     
-    newEntry = (SOTEntry *)malloc(sizeof(SOTEntry));
-    newEntry -> tag = tag;
-    newEntry -> theObj = theObj;
+    newEntry.tag = tag;
+    newEntry.theObj = theObj;
     
-    inx = STInsert(&currentTable, newEntry);
+    inx = STInsert(&currentTable, &newEntry);
     return inx;
   } else {
     initSpecialObjectTable();
@@ -110,15 +117,15 @@ void remarkSpecialObjects(void)
       if (entry -> theObj) {
 	Claim(inAOA(entry -> theObj), "GCspecialObjectsTable: Where is the object?");
 	
-	entry -> theObj -> GCAttr = AOASpecial;
+	entry -> theObj -> GCAttr = AOASPECIAL;
       }
     }
   }
 }
 
 /* 'getTagForObject' and 'getTag' should be only one function. This is
-   just a stupid implementation that will be fixed. */
-
+ *  just a stupid implementation that will be fixed.
+ */
 unsigned long getTag(Object *theObj)
 {
   unsigned long inx, maxIndex;

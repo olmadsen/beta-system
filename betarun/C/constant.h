@@ -8,22 +8,38 @@
 #define StackObjectPTValue     ((ProtoType *) -2)
 #define StructurePTValue       ((ProtoType *) -3)
 #define RefRepPTValue          ((ProtoType *) -4)
-#define LongRepPTValue          ((ProtoType *) -5)
+#define LongRepPTValue         ((ProtoType *) -5)
 #define ByteRepPTValue         ((ProtoType *) -6)
-#define ShortRepPTValue         ((ProtoType *) -7)
+#define ShortRepPTValue        ((ProtoType *) -7)
 #define DoubleRepPTValue       ((ProtoType *) -8)
 #define DopartObjectPTValue    ((ProtoType *) -9)
 #define DynItemRepPTValue      ((ProtoType *) -10)
 #define DynCompRepPTValue      ((ProtoType *) -11)
+#ifdef PERSIST
+#define ObjInfoPTValue         ((ProtoType *) -12)
+#define RefInfoPTValue         ((ProtoType *) -13)
+#endif /* PERSIST */
 
 #define MaxPTValue             ((ProtoType *) -1)
+#ifdef PERSIST
+#define MinPTValue             ((ProtoType *) -13)
+#else
 #define MinPTValue             ((ProtoType *) -11)
+#endif /* PERSIST */
 
 #ifdef UseRefStack
 /* Used to mark external activation part on reference stack */
 #define ExternalMarker	       -10
 #endif
 
+/* GCAttribute values in AOA */
+#define DEADOBJECT           0
+#define FREECHUNK            1
+#define AOASPECIAL           2
+#define LISTEND              3       
+#define AOAMAXGCTAG          LISTEND
+
+/* GCAttribute values in IOA */
 #define IOAMinAge            0
 #define IOAMaxAge            128
 #ifdef PERSIST               
@@ -79,3 +95,6 @@
 #define REFTYPE_DYNAMIC  0
 #define REFTYPE_OFFLINE  1
 #define REFTYPE_ORIGIN   2
+
+/* PERSISTENT ISSUES */
+#define FOLLOWDEPTH 1

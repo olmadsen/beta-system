@@ -21,32 +21,31 @@
 void ChkRA()
 {
 #ifdef sparc
-  /* Called with theCell in %g1, which is a super temp. */
-  register Object **g1 __asm__("%g1");
-  Object **theCell = g1;
+   /* Called with theCell in %g1, which is a super temp. */
+   register Object **g1 __asm__("%g1");
+   Object **theCell = g1;
 #endif
 #ifdef hppa
-  Object **theCell;
-  __asm__ volatile ("COPY %%r28,%0" : "=r" (theCell));
+   Object **theCell;
+   __asm__ volatile ("COPY %%r28,%0" : "=r" (theCell));
 #endif
-  
-  DEBUG_CODE(NumChkRA++);
-  
-  if (!inIOA(*theCell)) {
-    
+   
+   DEBUG_CODE(NumChkRA++);
+   
+   if (!inIOA(*theCell)) {  
 #ifdef PERSIST
-    Claim(!inPIT(theCell), "ChkRA: theCell in PIT??");
-    if (inPIT((void *)*theCell)) {
-      newAOAclient(getPUID((void *)*theCell), theCell);
-    }
+      Claim(!inPIT(theCell), "ChkRA: theCell in PIT??");
+      if (inPIT((void *)*theCell)) {
+         newAOAcell(*theCell, theCell);
+      }
 #endif /* PERSIST */
-    return; 
-  }
+      return; 
+   }
   
-  /* Remember this target cell. */
+   /* Remember this target cell. */
 #ifdef MT
-  MT_AOAtoIOAInsert(theCell);
+   MT_AOAtoIOAInsert(theCell);
 #else /* MT */
-  AOAtoIOAInsert(theCell);
+   AOAtoIOAInsert(theCell);
 #endif /* MT */
 }

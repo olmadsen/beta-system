@@ -1,499 +1,747 @@
-#include "objectTable.h"
 #include "beta.h"
-#include "PException.h"
-#include "misc.h"
-#include "PExport.h"
-#include "referenceTable.h"
-#include "sequenceTable.h"
-#include "trie.h"
-#include "proto.h"
-#include "transitObjectTable.h"
-#include "PStoreServer.h"
-#include "PStore.h"
-#include "crossStoreReferences.h"
-#include "specialObjectsTable.h"
 
 #ifdef PERSIST
+#include "objectTable.h"
+#include "transitObjectTable.h"
+#include "storageblock.h"
+#include "PException.h"
+#include "PExport.h"
+#include "specialObjectsTable.h"
+#include "storagemanager.h"
+#include "proto.h"
+#include "pit.h"
+
 /* LOCAL TYPES */
-typedef struct OTEntry {  /* Object Table Entry */
-  unsigned short GCAttr;  /* The GC state of this entry. */
-  unsigned short Flags;   /* Misc. flags for this entry. */
-  unsigned long store;    /* The store in which this object is saved */
-  unsigned long offset;   /* The byte offset in the store of the object */  
-  Object *theObj;         /* The object in memory */       
-} OTEntry;
 
 /* LOCAL DEFINITIONS */
-#define INITIALTABLELENGTH 128 /* Initial size of the objectTable */
-#define INITIALBUFFERSIZE 1024
 #define SIZEOFPROTOANDGCATTRIBUTE 8
 
 /* LOCAL VARIABLES */
-static sequenceTable *currentTable = NULL;
-static Trie *loadedObjectsST;
-static char *temporaryObjectBuffer = NULL;
-static unsigned long size;
-static OTEntry *entryBuffer = NULL;
+/* Contains the info set of all persistent objects currently in
+ * memory. The key to search into this table is the (store, offset)
+ * pair of the object.
+ */
+static Trie *loadedObjects;
+static int newPersistentObjectInIOA = 0;
 
 /* GLOBAL VARIABLES */
 
 /* LOCAL FUNCTION DECLARATIONS */
+static void insertObject(CAStorage *store, u_long offset, ObjInfo *objInfo);
+static void objhandler(Object *theObj);
+static void insertObjectAndParts(CAStorage *store,
+                                 u_long  offset,
+                                 Object *theObj,
+                                 ObjInfo *objInfo);
+static u_long allocateStorage(CAStorage *store, Object *realObj, u_long nb);
+static void markReachableObjects(REFERENCEACTIONARGSTYPE);
+static void visitOffsetsFuncP1(contentsBox *cb);
+static void visitStoresFuncP1(contentsBox *cb);
+static void markOfflineAndOriginObjectsAlive(REFERENCEACTIONARGSTYPE);
+static void visitOffsetsFuncP5_1(contentsBox *cb);
+static void visitStoresFuncP5_1(contentsBox *cb);
 static void updateObjectInStore(Object *theObj,
 				unsigned long objSize,
-				unsigned long store, 
+				CAStorage *store, 
 				unsigned long offset,
 				unsigned short Flags);
-static void freeLoadedObjectsOF(unsigned long contents);
+static void visitOffsetsFuncP5_2(contentsBox *cb);
+static void visitStoresFuncP5_2(contentsBox *cb);
+static void freeObjectCopy(Object *obj);
+static void freeOffsetsFunc(u_long contents);
+static void freeStoresFunc(u_long contents);
+static void freeStores(u_long contents);
+static void visitStoresFuncP3(contentsBox *cb);
+static void visitOffsetsFuncP3(contentsBox *cb);
 
 /* FUNCTIONS */
-static int isFree(void *entry)
+void initLoadedObjects(void)
 {
-  Claim(entry != NULL, "isFree: entry is NULL");
-  return (((OTEntry *)entry) -> GCAttr == ENTRYDEAD);
+    loadedObjects = TInit();
+    initTransitObjectTable();
 }
 
-void initObjectTable(void)
-{
-  currentTable = STInit(INITIALTABLELENGTH, isFree, NULL, sizeof(OTEntry));
-  loadedObjectsST = TInit();
-  initTransitObjectTable();
-  
-  temporaryObjectBuffer = (char *)malloc(INITIALBUFFERSIZE);
-  if (entryBuffer == NULL) {
-    entryBuffer = (OTEntry *)malloc(sizeof(OTEntry));
-  }
-  size = INITIALBUFFERSIZE;
-}
-
-unsigned long OTSize(void)
-{
-  return STSize(currentTable);
-}
-
-static unsigned long currentStore;
-static unsigned long currentOffset;
+/* For a justification of the local variables below see comment in
+ * 'PExport.h' */
+static CAStorage *currentStore;
+static u_long currentOffset;
 static Object *theRealObj;
-static unsigned long OTinx;
+static ObjInfo *currentInfo;
 
-static void registerReverse(Object *theObj)
+/* Functions 'insertStoreOffset', 'insertObject', 'objhandler' and
+ * 'insertObjectAndParts' are used in conjunction to insert an object
+ * and its parts into the set of loaded objects */
+void insertStoreOffset(CAStorage *store, 
+		       u_long offset, 
+		       u_long info,
+		       Trie **loadedObjects)
 {
-  unsigned long distanceToPart;
-  distanceToPart = (unsigned long)theObj - (unsigned long)theRealObj;
-  insertStoreOffsetOT(currentStore,
-		      currentOffset + distanceToPart,
-		      OTinx);
+   Trie *loadedObjectsOFbefore, *loadedObjectsOFafter;
+    
+   /* Check if store is member */
+   if ((loadedObjectsOFbefore =
+        loadedObjectsOFafter =
+        (Trie *)TILookup((u_long)store, *loadedObjects)) == NULL) {
+      /* insert new table for store */
+      loadedObjectsOFafter = TInit();
+   }
+    
+   /* insert offset in loadedObjectsOF */
+   TInsert(offset + 1, info, &loadedObjectsOFafter, offset + 1);
+    
+   /* */
+   if (loadedObjectsOFbefore == loadedObjectsOFafter) {
+      return;
+   } else {
+      TInsert((u_long)store,
+              (unsigned long)loadedObjectsOFafter,
+              loadedObjects,
+              (u_long)store);
+   }
 }
 
-static void registerObjectAndParts(unsigned long store, unsigned long offset, Object *theObj, unsigned long inx)
+static void insertObject(CAStorage *store, u_long offset, ObjInfo *objInfo)
+{
+    insertStoreOffset(store, offset, (u_long)objInfo, &loadedObjects);
+}
+
+static void objhandler(Object *theObj)
+{
+    u_long distanceToPart;
+    distanceToPart = (u_long)theObj - (u_long)theRealObj;
+    insertObject(currentStore,
+                 currentOffset + distanceToPart,
+                 currentInfo);
+}
+
+static void insertObjectAndParts(CAStorage *store,
+                                 u_long  offset,
+                                 Object *theObj,
+                                 ObjInfo *objInfo)
 {  
-  OTinx = inx;
-  currentStore = store;
-  currentOffset = offset;
-  theRealObj = theObj;
-  
-  scanObject(theObj,
-	     NULL,
-	     registerReverse,
-	     TRUE);
+    currentInfo = objInfo;
+    currentStore = store;
+    currentOffset = offset;
+    theRealObj = theObj;
+    
+    scanObject(theObj,
+               NULL,
+               objhandler,
+               TRUE);
+
 }
 
-unsigned long insertObject(unsigned short GCAttr,
-			   unsigned short Flags,
-			   unsigned long store,
-			   unsigned long offset,
-			   Object *theObj)
+ObjInfo *objectInfo(unsigned short flags,
+                    CAStorage *store,
+                    unsigned long offset,
+                    Object *theObj)
 {
-  unsigned long inx;
+    ObjInfo *objInfo;
+    Claim(theObj == getRealObject(theObj), "Unexpected part object");
 
-  Claim(theObj == getRealObject(theObj), "Unexpected part object");
-  
-  entryBuffer -> GCAttr = GCAttr;
-  entryBuffer -> Flags = Flags;
-  entryBuffer -> store = store;
-  entryBuffer -> offset = offset;
-  entryBuffer -> theObj = theObj;
-  
-  inx = STInsert(&currentTable, entryBuffer);
-  
-  /* register the object and the part objects to enable reverse lookup */
-  registerObjectAndParts(store, offset, theObj, inx + 1);
-  
-  return inx;
+    /* Only one object info object is created per object */
+    
+    objInfo = (ObjInfo *)AOAallocate(sizeof(struct _ObjInfo));
+    SETPROTO(objInfo, ObjInfoPTValue);
+    
+    objInfo -> flags = flags;
+    objInfo -> store = store;
+    objInfo -> offset = offset;
+    objInfo -> theObj = theObj;
+    
+    /* register the object and the part objects in the set of loaded
+     * objects to enable mapping from (store, offset) pairs to object
+     * info.
+     */
+    insertObjectAndParts(store, offset, theObj, objInfo);
+    
+    return objInfo;
 }
-
-/* Looks up GCAttr, store, offset and object based on index into table */
-void objectLookup(unsigned long inx,
-		  unsigned short *GCAttr,
-		  unsigned long *store,
-		  unsigned long *offset,
-		  Object **theObj)
+ 
+/* Returns object info of object identified by (store, offset) */
+ObjInfo *lookupObjectInfo(CAStorage *store, u_long offset)
 {
-  OTEntry *entry;
-  
-  if ((entry = STLookup(currentTable, inx))) {
-    *GCAttr = entry -> GCAttr;
-    *store = entry -> store;
-    *offset = entry -> offset;
-    *theObj = entry -> theObj;
-  }   
-}
-
-/* Returns inx of entry containing (??, store, object, ?? ). Returns -1 if
-   not found. */
-unsigned long indexLookupOT(unsigned long store, unsigned long offset)
-{
-  Trie *loadedObjectsOF;
-  
-  /* Check if store is member of 'loadedObjects' */
-  if ((loadedObjectsOF = (Trie *)TILookup(store, loadedObjectsST))) {
-    unsigned long inx;
-    if ((inx = TILookup(offset, loadedObjectsOF))) {
-      return inx - 1;
+    Trie *stores;
+    
+    /* Check if store is member of 'loadedObjects' */
+    if ((stores = (Trie *)TILookup((u_long)store, loadedObjects))) {
+        ObjInfo *objInfo;
+        if ((objInfo = (ObjInfo *)TILookup(offset + 1, stores))) {
+            return objInfo;
+        }
     }
-  }
-  return -1;
-}
-
-void OTCheck(void (*checkAction)(Object *theObj, void *generic))
-{
-  unsigned long inx, maxIndex;
-  OTEntry *entry;
-  
-  maxIndex = STSize(currentTable);
-  
-  for (inx = 0; inx < maxIndex; inx++) {
-    entry = STLookup(currentTable, inx);
-    if (entry -> GCAttr == POTENTIALLYDEAD) {
-      checkAction(entry -> theObj, NULL);
-    }
-  }
-}
-
-/* Marks all entries as potentially dead. */
-void OTStartGC(void)
-{
-  unsigned long inx, maxIndex;
-  OTEntry *entry;
-  
-  maxIndex = STSize(currentTable);
-
-  for (inx = 0; inx < maxIndex; inx++) {
-    entry = STLookup(currentTable, inx);
-    if (entry -> GCAttr == ENTRYALIVE) {
-      entry -> GCAttr = POTENTIALLYDEAD;
-    } else {
-      Claim(((entry -> GCAttr == DELAYEDENTRYALIVE) || (entry -> GCAttr == ENTRYDEAD)) , 
-	    "What is GCAttr ?");
-    }
-  }
+    return NULL;
 }
 
 void objectAlive(Object *theObj)
 {
-  OTEntry *entry;
-  unsigned long inx;
-  
-  inx = getPUID((void *)(theObj -> GCAttr));
-  entry = STLookup(currentTable, inx);
-  
-  Claim(((entry -> GCAttr == ENTRYALIVE) || (entry -> GCAttr == POTENTIALLYDEAD)),
-	"What is GCAttr ?");
-  
-  entry -> GCAttr = ENTRYALIVE;
-}
+   ObjInfo *objInfo;
 
-void insertStoreOffsetOT(unsigned long store, unsigned long offset, unsigned long inx)
-{
-  insertStoreOffset(store, offset, inx, &loadedObjectsST);
-}
+   objInfo = (ObjInfo *)(GETOI(theObj -> GCAttr));
+   
+   /* Marks the object info object in AOA as alive */
+   objInfo -> GCAttr = LISTEND;
 
-static void freeLoadedObjectsOF(unsigned long contents)
-{
-  TIFree((Trie *)contents, NULL);
-}
-
-void OTEndGC(void)
-{
-  unsigned long inx, maxIndex;
-  OTEntry *entry;
-  sequenceTable *newTable = NULL;
-  Object *objcopy;
-  unsigned long objSize;
-  
-  newTable = STInit(INITIALTABLELENGTH, isFree, NULL, sizeof(OTEntry));
-  
-  /* Free the current 'loadedObjectsST' */
-  TIFree(loadedObjectsST, freeLoadedObjectsOF);
-  loadedObjectsST = NULL;
-  loadedObjectsST = TInit();
-  
-  maxIndex = STSize(currentTable);
-  for (inx = 0; inx < maxIndex; inx++) {
-    entry = STLookup(currentTable, inx);
-    if (entry -> GCAttr == POTENTIALLYDEAD) {
-      entry -> theObj -> GCAttr = DEADOBJECT;
+   if (objInfo -> flags == FLAG_INSTORE) {
+      Object *objcopy;
       
-      if (entry -> Flags & FLAG_INSTORE) {
-	/* The object copy should be freeed as well */
-	objSize = 4*ObjectSize(entry -> theObj);
-	objcopy = (Object *)((char *)(entry -> theObj) + objSize);
-	Claim(ObjectSize(entry -> theObj) == ObjectSize(objcopy), "Copy mismatch");
-	objcopy -> GCAttr = DEADOBJECT;
-	entry -> theObj = NULL;
+      /* Marks the object copy in AOA as alive */
+      objcopy = (Object*)((char*)theObj+4*ObjectSize(theObj));
+      
+      objcopy -> GCAttr = LISTEND;
+   }   
+}
+
+u_long objectIsDead(Object *theObj)
+{
+   return (((ObjInfo *)(GETOI(theObj -> GCAttr))) -> GCAttr == DEADOBJECT);
+}
+
+/* Phases:
+ *
+ * The set of all persistent objects currently in memory is registered
+ * in the set 'loadedObjects'. A reference to the object info of all
+ * persistent objects is inserted in the GC attribute. At each AOAGc
+ * the following phases are completed in order to keep this set
+ * updated:
+ *
+ * - IOAGc #1,
+ *
+ *   The first IOAGc will copy all new persistent object in IOA to
+ *   AOA. This is used to handle new objects created by user code.
+ *
+ * - Update peristent objects graph
+ *
+ *   The set of persistent objects is scanned and all object info for
+ *   new persistent objects that have become reachable is inserted in
+ *   the set as well. Only objects in AOA can point to their object
+ *   info through their GC attribute. This is because IOAGc uses the
+ *   GC attribute when the object is in IOA. For this reason all new
+ *   persistent objects in IOA are forced to AOA. If they are in IOA
+ *   they are marked so that the ensuing IOAGc will force them to AOA.
+ *
+ *   The object will look alive to AOAGc since its GCattribute is a
+ *   pointer. The object info object looks DEAD.
+ *
+ * - IOAGc #2
+ *
+ *   This IOAGc will move all new persistent objects in IOA to
+ *   AOA. Still all persistent object look alive and their object info
+ *   objects look DEAD.
+ *
+ *  - AOAGc start
+ *
+ *   Apart from doing normal AOAGc this GC will also mark all
+ *   persistent objects that are referred by transient objects. This
+ *   is done by marking the object info object alive. Such objects
+ *   will be retained in memory.
+ *
+ *  - Retain additional objects.
+ *
+ *    The set of persistent objects is scanned and some additional
+ *    persistent object may be marked alive even though they are not
+ *    referrred from any transient objects. To be explained, only
+ *    relevant for BETA.
+ *
+ *  - Swizzle references.
+ *
+ *    The set of persistent objects is scanned and all references to
+ *    dead persistent objects are swizzled.
+ *
+ *  - Remove dead objects
+ *
+ *    Handled at the final sweep of AOAGc. All persistent objects whos
+ *    info object is marked alive is retained in memory and the info
+ *    object is marked DEAD.
+ *
+ *    Persistent objects who's info object is marked as DEAD are
+ *    updated to the store and both the object itself and its info
+ *    object is reclaimed.
+ */
+ 
+/**************************************************************************/
+/* Phase one: Update graph of persistent objects                          */
+/**************************************************************************/
+
+static CAStorage *currentStoreID = NULL;
+
+void setCurrentStoreID(CAStorage *ID)
+{
+   currentStoreID = ID;
+}
+
+static u_long allocateStorage(CAStorage *store, Object *realObj, u_long nb)
+{
+    /* We cannot save component objects. Rather they should be
+     * registered as special objects
+     */
+    
+    if (isComponent(realObj)) {
+        fprintf(output,
+                "allocateStorage: Saving component (register it as special object)\n");
+    }
+    
+    return SBOBJcreate(store, (char *)realObj, nb);
+}
+
+void markObject(Object *obj, int follow)
+{
+   Object *realObj;
+   
+   if (!inPIT((void *)obj)) {
+      realObj = getRealObject(obj);
+      if ((IOAActive && inToSpace(realObj)) ||
+          (!IOAActive && inIOA(realObj)))
+      {
+         if (!IOAISPERSISTENT(realObj)) {
+            unsigned long offset;
+            /* We have encountered a new persistent object in IOA. It
+             * cannot be made persistent all at once since it needs to
+             * be moved to AOA first. In order to force a move to AOA
+             * we insert in the GC field of the object an indication
+             * to the IOA collector that it should force this object
+             * into IOA at the next IOA GC. But we still insert the
+             * object in the object table. The object table entry will
+             * point to the object in IOA. This reference must be
+             * redirected when the object is moved to AOA.
+             */
+            
+            offset = allocateStorage(currentStoreID,
+                                     realObj,
+                                     (u_long)4*ObjectSize(realObj));
+            
+            realObj -> GCAttr = IOAPersist;
+
+            objectInfo(FLAG_INMEM,
+                       currentStoreID,
+                       offset,
+                       realObj);
+
+            newPersistentObjectInIOA = 1;
+
+            if (follow) {
+               scanObject(realObj,
+                          markReachableObjects,
+                          NULL,
+                          TRUE);
+            }
+         }
       } else {
-	;
+         Claim(inAOA(realObj), "markReachableObjects: Where is theObj?");
+         if (!AOAISPERSISTENT(realObj)) {
+            if (!(realObj -> GCAttr == AOASPECIAL)) {
+               /* We have encountered a new persistent object in AOA, and
+                  we can now proceed to allocate space for it in the store
+                  and in the object table. */
+               u_long offset;
+               
+               offset = allocateStorage(currentStoreID,
+                                        realObj,
+                                        (u_long)4*ObjectSize(realObj));
+               
+               realObj -> GCAttr = (u_long)PUTOI(objectInfo(FLAG_INMEM,
+                                                            currentStoreID,
+                                                            offset,
+                                                            realObj));
+               
+               /* The flag FLAG_INMEM indicates that this object has no copy of
+                * itself following it as is the case with objects loaded from the
+                * store. This copy is created in order to check if the object has
+                * been changed while loaded. If not there is no need to save it
+                * back onto the store when it becomes unreachable from this
+                * context.
+                */
+               
+               if (follow) {
+                  scanObject(realObj,
+                             markReachableObjects,
+                             NULL,
+                             TRUE);
+               }
+            }
+         }
       }
-    } else if (entry -> GCAttr == ENTRYALIVE) {
-      unsigned long newInx;
-
-      memcpy(entryBuffer, entry, sizeof(OTEntry));
-      
-      newInx = STInsert(&newTable, entryBuffer);
-      entry -> theObj -> GCAttr = (long)newPUID(newInx);
-      registerObjectAndParts(entry -> store, entry -> offset, entry -> theObj, newInx + 1);
-
-    } else {
-      Claim(entry -> theObj == NULL, "What is the object ??");
-    }
-  }
-  STFree(&currentTable);
-  currentTable = newTable;
+   }
 }
 
-/* Miscellaneous functions */
-
-void flushDelayedEntries(void)
+static void markReachableObjects(REFERENCEACTIONARGSTYPE)
 {
-  unsigned long count;
-  unsigned long maxIndex;
-  OTEntry *entry;
-  
-  if (currentTable == NULL) {
-    initObjectTable();
-  }
-  maxIndex = STSize(currentTable);
-  for (count=0; count<maxIndex; count++) {
-    entry = STLookup(currentTable, count);
-    if (entry -> GCAttr == DELAYEDENTRYALIVE) {
-      Object *theObj;
-      theObj = entry -> theObj;
-
-      Claim(inIOA(theObj), "flushDelayedEntries: Delayed object not in from space?");
-      Claim(inAOA(theObj -> GCAttr), "flushDelayedEntries: Delayed object not moved to AOA ?");
-      
-      entry -> GCAttr = ENTRYDEAD;
-      entry -> theObj = NULL;
-      newPersistentObject(entry -> store, (Object *)(theObj -> GCAttr));
-    }
-  }  
+   markObject(*theCell, 1);
 }
 
-extern unsigned long currentStoreID; /* defined in misc.c */
-
-#define _EXPLICITRECURSION_
-
-#ifdef _EXPLICITRECURSION_
-extern void markReachable(Object *theObj);
-#endif
-
-
-/* Collects the transitive closure of the persistent objects */
-void updatePersistentObjects(void)
+static void visitOffsetsFuncP1(contentsBox *cb)
 {
-  unsigned long count;
-  unsigned long maxIndex;
-  OTEntry *entry;
-  
-  /* All objects referred from persistent objects shall be made
-     persistent as well */
-  clearTail();
-  maxIndex = STSize(currentTable);
-  for (count=0; count<maxIndex; count++) {
-    entry = STLookup(currentTable, count);
-    if (entry -> GCAttr == ENTRYALIVE 
-	|| entry -> GCAttr == DELAYEDENTRYALIVE) {
-      Claim(entry -> theObj == getRealObject(entry -> theObj), "Prt object in object table?");
-#ifdef RTDEBUG
-      if (!inToSpace(entry -> theObj)) {
-	Claim(inAOA(entry -> theObj), "Where is theObj?");      
-	Claim(AOAISPERSISTENT(entry -> theObj), "not persistent??");
+    ObjInfo *current;
+    
+    current = (ObjInfo *)(cb -> contents);
+    setCurrentStoreID(current -> store);
+
+    Claim(inAOA(current -> theObj), "The object should have been moved");
+    Claim(GETOI(current -> theObj -> GCAttr) == (u_long)current, "Unlinked object info");
+    
+    scanObject(current -> theObj,
+               markReachableObjects,
+               NULL,
+               TRUE);
+    
+    /* Objects from the current table are scanned right now and
+     * inserted in the new table. The new objects not in the old table
+     * will be insert by 'objectInfo' when a new info object is
+     * created for them.
+     */
+    insertObjectAndParts(current -> store,
+                         current -> offset,
+                         current -> theObj,
+                         current);
+}
+
+static void visitStoresFuncP1(contentsBox *cb)
+{
+    TIVisit((Trie *)(cb -> contents), visitOffsetsFuncP1);
+}
+
+static void freeStores(u_long contents)
+{
+    TIFree((Trie *)contents, NULL);
+}
+
+void phaseOne(void)
+{
+    Trie *oldTable;
+    
+    oldTable = loadedObjects;
+    loadedObjects = TInit();
+    
+    TIVisit(oldTable, visitStoresFuncP1);
+    TIFree(oldTable, freeStores);
+}
+
+/**************************************************************************/
+/* Phase two: IOAGc, moves persistent objects in IOA to AOA               */
+/**************************************************************************/
+
+/**************************************************************************/
+/* Phase three: updates set of loaded objects                             */
+/**************************************************************************/
+
+static void visitOffsetsFuncP3(contentsBox *cb)
+{
+   ObjInfo *current;
+   
+   current = (ObjInfo *)(cb -> contents);
+   if (inIOA(current -> theObj)) {
+      /* Redirect object reference to the object that has now
+       *  been moved to AOA.
+       */
+      Claim(inAOA((Object *)(current -> theObj -> GCAttr)), "Where is theObj?");
+      
+      current -> theObj = (Object *)(current -> theObj -> GCAttr);
+      current -> theObj -> GCAttr = (u_long)PUTOI((u_long)current);
+   }
+}
+
+static void visitStoresFuncP3(contentsBox *cb)
+{
+   TIVisit((Trie *)(cb -> contents), visitOffsetsFuncP3);
+}
+
+void phaseThree(void)
+{
+   if (newPersistentObjectInIOA) {
+      TIVisit(loadedObjects, visitStoresFuncP3);
+      newPersistentObjectInIOA = 0;
+   }
+}
+
+/**************************************************************************/
+/* Phase four: AOAGc, marks persistent objects transiently referred       */
+/**************************************************************************/
+
+/**************************************************************************/
+/* Phase five: removes unreferred persistent objects                      */
+/**************************************************************************/
+
+static void markOfflineAndOriginObjectsAlive(REFERENCEACTIONARGSTYPE)
+{
+   Object *theRealObj;
+    
+   if (!inPIT(*theCell)) {
+      if (refType == REFTYPE_DYNAMIC) {
+         return;
       } else {
-	Claim(entry -> theObj -> GCAttr == IOAPersist, "Object in IOA with unexpected GCAttr");
+         theRealObj = getRealObject(*theCell);
+         Claim(inAOA(theRealObj), "Where is the object");
+
+         if (AOAISPERSISTENT(theRealObj)) {
+            if ((refType != REFTYPE_DYNAMIC)) {
+               /* this is a persistent object referred through a non
+                * dynamic reference. It must be kept alive no matter
+                * what
+                */
+               
+               if (objectIsDead(theRealObj)) {
+                  objectAlive(theRealObj);
+                  scanObject(theRealObj,
+                             markOfflineAndOriginObjectsAlive,
+                             NULL,
+                             TRUE);
+               }  
+            }
+         } else {
+            /* Origin is special object and not in persistent set */
+            ;
+         }
       }
-#endif /* RTDEBUG */
+   }
+}
+
+
+static void visitOffsetsFuncP5_1(contentsBox *cb)
+{
+   ObjInfo *current;
+   current = (ObjInfo *)(cb -> contents);
+   if (AOAISALIVE((Object *)current)) {
+      /* The object info object is alive, thus the object itself is
+       * alive and we scan its origins */
       
-      /* All new persistent objects reachable from this object will be
-         assigned the same store as the referring object. */
-      
-      currentStoreID = entry -> store;
-      
-#ifdef _EXPLICITRECURSION_
-      markReachable(entry -> theObj);
-#else
-      scanObject(entry -> theObj,
-		 markReachableObjects,
-		 NULL,
-		 TRUE);
-#endif
-    } else {
-      Claim(entry -> GCAttr == ENTRYDEAD, "What is GCAttr ?");
-    }
-  }
+      /* handle origin and offline allocated objects */
+
+      scanObject(current ->theObj,
+                 markOfflineAndOriginObjectsAlive,
+                 NULL,
+                 TRUE);
+   }
+}
+
+static void visitStoresFuncP5_1(contentsBox *cb)
+{
+   TIVisit((Trie *)(cb -> contents), visitOffsetsFuncP5_1);
+}
+
+void handlePersistentCell(REFERENCEACTIONARGSTYPE)
+{
+   Object *realObj, *theObj;
+   ObjInfo *objInfo;
+   void *ip;
+   RefInfo *refInfo;
+   
+   theObj = *theCell;
+    
+   if (inPIT((void *)theObj)) {
+      /* The reference is in proper format already */
+      ip = theObj;
+      refInfo = PITlookup(ip);   
+      refInfo -> objInTransit = NULL;
+      referenceAlive(ip, refInfo);
+      newAOAcell(theObj, theCell);
+      return;
+   } else {
+      /* The persistent cell refers an object directly */
+      u_long distanceToPart;
+        
+      realObj = getRealObject(theObj);
+      distanceToPart = (unsigned long)theObj - (unsigned long)realObj;
+        
+      if (inToSpace(realObj)) {
+         /* Special object in IOA */
+         Claim(FALSE, "Special object in IOA");
+      } else {
+         Claim(inAOA(realObj), "Where is the object?");
+         if (AOAISPERSISTENT(realObj)) {
+            /* The referred object is in AOA and is persistent */
+            objInfo = (ObjInfo *)GETOI(realObj -> GCAttr);
+            if (AOAISDEAD(objInfo)) {
+               Claim(refType == REFTYPE_DYNAMIC,
+                     "handlePersistentCell: Illegal referencetype");   
+               
+               /* The referred object will be removed so we need to
+                  unswizzle the reference to it. */
+
+               if ((ip = lookupReferenceInfo(objInfo -> store,
+                                             objInfo -> offset + distanceToPart)) == NULL) {
+                  /* Create a new reference info object and refer it indirectly */
+                  ip = referenceInfo(objInfo -> store,
+                                     objInfo -> offset + distanceToPart);
+
+               }
+               *theCell = (Object *)ip;
+               refInfo = PITlookup(ip);
+               refInfo -> objInTransit = NULL;
+               refInfo -> GCAttr = LISTEND; /* Marks the reference info object alive */
+               newAOAcell(ip, theCell);
+               
+            } else {
+               /* This reference is kept in absolute format since the
+                * referred object is not removed from memory for some
+                * reason.
+                */
+               Claim(AOAISALIVE(objInfo), "What is GC mark ?");
+            }
+         } else {
+            /* Special object in AOA */
+            ;
+         }
+      }
+   }
 }
 
 static void updateObjectInStore(Object *theObj,
 				unsigned long objSize,
-				unsigned long store, 
+				CAStorage *store, 
 				unsigned long offset,
 				unsigned short Flags)
 {
-  int docopy = 0;
-  Object *objcopy;
-  
-  Claim(inAOA(theObj), "Where is theObj?");      
-  Claim(AOAISPERSISTENT(theObj), "not persistent??");
-  Claim(theObj == getRealObject(theObj), "Unexpected part object");
-  
-  /* The object is exported. 'exportObject' does not export the proto
-     types. */
-
-  /* We need to set the current store since 'exportObject' might
-     create new proxy objects in the store holding the exported object.
-  */
-  
-  if (storeIsOpen(store)) {
-    setCurrentPStore(store);
-    exportObject(theObj, store);
+    Object *storeObj;
     
-    if ((!Flags & FLAG_INSTORE)) {
-      docopy = TRUE;
-    } else {
-      objcopy = (Object*)((char*)theObj+objSize);
-      /* We compare the objects disregarding the protypes and
-	 GCattribute values */
-      if (memcmp((char *)(theObj) + SIZEOFPROTOANDGCATTRIBUTE, 
-	       (char *)(objcopy) + SIZEOFPROTOANDGCATTRIBUTE, 
-		 objSize - SIZEOFPROTOANDGCATTRIBUTE)) {
-	docopy = TRUE;
-      }
-    }
+    storeObj = exportObject(theObj, store, objSize);
+    
+    if (Flags & FLAG_INSTORE) {
+        Object *objcopy;
         
-    if (docopy) {
-      setCurrentPStore(store);
-      if (setStoreObject(store, offset, theObj)) {
-	/* Object has been updated */
-	INFO_PERSISTENCE(objectsExported++);
-      } else {
-	Claim(FALSE, "Could not update object");
-      }
+        objcopy = (Object*)((char*)theObj+objSize);
+        /* We compare the objects disregarding the protypes and
+           GCattribute values */
+        if (memcmp((char *)(storeObj) + SIZEOFPROTOANDGCATTRIBUTE, 
+                   (char *)(objcopy) + SIZEOFPROTOANDGCATTRIBUTE, 
+                   objSize - SIZEOFPROTOANDGCATTRIBUTE)) {
+            exportProtoTypes(storeObj, store);
+            SBOBJsave(store, (char *)storeObj, offset, objSize);
+        }
+    } else {
+        exportProtoTypes(storeObj, store);
+        SBOBJsave(store, (char *)storeObj, offset, objSize);
     }
-  } else {
-    /* The store is no longer open. Sometimes it is necessary to keep
-       an object in memory eventhough the store is closed. This is
-       because the object might be the origin of some other object
-       which are retained in memory. */
-    ;
-  }
 }
 
-/* After GC all unused objects currently in memory should be
-   checkpointed and removed */
-void removeUnusedObjects()
+static void visitOffsetsFuncP5_2(contentsBox *cb)
 {
-  unsigned long count;
-  unsigned long maxIndex;
-  OTEntry *entry;  
-
-  /* All objects in the ObjectTable that are marked as POTENTIALLYDEAD
-     are no longer referred from this process and can be updated in
-     the store and released. */
-  
-  /* All persistent objects marked as ENTRYALIVE are not removed, so
-     references from alive persistent objects to POTENTIALLYDEAD (DEAD at
-     this point) persistent objects must be unswizzled as well. 
-  */
-  
-  /* If an object is alive and kept in memory we cannot move its
-     origin or any references from within the object to offline
-     allocated objects, so we have to mark the origin alive as well as
-     offline allocated objects referred from within the object. */
-  
-  maxIndex = STSize(currentTable);
-  for (count=0; count<maxIndex; count++) {
-    entry = STLookup(currentTable, count);
-    if (entry -> GCAttr == ENTRYALIVE) {
-      Claim(inAOA(entry ->theObj), "Where is theObj?");      
-      Claim(AOAISPERSISTENT(entry ->theObj), "not persistent??");
-      /* handle origin and offline allocated objects */
-      scanObject(entry ->theObj,
-		 markOfflineAndOriginObjectsAlive,
-		 NULL,
-		 TRUE);
+    ObjInfo *current;
+    
+    current = (ObjInfo *)(cb -> contents);
+    if (AOAISDEAD(current)) {
+       /* The object info object is dead */
+       /* The persistent object will be removed */
+       ;
+    } else if (AOAISALIVE(current)) {
+       /* The object info object is alive, thus the object is alive */
+       /* Handle references from live to dead persistent objects */
+       scanObject(current -> theObj,
+                  handlePersistentCell,
+                  NULL,
+                  TRUE);
+    } else {
+       Claim(FALSE, "What is the GC attr?");
     }
-  }
+    
+    /* Whether the object is removed or not we update it in the store */
+    updateObjectInStore(current -> theObj,
+                        4*ObjectSize(current -> theObj),
+                        current -> store,
+                        current -> offset,
+                        current -> flags);   
+}
 
-  /* Handle references from live to dead persistent objects */
-  maxIndex = STSize(currentTable);
-  for (count=0; count<maxIndex; count++) {
-    entry = STLookup(currentTable, count);
-    if (entry ->GCAttr == ENTRYALIVE) {
-      Claim(inAOA(entry ->theObj), "Where is theObj?");      
-      Claim(AOAISPERSISTENT(entry ->theObj), "not persistent??");
-      /* handle live entry */
-      scanObject(entry ->theObj,
-		 handlePersistentCell,
-		 NULL,
-		 TRUE);
-    }
-  }
+static void visitStoresFuncP5_2(contentsBox *cb)
+{
+    TIVisit((Trie *)(cb -> contents), visitOffsetsFuncP5_2);
+}
+
+void phaseFive()
+{
+   /* All objects in the ObjectTable who's object info object is DEAD
+      are no longer referred from this process and can be updated in
+      the store and released. */
   
-  /* Handles dead entries and exports dead objects */
-  maxIndex = STSize(currentTable);
-  for (count=0; count<maxIndex; count++) {
-    entry = STLookup(currentTable, count);
-    if (entry -> GCAttr == POTENTIALLYDEAD) {
-      updateObjectInStore(entry ->theObj,
-			  4*ObjectSize(entry ->theObj),
-			  entry ->store,
-			  entry ->offset,
-			  entry -> Flags);
-      /* This object will be removed */
-    } else if (entry ->GCAttr == ENTRYALIVE) {
-      unsigned long objSize;
-      /* The objects are kept in memory but updated on the store
-         anyhow */
-      
-      objSize = 4*ObjectSize(entry ->theObj);
-      
-      /* The function 'updateObjectInStore' will change the first copy
-	 of the object (remember that each object loaded is followed
-	 by a copy of itself as it looked at load time), but since we
-	 are keeping this object in memory we have to chage it
-	 back. This is why the object is copied and restored from the
-	 copy. Remember that benchmark programs indicate that only a
-	 handfull of objects are kept in memory after each AOA-GC. */
-      
-      while (objSize > size) {
-	free(temporaryObjectBuffer);
-	temporaryObjectBuffer = (char *)malloc(size * 2);
-	size = size * 2;
+   /* References from live persistent objects to DEAD persistent
+    * objects must be unswizzled.
+    */
+  
+   /* BETA issue: If an object is alive and kept in memory we cannot
+      move its origin or any references from within the object to
+      offline allocated objects, so we have to mark the origin alive
+      as well as offline allocated objects referred from within the
+      object. This is done first by the first 'TIVisit' below */
+   
+   TIVisit(loadedObjects, visitStoresFuncP5_1);
+
+   /* All references from live persistent objects to dead ones are
+    * swizzled. This is done by the next 'TIVisit' below */
+
+   TIVisit(loadedObjects, visitStoresFuncP5_2);
+    
+   /* At this point all persistent objects in AOA whos object infor
+    * object is marked as DEAD can be removed along with their object
+    * info object. The GCAttribute of the object info object for live
+    * persistent objects are reset to DEAD to prepare for the next
+    * AOAGc.
+    */
+   
+   /* mark dead objects dead and clean up tables */
+   OTEndGC();
+   RTEndGC();
+   SOEndGC();
+   SMGC();
+}
+
+/**************************************************************************/
+/* End GC:                                                                */
+/**************************************************************************/
+static void freeObjectCopy(Object *obj)
+{
+    Object *objcopy;
+    unsigned long objSize;
+    
+    objSize = 4*ObjectSize(obj);
+    objcopy = (Object *)((char *)(obj) + objSize);
+    objcopy -> GCAttr = DEADOBJECT;
+}
+
+static void freeOffsetsFunc(u_long contents)
+{
+   ObjInfo *current;
+    
+   current = (ObjInfo *)contents;
+   if (AOAISALIVE(current)) {
+      if (!SBstat(current -> store)) {
+         /* store is closed */
+         /* Object is marked as alive, but not persistent */
+         current -> theObj -> GCAttr = LISTEND;
+         current -> GCAttr = DEADOBJECT;
+         if (current -> flags & FLAG_INSTORE) {
+            freeObjectCopy(current -> theObj);
+         }
+      } else {
+         insertObjectAndParts(current -> store,
+                              current -> offset,
+                              current -> theObj,
+                              current);
       }
-      
-      memcpy(temporaryObjectBuffer, entry ->theObj, objSize);
-      updateObjectInStore(entry ->theObj,
-			  objSize,
-			  entry ->store,
-			  entry ->offset,
-			  entry ->Flags);
-      memcpy(entry ->theObj, temporaryObjectBuffer, objSize);
-    }
-  }
-  
-  /* mark dead objects dead and clean up tables */
-  OTEndGC();
-  RTEndGC();
-  SOEndGC();
-  saveCurrentStore();
+   } else {
+      current -> theObj -> GCAttr = DEADOBJECT;
+      if (current -> flags & FLAG_INSTORE) {
+         freeObjectCopy(current -> theObj);
+      }
+      current -> GCAttr = DEADOBJECT;
+   }
+}
+
+static void freeStoresFunc(u_long contents)
+{
+   TIFree((Trie *)contents, freeOffsetsFunc);
+}
+
+void OTEndGC(void)
+{
+   Trie *oldTable;
+
+   /* Moves all object from the old table to a new one and frees the
+    * old one.
+    */
+   
+   oldTable = loadedObjects;
+   loadedObjects = TInit();
+    
+   TIFree(oldTable, freeStoresFunc);
 }
 
 #endif /* PERSIST */

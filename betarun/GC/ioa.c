@@ -13,7 +13,6 @@
 
 #ifdef PERSIST
 #include "objectTable.h"
-#include "misc.h"
 #include "referenceTable.h"
 #include "PException.h"
 #include "transitObjectTable.h"
@@ -136,432 +135,422 @@ extern void SetAOANeedCompaction(void);
  */
 void IOAGc()
 {
-  long starttime = 0;
+   long starttime = 0;
   
 #ifdef PERSIST
-  repeatIOAGc = 0;
+   repeatIOAGc = 0;
   
- IOAGCstart:
+  IOAGCstart:
 #endif /* PERSIST */
   
-  MAC_CODE(RotateTheCursor());
+   MAC_CODE(RotateTheCursor());
   
-  DEBUG_IOA({
-    fprintf(output,
-            "\nBefore: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
-            (int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit);
-    fprintf(output,
-            "Before: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
-            (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
-  });
+   DEBUG_IOA({
+      fprintf(output,
+              "\nBefore: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+              (int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit);
+      fprintf(output,
+              "Before: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+              (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
+   });
   
-  NumIOAGc++;
+   NumIOAGc++;
   
-  TIME_IOA(starttime = getmilisectimestamp());
+   TIME_IOA(starttime = getmilisectimestamp());
 
-  SetAOANeedCompaction();
+   SetAOANeedCompaction();
 
-  INFO_IOA({
-    starttime = getmilisectimestamp();
-    fprintf(output, "#(IOA-%d, %d bytes requested,", 
-            (int)NumIOAGc, (int)ReqObjectSize*4);
-  });
+   INFO_IOA({
+      starttime = getmilisectimestamp();
+      fprintf(output, "#(IOA-%d, %d bytes requested,", 
+              (int)NumIOAGc, (int)ReqObjectSize*4);
+   });
   
-  DEBUG_CODE({
-    if (!NoHeapClear) {
-      /* Clear ToSpace to trigger errors earlier */
-      memset(ToSpace, 0, IOASize);
-    }
-    if (NumIOAGc==DebugStackAtGcNum) {
-      DebugStack=1;
-    }
-  });
-  
-  InfoS_LabA();
-  
-  /* Initialize the ToSpace */
-  ToSpaceTop       = ToSpace;
-  HandledInToSpace = ToSpace;
-  
-  DEBUG_MT(TSDCheck());
-  DEBUG_CBFA(CBFACheck());
-  DEBUG_IOA(IOACheck());
-  DEBUG_AOAtoIOA(AOAtoIOACheck()); 
-  DEBUG_AOA(AOACheck());
-  
-  IOAActive = TRUE;
-  
-  /* AOA roots start out by residing in upper part of ToSpace */
-  AOArootsLimit = AOArootsPtr = ToSpaceLimit;
-  
-#ifdef PERSIST
-  /* Clear registered indirect refs in IOA. Information about these will be 
-     rebuild during the following GC.
-  */
-  clearIOAclients();
-#endif /* PERSIST */
-
-  /* Clear IOAAgeTable */
-  { long i; for(i=0; i < IOAMaxAge; i++) IOAAgeTable[i] = 0; }
-  
-  /* */
-  HandledInAOAHead = HandledInAOATail = NULL;
-  
-  HandlePostponedIODs();
-
-  /* Process AOAtoIOAtable */
-  DEBUG_IOA(fprintf(output, " #(IOA: Roots: AOAtoIOAtable"); fflush(output));
-  AOAtoIOACount = 0;
-  if (AOAtoIOAtable) { 
-    long i;
-    int fakes = 0;
-    long * pointer = BlockStart( AOAtoIOAtable);
-    for(i=0; i<AOAtoIOAtableSize; i++){ 
-      if(*pointer){
-        AOAtoIOACount++;
-        Claim(inAOA(*pointer), "AOAtoIOAtable has a cell outside AOA");
-        ProcessAOAReference( (Object **)*pointer, REFTYPE_DYNAMIC);
-	if (!((inIOA(**(long**)pointer) || inToSpace(**(long**)pointer)))) {
-	  fakes++;
-	}
+   DEBUG_CODE({
+      if (!NoHeapClear) {
+         /* Clear ToSpace to trigger errors earlier */
+         memset(ToSpace, 0, IOASize);
       }
-      pointer++;
-    }
-    if (AOAtoIOACount>AOAtoIOAtableSize/(100/20) && fakes/(AOAtoIOACount/2)) {
-      /* More than 20% of the cells in AOAtoIOAtable are in use
-       * and more than 50% of the used cells point outside IOA/ToSpace.  
-       * That wastes space, and also time on each IOAGc.
-       */
-      if (!AOANeedCompaction) {
-	/* AOA also cleans it, so skip it in that case. */
-	AOAtoIOACleanup();
+      if (NumIOAGc==DebugStackAtGcNum) {
+         DebugStack=1;
       }
-    }
-  }
+   });
   
-  DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
+   InfoS_LabA();
+  
+   /* Initialize the ToSpace */
+   ToSpaceTop       = ToSpace;
+   HandledInToSpace = ToSpace;
+  
+   DEBUG_MT(TSDCheck());
+   DEBUG_CBFA(CBFACheck());
+   DEBUG_IOA(IOACheck());
+   DEBUG_AOAtoIOA(AOAtoIOACheck()); 
+   DEBUG_AOA(AOACheck());
+  
+   IOAActive = TRUE;
+  
+   /* AOA roots start out by residing in upper part of ToSpace */
+   AOArootsLimit = AOArootsPtr = ToSpaceLimit;
+   
+   /* Clear IOAAgeTable */
+   { long i; for(i=0; i < IOAMaxAge; i++) IOAAgeTable[i] = 0; }
+  
+   /* */
+   HandledInAOAHead = HandledInAOATail = NULL;
+  
+   HandlePostponedIODs();
 
-  DEBUG_AOAtoIOA( AOAtoIOAReport() );
-  DEBUG_AOA( AOAcopied = 0; IOAcopied = 0; );
+   /* Process AOAtoIOAtable */
+   DEBUG_IOA(fprintf(output, " #(IOA: Roots: AOAtoIOAtable"); fflush(output));
+   AOAtoIOACount = 0;
+   if (AOAtoIOAtable) { 
+      long i;
+      int fakes = 0;
+      long * pointer = BlockStart( AOAtoIOAtable);
+      for(i=0; i<AOAtoIOAtableSize; i++){ 
+         if(*pointer){
+            AOAtoIOACount++;
+            Claim(inAOA(*pointer), "AOAtoIOAtable has a cell outside AOA");
+            ProcessAOAReference( (Object **)*pointer, REFTYPE_DYNAMIC);
+            if (!((inIOA(**(long**)pointer) || inToSpace(**(long**)pointer)))) {
+               fakes++;
+            }
+         }
+         pointer++;
+      }
+      if (AOAtoIOACount>AOAtoIOAtableSize/(100/20) && fakes/(AOAtoIOACount/2)) {
+         /* More than 20% of the cells in AOAtoIOAtable are in use
+          * and more than 50% of the used cells point outside IOA/ToSpace.  
+          * That wastes space, and also time on each IOAGc.
+          */
+         if (!AOANeedCompaction) {
+            /* AOA also cleans it, so skip it in that case. */
+            AOAtoIOACleanup();
+         }
+      }
+   }
   
-  /* Follow ActiveComponent */ 
+   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
+
+   DEBUG_AOAtoIOA( AOAtoIOAReport() );
+   DEBUG_AOA( AOAcopied = 0; IOAcopied = 0; );
+  
+   /* Follow ActiveComponent */ 
 #ifndef MT
-  if (!ActiveComponent && NumIOAGc == 1) {
-    char buf[512];
-    sprintf(buf, "Could not allocate basic component");
-    MAC_CODE(EnlargeMacHeap(buf));
-    Notify(buf);
-    BetaExit(1);
-  }
+   if (!ActiveComponent && NumIOAGc == 1) {
+      char buf[512];
+      sprintf(buf, "Could not allocate basic component");
+      MAC_CODE(EnlargeMacHeap(buf));
+      Notify(buf);
+      BetaExit(1);
+   }
 #endif /* not MT */
 
 #ifndef NEWRUN
-  /* NEWRUN: stackObj is already 0 (cleared at Attach) */
+   /* NEWRUN: stackObj is already 0 (cleared at Attach) */
 #ifndef MT
-  /* MT: active component's stack should be preserved */
-  ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
+   /* MT: active component's stack should be preserved */
+   ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
 #endif /* MT */
 #endif /* NEWRUN */
-  DEBUG_IOA(fprintf(output, " #(IOA: Root: ActiveComponent"); fflush(output));
-  ProcessReference( (Object **)&ActiveComponent, REFTYPE_DYNAMIC);
-  DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
+   DEBUG_IOA(fprintf(output, " #(IOA: Root: ActiveComponent"); fflush(output));
+   ProcessReference( (Object **)&ActiveComponent, REFTYPE_DYNAMIC);
+   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 
-  DEBUG_IOA(fprintf(output, " #(IOA: Root: BasicItem"); fflush(output));
-  ProcessReference( (Object **)&BasicItem, REFTYPE_DYNAMIC);
-  DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
+   DEBUG_IOA(fprintf(output, " #(IOA: Root: BasicItem"); fflush(output));
+   ProcessReference( (Object **)&BasicItem, REFTYPE_DYNAMIC);
+   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 
-  CompleteScavenging();
+   CompleteScavenging();
   
 #ifdef MT
-  DEBUG_IOA(fprintf(output, " #(IOA: Roots: TSD"); fflush(output));
-  ProcessTSD();
-  DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
+   DEBUG_IOA(fprintf(output, " #(IOA: Roots: TSD"); fflush(output));
+   ProcessTSD();
+   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 #else
-  DEBUG_IOA(fprintf(output, " #(IOA: Roots: Stack"); fflush(output));
-  ProcessStack();
-  DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
+   DEBUG_IOA(fprintf(output, " #(IOA: Roots: Stack"); fflush(output));
+   ProcessStack();
+   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 #endif
 
 #if (defined(RTVALHALLA) && defined(intel))
-  DEBUG_IOA(fprintf(output, " #(IOA: Roots: Valhalla ReferenceStack"); fflush(output));
-  ProcessValhallaRefStack();
-  DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
+   DEBUG_IOA(fprintf(output, " #(IOA: Roots: Valhalla ReferenceStack"); fflush(output));
+   ProcessValhallaRefStack();
+   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 #endif /* RTVALHALLA && intel */
   
-  DEBUG_IOA(fprintf(output, " #(IOA: Roots: CBFA"); fflush(output));
-  ProcessCBFA();
-  DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
+   DEBUG_IOA(fprintf(output, " #(IOA: Roots: CBFA"); fflush(output));
+   ProcessCBFA();
+   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
   
-  CompleteScavenging();
+   CompleteScavenging();
   
-  /* Objects copied til AOA until now has not been proceesed. 
-   * During proceesing these objects, new objects may be copied to
-   * ToSpace and AOA, therefore we must alternate between handling
-   * objects in ToSpace and AOA until no more objects is to procees.
-   */
-  if (AOABaseBlock && HandledInAOAHead) {
-    while (1) {
-      Object *nextHead;
+   /* Objects copied til AOA until now has not been proceesed. 
+    * During proceesing these objects, new objects may be copied to
+    * ToSpace and AOA, therefore we must alternate between handling
+    * objects in ToSpace and AOA until no more objects is to procees.
+    */
+   if (AOABaseBlock && HandledInAOAHead) {
+      while (1) {
+         Object *nextHead;
       
-      ProcessAOAObject(HandledInAOAHead);
-      CompleteScavenging();
+         ProcessAOAObject(HandledInAOAHead);
+         CompleteScavenging();
       
-      nextHead = (Object *)HandledInAOAHead->GCAttr;
-      HandledInAOAHead->GCAttr = DEADOBJECT;
+         nextHead = (Object *)HandledInAOAHead->GCAttr;
+         HandledInAOAHead->GCAttr = DEADOBJECT;
       
-      if (HandledInAOAHead != HandledInAOATail) {
-        HandledInAOAHead = nextHead;
-      } else {
-        HandledInAOAHead = NULL;
-        break;
+         if (HandledInAOAHead != HandledInAOATail) {
+            HandledInAOAHead = nextHead;
+         } else {
+            HandledInAOAHead = NULL;
+            break;
+         }
       }
-    }
-  }
+   }
 
-  DEBUG_IOA(fprintf(output, " #(IOA: Weak roots: DOT"); fflush(output));
-  ProcessDOT();
-  DEBUG_IOA(fprintf(output, ")\n"); fflush(output)); 
+   DEBUG_IOA(fprintf(output, " #(IOA: Weak roots: DOT"); fflush(output));
+   ProcessDOT();
+   DEBUG_IOA(fprintf(output, ")\n"); fflush(output)); 
 
-  DEBUG_CODE(dump_aoa=(AOANeedCompaction && DumpAOA));
+   DEBUG_CODE(dump_aoa=(AOANeedCompaction && DumpAOA));
   
 #ifdef RTSTAT
-  if (StatAOA && AOABaseBlock) {
-    AOANeedCompaction = TRUE;
-  }
+   if (StatAOA && AOABaseBlock) {
+      AOANeedCompaction = TRUE;
+   }
 #endif
 
 #ifdef PERSIST
-  if (!BETAREENTERED) {
-  /* Will flush all persistent objects loaded since last IOAGc */
-  TOTFlush();
+   
+   if (!BETAREENTERED) {
+      /* Will update reference info on all persistent objects in IOA
+       * that has now been moved to AOA.
+       */
+      phaseThree();
+      
 #endif /* PERSIST */
-
-  if (!noAOAGC) {
+      
+      if (!noAOAGC) {
 #ifdef PERSIST
-    if (AOANeedCompaction || forceAOAGC) {
-      /* before we do AOAGC we need to do an additional IOAGC */
-      if (repeatIOAGc) {
-	/* We have done the extra IOAGC */
-	
-	/* To handle persistent objects moved from ioa to aoa */
-	flushDelayedEntries();
-	
-	/* All persistent objects have now been moved to AOA and
-	   inserted in the PObjects table. All persistent references
-	   in IOA have been marked ALIVE. */
-	clearAOAclients();
-	
-	AOAGc();
-	
-	repeatIOAGc = 0;
-      } else {
-	/* To handle objects explicitly marked as persistent by
-	   'put' */
-	flushDelayedEntries();
-	
-	/* There are no longer any special objects in IOA */
-	freeSOTags();
-	
-	/* Mark special objects moved to AOA as special */
-	remarkSpecialObjects();
-	
-	resetStatistics();
-	
-	updatePersistentObjects();
-	/* All new persistent objects in AOA have been registered in the
-	   PObjectsTable and assigned a store. Any new persistent object
-	   in IOA has been marked as IOAPersist and will be moved to AOA
-	   during the ensuing IOAGc. */
+         if (AOANeedCompaction || forceAOAGC) {
+            /* before we do AOAGC we need to do an additional IOAGC */
+            if (repeatIOAGc) {
+               /* We have done the extra IOAGC */
 
-	repeatIOAGc = 1;
+               /* All persistent objects have now been moved to AOA
+                * and inserted in the PObjects table. All persistent
+                * references in IOA have been marked ALIVE.
+                */
+               AOAGc();
 	
-	OTStartGC();
-	RTStartGC();
-	SOStartGC();
+               repeatIOAGc = 0;
+            } else {
+               /* There are no longer any special objects in IOA */
+               freeSOTags();
+               
+               /* Mark special objects moved to AOA as special */
+               remarkSpecialObjects();
+               
+               phaseOne();
+               /* All new persistent objects in AOA have been
+                * registered in the PObjectsTable and assigned a
+                * store. Any new persistent object in IOA has been
+                * marked as IOAPersist and will be moved to AOA during
+                * the ensuing IOAGc.
+                */
+               repeatIOAGc = 1;
+	
+               SOStartGC();
 
-	/* All entries marked alive have been marked
-	   POTENTIALLYDEAD. They must prove themselves relevant during
-	   the ensuing GC. */
-      }
-    }
+               /* Clears the structure containing all reference info
+                * objects. This is rebuild during the ensuing IOAGc
+                * and AOAGc.
+                */
+               RTStartGC();
+            }
+         } else {
+            /* XXX: Unswizzle all flushed references in AOA */
+         }   
 #else 
-    if (AOANeedCompaction || forceAOAGC) {
-      AOAGc();
-    }
+         if (AOANeedCompaction || forceAOAGC) {
+            AOAGc();
+         }
 #endif /* PERSIST */
-  }
-  
+      }
+      
 #ifdef PERSIST
-  } /* BETAREENTERED */
+   } /* BETAREENTERED */
 #endif /* PERSIST */
-
-  if (tempAOAroots) {
-    /* ToSpace was not big enough to hold both objects and table.
-     * Free the table that was allocated by saveAOAroot().  */
-    tempAOArootsFree();
-  }    
+   
+   if (tempAOAroots) {
+      /* ToSpace was not big enough to hold both objects and table.
+       * Free the table that was allocated by saveAOAroot().  */
+      tempAOArootsFree();
+   }    
   
 #ifdef RTDEBUG
-  else {
-    /* Clear the part of ToSpace used for AOArootstable */
-    if (!NoHeapClear) {
-      memset(AOArootsPtr, 0, AOArootsLimit-AOArootsPtr);
-    };
-  }
+   else {
+      /* Clear the part of ToSpace used for AOArootstable */
+      if (!NoHeapClear) {
+         memset(AOArootsPtr, 0, AOArootsLimit-AOArootsPtr);
+      };
+   }
 #endif
   
-  /* Swap IOA and ToSpace */
-  {
-    long * Tmp; 
+   /* Swap IOA and ToSpace */
+   {
+      long * Tmp; 
     
-    Tmp    = GLOBAL_IOA; 
+      Tmp    = GLOBAL_IOA; 
     
-    GLOBAL_IOA       = ToSpace;                          
-    GLOBAL_IOALimit  = ToSpaceLimit;
+      GLOBAL_IOA       = ToSpace;                          
+      GLOBAL_IOALimit  = ToSpaceLimit;
 
 #if defined(NEWRUN) || defined(sparc)
 #ifdef MT
-    gIOATop    = ToSpaceTop; 
+      gIOATop    = ToSpaceTop; 
 #else /* MT */
-    IOATopOff = (char *) ToSpaceTop - (char *) IOA;
+      IOATopOff = (char *) ToSpaceTop - (char *) IOA;
 #endif /* MT */
 #else
-    IOATop    = ToSpaceTop; 
+      IOATop    = ToSpaceTop; 
 #endif
     
-    ToSpace = Tmp; 
-    ToSpaceTop = ToSpace; 
-    ToSpaceLimit = (long*)((long)ToSpace+IOASize);
-  }
+      ToSpace = Tmp; 
+      ToSpaceTop = ToSpace; 
+      ToSpaceLimit = (long*)((long)ToSpace+IOASize);
+   }
 
-  IOAActive = FALSE;
+   IOAActive = FALSE;
   
-  /* Determine new tenuring threshold */
-  {
-    long limit;
-    long sum = 0;
-    limit = IOAPercentage*areaSize(GLOBAL_IOA,GLOBAL_IOALimit) / 100;
-    IOAtoAOAtreshold = 0;
-    do
+   /* Determine new tenuring threshold */
+   {
+      long limit;
+      long sum = 0;
+      limit = IOAPercentage*areaSize(GLOBAL_IOA,GLOBAL_IOALimit) / 100;
+      IOAtoAOAtreshold = 0;
+      do
       {
-        sum += IOAAgeTable[IOAtoAOAtreshold++];
+         sum += IOAAgeTable[IOAtoAOAtreshold++];
       } while ((sum < limit) && (IOAtoAOAtreshold < IOAMaxAge));
     
-    if (limit && (IOAtoAOAtreshold < IOAMaxAge))
-      IOAtoAOAtreshold +=1;
-    Claim(IOAtoAOAtreshold <= IOAMaxAge, "IOAtoAOAtreshold <= IOAMaxAge");
-  }
-  DEBUG_IOA( fprintf(output, " treshold=%d", (int)IOAtoAOAtreshold));
-  DEBUG_IOA( fprintf(output, " AOAroots=%d", 
-                     (int)areaSize(AOArootsPtr,AOArootsLimit)));
+      if (limit && (IOAtoAOAtreshold < IOAMaxAge))
+         IOAtoAOAtreshold +=1;
+      Claim(IOAtoAOAtreshold <= IOAMaxAge, "IOAtoAOAtreshold <= IOAMaxAge");
+   }
+   DEBUG_IOA( fprintf(output, " treshold=%d", (int)IOAtoAOAtreshold));
+   DEBUG_IOA( fprintf(output, " AOAroots=%d", 
+                      (int)areaSize(AOArootsPtr,AOArootsLimit)));
   
-  /* Clear all of the unused part of IOA (i.e. [IOATop..IOALimit[), 
-   * so that allocation routines do not need to clear cells.
-   */
-  memset(GLOBAL_IOATop, 0, (long)GLOBAL_IOALimit-(long)GLOBAL_IOATop);
+   /* Clear all of the unused part of IOA (i.e. [IOATop..IOALimit[), 
+    * so that allocation routines do not need to clear cells.
+    */
+   memset(GLOBAL_IOATop, 0, (long)GLOBAL_IOALimit-(long)GLOBAL_IOATop);
   
-  INFO_IOA({
-    fprintf(output," %d%% used, ioatime=%dms)\n",
-            (int)((100*areaSize(GLOBAL_IOA,GLOBAL_IOATop))
-                  / areaSize(GLOBAL_IOA,GLOBAL_IOALimit)),
-            (int)(getmilisectimestamp() - starttime));
-  });
+   INFO_IOA({
+      fprintf(output," %d%% used, ioatime=%dms)\n",
+              (int)((100*areaSize(GLOBAL_IOA,GLOBAL_IOATop))
+                    / areaSize(GLOBAL_IOA,GLOBAL_IOALimit)),
+              (int)(getmilisectimestamp() - starttime));
+   });
 
 #ifdef MT
-  DEBUG_IOA({ 
-    /* If there is only one thread, IOACheck will only check the range
-     * IOA..IOATop (not gIOA..gIOATop). To make this possible at this point,
-     * we must set the thread specific IOATop already here.
-     * It will be reassigned, when the object requested is allocated in
-     * doGC, but the assignment below should cause no harm.
-     */
-    if (NumTSD==1) IOATop = GLOBAL_IOATop; 
-  });
+   DEBUG_IOA({ 
+      /* If there is only one thread, IOACheck will only check the range
+       * IOA..IOATop (not gIOA..gIOATop). To make this possible at this point,
+       * we must set the thread specific IOATop already here.
+       * It will be reassigned, when the object requested is allocated in
+       * doGC, but the assignment below should cause no harm.
+       */
+      if (NumTSD==1) IOATop = GLOBAL_IOATop; 
+   });
 
-  /* Make sure there is enough slices in IOA for all threads.
-   * As the amount fo free heap has changed, recalculate slicesize.
-   * Forthcoming threads will use the smaller slice size, 
-   * whereas running threads will
-   * use the previous (larger) slice size) until they are forced to
-   * take a new slice (after a GC).
-   */
-  CalculateSliceSize();
+   /* Make sure there is enough slices in IOA for all threads.
+    * As the amount fo free heap has changed, recalculate slicesize.
+    * Forthcoming threads will use the smaller slice size, 
+    * whereas running threads will
+    * use the previous (larger) slice size) until they are forced to
+    * take a new slice (after a GC).
+    */
+   CalculateSliceSize();
 #endif
 
-  DEBUG_MT(TSDCheck());
-  DEBUG_IOA(IOACheck());
-  DEBUG_CBFA(CBFACheck());
-  DEBUG_AOAtoIOA(AOAtoIOACheck());
-  DEBUG_AOA(AOACheck());
-  DEBUG_CODE(if (dump_aoa) AOACheck());
+   DEBUG_MT(TSDCheck());
+   DEBUG_IOA(IOACheck());
+   DEBUG_CBFA(CBFACheck());
+   DEBUG_AOAtoIOA(AOAtoIOACheck());
+   DEBUG_AOA(AOACheck());
+   DEBUG_CODE(if (dump_aoa) AOACheck());
   
-  InfoS_LabB();
+   InfoS_LabB();
   
 #ifdef MT
-  /* doGC checks for this */
+   /* doGC checks for this */
 #else
-  if ((long)IOATop+4*(long)ReqObjectSize > (long)IOALimit) {
-    /* Not enough freed by this GC */
-    if (IOALooksFullCount > 4) {
-      char buf[512];
-      sprintf(buf, "Sorry, IOA is full: cannot allocate %d bytes.\n\
+   if ((long)IOATop+4*(long)ReqObjectSize > (long)IOALimit) {
+      /* Not enough freed by this GC */
+      if (IOALooksFullCount > 4) {
+         char buf[512];
+         sprintf(buf, "Sorry, IOA is full: cannot allocate %d bytes.\n\
 Program terminated.\n", (int)(4*ReqObjectSize));
-      Notify(buf);
+         Notify(buf);
 #ifdef NEWRUN
-      BetaError(IOAFullErr, CurrentObject, StackEnd, 0);
+         BetaError(IOAFullErr, CurrentObject, StackEnd, 0);
 #else
-      BetaError(IOAFullErr, 0);
+         BetaError(IOAFullErr, 0);
 #endif
-    } else {
-      if (IOALooksFullCount > 1) {
-        /* Have now done two IOAGc's without freeing enough space.
-         * Make sure that all objects go to AOA in the next GC.
-         */
-        IOAtoAOAtreshold=IOAMinAge+1;
-        DEBUG_IOA(fprintf(output, "Forcing all to AOA in next IOAGc\n"));
+      } else {
+         if (IOALooksFullCount > 1) {
+            /* Have now done two IOAGc's without freeing enough space.
+             * Make sure that all objects go to AOA in the next GC.
+             */
+            IOAtoAOAtreshold=IOAMinAge+1;
+            DEBUG_IOA(fprintf(output, "Forcing all to AOA in next IOAGc\n"));
+         }
+         IOALooksFullCount++;
       }
-      IOALooksFullCount++;
-    }
-    INFO_IOA(fprintf(output, "[%d]\n", IOALooksFullCount));
-  } else {
-    if (FALSE && ((long)IOATop-(long)IOA)/(((long)IOALimit-(long)IOA)/100+1) > 70) {
-      IOALooksFullCount = 1;
-    } else {
-      IOALooksFullCount = 0;
-    }
-  }
+      INFO_IOA(fprintf(output, "[%d]\n", IOALooksFullCount));
+   } else {
+      if (FALSE && ((long)IOATop-(long)IOA)/(((long)IOALimit-(long)IOA)/100+1) > 70) {
+         IOALooksFullCount = 1;
+      } else {
+         IOALooksFullCount = 0;
+      }
+   }
 #endif /* MT */
   
-  DEBUG_CODE(if (!NoHeapClear) { memset(ToSpace, 0, IOASize); });
+   DEBUG_CODE(if (!NoHeapClear) { memset(ToSpace, 0, IOASize); });
 
-  DEBUG_IOA(
-            fprintf(output,
-                    "\nAfter: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
-                    (int)GLOBAL_IOA, 
-                    (int)GLOBAL_IOATop,
-                    (int)GLOBAL_IOALimit);
-            fprintf(output,
-                    "After: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
-                    (int)ToSpace, 
-                    (int)ToSpaceTop, 
-                    (int)ToSpaceLimit);
-	    fflush(output);
-            );
-  INFO_HEAP_USAGE(PrintHeapUsage("after IOA GC"));
+   DEBUG_IOA(
+      fprintf(output,
+              "\nAfter: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+              (int)GLOBAL_IOA, 
+              (int)GLOBAL_IOATop,
+              (int)GLOBAL_IOALimit);
+      fprintf(output,
+              "After: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+              (int)ToSpace, 
+              (int)ToSpaceTop, 
+              (int)ToSpaceLimit);
+      fflush(output);
+      );
+   INFO_HEAP_USAGE(PrintHeapUsage("after IOA GC"));
   
 #ifdef PERSIST
-  if (repeatIOAGc) {
-    goto IOAGCstart;
-    /* Yuhuuu!!!! */
-  }
+   if (repeatIOAGc) {
+      goto IOAGCstart;
+      /* Yuhuuu!!!! */
+   }
 #endif /* PERSIST */
-  TIME_IOA(ioatime += (getmilisectimestamp() - starttime));
+   TIME_IOA(ioatime += (getmilisectimestamp() - starttime));
 
-  INFO_AOAUSE({
-    fprintf(output, "(AOAUSE:%d:%d/%d)\n", 
-	    (int)NumIOAGc, (int)AOAFreeListTotalFree(),
-	    (int)totalAOASize);
-  });
+   INFO_AOAUSE({
+      fprintf(output, "(AOAUSE:%d:%d/%d)\n", 
+              (int)NumIOAGc, (int)AOAFreeListTotalFree(),
+              (int)totalAOASize);
+   });
 } /* End IOAGc */
 
 static void IOAUpdateAOARoots(Object **theCell, long GCAttribute)
@@ -591,93 +580,93 @@ static void IOAUpdateAOARoots(Object **theCell, long GCAttribute)
 
 void ProcessReference(Object ** theCell, long refType)
 {
-  Object * theObj;
-  long GCAttribute;
+   Object * theObj;
+   long GCAttribute;
   
-  theObj = *theCell;
+   theObj = *theCell;
   
-  if (inIOA(theObj)) {
-    /* 'theObj' is inside IOA */
+   if (inIOA(theObj)) {
+      /* 'theObj' is inside IOA */
 #ifdef RTDEBUG
-    {
-      char buf[512];
-      DEBUG_IOA(sprintf(buf, 
-			"ProcessReference: theObj (0x%x) is consistent.", 
-			(int)theObj); 
-		Claim(isObject(theObj),buf));
-    }
+      {
+         char buf[512];
+         DEBUG_IOA(sprintf(buf, 
+                           "ProcessReference: theObj (0x%x) is consistent.", 
+                           (int)theObj); 
+                   Claim(isObject(theObj),buf));
+      }
 #endif
     
-    GCAttribute = theObj->GCAttr;
+      GCAttribute = theObj->GCAttr;
     
-    if (isForward(GCAttribute)) { 
-      /* theObj has a forward pointer, i.e has already been moved */
+      if (isForward(GCAttribute)) { 
+         /* theObj has a forward pointer, i.e has already been moved */
       
-      *theCell = (Object *) GCAttribute; /* update cell to reference forward obj */
+         *theCell = (Object *) GCAttribute; /* update cell to reference forward obj */
 
+         /* If the forward pointer refers an AOA object, insert
+          * theCell in AOAroots table.
+          */
+      
+         IOAUpdateAOARoots(theCell, GCAttribute);
+	
+      } else {
+         if (isAutonomous(GCAttribute)) { 
+            /* '*theCell' is an autonomous object. */
+            *theCell = NewCopyObject( *theCell, theCell);
+	
+         } else {
+            /* theObj is a part object. */
+            long Distance;
+            Object * newObj;
+            Object * AutObj;
+	
+            Claim(isStatic(GCAttribute), "Is not static?");
+            GetDistanceToEnclosingObject(theObj, Distance);
+            AutObj = (Object *) Offset(theObj, Distance);
+	
+            if (isForward(AutObj->GCAttr)) {
+               newObj = (Object *) AutObj->GCAttr;
+	  
+               /* If the forward pointer refers an AOA object, insert
+                * theCell in AOAroots table.
+                */
+               IOAUpdateAOARoots(theCell, AutObj->GCAttr);
+	      
+            } else {
+               newObj = NewCopyObject( AutObj, theCell);
+            }
+            *theCell = (Object *) Offset( newObj, -Distance);
+         }
+      }
+      
+      /* The referred object must have been copied to ToSpace */
+      Claim(!inIOA(*theCell),"ProcessReference: !inIOA(*theCell)");
+      
+      /* End inIOA(theObj) */
+      
+   } else {
+      /* '*theCell' is pointing outside IOA */
       /* If the forward pointer refers an AOA object, insert
        * theCell in AOAroots table.
        */
-      
-      IOAUpdateAOARoots(theCell, GCAttribute);
-	
-    } else {
-      if (isAutonomous(GCAttribute)) { 
-	/* '*theCell' is an autonomous object. */
-	*theCell = NewCopyObject( *theCell, theCell);
-	
-      } else {
-	/* theObj is a part object. */
-	long Distance;
-	Object * newObj;
-	Object * AutObj;
-	
-	Claim(isStatic(GCAttribute), "Is not static?");
-	GetDistanceToEnclosingObject(theObj, Distance);
-	AutObj = (Object *) Offset(theObj, Distance);
-	
-	if (isForward(AutObj->GCAttr)) {
-	  newObj = (Object *) AutObj->GCAttr;
-	  
-	  /* If the forward pointer refers an AOA object, insert
-	   * theCell in AOAroots table.
-	   */
-	  IOAUpdateAOARoots(theCell, AutObj->GCAttr);
-	      
-	} else {
-	  newObj = NewCopyObject( AutObj, theCell);
-	}
-	*theCell = (Object *) Offset( newObj, -Distance);
-      }
-    }
-      
-    /* The referred object must have been copied to ToSpace */
-    Claim(!inIOA(*theCell),"ProcessReference: !inIOA(*theCell)");
-      
-    /* End inIOA(theObj) */
-      
-  } else {
-    /* '*theCell' is pointing outside IOA */
-    /* If the forward pointer refers an AOA object, insert
-     * theCell in AOAroots table.
-     */
-    Claim(!inToSpace(*theCell), "*theCell is in to space ??");
+      Claim(!inToSpace(*theCell), "*theCell is in to space ??");
     
-    if (inAOA(*theCell)) {
-      MCHECK();
-      Claim(!inAOA(theCell), "!inAOA(theCell)");
-      saveAOAroot(theCell);
-      MCHECK();
-      return;
-    } 
-#ifdef PERSIST
-    else 
-      if (inPIT((void *)*theCell)) {
-	referenceAlive(((void *)*theCell));
-	newIOAclient(getPUID((void *)*theCell), theCell);
+      if (inAOA(*theCell)) {
+         MCHECK();
+         Claim(!inAOA(theCell), "!inAOA(theCell)");
+         saveAOAroot(theCell);
+         MCHECK();
+         return;
       } 
+#ifdef PERSIST
+      else 
+         if (inPIT((void *)*theCell)) {
+            referenceCheck(theCell);
+            saveAOAroot(theCell);
+         } 
 #endif /* PERSIST */
-  }
+   }
 }
 
 /*
@@ -779,11 +768,9 @@ static void ProcessAOAReference(Object ** theCell, long refType)
   } 
 #ifdef PERSIST
   else if (inPIT((void *)*theCell)) {
-    referenceAlive(((void *)*theCell));
-    newAOAclient(getPUID((void *)*theCell), theCell);
+     referenceCheck(theCell);
   }
 #endif /* PERSIST */
-  
 }
 
 /*
@@ -969,7 +956,14 @@ void IOACheckReference(REFERENCEACTIONARGSTYPE)
       fprintf (output, "[IOACheckReference: Warning, target outside heap:"
 	       " theCell=0x%x, *theCell=0x%x]\n", (int)theCell, (int)(*theCell));
     }
+  } 
+#ifdef PERSIST
+  else {
+     if (*theCell && inPIT(*theCell)) {
+        ;
+     }
   }
+#endif /* PERSIST */
 }
 
 void IOACheckObject (Object *theObj)
