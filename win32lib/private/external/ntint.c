@@ -40,11 +40,13 @@
 #endif
 
 #ifdef nti_gnu
-#undef fdopen
-FILE* fdopen (int nHandle, char* szMode)
-{
+  #ifdef fdopen /* fdopen is macro-defined in older version of GNU-SDK */
+  #undef fdopen /* we need a "real" fdopen function */
+  FILE* fdopen (int nHandle, char* szMode)
+  {
   return _fdopen(nHandle,szMode);
-}
+  }
+  #endif
 #endif
 
 int EOFvalue(){return EOF;}
