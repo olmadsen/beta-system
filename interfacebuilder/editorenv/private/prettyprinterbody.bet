@@ -1,0 +1,266 @@
+ORIGIN '../prettyprinter';
+INCLUDE '~beta/betaast/v4.9.1/betacfl';
+INCLUDE '~beta/mps/v4.9.1/metagramsematt';
+
+-- prettyPrinterPrintNode: doPart --
+do (# tmpNode: ^AST;
+   do theStream[] -> private.outputStream[];
+      theNode.index -> theNode.frag.indexToNode -> tmpNode[];
+      (tmpNode[],-1) -> pp.present;
+      private.theOutput.finish;
+      none -> private.outputStream[];
+   #);
+
+-- prettyPrinterPrintFragment: doPart --
+do (ff.root[],theStream[]) -> printNode;
+
+-- prettyPrinterPrintProperties: doPart --
+do (# firstTime: @boolean
+   do theStream[] -> private.outputStream[];
+      true -> firstTime;
+      prop.scanProp
+      (#
+         doProp::<
+           (#
+           do
+              (* Ignore the property 'donecheck'. *)
+              (if ('donecheck' -> prop.equal) //false  then 
+                  (if firstTime//true then 
+                      false -> firstTime
+                   else 
+                      ';' -> private.OutputStream.put; 
+                      private.outputStream.Newline
+                  if);
+                  prop.makeUC;
+                  prop[] -> private.OutputStream.putText;
+                  '  ' -> private.OutputStream.putText;
+                  scanParameters
+                  (# 
+                     doConst::< 
+                       (# do c -> private.OutputStream.putInt; ' ' -> private.OutputStream.put #);
+                     doName::< 
+                       (# do n[] -> private.OutputStream.putText; ' ' -> private.OutputStream.put #);
+                     doString::< 
+                       (# do '''' -> private.OutputStream.put;s[] -> private.OutputStream.putText;
+                          ''' ' -> private.OutputStream.putText
+                       #);
+                  #)
+              if)
+           #)
+      #);
+      private.OutputStream.newLine;
+      None -> private.OutputStream[];
+   #)
+
+-- prettyPrinterPrintGroup: doPart --
+do (# theMetaGrammar: ^MetaGrammar;
+      prodList: ^theMetaGrammar.productionList;
+      theBetaGrammar: ^Beta;
+      theGram: ^theMetaGrammar.Agrammar;
+   do grammarTable.Meta[] -> theMetaGrammar[];
+      grammarTable.Beta[] -> theBetaGrammar[];
+      theBetaGrammar.grammarAst.root[] -> theGram[];
+      theGram.getProductionList -> prodList[];
+      (fg.prop[],theStream[]) -> PrintProperties;
+      fg.fragmentList.scan
+      (#
+         ff: ^FragmentForm;
+         prod: ^theMetaGrammar.Prod;
+      do
+         (if current.type//formType then
+             current.Open -> ff[];
+             '-- ' -> theStream.putText;
+             ff.Name -> theStream.putText;
+             ': ' -> theStream.putText;
+             (if ff.Category
+              //theBetaGrammar.AttributesForm then 'attributes' -> theStream.putText;
+              //theBetaGrammar.DescriptorForm then 'descriptor' -> theStream.putText;
+              else
+                 ff.Category -> prodList.get -> prod[];
+                 prod.getSynDeclText -> theStream.putText;
+             if);
+             ' --' -> theStream.putLine;
+             (ff[],theStream[]) -> printFragment;
+             theStream.newLine;
+          else
+             '-- Include ''' -> theStream.putText;
+             current.name[] -> theStream.putText;
+             '''' -> theStream.putLine;
+         if);
+      #);
+   #)
+
+-- prettyPrinterInit: doPart --
+do '~beta/grammars/beta/v2.4/beta' -> expandToFullPath -> pp.init;
+   private.theOutput.init;
+   private.theOutput[] -> out[];
+   80 -> pp.width;
+   true -> pp.includeComments;
+   false -> pp.SpecialCommentTreatment;
+   (*
+    *    false -> pp.abstractPresentation;
+    *    false -> pp.parsingInformation;
+    *    false -> pp.specialLexemTreatment;
+    *)
+   
+
+-- prettyPrinterPrivate: descriptor --
+(#
+   outputStream: ^stream;
+   
+   theOutput: @output
+     (# reportMessage:
+          (# msg: ^text;
+          enter msg[]
+          do (* msg[] -> screen.putLine *)
+          #);
+        putText::<
+          (# 
+          do s[] -> outputStream.putText;
+          #);
+        put::<
+          (# 
+          do ch -> outputStream.put;
+          #);
+        putInt::<
+          (# 
+          do n -> outputStream.putInt; 
+          #);
+        printError::<
+          (# 
+          do 'printError' -> reportMessage;
+          #);
+        measureSpecialLexem::<
+          (# 
+          do 'measureSpecialLexem' -> reportMessage;
+          #);
+        printSpecialLexem::<
+          (# 
+          do 'printSpecialLexem' -> reportMessage;
+          #);
+        measureSpecialComment::<
+          (# 
+          do 'measureSpecialComment' -> reportMessage;
+          #);
+        printSpecialComment::<
+          (# 
+          do 'printSpecialComment' -> reportMessage;
+          #);
+        measureCommentProp::<
+          (# t: @text;
+          do(*  'measureCommentProp' -> screen.putLine;
+             *              t.clear;
+             *              l: 'ID' -> prop.getProp
+             *              (# doProp::<
+             *                   (#
+             *                   do scanParameters
+             *                      (# 
+             *                         doConst::<
+             *                           (# 
+             *                           do c -> t.putInt;
+             *                              leave l;
+             *                           #);
+             *                      #);
+             *                   #);
+             *              #);
+             *              10 + t.length -> length;
+             *)
+          #);
+        printCommentProp::<
+          (# t: @text;
+          do(*  'printCommentProp' -> screen.putLine;
+             *              t.clear;
+             *              ' {*<<' -> t.putText; {* ) *}
+             *              'ID' -> prop.getProp
+             *              (# doProp::<
+             *                   (#
+             *                   do scanParameters
+             *                      (# 
+             *                         doConst::<
+             *                           (# 
+             *                           do c -> t.putInt;
+             *                           #);
+             *                      #);
+             *                   #);
+             *              #);
+             *              '>>*} ' -> t.putText;
+             *              1 -> noOfLines;
+             *              t.length -> lengthOfLastLine;
+             *              t[] -> outputStream.putText;
+             *)
+          #);
+        selectArea::<
+          (# 
+          do 'selectArea' -> reportMessage;
+          #);
+        startBold::<
+          (# 
+          do 'startBold' -> reportMessage;
+          #);
+        endBold::<
+          (# 
+          do 'endBold' -> reportMessage;
+          #);
+        startSmall::<
+          (# 
+          do 'startSmall' -> reportMessage;
+          #);
+        endSmall::<
+          (# 
+          do 'endSmall' -> reportMessage;
+          #);
+        clear::<
+          (# 
+          do 'clear' -> reportMessage;
+          #);
+        newLine::<
+          (# 
+          do outputStream.newLine;
+          #);
+        init::<
+          (# 
+          do 'init' -> reportMessage;
+          #);
+        finish::<
+          (# 
+          do 'finish' -> reportMessage;
+          #);
+        insertLine::<
+          (# 
+          do 'insertLine' -> reportMessage;
+          #);
+        deleteLine::<
+          (# 
+          do 'deleteLine' -> reportMessage;
+          #);
+        deleteLines::<
+          (# 
+          do 'deleteLines' -> reportMessage;
+          #);
+        deleteArea::<
+          (# 
+          do 'deleteArea' -> reportMessage;
+          #);
+        getLine::<
+          (# 
+          do 'getLine' -> reportMessage;
+          #);
+        beforePresent::< 
+          (# 
+          do 'beforePresent' -> reportMessage;
+          #);
+        afterPresent::< 
+          (# 
+          do 'afterPresent' -> reportMessage;
+          #);
+        beforeUpdate::< 
+          (# 
+          do 'beforeUpdate' -> reportMessage;
+          #);
+        afterUpdate::< 
+          (# 
+          do 'afterUpdate' -> reportMessage;
+          #);
+     #);
+#)
+

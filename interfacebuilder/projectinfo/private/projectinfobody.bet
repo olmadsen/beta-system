@@ -1,0 +1,396 @@
+ORIGIN '../projectinfo';
+INCLUDE '~beta/basiclib/v1.4/file';
+INCLUDE '~beta/containers/v1.4/list';
+INCLUDE '~beta/sysutils/v1.4/pathhandler';
+INCLUDE '~beta/guienv/v1.2/controls';
+INCLUDE '~beta/guienv/v1.2/scrolllists';
+INCLUDE '~beta/guienv/v1.2/stddialogs';
+INCLUDE '~beta/guienv/v1.2/utils/guienvadds';
+
+-- ProjectInfoSetGUIfile: doPart --
+do name[] -> private.GUIfileName[];
+
+-- ProjectInfoGetGUIfile: doPart --
+do private.GUIfileName[] -> name[];
+
+-- projectInfoFragmentGroupNamesAdd: doPart --
+do (if not (name[] -> private.fragmentGroupNames.member) then
+       name.copy -> private.fragmentGroupNames.append;
+   if);
+
+-- projectInfoFragmentGroupNamesDelete: doPart --
+do name[] -> private.fragmentGroupNames.remove;
+
+-- projectInfoFragmentGroupNamesScan: doPart --
+do private.fragmentGroupNames.scan
+   (# 
+   do current[] -> this(scan).current[];
+      inner scan;
+   #);
+
+-- ProjectInfoInit: doPart --
+
+do private.fragmentGroupNames.init;
+   private.pathConverter.init;
+   inner init;
+   
+-- ProjectInfoRead: doPart --
+do reading:
+     (# version: @integer;
+        ignoreTag: ^text;
+        handleFailure:
+          (# msg: ^text;
+          enter msg[]
+          do 'Error in reading projectInfo: ' -> putText;
+             msg[] -> putLine;
+             failure;
+             leave reading;
+          #);
+     do reset;
+        theStream.getAtom -> ignoreTag[];
+        theStream.getInt
+        (# syntaxError::<
+             (# do 'syntaxerror reading int' -> handleFailure #);
+        #) -> version;
+        (if version//1 then
+            theStream[] -> reader1
+            (# failure::<  
+                 (# do 'syntaxerror reading int' -> handleFailure; #);
+            #);
+         else
+            'the format has a newer version' -> handleFailure;
+        if);
+     #);
+
+-- ProjectInfoWrite: doPart --
+do 'version ' -> theStream.putText;
+   1 -> theStream.putInt;
+   theStream.newLine;
+   'guifile ' -> theStream.putText;
+   (if private.GUIfileName[]<>None then
+       private.GUIfileName[] -> theStream.putLine;
+    else
+       'NONE' -> theStream.putLine;
+   if);
+   'home ' -> theStream.putText;
+   (if private.home[] <> None then
+       private.home[] -> theStream.putLine;
+    else
+       'NONE' -> theStream.putLine;
+   if);
+   'FragmentGroupCount ' -> theStream.putText;
+   private.fragmentGroupNames.size -> theStream.putInt;
+   theStream.newLine;
+   private.fragmentGroupNames.scan
+   (# 
+   do current[] -> theStream.putLine;
+   #);
+
+-- projectInfoPrivate: descriptor --
+(#
+   GUIfileName: ^text;
+   home: ^text;
+   fragmentGroupNames: @list
+     (# element::< Text;
+        remove:
+          (# e: ^element;
+          enter e[]
+          do l: iterate
+               (# 
+               do (if e[] -> current.elm.equalNCS//true then
+                      current[] -> delete;
+                      leave l;
+                  if);
+               #);
+          #);
+        member: booleanValue
+          (# e: ^element;
+          enter e[]
+          do l: iterate
+               (# 
+               do (if e[] -> current.elm.equalNCS//true then
+                      true -> value;
+                      leave l;
+                  if);
+               #);
+          #);
+     #);
+   pathConverter: @pathHandler;
+   theEditor: ^projectInfoEditor;
+#)
+
+-- projectInfoLib: attributes --
+
+localPath:
+  (# path, localPath: ^text;
+     failure:< object;
+  enter path[]
+  do path[] -> localPath[];
+     converting:
+       (# basis: ^text;
+       do home -> basis[];
+          (if basis[]<>None then
+              (path[], basis[]) -> private.pathConverter.localPath
+              (# 
+                 localPathException::<
+                   (# 
+                   do msg[] -> putLine;
+                      leave converting;
+                   #);
+              #) -> localPath[];
+           else
+              failure;
+          if);
+          localPath[] -> stripExtension;
+       #);
+  exit localPath[]
+  #);
+stripExtension:
+  (# path: ^text;
+     i: @integer;
+  enter path[]
+  do path.reset;
+     '.' -> path.findCH
+     (# 
+     do inx -> i;
+     #);
+     (if i > 0 then
+         (i, path.length) -> path.delete;
+     if);
+  #);
+reset:
+  (# 
+  do none -> private.GUIfileName[];
+     none -> private.home[];
+     private.fragmentGroupNames.clear;
+  #);
+
+reader1:
+  (# failure:< object;
+     theStream: ^stream;
+  enter theStream[]
+  do reader: 
+       (# ignoreTag: ^text;
+          name: ^text;
+          fragmentGroupCount: @integer;
+          handleFailure:
+            (# 
+            do reset;
+               failure;
+               leave reader;
+            #);
+       do theStream.getAtom -> ignoreTag[];
+          theStream.getAtom -> name[];
+          (if not ('NONE' -> name.equal) then
+              name[] -> private.GUIfileName[];
+          if);
+          theStream.getAtom -> ignoreTag[];
+          theStream.getAtom -> name[];
+          (if not ('NONE' -> name.equal) then
+              name[] -> private.home[];
+          if);
+          theStream.getAtom -> ignoreTag[];
+          theStream.getInt 
+          (# syntaxError::<
+               (# do handleFailure #);
+          #) -> fragmentGroupCount;
+          (for fragmentGroupCount repeat
+               theStream.getAtom -> private.fragmentGroupNames.append;
+          for);
+       #);
+  #);
+
+putPoint:
+  (# 
+     x, y: @integer;
+  enter (x,y)
+  do '[' -> put;
+     x -> putInt;
+     ', ' -> putText;
+     y -> putInt;
+     ']' -> put;
+  #);
+
+projectInfoEditor: window
+  (# 
+     menubarVisible::<
+       (# do False -> value #);
+     
+     updateDisplay:
+       (# 
+       do GUIfileName -> guiField.contents;
+          fragmentNamesList.clear;
+          fragmentGroupNames.size -> fragmentNamesList.append;
+          fragmentGroupNames.scan
+          (# count: @integer;
+          do count + 1 -> count;
+             (count, current[]) -> fragmentNamesList.setText;
+          #);
+       #);
+     guiLabel: @staticText
+       (# 
+          open::<
+            (# 
+            do (* ((10, 10), (75, 38)) -> frame; *)
+               'GUI file:' -> label;
+            #);
+       #);
+     guiField: @editText
+       (# 
+          open::<
+            (#
+            do 
+               (* ((80, 10), (290, 38)) -> frame; *)
+               true -> bindRight;
+            #);
+       #);
+     fragmentNamesList: @textScrollList
+       (# clear:
+            (# 
+            do (1,numberOfItems) -> delete;
+            #);
+          open::<
+            (# 
+            do ((10,50),(290, 170)) -> frame;
+               true -> bindRight;
+               true -> bindBottom;
+            #);
+       #);
+     commandButton: pushButton
+       (# 
+          command:< Object;
+          eventHandler::<
+            (# onMouseUp::<
+                 (# do command; #);
+            #);
+          open::<
+            (# 
+            do true -> bindBottom;
+               false -> bindTop;
+               inner;
+            #);
+       #);
+     
+     addButton: @commandButton
+       (# command::<
+            (# 
+            do addFragmentGroup;
+            #);
+          open::<
+            (# 
+            do 'Add' -> label;
+               ((10, 175), (70, 195)) -> frame;
+            #);
+       #);
+      openButton: @commandButton
+       (# command::<
+            (# 
+            do openFragmentGroup;
+            #);
+          open::<
+            (# 
+            do 'Open' -> label;
+               ((90, 175), (150, 195)) -> frame;
+            #);
+       #);
+      forgetButton: @commandButton
+       (# command::<
+            (# 
+            do forgetFragmentGroup;
+            #);
+          open::<
+            (# 
+            do 'Forget' -> label;
+               ((170, 175), (230, 195)) -> frame;
+            #);
+       #);
+     
+     addFragmentGroup:
+       (# fileName: ^text;
+          path: ^text;
+          anEntry: @diskEntry;
+       do this(projectInfoEditor)[] -> fileSelectionDialog -> filename[];
+          (if fileName[]<>None then
+              fileName[] -> putLine;
+              (* fileName[] -> anEntry.path;
+              anEntry.path.head -> path[];
+               anEntry.path.name.prefix -> path.append; *)
+              fileName[] -> localPath -> path[];
+              path[] -> fragmentGroupNames.add;
+              updateDisplay;
+              path[] -> this(projectInfo).fragmentGroupAdded;
+          if);
+       #);
+     forgetFragmentGroup:
+       (# path: ^text;
+       do (if fragmentNamesList.selection.first<>0 then
+              fragmentNamesList.selection.first 
+                -> fragmentNamesList.getText -> path[];
+              (fragmentNamesList.selection.first,1) 
+                -> fragmentNamesList.delete;
+              path[] -> fragmentGroupNames.delete;
+              path[] -> this(projectInfo).fragmentGroupDeleted;
+          if);
+       #);
+     openFragmentGroup:
+       (# path: ^text;
+       do (if fragmentNamesList.selection.first<>0 then
+              fragmentNamesList.selection.first 
+                -> fragmentNamesList.getText -> path[];
+              path[] -> this(projectInfo).openFragmentGroup;
+          if)
+       #);
+     open::<
+       (# 
+       do (300,200) -> size;
+          guiLabel.open;
+          guiField.open;
+          (# ignore, lWidth, lHeight, tHeight, delta: @integer;
+          do guiLabel.preferredSize -> (lWidth, lHeight);
+             27 -> tHeight;
+             ((tHeight - lHeight) div 2) -> delta;
+             ((10, 10 + delta), (lWidth + 10, lHeight + 10))
+               -> guiLabel.frame;
+             ((lWidth + 15, 10), (290, tHeight + 10)) -> guiField.frame;
+          #);
+          fragmentNamesList.open;
+          addButton.open;
+          openButton.open;
+          forgetButton.open;
+          guiField[] -> target;
+          updateDisplay;
+       #);
+     close::<
+       (# 
+       do Terminate;
+       #);
+  #);
+-- ProjectInfoRelease: doPart --
+do inner release;
+   (if private.theEditor[]<>None then
+       private.theEditor.close;
+       none -> private.theEditor[];
+   if);
+   reset;
+
+-- ProjectInfoShowEditor: doPart --
+do (# t: ^text;
+   do (if private.theEditor[]//None then
+          &text[] -> t[];
+          &projectInfoEditor[] -> private.theEditor[];
+          private.theEditor.open;
+       else
+          private.theEditor.show;
+          private.theEditor.bringToFront;
+      if);
+   #);
+
+-- projectInfoFragmentGroupNamesSize: doPart --
+do private.fragmentGroupNames.size -> value;
+
+-- ProjectInfoSetHome: doPart --
+do name[] -> private.home[];
+
+-- ProjectInfoGetHome: doPart --
+do private.home[] -> name[];
+

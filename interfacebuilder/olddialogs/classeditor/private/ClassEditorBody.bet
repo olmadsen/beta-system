@@ -1,0 +1,984 @@
+ORIGIN '../ClassEditor';
+BODY 'Hugo'
+[[
+-- Include '../GenerateAtt'
+-- Include '~michael/datastructures/ListAtt'
+-- Include '~michael/Ast/OpenFragmentGroup'
+-- Include '~michael/SaveDialog/SaveDialog'
+-- Include '~michael/MacenvStuff/MacFileStuff'
+-- Include '~michael/Ast/MPSStuff'
+-- Include '~michael/EditorEnv/Private/ClassTreeInfo'
+-- Include '~michael/asteditor/private/AstEditorBody'
+-- Include '~beta/macenv/v3.5/private/WindowPrivateAtt'
+-- ClassEditorLib: Attributes --
+
+GenerateCreate: MPS.Generate
+	(# CreateMethod: ^BetaGram.PatternDecl;
+		theOldCreate: ^MPS.Expanded;
+		theList: ^MPS.List;
+	do 'Create' -> Node.FindAttributeDecl -> theOldCreate[];
+		(if theOldCreate[]//None then else
+			theOldCreate.Father -> theList[];
+			theOldCreate.SonNo -> theList.Delete;
+		if);
+		Node.Frag[] -> CurrentFragment[];
+		('Create','') -> NewPatternDecl -> CreateMethod[];
+		CreateMethod.AddDoPart;
+		(ResourceID,None) -> NewOpenImp -> CreateMethod.AppendImp;
+		CreateMethod[] -> Node.AppendAttribute;
+	#);
+EditMethodOfDecl:
+	(# 
+		Decl: ^MPS.Ast;
+		Method: ^Text;
+		EditEvent:
+			(# theEventhandler,theVirtual: ^MPS.Expanded;
+			do Decl[] -> DemandEventHandler -> theEventhandler[];
+				Method[] -> theEventhandler.FindAttributeDecl -> theVirtual[];
+				(theVirtual[],theEventHandler[]) -> OpenAstEditor;
+			#);
+		EditMethod:
+			(# theVirtual: ^MPS.Cons
+			do Method[] -> Decl.FindAttributeDecl -> theVirtual[];
+				(theVirtual[],Decl[]) -> OpenAstEditor;
+			#);
+		
+		OpenAstEditor:
+			(# theFather,theVirtual,theDoPart,theDescriptor,theActionPart: ^MPS.Expanded;
+				theAstEditor: ^ClassAstEditor;
+				IsPrivate:
+					(#
+					exit (this(ClassEditor).Node.Frag[]<>Decl.Frag[])
+					#);
+			enter (theVirtual[],theFather[])
+			do (if theVirtual[]//None 
+				then
+					MPS.Generate
+						(# 
+						do Decl.Frag[] -> CurrentFragment[];
+							Method[] -> NewFurtherBinding -> theVirtual[];
+							theVirtual.AddDoPart;
+							theVirtual[] -> theFather.AppendAttribute;
+							(if (PrivateDoParts And (Not IsPrivate))//True
+							then
+								(# SlotName: ^Text;
+								do DemandBody;
+									Decl.GetDeclName -> SlotName[];
+									Method[] -> SlotName.Append;
+									(Body[],SlotName[]) -> theVirtual.MakeSlot -> theDescriptor[];
+								#);
+							else
+								theVirtual.FindDescriptor -> theDescriptor[];
+							if);
+							theVirtual.Frag[] -> MarkFormAsChanged;
+						#);
+				else
+					theVirtual.GetDoPart -> theDoPart[];
+					(if theDoPart[]//None
+					then
+					else
+						theDoPart.Father -> theActionPart[];
+						theActionPart.Father -> theDescriptor[];
+					if);
+					theVirtual.GetDoPart -> theDoPart[];
+					(if theDoPart[]//None
+					then
+					else
+						theDoPart.Father -> theActionPart[];
+						theActionPart.Father -> theDescriptor[];
+					if);
+				if);
+				(if theDescriptor[]//None
+				then
+					'theDescriptor[] is none in OpenAstEditor' -> PutLine;
+				else
+					&ClassAstEditor[] -> theAstEditor[];
+					ReadOnly -> theAstEditor.ReadOnly;
+					theAstEditor.Open;
+					MakeTitle -> theAstEditor.Title;
+					theDescriptor[] -> theAstEditor.Contents;
+					theAstEditor.Show;
+				if);
+			#);
+		MakeTitle:
+			(# theTitle: ^Text;
+			do Decl.GetDeclname -> theTitle[];
+				(if this(ClassEditor).Node[] -> Decl.Equal//False then
+					' : ' -> theTitle.Prepend;
+					this(ClassEditor).Node.GetDeclName -> theTitle.Prepend;
+				if);
+				' : ' -> theTitle.Append;
+				Method[] -> theTitle.Append;
+			exit theTitle[]
+			#);
+		IsMethod: @Boolean;
+	enter (Decl[],Method[])
+	do (if True
+		//'Open' -> Method.EqualNCS then True -> IsMethod;
+		//'Close' -> Method.EqualNCS then True -> IsMethod;
+		//'Hit' -> Method.EqualNCS then True -> IsMethod;
+		//'Status' -> Method.EqualNCS then True -> IsMethod;
+		else False -> IsMethod
+		if);
+		(if IsMethod 
+		//True then EditMethod;
+		//False then EditEvent;
+		if);
+	#);
+
+-- EditorEnvLib: Attributes --
+
+FindPrivate:
+	(# theAttributes: ^BetaGram.Attributes;
+		theAst: ^MPS.Ast;
+		PrivateDecl: ^BetaGram.SimpleDecl;
+		theStaticItem: ^BetaGram.StaticItem;
+		theAttributeDecl: ^BetaGram.AttributeDecl;
+		Frag: ^MPS.FragmentForm;
+		descForm: ^BetaGram.DescriptorForm;
+		desc: ^BetaGram.ObjectDescriptor;
+	enter theAttributeDecl[]
+	do 'Private' -> theAttributeDecl.FindAttributeDecl -> theAst[];
+		(if theAst[]//None then
+		else
+			(if theAst.Symbol//BetaGram.SimpleDecl then
+				theAst[] -> PrivateDecl[];
+				PrivateDecl.GetReferenceSpecification -> theAst[];
+				(if theAst.Symbol//BetaGram.StaticItem then
+					theAst[] -> theStaticItem[];
+					theStaticItem.GetObjectSpecification -> theAst[];
+					(if theAst.Kind//MPS.Kinds.unExpanded then
+						theAst[] -> FindSlotFragment -> Frag[];
+						(if Frag[]//None then
+						else
+							(if Frag.Category//BetaGram.DescriptorForm then
+								Frag.Root[] -> descForm[];
+								descForm.GetObjectDescriptor -> desc[];
+								desc.FindAttributes -> theAttributes[];
+							if);
+						if);
+					if);
+				if);
+			if);
+		if);
+	exit theAttributes[]
+	#);
+
+FindSlotFragment:
+	(# theUnExp: ^MPS.UnExpanded;
+		theAst: ^MPS.Ast;
+		theSlot: ^MPS.SlotDesc;
+		Group: ^MPS.FragmentGroup;
+		Frag: ^MPS.FragmentForm;
+	enter theUnExp[]
+	do (if theUnExp.IsSlot//True then
+			theUnExp.TheSlot -> TheSlot[];
+			theUnExp.Frag.Father -> Group[];
+			TheSlot.Name -> Group.FindSlotFragment -> Frag[];
+		if);
+	exit Frag[]
+	#);
+FindImperatives:
+	(# Imperatives: ^BetaGram.Imperatives;
+		InsertedItem: ^BetaGram.InsertedItem;
+		DescForm: ^BetaGram.DescriptorForm;
+		theAst: ^MPS.Ast;
+		Frag: ^MPS.FragmentForm;
+		theDoPart: ^BetaGram.DoPart;
+		FindDoPart:
+			(# Desc: ^BetaGram.ObjectDescriptor;
+				DoPart: ^BetaGram.DoPart;
+				MainPart: ^BetaGram.MainPart;
+				ActionPart: ^BetaGram.ActionPart;
+			enter Desc[]
+			do Desc.GetMainPart -> MainPart[];
+				MainPart.GetActionPart -> ActionPart[];
+				ActionPart.getDoPartOpt -> DoPart[];
+			exit DoPart[]
+			#);
+		theAttributeDecl: ^BetaGram.AttributeDecl;
+	enter theAttributeDecl[]
+	do theAttributeDecl.FindDescriptor -> FindDoPart -> theDoPart[];
+		theDoPart.GetImperatives -> Imperatives[];
+		Imperatives.GetSon1 -> theAst[];
+		(if theAst.symbol//BetaGram.InsertedItem
+		then
+			theAst[] -> InsertedItem[];
+			InsertedItem.GetSon1 -> theAst[];
+			(if theAst.Kind//MPS.Kinds.UnExpanded
+			then
+				theAst[] -> FindSlotFragment -> Frag[];
+				(if Frag[]//None
+				then
+				else
+					Frag.root[] -> DescForm[];
+					DescForm.GetObjectDescriptor -> FindDoPart -> theDoPart[];
+					theDoPart.GetImperatives -> Imperatives[];
+				if);
+			if);
+		if);
+	exit Imperatives[]
+	#);
+
+-- InterfaceObjectEditorFindPrivateAttributes: Descriptor --
+(#
+do (if Privates[]//None then
+		(if Node[]//None then
+		else
+			Node[] -> FindPrivate -> Privates[];
+		if);
+	if);
+#)
+
+-- InterfaceObjectEditorDemandPrivateAttributes: Descriptor --
+(#
+do FindPrivateAttributes;
+	(if Privates[]//None then
+		DemandBody;
+		MPS.Generate
+			(# theItem,theStaticItem: ^MPS.Expanded;
+				SlotName: ^Text;
+				Frag: ^MPS.FragmentForm;
+				descForm: ^BetaGram.DescriptorForm;
+				desc: ^BetaGram.ObjectDescriptor;
+			do 
+				Node.Frag[] -> CurrentFragment[];
+				('Private','Dummy') -> NewItem -> theItem[];
+				theItem.GetSon2 -> theStaticItem[];
+				Node.GetDeclName -> SlotName[];
+				'Private' -> SlotName.Append;
+				SlotName[] -> NewDescriptorSlot -> theStaticItem.PutSon1;
+				theItem[] -> Node.AppendAttribute;
+				SlotName[] -> MPS.NewDescriptorFragment -> Frag[];
+				Frag[] -> Body.FragmentList.AddFragment
+					(#
+						alreadyThere::< (# do true -> Continue #);
+					#);
+				Frag.Root[] -> descForm[];
+				descForm.GetObjectDescriptor -> desc[];
+				desc.FindAttributes -> Privates[];
+			#);
+		(Body[],Parts.FragmentList) -> MarkGroupAsChanged;
+		Node.Frag[] -> MarkFormAsChanged;
+	if);
+#)
+
+-- InterfaceObjectEditorInit: Descriptor --
+(# CollectInfo:
+		(# Inherited: @Boolean;
+			gopherImp: ^ImperativeInfoList.theCellType;
+			Collect:
+				(# Decl: ^BetaGram.AttributeDecl;
+					CollectFrom:
+						(# theAttributes: ^BetaGram.Attributes;
+						enter theAttributes[]
+						do theAttributes[] -> ClassTreeInfo.LocalCheckIn;
+							theAttributes.Scan
+								(# theAttribute: ^AttributeInfo;
+								enter theAttribute[]
+								do (if Current.HasCommentProp//True then
+										(if Current.Symbol//BetaGram.SimpleDecl then
+											&AttributeInfo[] -> theAttribute[];
+											Current[] -> theAttribute.theAst[];
+											Inherited -> theAttribute.Inherited;
+											Current.GetResourceInfo ->
+												(theAttribute.ResourceName[],theAttribute.ID);
+											theAttribute[] -> AttributeInfoList.Append;
+										if);
+									if);
+								#);
+						#);
+					theAttributes,PrivateAttributes: ^BetaGram.Attributes;
+					Imps: ^BetaGram.Imperatives;
+					theOpenVirtual: ^BetaGram.AttributeDecl;
+					theBody: ^MPS.FragmentGroup;
+				enter Decl[]
+				do Decl.FindAttributes -> theAttributes[];
+					(if theAttributes[]//None then
+					else
+						theAttributes[] -> CollectFrom
+					if);
+					Decl[] -> FindPrivate -> PrivateAttributes[];
+					(if PrivateAttributes[]//None then
+					else
+						PrivateAttributes[] -> CollectFrom;
+					if);
+					'Open' -> Decl.FindAttributeDecl -> theOpenVirtual[];
+					(if theOpenVirtual[]//None then
+					else
+						theOpenVirtual[] -> FindImperatives -> Imps[];
+						(if Imps[]//None then
+						else
+							Imps.Scan
+								(# theImp: ^MPS.Expanded;
+								do (if Current.hasCommentProp//True
+									then
+										Current[] -> theImp[];
+										L: MPS.Const -> theImp.SuffixWalkForProd
+											(# ScanCat::< MPS.Const;
+												theImperative: ^ImperativeInfo;
+											do &ImperativeInfo[] -> theImperative[];
+												Current.getValue -> theImperative.ID;
+												(theImperative[],gopherImp[]) -> ImperativeInfoList.insertBefore;
+												Leave L;
+											#);
+									if);
+								#);
+							ImperativeInfoList.head -> gopherImp[];
+						if);
+					if);
+				#);
+			
+			theClassInfo: ^ClassTreeInfo.ClassInfo;
+			
+		do AttributeInfoList.Init;
+			ImperativeInfoList.Init;
+			(if Node.HasAttributes//True then
+				FindPrivateAttributes;
+				Node[] -> Collect;
+			if);
+			Node.GetPrefix -> ClassTreeInfo.FindByName -> theClassInfo[];
+			(if theClassInfo[]//None then
+			else
+				True -> Inherited;
+				L: theClassInfo.ScanPrefix
+					(#
+					do (if Current.ClassAst[]//None then
+							Leave L;
+						else
+							Current.ClassAst[] -> Collect;
+						if);
+					#);
+			if);
+		#);
+do (if CollectAttributesInfo//True then
+		FindBody;
+		CollectInfo;
+	if);
+	Inner Init;
+#)
+
+-- InterfaceObjectEditorNew: Descriptor --
+(#
+do MPS.Generate
+		(#
+		do theAttributes.Frag[] -> CurrentFragment[];
+			(if Kind//SingularKind then
+				(Name[],SuperClass[]) -> NewItem -> Node[];
+			else
+				(Name[],SuperClass[]) -> NewPatternDecl -> Node[];
+			if);
+			(ResourceName[],ResourceID) -> Node.SetResourceInfo;
+			Node[] -> theAttributes.Append;
+		#);
+	theAttributes.Frag[] -> MarkFormAsChanged;
+	Inner New;
+#)
+
+-- InterfaceObjectEditorEditAttributes: Descriptor --
+(#
+do AddDescriptor;
+	Inner EditAttributes;
+#)
+
+-- InterfaceObjectEditorEditMethod: Descriptor --
+(#
+do AddDescriptor;
+	Inner EditMethod;
+#)
+
+-- InterfaceObjectEditorGenerateOpen: Descriptor --
+(#
+do AddDescriptor;
+	Inner GenerateOpen;
+#)
+
+
+-- ClassEditorInit: Descriptor --
+(# 
+do EditorWindow.Open;
+	Node.Frag.Father -> Group[];
+	DemandResourceFile;
+	ResourceFile.OpenResources;
+	Inner Init;
+	ResourceFile.CloseResources;
+	EditorWindow.Show;
+#)
+
+-- ClassEditorSave: Descriptor --
+(#
+do True -> DidSave;
+	L: (if True//True then
+			AstEditors.Scan
+				(#
+				do (if Screen[] -> Current.Parse//False 
+					then
+						Current.BringToFront;
+						False -> DidSave;
+						Leave L; 
+					if);
+				#);
+			ResourceFile.OpenResources;
+			Inner Save;
+			ResourceFile.CloseResources;
+			True -> this(GroupEditor).ResourcesDirty;
+		if);
+#)
+
+-- ClassEditorNew: Descriptor --
+(# 
+do EditorWindow.Open;
+	theAttributes.Frag.Father -> Group[];
+	DemandResourceFile;
+	ResourceFile.OpenResources;
+	Inner New;
+	ResourceFile.CloseResources;
+	AddDescriptor;
+	GenerateCreate;
+	EditorWindow.Show;
+#)
+
+-- ClassEditorEditAttributes: Descriptor --
+(#
+do Inner EditAttributes;
+#)
+
+-- ClassEditorEditPrivateAttributes: Descriptor --
+(#
+do (if Privates[]//None then
+	else
+		Inner EditPrivateAttributes;
+	if);
+#)
+
+-- ClassEditorEditMethod: Descriptor --
+(#
+do (Node[],Name[]) -> EditMethodOfDecl;
+	Inner EditMethod;
+#)
+
+-- ClassEditorGenerateOpen: Descriptor --
+(#
+do MPS.Generate
+		(# theOpenVirtual: ^BetaGram.AttributeDecl;
+			theDescForm: ^BetaGram.DescriptorForm;
+			theInsertedItem: ^BetaGram.InsertedItem;
+			theDoPart,MyDoPart: ^BetaGram.DoPart;
+			FirstSon,theAst: ^MPS.Ast;
+			UnExp: ^MPS.UnExpanded;
+			theSlot: ^MPS.SlotDesc;
+			SlotName: ^Text;
+			Frag: ^MPS.FragmentForm;
+			
+			FindImperatives:
+				(# theDoPart: ^BetaGram.DoPart;
+				enter FindDoPart -> theDoPart[]
+				exit theDoPart.GetImperatives
+				#);
+			FindDoPart:
+				(# desc: ^BetaGram.ObjectDescriptor;
+					theMainPart: ^BetaGram.MainPart;
+					theDoPart: ^BetaGram.DoPart;
+					theActionPart: ^BetaGram.ActionPart;
+				enter desc[]
+				do desc.GetMainPart -> theMainPart[];
+					theMainPart.GetActionPart -> theActionPart[];
+					theActionPart.GetDoPartOpt -> theDoPart[];
+				exit theDoPart[]
+				#);
+		do 'Open' -> Node.FindAttributeDecl -> theOpenVirtual[];
+			Node.Frag[] -> CurrentFragment[];
+			(if theOpenVirtual[]//None then
+				'Open' -> NewFurtherBinding -> theOpenVirtual[];
+				theOpenVirtual.AddDoPart;
+				theOpenVirtual[] -> Node.AppendAttribute;
+				theOpenVirtual.FindDescriptor -> FindImperatives -> theImperatives[];
+				(if PrivateDoParts//True then
+					Node.GetDeclName -> SlotName[];
+					'Open' -> SlotName.Append;
+					BetaGram.InsertedItem -> NewAst -> theInsertedItem[];
+					SlotName[] -> NewDescriptorSlot -> theInsertedItem.putObjectDescriptor;
+					(1,theInsertedItem[]) -> theImperatives.Insert;
+					DemandBody;
+					SlotName[] -> MPS.NewDescriptorFragment 
+						-> Frag[] -> Body.FragmentList.AddFragment
+								 	(#
+										alreadyThere::< (# do true -> Continue #);
+									#);
+					Frag.Root.FindDescriptor -> FindImperatives -> theImperatives[];
+				if);
+				Node.Frag[] -> MarkFormAsChanged;
+			else
+				theOpenVirtual.FindDescriptor -> FindImperatives -> theImperatives[];
+				(if PrivateDoParts//True then
+					DemandBody;
+					theImperatives.GetSon1 -> FirstSon[];
+					(if FirstSon.Symbol//BetaGram.InsertedItem then
+						FirstSon[] -> theInsertedItem[];
+						theInsertedItem.GetObjectDescriptor -> theAst[];
+						(if theAst.Kind//MPS.Kinds.UnExpanded then
+							theAst[] -> UnExp[];
+							(if UnExp.IsSlot//True
+							then 
+								UnExp.theSlot -> theSlot[];
+								(if theSlot[]//None
+								then
+								else
+									theSlot.Name -> Body.FindFragment -> Frag[];
+									(if Frag[]//None
+									then
+										theSlot.Name -> MPS.NewDescriptorFragment 
+											-> Frag[] -> Body.FragmentList.AddFragment
+												(#
+													alreadyThere::< (# do true -> Continue #);
+												#);
+									if);
+									Frag.Root.FindDescriptor -> FindImperatives -> theImperatives[];
+								if);
+							if);
+						if);
+					else
+						Node.GetDeclName -> SlotName[];
+						'Open' -> SlotName.Append;
+						SlotName[] -> MPS.NewDescriptorFragment 
+							-> Frag[] -> Body.FragmentList.AddFragment
+								 	(#
+										alreadyThere::< (# do true -> Continue #);
+									#);
+						Frag.Root.FindDescriptor -> FindDoPart -> theDoPart[];
+						Frag[] -> theImperatives.Copy -> theDoPart.PutImperatives;
+						theImperatives.Father -> MyDoPart[];
+						BetaGram.Imperatives -> NewAst -> theImperatives[] -> MyDoPart.PutImperatives;
+						BetaGram.InsertedItem -> NewAst -> theInsertedItem[];
+						SlotName[] -> NewDescriptorSlot -> theInsertedItem.putObjectDescriptor;
+						(1,theInsertedItem[]) -> theImperatives.Insert;
+						theDoPart.GetImperatives -> theImperatives[];
+					if);
+				if);
+			if);
+			(if theImperatives[]//None then
+				'"theImperatives" are none in "GenerateOpen"' -> PutLine;
+			else
+				Inner GenerateOpen;
+				theImperatives.Frag[] -> MarkFormAsChanged;
+			if);
+		#);
+#)
+
+-- InstanceEditorInit: Descriptor --
+(#
+do Inner Init;
+#)
+
+-- InstanceEditorNew: Descriptor --
+(#
+do Inner New;
+#)
+
+-- InstanceEditorSave: Descriptor --
+(#
+do Inner Save;
+#)
+
+-- InstanceEditorDelete: Descriptor --
+(#
+do Inner Delete;
+	Node.Frag[] -> MarkFormAsChanged;
+#)
+
+-- InstanceEditorEditAttributes: Descriptor --
+(#
+do Inner EditAttributes;
+#)
+
+-- InstanceEditorEditMethod: Descriptor --
+(#
+do (Node[],Name[]) -> EditMethodOfDecl;
+	Inner EditMethod;
+#)
+
+-- InstanceEditorGenerateOpen: Descriptor --
+(#
+do MPS.Generate
+		(# theOpenVirtual: ^BetaGram.AttributeDecl;
+			theDescForm: ^BetaGram.DescriptorForm;
+			theInsertedItem: ^BetaGram.InsertedItem;
+			theDoPart,MyDoPart: ^BetaGram.DoPart;
+			FirstSon,theAst: ^MPS.Ast;
+			UnExp: ^MPS.UnExpanded;
+			theSlot: ^MPS.SlotDesc;
+			SlotName: ^Text;
+			Frag: ^MPS.FragmentForm;
+			
+			FindImperatives:
+				(# theDoPart: ^BetaGram.DoPart;
+				enter FindDoPart -> theDoPart[]
+				exit theDoPart.GetImperatives
+				#);
+			FindDoPart:
+				(# desc: ^BetaGram.ObjectDescriptor;
+					theMainPart: ^BetaGram.MainPart;
+					theDoPart: ^BetaGram.DoPart;
+					theActionPart: ^BetaGram.ActionPart;
+				enter desc[]
+				do desc.GetMainPart -> theMainPart[];
+					theMainPart.GetActionPart -> theActionPart[];
+					theActionPart.GetDoPartOpt -> theDoPart[];
+				exit theDoPart[]
+				#);
+			DoMakeSlot: @Boolean;
+		do PrivateDoParts AND (NOT IsPrivate) -> DoMakeSlot;
+			Node.Frag[] -> CurrentFragment[];
+			'Open' -> Node.FindAttributeDecl -> theOpenVirtual[];
+			(if theOpenVirtual[]//None then
+				'Open' -> NewFurtherBinding -> theOpenVirtual[];
+				theOpenVirtual.AddDoPart;
+				theOpenVirtual[] -> Node.AppendAttribute;
+				theOpenVirtual.FindDescriptor -> FindImperatives -> theImperatives[];
+				(if DoMakeSlot//True then
+					Node.GetDeclName -> SlotName[];
+					'Open' -> SlotName.Append;
+					BetaGram.InsertedItem -> NewAst -> theInsertedItem[];
+					SlotName[] -> NewDescriptorSlot -> theInsertedItem.putObjectDescriptor;
+					(1,theInsertedItem[]) -> theImperatives.Insert;
+					DemandBody;
+					SlotName[] -> MPS.NewDescriptorFragment 
+						-> Frag[] -> Body.FragmentList.AddFragment
+							(#
+								alreadyThere::< (# do true -> Continue #);
+							#);
+					Frag.Root.FindDescriptor -> FindImperatives -> theImperatives[];
+				if);
+				Node.Frag[] -> MarkFormAsChanged;
+			else
+				theOpenVirtual.FindDescriptor -> FindImperatives -> theImperatives[];
+				(if DoMakeSlot//True then
+					DemandBody;
+					theImperatives.GetSon1 -> FirstSon[];
+					(if FirstSon.Symbol//BetaGram.InsertedItem then
+						FirstSon[] -> theInsertedItem[];
+						theInsertedItem.GetObjectDescriptor -> theAst[];
+						(if theAst.Kind//MPS.Kinds.UnExpanded then
+							theAst[] -> UnExp[];
+							(if UnExp.IsSlot//True
+							then 
+								UnExp.theSlot -> theSlot[];
+								(if theSlot[]//None
+								then
+								else
+									theSlot.Name -> Body.FindFragment -> Frag[];
+									(if Frag[]//None
+									then
+										theSlot.Name -> MPS.NewDescriptorFragment 
+											-> Frag[] -> Body.FragmentList.AddFragment
+												(#
+													alreadyThere::< (# do true -> Continue #);
+												#);
+									if);
+									Frag.Root.FindDescriptor -> FindImperatives -> theImperatives[];
+								if);
+							if);
+						if);
+					else
+						Node.GetDeclName -> SlotName[];
+						'Open' -> SlotName.Append;
+						SlotName[] -> MPS.NewDescriptorFragment 
+							-> Frag[] -> Body.FragmentList.AddFragment;
+						Frag.Root.FindDescriptor -> FindDoPart -> theDoPart[];
+						Frag[] -> theImperatives.Copy -> theDoPart.PutImperatives;
+						theImperatives.Father -> MyDoPart[];
+						BetaGram.Imperatives -> NewAst -> theImperatives[] -> MyDoPart.PutImperatives;
+						BetaGram.InsertedItem -> NewAst -> theInsertedItem[];
+						SlotName[] -> NewDescriptorSlot -> theInsertedItem.putObjectDescriptor;
+						(1,theInsertedItem[]) -> theImperatives.Insert;
+						theDoPart.GetImperatives -> theImperatives[];
+					if);
+				if);
+			if);
+			(if theImperatives[]//None then
+				'"theImperatives" are none in "GenerateOpen"' -> PutLine;
+			else
+				Inner GenerateOpen;
+				theImperatives.Frag[] -> MarkFormAsChanged;
+			if);
+		#);
+#)
+
+-- InstanceEditorSetIsPrivate: Descriptor --
+(# 
+do (if IsPrivate//Value
+	then
+	else
+		(if Value//True
+		then MakePrivate;
+		else MakePublic;
+		if);
+	if);
+#)
+
+-- InstanceEditorGetIsPrivate: Descriptor --
+(# theClassAst: ^MPS.Ast;
+do ClassAst -> theClassAst[];
+	(theClassAst.Frag[]<>Node.Frag[]) -> Value; 
+#)
+
+-- InstanceEditorMakePrivate: Descriptor --
+(# 
+do Inner MakePrivate;
+#)
+
+-- InstanceEditorMakePublic: Descriptor --
+(#
+do Inner MakePublic;
+#)
+
+-- ClassEditorFindEventHandler: Descriptor --
+(#
+do 'EventHandler' -> theAttributeDecl.FindAttributeDecl -> theEventHandler[];
+	Inner FindEventHandler;
+#)
+
+-- ClassEditorDemandEventHandler: Descriptor --
+(#
+do (if theEventHandler[]//None
+	then
+		MPS.Generate
+			(#
+			do theAttributeDecl.Frag[] -> CurrentFragment[];
+				'EventHandler' -> NewFurtherBinding -> theEventHandler[];
+				theEventHandler[] -> theAttributeDecl.AppendAttribute;
+			#);
+		theEventHandler.Frag[] -> MarkFormAsChanged;
+	if);
+#)
+
+-- InterfaceObjectEditorUpdateSlotNames: Descriptor --
+(# Name,SlotName: ^Text;
+	UpdateSlots:
+		(# astToUpdate: ^MPS.Expanded;
+		enter astToUpdate[]
+		do MPS.UnExpanded -> astToUpdate.SuffixWalkForProd
+				(# ScanCat::< MPS.UnExpanded;
+					theSlot: ^MPS.SlotDesc;
+					theAst: ^MPS.Ast;
+					OldName: ^Text;
+				do (if Current.IsSlot//True then
+						Current.theSlot -> theSlot[];
+						(if theSlot.Category//BetaGram.Objectdescriptor then
+							Current.Father -> theAst[];
+							L: 
+							(if theAst.Symbol
+							//BetaGram.PatternDecl
+							//BetaGram.SimpleDecl
+							//BetaGram.VirtualDecl
+							//BetaGram.BindingDecl then
+								True -> FoundSome;
+								Name -> SlotName;
+								theAst.GetDeclName -> SlotName.Append;
+								theSlot.Name -> OldName[];
+								SlotName[] -> theSlot.Name;
+								Search: Body.FragmentList.Scan
+									(# frag: ^MPS.FragmentForm;
+									do (if Current.Type//MPS.FormType then
+											(if Current.Name[] -> OldName.EqualNCS//True then
+												SlotName -> Current.Name;
+												Current.Open -> frag[];
+												SlotName[] -> Frag.Name;
+												Leave Search;
+											if);
+										if);
+									#);
+							else
+								theAst.Father -> theAst[];
+								restart L;
+							if);
+						if);
+					if);
+				#);
+		#);
+	FoundSome: @Boolean;
+do 
+		FindBody;
+		(if Body[]//None then
+		else
+			Node.GetDeclName -> Name[];
+			&Text[] -> SlotName[];
+			Node.ScanAttributes
+				(#
+				do (if Current.HasCommentProp//False then
+						Current[] -> UpdateSlots;
+					if);
+				#);
+			(if FoundSome//True then
+				Node.Frag[] -> MarkFormAsChanged;
+				(Body[],Parts.FragmentList) -> MarkGroupAsChanged;
+			if);
+		if);
+#)
+
+-- InterfaceObjectEditorAddDescriptor: Descriptor --
+(#
+do (if Node[]//None then 
+	else
+		Node.StaticItem2SingularObject;
+	if);
+#)
+
+-- InterfaceObjectEditorGetResourceID: Descriptor --
+(# Name: ^Text;
+do (if Node[]//None then
+	else
+		Node.GetResourceInfo -> (Name[],ID);
+	if);
+#)
+
+-- InterfaceObjectEditorChangeResourceID: Descriptor --
+(# Name: ^Text;
+do True -> Changed;
+	Node.GetResourceInfo -> (Name[],OldID);
+	(if OldID//NewID then
+	else
+		Inner ChangeResourceID;
+		(if Changed//True then
+			(Name[],NewID) -> Node.SetResourceInfo;
+			Node.Frag[] -> MarkFormAsChanged;
+		if);
+	if);
+#)
+
+-- ClassAstEditorOpen: Descriptor --
+(#
+do this(ClassAstEditor)[] -> AstEditors.Append;
+	Inner Open;
+#)
+
+-- ClassAstEditorClose: Descriptor --
+(#
+do this(ClassAstEditor)[] -> AstEditors.Remove;
+	Inner Close;
+#)
+
+-- ClassAstEditorParse: Descriptor --
+(#
+do Inner Parse;
+#)
+
+-- ClassAstEditorActivate: Descriptor --
+(# 
+do Inner Activate;
+#)
+
+-- ClassAstEditorDeactivate: Descriptor --
+(# 
+do 
+	Inner Deactivate;
+#)
+
+-- ClassEditorOpen: Descriptor --
+(#
+do True -> PrivateAttributes -> PrivateDoParts;
+	<<SLOT InsertInClassEditors: Descriptor>>;
+	Inner Open;
+#)
+
+-- ClassEditorClose: Descriptor --
+(# fg: ^MPS.FragmentGroup;
+do Inner Close;
+	AstEditors.Scan
+		(#
+		do Current.Close;
+		#);
+	<<SLOT RemoveFromClassEditors: Descriptor>>;
+#)
+
+-- ClassEditorAboutToClose: Descriptor --
+(# 
+do (if ReadOnly//True then
+		True -> OkToClose;
+	else
+		Save -> OkToClose;
+	if);
+#)
+
+-- ClassEditorActivate: Descriptor --
+(# HandleResourceID: theEditMenu.Action
+		(# Hit::<
+				(#
+				do EditResourceID;
+				#);
+		#);
+	HandlePrivateAttributes: theEditMenu.Action
+		(# Status::<
+				(#
+				do PrivateAttributes -> theItem.Check;
+				#);
+			Hit::<
+				(#
+				do Not PrivateAttributes -> PrivateAttributes;
+				#);
+		#);
+	HandlePrivateDoParts: theEditMenu.Action
+		(# Status::<
+				(#
+				do PrivateDoParts -> theItem.Check;
+				#);
+			Hit::<
+				(#
+				do Not PrivateDoParts -> PrivateDoParts;
+				#);
+		#);
+do (&HandleResourceID[],9) -> theEditMenu.AttachToItem;
+	(&HandlePrivateAttributes[],11) -> theEditMenu.AttachToItem;
+	(&HandlePrivateDoParts[],12) -> theEditMenu.AttachToItem;
+	InstallFileMenuHandlers;
+	Inner Activate;
+#)
+
+-- ClassEditorDeactivate: Descriptor --
+(#
+do 9 -> theEditMenu.DetachItem;
+	11 -> theEditMenu.DetachItem;
+	12 -> theEditMenu.DetachItem;
+	DeInstallFileMenuHandlers;
+	Inner Deactivate;
+#)
+
+
+-- ClassEditorChangeResourceID: Descriptor --
+(#
+do GenerateCreate;
+	Inner ChangeResourceID;
+#)
+
+-- ClassEditorPrivate: Descriptor --
+(#
+
+#)
+	
+-- MenuLib: Attributes --
+	
+AttachToItem:
+	(# theAction: ^Action;
+		itemNumber: @Integer;
+		theItem: ^DynamicItem;
+	enter (theAction[],itemNumber)
+	do itemNumber -> GetItemByNumber -> theItem[];
+		(if theAction[]//None
+			then
+			else
+				theAction[] -> theItem.attach;
+		if);
+	#);
+DetachItem:
+	(# itemNumber: @Integer;
+		theItem: ^DynamicItem;
+	enter itemNumber
+	do itemNumber -> GetItemByNumber -> theItem[];
+		theItem.detach;
+	#);
+DetachAll: Scan
+	(# d: ^DynamicItem;
+	do theItem[] -> d[];
+		d.detach;
+	#);
+--]]

@@ -1,0 +1,1253 @@
+ORIGIN '../graphicaleditor';
+INCLUDE '~beta/guienv/v1.2/utils/guienvadds';
+INCLUDE '~beta/guienv/v1.2/utils/track';
+INCLUDE '~beta/sysutils/v1.4/time';
+INCLUDE '~beta/sysutils/v1.4/objinterface';
+INCLUDE '~beta/interfacebuilder/v1.0d/code/generate';
+INCLUDE '~beta/interfacebuilder/v1.0d/asteditor/asteditor';
+INCLUDE '~beta/interfacebuilder/v1.0d/palettes/palettes';
+INCLUDE '~beta/interfacebuilder/v1.0d/guienvstuff/guienvstuff';
+INCLUDE '~beta/interfacebuilder/v1.0d/guienvstuff/walkingants';
+INCLUDE '~beta/interfacebuilder/v1.0d/guienvstuff/killtranslations';
+INCLUDE '~beta/interfacebuilder/v1.0d/mpsstuff/mpsutils';
+
+MDBODY default 'X11/graphicaleditor_X11body';
+
+
+-- GUIenvLib: attributes --
+
+getWalkingAnts: objectPool.get
+  (# type:: walkingAnts;
+     init::
+       (# 
+       do obj.init;
+          50 -> obj.interval;
+       #);
+  #);
+putPoint:
+  (# x, y: @integer;
+  enter (x, y)
+  do '[' -> put;
+     x -> putInt;
+     ' ' -> put;
+     y -> putInt;
+     ']' -> put;
+  #);
+
+-- windowitemEditornew: doPart --
+do 
+   (if astControl.theAst[]//None then
+       (#
+          theAttributeDecl: ^betaGram.attributeDecl;
+          className, instanceName: ^text;
+       do this(graphicalEditor).private.names[type][] -> className[];
+          className.copy -> instanceName[];
+          instanceName.length -> instanceName.setPos;
+          (if data[]<>none then
+              data.id -> instanceName.putInt;
+           else
+              uniqueID -> instanceName.putInt;
+          if);
+          (owner.astControl.theAst.frag[],
+          instanceName[],className[]) -> betaGram.newSingularItem -> theAttributeDecl[];
+          (owner.astControl.theAst[],theAttributeDecl[]) -> betaGram.appendAttribute;
+          theAttributeDecl[] -> astControl.init;
+          
+       #);
+   if);
+   (if data[]//none then
+       newData;
+       
+   if);
+   generateSimpleOpen;
+   createTheWindowItem;
+   (if owner[]<>None then
+       this(windowitemEditor)[] -> owner.children.append;
+       owner.generateOpen;
+   if);
+   
+   
+   inner;
+   
+   
+-- windowItemEditorLib: attributes --
+
+
+createTheWindowItem:
+  (# thisCanvasEditor: ^canvasEditor;
+  do (if theWindowItem[] = None then
+         &windowItemType[] -> theWindowItem[];
+         owner.theWindowItem[] -> theWindowItem.open;
+         theWindowItem.killTranslations;
+     if);
+     &handleMouseDown[] -> theWindowItem.prependAction;
+     &handleRefresh[] -> theWindowItem.appendAction;
+     &handleFrameChanged[] -> theWindowItem.appendAction;
+     applyObjectData;
+     (if this(windowItemEditor)## <= canvasEditor## then
+         this(windowItemEditor)[] -> thisCanvasEditor[];
+         thisCanvasEditor.children.scan
+         (# 
+         do current.createTheWindowItem; 
+         #)
+     if);
+  #);
+setIDcomment:
+  (#
+  do data.id -> astControl.theAst.guiInfo;
+  #);
+
+generateSimpleOpen:
+  (# theAttributeDecl: ^betaGram.attributeDecl;
+     frag: ^MPS.fragmentForm;
+     openDecl: ^betaGram.attributeDecl;
+     theObjectDescriptor: ^betaGram.objectDescriptor;
+     theMainPart: ^betaGram.mainPart;
+     theActionPart: ^betaGram.actionPart;
+     theDoPart: ^betaGram.doPart;
+     theImperatives, oldImperatives: ^betaGram.imperatives;
+     theDoPartOpt: ^MPS.AST;
+  do astControl.theAst[] -> theAttributeDecl[];
+     theAttributeDecl.frag[] -> frag[];
+     (theAttributeDecl[], 'open') -> betaGram.findAttribute -> openDecl[];
+     (if openDecl[]//None then
+         (frag[], 'open', none) -> betaGram.newVirtualBinding -> openDecl[];
+         (theAttributeDecl[], openDecl[]) -> betaGram.appendAttribute;
+     if);
+     openDecl[] -> betaGram.getObjectDescriptor -> theObjectDescriptor[];
+     theObjectDescriptor.getMainPart -> theMainPart[];
+     theMainPart.getActionPart -> theActionPart[];
+     theActionPart.getDoPartOpt -> theDoPartOpt[];
+     (if theDoPartOpt.kind//MPS.kinds.interior then
+         theDoPartOpt[] -> theDoPart[];
+         theDoPart.getImperatives -> oldImperatives[];
+      else
+         frag[] -> betaGram.newDoPart -> theDoPart[] -> theActionPart.putDoPartOpt;
+     if);
+     (betaGram.imperatives, frag[]) -> betaGram.newAst -> theImperatives[] -> theDoPart.putImperatives;
+     (frag[], data.id) -> betaGram.newInitFromResourceStatement -> theImperatives.append;
+     (if oldImperatives[]<>none then
+         oldImperatives.iterate
+         (# 
+         do frag[] -> current.copy -> theImperatives.append;
+         #);
+     if);
+  #);
+
+changeOwner:
+  (# newOwner: ^canvasEditor;
+     theAttribute: ^betaGram.attributeDecl;
+     theFather: ^betaGram.attributes;
+     currentOwner: ^canvasEditor;
+  enter newOwner[]
+  do 
+     astControl.theAst[] -> theAttribute[];
+     theAttribute.father -> theFather[];
+     theAttribute.sonNo -> theFather.delete;
+     (newOwner.astControl.theAst[], theAttribute[]) -> betaGram.appendAttribute;
+     owner[] -> currentOwner[];
+     newOwner[] -> owner[];
+     
+     theWindowItem.close;
+     None -> theWindowItem[];
+     this(windowItemEditor)[] -> currentOwner.children.at -> currentOwner.children.delete;
+     this(windowItemEditor)[] -> newOwner.children.append;
+     createTheWindowItem;
+     newOwner.generateOpen;
+     currentOwner.generateOpen;
+     newOwner.astControl.prepareChange;
+     currentOwner.astControl.prepareChange;
+     newOwner.astControl.theAst[] -> newOwner.astControl.change;
+     currentOwner.astControl.theAst[] -> currentOwner.astControl.change;
+  #);
+
+
+handleMouseDown: theWindowItem.mouseDownAction
+  (# 
+  do theEvent[] -> this(windowItemEditor).mousedown;
+  #);
+handleFrameChanged: theWindowItem.frameChangedAction
+  (# 
+  do (if theWindowItem[]<>none then
+         (if data[]<>none then
+             theWindowItem.position -> data.position;
+             theWindowItem.size -> data.size;
+             (if private.selected then
+                 restartWalkingAnts;
+             if);
+         if);
+     if);
+  #);
+restartWalkingAnts:
+  (#
+  do stopWalkingAnts;
+     startWalkingAnts;
+  #);
+stopWalkingAnts:
+  (# 
+  do this(graphicalEditor).private.theWalkingAnts.stop;
+  #);
+startWalkingAnts:
+  (# r: ^rectangle
+  do &rectangle[] -> r[];
+     theWindowItem.frame -> r;
+     (-1, -1) -> r.inset;
+     owner.theWindowItem[] -> this(graphicalEditor).private.theWalkingAnts.theCanvas[];
+     r[] -> this(graphicalEditor).private.theWalkingAnts.start;
+  #);
+handleRefresh: theWindowItem.refreshAction
+  (#
+  #);
+reConfigure:
+  (# doLeft,doTop,doRight,doBottom: @boolean;
+     r: @rectangle;
+     newOwner: ^canvasEditor;
+  enter (doLeft,doTop,doRight,doBottom)
+  do (if private.selected then
+         this(graphicalEditor).private.theWalkingAnts.stop;
+     if);
+     theWindowItem.frame -> r;
+     (r[],  theWindowItem.father[], (contentsEditor).theWindowItem[]) 
+       -> translateRect;
+     (r,doLeft,doTop,doRight,doBottom) -> (contentsEditor).theWindowItem.defineRect -> r;
+     (r.topLeft, this(windowItemEditor)[]) -> (contentsEditor).findEditor 
+       -> newOwner[];
+     (if newOwner[]<>owner[] then
+         (r[], (contentsEditor).theWindowItem[], newOwner.theWindowItem[])
+           -> translateRect;
+         r.topLeft -> data.position;
+         r.size -> data.size;
+         newOwner[] -> changeOwner;
+      else
+         (r.topLeft, (contentsEditor).theWindowItem[], theWindowItem.father[]) -> translate -> r.topLeft;
+         (r.bottomRight, (contentsEditor).theWindowItem[], theWindowItem.father[]) -> translate -> r.bottomRight;
+         r -> theWindowItem.frame;
+     if);
+     (if private.selected then
+         owner.theWindowItem[] -> this(graphicalEditor).private.theWalkingAnts.theCanvas[];
+         (-1, -1) -> r.inset;
+         r[] -> this(graphicalEditor).private.theWalkingAnts.start;
+     if);
+  #);
+resize:
+  (# r: @rectangle;
+  do theWindowItem.frame -> r;
+     (r,false,false,true,true) -> theWindowItem.father.defineRect -> theWindowItem.frame;
+  #);
+drag:
+  (# r: @rectangle;
+  do theWindowItem.frame -> r;
+     (r,true,true,true,true) -> theWindowItem.father.defineRect -> theWindowItem.frame;
+  #);
+
+
+-- windowitemEditorPrivate: descriptor --
+(# selected: @boolean;
+#)
+
+-- canvasEditornew: doPart --
+do (if theWindowItem[]<>contents then
+       borderStyles.shadowIn -> theWindowItem.border.style;
+       true -> theWindowItem.border.visible;
+   if);
+   inner;
+
+-- abstractScrollerEditornew: doPart --
+do false -> theWindowItem.border.visible;
+   inner;
+
+-- scrollerEditornew: doPart --
+do inner;
+
+-- textEditorEditornew: doPart --
+do inner;
+
+-- controlEditornew: doPart --
+do inner;
+
+-- buttonEditornew: doPart --
+do 
+   inner;
+
+-- pushButtonEditornew: doPart --
+do inner;
+
+-- iconButtonEditornew: doPart --
+do 
+   inner;
+
+-- optionButtonEditornew: doPart --
+do inner;
+
+-- staticTextEditornew: doPart --
+do inner;
+
+-- toggleButtonEditornew: doPart --
+do 
+   inner;
+
+-- radioButtonEditornew: doPart --
+do inner;
+
+-- checkBoxEditornew: doPart --
+do inner;
+
+-- scrollbarEditornew: doPart --
+do 
+   inner;
+
+-- editTextEditornew: doPart --
+do 
+   inner;
+
+-- textFieldEditornew: doPart --
+do inner;
+
+-- scrollListEditornew: doPart --
+do inner;
+
+-- textScrollListEditornew: doPart --
+do inner;
+
+-- graphicalEditorSetcurrentMode: doPart --
+do mode[] -> private.currentmode[];
+   mode[] -> private.objectSpecificationList.findObjectType -> private.currentType##;
+
+-- graphicalEditorGetcurrentMode: doPart --
+do private.currentmode[] -> mode[];
+
+-- graphicalEditorNewEditor: doPart --
+do this(graphicalEditor).private.editorGenerator[type] -> theEditor[];
+   (this(canvasEditor)[],type) -> theEditor.new;
+   theEditor[] -> select;
+
+-- objectItemonSelect: doPart --
+do name -> currentMode;
+   type -> this(graphicalEditor).private.currentCanvasEditor.newEditor;
+
+-- objectItemOpen: doPart --
+do inner open;
+
+-- ObjectMenuOpen: doPart --
+do (# 
+   do 'Objects' -> name;
+      ('PushButton',PushButtonType) -> addItem;
+      ('StaticText',StaticTextType) -> addItem;
+      ('TextScrollList',TextScrollListType) -> addItem;
+      ('Scroller',ScrollerType) -> addItem;
+      ('Canvas',CanvasType) -> addItem;
+      ('IconButton',IconButtonType) -> addItem;
+      ('OptionButton',MenuButtonType) -> addItem;
+      ('RadioButton',RadioButtonType) -> addItem;
+      ('CheckBox',CheckBoxType) -> addItem;
+      ('ScrollBar',ScrollBarType) -> addItem;
+      ('EditText',EditTextType) -> addItem;
+      ('TextField',TextFieldType) -> addItem;
+      ('TextEditor',TextEditorType) -> addItem;
+   #)
+
+-- graphicalEditormenubarTypeOpen: doPart --
+do fileMenu.open;
+   fileMenu[] -> append;
+   (* objectMenu.open;
+   objectMenu[] -> append; *)
+   this(graphicaleditor).private.thePaletteEnv.mainMenu.open;
+   'Objects' -> this(graphicaleditor).private.thePaletteEnv.mainMenu.name;
+   this(graphicaleditor).private.thePaletteEnv.mainMenu[] -> append;
+
+-- graphicalEditorOpen: doPart --
+do (#
+   do 'Graphical Objects' -> title;
+      getWalkingAnts -> private.theWalkingAnts[];
+      (600, 500) -> size;
+      (contents, width, height) -> private.windowView.open;
+      ('PushButton',pushButtonEditor##) -> addObjectSpecification;
+      ('StaticText',staticTextEditor##) -> addObjectSpecification;
+      ('TextScrollList',textScrollListEditor##) -> addObjectSpecification;
+      ('Scroller',scrollerEditor##) -> addObjectSpecification;
+      ('Canvas',canvasEditor##) -> addObjectSpecification;
+      ('IconButton',iconButtonEditor##) -> addObjectSpecification;
+      ('OptionButton',optionButtonEditor##) -> addObjectSpecification;
+      ('RadioButton',radioButtonEditor##) -> addObjectSpecification;
+      ('CheckBox',checkBoxEditor##) -> addObjectSpecification;
+      ('ScrollBar',scrollbarEditor##) -> addObjectSpecification;
+      ('EditText',editTextEditor##) -> addObjectSpecification;
+      ('TextField',textFieldEditor##) -> addObjectSpecification;
+      ('TextEditor',textEditorEditor##) -> addObjectSpecification;
+      private.thePaletteEnv.init;
+      private.initEditorGenerator;
+      private.initNames;
+      private.contentsEditorObject[] -> private.contentsEditor.theWindowItem[];
+   #);
+
+-- graphicalEditorClose: doPart --
+do inner;
+   private.selection.makeEmpty;
+
+-- graphicalEditorOnMouseDown: doPart --
+do 
+   
+-- graphicalEditorLib: attributes --
+
+scriptEditor: astEditor
+  (# eventHandler::
+       (# onAboutToClose::
+            (# parseOK: @boolean;
+            do (if dirty then
+                   parse -> parseOK;
+                   parseOK -> okToClose;
+               if);
+            #);
+       #);
+  #);
+
+initialize:
+  (# width, height: @integer;
+  enter (width, height)
+  do (width, height) -> open;
+  #);
+
+generateEditor:
+  (# we: ^windowItemEditor;
+  do inner;
+  exit we[]
+  #);
+
+contentsEditor:
+  (# 
+  exit private.contentsEditor[]
+  #);
+
+objectSpecification:
+  (# ID: ^text;
+     type: ##windowItemEditor;
+  #);
+addObjectSpecification:
+  (# type: ##windowItemEditor;
+     ID: ^text;
+     spec: ^objectSpecification;
+  enter (ID[],type##)
+  do &objectSpecification[] -> spec[];
+     ID[] -> spec.ID[];
+     type## -> spec.type##;
+     spec[] -> private.objectSpecificationList.append;
+  #);
+uniqueID:
+  (# 
+  do private.currentId + 1 -> private.currentId;
+  exit private.currentId
+  #);
+currentType:
+  (# 
+  enter private.currentType##
+  exit private.currentType##
+  #);
+getMilliTime:
+  (# secs,microSecs: @integer;
+     milliSecs: @integer;
+  do preciseTime -> (secs,microSecs);
+     secs - private.startupTime -> secs;
+     secs * 1000 + microSecs/1000 -> milliSecs;
+  exit milliSecs
+  #);
+currentCanvasEditor:
+  (# 
+  enter private.currentCanvasEditor[]
+  exit private.currentCanvasEditor[]
+  #);
+
+translateRect:
+  (# r: ^rectangle;
+     from, to: ^windowItem;
+  enter (r[], from[], to[])
+  do (r.topLeft,from[], to[]) -> translate -> r.topLeft;
+     (r.bottomRight, from[], to[]) -> translate -> r.bottomRight;
+  #);
+
+findPrivateAttributes:
+  (# theAttributes: ^betaGram.attributes;
+     failure:< object;
+  do (# theAst: ^MPS.AST;
+        group: ^MPS.fragmentGroup;
+        theSimpleDecl: ^betaGram.simpleDecl;
+        theReferenceSpecification: ^betagram.ReferenceSpecification;
+        theStaticItem: ^betaGram.staticItem;
+        theUnExpanded: ^MPS.unExpanded;
+        theSlotDesc: ^MPS.slotDesc;
+        frag: ^MPS.fragmentForm;
+        theDescriptorForm: ^betaGram.descriptorForm;
+        theObjectDescriptor: ^betaGram.objectDescriptor;
+        theMainPart: ^betaGram.mainPart;
+     do body -> group[];
+        (if group[]<>None then
+            (astControl, 'private') -> betaGram.findAttribute -> theAst[];
+            (if theAst[]<>None then
+                (if theAst.symbol = betaGram.simpleDecl then
+                    theAst[] -> theSimpleDecl[];
+                    theSimpleDecl.getReferenceSpecification -> theReferenceSpecification[];
+                    (if theReferenceSpecification.symbol = betagram.staticItem then
+                        theReferenceSpecification[] -> theStaticItem[];
+                        theStaticItem.getObjectSpecification -> theAst[];
+                        (if theAst.kind = MPS.kinds.unExpanded then
+                            theAst[] -> theUnExpanded[];
+                            (if theUnExpanded.isSlot then
+                                theUnExpanded.theSlot -> theSlotDesc[];
+                                theSlotDesc.name -> group.findFragment -> frag[];
+                                (if frag[]<>None then
+                                    (if frag.category = betaGram.descriptorForm then
+                                        frag.root[] -> theDescriptorForm[];
+                                        theDescriptorForm.getObjectDescriptor -> theObjectDescriptor[];
+                                        theObjectDescriptor.getMainPart -> theMainPart[];
+                                        theMainPart.getAttributes -> theAttributes[];
+                                     else
+                                        failure;
+                                    if);
+                                 else
+                                    failure;
+                                if);
+                             else
+                                failure;
+                            if);
+                         else
+                            failure;
+                        if);
+                     else
+                        failure;
+                    if);
+                 else
+                    failure;
+                if);
+             else
+                failure;
+            if);
+         else
+            failure;
+        if);
+     #);
+  exit theAttributes[]
+  #);
+
+findBody:
+  (# group: ^MPS.fragmentGroup;
+     theBody: ^MPS.fragmentGroup;
+     name: ^text;
+  do (astControl).frag.father -> group[];
+     search: group.prop.scanProp
+     (# 
+        doProp::<
+          (# 
+          do (if true 
+              //'BODY' -> prop.equalNCS
+              //'MDBODY' -> prop.equalNCS then
+                 scanParameters
+                 (# doString::<
+                      (# 
+                      do s[] -> name[];
+                         leave search;
+                      #);
+                 #);
+             if);
+          #);
+     #);
+     (if name[] = none then
+         group.name -> name[];
+         name.copy -> name[];
+         'Body' -> name.append;
+         'BODY' -> group.prop.addProp
+         (# 
+         do name[] -> addString;
+         #);
+     if);
+     name[] -> MPS.safeOpen -> theBody[];
+     (if theBody[] = None then
+         MPS.newFragmentGroup -> theBody[];
+         group.name -> theBody.originProperty;
+         name[] -> theBody.name;
+         theBody.markAsChanged;
+         theBody.name -> putLine;
+     if);
+     theBody[] -> body;
+  #);
+
+-- graphicalEditorPrivate: descriptor --
+(# editorGenerator: [26] ^generateEditor;
+   initEditorGenerator:
+     (# 
+     do (* &generateEditor (# do &interfaceObjectEditor[] -> we[] #)[] -> editorGenerator[1][]; *)
+        &generateEditor (# do &windowitemEditor[] -> we[] #)[] -> editorGenerator[2][];
+        (* &generateEditor (# do &separatorEditor[] -> we[] #)[] -> editorGenerator[3][]; *)
+        &generateEditor (# do &canvasEditor[] -> we[] #)[] -> editorGenerator[4][];
+        &generateEditor (# do &abstractScrollerEditor[] -> we[] #)[] -> editorGenerator[5][];
+        &generateEditor (# do &scrollerEditor[] -> we[] #)[] -> editorGenerator[6][];
+        &generateEditor (# do &textEditorEditor[] -> we[] #)[] -> editorGenerator[7][];
+        &generateEditor (# do &controlEditor[] -> we[] #)[] -> editorGenerator[8][];
+        &generateEditor (# do &buttonEditor[] -> we[] #)[] -> editorGenerator[9][];
+        &generateEditor (# do &pushButtonEditor[] -> we[] #)[] -> editorGenerator[10][];
+        &generateEditor (# do &iconButtonEditor[] -> we[] #)[] -> editorGenerator[11][];
+        &generateEditor (# do &OptionButtonEditor[] -> we[] #)[] -> editorGenerator[12][];
+        &generateEditor (# do &staticTextEditor[] -> we[] #)[] -> editorGenerator[13][];
+        &generateEditor (# do &toggleButtonEditor[] -> we[] #)[] -> editorGenerator[14][];
+        &generateEditor (# do &radioButtonEditor[] -> we[] #)[] -> editorGenerator[15][];
+        &generateEditor (# do &checkBoxEditor[] -> we[] #)[] -> editorGenerator[16][];
+        &generateEditor (# do &scrollbarEditor[] -> we[] #)[] -> editorGenerator[17][];
+        &generateEditor (# do &editTextEditor[] -> we[] #)[] -> editorGenerator[18][];
+        &generateEditor (# do &textFieldEditor[] -> we[] #)[] -> editorGenerator[19][];
+        &generateEditor (# do &scrollListEditor[] -> we[] #)[] -> editorGenerator[20][];
+        &generateEditor (# do &textScrollListEditor[] -> we[] #)[] -> editorGenerator[21][];
+        (* &generateEditor (# do &windowEditor[] -> we[] #)[] -> editorGenerator[22][]; *)
+        (* &generateEditor (# do &menuEditor[] -> we[] #)[] -> editorGenerator[23][]; *)
+        (* &generateEditor (# do &menubarEditor[] -> we[] #)[] -> editorGenerator[24][]; *)
+        (* &generateEditor (# do &menuitemEditor[] -> we[] #)[] -> editorGenerator[25][]; *)
+       (* &generateEditor (# do &dynamicMenuitemEditor[] -> we[] #)[] -> editorGenerator[26][];*)
+     #);
+   
+   names: [26] ^text;
+   initNames:
+     (# 
+     do 'interfaceObject' -> names[1][];
+        'windowitem' -> names[2][];
+        'separator' -> names[3][];
+        'canvas' -> names[4][];
+        'abstractScroller' -> names[5][];
+        'scroller' -> names[6][];
+        'textEditor' -> names[7][];
+        'control' -> names[8][];
+        'button' -> names[9][];
+        'pushButton' -> names[10][];
+        'iconButton' -> names[11][];
+        'menuButton' -> names[12][];
+        'staticText' -> names[13][];
+        'toggleButton' -> names[14][];
+        'radioButton' -> names[15][];
+        'checkBox' -> names[16][];
+        'scrollbar' -> names[17][];
+        'editText' -> names[18][];
+        'textField' -> names[19][];
+        'scrollList' -> names[20][];
+        'textScrollList' -> names[21][];
+        'window' -> names[22][];
+        'menu' -> names[23][];
+        'menubar' -> names[24][];
+        'menuitem' -> names[25][];
+        'dynamicMenuitem' -> names[26][];
+     #);
+   currentmode: ^text;
+   currentId: @integer;
+   currentType: ##windowItemEditor;
+   lastTime: @integer;
+   startUptime: @integer;
+   currentCanvasEditor: ^canvasEditor;
+   objectSpecificationList: @list
+     (# element::< objectSpecification;
+        findObjectType:
+          (# ID: ^text;
+             type: ##windowItemEditor;
+          enter ID[]
+          do l: scan
+               (# 
+               do (if current.ID[] -> ID.equalNCS//true then
+                      current.type## -> type##;
+                      leave l;
+                  if);
+               #);
+          exit type##
+          #);
+     #);
+   thePaletteEnv: @paletteEnv
+     (# itemSelected::<
+          (# 
+          do type -> this(graphicalEditor).private.currentCanvasEditor.newEditor;
+          #);
+     #);
+   contentsEditorObject: @canvas
+     (# 
+        open::<
+          (#
+          do true -> bindRight -> bindBottom;
+             false -> border.visible;
+          #);
+     #);
+   windowView: @canvas
+     (# 
+        titleBar: @staticText
+          (# open::
+               (# width, height: @integer;
+               enter (width, height)
+               do true -> bindRight;
+                  'Untitled' -> label;
+                  center -> alignment;
+                  ((2, 2), (width - 2, 20)) -> frame;
+               #);
+             eventHandler::
+               (# 
+                  onMouseDown::
+                    (# 
+                    do windowView.drag;
+                    #);
+               #);
+          #);
+        interior: @canvas
+          (# open::
+               (# width, height: @integer;
+               enter (width, height)
+               do borderStyles.shadowIn -> border.style;
+                  true -> border.visible;
+                  ((6, 20), (width - 6, height - 6)) -> frame;
+                  interior[] -> contentsEditorObject.open;
+                  ((2, 2), (width - 14, height - 30)) -> contentsEditorObject.frame;
+                  true -> bindRight;
+                  true -> bindBottom;
+               #);
+          #);
+        open::
+          (# width, height: @integer;
+          enter (width, height)
+          do 
+             (width + 16 -> width, height + 32 -> height) -> size;
+             true -> border.visible;
+             borderstyles.shadowOut -> border.style;
+             (windowView[], width, height) -> titleBar.open;
+             (windowView[], width, height) -> interior.open;
+          #);
+        eventHandler::
+          (# 
+             onMouseDown::
+               (# 
+               do (frame, false, false, true, true) -> father.defineRect -> frame;
+               #);
+          #);
+     #);
+   contentsEditor: @canvasEditor
+     (# 
+        mouseDown::<
+          (# 
+          do (* this(graphicalEditor).currentType -> newEditor; *)
+             (if theEvent.doubleClick//true then
+                 (* createAstEditor; *)
+              else
+                 this(graphicalEditor).private.selection.makeEmpty;
+                 this(contentsEditor)[] -> currentCanvasEditor[];
+             if);
+             true -> done;
+          #);
+     #);
+   
+   selection: @list
+     (# element::< windowItemEditor;
+        makeEmpty:
+          (# 
+          do scan
+             (# 
+             do false -> current.selected;
+             #);
+             clear;
+          #);
+     #);
+   initializing: @boolean;
+   privateAttributes, privateDoParts: @boolean;
+   body: ^MPS.fragmentGroup;
+   theWalkingAnts: ^walkingAnts;
+#)
+
+-- canvasEditorPrivate: descriptor --
+(#
+#)
+
+-- windowitemEditorMousedown: doPart --
+do (# r: @rectangle;
+      width,height: @integer;
+      dh,dv: @integer;
+      h,v: @integer;
+      doTop,doLeft,doBottom,doRight: @boolean;
+   do inner mousedown;
+      (if theEvent.doubleClick then
+          showInfoDialog;
+       else
+          (if not done then
+              theWindowItem.size -> (width,height);
+              ((width div 5,1) -> max,10) -> min  -> dh;
+              ((height div 5,1) -> max,10) -> min -> dv;
+              
+              theEvent.localPosition -> (h,v);
+              (if (h <= dh) then 
+                  true -> doLeft 
+              if);
+              (if (h >= (width - dh)) then
+                  true -> doRight
+              if);
+              (if (v <= dv) then
+                  true -> doTop
+              if);
+              (if (v >= (height - dv)) then 
+                  true -> doBottom
+              if);
+              (if (doLeft or doBottom or doTop or doRight) then
+                  (doLeft,doTop,doRight,doBottom) -> reConfigure;
+               else
+                  (true,true,true,true) -> reConfigure;
+              if);
+              this(windowItemEditor)[] -> owner.select;
+          if);
+      if);
+   #);
+
+-- canvasEditorMousedown: doPart --
+do inner mouseDown;
+   (*  (if not done then
+    *        (if theEvent.shiftKey then
+    *            false -> done;
+    *         else
+    *            currentType -> newEditor;
+    *            true -> done;
+    *        if);
+    *    if);
+    *)
+
+-- graphicalEditorQuitItemOnSelect: doPart --
+do Terminate;
+
+-- graphicalEditorQuitItemOpen: doPart --
+do 'Quit' -> name;
+
+-- graphicalEditorFileMenuOpen: doPart --
+do 'File' -> name;
+   saveItem.open;
+   saveItem[] -> append;
+   quitItem.open;
+   quitItem[] -> append;
+   
+   
+-- canvasEditorLib: attributes --
+select:
+  (# theWindowItemEditor: ^windowItemEditor;
+  enter theWindowItemEditor[]
+  do (if not (theWindowItemEditor[] -> this(graphicalEditor).private.selection.has) then
+         this(graphicalEditor).private.selection.makeEmpty;
+         theWindowItemEditor[] -> this(graphicalEditor).private.selection.append;
+         true -> theWindowItemEditor.selected;
+     if);
+  #);
+generateOpen:
+  (# theAttributeDecl: ^betaGram.attributeDecl;
+     frag: ^MPS.fragmentForm;
+     openDecl: ^betaGram.attributeDecl;
+     theObjectDescriptor: ^betaGram.objectDescriptor;
+     theMainPart: ^betaGram.mainPart;
+     theActionPart: ^betaGram.actionPart;
+     theDoPart: ^betaGram.doPart;
+     theImperatives, oldImperatives: ^betaGram.imperatives;
+     theDoPartOpt: ^MPS.AST;
+  do astControl.theAst[] -> theAttributeDecl[];
+     theAttributeDecl.frag[] -> frag[];
+     (theAttributeDecl[], 'open') -> betaGram.findAttribute -> openDecl[];
+     (if openDecl[]//None then
+         (frag[], 'open', none) -> betaGram.newVirtualBinding -> openDecl[];
+         (theAttributeDecl[], openDecl[]) -> betaGram.appendAttribute;
+     if);
+     openDecl[] -> betaGram.getObjectDescriptor -> theObjectDescriptor[];
+     theObjectDescriptor.getMainPart -> theMainPart[];
+     theMainPart.getActionPart -> theActionPart[];
+     theActionPart.getDoPartOpt -> theDoPartOpt[];
+     (if theDoPartOpt.kind//MPS.kinds.interior then
+         theDoPartOpt[] -> theDoPart[];
+         theDoPart.getImperatives -> oldImperatives[];
+      else
+         frag[] -> betaGram.newDoPart -> theDoPart[] -> theActionPart.putDoPartOpt;
+     if);
+     (betaGram.imperatives, frag[]) -> betaGram.newAst -> theImperatives[];
+     children.scan
+     (# name: ^text;
+        theImp: ^betaGram.imp;
+     do current.astControl.theAst[] -> betaGram.getName -> name[];
+        (frag[], name[]) -> betaGram.newOpenStatement -> theImp[] -> theImperatives.append;
+        current.astControl.theAst.guiInfo -> theImp.guiInfo;
+     #);
+     (if oldImperatives[]<>none then
+         oldImperatives.iterate
+         (# 
+         do (if not current.hasGUIcomment then
+                frag[] -> current.copy -> theImperatives.append;
+            if);
+         #);
+     if);
+     theImperatives[] -> theDoPart.putImperatives;
+  #);
+
+
+-- windowitemEditorSelected: doPart --
+do isSelected -> private.selected;
+   (if isSelected then
+       (# r: ^rectangle;
+       do owner.theWindowItem[] 
+            -> this(graphicalEditor).private.theWalkingAnts.theCanvas[];
+          &rectangle[] -> r[];
+          theWindowItem.frame -> r;
+          (-1, -1) -> r.inset;
+          r[] -> this(graphicalEditor).private.theWalkingAnts.start;
+       #);
+    else
+       this(graphicalEditor).private.theWalkingAnts.stop;
+   if);
+   inner selected;
+
+-- canvasEditorSelected: doPart --
+do (if isSelected then
+       this(canvasEditor)[] -> currentCanvasEditor;
+    else
+       (* none -> currentCanvasEditor; *)
+   if);
+
+-- objectMenuLib: attributes --
+addItem:
+  (# name: ^text;
+     type: @integer;
+     theItem: ^objectItem;
+  enter (name[],type)
+  do &objectItem[] -> theItem[];
+     theItem.open;
+     name[] -> theItem.name;
+     type -> theItem.type;
+     theItem[] -> append;
+  #);
+
+-- GraphicalEditorInit: doPart --
+do (# data: ^windowItemData;
+      prop: ^propertyList;
+      ID: @integer;
+      width, height: @integer;
+   do 
+      node[] -> astControl.init;
+      node.guiInfo -> ID;
+      ID -> theObjectStore.get -> data[];
+      data.size ->  initialize;
+      (none, node[], data[]) -> private.contentsEditor.init;
+      private.contentsEditor[] -> currentCanvasEditor;
+      inner;
+   #);
+
+-- IBwindowitemEditorapplyObjectData: doPart --
+do (# r: @rectangle;
+   do data.position -> r.topLeft;
+      data.size -> r.size;
+      r -> theWindowItem.frame;
+   #);
+   data.bindLeft -> theWindowItem.bindLeft;
+   data.bindRight -> theWindowItem.bindRight;
+   data.bindTop -> theWindowItem.bindTop;
+   data.bindBottom -> theWindowItem.bindBottom;
+  (* data.visible -> theWindowItem.visible;
+   data.hilite -> theWindowItem.hilite;
+   data.enabled -> theWindowItem.enabled; *)
+   data.borderStyle -> theWindowItem.border.style;
+   data.borderVisible -> theWindowItem.border.visible;
+   inner;
+
+-- IBcanvasEditorapplyObjectData: doPart --
+do inner;
+
+-- IBbuttonApplyObjectData: doPart --
+do data.label[] -> theWindowItem.label;
+   (* Not implemented !!! *)
+   inner;
+
+-- IBiconButtonapplyObjectData: doPart --
+do inner; 
+   (* Not implemented !!! *)
+
+-- IBoptionButtonapplyObjectData: doPart --
+do inner;
+   (* Not implemented !!! *)
+   
+-- IBtoggleButtonapplyObjectData: doPart --
+do data.state -> theWindowItem.state;
+   inner;
+
+-- IBscrollBarapplyObjectData: doPart --
+do data.scrollAmount -> theWindowItem.scrollAmount;
+   data.pageScrollAmount -> theWindowItem.pageScrollAmount;
+   data.maxValue  -> theWindowItem.maxValue;
+   data.value -> theWindowItem.value;
+   inner;
+-- IBeditTextapplyObjectData: doPart --
+do (* Not implemented !!! *)
+   inner;
+
+
+-- IBscrollListapplyObjectData: doPart --
+do (* Not implemented !!! *)
+   inner;
+
+-- IBtextScrollListapplyObjectData: doPart --
+do (* Not implemented !!! *)
+   inner;
+
+-- WindowitemEditorAstControlReplaced: doPart --
+do (* Nothing *)
+
+-- GraphicalEditorAstControlReplaced: doPart --
+do (* Nothing *)
+   
+-- graphicalEditorSaveItemOnSelect: doPart --
+do (# group: ^MPS.fragmentGroup;
+   do astControl.theAst.frag.father -> group[];
+      'doneCheck' -> group.prop.deleteProp;
+      (* Make GC in the ast's *)
+      (* group.fragmentList.scan
+       *       (# frag, newFrag: ^MPS.fragmentForm;
+       *          
+       *       do (if current.type//MPS.formType then
+       *              current.f[] -> frag[];
+       *              frag.grammar[]-> MPS.newFragmentForm -> newFrag[];
+       *              newFrag[] -> frag.root.copy -> newFrag.root[];
+       *              frag.name -> newFrag.name;
+       *              frag.grammar[] -> newFrag.grammar[];
+       *              group[] -> newFrag.father;
+       *              newFrag[] -> current.f[];
+       *          if);
+       *       #);
+       *)
+      group.markAsChanged;
+      save: (# theFile: @file;
+            do 
+               'guifile.gui' -> theFile.name;
+               theFile.openWrite;
+               theFile[] -> theObjectStore.write;
+               theFile.close;
+            #);
+   #);
+
+-- graphicalEditorSaveItemOpen: doPart --
+do 'Save' -> name;
+-- GraphicalEditorWindowItemEditorEditAttributes: doPart --
+do (# theEditor: ^astEditor;
+   do &scriptEditor[] -> theEditor[];
+      astControl.theAst[] -> theEditor.init;
+      true -> theEditor.readOnly;
+   #);
+
+-- GraphicalEditorWindowItemEditorShowInfoDialog: doPart --
+do (if infoDialog[]<>none then
+       infoDialog.updateFields;
+       infoDialog.bringToFront;
+       infoDialog.show;
+    else
+       &infoDialogType[] -> infoDialog[];
+       infoDialog.open;
+       this(windowItemEditor)[] -> infoDialog.editor[];
+       infoDialog.updateFields;
+       infoDialog.show;
+   if);
+   
+
+-- GraphicalEditorWindowItemEditorShowCodeDialog: doPart --
+do (if codeDialog[]//none then
+       &codeDialogType[] -> codeDialog[];
+       codeDialog.open;
+       this(windowItemEditor)[] -> codeDialog.editor[];
+    else
+       codeDialog.bringToFront;
+       codeDialog.show;
+   if);
+   codeDialog.updateFields;
+
+-- GraphicalEditorWindowItemEditorEditVirutal: doPart --
+do (# theAttribute, theVirtual, theEventHandler: ^betaGram.attributeDecl;
+      theEditor: ^astEditor;
+   do 
+      astControl.theAst[] -> theAttribute[];
+      (theAttribute[], 'eventHandler') -> betaGram.findAttribute -> theEventHandler[];
+      (if theEventHandler[]//none then
+          (theAttribute.frag[], 'eventHandler', none) -> betaGram.newVirtualBinding -> theEventHandler[];
+          (theAttribute[], theEventHandler[]) -> betaGram.appendAttribute;
+      if);
+      (theEventHandler[], name[]) -> betaGram.findAttribute -> theVirtual[];
+      (if theVirtual[]//none then
+          (theAttribute.frag[], name[], none) -> betaGram.newVirtualBinding -> theVirtual[];
+          (theEventHandler[], theVirtual[]) -> betaGram.appendAttribute;
+      if);
+      &scriptEditor[] -> theEditor[];
+      theVirtual[] -> theEditor.init;
+   #)
+   
+   
+-- GraphicalEditorWindowItemEditorInit: doPart --
+do (# 
+   do 
+      (if theAttribute[]<>none then
+          theAttribute[] -> astControl.init;
+      if);
+      (if theWindowItem[] = None then
+          createTheWindowItem;
+       else
+          &handleMouseDown[] -> theWindowItem.prependAction;
+          &handleRefresh[] -> theWindowItem.appendAction;
+          &handleFrameChanged[] -> theWindowItem.appendAction;
+      if);
+      (if owner[]<>none then
+          this(windowitemEditor)[] -> owner.children.append;
+      if);
+      inner init;
+   #);
+
+-- canvasEditorInit: doPart --
+do (# theAttributes: ^betaGram.attributes;
+   do theAttribute[] -> betaGram.getAttributes -> theAttributes[];
+      theAttributes.iterate
+      (# theEditor: ^windowItemEditor;
+         ID: @integer;
+         prop: ^propertyList;
+         theData: ^windowItemData;
+      do
+         (if current.hasGUIcomment then
+             current.guiInfo -> ID;
+             ID -> theObjectStore.get -> theData[];
+             (if theData[]//none then
+              else
+                 this(graphicalEditor).private.editorGenerator[theData.type] -> theEditor[];
+                 (this(canvasEditor)[],current[], theData[]) -> theEditor.init;
+             if);
+         if);
+      #);
+   #);
+   inner;
+
+
+-- GraphicalEditorNew: doPart --
+do (# frag: ^MPS.fragmentForm;
+      thePatternDecl: ^betaGram.patternDecl;
+      data: ^windowItemData;
+      prop: ^propertyList;
+   do (300, 200) -> initialize;
+      theAttribute[] -> thePatternDecl[];
+      canvasType -> theObjectStore.new -> data[];
+      true -> data.bindLeft -> data.bindTop;
+      (contents).size -> data.size;
+      data.id -> thePatternDecl.guiInfo;
+      thePatternDecl[] -> astControl.init;
+      (* findBody; *)
+      (none, thePatternDecl[], data[]) -> private.contentsEditor.init;
+      private.contentsEditor[] -> currentCanvasEditor;
+      private.contentsEditor.generateSimpleOpen;
+   #);
+
+-- graphicalEditorWindowItemEditorFindEditor: doPart --
+do inner;
+   
+-- graphicalEditorCanvasEditorFindEditor: doPart --
+do search: children.iterate
+     (# theFrame: @rectangle;
+     do (if current.elm[] <> ignoreEditor[] then
+            current.elm.theWindowItem.frame -> theFrame;
+            (if pt -> theFrame.containsPoint then
+                theFrame.topLeft -> pt.subTract;
+                (pt, ignoreEditor[]) -> current.elm.findEditor -> theEditor[];
+                leave search;
+            if);
+        if);
+     #);
+   
+   (if theEditor[] = None then
+       this(canvasEditor)[] -> theEditor[];
+   if);
+   
+   
+-- GraphicalEditorWindowItemEditorNewData: doPart --
+do type -> theObjectStore.new -> data[];
+   (100, 100) -> data.size;
+   true -> data.bindLeft;
+   false -> data.bindRight;
+   true -> data.bindTop;
+   false -> data.bindBottom;
+   true -> data.visible;
+   true -> data.enabled;
+   setIDcomment;
+   inner
+
+-- GraphicalEditorCanvasEditorNewData: doPart --
+do borderStyles.shadowIn -> data.borderStyle;
+   true -> data.borderVisible;
+   inner
+
+
+-- GraphicalEditorAbstractScrollerEditorNewData: doPart --
+do inner
+
+-- GraphicalEditorScrollerEditorNewData: doPart --
+do inner
+
+-- GraphicalEditorTextEditorEditorNewData: doPart --
+do inner
+
+-- GraphicalEditorControlEditorNewData: doPart --
+do inner
+
+-- GraphicalEditorButtonEditorNewData: doPart --
+do 'Button' -> data.label[];
+   &textStyleData[] -> data.style[];
+   'Courier' -> data.style.name[];
+   inner
+
+-- GraphicalEditorPushButtonEditorNewData: doPart --
+do 
+   (60, 20) -> data.size;
+   inner
+
+-- GraphicalEditorIconButtonEditorNewData: doPart --
+do 
+   (40, 40) -> data.size;
+   inner
+
+-- GraphicalEditorOptionButtonEditorNewData: doPart --
+do inner
+
+-- GraphicalEditorStaticTextEditorNewData: doPart --
+do inner
+
+-- GraphicalEditorToggleButtonEditorNewData: doPart --
+do (70,20) -> data.size;
+   inner
+
+-- GraphicalEditorCheckBoxEditorNewData: doPart --
+do inner
+
+-- GraphicalEditorScrollBarEditorNewData: doPart --
+do (100,16) -> data.size;
+   inner
+
+-- GraphicalEditorEditTextEditorNewData: doPart --
+do (100,22) -> data.size;
+   &textStyleData[] -> data.style[];
+   'Courier' -> data.style.name[];inner
+
+-- GraphicalEditorTextFieldEditorNewData: doPart --
+do inner
+
+-- GraphicalEditorScrollListEditorNewData: doPart --
+do inner
+
+-- GraphicalEditorTextScrollListEditorNewData: doPart --
+do inner
+   
+-- GraphicalEditorRadioButtonEditorNewData: doPart --
+do inner;
+   
+   
+-- GraphicalEditorEnterBody: doPart --
+do group[] -> private.body[];
+
+-- GraphicalEditorExitBody: doPart --
+do private.body[] -> group[]
+
+-- GraphicalEditorEnterPrivateAttributes: doPart --
+do value -> private.privateAttributes;
+   
+-- GraphicalEditorExitPrivateAttributes: doPart --
+do private.privateAttributes -> value;
+
+-- GraphicalEditorEnterPrivateDoParts: doPart --
+do value -> private.privateDoParts;
+
+-- GraphicalEditorExitPrivateDoPart: doPart --
+do private.privateDoParts -> value;
+
+

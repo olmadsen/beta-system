@@ -1,0 +1,228 @@
+ORIGIN '../asteditor';
+INCLUDE '~beta/guienv/v1.2/fields';
+INCLUDE 'parsing';
+INCLUDE '../astprop';
+INCLUDE '~beta/interfacebuilder/v1.0d/mpsstuff/mpsutils';
+
+-- astEditorLib: attributes --
+
+textContents:
+  (# t: ^styledText;
+  enter (#
+        enter t[]
+        do false -> dirty;
+           true -> private.settingContents;
+           t[] -> private.theTextField.contents;
+           false -> private.settingContents;
+        #)
+  exit (#
+       do private.theTextField.contents -> t[];
+       exit t[]
+       #)
+  #);
+
+prettyPrint:
+  (# t: @styledText;
+  do (astControl.theAst[],t[]) -> pretty.printNode;
+     t[] -> textContents;
+  #);
+closeEditor:
+  (# 
+  do (if theEventHandler.onAboutToClose then
+         this(asteditor).close;
+     if);
+  #);
+
+-- IBastEditorInit: doPart --
+do open;
+   node[] -> astControl.init;
+   prettyPrint;
+  
+-- IBastEditorOpen: doPart --
+do private.open;
+   
+
+-- IBastEditorPrivate: descriptor --
+(# dirtyFlag: @boolean;
+   settingContents: @boolean;
+   open:
+     (# 
+     do closeButton.open;
+        (5,5) -> closeButton.position;
+        revertButton.open;
+        (70,5) -> revertButton.position;
+        parseButton.open;
+        (135,5) -> parseButton.position;
+        theTextEditor.open;
+        theTextEditor.contents[] -> theTextField[];
+     #);
+   theTextField: ^textField;
+   theTextEditor: @textEditor
+     (# count: @integer;
+        contentsType::<
+          (# 
+             eventHandler::<
+               (# onBeforeChange::<
+                    (# 
+                    do not readOnly or settingContents  -> allow;
+                    #);
+                  onTextChanged::<
+                    (# 
+                    do (if not settingContents then
+                           true -> dirty;
+                       if);
+                    #);
+               #);
+          #);
+        open::<
+          (# width, height: @integer;
+          do this(astEditor).size -> (width,height);
+             ((5, 30), (width - 5, height - 5)) -> frame;
+             true -> bindBottom -> bindRight;
+          #);
+     #);
+   button: pushButton
+     (# 
+        command:< Object;
+        eventHandler::<
+          (#  onMouseUp::<
+               (# 
+               do command;
+               #);
+          #);
+        open::<
+          (# 
+          do (60,20) -> size;
+             inner;
+          #);
+     #);
+   parseButton: @button
+     (# command::<
+          (# 
+          do parse;
+          #);
+        open::<
+          (# 
+          do 'Parse' -> label;
+             disable;
+          #);
+     #);
+   closeButton: @button
+     (# command::<
+          (# 
+          do closeEditor;
+          #);
+        open::<
+          (# 
+          do 'Close' -> label;
+          #);
+     #);
+   revertButton: @button
+     (# command::<
+          (#
+          do prettyPrint;
+          #);
+        open::<
+          (# 
+          do 'Revert' -> label;
+             disable;
+          #);
+     #);
+#)
+
+-- AstEditorAstControlChanged: doPart --
+do (if not dirty then
+       prettyPrint
+   if);
+-- AstEditorAstControlReplaced: doPart --
+do (if not dirty then
+       prettyPrint;
+       
+   if);
+
+-- EditorEnvAstEditorClose: doPart --
+do inner;
+   astControl.release;
+   
+-- EditorEnvAstEditorEnterDirty: doPart --
+do (if value<>private.dirtyFlag then
+       value -> private.dirtyFlag;
+       (if private.dirtyFlag then
+           private.parseButton.enable;
+           private.revertButton.enable;
+        else
+           private.parseButton.disable;
+           private.revertButton.disable;
+       if);
+   if);
+   
+-- EditorEnvAstEditorExitDirty: doPart --
+do private.dirtyFlag -> value;
+   
+-- EditorEnvAstEditorParse: doPart --
+   
+do (# textToParse: ^text;
+      synCatNo: @integer;
+      astToReplace: ^MPS.AST;
+      father: ^MPS.expanded;
+      sonNo: @integer;
+      
+      frag: ^MPS.fragmentForm;
+      root: ^MPS.AST;
+      
+      newAST: ^MPS.AST;
+      
+      parseOK, fatal: @boolean;
+      errorText: @text;
+      oldErrorReporter: ^MPS.errorReporter;
+   do MPS.theErrorReporter[] -> oldErrorReporter[];
+      &MPS.interactiveErrorReporter[] -> MPS.theErrorReporter[];
+      astControl.prepareChange;
+      
+      astControl.theAst[] -> astToReplace[];
+      astToReplace[] -> parsingSynCatNo -> synCatNo;
+      astToReplace.father -> father[];
+      (if father[] <> none then
+          astToReplace.sonNo -> sonNo;
+      if);
+      astToReplace.frag[] -> frag[];
+      frag.root[] -> root[];
+      textContents -> textToParse[];
+      textToParse.reset;
+      
+      (synCatNo,textToParse[],Screen[],frag[]) -> betagram.parser.doParse
+      (#
+         fatalParseError::<
+           (#
+           do
+              'Parse errors: ' -> errorText.putText;
+              msg[] -> errorText.putLine;
+              true -> fatal;
+              true -> continue;
+           #);
+      #) -> parseOK;
+      
+      (if parseOK then
+          (* Now the parser has placed the new AST in the root of frag *)
+          frag.root[] -> newAST[];
+          newAst[] -> MPS.findAndParseAstProps;
+          (if father[]<>None then
+              (sonNo,newAST[]) -> father.put;
+              root[] -> frag.root[]; (* Reestablish old root *)
+           else
+              (* Do nothing since newAST is already root *)
+          if);
+          newAST[] -> astControl.change;
+          prettyPrint;
+       else
+          (if not fatal then
+              textToParse.Reset;
+              (textToParse[],errorText[]) -> betagram.parser.errorReport;
+              
+          if);
+          root[] -> frag.root[];
+          errorText[] -> showParseErrors;
+      if);
+      parseOK -> OK;
+      oldErrorReporter[] -> MPS.theErrorReporter[];
+   #)

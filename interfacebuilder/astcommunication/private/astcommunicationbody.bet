@@ -1,0 +1,237 @@
+ORIGIN '../astcommunication';
+
+-- lib: attributes --
+
+astServer:
+  (# insert:
+       (# theAstController: ^astController;
+       enter theAstController[]
+       do theAstController[] -> controllers.append;
+       #);
+     delete:
+       (# theAstController: ^astController;
+       enter theAstController[]
+       do theAstController[] -> controllers.at -> controllers.delete;
+       #);
+     findFamily:
+       (# controller: ^astController;
+          failure:< exception
+            (# 
+            do 'Family in use' -> msg.append;
+               inner;
+            #);
+       enter controller[]
+       do (if not family.inUse then
+              controller.node[] -> scanRelated
+              (# member: ^familyMember;
+                 doSame::
+                   (# 
+                   do &same[] -> member[];
+                      current[] -> member.init;
+                   #);
+                 doAncestor::
+                   (# 
+                   do &ancestor[] -> member[];
+                      current[] -> member.init;
+                   #);
+                 doChild::
+                   (# 
+                   do &child[] -> member[];
+                      current[] -> member.init;
+                   #);
+               else
+                 failure;
+              if);
+          #)
+       #);
+     
+     notify:
+       (# failure:< exception
+            (# 
+            do 'Family is not setup' -> msg.append;
+               inner;
+            #);
+       do (if family.inUse then
+              inner;
+              family.clear;
+              false -> family.inUse;
+           else
+              failure;
+          if);
+       #);
+     notifyChange: notify
+       (# 
+       do family.iterate
+          (# 
+          do current.elm.notifyChange;
+          #);
+       #);
+     notifyDelete: notify
+       (# 
+       do family.iterate
+          (# 
+          do current.elm.notifyDelete;
+          #);
+       #);
+     notifReplace: notify
+       (# node: ^astInterface.AST;
+       enter node[]
+       do family.iterate
+          (# 
+          do node[] -> current.elm.notifReplace;
+          #);
+       #);
+     scanRelated:
+       (# doChild:<
+            (# 
+            enter current[]
+            do inner;
+            #);
+          doAncestor:<
+            (# 
+            enter current[]
+            do inner;
+            #);
+          doSame:<
+            (# 
+            enter current[]
+            do inner;
+            #);
+          current: ^astController;
+          node: ^astInterface.AST;
+       enter node[]
+       do controllers.scan
+          (# ancestor: ^astInterface.AST;
+             ignore: @integer;
+          do (if node[] -> current.node.equal then
+                 current[] -> doSame;
+              else
+                 current.node[] -> node.nearestCommonAncestor 
+                   -> (ancestor[],ignore,ignore);
+                 (if ancestor[]<>None then
+                     (if true
+                      //ancestor[] -> node.equal then
+                         current[] -> doChild;
+                      //ancestor[] -> current.node.equal then
+                         current[] -> doAncestor;
+                     if);
+                 if);
+             if);
+          #);
+       #);
+     controllers: @list
+       (# element:: astController;
+       #);
+     
+
+     familyMember:
+       (# controller: ^astController;
+          init:<
+            (#
+            enter controller[]
+            do this(familyMember)[] -> family.append;
+               inner;
+            #);
+          notifyChange:< object;
+          notifyDelete:< object;
+          notifyReplace:<
+            (# node: ^astInterface.AST;
+            enter node[]
+            do inner;
+            #);
+       #);
+     same: familyMember
+       (# notifyChange::<
+            (# 
+            do controller.changed;
+            #);
+          notifyDelete::<
+            (# 
+            do controller.deleted;
+            #);
+          notifyReplace::<
+            (# 
+            do node[] -> controller.replaced;
+            #);
+       #);
+     ancestor: familyMember
+       (# notifyChange::<
+            (# 
+            do controller.changed;
+            #);
+          notifyDelete::<
+            (# 
+            do controller.changed;
+            #);
+          notifyReplace::<
+            (# 
+            do controller.changed;
+            #);
+       #);
+     child: familyMember
+       (# notifyChange::<
+            (# 
+            do (* nothing *)
+            #);
+          notifyDelete::<
+            (# 
+            do controller.ancestorReplaced;
+            #);
+          notifyReplace::<
+            (# 
+            do controller.ancestorReplaced;
+            #);
+       #);
+     family: @list
+       (# element:: familyMember;
+          inUse: @boolean;
+       #);
+  #);
+
+getServer: objectPool.get
+  (# type:: astServer;
+     exact:: (# do true -> value #);
+     init::
+       (# 
+       do obj.init;
+       #);
+  #);
+
+-- MPSastControllerInit: doPart --
+do getServer -> private.server[];
+   this(astController)[] -> private.server.insert;
+   inner;
+
+-- MPSastControllerRelease: doPart --
+do inner;
+   this(astController)[] -> private.server.delete;
+   none -> private.server[];
+   none -> node[];
+
+-- MPSastControllerPrepareUpdate: doPart --
+do this(astController)[] -> private.server.findFamily;
+
+-- MPSastControllerChange: doPart --
+do private.server.notifyChange;
+
+-- MPSastControllerDelete: doPart --
+do private.server.notifyDelete
+
+-- MPSastControllerReplace: doPart --
+do node[] -> private.server.notifyReplace;
+
+-- MPSastControllerEnterDirty: doPart --
+do
+
+-- MPSastControllerExitDirty: doPart --
+do
+
+-- MPSastControllerBeeingEdited: doPart --
+do
+
+-- MPSAstControllerPrivate: descriptor --
+(# 
+   
+#)
+
+

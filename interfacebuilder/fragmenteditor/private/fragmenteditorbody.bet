@@ -1,0 +1,725 @@
+ORIGIN '../fragmenteditor'
+[[
+-- INCLUDE '~beta/guienv/v1.2/stddialogs'
+-- INCLUDE '~beta/guienv/v1.2/controls'
+-- INCLUDE '~beta/guienv/v1.2/fields'
+-- Include '~beta/guienv/v1.2/scrolllists'
+-- Include '~beta/guienv/v1.2/styledtext'
+-- Include 'propertyparser'
+-- INCLUDE '~beta/basiclib/v1.4/regexp'
+-- Include '~beta/guienv/v1.2/utils/guienvadds'
+-- INCLUDE '~beta/guienv/v1.2/utils/listview'
+
+
+
+-- WindowLib: Attributes --
+
+     button: pushbutton
+       (#
+          command:< Object;
+          eventHandler::<
+            (#  onMouseUp::<
+                 (# 
+                 do command;
+                 #);
+            #);
+          open::<
+            (# 
+            do (60,20) -> size;
+               inner;
+            #);
+       #);
+
+--FragmentEditorClose: Descriptor --
+(#
+do
+   Properties.close;
+   Fragments.close;
+   Closebutton.close;
+   none->theFragmentGroup[];
+   INNER close;
+#)
+
+--FragmentEditorOpen: Descriptor --
+(#
+do
+   (550,550)->Size;
+   Properties.open;
+   Fragments.open;
+   Closebutton.open;
+   INNER open;
+#)
+
+--FragmentEditorPropertiesClose: Descriptor --
+(#
+do
+   Private.PropertiesText.close;
+   Private.RevertButton.close;
+   Private.ParseButton.close;
+   Private.OpenButton.close;
+   inner close
+#)
+
+--FragmentEditorPropertiesOpen: Descriptor --
+(# 
+do 
+   (3,40)->position;
+   (540,190)->Size;
+   'Properties'->label;
+   Private.RevertButton.open;
+   Private.ParseButton.open;
+   Private.OpenButton.open;
+   Private.PropertiesText.open;
+   true -> bindRight;
+   INNER open;
+#)
+
+
+--FragmentEditorPropertiesState: Descriptor --
+(# 
+do 
+   (if value<>Private.ChangedFlag then
+       value->Private.ChangedFlag;
+       (if Private.ChangedFlag then
+           Private.ParseButton.enable;
+           Private.RevertButton.enable;
+        else
+           Private.ParseButton.disable;
+           Private.RevertButton.disable;
+           Private.OpenButton.disable;
+       if);
+   if);
+#)
+
+--FragmentEditorPropertiesPrivate: Descriptor --
+(# ChangedFlag: @boolean;
+   
+   OpenNewGroup:<
+     (# name: ^text;
+        theGroup: ^MPS.fragmentGroup;
+        theFragmentEditor:^fragmentEditorWindow;
+        fragmentEditorWindowType: ##fragmentEditorWindow;
+     enter name[]
+     do
+        (name[], screen[]) -> MPS.top.open -> theGroup[];
+        (if theGroup[]<>none then
+            this(fragmentEditorWindow).struc -> fragmentEditorWindowType##;
+            &fragmentEditorWindowType[] -> theFragmentEditor[];
+            theGroup[] -> theFragmentEditor.init;
+        else 'No such group'->putline;    
+        if);
+     #);
+ 
+   OpenButton: @button
+     (# command::< (# groupname:^text;
+                      groupname2:^text;
+                      endpos: @integer;
+                   do (if (PropertiesText.contents.Selection.start <> PropertiesText.contents.Selection.end) then
+                          PropertiesText.contents.selection.contents->groupname[];
+                          (if (((1->groupname.inxget) = '''') and ((groupname.length->groupname.inxget) = '''')) then 
+                              (2,groupname.length-1)->groupname.sub->groupname2[]->OpenNewGroup;
+                          if);
+                      if)
+                      
+                   #);   
+        open::<(# do
+                  'Open'->label;
+                  (70,20)->size;
+                  (440,30)->position;
+                  true -> bindRight;
+                  false -> bindleft;
+                  disable;
+               #);
+     #);
+   RevertButton: @button
+     (# command::< (# 
+                   do    
+                      PropertiesText.prettyprint;
+                   #);   
+        open::<(# do
+                  'Revert'->label;
+                  (70,20)->size;
+                  (440,70)->position;
+                  disable;
+                  false -> bindleft;
+                  true -> bindRight;
+               #);
+        
+     #);
+   ParseButton: @button
+     (# command::< (# 
+                   do  
+                      PropertiesText.parse;
+                   #);
+        open::<(# do 'Parse'->label;
+                  (70,20)->size;
+                  (440,110)->position;
+                  disable;
+                  false -> bindleft;
+                  true -> bindRight;
+               #);
+     #);
+   
+   
+   PropertiesText: @TextEditor
+     (#
+        changed: @boolean;
+        count: @integer;
+        
+        open::<(# 
+               do
+                  (5,20)->position;
+                  (400,150)->size;
+                  PropertiesText.init;   
+                  true -> bindright;
+               #);
+        close::<
+          (#
+             do none->thetextField[];
+          #);
+        init:<(# 
+              do contents[]->theTextField[];
+                 prettyPrint;
+              #);
+        prettyPrint:<
+          (# st: ^styledtext;
+          do    
+             &styledtext[]->st[];
+             (theFragmentGroup.prop[],st[]) -> pretty.printProperties;
+             st[]->textContents;
+          #);
+        
+        Parse:<
+          (# TextToParse: ^text;
+             parseOK: @boolean;
+             errorText: @text;
+             fg: ^MPS.fragmentGroup;
+             prop: ^propertyList;
+          do
+             theFragmentGroup[] -> fg[];
+             TextContents -> TextToParse[];
+             TextToParse.reset;
+             &propertyList[] -> prop[];
+             prop.init;
+             parsing: (TextToParse[], screen[],prop[]) -> MPS.parseProperty
+             (#
+                parseErrors::<
+                  (# 
+                  do leave parsing;
+                  #);
+             #) -> parseOK;
+             (if parseOK then
+                 prop[] -> theFragmentGroup.prop[];
+                 false->Changed;
+                 PropertiesText.prettyprint;
+                 ' parse ok \n'->putline;
+              else
+                 ' parse not ok \n'->putline;
+             if);
+             
+          #);
+        
+        TextContents: 
+          (#
+             st:^styledText;
+          enter (#   
+                enter st[]
+                do 
+                   0->count;
+                   false->Changed->State;
+                   st[]->theTextField.contents;
+                #)
+          exit (# do theTextField.contents->st[];
+               exit st[]
+               #)
+          #);
+        theTextField: ^TextField;
+        contentsType::<
+          (#
+             eventHandler::< 
+               (#
+                  onMouseDown::<
+                    (# 
+                    do 
+                       (if doubleClick//true then
+                           OpenButton.enable;         
+                       if);
+                    #);
+                  onMouseUp::<
+                    (# groupname: ^text;
+                    do
+                       (if (Selection.start <> Selection.end) then  
+                           selection.contents->groupname[]; 
+                           (if ((1->groupname.inxget) = '''') and ((groupname.length->groupname.inxget) = '''') then 
+                               OpenButton.enable;   
+                            else 
+                               OpenButton.disable;         
+                           if);
+                        else 
+                           OpenButton.disable;         
+                       if)
+                    #);
+                  
+                  onTextChanged::<
+                    (# 
+                    do 
+                       count + 1 ->count;
+                       (if (count > 1) then 
+                           true->Changed->State;
+                       if);
+                   #);
+               #);
+          #);
+     #);
+#)
+   
+
+--FragmentEditorFragmentsClose: Descriptor --
+(#
+do
+   Private.OpenButton.close;
+   Private.NewButton.close;
+   Private.UpdateButton.close;
+   Private.DeleteButton.close;
+   Private.FragmentField.close;
+   Private.NameField.close;
+   Private.TypeMenuButton.close;
+#)
+
+--FragmentEditorFragmentsOpen: Descriptor --
+(# st: ^styledtext;
+do 
+   (3,240)->position;
+   (540,300)->size;
+   'Fragments'->label;
+   Private.OpenButton.open;
+   Private.NewButton.open;
+   Private.UpdateButton.open;
+   Private.DeleteButton.open;
+   Private.TypeMenuButton.open;
+   Private.NameField.open;
+   Private.FragmentField.open;
+   
+   true -> bindRight -> bindBottom;
+   INNER open;
+#)
+
+--FragmentEditorFragmentsPrivate: Descriptor --
+(#
+   OpenButton: @button
+     (# command::< 
+          (# 
+          do (if fragmentField.selectedItem[]<>none then
+                 screen[]->fragmentField.selectedItem.fgelm.open -> openFragment;
+             if);
+          #);   
+        open::<
+          (# 
+          do 'Open'->label;
+             (70,20)->size;
+             (440,30)->position;
+             false -> bindleft;
+             true -> bindRight;
+          #);
+        
+     #);
+   
+   NewButton: @button
+     (# command::< (# 
+                   do NewFragmentForm;    
+                   #);   
+        open::<(# do
+                  'New'->label;
+                  (70,20)->size;
+                  (440,270)->position;
+                  true -> bindBottom;   
+                  false -> bindTop;
+                  false -> bindleft;
+                  true -> bindRight;
+               #);
+        
+     #);
+   
+   TypeMenuButton: @OptionButton
+     (#
+        close::<
+          (#
+          do
+             TypeMenu.close;
+          #);
+        eventHandler::<
+          (#
+             onMouseDown::<
+               (#
+               do 
+               #);
+          #);
+        open::<
+          (#
+          do 
+             (230,250)->position;
+             TypeMenu.open;
+             TypeMenu[]->popupMenu;
+             true -> bindBottom;
+             false -> bindtop;
+             preferredSize -> Size;
+             ':'->label;
+          #);
+     #);
+
+   DeleteButton: @button
+     (# command::< (# 
+                   do DeleteFragment;    
+                   #);   
+        open::<(# do
+                  'Delete'->label;
+                  (70,20)->size;
+                  (440,70)->position;
+                  false -> bindleft;
+                  true -> bindRight;
+               #);
+        
+     #);
+   UpdateButton: @button
+     (# command::< (# 
+                   do 
+                      UpdateFragment;
+                   #);
+        open::<(# do 'Update'->label;
+                  (70,20)->size;
+                  (440,240)->position;
+                  true -> bindBottom;   
+                  false -> bindTop;
+                  false -> bindleft;
+                  true -> bindRight;
+               #);
+     #);
+   
+   DeleteFragment:<
+     (# ok: @boolean;
+        theCell: ^FragmentField.listItems.theCellType;
+     do (if FragmentField.selectedItem[] <> none then
+            FragmentField.selectedItem.fgelm.name[] -> theFragmentGroup.fragmentList.deleteLocalName;
+            FragmentField.selectedItem.delete;
+        if);
+        
+        NameField.clearText;
+        
+        FragmentField.listitems.head->theCell[];
+        (if theCell[] <> none then
+            theCell.elm.select;
+        if);    
+     #);
+   
+   UpdateFragment:<
+     (# st: ^styledText;
+        theFragmentForm:^MPS.fragmentform;
+        ok: @boolean;
+        groupname:^text;
+     do
+        'update'->CheckFragmentName->(ok,groupname[]);
+        (if ok then 
+            groupname[]->FragmentField.selectedItem.fgelm.name[];
+            screen[]->FragmentField.selectedItem.fgelm.open -> theFragmentForm[];
+            groupname[]->theFragmentForm.name;
+            TypeMenuButton.currentItem->FragmentField.selectedItem.category;
+            
+            FragmentField.selectedItem.UpdateName;
+            
+            (* if category has changed -> ny kode !!! *)
+        if);
+     #);
+   
+   CheckFragmentName:<
+     (#
+        groupname:^text;
+        ok: @boolean;
+        regexpr:^text;
+        t: ^text;
+        kind: ^text;
+     enter kind[]
+     do
+        (* check if name is not blank *)
+        
+        NameField.contents->groupname[];
+        true->OK;
+        ''->t[];
+        (if groupname[]->t.equal then
+            false->OK;
+         else
+            groupname.reset;
+            '[a-zA-z][a-zA-Z0-9_]*'->regexpr[];
+            0->groupname.pos;
+            regexpr[] ->groupname.regexp_match
+            (# noMatch::< (#
+                          do 
+                             false->OK #)
+               
+            do ((0->regs.start)+1,(0->regs.end))->groupname.sub->groupname[];
+            #);
+        if);
+        (if OK then
+            FragmentField.listitems.scan
+            (# fragitem: ^FragmentField.fragitem;
+            do current[]->fragitem[];
+               (if fragitem.fgelm.name[]->groupname.equalncs
+                // true then 
+                   (if  ((fragitem[] = FragmentField.selectedItem[]) and ('update'->kind.equal))
+                       then;
+                    else
+                       false->ok;
+                       'This name already exists...'->putline;        
+                   if);
+               if);
+            #);
+         else
+            'Names should have the format [a-zA-z][a-zA-Z0-9_]*'->putline;
+        if);
+     exit(OK,groupname[])
+     #);
+   
+   NewFragmentForm:< 
+     (#
+        groupname:^text;
+        ff: ^MPS.fragmentForm; 
+        fg: ^MPS.fragmentGroup;
+        e: ^ fg.fragmentListelement; 
+        ok: @boolean;
+     do
+        'new'->CheckFragmentName->(ok,groupname[]);
+        (if ok then 
+            betaGram[] -> MPS.newFragmentForm -> ff[];
+            
+            (if ff[]<>none then
+                groupname[]-> ff.name;
+                ff[]->theFragmentGroup.FragmentList.insertFragment
+                (# do
+                   groupname[]->newelement.name[];
+                       newelement[]->theFragmentGroup.FragmentList.append;
+                   newelement[]->e[];
+                #);
+                (* category  -> ny kode !!! *)
+                
+                (e[],TypeMenuButton.currentItem)->FragmentField.makeNewItem;
+            if);
+        if);
+     #);
+   
+   FragmentField: @listView
+     (# selectText: ^text;
+        count: @integer;
+        changed: @boolean;
+        selectedItem:^fragItem;
+        
+        makeNewItem:
+          (# name: ^text;
+             fg: ^MPS.fragmentGroup;
+             e: ^ fg.fragmentListelement; 
+             category: @integer;
+             newfragItem:^fragItem;
+          enter (e[],category)
+          do
+             &fragItem[]->newfragItem[];
+             selectedItem[]->newfragitem.init;
+             category->newfragitem.category;
+             e[]->newfragitem.fgelm[];
+             newFragItem.UpdateName;
+             newfragitem.select;
+          #);
+        fragItem: listItem
+          (# fg: ^MPS.fragmentGroup;
+             fgelm: ^ fg.fragmentListelement; 
+             category: @integer;
+             UpdateName:<
+               (#
+                  t: ^text;
+               do 
+                  this(fragItem).fgelm.name[]->t[];
+                  t.copy -> t[];
+                  ': '->t.append;
+                  (if category
+                   // 1 then 'Descriptor'->t.append;
+                   // 2 then 'Attributes'->t.append;
+                   // 3 then 'DoPart'->t.append;
+                  if);
+                  t[]->this(fragItem).name;
+                  this(fragitem).select;
+               #);
+             onSelect::<
+               (# t:^text;
+                  st: ^styledtext;
+               do 
+                  this(fragItem)[]->selectedItem[];
+                  (if doubleClick then
+                      'open' -> putLine;
+                   else
+                      
+                      &text[]->t[];
+                      &styledtext[]->st[];
+                      fgelm.name[]->t[];
+                      t->st;
+                      st[]->NameField.contents;
+                      (if true
+                       // 1 = category then 1->TypeMenuButton.currentItem;
+                       // 2 = category then 2->TypeMenuButton.currentitem;
+                       // 3 = category then 3->TypeMenuButton.currentitem;
+                      if);
+                  if);
+               #);
+             
+          #);
+        
+        Close::<
+          (# do
+             none->selecttext[];
+             none->selectedItem[];
+          #);
+        
+        Open::<
+          (# do
+             (5,20)->position;
+             (400,220)->Size;
+             true -> bindRight -> bindBottom;
+             FragmentField.init;             
+             true->singleSelection;
+          #);
+        Init:
+          (# theCell: ^listItems.theCellType;
+             st: ^styledtext;
+          do    
+             &styledtext[]->st[];
+             theFragmentGroup.fragmentlist.scan
+             (# theFragmentForm: ^MPS.fragmentForm;
+                fg: ^MPS.fragmentGroup;
+                e: ^ fg.fragmentListelement; 
+                newFragItem:^fragItem;
+             do 
+                st.clear;
+                (if current.type//MPS.formType then
+                    screen[] -> current.open -> theFragmentForm[];
+                    (if theFragmentForm.category 
+                     // betaGram.DescriptorForm then
+                        &fragItem[]->newfragItem[];
+                        newfragitem.init;
+                        current.name[]->st.append;
+                        ': Descriptor'->st.append;
+                        st[]->newfragItem.name;
+                        current[]->newfragitem.fgelm[];
+                        1->newfragitem.category;
+                        
+                     // betagram.AttributesForm then
+                        &fragItem[]->newfragItem[];
+                        newfragitem.init;
+                        current.name[]->st.append;
+                        ': Attributes'->st.append;
+                        st[]->newfragItem.name;
+                        current[]->newfragitem.fgelm[];
+                        2->newfragitem.category;
+                        
+                     // betagram.doPart then
+                        &fragItem[]->newfragItem[];
+                        newfragitem.init;
+                        current.name[]->st.append;
+                        ': DoPart'->st.append;
+                        st[]->newfragItem.name;
+                        current[]->newfragitem.fgelm[];
+                        3->newfragitem.category;
+                    if);
+                if);
+             #);
+             listitems.head->theCell[];
+             (if theCell[] <> none then
+                 theCell.elm.select;
+             if);    
+          #);
+     #);
+   NameField: @TextField
+     (# 
+        Cleartext:
+        (# t: ^styledtext;
+        do
+           &styledText[] -> t[];
+           t[]->contents;   
+        #);
+        Open::<
+          (# do
+             (5,250)->position;
+             (250,30)->Size;
+             true -> bindBottom;   
+             false -> bindTop;
+          #);
+     #);
+
+   TypeMenu: @menu
+     (# attributeType: @MenuItem
+          (#  enable: @boolean;
+              eventHandler::<
+                      (# onSelect::<
+                           (# 
+                           do 
+                           #);
+                         onStatus::< (# do (if enable//false then
+                                               false->value;
+                                           'on status'->putline;    
+                                           if);
+                                     #);
+                      #);
+             #);
+
+        doPartType : @Menuitem
+          (#  enable: @boolean;
+              eventHandler::<
+                      (# onSelect::<
+                           (# 
+                           do 
+                           #);
+                         onStatus::< (# do (if enable//false then
+                                               false->value;
+                                           if);
+                                     #);
+                      #);
+          #);
+        descriptorType: @MenuItem
+          (#  enable: @boolean;
+              eventHandler::<
+                      (# onSelect::<
+                           (# 
+                           do 
+                           #);
+                         onStatus::< (# do (if enable//false then
+                                               'on status' ->putline;
+                                               false->value;
+                                               
+                                           if);
+                                     #);
+                      #);
+             #);
+        open::<
+          (#
+          do 
+             attributeType.open;
+             'Attributes'->attributeType.name;
+             doPartType.open;
+             'DoPart'->doPartType.name;
+             descriptorType.open;
+             'Descriptor'->descriptorType.name;
+             descriptorType[]->append;
+             attributeType[]->append;
+             doPartType[]->append;
+          #);
+     #);
+#)
+
+--]]
+
+
+
+
+
+
+
+
+
+
+
+
