@@ -1,24 +1,76 @@
 ORIGIN '~beta/basiclib/v1.6/basicsystemenv';
-INCLUDE '~beta/process/v1.6/streamgenerator';
+INCLUDE '~beta/process/v1.6/streamgenerator'
+        '../graphicaleditor/patterndictionary';
 -- systemLib: Attributes --
 communicationEnv:
   (#
      port:< integerValue (#  do 6769->value; INNER #);
+     init:<
+       (# 
+       do
+            (# 
+            do
+               procedures.init;
+               port->generator.bind (# addressError::  (#  do  #) #);
+               &| processCommands[]->fork;
+               INNER init
+            #)
+       #);
+     compile:<
+       (# txt: ^text; proc: ##procedure
+       enter txt[]
+       do INNER
+       exit proc##
+       #);
+     install:
+       (# cmd: ^text; proc: ##procedure
+       enter (cmd[],proc##)
+       do (cmd[],proc##)->procedures.define
+       #);
+     procedure: (# args: ^argumentList enter args[] do INNER #);
+     argumentList: sequence (# element:: text #);
      generator: @socketGenerator;
      processCommand:< (# cmd: ^text;  enter cmd[] do INNER #);
+     dispatch:
+       (# cmd: ^text; args: ^argumentList; proc: ##procedure; 
+       enter (cmd[],args[])
+       do
+          cmd[]->procedures.lookup->proc##;
+          (if proc## <> none then args[]->&proc if)
+       #);
      processCommands: system
        (# connection: ^streamSocket
        do
           cycle
-            (# 
+            (# cmd,arg: ^text; args: @argumentList
             do
                waitForEver->generator.getStreamConnection->connection[];
-               connection.getLine->processCommand;
+               connection.getLine->cmd[];
+               args.clear;
+               reading:
+                 (# 
+                 do
+                    connection.getLine->arg[];
+                    (if '.'->arg.equal then
+                        leave reading
+                     else
+                        arg[]->args.append; restart reading
+                    if)
+                 #);
+               (cmd[],args[])->dispatch;
                
             #)
        #);
-     init:<
-       (#  do port->generator.bind; &| processCommands[]->fork; INNER #)
+     addProc: procedure
+       (# cmd: ^text; proc: ##procedure
+       do
+          (if args.size = 2 then
+              1->args.get->cmd[];
+              2->args.get->compile->proc##;
+              (if proc## <> none then (cmd[],proc##)->install if)
+          if)
+       #);
+     procedures: @patternDictionary
   do INNER
   #)  
 
