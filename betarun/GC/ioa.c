@@ -104,7 +104,6 @@ void IOAGc()
         sprintf(buf, "Could not allocate basic component");
         MAC_CODE(EnlargeMacHeap(buf));
         Notify(buf);
-#endif
         BetaExit(1);
     }
 #endif /* not MT */

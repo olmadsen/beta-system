@@ -8,12 +8,6 @@
 
 #define REP ((ObjectRep *)theObj)
 
-#ifdef NEWRUN
-extern void DoGC(long *SP);
-#else
-extern void DoGC(void);
-#endif
-
 /* LOCAL FUNCTIONS */
 static long AllocateBaseBlock(void);
 static void AOANewBlock(long newBlockSize);
@@ -271,16 +265,6 @@ Object *AOAallocate(long numbytes)
 #define AOA_ALLOC_PARAMS long numbytes
 #endif 
 
-#ifdef nti /*RUN*/ 
-/* FIXME:  We cannot call DoGC, as it is declared in RUN.
- * But we do not really need to, as long as AOAGC is disabled.
- */
-void DoGC()
-{
-  fprintf(output, "ERROR: Ignoring DoGC from AOA(c)alloc\n");
-}
-#endif
-
 Object *AOAalloc(AOA_ALLOC_PARAMS)
 {
   Object *theObj;
@@ -295,35 +279,9 @@ Object *AOAalloc(AOA_ALLOC_PARAMS)
     return theObj;
   }
 
-  /* AOAallocate failed. This means that AOANeedCompaction will be
-   * true now. Force an IOAGc.
-   */
-  INFO_AOA(fprintf(output, "AOAalloc: forcing IOAGc and AOAGc\n"));
-#ifdef MT
-  fprintf(output,"FIXME:AOAalloc failed, has to GC here!!\n");
-  /*    ReqObjectSize = numbytes/4;
-	IOAGc(); */
-#else
-#ifdef NEWRUN
-  DoGC(SP);
-#else
-  DoGC();
-#endif
-#endif /* MT */
-  /* Try again */
-  theObj = AOAallocate(numbytes);
-  if (theObj) {
-    MT_CODE(mutex_unlock(&aoa_lock));
-    return theObj;
-  }
-
-
-  /* Arrgh. FIXME */
   fprintf(output, "AOAalloc: cannot allocate 0x%x bytes\n", (int)numbytes);
   BetaExit(1);
-
   return NULL;
-  
 }
 
 Object *AOAcalloc(AOA_ALLOC_PARAMS)

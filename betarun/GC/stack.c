@@ -735,7 +735,7 @@ static __inline__ void ProcessStackCell(long *addr, char *desc, CellProcessFunc 
 
 static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
 {
-    Object **theCell = (Object **) &ar[1];
+    long *theCell = (long *) &ar[1];
     
     DEBUG_STACK(PrintAR(ar, theEnd));
 
@@ -781,18 +781,14 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
 #endif /* RTVALHALLA */
       if (skipCparams){
 	/* Will not skip out of frame - let's do it... */
-	theCell = (Object **)((long)theCell+48);
+        theCell += (48/sizeof(long*));
       }
     }
 
-    for (; theCell != (Object **) theEnd; theCell+=2) {
+    for (; theCell != (long*)theEnd; theCell+=2) {
       /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
-      /* replaced the func-call below with 
-       * ProcessStackCell(theCell, "stackpart", func);
-       * (Maybe build a more descriptive description using sprintf)
-       */
+      /* (Maybe build a more descriptive description using sprintf) */
       ProcessStackCell(theCell, "stackpart", func);
-      /* func(theCell, *theCell); */
     }
 }
 

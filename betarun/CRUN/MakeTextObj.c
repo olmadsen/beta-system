@@ -37,9 +37,9 @@ void MkTO(char *asciz,
 #endif /* hppa */
 
 {
-    TextObject* theText=0;
-    unsigned long range, i, repsize, size, isInAOA;
-    ValRep *theRep=0;
+    TextObject* theText;
+    unsigned long range, i, repsize, size;
+    ValRep *theRep;
     GCable_Entry();
 
     DEBUG_CODE(NumMkTO++);
@@ -51,33 +51,33 @@ void MkTO(char *asciz,
     if (range > LARGE_REP_SIZE) {
       theRep = (ValRep *)LVRAAlloc(ByteRepPTValue, range);
       /* theRep is now allocated, and the header of it is initialized */
-
-      *(ValRep **)((long *)theItem + offset) = theRep;
-
-      /* Allocate only theText in IOA */
       size = ItemSize(TextProto);
+      theText=(TextObject*)AOAcalloc(size);
     } else {
       /* Allocate both theText and theRep in IOA */
       size=ItemSize(TextProto) + repsize;
-    }
 
-    /* Allocate in IOA/AOA */
-    SaveVar(theItem);
-    if (size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "MkTO allocates in AOA\n"));
-      theText=(TextObject*)AOAcalloc(size);
-      DEBUG_AOA(if (!theText) fprintf(output, "AOAcalloc failed\n"));
-    }
-    if (theText) {
-      isInAOA=1;
-    } else {
-      isInAOA=0;
-      theText=(TextObject*)IOAalloc(size);
-      if (IOAMinAge!=0) {
+      /* Allocate in IOA/AOA */
+      SaveVar(theItem);
+      if (size>IOAMAXSIZE) {
+        DEBUG_AOA(fprintf(output, "MkTO allocates in AOA\n"));
+        theText=(TextObject*)AOAcalloc(size);
+      } else {
+        theText=(TextObject*)IOAalloc(size);
+        if (IOAMinAge!=0) {
           theText->GCAttr = IOAMinAge;
+        }
       }
+      RestoreVar(theItem);
+      /* An uninitialized value repetition is at the end of theText */
+      theRep = (ValRep *)((long)theText+ItemSize(TextProto));
+      theRep->Proto = ByteRepPTValue;
+      if (IOAMinAge!=0) {
+        theRep->GCAttr = IOAMinAge;
+      }
+      theRep->LowBorder = 1;
+      theRep->HighBorder = range;
     }
-    RestoreVar(theItem);
 
     /* The new TextObject and Repetition are now allocated */
     /* No need to call setup_item - no inlined partobjects in Text */
@@ -89,23 +89,13 @@ void MkTO(char *asciz,
 
     AssignReference((long *)theItem + offset, (Item *)theText);
       
-    if (!theRep) {
-      /* An uninitialized value repetition is at the end of theText */
-      theRep = (ValRep *)((long)theText+ItemSize(TextProto));
-      theRep->Proto = ByteRepPTValue;
-      if (!isInAOA) theRep->GCAttr = IOAMinAge;
-      theRep->LowBorder = 1;
-      theRep->HighBorder = range;
-    }
-    
     /* Assign the text to the body part of the repetition. */
     for (i = 0; i < (repsize-headsize(ValRep))/4; i++){
       theRep->Body[i] = *((long *)asciz + i);
     }
   
     /* No need for AssignReference. 
-     * Either both theText and theRep are in the same heap,
-     * or theText is in IOA and theRep is in AOA.
+     * theText and theRep are in the same heap.
      */
     theText->T = theRep;
 

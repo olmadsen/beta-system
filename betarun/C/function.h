@@ -72,7 +72,8 @@ extern char *GroupName(long, int);
 extern void AddGroup(group_header *new_group);
 extern int IsPrototypeOfGroup(group_header *gh, long data_addr);
 extern int IsPrototypeOfProcess(long pt);
-extern int IsBetaCodeAddrOfProcess(long addr);
+extern int IsBetaCodeAddrOfProcess(unsigned long addr);
+extern int IsBetaDataAddrOfProcess(unsigned long addr);
 
 /* C/exit.c */
 extern void BetaExit(long);

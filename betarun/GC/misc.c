@@ -149,14 +149,22 @@ int strongIsObject(Object *obj)
     if (!(isStatic(gc) || isAutonomous(gc)))
       return 0;
   }
-    
-#ifdef RISC
-  if (((long)proto) & 3)
-    return 0;
-#endif
-  if (!IsBetaDataAddrOfProcess((long)proto))
-    return 0;
 
+  if (!isSpecialProtoType(proto)) {
+#ifdef RISC
+    if (((long)proto) & 3) {
+      fprintf(output,"proto is not 4-aligned: 0x%08X\n", (int)proto);
+      fflush(output);
+      return 0;
+    }
+#endif
+    if (!IsBetaDataAddrOfProcess((unsigned long)proto)) {
+      fprintf(output,"proto is not in data segment: 0x%08X\n", (int)proto);
+      fflush(output);
+      return 0;
+    }
+  }
+  
   return 1;
 }
 
@@ -177,7 +185,12 @@ long isObject(void *theObj)
   long gc;
 
   obj = (Object*)theObj;
-
+  
+  isObjectState = 99;
+  if (!strongIsObject(obj)) {
+      return 0;
+  }
+  
   isObjectState = 1;
   if (ObjectAlign((unsigned)obj) != (unsigned)obj)
     return 0;
@@ -214,16 +227,18 @@ long isObject(void *theObj)
       return 0;
   }
     
+  if (!isSpecialProtoType(proto)) {
 #ifdef RISC
-  isObjectState = 8;
-  if (((long)proto) & 3)
-    return 0;
+    isObjectState = 8;
+    if (((long)proto) & 3)
+      return 0;
 #endif
 
-  isObjectState = 9;
-  if (!IsPrototypeOfProcess((long)proto))
-    return 0;
-
+    isObjectState = 9;
+    if (!IsPrototypeOfProcess((long)proto))
+        return 0;
+  }
+  
   isObjectState = 10;
   if (ObjectSize(obj) <= 0)
     return 0;
@@ -232,7 +247,6 @@ long isObject(void *theObj)
   if (ObjectAlign(4*ObjectSize(obj))!=4*(unsigned)ObjectSize(obj))
     return 0;
 
-  isObjectState = 0;
   return 1;
 }
 

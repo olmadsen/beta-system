@@ -183,7 +183,7 @@ int IsPrototypeOfProcess(long pt)
 /* IsBetaCodeAddrOfProcess:
  * Scan group to see if addr is within any BETA code segment.
  */
-int IsBetaCodeAddrOfProcess(long addr) 
+int IsBetaCodeAddrOfProcess(unsigned long addr) 
 { 
 #ifdef MAC
   /* can't determine if an address is in a given object file on MAC.
@@ -194,7 +194,7 @@ int IsBetaCodeAddrOfProcess(long addr)
 #else
   group_header *current = 0;
   while ((current = NextGroup (current))) {
-    if ((current->code_start<=addr) && (addr<=current->code_end))
+    if (((unsigned long)current->code_start<=addr) && (addr<=(unsigned long)current->code_end))
       return TRUE;
   }
   return FALSE;
@@ -204,7 +204,7 @@ int IsBetaCodeAddrOfProcess(long addr)
 /* IsBetaDataAddrOfProcess:
  * Scan group to see if addr is within any BETA data segment.
  */
-int IsBetaDataAddrOfProcess(long addr) 
+int IsBetaDataAddrOfProcess(unsigned long addr) 
 { 
 #ifdef MAC
   /* can't determine if an address is in a given object file on MAC.
@@ -215,7 +215,7 @@ int IsBetaDataAddrOfProcess(long addr)
 #else
   group_header *current = 0;
   while ((current = NextGroup (current))) {
-    if ((current->data_start<=addr) && (addr<=current->data_end))
+    if (((unsigned long)current->data_start<=addr) && (addr<=(unsigned long)current->data_end))
       return TRUE;
   }
   return FALSE;
