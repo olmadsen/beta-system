@@ -52,7 +52,8 @@ static int createObjectStore(BlockID store, u_long minSize)
      created anyway. */
   
   if ((file_name = objectStoreName(store))) {
-    if ((fd = open(file_name,O_RDWR | O_CREAT, S_IWRITE | S_IREAD))<0) {
+    if ((fd = open(file_name,O_RDWR | O_CREAT | _O_BINARY,
+		   S_IWRITE | S_IREAD))<0) {
       perror("createObjectStore");
       
       return ILLEGALBlockID;
@@ -91,7 +92,7 @@ int saveCurrentObjectStore()
     int fd;
     
     if ((file_name = objectStoreName(currentTable -> store))) {
-      if ((fd = open(file_name,O_RDWR))<0) {
+      if ((fd = open(file_name,O_RDWR | _O_BINARY))<0) {
 	perror("saveCurrentObjectStore");
 	DEBUG_CODE(Illegal());
 	BetaExit(1);
@@ -126,7 +127,7 @@ int setCurrentObjectStore(BlockID store)
   }
   
   if ((file_name = objectStoreName(store))) {
-    if ((fd = open(file_name,O_RDWR))<0) {
+    if ((fd = open(file_name,O_RDWR | _O_BINARY))<0) {
       perror("setCurrentObjectStore");
       return 0;
     } else {

@@ -4,7 +4,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#ifdef UNIX
 #include <unistd.h>
+#endif
+#ifdef nti
+#include <io.h>
+#endif
 #include <errno.h>
 
 /* readLong: reads a long from fd. */
@@ -26,17 +31,23 @@ void readLong(int fd, u_long *n)
 }
 
 /* readSome: reads size bytes into buffer from fd. */
-void readSome(int fd, void *buffer, u_long size) 
+void readSome(int fd, char *buffer, u_long size) 
 {
-  int nb;
-  
-  if ((nb = read(fd, buffer, size)) < 0) {
-    perror("readSome");
-    DEBUG_CODE(Illegal());
-    BetaExit(1);
+  int nb, toread = size;
+  char *ptr = (char*)buffer;
+  /* Claim(!lseek(fd, 0, SEEK_CUR), "Grr"); */
+
+  while (toread>0) {
+    if ((nb = read(fd, ptr, toread)) <= 0) {
+      perror("readSome");
+      DEBUG_CODE(Illegal());
+      BetaExit(1);
+    }
+    ptr += nb;
+    toread -= nb;
   }
   
-  if (nb != size) {
+  if ((u_long)(ptr - (char*)buffer) != size) {
     fprintf(output, "readSome: Could not read\n");
     DEBUG_CODE(Illegal());
     BetaExit(1);
@@ -96,9 +107,10 @@ void writeSome(int fd, void *buffer, u_long size)
 /* isDir: Returns true if name is a directory. */
 long isDir(char *name) 
 {
+#ifdef UNIX
   int fd;
   
-  if ((fd = open(name,O_RDWR))<0) {
+  if ((fd = open(name,O_RDWR | _O_BINARY ))<0) {
     switch(errno) {
     case EISDIR:
       return 1;
@@ -111,11 +123,23 @@ long isDir(char *name)
     close(fd);
     return 0;
   }
+#endif
+#ifdef nti
+  struct _stat buf;
+  int result = _stat(name, &buf);
+  if (result != 0)
+    return 0;
+  if (buf.st_mode & _S_IFDIR) 
+    return 1;
+#endif
   return 0;
 }
 
 u_long preferredBufferSize(char *path)
 {
+#ifdef nti
+  return 32*1024;
+#else /* nti */
   struct stat st;
   
   if (stat (path, &st) == 0) {
@@ -126,6 +150,7 @@ u_long preferredBufferSize(char *path)
     BetaExit(1);
   }
   return 0;
+#endif /* nti */
 }
 
 #endif /* PERSIST */

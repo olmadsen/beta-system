@@ -13,13 +13,28 @@ void pexp_dummy() {
 
 #ifdef PERSIST
 
+#ifdef UNIX
 #include <siginfo.h>
 #include <sys/regset.h>
 #include <sys/ucontext.h>
 #include <signal.h>
+#endif
+
+#ifdef nti
+#ifdef nti_gnu
+#include <excpt.h>
+#define OUR_EXCEPTION_CONTINUE_SEARCH ExceptionContinueSearch
+#define OUR_EXCEPTION_CONTINUE_EXECUTION ExceptionContinueExecution
+#else /* !nti_gnu */
+#define OUR_EXCEPTION_CONTINUE_SEARCH EXCEPTION_CONTINUE_SEARCH
+#define OUR_EXCEPTION_CONTINUE_EXECUTION EXCEPTION_CONTINUE_EXECUTION
+#endif /* nti_gnu */
+#endif /* nti */
 
 /* sighandler.c */
+#ifdef UNIX
 extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
+#endif
 
 /* block.c */
 void mmapInitial(unsigned long numbytes);
@@ -37,13 +52,14 @@ static u_long rs2;
 static void *PIT, *PITTop, *PITLimit; 
 
 /* LOCAL FUNCTION DECLARATIONS */
-static void PITAlloc(void);
+#ifdef sparc
 static void *getRegisterContents(u_long reg, ucontext_t *ucon);
 static long sourceReg(u_long instruction, ucontext_t *ucon);
 static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon);
+#endif
 
 /* FUNCTIONS */
-static void PITAlloc(void)
+void PITAlloc(void)
 {
   /* The backpointer that will be placed in the persistent objects
      marking them as persistent is a pointer into a protected memory
@@ -60,6 +76,28 @@ static void PITAlloc(void)
   PITLimit = mmapHeapLimit;
 }
 
+Object *newPUID(u_long offset)
+{
+  Claim(offset < MAXENTRIES, "Illegal offset of puid");
+  
+  return (Object *)((u_long )PIT + offset);
+}
+
+u_long getPUID(void *ip)
+{
+  Claim(((ip >= PIT) && (ip < PITLimit)),"Illegal ip");
+  
+  return (u_long)ip - (u_long)PIT;
+}
+
+int inPIT(void *ip)
+{
+  return ((ip >= PIT) && (ip < PITLimit));
+}
+
+
+/******************************* SPARC: ********************************/
+#ifdef sparc
 /* getRegisterContents: If register refers to G or O register the
    contents can be found in the ucon. Otherwise the contents is on the
    stack. The stack pointer is in the global variable 'returnSP'. Why
@@ -295,38 +333,6 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   
 }
 
-/* GLOBAL FUNCTIONS */
-#ifdef RTINFO
-void printProxyStatistics(void)
-{
-  fprintf(output, "[ numPF: 0x%X]\n", (int)numPF);
-}
-#else
-void printProxyStatistics(void)
-{
-  ;
-}
-#endif /* RTINFO */
-
-Object *newPUID(u_long offset)
-{
-  Claim(offset < MAXENTRIES, "Illegal offset of puid");
-  
-  return (Object *)((u_long )PIT + offset);
-}
-
-u_long getPUID(void *ip)
-{
-  Claim(((ip >= PIT) && (ip < PITLimit)),"Illegal ip");
-  
-  return (u_long)ip - (u_long)PIT;
-}
-
-int inPIT(void *ip)
-{
-  return ((ip >= PIT) && (ip < PITLimit));
-}
-
 /* initProxyTrapHandler: */
 void initProxyTrapHandler(void)
 { 
@@ -345,9 +351,166 @@ void initProxyTrapHandler(void)
   
   sigaction (SIGBUS,&sa,0);
   sigaction (SIGSEGV,&sa,0);
-
-  /* Allocate indirection table */
-  PITAlloc();
 }
+
+
+/******************************* SPARC end ******************************/
+#endif /* sparc */
+
+#ifdef intel
+/******************************* INTEL: *********************************/
+static long getRegisterContents(CONTEXT* pContextRecord, long reg)
+{
+#if 0
+  DEBUG_CODE({
+    fprintf(output, "Getting contents of reg=%0x\n", reg);
+  });
+#endif
+  switch (reg) {
+  case 0: return pContextRecord->Eax;
+  case 1: return pContextRecord->Ecx;
+  case 2: return pContextRecord->Edx;
+  case 3: return pContextRecord->Ebx;
+  case 4: return pContextRecord->Esp;
+  case 5: return pContextRecord->Ebp;
+  case 6: return pContextRecord->Esi;
+  case 7: return pContextRecord->Edi;
+  }
+  return 0;
+}
+
+static long setRegisterContents(CONTEXT* pContextRecord, long reg, long value)
+{
+#if 0
+  DEBUG_CODE({
+    fprintf(output, "Setting reg=%0x to val=%0x\n", reg, value);
+  });
+#endif
+  switch (reg) {
+  case 0: pContextRecord->Eax = value; break;
+  case 1: pContextRecord->Ecx = value; break;
+  case 2: pContextRecord->Edx = value; break;
+  case 3: pContextRecord->Ebx = value; break;
+  case 4: pContextRecord->Esp = value; break;
+  case 5: pContextRecord->Ebp = value; break;
+  case 6: pContextRecord->Esi = value; break;
+  case 7: pContextRecord->Edi = value; break;
+  }
+  return 0;
+}
+
+static long* decodeModRM(CONTEXT* pContextRecord, unsigned char modrm)
+{
+  /* if modrm==05, this is abs-adr, which really shouldn't trap. */
+  sourcereg = modrm & 7;
+  if (sourcereg != 4) {
+    return (long*)getRegisterContents(pContextRecord, sourcereg);
+  } else {
+    unsigned char* PC;
+    unsigned char sib;
+    long *adr;
+
+    PC = (unsigned char*)pContextRecord->Eip;
+    sib = PC[2];
+    /* FIXME: Do something about sib!
+     * Needed: Check both regs to see which one is a proxy, 
+     * then modify sourcereg accordingly. (Maybe it's always base?)
+     * Assumption: Only one of them may point into the proxyspace.
+     * This is true if the smallest address of proxyspace is larger
+     * than the largest repetition.
+     */
+    sourcereg = sib & 7;
+    adr = (long*)getRegisterContents(pContextRecord, sourcereg);
+    if (inPIT(adr)) {
+      return adr;
+    } else {
+      if (sib <= 0x3f) {
+	sourcereg = sib/8;
+	return (long*)getRegisterContents(pContextRecord, sourcereg);
+      }
+    }
+  }  
+  return 0;
+}
+
+int proxyTrapHandler(CONTEXT* pContextRecord)
+{
+  long *proxy, *absAddr = 0;
+  unsigned char* PC;
+  unsigned char modrm;
+
+  Claim(!IOAActive, "!IOAActive");
+
+  PC = (unsigned char*)pContextRecord->Eip;
+  switch (PC[0]) {
+  case 0x62:  /* BOUND R32, M32, M32 */
+  case 0x80:  /* CMP R/M8, IMM8 */
+  case 0x88:  /* MOV R/M8, R8 */
+  case 0x89:  /* MOV R/M32, R32 */
+  case 0x8a:  /* MOV R8, R/M8 */
+  case 0x8b:  /* MOV R32, R/M32 */
+  case 0xc6:  /* MOV R/M8, IMM8 */
+  case 0xc7:  /* MOV R/M32, IMM32 */
+    modrm = PC[1]; 
+    proxy = decodeModRM(pContextRecord, modrm);
+    break;
+  case 0x0f: /* Two-byte instruction. */
+    switch (PC[1]) {
+    case 0xb6: /* MOVZX R32, R/M8 */
+    case 0xb7: /* MOVZX R32, R/M16 */
+    case 0xbe: /* MOVSX R32, R/M8 */
+    case 0xbf: /* MOVSX R32, R/M16 */
+      modrm = PC[2]; 
+      proxy = decodeModRM(pContextRecord, modrm);
+      break;
+    default:
+    DEBUG_CODE({
+      fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
+	      "%02x %02x %02x %02x %02x %02x\n", 
+	      (int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
+    });
+    return 0;
+    }
+    break;
+  default:
+    DEBUG_CODE({
+      fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
+	      "%02x %02x %02x %02x %02x %02x\n", 
+	      (int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
+    });
+    return 0;
+  }
+  
+  if (inPIT(proxy)) {
+    /* Calculate absolute address by looking in appropriate tables */
+    absAddr = (long*)unswizzleReference(proxy);
+
+    /* Now write the new value back into sourcereg: */
+    setRegisterContents(pContextRecord, sourcereg, (long)absAddr);
+
+    return 1;
+  } else if (!proxy) {
+    /* Normal refNone:  Handle as regular refNone. */
+    return 2;
+  }
+
+  /* Exception not handled, let sighandler decide what to do. */
+  return 0;
+}
+/******************************* INTEL end ******************************/
+#endif /* intel */
+
+/* GLOBAL FUNCTIONS */
+#ifdef RTINFO
+void printProxyStatistics(void)
+{
+  fprintf(output, "[ numPF: 0x%X]\n", (int)numPF);
+}
+#else
+void printProxyStatistics(void)
+{
+  ;
+}
+#endif /* RTINFO */
 
 #endif /* PERSIST */

@@ -110,7 +110,13 @@ static void Free(void *entry)
 void initReferenceTable(void)
 {
   currentTable = STInit(INITIALTABLELENGTH, isFree, Free, sizeof(RTEntry));
+#ifdef UNIX
   initProxyTrapHandler();
+#endif
+
+  /* Allocate indirection table */
+  PITAlloc();
+
   loadedObjectsST = TInit();
   initProtoHandling();
 }
@@ -370,3 +376,16 @@ void RTEndGC(void)
 }
 
 #endif /* PERSIST */
+
+#ifdef RUN
+void CheckForNewAOAclient(Object **theCell)
+{
+#ifdef PERSIST
+  if (inPIT((void *)*theCell)) {
+    newAOAclient(getPUID((void *)*theCell), theCell);
+    INFO_PERSISTENCE(TtoP++);
+  }
+#endif /* PERSIST */
+}
+#endif /* RUN */
+

@@ -5,7 +5,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#ifndef nti
 #include <unistd.h>
+#endif
 #include <errno.h>
 
 void readLong(int fd, u_long *n);

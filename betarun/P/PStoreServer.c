@@ -11,7 +11,13 @@ void pstoreserver_dummy() {
 
 #ifdef PERSIST
 
+#ifdef UNIX
 #include <unistd.h>
+#endif
+#ifdef nti
+#include <io.h>
+#include <direct.h>
+#endif
 
 /* LOCAL CONSTANTS */
 #define SMALLTEXTSIZE       512
@@ -56,9 +62,6 @@ typedef struct storeInfo {
   BlockID next;
 } storeInfo;
 
-/* EXTERNAL DECLARATIONS */
-extern int ScanDir(char *dir, int *longestP, int *numP, void (*CallbackFnc)(char*));
-
 /* LOCAL VARIABLES */
 static char storename[SMALLTEXTSIZE];
 static char *currentStore = NULL;
@@ -84,7 +87,8 @@ static int getStoreInfo(void)
       int fd;
       
       sprintf(filename, "%s/%s", currentStore, STOREINFO);
-      if ((fd = open(filename,O_RDWR | O_CREAT, S_IWRITE | S_IREAD))<0) {
+      if ((fd = open(filename,O_RDWR | O_CREAT | _O_BINARY,
+		     S_IWRITE | S_IREAD))<0) {
 	perror("getStoreInfo");
 	free(filename);
 	return 1;
@@ -112,7 +116,8 @@ static int setStoreInfo(void)
       int fd;
       
       sprintf(filename, "%s/%s", currentStore, STOREINFO);
-      if ((fd = open(filename,O_RDWR | O_CREAT, S_IWRITE | S_IREAD))<0) {
+      if ((fd = open(filename,O_RDWR | O_CREAT | _O_BINARY,
+		     S_IWRITE | S_IREAD))<0) {
 	perror("setStoreInfo");
 	free(filename);
 	return 1;
@@ -177,6 +182,9 @@ BlockID getNextBlockID(void)
 
 static char *getBetaText(u_long name_r)
 {
+  return strdup((char*)name_r);
+
+#if 0
   Text *currentText;
   charRep *theRep;
   char *name;
@@ -193,6 +201,7 @@ static char *getBetaText(u_long name_r)
   name[j - 1] = '\0';
 
   return name;
+#endif
 }
 
 static u_long openExt(u_long name_r, u_long perm)
@@ -237,56 +246,10 @@ u_long openReadExt(u_long name_r)
   return openExt(name_r, S_IREAD);
 }
 
-void CallbackFnc(char *s)
-{
-  char *name;
-  name = (char *)malloc(sizeof(char)*(strlen(s)+strlen(currentDir)+4));
-  if (strlen(currentDir) > 0) {
-    if (currentDir[strlen(currentDir)-1] == '/') {
-      sprintf(name, "%s%s", currentDir, s);
-    } else {
-      sprintf(name, "%s/%s", currentDir, s);
-    }
-  } else {
-    sprintf(name, "%s", s);
-  }
-  
-  if ((strcmp(s, ".") == 0) || (strcmp(s, "..") == 0)) {
-    ;
-  } else {
-    if (unlink(name) != 0) {
-      perror("");
-    }
-  }
-  if (name) {
-    free(name);
-  }
-}
-
 u_long deleteExt(u_long name_r)
 {
-  int longestP, numP;
-  char *name;
-  
-  if (name_r) {
-    name = getBetaText(name_r);
-    currentDir = name;
-    if (ScanDir(name, &longestP, &numP, CallbackFnc) != -1) {
-      if (rmdir(currentDir) != 0) {
-	perror("");
-	free(name);
-	return 1;
-      } else {
-	free(name);
-	return 0;
-      }
-    } else {
-      free(name);
-      return 1;
-    }
-  } else {
-    return 1;
-  }
+  fprintf(output, "deleteExt: Not implemented yet!\n");
+  BetaExit(1);
 }
 
 u_long createExt(u_long name_r)
@@ -300,7 +263,12 @@ u_long createExt(u_long name_r)
       return EXISTSERROR;
     } else {
       /* make new directory */
-      if (mkdir(name, S_IFDIR | S_IREAD | S_IWRITE | S_IEXEC) < 0) {
+#ifdef UNIX
+      if (mkdir(name, S_IFDIR | S_IREAD | S_IWRITE | S_IEXEC) < 0) 
+#else
+      if (mkdir(name) < 0) 
+#endif
+      {
 	perror("");
 	free(name);
 	return CREATIONERRORERROR;
@@ -421,7 +389,12 @@ u_long getExt(u_long name_r, Object *theObj, Object **theCell)
       if (strcmp(&(si.nameMap[count].name[0]), name) == 0) {
 	Object *target;
 	
+#ifdef sparc
 	Protect(theObj, target = keyToObject(&(si.nameMap[count].ok)));
+#else
+	/* FIXME: Should protect regs */
+	target = keyToObject(&(si.nameMap[count].ok));
+#endif
 	theCell = (Object **)((u_long)theObj + offset);
 	*theCell = target;
 	free(name);

@@ -7,6 +7,12 @@ void trie_dummy() {
 #endif /* sparc */
 }
 
+#ifdef sparc
+#define OURINLINE __inline__
+#else
+#define OURINLINE
+#endif
+
 #ifdef PERSIST
 /* */
 
@@ -20,7 +26,7 @@ Node *TInit(void)
   return new;
 }
 
-static __inline__ void insertDown(u_long key, void *contents, Node *current, u_long insertKey)
+static OURINLINE void insertDown(u_long key, void *contents, Node *current, u_long insertKey)
 {
   if (current -> down == NULL) {
     current -> down = (Node *)calloc(sizeof(struct Node), 1);
@@ -29,7 +35,7 @@ static __inline__ void insertDown(u_long key, void *contents, Node *current, u_l
   TInsert(key, contents, current -> down, insertKey);
 }
 
-static __inline__ void insertRight(u_long key, void *contents, Node *current, u_long insertKey)
+static OURINLINE void insertRight(u_long key, void *contents, Node *current, u_long insertKey)
 {
   if (current -> right == NULL) {
     current -> right = (Node *)calloc(sizeof(struct Node), 1);
@@ -71,7 +77,7 @@ void TInsert(u_long key, void *contents, Node *current, u_long insertKey)
   }
 }
 
-static __inline__ void *downLookup(u_long key, Node *current)
+static OURINLINE void *downLookup(u_long key, Node *current)
 {
   if (current -> down != NULL) {
     return TILookup(key, current -> down);
@@ -80,7 +86,7 @@ static __inline__ void *downLookup(u_long key, Node *current)
   }
 }
 
-static __inline__ void *rightLookup(u_long key, Node *current)
+static OURINLINE void *rightLookup(u_long key, Node *current)
 {
   if (current -> right != NULL) {
     return TILookup(key, current -> right);
