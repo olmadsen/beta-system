@@ -32,10 +32,18 @@ static long M_Part(ref(ProtoType) proto)
   extern void Return();
   long *m;
   long *r;
+  register long ret= (long)Return;
   
+#ifdef hppa
+  asm volatile ("
+	LDIL L'Return, %0
+	LDO  R'Return(%0),%0
+	": "=r" (ret));
+#endif
+
   m = (long *)proto - 1;
   r = m - 1;
-  while ( (*r != (long)Return) && (r != 0) ){
+  while ( (*r != ret) && (r != 0) ){
     /* r != 0 just to avoid segmentation fault if something is wrong */
     m = r;
     r = m - 1;
@@ -637,7 +645,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
    * The HP-PA (Snake) specific parts of tracing the Beta stack.
    */
   {
-    struct Object **theCell = getRefSP();
+    struct Object **theCell = /*getRefSP()*/ (struct Object **)(RefSP-1);
     struct Object *theObj;
     long   *PC=thePC;
 
@@ -825,7 +833,7 @@ P("   file \"ifile\". The part of the prefix chain enclosed in \"<\" and \">\" i
 P("   where in the action sequence the error occurred. The line beginning with")
 P("   \"--\" shows the textually surrounding descriptor using the same notation.")
 P("2. The descriptor names used in the above description will normally have one or")
-P("   more \"meta characters\" appended. The meaning of these are:")
+P("   more \"meta characters\" appended. The meaning of these is:")
 P("      #  The descriptor belongs to a pattern, e.g. P: (# ... #)")
 P("      ~  Singular named descriptor, e.g. X: @(# ... #)")
 P("      *  Singular unnamed descriptor, e.g. ... ; (# ... #) ; ...")

@@ -202,15 +202,19 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
     /* First things first, get a grib on the struct pointer */
     asm volatile ("LDW 0(%%r28),%0" : "=r" (theStruct));
 
+    if (!theStruct) { freeCallbackCalled(); return 0; }
+
     /* Push CallBackFrame. */
     cbf.next    = ActiveCallBackFrame;
     cbf.betaTop = BetaStackTop;
     /* cbf.tmp     = (long) getSPReg();  so the GC can find it */
     ActiveCallBackFrame = &cbf;
 
+#if 0
     setIOAReg(savedIOA);
     setIOATopoffReg(savedIOATopoff);
     setRefSP(savedRefSP);
+#endif
 
     Ck(theStruct); Ck(theStruct->iOrigin);
     setCallReg(theStruct->iProto);
@@ -232,6 +236,7 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
     ActiveCallBackFrame = cbf.next;
     BetaStackTop        = cbf.betaTop;
 
+#if 0
     asm ("LDIL\tLR'savedIOA,%r1");
     asm ("STW\t%r17,RR'savedIOA(0,%r1)");
     asm ("LDIL\tLR'savedIOATopoff,%r1");
@@ -244,6 +249,7 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
     savedIOATopoff = getIOATopoffReg();
     savedRefSP     = getRefSP();
 */
+#endif
 
     return retval;
 }

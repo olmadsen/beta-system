@@ -151,9 +151,12 @@ Initialize()
   IOATopoff = tmpIOATop - IOA;
 #else
 #ifdef hppa
-  setIOAReg(tmpIOA);
-  setIOATopoffReg(tmpIOATop - tmpIOA);
-  setRefSP((void *)&ReferenceStack[0]);
+  /*setIOAReg(tmpIOA);
+  setIOATopoffReg(tmpIOATop - tmpIOA);*/
+  IOA = tmpIOA;
+  IOATop = tmpIOATop;
+  RefSP=&ReferenceStack[0];
+  /*setRefSP((void *)RefSP);*/
 #else
   IOA = tmpIOA;
   IOATop = tmpIOATop;
@@ -221,5 +224,6 @@ Initialize()
 #endif /* sun4s */
   
   InfoS_Start();
+
 }
 

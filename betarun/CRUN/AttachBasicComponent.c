@@ -58,8 +58,8 @@ ParamThisComp(void, AttBC)
     cb.callBackFrame = cast(CallBackFrame) 0;
     cb.next = cast(ComponentBlock) 0;
     cb.level = 0;
-    cb.RefBlock = (void *)getRefSP();
-    lastCompBlock = (void *)getSPReg();
+    cb.RefBlock = (void *)/*getRefSP()*/RefSP;
+    lastCompBlock = (void *)/*getSPReg()*/RefSP;
     StackStart = (long)getSPReg();  /* Should be start of Ref Stack though */
     comp->CallerLSC = 1;
 #endif
@@ -99,6 +99,9 @@ ParamThisComp(void, AttBC)
     fflush(output);*/
    }
 #endif
+    /*
+    fprintf(output, "AttBC: CallBetaEntry(0x%x, 0x%x)\n", *((long *)BasicItem->Proto-1), &comp->Body);
+    */
 
     /* ?? should set comp = 0 as done in Att.BasicComp.run */
     CallBetaEntry( *((long *)BasicItem->Proto-1), &comp->Body);

@@ -21,17 +21,27 @@ void doGC() /* The one called from IOA(c)alloc */
 #endif
 #ifdef hppa
     StackEnd = (long *)getSPReg();
-    asm volatile ("\tSTWS,MB\t%r3,4(0,%r14)\n"
-        "\tSTWS,MB\t%r4,4(0,%r14)\n" /* maybe not CallReg?? */
-        "\tSTWS,MB\t%r5,4(0,%r14)\n"
-        "\tSTWS,MB\t%r6,4(0,%r14)\n"
-        "\tSTWS,MB\t%r7,4(0,%r14)\n");
+    asm volatile ("\tLDIL\tLR'RefSP,%r1\n"
+		  "\tLDW\tRR'RefSP(%r1),%r14\n"
+		  "\tSTWS,MA\t%r3,4(0,%r14)\n"
+		  "\tSTWS,MA\t%r4,4(0,%r14)\n" /* maybe not CallReg?? */
+		  /*"\tSTWS,MA\t%r5,4(0,%r14)\n"*/
+		  "\tSTWS,MA\t%r6,4(0,%r14)\n"
+		  "\tSTWS,MA\t%r7,4(0,%r14)\n"
+		  /*"\tSTWS,MA\t%r8,4(0,%r14)\n"*/
+		  "\tSTW\t%r14,RR'RefSP(0,%r1)\n"
+		  );
     IOAGc();
-    asm volatile ("\tLDWS,MA\t-4(0,%r14),%r7\n"
-        "\tLDWS,MA\t-4(0,%r14),%r6\n"
-        "\tLDWS,MA\t-4(0,%r14),%r5\n"
-        "\tLDWS,MA\t-4(0,%r14),%r4\n"
-        "\tLDWS,MA\t-4(0,%r14),%r3\n");
+    asm volatile ("\tLDIL\tLR'RefSP,%r1\n"
+		  "\tLDW\tRR'RefSP(%r1),%r14\n"
+		  /*"\tLDWS,MB\t-4(0,%r14),%r8\n"*/
+		  "\tLDWS,MB\t-4(0,%r14),%r7\n"
+		  "\tLDWS,MB\t-4(0,%r14),%r6\n"
+		  /*"\tLDWS,MB\t-4(0,%r14),%r5\n"*/
+		  "\tLDWS,MB\t-4(0,%r14),%r4\n"
+		  "\tLDWS,MB\t-4(0,%r14),%r3\n"
+		  "\tSTW\t%r14,RR'RefSP(0,%r1)\n"
+		  );
 #endif
     asmemptylabel(EndGC);
 }

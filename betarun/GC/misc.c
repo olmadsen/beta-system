@@ -75,8 +75,13 @@ void Claim( expr, message)
   ptr(char) message;
 {
   if( expr == 0 ){
-    fprintf( output,"Assumption (%s) failed!\n", message);
-    fprintf( output,"IOA: 0x%X, IOATop: 0x%X, ToSpace: 0x%X\n", IOA, IOATop, ToSpace);
+    fprintf(output, "Assumption (%s) failed!\n", message);
+    fprintf(output,
+	    "IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+	    IOA, IOATop, IOALimit);
+    fprintf(output,
+	    "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+	    ToSpace, ToSpaceTop, ToSpaceLimit);
     BetaExit(0);
   }
 }

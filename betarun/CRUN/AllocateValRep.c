@@ -46,7 +46,6 @@ ParamObjOffRange(ref(ValRep), AlloVR1)
 	}
     }
 
-  
     Protect(theObj, theRep = cast(ValRep) IOAcalloc(Size));
 
     Ck(theObj);

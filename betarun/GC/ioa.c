@@ -298,8 +298,10 @@ You may order an unconstrained version from\n",
       IOATopoff = (char *) ToSpaceTop - (char *) IOA;
 #endif
 #ifdef hppa
-      setIOAReg(ToSpace);
-      setIOATopoffReg((char *) ToSpaceTop - (char *) IOA);
+      /*setIOAReg(ToSpace);
+      setIOATopoffReg((char *) ToSpaceTop - (char *) IOA);*/
+      IOA       = ToSpace;                          
+      IOATop    = ToSpaceTop; 
 #endif
 #ifdef mc68020
       IOA       = ToSpace;                          
@@ -764,9 +766,11 @@ long GetDistanceToEnclosingObject( theObj)
       
       theObj = (ref(Object)) IOA;
       while ((long *) theObj < IOATop) {
+	/*fprintf(output, "IOACheck: theObj=0x%x\n", theObj);*/
 	Claim((long)(theObj->Proto), "IOACheck: theObj->Proto");
 	theObjectSize = 4*ObjectSize(theObj);
 	Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0");
+	/*fprintf(output, "IOACheck: theObjectSize=0x%x\n", theObjectSize);*/
 	IOACheckObject (theObj);
 	lastObj = theObj;
 	theObj = (ref(Object)) Offset(theObj, theObjectSize);

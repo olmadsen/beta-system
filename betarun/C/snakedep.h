@@ -82,39 +82,48 @@ register long _dummy7 asm("%r14"); /* really RefSP */
 #define REFSTACK
 
 extern void *ReferenceStack[];
+#if 0
 extern long *savedRefSP;
+#endif
 
+#if 0
 static inline void setRefSP(void *p)
 {
   asm volatile ("COPY\t%0, %%r14" : /* no out */ : "r" (p)); 
   savedRefSP = (long *)p;
 }
+#endif
 
+#if 0
 static inline void *getRefSP()
 {     
   void *res; 
   asm volatile ("COPY\t%%r14, %0" : "=r" (res)); 
   return res;
 }
-
-#if 0
-static inline void *newReference(void)
-{
-  void *res;
-  asm volatile ("STWS,MB\t%%r0,4(0,%%r14)\n\tCOPY\t%%r14,%0" : "=r" (res));
-  return res;
-}
 #endif
 
 static inline void pushReference(void *p)
 {
-  asm volatile ("STWS,MB\t%0,4(0,%%r14)" : /* no out */ : "r" (p));
+  /*fprintf(stdout, "push 0x%x at 0x%x\n", p, RefSP);*/
+#if 0
+  asm volatile ("STWS,MA\t%0,4(0,%%r14)" : /* no out */ : "r" (p): "%r14");
+#else
+   *RefSP=(long)p; 
+  RefSP++; 
+#endif
 }
 
 static inline void *popReference()
 {
   void *p;
-  asm volatile ("LDWS,MA\t-4(0,%%r14),%0" : "=r" (p) : );
+#if 0
+  asm volatile ("LDWS,MB\t-4(0,%%r14),%0" : "=r" (p) : : "%r14");
+#else
+  RefSP--; 
+  p=(void *)*RefSP; 
+#endif
+  /*fprintf(stdout, "pop 0x%x at 0x%x\n", p, RefSP);*/
   return p;
 }
 
@@ -130,50 +139,6 @@ static inline void *popReg()
   asm volatile("LDW\t-36(0,%%r30),%0" : "=r" (r) : );
   return r;
 }
-
-#if 0
-static inline void modifyRefSP(const long n)
-{
-  asm volatile ("LDO\t%0(%%r14),%%r14" : /* no out */ : "i" (n<<2));
-}
-#endif
-
-/*
- * get and set IOA registers.
- */
-
-extern unsigned savedIOATopoff;
-extern long *   savedIOA;
-
-static inline long *getIOAReg()
-{     
-  long *res; 
-  asm volatile ("COPY\t%%r17, %0" : "=r" (res)); 
-  return res;
-}
-
-
-static inline void setIOAReg(long *p)
-{     
-  asm volatile ("COPY\t%0, %%r17" : /* no out */ : "r" (p) : "r17");
-  savedIOA = p;
-}
-
-static inline unsigned getIOATopoffReg()
-{     
-  unsigned res; 
-  asm volatile ("COPY\t%%r18, %0" : "=r" (res)); 
-  return res;
-}
-
-static inline void setIOATopoffReg(unsigned v)
-{     
-  asm volatile ("COPY\t%0, %%r18" : /* no out */ : "r" (v) : "r18");
-  savedIOATopoff = v;
-}
-
-#define IOA    getIOAReg()
-#define IOATop ((long *) ((char *)getIOAReg()+getIOATopoffReg()))
 
 extern ref(Component) ActiveComponent;
 extern ref(CallBackFrame) ActiveCallBackFrame;
@@ -280,15 +245,6 @@ static inline long getRPReg()
 #define RETURN(v) \
   return (typeof(v))(setCallReg((long *)(v)))
 
-/* Redefine inIOA as to make gcc generate optimal code */
-#ifdef inIOA
-#undef inIOA
-#endif
-
-/* Isn't life swell? */
-#define inIOA(x) (((unsigned) x - (unsigned) getIOAReg()) < (unsigned) getIOATopoffReg())
-
-
 /* Defining this in the head of a module, together with a
    GCable_Entry and GCable_Exit in every routine in that module makes
    the activation record look like BETA, but *BEWARE*!:
@@ -377,26 +333,12 @@ static inline struct Item * CAlloSI(struct Structure *s)
     return i;
 }
 
-#if 0
-#define CallBetaEntry(entry,item)       \
-  (setCallReg(item), (* (void (*)()) (entry))()); BETA_CLOBBER
-#else
-/* Calls of Beta entries (e.g. genparts) should be treated like callback.
- * specificly the savedRefSP may be overwritten by the Beta-code.
- */
 #define CallBetaEntry(entry,item) \
-{ /* Save savedIOA, savedIOATopoff, savedRefSP on ordinary stack */ \
-  register long *r; \
-  /*r = (long *)savedIOA; pushReg(r);*/ \
-  /*r = (long *)savedIOATopoff; pushReg(r);*/ \
-  r = (long *)savedRefSP; pushReg(r); \
+{                                 \
+  /*pushReg(getRefSP()); */       \
   (setCallReg(item), (* (void (*)()) (entry))()); BETA_CLOBBER;  \
-  /* Restore savedRefSP, savedIOATopoff, savedIOA */ \
-  r = popReg(); (long *)savedRefSP = r; \
-  /*r = popReg(); (long *)savedIOATopoff = r;*/ \
-  /*r = popReg(); (long *)savedIOA = r;*/ \
+  /* setRefSP(popReg()); */       \
 }
-#endif
 
 #define Protect(var, code) \
   pushReference(var); { code; } var = (typeof(var))popReference();

@@ -8,10 +8,12 @@
 #include "beta.h"
 #include "crun.h"
 
+#if 0
 #ifdef hppa
 unsigned savedIOATopoff;
 long *   savedIOA;
 long *   savedRefSP;
+#endif
 #endif
 
 #ifdef hppa
@@ -26,7 +28,7 @@ void Return()
 
 #ifdef sparc
      /* The first nop is needed in case Return is called directly from a 
-      * runtime ruotine. This is the case for e.g. an empty program.
+      * runtime routine. This is the case for e.g. an empty program.
       */
 #ifdef sun4s
      asmlabel(Return, "nop; retl; nop");
@@ -38,6 +40,10 @@ void Return()
 void
   RefNone(ref(Object) theObj)
 {
+#ifdef hppa
+    theObj = (struct Object *)getThisReg();
+#endif
+
   BetaError(RefNoneErr, theObj);
 }
 
@@ -75,6 +81,8 @@ char *
   register char *p;
   
   GCable_Entry();
+
+  /*fprintf(output, "IOAalloc: IOATop=0x%x, size=0x%x\n", IOATop, size);*/
   
   DEBUG_CODE(Claim(size>0, "IOAalloc: size>0"));
 #if (defined(sparc) || defined(hppa) || defined(crts))
@@ -89,16 +97,20 @@ char *
   
   p = (char *)IOATop;
 #ifdef hppa
+/*
   setIOATopoffReg(getIOATopoffReg() + size);
+*/
+  IOATop = (long*)((long)IOATop+size);
 #endif
 #ifdef sparc
   IOATopoff += size;
 #endif
 #ifdef crts
-  IOATop += size;
+  IOATop = (long*)((long)IOATop+size);
 #endif
   
   return p;
+
 }
 
 #ifndef RTDEBUG
@@ -107,10 +119,13 @@ char *
 char *
   IOAcalloc(unsigned size)
 {
+
   register char *p;
   
   GCable_Entry();
   
+  /*fprintf(output, "IOACalloc: IOATop=0x%x, size=0x%x\n", IOATop, size);*/
+
   DEBUG_CODE(Claim(size>0, "IOACalloc: size>0"));
 #if (defined(sparc) || defined(hppa) || defined(crts))
   DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAcalloc: (size&7)==0"));
@@ -124,16 +139,18 @@ char *
   
   p = (char *)IOATop;
 #ifdef hppa
-  setIOATopoffReg(getIOATopoffReg() + size);
+  /*setIOATopoffReg(getIOATopoffReg() + size);*/
+  IOATop = (long*)((long)IOATop+size);
 #endif
 #ifdef sparc
   IOATopoff += size;
 #endif
 #ifdef crts
-  IOATop += size;
+  IOATop = (long*)((long)IOATop+size);
 #endif
   
   long_clear(p, size);
+
   return p;
 }
 
@@ -156,7 +173,7 @@ asmlabel(_FailureExit, "
 #ifdef hppa
 void FailureExit()
 {
-  BetaError(StopCalledErr, cast(Object)(getD0Reg()));
+  BetaError(StopCalledErr, cast(Object)(getThisReg()));
 }
 #endif
 

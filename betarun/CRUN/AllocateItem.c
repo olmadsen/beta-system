@@ -23,7 +23,7 @@ ParamOriginProto(struct Item *,AlloI)
     Ck(origin);
 
 #if defined(hppa) && defined(RTDEBUG)
-    if((unsigned)getRefSP() > (unsigned)ReferenceStack + 990*4) {
+    if((unsigned)/*getRefSP()*/RefSP > (unsigned)ReferenceStack + 990*4) {
       Notify("ReferenceStack overflow!!!");
     }
 #endif
@@ -59,7 +59,7 @@ ParamOriginProto(struct Item *,AlloH)
     /*Ck(origin);*/
 
 #if defined(hppa) && defined(RTDEBUG)
-    if((unsigned)getRefSP() > (unsigned)ReferenceStack + 990*4) {
+    if((unsigned)/*getRefSP()*/RefSP > (unsigned)ReferenceStack + 990*4) {
       Notify("ReferenceStack overflow!!!");
     }
 #endif

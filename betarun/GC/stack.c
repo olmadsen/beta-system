@@ -24,9 +24,11 @@ void ProcessRefStack(size, bottom)
   struct Object **theCell;
   struct Object *theObj;
 
-  DEBUG_IOA(printf("RefStk: [%x .. %x]\n", (long)bottom, (long)(bottom+size)));
+  DEBUG_IOA(fprintf(output, "RefStk: [%x .. %x[\n", (long)bottom, (long)(bottom+size)));
+  DEBUG_IOA(fprintf(output, "&ReferenceStack[0]: 0x%x, RefSP: 0x%x\n", &ReferenceStack[0], RefSP));
   theCell = (struct Object **)bottom;
   for(; size > 0; size--, theCell++) {
+    DEBUG_IOA(fprintf(output, "  0x%x: 0x%x\n", theCell, *theCell));
     i = ((unsigned)*theCell & 1) ? 1 : 0;
     *theCell = (struct Object *)((unsigned)*theCell & ~1);
     theObj = *theCell;
@@ -49,8 +51,8 @@ void ProcessStack()
   ref(CallBackFrame)  frm;
   ref(ComponentBlock) cur;
 
-  ProcessRefStack(((unsigned)getRefSP()-(unsigned)&ReferenceStack[0]) >> 2,
-                  &ReferenceStack[1]);
+  ProcessRefStack(((unsigned)/*getRefSP()*/RefSP-(unsigned)&ReferenceStack[0]) >> 2,
+                  &ReferenceStack[0]);
 }
 
 /*

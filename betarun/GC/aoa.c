@@ -1014,6 +1014,9 @@ void AOACheckReference( theCell)
 	if( *pointer ) found = (*pointer == (long) theCell);
 	pointer++;
       }
+      if (!found){
+	fprintf(output, "AOACheckReference: theCell: 0x%x, *theCell: 0x%x\n", theCell, *theCell);
+      }
       Claim( found, "AOACheckReference: *theCell in IOA but not in AOAtoIOAtable");
     }
     if( inLVRA(*theCell) )
