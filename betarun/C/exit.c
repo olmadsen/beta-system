@@ -135,10 +135,10 @@ extern void CallLazyItem (void);
 #define RefNoneFrameSize 0x80
 #define HandleIndexErrFrameSize 0x80
 
-static inline long GetBetaPC(long errno)
+static __inline__ long GetBetaPC(long errno)
 {
   register long PC, SP;
-  asm volatile ("COPY\t%%sp, %0" : "=r" (SP)); 
+  __asm__ volatile ("COPY\t%%sp, %0" : "=r" (SP)); 
   SP = (SP-BetaErrorFrameSize); /* SP in function that called BetaError */
   switch(errno){
   case RepRangeErr:
@@ -186,7 +186,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 
 
 #ifdef sparc
-      asm("ta 3");
+      __asm__("ta 3");
       StackEnd = (long *) ((struct RegWin *)FramePointer)->fp;
       thePC = (long *) ((struct RegWin *)FramePointer)->i7;
 #endif /* sparc */
@@ -440,12 +440,12 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 
 #ifdef linux
 	    /* CallLazyItem: */
-	    asm volatile ("pushl %ebp # Save base pointer for C");
-	    asm volatile ("movl LazyItem,%edi # Call lazy handler");
-	    asm volatile ("movl (%edi),%edx");
-	    asm volatile ("movl 24(%edx),%edx");
-	    asm volatile ("call *%edx");
-	    asm volatile ("popl %ebp #restore base pointer");
+	    __asm__ volatile ("pushl %ebp # Save base pointer for C");
+	    __asm__ volatile ("movl LazyItem,%edi # Call lazy handler");
+	    __asm__ volatile ("movl (%edi),%edx");
+	    __asm__ volatile ("movl 24(%edx),%edx");
+	    __asm__ volatile ("call *%edx");
+	    __asm__ volatile ("popl %ebp #restore base pointer");
 #else
 	    /* NTI: Borland C is not good at inline assembler */
 	    CallLazyItem();

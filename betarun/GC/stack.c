@@ -875,7 +875,7 @@ void ProcessStack()
     struct RegWin *nextCompBlock = (struct RegWin *) lastCompBlock;
     
     /* Flush register windows to stack */
-    asm("ta 3");
+    __asm__("ta 3");
 
     DEBUG_STACK(fprintf(output, "\n ***** Trace of stack *****\n"));
     DEBUG_STACK(fprintf(output,
@@ -1476,7 +1476,7 @@ void PrintStack()
   struct RegWin *end;
   
   /* Flush register windows to stack */
-  asm("ta 3");
+  __asm__("ta 3");
   
   fprintf(output, "\n ***** Trace of stack *****\n");
   

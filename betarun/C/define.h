@@ -114,7 +114,7 @@
 #define TRUE	1
 
 #ifdef __GNUC__
-#define INLINE static inline 
+#define INLINE static __inline__ 
 #else 
 #define INLINE 
 #endif

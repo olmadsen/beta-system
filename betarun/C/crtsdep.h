@@ -2,7 +2,7 @@
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * crtsdep.h
  * by Ole Lehrmann Madsen, Peter Andersen, Kim Jensen M¿ller, and Peter Ryberg Jensen
- * $Id: crtsdep.h,v 1.17 1996-10-01 12:14:30 beta Exp $
+ * $Id: crtsdep.h,v 1.18 1996-10-08 16:18:46 beta Exp $
  */
 
 #define JUMPSTACK 1
@@ -164,9 +164,9 @@ extern long * oldSP;
   __asm__("iflush %0"::"r" (&CBFATop->code[11]));		\
 
 /* Used for components in Attach.c and Suspend.c */
-register long * StackPointer asm("%sp");
-register long * FramePointer asm("%fp");
-register long   retAddress   asm("%i7");
+register long * StackPointer __asm__("%sp");
+register long * FramePointer __asm__("%fp");
+register long   retAddress   __asm__("%i7");
 
 #define setret(newret) (retAddress = (long) (newret))
 #define setret_Susp(saved) (retAddress = (long) (saved))
@@ -183,7 +183,7 @@ register long   retAddress   asm("%i7");
 #define GetFramePointer_Att(FP) (FP=FramePointer)
 
 #define SaveCompState_sparc()\
-  asm("ta 3");
+  __asm__("ta 3");
 
 #endif /* SUN4 */
 
@@ -249,25 +249,25 @@ extern long * oldSP;
 #define setret_Susp(newret) (*(oldSP-1) = newret)
 #if 0
 #define setret_Att(newret) \
-  asm("sw %0, 64($29)"::"r" (newret));
+  __asm__("sw %0, 64($29)"::"r" (newret));
 #endif
 
 #define getret(saved) (saved = *(oldSP-2))
 #define getret_Susp(saved) (saved = *(oldSP-1))
 #if 0
 #define getret_Att(saved) \
-  asm("lw %0, 64($29)":"=r" (saved));
+  __asm__("lw %0, 64($29)":"=r" (saved));
 #endif
 
 #define getret_CB(saved) \
-  asm("move %0, $31":"=r" (saved));
+  __asm__("move %0, $31":"=r" (saved));
 
 #define SetStackPointer(newSP) \
-  asm("move $sp, %0"::"r" (newSP)); \
-  asm("lw $gp,16($sp)");
+  __asm__("move $sp, %0"::"r" (newSP)); \
+  __asm__("lw $gp,16($sp)");
 
 #define GetStackPointer(SP) \
-  asm("move %0, $sp":"=r" (SP));
+  __asm__("move %0, $sp":"=r" (SP));
 
 #define SetFramePointer(newFP) (oldSP = newFP)
 #define GetFramePointer(FP) (FP = oldSP)

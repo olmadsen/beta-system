@@ -262,9 +262,9 @@ extern long mcheck_line;
 #ifdef sparc
 
 #ifdef sun4s
-extern long *start asm("_start");
+extern long *start __asm__("_start");
 #else
-extern long *start asm("start");
+extern long *start __asm__("start");
 #endif
 extern long *etext;
 #define isCode(addr) ( ((unsigned long)&start <= (unsigned long)(addr)) &&  \

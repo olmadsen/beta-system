@@ -42,32 +42,29 @@ struct SnakeSF {
  */
 
 #ifndef NO_GLOB_REGS
-register long _dummy1 asm("%r3");  /* really th */
-register long _dummy2 asm("%r4");  /* really ca */
-register long _dummy3 asm("%r5");  /* really or */
-register long _dummy33 asm("%r6");  /* really tmp R1 */
-register long _dummy37 asm("%r7");  /* really tmp R2 */
-register long _dummy4 asm("%r17"); /* really IOAbot */
-register long _dummy5 asm("%r18"); /* really IOAsize */
-register long _dummy6 asm("%r9");  /* really D0 */
-register long _dummy6 asm("%r10");  /* really D1 */
-register long _dummy7 asm("%r14"); /* really RefSP */
+register long _dummy1 __asm__("%r3");  /* really th */
+register long _dummy2 __asm__("%r4");  /* really ca */
+register long _dummy3 __asm__("%r5");  /* really or */
+register long _dummy33 __asm__("%r6");  /* really tmp R1 */
+register long _dummy37 __asm__("%r7");  /* really tmp R2 */
+register long _dummy4 __asm__("%r17"); /* really IOAbot */
+register long _dummy5 __asm__("%r18"); /* really IOAsize */
+register long _dummy6 __asm__("%r9");  /* really D0 */
+register long _dummy6 __asm__("%r10");  /* really D1 */
+register long _dummy7 __asm__("%r14"); /* really RefSP */
 #endif
 
 /* Tell GCC that some called Beta code has potentially clobbered all these
    registers. */
 
 #define BETA_CLOBBER \
-   asm volatile ("" : : : /* "r3", "r4", "r5", "r6", "r7", */ "r8", "r9", \
+   __asm__ volatile ("" : : : /* "r3", "r4", "r5", "r6", "r7", */ "r8", "r9", \
 		 "r10",	"r11", "r12", "r13","r14","r15","r16")
 
 #define asmlabel(label, code) /*nothing*/
 
-#define asmemptylabel(label) \
-  /* asm(#label "\n	.EXPORT " #label ",CODE") */
-
 #define asmcomment(text) \
-  /* asm(";" #text) */
+  /* __asm__(";" #text) */
 
 /*
  * Take care of the reference stack.
@@ -81,14 +78,14 @@ register long _dummy7 asm("%r14"); /* really RefSP */
 
 extern void *ReferenceStack[];
 
-static inline void pushReference(void *p)
+static __inline__ void pushReference(void *p)
 {
   /*fprintf(stdout, "push 0x%x at 0x%x\n", p, RefSP);*/
    *RefSP=(long)p; 
    RefSP++; 
 }
 
-static inline void *popReference()
+static __inline__ void *popReference()
 {
   void *p;
   RefSP--; 
@@ -97,129 +94,129 @@ static inline void *popReference()
   return p;
 }
 
-static inline void pushReg(void *r) 
+static __inline__ void pushReg(void *r) 
 { /* This is how compiler pushes: strange big frame (64)? */
-  asm volatile("STW\t%0,-36(0,%%r30)" : /* no out */ : "r" (r));
-  asm volatile("LDO\t64(%r30),%r30");
+  __asm__ volatile("STW\t%0,-36(0,%%r30)" : /* no out */ : "r" (r));
+  __asm__ volatile("LDO\t64(%r30),%r30");
 }
 
-static inline void *popReg() 
+static __inline__ void *popReg() 
 { register void *r;
-  asm volatile("LDO\t-64(%r30),%r30");
-  asm volatile("LDW\t-36(0,%%r30),%0" : "=r" (r) : );
+  __asm__ volatile("LDO\t-64(%r30),%r30");
+  __asm__ volatile("LDW\t-36(0,%%r30),%0" : "=r" (r) : );
   return r;
 }
 
 extern ref(Component) ActiveComponent;
 extern ref(CallBackFrame) ActiveCallBackFrame;
 
-static inline long *getThisReg()
+static __inline__ long *getThisReg()
 {     
   long *res; 
-  asm volatile ("COPY\t%%r3, %0" : "=r" (res)); 
+  __asm__ volatile ("COPY\t%%r3, %0" : "=r" (res)); 
   return res;
 }
 
-static inline void setThisReg(void *p)
+static __inline__ void setThisReg(void *p)
 {     
-  asm volatile ("COPY\t%0, %%r3" : /* no out */ : "r" (p)); 
+  __asm__ volatile ("COPY\t%0, %%r3" : /* no out */ : "r" (p)); 
 }
 
-static inline long *getRetReg()
+static __inline__ long *getRetReg()
 {     
   long *res; 
-  asm volatile ("COPY\t%%r28, %0" : "=r" (res)); 
+  __asm__ volatile ("COPY\t%%r28, %0" : "=r" (res)); 
   return res;
 }
 
-static inline long *getCallReg()
+static __inline__ long *getCallReg()
 {     
   long *res; 
-  asm volatile ("COPY\t%%r4, %0" : "=r" (res)); 
+  __asm__ volatile ("COPY\t%%r4, %0" : "=r" (res)); 
   return res;
 }
 
-static inline void *setCallReg(void *p)
+static __inline__ void *setCallReg(void *p)
 {     
-  asm volatile ("COPY\t%0, %%r4" : /* no out */ : "r" (p));
+  __asm__ volatile ("COPY\t%0, %%r4" : /* no out */ : "r" (p));
   return p; /* 'cause it's used in the RETURN macro */
 }
 
-static inline long *getR8Reg()
+static __inline__ long *getR8Reg()
 {     
   long *res; 
-  asm volatile ("COPY\t%%r8, %0" : "=r" (res)); 
+  __asm__ volatile ("COPY\t%%r8, %0" : "=r" (res)); 
   return res;
 }
 
-static inline void setR8Reg(long p)
+static __inline__ void setR8Reg(long p)
 {     
-  asm volatile ("COPY\t%0, %%r8" : /* no out */ : "r" (p));
+  __asm__ volatile ("COPY\t%0, %%r8" : /* no out */ : "r" (p));
 }
 
-static inline long *getOriginReg()
+static __inline__ long *getOriginReg()
 {     
   /* This is probably a nop in most cases since r26 = first C param */
   long *res; 
-  asm volatile ("COPY\t%%r26, %0" : "=r" (res));
+  __asm__ volatile ("COPY\t%%r26, %0" : "=r" (res));
   return res;
 }
 
-static inline void *setOriginReg(void *p)
+static __inline__ void *setOriginReg(void *p)
 {     
-  asm volatile ("COPY\t%0, %%r26" : /* no out */ : "r" (p));
+  __asm__ volatile ("COPY\t%0, %%r26" : /* no out */ : "r" (p));
   return p;
 }
 
-static inline void setD0Reg(long v)
+static __inline__ void setD0Reg(long v)
 {     
-  asm volatile ("COPY\t%0, %%r9" : /* no out */ : "r" (v)); 
+  __asm__ volatile ("COPY\t%0, %%r9" : /* no out */ : "r" (v)); 
 }
 
-static inline long getD0Reg()
+static __inline__ long getD0Reg()
 { 
   long v;
-  asm volatile ("COPY\t%%r9, %0" : "=r" (v)); 
+  __asm__ volatile ("COPY\t%%r9, %0" : "=r" (v)); 
   return v;
 }
 
-static inline void setD1Reg(long v)
+static __inline__ void setD1Reg(long v)
 {     
-  asm volatile ("COPY\t%0, %%r10" : /* no out */ : "r" (v) : "r10"); 
+  __asm__ volatile ("COPY\t%0, %%r10" : /* no out */ : "r" (v) : "r10"); 
 }
 
-static inline long getD1Reg()
+static __inline__ long getD1Reg()
 { 
   long v;
-  asm volatile ("COPY\t%%r10, %0" : "=r" (v)); 
+  __asm__ volatile ("COPY\t%%r10, %0" : "=r" (v)); 
   return v;
 }
 
-static inline long getR1Reg()
+static __inline__ long getR1Reg()
 { 
   long v;
-  asm volatile ("COPY\t%%r15, %0" : "=r" (v)); 
+  __asm__ volatile ("COPY\t%%r15, %0" : "=r" (v)); 
   return v;
 }
 
-static inline long getR2Reg()
+static __inline__ long getR2Reg()
 { 
   long v;
-  asm volatile ("COPY\t%%r16, %0" : "=r" (v)); 
+  __asm__ volatile ("COPY\t%%r16, %0" : "=r" (v)); 
   return v;
 }
 
-static inline long getSPReg()
+static __inline__ long getSPReg()
 { 
   long v;
-  asm volatile ("COPY\t%%r30, %0" : "=r" (v)); 
+  __asm__ volatile ("COPY\t%%r30, %0" : "=r" (v)); 
   return v;
 }
 
-static inline long getRPReg()
+static __inline__ long getRPReg()
 { 
   long v;
-  asm volatile ("COPY\t%%r2, %0" : "=r" (v)); 
+  __asm__ volatile ("COPY\t%%r2, %0" : "=r" (v)); 
   return v;
 }
 
@@ -283,7 +280,7 @@ extern struct Component *AlloC();
 extern struct Item *AlloI();
 extern struct Item *AlloSI();
 
-static inline struct Item *CAlloI(struct Object *org, struct ProtoType *prot)
+static __inline__ struct Item *CAlloI(struct Object *org, struct ProtoType *prot)
 {
     struct Item *item;
 
@@ -297,7 +294,7 @@ static inline struct Item *CAlloI(struct Object *org, struct ProtoType *prot)
     return item;
 }
 
-static inline struct Component *
+static __inline__ struct Component *
   CAlloC(struct Object *org, struct ProtoType *prot)
 {
     struct Component *comp;
@@ -312,7 +309,7 @@ static inline struct Component *
     return comp;
 }
 
-static inline struct Item * CAlloSI(struct Structure *s)
+static __inline__ struct Item * CAlloSI(struct Structure *s)
 {
     struct Item *i;
 
@@ -331,7 +328,7 @@ static inline struct Item * CAlloSI(struct Structure *s)
 }
 
 #define PushGCRegs()                                          \
-    asm volatile ("\tLDIL\tLR'RefSP,%r1\n"                    \
+    __asm__ volatile ("\tLDIL\tLR'RefSP,%r1\n"                    \
 		  "\tLDW\tRR'RefSP(%r1),%r14\n"               \
 		  "\tSTWS,MA\t%r3,4(0,%r14)\n"  /* r3 (th) */ \
 		  "\tSTWS,MA\t%r4,4(0,%r14)\n"  /* r4 (ca) */ \
@@ -343,7 +340,7 @@ static inline struct Item * CAlloSI(struct Structure *s)
 		  )
 
 #define PopGCRegs()                                           \
-    asm volatile ("\tLDIL\tLR'RefSP,%r1\n"                    \
+    __asm__ volatile ("\tLDIL\tLR'RefSP,%r1\n"                    \
 		  "\tLDW\tRR'RefSP(%r1),%r14\n"               \
 		  "\tLDWS,MB\t-4(0,%r14),%r7\n"               \
 		  "\tLDWS,MB\t-4(0,%r14),%r6\n"               \

@@ -1061,7 +1061,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
     long   *PC=thePC;
     
     /* Flush register windows to stack */
-    asm("ta 3");
+    __asm__("ta 3");
     
     for (theAR =  (struct RegWin *) StackEnd;
 	 theAR != (struct RegWin *) 0;

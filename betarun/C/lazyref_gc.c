@@ -40,7 +40,7 @@
 #undef INLINE
 #endif
 #ifdef __GNUC__
-#define INLINE inline
+#define INLINE __inline__
 #else
 #define INLINE 
 #endif
@@ -402,7 +402,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 
       /* flush register windows to stack and fetch value of register causing
        * the trap. */
-      asm volatile  ("ta 3");
+      __asm__ volatile  ("ta 3");
 
       /* LazyDangler = ((int *) returnSP)[sourceReg(instruction) - 26]; */
       LazyDangler = ((int *) returnSP)[sourceReg(instruction) - 16];
@@ -422,24 +422,24 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 #endif
 
 	/* Return to trap window. */
-	asm volatile ("restore; restore ! return to trap window");
+	__asm__ volatile ("restore; restore ! return to trap window");
       
 	/* Now we are back in the register window where the trap occurred.
 	 * Only global registers may be changed. Now reset correct sp. (UNIX 
 	 * pushed some information on the stack). */
 #ifdef sun4s 
-	asm volatile ("sethi %hi(returnSP),%g1 ! reset sp to returnSP");
-	asm volatile ("ld [%g1+%lo(returnSP)],%sp");
+	__asm__ volatile ("sethi %hi(returnSP),%g1 ! reset sp to returnSP");
+	__asm__ volatile ("ld [%g1+%lo(returnSP)],%sp");
 #else
-	asm volatile ("sethi %hi(_returnSP),%g1 ! reset sp to returnSP");
-	asm volatile ("ld [%g1+%lo(_returnSP)],%sp");
+	__asm__ volatile ("sethi %hi(_returnSP),%g1 ! reset sp to returnSP");
+	__asm__ volatile ("ld [%g1+%lo(_returnSP)],%sp");
 #endif    
 	
 	/* Allocate a new register window to avoid changing trap registers. */
-	asm volatile ("save %sp,-64,%sp ! save trap window");
+	__asm__ volatile ("save %sp,-64,%sp ! save trap window");
 	
 	/* Tell compiler to assume nothing about register contents: */
-	asm volatile ("" : : : "i0", "i1", "i2", "i3", "i4", "i5", "fp", "i7",\
+	__asm__ volatile ("" : : : "i0", "i1", "i2", "i3", "i4", "i5", "fp", "i7",\
 		      "o0", "o1", "o2", "o3", "o4", "o5", "sp", "o7", \
 		      "l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7");
       
@@ -457,42 +457,42 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 	 * The i registers are the o registers of the trap frame. They may
 	 * contain garbage that should not be interpreted as objects. */
 
-	asm volatile ("mov %i0,%l0; set 0,%i0   ! Save and clear i registers");
-	asm volatile ("mov %i1,%l1; set 0,%i1");
-	asm volatile ("mov %i2,%l2; set 0,%i2");
-	asm volatile ("mov %i3,%l3; set 0,%i3");
-	asm volatile ("mov %i4,%l4; set 0,%i4");
+	__asm__ volatile ("mov %i0,%l0; set 0,%i0   ! Save and clear i registers");
+	__asm__ volatile ("mov %i1,%l1; set 0,%i1");
+	__asm__ volatile ("mov %i2,%l2; set 0,%i2");
+	__asm__ volatile ("mov %i3,%l3; set 0,%i3");
+	__asm__ volatile ("mov %i4,%l4; set 0,%i4");
 	
 	/* call beta object handling the lazy fetch */
 #ifdef sun4s
-	asm volatile ("sethi %hi(LazyItem),%i1  ! Call BETA lazy handler");
-	asm volatile ("ld [%i1+%lo(LazyItem)],%i1 ! Object in %i1");
+	__asm__ volatile ("sethi %hi(LazyItem),%i1  ! Call BETA lazy handler");
+	__asm__ volatile ("ld [%i1+%lo(LazyItem)],%i1 ! Object in %i1");
 #else
-	asm volatile ("sethi %hi(_LazyItem),%i1  ! Call BETA lazy handler");
-	asm volatile ("ld [%i1+%lo(_LazyItem)],%i1 ! Object in %i1");
+	__asm__ volatile ("sethi %hi(_LazyItem),%i1  ! Call BETA lazy handler");
+	__asm__ volatile ("ld [%i1+%lo(_LazyItem)],%i1 ! Object in %i1");
 #endif
-	asm volatile ("ld [%i1],%g1 ! Prototype in %g1");
-	asm volatile ("ld [%g1+24],%g1 ! Entry point in %g1");
-	asm volatile ("call %g1; nop");
+	__asm__ volatile ("ld [%i1],%g1 ! Prototype in %g1");
+	__asm__ volatile ("ld [%g1+24],%g1 ! Entry point in %g1");
+	__asm__ volatile ("call %g1; nop");
 
         /* Restore 'i' registers. */
 	
-	asm volatile ("mov %l0,%i0 ! Restore i registers");
-	asm volatile ("mov %l1,%i1");
-	asm volatile ("mov %l2,%i2");
-	asm volatile ("mov %l3,%i3");
-	asm volatile ("mov %l4,%i4");
+	__asm__ volatile ("mov %l0,%i0 ! Restore i registers");
+	__asm__ volatile ("mov %l1,%i1");
+	__asm__ volatile ("mov %l2,%i2");
+	__asm__ volatile ("mov %l3,%i3");
+	__asm__ volatile ("mov %l4,%i4");
 
 	/* Get back to returnPC and continue from there. */
 #ifdef sun4s
-	asm volatile ("sethi %hi(returnPC),%g1  ! Jump back to before trap");
-	asm volatile ("ld [%g1+%lo(returnPC)],%g1");
+	__asm__ volatile ("sethi %hi(returnPC),%g1  ! Jump back to before trap");
+	__asm__ volatile ("ld [%g1+%lo(returnPC)],%g1");
 #else
-	asm volatile ("sethi %hi(_returnPC),%g1  ! Jump back to before trap");
-	asm volatile ("ld [%g1+%lo(_returnPC)],%g1");
+	__asm__ volatile ("sethi %hi(_returnPC),%g1  ! Jump back to before trap");
+	__asm__ volatile ("ld [%g1+%lo(_returnPC)],%g1");
 #endif
-	asm volatile ("restore");
-	asm volatile ("jmp %g1; nop");
+	__asm__ volatile ("restore");
+	__asm__ volatile ("jmp %g1; nop");
       } 
     } 
 #if LAZYDEBUG
@@ -573,50 +573,50 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 	 */
 
 	/* Reset stackpointer to the one at traptime. */
-	asm volatile ("lea _returnSP,%sp");
-	asm volatile ("mov.l (%sp),%sp");
+	__asm__ volatile ("lea _returnSP,%sp");
+	__asm__ volatile ("mov.l (%sp),%sp");
 
 	/* Push return address on stack. */
-	asm volatile ("mov.l _returnPC,-(%sp)");
+	__asm__ volatile ("mov.l _returnPC,-(%sp)");
 
 	/* Push contents of address registers 0 through 4 on stack. */
-	asm volatile ("lea _allregs, %a0 # Push saved a0 through a4 on stack");
-	asm volatile ("mov.l 32(%a0),-(%sp)");
-	asm volatile ("mov.l 36(%a0),-(%sp)");
-	asm volatile ("mov.l 40(%a0),-(%sp)");
-	asm volatile ("mov.l 44(%a0),-(%sp)");
-	asm volatile ("mov.l 48(%a0),-(%sp)");
+	__asm__ volatile ("lea _allregs, %a0 # Push saved a0 through a4 on stack");
+	__asm__ volatile ("mov.l 32(%a0),-(%sp)");
+	__asm__ volatile ("mov.l 36(%a0),-(%sp)");
+	__asm__ volatile ("mov.l 40(%a0),-(%sp)");
+	__asm__ volatile ("mov.l 44(%a0),-(%sp)");
+	__asm__ volatile ("mov.l 48(%a0),-(%sp)");
 
 	/* Clear address registers to prevent strange GC behaviour. */
-	asm volatile ("mov.l &0,%a2 # Clear address registers");
-	asm volatile ("mov.l &0,%a3");
-	asm volatile ("mov.l &0,%a4");
+	__asm__ volatile ("mov.l &0,%a2 # Clear address registers");
+	__asm__ volatile ("mov.l &0,%a3");
+	__asm__ volatile ("mov.l &0,%a4");
 	
 	/* call beta object handling the lazy fetch */
-	asm volatile ("mov.l _LazyItem, %a1 # Call BETA lazy handler");
-	asm volatile ("mov.l (%a1), %a0");
-	asm volatile ("mov.l 24(%a0), %a0");
-	asm volatile ("jsr (%a0)");
+	__asm__ volatile ("mov.l _LazyItem, %a1 # Call BETA lazy handler");
+	__asm__ volatile ("mov.l (%a1), %a0");
+	__asm__ volatile ("mov.l 24(%a0), %a0");
+	__asm__ volatile ("jsr (%a0)");
 
 	/* Reset data registers. */
-	asm volatile ("lea _allregs, %a0 # reset data registers");
-	asm volatile ("mov.l (%a0),%d0");
-	asm volatile ("mov.l 4(%a0),%d1");
-	asm volatile ("mov.l 8(%a0),%d2");
-	asm volatile ("mov.l 12(%a0),%d3");
-	asm volatile ("mov.l 16(%a0),%d4");
-	asm volatile ("mov.l 20(%a0),%d5");
-	asm volatile ("mov.l 24(%a0),%d6");
-	asm volatile ("mov.l 28(%a0),%d7");
+	__asm__ volatile ("lea _allregs, %a0 # reset data registers");
+	__asm__ volatile ("mov.l (%a0),%d0");
+	__asm__ volatile ("mov.l 4(%a0),%d1");
+	__asm__ volatile ("mov.l 8(%a0),%d2");
+	__asm__ volatile ("mov.l 12(%a0),%d3");
+	__asm__ volatile ("mov.l 16(%a0),%d4");
+	__asm__ volatile ("mov.l 20(%a0),%d5");
+	__asm__ volatile ("mov.l 24(%a0),%d6");
+	__asm__ volatile ("mov.l 28(%a0),%d7");
 
 	/* Reset address registers. */
-	asm volatile ("mov.l (%sp)+,%a4 # reset address registers");
-	asm volatile ("mov.l (%sp)+,%a3");
-	asm volatile ("mov.l (%sp)+,%a2");
-	asm volatile ("mov.l (%sp)+,%a1");
-	asm volatile ("mov.l (%sp)+,%a0");
+	__asm__ volatile ("mov.l (%sp)+,%a4 # reset address registers");
+	__asm__ volatile ("mov.l (%sp)+,%a3");
+	__asm__ volatile ("mov.l (%sp)+,%a2");
+	__asm__ volatile ("mov.l (%sp)+,%a1");
+	__asm__ volatile ("mov.l (%sp)+,%a0");
 	
-	asm volatile ("rts # return to address before trap");
+	__asm__ volatile ("rts # return to address before trap");
       }
       
       

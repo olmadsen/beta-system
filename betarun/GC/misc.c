@@ -70,11 +70,11 @@ void Illegal()
     fprintf(output, "Illegal: hardcoded break!\n");
 
 #ifdef linux
-    asm("int3");
+    __asm__("int3");
 #endif
 
 #ifdef sparc
-    asm("illtrap 0");
+    __asm__("illtrap 0");
 #endif
 
 #ifdef sgi
@@ -84,7 +84,7 @@ void Illegal()
 #endif
 
 #ifdef hppa
-    asm("break 0,0");
+    __asm__("break 0,0");
 #endif
 
 #ifdef MAC

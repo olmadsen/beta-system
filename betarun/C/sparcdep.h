@@ -53,11 +53,11 @@ struct RegWin {
 */
 
 #ifdef GCable_Module
-register volatile void *GCreg0 asm("%o0");
-register volatile void *GCreg1 asm("%o1");
-register volatile void *GCreg2 asm("%o2");
-register volatile void *GCreg3 asm("%o3");
-register volatile void *GCreg4 asm("%o4");
+register volatile void *GCreg0 __asm__("%o0");
+register volatile void *GCreg1 __asm__("%o1");
+register volatile void *GCreg2 __asm__("%o2");
+register volatile void *GCreg3 __asm__("%o3");
+register volatile void *GCreg4 __asm__("%o4");
 
 #define GCable_Entry() \
   StackPointer = FramePointer-16; /* = 64 */ \
@@ -234,7 +234,7 @@ void name(struct ObjectRep *theRep,                     \
   { code; }						\
   pop(v2); pop(v1);					\
 
-static inline void USE()
+static __inline__ void USE()
 { int x;
   x=(int)IOA;
   x=(int)IOATopOff;
