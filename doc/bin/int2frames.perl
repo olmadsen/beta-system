@@ -119,10 +119,15 @@ sub print_button
 
     if ($href =~ m/^javascript:/ ){
 	print<<"EOT";
-<A HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}${type}g-jsr.gif" ALT="${alt} (JavaScript Required)" NAME="$alt" BORDER=0></A>
+<A NAME="A$alt" HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}${type}g-jsr.gif" ALT="${alt} (JavaScript Required)" NAME="$alt" BORDER=0></A>
 EOT
-        $javascript = "document.images.$alt.src = \"${imagedir}${type}.gif\";";
-
+        $javascript = <<"EOT";
+if (navigator.appName.substring(0,9) == "Microsoft"){
+  document.all.APrint.outerHTML = '<A NAME="A$alt" HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}${type}.gif" ALT="${alt}" NAME="$alt" BORDER=0></A>';
+} else {
+  document.images.$alt.src = \"${imagedir}${type}.gif\";
+}
+EOT
     } elsif ("$href" eq ""){
 	print "<A><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC=\"$imagedir";
 	print $type . "g.gif\" ALT=";
