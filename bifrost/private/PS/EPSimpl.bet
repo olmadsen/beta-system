@@ -331,52 +331,42 @@ do 'RasterPaint' -> out.debugps;
 --TiledSolidColorWritePS: descriptor--
 (# tile: ^BitMap;
    MakePaintProc:
-     (# 
+     (# bitpos: @integer;
         p: ^BitMap.pixel;
         value: @int8u;
-        numbit: @integer;
-     do '{\n    pop\n    ' -> out.puttext;
-        tile.width -> out.putint; out.sep;
-        tile.height -> out.putint; out.sep;
+        gp: ^Bitmap.getPixel;
+        sep: @out.sep;
+     do &tile.GetPixel[] -> gp[];
+        '{\n    pop\n    ' -> out.puttext;
+        tile.width -> out.putint; sep;
+        tile.height -> out.putint; sep;
         'true ' -> out.puttext;
-        (* An image that is scanned left-to-right, top-to-bottom
-         * is described by the following matrix, c.f. PostScript
-         * Language Refererence Manual page 218, top:
-         *    (tile.width, 0, 0, -tile.height, 0, tile.height) -> out.putmatrix;
-         * However, this turn out wrong. It seems to work with
-         * identity matrix. This must be because the logocal coordinate system
-         * of Bifrost is identical to that of PostScript.
+        (* The coordinate system of a Bifrost bitmap is identical to that of
+         * a PostScript image, so the identity matrix can be used here.
          *)
         'matrix ' -> out.puttext;
         '{ ' -> out.puttext;
-        (if (tile.width*tile.height)>(8*12) then out.newline; if);
         '<' -> out.puttext;
+        7 -> bitpos (* bits are filled in from MSB in PostScript images *);
+        0 -> value;
         (for j:tile.height repeat
              (for i:tile.width repeat
-                  (i,j) -> tile.getPixel -> p[];
-                  numbit+1 -> numbit;
-                  value*2->value;
-                  (if p.b then value+1 -> value if);
-                  (if (((numbit mod 8) = 0 ) (* Enough for one byte *) or
+                  (i,j) -> gp -> p[];
+                  (if p.b then value + (1 %sll bitpos) -> value if);
+                  (if ((bitpos = 0) (* Enough for one byte *) or
                       (i = tile.width)) (* Reached end of row *) then
                       (* Each row must begin in a new byte - See PostScript 
                        * Language Reference Manual, section 4.10.2 
                        *)
-                      (*'0x' -> out.puttext;*)
-                      (*value -> out.putHex(# do 2->width; '0'->padding #);*)
                       (16,value)->out.putRadix(# do 2->width; true->zeroPadding #);
-                      (*','->out.put;*)
-                      (if (numbit mod (8*12)) = 0 then out.newline; if);
-                      ' '->out.put;
                       0 -> value;
+                      7 -> bitpos;
+                   else
+                      bitpos-1 -> bitpos;
                   if);
              for);
         for);
-        (if (numbit mod 4) <> 0 then
-            'error: MakePaintProc: missing bits!' -> putline;
-        if);
         '> ' -> out.puttext;
-        (if (tile.width*tile.height)>(8*12) then '\n    '->out.puttext if);    
         '} imagemask' -> out.putline;
         '  }' -> out.putline;
      #);

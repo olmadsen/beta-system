@@ -13,8 +13,8 @@ do INNER
 (# x, more: @integer;
 do (* Destroy old privatepart if needed *)
    
-   (if bitmapprivatepart.xpixmap//0 then 
-    else (xdisplay, bitmapprivatepart.xpixmap)
+   (if bitmapprivatepart.xpixmap<>0 then 
+       (xdisplay, bitmapprivatepart.xpixmap)
          -> XFreePixmap;
        0 -> bitmapprivatepart.xpixmap;
    if);
@@ -54,7 +54,7 @@ do (****
     if);
     ****)
    
-   (if rasterprivatepart.width//0 then
+   (if rasterprivatepart.width=0 then
        (if displayWarnings then
            'BitMap.calculate: Width of Bitmap is zero!' -> putline;
            '(Maybe init has not been called)' -> putline;
@@ -62,7 +62,7 @@ do (****
        1 -> rasterprivatepart.width;
    if);
    
-   (if rasterprivatepart.height//0 then
+   (if rasterprivatepart.height=0 then
        (if displayWarnings then
            'BitMap.calculate: Height of Bitmap is zero!' -> putline;
            '(Maybe init has not been called)' -> putline;
@@ -77,7 +77,7 @@ do (****
    rasterprivatepart.height)
      -> XCreateBitMapFromData -> BitMapPrivatePart.xpixmap;
    
-   (if BitMapPrivatePart.xpixmap//0 then 
+   (if BitMapPrivatePart.xpixmap=0 then 
        (if displayWarnings then
            'BitMap.calculate: failed to create X Bitmap' -> putline;
        if);
@@ -97,7 +97,7 @@ do (****
               rasthot.x,
               rasthot.y) -> XWriteBitmapFile -> status;
               
-              (if status//0 then 
+              (if status=0 then 
                   'done.' -> putline;
                else
                   'failed for reason: ' -> puttext;
@@ -109,6 +109,7 @@ do (****
    INNER
 
 -- BitMapPutPixel: descriptor --
+(* FIXME: change private.data to byte-array *)
 (# bitpos,  (* BIT-Position in BitMapPrivatePart.data *)
    longinx, (* BitMapPrivatePart.data[longinx] is the long to manipulate *)
    longpos, (* BIT-position in BitMapPrivatePart.data[longinx] *)
@@ -119,7 +120,7 @@ do (****
    value: @integer;
    mybyte: @int8u;
 do (if rasterprivatepart.indexOK then
-       (if p.b then 1->value if);
+       (if p.b then 1->value else 0->value if);
        (rasterprivatepart.height-j+1)*bitmapprivatepart.realwidth-i 
          -> bitpos; 
        (bitpos) div 32 + 1 -> longinx; 
@@ -130,14 +131,23 @@ do (if rasterprivatepart.indexOK then
        (byteno+1)*8-longpos-1 -> offset;
        
        byteno -> BitMapPrivatePart.data[longinx].%getByte -> mybyte;
-       (if isbigEndian then 7-offset->offset; (* FIXME! *) if);
-       (value, offset, 1) -> mybyte.%PutBits;
+       (if isBigEndian then 7-offset->offset; (* FIXME! *) if);
+       (value, offset, 1) -> mybyte.%PutBits -> value;
+       (mybyte, byteno) -> BitMapPrivatePart.data[longinx].%putByte;
        
-       (mybyte,byteno) -> BitMapPrivatePart.data[longinx].%putByte;
+       (if false then
+           'i,j: '->puttext; i->putint; ','->put; j->putint; newline;
+           'bitpos: '->puttext; bitpos->putint; newline;
+           'longinx: '->puttext; longinx->putint; newline;
+           'longpos: '->puttext; longpos->putint; newline;
+           'value: '->puttext; value->putint; newline;
+           'mybyte after: '->puttext; mybyte->puthex; newline;
+       if);
    if);
 #)
 
 -- BitMapGetPixel: descriptor --
+(* FIXME: change private.data to byte-array *)
 (# bitpos,  (* BIT-Position in BitMapPrivatePart.data *)
    longinx, (* BitMapPrivatePart.data[longinx] is the long to manipulate *)
    longpos, (* BIT-position in BitMapPrivatePart.data[longinx] *)
@@ -159,7 +169,7 @@ do &pixel[] -> p[];
        (byteno+1)*8-longpos-1 -> offset;
        
        byteno -> BitMapPrivatePart.data[longinx].%getByte -> mybyte;
-       (if isbigEndian then 7-offset->offset; (* FIXME! *) if);
+       (if isBigEndian then 7-offset->offset; (* FIXME! *) if);
        (offset, 1) -> mybyte.%GetBits -> value;
    if);
    (value<>0) -> p.b;
@@ -181,7 +191,7 @@ do &pixel[] -> p[];
      (# b: @integer;
      do 
         (for width repeat
-             (if pbmbit//0 then
+             (if pbmbit=0 then
                  128 -> pbmbit;
                  pbminx+1 -> pbminx;
                  pbmrow[pbminx] -> pbmitem;
@@ -248,17 +258,17 @@ do INNER;
 (# pad,format: @integer;
 do maxval -> pixmapPrivatepart.maxRGB;
    
-   (if pixmapprivatepart.pixels//0 then 
+   (if pixmapprivatepart.pixels=0 then 
     else (*Not needed; is handled by XDestroyImage *)
        (* pixmapprivatepart.pixels->free; *)
    if);
-   (if pixmapprivatepart.ximage//0 then 
+   (if pixmapprivatepart.ximage=0 then 
     else pixmapprivatepart.ximage->XDestroyImage
    if);
    
    4*width*height -> malloc -> pixmapprivatepart.pixels;
    
-   (if THIS(guienv).private.defaultDepth//1 then
+   (if THIS(guienv).private.defaultDepth=1 then
        XYPixmap->format;
        32->pad;
     else
@@ -279,7 +289,7 @@ do maxval -> pixmapPrivatepart.maxRGB;
    height,
    pad,
    0) -> XCreateImage -> pixmapprivatepart.ximage;
-   (if pixmapprivatepart.ximage//0 then
+   (if pixmapprivatepart.ximage=0 then
        (if displayWarnings then
            'Unable to allocate XImage' ->putline;
        if);
@@ -314,11 +324,12 @@ do (if rasterprivatepart.indexOK then
 #)
 
 -- PixMapGetPixel: dopart --
-do INNER
+do 'PixMap.GetPixel' -> UnImplemented;
+   INNER
    
 -- PixMapCopy: descriptor --
 (# p: ^PixMap;
-do (if aCopy[]//NONE then (* Not done in inner *)
+do (if aCopy[]=NONE then (* Not done in inner *)
        &PixMap[] -> p[];
        (* ... *)
        p[] -> aCopy[];
@@ -355,7 +366,7 @@ do (if true then
        scanGOs(# do dummyCanvas[]->go.draw #);
        (* Now get the pixels from xpixmap into pm *)
        MaxRGB -> pm.pixmapprivatepart.maxRGB;
-       (if THIS(guienv).private.defaultDepth//1 then
+       (if THIS(guienv).private.defaultDepth=1 then
            XYPixmap->format;
            32->pad;
         else
