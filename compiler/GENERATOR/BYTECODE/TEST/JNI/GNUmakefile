@@ -1,73 +1,19 @@
-# Using SUN compilers
-# CC             = cc
-# LD             = cc -G
+beta:
+	jbeta helloworld.bet
+	./helloworld
 
-# Using GNU compilers
-CC               = gcc -Wall -static
-LD               = gcc -Wl,-G
+java: jvm/libhellolib.so jvm/helloworld.class
+	LD_LIBRARY_PATH=jvm:$LD_LIBRARY_PATH; export LD_LIBRARY_PATH; java -classpath jvm helloworld
 
-JAVAHOME	 = /users/datpete/bin/sun4/j2sdk1.4.1_02
-JAVA_CLASSPATH   = jvm
-
-JNI_CHECK        = -Xcheck:jni
-JNI_INCLUDE      = -I $(JAVAHOME)/include -I $(JAVAHOME)/include/solaris
-JNI_LIBRARY_PATH = jvm
-
-VPATH            = jvm:jvm/beta
-MAKEFLAGS	 = --no-print-directory
-
-####################### Clean directory #################################
+jvm/beta/hellolib.class: hellolib.java
+	mkdir -p jvm
+	javac -d jvm hellolib.java
+jvm/beta_hellolib.h: jvm/beta/hellolib.class
+	javah -d jvm -classpath jvm -jni beta.hellolib
+jvm/libhellolib.so: hellolib.c realhello.c realhello.h jvm/beta_hellolib.h
+	gcc -Wl,-G -I . -I jvm -I /home/java/Solaris/include -I /home/java/Solaris/include/solaris -o jvm/libhellolib.so hellolib.c realhello.c
+jvm/helloworld.class: helloworld.java
+	javac -d jvm -classpath jvm helloworld.java
 
 clean:
-	-rm -rf helloworld *.bat *.exe jvm *.class *.ast *.a2s *.astL helloworld *.so *.o *~ 
-
-####################### BETA build ######################################
-
-beta: clean
-	@echo ""
-	@echo Compiling BETA program and JNI wrappers:
-	jbeta -s 23 helloworld.bet
-	@echo ""
-	@echo Running BETA program:
-	./helloworld
-	@echo ""
-
-####################### JAVA only build #################################
-
-## Directory to place temporaries into
-jvm:
-	mkdir -p jvm
-
-## Actual library being interfaced
-realhello.o: jvm realhello.c realhello.h
-	@echo Compiling native library:
-	$(CC) -c -I . -I jvm -o jvm/realhello.o realhello.c
-
-## JNI glue steps
-hellolib.class: jvm hellolib.java
-	@echo Compiling native JAVA wrapper:
-	javac -d jvm hellolib.java
-beta_hellolib.h: hellolib.class
-	@echo Generating C/C++ header:
-	javah -jni -d jvm -classpath jvm beta.hellolib
-hellolib.o: jvm_beta_hellolib.h
-	@echo Compiling native C wrapper:
-	$(CC) -c -I . -I jvm $(JNI_INCLUDE) -o jvm/hellolib.o hellolib.c
-libhellolib.so: hellolib.o realhello.o
-	@echo Creating shared library:
-	$(LD) -o jvm/libhellolib.so jvm/hellolib.o jvm/realhello.o
-helloworld.class: helloworld.java
-	@echo Compiling JAVA example program:
-	javac -classpath jvm -d jvm helloworld.java
-
-java: 
-	@echo ""
-	@echo Generating JNI example:
-	@echo ""
-	@$(MAKE) libhellolib.so
-	@$(MAKE) helloworld.class
-	@echo ""
-	@echo Running JAVA JNI example:
-	@echo ""
-	@sh -c 'LD_LIBRARY_PATH=$(JNI_LIBRARY_PATH); export LD_LIBRARY_PATH; java -classpath jvm $(JNI_CHECK) helloworld'
-
+	rm -rf *~ *.ast *.astL *.a2s *.lst *.class *.so beta_hellolib.h beta jvm helloworld helloworld-jdb
