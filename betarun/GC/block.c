@@ -18,7 +18,8 @@
                               && ((long *) addr < theB->limit) )
 #define inBlockUnused( theB, addr) ((theB->top <= (long *) addr) \
                               && ((long *) addr < theB->limit) )
-#define USEMMAP
+
+#define USEMMAP /* HACK! used by proxy.c, but not used for aoa, etc */
 
 Block * newBlock(long size)
 {
@@ -131,7 +132,8 @@ void mmapInitial(unsigned long numbytes)
 #define MMAPINCR  0x10000000
   startadr = MMAPSTART;
   while (!mmapHeap && (!((startadr+numbytes-1) & (1<<31)))) {
-    mmapHeap = VirtualAlloc(startadr, numbytes, MEM_RESERVE, PAGE_NOACCESS);
+    mmapHeap = VirtualAlloc((void*)startadr, numbytes, 
+			    MEM_RESERVE, PAGE_NOACCESS);
     startadr += MMAPINCR;
   }
   if (!mmapHeap) {

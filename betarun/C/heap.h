@@ -58,3 +58,7 @@ typedef struct Heap {
 #define DEFAULT_AOAPERCENTAGE  15
 #endif
 
+#ifndef AOAINCREMENT
+#define AOAINCREMENT  25
+#endif
+

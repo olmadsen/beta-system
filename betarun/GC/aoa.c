@@ -113,11 +113,11 @@ void tempAOArootsFree(void)
 static void AOANewBlock(long newBlockSize) 
 {
   Block * newblock;
-  if (newBlockSize < totalAOASize/10) {
+  if (newBlockSize < (totalAOASize/100)*AOAINCREMENT) {
     /* Expand at least 10 percent each time.
      * This makes blocks bigger, which decreases fragmentation.
      */
-    newBlockSize = totalAOASize/10;
+    newBlockSize = (totalAOASize/100)*AOAINCREMENT;
   }
   newBlockSize = ObjectAlign(newBlockSize);
   if ((newblock = newBlock(newBlockSize))) {
@@ -130,7 +130,8 @@ static void AOANewBlock(long newBlockSize)
     /* Insert the new block in the freelist */
     AOAInsertFreeBlock((char *)AOATopBlock -> top, newBlockSize);
     INFO_AOA({
-      fprintf(output,"Allocated new block of 0x%0x bytes\n", (int)newBlockSize);
+      fprintf(output,"Allocated new block of %dkb\n", 
+	      (int)newBlockSize/1024);
       fflush(output);
     });
   } else {
@@ -483,7 +484,7 @@ void AOAGc()
     fflush(output);
   });
   INFO_AOA({
-    fprintf(output, "AOA-%d done, free space 0x%x bytes, time=%dms)\n", 
+    fprintf(output, "AOA-%d done, free space 0x%x bytes, aoatime=%dms)\n", 
 	    (int)NumAOAGc, (int)totalFree,
 	    (int)(getmilisectimestamp() - starttime));
   });

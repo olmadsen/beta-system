@@ -276,7 +276,7 @@ void IOAGc()
     memset(GLOBAL_IOATop, 0, (long)GLOBAL_IOALimit-(long)GLOBAL_IOATop);
 
     INFO_IOA({
-      fprintf(output," %d%% used, time=%dms)\n",
+      fprintf(output," %d%% used, ioatime=%dms)\n",
 	      (int)((100*areaSize(GLOBAL_IOA,GLOBAL_IOATop))
 		    / areaSize(GLOBAL_IOA,GLOBAL_IOALimit)),
 	      (int)(getmilisectimestamp() - starttime));

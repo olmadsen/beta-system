@@ -150,7 +150,7 @@ Retry:
     long *end = pointer + oldBlockSize;
     long used = 0;
 
-    fprintf(output, "(AOAtoIOAReAlloc:time=%dms)\n", 
+    fprintf(output, "(AOAtoIOAReAlloctime=%dms)\n", 
 	    (int)(getmilisectimestamp() - starttime));
 
     for ( ; pointer<end; pointer++) {

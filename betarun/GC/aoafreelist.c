@@ -247,7 +247,9 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
       AOAFreeListSize[index]--;
       
       /* insert the remaining chunk in the free list */
-      if (sizeOfRestChunk) {
+      /* There must be a rest, as this is not a perfect match -mg */
+      /* if (sizeOfRestChunk) */
+      { 
 	AOAInsertFreeElement(restChunk, sizeOfRestChunk);
       }
       return newChunk;
@@ -305,7 +307,9 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
         AOAFreeListSize[bestFitIndex]--;
 
 	/* insert the remaining chunk in the free list */
-	if (sizeOfRestChunk) {
+	/* There must be a rest, as this is not a perfect match -mg */
+	/* if (sizeOfRestChunk) */
+	{
 	  AOAInsertFreeElement(restChunk, sizeOfRestChunk);
 	}
 	return bestFit;
@@ -476,7 +480,6 @@ long AOAScanMemoryArea(long *start, long *end)
   DEBUG_CODE(long memoryAreaSize = 0);
   
   collectedMem = 0;
-  largestFreeChunk = 0;
   
   freeMemInBlock = 0;
   current = (AOAFreeChunk *)start;
@@ -529,9 +532,6 @@ long AOAScanMemoryArea(long *start, long *end)
             
       AOAInsertFreeElement(freeChunkStart, freeChunkSize);
             
-      if (freeChunkSize > largestFreeChunk) {
-	largestFreeChunk = freeChunkSize;
-      }
       DEBUG_CODE(memoryAreaSize += freeChunkSize);
             
     }
@@ -540,6 +540,21 @@ long AOAScanMemoryArea(long *start, long *end)
   return freeMemInBlock;
 }
 
+
+void GCInfo(void) 
+{
+  fprintf(output,"GCInfo:\n");
+  fprintf(output,"  %8lu (IOAGC)\n", NumIOAGc);
+  fprintf(output,"  %8lu (AOAGC)\n", NumAOAGc);
+  STAT_AOA({
+    fprintf(output,"  %8lu (AOABlocks)\n", AOABlocks);
+    fprintf(output,"  %8lu (objectsInAOA)\n", objectsInAOA);
+    fprintf(output,"  %8lu (sizeOfObjectsInAOA)\n", sizeOfObjectsInAOA);
+    fprintf(output,"  %8lu (AOABlockSize)\n", AOABlockSize);
+  });
+}
+
+#ifdef RTDEBUG
 /* AOADisplayMemoryArea: */
 void AOADisplayMemoryArea(long *start, long *end) 
 {
@@ -611,16 +626,4 @@ void AOADisplayFreeList(void)
   }
 }
 
-void GCInfo(void) 
-{
-  fprintf(output,"GCInfo:\n");
-  fprintf(output,"  %8lu (IOAGC)\n", NumIOAGc);
-  fprintf(output,"  %8lu (AOAGC)\n", NumAOAGc);
-  STAT_AOA({
-    fprintf(output,"  %8lu (AOABlocks)\n", AOABlocks);
-    fprintf(output,"  %8lu (objectsInAOA)\n", objectsInAOA);
-    fprintf(output,"  %8lu (sizeOfObjectsInAOA)\n", sizeOfObjectsInAOA);
-    fprintf(output,"  %8lu (AOABlockSize)\n", AOABlockSize);
-  });
-}
-    
+#endif /* RTDEBUG */
