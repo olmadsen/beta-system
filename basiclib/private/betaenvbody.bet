@@ -1,18 +1,12 @@
 ORIGIN  '../betaenv';
-INCLUDE '~beta/sysutils/objinterface';
-INCLUDE '~beta/basiclib/private/systemExceptionHandler';
 LIB_ITEM 'betaenv';
-MDBODY ppc     'betaenv_macbody'
-       ppcmac  'betaenv_macbody'
-       nti     'betaenv_ntbody'
-       default 'betaenv_unixbody';
-BUILD  nti    '$$/basicio.obj' 'external/basicio.c' 'betacc $0 $1'
-       ppcmac ':$$:basicio.obj' ':external:basicio.c' 'mrc -proto strict -proto auto -shared_lib_export on -o $0 $1'
-       default '$$/basicio.o' 'external/basicio.c' '$CC -D$$ -c -o $0 $1';
+MDBODY clr  'betaenv_clrbody'
+       jvm  'betaenv_jvmbody'
+       default 'betaenv_stdbody'
 
 (*
  * COPYRIGHT
- *       Copyright (C) Mjolner Informatics, 1984-99
+ *       Copyright (C) Mjolner Informatics, 1984-2002
  *       All rights reserved.
  *)
 
@@ -51,7 +45,7 @@ do (if R## <= as## then
 --- betaenvAsciiInitAscii: descriptor ---
 (# 
 do (for ch: private.upCase.range repeat 
-	ch-1->private.upCase[ch]->private.lowCase[ch] 
+    	ch-1->private.upCase[ch]->private.lowCase[ch] 
    for);
    (for ch: 26 repeat
         capA+ch-1->private.upCase[smalla+ch];
@@ -62,6 +56,7 @@ do (for ch: private.upCase.range repeat
    (for i: 10 repeat true->private.digits['0'+i] for);
    true->private.blanks[sp+1]->private.blanks[cr+1]->private.blanks[nl+1]
      ->private.blanks[np+1]->private.blanks[ht+1]->private.blanks[vt+1];
+   
    (for ch: (128-33) repeat true->private.NonWhiteSpace[ch+33] for);
    <<SLOT betaenvbodyMDInitAscii: descriptor>>
 #)
@@ -69,7 +64,7 @@ do (for ch: private.upCase.range repeat
 --- betaenvAsciiUpCase: dopart ---
 do private.upCase[value+1]->value 
    
---- betaenvAsciiLowCase: dopart ---
+--- betaenvAsciiLowCase: dopart --- 
 do private.lowCase[value+1]->value 
    
 --- betaenvAsciiIsUpper: dopart ---
@@ -126,7 +121,7 @@ do 'getint: syntax error - looking at: '->msg.append;
     else
        '\''->msg.put; peek->msg.put; '\''->msg.putline
    if);
-   INNER syntaxError
+   INNER syntaxError  
 
 --- betaenvStreamPutInt: descriptor ---
 (# i, noOfSpaces: @integer; negative: @boolean; c: [20] @char; pad: @char;
@@ -140,7 +135,7 @@ do (if n=minInt then '8463847412          '->C; 10->i; true->negative
        	     i+1->i;
        	     (n mod 10)+'0'->c[i];
        	     n div 10->n;
-       	     restart loop
+       	     restart loop 
    if)if);
    (if (width-i->noOfspaces)<0 then 0->noOfspaces if);
    (if adjustLeft then
@@ -382,7 +377,7 @@ do less:
                   (if T1.T[i]<>T[i] then (T1.T[i]<T[i])->value; leave less if)
              for);
              (* T1 exhausted *)
-             true->value;
+             true->value; 
           //(T1.lgth>=lgth) then
              (for i: lgth repeat
                   (if T1.T[i]<>T[i] then (T1.T[i]<T[i])->value; leave less if)
@@ -503,144 +498,6 @@ TextErrorMsg:
      if)
   #)
 
---- betaenvStop: dopart ---
-do newLine; 
-   (if T[] <> NONE then T[]->putText; newline if);
-   <<SLOT betaenvbodyTerminateConsole: descriptor>>;
-   (if termCode
-    // normal  then 0->BetaExit
-    // failure then 16->BetaExit
-    // failureTrace then FailureExit
-    // dumpStack then DoDumpStack
-    else
-       'Stop: Unknown termCode: '->screen.puttext; termCode->screen.putint; screen.newline;
-   if)
-
---- LIB: attributes ---
-infinityReal: 
-  external
-  (* Returns the real value 'Infinity'. The C routine is defined in
-   * the file external/basicio.c
-   *)
-  (# r: @real
-  do 'infReal'->callC
-  exit r
-  #);
-Argc: External(# noOfArgs: @integer exit noOfArgs #);
-Argv: External
-  (# argNo: @integer;
-     theArg: [1]@char
-  enter argNo
-  do CallC
-  exit theArg
-  #);
-BetaExit: External(# status: @integer enter status do CallC #);
-FailureExit: External(# do CallC #);
-DoDumpStack: External(# do 'DumpStack' -> CallC #);
-
-(* In private/external/basicio.c: *)
-KeyboardEOS: External(# yes: @boolean do CallC exit yes #);
-PutToScreen: External(# ch: @char enter ch do CallC #);
-PutTextToScreen: External(# str: @integer enter str #);
-KeyboardPeek: External(# ch: @char do CallC exit ch #);
-GetFromKeyboard: External(# ch: @char do CallC exit ch #);
-
-(* Default stdout/stdin implementations of screen and keyboard
- * using external functions in basicio.c.
- *)
-DefaultScreen: Stream
-  (# Eos::< 
-       (# do true->value #); 
-     OtherError::< 
-       (# do 'Screen error'->msg.puttext #);
-     Get::< 
-       (# do 'Warning: attempt to Get from the Screen' -> screen.putline; #);
-     Put::< 
-       (# do ch->PutToScreen; #);
-     PutText::< 
-       (# 
-       do (if txt.lgth > 0 then
-              (if txt.lgth < txt.T.range then 0 -> txt.T[txt.lgth+1] if);
-              @@txt.T[1]->PutTextToScreen;
-          if)
-       #);
-  #);
-DefaultKeyBoard: Stream
-  (# Eos::<
-       (# do KeyboardEOS->value #);
-     OtherError::< 
-       (# do 'Keyboard error'->msg.puttext #);
-     Put::< 
-       (# do 'Warning: attempt to Put to the Keyboard' -> screen.putline; #);
-     Get::<
-       (# do GetFromKeyboard->ch #);
-     GetAtom::<
-       (# 
-       do skipBlanks:
-            (if KeyboardPeek->ascii.isWhiteSpace then
-                GetFromKeyboard; restart skipBlanks 
-            if);
-          scan:
-            (if KeyBoardEOS then
-                (* premature end - stop here *)
-             else 
-                (if not (KeyboardPeek->ascii.isWhiteSpace) then
-                    (* atom not yet complete *)
-                    (if (txt.pos+1->txt.pos) > txt.T.range then 
-                        txt.T.range+16->txt.T.extend 
-                    if);
-                    GetFromKeyboard->txt.T[txt.pos]; 
-                    txt.lgth+1->txt.lgth;
-                    restart scan
-                if)
-            if);
-       #);
-     GetLine::<
-       (# 
-       do scan:
-            (if KeyboardPeek=ascii.newline then
-                (* eat the newline *)
-                GetFromKeyboard
-             else
-                (* more to come *)
-                (if KeyboardEOS then
-                    (* premature end - stop here *)
-                    missing_newline;
-                 else
-                    (if (txt.pos+1->txt.pos) > txt.T.range then 
-                        txt.T.range+16->txt.T.extend 
-                    if);
-                    GetFromKeyboard->txt.T[txt.pos]; 
-                    txt.lgth+1->txt.lgth;
-                    restart scan
-                if)
-            if)
-       #);
-     Peek::<
-       (# do KeyboardPeek->ch #);
-  #);
-
-trace_exceptions: (# exit false #);
-
-doContinue: (# exit 1 #);
-doRetry: (# exit 2 #);
-doPropagate: (# exit 3 #);
-doAbort: (# exit 4 #);
-
-find_activation: external
-  (# proto, startObj, theObj: @integer;
-  enter (proto, startObj)
-  exit theObj
-  #);
-
-UseOldExceptions: (# exit true #);
-SetupExceptions: 
-  (#
-  do (if not UseOldExceptions then
-         runtimeExceptionHandler##->InstallSystemExceptionHandler;
-     if);
-  #);
-
 --BetaEnvCstructChk: DoPart--
 do (if ((inx<0) or (R.range*4<inx)) then inx->BoundsExceeded if)
    
@@ -659,6 +516,7 @@ do 'Index error in cStruct: ' -> msg.putline;
 --- betaenvObjectPoolPrivate: descriptor ---
 (# elm: (# type: ##object; obj: ^object#);
    table: [2] ^elm; top: @integer;
+   
    insert: @
      (# e: ^elm; obj: ^Object; type: ##Object
      enter (obj[], type##)
@@ -690,7 +548,9 @@ do get:
             for)
         if);
         (* not found *)
+        
         (&type[]->obj[], type##)->private.insert;
+        
         init
      #);
    INNER get
@@ -714,7 +574,9 @@ do strucGet:
         if);
         (* not found *)
         &type[]->obj[];
+        
         (obj[], type##)->private.insert;
+        
         init
      #);
    INNER strucGet
@@ -771,328 +633,8 @@ do INNER put;
             for)
         if);
         (* not found *)
+        
         (obj[], obj##)->private.insert
+        
      #)
 #)
-
---- betaenv_state:doPart ---
-do (# R: ^object;
-      A,B,P: @integer
-   do this(object)[] -> R[];
-      (%getLongAt @@S) -> A; (* address of S *)
-      (* copy prototype *)
-      (%getLongAt (A+12)) -> P; (* the prototype of S*)
-      (%getLongAt @@R) -> B; (* address of R*)
-      (P+24) %putLongAt (B); (* with COM prototypes, point to the VDT*)
-      (* copy origin *)
-      (%getLongAt (A+8)) -> P; 
-      (*(P) %putLongAt (B+8);*)
-   #)
- 
---- betaenvInfReal: dopart ---
-do infinityReal->value
-   
---- betaenvDoGC: dopart ---
-do TOS'DoGC'
-   
---- betaenvPrivate: descriptor ---
-(#
-   tryList: @
-     (# storage: [20] ^try;
-        top: @integer;
-        prepend: 
-          (# t: ^try;
-          enter t[]
-          do top+1->top;
-             (if top > storage.range then
-                 storage.range->storage.extend;
-             if);
-             t[]->storage[top][];
-          #);
-        scan:
-          (# current: ^try;
-             i: @integer;
-             oldtop: @integer;
-          do top->oldtop;
-             L: 
-               (# 
-               do (for i:oldtop repeat
-                       storage[oldtop-i+1][]->current[];
-                       INNER scan;
-                  for);
-               #);
-          #);
-        head:
-          (# t: ^try
-          do (if top > 0 then 
-                 storage[top][]->t[];
-              else
-                 NONE->t[];
-             if);
-          exit t[]
-          #);
-        succ:
-          (# t1, t2: ^try;
-             i: @integer;
-          enter t1[]
-          do NONE->t2[];
-             L: (#
-                do (if i = top then
-                       NONE->t2[];
-                       leave L;
-                   if);
-                   (if t1[] = storage[top-i][] then
-                       (if i = top-1 then 
-                           NONE->t2[];
-                        else
-                           storage[top-i-1][]->t2[];
-                       if);
-                       leave L;
-                    else
-                       i+1->i;
-                       restart L;
-                   if);
-                #);
-          exit t2[]
-          #);
-        delete:
-          (# t: ^try;
-             i, j: @integer;
-          enter t[]
-          do L1: 
-               (#
-               do (if t[] = storage[top-i][] then
-                      NONE->storage[top-i][];
-                      leave L1;
-                   else
-                      i+1->i;
-                      restart L1;
-                  if);
-               #);
-             (if storage[top-i][] = NONE then
-                 top-i->i;
-                 (for j:top repeat
-                      storage[i+j-1][]->storage[i+j][];
-                      i+1->i;
-                 for);
-                 NONE->storage[top][];
-                 top-1->top;
-             if);
-          #);
-     #);
-#)
-
---- exceptionMain: dopart ---
-do INNER exception;
-   (if not continue and not propagate then       
-       (if UseOldExceptions then
-           failureTrace->termCode;
-           '*** Exception processing\n'->msg.prepend;
-           (termCode, msg[])->stop;
-        else
-           (* throw this static exception object
-            * as a dynamic exception
-            *)
-           (if this(exception)##=unknown## then
-               (failureTrace,msg[])->stop
-            else
-               this(exception)[]->throw;
-           if)
-       if);
-   if);
-   
---- exceptTryHandlerWhenContinue: dopart ---
-do doContinue->this(handler).status
-
---- exceptTryHandlerWhenRetry: dopart ---
-do doRetry->this(handler).status
-
---- exceptTryHandlerWhenPropagate: dopart ---
-do doPropagate->this(handler).status
-   
---- exceptTryHandlerWhenAbort: dopart ---
-do doAbort->this(handler).status
-   
---- exceptTryHandlerWhen: descriptor ---
-(#
-do (if this(handler).current##<=type## then
-       this(handler).current[]->current[];
-       (if predicate##<booleanValue## then
-           (* predicate further bound *)
-           (if predicate then 
-               INNER when 
-           if)
-        else
-           INNER when
-       if);
-       private.leaveHandler
-   if)
-#)
---- exceptTryHandlerPrivate: descriptor ---
-(# leaveHandler: ^object #)
-
---- exceptTryPrivate: descriptor ---
-(# abortBlock,retryBlock: ^object;
-   theHandler: @handler
-#)
-
---- exceptTryHandle: descriptor ---
-(# 
-do doPropagate->status;
-   handleBlock: 
-     (# dummy: @char;
-     do &(# do leave handleBlock #)[]
-          ->private.leaveHandler[];
-        INNER handler
-     #)
-#)
-
---- exceptTry: dopart ---
-do this(try)[]->betaenvPrivate.tryList.prepend;
-   tryBlock:
-     (# dummy: @char;
-     do &(# dummy: @char; do leave tryBlock #)[]->private.abortBlock[];
-        &(# dummy: @char; do restart tryBlock #)[]->private.retryBlock[];
-        INNER try;
-     #);
-   betaenvPrivate.tryList.head->betaenvPrivate.tryList.delete;
-   
---- exceptThrowPrivate: descriptor ---
-(# handler: ^try;
-   t: ^text; 
-   proto: @prototype; 
-   raise: ^exception; 
-   unknownEx: ^unknown;
-   l: ^try;
-   e: ^exception;
-#)
-
---- exceptThrow: dopart ---
-do betaenvPrivate.tryList.head->private.l[];
-   current##->getProtoTypeForStruc->private.proto;
-   (if trace_exceptions then
-       '\t\t\t\t***Throwing '->puttext;
-       private.proto.labid->puttext; '***'->putline;
-   if);
-   
-   (if current[] <> NONE then current[]->private.e[] if);
-   
-   (* Find the right try block *)
-   (# proto, obj: @integer;
-   do try##->getProtoTypeForStruc->proto;
-      (# dummy: @char do (proto, 0)->find_activation->obj #);
-      (if obj <> 0 then
-          obj->addressToObject->private.handler[];
-       else
-          NONE->private.handler[];
-      if);
-   #);
-   (if trace_exceptions then
-       (if private.handler[] <> NONE then 
-           'found try block'->putline; 
-        else 
-           'did not find try block'->putline;
-       if);
-   if);
-   
-   throwing:
-     (if private.handler[] = NONE then
-	 (if current##<=unknown## then
-             (if trace_exceptions then
-                 '\t\t\t\t***Exception "Unknown" not handled'->putline;
-             if);
-             current[]->private.raise[];
-             '**** Exception "Unknown" not handled\n'
-               ->private.raise.msg.prepend;
-             private.raise
-          else
-	     (if trace_exceptions then
-                 '\t\t\t\t***Exception not handled" - converted to "Unknown"'
-                   ->putline;
-             if);
-	     '**** Dynamic exception: '->private.t[];
-	     current##->getProtoTypeForStruc->private.proto;
-             private.proto.labid->private.t.putline;
-	     '     converted to the exception "unknown"'->private.t.puttext;
-	     &unknown[]->private.unknownEx[];
-	     private.t[]->private.unknownEx.msg.append;
-             '\n**** Original Exception message:\n'
-               ->private.unknownEx.msg.append;
-             private.e.msg[]->private.unknownEx.msg.append;
-	     current[]->private.unknownEx.original[];
-	     private.unknownEx;
-	 if)
-      else
-	 (if current[]->private.handler.private.theHandler
-	  // doContinue then
-	     (if trace_exceptions then
-                 '\t\t\t\t***Continuing '->puttext;
-                 private.handler.name->puttext;
-	         '***'->putline;
-             if);
-	  // doRetry then
-	     (if trace_exceptions then
-                 '\t\t\t\t***Retrying '->puttext;
-                 private.handler.name->puttext;
-	         '***'->putline;
-             if);
-	     ll: betaenvPrivate.tryList.scan
-	       (# 
-	       do current.finally;
-                  (if current[]=private.l[] then
-		      leave ll
-		   else 
-                      current[]->betaenvPrivate.tryList.delete
-		  if)
-               #);
-	     private.handler.private.retryBlock;
-	  // doPropagate then
-	     current##->getProtoTypeForStruc->private.proto;
-	     (if trace_exceptions then
-                 '\t\t\t\t***Propagating '->puttext;
-                 private.proto.labid->puttext;
-	         ' from '->puttext; 
-                 private.handler.name->puttext;
-	         '***'->putline;
-             if);
-	     private.l[]->betaenvPrivate.tryList.succ->private.l[];
-             (* Find the next try block *)
-             (# proto, obj: @integer;
-             do try##->getProtoTypeForStruc->proto;
-                (proto, %getLongAt(@@private.handler))
-                  ->find_activation
-                  ->obj;
-                (if obj <> 0 then
-                    obj->addressToObject->private.handler[];
-                 else
-                    NONE->private.handler[];
-                if);
-             #);
-             (if trace_exceptions then
-                 (if private.handler[] <> NONE then
-                     'Found try block to propagate to'->putline;
-                  else
-                     'Found no try block to propagate to'->putline;
-                 if);
-             if);
-	     restart throwing;
-	  // doAbort then
-	     (if trace_exceptions then
-                 '\t\t\t\t***Aborting '->puttext; private.handler.name
-                   ->puttext;
-	         '***'->putline;
-             if);
-	     ll: betaenvPrivate.tryList.scan
-	       (# temp: ^try;
-	       do current[]->temp[];
-                  (if current[]=private.l[] then
-                      temp.finally;
-		      leave ll
-		   else 
-                      temp.finally;
-                      current[]->betaenvprivate.tryList.delete
-		  if)
-	       #);
-	     private.handler.private.abortBlock;
-	 if)
-     if)
