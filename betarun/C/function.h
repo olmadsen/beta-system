@@ -220,6 +220,7 @@ extern ValRep * LVRAXAlloc(ProtoType *, long, long);
 /* GC/misc.c */
 extern void assignRef(long *theCell, Item * newObject);
 #ifdef RTDEBUG
+void PrintWhichHeap(Object *ref);
 extern void Illegal(void);
 #endif
 extern long inBetaHeap(Object *);

@@ -1282,14 +1282,7 @@ void PrintRef(Object * ref)
       }
     } else {
       fprintf(output, ", is NOT object");
-      if (inBetaHeap(ref)){
-	if (inIOA(ref)) 
-	  fprintf(output, " (is in IOA)");
-	if (inAOA(ref)) 
-	  fprintf(output, " (in in AOA)");
-	if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
-	  fprintf(output, " (is in ToSpace!)");
-      }
+      PrintWhichHeap(ref);
     }
   }
   fprintf(output, "\n");
@@ -1451,16 +1444,7 @@ void PrintRef(Object * ref)
 		getLabel((long*)ref),
 		(int)labelOffset);
       } else {
-	if (inBetaHeap(ref)){
-	  if (inIOA(ref)) 
-	    fprintf(output, " (is in IOA)");
-	  if (inAOA(ref)) 
-	    fprintf(output, " (in in AOA)");
-	  if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
-	    fprintf(output, " (is in ToSpace!)");
-	} else {
-	  fprintf(output, " (not in beta heap and not code)");
-	}
+	PrintWhichHeap(ref);
       }
     }
   }

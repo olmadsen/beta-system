@@ -182,15 +182,8 @@ static int AOAtoIOAInsertImpl(Object **theCell)
       fprintf(output, 
 	      "AOAtoIOAInsert: the cell 0x%x is not in AOA! ", 
 	      (int)theCell);
-      if (inBetaHeap((Object*)theCell)){
-	if (inIOA(theCell)) 
-	  fprintf(output, " (is in IOA)");
-	if (inAOA(theCell)) 
-	  fprintf(output, " (in in AOA)");
-	if (ToSpace<=(long*)theCell && (long*)theCell<ToSpaceLimit)
-	  fprintf(output, " (is in ToSpace!)");
-      }
-      fprintf(output, "\n\n");
+      PrintWhichHeap((Object*)theCell);
+      fprintf(output, "\n");
       Illegal(); /* useful to break in */
     });
 

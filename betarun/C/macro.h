@@ -135,7 +135,7 @@ do {                               \
 #define isEnd(gcattr) (gcattr == LISTEND)
 
 #define isAutonomous(gc)   ((IOAMinAge <= (gc)) && ((gc) <= IOAMaxAge))
-#define isStatic(gc)       (-0xFFFF <= (gc)) && ((gc) <= -1)
+#define isStatic(gc)       ((-0xFFFF <= (gc)) && ((gc) <= -1))
 #define isForward(gc)      ((gc) > IOAMaxAge )
 
 #define isValRep(x)      (((long)(DoubleRepPTValue) <= (long)((x)->Proto))\

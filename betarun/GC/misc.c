@@ -518,6 +518,25 @@ void NotifyRTDebug()
 
 #ifdef RTDEBUG
 
+void PrintWhichHeap(Object *ref)
+{
+  if (inBetaHeap(ref)){
+    if (inIOA(ref)) 
+      fprintf(output, " (IOA)");
+    if (inAOA(ref)) 
+      fprintf(output, " (AOA)");
+    if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
+      fprintf(output, " (ToSpace area)");
+  } else {
+    if (ref){
+      fprintf(output, " (not in beta heap)");
+    } else {
+      fprintf(output, " (NONE)");
+    }
+  }
+  fprintf(output, "\n");
+}
+
 void PrintHeap(long * startaddr, long numlongs)
 { 
   int i;
@@ -533,17 +552,8 @@ void PrintHeap(long * startaddr, long numlongs)
 	  (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
   fprintf(output, "\nDisplaying %d longs starting from address 0x%x",
 	  (int)numlongs, (int)startaddr);
-  if (inBetaHeap(ref)){
-    if (inIOA(ref)) 
-      fprintf(output, " (IOA)");
-    if (inAOA(ref)) 
-      fprintf(output, " (AOA)");
-    if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
-      fprintf(output, " (ToSpace)");
-  } else {
-    fprintf(output, " (not in beta heap)");
-  }
-  fprintf(output, ":\n\n");
+  PrintWhichHeap(ref);
+  fprintf(output, ":\n");
 
   for (i=0; i<numlongs; i++){
     fprintf(output, 
@@ -552,21 +562,7 @@ void PrintHeap(long * startaddr, long numlongs)
 	    (int)(startaddr+i), 
 	    (int)(*(startaddr+i)));
     ref=(Object *)(*(startaddr+i));
-    if (inBetaHeap(ref)){
-      if (inIOA(ref)) 
-	fprintf(output, " (IOA)");
-      if (inAOA(ref)) 
-	fprintf(output, " (AOA)");
-      if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
-	fprintf(output, " (ToSpace)");
-    } else {
-      if (ref){
-	fprintf(output, " (not in beta heap)");
-      } else {
-	fprintf(output, " (NONE)");
-      }
-    }
-    fprintf(output, "\n");
+    PrintWhichHeap(ref);
   }
   fprintf(output, "\n");
 

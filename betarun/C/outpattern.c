@@ -1042,13 +1042,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 	      "  Current object (0x%x) is damaged",
 	      (int)theObj
 	      );
-      if (inIOA(theObj))
-	fprintf(output, " (is in IOA)");
-      if (inAOA(theObj)) 
-	fprintf(output, " (is in AOA)");
-      if (ToSpace<=(long*)theObj && (long*)theObj<ToSpaceLimit)
-	fprintf(output, " (is in ToSpace!)");
-      fprintf(output, ".\n");
+      PrintWhichHeap(theObj);
       fflush(output);
 #if 1
       DEBUG_CODE({
