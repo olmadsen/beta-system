@@ -83,7 +83,7 @@ static void RepCopy(dst, src)
   long size = DispatchValRepSize(src->Proto, src->HighBorder-src->LowBorder+1)
     / sizeof(long);
   long i, *d = (long *) dst, *s = (long *) src;
-  Claim( dst!=src, "RepCopy: dst!=src");
+  DEBUG_LVRA(Claim( dst!=src, "RepCopy: dst!=src"));
   for (i = 0; i < size; ++i) *d++ = *s++;
 }
 
