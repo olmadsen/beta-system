@@ -88,6 +88,8 @@ static void BooleanProperty(char *name)
 #endif
 
   ENTRY("infos", isStatRecordOn = TRUE);
+  ENTRY("nocatch", NoCatchException = TRUE);
+  ENTRY("nocatchexception", NoCatchException = TRUE);
 
   /* IF NO ENTRY IS SELECTED REPORT UNKNOWN PROPERTY */
   { char buf[100];

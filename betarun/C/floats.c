@@ -17,13 +17,14 @@
 #endif
 
 #ifdef nti_ms
+#include <float.h>
 #define FPU_ZERODIVISION  _EM_ZERODIVIDE
 #define FPU_INVALID       _EM_INVALID
 #define FPU_DENORMALIZED  _EM_DENORMAL
 #define FPU_OVERFLOW      _EM_OVERFLOW
 #define FPU_UNDERFLOW     _EM_UNDERFLOW
 #define FPU_PRECISIONLOST _EM_INEXACT
-#define EnableFPUexceptions(mask) _controlfp((mask), _MCW_EM)
+#define EnableFPUexceptions(mask) _controlfp(~(mask), _MCW_EM)
 #endif /* nti_ms */
 
 #ifdef nti_bor
@@ -34,6 +35,7 @@
  * at run time.
  */
 #include <stdlib.h>
+#include <float.h>
 #pragma extref _floatconvert
 #define FPU_ZERODIVISION  EM_ZERODIVIDE
 #define FPU_INVALID       EM_INVALID
@@ -41,7 +43,7 @@
 #define FPU_OVERFLOW      EM_OVERFLOW
 #define FPU_UNDERFLOW     EM_UNDERFLOW
 #define FPU_PRECISIONLOST EM_INEXACT
-#define EnableFPUexceptions(mask) _control87((mask), MCW_EM)
+#define EnableFPUexceptions(mask) _control87(~(mask), MCW_EM)
 #endif
 
 #ifdef sun4s

@@ -1003,18 +1003,18 @@ void CompleteScavenging()
     theObj = (ref(Object)) HandledInToSpace;
     HandledInToSpace = (ptr(long)) (((long) HandledInToSpace)
 				    + 4*ObjectSize(theObj));
-    fprintf(output, 
-	    "CompleteScavenging#%d: theObj=0x%x, proto=0x%x, size=0x%x\n", 
-	    NumCompleteScavenging,
-	    (int)theObj, 
-	    (int)theObj->Proto,
-	    (int)(4*ObjectSize(theObj))
-	    );
-    fprintf(output, 
-	    "CompleteScavenging#%d: HandledInToSpace=0x%x\n",
-	    NumCompleteScavenging,
-	    (int)HandledInToSpace);
-
+    DEBUG_CODE(fprintf(output, 
+		       "CompleteScavenging#%d: theObj=0x%x, proto=0x%x, size=0x%x\n", 
+		       NumCompleteScavenging,
+		       (int)theObj, 
+		       (int)theObj->Proto,
+		       (int)(4*ObjectSize(theObj))
+		       ));
+    DEBUG_CODE(fprintf(output, 
+		       "CompleteScavenging#%d: HandledInToSpace=0x%x\n",
+		       NumCompleteScavenging,
+		       (int)HandledInToSpace));
+    
     DEBUG_CODE(Claim(ObjectSize(theObj)>0, "CompleteScavenging: ObjectSize(theObj)>0"));
     ProcessObject( theObj);
   }

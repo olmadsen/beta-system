@@ -220,7 +220,11 @@ void Initialize()
   setbuf(stderr,0);
 #endif
 
-  SetupBetaSignalHandlers();
+  if (NoCatchException) {
+    DEBUG_CODE(fprintf(output, "Signal Handlers Disabled\n"));
+  } else { 
+    SetupBetaSignalHandlers();
+  }
 
   SetupFPU();
 

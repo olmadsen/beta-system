@@ -384,6 +384,8 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
   long todo = 0;
   long sig;
 
+  if (NoCatchException) return EXCEPTION_CONTINUE_SEARCH;
+
   SavedExceptRec =  *(lpEP)->ExceptionRecord;  
   SavedContextRec = *(lpEP)->ContextRecord;
   
@@ -461,7 +463,7 @@ void beta_main(void (*AttBC)(struct Component *), struct Component *comp)
       /* Start BETA execution */
       AttBC(comp);
     }
-  __except ( BetaSignalHandler( GetExceptionInformation()))
+  __except ( BetaSignalHandler(GetExceptionInformation()))
     {
     }
 }
