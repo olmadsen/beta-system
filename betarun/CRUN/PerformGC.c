@@ -60,7 +60,7 @@ asmlabel(DoGC,
 	 "ba     doGC\n"
          "clr    [%g1+%lo(ReqObjectSize)]\n");
 #else
-asmlabel(_DoGC,
+asmlabel(DoGC,
 	 "sethi  %hi(_ReqObjectSize),%g1\n"
 	 "ba     _doGC\n"
          "clr    [%g1+%lo(_ReqObjectSize)]\n");
