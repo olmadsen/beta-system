@@ -8,6 +8,8 @@ MAIL="/usr/lib/sendmail -t"
 TMPFILE=/tmp/$APPLICATION.$$
 ERRFILE=/tmp/$APPLICATION.ERR.$$
 
+TODAY="`date +%y%m%d`"
+
 if [ "$MACHINETYPE" = "SGI" ]
 then
   LD_LIBRARY_PATH=${LOCATION}:${LD_LIBRARY_PATH}
@@ -30,7 +32,8 @@ fi
 if [ -f "$EXECNAME".dump ]
 then
         # rm failed
-        /bin/mv -f "$EXECNAME".dump /tmp
+#        /bin/mv -f "$EXECNAME".dump /tmp
+    echo "old dumpfile: $EXECNAME.dump could not be removed"
 fi
 
 if [  "$BETASTAT" = "yes" -a -w $STATFILE ] 
@@ -49,6 +52,7 @@ fi; \
 exit 0\
 " 2
 
+touch $ERRFILE
 if [ -w $ERRFILE ] 
 then
 	$LOCATION/$EXECNAME $* 2>$ERRFILE
@@ -108,17 +112,48 @@ INTERRUPT)
 
 *)
 
+if [ "$BETAREPORT" = "yes" ]
+then
+    if  [ "$BETAREPORT_WWW" = "yes" ]
+    then
+	if [ ! -w $TOOLCOUNTER ]
+	then
+	    touch $TOOLCOUNTER
+	    REPORTNO=1
+	    PREV=0
+	    NEXT=2
+	    cat > $TOOLCOUNTER <<EOF
+$REPORTNO
+EOF
+	else
+	    read REPORTNO < $TOOLCOUNTER
+	    REPORTNO=`expr $REPORTNO + 1`
+	    PREV=`expr $REPORTNO - 1`
+	    NEXT=`expr $REPORTNO + 1`
+	    cat > $TOOLCOUNTER <<EOF
+$REPORTNO
+EOF
+	fi
+    fi
+fi
+
 if [ "$BETASTAT" = "yes" ]
 then
-       # error!
-        magic="`whoami` | $MACHINETYPE | `hostname` | `date` | $$ | $*"
-        if [ -w $STATFILE ]
-        then
-        echo 'fatal:' $magic >> $STATFILE
-        fi
+    # error!
+    if [ "$BETAREPORT_WWW" = "yes" ]
+    then
+	magic="`whoami` | $MACHINETYPE | `hostname` | `date` | $$ | $* $REPORTNO"
+    else
+	magic="`whoami` | $MACHINETYPE | `hostname` | `date` | $$ | $*"
+    fi
+    if [ -w $STATFILE ]
+    then
+	echo 'fatal:' $magic >> $STATFILE
+    fi
 fi
 
 trap "" 2
+
 if [ -w $ERRFILE ] 
 then 
 	cat $ERRFILE
@@ -126,7 +161,7 @@ fi
  
 if [ "$BETAREPORT" = "yes" ]
 then
-        echo BETALIB="$BETALIB"  > $TMPFILE
+        echo BETALIB="$BETALIB" > $TMPFILE
         echo LOCATION=$LOCATION >> $TMPFILE
         echo EXECNAME=$EXECNAME >> $TMPFILE
         echo "$magic" >> $TMPFILE
@@ -144,28 +179,55 @@ then
         echo "----------"  >> $TMPFILE
         if [ -f "$EXECNAME".dump ]
         then
-          dump="`pwd`/$EXECNAME".dump
-          ls -l $dump                      >> $TMPFILE
-          echo ""                          >> $TMPFILE
-          cat "$EXECNAME".dump | head -500    >> $TMPFILE
+	    dump="`pwd`/$EXECNAME".dump
+
+	    if  [ "$BETAREPORT_WWW" = "yes" ]
+	    then
+		if [ -w $TOOLINDEX ]
+		then
+		    LINE1=`head -1 "$EXECNAME".dump  | sed -e 's/</\&lt;/g' -e 's/>/\&gt;/g'`
+		    LINE5=`head -5 "$EXECNAME".dump | tail -1 | sed -e 's/</\&lt;/g' -e 's/>/\&gt;/g' `
+		    echo LINE
+		    echo '<br><a href="http:'$TODAY'.'$REPORTNO'.html"> '$TODAY'.'$REPORTNO '</a><br>' $LINE1 '<br>' $LINE5 '<br>' >>$TOOLINDEX
+
+		fi
+	    fi
+
+	    ls -l $dump                      >> $TMPFILE
+	    echo ""                          >> $TMPFILE
+	    cat "$EXECNAME".dump | head -500    >> $TMPFILE
         else
-          echo "(no dumpfile)"             >> $TMPFILE
-	  if [ -w $ERRFILE ] 
-	  then 
-	    cat $ERRFILE  | head -500 >> $TMPFILE
-          fi
+	    echo "(no dumpfile)"             >> $TMPFILE
+	    if [ -w $ERRFILE ] 
+	    then 
+		cat $ERRFILE  | head -500 >> $TMPFILE
+	    fi
         fi
         echo "----------"                  >> $TMPFILE
-        echo Sending error report to $TO with Cc to $CC
+	if  [ "$BETAREPORT_EMAIL" = "yes" ]
+	then
+	    echo Sending error report to $TO with Cc to $CC
         (echo To: ${TO}; echo Cc: ${CC}; echo Subject: Automatic "$APPLICATION" error report; \
          echo "";                                                    \
          cat $TMPFILE;                                  \
          ) | ${MAIL}
+	fi
+
+	if  [ "$BETAREPORT_WWW" = "yes" ]
+	then
+	    REPORTFILE="$REPORTDIR"/"$TODAY"."$REPORTNO".html
+	    touch $REPORTFILE
+            chmod a+r $REPORTFILE
+            chmod a+w $REPORTFILE
+
+	    echo '<title>' $TODAY"."$REPORTNO '</title>' '<br><a href="http:'$TODAY'.'$PREV.html'"> 'Previous'</a>' '<a href="http:'$TODAY'.'$NEXT.html'"> 'Next'</a>' '<a href="http:index.html">Overview</a><pre>' > $REPORTFILE 
+
+	    cat $TMPFILE | sed -e 's/</\&lt;/g' -e 's/>/\&gt;/g'  >> $REPORTFILE 
+	    # to substitute < and > with &lt; and &gt; resp.
+	fi
         rm -f $TMPFILE
 fi
 
 rm -f $ERRFILE
 
 esac
-
-  
