@@ -14,7 +14,7 @@ void ExtVR1(struct Object *theObj,
 {
     struct ValRep * theRep;
     struct ValRep * newRep=NULL;
-    long range; /* range of old repetition */
+    long oldRange; /* range of old repetition */
     long newRange; /* Range of new repetition */
     long copyRange; /* Number of LONGS to copy from old rep */
     long i;
@@ -25,12 +25,12 @@ void ExtVR1(struct Object *theObj,
     Ck(theObj);
     theRep = *(struct ValRep **)((long *) theObj + offset);
     Ck(theRep);
-    range = theRep->HighBorder;
-    newRange = range + add; /* Range of new repetition */
+    oldRange = theRep->HighBorder;
+    newRange = oldRange + add; /* Range of new repetition */
     
     if (newRange < 0) newRange = 0;
 
-    copyRange = (ByteRepBodySize((add < 0) ? newRange : range))>>2;
+    copyRange = (ByteRepBodySize((add < 0) ? newRange : oldRange))>>2;
     size = ByteRepSize(newRange);
       
     if (newRange > LARGE_REP_SIZE){
@@ -99,7 +99,7 @@ void ExtVR2(struct Object *theObj,
 {
     struct ValRep * theRep;
     struct ValRep * newRep=NULL;
-    long range; /* range of old repetition */
+    long oldRange; /* range of old repetition */
     long newRange; /* Range of new repetition */
     long copyRange; /* Number of LONGS to copy from old rep */
     long i;
@@ -110,12 +110,12 @@ void ExtVR2(struct Object *theObj,
     Ck(theObj);
     theRep = *(struct ValRep **)((long *) theObj + offset);
     Ck(theRep);
-    range = theRep->HighBorder;
-    newRange = range + add; /* Range of new repetition */
+    oldRange = theRep->HighBorder;
+    newRange = oldRange + add; /* Range of new repetition */
     
     if (newRange < 0) newRange = 0;
 
-    copyRange = (ShortRepBodySize((add < 0) ? newRange : range))>>2;
+    copyRange = (ShortRepBodySize((add < 0) ? newRange : oldRange))>>2;
     size = ShortRepSize(newRange);
       
     if (newRange > LARGE_REP_SIZE){
@@ -184,7 +184,7 @@ void ExtVR4(struct Object *theObj,
 {
     struct ValRep * theRep;
     struct ValRep * newRep=NULL;
-    long range; /* range of old repetition */
+    long oldRange; /* range of old repetition */
     long newRange; /* Range of new repetition */
     long copyRange; /* Number of LONGS to copy from old rep */
     long i;
@@ -195,12 +195,12 @@ void ExtVR4(struct Object *theObj,
     Ck(theObj);
     theRep = *(struct ValRep **)((long *) theObj + offset);
     Ck(theRep);
-    range = theRep->HighBorder;
-    newRange = range + add; /* Range of new repetition */
+    oldRange = theRep->HighBorder;
+    newRange = oldRange + add; /* Range of new repetition */
     
     if (newRange < 0) newRange = 0;
 
-    copyRange = LongRepBodySize((add < 0) ? newRange : range) >>2;
+    copyRange = LongRepBodySize((add < 0) ? newRange : oldRange) >>2;
     size = LongRepSize(newRange);
       
     if (newRange > LARGE_REP_SIZE){
@@ -269,7 +269,7 @@ void ExtVR8(struct Object *theObj,
 {
     struct ValRep * theRep;
     struct ValRep * newRep=NULL;
-    long range; /* range of old repetition */
+    long oldRange; /* range of old repetition */
     long newRange; /* Range of new repetition */
     long copyRange; /* Number of LONGS to copy from old rep */
     long i;
@@ -280,12 +280,12 @@ void ExtVR8(struct Object *theObj,
     Ck(theObj);
     theRep = *(struct ValRep **)((long *) theObj + offset);
     Ck(theRep);
-    range = theRep->HighBorder;
-    newRange = range + add; /* Range of new repetition */
+    oldRange = theRep->HighBorder;
+    newRange = oldRange + add; /* Range of new repetition */
     
     if (newRange < 0) newRange = 0;
 
-    copyRange = (DoubleRepBodySize((add < 0) ? newRange : range))>>2;
+    copyRange = (DoubleRepBodySize((add < 0) ? newRange : oldRange))>>2;
     size = DoubleRepSize(newRange);
       
     if (newRange > LARGE_REP_SIZE){
@@ -355,7 +355,7 @@ void ExtVRI(struct Object *theObj,
 {
   struct ObjectRep * theRep;
   struct ObjectRep * newRep=NULL;
-  long range; /* range of old repetition */
+  long oldRange; /* range of old repetition */
   long newRange; /* Range of new repetition */
   long copyRange; /* Number of LONGS to copy from old rep */
   long i;
@@ -365,12 +365,12 @@ void ExtVRI(struct Object *theObj,
   
   Ck(theObj);
   theRep = *(struct ObjectRep **)((long *) theObj + offset);
-  range = theRep->HighBorder;
-  newRange = range + add; /* Range of new repetition */
+  oldRange = theRep->HighBorder;
+  newRange = oldRange + add; /* Range of new repetition */
   
   if (newRange < 0) newRange = 0;
   
-  copyRange = DynObjectRepSize((add < 0) ? newRange : range) >> 2;
+  copyRange = DynObjectRepSize((add < 0) ? newRange : oldRange) >> 2;
   size = DynObjectRepSize(newRange);
   
   /* Allocate new repetition */
@@ -414,7 +414,7 @@ void ExtVRI(struct Object *theObj,
       item = AlloI((struct Object *)theRep->iOrigin, theRep->iProto, SP);
       pop(newRep);
       pop(theRep);
-      AssignReference((long *)((long)&newRep->Body + (range+add)*4), item);
+      AssignReference((long *)((long)&newRep->Body + (oldRange+add)*4), item);
     }
   }
   
@@ -430,7 +430,7 @@ void ExtVRC(struct Object *theObj,
 {
   struct ObjectRep * theRep;
   struct ObjectRep * newRep=NULL;
-  long range; /* range of old repetition */
+  long oldRange; /* range of old repetition */
   long newRange; /* Range of new repetition */
   long copyRange; /* Number of LONGS to copy from old rep */
   long i;
@@ -440,12 +440,12 @@ void ExtVRC(struct Object *theObj,
   
   Ck(theObj);
   theRep = *(struct ObjectRep **)((long *) theObj + offset);
-  range = theRep->HighBorder;
-  newRange = range + add; /* Range of new repetition */
+  oldRange = theRep->HighBorder;
+  newRange = oldRange + add; /* Range of new repetition */
   
   if (newRange < 0) newRange = 0;
   
-  copyRange = DynObjectRepSize((add < 0) ? newRange : range) >> 2;
+  copyRange = DynObjectRepSize((add < 0) ? newRange : oldRange) >> 2;
   size = DynObjectRepSize(newRange);
   
   /* Allocate new repetition */
@@ -489,7 +489,7 @@ void ExtVRC(struct Object *theObj,
       comp = AlloC((struct Object *)theRep->iOrigin, theRep->iProto, SP);
       pop(newRep);
       pop(theRep);
-      AssignReference((long *)((long)&newRep->Body + (range+add)*4), (struct Item *)comp);
+      AssignReference((long *)((long)&newRep->Body + (oldRange+add)*4), (struct Item *)comp);
     }
   }
   
