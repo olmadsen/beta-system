@@ -29,7 +29,7 @@ char *IOAalloc(unsigned size)
   
 #ifdef MT
   /* Manipulate thread specific IOA */
-  if (do_unconditional_gc || ((char *)IOATop+size >= (char *)IOALimit)){
+  if (do_unconditional_gc || ((char *)IOATop+size > (char *)IOALimit)){
     return (char *)doGC(size);
   }
   p = (char *)IOATop;
@@ -42,7 +42,7 @@ char *IOAalloc(unsigned size)
     ReqObjectSize = size / 4;
     doGC();
   }
-  while ((char *)GLOBAL_IOATop+size >= (char *)GLOBAL_IOALimit) {
+  while ((char *)GLOBAL_IOATop+size > (char *)GLOBAL_IOALimit) {
     ReqObjectSize = size / 4;
     doGC();
   } 
