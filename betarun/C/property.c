@@ -16,7 +16,11 @@
 #include <CType.h>
 #endif
 
-static long intScan(), CmpStr();
+#ifndef DEMO
+static long intScan();
+#endif /* !DEMO */
+
+static long CmpStr();
 
 /* 
  * If you want to add properties, change BooleanProperty or ValueProperty. 
@@ -164,6 +168,7 @@ static ValueProperty( name, value)
 /* PRIVATE PART ---- don't change below ---- PRIVATE PART */
 /**********************************************************/
 
+#ifndef DEMO
 static long intScan( name, value)
   char *name, *value;
 {
@@ -182,6 +187,7 @@ static long intScan( name, value)
   }
   return result;
 }
+#endif /* !DEMO */
 
 /* Compare two null terminated strings. s2 points to constant in lower case */
 static long CmpStr( s1, s2)
