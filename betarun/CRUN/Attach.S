@@ -353,9 +353,18 @@ ExitO
 	COMB,<>	CA,TH,Lnotthis
 	NOP
 	;--- exitObj == this
+	LDO	-4(RSP),RSP		;drop the ref off RefStack
 	BV	%r0(OR)
-	NOP
+	COPY	CA,TH
 Lnotthis				;doesn't handle components yet...
+	COPY	RSP,%r1
+Lbitnotset
+	LDWS,MA	-4(%r1),%r31
+	BB,>=	%r31,31,Lbitnotset	;loop if bit 0 is 0
+	DEPI	0,31,1,%r31		;zero bit 0
+	COMB,<>	CA,%r31,Lbitnotset	;loop if it's not == exitObj
+	NOP
+	COPY	%r1,RSP
 	LDWX	D0 (CA),%r30		;the old sp is magically saved here
 	BV	%r0(OR)
 	COPY	CA,TH			;correct "this" reference
