@@ -811,6 +811,7 @@ void ProcessHPPAStackObj(StackObject *sObj, CellProcessFunc func)
 #ifdef sparc
 #include "../CRUN/crun.h"
 
+#if 0
 void stack_dummy() {
   USE();
   if (0) {
@@ -819,6 +820,7 @@ void stack_dummy() {
     IOAalloc(0);
   }
 }
+#endif
 
 static long skipCparams;
 

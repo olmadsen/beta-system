@@ -63,26 +63,6 @@ extern long              geS() __asm__("geS");
 extern long              ltS() __asm__("ltS");
 #endif
 
-#if 0
-  static void and not referenced fromn this file???
-#ifdef MAC
-static void 
-#else
-static void 
-#endif
-AssignReference(long *theCell, Item * newObject)
-{
-  *(Item **)theCell = newObject;
-  if (! inIOA(theCell) /* inAOA? */&& inIOA(newObject)){
-#ifdef MT
-    MT_AOAtoIOAInsert((Object **)theCell);
-#else /* MT */
-    AOAtoIOAInsert((Object **)theCell);
-#endif /* MT */
-  }
-}
-#endif
-
 /* inline version of memcpy; works only for 4 byte aligned */
 #define MEMCPY(dst,src,bytesize)            \
 {  register long i;                         \

@@ -28,7 +28,6 @@
 /* LOCAL FUNTIONS */
 static void ProcessAOAReference(Object ** theCell, long refType);
 static void ProcessAOAObject(Object * theObj);
-static void DoAOACell(Object **theCell,Object *theObj);
 
 #ifdef RTDEBUG
 static void IOACheckPrintTheObj(Object *theObj);
@@ -537,49 +536,6 @@ void DoStackCell(Object **theCell,Object *theObj)
   }
 }
 
-/* DoAOACell:
- *  Used to process stackobject in AOA.
- */
-static void DoAOACell(Object **theCell,Object *theObj)
-{
-  if (!theObj) {
-    return;
-  }
-  if (inBetaHeap(theObj)) {
-    if (isObject(theObj)) {
-      DEBUG_CODE(if (!CheckHeap) Ck(theObj));
-      ProcessAOAReference(theCell, REFTYPE_DYNAMIC);
-    } else {
-      DEBUG_CODE({
-        fprintf(output, "[DoStackCell: ***Illegal: 0x%x: 0x%x]\n", 
-                (int)theCell,
-                (int)theObj);
-        Illegal();
-      });
-    }
-  } else {
-#ifdef RTLAZY
-    if (isLazyRef(theObj)) {
-      DEBUG_LAZY(fprintf(output, 
-                         "DoAOACell: Lazy ref: %d\n", (int)theObj));
-      ProcessAOAReference(theCell, REFTYPE_DYNAMIC);
-    }
-#endif /* RTLAZY */
-#if defined(RTDEBUG) && defined(NEWRUN)
-    /* Because of the very well-defined structure of stackframes
-     * there should be no GC-able cells, that refer outside BETA heaps.
-     */
-    else {
-      if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
-        fprintf(output, 
-                "DoAOACell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
-        Illegal();
-      }
-    }
-#endif
-  }
-}
-
 static void IOAUpdateAOARoots(Object **theCell, long GCAttribute)
 {
   if (!inToSpace(GCAttribute)) {
@@ -931,6 +887,7 @@ static void IOACheckPrintTheObj(Object *theObj)
 #endif /* FASTDEBUG */
 }
 
+#ifdef MT
 static void IOACheckPrintSkipped(long *ptr, Object *theObj)
 {
   if (NumIOAGc>=IOAGC_START_TRACE) {
@@ -940,6 +897,7 @@ static void IOACheckPrintSkipped(long *ptr, Object *theObj)
     fflush(output);
   }
 }
+#endif
 
 /* IOACheck:
  *   Scan through entire IOA heap and check every object encountered.
