@@ -183,10 +183,10 @@ void AOAtoIOAReport(void);
 #endif
 
 /* GC/aoa.c */
-void scanOrigins(Object *theObj, void (*originAction)(Object **theCell));
-void clearTail(void);
-Object *getHead(void);
-void prependToList(Object *target);
+extern void scanOrigins(Object *theObj, void (*originAction)(Object **theCell));
+extern void clearTail(void);
+extern Object *getHead(void);
+extern void prependToList(Object *target);
 extern void tempAOArootsAlloc(void);
 extern void tempAOArootsFree(void);
 extern long sizeOfAOA(void);
@@ -293,7 +293,6 @@ extern void scanObject(Object *obj,
 		       void (*objectAction)(Object *),
                        int doPartObjects);
 extern Object * getRealObject(Object * obj);
-extern void appendToListInAOA(REFERENCEACTIONARGSTYPE);
 extern void prependToListInAOA(REFERENCEACTIONARGSTYPE);
 extern void collectList(Object * root,
 			void (*referenceAction)(REFERENCEACTIONARGSTYPE));
