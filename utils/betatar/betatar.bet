@@ -1,110 +1,416 @@
-ORIGIN '~beta/dependency/v1.3/dependency';
+ORIGIN '~beta/toollibs/preferences/v1.1/cmdOptions';
+INCLUDE '~beta/basiclib/v1.6/regexp';
+INCLUDE '~beta/sysutils/v1.6/envstring';
+INCLUDE '~beta/sysutils/v1.6/cstring';
+
 INCLUDE '~beta/mps/v5.2/findgrammar';
 INCLUDE '~beta/betaast/v5.2/index'; (* for easy ast init in this example *)
-INCLUDE '~beta/process/v1.6/osinterface';
+INCLUDE '~beta/dependency/v1.3/dependency';
+
+--- preferencesLib: attributes ---
+registerBETATARcmdOptions: registerCmdOptions
+  (#
+  do 'help'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'Print this help info'->pref.description[];
+		  'h'->pref.shortCut;
+	       #);
+     'extent'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'include all fragments (default)'->pref.description[];
+		  'e'->pref.shortCut;
+	       #);
+     'domain'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'ignoring BODY files'->pref.description[];
+		  'd'->pref.shortCut;
+	       #);
+     'full'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'include standard files \n(files located in $BETALIB)'
+		    ->pref.description[];
+		  'f'->pref.shortCut;
+	       #);
+     'ast'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'include .ast/.astL files'->pref.description[];
+		  'a'->pref.shortCut;
+	       #);
+     'asm'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'include ..s files, if present'->pref.description[];
+		  's'->pref.shortCut;
+	       #);
+     'code'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'include code files (.o files)'->pref.description[];
+		  'c'->pref.shortCut;
+	       #);
+     'debug'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'include debug files (..db files)'->pref.description[];
+		  'b'->pref.shortCut;
+	       #);
+     'job'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'include the job file (.job file)'->pref.description[];
+		  'j'->pref.shortCut;
+	       #);
+     'dump'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'include file.dump'->pref.description[];
+		  'u'->pref.shortCut;
+	       #);
+     'total'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'include all file types \n(equiv. to "--ast --asm --code --debup --job --dump")'
+		    ->pref.description[];
+		  't'->pref.shortCut;
+	       #);
+     'ignore'
+       ->define(# type:: cmdArgs
+		    (# onShortcutAction:: onAction #)
+	       do 'ignore all files with names containing "rexp". \nNote, that "rexp" may be any regexp pattern. \n"--ignore rexp" has precedence over all above options.'
+		    ->pref.description[];
+		  'x'->pref.shortCut;
+	       #);
+     'include'
+       ->define(# type:: cmdArgs
+		    (# onShortcutAction:: onAction #)
+	       do 'include all files with names containing "rexp". \nNote, that "rexp" may be any regexp pattern. \n"--include rexp" has precedence over all above options.'
+		    ->pref.description[];
+		  'i'->pref.shortCut;
+	       #);
+     'verbose'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'print what is saved on the tar-file'->pref.description[];
+		  'v'->pref.shortCut;
+	       #);
+     'compress'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'compress the resultfile.'->pref.description[];
+		  'm'->pref.shortCut;
+	       #);
+     'gzip'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'use "gzip" instead of "compress" to compress the resultfile.'->pref.description[];
+		  'g'->pref.shortCut;
+	       #);
+     'zip'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'use "zip" instead of "tar" to pack the files.'->pref.description[];
+		  'z'->pref.shortCut;
+	       #);
+     'list'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'list the files to be packed. \nDo not actually pack the files.'->pref.description[];
+		  'l'->pref.shortCut;
+	       #);
+  #);
+
+help: getCmdOption(# #);
+domain: getCmdOption(# #);
+full: getCmdOption(# #);
+verbose: getCmdOption(# #);
+ast: getCmdOption(# #);
+asm: getCmdOption(# #);
+codeOpt: getCmdOption(# do 'code'->name[] #);
+debug: getCmdOption(# #);
+job: getCmdOption(# #);
+dump: getCmdOption(# #);
+total: getCmdOption(# #);
+list: getCmdOption(# #);
+ignore: getCmdArgs(# #);
+include: getCmdArgs(# #);
+compress: getCmdOption(# #);
+gzip: getCmdOption(# #);
+zip: getCmdOption(# #);
+
+--- lib: attributes ---
+ExecuteShellCommand: external
+  (# CommandString:     @integer;
+  enter CommandString
+  do 'system' -> callC
+  #);
+
 ---program: descriptor---
 
 (# AST: @astinterface(# defaultGrammarFinder:: findgrammar #);
-   filename,resultname: ^text;
-   resultfile: @file;
-   ph: @pathHandler; OS: @osInterface;
-   doDomain: @boolean;
-   usage:
-     (#
-     do 'Usage: '->screen.puttext;
-	1 -> arguments->screen.puttext;
-	' filename [extent|domain] result'->screen.putline;
+   prefs: @preferences;
+   filename,resultfilename, lst: ^text;
+   f: @file;
+   files, allfiles, tarfiles, fn, fnn, fnm, fne, fnp, comstr: ^text;
+   regexp: ^text;
+   regexpFilter:
+     (# lst, regexp, l, res: ^text;
+     enter (lst[],regexp[])
+     do lst.reset; &text[]->res[];
+	loop:
+	  (if not lst.eos then
+	      lst.getline->l[]; l.reset;
+	      regexp[]->l.regexp_search
+		(# noMatch:: (# do l[]->res.putline #) #);
+	      restart loop;
+	  if)
+     exit res[]
      #);
-do l: (if noOfArguments <> 4 then
-	  'ERROR: Illegal number of arguments: '->screen.puttext;
-	  noOfArguments->screen.putint; screen.newline;
-	  usage;
-	  leave l
-       else
-	  2 -> arguments -> filename[];
-	  (if true
-	   // 'domain'->(3->arguments).equal then true ->doDomain
-	   // 'extent'->(3->arguments).equal then false->doDomain
-	   else
-	      'ERROR: illegal option: '->screen.puttext;
-	      3->arguments->screen.putline;
-	      usage;
-	      leave l
-	  if);
+   regexpMatch:
+     (# lst, regexp, l, res: ^text;
+     enter (lst[],regexp[])
+     do lst.reset; &text[]->res[];
+	loop:
+	  (if not lst.eos then
+	      lst.getline->l[]; l.reset;
+	      regexp[]->l.regexp_search
+		(# do l[]->res.putline #);
+	      restart loop;
+	  if)
+     exit res[]
+     #);
+do prefs.open(# do prefs.registerBETATARcmdOptions #);
 
-	  4->arguments->resultname[];
-	  resultname[]->resultfile.name; resultfile.openWrite;
+   AST.astlevelInit;
 
-	  OS.init;
+   &text[]->files[];
 
-	  AST.astlevelInit;
-	  ph.init;
+   AST.DependencyGraph
+     (#
+     do Init;  xverboselevel.nothing->xverboselevel;
+	machine_typeexternal->TargetMachine;
+	machine_typeexternal->TargetDirectory;
 
-	  AST.DependencyGraph
-	  (# f: @file;
-	  do Init;  xverboselevel.nothing->xverboselevel;
-	     OS.hostMachine->TargetMachine;
-	     OS.hostMachine->TargetDirectory;
+	prefs.readArguments
+	  (# announce:
+	       (#
+	       do '\n\n Error during dependency analysis:\n\t'->puttext;
+		  INNER; stop
+	       #);
+	  do (if prefs.help then prefs.dumpCmds; stop if);
+	     (for i: noOfArgs repeat
+		  args[i][]->filename[];
+		  ' Building dependency graph for: '->puttext;
+		  filename[]->puttext; '...'->puttext;
+		  (filename[],ast.thePathHandler.currentDirectory)->ast.thePathHandler.convertFilePath->f.name;
 
-	     (filename[],ph.currentDirectory)->ph.convertFilePath->f.name;
+		  f.entry.path->filename[];
 
-	     f.entry.path->filename[];
-
-	     (if doDomain then
-		 scan: filename[]->scandomain
-		 (# announce: (# do 'Error during dependency analysis:\n\t'->puttext #);
-		    MPSexception::
-		      (# do announce; T[]->puttext; ' too large (MPS overflow)'->putline; leave scan #);
-		    DoubleFormException::
-		      (# do announce; 'Double form declaration'->putline; leave scan #);
-		    propertyException::
-		      (# do announce; 'Error concerning property: '->puttext; p[]->putline; leave scan #);
-		    circularDependencyException::
-		      (# do announce; 'Circular dependency on: '->puttext; fg.name->putline; leave scan #);
-		    unknownPropertyException::
-		      (# do announce; 'Unknown property: '->puttext; leave scan #);
-		    emptyFragmentException::
-		      (# do announce; 'Empty fragment file: '->puttext; fg.name->putline; leave scan #);
-		    transAccessException::
-		      (# do announce; 'No read access to: '->puttext; FN[]->putline; leave scan #);
-		    notExistingException::
-		      (# do announce; 'Fragment file does not exist: '->puttext; fullFN[]->putline; leave scan; #);
-		    parseException::
-		      (# do announce; 'Parse errors in: '->puttext; fullFN[]->putline; leave scan #);
-		    transCreateDirException::
-		      (# do announce; 'Unable to create directory: '->puttext; FN[]->putline; leave scan #);
-		 do (current.fullname,'.')->ph.localpath->
-		    resultfile.putline
-		 #)
-	      else
-		 scan: filename[]->scanextent
-		 (# announce: (# do 'Error during dependency analysis:\n\t'->puttext #);
-		    MPSexception::
-		      (# do announce; T[]->puttext; ' too large (MPS overflow)'->putline; leave scan #);
-		    DoubleFormException::
-		      (# do announce; 'Double form declaration'->putline; leave scan #);
-		    propertyException::
-		      (# do announce; 'Error concerning property: '->puttext; p[]->putline; leave scan #);
-		    circularDependencyException::
-		      (# do announce; 'Circular dependency on: '->puttext; fg.name->putline; leave scan #);
-		    unknownPropertyException::
-		      (# do announce; 'Unknown property: '->puttext; leave scan #);
-		    emptyFragmentException::
-		      (# do announce; 'Empty fragment file: '->puttext; fg.name->putline; leave scan #);
-		    transAccessException::
-		      (# do announce; 'No read access to: '->puttext; FN[]->putline; leave scan #);
-		    notExistingException::
-		      (# do announce; 'Fragment file does not exist: '->puttext; fullFN[]->putline; leave scan; #);
-		    parseException::
-		      (# do announce; 'Parse errors in: '->puttext; fullFN[]->putline; leave scan #);
-		    transCreateDirException::
-		      (# do announce; 'Unable to create directory: '->puttext; FN[]->putline; leave scan #);
-		 do (current.fullname,'.')->ph.localpath->
-		    resultfile.putline
-		 #)
-	     if)
-
+		  (if prefs.domain then
+		      scan: filename[]->scandomain
+			(# MPSexception::
+			     (# do announce(# do T[]->puttext; ' too large (MPS overflow)'->putline #) #);
+			   DoubleFormException::
+			     (# do announce(# do 'Double form declaration'->putline #) #);
+			   propertyException::
+			     (# do announce(# do 'Error concerning property: '->puttext; p[]->putline #) #);
+			   circularDependencyException::
+			     (# do announce(# do 'Circular dependency on: '->puttext; fg.name->putline #) #);
+			   unknownPropertyException::
+			     (# do announce(# do 'Unknown property: '->puttext #) #);
+			   emptyFragmentException::
+			     (# do announce(# do 'Empty fragment file: '->puttext; fg.name->putline #) #);
+			   transAccessException::
+			     (# do announce(# do 'No read access to: '->puttext; FN[]->putline #) #);
+			   notExistingException::
+			     (# do announce(# do 'Fragment file does not exist: '->puttext; fullFN[]->putline #) #);
+			   parseException::
+			     (# do announce(# do 'Parse errors in: '->puttext; fullFN[]->putline #) #);
+			   transCreateDirException::
+			     (# do announce(# do 'Unable to create directory: '->puttext; FN[]->putline #) #);
+			do (current.fullname,'.')->ast.thePathHandler.convertFilePath->files.putline;
+			#)
+		   else
+		      scan: filename[]->scanextent
+			(# MPSexception::
+			     (# do announce(# do T[]->puttext; ' too large (MPS overflow)'->putline #) #);
+			   DoubleFormException::
+			     (# do announce(# do 'Double form declaration'->putline #) #);
+			   propertyException::
+			     (# do announce(# do 'Error concerning property: '->puttext; p[]->putline #) #);
+			   circularDependencyException::
+			     (# do announce(# do 'Circular dependency on: '->puttext; fg.name->putline #) #);
+			   unknownPropertyException::
+			     (# do announce(# do 'Unknown property: '->puttext #) #);
+			   emptyFragmentException::
+			     (# do announce(# do 'Empty fragment file: '->puttext; fg.name->putline #) #);
+			   transAccessException::
+			     (# do announce(# do 'No read access to: '->puttext; FN[]->putline #) #);
+			   notExistingException::
+			     (# do announce(# do 'Fragment file does not exist: '->puttext; fullFN[]->putline #) #);
+			   parseException::
+			     (# do announce(# do 'Parse errors in: '->puttext; fullFN[]->putline #) #);
+			   transCreateDirException::
+			     (# do announce(# do 'Unable to create directory: '->puttext; FN[]->putline #) #);
+			do (current.fullname,'.')->ast.thePathHandler.convertFilePath->files.putline
+			#)
+		  if);
+		  'done'->putline;
+	     for)
 	  #);
-	  resultfile.close;
-      if);
+     #);
+
+   files.copy->allFiles[];
+
+   (if not prefs.full then
+       ' Ignoring std. files...'->puttext;
+       '\\(^'->regexp[];
+       ('~beta','.')->ast.thePathHandler.convertFilePath->regexp.append;
+       '\\|^$BETALIB\\)'->regexp.append;
+       (files[],regexp[]->expandEnvVar)
+	 ->regexpFilter->files[];
+       'done'->putline;
+   if);
+
+   files.reset; &text[]->tarfiles[];
+   loop:
+     (if not files.eos then
+	 files.getline->fn[];
+	 fn[]->f.name;
+	 f.entry.path.head->fnp[]; f.entry.path.name.prefix->fnn[];
+
+	 '.bet'->(fn.copy).append->fne[]; fne[]->tarfiles.putline;
+	 (if prefs.verbose then
+	     '  '->puttext; fne[]->putline;
+	 if);
+	 (if prefs.ast or prefs.total then
+	     AST.astFileExtension->(fn.copy).append->fne[]; fne[]->tarfiles.putline;
+	     (if prefs.verbose then
+		 '  '->puttext; fne[]->putline;
+	     if);
+	 if);
+	 fnp.copy->fnm[];
+	 '/'->fnm.append; machine_type->fnm.append;
+	 '/'->fnm.append; fnn[]->fnm.append;
+	 (if prefs.asm or prefs.total then
+	     '..s'->(fnm.copy).append->fne[];
+	     fne[]->tarfiles.putline;
+	     (if prefs.verbose then
+		 '  '->puttext; fne[]->putline;
+	     if);
+	 if);
+	 (if prefs.codeOpt or prefs.total then
+	     '.o'->(fnm.copy).append->fne[];
+	     fne[]->tarfiles.putline;
+	     (if prefs.verbose then
+		 '  '->puttext; fne[]->putline;
+	     if);
+	 if);
+	 (if prefs.debug or prefs.total then
+	     '..db'->(fnm.copy).append->fne[];
+	     fne[]->tarfiles.putline;
+	     (if prefs.verbose then
+		 '  '->puttext; fne[]->putline;
+	     if);
+	 if);
+	 restart loop
+     if);
+   filename[]->f.name;
+   f.entry.path.head->fnp[]; f.entry.path.name.prefix->fnn[];
+   (if prefs.dump or prefs.total then
+       fnp.copy->fnm[];
+       '/'->fnm.append; fnn[]->fnm.append;
+       '.dump'->(fnm.copy).append->fne[];
+       fne[]->tarfiles.putline;
+       (if prefs.verbose then
+	   '  '->puttext; fne[]->putline;
+       if);
+   if);
+   fnp.copy->fnm[];
+   '/'->fnm.append; machine_type->fnm.append;
+   '/'->fnm.append; fnn[]->fnm.append;
+   (if prefs.job or prefs.total then
+       '..job'->(fnm.copy).append->fne[];
+       fne[]->tarfiles.putline;
+       (if prefs.verbose then
+	   '  '->puttext; fne[]->putline;
+       if);
+   if);
+
+   (if (prefs.ignore).noOfArgs>0 then
+       ' Ignoring files with names containing regexp: '->putline;
+       (prefs.ignore).scan
+	 (#
+	 do '    '->puttext; current[]->puttext; '...'->puttext;
+	    (tarfiles[],current[])->regexpFilter->tarfiles[];
+	    'done'->putline;
+	 #);
+   if);
+
+   (if (prefs.include).noOfArgs>0 then
+       '  Including files with names containing regexp: '->putline;
+       (prefs.include).scan
+	 (#
+	 do '    '->puttext; current[]->puttext; '...'->puttext;
+	    (allfiles[],current[])->regexpMatch->tarfiles.append;
+	    'done'->putline;
+	 #);
+   if);
+
+   (if prefs.list then
+       ' Files selected are:'->putline; tarfiles.reset;
+       loop:
+	 (if not tarfiles.eos then
+	     '  '->puttext; tarfiles.getline->putline; restart loop
+	 if);
+       '\n NOTE: no "tar" file has been created'->putline;
+       '       since the "--list" option was specified'->putline;
+    else
+       fnp.copy->fnm[];
+       '/'->fnm.append; fnn[]->fnm.append;
+
+       (if prefs.zip then
+	   '.zip'->(fnm.copy).append->fne[];
+
+	   'zip -'->comstr.puttext; files.reset;
+	   ' '->comstr.put; fne[]->comstr.puttext;
+	   loop:
+	     (if not files.eos then
+		 ' '->comstr.put; files.getline->comstr.puttext; restart loop
+	     if);
+	else
+	   '.tar'->(fnm.copy).append->fne[];
+
+	   'tar cf -'->comstr[]; files.reset;
+	   loop:
+	     (if not files.eos then
+		 ' '->comstr.put; files.getline->comstr.puttext; restart loop
+	     if);
+       if);
+
+       (if prefs.compress then
+	   (if prefs.gzip then
+	       '.gz'->fne.append;
+	       '| gzip '->comstr.puttext;
+	    else
+	       '.Z'->fne.append;
+	       '| compress '->comstr.puttext;
+	   if)
+       if);
+       ' > '->comstr.puttext;
+       fne[]->comstr.puttext;
+
+       ' Packing '->puttext; fne[]->puttext; '...'->puttext;
+       (# cstr: @cString;
+       do comstr[] -> cstr.set;
+	  cstr.charptr->ExecuteShellCommand;
+	  cstr.free;
+       #);
+
+       'done'->putline;
+   if);
 #)
