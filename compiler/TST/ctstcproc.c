@@ -103,3 +103,9 @@ long id(long x) { return x; }
 
 long intFloat(int n, real x) {return (long)(n+x);}
 long floatInt(real x, int n) {return (long)(n+x);}
+
+void bar(f) long (*f)();
+{ long b;
+  b = f('a',1);
+  printf("%c\n",b);
+}
