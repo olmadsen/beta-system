@@ -252,6 +252,7 @@ if (NumIOASlices < numProcessors(TRUE)){
   NumIOASlices = numProcessors(TRUE);
   IOASliceSize = IOASize / NumIOASlices;
 }
+IOASliceSize = ObjectAlignDown(IOASliceSize);
 #endif
 
 #ifdef PE  

@@ -64,10 +64,10 @@ void create_TSD(void)
   
   while (NumIOASlices < NumTSD) {
     NumIOASlices += numProcessors(TRUE);
-    IOASliceSize = IOASize / NumIOASlices;
+    IOASliceSize = ObjectAlignDown(IOASize / NumIOASlices);
     DEBUG_MT(fprintf(output,
-		     "create_TSD: NumIOASlices changed to %d\n", 
-		     (int)NumIOASlices));
+		     "create_TSD: NumIOASlices changed to %d, IOASliceSize to %d\n", 
+		     (int)NumIOASlices, IOASliceSize));
   }
 
   for (TSDinx = 0; TSDlist[TSDinx]; TSDinx++)
@@ -349,15 +349,11 @@ thread_t attToProcessor(struct Component *comp)
     fflush(output);
     exit (1);
   }
-  /* FIXME: why does this make 'threads' fail when run with BETART=DebugMt? */
-#if 0
   DEBUG_MT(fprintf(output, 
 		   "[Created thread 0x%x for comp 0x%x]\n", 
 		   (int)tid, 
 		   (int)comp);
 	   fflush(output););
-#endif
-
   return tid;
 }
 

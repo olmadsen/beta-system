@@ -104,6 +104,18 @@ extern unsigned int set_fpc_csr(unsigned int csr);
 }
 #endif /* sgi */
 
+#ifdef ppcmac
+#error Here is howto, but FE exceptions were not implemented by ETO-20
+#include <fenv.h>
+#define FPU_ZERODIVISION  FE_DIVBYZERO
+#define FPU_INVALID       FE_INVALID
+#define FPU_DENORMALIZED  0
+#define FPU_OVERFLOW      FE_OVERFLOW
+#define FPU_UNDERFLOW     FE_UNDERFLOW
+#define FPU_PRECISIONLOST FE_INEXACT
+#define EnableFPUexceptions(mask) feraiseexcept(mask) 
+#endif /* ppcmac */
+
 
 #ifndef EnableFPUexceptions
 #define EnableFPUexceptions(mask) \

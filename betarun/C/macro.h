@@ -137,9 +137,11 @@ do {                               \
 
 #if defined(sparc) || defined(hppa) || defined(NEWRUN)
 /* Objects must be multiples of 8 bytes because of reals */
-#define ObjectAlign(numbytes) (unsigned long)(((numbytes)+7) & ~7)
+#define ObjectAlign(numbytes)     (unsigned long)(((numbytes)+7) & ~7)
+#define ObjectAlignDown(numbytes) (unsigned long)(((numbytes))   & ~7)
 #else
-#define ObjectAlign(numbytes) (unsigned long)(numbytes)
+#define ObjectAlign(numbytes)     (unsigned long)(numbytes)
+#define ObjectAlignDown(numbytes) (unsigned long)(numbytes)
 #endif
 
 #define ByteRepBodySize(range)   ((((range)+4)/4)*4)

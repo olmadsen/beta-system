@@ -98,6 +98,8 @@ static void BooleanProperty(char *name)
 
 static void ValueProperty(char *name, char *value)
 {
+  char buf[100];
+
 #ifdef RTVALHALLA
   ENTRY("valhallaid", valhallaID = strdup (value));
 #endif /* RTVALHALLA */
@@ -108,6 +110,12 @@ static void ValueProperty(char *name, char *value)
 
   ENTRY("ioa", 
 	IOASize = 1024 * intScan(name, value);
+        if(IOASize < 1024){
+	  sprintf(buf, "IOA size (%dKb) is too low, adjusted to 1Kb.",
+		  (int)IOASize/1024);
+	  Notify(buf);
+	  IOASize = 1024;
+	}
 	);
 #ifdef MT
   ENTRY("ioaslicesize",
@@ -122,27 +130,43 @@ static void ValueProperty(char *name, char *value)
 
   ENTRY("aoa",  
 	AOABlockSize  = 1024 * intScan(name, value);
+        if(AOABlockSize < 1024){
+	  sprintf(buf, "AOA block size (%dKb) is too low, adjusted to 1Kb.",
+		  (int)AOABlockSize/1024);
+	  Notify(buf);
+	  AOABlockSize = 1024;
+	}
 	if (AOAMinFree>AOABlockSize) AOAMinFree=AOABlockSize;
 	);
   ENTRY("lvra", 
 	LVRABlockSize = 1024 * intScan(name, value);
+	if(LVRABlockSize < 1024){
+	  sprintf(buf, "LVRA block size (%dKb) is too low, adjusted to 1Kb.",
+		  (int)LVRABlockSize/1024);
+	  Notify(buf);
+	  LVRABlockSize = 1024;
+	}
 	if (LVRAMinFree>LVRABlockSize) LVRAMinFree=LVRABlockSize;
 	);
   ENTRY("cbfa", 
 	CBFABlockSize = 1024 * intScan(name, value);
+	if(CBFABlockSize < 1024){
+	  sprintf(buf, "CBFA block size (%dKb) is too low, adjusted to 1Kb.",
+		  (int)CBFABlockSize/1024);
+	  Notify(buf);
+	  CBFABlockSize = 1024;
+	}
 	);
 
   ENTRY("ioapercentage",
         IOAPercentage = intScan(name, value);
         if( IOAPercentage < 3 ){
-	  char buf[100];
 	  sprintf(buf, "IOAPercentage (%d) is too low, adjusted to 3.",
 		  (int)IOAPercentage);
 	  Notify(buf);
 	  IOAPercentage = 3;
 	}
 	if( IOAPercentage > 40 ){
-	  char buf[100];
 	  sprintf( buf, "IOAPercentage (%d) is too high, adjusted to 40.",
 		   (int)IOAPercentage);
 	  Notify(buf);
@@ -155,14 +179,12 @@ static void ValueProperty(char *name, char *value)
 	AOAPercentage = intScan(name, value);
 	AOAMinFree = 0;
         if( AOAPercentage < 3 ){
-	  char buf[100];
 	  sprintf(buf, "AOAPercentage (%d) is too low, adjusted to 3.",
 		  (int)AOAPercentage);
 	  Notify(buf);
 	  AOAPercentage = 3;
 	}
 	if( AOAPercentage > 97 ){
-	  char buf[100];
 	  sprintf(buf, "AOAPercentage (%d) is too high, adjusted to 97.",
 		  (int)AOAPercentage);
 	  Notify(buf);
@@ -175,14 +197,12 @@ static void ValueProperty(char *name, char *value)
 	LVRAPercentage = intScan(name, value);
 	LVRAMinFree = 0;
         if( LVRAPercentage < 3 ){
-	  char buf[100];
 	  sprintf(buf, "LVRAPercentage (%d) is too low, adjusted to 3.",
 		  (int)LVRAPercentage);
 	  Notify(buf);
 	  LVRAPercentage = 3;
 	}
 	if( LVRAPercentage > 97 ){
-	  char buf[100];
 	  sprintf(buf, "LVRAPercentage (%d) is too high, adjusted to 97.",
 		  (int)LVRAPercentage);
 	  Notify(buf);
@@ -196,18 +216,17 @@ static void ValueProperty(char *name, char *value)
 #endif /* MAC */
 
   ENTRY("infofile",
-    if( (output = fopen(value, "w")) ){
-      MacCode(MakeMPWFile(value));
-    } else {
-      char buf[100];
-      output = stderr;
-      sprintf(buf, "InfoFile '%s' couldn't be opened, stderr is used", value);
-      Notify(buf);
-    });
-
-   
+	if( (output = fopen(value, "w")) ){
+	  MacCode(MakeMPWFile(value));
+	} else {
+	  output = stderr;
+	  sprintf(buf, "InfoFile '%s' couldn't be opened, stderr is used", value);
+	  Notify(buf);
+	});
+  
+  
   /* IF NO ENTRY IS SELECTED REPORT UNKNOWN PROPERTY */
-  { char buf[100];
+  { 
     sprintf(buf, "Property '%s=%s' not known.", name, value);
     Notify(buf);
   }
