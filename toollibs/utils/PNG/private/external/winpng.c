@@ -817,15 +817,16 @@ void write_pixels_to_png_area_indexed
     
     palette = (png_colorp)malloc((std.ncolors+1) * sizeof (png_color));
     /* ... set palette colors ... */
+    
     for(i = 0; i < std.ncolors; i++) {
-      palette[i].red = std.colormap[i].red;
-      palette[i].green = std.colormap[i].green;
-      palette[i].blue = std.colormap[i].blue;
+      palette[i+1].red = std.colormap[i].red;
+      palette[i+1].green = std.colormap[i].green;
+      palette[i+1].blue = std.colormap[i].blue;
     }
-    palette[std.ncolors].red = std.special.red;
-    palette[std.ncolors].green = std.special.green;
-    palette[std.ncolors].blue = std.special.blue;
-    index = std.ncolors;
+    palette[0].red = std.special.red;
+    palette[0].green = std.special.green;
+    palette[0].blue = std.special.blue;
+    index = 0;
     png_set_PLTE(png_ptr, info_ptr, palette, std.ncolors+1);
     png_set_tRNS(png_ptr, info_ptr, &index, 1, NULL);
     

@@ -186,7 +186,7 @@ long BetaAllocColor (BetaPalette *palette, Color *color, Color* actual)
        && green == palette->special.green
        && blue == palette->special.blue)
       {
-        return palette->ncolors;
+        return 0;
       }
   }
   
@@ -198,8 +198,12 @@ long BetaAllocColor (BetaPalette *palette, Color *color, Color* actual)
   actual->red = palette->colormap[palette->rgbmap[index]].red;
   actual->green = palette->colormap[palette->rgbmap[index]].green;
   actual->blue = palette->colormap[palette->rgbmap[index]].blue;
-  return palette->xpixel[palette->rgbmap[index]];
 
+  if(palette->special_set) {
+    return (1 + palette->xpixel[palette->rgbmap[index]]);
+  } else {
+    return  palette->xpixel[palette->rgbmap[index]];
+  }
   
 }
 
