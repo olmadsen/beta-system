@@ -517,12 +517,8 @@ do (if stest then
                         '!exeobj:push receiver:'->mch.comment;
                         true -> A.isRef;
                         (* Handle possible virtual desc *) 
-                        (if true then
-                            (A[],desc[]->theGen.mkSignature,none)->mch.loadRef;
-                         else
-                            (A[],(desc[],true) -> descName,none)->mch.loadRef;
-                        if);
-                        (*(A[],none) -> mch.ldVal*)
+                        (A[],desc[]->theGen.mkSignature,none)->mch.loadRef;
+                        true -> A.noTmp
                     if)
                  else
                     A.toCallReg->A[];
@@ -981,10 +977,23 @@ itemEvVal: EvVal
               if)
           if);
        #);
+     isMultiValExit: booleanValue
+       (# EH: @evalHandler; 
+          xScan: @ | EH.scanXadr; 
+          more: @boolean; n: @integer; 
+       do (lDesc[],lA[],0,lChain[])->xScan->more;
+          loop:
+            (if more then
+                (if (n+1 -> n) > 1 then
+                    (* multiple exit values *)
+                    true -> value;
+                 else
+                    (if xScan->more then restart loop if)
+            if)if)
+       #);
      theReg:: (# do (* what about baseReg? *) lA.theReg -> aR #);
      loadVal::<
-       (# EH: @evalHandler; n: @integer; 
-          xScan: @ | EH.scanXadr; more: @boolean;
+       (# 
        do (* The ItemEv cannot be released since
            * V[] is an address using callReg *) 
           (if stest then 301->itemTrace(#do 'loadVal:A ' -> xT #)if);
@@ -1005,23 +1014,18 @@ itemEvVal: EvVal
            else
               L:
                 (if switch182 then
-                    (lDesc[],lA[],0,lChain[])->xScan->more;
-                    M:
-                    (if more then
-                        (if (n+1 -> n) > 1 then
-                            (* multiple exit values *)
-                            this(itemEvVal)[] -> V[];
-                            leave L
-                        if);
-                        (if xScan->more then restart M if)
-                    if);
-                    (* we have executed exeExit and the simple
-                   * exit value is on the stack; we thus return
-                   * a computedVal
-                   *)
-                  (0,false,false,false) 
-                    -> mkComputedEvVal 
-                    -> V[];
+                    (if isMultiValExit then
+                        this(itemEvVal)[] -> V[];
+                        leave L
+                     else
+                        (* we have executed exeExit and the simple
+                         * exit value is on the stack; we thus return
+                         * a computedVal
+                         *)
+                        (0,false,false,false) 
+                          -> mkComputedEvVal 
+                          -> V[];
+                    if)
                else
                   true -> SingleItemVal
                   (# 
@@ -1036,6 +1040,7 @@ itemEvVal: EvVal
        do (if true then
               (if not lA.noTmp then
                   lA.toCallReg -> lA[];
+                  true -> lA.noTmp
               if);
               LoadVal -> V[]
            else
@@ -1835,6 +1840,7 @@ itemEvVal: EvVal
           rAtmp,rA1: ^mch.address;
           lHasCode: @boolean
        do (* rA in [a0,a1] *)
+          (for i:3 repeat mch.duplicate for);
           ExeExit;
           (if switch181 then
               (lDesc[] -> sematt.hasXcode)  -> lHasCode;
@@ -2132,14 +2138,25 @@ itemEvVal: EvVal
           if)
        #);
      asgToMethod::
-       (# class: ^text
+       (# class: ^text; A: @mch.RegAdr;
        do (if true then
               lDesc[] -> theGen.mkSignature -> class[];
            else
               (lDesc[],true) -> descName -> class[];
           if);
-          (lA[],class[],none) -> mch.loadRef;
-          ExeExit;          
+          (if not lA.noTmp then
+              (lA[],class[],none) -> mch.loadRef;
+              true -> lA.noTmp
+          if);
+          ExeExit;  
+          (if isMultiValExit then
+              12 -> A.off;
+              true -> A.isRef;
+              (none,false,'','???') -> A.asgRefReg;
+              (* must scan exit-list and get exit-fields;
+               * we should probaly have an ExitArgs as argument?
+               *)
+          if)
        #);
      asgToNXoffSets::
        (* lA is some object, rA is an NXoffSetsVal
