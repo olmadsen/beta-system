@@ -214,3 +214,10 @@
 # endif
 # endif
 #endif
+
+#ifdef RTDEBUG
+#define isData(addr) (((long)&BETA_data1 <= (long)(addr)) && \
+		      ((long)(addr) < (long)&BETA_end) )
+#define isProto(addr) (isSpecialProtoType(addr) || \
+		       (isData(addr) && (((int)(addr) & 3) == 0)))
+#endif RTDEBUG
