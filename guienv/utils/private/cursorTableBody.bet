@@ -1,0 +1,191 @@
+ORIGIN '../cursorTable';
+INCLUDE '~beta/containers/hashTable';
+INCLUDE '~beta/basiclib/texthash';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/sysutils/pathhandler';
+MDBODY nti 'cursorTable_ntibody'
+       ppc 'cursorTable_macbody'
+       default 'cursorTable_unixbody';
+
+--- cursorTablePrivate: descriptor ---
+(# table: ^lookupTable;
+   establishTable: @
+     (# 
+     do (if table[]=NONE then
+            &lookuptable[]->table[];
+            table.init;
+            (defaultCursors,true)->table.load;
+            init;
+        if);
+     #);
+   defaultCursors:
+     (* A few standard cursors *)
+     (# t:@text;
+     do (* cursor file format:
+         *    x11ID macID ntiID ntiNAME cursorName
+         * where ntiNAME is used iff ntiID=0. 
+         * If any of the ID's are -1, this implies
+         * that the given cursor does not exist on
+         * that platform.  If no ntiNAME is needed,
+         * then write '0'.
+         *)
+        (*
+         x11ID macID ntiID ntiNAME cursorName *)
+        '   68     0 32512       0      arrow'->t.putline;
+        '  152     0 32513       0      ibeam'->t.putline;
+        '  150     0 32514       0      watch'->t.putline;
+        '   34     0 32515       0      cross'->t.putline;
+        '   30     0    -1       0      plus'->t.putline;
+        0->t.setpos;
+     exit t[]
+     #);
+#)
+
+--- cursorTableScan: dopart ---
+do private.establishTable;
+   private.table.scan
+       (#
+       do current.name[]->currentName[];
+	  current.cur[]->currentCursor[];
+	  INNER scan
+       #)
+   
+-- cursorTableLoad: doPart --
+do private.establishTable;
+   (if not merge then private.table.init (* clear the cursorTable*) if);
+   (cursorstream[],overwrite)->private.table.load;
+   
+--- cursorTableLoadFile: dopart ---
+do private.establishTable;
+   (if not merge then private.table.init (* clear the cursorTable *) if);
+   (filename[],overwrite)->private.table.loadfile;
+
+--- cursorTableDefine: dopart ---
+do private.establishTable;
+   cursorName[]
+     ->private.table.indexer.hash
+     ->private.table.findIndexed
+     (# predicate:: (# do cursorName[]->current.name.equal->value #);
+	notFound::
+	  (# elm: ^private.table.element;
+	  do &private.table.element[]->elm[];
+	     cursorName.copy->elm.name[];
+	     cursorRef[]->elm.cur[];
+	     elm[]->private.table.insert;
+	     true->continue
+	  #)
+     do cursorRef[]->current.cur[]
+     #)
+
+--- cursorTableLookup: dopart ---
+do private.establishTable;
+   cursorName[]
+     ->private.table.indexer.hash
+     ->private.table.findIndexed
+     (# predicate:: (# do cursorName[]->current.name.equal->value #);
+	notFound::
+	  (#
+	  do cursors.arrow[]->cursorRef[];
+	     true->continue
+	  #)
+     do (if current.cur[]=NONE then
+            &cursor[]->current.cur[];
+            current.cur.load
+              (# x11ID:: (# do current.x11ID->ID #);
+                 macID:: (# do current.macID->ID #);
+                 ntiID:: (# do current.ntiID->ID #);
+                 ntiNAME:: (# do current.ntiNAME[]->ID[] #);
+              #)
+        if);
+        current.cur[]->cursorRef[];
+     #)
+
+
+--- cursortablelib: attributes ---
+lookupTable: hashtable
+  (# indexer: @honeyman;
+     ph: @pathhandler;
+     init:: (# do indexer.init; ph.init #);
+     load:
+       (# cursorStream: ^stream; 
+          overwrite: @boolean;
+          elm:^element;
+       enter (cursorStream[], overwrite)
+       do 
+(* cursor file format:
+ *    x11ID macID ntiID ntiNAME cursorName
+ * where ntiNAME is used iff ntiID=0.  If any of the ID's are -1,
+ * this implies that the given cursor does not exist on that platform
+ *)
+          loop:
+            (if not cursorStream.eos then
+                &element[]->elm[];
+                cursorStream.getint->elm.x11ID;
+                cursorStream.getint->elm.macID;
+                cursorStream.getint->elm.ntiID;
+                cursorStream.getatom->elm.ntiNAME[];
+                cursorStream.scanwhitespace;
+                cursorStream.getline->elm.name[];
+                elm.name[]
+                  ->indexer.hash
+                  ->findIndexed
+                (# predicate::
+                     (# do elm.name[]->current.name.equal->value #);
+                   notFound::
+                     (#
+                     do elm[]->insert;
+                        true->continue
+                     #)
+                do (if overwrite then elm.cur[]->current.cur[] if)
+                #);
+                restart loop
+            if)
+       #);
+     loadFile:
+       (# filename: ^text; overwrite: @boolean
+       enter (filename[], overwrite)
+       do read:
+	    (# cursorFile: @file
+		 (# AccessError:: (# do leave read #);
+		    ReadError:: (# do leave read #);
+		    EOSerror:: (# do leave read #);
+		    NoSuchFileError:: (# do leave read #);
+		    OtherError:: (# do leave read #);
+		 #);
+	       elm: ^element;
+	    do (filename[],currentDirectory)
+		 ->ph.convertFilePath
+		 ->cursorFile.name;
+	       cursorFile.openRead;
+	       loop:
+		 (if not cursorfile.eos then
+		     &element[]->elm[];
+(*		     (cursorFile.getint)*256->elm.cur.red;
+ *		     (cursorFile.getint)*256->elm.cur.green;
+ *		     (cursorFile.getint)*256->elm.cur.blue;
+ *)		     cursorFile.scanwhitespace;
+		     cursorFile.getline->elm.name[];
+		     elm.name[]
+		       ->indexer.hash
+		       ->findIndexed
+		       (# predicate::
+			    (# do elm.name[]->current.name.equal->value #);
+			  notFound::
+			    (#
+			    do elm[]->insert;
+			       true->continue
+			    #)
+		       do (if overwrite then elm.cur[]->current.cur[] if)
+		       #);
+		     restart loop
+		 if)
+	    #);
+       #);
+     hashFunction:: (# do e.name[]->indexer.hash->value #);
+     rangeInitial:: (# do 750->value #);
+     element::
+       (# name: ^text;
+          x11ID, macID, ntiID: @integer; ntiNAME: ^text;
+	  cur: ^cursor;
+       #)
+  #)
