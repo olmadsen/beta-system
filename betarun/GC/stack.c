@@ -609,7 +609,15 @@ void ProcessStack()
 
 void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 {
-  DEBUG_STACK(fprintf(output, "\nProcessStackObject 0x%x\n", sObj));
+  DEBUG_CODE(long oldDebugStack=DebugStack);
+
+  DEBUG_STACKOBJ(fprintf(output, " *-*-* StackObject 0x%x *-*-*\n", (int)sObj));
+  DEBUG_CODE(if (DebugStackObj){
+    DebugStack=TRUE;
+  } else {
+    DebugStack=FALSE;
+  });
+  
 #ifdef ppcmac
   StackObjEnd = (long)sObj->Body;
 #endif
@@ -619,6 +627,8 @@ void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 		     FALSE, /* Do not only process dyn cells */
 		     func
 		     ); 
+  DEBUG_STACKOBJ(fprintf(output, " *-*-* End StackObject 0x%x *-*-*\n", (int)sObj));
+  DEBUG_CODE(DebugStack=oldDebugStack);
 }
 
 #endif /* NEWRUN */
@@ -692,7 +702,6 @@ void ProcessRefStack(unsigned size, Object **bottom, CellProcessFunc func)
 
 void ProcessStack()
 {
-
   ProcessRefStack(((unsigned)RefSP-(unsigned)&ReferenceStack[0]) >> 2,
                   (Object **)ReferenceStack, 
 		  DoStackCell);
@@ -705,18 +714,31 @@ void ProcessStack()
  * RefStackLength
  * RefStack section
  */
-void ProcessStackObj(StackObject *theStackObject, CellProcessFunc func)
+void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 {
   long *        theEnd;
+  DEBUG_CODE(long oldDebugStack=DebugStack);
 
-  DEBUG_IOA(fprintf(output, "ProcessStackObj: theStack: 0x%x, size: 0x%x\n", (int)theStackObject, (int)(theStackObject->StackSize)));
+  DEBUG_STACKOBJ({
+    fprintf(output, 
+	    " *-*-* StackObject: 0x%x, size: 0x%x *-*-*\n", 
+	    (int)sObj, 
+	    (int)(sObj->StackSize));
+  });
+  DEBUG_CODE(if (DebugStackObj){
+    DebugStack=TRUE;
+  } else {
+    DebugStack=FALSE;
+  });
 
-  Claim(theStackObject->StackSize <= theStackObject->BodySize,
-                   "ProcessReference: StackObjectType: Stack <= Object");
+  Claim(sObj->StackSize <= sObj->BodySize, "StackObject: Stack <= Object");
 
-  theEnd = &theStackObject->Body[0] + theStackObject->StackSize;
+  theEnd = &sObj->Body[0] + sObj->StackSize;
 
   ProcessRefStack(*theEnd, (Object **)(theEnd+1), func);
+
+  DEBUG_STACKOBJ(fprintf(output, " *-*-* End StackObject 0x%x *-*-*\n", (int)sObj));
+  DEBUG_CODE(DebugStack=oldDebugStack);
 }
 
 #endif /* hppa */
@@ -905,48 +927,46 @@ void ProcessStack()
 GLOBAL(long lastPC)=0;
 #endif
 
-void ProcessStackObj(StackObject *theStack, CellProcessFunc func)
+void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 {
     RegWin *theAR;
     long delta;
-#ifdef RTDEBUG
-    long oldDebugStack=DebugStack;
-#endif
+    DEBUG_CODE(long oldDebugStack=DebugStack);
 
-    if (!theStack->StackSize) {
-      return;
-    }
-    /* Start at theStack->Body[1], since theStack->Body[0] is saved FramePointer */
-    delta = (char *) &theStack->Body[1] - (char *) theStack->Body[0];
-    
-    DEBUG_STACKOBJ(fprintf(output, " *-*-* StackObject (age %d) *-*-*\n", (int)theStack->GCAttr);
-		   lastPC=PC;
-		   /* The PC of the topmost AR is saved in CallerLCS of the comp this stackobj 
-		    * belongs to. It is not known here. 
-		    */
-		   PC = 0;
-		   );
-
+    DEBUG_STACKOBJ({
+      fprintf(output, " *-*-* StackObject 0x%x *-*-*\n", (int)sObj);
+      lastPC=PC;
+      /* The PC of the topmost AR is saved in CallerLCS of the comp this stackobj 
+       * belongs to. It is not known here. 
+       */
+      PC = 0;
+    });
     DEBUG_CODE(if (DebugStackObj){
       DebugStack=TRUE;
     } else {
       DebugStack=FALSE;
     });
 
-    for (theAR =  (RegWin *) &theStack->Body[1];
-	 theAR != (RegWin *) &theStack->Body[theStack->StackSize];
+    if (!sObj->StackSize) {
+      return;
+    }
+    /* Start at sObj->Body[1], since sObj->Body[0] is saved FramePointer */
+    delta = (char *) &sObj->Body[1] - (char *) sObj->Body[0];
+    
+    for (theAR =  (RegWin *) &sObj->Body[1];
+	 theAR != (RegWin *) &sObj->Body[sObj->StackSize];
 #ifdef RTDEBUG
 	 PC = theAR->i7 +8, 
 #endif
 	   theAR =  (RegWin *) (theAR->fp + delta))
       {
-	Claim(&theStack->Body[1] <= (long *) theAR
-	      && (long *) theAR <= &theStack->Body[theStack->StackSize],
+	Claim(&sObj->Body[1] <= (long *) theAR
+	      && (long *) theAR <= &sObj->Body[sObj->StackSize],
 	      "ProcessStackObj: theAR in StackObject");
 	ProcessAR(theAR, (RegWin *) (theAR->fp + delta), func);
       }
 
-    DEBUG_STACKOBJ(fprintf(output, " *-*-* End StackObject *-*-*\n");
+    DEBUG_STACKOBJ(fprintf(output, " *-*-* End StackObject 0x%x *-*-*\n", (int)sObj);
 		   PC=lastPC;
 		   );
     DEBUG_CODE(DebugStack=oldDebugStack);
@@ -1102,18 +1122,26 @@ void ProcessStack()
     DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
 }
 
-void ProcessStackObj(StackObject *theStack, CellProcessFunc func)
+void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 { 
   long    *stackptr; 
   Object **theCell; 
   long    *theEnd;
-	    
-  Claim(theStack->StackSize <= theStack->BodySize,
+  DEBUG_CODE(long oldDebugStack=DebugStack);
+
+  DEBUG_STACKOBJ(fprintf(output, " *-*-* StackObject 0x%x *-*-*\n", (int)sObj));	
+  DEBUG_CODE(if (DebugStackObj){
+    DebugStack=TRUE;
+  } else {
+    DebugStack=FALSE;
+  });
+    
+  Claim(sObj->StackSize <= sObj->BodySize,
 		   "ProcessReference: StackObjectType: Stack > Object");
 	    
-  theEnd = &theStack->Body[0] + theStack->StackSize;
+  theEnd = &sObj->Body[0] + sObj->StackSize;
 	    
-  for (stackptr = &theStack->Body[0]; stackptr < theEnd; stackptr++) {
+  for (stackptr = &sObj->Body[0]; stackptr < theEnd; stackptr++) {
     switch (*stackptr) {
     case -8: stackptr++;
     case -7: stackptr++;
@@ -1130,6 +1158,8 @@ void ProcessStackObj(StackObject *theStack, CellProcessFunc func)
       func(theCell, *theCell);
     }
   }
+  DEBUG_STACKOBJ(fprintf(output, " *-*-* End StackObject 0x%x *-*-*\n", (int)sObj));
+  DEBUG_CODE(DebugStack=oldDebugStack);
 }
 
 #ifdef RTDEBUG
