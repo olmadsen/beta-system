@@ -19,6 +19,12 @@ guienv
             (#
                private: @
                  (#
+                    Handle2Pointer: external
+                      (# hglobal: @int32; cptr: @int32
+                      enter hglobal
+                      do callc
+                      exit cptr
+                      #);
                     theHandle:
                       (#
                          handle: @integer;
@@ -151,27 +157,7 @@ guienv
                            #);
                          DragLeave::<  (#  do S_OK->result #);
                          Drop::< 
-                           (#
-                              hr: @Hresult;
-                              GlobalMemoryPointer: @int32;
-                              str: @cstring;
-                              printf: external
-                                (# format: [0] @char; ptr: @integer
-                                enter (format,ptr)
-                                do callc
-                                #);
-                              (*  _HandToPtr: external
-                               (# mhandle: @int32; ptr: @int32
-                               enter mhandle
-                               do callc
-                               exit ptr
-                               #) *)
-                              Handle2Pointer: external
-                                (# hglobal: @int32; cptr: @int32
-                                enter hglobal
-                                do callc
-                                exit cptr
-                                #)
+                           (# hr: @Hresult
                            do
                               preferredType->tempFormatETC.cfFormat;
                               none ->tempFormatETC.ptd[];
@@ -182,12 +168,18 @@ guienv
                                 ->pDataObj.GetData->hr;
                               ;
                               (if hr.value = S_OK then
-                                  tempSTGMedium.hglobal->Handle2Pointer
-                                    ->GlobalMemoryPointer;
-                                  GlobalMemoryPointer->str.charptr;
-                                  str.get->putline;
-                                  action->pdwEffect;
-                                  (* ('%s\n',GlobalMemoryPointer)->printf *)
+                                  (if grfKeyState <> modifiers then
+                                  (* modifiers changed since last time - ask user for action again *)
+                                      (supportedTypes,grfKeyState,pdwEffect)
+                                        ->media->(preferredType,action)
+                                  if);
+                                  (preferredType,action,tempSTGMedium.hglobal)
+                                    ->THIS(COleDropTarget).drop;
+                                  action
+                                    ->pdwEffect
+                                    (* If e.g. action is DROPEFFECT_MOVE, then
+                                     the source should be told so - in order to delete the selection. *)
+                                    ;
                                   S_OK->result
                                else
                                   write_debug:
@@ -217,7 +209,7 @@ guienv
                                        if);
                                        ').'->putline
                                     #);
-                                  S_OK->result
+                                  E_INVALIDARG->result
                               if);
                               
                            #)
@@ -360,7 +352,12 @@ guienv
                  (#
                     asText:
                       (# t: ^text
-                      do 'asText implementation'->t[]
+                      do
+                           (# str: @cstring
+                           do
+                              objectHandle->private.Handle2Pointer->str.charptr;
+                              str.get->t[]
+                           #)
                       exit t[]
                       #);
                     ;
@@ -382,9 +379,20 @@ guienv
                     (if CF_TEXT->typeIsSupported then
                         CF_TEXT->preferredType
                     if)
+                 #);
+               drop::
+                 (# 
+                 do
+                    (if type = CF_TEXT then
+                        '\nFoelgende er blevet droppet:'->putline;
+                        asText->putline;
+                        newline
+                     else
+                        'Hvilken type er blevet droppet?'->putline
+                    if)
                  #)
             #);
-          open::<
+          open::< 
             (# 
             do
                (265,140)->size;
@@ -393,7 +401,7 @@ guienv
                'Drag\'n\'drop demo'->title;
                DropTarget.register
             #);
-          eventHandler::<
+          eventHandler::< 
             (# onAboutToClose::<  (#  do DropTarget.revoke; terminate #)
             #);
           target_btn: @pushbutton
