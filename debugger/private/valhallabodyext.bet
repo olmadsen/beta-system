@@ -39,7 +39,7 @@ do
 #)  
 
 -- valhalladoFinish: Descriptor --
-(#
+(# debugFinish:(# exit false #);
    p: @ (*gui.*) breakpointcontroller
      (#
         getFocus:: 
@@ -48,20 +48,34 @@ do
      #);
    node: ^astinterface.ast;
    dummy: @integer;
-   cs: ^componentstack;
-   comp: ^processInterface.remoteBetaObject;
-   returnadr: @integer;
+   cs,callcs: ^componentstack;
+   comp,callcomp: ^processInterface.remoteBetaObject;
+   returnadr,componentaddr: @integer;
    impi: ^debuggee.ImperativeInfo;
-   
+   after:@boolean
 do (* getFocus->node[];  *)
+   (if debugfinish then 'Finished Called'->screen.putline if);
    p.init;
    lasteditor.sifviewer.cs->(node[],dummy,dummy,dummy);
    debuggee.currentRemoteComponent->comp[];
    (* this component *)
    comp.getAddress->debuggee.getStack->cs[];
+   (if debugfinish then 'stack.last=%d\n'->putformat(# do cs.last->d #) if);
    (* stack of this component *)
-   cs.returnAdrs[2]->returnadr;
-   (* adrs[1] is this object, 2 is calling address *)
+   (if cs.last>2 then (* not bottom of object stack *)
+       cs.returnAdrs[2]->returnadr
+       (* adrs[1] is this object, 2 is calling address *)
+    else
+       (* was bottom of stack, try to find calling object in calling component *)
+       cs.callingComponents[1]-> componentaddr;
+       componentaddr->debuggee.newRemoteObject->callcomp[];
+        (if debugfinish then'caller is component:%d\n'->putformat(# do callcomp.isComp->d #) if);
+       callcomp.getaddress->debuggee.getStack->callcs[];
+       callcs.returnAdrs[1]->returnAdr; (* actually call point. ??*)
+        (if debugfinish then'callcs.returnAdrs[1]=%d\n'->putformat(# do returnAdr->d #) if);
+        (if debugfinish then'callcs.returnAdrs[2]=%d\n'->putformat(# do  callcs.returnAdrs[2]->d #) if);
+       True->After;
+   if);
    (if returnadr = 0 then
        ('Trying to Finish descriptor!','Warning Could not find return address!')
          -> (*FGC, gui.*) alertinfo;
@@ -85,7 +99,7 @@ do (* getFocus->node[];  *)
    (* error occured *)
    impi.cast[]->node[];
    (* ast corresp. to addr *)
-   (if (node[],FALSE,debuggee[])->p.setOneShotBreakpoint then
+   (if (node[],After,debuggee[])->p.setOneShotBreakpoint then
        doContinue; (* go *) 
    if);
    
