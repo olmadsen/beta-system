@@ -1,6 +1,7 @@
 ORIGIN '~beta/freja/frejalib';
 INCLUDE '~beta/interfacebuilder/friggapplication'
         '~beta/process/processmanager'
+        '~beta/process/streamgenerator'
         'seticon'
         '~beta/debugger/valhallaapplication'
         '~beta/toollibs/preferences/cmdOptions'
@@ -377,7 +378,75 @@ do
         mjolnerPrefs: ^mjolnerPreferences;
         compilerPrefs: ^compilerPreferences;
         
-     do
+        MjolnerDoitHandler: system
+          (# port: (# exit 6133 #);
+             ClientSockType: StreamSocket
+               (# error::
+                    (# 
+                    do true->SocketFailedFlag;
+                       errCB_abortOperation->value;
+                    #)
+               #);
+             streamGen: @SocketGenerator;
+             clientSock: ^ClientSockType;
+             t, cmd: ^Text;
+             SocketFailedFlag: @Boolean;
+          do port -> streamGen.bind;   (* The port chosen for this service. *)
+             cycle
+             (# 
+             do false -> SocketFailedFlag;
+                waitForever 
+                  -> streamGen.getStreamConnection
+                (# sockType::ClientSockType #) -> clientSock[];
+                (if not SocketFailedFlag then
+                    clientSock.getLine -> t[];
+                    (if not SocketFailedFlag then
+                        
+                        t.reset;
+                        t.getAtom->cmd[];
+                        (if true
+                         // 'OpenFile'->cmd.equal then
+                            (t.getpos+2, 99999)->t.sub
+                              -> ExternalAppendProject;
+                         else
+                            'Mjolner: Got "'->screen.putText;
+                            t[]->screen.putText;
+                            '" which is not a legal command'->screen.putLine;
+                        if);
+                     else
+                        'MjolnerDoitHandler: failed to getLine'
+                          ->screen.putLine;
+                    if);
+                    clientSock.close;
+                if);
+             #);
+          #);
+        
+        ExternalAppendProject:
+          (# name, fgname,ffname: ^text; f: @file; 
+          enter name[]
+          do name[]->analyzeArg->(fgname[],ffname[]);
+             (if fgname.length > 0 then
+                 (if ffname.length > 0 then
+                     fgname[]->f.name;
+                     (if f.entry.exists then
+                         (if ffname.length > 0 then
+                             fgname[]->ymerBrowser.appendProject;
+                             (fgname[],ffname[])
+                               ->ymerBrowser.browser.selectFragmentform
+                          else
+                             fgname[]->ymerbrowser.appendProject
+                         if);
+                         
+                     if)
+                  else
+                     fgname[]->ymerbrowser.appendProject
+                 if);
+                 ymerbrowser.appendDone;
+             if);
+          #);
+     do  &|MjolnerDoitHandler[]->fork;
+
         <<SLOT mjolnerPlatformInit:Descriptor>>;
         'Mjolner Programming Environment version 6.0 (0) '->puttext;
         machine_type->putLine;
@@ -390,26 +459,7 @@ do
             mjolnerprefs.scanArguments
               (# fgname,ffname: ^text; f: @file; 
               do
-                 current[]->analyzeArg->(fgname[],ffname[]);
-                 (if fgname.length > 0 then
-                     (if ffname.length > 0 then
-                         fgname[]->f.name;
-                         (if f.entry.exists then
-                             (if ffname.length > 0 then
-                                 fgname[]->ymerBrowser.appendProject;
-                                 (fgname[],ffname[])
-                                   ->ymerBrowser.browser.selectFragmentform
-                              else
-                                 fgname[]->ymerbrowser.appendProject
-                             if);
-                             
-                         if)
-                      else
-                         fgname[]->ymerbrowser.appendProject
-                     if)
-                 if);
-                 ymerbrowser.appendDone;
-                 
+                 current[]->ExternalAppendProject;
               #);
             
          else
