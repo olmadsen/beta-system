@@ -1,7 +1,7 @@
 runsematt.bet: always
-#	/users/beta/meta/v4.7/sun3/gen runtime
-	generator runtime
-	bobsit runtime
+#	/users/beta/meta/v4.8/SUN4gen runtime
+	BETART=QuaCont; export BETART; generator runtime
+	BETART=QuaCont; export BETART; bobsit runtime
 	cp runtimecfl.bet  runsematt.bet 
 
 always:
