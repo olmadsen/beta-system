@@ -88,6 +88,35 @@ EOFpeek: External
   exit eof
   #);
 
+
+isEntryDir: external
+  (# path: [1]@char;
+     isdir: @integer;
+  enter path
+  exit isdir (* -1 => error *)
+  #);
+ 
+isEntryFile: external
+  (# path: [1]@char;
+     isfile: @integer;
+  enter path
+  exit isfile (* -1 => error *)
+  #);
+
+getEntrySize: external
+  (# path: [1]@char;
+     size: @integer;
+  enter path
+  exit size (* -1 => error *)
+  #);
+
+getEntryModtime: External
+  (# path: [1]@char;
+     time: @integer;
+  enter path
+  exit time (* -1 => error *)
+  #);
+
 setEntryModtime: External
   (# path: [1]@char;
      time: @integer;
@@ -132,9 +161,8 @@ chownNtEntry: External
 
 entryExists: External
   (# path: [1]@char;
-     followlinks: @boolean (* ignored for NT *);
      status: @integer; (* -1 => error, 1 => exists, 0 => non-existing *)
-  enter (path, followlinks)
+  enter path
   exit status
   #);
 
@@ -212,6 +240,8 @@ do 'Disk entry exception for '''->msg.puttext;
 (# path: @text;
    pathchanged: @boolean;
    head, name, main, suf: @text;
+   tmp: @integer;
+   permBuf: [9] @integer;
    decomposepath: @
      (# i: @integer;
      do (if pathchanged then
@@ -267,7 +297,7 @@ do INNER;
 do INNER; private.path.copy -> p[]
 
 --DiskEntryExists: dopart--
-do (if ((private.path, 0) -> entryExists)
+do (if (private.path -> entryExists)
     // 0  then false -> value;
     // 1  then true -> value;
     // -1 then error;
@@ -281,21 +311,16 @@ do INNER;
    if);
    
 --DiskEntrySize: dopart--
-do (if private.dostat then -1 -> value; error;
-    else private.statbuf[15] -> value;
-   if)
-
+do (if (private.path->getEntrySize->value)=-1 then 0->value; error if)
+   
 --DiskEntryGetModTime:dopart--
-do (if private.dostat then
-       -1 -> time; error;
-    else private.statbuf[17] -> time
-   if)
+do (if (private.path -> getEntryModtime -> time) = -1 then error if)
 --DiskEntrySetModTime:dopart--
 do (if ((private.path,time) -> setEntryModtime)=-1 then error if);
 
 --DiskEntryRename: dopart--
 do (if newpath[]=NONE then &text[]->newpath[] if);
-   (if ((private.path, 0) -> entryExists) <> 1 then error
+   (if (private.path -> entryExists) <> 1 then error
     else
        (if ((private.path, newpath) -> renameNtEntry)=-1 then error;
         else newpath -> private.path;
@@ -319,16 +344,18 @@ do (if ((private.path, F_OK) -> access)=0 then (* File exists *)
 #)
 
 --DiskEntryIsDir: dopart--
-do (if private.dostat then error;
-    else private.statBuf[3]=1 -> value
+do (if (private.path->isEntryDir->private.tmp)=-1 then 
+       error 
+    else 
+       (private.tmp<>0) -> value
    if)
 
 --DiskEntryIsFile: dopart--
-do (if private.dostat then error;
-    else private.statBuf[6]=1 -> value
+do (if (private.path->isEntryFile->private.tmp)=-1 then 
+       error 
+    else 
+       (private.tmp<>0) -> value
    if)
-
-
 
 --FilePrivate:descriptor--
 (# outputFile: @boolean; (* True iff this file is opened for writing. *)
@@ -367,7 +394,7 @@ do 'Error in system call: ' -> msg.puttext;
    INNER
 
 --FileTouch: dopart--
-do (if ((entry.private.path, 0) -> entryExists) 
+do (if (entry.private.path -> entryExists) 
     // -1 then error;
     // 0 then
        (if (entry.private.path -> createntfile)=-1 then error if);

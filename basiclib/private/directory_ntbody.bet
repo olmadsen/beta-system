@@ -17,6 +17,13 @@ INCLUDE 'file_ntbody'
 
 -- DirectoryLib: attributes ---
 
+entryStatus: external
+  (# path: [0] @char; 
+     status, result: @integer;
+  enter (path, status)
+  exit result
+  #);
+
 ScanDir: External
   (# dir: [0] @char; 
      callBack: ##external; 
@@ -123,7 +130,14 @@ DirFullPath:
 
 
 -- DirPrivate: descriptor --
-   (# cwd: ^text #)
+(# cwd: ^text;
+   statBuf: [20] @integer;
+   dostat: @
+     (# path: [0]@char
+     enter path
+     exit (((path,@@statBuf[1]) -> entryStatus) = -1) 
+     #)
+#)
 
 -- DirException: descriptor --
 (# 
@@ -138,8 +152,7 @@ do msg.newline;
 
 -- DirTouch: descriptor--
 (# 
-do entry.private.checkfollow;
-   (if ((entry.private.path, entry.private.follow) -> entryExists) 
+do (if (entry.private.path -> entryExists) 
     // -1 then error
     // 0  then
        (if (entry.private.path -> createntdirectory)//-1 then error if);
@@ -162,8 +175,7 @@ do (if (entry.private.path) -> isDirEmpty
 
 -- DirDelete: descriptor --
 (# 
-do entry.private.checkfollow;
-   (if ((entry.private.path, entry.private.follow) -> entryExists) 
+do (if (entry.private.path -> entryExists) 
     // -1 then error
     // 0 then nosuch
     // 1  then
@@ -176,7 +188,7 @@ do (if name[]//NONE then &text[]->name[] else name.copy->name[]  if);
    (if entry.private.path.t[entry.private.path.length] // '\\' // ':' then else
        '\\' -> name.prepend; if);
    entry.path -> name.prepend;
-   (if ((name, false) -> entryExists) 
+   (if (name -> entryExists) 
     // -1 then error;
     // 1 then exists; 
     // 0  then
@@ -190,7 +202,7 @@ do (if name[]//NONE then &text[]->name[] else name.copy->name[]  if);
    (if entry.private.path.t[entry.private.path.length] // '\\' // ':' then else
        '\\' -> name.prepend; if);
    entry.path -> name.prepend;
-   (if ((name, false) -> entryExists) 
+   (if (name -> entryExists) 
     // -1 then error;
     // 0 then nosuch;
     // 1  then
@@ -202,7 +214,7 @@ do (if name[]//NONE then &text[]->name[] else name.copy->name[]  if);
    (if entry.private.path.t[entry.private.path.length] // '\\' // ':' then else
        '\\' -> name.prepend; if);
    entry.path -> name.prepend;
-   (if ((name, false) -> entryExists) 
+   (if (name -> entryExists) 
     // -1 then error;
     // 1 then exists;
     // 0  then
@@ -216,7 +228,7 @@ do (if name[]//NONE then &text[]->name[] else name.copy->name[]  if);
    (if entry.private.path.t[entry.private.path.length] // '\\' // ':' then else
        '\\' -> name.prepend; if);
    entry.path -> name.prepend;
-   (if ( (name, false) -> entryExists) 
+   (if (name -> entryExists) 
     // -1 then error;
     // 0 then nosuch
     // 1  then
@@ -232,38 +244,40 @@ do (if found[]//NONE then
 	// '.' -> entry.private.path.equal 
 	// private.cwd[] -> entry.private.path.equal then
 	   (* THIS(Directory) is current directory *)
-	   (if found.private.dostat
-	    // True then error;
-	   if);     
+	   (if found.private.path -> private.dostat then error if);     
 	// entry.private.path.t[1]='\\'
         // (entry.private.path.length>1) and (entry.private.path.t[2]=':') then
 	   (* Absolute path, not CWD *)
 	   (# path: @text;
 	   do entry.private.path -> path;
-              (if path.t[path.length] // '\\' // ':' then else
-                  '\\' -> path.append; if);
+              (if path.t[path.length] 
+               // '\\' 
+               // ':' then 
+               else
+                  '\\' -> path.append; 
+              if);
 	      found.private.path[] -> path.append;
-	      (if ( ((path,@@found.private.statBuf[1],
-		  @@found.private.permBuf[1],
-		  found.private.follow) -> entryStatus)<0 )
-	       // True then error;
-	      if);
+	      (if found.private.path -> private.dostat then error if);
 	   #)
 	else
 	   (* THIS(directory) has path relative to CWD *)
 	   (# path: @text;
 	   do private.cwd -> path;
-              (if path.t[path.length] // '\\' // ':' then else
-	          '\\' -> path.append; if);
+              (if path.t[path.length] 
+               // '\\' 
+               // ':' then 
+               else
+	          '\\' -> path.append; 
+              if);
 	      entry.private.path[] -> path.append;
-              (if path.t[path.length] // '\\' // ':' then else
-	          '\\' -> path.append; if);
+              (if path.t[path.length] 
+               // '\\' 
+               // ':' then 
+               else
+	          '\\' -> path.append; 
+              if);
 	      found.private.path[] -> path.append;
-	      (if ( ((path,@@found.private.statBuf[1],
-		  @@found.private.permBuf[1],
-		  found.private.follow) -> entryStatus)<0 )
-	       // True then error;
-	      if);
+              (if found.private.path -> private.dostat then error if);
 	   #)
        if);
    if)
@@ -273,8 +287,8 @@ do (if found[]//NONE then
 (# 
 do (if selectedInInner // false then
        (if 1
-	// found.private.statBuf[6] then whenfile;
-	// found.private.statBuf[3] then whendir;
+	// private.statBuf[6] then whenfile;
+	// private.statBuf[3] then whendir;
 	else
 	   whenother;
        if)
@@ -373,9 +387,7 @@ do (if true
     // '.' -> entry.private.path.equal 
     // private.cwd[] -> entry.private.path.equal then
        (* THIS(Directory) is current directory *)
-       (if found.private.dostat
-	// True then error;
-       if);     
+       (if found.private.path -> private.dostat then error if);     
     // entry.private.path.t[1]='\\'
     // (entry.private.path.length>1) and (entry.private.path.t[2]=':') then
        (* Absolute path, not CWD *)
@@ -384,11 +396,7 @@ do (if true
           (if path.t[path.length] // '\\' // ':' then else
 	      '\\' -> path.append; if);
 	  found.private.path[] -> path.append;
-	  (if ( ((path,@@found.private.statBuf[1],
-	      @@found.private.permBuf[1],
-	      found.private.follow) -> entryStatus)<0 )
-	   // True then error;
-	  if);
+	  (if found.private.path -> private.dostat then error if);
        #)
     else
        (* THIS(directory) has path relative to CWD *)
@@ -400,11 +408,7 @@ do (if true
           (if path.t[path.length] // '\\' // ':' then else
 	      '\\' -> path.append; if);
 	  found.private.path[] -> path.append;
-	  (if ( ((path,@@found.private.statBuf[1],
-	      @@found.private.permBuf[1],
-	      found.private.follow) -> entryStatus)<0 )
-	   // True then error;
-	  if);
+	  (if found.private.path -> private.dostat then error if);
        #)
    if);
 #)
@@ -413,8 +417,8 @@ do (if true
 (# 
 do (if selectedInInner // false then
        (if 1
-    	// found.private.statBuf[6] then whenfile;
-    	// found.private.statBuf[3] then whendir;
+    	// private.statBuf[6] then whenfile;
+    	// private.statBuf[3] then whendir;
     	else
        	   whenother;
        if)

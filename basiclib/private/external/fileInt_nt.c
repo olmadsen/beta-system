@@ -53,77 +53,6 @@ int textfile_is_text(char *name)
   return 1;
 }
 
-struct stat statBuffer;        /* used for all calls to stat */
-
-int entryStatus(path,status,permission,follow)
-     char *path;       /* IN par. denoting the path of the entry to be statted */
-     int  *status;     /* OUT par. The buffer must be allocated by Beta. */
-     int  *permission; /* OUT par. ---------------||-------------------- */ 
-     /* In essence an "lstat" call on the entry with absolute path, path.
-        The status of the entry is passed on to Beta by means of the
-        two buffers, status and permission. A return of -1 indicates
-        an error in the stat call, whereas a return of 1 means succes.
-        */
-     int follow; /* follow links ? Ignored by Windows NT*/
-{ int entryType;
-
-if (stat(path,&statBuffer)<0 ) 
-  return -1;
-
-/* fill in the status buffer */
-status[0]=(int) statBuffer.st_dev;
-status[1]=(int) statBuffer.st_ino;
-
-/* The type of the entry */
-entryType=statBuffer.st_mode & S_IFMT;
-status[2]=( S_IFDIR  == entryType ) ? 1 : 0;
-status[3]=( S_IFCHR  == entryType ) ? 1 : 0;
-status[4]=( S_IFBLK  == entryType ) ? 1 : 0;
-status[5]=( S_IFREG  == entryType || !entryType) ? 1 : 0;
-/* status[6]=0; /* currently not used */
-/* status[7]=0; /* currently not used */
-/* status[8]=0; /* currently not used */
-/* status[9]=0; /* currently not used */
-status[10]=(int) statBuffer.st_nlink;
-status[11]=(int) statBuffer.st_uid;
-status[12]=(int) statBuffer.st_gid;
-status[13]=(int) statBuffer.st_rdev;
-status[14]=(int) statBuffer.st_size;
-status[15]=(int) statBuffer.st_atime;
-status[16]=(int) statBuffer.st_mtime;
-status[17]=(int) statBuffer.st_ctime;
-/* status[18]= /* currently not used */
-/* status[19]= /* currently not used */
-
-/* The mode of the entry denoted by the full path name, path, is 
-   is changed according to the supplied permission buffer.
-   The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
-   related to the mode for the "other" category, the next 3 give the mode
-   for "group" and the last 3 denote the mode of "owner". The integers 
-   should be inetrpreted as follows :
-   
-   |other                |group                |owner
-   -----------------------------------------------------------------
-   protection :exec | write | read  | exec | write | read | exec | write | read
-   -----------------------------------------------------------------
-   
-   If for example the (other,exec) integer is 1, the "other" category are
-   given execute permission to the entry.
-   */
-
-/* fill in the permission buffer */
-/* permission[0] * currently not used */
-/* permission[1] * currently not used */
-/* permission[2] * currently not used */
-/* permission[3] * currently not used */
-/* permission[4] * currently not used */
-/* permission[5] * currently not used */
-permission[6]=( S_IXUSR & statBuffer.st_mode ) ? 1 : 0;
-permission[7]=( S_IWUSR & statBuffer.st_mode ) ? 1 : 0;
-permission[8]=( S_IRUSR & statBuffer.st_mode ) ? 1 : 0;
-return 1;
-} 
-
 /* Constants giving the mode in which files are opened */ 
 
 int readMode(int binary)
@@ -183,6 +112,26 @@ int EOFpeek(str)
   }
 }
 
+int isEntryDir(char *path)
+{ 
+  int entryType;
+  if (stat(path,&statBuffer)<0) return -1;
+  return (int) (statBuffer.st_mode & S_IFMT) == S_IFDIR;
+} 
+
+int isEntryFile(char *path)
+{ 
+  int entryType;
+  if (stat(path,&statBuffer)<0) return -1;
+  return (int) (statBuffer.st_mode & S_IFMT) == S_IFREG;
+}
+
+int getEntrySize(char *path)
+{ 
+  int entryType;
+  if (stat(path,&statBuffer)<0) return -1;
+  return (int) statBuffer.st_size;
+} 
 
 int touchEntry(path)
      char *path;
@@ -320,13 +269,3 @@ if(chmod(path,mask)<0)
   return -1;
 return 1;
 }
-
-
-int makeSymLink(src, dst)
-     char *src;
-     char *dst;
-     /* Make src point to dst. exits -1 if an error occurred */
-{
-  return -1;
-}
-

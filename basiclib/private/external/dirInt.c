@@ -268,6 +268,68 @@ char *path;
  return 1;
 }
 
+#ifdef nti
+/* entryStatus is no longer used in file implementation.
+ * For selection in a directoryscan, it is, however, usefull
+ * on win32 too.
+ */
+#include <stdlib.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <stdio.h>
+#include <time.h>
+#include <io.h>
+#ifdef nti_bor
+#include <utime.h>
+#else
+#include <sys/utime.h>
+#define S_IXUSR _S_IEXEC
+#define S_IWUSR _S_IWRITE
+#define S_IRUSR _S_IREAD
+#define S_IFBLK (-1) /* ??? */
+#define ENOTSAM EXDEV
+#endif
+
+extern struct stat statBuffer; /* in fileInt_nt.c */
+
+int entryStatus(path,status)
+     char *path;    /* IN par. denoting the path of the entry to be statted */
+     int  *status;  /* OUT par. The buffer must be allocated by Beta. */
+{ 
+  int entryType;
+  
+  if (stat(path,&statBuffer)<0 ) 
+    return -1;
+  
+  /* fill in the status buffer */
+  status[0]=(int) statBuffer.st_dev;
+  status[1]=(int) statBuffer.st_ino;
+  
+  /* The type of the entry */
+  entryType=statBuffer.st_mode & S_IFMT;
+  status[2]=( S_IFDIR  == entryType ) ? 1 : 0;
+  status[3]=( S_IFCHR  == entryType ) ? 1 : 0;
+  status[4]=( S_IFBLK  == entryType ) ? 1 : 0;
+  status[5]=( S_IFREG  == entryType || !entryType) ? 1 : 0;
+  /* status[6]=0; /* currently not used */
+  /* status[7]=0; /* currently not used */
+  /* status[8]=0; /* currently not used */
+  /* status[9]=0; /* currently not used */
+  status[10]=(int) statBuffer.st_nlink;
+  status[11]=(int) statBuffer.st_uid;
+  status[12]=(int) statBuffer.st_gid;
+  status[13]=(int) statBuffer.st_rdev;
+  status[14]=(int) statBuffer.st_size;
+  status[15]=(int) statBuffer.st_atime;
+  status[16]=(int) statBuffer.st_mtime;
+  status[17]=(int) statBuffer.st_ctime;
+ 
+  return 1;
+} 
+#endif /* nti */
+
 #ifdef test
 void CopyOut(buf)
      char *buf;
