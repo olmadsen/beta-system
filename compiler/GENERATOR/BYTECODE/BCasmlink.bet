@@ -89,11 +89,10 @@ containerlist: list(# #);
 
 --translateasmlinklib: attributes ---
 (* Configuration: *)
-use_java_classpath:
-  (* Use 'java -cp ... for executing jar files instead of 'java -jar ...' *)
-  (# exit true #);
 main_in_program:
   (# exit true #);
+only_program_jar:
+  (# exit common.switch[326] #);
 no_jar_compression:
   (# exit common.switch[325] #);
 use_relative_jar_paths:
@@ -656,8 +655,24 @@ do 'asmlinkdynamic'->TODO
      (# path, pwd: ^text;
         jvmpath: ^text;
         start,end: @integer;
+        addToJatFile:
+          (#
+          do 'echo ' -> ldA.puttext;
+             (if common.hostIsWindows then
+                 '-C ' -> (jvmpath.copy -> tick).prepend -> ldAputtext;
+              else
+                 '-C ' -> (jvmpath.copy -> tick).prepend -> tick -> ldAputtext;
+             if);
+             ' ' -> ldA.putText;
+             path[] -> tick -> ldAputtext;
+             ' >> ' -> ldAputtext;
+             jatfilename -> ldA.putline;
+          #);
      enter path[]
-     do path.copy -> path[]; (* avoid aliasing *)
+     do (if false then
+            'addclassfile: ' -> puttext; path[] -> putline;
+        if);
+        path.copy -> path[]; (* avoid aliasing *)
         (* Find jvm directory in path *)
         path[] -> BackslashToSlash -> jvmpath[];
         (if use_pcre then
@@ -682,16 +697,14 @@ do 'asmlinkdynamic'->TODO
                 if);
             if);
             jvmpath.copy -> ReplaceBetalib -> asmstate.jvmDirs.insertUnique;
-            'echo ' -> ldA.puttext;
-            (if common.hostIsWindows then
-                '-C ' -> (jvmpath.copy -> tick).prepend -> ldAputtext;
+            (if only_program_jar then
+                (*'only_program_jar: ' -> puttext; path[] -> putline;*)
+                (if 'beta/program.class' -> path.equal then
+                    addToJatFile;
+                if);
              else
-                '-C ' -> (jvmpath.copy -> tick).prepend -> tick -> ldAputtext;
+                addToJatFile;
             if);
-            ' ' -> ldA.putText;
-            path[] -> tick -> ldAputtext;
-            ' >> ' -> ldAputtext;
-            jatfilename -> ldA.putline;
         if)
      #);
    addDllFile:
@@ -863,6 +876,27 @@ do (if isJava then
              if);
           exit T[]
           #);
+        jarpath:
+          (# jarpath: ^text;
+          do (CodeDirectory[], ObjDirectory[]) 
+               -> thePathHandler.localpath
+               -> jarpath[];
+             DirectoryChar -> jarpath.put;
+             objName[] -> e.path;
+             e.path.name -> jarpath.append; 
+             '.jar'->jarpath.append;
+          exit jarpath[]
+          #);
+        fullclasspath:
+          (# classpath: ^text;
+          do &text[]->classpath[];
+             asmstate.jvmdirs.scan
+             (# 
+             do searchPathDelimiter -> classpath.put;
+                current[] -> classpath.append;
+             #);
+          exit classpath[]
+          #);
         for_jdb: @boolean;
      enter for_jdb
      do (if common.hostIsWindows then
@@ -935,11 +969,7 @@ do (if isJava then
             #);
             '\\" '                     -> AFF.puttext;
         if);
-        (if use_java_classpath then
-            '-classpath '              -> AFF.puttext;
-         else
-            '-jar '                    -> AFF.puttext;
-        if);
+        '-classpath '                  -> AFF.puttext;
         (* Add LIBFILES to classpath *)
         TX.scan
         (#
@@ -948,32 +978,28 @@ do (if isJava then
                searchPathDelimiter -> AFF.put;
            if)
         #); 
-        (CodeDirectory[], ObjDirectory[]) 
-          -> thePathHandler.localpath
-          -> AFF.puttext;
-        DirectoryChar -> AFF.put;
-        objName[] -> e.path;
-        e.path.name                  -> AFF.puttext; 
-        '.jar '                      -> AFF.puttext;
-        (if use_java_classpath then
-            (if main_in_program then
-                (if (asmstate.program_path[]<>NONE) and (asmstate.program_path.length>0) then
-                    (* Get program path relative to CodeDirectory.
-                     * This is the package path of program.class.
-                     * On SUN it works to give this path as foo/bar/program.
-                     * However using GIJ this only worls using foo.bar.program.
-                     * But since that works on SUN java too, we use that (:-).
-                     *)
-                    (asmstate.program_path[], CodeDirectory.copy) 
-                      -> thePathHandler.localPath
-                      -> slashToDot
-                      -> AFF.puttext;
-                    '.' -> AFF.put;
-                if);
-                'program' -> AFF.puttext;
-             else
-                objname[] -> AFF.puttext;
+        jarpath -> AFF.puttext;
+        (if only_program_jar then
+            fullclasspath -> AFF.puttext;
+        if);
+        ' ' -> AFF.puttext;
+        (if main_in_program then
+            (if (asmstate.program_path[]<>NONE) and (asmstate.program_path.length>0) then
+                (* Get program path relative to CodeDirectory.
+                 * This is the package path of program.class.
+                 * On SUN it works to give this path as foo/bar/program.
+                 * However using GIJ this only worls using foo.bar.program.
+                 * But since that works on SUN java too, we use that (:-).
+                 *)
+                (asmstate.program_path[], CodeDirectory.copy) 
+                  -> thePathHandler.localPath
+                  -> slashToDot
+                  -> AFF.puttext;
+                '.' -> AFF.put;
             if);
+            'program' -> AFF.puttext;
+         else
+            objname[] -> AFF.puttext;
         if);
         (if common.hostIsWindows then 	     
             ' %%_opts_%%'            -> AFF.puttext;
