@@ -1,7 +1,7 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: misc.c, rel: 1, date: 5/4/92, SID: 1.7
- * by Lars Bak.
+ * Mod: $Id: misc.h,v 1.3 1992-09-03 12:57:22 beta Exp $
+ * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
 extern long isObject( );

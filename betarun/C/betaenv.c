@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * by Lars Bak Petersen.
+ * by Lars Bak.
  */
 
 #include <stdio.h>

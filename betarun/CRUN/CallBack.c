@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-08-31 19:19:01 $, SID: $Revision: 1.20 $
+ * Mod: $Id: CallBack.c,v 1.21 1992-09-03 12:55:42 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 

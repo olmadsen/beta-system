@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:59 $, SID: $Revision: 1.17 $
+ * Mod: $Id: Structure.c,v 1.18 1992-09-03 12:56:24 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 

@@ -2,8 +2,8 @@
 #define _BETA_H_
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991, 1992 Mjolner Informatics Aps.
- * Mod: $RCSfile: beta.h,v $, rel: %R%, date: $Date: 1992-08-28 11:57:45 $, SID: $Revision: 1.5 $
- * by Lars Bak, Peter Andersen and Tommy Thorn
+ * Mod: $Id: beta.h,v 1.6 1992-09-03 12:54:03 beta Exp $
+ * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
 #include <stdio.h>

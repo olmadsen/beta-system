@@ -3,7 +3,7 @@
 
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: sparcdep.h, rel: 1, date: 07/31/92, SID: 1.2
+ * Mod: $Id: snakedep.h,v 1.5 1992-09-03 12:54:33 beta Exp $
  * by Peter Orbaek
  */
 

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Suspend.c,v $, rel: %R%, date: $Date: 1992-08-27 15:54:17 $, SID: $Revision: 1.9 $
+ * Mod: $Id: Suspend.c,v 1.10 1992-09-03 12:56:27 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 

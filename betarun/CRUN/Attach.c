@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: Attach.c, rel: 1, date: 8/1/92, SID: 1.7
+ * Mod: $Id: Attach.c,v 1.12 1992-09-03 12:55:34 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 

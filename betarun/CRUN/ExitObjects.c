@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: ExitObjects.c,v $, rel: %R%, date: $Date: 1992-08-31 09:25:14 $, SID: $Revision: 1.6 $
+ * Mod: $Id: ExitObjects.c,v 1.7 1992-09-03 12:56:02 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 

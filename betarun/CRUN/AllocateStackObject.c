@@ -1,7 +1,7 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateStackObject.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:02 $, SID: $Revision: 1.8 $
- * by Peter Andersen and Tommy Thorn.
+ * Mod: $Id: AllocateStackObject.c,v 1.9 1992-09-03 12:55:29 beta Exp $
+ * by Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
 #define GCable_Module

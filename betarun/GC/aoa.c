@@ -1,7 +1,7 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: aoa.c, rel: 1, date: 6/1/92, SID: 1.13
- * by Lars Bak
+ * Mod: $Id: aoa.c,v 1.30 1992-09-03 12:57:02 beta Exp $
+ * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
 #include "aoa.h"

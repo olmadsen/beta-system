@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: PerformGC.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:57 $, SID: $Revision: 1.6 $
+ * Mod: $Id: PerformGC.c,v 1.7 1992-09-03 12:56:22 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 

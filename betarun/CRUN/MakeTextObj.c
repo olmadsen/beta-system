@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: MakeTextObj.c,v $, rel: %R%, date: $Date: 1992-09-03 09:48:52 $, SID: $Revision: 1.9 $
+ * Mod: $Id: MakeTextObj.c,v 1.10 1992-09-03 12:56:11 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 

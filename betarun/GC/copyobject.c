@@ -1,7 +1,7 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-08-31 09:28:08 $, SID: $Revision: 1.12 $
- * by Lars Bak.
+ * Mod: $Id: copyobject.c,v 1.13 1992-09-03 12:57:14 beta Exp $
+ * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
 #include "beta.h"

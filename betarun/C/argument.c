@@ -1,7 +1,7 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: argument.c,v $, rel: %R%, date: $Date: 1991-01-30 10:55:32 $, SID: $Revision: 1.1 $
- * by Lars Bak
+ * Mod: $Id: argument.c,v 1.2 1992-09-03 12:53:59 beta Exp $
+ * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
 

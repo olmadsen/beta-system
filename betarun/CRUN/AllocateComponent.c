@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-08-31 10:03:52 $, SID: $Revision: 1.16 $
+ * Mod: $Id: AllocateComponent.c,v 1.17 1992-09-03 12:55:21 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 

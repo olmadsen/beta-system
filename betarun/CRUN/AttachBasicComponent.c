@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: AttachBasicComponent.c, rel: 1, date: 7/20/92, SID: 1.4
+ * Mod: $Id: AttachBasicComponent.c,v 1.9 1992-09-03 12:55:37 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
