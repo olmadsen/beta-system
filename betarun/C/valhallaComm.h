@@ -1,3 +1,4 @@
+#ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 #ifndef VALHALLACOMM_H
 #define VALHALLACOMM_H
 
@@ -41,4 +42,5 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
 #define CONTINUE 0
 #define TERMINATE 1
 
-#endif
+#endif VALHALLACOMM_H
+#endif RTVALHALLA 

@@ -1,3 +1,4 @@
+#ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 #include <stdio.h>
 #include <signal.h>
 #include <unistd.h>
@@ -577,7 +578,9 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   InstallHandler(SIGILL);
   InstallHandler(SIGBUS);
   InstallHandler(SIGSEGV);
+#ifndef linux
   InstallHandler(SIGEMT);
+#endif
   InstallHandler(SIGINT);
 
   
@@ -588,3 +591,4 @@ int connected_to_valhalla ()
 {
   return (valhallaID!=0);
 }
+#endif RTVALHALLA

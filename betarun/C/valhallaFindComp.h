@@ -1,4 +1,4 @@
-
+#ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 #ifndef VALHALLA_FINDCOMP_H
 #define VALHALLA_FINDCOMP_H
 #include "beta.h"
@@ -12,7 +12,6 @@
 #define CS_STACKOBJ        3  /* component stack in stack object.    */
 #define CS_NOSTACK         4  /* component has no stack.             */
 
-#ifdef sparc
 
 struct ComponentStack{
   struct Component *comp; /* The component */
@@ -21,6 +20,7 @@ struct ComponentStack{
 			   * starts running the next time. */
   union {
     struct { /* if stacktype==CS_PROCESSORSTACK or CS_ACTIVECOMPONENT: */
+#ifdef sparc
       /* FirstAR is the largest address that is not part of the stack of comp.
        * lastAR is the least RegWin that *is* part of the stack, i.e. the 
        * StackEnd for this component stack. Notice that the stack grows 
@@ -31,13 +31,16 @@ struct ComponentStack{
       struct RegWin* firstAR;
       struct RegWin* lastAR;
       struct RegWin* activeCBF;
+#else
+      int dummy;
+#endif sparc
     } if_onstack;
     /* if stacktype==CS_STACKOBJ: */
     struct StackObject *stackObj; 
   } info;
 };
 
-#endif sparc
+
 
 
 
@@ -86,3 +89,4 @@ void scanComponentStack (struct ComponentStack* compStack,
 			 forEachCallType forEach);
 
 #endif VALHALLA_FINDCOMP_H
+#endif RTVALHALLA

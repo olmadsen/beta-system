@@ -24,11 +24,7 @@
 
 #include <stdio.h>
 #include "dot.h"
-#ifdef linux
-/* #include "/usr/local/lib/beta/betarun/v2.6/linux/C/beta.h" */
-#else
 #include "beta.h"  /* Declarations of DOT variables in data.h. */
-#endif
 
 #define DOTinitialSize 50  /* Initial size of DOT. */
 #define DOTcompactLimit 25 /* Free space in DOT required to do a compaction. */

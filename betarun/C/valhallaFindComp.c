@@ -1,3 +1,4 @@
+#ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 #include "valhallaFindComp.h"
 
 #ifdef sparc
@@ -165,3 +166,4 @@ void scanComponentStack (struct ComponentStack* compStack,
 }
 
 #endif sparc
+#endif RTVALHALLA
