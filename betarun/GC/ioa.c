@@ -29,6 +29,42 @@ void ProcessStackObj(struct StackObject *sObj)
     ProcessReference(handle++);
   }
 }
+#ifdef RTDEBUG
+void PrintStackObj(struct StackObject *sObj)
+{
+  struct Object **handle;
+  struct Object **last;
+
+  fprintf(output, "StackObj: 0x%x\n",(int)sObj);
+  fprintf(output, "  BodySize:   0x%x\n",(int)sObj->BodySize);
+  fprintf(output, "  refTopOff:  0x%x\n",(int)sObj->refTopOff);
+  fprintf(output, "  dataTopOff: 0x%x\n",(int)sObj->dataTopOff);
+
+  fprintf(output, "  References\n");
+  handle = (struct Object **)&sObj->Body;
+  last = (struct Object **)((long)sObj + sObj->refTopOff);
+  while (handle<=last) {
+    fprintf(output, 
+	    "    0x%x: 0x%x (%s)\n",
+	    (int)handle, 
+	    (int)*handle, 
+	    ProtoTypeName((*handle)->Proto));
+    handle++;
+  }
+
+  fprintf(output, "  Data\n");
+  handle = (struct Object **)((long)&sObj->Body + sObj->dataTopOff);
+  last = (struct Object **)((long)sObj+headsize(StackObject)+sObj->BodySize);
+  while (handle<=last) {
+    fprintf(output, 
+	    "    0x%x: 0x%x\n",
+	    (int)handle, 
+	    (int)*handle);
+    handle++;
+  }
+}
+
+#endif /*RTDEBUG*/
 #else
 GLOBAL(static IOALooksFullCount) = 0; /* consecutive unsuccessful IOAGc's */
 #endif
@@ -153,19 +189,19 @@ void IOAGc()
     int i;
     for (i = 0; i < TSDlistlen; i++) {
       if (TSDlist[i]) {
-	fprintf(output, "\nTSDlist[%d]: TID=%d:\n", i, TSDlist[i]->_thread_id);
-	fprintf(output, "\tCurrentObject=0x%0x...", (int)TSDlist[i]->_CurrentObject);
+	DEBUG_MT(fprintf(output, "\nTSDlist[%d]: TID=%d:\n", i, TSDlist[i]->_thread_id));
+	DEBUG_MT(fprintf(output, "\tCurrentObject=0x%0x...", (int)TSDlist[i]->_CurrentObject));
 	ProcessReference((handle(Object))(&TSDlist[i]->_CurrentObject));
-	fprintf(output, "CurrentObject=0x%0x\n", (int)TSDlist[i]->_CurrentObject);
-	fprintf(output, "\tOrigin=0x%0x...", (int)TSDlist[i]->_CurrentObject);
+	DEBUG_MT(fprintf(output, "CurrentObject=0x%0x\n", (int)TSDlist[i]->_CurrentObject));
+	DEBUG_MT(fprintf(output, "\tOrigin=0x%0x...", (int)TSDlist[i]->_CurrentObject));
 	ProcessReference((handle(Object))(&TSDlist[i]->_Origin));
-	fprintf(output, "Origin=0x%0x\n", (int)TSDlist[i]->_CurrentObject);
+	DEBUG_MT(fprintf(output, "Origin=0x%0x\n", (int)TSDlist[i]->_CurrentObject));
 	ProcessReference((handle(Object))(&TSDlist[i]->_ActiveStack));
 	ProcessReference((handle(Object))(&TSDlist[i]->_ActiveComponent));
       }
 #ifdef RTDEBUG
       else {
-	fprintf(output, "TSDlist[%d] is NULL\n", i);
+	DEBUG_MT(fprintf(output, "TSDlist[%d] is NULL\n", i));
       }
 #endif
     }
@@ -1063,7 +1099,11 @@ void IOACheckObject (struct Object *theObj)
     return;
     
     case SwitchProto(StackObjectPTValue):
-      fprintf(output,"IOACheckObject: no check of stackobject 0x%x\n", (int)theObj);
+#ifdef NEWRUN
+      ProcessStackObject((struct StackObject *)theObj, CheckIOACell);
+#else
+      DEBUG_STACK(fprintf(output,"IOACheckObject: no check of stackobject 0x%x\n", (int)theObj));
+#endif
       return;
     
     case SwitchProto(StructurePTValue):
