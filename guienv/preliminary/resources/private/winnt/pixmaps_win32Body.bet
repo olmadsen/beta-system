@@ -1,0 +1,153 @@
+ORIGIN '../pixmapsBody';
+INCLUDE
+'~beta/guienv/v1.6/private/winnt/guienv_ntiprivate'
+'~beta/sysutils/v1.6/cstring'
+'~beta/win32lib/v1.6/systemmetrics';
+
+-- guienvlib: attributes --
+
+IMAGE_BITMAP: (# exit 0 #);
+IMAGE_ICON: (# exit 1 #);
+IMAGE_CURSOR: (# exit 2 #);
+
+GetIconInfo: external
+  (# hIcon: @integer;
+     piconinfo: @integer; (* PICONINFO *)
+     result: @integer;
+  enter (hIcon, piconinfo)
+  do callStd;
+  exit result
+  #);
+
+ICONINFO: ExternalRecord
+  (# fIcon: @long (# pos::< (# do 0 -> value; #); #);    (* BOOL *)
+     xHotspot: @long (# pos::< (# do 4 -> value; #); #); (* DWORD *)
+     yHotspot: @long (# pos::< (# do 8 -> value; #); #); (* DWORD *)
+     hbmMask: @long (# pos::< (# do 12 -> value; #); #);  (* HBITMAP *)
+     hbmColor: @long (# pos::< (# do 16 -> value; #); #); (* HBITMAP *)
+  #);
+
+sizeOf_ICONINFO: (# exit 20 #);
+
+BITMAPext: ExternalRecord
+  (# 
+     bmType: @long (# pos::< (# do 0 -> value; #); #); (* LONG *)
+     bmWidth: @long (# pos::< (# do 4 -> value; #); #); (* LONG *)
+     bmHeight: @long (# pos::< (# do 8 -> value; #); #); (* LONG *)
+     bmWidthBytes: @long (# pos::< (# do 12 -> value; #); #); (* LONG *)
+     bmPlanes: @short (# pos::< (# do 16 -> value; #); #); (* WORD *)
+     bmBitsPixel: @short (# pos::< (# do 18 -> value; #); #); (* WORD *)
+     bmBits: @long (# pos::< (# do 20 -> value; #); #); (* LPVOID *)
+  #);
+sizeOf_BITMAPext: (# exit 24 #);
+
+iconGetWidthHeight:
+  (# hIcon: @integer;
+     pIconInfo: @ICONINFO;
+     pbm: @BITMAPext;
+     width,height: @integer;
+  enter hIcon
+  do 
+     sizeOf_ICONINFO -> malloc -> pIconInfo.ptr;
+     (if pIconInfo.ptr<>0 then
+         (if (((hIcon,pIconInfo.ptr) -> GetIconInfo) <> 0) then
+             sizeOf_BITMAPext -> malloc -> pbm.ptr;
+             (if pbm.ptr<>0 then
+                 (pIconInfo.hbmMask,sizeOf_BITMAPext,pbm.ptr) -> GetObject;
+                 pIconInfo.hbmMask -> DeleteObject;
+                 pIconInfo.hbmColor -> DeleteObject;
+                 pbm.bmWidth -> width;
+                 pbm.bmHeight -> height;
+                 pbm.ptr -> free;
+             if);
+         if);
+         pIconInfo.ptr -> free;
+     if);
+  exit (width,height)
+  #);
+
+bitMapGetWidth: external
+  (# hBitmap: @integer;
+     width: @integer;
+  enter hBitmap
+  do 'bitMapGetWidth' -> callC
+  exit width
+  #);
+bitMapGetHeight: external
+  (# hBitmap: @integer;
+     height: @integer;
+  enter hBitmap
+  do 'bitMapGetHeight' -> callC
+  exit height
+  #);
+
+
+LoadImage: external
+  (# hinst: @integer;     (* handle of the instance that contains the image *)
+     lpszName: @integer;  (* name or identifier of image *)
+     uType: @integer;     (* type of image *)
+     cxDesired: @integer; (* desired width *)
+     cyDesired: @integer; (* desired height *)
+     fuLoad: @integer;    (* load flags *)
+     theHandle: @integer;
+  enter (hinst,lpszName,uType,cxDesired,cyDesired,fuLoad)
+  do 'LoadImageA' -> callStd;
+  exit theHandle
+  #);
+
+loadBitmap: external
+  (# hInstance: @integer; (* HINSTANCE *)
+     id: @integer; (* LPCSTR *)
+     hBitmap: @integer; (* HBITMAP *)
+  enter (hInstance,id)
+  do 'LoadBitmapA' -> callStd;
+  exit hBitmap
+  #);
+
+-- loadIconResourceImpl: doPart --
+do (# tempName: @cString;
+   do
+      (if id<>0 then
+          (uienvHinstance,id,IMAGE_ICON,0,0,0)->LoadImage->pm.private.handleToPixmap;
+       else
+          (if name[]<>NONE then
+              name[] -> tempName.set;
+              (if tempName.charPtr<>0 then
+                  (uienvHinstance,tempName,IMAGE_ICON,0,0,0)
+                    ->LoadImage
+                    ->pm.private.handleToPixmap;
+                  tempName.free;
+              if);
+          if);
+      if);
+      
+      (if pm.private.handleToPixmap=0 then
+          'LoadImage failed. Error: ' -> screen.putText;
+          GetLastError -> putint; newline;
+       else
+          pm.private.handleToPixmap -> iconGetWidthHeight->(pm.private.width,pm.private.height);
+      if);
+      
+      true -> pm.private.isIcon;
+      true -> pm.private.isFromResource;
+   #);
+   
+-- loadBitmapResourceImpl: doPart --
+do (# tempName: @cString;
+   do (if name[]<>NONE then
+          name[] -> tempName.set;
+          (if tempName.charPtr<>0 then
+              (uienvHInstance,tempName) -> loadBitmap -> pm.private.handleToPixmap;
+              tempName.free;
+          if);
+       else
+          (uienvHInstance,id) -> loadBitmap -> pm.private.handleToPixmap;
+      if);
+      (if pm.private.handleToPixmap=0 then
+          'loadBitmap failed.' -> screen.putLine;
+       else
+          pm.private.handleToPixmap -> bitMapGetWidth -> pm.private.width;
+          pm.private.handleToPixmap -> bitMapGetHeight -> pm.private.height;
+          true -> pm.private.isFromResource;
+      if);
+   #);
