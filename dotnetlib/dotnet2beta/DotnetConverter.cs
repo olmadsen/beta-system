@@ -159,8 +159,6 @@ namespace beta.converter
 	    ctorlist = cls.GetConstructors(BindingFlags.Instance
 					   | BindingFlags.Public 
 					   | BindingFlags.DeclaredOnly);
-	    if (ctorlist.Length == 0) return ;
-			
 	    foreach (ConstructorInfo ct in ctorlist){
 	      if (isRelevant(ct)) {
 		if (first){
@@ -210,10 +208,8 @@ namespace beta.converter
 			
 	    // Record all methods in order to reveal overloaded methods 
 	    methodcount = new IntegerMap();
-	    for (int i = 0; i < methlist.Length; i++){
-	      if (isRelevant(methlist[i])){
-		methodcount.increment(methlist[i].Name);
-	      }
+	    foreach (MethodInfo meth in methlist){
+	      if (isRelevant(meth)) methodcount.increment(meth.Name);
 	    }
 			
 	    // Then process each method
@@ -290,8 +286,7 @@ namespace beta.converter
 					   | BindingFlags.DeclaredOnly);
 	    foreach  (ConstructorInfo ct in ctorlist){
 	      if (isRelevant(ct)){
-		ParameterInfo[] parameters = ct.GetParameters();
-		foreach (ParameterInfo param in parameters){
+		foreach (ParameterInfo param in ct.GetParameters()){
 		  mapType(cls, param.ParameterType, true);
 		}
 	      }
@@ -314,8 +309,7 @@ namespace beta.converter
 	    }
 	    
 	    // Scan nested classes
-	    Type[] classlist = cls.GetNestedTypes();
-	    foreach (Type nested in classlist){
+	    foreach (Type nested in cls.GetNestedTypes()){
 	      if (isRelevant(nested)) doIncludes(nested);
 	    }
 
@@ -424,8 +418,7 @@ namespace beta.converter
 	      result += ((MethodInfo)m).ReturnType.ToString() + " ";
 	    }
 	    result += m.DeclaringType.Name + "." + m.Name+ "(";
-	    ParameterInfo[] parameters = m.GetParameters();
-	    foreach (ParameterInfo param in parameters){
+	    foreach (ParameterInfo param in m.GetParameters()){
 	      if (needComma) result += ", ";
 	      needComma=true;
 	      result += param.ParameterType.ToString();
@@ -831,8 +824,7 @@ namespace beta.converter
         
 	    // Then search all files in system runtime directory (:-(
 	    // Console.Error.WriteLine("Expensive search for type \"" + cls + "\"");
-	    String[] dlls = Directory.GetFiles(dir, "*.dll");
-	    foreach (String dll in dlls){
+	    foreach (String dll in Directory.GetFiles(dir, "*.dll")){
 	      if (dll.EndsWith("mscorlib.dll")) continue; // mscorlib already examined
 	      if ((trace&TraceFlags.Runtime)!=0) Console.WriteLine("  [searching " + dll + "]");
 	      try {
