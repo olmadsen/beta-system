@@ -346,8 +346,8 @@ long AlloI(int origin, long *proto,long SP) {
 		      FatalErr(0);
                     }
 	    )
-      Gentry(SP,start);
-
+	/* Gentry(SP,start); */
+	CallB(0,start,Gentry,SP);
     };
    TRACE(printf("After Gentry\n");)
    /* dumpHeap();*/
@@ -1168,9 +1168,12 @@ void Att(ref(Object) this, struct Component * comp, long RA, long SPx)
     * Subsequent calls after Attach; a0=SPz, a1=ca;
     */
 
-  /*compAdr(SPz,topObj,SPsize);*/
-  compAdr(SPz,topObj);
-  
+  /* compAdr(SPz,topObj,SPsize);*/
+  if (isFirst)
+    { CallB(0,topObj,compAdr,SPz); }
+  else
+    compAdr(SPz,topObj);
+
   /* Since compAdr has executed BETA code, registers may have been destroyed.
    * On SGI this does NOT cause problmes;
    * On PPC it apparently cause problmes; we can thus NOT reply on local 
@@ -1339,7 +1342,8 @@ void main(long argc, char *argv[])
   topObj = ActiveComponent->Body;
 
   M1BETAENV = theTopEntry(T1BETAENVadr);
-  M1BETAENV(0,topObj);
+  CallB(0,topObj,M1BETAENV,0);
+  /* M1BETAENV(0,topObj); */
   printf("End simple betarun\n"); fflush(stdout);
 }
 
