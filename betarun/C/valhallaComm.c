@@ -23,6 +23,11 @@ extern int doshutdown(int fd, int how);
 #include <sys/socket.h>
 #endif /* nti */
 
+#ifdef UNIX
+#include <dlfcn.h>
+static void *self=0;
+#endif /* UNIX */
+
 /* Opcodes for communication between valhalla and debugged process.
  *
  * VOP_* constants are replicated in
@@ -51,6 +56,8 @@ extern int doshutdown(int fd, int how);
 #define VOP_MEMFREE            17
 #define VOP_EXECUTEOBJECT      18
 #define VOP_ADDGROUP           19
+#define VOP_LOOKUP_SYM_OFF     20
+#define VOP_LOOKUP_ADDRESS     21
 
 #define VOP_STOPPED            50
 
@@ -90,6 +97,10 @@ void valhalla_init_sockets (int valhallaport)
 {
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_init_sockets\n"));  
   DEBUG_VALHALLA(fprintf(stdout,"debuggee: valhallaport=%d\n", valhallaport));
+#ifdef UNIX
+  DEBUG_VALHALLA(fprintf(stdout,"debuggee: dlopen(NULL)\n"));
+  self=dlopen(NULL,RTLD_LAZY|RTLD_GLOBAL);
+#endif /* UNIX */
 #ifdef nti
   valhalla_initSockets();
 #endif
@@ -157,6 +168,21 @@ void valhalla_writetext (char* txt)
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_writetext\n"));  
   valhalla_writeint (len);
   valhalla_writebytes (txt,len+1);
+}
+
+/* valhalla_readtext:
+ *   Reads text into allocated string.
+ *   The string should be FREE'ed after use.
+ */
+char *valhalla_readtext (void)
+{
+  char *txt;
+  int len;
+  
+  len=valhalla_readint();
+  txt=MALLOC(len+1);
+  valhalla_readbytes (txt,len+1);
+  return txt;
 }
 
 void on_valhalla_crashed (void)
@@ -277,6 +303,10 @@ void printOpCode (int opcode)
     fprintf (output,"VOP_EXECUTEOBJECT"); break;
   case VOP_ADDGROUP:
     fprintf (output,"VOP_ADDGROUP"); break;
+  case VOP_LOOKUP_SYM_OFF:
+    fprintf (output,"VOP_LOOKUP_SYM_OFF"); break;
+  case VOP_LOOKUP_ADDRESS:
+    fprintf (output,"VOP_LOOKUP_ADDRESS"); break;
   default:
     fprintf (output,"UNKNOWN OPCODE: %d", opcode); break;
   }
@@ -690,6 +720,44 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "VOP_ADDGROUP(0x%x)\n",(int)gh));
       AddGroup(gh);
       valhalla_writeint (opcode);
+      valhalla_socket_flush ();
+    }
+    break;
+    case VOP_LOOKUP_SYM_OFF: {
+      long addr = valhalla_readint();
+      char *sym=0;
+      long off=0;
+      DEBUG_VALHALLA(fprintf(output,"VOP_LOOKUP_SYM_OFF(%d)\n",addr));
+#ifdef sun4s
+      /* Not available for sgi - grrrr... */
+      {
+	Dl_info info;
+	if (dladdr((void*)addr, &info)){
+	  sym = info.dli_sname;
+	  off = (long)addr - (long)info.dli_saddr;
+	}
+      }
+#else /* !sun4s */
+      fprintf(output, "debuggee: VOP_LOOKUP_SYM_OFF: NYI\n");
+#endif /* sun4s */
+      valhalla_writeint (opcode);
+      valhalla_writetext(sym);
+      valhalla_writeint(off);
+      valhalla_socket_flush ();
+    }
+    break;
+    case VOP_LOOKUP_ADDRESS: {
+      char *sym = valhalla_readtext();
+      long addr = 0;
+      DEBUG_VALHALLA(fprintf(output,"VOP_LOOKUP_ADDRESS(%s)\n",sym));
+#ifdef UNIX
+      addr = (long)dlsym(self, sym);
+#else /* !UNIX */
+      fprintf(output, "debuggee: VOP_LOOKUP_ADDRESS: NYI\n");
+#endif /* UNIX */
+      FREE(sym);
+      valhalla_writeint (opcode);
+      valhalla_writeint (addr);
       valhalla_socket_flush ();
     }
     break;
