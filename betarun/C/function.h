@@ -266,5 +266,6 @@ extern void initialCollectList(ptr(Object) root,
                                void referenceAction(REFERENCEACTIONARGSTYPE));
 extern void extendCollectList(ptr(Object) root,
                               void referenceAction(REFERENCEACTIONARGSTYPE));
+extern ref (Object) copyObjectToLinearizationInAOA(ref (Object) theObj, long size);
 
 #endif /* LIN */

@@ -296,16 +296,30 @@ ref(Object) CopyObjectToAOA( theObj)
     fprintf(output, "  ...\n");
   }
 #endif
-
+  
   size = 4*ObjectSize( theObj); 
   DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#ToAOA: ObjectSize(theObj) > 0") );
-
-  if( (newObj = AOAallocate( size)) == 0 ) return 0;
-  
-  theEnd = (ptr(long)) (((long) newObj) + size); 
-  
-  src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
-  while( dst < theEnd) *dst++ = *src++; 
+#if defined(LIN)
+  /* If an object has been given an age of IOAMaxAge + 1 it is a
+   * request to IOAGc that the object is moved to the part of AOA that
+   * holds the current linearization */
+  if (theObj->GCAttr == IOAMaxAge+1) {
+      /* This can only happen if the GCAttribute has been explicitely
+       * set to this value by the linearizer.
+       */
+      newObj = copyObjectToLinearizationInAOA(theObj, size);
+      
+  } else {
+#endif /* LIN */
+      if( (newObj = AOAallocate( size)) == 0 ) return 0;
+      
+      theEnd = (ptr(long)) (((long) newObj) + size); 
+      
+      src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
+      while( dst < theEnd) *dst++ = *src++; 
+#if defined(LIN)
+  }
+#endif /* LIN */
   
   newObj->GCAttr = 0;
   
@@ -313,11 +327,11 @@ ref(Object) CopyObjectToAOA( theObj)
   theObj->GCAttr = (long) newObj;
   
   DEBUG_AOA( AOAcopied += size );
-
+  
   DEBUG_AOA(if(isStackObject(theObj)) 
 	    fprintf(output, 
 		    "CopyObjectToAOA: moved StackObject to 0x%x\n", (int)newObj));
-
+  
 #if 0
   DEBUG_AOA( fprintf(output, 
 		     "#ToAOA: IOA-addr: 0x%x AOA-addr: 0x%x proto: 0x%x size: %d\n", 
@@ -325,10 +339,10 @@ ref(Object) CopyObjectToAOA( theObj)
 #endif
 #if 0
   if (theObj->Proto == RefRepPTValue){
-    fprintf(output, "ToAOA: RefRep=0x%x\n", newObj);
+      fprintf(output, "ToAOA: RefRep=0x%x\n", newObj);
   }
 #endif
- 
+  
   /* Return the new object in AOA */
   return newObj;
 }

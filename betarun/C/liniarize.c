@@ -44,7 +44,6 @@ static int isAnchorProto(struct ProtoType *proto)
     return FALSE;
 }
 
-
 /* Build a linked list of all objects reachable from root in the
  * GCfield of the objects.  This often conflicts with the GC'er, so be
  * careful...  The refernces are negated when written to GCAttr so
@@ -62,10 +61,9 @@ static ptr(Object) tail;   /* Tail of list build by collectList */
 static long totalsize;
 
 /* Append objects to the list regardless of where they are */
-
 void appendToList(REFERENCEACTIONARGSTYPE)
 {
-    if ((tail != target) && target->GCAttr <= IOAMaxAge) {
+    if ((tail != target) && target->GCAttr <= IOAMaxAge + 1) {
         /* Not in the list yet.*/
         if (!isAnchorProto(target->Proto)) {
             /* Not an anchor, insert. */
@@ -90,7 +88,6 @@ void appendToListInAOA(REFERENCEACTIONARGSTYPE)
         appendToList(REFERENCEACTIONARGS);
     } 
 }
-    
 
 void initialCollectList(ptr(Object) root,
                         void referenceAction(REFERENCEACTIONARGSTYPE))
@@ -167,7 +164,6 @@ void extendCollectList(ptr(Object) root,
     set_end_time("extendCollectList");
 }
 
-
 static void scanList(ref (Object) root, void (foreach)(ref (Object) current))
 {
     ref (Object) cur;
@@ -178,7 +174,6 @@ static void scanList(ref (Object) root, void (foreach)(ref (Object) current))
         foreach(cur);
     }
 }
-
 
 static void scanObject(struct Object *obj,
                        void referenceAction(REFERENCEACTIONARGSTYPE),
@@ -283,11 +278,71 @@ static void scanObject(struct Object *obj,
     }
 }
 
-
 void assignRefNoGC(struct Object **theCell, long id)
 {
     *(long *)theCell = (long)id;
 }
 
-      
+ref (Object) copyObjectToLinearizationInAOA(ref (Object) theObj, long size) 
+{
+    long *newObj,*theEnd;
+    
+    /* Assuming that a block with the proper size has been allocated
+     * previously to hold the linearization, this function will copy
+     * theObj to the end of that linearization.
+     */
+    
+    newObj = AOALinTop;
+    theEnd = (ptr(long)) (((long) newObj) + size); 
+    
+    src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
+    while( dst < theEnd) *dst++ = *src++; 
+    AOALinTop = (ptr(long)) ((long) AOALinTop + size);
+    return (ref (Object))newObj;
+}
+
+void allocateLinearizationInAOA(long size) 
+{
+    if ((AOALinStart = AOAallocate(size))) {
+        AOALinTop = AOALinStart;
+        AOALinLimit = AOALinTop + size;
+    } else {
+        fprintf(stderr,"allocateLinearizationInAOA: failed to allocate block of size %lu\n", size);
+        Illegal();
+    }
+}
+
+void markIOARelinkAOA(ref (Object) current) 
+{
+    if (inIOA(current)) {
+        /* Mark that this object should be moved to the linearization in AOA
+           at the next IOAGc */
+        current -> GCAttr = IOAMaxAge + 1;
+        
+    } else {
+        if (!head) {
+            head = current;
+            tail = head;
+        } else {
+            tail -> GCAttr = current;
+            tail = current;
+        }
+    }
+}
+
+long linearizeAbsoluteMove(ref (Object) root)
+{
+    /* Step 1: Collect the transitive closure of the root in a linked
+     * list.  */
+    initialCollectList(root, appendToList);
+    
+    /* Step 2: Mark in the GCAttribute of the objects in IOA that they
+       should be moved to the linearization at the next IOAGc.
+    */
+    head = NULL;
+    tail = NULL;
+    scanList(root, markIOARelinkAOA);
+    
+}
+
 #endif /* LIN */
