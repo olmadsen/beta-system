@@ -26,7 +26,7 @@ void printLinStatistics();
 void initStats(void);
 
 /* LOCAL CONSTANTS */
-#define MAXSTATS 100
+#define MAXSTATS 1024
 
 /* LOCAL VARIABLES */
 static statInfo statistics[MAXSTATS];
