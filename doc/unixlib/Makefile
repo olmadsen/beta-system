@@ -1,15 +1,20 @@
-interface: always
-	@echo Generating interface descriptions
-	@cd interface; ./makeHTML
+doc: always
+	@echo Generating documentation without PDF
+	@perl -s ../bin/makedoc -v -p unixlib.book
+
+dist: always
+	@echo Generating documentation with PDF
+	@perl -s ../bin/makedoc unixlib.book
 
 tags:
-	etags demo/copyexpand interface/makeRTF interface/headers.perl
+	etags src/*.html
 
 clean:
-	-/bin/rm -f *~ demo/*.bet interface/*~ figures/*~ 
+	-/bin/rm -f *~ src/*~
 
-check:
-	weblint -x Netscape -x Microsoft -d empty-container interface/*.html
+distclean: clean
+	-/bin/rm -f *.html *.pdf
+	if [ -d interface ]; then /bin/rm -rf interface; fi
 
 always:
 	@echo ""
