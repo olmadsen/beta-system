@@ -549,3 +549,16 @@ void PrintBetaError(BetaErr err)
   fflush(output);
 }
 #endif /* RTDEBUG */
+
+/* Function called by COM code in case of
+ * COM virtual called with struct parameter transfered by
+ * value (not yet implemented).
+ */
+void _struct_param_by_value(void)
+{
+  fprintf(output, 
+	  "RTS: Warning: \n"
+	  "  COM virtual called with struct parameter transferred by value.\n"
+	  "This is not yet implemented, sorry!\n");
+  return;
+}
