@@ -24,7 +24,7 @@ class Primitives {
     return (i >> r) | ((i & mask) << (32-r));
   }
   
-  public int rol8 (int i, int r)
+  public int rol (int i, int r)
   {
     int mask = (1 << r) - 1;
     return (i << r) | ((i & mask) >> (32-r));
