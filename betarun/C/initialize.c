@@ -492,6 +492,12 @@ void Initialize()
      signal( SIGEMT,  BetaSignalHandler);
 #endif
 
+#ifdef RTDEBUG
+#ifdef SIGINT
+     signal( SIGINT,  BetaSignalHandler);
+#endif
+#endif
+
 #ifdef apollo
      signal( SIGINT,  BetaSignalHandler);
      signal( SIGQUIT, BetaSignalHandler);
@@ -520,6 +526,9 @@ void Initialize()
     sigaction( SIGBUS,  &sa, 0);
     sigaction( SIGSEGV, &sa, 0);
     sigaction( SIGEMT,  &sa, 0);
+#ifdef RTDEBUG
+    sigaction( SIGINT,  &sa, 0);
+#endif
   }
 #endif /* sun4s */
 
