@@ -8,6 +8,8 @@ INCLUDE '~beta/process/v1.4/osinterface';
 
 INCLUDE '~beta/debugger/v2.0/utils/buffered_io';
 
+INCLUDE '../dynpane';
+
 INCLUDE 'settings';
 INCLUDE 'sourcebrowserbody';
 
@@ -560,7 +562,7 @@ do ymerBrowserWindowCount-1
      ->ymerBrowserWindowCount;
    l: ymerPrivate.history.scan
      (#
-     do (if not true(*theSif.closeGroup*) then true->cancelQuit; leave l if)
+     do (if not current.theSif.closeGroup then true->cancelQuit; leave l if)
      #);
    (if not cancelQuit then
        (if ymerBrowserWindowCount=0 then
@@ -640,7 +642,7 @@ do (*fileSelectionDialog(# do 'New group'->label[] #)->t[];
 do
 
 --- menuGroupsDeleteOnselect: dopart ---
-do ymerPrivate.workspace.open;
+do ymerPrivate.workspace.panes.contents.addFragmentForm;
    
 --- onCurrentFormChange: dopart ---
 do (if newForm[]<>NONE then
@@ -666,7 +668,7 @@ do (if newForm[]<>NONE then
                  ->newHist.theGroup[];
                newForm[]
                  ->newHist.theForm[];
-               getFragmentFormEditor
+               browser.getFragmentFormEditor
                  ->newHist.theSif[];
                newHist[]->ymerPrivate.history.prepend;
                (this(ymerBrowserWindow).theMenubar).historyMenu.addHistoryElement;
@@ -721,7 +723,7 @@ do OS.init;
    mps.init;
    browsers.init;
    getSystemEnv->theSystemEnv[];
-   ymerBrowser.open
+   ymerBrowser.open;
 #)
 
 --- ymerPrivate: descriptor ---
@@ -733,62 +735,160 @@ do OS.init;
              theSif: ^sifTextEditor;
           #)
      #);
-   workspace: @window
-     (# workAreas: @pane
-          (# fragmentFormView: labelled
-               (# dobind:
-                    (# do contents.dobind; true->bindRight->bindBottom #);
-                  contentsType:: codemoveableEditor
-                    (# dobind:
-                         (# do true->bindRight->bindBottom->bindLeft->bindTop #);
-                       selectNode:: 
-                         (# do node[]->browser.selectNode #);
-                       open::
-                         (#
-                         do this(fragmentFormView).contents[]
-                              ->browser.onCodeViewOpen;
-                            (ffEncloser.getAST,ffEncloser.getBETACFL,
-                            browser.currentForm[],NONE)
-                              ->this(fragmentFormView).contents.newFragment;
-                         #); 
-                       charWidthType::
-                         (#
-                         do this(fragmentFormView).private.theLabel.style->ts[]
-                         #);
-                       getEncloser:: (# do ffEncloser[]->theEncloser[] #);
-                    #); 
-                  ffEncloser: @codemoveableEditorEncloser
-                    (# getAST:: (# do mps.AST[]->AST[] #);
-                       getBETACFL:: (# do mps.BETACFL[]->BETACFL[] #);
+   newWorkspace:
+     (# do &workspaceType[]->workspace[] #);
+   workspaceCount: @integer;
+   workspace: ^workspaceType;
+   workspaceType: ymerLocalWindow
+     (# menubarType::
+          (# addMenu: @menu
+               (# iAddForm: @menuItem
+                    (# eventhandler::
+                         (# onStatus::
+                              (# t: ^text
+                              do (browser.currentForm[]<>NONE)->value;
+                                 (if value then
+                                     browser.currentGroup.name.copy->t[];
+                                     '-'->t.put;
+                                     browser.currentForm.name->t.append;
+                                     t[]->name
+                                  else 'no fragment form selected'->name
+                                 if)
+                              #);
+                            onSelect::
+                              (#
+                              do panes.contents.addFragmentForm->removeMenu.addItem
+                              #);
+                         #)
                     #);
                   open::
-                    (# sz: @point;
-                       openContents::
-                         (# do (none,sz)->contents.open; true->doneInInner #)
-                    enter sz
-                    do sz->size; 
+                    (#
+                    do 'Add'->name;
+                       iAddForm.open; iAddForm[]->append;
                     #)
                #);
-             dobind:
-               (#
-               do TRUE->bindTop->bindLeft->bindRight->bindBottom;
-                  installResizeRelativeAction
+             removeMenu: @menu
+               (# addItem:
+                    (# newIform: ^iForm;
+                       member: ^labelled;
+                    enter member[]
+                    do &iForm[]->newIform[];
+                       member[]->newIform.member[];
+                       newIform.open; newIform[]->append; newIform.setName;
+                    #);
+                  iForm: menuItem
+                    (# member: ^labelled;
+                       eventhandler::
+                         (# onSelect::
+                              (#
+                              do member[]->panes.contents.deleteMember;
+                                 this(iForm)[]->delete
+                              #);
+                         #);
+                       setName: (# do member.label->name #)
+                    #);
+                  open::
+                    (# do 'Remove'->name #)
                #);
-             open:: 
-               (# onGroupSizeComputed:: 
-                    (# do size->THIS(workspace).size; dobind;  #);
+             open::
+               (#
+               do addMenu.open; addMenu[]->append;
+                  removeMenu.open; removeMenu[]->append;
+               #)
+          #);
+        panes: @scroller
+          (# contentsType:: dynpane
+               (# changing: @boolean;
+                  fragmentFormView: labelled
+                    (# onFatherFrameResizeRelative: @action
+                         (# w,w1,h,h1: @integer;
+                            eventType:: theEventHandler.fatherFrameChanged;
+                         do (if not changing then
+                                size->(w,h);
+                                panes.size->(w1,h1);
+                                (w1-40,h)->size
+                            if);
+                         #);
+                       installResizeRelativeAction:
+                         (# do onFatherFrameResizeRelative[]->appendAction #);
+                       dobind:
+                         (#
+                         do installResizeRelativeAction;
+                            contents.dobind
+                         #);
+                       contentsType:: codemoveableEditor
+                         (# dobind:
+                              (# do true->bindRight->bindBottom->bindLeft->bindTop #);
+                            selectNode:: 
+                              (# do node[]->browser.selectNode #);
+                            open::
+                              (# t: ^text
+                              do this(fragmentFormView).contents[]
+                                   ->browser.onCodeViewOpen;
+                                 (ffEncloser.getAST,ffEncloser.getBETACFL,
+                                 browser.currentForm[],NONE)
+                                   ->this(fragmentFormView).contents.newFragment;
+                                 browser.currentGroup.name.copy->t[];
+                                 '-'->t.put;browser.currentForm.name->t.append;
+                                 t[]->label
+                              #); 
+                            charWidthType::
+                              (#
+                              do this(fragmentFormView).private.theLabel.style
+                                   ->ts[]
+                              #);
+                            getEncloser:: (# do ffEncloser[]->theEncloser[] #);
+                         #); 
+                       ffEncloser: @codemoveableEditorEncloser
+                         (# getAST:: (# do mps.AST[]->AST[] #);
+                            getBETACFL:: (# do mps.BETACFL[]->BETACFL[] #);
+                         #);
+                       open::
+                         (# sz: @point;
+                            openContents::
+                              (#
+                              do (none,sz)->contents.open; true->doneInInner
+                              #)
+                         enter sz
+                         do sz->size
+                         #)
+                    #);
                   addFragmentForm:
-                    (# ffV: @fragmentFormView;
+                    (# ffV: @fragmentFormView; w,h: @integer;
                        lastmember: @boolean
                     enter lastmember
-                    do (workareas[], (200,150))->ffV.open;
+                    do panes.size->(w,h);
+                       (this(contentsType)[], (w-40,150))->ffV.open;
                        
-                       (ffV[],lastmember)-> workAreas.appendMember
+                       true->changing;
+                       ffV[]-> this(contentsType).appendMember;
+                       this(contentsType).appendsDone; ffV.dobind;
+                       false->changing;
+                    exit ffV[]   
                     #);
-               do TRUE->verticalStacking;
-                  false->addFragmentForm; true->addFragmentForm;
+                  dobind:
+                    (# do TRUE->bindTop->bindLeft->bindRight->bindBottom #);
+                  open:: 
+                    (# setDefaults:: 
+                         (#
+                         do true->verticalStacking;
+                            50->minsize;
+                            2->panewidth
+                         #);
+                    do doBind
+                    #);
                #);
+             open::
+               (# do TRUE->bindTop->bindLeft->bindRight->bindBottom #);
           #);
-        open:: (# do workAreas.open #);
+        open::
+          (# t: ^text
+          do 'Workspace'->t[];
+             workspaceCount+1->workspaceCount; 
+             (if workspaceCount>1 then
+                 '<'->t.put; workspaceCount->t.putint; '>'->t.put;
+             if);
+             t[]->title; panes.open;
+          #);
      #)
 #)
