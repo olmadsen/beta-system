@@ -1,7 +1,14 @@
-char betarun_version[] = "BETARUN VERSION 5.3(18)";
+char betarun_version[] = "BETARUN VERSION 5.3(19)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.18  2001/06/21 12:06:50  datpete
+ * Fixes for dynamic exception handling on intel.
+ * Now stack traversal can determine if external activation records found
+ * on the stack comes from a real callback from beta or via a system
+ * exception handler from betarun.
+ * Betarun version number: 18
+ *
  * Revision 1.17  2001/06/20 09:13:30  corry
  * Prettyness fixes to makefiles
  * Betarun version number: 17
@@ -85,7 +92,7 @@ int
 get_betarun_major()
 {
     char *p = betarun_version;
-    while(!isdigit(*p)) p++;
+    while(!isdigit((unsigned char)(*p))) p++;
     return atoi(p);
 }
 
@@ -93,9 +100,9 @@ int
 get_betarun_minor()
 {
     char *p = betarun_version;
-    while(!isdigit(*p)) p++;
-    while(isdigit(*p)) p++;
-    while(!isdigit(*p)) p++;
+    while(!isdigit((unsigned char)(*p))) p++;
+    while(isdigit((unsigned char)(*p))) p++;
+    while(!isdigit((unsigned char)(*p))) p++;
     return atoi(p);
 }
 
@@ -103,11 +110,11 @@ int
 get_betarun_release()
 {
     char *p = betarun_version;
-    while(!isdigit(*p)) p++;
-    while(isdigit(*p)) p++;
-    while(!isdigit(*p)) p++;
-    while(isdigit(*p)) p++;
-    while(!isdigit(*p)) p++;
+    while(!isdigit((unsigned char)(*p))) p++;
+    while(isdigit((unsigned char)(*p))) p++;
+    while(!isdigit((unsigned char)(*p))) p++;
+    while(isdigit((unsigned char)(*p))) p++;
+    while(!isdigit((unsigned char)(*p))) p++;
     return atoi(p);
 }
 
@@ -115,7 +122,7 @@ char *
 get_betarun_version()
 {
     char *p = betarun_version;
-    while(!isdigit(*p)) p++;
+    while(!isdigit((unsigned char)(*p))) p++;
     return p;
 }
 
