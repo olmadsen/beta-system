@@ -224,7 +224,7 @@ public class BetaOutput
 	if (mangledName!=null){
 	    putln(mangledName + ": " 
 		  + proctype + " " 
-		  + comment("Overloaded " + ((name.equals("_init")) ? "constructor" : name)));
+		  + comment(((name.equals("_init")) ? "constructor" : name)));
 	} else {
 	    putln(mapReserved(name) + ": " + proctype);
 	}
