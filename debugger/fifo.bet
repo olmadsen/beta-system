@@ -2,6 +2,7 @@ ORIGIN '~beta/basiclib/v1.4/betaenv';
 
 INCLUDE '~beta/basiclib/v1.4/basicsystemenv';
 INCLUDE '~beta/unixlib/v1.4/iostate';
+INCLUDE '~beta/basiclib/v1.4/formatio';
 
 --- include '~beta/unixlib/v1.4/unixinterface'
 
@@ -45,6 +46,11 @@ openFIFOS: external
      fromStreamAdr,toStreamAdr: @Integer;
   enter (pid,fromStreamAdr,toStreamAdr)
   #);
+openFIFOSfd: external
+  (# pid: @Integer;
+     fromFDadr,toFDAdr: @Integer;
+  enter (pid,fromFDAdr,toFDAdr)
+  #);
 deleteFIFOS: external
   (# pid: @Integer;
   enter pid
@@ -70,53 +76,205 @@ readyBytes: external
   exit count 
   #);
 
+memcpy: external (* Standard c lib. *)
+  (# adrTarget: @Integer;
+     adrSource: @Integer;
+     byteCount: @Integer;
+     out: @Integer;
+  enter (adrTarget, adrSource, byteCount)
+  exit out
+  #);
+
+FIFO_READ: (# exit 1 #);
+FIFO_WRITE: (# exit 2 #);
+
 fifo:
-  (# readyCount: @Integer;
-     ios: ^senv.IOstate;
-     senv: ^systemEnv;
+  (# bufrange:< IntegerValue (# do 8192->value; INNER #);
+     therange: @bufrange;
+     buffer: [bufrange]@Char;
+     next,last: @Integer; (* Buffer indices. next to put or read. 
+                           * Last is only used when reading. Points out
+                           * the last byte in buffer. *)
+     buffered: @(# exit last-next+1 #);
+     oflag: @Integer; (* FIFO_READ or FIFO_WRITE *)
+     iom: ^systemEnv.IOmask;
      init: 
-       (# 
-       enter unixStream
-       do (* getSystemEnv->senv[]; &senv.IOstate[]->ios[];
-           * unixStream->getfileno->ios.init; *)
+       (# senv: ^systemEnv;
+       enter (fd,oflag)
+       do getSystemEnv->senv[]; &senv.IOmask[]->iom[];
+          fd->iom.addExceptFD;
+          (if oflag
+           //FIFO_READ then
+              fd->iom.addReadFD;
+           //FIFO_WRITE then
+              fd->iom.addWriteFD;
+          if);
+          1->next; 0->last;
        #);
      binPutInt:
        (# val: @Integer;
           error:< Exception;
+          pb: @binPutBytes
+            (# writeFailure:: (#  do error #)
+            do @@val->repAdr;   
+            #);
        enter val
-       do (if (@@val,4) -> binPutBytes //4 then else error if);
+       do 4->pb;
        #);
-     binGetInt:
+     binGetInt: 
        (# error:< Exception;
           val: @Integer;
           ok: @Boolean;
-       do (if (@@val,4) -> binGetBytes //4 then else error if)
+          gb: @binGetBytes 
+            (# readFailure:: (# do error #)
+            do @@val->repAdr 
+            #);
+       do 4->gb
        exit val
        #);
-     binGetBytes: @
-       (# repAdr: @Integer; (* Address of buffer *)
-          length: @Integer; (* In bytes *)
-       enter (repAdr,length)
-       do (repAdr,1,length,unixStream)->fread->length
-       exit length
+     binGetBytes:
+       (# repAdr: @Integer; (* Address of buffer. Should be set in INNER. *)
+          length,didread,ready: @Integer; (* In bytes *)
+          readFailure:< Exception;
+          r,w,e: @Boolean;
+       enter length
+       do (if fd<>0 then
+              (if oflag=FIFO_READ THEN
+                  0->didread;
+                  loop:
+                    (# 
+                    do 
+                       (if TRUE
+                        //(buffered>=length-didread) then
+                           INNER binGetBytes;
+                           (repAdr+didread,@@buffer[next],length-didread)
+                             ->memcpy;
+                           next+length-didread->next;
+                           (* Done. *)
+                           leave loop;
+                        //(buffered>0) then
+                           INNER binGetBytes;
+                           (* Empty the buffer: *)
+                           (repAdr,@@buffer[next],buffered)->memcpy;
+                           didread+buffered->didread;
+                       if);
+                       (* If we get here, the buffer is empty, and we
+                        * need more data. *)
+                       1->next;
+                       iom.block;
+                       fd->iom.state->(r,w,e);
+                       (if e then readFailure; leave loop if);
+                       (* Fill as much as possible into buffer: *)
+                       (fd->readyBytes->ready,buffer.range)->min->last;
+                       (fd,@@buffer[1],last)->read->last; 
+                       (* read from unixlib *)
+                       (if last//-1 then readFailure if);
+                       restart loop;
+                    #)
+               else
+                  (failuretrace,'ERROR reading from FIFO opened for write')
+                    ->stop;
+              if);
+           else
+              closedFifoException;
+          if);
        #);
-     binPutBytes: @
-       (# repAdr: @Integer; (* Address of buffer *)
-          length: @Integer; (* In bytes *)
-       enter (repAdr,length)
-       do (repAdr,1,length,unixStream) -> fwrite -> length;
-       exit length
+     binPutBytes:
+       (# repAdr: @Integer; (* Address of buffer. Should be set in INNER. *)
+          length,written: @Integer; (* In bytes *)
+          writeFailure:< Exception;
+       enter length
+       do (if fd<>0 then
+              (if oflag=FIFO_WRITE then
+                  0->written;
+                  loop:
+                    (# 
+                    do
+                       (if true
+                        //(therange-next>=length-written) then
+                           (* Still room in the buffer *)
+                           INNER binPutBytes;
+                           (@@buffer[next],repAdr+written,length-written)
+                             ->memcpy;
+                           next+length-written->next;
+                           leave loop;
+                        //(therange>next) then
+                           (* Put as much as possible into buffer and
+                            * flush. *)
+                           INNER binPutBytes;
+                           (@@buffer[next],repAdr+written,therange-next)
+                             ->memcpy;
+                           written+therange-next->written;
+                           flush 
+                           (# writeFailure::
+                                (# do THIS(binPutBytes).writeFailure #)
+                           #);
+                           restart loop;
+                       if);
+                    #);
+               else
+                  (failuretrace,'ERROR writing FIFO opened for read')
+                    ->stop;
+              if);
+           else
+              closedFifoException;
+          if);
        #);
      getText:
-       (# len: @Integer;
+       (# error:< Exception;
+          len: @Integer;
           t: ^Text;
-       do binGetInt->len;
+          gb: @binGetBytes 
+            (# readFailure:: (# do error #)
+            do @@t.T[1]->repAdr 
+            #);
+       do binGetInt(# error:: (# do THIS(getText).error #)#)->len;
           &Text[]->t[]; len+1->t.T.new;
-          (@@t.T[1],len+1)->binGetBytes;
+          len+1->gb;
           len->t.lgth;
        exit t[]
        #);
-     close: (# do unixStream -> fclose; 0 -> unixStream #);
-     flush: (# do unixStream -> fflush #);
-     unixStream: @Integer;
+     close: 
+       (# close: external (# fd,error: @Integer enter fd exit error #); 
+       do (if oflag=FIFO_WRITE then flush if);
+          fd->close; 0->fd 
+       #);
+     flush: 
+       (# written: @Integer;
+          nextToWrite: @Integer;
+          writeFailure:< Exception;
+       do 
+          (if oflag=FIFO_WRITE then
+              (if fd<>0 then
+                  (if next>1 then
+                      1->nextToWrite;
+                      loop:
+                        (# 
+                        do 
+                           (fd,@@buffer[nextToWrite],next-nextToWrite)->write
+                             ->written; (* unixlib write *)
+                           (if true
+                            //(written=-1) then
+                               writeFailure;
+                            //(written<next-nextToWrite) then
+                               written+nextToWrite->nextToWrite;
+                               restart loop;
+                           if);
+                        #);
+                      1->next;
+                  if);
+               else
+                  closedFifoException;
+              if);
+           else
+              (failuretrace,'ERROR writing FIFO opened for read')
+                ->stop;
+          if);
+       #);
+     fd: @Integer;
+     closedFIFOexception:< Exception
+       (# 
+       do 'Operation on closed FIFO'->msg.putText;
+          INNER;
+       #)
   #)
