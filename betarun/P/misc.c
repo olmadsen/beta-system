@@ -170,9 +170,13 @@ void markOfflineAndOriginObjectsAlive(REFERENCEACTIONARGSTYPE)
 	if (isSpecialProtoType(theProto)) {
 	  switch (SwitchProto(theProto)) {
 	  case SwitchProto(DynItemRepPTValue):
+	    Claim(FALSE, "markOfflineAndOriginObjectsAlive: Splitting up part (DynItemRepPTValue)");
+	    break;
 	  case SwitchProto(DynCompRepPTValue): 
+	    Claim(FALSE, "markOfflineAndOriginObjectsAlive: Splitting up part (DynCompRepPTValue)");
+	    break;
 	  case SwitchProto(RefRepPTValue): 
-	    Claim(FALSE, "markOfflineAndOriginObjectsAlive: Splitting up part");
+	    Claim(FALSE, "markOfflineAndOriginObjectsAlive: Splitting up part (RefRepPTValue)");
 	    break;
 	  }
 	}

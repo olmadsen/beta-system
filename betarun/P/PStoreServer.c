@@ -259,14 +259,9 @@ unsigned long isOpen(void)
   return (currentStore != NULL);
 }
 
-unsigned long getExt(unsigned long name_r, Object *theObj, Object **theCell)
+unsigned long getExt(unsigned long name_r)
 {
   unsigned long count;
-  unsigned long offset;
-
-  Claim((unsigned long)theCell > (unsigned long)theObj, "getExt: theCell is before theObj");
-  
-  offset = (unsigned long)theCell - (unsigned long)theObj;
   
   if (name_r) {
     char *name;
@@ -279,23 +274,18 @@ unsigned long getExt(unsigned long name_r, Object *theObj, Object **theCell)
       if (strcmp(&(nameMap[count].name[0]), name) == 0) {
 	Object *target;
 #ifdef sparc
-	Protect(theObj, 
-		target = lookUpReferenceEntry(getCurrentStoreID(), nameMap[count].offset, -1));
+	target = lookUpReferenceEntry(getCurrentStoreID(), nameMap[count].offset, -1);
 #else
-	/* FIXME: Should protect regs */
 	target = lookUpReferenceEntry(getCurrentStoreID(), 
 				      nameMap[count].offset, -1);
 #endif
-	theCell = (Object **)((unsigned long)theObj + offset);
-	*theCell = target;
-	Claim(*theCell != NULL, "Assigning NULL");
 	free(name);
-	return 0;
+	return (unsigned long)target;
       }
     }
     free(name);
   }
-  return NOTFOUNDERROR;
+  return 0;
 }
 
 #endif /* PERSIST */
