@@ -15,41 +15,66 @@ INCLUDE '../Rubber/RubberArc';
 do INNER;
 
 -- ArcShapeContainsPoint: descriptor --
-(# i: @integer;            (* Angle in degrees *)
+(# i: @integer;            (* Angle a converted to degrees *)
    a, cos_a, sin_a: @real; (* Radians *)
    c: @point;              (* transformed center *)
-   x, y: @integer;
+   cdist, ddist: @integer;
    delta: @integer;
 do 
-   center.p -> privatepart.Go2CanvasTM.M.Transformpoint -> c;
-   (c.x, c.y, horizontalradius.value, verticalradius.value,
-   thepoint.x, thepoint.y) -> ellipseangle -> (a, cos_a, sin_a);
-   
-   (a * 180) div pi -> i;
-   
-   (if ((angle2.r)>360) and (i<180) then i+360 -> i
-   if);
-   
-   ((angle1.r) < i) and (i < (angle2.r)) -> value;
-   
-   (if value then
-       (arcwidth, 6) -> max -> delta;
-       horizontalradius.value+delta * cos_a -> x;
-       (((thepoint.x-c.x)->abs) <= (x->abs)) -> value;
-       (if value then
-           horizontalradius.value-delta * cos_a -> x;
-           (((thepoint.x-c.x)->abs) >= (x->abs)) -> value;
-       if);
-   if);
-   
-   (if value then
-       verticalradius.value+delta * sin_a -> y;
-       (((thepoint.y-c.y)->abs) <= (y->abs)) -> value;
-       (if value then
-           verticalradius.value-delta * sin_a -> y;
-           (((thepoint.y-c.y)->abs) >= (y->abs)) -> value;
-       if);	
-   if);	
+   ContainsPoint:
+     (# 
+     do center.p -> privatepart.Go2CanvasTM.M.Transformpoint -> c;
+        (c.x, c.y, horizontalradius.value, verticalradius.value,
+        thepoint.x, thepoint.y) -> ellipseangle -> (a, cos_a, sin_a);
+        
+        (* convert to degrees *)
+        (a * 180) div pi -> i;
+        
+        (* normalize i *)
+        (if ((angle2.r)>360) and (i<180) then i+360 -> i if);
+        
+        (if ((angle1.r) <= i) and (i <= (angle2.r)) then
+            (* i between the two angles *)
+            
+            (* Try if thePoint is between the two ellipses with
+             * radiuses increased and decreased by delta.
+             * Since angles are known to match, we can ignore
+             * signs and use abs before comparisons
+             *)
+            (arcwidth div 2, 8) -> max -> delta;
+            
+            (* horizontal distance from thePoint to center: *)
+            (thepoint.x-c.x) -> abs -> cdist;
+            (* horizontal radius if increased by delta: *)
+            (horizontalradius.value+delta) * cos_a -> abs -> ddist;
+            
+            (if cdist<=ddist then
+                (* OK we are below upper x limit. *)
+                (* horizontal radius if decreased by delta: *)
+                (horizontalradius.value-delta) * cos_a -> abs -> ddist;
+                (if ddist<=cdist then
+                    (* Both x limits are OK - check y direction *)
+                    
+                    (* vertical distance from thePoint to center: *)
+                    (thepoint.y-c.y) -> abs -> cdist;
+                    (* vertical radius if increased by delta: *)
+                    (verticalradius.value+delta) * sin_a -> abs -> ddist;
+                    
+                    (if cdist<=ddist then
+                        (* OK we are below upper y limit. *)
+                        (* vertical radius if decreased by delta: *)
+                        (verticalradius.value-delta) * sin_a -> abs -> ddist;
+                        (if ddist<=cdist then
+                            (* Both y limits are OK *)
+                            true -> value;
+                            leave ContainsPoint;
+                        if)
+                    if)
+                if)
+            if)
+        if);
+        false -> value;
+     #);
 #)
 
 -- ArcShapeGetControlsBody: descriptor --
