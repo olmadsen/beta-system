@@ -37,6 +37,10 @@ case "`uname -m`" in
 			# Setup for jbeta
 			JAVAHOME=${JAVAHOME-/home/java/Solaris}
 			JNIDIR="solaris"
+			DYNPREFIX="lib"
+			DYNEXTENSION="so"
+			export DYNPREFIX
+			export DYNEXTENSION
 			export JAVAHOME
 			export JNIDIR
 			;;
@@ -54,6 +58,10 @@ case "`uname -m`" in
 			# Setup for jbeta
 			JAVAHOME=${JAVAHOME-/home/java/Solaris}
 			JNIDIR="solaris"
+			DYNPREFIX="lib"
+			DYNEXTENSION="so"
+			export DYNPREFIX
+			export DYNEXTENSION
 			export JAVAHOME
 			export JNIDIR
 			;;
@@ -105,6 +113,10 @@ case "`uname -m`" in
 		# Setup for jbeta
 		JAVAHOME=${JAVAHOME-/home/java/Linux}
 		JNIDIR="linux"
+		DYNPREFIX="lib"
+		DYNEXTENSION="so"
+		export DYNPREFIX
+		export DYNEXTENSION
 		export JAVAHOME
 		export JNIDIR
 		case "`uname -r`" in
