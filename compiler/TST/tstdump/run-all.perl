@@ -54,7 +54,11 @@ foreach $f (@files) {
     }
        
     #FIXME: stderr og stdout redirect missing...
-    system("$f >$f.out 2>$f.err");
+    if ($objdir =~ /^nti/) {
+	system("$f >$f.out 2>$f.err");   #Probably requires 4NT / 4DOS.
+    } else {
+	system("$f >$f.out 2>$f.err");
+    }
     if ( -f "output/$f.out" ) {
 	if (system("diff -i output/$f.out $f.out") == 0){
 	    print "[stdout is correct]\n";
@@ -90,7 +94,7 @@ foreach $f (@files) {
 	    open(OUT, ">$f.app") || die "Unable to write app dump: $!";
 	    while(<IN>) {
 		next if (/\{/);
-		s/set\+ BETART\=SimpleDump/setenv BETART SimpleDump/gi;
+		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
 		print OUT;
 	    }
 	    close IN;
