@@ -22,6 +22,7 @@
 #  else
 #    ifdef nti_gnu
 #      include <sys/utime.h>
+#      define _DIR DIR
 #    else
 #      include <utime.h>
 #    endif
