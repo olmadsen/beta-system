@@ -1,0 +1,124 @@
+#!/usr/local/bin/perl -s
+
+use File::Copy;
+
+push(@INC, $ENV{'BETALIB'} . "/bin/admin");
+
+if ($h){
+    print "Usage: mbs_boottrack [-h]\n";
+    print "          -h   Print this help\n";
+    print "       Get a newly checked out BETA track working\n";
+    exit 0;
+}
+
+require "env.perl";
+
+$BETALIB = $ENV{'BETALIB'};
+
+chdir("$BETALIB/grammars/metagram") || die "Where is the BETALIB/grammars/metagram directory?";
+system("bobsit -b metagrammar") && die "Couldn't boot the metagrammar (failed in bobsit -b)";
+system("dogram -b metagrammar") && die "Couldn't boot the metagrammar (failed in dogram -b)";
+
+chdir("$BETALIB/grammars/beta") || die "Where is the BETALIB/grammars/beta directory?";
+system("dogram -b beta") && die "Couldn't boot the metagrammar (failed in dogram)";
+
+if ($objdir =~ /nti/) {
+    # On NTI we need to add this dir to the path so the compiler can find
+    # betacc.  This is ugly, since we could pick up other stuff from the
+    # boot dir inadvertently.  Better would be to add an option to beta
+    # for specifying where betacc is.
+    $savedpath = $ENV{'PATH'};
+    $ENV{'PATH'} = "$BETALIB\\boot\\bin\\$objdir;" . $ENV{'PATH'};
+}
+
+if ($RUNTYPE eq "run") {
+    chdir("$BETALIB/betarun/GEN/GRAMMAR") || die "Where is the BETALIB/betarun/GEN/GRAMMAR directory?";
+    system("dogram -b runtime") && die "Couldn't boot the runtime languange grammar (failed in dogram -b)";
+    chdir("$BETALIB/betarun/GEN/$objdir") || die "Where is the BETALIB/betarun/GEN/objdir directory (objdir is '$objdir')";
+    system("$BETALIB/boot/bin/$objdir/beta -qwl --betarun $BETALIB/boot/bin/$objdir/betarun$BETARUNSUFFIX gen") &&
+        &compilingfailed("gen", "/rungen (the RUN compiler)");
+    if (! -d "$BETALIB/bin/$objdir") {
+	mkdir("$BETALIB/bin/$objdir") || die "Couldn't make the directory for exe files ($BETALIB/bin/$objdir)\n";
+    }
+    copy("gen$EXESUFFIX", "$BETALIB/bin/$objdir/rungen$EXESUFFIX") || die "Couldn't move gen$EXESUFFIX over to $BETALIB/bin/$objdir/rungen$EXESUFFIX";
+    chmod 0755, "$BETALIB/bin/$objdir/rungen$EXESUFFIX";
+}
+
+system("mbs_make") && die("Couldn't make betarun\n");
+
+chdir("$BETALIB/compiler") || die "Couldn't find compiler directory\n";
+
+system("$BETALIB/boot/bin/$objdir/beta -qwl beta") &&
+    &compilingfailed("beta", " (the BETA compiler)");
+
+if (! -d "$BETALIB/bin/$objdir") {
+    mkdir("$BETALIB/bin/$objdir") || die "Couldn't make the directory for exe files ($BETALIB/bin/$objdir)\n";
+}
+
+copy("beta$EXESUFFIX", "$BETALIB/bin/$objdir/beta$EXESUFFIX") || die "Couldn't move beta$EXESUFFIX over to $BETALIB/bin/$objdir/beta$EXESUFFIX";
+chmod 0755, "$BETALIB/bin/$objdir/beta$EXESUFFIX";
+
+if ($objdir =~ /nti/) {
+    system("mbs_compiletools betacc") &&
+        &compilingfailed("betacc", " (the BETA compiler helper)");
+    $ENV{'PATH'} = $savedpath if ($savedpath ne "");
+}
+
+system("mbs_compiletools exbobs") && &compilingfailed("exbobs", "");
+system("mbs_compiletools tabc") && &compilingfailed("tabc", "");
+system("mbs_compiletools gen") && &compilingfailed("gen", " (the grammar tool)");
+system("mbs_compiletools makepretty") && &compilingfailed("makepretty", "");
+system("mbs_compiletools morepretty") && &compilingfailed("morepretty", "");
+
+chdir("$BETALIB/grammars/metagram") || die "chdir $BETALIB/grammars/metagram";
+system("dogram metagrammar") && die "building metagrammar";
+chdir("$BETALIB/grammars/beta") || die "chdir $BETALIB/grammars/beta";
+system("dogram beta") && die "building beta grammar";
+chdir("$BETALIB/grammars/pretty") || die "chdir $BETALIB/grammars/pretty";
+system("dogram prettyprint") && die "building pretty grammar";
+chdir("$BETALIB/grammars/property") || die "chdir $BETALIB/grammars/property";
+system("dogram property") && die "building property grammar";
+
+print "********************************************************\n";
+print "*** Finished booting track sucessfully (phase 1)\n";
+print "*** Now all asts will be removed and recompiled with the new compiler\n";
+print "********************************************************\n";
+
+system("mbs_rmast -u") && die "rmast";
+chdir("$BETALIB/compiler") || die "chdir $BETALIB/compiler";
+system("beta -qwl beta") && die "beta -qwl beta";
+move("$BETALIB/bin/$objdir/beta$EXESUFFIX", "$BETALIB/bin/$objdir/beta-compiled-by-boot-compiler$EXESUFFIX") || die "Couldn't move $BETALIB/bin/$objdir/beta$EXESUFFIX out of the way";
+copy("beta$EXESUFFIX", "$BETALIB/bin/$objdir/beta$EXESUFFIX") || die "Couldn't move beta$EXESUFFIX over to $BETALIB/bin/$objdir/beta$EXESUFFIX";
+chmod 0755, "$BETALIB/bin/$objdir/beta$EXESUFFIX";
+
+system("mbs_compile -u") && die "mbs_compile";
+system("mbs_compiletools -u") && die "mbs_compiletools";
+
+exit(0);
+
+
+
+
+
+
+
+
+
+
+
+
+sub compilingfailed
+{
+    my($prog, $progdesc) = @_;
+    print "Compiling $prog$progdesc failed\n";
+    print "*************************\n";
+    print "*** If you got an error saying the prettyprinter is missing then that\n";
+    print "*** means there are errors in $prog$progdesc\n";
+    print "*** you can either fix the errors in $prog in another track\n";
+    print "*** or you can get the prettyprinter grammar files you\n";
+    print "*** need from another track so you can see the real error messages\n";
+    print "\n";
+    print "*** Alternatively you could just complain to Ole :-)\n" if ($prog eq "beta");
+    print "\n";
+    exit(2);
+}
