@@ -1,8 +1,4 @@
-#ECLIPSE_INSTALLDIR=/tmp
-#COPY=cp
-
-ECLIPSE_INSTALLDIR=C:\eclipse2\...
-COPY=copy
+ECLIPSE_INSTALLDIR=C:/eclipse2/eclipse/workspace/org.eclipse.ui.betaeditor/bin
 
 java: clean java_indenter eclipse
 	java -classpath jvm Eclipse
@@ -19,6 +15,7 @@ dummies: jvm
 	javac -classpath jvm -d jvm DocumentCommand.java
 
 java_indenter: dummies
+	javac -classpath jvm -d jvm Screen.java
 	javac -classpath jvm -d jvm BetaAutoIndentStrategy.java
 
 beta_indenter: dummies
@@ -28,8 +25,14 @@ eclipse:
 	javac -classpath jvm -d jvm Eclipse.java
 
 install: clean beta_indenter
-	$(COPY) ../jvm/*.class $(ECLIPSE_INSTALLDIR)
-	$(COPY) jvm/org/eclipse/ui/betaeditor/*.class $(ECLIPSE_INSTALLDIR)
+	cp ../jvm/*.class $(ECLIPSE_INSTALLDIR)
+	cp jvm/org/eclipse/ui/betaeditor/beta/*.class $(ECLIPSE_INSTALLDIR)/org/eclipse/ui/betaeditor/beta
+
+java_install: clean java_indenter
+	echo Copying jvm/*.class
+	cp jvm/*.class $(ECLIPSE_INSTALLDIR)
+	echo Copying jvm/org/eclipse/ui/betaeditor/beta/*.class
+	cp jvm/org/eclipse/ui/betaeditor/beta/*.class $(ECLIPSE_INSTALLDIR)/org/eclipse/ui/betaeditor/beta
 
 clean:
-	/bin/rm -rf jvm *.a2s *.ast *.astL *~ 
+	rm -rf jvm *.a2s *.ast *.astL *~ 

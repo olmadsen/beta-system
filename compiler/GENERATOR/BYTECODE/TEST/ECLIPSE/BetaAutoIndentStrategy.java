@@ -25,7 +25,8 @@ public class BetaAutoIndentStrategy extends DefaultAutoIndentStrategy {
 	//    // Enter
 	//    System.out.println("Indent...");
 	//}
-	System.out.println("customizeDocumentCommand JAVA");
+	Screen s = new Screen();
+	s.putline("customizeDocumentCommand JAVA");
     }
     
 }
