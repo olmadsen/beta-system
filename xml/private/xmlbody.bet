@@ -1,7 +1,172 @@
 ORIGIN '../xml';
 INCLUDE '../xmlparser/xmlparser';
 
-
+-- AbstractElementClone: doPart --
+do &CloneType[] -> new[];
+   (if next[] <> none then
+       next.clone -> new.next[];
+   if);
+   INNER clone;
+   
+-- ElementClone: doPart --
+do tag.copy -> new.tag[];
+   (if attributes[]<> none then
+       attributes.clone -> new.attributes[];
+   if);
+   (if children[] <> none then
+       children.clone -> new.children[];
+   if);
+   
+-- ElementAddElement: doPart --
+do (if children[] = NONE then
+       child[] -> children[];
+    else
+       (# current: ^AbstractElement;
+          previous: ^AbstractElement;
+       do children[] -> current[];
+          loop:
+            (if current[] <> NONE then
+                current[] -> previous[];
+                current.next[] -> current[];
+                restart loop;
+            if);
+          child[] -> previous.next[];
+       #);
+   if);
+   
+-- ElementAddAttribute: doPart --
+do (if attributes[] = NONE then
+       theAttribute[] -> attributes[];
+    else
+       (# current: ^Attribute;
+          previous: ^Attribute;
+       do attributes[] -> current[];
+          loop:
+            (if current[] <> NONE then
+                current[] -> previous[];
+                current.next[] -> current[];
+                restart loop;
+            if);
+          theAttribute[] -> previous.next[];
+       #);
+   if);
+   
+-- ElementScan: doPart --
+do children[] -> current[];
+   loop:
+     (if current[] <> NONE then
+         INNER scan;
+         current.next[] -> current[];
+         restart loop;
+     if);
+   
+-- ElementScanAttributes: doPart --
+do attributes[] -> current[];
+   loop:
+     (if current[] <> NONE then
+         INNER scanAttributes;
+         current.next[] -> current[];
+         restart loop;
+     if);
+   
+-- ElementScanElements: doPart --
+do scan
+   (#
+   do current.select
+      (# onElement::
+           (#
+           do current[] -> THIS(scanElements).current[];
+              INNER scanElements;
+           #);
+      #);
+   #);
+   
+-- ElementScanData: doPart --
+do scan
+   (#
+   do current.select
+      (# onData::
+           (#
+           do current[] -> THIS(scanData).current[];
+              INNER scanData;
+           #);
+      #);
+   #);
+   
+-- ElementPrint: doPart --
+do (# printAttributes:
+        (# 
+        <<SLOT ElementPrintAttributes: doPart>>
+        #);
+   do output.newline;
+      (if (indentFiller[] <> NONE) then
+          (for i: level repeat 
+               indentFiller[] -> output.puttext; 
+          for);
+      if);
+      (if children[] = NONE then
+          '<' -> output.put;
+          tag[] -> output.puttext;
+          printAttributes;
+          '/>' -> output.puttext;
+       else
+          '<' -> output.put;
+          tag[] -> output.puttext;
+          printAttributes;
+          '>' -> output.puttext;
+          scan
+          (#
+          do (output[], level+1, indentFiller[]) -> current.print;
+          #);
+          (if (indentFiller[] <> NONE) then
+              output.newline;
+              (for i: level repeat 
+                   indentFiller[] -> output.puttext; 
+              for);
+          if);
+          '</' -> output.puttext;
+          tag[] -> output.puttext;
+          '>' -> output.put;
+      if);
+   #);
+   
+-- ElementPrintAttributes: doPart --
+do (# firstAttribute: @Boolean;
+   do true -> firstAttribute;
+      scanAttributes
+      (#
+      do (if (indentFiller[] <> NONE) then
+             (if firstAttribute then
+                 ' ' -> output.puttext;
+                 false -> firstAttribute;
+              else
+                 output.newline;
+                 (for i: level repeat 
+                      indentFiller[] -> output.puttext; 
+                 for);
+                 (for i: (tag.length+2) repeat
+                      ' ' -> output.puttext;
+                 for);
+             if);
+          else
+             ' ' -> output.puttext;
+         if);
+         current.key[] -> output.puttext;
+         '=' -> output.put;
+         '"' -> output.put;
+         (current.value[], output[]) -> xmlEscape;
+         '"' -> output.put;
+      #);
+   #);
+   
+-- AttributeClone: doPart --
+do &Attribute[] -> new[];
+   key.copy -> new.key[];
+   value.copy -> new.value[];
+   (if next[] <> none then
+       next.clone -> new.next[];
+   if);
+   
 -- XMLParse: doPart --
 do (# intern:
         (# symbol: ^Text;
@@ -97,40 +262,26 @@ do (# intern:
       current.children[] -> output[];
    #);
    
+-- XMLxmlEscape: doPart --
+do (if (input[] <> NONE) then
+       input.scanAll
+       (#
+       do (if true
+           //ch = '<' then
+              '&lt;' -> output.puttext;
+           //ch = '>' then
+              '&gt;' -> output.puttext;
+                  //ch = '&' then
+              '&amp;' -> output.puttext;
+           //ch = '"' then
+              '&quot;' -> output.puttext;
+           //ch = '\'' then
+              '&apos;' -> output.puttext;
+                  else
+              ch -> output.put;
+          if);
+       #);
+   if);
+
 -- XMLPrint: doPart --
-do (output[], 1) -> input.print;
-   
--- ElementAddElement: doPart --
-do (if children[] = NONE then
-       child[] -> children[];
-    else
-       (# current: ^AbstractElement;
-          previous: ^AbstractElement;
-       do children[] -> current[];
-          loop:
-            (if current[] <> NONE then
-                current[] -> previous[];
-                current.next[] -> current[];
-                restart loop;
-            if);
-          child[] -> previous.next[];
-       #);
-   if);
-   
--- ElementAddAttribute: doPart --
-do (if attributes[] = NONE then
-       theAttribute[] -> attributes[];
-    else
-       (# current: ^Attribute;
-          previous: ^Attribute;
-       do attributes[] -> current[];
-          loop:
-            (if current[] <> NONE then
-                current[] -> previous[];
-                current.next[] -> current[];
-                restart loop;
-            if);
-          theAttribute[] -> previous.next[];
-       #);
-   if);
-   
+do (output[], 0, indentFiller) -> input.print;
