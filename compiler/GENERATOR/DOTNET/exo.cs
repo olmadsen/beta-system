@@ -15,6 +15,9 @@ public class ExOException : Exception
       exitobj = e;
       labno = l;
     }
+  public ExOException ()
+    {
+    }
 }
 
 public class program
