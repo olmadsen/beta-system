@@ -91,6 +91,7 @@ struct vtbl
   char (STDCALL *f6)(struct xCOMclass *this, struct myData S);
   struct myData (STDCALL *f7)(struct xCOMclass *this, long a, long b, long c);
   struct myBigData (STDCALL *f8)(struct xCOMclass *this, long a, long b, long c);
+  char (STDCALL *f9)(struct xCOMclass *this, long a, struct myData S, long b);
 };
 
 /* xCOMclass is the class */
@@ -175,6 +176,13 @@ struct myBigData STDCALL f8(struct xCOMclass *this, long a, long b, long c)
   return mD;
 }
 
+char STDCALL f9(struct xCOMclass *this, long a, struct myData S, long b)
+{
+ if (test) printf(" xCOMclass::F9: %d, %d, %d \n",a,S.x,b);
+ if ((a == S.x) & (b == S.s)) {return S.c;}
+ else {return '?';};
+}
+
 /* This is a virtual dispatch table instance, 
  * that may be shared by all xCOMclass objects 
  */
@@ -193,6 +201,7 @@ struct xCOMclass * GetXobj()
   theVTBL.f6 = &f6;
   theVTBL.f7 = &f7;
   theVTBL.f8 = &f8;
+  theVTBL.f9 = &f9;
   /* Allocate xCOMclass object */
   R = (struct xCOMclass *)malloc(sizeof(struct xCOMclass));
   R->proto = &theVTBL;
