@@ -53,6 +53,46 @@ long openGLWidgetClass(void)
 }
 #endif
 
+#ifdef nti
+int setPixelFormat(HDC hdc)
+{
+	PIXELFORMATDESCRIPTOR* ppfd;
+	int formatindex;
+	PIXELFORMATDESCRIPTOR pfd = {
+	sizeof(PIXELFORMATDESCRIPTOR),
+	1,
+	PFD_DRAW_TO_WINDOW |
+	PFD_SUPPORT_OPENGL |
+	PFD_DOUBLEBUFFER,
+	PFD_TYPE_RGBA,
+	24,
+	0,0,0,0,0,0,
+	0,
+	0,
+	0,
+	0,0,0,0,
+	32,
+	0,
+	0,
+	PFD_MAIN_PLANE,
+	0,
+	0,0,0
+	};
+
+	pfd.cColorBits = GetDeviceCaps(hdc,BITSPIXEL);
+	printf("colorbits: %d\n",pfd.cColorBits);
+	ppfd=&pfd;
+
+    formatindex=ChoosePixelFormat(hdc,ppfd);
+	printf("pixelformatindex: %d\n",formatindex);
+
+	if (0==SetPixelFormat(hdc,formatindex,ppfd)) {
+		printf("setpixelformat error!\n");
+		return 0;
+	};
+	return 1;
+}
+#endif
 /*----------WRAPPERS------------*/
 /*mostly wrap double to float, and double limits (3) */
 
@@ -110,7 +150,9 @@ wrapglLineWidth(double width)
 
 wrapglPolygonOffset(double factor,double units)
 {
+  /*
   glPolygonOffset((float)factor,(float)units);
+  */
 }
 
 
