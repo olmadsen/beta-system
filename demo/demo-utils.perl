@@ -213,6 +213,7 @@ sub cleanup_exec()
 {
     my ($prog) = @_;
     my @files = ("$prog", "$prog-jdb", 
+		 "$prog.pdb", "$prog.ildb",
 		 "$prog.bat", "$prog-jdb.bat", 
 		 "$prog.exe", "$prog.exe.config", "$prog.exe.config.new",
 		 );
