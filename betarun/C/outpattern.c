@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: outpattern.c,v 1.23 1992-09-09 13:55:08 tthorn Exp $
+ * Mod: $Id: outpattern.c,v 1.24 1992-09-09 14:12:39 tthorn Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
@@ -172,6 +172,7 @@ NotInHeap( address)
   else return TRUE;
 }
 
+#ifndef sparc
 /* Traverse the StackArea [low..high-4] and Process all references within it. */
 static DisplayStackPart( output, low, high)
   ptr(long) low;
@@ -202,6 +203,7 @@ static DisplayStackPart( output, low, high)
     current++;
   }
 }
+#endif
 
 #ifdef sparc
 void
@@ -311,7 +313,7 @@ DisplayBetaStack( errorNumber, theObj)
 	      nextCBF = (struct RegWin *) theAR->l5;
 	      theAR = (struct RegWin *) theAR->l6;
 	  }
-	  if (theAR->fp != nextCompBlock)
+	  if (theAR->fp != (int) nextCompBlock)
 	    DisplayAR(output, theAR, (struct RegWin *) theAR->fp);
       }
   }

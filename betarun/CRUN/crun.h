@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: crun.h,v 1.18 1992-09-07 15:38:59 beta Exp $
+ * Mod: $Id: crun.h,v 1.19 1992-09-09 14:12:55 tthorn Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -13,7 +13,7 @@ extern struct Component* CAlloC();
 extern struct Item    * CAlloI();
 #endif
 extern ref(ValRep) 	AlloVR();
-extern char 	      * LVRAAlloc();
+extern ref(ValRep)      LVRAAlloc();
 extern ref(RefRep)	AlloRR();
 extern ref(StackObject) AlloSO() asm("AlloSO");
 extern void		CopyT() asm("CopyT");
@@ -96,8 +96,8 @@ setup_item(ref(Item) theItem,
 
 #ifdef DEBUG_IOA
   /* Consistency checks - Checks for valid references */
-  static char __CkString[80];
 # ifdef hppa
+  static char __CkString[80];
 #  define Ck(r) \
    { sprintf(__CkString, "%s:%d:Ck failed:%s", __FILE__, __LINE__, #r); \
      if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r), __CkString); }
