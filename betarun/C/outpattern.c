@@ -1,10 +1,28 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-04-09 08:48:20 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-04-11 08:50:35 $, SID: $Revision: 1.6 $
  * by Lars Bak
  */
 
 #include "beta.h"
+
+static ptr(char) ProtoTypeName(theProto)
+  ref(ProtoType) theProto;
+{
+  ptr(short) Tab;
+  long  TabValue;
+  int   index;
+
+  TabValue  = (long) theProto->GCTabOff;
+  TabValue += (long) theProto;
+  Tab = (ptr(short)) TabValue;
+
+  index = 0;
+  while( Tab[index++] != 0 );
+  while( Tab[index]   != 0 ) index += 4;
+      
+  return (ptr(char)) &Tab[index+1];
+}
 
 static ptr(char) theItemName(theItem)
   ref(Item) theItem;
@@ -36,9 +54,10 @@ static ptr(char) theFormName(theItem)
 }
 
 
-DisplayObject(output,aObj)
+DisplayObject(output,aObj,retAddress)
   ptr(FILE)   output;
   ref(Object) aObj;
+  ptr(long)   retAddress;
 { 
   ref(Item) aItem;
 
@@ -46,7 +65,7 @@ DisplayObject(output,aObj)
     switch ((long) aObj->Proto){
       case ComponentPTValue:
         aItem = ComponentItem(aObj);
-        fprintf(output,"  comp '%s' in '%s'\n", 
+        fprintf(output,"  comp %s in %s\n", 
 		theItemName(aItem), theFormName(aItem));
         break;
       case StackObjectPTValue:
@@ -59,9 +78,56 @@ DisplayObject(output,aObj)
         fprintf(output,"  RefRep\n");
         break;
     } 
-  }else
-    fprintf(output,"  item '%s' in '%s'\n", 
-	   theItemName(aObj), theFormName(aObj));
+  }else{
+    ref(ProtoType) theProto;
+    ref(ProtoType) activeProto;
+    long           activeDist;
+    ref(Object)    staticObj;
+    handle(Object) theCell;
+
+    theProto = aObj->Proto;
+    if( retAddress ){
+      activeProto = theProto;
+      activeDist  = retAddress - theProto->GenPart; 
+      while( theProto->Prefix->Prefix != theProto->Prefix){
+	theProto = theProto->Prefix;
+        if(    (retAddress - theProto->GenPart > 0)
+            && (retAddress - theProto->GenPart < activeDist)){ 
+	  activeProto = theProto;
+	  activeDist  = retAddress - theProto->GenPart; 
+	}
+      }
+    }else activeProto = theProto;
+
+    fprintf(output,"  item ");
+    theProto = aObj->Proto;
+    if( theProto == activeProto )
+      fprintf(output,"<%s>", ProtoTypeName(theProto));
+    else
+      fprintf(output,"%s", ProtoTypeName(theProto));
+    while( theProto->Prefix->Prefix != theProto->Prefix){
+      theProto = theProto->Prefix;
+      if( theProto == activeProto )
+	fprintf(output,"<%s>", ProtoTypeName(theProto));
+      else
+	fprintf(output,"%s", ProtoTypeName(theProto));
+    }
+    fprintf(output, " in %s\n", theFormName(aObj));
+
+    /* Print Static Environment Object. */
+    staticObj = *(handle(Object))((long)aObj + (4*(long)activeProto->OriginOff));
+    if( staticObj )
+      if( isObject( staticObj ) ){
+	fprintf(output,"    -- ");
+	theProto = staticObj->Proto;
+	fprintf(output,"%s", ProtoTypeName(theProto));
+	while( theProto->Prefix->Prefix != theProto->Prefix){
+	  theProto = theProto->Prefix;
+	  fprintf(output,"%s", ProtoTypeName(theProto));
+	}
+	fprintf(output, " in %s\n", theFormName(aObj));
+      }
+  }
 }
 
 
@@ -146,7 +212,7 @@ static DisplayStackPart( output, low, high)
       theObj  = *theCell;
       if( inIOA(theObj) || inAOA(theObj) ){
 	if( isObject( theObj) && NotInHeap(*(current+1)))
-	  DisplayObject(output, theObj);
+	  DisplayObject(output, theObj, *(current+1));
       }
     }else{
       switch( *current){
@@ -184,7 +250,7 @@ DisplayBetaStack( errorNumber, theObj)
   if( theObj != 0 ){
     if( isObject(theObj)){
       fprintf(output,"Current Object:\n");
-      DisplayObject(output, theObj);
+      DisplayObject(output, theObj, 0);
     }else{
       fprintf(output,"Current Object can't be retrieved!\n");
     }
@@ -197,10 +263,12 @@ DisplayBetaStack( errorNumber, theObj)
     ptr(long)          theTop   = StackEnd;
     ref(CallBackFrame) theFrame = ActiveCallBackFrame;
     while( theFrame){
-      DisplayStackPart( output, theTop, (long) theFrame - 4);
-      fprintf( output,"  [ C activation part involving beta Call Back ]\n");
+      DisplayStackPart( output, theTop, ((long) theFrame) - 16);
+      fprintf( output,"  [ C ACTIVATION PART ]\n");
       theTop   = theFrame->betaTop;
       theFrame = theFrame->next;
+      if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
+      theTop += 2;
     }
     DisplayStackPart( output, theTop, StackStart);  
   }else DisplayStackPart( output, StackEnd, StackStart);
