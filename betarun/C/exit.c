@@ -110,6 +110,7 @@ static void PrintNumVars(void)
 }
 #endif /* RTDEBUG */
 
+#ifdef PROTO_STATISTICS
 static int indirectprotocmp(const void *a1, const void *a2)
 {
   TRACE_PROTOSTATISTICS({
@@ -123,6 +124,7 @@ static int indirectprotocmp(const void *a1, const void *a2)
   });
   return 0;
 }
+#endif
 
 void BetaExit(long number)
 {
