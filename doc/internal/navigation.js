@@ -1,0 +1,71 @@
+USETEXTLINKS=1;
+
+foldersTree = gFld("<B>Contents</B>", "");
+
+       aux1 = insDoc(foldersTree, gLnk(0, "Intro", "intro.html"));
+
+       aux1 = insFld(foldersTree, gFld("Statistics", ""));
+	      insDoc(aux1, gLnk(2, "Student Statistics", "www.daimi.au.dk/~beta/Statistics/student/"));
+	      insDoc(aux1, gLnk(0, "Error Reports Status", "errorReportsStatus.html"));
+
+       aux1 = insFld(foldersTree, gFld("Status", ""));
+	      insDoc(aux1, gLnk(2, "MBS Status Matrix", "www.mjolner.dk/Quality/mbs_status.html"));
+
+       aux1 = insFld(foldersTree, gFld("Plan", ""));
+	      insDoc(aux1, gLnk(2, "Mj&oslash;lner r4.2 Plan", "www.mjolner.dk/Quality/r4.2-plan.html"));
+	      insDoc(aux1, gLnk(2, "Mj&oslash;lner r5.0 Plan", "www.mjolner.dk/Quality/r5.0-plan.html"));
+
+       aux1 = insFld(foldersTree, gFld("Quality", ""));
+	      insDoc(aux1, gLnk(2, "Mj&oslash;lner Quality Pages", "www.mjolner.dk/Quality/"));
+
+       aux1 = insFld(foldersTree, gFld("TODO", ""));
+              insDoc(aux1, gLnk(0, "Mjolner", "../mjolnertool/TODO"));
+              insDoc(aux1, gLnk(0, "CASE Tool", "../freja/internal/TODO"));
+              insDoc(aux1, gLnk(0, "Debugger", "../valhalla/internal/TODO"));
+              insDoc(aux1, gLnk(0, "Editor", "../sif/internal/TODO"));
+              insDoc(aux1, gLnk(0, "Sourcebrowser", "../ymer/internal/TODO"));
+              insDoc(aux1, gLnk(0, "Interfacebuilder", "../frigg/internal/TODO"));
+              insDoc(aux1, gLnk(0, "Guienv", "../lidskjalv-ref/internal/TODO"));
+              insDoc(aux1, gLnk(0, "Bifrost", "../bifrost-ref/internal/TODO"));
+              insDoc(aux1, gLnk(0, "Bidl", "../bidl/internal/todo.html"));
+              insDoc(aux1, gLnk(0, "MPS", "../yggdrasil/internal/TODO"));
+              insDoc(aux1, gLnk(0, "Documentation", "../admin/todo.html"));
+
+       aux1 = insFld(foldersTree, gFld("CHANGES", ""));
+              insDoc(aux1, gLnk(0, "CASE Tool", "../freja/internal/CHANGES"));
+              insDoc(aux1, gLnk(0, "Debugger", "../frigg/internal/CHANGES"));
+              insDoc(aux1, gLnk(0, "Editor", "../sif/internal/CHANGES"));
+              insDoc(aux1, gLnk(0, "Sourcebrowser", "../ymer/internal/CHANGES"));
+              insDoc(aux1, gLnk(0, "Interfacebuilder", "../frigg/internal/CHANGES"));
+              insDoc(aux1, gLnk(0, "Guienv", "../lidskjalv-ref/internal/CHANGES"));
+              insDoc(aux1, gLnk(0, "Bifrost", "../bifrost-ref/internal/CHANGES"));
+              insDoc(aux1, gLnk(0, "MPS", "../yggdrasil/internal/CHANGES"));
+
+       aux1 = insFld(foldersTree, gFld("Internal Documentation", ""));
+	      aux2 = insFld(aux1, gFld("Bifrost", "../bifrost-ref/internal/"));
+		     insDoc(aux2, gLnk(0, "README", "../bifrost-ref/internal/README"));
+		     insDoc(aux2, gLnk(0, "TODO", "../bifrost-ref/internal/README"));
+		     insDoc(aux2, gLnk(0, "CHANGES", "../bifrost-ref/internal/README"));
+	      aux2 = insFld(aux1, gFld("Betarun", ""));
+		     insDoc(aux2, gLnk(2, "Overview", "www.mjolner.com/Quality/betarun.html"));
+		     insDoc(aux2, gLnk(0, "Misc", "../betarun/internal/"));
+              insDoc(aux1, gLnk(2, "Compiler", "www.daimi.au.dk/~olm/DOC/"));
+
+       aux1 = insFld(foldersTree, gFld("Testing", "http://www.mjolner.dk/Quality/betatest.html"));
+	      aux2 = insFld(aux1, gFld("Tools", ""));
+		   insDoc(aux2, gLnk(2, "mjolner", "www.mjolner.dk/Quality/betatest.html#mjolner"));
+		   insDoc(aux2, gLnk(2, "compiler", "www.mjolner.dk/Quality/betatest.html#compiler"));
+		   insDoc(aux2, gLnk(2, "valhalla", "www.mjolner.dk/Quality/betatest.html#valhalla"));
+		   insDoc(aux2, gLnk(2, "freja", "www.mjolner.dk/Quality/betatest.html#freja"));
+		   insDoc(aux2, gLnk(2, "frigg", "www.mjolner.dk/Quality/betatest.html#frigg"));
+		   insDoc(aux2, gLnk(2, "psbrowser", "www.mjolner.dk/Quality/betatest.html#psbrowser"));
+		   insDoc(aux2, gLnk(2, "meta", "www.mjolner.dk/Quality/betatest.html#meta"));
+		   insDoc(aux2, gLnk(2, "pp", "www.mjolner.dk/Quality/betatest.html#pp"));
+		   insDoc(aux2, gLnk(2, "utils", "www.mjolner.dk/Quality/betatest.html#utils"));
+		   insDoc(aux2, gLnk(2, "tool check list", "www.mjolner.dk/Quality/toolchecklist.html"));
+	      aux2 = insFld(aux1, gFld("demo", "http://www.mjolner.dk/Quality/betatest.html#demo"));
+		   aux3 = insFld(aux2, gFld("demo check list", "http://www.mjolner.dk/Quality/demochecklist.html"));
+		   	insDoc(aux3, gLnk(2, "tutorial demos", "www.mjolner.dk/Quality/tutorialdemo.checklist.html"));
+
+initializeDocument();
+

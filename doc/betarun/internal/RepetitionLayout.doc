@@ -1,0 +1,78 @@
+
+Stephan Erbs Korsholm writes:
+> Hej Peter.
+> 
+...
+> 	Saa vidt jeg har kunnet finde ud af, er repetitions, ganske naturligt,
+> alloceret som arrays:
+> 
+> 	Memory:  byte offset:
+> 	________
+> 	|      |	+ 0
+> 	--------
+> 	|      |	+ 4
+> 	--------
+> 	| low  |	+ 8
+> 	--------
+> 	| high |	+ 12
+> 	--------
+> 	| elm1 |	+ 16
+> 	--------
+> 	| elmn |	+ 16 + n * sizeof(elm)
+> 	--------
+> 
+> 	Saa jeg veed naeste alt hvad jeg har brug for, for at kunne aendre
+> en repetitions range, blot mangle jeg foelgende information:
+> 
+> 	(1) Hvad skal der staa i (+ 0) og (+ 4) ?
+> 
+> 	(2) hvor staar sizeof(elm) ? Det skulle vel aldrig vaere i en af de
+> under (1) naevnte indgange ?
+> 
+
+Det er n{sten rigtigt.
+Generelt er objectlayouts beskrevet i C/object.h i betarun.
+Her er beskrevet struct ValRep, der bruges til alle value-repetitions 
+(byte/char/boolean, integer, shortint, real (double).
+
+I f|rste felt af alle disse st}r en "special prototype", der er defineret
+i C/constant.h.
+F.eks. i en byte-repetition st}r der v{rdien ByteRepPTValue (v{rdien -6 med
+passende type casts p}).
+
+I andet felt st}r der GCAttributten. Det vil for objekter i IOA v{re objektets
+alder (antal gange det er flyttet frem og tilbage mellem IOA og ToSpace).
+I AOA st}r der typisk 0 i feltet.
+I begge heaps g{lder dog, at der kan st} et negativt tal hvis objektet er 
+et partobject. I givet fald peger tallet tilbage p} det omkringliggende
+object. Dette kan dog ikke ske for repetitions, da de aldrig kan v{re
+(inlinede) partobjecter.
+For repetitions er der dog den ekstra finurlighed, at hvis de har range>256
+s} allokeres de i en speciel heap LVRA. I givet fald bruges GCAttr feltet
+til at pege tilbage fra repetitionen til den celle, der refererer repetitionen.
+
+LowBorder feltet er altid 1.
+
+HighBorder feltet angiver Range.
+
+Men st|rrelsen af repetitionen er ikke s} enkelt som du g{tter p}:
+F.eks. er bytes jo allokeret successivt (4 pr. long), og der er ogs} et 
+specialtilf{lde for byte-repetitions, hvor der ALTID allokeres een byte mere end
+angivet i range, for at kunne sikre NULL terminering.
+Desuden skal alle objektst|rrelser v{re 64bit alignet p} sparc (andre st|rrelser
+p} andre arkitekturer) for at undg} bus-errors ved reals (kan p} sparc kun
+loades fra 64bit gr{nser).
+
+Da allokeringen af repetitionen SKAL matche garbagecollectorens opfattelse
+af, hvor stor repetitionen er, s} skal st|rrelsen af repetitions beregnes som
+det sker i f|lgende makroer i C/macro.h i betarun:
+
+#define ByteRepBodySize(range)   ((((range)+4)/4)*4)
+#define ShortRepBodySize(range)  (((2*(range)+3)/4)*4)
+#define LongRepBodySize(range)   ((range)*4)
+#define DoubleRepBodySize(range) ((range)*8)
+
+(det kan udtrykkes enklere vha modulus etc, men det skal C-compileren nok
+optimere).
+Der er flere andre makroer for de andre objekttyper.
+Se f.eks. CRUN/AllocateValRep.c i betarun for anvendelse.

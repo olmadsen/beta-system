@@ -1,0 +1,180 @@
+SnakeDOC.txt.
+=============
+
+This document describes some of the things that are special about the 
+snake/hp-pa implementation of Beta 4.4.
+
+The hp-pa 1.1 processor is a (sort of) RISC processor with 32 32-bit integer
+registers, and 32 double precision floating-point registers.
+
+Registers
+---------
+
+During execution of a Beta program the integer registers are used a follows:
+
+ * r0 = 0
+ * r1 = scratch
+ * r2 = return pointer
+ * r3 = th
+ * r4 = ca
+ * r5 = or   (or is now primReg1 / OLM:Jan.94.)
+ * r5 - r8 = address registers 
+ * 	     The logical address registers a2-a4 are mapped to r5-r7.
+ * 	     r8=a5 is used as a temporary address register, but does NOT
+ * 	     hold addresses of objects, i.e. it shall NOT be garbage collected.
+ * 	     The registers r3-r7 can refer to objects and MUST be garbage collected.
+ *
+ * r9 - r13 = dataregisters
+ * r14 = NOT USED, was: Reference Stack Pointer, RefSP
+ * r15 - r16 = temp. dataregisters
+ * 
+ * r17 = IOAbot IN MEMORY CELL IOA
+ * r18 = IOAsize IN MEMORY AS: IOATop-IOA
+ * 
+ * r22 = PrimReg5
+ * r23 - r26 = parameters to external C routines, %r26 = arg0, %r25 = arg1,...
+ *       Also PrimReg1=r26, PrimReg2=r25, PrimReg3=r24, PrimReg4=r23.
+ * r27 = start of global data, not used ??
+ * r28 = return value from C calls
+ * r29 = return value from millicode calls
+ * r30 = stackpointer (the stack grows upwards)
+ * r31 = scratch
+ * ***********************
+ * fr0-fr3 = status registers, quite unusable
+ * fr4-11  = general caller-saves registers, parameters to C
+ * fr12-21 = callee-saves registers, >15 only on PA-RISC1.1
+
+fr8,fr9: temporary fp registers
+fr12-  : used by Beta as general fp registers
+
+Note that fr0 will be read as 0.0 in certain instructions. This is not
+documented anywhere that I know of, but the C compiler uses it, and so does
+Beta.
+
+Reference stack
+---------------
+One thing that is different from the other implementations of Beta, is that
+it was necessary to have a special stack that holds all object references,
+and outlaw references on the machinestack.
+
+Currently the reference stack has a fixed size of 500 references, this has been
+sufficient for the compiler to run, but the reference stack should be allocated
+in IOA or AOA and be grown automatically, when AlloI() detects a near-overflow.
+
+The RefSP variable points to the first free clee on the reference stack.
+The reference stack grows upwards like the machinestack.
+
+IOA heap
+--------
+The variable IOA points to the bottom of IOA, and the variable IOAtop to the top.
+This is like in the motorola implementation. 
+
+RefSP, IOA, and IOAsize in registers
+------------------------------------
+
+It has been attempted to keep the RefSP, IOA, and IOATop-IOATop in three 
+registers (r14, r17, r18), but this has been dropped in v2.6. The reason for 
+this is, that it is very difficult to keep the registers consistent.
+
+For the RefSP it has been attempted to save the register in a variable 
+before calling external routines and RT routines, and then reloading the
+register from the variable after the routine returns. But this will not
+work, if e.g AlloI is called, which calls a G-entry, which again calls AlloI.
+The saved value is then destroyed. This calls for a stack based solution.
+But the problem with that is that when making a callback (via HandleCB), 
+the register should be restored, and then saved when returning from the
+callback. This should be possible, but has not been tried.
+
+For the IOA and IOATop-IOA registers, the problem is, that these are 
+changed by RT routines. Thus the master copies has to be in variables
+(since the registers are not safe to use: may be in a clobbered state
+when a callback from C is active). Thus the variables are updated by allocation 
+routines, and the registers are read from the variables after each external
+call. Also they must be read by HandleCB just before a callback is invoked.
+There has been similar problems with doing this in nested situations, but
+in principle it should be possible.
+Another optimization would be to take advantage of the fact, that the 
+variables IOA and IOATop are allocated next to each other. Thus when both
+have to be read (i.e. in connection with a ChkRA), a base register r1 may
+be used to point to the first, which may then be read by "ldws,ma 4(r1),r17"
+whereafter r1 points to the next word.
+
+Tagged references on the Reference Stack 
+----------------------------------------
+Some references on the reference stack are tagged with the least significant
+bit set. The tagged references are saved "this" pointers that are pushed each
+time a do-part or a gen-part is invoked, and popped when the respective gen-
+or do-part returns.
+
+The tags are used when producing the stack-trace part of the beta.dump file,
+and are also used in the ExitO() RT routine.
+
+There proved to be a problem with having tagged references in connection with
+AOAGc(), because the pointers are dereferenced as objects may move in AOA.
+This has been overcome by a dreadful hack, described in aoa.c. We simply
+move the tagbits to the ToSpaceToAOA table while doing AOAGC, and then
+restore the tags after AOAGC.
+
+There should be no problems concerning tagged references and LVRAGc, because
+LVR object have no do-part!
+
+The machine stack
+------------------
+The machine stack on the snake is always bumped up with a multiple of 64 at a
+time, this has to do with cache line alignment...
+
+Attach & Suspend
+----------------
+Because of the extra reference stack, the layout of stackobjects is different
+on the snakes. A stackobject on the snake consists of a header, a machine stack
+part and a reference stack part. The first two are the same as on the sparc,
+but the reference part is only present on the snake.
+
+The reference part consists of a 32bit integer holding the number of references
+in the rest of that stackobject, and a copy of a part of the reference stack.
+
+The componentblock structure is also different on the snake, in that it is
+expanded with a RefBlock pointer that points to the reference stack part of 
+the corresponding stackobject. This pointer is used in Att(), Susp() and
+AttBC(). Att, Susp and ExitO for the snake is implemented in assembly in the
+file CRUN/SnakeAdditions.S
+
+Callback
+--------
+Obviously the code generated in the callback area is different from that 
+generated on other architectures.
+
+The code in CBFA is invoked from C via the $$dyncall millicode routine.
+(PA-RISC Procedure Calling Conventions Reference Manual, section 5.3.2). 
+
+Because CBFA is located in a data segment of memory, it is not quite trivial
+to transfer control back to the code segment (the HandleCB() routine).
+Certain segment registers need to be reloaded. See CallBack.c in the RT system.
+
+There are a couple of help-functions used to generate the sick opcodes for
+the snake.
+
+It is also necessary to flush the generated code from the data-cache, because
+the snake has separate code- and data-caches.
+
+Dump of assembler code for function $$dyncall:
+0x1a0c <$$dyncall>:     bb,>=,n r22,1e,0x1a1c <noshlibs>
+0x1a10 <$$dyncall+4>:   depi 0,31,2,r22   (clear least significant 2 bits)
+0x1a14 <$$dyncall+8>:   ldw 4(sr0,r22),r19
+0x1a18 <$$dyncall+12>:  ldw 0(sr0,r22),r22
+
+Dump of assembler code for function noshlibs:
+0x1a1c <noshlibs>:      ldsid (sr0,r22),r1
+0x1a20 <noshlibs+4>:    mtsp r1,sr0
+0x1a24 <noshlibs+8>:    be 0(sr0,r22)        # Here is the branch to CB entry
+0x1a28 <noshlibs+12>:   stw rp,-18(sr0,sp)
+
+One callback entry looks like this:
+
+0x4010b3bc <_end+1056840>:      ldil 12000,r1
+0x4010b3c0 <_end+1056844>:      mfsp sr4,r31
+0x4010b3c4 <_end+1056848>:      ldo 708(r1),r1         # HandleCB
+0x4010b3c8 <_end+1056852>:      mtsp r31,sr0
+0x4010b3cc <_end+1056856>:      ldil 4010b000,ret0
+0x4010b3d0 <_end+1056860>:      be 0(sr4,r1)
+0x4010b3d4 <_end+1056864>:      ldo 3b8(ret0),ret0     # &theStruct

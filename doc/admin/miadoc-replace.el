@@ -63,18 +63,14 @@
 <LINK REL=stylesheet HREF=../style/miadoc.css TYPE=text/css>" nil))
 )
 
-;; Not needed in webmaker 3.
-;; And wml file in webmaker 2.3 can be modified to produce the BORDER=0 and
-;; Alt=... too (use literal HTML).
-;; (defun miadoc-replace8 ()
-;;   (interactive)
-;;   (set-variable 'tags-file-name nil)
-;; 
-;;   (let ((case-replace t))
-;;     (message "Removing borders from buttons")
-;;     (tags-query-replace "<IMG\\s-+ALIGN\\s-*=\\s-*BOTTOM\\s-+SRC\\s-*=\\s-*\"\\.\\./images/\\(\\w+\\)\\.gif\">;; " "<IMG ALIGN=\"BOTTOM\" ALT=\"\\1\" BORDER=0 SRC=\"\\.\\./images/\\1.gif\">
-;; " nil))
-;; )
+(defun miadoc-replace8 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing MIA references")
+    (tags-query-replace "\\[MIA \\(9[0-9]-[0-9]+\\)\\]" "<A HREF=\"../bibliography/index.html#mia\\1\">[MIA \\1]</A>" nil)
+)
 
 (defun miadoc-replace9 ()
   (interactive)
