@@ -42,13 +42,14 @@ require "utils.perl";
 
 $betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
 
-@MachineTypes = ('NTI_MS', 'NTI_GNU', 'NTI_BOR', 'SUN4S', 'HPUX9PA', 'LINUX', 'SGI', 'PPCMAC');
-@ObjDirs =  ('nti_ms', 'nti_gnu', 'nti_bor', 'sun4s', 'hpux9pa', 'linux', 'sgi', 'ppcmac');
+@MachineTypes = ('NTI_MS', 'NTI_GNU', 'NTI_BOR', 'SUN4S', 'HPUX9PA', 'LINUX', 'SGI', 'PPCMAC', 'SOL_X86');
+@ObjDirs =  ('nti_ms', 'nti_gnu', 'nti_bor', 'sun4s', 'hpux9pa', 'linux', 'sgi', 'ppcmac', 'sol_x86');
 @OsTypes = ('WIN', 'UNIX', 'MAC');
 
 %ObjExt = ('nti_ms', 'obj',
 	   'nti_gnu', 'obj',
 	   'nti_bor', 'obj',
+	   'sol_x86', 'o',
 	   'sun4s', 'o',
 	   'hpux9pa', 'o',
 	   'linux', 'o',
@@ -58,6 +59,7 @@ $betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
 %AstExt = ('nti_ms', 'astL',
 	   'nti_gnu', 'astL',
 	   'nti_bor', 'astL',
+	   'sol_x86', 'ast',
 	   'sun4s', 'ast',
 	   'hpux9pa', 'ast',
 	   'linux', 'astL',
@@ -134,6 +136,10 @@ if (-e "c:\\") {
 	$MACHINETYPE = 'SGI';
 	$objdir = 'sgi';
 	&setup_sgi;
+    } elsif ($mach =~ /^i86pc$/) {
+	$MACHINETYPE = 'SOL_X86';
+	$objdir = 'sol_x86';
+	# &setup_sol_x86;
     } else {
 	print "Unknown/unsupported architecture.\n";
 	exit 1;
