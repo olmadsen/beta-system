@@ -41,7 +41,7 @@ void AOAtoIOAReAlloc(void)
   /* Exit if we can't find a new entry in prims. */
   if( primes[++prim_index] == 0 ) 
 #ifdef NEWRUN
-    BetaError(AOAtoIOAfullErr, CurrentObject, StackEnd);
+    BetaError(AOAtoIOAfullErr, CurrentObject, StackEnd, 0);
 #else
     BetaError(AOAtoIOAfullErr, 0);
 #endif
@@ -57,7 +57,7 @@ void AOAtoIOAReAlloc(void)
     /* If the allocation of the new AOAtoIOAtable failed please
        terminate the program execution. */
 #ifdef NEWRUN
-    BetaError(AOAtoIOAallocErr, CurrentObject, StackEnd);
+    BetaError(AOAtoIOAallocErr, CurrentObject, StackEnd, 0);
 #else /* NEWRUN */
     BetaError(AOAtoIOAallocErr, 0);
 #endif /* NEWRUN */

@@ -53,7 +53,7 @@ extern unsigned long        CodeEntry(struct ProtoType *theProto, long PC);
 /* C/exit.c */
 extern void BetaExit(long);
 #ifdef NEWRUN
-extern void BetaError(long errorNo, struct Object *theObj, long *SP);
+extern void BetaError(long errorNo, struct Object *theObj, long *SP, long *thePC);
 #else
 extern void BetaError(long, ref(Object));
 #endif

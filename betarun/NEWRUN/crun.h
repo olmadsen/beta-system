@@ -53,7 +53,7 @@ extern long 		    neS(struct Structure *arg1, struct Structure *arg2);
 extern void 		    Qua(struct Object *dstQuaOrigin, struct ProtoType *dstQuaProto, struct Object **theCell, long *SP);
 extern void		    Return(void);
 extern void		    SetArgValues(long argc, char *argv[]);
-extern void		    FailureExit(long *SP, struct Object *this);
+extern void		    FailureExit();
 extern void		    HandleIndexErr(long *SP, struct Object *this);
 extern void *               CopyCPP(struct Structure *theStruct);
 extern void 		    CinitT(void);

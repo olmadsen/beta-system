@@ -27,10 +27,10 @@ void CopySVR(struct ValRep *theRep,
     /* Copy a slice of a Value Repetition. */
     
     /* Check that low and high are usable. */
-    if (low < theRep->LowBorder) 
-      BetaError(RepLowRangeErr, GetThis(SP), SP);
-    if (high > theRep->HighBorder) 
-      BetaError(RepHighRangeErr, GetThis(SP), SP);
+    if ( (low < theRep->LowBorder) || (theRep->HighBorder < low) ) 
+      BetaError(RepLowRangeErr, GetThis(SP), SP, 0);
+    if ( (high < theRep->LowBorder) || (theRep->HighBorder < high) ) 
+      BetaError(RepHighRangeErr, GetThis(SP), SP, 0);
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;

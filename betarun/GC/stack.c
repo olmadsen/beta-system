@@ -21,6 +21,17 @@
 
 #ifdef NEWRUN
 /************************* Begin NEWRUN ****************************/
+
+#if 0
+#define DO_TRACE_CODEENTRY /* Trace search for prefix in ObjectDescription */
+#endif
+
+#ifdef DO_TRACE_CODEENTRY
+#define TRACE_CODEENTRY(code) code; fflush(output)
+#else
+#define TRACE_CODEENTRY(code)
+#endif
+
 /* Return the M or G part obtained from theProto, that PC is in */
 unsigned long CodeEntry(struct ProtoType *theProto, long PC)
 {
@@ -33,12 +44,7 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
   long gPart, gDist, mPart, mDist, minDist;
   struct ProtoType *activeProto;
 
-#undef TRACE_CODEENTRY
-
-#ifdef TRACE_CODEENTRY
-  fprintf(output, "CodeEntry(theProto=0x%x, PC=0x%x)\n", theProto, PC); 
-  fflush(output);
-#endif
+  TRACE_CODEENTRY(fprintf(output, "CodeEntry(theProto=0x%x (%s), PC=0x%x)\n", theProto, ProtoTypeName(theProto), PC)); 
   mPart = M_Part(theProto);
   gPart = G_Part(theProto);
   gDist  = PC - gPart; 
@@ -46,32 +52,25 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
   activeProto = theProto;
   if (gDist < 0) gDist = MAXINT;
   if (mDist < 0) mDist = MAXINT;
-#ifdef TRACE_CODEENTRY
-  fprintf(output, "CodeEntry(initial gDist: 0x%x, proto=0x%x)\n", gDist, theProto);
-  fprintf(output, "CodeEntry(initial mDist: 0x%x, proto=0x%x)\n", mDist, theProto);
-  fflush(output);
-#endif 
+  TRACE_CODEENTRY(fprintf(output, "CodeEntry(initial gDist: 0x%x, proto=0x%x)\n", gDist, theProto));
+  TRACE_CODEENTRY(fprintf(output, "CodeEntry(initial mDist: 0x%x, proto=0x%x)\n", mDist, theProto));
   minDist = (gDist<mDist) ? gDist : mDist;
     
   while(theProto && theProto->Prefix != theProto){
     theProto = theProto->Prefix;
     mPart = M_Part(theProto);
     gPart = G_Part(theProto);
-    if((PC-gPart > 0) && (PC-gPart < minDist)){ 
+    if((PC-gPart > 0) && (PC-gPart <= minDist)){ 
+      /* Use <= to get the LAST level, that has the entry point */ 
       minDist = gDist = PC-gPart;
       activeProto = theProto; 
-#ifdef TRACE_CODEENTRY
-      fprintf(output, "CodeEntry(gDist: 0x%x, proto=0x%x)\n", gDist, theProto);
-      fflush(output);
-#endif 
+      TRACE_CODEENTRY(fprintf(output, "CodeEntry(gDist: 0x%x, proto=0x%x)\n", gDist, theProto));
     }
-    if((PC-mPart > 0) && (PC-mPart < minDist)){ 
+    if((PC-mPart > 0) && (PC-mPart <= minDist)){ 
+      /* Use <= to get the LAST level, that has the entry point */ 
       minDist = mDist = PC-mPart; 
       activeProto = theProto;
-#ifdef TRACE_CODEENTRY
-      fprintf(output, "CodeEntry(mDist: 0x%x, proto=0x%x)\n", mDist, theProto);
-      fflush(output);
-#endif 
+      TRACE_CODEENTRY(fprintf(output, "CodeEntry(mDist: 0x%x, proto=0x%x)\n", mDist, theProto));
     }
   }
   if (minDist == MAXINT) {
@@ -253,8 +252,7 @@ struct Object *ProcessStackFrames(long SP,
      *          |////////////|  |               |  Frames for C and
      *          |////////////|  |               |  callback stub
      *          |------------|  |              -'
-     *          |  real-dyn  |  |                Pseudo frame
-     *  prevSP->|___SP-beta__|--'              _
+     *      SP->|___SP-beta__|--'              _  Pseudo frame
      *          |   RTS      | = PC in stub     |
      *          |   dyn      | = CALLBACKMARK   |
      *          |            |                  |
@@ -262,7 +260,7 @@ struct Object *ProcessStackFrames(long SP,
      *          |            |                  |  after callback
      *          |            |                  |
      *          |____________|                 _|
-     *      SP->|            |
+     *          |            |
      *          |            |
      * 
      */

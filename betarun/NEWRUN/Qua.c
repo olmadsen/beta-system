@@ -117,7 +117,7 @@ void Qua(struct Object *dstQuaOrigin,
 	}
       } while (0);
       /* dstQuaProto is not a prefix of srcProto */
-      BetaError(QuaErr, GetThis(SP), SP);
+      BetaError(QuaErr, GetThis(SP), SP, 0);
     }
   }
 }
@@ -228,9 +228,9 @@ void OQua(struct Object **theCell,
       } while (0);
       if (!less) 
 	if (isPrefix)
-	  BetaError(QuaOrigErr, GetThis(SP));
+	  BetaError(QuaOrigErr, GetThis(SP), 0);
 	else
-	  BetaError(QuaErr, GetThis(SP));
+	  BetaError(QuaErr, GetThis(SP), 0);
     }
   }
 }

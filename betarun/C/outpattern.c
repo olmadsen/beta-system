@@ -18,17 +18,25 @@
 #if 0
 #define DO_TRACE_GROUP /* Trace GroupName() */
 #endif
+#if 0
+#define DO_TRACE_CODEENTRY /* Trace search for prefix in ObjectDescription */
+#endif
 #endif
 
 #ifdef DO_TRACE_DUMP
-#define TRACE_DUMP(code) code
+#define TRACE_DUMP(code) code; fflush(output)
 #else
 #define TRACE_DUMP(code)
 #endif
 #ifdef DO_TRACE_GROUP
-#define TRACE_GROUP(code) code
+#define TRACE_GROUP(code) code; fflush(output)
 #else
 #define TRACE_GROUP(code)
+#endif
+#ifdef DO_TRACE_CODEENTRY
+#define TRACE_CODEENTRY(code) code; fflush(output)
+#else
+#define TRACE_CODEENTRY(code)
 #endif
 
 #ifdef RTVALHALLA
@@ -45,7 +53,6 @@ static char *machine_name(void);
 
 long M_Part(ref(ProtoType) proto)
      /* Return the address og of the M-entry for the prototype proto.
-      * If the pattern has no do-part, return MAXINT.
       *
       * Use the fact, that if the corresponding object has a do part, 
       * then above the prototype, the INNER table can be used to find
@@ -58,12 +65,29 @@ long M_Part(ref(ProtoType) proto)
       *        ...
       * proto: ...
       *
-      * If the pattern has no do-part, the picture is:
+      * If the pattern has NO do-part and NO explicit prefix, the picture is:
       *        
       *        long: _Return
       * proto: ...
       * 
-      * CRTS: prototype is, e.g.
+      * In this case the routine returns MAXINT.
+      * 
+      * 
+      * If the pattern has NO do-part but has a prefix, the picture is:
+      *        
+      *        long: _Return
+      *        long: M-entry of prefix
+      *        long: M-entry of prefix-prefix
+      * proto: ...
+      * 
+      * In the last case this routine will actually return the entry part of
+      * the last prefix.
+      *
+      * ------------------
+      * 
+      * CRTS: 
+      * prototype is, e.g.:
+      * 
       * long T18TSTVIRT[]={
       *   (48<<16)|(0xffff&2),
       *   (long)&G18TSTVIRT,
@@ -361,14 +385,21 @@ group_header* NextGroup (group_header* current)
  * the prototype adresses.
  */
 int IsBetaPrototype(group_header *gh, long data_addr) 
-{ long* proto=gh->protoTable;
+{ long* proto=&gh->protoTable[1];
   int i, NoOfPrototypes;
   NoOfPrototypes = gh->protoTable[0];
-  for (i=0; i<NoOfPrototypes; i++)
-    if ((*proto)==data_addr) 
-       return 1;
-     else
-       proto++;
+  TRACE_GROUP(fprintf(output, 
+		      ">>>IsBetaPrototype(group=0x%x, addr=0x%x)\n",
+		      gh,
+		      data_addr));
+  for (i=0; i<NoOfPrototypes; i++){
+    TRACE_GROUP(fprintf(output,">>>IsBetaPrototype: Try 0x%x\n", *proto));
+    if ((*proto)==data_addr){
+      return 1;
+    } else {
+      proto++;
+    }
+  }
   return 0;
 }
 
@@ -461,10 +492,6 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
     TRACE_DUMP(fprintf(output, "(BasicItem ignored - will be shown as comp)\n"));
     return;
   }
-  
-#ifdef NEWRUN
-  /* FIXME: use stack.c:CodeEntry() here */
-#endif
 
   if (retAddress) {
     /* Find the active prefix level based on the retAddress.
@@ -474,43 +501,44 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
      * to retAddress is smallest.
      */
     
+    TRACE_CODEENTRY(fprintf(output, "ObjectDescription: initial: theProto=0x%x (%s), addr=0x%x\n", theProto, ProtoTypeName(theProto), retAddress)); 
     gDist  = retAddress - gPart; 
-    /* fprintf(output, "gDist: 0x%x\n", gDist); fflush(output); */
+    TRACE_CODEENTRY(fprintf(output, "initial gPart: 0x%x, gDist: 0x%x\n", gPart, gDist));
     mDist  = retAddress - mPart;
-    /* fprintf(output, "mDist: 0x%x\n", mDist); fflush(output); */
+    TRACE_CODEENTRY(fprintf(output, "initial mPart: 0x%x, mDist: 0x%x\n", mPart, mDist));
     if (gDist < 0) gDist = MAXINT;
     if (mDist < 0) mDist = MAXINT;
     activeDist = (gDist<mDist) ? gDist : mDist;
     
-    while(theProto->Prefix && 
-	  theProto->Prefix->Prefix != theProto->Prefix){
+    while(theProto && (theProto->Prefix != theProto)/* stop at Object# */){
       theProto = theProto->Prefix;
       mPart = M_Part(theProto);
       gPart = G_Part(theProto);
+      TRACE_CODEENTRY(fprintf(output, "ObjectDescription: theProto=0x%x (%s), mPart=0x%x, gPart=0x%x\n", theProto, ProtoTypeName(theProto), mPart, gPart)); 
       if((retAddress - gPart > 0) &&
-	 (retAddress - gPart < activeDist)){ 
+	 (retAddress - gPart <= activeDist)){ 
+	/* Use <= to get the LAST level, that has the entry point */ 
 	activeProto = theProto;
 	activeDist  = gDist = retAddress - gPart; 
-	/* fprintf(output, "gDist: 0x%x\n", gDist); fflush(output); */
+	TRACE_CODEENTRY(fprintf(output, "gDist: 0x%x\n", gDist));
       }
       if((retAddress - mPart > 0) &&
-	 (retAddress - mPart < (long) activeDist)){ 
+	 (retAddress - mPart <= (long) activeDist)){ 
+	/* Use <= to get the LAST level, that has the entry point */ 
 	activeProto = theProto;
 	activeDist  = mDist = retAddress - mPart; 
-	/* fprintf(output, "mDist: 0x%x\n", mDist); fflush(output); */
+	TRACE_CODEENTRY(fprintf(output, "mDist: 0x%x\n", mDist));
       }
     }
     if (activeDist == MAXINT) return;
     TRACE_GROUP(fprintf(output, "Calling GroupName with return address\n"));
     groupname = GroupName(retAddress,1);
   } else {
-    /* retAddress == 0 */
-    TRACE_GROUP(fprintf(output, "Calling GroupName with %s\n",
-			(activeDist == gDist) ? "gPart" : "mPart"
-			));
-    groupname = (activeDist == gDist) ? GroupName(gPart,1) : GroupName(mPart,1);
+    /* retAddress not known. Use the groupname of theObj's mPart */
+    TRACE_GROUP(fprintf(output, "Calling GroupName with default mPart\n"));
+    groupname = GroupName(mPart,1);
   }
-  
+
   theProto = theObj->Proto;
 
   if (c_on_top>0){
@@ -570,6 +598,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       staticObj = *(handle(Object))addr;
     else
       staticObj = 0;
+    TRACE_DUMP(fprintf(output, ">>>TraceDump: staticObj=0x%x\n", staticObj));
     if( isSpecialProtoType(staticObj->Proto) ){
       switch ((long) staticObj->Proto){
       case (long) ComponentPTValue:
@@ -592,7 +621,9 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       case (long) ValRepPTValue:
       case (long) RefRepPTValue:
 	/* This is an error */
-	fprintf(output,"    -- Surrounding object damaged!\n");
+	fprintf(output,
+		"    -- Surrounding object damaged %s!\n", 
+		ProtoTypeName(staticObj->Proto));
 	return;
 	break;
       } 
@@ -624,6 +655,8 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
 
 /********************** DisplayObject: ********************/
 
+static struct Object *lastDisplayedObject=0;
+
 void DisplayObject(output,theObj,retAddress)
      ptr(FILE)   output;       /* Where to dump object */
      ref(Object) theObj;       /* Object to display */
@@ -632,6 +665,13 @@ void DisplayObject(output,theObj,retAddress)
 				*/
 { 
   ref(Object) theItem=0;
+
+  /* Make an empty line after the last line of a component */
+  if (lastDisplayedObject &&
+      (lastDisplayedObject->Proto==ComponentPTValue) &&
+      (theObj->Proto != ComponentPTValue)){
+    fprintf(output, "\n"); fflush(output);
+  }
 
   if( isSpecialProtoType(theObj->Proto) ){
     switch ((long) theObj->Proto){
@@ -645,10 +685,8 @@ void DisplayObject(output,theObj,retAddress)
 	  basic_dumped=1;
 	}
       } else {
-	ObjectDescription(theItem, retAddress, "comp", 0);
+	ObjectDescription(theItem, retAddress, "comp", 1);
       }
-      /* Make an empty line after the component */
-      fprintf(output, "\n"); fflush(output);
       break;
     case (long) DopartObjectPTValue:
       theItem = (cast(DopartObject)theObj)->Origin;
@@ -684,6 +722,8 @@ void DisplayObject(output,theObj,retAddress)
   }else{    
     ObjectDescription(theObj, retAddress, "item", 1);
   }
+
+  lastDisplayedObject=theObj;
 }
 
 /******************** ErrorMessage ******************/
@@ -756,30 +796,53 @@ static void DumpCell(struct Object **theCell,struct Object *theObj)
   
   if (theCell!=lastCell-1){
     /* theObj is dyn in a frame. This is the current object in the 
-     * previous frame. Save if for dump at next call.
+     * previous frame. 
      */
-    /* First check if theObj is inlined in a component */
-    theComp = (struct Component *)((long)theObj-headsize(Component));
-    if ((theObj->GCAttr == -(headsize(Component)/sizeof(long))) && 
-	(theComp->Proto==ComponentPTValue)) {
-      /* theObj is a component item - dump as comp */
-      theObj = (struct Object *)theComp;
-      PC = 0;
+
+    /* First check if theObj is CALLBACKMARK */
+    if (theObj==(struct Object *)CALLBACKMARK){
+      long *SP;
+      TRACE_DUMP(fprintf(output, "  cb: "));
+      fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
+      /* Since ProcessStackFrames now skips to previous frame before
+       * BETA called C, we will not see the current object in the
+       * frame before C as a dyn-pointer in any frame (it is hidden
+       * by this CALLBACKMARK).
+       * So we have to go to this previous frame ourselves and
+       * find the current object for that frame and dump it.
+       * See figure in stack.c.
+       */
+      SP = (long *)theCell+2; /* Frame starts 2 longs above dyn */
+      SP = *(long **)SP; /* SP-beta */
+      theObj = GetThis(SP);
+      PC = 0; /* not known - is somewhere in the C frames */
     } else {
-      if (theObj->Proto==ComponentPTValue){
-	theComp = (struct Component *)theObj;
-	/* Passing a component frame. The real dyn is found 
-	 * as theComp->CallerObj - see stack.c for details.
-	 */
-	theObj = theComp->CallerObj;
-	PC = theComp->CallerComp->CallerLSC;
-      } else {
+      /* Secondly check if theObj is inlined in a component */
+      theComp = (struct Component *)((long)theObj-headsize(Component));
+      if ((theObj->GCAttr == -(headsize(Component)/sizeof(long))) && 
+	  (theComp->Proto==ComponentPTValue)) {
+	/* theObj is a component item - dump as comp */
+	theObj = (struct Object *)theComp;
 	/* PC for previous frame is found just above dyn */
 	PC = *((long *)theCell+1);
+      } else {
+	if (theObj->Proto==ComponentPTValue){
+	  theComp = (struct Component *)theObj;
+	  /* Passing a component frame. The real dyn is found 
+	   * as theComp->CallerObj - see stack.c for details.
+	   */
+	  theObj = theComp->CallerObj;
+	  PC = theComp->CallerComp->CallerLSC;
+	} else {
+	  /* PC for previous frame is found just above dyn */
+	  PC = *((long *)theCell+1);
+	}
       }
     }
+
     TRACE_DUMP(fprintf(output, ", PC=0x%x *\n", PC));
     DisplayObject(output, theObj, PC);
+
   } else {
     TRACE_DUMP(fprintf(output, "\n"));
   }
@@ -1094,18 +1157,16 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 #endif
 #endif
 
-#if 0
-  fprintf(stdout, 
-	  "DisplayBetaStack(errorNumber=%d, theObj=0x%x, thePC=0x%x, theSignal=%d\n",
-	  errorNumber, 
-	  theObj, 
-	  thePC, 
-	  theSignal);
-  fprintf(stdout, "StackEnd=0x%x, StackStart=0x%x\n", 
-	  (long)StackEnd, 
-	  (long)StackStart
-	  );
-#endif
+  TRACE_DUMP(fprintf(stdout, 
+		     "DisplayBetaStack(errorNumber=%d, theObj=0x%x, thePC=0x%x, theSignal=%d\n",
+		     errorNumber, 
+		     theObj, 
+		     thePC, 
+		     theSignal);
+	     fprintf(stdout, "StackEnd=0x%x, StackStart=0x%x\n", 
+		     (long)StackEnd, 
+		     (long)StackStart
+		     ));
   
 #ifdef RTVALHALLA
   if (valhallaID){
@@ -1156,15 +1217,12 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   TRACE_DUMP(fprintf(output, ">>>TraceDump: Current object 0x%x\n", (int)theObj));
   if( theObj != 0 ){
     if( isObject(theObj)){
-      if (theObj==cast(Object)ActiveComponent->Body){
-	TRACE_DUMP(fprintf(output, "(is ActiveComponent->Body)\n"));
+      if (theObj==(struct Object *)ActiveComponent->Body){
+	DisplayObject(output, (struct Object *)ActiveComponent, (long)thePC);
       } else {
-	/* retAddress is 0 because we have no way of knowing
-	 * current address in current object (yet)
-	 */
 	DisplayObject(output, theObj, (long)thePC);
       }
-    }else{
+    } else {
       fprintf(output,"  Current object is damaged!\n");
     }
   } else {
@@ -1421,6 +1479,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 
 #undef P
 #define P(text) fprintf(output, "%s\n", text);
+P("")
 P("Legend:")
 P("")
 P("The above dump shows the dynamic call stack of invoked objects.")

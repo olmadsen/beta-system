@@ -45,9 +45,15 @@ void Return()
   return;
 }
 
-void FailureExit(long *SP, struct Object *this)
+void FailureExit()
 {
-  BetaError(StopCalledErr, this, SP);
+  BetaError(StopCalledErr, GetThis(BetaStackTop[0]), BetaStackTop[0], 0);
+}
+
+
+void HandleIndexErr(long *SP, struct Object *this)
+{
+    BetaError(RepRangeErr, this, SP, 0);
 }
 
 /* RefNone always referenced by betaenv, but not called on platforms,

@@ -418,7 +418,7 @@ static void ReverseAndFollow(void)
 	    extendRAFStackArea(); 
 	  else
 #ifdef NEWRUN	   
-	    BetaError(AOAtoLVRAfullErr, CurrentObject, StackEnd);
+	    BetaError(AOAtoLVRAfullErr, CurrentObject, StackEnd, 0);
 #else
 	    BetaError(AOAtoLVRAfullErr, 0);
 #endif

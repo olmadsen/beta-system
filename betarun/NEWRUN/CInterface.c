@@ -25,7 +25,7 @@ char *CpkVT(struct ValRep * theRep, long *SP)
 
     Ck(theRep);
     if (bodysize > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
-      BetaError(CTextPoolErr, GetThis(SP), SP);
+      BetaError(CTextPoolErr, GetThis(SP), SP, 0);
     
     /* Copy the contents of the repetition to the CTextPool */
     for (i = 0; i < bodysize/4; ++i, CTextPoolEnd += 4)
@@ -45,8 +45,8 @@ char *CpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
 
     /* printf("CCpkSVT: theRep=0x%x, low=0x%x, high=0x%x, SP=0x%x\n", theRep, low, high, SP); */
     Ck(theRep);
-    if (low<theRep->LowBorder) BetaError(RepLowRangeErr, GetThis(SP), SP);
-    if (high>theRep->HighBorder) BetaError(RepHighRangeErr, GetThis(SP), SP);
+    if (low<theRep->LowBorder) BetaError(RepLowRangeErr, GetThis(SP), SP, 0);
+    if (high>theRep->HighBorder) BetaError(RepHighRangeErr, GetThis(SP), SP, 0);
     high = high - low + 1;
     if (high<0) high=0;
 
@@ -56,7 +56,7 @@ char *CpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
      * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
      */
     if (bodysize > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
-      BetaError(CTextPoolErr, GetThis(SP), SP);
+      BetaError(CTextPoolErr, GetThis(SP), SP, 0);
     
     /* Copy the contents of the repetition to the CTextPool. */
     oldBody = (unsigned char *)((unsigned)theRep->Body+(low-theRep->LowBorder));

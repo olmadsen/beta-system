@@ -138,23 +138,31 @@ static inline long GetBetaPC(long errno)
 
 
 #ifdef NEWRUN
-void BetaError(long errorNo, struct Object *theObj, long *SP)
+void BetaError(long errorNo, struct Object *theObj, long *SP, long *thePC)
 #else
 void BetaError(long errorNo, struct Object *theObj)
 #endif
 {
+#ifndef NEWRUN
   long *thePC;
+#endif
 
   do {
     if( errorNo < 0 ){
 
       /* Set up StackEnd before calling DisplayBetaStack */
 
+#ifdef NEWRUN
+	StackEnd = SP;
+#endif
+
+
 #ifdef sparc
       asm("ta 3");
       StackEnd = (long *) ((struct RegWin *)FramePointer)->fp;
       thePC = (long *) ((struct RegWin *)FramePointer)->i7;
-#endif
+#endif /* sparc */
+
 
 #ifdef hppa
 #ifdef RTVALHALLA
@@ -162,30 +170,28 @@ void BetaError(long errorNo, struct Object *theObj)
       fprintf(output, "BetaError %d: PC is 0x%x\n", (int)errorNo, (int)thePC);
 #else
       thePC=(long*)0;
-#endif
-
-#ifdef UseRefStack || defined(NEWRUN)
+#endif /* RTVALHALLA */
+#ifdef UseRefStack
       /* RefSP or SP is used - no need to do anything */
 #else
 #error Find out Stack End for hppa without Reference Stack
 #endif /* UseRefStack */
 #endif /* hppa */
+
+
 #ifdef crts
       getret(thePC);
 #endif
 
-#if !(defined(hppa) || defined(sparc) || defined(crts))
+
+#if defined(mac) || defined(hpux9mc) || defined(intel)
       /* Ordinary MOTOROLA-like stack */
       thePC = 0;
       switch(errorNo){
       case StopCalledErr:
-	/* betaenv.stop -> FailureExit -> BetaError */
-#ifdef NEWRUN
-	StackEnd = BetaStackTop[0];
-	theObj   = (struct Object *)BetaStackTop[1];
-#else
+	/* betaenv.stop   -> FailureExit -> BetaError */
+	/* betaenvbody.bet   Misc.{c,run}   exit.c    */
 	StackEnd = BetaStackTop;
-#endif
 #ifdef mc68020
 	/* a0 and a1 were pushed before calling FailureExit */
 	StackEnd += 2;
@@ -196,15 +202,11 @@ void BetaError(long errorNo, struct Object *theObj)
 #endif
 	break;
       default:
-#ifdef NEWRUN
-	StackEnd = SP;
-#else
 	/* Current object was pushed as the first thing, when
 	 * the error was detected. The "thing" just below
 	 * is the first real part of the Beta stack
 	 */
 	StackEnd = (ptr(long)) &theObj; StackEnd++;
-#endif
 	break;
       }
 #endif

@@ -365,8 +365,6 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 #endif /* RTDEBUG */
 
 
-#ifdef NEWRUN
-
 #define long_clear(p, bytesize)                                     \
 {                                                                   \
   register long i;                                                  \
@@ -381,19 +379,19 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
  * GetDistanceToEnclosingObject:
  *  Find the offset (negative) to the most inclosing object e.g.
  *  the offset to the autonomous object in which theObj reside. 
- *  Placed here to allow 
  */
 
-#define GetDistanceToEnclosingObject(theObj, Distance)      \
-{                                                           \
-  long GCAttribute;                                         \
-  Distance = 0;                                             \
-  GCAttribute = theObj->GCAttr*4;                           \
-  while( GCAttribute < 0 ){                                 \
-    Distance += GCAttribute;                                \
-    theObj = (struct Object *) Offset(theObj, GCAttribute); \
-    GCAttribute = theObj->GCAttr*4;                         \
-  }                                                         \
+#define GetDistanceToEnclosingObject(theObj, Distance)         \
+{                                                              \
+  long           _GCAttribute;                                 \
+  struct Object *_theObj=theObj;                               \
+  Distance = 0;                                                \
+  _GCAttribute = _theObj->GCAttr*4;                            \
+  while( _GCAttribute < 0 ){                                   \
+    Distance += _GCAttribute;                                  \
+    _theObj = (struct Object *) Offset(_theObj, _GCAttribute); \
+    _GCAttribute = _theObj->GCAttr*4;                          \
+  }                                                            \
 }
 
 /* NameOfGroupMacro:
@@ -406,6 +404,12 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 #define NameOfGroupMacro (groupheader)\
   ((char *) &((groupheader)->protoTable[((groupheader)->protoTable[0]) + 1]))
 #endif
+
+
+
+
+
+#ifdef NEWRUN
 
 #define AssignReference(theCell, newObject)                                  \
   *(struct Item **)(theCell) = (struct Item *)(newObject);                   \

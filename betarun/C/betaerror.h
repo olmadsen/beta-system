@@ -3,8 +3,8 @@
 #define RepRangeErr         -3 /* Repetition index out of range */
 #define ArithExceptErr      -4 /* Arithmetic exception */
 #define RepSubRangeErr      -5 /* Repetition subrange out of range */
-#define RepLowRangeErr      -6 /* Repetition subrange out of range */
-#define RepHighRangeErr     -7 /* Repetition subrange out of range */
+#define RepLowRangeErr      -6 /* Repetition subrange out of range (low) */
+#define RepHighRangeErr     -7 /* Repetition subrange out of range (high) */
 #define StopCalledErr       -8 /* Stop is called */
 #define LVRAfullErr         -9 /* LVRA is full */
 #define ZeroDivErr         -10 /* Integer division by zero */
