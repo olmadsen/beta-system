@@ -8,6 +8,26 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef sparc
+/* Function used to call RT routines directly from C.
+ * Needed because %i1 in calling regwin is destroyed by (C)AlloC
+ * Must be here before AlloC to prevent gcc from inlining it.
+ */
+
+struct Component *SPARC_AlloC(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4)
+{
+  struct Component *CAlloC(struct Object *origin, 
+			   int i1, 
+			   struct ProtoType *proto, 
+			   int i3, 
+			   int i4);
+  GCable_Entry();
+  return CAlloC(origin, i1, proto, i3, i4);
+  GCable_Exit(1);
+}
+
+#endif
+
 ParamOriginProto(struct Component *,AlloC)
 {
   /* AlloC calls BETA code, thus we need to make sure GC can
@@ -51,16 +71,4 @@ ParamOriginProto(struct Component *,AlloC)
 #endif
 }
 
-#ifdef sparc
-/* Functions used to call RT routines directly from C.
- * Needed because %i1 in calling regwin is destroyed by (C)AlloC
- */
 
-struct Component *SPARC_AlloC(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4)
-{
-  GCable_Entry();
-  return CAlloC(origin, i1, proto, i3, i4);
-  GCable_Exit(1);
-}
-
-#endif
