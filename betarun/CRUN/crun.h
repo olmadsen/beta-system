@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-31 14:07:36 $, SID: $Revision: 1.13 $
+ * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-09-02 12:33:18 $, SID: $Revision: 1.14 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -64,19 +64,6 @@ static inline long DispatchValRepBodySize(ref(ValRep) theRep, unsigned range)
   }
 }
 */
-
-static inline void
-CCheckRefAsgn(handle(Object) theObjHandle)
-{
-  /* The Assignment *theObjHandle = theObj has just been
-   * done. We know the theObjHandle is in AOA, now check if
-   * *theObjHandle(==theObj) is in IOA.
-   */
-   
-  if (inIOA(*theObjHandle))
-    /* Remember this target cell. */
-    AOAtoIOAInsert(theObjHandle);
-}
 
 static inline void
 AssignReference(long *theCell, ref(Item) newObject)
