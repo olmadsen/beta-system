@@ -1,0 +1,1265 @@
+ORIGIN '../betadbc_oracle';
+INCLUDE '~beta/containers/list'
+'~beta/containers/dictionary'
+'~beta/basiclib/numberio'
+'~beta/sysutils/cstring'
+'~beta/sysutils/objinterface'
+'~beta/basiclib/formatio'
+'~beta/basiclib/texthash'
+'~beta/basiclib/pcre'
+'oracle'
+'patternparser';
+BUILD
+nti '$$/betaoracle.o' 'external/betaoracle.c' 'betacc -I $(ORACLE_HOME)/oci/include $0 $1'
+default '$$/betaoracle.o' 'external/betaoracle.c' '$CC -g -I $ORACLE_HOME/rdbms/demo -I $ORACLE_HOME/rdbms/public -c -o $0 $1';
+LINKOPT 
+(* No library on nti_gnu! Use ODBC instead *)
+nti_ms 'c:/beta/betadbc/private/ocimsvc/oci.lib'
+sun4s '$(ORACLE_HOME)/lib/libclntsh.so $(ORACLE_HOME)/lib/libwtc8.so'
+linux '$(ORACLE_HOME)/lib/libclntst8.a -lpthread'
+
+(* For dynamic linking:
+linux '$(ORACLE_HOME)/lib/libclntsh.so.8.0 $(ORACLE_HOME)/lib/libclntsh.so $(ORACLE_HOME)/lib/libwtc8.so'
+ *)
+
+-- lib: Attributes --
+trueText: (#  exit 'true' #);
+falseText: (#  exit 'false' #);
+
+integerToText:
+  (# i: @integer; res: ^text
+  enter i
+  do &text[]->res[]; res.reset; i->res.putint
+  exit res[]
+  #);
+realToText:
+  (# r: @real; res: ^text
+  enter r
+  do &text[]->res[]; res.reset; r->res.putreal
+  exit res[]
+  #);
+booleanToText:
+  (# b: @boolean; res: ^text
+  enter b
+  do
+     &text[]->res[];
+     res.reset;
+     (if b // true then 'true'->res[] // false then 'false'->res[] if)
+  exit res[]
+  #);
+
+maxCharBufSize: (# exit 256 #);
+
+charRepToText:
+  (# charBuf: [0]@char;
+     result: ^text;
+  enter charBuf
+  do
+     &text[]->result[];
+     result.reset;
+     (for i: charBuf.range repeat 
+          charBuf[i]->result.put; 
+     for);
+  exit result[]
+  #);
+
+isAscii: (# 
+	ch: @char; 
+	enter ch 
+          (* clearing bit 6 converts lower case to uppercase *)
+        exit ('A'<=(ch %Band 2x1011111)) and ((ch %Band 2x1011111)<='Z')
+  #);
+
+toLowercase:(# 
+	result, t: ^text; 
+	enter t[]
+	do t.copy -> result[];
+	   (for i:t.length repeat
+               (if t.T[i]->isAscii then (t.T[i] %Bor 2x100000)->result.T[i]; 
+               if);
+          for); 
+       exit result[]
+  #);
+
+columnNoList: list (# element::< integerObject #);
+
+-- ConnectionClose: DoPart --
+do (#
+   status: @integer;
+
+   do 
+      (THIS(Connection).private.svchp,
+       THIS(Connection).private.errhp,
+       THIS(Connection).private.authp, OCI_DEFAULT) -> OCISessionEnd -> status;
+      (if (status<>OCI_SUCCESS) then (status, THIS(Connection).private.errhp)->closeException; if);
+      
+      (THIS(Connection).private.srvhp, THIS(Connection).private.errhp, OCI_DEFAULT)->OCIServerDetach;
+      (THIS(Connection).private.authp, OCI_HTYPE_SESSION)->OCIHandleFree;
+      (THIS(Connection).private.svchp, OCI_HTYPE_SVCCTX)->OCIHandleFree;
+      (THIS(Connection).private.srvhp, OCI_HTYPE_SERVER)->OCIHandleFree;
+      (THIS(Connection).private.errhp, OCI_HTYPE_ERROR)->OCIHandleFree;
+      (THIS(Connection).private.envhp, OCI_HTYPE_ENV)->OCIHandleFree;
+      
+      false->private.isOpen;
+   #)
+   
+-- ConnectionOpen: DoPart --
+do  
+   (#    
+      openConnection:
+        (# envhp, errhp, srvhp, svchp, authp, status: @integer;
+           connectTmp: ^text;
+           connectString, usernameString, passwordString: @cstring;
+        do 
+           username[] -> usernameString.set;
+           password[] -> passwordString.set;
+           &text[]->connectTmp[];
+           'CONNECT %s/%s/%s' -> connectTmp.putFormat(# do username[]->s; password[]->s; name[]->s; #);
+           connectTmp[] -> connectString.set;
+           
+           (OCI_DEFAULT, 0, 0, 0, 0)->OCIInitialize->putint;
+           (@@envhp, OCI_DEFAULT, 0, 0)->OCIEnvInit->putint;
+           (envhp, @@errhp, OCI_HTYPE_ERROR, 0, 0)->OCIHandleAlloc->putint;
+           (envhp, @@srvhp, OCI_HTYPE_SERVER, 0, 0)->OCIHandleAlloc->putint;
+           (envhp, @@svchp, OCI_HTYPE_SVCCTX, 0, 0)->OCIHandleAlloc->putint;
+           
+           (* Connecting to default server *)
+           (srvhp, errhp, (* connectString*) 0, (*connectString.length*) 0, 0)->OCIServerAttach->status->putint;
+           (if (status<>OCI_SUCCESS) then (status, errhp)->openConnectionException; if);
+           
+           (svchp, OCI_HTYPE_SVCCTX, srvhp, 0, OCI_ATTR_SERVER, errhp)->OCIAttrSet->status;
+           (if (status<>OCI_SUCCESS) then (status, errhp)->openConnectionException; if);
+           
+           (envhp, @@authp, OCI_HTYPE_SESSION, 0, 0)->OCIHandleAlloc;
+           
+           (authp, OCI_HTYPE_SESSION, usernameString, username.length, OCI_ATTR_USERNAME, errhp)->OCIAttrSet->status;
+           (if (status<>OCI_SUCCESS) then (status, errhp)->openConnectionException; if);
+           
+           (authp, OCI_HTYPE_SESSION, passwordString, password.length, OCI_ATTR_PASSWORD, errhp)->OCIAttrSet->status;
+           (if (status<>OCI_SUCCESS) then (status, errhp)->openConnectionException; if);
+      
+           (svchp, errhp, authp, OCI_CRED_RDBMS, 0)->OCISessionBegin->status;
+           (if (status<>OCI_SUCCESS) then (status, errhp)->openConnectionException; if);
+           
+           (svchp, OCI_HTYPE_SVCCTX, authp, 0, OCI_ATTR_SESSION, errhp)->OCIAttrSet->status;
+           (if (status<>OCI_SUCCESS) then (status, errhp)->openConnectionException; if);
+           
+           true -> private.isOpen;
+           envhp -> private.envhp;
+           svchp -> private.svchp;
+           errhp -> private.errhp;
+           envhp -> private.envhp;
+           authp -> private.authp;
+        #);
+      twiceOpen: exception
+        (# 
+        do
+           'Attempt to open '->msg;
+           THIS(Connection)[]->getPatternName->msg.append;
+           ' twice.'->msg.append
+        #)
+   do (if name[] = none then
+          exception
+          (# 
+          do 'Name of connection is NONE in open of connection'->msg
+          #)
+      if);
+      (if THIS(connection).private.isOpen then
+          twiceOpen
+       else
+          openConnection;
+      if)
+   #)
+   
+-- DBEnvBDBCException: DoPart --
+do (# 
+      MaxErrorSize:(# exit 512 #);
+      
+      errBuf: [MaxErrorSize]@char;
+      errCode: @integer;
+      errMsg: ^text;
+      errTxt: @text;
+      
+   do
+      (* i argumenterne (handletype, handle) ligger (status, errhp) *)
+      (if handletype 
+       // OCI_SUCCESS then 'Internal OraIntf. error: OCI_SUCCESS'->msg.append;
+       // OCI_SUCCESS_WITH_INFO then 'Internal OraIntf. error: OCI_SUCCESS_WITH_INFO'->msg.append;
+       // OCI_NEED_DATA then 'Internal OraIntf. error: OCI_NEED_DATA'->msg.append;
+       // OCI_NO_DATA then 'Internal OraIntf. error: OCI_NO_DATA'->msg.append;
+       // OCI_ERROR then 
+          (handle, 1, 0, @@errCode, @@errBuf[1], MaxErrorSize, OCI_HTYPE_ERROR)->OCIErrorGet;          
+          errBuf->charRepToText->errMsg[];
+          'OraIntf. error: Errorcode %i, Error message: %s'->errTxt.putFormat(# do errCode->i; errMsg[]->s; #);
+          errTxt[]->msg.append;
+       // OCI_INVALID_HANDLE then 'Internal OraIntf. error: INVALID_HANDLE'->msg.append;
+       // OCI_STILL_EXECUTING then 'Internal OraIntf. error: STILL_EXECUTING'->msg.append;
+       // OCI_CONTINUE then 'Internal OraIntf. error: CONTINUE'->msg.append;
+       else
+          'Internal OraIntf. error. Unknown error type!'->msg.append;
+      if);
+      
+   #);
+
+-- DirectSQLStatementExecute: DoPart --
+do 
+   (# status, rows, rowhandle, stmthp, iterations: @integer;
+      cont, contLower: ^text; 
+      errormsg: @cstring;
+      isSelect: @boolean;
+   do 
+      (* Determine whether the statement is a SELECT statement or not *)
+      getExpanded->cont[];
+      cont[] -> toLowercase -> contLower[];
+      contLower[] -> ('^ *select' -> pcre).match -> isSelect;	
+      (if isSelect then 0->iterations else 1->iterations if);
+            
+      (* Allocate handle for the statement *)
+      (THIS(Connection).private.envhp, @@stmthp, OCI_HTYPE_STMT, 0, 0) -> OCIHandleAlloc -> status;
+      (if (status<>OCI_SUCCESS) then (status, THIS(Connection).private.errhp)->ExecDirectException; if);
+
+      (* Prepare statement *)
+      (stmthp, THIS(Connection).private.errhp, cont.t, cont.length-1, OCI_NTV_SYNTAX, OCI_DEFAULT) 
+        -> OCIStmtPrepare -> status;
+      (if (status<>OCI_SUCCESS) then (status, THIS(Connection).private.errhp)->ExecDirectException; if);
+      
+      (* Execute statement *)
+      (* Note that OCI_DEFAULT should be OCI_COMMIT_ON_SUCCESS, but the latter does not 
+       * work as intended, so an explicit commit has been added below *)
+      (THIS(Connection).private.svchp, stmthp, THIS(Connection).private.errhp, iterations, 0, 0, 0, OCI_DEFAULT) 
+        -> OCIStmtExecute -> status;
+      (if (status<>OCI_SUCCESS) then (status, THIS(Connection).private.errhp)->ExecDirectException; if);
+      
+      (* Explicitly commit any changes made *)
+      (THIS(Connection).private.svchp, THIS(Connection).private.errhp, OCI_DEFAULT) -> OCITransCommit -> status;
+      (if (status<>OCI_SUCCESS) then (status, THIS(Connection).private.errhp)->ExecDirectException; if);
+      
+      (* Fetch result if needed *)
+      (if isSelect then
+	(stmthp, THIS(Connection).private.errhp) -> OracleFetch -> rowhandle;
+	stmthp -> THIS(SQLStatement).private.theResultSet.stmthandle;
+	rowhandle -> THIS(SQLStatement).private.theResultSet.rowHandle;
+	rowhandle -> OracleNumOfRows -> THIS(SQLStatement).private.theResultSet.numofrows;
+	rowhandle -> OracleNumOfCols -> THIS(SQLStatement).private.theResultSet.numofcols;      
+      if);
+      
+      1 -> currentMarker;
+   #);
+
+-- SQLStatementPrivate: Descriptor --
+(#
+   t: ^text;
+   isOpen: @boolean;
+   theResultSet: @
+     (#
+        ref: ^resultSet;
+        exists: @boolean;
+        stmthandle, rowhandle, numofrows, numofcols:@integer;
+        set:
+          (# 
+          enter ref[]
+          do 
+             (if ref[] <> none then true->exists else false->exists if)
+          #);
+        assertClosed: (#  do  #);
+        close:
+          (# 
+             rc: @shortint;     
+             
+          do 0->stmthandle;
+             (if ref[]<>none then 
+                 0->ref.private.stmthandle 
+             if);
+             false->exists;
+             none ->ref[]
+          #)
+     #);
+   
+   assertNotOpened:
+     (# 
+     do
+        (if isOpen then
+            exception (#  do 'Attempt to open SQLStatement twice'->msg #)
+        if)
+     #);
+   
+   assertOpen:
+     (# 
+     do
+        (if not isOpen then
+            exception
+            (# 
+            do 'Attempt to use SQLStatement before calling open'->msg
+            #)
+        if)
+     #);
+   
+   assertSet:
+     (# 
+     do        
+        (if t[] = none then
+            exception
+            (#  do 'Attempt to execute SQLStatement before set'->msg #)
+        if);
+        
+     #)
+#)
+
+-- SQLStatementGet: DoPart --
+do private.t[]->t[]; INNER get
+
+-- SQLStatementSet: DoPart --
+do private.assertOpen;
+   (if t[] = none then &text[]->private.t[] else t.copy->private.t[] if);
+   INNER set
+
+-- SQLStatementExecute: DoPart -- 
+do (#
+      tempStmtText: ^text;
+      value: ^text;
+      rc: @shortint;
+      theCursor: @cursorType
+   do
+      (* cursor type ignored *)
+      
+      (if not THIS(Connection).private.isOpen then 
+          exception(# do 'Connection not open!'->msg.append;#) 
+      if);      
+      private.assertSet;
+      private.theResultSet.assertClosed;
+      &resultSetType[]->res[];
+      INNER execute;
+      private.theResultSet.rowhandle -> res.private.rowhandle;
+      private.theResultSet.stmthandle -> res.private.stmthandle;
+      private.theResultSet.numofrows -> res.private.numofrows; 
+      private.theResultSet.numofcols -> res.private.numofcols; 
+      res[]->private.theResultSet.set;
+   #)
+   
+-- SQLStatementClose: DoPart --
+do (# md: @integer;
+   do 
+      false->this(SQLstatement).private.isOpen;
+      THIS(SQLStatement).private.theResultSet.rowHandle->OracleFreeResultSet;
+      0->private.theResultSet.stmthandle;
+   #)
+   
+-- ResultSetInfoNoOfCols: DoPart --
+do private.numofcols -> value;
+   
+-- ResultSetInfoRowCount: DoPart --
+do private.numofrows->value
+
+-- ResultSetInfoGetColumnInfo: DoPart --
+do i->private.theColInfos.getInfoByNo->res[]
+   
+-- resultSetGetColumnByNameNameNotFound: DoPart --
+do '\''->msg.append;
+   name[]->msg.append;
+   '\' not found in resultSet columns'->msg.append;
+   msg.newline;
+   INNER  
+
+-- ResultSetInfogetColumnInfoByName: DoPart --
+do name[]
+     ->private.theColInfos.getInfoByName
+   (#
+      notFound:: 
+        (# propagate::  (#  do true->value #) do nameNotFound #)
+   #)->res[]  
+   
+-- resultSetScan: DoPart --
+do L:
+     (# 
+     do
+        pattern[]
+          ->set
+        (#
+           varNotDeclared:: 
+             (# propagate::  (#  do true->value #)
+             do name[]->THIS(set).varNotDeclared
+             #);
+           columnNotFound:: 
+             (# propagate::  (#  do true->value #)
+             do name[]->THIS(set).columnNotFound
+             #)
+        #);
+        fetch->current[];
+        (if not (current[] = EOT) then INNER scan; restart L if)
+     #)  
+
+   
+-- resultSetSet: DoPart --
+do (# 
+   do
+      pattern[]
+        ->private.p.parseResultSetPatternString
+      (#
+         varNotDeclared::  (#  do name[]->THIS(set).varNotDeclared #);
+         columnNotFound::  (#  do name[]->THIS(set).columnNotFound #)
+      #)
+   #) 
+    
+   
+-- DirectSQLStatementPrivate: Descriptor --
+(#
+   statement: @
+     (#
+        noStatement: exception
+          (# 
+          do 'Attempt to use DirectSQLStatement before calling set'->msg
+          #);
+        elm: ^PatternParser.StatementPattern;
+        set: (#  enter elm[] #);
+        get: (#  do (if elm[] = none then noStatement if) exit elm[] #)
+     enter set
+     exit get
+     #);
+   p: @PatternParser
+     (#
+        interpretNode: NodeVisitor
+          (#
+             t: ^text;
+             visitVariable:: 
+               (# var: ^declareVar
+               do
+                  (elm.value[]->THIS(connection).private.declareVars.lookup).
+                  getAsText->t.puttext
+               #);
+             visitPlaceholder:: 
+               (# 
+               do
+                  (if elm.mark = 's' then '\''->t.puttext if);
+                  elm.value[]->t.puttext;
+                  (if elm.mark = 's' then '\''->t.puttext if)
+               #);
+             visitStatementString::  (#  do elm.value[]->t.append #);
+             theNode: ^node
+          enter theNode[]
+          do &text[]->t[]; THIS(visitor)[]->theNode.accept
+          exit t[]
+          #);
+        setCurrentMarker: NodeVisitor
+          (#
+             visitPlaceholder:: 
+               (# 
+               do count+1->count; (if count = no then t[]->elm.value[] if)
+               #);
+             theNode: ^node;
+             t: ^text;
+             no: @integer;
+             count: @integer
+          enter (theNode[],t[],no)
+          do THIS(visitor)[]->theNode.accept
+          #);
+        setPlaceholderByName: NodeVisitor
+          (#
+             visitNamedSpecifier:: 
+               (# 
+               do
+                  (if name[]->elm.theNameDecl.value.equalNCS then
+                      true->found->wasFound
+                  if)
+               #);
+             visitVariable:: 
+               (# 
+               do
+                  (if found then
+                      t[]
+                        ->
+                      (
+                      elm.value[]
+                        ->THIS(connection).private.declareVars.lookup).
+                      setAsText;
+                      false->found
+                  if)
+               #);
+             visitPlaceholder:: 
+               (# 
+               do (if found then t[]->elm.value[]; false->found if)
+               #);
+             found,wasFound: @boolean;
+             theNode: ^node;
+             name,t: ^text;
+             nameNotFound:< object
+          enter (theNode[],name[],t[])
+          do
+             THIS(visitor)[]->theNode.accept;
+             (if not wasFound then nameNotFound if)
+          #);
+        parseStatementPatternString:: 
+          (#
+             checkDeclaredVars: NodeVisitor
+               (#
+                  visitVariable:: 
+                    (# 
+                    do
+                       (if not
+                           (elm.value[]
+                             ->THIS(connection).private.declareVars.exists) then
+                           elm.value[]->varNotDeclared
+                       if)
+                    #);
+                  theNode: ^node
+               enter theNode[]
+               do THIS(visitor)[]->theNode.accept
+               #);
+             varNotDeclared:< (# name: ^text enter name[] do INNER #)
+          do res[]->statement->checkDeclaredVars
+          #)
+     #);
+   currentMarkerNo: @integer;
+   getExpanded: 
+     (#  do 
+     exit statement->p.interpretNode   
+     #);
+   setCurrentMarker:
+     (# value: ^text     
+     enter value[]
+     do (statement,value[],currentMarkerNo)->p.setCurrentMarker
+     #);
+   setPlaceholderByName:
+     (# name,value: ^text; nameNotFound:< object
+     enter (name[],value[])
+     do (statement,name[],value[])
+          ->p.setPlaceholderByName
+        (#
+           nameNotFound:: 
+             (#  do THIS(setPlaceholderByName).nameNotFound #)
+        #)
+     #)
+#)
+
+-- ConnectionPrivate: Descriptor --
+(#
+   envhp, errhp, svchp, srvhp, authp:@integer;
+   isOpen: @boolean;
+   host: ^text;
+   declareVars: @dictionary
+     (#
+        key:: text;
+        keyEqual::  (#  do left[]->right.equalNCS->value #);
+        element:: declareVar;
+        assertInitialised:
+          (# 
+          do
+             (if not private.initialised then
+                 init; true->private.initialised
+             if)
+          #);
+        init::  (#  do private.h.init #);
+        hashFunction::  (#  do k[]->private.h.hash->value #);
+        exists: booleanValue
+          (# name: ^text
+          enter name[]
+          do ((name[]->lookup) <> none )->value
+          #);
+        private: @ (# initialised: @boolean; h: @honeyman #)
+     #);
+   MAX_COL_TXT: (*Initial upper bound for texts *) 
+     (#  
+     do exit 256   
+     #);
+   
+   OracleTypeToText:
+     (# typecode: @integer;
+	name: ^text;
+     enter typecode
+     do
+	(if typecode
+	 // SQLT_CHR then 'Text'->name[]
+         // SQLT_NUM then 'Oracle numeric'->name[]
+         // SQLT_INT then 'Int'->name[]
+         // SQLT_FLT then 'Double'->name[]
+         // SQLT_STR then 'Text'->name[]            
+         // SQLT_VNU then 'Varnum'->name[]
+         // SQLT_PDN then 'Unsupported type'->name[]
+         // SQLT_LNG then 'Long'->name[]
+         // SQLT_VCS then 'Varchar'->name[]
+         // SQLT_NON then 'Unsupported type'->name[]
+         // SQLT_RID then 'Row ID'->name[]
+         // SQLT_DAT then 'Date'->name[]
+         // SQLT_VBI then 'Unsupported type'->name[]
+         // SQLT_BIN then 'Unsupported type'->name[]
+         // SQLT_LBI then 'Unsupported type'->name[]
+         // SQLT_UIN then 'Unsigned int'->name[]
+         // SQLT_SLS then 'Unsupported type'->name[]
+         // SQLT_LVC then 'Long varchar'->name[]
+         // SQLT_LVB then 'Unsupported type'->name[]
+         // SQLT_AFC then 'Char'->name[]
+         // SQLT_AVC then 'CharZ'->name[]
+         // SQLT_CUR then 'Unsupported type'->name[]
+         // SQLT_RDD then 'Unsupported type'->name[]
+         // SQLT_LAB then 'Unsupported type'->name[]
+         // SQLT_OSL then 'Unsupported type'->name[]
+            
+         // SQLT_NTY then 'Unsupported type'->name[]
+         // SQLT_REF then 'Unsupported type'->name[]
+         // SQLT_CLOB then 'Unsupported type'->name[]
+         // SQLT_BLOB then 'Unsupported type'->name[]
+         // SQLT_BFILEE then 'Unsupported type'->name[]
+         // SQLT_CFILEE then 'Unsupported type'->name[]
+         // SQLT_RSET then 'Unsupported type'->name[]
+         // SQLT_NCO then 'Unsupported type'->name[]
+         // SQLT_VST then 'OCI string'->name[]
+         // SQLT_ODT then 'OCI date'->name[]
+	if);
+     exit name[]
+     #);
+   
+   OracleTypeToPattern:
+     (# 
+        DataType: @integer; Pattern: ##Object
+     enter DataType
+     do 
+        (if DataType
+         // SQLT_CHR then Text##->Pattern##
+         // SQLT_NUM then RealObject##->Pattern##
+         // SQLT_INT then IntegerObject##->Pattern##
+         // SQLT_FLT then RealObject##->Pattern##
+         // SQLT_STR then Text##->Pattern##
+         // SQLT_VNU then IntegerObject##->Pattern##
+         // SQLT_PDN then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_LNG then IntegerObject##->Pattern##
+         // SQLT_VCS then Text##->Pattern##
+         // SQLT_NON then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_RID then IntegerObject##->Pattern##
+         // SQLT_DAT then Time##->Pattern##
+         // SQLT_VBI then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_BIN then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_LBI then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_UIN then IntegerObject##->Pattern##
+         // SQLT_SLS then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_LVC then Text##->Pattern##
+         // SQLT_LVB then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_AFC then Text##->Pattern##
+         // SQLT_AVC then Text##->Pattern##
+         // SQLT_CUR then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_RDD then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_LAB then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_OSL then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+            
+         // SQLT_NTY then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_REF then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_CLOB then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_BLOB then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_BFILEE then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_CFILEE then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_RSET then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_NCO then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_VST then Text##->Pattern##
+         // SQLT_ODT then Time##->Pattern##
+            
+            (* datetimes and intervals *)
+         // SQLT_DATE then time##->Pattern##
+         // SQLT_TIME then time##->Pattern##
+         // SQLT_TIME_TZ then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_TIMESTAMP then time##->Pattern##
+         // SQLT_TIMESTAMP_TZ then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_INTERVAL_YM then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_INTERVAL_DS then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // SQLT_TIMESTAMP_LTZ then 'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+        if);
+     exit pattern##
+     #)
+#)
+
+-- resultSetResultPrivate: Descriptor --
+(# 
+   myrow, rowhandle:@integer;
+   currentMarkerNo: @integer;
+   getByNo:
+     (#i: @integer; rc: @shortint; enterEvaluated: @boolean
+     enter (#  enter i do true->enterEvaluated #)
+     do
+        
+        (if not enterEvaluated then
+            currentMarkerNo->THIS(resultSet).private.getColumnNoFromMarker->i
+        if);
+        INNER getByNo;
+        (* (rc,THIS(resultSet).private.hstmt)->checkError *)
+     #); 
+    
+   getInteger: getByNo
+     (# 
+        StrLen_or_IndPtr: @integer; res: @integer
+     do 
+        (myrow,i)->OracleGetInteger->res
+     exit res     
+     #);
+   
+   getText: getByNo
+     (# res: ^text; target: @cString; StrLen_or_IndPtr: @integer;
+        charptr,ptr2:@integer;
+     do
+        (myrow,i)->OracleGetText->target;
+        target.get->res[]
+     exit res[]
+     
+     #);
+   
+   getBoolean: getByNo
+     (# 
+     do
+        'ERROR: Oracle has no datatype boolean!'->putline;
+        exception(# do 'ERROR: Oracle has no datatype boolean!'->msg; #);
+        exit false
+     #);
+   
+   getReal: getByNo
+     (# 
+        StrLen_or_IndPtr: @integer; res: @real
+     do
+        (myrow,i)->OracleGetReal->res
+     exit res   
+     #);
+   
+   getClock: getByNo
+     (# StrLen_or_IndPtr: @integer; res: @time;
+        target: @cString; t:^text;
+     do 
+        (myrow,i)->OracleGetText->target;
+        target.get->t[];
+        t.reset;
+        '%d:%d:%d'->t.getformat(# do d->res.hour; d->res.minute; d->res.sec #)
+     exit res
+     #);
+   
+   getDate: getByNo
+     (# 
+        StrLen_or_IndPtr: @integer; res: @time;
+        target: @cString; t:^text;
+     do (myrow,i)->OracleGetText->target;
+        target.get->t[];
+        t.reset;
+        '%d-%d-%d'->t.getformat(# do d->res.year;d->res.month;d->res.day #)
+     exit res
+     #);
+ 
+   getTime: getByNo
+     (# 
+        StrLen_or_IndPtr: @integer; res: @time;
+        target: @cString; t:^text;
+     do 
+        (myrow,i)->OracleGetText->target;
+        target.get->t[];
+        t.reset;
+        '%d-%d-%d %d:%d:%d'->t.getformat
+        (# do d->res.year;d->res.month;d->res.day;d->res.hour;d->res.minute;d->res.sec #);
+     exit res
+     #);
+   
+   checkError:
+     (# rc: @shortint; hstmt: @integer
+     enter (rc,hstmt)
+     do 
+        (* 'checkerror is not (yet) implemented' *)
+     #)
+#)
+
+-- resultSetCursorName: DoPart --
+do (* 'resultSetCursorName is not (yet) further bound' *)
+
+   
+-- resultSetTupleMarker: DoPart --
+do private.currentMarkerNo+1->private.currentMarkerNo; INNER 
+
+-- resultSetTupleI: DoPart --
+do private.getInteger->value
+
+-- resultSetTupleR: DoPart --
+do private.getReal->value;  
+
+-- resultSetTupleS: DoPart --
+do private.getText->value[];
+
+-- resultSetTupleB: DoPart --
+do private.getBoolean->value;
+
+-- ConnnectionDeclareVar: DoPart --
+do private.declareVars.assertInitialised;
+   (varName[],THIS(declareVar)[])->private.declareVars.associate;
+   INNER  
+
+-- resultSetFetch: DoPart --
+do 
+   (if private.stmthandle<>0 then
+       (if private.currentrow<private.numofrows then
+           private.setData->result[];
+           1+private.currentrow->private.currentrow
+        else
+           EOT->result[]
+       if)
+    else
+       (0,0)->resultSetException
+   if);
+   INNER fetch
+   
+-- resultSetEOT: DoPart --
+do private.EOT[]->value[]
+   
+-- ResultSetPrivate: Descriptor --
+(#
+   stmthandle, rowhandle:@integer;
+   numofrows,numofcols,currentrow:@integer;
+   EOT: @tuple;   
+   p: @PatternParser
+     (#
+        setData: NodeVisitor
+          (#
+             isNamed: @boolean;
+             name: ^text;
+             columnNo: @integer;
+             resultSetPtn: ^ResultSetPattern;
+             visitNameDecl::  
+               (#  
+               do true->isNamed; elm.value[]->name[]; 
+               #);
+             visitVariable:: 
+               (#
+                  setValueByNumber:
+                    (#
+                       i: ^declareInteger;
+                       s: ^declareText;
+                       r: ^declareReal;
+                       b: ^declareBoolean;
+                       c: ^declareClock;
+                       d: ^declareDate;
+                       t: ^declareTime;
+                       var: ^declareVar;
+                       columnNo: @integer
+                    enter (var[],columnNo)
+                    do
+                       (if true
+                        // var## <= declareInteger## then
+                           var[]->i[];
+                           columnNo->result.private.getInteger->i.set
+                        // var## <= declareReal## then
+                           var[]->r[]; columnNo->result.private.getReal->r.set
+                        // var## <= declareText## then
+                           var[]->s[]; columnNo->result.private.getText->s.set
+                        // var## <= declareBoolean## then
+                           var[]->b[];
+                           columnNo->result.private.getBoolean->b.set
+                        // var## <= declareClock## then
+                           var[]->c[]; columnNo->result.private.getClock->c.set
+                        // var## <= declareDate## then
+                           var[]->d[]; columnNo->result.private.getDate->d.set
+                        // var## <= declareTime## then
+                           var[]->t[]; columnNo->result.private.getTime->t.set
+                        else
+                           exception
+                           (#  do 'Unknown datatype in scan'->msg #)
+                       if);
+                    #);
+                  setValueByName:
+                    (# var: ^declareVar; name: ^text
+                    enter (var[],name[])
+                    do
+                       (var[],name[]->theColInfos.getColumnByName)
+                         ->setValueByNumber
+                    #);
+                  var: ^declareVar
+               do columnNo+1->columnNo;
+                  elm.value[]->THIS(connection).private.declareVars.lookup
+                    ->var[];
+                  (if isNamed then
+                      (var[],name[])->setValueByName
+                   else
+                      (var[],columnNo)->setValueByNumber
+                  if);
+               #);
+             visitPlaceHolder::  
+               (#  
+               do columnNo+1->columnNo; 
+               #);
+             result: ^tuple
+  	  enter resultSetPtn[]		
+          do 
+             &tuple[]->result[];
+             (THIS(resultset).private.rowhandle, currentrow)->OracleGetRowAtIndex->result.private.myrow;
+             THIS(Visitor)[]->resultSetPtn.accept; 
+          exit result[] 
+          #);
+        getColumnNoFromMarker: NodeVisitor
+          (#
+             isNamed: @boolean;
+             name: ^text;
+             markerNo,currentMarkerNo,columnNo,currentColumnNo: @integer;
+             visitNameDecl::  (#  do true->isNamed; elm.value[]->name[] #);
+             visitVariable::  (#  do currentColumnNo+1->currentColumnNo #);
+             visitPlaceHolder:: 
+               (# 
+               do
+                  currentColumnNo+1->currentColumnNo;
+                  currentMarkerNo+1->currentMarkerNo;
+                  (if currentMarkerNo = markerNo then
+                      (if isNamed then
+                          name[]->theColInfos.getColumnByName->columnNo
+                       else
+                          currentColumnNo->columnNo
+                      if)
+                  if)
+               #);
+             resultSetPtn: ^ResultSetPattern
+          enter (markerNo,resultSetPtn[])
+          do markerNo->columnNo; THIS(Visitor)[]->resultSetPtn.accept
+          exit columnNo
+          #);
+        parseResultSetPatternString:: 
+          (#
+             checkIt: NodeVisitor
+               (#
+                  visitNameDecl:: 
+                    (# 
+                    do 
+                       elm.value[]
+                         ->getColumnByName
+                       (#
+                          nameNotFound:: 
+                            (# propagate::  (#  do true->value #)
+                            do name[]->columnNotFound
+                            #)
+                       #)
+ 
+                    #);
+                  visitVariable:: 
+                    (# 
+                    do
+                       (if not
+                           (elm.value[]
+                             ->THIS(connection).private.declareVars.exists) then
+                           elm.value[]->varNotDeclared
+                       if)                       
+                    #);
+                  theNode: ^node
+               enter theNode[]
+               do THIS(visitor)[]->theNode.accept;
+               #);
+             varNotDeclared:< (# name: ^text enter name[] do INNER #);
+             columnNotFound:< (# name: ^text enter name[] do INNER #)
+          do res[]->resultSetPtn->checkIt;
+          #)
+     #);
+   resultSetPtn: @
+     (#
+        noResultSetPtn: exception
+          (# 
+          do 'Attempt to use pattern in resultSet before setting it'->msg
+          #);
+        elm: ^PatternParser.ResultSetPattern;
+        set: (#  enter elm[] #);
+        get:
+          (# 
+          do (if elm[] = none then THIS(resultSet).set if)
+          exit elm[]
+          #)
+     enter set
+     exit get
+     #);
+   theColInfos: @
+     (#
+        elms: [0] ^Column;
+        isInitialised: @boolean;
+        assertInitialised:
+          (# rc1,rc2: @shortint
+          do
+             (if not isInitialised then     
+                 init->(rc1,rc2);
+                 (rc1,0)->checkError;
+                 (rc2,0)->checkError
+             if);
+          #);
+        getColumnByName:
+          (# name: ^text; res: @integer
+          enter name[]
+          do
+             assertInitialised;
+             L:
+               (for j: elms.range repeat
+                    (if elms[j].name[]->name.equalNCS then j->res; leave L if)
+               for)
+          exit res
+          #);
+        getInfoByName:
+          (# name: ^text; res: ^column; col: @integer; notFound:< exception
+          enter name[]
+          do
+             name[]->getColumnByName->col;
+             (if col = 0 then notFound else col->getInfoByNo->res[] if)
+          exit res[]
+          #);
+        getInfoByNo:
+          (# i: @integer enter i 
+          do 
+             assertInitialised 
+          exit elms[i][] 
+          #);
+        init:
+          (#             
+             datatypeCode, errhp, paramhp, paramStatus, maxSize, ociHtypeStmt, localstmthandle: @integer;
+             nameBuf: [MaxCharbufSize]@char;
+             ColumnNo: @shortint;
+             ColumnTypeName: @cString;
+             rc1,rc2: @shortint;
+             theInfo: ^column;
+          do
+	     THIS(Connection).private.errhp->errhp;
+             MaxCharbufSize->maxSize;
+             columnCount->elms.new;
+             (for i: elms.range repeat
+                  &column[]->theInfo[];
+                  i->ColumnNo;
+
+                  (* First get the parameter handle *)
+		  OCI_HTYPE_STMT -> ociHtypeStmt;		
+                  (stmthandle, ociHtypeStmt, errhp, @@paramhp, i) -> OCIParamGet -> paramStatus;
+
+                  (if paramStatus=OCI_SUCCESS then 
+                      
+                      (* Then get the integer code for the datatype *)
+                      (paramhp, OCI_DTYPE_PARAM, @@datatypeCode, 0, OCI_ATTR_DATA_TYPE, errhp)
+                        -> OCIAttrGet -> paramStatus;
+                      (if (paramStatus<>OCI_SUCCESS) then (paramStatus, errhp)->resultSetException; if);
+                      datatypeCode -> theInfo.DataTypeNo;
+                      
+                      (* Then get the datatype pattern and name *)
+                      datatypeCode -> THIS(Connection).private.OracleTypeToPattern -> theInfo.DataType##;
+                      datatypeCode -> THIS(Connection).private.OracleTypeToText -> theInfo.DataTypeName[];
+                      
+		      (* Make sure that the buffer is empty *)
+		      (for j: maxsize repeat 0->nameBuf[j]; for);
+
+                      (* Finally, get the name of the column *)
+                      (paramhp, @@nameBuf[1], maxsize, errhp) -> OracleGetColName -> paramStatus;
+                      (if (paramStatus<>OCI_SUCCESS) then (paramStatus, errhp) -> resultSetException; if);
+                      nameBuf -> charRepToText -> theInfo.name[];
+                      
+		      (* theInfo now contains all required information - insert it among its peers *)
+                      theInfo[] -> elms[i][];
+                  if);
+             for);
+             true->isInitialised
+          exit (rc1,rc2)
+          #)
+     #);
+   
+   checkError:
+     (# rc: @shortint; hstmt: @integer
+     enter (rc,hstmt)
+     #);
+   
+   getColumnNoFromMarker: integerValue
+     (# markerNo: @integer
+     enter markerNo
+     do (markerNo,resultSetPtn)->p.getColumnNoFromMarker->value
+     #);
+   setData: (#  exit resultSetPtn->p.setData #)     
+#) 
+
+-- DirectSQLStatementSet: DoPart --
+do 
+   THIS(SQLStatement).private.t.reset;
+   THIS(SQLStatement).private.t[]->private.p.parseStatementPatternString
+   (# varNotDeclared::  (#  do name[]->THIS(set).varNotDeclared #)
+   #);
+   1->private.currentMarkerNo;
+   INNER  
+   
+-- DirectSQLStatementCurrentMarkerSet: DoPart --
+do no->private.currentMarkerNo;
+   
+-- directSQLStatemenCurrentMarkerGet: DoPart --
+do private.currentMarkerNo->no
+   
+-- directSQLStatementMarker: DoPart --
+do &text[]->t[];
+   INNER ;
+   t[]->private.setCurrentMarker;
+   private.currentMarkerNo+1->private.currentMarkerNo  
+   
+-- directSQLStatementI: DoPart --
+do value->t.putint 
+
+-- directSQLStatementF: DoPart --
+do value->t.putreal  
+
+-- directSQLStatementS: DoPart --
+do value[]->t.append
+
+-- directSQLStatementB: DoPart --
+do (if value then trueText->t else falseText->t if) 
+
+-- directSQLStatementGetExpanded: DoPart --
+do private.getExpanded->value[];
+   
+-- directSQLStatementC: DoPart --
+do value->formatClock->t.puttext
+
+-- directSQLStatementD: DoPart --
+do value->formatDate->t.puttext  
+
+-- directSQLStatementT: DoPart --
+do value->formatTime->t.puttext
+
+ -- resultSetTupleD: DoPart --
+do private.getDate->value  
+  
+-- resultSetTupleC: DoPart --
+do private.getClock->value
+
+-- resultSetTupleT: DoPart --
+do private.getTime->value  
+
+-- resultSetScanVarNotDeclared: DoPart --
+do 'Variable named \''->msg.append;
+   name[]->msg.append;
+   '\' not declared in this connection'->msg.append;
+   INNER  
+
+-- resultSetScanUnknownColumn: DoPart --
+do 'Unknown column: \''->msg.append;
+   name[]->msg.append;
+   '\' is not in the resultSet'->msg.append;
+   INNER  
+
+-- declareVarSetAsText: DoPart --
+do INNER;
+   
+-- declareVarGetAsText: DoPart --
+do &text[]->value[];
+   
+-- declareIntegerSet: DoPart --
+do INNER
+
+-- declareIntegerSetAsText: DoPart --
+do value.reset; value.getInt->set; INNER  
+
+-- declareIntegerGetAsText: DoPart --
+do value.clear; get->value.putInt; INNER  
+
+-- declareRealSetAsText: DoPart --
+do value.reset; value.getReal->set; INNER
+
+-- declareRealGetAsText: DoPart --
+do value.clear; get->value.putReal; INNER  
+
+-- declareTextSetAsText: DoPart --
+do value[]->set; INNER 
+
+-- declareTextGetAsText: DoPart --
+do '\''->value.puttext; get->value.puttext; '\''->value.puttext; INNER  
+
+-- declareBooleanSetAsText: DoPart --
+do (if 'true'->value.equalNCS then true->set else false->set if); INNER  
+
+-- declareBooleanGetAsText: DoPart --
+do (if get then 'true'->value[] else 'false'->value[] if); INNER  
+
+-- declareTimeSetAsText: DoPart --
+do value.reset; value.getTime->set; INNER  
+
+-- declareTimeGetAsText: DoPart --
+do value.clear; get->formatTime->value.putText; INNER  
+
+-- directSQLStatementSetByNameNameNotFound: DoPart --
+do INNER ;
+   'Cannot find placeholder with name \''->msg;
+   name[]->msg.append;
+   '\''->msg.put  
+
+-- directSQLStatementSetByName: DoPart --
+do &text[]->t[];
+   INNER ;
+   (name[],t[])
+     ->private.setPlaceholderByName
+   (# nameNotFound::  (#  do THIS(setByName).nameNotFound #) #)  
+
+-- directSQLStatementSetBooleanByName: DoPart --
+do (if value then trueText->t else falseText->t if)  
+
+-- directSQLStatementSetClockByName: DoPart --
+do value->formatClock->t.puttext  
+
+-- directSQLStatementSetDateByName: DoPart --
+do value->formatDate->t.puttext  
+
+-- directSQLStatementSetFloatByName: DoPart --
+do value->t.putreal  
+
+-- directSQLStatementSetIntegerByName: DoPart --
+do value->t.putint
+   
+-- directSQLStatementSetTextByName: DoPart --
+do value[]->t.append
+   
+-- directSQLStatementSetTimeByName: DoPart --
+do value->formatTime->t.puttext
+   
+-- directSQLStatementSetVarNotDeclared: DoPart --
+do 'Variable named \''->msg.append;
+   name[]->msg.append;
+   '\' not declared in this connection'->msg.append;
+   INNER 
+   
+-- SQLStatementOpen: DoPart --
+do private.assertNotOpened;
+   (if not THIS(Connection).private.isOpen then 
+       BetaDBCException(# do 'Connection not open!'->msg.append; #);
+   if);
+   true->private.isOpen;
+   value[]->set  
+   
+-- resultSetSetVarNotDeclared: DoPart --
+do 'Variable named \''->msg.append;
+   name[]->msg.append;
+   '\' not declared in this connection'->msg.append;
+   INNER  
+
+-- resultSetSetUnknownColumn: DoPart --
+do 'Unknown column: \''->msg.append;
+   name[]->msg.append;
+   '\' is not in the resultSet'->msg.append;
+   INNER  
+
+-- formatTime: DoPart --
+do &text[]->value[];
+   '\''->value.put;
+   t.year->value.putint(#  do 4->width; true->zeroPadding #);
+   '-'->value.put;
+   t.month->value.putint(#  do 2->width; true->zeroPadding #);
+   '-'->value.put;
+   t.day->value.putint(#  do 2->width; true->zeroPadding #);
+   ' '->value.put;
+   t.hour->value.putint (#  do 2->width; true->zeroPadding #);
+   ':'->value.put;
+   t.minute->value.putint (#  do 2->width; true->zeroPadding #);
+   ':'->value.put;
+   t.sec->value.putint (#  do 2->width; true->zeroPadding #);
+   '\''->value.put;
+   INNER  
+
+-- formatDate: DoPart --
+do &text[]->value[];
+   '\''->value.put;
+   d.year->value.putint;
+   '-'->value.put;
+   d.month->value.putint;
+   '-'->value.put;
+   d.day->value.putint;
+   '\''->value.put;
+   INNER
+
+-- formatClock: DoPart --
+do  
+   &text[]->value[];
+   '\''->value.put;
+   c.hour->value.putint (#  do 2->width; true->zeroPadding #);
+   ':'->value.put;
+   c.minute->value.putint (#  do 2->width; true->zeroPadding #);
+   ':'->value.put;
+   c.sec->value.putint (#  do 2->width; true->zeroPadding #);
+   '\''->value.put;
+   INNER  
+
+
