@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(81)";
+char betarun_version[] = "BETARUN VERSION 5.3(82)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.95  2002/03/19 11:52:00  grouleff
+ * More ml<->gas changes. RUN/RunAlloc.run
+ * Betarun version number: 81 
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.94  2002/03/19 10:08:53  beta
  * Start of C# betarun for Microsoft .NET
  * Betarun version number: 80 
