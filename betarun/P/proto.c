@@ -65,7 +65,7 @@ char *FindNameByGroupID(unsigned long group)
     idx++;
   }
   fprintf(output, "Got groupindex outside range in use\n");
-  Illegal();
+  DEBUG_CODE(Illegal());
   BetaExit(1);
   return NULL;
 }
@@ -92,7 +92,7 @@ unsigned long FindGroupIDByName(char *name)
       /* FIXME!  Do this... */
       fprintf(output,
 	      "FindGroupIDByName: NYI: Make room for more groupnames\n");
-      Illegal();
+      DEBUG_CODE(Illegal());
       BetaExit(1);
     } 
     
