@@ -1,9 +1,14 @@
 ORIGIN '~beta/basiclib/v1.4/betaenv';
-INCLUDE '~beta/mps/v4.9.1/astlevel';
--- lib: Attributes --
+INCLUDE '~beta/mps/v4.9.1.ess/astlevel'
+        '~beta/betaast/v4.9.1.ess/betasematt'
+        '~beta/guienv/v1.3/utils/prompts';
+;
+UNIQUE_GROUP_ID '2304786_809861997'-- lib: Attributes --
 editorenv:
   (#
      mps: ^astInterface;
+     betaGrammar: (*^mps.treelevel;*) ^mps.beta;
+     UI: ^guienv;
      contractOnOpen,onlyNotifyFreja: @boolean;
      partList: (# elm: [50] ^mps.ast #);
      clip: ^clipBoard;
@@ -12,7 +17,6 @@ editorenv:
           synCatNo: @mps.nonterminalSymbol;
           fragments: @partList;
           length: @integer;
-          
        #);
      clippedff: ^mps.fragmentForm;
      makeSLOTfrag: ^mps.fragmentForm;
@@ -24,6 +28,134 @@ editorenv:
      lastCompiledFragment: ^mps.fragmentGroup;
      formsWithSemanticErrors: @list (# element::< mps.fragmentForm #);
      formEditorNo: @integer;
-     init: (#  enter mps[] do &clipBoard[]->clip[] #)
+     mypromptForText:
+       (#
+          message,defaultText: ^text;
+          confirm:< (# theText: ^text enter theText[] do INNER #);
+          cancel:< object;
+       enter (message[],defaultText[])
+       do
+          (none ,'Sif',message[],defaultText[])
+            ->UI.promptForText
+              (# ok::<  (# do usertext[]->confirm #) #)
+       #);
+     groupEditor:
+       (#
+          fg: ^mps.fragmentGroup;
+          askInsertPermission:
+            (# value: @boolean do true->value exit value #);
+          hello: (# do 'hello: '->putText; fg.fullName->putLine #);
+          groupTouched: (# do 'grouptouched'->putLine #);
+          myAddFragment:
+            (#
+               g: ^mps.fragmentGroup;
+               f: ^mps.fragment;
+               afterElement: ^g.fragmentListElement;
+               status: @boolean;
+               after: ^g.fragmentList.theCellType;
+               help: ^text;
+            enter (g[],f[],afterElement[])
+            do
+               true->status;
+               afterElement[]->g.fragmentList.at->after[];
+               (f[],after[])
+                 ->g.fragmentList.insertFragmentAfter
+                   (#
+                      alreadyThere::< 
+                        (# do false->status; true->continue #)
+                   #);
+               (if status
+                // false then
+                   f.name->help[];
+                   'Copy'->help.append;
+                   help.copy->f.name;
+                   true->status;
+               if);
+            exit status
+            #);
+          (* overvej current selection begreb *)
+          insertForm:
+            (#
+               ff: ^mps.fragmentForm;
+               synCatNo: @integer;
+               done:< object;
+               newf: ^mps.fragmentForm;
+               fle: ^fg.fragmentListElement;
+               t: ^text;
+               doParse: @boolean
+            enter (ff[],synCatNo)
+            do
+               search: fg.fragmentlist.scan
+                 (#
+                 do
+                    (if current.type = mps.formtype then
+                        (if current.f[] = ff[] then
+                            'fragmentForm found'->putLine;
+                            current[]->fle[];
+                            leave search
+                        if)
+                    if)
+                 #);
+               (if fle[] <> none then
+                   ('Enter fragment form name','')
+                     ->myPromptForText
+                       (#
+                          confirm::< 
+                            (#
+                            do
+                               ('beta',screen[])->mps.grammarTable.find
+                                 ->mps.newFragmentForm->newf[];
+                               theText[]->newf.name;
+                               (if synCatNo
+                                // 2 (*descriptorForm*) then
+                                   '<<PrefixOpt>> (# <<AttributeDeclOpt>> do <<ImpOpt>> #)\n'
+                                     ->t[];
+                                   true->doParse;
+                                // 3 (*attributesForm*) then
+                                   '<<NameDecl>>: <<PrefixOpt>> (# <<AttributeDeclOpt>> <<EnterPartOpt>> <<DoPartOpt>> <<ExitPartOpt>> #)\n'
+                                     ->t[];
+                                   true->doParse;
+                                // 31 (*doPart*) then
+                                   'do <<ImpOpt>>'->t[]; true->doParse;
+                               if);
+                               (if doParse
+                                // true then
+                                   t.reset;
+                                   (synCatNo,t[],screen[],newf[])
+                                     ->betaGrammar.parser.doParse;
+                               if);
+                               (if ((fg[],newf[],fle[])->myAddFragment)
+                                // true then groupTouched; done;
+                               if)
+                            #)
+                       #)
+               if);
+            exit newf[]
+            #)
+       #);
+     groupEditorList: @list
+       (#
+          element:: groupEditor;
+          findGroupEditor:
+            (# fg: ^mps.fragmentGroup; ge: ^groupEditor
+            enter fg[]
+            do
+               search: scan
+                 (#
+                 do
+                    (if fg[] = current.fg[] then
+                        current[]->ge[]; leave search
+                    if)
+                 #);
+               (if ge[] = none then
+                   'creating groupEditor'->putLine;
+                   &groupEditor[]->ge[];
+                   fg[]->ge.fg[];
+                   ge[]->append
+               if)
+            exit ge[]
+            #)
+       #);
+     init: (# enter (mps[],betaGrammar[],UI[]) do &clipBoard[]->clip[] #)
   #)  
 
