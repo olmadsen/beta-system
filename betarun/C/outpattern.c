@@ -931,11 +931,20 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
       fprintf(output, ".\n");
     }
 #else
-    /* UNIX: failed to open dump file */
+    /* Non-Mac: failed to open dump file */
+#ifdef nti
+    { char s[500];
+      sprintf(s, "\nBeta execution aborted: %s.\nFailed to open '%s'",
+              ErrorMessage(errorNumber), dumpname);
+      Notify(s);
+      return 0;
+    }
+#else
     output = stderr;
     fprintf(output, "\n# Beta execution aborted: ");
     fprintf(output, ErrorMessage(errorNumber));
     fprintf(output, ".\n");
+#endif
 #endif
   }else{
     /* beta.dump opened successfully */
@@ -953,11 +962,19 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
       fprintf(stderr, ".\n# Look at '%s'\n", dumpname);
     }
 #else
-    /* UNIX, dump file opened OK */
+    /* Non-Mac, dump file opened OK */
+#ifdef nti
+    { char s[500];
+      sprintf(s, "\nBeta execution aborted: %s.\nLook at '%s'",
+              ErrorMessage(errorNumber), dumpname);
+      Notify(s);
+    }
+#else
     fprintf(stderr, "\n# Beta execution aborted: ");
     fprintf(stderr, ErrorMessage(errorNumber));
     fprintf(stderr, ".\n# Look at '%s'\n", dumpname);
-#endif
+#endif /* nti */
+#endif /* mac */
     /* Dump file opened OK: Write diagnostics to dump file too */
     fprintf(output, "Beta execution aborted: ");
     fprintf(output, ErrorMessage(errorNumber));

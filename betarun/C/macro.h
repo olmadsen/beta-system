@@ -12,10 +12,16 @@
 #define Notify3(s1,s2,s3)    CPrompt(s1, s2, s3, 0)
 #define Notify4(s1,s2,s3,s4) CPrompt(s1, s2, s3, s4)
 #else /* not macintosh */
+#ifdef nti
+#include <windows.h>
+#define Notify(s1)           MessageBox(GetActiveWindow(),s1,"BETA Runtime Notification",MB_OK);
+#define Notify2(s1,s2)       do { char x[1000]; sprintf(x, "%s\n%s", s1, s2); Notify(x); } while (0)
+#else
 #define Notify(s1)           fprintf(output, "%s\n", s1);
 #define Notify2(s1,s2)       fprintf(output, "%s\n%s\n", s1, s2);
 #define Notify3(s1,s2,s3)    fprintf(output, "%s\n%s\n%s\n", s1, s2, s3);
 #define Notify4(s1,s2,s3,s4) fprintf(output, "%s\n%s\n%s\n%s\n", s1, s2, s3, s4);
+#endif
 #endif
 
 #define inHeap(x)    (inIOA(x) || inLVRA(x))
