@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: aoa.c,v 1.31 1992-09-09 13:50:15 tthorn Exp $
+ * Mod: $Id: aoa.c,v 1.32 1992-10-02 14:48:09 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -317,7 +317,23 @@ static void Phase1()
   AOAtoLVRAtable = (ptr(long)) Offset(IOA, IOASize/2) ;
   AOAtoLVRAsize  = 0;
   
+#ifdef RTDEBUG
+  /* Make sure that there are no duplicate AOA roots! */
+  {  
+    long old=0;
+    BubbleSort(ToSpaceToAOAptr, ToSpaceToAOALimit-ToSpaceToAOAptr);
+    while (pointer > ToSpaceToAOAptr){
+      if (old == *--pointer){
+	INFO_AOA(fprintf(output, "Phase1: Duplicate AOA root: 0x%x\n", old));
+      } else {
+	old = *pointer;
+	ReverseAndFollow(*pointer);
+      }
+    }
+  }
+#else
   while( pointer > ToSpaceToAOAptr) ReverseAndFollow( *--pointer );
+#endif
 }
 
 #define isAlive(x)  (toObject(x)->GCAttr != 0)
