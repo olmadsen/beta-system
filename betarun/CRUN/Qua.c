@@ -50,11 +50,12 @@ void CQua(ref(Object) dstQuaOrigin,
   src = *theCell;
 
   /* Ck(src); */
+#ifdef RTDEBUG
   if ((src) && !(inIOA(src) || inAOA(src) || inLVRA(src) || isLazyRef(src))) {
     fprintf (stderr, "Qua: src check failed. src = %d, theCell = %d\n", 
 	     (int) src, (int) theCell);
   }
-    
+#endif    
   
   if (src){
     /* If src is NONE, all is well */
