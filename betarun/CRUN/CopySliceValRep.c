@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopySliceValRep.c,v 1.20 1992-10-22 14:16:36 beta Exp $
+ * Mod: $Id: CopySliceValRep.c,v 1.21 1992-10-27 16:12:55 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -72,6 +72,8 @@ void CCopySVR(ref(ValRep) theRep,
 	    unsigned char *oldBody= (unsigned char *)((unsigned)theRep->Body+(low-theRep->LowBorder));
 	    for (i = 0;  i < high; ++(unsigned char *)i)
 	      *(unsigned char *)((unsigned)newBody+i) = *(unsigned char *)((unsigned)oldBody+i);
+	    *(unsigned char *)((unsigned)newBody+high) = 0
+	      /* Null termination */;
 	    break;
 	}
       case (int) WordRepPTValue:
