@@ -13,6 +13,10 @@
 #include <signal.h>
 #endif /* UNIX  */
 
+#ifdef ppcmac
+#include <MachineExceptions.h>
+#endif /* ppcmac */
+
 #ifdef sun4s
 #include <siginfo.h>
 #include <sys/regset.h>
@@ -34,10 +38,6 @@
 #define OUR_EXCEPTION_CONTINUE_EXECUTION EXCEPTION_CONTINUE_EXECUTION
 #endif /* nti_gnu */
 #endif /* nti */
-
-#ifdef ppcmac
-#include <MachineExceptions.h>
-#endif /* ppcmac */
 
 /***************************************************************************/
 /*************************** HELPER FUNCTIONS ******************************/
