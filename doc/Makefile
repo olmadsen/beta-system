@@ -4,6 +4,11 @@ all: generated link-check
 generated:
 	sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then cd $$d; make; cd ..; fi; done'
 
+# Update interface files only.
+interface:
+	sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then cd $$d; make interface; cd ..; fi; done'
+
+
 link-check:
 	@echo Checking all links from index.html
 	cd admin/errors; sh -c 'for f in *.*; do >$$f; done'

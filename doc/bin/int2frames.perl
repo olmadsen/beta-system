@@ -267,7 +267,7 @@ sub print_std_buttons
     print " | " if ($wiki);
     &print_button("index", $indexfile, "Interface Descriptions Index");
     print " | " if ($wiki);
-    $javascript = &print_button("print", "javascript:parent.${target}Body.printframe(parent.${target}Body);", "Print \u$basename Interface Frame");
+    $javascript = &print_button("print", "javascript:if (parent && parent.${target}Body){parent.${target}Body.printframe(parent.${target}Body)}", "Print \u$basename Interface Frame");
     return $javascript;
 }
 
@@ -293,7 +293,7 @@ EOT
 EOT
 
     print <<"EOT" if ($flags&4);
-<BASE TARGET="_top">
+<BASE TARGET="_parent">
 </HEAD>
 EOT
 }
