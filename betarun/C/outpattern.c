@@ -752,28 +752,6 @@ void DisplayNEWRUNStack(long *PC, Object *theObj, int signal)
 /************************* Begin INTEL ****************************/
 #ifdef intel
 
-#ifdef RTDEBUG
-static void PrintSkipped(long *current)
-{
-  Object *ref = (Object *)*current;
-  fprintf(output, "0x%08x: 0x%08x ", (int)current, (int)ref);
-  if (ref && 
-      inBetaHeap(ref) && 
-      isObject(ref) && 
-      IsPrototypeOfProcess((long)GETPROTO(ref))){ 
-    fprintf(output, "*** SUSPICIOUS STACK-SKIP!");
-    fflush(output);
-    fprintf(output, 
-	    " proto: 0x%08x (%s)\n", 
-	    (int)GETPROTO(ref),
-	    ProtoTypeName(GETPROTO(ref))); 
-  } else {
-    fprintf(output, "- SKIPPED\n");
-  } 
-  fflush(output);
-}
-#endif /* RTDEBUG */
-
 /* DisplayStackPart:
  * Traverse the StackArea [low..high] and Process all references within it. 
  * Stop when theComp is reached.

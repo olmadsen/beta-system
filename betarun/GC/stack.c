@@ -1252,18 +1252,35 @@ int SkipDataRegs(long *theCell)
   return 0;
 }
 
+static 
+void ProcessIntelStackCell(Object **theCell, Object *theObj)
+{
+  DEBUG_STACK({ 
+    fprintf(output, "0x%08x: 0x%08x", (int)theCell, (int)theObj);
+    PrintRef(theObj);
+    fprintf(output, "\n");
+  });
+  ProcessReference(theCell, REFTYPE_DYNAMIC);
+  CompleteScavenging();
+}
+
 /* Traverse the StackArea [low..high] and Process all references within it. */
 static
-void ProcessStackPart(long *low, long *high)
+void ProcessStackPart(long *low, long *high, CellProcessFunc whenObject)
 {
   long * current = low;
   Object * theObj;
   Object ** theCell;
-  DEBUG_STACK(fprintf(output, 
-		      "\n----- AR: low: 0x%08x, high: 0x%08x\n", (int)low, (int)high);
-	      fprintf(output, "ComponentBlock/CallbackFrame: [0x%08x, 0x%08x, 0x%08x]\n", 
-		      (int)(*(high+1)), (int)(*(high+2)), (int)(*(high+3)));
-	      );
+  DEBUG_STACK({
+    fprintf(output, 
+	    "\n----- AR: low: 0x%08x, high: 0x%08x\n", (int)low, (int)high);
+    fprintf(output, 
+	    "ComponentBlock/CallbackFrame: [0x%08x, 0x%08x, 0x%08x]\n", 
+	    (int)(*(high+1)), 
+	    (int)(*(high+2)), 
+	    (int)(*(high+3))
+	    );
+    });
   Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
   
   while( current <= high ){
@@ -1271,12 +1288,7 @@ void ProcessStackPart(long *low, long *high)
       theCell = (Object **) current;
       theObj  = *theCell;
       if (isObject(theObj)) {
-	  DEBUG_STACK({ fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
-			PrintRef(*(Object**)current);
-			fprintf(output, "\n");
-		      });
-	  ProcessReference( (Object **)current, REFTYPE_DYNAMIC);
-	  CompleteScavenging();
+	whenObject(theCell, theObj);
       } else {
 	DEBUG_CODE({
 	  if (!isValRep(theObj)){
@@ -1298,28 +1310,31 @@ void ProcessStackPart(long *low, long *high)
       if (skip){
 	current += skip;
       } else {
+#ifdef RTLAZY
 	if (isLazyRef(*current)) {
 	  /* (*current) is a dangling reference */
 	  DEBUG_STACK(fprintf(output, "0x%08x: %d - LAZY\n", (int)current, (int)*current));
-	  ProcessReference ((Object **)current, REFTYPE_DYNAMIC);
-	} else {
-	  DEBUG_STACK({
-	    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
-	    if (*current) {
-	      if (IsPrototypeOfProcess(*current)) {
-		fprintf(output, ", is proto  (");
-		PrintProto((ProtoType*)*current);
-		fprintf(output, ")\n");
+	  whenObject((Object**)current, *(Object**)current);
+	} else 
+#endif /* RTLAZY */
+	  {
+	    DEBUG_STACK({
+	      fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
+	      if (*current) {
+		if (IsPrototypeOfProcess(*current)) {
+		  fprintf(output, ", is proto  (");
+		  PrintProto((ProtoType*)*current);
+		  fprintf(output, ")\n");
+		} else {
+		  fprintf(output, " ");
+		  PrintCodeAddress(*current);
+		  fprintf(output, "\n");
+		}
 	      } else {
-		fprintf(output, " ");
-		PrintCodeAddress(*current);
 		fprintf(output, "\n");
 	      }
-	    } else {
-	      fprintf(output, "\n");
-	    }
-	  });
-	}
+	    });
+	  }
       }
     }
     current++;
@@ -1344,11 +1359,11 @@ void ProcessINTELStack(void)
     theFrame  = ActiveCallBackFrame;
     /* Follow the stack */
     while( theFrame){
-	ProcessStackPart( theTop, (long *)theFrame-1);
+	ProcessStackPart( theTop, (long *)theFrame-1, ProcessIntelStackCell);
 	theTop   = theFrame->betaTop;
 	theFrame = theFrame->next;
     }
-    ProcessStackPart(theTop, theBottom-1);  
+    ProcessStackPart(theTop, theBottom-1, ProcessIntelStackCell);  
     
     /*
      * Then handle the remaining component blocks.
@@ -1360,15 +1375,57 @@ void ProcessINTELStack(void)
 	theBottom = (long *) currentBlock->next;
 	theFrame  = currentBlock->callBackFrame;
 	while( theFrame){
-	    ProcessStackPart( theTop, (long *)theFrame-1);
+	    ProcessStackPart( theTop, (long *)theFrame-1, ProcessIntelStackCell);
 	    theTop   = theFrame->betaTop;
 	    theFrame = theFrame->next;
 	}
-	ProcessStackPart(theTop, theBottom-1);  
+	ProcessStackPart(theTop, theBottom-1, ProcessIntelStackCell);  
 	currentBlock = currentBlock->next;
     }
     DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
 }
+
+#ifdef RTDEBUG
+static
+void TraceStackObject(Object **current)
+{
+  if(inBetaHeap(*current)){
+    Object *theObj = *current;
+    if (isObject(theObj)) {
+      fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
+      PrintRef(*(Object**)current);
+      fprintf(output, "\n");
+    } else {
+      if (!isValRep(theObj)){
+	fprintf(output, "*** SUSPICIOUS REFERENCE IN STACKOBJ: 0x%08x: 0x%08x", 
+		(int)current, (int)(*current));
+	if (IsPrototypeOfProcess((long)GETPROTO(theObj))){
+	  fprintf(output, " Proto: 0x%08x (%s)\n",
+		  (int)GETPROTO(theObj),
+		  ProtoTypeName(GETPROTO(theObj)));
+	} else {
+	  fprintf(output, " *** ILLEGAL PROTOTYPE: 0x%08x\n", (int)GETPROTO(theObj));
+	}
+      }
+    }
+  } else {
+    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
+    if (*current) {
+      if (IsPrototypeOfProcess((long)*current)) {
+	fprintf(output, ", is proto  (");
+	PrintProto((ProtoType*)*current);
+	fprintf(output, ")\n");
+      } else {
+	fprintf(output, " ");
+	PrintCodeAddress((long)*current);
+	fprintf(output, "\n");
+      }
+    } else {
+      fprintf(output, "\n");
+    }
+  }
+}
+#endif /* RTDEBUG */
 
 static
 void ProcessINTELStackObj(StackObject *sObj, CellProcessFunc func)
@@ -1400,8 +1457,6 @@ void ProcessINTELStackObj(StackObject *sObj, CellProcessFunc func)
 	    
   theEnd = &sObj->Body[0] + sObj->StackSize;
 	
-  /* FIXME: could call ProcessStackPart (if parameterized with a CellProcessFunc) */
-
   for (current = &sObj->Body[0]; current < theEnd; current++) {
     int skip = SkipDataRegs(current);
     if (skip){
@@ -1412,43 +1467,7 @@ void ProcessINTELStackObj(StackObject *sObj, CellProcessFunc func)
 	  fprintf(output, "Dangler on stack: 0x08%x: %d\n", (int)current, (int)*current);
 	}
       });
-      DEBUG_STACKOBJ({
-	if(inBetaHeap((Object*)*current)){
-	  Object *theObj = *(Object **)current;
-	  if (isObject(theObj)) {
-	    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
-	    PrintRef(*(Object**)current);
-	    fprintf(output, "\n");
-	  } else {
-	    if (!isValRep(theObj)){
-	      fprintf(output, "*** SUSPICIOUS REFERENCE IN STACKOBJ: 0x%08x: 0x%08x", 
-		      (int)current, (int)(*current));
-	      if (IsPrototypeOfProcess((long)GETPROTO(theObj))){
-		fprintf(output, " Proto: 0x%08x (%s)\n",
-			(int)GETPROTO(theObj),
-			ProtoTypeName(GETPROTO(theObj)));
-	      } else {
-		fprintf(output, " *** ILLEGAL PROTOTYPE: 0x%08x\n", (int)GETPROTO(theObj));
-	      }
-	    }
-	  }
-	} else {
-	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
-	  if (*current) {
-	    if (IsPrototypeOfProcess(*current)) {
-	      fprintf(output, ", is proto  (");
-	      PrintProto((ProtoType*)*current);
-	      fprintf(output, ")\n");
-	    } else {
-	      fprintf(output, " ");
-	      PrintCodeAddress(*current);
-	      fprintf(output, "\n");
-	    }
-	  } else {
-	    fprintf(output, "\n");
-	  }
-	}
-      }) /* DEBUG_STACKOBJ */;
+      DEBUG_STACKOBJ(TraceStackObject((Object**)current)) /* DEBUG_STACKOBJ */;
       func((Object**)current, *(Object**)current);
     }
   }
@@ -1458,70 +1477,20 @@ void ProcessINTELStackObj(StackObject *sObj, CellProcessFunc func)
 
 #ifdef RTDEBUG
 
+static 
+void PrintStackCell(Object **theCell, Object *theObj)
+{
+  fprintf(output, "0x%08x: 0x%08x", (int)theCell, (int)theObj);
+  PrintRef(theObj);
+  fprintf(output, "\n");
+}
+
 /* PrintStackPart: (intel)
  * Traverse the StackArea [low..high] and print all references within it. 
  */
 void PrintStackPart(long *low, long *high)
 {
-  long * current = low;
-  Object * theObj;
-  Object ** theCell;
-  fprintf(output, 
-	  "\n----- AR: low: 0x%08x, high: 0x%08x\n", (int)low, (int)high);
-  fprintf(output, "ComponentBlock/CallbackFrame: [0x%08x, 0x%08x, 0x%08x]\n", 
-	  (int)(*(high+1)), (int)(*(high+2)), (int)(*(high+3)));
-  Claim( high <= (long *)StackStart, "PrintStackPart: high<=StackStart" );
-  
-  while( current <= high ){
-    if(inBetaHeap( (Object *)*current)){
-      theCell = (Object **) current;
-      theObj  = *theCell;
-      if( isObject( theObj) ){
-	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
-	  PrintRef(*(Object**)current);
-	  fprintf(output, "\n");
-      } else {
-	if (!isValRep(theObj)){
-	  fprintf(output, "*** SUSPICIOUS REFERENCE ON STACK: 0x%08x: 0x%08x", 
-		  (int)current, (int)(*current));
-	  if (IsPrototypeOfProcess((long)GETPROTO(theObj))){
-	    fprintf(output, " Proto: 0x%08x (%s)\n",
-		    (int)GETPROTO(theObj),
-		    ProtoTypeName(GETPROTO(theObj)));
-	  } else {
-	    fprintf(output, " *** ILLEGAL PROTOTYPE: 0x%08x\n", (int)GETPROTO(theObj));
-	  }
-	}
-      }
-    } else {
-      /* handle tagged data registers on the stack */
-      int skip = SkipDataRegs(current);
-      if (skip){
-	current += skip;
-      } else {
-	if (isLazyRef(*current)) {
-	  /* (*current) is a dangling reference */
-            fprintf(output, "0x%08x: %d - LAZY\n", (int)current, (int)*current);
-        } else {
-	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
-	  if (*current) {
-	    if (IsPrototypeOfProcess(*current)) {
-	      fprintf(output, ", is proto  (");
-	      PrintProto((ProtoType*)*current);
-	      fprintf(output, ")\n");
-	    } else {
-	      fprintf(output, " ");
-	      PrintCodeAddress(*current);
-	      fprintf(output, "\n");
-	    }
-	  } else {
-	    fprintf(output, "\n");
-	  }
-	}
-      }
-    }
-    current++;
-  }
+  ProcessStackPart(low, high, PrintStackCell);
 }
 
 /* PrintStack: (intel)
