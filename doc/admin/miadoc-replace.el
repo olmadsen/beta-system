@@ -69,8 +69,7 @@
 
   (let ((case-replace t))
     (message "Fixing MIA references")
-    (tags-query-replace "\\[MIA \\(9[0-9]-[0-9]+\\)\\]" "<A HREF=\"../bibliography/index.html#mia\\1\">[MIA \\1]</A>" nil)
-)
+    (tags-query-replace "\\[MIA \\(9[0-9]-[0-9]+\\)\\]" "<A HREF=\"../bibliography/index.html#mia\\1\">[MIA \\1]</A>" nil)))
 
 (defun miadoc-replace9 ()
   (interactive)
@@ -78,8 +77,7 @@
 
   (let ((case-replace t))
     (message "Changing PRE to class BETA")
-    (tags-query-replace "<PRE>" "<PRE CLASS=beta>" nil))
-)
+    (tags-query-replace "<PRE>" "<PRE CLASS=beta>" nil)))
 
 (defun miadoc-replace10 ()
   (interactive)
@@ -87,8 +85,7 @@
 
   (let ((case-replace t))
     (message "Removing META")
-    (tags-query-replace "<META.*>" "" nil))
-)
+    (tags-query-replace "<META.*>" "" nil)))
 
 (defun miadoc-replace11 ()
   (interactive)
@@ -96,8 +93,7 @@
 
   (let ((case-replace t))
     (message "Removing &middot;")
-    (tags-query-replace "<LI>&middot;" "<LI>" nil))
-)
+    (tags-query-replace "<LI>&middot;" "<LI>" nil)))
 
 (defun miadoc-replace12 ()
   (interactive)

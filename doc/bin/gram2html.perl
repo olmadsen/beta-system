@@ -209,7 +209,7 @@ sub print_index_toc()
 	    print "<STRONG><A HREF=\"#_$ch\">$ch</A></STRONG> &nbsp; \n";
 	} else {
 	    # no indices starting with $ch
-	    print "<STRONG><FONT color=\"#BEBEBE\">$ch</FONT></STRONG> &nbsp; \n";
+	    print "<STRONG CLASS=disabled>$ch</STRONG> &nbsp; \n";
 	}	    
     }
     print "<HR>\n<P></P>\n<PRE CLASS=gram>\n";
