@@ -5,6 +5,11 @@
 # Retains formatting of original file.
 # Requires rule specifier and '::' to be on the same line in order to
 # work.
+#
+# TODO:
+#   1. Create output file from perl
+#   2. Create foo-inx.html file to
+#   3. Add buttons
 
 sub usage()
 {

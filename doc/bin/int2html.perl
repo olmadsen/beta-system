@@ -275,7 +275,7 @@ sub print_index_toc
     print "<P></P>\n<HR>\n<P></P>\n<PRE CLASS=interface>\n";
 }
 
-sub print_index
+sub print_index()
 {
 
     # Remove levels on single index-entries.
@@ -295,13 +295,15 @@ sub print_index
 
     # Sort index ignoring case
     @index = sort {lc($a) cmp lc($b)} @index;
-    local ($html_index, $initial_ch, $htmlfile, $i, %entries);
+    local ($html_index, $prev_id, $prev_no, $initial_ch, $htmlfile, $i, %entries);
 
     #print STDERR "index:++++++++++++++++++++\n";
     #print STDERR join ("\n", @index);
     #print STDERR "indexend:++++++++++++++++++++\n";
 
     $html_index = "";
+    $prev_id = "";
+    $prev_no = 1;
 
     for($i = 0; $i <= $#index; $i++) {
 	#$html_index .= "[$index[$i]]\n" if $trace;
@@ -365,14 +367,42 @@ sub print_index
 	    $id = $2;
 	    if ($entries{$scopes}){
 		# foo:bar already emitted
-		$html_index .= "  " x (1+&num_chars(':', $scopes));
-		$html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\">" . $id . "</A>\n";
+		if ($prev_id eq $id){
+		    $prev_no++;
+		    if (!($prev_no % 10)){
+			# break line of references
+			$html_index .= "\n";
+			# indent with double-spaces
+			$html_index .= "  " x (2+&num_chars(':', $scopes));
+		    }
+		    $html_index .= " <A href=\"$htmlfile\#" . $index[$i] . "\">[" . $prev_no . "]</A>";
+		} else {
+		    $prev_no=1;
+		    $html_index .= "\n";
+		    # indent with double-spaces
+		    $html_index .= "  " x (1+&num_chars(':', $scopes));
+		    $html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\">" . $id . "</A>";
+		    $prev_id = $id;
+		}
 		$entries{$_} = 1;
 	    } else {
 		$html_index .= "Index Error: $_ ($scopes) ($id)\n";
 	    }
 	} else {
-	    $html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\">" . $_ . "</A>\n";
+	    $id = $_;
+	    if ($prev_id eq $id){
+		$prev_no++;
+		if (!($prev_no % 10)){
+		    # break line of references
+		    $html_index .= "\n   ";
+		}
+		$html_index .= " <A href=\"$htmlfile\#" . $index[$i] . "\">[" . $prev_no . "]</A>";
+	    } else {
+		$prev_no=1;
+		$html_index .= "\n";
+		$html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\">" . $id . "</A>";
+		$prev_id = $id;
+	    }
 	    $entries{$_} = 1;
 	}
     }
