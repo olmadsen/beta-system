@@ -374,8 +374,9 @@ namespace beta.converter
 	      else
 		comma = true;
 	      put("arg" + (++n));
-	      if (param.StartsWith("^"))
+	      if (param.StartsWith("^") || param.StartsWith("[0]") /* using Ref2Rep */){
 		put("[]");
+	      }
 	    }
 	    put(")");
 	    nl();
