@@ -6,8 +6,8 @@ require "$BETALIB/bin/admin/env.perl";
 #### Configuration
 
 $beta          = "$BETALIB/boot/bin/$objdir/beta";
-$dotnetoptions = "-s 23 184 186 189";
-$javaoptions   = "-qwp -s 23 186";
+$dotnetoptions = "-s 23";
+$javaoptions   = "-qwp -s 23";
 
 # Files to compile for both java and dotnet
 @files    = ("hello", 
@@ -81,8 +81,13 @@ if ($runonly && $compileonly){
     $compileonly=0;
 }
 
-$sbetasrc="$BETALIB/compiler/sbeta.bet";
-$sbeta="$BETALIB/compiler/$objdir/sbeta${EXESUFFIX}";
+if ($target eq "dotnet"){
+    $sbetasrc="$BETALIB/compiler/nbeta.bet";
+    $sbeta="$BETALIB/compiler/$objdir/nbeta${EXESUFFIX}";
+} else {
+    $sbetasrc="$BETALIB/compiler/jbeta.bet";
+    $sbeta="$BETALIB/compiler/$objdir/jbeta${EXESUFFIX}";
+}
 
 unless ($C || $runonly){
     print "*** Compiling $sbeta ***\n" if ($verbose);
@@ -94,7 +99,7 @@ $options = $dotnetoptions  if ($target eq "dotnet");
 $options = $javaoptions    if ($target eq "javabc");
 push @files, @javaonly     if ($target eq "javabc");
 
-$compilecmd = "$sbeta -t $target $options";
+$compilecmd = "$sbeta $options"; # -t $target 
 
 print "*** Removing ast files ***\n" if ($verbose);
 system "rm *.ast *.astL >/dev/null 2>&1";
@@ -103,6 +108,7 @@ print "*** Compiling with command ***\n\t$compilecmd\n\n" unless ($runonly);
 
 foreach $f (@files){
     unless ($runonly){
+	# Recompile
 	print "-"x20 . "Removing $f/$f.exe" . "-"x20  . "\n" if ($verbose);
 	unlink ("$f $f.exe");
 	unlink ("program.dll") if (-e "program.dll");
@@ -111,6 +117,7 @@ foreach $f (@files){
 	system "$compilecmd $f" if ($verbose);
     }
     unless ($compileonly){
+	# Execute
 	print "-"x20 . "Executing $f" . "-"x20  . "\n"; # if ($verbose);
 	system "./$f > $f.run";
 	open(IN, "<$f.run");
@@ -127,6 +134,7 @@ foreach $f (@files){
 		print "[output is correct]\n";
 		system "rm $f.run";
 		system "rm $f.out";
+		$status{$f} = 1;
 	    } else {
 		if ($x){
 		    print "[Difference in output - see above]\n";
@@ -134,15 +142,34 @@ foreach $f (@files){
 		    print "[Difference in output - see above. Correct output below]\n";
 		    system "cat -n reference/$f.run";
 		}
+		# Save diff file for easy lookup
+		system "diff $context reference/$f.run $f.out > $f.diff";
+		$status{$f} = 0;
 	    }
 	} else {
 	    system "cat $f.run";
 	    system "cp $f.run reference";
 	    print "[No reference existed. Output above used for future reference]\n";
 	    print "[Please do a manual 'cvs add reference/$f.run']\n";
+	    $status{$f} = 2;
 	}
     }
 }
+
+print "\n" . "*"x19 . " Summary " . "*"x19  . "\n";
+print "  Succeeded:\n";
+foreach $key (keys(%status)){
+    print "    $key\n" if ($status{$key} == 1);
+}
+print "  Failed:\n";
+foreach $key (keys(%status)){
+    if ($status{$key} == 0){
+	print "    $key";
+	print " [see $key.diff]" if (-f "$key.diff");
+	print "\n";
+    }
+}
+print "\n";
 
 sub IntHandler 
 {
