@@ -4,11 +4,13 @@
 #ifdef hpux
 void findComponentStack (struct ComponentStack* compStack, int PC)
 {
+  printf("findComponentStack NYI for hpux\n");
 }
 
 void scanComponentStack (struct ComponentStack* compStack,
 			 forEachCallType forEach)
 {
+  printf("scanComponentStack NYI for hpux\n");
 }
 #endif /* hpux */
 
