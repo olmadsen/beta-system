@@ -70,6 +70,7 @@ do_export_op_dcl:
                d: ^idl.param_dcls;
             enter p[]
             do 0 -> num_enter_parameters;
+               enter_parameters.clear;
                p.getparam_dcls -> d[];
                d.newscan
                (# 
@@ -108,12 +109,11 @@ do_export_op_dcl:
                  (# t: ^idl.param_type_spec;
                     s: ^idl.param_scoped_name;
                     b: ^idl.param_base_type_spec;
-                    scoped_name: ^text;
-                 enter t[]
+                    dcl_info: ^declarator_info;
+                 enter (dcl_info[], t[])
                  do (if t.symbol
                      // idl.param_base_type_spec then
                         put_arg;
-                        '@' -> outfile.put;
                         (t[]->b[]).getbase_type_spec
                           -> do_base_type_spec;
                      // idl.param_string_type then
@@ -122,24 +122,42 @@ do_export_op_dcl:
                           -> outfile.puttext;
                      // idl.param_scoped_name then
                         put_arg;
-                        (if arg_info.is_pointer 
-                            or arg_info.is_pointer_pointer then
-                            '^' -> outfile.put;
-                         else
-                            '@' -> outfile.put;
-                        if);
                         (t[]->s[]).getscoped_name
-                          -> do_scoped_name -> scoped_name[];
-                        (if arg_info.is_pointer_pointer then
-                            'Holder' -> outfile.puttext;
-                            scoped_name[] -> refholders.append;
-                        if)
+                          -> do_scoped_name 
+                          -> types.findsym
+                        (# 
+                        do (if current.basic_type[] <> NONE then
+                               (* We must add pointer levels from
+                                * declarator with type's pointer
+                                * level!
+                                *)
+                               (if dcl_info.pointer_level
+                                   + current.pointer_level
+                                // 0 then
+                                   '@' -> outfile.put;
+                                   current.basic_type[]->outfile.puttext;
+                                // 1 then
+                                   (* pointer to basic type *)
+                                   '^' -> outfile.put;
+                                   current.basic_type[]->outfile.puttext;
+                                   'Holder' -> outfile.puttext;
+                                else
+                                   'pointer_level_too_big!;' 
+                                     -> outfile.puttext;
+                                   'pointer_level>1 for basictype NYI' 
+                                     -> putline;
+                               if)
+                            else
+                               '@' -> outfile.put;
+                               current.basic_type[] -> outfile.puttext;
+                           if);
+                        #) 
                      // idl.param_void then
                         (if true
-                         // arg_info.is_pointer then
+                         // arg_info.pointer_level=1 then
                             put_arg;
                             '@integer (* void* *)' -> outfile.puttext;
-                         // arg_info.is_pointer_pointer then
+                         // arg_info.pointer_level=2 then
                             put_arg;
                             '@integer (* void** *)' -> outfile.puttext;
                          else
@@ -151,7 +169,6 @@ do_export_op_dcl:
                             (if num_enter_parameters=0 then
                                 'No parameters' 
                                   -> outfile.comment;
-                                0->num_enter_parameters
                              else
                                 'Error: Met void parameter at num_enter_parameters='
                                   -> screen.puttext;
@@ -167,15 +184,12 @@ do_export_op_dcl:
                  (#
                  do arg_info.id[] -> outfile.puttext;
                     ': ' -> outfile.puttext;
-                    num_enter_parameters+1
-                      -> num_enter_parameters;
-                    (if num_enter_parameters
-                        > enter_parameters.range then
-                        enter_parameters.range
-                          -> enter_parameters.extend;
+                    num_enter_parameters+1 -> num_enter_parameters;
+                    (* FIXME: possible boxes missing *)
+                    (if num_enter_parameters>1 then
+                        ', ' -> enter_parameters.append;
                     if);
-                    arg_info[]->
-                    enter_parameters[num_enter_parameters][];
+                    arg_info.id[] -> enter_parameters.append;
                  #);
                generate_param_name:
                  (# 
@@ -197,33 +211,19 @@ do_export_op_dcl:
                (if d.getconst1->optionalPresent then
                    d.getconst1->do_const;
                if);
-               d.gettype -> do_param_type_spec;
+               (arg_info[], d.gettype) -> do_param_type_spec;
                (if d.getattributes->optionalPresent then
                    d.getattributes->do_param_attribute_list;
                if);
                ';' -> outfile.putline;
             #);
-          emit_enter_parameters:
-            (# first_done: @boolean;
-            do (for i:num_enter_parameters repeat
-                    (if first_done then
-                        ', '->outfile.puttext;
-                     else
-                        true -> first_done;
-                    if);
-                    enter_parameters[i].id[] -> outfile.puttext;
-                    (if enter_parameters[i].is_pointer or
-                        enter_parameters[i].is_pointer_pointer then
-                        '[]' -> outfile.puttext;
-                    if);
-               for)
-            #);
           result_present: @boolean;
-          enter_parameters: [4]^declarator_info;
           num_enter_parameters: @integer;
+          enter_parameters: @text;
           do_op_type_spec:
             (# t: ^idl.op_type_spec;
                s: ^idl.param_scoped_name;
+               name: ^text;
             enter t[]
             do false -> result_present;
                (if t.symbol
@@ -231,9 +231,11 @@ do_export_op_dcl:
                    'No result' -> outfile.comment;
                 // idl.void_ref then
                    true -> result_present;
-                   'result: @integer ' -> outfile.puttext;
+                   'result: ^IUnknown ' -> outfile.puttext;
                    'void*' -> outfile.comment;
                    ';' -> outfile.put;
+                   'Warning: void* result translated to ^IUnknown'
+                   -> putline;
                 // idl.param_base_type_spec then
                    true -> result_present;
                    'result: @integer ' -> outfile.puttext;
@@ -242,13 +244,34 @@ do_export_op_dcl:
                 // idl.param_string_type then
                    true -> result_present;
                    'result: @integer ' -> outfile.puttext;
-                   'param_string_type' -> outfile.comment;
+                   'param_string_type NYI' -> outfile.comment;
                    ';' -> outfile.put;
                 // idl.param_scoped_name then
                    true -> result_present;
-                   'result: @' -> outfile.puttext;
+                   'result: ' -> outfile.puttext;
                    (t[]->s[]).getscoped_name 
-                     -> do_scoped_name;
+                     -> do_scoped_name -> name[];
+                   name[] -> types.findsym
+                   (# 
+                   do (if current.basic_type[] <> NONE then
+                          (if current.pointer_level
+                           // 0 then
+                              '@' -> outfile.put;
+                              current.basic_type[] -> outfile.puttext;
+                           // 1 then
+                              (* pointer to basic type *)
+                              '^' -> outfile.put;
+                              current.basic_type[] -> outfile.puttext;
+                              'Holder' -> outfile.puttext;
+                           else
+                              'pointer_level>1 for basictype NYI' 
+                                ->  putline;
+                          if)
+                       else
+                          '@' -> outfile.put;
+                          current.basic_type[] -> outfile.puttext;
+                      if);
+                   #);                                  
                    ';' -> outfile.put;
                 // idl.param_void then
                    false -> result_present;
@@ -298,7 +321,7 @@ do_export_op_dcl:
               (if num_enter_parameters>1 then 
                   '(' -> outfile.put;
               if);
-              emit_enter_parameters;
+              enter_parameters[] -> outfile.puttext;
               (if num_enter_parameters>1 then 
                   ')' -> outfile.put;
               if);

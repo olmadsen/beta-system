@@ -5,75 +5,98 @@ do_typedef:
   (# t: ^idl.typedef;
      x: ^idl.attributeX;
   enter (t[])
-  do outfile.newline;
-     outfile.indent;
-     'typedef:' -> outfile.commentline;
-     outfile.indent;
-     (t.gettype_declarator) -> do_type_declarator;
+  do (t.gettype_declarator) -> do_type_declarator;
+     (* FIXME: attributes should be put into type_info *)
      (if t.getattribute_opt -> optionalPresent then
          t.getattribute_opt -> do_attributeX;
      if);
-     ';' -> outfile.putline;
   #);
   
 do_type_spec:
   (# t: ^idl.type_spec;
      info: ^declarator_info;
+     alias: ^text;
+     found: @boolean;
   enter (info[],t[])
   do (if t.symbol
       // idl.float then
-         'real (* float *)' -> outfile.puttext;
+         'real' -> info.basic_type[];
+         'float' -> info.comment[];
       // idl.double then
-         'real (* double *)' -> outfile.puttext;
+         'real' -> info.basic_type[];
+         'double' -> info.comment[];
       // idl.signed_long_int then
-         'int32' -> outfile.puttext;
+         'int32' -> info.basic_type[];
       // idl.int then
-         'int32' -> outfile.puttext;
+         'int32' -> info.basic_type[];
       // idl.signed_short_int then
-         'int16' -> outfile.puttext;
+         'int16' -> info.basic_type[];
       // idl.unsigned_long_int then
-         'int32u' -> outfile.puttext;
+         'int32u' -> info.basic_type[];
       // idl.unsigned_short_int then
-         'int16u' -> outfile.puttext;
+         'int16u' -> info.basic_type[];
       // idl.unsigned_char then
-         'int8u' -> outfile.puttext;
+         'int8u' -> info.basic_type[];
       // idl.signed_char then
-         'int8' -> outfile.puttext;
+         'int8' -> info.basic_type[];
       // idl.char then
-         'char' -> outfile.puttext;
+         'char' -> info.basic_type[];
       // idl.boolean_type then
-         'boolean' -> outfile.puttext;
+         'boolean' -> info.basic_type[];
       // idl.octet_type then
-         'int8u (* octet *)' -> outfile.puttext;
+         'int8u' -> info.basic_type[];
+         'octet' -> info.comment[];
       // idl.any_type then
-         'any_type NYI' -> outfile.puttext;
+         'any_type' -> info.basic_type[];
+         'NYI' -> info.comment[];
       // idl.sequence1 then
-         'sequence1 NYI' -> outfile.puttext;
+         'sequence1' -> info.basic_type[];
+         'NYI' -> info.comment[];
       // idl.sequence2 then
-         'sequence2 NYI' -> outfile.puttext;
+         'sequence2' -> info.basic_type[];
+         'NYI' -> info.comment[];
       // idl.string1 then
-         'string1 NYI' -> outfile.puttext;
+         'sequence1' -> info.basic_type[];
+         'NYI' -> info.comment[];
       // idl.string2 then
-         'string2 NYI' -> outfile.puttext;
+         'sequence2' -> info.basic_type[];
+         'NYI' -> info.comment[];
       // idl.scoped_name1
       // idl.scoped_name2
       // idl.scoped_name3 then
-         t[] -> do_scoped_name;
-         (if true
-          // info.is_pointer then
-             '_Ref (* FIXME *)' -> outfile.puttext;
-          // info.is_pointer_pointer then
-             '_RefRef (* FIXME *)' -> outfile.puttext;
+         (* We have an alias *)
+         t[] -> do_scoped_name -> alias[];
+         find: types.scan
+         (# 
+         do (if current.id[] -> alias.equal then
+                current[] -> info.is_alias_for[];
+                true -> found;
+                leave find;
+            if);
+         #);
+         (if not found then
+             'Warning: ' -> puttext;
+             alias[] -> puttext;
+             ' not found in symbol table!' -> putline;
          if);
-         '(# #)' -> outfile.puttext;
       // idl.constr_struct_type then
+         (* Both emit the definition of the construction mapping, and
+          * add the type to types.
+          *)
+         info.id[] -> outfile.puttext; ': ' -> outfile.puttext;
          t[] -> do_constr_struct_type;
+         'data' -> info.basic_type[];
       // idl.constr_union_type then
          'constr_union_type NYI' -> outfile.puttext;
       // idl.constr_enum_type then
+         (* Both emit the definition of the enum mapping, and
+          * add the type to types.
+          *)
+         info.id[] -> outfile.puttext; ': ' -> outfile.puttext;
          (info[],t[]) -> do_constr_enum_type;
+         'integer' -> info.basic_type[];
       // idl.void_type_spec then
-         'Object(# (* void *) #)' -> outfile.puttext;
+         'void' -> info.basic_type[];
       else
          'Oops, must have forgotten a type!' -> outfile.comment;
      if);
@@ -81,16 +104,14 @@ do_type_spec:
 
 do_type_declarator:
   (# t: ^idl.type_declarator;
-     ;
-     info: @declarator_info;
+     info: ^declarator_info;
      d: ^idl.declarators;
   enter t[]
   do t.getdeclarators -> d[];
      d.newscan
      (# d: ^idl.declarator;
-     do (info[], current[]) -> do_declarator;
-        info.id[] -> outfile.puttext;
-        ': '->outfile.puttext;
+     do &declarator_info[] -> info[] -> types.append;
+        (info[], current[]) -> do_declarator;
         (info[], t.gettype_spec) -> do_type_spec;
      #);
   #);
@@ -113,13 +134,13 @@ do_struct_type:
                 (info[], current[]) -> do_declarator;
                 info.id[] -> outfile.puttext;
                 ': '->outfile.puttext;
-                (if info.is_pointer or info.is_pointer_pointer then
+                (if info.pointer_level>0 then
                     '^' -> outfile.put;
                  else
                     '@' -> outfile.put;
                 if);
                 (info[], mem.gettype_spec) -> do_type_spec;
-                (if info.is_pointer_pointer then
+                (if info.pointer_level>1 then
                     'Holder' -> outfile.puttext;
                     info.id.copy -> refholders.append;
                 if);

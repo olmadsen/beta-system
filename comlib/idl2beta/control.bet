@@ -19,13 +19,71 @@ Control:
      refholders: @textlist;
      imports: @textlist;
      
-     (* Aliases to be used to hold (resolved) typedefs *)
-     alias: (# al, def: ^text;
-            enter (al[],def[])
-            exit THIS(alias)[]
+     declarator_info:
+       (* id is the name of a type, which is either a basic_type,
+        * or an alias (with possible pointer indirection) to another 
+        * type.
+        *)
+       (# id: ^text;
+          pointer_level: @integer;
+          comment: ^text;
+          attributes: @textlist;
+          basic_type: ^text;
+          is_alias_for: ^declarator_info;
+       #);
+     
+     (* FIXME: are types global, or can they be local
+      * to interfaces? For now we assume that all types
+      * are global.
+      *)
+     symbollist: list
+       (# element::declarator_info;
+          findsym: find 
+            (# name: ^text;
+               predicate::(# do (current.id[]->name.equal)->value #);
+            enter name[]
+            do INNER
             #);
-     aliases: @list(# element::alias#);
-
+       #);
+     types: @symbollist;
+     
+     print_types:
+       (# 
+       do 'Registered types: ' -> putline;
+          'id      pointer comment basic   alias   attributes'
+            -> putline;
+          '---------------------------------------------------------'
+            -> putline;
+          types.scan
+          (# 
+          do current.id[] -> puttext;
+             '\t' -> puttext;
+             (for current.pointer_level repeat
+                 '*' -> put;
+             for);
+             '\t' -> puttext;
+             (if current.comment[]<>NONE then
+                 current.comment[] -> puttext;
+             if);
+             '\t' -> puttext;
+             (if current.basic_type[]<>NONE then
+                 current.basic_type[] -> puttext;
+             if);
+             '\t' -> puttext;
+             (if current.is_alias_for[] <> NONE then
+                 current.is_alias_for.id[] -> puttext;
+             if);
+             '\t' -> puttext;
+             (if current.attributes[]<>NONE then
+                 current.attributes.scan
+                 (# 
+                 do current[] -> puttext;
+                    ',' -> put;
+                 #);
+             if);
+             newline;
+          #)
+       #);
   do
      block:
        (#
@@ -77,12 +135,12 @@ Control:
                    true -> quiet;
                    StartOfFilenames+1 -> StartOfFilenames;
                    restart args;
-                // ('-d' -> aText.equal) then 
+                // ('-d' -> aText.equal)  
                 // ('--debug' -> aText.equal) then 
                    true -> debug;
                    StartOfFilenames+1 -> StartOfFilenames;
                    restart args;
-                // ('-t' -> aText.equal) then 
+                // ('-t' -> aText.equal)  
                 // ('--trace' -> aText.equal) then 
                    true -> trace;
                    StartOfFilenames+1 -> StartOfFilenames;
@@ -127,6 +185,9 @@ Control:
                <<SLOT Translate:descriptor>>;
                Outfile.Epilog;
                Outfile.Close;
+               (if debug then
+                   print_types;
+               if);
                
                StartOfFilenames+1 -> StartOfFilenames;
                (if StartOfFilenames<=NoOfArguments then
