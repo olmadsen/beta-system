@@ -95,7 +95,6 @@ TransferRedPixels: external
   #);
 
 
-ANTIALIAS: (# exit true #);
 MICHAEL: (# exit true #);
 
 DRAW_MULTIPLE_OVALS: (# exit true #);
@@ -333,6 +332,7 @@ do (# windowid, pixmapid: @integer;
 -- PixmapSurfaceInit: doPart --
 do (content.private.pixels, content.width, content.height) -> init_tables;
    init_ovals;
+   false -> useGDI;
    
 
 -- PixmapSurfaceDrawText: doPart --
@@ -369,7 +369,31 @@ do (if (ROTATE AND (currentStyle[] <> NONE)) then
    if);
    
 -- PixmapSurfaceDrawLine: doPart --
-do (# drawSimpleLine: 
+do (# drawGDILine:
+        (# theLogbrush: @LOGBRUSH;
+           width: @integer;
+           x1, y1: @integer;
+           x2, y2: @integer;
+           hpen, prevpen: @int32u;
+        do BS_SOLID -> theLogbrush.lbStyle;
+           private.colorref -> theLogbrush.lbColor;
+           (if strokewidth > 0 then
+               strokewidth -> width;
+            else
+               1 -> width;
+           if);
+           (PS_GEOMETRIC + PS_SOLID + PS_ENDCAP_FLAT, width, theLogbrush[], 0, 0) 
+             -> ExtCreatePen
+             -> hpen;
+           
+           (private.hdc, hpen) -> SelectObject -> prevpen;
+           start -> transform -> (x1, y1);
+           end -> transform -> (x2, y2);
+           (private.hdc, x1, y1, 0) -> MoveToEx;
+           (private.hdc, x2, y2) -> LineTo;
+           (private.hdc, prevpen) -> SelectObject -> DeleteObject;
+        #);
+      drawSimpleLine: 
         (# 
         do start -> transform -> aamoveto;
            end -> transform -> aalineto;
@@ -451,10 +475,14 @@ do (# drawSimpleLine:
            if);
            
         #);
-   do (if strokewidth <= 1 then
-          drawSimpleLine;
+   do (if useGDI then
+          drawGDILine
        else
-          drawComplexLine;
+          (if strokewidth <= 1 then
+              drawSimpleLine;
+           else
+              drawComplexLine;
+          if);
       if);
    #);
 
@@ -475,7 +503,17 @@ do (# r: @ntRect;
    #);
    
 -- PixmapSurfaceDrawOval: doPart --
-do (if MICHAEL then
+do (if useGDI then
+       (# nullbrush: @integer;
+          prev: @integer;
+          xi, yi: @integer;
+       do (* NULL_BRUSH  -> GetStockObject -> nullbrush;
+          (private.hdc, nullbrush) -> SelectObject -> prev; *)
+          (0, 0) -> transform -> (xi, yi);
+          (private.hdc, xi, yi, xi + width, yi + height) -> Ellipse;
+          (* private.hdc, prev) -> SelectObject; *)
+       #);
+    else
        (# x, y: @integer;
           w, h: @integer;
           x1, y1: @integer;
@@ -484,19 +522,23 @@ do (if MICHAEL then
           height -> h;
           (x1, y1, w, h) -> fill_oval;
        #);
-    else
-       (# nullbrush: @integer;
-          prev: @integer;
-          xi, yi: @integer;
-       do NULL_BRUSH  -> GetStockObject -> nullbrush;
-          (private.hdc, nullbrush) -> SelectObject -> prev;
-          (0, 0) -> transform -> (xi, yi);
-          (private.hdc, xi, yi, xi + width, yi + height) -> Ellipse;
-          (private.hdc, prev) -> SelectObject;
-       #);
    if);
+   
 -- PixmapSurfaceFillOval: doPart --
-do (if MICHAEL  then
+do (if useGDI  then
+       (# nullpen: @integer;
+          prev: @integer;
+          x1, y1: @integer;
+       do (*NULL_PEN -> GetStockObject -> nullpen;
+          (private.hdc, nullpen) -> SelectObject -> prev;*)
+          (0, 0) -> transform -> (x1, y1);
+          x1 + strokewidth -> x1;
+          y1 + strokewidth -> y1;
+          
+          (private.hdc, x1, y1, x1 + width - 2*strokewidth, y1 + height - 2*strokewidth) -> Ellipse;
+          (* (private.hdc, prev) -> SelectObject; *)
+       #);
+    else
        (# x, y: @integer;
           w, h: @integer;
           x1, y1: @integer;
@@ -508,16 +550,6 @@ do (if MICHAEL  then
           width - 2*strokewidth -> w;
           height - 2*strokewidth -> h;
           (x1, y1, w, h) -> fill_oval;
-       #);
-    else
-       (# nullpen: @integer;
-          prev: @integer;
-          xi, yi: @integer;
-       do NULL_PEN -> GetStockObject -> nullpen;
-          (private.hdc, nullpen) -> SelectObject -> prev;
-          (0, 0) -> transform -> (xi, yi);
-          (private.hdc, xi, yi, xi + width, yi + height) -> Ellipse;
-          (private.hdc, prev) -> SelectObject;
        #);
    if);
 -- PixmapSurfaceDrawPolygon: doPart --
@@ -537,24 +569,26 @@ do (# flag: @boolean;
    #);
    
 -- PixmapSurfaceFillPolygon: doPart --
-do (# flag: @boolean;
-      xr, yr: @real;
-      fx, fy: @real;
-   do true -> flag;
-      points.scan
-      (#
-      do current -> transform -> (xr, yr);
-         (if flag then
-             (xr, yr) -> aamoveto;
-             (xr, yr) -> (fx, fy);
-             false -> flag;
-          else
-             (xr, yr) -> aalineto;
-         if);
-      #);
-      (fx, fy) -> aalineto;
-    #);
-   
+do (if NOT useGDI then
+       (# flag: @boolean;
+          xr, yr: @integer;
+          fx, fy: @integer;
+       do true -> flag;
+          points.scan
+          (#
+          do current -> transform -> (xr, yr);
+             (if flag then
+                 (xr, yr) -> aamoveto;
+                 (xr, yr) -> (fx, fy);
+                 false -> flag;
+              else
+                 (xr, yr) -> aalineto;
+             if);
+          #);
+          (fx, fy) -> aalineto;
+       #);
+       
+   if);
    
    (# ntPoints: [0] @integer;
       size: @integer;
@@ -642,7 +676,7 @@ do (# x, y: @integer;
                 ->result;
           if);
        else
-          (if (thePixmap.private.pixels <> 0)  then
+          (if (NOT useGDI) AND (thePixmap.private.pixels <> 0)  then
               thePixmap.width -> width;
               thePixmap.height -> height;
               (thePixmap.private.pixels, width * 4, 
@@ -655,7 +689,7 @@ do (# x, y: @integer;
               (hdcmem, thePixmap.private.handleToPixmap) -> SelectObject -> oldbmp;
               (private.hdc, x, y, thePixmap.width, thePixmap.height, hdcmem, 0, 0, SRCCOPY) -> BitBlt;
               (hdcmem, oldbmp) -> SelectObject;
-          hdcmem -> DeleteDC;
+              hdcmem -> DeleteDC;
           if);
       if);
 
@@ -687,6 +721,7 @@ do (# red, green, blue: @int8u;
       (PS_SOLID, 0, colorref) -> CreatePen -> private.pen;
       (private.hdc, private.pen) -> SelectObject -> DeleteObject;
       
+      colorref -> private.colorref;
    #);
    
 -- PixmapSurfacePush: doPart --
@@ -772,7 +807,7 @@ ntFrameRect: external
    old_brush: @integer;
    old_pen: @integer;
    current: ^Matrix;
-   
+   colorref: @int32u;
    doomed: @boolean;
 #)
 
@@ -978,7 +1013,13 @@ do (# theSurface: ^PixmapSurface;
    #);
    
 -- SetUseGDI: doPart --
-do 
+do (# theSurface: ^PixmapSurface;
+   do getShared -> theSurface[];
+      value -> theSurface.useGDI;
+   #);
    
 -- GetUseGDI: doPart --
-do 
+do (# theSurface: ^PixmapSurface;
+   do getShared -> theSurface[];
+      theSurface.useGDI -> value;
+   #);
