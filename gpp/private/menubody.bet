@@ -1,9 +1,6 @@
 ORIGIN '../gppinterface';
 INCLUDE '../prettyprintersetup'
-        'diagramattributes'
-        '~beta/designenv/v2.3/private/userdatabody'
-        '~beta/designenv/v2.3/private/designlist'
-        '~beta/designenv/v2.3/private/designobjectbody';
+        'diagramattributes';
 -- theFileMenuNewGraphicsPage: DoPart --
 do
    (if theDocument[] <> none then
@@ -28,10 +25,7 @@ do
 (# name,fname: @Text; help,ext: ^Text; didRecover: @boolean
 do
    (if callbackVerbose // true then 'CallBackOpenItem'->putline if);
-   'Select a .bet, '->help[];
-   mps.astFileExtension->help.putText;
-   ' or .diag file'->help.putText;
-   help->DSFileNameDialog->name;
+   fileDialog->name;
    name[]->openFile;
    (* thisOp:
     (if name.length > 0
@@ -84,7 +78,7 @@ do
 
 -- theFileMenuClose: Descriptor --
 (#
-   ok: @Boolean;
+   ok: @integer;
    frejaFile,autosaveFrejaFile,tildeFrejaFile,diagFile,autosaveDiagFile,
      tildeDiagFile: @file;
    groupFile,autosaveGroupFile,tildeGroupFile: @file;
@@ -93,8 +87,8 @@ do
    doNotSave,askSave: @boolean
 do
    (if CurrentDiagramName[] <> none then
-       'Close Current Diagram?'->DSUIGetUserYesOrNo->ok;
-       (if ok then
+       ('Close','Close Current Diagram?')->promptForBoolean->ok;
+       (if ok = yes then
            currentDiagramName[]->diagFile.name;
            '#'->(currentDiagramName.copy).append->autosaveDiagFile.name;
            '~'->(currentDiagramName.copy).append->tildeDiagFile.name;
@@ -116,8 +110,12 @@ do
                    true->askSave
                if);
                (if askSave then
-                   'Save Current Diagram?'->DSUIGetUserYesOrNo->ok->doClose;
-                   (if ok then Save.hit else true->doNotSave if)
+                   ('Close','Save Current Diagram?')->promptForBoolean->ok;
+                   (if ok = yes then
+                       Save.hit; true->doClose
+                    else
+                       true->doNotSave; false->doClose
+                   if)
                 else
                    true->doNotSave
                if)
@@ -139,7 +137,7 @@ do
                        (# 
                        do
                           currentGroupName->groupName;
-                          '.ast'->groupName.append;
+                          mps.astFileExtension->groupName.append;
                           groupName[]->groupFile.name;
                           '#'->(groupName.copy).append->autosaveGroupFile.name;
                           '~'->(groupName.copy).append->tildeGroupFile.name;
@@ -149,11 +147,10 @@ do
                               tildeGroupFile.name->putLine
                           if);
                           (if autosaveGroupFile.entry.exists then
-                              'rm .ast#'->putLine; autosaveGroupFile.delete
+                              autosaveGroupFile.delete
                           if);
                           (if tildeGroupFile.entry.exists and
                           groupFile.entry.exists then
-                              'mv .ast~ .ast'->putLine;
                               groupFile.name->tildeGroupFile.entry.rename
                           if)
                        #);
@@ -180,13 +177,7 @@ do
 -- theFileMenuSave: Descriptor --
 (#
    name: @Text;
-   dummyFilter: ##external;
-   pageList: ^ObjectList;
    filename,t: @Text;
-   cancelled: ^integerRef;
-   prompt: @text;
-   count: @ShortRef;
-   list: @IntegerRef;
    f: @file;
    diagFile,tildeDiagFile: @file;
    dirWriteable: (# f: @file enter f.name exit f.entry.writeable #);
@@ -227,7 +218,7 @@ do
                '#'->(fileName.copy).append->f.name;
                (if f.entry.exists then 'rm .freja#'->putLine; f.delete if)
             else
-               'No currentDiagramName?'->putline
+               'No currentDiagramName?'->stdErr.putline
            if);
            (if doQuit then sifSaveAndQuit else sifSave if);
            SaveLists;
@@ -249,12 +240,7 @@ do
            if);
            (if savedPages[] <> none then
                savedPages.ListToNodeIDs->savedPageIDs;
-               @@ savedPageIDs[1]->list;
-               savedPageIDs.range->count;
-               &integerRef[]->cancelled[];
-               ' '->prompt.puttext;
-               (@@ CurrentDiagramName.T[1],false,cancelled[],true,count,list,
-                dummyFilter##,prompt)->DSFileSavePagesAsDiagram;
+               (CurrentDiagramName[],savedPageIDs)->fileSavePagesAsDiagram;
                '#'->(currentDiagramName.copy).append->f.name;
                (if f.entry.exists then 'rm .diag#'->putLine; f.delete if);
                (if doQuit then (normal,' ')->stop if)
@@ -270,19 +256,9 @@ do
 #)  
 
 -- theFileMenuSaveAs: Descriptor --
-(#
-   name: @Text;
-   ext: ^Text;
-   dummyFilter: ##external;
-   pageList: ^ObjectList;
-   filename: @Text;
-   cancelled: ^integerRef;
-   prompt: @text;
-   count: @ShortRef;
-   list: @IntegerRef;
-   f: @file
+(# name: @Text; ext: ^Text; pages: [0] @integer; filename: @Text; f: @file
 do
-   ('Save Current Diagram As:','Save')->GppFileNameDialog->name;
+   fileDialog->name;
    (if name.length > 0
     // true then
        name->getExtension->ext[];
@@ -297,11 +273,8 @@ do
                'No currentDiagramName?'->putline
            if);
            SaveLists;
-           (count[],list[])->DSStrGetPageList;
-           &integerRef[]->cancelled[];
-           ' '->prompt.puttext;
-           (@@ name.T[1],false,cancelled[],true,count,list,dummyFilter##,prompt)
-             ->DSFileSavePagesAsDiagram;
+           theDocument.getPageList->pages;
+           (name[],pages)->fileSavePagesAsDiagram;
            (if doQuit then sifSaveAndQuit else sifSave if);
            '#'->(currentDiagramName.copy).append->f.name;
            'rm .diag#'->putLine;
@@ -325,12 +298,7 @@ do
 
 -- theFileMenuLoadGraphicsPage: DoPart --
 do
-     (#
-        filename: ^text;
-        pageCount: ^shortRef;
-        pageList,cancelled: ^integerRef;
-        pages: [0] @integer;
-        thePage: ^theDocument.Page
+     (# filename: ^text; pages: [0] @integer; thePage: ^theDocument.Page
      do
         (if theDocument[] = none then
             &OADDocument[]->theDocument[]->theOADDocument[];
@@ -341,45 +309,20 @@ do
             theOADDocument.theWorkPage.InvisibleNew;
             'WorkSheet'->theOADDocument.theWorkPage.PageTitle
         if);
-        &shortRef[]->pageCount[];
-        &integerRef[]->pageList[];
-        &integerRef[]->cancelled[];
-        &Text[]->filename[];
-        'untitled'->filename.puttext;
-        (@@ filename.T[1],true,pageCount[],pageList[],cancelled[])
-          ->DSFileLoadPage;
-        (if cancelled = 0 then
-            (pageCount,pageList)->GetIntList->pages;
-            (for i: pages.range repeat
-              &theDocument.Page[]->thePage[];
-              pages[i]->thePage.onInit;
-              thePage.onReadDiagram;
-              (* delete userdata to convert from possible OADPage to graphics page *)
-              (pages[i],10)->UDDeleteType
-            for)
-        if)
+        FileLoadPage->pages;
+        (for i: pages.range repeat
+          &theDocument.Page[]->thePage[];
+          pages[i]->thePage.onInit;
+          thePage.onReadDiagram;
+          (* delete userdata to convert from possible OADPage to graphics page *)
+          (pages[i],10)->theDocument.deleteUserDataType
+        for)
      #)  
 
 -- theFileMenuSavePageAsGraphics: DoPart --
 do
-     (#
-        thePage: ^theDocument.Page;
-        title,filename: @text;
-        cancelled: ^integerRef
-     do
-        theDocument.currentPage->thePage[];
-        (if thePage[] <> none then
-            thePage.pageTitle->title;
-            (if not title.empty then
-                title.scanAll
-                  (#  do (if ch <> ' ' then ch->filename.put if) #)
-             else
-                'untitled'->filename
-            if);
-            &integerRef[]->cancelled[];
-            (@@ filename.T[1],true,cancelled[])->DSFileSavePage
-        if)
-     #)  
+   theDocument.currentPage->thePage[];
+   (if thePage[] <> none then fileSavePage if)  
 
 -- hideShowSifItem: DoPart --
 do INNER hit  
@@ -1434,7 +1377,7 @@ do
      #)  
 
 -- TextAttributesItemHit: Descriptor --
-(#  do menuID.textMenu.textAttr->DSUIMenuExecute #)  
+(#  do docTextMenu.textAttrItem.execute #)  
 
 -- FitToTextItemHit: DoPart --
 do
@@ -1479,12 +1422,12 @@ do
      #)  
 
 -- RefreshItem: Descriptor --
-(#  do (menuID.pageMenu,menuID.pageMenu.Cleanup)->CallOAMenu #)  
+(#  do docPageMenu.cleanUpItem.execute #)  
 
 -- ReduceItem: Descriptor --
 (# thePage: ^Page
 do
-   (menuID.pageMenu,menuID.pageMenu.reduce)->CallOAMenu;
+   pageMenu.reduceItem.execute;
    currentPage->thePage[];
    (if thePage[] <> none then
        (if thePage.currentObject <> none then
@@ -1497,7 +1440,7 @@ do
 -- BlowupItem: Descriptor --
 (# thePage: ^Page
 do
-   (menuID.pageMenu,menuID.pageMenu.blowup)->CallOAMenu;
+   pageMenu.blowupItem.execute;
    currentPage->thePage[];
    (if thePage[] <> none then
        (if thePage.currentObject <> none then
@@ -1509,7 +1452,7 @@ do
 
 -- AttributesItem: Descriptor --
 (# 
-do (menuID.pageMenu,menuID.pageMenu.changeFatts)->CallOAMenu
+do docPageMenu.changeFattsItem.execute
 #)
 (* -- NewCommentHit: Descriptor --
  * (#  #)  
@@ -1585,21 +1528,14 @@ do
         if);
         true->theGroupPage.visible;
         (if theGroupPage.currentObject <> none then
-            theGroupPage.currentObject->theGroupPage.currentObject;
-            ((theGroupPage.currentObject).ID,true)->DSUIAutoPan
+            theGroupPage.currentObject
+              ->theGroupPage.currentObject (#  do true->autoPan #)
         if)
      #)
 #)  
 
 -- HidePageItem: Descriptor --
-(# 
-do
-   menuID.PageMenu.closepage
-     ->DSUIMenuExecute
-     (* false->theGroupPage.visible;
-      theWorkPage.currentObject
-      ->theWorkPage.currentObject (#  do true->autoPan #)*)
-#)  
+(#  do docPageMenu.closePageItem.execute #)  
 
 -- ShowWorkSheetItem: DoPart --
 do
@@ -1630,12 +1566,12 @@ do
    (if pages[] <> none then
        pages.scan
          (# thePage: ^page
-         do current[]->currentPage; menuID.PageMenu.closepage->DSUIMenuExecute
+         do current[]->currentPage; docPageMenu.closePageItem.execute
          #)
    if)  
 
 -- PageMenuPageOverView: DoPart --
-do menuID.PageMenu.strTree->DSUIMenuExecute  
+do docPageMenu.strTreeItem.execute  
 
 -- PageMenuInit: Descriptor --
 (# 
