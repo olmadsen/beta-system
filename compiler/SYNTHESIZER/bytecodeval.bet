@@ -449,39 +449,70 @@ methodCall: evVal
           (dr,false,false,false) -> mkComputedEvVal -> V[];
        #);
      asgToRefAdr::
-       (# EV: @ASTindex
+       (# EV: @ASTindex; ok: @boolean
        do 301 -> trace(#
                       do 'asgToRefAdr: '->display;
                          100 -> switchon;
                          sig.exitVal[] -> xA;
                          100 -> switchOff
                       #);
+          (* the method, including exit-part has been executed
+           * and a reference is returned on the stack. We must
+           * get the type of the reference and assign it to destEv
+           *)
           sig.exitVal[]->sematt.evCase
           (# objRef::
                (#
                do (0,false,EV.sonRef,chain[]) 
                     -> mkComputedRefEvVal
-                    -> V[]
+                    -> V[];
+                  true -> ok
                #);
              dynItemRef::
                (#
                do (0,false,EV.sonRef,chain[]) 
                     -> mkComputedRefEvVal
-                    -> V[]
+                    -> V[];
+                  true -> ok
                #);
              strucRef::
                (#
                do (0,false,EV.sonRef,chain[]) 
                     -> mkComputedRefEvVal
-                    -> V[]
+                    -> V[];
+                  true -> ok
                #);
              txtCst::
                (# T: ^text 
-               do EV.gettext->T[]; T->mkTxtCstEvVal->V[]
+               do EV.gettext->T[]; 
+                  T->mkTxtCstEvVal->V[];
+                  true -> ok
+               #);
+             insert::
+               (# xScan: @| scanXadr; gXl: ^| sematt.getNXlength
+               do (sig.thisMethodDesc[],rAbase.copy,0,chain[]) -> xScan; 
+                  &|sematt.getNXlength[] -> gXl[];
+                  (xScan.thisEv[],false,EV[],xScan.thisChain[])
+                    -> gXl;
+                  301->trace(#
+                            do 'insert: ' -> xT;
+                               gXl.thisEv[] -> xA
+                            #);
+                  (0,false,gXl.thisEv[],gXL.thisChain[]) 
+                    -> mkComputedRefEvVal
+                    -> V[];
+                  true -> ok
                #)
           #);
+          (if not ok then
+              1-> trace(#
+                       do 'asgToMethod:sig.ExitVal[]not handled: '->display;
+                          xN;
+                          sig.ExitVal[] -> xA
+                       #)
+          if);
           (rAbase[],destEV[],rChain[]) -> V.asgToRefAdr;
-          (0,false,destEv[],rChain[])->mkComputedRefEvVal->V[];
+          (0,false,destEv[],rChain[]) -> mkComputedRefEvVal -> V[];
        #);
      asgToRealAdr::
        (#
@@ -1354,3 +1385,632 @@ ExitMultiVal: evVal
   enter exitNo
   exit this(ExitMultiVal)[]
   #);
+getDclName:
+  (# VN: ^ASTindex; N: @ASTindex; T: ^text
+  enter VN[]
+  do VN -> N;
+     L:
+       (if N.label
+        // gram.nameApl then
+           N.dclref -> N;
+           N.gettext -> T[]
+        // gram.remote then
+           N.son -> N; N.brother -> N;
+           restart L
+        else
+           '\ngetDclName: case not covered ' ->putline
+       if)
+  exit T[]
+  #);
+findReceiver:
+  (# EV,rD,mD: ^ASTindex; (* EV = (remote <R> <foo>) 
+                           * rD = possible receiver desc
+                           * mD = methodDesc 
+                           *)
+     D: @ASTindex;
+     R: ^ASTindex;
+     descKind: @integer
+  enter(EV[],rD[],mD[])
+  do L:
+       (if EV.label 
+      // gram.remote then
+         EV.sonRef -> R[];
+         (thisDesc[],R[]) 
+           -> GetActualDesc 
+           -> (D,descKind);
+         301->trace(#
+                 do 'findReceiver:' -> xT; R[] -> xA; xN;
+                    D[] -> xA; xN; rD[] -> xA
+                 #); 
+         (if R.label = gram.thisObject then
+             (* is this always correct?*)
+             D[] ->rD[]
+          else
+             (if not (D->rD.equal) then
+                 D -> sematt.descChain
+                 (* scan super patterns *)
+                 (#
+                 do (if desc->rD.equal then
+                        (if not common.switch[188] then
+                            'Receiver: Got it'->putline;
+                        if);
+                        D[] -> rD[];
+                        leave L
+                    if)
+                 #);
+                 (* no match??? *)
+                 D[] -> rD[]
+         if)if)
+      // gram.nameApl then
+         (* added to handle call from gram.virtual case *)
+         EV.dclRef -> D;
+         D.sort -> D;
+         (if D.label
+          // gram.virtualDecl
+          // gram.bindingDecl
+          // gram.finalDecl then
+             (*1->trace(#do 'findReceiver: ' -> xT; D[] -> xA #);*)
+             D[] -> sematt.EncDescOfNode -> R[]
+          else
+             (*1->trace(#
+                     do 'findReceiver:case not covered:  ' -> xT; D[] -> xA
+                     #);*)
+             D[] -> sematt.EncDescOfNode -> R[]
+         if);
+         (if not (R->rD.equal) then
+             rD -> sematt.descChain
+             (#
+             do (if desc->R.equal then
+                   (* 1->trace(#
+                            do 'finReceiver:gotIt: ' -> xT;
+                               rD[] -> xA
+                            #);*)
+         if)#)if);
+         (* so basically we just check consistency of enter arg rD
+          * which should be the receiver - so we may skip this
+          * call
+          *)
+      // gram.thisObject then
+         '\nfindReceiver:ThisObject'->puttext
+     if)
+  exit rD[]
+  #);
+
+mkByteCodeCall: 
+  (* incredibly ugly - FIXME *)
+  (# EV: @ASTindex;
+     OA: ^mch.address; 
+     descId,class: ^text;
+     descNo: @integer; local: @boolean;
+     VN,receiver,method,finalMethod: @ASTindex;
+     receiverDesc: ^ASTindex;
+     W: ^evVal;
+     sigTxt: ^text;
+     sig: @theGen.Signature;
+     descKind: @integer;
+     isStatic,isRealStatic,isSingular,isFinal,isRemote,isVirtual
+     ,isCons
+     ,isVarPtn
+     ,hasArguments       (* true : if arguments to EV: A -> EV 
+                          * false: if no arguments: ;EV;
+                          *)
+     ,hasExit: @boolean; (* true : if a the return value is used
+                          * false: if not; then a possible return
+                          *        value should be popped
+                          *)
+     theThisDesc: @ASTindex; (* aliasing:-(*)
+     chain: ^DH.superChain;
+     A: ^mch.address
+  enter(EV,hasArguments,hasExit,chain[])
+  do EV.son -> VN;
+     '!mkByteCodeCall:'->mch.comment;
+     301->trace(# 
+               do 'mkBytecodeCall: ' -> xT; EV[] -> xA; VN[] -> xA;
+                  EV.sonRef -> xA
+               #);
+     thisDesc -> theThisDesc;
+     (if VN.label = gram.objectDescriptor then
+         (* make sure that innerdesc.getID is defined *)
+         (VN,common.itemKind,2,null)->DS.push;
+     if);
+          (EV.sonRef,chain[],true) -> sig.setMethodDesc; 
+     &ASTindex[] -> receiverDesc[]; 
+     301->trace(# do 'mkBytecodeCall:label:'->xT;
+                  VN.label -> xI
+               #);
+     (if VN.label 
+      // gram.remote then
+         (# md: @ASTindex; mdo: ^ASTindex
+         do (* VN = R.foo *) 
+            VN.son -> receiver;
+            receiver.brother -> method;
+            (if receiver.label = gram.thisObject then
+                301->trace(#
+                          do 'mkByteCodecall.this(foo).m:receiver: '->xT;
+                             receiver[] -> xA
+                          #)
+             else
+                (* OBS receiver is NOT used anymore *)
+                receiver -> sematt.getName -> receiver; 
+                (* receiver = R, method = foo *)  
+                (* NOTE! below is an alternative - and correct - method
+                 * for computing the desc of the receiver; we just use
+                 * the origin of the method desc. In most cases this is the
+                 * same as above, but for virtual methods bound to global
+                 * patterns, this is not the same; the above code should
+                 * be removed
+                 *)
+            if);
+            (* EV = R.foo 
+             * NOTE: EV is reference or similar, and then
+             *       EV.sonRef = (remote <R> <foo> )
+             *)
+            301->trace(#
+                      do 'mkBytecodecall:remote:'->xT; 
+                         EV[] -> xA;
+                         ' sonRef: '->xT; EV.sonRef -> xA
+                      #);
+            (thisDesc[],EV.sonRef) 
+              -> GetActualDesc 
+              -> (md,descKind);
+            301->trace(#
+                      do 'mkBytCodeCall: ' -> xT; md[] -> xA
+                      #);
+            (* Problem with
+             *   T: (# foo: (# ... #) #)
+             *   TT: T(# #);
+             *   R: ^TT
+             *   R.foo
+             * method:  (# ... #) i.e. desc of foo
+             * receiver: origin(method) = T
+             * it should be TT
+             *   T: (# V:< A #);
+             *   TT: T(# V:: AA #);
+             *   TTT: TT (# #)
+             *   S1: ^TT;
+             *   S2: ^TTT
+             *   S1.V;  - is reciever origin of AA or the most specific
+             *   S2.V   - subpattern of origin of AA? 
+             *            then it is complicated
+             *)
+            md[] -> sematt.descOrigin -> mdo[];
+            301->trace(#
+                    do 'mkByteCall:remote:mdo:'->xH; mdo[] -> xA; xN;
+                       md[] -> xA
+                    #);
+            (EV.sonRef,mdo[],md[]) -> findReceiver -> mdo[];
+            mdo -> receiverDesc;
+            true -> isRemote;
+            (if true then
+                (* compute receiver as actual desc of R in R.foo 
+                 * previously we could not do this for virtuals
+                 * bound to global patterns???
+                 *)
+                
+            if);
+            (if (md->sematt.descKind) 
+             // sematt.staticProcKind then
+                (if not common.switch[188] then
+                    'staticCall'->putline;
+                if);
+                true -> isRealStatic;
+                sig.markRealStatic; (* isStatic is used for
+                                     * patterns at outermost levels
+                                     * in lib-files
+                                     *)
+             // sematt.consKind then
+                301->trace(#
+                        do 'mkByteCodeCall:cons: '->xT;
+                           'methodDesc: ' -> xT; md[] -> xA; xN;
+                           'receiverDesc: '->xT; receiverDesc[] -> xA;
+                        #);
+                (* Create instance of: receiverDesc
+                 * with constructor  : methodDesc
+                 *)
+                true -> isCons;
+                md -> method
+            if);
+            301 -> trace(# 
+                        do 'mkByteCodeCall:remote:2: ' -> xH;
+                           'methodDesc: ' -> xT; md[] -> xA; xN;
+                           'receiverDesc: '->xT; receiverDesc[] -> xA;
+                        #)
+         #)
+      // gram.nameApl then
+         (* VN = foo 
+          * means: originN....origin2.origin1.foo
+          * N >= 0
+          *)
+         VN -> method;
+         testLibLevel: (* is this a pattern at the outermost
+                        * lib level*)
+           (# org: @ASTindex
+           do sig.thisMethodDesc.origin -> org;
+              (* dont work if virtual?*)
+              (if org.label
+               // gram.attributesForm then
+                  301->trace(#
+                            do 'Pattern: ' -> xT;
+                               VN[] -> xA;
+                               ' is at the outermost lib level' -> xT
+                            #);
+                  'invoke static ' -> mch.comment;
+                  true -> isStatic;
+               else
+                  (* to find originN, go origin meth.N times *)
+                  thisDesc -> receiverDesc;
+                  (for i: method.on repeat
+                       receiverDesc[] -> sematt.descOrigin -> receiverDesc[]
+                  for);
+                  (if false then
+                      (* ok for calling V declared as V:: T
+                       * not ok for     V declared as V:< T
+                       *)
+                  (# md: @AStindex; mdo: ^AStindex
+                  do (thisDesc[],EV.sonRef) 
+                       -> GetActualDesc 
+                       -> (md,descKind);
+                     md[] -> sematt.descOrigin -> mdo[];
+                     mdo -> receiverDesc;                  
+                  #)if)
+              if);
+           #)
+      // gram.objectDescriptor then
+        301->trace(#
+                   do 'objectdescriptor: ' -> xT;
+                      VN[] -> xA;
+                   #);
+         VN -> method; (* NOTE: VN IS AN OBJECTDESCRIPTOR *)
+         method -> receiverDesc;
+         (* Here we need to find the right origin of the method *)
+         (if true then
+             receiverDesc[] -> sematt.descOrigin -> receiverDesc[];
+             (if receiverDesc.label 
+              // gram.descriptorForm (*then
+                 receiverdesc.xorigin -> receiverdesc;*)
+              // gram.doPart then
+                 receiverdesc.xorigin -> receiverdesc;
+                 receiverdesc.slotOrigin -> receiverdesc;
+             if)
+          else
+             receiverDesc.origin -> receiverDesc;
+         if);
+         (* (receiverDesc[],screen[],500) -> thePP;*)
+         true -> isSingular;
+         (*(VN,common.itemKind,2,null)->DS.push;*)
+         301->trace(# do 'mkBytecodeCall3: VN:' -> xT; VN[] -> xA #);
+      // gram.unExpanded then
+         301->trace(#
+                   do 'MkByteCodeCall:DescriptorSlot: ' -> xT; VN[] -> xA 
+                   #);
+         VN[] -> sematt.enclosingDesc -> receiverDesc[];
+                      
+         receiverDesc[] -> theGen.descLocation -> sig.location[];
+         301->trace(#
+                   do 'mkByteCodeCall:unExpanded:receiverLocation: "' -> xT;
+                      (if sig.location[] = none then 
+                          'none' -> xT
+                       else 
+                          sig.location[] -> xT
+                      if);
+                      '"' -> put
+                   #);
+         VN -> method;
+         (VN,common.itemKind,3,VN) -> DS.push;
+         true -> isSingular (* hack *)
+      // gram.computedRemote then
+         (# MN,isVirt: @integer; xchain: ^DH.superChain;
+            remEv,N,ref,refDesc: ^ASTindex;
+         (* (E).method 
+          * DOES NOT WORK
+          *)
+         do VN.son -> receiver;
+            receiver.brother -> method;
+            L: receiver->scanList(#do currentNode->receiver; leave L #);
+            (if true then
+                301->trace(#
+                          do 'mkByteCodeCallX: ' -> xT;
+                             VN[] -> xA
+                          #);
+                (VN[],DH[],chain[]) 
+                  -> sematt.chkComputedEval 
+                  -> (remEv[],N[],ref[],receiverDesc[],xchain[]);
+                301->trace(#
+                          do 'mkByteCodeCallY: ' -> xT;
+                             receiverDesc[] -> xA
+                          #);
+                
+             else
+                (chain[],(receiver.sonRef).son)  
+                  -> DH.theDescForm 
+                  -> (receiverDesc,MN,xchain[],isVirt);
+            if)
+         #)
+      else
+         '\n**** insert is NOT remote or nameApl'->putline
+     if);
+     (if isCons then
+         301->trace(#
+                 do 'cons: ' -> xT; receiverdesc[]->xA #);
+         (receiverDesc[],common.itemKind) -> theGen.newInstance
+         (# 
+         do mch.nop;
+            (if false then
+            (if hasOrigin then
+                (baseAdr.copy,thisDesc[],EV.sonref,thisSuperChain)
+                  -> genOrgAdrToOrgReg
+                  -> OA[];
+            if);if);
+            (method[],false,chain[]) -> consSig.addConstructorDesc;
+(*            1->trace(#do 'X:'->xT; conssig.astext->xT #);*)
+            false -> sig.isStatic;
+            'olsen' -> sig.addMethod;
+            method[] -> sig.addEnter;
+            sig.setVoidXSig; 
+            (*1->trace(#do sig.astext -> xT #);*)
+            ((receiverDesc[],true) -> descName,receiverDesc[]) 
+              -> sig.addReceiver;
+            INNER MkByteCodeCall
+         #);
+         (mch.thisRegOp,false,EV[],chain[]) -> mkComputedRefEvVal -> W[]
+      else
+     (if not isStatic then
+         ('G',receiverDesc[]) -> mkEntryPoint -> (class[],local);
+         301->trace(#
+                   do 'mkByteCodeCall:receiver: ' -> xT; class[] -> xT; xN;
+                      receiverDesc[] -> xA
+                   #);
+         (class[],receiverDesc[]) -> sig.addReceiver;
+     if);
+     L:
+     (if not isSingular then
+         method.dclRef -> finalMethod;
+         finalMethod.sort -> finalMethod;
+         301 -> trace(#
+                     do 'mkBytecodeCall:method.dclRef: ' -> xT;
+                        finalMethod[] -> xA
+                     #);
+
+         (if finalMethod.label = gram.finalDecl then
+             true -> isFinal;
+             method.dclRef -> finalMethod;
+             (if not isRemote then
+                 (# md: @AStindex; mdo: ^AStindex
+                 do (thisDesc[],EV.sonRef) 
+                      -> GetActualDesc 
+                      -> (md,descKind);
+                    md[] -> sematt.descOrigin -> mdo[];
+                    mdo -> receiverDesc;                  
+                    ((receiverDesc[],true) -> descName,receiverDesc[]) 
+                      -> sig.addReceiver
+         #)if)if);         
+         method.descRef -> method;
+         301 -> trace(#
+                     do 'mkBytecodeCall:method.descref: ' -> xT;
+                        method[] -> xA
+                     #);
+         LL: 
+           (if method.label 
+            // gram.objectDescriptor 
+            // gram.unExpanded then
+               method -> receiverDesc
+            // gram.finalDecl then (** ??? **)'FINAL'->putline;
+            // gram.bindingDecl then
+
+               method.son -> method;
+               L:
+                 method -> scanList
+               (# do currentNode -> method; leave L #);
+               method.virtDcl -> method;
+               method.sort -> method;
+               restart LL
+               
+            // gram.virtualDecl then
+               method.son -> method;
+               method.brother -> method; (* assume desc here *)
+               false -> isStatic; (* V:< T never be in an attributes form *)
+               true -> isVirtual;
+               (* perhaps we should explicitly set the receiver? *)
+               (if (EV.sonRef).label = gram.nameApl then
+                   (* are we sure the other cases are covered? *)
+                   (*1->trace(#
+                           do 'mkByteCodeCall:virtual: ' -> xT; EV[] -> xA; 
+                              ' on:'->xT; (EV.sonRef).on -> xI; xN;
+                              thisDesc[] -> xA
+                    #);*)
+                   thisDesc -> receiverDesc;
+                   (for i: (EV.sonRef).on repeat 
+                        receiverDesc[] -> sematt.DescOrigin -> receiverDesc[]
+                   for);
+                   (EV.sonRef,receiverDesc[],none) 
+                     -> findReceiver -> receiverDesc[];
+                   ((receiverDesc[],true)->descName,receiverDesc[]) 
+                     -> sig.addReceiver;
+               if)
+            // gram.variablePattern then
+               (* R: (# F: ##T
+                *    do ... F
+                * receiverDesc: R
+                * methodName  : F
+                * methodDesc  : T
+                *)
+               301->trace(#
+                         do 'mkByteCodeCall:varPtn: ' -> xT;
+                            EV[] -> xA;
+                         #);
+               true -> isVarPtn;
+               false -> isStatic;
+               method[] -> sematt.EncDescOfNode -> receiverDesc[];
+               ((receiverDesc[],true)->descName,receiverDesc[]) 
+                 -> sig.addReceiver;
+               sig.thisMethodDesc -> method;
+               301->trace(#
+                         do 'mkByteCodeCall:varPtn:X: ' -> xH;
+                            'receiver: '->xT; receiverDesc[] -> xA; xN;
+                            'methodName: ' -> xT; VN.gettext -> xT; xN;
+                            'methodDesc: ' -> xT; method[]->xA
+                         #);
+           if);
+         301 -> trace(# 
+                     do 'call2:receiver:'->xH;
+                        receiverDesc[] -> xA; xN; 
+                        'method: '->xT; method[] -> xA; 
+                     #);
+2         
+     if);
+
+     (if isStatic then
+         ((method[],true) -> descName,method[]) -> sig.addReceiver;
+         sig.markStatic
+     if);
+     (* set the name of the method *)
+     (if isVarPtn then
+         VN.gettext -> sig.addMethod;
+      else 
+         (if (sig.thisMethodDesc -> sematt.descKind) = sematt.procKind then
+             method[]  -> theGen.getExternalClassName -> sig.addMethod
+          else
+             (*1->trace(#do 'addMethod: ' -> xT; method[] -> xA; xN;
+                        'VN: ' -> xT; VN[] -> xA;
+                        'VN.text: ' -> xT; VN[] -> getDclName -> xT
+                     #);*)
+             (if isFinal and isRemote then
+                 VN[] -> getDclName -> sig.addMethod 
+              else
+                 (method[],false) -> descName -> sig.addMethod
+             if)
+         if)
+     if);
+     (* the following should be generalised? *)
+     (if method.isSlot then
+         sig.noEnter
+      else
+         method[] -> sig.addEnter
+     if);
+     
+     (if method.isSlot then
+         sig.setVoidXSig
+      else
+         (# p,mp,att,n,doP,exitP,EV: ^ASTindex; S: ^text
+         do sig.thisMethodDesc[] (* descriptor for method *)
+              -> sematt.descSonsRef
+              -> (p[],mp[],att[],n[],doP[],exitP[]);
+        
+            (if exitP[] <> none then
+                exitP[] -> sig.addExit
+             else
+                sig.setVoidXSig
+            if)
+     #)if);
+     sig.asText -> class[];
+     301 ->trace(#do 'class: ' -> xT;  class[] -> xT #);
+     (if not hasArguments 
+         and (((sig.NNsig.top > 0) and not isStatic)
+              or ((sig.NNsig.top > 1) and isStatic)) then
+         (* is receiverDesc the right originDesc here?
+          * is it ok with topDesc = none
+          *)
+         (# xD: @ASTindex; ba: ^mch.address;
+            oldReturnSaved,oldInNDX: @boolean;
+            mDesc: ^ASTindex;
+         do thisDesc->xD;
+            theThisDesc -> thisDesc;
+            baseAdr.copy -> ba[];
+            inEnterDoExitMethod -> oldInNDX;
+            theGen.returnSaved -> oldReturnSaved;            
+            (* instead of this clumsy save of global state,
+             * we should make a new instance of theGen
+             *)
+            301 ->trace(#
+                       do 'mkByteCodeCall:inlineMethod1:'->xT;
+                        method[] -> xA; 
+                        ' VN: ' -> xT; VN[] -> xA;
+                        ' on: ' -> xT; VN.on -> xI;
+                        xN;
+                        'thisDesc: ' -> xT;
+                        thisDesc[] -> xA; xN;
+                        'theThisDesc: '->xT; 
+                        theThisDesc[] -> xA; xN;
+                        'baseAdr.bAdr.localDesc: ' -> xT;
+                        baseAdr.bAdr.localDesc[] -> xA; xN;
+                        baseadr.display->xT; 
+                      #);
+            (if isVirtual then
+                301->trace(#do 'Virtual:genPtnMethod: '->xT; method[]->xA #);
+                method[] -> mDesc[];
+             else
+                sig.thisMethodDesc[] -> mDesc[]
+            if);
+            ('inline$',mDesc[]
+            ,false,false,receiverDesc[],none(*?*)
+            ,true,false,true)
+              -> theGen.genPtnMethod
+            (# 
+            do xD -> thisDesc;
+               (baseAdr.copy,theThisDesc[],VN[],EHchain[])
+                 -> genOrgAdrToOrgReg
+                 -> OA[];
+               xD -> thisDesc;
+               ba[] -> baseAdr[];
+            #);
+            xD -> thisDesc;
+            ba[] -> baseAdr[];
+            oldInNDX -> inEnterDoExitMethod;
+            301 ->trace(#
+                       do 'mkByteCodeCall:inlineMethod2:'->xT; 
+                          method[]->xA; xN;
+                          baseAdr.bAdr.localDesc[] -> xA; xN;
+                          baseadr.display->xT; xN;
+                          thisDesc[] -> xA
+                       #);
+            (if thisDesc.label = gram.doPart then
+                (* we should probably always do this *)
+                theRealDesc[] -> theGen.InitGen
+                (#
+                do &ASTindex[] -> doP[]; 
+                   thisDesc.son -> doP;                 
+                   doP[] -> setDoP
+                #);
+                (theRealDesc[],true) -> theGen.initPtnGen;
+                xD -> thisDesc; (* is overwritten by initPtnGen *)
+                301->trace(#
+                          do 'mkByteCodeCall:inlineMethod2:'->xT; 
+                             'TheRealDesc: ' -> xT; theRealDesc[] -> xA; xN;
+                             'FormDesc: ' -> xT; FormDesc[] -> xA; xN;
+                             'ThisDesc: ' -> xT; thisDesc[] -> xA; xN;
+                          #);
+                
+                
+             else 
+                (thisDesc[],false) -> theGen.initPtnGen
+            if);
+            oldReturnSaved -> theGen.returnSaved; (* is set to false
+                                                   * in initPtnGen
+                                                   *)
+         #)
+      else
+         (if isFinal and isRemote then
+             (baseAdr.copy,VN.sonRef,false,EHchain[])->genAdr->OA[];
+             (OA[],mch.adrTop[]) -> mch.ldVal
+          else
+             (baseAdr.copy,theThisDesc[],VN[],EHchain[])
+               -> genOrgAdrToOrgReg
+               -> OA[];
+         if);
+         INNER;         
+         (class[]->mch.newTextOp,'M',local,isStatic or isRealStatic)
+           -> mch.gJsr;  
+     if);
+     (if not hasExit and (sig.XXsig.elmType <> 10 (*void*)) then
+         (if sig.XXsig.elmType = 6 (* real/double *) then
+             true -> mch.popStack
+          else
+             mch.popStack
+     if)if);
+     301->trace(#
+             do 'mkByteCode:end: '->xT; sig.asText -> xT; sig.thischain
+             #);
+         (sig[],sig.thisChain[]) -> methodCall -> W[]
+     if);
+  exit W[]
+  #)
