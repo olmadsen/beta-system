@@ -1,7 +1,14 @@
-char betarun_version[] = "BETARUN VERSION 5.3(84)";
+char betarun_version[] = "BETARUN VERSION 5.3(84+)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.99  2002/03/19 14:35:59  beta
+ * Fixed error with nti build of gas-based betarun.
+ * Added new directory betarun/GEN/gas, and eliminated older dirs.
+ * Betarun version number: 84
+ * Developer: datpete
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.98  2002/03/19 13:39:54  grouleff
  * underscore for gnu as well.
  * Betarun version number: 83 
