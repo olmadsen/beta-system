@@ -41,7 +41,7 @@ set _myopts_=%_opts_%
 
 rem call %OLD_BETALIB%\bin\generator %_myopts_%
 echo generator version %META_VERSION% 
-"%OLD_BETALIB%"\meta\%META_VERSION%\NTIgen %_opts_%
+"%OLD_BETALIB%\meta\%META_VERSION%\NTIgen" %_opts_%
 
 rem call %OLD_BETALIB%\bin\bobsit %_myopts_%
 echo bobsit version %BOBSGEN_VERSION%
@@ -60,11 +60,11 @@ echo Look at %_opts_%-parser.lst
 
 rem call %OLD_BETALIB%\bin\makepretty %_myopts_%
 echo makepretty version %PRETTYGEN_VERSION% 
-"%OLD_BETALIB%"\prettygen\%PRETTYGEN_VERSION%\NTImakepretty %_opts_%
+"%OLD_BETALIB%\prettygen\%PRETTYGEN_VERSION%\NTImakepretty" %_opts_%
 
 rem call %OLD_BETALIB%\bin\morepretty %_myopts_%
 echo morepretty version %PRETTYGEN_VERSION% 
-"%OLD_BETALIB%"\prettygen\%PRETTYGEN_VERSION%\NTImorepretty %_opts_%
+"%OLD_BETALIB%\prettygen\%PRETTYGEN_VERSION%\NTImorepretty" %_opts_%
 
 
 

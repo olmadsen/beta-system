@@ -24,7 +24,7 @@ goto getopts
 
 :execute
 rem Start the excutable
-"%BETALIB%"\utils\betawc\v1.2\nti\%sdk%\betawc %_opts_%
+"%BETALIB%\utils\betawc\v1.2\nti\%sdk%\betawc" %_opts_%
 
 rem Clean-up
 set _opts_=

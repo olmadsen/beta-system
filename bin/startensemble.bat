@@ -10,8 +10,8 @@ goto install_notes
 
 :sdk_set
 rem Start the executable
-if not exist "%BETALIB%"\distribution\v1.6\nti\%sdk%\ensembleDeamon.exe goto notexist
-"%BETALIB%"\distribution\v1.6\nti\%sdk%\ensembleDeamon.exe
+if not exist "%BETALIB%\distribution\v1.6\nti\%sdk%\ensembleDeamon.exe" goto notexist
+"%BETALIB%\distribution\v1.6\nti\%sdk%\ensembleDeamon.exe"
 goto done
 
 :set_betalib

@@ -24,7 +24,7 @@ goto getopts
 
 :execute
 rem Start the excutable
-"%BETALIB%"\utils\betafs\v1.2\nti\%sdk%\betafs %_opts_%
+"%BETALIB%\utils\betafs\v1.2\nti\%sdk%\betafs" %_opts_%
 
 rem Clean-up
 set _opts_=

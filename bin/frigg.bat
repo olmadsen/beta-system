@@ -24,7 +24,7 @@ goto getopts
 
 :execute
 rem Start the executable
-"%BETALIB%"\interfacebuilder\v1.6\nti\%sdk%\frigg %_opts_%
+"%BETALIB%\interfacebuilder\v1.6\nti\%sdk%\frigg" %_opts_%
 
 rem Clean-up
 set _opts_=

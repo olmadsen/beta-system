@@ -24,7 +24,7 @@ goto getopts
 
 :execute
 rem Start the excutable
-"%BETALIB%"\utils\betatar\v1.2\nti\%sdk%\betatar %_opts_%
+"%BETALIB%\utils\betatar\v1.2\nti\%sdk%\betatar" %_opts_%
 
 rem Clean-up
 set _opts_=

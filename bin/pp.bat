@@ -24,7 +24,7 @@ goto getopts
 
 :execute
 rem Start the executable
-"%BETALIB%"\pretty\v5.2\nti\%SDK%\pp %_opts_%
+"%BETALIB%\pretty\v5.2\nti\%SDK%\pp" %_opts_%
 
 rem Clean-up
 set _opts_=

@@ -24,8 +24,8 @@ goto getopts
 
 :execute
 rem Start the executable
-if not exist "%BETALIB%"\debugger\v2.3\nti\%sdk%\valhalla.exe goto notexist
-"%BETALIB%"\debugger\v2.3\nti\%sdk%\valhalla %_opts_%
+if not exist "%BETALIB%\debugger\v2.3\nti\%sdk%\valhalla.exe" goto notexist
+"%BETALIB%\debugger\v2.3\nti\%sdk%\valhalla" %_opts_%
 
 rem Clean-up
 set _opts_=
