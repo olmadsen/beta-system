@@ -1,16 +1,13 @@
 ORIGIN '~beta/basiclib/v1.6/betaenv';
 (* 
- * $RCSfile: RepetitionObject.bet,v $ $Revision: 1.6 $ $Date: 1997-08-15 10:51:38 $
+ * $RCSfile: RepetitionObject.bet,v $ $Revision: 1.7 $ $Date: 1997-09-24 14:31:18 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
  *       All rights reserved.
  *)
 
-MDBODY linux   'private/RepetitionObject_little'
-       nti     'private/RepetitionObject_little'
-       default 'private/RepetitionObject_big';
-
+BODY 'private/RepetitionObjectBody';
 
 --- lib:attributes ---
 memcpy: external
@@ -23,7 +20,9 @@ memcpy: external
   #);
 
 RepetitionObject:
-  (* Used to pass serialized objects around *)
+  (* Used to pass serialized objects around.
+   * Can also be used to pass simple datastructures through sockets.
+   *)
   (# r: [InitialRange]@Integer;
      initialRange:< 
        (# value: @Integer; 
@@ -47,11 +46,18 @@ RepetitionObject:
        exit l
        #);
                   
+     (* Like Get, except it does not update position *)
+     Peek: @(# exit r[r[2]] #);
+     
+     PeekLong: @ 
+       (# l: @Integer;
+       <<SLOT RepObjPeekLongDP:dopart>>   
+       exit l
+       #);
+     
      put: @
        (# enter r[r[2]]
-       do 
-          (if (r[2] + 1 -> r[2]) > r.range then r.range -> r.extend if);
-          (if r[2] > r[1] + 1 then r[2] - 1 -> r[1] if);
+       <<SLOT RepObjPutDP:dopart>>   
        #);
      
      (* Put a long, byteswapping it on little-endian machines. *)
@@ -75,24 +81,14 @@ RepetitionObject:
      makeSpace: @
        (# nlongs: @Integer;
        enter nlongs
-       do (if r[2] + nlongs > r.range then
-              (r[2] + nlongs + 10 - r.range, r.range) -> max -> r.extend;
-          if);
+       <<SLOT RepObjMakeSpaceDP:dopart>>
        #);
      
-     checkSize: @
-       (# 
-       do (if r[2] > r[1] + 1 then r[2] - 1 -> r[1] if)
-       #);
+     checkSize: @(# <<SLOT RepObjcheckSizeDP:dopart>> #);
      
      getText: @
        (# t: ^Text; len, wsize: @Integer;
-       do
-          &Text[] -> t[];
-          getLong -> len -> t.lgth -> t.pos;
-          (if len > t.T.range then len - t.T.range -> t.T.extend if);
-          (@@t.T[1], @@r[r[2]], len) -> memcpy;
-          r[2] + ((len + 3) div 4) -> r[2];
+       <<SLOT RepObjGetTextDP:dopart>>   
        exit t[]
        #);   
      
@@ -100,16 +96,28 @@ RepetitionObject:
        (# t: ^Text;
           len, wsize: @Integer;
        enter t[]
-       do t.length -> len -> putLong;
-          (len + 3) div 4 -> wsize -> makeSpace;
-          (@@r[r[2]], @@t.t[1], len) -> memcpy;
-          r[2] + wsize -> r[2];
-          (if r[2] > r[1] + 1 then r[2] - 1 -> r[1] if)
+       <<SLOT RepObjPutTextDP:dopart>>  
        #);
      
      firstPos: (# exit 3 #);
      initialSize: (# exit 2 #);
-     reset: (# do firstPos -> r[2] #);
+     reset: @(# <<SLOT RepObjResetDP:dopart>> #);
               
-     init: (# do (initialSize, firstPos) -> (r[1], r[2]) #)
+     init: @(# <<SLOT RepObjInitDP:dopart>> #);
+     
+     (* Safety checking procedures.
+      * As the operations above do NO parameter checking at all,
+      * the following functions may be used when the origin of
+      * a repetitionObject is uncertain.  
+      * They are also quite usefull to catch programming errors.
+      *)
+     
+     checkGet: BooleanValue
+       (# <<SLOT RepObjcheckGetDP:dopart>> #);
+     
+     checkGetText: BooleanValue
+       (# maxLen: @Integer;
+       enter maxLen
+       <<SLOT RepObjcheckGetTextDP:dopart>>
+       #);
   #);
