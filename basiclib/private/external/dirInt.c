@@ -104,11 +104,9 @@ int closedir(struct _DIR *dirp)
  * LongestFnc, Apply CallbackFnc to each entry found.
  * Return number of entries found, -1 if error 
  */
-int ScanDir(dir, LongestFnc, CallbackFnc) 
-char *dir;
-void (*CallbackFnc)();
-void (*LongestFnc)();
-{ int i, dnamlen, num = 0;
+int ScanDir(char *dir, int *longestP, int *numP, void (*CallbackFnc)(char*)) 
+{ 
+  int i, dnamlen, num = 0;
   int longest = 0;
   char **list;
   int listlen = 64;
@@ -116,6 +114,9 @@ void (*LongestFnc)();
   char *tmp;
   struct DIRENT *dp;
 
+  *longestP = 0;
+  *numP = 0;
+  
   if (!(dirp = opendir(dir)))
     return -1;
 
@@ -137,7 +138,8 @@ void (*LongestFnc)();
   closedir(dirp);
 
   if (num > 0) {
-    (*LongestFnc)(longest);
+    *longestP = longest;
+    *numP =num;
   } else { 
     free(list);
     return -1; 
@@ -145,7 +147,9 @@ void (*LongestFnc)();
 
   qsort((char*)list, num, sizeof(char *), strptrcmp);
 
-  /* Apply CallbackFnc to each entry */
+  /* Apply CallbackFnc to each entry 
+   * NB: Do NOT use longestP, numP after calling a calbackfunc! 
+   */
   for (i=0;i<num;i++) {
     (*CallbackFnc)(list[i]);
     free(list[i]);
