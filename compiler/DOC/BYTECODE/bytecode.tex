@@ -1130,20 +1130,18 @@ the return list.
 {\bf Statements}. BETA's if-, and for-statements also maps easily into CJ.
 
 \subsection{Leave and restart}
-In BETA is possible to exit a nested scope of method invocations. To
-implement this in CJ, a (complicated) structure of exceptions have to
-be set up.
+In BETA is possible to exit a nested scope of method invocations:
 
 {\tt\small\begin{verbatim}
-   foo:
+   Foo:
      (#
      do ...;
-        L: (# Foo: 
+        L: (# Bar: 
                 (# 
                 do ...; leave L; 
                    ...; restart L; ...
                 #);
-           do ...; Foo; ...
+           do ...; Bar; ...
            #);
         Lx: ...
      #)
@@ -1157,13 +1155,37 @@ equivalent to {\tt goto L}. Execution of {\tt leave}/{\tt restart} may
 take place within arbitrarely nested pattern invocations\footnote{%
   The patterns must be declared in the scope of {\tt L}, i.e. within
   the object labelled by {\tt L}} --- in the example shown within the
-pattern {\tt Foo}.
-  
-In CJ the only way to implement leave and restart is to use the
-execption mechanism. At the point of {\tt }L, an exception handler is
-set up to catch exceptions that may be casted by {\tt leave} and/or
+pattern {\tt Bar}. 
+
+Notice that this involves {\em stack unwinding}, since the stack
+frame for {\tt Bar} must be removed, before execution continues at
+{\tt Lx}. JVM and CLR both have bytecodes for making an arbitrary 
+jump to another bytecode, {\em but only within the current method}.
+The stack unwinding is thus not directly possible. It can be obtained,
+though, by using the exception mechanism. 
+At the point of {\tt L}, an exception handler is
+set up to catch exceptions that may be thrown by {\tt leave} and/or
 {\tt restart}.  {\tt Leave} or {\tt restart} are then implemented by
-casting the appropriate exceptions.
+throwing the appropriate exceptions. The exception thrown has to
+contain information about
+\begin{enumerate}
+\item The {\em} object to unwind to
+\item Which {\em} label in this object is the target
+\end{enumerate}
+\noindent
+At the label definition site the exception handler code must then test
+whether the object to unwind to is identical to itself {\em and} the
+target label is numbered identical to it's own label. If so, the
+handler makes an unconditional jump to the first statement after the
+labeled region. If both conditions are not met, the handler propegates
+(re-throws) the exception further up the stack.
+
+A special problem comes with implementing leave/restart across
+Coroutine borders. As detailed below, the current Coroutine
+implementation involves Threads, and the propagation of the
+leave/restart exception would thus involve catching the exception in
+the thread's entry point, and signal this to the parent thread. This
+has not yet been implemented.
 
 Although we have not yet made any performance measures of the
 resulting code, we expect the use of the exception mechanism to
