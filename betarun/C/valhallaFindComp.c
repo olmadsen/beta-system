@@ -9,7 +9,7 @@
 #if defined(MT) || defined(hppa)
 int scanComponentStack (Component* comp,
 			Object *curObj,
-			int PC,
+			int pc,
 			CellDisplayFunc forEach)
 { 
   fprintf(output, "scanComponentStack: NYI\n");
@@ -21,14 +21,14 @@ int scanComponentStack (Component* comp,
 static int compfound;
 static CellDisplayFunc DoForEach;
 
-static void ShowCell(long PC, Object *theObj)
+static void ShowCell(long pc, Object *theObj)
 {
-  if (compfound) DoForEach(PC, theObj);
+  if (compfound) DoForEach(pc, theObj);
 }
 
 int scanComponentStack (Component* comp,
 			Object *curObj,
-			int PC,
+			int pc,
 			CellDisplayFunc forEach)
 {
   /* scan through the stackpart corresponding to the comp parameter.
@@ -39,7 +39,7 @@ int scanComponentStack (Component* comp,
   
   DEBUG_VALHALLA(fprintf(output, 
 			 "scanComponentStack(comp=0x%x, obj=0x%x, PC=0x%x)\n",
-			 (int)comp, (int)curObj, PC));
+			 (int)comp, (int)curObj, pc));
 
   compfound = 0;
   DoForEach = forEach;
@@ -63,8 +63,8 @@ int scanComponentStack (Component* comp,
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: scanning ActiveComponent\n"));
     compfound = TRUE;
     stacktype = CS_ACTIVECOMPONENT;
-    DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", (int)PC, (int)curObj));
-    ShowCell(PC, curObj);
+    DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", (int)pc, (int)curObj));
+    ShowCell(pc, curObj);
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: ActiveComponent done\n"));
   } else {
     compfound=0;
@@ -95,7 +95,7 @@ int scanComponentStack (Component* comp,
     cbFrame          = ActiveCallBackFrame; 
 
     /* First check for errors occured outside BETA */
-    if (!IsBetaCodeAddrOfProcess(PC)){
+    if (!IsBetaCodeAddrOfProcess(pc)){
       if ((StackEnd<BetaStackTop) && (BetaStackTop<(long*)StackStart)){
 	/* BetaStackTop is in the active stack. Try continuing from there.
 	 * This will work if BETA called a C routine, but not if the error
@@ -124,7 +124,7 @@ int scanComponentStack (Component* comp,
        * called C will not be displayed by DisplayStackPart.
        * So we display it here.
        */
-      forEach(0 /*PC*/, currentObject);
+      forEach(0 /*pc*/, currentObject);
     }
     
     if (cbFrame){
@@ -137,7 +137,7 @@ int scanComponentStack (Component* comp,
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: other component blocks\n"));
     currentBlock     = lastCompBlock;
     currentObject    = currentComponent->CallerObj;
-    PC               = currentComponent->CallerLSC;
+    pc               = currentComponent->CallerLSC;
     currentComponent = currentComponent->CallerComp;
     
     while (currentBlock->next){
@@ -151,8 +151,8 @@ int scanComponentStack (Component* comp,
       high = (long *) currentBlock->next;
       cbFrame  = currentBlock->callBackFrame;
       if (!cbFrame) {
-	DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", (int)PC, (int)currentObject));
-	ShowCell(PC, currentObject);
+	DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", (int)pc, (int)currentObject));
+	ShowCell(pc, currentObject);
       }
       if (cbFrame){
 	low = DisplayCallbackFrames(cbFrame, low, currentObject, ShowCell);
@@ -160,7 +160,7 @@ int scanComponentStack (Component* comp,
       DisplayStackPart(low, high-3, currentObject, ShowCell); 
       currentBlock     = currentBlock->next;
       currentObject    = currentComponent->CallerObj;
-      PC               = currentComponent->CallerLSC;
+      pc               = currentComponent->CallerLSC;
       currentComponent = currentComponent->CallerComp;
     }
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: other component blocks done\n"));
@@ -188,17 +188,17 @@ GLOBAL(static Component *TheComponent);
 GLOBAL(static CellDisplayFunc DoForEach);
 GLOBAL(static int BasicItemShown);
 
-static void ShowCell(int PC, Object *theObj)
+static void ShowCell(int pc, Object *theObj)
 {
   if (theObj==(Object *)BasicItem){
     if (!BasicItemShown){
-      TRACE_SCAN(fprintf(output, ", PC=0x%x *\n", PC));
-      DoForEach(PC, theObj);
+      TRACE_SCAN(fprintf(output, ", PC=0x%x *\n", pc));
+      DoForEach(pc, theObj);
       BasicItemShown=TRUE;
     }
   } else {
-    TRACE_SCAN(fprintf(output, ", PC=0x%x *\n", PC));
-    DoForEach(PC, theObj);
+    TRACE_SCAN(fprintf(output, ", PC=0x%x *\n", pc));
+    DoForEach(pc, theObj);
   }
 }
 
@@ -208,8 +208,8 @@ static void HandleStackCell(Object **theCell,Object *theObj)
    * in outpattern.c. An abstraction could be useful (i.e. having
    * DumpCell take a CellDisplayFunc pointer as argument).
    */
-  register long PC;
-  long *SP;
+  register long pc;
+  long *sp;
 
   TRACE_SCAN(fprintf(output, 
 		     ">>>HandleStackCell: theCell=0x%x, theObj=0x%x",
@@ -243,17 +243,17 @@ static void HandleStackCell(Object **theCell,Object *theObj)
        * find the current object for that frame and dump it.
        * See figure in stack.c.
        */
-      SP = (long *)theCell+DYN_OFF; /* Frame starts DYN_OFF longs above dyn */
-      SP = (long*)GetSPbeta(SP);   /* SP-beta */
-      if (SP==0){
+      sp = (long *)theCell+DYN_OFF; /* Frame starts DYN_OFF longs above dyn */
+      sp = (long*)GetSPbeta(sp);   /* SP-beta */
+      if (sp==0){
       /* We passed the main+CallB frames */
       return;
       }
-      theObj = GetThis(SP);
-      PC = 0;  /* not known - is somewhere in the C frames */
+      theObj = GetThis(sp);
+      pc = 0;  /* not known - is somewhere in the C frames */
     } else {
-      SP = (long *)theCell+DYN_OFF; /* Frame starts DYN_O longs above dyn */
-      PC = *((long *)SP+PC_OFF);
+      sp = (long *)theCell+DYN_OFF; /* Frame starts DYN_O longs above dyn */
+      pc = *((long *)sp+PC_OFF);
     }
     
     /* Check if theObj IS a component */
@@ -265,7 +265,7 @@ static void HandleStackCell(Object **theCell,Object *theObj)
       
       return;
     } 
-    ShowCell(PC, theObj);
+    ShowCell(pc, theObj);
   } else {
     /* Not yet found */
     if (theObj==(Object *)TheComponent){
@@ -277,9 +277,9 @@ static void HandleStackCell(Object **theCell,Object *theObj)
        */	
       TRACE_SCAN(fprintf(output, " comp found\n"));
       CompFound=TRUE;
-      PC = ((Component *)theObj)->CallerComp->CallerLSC;
+      pc = ((Component *)theObj)->CallerComp->CallerLSC;
       theObj = ((Component *)theObj)->CallerObj;
-      ShowCell(PC, theObj);
+      ShowCell(pc, theObj);
       return;
     } 
     if (theObj && (GETPROTO(theObj)==ComponentPTValue)){
@@ -293,9 +293,9 @@ static void HandleStackCell(Object **theCell,Object *theObj)
 	 */
 	TRACE_SCAN(fprintf(output, " CallerComp is comp to scan\n"));
 	CompFound = TRUE;
-	PC = ((Component *)theObj)->CallerComp->CallerLSC;
+	pc = ((Component *)theObj)->CallerComp->CallerLSC;
 	theObj = ((Component *)theObj)->CallerObj;
-	ShowCell(PC, theObj);
+	ShowCell(pc, theObj);
 	return;
       } 
     }
@@ -305,10 +305,10 @@ static void HandleStackCell(Object **theCell,Object *theObj)
 
 int scanComponentStack (Component* comp,
 			Object *curObj,
-			int PC,
+			int pc,
 			CellDisplayFunc forEach)
 { /* scan through the stackpart corresponding to the comp parameter.
-   * PC is the top code-address.
+   * pc is the top code-address.
    * calling "forEach" for each (code-address, object) pair on the stack.
    */
   int stacktype=0;
@@ -321,7 +321,7 @@ int scanComponentStack (Component* comp,
 
   DEBUG_VALHALLA(fprintf(output, 
 			 "scanComponentStack(comp=0x%x, obj=0x%x, PC=0x%x)\n",
-			 (int)comp, (int)curObj, PC));
+			 (int)comp, (int)curObj, pc));
 
   if (comp->StackObj){
     StackObject *sObj = comp->StackObj;
@@ -345,7 +345,7 @@ int scanComponentStack (Component* comp,
   if (comp==ActiveComponent) {
     CompFound = TRUE;
     stacktype = CS_ACTIVECOMPONENT;
-    forEach(PC, curObj);
+    forEach(pc, curObj);
   }
   /* FIXME: What about PC outside BETA, compare code in outpattern.c */
   ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, TRUE, HandleStackCell);
@@ -404,7 +404,7 @@ typedef struct ComponentStack {
  * ========================== 
  */
 
-static void findComponentStack (ComponentStack* compStack, int PC)
+static void findComponentStack (ComponentStack* compStack, int pc)
 { 
   RegWin *thisCompBlock = (RegWin *) lastCompBlock;
   RegWin *prevCompBlock = 0;
@@ -436,7 +436,7 @@ static void findComponentStack (ComponentStack* compStack, int PC)
 
 	compStack->info.if_onstack.activeCBF 
 	  = (RegWin *) ActiveCallBackFrame;
-	compStack->returnAdr = PC;
+	compStack->returnAdr = pc;
 	
       }
       DEBUG_VALHALLA(fprintf (output,"Leaving findComponentStack. Stacktype = %d\n",compStack->stacktype));
@@ -470,7 +470,7 @@ static void findComponentStack (ComponentStack* compStack, int PC)
 
 int scanComponentStack (Component* comp,
 			Object *curObj,
-			int PC,
+			int pc,
 			CellDisplayFunc forEach)
 { 
   struct ComponentStack compStack;
@@ -479,7 +479,7 @@ int scanComponentStack (Component* comp,
 
   DEBUG_VALHALLA(fprintf (output,"Entering scanComponentStack. \n"));
 
-  findComponentStack (&compStack,PC);
+  findComponentStack (&compStack,pc);
 
   DEBUG_VALHALLA(fprintf (output,"FindComponentStack done. stacktype = %d. \n",compStack.stacktype));
 
@@ -515,7 +515,7 @@ int scanComponentStack (Component* comp,
 
       DEBUG_VALHALLA(fprintf(output,"BetaStackTop = %d\n",(int)BetaStackTop));
 
-      if (!IsBetaCodeAddrOfProcess(PC))
+      if (!IsBetaCodeAddrOfProcess(pc))
 	/* Skip external code on top of stack: */
 	while ((unsigned int) theAR < (unsigned int) BetaStackTop) {
 	  DEBUG_VALHALLA(fprintf(output,"External return address: "));

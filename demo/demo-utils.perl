@@ -345,7 +345,7 @@ sub setup_variables
 	    $ENV{'LD_LIBRARY_PATH'} = $lib;
 	    #print "LD_LIBRARY_PATH set to\n\t$lib\n";
 	} elsif ($mach =~ /^i86pc$/) {
-	    $objdir = 'sol_x86';
+	    $objdir = 'x86sol';
 	    $ast = "astL";
 	} else {
 	    print "Unknown/unsupported architecture.\n";

@@ -43,6 +43,12 @@
 #  endif
 #endif
 
+#ifdef i386
+#  ifdef __svr4__
+#    define x86sol
+#  endif
+#endif
+
 #ifdef hpux
 #ifdef hppa
 #define hpux9pa
@@ -66,6 +72,11 @@ typedef unsigned short u_short;
 
 /********** Machine specific definitions **********/
 #ifdef linux
+#define intel 1
+#define UNIX 1
+#endif
+
+#ifdef x86sol
 #define intel 1
 #define UNIX 1
 #endif

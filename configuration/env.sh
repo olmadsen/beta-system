@@ -114,6 +114,13 @@ case "`uname -m`" in
 			;;
 		esac
 		;;
+	i86pc)
+		#################### Solaris X86 configuration ######################
+		MACHINETYPE=X86SOL
+		objdir=x86sol
+		MOTIFHOME=${MOTIFHOME-/usr/dt}
+		MOTIFINC=${MOTIFINC-/usr/dt/include}
+		;;
 	IP[23][0127])
 		########### Silicon Graphics IRIX configuration #############
 		MACHINETYPE=SGI

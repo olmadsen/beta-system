@@ -42,10 +42,10 @@ static void NotifySignalDuringDump(int sig)
 
 
 #ifdef UNIX
-static int HandleInterrupt(Object *theObj, long *PC, int sig)
+static int HandleInterrupt(Object *theObj, long *pc, int sig)
 {
 #ifdef RTDEBUG
-  return DisplayBetaStack( InterruptErr, theObj, PC, sig);
+  return DisplayBetaStack( InterruptErr, theObj, pc, sig);
 #else
   if (Info0){
     fprintf(stderr, "\n# Beta execution interrupted by user.\n");
@@ -144,7 +144,68 @@ static void RestoreLinuxRegisters(SIGNAL_CONTEXT scp,
   }
   DEBUG_VALHALLA(fprintf(output, "\n"));
 }
+
 #endif /* linux */
+
+
+#ifdef x86sol
+void SaveX86SolRegisters(SIGNAL_CONTEXT scp, 
+			 register_handles *handles)
+{
+  DEBUG_VALHALLA({
+    fprintf(output, 
+	    "Sighandler: Saving registers (at PC=0x%08x) ",
+	    (int)scp->uc_mcontext.gregs[PC]);
+  });
+  DEBUG_VALHALLA(fprintf(output, "on ReferenceStack:\n"));    
+
+  if (scp->uc_mcontext.gregs[EDX] && inBetaHeap((Object*)scp->uc_mcontext.gregs[EDX]) && isObject((Object*)scp->uc_mcontext.gregs[EDX])){
+    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->uc_mcontext.gregs[EDX]));
+    SaveVar(scp->uc_mcontext.gregs[EDX]); handles->edx=1;
+  }
+  if (scp->uc_mcontext.gregs[EDI] && inBetaHeap((Object*)scp->uc_mcontext.gregs[EDI]) && isObject((Object*)scp->uc_mcontext.gregs[EDI])){
+    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->uc_mcontext.gregs[EDI]));
+    SaveVar(scp->uc_mcontext.gregs[EDI]); handles->edi=1;
+  }
+  if (scp->uc_mcontext.gregs[EBP] && inBetaHeap((Object*)scp->uc_mcontext.gregs[EBP]) && isObject((Object*)scp->uc_mcontext.gregs[EBP])){
+    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->uc_mcontext.gregs[EBP]));
+    SaveVar(scp->uc_mcontext.gregs[EBP]); handles->ebp=1;
+  }
+  if (scp->uc_mcontext.gregs[ESI] && inBetaHeap((Object*)scp->uc_mcontext.gregs[ESI]) && isObject((Object*)scp->uc_mcontext.gregs[ESI])){
+    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->uc_mcontext.gregs[ESI]));
+    SaveVar(scp->uc_mcontext.gregs[ESI]); handles->esi=1;
+  }
+  DEBUG_VALHALLA(fprintf(output, "\n"));
+}
+
+static void RestoreX86SolRegisters(SIGNAL_CONTEXT scp, 
+				   register_handles *handles)
+{
+  DEBUG_VALHALLA({
+    fprintf(output, "Sighandler: Restoring registers ");
+  });
+  DEBUG_VALHALLA(fprintf(output, "from ReferenceStack:\n"));
+  if (handles->esi>=0) {
+    RestoreIntVar(scp->uc_mcontext.gregs[ESI]);
+    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->uc_mcontext.gregs[ESI]));
+  }
+  if (handles->ebp>=0) {
+    RestoreIntVar(scp->uc_mcontext.gregs[EBP]);
+    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->uc_mcontext.gregs[EBP]));
+  }
+  if (handles->edi>=0) {
+    RestoreIntVar(scp->uc_mcontext.gregs[EDI]);
+    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->uc_mcontext.gregs[EDI]));
+  }
+  if (handles->edx>=0) {
+    RestoreIntVar(scp->uc_mcontext.gregs[EDX]);
+    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->uc_mcontext.gregs[EDX]));
+  }
+  DEBUG_VALHALLA(fprintf(output, "\n"));
+}
+
+#endif /* x86sol */
+
 
 #ifdef nti
 void SaveWin32Registers(SIGNAL_CONTEXT scp, 
@@ -315,13 +376,13 @@ void RestoreSGIRegisters(SIGNAL_CONTEXT scp,
 }
 #endif /* sgi */
 
-void set_BetaStackTop(long *SP)
+void set_BetaStackTop(long *sp)
 {
 #if defined(sparc) || defined(intel)
-  BetaStackTop = SP;
+  BetaStackTop = sp;
 #else 
 #ifdef NEWRUN
-  BetaStackTop[0] = SP;
+  BetaStackTop[0] = sp;
 #else
   fprintf(output, "set_BetaStackTop: Not implemented for this platform\n");
 #endif /* NEWRUN */
@@ -334,10 +395,10 @@ void set_BetaStackTop(long *SP)
 
 
 /******************** BEGIN general UNIX handler ***************************/
-#if defined(UNIX) && !defined(sun4s)
+#if defined(UNIX) && !(defined(sun4s) || defined(x86sol))
 
 #ifdef linux 
-#define GetPCandSP() { PC = (long *) scp.eip; StackEnd = (long *) scp.esp_at_signal; }
+#define GetPCandSP() { pc = (long *) scp.eip; StackEnd = (long *) scp.esp_at_signal; }
 #endif
 
 #ifdef hppa
@@ -366,12 +427,12 @@ void set_BetaStackTop(long *SP)
 
 #ifdef UseRefStack
 #define GetPCandSP() { \
-  PC = (long *) (scp->sc_pcoq_head & (~3)); \
+  pc = (long *) (scp->sc_pcoq_head & (~3)); \
   /* StackEnd not used */\
 }
 #else /* UseRefStack */
 #define GetPCandSP() { \
-  PC = (long *) (scp->sc_pcoq_head & (~3)); \
+  pc = (long *) (scp->sc_pcoq_head & (~3)); \
   StackEnd = (long *) scp->sc_sp; \
 }
 #endif /* UseRefStack */
@@ -421,7 +482,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   Object ** theCell;
 #endif
   Object *    theObj = 0;
-  long *PC;
+  long *pc;
   long todo = 0;
 
   DEBUG_CODE({
@@ -445,7 +506,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 
 #ifdef sgi
   { 
-    PC = (long *) scp->sc_pc;
+    pc = (long *) scp->sc_pc;
     theObj = CurrentObject = (Object *) scp->sc_regs[30];
     StackEndAtSignal = StackEnd = (long*) scp->sc_regs[29];
     if( !(inBetaHeap(theObj) && isObject(theObj))) theObj  = 0;
@@ -460,39 +521,39 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
        */
       switch((int)code){
       case BRK_DIVZERO:
-	todo=DisplayBetaStack(ZeroDivErr , theObj, PC, sig); break;
+	todo=DisplayBetaStack(ZeroDivErr , theObj, pc, sig); break;
       case BRK_OVERFLOW:
       case BRK_MULOVF:
-	todo=DisplayBetaStack(ArithExceptErr , theObj, PC, sig); break;
+	todo=DisplayBetaStack(ArithExceptErr , theObj, pc, sig); break;
       default:
 	if (scp->sc_fpc_csr & (1<<15)){
 	  /* Floating point division by zero cause bit set.
 	   * <sys/fpu.h>: ((union fpc_csr)scp->sc_fpc_csr).fc_struct.ex_divide0
 	   */
-	  todo=DisplayBetaStack(FpZeroDivErr , theObj, PC, sig); break;
+	  todo=DisplayBetaStack(FpZeroDivErr , theObj, pc, sig); break;
 	} else {
-	  todo=DisplayBetaStack(FpExceptErr, theObj, PC, sig); break;
+	  todo=DisplayBetaStack(FpExceptErr, theObj, pc, sig); break;
 	};
       }
       break;
     case SIGEMT:
-      todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack( EmulatorTrapErr, theObj, pc, sig); break;
     case SIGILL:
-      todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack( IllegalInstErr, theObj, pc, sig); break;
     case SIGBUS:
-      todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack( BusErr, theObj, pc, sig); break;
     case SIGSEGV:
       /* Either a segmentation fault in BETA or external code or
        * a refnone in BETA code.
        */
-      if (IsBetaCodeAddrOfProcess((unsigned long)PC)){
+      if (IsBetaCodeAddrOfProcess((unsigned long)pc)){
 	/* Could still be a segmentation fault. Would need to
 	 * do a disassembly to make a better guess.
 	 * Here we just guess that it is a refnone.
 	 */
-	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); 
+	todo=DisplayBetaStack( RefNoneErr, theObj, pc, sig); 
       } else {
-	todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); 
+	todo=DisplayBetaStack( SegmentationErr, theObj, pc, sig); 
       }
       break;
     case SIGTRAP:
@@ -501,14 +562,14 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 	DEBUG_VALHALLA(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
 	SaveSGIRegisters(scp, &handles);
 	/* Hit breakpoint */
-	todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); 
+	todo=DisplayBetaStack( IllegalInstErr, theObj, pc, sig); 
 	RestoreSGIRegisters(scp, &handles);
       } 
       break;
     case SIGINT: /* Interrupt */
-      todo=HandleInterrupt(theObj, PC, sig); break;
+      todo=HandleInterrupt(theObj, pc, sig); break;
     default: 
-      todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
+      todo=DisplayBetaStack( UnknownSigErr, theObj, pc, sig);  
     }
   }
 #endif
@@ -534,9 +595,9 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 	 * and take it from the stack.
 	 */
 	theObj = (Object *) *StackEnd++;
-	todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
+	todo=DisplayBetaStack( ZeroDivErr, theObj, pc, sig); break;
       } else {
-	todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig); break;
+	todo=DisplayBetaStack( FpExceptErr, theObj, pc, sig); break;
       }
       break;
     case 16: /* Floating Point Error */
@@ -552,55 +613,55 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 	/* SF: floating point stack fault */
 	if (fpu_sw & (1L<<9)){
 	  /* C1=1: overflow */
-	  todo=DisplayBetaStack( FpStackOflowErr, theObj, PC, sig); break;
+	  todo=DisplayBetaStack( FpStackOflowErr, theObj, pc, sig); break;
 	} else {
 	  /* C1=0: underflow */
-	  todo=DisplayBetaStack( FpStackUflowErr, theObj, PC, sig); break;
+	  todo=DisplayBetaStack( FpStackUflowErr, theObj, pc, sig); break;
 	}
       }
       if (fpu_sw & _FPU_MASK_ZM /*(1L<<2)*/ ){
 	/* ZE: zero divide. Hmmm, apparerently x/0.0 gives IE instead (:-( */
-	todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
+	todo=DisplayBetaStack( FpZeroDivErr, theObj, pc, sig); break;
       }
       /* Fall back: report general FP error */
-      todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack( FpExceptErr, theObj, pc, sig); break;
     default:	
-      todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack( ArithExceptErr, theObj, pc, sig); break;
     }
     break;
   case SIGILL:
-    todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( IllegalInstErr, theObj, pc, sig); break;
   case SIGBUS:
-    todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( BusErr, theObj, pc, sig); break;
   case SIGINT: /* Interrupt */
-    todo=HandleInterrupt(theObj, PC, sig); break;
+    todo=HandleInterrupt(theObj, pc, sig); break;
   case SIGTRAP: 
-    if ( (*((char*)PC-1)) == (char)0xcc ){
+    if ( (*((char*)pc-1)) == (char)0xcc ){
       /* int3 break */
-      scp.eip -= 1; /* PC points just after int3 instruction */
-      PC = (long *) scp.eip;
-      DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)PC));
+      scp.eip -= 1; /* pc points just after int3 instruction */
+      pc = (long *) scp.eip;
+      DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)pc));
     }
     {
       register_handles handles = {-1, -1, -1, -1};
       SaveLinuxRegisters(&scp, &handles);
-      todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); 
+      todo=DisplayBetaStack( EmulatorTrapErr, theObj, pc, sig); 
       RestoreLinuxRegisters(&scp, &handles);
     }
     break;
    case SIGSEGV:
     switch (scp.trapno) {
     case 5: /* Interrupt 5 generated by boundl */
-      todo=DisplayBetaStack(RepRangeErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack(RepRangeErr, theObj, pc, sig); break;
     case 12: /* Stack Fault */
       /* FIXME: does not work */
-      todo=DisplayBetaStack(StackErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack(StackErr, theObj, pc, sig); break;
     default:
-      todo=DisplayBetaStack(SegmentationErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack(SegmentationErr, theObj, pc, sig); break;
     }
     break;
   default: 
-    todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
+    todo=DisplayBetaStack( UnknownSigErr, theObj, pc, sig);  
   }
 #undef fpu_sw
 #endif /* defined(linux) */
@@ -641,27 +702,27 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 	 * Thus the actual BETA code address is in r31. However, the two
 	 * LSB seems to be used for some tagging, so we mask them off.
 	 */
-	PC = (long*)((scp->sc_gr31 & (~3)) - 8);
-	todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
+	pc = (long*)((scp->sc_gr31 & (~3)) - 8);
+	todo=DisplayBetaStack( ZeroDivErr, theObj, pc, sig); break;
       case 0xe: /* fp div by zero */
-	todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
+	todo=DisplayBetaStack( FpZeroDivErr, theObj, pc, sig); break;
       default: /* other floating point exception */
-	todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig);
+	todo=DisplayBetaStack( FpExceptErr, theObj, pc, sig);
       }
       break;
     case SIGEMT:
-      todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack( EmulatorTrapErr, theObj, pc, sig); break;
     case SIGILL:
-      todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig);
+      todo=DisplayBetaStack( IllegalInstErr, theObj, pc, sig);
       break;
     case SIGBUS:
-      todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack( BusErr, theObj, pc, sig); break;
     case SIGSEGV:
-      todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack( SegmentationErr, theObj, pc, sig); break;
     case SIGINT: /* Interrupt */
-      todo=HandleInterrupt(theObj, PC, sig); break;
+      todo=HandleInterrupt(theObj, pc, sig); break;
     default:
-      todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);
+      todo=DisplayBetaStack( UnknownSigErr, theObj, pc, sig);
   }
 #endif /* hppa */
 
@@ -695,7 +756,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 {
   Object ** theCell;
   Object *    theObj = 0;
-  long *PC;
+  long *pc;
   long todo = 0;
 
   /* Setup signal handlers for the Beta system */
@@ -712,7 +773,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 #ifndef MT
   StackEnd = (long *) ucon->uc_mcontext.gregs[REG_SP];
 #endif
-  PC = (long *) ucon->uc_mcontext.gregs[REG_PC];
+  pc = (long *) ucon->uc_mcontext.gregs[REG_PC];
 
 #ifndef MT
   DEBUG_VALHALLA(fprintf(output,"BetaSignalHandler: StackEnd set to 0x%x\n",(int) StackEnd));
@@ -729,16 +790,16 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
       /* The current BETA compiler generates calls to the (leaf) routine
        * .idiv to handle integer division. Thus we need to fix the PC value.
        */
-      PC = (long*) ucon->uc_mcontext.gregs[REG_O7];
-      todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
+      pc = (long*) ucon->uc_mcontext.gregs[REG_O7];
+      todo=DisplayBetaStack( ZeroDivErr, theObj, pc, sig); break;
     case FPE_FLTDIV: /* fp div by zero */
-      todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack( FpZeroDivErr, theObj, pc, sig); break;
     default: /* arithmetic exception */
-      todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig);
+      todo=DisplayBetaStack( FpExceptErr, theObj, pc, sig);
     }
     break;
   case SIGEMT:
-    todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( EmulatorTrapErr, theObj, pc, sig); break;
   case SIGILL: /* Illegal instruction or trap */
     switch(info->si_code){
     case ILL_ILLTRP:
@@ -747,33 +808,33 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
       case 0x80: /* Solaris 2.3, 2.4, 2.5 */
       case 0x100: /* Solaris 2.5.1 */
 	/* tle 16 trap => component stack overflow */
-	todo=DisplayBetaStack( StackErr, theObj, PC, sig); break;
+	todo=DisplayBetaStack( StackErr, theObj, pc, sig); break;
 #endif
       case 0x81: /* Solaris 2.3, 2.4, 2.5 */
       case 0x101: /* Solaris 2.5.1 */
 	/* tle 17 trap => ref none */
-	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
+	todo=DisplayBetaStack( RefNoneErr, theObj, pc, sig); break;
       default:
-	todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
+	todo=DisplayBetaStack( IllegalInstErr, theObj, pc, sig); break;
       }
       break;
     default:
-      todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack( IllegalInstErr, theObj, pc, sig); break;
     }
     break;
   case SIGBUS: /* Bus error */
-    todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( BusErr, theObj, pc, sig); break;
   case SIGSEGV: /* Segmentation fault */
-    if (IsBetaCodeAddrOfProcess((unsigned long)PC)){
-      todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig);
+    if (IsBetaCodeAddrOfProcess((unsigned long)pc)){
+      todo=DisplayBetaStack( RefNoneErr, theObj, pc, sig);
     } else {
-      todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig);
+      todo=DisplayBetaStack( SegmentationErr, theObj, pc, sig);
     }
     break;
   case SIGINT: /* Interrupt */
-    todo=HandleInterrupt(theObj, PC, sig); break;
+    todo=HandleInterrupt(theObj, pc, sig); break;
   default:  /* Unknown signal */
-    todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
+    todo=DisplayBetaStack( UnknownSigErr, theObj, pc, sig);  
   }
 
   if (todo) {
@@ -798,6 +859,114 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 #endif /* sun4s */
 /***************************** END sun4s ********************************/
 
+/******************************** BEGIN x86sol **************************/
+#ifdef x86sol
+
+static void ExitHandler(int sig)
+{
+  DEBUG_CODE({
+    fprintf(output, "\nExitHandler: Caught signal %d", (int)sig);
+    PrintSignal((int)sig);
+    fprintf(output, " during signal handling.\n");
+    fflush(output);
+  });
+  if (isMakingDump) {
+#if 0
+    NotifySignalDuringDump((int)sig);
+#endif
+  }
+  BetaExit(1);
+}
+
+void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
+{
+  Object *    theObj = 0;
+  long *pc;
+  long todo = 0;
+
+  DEBUG_CODE({
+    fprintf(output, "\nBetaSignalHandler: Caught signal %d", (int)sig);
+    PrintSignal((int)sig);
+    fprintf(output, ".\n");
+  });
+
+  /* Setup signal handlers for the Beta system */
+  signal( SIGFPE,  ExitHandler);
+  signal( SIGILL,  ExitHandler);
+  signal( SIGBUS,  ExitHandler);
+  signal( SIGSEGV, ExitHandler);
+  signal( SIGEMT,  ExitHandler);
+
+  
+  /* Set StackEnd to the stack pointer just before trap. 
+   * PC etc. are in /usr/include/sys/reg.h.
+   */
+  StackEnd = (long *) ucon->uc_mcontext.gregs[SP];
+  pc = (long *) ucon->uc_mcontext.gregs[PC];
+
+  DEBUG_VALHALLA(fprintf(output,"BetaSignalHandler: StackEnd set to 0x%x\n",(int) StackEnd));
+
+  /* Try to fetch the address of current Beta object from i0.*/
+  theObj = (Object *) ucon->uc_mcontext.gregs[EDX];
+
+  switch(sig){
+  case SIGFPE: 
+    switch(info->si_code){
+    case FPE_INTDIV: /* int div by zero */
+      todo=DisplayBetaStack( ZeroDivErr, theObj, pc, sig); break;
+    case FPE_FLTDIV: /* fp div by zero */
+      todo=DisplayBetaStack( FpZeroDivErr, theObj, pc, sig); break;
+    default: /* arithmetic exception */
+      todo=DisplayBetaStack( FpExceptErr, theObj, pc, sig);
+    }
+    break;
+  case SIGEMT:
+    {
+      register_handles handles = {-1, -1, -1, -1};
+      SaveX86SolRegisters(ucon, &handles);
+      todo=DisplayBetaStack( EmulatorTrapErr, theObj, pc, sig); 
+      RestoreX86SolRegisters(ucon, &handles);
+    }
+    break;
+  case SIGILL: /* Illegal instruction or trap */
+    todo=DisplayBetaStack( IllegalInstErr, theObj, pc, sig); break;
+  case SIGBUS: /* Bus error */
+    todo=DisplayBetaStack( BusErr, theObj, pc, sig); break;
+  case SIGSEGV: /* Segmentation fault */
+    if (IsBetaCodeAddrOfProcess((unsigned long)pc)){
+      todo=DisplayBetaStack( RefNoneErr, theObj, pc, sig);
+    } else {
+      todo=DisplayBetaStack( SegmentationErr, theObj, pc, sig);
+    }
+    break;
+  case SIGTRAP: 
+    if ( (*((char*)pc-1)) == (char)0xcc ){
+      /* int3 break */
+      ucon->uc_mcontext.gregs[EIP] -= 1; /* pc points just after int3 instruction */
+      pc = (long *) ucon->uc_mcontext.gregs[EIP];
+      DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)pc));
+    }
+    {
+      register_handles handles = {-1, -1, -1, -1};
+      SaveX86SolRegisters(ucon, &handles);
+      todo=DisplayBetaStack( EmulatorTrapErr, theObj, pc, sig); 
+      RestoreX86SolRegisters(ucon, &handles);
+    }
+    break;
+  case SIGINT: /* Interrupt */
+    todo=HandleInterrupt(theObj, pc, sig); break;
+  default:  /* Unknown signal */
+    todo=DisplayBetaStack( UnknownSigErr, theObj, pc, sig);  
+  }
+
+  if (!todo) {
+    BetaExit(1);
+  }
+}
+  
+#endif /* x86sol */
+/***************************** END x86sol ********************************/
+
 
 /***************************** BEGIN nti ********************************/
 #ifdef nti
@@ -820,14 +989,14 @@ int BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
   CONTEXT* pContextRecord = lpEP->ContextRecord;
 #endif /* nti_ms */
   Object *theObj = 0;
-  long *PC;
+  long *pc;
   long todo = 0;
   long sig;
 
   if (NoCatchException) return OUR_EXCEPTION_CONTINUE_SEARCH;
   
   if (pContextRecord->ContextFlags & CONTEXT_CONTROL){
-    PC       = (long *)pContextRecord->Eip;
+    pc       = (long *)pContextRecord->Eip;
     StackEnd = (long *)pContextRecord->Esp;
   } else {
     /* Can't display stack if SP unknown */
@@ -844,65 +1013,65 @@ int BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
     if (!todo) {
       return OUR_EXCEPTION_CONTINUE_EXECUTION;
     } else if (todo == 2) {
-      todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack(RefNoneErr, theObj, pc, sig); break;
     } else {
-      todo=DisplayBetaStack(SegmentationErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack(SegmentationErr, theObj, pc, sig); break;
     }
 #endif
   case EXCEPTION_DATATYPE_MISALIGNMENT:
-    todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( SegmentationErr, theObj, pc, sig); break;
   case EXCEPTION_STACK_OVERFLOW:
-    todo=DisplayBetaStack( StackErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( StackErr, theObj, pc, sig); break;
   case EXCEPTION_BREAKPOINT:
-    DEBUG_VALHALLA(fprintf(output, "sighandler: breakpoint at PC 0x%x\n", (int)PC); fflush(output));
+    DEBUG_VALHALLA(fprintf(output, "sighandler: breakpoint at PC 0x%x\n", (int)pc); fflush(output));
     if (!isWinNT()) {
       /* Fix the problem with win95 returning PC after the int3 break
 	 instruction. NT returns PC pointing at the int3 instruction. */
-      PC = (long *) --pContextRecord->Eip;
-      DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)PC); fflush(output));
+      pc = (long *) --pContextRecord->Eip;
+      DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)pc); fflush(output));
     }
     {
       /* We are running under valhalla. */
       register_handles handles = {-1, -1, -1, -1};
       SaveWin32Registers(pContextRecord, &handles);
-      todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); 
+      todo=DisplayBetaStack( EmulatorTrapErr, theObj, pc, sig); 
       RestoreWin32Registers(pContextRecord, &handles);
     } 
     break;
   case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
-    todo=DisplayBetaStack( RepRangeErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( RepRangeErr, theObj, pc, sig); break;
   case STATUS_ILLEGAL_INSTRUCTION /* was: EXCEPTION_ILLEGAL_INSTRUCTION */:
   case EXCEPTION_PRIV_INSTRUCTION:
-    todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( IllegalInstErr, theObj, pc, sig); break;
   case EXCEPTION_INT_DIVIDE_BY_ZERO:
     /* Fix current object: It was pushed before the idiv instruction,
      * but will be zero in this case.
      */
     theObj = *(Object **)StackEnd++;
-    todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( ZeroDivErr, theObj, pc, sig); break;
   case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-    todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( FpZeroDivErr, theObj, pc, sig); break;
   case EXCEPTION_FLT_STACK_CHECK:
     if (pContextRecord->ContextFlags & CONTEXT_FLOATING_POINT){
       if (pContextRecord->FloatSave.StatusWord & (1L<<9)){
 	/* C1=1: overflow */
-	todo=DisplayBetaStack( FpStackOflowErr, theObj, PC, sig); break;
+	todo=DisplayBetaStack( FpStackOflowErr, theObj, pc, sig); break;
       } else {
 	/* C1=0: underflow */
-	todo=DisplayBetaStack( FpStackUflowErr, theObj, PC, sig); break;
+	todo=DisplayBetaStack( FpStackUflowErr, theObj, pc, sig); break;
       }
     } else {
       /* lets guess on overflow */
-      todo=DisplayBetaStack( FpStackOflowErr, theObj, PC, sig); break;
+      todo=DisplayBetaStack( FpStackOflowErr, theObj, pc, sig); break;
     }
   case EXCEPTION_FLT_DENORMAL_OPERAND:
   case EXCEPTION_FLT_INEXACT_RESULT:
   case EXCEPTION_FLT_OVERFLOW:
   case EXCEPTION_FLT_UNDERFLOW:
   case EXCEPTION_FLT_INVALID_OPERATION:
-    todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( FpExceptErr, theObj, pc, sig); break;
   default:
-    todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
+    todo=DisplayBetaStack( UnknownSigErr, theObj, pc, sig);  
   }
   
   if (todo) {
@@ -949,7 +1118,7 @@ void beta_main(void (*AttBC)(Component *), Component *comp)
 
 int proxyTrapHandler(ExceptionInformation *info)
 {
-	unsigned long *PC;
+	unsigned long *pc;
 	unsigned long instruction;
 	
 	int opcode;
@@ -962,8 +1131,8 @@ int proxyTrapHandler(ExceptionInformation *info)
 	
 	
 	registers = &info->registerImage->R0;
-	PC = (unsigned long *) info->machineState->PC.lo;
-	instruction = *PC;
+	pc = (unsigned long *) info->machineState->PC.lo;
+	instruction = *pc;
 	
 	//fprintf(output, "0x%08X\n", instruction);
 	
@@ -999,7 +1168,7 @@ static int entered = 0;
 OSStatus BetaSignalHandler(ExceptionInformation *info)
 {
   Object * theObj;
-  long *PC;
+  long *pc;
   long todo = 0;
   ExceptionKind sig = info->theKind;
   
@@ -1013,7 +1182,7 @@ OSStatus BetaSignalHandler(ExceptionInformation *info)
   
   /* Set StackEnd to the stack pointer just before exception */
   StackEnd = StackEndAtSignal = (long *)info->registerImage->R1.lo;
-  PC = (long *) info->machineState->PC.lo;
+  pc = (long *) info->machineState->PC.lo;
   /* Try to fetch the address of current Beta object from i0.*/
   theObj = (Object *) info->registerImage->R31.lo;
   if( !inIOA(theObj) || !isObject(theObj)) theObj = 0;
@@ -1021,7 +1190,7 @@ OSStatus BetaSignalHandler(ExceptionInformation *info)
   DEBUG_CODE({
     fprintf(output, "\nBetaSignalHandler: Caught signal %d", (int)sig);
     PrintSignal((int)sig);
-    fprintf(output, ", PC = 0x%08x, StackEnd = 0x%08x, obj = ", (int) PC, (int) StackEnd);
+    fprintf(output, ", PC = 0x%08x, StackEnd = 0x%08x, obj = ", (int) pc, (int) StackEnd);
 	fflush(output);
 	PrintObject(theObj);
 	fprintf(output, ".\n");
@@ -1031,7 +1200,7 @@ OSStatus BetaSignalHandler(ExceptionInformation *info)
   switch(sig){
 #if 0 /* Not used on PPC */
   case integerException:
-    todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( ArithExceptErr, theObj, pc, sig); break;
 #endif
   case trapException:
     /* FIXME: possibly some details in the exception records can determine
@@ -1044,25 +1213,25 @@ OSStatus BetaSignalHandler(ExceptionInformation *info)
 	todo=proxyTrapHandler(info);
 #endif
 	if(!todo) {
-    	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); 
+    	todo=DisplayBetaStack( RefNoneErr, theObj, pc, sig); 
 	}
 	break;
 		
   case illegalInstructionException:
-    todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig);break;
+    todo=DisplayBetaStack( IllegalInstErr, theObj, pc, sig);break;
   case accessException: 
   case unmappedMemoryException: 
   case excludedMemoryException: 
   case readOnlyMemoryException: 
   case unresolvablePageFaultException: 
-    todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( SegmentationErr, theObj, pc, sig); break;
   case stackOverflowException:
-    todo=DisplayBetaStack( StackErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( StackErr, theObj, pc, sig); break;
   case floatingPointException:
     /* FIXME: handle zerodiv (int+fp) */
-    todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( FpExceptErr, theObj, pc, sig); break;
   default:
-    todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( UnknownSigErr, theObj, pc, sig); break;
   }
 
   if (!todo) BetaExit(1);
@@ -1085,11 +1254,11 @@ ExceptionHandler default_exceptionhandler;
 
 void InstallSigHandler (int sig)
 {
-#ifndef sun4s
+#if !(defined(sun4s) || defined(x86sol))
 #ifdef UNIX
      signal (sig, (void (*)(int))BetaSignalHandler);
 #endif
-#else /* sun4s */
+#else /* sun4s || x86sol */
   { struct sigaction sa;
     sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
     sigemptyset(&sa.sa_mask); 
@@ -1107,12 +1276,9 @@ void SetupBetaSignalHandlers(void)
 {
 
 #ifdef ppcmac
-
-  
-
   default_exceptionhandler = InstallExceptionHandler((ExceptionHandler)BetaSignalHandler);
 #else /* ppcmac */
-#ifndef sun4s
+#if !(defined(sun4s) || defined(x86sol))
 #if defined(UNIX)
   { /* Setup signal handles for the Beta system */
 #ifdef SIGTRAP
@@ -1144,7 +1310,7 @@ void SetupBetaSignalHandlers(void)
   }
 #endif /* UNIX */
   
-#else /* sun4s */
+#else /* sun4s || x86sol */
   
   /* This is solaris */
   
@@ -1173,8 +1339,11 @@ void SetupBetaSignalHandlers(void)
     sigaction( SIGSEGV, &sa, 0);
     sigaction( SIGEMT,  &sa, 0);
     sigaction( SIGINT,  &sa, 0);
+#ifdef x86sol
+    sigaction( SIGTRAP,  &sa, 0);
+#endif /* x86sol */
   }
-#endif /* sun4s */
+#endif /* sun4s || x86sol */
 #endif /* ppcmac */
 
 #if defined(UNIX) && defined(PERSIST)

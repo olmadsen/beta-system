@@ -46,7 +46,7 @@
 #define EnableFPUexceptions(mask) _control87(~(mask), MCW_EM)
 #endif
 
-#ifdef sun4s
+#if (defined(sun4s) || defined(x86sol))
 #include <ieeefp.h>
 #define FPU_ZERODIVISION  FP_X_DZ
 #define FPU_INVALID       FP_X_INV

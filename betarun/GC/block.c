@@ -6,7 +6,7 @@
  */
 #include "beta.h"
 
-#if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi)
+#if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi) || defined(x86sol)
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>

@@ -1,4 +1,4 @@
-#if defined(sun4s) || defined(hpux9pa) || defined(linux) || defined(sgi)
+#if defined(sun4s) || defined(hpux9pa) || defined(linux) || defined(sgi) || defined(x86sol)
 #define UNIX
 #endif
 
@@ -75,7 +75,7 @@ void PutTextToStdErr(char *str)
 double infReal(void)
 {
   double x;
-#if defined(nti) || defined(linux)
+#if defined(nti) || defined(linux) || defined(x86sol)
   ((unsigned long *)(&x))[0] = 0x00000000;
   ((unsigned long *)(&x))[1] = 0x7FF00000;
 #else

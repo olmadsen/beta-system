@@ -42,21 +42,17 @@
 
 /* Architecture dependant includes */
 
-#ifdef sun4s
+#if defined(sun4s) || defined(x86sol)
 #  include <sys/filio.h>	/* to see FIONREAD */
 #  include <sys/sockio.h>	/* to see SIOCSPGRP */
 #  include <sys/stropts.h>	/* to see S_INPUT,S_ERROR */
 #  include <signal.h>
 #endif
+
 #if (defined(hpux9pa) || defined(sgi) || defined(linux))
 #  include <sys/ioctl.h>	/* to see FIONREAD & SIOCSPGRP */
 #  include <signal.h>
 #endif
-/* Not needed anymore. --mannan */
-/* #ifdef linux
-   #include <linux/termios.h>
-   #endif
-*/
 
 /* Architecture dependant types/values */
 
@@ -90,7 +86,7 @@
 #ifdef hpux9pa
 #  define SOCKADDR_type sockaddr_in
 #else
-#  if defined(sun4s) || defined(sgi)
+#  if defined(sun4s) || defined(x86sol) || defined(sgi)
 #    define SOCKADDR_type sockaddr
 #  else
 #    ifdef linux

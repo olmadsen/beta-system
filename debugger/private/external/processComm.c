@@ -212,7 +212,7 @@ static char *strdup (char *in)
 
 #endif /* ppcmac */
 
-#if defined(sun4s) || defined(sgi) || defined(sun4) || defined(linux)
+#if defined(sun4s) || defined(x86sol) || defined(sgi) || defined(sun4) || defined(linux)
 
 #include <unistd.h>
 

@@ -58,6 +58,12 @@ void unlink(const char *name);
 #define Decimal
 #endif
 
+#ifdef x86sol
+#define FULL_NMCOMMAND  "/usr/ccs/bin/nm -hvp %s"
+#define TERSE_NMCOMMAND "/usr/ccs/bin/nm -hvp %s"
+#define Decimal
+#endif
+
 #ifdef ppcmac
 #define FULL_NMCOMMAND  "not yet implemented"
 #define TERSE_NMCOMMAND "not yet implemented"

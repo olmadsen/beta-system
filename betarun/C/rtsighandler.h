@@ -9,7 +9,7 @@
 #include <MachineExceptions.h>
 #endif /* ppcmac */
 
-#ifdef sun4s
+#if defined(sun4s) || defined(x86sol)
 #include <siginfo.h>
 #include <sys/regset.h>
 #include <sys/ucontext.h>
@@ -45,6 +45,9 @@
 #ifdef sparc
 #define SIGNAL_CONTEXT ucontext_t *
 #endif
+#ifdef x86sol
+#define SIGNAL_CONTEXT ucontext_t *
+#endif
 #ifdef ppcmac
 #define SIGNAL_CONTEXT ExceptionInformation *
 #endif
@@ -52,7 +55,7 @@
 #define SIGNAL_CONTEXT struct sigcontext *
 #endif
 
-extern void set_BetaStackTop(long *SP);
+extern void set_BetaStackTop(long *sp);
 
 #ifdef intel
 typedef struct register_handles {
@@ -64,6 +67,12 @@ typedef struct register_handles {
 
 #ifdef linux
 void SaveLinuxRegisters(SIGNAL_CONTEXT scp, register_handles *handles);
+#define BeforeBetaCallback()
+#define AfterBetaCallback()
+#endif /* linux */
+
+#ifdef x86sol
+void SaveX86SolRegisters(SIGNAL_CONTEXT scp, register_handles *handles);
 #define BeforeBetaCallback()
 #define AfterBetaCallback()
 #endif /* linux */
@@ -86,10 +95,10 @@ typedef struct register_handles {
 
 void SaveSGIRegisters(SIGNAL_CONTEXT scp, register_handles *handles);
 void RestoreSGIRegisters(SIGNAL_CONTEXT scp, register_handles *handles);
-#define BetaCallback(ctx, SP, func) \
+#define BetaCallback(ctx, sp, func) \
 { \
   register_handles handles = {-1, -1, -1, -1, -1}; \
-  set_BetaStackTop((long *)SP); \
+  set_BetaStackTop((long *)sp); \
   /* User code must call fix_stacks manually */ \
   SaveSGIRegisters(ctx, &handles); \
   func; \
@@ -98,8 +107,8 @@ void RestoreSGIRegisters(SIGNAL_CONTEXT scp, register_handles *handles);
 #endif /* sgi */
 
 #ifdef sparc
-#define BetaCallback(ctx, SP, func) \
-set_BetaStackTop((long *)SP); \
+#define BetaCallback(ctx, sp, func) \
+set_BetaStackTop((long *)sp); \
 func; \
 ctx->uc_mcontext.gregs[REG_IOA] = (long)IOA; \
 ctx->uc_mcontext.gregs[REG_IOATOPOFF] = (long)IOATopOff
@@ -118,7 +127,7 @@ fprintf(output, \
 
 /* Definition of BetaSignalHandler */
 
-#if defined(UNIX) && !defined(sun4s)
+#if defined(UNIX) && !(defined(sun4s) || defined(x86sol))
 #ifdef linux
 void BetaSignalHandler(long sig, struct sigcontext_struct scp);
 #else
@@ -126,9 +135,9 @@ void BetaSignalHandler(long sig, long code, SIGNAL_CONTEXT scp, char *addr);
 #endif /* */
 #endif /* UNIX, !sun4s */
 
-#ifdef sun4s
+#if defined(sun4s) || defined(x86sol)
 void BetaSignalHandler(long sig, siginfo_t *info, SIGNAL_CONTEXT ucon);
-#endif /* sun4s */
+#endif /* sun4s||x86sol */
 
 #ifdef nti
 #ifdef nti_gnu

@@ -96,6 +96,11 @@ char *machine_type(void)
 #define MACHINE_TYPE "linux"
 #endif
   
+  /* X86 Solaris */
+#ifdef x86sol
+#define MACHINE_TYPE "x86sol"
+#endif
+  
   /* NTI */
 #ifdef nti_ms
 #define MACHINE_TYPE "nti_ms"
@@ -214,9 +219,9 @@ void NotifyFunc(char *s1){
 
 /********************** DisplayCell: ********************/
 
-static void DisplayCell(long PC, Object *theObj)
+static void DisplayCell(long pc, Object *theObj)
 {
-  DisplayObject(output, theObj, PC);
+  DisplayObject(output, theObj, pc);
 }
 
 /************************* ProtoTypeName **********************/
@@ -253,7 +258,7 @@ char *ProtoTypeName(ProtoType *theProto)
   while (*dyn++)
      ;			/* Step over dynamic gc entries */
 
-#if defined(linux) || defined(nti)
+#ifdef intel
   /* Step over little endian long/short/real position information */
   { 
     int skiplists=0; /* number of entries for int16s and reals */
@@ -282,7 +287,7 @@ static void ObjectSurrounderDescription(Object *obj,
 					ProtoType *activeProto);
 
 static void ObjectDescription(Object *obj, 
-			      long PC, 
+			      long pc, 
 			      char *type, 
 			      int print_origin)
 {
@@ -299,9 +304,9 @@ static void ObjectDescription(Object *obj,
     return;
   }
 
-  TRACE_CODEENTRY(fprintf(output, "ObjectDescription: initial: proto=0x%x (%s), addr=0x%x\n", (int)proto, ProtoTypeName(proto), (int)PC)); 
+  TRACE_CODEENTRY(fprintf(output, "ObjectDescription: initial: proto=0x%x (%s), addr=0x%x\n", (int)proto, ProtoTypeName(proto), (int)pc)); 
 
-  if (PC) {
+  if (pc) {
     /* Find the active prefix level based on the PC.
      * Here we use both the G-entry and the M-entry. 
      * The prefix we are in is the one, where the distance from the 
@@ -309,9 +314,9 @@ static void ObjectDescription(Object *obj,
      * to PC is smallest (and positive).
      */
     
-    gDist  = PC - gPart; 
+    gDist  = pc - gPart; 
     TRACE_CODEENTRY(fprintf(output, "initial gPart: 0x%x, gDist: 0x%x\n", (int)gPart, (int)gDist));
-    mDist  = PC - mPart;
+    mDist  = pc - mPart;
     TRACE_CODEENTRY(fprintf(output, "initial mPart: 0x%x, mDist: 0x%x\n", (int)mPart, (int)mDist));
     if (gDist < 0) gDist = MAXINT;
     if (mDist < 0) mDist = MAXINT;
@@ -322,18 +327,18 @@ static void ObjectDescription(Object *obj,
       mPart = M_Part(proto);
       gPart = G_Part(proto);
       TRACE_CODEENTRY(fprintf(output, "ObjectDescription: proto=0x%x (%s), mPart=0x%x, gPart=0x%x\n", (int)proto, ProtoTypeName(proto), (int)mPart, (int)gPart)); 
-      if((PC - gPart > 0) &&
-	 (PC - gPart <= activeDist)){ 
+      if((pc - gPart > 0) &&
+	 (pc - gPart <= activeDist)){ 
 	/* Use <= to get the LAST level, that has the entry point */ 
 	activeProto = proto;
-	activeDist  = gDist = PC - gPart; 
+	activeDist  = gDist = pc - gPart; 
 	TRACE_CODEENTRY(fprintf(output, "gDist: 0x%x\n", (int)gDist));
       }
-      if((PC - mPart > 0) &&
-	 (PC - mPart <= (long) activeDist)){ 
+      if((pc - mPart > 0) &&
+	 (pc - mPart <= (long) activeDist)){ 
 	/* Use <= to get the LAST level, that has the entry point */ 
 	activeProto = proto;
-	activeDist  = mDist = PC - mPart; 
+	activeDist  = mDist = pc - mPart; 
 	TRACE_CODEENTRY(fprintf(output, "mDist: 0x%x\n", (int)mDist));
       }
     }
@@ -346,7 +351,7 @@ static void ObjectDescription(Object *obj,
     groupname = GroupName((long)activeProto,0);
 #else
     TRACE_GROUP(fprintf(output, "Calling GroupName with return address\n"));
-    groupname = GroupName(PC,1);
+    groupname = GroupName(pc,1);
 #endif
   } else {
 #ifdef MAC
@@ -366,7 +371,7 @@ static void ObjectDescription(Object *obj,
 
   if (groupname==NULL){
     /* GroupName failed */
-    TRACE_DUMP(fprintf(output, ">>>TraceDump: GroupName failed for object 0x%x, addr 0x%x\n", (int)obj, (int)PC));
+    TRACE_DUMP(fprintf(output, ">>>TraceDump: GroupName failed for object 0x%x, addr 0x%x\n", (int)obj, (int)pc));
     return;
   }  
 
@@ -396,8 +401,8 @@ static void ObjectDescription(Object *obj,
   if (!SimpleDump){
     /* Print lowlevel info after standard info */
     proto=GETPROTO(obj);
-    fprintf(output, "  { PC  0x%x", (int)PC);
-    if (!SimpleDump) PrintCodeAddress(PC);
+    fprintf(output, "  { PC  0x%x", (int)pc);
+    if (!SimpleDump) PrintCodeAddress(pc);
     fprintf(output, 
 	    ", object 0x%x, proto 0x%x ",
 	    (int)obj, 
@@ -502,7 +507,7 @@ GLOBAL(static Object *lastDisplayedObject)=0;
 
 void DisplayObject(FILE   *output, /* Where to dump object */
 		   Object *obj,    /* Object to display */
-		   long    PC      /* Address obj was left from (jsr), 
+		   long    pc      /* Address obj was left from (jsr), 
 				    * i.e. when it was current object.
 				    */
 		   )
@@ -540,7 +545,7 @@ void DisplayObject(FILE   *output, /* Where to dump object */
 	  }
 	}
       } else {
-	ObjectDescription(theItem, PC, "comp", 1);
+	ObjectDescription(theItem, pc, "comp", 1);
       }
       break;
     case SwitchProto(DopartObjectPTValue):
@@ -552,10 +557,10 @@ void DisplayObject(FILE   *output, /* Where to dump object */
 	  && IsComponentItem(theItem)) {
 	DisplayObject(output, 
 		      (Object *)EnclosingComponent(theItem),
-		      PC);
+		      pc);
 	return;
       } else {
-	ObjectDescription(theItem, PC, "item", 1);
+	ObjectDescription(theItem, pc, "item", 1);
       }
       break;
     case SwitchProto(StructurePTValue):
@@ -584,7 +589,7 @@ void DisplayObject(FILE   *output, /* Where to dump object */
       break;
     } 
   }else{    
-    ObjectDescription(obj, PC, "item", 1);
+    ObjectDescription(obj, pc, "item", 1);
   }
 
   if (isMakingDump) lastDisplayedObject=obj;
@@ -604,7 +609,7 @@ void DisplayHPPAStack(long *thePC)
    */
   Object **theCell = /*getRefSP()*/ (Object **)(RefSP-1);
   Object *theObj;
-  long   *PC=thePC;
+  long   *pc=thePC;
   
   while((void **)theCell > &ReferenceStack[0]) {
     if ((*theCell)==(Object *)ExternalMarker){
@@ -613,11 +618,11 @@ void DisplayHPPAStack(long *thePC)
     } else if ((unsigned)*theCell & 1) {
       /* The reference is tagged: Should appear in beta.dump */
       theObj = (Object *)((unsigned)*theCell & ~1);
-      PC = 0; /* No way to tell the PC ?? */
+      pc = 0; /* No way to tell the PC ?? */
 #if 0 /* not yet */
 #ifdef RTVALHALLA
       theCell--;
-      PC = (long *)*theCell
+      pc = (long *)*theCell
 #endif
 #endif
 	if(theObj && isObject(theObj)) {
@@ -625,10 +630,10 @@ void DisplayHPPAStack(long *thePC)
 	  if (!isComponent(theObj) && IsComponentItem(theObj)) {
 	    DisplayObject(output, 
 			  (Object *)EnclosingComponent(theObj), 
-			  (long)PC);
+			  (long)pc);
 	    if (theObj==(Object *)BasicItem) break;
 	  } else {
-	    DisplayObject(output, theObj, (long)PC);
+	    DisplayObject(output, theObj, (long)pc);
 	  }
 	} else {
 	  if (theObj) fprintf(output, "  [Damaged object!: %x]\n", (int)theObj);
@@ -652,7 +657,7 @@ void DisplayHPPAStack(long *thePC)
  */
 static void DumpCell(Object **theCell, Object *theObj)
 { 
-  register long PC=-1;
+  register long pc=-1;
   long *SP;
 
   /* theObj is dyn in a frame. This is the current object in the 
@@ -669,13 +674,13 @@ static void DumpCell(Object **theCell, Object *theObj)
   /* First check if theObj is CALLBACKMARK */
   if ((theObj==CALLBACKMARK)||(theObj==GENMARK)){
     SP = (long *)theCell+DYN_OFF; /* Frame starts DYN_OFF longs above dyn */
-    PC = *((long *)SP+PC_OFF);
+    pc = *((long *)SP+PC_OFF);
     if (theObj==CALLBACKMARK){
       TRACE_DUMP(fprintf(output, "  cb: "));
       fprintf(output, 
 	      "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
-	      (int)PC);
-      if (!SimpleDump) PrintCodeAddress((long)PC);
+	      (int)pc);
+      if (!SimpleDump) PrintCodeAddress((long)pc);
       fprintf(output, ") ]\n");
     } else {
       TRACE_DUMP(fprintf(output, "  allo: "));
@@ -694,7 +699,7 @@ static void DumpCell(Object **theCell, Object *theObj)
       return;
     }
     theObj = GetThis(SP);
-    PC = 0;			 /* not known - is somewhere in the C frames */
+    pc = 0;			 /* not known - is somewhere in the C frames */
   }
     
   /* Check if theObj IS a component */
@@ -703,7 +708,7 @@ static void DumpCell(Object **theCell, Object *theObj)
     /* Passing a component frame. The real dyn is found 
      * as theComp->CallerObj - see stack.c for details.
      */
-    PC = ((Component *)theObj)->CallerComp->CallerLSC;
+    pc = ((Component *)theObj)->CallerComp->CallerLSC;
     theObj = ((Component *)theObj)->CallerObj;
   } 
     
@@ -713,24 +718,24 @@ static void DumpCell(Object **theCell, Object *theObj)
     theObj = (Object *)EnclosingComponent(theObj);
   } 
     
-  if (PC==-1){
+  if (pc==-1){
     SP = (long *)theCell+DYN_OFF; /* Frame starts DYN_OFF longs above dyn */
-    PC = *((long *)SP+PC_OFF);
+    pc = *((long *)SP+PC_OFF);
   }
 
-  TRACE_DUMP(fprintf(output, ", PC=0x%x *\n", (int)PC));
-  DisplayObject(output, theObj, PC);
+  TRACE_DUMP(fprintf(output, ", PC=0x%x *\n", (int)pc));
+  DisplayObject(output, theObj, pc);
 }
 
-void DisplayNEWRUNStack(long *PC, Object *theObj, int signal)
+void DisplayNEWRUNStack(long *pc, Object *theObj, int signal)
 { 
 
   /* First check for errors occured outside BETA */
-  if (!IsBetaCodeAddrOfProcess((long)PC)){
+  if (!IsBetaCodeAddrOfProcess((long)pc)){
     long *betatop = BetaStackTop[0];
     fprintf(output, 
 	    "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
-	    (int)PC);
+	    (int)pc);
     if (!SimpleDump) PrintCodeAddress((long)error_pc);
     fprintf(output, ") ]\n");
     
@@ -809,11 +814,11 @@ static void nonObjectMet(Object **theCell, Object *theObj)
 {
   if (IsBetaCodeAddrOfProcess((long)theObj)){
     /* Found a BETA PC */
-    long PC=(long)theObj;
-    TRACE_DUMP(PrintCodeAddress(PC));
+    long pc=(long)theObj;
+    TRACE_DUMP(PrintCodeAddress(pc));
     if (prevObj){
       TRACE_DUMP(fprintf(output, "\n"));
-      displayFunc(PC, prevObj);
+      displayFunc(pc, prevObj);
     } else {
       TRACE_DUMP(fprintf(output, " (no prevObj)"));
     }
@@ -915,7 +920,7 @@ long *DisplayCallbackFrames(CallBackFrame *cbFrame,
 
 void DisplayINTELStack(BetaErr errorNumber, 
 		       Object *currentObject, 
-		       long PC, 
+		       long pc, 
 		       long theSignal /* theSignal is zero if not applicable. */
 		       )
 { 
@@ -933,12 +938,12 @@ void DisplayINTELStack(BetaErr errorNumber,
    */
 
   /* First check for errors occured outside BETA */
-  if (!IsBetaCodeAddrOfProcess(PC)){
+  if (!IsBetaCodeAddrOfProcess(pc)){
     fprintf(output, 
 	    "  [ EXTERNAL ACTIVATION PART (address 0x%x",
 	    (int)error_pc
 	    );
-    if (!SimpleDump) PrintCodeAddress((long)PC);
+    if (!SimpleDump) PrintCodeAddress((long)pc);
     fprintf(output, ") ]\n");
     if ((StackEnd<BetaStackTop) && (BetaStackTop<(long*)StackStart)){
       /* BetaStackTop is in the active stack. Try continuing from there.
@@ -962,7 +967,7 @@ void DisplayINTELStack(BetaErr errorNumber,
      * NO: First comes the arguments for the external.
      * Here we cannot determine how many of these there are.
      */
-    /* PC = *(BetaStackTop-1); */
+    /* pc = *(BetaStackTop-1); */
 
     /* Adjust low to low+3 because the compiler pushes %edx, %edi, %ebp, %esi
      * before setting BetaStackTop.
@@ -976,7 +981,7 @@ void DisplayINTELStack(BetaErr errorNumber,
      * So we display it here.
      */
     TRACE_DUMP(fprintf(output, "Displaying current object\n"));
-    DisplayObject(output, currentObject, 0 /*PC*/);
+    DisplayObject(output, currentObject, 0 /*pc*/);
 
   }
 
@@ -1001,7 +1006,7 @@ void DisplayINTELStack(BetaErr errorNumber,
    */
   currentBlock     = lastCompBlock;
   currentObject    = currentComponent->CallerObj;
-  PC               = currentComponent->CallerLSC;
+  pc               = currentComponent->CallerLSC;
   currentComponent = currentComponent->CallerComp;
   
   while (currentBlock->next){
@@ -1018,9 +1023,9 @@ void DisplayINTELStack(BetaErr errorNumber,
       TRACE_DUMP(fprintf(output, ">>>TraceDump: current: 0x%x\n", (int)currentObject));
     } else {
       if (!isComponent(currentObject) && IsComponentItem(currentObject)){
-	DisplayObject(output, (Object*)EnclosingComponent(currentObject), PC);
+	DisplayObject(output, (Object*)EnclosingComponent(currentObject), pc);
       } else {
-	DisplayObject(output, currentObject, PC);
+	DisplayObject(output, currentObject, pc);
       }
     }
 
@@ -1042,7 +1047,7 @@ void DisplayINTELStack(BetaErr errorNumber,
 
     currentBlock     = currentBlock->next;
     currentObject    = currentComponent->CallerObj;
-    PC               = currentComponent->CallerLSC;
+    pc               = currentComponent->CallerLSC;
     currentComponent = currentComponent->CallerComp;
   }
 }
@@ -1056,7 +1061,7 @@ void DisplayINTELStack(BetaErr errorNumber,
  * This is the SPARC specifics of DisplayBetaStack
  */
 
-void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func)
+void DisplayAR(RegWin *theAR, long pc, CellDisplayFunc func)
 {
   Object *prevObj /* used for last successfully identified object */;
 
@@ -1066,8 +1071,8 @@ void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func)
 	    (int)theAR, 
 	    (int)theAR->fp, 
 	    (int)theAR->i0, 
-	    (int)PC);
-    if (!SimpleDump) PrintCodeAddress(PC);
+	    (int)pc);
+    if (!SimpleDump) PrintCodeAddress(pc);
     fprintf(output, "\n");
   });
 
@@ -1082,7 +1087,7 @@ void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func)
 		(int)prevObj);
       });
     } 
-    func(PC, prevObj);
+    func(pc, prevObj);
   }
 
   TraverseSparcStackPart(theAR, prevObj, func);
@@ -1093,7 +1098,7 @@ void TraverseSparcStackPart(RegWin *theAR, Object* prevObj, CellDisplayFunc func
 {
 
   long* this, *end;
-  long PC;
+  long pc;
 
   /* handle possible pushed PCs (%o7s) in the
    * stackpart (INNER call chains).
@@ -1144,17 +1149,17 @@ void TraverseSparcStackPart(RegWin *theAR, Object* prevObj, CellDisplayFunc func
       }
     }
 
-    PC = this[0];
-    if (isCode(PC)) {
+    pc = this[0];
+    if (isCode(pc)) {
       /* isCode is a real macro on sparc. So now we know that
        * a code address has been pushes in the stack part.
        * Add 8 to get the real SPARC return address.
        */
-      PC+=8;
+      pc+=8;
       TRACE_DUMP({
 	fprintf(output, 
 		">>>TraceDump: DisplayAR: PC 0x%x\n",
-		(int)PC);
+		(int)pc);
       });
       if ((this+2<end) && inBetaHeap((Object*)this[2]) && isObject((Object*)this[2])) {
 	/* There was an object, assumed to be from an INNER P */
@@ -1173,13 +1178,13 @@ void TraverseSparcStackPart(RegWin *theAR, Object* prevObj, CellDisplayFunc func
 		    (int)prevObj);
 	  });
 	} 
-	func(PC, prevObj);
+	func(pc, prevObj);
 	this+=2; /* Skip the object */
       } else {
 	/* No Object below the code. Display with the previous
 	 * found object.
 	 */
-	func(PC, prevObj);
+	func(pc, prevObj);
       }
     }
     this+=2;
@@ -1195,7 +1200,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
   RegWin *theAR;
   RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
   RegWin *nextCompBlock = (RegWin *) lastCompBlock;
-  long   *PC=thePC;
+  long   *pc=thePC;
   
   /* Flush register windows to stack */
   __asm__("ta 3");
@@ -1208,23 +1213,23 @@ void DisplaySPARCStack(BetaErr errorNumber,
   /* First check for errors occured outside BETA and wind down
    * to BETA part of stack, if possible.
    */
-  if (!IsBetaCodeAddrOfProcess((long)PC)){
+  if (!IsBetaCodeAddrOfProcess((long)pc)){
     fprintf(output, 
 	    "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
-	    (int)PC);
+	    (int)pc);
     if (!SimpleDump) PrintCodeAddress((long)error_pc);
     fprintf(output, ") ]\n");
 
     TRACE_DUMP(fprintf(output, "  Winding back through C frames on top\n"));
-    for (PC = (long *)theAR->i7, theAR = (RegWin *) theAR->fp;
-	 !IsBetaCodeAddrOfProcess((long)PC);
-	 PC = (long *)theAR->i7, theAR = (RegWin *) theAR->fp){
+    for (pc = (long *)theAR->i7, theAR = (RegWin *) theAR->fp;
+	 !IsBetaCodeAddrOfProcess((long)pc);
+	 pc = (long *)theAR->i7, theAR = (RegWin *) theAR->fp){
       if (!SimpleDump) {
 	fprintf(output, "  { PC  0x%x", (int)PC);
-	if (!SimpleDump) PrintCodeAddress((int)PC);
+	if (!SimpleDump) PrintCodeAddress((int)pc);
 	fprintf(output, " }\n");
       }
-      if ((theAR->fp==0) || (theAR->fp==StackStart) || (PC = 0)){
+      if ((theAR->fp==0) || (theAR->fp==StackStart) || (pc = 0)){
 	TRACE_DUMP({
 	  fprintf(output, 
 		  "Wierd: Did not find any BETA frames... At theAR=0x%x\n",
@@ -1238,7 +1243,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
 
   for (;
        theAR != (RegWin *) 0;
-       PC = (long*)theAR->i7, theAR =  (RegWin *) theAR->fp) {
+       pc = (long*)theAR->i7, theAR =  (RegWin *) theAR->fp) {
     /* PC is execution point in THIS frame. The update of PC
      * in the for-loop is not done until it is restarted.
      */
@@ -1262,10 +1267,10 @@ void DisplaySPARCStack(BetaErr errorNumber,
 			 ));
       for (cAR = theAR;
 	   cAR != (RegWin *)((RegWin *)theAR->fp)->l6;
-	   PC = (long *)cAR->i7, cAR = (RegWin *) cAR->fp){
+	   pc = (long *)cAR->i7, cAR = (RegWin *) cAR->fp){
 	if (!SimpleDump) {
 	  fprintf(output, "  { PC  0x%x", (int)PC);
-	  PrintCodeAddress((int)PC);
+	  PrintCodeAddress((int)pc);
 	  fprintf(output, " }\n");
 	}
       }
@@ -1299,7 +1304,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
       continue;
     } 
     /* Normal frame */
-    DisplayAR(theAR, (long)PC, DisplayCell);
+    DisplayAR(theAR, (long)pc, DisplayCell);
   }
   return;
 }
@@ -1906,7 +1911,7 @@ void NotifyErrorDuringDump(BetaErr errorNumber, BetaErr errorNumber2)
 /*************************** CodeEntry: ***************************/
 
 /* Return the M or G part obtained from theProto, that PC is in */
-unsigned long CodeEntry(ProtoType *theProto, long PC)
+unsigned long CodeEntry(ProtoType *theProto, long pc)
 {
   /* Find the active prefix level based on the PC.
    * Here we use both the G-entry and the M-entry. 
@@ -1921,15 +1926,15 @@ unsigned long CodeEntry(ProtoType *theProto, long PC)
   TRACE_CODEENTRY({
     fprintf(output, "CodeEntry(theProto=0x%x", (int)theProto);
     PrintProto(theProto);
-    fprintf(output, " PC=0x%x", PC); 
-    PrintCodeAddress(PC);
+    fprintf(output, " PC=0x%x", pc); 
+    PrintCodeAddress(pc);
     fprintf(output, ")\n");
     fflush(output);
   });
   mPart = M_Part(theProto);
   gPart = G_Part(theProto);
-  gDist  = PC - gPart; 
-  mDist  = PC - mPart;
+  gDist  = pc - gPart; 
+  mDist  = pc - mPart;
   activeProto = theProto;
   if (gDist < 0) gDist = MAXINT;
   if (mDist < 0) mDist = MAXINT;
@@ -1942,15 +1947,15 @@ unsigned long CodeEntry(ProtoType *theProto, long PC)
     TRACE_CODEENTRY(fprintf(output, "CodeEntry: new candidate: theProto=0x%x (%s)\n", theProto, ProtoTypeName(theProto))); 
     mPart = M_Part(theProto);
     gPart = G_Part(theProto);
-    if((PC-gPart > 0) && (PC-gPart <= minDist)){ 
+    if((pc-gPart > 0) && (pc-gPart <= minDist)){ 
       /* Use <= to get the LAST level, that has the entry point */ 
-      minDist = gDist = PC-gPart;
+      minDist = gDist = pc-gPart;
       activeProto = theProto; 
       TRACE_CODEENTRY(fprintf(output, "CodeEntry(gDist: 0x%x, proto=0x%x)\n", gDist, theProto));
     }
-    if((PC-mPart > 0) && (PC-mPart <= minDist)){ 
+    if((pc-mPart > 0) && (pc-mPart <= minDist)){ 
       /* Use <= to get the LAST level, that has the entry point */ 
-      minDist = mDist = PC-mPart; 
+      minDist = mDist = pc-mPart; 
       activeProto = theProto;
       TRACE_CODEENTRY(fprintf(output, "CodeEntry(mDist: 0x%x, proto=0x%x)\n", mDist, theProto));
     }
@@ -1959,18 +1964,18 @@ unsigned long CodeEntry(ProtoType *theProto, long PC)
     fprintf(output, 
 	    "RTS: Fatal Error: CodeEntry(proto=0x%x, PC=0x%x): minDist == MAXINT\n",
 	    protoArg,
-	    PC);
+	    pc);
     if (isMakingDump){
       NotifyErrorDuringDump((BetaErr)isMakingDump, InternalErr);
     }
     DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
-  if (minDist == PC) {
+  if (minDist == pc) {
     fprintf(output, 
 	    "RTS: Fatal Error: CodeEntry(proto=0x%x, PC=0x%x) returns 0.\n",
 	    protoArg,
-	    PC);
+	    pc);
     if (isMakingDump){
       NotifyErrorDuringDump((BetaErr)isMakingDump, InternalErr);
     }

@@ -1,6 +1,6 @@
 #include "coreaccess.h"
 
-#if defined(sun4s) || defined(sgi) || defined(sun4) || defined(linux)
+#if defined(sun4s) || defined(sgi) || defined(x86sol) || defined(linux)
 
 #include <errno.h>
 #include <stdio.h>
@@ -9,7 +9,7 @@
 
 #define TRACE_COREACCESS 0
 
-#if defined(sun4s) || defined(sgi)
+#if defined(sun4s) || defined(sgi) || defined(x86sol)
 
 /* Implementation using the /proc file system. */
 #include <fcntl.h>
@@ -177,7 +177,7 @@ int UnsetBreak (pid_t pid, int address, int oldInstruction)
   return WriteImage (pid, address, oldInstruction);
 }
 
-#endif /* not sun4s nor sgi */
+#endif /* not sun4s, x86sol nor sgi */
 
 #if defined(sun4) || defined(linux)
 
@@ -275,7 +275,7 @@ int SendSIGINT (pid_t pid)
   return kill (pid, SIGINT);
 }
 
-#endif /* not sun4 or sun4s or linux or sgi */
+#endif /* not x86sol or sun4s or linux or sgi */
 
 #if defined(ppcmac)
 

@@ -19,7 +19,7 @@
 #define BREAK_INST ((0x4afc0000) | ((*oldInstruction) & 0x0000ffff))
 #endif
 
-#if defined(linux) || defined(nti)
+#if defined(linux) || defined(nti) || defined(x86sol)
 /* int 3 - hex 0xcc */ 
 #define BREAK_INST ((0x000000cc) | ((*oldInstruction) & 0xffffff00))
 #endif
@@ -32,7 +32,7 @@
 #error BREAK_INST must be defined
 #endif
 
-#if defined(sun4s) || defined(sgi) || defined(sun4) || defined(linux)
+#if defined(sun4s) || defined(x86sol) || defined(sgi) || defined(sun4) || defined(linux)
 
 #include <sys/types.h>
 
@@ -63,7 +63,7 @@ int UnsetBreak (pid_t pid, int address, int oldInstruction);
 
 int SendSIGINT (pid_t pid);
 
-#if defined(sun4s) || defined(sgi)
+#if defined(sun4s) || defined(x86sol) || defined(sgi)
 
 /* int coreaccess_init (pid_t pid);
  * ================================
@@ -81,9 +81,9 @@ int SendSIGINT (pid_t pid);
  * coreaccess_init. */
 
 void coreaccess_close(pid_t pid);
-#endif /* sun4s or sgi */
+#endif /* sun4s, x86sol or sgi */
 
-#endif /* not sun4 or sun4s or linux or sgi */
+#endif /* not x86sol or sun4s or linux or sgi */
 
 #if defined(nti)
 #include <windows.h>

@@ -36,7 +36,7 @@
 
 int scanComponentStack (Component* comp, 
 			Object *curObj,
-			int PC,
+			int pc,
 			CellDisplayFunc forEach);
 
 #endif /* VALHALLA_FINDCOMP_H */

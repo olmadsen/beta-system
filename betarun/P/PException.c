@@ -617,6 +617,162 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
 /******************************* LINUX end ******************************/
 #endif /* linux */
 
+#ifdef x86sol
+/******************************* X86SOL: *********************************/
+static void *getRegisterContents(ucontext_t *ucon,
+				 unsigned long reg) 
+{
+  return (void *)ucon->uc_mcontext.gregs[(long)reg];
+}
+
+static void setRegisterContents(ucontext_t *ucon, 
+				long reg, 
+				long value)
+{
+   ucon->uc_mcontext.gregs[(long)reg] = (long)value;
+}
+
+static long* decodeModRM(ucontext_t *ucon,
+			 unsigned char modrm, 
+			 unsigned char* modrmPC)
+{
+   /* if modrm==05, this is abs-adr, which really shouldn't trap. */
+   sourcereg = modrm & 7;
+   if (sourcereg != 4) {
+      return (long*)getRegisterContents(ucon, sourcereg);
+   } else {
+      unsigned char sib;
+      long *adr;
+
+      sib = modrmPC[2];
+      /* FIXME: Do something about sib!
+       * Needed: Check both regs to see which one is a proxy, 
+       * then modify sourcereg accordingly. (Maybe it's always base?)
+       * Assumption: Only one of them may point into the proxyspace.
+       * This is true if the smallest address of proxyspace is larger
+       * than the largest repetition.
+       */
+      sourcereg = sib & 7;
+      adr = (long*)getRegisterContents(ucon, sourcereg);
+      if (inPIT(adr)) {
+         return adr;
+      } else {
+         if (sib <= 0x3f) {
+            sourcereg = sib/8;
+            return (long*)getRegisterContents(ucon, sourcereg);
+         }
+      }
+   }  
+   return 0;
+}
+
+/* X86SOL:
+   proxyTrapHandler:
+*/
+static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
+{
+   long *proxy = 0, *absAddr = 0;
+   unsigned char* pc;
+   unsigned char modrm;
+   int isBeta;
+   
+   DEBUG_CODE({
+     fprintf(output, "(proxyTrapHandler:PC=0x%08x, sig=%d)", (int)pc, (int)sig);
+     fflush(output);
+   });
+
+   /* FIXME: What is this for x86?
+      if (scp.trapno==5 || scp.trapno==12) {
+         BetaSignalHandler(sig, info, ucon);
+         DEBUG_CODE(ILLEGAL);
+      }
+   */
+   INFO_PERSISTENCE(numPF++);
+   pc = (unsigned char*) getRegisterContents(ucon, EIP);
+   
+   isBeta = IsBetaCodeAddrOfProcess((unsigned long)pc);
+   if (!isBeta){
+      DEBUG_CODE({
+         fprintf(output, "(proxyTrapHandler:PC=0x%08x, ", (int)pc);
+         fflush(output);
+      });
+      DEBUG_CODE({
+         fprintf(output, "(outside BETA code))\n");
+         fflush(output);
+      });
+   } else {
+      Claim(!IOAActive, "!IOAActive");
+      
+      switch (pc[0]) {
+        case 0x62:  /* BOUND R32, M32, M32 */
+        case 0x80:  /* CMP R/M8, IMM8 */
+        case 0x88:  /* MOV R/M8, R8 */
+        case 0x89:  /* MOV R/M32, R32 */
+        case 0x8a:  /* MOV R8, R/M8 */
+        case 0x8b:  /* MOV R32, R/M32 */
+        case 0xc6:  /* MOV R/M8, IMM8 */
+        case 0xc7:  /* MOV R/M32, IMM32 */
+           modrm = pc[1]; 
+           proxy = decodeModRM(ucon, modrm, pc+1);
+           break;
+        case 0x0f: /* Two-byte instruction. */
+           switch (pc[1]) {
+             case 0xb6: /* MOVZX R32, R/M8 */
+             case 0xb7: /* MOVZX R32, R/M16 */
+             case 0xbe: /* MOVSX R32, R/M8 */
+             case 0xbf: /* MOVSX R32, R/M16 */
+                modrm = pc[2]; 
+                proxy = decodeModRM(ucon, modrm, pc+2);
+                break;
+             default:
+                DEBUG_CODE({
+                   fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
+                           "%02x %02x %02x %02x %02x %02x\n", 
+                           (int)pc, pc[0], pc[1], pc[2], pc[3], pc[4], pc[5]);
+                });
+                /* Exception not handled, let sighandler decide what to do. */
+                BetaSignalHandler(sig, info, ucon);
+           }
+           break;
+        default:
+           DEBUG_CODE({
+              fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
+                      "%02x %02x %02x %02x %02x %02x\n", 
+                      (int)pc, pc[0], pc[1], pc[2], pc[3], pc[4], pc[5]);
+           });
+           /* Exception not handled, let sighandler decide what to do. */
+           BetaSignalHandler(sig, info, ucon);
+      }
+    
+      if (inPIT(proxy)) {
+         /* Calculate absolute address by looking in appropriate tables */
+         absAddr = (long*)unswizzleReference(proxy);
+         
+         /* Now write the new value back into sourcereg: */
+         setRegisterContents(ucon, sourcereg, (long)absAddr);
+         
+         return;
+      } else if (!proxy) {
+         Object *    theObj = 0;
+         theObj = (Object *) getRegisterContents(ucon, EDX);
+         if (!((inIOA(theObj) || inAOA(theObj)) && isObject (theObj))) {
+            theObj  = 0;
+         }
+         /* Normal refNone:  Handle as regular refNone. */
+	 
+         StackEnd = (long *) getRegisterContents(ucon, ESP);
+         if (!DisplayBetaStack(RefNoneErr, theObj, (long*)pc, sig)) {
+            BetaExit(1);
+         }
+         return;
+      } 
+   }
+   /* Exception not handled, let sighandler decide what to do. */
+   BetaSignalHandler(sig, info, ucon);
+}
+/******************************* X86SOL end ******************************/
+#endif /* x86sol */
+
 /******************************* SGI: ********************************/
 #ifdef sgi
 static unsigned long regToSet = 0;

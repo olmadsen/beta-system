@@ -108,6 +108,13 @@ case "9000/7??":
 		breaksw
 	endsw
 	breaksw
+case i86pc:
+	#################### Solaris X86 configuration ###############
+	setenv MACHINETYPE X86SOL
+	setenv objdir x86sol
+	if ( ! $?MOTIFHOME ) setenv MOTIFHOME /usr/dt
+	if ( ! $?MOTIFINC )  setenv MOTIFINC  /usr/dt/include
+	breaksw
 case "i?86":
 	#################### Linux configuration ######################
 	setenv MACHINETYPE LINUX

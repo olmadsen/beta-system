@@ -329,7 +329,7 @@ void printOpCode (int opcode)
 }
 #endif
 
-static int valhallaCommunicate (int PC, int SP, Object *curObj);
+static int valhallaCommunicate (int pc, int sp, Object *curObj);
 
 extern char *Argv (int);
 
@@ -441,7 +441,7 @@ void valhallaInit (int debug_valhalla)
 
 
 
-/* int valhallaCommunicate (int PC, int SP, Object *curObj)
+/* int valhallaCommunicate (int pc, int sp, Object *curObj)
  * ==========================
  *
  * Serves requests from valhalla regarding the state of this process.
@@ -576,7 +576,7 @@ static void fix_stacks(long PrevSP)
 }
 #endif /* NEWRUN */
 
-INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
+INLINE void *valhalla_CopyCPP(Structure *struc, long *sp, Object *curobj)
 {
   void *cb = 0;
 #ifdef sparc
@@ -717,7 +717,7 @@ void evaluatorSaveInt(int val)
 
 
 
-static int valhallaCommunicate (int PC, int SP, Object* curObj)
+static int valhallaCommunicate (int pc, int sp, Object* curObj)
 { 
   int opcode=0;
   
@@ -870,7 +870,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       });
       
       DEBUG_VALHALLA(fprintf (output,"debuggee: Scanning ComponentStack.\n"));
-      stacktype=scanComponentStack (comp,curObj,PC,HandleStackCell);
+      stacktype=scanComponentStack (comp,curObj,pc,HandleStackCell);
       DEBUG_VALHALLA(fprintf (output,"debuggee: ScanComponentStack done.\n"));
       
       valhalla_writeint (-1);
@@ -924,8 +924,8 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       void (*cb)(void);
       int origin_handle, curObj_handle;
 
-      DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: SP=0x%x\n", (int)SP));
-      DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: PC=0x%x\n", (int)PC));
+      DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: SP=0x%x\n", (int)sp));
+      DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: PC=0x%x\n", (int)pc));
 
       /* Debuggee is currently stopped in C code.
        * To activate a BETA object in debuggee, we thus have
@@ -949,14 +949,14 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 
 #ifdef NEWRUN
       /* SP already adjusted one frame back by DisplayBetaStack; */
-      fix_stacks(SP);
+      fix_stacks(sp);
 #endif /* NEWRUN */
 
       /* Save origin and curObj in DOT in case of a GC during VAlloS */
       origin_handle = DOThandleInsert(origin, DOTgarbageOnDelete, FALSE);
       curObj_handle = DOThandleInsert(curObj, DOTgarbageOnDelete, FALSE);
       /* VAlloS may cause GC - is specially constructed to handle this */
-      struc = VAlloS(proto, (long*)SP, (long)PC);
+      struc = VAlloS(proto, (long*)sp, (long)pc);
       origin = DOThandleLookup(origin_handle);
       curObj = DOThandleLookup(curObj_handle);
       /* struc->iOrigin is NOT set up by VAlloS */
@@ -969,7 +969,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "\n"));
 
       /* Construct callback function */
-      cb = (void (*)(void))valhalla_CopyCPP(struc, (long*)SP, curObj);
+      cb = (void (*)(void))valhalla_CopyCPP(struc, (long*)sp, curObj);
       DEBUG_VALHALLA(fprintf(output, "Installed callback at 0x%08x\n", (int)cb));
 
       DEBUG_VALHALLA(fprintf(output, 
@@ -986,7 +986,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       /* Save stackpointer in BetaStackTop to make the trap look like 
        * an external call
        */
-      set_BetaStackTop((long*)SP);
+      set_BetaStackTop((long*)sp);
       /* valhalla_socket_flush? */
       /* Callback: cb() may cause GC. Stack setup has been adjust for this */
       cb();
@@ -1339,18 +1339,18 @@ void forEachAlive (int handle, Object *address, DOTonDelete onDelete)
 
 
 /* 
- * int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj, 
+ * int ValhallaOnProcessStop (long*  pc, long* sp, Object * curObj, 
  *                            long sig, long errorNumber)
  * ====================================================================
  *
  * Calls back to valhalla to inform that this process has stopped and
  * is ready to serve requests. */
 
-int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj, 
+int ValhallaOnProcessStop (long*  pc, long* sp, Object * curObj, 
                            long sig, long errorNumber)
 { 
   char *txt; int res;
-  DEBUG_VALHALLA(fprintf(output,"debuggee: ValhallaOnProcessStop: PC=0x%x, SP=0x%x, curObj=%d,sig=%d,errorNumber=%d\n",(int) PC, (int) SP, (int) curObj, (int) sig, (int) errorNumber));
+  DEBUG_VALHALLA(fprintf(output,"debuggee: ValhallaOnProcessStop: PC=0x%x, SP=0x%x, curObj=%d,sig=%d,errorNumber=%d\n",(int) pc, (int) sp, (int) curObj, (int) sig, (int) errorNumber));
   invops++;
   if (invops > valhalla_exelevel+1) {
     fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
@@ -1371,9 +1371,9 @@ int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj,
   }
 
   valhalla_writeint (VOP_STOPPED);
-  valhalla_writeint ((int) PC);
+  valhalla_writeint ((int) pc);
 
-  if (PC==0) { /* Process about to stop. */
+  if (pc==0) { /* Process about to stop. */
     valhalla_socket_flush ();
     doshutdown(sock,2);
     closeSocket(sock);
@@ -1384,7 +1384,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj,
   valhalla_writeint ((int) curObj);
   valhalla_writeint ((int) ActiveComponent);
   
-  valhalla_writeint ((int) SP);
+  valhalla_writeint ((int) sp);
 
   valhalla_writeint (sig);
 
@@ -1431,7 +1431,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj,
     fprintf (output, "Warning! Wrong answer from Valhalla on VOP_STOPPED\n"); 
 
   
-  switch (res=valhallaCommunicate ((int) PC, (int)SP, curObj)){
+  switch (res=valhallaCommunicate ((int) pc, (int)sp, curObj)){
   case CONTINUE: break;
   case TERMINATE: exit (99);
   }
@@ -1461,9 +1461,9 @@ int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj,
 /* Shortcut for calling valhallaOnProcessStop from SnakeAdditions.S 
  * without having to transfer argument 5 via stack in assembler.
  */
-void ValhallaOPS(long *PC, long event)
+void ValhallaOPS(long *pc, long event)
 {
-  ValhallaOnProcessStop(PC, 0, 0, 0, event);
+  ValhallaOnProcessStop(pc, 0, 0, 0, event);
 }
 #endif
 

@@ -116,7 +116,7 @@ void ExtsleepUntil(double due)
 
 
 
-#ifdef sun4s
+#if defined(sun4s) || defined(x86sol)
 # include <stropts.h>
 #endif
 
@@ -155,7 +155,7 @@ void sleepDouble(double period)
 #endif
 
 
-#if (defined(sun4s) || defined(nti) || defined(linux)) 
+#if (defined(sun4s) || defined(nti) || defined(linux) || defined(x86sol)) 
 # define CASTFDSET 
 #else 
 # define CASTFDSET (int *)
@@ -258,7 +258,7 @@ int readyBytes (int fd)
   long noOfBytes;
   int result;
 
-#ifdef sun4s
+#if defined(sun4s) || defined(x86sol)
 
   result=ioctl(fd,I_NREAD,&noOfBytes);
   if (result>0) 
