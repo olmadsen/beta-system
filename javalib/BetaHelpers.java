@@ -41,7 +41,7 @@ public class BetaHelpers
   
   public static void loadJNILibraries (){
     // Cannot be static class constructor - e.g. applets will fail then
-    java.lang.System.loadLibrary("BetaHelpers"); // OK to call more than once
+    java.lang.System.loadLibrary("BetaHelpers");  // OK to call more than once
     //System.err.println("Loaded JNI library BetaHelpers");
   }
 
