@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-06-02 14:24:10 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-06-02 15:23:23 $, SID: $Revision: 1.7 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -34,18 +34,12 @@ Initialize()
   InitTheCursor();
 #endif
   /* save struct sizes for efficiency */
-  ItemStructSize = sizeof(struct Item);
-  printf(stderr, "ItemStructSize: %d\n", ItemStructSize);
-  ComponentStructSize = sizeof(struct Component);
-  printf(stderr, "ComponentStructSize: %d\n", ComponentStructSize);
-  StackObjectStructSize = sizeof(struct StackObject);
-  printf(stderr, "StackObjectStructSize: %d\n", StackObjectStructSize);
-  ValRepStructSize = sizeof(struct ValRep);
-  printf(stderr, "ValRepStructSize: %d\n", ValRepStructSize);
-  RefRepStructSize = sizeof(struct RefRep);
-  printf(stderr, "RefRepStructSize: %d\n", RefRepStructSize);
-  StructureStructSize = sizeof(struct Structure);
-  printf(stderr, "StructureStructSize: %d\n", StructureStructSize);
+  ItemStructSize = headsize(Item)/4;
+  ComponentStructSize = headsize(Component)/4;
+  StackObjectStructSize = headsize(StackObject)/4;
+  ValRepStructSize = headsize(ValRep)/4;
+  RefRepStructSize = headsize(RefRep)/4;
+  StructureStructSize = headsize(Structure)/4;
 
   GetBetaEnv();
 
