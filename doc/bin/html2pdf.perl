@@ -25,6 +25,15 @@ if ($old){
     $htmldoc = "htmldoc";
 } else {
     $htmldoc = "htmldoc-1.8b4";
+    #NOTICE: from config.h.in:
+    #define MAX_CHAPTERS	1000
+    #define MAX_COLUMNS	20
+    #define MAX_HEADINGS	20000
+    #define MAX_IMAGES	2000
+    #define MAX_LINKS	40000
+    #define MAX_OBJECTS	(10 * MAX_PAGES)
+    #define MAX_PAGES	5000
+    #define MAX_ROWS	2000
 }
 
 $sequence_file = "sequence";
@@ -47,7 +56,7 @@ while (<SEQUENCE>){
 $pdfexisted=1 if ( -f $pdf );
 &make_titlepage();
 $files = join (' ', @sequence);
-$cmd = "$htmldoc -v -t pdf -f $pdf --toclevels 4 --bodycolor #ffffff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.1 --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Helvetica --bodyfont Helvetica --headfootsize 11.0 --headfootfont Helvetica $files";
+$cmd = "$htmldoc -v -t pdf -f $pdf --toclevels 4 --bodycolor #ffffff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.i --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Helvetica --bodyfont Helvetica --headfootsize 11.0 --headfootfont Helvetica $files";
 
 print "$cmd\n";
 $ENV{'LD_LIBRARY_PATH'} = "/usr/local/lib";
