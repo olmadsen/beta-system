@@ -80,47 +80,19 @@ register long _dummy7 asm("%r14"); /* really RefSP */
  */
 
 extern void *ReferenceStack[];
-#if 0
-extern long *savedRefSP;
-#endif
-
-#if 0
-static inline void setRefSP(void *p)
-{
-  asm volatile ("COPY\t%0, %%r14" : /* no out */ : "r" (p)); 
-  savedRefSP = (long *)p;
-}
-#endif
-
-#if 0
-static inline void *getRefSP()
-{     
-  void *res; 
-  asm volatile ("COPY\t%%r14, %0" : "=r" (res)); 
-  return res;
-}
-#endif
 
 static inline void pushReference(void *p)
 {
   /*fprintf(stdout, "push 0x%x at 0x%x\n", p, RefSP);*/
-#if 0
-  asm volatile ("STWS,MA\t%0,4(0,%%r14)" : /* no out */ : "r" (p): "%r14");
-#else
    *RefSP=(long)p; 
-  RefSP++; 
-#endif
+   RefSP++; 
 }
 
 static inline void *popReference()
 {
   void *p;
-#if 0
-  asm volatile ("LDWS,MB\t-4(0,%%r14),%0" : "=r" (p) : : "%r14");
-#else
   RefSP--; 
   p=(void *)*RefSP; 
-#endif
   /*fprintf(stdout, "pop 0x%x at 0x%x\n", p, RefSP);*/
   return p;
 }

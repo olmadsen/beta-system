@@ -369,14 +369,6 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   /* Try to fetch the address of current Beta object in a0.
    * The numbers 68 and 72 have been found ad hoc!
    */
-#if 0
-  fprintf(output, "BetaSignalHandler: &scp: 0x%x\n", (int)&scp);
-  fprintf(output, "BetaSignalHandler: &scp+68: 0x%x\n", (int)&scp+72);
-  fprintf(output, 
-	  "BetaSignalHandler: *(&scp+68): 0x%x\n", 
-	  (int)*(long *)((long)&scp+68));
-#endif
-
   theCell = (handle(Object)) (((long) &scp) + ((long) 68));
   if( inIOA( *theCell))
     if( isObject( *theCell)) 

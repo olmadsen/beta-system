@@ -168,31 +168,3 @@ char *NameOfGroup(struct group_header *group)
 {
   return NameOfGroupMacro(group);
 }
-
-
-#if 0
-#ifdef RTDEBUG
-static long BETA_code_start=-1, BETA_code_end=-1;
-
-long GetBetaCodeStart()
-{
-  if (BETA_code_start==-1)
-    BETA_code_start=(long)((struct group_header*)BETA_DATA1_ADDR)->code_start;
-  return BETA_code_start;
-}
-  
-long GetBetaCodeEnd()
-{ 
-  if (BETA_code_end==-1){
-    struct group_header *last, *current;
-    last = current = NextGroup (0);  /* first (betaenv) data segment */
-    while (current){
-      last = current;
-      current = NextGroup(last);
-    }
-    BETA_code_end=(long)last->code_end;
-  }
-  return BETA_code_end;
-}
-#endif
-#endif

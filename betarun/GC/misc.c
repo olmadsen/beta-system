@@ -289,16 +289,6 @@ void CheckRegisters(void)
 
   CHECK_HEAP(IOACheck(); LVRACheck(); AOACheck());
 
-#if 0
-  if (a2 &&inLVRA(a2)) fprintf(output, "a2 warning: 0x%x points to LVRA at PC 0x%x\n", a2, pc);
-  if (a3 &&inLVRA(a3)) fprintf(output, "a3 warning: 0x%x points to LVRA at PC 0x%x\n", a3, pc);
-  if (a4 &&inLVRA(a4)) fprintf(output, "a4 warning: 0x%x points to LVRA at PC 0x%x\n", a4, pc);
-  if (ebp &&inLVRA(ebp)) fprintf(output, "ebp warning: 0x%x points to LVRA at PC 0x%x\n", ebp, pc);
-  if (esi &&inLVRA(esi)) fprintf(output, "esi warning: 0x%x points to LVRA at PC 0x%x\n", esi, pc);
-  if (edx &&inLVRA(edx)) fprintf(output, "edx warning: 0x%x points to LVRA at PC 0x%x\n", edx, pc);
-  if (edi &&inLVRA(edi)) fprintf(output, "edi warning: 0x%x points to LVRA at PC 0x%x\n", edi, pc);
-  fflush(output);
-#endif
   if (!CheckCell(a2)) RegError(pc1, pc2, "_a2", a2);
   if (!CheckCell(a3)) RegError(pc1, pc2, "_a3", a3);
   if (!CheckCell(a4)) RegError(pc1, pc2, "_a4", a4);

@@ -9,24 +9,12 @@
 long mcheck_line;
 #endif
 
-#if defined(UNIX) /*|| defined (crts)*/
-
-#ifdef sg
-/* Added for silicon graphics */
-typedef union sigval {
-        long    sival_int;
-        void    *sival_ptr;
-} sigval;
-typedef struct {
-        unsigned long sigbits[4];
-} sigset_t;
-#endif
-
-#include <signal.h>
-#endif
+#ifdef RTVALHALLA
+#include "valhallaComm.h"
+#endif /* RTVALHALLA */
 
 #ifdef sun4
-#include <errno.h>
+/* SunOS does not supply a strerror - so we do it ourselves */
 extern int sys_nerr;
 extern char *sys_errlist[];
 char *strerror(int err)
@@ -38,11 +26,7 @@ char *strerror(int err)
 }
 #endif
 
-#ifdef RTVALHALLA
-#include "valhallaComm.h"
-#endif /* RTVALHALLA */
-
-#if defined(MAC)
+#ifdef MAC
 #include <Quickdraw.h>
 #include <TextEdit.h>
 #include <Fonts.h>
@@ -57,7 +41,7 @@ extern void _DataInit();
 
 #define CPromptID 7130
 
-void EnlargeMacHeap(char *buf)
+static void EnlargeMacHeap(char *buf)
 {
   if (StandAlone){
     sprintf(buf, "\nTry enlarging the application heap");
@@ -86,7 +70,9 @@ void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4)
 	fflush(output);
   }
 }
-#endif
+#else
+#define EnlargeMacHeap(buf) 
+#endif /* MAC */
 
 #ifdef PE
 #if defined(MAC)
@@ -180,20 +166,37 @@ Mjølner BETA System and may not be used for commercial\npurposes\n\
 #endif /* mac */
 #endif /* PE */
 
-long AllocateHeap(
-     ptr(long) base, /* points out a cell which should refer the base. */
-     ptr(long) top,
-     ptr(long) limit,
-     long size)      /* the size of the requested heap in bytes.       */
+static void
+AllocateHeapFailed(char *name, int numbytes)
 {
-  if( (*base = (long) MALLOC( size)) != 0){
-    INFO_ALLOC(size);
+  char buf[300];
+  sprintf(buf,
+	  "%s: Cannot allocate the %s (%dKb)\n", 
+	  ArgVector[0],
+	  name,
+	  (int)numbytes/Kb);
+  Notify(buf);
+  EnlargeMacHeap(buf);
+  BetaExit(1);
+}
+
+static long 
+AllocateHeap(ptr(long) base, 
+	     ptr(long) top,
+	     ptr(long) limit,
+	     long numbytes,  
+	     char *name
+	     )
+{
+  if((*base = (long)MALLOC(numbytes)) != 0){
+    INFO_ALLOC(numbytes);
     *top   = *base;
-    
-    *limit = *base + size; 
+    *limit = *base + numbytes; 
     return *base;
-  }else
+  } else {
+    AllocateHeapFailed(name, numbytes);
     return 0;
+  }
 }
 
 #ifdef PE
@@ -338,42 +341,33 @@ void Initialize()
     = ((CBFABlockSize+CallBackEntrySize)/CallBackEntrySize)*CallBackEntrySize;
   DEBUG_CBFA(fprintf(output, "CBFABlockSize: %d\n", (int)CBFABlockSize));
   
-  /* Setup the Infant Object Area */
+  /* Allocate the IOA heap (Infant Object Area) */
   if ( IOASize <= 0 ) {
     char buf[100];
     sprintf(buf,"Too small IOA size specified: %dKb", (int)IOASize/Kb);
     Notify2(buf, "Check your BETART environment variable.");
     BetaExit(1);
   }
-  if( !AllocateHeap((long*)&tmpIOA,(long*)&tmpIOATop,(long*)&IOALimit, IOASize ) ){
-    char buf[300];
-    sprintf(buf,"%s: Cannot allocate the IOA heap (%dKb).", 
-	    ArgVector[0],
-	    (int)IOASize/Kb);
-#ifdef MAC
-    EnlargeMacHeap(buf);
-#endif
-    Notify(buf);
-    BetaExit(1);
-  }
-
+  AllocateHeap((long*)&tmpIOA,
+	       (long*)&tmpIOATop,
+	       (long*)&IOALimit, 
+	       IOASize,
+	       "IOA heap");
 #if defined(sparc) || defined(NEWRUN)
   IOA = tmpIOA;
   IOATopOff = tmpIOATop - IOA;
-#endif
-
-#if defined(UseRefStack)
-  /*setIOAReg(tmpIOA);
-  setIOATopoffReg(tmpIOATop - tmpIOA);*/
-  IOA = tmpIOA;
-  IOATop = tmpIOATop;
-  /*setRefSP((void *)RefSP);*/
-#endif
-
-#if !defined(sparc) && !defined(NEWRUN) && !defined(UseRefStack)
+#else
   IOA = tmpIOA;
   IOATop = tmpIOATop;
 #endif
+  /* Clear the initial IOA heap */
+  memset(IOATop, 0, IOASize);
+
+  AllocateHeap((long*)&ToSpace, 
+	       (long*)&ToSpaceTop, 
+	       (long*)&ToSpaceLimit, 
+	       IOASize,
+	       "ToSpace heap");
 
 #ifdef crts
   baseRefSP = RefSP;
@@ -382,50 +376,19 @@ void Initialize()
 #endif
 
 #ifdef NEWRUN
+  /* Allocate the internal Reference Stack */
   ReferenceStack = (struct Object **)MALLOC(REFSTACKSIZE*sizeof(struct Object *));
   if (!ReferenceStack){
-    char buf[300];
-    sprintf(buf,
-	    "%s: Cannot allocate the Reference Stack (%dKb)\n", 
-	    ArgVector[0],
-	    (int)REFSTACKSIZE*sizeof(struct Object *)/Kb);
-#ifdef MAC
-    EnlargeMacHeap(buf);
-#endif
-    Notify(buf);
-    BetaExit(1);
+    AllocateHeapFailed("Reference Stack",REFSTACKSIZE*sizeof(struct Object *));
   }
   RefSP = &ReferenceStack[0]; /* points to first free element */
 
   CompStack = (long *)MALLOC(REFSTACKSIZE*sizeof(long));
   if (!CompStack){
-    char buf[300];
-    sprintf(buf,
-	    "%s: Cannot allocate the Component Stack (%dKb)\n", 
-	    ArgVector[0],
-	    (int)REFSTACKSIZE*sizeof(long)/Kb);
-#ifdef MAC
-    EnlargeMacHeap(buf);
-#endif
-    Notify(buf);
-    BetaExit(1);
+    AllocateHeapFailed("Component Stack",*REFSTACKSIZE*sizeof(long));
   }
   CompSP = &CompStack[0]; /* points to first free element */
-
 #endif /* NEWRUN */
-
-  if( !AllocateHeap( (long*)&ToSpace, (long*)&ToSpaceTop, (long*)&ToSpaceLimit, IOASize ) ){
-    char buf[300];
-    sprintf(buf,
-	    "%s: Cannot allocate the ToSpace heap (%dKb)\n", 
-	    ArgVector[0],
-	    (int)IOASize/Kb);
-#ifdef MAC
-    EnlargeMacHeap(buf);
-#endif
-    Notify(buf);
-    BetaExit(1);
-  }
   
   /* Allocate the Callback Function Area */
   CBFAAlloc();
@@ -456,13 +419,11 @@ void Initialize()
 #ifdef SIGEMT
      signal( SIGEMT,  (void (*)(int))BetaSignalHandler);
 #endif
-
 #ifdef RTDEBUG
 #ifdef SIGINT
      signal( SIGINT,  (void (*)(int))BetaSignalHandler);
 #endif
 #endif
-
    }
 #endif /* UNIX || crts */
 
@@ -504,8 +465,7 @@ void Initialize()
   InfoS_Start();
 
 #ifdef RTVALHALLA
-  if (valhallaID)
-    valhallaInit (0);
+  if (valhallaID) valhallaInit (0);
 #endif /* RTVALHALLA */
   
 }

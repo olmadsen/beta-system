@@ -8,37 +8,26 @@
 #include "beta.h"
 #include "crun.h"
 
-#if 0
-#ifdef hppa
-unsigned savedIOATopoff;
-long *   savedIOA;
-long *   savedRefSP;
-#endif
-#endif
-
-#ifdef hppa
+#if (defined(sparc) && (!defined(RTDEBUG)))
+/* An extra nop is needed before retl in case Return is called directly
+ * from a runtime routine. This is the case for e.g. an empty program.
+ * If you try to do this with an asm("nop") in a C function, the C function
+ * will NOT become a leaf routine. Thus we do it manually her.
+ */
+#ifdef sun4s
+asmlabel(Return, "nop; retl; nop");
+#else
+asmlabel(_Return, "nop; retl; nop");
+#endif /* sun4s */
+#else
 void Return() 
 {
   DEBUG_CODE(NumReturn++);
   return;
 }
 #endif
-     
-#ifdef crts
-void Return() 
-{}
-#endif
 
 #ifdef sparc
-/* The first nop is needed in case Return is called directly from a 
- * runtime routine. This is the case for e.g. an empty program.
- */
-#ifdef sun4s
-asmlabel(Return, "nop; retl; nop");
-#else
-asmlabel(_Return, "nop; retl; nop");
-#endif
-
 /* Functions used to call RT routines directly from C.
  * Needed because %i1 in calling regwin is destroyed by (C)AlloSI
  * Must be here away from the corresponding CAlloXXX functions
@@ -72,10 +61,9 @@ struct Item *SPARC_AlloI(struct Object *origin, int i1, struct ProtoType *proto,
   GCable_Exit(1);
 }
 
-#endif
+#endif /* sparc */
 
-void
-  RefNone(ref(Object) theObj)
+void RefNone(ref(Object) theObj)
 {
 #if (defined(hppa) && defined(RTLAZY))
   /* Called with the possible dangling reference in %r31 */
@@ -173,7 +161,6 @@ void FailureExit()
 #endif
 
 #ifdef crts
-
 /* Global address registers */
 long a0, a1, a2, a3, a4, a7; 
 long leave;
@@ -184,8 +171,6 @@ void FailureExit()
 }
 
 /* New RT routines for crts */
-
-
 void Trap()
 {
   fprintf(output, "Trap called... Exiting\n");
@@ -225,8 +210,6 @@ signed long SignExtWord(signed short a)
 {
   return (a<<16)>>16;
 }
-
-
 
 #include <setjmp.h>
 

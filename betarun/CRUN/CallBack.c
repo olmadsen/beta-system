@@ -289,15 +289,7 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
 
     /* Pop CallBackFrame */
     ActiveCallBackFrame = next;
-#if 0
-    if (next)
-      BetaStackTop        = betaTop;
-    else
-      BetaStackTop        = 0; /* Valhalla assumes BetaStackTop is zero
-				* if no C on stack */
-#else
     BetaStackTop        = betaTop;
-#endif
     
     /* Fool gcc into believing that the address of a6 is taken, thus
        making it save it on stack. */
@@ -438,12 +430,6 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
     /* cbf.tmp     = (long) getSPReg();  so the GC can find it */
     ActiveCallBackFrame = &cbf;
 
-#if 0
-    setIOAReg(savedIOA);
-    setIOATopoffReg(savedIOATopoff);
-    setRefSP(savedRefSP);
-#endif
-
     Ck(theStruct); Ck(theStruct->iOrigin);
     setCallReg(theStruct->iProto);
     setOriginReg(theStruct->iOrigin);
@@ -474,21 +460,6 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
     ActiveCallBackFrame = cbf.next;
 #ifndef UseRefStack
     BetaStackTop        = cbf.betaTop;
-#endif
-
-#if 0
-    asm ("LDIL\tLR'savedIOA,%r1");
-    asm ("STW\t%r17,RR'savedIOA(0,%r1)");
-    asm ("LDIL\tLR'savedIOATopoff,%r1");
-    asm ("STW\t%r18,RR'savedIOATopoff(0,%r1)");
-    asm ("LDIL\tLR'savedRefSP,%r1");
-    asm ("STW\t%r14,RR'savedRefSP(0,%r1)");
-
-/*
-    savedIOA       = getIOAReg();
-    savedIOATopoff = getIOATopoffReg();
-    savedRefSP     = getRefSP();
-*/
 #endif
 
     return retval;

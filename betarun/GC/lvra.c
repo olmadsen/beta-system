@@ -172,7 +172,7 @@ static void LVRAInsertFreeElement(ref(ValRep) freeRep)
 	      } );
   headRep = LVRATable[index];  LVRATable[index] = freeRep;
   freeRep->Proto  = (ref(ProtoType)) headRep;
-  freeRep->GCAttr = 0; /* FIXME: NOT NEEDED always done before this func is called? */
+  freeRep->GCAttr = 0; /* FIXME: NOT NEEDED always done before this func is called? Change into assumption */
   DEBUG_CODE( if( index == TableMAX )
 	     fprintf(output, "(LVRAInsertFreeElement: size=%d (0x%x))", 
 		     (int)freeRep->HighBorder,

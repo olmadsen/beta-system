@@ -1299,8 +1299,20 @@ void AOACheckReference( theCell)
 
 #ifdef RTLAZY
   if (isLazyRef(*theCell)){
-    fprintf(output, "Lazy in AOA: 0x%x: %d\n", (int)theCell, (int)*theCell);
-    /* FIXME: Check that it is in negAOArefs */
+    int i;
+    int found=0;
+    for (i=0; i<negAOAsize; i++){
+      if (negAOArefs[i]==(long)*theCell){
+	found=1; break;
+      }
+    }
+    if (!found){
+      fprintf(output, 
+	      "Dangler in AOA, but NOT in negAOArefs table: 0x%x: %d\n", 
+	      (int)theCell, 
+	      (int)*theCell);
+      Illegal();
+    }
     return;
   }
 #endif

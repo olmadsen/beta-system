@@ -255,6 +255,16 @@ typedef struct group_header
   struct group_header **ptr; /* pointer back to beta_data file */
 } group_header;
 
+#ifdef sgi
+/* Added for silicon graphics */
+typedef union sigval {
+        long    sival_int;
+        void    *sival_ptr;
+} sigval;
+typedef struct {
+        unsigned long sigbits[4];
+} sigset_t;
+#endif
 
 #if defined(linux) || defined(nti)
 /* Header files do not declare this! */
