@@ -204,6 +204,9 @@ extern void ProcessStackObj(struct StackObject *, CellProcessFunc func);
 #else
 extern void ProcessStackObj(struct StackObject *);
 #endif
+#if (defined(RTVALHALLA) && defined(intel))
+extern void ProcessRefStack(void);
+#endif /* RTVALHALLA && intel */
 
 /* GC/ioa.c */
 extern void IOAGc(void);

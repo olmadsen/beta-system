@@ -44,6 +44,8 @@
 /***************************************************************************/
 
 #if defined(RTVALHALLA) && defined(intel)
+
+#ifdef SAVE_IN_DOT
 #include "dot.h"
 /* DOTdummyOnDelete
  * ==================
@@ -60,6 +62,7 @@ static void DOTdummyOnDelete (int index)
    *   });
    */
 }
+#endif /* SAVE_IN_DOT */
 
 typedef struct register_handles {
   int edx;
@@ -75,24 +78,46 @@ static void SaveLinuxRegisters(struct sigcontext_struct *scp,
 {
   DEBUG_VALHALLA({
     fprintf(output, 
-	    "Sighandler: Saving registers (at PC=0x%08x) in DOT:\n",
+	    "Sighandler: Saving registers (at PC=0x%08x) ",
 	    (int)scp->eip);
   });
-  if (scp->edx && isObject((Object*)scp->edx)){
+#ifdef SAVE_IN_DOT
+  DEBUG_VALHALLA(fprintf(output, "in DOT:\n"));
+#else
+  DEBUG_VALHALLA(fprintf(output, "on ReferenceStack:\n"));    
+#endif /* SAVE_IN_DOT */
+
+  if (scp->edx && inBetaHeap((Object*)scp->edx) && isObject((Object*)scp->edx)){
     DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->edx));
+#ifdef SAVE_IN_DOT
     handles->edx = DOThandleInsert((Object*)scp->edx, DOTdummyOnDelete, 0);
+#else /* SAVE_IN_DOT */
+    SaveVar(scp->edx); handles->edx=1;
+#endif /* SAVE_IN_DOT */
   }
-  if (scp->edi && isObject((Object*)scp->edi)){
+  if (scp->edi && inBetaHeap((Object*)scp->edi) && isObject((Object*)scp->edi)){
     DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->edi));
+#ifdef SAVE_IN_DOT
     handles->edi = DOThandleInsert((Object*)scp->edi, DOTdummyOnDelete, 0);
+#else /* SAVE_IN_DOT */
+    SaveVar(scp->edi); handles->edi=1;
+#endif /* SAVE_IN_DOT */
   }
-  if (scp->ebp && isObject((Object*)scp->ebp)){
+  if (scp->ebp && inBetaHeap((Object*)scp->ebp) && isObject((Object*)scp->ebp)){
     DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->ebp));
+#ifdef SAVE_IN_DOT
     handles->ebp = DOThandleInsert((Object*)scp->ebp, DOTdummyOnDelete, 0);
+#else /* SAVE_IN_DOT */
+    SaveVar(scp->ebp); handles->ebp=1;
+#endif /* SAVE_IN_DOT */
   }
-  if (scp->esi && isObject((Object*)scp->esi)){
+  if (scp->esi && inBetaHeap((Object*)scp->esi) && isObject((Object*)scp->esi)){
     DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->esi));
+#ifdef SAVE_IN_DOT
     handles->esi = DOThandleInsert((Object*)scp->esi, DOTdummyOnDelete, 0);
+#else /* SAVE_IN_DOT */
+    SaveVar(scp->esi); handles->esi=1;
+#endif /* SAVE_IN_DOT */
   }
   DEBUG_VALHALLA(fprintf(output, "\n"));
 }
@@ -101,26 +126,47 @@ static void RestoreLinuxRegisters(struct sigcontext_struct *scp,
 				  register_handles *handles)
 {
   DEBUG_VALHALLA({
-    fprintf(output, "Sighandler: Restoring registers from DOT:\n");
+    fprintf(output, "Sighandler: Restoring registers ");
   });
+#ifdef SAVE_IN_DOT
+  DEBUG_VALHALLA(fprintf(output, "from DOT:\n"));
+#else /* SAVE_IN_DOT */
+  DEBUG_VALHALLA(fprintf(output, "from ReferenceStack:\n"));
+#endif /* SAVE_IN_DOT */
   if (handles->edx>=0) {
+#ifdef SAVE_IN_DOT
     scp->edx = (unsigned long)DOThandleLookup(handles->edx);
     DOThandleDelete (handles->edx);
+#else /* SAVE_IN_DOT */
+    RestoreIntVar(scp->edx);
+#endif /* SAVE_IN_DOT */
     DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->edx));
   }
   if (handles->edi>=0) {
+#ifdef SAVE_IN_DOT
     scp->edi = (unsigned long)DOThandleLookup(handles->edi);
     DOThandleDelete (handles->edi);
+#else /* SAVE_IN_DOT */
+    RestoreIntVar(scp->edi);
+#endif /* SAVE_IN_DOT */
     DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->edi));
   }
   if (handles->ebp>=0) {
+#ifdef SAVE_IN_DOT
     scp->ebp = (unsigned long)DOThandleLookup(handles->ebp);
     DOThandleDelete (handles->ebp);
+#else /* SAVE_IN_DOT */
+    RestoreIntVar(scp->ebp);
+#endif /* SAVE_IN_DOT */
     DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->ebp));
   }
   if (handles->esi>=0) {
+#ifdef SAVE_IN_DOT
     scp->esi = (unsigned long)DOThandleLookup(handles->esi);
     DOThandleDelete (handles->esi);
+#else /* SAVE_IN_DOT */
+    RestoreIntVar(scp->esi);
+#endif /* SAVE_IN_DOT */
     DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->esi));
   }
   DEBUG_VALHALLA(fprintf(output, "\n"));

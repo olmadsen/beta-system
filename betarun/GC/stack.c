@@ -45,7 +45,7 @@ static void initLabels()
   FILE *thePipe; 
   long labelAddress;
 
-  fprintf(output, "(initLabels ... ");
+  fprintf(output, "[initLabels ... ");
   fflush(output);
 
 #ifdef sun4s
@@ -137,7 +137,7 @@ static void initLabels()
       }
       pclose (thePipe);
     }
-  fprintf(output, " done)\n");
+  fprintf(output, " done]");
   fflush(output);
 
 #ifdef DEBUG_LABELS
@@ -180,6 +180,71 @@ char *getLabel (addr)
 
 #endif /* RTDEBUG */
 /************************* End Label Debug *************************/
+
+/************************* Valhalla reference stack ****************/
+
+#if (defined(RTVALHALLA) && defined(intel))
+
+#ifdef RTDEBUG
+void PrintRefStack(void)
+{
+  Object *theObj;
+  Object **theCell = (Object **)&ReferenceStack[0];
+  long size = ((long)RefSP - (long)&ReferenceStack[0])/4;
+
+  fprintf(output, "\nReferenceStack: [%x .. %x[\n", (int)&ReferenceStack[0], (int)RefSP);
+  for(; size > 0; size--, theCell++){
+    theObj = *theCell;
+    fprintf(output, "  0x%08x: 0x%08x\n", (int)theCell, (int)theObj);
+    if (theObj && inBetaHeap(theObj) && isObject(theObj)) {
+      /* Normal object */
+    } 
+#ifdef RTLAZY
+    else if (isLazyRef(theObj)) {
+      DEBUG_LAZY(fprintf (output, "ProcessRefStack: Lazy ref: %d\n", (int)theObj));
+      ProcessReference(casthandle(Object)(theCell));
+    }
+#endif
+    else {
+      if (theObj 
+	  && !isProto(theObj) /* e.g. AlloI is called with prototype in ref. reg. */
+	  && !isCode(theObj)  /* e.g. at INNER a ref. reg contains code address */
+	  ) {
+	fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
+		(int)theCell, 
+		(int)theObj);
+	Illegal();
+      }
+    }
+  }
+}
+#endif /* RTDEBUG */
+
+void ProcessRefStack(void)
+{
+  Object *theObj;
+  Object **theCell = (Object **)&ReferenceStack[0];
+  long size = ((long)RefSP - (long)&ReferenceStack[0])/4;
+
+  DEBUG_IOA(PrintRefStack());
+  for(; size > 0; size--, theCell++) {
+    theObj = *theCell;
+    if (theObj && inBetaHeap(theObj) && isObject(theObj)) {
+      ProcessReference(theCell);
+      CompleteScavenging();
+    }
+#ifdef RTLAZY
+    else if (isLazyRef(theObj)) {
+      ProcessReference(theCell);
+    }
+#endif /* RTLAZY */
+  }
+}
+
+#endif /* RTVALHALLA && intel */
+
+/************************* End Valhalla reference stack ****************/
+
 
 /************************* Other common debug stuff ****************/
 #ifdef RTDEBUG

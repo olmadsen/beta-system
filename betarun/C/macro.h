@@ -400,6 +400,7 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 
 #define SaveVar(v)    push(v)
 #define RestoreVar(v) pop(v)
+#define RestoreIntVar(v) v = (int) *--RefSP
 #endif /* NEWRUN || (RTVALHALLA && intel) */
 
 #ifdef NEWRUN

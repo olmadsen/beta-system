@@ -85,7 +85,7 @@ void IOAGc()
   if( AOATopBlock ) HandledInAOA = AOATopBlock->top;
   
   /* Process AOAtoIOAtable */
-  DEBUG_IOA(fprintf(output, " #(IOA: AOAtoIOAtable"); fflush(output));
+  DEBUG_IOA(fprintf(output, " #(IOA: Roots: AOAtoIOAtable"); fflush(output));
   AOAtoIOACount = 0;
   if( AOAtoIOAtable ){ 
     long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
@@ -124,46 +124,57 @@ void IOAGc()
   ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
 #endif /* MT */
 #endif /* NEWRUN */
-  DEBUG_IOA(fprintf(output, " #(IOA: ActiveComponent"); fflush(output));
+  DEBUG_IOA(fprintf(output, " #(IOA: Root: ActiveComponent"); fflush(output));
   ProcessReference( (handle(Object))&ActiveComponent);
   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 
-  DEBUG_IOA(fprintf(output, " #(IOA: BasicItem"); fflush(output));
+  DEBUG_IOA(fprintf(output, " #(IOA: Root: BasicItem"); fflush(output));
   ProcessReference( (handle(Object))&BasicItem );
   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 
 #ifdef INTERPRETER
   /* Only used by Jawahar's interpreter */
   if (InterpretItem[0]) {
-    INFO_IOA(fprintf(output, " #(IOA: InterpretItem[0]"); fflush(output));
+    DEBUG_IOA(fprintf(output, " #(IOA: Root: InterpretItem[0]"); fflush(output));
     ProcessReference( (handle(Object))(&InterpretItem[0]) );
-    INFO_IOA(fprintf(output, ")\n"); fflush(output));
+    DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
   }
   if (InterpretItem[1]) {
-    INFO_IOA(fprintf(output, " #(IOA: InterpretItem[1]"); fflush(output));
+    DEBUG_IOA(fprintf(output, " #(IOA: Root: InterpretItem[1]"); fflush(output));
     ProcessReference( (handle(Object))(&InterpretItem[1]) );
-    INFO_IOA(fprintf(output, ")\n"); fflush(output));
+    DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
   }
 #endif /* INTERPRETER */
 
 #ifdef RTLAZY
   if (LazyItem) {
-    INFO_IOA(fprintf(output, " #(IOA: LazyItem"); fflush(output));
+    DEBUG_IOA(fprintf(output, " #(IOA: Root: LazyItem"); fflush(output));
     ProcessReference( (handle(Object))(&LazyItem) );
-    INFO_IOA(fprintf(output, ")\n"); fflush(output));
+    DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
   }
 #endif /* RTLAZY */
 
   CompleteScavenging();
   
 #ifdef MT
+  DEBUG_IOA(fprintf(output, " #(IOA: Roots: TSD"); fflush(output));
   ProcessTSD();
+  DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 #else
+  DEBUG_IOA(fprintf(output, " #(IOA: Roots: Stack"); fflush(output));
   ProcessStack();
+  DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 #endif
+
+#if (defined(RTVALHALLA) && defined(intel))
+  DEBUG_IOA(fprintf(output, " #(IOA: Roots: ReferenceStack"); fflush(output));
+  ProcessRefStack();
+  DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
+#endif /* RTVALHALLA && intel */
   
+  DEBUG_IOA(fprintf(output, " #(IOA: Roots: CBFA"); fflush(output));
   ProcessCBFA();
-  
+  DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
   
   /* Objects copied til AOA until now has not been proceesed. 
    * During proceesing these objects, new objects may be copied to
@@ -189,11 +200,11 @@ void IOAGc()
     }
     DEBUG_AOA( AOAtoIOACheck());
   }
-  
-  INFO_IOA(fprintf(output, " #(IOA: DOT"); fflush(output));
+    
+  DEBUG_IOA(fprintf(output, " #(IOA: Weak roots: DOT"); fflush(output));
   ProcessDOT();
-  INFO_IOA(fprintf(output, ")\n"); fflush(output)); 
-  
+  DEBUG_IOA(fprintf(output, ")\n"); fflush(output)); 
+
   DEBUG_CODE(dump_aoa=(AOANeedCompaction && DumpAOA));
 
 #if defined(NONMOVEAOAGC) && defined(LIN)
