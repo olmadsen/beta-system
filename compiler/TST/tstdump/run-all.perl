@@ -131,7 +131,7 @@ foreach $f (@files) {
 		&rm("$f.dump");
 		&rm("$f.ref");
 		&rm("$f.app");
-		&rm("$f$exe");
+		&rm("$f$exe") unless $FastMode;
 	    } else {
 		print "[Difference in dump]\n";
 		system("diff -i $f.ref $f.app > $f.diff");
