@@ -1,0 +1,194 @@
+ORIGIN '../nameTable';
+BUILD nti '$$/labelnametable.o' 'external/labelnametable.c' 'betacc -D DYN $0 $1';
+(* FIXME: should include the one in debugger (not quite identical) *)
+
+INCLUDE '~beta/containers/list';
+INCLUDE '~beta/win32lib/windowsmisc';
+INCLUDE '~beta/basiclib/math';
+
+-- lib: attributes --
+log2phys: external
+  (* Is in ../betaLink.c *)
+  (# log2phys_logical, log2phys_offset: @integer 
+  enter log2phys_logical 
+  exit log2phys_offset
+  #);
+
+tracedll: (# exit false #);
+
+GetModuleHandle_integer: external
+  (#
+     in0: @integer; (* LPCSTR *)
+     out: @integer; (* HMODULE *)
+  enter in0
+  do 'GetModuleHandleA'->callStd;
+  exit out
+  #);
+
+-- nameTableMDPrivate:descriptor --
+(# self: @Integer;
+   
+   dllinfo: (# name: @Text; handle: @Integer #);
+   
+   dllList: @List
+     (# element::dllInfo;
+        addName: 
+          (# T: ^Text; dp: ^ dllInfo;
+          enter T[]
+          do &dllInfo[]->dp[];
+             T->dp.name;
+             dp[]->append;
+          #);
+     #);
+#)
+
+-- NameTableInit: DoPart --
+do 
+   (* FIXME: Dirty hach to make these functions get linked statically
+    * so that figures.bet may be loaded... 
+    *)
+   0->sqrt->acos; 0.5-> tan->fabs;
+   
+   
+   (* Add all library listed in linkdirective by the compiler *)
+   'kernel32' -> mdPrivate.dllList.addName;
+   'user32' -> mdPrivate.dllList.addName;
+   'gdi32' -> mdPrivate.dllList.addName;
+   'comdlg32' -> mdPrivate.dllList.addName;
+   'advapi32' -> mdPrivate.dllList.addName;
+   'shell32' -> mdPrivate.dllList.addName;
+   'ole32' -> mdPrivate.dllList.addName;
+   'oleaut32' -> mdPrivate.dllList.addName;
+   'wsock32' -> mdPrivate.dllList.addName;
+   'comctl32' -> mdPrivate.dllList.addName;
+   (* Static library, not a DLL:
+    * 'uuid' -> mdPrivate.dllList.addName;
+    * 'winspool' -> mdPrivate.dllList.addName;
+    *)
+   
+   (* FIXME GetProcAdr on this handle does not work.
+    * 0->GetModuleHandle_integer->mdprivate.self;
+    * Instead, allways use NM for now...
+    *)
+   true->out_of_process;
+   
+   H.init;
+   (if out_of_process (* really: Use NM *) then
+       (if traceStream[] <> none then
+           'initReadNameTable...'->traceStream.puttext; 
+       if);
+       (# exefilename: ^text; 
+       do
+          exeName.copy->exefilename[];
+          ExeFileExtension->exefilename.appendExtension;
+          exefilename->DYN_initReadNameTable;
+          
+       #);
+       (if traceStream[] <> none then 'done.'->traceStream.putline;  if);
+       loop:
+         (# adr: @Integer; label: @Text
+         do
+            DYN_nextAddress->adr;
+            (if adr = - 1 then leave loop if) (* datpete 5/1/98 *) ;
+            DYN_nextLabel->label;
+            (if traceStream[] <> none then
+                'Label:'->traceStream.puttext;
+                adr->traceStream.puthex;
+                ' '->traceStream.put;
+                label[]->traceStream.putline;
+                
+            if);
+            (label.copy,adr)->add;
+            INNER init;
+            (* datpete 5/1/98: changed to use -1 test above.
+             * The stuff below is too UNIX dependant!
+             * (if not ('_end'->Label.equal) then restart loop if)
+             *)
+            restart loop;
+            
+         #)  
+   if);
+   
+   '_log2phys' -> lookup -> log2phys -> logical2physical_offset;
+   (if traceDll then
+       'dynlib_mdInit:logical2physical_offset='->screen.putText; 
+       logical2physical_offset->screen.putHex; screen.newLine;
+   if);
+   
+   
+-- NameTableLookupNative: Descriptor --
+(# symname: ^Text;
+   celladr: @Integer;
+   
+do (if tracedll then
+       '(NameTableLookupNative: Looking for '->screen.putLine;
+       name[]->screen.putText; ' '->screen.put;
+   if);
+   
+   (* First look for symbol in staticaly linked executable *)
+   (if false (* ((mdPrivate.self, name)->GetProcAddress ->adr)<>0 *) then
+       adr-logical2physical_offset->adr;
+       (if tracedll then 
+           'Name found statically at '->screen.putText;
+           adr->putHex;
+       if);
+    else
+       (* Strip name of __imp__ and @28 *)
+       (if '__imp__'->((1,7)->name.sub).equal then
+           4->malloc->celladr;
+           (8,maxInt)->name.sub->symname[];
+        else
+           name.copy->symname[];
+       if);
+       '@'->symname.findAll
+       (# 
+       do (1,inx-1)->symname.sub->symname[];
+       #);
+       
+       (if tracedll then '('->screen.put; 
+           symname[]->screen.putText; ') '->screen.putText; 
+       if);
+       
+       search: mdPrivate.dllList.scan
+         (#         
+         do (if current.handle=0 then
+                (* Not loaded, load it now. *)    
+                (if tracedll then '\ntrying to load '-> screen.putText;
+                    current.name[]->screen.putText; ' '->screen.put;
+                if);
+                current.name -> LoadLibrary -> current.handle;
+            if);
+            
+            (if current.handle=0 then
+                'Failed to loadLibrary dll '->screen.putText;
+                current.name[]->screen.putLine;
+             else    
+                (* Check if name is in this dll *)
+                (if ((current.handle,symname) -> 
+                    GetProcAddress ->adr)<>0 then
+                    (* Name found *)
+                    (if celladr<>0 then
+                        (* Name was memoryindirect, return indirect cell
+                         * rather than the function pointer
+                         *)
+                        (adr)%putLongAt(CellAdr);
+                        celladr-logical2physical_offset->adr;
+                     else
+                        adr-logical2physical_offset->adr;
+                    if);
+                    (if tracedll then 
+                        'Name found at '->screen.putText;
+                        adr->putHex;
+                    if);
+                    leave search
+                if);
+            if);
+         #);
+       (if tracedll then ')'->screen.putLine if);
+   if)    
+#)
+
+-- NameTableLookupCFixName: descriptor --
+(#
+do '_' -> (name.copy).prepend -> name[]
+#)

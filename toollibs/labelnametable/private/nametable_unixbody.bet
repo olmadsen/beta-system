@@ -1,0 +1,85 @@
+ORIGIN '../nameTable';
+INCLUDE '~beta/unixlib/dlfcn';
+BUILD default '$$/labelnametable.o' 'external/labelnametable.c' '$CC -c -D$$ -DDYN -o $0 $1';
+(* FIXME: should include the one in debugger (identical) *)
+
+-- nameTableMDPrivate:descriptor --
+(# 
+   self: @integer;
+   init_nm:
+     (# one_done:< object;
+        exeName: ^text
+     enter exeName[]
+     do ExeFileExtension->exeName.appendExtension;
+        (if traceStream[] <> none then
+            'initReadNameTable for: ' -> traceStream.puttext; 
+            exeName[] -> tracestream.puttext; '...' -> tracestream.puttext
+        if);
+        exeName->DYN_initReadNameTable;
+        (if traceStream[] <> none then 'done.'->traceStream.putline;  if);
+        loop:
+          (# adr: @Integer; label: @Text
+          do
+             DYN_nextAddress->adr;
+             (if adr = - 1 then leave loop if) (* datpete 5/1/98 *) ;
+             DYN_nextLabel->label;
+             (if traceStream[] <> none then
+                 'Label:'->traceStream.puttext;
+                 adr->traceStream.puthex;
+                 ' '->traceStream.put;
+                 label[]->traceStream.putline;
+                 
+             if);
+             (label.copy,adr)->add;
+             
+             (* datpete 5/1/98: changed to use -1 test above.
+              * The '_end' test is too UNIX dependant!
+              * (if not ('_end'->Label.equal) then restart loop if)
+              *)
+             restart loop;
+          #);
+     #)
+#)
+
+-- NameTableInit: DoPart --
+do
+   H.init;
+   (if out_of_process then
+       (if ExternalLookup##=TextToInteger## then
+           (* ExternalLookup not further bound - use nm *)
+           exeName[] -> MDprivate.init_nm(# one_done::(# do INNER init #)#);
+        else
+           (* ExternalLookup further bound - use it instead of nm *)
+           &ExternalLookup[] -> THIS(NameTable).ExternalLookup[];
+       if);
+    else
+       (* in_process - no need for nm *)
+       (0,RTLD_NOW %Bor RTLD_GLOBAL)->dlopen_integer->mdPrivate.self;
+   if)
+     
+
+-- NameTableLookupNative: Descriptor --
+(#  
+do (if out_of_process and (ExternalLookup[]<>NONE) then
+       name[] -> ExternalLookup -> adr;
+       (if tracestream[]<>NONE then
+           ' [ExternalLookup: '->tracestream.puttext;
+           name[] -> tracestream.puttext;
+           ' resolved to address ' -> tracestream.puttext;
+           adr -> tracestream.puthex;
+           '] ' -> tracestream.puttext;
+       if);
+    else
+       (mdPrivate.self,name)->dlsym->adr;
+       (if tracestream[]<>NONE then
+           ' [dlsym('->tracestream.puttext;
+           name[] -> tracestream.puttext;
+           ') returns address ' -> tracestream.puttext;
+           adr -> tracestream.puthex;
+           '] ' -> tracestream.puttext;
+       if);
+   if);
+#)  
+
+-- NameTableLookupCFixName: descriptor --
+(# #)
