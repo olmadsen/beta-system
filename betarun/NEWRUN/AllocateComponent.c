@@ -35,10 +35,6 @@ struct Component *AlloC(struct Object *origin, struct ProtoType *proto, long *SP
   /* Initialize the structual part; prototype, age etc. */
   comp->Proto = ComponentPTValue;
   /* comp->GCAttr set above if in IOA */
-  comp->StackObj = (struct StackObject *)0;
-  comp->CallerObj = (struct Object *)0;
-  comp->CallerComp = (struct Component *)0;
-  comp->CallerLSC = 0;
   
   setup_item((struct Item *)&comp->Body, proto, origin);
   
