@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopySliceValRep.c,v 1.14 1992-09-03 12:55:55 beta Exp $
+ * Mod: $Id: CopySliceValRep.c,v 1.15 1992-09-07 15:37:26 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -52,7 +52,7 @@ void CCopySVR(ref(ValRep) theRep,
     high =  high - low + 1;
     if (high < 0) high = 0;
     
-    Protect2(theRep,theItem,newRep = cast(ValRep) IOAalloc(DispatchValRepSize(theRep, high)));
+    Protect2(theRep,theItem,newRep = cast(ValRep) IOAalloc(DispatchValRepSize(theRep->Proto, high)));
     
     Ck(theRep); Ck(theItem);
 
