@@ -451,7 +451,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 	asm volatile ("ld [%i1+%lo(_LazyItem)],%i1 ! Object in %i1");
 #endif
 	asm volatile ("ld [%i1],%g1 ! Prototype in %g1");
-	asm volatile ("ld [%g1+-4],%g1 ! Entry point in %g1");
+	asm volatile ("ld [%g1+24],%g1 ! Entry point in %g1");
 	asm volatile ("call %g1; nop");
 
         /* Restore 'i' registers. */
@@ -574,7 +574,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 	/* call beta object handling the lazy fetch */
 	asm volatile ("mov.l _LazyItem, %a1 # Call BETA lazy handler");
 	asm volatile ("mov.l (%a1), %a0");
-	asm volatile ("mov.l -4(%a0), %a0");
+	asm volatile ("mov.l 24(%a0), %a0");
 	asm volatile ("jsr (%a0)");
 
 	/* Reset data registers. */

@@ -405,7 +405,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	    asm volatile ("pushl %ebp # Save base pointer for C");
 	    asm volatile ("movl LazyItem,%edi # Call lazy handler");
 	    asm volatile ("movl (%edi),%edx");
-	    asm volatile ("movl -4(%edx),%edx");
+	    asm volatile ("movl 24(%edx),%edx");
 	    asm volatile ("call *%edx");
 	    asm volatile ("popl %ebp #restore base pointer");
 #else
