@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-07-23 17:14:07 $, SID: $Revision: 1.13 $
+ * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-08-27 15:16:01 $, SID: $Revision: 1.14 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -47,6 +47,11 @@ Initialize()
   INFO( fprintf( output, ", CBFABlock=%dKb\n", CBFABlockSize/Kb) );
 
   /* Setup the Infant Object Area */
+  if ( IOASize <= 0 ) {
+      fprintf(output,"#Beta: Too small IOA size specified: %dKb\n", IOASize/Kb);
+      fprintf(output,"#Beta: Check your BETART environment variable\n");
+      exit(1);
+  }
   if( !AllocateHeap( &tmpIOA,     &tmpIOATop,     &IOALimit, IOASize ) ){
     fprintf(output,"#Beta: Couldn't allocate IOA (%dKb)\n", IOASize/Kb);
     exit(1);
