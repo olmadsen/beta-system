@@ -35,6 +35,7 @@ struct RegWin {
 
 register long *IOA asm("%g6");
 register unsigned IOATopoff asm("%g7");
+
 #define IOATop ((long *) ((char *)IOA+IOATopoff))
 
 /* Refcheck: R[] -> S[];

@@ -271,7 +271,6 @@ You may order an unconstrained version from\n",
 	IOALimit     = ToSpaceLimit;
       
 	ToSpace = Tmp;     ToSpaceTop = TmpTop;     ToSpaceLimit = TmpLimit;
-
     }
     
     IOAActive = FALSE;

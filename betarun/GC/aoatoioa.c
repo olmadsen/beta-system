@@ -76,7 +76,7 @@ void AOAtoIOAInsert( theCell)
       return;
     }
 #endif
-    
+
     DEBUG_AOA( Claim( inAOA( theCell),"AOAtoIOAInsert: theCell in AOA"));
     
     /* First Hash function. */
