@@ -17,4 +17,18 @@
 #define DEFAULT_CBFASIZE   1 * Kb
 #endif
 
+#ifndef DEFAULT_AOAMINFREE
+#define DEFAULT_AOAMINFREE     100 * Kb
+#endif
 
+#ifndef DEFAULT_AOAPERCENTAGE
+#define DEFAULT_AOAPERCENTAGE  0
+#endif
+
+#ifndef DEFAULT_LVRAMINFREE
+#define DEFAULT_LVRAMINFREE    200 * Kb
+#endif
+
+#ifndef DEFAULT_LVRAPERCENTAGE
+#define DEFAULT_LVRAPERCENTAGE 0
+#endif

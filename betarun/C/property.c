@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1991-02-06 08:21:25 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1991-02-11 14:28:29 $, SID: $Revision: 1.3 $
  * by Lars Bak
  */
 
@@ -27,6 +27,7 @@ static BooleanProperty( name)
   ENTRY("InfoIOA",  InfoIOA = TRUE);
   ENTRY("InfoAOA",  InfoAOA = TRUE);
   ENTRY("InfoLVRA", InfoLVRA = TRUE);
+  ENTRY("InfoLVRAAlloc", InfoLVRAAlloc = TRUE);
 
 #ifdef RTDEBUG
   ENTRY("DebugIOA",  DebugIOA = TRUE);
@@ -47,11 +48,44 @@ static ValueProperty( name, value)
   ENTRY("AOA",  AOABlockSize  = 1024 * intScan(name, value));
   ENTRY("LVRA", LVRABlockSize = 1024 * intScan(name, value));
   ENTRY("CBFA", CBFASize      = 1024 * intScan(name, value));
+
+  ENTRY("AOAMinFree",
+	AOAMinFree = 1024 * intScan(name, value); AOAPercentage = 0;);
+  ENTRY("AOAPercentage",
+	AOAPercentage = intScan(name, value);
+	AOAMinFree = 0;
+        if( AOAPercentage < 3 ){
+	  fprintf( output, "#AOAPercentage (%d) is to low, adjusted to 3\n",
+		  AOAPercentage);
+	  AOAPercentage = 3;
+	}
+	if( AOAPercentage > 97 ){
+	  fprintf( output, "#AOAPercentage (%d) is to high, adjusted to 3\n",
+		  AOAPercentage);
+	  AOAPercentage = 97;
+	});
+
+  ENTRY("LVRAMinFree",
+	LVRAMinFree = 1024 * intScan(name, value); LVRAPercentage = 0;);
+  ENTRY("LVRAPercentage",
+	LVRAPercentage = intScan(name, value);
+	LVRAMinFree = 0;
+        if( LVRAPercentage < 3 ){
+	  fprintf( output, "#LVRAPercentage (%d) is to low, adjusted to 3\n",
+		   LVRAPercentage);
+	  LVRAPercentage = 3;
+	}
+	if( LVRAPercentage > 97 ){
+	  fprintf( output, "#LVRAPercentage (%d) is to high, adjusted to 3\n",
+		   LVRAPercentage);
+	  LVRAPercentage = 97;
+	});
+
   ENTRY("InfoFile",
     if( !(output = fopen(value, "w")) ){
-      fprintf( stderr,"#warning: couldn't open %s as InfoFile, stderr is used\n");
-      output = stderr; }
-  );
+      fprintf( stderr, "#InfoFile %s couldn't be opened, stderr is used\n");
+      output = stderr;
+    });
    
   /* IF NO ENTRY IS SELECTED PLEASE REPORT UNKNOWN PROPERTY */
   fprintf( stderr, "#Property '%s#%s' not known!\n", name, value);

@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1991-01-30 10:52:35 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1991-02-11 14:28:09 $, SID: $Revision: 1.2 $
  * by Lars Bak.
  */
 
@@ -59,16 +59,20 @@ ref(Object) CopyObject( theObj)
   return newObj;
 }
 
-ref(Object) NewCopyObject( theObj)
-  ref(Object) theObj;
+ref(Object) NewCopyObject( theObj, theCell)
+  ref(Object)    theObj;
+  handle(Object) theCell;
 {
 #ifdef LVR_Area
   if( isValRep( theObj) ){
     if( ((ref(ValRep)) theObj)->HighBorder > 200){
       ref(Object) newObj; extern ref(Object) CopyObjectToLVRA(); 
-      if( newObj = CopyObjectToLVRA( theObj) )
+      if( newObj = CopyObjectToLVRA( theObj) ){
+	newObj->GCAttr = (long) theCell; /* Preserve the LVRA-Cycle */
+	DEBUG_LVRA( Claim( (long) ((ref(ValRep)) *theCell)->Proto == -3,
+			  "NewCopyObject: theRep->Proto == -3"));
 	return newObj;
-      else 
+      }else 
 	return CopyObject( theObj);
     }
   }
@@ -78,9 +82,11 @@ ref(Object) NewCopyObject( theObj)
   if( theObj->GCAttr >= IOAtoAOAtreshold ){
     if( !isStackObject(theObj) ){
       ref(Object) newObj; extern ref(Object) CopyObjectToAOA(); 
-      if( newObj = CopyObjectToAOA( theObj) )
+      if( newObj = CopyObjectToAOA( theObj) ){
+        /* Insert theCell in IOAtoAOAtable. */
+        if( theCell ) *--ToSpacePtr = (long) theCell;
 	return newObj;
-      else
+      }else
 	return CopyObject( theObj);
     }
   }

@@ -11,6 +11,7 @@
 
 #define isAutonomous(x)   ((1 <= x)  && ( x <= 2048))
 #define isStatic(x)       (  -0xFFFF <= x) && ( x <= -1)
+#define isForward(x)      ( x > 2048 )
 
 #define isValRep(x)      (((long) (x)->Proto) == ValRepPTValue)
 #define isStackObject(x) (((long) (x)->Proto) == StackObjectPTValue)

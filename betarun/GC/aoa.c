@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-02-06 08:21:04 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-02-11 14:28:00 $, SID: $Revision: 1.3 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -92,6 +92,7 @@ static ref(Object) AOAAllocate( size)
 			AOABlockSize/Kb) );
       AOATopBlock = AOATopBlock->next;
       oldTop = AOATopBlock->top;
+      AOACreateNewBlock = FALSE;
       if( areaSize(oldTop,AOATopBlock->limit) > size){
         AOATopBlock->top = (ptr(long)) Offset( oldTop, size);
         return (ref(Object)) oldTop;
@@ -140,18 +141,42 @@ ref(Object) CopyObjectToAOA( theObj)
   return newObj;
 }
 
+
 void AOAGc()
 {
-  INFO_AOA( fprintf( output, "\n#(AOA:%d ", NumAOAGc) );
+  /* Remember that AOAGc is called before ToSpace <-> IOA, so
+   * all reachable objects is in ToSpace, and IOA is junk.
+   * The space in IOA is used during the Mark Sweep.
+   */
+  long blocks, size, used;
+
   NumAOAGc++;
+  INFO_AOA( fprintf( output, "\n#(AOA-%d ", NumAOAGc) );
   /* Mark ll reachable objects within AOA and reverse all pointers. */
-  Phase1();  INFO_AOA( fprintf( output, "1") );
+  Phase1();  DEBUG_AOA( fprintf( output, "1") );
   /* Calculate new addresses for the reachable objects and reverse pointers. */
-  Phase2(); INFO_AOA( fprintf( output, "2") );
+  Phase2( &blocks, &size, &used);  DEBUG_AOA( fprintf( output, "2") );
   /* Copy all reachable objects to their new locations. */
-  Phase3(); INFO_AOA( fprintf( output, "3") );
+  Phase3();  DEBUG_AOA( fprintf( output, "3") );
   AOANeedCompaction = FALSE;
-  INFO_AOA( fprintf( output, ")\n") );
+
+  if( AOAMinFree ){
+    if( (size - used) < AOAMinFree )
+      /* if freeArea < AOAMinFree  then ... */
+      AOACreateNewBlock = TRUE;
+    else
+      AOACreateNewBlock = FALSE;
+  }else{
+    if( (100 - (100 * used)/size) < AOAPercentage )
+      /* if freeArea < AOAPercentage  then ... */
+      AOACreateNewBlock = TRUE;
+    else
+      AOACreateNewBlock = FALSE;
+  }
+  DEBUG_AOA( if( AOACreateNewBlock )fprintf( output, "new block needed, "));
+
+  INFO_AOA( fprintf( output, "%dKb in %d blocks, %d%% free)\n", 
+		    toKb(size), blocks, 100 - (100 * used)/size));
 }
 
 /* ReverseAndFollow is used during Phase1 of the Mark-Sweep GC. 
@@ -185,9 +210,18 @@ static ReverseAndFollow( theCell)
        */
       autObj->GCAttr = 1;    
       *theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
-      FollowItem( autObj);
+      FollowObject( autObj);
     }else{
       *theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
+    }
+  }else{
+    if(  inAOA(theCell) && inLVRA( theObj) ){
+      /* Save the theCell for later use */
+      AOAtoLVRAtable[AOAtoLVRAsize++] = (long) theCell;
+      DEBUG_LVRA( Claim( (long) (*theCell)->Proto == -3,"Phase1: LVRA cycle"));
+      DEBUG_LVRA( Claim( (*theCell)->GCAttr == (long) theCell,
+			"Phase1: LVRA cycle"));
+      if( AOAtoLVRAsize > (IOASize/4) ) BetaError(-34);
     }
   }
 }
@@ -279,8 +313,11 @@ static FollowObject( theObj)
  */
 static Phase1()
 { /* Call FollowReference for each root to AOA. */
-  ptr(long) pointer;
-  pointer = ToSpaceLimit;
+  ptr(long) pointer = ToSpaceLimit;
+
+  AOAtoLVRAtable = (ptr(long)) Offset(IOA, IOASize/2) ;
+  AOAtoLVRAsize  = 0;
+
   while( pointer > ToSpacePtr) ReverseAndFollow( *--pointer );
 }
 
@@ -371,13 +408,17 @@ static handleAliveObject( theObj, freeObj)
 
 
 
-static Phase2()
+static Phase2( numAddr, sizeAddr, usedAddr)
+  ptr(long) numAddr;
+  ptr(long) sizeAddr;
+  ptr(long) usedAddr;
 {
   ref(Block)  theBlock  = AOABaseBlock;
   ref(Block)  freeBlock = AOABaseBlock;
   ref(Object) theObj;
   ref(Object) freeObj;
   long        theObjectSize;
+  long        numOfBlocks = 0;
 
   long        usedSpace = 0;
   long        allSpace  = 0;
@@ -385,6 +426,7 @@ static Phase2()
   freeObj   = (ref(Object)) BlockStart( freeBlock);
 
   while( theBlock ){
+    numOfBlocks++;
     theObj = (ref(Object)) BlockStart(theBlock);
     while( (ptr(long)) theObj < theBlock->top ){
       theObjectSize = 4*ObjectSize( theObj);
@@ -406,12 +448,42 @@ static Phase2()
   }
   freeBlock->info.nextTop = (ptr(long)) freeObj;
 
-  INFO_AOA( fprintf( output, " (%d%% full of %d Kb) ", 
-                   (100 * usedSpace)/allSpace, toKb(allSpace) ));
-
-  if( (100 * usedSpace)/allSpace > 80 ) AOACreateNewBlock = TRUE;
-  else AOACreateNewBlock = FALSE;
+  *numAddr  = numOfBlocks;
+  *sizeAddr = allSpace;
+  *usedAddr = usedSpace;
 } 
+
+static FindInterval( table, size, block, startAddr, stopAddr)
+  ptr(long) table;
+  long size;
+  ref(Block) block;
+  ptr(long) startAddr;
+  ptr(long) stopAddr;
+{
+  /* Finds an interval in table, where all elements are inside block.
+   * We assume that the table is sorted in increasing order.
+   */
+  long start, stop;
+
+  start = 0;
+  while( (start < size) && (table[start] < (long)block)) start++;
+  stop = start;
+  while( (stop < size) && (table[stop] < (long)block->limit)) stop++;
+  *startAddr = start;
+  *stopAddr  = stop;
+}
+
+BubbleSort( table, size)
+  ptr(long) table;
+  long size;
+{ /* Sorts table[0..size-1]. */
+  int i,j,tmp;
+  for( j=size-1; j > 0; j--)
+    for( i=1; i <= j; i++)
+      if( table[i] < table[i-1] ){
+	tmp = table[i]; table[i] = table[i-1]; table[i-1] = tmp;
+      }
+}
 
 /* Remember to update AOAtoIOATable. 
  * So sort the Table in area[ToSpaceLimit..ToSpaceTop].
@@ -428,8 +500,9 @@ static Phase3()
       if( *pointer++ ) AOAtoIOACount++;
   }
 
-  if( ((long) ToSpacePtr - (long) ToSpaceTop) > (AOAtoIOACount * 4) )
-    table = ToSpaceTop;
+  if( ((long) IOALimit - (long) IOA) > (AOAtoIOACount * 8) )
+    /* Only use half og IOA area. */
+    table = IOA;
   else{
     if( !(table = (ptr(long)) malloc( AOAtoIOACount * 4))){
       fprintf( stderr,"#Phase3: malloc failed %d longs\n", AOAtoIOACount);
@@ -448,17 +521,14 @@ static Phase3()
     DEBUG_AOA( Claim( counter == AOAtoIOACount,"Phase3: counter == AOAtoIOACount"));
   }
 
+  DEBUG_AOA( fprintf( output,"(AOAtoIOA#%d)", AOAtoIOACount));
+  DEBUG_AOA( fprintf( output,"(AOAtoLVRA#%d)", AOAtoLVRAsize));
+
   /* Clear the AOAtoAOAtable. */
   AOAtoIOAClear();
    
-  /* Sort table[0..AOAtoIOACount]. Bubble sort for the moment. */
-  { int i,j,tmp;
-    for( j=AOAtoIOACount-1; j > 0; j--)
-      for( i=1; i <= j; i++)
-	if( table[i] < table[i-1] ){
-	  tmp = table[i]; table[i] = table[i-1]; table[i-1] = tmp;
-	}
-  }
+  BubbleSort( table, AOAtoIOACount);
+  BubbleSort( AOAtoLVRAtable, AOAtoLVRAsize);
 
   { ref(Block)  theBlock;
     ref(Object) theObj;
@@ -466,17 +536,15 @@ static Phase3()
     ref(Object) newObj;
     long        theObjectSize;
     long        start, stop, diff;
+    long        start1, stop1;
    
     theBlock = AOABaseBlock;
     while( theBlock ){
       theObj = (ref(Object)) BlockStart(theBlock);
-      start = 0;
-      while( (start < AOAtoIOACount) && (table[start] < (long)theBlock)) start++;
-      stop = start;
-      while( (stop < AOAtoIOACount) && (table[stop] < (long)theBlock->limit)) stop++;
-      /* table[start..stop-1] now point out all references in theBlock which 
-       * refers objects in IOA.
-       */ 
+
+      FindInterval( table, AOAtoIOACount, theBlock, &start, &stop);
+      FindInterval( AOAtoLVRAtable, AOAtoLVRAsize, theBlock, &start1, &stop1);
+
       while( (ptr(long)) theObj < theBlock->top ){
 	theObjectSize = ObjectSize( theObj);
         nextObj = (ref(Object)) Offset( theObj, theObjectSize*4); 
@@ -492,14 +560,29 @@ static Phase3()
             /* theObj need a new location in AOA, so move it. */
 	    MACRO_CopyBlock( theObj, newObj, theObjectSize);
 	  }
+          /* update the AOAtoIOAtable. */
 	  while( (start<stop) && (table[start] < (long)nextObj) ){
 	    if( inToSpace( *(ptr(long)) (table[start]-diff)))
 	      AOAtoIOAInsert( table[start]-diff);
 	    start++;
 	  }
+	  while( (start1<stop1) && (AOAtoLVRAtable[start1] < (long)nextObj) ){
+	    DEBUG_AOA( Claim( inLVRA( *(ptr(long))(AOAtoLVRAtable[start1]-diff)),
+			     "Phase3: Pointer is in LVRA"));
+	    (*((handle(ValRep)) (AOAtoLVRAtable[start1]-diff)))->GCAttr =
+	      AOAtoLVRAtable[start1]-diff;
+	    start1++;
+	  }
 	}else{
           /* theObj is not reachable. */
           while( (start<stop) && (table[start] < (long)nextObj )) start++;
+
+	  while( (start1<stop1) && (AOAtoLVRAtable[start1] < (long)nextObj) ){
+	    DEBUG_AOA( Claim( inLVRA( *(ptr(long))(AOAtoLVRAtable[start1]-diff)),
+			     "Phase3: Pointer is in LVRA"));
+	    (*((handle(ValRep)) (AOAtoLVRAtable[start1]-diff)))->Proto = 0;
+	    start1++;
+	  }
 	}
 	newObj->GCAttr = 0;
 	theObj = nextObj;
@@ -510,7 +593,7 @@ static Phase3()
   }
 
   /* if table was allocated with malloc, please free it. */
-  if( ((long) ToSpaceLimit - (long) ToSpaceTop) <= (AOAtoIOACount * 4) ){
+  if( table != IOA ){
     free( table);
     INFO_AOA( fprintf( output, "#(AOA: block for table freed %d longs)\n",
 		      AOAtoIOACount));
@@ -637,6 +720,9 @@ AOACheckReference( theCell)
       }
       Claim( found, "AOACheckReference: *theCell in IOA but not in AOAtoIOAtable");
     }
+    if( inLVRA(*theCell) )
+      Claim( ((ref(ValRep)) *theCell)->GCAttr == (long) theCell,
+	    "IOACheckReference:  ((ref(ValRep)) *theCell)->GCAttr == theCell");
   }
 }
 

@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-02-06 08:21:01 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-02-11 14:27:55 $, SID: $Revision: 1.3 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -21,7 +21,7 @@ IOAGc()
   NumIOAGc++;
   IOAActive = TRUE;
 
-  INFO_IOA( fprintf( output, "#(IOA-%d %d?", NumIOAGc, ReqObjectSize));
+  INFO_IOA( fprintf( output, "#(IOA-%d %d? ", NumIOAGc, ReqObjectSize));
   InfoS_LabA();
 
   /* Initialize the ToSpace */
@@ -57,14 +57,6 @@ IOAGc()
   DEBUG_AOA( AOAcopied = 0; IOAcopied = 0; );
 #endif
 
-
-#ifdef LVR_Area
-  if(LVRAIOAAge++ == -1){
-    fprintf(stderr,"#Beta error: LVRAIOAAge has reached its limit!\n");
-    exit(1);
-  }
-#endif
-
   /* Follow ActiveComponent */ 
   ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
   ProcessReference( &ActiveComponent);
@@ -76,8 +68,12 @@ IOAGc()
       theCell = (handle(Object)) stackptr;
       theObj  = *theCell;
       if( isObject( theObj) ){
-	ProcessReference( stackptr);
-	CompleteScavenging();
+	if( inLVRA( theObj) || ((long) theObj->Proto == -3)){
+	  DEBUG_IOA( fprintf( output, "$"));
+	}else{
+	  ProcessReference( stackptr);
+	  CompleteScavenging();
+	}
       }
     }else{
       /* handle value register objects on the stack ref. ../Asm/DataRegs.s */
@@ -154,16 +150,12 @@ IOAGc()
     }while( ( sum < limit ) && (IOAtoAOAtreshold < IOAMaxAge));
     IOAtoAOAtreshold +=1;
   }
-  INFO_IOA( fprintf( output, " treshold=%d", IOAtoAOAtreshold));
-  INFO_IOA( fprintf( output, " IOAtoAOA=%d", areaSize(ToSpacePtr,IOALimit)));
+  DEBUG_IOA( fprintf( output, " treshold=%d", IOAtoAOAtreshold));
+  DEBUG_IOA( fprintf( output, " IOAtoAOA=%d", areaSize(ToSpacePtr,IOALimit)));
 #endif
 
   INFO_IOA( fprintf( output," %d%%)\n",
 		    (100 * areaSize(IOA,IOATop))/areaSize(IOA,IOALimit)));
-
-#ifdef LVR_Area
-  if( LVRANeedCompaction) LVRACompaction();
-#endif
 
   DEBUG_IOA( IOACheck() );
   DEBUG_AOA( AOACheck() );
@@ -183,6 +175,7 @@ IOAGc()
  *  object is copied to ToSpace/AOA and the cell is updated.
  *  Furthermore one forward reference in the most enclosing
  *  object is inserted in the GC-attribute.
+ *  TIPS: USE theObj instead of newObj and inline GetDistanceToEnc....
  */
 
 ProcessReference( theCell)
@@ -193,14 +186,24 @@ ProcessReference( theCell)
 
   theObj = *theCell;
 
-  if( inIOA(theObj)){ /* theObj is inside IOA */
-    DEBUG_IOA( Claim( isObject(theObj), "ProcessReference: theObj is consistent."));
-    GCAttribute = theObj->GCAttr;
-    if( GCAttribute > 2048 ){ /* theObj has a forward pointer. */
+  if( inIOA(*theCell)){ /* '*theCell' is inside IOA */
+    DEBUG_IOA( Claim(isObject(*theCell),"ProcessReference: theObj is consistent."));
+    GCAttribute = (*theCell)->GCAttr;
+    if( isForward(GCAttribute) ){ /* theObj has a forward pointer. */
       *theCell = (ref(Object)) GCAttribute;
+      DEBUG_LVRA( Claim( !inLVRA(GCAttribute),
+			"ProcessAOAReference: Forward ValRep"));
+#ifdef AO_Area
+      /* If the forward pointer refers an AOA object, insert
+       * theCell in AOAtoIOAtable.
+       */
+      if( !inToSpace( GCAttribute))
+	if( inAOA( GCAttribute))
+	  *--ToSpacePtr = (long) theCell;
+#endif
     }else{
-      if( GCAttribute >= 0 ){ /* theObj is an autonomous object. */
-	*theCell = NewCopyObject( theObj);
+      if( GCAttribute >= 0 ){ /* '*theCell' is an autonomous object. */
+	*theCell = NewCopyObject( *theCell, theCell);
       }else{ /* theObj is a part object. */
          int Distance;
          ref(Object) newObj;
@@ -208,30 +211,43 @@ ProcessReference( theCell)
 
 	 Distance = GetDistanceToEnclosingObject( theObj);
 	 AutObj = (ref(Object)) Offset( theObj, Distance);
-	 if( !isAutonomous(AutObj->GCAttr)) 
+	 if( isForward(AutObj->GCAttr) ){
 	   newObj = (ref(Object)) AutObj->GCAttr;
-	 else
-	   newObj = NewCopyObject( AutObj);
+#ifdef AO_Area
+	   /* If the forward pointer refers an AOA object, insert
+	    * theCell in AOAtoIOAtable.
+	    */
+	   if( !inToSpace( AutObj->GCAttr))
+	     if( inAOA( AutObj->GCAttr))
+	       *--ToSpacePtr = (long) theCell;
+#endif
+	 }else
+	   newObj = NewCopyObject( AutObj, theCell);
 	 *theCell = (ref(Object)) Offset( newObj, -Distance);
       }
     }
     DEBUG_IOA( Claim( !inIOA(*theCell),"ProcessAOAReference: !inIOA(*theCell)"));
-  }
-/* PLEASE OPTIMIZE THIS. */
+  }else{
+    /* '*theCell' is pointing outside IOA */
 #ifdef AO_Area
-  if( inAOA( *theCell)){ /* theCell belongs to IOA and theObj belongs to AOA. */
-    DEBUG_AOA( AOACheckObjectSpecial( *theCell));
-    *--ToSpacePtr = (long) theCell;
-  }
-#endif
-
-#ifdef LVR_Area
-    if( inLVRA( *theCell) ){
-      theObj = *theCell;
-      ((ref(ValRep)) theObj)->Proto  = (ref(ProtoType)) theCell;
-      ((ref(ValRep)) theObj)->GCAttr = LVRAIOAAge;
+    /* If the forward pointer refers an AOA object, insert
+     * theCell in AOAtoIOAtable.
+     */
+    if( inAOA( *theCell)){
+      *--ToSpacePtr = (long) theCell;
+      return;
     }
 #endif
+#ifdef LVR_Area
+    if( inLVRA( *theCell)){
+      /* Preserve the LVRA-cycle. */
+      ((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
+      DEBUG_LVRA( Claim( (long) ((ref(ValRep)) *theCell)->Proto == -3,
+			"ProcessObject: theRep->Proto == -3"));
+      return;
+    }
+#endif
+  }
 }
 
 /*
@@ -370,9 +386,21 @@ ProcessAOAReference( theCell)
     GCAttribute = theObj->GCAttr;
     if( GCAttribute > 2048 ){ /* theObj has a forward pointer. */
       *theCell = (ref(Object)) GCAttribute;
+      DEBUG_LVRA( Claim( !inLVRA(GCAttribute),
+			"ProcessAOAReference: Forward ValRep"));
     }else{
       if( GCAttribute >= 0 ){ /* theObj is an autonomous object. */
-	*theCell = NewCopyObject( theObj);
+	*theCell = NewCopyObject( theObj, 0);
+#ifdef LVR_Area
+	if( !inToSpace( *theCell)){
+	  if( inLVRA( *theCell)){
+	    /* Preserve the LVRA-cycle. */
+	    ((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
+	    DEBUG_LVRA( Claim( (long) ((ref(ValRep)) *theCell)->Proto == -3,
+			      "ProcessAOAReference: theRep->Proto == -3"));
+	  }
+	}
+#endif
       }else{ /* theObj is a part object. */
          int Distance;
          ref(Object) newObj;
@@ -383,15 +411,20 @@ ProcessAOAReference( theCell)
 	 if( !isAutonomous(AutObj->GCAttr)) 
 	   newObj = (ref(Object)) AutObj->GCAttr;
 	 else
-	   newObj = NewCopyObject( AutObj);
+	   newObj = NewCopyObject( AutObj, 0);
 	 *theCell = (ref(Object)) Offset( newObj, -Distance);
       }
     }
-  }
+  }else{
 #ifdef LVR_Area
-  if( inLVRA(theObj) )
-    ((ref(ValRep)) theObj)->Proto  = (ref(ProtoType)) theCell;
+    if( inLVRA( *theCell)){
+      /* Preserve the LVRA-cycle. */
+      ((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
+      DEBUG_LVRA( Claim( (long) ((ref(ValRep)) *theCell)->Proto == -3,
+			"ProcessAOAReference: theRep->Proto == -3"));
+    }
 #endif
+  }
   DEBUG_AOA( Claim( !inIOA(*theCell),"ProcessAOAReference: !inIOA(*theCell)"));
   DEBUG_AOA( if( inAOA( *theCell)){ AOACheckObjectSpecial( *theCell); } );
 
@@ -655,6 +688,12 @@ IOACheckReference( theCell)
   if( *theCell ){
     Claim( inAOA(*theCell) || inIOA(*theCell) || inLVRA(*theCell),
 	  "IOACheckReference: *theCell outside IOA, AOA and LVRA");
+    if( inLVRA(*theCell) ){
+      Claim( ((ref(ValRep)) *theCell)->GCAttr == (long) theCell,
+	    "IOACheckReference:  ((ref(ValRep)) *theCell)->GCAttr == theCell");
+      DEBUG_LVRA( Claim( (long) ((ref(ValRep)) *theCell)->Proto == -3,
+			"IOACheckReference: theRep->Proto == -3"));
+    }
   }
 }
 #endif

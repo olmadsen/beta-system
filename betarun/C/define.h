@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: define.h,v $, rel: %R%, date: $Date: 1991-01-30 10:53:09 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: define.h,v $, rel: %R%, date: $Date: 1991-02-11 14:28:12 $, SID: $Revision: 1.2 $
  * by Lars Bak
  */
 #define FALSE	0
@@ -48,12 +48,14 @@
 #  define INFO_IOA( code)  if( InfoIOA  ){ code; }
 #  define INFO_AOA( code)  if( InfoAOA  ){ code; }
 #  define INFO_LVRA( code) if( InfoLVRA ){ code; }
+#  define INFO_LVRA_ALLOC( code) if( InfoLVRAAlloc ){ code; }
 #  define INFO_CODE( code) code;
 #else
 #  define INFO( code)
 #  define INFO_IOA( code)
 #  define INFO_AOA( code)
 #  define INFO_LVRA( code)
+#  define INFO_LVRA_ALLOC( code)
 #  define INFO_CODE( code)
 #endif
 
