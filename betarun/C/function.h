@@ -98,6 +98,8 @@ extern void IOACheckReference(handle(Object));
 #endif
 
 /* GC/lvra.c */
+extern ref(ValRep) LVRAAlloc(ref(ProtoType), long);
+extern ref(ValRep) LVRACAlloc(ref(ProtoType), long);
 extern long inLVRA(ref(Object));
 extern long LVRARestInBlock(ref(LVRABlock));
 extern void LVRAkill(struct ValRep *);
