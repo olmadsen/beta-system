@@ -72,7 +72,7 @@ void BetaError(errorNo, theObj)
 #endif hppa
 
 #if !(defined(hppa) || defined(sparc) || defined(crts))
-      /* Ordinary Motorola-like stack */
+      /* Ordinary MOTOROLA-like stack */
       thePC = 0;
       switch(errorNo){
       case StopCalledErr:
@@ -214,6 +214,7 @@ void BetaError(errorNo, theObj)
 	  /* Ignore 4 adr regs, and 8 dataregs+tags (see RefNone
 	   * in Misc.run)
 	   */;
+	thePC=RefNonePC;
       }
 #endif /* mac */
 #if defined(linux) || defined(nti)
@@ -301,6 +302,7 @@ void BetaError(errorNo, theObj)
 	StackEnd += 12
 	  /* Ignore 12 pushed registers/tags (see RefNone in Misc.run)
 	   */;
+	thePC=RefNonePC;
       }
 #endif /* linux || nti */
 #endif /* RTLAZY */

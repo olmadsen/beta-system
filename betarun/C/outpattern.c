@@ -10,17 +10,23 @@
 #include <String.h>
 #endif
 
-#define MAXINT 0x7fffffff
-#define MININT 0x80000000
+#define MAXINT (signed long)0x7fffffff
+#define MININT (signed long)0x80000000
 
 #ifdef RTDEBUG
-#define DO_TRACE_DUMP
+/* #define DO_TRACE_DUMP  */ /* Trace DisplayBetaStack() */
+/* #define DO_TRACE_GROUP */ /* Trace GroupName() */
 #endif
 
 #ifdef DO_TRACE_DUMP
 #define TRACE_DUMP(code) code
 #else
 #define TRACE_DUMP(code)
+#endif
+#ifdef DO_TRACE_GROUP
+#define TRACE_GROUP(code) code
+#else
+#define TRACE_GROUP(code)
 #endif
 
 static long M_Part(ref(ProtoType) proto)
@@ -141,7 +147,7 @@ static ptr(char) ProtoTypeName(theProto)
  * of the stack are outside beta-code, i.e. a program has failed in 
  * external code.
  */
-static int c_on_top;
+static signed long c_on_top;
 
 /* NextGroup is used by objectserver/persistent store to scan through the
  * data-segments, in order to implement InitFragment.
@@ -192,14 +198,18 @@ char *GroupName(long address, int isCode)
   struct group_header *group;
   struct group_header *current;
   struct group_header *last;
-  long dist, distance;
+  signed long dist, distance;
   
-  /*DEBUG_CODE(fprintf (output, "GroupName\n"));*/
+  TRACE_GROUP(fprintf (output, 
+		       "GroupName(addr: 0x%x, %s)\n",
+		       (int)address,
+		       isCode ? "code" : "data"));
 
   current = last = group = NextGroup (0);  /* first (betaenv) data segment */
   if ((isCode && (address<current->code_start)) /* code addr < betaenv code start */
       || (!isCode && (address<(long)current))){ /* data addr < betaenv data start */
     c_on_top++;
+    TRACE_GROUP(fprintf (output, "c_on_top\n"));
     return ""; 
   }
   
@@ -208,8 +218,8 @@ char *GroupName(long address, int isCode)
   while (current){
     
     /* Check if the address is closer to the start 
-     * of current segment than previous segments */
-    
+     * of current segment than previous segments 
+     */
     if (isCode)
       dist = address - current->code_start;
     else
@@ -218,7 +228,19 @@ char *GroupName(long address, int isCode)
       distance = dist;
       group = current;
     }
-    
+    TRACE_GROUP(if (isCode){
+      fprintf(output, 
+	      " cur->code: 0x%x, dist: %d: %s\n", 
+	      (int)current->code_start,
+	      (int)distance, 
+	      NameOfGroup(current));
+    } else {
+      fprintf(output, 
+	      " cur: 0x%x, dist: %d: %s\n", 
+	      (int)current,
+	      (int)distance, 
+	      NameOfGroup(current));
+    });
     last = current;
     current = NextGroup (current);
   }
@@ -241,7 +263,7 @@ char *GroupName(long address, int isCode)
 
 static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, int print_origin)
 {
-  long           gDist=MAXINT, mDist=MAXINT, activeDist=0;
+  signed long    gDist=MAXINT, mDist=MAXINT, activeDist=0;
   ref(ProtoType) theProto=theObj->Proto;
   ref(ProtoType) activeProto=theProto;
   char *groupname;
@@ -288,9 +310,13 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       }
     }
     if (activeDist == MAXINT) return;
+    TRACE_GROUP(fprintf(output, "Calling GroupName with return address\n"));
     groupname = GroupName(retAddress,1);
   } else {
     /* retAddress == 0 */
+    TRACE_GROUP(fprintf(output, "Calling GroupName with %s\n",
+			(activeDist == gDist) ? "gPart" : "mPart"
+			));
     groupname = (activeDist == gDist) ? GroupName(gPart,1) : GroupName(mPart,1);
   }
   
@@ -302,7 +328,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
      */
     if (c_on_top == 1){
       c_on_top++; /* Print only the first time */
-      DEBUG_CODE(fprintf(output, "  top: "));
+      TRACE_DUMP(fprintf(output, "  top: "));
       fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
     } 
     return;

@@ -230,7 +230,18 @@ void BetaSignalHandler(sig, code, scp, addr)
 
   switch(sig){
     case SIGFPE: 
-      DisplayBetaStack( ArithExceptErr, theObj, PC, sig); break;
+      if (theObj==0 && scp.trapno==0) {
+	/* IDIV uses %edx (i.e. current object register) for divisor.
+	 * If this is 0, theObj will be 0 when trap is taken.
+	 * Use the fact that current object is pushed before IDIV,
+	 * and take it from the stack.
+	 */
+	theObj = (struct Object *) *StackEnd++;
+	DisplayBetaStack( ZeroDivErr, theObj, PC, sig); 
+      } else {
+	DisplayBetaStack( ArithExceptErr, theObj, PC, sig); 
+      }
+      break;
     case SIGILL:
       DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
 #ifndef nti
