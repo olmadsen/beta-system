@@ -1,0 +1,108 @@
+------- ExtendRefRep: System ----
+ExtRR: public
+  (#
+     { Extend a value repetition. }
+     { stack on entry [return(0),offset(4),Item(8),...] }
+     
+     { Input variable.  }
+     addSize: Long    = DataReg1; { the size to extend the repetition with. }
+     
+     { Used variable.  }
+     stack:  StackArea  = SP;
+     newRep: Repetition = AddrReg2;
+     newTop: DataArea   = AddrReg1;
+     theRep: Repetition = AddrReg1;
+     theCell: DataArea  = AddrReg1;
+     
+     oldRange: Long     = DataReg2;
+     newRange: Long     = DataReg2;
+     value:    Long     = DataRegA; { Stored and restored. }
+     offset:   Long     = DataReg2
+  do
+     stack[8] -> theRep;
+     stack[4] -> offset;
+     theRep[offset*4] -> theRep;
+     
+     theRep.HighBorder -> newRange;
+     addSize  -> newRange+;
+     
+     (if MacOS then push AddrReg2 if);
+     
+     IOATop -> newRep;
+     newRep[16+newRange*4][] -> newTop;
+     (if newTop > IOALimit then goto GC if);
+     newTop -> IOATop;
+     
+     { The new Object is now allocated, but not assigned yet!}
+     
+     { Initialize the structual part of the repetition. }
+     -4       -> newRep.ProtoType;
+     1        -> newRep.Age;
+     1        -> newRep.LowBorder;
+     newRange -> newRep.HighBorder;
+     
+     { Load theRep once more, newTop and theRep use same register. }
+     (if MacOS then
+         stack[8]  -> offset;
+         stack[12] -> theRep
+      else
+         stack[4] -> offset;
+         stack[8] -> theRep
+     if);
+     
+     theRep[offset*4]  -> theRep;
+     theRep.HighBorder -> oldRange;
+     
+     { Copy the body part of theRep to newRep. }
+     push value;
+     (if oldRange > 0 then
+         1 -> oldRange-;
+         loop1:
+         theRep[16+oldRange*4] -> value;
+         value -> newRep[16+oldRange*4];
+         1 -> oldRange-;
+         (if FLAGS >= 0 then goto loop1 if)
+     if);
+     pop value;
+     
+     { Calculate the address of the extension part into theRep. }
+     theRep.HighBorder -> oldRange;
+     newRep[16+oldRange*4][] -> theRep;
+     
+     { Clear the extension part of newRep, pointed out by theRep. }
+     (if addSize > 0 then
+         1 -> addSize-;
+         loop2:
+         0 -> theRep[addSize*4];
+         1 -> addSize-;
+         (if FLAGS >= 0 then goto loop2 if)
+     if);
+     
+     (if MacOS then 
+         stack[12] -> theCell;
+         stack[8]  -> offset
+      else
+         stack[8] -> theCell;
+         stack[4] -> offset
+     if);
+     theCell[offset*4][] -> theCell;
+     newRep -> theCell[0];
+     
+     (if theCell outside IOA then  { The theCell resides in AOA. }
+         push theCell;
+         call ChkRA { No need to remove parameter. }
+     if);
+     
+     (if MacOS then pop AddrReg2 if);
+     return 8;
+     
+     GC:
+     { The IOA heap is full, so we need a garbage collection.            }
+     (if MacOS then pop AddrReg2 if);
+     4 -> ReqObjectSize;     { Set the requested Object Size.            }
+     newRange -> ReqObjectSize+;
+     call DoGC;              { Call the Garbage Collector.               }
+     goto ExtRR              { Go back to the beginning of this routine. }
+  #)
+
+

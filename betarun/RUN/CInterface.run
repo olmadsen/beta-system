@@ -1,0 +1,151 @@
+----- CInterface: system -----
+
+CinitT: public
+  (# thePoolAddr: DataArea = AddrReg1
+  do
+     CTextPool[] -> thePoolAddr;
+     thePoolAddr -> CTextPoolEnd;
+     return
+  #);
+
+CpkVT: public
+  (#
+     { input parameters }
+     repArg:      Repetition = DataReg1;
+     
+     { variables }
+     theRep:      Repetition = RegAdr;
+     theTextAddr: DataArea   = RegArg;
+     FreeSpace:   Long       = DataReg1;
+     nextText:    DataArea   = AddrReg1;
+     
+     BodySize:    Long       = DataReg2;
+     index:       Long       = DataRegA;
+     Value:       Long       = DataReg1;
+     
+     RetAddr:     CodeArea   = AddrReg1 
+  do 
+     repArg -> theRep;
+     
+     { Compute the text start point. }
+     CTextPoolEnd -> theTextAddr;
+     
+     { Check range overflow on CTextPool.                               }
+     { nextText is used as a tmp. register only.                        }
+     { Size_left_in_CTextPool = (Adr(CTextPool) + 1000) - CTextPoolEnd. }
+     CTextPool[] -> nextText;
+     nextText -> FreeSpace;
+     1000 -> FreeSpace+;
+     CTextPoolEnd -> FreeSpace-;
+     
+     theRep.HighBorder -> BodySize;
+     4 -> BodySize+;
+     4 -> BodySize/;
+     4 -> BodySize*;
+     
+     (if FreeSpace < BodySize then
+         push RegObj;
+         push -35;
+         call BetaError
+     if);
+     
+     { Copy the contents of the repetition to the CTextPool. }
+     (if BodySize <> 0 then
+         0 -> index;
+         loop:
+         theRep[16+index] -> Value; { copy as longs, the repetition is mult. of 4 }
+         Value -> theTextAddr[index];
+         4 -> index+;
+         (if index < BodySize then goto loop if)
+     if);
+     
+     { Update CTextPool. }
+     theTextAddr[BodySize][] -> nextText;
+     nextText -> CTextPoolEnd;
+     
+     pop  RetAddr;
+     push theTextAddr;
+     goto RetAddr
+  #);
+
+CpkSVT: proc;
+CpkVTS: public
+(# do goto CpkSVT #);
+
+CpkSVT: public
+  (#
+     { input parameters }
+     repArg:      Repetition = DataReg1;
+     
+     { variables }
+     theRep:      Repetition = RegAdr;
+     low:         Long       = DataReg2;
+     high:        Long       = DataReg3;
+     
+     { variables }
+     theTextAddr: DataArea   = RegArg;
+     FreeSpace:   Long       = DataRegA;
+     nextText:    DataArea   = AddrReg1;
+     
+     BodySize:    Long       = DataReg1; 
+     index:       Long       = DataReg2; { same as low }
+     Value:       Byte       = DataRegA; { same as FreeSpace }
+     
+     RetAddr:     CodeArea   = AddrReg1
+do 
+     repArg -> theRep;
+     
+     { Check bounds and transform high into number of bytes to copy }
+     (if low  < theRep.LowBorder   then push RegObj; push -6; call BetaError if);
+     (if high < theRep.LowBorder   then push RegObj; push -6; call BetaError if);
+     (if low  > theRep.HighBorder  then push RegObj; push -7; call BetaError if);
+     (if high > theRep.HighBorder  then push RegObj; push -7; call BetaError if);
+     low  -> high-; 1 -> high+;
+     (if high < 0 then 0 -> high if);
+     
+     { Compute the text start point. }
+     CTextPoolEnd -> theTextAddr;
+     
+     { Check range overflow on CTextPool.                               }
+     { nextText is used as a tmp. register only.                        }
+     { Size_left_in_CTextPool = (Adr(CTextPool) + 1000) - CTextPoolEnd. }
+     CTextPool[] -> nextText;
+     nextText -> FreeSpace;
+     1000 -> FreeSpace+;
+     CTextPoolEnd -> FreeSpace-;
+     
+     high -> BodySize;
+     4 -> BodySize+;
+     4 -> BodySize/;
+     4 -> BodySize*;
+     (if FreeSpace < BodySize then
+         push RegObj;
+         push -35;
+         call BetaError
+     if);
+     
+     { Copy the contents of the repetition to the CTextPool. }
+     (if high <> 0 then
+         1 -> low-;
+         theRep[low][] -> theRep; { Start at low. }
+         0 -> index;
+         loop:
+         theRep[16+index]!b -> Value; { copy as bytes }
+         Value -> theTextAddr[index]!b;
+         1 -> index+;
+         (if index < high then goto loop if)
+     if);
+     0 -> Value;
+     Value -> theTextAddr[index]!b; { NULL termination }
+     
+     { Update CTextPool. }
+     3 -> BodySize+;
+     4 -> BodySize/;
+     4 -> BodySize*;
+     theTextAddr[BodySize][] -> nextText;
+     nextText -> CTextPoolEnd;
+     
+     pop  RetAddr;
+     push theTextAddr;
+     goto RetAddr
+  #)

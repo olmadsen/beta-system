@@ -1,0 +1,195 @@
+------- ExtendValRep: System ----
+
+ExtVR: public
+  (#
+     { Extend a value repetition. }
+     { stack on entry [return(0),offset(4),Item(8),...] }
+     
+     { Input variable.  }
+     addSize: Long      = DataReg1; { the size (in range units) to extend the repetition with. }
+     
+     { Used variable.  }
+     stack:  StackArea  = SP;
+     newRep: Repetition = AddrReg2;
+     newTop: DataArea   = AddrReg1;
+     theRep: Repetition = AddrReg1;
+     theCell: DataArea  = AddrReg1;
+     
+     oldRange: Long     = DataReg2;
+     newRange: Long     = DataReg2;
+     oldBodySize: Long  = DataReg1;
+     BodySize: Long     = DataReg2; { number of bytes to allocate for new rep }
+     value:    Long     = DataRegA; { Stored and restored. }
+     offset:   Long     = DataReg2
+  do
+     stack[8] -> theRep;
+     stack[4] -> offset;
+     theRep[offset*4] -> theRep;
+     
+     theRep.HighBorder -> newRange;
+     addSize  -> newRange+;
+     
+     theRep.HighBorder -> oldBodySize; { invalidates addSize }
+     (if oldBodySize > 0 then
+         (if theRep.ProtoType = -8 then { double rep }
+             2 -> oldBodySize*;
+             goto oldBodyOK
+         if);
+         (if theRep.ProtoType = -7 then { word rep }
+             2 -> oldBodySize*;
+             3 -> oldBodySize+;
+             4 -> oldBodySize/; 
+             goto oldBodyOK
+         if);
+         (if theRep.ProtoType = -6 then { byte rep }
+             4 -> oldBodySize+;
+             4 -> oldBodySize/; 
+             goto oldBodyOK
+         if);
+         oldBodyOK:
+         4->oldBodySize*
+     if);
+         
+     (if MacOS then push AddrReg2 if);
+     
+     (if newRange > 200 then
+         push RegArg, RegObj, DataRegA, DataRegB;
+         push newRange;  { Parameter to LVRA*Alloc. }
+         (if theRep.ProtoType = -8 then { double rep }
+             call LVRAByteAlloc;
+             goto cycle
+         if);
+         (if theRep.ProtoType = -7 then { word rep }
+             call LVRAByteAlloc;
+             goto cycle
+         if);
+         (if theRep.ProtoType = -6 then { byte rep }
+             call LVRAByteAlloc;
+             goto cycle
+         if);
+         (if theRep.ProtoType = -5 then { long rep }
+             call LVRAAlloc;
+             goto cycle
+         if);
+         
+         cycle:
+         DataRegA -> newRep;
+         (if newRep <> 0 then
+             { Make the LVRA-cycle: theCell -> newRep.Age }
+             (if MacOS then
+                 stack[28 { =  8 + 5*4 } ] -> DataRegA; 4 -> DataRegA*;
+                 stack[32 { = 12 + 5*4 } ] -> DataRegA+
+              else
+                 stack[24 { =  4 + 5*4 } ] -> DataRegA; 4 -> DataRegA*;
+                 stack[28 { =  8 + 5*4 } ] -> DataRegA+
+             if);
+             DataRegA -> newRep.Age
+         if);  
+         pop  newRange;
+         pop  DataRegB, DataRegA, RegObj, RegArg;
+         (if newRep <> 0 then goto copyBody if)
+     if);
+     
+     { Calculate BodySize of new repetition }
+     { newRange -> BodySize; // not needed, is the same register }
+     (if theRep.ProtoType = -8 then { double rep }
+         2 -> BodySize*;
+         goto IOAalloc
+     if);
+     (if theRep.ProtoType = -7 then { word rep }
+         2 -> BodySize*;
+         3 -> BodySize+;
+         4 -> BodySize/; 
+         goto IOAalloc
+     if);
+     (if theRep.ProtoType = -6 then { byte rep }
+         4 -> BodySize+;
+         4 -> BodySize/; 
+         goto IOAalloc
+     if);
+     4 -> BodySize*;
+     
+     IOAalloc:
+     IOATop -> newRep;
+     newRep[16+BodySize][] -> newTop;
+     (if newTop > IOALimit then goto GC if);
+     newTop -> IOATop;
+     
+     { The new Object is now allocated, but not assigned yet!}
+     push BodySize;
+     push value; { save DataRegA }
+     
+     { recalculate theRep, it has been invalidated above }
+     (if MacOS then
+         stack[20] -> theRep;
+         stack[16] -> offset { invalidates BodySize }
+      else
+         stack[16] -> theRep;
+         stack[12] -> offset { invalidates BodySize }
+     if);
+     theRep[offset*4] -> theRep;
+     
+     { Initialize the structual part of the repetition. }
+     theRep.ProtoType -> newRep.ProtoType;
+     1                -> newRep.Age;
+     1                -> newRep.LowBorder;
+     newRange         -> newRep.HighBorder;
+     
+     copyBody: { Copy the body part of theRep to newRep. }
+     (if oldBodySize > 0 then
+         push oldBodySize;
+         4 -> oldBodySize-;
+         loop1:
+         theRep[16+oldBodySize] -> value;
+         value -> newRep[16+oldBodySize];
+         4 -> oldBodySize-;
+         (if FLAGS >= 0 then goto loop1 if);
+         pop oldBodySize
+     if);
+     
+     pop value; { restore DataRegA }
+     pop BodySize;
+          
+     { calculate difference in actual size }
+     oldBodySize -> BodySize-;
+     
+     { Calculate the address of the extension part into theRep. }
+     newRep[16+oldBodySize][] -> theRep;
+     
+     { Clear the extension part of newRep, pointed out by theRep. }
+     (if BodySize > 0 then
+         4 -> BodySize-;
+         loop2:
+         0 -> theRep[BodySize];
+         4 -> BodySize-;
+         (if FLAGS >= 0 then goto loop2 if)
+     if);
+     
+     { calculate the cell to store new rep in }
+     (if MacOS then 
+         stack[12] -> theCell;
+         stack[8]  -> offset
+      else
+         stack[8] -> theCell;
+         stack[4] -> offset
+     if);
+     theCell[offset*4][] -> theCell;
+     newRep -> theCell[0];
+     
+     (if theCell outside IOA then  { The theCell resides in AOA. }
+         push theCell;
+         call ChkRA { No need to remove parameter. }
+     if);
+     
+     (if MacOS then pop AddrReg2 if);
+     return 8;
+     
+     GC:
+     { The IOA heap is full, so we need a garbage collection.            }
+     (if MacOS then pop AddrReg2 if);
+     4 -> ReqObjectSize;     { Set the requested Object Size.            }
+     4 -> BodySize/;
+     BodySize -> ReqObjectSize+;
+     call DoGC;              { Call the Garbage Collector.               }
+     goto ExtVR              { Go back to the beginning of this routine. }
+  #)

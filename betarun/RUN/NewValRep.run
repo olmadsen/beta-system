@@ -1,0 +1,125 @@
+------- NewValRep: System ----
+NewVR: public
+  (#
+     { Allocate a value repetition. }
+     { stack on entry [return(0),offset(4),Item(8),...] }
+     { Input register range = DataReg1.                 }
+     
+     { Used variable.   }
+     stack:   StackArea = SP;
+     theRep:  Repetition = AddrReg1;
+     newTop:  DataArea   = AddrReg2;
+     theCell: DataArea   = AddrReg2;
+     range:   Long       = DataReg1; { The range of the valRep. }
+     BodySize: Long      = DataReg2; { number of bytes to allocate }
+     offset:  Long       = DataReg1
+  do
+     (if MacOS then push AddrReg2 if);
+     
+     { find the (special) prototype of the val rep }
+     (if MacOS then 
+         stack[12] -> theCell;
+         stack[8]  -> offset
+      else
+         stack[8] -> theCell;
+         stack[4] -> offset
+     if);
+     theCell[offset*4][] -> theRep;
+     push theRep.ProtoType; { from here on all SP-offsets should be 4 larger!}
+
+     (if range > 200 then
+         push RegObj, DataRegA, DataRegB;
+         push range; { Parameter to LVRAByteAlloc. }
+         (if stack[0] = -6 then { byte rep }
+             call LVRAByteAlloc;
+             goto cycle
+         if);
+         (if stack[0] = -5 then { long rep }
+             call LVRAAlloc;
+             goto cycle
+         if);
+         cycle:
+         DataRegA -> theRep;
+         (if theRep <> 0 then
+             { Make the LVRA-cycle: theCell -> theRep.Age }
+             (if MacOS then
+                 stack[28 { =  8 + 4*4 + 4 } ] -> DataRegA; 4 -> DataRegA*;
+                 stack[32 { = 12 + 4*4 + 4 } ] -> DataRegA+
+              else
+                 stack[24 { =  4 + 4*4 + 4 } ] -> DataRegA; 4 -> DataRegA*;
+                 stack[28 { =  8 + 4*4 + 4 } ] -> DataRegA+
+             if);
+             DataRegA -> theRep.Age
+         if);  
+         pop  range;
+         pop  DataRegB, DataRegA, RegObj;
+         (if theRep <> 0 then goto clearBody if)
+     if);
+     
+     IOATop -> theRep;
+     range -> BodySize;
+     (if stack[0] = -6 then { byte rep }
+         4 -> BodySize+;
+         4 -> BodySize/;
+         goto IOAalloc
+     if);
+     (if stack[0] = -7 then { word rep }
+         2 -> BodySize*;
+         3 -> BodySize+;
+         4 -> BodySize/;
+         goto IOAalloc
+     if);
+     (if stack[0] = -8 then { double rep }
+         2 -> BodySize*;
+         goto IOAalloc
+     if);
+     IOAalloc:
+     4 -> BodySize*;
+     theRep[16+BodySize][] -> newTop;
+     (if newTop > IOALimit then goto GC if);
+     newTop -> IOATop;
+     
+     { The new Object is now allocated, but not initialized yet!}
+     
+     { Initialize the structual part of the repetition. }
+     stack[0] -> theRep.ProtoType;
+     1        -> theRep.Age;
+     1        -> theRep.LowBorder;
+     range    -> theRep.HighBorder;
+     
+     { Clear the body part of the repetition. }
+     clearBody:
+     4 -> BodySize-;
+     loop:
+     0 -> theRep[16+BodySize]!l;
+     4 -> BodySize-;
+     (if FLAGS >= 0 then goto loop if);
+     
+     (if MacOS then 
+         stack[16] -> theCell;
+         stack[12] -> offset
+      else
+         stack[12] -> theCell;
+         stack[8]  -> offset
+     if);
+     
+     theCell[offset*4][] -> theCell;
+     theRep -> theCell[0];
+     (if theCell outside IOA then  { The theCell resides in AOA. }
+         push theCell;
+         call ChkRA { No need to remove parameter. }
+     if);
+     
+     4 -> stack+; { remove proto }
+     (if MacOS then pop AddrReg2 if);
+     return 8;
+     
+     GC:
+     { The IOA heap is full, so we need a garbage collection.            }
+     4 -> ReqObjectSize;     { Set the requested Object Size.            }
+     4 -> BodySize/;
+     BodySize -> ReqObjectSize+;
+     (if MacOS then pop AddrReg2 if);
+     call DoGC;              { Call the Garbage Collector.               }
+     goto NewVR              { Go back to the beginning of this routine. }
+  #)

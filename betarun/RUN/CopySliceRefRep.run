@@ -1,0 +1,99 @@
+---- CopySliceRefRep: System ----
+
+CopySRR: public
+  (#
+     { Copy a slice of a Reference Repetition. }
+     { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
+     { and registers DataReg1=low, DataReg2=high. }
+     
+     { Input variable.  }
+     low:     Long    = DataReg1;
+     high:    Long    = DataReg2;
+     
+     { Used variable.  }
+     stack:  StackArea  = SP;    
+     theRep: Repetition = AddrReg1;
+     theObj: Object     = RegObj;
+     newRep: Repetition = AddrReg2;
+     newTop: DataArea   = AddrReg1;
+     value:  Long       = DataReg1;
+     offset: Long       = DataReg1;
+     theItem: Item      = AddrReg1;
+     theCell: DataArea  = AddrReg1
+  do
+     stack[12] -> theRep;
+     { Check that low and high usable. }
+     (if low  < theRep.LowBorder   then push theObj; push -6; call BetaError if);
+     (if high < theRep.LowBorder   then push theObj; push -7; call BetaError if);
+     (if low  > theRep.HighBorder  then push theObj; push -6; call BetaError if);
+     (if high > theRep.HighBorder  then push theObj; push -7; call BetaError if);
+ 
+     { Calculate the range of the new repetition. }
+     low  -> high-; 1 -> high+;
+     (if high < 0 then 0 -> high if);
+     { high is now converted to the range of the resulting repetition. }
+     
+     (if MacOS then push AddrReg2 if);
+     again:
+     
+     IOATop -> newRep;
+     newRep[16+high*4][] -> newTop;
+     (if newTop > IOALimit then goto GC if);
+     newTop -> IOATop;
+     
+     (if MacOS then
+         { AddrReg2 is on the stack. }
+         stack[16] -> theRep
+      else
+         stack[12] -> theRep
+     if);
+     
+     { The new Object is now allocated, but not assigned yet!}
+     
+     { Initialize the structual part of the repetition. }
+     -4    -> newRep.ProtoType;
+     1     -> newRep.Age;
+     1     -> newRep.LowBorder;
+     high  -> newRep.HighBorder;
+     
+     { Copy the body part of the repetition. }
+     1 -> low-;
+     theRep[low*4][] -> theRep; { Start at low. }
+     
+     (if high <> 0 then
+         1 -> high-;
+         loop:
+         theRep[16+high*4] -> value;
+         value -> newRep[16+high*4];
+         1 -> high-;
+         (if FLAGS >= 0 then goto loop if)
+     if);
+     
+     (if MacOS then
+         { AddrReg2 is on the stack. }
+         stack[12] -> theItem;
+         stack[8] -> offset
+      else
+         stack[8] -> theItem;
+         stack[4] -> offset
+     if);
+     
+     newRep -> theItem[offset*4];
+     
+     theItem[offset*4][] -> theCell;
+     (if theCell outside IOA then  { The theCell resides in AOA. }
+         push theCell;
+         call ChkRA                { No need to remove parameter. }
+     if);
+     
+     (if MacOS then pop AddrReg2 if);
+     return 12;
+     
+     GC:
+     { The IOA heap is full, so we need a garbage collection.            }
+     4 -> ReqObjectSize;     { Set the requested Object Size.            }
+     high -> ReqObjectSize+;
+     call DoGC;              { Call the Garbage Collector.               }
+     goto again              { Go back to the beginning of this routine. }
+  #)
+

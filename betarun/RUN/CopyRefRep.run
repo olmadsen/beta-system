@@ -1,0 +1,86 @@
+------- CopyRefRep: System ----
+CopyRR: public
+  (#
+     { Copy a reference repetition. }
+     { stack on entry [return(0),Offset(4),Item(8),RefRep(12),....] }
+     
+     stack: StackArea = SP;
+     
+     { Used variable.  }
+     theRep: Repetition = AddrReg1;
+     newTop: DataArea   = AddrReg2;
+     newRep: Repetition = AddrReg2;
+     theCell: DataArea  = AddrReg1;
+     
+     range:  Long       = DataReg1;
+     tmp:    Long       = DataReg2;
+     value:  Long       = DataReg2;
+     offset: Long       = DataReg2
+  do
+     stack[12] -> theRep;
+     theRep.HighBorder -> range;
+     
+     (if MacOS then push AddrReg2 if);
+     
+     IOATop -> newTop;
+     newTop[16+range*4][] -> newTop;
+     (if newTop > IOALimit then goto GC if);
+     
+     IOATop -> tmp;
+     newTop -> IOATop;
+     tmp    -> newRep;
+     
+     { The new Object is now allocated, but not assigned yet!}
+     
+     { Initialize the structual part of the repetition. }
+     -4    -> newRep.ProtoType;
+     1     -> newRep.Age;
+     1     -> newRep.LowBorder;
+     range -> newRep.HighBorder;
+     
+     (if MacOS then
+         { AddrReg2 is on the stack. }
+         stack[16] -> theRep
+      else  
+         stack[12] -> theRep  
+     if);
+     
+     { Clear the body part of the repetition. }
+     (if range <> 0 then
+         1 -> range-;
+         loop:
+         theRep[16+range*4] -> value;
+         value -> newRep[16+range*4];
+         1 -> range-;
+         (if FLAGS >= 0 then goto loop if)
+     if);
+     
+     (if MacOS then 
+         { AddrReg2 is pushed on the stack. }
+         stack[12] -> theCell;
+         stack[8]  -> offset
+      else
+         stack[8] -> theCell;
+         stack[4] -> offset
+     if);
+     theCell[offset*4][] -> theCell;
+     newRep -> theCell[0];
+     
+     (if theCell outside IOA then  { The theCell resides in AOA. }
+         push theCell;
+         call ChkRA { No need to remove parameter. }
+     if);
+     
+     (if MacOS then pop AddrReg2 if);
+     return 12;
+     
+     GC:
+     { The IOA heap is full, so we need a garbage collection.            }
+     4 -> ReqObjectSize;     { Set the requested Object Size.            }
+     range -> ReqObjectSize+;
+     (if MacOS then pop AddrReg2 if);
+     call DoGC;              { Call the Garbage Collector.               }
+     goto CopyRR             { Go back to the beginning of this routine. }
+  #)
+
+
