@@ -522,8 +522,6 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
     return -1;
   }
 
-  {
-
   if (setsockopt(sock, SOL_SOCKET, SO_LINGER,
 		 (char*)&li, sizeof(struct linger))) {
     INFO_SOCKETS("createActiveSocket,4.1");
