@@ -828,10 +828,9 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
     break;
     case VOP_PROCESS_OFFSET: {
       unsigned long offset;
-      extern void M1PROGRAM(void);
-      unsigned long m1program = (unsigned long)valhalla_readint();
-      DEBUG_VALHALLA(fprintf(output,"VOP_PROCESS_OFFSET(0x%x)=", (int)m1program));
-      offset = (unsigned long)&M1PROGRAM - m1program;
+      unsigned long initlogaddr = (unsigned long)valhalla_readint();
+      DEBUG_VALHALLA(fprintf(output,"VOP_PROCESS_OFFSET(0x%x)=", (int)initlogaddr));
+      offset = (unsigned long)&Initialize - initlogaddr;
       DEBUG_VALHALLA(fprintf(output,"0x%x\n",(int)offset));
       valhalla_writeint(opcode);
       valhalla_writeint(offset);
