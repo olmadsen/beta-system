@@ -4,7 +4,7 @@ INCLUDE '~beta/basiclib/streamPosition';
 
 --BCmachineLib: attributes--
 
-generateLineNumbers:
+generateDebugInfo:
   (# exit common.switch[41] #);
 
 splitSignature:
@@ -56,9 +56,17 @@ FIXME:
 --FieldsNewJasmin:descriptor--
 (# name_index, descriptor_index: @integer;
 do (if methodClassTag 
-    // 'c' // 'p' // '[' then
+    // 'c' 
+    // 'p' 
+    // '[' then
        (if methodClassTag = '[' then '[' -> T.prepend if);
        (FN[], T[]) -> jcf.emitFieldDef;
+    // 'm' then
+       (*'FieldsNewJasmin.m: '->screen.puttext;
+       FN[] -> screen.putline;*)
+       (if generateDebugInfo then
+           (65535, 0, FN[], T[]) -> jcf.emitLocalVariableDefinition;
+       if);
    if);
 #)
 
@@ -109,7 +117,7 @@ do (# commentstream: @stream (* maybe something more useful *);
         (# BCmch: ^ByteCodeMachine;
         do (mch[]->BCmch[]).mstate.thisSourceFileName.copy -> betafilename[];
            '.bet' -> betafilename.append;
-           (if generateLineNumbers then
+           (if generateDebugInfo then
                betafilename[] -> jcf.SourceFile;
                betafilename[] -> betafile.name;
                betafile.openRead;
@@ -142,12 +150,17 @@ do (# commentstream: @stream (* maybe something more useful *);
                (varNo div 4) - 2 -> varNo;
            if);
            
+           (if generateDebugInfo then
+               varNo -> jcf.emitLocalVariableUse;
+           if);
+           
            (if varNo <= 3 then 
                op0 + varNo -> jcf.emit;
             else
                op -> jcf.emit;
                varNo -> jcf.emit;
            if);
+           
         #);
       dumpReg:
         (# 
@@ -481,10 +494,12 @@ do (# commentstream: @stream (* maybe something more useful *);
                    methodname: ^text;
                    isStatic: @boolean;
                    access: @integer;
+                   argn: ^text;
                 do jcf.labs.clear;
                    BC.gettext -> thisInnerMethodName[];  
                    BC.gettext -> thisSignature[];
-                   BC.get -> noOfEnterArgs;
+                   0                       -> BCstate.fields.numLocals;
+                   BC.get -> noOfEnterArgs -> BCstate.fields.numArguments;
                    BC.get -> aux;
                    (if false then
                        '\nMethodDef: ' -> puttext;
@@ -499,6 +514,10 @@ do (# commentstream: @stream (* maybe something more useful *);
                    (if 'main' -> thisInnerMethodName.equal then
                        (ACC_PUBLIC %Bor ACC_STATIC, 'main', '([Ljava/lang/String;)V', 8, 8)
                          -> jcf.currentmethod.new;
+                       (if generateDebugInfo then
+                           (0, 65535, 'args', 'Ljava/lang/String;') 
+                             -> jcf.emitlocalVariableDefinition;
+                       if);
                        true -> isMainMethod
                     else
                        false -> isMainMethod;
@@ -509,6 +528,10 @@ do (# commentstream: @stream (* maybe something more useful *);
                             *)
                            (0 (*%Bor ACC_PUBLIC*), thisInnerMethodName[], '()V', 1, 1)
                              -> jcf.currentmethod.new;
+                           (if generateDebugInfo then
+                               (0, 65535, 'this', thisClassName.copy->makeSignature) 
+                                 -> jcf.emitLocalVariableDefinition;
+                           if);
                            _return -> jcf.currentmethod._code.putByte;
                        if);
                        thisSignature[] 
@@ -521,12 +544,37 @@ do (# commentstream: @stream (* maybe something more useful *);
                        if);
                        (access, methodname[], thisSignature[], 8, 8)
                          -> jcf.currentmethod.new;
+                       (if generateDebugInfo and (not isStatic) then
+                           (0, 65535, 'this', thisClassName.copy->makeSignature) 
+                             -> jcf.emitLocalVariableDefinition;
+                       if);
                    if);    
-                #)
+                   (if true then
+                       (* enter parameters are declared as variables too.
+                        * Thus no need for this!
+                        * Well yes - apparently sometimes!!!!! FIXME!???
+                        * Example: program.program() has a parameter of
+                        * class tstenv, but does NOT call fields.new with tag 'm'
+                        *)
+                       (if generateDebugInfo then
+                           (for i:noOfEnterArgs repeat
+	                        'arg' -> argn[];
+	                        i-1 -> argn.putint; (* FIXME: argument name *)
+	                        (0, 65535, argn[], 'I' (* FIXME: argument type *))
+	                          -> jcf.emitlocalvariabledefinition;
+                           for);
+                       if);
+                   if);
+                #);
              // initCons then
                 (ACC_PUBLIC, '<init>', '('->(')V'->(thisOrgName.copy).append).prepend, 8, 3)
                   -> jcf.currentmethod.new;
-                
+                (if generateDebugInfo then
+                    (0, 65535, 'this', thisClassName.copy->makeSignature) 
+                      -> jcf.emitLocalVariableDefinition;
+                    (65535, 0, 'origin', 'Ljava/lang/Object;' (* FIXME: argument type *))
+                      -> jcf.emitlocalvariabledefinition;
+                if);
              // field then
                 (# F: @text
                 do 'F' -> F; BC.get->F.putInt; (* datpete: Fnn field???? *)
@@ -653,7 +701,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                 #)
              // position then
                 BC.getShort -> line;
-                (if generateLineNumbers then
+                (if generateDebugInfo then
                     line -> betafile.pc.posToLineCol -> (line, column);
                     line -> jcf.emitLinenumber;
                 if);

@@ -3,12 +3,15 @@ INCLUDE '~beta/containers/hashTable';
 INCLUDE '~beta/basiclib/texthash';
 --LIB: attributes--
 
+traceDebuginfo:
+  (# exit false #);
+
 JavaImage:
   (# cf: @ClassFile;
      
      traceClassFile: @boolean;
      traceClassFileName: @boolean;
-     
+    
      thisClassIndex, superClassIndex: @integer;
           
      init:<
@@ -62,10 +65,25 @@ JavaImage:
               (currentmethod.LIP, line) -> currentmethod.linenumber;
           if);
        #);
+     emitLocalVariableDefinition:
+       (# start_pc: @int16u; (* start_pc=65535 means not yet defined *)
+          length: @int16u; (* length=65535 means "lives through entire method" *)
+          name, type: ^text;
+       enter (start_pc, length, name[], type[])
+       do (start_pc, length, name[], type[], currentmethod.numLocals)
+            -> currentmethod.variable_definition;
+          currentmethod.numLocals+1 -> currentmethod.numLocals;
+       #);
+     emitLocalVariableUse:
+       (# variable_index: @int16u;
+       enter variable_index
+       do (variable_index, currentmethod.LIP) -> currentmethod.variable_use
+       #);
      
      emitToFile:
        (# e: @diskentry;
-       do (if traceClassFile then
+       do currentmethod.fix_variables;
+          (if traceClassFile then
               '\nWriting ' -> screen.puttext;
               cf.name -> screen.putline;
            else
@@ -215,15 +233,19 @@ JavaImage:
      currentmethod: @
        (# info: ^CF_Method_info;
           _code: ^CF_Code_attribute;
+          name, signature: ^text;
+          isStatic: @boolean;
+          numLocals: @int16u;
           line_numbers: ^CF_LineNumberTable_attribute;
           variables: ^CF_LocalVariableTable_attribute;
           LIP: (# exit _code.code_length #);
           new: 
             (# access, maxstack, maxlocals: @integer;
-               name, signature: ^text;
                name_index, descriptor_index, code_index: @integer;
             enter (access, name[], signature[], maxstack, maxlocals)
-            do name[] -> constant_pool.utf8strings.add -> name_index;
+            do fix_variables;
+               (access %Band ACC_STATIC) <> 0 -> isStatic;
+               name[] -> constant_pool.utf8strings.add -> name_index;
                signature[] -> constant_pool.utf8strings.add -> descriptor_index;
                (access, name_index, descriptor_index) 
                  -> &CF_Method_info
@@ -235,7 +257,25 @@ JavaImage:
                  -> _code[]
                  -> info.attributes.add;
                NONE -> line_numbers[];
+            #);
+          fix_variables:
+            (# 
+            do (if variables[]<>NONE then
+                   (* Complete local variable information of previous method *)
+                   (for i:variable_slots.range repeat
+                        (if variable_slots[i][]<>NONE then
+                            (if variable_slots[i].start_pc = 65535 then
+                                0 -> variable_slots[i].start_pc;
+                            if);
+                            (if variable_slots[i].length = 65535 then
+                                LIP-variable_slots[i].start_pc-1 -> variable_slots[i].length;
+                            if);
+                        if);
+                   for);
+               if);
+               0 -> numLocals;
                NONE -> variables[];
+               1 -> variable_slots.new;
             #);
           linenumber:
             (# pc, line: @integer;
@@ -251,19 +291,78 @@ JavaImage:
                &CF_LineNumber_info[] -> i[] -> line_numbers.line_number_table.add;
                (pc, line) -> i;
             #);
-          variable_definition:
-            (# name_index, descriptor_index, index: @integer;
+          variable_slots: [1]^CF_LocalVariable_info;
+          variable_definition: 
+            (# name, type: ^text;
+               start_pc, length, name_index, descriptor_index, index: @integer;
                i: ^CF_LocalVariable_info;
-            enter (name_index, descriptor_index, index)
-            do (if variables[]=NONE then
+            enter (start_pc, length, name[], type[], index)
+            do (if traceDebugInfo then
+                   'method '->screen.puttext;
+                   currentmethod.name[] -> screen.puttext;
+                   ': defining local var no '->screen.puttext;
+                   index -> screen.putint;
+                   ' ' -> screen.put;
+                   name[] -> screen.putline;
+               if);       
+               (if variables[]=NONE then
                    'LocalVariableTable' 
                      -> constant_pool.utf8strings.add
                      -> &CF_LocalVariableTable_attribute
                      -> variables[]
                      -> _code.attributes.add;
                if);
-               (*&CF_LineNumber_info[] -> i[] -> line_numbers.line_number_table.add;
-               (pc, line) -> i;*)
+               name[] -> constant_pool.utf8strings.add -> name_index;
+               type[] -> constant_pool.utf8strings.add -> descriptor_index;
+               &CF_LocalVariable_info[] -> i[] ->variables.local_variable_table.add;
+               (start_pc, length, name_index, descriptor_index, index) -> i;
+               (if index+1>variable_slots.range then
+                   (variable_slots.range, index+1-variable_slots.range)
+                     -> max
+                     -> variable_slots.extend;
+               if);
+               (if variable_slots[index+1][]=NONE then
+                   i[] -> variable_slots[index+1][];
+                else
+                   'method '->screen.puttext;
+                   currentmethod.name[] -> screen.puttext;
+                   ': redefinition of variable no '
+                     -> screen.puttext;
+                   index -> screen.putint;
+                   screen.newline;
+               if);
+            #);
+          variable_use:
+            (# index, pc: @int16u;
+            enter (index,pc)
+            do (if (index+1>variable_slots.range) or (variable_slots[index+1][]=NONE) then
+                   'method '->screen.puttext;
+                   currentmethod.name[] -> screen.puttext;
+                   ': use of undefined variable no '
+                     -> screen.puttext;
+                   index -> screen.putint;
+                   screen.newline;
+                else
+                   (if traceDebugInfo then 
+                       'method '->screen.puttext;
+                       currentmethod.name[] -> screen.puttext;
+                       ': correct use of variable no '
+                         -> screen.puttext;
+                       index -> screen.putint;
+                       ' at pc '->screen.puttext;
+                       pc -> screen.putint;
+                       screen.newline;
+                   if);
+                   (if variable_slots[index+1].start_pc=65535 then
+                       (* first use of slot#index *)
+                       pc -> variable_slots[index+1].start_pc;
+                   if);
+                   (if variable_slots[index+1].length<>65535 then
+                       (* 65535 means lives through entire method - fixed by fix_variables *)
+                       pc-variable_slots[index+1].start_pc 
+                         -> variable_slots[index+1].length;
+                   if);
+               if);
             #);
        enter new
        #);
