@@ -154,7 +154,13 @@ void BetaError(enum BetaErr err, struct Object *theObj)
       /* Set up StackEnd before calling DisplayBetaStack */
 
 #ifdef NEWRUN
-	StackEnd = SP;
+      if (err==RepRangeErr){
+	/* Skip frame of HandleIndexErr */
+	long SPoff;
+	GetSPoff(SPoff, CodeEntry(theObj->Proto, (long)thePC)); 
+	SP = (long *) ((long)SP+SPoff);
+      }
+      StackEnd = SP;
 #endif
 
 

@@ -34,7 +34,7 @@ char *CpkVT(struct ValRep * theRep, long *SP)
     return CTextPoolEnd - bodysize;
 }
 
-/* CCpkSVT: Copy Slice of variable text (byte rep) to C */
+/* CpkSVT: Copy Slice of variable text (byte rep) to C */
 char *CpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
 {
     long bodysize;
@@ -43,7 +43,7 @@ char *CpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
 
     DEBUG_CODE(NumCpkSVT++);
 
-    /* printf("CCpkSVT: theRep=0x%x, low=0x%x, high=0x%x, SP=0x%x\n", theRep, low, high, SP); */
+    /* printf("CpkSVT: theRep=0x%x, low=0x%x, high=0x%x, SP=0x%x\n", theRep, low, high, SP); */
     Ck(theRep);
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
       BetaError(RepLowRangeErr, GetThis(SP), SP, 0);
