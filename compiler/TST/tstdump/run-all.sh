@@ -93,5 +93,12 @@ do
     echo "--------------------------"
 done
 
-echo Done.
+echo Summary:
+for f in tstdump??
+do
+    if [ -f $f.out ];  then echo "  $f: difference in output"; fi
+    if [ -f $f.err ];  then echo "  $f: difference in stderr"; fi
+    if [ -f $f.diff ]; then echo "  $f: difference in dump"; fi
+done
 
+echo Done.

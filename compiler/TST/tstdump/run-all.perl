@@ -124,6 +124,17 @@ foreach $f (@files) {
     print "--------------------------\n";
 }
 
+date
+print "Summary:\n";
+foreach $f (@files) {
+    $f =~ s%^\.\/%%;
+    $f =~ s/${exe}$//;
+    next if ($f !~ m/^$match$/);
+    if (-f "$f.out")  { print "  $f: difference in output\n"; }
+    if (-f "$f.err")  { print "  $f: difference in stderr\n"; }
+    if (-f "$f.diff") { print "  $f: difference in dump\n"; }
+}
+
 print "Done.\n";
 
 sub rm()
