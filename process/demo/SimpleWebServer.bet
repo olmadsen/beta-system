@@ -1,0 +1,86 @@
+ORIGIN '~beta/basiclib/systemenv';
+INCLUDE '~beta/basiclib/textutils';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/sysutils/pathhandler';
+INCLUDE '~beta/process/streamgenerator';
+(******************************************************************
+ * Example of a very simple Web server adapted from
+ *    James F. Kurose & Keith W. Ross
+ *    Computer Networking
+ *    A Top-Down Approach Featuring the Internet
+ *    Addison Wesley, 2001, ISBN0-201-47711-4
+ *    Section 2.8.1
+ * 
+ * If this program is run on
+ *     somehost.somewhere.edu
+ * and somehost contains a file
+ *     somefile.html
+ * this file may be shown by a Web browser by 
+ * issuing the following request:
+ *     http://somehost.somewhere.edu:6789/somefile.html
+ * 
+ * This version continues to accept request,
+ * but sometimes if fails with a 'Broken pipe'.
+ * Reason not known!
+ *)
+---systemlib:attributes---
+SimpleWebServer:
+  (# listenSocket: @SocketGenerator;    
+     init:<  (# do 6789 -> listenSocket.bind  #);
+     accept:
+       (# connection: ^StreamSocket;     
+          fileName,T: ^text;
+          f: @file
+            (# openTopFile:
+                 (# fileName: ^text; 
+                    P: @pathHandler;
+                 enter fileName[]
+                 do (if not ('/'->fileName.startsWith) then
+                        '/'->fileName.prePend
+                    if);
+                    P.init;
+                    ('~','')->P.convertFilePath->fileName.prePend;
+                    fileName[]->putA;
+                    filename[]->name; openRead; 
+            #)#)
+       do waitForEver
+            -> listenSocket.getStreamConnection
+            -> connection[];
+          connection.getLine -> T[] -> putA;
+          0->T.setPos;
+          (if 'GET'->(T.getAtom).equal then
+              T.getAtom->fileName[]->f.openTopFile;
+              'HTTP/1.0 200 Document Follows\r\n' -> connection.putText;  
+              (if '.jpeg'->fileName.endsWith then
+                  'Content-Type: image/jpeg\r\n '-> connection.putText;
+              if);
+              (if '.gif'->fileName.endsWith then
+                  'Content-Type: image/gif\r\n' -> connection.putText;
+              if);
+              'Content-Length: ' -> connection.putText;
+              f.length -> connection.putInt;
+              '\r\n\r\n' -> connection.putText;              
+              copy:
+                (if not f.eos then
+                    f.get->connection.put;
+                    restart copy
+                if);
+              connection.close
+           else
+              'Bad Request Message'->putline
+          if)
+       #);
+     putA:
+       (# A: ^text
+       enter A[]
+       do '"'->put; A[]->puttext; '"'->put; newline
+       #);       
+  #)
+---program:descriptor---
+SystemEnv
+(# S: @SimpleWebServer
+do S.init;
+   cycle(# do S.accept #)
+#)
+
+   
