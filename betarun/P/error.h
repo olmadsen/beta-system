@@ -6,6 +6,7 @@
 #define ALREADYOPENERROR   3
 #define EXISTSERROR        4
 #define CREATIONERRORERROR 5
-#define MAXERROR           CREATIONERRORERROR
+#define MULTIPLEOPENERROR  6
+#define MAXERROR           MULTIPLEOPENERROR
 
 #endif /* _P_ERROR_H_ */

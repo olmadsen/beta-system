@@ -206,14 +206,27 @@ u_long SBstat(CAStorage *csb)
     return (csb -> open);
 }
 
+/* used to handle multiple calls of SBopen which is illegal 
+ * If cross stores are implemented, this should be a more complicated test */
+static int SBopencalled = 0;
+
 CAStorage *SBopen(char *host, char *path)
 {
    DEStorage *des; /* dynamic extendable storage */
    char *dbn = DBname(path, 1);
    u_long rcode;
+
+   /* Check for multiple calls to open */
+   printf("SBopencalled = %d\n", SBopencalled);
+   if (SBopencalled == 1) {
+     return (CAStorage *)MULTIPLEOPENERROR;
+   }
+   SBopencalled = 1;
+
     /* First we create the dynamic extendable storage used to hold
      * this storage block.
      */
+
    des = DEScreate(NULL, NULL, FALSE);
    
    rcode = DESattach(des, host, dbn);
