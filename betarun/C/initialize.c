@@ -1,9 +1,10 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-06-12 12:19:00 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-06-12 14:48:46 $, SID: $Revision: 1.11 $
  * by Lars Bak.
  */
 #include "beta.h"
+extern CBFAAlloc();
 
 #ifdef UNIX
 #include <signal.h>
@@ -43,7 +44,7 @@ Initialize()
 #ifdef LVR_Area
   INFO( fprintf( output, ", LVRABlock=%dKb", LVRABlockSize/Kb) );
 #endif
-  INFO( fprintf( output, ", CBFA=%dKb\n", CBFASize/Kb) );
+  INFO( fprintf( output, ", CBFABlock=%dKb\n", CBFABlockSize/Kb) );
 
   /* Setup the Infant Object Area */
   if( !AllocateHeap( &tmpIOA,     &tmpIOATop,     &IOALimit, IOASize ) ){
@@ -61,11 +62,8 @@ Initialize()
     exit(1);
   }
 
-  /* Allocate the Call Back Functions Area. */
-  if( !AllocateHeap( &CBFA,     &CBFATop,     &CBFALimit, CBFASize ) ){
-    fprintf(output,"#Beta: Couldn't allocate CBFA (%dKb)\n", CBFASize/Kb);
-    exit(1);
-  }
+  /* Allocate the Callback Function Area */
+  CBFAAlloc();
 
   /* Allocate the Debug Object Table. */
   if( DOTSize > 0 )
