@@ -1,3 +1,4 @@
+#ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 /* ------------------------- FILE valhallaSOCKETS.c ------------------------- */
 
 /*
@@ -283,3 +284,4 @@ int valhalla_writeDataMax(int fd, char *srcbuffer, int length)
 }
 
 /* ------------------------- END sockets.c ------------------------- */
+#endif /* RTVALHALLA */
