@@ -1,7 +1,7 @@
 #!/usr/local/bin/tcsh
 
-# Der er frysning nu, lad vaer med at blande dig!!!
-# exit 0   # Den er overstaaet nu...
+# Hvis er er frysning nu, saa lad vaere med at blande dig!
+# exit 0
 
 # configuration:
 set CVSUPDATE=yes
