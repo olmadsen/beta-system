@@ -5,12 +5,13 @@
 # Useful to place instead of a page, when the original page
 # has been moved. This way old bookmarks will still work.
 
-if ($#ARGV!=0){
-    print "Usage: make_redirect_page.perl <new-url>\n";
+if ($#ARGV!=1){
+    print "Usage: make_redirect_page.perl <new-url> <seconds>\n";
     exit 1;
 }
 
 $url=$ARGV[0];
+$time=$ARGV[1];
 
 print<<EOT
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
@@ -22,7 +23,7 @@ print<<EOT
 <TITLE>Page Moved</TITLE>
 </HEAD>
 
-<META HTTP-EQUIV=REFRESH CONTENT="2; URL=$url">
+<META HTTP-EQUIV=REFRESH CONTENT="$time; URL=$url">
 
 <BODY>
 
