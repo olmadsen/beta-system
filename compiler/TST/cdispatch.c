@@ -125,8 +125,10 @@ struct vtbl
 				, char *cNames
 				, long lcid
 				, long *rgDispId);
+  /* Some of the arguments of Invoke may not have the correct
+   * official type */
   long (STDCALL *Invoke)(struct idispatch *this
-			 ,long dispIdMember
+			 , long dispIdMember
 			 , long riid
 			 , long _lcid
 			 , long wFlags
@@ -141,9 +143,13 @@ struct idispatch
 };
 
 long BETA_Invoke(struct idispatch *pdisp
-		 ,char *pszName
-		 ,char *pszFmt
-		 ,...)
+		 , short wFlags     // not used: type is NOT correct
+		 , long pvRet       // not used: type is NOT correct
+		 , long pexcepinfo  // not used: type is NOT correct
+		 , long pnArgError  // not used: type is NOT correct
+		 , char *pszName
+		 , char *pszFmt
+		 , ...)
 { char * nameList;
   long * resList; 
   long HR,dispid;
