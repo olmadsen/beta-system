@@ -18,6 +18,15 @@ run2:
 java2:
 	javac -g:none helloworld2.java
 
+danish:
+	beta -qw writedanish
+	./writedanish
+dumpdanish:
+	jcf-dump -c Danish
+rundanish:
+	java Danish
+javadanish:
+	javac -g:none danish.java
 
 
 
