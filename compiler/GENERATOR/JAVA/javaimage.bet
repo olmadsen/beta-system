@@ -1,5 +1,6 @@
 ORIGIN 'classfile';
 INCLUDE '~beta/containers/hashTable';
+INCLUDE '~beta/basiclib/texthash';
 --LIB: attributes--
 
 JavaImage:
@@ -8,6 +9,240 @@ JavaImage:
      traceClassFile: @boolean;
      
      thisClassIndex, superClassIndex: @integer;
+          
+     init:<
+       (# classfilename: ^text;
+       enter classfilename[]
+       do classfilename[] -> cf.name;
+          constant_pool.init;
+          fields.init;
+       #);
+     
+     emitToFile:
+       (# 
+       do cf.openWrite;
+          (JAVA_MAGIC, JAVA_MINOR, JAVA_MAJOR, ACC_SUPER, thisClassIndex, superClassIndex) 
+            -> cf.write(# trace::(# do traceClassFile->value #)#);
+          cf.close;
+       #);
+     
+     constant_pool: @
+       (# 
+          strings: @integerHashTable
+            (# entrytype::CF_CONSTANT_String_info;
+               addentry::(# do i->entry.string_index #)
+            #);
+          classes: @integerHashTable
+            (# entrytype::CF_CONSTANT_Class_info;
+               addentry::(# do i->entry.name_index #)
+            #);
+          methodrefs: @integerPairHashTable
+            (# entrytype::CF_CONSTANT_Methodref_info;
+               addentry::(# do (i1,i2)->(entry.class_index, entry.name_and_type_index) #)
+            #);
+          fieldrefs: @integerPairHashTable
+            (# entrytype::CF_CONSTANT_Fieldref_info;
+               addentry::(# do (i1,i2)->(entry.class_index, entry.name_and_type_index) #)
+            #);
+          doubles: @doubleHashTable
+            (# entrytype::CF_CONSTANT_Double_info;
+               addentry::(# do d->entry.double #)
+            #);
+          name_types: @integerPairHashTable
+            (# entrytype::CF_CONSTANT_NameAndType_info;
+               addentry::(# do (i1,i2)->(entry.name_index, entry.descriptor_index) #)
+            #);
+          utf8strings: @texthashtable
+            (# entrytype::CF_CONSTANT_Utf8_info;
+               addentry::(# do t[]->entry.encode #)
+            #);
+          init:
+            (# 
+            do strings.init;
+               classes.init;
+               methodrefs.init;
+               fieldrefs.init;
+               doubles.init;
+               name_types.init;
+               utf8strings.init;
+            #);
+       #);
+     
+     fields: @
+       (# info: ^CF_Field_info;
+          init:
+            (# 
+            do (if info[]<>NONE then
+                   info.write;
+               if);
+               &CF_Field_info[] -> info[];
+            #);
+       #);
+     
+     currentmethod: @
+       (# info: ^CF_Method_info;
+          init: 
+            (# 
+            do (if info[]<>NONE then
+                   info.write;
+               if);
+               &CF_Method_info[] -> info[];
+            #);
+          
+       #);
+     
+     CP_HashTable: hashTable
+       (# entrytype:< cf.entry;
+          addentry:<
+            (# entry: ^entrytype;
+               index: @integer
+            do &entrytype[] -> entry[];
+               INNER;
+               entry[] -> cf.constant_pool.add;
+               cf.constant_pool.count -> index;
+            exit index
+            #);
+       #);
+     textHashTable: CP_hashTable
+       (# element::
+            (# t: ^text;
+               index: @integer (* index in cf.constant_pool *);
+            #);
+          addentry::< (# t: ^text enter t[]  do INNER #);
+          honeyM: @honeyMan;
+          init::<
+            (# 
+            do honeyM.init;
+            #);
+          hashFunction::< 
+            (# do e.t[]-> honeyM.hash ->value; #);
+          equal::< 
+            (# 
+            do left.t[]->right.t.equal->value;
+            #);
+          add:
+            (# T: ^text;
+               E: ^element;
+            enter T[]
+            do &element[]->E[];
+               T[]->E.T[];
+               E[]->hashfunction->findIndexed
+               (# predicate::< 
+                    (# 
+                    do (T[]->current.t.equal)->value;
+                    #);
+                  notFound::< 
+                    (# 
+                    do T[] -> addentry -> E.index;
+                       E[] -> insert;
+                    #)
+               do current[]->E[] (* Only when found *)
+               #);
+            exit E.index
+            #)
+       #);
+     
+     integerHashTable: CP_hashTable
+       (# addentry::< (# i: @integer enter i do INNER #);
+          element::
+            (# i: @integer;
+               index: @integer (* index in cf.constant_pool *);
+            #);
+          hashFunction::< 
+            (# do (e.i mod size) ->value; #);
+          equal::< 
+            (# 
+            do left.i=right.i -> value;
+            #);
+          add:
+            (# i: @integer;
+               E: ^element;
+            enter i
+            do &element[]->E[];
+               i->E.i;
+               E[]->hashfunction->findIndexed
+               (# predicate::< 
+                    (# 
+                    do i=current.i->value;
+                    #);
+                  notFound::< 
+                    (# 
+                    do i   -> addentry -> E.index;
+                       E[] -> insert;
+                    #)
+               do current[]->E[] (* Only when found *)
+               #);
+            exit E.index
+            #)
+       #);
+     
+     integerPairHashTable: CP_hashTable
+       (# addentry::< (# i1, i2: @integer enter (i1,i2) do INNER #);
+          element::
+            (# i1, i2: @integer;
+               index: @integer (* index in cf.constant_pool *);
+            #);
+          hashFunction::< 
+            (# do ((e.i1 + e.i2) mod size) ->value; #);
+          equal::< 
+            (# 
+            do (left.i1=right.i1) and (left.i2=right.i2) -> value;
+            #);
+          add:
+            (# i1, i2: @integer;
+               E: ^element;
+            enter (i1, i2)
+            do &element[]->E[];
+               (i1, i2) -> (E.i1, E.i2);
+               E[]->hashfunction->findIndexed
+               (# predicate::< 
+                    (# 
+                    do (i1=current.i1) and (i2=current.i2)->value;
+                    #);
+                  notFound::< 
+                    (# 
+                    do (i1,i2) -> addentry -> E.index;
+                       E[]     -> insert;
+                    #)
+               do current[]->E[] (* Only when found *)
+               #);
+            exit E.index
+            #)
+       #);
+     
+     doubleHashTable: CP_hashTable
+       (# addentry::< (# d: @real enter d do INNER #);
+          element::
+            (# d: @real;
+               index: @integer (* index in cf.constant_pool *);
+            #);
+          hashFunction::< 
+            (# do ((e.d -> value) mod size) ->value; #);
+          equal::< 
+            (# 
+            do left.d=right.d -> value;
+            #);
+          add:
+            (# d: @real;
+               E: ^element;
+            enter d
+            do &element[]->E[];
+               d->E.d;
+               E[]->hashfunction->findIndexed
+               (# predicate::< 
+                    (# 
+                    do d=current.d->value;
+                    #);
+                  notFound::< 
+                    (# 
+                    do d   -> addentry -> E.index;
+                       E[] -> insert;
+                    #)
+               do current[]->E[] (* Only when found *)
+               #);
+            exit E.index
+            #)
+       #);
      
      (* Class file structs with tracing controlled by local variable traceClassFile *)
      CF_CONSTANT_Class_info: 
@@ -50,92 +285,5 @@ JavaImage:
        cf.LineNumber_info(# trace::(# do traceClassFile->value #)#);
      CF_LocalVariable_info: 
        cf.LocalVariable_info(# trace::(# do traceClassFile->value #)#);
-     
-     init:<
-       (# classfilename: ^text;
-       enter classfilename[]
-       do classfilename[] -> cf.name;
-          constant_pool.init;
-          fields.init;
-       #);
-     
-     emitToFile:
-       (# 
-       do cf.openWrite;
-          (JAVA_MAGIC, JAVA_MINOR, JAVA_MAJOR, ACC_SUPER, thisClassIndex, superClassIndex) 
-            -> cf.write(# trace::(# do traceClassFile->value #)#);
-          cf.close;
-       #);
-     
-     constant_pool: @
-       (# 
-          strings: @integerHashTable(# entrytype::CF_CONSTANT_String_info #);
-          classes: @integerHashTable;
-          methodrefs: @integerPairHashTable;
-          fieldrefs: @integerPairHashTable;
-          doubles: @doubleHashTable;
-          name_types: @integerPairHashTable;
-          utf8strings: @texthashtable;
-          init:
-            (# 
-            do strings.init;
-               classes.init;
-               methodrefs.init;
-               fieldrefs.init;
-               doubles.init;
-               name_types.init;
-               utf8strings.init;
-            #);
-       #);
-     
-     fields: @
-       (# init:
-            (# 
-            #);
-       #);
-     
-     currentmethod: @
-       (# info: ^CF_Method_info;
-          init: 
-            (# 
-            do (if info[]<>NONE then
-                   info.write;
-               if);
-               &CF_Method_info[] -> info[];
-            #);
-          
-       #);
-     
-     textHashTable: hashTable
-       (# entrytype:< cf.entry;
-          element::
-            (# t: ^text;
-               index: @integer (* index in cf.constant_pool *);
-            #);
-       #);
-     
-     integerHashTable: hashTable
-       (# entrytype:< cf.entry;
-          element::
-            (# i: @integer;
-               index: @integer (* index in cf.constant_pool *);
-            #);
-       #);
-     
-     integerPairHashTable: hashTable
-       (# entrytype:< cf.entry;
-          element::
-            (# i1, i2: @integer;
-               index: @integer (* index in cf.constant_pool *);
-            #);
-       #);
-     
-     doubleHashTable: hashTable
-       (# entrytype:< cf.entry;
-          element::
-            (# d: @real;
-               index: @integer (* index in cf.constant_pool *);
-            #);
-       #);
      
   #);
