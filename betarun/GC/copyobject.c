@@ -50,7 +50,7 @@ static ref(Object) CopyObject( theObj)
     long        size;
     
     size = 4*ObjectSize( theObj);
-    DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0") );
+    DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#CopyObject: ObjectSize(theObj) > 0") );
     
     /* Assume that theObj->GCAttr <= IOAMaxAge. */
     DEBUG_IOA( Claim( theObj->GCAttr<=IOAMaxAge,

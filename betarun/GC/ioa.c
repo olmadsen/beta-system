@@ -564,6 +564,8 @@ void ProcessAOAReference( theCell)
 {
   ref(Object) theObj;
   long GCAttribute;
+
+  /*fprintf(output, "ProcessAOAReference: 0x%x\n", *theCell);*/
   
   DEBUG_AOA( Claim( inAOA( theCell),"#ProcessAOAReference: theCell inside AOA\n"));
   theObj = *theCell;
@@ -727,7 +729,7 @@ void CompleteScavenging()
     theObj = (ref(Object)) HandledInToSpace;
     HandledInToSpace = (ptr(long)) (((long) HandledInToSpace)
 				    + 4*ObjectSize(theObj));
-    DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0") );
+    DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#CompleteScavenging: ObjectSize(theObj) > 0") );
     ProcessObject( theObj);
   }
   DEBUG_IOA( Claim( HandledInToSpace == ToSpaceTop,
@@ -766,11 +768,11 @@ long GetDistanceToEnclosingObject( theObj)
       
       theObj = (ref(Object)) IOA;
       while ((long *) theObj < IOATop) {
-	/*fprintf(output, "IOACheck: theObj=0x%x\n", theObj);*/
+	/* fprintf(output, "IOACheck: theObj=0x%x, theObj->Proto: 0x%x\n", theObj, theObj->Proto); */
 	Claim((long)(theObj->Proto), "IOACheck: theObj->Proto");
 	theObjectSize = 4*ObjectSize(theObj);
-	Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0");
 	/*fprintf(output, "IOACheck: theObjectSize=0x%x\n", theObjectSize);*/
+	Claim(ObjectSize(theObj) > 0, "#IOACheck: ObjectSize(theObj) > 0");
 	IOACheckObject (theObj);
 	lastObj = theObj;
 	theObj = (ref(Object)) Offset(theObj, theObjectSize);
