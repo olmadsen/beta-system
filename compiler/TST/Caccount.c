@@ -6,6 +6,15 @@
  *   The class is an account with operations 
  *   init, deposit and withdraw
  */
+#ifdef nti
+# define CALL _stdcall
+#else
+# define CALL
+#endif
+/* FIXME: The functions below does not actually return
+ * HRESULTs, but e.g balance/amount.
+ */
+#define HRESULT unsigned long
 
 struct Account; /* forward declaration */
  
@@ -13,9 +22,9 @@ struct Account; /* forward declaration */
  * The vtbl has entries in the form of function pointers
  */
 struct vtbl
-{ long (*init)(struct Account *this, char *name,long initialAmount);
-  long (*deposit)(struct Account *this, long amount);
-  long (*withdraw)(struct Account *this,long amount);
+{ HRESULT (CALL *init)(struct Account *this, char *name,long initialAmount); 
+  HRESULT (CALL *deposit)(struct Account *this, long amount);
+  HRESULT (CALL *withdraw)(struct Account *this,long amount);
 };
 
 /* Account is the class */
@@ -30,20 +39,20 @@ struct Account
  * to the Account object;
  */
 
-long init(struct Account *this, char* name, long initialAmount)
+HRESULT CALL init(struct Account *this, char* name, long initialAmount)
 { printf("Initializing account for %s\n",name);
   this->name = name;
   this->balance = initialAmount;
   return this->balance;
 }
 
-long deposit(struct Account *this, long amount)
+HRESULT CALL deposit(struct Account *this, long amount)
 { printf("Deposit %i\n",amount);
   this->balance = this->balance + amount;
   return this->balance;
 }
 
-long withdraw(struct Account *this, long amount)
+HRESULT CALL withdraw(struct Account *this, long amount)
 { printf("Withdraw %i\n",amount);
   this->balance = this->balance - amount;
   return this->balance;
