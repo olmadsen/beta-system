@@ -62,7 +62,7 @@ static void AOAtoIOAReAlloc(void)
   long    numUsed;
   long    i;
   long    largerList = 0;
-  long    starttime;
+  long    starttime = 0;
 
   INFO_AOA(starttime = getmilisectimestamp());
 

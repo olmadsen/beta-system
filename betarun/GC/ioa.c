@@ -35,7 +35,7 @@ static void IOACheckPrintIOA(void);
  */
 void IOAGc()
 {
-  long starttime;
+  long starttime = 0;
 
   MAC_CODE(RotateTheCursor());
   

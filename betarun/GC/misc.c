@@ -8,6 +8,9 @@
 
 #ifdef UNIX
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <time.h>
 #endif /* UNIX */
 
 #if defined(MAC)

@@ -374,7 +374,7 @@ void AOAGc()
   Object * target;
   Object * root;
   Block * currentBlock;
-  long starttime;
+  long starttime = 0;
 
   NumAOAGc++;
     
