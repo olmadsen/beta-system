@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: AllocateValRep.c,v 1.17 1992-10-08 11:00:07 beta Exp $
+ * Mod: $Id: AllocateValRep.c,v 1.18 1992-10-19 09:15:40 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -46,14 +46,13 @@ ref(ValRep) CAlloVR1(ref(Object) theObj,
 
 #ifdef LVR_Area
     if (range > LARGE_REP_SIZE) {
-	theRep = cast(ValRep) LVRAAlloc(ByteRepPTValue, range);
+	theRep = cast(ValRep) LVRACAlloc(ByteRepPTValue, range);
 	if (theRep) {
 	    Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 		  "AlloVR1: lvra structure ok");
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
 	    theRep->GCAttr = (int) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
-	    int_clear((char*)theRep->Body, Size - headsize(ValRep));
 	    
 	    RETURN(theRep);
 	}
@@ -103,14 +102,13 @@ ref(ValRep) CAlloVR2(ref(Object) theObj,
 
 #ifdef LVR_Area
     if (range > LARGE_REP_SIZE) {
-	theRep = cast(ValRep) LVRAAlloc(WordRepPTValue, range);
+	theRep = cast(ValRep) LVRACAlloc(WordRepPTValue, range);
 	if (theRep) {
 	    Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 		  "AlloVR2: lvra structure ok");
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
 	    theRep->GCAttr = (int) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
-	    int_clear((char*)theRep->Body, Size - headsize(ValRep));
 	    RETURN(theRep);
 	}
     }
@@ -158,14 +156,13 @@ ref(ValRep) CAlloVR4(ref(Object) theObj,
 
 #ifdef LVR_Area
     if (range > LARGE_REP_SIZE) {
-	theRep = cast(ValRep) LVRAAlloc(ValRepPTValue, range);
+	theRep = cast(ValRep) LVRACAlloc(ValRepPTValue, range);
 	if (theRep) {
 	    Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 		  "AlloVR4: lvra structure ok");
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
 	    theRep->GCAttr = (int) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
-	    int_clear((char*)theRep->Body, Size - headsize(ValRep));
 	    RETURN(theRep);
 	}
     }
@@ -216,14 +213,13 @@ ref(ValRep) CAlloVR8(ref(Object) theObj,
 
 #ifdef LVR_Area
     if (range > LARGE_REP_SIZE) {
-	theRep = cast(ValRep) LVRAAlloc(DoubleRepPTValue, range);
+	theRep = cast(ValRep) LVRACAlloc(DoubleRepPTValue, range);
 	if (theRep) {
 	   Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 		 "AlloVR8: lvra structure ok");
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
 	    theRep->GCAttr = (int) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
-	    int_clear((char*)theRep->Body, Size - headsize(ValRep));
 	    RETURN(theRep);
 	}
     }
