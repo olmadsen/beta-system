@@ -1,7 +1,7 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-93 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
  * property.c
- * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 
 /* EXPORTING:
@@ -63,8 +63,10 @@ static ValueProperty( name, value)
   char *name, *value;
 {
 
-  ENTRY("ioa",  IOASize       = 1024 * intScan(name, value));
-  ENTRY("aoa",  AOABlockSize  = 1024 * intScan(name, value));
+  ENTRY("ioa", IOASize = 1024 * intScan(name, value));
+  ENTRY("aoa",  
+	AOABlockSize  = 1024 * intScan(name, value);
+	if (AOAMinFree>AOABlockSize) AOAMinFree=AOABlockSize;);
   ENTRY("lvra", LVRABlockSize = 1024 * intScan(name, value));
   ENTRY("cbfa", CBFABlockSize = 1024 * intScan(name, value));
 
@@ -127,7 +129,7 @@ static ValueProperty( name, value)
 #endif DEMO
 
 /**********************************************************/
-/* PRIVATE PART ---- do'nt change below ---- PRIVATE PART */
+/* PRIVATE PART ---- don't change below ---- PRIVATE PART */
 /**********************************************************/
 
 static long intScan( name, value)
