@@ -106,6 +106,20 @@
 ;; 
 ;;  Emacs will detect the ``.html'' suffix and activate html-mode
 ;;  appropriately.
+;;
+;;  Suggestion for use in editing MIADOC manuals /datpete:
+;;  (defun myhtml ()
+;;    (interactive)
+;;    (local-set-key [f1]   (function (lambda () (interactive)(html-add-code 1))))
+;;    (local-set-key [f2]   (function (lambda () (interactive)(html-add-bold 1))))
+;;    (local-set-key [f3]   (function (lambda () (interactive)(html-add-emphasis 1))))
+;;    (local-set-key [f4]   (function (lambda () (interactive)(html-add-beta 1))))
+;;    (local-set-key [f5]   (function (lambda () (interactive)(html-add-fig 1))))
+;;    (local-set-key [f6]   (function (lambda () (interactive)(html-add-inx 1))))
+;;  )
+;;  
+;;  (setq html-mode-hook 'myhtml)
+;;
 
 ;;; ------------------------------- VARIABLES --------------------------------
 
@@ -396,6 +410,24 @@ If called with a PREFIX argument surround region with blockquote markup."
 If called with a PREFIX argument surround region with preformatted markup."
   (interactive "*P")
   (html-add-tag-internal "PRE" arg t))
+
+(defun html-add-beta (&optional arg)
+  "Add BETA tags.
+If called with a PREFIX argument surround region with preformatted markup."
+  (interactive "*P")
+  (html-add-tag-internal "BETA" arg t))
+
+(defun html-add-fig (&optional arg)
+  "Add FIG tags.
+If called with a PREFIX argument surround region with preformatted markup."
+  (interactive "*P")
+  (html-add-tag-internal "FIG" arg))
+
+(defun html-add-inx (&optional arg)
+  "Add BETA tags.
+If called with a PREFIX argument surround region with preformatted markup."
+  (interactive "*P")
+  (html-add-tag-internal "INX" arg))
 
 ;;; ---------------- Character Formatting Commands --------------------
 
@@ -987,6 +1019,7 @@ since make-temp-name is unique per process, not per call.")
               (set-buffer-menubar (copy-sequence current-menubar))
               (add-menu nil "Forms" (cdr html-forms-menu)))))
       (add-hook 'html-mode-hook 'html-install-form-menubar t)
+
       )
   )
 
