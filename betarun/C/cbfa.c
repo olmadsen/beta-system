@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: cbfa.c,v 1.8 1992-10-08 10:59:37 beta Exp $
+ * Mod: $Id: cbfa.c,v 1.9 1992-10-09 17:13:50 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 #include "beta.h"
@@ -44,11 +44,11 @@ void CBFArelloc ()
     }
 	
     /* Allocate new CBFA block */
-    if ( ! (CBFA->next = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {
+    if ( ! (lastCBFA->next = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {
 	fprintf(output,"#Beta: Couldn't allocate CBFA\n");
 	exit(1);
     }
-    lastCBFA = CBFA->next;
+    lastCBFA = lastCBFA->next;
     if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
 	fprintf(output,"#Beta: Couldn't allocate CBFA (%dKb)\n", CBFABlockSize/Kb);
 	exit(1);
