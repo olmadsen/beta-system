@@ -8,22 +8,65 @@
 #define kApplicationFloaterKind 7
 #define NormalKind 8
 
+void SetWindowMaxSize (WindowPeek theWindow, long width, long height);
+
+void ActivateWindow (WindowPtr theWindow);
+void DeactivateWindow (WindowPtr theWindow);
+WindowPtr GetNextVisibleWindow (WindowPtr theWindow);
+void SetTheWindowKind (WindowPtr WindowPtrerence, short kind);
+RgnHandle GetContentRegion(WindowPtr WindowPtrerence);
+WindowPtr GetWindowList(void);
+void SetWindowList(WindowPtr WindowPtrerence);
+Boolean GetWindowHilite(WindowPtr WindowPtrerence);
+pascal void SetWindowHilite(WindowPtr WindowPtrerence, Boolean windowHilite);
+Boolean WindowIsModal(WindowPtr WindowPtrerence);
+void SetWindowBackground (WindowPtr theWindow, short red, short green, short blue);
+WindowPtr FrontNonFloatingWindow(void);
+WindowPtr  LastFloatingWindow(void);
+WindowPtr SelectTheWindow (WindowPtr theWindow);
+void DragTheWindow (WindowPtr windowToDrag, Point startPoint, const Rect *draggingBounds);
+void HideTheWindow (WindowPtr windowToHide);
+void ShowTheWindow(WindowPtr windowToShow);
 
 
-void ActivateWindow (WindowRef theWindow)
+
+void SetWindowMaxSize (WindowPeek theWindow, long width, long height)
+{
+	WStateDataHandle state;
+	Rect zoomRect;
+	
+	state = (WStateDataHandle) theWindow->dataHandle;
+	if (state != nil) {
+		if ((width > 0) && (height > 0)) {
+			zoomRect = qd.screenBits.bounds;
+			zoomRect.left = zoomRect.left + 4;
+			zoomRect.top = zoomRect.top + 40;
+
+			if (zoomRect.bottom - zoomRect.top > height)
+				zoomRect.bottom = zoomRect.top + height;
+			if(zoomRect.right - zoomRect.left > width)
+				zoomRect.right = zoomRect.left + width;
+			(*state)->stdState = zoomRect;
+		}
+	}
+	return;
+}
+
+
+void ActivateWindow (WindowPtr theWindow)
 {
 	HiliteWindow(theWindow, true);
 	LMSetCurActivate(theWindow);
 }
 
-void DeactivateWindow (WindowRef theWindow)
+void DeactivateWindow (WindowPtr theWindow)
 {	
 	HiliteWindow(theWindow, false);
 	LMSetCurDeactive(theWindow);
 }
 
 
-WindowRef GetNextVisibleWindow (WindowRef theWindow)
+WindowPtr GetNextVisibleWindow (WindowPtr theWindow)
 {
 	do {
 		theWindow = GetNextWindow(theWindow);
@@ -32,14 +75,14 @@ WindowRef GetNextVisibleWindow (WindowRef theWindow)
 }
 
 
-void SetTheWindowKind (WindowRef windowReference, short kind)
+void SetTheWindowKind (WindowPtr WindowPtrerence, short kind)
 {
-	SetWindowKind(windowReference, kind);
+	SetWindowKind(WindowPtrerence, kind);
 }
 
-RgnHandle GetContentRegion(WindowRef windowReference)
+RgnHandle GetContentRegion(WindowPtr WindowPtrerence)
 {
-	return (((WindowPeek) windowReference)->contRgn);
+	return (((WindowPeek) WindowPtrerence)->contRgn);
 }
 
 
@@ -50,31 +93,31 @@ WindowPtr GetWindowList(void)
 
 // SetWindowList — Set the first window in this process’ window list.
 
-void SetWindowList(WindowPtr windowReference)
+void SetWindowList(WindowPtr WindowPtrerence)
 {
-	LMSetWindowList(windowReference);
+	LMSetWindowList(WindowPtrerence);
 }
 
 // Get/SetWindowHilite — get and set the hilited field of a window
 
-Boolean GetWindowHilite(WindowRef windowReference)
+Boolean GetWindowHilite(WindowPtr WindowPtrerence)
 {
-	return (((WindowPeek) windowReference)->hilited);
+	return (((WindowPeek) WindowPtrerence)->hilited);
 }
 
-pascal void SetWindowHilite(WindowRef windowReference, Boolean windowHilite)
+pascal void SetWindowHilite(WindowPtr WindowPtrerence, Boolean windowHilite)
 {
-	((WindowPeek) windowReference)->hilited = windowHilite;
+	((WindowPeek) WindowPtrerence)->hilited = windowHilite;
 }
 
 
 
-Boolean WindowIsModal(WindowRef windowReference)
+Boolean WindowIsModal(WindowPtr WindowPtrerence)
 {
 	short	windowVariant;
 	
-	windowVariant = GetWVariant((WindowPtr) windowReference);
-	if ((GetWindowKind(windowReference) == DialogKind) &&
+	windowVariant = GetWVariant((WindowPtr) WindowPtrerence);
+	if ((GetWindowKind(WindowPtrerence) == DialogKind) &&
 		((windowVariant == dBoxProc) ||
 		(windowVariant == movableDBoxProc)))
 		return true;
@@ -170,7 +213,7 @@ WindowPtr SelectTheWindow (WindowPtr theWindow)
 	return currentFrontWindow;
 }
 
-void DragTheWindow (WindowRef windowToDrag, Point startPoint, const Rect *draggingBounds)
+void DragTheWindow (WindowPtr windowToDrag, Point startPoint, const Rect *draggingBounds)
 {
 	Rect		dragRect;
 	KeyMap		keyMap;
@@ -267,11 +310,11 @@ void DragTheWindow (WindowRef windowToDrag, Point startPoint, const Rect *draggi
 	}
 }
 
-void HideTheWindow (WindowRef windowToHide)
+void HideTheWindow (WindowPtr windowToHide)
 {
-	WindowRef			frontNonFloater;
-	WindowRef			lastFloater;
-	WindowRef			windowBehind;
+	WindowPtr			frontNonFloater;
+	WindowPtr			lastFloater;
+	WindowPtr			windowBehind;
 	
 	// Don’t do anything if the window is already invisible.
 	
@@ -302,11 +345,11 @@ void HideTheWindow (WindowRef windowToHide)
 }
 
 
-void ShowTheWindow(WindowRef windowToShow)
+void ShowTheWindow(WindowPtr windowToShow)
 {
-	WindowRef			windowBehind;
-	WindowRef			frontNonFloatingWindow;
-	WindowRef			lastFloatingWindow;
+	WindowPtr			windowBehind;
+	WindowPtr			frontNonFloatingWindow;
+	WindowPtr			lastFloatingWindow;
 	short				windowClass;
 	Boolean				windowIsInFront = false;
 	
@@ -322,14 +365,15 @@ void ShowTheWindow(WindowRef windowToShow)
 			BringToFront(windowToShow);
 			break;
 		case NormalKind:
+		case DialogKind:
+
 			lastFloatingWindow = LastFloatingWindow();
+			
 			if (lastFloatingWindow != nil) {
 				SendBehind(windowToShow, lastFloatingWindow);
 			} else {
 				BringToFront(windowToShow);
 			}
-			break;
-		case DialogKind:
 			break;
 	}
 	
@@ -363,7 +407,7 @@ void ShowTheWindow(WindowRef windowToShow)
 	
 		frontNonFloatingWindow = FrontNonFloatingWindow();
 		if ((frontNonFloatingWindow != nil) &&
-			(frontNonFloatingWindow == (WindowRef) FrontWindow()) &&
+			(frontNonFloatingWindow == (WindowPtr) FrontWindow()) &&
 			(WindowIsModal(frontNonFloatingWindow)))
 			SetWindowHilite(windowToShow, false);
 		else {

@@ -1,5 +1,5 @@
 ORIGIN 'guienv_macbody';
-INCLUDE '~beta/maclib/v3.0/scrap';
+INCLUDE '~beta/maclib/v3.1/scrap';
 
 -- GUIENVwindowUseTextStyle: descriptor --
 (#
@@ -74,10 +74,14 @@ do assertOpen;
 -- GUIENVwindowSetSize: descriptor --
 (#
 do assertOpen;
-	invalidateGrowIcon;
+	(if resizeable then
+		invalidateGrowIcon;
+	if);
 	(private.windowPointer,width,height,false) -> SizeWindow;
 	(width,height) -> private.windowContents.size;
-	invalidateGrowIcon;
+	(if resizeable then
+		invalidateGrowIcon;
+	if);
 	updateCursor;
 #)
 
@@ -112,7 +116,7 @@ do assertOpen;
 (#
 do assertOpen;
 	private.windowPointer -> ShowTheWindow;
-	bringToFront;
+	(* bringToFront; *)
 	true -> windowVisible;
 #)
 
@@ -141,6 +145,7 @@ do assertOpen;
 (#
 do assertOpen;
 	(width,height) -> theMaxSize;
+	(private.windowPointer, width, height) -> SetWindowMaxSize;
 #)
 
 -- GUIENVwindowGetMaxSize: descriptor --
@@ -164,7 +169,7 @@ do assertOpen;
 -- GUIENVwindowBringToFront: descriptor --
 (# BringToFront: External (# theWindow: @Integer; enter theWindow do '$A920' -> PascalTrap; #);
 do assertOpen;
-	private.windowPointer -> SelectWindow;
+	private.windowPointer -> SelectTheWindow;
 #)
 
 -- GUIENVwindowBringToBack: descriptor --
@@ -197,25 +202,29 @@ do shadows -> style;
 		dialog -> private.type;
 	if);
 	inner create;
-	(if private.type
-		//normal then
-			ZoomDocProc -> macType;
-		//dialog then
-			DBoxProc -> macType;
-		//utility then
+	(if type
+		//windowtypes.normal then
+			(if resizeable then
+				ZoomDocProc -> macType;
+			else
+				noGrowDocProc -> macType;
+			if);
+		//windowtypes.dialog then
+			movableDBoxProc -> macType;
+		//windowtypes.palette then
 			rFloatingWindowProc * 16 -> macType;
 	if);
 	(if private.windowPointer = 0 then
 		((40,40),(340,240)) -> bounds;
-		(0,bounds[],'Title',false,macType, -1, true, 0) -> NewCWindow -> private.windowPointer;
+		(0,bounds[],'Title',false,macType, 0, true, 0) -> NewCWindow -> private.windowPointer;
 		(private.windowPointer, 56797, 56797, 56797) -> SetWindowBackground;
 		
-		(if private.type
-			//normal then
+		(if type
+			//windowtypes.normal then
 				(private.windowPointer, NormalKind) -> SetTheWindowKind;
-			//dialog then
+			//windowtypes.dialog then
 				(private.windowPointer, DialogKind) -> SetTheWindowKind;
-			//utility then
+			//windowtypes.palette then
 				(private.windowPointer, ApplicationFloaterKind) -> SetTheWindowKind;
 		if);
 	if);
@@ -692,7 +701,11 @@ do (* not implemented !!! *)
 (# 
 do assertOpen;
 	(if viewable then
-	 	invalVisibleRgn;
+		(if private.isFigureItem then
+			invalFrame;
+		else
+	 		invalVisibleRgn;
+		if);
 		(if immediate then
 			this(window).update;
 		if);
@@ -759,10 +772,10 @@ do
 -- GUIENVwindowitemClose: descriptor --
 (#
 do updateMaybe;
-	inner close;
 	(if this(windowItem)[] = target then
 		none -> target;
 	if);
+	inner close;
 	(if father[] <> NONE then
 		(if private.isFigureItem then
 			this(windowitem)[] -> father.private.figs.remove;
@@ -1007,12 +1020,12 @@ do
 -- GUIENVcanvasClose: descriptor --
 (#
 do inner close;
-	private.children.clear;
-	private.figs.clear;
 	scan
 		(#
 		do current.close;
 		#);
+	private.children.clear;
+	private.figs.clear;
 #)
 
 
@@ -1445,6 +1458,7 @@ do private.event.init;
 	initCursors;
 	private.timerQueue.init;
 	private.initColors;
+	installCoreEventhandlers;
 #)
 
 -- GUIENVDoPart: descriptor --
@@ -1457,7 +1471,7 @@ do
 
 -- GUIENVactiveWindow: descriptor --
 (# windowPointer: @integer;
-do	FrontWindow -> windowPointer;
+do	FrontNonFloatingWindow -> windowPointer;
 	(if windowPointer//0 then
 		none -> theWindow[];
 	else

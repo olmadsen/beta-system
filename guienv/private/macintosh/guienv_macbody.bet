@@ -5,20 +5,23 @@ BUILD default ':$$/windowmanagement.obj' ':external/windowmanagement.c' 'mrc -pr
 
 RESOURCE default 'external/guienv.r';
 
-INCLUDE '~beta/maclib/v3.0/osutils';
-INCLUDE '~beta/maclib/v3.0/debug';
-INCLUDE '~beta/maclib/v3.0/windows';
-INCLUDE '~beta/maclib/v3.0/fonts';
-INCLUDE '~beta/maclib/v3.0/quickdraw';
-INCLUDE '~beta/maclib/v3.0/dialogs';
-INCLUDE '~beta/maclib/v3.0/toolutils';
-INCLUDE '~beta/maclib/v3.0/scrap';
-INCLUDE '~beta/maclib/v3.0/textedit';
-INCLUDE '~beta/maclib/v3.0/desk';
-INCLUDE '~beta/maclib/v3.0/menus';
-INCLUDE '~beta/maclib/v3.0/memory';
-INCLUDE '~beta/maclib/v3.0/diskinit';
-INCLUDE '~beta/maclib/v3.0/events';
+INCLUDE '~beta/maclib/v3.1/osutils';
+INCLUDE '~beta/maclib/v3.1/debug';
+INCLUDE '~beta/maclib/v3.1/windows';
+INCLUDE '~beta/maclib/v3.1/fonts';
+INCLUDE '~beta/maclib/v3.1/quickdraw';
+INCLUDE '~beta/maclib/v3.1/dialogs';
+INCLUDE '~beta/maclib/v3.1/toolutils';
+INCLUDE '~beta/maclib/v3.1/scrap';
+INCLUDE '~beta/maclib/v3.1/textedit';
+INCLUDE '~beta/maclib/v3.1/desk';
+INCLUDE '~beta/maclib/v3.1/menus';
+INCLUDE '~beta/maclib/v3.1/memory';
+INCLUDE '~beta/maclib/v3.1/diskinit';
+INCLUDE '~beta/maclib/v3.1/events';
+INCLUDE '~beta/maclib/v3.1/appleevents';
+INCLUDE '~beta/maclib/v3.1/morefiles';
+
 INCLUDE '~beta/containers/v1.6/list';
 INCLUDE '~beta/sysutils/v1.6/objinterface';
 INCLUDE '../linkedlist';
@@ -82,13 +85,48 @@ processMouseDown:
  * Interface to the routines in "windowmanagement.c"
  *****)
  
+SetWindowMaxSize: external
+	(# theWindow: @integer;
+		width, height: @integer;
+	enter (theWindow, width, height)
+	#);
 
 SetWindowBackground: external
 	 (# theWindow: @integer;
 		   red, green, blue: @shortInt;
 		enter (theWindow, red, green, blue)
 	 #);
-		
+	 
+SelectTheWindow: external
+	(# theWindow: @integer;
+		deActivatedWindow: @integer;
+	enter	theWindow
+	exit deActivatedWindow
+	#);
+DragTheWindow: external
+	(# theWindow: @integer;
+		startPt: @integer;
+		dragRect: ^macrect;
+	enter	(theWindow, startPt, dragRect[])
+	#);
+ShowTheWindow: external
+	(# theWindow: @integer;
+	enter	theWindow
+	#);
+HideTheWindow: external
+	(# theWindow: @integer;
+	enter	theWindow
+	#);
+SetTheWindowKind: external
+	(# theWindow: @integer;
+		kind: @shortInt;
+	enter	(theWindow, kind)
+	#);
+	
+FrontNonFloatingWindow: external
+	(# theWindow: @integer;
+	exit theWindow
+	#);
 (* END of windowmanagement *)
 
 
@@ -185,10 +223,12 @@ processMouseDown:
 				else
 					processMenubarClick;
 				if);
+				false -> sendOnMouseUp;
 			//inSysWindow then
-				30 -> SysBeep;
-				(* (private.event.address,windowPointer) -> SystemClick; *)
+				(private.event.address,windowPointer) -> SystemClick;
+				false -> sendOnMouseUp;
 			//inDesk then
+				false -> sendOnMouseUp;
 		else
 			(* first determine if this can possibly be a doubleclick *)
 			private.event.where -> macPt;
@@ -206,6 +246,9 @@ processMouseDown:
 			windowPointer -> private.windows.findBywindowPointer -> theWindow[];
 			(if theWindow[]<>none then
 				partCode -> theWindow.processMouseDown;
+			else
+				false -> sendOnMouseUp;
+				NONE -> lastClickedObject;
 			if);
 		if);
 	#);
@@ -279,16 +322,34 @@ processOsEvent:
 	#);
 processResume:
 	(#	theWindow: ^window;
-	do activeWindow -> theWindow[];
+	do private.windows.scan
+			(#
+			do (if current.type = windowTypes.palette then
+					(if current.private.windowVisible then
+						(current.private.windowPointer, true) -> ShowHide;
+					if);
+				if);
+			#);
+		activeWindow -> theWindow[];
 		(if theWindow[] <> none then
+			(theWindow.private.windowPointer, true) -> HiliteWindow;
 			true -> theWindow.processActivate;
 		if);
 		true -> updateCursor;
 	#);
 processSuspend:
 	(#	theWindow: ^window;
-	do activeWindow -> theWindow[];
+	do private.windows.scan
+			(#
+			do (if current.type = windowTypes.palette then
+					(if current.private.windowVisible then
+						(current.private.windowPointer, false) -> ShowHide;
+					if);
+				if);
+			#);
+		activeWindow -> theWindow[];
 		(if theWindow[] <> none then
+			(theWindow.private.windowPointer, false) -> HiliteWindow;
 			false -> theWindow.processActivate;
 		if);
 	#);
@@ -297,7 +358,14 @@ processMouseMoved:
 	do doUpdateCursor;
 	#);
 processHighLevelEvent: 
-	(#
+	(# err: @integer;
+		AEProcessAppleEvent: External
+		  (# theEventRecord: @integer; OSErr: @ShortInt; 
+		  enter theEventRecord
+		  do '{$303C,$021B,$A816}'->PascalTrap; 
+		  exit OSErr
+		  #);
+	do private.event.address -> AEProcessAppleEvent -> err; 
 	#);
 
 processMenubarClick:
@@ -339,8 +407,81 @@ showAboutBox:
 	(# result: @integer;
 	do (7128,0) -> Alert -> result;
 	#);
+	
+	
+	  
+	  
+installAppleEvent:
+	(# handler: ##AppleEventHandler;
+		class, type: @integer;
+		err: @integer;
+	enter (class, type, handler##)
+	do (class, type, handler##, 1234, false) -> AEInstallEventHandler -> err;
+	#);
 
-
+handleOpenDocuments: appleEventHandler
+	(# docList: @AEDescList;
+		count: @longInt;
+		keywd, returnedType, actualSize: @longInt;
+		spec: @FSSpec;
+		AEGetParamDesc: External
+		  (# theAppleEvent: @integer;
+			  theAEKeyword,desiredType: @Integer;
+			  result: ^AEDesc;
+			  OSErr: @ShortInt;
+			  
+		  enter (theAppleEvent,theAEKeyword,desiredType,result[])
+		  do '{$303C,$0812,$A816}'->PascalTrap; 
+		  exit OSErr
+		  #);
+		AEGetNthPtr: External
+		  (# theAEDescList: ^AEDescList;
+			  index,desiredType,maximumSize: @Integer;
+			  data: ^cStruct;
+			  theAEKeyword,typeCode,actualSize: ^LongInt;
+			  OSErr: @ShortInt;
+			  
+		  enter
+		  (theAEDescList[],index,desiredType,theAEKeyword[],typeCode[],data[],maximumSize,actualSize[])
+		  do '{$303C,$100A,$A816}'->PascalTrap; 
+		  exit OSErr
+		  #);
+		path: ^text;
+		ignoreErr: @integer;
+	do (theAppleEvent, keyDirectObject, typeAEList, docList[]) -> AEGetParamDesc -> err;
+		(if err = 0 then
+			(doclist[], count[]) -> AECountItems -> err;
+			(if err = 0 then
+				(for index: count repeat
+					(docList[], index, typeFSS, keywd[], returnedType[], spec[], 70, actualSize[])
+						-> AEGetNthPtr -> err;
+					(if err = 0 then
+						spec[] -> convertToFullPath -> path[];
+						(if path[] <> NONE then
+							path[] -> onOpenDocument;
+						if);
+					if);
+				for);
+			if);
+			docList[] -> AEDisposeDesc -> ignoreErr;
+		if);
+	#);
+handleOpenApplication: appleEventHandler
+	(#
+	do onStartApplication
+	#);
+handleQuitApplication: appleEventHandler
+	(#
+	do Terminate;
+	#);
+	
+installCoreEventhandlers:
+	(#
+	do (kCoreEventClass, kAEOpenDocuments, handleOpenDocuments##) -> installAppleEvent;
+		(kCoreEventClass, kAEOpenApplication, handleOpenApplication##) -> installAppleEvent;
+		(kCoreEventClass, kAEQuitApplication, handleQuitApplication##) -> installAppleEvent;
+	#);
+	
 -- GUIENVdoUpdateCursor: doPart --
 do
 (# macPt, windowPosition: @macPoint;
@@ -1346,31 +1487,7 @@ do &fileMenu[] -> theFileMenu[];
 
 -- windowLib: attributes --
 
-SelectTheWindow: external
-	(# theWindow: @integer;
-		deActivatedWindow: @integer;
-	enter	theWindow
-	exit deActivatedWindow
-	#);
-DragTheWindow: external
-	(# theWindow: @integer;
-		startPt: @integer;
-		dragRect: ^macrect;
-	enter	(theWindow, startPt, dragRect[])
-	#);
-ShowTheWindow: external
-	(# theWindow: @integer;
-	enter	theWindow
-	#);
-HideTheWindow: external
-	(# theWindow: @integer;
-	enter	theWindow
-	#);
-SetTheWindowKind: external
-	(# theWindow: @integer;
-		kind: @shortInt;
-	enter	(theWindow, kind)
-	#);
+
 	
 DialogKind: (# exit 2 #);
 NormalKind: (# exit 8 #);
@@ -1399,10 +1516,10 @@ processMouseDown:
 		
 		screenBounds: @macRect;
 	enter partCode
-	do (if this(window)[]//activeWindow then
+	do (if this(window)[] = activeWindow then
 			true -> handleTheEvent;
 		else
-			(modalState = modeless) -> handleTheEvent
+			(modalState = modeless) -> handleTheEvent;
 		if);				
 		(if handleTheEvent then
 			(if partCode
@@ -1411,18 +1528,32 @@ processMouseDown:
 						processContentClick;
 					else
 						private.windowPointer -> SelectTheWindow;
+						false -> sendOnMouseUp;
+						NONE -> lastClickedObject;
 					if);
 				//inDrag then
 					GetGrayRgn -> GetRegionBounds -> screenBounds;
 					(private.windowPointer, this(guienv).private.event.where, screenBounds[]) -> DragTheWindow;
+					false -> sendOnMouseUp;
+					NONE -> lastClickedObject;
 				//inGrow then
-					processResize;
+					false -> sendOnMouseUp;
+					NONE -> lastClickedObject;
+					(if resizeable then
+						processResize;
+					if);
 				//inGoAway then
 					processGoAway;
+					false -> sendOnMouseUp;
+					NONE -> lastClickedObject;
 				//inZoomIn//inZoomOut then
 					partCode -> processZoom;
+					false -> sendOnMouseUp;
+					NONE -> lastClickedObject;
 			if);
 		else
+			false -> sendOnMouseUp;
+			NONE -> lastClickedObject;
 			30 -> SysBeep;
 		if);
 	#);
@@ -1461,7 +1592,9 @@ processActivate:
 					private.windowTarget.theEventHandler.onDisableTarget;
 				if);
 			if);
-			invalidateGrowIcon;
+			(if resizeable then
+				invalidateGrowIcon;
+			if);
 		if);
 		handleCursor;
 	#);
@@ -1473,7 +1606,9 @@ processUpdate:
 		ResetPen;
 		drawDefaultButton;
 		ResetPen;
-		drawGrow;
+		(if resizeable then
+			drawGrow;
+		if);
 		private.windowPointer -> EndUpdate;
 	#);
 erasePortRect:
@@ -1535,7 +1670,7 @@ zoom:
 	(# partCode: @integer;
 		r: @rectangle;
 	enter partCode
-	do  erasePortRect;
+	do erasePortRect;
 		private.windowPointer -> SetPort;
 		(private.windowPointer,partCode,false) -> ZoomWindow;
 		getBounds -> r;
@@ -1641,3 +1776,54 @@ do (# rgnTop: (# exit 2 #);
 		address + rgnRight -> TOS'%adrGetSignedShort' -> value.right;
 		address + rgnBottom -> TOS'%adrGetSignedShort' -> value.bottom;
    #);
+
+-- guienvQuit: doPart --
+do true -> okToQuit;
+	INNER;
+   (if okToQuit then
+       Terminate;
+   if);
+	
+-- guienvFitToContents: doPart --
+do (# style: ^textStyle;
+		theButton: ^button;
+		preferredWidth, preferredHeight: @integer;
+	do (if true 
+			//this(windowItem)## <= staticText## then
+				this(windowItem)[] -> theButton[];
+				theButton.style -> style[];
+				theButton.label -> style.widthOftext -> preferredWidth;
+				preferredWidth + 1 -> preferredWidth;
+				style.lineHeight -> preferredHeight;
+			//this(windowItem)## <= optionButton## then
+				(200, 22) -> (preferredWidth, preferredHeight);
+			//this(windowItem)## <= pushButton## then
+				this(windowItem)[] -> theButton[];
+				theButton.style -> style[];
+				theButton.label -> style.widthOftext -> preferredWidth;
+				preferredWidth + 12 -> preferredWidth;
+				(style.lineHeight + 6, 20) -> Max -> preferredHeight;
+			//this(windowItem)## <= toggleButton## then
+				this(windowItem)[] -> theButton[];
+				theButton.style -> style[];
+				theButton.label -> style.widthOftext -> preferredWidth;
+				preferredWidth + 20 -> preferredWidth;
+				(style.lineHeight + 2, 16) -> Max -> preferredHeight;
+		else
+			size -> (preferredWidth, preferredHeight);
+		if);
+		(preferredWidth, preferredHeight) -> size;
+	#)
+	
+-- windowEnterVisible: doPart --
+do assertOpen;
+	(if value <> private.windowVisible then
+		(if value then
+			show;
+		else
+			hide;
+		if);
+	if);
+-- windowExitVisible: doPart --
+do assertOpen;
+	private.windowVisible -> value;

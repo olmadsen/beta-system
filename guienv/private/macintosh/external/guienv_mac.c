@@ -227,6 +227,8 @@ void DrawBitMapInPort(BitMapHandle bitmap,GrafPtr port,Point from,Point to,long 
 	Rect srcRect;
 	Rect dstRect;
 	
+	printf("DrawBitMapInPort\n");
+	
 	SetRect(&srcRect,from.h,from.v,from.h + width,from.v + height);
 	SetRect(&dstRect,to.h,to.v,to.h + width,to.v + height);
 	CopyBits(*bitmap,&port->portBits,&srcRect,&dstRect,srcCopy,nil);
