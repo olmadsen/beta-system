@@ -1,5 +1,4 @@
 ORIGIN 'BifrostX11impl';
-
 -- CanvasImmediateTextBody: descriptor --
 (# (* Need to be in this fragmentgroup to see private attributes of 
     * font info
@@ -42,18 +41,35 @@ do
 
 -- SetXFontBody: descriptor --
 (# 
+   UseScalableFonts: (# exit false #);
+   fname:@text;
+   succes: @Boolean;
+   
 do siz -> theCanvas.ZoomDim -> siz;
-   
-   (nam,sty,siz) -> XCheckFontLoaded -> (xf[],nam,sty,siz);
-   
+   false->succes;
+   (if UseScalableFonts then
+       '-*-%s-%s-normal-*-%d-*-*-*-p-*-iso8859-1' ->
+       fname.putFormat
+       (# 
+       do nam->Fontname2Text->s; sty->Fontstyle2Text->s; siz->d;
+       #);
+       &THIS(guienv).private.xfont[]->xf[];
+       fname->xf.name;
+       false->xf.loaded;
+       'Trying to load: ' ->puttext; fname[] -> putline;
+       xf[]->XLoadFontFromName;
+       xf.loaded->succes;
+   if);
+   (if not succes then
+       (nam,sty,siz) -> XCheckFontLoaded -> (xf[],nam,sty,siz);
+   if);
    (* Set font in GC *)
    (xdisplay, theCanvas.implpart.xgc, xf.XfontId) -> XSetFont;
    
    (* Temporarily store the current font in privatePart of theCanvas *)
    xf[] -> theCanvas.implpart.currentxfont[];
-   
 #)
-
+                                  
 -- BifrostAttributes: attributes -- 
 initBifrostFonts: 
   (# d: @Text;
@@ -80,20 +96,23 @@ initBifrostFonts:
      for);
      
      InitXFontNames;
-     '8x13' -> THIS(guienv).private.fonts.defaultfont.name;
+     (if THIS(guienv).private.fonts.defaultfont.name.empty then
+         '8x13' -> THIS(guienv).private.fonts.defaultfont.name;
+     if);
      THIS(guienv).private.fonts.defaultfont[] -> XLoadFontFromName;
+     true->THIS(guienv).private.fonts.initialized;
      (if debugGraphic then 'done' -> putwarnline if);
   #);
 
 XCheckFontLoaded:
   (# nam, orignam: @FontName;
      sty, origsty: @Style;
-     siz, origsiz, range: @integer;
+     siz, origsiz, tmpsiz, range: @integer;
      legalsiz, legalnam, legalsty, subst: @boolean;
      xf: ^THIS(guienv).private.xfont;
-     
   enter (nam,sty,siz)
-  do (if debugGraphic then 
+  do 
+     (if debugGraphic then 
          'XCheckFontLoaded: Name style size ' -> putwarntext;
          (nam,6) -> putwarnintwidth;
          (sty,6) -> putwarnintwidth;
@@ -187,7 +206,32 @@ XCheckFontLoaded:
          xf.name[] -> putwarntext;
          '\''->putwarnline;
          true -> subst;
-         THIS(guienv).private.fonts.defaultFont[] -> xf[];
+         (if THIS(guienv).private.fonts.scalableExists then
+             origsiz->tmpsiz;
+             (if tmpsiz>7 then tmpsiz-1->tmpsiz if); 
+             NONE->xf[];
+             findfont:
+               (for i:THIS(guienv).private.fonts.xfonts.range repeat
+                      (for j: THIS(guienv).private.fonts.xfonts[nam].style.range repeat
+                           (if not 
+                               THIS(guienv).private.fonts.xfonts[i].style[j].size[tmpsiz].name.empty
+                               then
+                               THIS(guienv).private.fonts.xfonts[i].style[j].size[tmpsiz][]->xf[];
+                               leave findfont;
+                           if)
+                      for)
+               for);
+             (if xf[]=NONE then
+                 THIS(guienv).private.fonts.defaultFont[] -> xf[];
+              else 
+                 (if not xf.loaded then
+                     xf[] -> XLoadFontFromName; 
+                     (if not xf.loaded then 
+                         THIS(guienv).private.fonts.defaultFont[] -> xf[];
+                     if);
+                 if);
+             if);
+         if);
      if);
          
      (if subst then
@@ -284,630 +328,111 @@ InitX11r0:
   #);
 
 InitX11r3:
-  (# init: @initname;
-     (*
-      * I have changed the fonts so they don't explicitly require
-      * `adobe' fonts.  This makes it possible to use URW fonts.  URW
-      * fonts should be included in Aladdin Ghostscript
-      * <URL:http://www.cs.wisc.edu/~ghost/index.html>.  The fonts are
-      * also included in the RedHat 6.0 Linux distribution.
-      * /pahe
-      *)
-     InitTimes:
-       (# 
-       do (* FIXME: use XListFontsWithInfo instead!
-           * Declared in ~beta/Xt/xlib.bet:
-           * 
-           * XListFontsWithInfo: External
-           *   (# display,maxNames,countReturn,infoReturn: @integer;
-           *      pattern: [1]@char;
-           *      charList: @integer;
-           *   enter (display,pattern,maxNames,countReturn,infoReturn)
-           *   exit charList
-           *   #);
-           * 
-           * XFreeFontInfo: External
-           *   (# names,freeInfo,actualCount: @integer
-           *   enter (names,freeinfo,actualCount)
-           *   #);
-           * 
-           * maxnames: (# exit 100 #);
-           * names: @integer;
-           * info: [maxnames]@integer;
-           * count: @integer;
-           * fontname: @cstring;
-           * fi: @fontinfo;
-           * 
-           * do (xdisplay, 
-           *     '-adobe-times-medium-r-normal-*-*-*-*-*-*-*-*-*',
-           *     maxnames,
-           *     @@count,
-           *     @@info[1])
-           *      -> XListFontsWithInfo
-           *      -> names;
-           *     (for i:count repeat
-           *          %getLongAt (names+4*(i-1)) -> fontname;
-           *          info[i] -> fi;
-           *          FIXME:
-           *            find out the font size xxx either using the fi or
-           *            by parsing the name (font size is after 6th '-')
-           *          (fontname.gettext, Times, Plain,  xxx) -> init;
-           *     for);
-           *     (names, @@info[1], count) -> XFreeFontInfo;
-           * 
-           *     - repeat with 
-           *        '-adobe-times-bold-r-normal-*-*-*-*-*-*-*-*-*'
-           *        '-adobe-times-medium-i-normal-*-*-*-*-*-*-*-*-*'
-           *        and helvetica and times.
-           *)
-          ('-*-times-medium-r-normal-*-2-*-*-*-*-*-*-*',
-          Times, Plain,  1) -> init;
-          ('-*-times-bold-r-normal-*-2-*-*-*-*-*-*-*',
-          Times, Bold,   1) -> init;
-          ('-*-times-medium-i-normal-*-2-*-*-*-*-*-*-*',
-          Times, Italic, 1) -> init;
-
-          ('-*-times-medium-r-normal-*-2-*-*-*-*-*-*-*',
-          Times, Plain,  2) -> init;
-          ('-*-times-bold-r-normal-*-2-*-*-*-*-*-*-*',
-          Times, Bold,   2) -> init;
-          ('-*-times-medium-i-normal-*-2-*-*-*-*-*-*-*',
-          Times, Italic, 2) -> init;
-
-          ('-*-times-medium-r-normal-*-6-*-*-*-*-*-*-*',
-          Times, Plain,  6) -> init;
-          ('-*-times-bold-r-normal-*-6-*-*-*-*-*-*-*',
-          Times, Bold,   6) -> init;
-          ('-*-times-medium-i-normal-*-6-*-*-*-*-*-*-*',
-          Times, Italic, 6) -> init;
-
-          ('-*-times-medium-r-normal-*-7-*-*-*-*-*-*-*',
-          Times, Plain,  7) -> init;
-          ('-*-times-bold-r-normal-*-7-*-*-*-*-*-*-*',
-          Times, Bold,   7) -> init;
-          ('-*-times-medium-i-normal-*-7-*-*-*-*-*-*-*',
-          Times, Italic, 7) -> init;
-
-          ('-*-times-medium-r-normal-*-8-*-*-*-*-*-*-*',
-          Times, Plain,  8) -> init;
-          ('-*-times-bold-r-normal-*-8-*-*-*-*-*-*-*',
-          Times, Bold,   8) -> init;
-          ('-*-times-medium-i-normal-*-8-*-*-*-*-*-*-*',
-          Times, Italic, 8) -> init;
-
-          ('-*-times-medium-r-normal-*-9-*-*-*-*-*-*-*',
-          Times, Plain,  9) -> init;
-          ('-*-times-bold-r-normal-*-9-*-*-*-*-*-*-*',
-          Times, Bold,   9) -> init;
-          ('-*-times-medium-i-normal-*-9-*-*-*-*-*-*-*',
-          Times, Italic, 9) -> init;
-
-          ('-*-times-medium-r-normal-*-10-*-*-*-*-*-*-*',
-          Times, Plain,  10) -> init;
-          ('-*-times-bold-r-normal-*-10-*-*-*-*-*-*-*',
-          Times, Bold,   10) -> init;
-          ('-*-times-medium-i-normal-*-10-*-*-*-*-*-*-*',
-          Times, Italic, 10) -> init;
-
-          ('-*-times-medium-r-normal-*-11-*-*-*-*-*-*-*',
-          Times, Plain,  11) -> init;
-          ('-*-times-bold-r-normal-*-11-*-*-*-*-*-*-*',
-          Times, Bold,   11) -> init;
-          ('-*-times-medium-i-normal-*-11-*-*-*-*-*-*-*',
-          Times, Italic, 11) -> init;
-
-          ('-*-times-medium-r-normal-*-12-*-*-*-*-*-*-*',
-          Times, Plain,  12) -> init;
-          ('-*-times-bold-r-normal-*-12-*-*-*-*-*-*-*',
-          Times, Bold,   12) -> init;
-          ('-*-times-medium-i-normal-*-12-*-*-*-*-*-*-*',
-          Times, Italic, 12) -> init;
-
-          ('-*-times-medium-r-normal-*-13-*-*-*-*-*-*-*',
-          Times, Plain,  13) -> init;
-          ('-*-times-bold-r-normal-*-13-*-*-*-*-*-*-*',
-          Times, Bold,   13) -> init;
-          ('-*-times-medium-i-normal-*-13-*-*-*-*-*-*-*',
-          Times, Italic, 13) -> init;
-
-          ('-*-times-medium-r-normal-*-14-*-*-*-*-*-*-*',
-          Times, Plain,  14) -> init;
-          ('-*-times-bold-r-normal-*-14-*-*-*-*-*-*-*',
-          Times, Bold,   14) -> init;
-          ('-*-times-medium-i-normal-*-14-*-*-*-*-*-*-*',
-          Times, Italic, 14) -> init;
-
-          ('-*-times-medium-r-normal-*-15-*-*-*-*-*-*-*',
-          Times, Plain,  15) -> init;
-          ('-*-times-bold-r-normal-*-15-*-*-*-*-*-*-*',
-          Times, Bold,   15) -> init;
-          ('-*-times-medium-i-normal-*-15-*-*-*-*-*-*-*',
-          Times, Italic, 15) -> init;
-
-          ('-*-times-medium-r-normal-*-16-*-*-*-*-*-*-*',
-          Times, Plain,  16) -> init;
-          ('-*-times-bold-r-normal-*-16-*-*-*-*-*-*-*',
-          Times, Bold,   16) -> init;
-          ('-*-times-medium-i-normal-*-16-*-*-*-*-*-*-*',
-          Times, Italic, 16) -> init;
-
-          ('-*-times-medium-r-normal-*-17-*-*-*-*-*-*-*',
-          Times, Plain,  17) -> init;
-          ('-*-times-bold-r-normal-*-17-*-*-*-*-*-*-*',
-          Times, Bold,   17) -> init;
-          ('-*-times-medium-i-normal-*-17-*-*-*-*-*-*-*',
-          Times, Italic, 17) -> init;
-
-          ('-*-times-medium-r-normal-*-18-*-*-*-*-*-*-*',
-          Times, Plain,  18) -> init;
-          ('-*-times-bold-r-normal-*-18-*-*-*-*-*-*-*',
-          Times, Bold,   18) -> init;
-          ('-*-times-medium-i-normal-*-18-*-*-*-*-*-*-*',
-          Times, Italic, 18) -> init;
-
-          ('-*-times-medium-r-normal-*-19-*-*-*-*-*-*-*',
-          Times, Plain,  19) -> init;
-          ('-*-times-bold-r-normal-*-19-*-*-*-*-*-*-*',
-          Times, Bold,   19) -> init;
-          ('-*-times-medium-i-normal-*-19-*-*-*-*-*-*-*',
-          Times, Italic, 19) -> init;
-
-          ('-*-times-medium-r-normal-*-20-*-*-*-*-*-*-*',
-          Times, Plain,  20) -> init;
-          ('-*-times-bold-r-normal-*-20-*-*-*-*-*-*-*',
-          Times, Bold,   20) -> init;
-          ('-*-times-medium-i-normal-*-20-*-*-*-*-*-*-*',
-          Times, Italic, 20) -> init;
-
-          ('-*-times-medium-r-normal-*-24-*-*-*-*-*-*-*',
-          Times, Plain,  24) -> init;
-          ('-*-times-bold-r-normal-*-24-*-*-*-*-*-*-*',
-          Times, Bold,   24) -> init;
-          ('-*-times-medium-i-normal-*-24-*-*-*-*-*-*-*',
-          Times, Italic, 24) -> init;
-
-          ('-*-times-medium-r-normal-*-25-*-*-*-*-*-*-*',
-          Times, Plain,  25) -> init;
-          ('-*-times-bold-r-normal-*-25-*-*-*-*-*-*-*',
-          Times, Bold,   25) -> init;
-          ('-*-times-medium-i-normal-*-25-*-*-*-*-*-*-*',
-          Times, Italic, 25) -> init;
-
-          ('-*-times-medium-r-normal-*-26-*-*-*-*-*-*-*',
-          Times, Plain,  26) -> init;
-          ('-*-times-bold-r-normal-*-26-*-*-*-*-*-*-*',
-          Times, Bold,   26) -> init;
-          ('-*-times-medium-i-normal-*-26-*-*-*-*-*-*-*',
-          Times, Italic, 26) -> init;
-
-          ('-*-times-medium-r-normal-*-30-*-*-*-*-*-*-*',
-          Times, Plain,  30) -> init;
-          ('-*-times-bold-r-normal-*-30-*-*-*-*-*-*-*',
-          Times, Bold,   30) -> init;
-          ('-*-times-medium-i-normal-*-30-*-*-*-*-*-*-*',
-          Times, Italic, 30) -> init;
-
-          ('-*-times-medium-r-normal-*-33-*-*-*-*-*-*-*',
-          Times, Plain,  33) -> init;
-          ('-*-times-bold-r-normal-*-33-*-*-*-*-*-*-*',
-          Times, Bold,   33) -> init;
-          ('-*-times-medium-i-normal-*-33-*-*-*-*-*-*-*',
-          Times, Italic, 33) -> init;
-
-          ('-*-times-medium-r-normal-*-34-*-*-*-*-*-*-*',
-          Times, Plain,  34) -> init;
-          ('-*-times-bold-r-normal-*-34-*-*-*-*-*-*-*',
-          Times, Bold,   34) -> init;
-          ('-*-times-medium-i-normal-*-34-*-*-*-*-*-*-*',
-          Times, Italic, 34) -> init;
-
-          ('-*-times-medium-r-normal-*-40-*-*-*-*-*-*-*',
-          Times, Plain,  40) -> init;
-          ('-*-times-bold-r-normal-*-40-*-*-*-*-*-*-*',
-          Times, Bold,   40) -> init;
-          ('-*-times-medium-i-normal-*-40-*-*-*-*-*-*-*',
-          Times, Italic, 40) -> init;
-
-          ('-*-times-medium-r-normal-*-50-*-*-*-*-*-*-*',
-          Times, Plain,  50) -> init;
-          ('-*-times-bold-r-normal-*-50-*-*-*-*-*-*-*',
-          Times, Bold,   50) -> init;
-          ('-*-times-medium-i-normal-*-50-*-*-*-*-*-*-*',
-          Times, Italic, 50) -> init;
-
-          ('-*-times-medium-r-normal-*-60-*-*-*-*-*-*-*',
-          Times, Plain,  60) -> init;
-          ('-*-times-bold-r-normal-*-60-*-*-*-*-*-*-*',
-          Times, Bold,   60) -> init;
-          ('-*-times-medium-i-normal-*-60-*-*-*-*-*-*-*',
-          Times, Italic, 60) -> init;
-       #);
-     InitCourier:
-       (#
-       do ('-*-courier-medium-r-normal-*-2-*-*-*-*-*-*-*',
-          Courier, Plain,  1) -> init;
-          ('-*-courier-bold-r-normal-*-2-*-*-*-*-*-*-*',
-          Courier, Bold,   1) -> init;
-          ('-*-courier-medium-i-normal-*-2-*-*-*-*-*-*-*',
-          Courier, Italic, 1) -> init;
-
-          ('-*-courier-medium-r-normal-*-2-*-*-*-*-*-*-*',
-          Courier, Plain,  2) -> init;
-          ('-*-courier-bold-r-normal-*-2-*-*-*-*-*-*-*',
-          Courier, Bold,   2) -> init;
-          ('-*-courier-medium-i-normal-*-2-*-*-*-*-*-*-*',
-          Courier, Italic, 2) -> init;
-
-          ('-*-courier-medium-r-normal-*-6-*-*-*-*-*-*-*',
-          Courier, Plain,  6) -> init;
-          ('-*-courier-bold-r-normal-*-6-*-*-*-*-*-*-*',
-          Courier, Bold,   6) -> init;
-          ('-*-courier-medium-i-normal-*-6-*-*-*-*-*-*-*',
-          Courier, Italic, 6) -> init;
-
-          ('-*-courier-medium-r-normal-*-7-*-*-*-*-*-*-*',
-          Courier, Plain,  7) -> init;
-          ('-*-courier-bold-r-normal-*-7-*-*-*-*-*-*-*',
-          Courier, Bold,   7) -> init;
-          ('-*-courier-medium-i-normal-*-7-*-*-*-*-*-*-*',
-          Courier, Italic, 7) -> init;
-
-          ('-*-courier-medium-r-normal-*-8-*-*-*-*-*-*-*',
-          Courier, Plain,  8) -> init;
-          ('-*-courier-bold-r-normal-*-8-*-*-*-*-*-*-*',
-          Courier, Bold,   8) -> init;
-          ('-*-courier-medium-i-normal-*-8-*-*-*-*-*-*-*',
-          Courier, Italic, 8) -> init;
-
-          ('-*-courier-medium-r-normal-*-9-*-*-*-*-*-*-*',
-          Courier, Plain,  9) -> init;
-          ('-*-courier-bold-r-normal-*-9-*-*-*-*-*-*-*',
-          Courier, Bold,   9) -> init;
-          ('-*-courier-medium-i-normal-*-9-*-*-*-*-*-*-*',
-          Courier, Italic, 9) -> init;
-
-          ('-*-courier-medium-r-normal-*-10-*-*-*-*-*-*-*',
-          Courier, Plain,  10) -> init;
-          ('-*-courier-bold-r-normal-*-10-*-*-*-*-*-*-*',
-          Courier, Bold,   10) -> init;
-          ('-*-courier-medium-i-normal-*-10-*-*-*-*-*-*-*',
-          Courier, Italic, 10) -> init;
-
-          ('-*-courier-medium-r-normal-*-11-*-*-*-*-*-*-*',
-          Courier, Plain,  11) -> init;
-          ('-*-courier-bold-r-normal-*-11-*-*-*-*-*-*-*',
-          Courier, Bold,   11) -> init;
-          ('-*-courier-medium-i-normal-*-11-*-*-*-*-*-*-*',
-          Courier, Italic, 11) -> init;
-
-          ('-*-courier-medium-r-normal-*-12-*-*-*-*-*-*-*',
-          Courier, Plain,  12) -> init;
-          ('-*-courier-bold-r-normal-*-12-*-*-*-*-*-*-*',
-          Courier, Bold,   12) -> init;
-          ('-*-courier-medium-i-normal-*-12-*-*-*-*-*-*-*',
-          Courier, Italic, 12) -> init;
-
-          ('-*-courier-medium-r-normal-*-13-*-*-*-*-*-*-*',
-          Courier, Plain,  13) -> init;
-          ('-*-courier-bold-r-normal-*-13-*-*-*-*-*-*-*',
-          Courier, Bold,   13) -> init;
-          ('-*-courier-medium-i-normal-*-13-*-*-*-*-*-*-*',
-          Courier, Italic, 13) -> init;
-
-          ('-*-courier-medium-r-normal-*-14-*-*-*-*-*-*-*',
-          Courier, Plain,  14) -> init;
-          ('-*-courier-bold-r-normal-*-14-*-*-*-*-*-*-*',
-          Courier, Bold,   14) -> init;
-          ('-*-courier-medium-i-normal-*-14-*-*-*-*-*-*-*',
-          Courier, Italic, 14) -> init;
-
-          ('-*-courier-medium-r-normal-*-15-*-*-*-*-*-*-*',
-          Courier, Plain,  15) -> init;
-          ('-*-courier-bold-r-normal-*-15-*-*-*-*-*-*-*',
-          Courier, Bold,   15) -> init;
-          ('-*-courier-medium-i-normal-*-15-*-*-*-*-*-*-*',
-          Courier, Italic, 15) -> init;
-
-          ('-*-courier-medium-r-normal-*-16-*-*-*-*-*-*-*',
-          Courier, Plain,  16) -> init;
-          ('-*-courier-bold-r-normal-*-16-*-*-*-*-*-*-*',
-          Courier, Bold,   16) -> init;
-          ('-*-courier-medium-i-normal-*-16-*-*-*-*-*-*-*',
-          Courier, Italic, 16) -> init;
-
-          ('-*-courier-medium-r-normal-*-17-*-*-*-*-*-*-*',
-          Courier, Plain,  17) -> init;
-          ('-*-courier-bold-r-normal-*-17-*-*-*-*-*-*-*',
-          Courier, Bold,   17) -> init;
-          ('-*-courier-medium-i-normal-*-17-*-*-*-*-*-*-*',
-          Courier, Italic, 17) -> init;
-
-          ('-*-courier-medium-r-normal-*-18-*-*-*-*-*-*-*',
-          Courier, Plain,  18) -> init;
-          ('-*-courier-bold-r-normal-*-18-*-*-*-*-*-*-*',
-          Courier, Bold,   18) -> init;
-          ('-*-courier-medium-i-normal-*-18-*-*-*-*-*-*-*',
-          Courier, Italic, 18) -> init;
-
-          ('-*-courier-medium-r-normal-*-19-*-*-*-*-*-*-*',
-          Courier, Plain,  19) -> init;
-          ('-*-courier-bold-r-normal-*-19-*-*-*-*-*-*-*',
-          Courier, Bold,   19) -> init;
-          ('-*-courier-medium-i-normal-*-19-*-*-*-*-*-*-*',
-          Courier, Italic, 19) -> init;
-
-          ('-*-courier-medium-r-normal-*-20-*-*-*-*-*-*-*',
-          Courier, Plain,  20) -> init;
-          ('-*-courier-bold-r-normal-*-20-*-*-*-*-*-*-*',
-          Courier, Bold,   20) -> init;
-          ('-*-courier-medium-i-normal-*-20-*-*-*-*-*-*-*',
-          Courier, Italic, 20) -> init;
-
-          ('-*-courier-medium-r-normal-*-24-*-*-*-*-*-*-*',
-          Courier, Plain,  24) -> init;
-          ('-*-courier-bold-r-normal-*-24-*-*-*-*-*-*-*',
-          Courier, Bold,   24) -> init;
-          ('-*-courier-medium-i-normal-*-24-*-*-*-*-*-*-*',
-          Courier, Italic, 24) -> init;
-
-          ('-*-courier-medium-r-normal-*-25-*-*-*-*-*-*-*',
-          Courier, Plain,  25) -> init;
-          ('-*-courier-bold-r-normal-*-25-*-*-*-*-*-*-*',
-          Courier, Bold,   25) -> init;
-          ('-*-courier-medium-i-normal-*-25-*-*-*-*-*-*-*',
-          Courier, Italic, 25) -> init;
-
-          ('-*-courier-medium-r-normal-*-26-*-*-*-*-*-*-*',
-          Courier, Plain,  26) -> init;
-          ('-*-courier-bold-r-normal-*-26-*-*-*-*-*-*-*',
-          Courier, Bold,   26) -> init;
-          ('-*-courier-medium-i-normal-*-26-*-*-*-*-*-*-*',
-          Courier, Italic, 26) -> init;
-
-          ('-*-courier-medium-r-normal-*-30-*-*-*-*-*-*-*',
-          Courier, Plain,  30) -> init;
-          ('-*-courier-bold-r-normal-*-30-*-*-*-*-*-*-*',
-          Courier, Bold,   30) -> init;
-          ('-*-courier-medium-i-normal-*-30-*-*-*-*-*-*-*',
-          Courier, Italic, 30) -> init;
-
-          ('-*-courier-medium-r-normal-*-33-*-*-*-*-*-*-*',
-          Courier, Plain,  33) -> init;
-          ('-*-courier-bold-r-normal-*-33-*-*-*-*-*-*-*',
-          Courier, Bold,   33) -> init;
-          ('-*-courier-medium-i-normal-*-33-*-*-*-*-*-*-*',
-          Courier, Italic, 33) -> init;
-
-          ('-*-courier-medium-r-normal-*-34-*-*-*-*-*-*-*',
-          Courier, Plain,  34) -> init;
-          ('-*-courier-bold-r-normal-*-34-*-*-*-*-*-*-*',
-          Courier, Bold,   34) -> init;
-          ('-*-courier-medium-i-normal-*-34-*-*-*-*-*-*-*',
-          Courier, Italic, 34) -> init;
-
-          ('-*-courier-medium-r-normal-*-40-*-*-*-*-*-*-*',
-          Courier, Plain,  40) -> init;
-          ('-*-courier-bold-r-normal-*-40-*-*-*-*-*-*-*',
-          Courier, Bold,   40) -> init;
-          ('-*-courier-medium-i-normal-*-40-*-*-*-*-*-*-*',
-          Courier, Italic, 40) -> init;
-
-          ('-*-courier-medium-r-normal-*-50-*-*-*-*-*-*-*',
-          Courier, Plain,  50) -> init;
-          ('-*-courier-bold-r-normal-*-50-*-*-*-*-*-*-*',
-          Courier, Bold,   50) -> init;
-          ('-*-courier-medium-i-normal-*-50-*-*-*-*-*-*-*',
-          Courier, Italic, 50) -> init;
-
-          ('-*-courier-medium-r-normal-*-60-*-*-*-*-*-*-*',
-          Courier, Plain,  60) -> init;
-          ('-*-courier-bold-r-normal-*-60-*-*-*-*-*-*-*',
-          Courier, Bold,   60) -> init;
-          ('-*-courier-medium-i-normal-*-60-*-*-*-*-*-*-*',
-          Courier, Italic, 60) -> init;
-       #);
-     InitHelvetica:
-       (#
-       do ('-*-helvetica-medium-r-normal-*-2-*-*-*-*-*-*-*',
-          Helvetica, Plain,  1) -> init;
-          ('-*-helvetica-bold-r-normal-*-2-*-*-*-*-*-*-*',
-          Helvetica, Bold,   1) -> init;
-          ('-*-helvetica-medium-i-normal-*-2-*-*-*-*-*-*-*',
-          Helvetica, Italic, 1) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-2-*-*-*-*-*-*-*',
-          Helvetica, Plain,  2) -> init;
-          ('-*-helvetica-bold-r-normal-*-2-*-*-*-*-*-*-*',
-          Helvetica, Bold,   2) -> init;
-          ('-*-helvetica-medium-i-normal-*-2-*-*-*-*-*-*-*',
-          Helvetica, Italic, 2) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-6-*-*-*-*-*-*-*',
-          Helvetica, Plain,  6) -> init;
-          ('-*-helvetica-bold-r-normal-*-6-*-*-*-*-*-*-*',
-          Helvetica, Bold,   6) -> init;
-          ('-*-helvetica-medium-i-normal-*-6-*-*-*-*-*-*-*',
-          Helvetica, Italic, 6) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-7-*-*-*-*-*-*-*',
-          Helvetica, Plain,  7) -> init;
-          ('-*-helvetica-bold-r-normal-*-7-*-*-*-*-*-*-*',
-          Helvetica, Bold,   7) -> init;
-          ('-*-helvetica-medium-i-normal-*-7-*-*-*-*-*-*-*',
-          Helvetica, Italic, 7) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-8-*-*-*-*-*-*-*',
-          Helvetica, Plain,  8) -> init;
-          ('-*-helvetica-bold-r-normal-*-8-*-*-*-*-*-*-*',
-          Helvetica, Bold,   8) -> init;
-          ('-*-helvetica-medium-i-normal-*-8-*-*-*-*-*-*-*',
-          Helvetica, Italic, 8) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-9-*-*-*-*-*-*-*',
-          Helvetica, Plain,  9) -> init;
-          ('-*-helvetica-bold-r-normal-*-9-*-*-*-*-*-*-*',
-          Helvetica, Bold,   9) -> init;
-          ('-*-helvetica-medium-i-normal-*-9-*-*-*-*-*-*-*',
-          Helvetica, Italic, 9) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-10-*-*-*-*-*-*-*',
-          Helvetica, Plain,  10) -> init;
-          ('-*-helvetica-bold-r-normal-*-10-*-*-*-*-*-*-*',
-          Helvetica, Bold,   10) -> init;
-          ('-*-helvetica-medium-i-normal-*-10-*-*-*-*-*-*-*',
-          Helvetica, Italic, 10) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-11-*-*-*-*-*-*-*',
-          Helvetica, Plain,  11) -> init;
-          ('-*-helvetica-bold-r-normal-*-11-*-*-*-*-*-*-*',
-          Helvetica, Bold,   11) -> init;
-          ('-*-helvetica-medium-i-normal-*-11-*-*-*-*-*-*-*',
-          Helvetica, Italic, 11) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-12-*-*-*-*-*-*-*',
-          Helvetica, Plain,  12) -> init;
-          ('-*-helvetica-bold-r-normal-*-12-*-*-*-*-*-*-*',
-          Helvetica, Bold,   12) -> init;
-          ('-*-helvetica-medium-i-normal-*-12-*-*-*-*-*-*-*',
-          Helvetica, Italic, 12) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-13-*-*-*-*-*-*-*',
-          Helvetica, Plain,  13) -> init;
-          ('-*-helvetica-bold-r-normal-*-13-*-*-*-*-*-*-*',
-          Helvetica, Bold,   13) -> init;
-          ('-*-helvetica-medium-i-normal-*-13-*-*-*-*-*-*-*',
-          Helvetica, Italic, 13) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-14-*-*-*-*-*-*-*',
-          Helvetica, Plain,  14) -> init;
-          ('-*-helvetica-bold-r-normal-*-14-*-*-*-*-*-*-*',
-          Helvetica, Bold,   14) -> init;
-          ('-*-helvetica-medium-i-normal-*-14-*-*-*-*-*-*-*',
-          Helvetica, Italic, 14) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-15-*-*-*-*-*-*-*',
-          Helvetica, Plain,  15) -> init;
-          ('-*-helvetica-bold-r-normal-*-15-*-*-*-*-*-*-*',
-          Helvetica, Bold,   15) -> init;
-          ('-*-helvetica-medium-i-normal-*-15-*-*-*-*-*-*-*',
-          Helvetica, Italic, 15) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-16-*-*-*-*-*-*-*',
-          Helvetica, Plain,  16) -> init;
-          ('-*-helvetica-bold-r-normal-*-16-*-*-*-*-*-*-*',
-          Helvetica, Bold,   16) -> init;
-          ('-*-helvetica-medium-i-normal-*-16-*-*-*-*-*-*-*',
-          Helvetica, Italic, 16) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-17-*-*-*-*-*-*-*',
-          Helvetica, Plain,  17) -> init;
-          ('-*-helvetica-bold-r-normal-*-17-*-*-*-*-*-*-*',
-          Helvetica, Bold,   17) -> init;
-          ('-*-helvetica-medium-i-normal-*-17-*-*-*-*-*-*-*',
-          Helvetica, Italic, 17) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-18-*-*-*-*-*-*-*',
-          Helvetica, Plain,  18) -> init;
-          ('-*-helvetica-bold-r-normal-*-18-*-*-*-*-*-*-*',
-          Helvetica, Bold,   18) -> init;
-          ('-*-helvetica-medium-i-normal-*-18-*-*-*-*-*-*-*',
-          Helvetica, Italic, 18) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-19-*-*-*-*-*-*-*',
-          Helvetica, Plain,  19) -> init;
-          ('-*-helvetica-bold-r-normal-*-19-*-*-*-*-*-*-*',
-          Helvetica, Bold,   19) -> init;
-          ('-*-helvetica-medium-i-normal-*-19-*-*-*-*-*-*-*',
-          Helvetica, Italic, 19) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-20-*-*-*-*-*-*-*',
-          Helvetica, Plain,  20) -> init;
-          ('-*-helvetica-bold-r-normal-*-20-*-*-*-*-*-*-*',
-          Helvetica, Bold,   20) -> init;
-          ('-*-helvetica-medium-i-normal-*-20-*-*-*-*-*-*-*',
-          Helvetica, Italic, 20) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-24-*-*-*-*-*-*-*',
-          Helvetica, Plain,  24) -> init;
-          ('-*-helvetica-bold-r-normal-*-24-*-*-*-*-*-*-*',
-          Helvetica, Bold,   24) -> init;
-          ('-*-helvetica-medium-i-normal-*-24-*-*-*-*-*-*-*',
-          Helvetica, Italic, 24) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-25-*-*-*-*-*-*-*',
-          Helvetica, Plain,  25) -> init;
-          ('-*-helvetica-bold-r-normal-*-25-*-*-*-*-*-*-*',
-          Helvetica, Bold,   25) -> init;
-          ('-*-helvetica-medium-i-normal-*-25-*-*-*-*-*-*-*',
-          Helvetica, Italic, 25) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-26-*-*-*-*-*-*-*',
-          Helvetica, Plain,  26) -> init;
-          ('-*-helvetica-bold-r-normal-*-26-*-*-*-*-*-*-*',
-          Helvetica, Bold,   26) -> init;
-          ('-*-helvetica-medium-i-normal-*-26-*-*-*-*-*-*-*',
-          Helvetica, Italic, 26) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-30-*-*-*-*-*-*-*',
-          Helvetica, Plain,  30) -> init;
-          ('-*-helvetica-bold-r-normal-*-30-*-*-*-*-*-*-*',
-          Helvetica, Bold,   30) -> init;
-          ('-*-helvetica-medium-i-normal-*-30-*-*-*-*-*-*-*',
-          Helvetica, Italic, 30) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-33-*-*-*-*-*-*-*',
-          Helvetica, Plain,  33) -> init;
-          ('-*-helvetica-bold-r-normal-*-33-*-*-*-*-*-*-*',
-          Helvetica, Bold,   33) -> init;
-          ('-*-helvetica-medium-i-normal-*-33-*-*-*-*-*-*-*',
-          Helvetica, Italic, 33) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-34-*-*-*-*-*-*-*',
-          Helvetica, Plain,  34) -> init;
-          ('-*-helvetica-bold-r-normal-*-34-*-*-*-*-*-*-*',
-          Helvetica, Bold,   34) -> init;
-          ('-*-helvetica-medium-i-normal-*-34-*-*-*-*-*-*-*',
-          Helvetica, Italic, 34) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-40-*-*-*-*-*-*-*',
-          Helvetica, Plain,  40) -> init;
-          ('-*-helvetica-bold-r-normal-*-40-*-*-*-*-*-*-*',
-          Helvetica, Bold,   40) -> init;
-          ('-*-helvetica-medium-i-normal-*-40-*-*-*-*-*-*-*',
-          Helvetica, Italic, 40) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-50-*-*-*-*-*-*-*',
-          Helvetica, Plain,  50) -> init;
-          ('-*-helvetica-bold-r-normal-*-50-*-*-*-*-*-*-*',
-          Helvetica, Bold,   50) -> init;
-          ('-*-helvetica-medium-i-normal-*-50-*-*-*-*-*-*-*',
-          Helvetica, Italic, 50) -> init;
-
-          ('-*-helvetica-medium-r-normal-*-60-*-*-*-*-*-*-*',
-          Helvetica, Plain,  60) -> init;
-          ('-*-helvetica-bold-r-normal-*-60-*-*-*-*-*-*-*',
-          Helvetica, Bold,   60) -> init;
-          ('-*-helvetica-medium-i-normal-*-60-*-*-*-*-*-*-*',
-          Helvetica, Italic, 60) -> init;
-       #);
+  (#
   do 
-   (*implpart.xdrawable, 
-   implpart.xgc,
-   pos.x,
-      * 
-      *)
-     InitTimes;
-     InitCourier;
-     InitHelvetica;
-  #);
+     (Times,Plain)->buildFontNames;
+     (Times,Bold)->buildFontNames;
+     (Times,Italic)->buildFontNames;
+     
+     (Helvetica,Plain)->buildFontNames;
+     (Helvetica,Bold)->buildFontNames;
+     (Helvetica,Italic)->buildFontNames;
+     
+     (Courier,Plain)->buildFontNames;
+     (Courier,Bold)->buildFontNames;
+     (Courier,Italic)->buildFontNames;
 
+  #); 
 
-InitName:
-  (# xname: @Text;
+buildFontNames:
+  (# 
+     onlyAdobeFonts: (# exit false #);
+     fname: @text;
+     tmpname,realname: ^text;
+     maxnames: (# exit 100 #);
+     scaleExist: @Boolean;
+     names, count, tmprange, size, totalfonts: @integer;
+     xname: @cstring;
      nam: @FontName;
      sty: @Style;
-     siz: @Integer;
-  enter (xname, nam, sty, siz)
+     getfontsize:
+       (# mypos,mysize: @integer;
+          t: ^text;
+       enter t[]
+       do -1 ->mysize;
+          (if t[]<>NONE then
+              t.reset;
+              myscan:
+                t.scan
+                (# 
+                do 
+                   (if ch='-' then
+                       (if (mypos+1->mypos)=7 then
+                           t.getint->mysize;
+                           (if mysize=0 then
+                               (t.position,t.position+1)->t.delete;
+                               ('%d-',t.position+1) -> t.insert;
+                           if);
+                           leave myscan
+                       if)
+                   if)
+                #)
+          if)
+       exit mysize
+       #);
+  enter (nam,sty)
   do
-     xname -> THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz].name;
+     (if onlyAdobeFonts then
+         '-adobe-%s-%s-normal-*-*-*-*-*-*-*-iso8859-1' -> tmpname[];
+      else
+         '-*-%s-%s-normal-*-*-*-*-*-*-*-iso8859-1' -> tmpname[];
+     if);
+     
+     tmpname[]->fname.putFormat
+     (# 
+     do nam->Fontname2Text->s; sty->Fontstyle2Text->s;
+     #);
+     
+     (xdisplay, fname,maxnames,@@count) -> XListFonts -> names;
+     myloop:
+       (for i:count repeat
+            %getLongAt (names+4*(i-1)) -> xname;
+            xname.get->realname[]->getfontsize->size;
+            (if size=0 then (* JUBIIII: we have found a scalable font *)
+                true->scaleExist;
+                THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range->tmprange;
+                (for fsize: tmprange repeat
+                     fname.clear;
+                     realname[]->fname.putformat
+                     (# 
+                     do fsize->d;
+                     #);
+                     fname->THIS(guienv).private.fonts.xfonts[nam].style[sty].size[fsize].name;
+                for);
+                THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range->totalfonts;
+                leave myloop
+            if);
+	    (if (size<=60)and(size>0) then
+                totalfonts+1->totalfonts;
+                realname->THIS(guienv).private.fonts.xfonts[nam].style[sty].size[size].name;
+            if);
+       for);
+     names->XFreeFontNames;
+     
+     (*
+     '%d fonts of type %s loaded'->putFormat
+     (# 
+     do totalfonts->d; fname[]->s;
+     #);
+     putline;
+      *)
+     (if scaleExist then 
+         true->THIS(guienv).private.fonts.scalableExists;
+         fname.clear;
+         realname[]->fname.putformat
+                     (# 
+                     do 1->d;
+                     #);
+         fname->THIS(guienv).private.fonts.defaultfont.name;
+     if);
   #);
