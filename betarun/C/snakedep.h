@@ -48,6 +48,7 @@ register int _dummy37 asm("%r7");  /* really tmp R2 */
 register int _dummy4 asm("%r17"); /* really IOAbot */
 register int _dummy5 asm("%r18"); /* really IOAsize */
 register int _dummy6 asm("%r9");  /* really D0 */
+register int _dummy6 asm("%r10");  /* really D1 */
 register int _dummy7 asm("%r14"); /* really RefSP */
 
 /* Tell GCC that some called Beta code has potentially clobbered all these
