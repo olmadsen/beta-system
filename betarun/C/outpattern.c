@@ -646,9 +646,15 @@ static void DumpCell(Object **theCell, Object *theObj)
 
   /* First check if theObj is CALLBACKMARK */
   if ((theObj==CALLBACKMARK)||(theObj==GENMARK)){
+    SP = (long *)theCell+DYN_OFF; /* Frame starts DYN_OFF longs above dyn */
+    PC = *((long *)SP+PC_OFF);
     if (theObj==CALLBACKMARK){
       TRACE_DUMP(fprintf(output, "  cb: "));
-      fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
+      fprintf(output, 
+	      "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
+	      (int)PC);
+      if (!SimpleDump) PrintCodeAddress((long)PC);
+      fprintf(output, ") ]\n");
     } else {
       TRACE_DUMP(fprintf(output, "  allo: "));
     }
@@ -660,7 +666,6 @@ static void DumpCell(Object **theCell, Object *theObj)
      * find the current object for that frame and dump it.
      * See figure in stack.c.
      */
-    SP = (long *)theCell+DYN_OFF; /* Frame starts DYN_OFF longs above dyn */
     SP = (long*)GetSPbeta(SP);	 /* SP-beta */
     if (SP==0){
       /* We passed the main+CallB frames */
