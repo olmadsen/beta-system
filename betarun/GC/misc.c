@@ -15,9 +15,12 @@ long isObject( theObj)
 { 
 #if defined(sparc) || defined(hppa)
     /* For the SPARC isObject also checks alignment constraints */
-    if ((unsigned)theObj % 8 != 0)
+    if (((unsigned)theObj & 7) != 0)
       return FALSE;
 #endif
+  /* Check that theObj is non-negative */
+  if ((long)theObj <= 0) return FALSE;
+
   /* check that the GCAttr of the object is valid. */
   if( inBetaHeap(theObj->Proto) ) return FALSE;
   if( theObj->Proto == 0 ) return FALSE;
@@ -37,12 +40,13 @@ long inBetaHeap( theObj)
 { 
 #if defined(sparc) || defined(hppa)
     /* For the SPARC inBetaHeap also checkes alignment constraints */
-    if ((unsigned)theObj % 8 != 0)
+    if (((unsigned)theObj & 7) != 0)
       return FALSE;
 #endif
-  if( inIOA( theObj)) return TRUE;
-  if( inAOA( theObj)) return TRUE;
-  if( inLVRA( theObj)) return TRUE;
+  if ((long) theObj <= 0) return FALSE;
+  if (inIOA( theObj)) return TRUE;
+  if (inAOA( theObj)) return TRUE;
+  if (inLVRA( theObj)) return TRUE;
   return FALSE;
 }
 
