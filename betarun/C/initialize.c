@@ -119,6 +119,9 @@ Initialize()
 #endif
 #endif
 
+  InterpretItem[0] = 0;
+  InterpretItem[1] = 0;
+
   INFO( fprintf( output, "#(Heap info: IOA=2*%dKb", IOASize/Kb) );
   INFO( fprintf( output, ", AOABlock=%dKb", AOABlockSize/Kb) );
   INFO( fprintf( output, ", LVRABlock=%dKb", LVRABlockSize/Kb) );
