@@ -4,9 +4,13 @@ MDBODY ppc     'betaenv_macbody'
        ppcmac  'betaenv_macbody'
        nti     'betaenv_ntbody'
        default 'betaenv_unixbody';
+BUILD  nti    '$$/basicio.obj' 'external/basicio.c' 'betacc $0 $1'
+       ppcmac ':$$:basicio.obj' ':external:basicio.c' 'mrc -proto strict -proto auto -shared_lib_export on -o $0 $1'
+       default '$$/basicio.o' 'external/basicio.c' '$CC -D$$ -c -o $0 $1';
+
 (*
  * COPYRIGHT
- *       Copyright (C) Mjolner Informatics, 1984-96
+ *       Copyright (C) Mjolner Informatics, 1984-99
  *       All rights reserved.
  *)
 
@@ -205,7 +209,13 @@ do scan
    (# while::< (# do (ch <> ascii.newline)->value #)
    do ch->THIS(scanToNl).ch; INNER scanToNl
    #);
-   (if not eos then getCh->ch if)
+   (if eos then 
+       (* stopped at end-of-stream *)
+       missing_newline;
+    else
+       (* eat the newline *)
+       getCh->ch
+   if)
 
 --- betaenvTextPut: dopart ---
 do INNER put;
@@ -244,10 +254,16 @@ do skipBlanks:
 do scan:
      (if (pos < lgth) then
          (if (T[pos+1]<>ascii.newline) then
-             (if (txt.pos+1->txt.pos) > txt.T.range then txt.T.range+16->txt.T.extend if);
-             pos+1->pos; T[pos]->txt.T[txt.pos]; txt.lgth+1->txt.lgth;
+             (if (txt.pos+1->txt.pos) > txt.T.range then 
+                 txt.T.range+16->txt.T.extend 
+             if);
+             pos+1->pos; 
+             T[pos]->txt.T[txt.pos]; 
+             txt.lgth+1->txt.lgth;
              restart scan
-          else pos+1->pos
+          else 
+             pos+1->pos;
+             missing_newline;
          if)
      if);
    INNER getline
@@ -514,7 +530,89 @@ Argv: External
   enter argNo
   do CallC
   exit theArg
-  #)
+  #);
+
+(* In private/external/basicio.c: *)
+KeyboardEOS: External(# yes: @boolean do CallC exit yes #);
+PutToScreen: External(# ch: @char enter ch do CallC #);
+PutTextToScreen: External(# str: @integer enter str #);
+KeyboardPeek: External(# ch: @char do CallC exit ch #);
+GetFromKeyboard: External(# ch: @char do CallC exit ch #);
+
+(* Default stdout/stdin implementations of screen and keyboard
+ * using external functions in basicio.c.
+ *)
+DefaultScreen: Stream
+  (# Eos::< 
+       (# do true->value #); 
+     OtherError::< 
+       (# do 'Screen error'->msg.puttext #);
+     Get::< 
+       (# do 'Warning: attempt to Get from the Screen' -> screen.putline; #);
+     Put::< 
+       (# do ch->PutToScreen; #);
+     PutText::< 
+       (# 
+       do (if txt.lgth > 0 then
+              (if txt.lgth < txt.T.range then 0 -> txt.T[txt.lgth+1] if);
+              @@txt.T[1]->PutTextToScreen;
+          if)
+       #);
+  #);
+DefaultKeyBoard: Stream
+  (# Eos::<
+       (# do KeyboardEOS->value #);
+     OtherError::< 
+       (# do 'Keyboard error'->msg.puttext #);
+     Put::< 
+       (# do 'Warning: attempt to Put to the Keyboard' -> screen.putline; #);
+     Get::<
+       (# do GetFromKeyboard->ch #);
+     GetAtom::<
+       (# 
+       do skipBlanks:
+            (if KeyboardPeek->ascii.isWhiteSpace then
+                GetFromKeyboard; restart skipBlanks 
+            if);
+          scan:
+            (if KeyBoardEOS then
+                (* premature end - stop here *)
+             else 
+                (if not (KeyboardPeek->ascii.isWhiteSpace) then
+                    (* atom not yet complete *)
+                    (if (txt.pos+1->txt.pos) > txt.T.range then 
+                        txt.T.range+16->txt.T.extend 
+                    if);
+                    GetFromKeyboard->txt.T[txt.pos]; 
+                    txt.lgth+1->txt.lgth;
+                    restart scan
+                if)
+            if);
+       #);
+     GetLine::<
+       (# 
+       do scan:
+            (if KeyboardPeek=ascii.newline then
+                (* eat the newline *)
+                GetFromKeyboard
+             else
+                (* more to come *)
+                (if KeyboardEOS then
+                    (* premature end - stop here *)
+                    missing_newline;
+                 else
+                    (if (txt.pos+1->txt.pos) > txt.T.range then 
+                        txt.T.range+16->txt.T.extend 
+                    if);
+                    GetFromKeyboard->txt.T[txt.pos]; 
+                    txt.lgth+1->txt.lgth;
+                    restart scan
+                if)
+            if)
+       #);
+     Peek::<
+       (# do KeyboardPeek->ch #);
+  #);
 
 --BetaEnvCstructChk: DoPart--
 do (if ((inx<0) or (R.range*4<inx)) then inx->BoundsExceeded if)

@@ -9,67 +9,67 @@
 #endif
 
 void PutToScreen(char ch)
-  {
-   putchar(ch);
-   fflush(stdout);
-  }
+{
+  putchar(ch);
+  fflush(stdout);
+}
 void PutTextToScreen(char *str)
-  {
-   fputs(str,stdout);
-   fflush(stdout);
-  }
+{
+  fputs(str,stdout);
+  fflush(stdout);
+}
 
 static int my_getchar(void)
 {
-    int ch;
-    ch=getchar();
+  int ch;
+  ch=getchar();
 #ifdef UNIX
-    if (ch == EOF && errno==EAGAIN) {
-        fd_set fdset;
-        int fd = fileno(stdin);
-        FD_ZERO(&fdset);
-        FD_SET(fd, &fdset);
-        select(1, &fdset,NULL,NULL,NULL);
-        ch=getchar();
-    }
+  if (ch == EOF && errno==EAGAIN) {
+    fd_set fdset;
+    int fd = fileno(stdin);
+    FD_ZERO(&fdset);
+    FD_SET(fd, &fdset);
+    select(1, &fdset,NULL,NULL,NULL);
+    ch=getchar();
+  }
 #endif
-    return ch;
+  return ch;
 }
 
-    
+
 char GetFromKeyboard(void)
-  {
-   return(my_getchar());
-  }
+{
+  return(my_getchar());
+}
 int KeyboardEOS(void)
 {
-    int ch;
-    ch=my_getchar();
-    ungetc(ch, stdin);
-    return(ch==EOF); 
+  int ch;
+  ch=my_getchar();
+  ungetc(ch, stdin);
+  return(ch==EOF); 
 }
 int KeyboardPeek(void)
 {
   int ch;
   ch=my_getchar();
- 
+  
   if (ch != EOF) {
-      ungetc(ch, stdin);
+    ungetc(ch, stdin);
   }
   
   return (ch);
 }
 
 void PutToStdErr(char ch)
-  {
-   putc(ch, stderr);
-   fflush(stderr); 
-  }
+{
+  putc(ch, stderr);
+  fflush(stderr); 
+}
 void PutTextToStdErr(char *str)
-  {
-   fputs(str,stderr);
-   fflush(stderr); 
-  }
+{
+  fputs(str,stderr);
+  fflush(stderr); 
+}
 
 double infReal(void)
 {
@@ -83,3 +83,4 @@ double infReal(void)
 #endif
   return x;
 }
+
