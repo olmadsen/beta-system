@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Attach.c,v 1.16 1992-11-06 16:55:05 beta Exp $
+ * Mod: $Id: Attach.c,v 1.17 1993-02-09 16:12:51 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -46,6 +46,7 @@ ParamThisComp(struct Component *, Att)
     if (first) {
 	ActiveComponent = comp;
 
+	asmemptylabel(AttFirstEnd);
 	/* comp->Body is the Object and comp->Body->Proto[-1] is the M-entry address */
 	CallBetaEntry(((void (**)())(cast(Item) &comp->Body)->Proto)[-1],
 		      &comp->Body);
@@ -117,6 +118,7 @@ ParamThisComp(struct Component *, Att)
 	/* Fool gcc into believing that level, next.. is used */
 	asm(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
 	
+	asmemptylabel(AttEnd);
 	return comp; /* still ?? */
       }
 }
