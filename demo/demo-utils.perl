@@ -275,7 +275,7 @@ sub init()
     &find_local_progs();
     &setup_variables();
     if ($cleanall){
-	print "Cleaning local directory.\n\n";
+	print "***Cleaning local directory.\n";
 	&cleanup_all();
 	exit 0;
     }
