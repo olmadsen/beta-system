@@ -25,7 +25,7 @@ Free Software Foundation.
 Emacs-specific code and syntax table code is almost directly borrowed
 from GNU regexp.
 
-$Header: /a/home/alhambra02/beta/.CVSHOME/beta_project/basiclib/private/external/regexpr.c,v 1.2 1997-03-25 13:35:13 beta Exp $
+$Header: /a/home/alhambra02/beta/.CVSHOME/beta_project/basiclib/private/external/regexpr.c,v 1.3 1999-11-18 13:54:09 beta Exp $
 
 */
 
@@ -242,7 +242,7 @@ static void re_compile_initialize()
   regexp_ansi_sequences = (regexp_syntax & RE_ANSI_HEX) != 0;
 }
 
-int re_set_syntax(syntax)
+int beta_re_set_syntax(syntax)
 int syntax;
 {
   int ret;
@@ -265,7 +265,7 @@ int ch;
   return 16;
 }
 
-char *re_compile_pattern(regex, size, bufp)
+char *beta_re_compile_pattern(regex, size, bufp)
 char *regex;
 int size;
 regexp_t bufp;
@@ -881,7 +881,7 @@ int used, pos;
   return 1;
 }
 
-void re_compile_fastmap(bufp)
+void beta_re_compile_fastmap(bufp)
 regexp_t bufp;
 {
   if (!bufp->fastmap || bufp->fastmap_accurate)
@@ -903,7 +903,7 @@ regexp_t bufp;
 #define INITIAL_FAILURES  128  /* initial # failure points to allocate */
 #define MAX_FAILURES     4100  /* max # of failure points before failing */
 
-int re_match_2(bufp, string1, size1, string2, size2, pos, regs, mstop)
+int beta_re_match_2(bufp, string1, size1, string2, size2, pos, regs, mstop)
 regexp_t bufp;
 char *string1, *string2;
 int size1, size2, pos, mstop;
@@ -974,7 +974,7 @@ regexp_registers_t regs;
   failure_stack_end = initial_failure_stack + INITIAL_FAILURES;
 
 #if 0
-  /* re_search_2 has already done this, and otherwise we get little benefit
+  /* beta_re_search_2 has already done this, and otherwise we get little benefit
      from this.  So I'll leave this out. */
   if (bufp->fastmap_accurate && !bufp->can_be_null &&
       text != textend &&
@@ -1366,16 +1366,16 @@ regexp_registers_t regs;
 #undef NEXTCHAR
 #undef PUSH_FAILURE
 
-int re_match(bufp, string, size, pos, regs)
+int beta_re_match(bufp, string, size, pos, regs)
 regexp_t bufp;
 char *string;
 int size, pos;
 regexp_registers_t regs;
 {
-  return re_match_2(bufp, string, size, (char *)NULL, 0, pos, regs, size);
+  return beta_re_match_2(bufp, string, size, (char *)NULL, 0, pos, regs, size);
 }
 
-int re_search_2(bufp, string1, size1, string2, size2, pos, range, regs,
+int beta_re_search_2(bufp, string1, size1, string2, size2, pos, range, regs,
 		mstop)
 regexp_t bufp;
 char *string1, *string2;
@@ -1393,7 +1393,7 @@ regexp_registers_t regs;
   fastmap = bufp->fastmap;
   translate = bufp->translate;
   if (fastmap && !bufp->fastmap_accurate)
-    re_compile_fastmap(bufp);
+    beta_re_compile_fastmap(bufp);
   anchor = bufp->anchor;
   if (bufp->can_be_null == 1) /* can_be_null == 2: can match null at eob */
     fastmap = NULL;
@@ -1479,7 +1479,7 @@ regexp_registers_t regs;
 	    continue;
 	}
       assert(pos >= 0 && pos <= size1 + size2);
-      ret = re_match_2(bufp, string1, size1, string2, size2, pos, regs, mstop);
+      ret = beta_re_match_2(bufp, string1, size1, string2, size2, pos, regs, mstop);
       if (ret >= 0)
 	return pos;
       if (ret == -2)
@@ -1488,19 +1488,19 @@ regexp_registers_t regs;
   return -1;
 }
 
-int re_search(bufp, string, size, startpos, range, regs)
+int beta_re_search(bufp, string, size, startpos, range, regs)
 regexp_t bufp;
 char *string;
 int size, startpos, range;
 regexp_registers_t regs;
 {
-  return re_search_2(bufp, string, size, (char *)NULL, 0,
+  return beta_re_search_2(bufp, string, size, (char *)NULL, 0,
 		     startpos, range, regs, size);
 }
 
 static struct re_pattern_buffer re_comp_buf;
 
-char *re_comp(s)
+char *beta_re_comp(s)
 char *s;
 {
   if (s == NULL)
@@ -1515,15 +1515,15 @@ char *s;
       re_comp_buf.fastmap = malloc(256);
       re_comp_buf.translate = NULL;
     }
-  return re_compile_pattern(s, strlen(s), &re_comp_buf);
+  return beta_re_compile_pattern(s, strlen(s), &re_comp_buf);
 }
 
-int re_exec(s)
+int beta_re_exec(s)
 char *s;
 {
   int len = strlen(s);
   
-  return re_search(&re_comp_buf, s, len, 0, len, (regexp_registers_t)NULL) >= 0;
+  return beta_re_search(&re_comp_buf, s, len, 0, len, (regexp_registers_t)NULL) >= 0;
 }
 
 #ifdef TEST_REGEXP
@@ -1542,19 +1542,19 @@ int main()
   exp.translate = NULL;
   exp.fastmap = fastmap;
 
-  /* re_set_syntax(RE_NO_BK_PARENS|RE_NO_BK_VBAR|RE_ANSI_HEX); */
+  /* beta_re_set_syntax(RE_NO_BK_PARENS|RE_NO_BK_VBAR|RE_ANSI_HEX); */
 
   while (1)
     {
       printf("Enter regexp:\n");
       gets(buf);
-      cp=re_compile_pattern(buf, strlen(buf), &exp);
+      cp=beta_re_compile_pattern(buf, strlen(buf), &exp);
       if (cp)
 	{
 	  printf("Error: %s\n", cp);
 	  continue;
 	}
-      re_compile_fastmap(&exp);
+      beta_re_compile_fastmap(&exp);
       printf("dump:\n");
       for (pos = 0; pos < exp.used;)
 	{
@@ -1662,7 +1662,7 @@ int main()
 	{
 	  if (buf[0] == '\n')
 	    break;
-	  a = re_search(&exp, buf, strlen(buf), 0, strlen(buf), &regs);
+	  a = beta_re_search(&exp, buf, strlen(buf), 0, strlen(buf), &regs);
 	  printf("search returns %d\n", a);
 	  if (a != -1)
 	    {
