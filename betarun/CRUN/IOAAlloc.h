@@ -4,7 +4,7 @@
  * called from IOA(c)lloc or DoGC.
  */
 #ifdef MT
-extern struct Object *doGC(unsigned long);
+extern Object *doGC(unsigned long);
 #else
 extern void doGC();
 #endif

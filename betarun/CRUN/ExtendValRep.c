@@ -15,8 +15,8 @@ register long _dummyx __asm__("r16");
 
 ParamObjOffRange(ExtVR1)
 {
-  DeclReference1(struct ValRep *, theRep);
-  DeclReference2(struct ValRep *, newRep);
+  DeclReference1(ValRep *, theRep);
+  DeclReference2(ValRep *, newRep);
   long add = range;
   long oldRange; /* range of old repetition */
   long newRange; /* Range of new repetition */
@@ -30,8 +30,8 @@ ParamObjOffRange(ExtVR1)
   DEBUG_CODE(NumExtVR1++);
   Ck(theObj);
   
-  newRep = (struct ValRep *)0;
-  theRep = *casthandle(ValRep) ((long *) theObj + offset);
+  newRep = (ValRep *)0;
+  theRep = *(ValRep **) ((long *) theObj + offset);
   oldRange = theRep->HighBorder;
   newRange = oldRange + add; /* Range of new repetition */
   
@@ -42,7 +42,7 @@ ParamObjOffRange(ExtVR1)
   
   if (newRange > LARGE_REP_SIZE) {
       newRep = LVRAXAlloc(ByteRepPTValue, oldRange, newRange);
-      *casthandle(ValRep) ((long *) theObj + offset) = newRep;
+      *(ValRep **) ((long *) theObj + offset) = newRep;
       
       /* Copy old rep */
       for (i = 0; i < copyRange; ++i){
@@ -51,7 +51,7 @@ ParamObjOffRange(ExtVR1)
   } else {
       /* Allocate new repetition in IOA */
       
-      Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+      Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
       
       /* Assign structural part of new repetition */
       newRep->Proto = ByteRepPTValue;
@@ -64,7 +64,7 @@ ParamObjOffRange(ExtVR1)
       newRep->HighBorder = newRange;
       
       /* Assign into theObj */
-      AssignReference((long *) theObj + offset, cast(Item) newRep);
+      AssignReference((long *) theObj + offset, (Item *) newRep);
       
       /* Copy contents of old rep to new rep as longs */
       for (i = 0; i < copyRange; ++i){
@@ -77,8 +77,8 @@ ParamObjOffRange(ExtVR1)
 
 ParamObjOffRange(ExtVR2)
 {
-  DeclReference1(struct ValRep *, theRep);
-  DeclReference2(struct ValRep *, newRep);
+  DeclReference1(ValRep *, theRep);
+  DeclReference2(ValRep *, newRep);
   long add = range;
   long oldRange; /* range of old repetition */
   long newRange; /* Range of new repetition */
@@ -92,8 +92,8 @@ ParamObjOffRange(ExtVR2)
   DEBUG_CODE(NumExtVR2++);
   Ck(theObj);
   
-  newRep = (struct ValRep *)0;
-  theRep = *casthandle(ValRep) ((long *) theObj + offset);
+  newRep = (ValRep *)0;
+  theRep = *(ValRep **) ((long *) theObj + offset);
   oldRange = theRep->HighBorder;
   newRange = oldRange + add; /* Range of new repetition */
   
@@ -104,7 +104,7 @@ ParamObjOffRange(ExtVR2)
   
   if (newRange > LARGE_REP_SIZE) {
       newRep = LVRAXAlloc(ShortRepPTValue, oldRange, newRange);
-      *casthandle(ValRep) ((long *) theObj + offset) = newRep;
+      *(ValRep **) ((long *) theObj + offset) = newRep;
       /* Copy old rep */
       for (i = 0; i < copyRange; ++i){
           newRep->Body[i] = theRep->Body[i];
@@ -112,7 +112,7 @@ ParamObjOffRange(ExtVR2)
   } else {
       /* Allocate new repetition in IOA */
       
-      Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+      Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
       
       /* Assign structural part of new repetition */
       newRep->Proto = ShortRepPTValue;
@@ -123,7 +123,7 @@ ParamObjOffRange(ExtVR2)
       newRep->HighBorder = newRange;
       
       /* Assign into theObj */
-      AssignReference((long *) theObj + offset, cast(Item) newRep);
+      AssignReference((long *) theObj + offset, (Item *) newRep);
       
       /* Copy contents of old rep to new rep as longs */
       for (i = 0; i < copyRange; ++i){
@@ -135,8 +135,8 @@ ParamObjOffRange(ExtVR2)
 
 ParamObjOffRange(ExtVR4)
 {
-  DeclReference1(struct ValRep *, theRep);
-  DeclReference2(struct ValRep *, newRep);
+  DeclReference1(ValRep *, theRep);
+  DeclReference2(ValRep *, newRep);
   long add = range;
   long oldRange; /* range of old repetition */
   long newRange; /* Range of new repetition */
@@ -150,8 +150,8 @@ ParamObjOffRange(ExtVR4)
   DEBUG_CODE(NumExtVR4++);
   Ck(theObj);
 
-  newRep = (struct ValRep *)0;
-  theRep = *casthandle(ValRep) ((long *) theObj + offset);
+  newRep = (ValRep *)0;
+  theRep = *(ValRep **) ((long *) theObj + offset);
   oldRange = theRep->HighBorder;
   newRange = oldRange + add; /* Range of new repetition */
 
@@ -167,7 +167,7 @@ ParamObjOffRange(ExtVR4)
   
   if (newRange > LARGE_REP_SIZE) {
     newRep = LVRAXAlloc(LongRepPTValue, oldRange, newRange);
-    *casthandle(ValRep) ((long *) theObj + offset) = newRep;
+    *(ValRep **) ((long *) theObj + offset) = newRep;
     
     /* Copy old rep */
     for (i = 0; i < copyRange; ++i){
@@ -176,7 +176,7 @@ ParamObjOffRange(ExtVR4)
   } else {
       /* Allocate new repetition in IOA */
       
-      Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+      Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
       
       /* Assign structural part of new repetition */
       newRep->Proto = LongRepPTValue;
@@ -185,7 +185,7 @@ ParamObjOffRange(ExtVR4)
       newRep->HighBorder = newRange;
       
       /* Assign into theObj */
-      AssignReference((long *) theObj + offset, cast(Item) newRep);
+      AssignReference((long *) theObj + offset, (Item *) newRep);
       
       /* Copy contents of old rep to new rep as longs */
       for (i = 0; i < copyRange; ++i){
@@ -197,8 +197,8 @@ ParamObjOffRange(ExtVR4)
 
 ParamObjOffRange(ExtVR8)
 {
-  DeclReference1(struct ValRep *, theRep);
-  DeclReference2(struct ValRep *, newRep);
+  DeclReference1(ValRep *, theRep);
+  DeclReference2(ValRep *, newRep);
   long add = range;
   long oldRange; /* range of old repetition */
   long newRange; /* Range of new repetition */
@@ -212,8 +212,8 @@ ParamObjOffRange(ExtVR8)
   DEBUG_CODE(NumExtVR8++);
   Ck(theObj);
   
-  newRep = (struct ValRep *)0;
-  theRep = *casthandle(ValRep) ((long *) theObj + offset);
+  newRep = (ValRep *)0;
+  theRep = *(ValRep **) ((long *) theObj + offset);
   oldRange = theRep->HighBorder;
   newRange = oldRange + add; /* Range of new repetition */
   
@@ -224,7 +224,7 @@ ParamObjOffRange(ExtVR8)
   
   if (newRange > LARGE_REP_SIZE) {
       newRep = LVRAXAlloc(DoubleRepPTValue, oldRange, newRange);
-      *casthandle(ValRep) ((long *) theObj + offset) = newRep;
+      *(ValRep **) ((long *) theObj + offset) = newRep;
       /* Copy old rep */
       for (i = 0; i < copyRange; ++i){
           newRep->Body[i] = theRep->Body[i];
@@ -232,7 +232,7 @@ ParamObjOffRange(ExtVR8)
   } else {
       /* Allocate new repetition in IOA */
       
-      Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+      Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
       
       /* Assign structural part of new repetition */
       newRep->Proto = DoubleRepPTValue;
@@ -243,7 +243,7 @@ ParamObjOffRange(ExtVR8)
       newRep->HighBorder = newRange;
       
       /* Assign into theObj */
-      AssignReference((long *) theObj + offset, cast(Item) newRep);
+      AssignReference((long *) theObj + offset, (Item *) newRep);
       
       /* Copy contents of old rep to new rep as longs */
       for (i = 0; i < copyRange; ++i){
@@ -255,13 +255,13 @@ ParamObjOffRange(ExtVR8)
 
 /****** Object Repetitions *******/
 
-#define REP    ((struct ObjectRep *)theRep)
-#define NEWREP ((struct ObjectRep *)newRep)
+#define REP    ((ObjectRep *)theRep)
+#define NEWREP ((ObjectRep *)newRep)
 
 ParamObjOffRange(ExtVRI)
 {
-  DeclReference1(struct ValRep *, theRep);
-  DeclReference2(struct ValRep *, newRep);
+  DeclReference1(ValRep *, theRep);
+  DeclReference2(ValRep *, newRep);
   long add = range;
   long oldRange; /* range of old repetition */
   long newRange; /* Range of new repetition */
@@ -275,8 +275,8 @@ ParamObjOffRange(ExtVRI)
   DEBUG_CODE(NumExtVRI++);
   Ck(theObj);
 
-  newRep = (struct ValRep *)0;
-  theRep = *casthandle(ValRep) ((long *) theObj + offset);
+  newRep = (ValRep *)0;
+  theRep = *(ValRep **) ((long *) theObj + offset);
   oldRange = theRep->HighBorder;
   newRange = oldRange + add; /* Range of new repetition */
   
@@ -288,7 +288,7 @@ ParamObjOffRange(ExtVRI)
 
   /* Allocate new repetition */
   
-  Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+  Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
   
   /* Assign structural part of new repetition */
   newRep->Proto = DynItemRepPTValue;
@@ -299,12 +299,12 @@ ParamObjOffRange(ExtVRI)
   NEWREP->iOrigin = REP->iOrigin;
 
   /* Assign into theObj */
-  AssignReference((long *) theObj + offset, cast(Item) newRep);
+  AssignReference((long *) theObj + offset, (Item *) newRep);
   
   /* Copy contents of old rep to new rep */
   for (i = 0; i < copyRange; ++i){
 #ifdef MT
-    AssignReference((long*)&NEWREP->Body[i], cast(Item)REP->Body[i]);
+    AssignReference((long*)&NEWREP->Body[i], (Item *)REP->Body[i]);
 #else
     NEWREP->Body[i] = REP->Body[i];
     /* No need to use AssignReference: NEWREP is in IOA */
@@ -315,20 +315,20 @@ ParamObjOffRange(ExtVRI)
     /* Allocate/Initialize new extra elements */
 
     while(--add>=0){
-      struct Item *item;
+      Item *item;
 #ifdef sparc
 #ifdef MT
       Protect2(theRep, newRep,
-	       item = (struct Item *)
+	       item = (Item *)
 	              CallVEntry((void (*)())REP->iProto,REP->iOrigin));
 #else
       Protect2(theRep, newRep,
-	       item = SPARC_AlloI(cast(Object) REP->iOrigin, 0, REP->iProto, 0, 0));
+	       item = SPARC_AlloI((Object *) REP->iOrigin, 0, REP->iProto, 0, 0));
 #endif /* MT */
 #endif
 #ifdef hppa
       Protect2(theRep, newRep,
-	       item = CAlloI(cast(Object) REP->iOrigin, REP->iProto));
+	       item = CAlloI((Object *) REP->iOrigin, REP->iProto));
 #endif
       AssignReference((long *)((long)&NEWREP->Body + (oldRange+add)*4), item);
     }
@@ -338,8 +338,8 @@ ParamObjOffRange(ExtVRI)
 
 ParamObjOffRange(ExtVRC)
 {
-  DeclReference1(struct ValRep *, theRep);
-  DeclReference2(struct ValRep *, newRep);
+  DeclReference1(ValRep *, theRep);
+  DeclReference2(ValRep *, newRep);
   long add = range;
   long oldRange; /* range of old repetition */
   long newRange; /* Range of new repetition */
@@ -353,8 +353,8 @@ ParamObjOffRange(ExtVRC)
   DEBUG_CODE(NumExtVRC++);
   Ck(theObj);
 
-  newRep = (struct ValRep *)0;
-  theRep = *casthandle(ValRep) ((long *) theObj + offset);
+  newRep = (ValRep *)0;
+  theRep = *(ValRep **) ((long *) theObj + offset);
   oldRange = theRep->HighBorder;
   newRange = oldRange + add; /* Range of new repetition */
   
@@ -366,7 +366,7 @@ ParamObjOffRange(ExtVRC)
 
   /* Allocate new repetition */
   
-  Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+  Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
   
   /* Assign structural part of new repetition */
   newRep->Proto = DynCompRepPTValue;
@@ -377,12 +377,12 @@ ParamObjOffRange(ExtVRC)
   NEWREP->iOrigin = REP->iOrigin;
 
   /* Assign into theObj */
-  AssignReference((long *) theObj + offset, cast(Item) newRep);
+  AssignReference((long *) theObj + offset, (Item *) newRep);
   
   /* Copy contents of old rep to new rep */
   for (i = 0; i < copyRange; ++i){
 #ifdef MT
-    AssignReference((long*)&NEWREP->Body[i], cast(Item)REP->Body[i]);
+    AssignReference((long*)&NEWREP->Body[i], (Item *)REP->Body[i]);
 #else
     NEWREP->Body[i] = REP->Body[i];
     /* No need to use AssignReference: NEWREP is in IOA */
@@ -393,7 +393,7 @@ ParamObjOffRange(ExtVRC)
     /* Allocate/Initialize new extra elements */
 
     while(--add>=0){
-      struct Component *comp;
+      Component *comp;
 
 #ifdef sparc
 #ifdef MT
@@ -401,16 +401,16 @@ ParamObjOffRange(ExtVRC)
 	       comp = CallAlloC(REP->iProto, REP->iOrigin));
 #else
       Protect2(theRep, newRep,
-	       comp = SPARC_AlloC(cast(Object) REP->iOrigin, 0, REP->iProto, 0, 0));
+	       comp = SPARC_AlloC((Object *) REP->iOrigin, 0, REP->iProto, 0, 0));
 #endif /* MT */
 #endif
 #ifdef hppa
       Protect2(theRep, newRep,
-	       comp = CAlloC(cast(Object) REP->iOrigin, REP->iProto));
+	       comp = CAlloC((Object *) REP->iOrigin, REP->iProto));
 #endif
 
       AssignReference((long *)((long)&NEWREP->Body + (oldRange+add)*4), 
-		      (struct Item *)comp);
+		      (Item *)comp);
     }
   }
   Ck(theRep); Ck(newRep); Ck(theObj);

@@ -197,9 +197,9 @@ void PrintRefStack(void)
       /* Normal object */
     } 
 #ifdef RTLAZY
-    else if (isLazyRef(theObj)) {
+    else if (isLazystruct theObj *) {
       DEBUG_LAZY(fprintf (output, "ProcessRefStack: Lazy ref: %d\n", (int)theObj));
-      ProcessReference(casthandle(Object)(theCell));
+      ProcessReference((Object **)(theCell));
     }
 #endif
     else {
@@ -231,7 +231,7 @@ void ProcessRefStack(void)
       CompleteScavenging();
     }
 #ifdef RTLAZY
-    else if (isLazyRef(theObj)) {
+    else if (isLazystruct theObj *) {
       ProcessReference(theCell);
     }
 #endif /* RTLAZY */
@@ -247,7 +247,7 @@ void ProcessRefStack(void)
 #ifdef RTDEBUG
 static void PrintSkipped(long *current)
 {
-  struct Object *ref = (struct Object *)*current;
+  Object *ref = (Object *)*current;
   DEBUG_STACK(fprintf(output, "0x%08x: 0x%08x ", (int)current, (int)ref));
   if (ref && inBetaHeap(ref) && isObject(ref) && IsPrototypeOfProcess((long)ref->Proto)){ 
     fprintf(output, "*** SUSPICIOUS STACK-SKIP!");
@@ -291,7 +291,7 @@ fprintf(output, "===============================================================
 #endif
 
 /* Return the M or G part obtained from theProto, that PC is in */
-unsigned long CodeEntry(struct ProtoType *theProto, long PC)
+unsigned long CodeEntry(ProtoType *theProto, long PC)
 {
   /* Find the active prefix level based on the PC.
    * Here we use both the G-entry and the M-entry. 
@@ -300,8 +300,8 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
    * to PC is smallest.
    */
   long gPart, gDist, mPart, mDist, minDist;
-  struct ProtoType *activeProto;
-  struct ProtoType *protoArg=theProto;
+  ProtoType *activeProto;
+  ProtoType *protoArg=theProto;
 
   TRACE_CODEENTRY(fprintf(output, "CodeEntry(theProto=0x%x (%s), PC=0x%x)\n", theProto, ProtoTypeName(theProto), PC)); 
   mPart = M_Part(theProto);
@@ -354,10 +354,10 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
  *  Process references in a stack frame.
  */
 static 
-void ProcessRefStack(struct Object **topOfStack, long dynOnly, CellProcessFunc func)
+void ProcessRefStack(Object **topOfStack, long dynOnly, CellProcessFunc func)
 {
-  struct Object **theCell=topOfStack;
-  struct Object *theObj= *theCell;
+  Object **theCell=topOfStack;
+  Object *theObj= *theCell;
 
   if (dynOnly) {
     DEBUG_STACK(fprintf(output, 
@@ -450,14 +450,14 @@ void ProcessStackFrames(long SP,
    *            |  AlloXXX   |
    *            |   IOAGC    |
    */
-  struct Object *theObj;
+  Object *theObj;
   long *CSP = CompSP;
   long PC;
 #ifdef macppc
   long SPz = StackObjEnd; /* Used for stackobjects */
 #endif
 #ifdef RTDEBUG
-  struct Object *current;
+  Object *current;
   long currentSP, currentPC;
   int unknown=-1;
 #endif
@@ -470,9 +470,9 @@ void ProcessStackFrames(long SP,
   DEBUG_STACK(FrameSeparator());
   DEBUG_STACK(fprintf(output, "Processing top frame:\n"));
   TRACE_STACK(SP,unknown,GetThis((long *)SP));
-  ProcessRefStack((struct Object **)SP-DYN_OFF, dynOnly, func);
+  ProcessRefStack((Object **)SP-DYN_OFF, dynOnly, func);
   PC = GetPC(SP);
-  theObj = *((struct Object **)SP-DYN_OFF);
+  theObj = *((Object **)SP-DYN_OFF);
 
   if (SP==StackStart){
     /* Only top frame to process - can happen for stack objects */
@@ -552,9 +552,9 @@ void ProcessStackFrames(long SP,
 			  "Processing top frame before %s:\n",
 			  (isGen) ? "allocation" : "callback"));
       TRACE_STACK(unknown,unknown,GetThis((long*)SP));
-      ProcessRefStack((struct Object **)SP-DYN_OFF, dynOnly, func);
+      ProcessRefStack((Object **)SP-DYN_OFF, dynOnly, func);
       PC = GetPC(SP);
-      theObj = *((struct Object **)SP-DYN_OFF); 
+      theObj = *((Object **)SP-DYN_OFF); 
       TRACE_NEW_FRAME();
       if (SP<StackStart) {
 	continue; /* Restart do-loop */
@@ -569,7 +569,7 @@ void ProcessStackFrames(long SP,
 #endif
     if ((long)theObj->Proto == (long)DopartObjectPTValue) {
       DEBUG_STACK(fprintf(output, "Passing dopart object 0x%x\n", theObj));
-      theObj = ((struct DopartObject *)theObj)->Origin;
+      theObj = ((DopartObject *)theObj)->Origin;
       continue;
     }
 
@@ -611,8 +611,8 @@ void ProcessStackFrames(long SP,
      */
 
     if ((long)theObj->Proto == (long)ComponentPTValue) {
-      struct Component *comp = (struct Component *)theObj;
-      struct Component *callerComp = comp->CallerComp;
+      Component *comp = (Component *)theObj;
+      Component *callerComp = comp->CallerComp;
 
       if (isStackObject){
 	/* Processing stackobject:
@@ -696,7 +696,7 @@ void ProcessStackFrames(long SP,
 #endif
       /* SP now points to end of *previous* frame, i.e. bottom of top frame */
       /* normal dyn from the start of this frame gives current object */
-      theObj = *((struct Object **)SP-DYN_OFF); 
+      theObj = *((Object **)SP-DYN_OFF); 
       /* RTS from the start of this frame gives PC */
       PC = GetPC(SP);
       TRACE_NEW_FRAME();
@@ -713,7 +713,7 @@ void ProcessStackFrames(long SP,
     DEBUG_STACK(FrameSeparator());
     DEBUG_STACK(fprintf(output, "Processing normal frame:\n"));
     TRACE_STACK(currentSP,currentPC,current);
-    ProcessRefStack((struct Object **)SP-DYN_OFF, dynOnly, func);
+    ProcessRefStack((Object **)SP-DYN_OFF, dynOnly, func);
 
   } while (SP<StackStart);
 #if 0
@@ -745,7 +745,7 @@ void ProcessStack()
   ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoIOACell);
 }
 
-void ProcessStackObj(struct StackObject *sObj, CellProcessFunc func)
+void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 {
   DEBUG_STACK(fprintf(output, "\nProcessStackObject 0x%x\n", sObj));
 #ifdef ppcmac
@@ -782,17 +782,17 @@ void PrintRefStack()
 }
 #endif
 
-void ProcessRefStack(unsigned size, struct Object **bottom, CellProcessFunc func)
+void ProcessRefStack(unsigned size, Object **bottom, CellProcessFunc func)
 {
   long i;
-  struct Object **theCell;
+  Object **theCell;
 
   DEBUG_IOA(PrintRefStack());
   theCell = bottom;
   for(; size > 0; size--, theCell++) {
     if (!isLazyRef(*theCell)) {
       i = ((unsigned)*theCell & 1);
-      *theCell = (struct Object *)((unsigned)*theCell & ~1);
+      *theCell = (Object *)((unsigned)*theCell & ~1);
     } else {
       i = 0;
     }
@@ -816,7 +816,7 @@ void ProcessRefStack(unsigned size, struct Object **bottom, CellProcessFunc func
 	  && !inBetaHeap(*theCell) && !isObject(*theCell)
 	  && !isProto(*theCell) /* e.g. AlloI is called with prototype in ref. reg. */
 	  && !isCode(*theCell)  /* e.g. at INNER a ref. reg contains code address */
-	  && (*theCell!=(struct Object *)ExternalMarker)
+	  && (*theCell!=(Object *)ExternalMarker)
 	  ) {
 	fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
 	      (int)theCell, 
@@ -824,7 +824,7 @@ void ProcessRefStack(unsigned size, struct Object **bottom, CellProcessFunc func
       Illegal();
     }
     });
-    *theCell = (struct Object *)((unsigned)*theCell | i);
+    *theCell = (Object *)((unsigned)*theCell | i);
   }
 }
 
@@ -832,7 +832,7 @@ void ProcessStack()
 {
 
   ProcessRefStack(((unsigned)RefSP-(unsigned)&ReferenceStack[0]) >> 2,
-                  (struct Object **)ReferenceStack, 
+                  (Object **)ReferenceStack, 
 		  DoIOACell);
 }
 
@@ -843,9 +843,9 @@ void ProcessStack()
  * RefStackLength
  * RefStack section
  */
-void ProcessStackObj(struct StackObject *theStackObject, CellProcessFunc func)
+void ProcessStackObj(StackObject *theStackObject, CellProcessFunc func)
 {
-  ptr(long)        theEnd;
+  long *        theEnd;
 
   DEBUG_IOA(fprintf(output, "ProcessStackObj: theStack: 0x%x, size: 0x%x\n", (int)theStackObject, (int)(theStackObject->StackSize)));
 
@@ -854,7 +854,7 @@ void ProcessStackObj(struct StackObject *theStackObject, CellProcessFunc func)
 
   theEnd = &theStackObject->Body[0] + theStackObject->StackSize;
 
-  ProcessRefStack(*theEnd, (struct Object **)(theEnd+1), func);
+  ProcessRefStack(*theEnd, (Object **)(theEnd+1), func);
 }
 
 #endif /* hppa */
@@ -879,7 +879,7 @@ void PrintCAR(struct RegWin *cAR);
 
 static __inline__ void ProcessReg(long *addr, char *desc, CellProcessFunc func)
 {
-  func((struct Object **)addr, *(struct Object **)addr);
+  func((Object **)addr, *(Object **)addr);
   DEBUG_LAZY({
     if (isLazyRef(*addr)) {
       fprintf (output, "Lazy ref in %s: %d\n", desc, (int)(*addr));
@@ -893,7 +893,7 @@ static __inline__ void ProcessReg(long *addr, char *desc, CellProcessFunc func)
 
 void ProcessAR(struct RegWin *ar, struct RegWin *theEnd, CellProcessFunc func)
 {
-    struct Object **theCell = (struct Object **) &ar[1];
+    Object **theCell = (Object **) &ar[1];
     
     DEBUG_STACK(PrintAR(ar, theEnd));
 
@@ -941,11 +941,11 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd, CellProcessFunc func)
 #endif /* RTVALHALLA */
       if (skipCparams){
 	/* Will not skip out of frame - let's do it... */
-	theCell = (struct Object **)((long)theCell+48);
+	theCell = (Object **)((long)theCell+48);
       }
     }
 
-    for (; theCell != (struct Object **) theEnd; theCell+=2) {
+    for (; theCell != (Object **) theEnd; theCell+=2) {
       /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
       func(theCell, *theCell);
     }
@@ -1045,7 +1045,7 @@ void ProcessStack()
 GLOBAL(long lastPC)=0;
 #endif
 
-void ProcessStackObj(struct StackObject *theStack, CellProcessFunc func)
+void ProcessStackObj(StackObject *theStack, CellProcessFunc func)
 {
     struct RegWin *theAR;
     long delta;
@@ -1100,15 +1100,15 @@ void ProcessStackObj(struct StackObject *theStack, CellProcessFunc func)
 
 #ifdef RTDEBUG
 static void PrintSkipped(long *current);
-void PrintRef(ref(Object) ref);
+void PrintRef(Object * ref);
 #endif /* RTDEBUG */
 
 /* Traverse the StackArea [low..high] and Process all references within it. */
 void ProcessStackPart(long *low, long *high)
 {
-  ptr(long) current = low;
-  ref(Object) theObj;
-  handle(Object) theCell;
+  long * current = low;
+  Object * theObj;
+  Object ** theCell;
   DEBUG_STACK(fprintf(output, 
 		      "\n----- AR: low: 0x%08x, high: 0x%08x\n", (int)low, (int)high);
 	      fprintf(output, "ComponentBlock/CallbackFrame: [0x%08x, 0x%08x, 0x%08x]\n", 
@@ -1117,14 +1117,14 @@ void ProcessStackPart(long *low, long *high)
   Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
   
   while( current <= high ){
-    if(inBetaHeap( (ref(Object))*current)){
-      theCell = (handle(Object)) current;
+    if(inBetaHeap( (Object *)*current)){
+      theCell = (Object **) current;
       theObj  = *theCell;
       if (isObject(theObj)) {
 	  DEBUG_STACK({ fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 			PrintRef(*(Object**)current);
 		      });
-	  ProcessReference( (handle(Object))current);
+	  ProcessReference( (Object **)current);
 	  CompleteScavenging();
       } else {
 	DEBUG_CODE({
@@ -1173,7 +1173,7 @@ void ProcessStackPart(long *low, long *high)
 	if (isLazyRef (*current)){
 	  /* (*current) is a dangling reference */
 	  DEBUG_STACK(fprintf(output, "0x%08x: %d - LAZY\n", (int)current, (int)*current));
-	  ProcessReference ((handle(Object))current);
+	  ProcessReference ((Object **)current);
 	} else {
 	  DEBUG_STACK({
 	    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
@@ -1195,18 +1195,18 @@ void ProcessStackPart(long *low, long *high)
 
 void ProcessStack()
 {
-    ptr(long)          theTop;
-    ptr(long)          theBottom;
+    long *          theTop;
+    long *          theBottom;
     
-    ref(CallBackFrame)  theFrame;
-    ref(ComponentBlock) currentBlock;
+    CallBackFrame *  theFrame;
+    ComponentBlock * currentBlock;
     
     DEBUG_STACK(fprintf(output, "\n ***** Trace of stack *****\n"));
     /*
      * First handle the topmost component block
      */
     theTop    = StackEnd;
-    theBottom = (ptr(long)) lastCompBlock;
+    theBottom = (long *) lastCompBlock;
     theFrame  = ActiveCallBackFrame;
     /* Follow the stack */
     while( theFrame){
@@ -1222,7 +1222,7 @@ void ProcessStack()
     currentBlock = lastCompBlock;
     while( currentBlock->next ){
 	theTop    = (long *) ((long) currentBlock +
-			      sizeof(struct ComponentBlock) );
+			      sizeof(ComponentBlock) );
 	theBottom = (long *) currentBlock->next;
 	theFrame  = currentBlock->callBackFrame;
 	while( theFrame){
@@ -1267,7 +1267,7 @@ void ProcessStackObj(StackObject *theStack, CellProcessFunc func)
 }
 
 #ifdef RTDEBUG
-void PrintRef(ref(Object) ref)
+void PrintRef(Object * ref)
 {
   if (ref) {
     if (inBetaHeap(ref) && isObject(ref) ){
@@ -1298,9 +1298,9 @@ void PrintRef(ref(Object) ref)
 /* Traverse the StackArea [low..high] and print all references within it. */
 void PrintStackPart(long *low, long *high)
 {
-  ptr(long) current = low;
-  ref(Object) theObj;
-  handle(Object) theCell;
+  long * current = low;
+  Object * theObj;
+  Object ** theCell;
   fprintf(output, 
 	  "\n----- AR: low: 0x%08x, high: 0x%08x\n", (int)low, (int)high);
   fprintf(output, "ComponentBlock/CallbackFrame: [0x%08x, 0x%08x, 0x%08x]\n", 
@@ -1308,8 +1308,8 @@ void PrintStackPart(long *low, long *high)
   Claim( high <= (long *)StackStart, "PrintStackPart: high<=StackStart" );
   
   while( current <= high ){
-    if(inBetaHeap( (ref(Object))*current)){
-      theCell = (handle(Object)) current;
+    if(inBetaHeap( (Object *)*current)){
+      theCell = (Object **) current;
       theObj  = *theCell;
       if( isObject( theObj) ){
 	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
@@ -1379,18 +1379,18 @@ void PrintStack(long *StackEnd)
   /* FIXME: Would be nice to have some way of determining
    * stack top from here. Maybe inline assembler? Maybe &theTop?
    */
-  ptr(long)          theTop;
-  ptr(long)          theBottom;
+  long *          theTop;
+  long *          theBottom;
   
-  ref(CallBackFrame)  theFrame;
-  ref(ComponentBlock) currentBlock;
+  CallBackFrame *  theFrame;
+  ComponentBlock * currentBlock;
   
   fprintf(output, "\n ***** Trace of stack *****\n");
   /*
    * First handle the topmost component block
    */
   theTop    = StackEnd;
-  theBottom = (ptr(long)) lastCompBlock;
+  theBottom = (long *) lastCompBlock;
   theFrame  = ActiveCallBackFrame;
   /* Follow the stack */
   while( theFrame){
@@ -1406,7 +1406,7 @@ void PrintStack(long *StackEnd)
   currentBlock = lastCompBlock;
   while( currentBlock->next ){
     theTop    = (long *) ((long) currentBlock +
-			  sizeof(struct ComponentBlock) );
+			  sizeof(ComponentBlock) );
     theBottom = (long *) currentBlock->next;
     theFrame  = currentBlock->callBackFrame;
     while( theFrame){
@@ -1430,7 +1430,7 @@ void PrintStack(long *StackEnd)
 
 #ifdef sparc
 
-void PrintRef(ref(Object) ref)
+void PrintRef(Object * ref)
 {
   if (ref) {
     if (inBetaHeap(ref) && isObject(ref) ){
@@ -1481,7 +1481,7 @@ void PrintCAR(struct RegWin *cAR)
 
 void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
 {
-  struct Object **theCell = (struct Object **) &ar[1];
+  Object **theCell = (Object **) &ar[1];
 
   fprintf(output, 
 	  "\n----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x (%s+0x%x)\n",
@@ -1491,14 +1491,14 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
 	  getLabel(PC),
 	  (int)labelOffset);
 
-  fprintf(output, "%%i0: 0x%x", (int)ar->i0); PrintRef(cast(Object)ar->i0);
-  fprintf(output, "%%i1: 0x%x", (int)ar->i1); PrintRef(cast(Object)ar->i1)
+  fprintf(output, "%%i0: 0x%x", (int)ar->i0); PrintRef((Object *)ar->i0);
+  fprintf(output, "%%i1: 0x%x", (int)ar->i1); PrintRef((Object *)ar->i1)
     /* Notice that CopyT, AlloVR1-4 gets an offset in this parameter.
      * This should be safe.
      */;
-  fprintf(output, "%%i2: 0x%x", (int)ar->i2); PrintRef(cast(Object)ar->i2);
-  fprintf(output, "%%i3: 0x%x", (int)ar->i3); PrintRef(cast(Object)ar->i3);
-  fprintf(output, "%%i4: 0x%x", (int)ar->i4); PrintRef(cast(Object)ar->i4);
+  fprintf(output, "%%i2: 0x%x", (int)ar->i2); PrintRef((Object *)ar->i2);
+  fprintf(output, "%%i3: 0x%x", (int)ar->i3); PrintRef((Object *)ar->i3);
+  fprintf(output, "%%i4: 0x%x", (int)ar->i4); PrintRef((Object *)ar->i4);
   fprintf(output, "%%fp: 0x%x\n", (int)ar->fp); 
   fprintf(output, "%%l5: 0x%x\n", (int)ar->l5); 
   fprintf(output, "%%l6: 0x%x\n", (int)ar->l6); 
@@ -1525,13 +1525,13 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
       if (skipCparams){
 	fprintf(output, "Skipping 12 words in frame that called C:\n");
 	for (i=0; i<12; i++) PrintSkipped((long*)theCell+i);
-	theCell = (struct Object **)((long)theCell+48);
+	theCell = (Object **)((long)theCell+48);
       }
     }      
   }
-  for (; theCell != (struct Object **) theEnd; theCell+=2) {
+  for (; theCell != (Object **) theEnd; theCell+=2) {
     fprintf(output, "0x%x", (int)(*theCell));
-    PrintRef(cast(Object)(*theCell));
+    PrintRef((Object *)(*theCell));
   }
   fflush(output);
 }

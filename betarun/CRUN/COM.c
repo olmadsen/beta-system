@@ -11,10 +11,10 @@
 
 #ifndef MT
 
-ParamOriginProto(struct Item *,AlloCOM)
-/* = struct Item * AlloCOM(struct Object *origin, struct ProtoType *proto) */
+ParamOriginProto(Item *,AlloCOM)
+/* = Item * AlloCOM(Object *origin, ProtoType *proto) */
 {
-    DeclReference1(struct Item *, item); /*= struct Item * item; */
+    DeclReference1(Item *, item); /*= Item * item; */
     GCable_Entry();
     MCHECK();
     FetchOriginProto();
@@ -31,7 +31,7 @@ ParamOriginProto(struct Item *,AlloCOM)
 
     DEBUG_CODE( Claim(proto->Size > 0, "AlloCOM: proto->Size > 0") );
 
-    Protect(origin, item = (struct Item *) AOAcalloc(ItemSize(proto)));
+    Protect(origin, item = (Item *) AOAcalloc(ItemSize(proto)));
 
     /* The new Object is now allocated, but not initialized yet! */
 
@@ -41,7 +41,7 @@ ParamOriginProto(struct Item *,AlloCOM)
      * the proto type struct 
      */
     /* item->Proto++; does not work - adds 28 */
-    item->Proto = (struct ProtoType *)((long)item->Proto+sizeof(ProtoType)-4);
+    item->Proto = (ProtoType *)((long)item->Proto+sizeof(ProtoType)-4);
 
     if (proto->GenPart){
 #ifdef RTDEBUG

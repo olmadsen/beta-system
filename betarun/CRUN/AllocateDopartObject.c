@@ -9,9 +9,9 @@
 #include "crun.h"
 
 
-ParamOriginSize(struct DopartObject *, AlloDO)
+ParamOriginSize(DopartObject *, AlloDO)
 {
-    DeclReference1(struct DopartObject *, theObj);
+    DeclReference1(DopartObject *, theObj);
     GCable_Entry();
 
     FetchOriginSize();
@@ -23,7 +23,7 @@ ParamOriginSize(struct DopartObject *, AlloDO)
     DEBUG_CODE( Claim(size > 0, "AlloDO: size > 0") );
 
     Protect(origin, 
-	    theObj = cast(DopartObject) IOAalloc(DopartObjectSize(size)));
+	    theObj = (DopartObject *) IOAalloc(DopartObjectSize(size)));
 
     theObj->Proto  = DopartObjectPTValue;
     if (IOAMinAge!=0) theObj->GCAttr = IOAMinAge;

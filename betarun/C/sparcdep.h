@@ -119,7 +119,7 @@ register volatile void *GCreg4 __asm__("%o4");
 
 #ifdef MT
 
-static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
+static __inline__ ProtoType *findProto(unsigned long *Ventry)
      /* MUST match corresponding function in BetaRun.bet */
 { 
   /* A V-entry either has the form
@@ -170,7 +170,7 @@ static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
     }
   }
   /* Preg now contains SETHI instr. and RegTmp contains OR instr. */
-  return (struct ProtoType *)((instr1<<10) | (instr2 & 0x3ff));
+  return (ProtoType *)((instr1<<10) | (instr2 & 0x3ff));
 }
 
 /* CallAndSave macros are used as wrappers for C-routines
@@ -248,9 +248,9 @@ static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
 	   "ba "CPREF#name";"				\
 	   "mov %i1,%o2;"				\
 	   );			                        \
-  type C##name(struct Object *origin,                   \
+  type C##name(Object *origin,                   \
                int i1,                                  \
-               struct ProtoType *proto,                 \
+               ProtoType *proto,                 \
                int i3,                                  \
                int i4)
 
@@ -269,7 +269,7 @@ static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
 	   "mov %i0,%o0; "				\
 	   "ba "CPREF#name"; "				\
 	   "mov %i1,%o1");				\
- type C##name(struct Object *this, struct Component *comp,\
+ type C##name(Object *this, Component *comp,\
               int i2, int i3, int i4)
 
 #else /* MT */
@@ -281,7 +281,7 @@ static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
 	   "mov %i1,%o1; "				\
 	   CallAndSave_I0_I1_O0(name)                   \
 	   );                                           \
- type C##name(struct Object *this, struct Component *comp)
+ type C##name(Object *this, Component *comp)
 
 #endif /* MT */
 
@@ -296,7 +296,7 @@ static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
 	   "clr %o4; "		\
 	   "ba "CPREF#name"; "	\
 	   "mov %i0,%o0; ");	\
- type C##name(struct Object *this, int i1, int i2, int i3, int i4)
+ type C##name(Object *this, int i1, int i2, int i3, int i4)
 
 #endif /* MT */
 
@@ -311,7 +311,7 @@ static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
 	   "ba "CPREF#name";"				\
 	   "mov %i1,%o0;"  /* struc */			\
 	   );			                        \
- type C##name(struct Structure *struc, int i1, int i2, int i3, int i4)
+ type C##name(Structure *struc, int i1, int i2, int i3, int i4)
 
 #endif /* MT */
 
@@ -327,7 +327,7 @@ static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
            "clr %o3; "					\
 	   "ba "CPREF#name"; "				\
 	   "clr %o4; ");				\
- void C##name(struct Object *theObj,			\
+ void C##name(Object *theObj,			\
 	      int i1,					\
 	      unsigned offset, /* in bytes */		\
 	      int i3,					\
@@ -346,7 +346,7 @@ static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
            "clr %o3; "					\
 	   "ba "CPREF#name"; "				\
 	   "clr %o4; ");				\
- void C##name(struct Object *theObj,			\
+ void C##name(Object *theObj,			\
 	      int i1,					\
 	      /*unsigned*/ int range,                   \
 	      int i3,					\
@@ -360,7 +360,7 @@ static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
   asmlabel(name, 					\
 	   CallAndPush_I0_I1(name)                      \
            );                                           \
- void C##name(struct Object *theObj,			\
+ void C##name(Object *theObj,			\
 	      unsigned offset, /* in bytes */           \
 	      /*unsigned*/ int range)
 
@@ -370,8 +370,8 @@ static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
 
 /* CopyRR, CopyVR1, CopyVR2, CopyVR4, CopyVR8 */
 #define ParamRepObjOff(name)                            \
-void name(struct ValRep *theRep,                        \
-	   struct Object *theObj,                       \
+void name(ValRep *theRep,                        \
+	   Object *theObj,                       \
 	   unsigned offset /* in ints */)
 
 #else /* MT */
@@ -381,8 +381,8 @@ void name(struct ValRep *theRep,                        \
   asmlabel(name,                                        \
 	   CallAndSave_I0_I1_O0(name)                   \
 	   );                                           \
-void C##name(struct ValRep *theRep,                     \
-	     struct Object *theObj,                     \
+void C##name(ValRep *theRep,                     \
+	     Object *theObj,                     \
 	     unsigned offset /* in ints */)
      
 #endif /* MT */
@@ -391,8 +391,8 @@ void C##name(struct ValRep *theRep,                     \
 
 /* CopySVRI, CopySVRC, CopyVRI, CopyVRC */
 #define ParamORepObjOff(name)                           \
-void name(struct ObjectRep *theRep,                     \
-	   struct Object *theObj,                       \
+void name(ObjectRep *theRep,                     \
+	   Object *theObj,                       \
 	   unsigned offset /* in ints */)
 
 #else /* MT */
@@ -402,8 +402,8 @@ void name(struct ObjectRep *theRep,                     \
   asmlabel(name,                                        \
 	   CallAndSave_I0_I1_O0(name)                   \
 	   );                                           \
-void C##name(struct ObjectRep *theRep,                  \
-	     struct Object *theObj,                     \
+void C##name(ObjectRep *theRep,                  \
+	     Object *theObj,                     \
 	     unsigned offset /* in ints */)
      
 #endif /* MT */
@@ -413,8 +413,8 @@ void C##name(struct ObjectRep *theRep,                  \
 
 /* CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
 #define ParamRepObjOffLowHigh(name)                     \
-void name(struct ValRep *theRep,                        \
-	   struct Object *theObj,                       \
+void name(ValRep *theRep,                        \
+	   Object *theObj,                       \
 	   unsigned offset, /* in ints */               \
            unsigned low,                                \
 	   long high)
@@ -426,8 +426,8 @@ void name(struct ValRep *theRep,                        \
   asmlabel(name,                                        \
 	   CallAndSave_I0_I1_O0(name)                   \
 	   );                                           \
-void C##name(struct ValRep *theRep,                     \
-	     struct Object *theObj,                     \
+void C##name(ValRep *theRep,                     \
+	     Object *theObj,                     \
 	     unsigned offset, /* in ints */             \
 	     unsigned low,                              \
 	     long high)
@@ -438,8 +438,8 @@ void C##name(struct ValRep *theRep,                     \
 
 /* CopySVRI, CopySVRC CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
 #define ParamORepObjOffLowHigh(name)                    \
-void name(struct ObjectRep *theRep,                     \
-	   struct Object *theObj,                       \
+void name(ObjectRep *theRep,                     \
+	   Object *theObj,                       \
 	   unsigned offset, /* in ints */               \
            unsigned low,                                \
 	   long high)
@@ -451,8 +451,8 @@ void name(struct ObjectRep *theRep,                     \
   asmlabel(name,                                        \
 	   CallAndSave_I0_I1_O0(name)                   \
 	   );                                           \
-void C##name(struct ObjectRep *theRep,                  \
-	     struct Object *theObj,                     \
+void C##name(ObjectRep *theRep,                  \
+	     Object *theObj,                     \
 	     unsigned offset, /* in ints */             \
 	     unsigned low,                              \
 	     long high)
@@ -466,12 +466,12 @@ void C##name(struct ObjectRep *theRep,                  \
 	   "mov %i0, %o1; " /* theObj */		\
 	   CallAndPush_I0_I1(name)                      \
 	   );		                 		\
- void C##name(struct Object *origin,			\
-	      struct Object *theObj,	                \
+ void C##name(Object *origin,			\
+	      Object *theObj,	                \
 	      unsigned offset, /* in bytes */		\
 	      int range,			        \
 	      int i4,					\
-	      struct ProtoType *proto)
+	      ProtoType *proto)
 #else
 /* AlloVRI, AlloVRC */
 #define ParamObjOriginProtoOffRange(name)		\
@@ -480,12 +480,12 @@ void C##name(struct ObjectRep *theRep,                  \
 	   "mov %i0, %o1; " /* theObj */		\
 	   "ba "CPREF#name"; "				\
 	   "clr %o4; ");				\
- void C##name(struct Object *origin,			\
-	      struct Object *theObj,	                \
+ void C##name(Object *origin,			\
+	      Object *theObj,	                \
 	      unsigned offset, /* in bytes */		\
 	      int range,			        \
 	      int i4,					\
-	      struct ProtoType *proto)
+	      ProtoType *proto)
 #endif /* MT */
 
 #ifdef MT
@@ -496,7 +496,7 @@ void C##name(struct ObjectRep *theRep,                  \
 	   "mov  %i0,%o0;"                              \
 	   CallAndSave_I1_O0(name)                      \
            );                                           \
-  type C##name(struct Object *origin,                   \
+  type C##name(Object *origin,                   \
                int i1,                                  \
                unsigned size)
 #else /* MT */
@@ -509,7 +509,7 @@ void C##name(struct ObjectRep *theRep,                  \
 	   "clr  %o3;"                                  \
 	   "ba "CPREF#name"; "				\
 	   "clr  %o4; ");				\
-  type C##name(struct Object *origin,                   \
+  type C##name(Object *origin,                   \
                int i1,                                  \
                unsigned size)
 
@@ -547,7 +547,7 @@ asmlabel(name,                                          \
          CallAndSave_I0_I1(name)                        \
          );                                             \
 type C##name(int i0,                                    \
-	     struct Item *theItem,                      \
+	     Item *theItem,                      \
 	     unsigned offset, /* i ints */              \
 	     int i3,                                    \
 	     int i4,                                    \
@@ -563,7 +563,7 @@ asmlabel(name,                                          \
          "clr %o4;"                                     \
          );                                             \
 type C##name(int i0,                                    \
-	     struct Item *theItem,                      \
+	     Item *theItem,                      \
 	     unsigned offset, /* i ints */              \
 	     int i3,                                    \
 	     int i4,                                    \
@@ -579,10 +579,10 @@ asmlabel(name,                                          \
 	 "mov %i0,%o3; " /* This */                     \
          CallAndSave_I0_I1_O0(name)                     \
          );                                             \
-void C##name(ref(Object) dstQuaOrigin,                  \
-	     struct Object **theCell,                   \
-	     ref(ProtoType) dstQuaProto,                \
-	     ref(Object) this)
+void C##name(Object * dstQuaOrigin,                  \
+	     Object **theCell,                   \
+	     ProtoType * dstQuaProto,                \
+	     Object * this)
 #else /* MT */
 /* Qua */
 #define ParamProtoCellOriginThis(name)                  \
@@ -591,10 +591,10 @@ asmlabel(name,                                          \
 	 "ba "CPREF#name"; "                            \
 	 "mov %i0,%o3; " /* This */                     \
          );                                             \
-void C##name(ref(Object) dstQuaOrigin,                  \
-	     struct Object **theCell,                   \
-	     ref(ProtoType) dstQuaProto,                \
-	     ref(Object) this)
+void C##name(Object * dstQuaOrigin,                  \
+	     Object **theCell,                   \
+	     ProtoType * dstQuaProto,                \
+	     Object * this)
 
 #endif /* MT */
 
@@ -609,10 +609,10 @@ void C##name(ref(Object) dstQuaOrigin,                  \
 		    "%i0","%i1","%i2","%i3","%i4","%i5",             \
 		    "%l0","%l1","%l2","%l3","%l4","%l5","%l6","%l7")
 
-static __inline__ struct Object *
-CallVEntry(void (*entry)(), struct Object *origin)
+static __inline__ Object *
+CallVEntry(void (*entry)(), Object *origin)
 {
-  register struct Object *newObject;
+  register Object *newObject;
   /* Clear current object before calling V-entry.
    * FIXME: should set a correct current object
    */
@@ -629,11 +629,11 @@ CallVEntry(void (*entry)(), struct Object *origin)
   return newObject;
 }
 
-static __inline__ struct Component *
-CallAlloC(void *Ventry, struct Object *origin)
+static __inline__ Component *
+CallAlloC(void *Ventry, Object *origin)
 {
-  register struct Component *newComp;
-  extern void AlloC(struct Object *origin);
+  register Component *newComp;
+  extern void AlloC(Object *origin);
 
   /* Clear current object before calling AlloC.
    * FIXME: should set a correct current object
@@ -701,12 +701,12 @@ static __inline__ void USE()
 #endif
 
 /* Routines called from others */
-extern void      CAlloRR (ref(Object), int, unsigned, int, int, int);
-extern void      CAlloVR1(ref(Object), int, unsigned, int, int, int);
-extern void      CAlloVR2(ref(Object), int, unsigned, int, int, int);
-extern void      CAlloVR4(ref(Object), int, unsigned, int, int, int);
-extern void      CAlloVR8(ref(Object), int, unsigned, int, int, int);
-extern void      CAlloVRI(ref(Object), ref(Object), unsigned, int, int, ref(ProtoType));
-extern void      CAlloVRC(ref(Object), ref(Object), unsigned, int, int, ref(ProtoType));
+extern void      CAlloRR (Object *, int, unsigned, int, int, int);
+extern void      CAlloVR1(Object *, int, unsigned, int, int, int);
+extern void      CAlloVR2(Object *, int, unsigned, int, int, int);
+extern void      CAlloVR4(Object *, int, unsigned, int, int, int);
+extern void      CAlloVR8(Object *, int, unsigned, int, int, int);
+extern void      CAlloVRI(Object *, Object *, unsigned, int, int, ProtoType *);
+extern void      CAlloVRC(Object *, Object *, unsigned, int, int, ProtoType *);
 
 #endif /* _SPARC_H_ */

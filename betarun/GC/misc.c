@@ -65,21 +65,21 @@ char *convert_from_winnt(char *src, char nl)
 #endif /* nti */
 
 /* Used by objinterface.bet and lazyref_gc.c */
-void assignRef(long *theCell, ref(Item) newObject)
+void assignRef(long *theCell, Item * newObject)
 /* If theCell is in AOA and will now reference an object in IOA, 
  * then insert in AOAtoIOA table.
  * If theCell is in AOA and will now reference a lazy dangler,
  * then insert in negAOArefs table. This may occur from e.g. missingRefs.replace.
  */
 {
-  *(struct Item **)theCell = newObject;
+  *(Item **)theCell = newObject;
   if (!inIOA(theCell)){
     /* theCell is in AOA */
     if (inIOA(newObject)){
 #ifdef MT
-      MT_AOAtoIOAInsert((handle(Object))theCell);
+      MT_AOAtoIOAInsert((Object **)theCell);
 #else /* MT */
-      AOAtoIOAInsert((handle(Object))theCell);
+      AOAtoIOAInsert((Object **)theCell);
 #endif /* MT */
       return;
     }
@@ -94,17 +94,17 @@ void assignRef(long *theCell, ref(Item) newObject)
 /* Only used in debug version, but declared unconditionally in Declaration.run */
 GLOBAL(long CkPC1);
 GLOBAL(long CkPC2);
-GLOBAL(ref(Object) CkP1);
-GLOBAL(ref(Object) CkP2);
-GLOBAL(ref(Object) CkP3);
-GLOBAL(ref(Object) CkP4);
-GLOBAL(ref(Object) CkP5);
+GLOBAL(Object * CkP1);
+GLOBAL(Object * CkP2);
+GLOBAL(Object * CkP3);
+GLOBAL(Object * CkP4);
+GLOBAL(Object * CkP5);
 #endif
 
 #ifdef RTDEBUG
 
 #ifdef NEWRUN
-static void DoNothing(struct Object **theCell,struct Object *theObj)
+static void DoNothing(Object **theCell,Object *theObj)
 {
 }
 #endif
@@ -184,11 +184,11 @@ void Illegal()
 GLOBAL(long isObjectState);
 #endif
 
-long isObject( theObj)
-  ref(Object) theObj;
+long isObject(Object *theObj)
 { 
 #if defined(sparc) || defined(hppa)
   /* For the SPARC isObject also checks alignment constraints */
+  /* FIXME: is now required on all platforms? */
   if (((unsigned)theObj & 7) != 0)
     return FALSE;
 #endif /* defined(sparc) || defined(hppa) */
@@ -198,7 +198,7 @@ long isObject( theObj)
 
   DEBUG_CODE(isObjectState=1);
   /* check that the GCAttr of the object is valid. */
-  if( inBetaHeap((ref(Object))(theObj->Proto)) ) return FALSE;
+  if( inBetaHeap((Object *)(theObj->Proto)) ) return FALSE;
 
   DEBUG_CODE(isObjectState=2);
   if( theObj->Proto == 0 ) return FALSE;
@@ -224,7 +224,7 @@ long isObject( theObj)
 }
 
 long inBetaHeap( theObj)
-  ref(Object) theObj;
+  Object * theObj;
 { 
 #if defined(sparc) || defined(hppa) 
     /* For the SPARC inBetaHeap also checkes alignment constraints */
@@ -240,7 +240,7 @@ long inBetaHeap( theObj)
 #ifdef RTDEBUG
 void Claim( expr, message)
   long  expr;
-  ptr(char) message;
+  char * message;
 {
   if( expr == 0 ){
     fprintf(output, "\n\nAssumption failed: %s\n\n", message);
@@ -265,7 +265,7 @@ void Claim( expr, message)
 GLOBAL(static char __CkString[100]);
 void CCk(void *r, char *fname, int lineno, char *ref)
 {
-  register struct Object* rr = (struct Object *)r; 
+  register Object* rr = (Object *)r; 
 
   CHECK_HEAP(IOACheck(); AOACheck());
 
@@ -312,7 +312,7 @@ void CCk(void *r, char *fname, int lineno, char *ref)
       /* Check alignment */
       Claim(isLazyRef(r) || (((long)r&3)==0), __CkString);
       /* Check it's in a heap */
-      Claim(inIOA(rr) || inAOA(rr) || isLazyRef(rr) , __CkString);
+      Claim(inIOA(rr) || inAOA(rr) || isLazyRef(rr), __CkString);
     }
 }
 
@@ -384,7 +384,7 @@ void GiveTime(void)
           case 1:
             break;
           default:
-            GetMenuItemText(GetMenuHandle(128), menuItem, daName);
+            GetMenuItemText(GetMenustruct 128 **, menuItem, daName);
             daRefNum = OpenDeskAcc(daName);
             break;
           }
@@ -477,9 +477,9 @@ void NotifyRTDebug()
 void PrintHeap(long * startaddr, long numlongs)
 { 
   int i;
-  struct Object *ref;
+  Object *ref;
 
-  ref=(struct Object *)startaddr;
+  ref=(Object *)startaddr;
   fprintf(output, "\n\nPrintHeap:\n");
   fprintf(output,
 	  "IOA:     0x%x, IOATop:     0x%x, IOALimit:     0x%x\n",
@@ -507,7 +507,7 @@ void PrintHeap(long * startaddr, long numlongs)
 	    i, 
 	    (int)(startaddr+i), 
 	    (int)(*(startaddr+i)));
-    ref=(struct Object *)(*(startaddr+i));
+    ref=(Object *)(*(startaddr+i));
     if (inBetaHeap(ref)){
       if (inIOA(ref)) 
 	fprintf(output, " (IOA)");
@@ -534,7 +534,7 @@ void PrintHeap(long * startaddr, long numlongs)
 
 
 #ifdef intel
-static void RegError(long pc1, long pc2, char *reg, ref(Object) value)
+static void RegError(long pc1, long pc2, char *reg, Object * value)
 {
   fprintf(output, "\nIllegal value for GC register at PC=0x%x (called from 0x%x): %s=0x%x ", 
 	  (int)pc1, (int)pc2, reg, (int)value);
@@ -552,7 +552,7 @@ static void RegError(long pc1, long pc2, char *reg, ref(Object) value)
   Illegal();
 }
 
-static long CheckCell(struct Object *theCell)
+static long CheckCell(Object *theCell)
 {
   if(theCell) {
     if (inBetaHeap(theCell)) {
@@ -573,15 +573,15 @@ void CheckRegisters(void)
 {
 #ifdef RTDEBUG
 #if (defined(linux) || defined(nti))
-  extern ref(Object) a2;
-  extern ref(Object) a3;
-  extern ref(Object) a4;
+  extern Object * a2;
+  extern Object * a3;
+  extern Object * a4;
   long pc1 = CkPC1 - 5; /* sizeof(call) = 1+4 bytes */
   long pc2 = CkPC2 - 5; /* sizeof(call) = 1+4 bytes */
-  ref(Object) ebp = CkP1;
-  ref(Object) esi = CkP2;
-  ref(Object) edx = CkP3;
-  ref(Object) edi = CkP4;
+  Object * ebp = CkP1;
+  Object * esi = CkP2;
+  Object * edx = CkP3;
+  Object * edi = CkP4;
 
   CHECK_HEAP(IOACheck(); AOACheck());
 

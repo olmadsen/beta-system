@@ -22,9 +22,9 @@
 
 ParamProtoCellOriginThis(Qua)
 {
-  ref(Object) src;
+  Object * src;
   /* the source can be found in theCell since the assignment *has* been done */
-  ref(ProtoType) srcProto;
+  ProtoType * srcProto;
   GCable_Entry();
   FetchParamProtoCellOriginThis();
 
@@ -52,7 +52,7 @@ ParamProtoCellOriginThis(Qua)
       if (! inIOA(theCell)) 
 	/* in AOA area. */
 	negAOArefsINSERT((long)theCell);
-      srcProto = cast(ProtoType) findDanglingProto((int)src);
+      srcProto = (ProtoType *) findDanglingProto((int)src);
     } else 
 #endif
       if (! inIOA(theCell) && inIOA(src)){
@@ -72,11 +72,11 @@ ParamProtoCellOriginThis(Qua)
       switch(SwitchProto(src->Proto)){
       case SwitchProto(StructurePTValue):
 	/* It was a pattern variable assignment: src is a struc-object */
-	srcProto  = (cast(Structure)src)->iProto;
+	srcProto  = ((Structure *)src)->iProto;
 	break;
       case SwitchProto(ComponentPTValue):
 	/* It was a component-reference assignment: src points to a component */
-	src       = cast(Object)(cast(Component)src)->Body;
+	src       = (Object *)((Component *)src)->Body;
 	srcProto  = src->Proto;
 	break;
       default:
@@ -94,7 +94,7 @@ ParamProtoCellOriginThis(Qua)
     } else {
       do {
 	/* Inlined version of ltS without struc objects, and not checking origins */
-	ref(ProtoType) proto1 = srcProto;
+	ProtoType * proto1 = srcProto;
 	
 	if (dstQuaProto->Prefix == dstQuaProto){
 	  /* dstQuaProto is Object## */

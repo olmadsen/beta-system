@@ -42,7 +42,7 @@ static void AOAtoIOAReAlloc(void)
    */
 
   /* Save the old table. */
-  ref(Block) oldBlock      = AOAtoIOAtable;
+  Block * oldBlock      = AOAtoIOAtable;
   long       oldBlockSize  = AOAtoIOAtableSize;
   
   /* Exit if we can't find a new entry in prims. */
@@ -73,11 +73,11 @@ static void AOAtoIOAReAlloc(void)
   /* Move all entries from the old table into to new. */
   { 
     long i;
-    ptr(long) pointer = BlockStart( oldBlock);
+    long * pointer = BlockStart( oldBlock);
     for(i=0; i < oldBlockSize; i++){
       if (*pointer) 
 	if (inIOA(**(long**)pointer) || inToSpace(**(long**)pointer))
-	  AOAtoIOAInsert( (handle(Object))(*pointer));
+	  AOAtoIOAInsert( (Object **)(*pointer));
       pointer++;
     }
   }
@@ -109,7 +109,7 @@ static void AOAtoIOAReAlloc(void)
 }
 
 #ifdef RTDEBUG
-void reportAsgRef(handle( Object) theCell)
+void reportAsgRef(Object **theCell)
 {
   if (!inIOA(theCell)){
     fprintf(output, "\n*** AsgRef: 0x%x: 0x%x", (int)theCell, (int)*theCell);
@@ -120,7 +120,7 @@ void reportAsgRef(handle( Object) theCell)
 #ifdef MT
 static 
 #endif
-void AOAtoIOAInsert(handle( Object) theCell)
+void AOAtoIOAInsert(Object **theCell)
 {
     unsigned long *table;
     unsigned long index, count;
@@ -227,7 +227,7 @@ void MT_AOAtoIOAInsert(handle( Object) theCell)
 
 void AOAtoIOAClear(void)
 { 
-    long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
+    long i; long * pointer = BlockStart( AOAtoIOAtable);
     for(i=0;i<AOAtoIOAtableSize;i++) *pointer++ = 0;
 }
 
@@ -253,7 +253,7 @@ void CheckAOAtoIOAtableSize(long *theCell, long PC)
 
 void AOAtoIOACheck(void)
 { 
-    long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
+    long i; long * pointer = BlockStart( AOAtoIOAtable);
     
     /* fprintf(output, "#AOAtoIOACheck: AOAtoIOAtableSize: %d\n", (int)AOAtoIOAtableSize); */
     for(i=0; i<AOAtoIOAtableSize; i++){

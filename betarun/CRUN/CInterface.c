@@ -22,18 +22,18 @@ asmlabel(CpkVT,
 
 char *
 #ifdef sparc
-      CCpkVT(ref(Object) currentObj, ref(ValRep) theRep)
+      CCpkVT(Object * currentObj, ValRep * theRep)
 #endif
 #ifdef hppa
-      CpkVT(ref(ValRep) theRep)
+      CpkVT(ValRep * theRep)
 #endif
 {
     long bodysize = ByteRepBodySize(theRep->HighBorder);
     long i;
 
 #ifdef hppa
-    ref(Object) currentObj;
-    currentObj = cast(Object) getThisReg();
+    Object * currentObj;
+    currentObj = (Object *) getThisReg();
 #endif
 
     DEBUG_CODE(NumCpkVT++);
@@ -68,19 +68,19 @@ asmlabel(CpkSVT,
 /* CCpkSVT: Copy Slice of variable text (byte rep) to C */
 char *
 #ifdef sparc
-      CCpkSVT(ref(Object) currentObj, ref(ValRep) theRep, unsigned low,
+      CCpkSVT(Object * currentObj, ValRep * theRep, unsigned low,
 	      long high)
 #endif
 #ifdef hppa
-      CpkSVT(ref(ValRep) theRep, unsigned low, long high)
+      CpkSVT(ValRep * theRep, unsigned low, long high)
 #endif
 {
     long bodysize;
     long i;
     unsigned char *oldBody;
 #ifdef hppa
-    ref(Object) currentObj;
-    currentObj = cast(Object) getThisReg();
+    Object * currentObj;
+    currentObj = (Object *) getThisReg();
 #endif
 
     DEBUG_CODE(NumCpkSVT++);
@@ -123,7 +123,7 @@ char *
 }
 
 #ifdef MAC
-unsigned char * PpkVT(struct Object *currentObj, ref(ValRep) theRep)
+unsigned char * PpkVT(Object *currentObj, ValRep * theRep)
 {
     long bodysize = theRep->HighBorder;
     long i;
@@ -152,7 +152,7 @@ unsigned char * PpkVT(struct Object *currentObj, ref(ValRep) theRep)
     return res;
 }
 
-unsigned char * PpkSVT(struct Object *currentObj, ref(ValRep) theRep, unsigned low, long high)
+unsigned char * PpkSVT(Object *currentObj, ValRep * theRep, unsigned low, long high)
 {
     long bodysize;
     long i;
@@ -187,7 +187,7 @@ unsigned char * PpkSVT(struct Object *currentObj, ref(ValRep) theRep, unsigned l
     return res;
 }
 
-unsigned char * PpkCT(struct Object *currentObj, char *text)
+unsigned char * PpkCT(Object *currentObj, char *text)
 {
     long bodysize = strlen(text);
     unsigned char *res;

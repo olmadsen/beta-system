@@ -1,173 +1,169 @@
 /*  Define structs describing all sorts of beta objects.  */
 
 /* 92-04-02 tthorn: All heap objects now have a Body element;
-   		    thus one can use the headsize macro
- */
+   thus one can use the headsize macro
+   */
 
-typedef struct ProtoType{
-  short           GCTabOff;  /* 0:  Byte offset to the GC Table                */
-  short           OriginOff; /* 2:  Where should the origin be                 */
-  ptr(long)       GenPart;   /* 4:  Reference to the generation code (or NULL) */
-  ref(ProtoType)  Prefix;    /* 8:  Reference to the prefix prototype          */
-  short           Size;      /* 12: Object size in longs                       */
-  short           MpartOff;  /* 14: Byte offset to M entry prototype (or NULL) */
-  short           FormInx;   /* 16: FragmentForm index of this object-desc     */
-  short           AstRef;    /* 18: AST index of this object-desc.             */
-  long            (*CBR)();  /* 20: Callback routine (or NULL)                 */
-  long            TopMpart;  /* 24: M entry for top prefix                     */
+typedef struct _ProtoType{
+  short              GCTabOff;  /* 0:  Byte offset to the GC Table                */
+  short              OriginOff; /* 2:  Where should the origin be                 */
+  long *             GenPart;   /* 4:  Reference to the generation code (or NULL) */
+  struct _ProtoType *Prefix;    /* 8:  Reference to the prefix prototype          */
+  short              Size;      /* 12: Object size in longs                       */
+  short              MpartOff;  /* 14: Byte offset to M entry prototype (or NULL) */
+  short              FormInx;   /* 16: FragmentForm index of this object-desc     */
+  short              AstRef;    /* 18: AST index of this object-desc.             */
+  long               (*CBR)();  /* 20: Callback routine (or NULL)                 */
+  long               TopMpart;  /* 24: M entry for top prefix                     */
 } ProtoType;
 
-typedef struct Item{ 
-    ref(ProtoType)  Proto;     /* Reference to the Prototype */
-    long            GCAttr;    /* The GC attribute           */
-    long            Body[1];   /* The body part              */ 
+typedef struct _Item{ 
+  ProtoType *Proto;     /* Reference to the Prototype */
+  long       GCAttr;    /* The GC attribute           */
+  long       Body[1];   /* The body part              */ 
 } Item;
 
-typedef struct Object{ 
-    ref(ProtoType)  Proto;     /* Reference to the Prototype */
-    long            GCAttr;    /* The GC attribute           */
-    long            Body[1];   /* The body part              */ 
+typedef struct _Object{ 
+  ProtoType *Proto;     /* Reference to the Prototype */
+  long       GCAttr;    /* The GC attribute           */
+  long       Body[1];   /* The body part              */ 
 } Object;
 
-typedef struct TextObject { 
-    ref(ProtoType)  Proto;     /* Reference to TextProto     */
-    long            GCAttr;    /* The GC attribute           */
-    ref(Object)     Origin;    /* Reference to basicItem     */
-    ref(ValRep)     T;         /* Repetition holding chars   */
-    long            Pos;       /* Position in T              */
-    long            Lgth;      /* Length in T                */
-} TextObject;
-
-typedef struct DopartObject{ 
-    ref(ProtoType)  Proto;     /* Reference to the Prototype */
-    long            GCAttr;    /* The GC attribute           */
-    ref(Object)     Origin;    /* Origin of dopart object    */
-    long            Size;      /* Size in BYTES of body      */
-    long            Body[1];   /* The body part              */ 
-} DopartObject;
-
+typedef struct _StackObject{
+  ProtoType *Proto;     /* StackObjectPTValue         */
+  long       GCAttr;    /* The GC attribute            */
+  long       BodySize;  /* The size of the body part   */
 #ifdef MT
-typedef struct StackObject{
-    ref(ProtoType)  Proto;     /* Reference to the Prototype  */
-    long            GCAttr;    /* The GC attribute            */
-    long            BodySize;  /* The size of the body part   */
-    long            refTopOff; /* byte offset to refstack top */
-    long            dataTopOff;/* byte offset to datastack top*/
-    long            Body[1];   /* The body part               */ 
-} StackObject;
+  long       refTopOff; /* byte offset to refstack top */
+  long       dataTopOff;/* byte offset to datastack top*/
+  long       Body[1];   /* The body part               */ 
 #else
-typedef struct StackObject{
-    ref(ProtoType)  Proto;     /* Reference to the Prototype  */
-    long            GCAttr;    /* The GC attribute            */
-    long            BodySize;  /* The size of the body part   */
-    long            StackSize; /* Size of the packed stack   
-				* Size of top frame in NEWRUN 
-				*/
-    long            Body[1];   /* The body part               */ 
-} StackObject;
+  long       StackSize; /* Size of the packed stack   
+			 * Size of top frame in NEWRUN 
+			 */
+  long       Body[1];   /* The body part               */ 
 #endif
+} StackObject;
 
-typedef struct Component{
-    ref(ProtoType)  Proto;     /* Reference to the Prototype  */
-    long            GCAttr;    /* The GC attribute            */
-    ref(StackObject)StackObj;  /* Packed stack (suspended) 
-				  or -1 (active)              */
-    ref(Object)     CallerObj; /* Calling object 
-                                * (called "Return Link" in the BETA book)
-				*/
-    ref(Component)  CallerComp;/* Calling component           */ 
-    long            CallerLSC; /* Local sequence counter in
-				* calling object.
-				* (called "Code Point" in BETA book)        
-				*/ 
-    long            Body[1];   /* The body part               */ 
+typedef struct _Component{
+  ProtoType         *Proto;     /* ComponentPTValue           */
+  long               GCAttr;    /* The GC attribute            */
+  StackObject       *StackObj;  /* Packed stack (suspended) 
+				 * or -1 (active)
+				 */
+  Object            *CallerObj; /* Calling object 
+				 * (called "Return Link" in the BETA book)
+				 */
+  struct _Component *CallerComp;/* Calling component           */ 
+  long               CallerLSC; /* Local sequence counter in
+				 * calling object.
+				 * (called "Code Point" in BETA book)        
+				 */ 
+  long               Body[1];   /* The body part               */ 
 } Component;
 
-typedef struct ValRep{
-    ref(ProtoType)  Proto;     /* Reference to the Prototype  */
-    long            GCAttr;    /* The GC attribute            */
-    long            LowBorder; /* Lower bound of range        */
-    long            HighBorder;/* Higher bound of range       */
-    long            Body[1];   /* The body part               */ 
+typedef struct _ValRep{
+  ProtoType *Proto;     /* {Byte/Short/Long/Double}RepPTValue  */
+  long       GCAttr;    /* The GC attribute            */
+  long       LowBorder; /* Lower bound of range        */
+  long       HighBorder;/* Higher bound of range       */
+  long       Body[1];   /* The body part               */ 
 } ValRep;
 
-typedef struct RefRep{
-    ref(ProtoType)  Proto;     /* Reference to the Prototype  */
-    long            GCAttr;    /* The GC attribute            */
-    long            LowBorder; /* Lower bound of range        */
-    long            HighBorder;/* Higher bound of range       */
-    long            Body[1];   /* The body part               */ 
+typedef struct _RefRep{
+  ProtoType *Proto;     /* RefRepPTValue  */
+  long       GCAttr;    /* The GC attribute            */
+  long       LowBorder; /* Lower bound of range        */
+  long       HighBorder;/* Higher bound of range       */
+  long       Body[1];   /* The body part               */ 
 } RefRep;
 
-typedef struct ObjectRep{
-    ref(ProtoType)  Proto;     /* Reference to the Prototype  */
-    long            GCAttr;    /* The GC attribute            */
-    long            LowBorder; /* Lower bound of range        */
-    long            HighBorder;/* Higher bound of range       */
-    ref(ProtoType)  iProto;    /* Prototype of objects in rep */
-    ref(Object)     iOrigin;   /* Origin of objects in rep    */
-    long            Body[1];   /* The body part               */ 
+typedef struct _ObjectRep{
+  ProtoType *Proto;     /* Dyn{Item/Comp}RepPTValue    */
+  long       GCAttr;    /* The GC attribute            */
+  long       LowBorder; /* Lower bound of range        */
+  long       HighBorder;/* Higher bound of range       */
+  ProtoType *iProto;    /* Prototype of objects in rep */
+  Object    *iOrigin;   /* Origin of objects in rep    */
+  long       Body[1];   /* The body part               */ 
 } ObjectRep;
 
-typedef struct Structure{
-    ref(ProtoType)  Proto;     /* StructurePTValue	      */
-    long            GCAttr;    /* The GC attribute            */
-    ref(Object)     iOrigin;   /* The origin of the structure */
-    ref(ProtoType)  iProto;    /* The protoType of the struc  */
-    long	    Body[1];   /* Dummy. Makes headsize work. */
+typedef struct _Structure{
+  ProtoType *Proto;     /* StructurePTValue	      */
+  long       GCAttr;    /* The GC attribute            */
+  Object    *iOrigin;   /* The origin of the structure */
+  ProtoType *iProto;    /* The protoType of the struc  */
+  long       Body[1];   /* Dummy. Makes headsize work. */
 } Structure;
 
+typedef struct _DopartObject{ 
+  ProtoType *Proto;     /* DopartObjectPTValue        */
+  long       GCAttr;    /* The GC attribute           */
+  Object    *Origin;    /* Origin of dopart object    */
+  long       Size;      /* Size in BYTES of body      */
+  long       Body[1];   /* The body part              */ 
+} DopartObject;
+
+typedef struct _TextObject { 
+  ProtoType *Proto;     /* Reference to TextProto     */
+  long       GCAttr;    /* The GC attribute           */
+  Object    *Origin;    /* Reference to basicItem     */
+  ValRep    *T;         /* Repetition holding chars   */
+  long       Pos;       /* Position in T              */
+  long       Lgth;      /* Length in T                */
+} TextObject;
+
 /* Block is memory unit for AOArea. */
-typedef struct Block{
-    ref(Block)      next;      /* Reference to the next Block     */
-    union { 
-             ptr(long) nextTop; 
-             long      state; 
-          } info;
-    ptr(long)       top;          /* Refers the top in this(Block)   */
-    ptr(long)       limit;        /* Refers the limit of this(Block) */
-    ptr(long)       mmaplimit;    /* max limit of block */
-    ptr(long)       mmapmaxlimit; /* max mmaplimit of block */
+typedef struct _Block{
+  struct _Block *next;      /* Reference to the next Block     */
+  union { 
+    long        *nextTop; 
+    long         state; 
+  } info;
+  long          *top;          /* Refers the top in this(Block)   */
+  long          *limit;        /* Refers the limit of this(Block) */
+  long          *mmaplimit;    /* max limit of block */
+  long          *mmapmaxlimit; /* max mmaplimit of block */
 } Block;
 
-typedef struct CallBackFrame {
-    ref(CallBackFrame)  next;
+typedef struct _CallBackFrame {
+  struct _CallBackFrame *  next;
 #if !(defined(hppa) && defined(UseRefStack))
-    ptr(long)           betaTop;
+  long *betaTop;
 #endif
-    long                tmp;
+  long  tmp;
 } CallBackFrame;
 
-typedef struct CallBackEntry {
+typedef struct _CallBackEntry {
 #ifdef sparc
 #ifdef MT
-    ref(Structure)	theStruct;
-    long		code[6];
+  Structure    *theStruct;
+  long          code[6];
 #else
-    ref(Structure)	theStruct;
-    long		mov_o7_g1;
-    long		call_HandleCallBack;
-    long		nop;
+  Structure    *theStruct;
+  long          mov_o7_g1;
+  long          call_HandleCallBack;
+  long          nop;
 #endif /* MT */
 #endif /* sparc */
 #ifdef hppa
-    ref(Structure)      theStruct;
-    unsigned long       code[7];
+  Structure    *theStruct;
+  unsigned long code[7];
 #endif
 #ifdef intel
-    ref(Structure)      theStruct;
-    unsigned char       code[6];
+  Structure    *theStruct;
+  unsigned char code[6];
 #ifdef nti
-    unsigned char       disp[2]; /* Only used for pascal and std call */
+  unsigned char disp[2]; /* Only used for pascal and std call */
 #endif /* nti */
 #endif /* intel */
 #ifdef sgi
-    ref(Structure)      theStruct;
-    unsigned long       code[5];
+  Structure    *theStruct;
+  unsigned long code[5];
 #endif
 #ifdef macppc
-    ref(Structure)      theStruct;
-    unsigned long       code[10];
+  Structure    *theStruct;
+  unsigned long code[10];
 #endif
 } CallBackEntry;
 
@@ -177,72 +173,56 @@ typedef struct CallBackEntry {
 #ifdef nti
 #define CallBackEntrySize 12
 #else
-#define CallBackEntrySize sizeof(struct CallBackEntry)
+#define CallBackEntrySize sizeof(CallBackEntry)
 #endif
 #endif
 
 
-typedef struct CallBackArea {
-  ref(CallBackArea) next;
-  ref(CallBackEntry) entries;
+typedef struct _CallBackArea {
+  struct _CallBackArea *next;
+  CallBackEntry * entries;
 } CallBackArea;
 
-typedef struct ComponentBlock{
-    ref(CallBackFrame)  callBackFrame;
-    ref(ComponentBlock) next;
-    long                level;
+typedef struct _ComponentBlock{
+  CallBackFrame          *callBackFrame;
+  struct _ComponentBlock *next;
+  long                    level;
 #ifdef hppa
-    void *              RefBlock;
+  void                   *RefBlock;
 #endif
 } ComponentBlock;
 
-typedef struct GCEntry {
-    unsigned short StaticOff;
-    short OrigOff;
-    ref(ProtoType) Proto;
+typedef struct _GCEntry {
+  unsigned short  StaticOff;
+  short           OrigOff;
+  ProtoType      *Proto;
 } GCEntry;
 
-typedef struct PartObject {
-    ref(ProtoType) Proto;
-    long OrigOff;
+typedef struct _PartObject {
+  ProtoType *Proto;
+  long       OrigOff;
 } PartObject;
 
-/* Statistic structs */
-
-#ifdef GATHERSTATS
-typedef struct IOAStatistic {
-   long NumOfMoved;
-   long SizeOfMoved;
-   long NumOfStatic;
-   long SizeOfStatic;
-   long TotalNumOfGC;
-   long TotalNumOfMoved;
-   long TotalSizeOfMoved;
-   long TotalNumOfStatic;
-   long TotalSizeOfStatic;
-} IOAStatistic;
-#endif
-
-typedef struct group_header
+typedef struct _group_header
 {
-  struct group_header *data_start;
-  long                *protoTable;
-  struct group_header *data_end;
-  long                code_start;
-  long                code_end;
-  char                *group_name;
-  struct {
-    unsigned long     hash;
-    unsigned long     modtime;
+  struct _group_header  *data_start;
+  long                  *protoTable;
+  struct _group_header  *data_end;
+  long                   code_start;
+  long                   code_end;
+  char                  *group_name;
+  struct _{
+    unsigned long        hash;
+    unsigned long        modtime;
   } unique_group_id;
-  struct group_header **ptr; /* pointer back to beta_data file */
+  struct _group_header **ptr; /* pointer back to beta_data file */
 } group_header;
 
 #if !defined(KEEP_STACKOBJ_IN_IOA)
-typedef void (*CellProcessFunc)(struct Object **theCell,struct Object *theObj);
+typedef void (*CellProcessFunc)(Object **theCell,Object *theObj);
 #endif
 
-typedef struct nums
+typedef struct _nums
 {
   long NumAlloI;
   long NumAlloCOM;
@@ -329,24 +309,24 @@ typedef enum {
 } tsd_flag_t;
 
 /* Thread Specific Data */
-typedef struct TSD 
+typedef struct _TSD 
 {
-  /*  0 */ struct Component   * _ActiveComponent;
-  /*  4 */ struct StackObject * _ActiveStack;
-  /*  8 */ long               * _IOALimit;
-  /* 12 */ long               * _IOATop;
-  /* 16 */ long               * _savedIOALimit;
-  /* 20 */ long                 _MallocExhausted;
-  /* 24 */ thread_t             _thread_id;
-  /* 28 */ nums               * _nums;
-  /* 32 */ struct Object      * _CurrentObject;
+  /*  0 */ Component   *_ActiveComponent;
+  /*  4 */ StackObject *_ActiveStack;
+  /*  8 */ long        *_IOALimit;
+  /* 12 */ long        *_IOATop;
+  /* 16 */ long        *_savedIOALimit;
+  /* 20 */ long         _MallocExhausted;
+  /* 24 */ thread_t     _thread_id;
+  /* 28 */ nums        *_nums;
+  /* 32 */ Object      *_CurrentObject;
   /*       NB: This offset is hardcoded into CallAndSave* in sparcdep.h */
-  /* 36 */ struct Object      * _Origin;
-  /* 40 */ struct Object      * _SavedCallO;
-  /* 44 */ long                 _TSDinx;
-  /* 48 */ tsd_flag_t           _TSDFlags;
-  /* 52 */ char               * _CTextPoolEnd;
-  /* 56 */ long                 _CTextPool [MAXCTEXTPOOL/4];
+  /* 36 */ Object      *_Origin;
+  /* 40 */ Object      *_SavedCallO;
+  /* 44 */ long         _TSDinx;
+  /* 48 */ tsd_flag_t   _TSDFlags;
+  /* 52 */ char        *_CTextPoolEnd;
+  /* 56 */ long         _CTextPool [MAXCTEXTPOOL/4];
 } TSD;
 
 #define ActiveComponent TSDReg->_ActiveComponent

@@ -11,9 +11,9 @@
  *  Copy an object refered by theObj from IOASpace to ToSpace.
  */
 
-static ref(Object) CopyObject(ref(Object) theObj)
+static Object * CopyObject(Object * theObj)
 {
-    ref(Object) newObj;
+    Object * newObj;
     long        size;
     
     size = 4*ObjectSize( theObj);
@@ -42,12 +42,12 @@ static ref(Object) CopyObject(ref(Object) theObj)
     DEBUG_AOA( IOAcopied += size );
     
     {
-	register ptr(long) src;
-	register ptr(long) dst;
-	register ptr(long) theEnd;
+	register long * src;
+	register long * dst;
+	register long * theEnd;
 	
-	newObj     = (ref(Object)) ToSpaceTop;
-	theEnd     = (ptr(long)) (((long) newObj) + size); 
+	newObj     = (Object *) ToSpaceTop;
+	theEnd     = (long *) (((long) newObj) + size); 
 	
 	DEBUG_IOA( Claim(theEnd<=ToSpaceLimit, "theEnd<=ToSpaceLimit") );
 	
@@ -61,7 +61,7 @@ static ref(Object) CopyObject(ref(Object) theObj)
             tempAOArootsAlloc();
 	}
         
-	src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
+	src = (long *) theObj; dst = (long *) newObj; 
         
 	while( dst < theEnd) *dst++ = *src++; 
 	
@@ -83,10 +83,10 @@ static ref(Object) CopyObject(ref(Object) theObj)
  *  theObj is moved to AOA.
  *  The function is used by IOAGc.
  * 
- * FIXME: better parameters: (struct Object **theCell, int useForAOAroot)
+ * FIXME: better parameters: (Object **theCell, int useForAOAroot)
  *        will be more readable.
  */
-ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
+Object * NewCopyObject(Object * theObj, Object ** theCell)
 {
     MCHECK();
 
@@ -99,7 +99,7 @@ ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
         return CopyObject(theObj);
     } else {
         /* theObj is old enough to go into AOA */
-        ref(Object) newObj;
+        Object * newObj;
 
         MCHECK();
         if( (newObj = CopyObjectToAOA(theObj)) ){

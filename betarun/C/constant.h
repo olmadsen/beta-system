@@ -4,20 +4,20 @@
 
 /* Prototype constants */
 
-#define ComponentPTValue       ((struct ProtoType *) -1)
-#define StackObjectPTValue     ((struct ProtoType *) -2)
-#define StructurePTValue       ((struct ProtoType *) -3)
-#define RefRepPTValue          ((struct ProtoType *) -4)
-#define LongRepPTValue          ((struct ProtoType *) -5)
-#define ByteRepPTValue         ((struct ProtoType *) -6)
-#define ShortRepPTValue         ((struct ProtoType *) -7)
-#define DoubleRepPTValue       ((struct ProtoType *) -8)
-#define DopartObjectPTValue    ((struct ProtoType *) -9)
-#define DynItemRepPTValue      ((struct ProtoType *) -10)
-#define DynCompRepPTValue      ((struct ProtoType *) -11)
+#define ComponentPTValue       ((ProtoType *) -1)
+#define StackObjectPTValue     ((ProtoType *) -2)
+#define StructurePTValue       ((ProtoType *) -3)
+#define RefRepPTValue          ((ProtoType *) -4)
+#define LongRepPTValue          ((ProtoType *) -5)
+#define ByteRepPTValue         ((ProtoType *) -6)
+#define ShortRepPTValue         ((ProtoType *) -7)
+#define DoubleRepPTValue       ((ProtoType *) -8)
+#define DopartObjectPTValue    ((ProtoType *) -9)
+#define DynItemRepPTValue      ((ProtoType *) -10)
+#define DynCompRepPTValue      ((ProtoType *) -11)
 
-#define MaxPTValue             ((struct ProtoType *) -1)
-#define MinPTValue             ((struct ProtoType *) -11)
+#define MaxPTValue             ((ProtoType *) -1)
+#define MinPTValue             ((ProtoType *) -11)
 
 #ifdef UseRefStack
 /* Used to mark external activation part on reference stack */
@@ -43,9 +43,9 @@
 
 #ifdef NEWRUN
 /* Special "dyn" mark used after callback */
-#define CALLBACKMARK ((struct Object *)4)
+#define CALLBACKMARK ((Object *)4)
 /* Special "dyn" mark used after Gparts */
-#define GENMARK      ((struct Object *)8)
+#define GENMARK      ((Object *)8)
 
 /* Offset for dyn and PC on stack frame */
 #ifdef sgi

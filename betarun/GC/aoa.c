@@ -6,7 +6,7 @@
  */
 #include "beta.h"
 
-#define REP ((struct ObjectRep *)theObj)
+#define REP ((ObjectRep *)theObj)
 
 #ifdef NEWRUN
 extern void DoGC(long *SP);
@@ -18,10 +18,10 @@ extern void DoGC(void);
  *
  *  void tempAOArootsAlloc(void)
  *  void tempAOArootsFree(void)
- *  struct Object *AOAallocate(long numbytes)
- *  struct Object *AOAalloc(AOA_ALLOC_PARAMS)
- *  struct Object *AOAcalloc(AOA_ALLOC_PARAMS)
- *  ref(Object) CopyObjectToAOA( ref(Object) theObj theObj)
+ *  Object *AOAallocate(long numbytes)
+ *  Object *AOAalloc(AOA_ALLOC_PARAMS)
+ *  Object *AOAcalloc(AOA_ALLOC_PARAMS)
+ *  Object * CopyObjectToAOA( Object * theObj theObj)
  *  long sizeOfAOA(void)
  *  void AOAGc()
  *  #ifdef nti 
@@ -29,15 +29,15 @@ extern void DoGC(void);
  *  #endif
  *  #ifdef RTDEBUG
  *  void AOACheck()
- *  void AOACheckObject(ref(Object) theObj)
- *  void AOACheckReference(handle(Object) theCell)
- *  void AOACheckObjectSpecial(ref(Object) theObj)
+ *  void AOACheckObject(Object * theObj)
+ *  void AOACheckReference(Object ** theCell)
+ *  void AOACheckObjectSpecial(Object * theObj)
  *  #endif
  */
 
 /* LOCAL FUNCTIONS */
 static long AllocateBaseBlock(void);
-static void markObjectAlive(ref (Object) obj);
+static void markObjectAlive(Object * obj);
 static void AOANewBlock(long newBlockSize);
 
 /* LOCAL VARIABLES */
@@ -50,8 +50,8 @@ static long totalAOASize = 0;
  */
 void tempAOArootsAlloc(void)
 {
-    ptr(long) oldPtr;        /* start of old table */
-    ptr(long) oldlimitPtr;   /* points to end of old table */
+    long * oldPtr;        /* start of old table */
+    long * oldlimitPtr;   /* points to end of old table */
     long size;
     
     if (tempAOAroots) {
@@ -179,7 +179,7 @@ static long AllocateBaseBlock(void)
 /* AOAallocate allocate 'size' number of bytes in the Adult object area.
  * If the allocation succeeds the function returns a reference to the allocated
  * object, 0 otherwise.  */
-struct Object *AOAallocate(long numbytes)
+Object *AOAallocate(long numbytes)
 {
     Object *newObj;
     
@@ -238,9 +238,9 @@ void DoGC()
 }
 #endif
 
-struct Object *AOAalloc(AOA_ALLOC_PARAMS)
+Object *AOAalloc(AOA_ALLOC_PARAMS)
 {
-    struct Object *theObj;
+    Object *theObj;
 
     MT_CODE(mutex_lock(&aoa_lock));
 
@@ -277,9 +277,9 @@ struct Object *AOAalloc(AOA_ALLOC_PARAMS)
     return theObj;
 }
 
-struct Object *AOAcalloc(AOA_ALLOC_PARAMS)
+Object *AOAcalloc(AOA_ALLOC_PARAMS)
 {
-    struct Object *theObj;
+    Object *theObj;
     long gca;
 #ifdef NEWRUN
     theObj = AOAalloc(numbytes, SP);
@@ -297,14 +297,14 @@ struct Object *AOAcalloc(AOA_ALLOC_PARAMS)
  *  move an object to AOA and return the address of the new location
  *  If the allocation in AOA failed the function returns 0;
  */
-ref(Object) CopyObjectToAOA( theObj)
-ref(Object) theObj;
+Object * CopyObjectToAOA( theObj)
+Object * theObj;
 {
-    ref(Object) newObj;
+    Object * newObj;
     long        size;
-    register ptr(long) src;
-    register ptr(long) dst;
-    register ptr(long) theEnd;
+    register long * src;
+    register long * dst;
+    register long * theEnd;
   
     size = 4*ObjectSize( theObj); 
     Claim(ObjectSize(theObj) > 0, "#ToAOA: ObjectSize(theObj) > 0");
@@ -320,9 +320,9 @@ ref(Object) theObj;
       
     if( (newObj = AOAallocate( size)) == 0 ) return 0;
   
-    theEnd = (ptr(long)) (((long) newObj) + size); 
+    theEnd = (long *) (((long) newObj) + size); 
   
-    src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
+    src = (long *) theObj; dst = (long *) newObj; 
     while( dst < theEnd) *dst++ = *src++; 
   
     if (!HandledInAOAHead) {
@@ -350,14 +350,14 @@ ref(Object) theObj;
     return newObj;
 }
 
-static void markObjectAlive(ref (Object) obj)
+static void markObjectAlive(Object * obj)
 {
     obj -> GCAttr = LIVEOBJECT;
 }
 
 long sizeOfAOA(void)
 {
-    ref (Block) current;
+    Block * current;
     long numbytes = 0;
     
     current = AOABaseBlock;
@@ -378,10 +378,10 @@ long sizeOfAOA(void)
 void AOAGc()
 {
     long *pointer;
-    ptr(long) cellptr;
-    ptr(Object) target;
-    ptr(Object) root;
-    ref(Block) currentBlock;
+    long * cellptr;
+    Object * target;
+    Object * root;
+    Block * currentBlock;
 
     NumAOAGc++;
     
@@ -411,7 +411,7 @@ void AOAGc()
         cellptr = (long*)(*pointer & ~1);
         
         /* Make target point to the actual object in AOA. */
-        root = target = (ptr(Object))*cellptr;
+        root = target = (Object *)*cellptr;
         
         /* It is necessary to call a special collecter the first
          * time.
@@ -424,7 +424,7 @@ void AOAGc()
         /* Afterwards we call extendCollectList. */
         while (pointer < AOArootsLimit) {
             cellptr = (long*)(*pointer & ~1);
-            target = (ptr(Object))*cellptr;
+            target = (Object *)*cellptr;
             extendCollectList(target,
                               appendToListInAOA);
             pointer++;
@@ -490,7 +490,7 @@ void AOAGc()
 
 static void AOANewBlock(long newBlockSize) 
 {
-    ref(Block) newblock;
+    Block * newblock;
     if ((newblock = newBlock(newBlockSize))) {
         totalFree += newBlockSize;
         totalAOASize += newBlockSize;
@@ -510,13 +510,13 @@ static void AOANewBlock(long newBlockSize)
 }
     
 #ifdef RTDEBUG
-static void CheckAOACell(struct Object **theCell,struct Object *theObj)
+static void CheckAOACell(Object **theCell,Object *theObj)
 {
   DEBUG_CODE(if (!CheckHeap) Ck(theObj));
   AOACheckReference(theCell);
 }
 
-ref(Object) lastAOAObj=0;
+Object * lastAOAObj=0;
 
 static FILE *dump_aoa_file=NULL;
 #define AOA_DUMP(code) { code; }
@@ -530,8 +530,8 @@ if (dump_aoa){ fprintf(dump_aoa_file, "%d", (int)num); }
 /* AOACheck: Consistency check on entire AOA area */
 void AOACheck()
 {
-    ref(Block)  theBlock  = AOABaseBlock;
-    ref(Object) theObj;
+    Block *  theBlock  = AOABaseBlock;
+    Object * theObj;
     long        theObjectSize;
 
     if (dump_aoa) {
@@ -554,14 +554,14 @@ void AOACheck()
 
     lastAOAObj=0;
     while( theBlock ){
-        theObj = (ref(Object)) BlockStart(theBlock);
+        theObj = (Object *) BlockStart(theBlock);
         while( (long *) theObj < theBlock->top ){
             theObjectSize = 4*ObjectSize(theObj);
 	    Claim((theObjectSize&7)==0, "#AOACheck: (TheObjectSize&7)==0 ");
             Claim(ObjectSize(theObj) > 0, "#AOACheck: ObjectSize(theObj) > 0");
             AOACheckObject( theObj);
             lastAOAObj=theObj;
-            theObj = (ref(Object)) Offset( theObj, theObjectSize);
+            theObj = (Object *) Offset( theObj, theObjectSize);
         }
         theBlock = theBlock->next;
     }
@@ -570,8 +570,8 @@ void AOACheck()
 
 /* AOACheckObject: Consistency check on AOA object */
 void AOACheckObject( theObj)
-ref(Object) theObj;
-{ ref(ProtoType) theProto;
+Object * theObj;
+{ ProtoType * theProto;
   
  theProto = theObj->Proto;
 
@@ -582,7 +582,7 @@ ref(Object) theObj;
  if (!theProto) return;
 #endif
 
- Claim( !inBetaHeap((ref(Object))theProto),
+ Claim( !inBetaHeap((Object *)theProto),
 	"#AOACheckObject: !inBetaHeap(theProto)");
 
  AOA_DUMP_TEXT(":");
@@ -611,7 +611,7 @@ ref(Object) theObj;
        case SwitchProto(DynItemRepPTValue):
        case SwitchProto(DynCompRepPTValue):
            /* Check iOrigin */
-           AOACheckReference( (handle(Object))(&REP->iOrigin) );
+           AOACheckReference( (Object **)(&REP->iOrigin) );
            /* Check rest of repetition */
            switch(SwitchProto(theProto)){
              case SwitchProto(DynItemRepPTValue):
@@ -625,7 +625,7 @@ ref(Object) theObj;
                  pointer = (long *)&REP->Body[0];
 	    
                  for (index=0; index<size; index++) {
-                     AOACheckReference( (handle(Object))(pointer) );
+                     AOACheckReference( (Object **)(pointer) );
                      pointer++;
                  }
              }
@@ -639,11 +639,11 @@ ref(Object) theObj;
        { long * pointer;
        register long size, index;
 	
-       size = toRefRep(theObj)->HighBorder;
-       pointer =  (long *) &toRefRep(theObj)->Body[0];
+       size = ((RefRep*)theObj)->HighBorder;
+       pointer =  (long *) &((RefRep*)theObj)->Body[0];
 	
        for(index=0; index<size; index++) {
-           AOACheckReference( (handle(Object))(pointer) );
+           AOACheckReference( (Object **)(pointer) );
            pointer++;
        }
        }
@@ -651,39 +651,39 @@ ref(Object) theObj;
        return;
       
        case SwitchProto(ComponentPTValue):
-       { ref(Component) theComponent;
+       { Component * theComponent;
 	
-       theComponent = Coerce( theObj, Component);
-       if (theComponent->StackObj == (ref(StackObject))-1) {
+       theComponent = ((Component*)theObj);
+       if (theComponent->StackObj == (StackObject *)-1) {
            /* printf("\nAOACheckObject: theComponent->StackObj=-1, skipped!\n"); */
        } else {
-           AOACheckReference( (handle(Object))(&theComponent->StackObj));
+           AOACheckReference( (Object **)(&theComponent->StackObj));
        }
-       AOACheckReference( (handle(Object))(&theComponent->CallerComp));
-       AOACheckReference( (handle(Object))(&theComponent->CallerObj));
-       AOACheckObject( (ref(Object))(ComponentItem( theComponent)));
+       AOACheckReference( (Object **)(&theComponent->CallerComp));
+       AOACheckReference( (Object **)(&theComponent->CallerObj));
+       AOACheckObject( (Object *)(ComponentItem( theComponent)));
        }
        return;   
        case SwitchProto(StackObjectPTValue):
 #ifdef KEEP_STACKOBJ_IN_IOA
            Claim( FALSE, "AOACheckObject: theObj should not be StackObject.");
 #else
-           ProcessStackObj((struct StackObject *)theObj, CheckAOACell);
+           ProcessStackObj((StackObject *)theObj, CheckAOACell);
 #endif /* KEEP_STACKOBJ_IN_IOA */
            return; 
        case SwitchProto(StructurePTValue):
-           AOACheckReference( &(toStructure(theObj))->iOrigin );
+           AOACheckReference( &(((Structure*)theObj))->iOrigin );
            return;
        case SwitchProto(DopartObjectPTValue):
-           AOACheckReference( &(cast(DopartObject)(theObj))->Origin );
+           AOACheckReference( &((DopartObject *)(theObj))->Origin );
            return;
      }
  }else{
-     ptr(short)  Tab;
+     short *  Tab;
      long *   theCell;
     
      /* Calculate a pointer to the GCTable inside the ProtoType. */
-     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
+     Tab = (short *) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
     
      /* Handle all the static objects. 
       * The static table have the following structure:
@@ -703,7 +703,7 @@ ref(Object) theObj;
          Claim( *(long *) Offset( theObj, *Tab * 4 + 4) == (long) Tab[1],
                 "AOACheckObject: EnclosingObject match GCTab entry.");
          if( *Tab == -Tab[1] ) 
-             AOACheckObject( (ref(Object))(Offset( theObj, *Tab * 4)));
+             AOACheckObject( (Object *)(Offset( theObj, *Tab * 4)));
          Tab += 4;
      }
      Tab++;
@@ -715,14 +715,14 @@ ref(Object) theObj;
           * dynamic offset table masked out. As offsets in this table are
           * always multiples of 4, these bits may be used to distinguish
           * different reference types. */ 
-         AOACheckReference( (handle(Object))theCell );
+         AOACheckReference( (Object **)theCell );
      }
  }
 }
 
 /* AOACheckReference: Consistency check on AOA reference */
 void AOACheckReference( theCell)
-handle(Object) theCell;
+Object ** theCell;
 {
     long i; long * pointer = BlockStart( AOAtoIOAtable);
     long found = FALSE;
@@ -768,8 +768,8 @@ handle(Object) theCell;
 
 /* AOACheckObjectSpecial: Weak consistency check on AOA object */
 void AOACheckObjectSpecial( theObj)
-ref(Object) theObj;
-{ ref(ProtoType) theProto;
+Object * theObj;
+{ ProtoType * theProto;
   
  theProto = theObj->Proto;
 
@@ -780,7 +780,7 @@ ref(Object) theObj;
  if (!theProto) return;
 #endif
   
- Claim( !inBetaHeap((ref(Object))theProto),
+ Claim( !inBetaHeap((Object *)theProto),
 	"#AOACheckObjectSpecial: !inBetaHeap(theProto)");
   
  if( isSpecialProtoType(theProto) ){  
@@ -793,7 +793,7 @@ ref(Object) theObj;
        case SwitchProto(DynCompRepPTValue): return;
        case SwitchProto(RefRepPTValue): return;
        case SwitchProto(ComponentPTValue):
-           AOACheckObjectSpecial( (ref(Object))(ComponentItem( theObj)));
+           AOACheckObjectSpecial( (Object *)(ComponentItem( theObj)));
            return;
        case SwitchProto(StackObjectPTValue):
 #ifdef KEEP_STACKOBJ_IN_IOA
@@ -811,11 +811,11 @@ ref(Object) theObj;
            Claim( FALSE, "AOACheckObjectSpecial: theObj must be KNOWN.");
      }
  }else{
-     ptr(short)  Tab;
+     short *  Tab;
      long *   theCell;
     
      /* Calculate a pointer to the GCTable inside the ProtoType. */
-     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
+     Tab = (short *) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
     
      /* Handle all the static objects. 
       * The static table have the following structure:
@@ -833,7 +833,7 @@ ref(Object) theObj;
     
      while( *Tab != 0 ){
          if( *Tab == -Tab[1] ) 
-             AOACheckObjectSpecial( (ref(Object))(Offset( theObj, *Tab * 4)));
+             AOACheckObjectSpecial( (Object *)(Offset( theObj, *Tab * 4)));
          Tab += 4;
      }
      Tab++;

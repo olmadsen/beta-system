@@ -12,21 +12,21 @@
 
 ParamThisOffRange(AlloRR)
 {
-    DeclReference1(struct RefRep *, theRep);
+    DeclReference1(RefRep *, theRep);
     GCable_Entry();
     FetchThisOffRange();
 
     DEBUG_CODE(NumAlloRR++);
 
     Ck(theObj);
-    Protect(theObj, theRep = cast(RefRep) IOAalloc(RefRepSize(range)));
+    Protect(theObj, theRep = (RefRep *) IOAalloc(RefRepSize(range)));
 
     theRep->Proto = RefRepPTValue;
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
 
-    AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+    AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
     Ck(theObj); Ck(theRep); 
 }
 

@@ -6,7 +6,7 @@
 #undef DMALLOC
 
 #if defined(MAC)
-#  define MALLOC(size) NewPtr(size)
+#  define MALLOC(size) Newsize *
 #  define REALLOC(src,size) \
      fprintf(output, "Error: REALLOC called\n!")); \
      fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__)
@@ -112,8 +112,8 @@ do {                               \
 
 #define inHeap(x)    inIOA(x)
 #define inToSpace(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceTop)) 
-#define inAOA(x)     inArea(AOABaseBlock, (struct Object *)(x))
-#define inAOAUnused(x) inAreaUnused(AOABaseBlock, (struct Object *)(x))
+#define inAOA(x)     inArea(AOABaseBlock, (Object *)(x))
+#define inAOAUnused(x) inAreaUnused(AOABaseBlock, (Object *)(x))
 
 #define isSpecialProtoType(x) (((long)(MinPTValue) <= (long)(x)) && \
                                ((long)(x) <= (long)(MaxPTValue)))
@@ -147,7 +147,7 @@ do {                               \
 #define isStackObject(x) ((long)((x)->Proto) == (long)(StackObjectPTValue))
 #define isComponent(x)   ((long)((x)->Proto) == (long)(ComponentPTValue))
 
-#define ComponentItem(x) ((ref(Item)) (((long)(x)) + headsize(Component)))
+#define ComponentItem(x) ((Item *) (((long)(x)) + headsize(Component)))
 
 #define ItemSize(proto)          (4*((proto)->Size))
 #define ComponentSize(proto)     (headsize(Component)+4*((proto)->Size))
@@ -193,36 +193,18 @@ do {                               \
   (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepBodySize(range) :	\
    ShortRepBodySize(range))))
 
-/**** Cast operations ****/
-
-#define toObject(x)      ((ref(Object))      x)
-#define toItem(x)        ((ref(Item))        x)
-#define toComponent(x)   ((ref(Component))   x)
-#define toStackObject(x) ((ref(StackObject)) x)
-#define toValRep(x)      ((ref(ValRep))      x)
-#define toRefRep(x)      ((ref(RefRep))      x)
-#define toStructure(x)   ((ref(Structure))   x)
-
-#define Coerce(x,y) ((struct y *) x)
-/* Example:
-   struct Item   *aItem;
-   struct Object *aObj;
-
-   aItem = Coerce(aObj,Item);
-*/
-
 #define Offset(x,y) (((long) (x)) + ((long) (y)))
 /* Example:
-   struct Item *aItem
+   Item *aItem
 
-   theStaticObject = (struct Object *) Offset( aItem, 25);
+   theStaticObject = (Object *) Offset( aItem, 25);
 */
 
 #define toKb(x) ( (long) (x)/1024)
 #define areaSizeInKb( from, to) ( ( ( (long) to ) - ( (long) from) ) / 1024)
 #define areaSize( from, to) ( ( ( (long) to ) - ( (long) from) ) )
 
-#define BlockStart( theB) ((ptr(long)) Offset( theB, sizeof(struct Block)))
+#define BlockStart( theB) ((long *) Offset( theB, sizeof(Block)))
 
 /* MACRO_CopyBlock copy from address src to address dst a block
  * of length = len bytes. (Used to be longs!!)
@@ -236,7 +218,7 @@ do {                               \
  * code is called, thisCell refers the element in question.
  */
 #define MACRO_ScanBlock( block, code) \
-{ long *thisCell=(long *)((long)block + sizeof(struct Block)), *XXe=block->top;\
+{ long *thisCell=(long *)((long)block + sizeof(Block)), *XXe=block->top;\
   while( thisCell < XXe){  code;  thisCell++; }\
 }
 
@@ -249,12 +231,12 @@ do {                               \
 #define GetDistanceToEnclosingObject(theObj, Distance)         \
 {                                                              \
   long           _GCAttribute;                                 \
-  struct Object *_theObj=theObj;                               \
+  Object *_theObj=theObj;                               \
   Distance = 0;                                                \
   _GCAttribute = _theObj->GCAttr*4;                            \
   while( _GCAttribute < 0 ){                                   \
     Distance += _GCAttribute;                                  \
-    _theObj = (struct Object *) Offset(_theObj, _GCAttribute); \
+    _theObj = (Object *) Offset(_theObj, _GCAttribute); \
     _GCAttribute = _theObj->GCAttr*4;                          \
   }                                                            \
 }
@@ -266,11 +248,11 @@ do {                               \
 #define NameOfGroupMacro(groupheader) (groupheader)->group_name
 
 #define EnclosingComponent(item) \
- ((struct Component *)((long)(item)-headsize(Component)))
+ ((Component *)((long)(item)-headsize(Component)))
 
 #define IsComponentItem(item) \
 (item && \
- (((struct Item *)(item))->GCAttr == -((long)(headsize(Component)/sizeof(long)))) && \
+ (((Item *)(item))->GCAttr == -((long)(headsize(Component)/sizeof(long)))) && \
  ((long)(EnclosingComponent(item)->Proto)==(long)(ComponentPTValue)))
 
 /* Safe way to save AOAroots references */
@@ -292,8 +274,6 @@ do {                               \
     TRACE_SAVE_AOA_ROOT();                                            \
     *--AOArootsPtr = (long) (cell);                                   \
   }
-
-#define BETA_DATA1_ADDR &BETA_DATA
 
 /* FIXME: isProto could be defined to IsPrototypeOfProcess
  * in DEBUG runtime system.
@@ -366,9 +346,9 @@ extern long *etext;
 }
 
 #define CkReg(func,value,reg)                                              \
-{ struct Object *theObj = (struct Object *)(value);                          \
+{ Object *theObj = (Object *)(value);                          \
   if (theObj && /* Cleared registers are ok */                               \
-      !isLazyRef(theObj) &&                                                  \
+      !isLazystruct theObj * &&                                                  \
       !isProto(theObj) && /* e.g. AlloI is called with proto in ref. reg. */ \
       !isCode(theObj) && /* e.g. at INNER a ref. reg contains code addr */   \
       !(inBetaHeap(theObj) && isObject(theObj))){                            \
@@ -392,7 +372,7 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 
 #if defined(NEWRUN) || (defined(RTVALHALLA) && defined(intel))
 /* FIXME: push should do boundary check and realloc if needed */
-#define push(v) /* printf("push: RefSP=0x%x\n", RefSP); */ *RefSP++ = (struct Object *) v
+#define push(v) /* printf("push: RefSP=0x%x\n", RefSP); */ *RefSP++ = (Object *) v
 #define pop(v)  /* printf("pop: RefSP=0x%x\n", RefSP); */  v = (void *) *--RefSP
 
 #define SaveVar(v)    push(v)
@@ -403,23 +383,23 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 #ifdef NEWRUN
 
 #define AssignReference(theCell, newObject)                                  \
-  *(struct Item **)(theCell) = (struct Item *)(newObject);                   \
-  if (!inIOA((struct Item *)(theCell)) && inIOA((struct Item *)(newObject))) \
-    AOAtoIOAInsert((struct Object **)theCell)
+  *(Item **)(theCell) = (Item *)(newObject);                   \
+  if (!inIOA((Item *)(theCell)) && inIOA((Item *)(newObject))) \
+    AOAtoIOAInsert((Object **)theCell)
 
 #define setup_item(theItem, proto, origin )                                     \
 {                                                                               \
-   register struct GCEntry *initTab;                                            \
+   register GCEntry *initTab;                                            \
                                                                                 \
-   ((struct Item *)(theItem))->Proto = ((struct ProtoType *)(proto));           \
+   ((Item *)(theItem))->Proto = ((ProtoType *)(proto));           \
    if (inIOA(theItem))                                                          \
-      if (IOAMinAge!=0) ((struct Item *)(theItem))->GCAttr = IOAMinAge; /* Set item age to IOAMinAge */           \
+      if (IOAMinAge!=0) ((Item *)(theItem))->GCAttr = IOAMinAge; /* Set item age to IOAMinAge */           \
    else                                                                         \
-      ((struct Item *)(theItem))->GCAttr = 0; /* Set item age to 0 */           \
+      ((Item *)(theItem))->GCAttr = 0; /* Set item age to 0 */           \
                                                                                 \
    /* Initialize the body part of the item, according to the genTable. */       \
                                                                                 \
-   initTab = (struct GCEntry *)((char *)(proto)+((struct ProtoType *)(proto))->GCTabOff); \
+   initTab = (GCEntry *)((char *)(proto)+((ProtoType *)(proto))->GCTabOff); \
                                                                                 \
    /* initTab is now pointing to the static GCTable.                            \
     * This table has zero or more elements terminated with a zero word.         \
@@ -430,8 +410,8 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
     */                                                                          \
                                                                                 \
    for (; initTab->StaticOff; ++initTab) {                                      \
-      register struct PartObject *po;                                           \
-      po = (struct PartObject *)(((long *)(theItem)) + initTab->StaticOff);     \
+      register PartObject *po;                                           \
+      po = (PartObject *)(((long *)(theItem)) + initTab->StaticOff);     \
       po->Proto = initTab->Proto;                                               \
       po->OrigOff = initTab->OrigOff;                                           \
    }                                                                            \
@@ -439,7 +419,7 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
    /* Assign origin into theItem. Since theItem may now be allocaed directly in \
     * AOA, it is necessary to use AssignReference.                              \
     */                                                                          \
-   AssignReference(((long*)(theItem))+((struct ProtoType*)(proto))->OriginOff,  \
+   AssignReference(((long*)(theItem))+((ProtoType*)(proto))->OriginOff,  \
                    (origin));                                                   \
 }
 
@@ -450,7 +430,7 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 
 /* Call Gpart with 4 as first parameter, and item as second argument */
 #define CallGPart(gpart, item, SP) \
-   CallB(GENMARK, (struct Object*)(item), (long)gpart, (long)SP)
+   CallB(GENMARK, (Object*)(item), (long)gpart, (long)SP)
 
 #ifdef sgi
 

@@ -10,7 +10,7 @@
 
 ParamRepObjOff(CopyVR1)
 {
-    DeclReference1(struct ValRep *, newRep);
+    DeclReference1(ValRep *, newRep);
     register unsigned range, i, size;
     
     GCable_Entry();
@@ -31,7 +31,7 @@ ParamRepObjOff(CopyVR1)
         
     } else {
         /* Allocate in IOA */
-        Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+        Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
         newRep->Proto = ByteRepPTValue;
         
         if (IOAMinAge!=0) {
@@ -49,7 +49,7 @@ ParamRepObjOff(CopyVR1)
         newRep->Body[i] = theRep->Body[i];
     }
     
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
     
     Ck(newRep); Ck(theRep); Ck(theObj);
 
@@ -57,7 +57,7 @@ ParamRepObjOff(CopyVR1)
 
 ParamRepObjOff(CopyVR2)
 {
-    DeclReference1(struct ValRep *, newRep);
+    DeclReference1(ValRep *, newRep);
     register unsigned range, i, size;
     
     GCable_Entry();
@@ -77,7 +77,7 @@ ParamRepObjOff(CopyVR2)
         
     } else {
         /* Allocate in IOA */
-        Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+        Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
         newRep->Proto = ShortRepPTValue;
 
         if (IOAMinAge!=0) {
@@ -95,14 +95,14 @@ ParamRepObjOff(CopyVR2)
         newRep->Body[i] = theRep->Body[i];
     }
     
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
     
     Ck(newRep); Ck(theRep); Ck(theObj);
 }
 
 ParamRepObjOff(CopyVR4)
 {
-    DeclReference1(struct ValRep *, newRep);
+    DeclReference1(ValRep *, newRep);
     register unsigned range, i, size;
     
     GCable_Entry();
@@ -121,7 +121,7 @@ ParamRepObjOff(CopyVR4)
         newRep = LVRAAlloc(LongRepPTValue, range);
     } else {
         /* Allocate in IOA */
-        Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+        Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
         newRep->Proto = LongRepPTValue;
 
         if (IOAMinAge!=0) {
@@ -139,7 +139,7 @@ ParamRepObjOff(CopyVR4)
         newRep->Body[i] = theRep->Body[i];
     }
 
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
     
     Ck(newRep); Ck(theRep); Ck(theObj);
     
@@ -147,7 +147,7 @@ ParamRepObjOff(CopyVR4)
 
 ParamRepObjOff(CopyVR8)
 {
-    DeclReference1(struct ValRep *, newRep);
+    DeclReference1(ValRep *, newRep);
     register unsigned range, i, size;
     
     GCable_Entry();
@@ -166,7 +166,7 @@ ParamRepObjOff(CopyVR8)
         newRep = LVRAAlloc(DoubleRepPTValue, range);
     } else {
         /* Allocate in IOA */
-        Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+        Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
         newRep->Proto = DoubleRepPTValue;
 
         if (IOAMinAge!=0) {
@@ -184,7 +184,7 @@ ParamRepObjOff(CopyVR8)
         newRep->Body[i] = theRep->Body[i];
     }
     
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
     
     Ck(newRep); Ck(theRep); Ck(theObj);
     
@@ -192,7 +192,7 @@ ParamRepObjOff(CopyVR8)
 
 ParamORepObjOff(CopyVRI)
 {
-    DeclReference1(struct ObjectRep *, newRep);
+    DeclReference1(ObjectRep *, newRep);
     register unsigned range, i, size;
     
     GCable_Entry();
@@ -204,7 +204,7 @@ ParamORepObjOff(CopyVRI)
     range = theRep->HighBorder;
     size = DynObjectRepSize(range);
     
-    Protect2(theObj, theRep, newRep = cast(ObjectRep) IOAalloc(size));
+    Protect2(theObj, theRep, newRep = (ObjectRep *) IOAalloc(size));
     
     newRep->Proto = DynItemRepPTValue;
 
@@ -225,14 +225,14 @@ ParamORepObjOff(CopyVRI)
         /* No need to use AssignReference: newRep is in IOA */
     }
     
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
     
     Ck(newRep); Ck(theRep); Ck(theObj);
 }
 
 ParamORepObjOff(CopyVRC)
 {
-    DeclReference1(struct ObjectRep *, newRep);
+    DeclReference1(ObjectRep *, newRep);
     register unsigned range, i, size;
     
     GCable_Entry();
@@ -244,7 +244,7 @@ ParamORepObjOff(CopyVRC)
     range = theRep->HighBorder;
     size = DynObjectRepSize(range);
     
-    Protect2(theObj, theRep, newRep = cast(ObjectRep) IOAalloc(size));
+    Protect2(theObj, theRep, newRep = (ObjectRep *) IOAalloc(size));
     
     newRep->Proto = DynCompRepPTValue;
 
@@ -265,7 +265,7 @@ ParamORepObjOff(CopyVRC)
         /* No need to use AssignReference: newRep is in IOA */
     }
     
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
     
     Ck(newRep); Ck(theRep); Ck(theObj);
 }

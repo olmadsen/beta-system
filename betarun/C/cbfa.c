@@ -6,7 +6,7 @@
 #include "beta.h"
 
 /* Pointer to the last Call Back Functions Area. */
-GLOBAL(static ref(CallBackArea) lastCBFA = 0);  
+GLOBAL(static CallBackArea * lastCBFA = 0);  
 
 
 void CBFAalloc()
@@ -34,14 +34,14 @@ void CBFAalloc()
 #ifdef hppa
     (void) MALLOC(16); /* to avoid spurious bug, with overwriten CBFA */
 #endif
-    if ( ! (CBFA = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {
+    if ( ! (CBFA = (CallBackArea *) MALLOC(sizeof(CallBackArea))) ) {
       char buf[512];
       sprintf(buf, "%s: Cannot allocate CBFA", ArgVector[0]);
       Notify(buf);
       BetaExit(1);
     }
     lastCBFA = CBFA;
-    if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
+    if ( ! (lastCBFA->entries = (CallBackEntry *) MALLOC(CBFABlockSize)) ) {
       char buf[512];
       sprintf(buf,
 	      "%s: Cannot allocate the CBFA heap (%dKb)\n", 
@@ -55,7 +55,7 @@ void CBFAalloc()
     }
     lastCBFA->next = 0;
     CBFATop = lastCBFA->entries;
-    CBFALimit = cast(CallBackEntry) ((long) lastCBFA->entries + CBFABlockSize);
+    CBFALimit = (CallBackEntry *) ((long) lastCBFA->entries + CBFABlockSize);
   }
   INFO_CBFA(fprintf(output, "#(CBFA: new block allocated %dKb.)\n", 
 		    (int)CBFABlockSize/Kb) );
@@ -78,14 +78,14 @@ void CBFArelloc()
   DEBUG_CBFA(Claim((CBFATop==CBFALimit),"CBFATop==CBFALimit"));
 
   /* Allocate new CBFA block */
-  if ( ! (lastCBFA->next = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {
+  if ( ! (lastCBFA->next = (CallBackArea *) MALLOC(sizeof(CallBackArea))) ) {
     char buf[512];
     sprintf(buf, "%s: Cannot allocate CBFA", ArgVector[0]);
     Notify(buf);
     BetaExit(1);
   }
   lastCBFA = lastCBFA->next;
-  if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
+  if ( ! (lastCBFA->entries = (CallBackEntry *) MALLOC(CBFABlockSize)) ) {
     char buf[512];
     sprintf(buf,
 	    "%s: Cannot allocate CBFA (%dKb)", 
@@ -96,7 +96,7 @@ void CBFArelloc()
   }
   lastCBFA->next = 0;
   CBFATop = lastCBFA->entries;
-  CBFALimit = cast(CallBackEntry) ((long) lastCBFA->entries + CBFABlockSize);
+  CBFALimit = (CallBackEntry *) ((long) lastCBFA->entries + CBFABlockSize);
   
   INFO_CBFA(fprintf(output, "#(CBFA: new block allocated %dKb.)\n", 
 		    (int)CBFABlockSize/Kb) );
@@ -106,10 +106,10 @@ void CBFArelloc()
 }
 
 void freeCBF(external_entry)
-     unsigned long external_entry; /* Address of cell just after the ref(Structure) */
+     unsigned long external_entry; /* Address of cell just after the Structure * */
 {
   /* For now we just clear the struct of the entry  */
-  struct CallBackEntry *theCBE;
+  CallBackEntry *theCBE;
 
   if (!external_entry){
     DEBUG_CODE(fprintf(output, "freeCBF: external_entry is NULL\n");
@@ -118,9 +118,9 @@ void freeCBF(external_entry)
   }
   
   theCBE 
-    = (struct CallBackEntry *)(external_entry - sizeof(struct Structure *));
+    = (CallBackEntry *)(external_entry - sizeof(Structure *));
 #ifdef RTDEBUG
-  Claim(inBetaHeap((ref(Object))(theCBE->theStruct)), 
+  Claim(inBetaHeap((Object *)(theCBE->theStruct)), 
 	"inBetaHeap(theCBE->theStruct)");
 #ifndef MT
 #ifdef sparc
@@ -135,13 +135,13 @@ void freeCBF(external_entry)
   Claim(CBFABlockSize != 0, "CBFABlockSize != 0");
   Claim(CBFATop != CBFA->entries, "CBFATop != CBFA->entries");
   
-  { ref(CallBackArea) cbfa = CBFA;
-    ref(CallBackEntry) current = cbfa->entries;
+  { CallBackArea * cbfa = CBFA;
+    CallBackEntry * current = cbfa->entries;
     long limit = (long) cbfa->entries + CBFABlockSize;
     int found = 0;
     
     for (; current != CBFATop;
-	 current=(ref(CallBackEntry))((long)current+CallBackEntrySize)){
+	 current=(CallBackEntry *)((long)current+CallBackEntrySize)){
       if ( (long) current >= limit){
 	/* Go to next block */
 	cbfa = cbfa->next;        
@@ -189,8 +189,8 @@ void freeCallbackCalled()
  * ptr may then be handled to an external, that may call back.
  * Later ptr may be freed using freeCBF.
  */
-ref(CallBackEntry) makeCBF(pat)
-     ref(CallBackEntry) pat;
+CallBackEntry * makeCBF(pat)
+     CallBackEntry * pat;
 {
   return pat
     /* All casts are done by the BETA compiler, which calls CopyCPP */;
@@ -201,12 +201,12 @@ void ProcessCBFA(void)
   /* Follow all struct pointers in the Call Back Functions area. */
   if (CBFABlockSize){
     if( CBFATop != CBFA->entries ){
-      ref(CallBackArea) cbfa = CBFA;
-      ref(CallBackEntry) current = cbfa->entries;
+      CallBackArea * cbfa = CBFA;
+      CallBackEntry * current = cbfa->entries;
       long limit = (long) cbfa->entries + CBFABlockSize;
       
       for (; current != CBFATop; 
-	   current = (ref(CallBackEntry))((long)current+CallBackEntrySize)){
+	   current = (CallBackEntry *)((long)current+CallBackEntrySize)){
 	if ( (long) current >= limit){
 	  /* Go to next block */
 	  cbfa = cbfa->next;        
@@ -220,7 +220,7 @@ void ProcessCBFA(void)
 	}
 	/*DEBUG_CBFA(fprintf(output, "ProcessCBFA: current=0x%x\n", current));*/
 	if (current->theStruct){
-	  ProcessReference((handle(Object))(&current->theStruct));
+	  ProcessReference((Object **)(&current->theStruct));
 	}
       }
       CompleteScavenging();
@@ -234,8 +234,8 @@ void CBFACheck()
   DEBUG_CBFA(fprintf(output, "CBFACheck begin\n"));
   if (CBFABlockSize){
     if( CBFATop != CBFA->entries ){
-      ref(CallBackArea) cbfa = CBFA;
-      ref(CallBackEntry) current = cbfa->entries;
+      CallBackArea * cbfa = CBFA;
+      CallBackEntry * current = cbfa->entries;
       long limit = (long) cbfa->entries + CBFABlockSize;
       DEBUG_CBFA({
 	fprintf(output, "CBFACheck: CBFA =    0x%x\n", (int)CBFA);
@@ -248,7 +248,7 @@ void CBFACheck()
       });
       
       for (; current != CBFATop;
-	   current = (ref(CallBackEntry))((long)current+CallBackEntrySize)){
+	   current = (CallBackEntry *)((long)current+CallBackEntrySize)){
 	if ( (long) current >= limit){
 	  /* Go to next block */
 	  DEBUG_CBFA(fprintf(output, "CBFACheck: fetching next block.\n"));
@@ -276,7 +276,7 @@ void CBFACheck()
 	    DescribeObject((Object*)current->theStruct);
 	    fprintf(output, "\n");
 	  });
-	  Claim(inBetaHeap((ref(Object))(current->theStruct)), 
+	  Claim(inBetaHeap((Object *)(current->theStruct)), 
 		"inBetaHeap(current->theStruct)");
 	  Claim(inBetaHeap(current->theStruct->iOrigin), 
 		"inBetaHeap(current->theStruct->iOrigin)");
@@ -296,12 +296,12 @@ void PrintCBFA()
   
   if (CBFABlockSize){
     if( CBFATop != CBFA->entries ){
-      ref(CallBackArea) cbfa = CBFA;
-      ref(CallBackEntry) current = cbfa->entries;
+      CallBackArea * cbfa = CBFA;
+      CallBackEntry * current = cbfa->entries;
       long limit = (long) cbfa->entries + CBFABlockSize;
       
       for (; current != CBFATop;
-	   current = (ref(CallBackEntry))((long)current+CallBackEntrySize)){
+	   current = (CallBackEntry *)((long)current+CallBackEntrySize)){
 	if ( (long) current >= limit){
 	  /* Go to next block */
 	  cbfa = cbfa->next; 
@@ -321,7 +321,7 @@ void PrintCBFA()
 	fprintf(output, "  theStruct: 0x%08x: 0x%08x ", 
 		(int)&current->theStruct, (int)current->theStruct);
 	if ((current->theStruct) 
-	    && inBetaHeap((ref(Object))(current->theStruct))
+	    && inBetaHeap((Object *)(current->theStruct))
 	    && inBetaHeap(current->theStruct->iOrigin)){
 	  fprintf(output, "(OK)\n");
 	} else {

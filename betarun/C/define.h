@@ -24,6 +24,7 @@
 #endif
 
 #define NONMOVEAOAGC
+#undef KEEP_STACKOBJ_IN_IOA
 
 #define RTINFO  /* Include support for runtime info */
 #define RTLAZY  /* Include support for lazy fetch */
@@ -135,24 +136,11 @@
 #endif
 
 
-
-#if defined(NEWRUN) || defined(intel) || defined(sparc) || defined(hppa)
-#undef KEEP_STACKOBJ_IN_IOA
-#else
-#define KEEP_STACKOBJ_IN_IOA
-#endif
-
-#define ptr(x)    x *
-#define ref(x)    struct x *
-#define handle(x) struct x **
-#define cast(x) (struct x *)
-#define casthandle(x) (struct x **)
-
 /* headsize *only* works on heap objects. They should
  * all include a Body element
  */  
 
-#define headsize(x) (sizeof(struct x) - sizeof(long))
+#define headsize(x) (sizeof(x) - sizeof(long))
 
 /********* Debug macros *******/
 #ifdef RTDEBUG
@@ -229,7 +217,7 @@
 #define isLink(c) (c > LISTEND)
 #define isEnd(c) (c == LISTEND)
 
-#define REFERENCEACTIONARGSTYPE struct Object **theCell
+#define REFERENCEACTIONARGSTYPE Object **theCell
 #define REFERENCEACTIONARGS theCell
 
 #endif /* NONMOVEAOAGC */

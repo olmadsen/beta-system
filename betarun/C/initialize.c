@@ -178,9 +178,9 @@ static void AllocateHeapFailed(char *name, int numbytes)
   BetaExit(1);
 }
 
-static long  AllocateHeap(ptr(long) base, 
-	     ptr(long) top,
-	     ptr(long) limit,
+static long  AllocateHeap(long * base, 
+	     long * top,
+	     long * limit,
 	     long numbytes,  
 	     char *name
 	     )
@@ -413,9 +413,9 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
 
 #if defined(NEWRUN) || (defined(RTVALHALLA) && defined(intel))
   /* Allocate the internal Reference Stack */
-  ReferenceStack = (struct Object **)MALLOC(REFSTACKSIZE*sizeof(struct Object *));
+  ReferenceStack = (Object **)MALLOC(REFSTACKSIZE*sizeof(Object *));
   if (!ReferenceStack){
-    AllocateHeapFailed("Reference Stack",REFSTACKSIZE*sizeof(struct Object *));
+    AllocateHeapFailed("Reference Stack",REFSTACKSIZE*sizeof(Object *));
   }
   INFO_HEAP_USAGE(PrintHeapUsage("after ReferenceStack allocation"));
   RefSP = &ReferenceStack[0]; /* points to first free element */

@@ -14,8 +14,8 @@ register long _dummyx __asm__("r16");
 
 ParamObjOffRange(ExtRR)
 {
-    DeclReference1(struct RefRep *, theRep);
-    DeclReference2(struct RefRep *, newRep);
+    DeclReference1(RefRep *, theRep);
+    DeclReference2(RefRep *, newRep);
     
     long add = range;
     long newRange, copyRange, i;
@@ -26,7 +26,7 @@ ParamObjOffRange(ExtRR)
     DEBUG_CODE(NumExtRR++);
 
     Ck(theObj);
-    theRep = *casthandle(RefRep) ((long *) theObj + offset);
+    theRep = *(RefRep **) ((long *) theObj + offset);
     newRange = theRep->HighBorder + add;
     copyRange = (add < 0) ? newRange : theRep->HighBorder;
     
@@ -34,7 +34,7 @@ ParamObjOffRange(ExtRR)
       newRange = 0;
 
     Protect2(theRep, theObj,
-	     newRep = cast(RefRep) IOAalloc(RefRepSize(newRange)));
+	     newRep = (RefRep *) IOAalloc(RefRepSize(newRange)));
    
     newRep->Proto = RefRepPTValue;
     if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
@@ -44,7 +44,7 @@ ParamObjOffRange(ExtRR)
     for (i = 0; i < copyRange; ++i)
       newRep->Body[i] = theRep->Body[i];
     
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
 
     Ck(theRep); Ck(newRep); Ck(theObj);
 

@@ -8,9 +8,9 @@
 #include "beta.h"
 #include "crun.h"
 
-ParamItemAscii(struct Item *, CopyT)
+ParamItemAscii(Item *, CopyT)
 {
-  DeclReference1(struct ValRep *, theRep);
+  DeclReference1(ValRep *, theRep);
   register unsigned range, size, i;
   
   GCable_Entry();
@@ -25,7 +25,7 @@ ParamItemAscii(struct Item *, CopyT)
   /* Allocate a value repetition */
   size = ByteRepSize(range);
 
-  Protect(theItem, theRep = cast(ValRep) IOAalloc(size));
+  Protect(theItem, theRep = (ValRep *) IOAalloc(size));
   
   theRep->Proto = ByteRepPTValue;
   if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
@@ -39,7 +39,7 @@ ParamItemAscii(struct Item *, CopyT)
     theRep->Body[i] = *((long *)ascii + i);
   }
   
-  AssignReference((long *)theItem + offset, cast(Item) theRep);
+  AssignReference((long *)theItem + offset, (Item *) theRep);
 
   /* return the (possibly moved) item */
   return theItem;

@@ -320,21 +320,21 @@ void ProcessDOT(void)
 {
   if( DOT ){
     /* The Debugger Object Table is in use, so traverse this table. */
-    ptr(long) current = DOT;
+    long * current = DOT;
     while( current < DOTTop){
       if( *current ) {
 	if (inIOA(*current)){
 	  { 
-	    ref(Object) theObj;
-	    ref(Object) enclObj;
+	    Object * theObj;
+	    Object * enclObj;
 	    int enclDist;
 	    
-	    theObj = cast(Object)(*current);
+	    theObj = (Object *)(*current);
 	    if (isStatic(theObj->GCAttr)) {
 	      GetDistanceToEnclosingObject(theObj,enclDist);
-	      enclObj = cast(Object) Offset(theObj,enclDist);
+	      enclObj = (Object *) Offset(theObj,enclDist);
 	      if (isForward(enclObj->GCAttr))
-		theObj = cast(Object) Offset(enclObj->GCAttr,-enclDist);
+		theObj = (Object *) Offset(enclObj->GCAttr,-enclDist);
 	      else
 		theObj = 0;	/* Enclosing object is dead */
 	    } else {
@@ -342,7 +342,7 @@ void ProcessDOT(void)
 	       * forward reference to the objects new position, or it is
 	       * NONE if the object is dead. */
 	      if (isForward (theObj->GCAttr))
-		theObj =  cast(Object) theObj->GCAttr;
+		theObj =  (Object *) theObj->GCAttr;
 	      else
 		theObj = 0;
 	    }

@@ -258,9 +258,9 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #endif
 {
 #ifndef linux
-  handle(Object) theCell;
+  Object ** theCell;
 #endif
-  ref(Object)    theObj = 0;
+  Object *    theObj = 0;
   long *PC;
   long todo = 0;
 
@@ -291,7 +291,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #ifdef sgi
   { 
     PC = (long *) scp->sc_pc;
-    theObj = CurrentObject = (struct Object *) scp->sc_regs[30];
+    theObj = CurrentObject = (Object *) scp->sc_regs[30];
     if (IsBetaCodeAddrOfProcess((long)PC)){ 
       long SPoff;
       GetSPoff(SPoff, CodeEntry(theObj->Proto, (long)PC)); 
@@ -344,7 +344,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #if defined(linux)
 #define fpu_sw scp.fpstate->status
   /* see <asm/sigcontext.h> */
-  theObj = cast(Object) scp.edx;
+  theObj = (Object *) scp.edx;
   if ( ! (inIOA(theObj) && isObject (theObj)))
     theObj  = 0;
 
@@ -361,7 +361,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 	 * Use the fact that current object is pushed before IDIV,
 	 * and take it from the stack.
 	 */
-	theObj = (struct Object *) *StackEnd++;
+	theObj = (Object *) *StackEnd++;
 	todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
       } else {
 	todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig); break;
@@ -449,7 +449,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #ifdef hppa
   /* Try to fetch the address of current Beta object in %r3 (This).*/
   /* See /usr/include/sys/signal.h and /usr/include/machine/save_state.h */
-  theCell = (handle(Object)) &scp->sc_gr3;
+  theCell = (Object **) &scp->sc_gr3;
   if( inIOA( *theCell))
     if( isObject( *theCell)) theObj  = *theCell;
 
@@ -530,8 +530,8 @@ static void ExitHandler(int sig)
 
 void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 {
-  handle(Object) theCell;
-  ref(Object)    theObj = 0;
+  Object ** theCell;
+  Object *    theObj = 0;
   long *PC;
   long todo = 0;
 
@@ -556,7 +556,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 #endif /* MT */
 
   /* Try to fetch the address of current Beta object from i0.*/
-  theCell = (struct Object **) &((struct RegWin*)ucon->uc_mcontext.gregs[REG_SP])->i0;
+  theCell = (Object **) &((struct RegWin*)ucon->uc_mcontext.gregs[REG_SP])->i0;
   if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
 
   switch(sig){
@@ -651,7 +651,7 @@ BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
   EXCEPTION_RECORD* pExceptionRec =  lpEP->ExceptionRecord;
   CONTEXT* pContextRecord = lpEP->ContextRecord;
 #endif /* nti_ms */
-  struct Object *theObj = 0;
+  Object *theObj = 0;
   long *PC;
   long todo = 0;
   long sig;
@@ -666,7 +666,7 @@ BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
     return OUR_EXCEPTION_CONTINUE_SEARCH;
   }
   if (pContextRecord->ContextFlags & CONTEXT_INTEGER){
-    theObj = (struct Object *)pContextRecord->Edx;
+    theObj = (Object *)pContextRecord->Edx;
   }
   sig = (long)pExceptionRec->ExceptionCode;
   switch (pExceptionRec->ExceptionCode){
@@ -693,7 +693,7 @@ BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
     /* Fix current object: It was pushed before the idiv instruction,
      * but will be zero in this case.
      */
-    theObj = *(struct Object **)StackEnd++;
+    theObj = *(Object **)StackEnd++;
     todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
   case EXCEPTION_FLT_DIVIDE_BY_ZERO:
     todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
@@ -732,7 +732,7 @@ BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
 }
 
 /* beta_main: called from _AttBC */
-void beta_main(void (*AttBC)(struct Component *), struct Component *comp)
+void beta_main(void (*AttBC)(Component *), Component *comp)
 {
   /* Set up structured exception handling for rest of execution */
 #ifdef nti_gnu
@@ -766,7 +766,7 @@ void beta_main(void (*AttBC)(struct Component *), struct Component *comp)
 
 OSStatus BetaSignalHandler(ExceptionInformation *info)
 {
-  ref(Object) theObj;
+  Object * theObj;
   long *PC;
   long todo = 0;
   ExceptionKind sig = info->theKind;
@@ -778,7 +778,7 @@ OSStatus BetaSignalHandler(ExceptionInformation *info)
   PC = (long *) info->machineState->PC.lo;
 
   /* Try to fetch the address of current Beta object from i0.*/
-  theObj = cast(Object) info->registerImage->R31.lo;
+  theObj = (Object *) info->registerImage->R31.lo;
   if( !inIOA(theObj) || !isObject(theObj)) theObj = 0;
 
   switch(sig){

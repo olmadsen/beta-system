@@ -10,12 +10,12 @@
 
 #ifndef MT
 
-ParamOriginProto(struct Component *,AlloC)
+ParamOriginProto(Component *,AlloC)
 {
   /* AlloC calls BETA code, thus we need to make sure GC can
      find and update the reference in comp. */
 
-    DeclReference1(struct Component *, comp);
+    DeclReference1(Component *, comp);
     GCable_Entry();
     FetchOriginProto();
 
@@ -25,7 +25,7 @@ ParamOriginProto(struct Component *,AlloC)
     DEBUG_CODE( Claim(proto->Size > 0, "AlloC: proto->Size > 0") );
 
     Protect(origin, 
-	    comp = cast(Component) IOAalloc(ComponentSize(proto)));    
+	    comp = (Component *) IOAalloc(ComponentSize(proto)));    
 
     /* The new Component is now allocated, but not initialized yet! */
 
@@ -33,9 +33,9 @@ ParamOriginProto(struct Component *,AlloC)
     comp->Proto = ComponentPTValue;
     if (IOAMinAge!=0) comp->GCAttr = IOAMinAge;
 
-    setup_item(cast(Item) &comp->Body, proto, origin);
+    setup_item((Item *) &comp->Body, proto, origin);
 
-    (cast(Item) &comp->Body)->GCAttr = -((headsize(Component))/4);
+    ((Item *) &comp->Body)->GCAttr = -((headsize(Component))/4);
 
     if (proto->GenPart){
 #ifdef RTDEBUG

@@ -19,10 +19,10 @@ asmlabel(ExO,
 /* Note: The offset parameter is complely ignored. It's not needed
    on the SPARC */
 
-void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
+void CExitO(long exitAddr, Object * exitObj, Object * theObj)
 {
-  ref(Component) theComp;
-  ref(RegWin) rw;		/* Callers Register Window */
+  Component * theComp;
+  struct RegWin * rw;		/* Callers Register Window */
 
   GCable_Entry();
 
@@ -38,24 +38,24 @@ void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
 
   /* We need to read the stack, thus this trap to flush regwins */
   __asm__("ta 3");
-  rw = cast(RegWin) FramePointer;
+  rw = (struct RegWin *) FramePointer;
 
   if (theObj == exitObj)
     return;			/* to exitAddr */
     
-  while ((theObj = cast(Object) rw->i0) != exitObj) {
+  while ((theObj = (Object *) rw->i0) != exitObj) {
 #ifdef FISKEMAND
-    if (cast(CallBackFrame)rw == ActiveCallBackFrame){
+    if ((CallBackFrame *)rw == ActiveCallBackFrame){
       /* This is AR of HandleCB. Update ActiveCallBackFrame.   */
-      ActiveCallBackFrame = cast(CallBackFrame)  rw->l5;
-      rw = cast(RegWin)rw->l6 /* skip to betaTop */;
+      ActiveCallBackFrame = (CallBackFrame *)  rw->l5;
+      rw = (struct RegWin *)rw->l6 /* skip to betaTop */;
 #ifdef RTDEBUG
       fprintf(output, "RTS: Leaving callback.\n");
 #endif
     } else {
 #endif
       /* Ordinary BETA activation record */
-      if (cast(Object) ActiveComponent->Body == theObj) {
+      if ((Object *) ActiveComponent->Body == theObj) {
 	/* Passing a component. As in AttachComponent: */
 	/* Terminate theComp. */
 	DEBUG_CODE(NumTermComp++);
@@ -69,12 +69,12 @@ void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
 	theComp->StackObj = 0;
 	
 	/* Pop the Component Block */
-	rw = cast(RegWin) rw->fp;	/* RegWin of CAttach */
-	ActiveCallBackFrame = cast(CallBackFrame)  rw->l5;
-	lastCompBlock       = cast(ComponentBlock) rw->l6;
+	rw = (struct RegWin *) rw->fp;	/* RegWin of CAttach */
+	ActiveCallBackFrame = (CallBackFrame *)  rw->l5;
+	lastCompBlock       = (ComponentBlock *) rw->l6;
       } 
       /* go one step back */
-      rw = cast(RegWin) rw->fp;
+      rw = (struct RegWin *) rw->fp;
 #ifdef FISKEMAND
     }
 #endif

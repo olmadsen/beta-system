@@ -23,10 +23,10 @@
    Notice, that on the SPARC you should add 8 to this address.
    */
 
-ParamThisComp(struct Component *, Att)
+ParamThisComp(Component *, Att)
 {
   long * entryAdr;
-  register ref(CallBackFrame)  callBackFrame __asm__("%l5");
+  register CallBackFrame *  callBackFrame __asm__("%l5");
   register long              * nextCompBlock __asm__("%l6");
   register long                level         __asm__("%l7");
   long first = comp->CallerLSC == 0;
@@ -41,7 +41,7 @@ ParamThisComp(struct Component *, Att)
 
   Ck(comp); Ck(this);
   
-  if (comp->StackObj == cast(StackObject) -1 || comp == ActiveComponent)
+  if (comp->StackObj == (StackObject *) -1 || comp == ActiveComponent)
     BetaError(RecursiveAttErr, this);
   
   /*
@@ -54,11 +54,11 @@ ParamThisComp(struct Component *, Att)
 
   getret(ActiveComponent->CallerLSC);		/* Save our return address */
   
-  AssignReference((long *)&comp->CallerComp, cast(Item) ActiveComponent);
-  AssignReference((long *)&comp->CallerObj, cast(Item) this);
+  AssignReference((long *)&comp->CallerComp, (Item *) ActiveComponent);
+  AssignReference((long *)&comp->CallerObj, (Item *) this);
   
   /* -1 tells that ActiveComponent is active */
-  ActiveComponent->StackObj = cast(StackObject) -1;
+  ActiveComponent->StackObj = (StackObject *) -1;
   
   /* Push a new Component Block. (It lives in our RegWin) */
   /* level = 0; */
@@ -73,7 +73,7 @@ ParamThisComp(struct Component *, Att)
   ActiveCallBackFrame = 0;		    /* Clear the CallBackFrame list */
   /* Fool gcc into believing that %i1 is used */
   __asm__(""::"r" (tmp));
-  lastCompBlock = cast(ComponentBlock) StackPointer;
+  lastCompBlock = (ComponentBlock *) StackPointer;
   /* Fool gcc into believing that %i1 is used */
   __asm__(""::"r" (tmp));
   
@@ -90,7 +90,7 @@ ParamThisComp(struct Component *, Att)
     
     /* comp->Body is the Object and comp->Body->Proto[-1] is the M-entry address */
 
-    entryAdr = (long*)(cast(Item) &comp->Body)->Proto->TopMpart;
+    entryAdr = (long*)((Item *) &comp->Body)->Proto->TopMpart;
 
 #ifdef RTVALHALLA
     if (valhallaIsStepping) {
@@ -125,7 +125,7 @@ ParamThisComp(struct Component *, Att)
     ActiveCallBackFrame = callBackFrame;
     /* Fool gcc into believing that %i1 is used */
     __asm__(""::"r" (tmp));
-    lastCompBlock = cast(ComponentBlock) nextCompBlock;
+    lastCompBlock = (ComponentBlock *) nextCompBlock;
     /* Fool gcc into believing that %i1 is used */
     __asm__(""::"r" (tmp));
     setret(ActiveComponent->CallerLSC);
@@ -153,9 +153,9 @@ ParamThisComp(struct Component *, Att)
   {
     long delta;
     char *dest;
-    ref(StackObject) theStackObj = ActiveComponent->StackObj;
+    StackObject * theStackObj = ActiveComponent->StackObj;
     long size = theStackObj->StackSize * 4 - 4;
-    ref(RegWin) rw;
+    struct RegWin * rw;
     
     /* Fool gcc into believing that %i1 is used */
     __asm__(""::"r" (tmp));
@@ -166,18 +166,18 @@ ParamThisComp(struct Component *, Att)
     
     /* Now correct all frame pointers in the restored stackpart */
     delta = dest - (char *)theStackObj->Body[0];
-    rw = cast(RegWin) dest;
+    rw = (struct RegWin *) dest;
     while ((long *)rw < FramePointer) {
       if ((rw->fp += delta) == (long)FramePointer) {
 	goto ok;
       }
-      rw = cast(RegWin) rw->fp;
+      rw = (struct RegWin *) rw->fp;
     }
 #ifdef RTDEBUG
     fprintf(stderr, "Upps, stack handling gone crazy\n");
 #endif
   ok:
-    lastCompBlock = cast(ComponentBlock) rw;
+    lastCompBlock = (ComponentBlock *) rw;
     /* Fool gcc into believing that %i1 is used */
     __asm__(""::"r" (tmp));
     /* Update ComponentBlock in the restored RegWin */

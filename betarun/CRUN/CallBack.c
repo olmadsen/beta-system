@@ -30,7 +30,7 @@ asmlabel(CopyCPP,
 	 "mov	%i0, %o1; "
 	 );
 
-void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
+void *CCopyCPP(Structure * theStruct, Object * theObj)
 {
     DEBUG_CODE(NumCopyCPP++);
 
@@ -74,12 +74,12 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
     register long		 g1	       __asm__("%g1");
 
     /* A CallBackFrame: */
-    register ref(CallBackFrame)  next	       __asm__("%l5");
+    register CallBackFrame *  next	       __asm__("%l5");
     register long              * betaTop       __asm__("%l6");
     register long                tmp           __asm__("%l7");
     
-    ref(Item) 		         theObj;
-    ref(CallBackEntry) cb;
+    Item * 		         theObj;
+    CallBackEntry * cb;
     long retval;
     long (*cbr)();
 
@@ -90,7 +90,7 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
        ADDRESS, AND WE NEED TO RESTORE THIS VALUE BEFORE ANYTHING HAPPENS
        TO IT. (%g1 is not generally safe to use, but ok here. (I hope :^) */
 
-    cb = cast(CallBackEntry)
+    cb = (CallBackEntry *)
       ((char *) retAddress - ((char *)&cb->call_HandleCallBack - (char *)cb));
     retAddress = g1;
 
@@ -100,7 +100,7 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
     next    = ActiveCallBackFrame;
     betaTop = BetaStackTop;
     tmp     = 0;
-    ActiveCallBackFrame = cast(CallBackFrame) StackPointer;
+    ActiveCallBackFrame = (CallBackFrame *) StackPointer;
 
     theObj = SPARC_AlloI(cb->theStruct->iOrigin, 0, cb->theStruct->iProto, 0, 0);
 
@@ -157,12 +157,12 @@ static __inline__ unsigned long bletch(unsigned long x)
 
 #include <sys/cache.h>
 
-void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
+void *CopyCPP(Structure * theStruct, Object * theObj)
 {   register unsigned long hcb /* , savedSR0 */;
 
     if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
 
-    theObj = cast(Object) getThisReg();
+    theObj = (Object *) getThisReg();
 
     Ck(theObj);
     if (CBFATop+1 > CBFALimit) CBFArelloc();
@@ -263,10 +263,10 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 
 long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
 {
-    struct CallBackFrame        cbf;
-    ref(Structure)              theStruct;
+    CallBackFrame        cbf;
+    Structure *              theStruct;
     long                         retval;
-    DeclReference1(struct Item *, theObj);
+    DeclReference1(Item *, theObj);
 
     /* First things first, get a grib on the struct pointer */
     __asm__ volatile ("LDW 0(%%r28),%0" : "=r" (theStruct));

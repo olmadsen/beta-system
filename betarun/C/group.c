@@ -22,7 +22,7 @@
 /*
  *  The structure is:
  *                      _______          __________ 
- *    BETA_DATA1_ADDR: |_______|<==---->|data_start|(group_header)
+ *          BETA_DATA: |_______|<==---->|data_start|(group_header)
  *                     |_______|   \	|protoTable|
  *                     |  ...  |    |	| data_end |
  *                     |  ...  |    |	|code_start|
@@ -44,6 +44,8 @@
  *                                   |___0___| (last block double NULL term)
  */
 
+extern group_header *BETA_DATA; /* Defined in BETA */
+
 /************** NEXTGROUP ******************/
 
 /* NextGroup is used by objectserver/persistent store to scan through the
@@ -63,7 +65,7 @@ group_header* NextGroup (group_header* current)
     ptr = current->ptr+1;
   } else {
     /* Start from betaenv */
-    ptr = BETA_DATA1_ADDR;
+    ptr = &BETA_DATA;
   }
   TRACE_GROUP(fprintf (output, "NextGroup: ptr=0x%x\n", (long)ptr));
   if (!ptr) {
@@ -106,11 +108,11 @@ static group_header **NewGroupList(void)
 
 void AddGroup(group_header *new_group)
 {
-  static group_header **LastGroup = BETA_DATA1_ADDR;
+  static group_header **LastGroup = &BETA_DATA;
   static int LastGroupInx;
   group_header **list;
 
-  if (LastGroup == BETA_DATA1_ADDR){
+  if (LastGroup == &BETA_DATA){
     /* There is never room for more in BETA_DATA */
     /* Find last position in BETA_DATA */
     while (LastGroup[LastGroupInx]) LastGroupInx++;
@@ -278,7 +280,7 @@ char *GroupName(long address, int isCode)
  * Declared as *function* because objectserver uses it.
  * Not used internally in RTS - here we use NameOfGroupMacro.
  */
-char *NameOfGroup(struct group_header *group)
+char *NameOfGroup(group_header *group)
 {
   return NameOfGroupMacro(group);
 }

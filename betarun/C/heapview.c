@@ -3,8 +3,8 @@
 void PrintHeapUsage(char *prompt)
 {
   long aoasize, aoablocks, cbfasize, cbfablocks;
-  struct CallBackArea *cbfa;
-  struct Block        *aoa;
+  CallBackArea *cbfa;
+  Block        *aoa;
 
   fprintf(output, "Heap usage %s:\n", prompt);
   fprintf(output, 

@@ -14,37 +14,33 @@
 #include <errno.h>
 #endif
 
-#define inBlock( theB, addr) (((BlockStart( theB)) <= (ptr(long)) addr) \
-                              && ((ptr(long)) addr < theB->limit) )
-#define inBlockUnused( theB, addr) ((theB->top <= (ptr(long)) addr) \
-                              && ((ptr(long)) addr < theB->limit) )
+#define inBlock( theB, addr) (((BlockStart( theB)) <= (long *) addr) \
+                              && ((long *) addr < theB->limit) )
+#define inBlockUnused( theB, addr) ((theB->top <= (long *) addr) \
+                              && ((long *) addr < theB->limit) )
 
-ref(Block) newBlock( size )
-  long size;
+Block * newBlock(long size)
 {
-  ref(Block) theBlock;
+  Block * theBlock;
 
-  theBlock = (ref(Block)) MALLOC( sizeof(struct Block) + size );
-  INFO_ALLOC(sizeof(struct Block) + size);
+  theBlock = (Block *) MALLOC( sizeof(Block) + size );
+  INFO_ALLOC(sizeof(Block) + size);
   
   
   if( theBlock != 0 ){
     theBlock->next  = 0;
     theBlock->top   = BlockStart( theBlock );
-    theBlock->limit = (ptr(long)) ((long) BlockStart( theBlock) + (long) size);
+    theBlock->limit = (long *) ((long) BlockStart( theBlock) + (long) size);
   }
   return theBlock;
 }
 
-void freeBlock(theBlock)
-     ref(Block) theBlock;
+void freeBlock(Block * theBlock)
 {
   FREE(theBlock);
 }
 
-long inArea( theBlock, theObj )
-  ref(Block)  theBlock;
-  ref(Object) theObj;
+long inArea(Block *  theBlock, Object * theObj)
 {
     while( theBlock != 0 ){
         
@@ -160,9 +156,9 @@ void InsertGuardPage(void)
   mmapHeapTop = (char*)mmapHeapTop + MMAPPageSize;
 }
 
-ref(Block) reserveBlock(long numbytes)
+Block * reserveBlock(long numbytes)
 {
-  ref(Block) theBlock;
+  Block * theBlock;
   INFO(fprintf(output, "(#reserveBlock(%08X))", (int)numbytes));
   Claim((long)mmapHeap, "reserveBlock: mmapHeap=0");
   Claim((long)mmapHeapTop, "reserveBlock: mmapHeapTop=0");
@@ -209,7 +205,7 @@ ref(Block) reserveBlock(long numbytes)
   return theBlock;
 }
 
-int extendBlock(ref(Block) theBlock, long numbytes)
+int extendBlock(Block * theBlock, long numbytes)
 {
   int newnumbytes;
   Claim((long)mmapHeap, "extendBlock with mmapHeap=0");
@@ -246,16 +242,16 @@ int extendBlock(ref(Block) theBlock, long numbytes)
 #endif /* nti  */
 #endif /* unix */
 
-  theBlock->limit = (ptr(long))((char*)theBlock + newnumbytes);
+  theBlock->limit = (long *)((char*)theBlock + newnumbytes);
   INFO(fprintf(output, "Block at %08X-%08X)", 
 	       (int)theBlock, (int)theBlock->limit));
 
   return 0;  
 }
 
-ref(Block) AllocateBlock(long numbytes)
+Block * AllocateBlock(long numbytes)
 {
-  ref(Block) blk;
+  Block * blk;
   long size = (numbytes+sizeof(Block)+MMAPPageSize-1) & ~(MMAPPageSize-1);
   blk = reserveBlock(size);
   if (!blk)
@@ -267,9 +263,7 @@ ref(Block) AllocateBlock(long numbytes)
 #endif /* USEMMAP */
 
 #ifdef RTDEBUG
-long inAreaUnused( theBlock, theObj )
-  ref(Block)  theBlock;
-  ref(Object) theObj;
+long inAreaUnused(Block *  theBlock, Object * theObj)
 {
   while( theBlock != 0 ){
     if( inBlockUnused( theBlock, theObj) ) return TRUE;

@@ -22,7 +22,7 @@ asmlabel(MkTO,
 	 "ba "CPREF"MkTO;"
          "clr %o4;"
 );	
-void CMkTO(ref(Item) theItem,
+void CMkTO(Item * theItem,
 	   int i1,
 	   unsigned offset, /* i ints */
 	   int i3,
@@ -32,14 +32,14 @@ void CMkTO(ref(Item) theItem,
 
 #ifdef hppa
 void MkTO(char *asciz,
-	  ref(Item) theItem,
+	  Item * theItem,
 	  unsigned offset /* i ints */ )
 #endif /* hppa */
 
 {
-    struct TextObject* theText=0;
+    TextObject* theText=0;
     unsigned long range, i, repsize, size, isInAOA;
-    struct ValRep *theRep=0;
+    ValRep *theRep=0;
     GCable_Entry();
 
     DEBUG_CODE(NumMkTO++);
@@ -49,10 +49,10 @@ void MkTO(char *asciz,
     repsize = ByteRepSize(range);
 
     if (range > LARGE_REP_SIZE) {
-      theRep = (struct ValRep *)LVRAAlloc(ByteRepPTValue, range);
+      theRep = (ValRep *)LVRAAlloc(ByteRepPTValue, range);
       /* theRep is now allocated, and the header of it is initialized */
 
-      *(struct ValRep **)((long *)theItem + offset) = theRep;
+      *(ValRep **)((long *)theItem + offset) = theRep;
 
       /* Allocate only theText in IOA */
       size = ItemSize(TextProto);
@@ -65,14 +65,14 @@ void MkTO(char *asciz,
     SaveVar(theItem);
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "MkTO allocates in AOA\n"));
-      theText=(struct TextObject*)AOAcalloc(size);
+      theText=(TextObject*)AOAcalloc(size);
       DEBUG_AOA(if (!theText) fprintf(output, "AOAcalloc failed\n"));
     }
     if (theText) {
       isInAOA=1;
     } else {
       isInAOA=0;
-      theText=(struct TextObject*)IOAalloc(size);
+      theText=(TextObject*)IOAalloc(size);
       if (IOAMinAge!=0) {
           theText->GCAttr = IOAMinAge;
       }
@@ -83,15 +83,15 @@ void MkTO(char *asciz,
     /* No need to call setup_item - no inlined partobjects in Text */
     theText->Proto = TextProto;
     /* theText->GCAttr set above if in IOA */
-    theText->Origin = (struct Object *)BasicItem;   
+    theText->Origin = (Object *)BasicItem;   
 
     /* No need to call Gpart - the repetition will be overwritten anyway */
 
-    AssignReference((long *)theItem + offset, (struct Item *)theText);
+    AssignReference((long *)theItem + offset, (Item *)theText);
       
     if (!theRep) {
       /* An uninitialized value repetition is at the end of theText */
-      theRep = (struct ValRep *)((long)theText+ItemSize(TextProto));
+      theRep = (ValRep *)((long)theText+ItemSize(TextProto));
       theRep->Proto = ByteRepPTValue;
       if (!isInAOA) theRep->GCAttr = IOAMinAge;
       theRep->LowBorder = 1;

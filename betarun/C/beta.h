@@ -10,8 +10,6 @@
 
 #include <stdio.h>
 
-extern struct group_header *BETA_DATA; /* Defined in BETA */
-
 #if defined (MAC)
 # include <Resources.h>
 # include <Memory.h>

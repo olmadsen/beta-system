@@ -21,9 +21,9 @@
  **********************/
 
 static int
-isPrefix(ref(ProtoType) fst, ref(ProtoType) snd)
+isPrefix(ProtoType * fst, ProtoType * snd)
 {
-  ref(ProtoType) tmp=snd;
+  ProtoType * tmp=snd;
 
   if ((long)fst > 0 && (long)snd > 0) {
 
@@ -46,11 +46,11 @@ isPrefix(ref(ProtoType) fst, ref(ProtoType) snd)
 
 static void
 printMessage(FILE *fp,
-	     ref(Object) theObj,
+	     Object * theObj,
 	     int printOrigin,
 	     int printSize)
 {
-  ref(ProtoType) proto=theObj->Proto;
+  ProtoType * proto=theObj->Proto;
   char *name;
 
   if ((long)proto < 0)
@@ -82,7 +82,7 @@ printMessage(FILE *fp,
     if (printOrigin) {
       fprintf(fp," ");
       printMessage(fp,
-		   cast(Object)(((long*)theObj)[theObj->Proto->OriginOff]),
+		   (Object *)(((long*)theObj)[theObj->Proto->OriginOff]),
 		   0,	/* don't print origins recursively */
 		   0);	/* don't print size of origin */
     }
@@ -95,7 +95,7 @@ printMessage(FILE *fp,
 
 
 static void
-noise_cb(ref(Object) theObj, int printOrigin, int printSize)
+noise_cb(Object * theObj, int printOrigin, int printSize)
 {
   fprintf(MSG_DEST,"{scan} ");
   printMessage(MSG_DEST,theObj,printOrigin,printSize);
@@ -106,15 +106,15 @@ noise_cb(ref(Object) theObj, int printOrigin, int printSize)
 static void
 scanAOAliveObjects(int printVisited, int printOrigin, int printSize,
 		   int docallback,
-		   ref(ProtoType) rootProto,
-		   void (*cb)(ref(Object)))
+		   ProtoType * rootProto,
+		   void (*cb)(Object *))
 {
-  ref(Block) theBlock;
-  ref(Object) theObj;
+  Block * theBlock;
+  Object * theObj;
   long objSize;
-  ref(Block) savedLastBlock;
-  ptr(long) savedLastTop;
-  ptr(long) currentTop;
+  Block * savedLastBlock;
+  long * savedLastTop;
+  long * currentTop;
   long SavedNumAOAGc = NumAOAGc;
 
   /* If no AOA yet, stop */
@@ -137,8 +137,8 @@ scanAOAliveObjects(int printVisited, int printOrigin, int printSize,
       currentTop=theBlock->top;
     }
 
-    theObj = (ref(Object)) BlockStart(theBlock);
-    while ((ptr(long)) theObj < currentTop) {
+    theObj = (Object *) BlockStart(theBlock);
+    while ((long *) theObj < currentTop) {
 
       /* Check for AOA-GC */
       if (SavedNumAOAGc != NumAOAGc) {
@@ -166,7 +166,7 @@ scanAOAliveObjects(int printVisited, int printOrigin, int printSize,
 
       /* Go to next object */
       objSize = 4*ObjectSize(theObj);
-      theObj = (ref(Object)) ((long) theObj + objSize);
+      theObj = (Object *) ((long) theObj + objSize);
     }
 
     if (theBlock==savedLastBlock) {
@@ -184,10 +184,10 @@ scanIOAliveObjects(int printVisited,
 		   int printOrigin,
 		   int printSize,
 		   int docallback,
-		   ref(ProtoType) rootProto,
-		   void (*cb)(ref(Object)))
+		   ProtoType * rootProto,
+		   void (*cb)(Object *))
 {
-  ref(Object) theObj = (ref(Object))IOA;
+  Object * theObj = (Object *)IOA;
   long objSize;
   long SavedNumIOAGc = NumIOAGc;
 
@@ -222,7 +222,7 @@ scanIOAliveObjects(int printVisited,
 
     /* Go to next object */
     objSize = 4*ObjectSize(theObj);
-    theObj = (ref(Object)) ((long)theObj + objSize);
+    theObj = (Object *) ((long)theObj + objSize);
   }
 }
 
@@ -239,8 +239,8 @@ scanIOAliveObjects(int printVisited,
 void
 lowScanIOA(long printVisited, long printOrigin, long printSize,
 	   long docallback,
-	   ref(ProtoType) rootProto,
-	   void (*cb)(ref(Object)))
+	   ProtoType * rootProto,
+	   void (*cb)(Object *))
 {
   scanIOAliveObjects(printVisited,
 		     printOrigin,
@@ -254,8 +254,8 @@ lowScanIOA(long printVisited, long printOrigin, long printSize,
 void
 lowScanAOA(long printVisited, long printOrigin, long printSize,
 	   long docallback,
-	   ref(ProtoType) rootProto,
-	   void (*cb)(ref(Object)))
+	   ProtoType * rootProto,
+	   void (*cb)(Object *))
 {
   scanAOAliveObjects(printVisited,
 		     printOrigin,
@@ -267,14 +267,14 @@ lowScanAOA(long printVisited, long printOrigin, long printSize,
 
 
 #define DEBUG_SCANREF 0
-void scanIOAliveForRef(ref(Object) target,
+void scanIOAliveForRef(Object * target,
 		  int printName,
-		  void (*cb)(ref(Object)))
+		  void (*cb)(Object *))
 {
-  ref(Object) theObj = (ref(Object))IOA;
+  Object * theObj = (Object *)IOA;
   long objSize;
   long SavedNumIOAGc = NumIOAGc;
-  struct GCEntry *gce;
+  GCEntry *gce;
   short *dynoffptr;
   long reftype;
   long* refptr;
@@ -300,7 +300,7 @@ void scanIOAliveForRef(ref(Object) target,
 	      (long)theObj, ProtoTypeName(theObj->Proto));
 #endif
       /* Real object: Scan refs or target */
-      gce = (struct GCEntry*)((long)theObj->Proto + theObj->Proto->GCTabOff);
+      gce = (GCEntry*)((long)theObj->Proto + theObj->Proto->GCTabOff);
       while (gce->StaticOff) {
 	/* Check static refs here. */
 #if DEBUG_SCANREF
@@ -344,7 +344,7 @@ void scanIOAliveForRef(ref(Object) target,
 #if DEBUG_SCANREF
 	fprintf(output, "ScanRefs:Component, skipping header\n");
 #endif
-	theObj = (struct Object*)ComponentItem(theObj);
+	theObj = (Object*)ComponentItem(theObj);
 	continue;
       default:
 	;
@@ -357,7 +357,7 @@ void scanIOAliveForRef(ref(Object) target,
     
     /* Go to next object */
     objSize = 4*ObjectSize(theObj);
-    theObj = (ref(Object)) ((long)theObj + objSize);
+    theObj = (Object *) ((long)theObj + objSize);
   }
 }
 

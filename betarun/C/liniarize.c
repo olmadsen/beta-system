@@ -14,13 +14,13 @@
  * moved.
  */
 
-static ptr(Object) head;   /* Head of list build by collectList */
-static ptr(Object) tail;   /* Tail of list build by collectList */
+static Object * head;   /* Head of list build by collectList */
+static Object * tail;   /* Tail of list build by collectList */
 static long totalsize;
 
 #ifndef KEEP_STACKOBJ_IN_IOA
 static void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
-void StackRefActionWrapper(struct Object **theCell,struct Object *theObj)
+void StackRefActionWrapper(Object **theCell,Object *theObj)
 {
   if (theObj
       && inBetaHeap(theObj)
@@ -30,13 +30,13 @@ void StackRefActionWrapper(struct Object **theCell,struct Object *theObj)
 }
 #endif /* KEEP_STACKOBJ_IN_IOA */
 
-ref (Object) getRealObject(ref (Object) obj)
+Object * getRealObject(Object * obj)
 {
     long Distance;
-    ref(Object) AutObj;
+    Object * AutObj;
     if (obj -> GCAttr < 0) {
         GetDistanceToEnclosingObject(obj, Distance);
-        AutObj = (ref(Object)) Offset(obj, Distance);
+        AutObj = (Object *) Offset(obj, Distance);
         return AutObj;
     } else {
         return obj;
@@ -165,10 +165,10 @@ void appendToListInAOA(REFERENCEACTIONARGSTYPE)
     }
 }
 
-void initialCollectList(ptr(Object) root,
+void initialCollectList(Object * root,
                         void referenceAction(REFERENCEACTIONARGSTYPE))
 {
-    ptr(Object) theObj;
+    Object * theObj;
 
     /* If root is a pointer to a staticly inlined part object, then
      * 'getRealObject' will return the enclosing object.
@@ -212,16 +212,16 @@ void initialCollectList(ptr(Object) root,
     /* There are no objects in the list yet. */
     totalsize = 0;
     
-    for (theObj = root; !isEnd((long)theObj); theObj=(struct Object*)(theObj->GCAttr)) {
+    for (theObj = root; !isEnd((long)theObj); theObj=(Object*)(theObj->GCAttr)) {
         scanObject(theObj, referenceAction, TRUE);
     }
     /* set_end_time("initialCollectList"); */
 }
 
-void extendCollectList(ptr(Object) root,
+void extendCollectList(Object * root,
                        void referenceAction(REFERENCEACTIONARGSTYPE))
 {
-    ptr(Object) theObj;
+    Object * theObj;
 
     /* set_start_time("extendCollectList"); */
     
@@ -239,7 +239,7 @@ void extendCollectList(ptr(Object) root,
      * there.
      */
     
-    for (theObj = tail; !isEnd((long)theObj); theObj=(struct Object*)(theObj->GCAttr)) {
+    for (theObj = tail; !isEnd((long)theObj); theObj=(Object*)(theObj->GCAttr)) {
         /* if root has not been appended to the list, then we scan
          * tail again, which must have been scanned previously. This
          * should not matter as no new objects will be appended since
@@ -251,30 +251,30 @@ void extendCollectList(ptr(Object) root,
     /* set_end_time("extendCollectList"); */
 }
 
-void scanList(ref (Object) root, void (foreach)(ref (Object) current))
+void scanList(Object * root, void (foreach)(Object * current))
 {
-    ref (Object) cur;
-    ref (Object) next;
+    Object * cur;
+    Object * next;
     
     cur = root;
     while (!isEnd((long)cur)) {
-        next = (ref(Object))(cur->GCAttr);
+        next = (Object *)(cur->GCAttr);
         foreach(cur);
 	cur = next;
     }
 }
 
-void scanObject(struct Object *obj,
+void scanObject(Object *obj,
                        void referenceAction(REFERENCEACTIONARGSTYPE),
                        int doPartObjects)
 {
-    ptr (ProtoType) theProto;
+    ProtoType * theProto;
     
     theProto = obj->Proto;
     if (!isSpecialProtoType(theProto)) {
-        struct GCEntry *tab =
-            (struct GCEntry *) ((char *) theProto + theProto->GCTabOff);
-        ptr(short) refs_ofs;
+        GCEntry *tab =
+            (GCEntry *) ((char *) theProto + theProto->GCTabOff);
+        short * refs_ofs;
         
         /* Handle all the static objects. 
          *
@@ -287,7 +287,7 @@ void scanObject(struct Object *obj,
         
         if (doPartObjects) {
             for (;tab->StaticOff; ++tab) {
-                scanObject((ref(Object))((long *)obj + tab->StaticOff),
+                scanObject((Object *)((long *)obj + tab->StaticOff),
                            referenceAction, FALSE);
             }
         }
@@ -307,7 +307,7 @@ void scanObject(struct Object *obj,
              * always multiples of 4, these bits may be used to distinguish
              * different reference types. */ 
             if (*pointer) {
-                referenceAction((struct Object **)pointer);
+                referenceAction((Object **)pointer);
             }
         }
     } else {
@@ -345,8 +345,8 @@ void scanObject(struct Object *obj,
               long *pointer;
               long offset, offsetTop;
               
-              offset =  (char*)(&toRefRep(obj)->Body[0]) - (char*)obj;
-              offsetTop = offset + 4 * toRefRep(obj)->HighBorder;
+              offset =  (char*)(&((RefRep*)(obj))->Body[0]) - (char*)obj;
+              offsetTop = offset + 4 * ((RefRep*)(obj))->HighBorder;
               
               while (offset < offsetTop) {
                   pointer = (long *)((long)obj + offset);
@@ -360,9 +360,9 @@ void scanObject(struct Object *obj,
           
           case SwitchProto(ComponentPTValue):
           {
-              ref(Component) theComponent;
+              Component * theComponent;
               
-              theComponent = Coerce( obj, Component);
+              theComponent = ((Component*)obj);
 #if (defined(CRUN) || defined(RUN) || defined(NEWRUN))
               if ((theComponent->StackObj) &&
                   (long)(theComponent->StackObj) != -1) {
@@ -377,7 +377,7 @@ void scanObject(struct Object *obj,
               if (theComponent->CallerObj) {
                   referenceAction(&(theComponent->CallerObj));
               }
-              scanObject((struct Object *)ComponentItem( theComponent),
+              scanObject((Object *)ComponentItem( theComponent),
                          referenceAction, TRUE);
               break;
           }
@@ -393,16 +393,16 @@ void scanObject(struct Object *obj,
 	    /* Illegal(); */
 #else
 	   StackRefAction = referenceAction;
-	   ProcessStackObj((struct StackObject *)obj, StackRefActionWrapper);
+	   ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
 #endif
 	    break;
               
           case SwitchProto(StructurePTValue):
-              referenceAction(&((toStructure(obj))->iOrigin));
+              referenceAction(&(((Structure*)(obj))->iOrigin));
               break;
               
           case SwitchProto(DopartObjectPTValue):
-              referenceAction(&((cast(DopartObject)(obj))->Origin));
+              referenceAction(&(((DopartObject *)(obj))->Origin));
               break;
         }
     } 

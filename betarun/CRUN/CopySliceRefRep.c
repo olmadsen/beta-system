@@ -15,7 +15,7 @@ register long _dummy9 __asm__("%r16"); /* really tmp data 2 */
 
 ParamRepObjOffLowHigh(CopySRR)
 {
-    DeclReference1(struct RefRep *, newRep);
+    DeclReference1(RefRep *, newRep);
     register long range;
     register long i;
     
@@ -33,9 +33,9 @@ ParamRepObjOffLowHigh(CopySRR)
     
     /* Check that low and high usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, cast(Object)theObj);
+      BetaError(RepLowRangeErr, (Object *)theObj);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-      BetaError(RepHighRangeErr, cast(Object)theObj);
+      BetaError(RepHighRangeErr, (Object *)theObj);
     
     /* Calculate the range of the new repetition. */
     range = high - low + 1;
@@ -43,7 +43,7 @@ ParamRepObjOffLowHigh(CopySRR)
     
     /* range is now converted to the range of the resulting repetition. */
     
-    Protect2(theObj, theRep, newRep = cast(RefRep) IOAalloc(RefRepSize(range)));
+    Protect2(theObj, theRep, newRep = (RefRep *) IOAalloc(RefRepSize(range)));
     
     /* The new Object is now allocated, but not assigned yet! */
     
@@ -58,7 +58,7 @@ ParamRepObjOffLowHigh(CopySRR)
     for (i = 0; i < range; ++i)
       newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder]; /* AssignReference? */
     
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
 
     Ck(newRep); Ck(theRep); Ck(theObj);
 

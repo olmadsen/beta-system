@@ -11,17 +11,17 @@
 #ifndef MT
 
 ParamThisComp(void, AttBC)
-/* = void AttBC(struct Object *this, struct Component *comp) */
+/* = void AttBC(Object *this, Component *comp) */
 {
 #ifdef sparc
-    register ref(CallBackFrame) callBackFrame __asm__("%l5");
-    register ref(RegWin)	nextCompBlock __asm__("%l6");
+    register CallBackFrame * callBackFrame __asm__("%l5");
+    register struct RegWin *	nextCompBlock __asm__("%l6");
     register long 		level 	      __asm__("%l7");
 #endif
 
 #ifdef hppa
     long dummy; /* don't move without changing SnakeAdditions.S */
-    struct ComponentBlock  cb
+    ComponentBlock  cb
 	/* Used to hold value of lastCompBlock at time of Attach.
 	 * This value is used by Susp to find out which parts of
 	 * machine stack and ref-stack to pack.
@@ -42,14 +42,14 @@ ParamThisComp(void, AttBC)
     __asm__ volatile ("clr %0": "=r" (nextCompBlock));
     __asm__ volatile ("clr %0": "=r" (level));
 
-    lastCompBlock = cast(ComponentBlock) StackPointer;
+    lastCompBlock = (ComponentBlock *) StackPointer;
     StackStart = (long)StackPointer;
     
     getret(comp->CallerLSC);
 #endif
 #ifdef hppa
-    cb.callBackFrame = cast(CallBackFrame) 0;
-    cb.next = cast(ComponentBlock) 0;
+    cb.callBackFrame = (CallBackFrame *) 0;
+    cb.next = (ComponentBlock *) 0;
     cb.level = 0;
     cb.RefBlock = (void *)/*getRefSP()*/RefSP;
     StackStart = (long)RefSP;
@@ -57,7 +57,7 @@ ParamThisComp(void, AttBC)
     comp->CallerLSC = 1;
 #endif
 
-    BasicItem = cast(Item) &comp->Body;
+    BasicItem = (Item *) &comp->Body;
 
     /* ActiveCallBackFrame = 0; */
     ActiveComponent = comp;

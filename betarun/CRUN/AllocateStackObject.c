@@ -20,18 +20,18 @@ asmlabel(AlloSO,
 	 "ba  "CPREF"AlloSO;"   \
 	 "clr %o4;"        \
 	 );
-ref(StackObject) CAlloSO(int i0, int i1, unsigned size)
+StackObject * CAlloSO(int i0, int i1, unsigned size)
 #else
-ref(StackObject) AlloSO(unsigned size)
+StackObject * AlloSO(unsigned size)
 #endif
 {
-    DeclReference1(struct StackObject *, theStack);
+    DeclReference1(StackObject *, theStack);
 
     GCable_Entry();
 
     DEBUG_CODE(NumAlloSO++);
 
-    theStack = cast(StackObject) IOAalloc(StackObjectSize(size));
+    theStack = (StackObject *) IOAalloc(StackObjectSize(size));
 
     theStack->Proto = StackObjectPTValue;
     if (IOAMinAge!=0) theStack->GCAttr = IOAMinAge;

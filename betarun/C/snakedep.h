@@ -105,8 +105,8 @@ static __inline__ void *popReg()
   return r;
 }
 
-extern ref(Component) ActiveComponent;
-extern ref(CallBackFrame) ActiveCallBackFrame;
+extern Component * ActiveComponent;
+extern CallBackFrame * ActiveCallBackFrame;
 
 static __inline__ long *getThisReg()
 {     
@@ -335,48 +335,48 @@ static __inline__ long getRPReg()
 
 /* AlloC, AlloI, AlloH, AlloS */
 #define ParamOriginProto(type, name)		        \
-  type name(struct Object *origin,                      \
-	    struct ProtoType *proto)
+  type name(Object *origin,                      \
+	    ProtoType *proto)
 #define FetchOriginProto()				\
   /* origin is in correct register */                   \
-  proto  = (struct ProtoType *)getCallReg()
+  proto  = (ProtoType *)getCallReg()
 
 
 /* Att, AttBC, HandleIndexErr */
 #define ParamThisComp(type, name)			\
- type name(struct Object *this, struct Component *comp)
+ type name(Object *this, Component *comp)
 #define FetchThisComp()			                \
-  this = (struct Object *)getThisReg();	                \
-  comp = (struct Component *)getCallReg()
+  this = (Object *)getThisReg();	                \
+  comp = (Component *)getCallReg()
 
 
 /* Susp */
 #define ParamThis(type, name)                         	\
- type name(struct Object *this)
+ type name(Object *this)
 #define FetchThis()					\
-  this = (struct Object *) getThisReg();                \
+  this = (Object *) getThisReg();                \
 
 
 /* AlloSI, AlloSC */
 #define ParamStruc(type, name)				\
- type name(struct Structure *struc)
+ type name(Structure *struc)
 #define FetchStruc()                                    \
-  struc = cast(Structure) getCallReg();
+  struc = (Structure *) getCallReg();
 
 
 /* AlloRR, AlloVR1, AlloVR2, AlloVR4, AlloVR8 */
 #define ParamThisOffRange(name)		        	\
  void name(unsigned offset, /* in bytes */		\
 	   /*unsigned*/ int range,                      \
-	   struct Object *theObj)
+	   Object *theObj)
 #define FetchThisOffRange()				\
   /* offset and range are in correct registers */       \
-  theObj = (struct Object *) getThisReg();              \
+  theObj = (Object *) getThisReg();              \
 
 
 /* ExtRR, ExtVRx, NewRR, NewVRx */
 #define ParamObjOffRange(name)			        \
- void name(struct Object *theObj,			\
+ void name(Object *theObj,			\
 	   unsigned offset, /* in bytes */              \
 	   /*unsigned*/ int range)
 #define FetchObjOffRange()				\
@@ -385,8 +385,8 @@ static __inline__ long getRPReg()
 
 /* CopyRR, CopyVR1, CopyVR2, CopyVR4, CopyVR8 */
 #define ParamRepObjOff(name)                            \
-void name(struct ValRep *theRep,                        \
-	  struct Object *theObj,                        \
+void name(ValRep *theRep,                        \
+	  Object *theObj,                        \
 	  unsigned offset /* in ints */)
 #define FetchRepObjOff()				\
   /* all are in correct registers */
@@ -394,8 +394,8 @@ void name(struct ValRep *theRep,                        \
 
 /* CopySVRI, CopySVRC, CopyVRI, CopyVRC */
 #define ParamORepObjOff(name)                           \
-void name(struct ObjectRep *theRep,                     \
-	  struct Object *theObj,                        \
+void name(ObjectRep *theRep,                     \
+	  Object *theObj,                        \
 	  unsigned offset /* in ints */)
 #define FetchORepObjOff()				\
   /* all are in correct registers */
@@ -403,8 +403,8 @@ void name(struct ObjectRep *theRep,                     \
 
 /* CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
 #define ParamRepObjOffLowHigh(name)                     \
-void name(struct ValRep *theRep,                        \
-	  struct Object *theObj,                        \
+void name(ValRep *theRep,                        \
+	  Object *theObj,                        \
 	  unsigned offset, /* in ints */                \
 	  unsigned low,                                 \
 	  long high)
@@ -415,8 +415,8 @@ void name(struct ValRep *theRep,                        \
 
 /* CopySVRI, CopySVRC CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
 #define ParamORepObjOffLowHigh(name)                    \
-void name(struct ObjectRep *theRep,                     \
-	  struct Object *theObj,                        \
+void name(ObjectRep *theRep,                     \
+	  Object *theObj,                        \
 	  unsigned offset, /* in ints */                \
 	  unsigned low,                                 \
 	  long high)
@@ -427,24 +427,24 @@ void name(struct ObjectRep *theRep,                     \
 
 /* AlloVRI, AlloVRC */
 #define ParamObjOriginProtoOffRange(name)		\
- void name(struct Object *origin,			\
-	   struct Object *theObj,	                \
+ void name(Object *origin,			\
+	   Object *theObj,	                \
 	   unsigned offset, /* in bytes */		\
 	   int range,			                \
-	   struct ProtoType *proto)
+	   ProtoType *proto)
 #define FetchObjOriginProtoOffRange()			\
   /* origin is in correct register */                   \
-  theObj = (struct Object *) getThisReg();              \
+  theObj = (Object *) getThisReg();              \
   /* offset and range are in correct registers */       \
-  proto  = (struct ProtoType *) getCallReg()
+  proto  = (ProtoType *) getCallReg()
 
 
 /* AlloDO */
 #define ParamOriginSize(type, name)	                \
-type name(unsigned size, struct Object *origin)         
+type name(unsigned size, Object *origin)         
 #define FetchOriginSize()			        \
   /* size is in correct register */                     \
-  origin = (struct Object *) getThisReg();              \
+  origin = (Object *) getThisReg();              \
 
 
 /* CopyCT */
@@ -456,7 +456,7 @@ type name(unsigned size, struct Object *origin)
 
 #define ParamItemAscii(type, name)                      \
 type name(char *ascii,                                  \
-	  ref(Item) theItem,                            \
+	  Item * theItem,                            \
 	  unsigned offset /* i ints */)
 
 #define FetchItemAscii()                                \
@@ -464,53 +464,53 @@ type name(char *ascii,                                  \
 
 /* Qua */
 #define ParamProtoCellOriginThis(name)                  \
-void name(ref(ProtoType) dstQuaProto,                   \
-	 struct Object **theCell,                       \
-	 ref(Object) dstQuaOrigin,                      \
-	 ref(Object) this) 
+void name(ProtoType * dstQuaProto,                   \
+	 Object **theCell,                       \
+	 Object * dstQuaOrigin,                      \
+	 Object * this) 
 
 #define FetchParamProtoCellOriginThis()                 \
-  this = cast(Object)getThisReg();                      \
-  dstQuaProto = cast(ProtoType)getCallReg();
+  this = (Object *)getThisReg();                      \
+  dstQuaProto = (ProtoType *)getCallReg();
 
 /* Wrappers for functions called directly from RTS */
-extern struct Component *AlloC();
-extern struct Item *AlloI();
-extern struct Item *AlloSI();
-extern void   AlloRR(unsigned offset, int range, struct Object *theObj);
-extern void   AlloVR1(unsigned offset, int range, struct Object *theObj);
-extern void   AlloVR2(unsigned offset, int range, struct Object *theObj);
-extern void   AlloVR4(unsigned offset, int range, struct Object *theObj);
-extern void   AlloVR8(unsigned offset, int range, struct Object *theObj);
-extern void   AlloVRI(struct Object *origin,
-		      struct Object *theObj,
+extern Component *AlloC();
+extern Item *AlloI();
+extern Item *AlloSI();
+extern void   AlloRR(unsigned offset, int range, Object *theObj);
+extern void   AlloVR1(unsigned offset, int range, Object *theObj);
+extern void   AlloVR2(unsigned offset, int range, Object *theObj);
+extern void   AlloVR4(unsigned offset, int range, Object *theObj);
+extern void   AlloVR8(unsigned offset, int range, Object *theObj);
+extern void   AlloVRI(Object *origin,
+		      Object *theObj,
 		      unsigned offset,
 		      int range,
-		      struct ProtoType *proto);
-extern void   AlloVRC(struct Object *origin,
-		      struct Object *theObj,
+		      ProtoType *proto);
+extern void   AlloVRC(Object *origin,
+		      Object *theObj,
 		      unsigned offset,
 		      int range,
-		      struct ProtoType *proto);
+		      ProtoType *proto);
 
-static __inline__ struct Item *CAlloI(struct Object *org, struct ProtoType *prot)
+static __inline__ Item *CAlloI(Object *org, ProtoType *prot)
 {
-  struct Item *item;
+  Item *item;
   
   pushReference(getCallReg());
   pushReference(getOriginReg());
   setOriginReg(org);
   setCallReg(prot);
-  item = (struct Item *)AlloI();
+  item = (Item *)AlloI();
   setOriginReg(popReference());
   setCallReg(popReference());
   return item;
 }
 
-static __inline__ struct Component *
-  CAlloC(struct Object *org, struct ProtoType *prot)
+static __inline__ Component *
+  CAlloC(Object *org, ProtoType *prot)
 {
-  struct Component *comp;
+  Component *comp;
   
   pushReference(getCallReg());
   pushReference(getOriginReg());
@@ -522,9 +522,9 @@ static __inline__ struct Component *
   return comp;
 }
 
-static __inline__ struct Item * CAlloSI(struct Structure *s)
+static __inline__ Item * CAlloSI(Structure *s)
 {
-  struct Item *i;
+  Item *i;
   
   pushReference(getCallReg());
   setCallReg(s);
@@ -534,7 +534,7 @@ static __inline__ struct Item * CAlloSI(struct Structure *s)
 }
 
 static __inline__ void 
-CAlloRR(unsigned offset, int range, struct Object *theObj)
+CAlloRR(unsigned offset, int range, Object *theObj)
 {
   pushReference(getThisReg());
   setThisReg(theObj);
@@ -543,7 +543,7 @@ CAlloRR(unsigned offset, int range, struct Object *theObj)
 }
 
 static __inline__ void 
-CAlloVR1(unsigned offset, int range, struct Object *theObj)
+CAlloVR1(unsigned offset, int range, Object *theObj)
 {
   pushReference(getThisReg());
   setThisReg(theObj);
@@ -552,7 +552,7 @@ CAlloVR1(unsigned offset, int range, struct Object *theObj)
 }
 
 static __inline__ void 
-CAlloVR2(unsigned offset, int range, struct Object *theObj)
+CAlloVR2(unsigned offset, int range, Object *theObj)
 {
   pushReference(getThisReg());
   setThisReg(theObj);
@@ -561,7 +561,7 @@ CAlloVR2(unsigned offset, int range, struct Object *theObj)
 }
 
 static __inline__ void 
-CAlloVR4(unsigned offset, int range, struct Object *theObj)
+CAlloVR4(unsigned offset, int range, Object *theObj)
 {
   pushReference(getThisReg());
   setThisReg(theObj);
@@ -570,7 +570,7 @@ CAlloVR4(unsigned offset, int range, struct Object *theObj)
 }
 
 static __inline__ void 
-CAlloVR8(unsigned offset, int range, struct Object *theObj)
+CAlloVR8(unsigned offset, int range, Object *theObj)
 {
   pushReference(getThisReg());
   setThisReg(theObj);
@@ -579,11 +579,11 @@ CAlloVR8(unsigned offset, int range, struct Object *theObj)
 }
 
 static __inline__ void 
-CAlloVRI(struct Object *origin,	
-	 struct Object *theObj,	
+CAlloVRI(Object *origin,	
+	 Object *theObj,	
 	 unsigned offset,
 	 int range,
-	 struct ProtoType *proto)
+	 ProtoType *proto)
 {
   pushReference(getThisReg());
   pushReference(getCallReg());
@@ -595,11 +595,11 @@ CAlloVRI(struct Object *origin,
 }
 
 static __inline__ void 
-CAlloVRC(struct Object *origin,	
-	 struct Object *theObj,	
+CAlloVRC(Object *origin,	
+	 Object *theObj,	
 	 unsigned offset,
 	 int range,
-	 struct ProtoType *proto)
+	 ProtoType *proto)
 {
   pushReference(getThisReg());
   pushReference(getCallReg());

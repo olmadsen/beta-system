@@ -146,7 +146,7 @@ void setupDanglers (int* danglers, long* objects, int count)
 	   */
 	  (*((long *) negIOArefs[i])) = objects[inx];
 	else
-	  AssignReference ((long *) negIOArefs[i], cast(Item) objects[inx]);
+	  AssignReference ((long *) negIOArefs[i], (Item *) objects[inx]);
       }
   }
   
@@ -161,7 +161,7 @@ void setupDanglers (int* danglers, long* objects, int count)
       if (isLazyRef(dangler)) {
 	if ((inx = danglerLookup (danglers, 0, count - 1, dangler)) >= 0) {
 	  DEBUG_LAZY(fprintf (output, "setupDanglerAOA(%d)\n", dangler)); 
-	  AssignReference ((long *) negAOArefs[i], cast(Item) objects[inx]);
+	  AssignReference ((long *) negAOArefs[i], (Item *) objects[inx]);
 	  negAOAsize--;
 	  if (negAOAsize > 0) negAOArefs[i] = negAOArefs[negAOAsize];
 	} else {
@@ -515,7 +515,7 @@ void clearDangler ()
  * as soon as the objectserver is in function, regardless if
  * lazyfetch is enabled.
  */
-void initLazyTrapHandler (ref(Item) lazyHandler)
+void initLazyTrapHandler (Item * lazyHandler)
 { 
 #ifdef sun4s
   struct sigaction sa;

@@ -52,22 +52,22 @@ extern void DumpIOA(void);
 #endif
 
 /* C/outpattern.c */
-extern char *ProtoTypeName(struct ProtoType *theProto);
-extern long M_Part(ref(ProtoType) proto);
-extern void  DisplayObject(ptr(FILE),ref(Object),long);
+extern char *ProtoTypeName(ProtoType *theProto);
+extern long M_Part(ProtoType * proto);
+extern void  DisplayObject(FILE *,Object *,long);
 extern char *ErrorMessage(enum BetaErr);
-extern int  DisplayBetaStack(enum BetaErr, ref(Object), long *, long);
+extern int  DisplayBetaStack(enum BetaErr, Object *, long *, long);
 #ifdef RTDEBUG
-extern void DescribeObject(struct Object *);
-extern void DescribeProto(ref(ProtoType) theProto);
+extern void DescribeObject(Object *);
+extern void DescribeProto(ProtoType * theProto);
 
 #endif
 #ifdef NEWRUN
-extern unsigned long        CodeEntry(struct ProtoType *theProto, long PC);
+extern unsigned long        CodeEntry(ProtoType *theProto, long PC);
 #endif
 
 /* C/group.c */
-extern struct group_header* NextGroup (struct group_header*);
+extern group_header* NextGroup (group_header*);
 extern char *GroupName(long, int);
 extern void AddGroup(group_header *new_group);
 extern int IsPrototypeOfGroup(group_header *gh, long data_addr);
@@ -80,9 +80,9 @@ extern void BetaExit(long);
 extern void ThreadExit(void);
 #endif
 #ifdef NEWRUN
-extern void BetaError(enum BetaErr err, struct Object *theObj, long *SP, long *thePC);
+extern void BetaError(enum BetaErr err, Object *theObj, long *SP, long *thePC);
 #else
-extern void BetaError(enum BetaErr, ref(Object));
+extern void BetaError(enum BetaErr, Object *);
 #endif
 
 /* C/cbfa.c */
@@ -113,7 +113,7 @@ extern void TSDCheck(void);
 #endif
 extern void initSynchVariables(void);
 extern int numProcessors(int online);
-extern thread_t attToProcessor(struct Component *comp);
+extern thread_t attToProcessor(Component *comp);
 extern void SetupVirtualTimerHandler(void);
 extern void SetupVirtualTimer(unsigned usec);
 extern void* MT_malloc(int size);
@@ -139,28 +139,28 @@ extern long doBlock(long fd, long rd, long wr, long timeoutValue);
 extern long Errno(void);
 
 /* GC/block.c */
-extern ref(Block) newBlock(long);
-extern void freeBlock(ref(Block));
-extern long inArea(ref(Block), ref(Object));
+extern Block * newBlock(long);
+extern void freeBlock(Block *);
+extern long inArea(Block *, Object *);
 #ifdef USEMMAP
 void mmapInitial(unsigned long numbytes);
 void InsertGuardPage(void);
-ref(Block) reserveBlock(long numbytes);
-int extendBlock(ref(Block) theBlock, long numbytes);
-ref(Block) AllocateBlock(long numbytes);
+Block * reserveBlock(long numbytes);
+int extendBlock(Block * theBlock, long numbytes);
+Block * AllocateBlock(long numbytes);
 #endif
 #ifdef RTDEBUG
-extern long inAreaUnused(ref(Block), ref(Object));
+extern long inAreaUnused(Block *, Object *);
 #endif
 
 /* GC/objectsize.c */
-extern long ObjectSize(ref(Object));
+extern long ObjectSize(Object *);
 
 /* GC/aoatoioa.c */
 #ifdef MT
-extern void MT_AOAtoIOAInsert(handle(Object));
+extern void MT_AOAtoIOAInsert(Object **);
 #else /* MT */
-extern void AOAtoIOAInsert(handle(Object));
+extern void AOAtoIOAInsert(Object **);
 #endif /* MT */
 extern long AOAtoIOAalloc(void);
 extern void AOAtoIOAClear(void);
@@ -176,36 +176,36 @@ extern void tempAOArootsFree(void);
 extern long sizeOfAOA(void);
 #endif /* NONMOVEAOAGC */
 #ifdef NEWRUN
-extern struct Object *AOAalloc(long numbytes, long *SP);
-extern struct Object *AOAcalloc(long numbytes, long *SP);
+extern Object *AOAalloc(long numbytes, long *SP);
+extern Object *AOAcalloc(long numbytes, long *SP);
 #else
-extern struct Object *AOAalloc(long numbytes);
-extern struct Object *AOAcalloc(long numbytes);
+extern Object *AOAalloc(long numbytes);
+extern Object *AOAcalloc(long numbytes);
 #endif
 #ifdef MT
-extern struct Object *AOAalloc(long numbytes);
-extern struct Object *AOAcalloc(long numbytes);
+extern Object *AOAalloc(long numbytes);
+extern Object *AOAcalloc(long numbytes);
 #endif
 /* Allocate block without possibility of doing IOAGc: */
-extern struct Object *AOAallocate(long numbytes);
+extern Object *AOAallocate(long numbytes);
 
-extern ref(Object) CopyObjectToAOA(ref(Object));
+extern Object * CopyObjectToAOA(Object *);
 extern void AOAGc(void);
 #ifdef RTDEBUG
 extern void AOACheck(void);
-extern void AOACheckObject(ref(Object));
-extern void AOACheckReference(handle(Object));
-extern void AOACheckObjectSpecial(ref(Object));
+extern void AOACheckObject(Object *);
+extern void AOACheckReference(Object **);
+extern void AOACheckObjectSpecial(Object *);
 #endif
 
 /* GC/copyobject.c */
-extern ref(Object) NewCopyObject(ref(Object), handle(Object));
+extern Object * NewCopyObject(Object *, Object **);
 
 /* GC/stack.c */
 #if !defined(KEEP_STACKOBJ_IN_IOA)
-extern void ProcessStackObj(struct StackObject *, CellProcessFunc func);
+extern void ProcessStackObj(StackObject *, CellProcessFunc func);
 #else
-extern void ProcessStackObj(struct StackObject *);
+extern void ProcessStackObj(StackObject *);
 #endif
 
 extern void ProcessStack(void);
@@ -218,30 +218,30 @@ extern void ProcessRefStack(void);
 
 /* GC/ioa.c */
 extern void IOAGc(void);
-extern void ProcessReference(handle(Object));
-extern void ProcessObject(ref(Object));
+extern void ProcessReference(Object **);
+extern void ProcessObject(Object *);
 extern void CompleteScavenging(void);
 #if !defined(KEEP_STACKOBJ_IN_IOA)
-extern void DoIOACell(struct Object **theCell,struct Object *theObj);
+extern void DoIOACell(Object **theCell,Object *theObj);
 #endif
 #ifdef RTDEBUG
 extern void IOACheck(void);
-extern void IOACheckObject(ref(Object));
+extern void IOACheckObject(Object *);
 extern void IOACheckReference(REFERENCEACTIONARGSTYPE);
 #endif
 
 /* GC/lvra.c */
-extern ref(ValRep) LVRAAlloc(ref(ProtoType), long);
-extern ref(ValRep) LVRACAlloc(ref(ProtoType), long);
-extern ref(ValRep) LVRAXAlloc(ref(ProtoType), long, long);
+extern ValRep * LVRAAlloc(ProtoType *, long);
+extern ValRep * LVRACAlloc(ProtoType *, long);
+extern ValRep * LVRAXAlloc(ProtoType *, long, long);
 
 /* GC/misc.c */
-extern void assignRef(long *theCell, ref(Item) newObject);
+extern void assignRef(long *theCell, Item * newObject);
 #ifdef RTDEBUG
 extern void Illegal(void);
 #endif
-extern long isObject(ref(Object));
-extern long inBetaHeap(ref(Object));
+extern long isObject(Object *);
+extern long inBetaHeap(Object *);
 #ifdef RTDEBUG
 extern void Claim(long, char*);
 #endif
@@ -254,10 +254,10 @@ extern void RotateTheCursorBack(void);
 #ifdef NEWRUN
 /* Defined in betaenv */
 extern void DoGC(long *SP); /* The one called directly from betaenv */
-extern void doAtt(long SPx, struct Object *topObj, long spSize, long *stack, long entry);
+extern void doAtt(long SPx, Object *topObj, long spSize, long *stack, long entry);
 extern long *GetSP(void);
-extern void CallB(struct Object *caller,
-		          struct Object *callee,
+extern void CallB(Object *caller,
+		          Object *callee,
 		          long address,
 		          long SP);
 extern void BETA_main(void);
@@ -265,21 +265,21 @@ extern void BETA_main(void);
 extern void FlushCodeCash(long start, long end);
 #endif
 
-extern struct Object * GetThis(long *SP);
+extern Object * GetThis(long *SP);
 #endif
 
 /* liniarize.c */
-extern void scanObject(struct Object *obj,
+extern void scanObject(Object *obj,
                        void referenceAction(REFERENCEACTIONARGSTYPE),
                        int doPartObjects);
 #ifdef NONMOVEAOAGC
-extern ref (Object) getRealObject(ref (Object) obj);
+extern Object * getRealObject(Object * obj);
 extern void appendToListInAOA(REFERENCEACTIONARGSTYPE);
-extern void initialCollectList(ptr(Object) root,
+extern void initialCollectList(Object * root,
                                void referenceAction(REFERENCEACTIONARGSTYPE));
-extern void extendCollectList(ptr(Object) root,
+extern void extendCollectList(Object * root,
                               void referenceAction(REFERENCEACTIONARGSTYPE));
-extern void scanList(ref (Object) root, void (foreach)(ref (Object) current));
+extern void scanList(Object * root, void (foreach)(Object * current));
 #endif /* NONMOVEAOAGC */
 
 /* aoafreelist.c */

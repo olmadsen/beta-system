@@ -15,10 +15,10 @@ void ChkRA()
 {
 #ifdef sparc
   /* Called with theCell in %g1, which is a super temp. */
-  register struct Object **theCell __asm__("%g1");
+  register Object **theCell __asm__("%g1");
 #endif
 #ifdef hppa
-  struct Object **theCell;
+  Object **theCell;
   __asm__ volatile ("COPY %%r28,%0" : "=r" (theCell));
 #endif
 

@@ -86,7 +86,7 @@ static void indirTrap(long sig, siginfo_t *info, ucontext_t *ucon) {
             indirRef = ((int *) returnSP)[sourceReg(instruction) - 16];
             indirRefsFollowed++;
             
-            if (isIndirRef(indirRef)) {
+            if (isIndirstruct indirRef *) {
                 
                 /* Ok, so this is a genuine indirect reference, and
                  * not simply a NONE reference.

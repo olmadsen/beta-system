@@ -7,8 +7,8 @@
  * by Peter Andersen, Tommy Thorn, and Jacob Seligmann
  */
 
-#define REP ((struct ObjectRep *)theRep)
-#define NEWREP ((struct ObjectRep *)newRep)
+#define REP ((ObjectRep *)theRep)
+#define NEWREP ((ObjectRep *)newRep)
 
 #ifdef hppa
 register long _dummy8 __asm__("%r15"); /* really tmp data 1 */
@@ -22,7 +22,7 @@ register long _dummy9 __asm__("%r16"); /* really tmp data 2 */
 
 ParamRepObjOffLowHigh(CopySVR1)
 {
-    DeclReference1(struct ValRep *, newRep);
+    DeclReference1(ValRep *, newRep);
     register long i, size, range;
     
     GCable_Entry();
@@ -36,9 +36,9 @@ ParamRepObjOffLowHigh(CopySVR1)
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, cast(Object)theObj);
+      BetaError(RepLowRangeErr, (Object *)theObj);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, cast(Object)theObj);
+       BetaError(RepHighRangeErr, (Object *)theObj);
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -46,7 +46,7 @@ ParamRepObjOffLowHigh(CopySVR1)
 
     size = ByteRepSize(range);
 
-    Protect2(theRep,theObj,newRep= cast(ValRep) IOAalloc(size));
+    Protect2(theRep,theObj,newRep= (ValRep *) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = ByteRepPTValue;
@@ -65,7 +65,7 @@ ParamRepObjOffLowHigh(CopySVR1)
       *(unsigned char *)((unsigned)newBody+range) = 0 ;
     }
 
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
 
     Ck(newRep); Ck(theRep); Ck(theObj);
 
@@ -73,7 +73,7 @@ ParamRepObjOffLowHigh(CopySVR1)
 
 ParamRepObjOffLowHigh(CopySVR2)
 {
-    DeclReference1(struct ValRep *, newRep);
+    DeclReference1(ValRep *, newRep);
     register long i, size, range;
     
     GCable_Entry();
@@ -87,9 +87,9 @@ ParamRepObjOffLowHigh(CopySVR2)
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, cast(Object)theObj);
+      BetaError(RepLowRangeErr, (Object *)theObj);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, cast(Object)theObj);
+       BetaError(RepHighRangeErr, (Object *)theObj);
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -97,7 +97,7 @@ ParamRepObjOffLowHigh(CopySVR2)
 
     size = ShortRepSize(range);
 
-    Protect2(theRep,theObj,newRep = cast(ValRep) IOAalloc(size));
+    Protect2(theRep,theObj,newRep = (ValRep *) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = ShortRepPTValue;
@@ -114,7 +114,7 @@ ParamRepObjOffLowHigh(CopySVR2)
       }
     }
         
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
 
     Ck(newRep); Ck(theRep); Ck(theObj);
 
@@ -122,7 +122,7 @@ ParamRepObjOffLowHigh(CopySVR2)
 
 ParamRepObjOffLowHigh(CopySVR4)
 {
-    DeclReference1(struct ValRep *, newRep);
+    DeclReference1(ValRep *, newRep);
     register long i, size, range;
     
     GCable_Entry();
@@ -136,9 +136,9 @@ ParamRepObjOffLowHigh(CopySVR4)
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, cast(Object)theObj);
+      BetaError(RepLowRangeErr, (Object *)theObj);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, cast(Object)theObj);
+       BetaError(RepHighRangeErr, (Object *)theObj);
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -146,7 +146,7 @@ ParamRepObjOffLowHigh(CopySVR4)
 
     size = LongRepSize(range);
 
-    Protect2(theRep,theObj,newRep = cast(ValRep) IOAalloc(size));
+    Protect2(theRep,theObj,newRep = (ValRep *) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = LongRepPTValue;
@@ -159,7 +159,7 @@ ParamRepObjOffLowHigh(CopySVR4)
       newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
     } 
         
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
 
     Ck(newRep); Ck(theRep); Ck(theObj);
 
@@ -167,7 +167,7 @@ ParamRepObjOffLowHigh(CopySVR4)
 
 ParamRepObjOffLowHigh(CopySVR8)
 {
-    DeclReference1(struct ValRep *, newRep);
+    DeclReference1(ValRep *, newRep);
     register long i, size, range;
     
     GCable_Entry();
@@ -181,9 +181,9 @@ ParamRepObjOffLowHigh(CopySVR8)
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, cast(Object)theObj);
+      BetaError(RepLowRangeErr, (Object *)theObj);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, cast(Object)theObj);
+       BetaError(RepHighRangeErr, (Object *)theObj);
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -191,7 +191,7 @@ ParamRepObjOffLowHigh(CopySVR8)
 
     size = DoubleRepSize(range);
 
-    Protect2(theRep,theObj,newRep = cast(ValRep) IOAalloc(size));
+    Protect2(theRep,theObj,newRep = (ValRep *) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = DoubleRepPTValue;
@@ -207,7 +207,7 @@ ParamRepObjOffLowHigh(CopySVR8)
       }
     }
         
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
 
     Ck(newRep); Ck(theRep); Ck(theObj);
 
@@ -215,7 +215,7 @@ ParamRepObjOffLowHigh(CopySVR8)
 
 ParamORepObjOffLowHigh(CopySVRI)
 {
-    DeclReference1(struct ObjectRep *, newRep);
+    DeclReference1(ObjectRep *, newRep);
     register long i, size, range;
     
     GCable_Entry();
@@ -229,9 +229,9 @@ ParamORepObjOffLowHigh(CopySVRI)
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, cast(Object)theObj);
+      BetaError(RepLowRangeErr, (Object *)theObj);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, cast(Object)theObj);
+       BetaError(RepHighRangeErr, (Object *)theObj);
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -239,7 +239,7 @@ ParamORepObjOffLowHigh(CopySVRI)
 
     size = DynObjectRepSize(range);
 
-    Protect2(theRep,theObj,newRep = cast(ObjectRep) IOAalloc(size));
+    Protect2(theRep,theObj,newRep = (ObjectRep *) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = DynItemRepPTValue;
@@ -255,7 +255,7 @@ ParamORepObjOffLowHigh(CopySVRI)
       /* No need to use AssignReference: newRep is in IOA */
     }
 
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
 
     Ck(newRep); Ck(theRep); Ck(theObj);
 
@@ -263,7 +263,7 @@ ParamORepObjOffLowHigh(CopySVRI)
 
 ParamORepObjOffLowHigh(CopySVRC)
 {
-    DeclReference1(struct ObjectRep *, newRep);
+    DeclReference1(ObjectRep *, newRep);
     register long i, size, range;
     
     GCable_Entry();
@@ -277,9 +277,9 @@ ParamORepObjOffLowHigh(CopySVRC)
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, cast(Object)theObj);
+      BetaError(RepLowRangeErr, (Object *)theObj);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, cast(Object)theObj);
+       BetaError(RepHighRangeErr, (Object *)theObj);
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -287,7 +287,7 @@ ParamORepObjOffLowHigh(CopySVRC)
 
     size = DynObjectRepSize(range);
 
-    Protect2(theRep,theObj,newRep = cast(ObjectRep) IOAalloc(size));
+    Protect2(theRep,theObj,newRep = (ObjectRep *) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = DynCompRepPTValue;
@@ -303,7 +303,7 @@ ParamORepObjOffLowHigh(CopySVRC)
       /* No need to use AssignReference: newRep is in IOA */
     }
 
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
 
     Ck(newRep); Ck(theRep); Ck(theObj);
 

@@ -35,19 +35,19 @@ void Return()
  */
 
 #ifndef MT
-struct Item *SPARC_AlloSI(struct Structure *s, int i1, int i2, int i3, int i4)
+Item *SPARC_AlloSI(Structure *s, int i1, int i2, int i3, int i4)
 {
-  struct Item *CAlloSI(struct Structure *s, int i1, int i2, int i3, int i4);
+  Item *CAlloSI(Structure *s, int i1, int i2, int i3, int i4);
   GCable_Entry();
   return CAlloSI(s, i1, i2 ,i3, i4);
   GCable_Exit(1);
 }
 
-struct Component *SPARC_AlloC(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4)
+Component *SPARC_AlloC(Object *origin, int i1, ProtoType *proto, int i3, int i4)
 {
-  struct Component *CAlloC(struct Object *origin, 
+  Component *CAlloC(Object *origin, 
 			   int i1, 
-			   struct ProtoType *proto, 
+			   ProtoType *proto, 
 			   int i3, 
 			   int i4);
   GCable_Entry();
@@ -55,8 +55,8 @@ struct Component *SPARC_AlloC(struct Object *origin, int i1, struct ProtoType *p
   GCable_Exit(1);
 }
 
-struct Item *SPARC_AlloI(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4)
-{ struct Item *CAlloI(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4);
+Item *SPARC_AlloI(Object *origin, int i1, ProtoType *proto, int i3, int i4)
+{ Item *CAlloI(Object *origin, int i1, ProtoType *proto, int i3, int i4);
   GCable_Entry();
   MCHECK();
   return CAlloI(origin, i1, proto, i3, i4);
@@ -67,12 +67,12 @@ struct Item *SPARC_AlloI(struct Object *origin, int i1, struct ProtoType *proto,
 
 #endif /* sparc */
 
-void RefNone(ref(Object) theObj)
+void RefNone(Object * theObj)
 {
 #if (defined(hppa) && defined(RTLAZY))
   /* Called with the possible dangling reference in %r31 */
   __asm__ volatile ("\tCOPY\t%%r31,%0\n" : "=r" (theObj));
-  if (isLazyRef(theObj)){
+  if (isLazystruct theObj *){
     /* save reference registers in case of dangling reference */
     PushGCRegs();
     CkReg("RefNone", *(RefSP-1), "%r7");
@@ -98,12 +98,12 @@ void RefNone(ref(Object) theObj)
     PopGCRegs();
   } else {
     /* Reference was NONE */
-    theObj = (struct Object *)getThisReg(); /* Get current object */
+    theObj = (Object *)getThisReg(); /* Get current object */
     BetaError(RefNoneErr, theObj);
   }
 #else
 #ifdef hppa
-    theObj = (struct Object *)getThisReg(); /* Get current object */
+    theObj = (Object *)getThisReg(); /* Get current object */
 #endif
   BetaError(RefNoneErr, theObj);
 #endif /* hppa && RTLAZY */
@@ -160,7 +160,7 @@ asmlabel(_FailureExit,
 #ifdef hppa
 void FailureExit()
 {
-  BetaError(StopCalledErr, cast(Object)(getThisReg()));
+  BetaError(StopCalledErr, (Object *)(getThisReg()));
 }
 #endif
 

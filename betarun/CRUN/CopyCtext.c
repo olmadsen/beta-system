@@ -8,9 +8,9 @@
 #include "beta.h"
 #include "crun.h"
 
-ParamAscii(struct ValRep *, CopyCT)
+ParamAscii(ValRep *, CopyCT)
 {
-  DeclReference1(struct ValRep *, theRep);
+  DeclReference1(ValRep *, theRep);
   register unsigned range, size;
   
   GCable_Entry();
@@ -24,7 +24,7 @@ ParamAscii(struct ValRep *, CopyCT)
   range = ascii ? strlen((const char *)ascii) : 0;
   size = ByteRepSize(range);
   
-  theRep = cast(ValRep) IOAalloc(size);
+  theRep = (ValRep *) IOAalloc(size);
   
   theRep->Proto = ByteRepPTValue;
   if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;

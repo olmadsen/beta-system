@@ -15,13 +15,13 @@
 #endif
 
 #ifdef sparc
-ParamThis(struct Component *, Susp)
+ParamThis(Component *, Susp)
 {
-  ref(RegWin) rw; 	/* Pointer to the saved reg.window of last frame */
-  ref(Component) caller;
-  ref(Component) called;
+  struct RegWin * rw; 	/* Pointer to the saved reg.window of last frame */
+  Component * caller;
+  Component * called;
   long Size;
-  ref(StackObject) theStackObj;
+  StackObject * theStackObj;
 
   GCable_Entry();
   FetchThis();
@@ -61,7 +61,7 @@ ParamThis(struct Component *, Susp)
   
   /* Add one for the 'orig start' */
   __asm__("ta 3");
-  Size = (long *) (cast(RegWin)lastCompBlock)->fp - FramePointer + 1;
+  Size = (long *) ((struct RegWin *)lastCompBlock)->fp - FramePointer + 1;
 
   theStackObj = ActiveComponent->StackObj;
   if ((long)theStackObj == 0
@@ -69,7 +69,7 @@ ParamThis(struct Component *, Susp)
       || Size > theStackObj->BodySize)
     {
       theStackObj = AlloSO(Size);
-      AssignReference((long *)&ActiveComponent->StackObj, cast(Item) theStackObj);
+      AssignReference((long *)&ActiveComponent->StackObj, (Item *) theStackObj);
     }
   /* FillStackObj */
   theStackObj->StackSize = Size;
@@ -82,14 +82,14 @@ ParamThis(struct Component *, Susp)
     /* Then leave the program a nice way. */
     BetaExit(0);
   
-  rw = cast(RegWin) lastCompBlock;
-  ActiveCallBackFrame = cast(CallBackFrame) rw->l5;
-  lastCompBlock = cast(ComponentBlock) rw->l6;	/* See AttachBasic...*/
+  rw = (struct RegWin *) lastCompBlock;
+  ActiveCallBackFrame = (CallBackFrame *) rw->l5;
+  lastCompBlock = (ComponentBlock *) rw->l6;	/* See AttachBasic...*/
   FramePointer = (long *) rw->fp;
   
   this = ActiveComponent->CallerObj;
-  ActiveComponent->CallerObj =  cast(Object) 0;
-  ActiveComponent->CallerComp = cast(Component) 0;
+  ActiveComponent->CallerObj =  (Object *) 0;
+  ActiveComponent->CallerComp = (Component *) 0;
   /* Save %i7 (where Suspend was called from) in ActiveComponent->CallerLSC: */
   getret(ActiveComponent->CallerLSC);
 

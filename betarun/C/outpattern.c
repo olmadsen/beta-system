@@ -38,7 +38,7 @@ static char NotifyMessage[500] = { 0 /* rest is uninitialized */};
 GLOBAL(static int basic_dumped)=0;
 GLOBAL(static int isMakingDump)=0;
 
-long M_Part(ref(ProtoType) proto)
+long M_Part(ProtoType * proto)
      /* Return the address og of the M-entry for the prototype proto.
       *
       * If the pattern has NO do-part and NO explicit prefix,
@@ -117,9 +117,9 @@ return MACHINE_TYPE;
 
 /************************* ProtoTypeName **********************/
 
-char *ProtoTypeName(struct ProtoType *theProto)
+char *ProtoTypeName(ProtoType *theProto)
 {
-  ref(GCEntry) stat;
+  GCEntry * stat;
   short *dyn;
 
 #ifdef RTDEBUG
@@ -143,7 +143,7 @@ char *ProtoTypeName(struct ProtoType *theProto)
   }
 #endif /* RTDEBUG */
   
-  stat = cast(GCEntry) ((long) theProto + theProto->GCTabOff);
+  stat = (GCEntry *) ((long) theProto + theProto->GCTabOff);
   while (*(short *) stat) stat++;	/* Step over static gc entries */ 
   dyn = ((short *) stat) + 1;		/* Step over the zero */
   while (*dyn++)
@@ -166,7 +166,7 @@ char *ProtoTypeName(struct ProtoType *theProto)
   }
 #endif
 
-  return (ptr(char)) dyn;
+  return (char *) dyn;
 }
 
 /* c_on_top is used by beta.dump (only) to determine if things on top
@@ -179,16 +179,16 @@ GLOBAL(static unsigned long error_pc);
 
 /*************************** ObjectDescription: **********************/
 
-static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, int print_origin)
+static void ObjectDescription(Object * theObj, long retAddress, char *type, int print_origin)
 {
   signed long    gDist=MAXINT, mDist, activeDist=0;
-  ref(ProtoType) theProto=theObj->Proto;
-  ref(ProtoType) activeProto=theProto;
+  ProtoType * theProto=theObj->Proto;
+  ProtoType * activeProto=theProto;
   char *groupname;
   long mPart = M_Part(theProto);
   long gPart = G_Part(theProto);
 
-  if (isMakingDump && (theObj==(struct Object *)BasicItem)){
+  if (isMakingDump && (theObj==(Object *)BasicItem)){
     /* BasicItem will be shown as component */
     TRACE_DUMP(fprintf(output, "(BasicItem ignored - will be shown as comp)\n"));
     return;
@@ -308,7 +308,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
   fprintf(output," in %s\n", groupname);
   if (print_origin){
     long addr;
-    ref(Object)    staticObj;
+    Object *    staticObj;
     
     /** Print Static Environment Object. **/
 
@@ -317,17 +317,17 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
     if (!activeProto) return;
     addr=(long)theObj + (4*(long)activeProto->OriginOff);
     if (addr) 
-      staticObj = *(handle(Object))addr;
+      staticObj = *(Object **)addr;
     else
       staticObj = 0;
     TRACE_DUMP(fprintf(output, ">>>TraceDump: staticObj=0x%x\n", staticObj));
     if( isSpecialProtoType(staticObj->Proto) ){
       switch (SwitchProto(staticObj->Proto)){
       case SwitchProto(ComponentPTValue):
-	staticObj = cast(Object) ComponentItem(theObj);
+	staticObj = (Object *) ComponentItem(theObj);
 	break;
       case SwitchProto(DopartObjectPTValue):
-	staticObj = (cast(DopartObject)staticObj)->Origin;
+	staticObj = ((DopartObject *)staticObj)->Origin;
 	break;
 
       case SwitchProto(DynItemRepPTValue):
@@ -383,16 +383,16 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
  * Called by DisplayBetaStack and BetaError (in case of QuaCont)
  */
 
-GLOBAL(static struct Object *lastDisplayedObject)=0;
+GLOBAL(static Object *lastDisplayedObject)=0;
 
 void DisplayObject(output,theObj,retAddress)
-     ptr(FILE)   output;       /* Where to dump object */
-     ref(Object) theObj;       /* Object to display */
+     FILE *   output;       /* Where to dump object */
+     Object * theObj;       /* Object to display */
      long        retAddress;   /* Address theObj was left from (jsr), i.e. when 
 				* it was current object.
 				*/
 { 
-  ref(Object) theItem;
+  Object * theItem;
 
   if (isMakingDump){
     /* Make an empty line after the last line of a component 
@@ -408,8 +408,8 @@ void DisplayObject(output,theObj,retAddress)
   if( isSpecialProtoType(theObj->Proto) ){
     switch (SwitchProto(theObj->Proto)){
     case SwitchProto(ComponentPTValue):
-      theItem = cast(Object) ComponentItem(theObj);
-      if (theItem == cast(Object) BasicItem) {
+      theItem = (Object *) ComponentItem(theObj);
+      if (theItem == (Object *) BasicItem) {
 	if (!basic_dumped){
 	  fprintf(output,
 		  "  basic component in %s\n", 
@@ -424,13 +424,13 @@ void DisplayObject(output,theObj,retAddress)
       }
       break;
     case SwitchProto(DopartObjectPTValue):
-      theItem = (cast(DopartObject)theObj)->Origin;
+      theItem = ((DopartObject *)theObj)->Origin;
       /* Check whether theItem is actually an item or is the
        * body part of a component.
        */
       if (IsComponentItem(theItem)) {
 	DisplayObject(output, 
-		      (struct Object *)EnclosingComponent(theItem),
+		      (Object *)EnclosingComponent(theItem),
 		      retAddress);
 	return;
       } else {
@@ -551,7 +551,7 @@ char *ErrorMessage(enum BetaErr errorNumber)
 
 #ifdef NEWRUN
 
-static void DumpCell(struct Object **theCell,struct Object *theObj)
+static void DumpCell(Object **theCell,Object *theObj)
 { 
   register long PC=-1;
   long *SP;
@@ -596,14 +596,14 @@ static void DumpCell(struct Object **theCell,struct Object *theObj)
     /* Passing a component frame. The real dyn is found 
      * as theComp->CallerObj - see stack.c for details.
      */
-    PC = ((struct Component *)theObj)->CallerComp->CallerLSC;
-    theObj = ((struct Component *)theObj)->CallerObj;
+    PC = ((Component *)theObj)->CallerComp->CallerLSC;
+    theObj = ((Component *)theObj)->CallerObj;
   } 
     
   /* Check if theObj is inlined in a component */
   if (IsComponentItem(theObj)) {
     TRACE_DUMP(fprintf(output, " dump as comp"));
-    theObj = (struct Object *)EnclosingComponent(theObj);
+    theObj = (Object *)EnclosingComponent(theObj);
   } 
     
   if (PC==-1){
@@ -632,22 +632,22 @@ static void DumpCell(struct Object **theCell,struct Object *theObj)
 static void DisplayStackPart(FILE *output, 
 			     long *low, 
 			     long *high,
-			     struct Component *theComp)
+			     Component *theComp)
 {
-  ptr(long) current = low;
-  ref(Object) theObj;
-  handle(Object) theCell;
+  long * current = low;
+  Object * theObj;
+  Object ** theCell;
   long retAddr=0;
 
   TRACE_DUMP(fprintf(output, ">>>TraceDump: StackPart [0x%x..0x%x]\n", (int)low, (int)high));
   while( current <= high ){
     retAddr=0;
-    if( inBetaHeap( (ref(Object))(*current))){
-      theCell = (handle(Object)) current;
+    if( inBetaHeap( (Object *)(*current))){
+      theCell = (Object **) current;
       theObj  = *theCell;
       if( inIOA(theObj) || inAOA(theObj) ){
 	if( isObject( theObj) && NotInHeap(*(current+1))){
-	  if (theComp && cast(Object)theComp->Body==theObj){
+	  if (theComp && (Object *)theComp->Body==theObj){
 	    retAddr=*(current+1); /* pc of theComp, when it was left */
 	    break;
 	  }
@@ -666,7 +666,7 @@ static void DisplayStackPart(FILE *output,
     current++;
   }
   if (theComp){
-    DisplayObject( output, (ref(Object)) theComp, retAddr);
+    DisplayObject( output, (Object *) theComp, retAddr);
     /* Make an empty line after the component */
     fprintf( output, "\n");
   }
@@ -683,7 +683,7 @@ static void DisplayStackPart(FILE *output,
 void
   DisplayAR(FILE *output, struct RegWin *theAR, long *PC)
 {
-  struct Object *theObj = (struct Object *) theAR->i0;
+  Object *theObj = (Object *) theAR->i0;
   
   if ((inIOA(theObj) || inAOA(theObj)) && isObject(theObj))
     DisplayObject(output, theObj, (long)PC);
@@ -898,7 +898,7 @@ static char *OpenDumpFile(long errorNumber)
  * the process should continue execution. */
 
 int DisplayBetaStack(enum BetaErr errorNumber, 
-		     struct Object *theObj, 
+		     Object *theObj, 
 		     long *thePC, 
 		     long theSignal /* theSignal is zero if not applicable. */
 		     )
@@ -906,7 +906,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
   FILE *old_output=0;
 #ifndef sparc
 #ifndef hppa
-  ref(Component)      currentComponent;
+  Component *      currentComponent;
 #endif
 #endif
 
@@ -969,7 +969,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
       int skip_dump;
       DEBUG_CODE(fprintf(output, 
 			 "RTS: calling errorhandler (first callback)\n"));
-      skip_dump = ((int (*)(enum BetaErr, struct Object *, long *, long *))
+      skip_dump = ((int (*)(enum BetaErr, Object *, long *, long *))
 		   ((&CBFA->entries[0].theStruct)+1))(errorNumber, 
 						      theObj, 
 						      thePC, 
@@ -1032,8 +1032,8 @@ int DisplayBetaStack(enum BetaErr errorNumber,
   TRACE_DUMP(fprintf(output, ">>>TraceDump: Current object 0x%x\n", (int)theObj); fflush(output));
   if( theObj != 0 ){
     if( isObject(theObj)){
-      if (theObj==(struct Object *)ActiveComponent->Body){
-	DisplayObject(output, (struct Object *)ActiveComponent, (long)thePC);
+      if (theObj==(Object *)ActiveComponent->Body){
+	DisplayObject(output, (Object *)ActiveComponent, (long)thePC);
       } else {
 	DisplayObject(output, theObj, (long)thePC);
       }
@@ -1086,17 +1086,17 @@ int DisplayBetaStack(enum BetaErr errorNumber,
    * The ReferenceStack way of tracing the Beta stack.
    */
   {
-    struct Object **theCell = /*getRefSP()*/ (struct Object **)(RefSP-1);
-    struct Object *theObj;
+    Object **theCell = /*getRefSP()*/ (Object **)(RefSP-1);
+    Object *theObj;
     long   *PC=thePC;
 
     while((void **)theCell > &ReferenceStack[0]) {
-      if ((*theCell)==(struct Object *)ExternalMarker){
+      if ((*theCell)==(Object *)ExternalMarker){
 	TRACE_DUMP(fprintf(output, "  cb: "));
 	fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
       } else if (!isLazyRef(*theCell) && (unsigned)*theCell & 1) {
 	/* The reference is tagged: Should appear in beta.dump */
-	theObj = (struct Object *)((unsigned)*theCell & ~1);
+	theObj = (Object *)((unsigned)*theCell & ~1);
 	PC = 0; /* No way to tell the PC ?? */
 #if 0 /* not yet */
 #ifdef RTVALHALLA
@@ -1108,9 +1108,9 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 	  /* Check if theObj is inlined in a component */
 	  if (IsComponentItem(theObj)) {
 	    DisplayObject(output, 
-			  (struct Object *)EnclosingComponent(theObj), 
+			  (Object *)EnclosingComponent(theObj), 
 			  (long)PC);
-	    if (theObj==(struct Object *)BasicItem) break;
+	    if (theObj==(Object *)BasicItem) break;
 	  } else {
 	    DisplayObject(output, theObj, (long)PC);
 	  }
@@ -1161,12 +1161,12 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 	
 	if (nextCompBlock == 0)
 	  { /* We reached the bottom */
-	    DisplayObject(output, (struct Object *)theAR->i1, 0); /* AttBC */
+	    DisplayObject(output, (Object *)theAR->i1, 0); /* AttBC */
 	    fprintf(output, "\n"); fflush(output);
 	    break;
 	  }
 	
-	DisplayObject(output, (struct Object *) theAR->i0, 0); /* Att */
+	DisplayObject(output, (Object *) theAR->i0, 0); /* Att */
 	
 	continue;
       }
@@ -1198,10 +1198,10 @@ int DisplayBetaStack(enum BetaErr errorNumber,
     long                *lowAddr;
     long                *highAddr;
     
-    ref(CallBackFrame)  cbFrame;
+    CallBackFrame *  cbFrame;
     
-    ref(ComponentBlock) currentBlock;
-    ref(Object)         currentObject;
+    ComponentBlock * currentBlock;
+    Object *         currentObject;
     long                retAddr;
     
     /*
@@ -1230,7 +1230,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
        */
 #endif
       cbFrame = cbFrame->next;
-      if( isObject( (ref(Object))(*lowAddr)) ) {
+      if( isObject( (Object *)(*lowAddr)) ) {
 	  TRACE_DUMP(fprintf(output, ">>> lowAddr: 0x%x\n", (int)lowAddr));
 	  DisplayObject( output, (void *)(*lowAddr), 0);
       }
@@ -1259,11 +1259,11 @@ int DisplayBetaStack(enum BetaErr errorNumber,
     currentComponent = currentComponent->CallerComp;
     
     while (currentBlock->next){
-      lowAddr  = (long *)((long)currentBlock+sizeof(struct ComponentBlock))+1
+      lowAddr  = (long *)((long)currentBlock+sizeof(ComponentBlock))+1
 	  /* +1 because the compiler always pushes the component before calling
 	   * attach.
 	   */;
-      highAddr = (ptr(long)) currentBlock->next;
+      highAddr = (long *) currentBlock->next;
       cbFrame  = currentBlock->callBackFrame;
       
       /* Display current object in ComponentBlock */
@@ -1291,7 +1291,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 	 */
 #endif
 	cbFrame = cbFrame->next;
-	if( isObject( (ref(Object))(*lowAddr)) ){
+	if( isObject( (Object *)(*lowAddr)) ){
 	    TRACE_DUMP(fprintf(output, ">>>TraceDump: lowAddr: 0x%x\n", (int)lowAddr));
 	    DisplayObject( output, (void *)(*lowAddr), 0);
 	}
@@ -1372,14 +1372,14 @@ P("      [ EXTERNAL ACTIVATION PART ]")
 #ifdef RTDEBUG
 
 void DescribeObject(theObject)
-     struct Object *theObject;
+     Object *theObject;
 {
-  ref(ProtoType) theProto = theObject->Proto;
+  ProtoType * theProto = theObject->Proto;
   if (isSpecialProtoType(theProto)){
     switch (SwitchProto(theProto)){
     case SwitchProto(ComponentPTValue):
       fprintf(output, "Component: ");
-      DescribeObject((struct Object *)(cast(Component)theObject)->Body);
+      DescribeObject((Object *)((Component *)theObject)->Body);
       return;
     case SwitchProto(StackObjectPTValue):
       fprintf(output, "StackObj");
@@ -1387,18 +1387,18 @@ void DescribeObject(theObject)
     case SwitchProto(StructurePTValue):
       fprintf(output, 
 	      "Struc: origin: 0x%x \"%s\", proto: 0x%x \"%s\"", 
-	      (int)((cast(Structure)theObject)->iOrigin),
-	      ProtoTypeName(((cast(Structure)theObject)->iOrigin)->Proto),
-	      (int)((cast(Structure)theObject)->iProto),
-	      ProtoTypeName((cast(Structure)theObject)->iProto)
+	      (int)(((Structure *)theObject)->iOrigin),
+	      ProtoTypeName((((Structure *)theObject)->iOrigin)->Proto),
+	      (int)(((Structure *)theObject)->iProto),
+	      ProtoTypeName(((Structure *)theObject)->iProto)
 	      );
       return;
     case SwitchProto(DopartObjectPTValue):
       fprintf(output, 
 	      "Dopart: origin: 0x%x, proto: 0x%x (%s)", 
-	      (int)((cast(DopartObject)theObject)->Origin),
-	      (int)((cast(DopartObject)theObject)->Origin)->Proto,
-	      ProtoTypeName(((cast(DopartObject)theObject)->Origin)->Proto)
+	      (int)(((DopartObject *)theObject)->Origin),
+	      (int)(((DopartObject *)theObject)->Origin)->Proto,
+	      ProtoTypeName((((DopartObject *)theObject)->Origin)->Proto)
 	      );
       return;
     case SwitchProto(DynItemRepPTValue):
@@ -1410,11 +1410,11 @@ void DescribeObject(theObject)
       fprintf(output, "IntegerRep"); return;
     case SwitchProto(ByteRepPTValue):
       fprintf(output, "CharRep: '");
-      if ( (((cast(ValRep)theObject)->HighBorder)-((cast(ValRep)theObject)->LowBorder)+1) > 10 ){
-	fprintf(output, "%s", (char *)(cast(ValRep)theObject)->Body);
+      if ( ((((ValRep *)theObject)->HighBorder)-(((ValRep *)theObject)->LowBorder)+1) > 10 ){
+	fprintf(output, "%s", (char *)((ValRep *)theObject)->Body);
 	fprintf(output, "...'");
       } else {
-	fprintf(output, "%s", (char *)(cast(ValRep)theObject)->Body);
+	fprintf(output, "%s", (char *)((ValRep *)theObject)->Body);
 	fprintf(output, "'");
       }
       return;

@@ -10,5 +10,5 @@ ParamThisComp(void, HandleIndexErr)
 {
   FetchThisComp();
   Ck(this);
-  BetaError(RepRangeErr, cast(Object)this);
+  BetaError(RepRangeErr, (Object *)this);
 }

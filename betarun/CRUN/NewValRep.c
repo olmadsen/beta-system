@@ -85,13 +85,13 @@ ParamObjOffRange(NewVR8)
 
 ParamObjOffRange(NewVRI)
 {
-  DeclReference1(struct ObjectRep *, theRep);
+  DeclReference1(ObjectRep *, theRep);
   GCable_Entry();
   FetchObjOffRange();
   
   DEBUG_CODE(NumNewVRI++);
   Ck(theObj);
-  theRep = (casthandle(ObjectRep)theObj)[offset];
+  theRep = ((ObjectRep **)theObj)[offset];
   
 #ifdef sparc
   CAlloVRI(theRep->iOrigin, theObj, 4*offset, range, 0, theRep->iProto);
@@ -104,13 +104,13 @@ ParamObjOffRange(NewVRI)
 
 ParamObjOffRange(NewVRC)
 {
-  DeclReference1(struct ObjectRep *, theRep);
+  DeclReference1(ObjectRep *, theRep);
   GCable_Entry();
   FetchObjOffRange();
   
   DEBUG_CODE(NumNewVRC++);
   Ck(theObj);
-  theRep = (casthandle(ObjectRep)theObj)[offset];
+  theRep = ((ObjectRep **)theObj)[offset];
   
 #ifdef sparc
   CAlloVRC(theRep->iOrigin, theObj, 4*offset, range, 0, theRep->iProto);

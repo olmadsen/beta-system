@@ -40,8 +40,8 @@ typedef void (*forEachCallType) (int,int);
  * Returns the stack type (one of the above CS_*
  */
 
-int scanComponentStack (struct Component* comp, 
-			struct Object *curObj,
+int scanComponentStack (Component* comp, 
+			Object *curObj,
 			int PC,
 			forEachCallType forEach);
 

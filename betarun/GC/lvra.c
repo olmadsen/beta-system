@@ -5,13 +5,13 @@
  */
 #include "beta.h"
 
-ref(ValRep) LVRAAlloc(ref(ProtoType) proto, long range)
+ValRep * LVRAAlloc(ProtoType * proto, long range)
 {
-  ref(ValRep)    newRep;
+  ValRep *    newRep;
   long           size;
 
   size = DispatchValRepSize(proto, range);
-  newRep = (ref(ValRep)) AOAallocate(size);
+  newRep = (ValRep *) AOAallocate(size);
   newRep->Proto      = proto;
   newRep->LowBorder  = 1;
   newRep->HighBorder = range; /* indexes */
@@ -22,9 +22,9 @@ ref(ValRep) LVRAAlloc(ref(ProtoType) proto, long range)
 /* LVRACAlloc: allocate a Value repetition in the LVRA area 
  * and nullify the BODY of the repetition..
  */
-ref(ValRep) LVRACAlloc(ref(ProtoType) proto, long range)     
+ValRep * LVRACAlloc(ProtoType * proto, long range)     
 {
-  ref(ValRep) newRep = LVRAAlloc(proto, range);
+  ValRep * newRep = LVRAAlloc(proto, range);
   if (newRep){
     /* Clear the body of newRep */
     memset(newRep->Body, 0, DispatchValRepBodySize(proto, range));
@@ -36,9 +36,9 @@ ref(ValRep) LVRACAlloc(ref(ProtoType) proto, long range)
  * and nullify extension part of the BODY of the repetition
  * (i.e. the elements from ]oldrange..newrange]
  */
-ref(ValRep) LVRAXAlloc(ref(ProtoType) proto, long oldrange, long newrange)  
+ValRep * LVRAXAlloc(ProtoType * proto, long oldrange, long newrange)  
 {
-  ref(ValRep) newRep = LVRAAlloc(proto, newrange);
+  ValRep * newRep = LVRAAlloc(proto, newrange);
   if (newRep && (newrange>oldrange)){
     /* Clear the extension part of the body of newRep */
     long oldbodysize = DispatchValRepBodySize(proto, oldrange);

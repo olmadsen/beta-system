@@ -22,15 +22,15 @@
 ParamObjOriginProtoOffRange(AlloVRI)
 {
   /* Allocate repetition of offline items */
-  DeclReference1(struct ObjectRep *, theRep);
-  struct Item *item;
+  DeclReference1(ObjectRep *, theRep);
+  Item *item;
   GCable_Entry();
   FetchObjOriginProtoOffRange();
 
   DEBUG_CODE(NumAlloVRI++);
   Ck(theObj);
   Protect2(theObj, origin,  
-	  theRep = cast(ObjectRep)IOAalloc(DynObjectRepSize(range)));
+	  theRep = (ObjectRep *)IOAalloc(DynObjectRepSize(range)));
 
   theRep->Proto = DynItemRepPTValue;
   if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
@@ -45,23 +45,23 @@ ParamObjOriginProtoOffRange(AlloVRI)
 #ifdef sparc
 #ifdef MT
     Protect(theRep, 
-	    item = (struct Item *)
+	    item = (Item *)
 	    CallVEntry((void (*)())(theRep->iProto), theRep->iOrigin));
 #else
     Protect(theRep, 
-	    item = SPARC_AlloI(cast(Object) theRep->iOrigin, 0, theRep->iProto, 0, 0));
+	    item = SPARC_AlloI((Object *) theRep->iOrigin, 0, theRep->iProto, 0, 0));
 #endif /* MT */
 #endif
 #ifdef hppa
     Protect(theRep, 
-	    item = CAlloI(cast(Object) theRep->iOrigin, theRep->iProto));
+	    item = CAlloI((Object *) theRep->iOrigin, theRep->iProto));
 #endif
     AssignReference((long *)((long)&theRep->Body + range*4), item);
   }
 
   RestoreVar(theObj);
 
-  AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+  AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
 
   Ck(theObj); Ck(theRep);
 }
@@ -72,15 +72,15 @@ ParamObjOriginProtoOffRange(AlloVRC)
 {
   /* AllocateObjectRepetitionComponent: Allocate repetition of offline components
    */
-  DeclReference1(struct ObjectRep *, theRep);
-  struct Component *comp;
+  DeclReference1(ObjectRep *, theRep);
+  Component *comp;
   GCable_Entry();
   FetchObjOriginProtoOffRange();
 
   DEBUG_CODE(NumAlloVRC++);
   Ck(theObj);
   Protect2(theObj, origin,  
-	  theRep = cast(ObjectRep)IOAalloc(DynObjectRepSize(range)));
+	  theRep = (ObjectRep *)IOAalloc(DynObjectRepSize(range)));
 
   theRep->Proto = DynCompRepPTValue;
   if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
@@ -98,20 +98,20 @@ ParamObjOriginProtoOffRange(AlloVRC)
 	    comp = CallAlloC(theRep->iProto, theRep->iOrigin));
 #else
     Protect(theRep, 
-	    comp = SPARC_AlloC(cast(Object) theRep->iOrigin, 0, theRep->iProto, 0, 0));
+	    comp = SPARC_AlloC((Object *) theRep->iOrigin, 0, theRep->iProto, 0, 0));
 #endif /* MT */
 #endif
 #ifdef hppa
     Protect(theRep, 
-	    comp = CAlloC(cast(Object) theRep->iOrigin, theRep->iProto));
+	    comp = CAlloC((Object *) theRep->iOrigin, theRep->iProto));
 #endif
     AssignReference((long *)((long)&theRep->Body + range*4), 
-		    (struct Item *)comp);
+		    (Item *)comp);
   }
 
   RestoreVar(theObj);
 
-  AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+  AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
 
   Ck(theObj); Ck(theRep);
 }

@@ -9,9 +9,9 @@
 #include "crun.h"
 
 #ifndef MT
-ParamOriginProto(struct Structure *, AlloS)
+ParamOriginProto(Structure *, AlloS)
 {
-  register ref(Structure) newStruct;
+  register Structure * newStruct;
   
   GCable_Entry();
   FetchOriginProto();
@@ -21,7 +21,7 @@ ParamOriginProto(struct Structure *, AlloS)
   /* Allocate a StructObject. */
     
   Ck(origin);
-  Protect(origin, newStruct = cast(Structure) IOAalloc(StructureSize));
+  Protect(origin, newStruct = (Structure *) IOAalloc(StructureSize));
   
   newStruct->Proto = StructurePTValue;
   if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
@@ -37,9 +37,9 @@ ParamOriginProto(struct Structure *, AlloS)
 #endif
 }
 
-ParamStruc(struct Item *, AlloSI)
+ParamStruc(Item *, AlloSI)
 {
-  struct Item *ss;
+  Item *ss;
   
   GCable_Entry();
   FetchStruc();
@@ -48,10 +48,10 @@ ParamStruc(struct Item *, AlloSI)
 
   Ck(struc); Ck(struc->iOrigin);
 #ifdef sparc
-  ss = SPARC_AlloI(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0);
+  ss = SPARC_AlloI((Object *) struc->iOrigin, 0, struc->iProto, 0, 0);
 #endif
 #ifdef hppa
-  ss = CAlloI(cast(Object) struc->iOrigin, struc->iProto);
+  ss = CAlloI((Object *) struc->iOrigin, struc->iProto);
 #endif
 
   Ck(ss); 
@@ -63,9 +63,9 @@ ParamStruc(struct Item *, AlloSI)
 #endif
 }
 
-ParamStruc(struct Component *, AlloSC)
+ParamStruc(Component *, AlloSC)
 {
-  struct Component *ss;
+  Component *ss;
   
   GCable_Entry();
   FetchStruc();
@@ -74,10 +74,10 @@ ParamStruc(struct Component *, AlloSC)
 
   Ck(struc);
 #ifdef sparc
-  ss = SPARC_AlloC(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0);
+  ss = SPARC_AlloC((Object *) struc->iOrigin, 0, struc->iProto, 0, 0);
 #endif
 #ifdef hppa
-  ss = CAlloC(cast(Object) struc->iOrigin, struc->iProto);
+  ss = CAlloC((Object *) struc->iOrigin, struc->iProto);
 #endif
 
   Ck(ss);
@@ -89,7 +89,7 @@ ParamStruc(struct Component *, AlloSC)
 #endif
 }    
 
-ref(Structure) ObjS(ref(Object) theObj)
+Structure * ObjS(Object * theObj)
 {
   /* Allocate a structObject for theObj. 
    * Used in this way:
@@ -99,7 +99,7 @@ ref(Structure) ObjS(ref(Object) theObj)
    *
    */
   
-  register ref(Structure) newStruct;
+  register Structure * newStruct;
   
   GCable_Entry();
   
@@ -110,17 +110,17 @@ ref(Structure) ObjS(ref(Object) theObj)
 #ifdef RTDEBUG
   if (theObj->Proto == DopartObjectPTValue){
     fprintf(output, "ObjS: called with DoPartObject: 0x%x\n", (int)theObj);
-    theObj = ((struct DopartObject *)theObj)->Origin; /* the "real" object */
+    theObj = ((DopartObject *)theObj)->Origin; /* the "real" object */
   }
 #endif
   
   Ck(theObj);
-  Protect(theObj, newStruct = cast(Structure) IOAalloc(StructureSize));
+  Protect(theObj, newStruct = (Structure *) IOAalloc(StructureSize));
   
   newStruct->Proto = StructurePTValue;
   if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
   newStruct->iProto = theObj->Proto;
-  newStruct->iOrigin = (casthandle(Object)theObj)[theObj->Proto->OriginOff];
+  newStruct->iOrigin = ((Object **)theObj)[theObj->Proto->OriginOff];
 
   Ck(newStruct); Ck(theObj);
   
@@ -129,7 +129,7 @@ ref(Structure) ObjS(ref(Object) theObj)
 #endif /* MT */
 
 
-long eqS(ref(Structure) arg1, ref(Structure) arg2)
+long eqS(Structure * arg1, Structure * arg2)
 {
   /*GCable_Entry();*/
   
@@ -150,7 +150,7 @@ long eqS(ref(Structure) arg1, ref(Structure) arg2)
   return 1;
 }
 
-long neS(ref(Structure) arg1, ref(Structure) arg2)
+long neS(Structure * arg1, Structure * arg2)
 {
   /* GCable_Entry(); */
   
@@ -173,14 +173,14 @@ asmlabel(ltS,
          "ba   "CPREF"ltS; "
          "clr %o4");
 #endif
-long CltS(ref(Structure) arg1, ref(Structure) arg2)
+long CltS(Structure * arg1, Structure * arg2)
 #else /* not sparc */
-long ltS(ref(Structure) arg1, ref(Structure) arg2)
+long ltS(Structure * arg1, Structure * arg2)
 #endif
 {
-  ref(ProtoType) proto1;
-  ref(ProtoType) proto2;
-  DeclReference1(struct Item *, newObject);
+  ProtoType * proto1;
+  ProtoType * proto2;
+  DeclReference1(Item *, newObject);
 
 
   GCable_Entry();
@@ -210,7 +210,7 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
 	   /* Now there is some hope.
 	    * We need to check if origins are equal.
 	    */
-	   struct ProtoType *tmpProto1 = GetProto(arg1); 
+	   ProtoType *tmpProto1 = GetProto(arg1); 
 	   if (proto2->OriginOff == tmpProto1->OriginOff){
 	     /* The original prototypes have same origin offset 
 	      * (same prefix level), so the result is 
@@ -235,7 +235,7 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
 #ifdef sparc
 #ifdef MT
 	   Protect(arg2, 
-		   newObject = (struct Item *)
+		   newObject = (Item *)
 		   CallVEntry((void (*)())(arg1->iProto), arg1->iOrigin));
 #else
 	   Protect(arg2, newObject = SPARC_AlloSI(arg1, 0, 0, 0, 0));
@@ -245,7 +245,7 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
 	   Protect(arg2, newObject = CAlloSI(arg1));
 #endif
 	   Ck(arg2);
-	   return cast(Object)((long*)newObject)[proto2->OriginOff] == (arg2->iOrigin);
+	   return (Object *)((long*)newObject)[proto2->OriginOff] == (arg2->iOrigin);
 	 }
        }
   Ck(arg1); Ck(arg2);
@@ -259,9 +259,9 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
 asmlabel(gtS,
 	 CallAndPush_I0_I1(gtS)
 	 ); 
-long CgtS(ref(Structure) arg1, ref(Structure) arg2)
+long CgtS(Structure * arg1, Structure * arg2)
 #else
-long gtS(ref(Structure) arg1, ref(Structure) arg2)
+long gtS(Structure * arg1, Structure * arg2)
 #endif
 {
   GCable_Entry();
@@ -282,9 +282,9 @@ long gtS(ref(Structure) arg1, ref(Structure) arg2)
 asmlabel(leS,
 	 CallAndPush_I0_I1(leS)
 	 ); 
-long CleS(ref(Structure) arg1, ref(Structure) arg2)
+long CleS(Structure * arg1, Structure * arg2)
 #else
-long leS(ref(Structure) arg1, ref(Structure) arg2)
+long leS(Structure * arg1, Structure * arg2)
 #endif
 { 
   GCable_Entry();
@@ -305,9 +305,9 @@ long leS(ref(Structure) arg1, ref(Structure) arg2)
 asmlabel(geS,
 	 CallAndPush_I0_I1(geS)
 	 ); 
-long CgeS(ref(Structure) arg1, ref(Structure) arg2)
+long CgeS(Structure * arg1, Structure * arg2)
 #else
-long geS(ref(Structure) arg1, ref(Structure) arg2)
+long geS(Structure * arg1, Structure * arg2)
 #endif
 { 
   GCable_Entry();

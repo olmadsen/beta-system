@@ -291,7 +291,7 @@ void printOpCode (int opcode)
 }
 #endif
 
-static int valhallaCommunicate (int PC, int SP, struct Object *curObj);
+static int valhallaCommunicate (int PC, int SP, Object *curObj);
 
 extern char *Argv (int);
 
@@ -451,7 +451,7 @@ INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
 {
   void *cb = 0;
 #ifdef sparc
-  extern void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj);
+  extern void *CCopyCPP(Structure * theStruct, Object * theObj);
   BetaStackTop = SP; /* Must be set in case og GC during callback */
   cb = CCopyCPP(struc, curobj);
 #endif /* sparc */
@@ -481,7 +481,7 @@ INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
   /* __asm__("invd"); Flush cache -- i486 only */
 #endif /* intel */
 #ifdef NEWRUN
-  extern void *CopyCPP(struct Structure *theStruct);
+  extern void *CopyCPP(Structure *theStruct);
   BetaStackTop[0] = SP;
   cb = CopyCPP(struc);  
 #endif /* NEWRUN */
@@ -492,7 +492,7 @@ INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
   return cb;
 }
 
-INLINE int findMentry (struct ProtoType *proto)
+INLINE int findMentry (ProtoType *proto)
      /* 
       * Return the Mentry point corresponding to a T entry, or 0, if
       * the corresponding pattern does not have a do-part.
@@ -507,7 +507,7 @@ INLINE int findMentry (struct ProtoType *proto)
   }
 }
 
-static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
+static int valhallaCommunicate (int PC, int SP, Object* curObj)
 { int opcode;
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhallaCommunicate\n"));  
   while (TRUE) {
@@ -570,7 +570,7 @@ static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
     case VOP_OBJADRCANONIFY: { 
       int address;
       int legal;
-      struct Object *obj = (struct Object *) valhalla_readint ();
+      Object *obj = (Object *) valhalla_readint ();
       
       DEBUG_VALHALLA(fprintf(output,"debuggee: Got object %d\n",(int) obj));
       if (obj && inBetaHeap(obj) && isObject(obj)){
@@ -583,7 +583,7 @@ static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
 	if ((obj->Proto) != (ComponentPTValue)) {
 	  DEBUG_VALHALLA(fprintf(output,"debuggee: Not ComponentPTValue\n"));
 	  if (obj->GCAttr == -6) {
-	    struct Component *comp = (struct Component *) (address - 24);
+	    Component *comp = (Component *) (address - 24);
 	    DEBUG_VALHALLA(fprintf(output,"debuggee: GCAttr was -6\n"));
 	    if ((comp->Proto) == (ComponentPTValue))
 	      address = address - 24;
@@ -619,17 +619,17 @@ static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
     }
     break;
     case VOP_GETPROTOINFO: {
-      struct group_header* header; int tableSize;
+      group_header* header; int tableSize;
       long** protoTable; int i;
       
-      header = (struct group_header*) valhalla_readint ();
+      header = (group_header*) valhalla_readint ();
       protoTable = (long **) header->protoTable;
       
       tableSize= (int) protoTable[0];
       
       for (i=1; i<=tableSize; i++) {
 	/* M entry point: */
-	valhalla_writeint (findMentry ((struct ProtoType *) protoTable[i]));
+	valhalla_writeint (findMentry ((ProtoType *) protoTable[i]));
 	
 	valhalla_writeint (protoTable[i][1]); /* G entry point. */
 	valhalla_writeint (protoTable[i][4]); /* (formIndex,AstIndex) */
@@ -640,10 +640,10 @@ static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
     }
     break;
     case VOP_SCANSTACK: { 
-      struct Component *comp;
+      Component *comp;
       int stacktype;
       
-      comp = (struct Component *) valhalla_readint ();
+      comp = (Component *) valhalla_readint ();
       DEBUG_VALHALLA(fprintf (output,"debuggee: Received component: %d, pt = %d\n",(int)comp, (int) comp->Proto));
       
       DEBUG_VALHALLA(fprintf (output,"debuggee: Scanning ComponentStack.\n"));
@@ -684,9 +684,9 @@ static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
     }
     break;
     case VOP_EXECUTEOBJECT: {
-      struct Object    * origin;
-      struct ProtoType * proto;
-      struct Structure * struc;
+      Object    * origin;
+      ProtoType * proto;
+      Structure * struc;
       long   old_valhallaIsStepping;
       void (*cb)(void);
       int origin_handle, curObj_handle;
@@ -705,8 +705,8 @@ static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
        * stack pointer at the point where debuggee was
        * stopped.
        */
-      origin = (struct Object *) valhalla_readint ();
-      proto  = (struct ProtoType *) valhalla_readint ();
+      origin = (Object *) valhalla_readint ();
+      proto  = (ProtoType *) valhalla_readint ();
       
       DEBUG_VALHALLA(fprintf(output, "VOP_EXECUTEOBJECT:\n"));
       DEBUG_VALHALLA(fprintf(output, "Origin Object:\n"));
@@ -876,14 +876,14 @@ void forEachAlive (int handle, Object *address, DOTonDelete onDelete)
 
 
 /* 
- * int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj, 
+ * int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj, 
  *                            long sig, long errorNumber)
  * ====================================================================
  *
  * Calls back to valhalla to inform that this process has stopped and
  * is ready to serve requests. */
 
-int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj, 
+int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj, 
 			   long sig, long errorNumber)
 { 
   char *txt; int res;

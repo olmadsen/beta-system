@@ -173,7 +173,7 @@ void ProcessTSD(void)
       DEBUG_MT(fprintf(output, 
 		       "\tCurrentObject=0x%0x...", 
 		       (int)TSDlist[i]->_CurrentObject));
-      ProcessReference((handle(Object))(&TSDlist[i]->_CurrentObject));
+      ProcessReference((Object **)(&TSDlist[i]->_CurrentObject));
       DEBUG_MT(fprintf(output, 
 		       "CurrentObject=0x%0x\n", 
 		       (int)TSDlist[i]->_CurrentObject));
@@ -181,14 +181,14 @@ void ProcessTSD(void)
       DEBUG_MT(fprintf(output, 
 		       "\tOrigin=0x%0x...",
 		       (int)TSDlist[i]->_Origin));
-      ProcessReference((handle(Object))(&TSDlist[i]->_Origin));
+      ProcessReference((Object **)(&TSDlist[i]->_Origin));
       DEBUG_MT(fprintf(output, 
 		       "Origin=0x%0x\n", (int)TSDlist[i]->_Origin));
 
       DEBUG_MT(fprintf(output, 
 		       "\tSavedCallO=0x%0x...",
 		       (int)TSDlist[i]->_SavedCallO));
-      ProcessReference((handle(Object))(&TSDlist[i]->_SavedCallO));
+      ProcessReference((Object **)(&TSDlist[i]->_SavedCallO));
       DEBUG_MT(fprintf(output, 
 		       "SavedCallO=0x%0x\n", 
 		       (int)TSDlist[i]->_SavedCallO));
@@ -196,7 +196,7 @@ void ProcessTSD(void)
       DEBUG_MT(fprintf(output, 
 		       "\tActiveStack=0x%0x...",
 		       (int)TSDlist[i]->_ActiveStack));
-      ProcessReference((handle(Object))(&TSDlist[i]->_ActiveStack));
+      ProcessReference((Object **)(&TSDlist[i]->_ActiveStack));
       DEBUG_MT(fprintf(output, 
 		       "ActiveStack=0x%0x\n", 
 		       (int)TSDlist[i]->_ActiveStack));
@@ -204,7 +204,7 @@ void ProcessTSD(void)
       DEBUG_MT(fprintf(output, 
 		       "\tActiveComponent=0x%0x...",
 		       (int)TSDlist[i]->_ActiveComponent));
-      ProcessReference((handle(Object))(&TSDlist[i]->_ActiveComponent));
+      ProcessReference((Object **)(&TSDlist[i]->_ActiveComponent));
       DEBUG_MT(fprintf(output, 
 		       "ActiveComponent=0x%0x\n", 
 		       (int)TSDlist[i]->_ActiveComponent));
@@ -219,7 +219,7 @@ void ProcessTSD(void)
 }
 
 #ifdef RTDEBUG
-static void TSDCheckReference(int i, struct Object *ref);
+static void TSDCheckReference(int i, Object *ref);
 
 /*
  * TSDCheck: do consistency check on entire TSD structure.
@@ -309,17 +309,17 @@ void TSDCheck(void)
 #endif
 
       /* Check references */
-      TSDCheckReference(i, (ref(Object))(TSDlist[i]->_CurrentObject));
-      TSDCheckReference(i, (ref(Object))(TSDlist[i]->_Origin));
-      TSDCheckReference(i, (ref(Object))(TSDlist[i]->_SavedCallO));
-      TSDCheckReference(i, (ref(Object))(TSDlist[i]->_ActiveStack));
-      TSDCheckReference(i, (ref(Object))(TSDlist[i]->_ActiveComponent));
+      TSDCheckReference(i, (Object *)(TSDlist[i]->_CurrentObject));
+      TSDCheckReference(i, (Object *)(TSDlist[i]->_Origin));
+      TSDCheckReference(i, (Object *)(TSDlist[i]->_SavedCallO));
+      TSDCheckReference(i, (Object *)(TSDlist[i]->_ActiveStack));
+      TSDCheckReference(i, (Object *)(TSDlist[i]->_ActiveComponent));
     }
   }
 }
 
 /* TSDCheckReference: Placed here to prevent inlining */
-static void TSDCheckReference(int i, struct Object *ref)
+static void TSDCheckReference(int i, Object *ref)
 {
   if (ref && !(inBetaHeap(ref) && isObject(ref))) { 
     fprintf(output, "Illegal reference 0x%x in TSD[%d]\n", (int)ref, i); 
@@ -328,10 +328,10 @@ static void TSDCheckReference(int i, struct Object *ref)
 }
 #endif /* RTDEBUG */
 
-void ProcessStackObj(struct StackObject *sObj)
+void ProcessStackObj(StackObject *sObj)
 {
-  struct Object **handle = (struct Object **)&sObj->Body;
-  struct Object **last   = (struct Object **)((long)&sObj->Proto + sObj->refTopOff);
+  Object **handle = (Object **)&sObj->Body;
+  Object **last   = (Object **)((long)&sObj->Proto + sObj->refTopOff);
   DEBUG_MT(fprintf(output, "ProcessStackObj: 0x%x\n",(int)sObj));
   while (handle<=last) {
     if (inBetaHeap(*handle) 
@@ -352,10 +352,10 @@ void ProcessStackObj(struct StackObject *sObj)
   }
 }
 #ifdef RTDEBUG
-void PrintStackObj(struct StackObject *sObj)
+void PrintStackObj(StackObject *sObj)
 {
-  struct Object **handle;
-  struct Object **last;
+  Object **handle;
+  Object **last;
 
   fprintf(output, "StackObj: 0x%x\n",(int)sObj);
   fprintf(output, "  BodySize:   0x%x\n",(int)sObj->BodySize);
@@ -363,8 +363,8 @@ void PrintStackObj(struct StackObject *sObj)
   fprintf(output, "  dataTopOff: 0x%x\n",(int)sObj->dataTopOff);
 
   fprintf(output, "  References\n");
-  handle = (struct Object **)&sObj->Body;
-  last = (struct Object **)((long)sObj + sObj->refTopOff);
+  handle = (Object **)&sObj->Body;
+  last = (Object **)((long)sObj + sObj->refTopOff);
   while (handle<=last) {
     fprintf(output, 
 	    "    0x%x: 0x%x (%s)\n",
@@ -375,8 +375,8 @@ void PrintStackObj(struct StackObject *sObj)
   }
 
   fprintf(output, "  Data\n");
-  handle = (struct Object **)((long)&sObj->Body + sObj->dataTopOff);
-  last = (struct Object **)((long)sObj+headsize(StackObject)+sObj->BodySize);
+  handle = (Object **)((long)&sObj->Body + sObj->dataTopOff);
+  last = (Object **)((long)sObj+headsize(StackObject)+sObj->BodySize);
   while (handle<=last) {
     fprintf(output, 
 	    "    0x%x: 0x%x\n",
@@ -388,11 +388,11 @@ void PrintStackObj(struct StackObject *sObj)
 
 #endif /*RTDEBUG*/
 
-static struct Object *AllocObjectAndSlice(unsigned int numbytes, unsigned int reqsize)
+static Object *AllocObjectAndSlice(unsigned int numbytes, unsigned int reqsize)
 {
   /* ASSUMPTION: that max(numbytes,IOASliceSize) will fit into [gIOATop..gIOALimit[ */
 
-  struct Object *newObj;
+  Object *newObj;
 
 #ifdef RTDEBUG
   {
@@ -408,11 +408,11 @@ static struct Object *AllocObjectAndSlice(unsigned int numbytes, unsigned int re
      * utilize the remaining space in this slice, even though numbytes 
      * may be bigger.
      */
-    newObj = (struct Object*)IOATop;
+    newObj = (Object*)IOATop;
     IOATop = (long*)((long)IOATop + numbytes); /* size of object */
     gIOATop = (long*)((long)IOATop + reqsize-numbytes); /* size of slice */
   } else {
-    newObj = (struct Object*)gIOATop;
+    newObj = (Object*)gIOATop;
     IOATop = (long*)((long)gIOATop + numbytes); /* size of object */
     gIOATop = (long*)((long)gIOATop + reqsize); /* size of slice */
   }
@@ -431,7 +431,7 @@ static int CheckIfICanGC()
   return 1;
 }
 
-struct Object *doGC(unsigned long numbytes)
+Object *doGC(unsigned long numbytes)
 {
   /* Allocate an IOA slice. 
    * -Attempts to allocate max(numbytes,IOASliceSize) bytes.
@@ -440,7 +440,7 @@ struct Object *doGC(unsigned long numbytes)
    */
 
   static volatile int numReadyToGC;
-  struct Object* newObj=0;
+  Object* newObj=0;
   unsigned long reqsize = numbytes;
   int i;
   
@@ -578,7 +578,7 @@ struct Object *doGC(unsigned long numbytes)
 	    /* (6.0) */
 	    IOATop = gIOATop; 
 	    gIOATop = (long*)((long)gIOATop + reqsize); /* size of slice */
-	    newObj = (struct Object *)IOATop;
+	    newObj = (Object *)IOATop;
 	    IOATop = (long*)((long)IOATop + numbytes);
 	    savedIOALimit = IOALimit = gIOATop;
 	    break;
@@ -599,7 +599,7 @@ struct Object *doGC(unsigned long numbytes)
 	      /* (6.1) */
 	      IOATop = gIOATop; 
 	      gIOATop = (long*)((long)gIOATop + reqsize); /* size of slice */
-	      newObj = (struct Object *)IOATop;
+	      newObj = (Object *)IOATop;
 	      IOATop = (long*)((long)IOATop + numbytes);
 	      savedIOALimit = IOALimit = gIOATop;
 	      break;
@@ -607,7 +607,7 @@ struct Object *doGC(unsigned long numbytes)
 
 	    if ((long*)((long)gIOATop + numbytes) <= gIOALimit) {
 	      /* (6.1) */
-	      newObj = (struct Object *)gIOATop; 
+	      newObj = (Object *)gIOATop; 
 	      gIOATop = (long*)((long)gIOATop + numbytes); /* size of object */
 	      IOATop = savedIOALimit = IOALimit = gIOATop;
 	      break;
@@ -732,7 +732,7 @@ int numProcessors(int online)
 
 extern void *AttTC(void *);
 
-thread_t attToThread(struct Component *comp)
+thread_t attToThread(Component *comp)
 { 
   TSD *tsd = create_TSD();
   tsd->_ActiveComponent = comp;

@@ -223,9 +223,9 @@ static __inline__ long GetBetaPC(long errno)
 /* BetaError: */
 
 #ifdef NEWRUN
-void BetaError(enum BetaErr err, struct Object *theObj, long *SP, long *thePC)
+void BetaError(enum BetaErr err, Object *theObj, long *SP, long *thePC)
 #else
-void BetaError(enum BetaErr err, struct Object *theObj)
+void BetaError(enum BetaErr err, Object *theObj)
 #endif
 {
 #ifndef NEWRUN
@@ -318,7 +318,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	 * The "thing" two positions below is the first real part 
 	 * of the Beta stack
 	 */
-	StackEnd = (ptr(long)) &theObj; 
+	StackEnd = (long *) &theObj; 
 	StackEnd++; /* One below */
 	thePC = *(long**)StackEnd;
 	StackEnd++;  /* Two below */
@@ -348,7 +348,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	 *           are met here.
 	 */
 	thePC = 0;
-	StackEnd = (ptr(long)) &theObj; StackEnd++;
+	StackEnd = (long *) &theObj; StackEnd++;
 	break;
       }
 #endif /* intel */

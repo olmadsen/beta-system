@@ -11,8 +11,8 @@
 #endif
 
 #if defined(MT) || defined(hppa)
-int scanComponentStack (struct Component* comp,
-			struct Object *curObj,
+int scanComponentStack (Component* comp,
+			Object *curObj,
 			int PC,
 			forEachCallType forEach)
 { 
@@ -41,14 +41,14 @@ int isBETAcode(int PC)
 static void ShowStackPart(long *low, long *high, forEachCallType DoForEach)
 {
   long          *ptr = low;
-  struct Object *theObj;
-  struct Object **theCell;
+  Object *theObj;
+  Object **theCell;
 
   DEBUG_VALHALLA(fprintf(output, "ShowStackPart: [0x%x..0x%x]\n", (int)low, (int)high));
 
   while (ptr<=high){
-    if(inBetaHeap((struct Object *)(*ptr))){
-      theCell = (handle(Object)) ptr;
+    if(inBetaHeap((Object *)(*ptr))){
+      theCell = (Object **) ptr;
       theObj  = *theCell;
       if (inIOA(theObj) || inAOA(theObj)){
 	DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", (int)*(ptr+1), (int)theObj));
@@ -71,8 +71,8 @@ static void ShowStackPart(long *low, long *high, forEachCallType DoForEach)
 
 }
 
-int scanComponentStack (struct Component* comp,
-			struct Object *curObj,
+int scanComponentStack (Component* comp,
+			Object *curObj,
 			int PC,
 			forEachCallType forEach)
 {
@@ -91,7 +91,7 @@ int scanComponentStack (struct Component* comp,
 				  * if it has previously been suspended.
 				  */
       ){
-    struct StackObject *sObj = comp->StackObj;
+    StackObject *sObj = comp->StackObj;
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: scanning stackObject 0x%x\n", (int)comp->StackObj));
     ShowStackPart((long*)sObj->Body, 
 		  (long*)((long)sObj->Body + sObj->StackSize),
@@ -122,10 +122,10 @@ int scanComponentStack (struct Component* comp,
   { 
     long                  *lowAddr;
     long                  *highAddr;
-    struct CallBackFrame  *cbFrame;
-    struct ComponentBlock *currentBlock;
-    struct Object         *currentObject;
-    struct Component      *currentComponent;
+    CallBackFrame  *cbFrame;
+    ComponentBlock *currentBlock;
+    Object         *currentObject;
+    Component      *currentComponent;
     long                  PC=0;
     
     /* First handle the topmost component block */
@@ -140,7 +140,7 @@ int scanComponentStack (struct Component* comp,
       lowAddr = cbFrame->betaTop;
       lowAddr += 4;
       cbFrame = cbFrame->next;
-      if(compfound && isObject((ref(Object))(*lowAddr))) forEach(0,(*lowAddr));
+      if(compfound && isObject((Object *)(*lowAddr))) forEach(0,(*lowAddr));
       lowAddr += 2;
     }
     if (compfound) ShowStackPart(lowAddr, highAddr-3, forEach);  
@@ -160,8 +160,8 @@ int scanComponentStack (struct Component* comp,
 	break;
       }
       if (currentComponent==comp) compfound=TRUE;
-      lowAddr  = (long *)((long)currentBlock+sizeof(struct ComponentBlock))+1;
-      highAddr = (ptr(long)) currentBlock->next;
+      lowAddr  = (long *)((long)currentBlock+sizeof(ComponentBlock))+1;
+      highAddr = (long *) currentBlock->next;
       cbFrame  = currentBlock->callBackFrame;
       if (compfound && !cbFrame) {
 	DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", (int)PC, (int)currentObject));
@@ -173,7 +173,7 @@ int scanComponentStack (struct Component* comp,
 	lowAddr = cbFrame->betaTop;
 	lowAddr += 4;
 	cbFrame = cbFrame->next;
-	if(compfound && isObject((ref(Object))(*lowAddr))){
+	if(compfound && isObject((Object *)(*lowAddr))){
 	  DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", 0, (int)(*lowAddr)));
 	  forEach(0, (*lowAddr));
 	}
@@ -217,9 +217,9 @@ GLOBAL(static Component *TheComponent);
 GLOBAL(static forEachCallType DoForEach);
 GLOBAL(static int BasicItemShown);
 
-static void ShowCell(int PC, struct Object *theObj)
+static void ShowCell(int PC, Object *theObj)
 {
-  if (theObj==(struct Object *)BasicItem){
+  if (theObj==(Object *)BasicItem){
     if (!BasicItemShown){
       TRACE_SCAN(fprintf(output, ", PC=0x%x *\n", PC));
       DoForEach(PC, (int)theObj);
@@ -231,7 +231,7 @@ static void ShowCell(int PC, struct Object *theObj)
   }
 }
 
-static void DoStackCell(struct Object **theCell,struct Object *theObj)
+static void DoStackCell(Object **theCell,Object *theObj)
 { 
   register long PC;
   long *SP;
@@ -292,14 +292,14 @@ static void DoStackCell(struct Object **theCell,struct Object *theObj)
     ShowCell(PC, theObj);
   } else {
     /* Not yet found */
-    if (theObj==(struct Object *)TheComponent){
+    if (theObj==(Object *)TheComponent){
       /* Found: The real dyn is found as theComp->CallerObj 
        * - see stack.c for details.
        */	
       TRACE_SCAN(fprintf(output, " comp found"));
       CompFound=TRUE;
-      PC = ((struct Component *)theObj)->CallerComp->CallerLSC;
-      theObj = ((struct Component *)theObj)->CallerObj;
+      PC = ((Component *)theObj)->CallerComp->CallerLSC;
+      theObj = ((Component *)theObj)->CallerObj;
       ShowCell(PC, theObj);
     } else {
       TRACE_SCAN(fprintf(output, " comp not yet found\n"));
@@ -307,8 +307,8 @@ static void DoStackCell(struct Object **theCell,struct Object *theObj)
   }
 }
 
-int scanComponentStack (struct Component* comp,
-			struct Object *curObj,
+int scanComponentStack (Component* comp,
+			Object *curObj,
 			int PC,
 			forEachCallType forEach)
 { /* scan through the stackpart corresponding to the comp parameter.
@@ -324,7 +324,7 @@ int scanComponentStack (struct Component* comp,
   BasicItemShown=0;
 
   if (comp->StackObj){
-    struct StackObject *sObj = comp->StackObj;
+    StackObject *sObj = comp->StackObj;
     /* See ProcessStackObj in stack.c */
     CompFound = TRUE;
 
@@ -366,8 +366,8 @@ int scanComponentStack (struct Component* comp,
 #ifndef MT
 
 
-struct ComponentStack{
-  struct Component *comp; /* The component */
+typedef struct ComponentStack {
+  Component *comp; /* The component */
   int stacktype;          /* One of CS_*   */
   int returnAdr;          /* The address to return to when this component 
 			   * starts running the next time. */
@@ -385,15 +385,15 @@ struct ComponentStack{
       struct RegWin* activeCBF;
     } if_onstack;
     /* if stacktype==CS_STACKOBJ: */
-    struct StackObject *stackObj; 
+    StackObject *stackObj; 
   } info;
-};
+} ComponentStack;
 
 void handleStackPart (struct RegWin *theAR, int lastReturnAdr, forEachCallType forEach)
 { long* this, *end;
-  struct Object *lastObj, *theObj;
+  Object *lastObj, *theObj;
   
-  lastObj= (struct Object *) theAR->i0;
+  lastObj= (Object *) theAR->i0;
   forEach ((int) lastReturnAdr,(int) lastObj);
   
   this = (long *) (((long) theAR)+16*4);
@@ -401,7 +401,7 @@ void handleStackPart (struct RegWin *theAR, int lastReturnAdr, forEachCallType f
   
   while (this<=end) {
     if (isCode(this[0])) {
-      theObj = (struct Object *) this[2];
+      theObj = (Object *) this[2];
       if (inBetaHeap(theObj) 
 	  && isObject(theObj)) {
 	/* Add 8 to get the real SPARC return address. */
@@ -431,11 +431,11 @@ void handleStackPart (struct RegWin *theAR, int lastReturnAdr, forEachCallType f
  * ========================== 
  */
 
-static void findComponentStack (struct ComponentStack* compStack, int PC)
+static void findComponentStack (ComponentStack* compStack, int PC)
 { 
   struct RegWin *thisCompBlock = (struct RegWin *) lastCompBlock;
   struct RegWin *prevCompBlock = 0;
-  struct Component *thisComponent = ActiveComponent;
+  Component *thisComponent = ActiveComponent;
 
   DEBUG_VALHALLA(fprintf (output,"Entering findComponentStack (SPARC)\n"));
 
@@ -495,11 +495,12 @@ static void findComponentStack (struct ComponentStack* compStack, int PC)
 }
 
 
-int scanComponentStack (struct Component* comp,
-			struct Object *curObj,
+int scanComponentStack (Component* comp,
+			Object *curObj,
 			int PC,
 			forEachCallType forEach)
-{ struct ComponentStack compStack;
+{ 
+  struct ComponentStack compStack;
 
   compStack.comp = comp;
 
@@ -513,7 +514,7 @@ int scanComponentStack (struct Component* comp,
   case CS_NOSTACK: 
     break;
   case CS_STACKOBJ:
-    { struct StackObject *theStack = compStack.info.stackObj;
+    { StackObject *theStack = compStack.info.stackObj;
       struct RegWin *theAR;
       int lastReturnAdr = compStack.returnAdr; 
       

@@ -18,7 +18,7 @@
 
 ParamThisOffRange(AlloVR1)
 {
-    DeclReference1(struct ValRep *, theRep);
+    DeclReference1(ValRep *, theRep);
     register unsigned Size;
 
     GCable_Entry();
@@ -32,30 +32,30 @@ ParamThisOffRange(AlloVR1)
     Size = ByteRepSize(range);
 
     if (range > LARGE_REP_SIZE) {
-        theRep = cast(ValRep) LVRACAlloc(ByteRepPTValue, range);
+        theRep = (ValRep *) LVRACAlloc(ByteRepPTValue, range);
         if (theRep) {
             DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
                              "AlloVR1: lvra structure ok"));
-            *casthandle(ValRep)((char *)theObj + offset) = theRep;
+            *(ValRep **)((char *)theObj + offset) = theRep;
             return;
         }
     }
 
-    Protect(theObj, theRep = cast(ValRep) IOAalloc(Size));
+    Protect(theObj, theRep = (ValRep *) IOAalloc(Size));
 
     theRep->Proto = ByteRepPTValue;
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
   
-    AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+    AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
 
     Ck(theObj); Ck(theRep);
 }
 
 ParamThisOffRange(AlloVR2)
 {
-  DeclReference1(struct ValRep *, theRep);
+  DeclReference1(ValRep *, theRep);
   register unsigned Size;
 
   GCable_Entry();
@@ -69,29 +69,29 @@ ParamThisOffRange(AlloVR2)
   Size = ShortRepSize(range);
 
   if (range > LARGE_REP_SIZE) {
-    theRep = cast(ValRep) LVRACAlloc(ShortRepPTValue, range);
+    theRep = (ValRep *) LVRACAlloc(ShortRepPTValue, range);
     if (theRep) {
       DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 		       "AlloVR2: lvra structure ok"));
-      *casthandle(ValRep)((char *)theObj + offset) = theRep;
+      *(ValRep **)((char *)theObj + offset) = theRep;
       return;
     }
   }
 
-  Protect(theObj, theRep = cast(ValRep) IOAalloc(Size));
+  Protect(theObj, theRep = (ValRep *) IOAalloc(Size));
 
   theRep->Proto = ShortRepPTValue;
   if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
   
-  AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+  AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
   Ck(theObj); Ck(theRep);
 }
 
 ParamThisOffRange(AlloVR4)
 {
-  DeclReference1(struct ValRep *, theRep);
+  DeclReference1(ValRep *, theRep);
   register unsigned Size;
 
   GCable_Entry();
@@ -106,29 +106,29 @@ ParamThisOffRange(AlloVR4)
   Size = LongRepSize(range);
 
   if (range > LARGE_REP_SIZE) {
-    theRep = cast(ValRep) LVRACAlloc(LongRepPTValue, range);
+    theRep = (ValRep *) LVRACAlloc(LongRepPTValue, range);
     if (theRep) {
       DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 		       "AlloVR4: lvra structure ok"));
-      *casthandle(ValRep)((char *)theObj + offset) = theRep;
+      *(ValRep **)((char *)theObj + offset) = theRep;
       return;
     }
   }
 
-  Protect(theObj, theRep = cast(ValRep) IOAalloc(Size));
+  Protect(theObj, theRep = (ValRep *) IOAalloc(Size));
   
   theRep->Proto = LongRepPTValue;
   if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
 
-  AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+  AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
   Ck(theObj); Ck(theRep);
 }
 
 ParamThisOffRange(AlloVR8)
 {
-  DeclReference1(struct ValRep *, theRep);
+  DeclReference1(ValRep *, theRep);
   register unsigned Size;
 
   GCable_Entry();
@@ -143,23 +143,23 @@ ParamThisOffRange(AlloVR8)
   Size= DoubleRepSize(range);
 
   if (range > LARGE_REP_SIZE) {
-    theRep = cast(ValRep) LVRACAlloc(DoubleRepPTValue, range);
+    theRep = (ValRep *) LVRACAlloc(DoubleRepPTValue, range);
     if (theRep) {
       DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 		       "AlloVR8: lvra structure ok"));
-      *casthandle(ValRep)((char *)theObj + offset) = theRep;
+      *(ValRep **)((char *)theObj + offset) = theRep;
       return;
     }
   }
 
-  Protect(theObj, theRep = cast(ValRep) IOAalloc(Size));
+  Protect(theObj, theRep = (ValRep *) IOAalloc(Size));
 
   theRep->Proto = DoubleRepPTValue;
   if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
 
-  AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+  AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
   Ck(theObj); Ck(theRep);
 }
 

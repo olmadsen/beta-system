@@ -11,10 +11,10 @@
 
 #ifndef MT
 
-ParamOriginProto(struct Item *,AlloI)
-/* = struct Item * AlloI(struct Object *origin, struct ProtoType *proto) */
+ParamOriginProto(Item *,AlloI)
+/* = Item * AlloI(Object *origin, ProtoType *proto) */
 {
-    DeclReference1(struct Item *, item); /*= struct Item * item; */
+    DeclReference1(Item *, item); /*= Item * item; */
     GCable_Entry();
     MCHECK();
     FetchOriginProto();
@@ -31,7 +31,7 @@ ParamOriginProto(struct Item *,AlloI)
 
     DEBUG_CODE( Claim(proto->Size > 0, "AlloI: proto->Size > 0") );
 
-    Protect(origin, item = (struct Item *) IOAalloc(ItemSize(proto)));
+    Protect(origin, item = (Item *) IOAalloc(ItemSize(proto)));
 
     /* The new Object is now allocated, but not initialized yet! */
 
@@ -64,9 +64,9 @@ ParamOriginProto(struct Item *,AlloI)
  * call G-entry ("AllocateHeap") 
  */
 
-ParamOriginProto(struct Item *,AlloH)
+ParamOriginProto(Item *,AlloH)
 {
-    DeclReference1(struct Item *, item);
+    DeclReference1(Item *, item);
     GCable_Entry();
     FetchOriginProto();
 
@@ -76,7 +76,7 @@ ParamOriginProto(struct Item *,AlloH)
     }
 #endif
 
-    item = (struct Item *) IOAalloc(4*proto->Size);
+    item = (Item *) IOAalloc(4*proto->Size);
 
     /* The new Object is now allocated, but not initialized yet! */
 

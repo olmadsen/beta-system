@@ -10,7 +10,7 @@
 
 ParamRepObjOff(CopyRR)
 {
-    DeclReference1(struct RefRep *, newRep);
+    DeclReference1(RefRep *, newRep);
     register unsigned range, i;
     
     GCable_Entry();
@@ -24,7 +24,7 @@ ParamRepObjOff(CopyRR)
     range = theRep->HighBorder;
 
     Protect2(theObj, theRep,
-	     newRep = cast(RefRep) IOAalloc(RefRepSize(range)));
+	     newRep = (RefRep *) IOAalloc(RefRepSize(range)));
     
 
     newRep->Proto = theRep->Proto;
@@ -36,7 +36,7 @@ ParamRepObjOff(CopyRR)
     for (i = 0; i < range; ++i)
       newRep->Body[i] = theRep->Body[i];	/* Beautiful! */
     
-    AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, (Item *) newRep);
 
     Ck(newRep); Ck(theRep); Ck(theObj);
 }
