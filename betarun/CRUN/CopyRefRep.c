@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopyRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:26 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: CopyRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 21:57:20 $, SID: $Revision: 1.5 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -25,9 +25,8 @@ void CopyRR(ref(ValRep) theRep,
     
     range = theRep->HighBorder;
 
-    Protect(theObj,
-	    Protect(theRep,
-		    newRep = cast(RefRep) IOAcalloc(RefRepSize(range))));
+    Protect2(theObj, theRep,
+	     newRep = cast(RefRep) IOAcalloc(RefRepSize(range)));
     
     Ck(theRep); Ck(theObj);
 

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:29 $, SID: $Revision: 1.12 $
+ * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 21:57:30 $, SID: $Revision: 1.13 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -61,8 +61,7 @@ void CCopySRR(ref(RefRep) theRep,
     
     /* size is now converted to the range of the resulting repetition. */
     
-    Protect(theItem,
-	    Protect(theRep, newRep = cast(RefRep) IOAalloc(RefRepSize(size))));
+    Protect2(theItem, theRep, newRep = cast(RefRep) IOAalloc(RefRepSize(size)));
     
     Ck(theRep); Ck(theItem);
 
