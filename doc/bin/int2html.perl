@@ -71,7 +71,7 @@ $indexfile = "inx.html";
 $contentsfile = "index.html";
 
 # Flags
-$index_super_subs=0;
+$index_super_subs=1;
 
 sub print_button
 {
@@ -247,7 +247,7 @@ sub print_index
     #}
 
     @index = sort @index;
-    local ($html_index, $initial_ch, $htmlfile, $i);
+    local ($html_index, $initial_ch, $htmlfile, $i, %entries);
 
     $html_index = "";
 
@@ -277,7 +277,40 @@ sub print_index
 	    $caps{$initial_ch} = 1;
 	}
 
-	$html_index .= "<A href=\"$htmlfile\#" . $index[$i] . "\">" . $_ . "</A>\n";
+	# Block levels are present as such in the entries:
+	#   foo:
+	#     (# bar:
+	#          (# kuk: 
+	#               (# ... #)
+	#          #)
+	#     #);
+	#
+	# Index:
+	#    foo
+	#    foo:bar
+	#    foo:bar:kuk
+	#
+	# Should print as this:
+	#    foo
+	#      bar
+	#       kuk
+	#
+	$html_index .=  "[$_]\n";
+	if (0 && ($_ =~ m/(.*):([^:]+)/)){
+	    $scopes = $1;
+	    $id = $2;
+	    if ($entries{$scopes}){
+		# foo:bar already emitted
+		$html_index .= "&nbsp;" x (2* (1+&num_chars(':', $scopes)));
+		$html_index .= "<A href=\"$htmlfile\#" . $id . "\">" . $_ . "</A>\n";
+		$entries{$_} = 1;
+	    } else {
+		$html_index .= "Error: $_ ($scopes) ($id)\n";
+	    }
+	} else {
+	    $html_index .= "<A href=\"$htmlfile\#" . $index[$i] . "\">" . $_ . "</A>\n";
+	    $entries{$_} = 1;
+	}
     }
     &print_index_header;
     &print_index_toc;
@@ -374,6 +407,17 @@ sub legal_identifier
 {
     local ($id) = @_[0];
     return ($id =~ m/[a-zA-Z_]\w*/);
+}
+
+sub num_chars
+# Occurences of $ch in $string
+{
+    local ($ch, $string) = @_;
+    local ($i, $num);
+    for ($i=0; $i<$#string; $i++){
+	$num++ if ($string[$i] = $ch);
+    }
+    return $num;
 }
 
 sub process_file
