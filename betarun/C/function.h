@@ -243,7 +243,8 @@ extern int EqualNCS(char *s1, char *s2);
 extern void assignRef(long *theCell, Item * newObject);
 extern int strongIsObject(Object *obj);
 #ifdef RTDEBUG
-void PrintWhichHeap(Object *ref);
+extern const char *WhichHeap(Object *ref);
+extern void PrintWhichHeap(Object *ref);
 extern void Illegal(void);
 extern char *getLabel (long addr);
 extern long labelOffset;

@@ -660,26 +660,34 @@ void NotifyRTDebug()
 
 #ifdef RTDEBUG
 
-void PrintWhichHeap(Object *ref)
+const char *WhichHeap(Object *ref)
 {
   if (inBetaHeap(ref)){
     if (inIOA(ref)) 
-      fprintf(output, " (IOA)");
+      return "(IOA)";
     if (inAOA(ref)) 
-      fprintf(output, " (AOA)");
+      return "(AOA)";
     if (inToSpace(ref)){
-      fprintf(output, " (ToSpace)");
+      return "(ToSpace)";
     } else {
-      if (inToSpaceArea(ref))
-	fprintf(output, " (ToSpace area)");
+      if (inToSpaceArea(ref)){
+	return "(ToSpace area)";
+      } else {
+	return "(Unknown part of heap!)";
+      }
     }
   } else {
     if (ref){
-      fprintf(output, " (not in beta heap)");
+      return "(not in beta heap)";
     } else {
-      fprintf(output, " (NONE)");
+      return "(NONE)";
     }
   }
+}
+
+void PrintWhichHeap(Object *ref)
+{
+  fprintf(output, " %s", WhichHeap(ref));
 }
 
 void PrintHeap(long * startaddr, long numlongs)

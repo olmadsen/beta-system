@@ -19,33 +19,36 @@ void *memalign(size_t align, size_t size) {
 
 void GetBetaEnv()
 {
-  char *betaEnv;
+  char *betart;
   
 #if defined(MAC)
   char **theHandle;
   long length;
   
-  if( betaEnv = getenv("BETASU") ){ SetupProperties( betaEnv); return; };
-  
-  if( betaEnv = getenv( DEFAULT_PROPERTY_NAME) ){
-    SetupProperties( betaEnv);
+  if(betart = getenv(DEFAULT_PROPERTY_NAME)){
+    SetupProperties(betart);
   } else {
     if( theHandle = GetNamedResource('STR ',(const unsigned char*)"\pBETART") ){
-      betaEnv = *theHandle; length = betaEnv[0];
-      betaEnv = strncpy( (Ptr) NewPtr(length+1), &betaEnv[1], length);
-      betaEnv[length] = 0; SetupProperties( betaEnv);
+      betart = *theHandle; length = betart[0];
+      betart = strncpy( (Ptr) NewPtr(length+1), &betart[1], length);
+      betart[length] = 0; SetupProperties( betart);
     }
   }
-#else
-  if( (betaEnv = getenv(DEFAULT_PROPERTY_NAME)) )
-    SetupProperties( betaEnv);
-#ifdef RTVALHALLA
-  { char* valhallaEnv;
-    if ((valhallaEnv = getenv ("VALHALLART")))
-      SetupProperties(valhallaEnv);
+#else /* !MAC */
+  if((betart = getenv(DEFAULT_PROPERTY_NAME))){
+    DEBUG_CODE({
+      fprintf(output, "%s is \"%s\"\n", DEFAULT_PROPERTY_NAME, betart);
+    });
+    SetupProperties(betart);
   }
-#endif
-#endif
+#ifdef RTVALHALLA
+  { 
+    char* valhallart;
+    if ((valhallart = getenv ("VALHALLART")))
+      SetupProperties(valhallart);
+  }
+#endif /* RTVALHALLA*/
+#endif /* MAC */
 }
 
 #ifdef nti

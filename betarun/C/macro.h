@@ -56,6 +56,17 @@ extern int dmalloc_verify(int);
  */
 #define GLOBAL(var) var
 
+/* Macros to access prototypes, that are displaced as COM objects */
+#ifdef COM
+/* Get real protoype from an object */
+#define PROTO(obj)              ((ProtoType*)(((long)((obj)->Proto))-DISP_OFF))
+/* Get a field from an unadjusted prototype pointer */
+#define PROTOFIELD(proto,field) (((ProtoType*)(((long)(proto))-DISP_OFF))->field)
+#else /* !COM */
+#define PROTO(obj)              ((obj)->Proto)
+#define PROTOFIELD(proto,field) (((ProtoType*)(proto))->field)
+#endif /* COM */
+
 #ifdef RTLAZY
 #define isLazyRef(ref) ((lastDangler <= ((int)(ref))) && (((int)(ref)) < -101))
 #else
@@ -430,3 +441,4 @@ typedef union FormatI
   pop(v2); pop(v1)
 
 #endif /* NEWRUN */
+

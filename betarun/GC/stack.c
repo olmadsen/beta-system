@@ -10,6 +10,8 @@
 
 #ifndef MT
 
+extern void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
+
 /************************* Valhalla reference stack ****************/
 
 #if (defined(RTVALHALLA) && defined(intel))
@@ -546,7 +548,19 @@ void ProcessNEWRUNStackObj(StackObject *sObj, CellProcessFunc func)
 {
   DEBUG_CODE(long oldDebugStack=DebugStack);
 
-  DEBUG_STACKOBJ(fprintf(output, " *-*-* StackObject: 0x%x, size: 0x%x *-*-*\n", (int)sObj, (int)(sObj->StackSize)));
+  DEBUG_STACKOBJ({
+    fprintf(output,
+	    " *-*-* StackObject: 0x%x, size: 0x%x %s *-*-*\n", 
+	    (int)sObj, 
+	    (int)(sObj->StackSize),
+	    WhichHeap((Object*)sObj));
+    fprintf(output, "func is 0x%x", (int)func);
+    PrintCodeAddress((long)func);
+    fprintf(output, "\n");
+    fprintf(output, "StackRefAction is 0x%x", (int)StackRefAction);
+    PrintCodeAddress((long)StackRefAction);
+    fprintf(output, "\n");
+  });
   DEBUG_CODE(if (DebugStackObj){
     DebugStack=TRUE;
   } else {
@@ -656,7 +670,19 @@ void ProcessHPPAStackObj(StackObject *sObj, CellProcessFunc func)
   long *        theEnd;
   DEBUG_CODE(long oldDebugStack=DebugStack);
 
-  DEBUG_STACKOBJ(fprintf(output, " *-*-* StackObject: 0x%x, size: 0x%x *-*-*\n", (int)sObj, (int)(sObj->StackSize)));
+  DEBUG_STACKOBJ({
+      fprintf(output,
+	      " *-*-* StackObject: 0x%x, size: 0x%x %s *-*-*\n", 
+	      (int)sObj, 
+	      (int)(sObj->StackSize),
+	      WhichHeap((Object*)sObj));
+      fprintf(output, "func is 0x%x", (int)func);
+      PrintCodeAddress((long)func);
+      fprintf(output, "\n");
+      fprintf(output, "StackRefAction is 0x%x", (int)StackRefAction);
+      PrintCodeAddress((long)StackRefAction);
+      fprintf(output, "\n");
+  });
 
   DEBUG_CODE(if (DebugStackObj){
     DebugStack=TRUE;
@@ -894,11 +920,21 @@ void ProcessSPARCStackObj(StackObject *sObj, CellProcessFunc func)
     DEBUG_CODE(long oldDebugStack=DebugStack);
 
     DEBUG_STACKOBJ({
-      fprintf(output, " *-*-* StackObject: 0x%x, size: 0x%x *-*-*\n", (int)sObj, (int)(sObj->StackSize));
-fprintf(output, " *-*-* StackObject 0x%x *-*-*\n", (int)sObj);
+      fprintf(output,
+	      " *-*-* StackObject: 0x%x, size: 0x%x %s *-*-*\n", 
+	      (int)sObj, 
+	      (int)(sObj->StackSize),
+	      WhichHeap((Object*)sObj));
+      fprintf(output, "func is 0x%x", (int)func);
+      PrintCodeAddress((long)func);
+      fprintf(output, "\n");
+      fprintf(output, "StackRefAction is 0x%x", (int)StackRefAction);
+      PrintCodeAddress((long)StackRefAction);
+      fprintf(output, "\n");
+      
       lastPC=PC;
-      /* The PC of the topmost AR is saved in CallerLCS of the comp this stackobj 
-       * belongs to. It is not known here. 
+      /* The PC of the topmost AR is saved in CallerLCS of the comp 
+       * this stackobj belongs to. It is not known here. 
        */
       PC = 0;
     });
@@ -1236,7 +1272,19 @@ void ProcessINTELStackObj(StackObject *sObj, CellProcessFunc func)
   long    *theEnd;
   DEBUG_CODE(long oldDebugStack=DebugStack);
 
-  DEBUG_STACKOBJ(fprintf(output, " *-*-* StackObject: 0x%x, size: 0x%x *-*-*\n", (int)sObj, (int)(sObj->StackSize)));
+  DEBUG_STACKOBJ({
+      fprintf(output,
+	      " *-*-* StackObject: 0x%x, size: 0x%x %s *-*-*\n", 
+	      (int)sObj, 
+	      (int)(sObj->StackSize),
+	      WhichHeap((Object*)sObj));
+      fprintf(output, "func is 0x%x", (int)func);
+      PrintCodeAddress((long)func);
+      fprintf(output, "\n");
+      fprintf(output, "StackRefAction is 0x%x", (int)StackRefAction);
+      PrintCodeAddress((long)StackRefAction);
+      fprintf(output, "\n");
+  });
   DEBUG_CODE(if (DebugStackObj){
     DebugStack=TRUE;
   } else {

@@ -674,7 +674,7 @@ static Object * head;   /* Head of list build by collectList */
 static Object * tail;   /* Tail of list build by collectList */
 static long totalsize;
 
-static void (*StackRefAction)(REFERENCEACTIONARGSTYPE) = NULL;
+/* static */ void (*StackRefAction)(REFERENCEACTIONARGSTYPE) = NULL;
 void StackRefActionWrapper(Object **theCell,Object *theObj)
 {
   if (theObj

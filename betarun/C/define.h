@@ -13,6 +13,9 @@
 # define MT_CODE(code)
 #endif
 
+/* COM prototypes */
+#undef COM
+
 #ifdef RTDEBUG
 /* Trigger unconditional GC at every allocation.
  * MT: Should match define i BetaRun.bet!

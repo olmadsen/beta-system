@@ -62,3 +62,8 @@
 #endif
 
 #endif /* NEWRUN */
+
+#ifdef COM /* defined in define.h */
+/* FIXME: should be sizeof(ProtoType) */
+#define DISP_OFF 24
+#endif /* COM */
