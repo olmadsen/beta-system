@@ -7,9 +7,6 @@ INCLUDE '~beta/basiclib/streamPosition';
 generateDebugInfo:
   (# exit common.switch[41] #);
 
-generateDefaultConstructors:
-  (# exit true #);
-
 splitSignature:
   (# signature: ^text;
      name: ^text;
@@ -140,8 +137,9 @@ GenerateClassStructure:
        -> struc.constant_pool.classes.addtext 
        -> struc.superClassIndex;
      
-     ('iOrigin', 'Ljava/lang/Object;')      -> struc.emitFieldDef;
-     ('iProto', 'Ljava/lang/Class;')  -> struc.emitFieldDef;
+     ('iOrigin', 'Ljava/lang/Object;')                    -> struc.emitPrivateFieldDef;
+     ('iProto', 'Ljava/lang/Class;')                      -> struc.emitPrivateFieldDef;
+     ('iConstructor', 'Ljava/lang/reflect/Constructor;')  -> struc.emitPrivateFieldDef; 
      
      (* Method: <init> *)
      (ACC_PUBLIC, '<init>', '(Ljava/lang/Object;Ljava/lang/Class;)V', 2,  3) -> struc.currentmethod.new;
@@ -153,6 +151,9 @@ GenerateClassStructure:
      aload_0       -> struc.emit;
      aload_2       -> struc.emit;
      putfield      -> struc.emit; ('Structure', 'iProto', 'Ljava/lang/Class;') -> struc.emitFieldRef;
+     aload_0       -> struc.emit;
+     aconst_null   -> struc.emit;
+     putfield      -> struc.emit; ('Structure', 'iConstructor', 'Ljava/lang/reflect/Constructor;') -> struc.emitFieldRef;
      _return       -> struc.emit;
      
      (* Method: AlloS *)
@@ -165,6 +166,17 @@ GenerateClassStructure:
      areturn       -> struc.emit;
 
      (* Method: ObjS *)
+     (*     public static Structure ObjS(Object o)
+      * 	throws Exception
+      *     {
+      * 	Class proto = o.getClass();
+      * 	Field origin_field;
+      * 	Object origin;
+      * 	origin_field = proto.getDeclaredField("origin");
+      * 	origin = origin_field.get(o);
+      * 	return new Structure(origin, proto);
+      *     }
+      *)
      (ACC_PUBLIC %Bor ACC_STATIC, 'ObjS', '(Ljava/lang/Object;)LStructure;', 4,  5) -> struc.currentmethod.new;
      aload_0       -> struc.emit;
      invokevirtual -> struc.emit; ('java/lang/Object', 'getClass', '()Ljava/lang/Class;') -> struc.emitMethodRef;
@@ -185,25 +197,92 @@ GenerateClassStructure:
      areturn       -> struc.emit;
      
      (* Method: AlloSI *)
-     (ACC_PUBLIC, 'AlloSI', '()Ljava/lang/Object;', 3,  4) -> struc.currentmethod.new;
-     aload_0       -> struc.emit;
-     getfield      -> struc.emit; ('Structure', 'iProto', 'Ljava/lang/Class;') -> struc.emitFieldRef;
-     invokevirtual -> struc.emit; ('java/lang/Class', 'newInstance', '()Ljava/lang/Object;') -> struc.emitMethodRef;
-     astore_1      -> struc.emit;
-     aload_0       -> struc.emit;
-     getfield      -> struc.emit; ('Structure', 'iProto', 'Ljava/lang/Class;') -> struc.emitFieldRef;
-     'origin'      -> struc.emitLoadString;
-     invokevirtual -> struc.emit; ('java/lang/Class', 'getDeclaredField', '(Ljava/lang/String;)Ljava/lang/reflect/Field;') -> struc.emitMethodRef;
-     astore_2      -> struc.emit;
-     aload_2       -> struc.emit;
-     aload_1       -> struc.emit;
-     aload_0       -> struc.emit;
-     getfield      -> struc.emit; ('Structure', 'iOrigin', 'Ljava/lang/Object;') -> struc.emitFieldRef;
-     invokevirtual -> struc.emit; ('java/lang/reflect/Field', 'set', '(Ljava/lang/Object;Ljava/lang/Object;)V') -> struc.emitMethodRef;
-     aload_1       -> struc.emit;
-     areturn       -> struc.emit;
+     (*     public Object AlloSI() throws Exception
+      *     {
+      * 	Constructor[] constructors = iProto.getDeclaredConstructors();
+      * 	if (iConstructor == null){
+      * 	    search:
+      * 	    for (int i = 0; i < constructors.length; i++) {
+      * 		Class[] parameterTypes = constructors[i].getParameterTypes();
+      * 		if (parameterTypes.length == 1){
+      * 		    if (parameterTypes[0].isAssignableFrom(iOrigin.getClass())){
+      * 			iConstructor = constructors[i];
+      * 			break search;
+      * 		    }
+      * 		}
+      * 	    }
+      * 	}
+      * 	return iConstructor.newInstance(new Object[]{iOrigin});
+      *     }
+      *)
+     (ACC_PUBLIC, 'AlloSI', '()Ljava/lang/Object;', 5,  4) -> struc.currentmethod.new;
+     (*  0:*) aload_0       -> struc.emit;
+     (*  1:*) getfield      -> struc.emit; ('Structure', 'iProto', 'Ljava/lang/Class;') -> struc.emitFieldRef;
+     (*  4:*) invokevirtual -> struc.emit; ('java/lang/Class', 'getDeclaredConstructors', '()[Ljava/lang/reflect/Constructor;') -> struc.emitMethodRef;
+     (*  7:*) astore_1      -> struc.emit;
+     (*  8:*) aload_0       -> struc.emit;
+     (*  9:*) getfield      -> struc.emit; ('Structure', 'iConstructor', 'Ljava/lang/reflect/Constructor;') -> struc.emitFieldRef;
+     (* 12:*) ifnonnull     -> struc.emit; 68-12 -> struc.emitShort;
+     (* 15:*) iconst_0      -> struc.emit;
+     (* 16:*) istore_2      -> struc.emit;
+     (* 17:*) goto          -> struc.emit; 62-17 -> struc.emitShort;
+     (* 20:*) aload_1       -> struc.emit;
+     (* 21:*) iload_2       -> struc.emit;
+     (* 22:*) aaload        -> struc.emit;
+     (* 23:*) invokevirtual -> struc.emit; ('java/lang/reflect/Constructor', 'getParameterTypes', '()[Ljava/lang/Class;') -> struc.emitMethodRef;
+     (* 26:*) astore_3      -> struc.emit;
+     (* 27:*) aload_3       -> struc.emit;
+     (* 28:*) arraylength   -> struc.emit;
+     (* 29:*) iconst_1      -> struc.emit;
+     (* 30:*) if_icmpne     -> struc.emit; 59-30 -> struc.emitShort;
+     (* 33:*) aload_3       -> struc.emit;
+     (* 34:*) iconst_0      -> struc.emit;
+     (* 35:*) aaload        -> struc.emit;
+     (* 36:*) aload_0       -> struc.emit;
+     (* 37:*) getfield      -> struc.emit; ('Structure', 'iOrigin', 'Ljava/lang/Object;') -> struc.emitFieldRef;
+     (* 40:*) invokevirtual -> struc.emit; ('java/lang/Object', 'getClass', '()Ljava/lang/Class;') -> struc.emitMethodRef;
+     (* 43:*) invokevirtual -> struc.emit; ('java/lang/Class', 'isAssignableFrom', '(Ljava/lang/Class;)Z') -> struc.emitMethodRef;
+     (* 46:*) ifeq          -> struc.emit; 59-46 -> struc.emitShort;
+     (* 49:*) aload_0       -> struc.emit;
+     (* 50:*) aload_1       -> struc.emit;
+     (* 51:*) iload_2       -> struc.emit;
+     (* 52:*) aaload        -> struc.emit;
+     (* 53:*) putfield      -> struc.emit; ('Structure', 'iConstructor', 'Ljava/lang/reflect/Constructor;') -> struc.emitFieldRef;
+     (* 56:*) goto          -> struc.emit; 68-56 -> struc.emitShort;
+     (* 59:*) iinc          -> struc.emit; 2 -> struc.emit; 1-> struc.emit; 
+     (* 62:*) iload_2       -> struc.emit;
+     (* 63:*) aload_1       -> struc.emit;
+     (* 64:*) arraylength   -> struc.emit;
+     (* 65:*) if_icmplt     -> struc.emit; 20-65 -> struc.emitShort;
+     (* 68:*) aload_0       -> struc.emit;
+     (* 69:*) getfield      -> struc.emit; ('Structure', 'iConstructor', 'Ljava/lang/reflect/Constructor;') -> struc.emitFieldRef;
+     (* 72:*) iconst_1      -> struc.emit;
+     (* 73:*) anewarray     -> struc.emit; 'java/lang/Object' -> struc.emitClassRef;
+     (* 76:*) _dup          -> struc.emit;
+     (* 77:*) iconst_0      -> struc.emit;
+     (* 78:*) aload_0       -> struc.emit;
+     (* 79:*) getfield      -> struc.emit; ('Structure', 'iOrigin', 'Ljava/lang/Object;') -> struc.emitFieldRef;
+     (* 82:*) aastore       -> struc.emit;
+     (* 83:*) invokevirtual -> struc.emit; ('java/lang/reflect/Constructor', 'newInstance', '([Ljava/lang/Object;)Ljava/lang/Object;') -> struc.emitMethodRef;
+     (* 86:*) areturn       -> struc.emit;
      
      (* Method: eqS *)
+     (*     public static boolean eqS(Structure arg1, Structure arg2)
+      *     {
+      * 	if (arg1==null) {
+      * 	    if (arg2==null)
+      * 		return true;
+      * 	    return false;
+      * 	}
+      * 	if (arg2==null)
+      * 	    return false;
+      * 	if (arg1.iProto != arg2.iProto)
+      * 	    return false;
+      * 	if (arg1.iOrigin != arg2.iOrigin)
+      * 	    return false;
+      * 	return true;
+      *     }
+      *)
      (ACC_PUBLIC %Bor ACC_STATIC, 'eqS', '(LStructure;LStructure;)Z', 2,  2) -> struc.currentmethod.new;
      (* 0: *) aload_0   -> struc.emit;
      (* 1: *) ifnonnull -> struc.emit; 12-1 -> struc.emitShort;
@@ -235,6 +314,11 @@ GenerateClassStructure:
      (* 45:*) ireturn   -> struc.emit;
      
      (* Method: neS *)
+     (*     public static boolean neS(Structure arg1, Structure arg2)
+      *     {
+      * 	return !eqS(arg1, arg2);
+      *     }
+      *)
      (ACC_PUBLIC %Bor ACC_STATIC, 'neS', '(LStructure;LStructure;)Z', 2,  2) -> struc.currentmethod.new;
      (* 0:*) aload_0      -> struc.emit; 
      (* 1:*) aload_1      -> struc.emit; 
@@ -246,6 +330,11 @@ GenerateClassStructure:
      (*13:*) ireturn      -> struc.emit; 
      
      (* Method: leS *)
+     (*     public static boolean leS(Structure arg1, Structure arg2)
+      *     { 
+      * 	return (eqS(arg1, arg2) || ltS(arg1, arg2));
+      *     }
+      *)
      (ACC_PUBLIC %Bor ACC_STATIC, 'leS', '(LStructure;LStructure;)Z', 2,  2) -> struc.currentmethod.new;
      (* 0:*) aload_0      -> struc.emit; 
      (* 1:*) aload_1      -> struc.emit; 
@@ -261,6 +350,11 @@ GenerateClassStructure:
      (*21:*) ireturn      -> struc.emit; 
      
      (* Method: geS *)
+     (*     public static boolean geS(Structure arg1, Structure arg2)
+      *     { 
+      * 	return (eqS(arg1, arg2) || gtS(arg1, arg2));
+      *     }     
+      *)
      (ACC_PUBLIC %Bor ACC_STATIC, 'geS', '(LStructure;LStructure;)Z', 2,  2) -> struc.currentmethod.new;
      (* 0:*) aload_0      -> struc.emit; 
      (* 1:*) aload_1      -> struc.emit; 
@@ -276,6 +370,11 @@ GenerateClassStructure:
      (*21:*) ireturn      -> struc.emit; 
      
      (* Method: gtS *)
+     (*     public static boolean gtS(Structure arg1, Structure arg2)
+      *     {
+      * 	return ltS(arg2, arg1);
+      *     }
+      *)
      (ACC_PUBLIC %Bor ACC_STATIC, 'gtS', '(LStructure;LStructure;)Z', 2,  2) -> struc.currentmethod.new;
      (*0:*) aload_1       -> struc.emit; 
      (*1:*) aload_0       -> struc.emit; 
@@ -283,6 +382,7 @@ GenerateClassStructure:
      (*5:*) ireturn       -> struc.emit; 
      
      (* Method: ltS *)
+     (* FIXME: Not yet complete: should handle different origins *)
      (ACC_PUBLIC %Bor ACC_STATIC, 'ltS', '(LStructure;LStructure;)Z', 2,  5) -> struc.currentmethod.new;
      (* 0:*) aload_0      -> struc.emit; 
      (* 1:*) ifnonnull    -> struc.emit; 6-1 -> struc.emitShort;
@@ -395,7 +495,6 @@ do (# commentstream: @stream (* maybe something more useful *);
                            * used by subsequent init - ugly
                            *)
       isMainMethod: @boolean; (* true if generating code for main method *)
-      defaultConstructorGenerated: @boolean;
       
       betafile: @file(# initialized: @boolean; pc: @positionConverter #);
       betafilename: ^text;
@@ -864,7 +963,6 @@ do (# commentstream: @stream (* maybe something more useful *);
             (if opCode
              // classDef then
                 false -> isMainMethod;
-                false -> defaultConstructorGenerated;
                 BC.gettext
                   -> thisClassName[]
                   -> jcf.constant_pool.classes.addtext
@@ -983,32 +1081,9 @@ do (# commentstream: @stream (* maybe something more useful *);
                 (# sig: ^text
                 do BC.gettext -> sig[]; 
                    (if ('-' -> thisOrgName.equal) then
-                       (if generateDefaultConstructors then
-                           (if defaultConstructorGenerated then
-                               'Duplicate default constructor caused by __init' -> FIXME;
-                           if);
-                           true -> defaultConstructorGenerated;
-                       if);
                        (ACC_PUBLIC, '<init>', '()V', 8, 3) 
                          -> jcf.currentmethod.new;
                     else
-                       (if generateDefaultConstructors then
-                           (if (not defaultConstructorGenerated) then
-                               (if not ('()V'->sig.equal) then
-                                   (* Generate default constructor needed for AlloSI *)
-                                   (ACC_PUBLIC, '<init>', '()V', 8, 1)
-                                     -> jcf.currentmethod.new;
-                                   aload_0 -> jcf.emit;
-                                   aconst_null -> jcf.emit;
-                                   invokespecial -> jcf.emit;
-                                   (thisClassName[], '<init>', sig[]) -> jcf.emitMethodRef;
-                                   _return -> jcf.emit;
-                                   true -> defaultConstructorGenerated;
-                               if);
-                           if);
-                       if);
-                       
-                       (* Generate normal constructor *)
                        (ACC_PUBLIC, '<init>', sig[], 8, 30)
                          -> jcf.currentmethod.new;
                    if);
@@ -1203,7 +1278,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                     // ('java/io/PrintStream'-> ((1,19)->prim.sub).equal) then
                        (* FIXME: hardcoded 
                         * Assuming that operation is on the static instance of 
-                        * PrintStream in java.lang.System.out.
+                        * PrintStream in java/lang/System.out.
                         * We must load this first.
                         *)
                        getstatic -> jcf.emit;
@@ -1214,7 +1289,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                     // ('java/io/InputStream'-> ((1,19)->prim.sub).equal) then
                        (* FIXME: hardcoded 
                         * Assuming that operation is on the static instance of 
-                        * InputStream in java.lang.System.in.
+                        * InputStream in java/lang/System.in.
                         * We must load this first.
                         *)
                        getstatic -> jcf.emit;
