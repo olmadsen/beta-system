@@ -712,7 +712,12 @@ static void ProcessAOAReference(Object ** theCell, long refType)
 
 #ifndef PERSIST
   if (*theCell) {
-    Claim(inBetaHeap(*theCell), "inBetaHeap(*theCell)");
+      /* This Claim assumes that the StackObj is at offset 8 in
+       * the Component struct. --mg
+       */
+      Claim(inBetaHeap(*theCell) ||
+          ((long)*theCell==-1 && GETPROTO(*(theCell-2))==ComponentPTValue),
+           "inBetaHeap(*theCell)");
   } else {
     return;
   }

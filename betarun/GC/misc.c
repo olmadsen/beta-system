@@ -475,7 +475,6 @@ void CClaim(long expr, char *description, char *fname, int lineno)
 #endif
 
 #ifdef RTDEBUG
-GLOBAL(static char __CkString[100]);
 void CCk(void *r, char *fname, int lineno, char *ref)
 {
   register Object* rr = (Object *)r; 
@@ -488,8 +487,6 @@ void CCk(void *r, char *fname, int lineno, char *ref)
  
   if(r) 
     {
-      sprintf(__CkString, 
-	      "%s:%d: Ck(%s) (%s=0x%x)", fname, lineno, ref, ref, (int)(r));
 #ifdef NEWRUN
       if (r==CALLBACKMARK){
 	DEBUG_STACK(fprintf(output, 
@@ -524,10 +521,15 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 #endif /* NEWRUN */
 
       /* Check alignment */
-      /* Check it's in a heap */
-      Claim(isLazyRef(r) || (ObjectAlign((unsigned)r)==(unsigned)r), 
-	    __CkString);
-      Claim(inIOA(rr) || inAOA(rr) || isLazyRef(rr), __CkString);
+      if (!(isLazyRef(r) || (ObjectAlign((unsigned)r)==(unsigned)r))) {
+          fprintf(output, "CCk:!ref:%s:%d: Ck(%s) (%s=0x%x)",
+                  fname, lineno, ref, ref, (int)(r));
+      }
+/* Check it's in a heap */
+      if (!(inIOA(rr) || inAOA(rr) || isLazyRef(rr))) {
+          fprintf(output, "CCk:!inHeap:%s:%d: Ck(%s) (%s=0x%x)",
+                  fname, lineno, ref, ref, (int)(r));
+      }
     }
 }
 
