@@ -204,49 +204,89 @@ do common.switch[14]->oldS14; common.switch[15]->oldS15;
    true->common.switch[14]->common.switch[15];
    (if switch182 then
        (# tA: ^mch.address; IA: @mch.InxRegAdr
-       do (&theGen.int32value[]).asText-> mch.allocAndStoreLocal -> tA[];
+       do (* stack = ..., IX  where IX is the byteindex in repetition *)
+          (&theGen.int32value[]).asText-> mch.allocAndStoreLocal -> tA[];
+          (* IX is stored in tmp_1 *)
           INNER primInxGet;
-          (rA[],mch.dataTop[])->mch.ldVal;
-          (tA[],mch.dataTop[]) -> mch.ldVal;
+          (rA[],mch.dataTop[])->mch.ldVal;   (* push rep. element *)
+          (tA[],mch.dataTop[]) -> mch.ldVal; (* push IX from tmp_1 *)
           (* stack = [ ... rep,index *)
           (if not (size = 4) and (rA.size = 4) then
-          (if size > 1 then
-              (size -> mch.newCstOp,mch.dataTop[],4) -> mch.gMult
-          if);
-          mch.duplicate;
-          (rA.size->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
-          (mch.dataTop[],&mch.doubleDataRegOperand[],false(*mod*)) 
-            -> mch.gDiv;
-          (8->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
-          (mch.dataTop[],mch.dataTop[],4) -> mch.gMult;
-
-          (* store in tmp *)
-          (&theGen.int32value[]).asText
-            -> mch.allocAndStoreLocal
-            -> tA[];
-          (rA.size->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
-          (mch.dataTop[],&mch.doubleDataRegOperand[],true(*div*)) 
-            -> mch.gDiv;
+              (if size > 1 then
+                  (size -> mch.newCstOp,mch.dataTop[],4) -> mch.gMult
+                  (* stack = ... rep,IX*size,   *)
+              if);
+              mch.duplicate;  (* stack = ... rep,IX,IX   *)
+              (rA.size->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+              (mch.dataTop[],&mch.doubleDataRegOperand[],false(*mod*)) 
+                -> mch.gDiv;
+              (8->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+              (mch.dataTop[],mch.dataTop[],4) -> mch.gMult;
+              (* stack = ... repElm, IX, (IX mod Rsize)*8 
+               * where Rsize often is 4 since we often store in  an int rep
+               *)              
+              (&theGen.int32value[]).asText
+                -> mch.allocAndStoreLocal
+                -> tA[];
+              (* stack = ... rep, IX, 
+               * tmp_2 = (IX mod Rsize)*8 
+               *)              
+              (rA.size->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+              (mch.dataTop[],&mch.doubleDataRegOperand[],true(*div*)) 
+                -> mch.gDiv;
+              (* stack = ... rep, IX div 4 *)
           if);
           'this_'->IA.receiverType[];
           'index_'->IA.fieldName[];
           (&theGen.int32value[]).asText -> IA.fieldType[];
           (IA[],mch.dataTop[]) -> mch.ldVal;
+          (* stack = ... repElm   *)
           (if size < 4 then
-              (if size
-               // 1 then (24->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
-               // 2 then (16->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
-              if);
-              (tA[],mch.dataTop[]) -> mch.ldVal; (* index * 2 * 8 *)
-              (mch.dataTop[],mch.dataTop[],4) -> mch.gSub;
-              (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftRight;
-              (if size
-               // 1 then
-                  (0xFF->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
-               // 2 then
-                  (0xFFFF->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
-              if);
-              (mch.dataTop[],mch.dataTop[],4) -> mch.gAnd
+              (if true then
+                  (tA[],mch.dataTop[]) -> mch.ldVal; 
+                  (* tmp_2 = (IX mod Rsize)*8 
+                   * bytepos: 0,4, 8,...:  0
+                   *          1,5, 9,...:  8
+                   *          2,6,10,...: 16
+                   *          3,7,11,...: 24
+                   *)
+                  (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftLeft;
+                  
+                  (if size
+                   // 1 then (24->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
+                   // 2 then (16->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
+                  if);
+                  (if signed then
+                      (mch.dataTop[],mch.dataTop[]) -> mch.arithShiftRight;
+                   else
+                      (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftRight;
+                  if);                  
+               else
+                  (if size
+                   // 1 then (24->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
+                   // 2 then (16->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
+                  if);
+                  (tA[],mch.dataTop[]) -> mch.ldVal; (* tmp_2 = (IX mod Rsize)*8 *)
+                  (mch.dataTop[],mch.dataTop[],4) -> mch.gSub;
+                  (* stack = ... Relm,24/16 - (IX mod Rsize)*8
+                   * 24/16- (IX mod Rsize)*8 is the amount to rightShift
+                   * the field to be extracted
+                   *)
+                  (if signed then
+                      (mch.dataTop[],mch.dataTop[]) -> mch.arithShiftRight;
+                   else
+                      (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftRight;
+                  if);
+                  (if false then
+                      (if size
+                       // 1 then
+                          (0xFF->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                       // 2 then
+                          (0xFFFF->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                      if);
+                      (mch.dataTop[],mch.dataTop[],4) -> mch.gAnd
+                  if)
+              if)
           if)
        #)
     else
@@ -315,7 +355,7 @@ do (if switch182 then
                (if isSigned then
                    (&mch.dataRegOperand[],offSet*8->mch.newCstOp) 
                      -> mch.logicalShiftLeft;
-                   (&mch.dataRegOperand[],offSet*8->mch.newCstOp) 
+                   (&mch.dataRegOperand[],24->mch.newCstOp) 
                      -> mch.arithShiftRight
                 else
                    (if offSet < 3 then
