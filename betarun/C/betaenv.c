@@ -3,20 +3,20 @@
  * by Lars Bak.
  */
 
-#include <stdio.h>
-#ifdef nti
-#include <stdlib.h>
-#pragma extref _floatconvert
-#endif
+
+#include "beta.h"
 
 #if defined(macintosh) || defined(MAC)
 #include <StdLib.h>
 #include <Resources.h>
 #include <String.h>
 #include <memory.h>
-#endif
-
-#include "beta.h"
+#else
+#include <stdlib.h>
+#ifdef nti
+#pragma extref _floatconvert
+#endif /* nti */
+#endif /* mac */
 
 #ifndef DEFAULT_PROPERTY_NAME
 #define DEFAULT_PROPERTY_NAME "BETART"
@@ -25,9 +25,6 @@
 void GetBetaEnv()
 {
   char *betaEnv;
-#ifndef nti
-  char *getenv(char *);
-#endif
   
 #if defined(macintosh) || defined(MAC)
   char **theHandle;
