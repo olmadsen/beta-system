@@ -1,11 +1,11 @@
 #!/usr/local/bin/tcsh
 
 # Der er frysning nu, lad vaer med at blande dig!!!
-exit 0   # Den er overstaaet nu...
+# exit 0   # Den er overstaaet nu...
 
 # configuration:
-set CVSUPDATE=no
-set RCMUPDATE=no 
+set CVSUPDATE=yes
+set RCMUPDATE=no
 set BUILDMACHINES=(lisa amigo)
 
 # You can touch the following files to get a one-shot effect as if the
@@ -90,7 +90,7 @@ if ( $REMOVEASTS == "yes" ) then
     echo "rebuildall.sh: Removing all asts files for all platforms." >>& $LOG
     mbs_rmast -u >>& $LOG
     echo "rebuildall.sh: Removing all code files for all platforms." >>& $LOG
-    mbs_rmcode -u sun4s linux sgi hpux9pa nti_ms nti_gnu ms gnu bor >>& $LOG
+    mbs_rmcode -u sun4s linux sgi hpux9pa nti_ms nti_gnu ms gnu >>& $LOG
 
     # Check one-shot variables...
     if (-f "$BETALIB/.rebuildall-cvsupdate") then
@@ -129,7 +129,7 @@ if ( $REMOVEASTS == "yes" ) then
     date >>& $LOG
     echo "rebuildall.sh: rsh'ing to other machines." >>& $LOG
     foreach mach ($BUILDMACHINES) 
-         ( rsh $mach /users/beta/r5.0/bin/admin/rebuildall.sh /users/beta/r5.0 no < /dev/zero ) &
+         ( rsh $mach $BETALIB/bin/admin/rebuildall.sh $BETALIB no < /dev/zero ) &
     end
     echo "rebuildall.sh: Building betarun." >>& $LOG
     date >>& $LOG
