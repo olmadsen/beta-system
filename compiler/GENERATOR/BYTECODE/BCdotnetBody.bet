@@ -45,8 +45,6 @@ trace_stack: (* only relevant if compute_stack_height is true *)
 
 use_reflection:
   (# exit false #);
-use_betarun:
-  (# exit false #);
 use_modules:
   (# exit false #);
 generateLineNumbers:
@@ -666,20 +664,10 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
             if);
             
             betafilename[] -> betafile.name;
-            (if betafile.entry.exists and betafile.entry.isfile then
-                betafile.openRead;
-                betafile.pc.update;
-                betafile.close;
-                true -> betafile.initialized;
-             else
-                'Error: cannot open source file: '->screen.puttext;
-                betafilename[] -> screen.putline;
-                'Will not generate line number info' -> screen.putline;
-            if)
         if);
         ('.il' -> thisModuleName.stripExtension).copy
           -> BCstate.thisModuleName[];
-        (if use_betarun then
+        (if use_modules then
             emitModuleHeader;
          else
             emitAssemblyHeader;
@@ -794,9 +782,6 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
      (# 
      do '/* Assembly references. */' -> out.putline;
         'mscorlib' -> importAssembly;
-        (if use_betarun then
-            'betarun' -> importAssembly;
-        if);
      #);
    emitBETAAssemblyReferences:
      (# 
@@ -892,9 +877,6 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
      (# 
      do '/* Module references */\n'
           -> out.puttext;
-        (if use_betarun then
-            '.module extern betarun_v.dll' -> out.putline;
-        if);
         imports.scan
         (#
         do (if use_modules then
@@ -2429,29 +2411,22 @@ do init;
              #)
           // position then
              BC.getShort -> line;
+             BC.getShort -> column (* Not used for Java *);
              (if generateLineNumbers then
-                 (if betafile.initialized then
+                 (if line>=betafile.length then
+                     (* FIXME! *)
                      (if true then
                          out.nl;
-                         '// ast pos:' -> out.puttext;
-                         line -> out.putint;
+                         '// ignored - EOF' -> out.puttext;
                      if);
-                     (if line>=betafile.length then
-                         (* FIXME! *)
-                         (if true then
-                             out.nl;
-                             '// ignored - EOF' -> out.puttext;
-                         if);
-                      else
-                         out.nl;
-                         '.line  ' -> out.puttext; 
-                         line -> betafile.pc.posToLineCol -> (line, column);
-                         line -> out.putint;
-                         ':' -> out.put;
-                         column +1 -> out.putint;
-                         ' ' -> out.puttext;
-                         betafile.entry.path (*.name*) -> (*BackslashToSlash*) escBackSlash -> safequote -> out.puttext;
-                     if);
+                  else
+                     out.nl;
+                     '.line  ' -> out.puttext; 
+                     line -> out.putint;
+                     ':' -> out.put;
+                     column +1 -> out.putint;
+                     ' ' -> out.puttext;
+                     betafile.entry.path (*.name*) -> (*BackslashToSlash*) escBackSlash -> safequote -> out.puttext;
                  if);
              if);
           else
@@ -2607,8 +2582,10 @@ do init;
                     leaveLabno: @integer;
                  do BC.getLong -> restartlabno;
                     BC.getLong -> leavelabno;
-                    '.try {' -> out.puttext;
-                    out.indent.inc;
+                    (if BC.get = 1 then
+                        '.try {' -> out.puttext;
+                        out.indent.inc;
+                    if);
                  #);
               // endLab then
                  (# restartLabno: @integer;
@@ -2623,90 +2600,92 @@ do init;
                         ', leavelabno='->out.puttext;
                         leavelabno->out.putint; '*/' -> out.putln;
                     if);
-                    (* End try clause by jumping over handler *)
-                    'leave  L' -> out.puttext; leavelabno -> out.putint; 
-                    out.indent.dec;
-                    out.nl;
-                    '} // end .try L' -> out.puttext;
-                    restartlabno->out.putint;
-                    
-                    (* Handler:
-                     * if (e.exitobj == this){
-                     *	    if (e.labno==restartlabno){
-                     *	      /* We have a restart in this object */
-                     *              goto Lrestart;
-                     *            } else if (e.labno==leavelabno){
-                     *	      /* We have a leave in this object */
-                     *              goto Lleave;
-                     *	    }
-                     *	  }
-                     * 	  /* Not leave/restart in this object - propagate */
-                     * 	  throw;
-                     *)
-                    out.nl;
-                    'catch [\'%s\']ExOException {' 
-                      -> out.putformat(# do betaenv_name->s #);
-                    out.indent.inc;
-                    out.nl;
-                    
-                    &text[] -> exoclass[];
-                    '[\'%s\']ExOException'
-                      -> exoclass.putformat(# do betaenv_name->s #);
-                    'class ' -> (exoclass.copy).prepend -> allocLocal -> loc;
-                    
-                    (* Save exception object e in local cell *)
-                    loc -> storeLocal;
-                    (* Test this[] = e.exitObj *)
-                    loc -> loadLocal;
-                    'ldfld  object %s::exitobj'
-                      -> out.putformat(# do exoclass[]->s #);;
-                    out.nl;
-                    'ldarg.0' -> out.putln;
-                    'bne.un  L%d_rethrow' 
-                      -> out.putformat(# do restartlabno->d #);;
-                    out.nl;
-                    
-                    (* Test e.labno=restartlabno *)
-                    loc -> loadLocal;
-                    'ldfld  int32 %s::labno'
-                      -> out.putformat(# do exoclass[]->s #);;
-                    out.nl;
-                    pushCst(# do restartlabno->i #); out.nl;
-                    'bne.un  L%d_testleave' 
-                      -> out.putformat(# do restartlabno->d #);;
-                    out.nl;
-                    'leave  L%d'
-                      -> out.putformat(# do restartlabno->d #);;
-                    out.nl;
-                    
-                    'L%d_testleave:'
-                      -> out.putformat(# do restartlabno->d #);;
-                    out.nl;
-                    (* Test e.labno=leavelabno *)
-                    loc -> loadLocal;
-                    'ldfld  int32 %s::labno'
-                      -> out.putformat(# do exoclass[]->s #);;
-                    out.nl;
-                    pushCst(# do leavelabno->i #); out.nl;
-                    'bne.un  L%d_rethrow' 
-                      -> out.putformat(# do restartlabno->d #);;
-                    out.nl;
-                    'leave  L%d'
-                      -> out.putformat(# do leavelabno->d #);;
-                    
-                    (* retrow to outer handler *)
-                    2 -> out.indent.dec;
-                    out.nl;
-                    'L%d_rethrow:' 
-                      -> out.putformat(# do restartlabno->d #);
-                    2 -> out.indent.inc;
-                    out.nl;
-                    'rethrow' -> out.puttext;
-                    loc -> releaseLocal;
-                    out.indent.dec;
-                    out.nl;
-                    '} // end catch L' -> out.puttext;
-                    restartlabno->out.putint;
+                    (if BC.get = 1 then
+                        (* End try clause by jumping over handler *)
+                        'leave  L' -> out.puttext; leavelabno -> out.putint; 
+                        out.indent.dec;
+                        out.nl;
+                        '} // end .try L' -> out.puttext;
+                        restartlabno->out.putint;
+                        
+                        (* Handler:
+                         * if (e.exitobj == this){
+                         *	    if (e.labno==restartlabno){
+                         *	      /* We have a restart in this object */
+                         *              goto Lrestart;
+                         *            } else if (e.labno==leavelabno){
+                         *	      /* We have a leave in this object */
+                         *              goto Lleave;
+                         *	    }
+                         *	  }
+                         * 	  /* Not leave/restart in this object - propagate */
+                         * 	  throw;
+                         *)
+                        out.nl;
+                        'catch [\'%s\']ExOException {' 
+                          -> out.putformat(# do betaenv_name->s #);
+                        out.indent.inc;
+                        out.nl;
+                        
+                        &text[] -> exoclass[];
+                        '[\'%s\']ExOException'
+                          -> exoclass.putformat(# do betaenv_name->s #);
+                        'class ' -> (exoclass.copy).prepend -> allocLocal -> loc;
+                        
+                        (* Save exception object e in local cell *)
+                        loc -> storeLocal;
+                        (* Test this[] = e.exitObj *)
+                        loc -> loadLocal;
+                        'ldfld  object %s::exitobj'
+                          -> out.putformat(# do exoclass[]->s #);;
+                        out.nl;
+                        'ldarg.0' -> out.putln;
+                        'bne.un  L%d_rethrow' 
+                          -> out.putformat(# do restartlabno->d #);;
+                        out.nl;
+                        
+                        (* Test e.labno=restartlabno *)
+                        loc -> loadLocal;
+                        'ldfld  int32 %s::labno'
+                          -> out.putformat(# do exoclass[]->s #);;
+                        out.nl;
+                        pushCst(# do restartlabno->i #); out.nl;
+                        'bne.un  L%d_testleave' 
+                          -> out.putformat(# do restartlabno->d #);;
+                        out.nl;
+                        'leave  L%d'
+                          -> out.putformat(# do restartlabno->d #);;
+                        out.nl;
+                        
+                        'L%d_testleave:'
+                          -> out.putformat(# do restartlabno->d #);;
+                        out.nl;
+                        (* Test e.labno=leavelabno *)
+                        loc -> loadLocal;
+                        'ldfld  int32 %s::labno'
+                          -> out.putformat(# do exoclass[]->s #);;
+                        out.nl;
+                        pushCst(# do leavelabno->i #); out.nl;
+                        'bne.un  L%d_rethrow' 
+                          -> out.putformat(# do restartlabno->d #);;
+                        out.nl;
+                        'leave  L%d'
+                          -> out.putformat(# do leavelabno->d #);;
+                        
+                        (* retrow to outer handler *)
+                        2 -> out.indent.dec;
+                        out.nl;
+                        'L%d_rethrow:' 
+                          -> out.putformat(# do restartlabno->d #);
+                        2 -> out.indent.inc;
+                        out.nl;
+                        'rethrow' -> out.puttext;
+                        loc -> releaseLocal;
+                        out.indent.dec;
+                        out.nl;
+                        '} // end catch L' -> out.puttext;
+                        restartlabno->out.putint;
+                    if);
                  #);
               // break then
                  (# labno: @integer;
