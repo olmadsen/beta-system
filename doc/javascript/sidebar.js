@@ -73,3 +73,62 @@ function out(){
     clearInterval(hdraw)
 }
 
+function onKey(e)
+{
+   if (document.layers){
+     if (e.which==104) {
+        // 'h'
+	document.layers.SideBar.visibility = "hidden";
+     }
+     if (e.which==115) {
+        // 's'
+	document.layers.SideBar.visibility = "visible";
+     }
+     if (e.which==110) {
+        // 'n'
+	if (next) window.location = next;
+     }
+     if (e.which==112) {
+        // 'p'
+	if (prev) window.location = prev;
+     }
+     if (e.which==116) {
+        // 't'
+	window.location.hash = "_top";
+     }
+     if (e.which==105) {
+        // 'i'
+	if (inx) window.location = inx;
+     }
+   } else if (document.all){
+     if (event.keyCode==104) {
+        // 'h'
+        document.all.SideBar2.style.visibility = "hidden";
+     }
+     if (event.keyCode==115) {
+	// 's'
+        document.all.SideBar2.style.visibility = "show";
+     }
+     if (event.keyCode==110) {
+        // 'n'
+	if (next) window.location = next;
+     }
+     if (event.keyCode==112) {
+        // 'p'
+	if (prev) window.location = prev;
+     }
+     if (event.keyCode==116) {
+        // 't'
+	window.location.hash = "_top";
+     }
+     if (event.keyCode==105) {
+        // 'i'
+	if (inx) window.location = inx;
+     }
+   }
+}
+
+if (document.layers){
+   document.captureEvents(Event.KEYPRESS);
+}
+document.onkeypress=onKey;
