@@ -1,7 +1,45 @@
-char betarun_version[] = "BETARUN VERSION 5.3(63)";
+char betarun_version[] = "BETARUN VERSION 5.3(64)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.63  2002/01/22 20:47:34  corry
+ * Just testing mbs_commit igen
+ * CVS: Place the log message above this line
+ * CVS:
+ * CVS: Place the Betarun verison number (from betarun-src/version.c) here
+ * CVS: (remember to increment it first)
+ * CVS:
+ * Betarun version number: 63
+ * CVS:
+ * CVS: If you are logging in as beta, then delete the CVS: and put your name here:
+ * CVS:
+ * CVS: Developer:
+ * CVS:
+ * CVS: Index: version.c
+ * CVS: ===================================================================
+ * CVS: RCS file: /users/beta/.CVSHOME/beta_project/betarun/version.c,v
+ * CVS: retrieving revision 1.62
+ * CVS: diff -u -r1.62 version.c
+ * CVS: --- version.c	2002/01/22 20:46:45	1.62
+ * CVS: +++ version.c	2002/01/22 20:47:17
+ * CVS: @@ -1,4 +1,4 @@
+ * CVS: -char betarun_version[] = "BETARUN VERSION 5.3(63)";
+ * CVS: +char betarun_version[] = "BETARUN VERSION 5.3(64)";
+ * CVS:
+ * CVS:  /*
+ * CVS:   * $Log: not supported by cvs2svn $
+ * CVS: @@ -23,8 +23,8 @@
+ * CVS:   * CVS: --- version.c	2002/01/09 09:51:36	1.61
+ * CVS:   * CVS: +++ version.c	2002/01/22 20:46:21
+ * CVS:   * CVS: @@ -1,4 +1,4 @@
+ * CVS: - * CVS: -char betarun_version[] = "BETARUN VERSION 5.3(62)";
+ * CVS: - * CVS: +char betarun_version[] = "BETARUN VERSION 5.3(63)";
+ * CVS: + * CVS: -char betarun_version[] = "BETARUN VERSION 5.3(63)";
+ * CVS: + * CVS: +char betarun_version[] = "BETARUN VERSION 5.3(64)";
+ * CVS:   * CVS:
+ * CVS:   * CVS:  /*
+ * CVS:   * CVS:   * $Log: not supported by cvs2svn $
+ *
  * Revision 1.62  2002/01/22 20:46:45  corry
  * Just testing mbs_commit
  * CVS: Place the log message above this line
@@ -23,11 +61,49 @@ char betarun_version[] = "BETARUN VERSION 5.3(63)";
  * CVS: --- version.c	2002/01/09 09:51:36	1.61
  * CVS: +++ version.c	2002/01/22 20:46:21
  * CVS: @@ -1,4 +1,4 @@
- * CVS: -char betarun_version[] = "BETARUN VERSION 5.3(62)";
- * CVS: +char betarun_version[] = "BETARUN VERSION 5.3(63)";
+ * CVS: -char betarun_version[] = "BETARUN VERSION 5.3(63)";
+ * CVS: +char betarun_version[] = "BETARUN VERSION 5.3(64)";
  * CVS:
  * CVS:  /*
  * CVS:   * $Log: not supported by cvs2svn $
+ * CVS:   * Revision 1.63  2002/01/22 20:47:34  corry
+ * CVS:   * Just testing mbs_commit igen
+ * CVS:   * CVS: Place the log message above this line
+ * CVS:   * CVS:
+ * CVS:   * CVS: Place the Betarun verison number (from betarun-src/version.c) here
+ * CVS:   * CVS: (remember to increment it first)
+ * CVS:   * CVS:
+ * CVS:   * Betarun version number: 63
+ * CVS:   * CVS:
+ * CVS:   * CVS: If you are logging in as beta, then delete the CVS: and put your name here:
+ * CVS:   * CVS:
+ * CVS:   * CVS: Developer:
+ * CVS:   * CVS:
+ * CVS:   * CVS: Index: version.c
+ * CVS:   * CVS: ===================================================================
+ * CVS:   * CVS: RCS file: /users/beta/.CVSHOME/beta_project/betarun/version.c,v
+ * CVS:   * CVS: retrieving revision 1.62
+ * CVS:   * CVS: diff -u -r1.62 version.c
+ * CVS:   * CVS: --- version.c	2002/01/22 20:46:45	1.62
+ * CVS:   * CVS: +++ version.c	2002/01/22 20:47:17
+ * CVS:   * CVS: @@ -1,4 +1,4 @@
+ * CVS:   * CVS: -char betarun_version[] = "BETARUN VERSION 5.3(63)";
+ * CVS:   * CVS: +char betarun_version[] = "BETARUN VERSION 5.3(64)";
+ * CVS:   * CVS:
+ * CVS:   * CVS:  /*
+ * CVS:   * CVS:   * $Log: not supported by cvs2svn $
+ * CVS:   * CVS: @@ -23,8 +23,8 @@
+ * CVS:   * CVS:   * CVS: --- version.c	2002/01/09 09:51:36	1.61
+ * CVS:   * CVS:   * CVS: +++ version.c	2002/01/22 20:46:21
+ * CVS:   * CVS:   * CVS: @@ -1,4 +1,4 @@
+ * CVS:   * CVS: - * CVS: -char betarun_version[] = "BETARUN VERSION 5.3(62)";
+ * CVS:   * CVS: - * CVS: +char betarun_version[] = "BETARUN VERSION 5.3(63)";
+ * CVS:   * CVS: + * CVS: -char betarun_version[] = "BETARUN VERSION 5.3(63)";
+ * CVS:   * CVS: + * CVS: +char betarun_version[] = "BETARUN VERSION 5.3(64)";
+ * CVS:   * CVS:   * CVS:
+ * CVS:   * CVS:   * CVS:  /*
+ * CVS:   * CVS:   * CVS:   * $Log: not supported by cvs2svn $
+ * CVS:   *
  * CVS: Index: C/initialize.c
  * CVS: ===================================================================
  * CVS: RCS file: /users/beta/.CVSHOME/beta_project/betarun/C/initialize.c,v
