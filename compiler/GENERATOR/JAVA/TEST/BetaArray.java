@@ -173,7 +173,6 @@ public abstract class BetaArray {
     public static void CkSR(int low, int high, int range) 
 	throws ArrayIndexOutOfBoundsException
     {
-
 	// Check that low and high are usable. 
 	if (low<1) 
 	    throw new ArrayIndexOutOfBoundsException("Repetition subrange out of bounds (low): " 
