@@ -14,6 +14,13 @@
 void Illegal()
 { 
   /* used to break in! */
+#ifdef sun4s
+  int (*f)();
+  /* force seg fault */
+  fprintf(output, "Illegal: forcing segmentation fault\n");
+  f = 1;
+  f();
+#endif
 #if defined(SGI) || defined(sgi)
   /* avoid optimizing the function away */
   fprintf(output, "Illegal() called\n");
