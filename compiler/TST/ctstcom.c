@@ -2,9 +2,9 @@
 */
 
 #ifdef nti
-# define CALL _stdcall
+# define STDCALL _stdcall
 #else
-# define CALL
+# define STDCALL
 #endif
 
 #define test 0
@@ -16,10 +16,10 @@ struct xCOMclass; /* forward */
  * The vtbl has entries in the form of function pointers
  */
 struct vtbl
-{ char (CALL *f1)(struct xCOMclass *this, long n);
-  char (CALL *f2)(struct xCOMclass *this, long a, long b, long c);
-  char (CALL *f3)(struct xCOMclass *this, char *t, long ix);
-  char *(CALL *f4)(struct xCOMclass *this, long ix, char *t);
+{ char (STDCALL *f1)(struct xCOMclass *this, long n);
+  char (STDCALL *f2)(struct xCOMclass *this, long a, long b, long c);
+  char (STDCALL *f3)(struct xCOMclass *this, char *t, long ix);
+  char *(STDCALL *f4)(struct xCOMclass *this, long ix, char *t);
 };
 
 /* xCOMclass is the class */
@@ -35,7 +35,7 @@ struct xCOMclass
  * to the xCOMclass object;
  */
 
-char CALL f1(struct xCOMclass *this, long n)
+char STDCALL f1(struct xCOMclass *this, long n)
 { char ch;
   if (test) printf("  xCOMclass::f1: %i\n",n);
   this->val = this->val + n;
@@ -44,7 +44,7 @@ char CALL f1(struct xCOMclass *this, long n)
   return ch;
 }
 
-char CALL f2(struct xCOMclass *this, long a, long b, long c)
+char STDCALL f2(struct xCOMclass *this, long a, long b, long c)
      /* a = 10, b= 20, c = 2 */
 { char ch;
   if (test) printf(" xCOMclass::f2: %i,%i,%i\n",a,b,c);
@@ -54,7 +54,7 @@ char CALL f2(struct xCOMclass *this, long a, long b, long c)
   return ch;
 }
 
-char CALL f3(struct xCOMclass *this, char *t, long ix)
+char STDCALL f3(struct xCOMclass *this, char *t, long ix)
 { char ch;
   if (test) printf(" xCOMclass::F3: %s %i\n",t,ix);
   this->str = t;
@@ -62,7 +62,7 @@ char CALL f3(struct xCOMclass *this, char *t, long ix)
   return ch;
 }
 
-char *CALL f4(struct xCOMclass *this, long ix, char *t)
+char *STDCALL f4(struct xCOMclass *this, long ix, char *t)
 { char *s;
   if (test) printf(" xCOMclass::F4: %s %i %c %c\n",t,ix,t[ix],this->str[ix]);
   s = "?!?";
@@ -102,14 +102,14 @@ struct bCOMclass; /* forward declaration */
  * The vtblX has entries in the form of function pointers
  */
 struct vtblX
-{ void (*g0)(struct bCOMclass *this);
-  void (*g1)(struct bCOMclass *this, char ch);
-  long (*g2)(struct bCOMclass *this, long a, long b, long c);
-  long (*g3)(struct bCOMclass *this, char * s);
-  long (*g4)(struct bCOMclass *this, 
-	     long a, long b, long c, long d, long e,
-             long f, long g, long h);
-  char(*ch)(struct bCOMclass *this);
+{ void (STDCALL *g0)(struct bCOMclass *this);
+  void (STDCALL *g1)(struct bCOMclass *this, char ch);
+  long (STDCALL *g2)(struct bCOMclass *this, long a, long b, long c);
+  long (STDCALL *g3)(struct bCOMclass *this, char * s);
+  long (STDCALL *g4)(struct bCOMclass *this, 
+		     long a, long b, long c, long d, long e,
+		     long f, long g, long h);
+  char (STDCALL *ch)(struct bCOMclass *this);
 };
 
 /* bCOMclass is the class */
@@ -121,9 +121,12 @@ struct bCOMclass
 /* Called from BETA with COM bCOMclass object */
 void PutBobj(struct bCOMclass * R)
 { char * S;
+  char ch;
   if (test) printf("\n   Enter C PutBobj\n");
   R->proto->g0(R);
-  R->proto->g1(R,R->proto->ch(R));
+  ch=R->proto->ch(R);
+  R->proto->g1(R,ch);
+  /*R->proto->g1(R,R->proto->ch(R));*/
   R->proto->g2(R,100,10,1);
   S = (char *) malloc(3);
   S[0] = R->proto->ch(R);
