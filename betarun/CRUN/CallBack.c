@@ -111,7 +111,7 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
  * these are used in the process of generating HP-PA machinecode. Now aren't
  * these lovely?
  */
-static unsigned long mangle21(unsigned long x)
+static inline unsigned long mangle21(unsigned long x)
 {
   unsigned long bit20, bits9_19, bits5_6, bits0_4, bits7_8;
 
@@ -124,7 +124,7 @@ static unsigned long mangle21(unsigned long x)
   return (bits0_4<<16)|(bits5_6<<14)|(bits7_8<<12)|(bits9_19<<1)|bit20;
 }
 
-static unsigned long bletch(unsigned long x)
+static inline unsigned long bletch(unsigned long x)
 {
   return (x << 1) & 0x03ffe;
 }
@@ -184,11 +184,11 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
    above. This means that %r28 is the address of a pointer to the struct.
  */
 
-asm("\t.EXPORT HandleCB,ENTRY\n"
+asm("\t.EXPORT HandleCB,ENTRY\n" /* ENTRY is significant - CODE cannot be used */
     "HandleCB:\n"
-    "\tstw %r2,-20(%r30)\n"
-    "\tldo 128(%r30),%r30\n"
-    "\tstw %r3,-128(%r30)\n"
+    "\tstw %r2,-20(%r30)\n"   /* Save return - normal procedure entry */
+    "\tldo 128(%r30),%r30\n"  /* Allocate stack frame for 32 words */
+    "\tstw %r3,-128(%r30)\n"  /* Save the 15 words that may be destroyed by beta */
     "\tstw %r4,-124(%r30)\n"
     "\tstw %r5,-120(%r30)\n"
     "\tstw %r6,-116(%r30)\n"
@@ -203,8 +203,8 @@ asm("\t.EXPORT HandleCB,ENTRY\n"
     "\tstw %r15,-80(%r30)\n"
     "\tstw %r17,-72(%r30)\n"
     "\tstw %r18,-68(%r30)\n"
-    "\tbl CHandleCB,%r2\n"
-    "\tstw %r16,-76(%r30)\n"
+    "\tbl CHandleCB,%r2\n"    /* Call CHandleCB */
+    "\tstw %r16,-76(%r30)\n"  /* Restore 15 words */
     "\tldw -68(%r30),%r18\n"
     "\tldw -72(%r30),%r17\n"
     "\tldw -76(%r30),%r16\n"
@@ -221,11 +221,11 @@ asm("\t.EXPORT HandleCB,ENTRY\n"
     "\tldw -120(%r30),%r5\n"
     "\tldw -124(%r30),%r4\n"
     "\tldw -128(%r30),%r3\n"
-    "\tldw -20-128(%r30),%r2\n"
-    "\tldsid (0,%r2),%r1\n"
-    "\tmtsp %r1,%sr0\n"
-    "\tbe 0(%sr0,%r2)\n"
-    "\tldo -128(%r30),%r30\n");
+    "\tldw -20-128(%r30),%r2\n"  /* Restore return */
+    "\tldsid (0,%r2),%r1\n"      
+    "\tmtsp %r1,%sr0\n"          
+    "\tbe 0(%sr0,%r2)\n"         /* Return */
+    "\tldo -128(%r30),%r30\n");  /* Deallocate stackframe */
 
 long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
 {
