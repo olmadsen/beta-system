@@ -55,7 +55,7 @@ void ProcessValhallaRefStack(void)
   Object **theCell = (Object **)&ReferenceStack[0];
   long size = ((long)RefSP - (long)&ReferenceStack[0])/4;
 
-  DEBUG_IOA(PrintRefStack());
+  DEBUG_IOA(PrintvalhallaRefStack());
   for(; size > 0; size--, theCell++) {
     theObj = *theCell;
     if (theObj && inBetaHeap(theObj) && isObject(theObj)) {
@@ -523,7 +523,7 @@ void ProcessStackFrames(long SP,
 } /* ProcessStackFrames */
 
 static
-void ProcessNEWRUNStack()
+void ProcessNEWRUNStack(void)
 {
   /* There are two set of GC roots:
    * 1. The ReferenceStack contains roots
@@ -573,7 +573,7 @@ void ProcessNEWRUNStackObj(StackObject *sObj, CellProcessFunc func)
 /***************************** Begin HPPA ****************************/
 
 #ifdef RTDEBUG
-void PrintRefStack()
+void PrintRefStack(void)
 {
   long *theCell = (long *)&ReferenceStack[0];
   long size = ((long)RefSP - (long)&ReferenceStack[0])/4;
@@ -636,7 +636,7 @@ void ProcessRefStack(unsigned size, Object **bottom, CellProcessFunc func)
 }
 
 static 
-void ProcessHPPAStack()
+void ProcessHPPAStack(void)
 {
   ProcessRefStack(((unsigned)RefSP-(unsigned)&ReferenceStack[0]) >> 2,
                   (Object **)ReferenceStack, 
@@ -768,7 +768,7 @@ void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
 }
 
 static
-void ProcessSPARCStack()
+void ProcessSPARCStack(void)
 {
     RegWin *theAR;
     RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
@@ -996,7 +996,7 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
  * Should probably not be called during GC. Instead, you may set DebugStack to
  * TRUE before calling IOAGc()
  */
-void PrintStack()
+void PrintStack(void)
 {
   RegWin *theAR;
   RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
@@ -1165,7 +1165,7 @@ void ProcessStackPart(long *low, long *high)
 }
 
 static
-void ProcessINTELStack()
+void ProcessINTELStack(void)
 {
     long *theTop;
     long *theBottom;
