@@ -1,0 +1,132 @@
+ORIGIN 'shellBody';
+(* 
+ * $RCSfile: performRPC.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:10 $
+ *
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+INCLUDE 'rpc_interface';
+INCLUDE '~beta/objectserver/v2.1/RepetitionObject';
+INCLUDE 'commFormats';
+
+--- shellPrivateAttributes:attributes ---
+
+performRPC:
+  (# theProxy: ^remoteAble;
+     theEntry: ^theProxy.entry;
+     timeOut: @Integer;
+     protSpec: ^protocolSpec;
+     msg: ^RepetitionObject; 
+     (* Messages sent. Overwritten with answer. *)
+     messages: ^RepetitionObjectsTable; 
+     eh: ^errorHandler;
+     notification: @Boolean;
+     
+     error: @Integer;
+     
+  enter (theProxy[],theEntry[],timeOut,protSpec[],
+         msg[],messages[],eh[],notification)
+  do
+     doRPC:
+       (# 
+       do
+          (theProxy.ri.shellAdr[],0,msg[],
+          messages[],timeOut,protSpec[],notification) -> 
+          RPC.rpc_send 
+          (# timedOut::<
+               (# 
+               do (if (theProxy[], theEntry[]) -> eh.timeOut 
+                   //EH_kill//EH_ignore then true -> value
+                   //EH_retry then false -> value
+                  if)
+               #);
+             connBroken::<
+               (# 
+               do (if (theProxy[], theEntry[]) -> eh.connectionBroken
+                   //EH_kill//EH_ignore then true -> value
+                   //EH_retry then false -> value
+                  if)
+               #);
+          #) -> (error,msg[]);
+          
+          (if error
+           //rpcError_OK then
+              
+              (* Nothing. *)
+              
+           //rpcError_noHost
+           //rpcError_connRefused
+           //rpcError_nomoreSockets then
+              
+              (if (theProxy[], theEntry[]) -> eh.connectionFailed
+               //EH_kill then theShell.kill
+               //EH_retry then restart doRPC
+               //EH_ignore then leave doRPC;
+              if)
+              
+           //rpcError_serverOverload then
+              
+              (if (theProxy[], theEntry[]) -> eh.serverOverLoad
+               //EH_kill then theShell.kill
+               //EH_retry then restart doRPC
+               //EH_ignore then leave doRPC;
+              if)
+              
+           //rpcError_timeOut
+           //rpcError_connBroken then
+              
+              (* Must have given up. *)
+              leave doRPC;
+
+           //rpcError_formatError then
+              
+              (if (theProxy[], theEntry[]) -> eh.wrongAnswer
+               //EH_kill then theShell.kill
+               //EH_retry then restart doRPC
+               //EH_ignore then leave doRPC;
+              if)
+
+          if);
+          
+           
+          (* Check answer format. *)
+          
+          (if true
+           //notification then
+              
+              (* No answer. *)
+              
+           //(msg.size < 6)
+           //(msg.r[BetaRequestTypeInx] <> BetaAnswer) then
+               
+              (if (theProxy[], theEntry[]) -> eh.wrongAnswer
+               //EH_kill then theShell.kill
+               //EH_retry then restart doRPC
+               //EH_ignore then leave doRPC;
+              if)
+              
+           //(msg.r[errCodeInx] <> 0) then
+               
+              (if msg.r[errCodeInx]
+               //EUnknownProxy then
+                  
+                  (if (theProxy[], theEntry[]) -> eh.unknownObject
+                   //EH_kill then theShell.kill
+                   //EH_retry then restart doRPC
+                   //EH_ignore then leave doRPC;
+                  if)
+                  
+               //EUnknownGroup then
+                  
+                  (if (theProxy[], theEntry[], false) -> eh.unknownPattern
+                   //EH_kill//EH_retry then theShell.kill
+                   //EH_ignore then leave doRPC;
+                  if)
+                  
+              if);
+          if);
+       #);
+
+  exit error<>rpcError_OK
+  #)

@@ -1,0 +1,146 @@
+ORIGIN 'shellRPCbody';
+(* 
+ * $RCSfile: workerBody.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:16 $
+ *
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+INCLUDE 'shellComm';
+
+(* WORKERINIT
+ * ========== *)
+
+--- WorkerInit:dopart ---
+do workerPrivate.dos.init;
+
+(* WORKERREINIT
+ * ============ *)
+
+--- WorkerReInit:dopart ---
+do workerPrivate.dos.reinit;
+
+(* WORKERPRIVATEBODY
+ * ================= *)
+
+--- Workerprivatebody: descriptor ---
+(# dos: @DistrObjectSerializer
+     (# reinit::<
+          (# 
+          do NONE -> msg[]; 
+             NONE -> messages[];
+          #);
+     #);
+   
+   clearOnError:
+     (# req: ^RPC.receiver.onReceive;
+     enter req[]
+     do req.messages.reInit;
+        req.msg.init;
+     #);
+   
+   handleExecRequest:
+     (# OID: @OIDtype;   (* OID of local remoteable. *)
+        execObj: ^Object;
+        msg: ^RepetitionObject; (* Short for req.msg *)
+        req: ^RPC.receiver.onReceive;
+        index: @Integer;
+        ri: ^remoteInfo;
+        
+     enter req[]
+     do
+        req.msg[] -> msg[];
+        
+        execute:
+          (if msg.size < 9 //true then
+              req[] -> clearOnError;
+              rpcError_formatError -> req.error;
+           else
+              BetaAnswer -> msg.r[BetaRequestTypeInx];
+              0 -> msg.r[errCodeInx];
+              
+              msg.get -> OID.a;
+              msg.get -> OID.b;
+              
+              (if OID -> OIDhandler.localObjects.exclFindByOID -> ri[]
+               //NONE then 
+                  req[] -> clearOnError;
+                  errCodeInx -> msg.size -> msg.pos;
+                  EUnknownProxy -> msg.put;
+                  rpcError_OK -> req.error;
+                  leave execute 
+               else
+                  ri[] -> dos.curProxy[];
+              if);
+              
+              (msg[],req.messages[]) -> dos.get
+              (# unknownProtoType::<
+                   (# 
+                   do req[] -> clearOnError;
+                      errCodeInx -> msg.size -> msg.pos;
+                      EUnknownGroup -> msg.put;
+                      rpcError_OK -> req.error;
+                      leave execute 
+                   #);
+                 unknownObject::<
+                   (# 
+                   do req[] -> clearOnError;
+                      errCodeInx -> msg.size -> msg.pos;
+                      EUnknownProxy -> msg.put;  
+                      rpcError_OK -> req.error;
+                      leave execute 
+                   #);
+              #) -> execObj[]; 
+              
+              (* execute the object. *)
+              execObj;
+              
+              msg.init;
+              
+              (* The objects table contains the transient OID's of the 
+               * objects present in the request. The objects should keep 
+               * their transient OID's when sent back to let the caller 
+               * update the original objects correctly. *)
+              
+              (execObj[],msg[],req.messages[]) -> dos.put;
+              
+              rpcError_OK -> req.error;
+          if);
+     #);
+   
+   handleObjStateRequest:
+     (# req: ^RPC.receiver.onReceive;
+     enter req[]
+     do 
+     #);
+#)
+
+
+--- workerHandleRequest:dopart ---
+do
+   req.msg.reset;
+   (if req.msg.size < 6 //true then
+       req.messages.reInit; 
+       req.msg.init;
+       rpcError_formatError -> req.error;
+    else
+       BetaRequestTypeInx -> req.msg.pos;
+       (if req.msg.get
+        //BetaRequest then
+           
+           (if req.msg.get 
+            //ObjExecRequest then
+               req[] -> workerPrivate.handleExecRequest
+            //ObjStateRequest then
+               req[] -> workerPrivate.handleObjStateRequest
+            else
+               req.messages.reInit;  
+               rpcError_formatError -> req.error;
+           if);       
+           
+        else
+           req.messages.reInit; 
+           rpcError_formatError -> req.error;
+       if);
+   if);
+   

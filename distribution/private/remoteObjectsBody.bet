@@ -1,0 +1,144 @@
+ORIGIN 'shellBody';
+(* 
+ * $RCSfile: remoteObjectsBody.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:11 $
+ *
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+--- include 'dottable'
+--- include '~beta/sysutils/v1.4/objinterface'
+
+--- remoteObjectsFOBO:descriptor ---
+(# 
+do remoteObjectsMutex.P;
+   OID -> roPrivate.fobo -> ri[];
+   remoteObjectsMutex.V;
+#)
+
+--- remoteObjectsCreateEnsemble:descriptor ---
+(# 
+do remoteObjectsMutex.P;
+   
+   lookup:
+     (# procAddr: ^portablePortAddress;
+        tcp_addr: ^tcpPortAddress;
+     do 
+        (if ensembleAdrAsText[] //NONE then
+            ensembleName[] -> RPC.otherEnsemble
+            (# notFound::< (# do leave lookup #)
+            #) -> portableCommAddressFromText -> procAddr[];
+            procAddr.asText -> ensembleAdrAsText[];
+
+            (* !!! This assumes that an internet (TCP/IP)
+             * address exists for this host *)
+            procAddr.getTcpPort->tcp_addr[];
+            (tcp_addr.inetAddr,0) -> ensembleOID;
+        if);
+        
+        (if (ensembleOID -> roPrivate.fobo -> ri[]) //NONE then
+            (* Create a local proxy for the ensemble *)
+            create:
+              (# es: ^ensemble;
+              do
+                 &ensemble[] -> es[];
+                 
+                 ensembleName[] -> es.hostName[];
+                 true -> es.isProxy -> es.ns.isProxy;
+                 
+                 &remoteInfo[] -> es.ri[];
+                 
+                 ensembleAdrAsText[]
+                   -> es.ri.ensembleAdrAsText[]
+                   -> portableCommAddressFromText
+                   -> es.ri.shellAdr[];
+                 
+                 es[] -> typeAllocator.initFromObj -> es.ri.netType[];
+                 es.hostName[] -> es.ri.ensembleName[];
+                 
+                 ensembleOID -> es.ri.OID -> es.ri.shellOID;
+                 
+                 es.ri[] -> es.ns.ri[];
+                 
+                 es[] -> es.ri.o[];
+                 
+                 es.ri[] -> roPrivate.Insert;
+                 
+                 &remoteInfo[] -> ri[]; es.ri -> ri;
+                 NONE -> es.ri.o[];
+              #);
+        if);
+     #);
+   
+   remoteObjectsMutex.V;
+#)
+
+--- remoteObjectsInsert:descriptor ---
+(# 
+do
+   remoteObjectsMutex.P;
+   ri[] -> roPrivate.insert;
+   remoteObjectsMutex.V;
+#)
+
+--- remoteObjectsInit:descriptor ---
+(# 
+do 
+   DOTinit;
+   roPrivate.onDelete## -> makeCBF -> roPrivate.onDeleteAdr;
+   roPrivate.dotinxTable.init;
+   remoteObjectsMutex.V
+#)
+
+--- remoteObjectsPrivate:descriptor ---
+(# dotinxTable: @IntegerHashTable (# element::< remoteObjectsElement #);
+   
+   onDeleteAdr: @Integer;
+   onDelete: DOTonDelete
+     (# elm: ^remoteObjectsElement
+     do handle -> dotinxTable.delete -> elm[];
+        elm.ri.OID -> remoteObjects.delete;
+     #);
+   
+   insert:
+     (# elm: ^remoteObjectsElement;
+        ri: ^remoteInfo;
+     enter ri[]
+     do 
+        &remoteObjectsElement[] -> elm[];
+        &remoteInfo[] -> elm.ri[];
+        ri -> elm.ri; (* Make a copy so it is up to caller to get rid of his
+                       * own ri. *)
+        NONE -> elm.ri.o[];
+        loop:
+          (if (@@ri.o -> TOS'%adrGetLong', onDeleteAdr) 
+                -> DOThandleInsert -> elm.dotinx
+           //-1 then
+              DOThandlePerformCompaction;
+              restart loop;
+          if);
+        
+        (elm[],ri.OID) -> THIS(remoteObjects).insert; 
+        (elm[],elm.dotinx) -> dotinxTable.insert;
+     #);
+   
+   fobo:
+     (# elm: ^remoteObjectsElement;
+        ato: @addressToObject;
+        ra: ^remoteable;OID: @OIDtype; 
+        ri: ^remoteInfo;
+     enter OID
+     do OID -> find -> elm[];
+        (if elm[] //NONE then else
+            NONE -> elm.ri.o[];
+            (if elm.dotinx -> DOThandleLookup -> ato -> ra[] //NONE then 
+                (* This element has been deleted. *)
+             else
+                &remoteInfo[] -> ri[];
+                elm.ri -> ri;(* Make a copy that can be discarded by caller. *)
+                ra[] -> ri.o[];
+            if);
+        if);
+     exit ri[]
+     #);
+#)

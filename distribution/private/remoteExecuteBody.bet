@@ -1,0 +1,149 @@
+ORIGIN 'shellBody'
+(* 
+ * $RCSfile: remoteExecuteBody.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:11 $
+ *
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+--- include 'shellComm'
+--- include 'commFormats'
+--- include 'performRPC'
+
+
+(* REMOTEEXECUTEBODY
+ * ================= *)
+
+--- remoteExecuteBody:descriptor ---
+(# er: ^rePrivate.execResource;
+   eh: ^errorHandler;
+   msg: ^RepetitionObject; (* Same as er.msg *)
+   protSpec: @protocolSpec;
+   commError: @Boolean;
+   
+   curEntry, curProxy: @ObjectTableElement;
+   
+do
+   rePrivate.resourcePool.getResource -> er[];
+   er.dos.msg[] -> msg[]; 
+   
+   doexecute:
+     (# 
+     do
+        BetaRequestTypeInx -> msg.pos;
+        BetaRequest -> msg.cheapPut;
+        ObjExecRequest -> msg.cheapPut;
+        theProxy.ri.OID.a -> msg.cheapPut;
+        theProxy.ri.OID.b -> msg.cheapPut;
+        msg.pos+3 -> msg.pos;
+        msg.checkSize;
+        
+        (* As we already has all available information about the entry and
+         * the proxy, we might as well tell the objects table: *)
+        (theEntry[],(0,1)) -> curEntry; 
+        curEntry[] -> er.dos.curEntry[];
+        (theProxy[],theProxy.ri.OID) -> curProxy; 
+        curProxy[] -> er.dos.curProxy[];
+
+        (theEntry[],msg[],er.dos.messages[]) -> er.dos.put;
+        
+        (* Get active errorHandler: *)
+        (if theActive.lc[] -> eh[] //NONE then globalHandler[] -> eh[] if);
+        
+        (* Select protocol. *)
+        (commProtocol_dontcare, commRely_dontcare) -> protSpec;
+        
+        (* Perform RPC. *)
+        (theProxy[], theEntry[], eh.timeOutValue, protSpec[],
+        msg[], er.dos.messages[], eh[], notification) 
+          -> performRPC 
+          -> commError;
+        
+        (if true //notification//commError then
+            (* Some communication error was ignored or it was a notification *)
+            leave doexecute;
+        if);
+        
+        (* Unserialize the answer updating the original objects with the 
+         * state contained in the answer: *)
+        (msg[],er.dos.messages[]) -> er.dos.get
+        (# unknownProtoType::<
+             (# 
+             do (if (theProxy[], theEntry[], true) -> eh.unknownPattern
+                 //EH_kill//EH_retry then theShell.kill; 
+                 //EH_ignore then leave doexecute
+                if)
+             #);
+           UnknownObject::<
+             (# 
+             do (* This should not happen. *)
+                (failure, 'remoteExecute: Unexpected: UnknownObject')
+                  -> stop;
+             #);
+        #);
+     #);
+   
+   er[] -> rePrivate.resourcePool.releaseResource;
+#)
+
+--- remoteExecutorInit:descriptor ---
+(#
+do rePrivate.resourcePool.Init;
+#)
+
+--- remoteExecutorPrivate:descriptor ---
+(# minimumRep: RepetitionObject (# initialRange::< (# do 50 -> value #)#);
+   
+   execResource:
+     (# dos: @DistrObjectSerializer
+          (# init::<
+               (# 
+               do &minimumRep[] -> msg[]; msg.init;
+                  &repetitionObjectsTable[] -> messages[];
+               #);
+             reInit::<
+               (# 
+               do messages.reInit; msg.init;
+               #);
+          #);
+        init: 
+          (#
+          do dos.init;
+          #);
+        reInit: @
+          (# 
+          do dos.reinit;
+          #);
+     #);
+   
+   resourcePool: @Monitor
+     (# poolSize: (# exit 5 #);
+        
+        pool: [poolSize]^execResource;
+        last: @Integer;
+        
+        getResource: entry
+          (# er: ^execResource;
+          do 
+             (if last > 0 //true then
+                 pool[last][] -> er[];
+                 last-1 -> last;
+              else
+                 &execResource[] -> er[];
+                 er.init;
+             if);
+          exit er[]
+          #);
+        
+        releaseResource: entry
+          (# er: ^execResource;
+          enter er[]
+          do
+             (if last < poolSize //true then
+                 last+1 -> last;
+                 er[] -> pool[last][];
+                 er.reInit;
+             if);
+          #);
+     #);
+#)

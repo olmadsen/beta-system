@@ -1,0 +1,126 @@
+ORIGIN 'shellBody';
+(* 
+ * $RCSfile: shellRPCbody.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:15 $
+ *
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+BODY 'workerBody';
+(* 
+ * --- include 'shellComm'
+ * --- include 'shellTypes'
+ * --- include 'rpc_interface'
+ * 
+ *)
+--- shellRPCinit:descriptor ---
+(# 
+do rpcPrivate.workerPool.init; 
+   RPC.localEnsemble -> (localEnsembleAdrAsText[],localHostName[]);
+#)
+
+--- rpcPrivate:descriptor ---
+(# 
+   
+   (* WORKERPOOL
+    * ==========
+    * 
+    * When RPC accepts an incoming request, a new coroutine is created
+    * to execute the request. This coroutine calls onReceive.
+    * 
+    * onReceive checks to see if a worker is free to perform the request,
+    * and if so calls the worker to do it. A worker is a collection of 
+    * resources necessary to perform the request.
+    * If no worker is available a new one is allocated to do the job. 
+    * workerPoolSize workers are kept in a worker-pool so they 
+    * can be reused. Extra workers are created and thrown away as needed.
+    * 
+    * If a new request results in more than concurrentRequestLimit 
+    * simultaneously handled requests, the request is ignored and the
+    * error rpcError_serverOverLoad returned. *)
+   
+   workerPool: @Monitor
+     (# 
+        requestLimit: @Integer; (* From shellEnv.globalHandler.            *)
+        requestCount: @Integer; (* Current number of simultanous requests. *)
+        
+        pool: [globalHandler.workerPoolSize]^Worker;
+        last: @Integer;
+        
+        init::<
+          (# 
+          do globalHandler.concurrentRequestLimit -> requestLimit;
+          #);
+        
+        getWorker: entry
+          (# w: ^Worker;
+          do
+             (if requestCount = requestLimit //false then
+                 requestCount+1 -> requestCount;
+                 (if last > 0 //true then
+                     pool[last][] -> w[];
+                     last-1 -> last;
+                  else
+                     &Worker[] -> w[];
+                     w.Init;
+                 if);
+              else
+                 (* requestLimit already reached *)
+                 NONE -> w[];
+             if);
+          exit w[]
+          #);
+        
+        releaseWorker: entry
+          (# w: ^Worker;
+          enter w[]
+          do
+             requestCount-1 -> requestCount;
+             (if last < pool.range //true then
+                 last+1 -> last;
+                 w[] -> pool[last][];
+                 w.reInit;
+             if);
+          #);
+     #);
+   
+#)
+
+--- shellOnReceive:dopart ---
+do
+   (# w: ^Worker;
+   do
+      rpcPrivate.workerPool.getWorker -> w[];   
+      (if w[] //NONE then
+          (* requestLimit reached. *)
+          rpcError_serverOverLoad -> error;
+       else
+          THIS(onReceive)[] -> w.handleRequest;
+          w[] -> rpcPrivate.workerPool.releaseWorker;
+      if);
+   #)
+
+
+
+--- shellPrivateAttributes: attributes ---
+
+(* WORKER
+ * ======
+ * 
+ * The worker is a collection of resources needed to handle a request
+ * received by this shell. As it is cheaper to reuse these resources
+ * than to allocate new, the worker may be reused by calling reInit
+ * before calling handleRequest a second time. *)
+
+Worker:
+  (# init: (#  <<SLOT WorkerInit:dopart>> #);
+     reInit: @(# <<SLOT WorkerReInit:dopart>> #);
+     
+     handleRequest:
+       (# req: ^RPC.receiver.onReceive;
+       enter req[]
+       <<SLOT workerHandleRequest:dopart>>
+       #);
+     
+     workerPrivate: @<<SLOT WorkerPrivateBody:descriptor>>
+  #)

@@ -1,0 +1,875 @@
+ORIGIN '~beta/basiclib/v1.4/basicsystemenv';
+(* 
+ * $RCSfile: basicshell.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:03 $
+ *
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ * 
+ * Use xshell or shell as origin for distributed BETA programs.
+ *)
+BODY 'private/shellBody';
+
+INCLUDE '~beta/objectserver/v2.1/ObjectSerializer';
+INCLUDE '~beta/sysutils/v1.4/envstring';
+INCLUDE '~beta/process/v1.4/commAddress';
+INCLUDE 'private/rpc_interface';
+
+--- lib:attributes ---
+
+
+(* GETSHELLENV
+ * ===========
+ * 
+ * Returns the unique shellEnv instance running. *)
+
+getShellEnv:
+  (# theShellEnv: ^shellEnv;
+  do shellEnv## -> objectPool.strucGet 
+     (# init::< 
+          (# 
+          do (failure, 'Program:descriptor must be a subpattern of shellEnv')
+               -> stop
+     #)#) -> theShellEnv[];
+  exit theShellEnv[]
+  #);
+
+
+
+(* SHELLENV
+ * ========
+ * 
+ * When making distributed BETA programs, the "program:descriptor" SLOT
+ * in betaenv must be filled with a subpattern of shellEnv. This is also
+ * the only instance of shellEnv allowed. *)
+
+shellEnv: systemenv
+  (# 
+     
+     (* SHELLTYPE
+      * ========= 
+      * 
+      * Furtherbind to specify the kind of Shell. *)
+     
+     shellType:< Shell;
+     theShell: @shellType;
+     
+     
+     
+     
+     (* SHELLENVLIB
+      * ===========
+      * 
+      * Pattern definitions used as interfaces to remote
+      * objects must be declared in the shellEnvLib SLOT.
+      * 
+      * References to objects being instances of subpatterns 
+      * of these patterns may be exported for remote access 
+      * without being declared in this attribute slot, but at 
+      * least the superpattern containing the entrys to be called
+      * remotely should be declared in ShellEnvLib, to make them
+      * visible in the client. *)
+     
+     <<SLOT shellEnvLib:attributes>>;
+     
+     
+     
+     
+     (* REMOTEABLE
+      * ==========
+      * 
+      * Superpattern of all objects that may be accessed remotely.
+      * 
+      * Methods to be called remotely must be non-virtual and be 
+      * subpatterns of entry.
+      * 
+      * ping returns true if the object is currently accessible and
+      * false otherwise. *)
+     
+     remoteable:
+       (# entry: 
+            (# 
+            do (if isProxy //true then 
+                   <<SLOT remoteableCallremote:descriptor>>
+                else INNER
+               if);
+            #);
+          
+          ping: booleanValue (# do <<SLOT remoteablePing:descriptor>> #);
+          
+          
+          (* private:
+           * ======== *)
+          
+          ri: ^remoteInfo;
+          isProxy: @Boolean;
+          
+          <<SLOT remoteablePrivateEntries:attributes>>;
+          
+       do INNER
+       #);
+     
+     
+     
+     
+     (* SHELL
+      * =====
+      * 
+      * Pattern describing executables whose instances are processes.
+      * Shells should only be instantiated through ensemble.createShell
+      * or started from the commandline. 
+      * 
+      * myEnsemble is a reference to the ensemble on which this shell
+      * is running.
+      * 
+      * kill kills the corresponding process. The onKill virtual is
+      * called before killing the process. 
+      * 
+      * The INNER part of a shell has to pause once in a while for
+      * shellEnv to be able to handle incoming requests. 
+      * This is due to the non-preemptive multitasking used.
+      * 
+      * Even if INNER terminates, the process will not terminate before
+      * kill has been called. (Of course nasty signals may do the job.) *)
+     
+     
+     shell: remoteAble
+       (# 
+          myEnsemble: ^ensemble;
+          onKill:< Object;
+          
+          kill: (# do <<SLOT shellKillBody:descriptor>> #);
+          
+          ShellPrivate: @<<SLOT shellPrivateBody:descriptor>>;
+          
+          <<SLOT shellPrivateEntries:attributes>>;
+
+       do INNER;
+       #);
+     
+     
+     
+     
+     (* NAMESERVER
+      * ==========
+      * 
+      * Performs mapping between logical object names and object
+      * references. Subpatterns may perform this mapping differently.
+      * 
+      * put saves an object reference under the name given. The overWrite
+      * virtual is called if an object of that name is already registered. 
+      * If overWrite returns true, the existing (name,objectref) pair is 
+      * overwritten with the new one.
+      * 
+      * get looks for an object with the given name and type. If no
+      * matching object is found, notFound is called. If an object with
+      * the right name, but wrong type is found, quaError is raised.
+      * 
+      * remove undoes put.
+      * 
+      * NameServer is a remoteAble, but all public operations does some
+      * work locally before calling remote. *)
+
+     NameServer: remoteAble
+       (# 
+          elementType:< RemoteAble;
+          
+          put:<
+            (# overWrite:< BooleanValue;
+               name: ^Text; obj: ^elementType;
+            enter (obj[], name[])
+            do INNER
+            #);
+          
+          get:<
+            (# notFound:< Notification;
+               quaError:< Exception;
+               name: ^Text; type: ##object;
+               obj: ^elementType;
+            enter (type##, name[])
+            do INNER
+            exit obj[]
+            #);
+          
+          remove:< 
+            (# notFound:< Notification;
+               name: ^Text; 
+            enter name[]
+            do INNER
+            #);
+          
+          <<SLOT NameServerAttributes:attributes>>;
+          
+       do INNER
+       #);
+     
+     
+     
+     
+     (* ENSEMBLE
+      * ========
+      * 
+      * A representation of network hosts.
+      * 
+      * hostname is the hostname of the host represented. (surprise surprise)
+      * 
+      * createShell allows creation of shells on the host represented.
+      * 
+      *   The executable name without path is given by the "execName" 
+      *   parameter, and the expected type of the shell created by "instances"
+      *   of this executable is given by the "shellType" parameter.
+      * 
+      *   appsDir is the directory where executables are expected to be found.
+      *   You should also check the description of the 
+      *   "shellEnv.defaultAppsDir" virtual.
+      * 
+      *   screenName names the redirection file for screen output from the new
+      *   shell. If screenName is not furtherbound, screen output is redirected
+      *   to the file specified in the shellEnv of the shell created.
+      * 
+      *   The execNotFound exception is raised if the executable could not 
+      *   be found.
+      * 
+      *   processCreationFailed is raised if the process could not be created.
+      * 
+      *   typeError is raised if the shell created does not have the expected
+      *   type. 
+      * 
+      *   Other kinds of errors raises the unknownError exception.
+      * 
+      *   Furtherbind environment and call addEnvVar for each environment 
+      *   variable to be added to the environment of the new shell.
+      * 
+      *   Furtherbind parameters and call addParam for each command line
+      *   parameter to be given to the new shell.
+      * 
+      * ns is a NameServer with default knowledge of the ensembles in
+      * the distributed environment. It is therefore possible to lookup
+      * other ensembles using ns. Apart from this, ns provides a flat
+      * namespace in which objects may be saved and retrieved using ns.put
+      * and ns.get. ns.scanNames may be used to iterate over the names
+      * explicitly registered in the ensemble using ns.get.
+      * 
+      * DO NOT CREATE INSTANCES OF ENSEMBLE ON YOUR OWN!!. *)
+     
+     Ensemble: shell
+       (# hostName: ^Text;
+          
+          createShell:
+            (# appsDir:<
+                 (# dir: ^Text
+                 do defaultAppsDir -> dir[];
+                    INNER;
+                 exit dir[]
+                 #);
+               
+               screenName:<
+                 (# name: ^Text;
+                 do INNER
+                 exit name[] 
+                 #);
+               
+               environment:< 
+                 (# addEnvVar: 
+                      (# name, value: ^Text;
+                      enter (name[],value[])
+                      do <<SLOT ensembleAddEnvVar:descriptor>>
+                      #);
+                    (* private: *) env: ^Text; envCount: @Integer;
+                 do INNER
+                 exit (env[],envCount)
+                 #);
+               
+               parameters:<
+                 (# addParam:
+                      (# value: ^Text;
+                      enter value[]
+                      do <<SLOT createShellAddParam:descriptor>>
+                      #);
+                    (* private: *) params: ^Text; paramCount: @Integer;
+                 do INNER;
+                 exit (params[],paramCount)
+                 #);
+               
+               execNotFound:< Exception
+                 (# 
+                 do INNER; 
+                    (if continue //false then
+                        'createShell: executable not found.' -> msg.append;
+                    if);
+                 #);
+               
+               processCreationFailed:< Exception
+                 (# 
+                 do INNER;
+                    (if continue //false then
+                        'createShell: Could not create process.' -> msg.append;
+                    if);
+                 #);
+               
+               typeError:< Exception
+                 (# 
+                 do INNER;
+                    (if continue //false then
+                        'createShell: typeError.' -> msg.append;
+                    if);
+                 #);
+               
+               unknownError:< Exception
+                 (# 
+                 do INNER;
+                    (if continue //false then
+                        'createShell: unknownError.' -> msg.append;
+                    if);
+                 #);
+               
+               shellType: ##Shell;
+               execName: ^Text;
+               sh: ^Shell;
+            enter (shellType##,execName[])
+            do <<SLOT ensembleCreateShellBody:descriptor>>
+            exit sh[]
+            #);
+          
+          
+          ns: @NameServer
+            (# put:: (# do <<SLOT EnsemblePutBody:descriptor>> #);
+               get:: (# do <<SLOT EnsembleGetBody:descriptor>> #);
+               remove:: (# do <<SLOT EnsembleRemoveBody:descriptor>> #);
+               scanNames:
+                 (# current: ^Text;
+                 do <<SLOT EnsembleScanNames:descriptor>>
+                 #);
+            #);
+          
+          
+          (* private:
+           * ======== *)
+          
+          <<SLOT ensembleAttributes:attributes>>;
+          
+          ensemblePrivate: @<<SLOT ensemblePrivateBody:descriptor>>;
+       #);
+     
+     
+     
+     
+     (* ERRORHANDLER
+      * ============
+      * 
+      * When an errorHandler exception is raised that is not
+      * further specified, the exception is propagated to the
+      * previous handler in the dynamic call chain. This continues
+      * until either a handler catches the exception (by further
+      * binding the corresponding errorHandler virtual), or until
+      * the globalHandler is reached. If even the globalHandler does not
+      * catch the error, default action is to kill the current shell.
+      * Each coroutine by default has its own dynamic errorhandler chain.
+      * If the top of this chain is reached, control is passed to the global
+      * handler, and not, for example, to the handler chain of the coroutine
+      * that forked the active coroutine. 
+      * If the entered errorHandler (prevHandler) is not NONE, it will be 
+      * used as the previous handler instead of the currently active 
+      * errorHandler. This may be used to transfer errors between different 
+      * coroutines.
+      * 
+      * The error pattern is an abstract super pattern for all error
+      * patterns. The toDo determines how to handle a network failure.
+      * 
+      * The possibilities for error.toDo are:
+      * 
+      *      EH_kill:   Kill this shell. (default)
+      *      EH_retry:  Try again.
+      *      EH_ignore: Pretend as if the remote call succeded. This option
+      *                 may of course result in strange program behaviour.
+      * 
+      * connectionFailed is raised when we fail to send a message to a remote 
+      * shell. 
+      * 
+      * connectionBroken is raised when message send succeded, but the 
+      * connection to the remote shell was broken before an answer could 
+      * be received.
+      * 
+      * timeOut is raised if the remote shell failed to answer within
+      * the time limit specified by timeOutValue. Default timeOutValue is to 
+      * wait for ever for answer when doing remote calls. Furtherbind to 
+      * limit the allowed waitingtime.
+      * 
+      * serverOverload is raised if the remote shell was busy and therefore
+      * refused to handle the request. The number of concurrently allowed
+      * requests is set by globalErrorHandler.concurrentRequestLimit.
+      * 
+      * unknownObject is raised if the remote shell did not know the object
+      * requested. This is a consequence of the remote shell doing a 
+      * withDraw on the object requested. Thus unknownObject corresponds
+      * to detectiong of a distributed dangling reference.
+      * 
+      * unknownPattern is raised if one of the objects sent to the remote 
+      * host was an instance of a pattern unknown there (local=FALSE), or if
+      * the pattern of a returned object was not known locally (local=TRUE).
+      * In the case of unknown pattern it makes no sense to retry the request.
+      * 
+      * wrongAnswer is raised if the answer from the remote shell does
+      * not have the expected format. This could mean that the remote
+      * shell is not the one we think it is, i.e. it could be another
+      * process at the same port. *) 
+     
+     errorHandler:
+       (# connectionFailed:< E_failed;
+          connectionBroken:< E_broken;
+          unknownObject:< E_unknownObj;
+          unknownPattern:< E_unknownPat;
+          timeOut:< E_timeOut;
+          serverOverLoad:< E_overload;
+          wrongAnswer:< E_answer;
+          
+          timeOutValue:< V_timeOut;
+          
+          V_timeOut: (# sec: @Integer 
+                     do <<SLOT VtimeOutBody:descriptor>> 
+                     exit sec 
+                     #);
+          
+          
+          error: 
+            (# theObj: ^remoteAble; theEntry: ^theObj.entry;
+               toDo: @Integer;
+            enter (theObj[], theEntry[])
+            do EH_kill -> toDo; INNER 
+            exit toDo
+            #);
+          
+          E_failed:     error (# do <<SLOT EfailedBody:descriptor>>     #);
+          E_broken:     error (# do <<SLOT EbrokenBody:descriptor>>     #);
+          E_timeOut:    error (# do <<SLOT EtimeOutBody:descriptor>>    #);
+          E_overload:   error (# do <<SLOT EoverloadBody:descriptor>>   #);
+          E_answer:     error (# do <<SLOT EanswerBody:descriptor>>     #);
+          E_unknownObj: error (# do <<SLOT EunknownObjBody:descriptor>> #);
+          E_unknownPat: error 
+            (# local: @Boolean
+            enter local
+            do <<SLOT EunknownPatBody:descriptor>> 
+            #);
+          
+          (* private:
+           * ======== *)
+          
+          prevHandler: ^errorHandler;
+          onEntry: @<<SLOT errorHandlerOnEntry:descriptor>>;
+          onLeave: @<<SLOT errorHandlerOnLeave:descriptor>>;
+          
+       enter prevHandler[] 
+       do onEntry; INNER; onLeave;
+       #);
+     
+     (* errorHandler.error exit values: *)
+     
+     EH_kill:   (# exit -1 #);
+     EH_retry:  (# exit -2 #);
+     EH_ignore: (# exit -3 #);
+     
+     
+     
+     (* GLOBALERRORHANDLER
+      * ==================
+      * 
+      * Furtherbind globalErrorHandler to specify a global errorHandler.
+      * 
+      * concurrentRequestLimit is the maximum number of simultaneous
+      * requests this shell will allow. -1 means no limit. If handling
+      * a request would result in breaking this limit, the request will
+      * be ignored and the client-side exception overLoadError will be 
+      * raised.
+      * 
+      * workerPoolSize determines the size of the pool of workers to
+      * handle incoming requests. A worker is a collection of resources
+      * needed to handle a request. Because it is cheaper to reuse these
+      * resources than to allocate new ones, the workerPool keeps 
+      * track of unemployed workers ready for reuse. A reasonable value for 
+      * workerPoolSize is probably the expected mean number of requests 
+      * handled simultaneously. If a request is always executed to end
+      * without suspending implicitly of explicitly, a single worker
+      * is adequate. *)
+     
+     globalErrorHandler:< errorHandler
+       (# concurrentRequestLimit:< IntegerValue 
+            (# do -1 -> value; INNER #);
+          workerPoolSize:< IntegerValue
+            (# do 5 -> value; INNER #);
+       #);
+     globalHandler: @globalErrorHandler;
+     
+     
+     
+     
+     (* DEFAULTAPPSDIR
+      * ==============
+      * 
+      * When using ensemble.createShell to start processes,
+      * this is the default directory on the remote host in 
+      * which the executable is expected to be found. The default 
+      * may be overridden using this virtual. Alternatively the 
+      * directory may be changed individually on each createShell 
+      * call by furtherbinding the ensemble.createShell.appsDir virtual.
+      * 
+      * As is the case when specifying INCLUDE and BODY paths in the 
+      * BETA fragment system, you may use '$' to specify machine
+      * dependent executable paths. That is, assume "dir" is assigned the 
+      * value '/mydir/$/', and the remote host on which the new shell is to 
+      * be created is of type 'sun4s'. Then, the "execName" parameter to
+      * createShell is appended to "dir", and all occurrences of '$' in the 
+      * resulting string then replaced by 'sun4s' before it is used as the
+      * full path of an executable.
+      * 
+      * By default, the defaultAppsDir directory is
+      *     
+      *     '/usr/local/lib/beta/distribution/v1.0/aps/$/'
+      * 
+      * but this may be changed either by the environment variable
+      * BETALIB, having default value
+      * 
+      *     '/usr/local/lib/beta/'
+      * 
+      * or by furtherbinding the defaultAppsDir virtual and assigning 
+      * to "dir". *)
+     
+     defaultAppsDir:<
+       (# dir: ^Text
+       do 
+          '$(BETALIB)' -> expandEnvVar
+          (# defaultValue::< (# do '/usr/local/lib/beta/' -> envvarvalue[] #)
+          #) -> dir[];
+          (if dir.length -> dir.inxGet // '/' then else
+              '/' -> dir.append;
+          if);
+          'distribution/v1.0/aps/$/' -> dir.append; 
+          INNER;
+       exit dir[]
+       #);
+     
+     
+     
+     
+     (* DEFAULTSCREENNAME
+      * =================
+      * 
+      * ShellEnv instances created by ensemble.createShell cannot 
+      * use the standard outputs of the process.
+      * 
+      * To redirect output you may specify the name of a file by 
+      * furtherbinding defaultScreenName. If you miss to do so,  
+      * output from remotely started shells is put into /dev/null. 
+      * Alternatively screenName may be set individually for created 
+      * shells by using the ensemble.createShell.screenName virtual.
+      * This allows the creator to override the defaultScreenName of 
+      * the shell created. 
+      * 
+      * stdout as well as stderr are redirected to the file named in
+      * defaultScreenName or in ensemble.createShell.screenName.
+      * Since output on stdout and stderr from remotely started shells
+      * should normally be restricted to debugging output, stdout
+      * and stderr are unbuffered in order to ensure that all output
+      * is actually written to the file specified, and in the order
+      * the output was written to stdout respectively stderr.
+      * 
+      * If this shell is started from the commandline, defaultScreenname 
+      * has no effect, since stdout and stderr are then used without
+      * modification. *)
+     
+     defaultScreenName:< 
+       (# name: ^Text;
+       do INNER 
+       exit name[] 
+       #);
+     
+     
+     
+     
+     (* DISTRIBUTIONDIR
+      * ===============
+      * 
+      * When using ensemble.createShell to start processes, createShell
+      * needs to know the location of certain scripts. The default
+      * location of these scripts is in a subdirectory of the
+      * directory containing BETA distribution source files. 
+      * 
+      * By default the distribution directory is
+      *     
+      *     '/usr/local/lib/beta/distribution/v1.0/private/external'
+      * 
+      * but this may be changed either by the environment variable
+      * BETALIB, having default value
+      * 
+      *     '/usr/local/lib/beta/'
+      * 
+      * or by furtherbinding the distributionDir virtual and assigning
+      * to "dir". *)
+     
+     distributionDir:<
+       (# dir: ^Text;
+       do 
+          '$(BETALIB)' -> expandEnvVar
+          (# defaultValue::< (# do '/usr/local/lib/beta/' -> envvarvalue[] #)#)
+            -> dir[];
+          (if dir.length -> dir.inxGet // '/' then else
+              '/' -> dir.append;
+          if);
+          'distribution/v1.0/private/external/' -> dir.append;
+          INNER;
+          (if dir.length -> dir.inxGet // '/' then else
+              '/' -> dir.append;
+          if);
+       exit dir[]
+       #);
+     
+     
+     
+     
+     (* ENSEMBLEPORT
+      * ============
+      * 
+      * This release of the BETA distribution library uses TCP/IP for all 
+      * communication between distributed BETA processes. The only system 
+      * port number hardcoded into the distribution library is the port number
+      * assigned to the ensemble shell (the "ensembleDeamon" program started 
+      * on the local host using the "~beta/bin/startensemble" script).
+      * 
+      * By default, the ensemble uses the port number 5188. However, in order
+      * to allow several ensemble instances to run on the same host without
+      * conflicting, e.g. in order to allow different groups to run BETA
+      * distribution without sharing the ensemble, this may be changed in one 
+      * of the following ways:
+      * 
+      *    1. Set the BETA_ENSEMBLE_PORT environment variable before starting
+      *       the distributed program supposed to use an alternative port 
+      *       number. For example:
+      * 
+      *           setenv BETA_ENSEMBLE_PORT 5211
+      * 
+      *       Note that this should be done before starting the ensemble to
+      *       use the alternative portnumber. Remember that the 
+      *       ensemble.createShell.environment virtual may be used to set the 
+      *       environment of shells started from other shells.
+      * 
+      *    2. Furtherbind the ensemblePort virtual found below. For example:
+      * 
+      *           --- program:descriptor ---
+      *           shellEnv
+      *           (# ...
+      *              ensemblePort::< (# do 5211 -> value #)
+      *              ...
+      *           #)
+      *)
+     
+     ensemblePort:< IntegerValue
+       (# valueAsText: ^Text;
+       do 
+          '$(BETA_ENSEMBLE_PORT)' -> expandEnvVar
+          (# defaultValue::< (# do '5188' -> envvarvalue[] #)#)
+            -> valueAsText[];
+          valueAsText.reset;
+          valueAsText.getInt -> value;
+          INNER;
+       #);
+     
+     
+     
+     (* RSHPATH
+      * =======
+      * 
+      * Currently ensemble.createShell depends on "rsh" in order to start 
+      * new shells on remote hosts. In order to support systems with rsh
+      * installed in a non-standard directory, this virtual allows for
+      * the specification of the location of the rsh system command.
+      * rshpath should be specified to the full path of the "rsh" 
+      * ("remsh" on HP UX) system command. If rshpath is not further 
+      * specified, the system default is used. Usually there should be no  
+      * need for changing the rshpath. *)
+     
+     rshPath:<
+       (# path: ^Text;
+       do INNER
+       exit path[]
+       #);
+     
+     
+     
+     
+     (* USERNAME
+      * ========
+      * 
+      * Returns username of process owner. *)
+     
+     userName: @
+       (# t: ^Text;
+       do (if t[] //NONE then <<SLOT userNamegetUser:descriptor>> if)
+       exit t[]
+       #);
+     
+     
+     
+     
+     (* WITHDRAW
+      * ========
+      * 
+      * Due to the lack of distributed garbage collection, we need a way
+      * to explicitly withdraw the possibility of remote access to objects
+      * whose reference has crossed the shell boundary. Whenever that happens,
+      * the object reference is saved in an internal table and is therefore 
+      * never garbage collected. Calling withdraw with a local object whose 
+      * reference has been exported deletes the object from the internal 
+      * table, thereby making it possible to garbage collect the object unless
+      * other local references exists. If a request to a withdrawn object
+      * arrives from a client, it will fail with an 'unknownObject' exception.
+      * This corresponds to following a distributed dangling reference, and
+      * there is no way to avoid this without distributed garbage collection.
+      * 
+      * Proxy objects are garbage collected automatically as is any ordinary
+      * object.
+      *)
+     
+     withDraw:
+       (# ra: ^remoteAble
+       enter ra[]
+       do <<SLOT shellEnvWithDraw:descriptor>>
+       #);
+     
+     
+     
+     (* TRACING OBJECT SERIALIZATIONS
+      * =============================
+      * 
+      * When performing a remote invocation, one or more objects are 
+      * serialized (marshalled) to be sent across the network connection.
+      * In some cases large object graphs are serialized this way. Currently
+      * there is no way of specifying a limitation on this serialization 
+      * traversal (as is possible in the persistent store), and sometimes 
+      * more objects than expected gets serialized, leading to unexpected 
+      * errors. Most often the error message resulting is "components not 
+      * handled", which is triggered when trying to serialize an active 
+      * object. To debug problems like these, a number of patterns are offered
+      * below.
+      * 
+      * Tracing is initiated by setting the "TraceSer" boolean to TRUE. When
+      * this has been done, the "BeforeSer", "AfterSer" and "AfterUnser"
+      * virtuals are called as described below:
+      * 
+      * BeforeSer is called just before an object is about to be
+      * serialized, either as a result of being sent in a remote request, or
+      * as a result of being returned as a result parameter.
+      * 
+      * AfterSer is called when the object has been serialized.
+      * 
+      * AfterUnser is called when some object received, either as part of
+      * an incoming call, or as part of a the result received, has been
+      * unserialized.
+      * 
+      * Remoteable instances are not actually serialized. Instead a network 
+      * representation of the corresponding object reference is sent. In case 
+      * of a non-remoteable, the object is serialized and all references it 
+      * contains followed. *)
+     
+     TraceSer: @Boolean;
+     
+     BeforeSer:<
+       (# o: ^Object
+       enter o[]
+       do INNER
+       #);
+     AfterSer:<
+       (# o: ^Object
+       enter o[]
+       do INNER
+       #);
+     AfterUnser:<
+       (# o: ^Object
+       enter o[]
+       do INNER
+       #);
+     
+     
+     
+     (* EVERYTHING BELOW IS PRIVATE!
+      * ============================ *)
+     
+     
+     senvPriv: @<<SLOT senvPrivBody:descriptor>>;
+     
+     
+     
+     
+     (* REMOTEABLETYPE
+      * ==============
+      *
+      * The remoteAbleType is a network representation of remoteAble
+      * subpatterns. The type represented includes the part of the
+      * superpattern chain having origin in shellEnv, excluding
+      * remoteAble as this is the basepattern for all patterns represented.
+      *
+      * groupNames are the names of the groups corresponding to groups.
+      * The path of the groupNames are not included. Instead a check is made
+      * at startup time, that no two groups in the executable have the same
+      * name, as this cannot be allowed. The reason for this is to avoid the
+      * usual problems with pathnames, but it means that no two program files
+      * can have the same name.
+      *
+      * groups are the indices in the local execGroupTable corresponding to
+      * groupNames. If a groupName does not exist in the local execGroupTable,
+      * group will be -1.
+      * 
+      * protos are the indices of prototypes in the groups.
+      *
+      * bestKnown is the most specific superpattern of the represented type
+      * that is known to the local shell and that has origin in shellEnv.
+      * 
+      * remoteAbleType instances are created by typeAllocator in shellBody. *)
+     
+     remoteAbleType:
+       (# groupNames: [1]^Text;
+          groups: [1]@Integer;
+          protos: [1]@Integer;
+          last: @Integer;
+          
+          bestKnown: ##remoteAble;
+       #);
+     
+     
+     
+     (* REMOTEINFO
+      * ==========
+      *
+      * A specialization of ObjectTableElement containing address
+      * information on the corresponding object ra.
+      * 
+      * shellOID is the OID of the shell containing ra.
+      * 
+      * shellAdr is the network address of the shell containing ra.
+      * 
+      * netType is the network representation of the type of ra.
+      * 
+      * ensembleAdr is the network address of the ensemble where
+      * a remoteAble exists. ensembleName is the name of the ensemble.
+      * 
+      * ensembleAdr and ensembleName are NONE unless the remoteInfo 
+      * corresponds to a shell or an ensemble. *)
+     
+     remoteInfo: ObjectTableElement
+       (# shellOID: @OIDtype;
+          shellAdr: ^portablePortAddress;
+          netType: ^remoteAbleType;
+          ensembleAdrAsText: ^Text;
+          ensembleName: ^Text;
+       enter (shellOID,shellAdr[],netType[],ensembleAdrAsText[],ensembleName[])
+       exit  (shellOID,shellAdr[],netType[],ensembleAdrAsText[],ensembleName[])
+       #);
+     
+     initBeforeScheduler::<
+       (# 
+       do <<SLOT ShellEnvFirstInitBody: descriptor>>
+       #);
+     
+     isEnsemble:< BooleanValue;
+     
+  do <<SLOT ShellEnvSecondInitBody: descriptor>>;
+     INNER;
+  #);

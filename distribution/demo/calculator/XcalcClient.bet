@@ -1,0 +1,192 @@
+(* File XcalcClient.bet
+ * =====================
+ * 
+ * Example X/athena client of the calcServer. *)
+
+(* As this is an X application, we must use xshell: *)
+
+ORIGIN '~beta/distribution/v1.0/xshell';
+(* 
+ * $RCSfile: XcalcClient.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:05 $
+ *
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+--- include 'interfaces'
+--- include '~beta/Xt/v1.8/awenv'
+--- include '~beta/Xt/v1.8/athena/prompts'
+
+--- program:descriptor ---
+shellEnv
+(# 
+   (* Tell the scheduler about the xtenv instance of this program: *)
+   
+   setwindowEnv::< (# do myAwenv[] -> theWindowEnv[] #);
+   
+   (* Tell ensemble.createShell where to look for the calcServer executable: *)
+   
+   defaultAppsDir::< 
+     (# 
+     do '/usr/local/lib/beta/distribution/v1.0/demo/calculator/$/' -> dir[] 
+     #);
+   
+   myAwEnv: @AwEnv
+     (# window: @Box
+          (# commandButton: @Command
+               (# callback::< 
+                    (# cs: ^|clientSystem;
+                    do &|clientSystem[] -> cs[];
+                       cs[] -> fork;
+                       systemcount+1-> systemcount;
+                       false -> quit.sensitive;
+                    #);
+                  init::<
+                    (# 
+                    do 'Create new calculator' -> label;
+                    #)
+               #);
+             
+             quit: @Command (# callback::< (# do theShell.kill #)#);
+             
+             messages: @Label 
+               (# init::< (# do '                        ' -> label #)
+               #);
+             
+             init::<
+               (#
+               do commandButton.init; quit.init; messages.init;
+                  commandButton -> quit.fromHoriz;
+                  commandButton -> messages.fromVert;
+                  false -> vertical;
+               #);
+             
+             coordinates: (# exit (x+20,y+20) -> translatecoords #);
+          #);
+     do window.init;
+     #);
+   
+   systemcount: @Integer;
+   onClientSystemDone:
+     (# 
+     do systemcount-1 -> systemcount; 
+        (systemcount=0) -> myAwEnv.window.quit.sensitive;
+     #);
+   
+   
+   clientSystem: system
+     (# server: ^calcServer;
+        
+        setServer:
+          (# serverEnsembleName: ^Text;
+             serverEnsemble: ^ensemble;
+             x,y: @Integer;
+          do
+             myAwEnv.window.coordinates -> (x,y);
+             
+             getServer: (x,y,0,'Name of server ensemble','OK','Cancel','') -> 
+             myAwEnv.PromptForString
+             (# ok::< 
+                  (# 
+                  do value[] ->serverEnsembleName[];
+                     
+                     (* Lookup server ensemble: *)
+                     
+                     getHost: (ensemble##, serverEnsembleName[]) -> 
+                     theShell.myEnsemble.ns.get
+                     (# notFound::<
+                          (# msg: ^Text;
+                          do serverEnsembleName.copy -> msg[];
+                             ' not found.' -> msg.append;
+                             msg[] -> myAwEnv.window.messages.label;
+                             restart getServer
+                          #)
+                     #) -> serverEnsemble[];
+                     
+                     (* Check whether a calcServer is already present on the 
+                      * serverEnsemble: *)
+                     
+                     (calcServer##, 'calcServer') -> serverEnsemble.ns.get
+                     (# notFound::<
+                          (#
+                          do (calcServer##,'calcServer')
+                               ->serverEnsemble.createShell->obj[];
+                          #)
+                     #) -> server[];
+                     
+                     sem.V;
+                  #);
+                
+                cancel::< 
+                  (# 
+                  do none -> server[]; sem.V 
+                  #); 
+             #)
+          #);
+        
+        sem: @semaphore;
+        
+     do
+        setServer;
+        
+        (* Block on a semaphore instead of using a modal dialog box 
+         * with a local event loop when prompting for the 
+         * serverEnsembleName: *)        
+        sem.P; 
+        
+        (if server[] <> NONE //true then server[] -> useServer if);
+        
+        onClientSystemDone;
+     #);
+   
+      
+   useServer:
+     (# c: ^calculator;
+        server: ^calcServer;
+        msg: @Text;
+        
+     enter server[]
+     do
+        server.newCalc -> c[];
+        
+        (for i:100 repeat
+             '2*' -> msg;
+             i -> msg.putInt;
+             ' = ' -> msg.append;
+             i -> c.double -> msg.putInt; 
+             msg[] -> myAwenv.window.messages.label;
+        for);
+        
+        (for i:100 repeat
+             msg.clear;
+             i -> msg.putInt;
+             '*' -> msg.append;
+             i -> msg.putInt;
+             ' = ' -> msg.append;
+             i -> c.exp -> msg.putInt;
+             msg[] -> myAwenv.window.messages.label;
+        for);
+        
+        (# foreach: @valueCallback
+             (# callbackImpl::< 
+                  (# 
+                  do msg.clear;
+                     value -> msg.putInt;
+                     msg[] -> myAwenv.window.messages.label;
+                  #)
+             #);
+           fac8: @Integer;
+           
+        do 
+           'Calculating 8!' -> msg;
+           msg[] -> myAwenv.window.messages.label;
+           (8,foreach[]) -> c.factorial -> fac8;
+           '8! = ' -> msg;
+           fac8 -> msg.putInt;
+           msg[] -> myAwenv.window.messages.label;
+        #);
+        
+        c[] -> server.calcDone;
+     #);
+
+#)

@@ -1,0 +1,638 @@
+ORIGIN 'shellBody';
+(* 
+ * $RCSfile: shellComm.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:13 $
+ *
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+INCLUDE '~beta/sysutils/v1.4/objinterface';
+INCLUDE 'commFormats';
+INCLUDE 'shellTypes';
+INCLUDE '~beta/objectserver/v2.1/ObjectSerializer';
+
+
+--- shellPrivateAttributes: attributes ---
+
+
+(* DISTROBJECTSERIALIZER
+ * =====================
+ * 
+ * DistrObjectSerializer handles serialization and unserialization of
+ * objects to be sent across the network. Only real objects are serialized
+ * as proxys are only identified by OID and remoteAbleType. *)
+
+DistrObjectSerializer:
+  (# 
+     msg: ^RepetitionObject;            (* The message received or sent. *)
+     messages: ^RepetitionObjectsTable; (* Auxiliary repetition objects.  *)
+     
+     curProxy: ^ObjectTableElement; (* Info on the remoteable whose method
+                                     * is executed. *)
+     curEntry: ^ObjectTableElement; (* Info on the remoteable entry itself *)
+     
+     RepetitionObjectPtAdr: @Integer; (* Prototype address for repetition
+                                       * objects. *)
+     
+     theShellEnv: ^ObjectTableElement; (* ObjectTableElement corresponding to
+                                        * the singular shellEnv instance. *)
+    
+     outNames: @outgoingNames; (* Groupnames leaving.  *)
+     inNames: @incomingNames;  (* Groupnames received. *)
+     
+     prxGroupProto: @Integer;
+     
+     outGoing: @ (* Management of outgoing message. *)
+       (# beforeObjectPut: @
+            (# OIDb: @Integer;
+            enter OIDb
+            do 0 -> msg.put;    (* Space for group,proto pair. *)
+               0 -> msg.put;    (* Space for next link.        *)
+               OIDb -> msg.put; (* Object OID.b.               *) 
+            #);
+          
+          afterObjectPut: @
+            (# proto,group,firstPos,afterPos: @Integer;
+            enter (proto, group, firstPos, afterPos)
+            do (* Save (group,proto) and next link. *)
+               (group,proto) -> packGroupProto -> msg.r[firstPos-3];
+               afterPos -> msg.r[firstPos-2];
+            #);
+          
+          insertRepetition: @
+            (# e: ^ObjectTableElement;
+            enter e[]
+            do 0 -> msg.put;                    (* Signals RepetitionObject. *)
+               e.o[]->messages.append->msg.put; (* Index in messages table.  *)
+               e.OID.b -> msg.put;              (* OID of repetitionObject.  *)
+               NONE -> e[];
+            #);
+          
+          insertProxy: @
+            (# e: ^ObjectTableElement;
+            enter e[]
+            do (-1,-1)->packGroupProto->msg.put; (* Signals proxy.       *)
+               (e[],msg[],outNames[])->saveRemoteInfo;
+               NONE -> e[];
+            #);
+       #);
+     
+     inComing: @ (* Management of incoming message. *)
+       (# proxyTable: OIDhashTable
+            (# element::< remoteInfo;
+               collisionRange:: (# do 2 -> value #);
+               range:: (# do 5 -> value #);
+            #);
+          positionsTable:
+            (# collisionList: 
+                 (# OIDbs: [2]@Integer;
+                    poss:  [2]@Integer;
+                    last: @Integer; 
+                 #);
+               indexrange: (# exit 5 #);
+               index: [indexrange]^collisionList;
+               insert: @
+                 (# OIDb,pos,inx: @Integer; cl: ^collisionList;
+                 enter (OIDb,pos)
+                 do (OIDb mod indexrange) + 1 -> inx;
+                    (if (index[inx][] -> cl[]) //NONE then
+                        &collisionList[] -> cl[] -> index[inx][];
+                    if);
+                    (if (cl.last+1 -> cl.last) > cl.OIDbs.range //true then
+                        cl.OIDbs.range -> cl.OIDbs.extend;
+                        cl.poss.range -> cl.poss.extend;
+                    if);
+                    OIDb -> cl.OIDbs[cl.last];
+                    pos -> cl.poss[cl.last];
+                 #);
+               find: @
+                 (# OIDb,pos,inx: @Integer; cl: ^collisionList;
+                 enter OIDb
+                 do (OIDb mod indexrange) + 1 -> inx;
+                    search:
+                      (if (index[inx][] -> cl[]) //NONE then 
+                          0 -> pos;
+                       else
+                          (for i:cl.last repeat
+                               (if cl.OIDbs[i] //OIDb then
+                                   cl.poss[i] -> pos;
+                                   leave search;
+                               if);
+                          for);
+                          0 -> pos;
+                      if);
+                 exit pos
+                 #);
+            #);
+          proxies: ^proxyTable;
+          positions: ^positionsTable;
+          
+          setup:
+            (# lastPos, thisPos: @Integer;
+               index,OIDb: @Integer;
+               sp: @setupProxy;
+               ri: ^remoteInfo;
+            do 
+               (* Scan the list of object information, creating proxies
+                * and remembering position on the way. *)
+               
+               msg.r[GroupsInx] -> lastPos;
+               
+               (* Skip the entry object. *)
+               msg.r[SerTabInx+1] -> thisPos;
+               
+               loop:
+                 (if (thisPos < lastPos) //true then
+                     thisPos -> msg.pos;
+                     (if msg.get
+                      //0 then
+                         (* repetitionObject *)
+                         -(msg.get) -> index;
+                         msg.get -> OIDb;
+                         (if positions[] //NONE then
+                             &positionsTable[] -> positions[];
+                         if);
+                         (OIDb,index) -> positions.insert;
+                         thisPos+3 -> thisPos;
+                      //prxGroupProto then
+                         (if proxies[] //NONE then
+                             &proxyTable[] -> proxies[];
+                             proxies.init;
+                         if);
+                         (msg[],inNames[]) -> sp -> ri[];
+                         (ri[],ri.OID) -> proxies.insert;
+                         msg.pos -> thisPos;
+                      else
+                         thisPos -> index;
+                         msg.get -> thisPos;
+                         msg.get -> OIDb;
+                         (if positions[] //NONE then
+                             &positionsTable[] -> positions[];
+                         if);
+                         (OIDb,index) -> positions.insert;
+                     if);
+                     restart loop;
+                 if);
+            #);
+          
+          reInit: @
+            (# 
+            do NONE -> proxies[]; 
+               NONE -> positions[];
+               NONE -> findProxy.ri[];
+            #);
+          
+          findProxy: @
+            (# OID: @OIDtype;
+               ri: ^remoteInfo;
+            enter OID
+            do NONE -> ri[];
+               (if proxies[] //NONE then else
+                   OID -> proxies.find -> ri[]
+               if);
+            exit ri[]
+            #);
+          
+          findPos: @
+            (# OIDb,pos,group,proto: @Integer;
+            enter OIDb
+            do (if OIDb //1 then
+                   (* The entry object. *)
+                   SerTabInx -> msg.pos;
+                   msg.get -> unpackGroupProto -> (group,proto);
+                   SerTabInx + 3 -> pos;
+                else
+                   (if positions[] //NONE then
+                       0 -> pos;
+                    else
+                       OIDb -> positions.find -> pos;
+                       (if pos//0 then else
+                           (if (pos < 0) //true then
+                               (* Repetition object. Do nothing. *)
+                            else
+                               pos -> msg.pos;
+                               msg.get -> unpackGroupProto -> (group,proto);
+                               pos + 3 -> pos;
+                           if);
+                       if);
+                   if);
+               if);
+            exit (pos,group,proto)
+            #);
+       #);
+          
+     
+     (* DISTROBJECTTABLE
+      * ================
+      * 
+      * Table of objects sent in a remote procedure call.
+      * 
+      * findObjectByOID assumes that proxy references contained in the 
+      * message to unserialize have already been set up and if necessary 
+      * put into the remoteObjects table. *)
+
+     objects: @ObjectTable
+       (# OIDhash:: (# collisionRange:: (# do 2 -> value #);
+                       range:: (# do 5 -> value #);
+                    #);
+          protoHash:: (# collisionRange:: (# do 2 -> value #);
+                         range:: (# do 5 -> value #);
+                      #);
+          
+          findObjectByReference::
+            (# ra: ^remoteAble; ri: ^remoteInfo;
+            do 
+               (if refObj[] //NONE then else
+                   (* Allow static remoteables. *)
+                   (if refObj[] -> typeAllocator.isRemoteable //true then
+                       refObj[] -> o[]
+                   if)
+               if);
+               (if o[] 
+                //curEntry.o[] then
+                   curEntry[] -> e[];
+                //curProxy.o[] then
+                   curProxy[] -> e[];
+                else
+                   (if true 
+                    //(o[] -> typeAllocator.isRemoteable) then
+                       o[] -> ra[];
+                       (if ra.ri[] -> ri[] -> e[] //NONE then
+                           (* o[] is a local object that can be accessed 
+                            * remotely but has not yet been given a global 
+                            * OID. Assign and OID to the object. *)
+                           ra[] -> OIDhandler.assignOID;
+                           ra.ri[] -> ri[] -> e[];
+                       if);
+                    //(theShellEnv.o[] = o[]) then
+                       theShellEnv[] -> e[];
+                   if);
+               if);
+            #);
+          
+          findObjectByOID::<
+            (# ri: ^remoteInfo;
+               oideq: @equalOID;
+            do 
+               (if OID.a //0 then 
+                   (if OID.b 
+                    //1 then
+                       (if curEntry[] //NONE then else
+                           curEntry[] -> e[];
+                       if)
+                    //2 then
+                       theShellEnv[] -> e[]
+                   if)     
+                else
+                   (* This is a proxy object. *)
+                   (if (OID,curProxy.OID)  -> oideq //true then
+                       (* Local proxy on which method is executed. *)
+                       curProxy[] -> e[];
+                    else
+                       OID -> inComing.findProxy -> e[];
+                   if);
+               if)
+            #);
+          
+          getGroupAndProtoId::
+            (# groupName: ^Text;
+            do ptAdr -> protoTable.getProtoId -> (group, proto, groupName[]);
+               (* If getGroupAndProtoId is called, an object of the given
+                * type is being serialized. *)
+               (group, groupName[]) -> outNames.put;
+            #);
+          
+          getProto::
+            (# ge: ^groupElement;
+            do group -> inNames.find -> ge[];
+               (ge.groupName[], proto) 
+                 -> protoTable.getProtoByGroupName 
+                 -> (ptAdr,group);
+               (* If ptAdr is -1, the 'unknownProtoType' exception will be 
+                * raised by the unserializer and the problem handled there. *)
+            #);
+          
+          reinit: @
+            (#
+            do (if ph.size //0 then else ph.reinit; oh.reinit if);
+            #);
+          
+          insert::<
+            (# (* Only transient objects gets inserted. *)
+            do (if elm.OID.b//1 then
+                   elm[] -> curEntry[]; true -> doneInInner;
+                //2 then
+                   true -> doneInInner;
+               if);
+            #);
+          
+          newOID::<
+            (# 
+            do (* First OID assigned must be (0,3), since (0,1) is given
+                * to the entry object and (0.2) is given to shellEnv *without 
+                * inserting any of these properly into the table* *)
+               (0,oh.size+3) -> value
+            #);
+       #);
+
+     init:<
+       (# 
+       do outNames.init; 
+          inNames.init; 
+          objects.init;
+          RepetitionObject## -> getProtoTypeForStruc -> RepetitionObjectPtAdr;
+          (-1,-1) -> packGroupProto -> prxGroupProto;
+          &ObjectTableElement[] -> theShellEnv[];
+          systemEnv## -> objectPool.strucGet
+          (# init:: Exception
+               (# 
+               do 'FATAL! Initialization of ObjectSerializer failed' 
+                    -> msg.putText;
+               #);
+          #) -> theShellEnv.o[];
+          (0,2) -> theShellEnv.OID;
+          
+          INNER;
+       #);
+     
+     reinit:<
+       (# 
+       do outNames.reinit; 
+          inNames.reinit; 
+          objects.reinit;
+          inComing.reinit;
+          NONE -> curEntry[] -> curProxy[];
+          INNER;
+       #);
+     
+     put: @
+       (# ser: @serialize
+            (# putDone::<
+                 (#
+                 do (proto,group,firstPos,afterPos)->outGoing.afterObjectPut;
+                    (if TraceSer//true then e.o[] -> AfterSer if);
+                 #);
+               getRepetition::< 
+                 (# gp: @getPrototype;
+                 do 
+                    (if e.OID.a//0 then
+                        (if (e.o[] -> gp) //RepetitionObjectPtAdr then 
+                            e[]  -> outGoing.insertRepetition;
+                            TRUE -> putSpecial;
+                         else
+                            (if e.OID.b //2 then
+                                (* Do nothing to put the shellEnv. *)
+                                TRUE -> putSpecial;
+                             else
+                                e.OID.b -> outGoing.beforeObjectPut;
+                                msg[] -> rep[];
+                            if);
+                        if);
+                     else
+                        (if e[] //curProxy[] then else
+                            e[] -> outGoing.insertProxy;
+                        if);
+                        TRUE -> putSpecial;
+                    if);
+                    (if TraceSer//true then e.o[] -> BeforeSer if);
+                 #);
+               stateTableRange::< (# do 11 -> value #);
+               stateTableCollisionRange::< (# do 2 -> value #);
+               
+               unknownProtoType::< 
+                 (# 
+                 do (failure,'DistrObjectSerializer.put: Unknown prototype')
+                      -> stop;
+                 #);
+            do (o[],(0,0),curEntry[]) -> forEachRoot
+            #);
+          
+          o: ^Object; 
+          
+       enter (o[],msg[],messages[])
+       do 
+          SerTabInx -> msg.pos;
+          (objects[],NONE,ptOffsets[]) -> ser;
+          (msg[], GroupsInx) -> outNames.save;
+       #);
+     
+     get: 
+       (# unknownProtoType:<
+            (# group, proto: @Integer 
+            enter (group, proto) 
+            do INNER
+            #);
+          
+          UnknownObject:<
+            (# OID: @OIDtype enter OID 
+            do INNER
+            #);
+          
+          OID: @OIDtype; 
+          index: @Integer;
+          o: ^Object;
+          
+       enter (msg[],messages[])
+       do 
+          (msg[], GroupsInx) -> inNames.read;
+          inComing.setup;
+          (objects[],NONE,ptOffsets[],this(get)[]) -> unser;
+          messages.reInit;
+          inComing.reInit;
+       exit o[]
+       #);
+     
+     unser: @unserialize
+       (# doGetObject::< 
+            (# 
+            do (OID.a = 0) and (OID.b <> 2) -> value
+            #);
+          getSerialization::<
+            (# pos: @Integer;
+               newVal,oldVal: ^RepetitionObject;
+            do 
+               OID.b -> inComing.findPos -> (pos,group,proto);
+               (if (pos < 0) //true then
+                   (* This is a repetition object. 
+                    * Unknown repetition objects should simply be assigned
+                    * to objElm.o.
+                    * Known repetition objects must be updated with the 
+                    * new value received. *)
+                   (if objElm.o[] //NONE then
+                       -pos -> messages.get -> objElm.o[];
+                    else
+                       -pos -> messages.get -> newVal[];
+                       objElm.o[] -> oldVal[];
+                       (if newVal.r.range > oldVal.r.range //true then
+                           (* Expensive copy. oldVal.r must be extended. *)
+                           newVal.r -> oldVal.r;
+                        else
+                           (* Cheap copy. *)
+                           (@@oldVal.r[1],@@newVal.r[1],4*newVal.r.range)
+                             -> memcpy;
+                       if);
+                   if);
+                   TRUE -> GetSpecial;
+                else
+                   pos -> msg.pos; msg[] -> rep[];
+               if);
+            #);
+          getDone::<
+            (# 
+            do (if TraceSer //true then objElm.o[] -> AfterUnser if);
+            #);
+          unknownProtoType::<
+            (# do (group, proto) -> theGet.unknownProtoType #);
+          unknownObject::<
+            (# do OID -> theGet.unknownObject #);
+          stateTableRange::< (# do 11 -> value #);
+          stateTableCollisionRange::< (# do 2 -> value #);
+          
+          theGet: ^get;
+       enter theGet[]
+       do ((0,1),0,(0,0),curEntry[]) -> forEachRoot -> theGet.o[]
+       #);
+     
+  #);
+
+
+
+(* SAVEREMOTEINFO
+ * ==============
+ * 
+ * Used to save remoteInfo on proxies to and from a
+ * network message.
+ * 
+ * remoteInfo is defined in shell.bet.
+ * 
+ * The remote info information saved is read again by
+ * setupProxy. *)
+
+saveRemoteInfo:
+  (# ri: ^remoteInfo;
+     rep: ^repetitionObject; 
+     groups: ^outgoingNames;
+     needFix: @Integer;
+  enter (ri[], rep[], groups[])
+  do 
+     rep.pos -> needFix;
+     0 -> rep.put; (* Reserved to point to end of the saved remoteInfo.
+                    * This makes it possible for setupProxies to only
+                    * read the OID of an object in most cases. *)
+     ri.OID.a -> rep.put; 
+     ri.OID.b -> rep.put;
+     ri.shellOID.a -> rep.put; 
+     ri.shellOID.b -> rep.put; 
+     
+     ri.shellAdr.asText -> rep.putText;
+     (ri.netType[],rep[],groups[]) -> typeAllocator.save;
+     (if ri.ensembleName[]//NONE then
+         0 -> rep.put;
+      else
+         1 -> rep.put;
+         ri.ensembleName[] -> rep.putText;
+         ri.ensembleAdrAsText[] -> rep.putText;
+     if);
+     rep.pos -> rep.r[needFix];
+  #);
+
+
+   
+(* SETUPPROXY
+ * ========== 
+ * 
+ * Reads a proxy in msg and checks whether it is known locally to
+ * this shell. If not, a proxy object is created and inserted into
+ * the remoteObjects table. The proxy is instantiated as an instance
+ * of remoteInfo.bestKnown.
+ * 
+ * msg is the repetitionObject received.
+ * inNames is the groupNames in the message. *)
+   
+setupProxy: 
+  (#
+     msg: ^RepetitionObject; 
+     inNames: ^incomingNames;
+     
+     ri,ri2: ^remoteInfo;
+     ra: ^remoteAble;
+     es: ^ensemble;
+     sh: ^shell;
+     
+     afterPos: @Integer;
+     OID, shellOID: @OIDtype;
+     
+     ensembleAdrAsText, shellAdrAsText: ^Text;
+     ensembleName: ^Text;
+     netType: ^remoteableType;
+     
+  enter (msg[],inNames[])
+  do
+     (* Read OID as saved by saveRemoteInfo *);
+     msg.get -> afterPos;
+     msg.get -> OID.a;
+     msg.get -> OID.b;
+   
+     (if true
+      //((OID->OIDhandler.localObjects.exclFindByOID->ri[]) <> NONE)
+      //((OID->remoteObjects.exclFindByOID->ri[]) <> NONE) then 
+         
+         (* Ok. We already know this object. Skip the rest of the
+          * information about it:  *)
+         afterPos -> msg.pos;
+            
+      else
+         (* Object unknown locally. We need to read the full information
+          * saved in the message: *)
+         
+         msg.get -> shellOID.a;
+         msg.get -> shellOID.b;
+         
+         msg.getText -> shellAdrAsText[];
+         (msg[],inNames[]) -> typeAllocator.initFromNet -> netType[];
+         (if msg.get //1 then
+             msg.getText -> ensembleName[];
+             msg.getText -> ensembleAdrAsText[];
+         if);
+         
+         (if OID.b //0 then
+             (* This is an ensemble *)
+             
+             (ensembleName[],ensembleAdrAsText[],OID) 
+               -> remoteObjects.exclCreateEnsemble
+               -> ri[];
+             
+          else
+             
+             &remoteInfo[] -> ri[];
+             shellAdrAsText[]
+               -> portableCommAddressFromText
+               -> ri.shellAdr[];
+             OID -> ri.OID;
+             shellOID -> ri.shellOID;
+             
+             netType[] -> ri.netType[];
+             ensembleName[] -> ri.ensembleName[];
+             ensembleAdrAsText[]  -> ri.ensembleAdrAsText[];
+             
+             &ri.netType.bestKnown[] -> ra[] -> ri.o[];
+             true -> ra.isProxy;
+             ri[] -> ra.ri[];
+             
+             ri[] -> remoteObjects.exclInsert;
+         
+             (if true
+              //(ra[] -> typeAllocator.isShell) then
+                 ra[] -> sh[];
+                 
+                 (* Lookup the ensemble corresponding to sh *)
+                 
+                 (ensembleName[],ensembleAdrAsText[],(ri.OID.a,0)) 
+                   -> remoteObjects.exclCreateEnsemble -> ri2[];
+                 ri2.o[] -> sh.myEnsemble[];
+                 
+             if)
+         if);
+     if);
+  exit ri[]
+  #);

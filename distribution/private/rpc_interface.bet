@@ -1,0 +1,216 @@
+(* 
+ * $RCSfile: rpc_interface.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:11 $
+ *
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+
+ORIGIN '~beta/basiclib/v1.4/basicsystemenv';
+
+INCLUDE '~beta/containers/v1.4/list';
+INCLUDE '~beta/basiclib/v1.4/external';
+INCLUDE '~beta/objectserver/v2.1/RepetitionObject';
+INCLUDE '~beta/process/v1.4/systemComm';
+INCLUDE 'RepetitionObjectsTable';
+
+BODY 'rpc_interfaceBody';
+
+OBJFILE default '$/thisHost.o';
+
+MAKE sun4s 'external/distributionSUN4S.make'
+     default 'external/distribution.make';
+LINKOPT sun4s '-lsocket -lnsl'
+        default '';
+
+--- systemlib:attributes ---
+
+rpcError_OK:		 (# exit  0 #);
+rpcError_noHost: 	 (# exit -1 #);
+rpcError_connRefused:	 (# exit -2 #);
+rpcError_serverOverload: (# exit -4 #);
+rpcError_timeOut:        (# exit -5 #);
+rpcError_connBroken:     (# exit -6 #);
+rpcError_formatError:    (# exit -7 #);
+rpcError_nomoreSockets:  (# exit -8 #);
+(* etc *)
+
+rpcHandler:
+  (# 
+     rpc_send: (* execute any remote procedure *)
+       (# 
+          dest: ^portablePortAddress; (* specifies who plays the server role *)
+          rpc_id: @integer;	      (* selects which rpc within server *)
+          msg: ^RepetitionObject;    
+          (* Primary message to be sent. !!! Not reused for the answer. 
+           * Three longs are reserved for the rpcHandler. 
+           * See commformats.bet. *)
+          messages: ^RepetitionObjectsTable; 
+          (* Extra messages to be sent. May be empty. *)
+          timeout: @integer;	      (* Call timedOut if no answer arrives in 
+                                       * 'timeout' seconds. If timedOut returns
+                                       * false, wait another timeout seconds.
+                                       * Otherwise return rpcError_timeOut. *)
+          protocol: ^protocolSpec;    (* selects communication type/parms *)
+          error: @integer;	      (* one of 'rpcError_.*' *)
+          notification: @Boolean;     (* If true, do not wait for answer. *)
+          
+          timedOut:< BooleanValue;    (* false: Try again.
+                                       * true: Give up with rpcError_timeOut. *)
+          connBroken:< BooleanValue;  (* false: Try again.
+                                       * true: Give up with rpcError_connBroken *)
+          
+       enter (dest[],rpc_id,msg[],messages[],
+              timeout,protocol[],notification)
+       do <<SLOT rpcSend:descriptor>>
+       exit (error,msg[])
+       #);
+     
+     rpc_receiver: 
+       (* accept remote requests for execution of a specific procedure *)
+       (# 
+          init:< 
+            (# rpc_id: @integer; (* identifies this rpc_receiver 
+                                  * within this server *)
+               thisProcess: ^portablePortAddress; (* gathered during
+                                                   * initialization of
+                                                   * communication *)
+            enter rpc_id
+            do <<SLOT rpcReceiverInit:descriptor>>; INNER
+            exit thisProcess[]
+            #);
+          onReceive:< 
+            (# msg: ^RepetitionObject; 
+               (* Message received. proxyRefs may be NONE. Answer is saved
+                * in these repetitions. *)
+               messages: ^RepetitionObjectsTable;  
+               (* Extra messages received. *)
+               error: @integer;		  (* one of 'rpcError_.*' *)
+            enter (msg[],messages[])
+            do INNER
+            exit error
+            #);
+       #);
+     
+     ensemblePort: @Integer;       (* The TCP port number to use when
+                                    * contacting the ensemble shell. *)
+     
+     init:<
+       (# isEnsemble: @Boolean;		(* True if this process is to be
+                                         * the local ensemble *)
+       enter (isEnsemble,ensemblePort)
+       do <<SLOT rpcHandlerInit:descriptor>>; INNER
+       #);
+     
+     localEnsemble:
+       (# eadrAsText: ^Text; 
+          eadr: @tcpPortAddress;
+          hostName: ^Text; 
+          inadr: @Integer;
+       do 
+          thisHost -> (hostName[],eadr.inetAddr);
+          ensemblePort -> eadr.portNo;
+          eadr.asText -> eadrAsText[];
+          
+       exit (eadrAsText[], hostName[])
+       #);
+     
+     otherEnsemble:
+       (# eadrAsText: ^Text; 
+          hostName: ^Text; 
+          eadr: @tcpPortAddress;
+          notFound:< Notification;
+          
+       enter hostName[]
+       do 
+          hostName[] -> gethostbyname
+          (# notFound::< (# do this(otherEnsemble).notFound #);
+          do
+             inadr->eadr.inetAddr;
+             ensemblePort->eadr.portNo;
+             eadr.asText->eadrAsText[];
+          #);
+          
+       exit eadrAsText[]
+       #);
+     
+     shutDown: (# do <<SLOT rpcHandlerShutDown:descriptor>> #);
+     
+     rpcPrivate: @<<SLOT rpcHandlerPrivate:descriptor>>
+     
+  #);
+
+
+(* Raw utility patterns
+ * ====================
+ *
+ * For retrieving name of this host and such.
+ *
+ * Please note: These are NOT readily portable to
+ * any context with a non-TCP/IP communication
+ * transport layer. 
+ *)
+
+hostent: ExternalRecord
+  (* Internal use only.
+   * Internet host mapping from name to address.
+   *)
+  (# hname: (* Hostname *)
+       (# getName: external 
+            (# adr: @Integer; name: [1]@Char enter adr exit name #);
+          name: ^Text;
+       do &Text[] -> name[]; 0 -> getLong -> getName -> name;
+       exit name[]
+       #);
+     haddr: (* Internet adr *)
+       (# exit 16+ptr->TOS'%adrGetLong'->TOS'%adrGetLong'->TOS'%adrGetLong' #);
+  enter ptr
+  exit ptr
+  #);
+
+gethostbyname:
+  (# gethostbyname: external  (* See 'man gethostbyname' *)
+       (# name: [1]@Char; hostInfo: @Integer;
+       enter name exit hostInfo
+       #);
+     hostInfo: @hostent;
+     
+     notfound:< Exception;
+     
+     name: ^Text;     (* Host name.        *)
+     inadr: @Integer; (* Internet address. *)
+     
+  enter name[]
+  do name -> gethostbyname -> hostInfo;
+     (if hostInfo //0 then 
+         notfound 
+      else
+         hostInfo.hname -> name[];
+         hostinfo.haddr -> inadr;
+         INNER;
+     if);
+  exit (name[], inadr)
+  #);
+
+
+
+
+thisHost:
+  (# thisHost: external (# hostInfo: @Integer exit hostInfo #);
+     hostInfo: @hostent;
+     
+     notfound:< Exception;
+     
+     name: ^Text;
+     inadr: @Integer;
+     
+  do 
+     thisHost -> hostInfo;
+     (if hostInfo //0 then 
+         notfound 
+      else
+         hostInfo.hname -> name[];
+         hostinfo.haddr -> inadr;
+     if);
+  exit (name[], inadr)
+  #);

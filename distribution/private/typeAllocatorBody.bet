@@ -1,0 +1,207 @@
+ORIGIN 'shellBody'
+(* 
+ * $RCSfile: typeAllocatorBody.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:16 $
+ *
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+--- include '~beta/objectserver/v2.1/ObjectSerializerTables'
+
+(* TYPEALLOCATORPRIVATE
+ * ====================
+ *
+ * ptcache maps local prototype addresses into known remoteAbleTypes. *)
+
+--- typeAllocatorPrivate:descriptor ---
+(#
+   egt: ^execGroupTable;
+   gp: @getProtoType;
+
+   shellPtAdr: @Integer;
+   nameServerPtAdr: @Integer;
+   ensemblePtAdr: @Integer;
+   remoteAblePtAdr: @Integer;
+   remoteAbleOriOff: @Integer;
+   
+   ptcache: @IntegerHashTable (# element::< remoteAbleType #);
+   
+   save: @
+     (# rat: ^remoteAbleType;
+        rep: ^RepetitionObject; 
+        groups: ^outgoingNames;
+     enter (rat[],rep[],groups[])
+     do
+        rat.last -> rep.put;
+        (for i: rat.last repeat
+             rat.protos[i] -> rep.put;
+             (rat.groups[i],rat.groupNames[i][]) -> groups.put -> rep.put;
+        for);
+     #);
+
+   initFromObj: @
+     (# ra: ^RemoteAble; 
+        rat: ^remoteAbleType; 
+        pt: @protoType;
+        ext: @Integer;
+     enter ra[]
+     do
+        ra[] -> getProtoType -> pt;
+        (if pt -> ptcache.find -> rat[] //NONE then
+            &remoteAbleType[] -> rat[];
+            remoteAble## -> rat.bestKnown##;
+            (rat[],pt) -> ptcache.insert;
+            loop:
+              (if pt //remoteAblePtAdr then else
+                  (if pt.OriginOff //remoteAbleOriOff then
+                      rat.last+1 -> rat.last;
+                      (if rat.last > rat.groups.range //true then
+                          rat.groups.range -> ext -> rat.groups.extend;
+                          ext -> rat.groupNames.extend;
+                          ext -> rat.protos.extend;
+                      if);
+                      pt -> protoTable.getProtoId -> 
+                      (rat.groups[rat.last],
+                       rat.protos[rat.last],
+                       rat.groupNames[rat.last][]);
+                      (if rat.last //1 then
+                          (* Set iProto of rat.bestKnown. *)
+                          ((@@rat.last + 4 -> TOS'%adrGetLong') + 12, pt)
+                            -> TOS'%putLong';
+                      if);
+                  if);
+                  pt.prefix -> pt;
+                  restart loop;
+              if);
+        if)
+     exit rat[]
+     #);
+
+   initFromNet: @
+     (# rep: ^repetitionObject;
+        groups: ^incomingNames;
+        rat, tmp: ^remoteAbleType;
+        ge: ^groupElement;
+        group, proto, ptAdr, firstPtAdr: @Integer;
+        hasUnknown: @Boolean;
+        count: @Integer;
+     enter (rep[], groups[])
+     do
+        false -> hasUnknown;
+        0 -> firstPtAdr;
+        
+        &remoteAbleType[] -> tmp[];
+        
+        rep.get -> count;
+        count -> tmp.protos.new;
+        count -> tmp.groupNames.new;
+        count -> tmp.groups.new;
+        none -> rat[];
+        
+        (for count repeat
+             (if rat[] //NONE then
+                 tmp.last+1 -> tmp.last;
+                 
+                 rep.get -> tmp.protos[tmp.last];
+                 rep.get -> groups.find -> ge[];
+                 ge.groupName[] -> tmp.groupNames[tmp.last][];
+                 
+                 (tmp.groupNames[tmp.last][],tmp.protos[tmp.last]) 
+                   -> protoTable.getLocalProtoId
+                   -> (group,proto,ptAdr);
+                 
+                 group -> tmp.groups[tmp.last];
+                 
+                 (if group //-1 then
+                     (* This proto is locally unknown. To ensure that we
+                      * do not throw away type information, we need to
+                      * read and save all type info from the net and not
+                      * just use a superpattern that is fully known locally. *)
+                     true -> hasUnknown;
+                  else
+                     (if tmp.last //1 then
+                         (* Try if we already know this one. In that case we
+                          * are done. *)
+                         ptAdr -> firstPtAdr -> ptcache.find -> rat[];
+                      else
+                         (if firstPtAdr //0 then
+                             ptAdr -> firstPtAdr
+                         if);
+                     if);
+                 if);
+              else
+                 (* Need to skip rest of remoteAbleType in rep. *)
+                 rep.get; rep.get;
+             if);
+        for);
+        (if rat[] //NONE then 
+            tmp[] -> rat[];
+            remoteAble## -> rat.bestKnown##;
+            (if firstPtAdr //0 then else
+                (* Set iProto of rat.bestKnown. *)
+                ((@@rat.last + 4 -> TOS'%adrGetLong') + 12, firstPtAdr)
+                  -> TOS'%putLong';
+                (if hasUnknown //false then
+                    (rat[],firstPtAdr) -> ptcache.insert
+                if);
+            if);
+        if);
+     exit rat[]
+     #);
+
+   init:
+     (# pt: @prototype;
+     do GetExecGroupTable -> egt[];
+        ptcache.init;
+        remoteAble## -> getProtoTypeForStruc -> remoteAblePtAdr -> pt;
+        pt.OriginOff -> remoteAbleOriOff;
+        shell## -> getProtoTypeForStruc -> shellPtAdr;
+        nameServer## -> getProtoTypeForStruc -> nameServerPtAdr;
+        ensemble## -> getProtoTypeForStruc -> ensemblePtAdr;
+     #);
+   
+   InPrefChain: @
+     (# obj: ^Object; ptPref: @Integer; value: @Boolean;
+        pt: @ProtoType; pref: @Integer;
+     enter (obj[], ptPref)
+     do
+        obj[] -> gp -> pt;
+        loop:
+          (if pt //ptPref then
+              true -> value;
+           else
+              (if pt.prefix -> pref //pt//0 then
+                  false -> value;
+               else
+                  pref -> pt;
+                  restart loop
+              if);
+          if);
+     exit value
+     #);
+#)
+
+
+--- typeAllocatorIsRemoteAble:dopart ---
+do (obj[],taPrivate.remoteAblePtAdr) -> taPrivate.InPrefChain -> value
+   
+--- typeAllocatorIsShell:dopart ---
+do (obj[],taPrivate.shellPtAdr) -> taPrivate.InPrefChain -> value
+   
+--- typeAllocatorIsNameServer:dopart ---
+do (obj[],taPrivate.nameServerPtAdr) -> taPrivate.InPrefChain -> value
+   
+--- typeAllocatorIsEnsemble:dopart ---
+do (obj[],taPrivate.ensemblePtAdr) -> taPrivate.InPrefChain -> value
+   
+--- typeAllocatorInitFromObj:dopart ---
+do ra[] -> taPrivate.initFromObj -> rat[]
+
+--- typeAllocatorInitFromNet:dopart ---
+do (rep[],groups[]) -> taPrivate.initFromNet -> rat[]
+
+--- typeAllocatorInit:dopart ---
+do taPrivate.init
+
+--- typeAllocatorSave:dopart ---
+do (rat[],rep[],groups[]) -> taPrivate.save

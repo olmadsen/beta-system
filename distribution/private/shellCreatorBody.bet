@@ -1,0 +1,464 @@
+ORIGIN 'shellBody';
+(*
+ * $RCSfile: shellCreatorBody.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:13 $
+ *
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+MDBODY sun4 'rshNameBody_sun4'
+       sun4s 'rshNameBody_sun4'
+       hpux8 'rshNameBody_hpux8'
+       snake 'rshNameBody_hpux8'
+       linux 'rshNameBody_linux';
+
+OBJFILE default '$/remoteStart.o';
+
+--- include '~beta/sysutils/v1.4/envstring'
+--- include '~beta/basiclib/v1.4/iostate'
+--- include '~beta/basiclib/v1.4/timehandler'
+
+--- lib:attributes ---
+
+rshBegin: external
+  (# command: [1]@Char;
+     pipePtr: @Integer;
+  enter command
+  exit pipePtr
+  #);
+getPipeDesc: external
+  (# pipePtr: @Integer;
+     pipeFD: @Integer;
+  enter pipePtr
+  exit pipeFD
+  #);
+rshGetNext: external
+  (# pipePtr: @Integer;
+     res: @Integer;
+  enter pipePtr
+  exit res
+  #);
+rshClose: external
+  (# pipePtr: @Integer
+  enter pipePtr
+  #);
+
+(* CREATESHELLBODY
+ * =============== *)
+
+--- createShellBody:descriptor ---
+(#
+   pt: ^ProtoType;
+   selm: ^scPrivate.pending.element;
+
+   shellNmb: @Integer
+     (* Used to identify the shell started when it calls back to
+      * register itself. *);
+
+   command: ^Text;
+   envCountAsText: @Text;
+   OID: @OIDtype;
+
+   pipePtr: @Integer;
+   pipestream: @IOstate;
+
+   tmp: ^Text;
+   env: ^cs.environment;
+   envCount: @Integer;
+   paramCount: @Integer;
+   localhost: @Boolean;
+
+   positions: ^Text;
+   pos: @Integer;
+
+   eh: ^errorHandler;
+
+   timerId: @Integer;
+   validTimerId: @Integer;
+   waitingForCallback: @Boolean;
+   waitingTime: @Integer;
+
+   onTimeOut: @
+     (#
+     do (if waitingForCallback //true then
+            selm.callback.V
+         else
+            pipeStream.timeOut;
+        if);
+     #);
+
+   (* When remote shell (rsh) is used to start remote BETA shells, double
+    * quoting of parameters are needed in order to preserve the parameters
+    * all the way to "startAsDeamon".
+    *
+    * In the local case, only a single quote is needed. *)
+
+   quoteStart:
+     (#
+     do
+        (if localhost //true then
+            '''' -> command.append;
+         else
+            '"' -> command.append;
+            '''' -> command.append;
+        if)
+     #);
+
+   quoteEnd:
+     (#
+     do
+        (if localhost //true then
+            '''' -> command.append;
+         else
+            '''' -> command.append;
+            '"' -> command.append;
+        if)
+     #);
+
+   rshName:
+     (# name: ^Text
+     do (if rshPath -> name[] //NONE then <<SLOT rshNameBody:descriptor>> if);
+     exit name[]
+     #);
+
+
+do
+
+   (* Format of command:
+    *
+    *   (rsh remoteName) remoteStart distributionDir appPath \
+    *                    environment params
+    *
+    * environment and params are strings in the following format:
+    *
+    *   envparamStr::= elmCount.(element)**elmCount
+    *   element::=     strlen.str
+    *)
+   es.hostName[] -> theShell.myEnsemble.hostName.equal -> localhost;
+   (if localHost//false then
+       rshName -> command[];
+       es.hostName[] -> command.append;
+       ' ' -> command.append;
+    else
+       &Text[] -> command[];
+   if);
+
+   distributionDir -> command.append;
+   'remoteStart' -> command.append;
+
+   ' ' -> command.append;
+
+   quoteStart;
+   distributionDir -> command.append;
+   quoteEnd;
+
+   ' ' -> command.append;
+
+   quoteStart;
+   (* Clear '$' since they are treated specially by the command interpreter.
+    * Instead their positions are appended to the command parameter. *)
+   cs.appsDir -> tmp[];
+   cs.execName[] -> tmp.append;
+   tmp.length -> command.putInt;
+   '.' -> command.append;
+   &Text[] -> positions[];
+   1 -> pos;
+   tmp.scanAll
+   (#
+   do (if ch //'$' then
+          pos -> positions.putInt;
+          '.' -> positions.append;
+          ' ' -> tmp.t[pos];
+      if);
+      pos+1 -> pos;
+   #);
+   0 -> positions.putInt;
+   '.' -> positions.append;
+   tmp[] -> command.append;
+   positions[] -> command.append;
+   quoteEnd;
+
+   ' ' -> command.append;
+
+   scPrivate.scmutex.P;
+   scPrivate.shellCount+1 -> scPrivate.shellCount -> shellNmb;
+   scPrivate.scmutex.V;
+   OIDHandler.shellOID -> OID;
+
+   (* environment: *)
+
+   &cs.environment[] -> env[];
+
+   ('BETADISTRCREATORADR',RPC.localAddress.asText) -> env.addEnvVar;
+
+   &Text[] -> tmp[];
+   OID.a -> tmp.putInt;'.' -> tmp.put;OID.b -> tmp.putInt;'.' -> tmp.put;
+   shellNmb -> tmp.putInt;'.' -> tmp.put;
+   ('BETADISTRCREATORINFO',tmp[]) -> env.addEnvVar;
+
+   (if cs.screenName -> tmp[] //NONE then else
+       ('BETADISTRSCREENNAME',tmp[]) -> env.addEnvVar
+   if);
+
+   quoteStart;
+   env -> (tmp[], envCount);
+   '_' -> command.append;
+   envCount -> command.putInt;
+   '.' -> command.append;
+   tmp[] -> command.append;
+   quoteEnd;
+
+   ' ' -> command.append;
+
+   (* parameters: *)
+
+   quoteStart;
+   '_' -> command.append;
+   cs.parameters -> (tmp[], paramCount);
+   paramCount -> command.putInt;
+   '.' -> command.append;
+   (if tmp[] //NONE then else
+       tmp[] -> command.append;
+   if);
+   quoteEnd;
+
+   ' 2> /dev/null ' -> command.append;
+
+   &scPrivate.pending.element[] -> selm[];
+   mutex.p; (selm[], shellNmb) -> scPrivate.pending.insert; mutex.v;
+
+   (* command[] -> screen.putLine; *)
+
+   command -> rshbegin -> pipePtr;
+
+   (if pipePtr //0 then
+       cs.processCreationFailed;
+
+    else
+       pipePtr -> getPipeDesc -> pipeStream.init;
+
+       loop:
+         (#
+         do
+             (* Get active errorHandler: *)
+             (if theActive.lc[] -> eh[] //NONE then
+                 globalHandler[] -> eh[]
+             if);
+
+            pipeWait:
+              (#
+              do
+                   (if eh.timeOutValue -> waitingTime //-1 then else
+                       (onTimeOut[],waitingTime)
+                         -> scPrivate.timer.register
+                         -> timerId;
+                       true -> validTimerId;
+                   if);
+
+                   (if pipeStream.readBlock //true then
+                       (if (es[], NONE) -> eh.timeOut
+                        //EH_kill then theShell.kill
+                        //EH_retry then restart pipewait
+                        //EH_ignore then
+                           pipePtr -> rshClose; leave loop;
+                       if)
+                   if);
+              #);
+
+             (if pipePtr -> rshGetNext
+              //0 then
+                 (* Ok *)
+
+                 true -> waitingForCallback;
+                 pipePtr -> rshClose;
+
+                 cbwait:
+                   (if 1//1 then
+                       selm.callback.P; (* Wait for callback *)
+
+                       (if selm.newShell[] //NONE then
+                           (* time out. *)
+                           (if (es[], NONE) -> eh.timeOut
+                            //EH_kill then theShell.kill
+                            //EH_retry then
+                               (onTimeOut[],waitingTime)
+                                 -> scPrivate.timer.register
+                                 -> timerId;
+                               restart cbwait
+                            //EH_ignore then
+                               pipePtr -> rshClose; leave loop;
+                           if)
+                       if);
+                   if);
+
+                 (if selm.newShell.struc <= cs.shellType## //false then
+                     cs.typeError;
+                  else
+                     selm.newShell[] -> sh[];
+                 if);
+
+              //1 then
+                 (* Not found. *)
+                 pipePtr -> rshClose;
+                 cs.execNotFound;
+
+              //2 then
+                 (* Error *)
+                 pipePtr -> rshClose;
+                 cs.unknownError;
+
+              //3 then
+                 (* nothing yet. *)
+                 restart loop;
+
+             if);
+         #)
+   if);
+
+   (if validTimerId //true then
+       timerId -> scPrivate.timer.unregister
+   if);
+#)
+
+(* ENSEMBLEADDENVVAR
+ * ================= *)
+
+--- ensembleAddEnvVar:descriptor ---
+(#
+do
+   (if env[] //NONE then &Text[] -> env[] if);
+
+   name.length + value.length + 1 -> env.putInt;
+   '.' -> env.append;
+   name[] -> env.append;
+   '=' -> env.append;
+   value[] -> env.append;
+
+   envCount+1 -> envCount;
+#)
+
+(* CREATESHELLADDPARAM
+ * =================== *)
+
+--- createShellAddParam:descriptor ---
+(#
+do
+   (if params[] //NONE then &Text[] -> params[] if);
+
+   value.length -> params.putInt;
+   '.' -> params.append;
+   value[] -> params.append;
+
+   paramCount+1 -> paramCount;
+#)
+
+(* SHELLCALLBACK
+ * ============= *)
+
+--- shellCallback:descriptor ---
+(# selm: ^scPrivate.pending.element;
+do
+   shellNmb -> scPrivate.pending.delete -> selm[];
+   (if selm[] //NONE then
+       'shellCallback: selm was NONE' -> screen.putLine;
+    else
+       newShell[] -> selm.newShell[];
+       selm.callback.V;
+   if);
+#)
+
+(* SCPRIVATE
+ * ========= *)
+
+--- scPrivate:descriptor ---
+(# shellCount: @Integer;
+   scmutex: @semaphore;
+
+   pending: @integerHashTable
+     (# element::<
+          (# callback: @semaphore;
+             newShell: ^Shell;
+          #);
+     #);
+
+   timer: @timeHandler;
+
+   creatoradr: ^Text;
+   creatorinfo: ^Text;
+   screenName: ^Text;
+#)
+
+(* SCINIT
+ * ====== *)
+
+--- scInit:descriptor ---
+(# notFound: @Boolean;
+do
+   scPrivate.pending.init;
+
+   '$(BETADISTRCREATORADR)' -> expandEnvVar
+   (# defaultValue::< (# do true -> notFound #);
+   #) -> scPrivate.creatoradr[];
+
+   (if notFound //true then none -> scprivate.creatoradr[] if);
+
+   false -> notFound;
+
+   '$(BETADISTRCREATORINFO)' -> expandEnvVar
+   (# defaultValue::< (# do true -> notFound #);
+   #) -> scPrivate.creatorinfo[];
+
+   (if notFound //true then none -> scprivate.creatorinfo[] if);
+
+   '$(BETADISTRSCREENNAME)' -> expandEnvVar
+   (# defaultValue::< (# do defaultScreenName -> envvarvalue[] #);
+   #) -> scPrivate.screenName[];
+
+   scPrivate.timer.init;
+   scPrivate.scmutex.V
+#)
+
+(* REMOTELYINSTANTIATED
+ * ==================== *)
+
+--- remotelyInstantiated:dopart ---
+do (scPrivate.creatoradr[] <> NONE) and (scPrivate.creatorinfo[] <> NONE)
+     -> value
+
+(* SCREENNAME
+ * ========== *)
+
+--- shellCreatorScreenName:dopart ---
+do scPrivate.screenName[] -> name[]
+
+(* STARTSHELLREPORT
+ * ================ *)
+
+--- startShellReport:descriptor ---
+(#
+   creatorAddr: ^portablePortAddress;
+   info: ^Text;
+   creator: ^Shell;
+
+do
+   (* Make a fake proxy for calling back to creator: *)
+
+   scprivate.creatoradr[]-> portableCommAddressFromText -> creatorAddr[];
+   scprivate.creatorinfo[] -> info[];
+
+   &shell[] -> creator[];
+   true -> creator.isProxy;
+
+   &remoteInfo[] -> creator.ri[];
+
+   info.reset;
+   info.getInt -> creator.ri.OID.a;
+   info.get;
+   info.getInt -> creator.ri.OID.b;
+   info.get;
+   creator.ri.OID -> creator.ri.shellOID;
+
+   creatorAddr[] -> creator.ri.shellAdr[];
+   
+   (theShell[], info.getInt) -> creator.registerCallback;
+#)

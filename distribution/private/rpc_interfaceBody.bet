@@ -1,0 +1,642 @@
+(*
+ * $rcsfile: rpc_interfaceBody.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:11 $
+ *
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+
+ORIGIN 'rpc_interface';
+
+INCLUDE '~beta/basiclib/v1.4/timehandler';
+INCLUDE '~beta/process/v1.4/connectionPool';
+
+--- rpcHandlerShutDown:descriptor ---
+(#
+do rpcPrivate.portHandler.terminate;
+#)
+
+--- rpcReceiverInit:descriptor ---
+(#
+do THIS(rpc_receiver)[] -> rpcPrivate.receiver[];
+   rpcPrivate.procAddr[] -> thisProcess[];
+#)
+
+--- rpcHandlerPrivate:descriptor ---
+(#
+   cPool: @binaryConnectionPool;
+   sockgen: @socketGenerator;
+   procAddr: ^portablePortAddress;
+   receiver: ^rpc_receiver;
+
+   init:
+     (# isEnsemble: @boolean;
+     enter isEnsemble
+     do
+        (if isEnsemble//true then
+            ensemblePort->sockgen.port; (* Use 'well-known' port *)
+         else
+            0->sockgen.port; (* Choose any available port *)
+        if);
+        sockgen.bind;
+        sockgen.getPortableAddress->procAddr[];
+        (if isEnsemble // true then 
+            60->portHandler.timeoutValue;
+         else
+            waitForEver->portHandler.timeoutValue;
+        if);
+        RepPool.init;
+        cPool.init;
+     #);
+
+   RepPool: @Monitor
+     (# reps: [10]^RepetitionObject;
+        last: @Integer;
+
+        msgs: [10]^RepetitionObjectsTable;
+        lastm: @Integer;
+
+        getRep: entry
+          (# r: ^RepetitionObject;
+          do
+             (if last //0 then
+                 &RepetitionObject[]->r[];
+              else
+                 reps[last][] -> r[];
+                 NONE -> reps[last][];
+                 last-1 -> last;
+             if);
+          exit r[]
+          #);
+
+        putRep: entry
+          (# r: ^RepetitionObject;
+          enter r[]
+          do
+             (if (last+1 -> last) > reps.range //true then
+                 last-1 -> last;
+              else
+                 r[] -> reps[last][];
+             if);
+          #);
+
+        getMessages: entry
+          (# m: ^RepetitionObjectsTable;
+          do
+             (if lastm //0 then
+                 &RepetitionObjectsTable[] -> m[];
+              else
+                 msgs[lastm][] -> m[];
+                 NONE -> msgs[lastm][];
+                 lastm-1 -> lastm;
+             if);
+          exit m[]
+          #);
+
+        putMessages: entry
+          (# m: ^RepetitionObjectsTable;
+          enter m[]
+          do
+             (if (lastm+1 -> lastm) > msgs.range //true then
+                 lastm-1 -> lastm;
+              else
+                 m.reInit;
+                 m[] -> msgs[lastm][];
+             if);
+          #);
+     #);
+
+   requestHandler: System
+     (# init: (# enter (sock[],timeoutValue) #);
+        sock: ^binarySocket;
+        timeoutValue: @integer;
+        messages: ^repetitionObjectsTable;
+        msg: ^repetitionObject;
+        last: @integer;
+        error: @integer;
+
+        (* termination *)
+        terminate: (# do sock.forceTimeout #);
+        ref: (# exit this(requestHandler)[] #);
+        busy: @boolean;
+
+        (* timeout handling *)
+        timeHnd: @timeHandler;
+        timerId: @integer;
+        timerRunning: @boolean;
+        timerInit: @(# do timeHnd.init; #);
+        timeOutAction: @(# do sock.forceTimeout #);
+        timerStart: @
+          (# timeout: @integer;
+          enter timeout
+          do
+             (if timeout // waitForever then
+                 (* Noop *)
+              else
+                 (timeOutAction[],timeout)->timeHnd.register->timerId;
+                 true->timerRunning;
+             if);
+          #);
+        timerStop: @
+          (#
+          do (if timerRunning // true then
+                 false->timerRunning;
+                 timerId -> timeHnd.unregister;
+             if);
+          #);        
+     do
+        timerInit;
+        
+        loop:
+          (#
+             killSocket: (# do sock.close #);
+             aPut: sock.putRepObjPattern
+               (#
+                  error::<
+                    (#
+                    do killSocket;
+                       abort(# do leave loop; (* suicide *) #);
+                    #);
+               #);
+             aGet: sock.getRepObjPattern
+               (#
+                  error::<
+                    (#
+                    do killSocket;
+                       abort(# do leave loop; (* suicide *) #);
+                    #);
+               #);
+             thePut: ^aPut;
+             theGet: ^aGet;
+
+             tmpMsg: ^repetitionObject;
+             comm_id: @integer;
+          do
+             &aPut[]->thePut[];
+             &aGet[]->theGet[];
+
+             L:
+               (if 1//1 then
+
+                   repPool.getRep->msg[];
+                   false->busy;
+
+                   timeoutValue->timerStart;
+                   (waitForEver,msg[])->theGet;
+                   timerStop;
+                   
+                   true->busy;
+                   msg.r[4]->last;
+
+                   repPool.getMessages->messages[];
+                   (if last
+                    // 0 then
+                       messages.reInit;
+                    else
+                       last->messages.table.new;
+                       0->messages.last;
+                       (for i: last repeat
+                            repPool.getRep->tmpMsg[];
+                            (waitForEver,tmpMsg[])->theGet;
+                            tmpMsg[]->messages.append;
+                       for);
+                   if);
+
+                   (msg[],messages[])
+                     ->receiver.onReceive
+                     ->error;
+
+                   (* Answer format:
+                    *    1: msg (error=msg.r[3], messages.last = msg.r[4])
+                    *           (comm_id=msg.r[RepObjIdPosition])
+                    *    3: messages if any
+                    *)
+                   error->msg.r[3];
+                   messages.last->msg.r[4];
+
+                   (waitForever,msg[])->thePut;
+                   msg[] -> repPool.putRep;
+
+                   (if messages.last //0 then else
+                       messages.scan(# do (waitForEver,current[])->thePut; #);
+                   if);
+                   messages[]->repPool.putMessages;
+
+                   restart L;
+               if);
+          #);
+        timerStop;
+     #);
+
+   portHandler: @|System
+     (# rh: ^|requestHandler;
+        sock: ^binarySocket;
+        timeoutValue: @integer;
+        terminate: (# do sockgen.forceTimeout; #);
+        reqHandlers: @list(# element::< requestHandler #);
+
+        removeSomeRequestHandler:
+          (* !! This and connectionPool.removeSomeConnection ought to
+           * be specializations of some common pattern. But we don`t
+           * really want to include connectionPoolBody here *)
+          (# noneRemovable:< object;
+             lru_cell: ^reqHandlers.theCellType;
+             lru_timestamp: @integer;
+             other_timestamp: @integer;
+             
+             older: @booleanValue
+               (# i1,i2: @integer;
+               enter (i1,i2)
+               do
+                  (* 0 is unknown - never used: least-recently-used *)
+                  (if i1 // 0 then
+                      true->value;
+                   else
+                      (if i2 // 0 then
+                          false->value;
+                       else
+                          (* i1 and i2 both non-zero *)
+                          (i1<i2)->value;
+                      if);
+                  if);
+               #);
+          do
+             NONE->lru_cell[];
+             0->lru_timestamp;
+             
+             reqHandlers.iterate
+             (#
+             do (if current.elm.busy // false then
+                    
+                    (* Found idle request handler *)
+                    (if lru_cell[] // NONE then
+                        
+                        (* First candidate: taken *)
+                        current[]->lru_cell[];
+                        lru_cell.elm.sock.usageTimestamp->lru_timestamp;
+                        
+                     else
+                        
+                        (* Non-first candidate: compare *)
+                        current.elm.sock.usageTimestamp->other_timestamp;
+                        (if (other_timestamp,lru_timestamp)->older // true then
+                            
+                            (* It IS better, take it *)
+                            current[]->lru_cell[];
+                            other_timestamp->lru_timestamp;
+                            
+                        if);
+                    if);
+                if);
+             #);
+             
+             (if lru_cell[] // NONE then
+                 
+                 (* No handlers could be closed down *)
+                 noneRemovable;
+                 
+              else
+                 
+                 (* lru_cell chosen *)
+                 lru_cell[]->reqHandlers.delete;
+                 lru_cell.elm.terminate;
+
+                 (* Let it happen *)
+                 pause;
+                 
+             if);
+          #);
+     do
+        reqHandlers.init;
+        
+        listen:
+          (if 1//1 then
+              waitForEver->sockgen.getBinaryConnection
+              (# timedOut::< (# do abort(# do leave listen #) #);
+                 resourceError::<
+                   (# 
+                   do
+                      (* Default is success *)
+                      continue;
+
+                      (* 1st strategy: get rid of a pool connection *)
+                      cPool.removeSomeConnection
+                      (#
+                         noConnectionsRemovable::<
+                           (#
+                           do (* 2nd strategy: kill a requestHandler *)
+                              removeSomeRequestHandler
+                              (#
+                                 noneRemovable::<
+                                   (#
+                                   do (* No more strategies *)
+                                      'No more sockets available'->addMsg;
+                                      fatal;
+                                   #);
+                              #);
+                           #);
+                      #);
+                   #);
+              #)->sock[];
+
+              (* Tell connection pool that this connection belongs to
+               * someone else - otherwise it might use this connection
+               * because it has same OS id (file descriptor) as some
+               * (silently) dead connection in the pool.
+               *)
+              sock[]->cPool.markAsDead;
+
+              &|requestHandler[]->rh[];
+              (sock[],timeoutValue)->rh.init;
+              rh.ref->reqHandlers.append;
+              
+              none -> sock[];
+              rh[] -> fork;
+              none -> rh[];
+
+              restart listen;
+          if);
+        sockgen.close;
+     #);
+
+   doSend:
+     (* !! Can`t readily make a static instance of this to use
+      * at all times: the different components will mix up
+      * the local state; this, e.g., can make ALL components stop
+      * if ONE component experiences an error. We could have one
+      * instance for each component, though --
+      *)
+     (#
+        onTimeOut:
+          (# do_leave: @boolean;
+          do (if timedOut->do_leave // true then
+                 rpcError_timeOut->err;
+             if);
+          exit do_leave
+          #);
+        onConBroken:
+          (# do_leave: @boolean;
+          do (if connBroken->do_leave // true then
+                 rpcError_connBroken->err;
+             if);
+          exit do_leave
+          #);
+        onNoMoreSockets:
+          (# failed: @boolean;
+          do cPool.removeSomeConnection
+             (#
+                noConnectionsRemovable::< (# do true->failed #);
+             #);
+             (if failed // true then 
+                 rpcError_nomoreSockets->err;
+             if);
+          exit failed
+          #);
+        onRefused:
+          (#
+          do rpcError_connRefused -> err;
+          exit true
+          #);
+        
+        last: @Integer;
+        first_try: @boolean;
+
+        (* time management *)
+        timeHnd: @timeHandler;
+        timerRunning: @boolean;
+        timerID: @integer;
+        timeOutAction: @
+          (# obj: ##object;
+             set: (# enter obj## #);
+          do (if onTimeout // true then
+                 (if obj## // NONE then else &obj if);
+              else
+                 timeout->timerStart;
+             if);
+          #);
+        timerInit: @
+          (#
+          do timeHnd.init;
+          #);
+        timerStart: @
+          (# timeout: @integer;
+          enter timeout
+          do
+             (if timeout // waitForever then
+                 (* Noop *)
+              else
+                 (timeOutAction[],timeout)->timeHnd.register->timerId;
+                 true->timerRunning;
+             if);
+          #);
+        timerStop: @
+          (#
+          do (if timerRunning // true then
+                 false->timerRunning;
+                 timerId -> timeHnd.unregister;
+             if);
+          #);
+
+        (* entered/exited *)
+        dest: ^portablePortAddress;
+        rpc_id: @integer;
+        msg,tmpMsg: ^RepetitionObject;
+        messages: ^RepetitionObjectsTable;
+        timeout: @integer;
+        protocol: ^protocolSpec;
+        notification: @Boolean;
+        connBroken,timedOut: ##booleanValue;
+        err: @integer;
+
+     enter
+        (dest[],rpc_id,msg[],messages[],timeout,protocol[],notification,
+        err,connBroken##,timedOut##)
+     do
+        (* Setup timeout handling *)
+        timerInit;
+        timeout->timerStart;
+
+        (* Do the rpc communication *)
+        SND:
+          (if 0//0 then
+
+              (if messages[] // NONE then
+                  0->msg.r[4];
+               else
+                  messages.last->msg.r[4];
+              if);
+
+              true->first_try;
+              L: dest[]->cPool.communication
+              (#
+                 destroySock:
+                   (#
+                   do (if sock[] // NONE then (* no action *) else
+                          sock.close;
+                          removeSock;
+                      if);
+                   #);
+                 trsf: (* choose control flow transfer *)
+                   (# b: @boolean;
+                   enter b
+                   do destroySock;
+                      (if b // true then leave SND else restart L if);
+                   #);
+                 resourceError::<
+                   (# do abort(# do onNoMoreSockets->trsf #)#);
+                 refusedError::<
+                   (# do abort(# do onRefused->trsf #)#);
+                 (* other- *) error::<
+                   (# do abort(# do onRefused->trsf #)#);
+
+                 thePut: ^thePutPtn;
+                 thePutPtn: sock.putRepObjPattern
+                   (#
+                      timedOut::<
+                        (# do abort(# do true->trsf #)#);
+                      timedOutInTransfer::<
+                        (# do abort(# do true->trsf #)#);
+                      connBrokenError::<
+                        (#
+                        do abort
+                           (#
+                           do (if first_try // true then
+                                  destroySock;
+                                  false->first_try;
+                                  restart L;
+                               else
+                                  onConBroken->trsf;
+                              if);
+                           #);
+                        #);
+                      (* other- *) error::<
+                        (#
+                        do abort
+                           (#
+                           do (if first_try // true then
+                                  destroySock;
+                                  false->first_try;
+                                  restart L;
+                               else
+                                  onConBroken->trsf;
+                              if);
+                           #);
+                        #);
+                   #);
+                 
+                 theGet: ^theGetPtn;
+                 theGetPtn: sock.getRepObjPattern
+                   (#
+                      timedOut::<
+                        (# do abort(# do true->trsf #)#);
+                      timedOutInTransfer::<
+                        (# do abort(# do true->trsf #)#);
+                      connBrokenError::<
+                        (#
+                        do abort
+                           (#
+                           do (if first_try // true then
+                                  destroySock;
+                                  false->first_try;
+                                  restart L;
+                               else
+                                  onConBroken->trsf;
+                              if);
+                           #);
+                        #);
+                      (* other- *) error::<
+                        (#
+                        do abort
+                           (#
+                           do (if first_try // true then
+                                  destroySock;
+                                  false->first_try;
+                                  restart L;
+                               else
+                                  onConBroken->trsf;
+                              if);
+                           #);
+                        #);
+                   #);
+              do
+                 sock.forceTimeout##->timeOutAction.set;
+
+                 (waitForEver,msg[])->sock.putRepObjPattern
+                 (#
+                    timedOut::<
+                      (# do abort(# do true->trsf #)#);
+                    timedOutInTransfer::<
+                      (# do abort(# do true->trsf #)#);
+                    connBrokenError::<
+                      (# 
+                      do abort
+                         (#
+                         do (if first_try // true then
+                                destroySock;
+                                false->first_try;
+                                restart L;
+                             else
+                                onConBroken->trsf;
+                            if);
+                         #);
+                      #);
+                    (* other- *) error::<
+                      (#
+                      do abort
+                         (#
+                         do (if first_try // true then
+                                destroySock;
+                                false->first_try;
+                                restart L;
+                             else
+                                onConBroken->trsf;
+                            if);
+                         #);
+                      #);
+                 #);
+
+                 &thePutPtn[]->thePut[];
+                 messages.scan(# do (waitForEver,current[])->thePut #);
+
+                 (if notification // false then
+
+                     &theGetPtn[]->theGet[];
+                     (waitForEver,msg[])->theGet;
+
+                     msg.r[3] -> err;
+                     msg.r[4] -> last;
+
+                     (if last //0 then
+                         messages.reInit
+                      else
+                         0 -> messages.last;
+                         last -> messages.table.new;
+                         (for i:last repeat
+                              repPool.getRep->tmpMsg[];
+                              (waitForEver,tmpMsg[])->theGet;
+                              tmpMsg[]->messages.append;
+                         for);
+                     if);
+                 if);
+              #);
+
+          if); (* end of block named SND *)
+        timerStop;
+
+     exit (* !!!!!! (err,msg[]) *) err
+     #);
+#)
+
+--- rpcSend:descriptor ---
+(#
+do (dest[],rpc_id,msg[],messages[],
+   timeout,protocol[],notification,
+   error,connBroken##,timedOut##)
+     ->rpcPrivate.doSend-> (* !!!!!! (error,msg[]) *) error;
+#)
+
+--- rpcHandlerInit:descriptor ---
+(#
+do isEnsemble->rpcPrivate.init;
+   rpcPrivate.portHandler[] -> fork;
+#)

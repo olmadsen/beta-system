@@ -1,0 +1,120 @@
+ORIGIN '../basicshell';
+(* 
+ * $RCSfile: shellTypes.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:15 $
+ *
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+INCLUDE '~beta/objectserver/v2.1/ObjectSerializer';
+INCLUDE '~beta/objectserver/v2.1/groupList';
+INCLUDE 'commFormats';
+
+--- shellEnvLib:attributes ---
+
+(* INCOMINGNAMES, OUTGOINGNAMES
+ * ============================
+ * 
+ * Contains a mapping between groupNames and groupIndices as used
+ * in the serialization of objects. 
+ * 
+ * outgoingNames is used to collect groupNames during serialization 
+ * (marshalling) of objects to be sent away.
+ * 
+ * put saves a groupName and corresponding index in the table unless
+ * they are already there. It is assumed that if a match on index occurs,
+ * then groupNames also match. This should be so as only local indices will
+ * be used in an outgoingNames table. nextInx is used to generate unique 
+ * (negative) indices for groups not known to the local shell, i.e. groups
+ * containing remoteable types unknown locally.
+ * 
+ * newSession may be used to start a new session using the table without
+ * the need to actually initialize (allocate) a lot of internal objects. 
+ * 
+ * save saves the contents of this table in the entered repetitionObject.
+ * The position of the saved table in the repetition is saved in the
+ * position ptrInx of the repetition.
+ * 
+ * incomingNames is used to read groupNames contained in a message.
+ * 
+ * read clears the table and then reads the contents of the table from
+ * the repetition entered. rep[ptrInx] contains the position of the table
+ * in the repetition. *)
+
+incomingNames: integerHashTable
+  (# 
+     element::< groupElement;
+     
+     (* As this table is initialized for each incoming request, we would
+      * like to keep down its memory usage: *)
+     
+     range::< (# do 5 -> value #);
+     collisionRange::< (# do 1 -> value #);
+     
+     read: @
+       (* Clear and then read the contents of this table from the entered
+        * repetition. *)
+       (# rep: ^RepetitionObject; ptrInx: @Integer;
+          pos, count: @Integer;
+          e: ^groupElement; 
+       enter (rep[], ptrInx)
+       do
+          (if rep.r[ptrInx] -> pos //0 then else
+              pos -> rep.pos;
+              rep.get -> count;
+              (for count repeat
+                   &groupElement[] -> e[];
+                   rep.get -> e.inx;
+                   rep.getText -> e.groupName[];
+                   (e[],e.inx) -> insert;
+              for);
+          if)
+       #);
+  #);
+
+outgoingNames: integerHashTable
+  (# 
+     element::< groupElement;
+     nextInx: @ (# value: @Integer do value-1 -> value exit value #);
+     
+     range::< (# do 5 -> value #);
+     collisionRange::< (# do 1 -> value #);
+     
+     put: @
+       (# e: ^element; 
+          groupName: ^Text; group: @Integer;
+       enter (group, groupName[])
+       do 
+          (if group //-1 then
+              (* This is an index from a remoteAbleType with elements
+               * unknown to this shell. Assign it some negative index. *)
+              nextInx -> group;
+              none -> e[];
+           else 
+              group -> find -> e[];
+          if);
+          
+          (if e[]//NONE then
+              &element[] -> e[];
+              groupName[] -> e.groupName[];
+              group -> e.inx;
+              (e[],e.inx) -> insert;
+          if);
+       exit group
+       #);
+     
+     save: @
+       (# sc: @scan
+            (# 
+            do current.inx->rep.put; current.groupName[]->rep.putText;
+            #);
+          rep: ^RepetitionObject; ptrInx: @Integer;
+       enter (rep[], ptrInx)
+       do 
+          rep.pos -> rep.r[ptrInx];
+          size -> rep.put;
+          sc;
+       #);
+     
+     reinitImpl::< (# do 0 -> nextinx.value #);
+  #);

@@ -1,0 +1,165 @@
+ORIGIN '../ensembleDeamon';
+INCLUDE '~beta/containers/v1.4/hashTable';
+INCLUDE 'shellBody';
+INCLUDE 'ensembleInterface';
+INCLUDE 'ensembleBody';
+
+--- ensembleDeamonPrivate:descriptor ---
+(# ei: @ensembleInterface
+     (# 
+        saveReferenceImpl::<
+          (# 
+          do (name[],r[],force) -> refs.insert -> res;
+          #);
+        
+        getReferenceImpl::<
+          (# 
+          do name[] -> refs.find -> (r[],res);
+          #);
+        
+        removeReferenceImpl::< 
+          (#
+          do name[] -> refs.remove -> res;
+          #);
+        
+        newOIDsImpl::<
+          (# 
+          do requested -> refs.newOIDs -> nextFree;
+             theShell.ri.OID.a -> OIDa;
+          #);
+        
+        getNamesImpl::<
+          (# 
+          do refs.scan 
+             (#
+             do (if size //0 then else size -> names.new; 0 -> size if);
+                current.name[] -> names[index][];
+             #);
+          #);
+     #);
+        
+   refs: @Monitor
+     (# table: @HashTable
+          (# element::<
+               (# name: ^Text;
+                  r: ^remoteable;
+               enter (name[],r[])
+               exit (name[],r[])
+               #);
+             hashfunction::< 
+               (#
+               do e.name.scanAll (# do ch*26+value -> value #)
+               #);
+             textHash: indexValue
+               (# t: ^Text;
+               enter t[]
+               do t.scanAll (# do ch*26+value -> value #)
+               #);
+          #);
+        
+        scan: entry
+          (# current: ^table.element;
+             size,index: @Integer;
+          do table.size -> size;
+             1 -> index;
+             table.scan
+             (# 
+             do current[] -> THIS(scan).current[]; 
+                INNER scan;
+                index+1 -> index;
+             #);
+          #);
+        
+        insert: entry
+          (# name: ^Text; r: ^remoteable; force: @Boolean;
+             res: @Integer;
+          enter (name[],r[],force)
+          do
+             ES_ok -> res;
+             name[] -> table.textHash -> table.findIndexed
+             (# predicate::< (# do current.name[]->name.equal->value #);
+                notFound::< 
+                  (# new: ^table.element;
+                  do &table.element[] -> new[]; (name[],r[]) -> new;
+                     new[] -> table.insert
+                  #)
+             do 
+                (if force //true then
+                    r[] -> current.r[];
+                 else
+                    ES_exists -> res
+                if);
+             #);
+          exit res
+          #);
+        
+        find: entry
+          (# name: ^Text; 
+             r: ^remoteable; res: @Integer;
+          enter name[]
+          do 
+             ES_ok -> res;
+             dofind: name[] -> table.textHash -> table.findIndexed
+             (# predicate::< (# do current.name[]->name.equal->value #);
+                notFound::< (# do ES_notFound -> res #)
+             do current.r[] -> r[];
+             #);
+          exit (r[],res)
+          #);
+        
+        remove: entry
+          (# name: ^Text;
+             res: @Integer;
+          enter name[]
+          do 
+             ES_ok -> res;
+             dofind: name[] -> table.textHash -> table.findIndexed
+             (# predicate::< (# do current.name[]->name.equal->value #);
+                notFound::< (# do ES_notFound -> res #)
+             do current[] -> table.delete;
+                leave dofind;
+             #);
+          exit res
+          #);
+        
+        nextOIDb: @Integer;
+        
+        newOIDs: entry
+          (# requested: @Integer;
+             nextFree: @Integer;
+          enter requested   
+          do 
+             nextOIDb -> nextFree;
+             nextOIDb+requested -> nextOIDb;
+          exit nextFree
+          #);
+        
+        init::< 
+          (# 
+          do 1 -> nextOIDb; (* The ensemble itself has OIDb = 0 *)
+             table.init;
+          #);
+     #);
+#)
+
+
+--- ensembleDeamonInit:descriptor ---
+(# ri: ^remoteInfo;
+do 
+   private.refs.init;
+   
+   &remoteInfo[] -> theShell.ri[] -> ri[]; theShell[] -> ri.o[];
+   
+   senvpriv.RPC.localAddress[] -> ri.shellAdr[];
+   senvpriv.RPC.localHostName[] -> ri.ensembleName[];
+   senvpriv.RPC.localEnsembleAdrAsText[] -> ri.ensembleAdrAsText[];
+   
+   thisHost -> (ri.ensembleName[],ri.OID.a); 0 -> ri.OID.b;
+   ri.OID -> ri.shellOID;
+   
+   theShell[] -> senvPriv.typeAllocator.initFromObj -> ri.netType[];
+   
+   ri[] -> senvPriv.OIDhandler.localObjects.exclInsert;
+   
+   private.ei[] -> ensemblePrivate.ei[];
+#)

@@ -1,0 +1,246 @@
+(* 
+ * xtalk
+ * =====
+ * 
+ * X (motif) based talk example using BETA distribution. *)
+
+
+ORIGIN '~beta/distribution/v1.0/xshell';
+(* 
+ * $RCSfile: xtalk.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:08 $
+ *
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+BODY 'xtalkBody';
+
+--- include 'partnerDialog'
+--- include '~beta/Xt/v1.8/motifenv'
+--- include '~beta/Xt/v1.8/motif/mainwindow'
+--- include '~beta/Xt/v1.8/motif/form'
+--- include '~beta/Xt/v1.8/motif/texts'
+--- include '~beta/Xt/v1.8/motif/cascadebutton'
+--- include '~beta/Xt/v1.8/motif/panedwindow'
+--- include '~beta/Xt/v1.8/motif/pushbuttongadget'
+--- include '~beta/Xt/v1.8/motif/separatorgadget'
+--- include '~beta/Xt/v1.8/motif/messagebox'
+
+--- program:descriptor ---
+shellEnv
+(# setwindowEnv::< (# do mymotif[] -> theWindowEnv[] #);
+   
+   (* Communication failures caught by globalHandler are handled by
+    * pretending as if the partner hung up. *)
+   
+   globalErrorHandler::<
+     (# connectionFailed::< (# do onFailure; EH_ignore -> toDo #);
+        connectionBroken::< (# do onFailure; EH_ignore -> toDo #);
+        timeOut::< (# do onFailure; EH_ignore -> toDo #);
+        timeOutValue::< (# do 2 -> sec #);
+        onFailure: (# do <<SLOT xtalkOnFailure:descriptor>> #);
+     #);
+   
+   shellErrorHandler: errorHandler (# do INNER #);
+   
+   mymotif: @motifenv
+     (# window: @MainWindow
+          (# 
+             (* The menu bar:
+              * ============= *)
+             
+             mBar: @MenuBar
+               (# 
+                  (* The 'File' menu:
+                   * ================ *)
+                  
+                  fileMenu: @PullDownMenu
+                    (# call: @PushButtonGadget
+                         (# activateCallback::< 
+                              (# 
+                              do <<SLOT callcb:descriptor>> 
+                              #);
+                            init::< 
+                              (# 
+                              do <<SLOT callInit:descriptor>> 
+                              #);
+                         #);
+                       hangup: @PushButtonGadget
+                         (# activateCallback::< 
+                              (# 
+                              do <<SLOT hangupcb:descriptor>> 
+                              #);
+                            init::<
+                              (# 
+                              do <<SLOT hangupInit:descriptor>>
+                              #);
+                         #);
+                       quit: @PushButtonGadget
+                         (# activateCallback::< 
+                              (# 
+                              do <<SLOT quitcb:descriptor>> 
+                              #);
+                            init::<
+                              (# 
+                              do <<SLOT quitInit:descriptor>>
+                              #);
+                         #);
+                       init::<
+                         (# 
+                         do <<SLOT fileMenuInit:descriptor>>
+                         #);
+                    #);
+                  
+                  fileButton: @CascadeButton 
+                    (# init::< 
+                         (# 
+                         do <<SLOT fileButtonInit:descriptor>>
+                         #)
+                    #);
+                  
+                  init::< 
+                    (# 
+                    do <<SLOT mbarInit:descriptor>>
+                    #);
+               #);
+             
+             workArea: @panedwindow
+               (#
+                  (* Local texteditor: 
+                   * ================= *)
+                  
+                  myText: @scrolledText
+                    (# modifyVerifyCallback::< 
+                         (# 
+                         do <<SLOT mvcb:descriptor>>
+                         #);
+                       init::< 
+                         (# 
+                         do <<SLOT mtInit:descriptor>>
+                         #);
+                    #);
+                  
+                  (* Replica of remote texteditor:
+                   * ============================= *)
+                  
+                  shadow: @scrolledText 
+                    (# 
+                       init::< (# do <<SLOT shadowInit:descriptor>> #)
+                    #);
+                  
+                  init::< (# do <<SLOT waInit:descriptor>> #);
+               #);
+             
+             (* The status line: 
+              * ================ *)
+             
+             status: @form
+               (# messages: @label 
+                    (# init::< (# do <<SLOT msgInit:descriptor>> #)
+                    #);
+                  
+                  sep: @separatorGadget
+                    (# init::< (# do <<SLOT sepInit:descriptor>> #)
+                    #);
+                  
+                  clock: @label 
+                    (# init::< (# do <<SLOT clockInit:descriptor>> #)
+                    #);
+                  
+                  init::< (# do <<SLOT statusInit:descriptor>> #)
+               #);
+             
+             (* GETPARTNER
+              * ==========
+              * 
+              * Dialog prompting for partner to call *)
+             
+             getPartner: @partnerDialog
+               (# 
+                  onOk::< 
+                    (# 
+                    do <<SLOT OkButtonBody:descriptor>> 
+                    #);
+                  
+                  onCancel::<
+                    (# 
+                    do <<SLOT CancelButtonBody:descriptor>> 
+                    #)
+               #);
+             
+             (* ACCEPTMESSAGE
+              * =============
+              * 
+              * Dialog popping up when a potential partner calls and this 
+              * xtalk is not already connected. *)
+             
+             acceptMessage: @ QuestionDialog
+               (# initialized: @boolean;
+                  popup:
+                    (# msg: ^text;
+                    enter msg[] 
+                    do (if initialized//false then
+                           init; true -> initialized;
+                       if);
+                       msg[] -> messageString;
+                       (* Ring a bell: *)
+                       ascii.bel -> screen.put;
+                       manageChild;
+                    #);
+                  okCallback::< 
+                    (# 
+                    do <<SLOT acceptOk:descriptor>> 
+                    #);
+                  cancelCallback::< 
+                    (#
+                    do <<SLOT acceptCancel:descriptor>>
+                    #);
+                  init::< 
+                    (# 
+                    do 'Yes' -> okLabelString;
+                       'No' -> cancelLabelstring;
+                       XmDIALOG_FULL_APPLICATION_MODAL -> dialogStyle;
+                       'Call received' -> dialogTitle;
+                       unmanageHelp; 
+                    #);
+               #);
+             
+             (* MESSAGEDIALOG
+              * =============
+              * 
+              * Dialog popping up when a potential partner calls and this 
+              * xtalk is not already connected. *)
+             
+             warning: @ WarningDialog
+               (# initialized: @boolean;
+                  popup:
+                    (# msg: ^text;
+                    enter msg[] 
+                    do (if initialized//false then
+                           init; true -> initialized;
+                       if);
+                       msg[] -> messageString;
+                       (* Ring a bell: *)
+                       ascii.bel -> screen.put;
+                       manageChild;
+                    #);
+                  init::< 
+                    (# 
+                    do 'Ok' -> okLabelString;
+                       XmDIALOG_FULL_APPLICATION_MODAL -> dialogStyle;
+                       'Warning' -> dialogTitle;
+                       unmanageHelp; 
+                       unmanageCancel;
+                    #);
+               #);
+             
+             init::< (# do <<SLOT windowInit:descriptor>> #);
+             
+             xtalkPrivate: @<<SLOT xtalkPrivate:descriptor>>;
+          #);
+        
+     do window.init
+     #);
+   
+do <<SLOT xtalkShellInit:descriptor>>
+#)
