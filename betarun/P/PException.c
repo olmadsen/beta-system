@@ -526,9 +526,9 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
      fflush(output);
    });
 
-   if (scp.trapno==5 || scp.trapno==12) {
+   if (scp.trapno==5 /* boundl=>index error */|| 
+       scp.trapno==12 /* stack fault */) {
       BetaSignalHandler(sig, scp);
-      DEBUG_CODE(ILLEGAL);
    }
    INFO_PERSISTENCE(numPF++);
    PC = (unsigned char*) scp.eip;
@@ -681,12 +681,11 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
      fflush(output);
    });
 
-   /* FIXME: What is this for x86?
-      if (scp.trapno==5 || scp.trapno==12) {
-         BetaSignalHandler(sig, info, ucon);
-         DEBUG_CODE(ILLEGAL);
-      }
-   */
+   if (ucon->uc_mcontext.gregs[TRAPNO]==5 /* boundl => index error */||
+       ucon->uc_mcontext.gregs[TRAPNO]==12 /* stack fault */) {
+     BetaSignalHandler(sig, info, ucon);
+   }
+
    INFO_PERSISTENCE(numPF++);
    pc = (unsigned char*) getRegisterContents(ucon, EIP);
    
@@ -760,7 +759,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
          }
          /* Normal refNone:  Handle as regular refNone. */
 	 
-         StackEnd = (long *) getRegisterContents(ucon, ESP);
+         StackEnd = (long *) ucon->uc_mcontext.gregs[UESP]; /* not SP */
          if (!DisplayBetaStack(RefNoneErr, theObj, (long*)pc, sig)) {
             BetaExit(1);
          }

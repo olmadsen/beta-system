@@ -1687,11 +1687,15 @@ int DisplayBetaStack(BetaErr errorNumber,
 #define STACKEND StackEnd
 #endif
 
-#ifndef MT
+#ifdef MT
+  DEBUG_CODE(fprintf(output, "MT defined\n"); fflush(output));
+#else
   TRACE_DUMP(fprintf(output, "StackEnd=0x%x, StackStart=0x%x\n", 
 		     (int)STACKEND, 
 		     (int)StackStart
-		     ));
+		     );
+	     fflush(output);
+	     );
 
   if (isMakingDump){
     /* Something went wrong during the dump. Stop here! */
