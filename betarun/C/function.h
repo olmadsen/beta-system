@@ -39,8 +39,8 @@ extern void DumpIOA(void);
 extern char *ProtoTypeName(struct ProtoType *theProto);
 extern long M_Part(ref(ProtoType) proto);
 extern void  DisplayObject(ptr(FILE),ref(Object),long);
-extern char *ErrorMessage(long);
-extern int  DisplayBetaStack(long, ref(Object), long *, long);
+extern char *ErrorMessage(enum BetaErr);
+extern int  DisplayBetaStack(enum BetaErr, ref(Object), long *, long);
 #ifdef RTDEBUG
 extern void DescribeObject(struct Object *);
 #endif
@@ -57,9 +57,9 @@ int IsBetaCodeAddr(long addr);
 /* C/exit.c */
 extern void BetaExit(long);
 #ifdef NEWRUN
-extern void BetaError(long errorNo, struct Object *theObj, long *SP, long *thePC);
+extern void BetaError(enum BetaErr err, struct Object *theObj, long *SP, long *thePC);
 #else
-extern void BetaError(long, ref(Object));
+extern void BetaError(enum BetaErr, ref(Object));
 #endif
 
 /* C/cbfa.c */

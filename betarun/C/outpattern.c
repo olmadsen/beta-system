@@ -548,10 +548,13 @@ void DisplayObject(output,theObj,retAddress)
 
 /******************** ErrorMessage ******************/
 
-static struct errorEntry {
-  long  errorNumber;
-  char *errorMessage;
-} errorTable[] = {
+static struct errorEntry 
+{
+  enum BetaErr errorNumber;
+  char *       errorMessage;
+} 
+errorTable[] = 
+{
   { RefNoneErr,        "Reference is none" },
   { CompTerminatedErr, "Executing terminated component" },
   { RepRangeErr,       "Repetition index out of range" },
@@ -588,8 +591,7 @@ static struct errorEntry {
 
 static char UnknownError[25];
 
-char *ErrorMessage(errorNumber)
-     long errorNumber;
+char *ErrorMessage(enum BetaErr errorNumber)
 {
   long  index = 0;
   
@@ -954,11 +956,11 @@ static char *OpenDumpFile(long errorNumber)
 /* If DisplayBetaStack returns non-zero, the debugger was invoked, and
  * the process should continue execution. */
 
-int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
-     long errorNumber;
-     ref(Object) theObj;
-     long *thePC;
-     long theSignal; /* theSignal is zero if not applicable. */
+int DisplayBetaStack(enum BetaErr errorNumber, 
+		     struct Object *theObj, 
+		     long *thePC, 
+		     long theSignal /* theSignal is zero if not applicable. */
+		     )
 {
 #ifndef sparc
 #ifndef hppa

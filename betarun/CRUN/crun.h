@@ -8,7 +8,6 @@
 #define _CRUN_H_
 
 extern void             Return();
-extern void             BetaError();
 
 #ifdef crts
 extern struct Component*AlloC();

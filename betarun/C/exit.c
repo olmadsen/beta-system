@@ -10,8 +10,7 @@
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
 
-void BetaExit( number )
-     long number;
+void BetaExit(long number)
 {
 #ifdef RTVALHALLA
   if (valhallaID) 
@@ -140,9 +139,9 @@ static inline long GetBetaPC(long errno)
 /* BetaError: */
 
 #ifdef NEWRUN
-void BetaError(long errorNo, struct Object *theObj, long *SP, long *thePC)
+void BetaError(enum BetaErr err, struct Object *theObj, long *SP, long *thePC)
 #else
-void BetaError(long errorNo, struct Object *theObj)
+void BetaError(enum BetaErr err, struct Object *theObj)
 #endif
 {
 #ifndef NEWRUN
@@ -150,7 +149,7 @@ void BetaError(long errorNo, struct Object *theObj)
 #endif
 
   do {
-    if( errorNo < 0 ){
+    if( err < 0 ){
 
       /* Set up StackEnd before calling DisplayBetaStack */
 
@@ -168,8 +167,8 @@ void BetaError(long errorNo, struct Object *theObj)
 
 #ifdef hppa
 #ifdef RTVALHALLA
-      thePC=(long *)GetBetaPC(errorNo);
-      fprintf(output, "BetaError %d: PC is 0x%x\n", (int)errorNo, (int)thePC);
+      thePC=(long *)GetBetaPC(err);
+      fprintf(output, "BetaError %d: PC is 0x%x\n", (int)err, (int)thePC);
 #else
       thePC=(long*)0;
 #endif /* RTVALHALLA */
@@ -189,7 +188,7 @@ void BetaError(long errorNo, struct Object *theObj)
 #if defined(mac) || defined(hpux9mc) || defined(intel)
       /* Ordinary MOTOROLA-like stack */
       thePC = 0;
-      switch(errorNo){
+      switch(err){
       case StopCalledErr:
 	/* betaenv.stop   -> FailureExit -> BetaError */
 	/* betaenvbody.bet   Misc.{c,run}   exit.c    */
@@ -214,7 +213,7 @@ void BetaError(long errorNo, struct Object *theObj)
 #endif
 
       /* Treat QUA errors specially */
-      if (errorNo==QuaErr || errorNo==QuaOrigErr){
+      if (err==QuaErr || err==QuaOrigErr){
 	if (QuaCont) {
 	  fprintf(output, "\n*** OBS. ");
 	  fprintf(output, ErrorMessage(QuaErr));
@@ -259,7 +258,7 @@ void BetaError(long errorNo, struct Object *theObj)
       /* Treat REFNONE errors specially */
 
 #if defined(macintosh)
-      else if (errorNo==RefNoneErr) {
+      else if (err==RefNoneErr) {
 
 	/* Check whether it is a genuine error or whether the RefNoneErr
          * was caused by a lazy persistent reference */
@@ -334,7 +333,7 @@ void BetaError(long errorNo, struct Object *theObj)
       }
 #endif /* mac */
 #if defined(linux) || defined(nti)
-      else if (errorNo==RefNoneErr) {
+      else if (err==RefNoneErr) {
 
 	/* Check whether it is a genuine error or whether the RefNoneErr
          * was caused by a lazy persistent reference */
@@ -426,7 +425,7 @@ void BetaError(long errorNo, struct Object *theObj)
       /* If not QUA error with QuaCont or 
        * REFNONE error with lazy reference, 
        * we fall through to here */
-      if (DisplayBetaStack( errorNo, theObj, thePC, 0))
+      if (DisplayBetaStack( err, theObj, thePC, 0))
 	break; /*  DisplayBetaStack <> 0 => continue execution */
     }    
     BetaExit(1);
