@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1992-03-03 14:02:44 $, SID: $Revision: 1.12 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1992-03-04 10:18:08 $, SID: $Revision: 1.13 $
  * by Lars Bak
  */
 
@@ -83,7 +83,6 @@ DisplayObject(output,aObj,retAddress)
     ref(ProtoType) activeProto;
     long           activeDist;
     ref(Object)    staticObj;
-    handle(Object) theCell;
 
     theProto = aObj->Proto;
     if( retAddress ){

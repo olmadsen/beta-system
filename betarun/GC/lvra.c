@@ -243,7 +243,6 @@ ref(ValRep)LVRAAllocInBlock( range)
 ref(ValRep) LVRAAlloc( range)
   long range;
 {
-  ptr(long)   newTop;
   ref(ValRep) newRep;
   long        size;
   long        rest;
@@ -314,7 +313,6 @@ LVRACompaction()
   ref(ValRep)    srcRep;
   ref(ValRep)    dstRep;
 
-  long           rest;
   long           alive;
   long           saved;
   long           theObjectSize;
@@ -439,7 +437,6 @@ LVRAConstructFreeList()
   ref(LVRABlock) currentLVRABlock;
   ref(ValRep)    currentValRep;
   ref(ValRep)    startRep;
-  long           rest;
   long           saved;
   long           alive;
   long           theObjectSize;
