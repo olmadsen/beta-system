@@ -1,0 +1,208 @@
+ORIGIN '../cdplayerbody';
+
+BUILD default ':$$/cdmac.obj' ':external/cdmac.c' 'Mrc -align mac68k  -o $0 $1' 
+
+-- cdPlayerLib: attributes --
+
+CsParam: data
+      (# addrFormat: @ shortInt;
+         a1,address: @shortInt;
+	     stopAddress: @shortInt;
+	     playMode: @shortInt
+	   #);
+CsTocParam: data
+	(# type: @shortInt;
+		b, c, d: @Char;
+		fill: @Char;
+		filler: @ShortInt;
+	#);
+	
+CSPauseParam: data
+      (# pause: @integer;
+	     filler: @integer;
+	   #);
+		
+   TRACKADDR: (#exit 2 #);
+   STEREO: (#exit 9 #);
+   INPROGRESs: (#exit 0 #);
+   AEJECT: (#exit 7 #);
+   APLAY: (#exit 104#);
+   APAUSE: (#exit 105 #);
+   ASTOP: (#exit 106 #);
+
+OpenDriver: external
+     (# device: [1]@char; adr,osErr: @integer
+	 enter(device,adr)
+	 do callPAscal
+	 exit osErr
+	 #);
+   Control: external
+      (* extern pascal OSErr Control
+       *  (short refNum, short csCode, const void *csParamPtr);
+       *)
+     (# refNum,csCode: @shortInt; csParamPtr,osErr: @integer
+     enter(refNum,csCode,csParamPtr)
+     do CallPascal
+    exit osErr
+     #);
+	 
+initialize:
+	(# osErr: @integer
+	do (if not private.initialized then
+			('.AppleCD',@@private.ioDRefNum) -> OpenDriver -> osErr;
+			true -> private.initialized;
+		if);
+	#);
+	
+TrackStart: external
+	(# err: @shortInt;
+		ioref: @shortint;
+		track: @char;
+		milli: @integer;
+	enter (ioref, track, milli)
+	exit err
+	#);
+CurrentPosition: external
+	(# err: @shortInt;
+		ioref: @shortint;
+		milli: @integer;
+	enter (ioref, milli)
+	exit err
+	#);
+CurrentTrack: external
+	(# err: @shortInt;
+		ioref: @shortint;
+		track: @integer;
+	enter (ioref, track)
+	exit err
+	#);
+	
+SetCurrentPosition: external
+	(# ioref: @shortInt;
+		track: @char;
+		milli: @integer;
+		err: @shortInt;
+	enter (ioref, track, milli)
+	exit err
+	#);
+
+-- cdPlayerIsCDPresent: doPart --
+do initialize;
+	(# DiscStatus: external
+			(# ioref: @shortInt;
+				status: @integer;
+				error: @integer;
+			enter (ioref, status)
+			exit error
+			#);
+		status, error: @integer;
+	do (private.ioDRefNum,@@status) -> DiscStatus -> error;
+		(if status = 0 then
+			false -> isCDPresent;
+		else
+			true -> isCDPresent;
+		if);
+	#);
+	
+-- cdPlayerDuration: doPart --
+do initialize;
+	(# length: @integer;
+		error: @integer;
+		DiscLength: external
+			(# ioref: @shortInt;
+				length: @integer;
+				err: @shortInt;
+			enter (ioref, length)
+			exit err
+			#);
+	do (private.ioDRefNum,@@length) -> DiscLength -> error;
+		length -> theDuration;
+	#);
+	
+
+-- cdPlayerStart: doPart --
+do initialize;
+	(# csP: @CsParam;
+   do  TRACKADDR -> csP.addrFormat;
+	    track -> csP.address;
+	    0 -> csP.stopAddress;
+	    STEREO -> csP.playMode;
+	    (private.ioDRefNum,APLAY,@@csP) -> Control;
+   #);
+	  
+-- cdStop: doPart --
+do initialize;
+   (# csP: @CsParam;
+	do (private.ioDRefNum,ASTOP,@@csP) -> Control;
+	#);
+
+-- cdPause: doPart --
+do initialize;
+	(#  csP: @CSPauseParam;
+	do 1 -> csP.pause;
+		(private.ioDRefNum,APAUSE,@@csP) -> Control;
+	#);
+-- cdPlayerResume: doPart --
+do initialize;
+	(#  csP: @CSPauseParam;
+	do 0 -> csP.pause;
+		(private.ioDRefNum,APAUSE,@@csP) -> Control;
+	#);
+	
+-- cdPlayerGetCurrentTime: doPart --
+do initialize;
+	(# current: @integer;
+		start: @integer;
+		err: @integer;
+		tracks: @integer;
+		track: @integer;
+		
+	do (private.ioDRefNum,@@current) -> CurrentPosition -> err;
+		numberOfTracks -> tracks;
+		(if err = 0 then
+			search:
+			(for inx: numberOfTracks repeat
+				tracks + 1 - inx -> track;
+				(private.ioDRefNum,track, @@start) -> TrackStart -> err;
+				(if start < current then
+					leave search;
+				if)
+			for);
+			track -> theTrack;
+			current - start -> theTime;
+		if);
+	#);
+
+-- cdPlayerSetCurrentTime: doPart --
+do initialize;
+	(private.ioDRefNum, theTrack, theTime) -> SetCurrentPosition;
+
+-- cdPlayerNumberOfTracks: doPart --
+do initialize;
+	(# TrackCount: external
+			(# ioRef: @shortInt;
+				count: @integer;
+				error: @shortInt;
+			enter (ioRef, count)
+			exit error
+			#);
+		count: @integer;
+		error: @integer;
+	do (private.ioDRefNum, @@count) -> TrackCount -> error;
+		count -> tracks;
+	#);
+
+  
+	 
+	 
+-- cdPlayerPrivate: descriptor --
+(# ioDRefNum: @shortInt;
+	initialized: @boolean;
+#)
+
+-- cdPlayerOpen:dopart --
+do INNER;
+   
+--- cdPlayerClose:dopart ---
+do INNER;
+   

@@ -1,0 +1,249 @@
+ORIGIN '../movieplayerbody';
+
+INCLUDE '~beta/maclib/movies'
+        '~beta/maclib/imagecompression'
+		  '~beta/maclib/files'
+		  '~beta/maclib/qdoffscreen' ;
+INCLUDE '~beta/guienv/private/macintosh/guienv_macprivate';
+
+
+-- movieLib: attributes --
+
+readMovieFile:
+	(# spec: ^FSSpec;
+		error: @integer;
+		myRefNum: @shortRef;
+		myMovie: @longInt;
+		myResID: @shortRef;
+		macBox: @macRect;
+		box: @rectangle;
+		result: @integer;
+		movieWidth, movieHeight: @integer;
+	enter spec[]
+	do (spec[], myRefNum[], 1) -> OpenMovieFile -> error;
+		(if error = 0 then
+			(myMovie[], myRefNum, myResID[], NONE, newMovieActive, NONE) 
+				-> NewMovieFromFile
+				-> error;
+			(if error = 0 then
+				myMovie -> private.fMovie;
+				(private.fMovie, macBox[]) -> GetMovieBox;
+				macBox -> box;
+				box.size -> (movieWidth, movieHeight);
+				((0, 0), (movieWidth, movieHeight)) -> macBox;
+				(private.fMovie, macBox[]) -> SetMovieBox;
+				movieWidth -> private.width;
+				movieHeight -> private.height;
+			if);
+			myRefNum -> CloseMovieFile;
+		if);
+	#);
+	
+-- movieRead: doPart --
+do (# myFSSpec: @FSSpec;
+   do theFileName.copy -> private.theFileName[];
+		(0, 0, theFileName, myFSSpec[]) -> FSMakeFSSpec;
+		myFSSpec[] -> readMovieFile;
+	#);
+
+--  movieUserSelectFile: doPart --
+do (# myFSSpec: @FSSpec;
+      myTypeList: @SFTypeList;
+		myReply: @standardFileReply;
+		name: ^text;
+   do (0, -1, myTypeList[], myReply[]) -> StandardGetFilePreview;
+	   (if myReply.sfGood then
+			myReply.getSpecName -> name[];
+			(myReply.specVRefNum, myReply.specParId, name, myFSSpec[]) -> FSMakeFSSpec;
+			myFSSpec[] -> readMovieFile;
+			true -> success;
+		else
+			false -> success;
+		if);
+	#);
+
+--  movieDuration: doPart --
+do (# scale, duration: @integer;
+	do private.fMovie -> GetMovieTimeScale -> scale;
+		private.fMovie -> GetMovieDuration -> duration;
+		(duration * 1000) div scale -> theDuration;
+	#);
+
+
+--  movieFilename: doPart --
+do private.theFileName.copy -> theFileName[];
+
+
+-- movieDisplaySize: doPart --
+do private.width -> width;
+	private.height -> height;
+	
+-- moviePrivate: descriptor --
+(# fMovie: @integer;
+	theFileName: ^text;
+	width, height: @integer;
+#)
+
+-- moviePlayerSetContents: doPart --
+do (# movieWidth, movieHeight: @integer;
+		macBox: @macRect;
+		box: @rectangle;
+		result: @integer;
+		flags: @integer;
+	do (*** DISPOSE OF OLD CONTENTS!!! ***)
+		(if theMovie[] <> NONE then
+			(if theMovie.private.fMovie <> 0 then
+				(theMovie.private.fMovie, 
+				 THIS(window).private.windowPointer, 
+				 THIS(window).private.windowPointer -> GetGWorldDevice)
+					-> SetMovieGWorld;
+				(if automaticResize then
+					theMovie.displaySize -> (movieWidth, movieHeight);
+				else
+					size -> (movieWidth, movieHeight);
+				if);
+				((0, 0), (movieWidth, movieHeight)) -> macBox;
+				mcTopLeftMovie -> flags;
+				(if NOT controllerVisible then
+					flags + mcNotVisible -> flags;
+				if);
+				(theMovie.private.fMovie, macBox[], flags) 
+				 	-> NewMovieController 
+					-> private.fController;
+				 (if private.fController <> 0 then
+				 	(if controllerVisible then
+				 		(private.fController, macBox[]) -> MCGetControllerBoundsRect -> result;
+					if);
+					macBox -> box;
+					box.size -> size;
+					1 -> private.theTimer.start;
+				 if);
+			if);
+		if);
+	#);
+--  movieplayerRead: doPart --
+do &movie[] -> theMovie[];
+	theFileName[] -> theMovie.read;
+	theMovie[] -> contents;
+
+--  movieplayerUserSelectFile: doPart --
+do &movie[] -> theMovie[];
+	(if theMovie.userSelectFile then
+		theMovie[] -> contents;
+		true -> success;
+	if);
+
+-- moviePlayerSetCurrentTime: doPart --
+do graphics
+		(# time: @timeRecord;
+		do (theMovie.private.fMovie, time[]) -> GetMovieTime;
+			(theTime * time.scale) div 1000 -> time.valueLo;
+			(theMovie.private.fMovie, time[]) -> SetMovieTime;
+			(this(moviePlayer).private.fController, 
+			 this(moviePlayer).theMovie.private.fMovie) -> MCMovieChanged;
+		#)
+
+-- moviePlayerGetCurrentTime: doPart --
+do (# time: @timeRecord;
+	do (theMovie.private.fMovie, time[]) -> GetMovieTime;
+	   (time.valueLo * 1000) div time.scale -> theTime;
+	#)
+	
+-- moviePlayerSetCurrentFrame: doPart --
+do 'moviePlayer.currentFrame is not implemented' -> putLine;
+
+-- moviePlayerGetCurrentFrame: doPart --
+do 'moviePlayer.currentFrame is not implemented' -> putLine;
+
+
+-- moviePlayerPlay: doPart --
+do graphics 
+		(# 
+		do this(moviePlayer).theMovie.private.fMovie -> StartMovie;
+			(this(moviePlayer).private.fController, 
+			 this(moviePlayer).theMovie.private.fMovie) -> MCMovieChanged;
+			 true -> this(moviePlayer).private.playing;
+		#);
+
+-- moviePlayerStop: doPart --
+do graphics 
+		(# 
+		do this(moviePlayer).theMovie.private.fMovie -> StopMovie;
+			0 -> currentTime;
+			(this(moviePlayer).private.fController, 
+			 this(moviePlayer).theMovie.private.fMovie) -> MCMovieChanged;
+			 false -> this(moviePlayer).private.playing
+		#);
+		
+-- moviePlayerPause: doPart --
+do graphics 
+		(# 
+		do this(moviePlayer).theMovie.private.fMovie -> StopMovie;
+			(this(moviePlayer).private.fController, 
+			 this(moviePlayer).theMovie.private.fMovie) -> MCMovieChanged;
+			 false -> this(moviePlayer).private.playing;
+		#);
+
+-- moviePlayerCreate: doPart --
+do INNER;
+
+-- moviePlayerOpen: doPart --
+do EnterMovies -> private.error;
+   INNER;
+	
+
+-- moviePlayerClose: doPart --
+do ExitMovies;
+   INNER;
+
+-- moviePlayerOnActivate: doPart --
+do graphics 
+		(# 
+		do (this(moviePlayer).private.fController, this(window).private.windowPointer, true) -> MCActivate;
+		#);
+	INNER;
+
+-- moviePlayerOnDeactivate: doPart --
+do graphics 
+		(# 
+		do (this(moviePlayer).private.fController, this(window).private.windowPointer, false) -> MCActivate;
+		#);
+	INNER;
+	
+-- moviePlayerOnMouseDown: doPart --
+do INNER;
+	graphics 
+		(# where: @MacPoint;
+			GlobalToLocal: External (# p: ^macPoint enter p[] do '$A871' -> PascalTrap; #);
+		do this(guienv).private.event.where -> where;
+			where[] -> GlobalToLocal;
+			(this(moviePlayer).private.fController, this(window).private.windowPointer,
+			 where,
+			 this(guienv).private.event.when,
+			 this(guienv).private.event.modifiers) -> MCClick;
+		#);
+
+
+-- moviePlayerOnRefresh: doPart --
+do graphics 
+		(# 
+		do (this(moviePlayer).private.fController, this(window).private.windowPointer) -> MCDraw;
+		#);
+	INNER;
+
+
+
+-- moviePlayerPrivate: descriptor --
+(# error: @integer;
+   fController: @integer;
+   playing: @boolean;
+   
+	theTimer: @timer
+		(# action::
+				(#
+				do (if fController <> 0 then
+							graphics (# do fController -> MCIdle #);
+					if);
+				#);
+		#);
+#)

@@ -1,0 +1,450 @@
+ORIGIN '../cdplayerbody';
+INCLUDE 
+'~beta/win32lib/win32apiinit'
+'~beta/win32lib/windowmanagement'
+'~beta/win32lib/winuserconsts'
+'~beta/sysutils/cstring'
+'mcilib';
+
+BUILD default '$$/cdaudiodevicehelp.obj' 'external/cdaudiodevicehelp.c' 'betacc $0 $1';
+
+LINKOPT nti_ms  'winmm.lib'
+        nti_gnu 'libwinmm.a';
+
+-- cdPlayerLib: attributes --
+
+
+windowClassName: (# exit 'cdAudioDeviceWindowClass' #);
+
+
+lstrcpy: External
+  (# charptr1, charptr2: @integer;
+     result_ptr: @integer;
+  enter (charptr1, charptr2)
+  do 'lstrcpyA' -> callStd;
+  exit result_ptr
+  #);
+
+std16x4toint: external
+  (# func: ##cdAudioDeviceWindowProc;
+     int: @integer;
+  enter func##
+  do 'copyinput'->callC
+  exit int
+  #);
+
+cdAudioDeviceWindowProc: external
+  (# windowHandle,message,wParam,lParam: @integer;
+     result: @integer;               
+     dispatch:
+       (# 
+       do 1 -> result;
+          
+          (if message
+           //MM_MCINOTIFY then
+              (if wParam 
+               //MCI_NOTIFY_ABORTED  then
+                  (*'MCI_NOTIFY_ABORTED' -> screen.putline;*)
+               //MCI_NOTIFY_FAILURE  then
+                  'MCI_NOTIFY_FAILURE' -> screen.putline;
+               //MCI_NOTIFY_SUCCESSFUL then
+                  'MCI_NOTIFY_SUCCESSFUL' -> screen.putline;
+               //MCI_NOTIFY_SUPERSEDED then
+                  'MCI_NOTIFY_SUPERSEDED' -> screen.putline;
+              if);
+           else
+              (windowHandle,message,wParam,lParam)
+                -> DefWindowProc -> result;
+          if);
+       #);
+  enter (windowHandle,message,wParam,lParam)
+  do StdExternalEntry;
+     (if XsystemEnvPresent then
+         &dispatch[]->XsystemEnvHandleCallback;
+      else
+         dispatch;
+     if);
+  exit result
+  #);
+
+
+registerAudioDeviceWindowClass:
+  (# cstr: @cString;
+     theClass: @WndClass;
+     
+  do windowClassName -> cstr.set;
+     0 -> theClass.style;
+     (if windowProcAddress=0 then
+         cdAudioDeviceWindowProc## -> std16x4toint -> windowProcAddress; 
+     if);
+     windowProcAddress -> theClass.lpfnWndProc;
+     hInstance -> theClass.hInstance;
+     0 -> theClass.hbrBackGround;
+     0 -> theClass.lpszMenuName;
+     cstr.charPtr -> theClass.lpszClassName;
+     0 -> theClass.cbClsExtra;
+     0 -> theClass.cbWndExtra;
+     theClass[] -> RegisterClass; 
+     cstr.free;
+  #);
+
+isCdAudioDeviceWindowClassReg: booleanValue
+  (# theClass: @integer;
+     result: @integer;
+  do 40 -> malloc -> theClass;
+     get_beta_instance -> hInstance;
+     (if theClass<>0 then
+         (hInstance, windowClassName, theClass)
+           -> GetClassInfo -> result;
+         theClass -> free;
+     if);
+     (result<>0) -> value;
+  #);
+
+createAudioDeviceWindow:
+  (# 
+  do (0, windowClassName,'cdAudioDevice',WS_OVERLAPPED,
+     10,10,400,400,0,0,hInstance,0) -> CreateWindowEx -> hwnd;   
+  #);
+
+windowProcAddress:
+  (# 
+  enter private.windowProcAddress
+  exit private.windowProcAddress
+  #);
+
+wDeviceID:
+  (# 
+  enter private.wDeviceID
+  exit private.wDeviceID
+  #);
+
+hwnd:
+  (# 
+  enter private.hwnd
+  exit private.hwnd
+  #);
+
+hInstance:
+  (# 
+  enter private.hInstance
+  exit private.hInstance
+  #);
+
+-- cdplayerOpen:doPart---
+do
+   (# theMCI_OPEN_PARMS: @MCI_OPEN_PARMS;
+      theMCI_SET_PARMS: @MCI_SET_PARMS;
+      deviceTypeCstr: @cString;
+      errorCstr: @cString;
+      dwReturn: @integer;
+   do 28 -> malloc -> private.message;
+      openL:
+        (# 
+        do (if private.message<>0 then
+               (if not isCdAudioDeviceWindowClassReg then
+                   registerAudioDeviceWindowClass;
+               if);
+               createAudioDeviceWindow;
+               sizeOf_MCI_OPEN_PARMS -> malloc -> theMCI_OPEN_PARMS.ptr;
+               (if theMCI_OPEN_PARMS.ptr<>0 then
+                   
+                   (* Open the CD audio device by specifying the device name. *)
+                   'cdaudio' -> deviceTypeCstr.set;
+                   deviceTypeCstr -> theMCI_OPEN_PARMS.lpstrDeviceType;
+                   (0, MCI_OPEN,
+                   MCI_OPEN_TYPE,theMCI_OPEN_PARMS.ptr)
+                     -> mciSendCommand
+                     -> dwReturn;
+                   (if (dwReturn<>0)   then
+                       (* Failed to open device. Do not close it; just return error. *)
+                       130 -> errorCstr.init;
+                       (dwReturn,errorCstr,128) -> mciGetErrorString;
+                       errorCstr.get -> deviceError;
+                       errorCstr.free;
+                       leave openL
+                    else
+                       (* The device opened successfully; get the device ID. *)
+                       theMCI_OPEN_PARMS.wDeviceID -> wDeviceID;
+                       
+                       sizeOf_MCI_SET_PARMS -> malloc -> theMCI_SET_PARMS.ptr;
+                       (if theMCI_SET_PARMS.ptr<> 0 then
+                           (* Set the time format to track/minute/second/frame (TMSF). *)
+                           MCI_FORMAT_TMSF -> theMCI_SET_PARMS.dwTimeFormat;
+                           (wDeviceID, MCI_SET, 
+                           MCI_SET_TIME_FORMAT,theMCI_SET_PARMS.ptr)
+                             -> mciSendCommand
+                             -> dwReturn;
+                           (if (dwReturn=0)   then
+                            else
+                               130 -> errorCstr.init;
+                               (dwReturn,errorCstr,128) -> mciGetErrorString;
+                               errorCstr.get -> deviceError;
+                               errorCstr.free;
+                           if);
+                        else
+                           'Allocation error in open. ' -> allocationError;
+                       if);
+                   if);
+                   
+                else
+                   'Allocation error in open. ' -> allocationError;
+               if);
+            else
+               130 -> errorCstr.init;
+               (dwReturn,errorCstr,128) -> mciGetErrorString;
+               errorCstr.get -> deviceError;
+               errorCstr.free;
+           if);
+        #);
+      (if theMCI_OPEN_PARMS.ptr<>0 then
+          theMCI_OPEN_PARMS.ptr -> free;
+          0 -> theMCI_OPEN_PARMS.ptr;
+      if);
+      (if theMCI_SET_PARMS.ptr<>0 then
+          theMCI_SET_PARMS.ptr -> free;
+          0 -> theMCI_SET_PARMS.ptr;
+      if);
+      (if deviceTypeCstr<>0 then
+          deviceTypeCstr.free;
+      if);
+   #);
+   inner open;
+
+-- cdPlayerClose: doPart --
+do
+   inner close;
+   
+   (wDeviceID, MCI_CLOSE, 0, 0) -> mciSendCommand;
+   
+   (if private.message<>0 then
+       private.message -> free;
+       0 -> private.message;
+   if);
+   
+-- cdPlayerIsCDPresent:dopart --
+do
+   
+--- cdPlayerStart :dopart ---
+do  (# tmsf:@integer;
+    do (track,0,0,0)->MCI_MAKE_TMSF->tmsf;
+       tmsf->private.play;
+    #);
+       
+   
+--- cdStop :dopart ---
+do
+   (# theMCI_GENERIC_PARMS: @MCI_GENERIC_PARMS;
+      dwReturn: @integer;
+   do sizeOf_MCI_GENERIC_PARMS -> malloc -> theMCI_GENERIC_PARMS.ptr;
+      (wDeviceID, MCI_STOP,MCI_NOTIFY, theMCI_GENERIC_PARMS.ptr)
+        -> mciSendCommand
+        -> dwReturn;
+      
+      theMCI_GENERIC_PARMS.ptr -> free;
+   #);
+   
+--- cdPause :dopart ---
+do
+   (# theMCI_GENERIC_PARMS: @MCI_GENERIC_PARMS;
+      dwReturn: @integer;
+   do sizeOf_MCI_GENERIC_PARMS -> malloc -> theMCI_GENERIC_PARMS.ptr;
+      (wDeviceID, MCI_PAUSE,MCI_NOTIFY, theMCI_GENERIC_PARMS.ptr)
+        -> mciSendCommand
+        -> dwReturn;
+      
+      theMCI_GENERIC_PARMS.ptr -> free;
+   #);
+   
+   
+--- cdPlayerResume:dopart ---
+do (# time:@integer;
+      track:@integer;
+   do currenttime->currenttime;
+   (*
+   (# theMCI_GENERIC_PARMS: @MCI_GENERIC_PARMS;
+      dwReturn: @integer;
+   do sizeOf_MCI_GENERIC_PARMS -> malloc -> theMCI_GENERIC_PARMS.ptr;
+      (wDeviceID, MCI_RESUME,MCI_NOTIFY, theMCI_GENERIC_PARMS.ptr)
+        -> mciSendCommand
+        -> dwReturn;
+      
+      theMCI_GENERIC_PARMS.ptr -> free;
+    #);
+    *)
+   #);
+   
+--- cdPlayerDuration :dopart ---
+do
+   (# theMCI_STATUS_PARMS: @MCI_STATUS_PARMS;
+      dwReturn: @integer;
+      errorCstr: @cString;
+   do sizeOf_MCI_STATUS_PARMS -> malloc -> theMCI_STATUS_PARMS.ptr;
+      (if theMCI_STATUS_PARMS.ptr<>0 then
+          MCI_STATUS_LENGTH -> theMCI_STATUS_PARMS.dwItem;
+          (wDeviceID, MCI_STATUS, MCI_STATUS_ITEM , theMCI_STATUS_PARMS.ptr)
+            -> mciSendCommand
+            -> dwReturn;
+          (if dwReturn = 0 then
+              theMCI_STATUS_PARMS.dwReturn -> theDuration;
+           else
+              (* error *)
+              130 -> errorCstr.init;
+              (dwReturn,errorCstr,128) -> mciGetErrorString;
+              errorCstr.get -> deviceError;
+              errorCstr.free;
+          if);
+          theMCI_STATUS_PARMS.ptr -> free;
+      if);
+   #);
+
+   
+--- cdPlayerSetCurrentTime:dopart ---
+do
+   (# theMCI_SEEK_PARMS: @MCI_SEEK_PARMS;
+      dwReturn: @integer;
+      errorCstr: @cString;
+      mytime:@integer;
+      minutes,seconds,ms:@integer;
+      frm:@integer;
+      tmsf:@integer;
+   do
+      theTime/1000->mytime;
+      mytime/60->minutes;
+      mytime-minutes*60->seconds;
+      (theTime-minutes*60000-seconds*1000)->ms;
+      (ms*75)/1000->frm;
+      (theTrack,minutes,seconds,frm)->MCI_MAKE_TMSF->tmsf;
+      pause;
+      tmsf->private.play;
+      (*
+       * sizeOf_MCI_SEEK_PARMS -> malloc -> theMCI_SEEK_PARMS.ptr;
+      (if theMCI_SEEK_PARMS.ptr<>0 then
+          theTime/1000->mytime;
+          mytime/60->minutes;'M'->put;minutes->putint;
+          mytime-minutes*60->seconds;'s'->put;seconds->putint;
+          (theTrack,minutes,seconds,0)->MCI_MAKE_TMSF->theMCI_SEEK_PARMS.dwTo;
+          (wDeviceID, MCI_SEEK, MCI_TO , theMCI_SEEK_PARMS.ptr)
+            -> mciSendCommand
+            -> dwReturn;
+          (if dwReturn <> 0 then
+                 130 -> errorCstr.init;
+              (dwReturn,errorCstr,128) -> mciGetErrorString;
+              errorCstr.get -> deviceError;
+              errorCstr.free;
+          if);
+          theMCI_SEEK_PARMS.ptr -> free;
+       if);
+       *)
+   #);
+
+   
+--- cdPlayerGetCurrentTime:dopart ---
+do
+   (# theMCI_STATUS_PARMS: @MCI_STATUS_PARMS;
+      dwReturn: @integer;
+      errorCstr: @cString;
+      mytmsf:@integer;
+   do sizeOf_MCI_STATUS_PARMS -> malloc -> theMCI_STATUS_PARMS.ptr;
+      (if theMCI_STATUS_PARMS.ptr<>0 then
+          MCI_STATUS_POSITION -> theMCI_STATUS_PARMS.dwItem;
+          (wDeviceID, MCI_STATUS, MCI_STATUS_ITEM , theMCI_STATUS_PARMS.ptr)
+            -> mciSendCommand
+            -> dwReturn;
+          (if dwReturn = 0 then
+              theMCI_STATUS_PARMS.dwReturn -> mytmsf;
+              mytmsf->MCI_TMSF_TRACKS->theTrack;
+              mytmsf->myMCI_TMSF_MILLI->theTime;
+           else
+              (* error *)
+              130 -> errorCstr.init;
+              (dwReturn,errorCstr,128) -> mciGetErrorString;
+              errorCstr.get -> deviceError;
+              errorCstr.free;
+          if);
+          theMCI_STATUS_PARMS.ptr -> free;
+      if);
+   #);
+
+   
+   
+--- cdPlayerNumberOfTracks:dopart ---
+do
+   (# theMCI_STATUS_PARMS: @MCI_STATUS_PARMS;
+      dwReturn: @integer;
+      errorCstr: @cString;
+   do sizeOf_MCI_STATUS_PARMS -> malloc -> theMCI_STATUS_PARMS.ptr;
+      (if theMCI_STATUS_PARMS.ptr<>0 then
+          MCI_STATUS_NUMBER_OF_TRACKS -> theMCI_STATUS_PARMS.dwItem;
+          (wDeviceID, MCI_STATUS, MCI_STATUS_ITEM , theMCI_STATUS_PARMS.ptr)
+            -> mciSendCommand
+            -> dwReturn;
+          (if dwReturn = 0 then
+              theMCI_STATUS_PARMS.dwReturn -> tracks;
+           else
+              (* error *)
+              130 -> errorCstr.init;
+              (dwReturn,errorCstr,128) -> mciGetErrorString;
+              errorCstr.get -> deviceError;
+              errorCstr.free;
+          if);
+          theMCI_STATUS_PARMS.ptr -> free;
+      if);
+   #);
+   
+   
+   
+--- cdPlayerPrivate:descriptor---
+(# wDeviceID: @integer;
+   windowProcAddress: @integer;
+   message: @integer;
+   hwnd: @integer;
+   hInstance: @integer;
+   
+   play:
+     (# 
+        theMCI_PLAY_PARMS: @MCI_PLAY_PARMS;
+        dwReturn: @integer;
+        flags: @integer;
+        errorCstr: @cString;
+        tmsf:@integer;
+     enter tmsf
+     do
+        playL:
+          (# 
+          do sizeOf_MCI_PLAY_PARMS -> malloc -> theMCI_PLAY_PARMS.ptr;
+             (if theMCI_PLAY_PARMS.ptr<>0 then
+                 (* Begin playback from the given track and play until the beginning 
+                  * of the next track. The window procedure function for the parent 
+                  * window will be notified with an MM_MCINOTIFY message when 
+                  * playback is complete. Unless the play command fails, the window 
+                  * procedure closes the device.    
+                  *)
+                 0 -> theMCI_PLAY_PARMS.dwFrom;
+                 0 -> theMCI_PLAY_PARMS.dwTo;
+                 tmsf->theMCI_PLAY_PARMS.dwFrom;
+                 (* (track, 0, 0, 0) -> MCI_MAKE_TMSF -> theMCI_PLAY_PARMS.dwFrom; *)
+                 (* (track, 0, 0, 0) -> MCI_MAKE_TMSF -> theMCI_PLAY_PARMS.dwTo; *)
+                 hwnd -> theMCI_PLAY_PARMS.dwCallback;
+                 MCI_FROM (* %Bor MCI_TO *) %Bor MCI_NOTIFY -> flags;
+                 (wDeviceID, MCI_PLAY,flags, theMCI_PLAY_PARMS.ptr)
+                   -> mciSendCommand
+                   -> dwReturn;
+                 (if dwReturn<>0 then
+                     (* error *)
+                     130 -> errorCstr.init;
+                     (dwReturn,errorCstr,128) -> mciGetErrorString;
+                     errorCstr.get -> deviceError;
+                     errorCstr.free;
+                 if);
+              else
+                 'Allocation error in play.' -> allocationError;
+             if);
+          #);
+        
+        (if theMCI_PLAY_PARMS.ptr<>0 then
+            theMCI_PLAY_PARMS.ptr -> free;
+        if);
+     #);
+#)
+

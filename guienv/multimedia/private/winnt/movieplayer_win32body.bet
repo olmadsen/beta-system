@@ -1,0 +1,399 @@
+ORIGIN '../movieplayerbody';
+INCLUDE '~beta/basiclib/file'
+        '~beta/sysutils/cstring'
+        '~beta/win32lib/fileio'
+        '~beta/win32lib/windef'
+        '~beta/win32lib/windowmanagement'
+        '~beta/guienv/private/winnt/guienv_ntiprivate'
+        'avistuff'
+        'mcilib';
+
+INCLUDE 
+       '~beta/guienv/controls'
+       '~beta/guienv/stddialogs';
+
+
+LINKOPT nti_ms 'vfw32.lib'
+        nti_gnu 'libvfw32.a';
+LINKOPT nti_ms 'winmm.lib'
+        nti_gnu 'libwinmm.a';
+--movieRead: doPart--
+do (# myinfo:@myMciinfostruct;
+   do
+      sizeOf_myMciinfostruct -> malloc -> myinfo.ptr;
+      (if thefilename[]<>none then
+          theFileName[]->private.thefilename[];
+      if);
+           
+      (private.thefilename
+      ,this(guienv).private.hMainwindow
+      ,this(guienv).private.uienvHInstance
+      ,myinfo.ptr)->myMCIgetinfo;
+      
+      myinfo.length->private.length;
+      myinfo.width->private.width;
+      myinfo.height->private.height;
+      myinfo.ptr->free;
+   #);
+      
+-- movieUserSelectFile: doPart --
+do
+   (# resultPath, winapiFilter: @cString;
+   do 'Microsoft AVI Files( *.avi)|*.avi|QuickTime Movies( *.mov)|*.mov|' -> winapiFilter.set;
+      winapiFilter -> openAVIfile -> resultPath;
+      
+      (if resultPath.charPtr=0 then
+          none -> private.theFileName[];
+       else
+          resultPath.get -> private.theFileName[];
+          resultPath.free;
+      if);
+      winapiFilter.free;
+      (if private.theFileName[]<>NONE then
+          (private.theFileName.length>0) -> success;         
+      if);
+      (if success then
+          read;
+      if);
+   #)
+   
+---movieDuration: doPart ---
+do private.length->theDuration;
+   
+--- movieFilename: doPart ---
+do private.theFilename[]->theFilename[];
+   
+---movieDisplaySize: doPart ---
+do private.width->width; private.height->height;
+   
+--- moviePrivate: descriptor ---
+(# read:@integer;
+   theFileName: ^text; 
+   existing: @boolean;
+   width,height,length:@integer;
+#)
+
+--- moviePlayerLib: attributes ---
+moviePlayerMethods: windowItemMethods
+  (# 
+     dispatchMessage::
+       (# didSomething: @boolean;
+          
+          setFrameSize:
+            (# theNtRectPtr: @integer;
+               r: ^rectangle;
+            do 16 -> malloc -> theNtRectPtr;
+               (interfaceObjectID,theNtRectPtr) -> GetClientRect;
+               &rectangle[] -> r[];
+               theNtRectPtr -> getRectFromNtRectPtr -> r;
+               r.size -> this(WindowItem).private.windowItemFrame.size;
+               theNtRectPtr -> free;
+            #);
+          
+          processWM_Size:
+            (# width,height: @integer;
+            do (info.lParam.loWord,info.lParam.hiWord) ->  (width,height);
+               (* If the user selects a view that is already shown the
+                * values for new width and height set by MCI and returned in
+                * the WM_SIZE message are zero. This is an error. We correct
+                * it by calculating the client rectangle and resetting the 
+                * windowItemFrame. *)
+               (if (width>0) and (height>0) then
+                   private.newFrame -> private.oldFrame;
+                   frame -> private.newFrame;
+                else
+                   setFrameSize;
+               if);
+            #);
+       do (if info.message = WM_SIZE then
+             processWM_Size; 
+          if);
+          didSomething or info.handled -> info.handled;
+       #);
+  #);
+
+
+
+--- moviePlayerSetContents: doPart ---
+do (# windowID: @integer; t: @text; openRes: @integer;
+      theNewMoviename:^text;
+   do interfaceObjectID -> windowID;
+      (if theMovie[] <> none then
+          (* We do not close the current MCI device. myMCIWndOpen does this
+           * automatically if we assign a new movie or it is done when the
+           * movie field is closed. If we call myMCIWndClose at this point
+           * calling myMCIWndOpen right afterwards will not work. *)
+          (* none -> theMovie[];  *) (* not used right now *)
+      if); 
+      (if theMovie[]<>NONE then
+          (theMovie.filename).copy->theNewMoviename[];
+          (windowID, theNewMoviename, 0) -> myMCIWndOpen -> openRes; 
+          this(moviePlayer)[] -> target;
+          (* theNewMovie[] -> theMovie[]; *)
+      if);
+   #);
+   
+--- movieplayerRead: doPart ---
+do (if theMovie[]<>none then
+       theMovie.read;
+   if);
+   themovie[]->Contents;
+   (interfaceobjectid)->myMCIWndGetLength->theMovie.private.length;
+
+--- movieplayerUserSelectFile: doPart ---
+do 
+   &movie[] -> theMovie[];
+   (if theMovie.userSelectFile then
+       theMovie[] -> contents;
+   if);
+   
+--- moviePlayerSetCurrentTime: doPart ---
+do
+   (# windowID: @integer;
+      t:@integer;
+   do (if private.isinframes then private.changetime if);
+      interfaceObjectID -> windowID;
+      theTime->t;
+      (windowId, t) -> myMCIWndSeek;
+   #);
+   
+   
+--- moviePlayerGetCurrentTime: doPart ---
+do  
+   (# windowID: @integer; 
+      t:@integer;
+   do (if private.isinframes then private.changetime if);
+      interfaceObjectID -> windowID;
+      windowID -> myMCIWndGetPosition -> t;
+      t->theTime;
+   #);
+   
+--- moviePlayerSetCurrentFrame: doPart ---
+do
+   (# windowID: @integer;
+      t:@integer;
+   do interfaceObjectID -> windowID;
+      (if not private.isinframes then private.changetime; if);
+      theFrame->t;
+      (windowId, t) -> myMCIWndSeek;
+   #);
+   
+   
+--- moviePlayerGetCurrentFrame: doPart ---
+do  
+   (# windowID: @integer; 
+      t:@integer;
+   do interfaceObjectID -> windowID;
+      (if not private.isinframes then private.changetime; if);
+      windowID -> myMCIWndGetPosition -> t;
+      t->theFrame;
+   #);
+   
+--- moviePlayerPlay: doPart ---
+do
+   (# windowID: @integer;
+      start, end, duration: @integer;  (* duration not used !*)
+   do interfaceObjectID -> windowID;
+      (if duration<1 then
+          windowID -> myMCIWndPlay;
+       else
+          windowID -> myMCIWndGetPosition -> start;
+          start + duration -> end;
+          (windowID, end) -> myMCIWndPlayTo;
+      if);
+   #);
+   
+--- moviePlayerStop: doPart ---
+do
+   (# windowID: @integer;
+   do interfaceObjectID -> windowID;
+      windowID -> myMCIWndStop;
+   #);
+   
+--- moviePlayerPause: doPart ---
+do (# windowID:@integer;
+   do interfaceObjectID -> windowID;
+      windowID->myMCIWndPause;
+   #);
+   
+--- moviePlayerCreate: doPart ---
+do (# wStyle: @integer;
+   do Private.owner.open;
+      (if not this(guienv).private.isMCIWndClassReg then
+          (if (uienvHInstance -> MCIWndRegisterClass)= 0 then
+              'MCIWndRegisterClass failed.' -> screen.putLine;
+           else
+              TRUE -> this(guienv).private.isMCIWndClassReg;
+          if);
+      if);
+      
+      &moviePlayerMethods[] -> theMethods; 
+      
+      (MCIWNDF_NOTIFYANSI,MCIWNDF_NOTIFYMEDIA) -> tos'%or' -> wStyle; 
+      (wStyle,MCIWNDF_NOTIFYSIZE) -> tos'%or' -> wStyle; 
+      (wStyle,MCIWNDF_NOTIFYMODE) -> tos'%or' -> wStyle; 
+      (wStyle,MCIWNDF_NOTIFYPOS) -> tos'%or' -> wStyle; 
+      (wStyle,MCIWNDF_NOOPEN) -> tos'%or' -> wStyle; 
+      (if not controllerVisible then
+          wstyle %Bor MCIWNDF_NOPLAYBAR -> wStyle;
+      if);
+      (if not automaticresize then 
+          wstyle %Bor MCIWNDF_NOAUTOSIZEWINDOW -> wStyle;
+      if);
+      
+      wStyle -> windowItemStyle; 
+      'MCIWndClass' -> windowItemClass;  
+      isSubClass -> windowItemClassStatus;
+      INNER create;
+   #);
+   
+--- moviePlayerOpen: doPart ---
+do
+   INNER;
+   (interfaceObjectID, Private.owner.interfaceObjectID) -> myMCIWndSetOwner;
+   interfaceObjectID -> myMCIWndUseTime;
+   (* (interfaceObjectID, MCIWNDF_NOTIFYALL, 0)
+    -> myMCIWndChangeStyles;
+    *)
+  
+   
+--- moviePlayerClose: doPart ---
+do
+   inner close;
+   interfaceObjectID -> myMCIWndClose;
+  
+   
+--- moviePlayerOnActivate: doPart ---
+do INNER
+   
+--- moviePlayerOnDeactivate: doPart ---
+do INNER
+   
+--- moviePlayerOnMouseDown: doPart ---
+do INNER
+   
+--- moviePlayerOnRefresh: doPart ---
+do INNER
+   
+   
+   
+--- moviePlayerPrivate: descriptor ---
+(# theMCI_SET_PARMS: @MCI_SET_PARMS; 
+   isinframes:@boolean;  (* otherwise miliseconds *);
+   newFrame, oldFrame: @rectangle;
+   inOnFrameChanged: @boolean;
+   theMovieController: @integer; 
+   changetime:
+     (# devid:@integer;
+        result:@integer;
+        errorCstr: @cString;
+        
+     do (if theMCI_SET_PARMS.ptr= 0 then leave changetime; if);
+        interfaceObjectID->myMciWndgetDeviceId->devid;
+        (if isinframes then (* change to milliseconds *)
+            MCI_FORMAT_MILLISECONDS -> theMCI_SET_PARMS.dwTimeFormat;
+         else
+            MCI_FORMAT_FRAMES -> theMCI_SET_PARMS.dwTimeFormat;            
+        if);
+        (devID, MCI_SET, MCI_SET_TIME_FORMAT,theMCI_SET_PARMS.ptr)
+          -> mciSendCommand->result;
+        (if (result=0)   then
+         else
+            130 -> errorCstr.init;
+            (result,errorCstr,128) -> mciGetErrorString;
+            errorCstr.get -> screen.putline;
+            errorCstr.free;
+        if);
+
+        not isinframes->isinframes;
+     #);
+   owner: @windowitem
+     (# ownerMethods: windowItemMethods
+          (# 
+             dispatchMessage::
+               (# didSomething: @boolean;
+                  
+                  processMCIWNDM_NOTIFYMODE:
+                    (# 
+                    do 'processMCIWNDM_NOTIFYMODE is called. mode= ' 
+                         -> screen.putText;
+                       info.lParam  -> putInt; newline;
+                    #);
+                  
+                  processMCIWNDM_NOTIFYMEDIA:
+                    (# theNewName: @cString;
+                       newName: ^text;
+                    do true -> didSomething;
+                       info.lParam -> theNewName;
+                       theNewName.get 
+                         -> this(moviePlayer).theEventHandler.onContentsChanged;
+                    #);
+                  
+                  processMCIWNDM_NOTIFYSIZE:
+                    (# newFrame: @rectangle;
+                       w,h: @integer;
+                    do (if not this(movieplayer).Private.inOnFrameChanged then
+                           (if not 
+                               (this(movieplayer).Private.newFrame
+                                 ->this(movieplayer).Private.oldFrame.isEqual)
+                               then
+                               (this(movieplayer).Private.oldFrame,this(movieplayer).Private.newFrame) 
+                                 -> this(moviePlayer).theEventHandler.onFrameChanged;
+                           if);
+                       if);
+                    #);
+                  
+                  processMCIWNDM_NOTIFYPOS:
+                  (# 
+                  do (* 'processMCIWNDM_NOTIFYPOS. lParam= ' -> putText;
+                      info.lParam -> putInt; newline;
+                      *)
+                  #);
+                  
+                  putPoint:
+                    (# h,v: @integer;
+                    enter (h,v)
+                    do '(' -> put;
+                       h -> putInt;
+                       ',' -> put;
+                       v -> putInt;
+                       ')' -> put;
+                    #);
+                  
+                  putRectangle:
+                    (# top, left, bottom, right: @integer;
+                    enter ((top, left), (bottom, right))
+                    do '( ' -> putText;
+                       (top, left) -> putPoint; ' , ' -> putText;
+                       (bottom, right) -> putPoint; ' )' -> putLine;
+                    #);
+               do 
+                  (if info.message 
+                   //MCIWNDM_NOTIFYMODE then (* processMCIWNDM_NOTIFYMODE;  *)
+                   //MCIWNDM_NOTIFYPOS then processMCIWNDM_NOTIFYPOS;
+                   //MCIWNDM_NOTIFYSIZE then
+                      processMCIWNDM_NOTIFYSIZE;
+                      
+                   //MCIWNDM_NOTIFYMEDIA then
+                      processMCIWNDM_NOTIFYMEDIA;
+                   //MCIWNDM_NOTIFYERROR then
+                      (* 'Got a MCIWNDM_NOTIFYERROR' -> screen.putLine; *)
+                   else
+                      (* info.message  -> putint; newline; *)
+                  if);
+                  didSomething or info.handled -> info.handled;
+               #);
+          #);
+        open::
+          (# create::
+               (# 
+               do uienvStandardWindowClass -> windowItemClass;
+                  isStandardClass  -> windowItemClassStatus;
+                  &ownerMethods[] -> theMethods;
+                  sizeOf_MCI_SET_PARMS -> malloc -> theMCI_SET_PARMS.ptr; (* allocate struct *)
+               #);
+          do hide; 
+          #);
+     #);
+#)
+
