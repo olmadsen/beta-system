@@ -30,7 +30,10 @@ void ChkRA()
    * *theObjHandle is in IOA.
    */
    
+#ifndef sparc 
+  /* Gcc dies (:-( */
   Ck(*theObjHandle);
+#endif
 
   if (!inIOA(*theObjHandle)) {
 #ifdef RTLAZY

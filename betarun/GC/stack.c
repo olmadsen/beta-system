@@ -938,8 +938,8 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
 
   fprintf(output, 
 	  "----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x (%s+0x%x)\n",
-	  ar, 
-	  theEnd,
+	  (int)ar, 
+	  (int)theEnd,
 	  PC,
 	  getLabel(PC),
 	  labelOffset);
