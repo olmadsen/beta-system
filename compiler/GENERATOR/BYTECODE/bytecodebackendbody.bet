@@ -127,18 +127,6 @@ INCLUDE '~beta/sysutils/pathhandler';
                                   *)
    jasmin: @file;
    jasminIsOpen: @boolean;
-   methodType: @integer; (* 0: for calling a ptn as a method
-                          * 1: for generating a vclass-instance of a ptn
-                          * 2: enter- do- or exit-method
-                          *)
-   extraOrigin:
-     (#
-     do (if methodType = 2 then
-            '****extra origin'->putline;
-            BCM.loadOrigin->mstate.BCM.emit;
-            0 -> BCM.emit
-        if);
-     #);
    classes: @
      (# L: [4] ^text; top: @integer;
         init: (# do 0 -> top #);
@@ -233,12 +221,7 @@ do reg.out;
    if);
    off -> mstate.BCM.emit; 
    size -> mstate.BCM.emit;
-   (if mstate.methodType = 2 then
-       '**** extra ON '->putline;
-       ONlevel+1 -> mstate.BCM.emit;
-    else
-       0 (* ONlevel*) -> mstate.BCM.emit;
-   if);
+   0 (* ONlevel*) -> mstate.BCM.emit;
    (* 18/06/02: ONlevel can be eliminated and
     * ONlevel > 0 ==> isField = true
     * BUT! For loadOrigin ONlevel is used
@@ -336,12 +319,7 @@ do (if true
 do mstate.BCM.pushNone -> mstate.BCM.emit;
    
 ---byteCode_ldValImpl:doPart---
-do (if mstate.methodType = 2 then
-       '**** extra ldvl origin'->putline;
-       mstate.BCM.loadOrigin->mstate.BCM.emit;
-       0 -> mstate.BCM.emit
-   if);
-   (if A.isOrigin then
+do (if A.isOrigin then
        mstate.BCM.loadOrigin -> mstate.BCM.emit;
        (* Regarding ONlevel, see regAdr_out
         * and BCjasminBody.
@@ -349,20 +327,16 @@ do (if mstate.methodType = 2 then
         * ONlevel > 0 is used in BCjasminBody
         * Find out if isField can be used
         *)
-       (if mstate.methodType = 2 then
-           A.ONlevel+1 -> mstate.BCM.emit;
-        else
-           (if true
-            // (A.ONlevel = 0) and A.isField then 
-               'loadOrigin: ONlevel=0. isField=true' -> putline
-            // (A.ONlevel > 0) and not A.isField then
-               'loadOrigin: ONlevel>0, isField=false' -> putline
-           if);
-           (* Here we should replace ONlevel with
-            * isField: 0 or 1 
-            *)
-           A.ONlevel -> mstate.BCM.emit
+       (if true
+        // (A.ONlevel = 0) and A.isField then 
+           'loadOrigin: ONlevel=0. isField=true' -> putline
+        // (A.ONlevel > 0) and not A.isField then
+           'loadOrigin: ONlevel>0, isField=false' -> putline
        if);
+       (* Here we should replace ONlevel with
+        * isField: 0 or 1 
+        *)
+       A.ONlevel -> mstate.BCM.emit;
        (if A.receiverType[] <> none then
            1 -> mstate.BCM.emit;
            (if not common.switch[189] (* not java *) then
@@ -421,7 +395,31 @@ do (if mstate.methodType = 2 then
             else
                'ldValImpl_UnknownType' -> mstate.BCM.emittext
        if)if)
-   if)
+   if);
+   elimSign:
+     (if not A.signed and (A.fieldType[]<>none) then
+         (if isJava then
+             (if ('C' -> A.fieldType.equal) 
+                 or ((1->A.fieldType.inxget) = '[') 
+                 then leave elimSign
+             if)
+          else
+             '\nPeter: check her!\n'
+             'Til håndtering af unsigned 8/16-bit integers.\n'
+             'Vi skal leave her hvis fieldtype er char eller array'
+               ->putline;
+             (if ('char' -> A.fieldType.equal) 
+                 or ((A.fieldType.length->A.fieldType.inxget) = ']') 
+                 then leave elimSign
+             if)
+         if);
+         (if A.size
+          // 1 then
+             (&dataRegOperand[],0xFF->newCstOp,4) -> gAnd
+          // 2 then
+             (&dataRegOperand[],0xFFFF->newCstOp,4) -> gAnd
+         if)
+     if)
    
 ---byteCode_ByteSwap:doPart---
 do (if long then
@@ -431,8 +429,7 @@ do (if long then
    if);
 
 ---byteCode_loadRef:doPart---
-do mstate.extraOrigin;
-   (if A.isOrigin then
+do (if A.isOrigin then
        '\nOBS! ShouldNotHappen: byteCode_loadRef:doPart'->putline;
        mstate.BCM.loadOrigin->mstate.BCM.emit;
        0 -> mstate.BCM.emit;
@@ -459,8 +456,7 @@ do mstate.extraOrigin;
    if)
    
 ---byteCode_stValImpl:doPart---
-do mstate.extraOrigin;
-   mstate.BCM.stVal->mstate.BCM.emit; 
+do mstate.BCM.stVal->mstate.BCM.emit; 
    A.out;   
    
 ---byteCode_cpReg:doPart---
@@ -479,7 +475,7 @@ do (if true
    if)   
    
 --bytecodeBackend_gClr:doPart--
-do (* don't do this; too mnay zero constants
+do (* don't do this; too many zero constants
     * will be pushed when clearing registers.
     * (mstate.BCM.pushCst,0) -> mstate.BCM.emit1;
     *)
@@ -735,7 +731,7 @@ do (if isGpart then
 ---byteCode_return:doPart---
 do mstate.BCM.return -> mstate.BCM.emit;
    RToff -> mstate.BCM.emit;
-   0 -> mstate.methodType
+
 ---bytecode_endMethod:doPart---
 do mstate.BCM.endMethod -> mstate.BCM.emit
    
@@ -796,7 +792,7 @@ do (if true
    superName[]->mstate.BCM.emittext;
    subLevel -> mstate.BCM.emit; (* OBS: int8 assumed here *)
    orgName[] -> mstate.BCM.emittext;
-   0 -> mstate.methodType
+
    
 --byteCode_endClass:doPart---
 do mstate.BCM.endClass -> mstate.BCM.emit;
@@ -812,22 +808,9 @@ do 0 -> mstate.numTempLocals;
    signature[]->mstate.BCM.emittext;
    noOfEnterArgs -> mstate.BCM.emit;
    type -> mstate.BCM.emit;
-   (*type -> mstate.methodType*)
    
 --byteCode_emitTextConst:doPart---
-do (*13->mstate.BCM.emit;
-   112->mstate.BCM.emit;
-   113->mstate.BCM.emit;
-   *)
-   mstate.BCM.pushText->mstate.BCM.emit; S[]->mstate.BCM.emitText;
-(* 97 -> mstate.BCM.emit;
-   97 -> mstate.BCM.emit;
-   97 -> mstate.BCM.emit;
-   97 -> mstate.BCM.emit;
-   0 -> mstate.BCM.emit;*)
-(*   '\nemitTextConst: ' -> screen.puttext;
-   mstate.BCM.pushText-> screen.putint; ' '->screen.put;
-   S[] ->screen. putline*)
+do mstate.BCM.pushText->mstate.BCM.emit; S[]->mstate.BCM.emitText;
 
 ---byteCode_close:doPart---
 do 183->trace(#
