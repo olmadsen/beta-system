@@ -106,17 +106,9 @@ if ( $REMOVEASTS == "yes" ) then
         echo "rebuildall.sh: Doing mbs_cvsupdate -u -c." >>& $LOG
         mbs_cvsupdate -u -c >>& $LOG
     endif
-    #date >>& $LOG
-    #echo "rebuildall.sh: Checking compiler." >>& $LOG
-    #setenv BETAOPTS --nocode
-    #date >>& $LOG
-    #mbs_compiletools compiler >>& $LOG
-    #unsetenv BETAOPTS
     date >>& $LOG
     echo "rebuildall.sh: Building betarun." >>& $LOG
     date >>& $LOG
-    #cd $BETALIB/betarun/$objdir
-    #make all >>& $LOG
     mbs_make >>& $LOG
     date >>& $LOG
     echo "rebuildall.sh: Building compiler using boot compiler." >>& $LOG
