@@ -37,7 +37,7 @@
 
   (let ((case-replace nil)(case-fold-search t))
     (message "Fixing PRE CLASS=BETA with headings")
-    (tags-query-replace "<h4\\s-*class\\s-*=\\s-*betacaption\\s-*>\\s-*\\(.*\\)\\s-*</h4>[
+    (tags-query-replace "<a name=.*><h4\\s-*class\\s-*=\\s-*betacaption\\s-*>\\s-*\\(.*\\)\\s-*</h4></a>[
 \\s-	]*<pre\\s-*class=beta>" "<BETA LIST=\"\\1\">" nil)))
 
 
