@@ -115,7 +115,8 @@ void BetaSignalHandler(sig, code, scp, addr)
   StackEnd = (long *) scp->sc_sp;
 #ifndef hppa
   PC = (long *) scp->sc_pc;
-#endif
+#endif /* hppa */
+#endif /* linux */
 
 #ifdef sun3
   /* Try to fetch the address of current Beta object in a0.*/
