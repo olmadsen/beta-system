@@ -34,7 +34,16 @@ public abstract class BetaArray {
   {
 
     // Check that low and high are usable. 
-    if ((low<1) || (array.length < high)) throw new ArrayIndexOutOfBoundsException();
+    if (low<1) 
+      throw new ArrayIndexOutOfBoundsException("Repetition subrange out of bounds (low): " 
+					       + low 
+					       + "<1");
+    if (array.length<high) 
+      throw new ArrayIndexOutOfBoundsException("Repetition subrange out of bounds (high): "
+					       + high
+					       + ">"
+					       + array.length
+					       );
       
     int newsize = high - low + 1;
     if (newsize<0) newsize = 0;
