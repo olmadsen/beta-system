@@ -52,7 +52,13 @@ systemenv
                        iSend: @menuItem
                          (# eventHandler::
                               (# onSelect::
-                                   (# W: @newMessageWindow;
+                                   (# W: @newMessageWindow
+                                        (# send::
+                                             (# M: @sendMail
+                                             do (server[],to[],subject[],msg[])
+                                                  -> M.send
+                                             #)
+                                        #);
                                    do 'Send mail'->putline;
                                       W.open;
                                    #)
@@ -63,6 +69,7 @@ systemenv
                               (# 
                               do 'Quitting...'->TE.puttext;
                                  IM.sendLOGOUT;
+                                 logF.doClose;
                                  terminate 
                               #)
                          #);
@@ -88,10 +95,10 @@ systemenv
                             onLabelChanged:: (# do newlabel[]->label[] #);
                             onSelected::
                               (#
-                              do 'Select of:'->puttext; label[] -> putline;
+                              do 'Select of:'->log.puttext; 
+                                 label[] -> log.putline;
                                  label[] -> IM.selectFolder
                               #);
-                            
                          #);
                        addFolder:
                          (# f,f1: ^folder;
@@ -194,17 +201,13 @@ systemenv
                   mails.open;
                #)
           #);
-        
-        
      do theWindow.open;
      #);
    IM: @ IMAP
      (# logs::
           (# puttext::
                (# 
-               do (*txt[] -> myWindowEnv.clipboard.textContents;
-                   myWindowEnv.theWindow.TE.contents.paste;
-                   (0,10) -> myWindowEnv.theWindow.TE.scroll;*)
+               do txt[] -> log.puttext
                #);
           #);
         listResp::
@@ -259,7 +262,7 @@ systemenv
                   if)if)if)
                #);
           enter T[]
-          do 'match: ' -> puttext; T[] -> putline;
+          do 'match: ' -> log.puttext; T[] -> log.putline;
              T.reset;
              loop:
                (if not T.eos then
@@ -311,7 +314,7 @@ systemenv
                    restart loop
                if);
              S.reset;
-             '\nDONE: ' -> puttext; S[] -> putline;
+             '\nDONE: ' -> log.puttext; S[] -> log.puttext; log.newline;
           exit S[] 
           #);
         exists::
@@ -330,12 +333,15 @@ systemenv
                    else
                       Loop:
                         (#
-                        do outSocket[] -> parseImap -> C[];
+                        do outSocket[] 
+                             -> IP 
+                             -> C[];
                            (if (C[]=none) or not C.isCompleted then
                                restart Loop
                   if)#)if)
                #)
-          do 'EXIST: fetching mailbox: '->puttext; R.value -> putint; newline;
+          do 'EXIST: fetching mailbox: '-> log.puttext;
+             R.value -> log.putint; log.newline;
              awaitCompleted; (* OK from SELECT *)
              (for i: R.value repeat
                   (*i -> putint; ','->put;*)
@@ -343,12 +349,12 @@ systemenv
                   (#
                   do Loop:
                        (#
-                       do outSocket[] -> parseImap -> msg[];
+                       do outSocket[] -> IP -> msg[];
                           (if (msg[]=none) or not msg.isMsg then
                               restart Loop
                        if)#);
-                     newline;
-                     msg.M.PP; newline;
+                     log.newline;
+                     msg.M.PP -> log.puttext; log.newline;
                      msg.subject -> coded2iso -> header[];
                      '   ' -> header.append;
                      msg.sender  -> coded2iso -> header.append;
@@ -360,12 +366,12 @@ systemenv
                      awaitCompleted; (* OK from FETCH *)
                   #)
              for);
-             'EXIST: done fetching mailbox'->putline;
+             'EXIST: done fetching mailbox'-> log.puttext;
              (R.value,false) -> myWindowEnv.theWindow.mails.selection.select;
              myWindowEnv.theWindow.mails.selection.scrollIntoView;
              (R.value,true) -> sendFetch
              (#
-             do outSocket[] -> parseImap -> C[];
+             do outSocket[] -> IP -> C[];
                 (if C.isMsg then
                     C[] -> msg[];
                     msg.message -> myWindowEnv.clipboard.textContents;
@@ -405,8 +411,27 @@ systemenv
         T: @styledtext;
      #);
    MB: @mailFolder;
-
-do MB.init;
+   IP: @parseImap;
+   
+   log: ^Stream; 
+   logF: @logFile;
+   logFile:< file
+     (# init:<
+          (#
+          do (if trace then
+                 'myMailer-log.txt' -> name; 
+                 openWrite;
+                 logF[] -> log[];
+              else 
+                 &stream[] -> log[]
+             if);
+          #);
+        doClose:< (# do (if trace then close if)#)
+     #);   
+   trace: (# exit true #);
+do logF.init;
+   log[] -> IP.init;
+   MB.init;
    'daimi'->MB.name[];
    IM
 #)

@@ -9,7 +9,7 @@ INCLUDE 'IMAPparser';
  *)
 ---systemlib:attributes---
 IMAP: system
-  (# log: @ logs;
+  (# ilog: @ logs;
      logs:< stream
        (# 
        #);
@@ -67,24 +67,23 @@ IMAP: system
        #);
      sendNOOP: command
        (#
-       do 'NOOP:'->log.putline;
-          'NOOP:'->putline;
+       do 'NOOP:'->ilog.putline;
           'NOOP\n' -> outsocket.puttext
        #);
      sendLOGIN: command
        (#
-       do 'LOGIN:'->log.putline;
+       do 'LOGIN:'->ilog.putline;
           'LOGIN olm mor,Efi.\n' -> outsocket.puttext
        #);        
      sendLOGOUT: command
        (#
-       do 'LOGOUT:'->log.putline;
+       do 'LOGOUT:'->ilog.putline;
           'LOGOUT\n' -> outsocket.puttext
        #);
      sendSELECT: command
        (# folder: ^text
        enter folder[]
-       do 'SELECT:'->log.putline;
+       do 'SELECT:'->ilog.putline;
           'SELECT ' -> outSocket.puttext;
           folder[] -> outSocket.puttext;
           outSocket.newline
@@ -92,7 +91,7 @@ IMAP: system
      sendFETCH: command
        (# msgNo: @integer; withText: @boolean
        enter(msgNo,withText)
-       do 'FETCH:'->log.putline;
+       do 'FETCH:'->ilog.putline;
           'FETCH ' -> outSocket.puttext;
           msgNo -> outSocket.putint;
           ' (FLAGS INTERNALDATE RFC822.size ENVELOPE BODY'
@@ -108,20 +107,21 @@ IMAP: system
           mbox,w: ^text;
           msg: @text
        enter(mbox[],w[])
-       do 'LIST:'->log.putline;
+       do 'LIST:'->ilog.putline;
           'LIST ' -> msg;
           mbox[] -> msg.puttext;
           ' '-> msg.puttext;
           w[] -> msg.puttext;
           '\n' -> msg.puttext;
-          msg[] ->putline;
+          msg[] -> ilog.putline;
           msg[] -> outSocket.puttext
        #);
      parse:
        (# T: ^text; last: @integer; R: ^response;
-          
+          IP: @parseIMAP
        enter T[]
-       do  T[] -> parseIMAP -> R[];
+       do ilog[] -> IP.init;
+          T[] -> IP -> R[];
           (if R[] <> none then R[] -> listResp; if);
        #);     
 
@@ -150,11 +150,13 @@ IMAP: system
        #);
      parseMesg: @boolean;
      receiver: @ | system
-       (# R,A: ^text; resp: ^response
-       do L: cycle
+       (# R,A: ^text; resp: ^response;
+          IP: @parseIMAP
+       do ilog[] -> IP.init;
+          L: cycle
             (# ch: @char
             do (if outSocket.eos then 
-                   'EOS'->log.putline;
+                   'EOS'->ilog.putline;
                    leave L 
                if);
                (if false then
@@ -165,7 +167,7 @@ IMAP: system
                        none -> currentID[]
                    if)
                 else
-                   outSocket[] -> parseImap -> resp[];
+                   outSocket[] -> IP -> resp[];
                    (if (resp[]<>none) then
                        (if true
                         // resp.isCompleted then
@@ -175,8 +177,8 @@ IMAP: system
                                CR.tag[] -> puttext; '?'->put;
                                currentid[] ->puttext; '?'->put; newline;*)
                               (if CR.tag[] -> currentID.equal then
-                                  'Completed:'->puttext;
-                                  CR.tag[]->putline;
+                                  'Completed:'->ilog.puttext;
+                                  CR.tag[]->ilog.putline;
                                   none -> currentID[]
                            if)#)
                         // resp.isMsg then
@@ -194,7 +196,7 @@ IMAP: system
                         // resp.isList then
                            resp[] -> listResp
                         // resp.isSelectExists then
-                           'selectExists:'->putline;
+                           'selectExists:'->ilog.putline;
                            resp[] -> exists;
                        if)
                    if)
@@ -228,9 +230,8 @@ IMAP: system
                #);
           #);
         (* connection established *)
-        'Connected'->putline;
-        'Connected'->LOG.putline;
-        'Connected!'->putline;
+        'Connected' -> screen.putline;
+        'Connected' -> ILOG.putline;
         sender[] -> fork;
         receiver[] -> fork;
         (*fromUser[] -> fork;*)
