@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
- * by Peter Andersen and Tommy Thorn.
+ * by Peter Andersen, Tommy Thorn, and Jacob Seligmann.
  */
 
 #define GCable_Module
@@ -39,5 +39,6 @@ void doGC() /* The one called from IOA(c)alloc */
 void DoGC() /* The one called directly from betaenv */
 { 
   /* This wrapper adds an activation record around doGC, which skips two AR's */
+  ReqObjectSize = 0;
   doGC();
 }
