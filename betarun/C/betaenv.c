@@ -12,11 +12,13 @@
 #include <memory.h>
 #endif
 
+#include "beta.h"
+
 #ifndef DEFAULT_PROPERTY_NAME
 #define DEFAULT_PROPERTY_NAME "BETART"
 #endif
 
-GetBetaEnv()
+void GetBetaEnv()
 {
   char *betaEnv, *getenv();
   

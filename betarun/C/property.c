@@ -49,11 +49,11 @@ static BooleanProperty( name)
   fprintf( output, "#Property '%s' not known!\n", name);
 }
 
+#ifndef DEMO
 static ValueProperty( name, value)
   char *name, *value;
 {
 
-#ifndef DEMO
   ENTRY("IOA",  IOASize       = 1024 * intScan(name, value));
   ENTRY("AOA",  AOABlockSize  = 1024 * intScan(name, value));
   ENTRY("LVRA", LVRABlockSize = 1024 * intScan(name, value));
@@ -113,9 +113,8 @@ static ValueProperty( name, value)
    
   /* IF NO ENTRY IS SELECTED PLEASE REPORT UNKNOWN PROPERTY */
   fprintf( output, "#Property '%s#%s' not known!\n", name, value);
-
-#endif DEMO
 }
+#endif DEMO
 
 /**********************************************************/
 /* PRIVATE PART ---- do'nt change below ---- PRIVATE PART */
@@ -178,7 +177,9 @@ void SetupProperties( betart)
         if( start < sep ){
           for(i=start; i<sep; i++)  name[i-start]  = betart[i]; name[sep-start]  = '\0';
           for(i=sep+1; i<pos; i++)  value[i-sep-1] = betart[i]; value[pos-sep-1] = '\0';
+#ifndef DEMO
           ValueProperty( name, value);
+#endif
         }
       }else{
         /* the item has the form  "<name>", where <name>  = betart[start..pos-1]. */

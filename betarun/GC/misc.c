@@ -14,7 +14,7 @@ long isObject( theObj)
   ref(Object) theObj;
 { 
 #if defined(sparc) || defined(hppa)
-    /* For the SPARC isObject also checkes alignment constraints */
+    /* For the SPARC isObject also checks alignment constraints */
     if ((unsigned)theObj % 8 != 0)
       return FALSE;
 #endif
@@ -76,7 +76,7 @@ void Claim( expr, message)
 
 #ifdef macintosh
 extern long StandAlone;
-InitTheCursor()   { if(StandAlone == 0) InitCursorCtl(0); }
-RotateTheCursor() { if(StandAlone == 0) SpinCursor(32); }
-RotateTheCursorBack() { if(StandAlone == 0) SpinCursor(-32); }
+void InitTheCursor()   { if(StandAlone == 0) InitCursorCtl(0); }
+void RotateTheCursor() { if(StandAlone == 0) SpinCursor(32); }
+void RotateTheCursorBack() { if(StandAlone == 0) SpinCursor(-32); }
 #endif

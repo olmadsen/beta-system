@@ -101,7 +101,6 @@ ref(Object) NewCopyObject( theObj, theCell)
      ref(Object)    theObj;
      handle(Object) theCell;
 {
-    extern ref(Object) CopyObjectToLVRA(); 
     if (isValRep(theObj)) {
 	
 	/* THIS SHOULDN'T BE NECESSARY: should be handled at allocation time */
@@ -122,7 +121,6 @@ ref(Object) NewCopyObject( theObj, theCell)
     
     if( theObj->GCAttr >= IOAtoAOAtreshold ){
 	/* theObj is old enough to go into AOA */
-	extern ref(Object) CopyObjectToAOA(); 
 	if( !isStackObject(theObj) ){
 	    ref(Object) newObj; 
 	    if( newObj = CopyObjectToAOA( theObj) ){

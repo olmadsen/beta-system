@@ -9,7 +9,6 @@
 #include "../CRUN/crun.h"
 #endif
 
-extern ref(Object) NewCopyObject();
 #ifdef hppa
 /***************************** for the snake ****************************/
 

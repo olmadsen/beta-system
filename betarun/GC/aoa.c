@@ -38,7 +38,6 @@ long AOACreateNewBlock = FALSE;
 static ref(Object) AOAalloc( size)
      long size;
 {
-  ref(Block) newBlock(); /* Extern routine in block.c */
   ptr(long)  oldTop;
 
 DEBUG_AOA(if (AOATopBlock) 
@@ -670,8 +669,6 @@ static void Phase3()
 	  }
 	  newObj->GCAttr = 0;
 	} else {
-	  extern void LVRAkill();
-
 	  /* theObj is not reachable. */
 	  while ((start<stop) && (table[start] < (long)nextObj)) start++;
 	  

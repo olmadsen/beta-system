@@ -154,3 +154,8 @@
  (((proto) == ValRepPTValue)   ? ValRepBodySize(range)  :	\
   (((proto) == DoubleRepPTValue) ? DoubleRepBodySize(range) :	\
    WordRepBodySize(range))))
+
+/* Safe way to save ToSpaceToAOA references */
+#define SaveToSpaceToAOAref(cell)				\
+  ((ToSpaceTop == ToSpaceToAOAptr)?tempToSpaceToAOAalloc(): (void) 0,	\
+   *--ToSpaceToAOAptr = (long) (cell))

@@ -456,7 +456,7 @@ void LVRAkill(rep)
 
 /* CopyObjectToLVRA: called from NewCopyObject */
 
-ref(ValRep) CopyObjectToLVRA(theRep)
+ref(Object) CopyObjectToLVRA(theRep)
      ref(ValRep) theRep;
 {
   ref(ValRep) newRep;
@@ -474,7 +474,7 @@ ref(ValRep) CopyObjectToLVRA(theRep)
   }
   /* Return the new object in ToSpace */
   DEBUG_LVRA(fprintf(output, "#COPYObjectToLVRA: newRep=0x%x\n", newRep));
-  return newRep;
+  return cast(Object)newRep;
 }
 
 /********************** LVRA garbage collection *************************/

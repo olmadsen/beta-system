@@ -4,7 +4,6 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 #include "beta.h"
-extern CBFAAlloc();
 
 #ifdef UNIX
 #include <signal.h>
@@ -148,7 +147,6 @@ Initialize()
 
 #ifdef UNIX
    { /* Setup signal handles for the Beta system */
-     extern void SignalHandler();
      signal( SIGFPE,  SignalHandler);
      signal( SIGILL,  SignalHandler);
      signal( SIGBUS,  SignalHandler);

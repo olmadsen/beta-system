@@ -10,9 +10,6 @@
 static long primes[] = 
 { 5879,  8821, 13241, 19867, 29803, 44711, 67079, 99991, 0 };
 
-ref(Block) newBlock(); /* Extern routine in block.c */
-void freeBlock();      /* Extern routine in block.c */
-
 static long prim_index = 0;
 /* Allocates the initial AOAtoIOAtable. */
 long AOAtoIOAAlloc()

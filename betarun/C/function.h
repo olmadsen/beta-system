@@ -7,10 +7,10 @@ extern void Prompt(char *msg1, char *msg2, char *msg3, char *msg4);
 extern void GetBetaEnv();
 
 /* C/property.c */
-void SetupProperties();
+extern void SetupProperties();
 
 /* C/wordsort.c */
-extern void wordsort();
+extern void WordSort();
 
 /* C/outpattern.c */
 extern void DisplayObject();
@@ -21,7 +21,20 @@ extern void DisplayBetaStack();
 extern void BetaExit();
 extern void BetaError();
 
+/* C/cbfa.c */
+extern void CBFAAlloc();
+extern void CBFArelloc();
 
+/* C/sighandler.c */
+extern void SignalHandler();
+
+
+
+
+/* GC/block.c */
+extern ref(Block) newBlock();
+extern void freeBlock();
+extern long inArea();
 
 /* GC/objectsize.c */
 extern long ObjectSize();
@@ -43,6 +56,10 @@ extern void AOACheckObjectSpecial();
 #endif
 
 
+
+/* GC/copyobject.c */
+extern ref(Object) NewCopyObject();
+
 /* GC/scavenging.c */
 extern void ProcessStackPart();
 extern void ProcessStack();
@@ -54,12 +71,6 @@ extern void ProcessAOAObject();
 
 extern void CompleteScavenging();
 extern long GetDistanceToEnclosingObject();
-
-/* Safe way to save ToSpaceToAOA references */
-#define SaveToSpaceToAOAref(cell)				\
-  ((ToSpaceTop == ToSpaceToAOAptr)?tempToSpaceToAOAalloc(): (void) 0,	\
-   *--ToSpaceToAOAptr = (long) (cell))
-
 extern void tempToSpaceToAOAalloc();
 extern void tempToSpaceToAOAfree();
      
@@ -72,8 +83,9 @@ extern void IOACheckReference();
 
 /* GC/lvra.c */
 extern long inLVRA();
-long LVRARestInBlock();
-
+extern long LVRARestInBlock();
+extern void LVRAkill();
+extern ref(Object) CopyObjectToLVRA(); 
 
 
 /* GC/misc.c */
@@ -88,8 +100,3 @@ extern void InitTheCursor();
 extern void RotateTheCursor();
 extern void RotateTheCursorBack();
 #endif
-
-
-
-
-

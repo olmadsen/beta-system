@@ -36,7 +36,7 @@ void CBFAAlloc()
     INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb); );
 }
 
-void CBFArelloc ()
+void CBFArelloc()
 {
     /* BetaError(CBFAfullErr, 0); */
     
