@@ -16,11 +16,26 @@ public class BetaOutput
     public BetaOutput(String betalib, 
 		      String pkg, 
 		      String cls, 
+		      String supPkg, 
+		      String sup, 
 		      int overwrite,
 		      PrintStream outstream)
 	throws Throwable
     {
-        entry   = new File(betalib + "/javalib/" + pkg + "/" + cls + ".bet");
+        
+	openStream(betalib, pkg, "_" + cls, overwrite, outstream);
+	if (out!=null) putWrapper(pkg, cls, supPkg, sup);
+	openStream(betalib, pkg, cls, overwrite, outstream);
+    }
+
+    void openStream(String betalib, 
+		    String pkg, 
+		    String cls, 
+		    int overwrite,
+		    PrintStream outstream)
+	throws Throwable
+    {
+	entry   = new File(betalib + "/javalib/" + pkg + "/" + cls + ".bet");
 	if (entry.exists()){
 	    if (overwrite==-1){
 		// Ignore if already converted
@@ -40,9 +55,11 @@ public class BetaOutput
 	    out = outstream;
 	} else {
 	    // System.err.println("BetaOutput: new outstream");
+	    if (out != null) { out.close(); }
 	    out = new PrintStream(new FileOutputStream(entry));
 	}
     }
+
 
     public void reportFileName()
     {
@@ -214,20 +231,38 @@ public class BetaOutput
 	indent(+3);
     }
 
-    public void putHeader(String packageName, String className, String superClass, Object[] includes)
+    public void putWrapper(String packageName, String className, String superPkg, String superClass)
     {
 	putln("ORIGIN '~beta/basiclib/betaenv';");
+	if ((superClass!=null) && !superClass.equals("Object")){
+	    // Include non-wrapper version of superclass
+	    putln("INCLUDE '~beta/javalib/" + superPkg + "/" + superClass + "';");
+	};
+	putln("--LIB: attributes--\n");
+	putln("(* Java " + className + " class declaration.");
+	putln(" * This wrapper is needed to prevent circular fragment INCLUDE.");
+	putln(" * See " + className + ".bet for members.");
+	putln(" *)");
+	putPatternBegin("_" + className, superClass);
+	nl();
+	putTrailer(packageName, className);
+    }
+
+    public void putHeader(String packageName, String className, Object[] includes)
+    {
+	putln("ORIGIN '" + "_" + className + "';");
 	if (includes!=null){
 	    for (int i = 0; i<includes.length; i++){
 		putln("INCLUDE '~beta/javalib/" + (String)includes[i] + "';");
 	    };
 	};
 	putln("--LIB: attributes--\n");
-	putln("(* Java " + className + " class.");
+	putln("(* Java " + className + " class members.");
+	putln(" * See " + "_" + className + " for class declaration.");
 	putln(" * See http://java.sun.com/j2se/1.4.1/docs/api/" 
 	      + packageName + '/' + className + ".html");
 	putln(" *)");
-	putPatternBegin(className, superClass);
+	putPatternBegin(className, "_" + className);
     }
 
     public void putField(String name, String type, boolean isStatic)
@@ -245,11 +280,12 @@ public class BetaOutput
 
     public void putMethod(String name, String mangledName, String[] parameters, String returnType, boolean isStatic)
     {
-	String proctype = (name.equals("_init")) ? "cons" : ((isStatic)? "static_proc" : "proc");
+	boolean isConstructor = name.equals("_init");
+	String proctype = (isConstructor) ? "cons" : ((isStatic)? "static_proc" : "proc");
 	if (mangledName!=null){
 	    putln(mangledName + ": " 
 		  + proctype + " " 
-		  + comment(((name.equals("_init")) ? "constructor" : name)));
+		  + comment(((isConstructor) ? "constructor" : name)));
 	} else {
 	    putln(mapReserved(name) + ": " + proctype);
 	}
@@ -281,7 +317,7 @@ public class BetaOutput
 	    indent(+3);
 	}
 	indent(-3);
-	if (mangledName!=null && !name.equals("_init")) {
+	if (mangledName!=null && !isConstructor) {
 	    indent();
 	    put("do '" + name + "' -> procname;");
 	    nl();
@@ -299,7 +335,9 @@ public class BetaOutput
     {
 	indent(-3);
 	putln("do '" + packageName + '/' + className + "' -> className;");
+	indent(+3);
 	putln("INNER;");
+	indent(-3);
 	putln("#);\n");
 	indent(-2);
     }

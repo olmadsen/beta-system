@@ -170,7 +170,7 @@ class JavaConverter
 			mangledName = dollarName;
 		    }
 		}
-		beta.putMethod(name, mangledName, parameters, null, isStatic);
+		beta.putMethod(name, mangledName, parameters, "^" + stripPackage(cls.getName()) , isStatic);
 	    }
 	}
     }
@@ -284,17 +284,35 @@ class JavaConverter
 	}
 
 	if (includes.isEmpty()) return null;
-	return includes.keySet().toArray();
+	Object inc[] = includes.keySet().toArray();
+	for (int i = 0; i<inc.length; i++){
+	    inc[i] = prependClassWithUnderscore((String)inc[i]);
+	};
+	return inc;
     }
 
     void include(String name){
-	//System.err.println("include? " + name + ", self: " + className);
+	//System.err.print("include? " + name + ", self: " + className + "? ");
 	if (stripPackage(name).equals(className)){
 	    // No need to include current class
-	} else if (name.equals("java.lang.Object")){
+	    //System.err.println("no");
+	} else if (slashToDot(name).equals("java.lang.Object")){
 	    // No need to include Object
+	    //System.err.println("no");
 	} else {
 	    includes.put(dotToSlash(name), name);
+	    //System.err.println("yes");
+	}
+    }
+
+    String prependClassWithUnderscore(String name){
+	try {
+	    Class cls = Class.forName(slashToDot(name));
+	    return dotToSlash(cls.getPackage().getName()) + "/" + "_" + stripPackage(name);
+	} 
+	catch (Throwable e){
+	    System.err.println ("prependClassWithUnderscore: class not found: " + name + "\n");
+	    return null;
 	}
     }
 
@@ -380,7 +398,7 @@ class JavaConverter
 	    } else {
 		if (doIncludes) include(name);
 	    }
-	    return "^" + stripPackage(dollarToUnderscore(name));
+	    return makeBetaReference(name);
 	}
     }
 
@@ -416,11 +434,23 @@ class JavaConverter
 	} else if (name.startsWith("L")){
 	    name = name.substring(1,name.length()-1);
 	    if (doIncludes) include(name);
-	    return "[0]^" + stripPackage(name);
+	    return "[0]" + makeBetaReference(name);
 	} else {
 	    System.err.println("Warning: mapInternalType: [" + name + ": unknown type"); 
 	    return "[0]@int32";
 	}
+    }
+
+    String makeBetaReference(String name){
+	if (stripPackage(name).equals(className)){
+	    name = "^" + stripPackage(dollarToUnderscore(name));
+	} else if (name.equals("java.lang.Object")){
+	    name = "^" + stripPackage(dollarToUnderscore(name));
+	} else {
+	    // Make reference to wrapper class
+	    name = "^" + "_" + stripPackage(dollarToUnderscore(name));
+	}
+	return name;
     }
   
     String slashToDot(String name){
@@ -466,7 +496,7 @@ class JavaConverter
 	String innerSuper=null;
 	Class sup;
 	if (outer==null) {
-	    beta.putHeader(packageName, className, superClass, doIncludes(cls));
+	    beta.putHeader(packageName, className, doIncludes(cls));
 	} else {
 	    innerClass = stripPackage(cls.getName());
 	    innerName  = stripPackage(unmangle(outer, cls.getName()));
@@ -531,7 +561,7 @@ class JavaConverter
 		superPkg   = dotToSlash(sup.getPackage().getName());
 		superClass = stripPackage(sup.getName());
 	    }
-	    beta = new BetaOutput(betalib, packageName, className, overwrite, out);
+	    beta = new BetaOutput(betalib, packageName, className, superPkg, superClass, overwrite, out);
 	    if (beta.out == null) return null;
 	} catch (Throwable e) {
 	    e.printStackTrace();
