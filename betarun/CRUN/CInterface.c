@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CInterface.c,v 1.21 1992-11-06 16:55:07 beta Exp $
+ * Mod: $Id: CInterface.c,v 1.22 1992-12-18 15:34:27 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -50,15 +50,6 @@ char *
     return CTextPoolEnd - bodysize;
 }
 
-/* Temporary alias */
-asmlabel(CpkVTS, "
-	mov %o2, %o3
-	mov %o1, %o2
-	mov %o0, %o1
-        ba _CCpkSVT
-	mov %i0, %o0
-");
-
 asmlabel(CpkSVT, "
 	mov %o2, %o3
 	mov %o1, %o2
@@ -73,7 +64,7 @@ char *
       CCpkSVT(ref(Object) currentObj, ref(ValRep) theRep, unsigned low,
 	      long high)
 #else
-       CpkVTS(ref(ValRep) theRep, unsigned low, long high)
+       CpkSVT(ref(ValRep) theRep, unsigned low, long high)
 #endif
 {
     long bodysize;
