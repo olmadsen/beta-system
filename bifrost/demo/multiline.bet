@@ -1,6 +1,38 @@
 ORIGIN '~beta/bifrost/v2.2/Bifrost';
 INCLUDE '~beta/bifrost/v2.2/ColorNames';
 INCLUDE '~beta/bifrost/v2.2/PredefinedGO';
+-- lib: attributes --
+distanceToLine: (* algorithm from Graphical Gems II, p. 10-13 *)
+  (# A, B, P: @point;
+     idist: (* algorithm from Graphical Gems, p. 427-431 *)
+       (# X, Y: @point; res: @integer
+       enter (X, Y)
+       do Y.h-X.h->abs->Y.h;
+          Y.v-X.v->abs->Y.v;
+          Y.h+Y.v-(((Y.h,Y.v)->min) div 2)->res;
+       exit res
+       #);
+     d1: (* algorithm from Graphical Gems II, p. 10-13 *)
+       (# a2: @integer; res: @integer
+       do (P.v-A.v)*(B.h-A.h)-(P.h-A.h)*(B.v-A.v)->abs->a2;
+          (((B.h-A.h)->abs)+((B.v-A.v)->abs)
+          -((((B.h-A.h)->abs,(B.v-A.v)->abs)->min) div 2))->res;
+          a2 div res->res
+       exit res
+       #);
+     d2: @integer;
+  enter (A, B, P)
+  do (if (P.h-A.h)*(B.h-A.h) + (P.v-A.v)*(B.v-A.v)<0 then
+         (A,P)->idist->d2
+      else
+         (if (B.h-P.h)*(B.h-A.h) + (B.v-P.v)*(B.v-A.v)<0 then
+             (B,P)->idist->d2
+          else
+             d1->d2
+         if)
+     if)
+  exit d2
+  #)
 -- program: descriptor --
 bifrost
 (# (* Simple demo showing some manipulation with the
@@ -8,71 +40,95 @@ bifrost
     *)
    theWindow: @window
      (# bluepaint, redpaint: @solidcolor;
-	theCanvas: @BifrostCanvas
-	  (# eventhandler::
-	       (# ML: @MultiLine; p: ^pointArray;
-		  onKeyDown::
-		    (# do terminate #);
-		  onMouseDown::
-		    (# exactPos: ^point;
-		    do mousePos -> DeviceToCanvas -> mousePos;
-		       (ML[], mousePos)-> HitControl -> exactpos[];
-		       (if exactpos[] <> NONE then
-			   ML[] -> unhilite;
-			   (ML[], exactPos, ShiftModifier)
-			     -> interactiveReshape;
-			   ML[] -> hilite;
-			else
-			   (if (theCanvas[],mousePos) -> ML.containsPoint then
-			       (if doubleClick then
-				   ML[] -> unhilite;
-				   mousepos->p.addPoint;
-				   p[]->ML.points;
-				   ML[]->draw;
-				   ML[] -> hilite;
-				else
-				   ML[] -> unhilite;
-				   (ML[], mousePos, NoModifier)
-				     -> interactiveMove;
-				   ML[] -> hilite;
-			       if)
-			   if)
-		       if)
-		    #);
-		  onOpen::
-		    (#
-		    do ML.init;
-		       &pointArray[]->p[];
-		       3->p.initPoints;
-		       (0,0) -> p.addPoint;
-		       (20,100) -> p.addPoint;
-		       (150,150) -> p.addPoint;
-		       p[] -> ML.points;
-		       8 -> ML.width;
-		       bluepaint[] -> ML.setpaint;
-		       ML[] -> hilite;
-		       ML[] -> draw;
-		    #)
-	       #);
-	     open::
-	       (#
-	       do (200,200) -> size;
-		  true->bindright;
-		  true->bindbottom;
-		  true->bindtop;
-		  true->bindleft;
-	       #);
-	  #);
-	eventhandler:: (# onAboutToClose:: (# do terminate #) #);
-	open::
-	  (#
-	  do (200,200)->size;
-	     redpaint.init;
-	     red -> redpaint.name;
-	     bluepaint.init;
-	     blue -> bluepaint.name;
-	     theCanvas.open;
-	  #);
+        theCanvas: @BifrostCanvas
+          (# eventhandler::
+               (# ML: @MultiLine; p: ^pointArray;
+                  onKeyDown::
+                    (# do terminate #);
+                  onMouseDown::
+                    (# exactPos: ^point; d, dMin, dInx: @integer;
+                    do mousePos -> DeviceToCanvas -> mousePos;
+                       (ML[], mousePos)-> HitControl -> exactpos[];
+                       (if exactpos[] <> NONE then
+                           ML[] -> unhilite;
+                           (ML[], exactPos, ShiftModifier)
+                             -> interactiveReshape;
+                           ML[] -> hilite;
+                        else
+                           (if (theCanvas[],mousePos) -> ML.containsPoint then
+                               click:
+                                 (if doubleclick then
+                                     maxint->dMin;
+                                     (for i: p.npoints-1 repeat
+                                          (if (i->p.getPoint,mousePos)
+                                                ->equalPoint then
+                                              leave click (* point already in multiline *)
+                                          if);
+                                          (i->p.getPoint,
+                                          i+1->p.getPoint,
+                                          mousepos)->distanceToLine->d;
+                                          (if (d>=0) and (d<dMin) then
+                                              d->dMin; i->dInx
+                                          if)
+                                     for);
+                                     ML[] -> unhilite;
+                                     ML.getBounds->damaged;
+                                     (* make room for new point *)
+                                     (0,0)->p.addPoint;
+                                     (* slide the points *)
+                                     (for i: p.npoints-dInx-1 repeat
+                                          (p.npoints-i->p.getPoint, p.npoints-i+1)
+                                            ->p.setPoint
+                                     for);
+                                     (* insert the new point *)
+                                     (mousepos,dInx+1)->p.setPoint;
+                                     p[]->ML.points;
+                                     repair;
+                                     ML[]->draw;
+                                     ML[] -> hilite;
+                                  else
+                                     ML[] -> unhilite;
+                                     (ML[], mousePos, NoModifier)
+                                       -> interactiveMove;
+                                     ML[] -> hilite;
+                                 if)
+                           if)
+                       if)
+                    #);
+                  onOpen::
+                    (#
+                    do ML.init; 
+                       &pointArray[]->p[];
+                       3->p.initPoints;
+                       (0,0) -> p.addPoint;
+                       (20,100) -> p.addPoint;
+                       (150,150) -> p.addPoint;
+                       p[] -> ML.points;
+                       8 -> ML.width;
+                       bluepaint[] -> ML.setpaint;
+                       ML[] -> hilite;
+                       ML[] -> draw;
+                    #)
+               #);
+             open:: 
+               (# 
+               do (200,200) -> size;
+                  true->bindright;
+                  true->bindbottom;
+                  true->bindtop;
+                  true->bindleft;
+               #);
+          #);
+        eventhandler:: (# onAboutToClose:: (# do terminate #) #);
+        open::
+          (# 
+          do (200,200)->size;
+             redpaint.init;
+             red -> redpaint.name;
+             bluepaint.init;
+             blue -> bluepaint.name;
+             theCanvas.open;
+          #);
      #);
 do theWindow.open;
    1->Arguments->theWindow.title;
