@@ -1,5 +1,6 @@
 ORIGIN '../Impl/RasterImpl';
 INCLUDE 'BifrostX11impl';
+INCLUDE '~beta/sysutils/endian';
 
 (************* Rasters ****************)
 
@@ -112,60 +113,62 @@ do (****
    longinx, (* BitMapPrivatePart.data[longinx] is the long to manipulate *)
    longpos, (* BIT-position in BitMapPrivatePart.data[longinx] *)
    byteno,  (* Byte index in BitMapPrivatePart.data[longinx] *)
-   offset,  (* Bitposition (from LSB) in byte number byteno of 
+   offset,  (* Bitposition in byte number byteno of 
              * BitMapPrivatePart.data[longinx]
              *)
-   mask,
-   mylong: @integer;
+   value: @integer;
+   mybyte: @int8u;
 do (if rasterprivatepart.indexOK then
-       (if p.b then
-           (* TOS'%PutBits' expects constants, so we don't use it *)
-           
-           (rasterprivatepart.height-j+1)*bitmapprivatepart.realwidth
-           -i -> bitpos; 
-           (bitpos) div 32 + 1 -> longinx; 
-           (* +1 since we're using longinx for BitMapPrivatePart.data *)
-           
-           bitpos mod 32 -> longpos;
-           longpos div 8  -> byteno;
-           (byteno+1)*8-longpos-1 -> offset;
-           
-           1 -> mask;
-           (for i:offset repeat
-                mask*2 -> mask;
-           for);
-           
-           (if byteno
-            // 0 then
-               (BitMapPrivatePart.data[longinx]->TOS'%GetByte[0]'->mylong,
-               mask) -> TOS'%or' -> mylong; (* This is a long < 256 *)
-               (@@BitMapPrivatePart.data[longinx], mylong)
-                 -> TOS'%PutByte[0]'
-            // 1 then
-               (BitMapPrivatePart.data[longinx]->TOS'%GetByte[1]'->mylong,
-               mask) -> TOS'%or' -> mylong; (* This is a long < 256 *)
-               (@@BitMapPrivatePart.data[longinx], mylong)
-                 -> TOS'%PutByte[1]'
-            // 2 then 
-               (BitMapPrivatePart.data[longinx]->TOS'%GetByte[2]'->mylong,
-               mask) -> TOS'%or' -> mylong; (* This is a long < 256 *)
-               (@@BitMapPrivatePart.data[longinx], mylong)
-                 -> TOS'%PutByte[2]'
-            // 3 then
-               (BitMapPrivatePart.data[longinx]->TOS'%GetByte[3]'->mylong,
-               mask) -> TOS'%or' -> mylong; (* This is a long < 256 *)
-               (@@BitMapPrivatePart.data[longinx], mylong)
-                 -> TOS'%PutByte[3]'
-           if);
-           
-       if);
+       (if p.b then 1->value if);
+       (rasterprivatepart.height-j+1)*bitmapprivatepart.realwidth-i 
+         -> bitpos; 
+       (bitpos) div 32 + 1 -> longinx; 
+       (* +1 since we're using longinx for BitMapPrivatePart.data *)
+       
+       bitpos mod 32 -> longpos;
+       longpos div 8 -> byteno;
+       (byteno+1)*8-longpos-1 -> offset;
+       
+       byteno -> BitMapPrivatePart.data[longinx].%getByte -> mybyte;
+       (if isbigEndian then 7-offset->offset; (* FIXME! *) if);
+       (value, offset, 1) -> mybyte.%PutBits;
+       
+       (mybyte,byteno) -> BitMapPrivatePart.data[longinx].%putByte;
    if);
-   
 #)
 
--- BitMapGetPixel: dopart --
-do INNER
-   
+-- BitMapGetPixel: descriptor --
+(# bitpos,  (* BIT-Position in BitMapPrivatePart.data *)
+   longinx, (* BitMapPrivatePart.data[longinx] is the long to manipulate *)
+   longpos, (* BIT-position in BitMapPrivatePart.data[longinx] *)
+   byteno,  (* Byte index in BitMapPrivatePart.data[longinx] *)
+   offset,  (* Bitposition in byte number byteno of 
+             * BitMapPrivatePart.data[longinx]
+             *)
+   value: @integer;
+   mybyte: @int8u;
+do &pixel[] -> p[];
+   (if rasterprivatepart.indexOK then
+       (rasterprivatepart.height-j+1)*bitmapprivatepart.realwidth-i 
+         -> bitpos; 
+       (bitpos) div 32 + 1 -> longinx; 
+       (* +1 since we're using longinx for BitMapPrivatePart.data *)
+       
+       bitpos mod 32 -> longpos;
+       longpos div 8 -> byteno;
+       (byteno+1)*8-longpos-1 -> offset;
+       
+       byteno -> BitMapPrivatePart.data[longinx].%getByte -> mybyte;
+       'mybyte: ' -> puttext; mybyte->putbinary; newline;
+       'offset: ' -> puttext; offset->putint; newline;
+       (if isbigEndian then 7-offset->offset; (* FIXME! *) if);
+       (offset, 1) -> mybyte.%GetBits -> value;
+       'value: ' -> puttext; value->putint; newline; newline;
+   if);
+   (value<>0) -> p.b;
+#)
+
+
 -- BitmapConvertPBMrow: descriptor --
 (# (* Convert pbmrow to data for X bitmap *)
    (* Inspired from pbmtoxbm.c from pbmplus package by Jef Poskanzer *)
