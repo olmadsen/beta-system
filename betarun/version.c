@@ -1,7 +1,13 @@
-char betarun_version[] = "BETARUN VERSION 5.3(80)";
+char betarun_version[] = "BETARUN VERSION 5.3(81)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.94  2002/03/19 10:08:53  beta
+ * Start of C# betarun for Microsoft .NET
+ * Betarun version number: 80 
+ * Developer: datpete
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.93  2002/03/19 09:23:41  grouleff
  * Minor compile fixes.
  * Betarun version number: 79
