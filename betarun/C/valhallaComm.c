@@ -358,44 +358,16 @@ extern void Return ();
 
 INLINE int findMentry (struct ProtoType *proto)
      /* 
-      * Used to locate the Mentry point corresponding to a T entry. This is
-      * done by scanning backwards in the INNER table of the prototype until
-      * the address of Return is seen. The previous address seen is then the 
-      * Mentry.
-      *
-      * However, if a prototype does not have an M entry point of its own
-      * (no dopart), this method may return the Mentry point of one of its
-      * prefixes. To ensure that this does not happen, the INNER table of
-      * the immediate prefix prototype is scanned to ensure that the Mentry
-      * found is not in that table too. If it is anyway, the current prototype 
-      * has no Mentry of its own, and an Mentry of 0 is used. */
-{ long tmp,Mentry=0;
-  long* INNERtab = ((long *) proto)-1;
-  struct ProtoType *prefix;
-  
-  while (TRUE) {
-    tmp = *(INNERtab--);
-    if (tmp==(long)Return) break;
-    Mentry=tmp;
+      * Return the Mentry point corresponding to a T entry, or 0, if
+      * the corresponding pattern does not have a do-part.
+      * 
+      */
+{ 
+  if (proto && proto->MpartOff){
+    return *(long*)((long)proto+proto->MpartOff);
+  } else {
+    return 0;
   }
-  if (!Mentry) return 0; /* Empty INNER table. */
-  
-  /* Now check that the Mentry found cannot be found in the
-   * prefix INNER table. */
-  
-  prefix = proto->Prefix;
-  
-  if ((prefix) && (prefix!=proto)) {
-    INNERtab = ((long *) prefix)-1;
-    while (TRUE) {
-      tmp = *(INNERtab--);
-      if (tmp==(long)Return) break;
-      if (tmp==Mentry) return 0;
-    }
-  }
-  
-  /*fprintf(stderr, "findMentry: proto=0x%x, mpart=0x%x\n", proto, Mentry);*/
-  return Mentry;
 }
 
 static int valhallaCommunicate (int curPC, struct Object* curObj)

@@ -56,7 +56,7 @@ long M_Part(ref(ProtoType) proto)
   if (proto->MpartOff){
     return *(long *)((long)proto+proto->MpartOff);
   } else {
-    return MAXINT:
+    return MAXINT;
   }
 
 }

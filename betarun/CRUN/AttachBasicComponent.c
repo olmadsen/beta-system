@@ -71,7 +71,7 @@ ParamThisComp(void, AttBC)
     CallBetaEntry( *((long *)((long)(BasicItem->Proto)+sizeof(struct ProtoType)+4)), &comp->Body);
 #else
     /* ?? should set comp = 0 as done in AttachBasicComponent.run */
-    CallBetaEntry( *((long *)BasicItem->Proto-1), &comp->Body);
+    CallBetaEntry( BasicItem->Proto->TopMpart, &comp->Body);
 #endif
 
     /* TerminateBasicComponent: */

@@ -94,7 +94,7 @@ void
     pushReg((void *)getR8Reg());
     
     LazyDangler = (long)theObj; /* dangling reference */
-    CallBetaEntry(*((long *)LazyItem->Proto-1), LazyItem);
+    CallBetaEntry(LazyItem->Proto->TopMpart, LazyItem);
     
     setR8Reg((long)popReg());
     setD1Reg((long)popReg());

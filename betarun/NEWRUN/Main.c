@@ -28,7 +28,7 @@ void main(long argc, char *argv[])
   DEBUG_STACK(fprintf(output, "StackStart=0x%x\n", StackStart));
 
   /* M1BETAENV(0,BasicItem) */
-  CallBetaEntry( *((long *)BasicItem->Proto-1)-8, BasicItem /*dyn*/, BasicItem);
+  CallBetaEntry( (long)(BasicItem->Proto-TopMpart)-8, BasicItem /*dyn*/, BasicItem);
 
   /* TerminateBasicComponent: */
   BetaExit(0);
