@@ -7,6 +7,13 @@
 #include <errno.h>
 #include <stdio.h>		/* to see FILE */
 
+#ifdef MAXINT
+#undef MAXINT
+#endif
+#ifdef MININT
+#undef MININT
+#endif
+
 #ifdef nti
 #  ifdef nti_gnu
 #    include <Windows32/Sockets.h> 
@@ -28,7 +35,6 @@
 #  else
 #    include <netinet/in.h>
 #  endif /* linux */
-/* #  include <values.h> defines maxint twice? *//* to see MAXINT */
 #  include <sys/socket.h>         /* to see SOL_SOCKET, SO_TYPE */
 #  include <sys/param.h>		/* to see NOFILE */
 #  include <sys/time.h>		/* to see struct timeval */
@@ -59,7 +65,8 @@
 #  define HPFD_cast
 #else
 #  ifdef hpux9pa
-#    define HPFD_cast (int*)
+/*#    define HPFD_cast (int*) --- fails on lisa */
+#define HPFD_cast
 #  else
 #    ifdef linux
 #      define HPFD_cast

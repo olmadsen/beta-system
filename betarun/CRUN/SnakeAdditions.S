@@ -1,7 +1,7 @@
 /* SnakeAdditions.S */
 
 #define USE_EXTERNAL_MARKER
-#define UseRefStack
+#include "define.h"
 
 /* From betaerror.h */
 #define CompTerminatedErr   -2 
@@ -12,6 +12,7 @@
 #ifdef USE_EXTERNAL_MARKER
 #include "constant.h"
 #endif
+	
 
 #ifdef RTVALHALLA
 /* From valhallaComm.h */
@@ -156,8 +157,11 @@ HandleCB:
 
 
 ;; struct ProtoType
+#ifdef COM
+TopMpart	.equ	0
+#else
 TopMpart	.equ	24
-
+#endif
 
 ;; struct Component
 Proto		.equ	0
