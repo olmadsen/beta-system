@@ -3,7 +3,7 @@
  * of length = len bytes. (Used to be longs!!)
  */
 #define MACRO_CopyBlock( src, dst, len) \
-{ unsigned char *XXe=((unsigned char *) dst)+len,*XXs=((unsigned char *) src),*XXd=((unsigned char *) dst);\
+{ long *XXe=((long *) dst)+len,*XXs=((long *) src),*XXd=((long *) dst);\
   while(XXd < XXe) *XXd++ = *XXs++;\
 }
 

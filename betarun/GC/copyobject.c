@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-06-03 09:57:18 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-06-08 15:18:34 $, SID: $Revision: 1.5 $
  * by Lars Bak.
  */
 
@@ -17,7 +17,7 @@ ref(Object) CopyObject( theObj)
   ref(Object) newObj;
   long        size;
 
-  size = ObjectSize( theObj);
+  size = 4*ObjectSize( theObj);
   
   /* Assume that theObj->GCAttr <= IOAMaxAge. */
   DEBUG_IOA( Claim( theObj->GCAttr<=IOAMaxAge,

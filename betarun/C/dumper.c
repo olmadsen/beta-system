@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: dumper.c,v $, rel: %R%, date: $Date: 1992-06-03 09:57:57 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: dumper.c,v $, rel: %R%, date: $Date: 1992-06-08 15:19:25 $, SID: $Revision: 1.7 $
  * by Lars Bak
  */
 #include <ctype.h>
@@ -84,30 +84,30 @@ static DumpObject( theObj)
       if( isSpecialProtoType( theObj->Proto )){
         switch( (int) theObj->Proto ){
 	case ComponentPTValue:
-  	    DumpFormat('C', theObj->GCAttr, ObjectSize(theObj),
+  	    DumpFormat('C', theObj->GCAttr, 4*ObjectSize(theObj),
                        DumpItemName( ComponentItem( theObj) ),
                        DumpItemFragment( ComponentItem( theObj) ) );
 	    break;
 	case StackObjectPTValue:
-	    DumpFormat('S', theObj->GCAttr, ObjectSize(theObj), 0, 0);
+	    DumpFormat('S', theObj->GCAttr, 4*ObjectSize(theObj), 0, 0);
 	    break;
         case ByteRepPTValue:
-	    DumpFormat('B', theObj->GCAttr, ObjectSize(theObj), 
+	    DumpFormat('B', theObj->GCAttr, 4*ObjectSize(theObj), 
                        DumpValContents( theObj), "" );
 	  break;
         case ValRepPTValue:
-	    DumpFormat('V', theObj->GCAttr, ObjectSize(theObj), 
+	    DumpFormat('V', theObj->GCAttr, 4*ObjectSize(theObj), 
                        DumpValContents( theObj), "" );
 	  break;
         case RefRepPTValue:
-	    DumpFormat('R', theObj->GCAttr, ObjectSize(theObj), 0, 0);
+	    DumpFormat('R', theObj->GCAttr, 4*ObjectSize(theObj), 0, 0);
 	    break;
         default:
 	  fprintf( output,"U\n");
 	  break;
 	}
       }else{ /* theObj is an item */
-	DumpFormat('I', theObj->GCAttr, ObjectSize(theObj),
+	DumpFormat('I', theObj->GCAttr, 4*ObjectSize(theObj),
 		   DumpItemName( theObj ),
 		   DumpItemFragment( theObj) );
       }
@@ -127,7 +127,7 @@ dumpIOA( fileName)
 
   while( handled < IOATop){
     theObj  = (ref(Object)) handled;
-    handled = (ptr(long)) (((long) handled) + ObjectSize(theObj));
+    handled = (ptr(long)) (((long) handled) + 4*ObjectSize(theObj));
     DumpObject( theObj);
   }
 

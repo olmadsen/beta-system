@@ -119,7 +119,7 @@ ref(Object) CopyObjectToAOA( theObj)
   register ptr(long) theEnd;
 
 
-  size = ObjectSize( theObj);
+  size = 4*ObjectSize( theObj);
   if( (newObj = AOAAllocate( size)) == 0 ) return 0;
  
   theEnd = (ptr(long)) (((long) newObj) + size); 
@@ -420,7 +420,7 @@ static void Phase2( numAddr, sizeAddr, usedAddr)
     numOfBlocks++;
     theObj = (ref(Object)) BlockStart(theBlock);
     while( (ptr(long)) theObj < theBlock->top ){
-      theObjectSize = ObjectSize( theObj);
+      theObjectSize = 4*ObjectSize( theObj);
       if( isAlive( theObj)){
         /* update freeObj if no space is available. */
         if( (ptr(long)) Offset( freeObj, theObjectSize) > freeBlock->limit){
@@ -547,7 +547,7 @@ static void Phase3()
       FindInterval( AOAtoLVRAtable, AOAtoLVRAsize, theBlock, &start1, &stop1);
 
       while( (ptr(long)) theObj < theBlock->top ){
-	theObjectSize = ObjectSize( theObj);
+	theObjectSize = 4*ObjectSize( theObj);
         nextObj = (ref(Object)) Offset( theObj, theObjectSize); 
 
         DEBUG_AOA( if( start<stop ) Claim( table[start] > (long) theObj,
@@ -611,7 +611,7 @@ void AOACheck()
   while( theBlock ){
     theObj = (ref(Object)) BlockStart(theBlock);
     while( (ptr(long)) theObj < theBlock->top ){
-      theObjectSize = ObjectSize( theObj);
+      theObjectSize = 4*ObjectSize( theObj);
       AOACheckObject( theObj);
       theObj = (ref(Object)) Offset( theObj, theObjectSize);
     }
