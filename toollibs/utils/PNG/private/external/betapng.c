@@ -1,4 +1,4 @@
-#include <png.h>
+#include "png.h"
 #include <stdlib.h>
 #include <math.h>
 #include "betaimage.h"
