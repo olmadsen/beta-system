@@ -13,4 +13,3 @@ BetaComponent = Coroutine (
       ^self new init: obj.
    )
 )
-
