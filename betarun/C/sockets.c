@@ -86,10 +86,12 @@
 #  endif
 #endif
 
-#ifdef sun4s
+#ifndef ERR_WOULDBLOCK
+# ifdef sun4s
 #  define ERR_WOULDBLOCK EWOULDBLOCK
-#else
+# else
 #  define ERR_WOULDBLOCK EAGAIN
+# endif
 #endif
 
 
@@ -486,6 +488,8 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
   li.l_linger=0;
 
   /* Create a socket */
+  DEBUG_SOCKETS(fprintf(output, "Connecting to 0x%8x port %d on sock=", 
+			(int)inetAddr, (int)port));
 #ifdef nti
 
   if((sock = socket(AF_INET,SOCK_STREAM,0)) == SOCKET_ERROR) {
@@ -493,6 +497,7 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
     errno = WSAGetLastError();
     return -1;
   }
+  DEBUG_SOCKETS(fprintf(output, "%d\n", sock));
 
   SET_TIMESTAMP(sock);
 
@@ -535,6 +540,7 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
     INFO_SOCKETS("createActiveSocket,1");
     return -1;
   }
+  DEBUG_SOCKETS(fprintf(output, "%d\n", sock));
 
   SET_TIMESTAMP(sock);
 
@@ -691,6 +697,7 @@ int createPassiveSocket(long *port, int nonblock)
       return -1;
     }
     (*port) = ntohs(sockaddr.sin_port);
+    DEBUG_SOCKETS(fprintf(output, "Passive was assigned port %d\n",(int)*port));
   }
 
   /* Ask OS to create client request queue with max 5 entries*/
@@ -726,6 +733,12 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
   int newSock;
   struct SOCKADDR_type from;
   int fromaddrlen = sizeof( struct SOCKADDR_type );
+  unsigned long on = 1;
+  struct linger li;
+  
+  li.l_onoff=0;
+  li.l_linger=0;
+
 
   SET_TIMESTAMP(sock);
 
@@ -790,6 +803,43 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
   }
 
   SET_TIMESTAMP(newSock);
+
+#ifdef nti
+  if (ioctlsocket(newSock, FIONBIO, (unsigned long*)&nonblock)) {
+    INFO_SOCKETS("acceptConn,3");
+    errno = WSAGetLastError();
+    return -1;
+  }
+  
+  if (setsockopt(newSock, SOL_SOCKET, SO_KEEPALIVE, (char*)&on, sizeof(on))) {
+    INFO_SOCKETS("acceptConn,4");
+    errno = WSAGetLastError();
+    return -1;
+  }
+
+  if (setsockopt(newSock, SOL_SOCKET, SO_LINGER,
+		 (char*)&li, sizeof(struct linger))) {
+    INFO_SOCKETS("acceptConn,4.1");
+    errno = WSAGetLastError();
+    return -1;
+  }
+#else
+  if (0 > fcntl(newSock, F_SETFL, O_NONBLOCK)) {
+    INFO_SOCKETS("acceptConn,3");
+    return -1;
+  }
+
+  if (0>setsockopt(newSock, SOL_SOCKET, SO_KEEPALIVE, (char*)&on, sizeof(on))){
+    INFO_SOCKETS("acceptConn,4");
+    return -1;
+  }
+
+  if (setsockopt(newSock, SOL_SOCKET, SO_LINGER,
+		 (char*)&li, sizeof(struct linger))) {
+    INFO_SOCKETS("acceptConn,4.1");
+    return -1;
+  }
+#endif
 
   return newSock;
 }
@@ -858,6 +908,8 @@ int sockToRead(int fd)
 int closeSocket(int fd)
 {
   SET_TIMESTAMP(fd);
+
+  DEBUG_SOCKETS(fprintf(output, "CloseSocket(%d)\n", fd));
 
 #ifdef nti
   if (closesocket(fd))
