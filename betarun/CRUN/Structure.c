@@ -1,3 +1,4 @@
+/* fisk */
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen and Tommy Thorn.
@@ -26,7 +27,11 @@ ParamOriginProto(struct Structure *, AlloS)
   newStruct->iOrigin = origin;
   newStruct->iProto = proto;
   
+#ifdef sparc
+    return_in_i1(newStruct);
+#else
   RETURN(newStruct);
+#endif
 }
 
 #ifdef sparc
@@ -121,7 +126,7 @@ ParamStruc(struct Item *, AlloSI)
   Ck(struc->iOrigin);
 #ifdef sparc
   Protect(struc, 
-	  ss = CAlloI(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0));
+	  ss = SPARC_AlloI(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0));
 #endif
 #ifdef hppa
   Protect(struc, 
@@ -131,8 +136,27 @@ ParamStruc(struct Item *, AlloSI)
   Protect(struc, 
 	  ss = AlloI(cast(Object) struc->iOrigin, struc->iProto));
 #endif
+
+#ifdef sparc
+  return_in_i1(ss);
+#else
   RETURN(ss);
+#endif
 }
+
+#ifdef sparc
+/* Functions used to call RT routines directly from C.
+ * Needed because %i1 in calling regwin is destroyed by (C)AlloSI
+ */
+
+struct Item *SPARC_AlloSI(struct Structure *s, int i1, int i2, int i3, int i4)
+{
+  GCable_Entry();
+  return CAlloSI(s, i1, i2 ,i3, i4);
+  GCable_Exit(1);
+}
+
+#endif
 
 ParamStruc(struct Component *, AlloSC)
 {
@@ -143,7 +167,7 @@ ParamStruc(struct Component *, AlloSC)
   Ck(struc);
 #ifdef sparc
   Protect(struc, 
-	  ss = CAlloC(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0));
+	  ss = SPARC_AlloC(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0));
 #endif
 #ifdef hppa
   Protect(struc, 
@@ -153,7 +177,12 @@ ParamStruc(struct Component *, AlloSC)
   Protect(struc, 
 	  ss = AlloC(cast(Object) struc->iOrigin, struc->iProto));
 #endif
+
+#ifdef sparc
+  return_in_i1(ss);
+#else
   RETURN(ss);
+#endif;
 }    
 
 long eqS(ref(Structure) arg1, ref(Structure) arg2)
@@ -267,7 +296,7 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
 	    */
 	   
 #ifdef sparc
-	   Protect(arg2, newObject = CAlloSI(arg1, 0, 0, 0, 0));
+	   Protect(arg2, newObject = SPARC_AlloSI(arg1, 0, 0, 0, 0));
 #endif
 #ifdef hppa
 	   Protect(arg2, newObject = CAlloSI(arg1));
@@ -281,3 +310,4 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
 
   return 0; 
 }
+
