@@ -20,7 +20,6 @@ ParamObjOffRange(ExtVR1)
   long newRange; /* Range of new repetition */
   long copyRange; /* Number of LONGS to copy from old rep */
   long i;
-  long size; /* size of new repetition */
   
   FetchObjOffRange();
   
@@ -35,9 +34,8 @@ ParamObjOffRange(ExtVR1)
   if (newRange < 0) newRange = 0;
   
   copyRange = (ByteRepBodySize((add < 0) ? newRange : oldRange))>>2;
-  size = ByteRepSize(newRange);
   
-  do {
+  while (1) {
     if (newRange > LARGE_REP_SIZE) {
       newRep = LVRAXAlloc(ByteRepPTValue, oldRange, newRange);
       if (newRep) {
@@ -53,7 +51,11 @@ ParamObjOffRange(ExtVR1)
     }
     
     /* Allocate new repetition in IOA */
-    Protect2(theObj, theRep, newRep = (ValRep *) IOATryAlloc(size));
+    { 
+      long size; /* size of new repetition */
+      size = ByteRepSize(newRange);
+      Protect2(theObj, theRep, newRep = (ValRep *) IOATryAlloc(size));
+    }
 
     if (newRep) {
       /* Assign structural part of new repetition */
@@ -73,10 +75,10 @@ ParamObjOffRange(ExtVR1)
       for (i = 0; i < copyRange; ++i){
 	newRep->Body[i] = theRep->Body[i];
       }
+      Ck(theRep); Ck(newRep); Ck(theObj);
+      return;
     }
-  } while (!newRep);
-  
-  Ck(theRep); Ck(newRep); Ck(theObj);
+  } 
 }
 
 ParamObjOffRange(ExtVR2)
@@ -88,7 +90,6 @@ ParamObjOffRange(ExtVR2)
   long newRange; /* Range of new repetition */
   long copyRange; /* Number of LONGS to copy from old rep */
   long i;
-  long size; /* size of new repetition */
   
   FetchObjOffRange();
   
@@ -103,9 +104,8 @@ ParamObjOffRange(ExtVR2)
   if (newRange < 0) newRange = 0;
   
   copyRange = (ShortRepBodySize((add < 0) ? newRange : oldRange))>>2;
-  size = ShortRepSize(newRange);
   
-  do {
+  while (1) {
     if (newRange > LARGE_REP_SIZE) {
       newRep = LVRAXAlloc(ShortRepPTValue, oldRange, newRange);
       if (newRep) {
@@ -120,9 +120,12 @@ ParamObjOffRange(ExtVR2)
     }
 
     /* Allocate new repetition in IOA */
-    
-    Protect2(theObj, theRep, newRep = (ValRep *) IOATryAlloc(size));
-    
+    {
+      long size; /* size of new repetition */
+      size = ShortRepSize(newRange);
+      Protect2(theObj, theRep, newRep = (ValRep *) IOATryAlloc(size));
+    }
+
     if (newRep) {
       /* Assign structural part of new repetition */
       SETPROTO(newRep,ShortRepPTValue);
@@ -139,10 +142,10 @@ ParamObjOffRange(ExtVR2)
       for (i = 0; i < copyRange; ++i){
 	newRep->Body[i] = theRep->Body[i];
       }
+      Ck(theRep); Ck(newRep); Ck(theObj);
+      return;
     }
-  } while (!newRep);
-  
-  Ck(theRep); Ck(newRep); Ck(theObj);
+  }
 }
 
 ParamObjOffRange(ExtVR4)
@@ -154,7 +157,6 @@ ParamObjOffRange(ExtVR4)
   long newRange; /* Range of new repetition */
   long copyRange; /* Number of LONGS to copy from old rep */
   long i;
-  long size; /* size of new repetition */
   
   FetchObjOffRange();
   
@@ -174,9 +176,8 @@ ParamObjOffRange(ExtVR4)
   if (newRange < 0) newRange = 0;
   
   copyRange = (LongRepBodySize((add < 0) ? newRange : oldRange))>>2;
-  size = LongRepSize(newRange);
   
-  do {
+  while (1) {
     if (newRange > LARGE_REP_SIZE) {
       newRep = LVRAXAlloc(LongRepPTValue, oldRange, newRange);
       if (newRep) {
@@ -192,9 +193,12 @@ ParamObjOffRange(ExtVR4)
     }
     
     /* Allocate new repetition in IOA */
-    
-    Protect2(theObj, theRep, newRep = (ValRep *) IOATryAlloc(size));
-      
+    {
+      long size; /* size of new repetition */
+      size = LongRepSize(newRange);
+      Protect2(theObj, theRep, newRep = (ValRep *) IOATryAlloc(size));
+    }
+
     if (newRep) {
       /* Assign structural part of new repetition */
       SETPROTO(newRep,LongRepPTValue);
@@ -209,10 +213,10 @@ ParamObjOffRange(ExtVR4)
       for (i = 0; i < copyRange; ++i){
 	newRep->Body[i] = theRep->Body[i];
       }
+      Ck(theRep); Ck(newRep); Ck(theObj);
+      return;
     }
-  } while (!newRep);
-
-  Ck(theRep); Ck(newRep); Ck(theObj);
+  }
 }
 
 ParamObjOffRange(ExtVR8)
@@ -224,7 +228,6 @@ ParamObjOffRange(ExtVR8)
   long newRange; /* Range of new repetition */
   long copyRange; /* Number of LONGS to copy from old rep */
   long i;
-  long size; /* size of new repetition */
   
   FetchObjOffRange();
   
@@ -239,9 +242,8 @@ ParamObjOffRange(ExtVR8)
   if (newRange < 0) newRange = 0;
   
   copyRange = (DoubleRepBodySize((add < 0) ? newRange : oldRange))>>2;
-  size = DoubleRepSize(newRange);
   
-  do {
+  while (1) {
     if (newRange > LARGE_REP_SIZE) {
       newRep = LVRAXAlloc(DoubleRepPTValue, oldRange, newRange);
       if (newRep) {
@@ -256,9 +258,12 @@ ParamObjOffRange(ExtVR8)
     }
 
     /* Allocate new repetition in IOA */
-    
-    Protect2(theObj, theRep, newRep = (ValRep *) IOATryAlloc(size));
-    
+    {
+      long size; /* size of new repetition */
+      size = DoubleRepSize(newRange);
+      Protect2(theObj, theRep, newRep = (ValRep *) IOATryAlloc(size));
+    }
+
     if (newRep) {
       /* Assign structural part of new repetition */
       SETPROTO(newRep,DoubleRepPTValue);
@@ -275,10 +280,10 @@ ParamObjOffRange(ExtVR8)
       for (i = 0; i < copyRange; ++i){
 	newRep->Body[i] = theRep->Body[i];
       }
+      Ck(theRep); Ck(newRep); Ck(theObj);
+      return;
     }
-  } while (!newRep);
-  
-  Ck(theRep); Ck(newRep); Ck(theObj);
+  }
 }
 
 /****** Object Repetitions *******/
