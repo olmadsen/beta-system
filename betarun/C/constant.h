@@ -14,6 +14,11 @@
 #define MaxPTValue             -1
 #define MinPTValue             -9
 
+#ifdef hppa
+/* Used to mark external activation part on reference stack */
+#define ExternalMarker	       -10
+#endif
+
 
 #define ItemType                1
 #define ComponentType           2
