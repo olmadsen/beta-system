@@ -95,7 +95,7 @@ setup_item(ref(Item) theItem,
   static char __CkString[80];
 #  define Ck(r) \
    { sprintf(__CkString, "%s: %d: Ck failed: %s (0x%x)", __FILE__, __LINE__, #r, r); \
-     if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r), __CkString); }
+     if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r) || isLazyRef(r), __CkString); }
 # else
 /*#  define Ck(r) \
  *  if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r), __FILE__":" #r ": none or inside IOA, AOA, or LVRA")

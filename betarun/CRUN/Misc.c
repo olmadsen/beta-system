@@ -132,7 +132,7 @@ void FailureExit()
 void CCk(ref(Object) r)
 {
   if(r) 
-    Claim(inIOA(r) || inAOA(r) || inLVRA(r),
+    Claim(inIOA(r) || inAOA(r) || inLVRA(r) || isLazyRef(r),
 	  "Reference none or inside IOA, AOA, or LVRA");
   }
 #endif
