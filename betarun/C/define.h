@@ -15,7 +15,7 @@
 
 /* COM prototypes */
 #define COM 1
-#undef COM
+/*#undef COM*/
 
 #ifdef RTDEBUG
 /* Trigger unconditional GC at every allocation.
