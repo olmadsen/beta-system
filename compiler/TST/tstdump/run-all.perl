@@ -24,6 +24,8 @@ print "======================================================\n";
 &rm("*.ref");
 &rm("*.app");
 &rm("*.diff");
+&rm("*.nodump");
+&rm("*.candidate");
 
 if (!$s) {
     print "\nCompiling all...\n";
