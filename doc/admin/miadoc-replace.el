@@ -7,14 +7,40 @@
     (tags-query-replace match "index.html" nil)
 ))
 
-;(defun miadoc-replace2 (secondfilename)
-;  (interactive "sSecond WebMaker generated file: " )
-;  (set-variable 'tags-file-name nil);;;
-;
-;  (let ((case-replace t))
-;    (message "Replacing %s name with contents.html" secondfilename)
-;    (tags-query-replace secondfilename "contents.html" nil)
-;))
+(defun miadoc-replace2 ()
+  (interactive)
+  (set-variable 'tags-file-name nil);;;
+
+  (let ((case-replace t))
+    (message "Replacing contents.html with index.html")
+    (tags-query-replace "contents.html" "index.html" nil)
+))
+(defun miadoc-replace2-1 (manualname)
+  (interactive "sManual name: ")
+  (set-variable 'tags-file-name nil);;;
+
+  (let ((case-replace t))
+    (message "Replacing Contents headers with %s" manualname)
+    (tags-query-replace "<P> Contents</P>" (format "<P>%s</P>" manualname) nil)
+))
+(defun miadoc-replace2-2 ()
+  (interactive)
+  (set-variable 'tags-file-name nil);;;
+
+  (let ((case-replace t))
+    (message "Removing Up buttons")
+    (tags-query-replace "<A HREF=index.html><IMG ALIGN=BOTTOM SRC=\"../images/up.gif\" ALT=Up BORDER=0></A>" "" nil)
+))
+(defun miadoc-replace2-3 ()
+  (interactive)
+  (set-variable 'tags-file-name nil);;;
+
+  (let ((case-replace t))
+    (message "Fixing Top buttons")
+    (tags-query-replace "<A HREF=index.html><IMG ALIGN=BOTTOM SRC=\"../images/top.gif\" ALT=Top BORDER=0></A>" "<A HREF=../index.html><IMG ALIGN=BOTTOM SRC=\"../images/top.gif\" ALT=Top BORDER=0></A>" nil)
+))
+
+
 
 (defun miadoc-replace3 (lastfilename)
   (interactive "sLast WebMaker generated file: " )
@@ -126,3 +152,14 @@
   (let ((case-replace t))
     (message "Removing FM pgf ignored")
     (tags-query-replace "<!-- FM pgf ignored -->" "" nil)))
+
+(defun miadoc-replace16 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Removing empty lines in PRE")
+    (tags-query-replace "<PRE CLASS=beta>
+
+" "<PRE CLASS=beta>
+" nil)))
