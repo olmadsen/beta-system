@@ -1,0 +1,294 @@
+ORIGIN '../ymer';
+INCLUDE '~beta/mps/v4.9.1/astlevel';
+INCLUDE '~beta/betaast/v4.9.1/index';
+INCLUDE '~beta/dependency/v1.0/dependency';
+--- dependencyPrivate: descriptor ---
+(# Module: 
+     (# Path, Library, Version, Name: ^text;
+        NumberOfForms: @integer;
+        
+        location:
+          (# loc: ^text
+          do path.copy->loc[];           '/'->loc.put;
+             Library[]->loc.putText;     '/'->loc.put;
+             (if isLibrary then
+                 Version[]->loc.putText; '/'->loc.put;
+             if)
+             exit loc[]
+          #);
+        
+        isLibrary: (# exit (version[]<>NONE) and (Version.Length <> 0) #);
+        
+        Dump: 
+          (# newGroup: ^selectedProj.groups.element;
+             selectedProj: ^projects.theProjects.element;
+          enter selectedProj[]
+          do &selectedProj.groups.element[]->newGroup[];
+             Path->newGroup.location; '/'->newGroup.location.put;
+             Library[]->newGroup.location.putText; '/'->newGroup.location.put;
+             (if isLibrary then
+                 Version[]->newGroup.location.putText; '/'->newGroup.location.put;
+             if);
+             Name[]->newGroup.location.puttext;
+             Name[]->newGroup.name[];
+          exit newGroup[]
+          #);
+     #);
+   
+   Library: 
+     (# Name, Version, Path: ^text;
+        
+        ModList: [100]^Module;
+        ModEnd: @integer;
+        
+        insert: 
+          (# theModule: ^Module; isPresent: @boolean;
+          enter theModule[]
+          do false->isPresent;
+             loop: 
+               (for i: ModEnd repeat
+                    (if (theModule.name[]->ModList[i].name.equal) then
+                    true->isPresent; leave loop if) for);
+             (if not isPresent then
+                 (if (ModEnd=ModList.range) then
+                     ModList.range/2->ModList.extend
+                 if);
+                 theModule[]->ModList[ModEnd+1->ModEnd][];
+             if)
+          exit isPresent
+          #);
+        
+        Dump: 
+          (# newProj: ^selectedProj.subProjects.element;
+             selectedProj: ^projects.theProjects.element;
+             splitIntoSubprojects:
+               (# SplitName:
+                    (# name: ^text; index: @integer
+                    enter name[]
+                    do name.Length->index;
+                       l: '/'->name.FindCh(# do inx->index; leave l #);
+                    exit ((1,index)->name.Sub, (index+1,name.Length)->name.Sub)
+                    #);
+                  projectList: list
+                    (# element::
+                         (# name, location: ^text;
+                            subs: @projectList
+                         #)
+                    #);
+                  projList: @projectList;
+                  name, rest: ^text;
+                  pos: ^projList.theCellType;
+                  new: ^projList.element;
+                  currentList: ^projectList;
+                  createProjects:
+                    (# currentList: ^projectList;
+                       newProj, newProj2: ^selectedProj.subProjects.element;
+                       newGroup: ^groups.element;
+                    enter (currentList[], newProj[])
+                    do currentList.scan
+                       (#
+                       do (if current.subs.empty then
+                              &groups.element[]->newGroup[];
+                              current.name[]->newGroup.name[];
+                              current.location->newGroup.location;
+                              newGroup[]->newProj.groups.append;
+                           else
+                              true->newProj.hasSubprojects;
+                              &selectedProj.subProjects.element[]->newProj2[];
+                              current.name[]->newProj2.name[];
+                              current.location->newProj2.location;
+                              newProj2[]->newProj.subprojects.append;
+                              (current.subs[],newProj2[])->createProjects;
+                          if)
+                       #)
+                    #);
+                  newProj: ^selectedProj.subProjects.element;
+                  loc: ^text;
+               enter newProj[]
+               do projList.init;
+                  (for i: ModEnd repeat
+                       projList[]->currentList[];
+                       ModList[i].location->loc[];
+                       ModList[i].name[]->rest[];
+                       l: (if not rest.empty then
+                              rest[]->splitname->(name[], rest[]);
+                              name[]->loc.puttext;
+                              currentList.locate
+                              (# predicate::
+                                   (# do current.elm.name[]->name.equal->value #);
+                                 notFound::
+                                   (#
+                                   do &currentList.element[]->new[];
+                                      new[]->currentList.append->pos[];
+                                      name[]->new.name[];
+                                      loc.copy->new.location[];
+                                   #)
+                              do position[]->pos[];
+                              #);
+                              pos.elm.subs[]->currentList[];
+                              restart l;
+                          if)
+                  for);
+                  (projList[],newProj[])->createProjects
+               #)
+          enter selectedProj[]
+          do &selectedProj.subProjects.element[]->newProj[];
+             Path->newProj.location; '/'->newProj.location.put;
+             Name[]->newProj.location.putText; '/'->newProj.location.put;
+             Version[]->newProj.location.putText;
+             Name[]->newProj.name[]; '/'->newProj.name.put;
+             newProj[]->splitIntoSubprojects
+          exit newProj[]
+          #)
+     #);
+
+   System: 
+     (# LibList: [100]^Library;
+        LibEnd: @integer;
+
+        ProgList: [100]^Library;
+        ProgEnd: @integer;
+        
+        errorMsg: @text;
+        
+        Insert: 
+          (# theModule: ^Module; isPresent, libFound: @boolean;
+          enter theModule[]
+          do false->isPresent->libFound;
+             (if theModule.isLibrary then
+                 (* Check the LibList *)
+                 loop: 
+                   (for i: LibEnd repeat
+                        (if (theModule.Library[]->LibList[i].name.equal) then
+                            true->libFound;
+                            (if not (LibList[i].version[]->theModule.version.equal) then
+                                'Version conflict between: '->errorMsg.putText; 
+                                theModule.Library[]->errorMsg.putText;
+                                ' '->errorMsg.put; theModule.name[]->errorMsg.putText;
+                                ' '->errorMsg.put; theModule.version[]->errorMsg.putText;
+                                ' and '->errorMsg.putText; LibList[i].version[]->errorMsg.putLine;
+                            if);
+                            theModule[]->LibList[i].insert->isPresent;
+                            leave loop
+                        if)
+                   for);
+                 (if not libFound then
+                     (if (LibEnd=LibList.range) then 
+                         libList.range/2->LibList.extend
+                     if);
+                     &Library[]->LibList[LibEnd+1->LibEnd][];
+                     theModule.Library[]->LibList[LibEnd].name[];
+                     theModule.version[]->LibList[LibEnd].version[];
+                     theModule.path[]->LibList[LibEnd].path[];
+                     theModule[]->LibList[LibEnd].insert
+                 if);
+              else
+                 (* Check the ProgList *)
+                 loop: 
+                   (for i: ProgEnd repeat
+                        (if (theModule.name[]->ProgList[i].name.equal) then
+                        true->isPresent; leave loop if) for);
+                 (if not isPresent then
+                     (if (ProgEnd=ProgList.range) then 
+                         ProgList.range/2->ProgList.extend
+                     if);
+                     &Library[]->ProgList[ProgEnd+1->ProgEnd][];
+                     theModule.Library[]->ProgList[ProgEnd].name[];
+                     theModule.version[]->ProgList[ProgEnd].version[];
+                     theModule.path[]->ProgList[ProgEnd].path[];
+                     theModule[]->ProgList[ProgEnd].insert
+                 if)
+             if)
+          exit isPresent
+          #);
+
+        Dump: 
+          (# selectedProj: ^projects.theProjects.element;
+          enter selectedProj[]
+          do true->selectedProj.hasSubprojects;
+             (for i: ProgEnd repeat
+                  selectedProj[]->ProgList[i].Dump->selectedProj.subProjects.append
+             for);
+             (for i: LibEnd repeat 
+                  selectedProj[]->LibList[i].Dump->selectedProj.subProjects.append
+             for)
+          #)
+     #);
+
+   ParseModuleName: 
+     (# SplitName: 
+          (# name: ^text; index: @integer
+          enter name[]
+          do '/'->name.FindCh(# do inx->index #);
+          exit ((1,index-1)->name.Sub, (index+1,name.Length)->name.Sub)
+          #);
+        
+        CheckVersion: 
+          (# String: ^text; result: @boolean
+          enter String[]
+          do (if (string.Length >= 2) then
+                 (string.T[1] = 'v') AND
+                 (string.T[2] >= '0') AND
+                 (string.T[2] <= '9')->result
+              else
+                 false->result;
+             if);
+          exit result
+          #);
+
+        theModule: ^Module;
+        fileName, tryVersion, rest, path, name, loc: ^text
+          
+     enter fileName[]
+     do &module[]->themodule[];
+        &text[]->theModule.name[]->theModule.version[]
+          ->theModule.library[]->theModule.path[];
+        filename[]->rest[];
+        l: (if not rest.empty then
+               rest[]->SplitName->(path[], name[]);
+               path[]->SplitName->(loc[], tryVersion[]);
+               (if (tryVersion[]->CheckVersion) then
+                   tryVersion[]->theModule.Version[];
+                   loc[]->SplitName->(theModule.path[], theModule.library[]);
+                   (if theModule.name.empty then
+                       name[]->theModule.name[]
+                    else
+                       '/'->theModule.name.prepend;
+                       name[]->theModule.name.prepend;
+                   if);
+                else
+                   (if theModule.name.empty then
+                       name[]->theModule.name[]
+                    else
+                       '/'->theModule.name.prepend;
+                       name[]->theModule.name.prepend;
+                   if);
+                   path[]->rest[];
+                   restart L
+               if)
+            else
+               filename[]->splitName->(theModule.path[], theModule.name[]);
+               theModule.path[]->splitName
+                 ->(theModule.path[], theModule.library[])
+           if)
+     exit theModule[]
+     #);
+   
+   MySystem: @System;
+#)
+
+--- dependencyRegister: dopart ---
+do fgName[]
+     ->dependencyPrivate.ParseModuleName
+     ->dependencyPrivate.MySystem.insert;
+
+--- dependencyCreateSubprojects: descriptor ---
+(#
+do selectedProj[]->dependencyPrivate.mySystem.dump;
+   (if not dependencyPrivate.mySystem.errorMsg.empty then
+       (NONE, dependencyPrivate.mySystem.errorMsg[], 'Version conflicts')
+         ->alertUser
+   if)
+#)
+
+

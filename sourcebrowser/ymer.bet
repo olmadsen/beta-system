@@ -1,0 +1,559 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+
+INCLUDE '~beta/basiclib/v1.4/basicsystemenv';
+
+INCLUDE '~beta/guienv/v1.2/utils/prompts';
+INCLUDE '~beta/guienv/v1.2/utils/pane';
+
+INCLUDE '~beta/objectbrowser/v2.0/mpsinterface';
+INCLUDE '~beta/objectbrowser/v2.0/betagrammarinit';
+
+INCLUDE '~beta/dependency/v1.0/dependency';
+
+INCLUDE '~beta/sourcebrowser/v0.1/sourcebrowser';
+
+INCLUDE 'envgroup';
+
+BODY 'private/parseProjects';
+BODY 'private/splitDependency';
+BODY 'private/compilerPreferences';
+
+--- lib: attributes ---
+ymerApplication: guienv
+  (# <<SLOT ymerApplicationLib: attributes>>;
+     mps: @mpsinterface
+       (# onOldGroup::
+            (# t: @text
+            do 'Fragment not parsed.\nShould this be done?'->t;
+               (ymerBrowser[],'Notification', t[])->
+               promptForBoolean
+               (# ok:: (# do true->continue #) #);
+               true->continue (* to ignore faults *)
+            #);
+          onUncheckedGroup::
+            (# do true->continue #);
+          init::
+            (# do betagrammarinit; dg.graphInit #);
+          dg: @AST.dependencyGraph;
+       #);
+     ymerWindow: window
+       (# name: ^text;
+          setName:
+            (#
+            enter name[]
+            do name[]->title;
+            #);
+          open::<
+            (#
+            do INNER;
+               this(ymerWindow)[]
+                ->(ymerBrowser.ymerMenubar).windowsMenu.insertWindow;
+            #);
+          eventhandler::<
+            (# onAboutToClose::<
+                 (#
+                 do INNER;
+                    (if okToClose then
+                        this(ymerWindow)[]
+                          ->(ymerBrowser.ymerMenubar).windowsMenu.deleteWindow
+                    if);
+                 #)
+            #);
+       #);
+     ymerBrowser: @ymerBrowserWindow;
+     ymerBrowserWindow:< window
+       (# <<SLOT fragmentBrowserLib: attributes>>;
+          ymerMenubar: (# mb: ^menubarType exit theMenubar->mb[] #);
+          addProject:
+            (# name, location: ^text;
+               newProj: ^browser.projects.theProjects.element;
+            enter (name[], location[])
+            <<SLOT ymerAddProject: dopart>>
+            #);
+          compilerSwitches: ^text;
+          ph: @pathHandler;
+          browser: @sourcebrowser
+            (# <<SLOT browserLib: attributes>>;
+               projectInfoType::
+                 (# <<SLOT projectInfoLib: attributes>>;
+                    formList: list
+                      (# element:: (# location: @text #) #);
+                    groupList: list
+                      (# gr: group(# #); element:: gr #);
+                    projectList: list
+                      (# pr: project(# #);
+                         element:: pr;
+                         <<SLOT parseDefn: attributes>>;
+                         parseProjectFile:
+                           (# projectFile: ^text; newProj: ^element
+                           enter (projectFile[], newProj[])
+                           <<SLOT ymerParseProjectFile: dopart>>
+                           #);
+                         parseProjectsRC:
+                           <<SLOT ymerParseProjectsRC:descriptor>>;
+                      #);
+                    theProjects: @projectList;
+                    project:: 
+                      (# location: @text;
+                         isDirectory, isProjectFile: @boolean;
+                         isRoot, isExtent, isDomain: @boolean;
+                         hasSubprojects: @boolean;
+                         subprojects: @projectList;
+                         level: @integer;
+                         isOpen: @boolean;
+                         groups: @groupList;
+                         scanGroupsImpl::
+                           (# newGroup: ^groups.element;
+                              dependencyPrivate:
+                                @<<SLOT dependencyPrivate: descriptor>>;
+                              dependencyRegister:
+                                (# fgName: ^text
+                                enter fgName[]
+                                <<SLOT dependencyRegister: dopart>>
+                                #);
+                              dependencyCreateSubprojects:
+                                (# selectedProj: ^projects.theProjects.element;
+                                do this(project)[]->selectedProj[];
+                                   selectedProj.subProjects.clear;
+                                   <<SLOT dependencyCreateSubprojects:descriptor>>
+                                #);
+                           <<SLOT scanGroupsImpl: dopart>>
+                           #)
+                      #);
+                    group::
+                      (# location: @text;
+                         forms: @formList;
+                         getfg::
+                           (# doRealOpen:
+                                (# g: ^mps.AST.FragmentGroup;
+                                   isRealOpen:
+                                     (# isOpen: @Boolean;
+                                     do scanner: g.fragmentList.scan
+                                          (#
+                                          do (if current.type
+                                              // mps.AST.formType then
+                                                 (if current.f[]<>NONE then
+                                                     true->isOpen;
+                                                     leave scanner
+                                          if)if)#)
+                                     exit isOpen
+                                     #)
+                                enter g[]
+                                do (if not isRealOpen then (* open g real *)
+                                       g.realOpen;
+                                   if);
+                                #);
+                           do (if not this(Group).location.empty then
+                                  this(Group).location[]
+                                    ->mps.fragmentGroupTable.getFragmentGroup
+                                    ->fg[]->doRealOpen
+                              if);
+                           #);
+                      #);
+                    scanProjectsImpl::
+                      (#
+                      do theProjects.scan
+                         (# do current[]->thescan.foreach #)
+                      #);
+                    init::
+                      (# 
+                      do ph.init;
+                         theProjects.init;
+                         theProjects.parseProjectsRC;
+                      #);
+                 #);
+               projectsLabel::
+                 (# do 'Projects'->t[] #);
+               emptyProjectListLabel::
+                 (# do 'No Project selected'->t[] #);
+               onGroupListOpen::
+                 (# <<SLOT onGroupListOpen: dopart>> #);
+               onProjectListOpen::
+                 (# <<SLOT onProjectListOpen: dopart>> #);
+               onCurrentProjectChange::
+                 (#
+                 do (if newProject[]<>NONE then
+                        newProject.location[]->locationView.contents.label
+                    if)
+                 #);
+               onCurrentGroupChange::
+                 (#
+                 do (if newGroup[]<>NONE then
+                        newGroup.location[]->locationView.contents.label
+                    if)
+                 #);
+               eventhandler::
+                 (# onFatherFrameChanged::
+                      (# h,w: @integer
+                      do ymerBrowser.size->(w,h);
+                         (w,h-60)->size;
+                         (0,0)->position;
+                      #)
+                 #);
+               open:: 
+                 (# x,y,h,w: @integer
+                 do size->(w,h);(w,h+h/2)->size;
+                    (w,h+h/2+60)->ymerBrowser.size;
+                    TRUE->bindRight->bindLeft->bindTop;
+                 #);
+               editorEncloserType::
+                 (# tryclose:: (# do ymerBrowser.close #);
+                    onHighLight:: (# do ymerBrowser.wriggle #);
+                    getAST:: (# do mps.AST[]->AST[] #);
+                    getBETACFL:: (# do mps.BETACFL[]->BETACFL[] #);
+                 #);
+            #);
+          showPreferencesDialog:
+            <<SLOT showPreferencesDialog: descriptor>>;
+          locationView: @envGroup
+            (# contentsType:: staticText(# open:: (# do ''->label #) #);
+               eventhandler::
+                 (# onFatherFrameChanged::
+                      (# h,w: @integer
+                      do ymerBrowser.size->(w,h);
+                         (w/2,50)->size;
+                         (0,h-60)->position;
+                      #)
+                 #);
+               open::
+                 (# h,w: @integer
+                 do ymerBrowser.size->(w,h);
+                    (w/2,50)->size;
+                    (0,h-60)->position;
+                    'Current location'->label;
+                 #)
+            #);
+          infoView: @envGroup
+            (# contentsType:: staticText(# open:: (# do ''->label #) #);
+               eventhandler::
+                 (# onFatherFrameChanged::
+                      (# h,w: @integer
+                      do ymerBrowser.size->(w,h);
+                         (w/2,50)->size;
+                         (w/2,h-60)->position;
+                      #)
+                 #);
+               open::
+                 (# h,w: @integer
+                 do ymerBrowser.size->(w,h);
+                    (w/2,50)->size;
+                    (w/2,h-60)->position;
+                    'Info'->label;
+                 #)
+            #);
+          eventhandler::<
+            (# onAboutToClose:: (# do INNER; terminate #) #);       
+          open::<
+            (#
+            do 'Ymer Fragment Browser (v0.2)'->title;
+               ''->compilerSwitches[]; cPrivate(* to initialize *);
+               browser.open;
+               locationView.open;
+               infoView.open;
+               INNER;
+            #);
+          cPrivate: @<<SLOT compilePrivate: descriptor>>;
+          menubarType::< 
+            (# projectsMenu: @menu
+                 (# iSaveSettings: @menuItem
+                      (# eventhandler::
+                           (# onSelect::
+                                (# <<SLOT menubarSaveSettingsOnselect: dopart>> #) 
+                           #);
+                         open:: (# do 'Save settings'->name #)
+                      #);
+                    iLoadSettings: @menuItem
+                      (# eventhandler::
+                           (# onSelect::
+                                (# <<SLOT menubarLoadSettingsOnselect: dopart>> #) 
+                           #);
+                         open:: (# do 'Load settings'->name #)
+                      #);
+                    iLoad: @menuItem
+                      (# eventhandler::
+                           (# onSelect::
+                                (# t: ^text;
+                                   newProj: ^browser.projects.theProjects.element;
+                                <<SLOT menubarLoadOnselect: dopart>>
+                                #) 
+                           #);
+                         open:: (# do 'Load'->name #)
+                      #);
+                    iNew: @menuItem
+                      (# eventhandler::
+                           (# onSelect::
+                                (#
+                                do (ymerBrowser[],'New Project Name','Enter name of new project','')->
+                                   promptForText
+                                   (# ok::
+                                        (# cp: ^browser.projects.theProjects.element;
+                                        do &browser.projects.theProjects.element[]->cp[];
+                                           usertext.copy->cp.name[];
+                                           cp[]->browser.projects.theProjects.append;
+                                           browser.projectsChanged;
+                                           cp[]->browser.setProject;
+                                   #) #);
+                           #) #);
+                         open:: (# do 'New'->name #)
+                      #);
+                    iSave: @menuItem
+                      (# eventhandler::
+                           (# onStatus::
+                                (# do false and (browser.currentProject[]<>NONE) -> value #);
+                              onSelect:: (# do  #) #);
+                         open:: (# do 'Save'->name #)
+                      #);
+                    iRename: @menuItem
+                      (# eventhandler::
+                           (# onStatus::
+                                (# do browser.currentProject[]<>NONE -> value #);
+                              onSelect::
+                                (#
+                                do (ymerBrowser[],'Project Rename','New project name','')->
+                                   promptForText
+                                   (# ok::
+                                        (# cp: ^browser.projects.project; ch: @char
+                                        do browser.currentProject[]->cp[];
+                                           usertext->cp.name;
+                                           (if true
+                                            // cp.isDirectory and 
+                                               (cp.name.length>0) and
+                                               ((cp.name.length->cp.name.inxGet)<>'/') then
+                                               '/'->cp.name.append
+                                            // cp.isRoot and 
+                                               (cp.name.length>0) and
+                                               ((cp.name.length->cp.name.inxGet)<>'*') then
+                                               '*'->cp.name.put
+                                           if);
+                                           browser.projectsChanged;
+                                           cp[]->browser.setProject;
+                                   #) #);
+                                #) 
+                           #);
+                         open:: (# do 'Rename'->name #)
+                      #);
+                    iRelocate: @menuItem
+                      (# eventhandler::
+                           (# onStatus::
+                                (# do browser.currentProject[]<>NONE -> value #);
+                              onSelect::
+                                (# cp: ^browser.projects.project; t: ^text
+                                  <<SLOT menubarRelocateOnselect: dopart>>
+                                #) 
+                           #);
+                         open:: (# do 'Relocate'->name #)
+                      #);
+                    iDelete: @menuitem
+                      (# eventhandler::
+                           (# onStatus::
+                                (# do browser.currentProject[]<>NONE -> value #);
+                              onSelect::
+                                (# cp: ^browser.projects.project
+                                  <<SLOT menubarDeleteOnselect: dopart>>
+                                #)
+                           #);
+                         open:: (# do 'Delete'->name #)
+                      #);
+                    iQuit: @menuitem
+                      (# eventhandler::
+                           (# onSelect::
+                                (# do terminate #)
+                           #);
+                         open:: (# do 'Quit'->name #)
+                      #);
+                    open::
+                      (# sep: ^menuItem
+                      do 'Projects'->name;
+                         iLoad.open; iLoad[]->append;
+                         iSave.open; iSave[]->append;
+                         &separator[]->sep[]; sep.open; sep[]->append;
+                         iNew.open; iNew[]->append;
+                         iRename.open; iRename[]->append;
+                         iRelocate.open; iRelocate[]->append;
+                         iDelete.open; iDelete[]->append;
+                         &separator[]->sep[]; sep.open; sep[]->append;
+                         iSaveSettings.open; iSaveSettings[]->append;
+                         iLoadSettings.open; iLoadSettings[]->append;
+                         &separator[]->sep[]; sep.open; sep[]->append;
+                         iQuit.open; iQuit[]->append;
+                      #);
+                 #);
+               groupsMenu: @menu
+                 (# iOpen: @menuItem
+                      (# eventhandler::
+                           (# onSelect:: (# do #) #);
+                         open:: (# do 'Open'->name #)
+                      #);
+                    iNew: @menuItem
+                      (# eventhandler::
+                           (# onSelect:: (# do #) #);
+                         open:: (# do 'New'->name #)
+                      #);
+                    iDelete: @menuItem
+                      (# eventhandler:: 
+                           (# onSelect:: (# do #) #);
+                         open:: (# do 'Delete'->name #)
+                      #);
+                    open::
+                      (# sep: ^menuItem
+                      do 'Groups'->name;
+                         iOpen.open; iOpen[]->append;
+                         iNew.open; iNew[]->append;
+                         &separator[]->sep[]; sep.open; sep[]->append;
+                         iDelete.open; iDelete[]->append;
+                      #);
+                 #);
+               toolsMenu: @menu
+                 (# iCompile: @menuItem
+                      (# eventhandler::
+                           (# onStatus::
+                                (#
+                                do (browser.currentGroup[]<>NONE) or
+                                   ((browser.currentProject[]<>NONE) and
+                                   (browser.currentProject.isRoot or
+                                   browser.currentProject.isExtent or
+                                   browser.currentProject.isDomain or
+                                   browser.currentProject.isDirectory))
+                                     ->value
+                                #);
+                              onSelect::
+                                (# compile: <<SLOT iCompile: descriptor>>
+                                do compile
+                                #)
+                           #);
+                         open:: (# do 'Compile'->name #)
+                      #);
+                    iExecute: @menuItem
+                      (# eventhandler::
+                           (# onStatus::
+                                (#
+                                do ((browser.currentProject[]<>NONE) and
+                                   (browser.currentProject.isRoot or
+                                   browser.currentProject.isExtent or
+                                   browser.currentProject.isDomain)) or
+                                   (browser.currentGroup[]<>NONE)
+                                     ->value
+                                #);
+                              onSelect::
+                                (# execute: <<SLOT iExecute: descriptor>>
+                                do execute
+                                #)
+                           #);
+                         open:: (# do 'Execute'->name #)
+                      #);
+                    iDebug: @menuItem
+                      (# eventhandler::
+                           (# onStatus::
+                                (#
+                                do ((browser.currentProject[]<>NONE) and
+                                   (browser.currentProject.isRoot or
+                                   browser.currentProject.isExtent or
+                                   browser.currentProject.isDomain)) or
+                                   (browser.currentGroup[]<>NONE)
+                                     ->value
+                                #);
+                              onSelect:: 
+                                (# debug: <<SLOT iDebug: descriptor>>
+                                do debug
+                                #)
+                           #);
+                         open:: (# do 'Debug'->name #)
+                      #);
+                    iSif: @menuItem
+                      (# eventhandler::
+                           (# onStatus::
+                                (#
+                                do ((browser.currentProject[]<>NONE) and
+                                   (browser.currentProject.isRoot or
+                                   browser.currentProject.isExtent or
+                                   browser.currentProject.isDomain)) or
+                                   (browser.currentGroup[]<>NONE)
+                                     ->value
+                                #);
+                              onSelect:: 
+                                (# sif: <<SLOT iSif: descriptor>>
+                                do sif
+                                #)
+                           #);
+                         open:: (# do 'Edit: Sif'->name #)
+                      #);
+                    iTextEdit: @menuItem
+                      (# eventhandler::
+                           (# onStatus::
+                                (#
+                                do ((browser.currentProject[]<>NONE) and
+                                   (browser.currentProject.isRoot or
+                                   browser.currentProject.isExtent or
+                                   browser.currentProject.isDomain)) or
+                                   (browser.currentGroup[]<>NONE)
+                                     ->value
+                                #);
+                              onSelect:: 
+                                (# textEdit: <<SLOT iTextEdit: descriptor>>
+                                do textEdit
+                                #)
+                           #);
+                         open:: (# do 'Edit: Text editor'->name #)
+                      #);
+                    iAnalyze: @menuItem
+                      (# eventhandler::
+                           (# onStatus::
+                                (#
+                                do ((browser.currentProject[]<>NONE) and
+                                   (browser.currentProject.isRoot or
+                                   browser.currentProject.isExtent or
+                                   browser.currentProject.isDomain)) or
+                                   (browser.currentGroup[]<>NONE)
+                                     ->value
+                                #);
+                              onSelect:: 
+                                (# analyze: <<SLOT iAnalyze: descriptor>>
+                                do analyze
+                                #)
+                           #);
+                         open:: (# do 'Analyze: betawc'->name #)
+                      #);
+                    iPreferences: @menuItem
+                      (# eventhandler::
+                           (# onSelect:: (# do showPreferencesDialog #)
+                           #);
+                         open:: (# do 'Preferences'->name #)
+                      #);
+                    open::
+                      (# sep: ^menuItem
+                      do 'Tools'->name;
+                         iCompile.open; iCompile[]->append;
+                         iExecute.open; iExecute[]->append;
+                         iDebug.open; iDebug[]->append;
+                         iSif.open; iSif[]->append;
+                         iTextEdit.open; iTextEdit[]->append;
+                         iAnalyze.open; iAnalyze[]->append;
+                         &separator[]->sep[]; sep.open; sep[]->append;
+                         iPreferences.open; iPreferences[]->append;
+                      #);
+                 #);
+               windowsMenu: @menu
+                 (# <<SLOT windowsMenuPrivate: attributes>>;
+                    insertWindow: (# win: ^ymerWindow enter win[] do <<SLOT windowsMenuInsertWindow: descriptor>> #);
+                    deleteWindow: (# win: ^ymerWindow enter win[] <<SLOT windowsMenuDeleteWindow: dopart>> #);
+                    open:: (# do 'Windows'->name #);
+                 #);
+               open::<
+                 (#
+                 do projectsMenu.open; projectsMenu[]->append;
+                    (*groupsMenu.open; groupsMenu[]->append;*)
+                    toolsMenu.open; toolsMenu[]->append;
+                    windowsMenu.open; windowsMenu[]->append;
+                    INNER;
+                 #)
+            #);
+       #);
+     
+     BETAlib, BETAexecutable, SIFexecutable,
+     VALHALLAexecutable, TEXTexecutable, BETAWCexecutable: ^text;
+     machineType: @text;
+     theSystemEnv: ^systemenv;
+     
+     init:<
+       (# do <<SLOT ymerInit: descriptor>> #);
+  #);

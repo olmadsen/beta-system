@@ -1,0 +1,572 @@
+ORIGIN '../ymer';
+INCLUDE '~beta/basiclib/v1.4/formatio';
+INCLUDE '~beta/basiclib/v1.4/file';
+INCLUDE '~beta/unixlib/v1.4/unixfile';
+INCLUDE '~beta/basiclib/v1.4/directory';
+INCLUDE '~beta/sysutils/v1.4/pathhandler';
+INCLUDE '~beta/process/v1.4/osinterface';
+
+INCLUDE '~beta/debugger/v2.0/utils/buffered_io';
+
+INCLUDE 'settings';
+
+--- ymerApplicationLib: attributes ---
+
+fragmentDefaultName:
+  (# f: @file
+  enter f.name
+  exit f.entry.path.name.prefix
+  #);
+fileAvailable:
+  (# f: @unixfile; avail: @boolean; t: ^text;
+  enter f.name
+  do (if true
+      // not f.entry.exists then
+         'File: '->t[];
+         f.name->t.puttext;
+         '\ndoes not exist'->t.puttext;
+         (NONE, t[],'Not available')->alertUser
+      // not f.entry.readable then
+         'No read permissions to the file:\n     '->t[];
+         f.name->t.puttext;
+         (NONE, t[],'Not available')->alertUser
+      else true->avail
+     if);
+  exit avail  
+  #);
+fileExists: 
+  (# f: @file
+  enter f.name
+  exit f.entry.exists
+  #);
+fileReadable: 
+  (# f: @file
+  enter f.name
+  exit f.entry.readable 
+  #);
+fileExecutable: 
+  (# f: @unixfile
+  enter f.name
+  exit ('a','x')->f.entry.permission.has
+  #);
+isFile:
+  (# f: @file
+  enter f.name
+  exit f.entry.isFile
+  #);
+isDirectory:
+  (# f: @file
+  enter f.name
+  exit f.entry.isDirectory
+  #);
+isRoot:
+  (# f: @file
+  enter f.name
+  exit (mps.AST.astfileExtension->(f.entry.path.name.suffix).equal)
+     or ('.bet'->(f.entry.path.name.suffix).equal)
+     or ((mps.AST.astfileExtension->(f.name).append)->fileExists)
+  #);
+isProject:
+  (# f: @file
+  enter f.name
+  exit '.prj'->(f.entry.path.name.suffix).equal
+  #);
+
+--- ymerAddProject: dopart ---
+do &browser.projects.theProjects.element[]->newProj[];
+   name.copy->newProj.name[];
+   location->newProj.location;
+   newProj[]->browser.projects.setupProject;
+   newProj[]->browser.projects.theProjects.append;
+   browser.projectsChanged;
+   newProj[]->browser.setProject;
+   
+--- projectInfoLib: attributes ---
+setupProject:
+  (# f: @file; ext: ^text;
+     proj, root: ^theProjects.element
+  enter proj[]
+  do (if (proj.location.length
+           ->proj.location.inxGet)='/' then
+         (proj.location.length,proj.location.length)
+           ->proj.location.delete;
+     if);
+     (proj.location[],ph.currentDirectory)
+       ->ph.convertfilepath->f.name;
+     (if proj.name[]=NONE then
+         f.entry.path.name->proj.name[]
+     if);
+     (if true
+      // f.entry.exists and
+         f.entry.readable and
+         f.entry.isDirectory then
+         true->proj.isDirectory;
+         (if (proj.location.length
+               ->proj.location.inxGet)<>'/' then
+             '/'->proj.location.append
+         if);
+         (if (proj.name.length>0) and
+             ((proj.name.length->proj.name.inxGet)<>'/') then
+             '/'->proj.name.append;
+         if);
+      else
+         f.entry.path.name.suffix->ext[];
+         (if true
+          // f.entry.exists and
+             f.entry.readable and
+             (mps.AST.astfileExtension->ext.equal)
+          // f.entry.exists and
+             f.entry.readable and
+             ('.bet'->ext.equal) 
+          // (mps.AST.astfileExtension->(f.name).append
+               ->fileExists) and
+             (mps.AST.astfileExtension->(f.name).append
+               ->fileReadable)
+          // ('.bet'->(f.name).append->fileExists) and
+             ('.bet'->(f.name).append->fileReadable) then
+             '*'->proj.name.append;
+             true->proj.isRoot;
+             
+             proj[]->root[];
+             
+             &root.subprojects.element[]->proj[];
+             root.location->proj.location;
+             true->proj.isDomain;
+             '[domain]'->proj.name[];
+             proj[]->root.subprojects.append;
+             
+             &root.subprojects.element[]->proj[];
+             root.location->proj.location;
+             true->proj.isExtent;
+             '[extent]'->proj.name[];
+             proj[]->root.subprojects.append;
+          // f.entry.exists and
+             f.entry.readable and
+             ('.pjt'->ext.equal) then
+             true->proj.isProjectFile->proj.hasSubprojects;
+             (if (proj.name.length>0) and
+                 ((proj.name.length->proj.name.inxGet)<>'+') then
+                 '+'->proj.name.append;
+             if);
+             (f.name,proj[])
+               ->theProjects.parseProjectFile;
+          // ('.pjt'->(f.name).append->fileExists) and
+             ('.pjt'->(f.name).append->fileReadable) then
+             true->proj.isProjectFile->proj.hasSubprojects;
+             (if (proj.name.length>0) and
+                 ((proj.name.length->proj.name.inxGet)<>'+') then
+                 '+'->proj.name.append;
+             if);
+             ('.pjt'->(f.name).append,proj[])
+               ->theProjects.parseProjectFile;
+          else
+             f.name->fileAvailable;
+         if)
+     if)
+  #);
+
+--- scanGroupsImpl: dopart ---
+do ''->infoView.contents.label;
+   (if true
+    // isExtent then
+       (if groups.size=0 then
+           (* the extent haven't previously been calculated *)
+           machineType->mps.dg.TargetMachine;
+           machineType->mps.dg.TargetDirectory;
+           (location[],ph.currentDirectory)
+             ->ph.convertfilepath
+             ->mps.dg.scanExtent
+           (#
+           do &groups.element[]->newGroup[];
+              (current.fullname,ph.currentDirectory)
+                ->ph.convertfilepath
+                ->newGroup.location.puttext;
+              newGroup.location[]
+                ->dependencyRegister;
+              current.name->fragmentDefaultName
+                ->newGroup.name[];
+              newGroup[]->groups.append;
+              newGroup[]->thescan.foreach
+           #);
+           dependencyCreateSubprojects;
+        else 
+           (* the extent have previously been calculated *)
+           groups.scan
+           (#
+           do current[]->thescan.foreach
+           #)
+       if)
+    // isDomain then
+       (if groups.size=0 then
+           (* the domain haven't previously been calculated *)
+           machineType->mps.dg.TargetMachine;
+           machineType->mps.dg.TargetDirectory;
+           (location[],ph.currentDirectory)
+             ->ph.convertfilepath
+             ->mps.dg.scanDomain
+           (#
+           do &groups.element[]->newGroup[];
+              (current.fullname,ph.currentDirectory)
+                ->ph.convertfilepath
+                ->newGroup.location.puttext;
+              newGroup.location[]
+                ->dependencyRegister;
+              current.name->fragmentDefaultName
+                ->newGroup.name[];
+              newGroup[]->groups.append;
+              newGroup[]->thescan.foreach
+           #);
+           dependencyCreateSubprojects;
+        else 
+           (* the domain have previously been calculated *)
+           groups.scan
+           (#
+           do current[]->thescan.foreach
+           #)
+       if)
+    // isDirectory then
+       (# d: @directory; count: @integer;
+       do this(Project).groups.clear;
+          (if location.empty then
+              ph.currentDirectory->location.puttext;
+          if);
+          (location[],ph.currentDirectory)
+            ->ph.convertfilepath->d.name;
+          d.scanEntries
+          (#
+          do select
+             (# whenFile::
+                  (# f: ^file; ext: ^Text;
+                  do &groups.element[]->newGroup[];
+                     thefile->f[];
+                     f.entry.path.name.suffix
+                       ->ext[];
+                     f.entry.path.name
+                       ->newGroup.location.puttext;
+                     (if true
+                      // f.entry.exists and
+                         f.entry.readable and
+                         (mps.AST.astfileExtension
+                           ->ext.equal)
+                      // f.entry.exists and
+                         f.entry.readable and
+                         ('.bet'->ext.equal) then
+                         (newGroup.location.length-3,newGroup.location.length)
+                           ->newGroup.location.delete;
+                         location[]->newGroup.location.prepend;
+                         (if groups.find
+                             (# predicate::
+                                  (#
+                                  do current.location[]
+                                       ->newGroup.location.equalNCS
+                                       ->value
+                                  #)
+                             #)=NONE then
+                             f.entry.path.name.prefix
+                               ->newGroup.name[];
+                             count+1->count;
+                             newGroup[]->groups.append;
+                             newGroup[]->thescan.foreach
+                         if)
+                      else
+                         f.name->fileAvailable
+                     if);
+                  #)
+             #)
+          #);
+          (if count=0 then
+              'no fragments in project'
+                ->infoView.contents.label;
+          if)
+       #)
+    // groups.size<>0 then
+       groups.scan
+       (#
+       do current[]->thescan.foreach
+       #)
+    else
+       (if not isOpen then 
+           'open project to find subprojects'
+             ->infoView.contents.label;
+        else 
+           'open subproject to find fragments'
+             ->infoView.contents.label;
+       if)
+   if)
+   
+--- browserLib: attributes ---
+
+unfoldSubprojects:
+  (# proj: ^projects.theProjects.element;
+     projPos: ^projects.theProjects.theCellType;
+     newLevel: @integer;
+  enter proj[]
+  do ''->infoView.contents.label;
+     (if true
+      // proj.hasSubprojects 
+      // proj.isRoot then
+         proj.level+1->newLevel;
+         proj[]->projects.theProjects.at->projPos[];
+         proj.subprojects.scan
+         (# newProj: ^projects.theProjects.element;
+         do &projects.theProjects.element[]->newProj[];
+            newLevel->newProj.level;
+            &text[]->newProj.name[];
+            (for newProj.level repeat
+                 '  '->newProj.name.puttext
+            for);
+            current.name[]->newProj.name.puttext;
+            current.location[]->newProj.location.puttext;
+            
+            current.isDirectory->newProj.isDirectory;
+            current.isProjectFile->newProj.isProjectFile;
+            current.isRoot->newProj.isRoot;
+            current.isExtent->newProj.isExtent;
+            current.isDomain->newProj.isDomain;
+            current.hasSubprojects->newProj.hasSubprojects;
+            current.subprojects->newProj.subprojects;
+            current.groups->newProj.groups;
+            (newProj[],projPos[])
+              ->projects.theProjects.insertAfter->projPos[];
+         #)
+      // proj.isDirectory then
+         (# d: @directory; f: @file;
+         do (proj.location[],ph.currentDirectory)
+              ->ph.convertfilepath->d.name;
+            d.scanEntries
+            (# 
+            do select
+               (# whenDir::
+                    (# d: ^directory; name: ^text;
+                       newProj: ^projects.theProjects.element;
+                    do thedir->d[];
+                       d.entry.path.name->name[];
+                       (if true
+                        // '.'->name.equalNCS
+                        // '..'->name.equalNCS
+                        // 'sun4s'->name.equalNCS then
+                        // 'sun4'->name.equalNCS then
+                        // 'sun3'->name.equalNCS then
+                        // 'snake'->name.equalNCS then
+                        // 'sgi'->name.equalNCS then
+                        // 'nti'->name.equalNCS then
+                        // 'linux'->name.equalNCS then
+                        // 'hpux9pa'->name.equalNCS then
+                        // 'hpux8'->name.equalNCS then
+                        // 'b2c'->name.equalNCS then
+                        else
+                           &projects.theProjects.element[]
+                             ->newProj[];
+                           (d.name,proj.location[])
+                             ->ph.convertfilePath
+                             ->newProj.location.puttext;
+                           newProj.location[]->f.name;
+                           (if (newProj.location.length
+                                 ->newProj.location.inxGet)<>'/'
+                               then
+                               '/'->newProj.location.append
+                           if);
+                           proj.level+1->newProj.level;
+                           &text[]->newProj.name[];
+                           (for newProj.level repeat
+                                '  '->newProj.name.puttext
+                           for);
+                           f.entry.path.name
+                             ->newProj.name.puttext;
+                           '/'->newProj.name.append;
+                           true->newProj.isDirectory;
+                           (if (newProj.location[]->fileExists) and
+                               (newProj.location[]->fileReadable) then
+                               (newProj[],proj[]
+                                 ->projects.theProjects.at)
+                                 ->projects.theProjects.insertAfter;
+                            else
+                               newProj.location[]->fileAvailable
+                           if)
+                       if)
+                    #);
+                  whenFile::
+                    (# f: ^file; name: ^text;
+                       newProj: ^projects.theProjects.element;
+                    do thefile->f[];
+                       f.entry.path.name->name[];
+                       (if true
+                        // '.pjt'->(f.entry.path.name.suffix).equal then
+                           &projects.theProjects.element[]
+                             ->newProj[];
+                           (f.name,proj.location[])
+                             ->ph.convertfilePath
+                             ->newProj.location.puttext;
+                           (newProj.location.length-3,newProj.location.length)
+                             ->newProj.location.delete;
+                           proj.level+1->newProj.level;
+                           &text[]->newProj.name[];
+                           (for newProj.level repeat
+                                '  '->newProj.name.puttext
+                           for);
+                           f.entry.path.name
+                             ->newProj.name.puttext;
+                           (newProj.name.length-3,newProj.name.length)
+                             ->newProj.name.delete;
+                           '+'->newProj.name.append;
+                           true->newProj.hasSubprojects;
+                           (f.name,newProj[])
+                             ->proj.subprojects.parseProjectFile;
+                           (if (newProj.location[]->fileExists) and
+                               (newProj.location[]->fileReadable) then
+                               (newProj[],proj[]
+                                 ->projects.theProjects.at)
+                                 ->projects.theProjects.insertAfter;
+                            else
+                               newProj.location[]->fileAvailable
+  if)if)#)#)#)#)if)#);
+foldSubprojects:
+  (# proj: ^projects.theProjects.element;
+     level: @integer
+  enter proj[]
+  do ''->infoView.contents.label;
+     proj.level->level;
+     loop:
+       (proj[]
+       ->projects.theProjects.at).succ[]
+       ->projects.theProjects.iterateFrom
+     (#
+     do (if current.elm.level>level then
+            current[]->projects.theProjects.delete
+         else leave loop
+        if)
+     #);
+  #);
+projectByIndex:
+  (# inx: @integer;
+     foundProj: ^projects.theProjects.element;
+  enter inx
+  do find: projects.theProjects.scan
+       (#
+       do inx-1->inx;
+          (if inx=0 then
+              current[]->foundProj[];
+              leave find
+       if)#)
+  exit foundProj[]
+  #);
+
+--- onGroupListOpen: dopart --- 
+do &thegrouplist.action
+   (# eventtype:: thegrouplist.theeventhandler.mousedown;
+      selectedGroup: ^projects.group;
+      root, newProj: ^projects.theProjects.element;
+   do (if (thegrouplist.selection.first)<>0 then
+          (if theEvent.doubleClick then
+              (if theEvent.shiftKey then
+                  (* do what's needed to make THIS into a root *)
+                  thegrouplist.selection.first
+                    ->groups.getGroupByIndex->selectedGroup[];
+                  &projects.theProjects.element[]->newProj[];
+                  selectedGroup.location->newProj.location;
+                  (if newProj.name[]=NONE then
+                      selectedGroup.name.copy->newProj.name[]
+                  if);
+                  '*'->newProj.name.append;
+                  true->newProj.isRoot;
+                  
+                  newProj[]->projects.theProjects.append;
+                  newProj[]->root[];
+                  
+                  &root.subprojects.element[]->newProj[];
+                  root.location->newProj.location;
+                  true->newProj.isDomain;
+                  '[domain]'->newProj.name[];
+                  newProj[]->root.subprojects.append;
+                  
+                  &root.subprojects.element[]->newProj[];
+                  root.location->newProj.location;
+                  true->newProj.isExtent;
+                  '[extent]'->newProj.name[];
+                  newProj[]->root.subprojects.append;
+                  
+                  projectsChanged;
+                  root[]->setProject;
+              if)
+          if)
+      if)
+   #)[]->thegrouplist.appendAction;
+   
+--- onProjectListOpen: dopart --- 
+do &theprojectlist.action
+   (# eventtype:: theprojectlist.theeventhandler.mousedown;
+      i: @integer;
+      selectedProj: ^projects.theProjects.element;
+   do (if (theprojectlist.selection.first->i)<>0 then
+          (if theEvent.doubleClick then
+              i->projectByIndex->selectedProj[];
+              (if selectedProj.isOpen then
+                  false->selectedProj.isOpen;
+                  selectedProj[]->foldSubprojects;
+               else
+                  true->selectedProj.isOpen;
+                  selectedProj[]->unfoldSubprojects;
+              if);
+              projectsChanged;
+              selectedProj[]->setProject;
+          if)
+      if)
+   #)[]->theprojectlist.appendAction;
+   
+--- menubarSaveSettingsOnselect: dopart ---
+do browser.saveSettings
+   
+--- menubarLoadSettingsOnselect: dopart ---
+do browser.loadSettings
+   
+--- menubarLoadOnselect: dopart ---
+do &fileSelectionDialog(# do 'Load Project File'->dialogTitle[] #)->t[]; 
+   (if true
+    // t[]=NONE then (* ignore: cancel pressed *)
+    // t[]->fileAvailable then
+       &browser.projects.theProjects.element[]->newProj[];
+       t->newProj.location;
+       newProj[]->browser.projects.setupProject;
+       newProj[]->browser.projects.theProjects.append;
+       browser.projectsChanged;
+       newProj[]->browser.setProject;
+   if)
+   
+--- menubarRelocateOnselect: dopart ---
+do browser.currentProject[]->cp[];
+   fileSelectionDialog(# do 'Specify new location'->dialogTitle[] #)->t[];
+   (if true
+    // (t[]=NONE) then (* ignore: cancel pressed *)
+    // t[]->fileAvailable then
+       t->cp.location;
+       cp[]->browser.projects.setupProject;
+       (if cp.isOpen then
+           cp[]->browser.foldSubprojects;
+           cp[]->browser.unfoldSubprojects;
+       if);
+       browser.projectsChanged;
+       cp[]->browser.setProject
+   if)
+   
+--- menubarDeleteOnselect: dopart ---
+do browser.currentProject[]->cp[];
+   (if cp.isOpen then
+       cp[]->browser.foldSubprojects;
+   if);
+   cp[]
+     ->browser.projects.theProjects.at
+     ->browser.projects.theProjects.delete;
+   browser.projectsChanged
+   
+---  ymerInit: descriptor ---
+(# OS: @osInterface;
+do OS.init;
+   OS.hostMachine->machinetype;
+   '$(BETALIB)'->expandEnvVar
+   (# defaultValue::
+        (# do '/usr/local/lib/beta'->envvarvalue[] #)#)
+     ->BETAlib[];
+   mps.init;
+   getSystemEnv->theSystemEnv[];
+   ymerBrowser.open
+#)

@@ -1,0 +1,473 @@
+ORIGIN '../ymer';
+INCLUDE 'ymerBody';
+
+--- parseDefn: attributes ---
+parse:
+  (# (* project file grammar:
+      *     <projects>    ::= <project>*
+      *     <project>     ::= project <projectname> <projectDefn>
+      *     <projectname> ::= NAME | STRING | <empty>
+      *     <projectDefn> ::= <directory> | <root> | <groups> | <subprojects>
+      *     <directory>   ::= STRING
+      *     <root>        ::= STRING
+      *     <groups>      ::= <group>+
+      *     <group>       ::= group <groupname> <groupDefn>
+      *     <groupname>   ::= NAME | <empty>
+      *     <groupDefn>   ::= <.ast-file> | <.bet-file> | <forms>
+      *     <.ast-file>   ::= STRING
+      *     <.bet-file>   ::= STRING
+      *     <forms>       ::= <form>+
+      *     <form>        ::= form <formname> <formDefn>
+      *     <formname>    ::= NAME | <empty>
+      *     <formDefn>    ::= <.ast-file> | <.bet-file>
+      * 
+      *     <subprojects> ::= <projects> DASH
+      *  
+      * Lexical tokens: NAME STRING DASH{--+}
+      *)
+     filename, projectname: ^text;
+     input: @file;
+     
+     dash: (# exit -1 #);
+     name: (# exit - 4 #);
+     string: (# exit - 5 #);
+     const: (# exit - 6 #);
+     EOF: (# exit - 7 #);
+     project: (# exit - 8 #);
+     group: (# exit - 9 #);
+     form: (# exit - 10 #);
+     semiColon: (# exit ';' #);
+     colon: (# exit ':' #);
+     inputPos,lastOKPos: @integer;
+     firstComment: @boolean;
+     fgComment: @Text;
+     markError:
+       (# msg: @text
+       enter msg
+       do msg[]->screen.puttext;
+          ' at position: '->screen.puttext; lastOKpos->screen.putint; screen.newline
+       #);
+     get: @
+       (# eos: @input.eos
+       do
+          (if eos then EOF->nextCh
+           else inputPos+1->inputPos;input.get->nextCh
+          if)
+       exit nextCh
+       #);
+     currentToken: @ (# val: @integer; enter val exit val #);
+     advance: @|
+       (#
+       do
+          get;
+          cycle
+          (#
+          do
+             inputPos->lastOKPos;
+             (if nextCh
+              // '-' then
+                 (if get = '-' then
+                     loop1: (if get = '-' then restart loop1 if);
+                     dash->currentToken;
+                     SUSPEND;
+                  else
+                     dash->currentToken; SUSPEND;
+                 if);
+              // '''' then
+                 theText.clear;
+                 loop:
+                   (if get
+                    // '''' // EOF then ;
+                    else
+                       nextCh->theText.put; restart loop
+                   if);
+                 string->currentToken;
+                 SUSPEND;
+                 get
+              // '(' then
+                 (if get
+                  // '*' then
+                     (if firstComment then false->firstComment if);
+                     loop:
+                       (if get
+                        // '*' then
+                           loop1:
+                             (if get
+                              // '*' then
+                                 nextCh->fgComment.put; restart loop1
+                              // ')' then
+                                 get; leave loop
+                              // EOF then
+                                 'advance: EOF reached while skipping this comment'
+                                   ->markerror
+                              else
+                                 '*'->fgComment.put;
+                                 nextCh->fgComment.put;
+                                 restart loop
+                             if)
+                        // EOF then
+                           'advance: EOF reached while skipping this comment'
+                             ->markerror
+                        else
+                           nextCh->fgComment.put; restart loop
+                       if)
+                  else
+                     '('->currentToken; SUSPEND
+                 if)
+              // EOF // ascii.fs then
+                 EOF->currentToken; SUSPEND;
+              else
+                 (if true
+                  // ('0' <= nextCh) and ('9' >= nextCh) then
+                     nextCh-'0'->theConst;
+                     get;
+                     loop:
+                       (if ('0' <= nextCh) and ('9' >= nextCh) then
+                           10*theConst+nextCh-'0'->theConst; get; restart loop
+                       if);
+                     const->currentToken;
+                     SUSPEND;
+                  //
+                     ('A' <= (nextCh->ascii.upcase))
+                     and
+                     ('Z' >= (nextCh->ascii.upcase)) then
+                     theText.clear;
+                     nextCh->theText.put;
+                     get;
+                     loop:
+                       (if true
+                        //
+                           ('A' <= (nextCh->ascii.upcase))
+                           and
+                           ('Z' >= (nextCh->ascii.upcase))
+                        // '_' = nextCh
+                        // ('0' <= nextCh) and ('9' >= nextCh) then
+                           nextCh->theText.put; get; restart loop
+                       if);
+                     (if true
+                      // 'PROJECT'->nameEqual then
+                         project->currentToken; SUSPEND
+                      // 'GROUP'->nameEqual then
+                         group->currentToken; SUSPEND
+                      // 'FORM'->nameEqual then
+                         form->currentToken; SUSPEND
+                      else
+                         name->currentToken; SUSPEND
+                     if)
+                  // (0 <= nextCh) and (nextCh <= 32) then
+                     get
+                  else
+                     nextCh->currentToken; SUSPEND; get
+                 if)
+             if)
+          #)
+       #);
+     nextCh: @integer;
+     theText: @text;
+     theConst: @integer;
+     accept: @
+       (# token: @integer; errorText: @text
+       enter token
+       do
+          (if currentToken <> token then
+              (if token
+               // name then
+                  'accept: NAME expected'->markError;
+               // string then
+                  'accept: STRING expected'->markError;
+               // const then
+                  'accept: CONST expected'->markError;
+               // project then
+                  'accept: "project" expected'->markError;
+               // group then
+                  'accept: "group" expected'->markError;
+               // form then
+                  'accept: "form" expected'->markError;
+               // dash then
+                  'accept: "--" expected'->markError;
+               // EOF then
+                  'accept: EOF expected'->markError;
+               else
+                  'accept: "'->errorText;
+                  token->errorText.put;
+                  '" expected'->errorText.puttext;
+                  errorText->markError
+              if)
+          if)
+       #);
+     nameEqual: @
+       (# name: ^text enter name[] exit (theText[]->name.equalNCS) #);
+     
+     
+     parseProjectFileContents:
+       (# newProj: ^element;
+       enter newProj[]
+       do (if newProj[]=NONE then
+              &element[]->newProj[];
+          if);
+          (if newProj.name[]=NONE then
+              input.entry.path.name.prefix->newProj.name[]
+          if);
+          (if newProj.location.empty then
+              input.name->newProj.location.puttext
+          if);
+          true->newProj.hasSubprojects;
+          newProj.subProjects[]->parseProjectList;
+          EOF->accept
+       #);
+     
+     parseProjectList:
+       (# currProjList: ^projectList;
+          
+          parseProject:
+            (# newProj: ^currProjList.element;
+               
+               parseGroupList:
+                 (# currGroupList: ^groupList;
+                    
+                    parseGroup:
+                      (# newGroup: ^GroupList.element; f: @file; ext: ^text;
+                         
+                         parseFormList:
+                           (# currFormList: ^formList;
+                              
+                              parseForm:
+                                (# newForm: ^currFormList.element
+                                do (* parseForm *)
+                                   advance;
+                                   string->accept;
+                                   &currFormList.element[]->newForm[];
+                                   theText
+                                     ->newForm.location;
+                                   newForm[]->currFormList.append;
+                                   advance;
+                                #)
+                           enter currFormList[]
+                           do (* parseFormList *)
+                              loop:
+                                (if currentToken
+                                 // form then
+                                    parseForm;
+                                    restart loop;
+                                 // project // group // dash // EOF then
+                                    leave loop
+                                 else 'parseFormList: EOF, "project", "group", "form" or "--" expected'
+                                      ->markError
+                                if)
+                           #);
+                         
+                      do (* parseGroup *)
+                         group->accept;
+                         advance;
+                         &currGroupList.element[]->newGroup[];
+                         (if currentToken
+                          // name then
+                             theText.copy->newGroup.name[];
+                             theText->newGroup.location;
+                             advance
+                         if);
+                         (if currentToken
+                          // string then
+                             theText->newGroup.location;
+                             advance;
+                             (if NONE
+                              // newGroup.name[] then
+                                 newGroup.location.copy->newGroup.name[]
+                              // newGroup.location[] then
+                                 newGroup.name->newGroup.location
+                             if);
+                             newGroup.location[]->f.name;
+                             f.entry.path.name.suffix->ext[];
+                             (if true
+                              // mps.AST.astfileExtension->ext.equal 
+                              // '.bet'->ext.equal then
+                                 (newGroup.location.length-3,
+                                 newGroup.location.length)
+                                   ->newGroup.location.delete
+                             if);
+                             else 'parseGroup: NAME or STRING expected'->markError
+                         if);
+                         (if (((newGroup.location[],ph.currentDirectory)
+                               ->ph.convertfilepath->fileExists) and
+                             ((newGroup.location[],ph.currentDirectory)
+                               ->ph.convertfilepath->fileReadable) or
+                             ((('.ast'->(newGroup.location.copy).append,ph.currentDirectory)
+                               ->ph.convertfilepath->fileExists) and
+                             (('.ast'->(newGroup.location.copy).append,ph.currentDirectory)
+                               ->ph.convertfilepath->fileReadable))) then
+                             newGroup[]->currGroupList.append
+                          else
+                             (# t: ^text
+                             do 'Group: '->t[]; newGroup.location[]->t.puttext;
+                                (NONE,t[],'Not Available')->alertUser
+                             #)
+                         if);
+                         newGroup.forms[]->parseFormList;
+                      #);
+                 enter currGroupList[]   
+                 do (* parseGroupList *)
+                    loop:
+                      (if currentToken
+                       // group then
+                          parseGroup;
+                          restart loop;
+                       // project // form // dash // EOF then
+                          leave loop
+                       else 'parseGroupList: EOF, "project", "group", "form" or "--" expected'
+                            ->markError
+                      if)
+                 #);
+               
+            do (* parseProject *)
+               project->accept;
+               advance;
+               &currProjList.element[]->newProj[];
+               (if currentToken
+                // name then
+                   theText.copy->newProj.name[];
+                   advance;
+                // string then
+                   theText.copy->newProj.name[];
+                   advance;
+               if);
+               (if currentToken
+                // string then
+                   theText->newProj.location;
+                   newProj[]->setupProject;
+                   newProj[]->currProjList.append;
+                   advance
+                // group then  
+                   newProj[]->currProjList.append;
+                   newProj.groups[]->parseGroupList;
+                // project then
+                   true->newProj.hasSubprojects;
+                   (if (newProj.name.length>0) and
+                       ((newProj.name.length->newProj.name.inxGet)<>'/') then
+                       '/'->newProj.name.append;
+                   if);
+                   newProj[]->currProjList.append;
+                   newProj.subprojects[]->parseProjectList;
+                else 'parseProject: STRING or NAME expected'->markError
+               if);
+            #);
+          
+       enter currProjList[]
+       do (* parseProjectList *)
+          loop:
+            (if currentToken
+             // project then
+                parseProject;
+                restart loop
+             // EOF then
+                leave loop
+             // dash then
+                advance; leave loop
+             else
+                'parseProjectList: EOF, "--" or "project" expected'->markError
+            if)
+       #);
+     
+     newProj: ^element;
+  enter (filename[],newProj[])
+  do filename[]->input.name;
+     (if input.entry.exists then
+         (if input.entry.isFile then
+             (if (input.entry.readable) then
+                 input.openRead
+              else
+                 (# t: @text
+                 do 'No read access to the file:\n     '->t;
+                    input.name->t.append;
+                    (NONE,T[],'Not available')->alertUser
+                 #)
+             if)
+          else
+             (# t: @text
+             do 'Filename '->t;
+                input.name->t.append;
+                '\nrefers to a directory, not a file'->t.putline;
+                (NONE,t[],'Not available')->alertUser
+             #)
+         if);
+         0->inputPos;
+         true->firstComment;
+         fgComment.clear;
+         advance;
+         newProj[]->parseProjectFileContents;
+         input.close
+      else
+         (# t: @text
+         do 'File: '->t;
+            input.name->t.append;
+            '\ndoes not exist'->t.putline;
+            (NONE,t[],'Not available')->alertUser
+         #)
+     if)
+  #);
+
+--- ymerParseProjectFile: dopart ---
+do (projectFile[],ph.currentDirectory)->ph.convertFilePath->projectFile[];
+   (if projectFile[]->fileReadable then
+       (projectFile[],newProj[])->parse
+   if)
+
+--- ymerParseProjectsRC: descriptor ---
+(# newProj: ^project;
+   projectFile: ^text;
+do (if not ('.'->(('.',ph.currentDirectory)->ph.localpath).equal) then
+       &element[]->newProj[];
+       ('./.projects.pjt',ph.currentDirectory)
+         ->ph.convertFilePath
+         ->projectFile[];
+       (if projectFile[]->fileReadable then
+           true->newProj.isProjectFile;
+           './+'->newProj.name[];
+           projectFile->newProj.location;
+           (projectFile[],newProj[])->parse;
+           newProj[]->append
+       if)
+   if);   
+  
+   (if not ('.'->(('~',ph.currentDirectory)->ph.localpath).equal) then
+       &element[]->newProj[];
+       ('~/.projects.pjt',ph.currentDirectory)
+         ->ph.convertFilePath
+         ->projectFile[];
+       (if projectFile[]->fileReadable then
+           true->newProj.isProjectFile;
+           '~/+'->newProj.name[];
+           projectFile->newProj.location;
+           (projectFile[],newProj[])->parse;
+           newProj[]->append
+       if)
+   if);   
+   
+   (if not ('.'->(('$(BETALIB)',ph.currentDirectory)->ph.localpath).equal) then
+       &element[]->newProj[];
+       ('$(BETALIB)/.projects.pjt',ph.currentDirectory)
+         ->ph.convertFilePath
+         ->projectFile[];
+       (if projectFile[]->fileReadable then
+           true->newProj.isProjectFile;
+           '$(BETALIB)/+'->newProj.name[];
+           projectFile->newProj.location;
+           (projectFile[],newProj[])->parse;
+           newProj[]->append
+       if)
+   if);   
+   
+   
+   (if not ('.'->(('~beta/configuration/r3.0',ph.currentDirectory)->ph.localpath).equal) then
+       &element[]->newProj[];
+       ('~beta/configuration/r3.0/.projects.pjt',ph.currentDirectory)
+         ->ph.convertFilePath
+         ->projectFile[];
+       (if projectFile[]->fileReadable then
+           true->newProj.isProjectFile;
+           '~beta/configuration/r3.0/+'->newProj.name[];
+           projectFile->newProj.location;
+           (projectFile[],newProj[])->parse;
+           newProj[]->append
+       if)
+   if);
+#)
