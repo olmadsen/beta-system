@@ -3,8 +3,9 @@
 . $BETALIB/configuration/env.sh
 
 echo ""
-echo Removing old dump files...
+echo Removing old output- and dump files...
 echo "======================================================"
+/bin/rm -f *.out
 /bin/rm -f *.dump
 
 echo ""
@@ -34,7 +35,17 @@ do
        #echo "--------------------------"
        continue
     fi 
-    $f
+    $f >$f.out 2>&1
+    if [ -f output/$f.out ]; then
+       diff output/$f.out $f.out
+       if [ $? = 0 ]; then
+	  echo "[Output is correct]"
+       else
+	  echo "[Difference in output]"
+       fi
+    else
+       echo "[No reference output exists]"
+    fi
     echo "--------------------------"
 done
 
