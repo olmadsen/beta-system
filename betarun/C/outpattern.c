@@ -954,11 +954,27 @@ void DisplayINTELStack(BetaErr errorNumber,
 		(int)BetaStackTop);
       });
     }
-    low += 3;
-    /* low+3 because the compiler pushes %edx, %edi, %ebp, %esi
+    /* The PC corresponding to the BETA object that called C is just 
+     * above BetaStackTop.
+     * NO: First comes the arguments for the external.
+     * Here we cannot determine how many of these there are.
+     */
+    /* PC = *(BetaStackTop-1); */
+
+    /* Adjust low to low+3 because the compiler pushes %edx, %edi, %ebp, %esi
      * before setting BetaStackTop.
      * Of these we only want to see %edx (current object).
      */
+    low += 3;
+
+    /* Since a new lastObj will be met by DisplayStackPart before 
+     * any other PC corresponding to currentObject, the current object that
+     * called C will not be displayed by DisplayStackPart.
+     * So we display it here.
+     */
+    TRACE_DUMP(fprintf(output, "Displaying current object\n"));
+    DisplayObject(output, currentObject, 0 /*PC*/);
+
   }
 
   if (cbFrame){

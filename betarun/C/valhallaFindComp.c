@@ -123,7 +123,12 @@ int scanComponentStack (Component* comp,
        * Of these we only want to see %edx (current object).
        */
 
-      /* Anything to tell valhalla? */
+      /* Since a new lastObj will be met by DisplayStackPart before 
+       * any other PC corresponding to currentObject, the current object that
+       * called C will not be displayed by DisplayStackPart.
+       * So we display it here.
+       */
+      forEach(0 /*PC*/, currentObject);
     }
     
     if (cbFrame){
