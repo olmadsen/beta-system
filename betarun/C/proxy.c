@@ -34,6 +34,7 @@ static Proxy *asProxy(long ip)
 {
   long offset;
   /* ip is the Indirect Proxy. */
+
   Claim((ip >= (long) PIT) && (ip < (long) PITLimit), "asProxy: Illegal proxy!\n");
   offset = ip - (long) PIT;
   
@@ -65,6 +66,7 @@ void sweepAndCollectProxySpace(void)
 void initProxySpace(void) 
 {
   static isInitialized = 0;
+  USE(); /* This has no meaning. So don't worry about it. */
   if (!isInitialized) {
     long count;
 
@@ -91,7 +93,7 @@ long proxyAlive(Object **theCell)
   
   p = asProxy((long) *theCell);
   
-  Claim(p -> GCAttr == PROXYPOTENTIALLYDEAD,"proxyAlive: Unallocated proxy marked alive!\n");
+  Claim(p -> GCAttr != PROXYDEAD,"proxyAlive: Proxy resurrected!\n");
   
   p -> GCAttr = PROXYALIVE;
 
@@ -159,12 +161,12 @@ long newProxy(Block *theBlock, Object *theObj)
 
 long inProxy(long ip)
 {
-  return FALSE;
-
+#ifdef sparc
   if ((ip >= (long) PIT) && (ip < (long) PITLimit)) {
     return TRUE;
   } else {
     return FALSE;
   }
+#endif /* sparc */
   return FALSE;
 }
