@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-06-12 19:00:45 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-06-12 19:18:27 $, SID: $Revision: 1.6 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -32,7 +32,7 @@ void *CCopyCProcPar(ref(Structure) theStruct, ref(Object) theObj)
     MK_CALL(&CBFATop->call_HandleCallBack, HandleCallBack);
     CBFATop->nop       = NOP;
     /* Nullify the first long in the following CBStruct */
-    *((long *)(theCBStruct+1)) = 0;
+    *((long *)(CBFATop+1)) = 0; /* ..and do it right this time :^) */
     return (void *)&CBFATop->mov_o7_g1;
 }
 
