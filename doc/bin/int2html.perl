@@ -34,17 +34,12 @@ $extradir=$x;
 #
 # FIXME:
 # BUGS:
-#   "enter (foo, type##)" where type is pattern variable does not work
-#   Has to be written "enter (foo, type ## )"
+#   1. "enter (foo, type##)" where type is pattern variable does not work
+#      Has to be written "enter (foo, type ## )" Currently gives warning.
 #
+#   2. "do" inside comments tend to "eat" the newline after the "do"?
+
 # TODO: 
-#
-# 4. ANONYMOUS.1:(.*)\@betaenv.html could probably be replaced
-#    with betaenv.1:$1\@betaenv.html.
-#    Requires emission of an index entry for betaenv (href=betaenv.html) when 
-#    thefirst such match is found in index.
-#
-# 5. "do" inside comments tend to "eat" the newline after the "do"?
 #
 # 6. Generate tiles like "Foo Interface Descriptions" instead of just
 #    "Interface Descriptions". "Foo" can be found as ucfirst($directory)
@@ -277,7 +272,6 @@ sub print_index()
 
 	# In betaenv: exit T[1:lgth] is taken to be
 	# an identifer with name 1. Prevent this.
-	# (now donw by fixing identifier matching expression)
 	if (!&legal_identifier($_)){
 	    printf STDERR "skipped illegal identifier: $_\n" if $verbose;
 	    next;
@@ -316,12 +310,23 @@ sub print_index()
 	#      bar
 	#       kuk
 	#
+	
+	# print STDERR "$index[$i]\n";
+
 	# Handle ANONYMOUS especially
-	#$html_index .= "[[$_]]\n" if $trace;
 	if ($_ =~ m/^ANONYMOUS:/){
 	    if (!$entries{"ANONYMOUS"}){
+		print STDERR "Treating ANONYMOUS specially\n" if $verbose;
 		$html_index .= "\n  <I>Anonymous pattern</I>";
 		$entries{"ANONYMOUS"} = 1;
+	    }
+	}
+	# Handle betaenv specially
+	if ( ($index[$i] =~ m/^betaenv.1/) && ($htmlfile eq "betaenv.html")){
+	    if (!$entries{"betaenv"}){
+		print STDERR "Treating betaenv specially\n" if $verbose;
+		$html_index .= "\n  <I><A HREF=\"betaenv.html\">betaenv</I></A>";
+		$entries{"betaenv"} = 1;
 	    }
 	}
 	if ($_ =~ m/(.*):([^:]+)/){
@@ -575,9 +580,14 @@ sub process_file
 	    if ( "$patternid" ne "" ) {
 		$patterns .= "$patternid.$level:";
 		printf STDERR "***  %s\n", $patternid if $trace==1;
-	    } else {	   
-		$patterns .= "ANONYMOUS.$level:";
-		printf STDERR "  ANONYMOUS\n" if $trace==1;
+	    } else {	
+		if (($outfile eq "betaenv.html") && ($level == 1)){
+		    $patterns .= "betaenv.1:";
+		    printf STDERR "  BETAENV\n" if $trace==1;
+		} else {
+		    $patterns .= "ANONYMOUS.$level:";
+		    printf STDERR "  ANONYMOUS\n" if $trace==1;
+		}
 	    }
 	    $level += 1;
 	    $patternid = "";
