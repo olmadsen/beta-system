@@ -9,6 +9,10 @@
 #ifndef _SPARC_H_
 #define _SPARC_H_ 1
 
+#ifdef RTVALHALLA
+#include "valhallaComm.h"
+#endif RTVALHALLA
+
 struct RegWin {
     long l0, l1, l2, l3, l4, l5, l6, l7;
     long i0, i1, i2, i3, i4, i5, fp, i7;
@@ -217,6 +221,12 @@ register volatile void *GCreg4 asm("%o4");
 /* On the SPARC we need to skip the first instruction */
 #define CallBetaEntry(entry,item)			\
     (* (void (*)()) ((long*)entry+1) )(item);
+
+#ifdef RTVALHALLA
+#define ValhallaCallBetaEntry(entry,item,event)		 \
+    ValhallaOnProcessStop ((long*)entry+1,0,0,0,event); \
+    (* (void (*)()) ((long*)entry+1) )(item);
+#endif
 
 /* The asm's tell GCC that 'var' is read and modified in 'code' */
 

@@ -47,6 +47,12 @@ void GetBetaEnv()
 #else
   if( (betaEnv = getenv(DEFAULT_PROPERTY_NAME)) )
     SetupProperties( betaEnv);
+#ifdef RTVALHALLA
+  { char* valhallaEnv;
+    if ((valhallaEnv = getenv ("VALHALLART")))
+      SetupProperties(valhallaEnv);
+  }
+#endif
 #endif
 }
 

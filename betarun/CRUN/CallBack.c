@@ -9,6 +9,10 @@
 #include <MixedMode.h>
 #endif
 
+#ifdef RTVALHALLA
+#include "valhallaComm.h"
+#endif RTVALHALLA
+
 /*************************** crts ***************************/
 #ifdef crts
 
@@ -275,6 +279,12 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
     
     /* As usual, skip the first instruction */
     cbr = (long (*)()) ((long*)theObj->Proto->CallBackRoutine+1);
+    
+#ifdef RTVALHALLA
+    if (informValhallaOnCallback)
+      ValhallaOnProcessStop ((long *) cbr,0,0,0,RTS_ATTACH);
+#endif
+    
     retval = cbr(theObj, a1, a2, a3, a4, &a5);
 
     /* Pop CallBackFrame */

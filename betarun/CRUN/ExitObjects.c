@@ -35,6 +35,7 @@ void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
     return;			/* to exitAddr */
     
   while ((theObj = cast(Object) rw->i0) != exitObj) {
+#ifdef FISKEMAND
     if (cast(CallBackFrame)rw == ActiveCallBackFrame){
       /* This is AR of HandleCB. Update ActiveCallBackFrame.   */
       ActiveCallBackFrame = cast(CallBackFrame)  rw->l5;
@@ -43,6 +44,7 @@ void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
       fprintf(output, "RTS: Leaving callback.\n");
 #endif
     } else {
+#endif
       /* Ordinary BETA activation record */
       if (cast(Object) ActiveComponent->Body == theObj) {
 	/* Passing a component. As in AttachComponent: */
@@ -63,7 +65,9 @@ void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
       } 
       /* go one step back */
       rw = cast(RegWin) rw->fp;
+#ifdef FISKEMAND
     }
+#endif
   }
   FramePointer = (long *) rw;
 }

@@ -9,6 +9,10 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef RTVALHALLA
+#include "valhallaComm.h"
+#endif RTVALHALLA
+
 #ifdef crts
 
 #ifdef MAC
@@ -32,6 +36,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
   char * attachSaveArea;
   struct StackObject * theStackObj;
   long * newSP, *SP, *FP, RA;
+  long * entryAdr;
 
   getret(RA); /* Fetch return address */
     
@@ -108,7 +113,17 @@ struct Component * Att(struct Object *this, struct Component *comp)
 
     /* Call attached component */
     push(this);
-    CallBetaEntry(*((long *)((long)((cast(Item) &comp->Body)->Proto)+sizeof(struct ProtoType)+4)), &comp->Body);
+    entryAdr = *((long **)((long)((cast(Item) &comp->Body)->Proto)+sizeof(struct ProtoType)+4));
+
+#ifdef RTVALHALLA
+    if (informValhallaOnAttach)
+      ValhallaCallBetaEntry(entryAdr, &comp->Body, RTS_ATTACH);
+    else
+      CallBetaEntry(entryAdr, &comp->Body);
+#else
+    CallBetaEntry(entryAdr, &comp->Body);
+#endif
+
     pop(this);
 
     /* When the attached component terminates the following code is executed.  */
@@ -257,6 +272,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
 
 ParamThisComp(struct Component *, Att)
 {
+  long * entryAdr;
   register ref(CallBackFrame)  callBackFrame asm("%l5");
   register long              * nextCompBlock asm("%l6");
   register long                level         asm("%l7");
@@ -317,8 +333,18 @@ ParamThisComp(struct Component *, Att)
     
     asmemptylabel(AttFirst);
     /* comp->Body is the Object and comp->Body->Proto[-1] is the M-entry address */
-    CallBetaEntry(((void (**)())(cast(Item) &comp->Body)->Proto)[-1],
-		  &comp->Body);
+
+    entryAdr = ((long **)(cast(Item) &comp->Body)->Proto)[-1];
+
+#ifdef RTVALHALLA
+    if (informValhallaOnAttach) {
+      ValhallaCallBetaEntry(entryAdr, &comp->Body, RTS_ATTACH);
+    } else {
+      CallBetaEntry(entryAdr, &comp->Body);
+    }
+#else
+    CallBetaEntry(entryAdr, &comp->Body);
+#endif
     
     /* Fool gcc into believing that level, next.. is used */
     asm(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));

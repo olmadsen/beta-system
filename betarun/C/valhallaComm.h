@@ -26,6 +26,14 @@ void valhallaInit ();
  *     are 0 as well. In this case valhalla will close the connection!
  * 
  *  2. From outpattern.c to inform that some error occurred.
+ *
+ *  3. From Attach.c, to inform that some BETA coroutine is about to be attached.
+ *     In this case, PC is the BETA code address where control is being transferred,
+ *     SP, curObj and sig are undefined, and errorNumber is RTS_ATTACH.
+ *
+ *  4. From Callback.c, to inform that some BETA external entry is about to be
+ *     called. In this case,  PC is the BETA code address where control is being 
+ *     transferred, SP, curObj and sig are undefined, and errorNumber is RTS_CBFA.
  * 
  * In any case calls back to valhalla to inform that this process has stopped.
  *
@@ -36,6 +44,9 @@ void valhallaInit ();
 int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj, 
 			   long sig, long errorNumber);
 
+/* Values of errorNumber in cases 3 and 4 of calling ValhallaOnProcessStop. */
+#define  RTS_ATTACH 1
+#define RTS_CBFA 2
 
 /* Return values from ValhallaOnProcessStop */
 

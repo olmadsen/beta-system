@@ -325,7 +325,9 @@ int valhallaCommunicate (int curPC)
       return TERMINATE;
 
     case VOP_CONTINUE:
-
+      
+      informValhallaOnCallback = fifoBinGetInt (fifoTo);
+      informValhallaOnAttach = fifoBinGetInt (fifoTo);
       fifoBinPutInt (fifoFrom, opcode);
       fflush (fifoFrom);
       return CONTINUE;
@@ -547,7 +549,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   fifoPutText (fifoFrom, txt);
 
   fifoBinPutInt (fifoFrom, errorNumber);
-  if (errorNumber) {
+  if (errorNumber<0) {
     txt = ErrorMessage (errorNumber);
     fifoPutText (fifoFrom, txt);
   }
