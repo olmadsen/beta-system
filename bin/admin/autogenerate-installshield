@@ -1,6 +1,5 @@
 #! perl
 
-$| = 1;   # Flush all read/writes
 
 # Takes the list of files.z to be included as args. 
 # Configure:
@@ -14,10 +13,13 @@ $FirstSize        =  600;                # Size of first disk. (in kb)
 $RestSize         = 1380;                # Size of rest of disks. (in kb)
 
 # The name of the template for "setup.rul". Try to leave this untouched.
-$RuleTemplate     = "../setup.rul.template";
+$RuleTemplate     = "setup.rul.template";
 
+$| = 1;   # Flush all read/writes
 
-
+$betalib = $ENV{'BETALIB'};
+$CWD = `cd`; chop $CWD;
+$log = "beta_$ENV{'SDK'}.lst";
 ##############################################################
 
 $SPLIT ="$InstallShieldDir\\program\\split.exe";
@@ -25,11 +27,19 @@ $LastUsed = $RestSize - $FirstSize;
 $LastDisk = 0;
 $CurDisk = 1;
 $AutoRuleText = "";
-$AllCmds = 1;
 
 if ($#ARGV == -1) {
-    print "autogenerate-installshield: Give me *.z files as argument!\n";
+    print "autogenerate-installshield: Give me *.cmd files as argument!\n";
     exit 1;
+}
+
+foreach $file (@ARGV) {
+    if ($file =~ /^(.*)\.cmd$/i) {
+	push(@FileList, $1);
+    } else {
+	print "Unable to handle argument '$file'.\n";
+	exit 1;
+    }
 }
 
 # Check existance of some cricial files:
@@ -38,7 +48,14 @@ if (!-e $SPLIT) {
     exit 1;
 }
 
-unlink 'log' if (-e 'log');
+$prgs = "$InstallShieldDir\\program";
+if ($ENV{'PATH'} !~ /$prgs/i) {
+    $ENV{'PATH'} = "$prgs;" . $ENV{'PATH'};
+}
+
+mkdir('datafiles',0755) if (!-d 'datafiles');
+
+unlink 'setup.lst' if (-e 'setup.lst');
 if (-d "disk1" || -d "disk2" || -d "disk3" || -d "disk4" || -d "disk5") {
     print "\n\nWARNING!!! the directory 'disk?' exists allready!\n";
     print "Enter 'yes' to delete disk* from current dir! :\n";
@@ -54,7 +71,45 @@ if (-d "disk1" || -d "disk2" || -d "disk3" || -d "disk4" || -d "disk5") {
 
 open (LST, ">setup.lst") || die "Unable to create setup.lst: $!";
 
-foreach $file (@ARGV) {
+system "copy /Q $betalib\\bin\\admin\\setup.rul.template $RuleTemplate";
+print "\n\nYou may now start editing\n\t'$CWD\\$RuleTemplate'\n\n";
+
+foreach $file (@FileList) {
+    print "\n------Packing $file:\n";
+    open (LOG, ">>datafiles/$log");
+    print LOG "\n------Packing $file:\n";
+    close(LOG);
+    unlink "$betalib/$file.z" if (-e "$betalib/$file.z");
+    open (IN, "<$file.cmd") || die "$!";
+    chdir $betalib;
+    foreach $line (<IN>) {
+	chop $line;
+	if ($line =~ /^icomp/i) {
+	    print "$line\n";
+	    system ("$InstallShieldDir\\program\\$line >>$CWD\\datafiles\\$log");
+	}
+    }
+    close(IN);
+    chdir $CWD;
+    if (8 < length($file)) {
+	$nam = substr($file, 0, 8);
+    } else {
+	$nam = $file;
+    }
+    rename("$betalib/$nam.z", "datafiles/$nam.z") || die "$!";
+}
+
+chdir 'datafiles' || die "Unable to chdir(datafiles): $!";
+
+$ByteSize = 0;
+$FileCount = 0;
+foreach $basefile (@FileList) {
+    if (8 < length($basefile)) {
+	$file = substr($basefile, 0, 8);
+    } else {
+	$file = $basefile;
+    }
+    $file .= ".z";
     if (!-e $file) {
 	print "Unable to read file '$file'.\n";
 	exit 1;
@@ -69,7 +124,7 @@ foreach $file (@ARGV) {
 	    $first = $RestSize;
 	}
 	print "Splitting $file...";
-	system "$SPLIT $file -F$RestSize -d1\@$first -h >>log";
+	system "$SPLIT $file -F$RestSize -d1\@$first -h >>$log";
 	opendir (DIR, $path);
 	$lastfound = 0;
 	foreach (readdir DIR) {
@@ -111,10 +166,12 @@ foreach $file (@ARGV) {
 	$AutoRuleText .= "             CompressGet( \"$base.z\", \"*.*\", INCLUDE_SUBDIR );\n";
 
 	open (ICOMP, "$InstallShieldDir\\program\\icomp.exe -l $base.z |");
-	undef $count;
+	$count = 0; $orgsize = 0;
 	foreach $line (<ICOMP>) {
 	    if ($line =~ /(\d+)\s+(\d+)\s+(\d+)/) {
-		$orgsize=$1; $compsize=$2; $count=$3;
+		$orgsize=$1; 
+		#$compsize=$2; 
+		$count=$3;
 	    }
 	}
 	close ICOMP;
@@ -133,13 +190,13 @@ close LST;
 
 print "\n";
 
-system "$InstallShieldDir\\program\\packlist.exe setup.lst >>log";
-system "move /Q setup.pkg disk1\\setup.pkg >>log";
+system "$InstallShieldDir\\program\\packlist.exe ..\\setup.lst >>$log";
+rename "setup.pkg", "disk1/setup.pkg";
 foreach $file ("setup.exe", "uninst.exe", "_isres.dll", "_setup.dll", "_setup.lib", "_inst32i.ex_") {
-    system "copy /Q $InstallShieldDir\\program\\$file disk1 >>log";
+    system "copy /Q $InstallShieldDir\\program\\$file disk1 >>$log";
 }
 
-print "\n\n\nI have calculated the following sizes of the installation:\n";
+print "\n\nI have calculated the following sizes of the installation:\n";
 print "(Normally, choose the 2048-value as Minimum Required, and mention\n";
 print "the others in the installation-notes. You cannot install, if there\n";
 print "is less than the Min.Req available.)\n\n";
@@ -147,10 +204,11 @@ print  "ClusterSize   Maximal Need\n";
 foreach $c (0,512,1024,2048,4096,8192,16384,32768) {
     printf "%9d     %9d\n", $c, ($ByteSize + $c * $FileCount);
     }
-print "\n\nPlease edit '$RuleTemplate' NOW, then press enter to continue:\n";
+print "\n\nPlease edit '$CWD\\$RuleTemplate' NOW.\n";
+print "Then press enter to continue:\n";
 $a = <STDIN>;
 
-open (TMP, $RuleTemplate) || die "Unable to read RuleTemplate: $!\n";
+open (TMP, "../$RuleTemplate") || die "Unable to read $RuleTemplate: $!\n";
 open (RUL, ">disk1/setup.rul");
 $found = 0;
 foreach (<TMP>) {
@@ -166,12 +224,28 @@ foreach (<TMP>) {
 close RUL;
 close TMP;
 if ($found) {
-    system("$InstallShieldDir\\program\\compile.exe disk1\\setup.rule >>log");
+    system("$InstallShieldDir\\program\\compile.exe disk1\\setup.rule >>$log");
     unlink "disk1/setup.rul";
+    print "done\n";
 } else {
     print "FATAL: did not find Autoinsert-magic key in Rule-template\n";
     exit 1;
 }
 
-print "\n\nNow the ready-to-ship disks should reside in diskXX.\n";
-print "BUT please check the output from the programs in 'log'\n";
+print "\nZIPPING beta_$ENV{'SDK'}.zip\n";
+system "zip -r beta_$ENV{'SDK'} disk*";
+
+chdir $CWD;
+# Clean up:
+unlink "setup.lst";
+unlink "$RuleTemplate";
+foreach $basefile (@FileList) {
+    if (8 < length($basefile)) {
+	$file = substr($basefile, 0, 8);
+    } else {
+	$file = $basefile;
+    }
+    unlink "datafiles/$file.z"
+}
+print "\nNow the ready-to-ship disks should reside in datafiles/diskXX.\n";
+print "BUT please check the output from the programs in datafiles/$log\n";
