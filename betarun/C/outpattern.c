@@ -23,11 +23,23 @@ static long M_Part(ref(ProtoType) proto)
       *
       * Should ONLY be called for a prototype which is known to correspond to 
       * object with do-part.
+      * NOTICE. The Return entry point has no underscore (_) prepended to its
+      * name on any platform.
       */
 {
 #ifdef macintosh
-#error Address of label Return not yet calculated for Macintosh / datpete
-#else
+#error Address of label Return not yet calculated for Macintosh. / datpete
+
+/* Maybe 
+ *   extern void Return();
+ * and
+ *   &Return 
+ * i.e. a function pointer, can be used on mac instead of asm("Return"),
+ * since the mac C-compiler does not put a underscore in front of 
+ * function names.
+ */
+
+#else /* Not macintosh */
   extern long *Return asm("Return");
 #endif
   long *m;
@@ -57,6 +69,17 @@ static ptr(char) ProtoTypeName(theProto)
   return (ptr(char)) dyn;
 }
 
+/* c_on_top are used by beta.dump (only) to determine if things on top
+ * of the stack is outside beta-code, i.e. a program has failed in 
+ * external code.
+ */
+static int c_on_top;
+
+#ifdef macintosh
+#error Functions NextGroup and GroupName are not yet implemented for macintosh. \
+   The are used by beta.dump, objinterface, and persistent store / datpete
+#else
+
 typedef struct group_header
 {
  struct group_header *self;
@@ -66,16 +89,14 @@ typedef struct group_header
  long                code_end;
 } group_header;
 
-static int c_on_top;
-
+/* NextGroup are used by objectserver/persistent store to scan through the
+ * data-segments, in order to implement InitFragment.
+ * It must be non-static.
+ */
 struct group_header* NextGroup (struct group_header* current)
 /* Return group in executable following current. 
  * If current is NULL, first group is returned. */
 { 
-#ifdef macintosh
-#error Function NextGroup not yet implemented for Macintosh / sbrandt
-#else /* Not macintosh */
-
   extern long *data1 asm("BETA_data1");
   long *limit;
 
@@ -91,15 +112,13 @@ struct group_header* NextGroup (struct group_header* current)
     return 0;
   } else
     return (struct group_header *)&data1;
-
-#endif /* not macintosh */
 }
 
+/* GroupName is used by DisplayBetaStack (beta.dump) and objinterface.bet.
+ * It must be non-static.
+ */
 char *GroupName(long address, int isCode)
 {
-#ifdef macintosh
-#error Function GroupName not yet implemented for Macintosh / datpete
-#else /* Not macintosh */
   struct group_header *group;
   struct group_header *current;
   struct group_header *last;
@@ -142,8 +161,9 @@ char *GroupName(long address, int isCode)
   }
   
   return group->ascii;
-#endif /* not macintosh */
 }
+
+#endif /* not macintosh */
 
 static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, int print_origin)
 {
