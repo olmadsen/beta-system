@@ -34,10 +34,6 @@ typedef struct OTEntry {  /* Object Table Entry */
 static sequenceTable *currentTable = NULL;
 static Node *loadedObjectsST;
 
-#ifdef RTINFO
-static unsigned long bytesExported, objectsExported;
-#endif /* RTINFO */
-
 /* LOCAL FUNCTION DECLARATIONS */
 static void updateObjectInStore(Object *theObj, unsigned long store, unsigned long offset);
 static void freeLoadedObjectsOF(void *contents);
@@ -239,7 +235,6 @@ void OTEndGC(void)
     if (entry -> GCAttr == POTENTIALLYDEAD) {
       entry -> theObj -> GCAttr = DEADOBJECT;
       entry -> theObj = NULL;
-      INFO_PERSISTENCE(numD++);
       
     } else if (entry -> GCAttr == ENTRYALIVE) {
       if (!closingGC) {
@@ -252,7 +247,6 @@ void OTEndGC(void)
 	newInx = STInsert(&newTable, newEntry);
 	entry -> theObj -> GCAttr = (long)newPUID(newInx);
 	registerObjectAndParts(entry -> store, entry -> offset, entry -> theObj, newInx + 1);
-	INFO_PERSISTENCE(numP++);
       }
     } else {
       Claim(entry -> theObj == NULL, "What is the object ??");
@@ -282,7 +276,6 @@ void flushDelayedEntries(void)
       entry -> GCAttr = ENTRYDEAD;
       entry -> theObj = NULL;
       newPersistentObject(theObj);
-      INFO_PERSISTENCE(numDE++);
     }
   }  
 }
@@ -297,7 +290,6 @@ void updatePersistentObjects(void)
   
   /* All objects referred from persistent objects shall be made
      persistent as well */
-  INFO_PERSISTENCE(fprintf(output, "[ updatePersistentObjects\n "));
   clearTail();
   maxIndex = STSize(currentTable);
   for (count=0; count<maxIndex; count++) {
@@ -310,15 +302,11 @@ void updatePersistentObjects(void)
 		 markReachableObjects,
 		 NULL,
 		 TRUE);
-      INFO_PERSISTENCE(numPB++);
     } else {
       Claim(entry -> GCAttr == ENTRYDEAD, "What is GCAttr ?");
     }
   }
 
-  INFO_PERSISTENCE(newObjects = 0);
-  INFO_PERSISTENCE(persistentBytes = 0);
-  INFO_PERSISTENCE(fprintf(output, " handleNewPersistentObjects "));
   /* All new persistent objects have now been linked together. */
   if ((root = getHead())) {
     scanList(root, handleNewPersistentObject);
@@ -326,10 +314,6 @@ void updatePersistentObjects(void)
     /* No new persistent objects */
     ;
   }
-  INFO_PERSISTENCE(fprintf(output, "(0x%X new Objects, 0x%X new bytes)\n", 
-			   (int)newObjects, 
-			   (int)persistentBytes));
-  INFO_PERSISTENCE(fprintf(output, "  AOAGc\n"));
 }
 
 static void updateObjectInStore(Object *theObj, unsigned long store, unsigned long offset)
@@ -344,6 +328,11 @@ static void updateObjectInStore(Object *theObj, unsigned long store, unsigned lo
   Claim(theObj == getRealObject(theObj), "Unexpected part object");
   
   entry = STLookup(currentTable, getPUID((void*)(theObj->GCAttr)));
+
+  /* The object is exported. 'exportObject' does not export the proto
+     types. */
+  exportObject(theObj, store);
+  
   if ((!entry->Flags & FLAG_INSTORE)) {
     docopy = TRUE;
   } else {
@@ -355,15 +344,12 @@ static void updateObjectInStore(Object *theObj, unsigned long store, unsigned lo
     }
     objcopy->GCAttr = DEADOBJECT;
   }
-
+  
   if (docopy) {
     setCurrentPStore(store);
-    exportObject(theObj, store);
-    
     if (setStoreObject(store, offset, theObj)) {
       /* Object has been updated */
-      INFO_PERSISTENCE(bytesExported += 4*ObjectSize(theObj));
-      INFO_PERSISTENCE(objectsExported ++);
+      INFO_PERSISTENCE(objectsExported++);
     } else {
       Claim(FALSE, "Could not update object");
     }
@@ -391,7 +377,6 @@ void removeUnusedObjects()
      allocated objects, so we have to mark the origin alive as well as
      offline allocated objects referred from within the object. */
   
-  INFO_PERSISTENCE(fprintf(output, "  markOriginsAlive\n "));
   maxIndex = STSize(currentTable);
   for (count=0; count<maxIndex; count++) {
     entry = STLookup(currentTable, count);
@@ -406,7 +391,6 @@ void removeUnusedObjects()
     }
   }
   
-  INFO_PERSISTENCE(fprintf(output, " handlePersistentCell\n"));    
   /* Handle references from live to dead persistent objects */
   maxIndex = STSize(currentTable);
   for (count=0; count<maxIndex; count++) {
@@ -422,12 +406,8 @@ void removeUnusedObjects()
     }
   }
   
-  INFO_PERSISTENCE(fprintf(output, "  updateObjectInStore "));    
-
   /* Handles dead entries and exports dead objects */
   maxIndex = STSize(currentTable);
-  INFO_PERSISTENCE(bytesExported = 0);
-  INFO_PERSISTENCE(objectsExported = 0);
   for (count=0; count<maxIndex; count++) {
     entry = STLookup(currentTable, count);
     if (entry -> GCAttr == POTENTIALLYDEAD) {
@@ -449,22 +429,14 @@ void removeUnusedObjects()
     }
   }
   
-  INFO_PERSISTENCE(fprintf(output, "(exported 0x%X objects 0x%X bytes)\n", 
-			   (int)objectsExported,
-			   (int)bytesExported));
-  
   /* mark dead objects dead and clean up tables */
-  INFO_PERSISTENCE(fprintf(output, "  OTEndGC\n"));    
   OTEndGC();
-  INFO_PERSISTENCE(fprintf(output, "  RTEndGC"));    
   RTEndGC();
   
   if (closingGC) {
     closeExt();
     closingGC = FALSE;
   }
-
-  INFO_PERSISTENCE(fprintf(output, "]\n"));    
 }
 
 #endif /* PERSIST */

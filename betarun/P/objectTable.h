@@ -9,7 +9,7 @@ unsigned long insertObject(unsigned short GCAttr,
 			   unsigned long offset,
 			   Object *theObj);
 void objectLookup(unsigned long inx,
-		  char *GCAttr,
+		  unsigned short *GCAttr,
 		  unsigned long *store,
 		  unsigned long *offset,
 		  Object **theObj);

@@ -84,9 +84,6 @@ void newPersistentObject(Object *theObj)
 		     theObj);
   free(sp);
   theObj -> GCAttr = PERSISTENTMARK(inx);
-  
-  INFO_PERSISTENCE(persistentBytes+= 4*ObjectSize(theObj));
-  INFO_PERSISTENCE(newObjects+=1);
 }
 
 /* Given a cell in a persistent object, all objects referred
@@ -157,7 +154,7 @@ void markOfflineAndOriginObjectsAlive(REFERENCEACTIONARGSTYPE)
 {
   Object *theObj, *theRealObj;
   unsigned long inx;
-  char GCAttr;
+  unsigned short GCAttr;
   unsigned long store;
   unsigned long offset;
   
@@ -219,7 +216,7 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
 {
   Object *realObj, *theObj;
   unsigned long inx;
-  char GCAttr;
+  unsigned short GCAttr;
   unsigned long store;
   unsigned long offset;
   
@@ -236,7 +233,6 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
     /* The reference is in proper format already */
     referenceAlive((void *)theObj);
     newAOAclient(getPUID((void *)theObj), theCell);
-    INFO_PERSISTENCE(PtoD++);
     return;
   } else {
     unsigned long newEntryInx, distanceToPart;
@@ -293,7 +289,6 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
 	Claim(*theCell != NULL, "Assigning NULL");
 	referenceAlive((void *)*theCell);
 	newAOAclient(newEntryInx, theCell);
-	INFO_PERSISTENCE(PtoD++);
       } else {
 	Claim(GCAttr == ENTRYALIVE, "What is GC mark ?");
       }
@@ -305,32 +300,16 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
 
 void resetStatistics(void)
 {
-  TtoP = 0;
-  numP = 0;
-  PtoD = 0;
-  numD = 0;
-  numPB = 0;
-  numDE = 0;
+  ;
 }
 
 void showStatistics(void)
 {
-  /* INFO_PERSISTENCE(fprintf(output, "[Persistence statistics\n");
-     fprintf(output, " Pers. before GC         : %d\n", numPB);
-     fprintf(output, " Delayed entries used    : %d\n", numDE);
-     fprintf(output, " Trans. to Pers. refs    : %d\n", TtoP);
-     fprintf(output, " Persistent Objects      : %d\n", numP);
-     fprintf(output, " Pers. alive to dead refs: %d\n", PtoD);
-     fprintf(output, " Dead pers. objects      : %d\n", numD);
-     fprintf(output, "\n");
-     fprintf(output, " Block loads             : %d\n", numSL);
-     fprintf(output, "\n");
-     fprintf(output, " OT size                 : %d\n", (int)OTSize());
-     fprintf(output, "]\n")); */
-
-  printObjectStoreStatistics();
-  printProxyStatistics();
-  showUnswizzleStatistics();
+  INFO_PERSISTENCE(fprintf(output, "[Statistics:\n"));
+  INFO_PERSISTENCE(fprintf(output, " Traps              : %d\n", (int)numPF));
+  INFO_PERSISTENCE(fprintf(output, " Objects Loaded     : %d\n", (int)objectsLoaded));
+  INFO_PERSISTENCE(fprintf(output, " Objects Exported   : %d\n", (int)objectsExported));
+  INFO_PERSISTENCE(fprintf(output, " Memory used(kB)    : %d]\n", (int)totalAOASize/(int)1024));
 }
 
 /* */
@@ -338,7 +317,7 @@ void showStatistics(void)
 void getKeyForObject(ObjectKey *ok, Object *theObj)
 {
   unsigned long inx;
-  char GCAttr;
+  unsigned short GCAttr;
   unsigned long store;
   unsigned long offset;
   Object *theObjInTable;

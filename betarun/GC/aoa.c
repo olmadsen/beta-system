@@ -495,7 +495,6 @@ void AOAGc()
       if (!AOAISPERSISTENT(target)) {
 	collectList(target, prependToListInAOA);
       } else {
-	INFO_PERSISTENCE(TtoP++);
 	objectAlive(target);
       }
 #else
@@ -1054,7 +1053,6 @@ void prependToListInAOA(REFERENCEACTIONARGSTYPE)
       Claim(inAOA(realObj), "inAOA(realObj)");
       if (AOAISPERSISTENT(realObj)) {
 	/* The object is marked as persistent. */
-	INFO_PERSISTENCE(TtoP++);
 	objectAlive(realObj);
       } else { 
 	prependToList(realObj);
@@ -1064,8 +1062,7 @@ void prependToListInAOA(REFERENCEACTIONARGSTYPE)
     }
   } else {
     /* This reference is a proxy reference */
-    INFO_PERSISTENCE(TtoP++);
-    referenceAlive((void *)theObj);
+   referenceAlive((void *)theObj);
     newAOAclient(getPUID((void *)theObj), theCell);
   }
 #else

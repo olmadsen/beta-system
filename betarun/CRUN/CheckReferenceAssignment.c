@@ -42,7 +42,6 @@ void ChkRA()
 #ifdef PERSIST
     if (inPIT((void *)*theCell)) {
       newAOAclient(getPUID((void *)*theCell), theCell);
-      INFO_PERSISTENCE(TtoP++);
     }
 #endif /* PERSIST */
     return; 

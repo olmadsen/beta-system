@@ -8,11 +8,11 @@ typedef struct Array {
   unsigned short max;
 } Array;
 
-unsigned long insertReference(char GCAttr,
+unsigned long insertReference(unsigned short GCAttr,
 			      unsigned long store,
 			      unsigned long offset);
 void referenceLookup(unsigned long inx,
-		     char *GCAttr,
+		     unsigned short *GCAttr,
 		     unsigned long *store,
 		     unsigned long *offset,
 		     Array **IOAclients,

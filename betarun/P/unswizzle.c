@@ -19,7 +19,6 @@ void unswizzle_dummy()
 #ifdef PERSIST
 
 /* LOCAL VARIABLES */
-static unsigned long lookups = 0;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static Object *loadObject(unsigned long store, u_long offset, unsigned long inx);
@@ -31,12 +30,12 @@ static Object *loadObject(unsigned long store, u_long offset, unsigned long inx)
    object is retrieved. */
 void showUnswizzleStatistics(void)
 {
-  INFO_PERSISTENCE(fprintf(output, "[Unswizzle: lookups = 0x%X]\n", (int)lookups));
+  ;
 }
 
 Object *unswizzleReference(void *ip)
 {
-  char GCAttr;
+  unsigned short GCAttr;
   unsigned long store;
   unsigned long offset;
   unsigned long inx;
@@ -68,8 +67,6 @@ Object *unswizzleReference(void *ip)
 Object *lookUpReferenceEntry(unsigned long store, unsigned long offset, unsigned long inx)
 {
   Object *theObj;
-  
-  INFO_PERSISTENCE(lookups++);
   
   if ((theObj = indexLookupTOT(store, offset)) != NULL) {
     return theObj;
@@ -110,17 +107,22 @@ static Object *loadObject(unsigned long store, unsigned long offset, unsigned lo
     }
     memcpy(theRealObj, theRealStoreObj, size);
     importProtoTypes(theRealObj);
-    importStoreObject(theRealObj, store, offset, inx);
+    
+    /* A copy of the object is save after the object it self. This
+       copy are still in store format apart from the prototypes which
+       are in in memory format. */
     memcpy((char*)theRealObj+size, theRealObj, size);
-    ((Object*)((char*)theRealObj+size))->GCAttr = newPUID(0);
+    /* The copy is marked as a persistent object. This marking is only
+       used to indicate to the GC'er that it should not free the space
+       taken up by the object. */
+    ((Object*)((char*)theRealObj+size))->GCAttr = (long)newPUID(0);
+
+    /* The real object is imported */
+    importStoreObject(theRealObj, store, offset, inx);
+
     Claim(ObjectSize(((Object*)((char*)theRealObj+size)))
 	  == ObjectSize(theRealObj), "Claim");
-#ifdef RTDEBUG
-    INFO_PERSISTENCE(fprintf(output, "[ Importing object (%d, %d) %s]\n",
-			     (int)store,
-			     (int)offset,
-			     ProtoTypeName(GETPROTO(theRealObj))));
-#endif /* RTDEBUG */
+    INFO_PERSISTENCE(objectsLoaded++);
     return theRealObj;
   }
 }

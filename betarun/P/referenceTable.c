@@ -17,7 +17,7 @@ void reft_dummy() {
 /* LOCAL TYPES */
 
 typedef struct RTEntry {          /* Reference Table Entry */
-  char GCAttr;                    /* The GC state of this entry. */
+  unsigned short GCAttr;                    /* The GC state of this entry. */
   unsigned long store;            /* The store in which this object is saved */
   unsigned long offset;           /* The byte offset in the store of the object */  
   Array *IOAclients, *AOAclients; /* List of cells referring this reference */
@@ -220,7 +220,7 @@ void clearIOAclients(void)
   }
 }
 
-unsigned long insertReference(char GCAttr,
+unsigned long insertReference(unsigned short GCAttr,
 			      unsigned long store,
 			      unsigned long offset)
 {
@@ -260,7 +260,7 @@ static void insertStoreOffsetRT(unsigned long store, unsigned long offset, unsig
 
 /* Looks up GCAttr, store and offset based on index into table */
 void referenceLookup(unsigned long inx,
-		     char *GCAttr,
+		     unsigned short *GCAttr,
 		     unsigned long *store,
 		     unsigned long *offset,
 		     Array **IOAclients,

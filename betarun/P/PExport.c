@@ -24,7 +24,7 @@ static Object *currentObj;
 /* */
 static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
 {
-  char GCAttr;
+  unsigned short GCAttr;
   unsigned long store;
   unsigned long offset, distanceToPart;
   Object *theObj, *realObj;

@@ -657,7 +657,6 @@ void ProcessReference(Object ** theCell, long refType)
     if (inPIT((void *)*theCell)) {
       referenceAlive(((void *)*theCell));
       newIOAclient(getPUID((void *)*theCell), theCell);
-      INFO_PERSISTENCE(TtoP++);
     } else 
 #endif /* PERSIST */
     if (inAOA(*theCell)) {
@@ -768,7 +767,6 @@ static void ProcessAOAReference(Object ** theCell, long refType)
   else if (inPIT((void *)*theCell)) {
     referenceAlive(((void *)*theCell));
     newAOAclient(getPUID((void *)*theCell), theCell);
-    INFO_PERSISTENCE(TtoP++);
   }
 #endif /* PERSIST */
 

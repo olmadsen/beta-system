@@ -508,7 +508,7 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
 #ifdef RTINFO
 void printProxyStatistics(void)
 {
-  fprintf(output, "[ numPF: 0x%X]\n", (int)numPF);
+  ;
 }
 #else
 void printProxyStatistics(void)

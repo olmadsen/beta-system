@@ -87,7 +87,7 @@ static Object *importReference(unsigned long store, unsigned long offset, Object
 {
   StoreProxy *sp;
   unsigned long inxOT;
-  char OTGCAttr;
+  unsigned short OTGCAttr;
   unsigned long OTstore;
   unsigned long OToffset;
   Object *theRealObj;
@@ -143,9 +143,9 @@ static void updateTransitObjectTable(Object *theObj)
 			theObj);
   if (distanceToPart == 0) {
     if (currentInx != -1) {
-      theObj -> GCAttr = currentInx;
+      theObj -> GCAttr = currentInx + 1;
     } else {
-      theObj -> GCAttr = DEADOBJECT;
+      theObj -> GCAttr = 0;
     }
   }
 }
