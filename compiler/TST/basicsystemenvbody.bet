@@ -1,5 +1,5 @@
 ORIGIN 'basicsystemenv';
-MDBODY sun4s 'semaphore_solarisbody';
+
 
 --LIB: attributes--
 attToThread: external
@@ -8,6 +8,15 @@ attToThread: external
   enter comp
   exit tid
   #);
+thisThreadInx: external
+  (# i: @Integer;
+  exit i
+  #);
+BETA_MT_lock: external(# #);
+BETA_MT_unlock: external(# #);
+BETA_MT_suspend: external(# #);
+BETA_MT_continue: external(# i: @integer enter i #);
+   
 --basicSystemEnvFork:doPart--
 do (*IO.entry
    (#
@@ -17,5 +26,79 @@ do (*IO.entry
    (*   ')'->put
     #)*)
    
+--SemaphoreInit:dopart--
+do private.Queue.init; count->private.cnt;
+--SemaphoreP:dopart--
+do private.P   
+--SemaphoreV:dopart--
+do private.V
+-- SemaphorePrivate:descriptor --
+(# P:
+     (# 
+     do cnt.%disablePreemption;
+        BETA_MT_lock;
+        (if (cnt < 1) then
+            cnt-1->cnt;
+            thisThreadInx->Queue.append;
+            cnt.%enablePreemption;
+            BETA_MT_suspend;
+            BETA_MT_unlock;
+         else
+            cnt-1->cnt;
+            BETA_MT_unlock;
+            cnt.%enablePreemption;
+        if)
+     #);
+   
+   V:(# next: @Integer;
+     do cnt.%disablePreemption;
+        BETA_MT_lock;
+        (if (cnt < 0) then
+            cnt+1->cnt;
+            Queue.next -> next;
+	    next -> BETA_MT_continue;
+         else
+            cnt+1->cnt;
+        if);
+        BETA_MT_unlock;
+        cnt.%enablePreemption;
+  #);
+
+   cnt: @Integer;
+   Queue: @
+     (# Q: [1]@Integer;
+        length, mask: @Integer;
+        putpos, getpos: @ integer;
+        init:
+          (# do 32->length; length-1->mask; length -> Q.new #);
+        extendBuffer: 
+          (# (* DOES NOT WORK! you have to move some elms! *)
+          do 'FATAL: extendBuffer called' -> putLine;
+             length*2->length; 
+             mask*2+1->mask;   
+             length-Q.range->Q.extend;
+          #);
+        isEmpty: @(# exit getpos=putpos #);
+        append:
+          (# S: @Integer;
+          enter S
+          do (if ((putpos+1) %Band mask)=getpos then extendBuffer if);
+             S -> Q[putpos+1];
+             (putpos+1) %Band mask -> putpos;
+          #);
+        next: 
+          (# S: @Integer;
+          do (if (putpos=getpos) then 
+                 'ERROR: next called on empty queue!'->putLine;
+              else
+                 Q[getpos+1]->S;
+                 (getpos+1) %Band mask -> getpos
+             if);
+          exit S
+          #);
+     #);
+#)
+  
+
    
    

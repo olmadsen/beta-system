@@ -32,17 +32,22 @@ struct S_PreemptionLevel {
 void initSynchVariables(void)
 {
   mutex_init(&tsd_lock, USYNC_THREAD, NULL);
-  mutex_init(&ioa_lock, USYNC_THREAD, NULL);
   mutex_init(&lvra_lock, USYNC_THREAD, NULL);
   mutex_init(&aoa_lock,  USYNC_THREAD, NULL);
   mutex_init(&aoatoioa_lock,  USYNC_THREAD, NULL);
   mutex_init(&cbfa_lock, USYNC_THREAD, NULL);
-  mutex_init(&GC_lock, USYNC_THREAD, NULL);
 
+#ifdef OURSEMAIMPL
+  mutex_init(&cond_pause_lock, USYNC_THREAD, NULL);
+  cond_init (&cond_pause, USYNC_THREAD, NULL);
+#else
+  mutex_init(&GC_lock, USYNC_THREAD, NULL);
+  mutex_init(&ioa_lock, USYNC_THREAD, NULL);
   cond_init (&cond_startGC, USYNC_THREAD, NULL);
   mutex_init(&cond_startGC_lock, USYNC_THREAD, NULL);
   cond_init (&cond_GCdone, USYNC_THREAD, NULL);
   mutex_init(&cond_GCdone_lock, USYNC_THREAD, NULL);
+#endif
 }
 
 
@@ -83,34 +88,33 @@ void create_TSD(void)
   TSDlist[TSDinx] = TSDReg;
   
   mutex_unlock(&tsd_lock);
+
+  /* Signal that the number of threads has changed */
+  mutex_lock(&cond_pause_lock);
+  cond_broadcast(&cond_pause);
+  mutex_unlock(&cond_pause_lock);
 }
 
 void destroy_TSD(void)
 {
   long inx = TSDinx;
 
-  if (!TSDReg)__asm__("unimp 0");
-  /* mutex_lock(&tsd_lock); */
-  while(mutex_trylock(&tsd_lock))
-    sleep(1);
-  if (!TSDReg)__asm__("unimp 0");
- 
+  mutex_lock(&tsd_lock);
   free(Nums);
-  if (!TSDReg)__asm__("unimp 0");
   free(TSDReg);
   TSDlist[inx] = NULL;
   TSDReg = NULL;
   NumTSD--;
-
+  
   mutex_unlock(&tsd_lock);
 
   /* Some other thread may be initiating a GC.  
    * If we are the last to "join in", that thread wouldwait forever
    * without this...
    */
-  mutex_lock(&cond_startGC_lock);
-  cond_signal(&cond_startGC);
-  mutex_unlock(&cond_startGC_lock);
+  mutex_lock(&cond_pause_lock);
+  cond_broadcast(&cond_pause);
+  mutex_unlock(&cond_pause_lock);
 }
 
 static struct Object *AllocObjectAndSlice(unsigned int numbytes, unsigned int reqsize)
@@ -146,6 +150,16 @@ static struct Object *AllocObjectAndSlice(unsigned int numbytes, unsigned int re
   return newObj;
 }
 
+/* Acquire cond_pause_lock and tsd_lock prior to calling */
+static int CheckIfICanGC()
+{ 
+  int i;
+  for (i = 0; i < TSDlistlen; i++)
+    if (TSDlist[i] && (TSDlist[i]->_TSDFlags & Flag_DoingGC))
+      return 0;
+  return 1;
+}
+
 struct Object *doGC(unsigned long numbytes)
 {
   /* Allocate an IOA slice. 
@@ -159,8 +173,8 @@ struct Object *doGC(unsigned long numbytes)
   unsigned long reqsize = numbytes;
   int i;
   
-  mutex_lock(&ioa_lock); /* IOA_CRITICAL_START */
-  DEBUG_MT(fprintf(output,"TId=%d: Lock ioa_lock.\n", (int)ThreadId);
+  mutex_lock(&cond_pause_lock);
+  DEBUG_MT(fprintf(output,"TId=%d: Got cond_pause_lock.\n", (int)ThreadId);
 	   fflush(output);
 	   );
   if (reqsize < IOASliceSize)
@@ -169,6 +183,9 @@ struct Object *doGC(unsigned long numbytes)
   if (!IOATop) {
     /* IOATop is zero => this thread has not had a slice yet. */
     IOATop = gIOATop;
+    DEBUG_MT(fprintf(output,"TId=%d: Got initial slice.\n", (int)ThreadId);
+	     fflush(output);
+	     );
   } 
   
   if (gIOALimit < (long*)((long)gIOATop + reqsize)) {
@@ -179,48 +196,81 @@ struct Object *doGC(unsigned long numbytes)
     if (ActiveStack) {
       ActiveStack->refTopOff = (long)RefTopOffReg;
       ActiveStack->dataTopOff = (long)DataTopOffReg;
+    } else {
+      DEBUG_MT(fprintf(output,"TId=%d: doGC: No ActiveStack.\n", (int)ThreadId);
+	       fflush(output);
+	       );
     }
 
-    if (!mutex_trylock(&GC_lock)) {
-      /* I'm the first thread that discoveres the need to GC */
+    mutex_lock(&tsd_lock);
+    if (CheckIfICanGC()) {
+      /* I'm the first thread that discovers the need to GC */
       /* Get Ready to GC now:
        * 1) Only one threads will get in HERE for each GC.
        * 2) Setup variables & locks so that only this thread will do the GC.
        *    Also force all threads to run out of heap at next allocation, so
        *    that they will not use the rest of their slice.
-       * 3) Then release ioa_lock, ie. let the other pass IOA_CRITICAL_START,
-       *    where they have been blocked so far.
        * 4) Then wait for the last of the other threads to signal start_gc.
        * 5) Try IOAGc'ing at most three times.
        * 6) Allocate object and slice for this thread.
        * 7) signal gc_done to all other threads.
        */
-      
-      DEBUG_MT(fprintf(output,"TId=%d: Acquired GC_lock.\n", (int)ThreadId);
+
+      /* (2) */
+      TSDFlags |= Flag_DoingGC;
+      DEBUG_MT(fprintf(output,"TId=%d: Set Flag_DoingGC\n", (int)ThreadId);
 	       fflush(output);
 	       );
-      /* (2) */
-      mutex_lock(&tsd_lock);
       for (i = 0; i < TSDlistlen; i++) {
 	if (TSDlist[i]) {
-	  TSDlist[i]->_IOALimit = gIOA; /* Makes all other threads run out of mem */
+	  if (gIOA <= TSDlist[i]->_IOALimit){
+	    /* Make thread TSDlist[i]->_thread_id run out of mem */
+	    TSDlist[i]->_IOALimit = gIOA; 
+	  } else {
+	    DEBUG_MT(fprintf(output,
+			     "TId=%d: not triggering GC for TId %d (no slice yet).\n", 
+			     (int)ThreadId,
+			     (int)TSDlist[i]->_thread_id);
+		     fflush(output);
+		     );
+	  }
 	}
       }
       mutex_unlock(&tsd_lock);
-      numReadyToGC = 1;                  
-      
-      /* (3) */
-      DEBUG_MT(fprintf(output,"TId=%d: UNLock ioa_lock.\n", (int)ThreadId);
-	       fflush(output);
-	       );
-      mutex_unlock(&ioa_lock);
-      
+
       /* (4) */
-      mutex_lock(&cond_startGC_lock);
-      while (numReadyToGC != NumTSD)
-	cond_wait(&cond_startGC, &cond_startGC_lock);
-      mutex_unlock(&cond_startGC_lock); 
-      mutex_unlock(&GC_lock); 
+      /* Scan TSD, counting blocked processes into numReadyToGC.
+       * Recount until NumTSD threads are blocked.
+       */
+
+      while (1) {
+	numReadyToGC = 0;
+	mutex_lock(&tsd_lock);
+	for (i = 0; i < TSDlistlen; i++) {
+	  if (TSDlist[i] &&
+	      (TSDlist[i]->_TSDFlags & (Flag_Semablocked | Flag_GCblocked | Flag_DoingGC))){
+	    numReadyToGC++;
+	    DEBUG_MT(fprintf(output,
+			     "TId=%d: Detected TId %d ready for GC (%d ready, expecting %d)\n", 
+			     (int)ThreadId,
+			     TSDlist[i]->_thread_id,
+			     (int)numReadyToGC,
+			     (int)NumTSD
+			     );
+		     fflush(output);
+	   );
+
+	  }
+	}
+	
+	if (numReadyToGC == NumTSD) {
+	  mutex_unlock(&tsd_lock);
+	  break;  /* all threads are blocked, go GC! */
+	} else {
+	  mutex_unlock(&tsd_lock);
+	  cond_wait(&cond_pause, &cond_pause_lock);
+	}
+      }
 
       DEBUG_MT(fprintf(output,"TId=%d: Starting doGC.\n", (int)ThreadId);
 	       fflush(output);
@@ -278,36 +328,32 @@ struct Object *doGC(unsigned long numbytes)
 	       fflush(output);
 	       );
       /* (7) */
-      DEBUG_MT(fprintf(output,"TId=%d: Broadcast on GCdone.\n", (int)ThreadId);
-	       fflush(output);
-	       );
-      mutex_lock(&cond_GCdone_lock);
-      cond_broadcast(&cond_GCdone);
-      mutex_unlock(&cond_GCdone_lock);      
-    } 
-    else {
-      DEBUG_MT(fprintf(output,"TId=%d: Increment and signal.\n", (int)ThreadId);
-	       fflush(output);
-	       );
-      numReadyToGC++;
-      DEBUG_MT(fprintf(output,"TId=%d: UNLock ioa_lock.\n", (int)ThreadId);
+      mutex_lock(&tsd_lock);
+      for (i = 0; i < TSDlistlen; i++) {
+	if (TSDlist[i])
+	  TSDlist[i]->_TSDFlags &= ~(Flag_GCblocked | Flag_DoingGC);
+      }
+      mutex_unlock(&tsd_lock);
+      cond_broadcast(&cond_pause);
+      mutex_unlock(&cond_pause_lock);
+    } else {
+      mutex_unlock(&tsd_lock);
+
+      DEBUG_MT(fprintf(output,"TId=%d: Flag and signal.\n", (int)ThreadId);
 	       fflush(output);
 	       );
       DEBUG_MT(fprintf(output,"TId=%d: Wait for GC to complete.\n", (int)ThreadId);
 	       fflush(output);
 	       );
-      mutex_lock(&cond_GCdone_lock);
-      mutex_lock(&cond_startGC_lock);
-      cond_signal(&cond_startGC);
-      mutex_unlock(&cond_startGC_lock);
-      mutex_unlock(&ioa_lock);
-      /* FIXME: problem: The thread GC'ing may finish before I get to wait... */
-      while (cond_wait(&cond_GCdone, &cond_GCdone_lock))
-	;
+      TSDFlags |= Flag_GCblocked;
+      cond_broadcast(&cond_pause);
+      while (TSDFlags & Flag_GCblocked)
+	cond_wait(&cond_pause, &cond_pause_lock);
+      
       DEBUG_MT(fprintf(output,"TId=%d: Received GCdone.\n", (int)ThreadId);
 	       fflush(output);
 	       );
-
+      
       if (gIOALimit < (long*)((long)gIOATop + reqsize)) {
 	/* Not enough room in IOA. Allocate object in AOA, and return empty slice */
 	DEBUG_MT(fprintf(output,"TId=%d: Alloced in AOA\n", (int)ThreadId);
@@ -316,28 +362,26 @@ struct Object *doGC(unsigned long numbytes)
 	newObj = AOAcalloc(numbytes);
 	IOATop = gIOATop;
 	savedIOALimit = IOALimit = gIOATop;
-      }
-      else {
+      } else {
 	/* There is room for my request, as
 	 * max(numbytes,IOASliceSize) will fit into [gIOATop..gIOALimit[ 
 	 */
 	newObj = AllocObjectAndSlice(numbytes, reqsize);
       }
-      DEBUG_MT(fprintf(output,"TId=%d: Unlocking GCdone_lock\n", (int)ThreadId);
+      DEBUG_MT(fprintf(output,"TId=%d: Unlocking cond_pause_lock\n", (int)ThreadId);
 	       fflush(output);
 	       );
-      mutex_unlock(&cond_GCdone_lock);
+      mutex_unlock(&cond_pause_lock);
     }
-  } 
-  else {
+  } else {
     /* No need to GC, as 
      * max(numbytes,IOASliceSize) will fit into [gIOATop..gIOALimit[ 
      */
     newObj = AllocObjectAndSlice(numbytes, reqsize);
-    DEBUG_MT(fprintf(output,"TId=%d: UNLock ioa_lock\n", (int)ThreadId);
+    DEBUG_MT(fprintf(output,"TId=%d: UNLock cond_pause_lock\n", (int)ThreadId);
 	     fflush(output);
-	     )
-    mutex_unlock(&ioa_lock);
+	     );
+    mutex_unlock(&cond_pause_lock);
   }
 
   return newObj;
@@ -387,6 +431,60 @@ int thisThreadInx(void)
 {
   return TSDinx;
 }
+
+void BETA_MT_lock(void)
+{
+  DEBUG_MT(fprintf(output,"TId=%d: Try BETA_MT_lock\n", (int)ThreadId);
+	   fflush(output);
+	   );
+  mutex_lock(&cond_pause_lock);
+  DEBUG_MT(fprintf(output,"TId=%d: Got BETA_MT_lock\n", (int)ThreadId);
+	   fflush(output);
+	   );
+}
+void BETA_MT_unlock(void)
+{
+  DEBUG_MT(fprintf(output,"TId=%d: BETA_MT_unlock\n", (int)ThreadId);
+	   fflush(output);
+	   );
+  mutex_unlock(&cond_pause_lock); 
+}
+void BETA_MT_suspend(void)
+{
+  DEBUG_MT(fprintf(output,"TId=%d: BETA_MT_suspend\n", (int)ThreadId);
+	   fflush(output);
+	   );  
+  DEBUG_MT(if (mutex_trylock(&cond_pause_lock) != EBUSY) 
+    fprintf(output, "TId=%d: BETA_MT_suspend DOES NOT HAVE pause_lock!\n", (int)ThreadId));
+
+  TSDFlags |= Flag_Semablocked; /* No need to lock; this is my own TSD */
+  cond_broadcast(&cond_pause);
+  while (TSDFlags & Flag_Semablocked) {
+    cond_wait(&cond_pause, &cond_pause_lock);
+  }
+  DEBUG_MT(fprintf(output,"TId=%d: BETA_MT_suspend-continuing\n", (int)ThreadId);
+	   fflush(output);
+	   );
+}
+void BETA_MT_continue(int i)
+{
+  DEBUG_MT(fprintf(output,"TId=%d: BETA_MT_continue\n", (int)ThreadId);
+	   fflush(output);
+	   );
+  DEBUG_MT(if (mutex_trylock(&cond_pause_lock) != EBUSY) 
+    fprintf(output, "TId=%d: BETA_MT_continue DOES NOT HAVE pause_lock!\n", (int)ThreadId));
+
+  mutex_lock(&tsd_lock); /* Someone elses TSD; lock TSDlist first */
+  if (TSDlist[i]) {
+    TSDlist[i]->_TSDFlags &= ~Flag_Semablocked;
+    cond_broadcast(&cond_pause);
+  } else {
+    fprintf(output, "ERROR: continue on nonexisting thread!\n");
+  }
+  mutex_unlock(&tsd_lock);
+
+}     
+
 
 #ifdef RTDEBUG
 void ReportMainStarted(void)

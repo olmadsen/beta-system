@@ -189,14 +189,36 @@ void IOAGc()
     int i;
     for (i = 0; i < TSDlistlen; i++) {
       if (TSDlist[i]) {
-	DEBUG_MT(fprintf(output, "\nTSDlist[%d]: TID=%d:\n", i, TSDlist[i]->_thread_id));
-	DEBUG_MT(fprintf(output, "\tCurrentObject=0x%0x...", (int)TSDlist[i]->_CurrentObject));
+	DEBUG_MT(fprintf(output, 
+			 "\nTSDlist[%d]: TID=%d:\n", 
+			 i, 
+			 TSDlist[i]->_thread_id));
+
+	DEBUG_MT(fprintf(output, 
+			 "\tCurrentObject=0x%0x...", 
+			 (int)TSDlist[i]->_CurrentObject));
 	ProcessReference((handle(Object))(&TSDlist[i]->_CurrentObject));
-	DEBUG_MT(fprintf(output, "CurrentObject=0x%0x\n", (int)TSDlist[i]->_CurrentObject));
-	DEBUG_MT(fprintf(output, "\tOrigin=0x%0x...", (int)TSDlist[i]->_CurrentObject));
+	DEBUG_MT(fprintf(output, 
+			 "CurrentObject=0x%0x\n", 
+			 (int)TSDlist[i]->_CurrentObject));
+
+	DEBUG_MT(fprintf(output, 
+			 "\tOrigin=0x%0x...",
+			 (int)TSDlist[i]->_Origin));
 	ProcessReference((handle(Object))(&TSDlist[i]->_Origin));
-	DEBUG_MT(fprintf(output, "Origin=0x%0x\n", (int)TSDlist[i]->_CurrentObject));
+	DEBUG_MT(fprintf(output, 
+			 "Origin=0x%0x\n", (int)TSDlist[i]->_Origin));
+
+	DEBUG_MT(fprintf(output, 
+			 "\tSavedCallO=0x%0x...",
+			 (int)TSDlist[i]->_SavedCallO));
+	ProcessReference((handle(Object))(&TSDlist[i]->_SavedCallO));
+	DEBUG_MT(fprintf(output, 
+			 "SavedCallO=0x%0x\n", 
+			 (int)TSDlist[i]->_SavedCallO));
+
 	ProcessReference((handle(Object))(&TSDlist[i]->_ActiveStack));
+
 	ProcessReference((handle(Object))(&TSDlist[i]->_ActiveComponent));
       }
 #ifdef RTDEBUG

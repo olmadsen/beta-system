@@ -8,6 +8,7 @@
 # define _REEENTRANT 1
 # define MT_CODE(code) code
 # define IOATopInTSD 1 /* Should match define i BetaRun.bet! */
+# define OURSEMAIMPL 1
 #else
 # define MT_CODE(code)
 #endif

@@ -327,6 +327,12 @@ typedef struct nums
 } nums;
 
 #ifdef MT
+typedef enum { 
+  Flag_Semablocked = (1UL<< 0), 
+  Flag_GCblocked   = (1UL<< 1), 
+  Flag_DoingGC     = (1UL<< 2)
+} tsd_flag_t;
+
 /* Thread Specific Data */
 typedef struct TSD 
 {
@@ -341,9 +347,11 @@ typedef struct TSD
   /* 32 */ struct Object      * _CurrentObject;
   /*       NB: This offset is hardcoded into CallWithSave in sparcdep.h */
   /* 36 */ struct Object      * _Origin;
-  /* 40 */ long                 _TSDinx;
-  /* 44 */ char               * _CTextPoolEnd;
-  /* 48 */ long                 _CTextPool [MAXCTEXTPOOL/4];
+  /* 40 */ struct Object      * _SavedCallO; /* used when no stack avail */
+  /* 44 */ long                 _TSDinx;
+  /* 48 */ tsd_flag_t           _TSDFlags;
+  /* 52 */ char               * _CTextPoolEnd;
+  /* 56 */ long                 _CTextPool [MAXCTEXTPOOL/4];
 } TSD;
 
 #define ActiveComponent TSDReg->_ActiveComponent
@@ -359,6 +367,7 @@ typedef struct TSD
 #define CTextPoolEnd    TSDReg->_CTextPoolEnd
 #define CTextPool       TSDReg->_CTextPool
 #define TSDinx          TSDReg->_TSDinx
+#define TSDFlags        TSDReg->_TSDFlags
 
 #ifdef RTDEBUG
 #define NumAlloI	Nums->NumAlloI
