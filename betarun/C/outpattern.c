@@ -614,7 +614,9 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 
 #ifndef sparc
 #ifndef hppa
+#ifndef crts
   ref(Component)      currentComponent;
+#endif
 #endif
 #endif
   char *dumpname;
