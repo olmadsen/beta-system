@@ -100,11 +100,29 @@ int scanComponentStack (Component* comp,
 
     /* First check for errors occured outside BETA */
     if (!IsBetaCodeAddrOfProcess(PC)){
+      if ((StackEnd<BetaStackTop) && (BetaStackTop<(long*)StackStart)){
+	/* BetaStackTop is in the active stack. Try continuing from there.
+	 * This will work if BETA called a C routine, but not if the error
+	 * occurred in a runtime routine - BetaStackTop is not set, when
+	 * runtime routines are called.
+	 * This might also fail if we are returning from a callback chain,
+	 * since BetaStackTop is not adjusted as we pop off callback frames.
+	 * Should be handled, though, by the requirement that BetaStackTop 
+	 * must be between StackStart and StackEnd.
+	 */
+	low = BetaStackTop;
+	TRACE_DUMP({
+	  fprintf(output, 
+		  ">>>DisplayINTELStack: adjusting low to BetaStackTop: 0x%x\n",
+		  (int)BetaStackTop);
+	});
+      }
       low += 3;
       /* low+3 because the compiler pushes %edx, %edi, %ebp, %esi
        * before setting BetaStackTop.
        * Of these we only want to see %edx (current object).
        */
+
       /* Anything to tell valhalla? */
     }
     
