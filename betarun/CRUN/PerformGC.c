@@ -56,14 +56,14 @@ void doGC() /* The one called from IOA(c)alloc */
  */
 #ifdef sun4s
 asmlabel(DoGC,
-	 "sethi  %hi(ReqObjectSize), %g1\n"
+	 "sethi  %hi(ReqObjectSize),%g1\n"
 	 "ba     doGC\n"
-         "clr    [ %g1 + %lo(ReqObjectSize) ]\n");
+         "clr    [%g1+%lo(ReqObjectSize)]\n");
 #else
 asmlabel(_DoGC,
-	 "sethi  %hi(_ReqObjectSize), %g1\n"
+	 "sethi  %hi(_ReqObjectSize),%g1\n"
 	 "ba     _doGC\n"
-         "clr    [ %g1 + %lo(_ReqObjectSize) ]\n");
+         "clr    [%g1+%lo(_ReqObjectSize)]\n");
 #endif
 #else
 void DoGC() /* The one called directly from betaenv */
