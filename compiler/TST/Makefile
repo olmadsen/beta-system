@@ -47,7 +47,7 @@ tstthis.bet \
 tstthis2.bet \
 tstvarptn.bet \
 tstvirt.bet \
-tstvirt2.bet \
+tstvirt2.bet
 
 tst: $(TSTFILES)
 	beta -qw tst
