@@ -291,6 +291,14 @@
     (message "Appending beta captions")
     (tags-query-replace "<P> \\([a-zA-Z0-9_]+\\.bet\\)</P>" "<A NAME=\\1><H4 CLASS=betacaption>\\1</H4></A>" nil)))
 
+(defun miadoc-replace28-H2 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Appending beta captions")
+    (tags-query-replace "<H2> \\([a-zA-Z0-9_]+\\.bet\\)</H2>" "<A NAME=\\1><H4 CLASS=betacaption>\\1</H4></A>" nil)))
+
 (defun miadoc-replace28-1 ()
   (interactive)
   (set-variable 'tags-file-name nil)
@@ -322,4 +330,13 @@
   (let ((case-replace t))
     (message "Fixing spaces")
     (tags-query-replace "&Ecirc;" " " nil)))
+
+(defun miadoc-replace31 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing IMG tags")
+    (tags-query-replace "<P> <IMG ALIGN=TOP SRC=xwindows-[0-9]+-image-[0-9]+.gif></P>" "<BLOCKQUOTE><IMG ALIGN=TOP SRC=images//.gif></BLOCKQUOTE>" nil)))
+
 
