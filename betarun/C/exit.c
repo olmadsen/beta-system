@@ -367,9 +367,9 @@ void BetaError(BetaErr err, Object *theObj)
 	StackEnd = (long *) &theObj; StackEnd++;
 	break;
       }
-      DEBUG_CODE(fprintf(output, "          StackEnd=0x%x,\n", StackEnd));
-      DEBUG_CODE(fprintf(output, "          thePC=0x%x", thePC));
-      DEBUG_CODE(PrintCodeAddress(thePC));
+      DEBUG_CODE(fprintf(output, "          StackEnd=0x%x,\n", (int)StackEnd));
+      DEBUG_CODE(fprintf(output, "          thePC=0x%x", (int)thePC));
+      DEBUG_CODE(PrintCodeAddress((long)thePC));
       DEBUG_CODE(fprintf(output, ")\n"));
 #endif /* intel */
 

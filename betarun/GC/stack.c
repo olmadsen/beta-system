@@ -1041,9 +1041,11 @@ void ProcessStackPart(long *low, long *high)
 	    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	    if (*current) {
 	      if (IsPrototypeOfProcess(*current)) {
+		fprintf(output, ", is proto  (");
 		PrintProto((ProtoType*)*current);
-		fprintf(output, "\n");
+		fprintf(output, ")\n");
 	      } else {
+		fprintf(output, " ");
 		PrintCodeAddress(*current);
 		fprintf(output, "\n");
 	      }
@@ -1199,9 +1201,16 @@ void PrintStackPart(long *low, long *high)
             fprintf(output, "0x%08x: %d - LAZY\n", (int)current, (int)*current);
         } else {
 	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
-	  if (*current){
-	    PrintCodeAddress((long)*current);
-	    fprintf(output, "\n");
+	  if (*current) {
+	    if (IsPrototypeOfProcess(*current)) {
+	      fprintf(output, ", is proto  (");
+	      PrintProto((ProtoType*)*current);
+	      fprintf(output, ")\n");
+	    } else {
+	      fprintf(output, " ");
+	      PrintCodeAddress(*current);
+	      fprintf(output, "\n");
+	    }
 	  } else {
 	    fprintf(output, "\n");
 	  }
