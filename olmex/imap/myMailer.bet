@@ -144,9 +144,22 @@ systemenv
                        false -> bindBottom -> bindRight
                     #);
                   puttext:
-                    (# T: @StyledText
-                    enter T
-                    do T[] ->contents.contents;
+                    (# T: ^text; T1: @StyledText; s,e: @integer
+                    enter T[]
+                    do  (*T[] ->contents.contents;*)
+                       T -> T1;
+                       (0, contents.length)->
+                       contents.selection;
+                       '\nLength: ' -> screen.puttext; 
+                       contents.length -> screen.putint;screen. newline;
+                       contents.selection -> (s,e);
+                       s -> screen.putint; ' '->screen.put; 
+                       e -> screen.putint; screen.newline;
+                       contents.contents -> screen.putline;
+                       contents.clear;
+                       T1[] -> myWindowEnv.clipboard.textContents;
+                       contents.paste;
+                       'End puttext:'->screen.putline;
                     #)                  
                #);
              
@@ -185,6 +198,7 @@ systemenv
                                     '!' -> selectedText.append;
                                 if);
                                 selectedText[] -> Title;
+                                item -> IM.showMessage
                              else
                                 '<<NONE>>' -> Title;
                             if);
@@ -233,7 +247,7 @@ systemenv
              #);
           #);
         message::
-          (# header: ^text
+          (# header: ^text; s,e: @integer
           do msg.subject -> header[];
              '   '->header.puttext;
              msg.sender -> header.append;;
@@ -242,8 +256,20 @@ systemenv
              (1,header[])
                -> myWindowEnv.theWindow.mails.setText;
              msg.message -> myWindowEnv.clipboard.textContents;
-             myWindowEnv.theWindow.TE.contents.paste;
-             
+             (if false then
+                 (0, myWindowEnv.theWindow.TE.contents.length)->
+                 myWindowEnv.theWindow.TE.contents.selection;
+                 '\nLength: ' -> puttext; 
+                 myWindowEnv.theWindow.TE.contents.length -> putint; newline;
+                 myWindowEnv.theWindow.TE.contents.selection -> (s,e);
+                 s -> putint; ' '->put; e -> putint; newline;
+                 myWindowEnv.theWindow.TE.contents.contents -> putline;
+                 
+                 myWindowEnv.theWindow.TE.contents.clear;
+                 '\n*********************'->putline;
+                 myWindowEnv.theWindow.TE.contents.contents -> putline;
+             if);
+             myWindowEnv.theWindow.TE.contents.paste;             
              (0,10) -> myWindowEnv.theWindow.TE.scroll;
           #);
         coded2iso:
@@ -317,6 +343,24 @@ systemenv
              '\nDONE: ' -> log.puttext; S[] -> log.puttext; log.newline;
           exit S[] 
           #);
+        awaitCompleted:
+          (# C: ^response
+          do (if false then
+                 loop:
+                   (# do
+                      getresponse -> putline;
+                      restart Loop
+                   #)
+              else
+                 Loop:
+                   (#
+                   do outSocket[] 
+                        -> IP 
+                        -> C[];
+                      (if (C[]=none) or not C.isCompleted then
+                          restart Loop
+             if)#)if)
+          #);
         exists::
           (# mno: @integer;
              C: ^response;
@@ -339,7 +383,8 @@ systemenv
                            (if (C[]=none) or not C.isCompleted then
                                restart Loop
                   if)#)if)
-               #)
+               #);
+             lastNonDeleted: @integer
           do 'EXIST: fetching mailbox: '-> log.puttext;
              R.value -> log.putint; log.newline;
              awaitCompleted; (* OK from SELECT *)
@@ -354,6 +399,9 @@ systemenv
                               restart Loop
                        if)#);
                      log.newline;
+                     (if not msg.isDeleted then
+                         i -> lastNonDeleted
+                     if);
                      msg.M.PP -> log.puttext; log.newline;
                      msg.subject -> coded2iso -> header[];
                      '   ' -> header.append;
@@ -366,22 +414,25 @@ systemenv
                      awaitCompleted; (* OK from FETCH *)
                   #)
              for);
-             'EXIST: done fetching mailbox'-> log.puttext;
-             (R.value,false) -> myWindowEnv.theWindow.mails.selection.select;
-             myWindowEnv.theWindow.mails.selection.scrollIntoView;
-             (R.value,true) -> sendFetch
-             (#
-             do outSocket[] -> IP -> C[];
-                (if C.isMsg then
-                    C[] -> msg[];
-                    msg.message -> myWindowEnv.clipboard.textContents;
-                    myWindowEnv.theWindow.TE.contents.paste;
-                 else
-                    '\nFECTH: missing message response'->putline;
-                if);
-                awaitCompleted; (* OK FETCH *)
-                none -> currentID[];
-             #)
+             'EXIST: done fetching mailbox'->  log.putline;
+             (if lastNonDeleted > 0 then
+                 (lastNonDeleted,false) 
+                   -> myWindowEnv.theWindow.mails.selection.select;
+                 myWindowEnv.theWindow.mails.selection.scrollIntoView;
+                 (lastNonDeleted,true) -> sendFetch
+                 (# s,e: @integer
+                 do Loop:
+                      (#
+                      do outSocket[] -> IP -> msg[];
+                         (if (msg[]=none) or not msg.isMsg then
+                             restart Loop
+                      if)#);
+                    msg.message -> myWindowEnv.theWindow.TE.puttext;
+                    awaitCompleted; (* OK FETCH *)
+                    none -> currentID[];
+                 #)
+             if);
+             'EXIST: done SHOW lastNonDeleted'->  screen.putline;
           #);
         addFolder:
           (# f,f1: ^myWindowEnv.theWindow.scrolltv.contents.folder;
@@ -407,6 +458,23 @@ systemenv
           (# name: ^text
           enter name[]
           do name[] -> sendSelect
+          #);
+        showMessage:
+          (# msgNo: @integer; C: ^response; msg: ^messageResponse
+          enter msgNo
+          do (msgNo,true) -> sendFetch
+             (# s,e: @integer
+             do outSocket[] -> IP -> C[];
+                (if C.isMsg then
+                    C[] -> msg[];
+                    msg.getFlags;
+                    msg.message -> myWindowEnv.theWindow.TE.puttext
+                 else
+                    '\nFECTH: missing message response'->putline;
+                if);
+                awaitCompleted; (* OK FETCH *)
+                none -> currentID[];
+             #)
           #);
         T: @styledtext;
      #);
