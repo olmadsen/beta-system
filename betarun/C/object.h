@@ -109,7 +109,9 @@ struct CallBackFrame {
 struct CallBackEntry {
 #ifdef crts
     ref(Structure)      theStruct;
-    unsigned long*      code; /* size unknown */
+    long		mov_o7_g1;
+    long		call_HandleCallBack;
+    long		nop;
 #endif
 #ifdef sparc
     ref(Structure)	theStruct;
