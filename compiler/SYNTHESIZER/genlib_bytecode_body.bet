@@ -1404,7 +1404,7 @@ do (# findBetaenv:
               if);
               (if hasExitMethod then
                   (* extra isExit arg needed *)
-                  TheDesc[] -> genExitMethod
+                  (TheDesc[],superDesc[]) -> genExitMethod
               if);
               false -> inEnterDoExitMethod;
           if);
@@ -1860,7 +1860,61 @@ do genExit:
              #);
            F: [3] ^field;
            top: @integer
-        #)
+          #);
+        exitMethodNeeded: booleanValue
+          (* If exitP.label <> gram.empty then
+           * the mian-part of thisDesc has an exit-part
+           * and we should generate an exit-method.
+           * 
+           * If no exit-part in main-part; we should only generate
+           * an exit-method if som exit-element in a super-part
+           * exits a virtual pattern with a binding in thisDesc
+           * and the bindindg extends the exit-part
+           * 
+           * Example:
+           * 
+           *    A: (# V:< T ... exit V #);
+           *    AA: A(# V::< TT ... #);
+           *    T: (# ... exit aChar #);
+           *    TT: T(# .. exit aChar #)
+           * 
+           * AA's main-part has no exit-part.
+           * A has an exit-part that exits a virtual (V)
+           * and AA has a binding of V (TT) and the binding(TT)
+           * extends the exit-part of its super (T). 
+           * An exit-method must thus be generated for AA.
+           * 
+           * If the main-part of thisDesc has no  virtual bindings,
+           * we could leave genExitMethod immediately. However,
+           * this test is nt yet included.
+           * 
+           * A simple test for the need pf regenerating the
+           * exit-method is to compare the signature of
+           * the exit.method of super with a possible exit-method
+           * of thisDesc. If they are equal, no regeneration of
+           * the exit-method is necessary. If they differe we
+           * should regenerate the exit-method.
+           *)
+          (# superSig: @signature;
+          do (if exitP.label <> gram.empty then
+                 true -> value
+              else
+                 superSig.noEnter;
+                 (superDesc[],superDesc->DH.newSingle,false) 
+                   -> superSig.setMethodDesc;
+                 'exit' -> superSig.addMethod;
+                 superSig.addExit;
+                 not (superSig.asText->(sig.asText).equal) -> value;
+                 (if false (*value*) then
+                     1->trace(#
+                             do 'exitMethodNeeded:super: ' -> xT;
+                                superSig.astext -> xT;
+                                ' thisDesc: ' -> xT;
+                                sig.asText -> xT
+                             #);
+                 if)
+             if)
+          #);
    do 311->trace(#
                 do 'GenExitMethod:'->xT; desc[]->xA
                 #);   
@@ -1871,14 +1925,19 @@ do genExit:
           sig.noEnter;
           (thisDesc[],thisSuperChain,false)->sig.setMethodDesc;
           exitP[] -> sig.addExit;
+          
           (if sig.XXsig.elmType = 10 then
               (* void: no exit part in any super chain *)
-              leave genExit
+              LEAVE genExit
           if);
+          
           'exit' -> methodName;
           methodName[] -> sig.addMethod;
           sig.exitId -> exitId;
           sig.exitVal[] -> exitVal[];
+          
+          (if not exitMethodNeeded then LEAVE genExit if);
+          
           (exitP.nodeId,methodName[],false,sig.asText,sig.noOfEnterArgs) 
             -> mch.initDo;
           313->trace(#do 'genExitMethod:ExpEval: '->xT; exitVal[] -> xA #);
@@ -1887,8 +1946,8 @@ do genExit:
           (desc[],gen.thisRegAdr,0,thisSuperChain) 
             -> xScan 
             -> more;
+          
           (if sig.isMultiValExit then
-
               'exit_' -> destField;
               (desc[] -> fieldSignature).asText -> aD.receiverType[];
               true -> OA.isOrigin;
