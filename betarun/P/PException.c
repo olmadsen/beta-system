@@ -703,7 +703,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
    INFO_PERSISTENCE(numPF++);
    pc = (unsigned char*) getRegisterContents(ucon, EIP);
    
-   isBeta = IsBetaCodeAddrOfProcess((unsigned long)pc);
+   isBeta = IsBetaCodeAddrOfProcess((pc_t)pc);
    if (!isBeta){
       DEBUG_CODE({
          fprintf(output, "(proxyTrapHandler:PC=0x%08x, ", (int)pc);
@@ -774,7 +774,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
          /* Normal refNone:  Handle as regular refNone. */
 	 
          StackEnd = (long *) ucon->uc_mcontext.gregs[UESP]; /* not SP */
-         if (!DisplayBetaStack(RefNoneErr, theObj, (long*)pc, sig)) {
+         if (!DisplayBetaStack(RefNoneErr, theObj, (pc_t)pc, sig)) {
             BetaExit(1);
          }
          return;

@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(59)";
+char betarun_version[] = "BETARUN VERSION 5.3(60)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.59  2002/01/03 15:20:44  corry
+ * Use .lib, not .o file for betarun on nti_gnu
+ * Now can make new betarun on nti_gnu, and it works for simple programs (for all?)
+ * Betarun version number: 59
+ *
  * Revision 1.58  2002/01/03 12:15:01  corry
  * Don't use parenthesis around (cd dir; do command) sequences in Makefile.  They
  * are not necessary and they confuse shmsdos.exe, the minimal shell)

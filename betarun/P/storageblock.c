@@ -47,7 +47,7 @@
 
 #ifdef PSENDIAN
 /* Get definition of ntohl */
-#ifdef linux
+#if defined(linux) || defined(x86sol)
 # include <sys/types.h>
 # include <netinet/in.h>
 #else
