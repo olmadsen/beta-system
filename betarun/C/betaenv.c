@@ -43,12 +43,9 @@ void GetBetaEnv()
 }
 
 #ifdef nti
-GLOBAL(int beta_instance);
-GLOBAL(int beta_previnstance);
-GLOBAL(char *beta_cmdline);
-GLOBAL(int beta_show);
 
 /* Create ArgVector and ArgCount from a command line string */
+/* Is called from _WinMain@16, when linked as subsystem windows */
 void SetupArgValues(int ret, int inst, int prev, char *cmd, int show)
 {
   char *p = ""; /* Init so that !*p */

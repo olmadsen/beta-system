@@ -421,26 +421,51 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 #ifdef nti
 #include <float.h>
 
-int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
-{ 
-  EXCEPTION_RECORD SavedExceptRec;
-  CONTEXT SavedContextRec;
+#ifdef nti_gnu
+#include <excpt.h>
+#define OUR_EXCEPTION_CONTINUE_SEARCH ExceptionContinueSearch
+#define OUR_EXCEPTION_CONTINUE_EXECUTION ExceptionContinueExecution
+EXCEPTION_DISPOSITION BetaSignalHandler_GNU
+(
+ struct _EXCEPTION_RECORD* pExceptionRec,
+ void* pEstablisherFrame,
+ struct _CONTEXT* pContextRecord,
+ void* pDispatcherContext
+ )
+{
+  EXCEPTION_RECORD SavedExceptRec = *pExceptionRec;
+  CONTEXT SavedContextRec = *pContextRecord;
   struct Object *theObj = 0;
   long *PC;
   long todo = 0;
   long sig;
 
-  if (NoCatchException) return EXCEPTION_CONTINUE_SEARCH;
+  printf ("In BetaSignalHandler_GNU exception handler!\n");
 
-  SavedExceptRec =  *(lpEP)->ExceptionRecord;  
-  SavedContextRec = *(lpEP)->ContextRecord;
+#else  /* !nti_gnu */
+
+#define OUR_EXCEPTION_CONTINUE_SEARCH EXCEPTION_CONTINUE_SEARCH
+#define OUR_EXCEPTION_CONTINUE_EXECUTION EXCEPTION_CONTINUE_EXECUTION
+
+int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
+{ 
+  EXCEPTION_RECORD SavedExceptRec =  *(lpEP)->ExceptionRecord;
+  CONTEXT SavedContextRec = *(lpEP)->ContextRecord;
+  struct Object *theObj = 0;
+  long *PC;
+  long todo = 0;
+  long sig;
+
+#endif /* !nti_gnu */
+
+  if (NoCatchException) return OUR_EXCEPTION_CONTINUE_SEARCH;
   
   if (SavedContextRec.ContextFlags & CONTEXT_CONTROL){
     PC       = (long *)SavedContextRec.Eip;
     StackEnd = (long *)SavedContextRec.Esp;
   } else {
     /* Can't display stack if SP unknown */
-    return EXCEPTION_CONTINUE_SEARCH;
+    return OUR_EXCEPTION_CONTINUE_SEARCH;
   }
   if (SavedContextRec.ContextFlags & CONTEXT_INTEGER){
     theObj = (struct Object *)SavedContextRec.Edx;
@@ -497,11 +522,12 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
   if (todo) {
     /* continue after ValhallaOnProcessStop */
     DEBUG_VALHALLA(fprintf(output,"BetaSignalHandler: EXCEPTION_CONTINUE_EXECUTION\n"));
-    return EXCEPTION_CONTINUE_EXECUTION;
+    return OUR_EXCEPTION_CONTINUE_EXECUTION;
   } else {
     BetaExit(1);
-    /* return EXCEPTION_CONTINUE_SEARCH; */
+    /* return OUR_EXCEPTION_CONTINUE_SEARCH; */
   }
+  return OUR_EXCEPTION_CONTINUE_SEARCH;
 }
 
 /* beta_main: called from _AttBC */
@@ -512,7 +538,12 @@ void beta_main(void (*AttBC)(struct Component *), struct Component *comp)
   /* fprintf(output, "beta_main: exceptions not enabled\n"); 
    * Annoying; ruins "run.demos | diff"
    */
-  AttBC(comp);
+
+  __try1 (BetaSignalHandler_GNU)
+      /* Start BETA execution */
+      AttBC(comp);
+  __except1
+
 #else
   __try 
     { 

@@ -228,6 +228,9 @@ void Initialize()
   
 #ifdef nti_gnu
   output = stderr;
+  if (!beta_instance){
+    beta_instance = (long)GetModuleHandle(0);
+  }
 #endif
 
 #ifdef MT
