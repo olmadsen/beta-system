@@ -4,9 +4,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef ppmac
-  char *strdup (char *in);
-#endif 
+#if defined(ppcmac)
+
+#include <TextUtils.h>
+#include <Files.h>
+#include <Processes.h>
+#include <Resources.h>
+
+static Str255 valhallart;
+
+
+#endif
+
+
+char *strdup (char *in);
 
 /* 
    #define EXITONEXCEPTION
@@ -46,6 +57,8 @@ void process_comm_exception(char *message) {
 
 void extScanEnv (forEachEnv forEach) { 
 
+#ifndef ppcmac
+
 #define MAXNAMELENGTH 100
 #define MAXVALUELENGTH 1000
   
@@ -66,6 +79,8 @@ void extScanEnv (forEachEnv forEach) {
     forEach (name,value);
     i++;
   }
+#endif
+return;	
 }   
 
 void initParamsAndEnv (int numParam, int numEnv) {
@@ -79,14 +94,24 @@ void initParamsAndEnv (int numParam, int numEnv) {
 
 void addEnv (char *name, char* value) { 
 
+	
+
 #define TMPLENGTH 1000
 
   char tmp[TMPLENGTH];
+  
+  printf("addnv %s = %s\n", name, value);
   
   if (strlen(name)+strlen(value)+2>=TMPLENGTH) 
     process_comm_exception("TMPLENGTH exceeded\n");
   sprintf (tmp,"%s=%s",name,value);
   envp[envc++] = (char *) strdup (tmp);
+  
+#if defined(ppcmac)
+	valhallart[0] = strlen(value);
+	BlockMove(value, valhallart+1, valhallart[0]);
+#endif
+  
 }
 
 void addParam (char *name) {
@@ -100,9 +125,43 @@ void addParam (char *name) {
 
 char **environ;
 
-int executeProcess (char *execName)
+
+
+
+int executeProcess (unsigned char *execName)
 {
-	return 0;
+	FSSpec 				spec;
+	LaunchParamBlockRec params;
+	OSErr				err;
+	short				refnum;
+	StringHandle		resource;
+	
+	c2pstr(execName);
+	FSMakeFSSpec(0, 0, execName, &spec);
+	
+	refnum = FSpOpenResFile(&spec, fsCurPerm);
+	
+	resource = NewString(valhallart);
+	
+	AddResource((Handle) resource, 'STR ', 200, "\pVALHALLART");  
+	CloseResFile(refnum);
+	
+	
+	params.launchBlockID = extendedBlock;
+	params.launchEPBLength = extendedBlockLen;
+	params.launchFileFlags = 0;
+	params.launchControlFlags = launchContinue | launchNoFileFlags | launchDontSwitch;
+	params.launchAppSpec = &spec;
+	params.launchAppParameters = nil;
+	
+	err = LaunchApplication(&params);
+	
+	if (err == noErr) {
+		return 1;
+	}
+	else {
+		return -1;
+	}
 }
 
 char *strdup (char *in)

@@ -250,18 +250,36 @@ int SendSIGINT (pid_t pid)
 
 #if defined(ppcmac)
 
+#include <Memory.h>
+#include <TextUtils.h>
 #include <stdio.h>
+
 int SendSIGINT(int pid) {
 	return 0;
 }
 
 int UnsetBreak(int pid, int address, int oldInstruction) {
+ 
+	Str255 msg;
+	
+	sprintf((char *) msg, ";brc #%d; g", address);
+	c2pstr(msg);
+	DebugStr(msg);
+
   return 0;
 }
 
 int SetBreak(int pid, int address, int* oldInstruction) { 
+
+	Str255 msg;
+	
+	sprintf((char *) msg, ";br #%d; g", address);
+	c2pstr(msg);
+	DebugStr(msg);
+
 	return 0;
 }
+
 
 
 #endif /* ppcmac */
