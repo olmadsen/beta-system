@@ -321,7 +321,7 @@ do {                               \
 
 #ifdef sparc
 extern long *start __asm__("_start");
-extern long *etext;
+extern unsigned long etext;
 #define isCode(addr) ( ((unsigned long)&start <= (unsigned long)(addr)) &&  \
                        ((unsigned long)(addr) < (unsigned long)&etext) )
 #endif /* sparc */

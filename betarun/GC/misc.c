@@ -1296,7 +1296,7 @@ static char *getLabelExact(unsigned long addr)
   return NULL;
 }
 
-#if defined(sgi)||defined(sparc)
+#if defined(sgi)
 extern unsigned long etext;
 #endif
 
@@ -1335,7 +1335,7 @@ char *getLabel (unsigned long addr)
 #endif /* sparc || linux */
 
 #if defined(sgi)||defined(sparc)
-  if ((unsigned long)addr>etext){
+  if ((unsigned long)addr>(unsigned long)etext){
     skip_nm = 1;
   }
 #endif
