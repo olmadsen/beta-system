@@ -6,12 +6,18 @@
 #     PLEASE DO NOT CHANGE BELOW THIS LINE
 ##############################################################################
 
+# Temporary, for testing!!!
+BETASTAT=yes
+BETAREPORT=yes
+
 MAIL="/usr/lib/sendmail -t"
 TMPFILE0=/tmp/$APPLICATION.0.$$
 TMPFILE=/tmp/$APPLICATION.$$
 ERRFILE=/tmp/$APPLICATION.ERR.$$
 ERRCODEFILE=/tmp/$APPLICATION.ERRCODE.$$
 LOGFILEINREPORT=yes
+ARGS=$*
+PID=$$
 
 #TODAY="`date +%y%m%d`"
 TODAY=`sh -c 'LC_TIME="C"; export LC_TIME; date'`
@@ -54,11 +60,27 @@ then
     LOGFILEINREPORT=no
 fi
 
-if [  "$BETASTAT" = "yes" -a -w $STATFILE ] 
-then
 
-echo 'start:' `whoami` '|' $MACHINETYPE '|' `hostname` '|' `sh -c 'LC_TIME="C"; export LC_TIME; date'` '|' $$ '|' $* >> $STATFILE
-fi
+SendStatistics () {
+  if [ "$BETASTAT" = "yes" ]
+  then
+    cmd=$1;
+    shift
+    (echo To: ess-betastat@mjolner.dk; \
+     echo Subject: beta-${APPLICATION}-r5.2; \
+     echo ""; \
+     echo $cmd `whoami` '|' $MACHINETYPE '|' `hostname` '|' \
+     `sh -c 'LC_TIME="C"; export LC_TIME; date'` '|' $PID '|' $*) \
+    | ${MAIL}
+
+    if [ -w $STATFILE ] 
+    then
+      echo $cmd `whoami` '|' $MACHINETYPE '|' `hostname` '|' `sh -c 'LC_TIME="C"; export LC_TIME; date'` '|' $$ '|' $* >> $STATFILE
+    fi
+  fi
+}
+
+SendStatistics 'start:' $ARGS
 
 # execute
 
@@ -70,11 +92,7 @@ fi
 # during execution of this).
 
 trap "echo ''; echo 'User Interrupt'; \
-if [  '$BETASTAT' = 'yes' -a -w $STATFILE ]; \
-then \
-echo 'interrupt:  ' `whoami` '|' $MACHINETYPE '|' `hostname` '|' `sh -c 'LC_TIME="C"; export LC_TIME; date'` '|' $$ '|' $* code\(130\) \
->> $STATFILE; \
-fi; \
+SendStatistics 'interrupt:  ' $ARGS code\(130\); \
 /bin/rm -f $ERRFILE $ERRCODEFILE "$EXECNAME".log; \
 if [ -w "$EXECNAME".log ]; \
 then \
@@ -144,11 +162,7 @@ case $STATUS in
 
 NORMAL)
         # normal exit
-        if [ "$BETASTAT" = "yes" -a -w $STATFILE ]
-        then
-		
-        	echo 'end:  ' `whoami` '|' $MACHINETYPE '|' `hostname` '|' `sh -c 'LC_TIME="C"; export LC_TIME; date'` '|' $$ '|' $* >> $STATFILE
-        fi
+        SendStatistics 'end:  ' $ARGS
 	if [ -w $ERRFILE ] 
 	then 
 		#cat $ERRFILE
@@ -162,11 +176,7 @@ NORMAL)
 
 INTERRUPT)
 	#interupted
-        if [  "$BETASTAT" = "yes" -a -w "$STATFILE" ]
-        then
-		
-        	echo 'interrupt:' `whoami` '|' $MACHINETYPE '|' `hostname` '|' `sh -c 'LC_TIME="C"; export LC_TIME; date'` '|' $$  '|' code\($NUMSTAT\) >> "$STATFILE"
-        fi
+        SendStatistics 'interrupt:' code\($NUMSTAT\)
 	if [ -w $ERRFILE ] 
 	then 
 		#cat $ERRFILE
@@ -200,19 +210,11 @@ EOF
     fi
 fi
 
-if [ "$BETASTAT" = "yes" ]
+if [ "$BETAREPORT_WWW" = "yes" ]
 then
-    # error!
-    if [ "$BETAREPORT_WWW" = "yes" ]
-    then
-	magic="`whoami` | $MACHINETYPE | `hostname` | `sh -c 'LC_TIME="C"; export LC_TIME; date'` | $$ | $* $REPORTNO"
-    else
-	magic="`whoami` | $MACHINETYPE | `hostname` | `sh -c 'LC_TIME="C"; export LC_TIME; date'` | $$ | $*"
-    fi
-    if [ -w $STATFILE ]
-    then
-	echo 'fatal:' $magic >> $STATFILE
-    fi
+  SendStatistics 'fatal:' $ARGS $REPORTNO
+else
+  SendStatistics 'fatal:' $ARGS
 fi
 
 trap "" 2
@@ -227,7 +229,15 @@ then
         echo BETALIB="$BETALIB" > $TMPFILE
         echo LOCATION=$LOCATION >> $TMPFILE
         echo EXECNAME=$EXECNAME >> $TMPFILE
-        echo "$magic" >> $TMPFILE
+	echo 'fatal:' `whoami` '|' $MACHINETYPE '|' `hostname` '|' \
+	`sh -c 'LC_TIME="C"; export LC_TIME; date'` '|' $PID '|' $ARGS >> $TMPFILE
+	if [ -x /usr/sbin/top ] 
+	then
+        	echo Top:  >> $TMPFILE
+	        echo "----------"  >> $TMPFILE
+	    	/usr/sbin/top >> $TMPFILE
+	        echo "----------"  >> $TMPFILE
+	fi
         echo Description:  >> $TMPFILE
         echo "----------"  >> $TMPFILE
 
