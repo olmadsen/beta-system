@@ -56,6 +56,7 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
     
   while(theProto && theProto->Prefix != theProto){
     theProto = theProto->Prefix;
+    TRACE_CODEENTRY(fprintf(output, "CodeEntry: new candidate: theProto=0x%x (%s))\n", theProto, ProtoTypeName(theProto)); 
     mPart = M_Part(theProto);
     gPart = G_Part(theProto);
     if((PC-gPart > 0) && (PC-gPart <= minDist)){ 
@@ -80,8 +81,10 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
     BetaExit(1);
   }
   if (minDist == gDist) {
+    TRACE_CODEENTRY(fprintf(output, "CodeEntry returns: 0x%x\n", G_Part(activeProto)));
     return (unsigned long)G_Part(activeProto);
   } else {
+    TRACE_CODEENTRY(fprintf(output, "CodeEntry returns: 0x%x\n", M_Part(activeProto)));
     return (unsigned long)M_Part(activeProto);
   }
 }
