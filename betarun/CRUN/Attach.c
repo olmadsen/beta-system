@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Attach.c,v 1.18 1993-02-12 13:57:12 datpete Exp $
+ * Mod: $Id: Attach.c,v 1.19 1993-02-16 14:57:51 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -38,14 +38,24 @@ ParamThisComp(struct Component *, Att)
     /* Push a new Component Block. (It lives in our RegWin) */
     level = 0;
     nextCompBlock = (long *) lastCompBlock;
+    /* Fool gcc into believing that %i1 is used */
+    asm(""::"r" (tmp));
     callBackFrame = ActiveCallBackFrame;
+    /* Fool gcc into believing that %i1 is used */
+    asm(""::"r" (tmp));
 
-    ActiveCallBackFrame = 0;			/* Clear the CallBackFrame list */
+    ActiveCallBackFrame = 0;		    /* Clear the CallBackFrame list */
+    /* Fool gcc into believing that %i1 is used */
+    asm(""::"r" (tmp));
     lastCompBlock = cast(ComponentBlock) StackPointer;
+    /* Fool gcc into believing that %i1 is used */
+    asm(""::"r" (tmp));
 
     if (first) {
 	ActiveComponent = comp;
-
+	/* Fool gcc into believing that %i1 is used */
+	asm(""::"r" (tmp));
+	
 	asmemptylabel(AttFirst);
 	/* comp->Body is the Object and comp->Body->Proto[-1] is the M-entry address */
 	CallBetaEntry(((void (**)())(cast(Item) &comp->Body)->Proto)[-1],
@@ -56,7 +66,11 @@ ParamThisComp(struct Component *, Att)
 
 	/* TerminateComponent: */
 	comp = ActiveComponent;
+	/* Fool gcc into believing that %i1 is used */
+	asm(""::"r" (tmp));
 	ActiveComponent  = comp->CallerComp;
+	/* Fool gcc into believing that %i1 is used */
+	asm(""::"r" (tmp));
 	this             = comp->CallerObj;
 	comp->StackObj   = 0;
 	comp->CallerComp = 0;
@@ -64,7 +78,11 @@ ParamThisComp(struct Component *, Att)
 	
 	/* Pop the Component Block */
 	ActiveCallBackFrame = callBackFrame;
+	/* Fool gcc into believing that %i1 is used */
+	asm(""::"r" (tmp));
 	lastCompBlock = cast(ComponentBlock) nextCompBlock;
+	/* Fool gcc into believing that %i1 is used */
+	asm(""::"r" (tmp));
 	setret(ActiveComponent->CallerLSC);
 
 	asmemptylabel(AttEnd);
@@ -75,6 +93,8 @@ ParamThisComp(struct Component *, Att)
       BetaError(CompTerminatedErr, this);
     }
     ActiveComponent = comp;
+    /* Fool gcc into believing that %i1 is used */
+    asm(""::"r" (tmp));
 	
     /* Unpack 'ActiveComponent.StackObj' on top of the stack.
        
@@ -93,6 +113,9 @@ ParamThisComp(struct Component *, Att)
 	long size = theStackObj->StackSize * 4 - 4;
 	ref(RegWin) rw;
 
+	/* Fool gcc into believing that %i1 is used */
+	asm(""::"r" (tmp));
+
 	((char *)StackPointer) -= size;
 	dest = (char *)FramePointer - size;
 	memcpy(dest, theStackObj->Body+1, size);
@@ -109,9 +132,17 @@ ParamThisComp(struct Component *, Att)
 	fprintf(stderr, "Upps, stack handling gone crazy\n");
       ok:
 	lastCompBlock = cast(ComponentBlock) rw;
+	/* Fool gcc into believing that %i1 is used */
+	asm(""::"r" (tmp));
 	/* Update ComponentBlock in the restored RegWin */
 	rw->l5 = (long) callBackFrame;
+	/* Fool gcc into believing that %i1 is used */
+	asm(""::"r" (tmp));
+	/* Fool gcc into believing that %i1 is used */
+	asm(""::"r" (tmp));
 	rw->l6 = (long) nextCompBlock;
+	/* Fool gcc into believing that %i1 is used */
+	asm(""::"r" (tmp));
 	rw->l7 = level;
 	asm("ta 3");
 	((char *)FramePointer) -= size;
