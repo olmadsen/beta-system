@@ -1,0 +1,574 @@
+;
+ORIGIN '../sharedpersistentstore'-- sharedpersistentstoreOpen: DoPart --
+do
+     (#
+        theDir: @Directory;
+        myfile: binfile
+          (#
+             AccessError:: (#  do true->continue; (*false -> ok*)  #);
+             NoSuchFileError:: (#  do true->continue; (*false -> ok*)  #);
+             
+          #);
+        numberofUpdates: @integer;
+        exist: @boolean;
+        ok: @boolean
+     do
+        c[]->client[];
+        theEnsemble.hostname.copy->serverEnsembleName[];
+        theEnsemble[]->serverEnsemble[];
+        getlockmanager:
+        (LockManagerInterface##,'Lockmanager')
+          ->serverEnsemble.ns.get
+            (#
+               notFound::
+                 (# 
+                 do
+                    'No Lockmanager on '->screen.putText;
+                    serverEnsembleName[]->screen.putLine;
+                    (*leave getlockmanager;*)
+                    
+                 #)
+            #)->lockServer[];
+        (* get notification manager if running*)
+        getnotificationmanager:
+          (# 
+          do
+             (NotificationManager##,'Notificationmanager')
+               ->serverEnsemble.ns.get
+                 (# notFound:: (#  do leave getnotificationmanager;  #)
+                 #)->notificationServer[];
+             
+          #);
+        (if notificationserver[]
+         // none then
+            'No Notificationmanager on '->screen.putText;
+            serverEnsembleName[]->screen.putLine;
+            
+         else
+            &notificationmanagement[]->nm[];
+            (notificationServer[],serverensemblename[])->nm.init;
+            
+        if);
+        name.copy->shortname[];
+        false->haslock;
+        false->readlock;
+        false->writelock;
+        true->committed;
+        name[]->makeFileNames->fullName[];
+        fullName[]->theDir.name;
+        doexist:
+          (# 
+          do
+             true->exist;
+             (if false
+              // theDir.entry.exists // theDir.entry.isDirectory then
+                 false->exist; leave doexist; 
+             if);
+             
+          #);
+        doconnect: lockerrorhandler
+          (# 
+          do
+             true->successful;
+             (client[],fullname[])->lockServer.connect->ok;
+             (if not successful then restart doconnect if);
+             (if (not ok) then alreadyOpen;  if);
+             
+          #);
+        (if false // exist then notfound;  if);
+        dogetUpdate: (#  do ps.numberOfUpdates->numberOfUpdates;  #);
+        numberofupdates->ps.lastupdate;
+        ps.init;
+        
+     #)  
+
+-- sharedpersistentstoreCreate: DoPart --
+do
+   docreate:
+   name[]
+     ->PS.create
+       (#
+          exists:: (#  do fullName[]->THIS(create).exists #);
+          alreadyOpen::
+            (#  do fullName[]->THIS(create).alreadyOpen; leave docreate #);
+          creationError::
+            (#  do fullName[]->creationError; leave docreate #);
+          
+       #);
+   PS.commit;
+     
+
+-- sharedpersistentstoreGetlock: DoPart --
+do
+   dogetlock: lockerrorhandler
+     (#
+        deletelocks:
+          (#  do false->haslock; false->writelock; false->readlock;  #);
+        connectionBroken::
+          (# 
+          do
+             dodelete: lockerrorhandler
+               (# 
+               do
+                  true->successful;
+                  (client[],fullname[])->lockServer.deletelockrequest;
+                  (if not successful then restart dodelete if);
+                  
+               #);
+             deletelocks;
+             (*THIS(connectionBroken)[] -> onFailure *)
+             
+          #);
+        connectionFailed::
+          (# 
+          do
+             dodelete: lockerrorhandler
+               (# 
+               do
+                  true->successful;
+                  (client[],fullname[])->lockServer.deletelockrequest;
+                  (if not successful then restart dodelete if);
+                  
+               #);
+             deletelocks;
+             (*THIS(connectionFailed)[] -> onFailure*)
+             
+          #);
+        timeOut::
+          (# 
+          do
+             false->successful;
+             'Lock timeout'->putline;
+             dodelete: lockerrorhandler
+               (# 
+               do
+                  true->successful;
+                  (client[],fullname[])->lockServer.deletelockrequest;
+                  (if not successful then restart dodelete if);
+                  
+               #);
+             deletelocks;
+             abort
+               (#  do leave dogetlock;  #);
+             
+          #);
+        timeOutValue:: (#  do THIS(getlock).timeOutValue->sec #)
+     do
+        true->successful;
+        (fullname[],client[],THIS(shellenv).username,lockmode,lockpolicy)
+          ->lockServer.getLock;
+        (if not successful then restart dogetlock;  if);
+        true->haslock;
+        (if lockmode
+         // read then
+            true->readlock; false->writelock; 
+         // write then
+            true->readlock; true->writelock; 
+        if)
+     #);
+     
+
+-- sharedpersistentstoreReleaselock: DoPart --
+do
+   false->haslock;
+   false->writelock;
+   false->readlock;
+   doreleaselock: Lockerrorhandler
+     (# 
+     do
+        true->successful;
+        (client[],fullname[])->lockServer.releaseLock;
+        (if not successful then restart doreleaselock if)
+     #)  
+
+-- sharedpersistentstoreAccess: DoPart --
+do
+   doaccess:
+     (# 
+     do
+        (if writelock then
+            shortname[]->PS.Openwrite; 
+         else
+            (if readlock then
+                shortname[]->PS.Openread; 
+             else
+                'You have to obtain a lock before accessing the ps'->putline;
+                leave doaccess
+            if)
+        if);
+        (if doreget then PS.reget if);
+        false->committed
+     #);
+     
+
+-- sharedpersistentstoreReget: DoPart --
+do
+   (if (readlock or writelock) then
+       PS.commit
+         (#
+            doUpdateInMemoryObjects::< (#  do true->value #);
+            doCheckpoint::< (#  do false->value #)
+         #);
+       shortname[]->PS.Openread;
+       theObject[]->PS.reget;
+       
+    else
+       'You have to obtain a lock before accessing the ps'->putline; 
+   if)  
+
+-- sharedpersistentstoreCommit: DoPart --
+do
+   (if not committed then
+       (if writelock then
+           (if doCheckpoint then
+               PS.commit;
+               (if nm[]
+                // none then 
+                else
+                   (client[],THIS(shellEnv).username,fullname[],Update)
+                     ->nm.notify
+               if)
+            else
+               PS.commit
+                 (#
+                    doUpdateInMemoryObjects::< (#  do true->value #);
+                    doCheckpoint::< (#  do false->value #)
+                 #)
+           if);
+           true->committed
+        else
+           (if readlock then (*only readlock*)
+               PS.commit
+                 (#
+                    doUpdateInMemoryObjects::<
+                      (#  do THIS(commit).doUpdateInMemoryObjects->value #);
+                    doCheckpoint::< (#  do false->value #)
+                 #);
+               true->committed
+            else
+           (* no lock at all *)
+               'You have to obtain a lock before accessing the ps'->putline; 
+           if)
+       if)
+   if)  
+
+-- sharedpersistentstoreClose: DoPart --
+do
+   (if not committed then
+       (if doCheckpoint
+        // true then
+           PS.commit;
+           (if nm[] <> none then
+               (client[],THIS(shellEnv).username,fullname[],Update)->nm.notify
+           if)
+        else
+           PS.commit (# doCheckpoint::< (#  do false->value #) #)
+       if)
+   if);
+   PS.close
+     (#
+        danglersexists::< (#  do THIS(close).danglersexists->todo #);
+        doCheckpoint::< (#  do false->value #)
+     #);
+   THIS(sharedpersistentstore).releaseLock;
+   dodisconnect: lockerrorhandler
+     (#
+        connectionBroken::
+          (#  do THIS(connectionBroken).ignore; leave dodisconnect #);
+        connectionFailed::
+          (#  do THIS(connectionFailed).ignore; leave dodisconnect #);
+        timeOut:: (#  do THIS(timeout).ignore; leave dodisconnect #);
+        
+     do (client[],fullname[])->lockServer.disconnect; 
+     #);
+   (*for en sikkerheds skyld*)
+   (*none->client[];*)
+   (*none->lockServer[]; because of delete*)
+   (*none->notificationServer[];*)
+     
+
+-- sharedpersistentstoreGet: DoPart --
+do
+   (if (readlock or writelock) then
+       doget:
+       (name[],type##)
+         ->PS.get
+           (#
+              notFound:: (#  do THIS(Get).notFound; leave doget;  #);
+              quaError:: (#  do THIS(Get).quaError;  #);
+              
+           #)->theObject[];
+       
+    else
+       'You have to obtain a lock before accessing the ps'->putline; 
+   if)  
+
+-- sharedpersistentstorePut: DoPart --
+do
+   (if writelock then
+       (obj[],name[])
+         ->ps.put
+           (# dooverwrite::< (#  do THIS(put).dooverwrite->value #)
+           #);
+       
+    else
+       'You have to obtain a writelock before putting roots in the ps'->putline;
+       
+   if)  
+
+-- sharedpersistentstoreScanRootNames: DoPart --
+do
+   (if (readlock or writelock) then
+       PS.scanRootNames
+         (# 
+         do current[]->THIS(scanRootNames).current[]; INNER scanRootNames
+         #)
+    else
+       'You have to obtain a lock before accessing the ps'->putline; 
+   if);
+     
+
+-- SharedPersistentStoreLockErrorOnFailure: DoPart --
+do
+   (if theError.theObj## <= LockmanagerInterface## then
+   (* 'Warning: Communication with LockManager failed'->putline;*)
+   (*'Get reference to server ensemble...'->putline;*)
+       getHost:
+         (# 
+         do
+            (ensemble##,serverEnsembleName[])
+              ->theShell.myEnsemble.ns.get
+                (#
+                   notFound::
+                     (# 
+                     do
+                        serverEnsembleName[]->screen.putText;
+                        ' not found. '->putline;
+                        (*Try again: ' -> screen.putText;
+                         keyboard.getLine -> serverEnsembleName[];
+                         restart getHost*)
+                        
+                     #)
+                #)->serverEnsemble[];
+            (if serverEnsemble[]
+             // none then
+                'Please, start new Ensemble on '->puttext;
+                serverEnsemblename[]->putline;
+                5->sleep;
+                restart gethost
+            if);
+            
+         #);
+       getserver:
+         (# 
+         do
+            (LockManagerInterface##,'Lockmanager')
+              ->serverEnsemble.ns.get
+                (#
+                   notFound::
+                     (# 
+                     do
+                        'No Lockmanager on '->screen.putText;
+                        serverEnsembleName[]->screen.putLine;
+                        'Please, restart new server on '->puttext;
+                        serverEnsemblename[]->putline;
+                        5->sleep;
+                        restart getserver
+                     #)
+                #)->lockServer[];
+            
+         #);
+       theError.ignore;
+       
+    else
+       theError.abort; 
+   if)  
+
+-- SharedPersistentStoreOpenNotFound: DoPart --
+do
+   'persistentstore.open: "'->msg.putText;
+   fullName[]->msg.putText;
+   '" not found'->msg.putText;
+   INNER ;
+     
+
+-- SharedPersistentStoreOpenAlreadyOpen: DoPart --
+do
+   'persistentstore.open: "'->msg.putText;
+   fullName[]->msg.putText;
+   '" already open'->msg.putText;
+   INNER ;
+     
+
+-- SharedPersistentStoreCreateAlreadyOpen: DoPart --
+do
+   'persistentstore.create: "'->msg.putText;
+   fullName[]->msg.putText;
+   '" already open'->msg.putText;
+   INNER ;
+     
+
+-- SharedPersistentStoreCreateExists: DoPart --
+do
+   'persistentstore.create: "'->msg.putText;
+   fullName[]->msg.putText;
+   '" already exists'->msg.putText;
+   INNER ;
+     
+
+-- SharedPersistentStoreCreationError: DoPart --
+do
+   'persistentstore.create: Failed creating "'->msg.putText;
+   fullName[]->msg.putText;
+   '"'->msg.putText;
+   INNER ;
+     
+
+-- SharedPersistentStoreCheckpointNoAccessRight: DoPart --
+do
+   'Persistentstore.checkpoint: '->msg.putText;
+   'No appropriate lock has been obtained'->msg.putText;
+   msg[]->putline;
+   true->continue;
+   INNER  
+
+-- SharedPersistentStoreCheckpoint: DoPart --
+do
+   (if writelock then
+       PS.checkpoint;
+       (* send notification to the server, if it is running a notificationmanager*)
+       (if (nm[] <> none ) then
+           (client[],THIS(shellEnv).username,fullname[],Update)->nm.notify; 
+       if);
+       
+    else
+       NoAccessRight; 
+   if);
+     
+
+-- SharedPersistentStoreGetQuaError: DoPart --
+do
+   'persistentstore.get: Qua error getting "'->msg.putText;
+   name[]->msg.putText;
+   '"'->msg.putText;
+   INNER ;
+     
+
+-- SharedPersistentStoreGetNotFound: DoPart --
+do
+   'persistentstore.get: "'->msg.putText;
+   name[]->msg.putText;
+   '" not found'->msg.putText;
+   INNER ;
+     
+
+-- SharedPersistentStoreDeletePSAlreadyOpen: DoPart --
+do
+   'Error in persistentstore.delete: "'->msg.putText;
+   fullName[]->msg.putText;
+   '" is currently open.'->msg.putText;
+   msg[]->putline;
+   true->continue;
+   INNER ;
+     
+
+-- SharedPersistentStoreDeletePSAccessError: DoPart --
+do
+   'persistetstore.delete: Unable to delete "'->msg.putText;
+   fullName[]->msg.putText;
+   '"'->msg.putText;
+   INNER ;
+     
+
+-- SharedPersistentStoreDeletePSNotFound: DoPart --
+do
+   'persistetstore.delete: "'->msg.putText;
+   fullName[]->msg.putText;
+   '" not found'->msg.putText;
+   INNER ;
+     
+
+-- SharedPersistentStoreDeletePSNoConnection: DoPart --
+do
+   'persistetstore.delete: "'->msg.putText;
+   'No communication to the server. The PS is not deleted'->msg.puttext;
+   INNER ;
+     
+
+-- SharedPersistentStoreDelete: DoPart --
+do
+   true->ok;
+   'in delete'->putline;
+   name[]->getfullname->fullname[];
+   getlockmanager:
+   (LockManagerInterface##,'Lockmanager')
+     ->serverEnsemble.ns.get
+       (# notFound:: (#  do noConnection; leave getlockmanager;  #) #)
+     ->lockServer[];
+   'efter getlock server'->putline;
+   dogetpermission: errorhandler
+     (#
+        onFailure:
+          (# theError: ^error; 
+          enter theError[]
+          do
+             (if theError.theObj## <= LockManagerInterface## then
+                 false->ok; theError.ignore; leave dogetpermission; 
+              else
+                 theError.abort; 
+             if)
+          #);
+        connectionBroken:: (#  do THIS(connectionBroken)[]->onFailure #);
+        connectionFailed:: (#  do THIS(connectionFailed)[]->onFailure #);
+        timeOut:: (#  do THIS(timeOut)[]->onFailure #);
+        timeOutValue::< (#  do 5->sec #);
+        
+     do fullname[]->lockServer.getPermissiontoDeletePS->ok; 
+     #);
+   (if ok then
+       'ok is true'->putline;
+       dodelete:
+       fullname[]
+         ->ps.deletePersistentStore
+           (#
+              accessError::
+                (# 
+                do fullName[]->THIS(deletesharedpersistentstore).accessError; 
+                #);
+              alreadyOpen::
+                (# 
+                do fullName[]->THIS(deletesharedpersistentstore).alreadyOpen; 
+                #);
+              notFound::
+                (# 
+                do fullName[]->THIS(deletesharedpersistentstore).notFound; 
+                #)
+           #);
+       
+    else
+       fullname[]->THIS(deletesharedpersistentstore).alreadyOpen; 
+   if);
+     
+
+-- SharedPersistentStoreMakeFileNames: DoPart --
+do
+   ph.init;
+   name.copy->fullname[];
+   (fullname[],ph.CurrentDirectory)->ph.convertFilePath->fullname[];
+   fullname.copy->dirName[];
+   (if fullname.t[fullname.lgth] <> ph.directoryChar then
+       fullname.lgth->fullname.pos; ph.directoryChar->fullname.put; 
+   if);
+     
+
+-- SharedPersistentStoreGetfullname: DoPart --
+do
+   ph.init;
+   name.copy->fullname[];
+   (fullname[],ph.CurrentDirectory)->ph.convertFilePath->fullname[];
+   fullname.copy->dirName[];
+   (if fullname.t[fullname.lgth] <> ph.directoryChar then
+       fullname.lgth->fullname.pos; ph.directoryChar->fullname.put; 
+   if);
+     
+

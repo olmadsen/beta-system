@@ -1,0 +1,398 @@
+ORIGIN '~beta/distribution/guienvshell';
+INCLUDE '~beta/persistentstore/serverinterface'
+        '~beta/persistentstore/clientinterface'
+        '~beta/persistentstore/notification'
+        '~beta/persistentstore/sharedpersistentstore'
+        '~beta/persistentstore/transaction'
+        'clientwindows'
+        'recordlib';
+BODY 'private/usenotclientbody';
+-- program: Descriptor --
+shellEnv
+  (#
+     aRecord: ^record;
+     psdata: ^register;
+     consecutiveNumber: @integer;
+     ;
+     getHost:
+       (# 
+       enter serverEnsembleName[]
+       do
+          (if serverEnsembleName[] <> none then
+              (ensemble##,serverEnsembleName[])
+                ->theShell.myEnsemble.ns.get
+                  (#
+                     notFound:: 
+                       (# 
+                       do
+                          serverEnsembleName[]->screen.putText;
+                          ' not found. Try again: '->screen.putText
+                       #)
+                  #)->serverEnsemble[]
+          if)
+       #);
+     getNotificationManager:
+       (# 
+       do
+          dogetnotificationmanager:
+          (NotificationManager##,'Notificationmanager')
+            ->serverEnsemble.ns.get
+              (#
+                 notFound:: 
+                   (# 
+                   do
+                      'No Notificationmanager on '->screen.putText;
+                      serverEnsembleName[]->screen.putLine;
+                      leave dogetnotificationmanager
+                   #)
+              #)->thenotificationmanager[]
+       #);
+     subscribeUPDATE:
+       (# thesubscription: ^subscription; 
+       do
+          (theClientShell[],'all',PSname1[],Update)->subscribetoPSEvent
+            ->theSubscription[];
+          theSubscription[]->thenotificationmanager.subscribeNotification
+       #);
+     subscribeWAITFORLOCK:
+       (# thesubscription: ^subscription; 
+       do
+          (theClientShell[],'all',PSname1[],Waitforlock)->subscribetoPSEvent
+            ->theSubscription[];
+          theSubscription[]->thenotificationmanager.subscribeNotification
+       #);
+     openPS1:
+       (# 
+       do
+          doit:
+            (# 
+            do
+               (PSname1[],theClientShell[],serverensemble[])
+                 ->PS.open
+                   (#
+                      notfound::< 
+                        (# 
+                        do
+                           'The store is created ...'->puttext;
+                           PSname1[]->PS.create;
+                           'done'->putline;
+                           ;
+                           gettingAccess:
+                             (# 
+                             do
+                                ps.getlock
+                                  (# LockMode::<  (#  do write->value #)
+                                  #);
+                                ps.access
+                             #);
+                           &register[]->psdata[];
+                           psdata.init;
+                           (psdata[],'data')->PS.put;
+                           none ->psdata[];
+                           committing: (#  do ps.commit; ps.releaselock #);
+                           ;
+                           leave doit
+                        #)
+                   #)
+            #);
+          gettingAccess:
+            (# 
+            do
+               ps.getlock
+                 (# LockMode::<  (#  do read->value #) #);
+               ps.access
+            #);
+          ('data',register##)->PS.get->psdata[];
+          committing: (#  do ps.commit; ps.releaselock #)
+       #);
+     openPS2:
+       (# 
+       do
+          doit:
+            (# 
+            do
+               (PSname2[],theClientShell[],serverensemble[])
+                 ->PS.open
+                   (#
+                      notfound::< 
+                        (# 
+                        do
+                           'The store is created ...'->puttext;
+                           PSname2[]->PS.create;
+                           'done'->putline;
+                           leave doit
+                        #)
+                   #)
+            #)
+       #);
+     ;
+     thenotificationmanager: ^notificationmanager;
+     serverEnsembleName: ^Text;
+     serverEnsemble: ^ensemble;
+     PSname1: ^text;
+     PSname2: ^text;
+     ps: @sharedpersistentstore;
+     ps2: @sharedpersistentstore;
+     clientStatus: (* idle, waitingforlock or haslock *) @integer;
+     clientIdle: (#  exit 1 #);
+     clientWaitingForLock: (#  exit 2 #);
+     clientHasLock: (#  exit 3 #);
+     getLockAction:
+       (# 
+       do
+          clientWaitingForLock->clientStatus;
+          'Waiting for lock'->theTransactionLoopWindow.info.status;
+          theTransactionLoopWindow.info.setViewStatus;
+          ;
+          gettingAccess:
+            (# 
+            do
+               'Trying to get access...'->putline;
+               ps.getlock
+                 (#
+                    LockMode::< 
+                      (# 
+                      do
+                         (if theTransactionLoopWindow.info.read then
+                             read->value
+                          else
+                             write->value
+                         if)
+                      #);
+                    LockPolicy::< 
+                      (# 
+                      do
+                         (if theTransactionLoopWindow.info.shared then
+                             shared->value
+                          else
+                             exclusive->value
+                         if)
+                      #);
+                    timeoutvalue::  (#  do - 1->value #)
+                 #);
+               (if ps.writelock then
+                   'The ps is accessed for writing'->putline
+                else
+                   'The ps is accessed for reading'->putline
+               if);
+               ps.access
+            #);
+          'The list after (possibly) regetting: '->puttext;
+          psdata.scan
+            (#  do elm.key->putint; ', '->puttext #);
+          newline;
+          ;
+          clientHasLock->clientStatus;
+          'Obtained lock'->theTransactionLoopWindow.info.status;
+          theTransactionLoopWindow.info.setViewStatus
+       #);
+     releaseLockAction:
+       (# 
+       do
+          (if ps.writelock then
+              consecutiveNumber+1->consecutiveNumber;
+              &record[]->aRecord[];
+              consecutiveNumber->aRecord.key;
+              aRecord[]->psdata.insert;
+              '------> Adding element to list just before committing writelock: '
+                ->puttext;
+              consecutiveNumber->putint;
+              newline
+          if);
+          committing:
+            (# 
+            do
+               'Transaction commit...'->putline;
+               (if ps.writelock then
+                   ps.commit
+                else
+                   ps.commit
+                     (# doCheckpoint::<  (#  do false->value #) #)
+               if);
+               ps.releaselock
+            #);
+          ;
+          clientIdle->clientStatus;
+          'Ready'->theTransactionLoopWindow.info.status;
+          theTransactionLoopWindow.info.setViewStatus
+       #);
+     ;
+     theOpenClientWindow: ^openClientWindow;
+     openClientWindow: ui.openClientWindowClass
+       (# onOK::<  (#  do hide; INNER ; close #) #);
+     theTransactionLoopWindow: ^transactionLoopWindow;
+     transactionLoopWindow: ui.transactionLoopWindowClass
+       (#
+          open::< 
+            (# tmp: @text
+            do
+               'Client using '''->tmp;
+               PSname1[]->tmp.append;
+               ''' via '''->tmp.append;
+               serverEnsembleName[]->tmp.append;
+               ''''->tmp.append;
+               tmp[]->title
+            #);
+          ;
+          onGetLock::< 
+            (# 
+            do
+               (if clientStatus
+                // clientIdle then
+                   getLockAction
+                // clientWaitingForLock then
+                   'Already waiting for lock!'->putline
+                // clientHasLock then
+                   'Already has lock!'->putline
+               if)
+            #);
+          onReleaseLock::< 
+            (# 
+            do
+               (if clientStatus
+                // clientIdle then
+                   'Doesn''t have lock!'->putline
+                // clientWaitingForLock then
+                   'Too late - already waiting for lock!'->putline
+                // clientHasLock then
+                   releaseLockAction
+               if)
+            #);
+          onEndSession::< 
+            (# 
+            do
+               INNER onEndSession;
+               (if clientStatus
+                // clientIdle then
+                   'Idle'->putline; PS.close; close; theShell.kill
+                // clientWaitingForLock then
+                   'Waiting for lock'->putline;
+                   'Too late - already waiting for lock!'->putline
+                // clientHasLock then
+                   'Has lock'->putline;
+                   releaseLockAction;
+                   PS.close;
+                   close;
+                   theShell.kill
+               if)
+            #)
+       #);
+     theLockStatusWindow: ^lockStatusWindow;
+     lockStatusWindow: ui.lockStatusWindowClass
+       (#
+          open::< 
+            (# tmp: @text
+            do
+               'Client using '''->tmp;
+               PSname1[]->tmp.append;
+               ''' via '''->tmp.append;
+               serverEnsembleName[]->tmp.append;
+               ''''->tmp.append;
+               tmp[]->title;
+               ;
+               watchSystem[]->fork
+            #)
+       #);
+     watchSystem:
+     (* Continually watching the sharedpersistentstores' lock states and
+      displays the states in the lockStatusWindow.
+      Forked by lockStatusWindow.*) @|system
+       (# 
+       do
+          Cycle
+            (# 
+            do
+               1->sleep;
+               ps.readlock->theLockStatusWindow.info.customerReadLock;
+               ps.writelock->theLockStatusWindow.info.customerWriteLock
+            #)
+       #);
+     ;
+     setWindowEnv::<  (#  do ui[]->theWindowEnv[] #);
+     ui: @guienv (#  #);
+     theClientShell: @NPSclient
+       (#
+          notifyImpl:: 
+            (# tmp: @text; aPSEvent: ^PSEvent
+            do
+               theNotification.display;
+               tmp.clear;
+               'Timestamp: '->tmp.puttext;
+               theNotification.timestamp->formattime->tmp.putline;
+               'User which caused the event: '->tmp.puttext;
+               theNotification.theUser[]->tmp.putline;
+               ;
+               'Eventtype: '->tmp.puttext;
+               (if theNotification.theEvent.type
+                // Create then
+                   'CREATE'->tmp.putline; 
+                // Open then
+                   'OPEN'->tmp.putline; 
+                // Close then
+                   'CLOSE'->tmp.putline; 
+                // Update then
+                   'UPDATE'->tmp.putline; 
+                // Lock then
+                   'LOCK'->tmp.putline; 
+                // Unlock then
+                   'UNLOCK'->tmp.putline; 
+                // WaitforLock then
+                   'WAIT FOR LOCK'->tmp.putline; 
+                else
+                   'Unknown'->tmp.putline; 
+               if);
+               ;
+               'Name of PS: '->tmp.puttext;
+               theNotification.theEvent[]
+                 ->aPSEvent[]
+                 (* Only PSEvents have PSnames... and this is a PSEvent*) ;
+               aPSEvent.theinfo.PSname[]->tmp.putline;
+               ;
+               tmp->theTransactionLoopWindow.info.notifications;
+               theTransactionLoopWindow.info.setViewNotifications
+            #)
+       #)
+  do
+     setWindowEnv;
+     theClientShell.start;
+     &openClientWindow
+       (#
+          onOK::< 
+            (# 
+            do
+               info.host[]->getHost;
+               info.fullPath[]->PSname1[];
+               info.fullPath.copy->PSname2[];
+               '2'->PSname2.append;
+               ;
+               getNotificationManager;
+               (if theNotificationManager[] <> none then
+                   subscribeUPDATE; subscribeWAITFORLOCK
+               if);
+               openPS1;
+               ;
+               setup_transactionLoopWindow:
+                 (# 
+                 do
+                    &transactionLoopWindow[]->theTransactionLoopWindow[];
+                    theTransactionLoopWindow.open;
+                    theTransactionLoopWindow.info.clearView;
+                    'Ready'->theTransactionLoopWindow.info.status;
+                    theTransactionLoopWindow.info.setViewStatus
+                 #);
+               setup_lockStatusWindow:
+                 (# 
+                 do
+                    &lockStatusWindow[]->theLockStatusWindow[];
+                    theLockStatusWindow.open;
+                    theLockStatusWindow.hide;
+                    theLockStatusWindow.info.clearView
+                 #);
+               clientIdle->clientStatus
+            #)
+       #)[]->theOpenClientWindow[];
+     theOpenClientWindow.open;
+     (* theOpenClientWindow.onOK *)
+     
+  #)  
+

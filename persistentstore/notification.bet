@@ -1,0 +1,238 @@
+ORIGIN 'clientinterface';
+INCLUDE '~beta/sysutils/time'
+        'samefile'
+        '~beta/sysutils/pathhandler';
+(* File notification.bet
+ * =====================
+ * This file is a library containing the declarations used
+ * when using notifications. This file has to be included by
+ * the clients, if they want to subscribe to notifications.
+*)
+-- shellEnvLib: Attributes --
+NPSclient: PSclient
+  (#
+     notify: entry
+       (# theNotification: ^notification; 
+       enter theNotification[]
+       do theNotification[]->notifyImpl; 
+       #);
+     notifyImpl:<
+       (# theNotification: ^notification; 
+       enter theNotification[]
+       do INNER
+       #)
+  #);
+Create: (#  exit 1 #);
+Open: (#  exit 2 #);
+Close: (#  exit 3 #);
+Update: (#  exit 4 #);
+Lock: (#  exit 5 #);
+Unlock: (#  exit 6 #);
+WaitforLock: (#  exit 7 #);
+event:
+  (#
+     type: @integer;
+     info:< (#  #);
+     theinfo: @info;
+     display:<
+       (# 
+       do
+          'Eventtype: '->puttext;
+          (if type
+           // Create then
+              'CREATE'->putline; 
+           // Open then
+              'OPEN'->putline; 
+           // Close then
+              'CLOSE'->putline; 
+           // Update then
+              'UPDATE'->putline; 
+           // Lock then
+              'LOCK'->putline; 
+           // Unlock then
+              'UNLOCK'->putline; 
+           // WaitforLock then
+              'WAIT FOR LOCK'->putline; 
+           else
+              'Unknown'->putline; 
+          if);
+          INNER ;
+          
+       #);
+     match:<
+       (# theEvent: ^event; ok: @boolean; 
+       enter theEvent[]
+       do false->ok; (if (type = theEvent.type) then true->ok; INNER if); 
+       exit ok
+       #);
+     
+  do INNER ; 
+  #);
+PSevent: event
+  (#
+     info::<  (# PSname: ^text;  #);
+     display::< 
+       (#  do 'Name of PS: '->puttext; theinfo.PSname[]->putline;  #);
+     match::< 
+       (# thePSEvent: ^PSevent; 
+       do
+          theEvent[]->thePSEvent[];
+          false->ok;
+          (if
+          (((theinfo.PSname[],thePSEvent.theinfo.PSname[])->sameFile) or
+           ('all'->theinfo.PSname.equal)) then
+              true->ok; 
+          if);
+          
+       #);
+     
+  do INNER ; 
+  #);
+subscription:
+  (#
+     theEvent: ^event;
+     (*the event to be notified about*)
+     user: ^text;
+     (*the user/s of interest*)
+     theClient: ^NPSclient;
+     (*the subsribing client*)
+     display:
+       (# 
+       do
+          'Subscribed to user/s: '->puttext;
+          user[]->putline;
+          'Subscribing client: '->puttext;
+          theClient.ri.shellAdr.astext->putline;
+          theEvent.display;
+          
+       #);
+     
+  #);
+notification:
+  (#
+     theEvent: ^event;
+     theUser: ^text;
+     (*the user/s of interest*)
+     timestamp: @integer;
+     (* the time at what the event happened*)
+     display:
+       (# ch: @char; 
+       do (* ascii.bel->put; *)
+          newline;
+          '**********Notification**************************'->putline;
+          'Timestamp: '->puttext;
+          timestamp->formattime->puttext;
+          newline;
+          'User which caused the event: '->puttext;
+          theUser[]->putline;
+          theEvent.display;
+          '************************************************'->putline;
+          
+       #);
+     
+  #);
+subscribetoEvent:
+  (# (*theServer: ^PersistentStoreManager;*)
+     theClient: ^NPSclient; user: ^text; theSubscription: ^subscription; 
+  enter (theClient[], (*theServer[],*) user[])
+  do
+     &subscription[]->theSubscription[];
+     theClient[]->theSubscription.theClient[];
+     user[]->theSubscription.user[];
+     INNER ;
+     (*theSubscription[]->theServer.subscribeNotification;*)
+     
+  exit theSubscription[]
+  #);
+subscribetoPSEvent: subscribetoEvent
+  (# PSname: ^text; fullname: ^text; theEvent: ^PSEvent; thetype: @integer
+  enter (PSname[],thetype)
+  do
+     &PSEvent[]->theEvent[];
+     (if (not ('all'->PSname.equal)) then
+         PSname[]->getfullname->fullname[];
+         fullname[]->theEvent.theinfo.PSname[];
+         
+      else
+         'all'->theEvent.theinfo.PSname[]; 
+     if);
+     thetype->theEvent.type;
+     INNER ;
+     theEvent[]->theSubscription.theEvent[];
+     
+  #);
+unsubscribefromEvent:
+  (# (*theServer: ^PersistentStoreManager;*)
+     theClient: ^NPSclient; user: ^text; theSubscription: ^subscription; 
+  enter (theClient[], (*theServer[],*) user[])
+  do
+     &subscription[]->theSubscription[];
+     theClient[]->theSubscription.theClient[];
+     user[]->theSubscription.user[];
+     INNER ;
+     (*theSubscription[]->theServer.unsubscribeNotification;*)
+     
+  exit theSubscription
+  #);
+unsubscribefromPSEvent: unsubscribefromEvent
+  (#
+     PSname: ^text; fullname: ^text; theEvent: ^PSEvent; thetype: @integer; 
+  enter (PSname[],thetype)
+  do
+     &PSEvent[]->theEvent[];
+     (if (not ('all'->PSname.equal)) then
+         PSname[]->getfullname->fullname[];
+         fullname[]->theEvent.theinfo.PSname[];
+         
+      else
+         'all'->theEvent.theinfo.PSname[]; 
+     if);
+     thetype->theEvent.type;
+     INNER ;
+     theEvent[]->theSubscription.theEvent[];
+     
+  #);
+sendNotification:
+  (#
+     theClient: ^NPSclient;
+     (*theServer: ^PersistentStoreManager;*)
+     user: ^text;
+     theNotification: ^notification;
+     
+  enter (theClient[], (*theServer[],*) user[])
+  do
+     &notification[]->theNotification[];
+     user[]->theNotification.theUser[];
+     systemTime->theNotification.timestamp;
+     INNER ;
+     (*(theClient[],theNotification[])->theServer.notify;*)
+     
+  exit theNotification[]
+  #);
+sendPSNotification: sendNotification
+  (# PSname: ^text; theEvent: ^PSEvent; thetype: @integer; 
+  enter (PSname[],thetype)
+  do
+     &PSEvent[]->theEvent[];
+     PSname[]->theEvent.theinfo.PSname[];
+     thetype->theEvent.type;
+     INNER ;
+     theEvent[]->theNotification.theEvent[]
+  #);
+getfullname:
+  (# name,fullname: ^Text; dirname: ^text; ph: @PathHandler; 
+  enter name[]
+  do
+     ph.init;
+     name.copy->fullname[];
+     (fullname[],ph.CurrentDirectory)->ph.convertFilePath->fullname[];
+     fullname.copy->dirName[];
+     (*(if fullname.t[fullname.lgth] <> ph.directoryChar then 
+      fullname.lgth -> fullname.pos;
+      ph.directoryChar -> fullname.put;
+      if);*)
+     
+  exit dirname[]
+  #);
+  
+

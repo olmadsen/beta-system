@@ -1,0 +1,329 @@
+ORIGIN '~beta/distribution/shell';
+INCLUDE '~beta/persistentstore/serverinterface'
+        '~beta/persistentstore/clientinterface'
+        '~beta/persistentstore/sharedpersistentstore'
+        'recordlib';
+(* 
+ * This file contains an example implementation of a client using the
+ * sharedpersistent store. The client does not make use of notifiactions
+ * - This client makes use of transactions.
+ * - The user can choose to access the PS for reading or writing. 
+ *   He can also determine the lockpolicy.
+ * 
+ * INCLUDE 'serverinterface' -> to communicate with the server
+ * INCLUDE 'clientinterface' -> to bind shelltype to PSclient 
+ * INCLUDE 'sharedps'        -> to make use of the concurrency control mechanism
+ * INCLUDE 'recordlib'       -> to store persons in a register
+ * INCLUDE 'transactionlib'; -> to use transactions
+ * 
+ *)
+-- program: Descriptor --
+shellEnv
+  (#
+     theClientShell: @PSclient
+       (#
+          ps: @sharedpersistentstore;
+          serverEnsembleName: ^Text;
+          (* name of server host *)
+          serverEnsemble: ^ensemble;
+          (* ref to server host *)
+          PSname: ^text;
+          exists: @boolean;
+          newreg: ^register;
+          s: ^register;
+          rootname: ^text;
+          regname: ^text;
+          theperson: ^person;
+          addRecord:
+            (# elm:< record; p: ^elm
+            do
+               &elm[]->p[];
+               'Key      ?'->screen.putText;
+               keyBoard.getInt->p.key;
+               keyBoard.getLine;
+               INNER ;
+               p[]->s.insert;
+               
+            exit p[]
+            #);
+          addPerson: addRecord
+            (# elm::< person; 
+            do
+               'Name     ?'->screen.putText;
+               keyBoard.getLine->p.name[];
+               'Sex      ?'->screen.putText;
+               keyBoard.getLine->p.sex[];
+               INNER
+            #);
+          change:
+            (# k: @integer; found: @boolean; 
+            do
+               'Key      ?'->screen.putText;
+               keyBoard.getInt->k;
+               false->found;
+               keyBoard.getLine;
+               s.scan
+                 (# 
+                 do (if elm.key // k then true->found; elm.change;  if); 
+                 #);
+               (if not found then
+                   'Element with key '->screen.puttext;
+                   k->screen.putint;
+                   ' not found'->screen.puttext;
+                   
+               if);
+               
+            #);
+          delete:
+            (# k: @integer; 
+            do
+               'Which key? '->screen.putText;
+               keyBoard.getInt->k;
+               keyBoard.getLine;
+               k->s.delete;
+               
+            #);
+          findWithKey:
+            (# k: @integer; found: ^record; 
+            do
+               'Key      ?'->screen.putText;
+               keyBoard.getInt->k;
+               keyBoard.getLine;
+               s.scan
+                 (# 
+                 do
+                    (if elm.key
+                     // k then elm[]->found[]; INNER findWithKey; 
+                    if)
+                 #);
+               
+            #);
+          doaccess:
+            (#
+               lmode: @integer;
+               lpolicy: @integer;
+               getregister:
+                 (# rootname: ^text; 
+                 do
+                    keyboard.getLine;
+                    'Which register? '->screen.puttext;
+                    keyboard.getline->rootname[];
+                    rootname[]->puttext;
+                    ': '->putline;
+                    (rootname[],register##)
+                      ->ps.get
+                        (#
+                        (*notfound::< 
+                         (# do 
+                         'This register does not exist'->putline;
+                         true->continue;
+                         #);*) 
+                        #)->s[];
+                    
+                 exit s[]
+                 #);
+               
+            do
+               'Access the ps for reading or writing[r/w]: '->putText;
+               (if getNonBlank
+                // 'w' then write->lmode; 
+                else
+                   read->lmode; 
+               if);
+               'The policy to be guaranteed: MRSW allowed[y/n]: '->putText;
+               (if getNonBlank
+                // 'y' then shared->lpolicy; 
+                else
+                   exclusive->lpolicy; 
+               if);
+               ps.getlock
+                 (#
+                    LockMode::<  (#  do lmode->value #);
+                    LockPolicy::<  (#  do lpolicy->value #);
+                    
+                 #);
+               ps.access;
+               INNER ;
+               ps.commit;
+               ps.releaselock;
+               
+            #);
+          
+          onClientStart :: 
+            (# 
+            do 
+               (* Get a reference to the ensemble on which a PersistentStoreManager is
+                * running or should run: *)
+               'Enter Persistens Server hostname: '->screen.putText;
+               keyboard.getLine->serverEnsembleName[];
+               getHost:
+                 (ensemble##,serverEnsembleName[])
+                 ->theShell.myEnsemble.ns.get
+               (#
+                  notFound:: 
+                    (# 
+                    do
+                       serverEnsembleName[]->screen.putText;
+                       ' not found. Try again: '->screen.putText;
+                       keyboard.getLine->serverEnsembleName[];
+                       restart getHost
+                    #)
+               #)->serverEnsemble[];
+               'Enter name of shared persistent store to open: '->screen.puttext;
+               keyboard.getline->PSname[];
+               (* open shared PS *)
+               open:
+                 (# 
+                 do
+                    true->exists;
+                    (PSname[],theClientShell[],serverensemble[])
+                      ->PS.open
+                    (#
+                       notfound::< 
+                         (# 
+                         do
+                            false->exists;
+                            'The store is created ...'->putText;
+                            PSname[]->PS.create;
+                            leave open;
+                            
+                         #);
+                       
+                    #);
+                    
+                 #);
+               (if not exists then 'done'->putline if);
+               (* start transaction loop *)
+               loop:
+                 (# 
+                 do
+                    doaccess
+                    (# 
+                    do
+                       commandLoop: cycle
+                         (# newreg: ^register; 
+                         do
+                            screen.newLine;
+                            'The operations get,display,find,add,delete,change gets the register from location, if not already done'
+                              ->putline;
+                            '-----------------------------------------------------------'
+                              ->putline;
+                            'Get a register (persistent root) [g]'->putline;
+                            'Display register [d]'->putline;
+                            'Find person in register [f]'->putline;
+                            'Add person to register [a]'->putline;
+                            'Delete person from register [k]'->putline;
+                            'Change name of person [c]'->putline;
+                            screen.newline;
+                            'Show registers in location [s]'->putline;
+                            'Put register [p]'->putline;
+                            'Remove register [r]'->putline;
+                            'Checkpoint/Update persistent store [u]'->putline;
+                            'Reget in-memory objects [e]'->putline;
+                            screen.newline;
+                            'Abort the transaction [b]'->putline;
+                            'Commit the transaction [q]'->putline;
+                            (if getNonBlank
+                             // 'g' then
+                                getregister->s[];
+                                (if (not (s[] = none )) then
+                                    'Done'->putline; 
+                                if);
+                                
+                             // 'd' then
+                                getregister->s[];
+                                (if (not (s[] = none )) then
+                                    screen[]->s.display; 
+                                if);
+                                
+                             // 'f' then
+                                getregister->s[];
+                                (if (not (s[] = none )) then
+                                    findWithKey
+                                    (#  do screen[]->found.display #);
+                                    
+                                if);
+                                
+                             // 'a' then
+                                (* evt. check om man har write permission *)
+                                getregister->s[];
+                                (if (not (s[] = none )) then
+                                    addPerson->theperson[]; 
+                                if);
+                                'Add to another register? [y,n]'->putline;
+                                (if getNonBlank
+                                 // 'y' then
+                                    getregister->s[];
+                                    (if (not (s[] = none )) then
+                                        'insert'->putline;
+                                        (if (not (theperson[] = none )) then
+                                            theperson[]->s.insert; 
+                                         else
+                                            addperson; 
+                                        if);
+                                        
+                                    if);
+                                    
+                                if);
+                                
+                             // 'k' then
+                                getregister->s[];
+                                (if (not (s[] = none )) then delete if);
+                                
+                             // 'c' then
+                                getregister->s[];
+                                (if (not (s[] = none )) then change;  if);
+                                
+                             // 's' then
+                                'The following registers are found in the PS:'
+                                  ->putline;
+                                ps.scanrootnames
+                                (#  do current[]->putline;  #);
+                                
+                             // 'p' then
+                                keyboard.getLine;
+                                'Name of register to be put? '->screen.puttext;
+                                keyboard.getline->rootname[];
+                                rootname[]->putline;
+                                &register[]->newreg[];
+                                (newreg[],rootname.copy)->ps.put;
+                                
+                             // 'r' then
+                                getregister->s[];
+                                (if (not (s[] = none )) then none ->s[];  if);
+                                
+                             // 'e' then
+                                ps.reget; 
+                             // 'u' then
+                                ps.checkpoint; 
+                             // 'b' then
+                                ps.commit
+                                (# doCheckpoint::<  (#  do false->value #)
+                                #);
+                                leave commandloop;
+                                
+                             // 'q' then
+                                ps.commit; leave commandLoop; 
+                            if);
+                            
+                         #);
+                       
+                    #);
+                    'Start a new access [yn]?'->screen.puttext;
+                    (if getnonblank = 'y' then restart loop if);
+                    
+                 #);
+               (* close shared ps and disconnect *)
+               close:
+                 (#  do 'The PS is closed now.'->screen.puttext; PS.close;  #);
+               'Do you want to delete the PS [yn]?'->putline;
+               (if getnonblank = 'y' then
+                   (PSname[],serverensemble[])->PS.deletesharedpersistentstore; 
+               if);
+               theShell.kill;
+            #);
+       #);
+     
+  do theClientShell.start
+  #)  
+

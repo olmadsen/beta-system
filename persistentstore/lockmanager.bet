@@ -1,0 +1,389 @@
+ORIGIN '~beta/distribution/basicshell';
+INCLUDE 'clientinterface'
+        'samefile'
+        'perslib'
+        'sharedpsnotifications'
+        'lockmanagerinterface'
+        '~beta/basiclib/file'
+        '~beta/basiclib/directory'
+        '~beta/containers/sets';
+(* File lockmanager.bet
+ * ====================
+ * This file contains the interface to a lockmanager serving
+ * concurrency control.
+ * This file is included by the file serverinterface.bet, because
+ * every server starts a lockmanager.
+ *)
+-- shellEnvLib: Attributes --
+pStoreStatus:
+  (#
+     pStoreName: ^text;
+     lockingClient: ^PSClient;
+     LockMode: @integer;
+     LockPolicy: @integer;
+     priority: @integer;
+     hostname: ^text
+  #);
+MRSWinfo:
+  (# name: ^text; lockingClient: ^PSClient; LockMode: @integer;  #);
+clientinfo: (# theclient: ^PSclient; name: ^text; hostname: ^text;  #);
+lockmanager: lockmanagerinterface
+  (#
+     connectImpl:: 
+       (# 
+       do
+          'lock: Client connecting...'->puttext;
+          (theClient[],name[])->clientList.insert->value;
+          (if value then theClient.registerClient if);
+          ' done'->putline
+       #);
+     disconnectImpl:: 
+       (# 
+       do
+          'lock: Client disconnecting...'->puttext;
+          (theClient[],name[])->clientList.delete;
+          ' done'->putline
+       #);
+     getLockImpl:: 
+       (# 
+       do
+          'lock: Request for lock...'->puttext;
+          (name[],theClient[],username[],lockmode,lockpolicy)
+            ->pStoreTable.getlock->value;
+          (if value then ' granted'->putline else ' NOT granted'->putline if)
+       #);
+     MRSWgetLockImpl:: 
+       (# 
+       do
+          'lock: Request for lock...'->puttext;
+          (name[],theClient[],lockmode)->MRSWTable.getlock;
+          ' done'->putline
+       #);
+     MRSWreleaseLockImpl:: 
+       (# 
+       do
+          'lock: Releasing lock...'->puttext;
+          (theClient[],name[])->MRSWTable.releaselock;
+          ' done'->putline
+       #);
+     releaseLockImpl:: 
+       (# 
+       do
+          'lock: Releasing lock...'->puttext;
+          (theClient[],name[])->pStoreTable.releaselock;
+          ' done'->putline
+       #);
+     deleteLockRequestImpl:: 
+       (#  do (theClient[],name[])->pStoreTable.deleteLockRequest;  #);
+     getPermissiontoDeletePSImpl:: 
+       (#  do name[]->clientList.GetpermissiontoDeletePS->ok;  #);
+     ;
+     getNextString:
+       (#
+       (* soeger fra nuvaerende position og frem til og med naeste semikolon. 
+        Returnerer herefter det foerste uden semikolon
+        *) txtref,outtxt: ^text; start: @integer; 
+       enter txtref[]
+       <<SLOT LockManagerGetNextString:DoPart>>
+       exit outtxt
+       #);
+     getNextInteger:
+       (#
+       (* Kalder getNextString og konverterer resultatet til en integer *)
+          txtref: ^text; outtxt: @text; result: @integer; 
+       enter txtref[]
+       <<SLOT LockManagerGetNextInteger:DoPart>>
+       exit result
+       #);
+     chop:
+     (* Afskærer foran- og efterstillede mellemrum, linieskift *)
+       (# t: ^text;  enter t[] <<SLOT LockManagerChop:DoPart>> exit t[] #);
+     ;
+     notificationServer: ^notificationmanager;
+     nm: ^notificationmanagement;
+     ;
+     myErrorHandler: errorhandler
+       (#
+          wrongAnswer::< 
+            (# 
+            do 'lock: wrongAnswer called!!! - continuing...'->putline; continue
+            #);
+          onFailure:<
+            (# theError: ^error; 
+            enter theError[]
+            do
+               INNER onFailure;
+               (if theError.theObj## <= PSClient## then
+               (* Get rid of the failing Client. *)
+                   theError.theObj[]->FailingClients.insert; theError.ignore
+                else
+                   theError.abort; 
+               if)
+            #);
+          connectionBroken::  (#  do THIS(connectionBroken)[]->onFailure #);
+          connectionFailed::  (#  do THIS(connectionFailed)[]->onFailure #);
+          timeOut::  (#  do THIS(timeOut)[]->onFailure #);
+          timeOutValue::  (#  do 1->sec #)
+       do INNER
+       #);
+     ;
+     clientList: @Monitor
+       (#
+          scanClients: entry
+            (#
+               curClient: ^PSClient;
+               allClients:
+               (* A client may appear more than once in theList. This
+                set contains only one element per client *) @set
+                 (# element:: PSclient #)
+            <<SLOT LockManagerClientListScanClients:DoPart>>
+            #);
+          scanClientInfos:
+           entry
+            (# current: ^clientinfo
+            <<SLOT LockManagerClientListScanClientInfos:DoPart>>
+            #);
+          getpermissiontoDeletePS: entry
+            (# name: ^text; ok: @boolean; 
+            enter name[]
+            <<SLOT LockManagerClientListGetpermissiontoDeletePS:DoPart>>
+            exit ok
+            #);
+          append: entry
+            (# elme: ^clientinfo; 
+            enter elme[]
+            do elme[]->private.theList.append
+            #);
+          insert: entry
+            (#
+               theClient: ^PSclient;
+               name: ^text;
+               newclientinfo: ^clientinfo;
+               ok: @boolean
+            enter (theClient[],name[])
+            <<SLOT LockManagerClientListInsert:DoPart>>
+            exit ok
+            #);
+          delete: entry
+            (# theClient: ^PSclient; name: ^text; 
+            enter (theClient[],name[])
+            <<SLOT LockManagerClientListDelete:DoPart>>
+            #);
+          deleteDeadClient: entry
+            (# theClient: ^PSclient; 
+            enter theClient[]
+            <<SLOT LockManagerClientListDeleteDeadClient:DoPart>>
+            #);
+          display: entry (#  <<SLOT LockManagerClientListDisplay:DoPart>> #);
+          size: entry (#  exit private.theList.size #);
+          save: entry (#  do private.saveinfo #);
+          load: entry (#  do private.loadinfo #);
+          ;
+          private: @
+            (#
+               theList: @list (# element:: clientinfo #);
+               filename: (#  exit 'datafiles/clients.txt' #);
+               loadinfo:
+                 (#
+                    inFile: @file;
+                    hasInformedUser:
+                    (* If there are items to recover, then the user should be notified - but
+                     only once! *) @boolean
+                 <<SLOT LockManagerClientListPrivateLoadinfo:DoPart>>
+                 #);
+               saveinfo:
+                 (#
+                    outFile:
+                      @file
+                 <<SLOT LockManagerClientListPrivateSaveinfo:DoPart>>
+                 #)
+            #);
+          init:: 
+            (# 
+            do
+               private.
+                 theList.init
+            #)
+       #);
+     pStoreTable: @Monitor
+       (#
+          append: entry
+            (# elme: ^pStoreStatus; 
+            enter elme[]
+            <<SLOT LockManagerpStoreTableAppend:DoPart>>
+            #);
+          deleteDeadClient: entry
+            (#
+               theClient: ^PSclient
+            enter theClient[]
+            <<SLOT LockManagerpStoreTableDeleteDeadClient:DoPart>>
+            #);
+          getlock: entry
+            (#
+               newpStoreStatus: ^pStoreStatus;
+               ok: @boolean;
+               name: ^text;
+               uname: ^text;
+               theClient: ^PSclient;
+               lockmode: @integer;
+               lockpolicy: @integer;
+               notified: @boolean
+               (* Has the notificationmanager been notified
+                that we are trying to get a lock? *)
+            enter (name[],theClient[],uname[],lockmode,lockpolicy)
+            <<SLOT LockManagerpStoreTableGetlock:DoPart>>
+            exit ok
+            #);
+          releaseLock: entry
+            (# thePS: ^pStoreStatus; name: ^text; theClient: ^PSclient
+            enter (theClient[],name[])
+            <<SLOT LockManagerpStoreTableReleaseLock:DoPart>>
+            #);
+          deleteLockRequest: entry
+            (# thePS: ^pStoreStatus; name: ^text; theClient: ^PSclient
+            enter (theClient[],name[])
+            <<SLOT LockManagerpStoreTableDeleteLockRequest:DoPart>>
+            #);
+          save: entry (#  do private.saveinfo;  #);
+          load: entry (#  do private.loadinfo;  #);
+          ;
+          private: @
+            (#
+               filename: (#  exit 'datafiles/locks.txt' #);
+               loadinfo:
+                 (# inFile: @file
+                 <<SLOT LockManagerpStoreTablePrivateLoadinfo:DoPart>>
+                 #);
+               saveinfo:
+                 (#
+                    outFile: @file;
+                    writePStoreStatus:
+                      (# elm: ^pStoreStatus
+                      enter elm[]
+                      <<SLOT LockManagerpStoreTableWritePStoreStatus:DoPart>>
+                      #)
+                 <<SLOT LockManagerpStoreTablePrivateSaveinfo:DoPart>>
+                 #);
+               theList: @list (# element:: pStoreStatus;  #);
+               theQueue: @list (# element:: pStoreStatus;  #);
+               checkpolicy:
+                 (# policy: @integer; name: ^text; 
+                 enter name[]
+                 <<SLOT LockManagerpStoreTablePrivateCheckpolicy:DoPart>>
+                 exit policy
+                 #);
+               setpriority:
+                 (#
+                    name: ^text;
+                    lockmode: @integer;
+                    lockpolicy: @integer;
+                    ok: @boolean;
+                    
+                 enter name[]
+                 <<SLOT LockManagerpStoreTablePrivateSetpriority:DoPart>>
+                 #)
+                 (*display: entry
+                  (#
+                  do 'Persistent Store information:'->putline;
+                  theList.scan
+                  (# do current.pStoreName[]->screen.puttext;
+                  ' is locked by '->puttext;
+                  current.lockingClient.ri.shellAdr.astext->puttext;
+                  ' running on '->puttext;
+                  current.lockingClient.myensemble.hostname[]->puttext; 
+                  newline;
+                  'Lockmode: '->puttext;
+                  (if (current.lockmode = write) then
+                  'Write lock'->putline;
+                  else
+                  'Read lock'->putline;
+                  if);    
+                  #);
+                  #);
+                  *)
+            #);
+          init::  (#  do private.theList.init #)
+       #);
+     MRSWTable: @Monitor
+       (#
+          deleteDeadClient: entry
+            (# theClient: ^PSclient
+            enter theClient[]
+            <<SLOT LockManagerMRSWTableDeleteDeadClient:DoPart>>
+            #);
+          getlock: entry
+            (#
+               newMRSWinfo: ^MRSWinfo;
+               ok: @boolean;
+               name: ^text;
+               theClient: ^PSclient;
+               lockmode: @integer;
+               
+            enter (name[],theClient[],lockmode)
+            <<SLOT LockManagerMRSWTableGetlock:DoPart>>
+            exit ok
+            #);
+          releaseLock: entry
+            (# name: ^text; theClient: ^PSclient
+            enter (theClient[],name[])
+            <<SLOT LockManagerMRSWTableReleaseLock:DoPart>>
+            #);
+          ;
+          private: @
+            (#
+               readerList: @list (# element:: MRSWinfo;  #);
+               writerList: @list (# element:: MRSWinfo;  #)
+            #);
+          init:: 
+            (#  do private.readerList.init; private.writerlist.init;  #)
+       #);
+     ;
+     getRidOfFailingClients:
+       @|<<SLOT LockManagerGetRidOfFailingClients:Descriptor>>;
+     FailingClients: @Monitor
+       (#
+          insert: entry
+            (# theClient: ^PSClient; theListElement: ^listElement
+            enter theClient[]
+            <<SLOT LockManagerFailingClientsInsert:DoPart>>
+            #);
+          scanClients: entry
+            (#
+               curElement:
+                 ^listElement;
+               
+            <<SLOT LockManagerFailingClientsScanClients:DoPart>>
+            #);
+          clear: entry
+            (# 
+            do
+               theList.
+                 clear;
+               
+            #);
+          ;
+          listElement:
+            (#
+               client:
+                 ^PSClient;
+               noOfFailures: @integer;
+               failedAtThisPing: @boolean
+            #);
+          theList: @list (# element:: listElement #);
+          init::  (#  do theList.init #)
+       #);
+     ;
+     init:: 
+       (#
+          createDirectory:
+          (* Skaber directoriet path. Det antages, at path i forvejen eksisterer
+           i hvert fald ind til naest-dybeste niveau, saadan, at der her hoejst skal 
+           skabes ét directory. *)
+            (# theDirectory: @directory; thePath: ^text
+            enter thePath[]
+            do thePath[]->theDirectory.name; theDirectory.touch
+            #)
+       <<SLOT LockManagerInit:DoPart>>
+       #)
+  #)  
+

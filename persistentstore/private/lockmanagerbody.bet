@@ -1,0 +1,1087 @@
+ORIGIN '../lockmanager';
+-- LockManagerGetNextString: DoPart --
+do
+   txtref.getpos->start;
+   while:
+     (# 
+     do
+        (if txtref.eos then
+            (start+1,txtref.getpos)->txtref.sub->outtxt[]; leave while
+        if);
+        (if txtref.get = ';' then
+            (start+1,txtref.getpos-1)->txtref.sub->outtxt[]; leave while
+        if);
+        restart while
+     #);
+   ;
+   outtxt[]->chop->outtxt[];
+   outtxt.reset;
+     
+
+-- LockManagerGetNextInteger: DoPart --
+do
+   txtref[]->getNextString->outtxt;
+   outtxt.reset;
+   (if outtxt.length = 0 then - 1->result;  else outtxt.getint->result;  if);
+     
+
+-- LockManagerChop: DoPart --
+do (* fjerner foranstillede mellemrum, linieskift *)
+   t.reset;
+   t.scan
+     (# while::  (#  do (ch = '\n') or (ch = ' ')->value #) #);
+   (if t.getpos >= 1 then (1,t.getpos)->t.delete if);
+   (* fjerner efterstillede mellemrum, linieskift *)
+   t.length->t.setPos;
+   loop
+     (#
+        while:: 
+          (# 
+          do
+             ((t.length >= 1) and
+              (((t.length->t.inxGet) = '\n') or ((t.length->t.inxGet) = ' ')))
+               ->value;
+             
+          #)
+     do (t.length,t.length)->t.delete; 
+     #);
+     
+
+-- LockManagerClientListScanClients: DoPart --
+do
+   private.theList.scan
+     (#  do current.theClient[]->allClients.insert #);
+   allClients.scan
+     (#  do current[]->curClient[]; INNER scanClients #)  
+
+-- LockManagerClientListScanClientInfos: DoPart --
+do
+   private.thelist.scan
+     (# 
+     do
+        (if current[] = none then 'NONE'->putline if);
+        current[]->THIS(scanClientInfos).current[];
+        INNER scanClientInfos
+     #)  
+
+-- LockManagerClientListGetpermissiontoDeletePS: DoPart --
+do
+   true->ok;
+   doscan: private.theList.scan
+     (# 
+     do
+        (if (current.name[],name[])->sameFile then
+            false->ok; leave doscan; 
+        if)
+     #)  
+
+-- LockManagerClientListInsert: DoPart --
+do
+   L:
+     (# 
+     do
+        true->ok;
+        private.theList.scan
+          (# 
+          do
+             (if
+             ((current.theclient[] = theClient[]) and
+              ((current.name[],name[])->sameFile)) then
+                 false->ok; leave L; 
+             if)
+          #);
+        (if ok then
+            &clientinfo[]->newclientinfo[];
+            theclient[]->newclientinfo.theclient[];
+            name.copy->newclientinfo.name[];
+            myErrorHandler
+              (# theEnsemble: ^ensemble
+              do
+                 theClient.getMyEnsemble->theEnsemble[];
+                 (if theEnsemble[] <> none then
+                     theEnsemble.hostname.copy->newClientInfo.hostname[]
+                  else
+                     'lock:clientlist.insert: getMyEnsemble returned none!'
+                       ->putline;
+                     'DEFAULT'->newClientInfo.hostname[]
+                 if)
+              #);
+            newclientinfo[]->private.theList.append;
+            private.saveinfo
+        if);
+        
+     #)  
+
+-- LockManagerClientListDelete: DoPart --
+do
+   L:
+     (# 
+     do
+        private.theList.scan
+          (# 
+          do
+             (if
+             ((current.theclient[] = theClient[]) and
+              ((current.name[],name[])->sameFile)) then
+                 current[]->private.theList.at->private.theList.delete;
+                 private.saveinfo;
+                 leave L
+             if)
+          #)
+     #)  
+
+-- LockManagerClientListDeleteDeadClient: DoPart --
+do
+   private.theList.scan
+     (# 
+     do
+        (if (current.theclient[] = theClient[]) then
+            current[]->private.theList.at->private.theList.delete
+        if)
+     #);
+   private.saveinfo  
+
+-- LockManagerClientListDisplay: DoPart --
+do
+   'Client information:'->putline;
+   private.theList.scan
+     (# 
+     do
+        current.theClient.ri.shellAdr.astext->puttext;
+        ' running on '->puttext;
+        myErrorHandler
+          (# theEnsemble: ^ensemble
+          do
+             current.theclient.getMyEnsemble->theEnsemble[];
+             (if theEnsemble[] <> none then
+                 theEnsemble.hostname.copy->puttext
+              else
+                 'lock:clientlist.display: getMyEnsemble returned none!'
+                   ->putline
+             if)
+          #);
+        ' is connected to the ps with name '->puttext;
+        current.name[]->puttext;
+        newline;
+        
+     #);
+     
+
+-- LockManagerClientListPrivateLoadinfo: DoPart --
+do
+   filename->inFile.name;
+   inFile.touch (* to assure that a file _exists_.*) ;
+   inFile.openread;
+   loop
+     (#
+        while::  (#  do (not inFile.eos)->value;  #);
+        tmptext: ^text;
+        newclientinfo: ^clientinfo;
+        name,hostname,shellAddress: @text
+     do
+        (if not hasInformedUser then
+            'The lockmanager will try to recover from the crash...'->putline;
+            true->hasInformedUser
+        if);
+        inFile.getline->tmptext[];
+        ;
+        tmptext.reset;
+        tmptext[]->getNextString->name;
+        tmptext[]->getNextString->hostname;
+        tmptext[]->getNextString->shellAddress;
+        ;
+        &clientinfo[]->newclientinfo[];
+        name.copy->newclientinfo.name[];
+        hostname.copy->newclientinfo.hostname[];
+        getclient:
+          (# theClient: ^PSclient; clientensemble: ^ensemble
+          do
+             (ensemble##,hostname[])
+               ->theShell.myEnsemble.ns.get
+                 (#
+                    notFound:: 
+                      (#  do 'Ensemble not found.'->screen.putText #)
+                 #)->clientEnsemble[];
+             (if clientEnsemble[] <> none then
+                 (PSclient##,shellAddress.copy)
+                   ->clientensemble.ns.get
+                     (#
+                        notFound:: 
+                          (# 
+                          do (* 'Client not found '->screen.putText *) 
+                          #)
+                     #)->theClient[];
+                 (if theClient[] = none then
+                     ' => Client not found - is deleted'->putline
+                  else
+                     ' => Client found - recovered'->putline;
+                     theclient[]->newclientinfo.theclient[];
+                     name.copy->newclientinfo.name[];
+                     myErrorHandler
+                       (# theEnsemble: ^ensemble
+                       do
+                          theclient.getMyEnsemble->theEnsemble[];
+                          (if theEnsemble[] <> none then
+                              theEnsemble.hostname.copy
+                                ->newclientinfo.hostname[]
+                           else
+                              'lock:init: getMyEnsemble returned none!'
+                                ->putline;
+                              'DEFAULT'->newClientInfo.hostname[]
+                          if)
+                       #);
+                     newclientinfo[]->theList.append
+                 if)
+              else
+                 'lockmanager.clientList: could not find ensemble: "'->puttext;
+                 hostname[]->puttext;
+                 '".'->putline
+             if)
+          #)
+     #)  
+
+-- LockManagerClientListPrivateSaveinfo: DoPart --
+do
+   filename->outFile.name;
+   outFile.openwrite;
+   theList.scan
+     (# 
+     do
+        current.name[]->outFile.puttext;
+        ';'->outFile.put;
+        current.hostname[]->outFile.puttext;
+        ';'->outFile.put;
+        current.theClient.ri.shellAdr.astext->outFile.putline
+     #);
+   outFile.close  
+
+-- LockManagerpStoreTableAppend: DoPart --
+do
+   (if elme.priority = 1 then
+       elme[]->private.theList.append; 
+    else
+       elme[]->private.theQueue.append; 
+   if);
+   private.saveinfo  
+
+-- LockManagerpStoreTableDeleteDeadClient: DoPart --
+do
+   private.theList.scan
+     (# 
+     do
+        (if (theClient[] = current.lockingClient[]) then
+            current[]->private.theList.at->private.theList.delete;
+            current.pStoreName[]->private.setpriority
+        if)
+     #);
+   private.theQueue.scan
+     (# 
+     do
+        (if (theClient[] = current.lockingClient[]) then
+            current[]->private.theQueue.at->private.theQueue.delete
+        if)
+     #);
+   private.saveinfo  
+
+-- LockManagerpStoreTableGetlock: DoPart --
+do
+   &pStorestatus[]->newpStoreStatus[];
+   name[]->newpStoreStatus.pStoreName[];
+   myErrorHandler
+     (# theEnsemble: ^ensemble
+     do
+        theClient.getMyEnsemble->theEnsemble[];
+        (if theEnsemble[] <> none then
+            theEnsemble.hostname.copy->newpStoreStatus.hostname[]
+         else
+            'lock:pStoreTable.getlock: getMyEnsemble returned none!'->putline;
+            'DEFAULT'->newpStoreStatus.hostname[]
+        if)
+     #);
+   theClient[]->newpStoreStatus.lockingClient[];
+   lockmode->newpStoreStatus.LockMode;
+   lockpolicy->newpStoreStatus.LockPolicy;
+   makeLock:
+   (* Obtaining lock if possible. Doesn't continue until
+    a lock has been obtained *)
+     (# 
+     do
+        true
+          ->ok
+          (* ok is only false if the lock cannot be obtained. So
+           next we scan all the statuses for the file and see if there 
+           is a conflict. *) ;
+        doscan:
+          (# 
+          do
+             (if false then
+                 'lock: Scanning pStoreTable to see if a lock can be given to the client.'
+                   ->putline
+             if);
+             private.theList.scan
+               (# 
+               do
+                  (if (current.pStoreName[],name[])->sameFile then
+                      (if true
+                       // ((lockmode = Read) and (current.lockmode = Read)) then
+                          true->ok; 
+                       // ((lockmode = Read) and (current.lockmode = Write))
+                       then
+                          (if
+                          (((name[]->private.checkpolicy) = shared) and
+                           (lockpolicy = shared)) then
+                              true->ok; 
+                           else
+                              false->ok; 
+                          if);
+                          
+                       // ((lockmode = Write) and (current.lockmode = Write))
+                       then
+                          false->ok; 
+                       // ((lockmode = Write) and (current.lockmode = Read))
+                       then
+                          (if
+                          (((name[]->private.checkpolicy) = shared) and
+                           (lockpolicy = shared)) then
+                              true->ok; 
+                           else
+                              false->ok; 
+                          if);
+                          
+                      if);
+                      (if not ok then leave doscan if);
+                      
+                  if);
+                  
+               #)
+          #);
+        (if ok then (* A lock can be obtained immediately *)
+            1->newpStoreStatus.priority;
+            newpStoreStatus[]->private.theList.append;
+            private.saveinfo
+         else
+        (* A lock could NOT be obtained immediately. We queue the
+         client and wait for the lock. Also we make a notification to the 
+         notificationmanager  *)
+            0->newpStoreStatus.priority;
+            newpStoreStatus[]->private.theQueue.append;
+            private.saveinfo;
+            false->notified;
+            wait:
+            (* Waiting until a lock has been obtained... 
+             While we are waiting we try to notify the notificationmanager
+             about it.*)
+              (# 
+              do
+                 (if not notified
+                 (* We have to notify the notificationmanagement
+                  that a client is waiting for a lock. *) then
+                     (if notificationserver[] = none then
+                         getnotificationmanager:
+                           (# 
+                           do
+                              (NotificationManager##,'Notificationmanager')
+                                ->theShell.myEnsemble.ns.get
+                                  (#
+                                     notFound:: 
+                                       (# 
+                                       do
+                                          ' notserver not found'->putline;
+                                          leave getnotificationmanager
+                                       #)
+                                  #)->notificationServer[];
+                              
+                           #)
+                     if);
+                     (if notificationserver[] <> none then
+                         sendNotification:
+                           (# 
+                           do
+                              'lockmanager.getlock: A client sent WAITFORLOCK event to notificationmanagement'
+                                ->putline;
+                              (if nm[] = none then
+                                  &notificationmanagement[]->nm[];
+                                  (notificationServer[],
+                                   theShell.myensemble.hostname[])->nm.init
+                              if);
+                              (theclient[],uname[],name[],WAITFORLOCK)
+                                ->nm.notify
+                           #)
+                     if);
+                     true->notified
+                 if);
+                 return;
+                 pause;
+                 mutex.P;
+                 (if
+                 (newpStoreStatus.priority = 1)
+                 (* newpStoreStatus is initially referring to a pStoreStatus
+                  in the queue (priority=0). If it has been moved to
+                  the list then a lock has been obtained (priority=1). *) then
+                     leave wait
+                  else
+                     restart wait
+                 if);
+                 
+              #)
+        if)
+     #)  
+
+-- LockManagerpStoreTableReleaseLock: DoPart --
+do
+   L:
+     (# 
+     do
+        private.theList.scan
+          (# 
+          do
+             (if (current.pStoreName[],name[])->sameFile then
+                 (if (theClient[] = current.lockingClient[]) then
+                     current[]->private.theList.at->private.theList.delete;
+                     private.saveinfo;
+                     name[]->private.setpriority;
+                     leave L;
+                     
+                 if);
+                 
+             if)
+          #);
+        
+     #);
+     
+
+-- LockManagerpStoreTableDeleteLockRequest: DoPart --
+do
+   L1:
+     (# 
+     do
+        private.theList.scan
+          (# 
+          do
+             (if (current.pStoreName[],name[])->sameFile then
+                 (if (theClient[] = current.lockingClient[]) then
+                     current[]->private.theList.at->private.theList.delete;
+                     private.saveinfo;
+                     name[]->private.setpriority;
+                     leave L1
+                 if)
+             if)
+          #)
+     #);
+   L2:
+     (# 
+     do
+        private.theQueue.scan
+          (# 
+          do
+             (if (current.pStoreName[],name[])->sameFile then
+                 (if (theClient[] = current.lockingClient[]) then
+                     current[]->private.theQueue.at->private.theQueue.delete;
+                     private.saveinfo;
+                     leave L2
+                 if)
+             if)
+          #)
+     #)  
+
+-- LockManagerpStoreTablePrivateLoadinfo: DoPart --
+do
+   filename->inFile.name;
+   inFile.touch (* to assure that a file _exists_.*) ;
+   inFile.openread;
+   loop
+     (#
+        while::  (#  do (not inFile.eos)->value;  #);
+        tmptext: ^text;
+        newpstorestatus: ^pstorestatus;
+        pstorename,shellAddress,hostname: @text;
+        lockmode,lockpolicy,priority: @integer
+     do
+        inFile.getline->tmptext[];
+        ;
+        tmptext.reset;
+        tmptext[]->getNextString->pstorename;
+        tmptext[]->getNextString->shellAddress;
+        tmptext[]->getNextInteger->lockmode;
+        tmptext[]->getNextInteger->lockpolicy;
+        tmptext[]->getNextInteger->priority;
+        tmptext[]->getNextString->hostname;
+        ;
+        &pstorestatus[]->newpstorestatus[];
+        pstorename.copy->newpStoreStatus.pStoreName[];
+        hostname.copy->newpStoreStatus.hostname[];
+        lockmode->newpStoreStatus.LockMode;
+        lockpolicy->newpStoreStatus.LockPolicy;
+        priority->newpStoreStatus.priority;
+        getclient:
+          (# theClient: ^PSclient; clientensemble: ^ensemble; 
+          do
+             (ensemble##,hostname.copy)
+               ->theShell.myEnsemble.ns.get
+                 (#
+                    notFound:: 
+                      (#  do 'Ensemble not found.'->screen.putText #)
+                 #)->clientEnsemble[];
+             (if clientEnsemble[] <> none then
+                 (PSclient##,shellAddress.copy)
+                   ->clientensemble.ns.get
+                     (#
+                        notFound:: 
+                          (# 
+                          do (* ' - Client not found '->screen.putText *) 
+                          #)
+                     #)->theClient[];
+                 (if theClient[] = none then
+                     ' => Client not found - is deleted'->putline
+                  else
+                     ' => Client found - lock recovered'->putline;
+                     theClient[]->newpStoreStatus.lockingClient[];
+                     (if newpstorestatus.priority = 1 then
+                         newpStoreStatus[]->theList.append
+                      else
+                         newpStoreStatus[]->theQueue.append
+                     if)
+                 if)
+              else
+                 'lockmanager.pStoreTable: could not find ensemble: "'->puttext;
+                 hostname[]->puttext;
+                 '".'->putline
+             if)
+          #)
+     #)  
+
+-- LockManagerpStoreTableWritePStoreStatus: DoPart --
+do
+   elm.pstorename[]->outFile.puttext;
+   ';'->outFile.put;
+   elm.lockingClient.ri.shellAdr.astext->outFile.puttext;
+   ';'->outFile.put;
+   elm.lockmode->outFile.putint;
+   ';'->outFile.put;
+   elm.lockPolicy->outFile.putint;
+   ';'->outFile.put;
+   elm.priority->outFile.putint;
+   ';'->outFile.put;
+   elm.hostname[]->outFile.putline  
+
+-- LockManagerpStoreTablePrivateSaveinfo: DoPart --
+do
+   filename->outFile.name;
+   outFile.openwrite;
+   theList.scan
+     (#  do current[]->writePStoreStatus #);
+   theQueue.scan
+     (#  do current[]->writePStoreStatus #);
+   outFile.close  
+
+-- LockManagerpStoreTablePrivateCheckpolicy: DoPart --
+do
+   shared->policy;
+   theList.scan
+     (# 
+     do
+        (if (current.pStoreName[],name[])->sameFile then
+            (if (current.lockpolicy < policy) then
+                current.lockpolicy->policy; 
+            if);
+            
+        if);
+        
+     #);
+     
+
+-- LockManagerpStoreTablePrivateSetpriority: DoPart --
+do
+   doscan: theQueue.scan
+     (# 
+     do
+        (if (current.pStoreName[],name[])->sameFile then
+            current.lockmode->lockmode;
+            (current.lockpolicy,(name[]->checkpolicy))->min->lockpolicy;
+            true->ok;
+            dolistscan: theList.scan
+              (# 
+              do
+                 (if (current.pStoreName[],name[])->sameFile then
+                     (if true
+                      // ((lockmode = Read) and (current.lockmode = Read)) then
+                         true->ok; 
+                      // ((lockmode = Read) and (current.lockmode = Write)) then
+                         (if (lockpolicy = shared) then
+                             true->ok; 
+                          else
+                             false->ok; 
+                         if);
+                         
+                      // ((lockmode = Write) and (current.lockmode = Write))
+                      then
+                         false->ok; 
+                      // ((lockmode = Write) and (current.lockmode = Read)) then
+                         (if (lockpolicy = shared) then
+                             true->ok; 
+                          else
+                             false->ok; 
+                         if);
+                         
+                     if);
+                     (if not ok then leave dolistscan if);
+                     
+                 if);
+                 
+              #);
+            (if ok then
+                1->current.priority;
+                current[]->theQueue.at->theQueue.delete;
+                current[]->theList.append;
+                saveinfo;
+                
+            if);
+            
+        if);
+        
+     #);
+     
+
+-- LockManagerMRSWTableDeleteDeadClient: DoPart --
+do
+   L1:
+     (# 
+     do
+        private.readerList.scan
+          (# 
+          do
+             (if (theClient[] = current.lockingClient[]) then
+                 current[]->private.readerList.at->private.readerList.delete
+             if)
+          #)
+     #);
+   L2:
+     (# 
+     do
+        private.writerList.scan
+          (# 
+          do
+             (if (theClient[] = current.lockingClient[]) then
+                 current[]->private.writerList.at->private.writerList.delete
+             if)
+          #)
+     #)  
+
+-- LockManagerMRSWTableGetlock: DoPart --
+do
+   &MRSWinfo[]->newMRSWinfo[];
+   name[]->newMRSWinfo.name[];
+   theClient[]->newMRSWinfo.lockingClient[];
+   lockmode->newMRSWinfo.LockMode;
+   L:
+     (# 
+     do
+        true->ok;
+        (if (lockmode = read) then
+            doscan:
+              (# 
+              do
+                 private.writerList.scan
+                   (# 
+                   do
+                      (if (current.name[],name[])->sameFile then
+                          false->ok; leave doscan; 
+                      if);
+                      
+                   #);
+                 
+              #);
+            
+         else
+            doscan:
+              (# 
+              do
+                 private.writerList.scan
+                   (# 
+                   do
+                      (if (current.name[],name[])->sameFile then
+                          false->ok; leave doscan; 
+                      if);
+                      
+                   #);
+                 private.readerlist.scan
+                   (# 
+                   do
+                      (if (current.name[],name[])->sameFile then
+                          false->ok; leave doscan; 
+                      if);
+                      
+                   #)
+              #)
+        if);
+        (if ok then
+            (if (lockmode = read) then
+                newMRSWinfo[]->private.readerList.append; 
+             else
+                newMRSWinfo[]->private.writerList.append; 
+            if);
+            
+         else
+            wait:
+              (# ok: @boolean; 
+              do
+                 return;
+                 pause;
+                 mutex.P;
+                 true->ok;
+                 (if (lockmode = read) then
+                     doscan:
+                       (# 
+                       do
+                          private.writerList.scan
+                            (# 
+                            do
+                               (if (current.name[],name[])->sameFile then
+                                   false->ok; leave doscan; 
+                               if);
+                               
+                            #);
+                          
+                       #);
+                     
+                  else
+                     doscan:
+                       (# 
+                       do
+                          private.writerList.scan
+                            (# 
+                            do
+                               (if (current.name[],name[])->sameFile then
+                                   false->ok; leave doscan; 
+                               if);
+                               
+                            #);
+                          private.readerlist.scan
+                            (# 
+                            do
+                               (if (current.name[],name[])->sameFile then
+                                   false->ok; leave doscan; 
+                               if);
+                               
+                            #);
+                          
+                       #);
+                     
+                 if);
+                 (if ok then
+                     (if (lockmode = read) then
+                         newMRSWinfo[]->private.readerList.append; 
+                      else
+                         newMRSWinfo[]->private.writerList.append; 
+                     if);
+                     leave wait
+                  else
+                     restart wait
+                 if);
+                 
+              #);
+            
+        if);
+        
+     #);
+     
+
+-- LockManagerMRSWTableReleaseLock: DoPart --
+do
+   private.readerList.scan
+     (# 
+     do
+        (if (current.Name[],name[])->sameFile then
+            (if (theClient[] = current.lockingClient[]) then
+                current[]->private.readerList.at->private.readerList.delete
+            if)
+        if)
+     #);
+   private.writerList.scan
+     (# 
+     do
+        (if (current.Name[],name[])->sameFile then
+            (if (theClient[] = current.lockingClient[]) then
+                current[]->private.writerlist.at->private.writerList.delete
+            if)
+        if)
+     #)  
+
+-- LockManagerGetRidOfFailingClients: Descriptor --
+System
+  (#
+     noOfFailuresRequired:
+     (* how many failed pings before a client should be deleted? *)
+       (#  exit 10 #);
+     old_implementations:
+       (#
+          AlmostOriginalGetRidOfFailingClients: @|System
+            (#
+               async:
+                 (#
+                    theThread: @|System (#  do THIS(async) #);
+                    forked: @Boolean;
+                    
+                 do
+                    (if forked then
+                        INNER
+                     else
+                        true->forked; theThread[]->fork; 
+                    if)
+                 #);
+               myErrorHandler: errorhandler
+                 (#
+                    onFailure:
+                      (# theError: ^error; 
+                      enter theError[]
+                      do
+                         (if theError.theObj## <= PSClient## then
+                         (* Get rid of the failing Client. *)
+                             theError.theObj[]->FailingClients.insert;
+                             theError.ignore;
+                             
+                          else
+                             theError.abort; 
+                         if);
+                         
+                      #);
+                    connectionBroken:: 
+                      (#  do THIS(connectionBroken)[]->onFailure #);
+                    connectionFailed:: 
+                      (#  do THIS(connectionFailed)[]->onFailure #);
+                    timeOut::  (#  do THIS(timeOut)[]->onFailure #);
+                    timeOutValue::  (#  do 2->sec #);
+                    
+                 do INNER
+                 #)
+            do
+               Cycle
+                 (# 
+                 do
+                    2->sleep;
+                    ClientList.scanClients
+                      (# 
+                      do
+                         curClient[]
+                           ->async
+                             (# myClient: ^PSClient
+                             enter myClient[]
+                             do myerrorhandler (#  do myClient.ping #); 
+                             #)
+                      #);
+                    FailingClients.scanClients
+                      (# 
+                      do
+                         curElement.Client[]->ClientList.deleteDeadClient;
+                         curElement.Client[]->pStoretable.deleteDeadClient;
+                         curElement.Client[]->MRSWTable.deleteDeadClient
+                      #);
+                    FailingClients.clear
+                 #)
+            #);
+          MyOldGetRidOfFailingClients: @|System
+            (#
+               async:
+                 (#
+                    theThread: @|System (#  do THIS(async) #);
+                    forked: @Boolean;
+                    
+                 do
+                    (if forked then
+                        INNER
+                     else
+                        true->forked; theThread[]->fork; 
+                    if)
+                 #);
+               myErrorHandler: errorhandler
+                 (#
+                    wrongAnswer::< 
+                      (# 
+                      do
+                         'lock: wrongAnswer called!!! - continuing...'->putline;
+                         continue
+                      #);
+                    onFailure:
+                      (# theError: ^error; 
+                      enter theError[]
+                      do
+                         (if theError.theObj## <= PSClient## then
+                         (* Get rid of the failing Client. *)
+                             theError.theObj[]->FailingClients.insert;
+                             theError.ignore
+                          else
+                             theError.abort; 
+                         if)
+                      #);
+                    connectionBroken:: 
+                      (#  do THIS(connectionBroken)[]->onFailure #);
+                    connectionFailed:: 
+                      (#  do THIS(connectionFailed)[]->onFailure #);
+                    timeOut::  (#  do THIS(timeOut)[]->onFailure #);
+                    timeOutValue::  (#  do 1->sec #)
+                 do INNER
+                 #);
+               noOfFailuresRequired:
+               (* how many failed pings before a client should be deleted? *)
+                 (#  exit 30 #);
+               sem: @Semaphore;
+               semCounter: @integer
+            do
+               FailingClients.clear;
+               sem.V;
+               Cycle
+                 (# 
+                 do
+                    4->sleep;
+                    sem.P;
+                    failingClients.scanClients
+                      (#  do false->curElement.failedAtThisPing #);
+                    sem.V;
+                    (if clientList.private.theList.size <> 0 then
+                        sem.P;
+                        ClientList.scanClients
+                          (# 
+                          do
+                             semCounter+1->semCounter;
+                             curClient[]
+                               ->async
+                                 (# myClient: ^PSClient
+                                 enter myClient[]
+                                 do
+                                    myerrorhandler
+                                      (#  do myClient.ping #);
+                                    semCounter-1->semcounter;
+                                    (if semCounter = 0 then sem.V if)
+                                 #)
+                          #)
+                    if);
+                    sem.P;
+                    FailingClients.scanClients
+                      (# 
+                      do
+                         (if curElement.failedAtThisPing then
+                             curElement.noOfFailures+1->curElement.noOfFailures;
+                             write_warning_on_screen:
+                               (# 
+                               do
+                                  'lock: Client not responding: '->puttext;
+                                  curElement.client.ri.shellAdr.astext->puttext;
+                                  ' ('->puttext;
+                                  curElement.noOfFailures->putint;
+                                  ':'->put;
+                                  noOfFailuresRequired->putint;
+                                  ').'->putline
+                               #)
+                          else
+                             0->curElement.noOfFailures
+                         if);
+                         (if curElement.noOfFailures >= noOfFailuresRequired
+                          then
+                             'Lock: DELETING DEAD CLIENT!! '->puttext;
+                             curElement.client.ri.shellAdr.astext->putline;
+                             curElement[]->FailingClients.theList.at
+                               ->FailingClients.theList.delete;
+                             curElement.client[]->ClientList.deleteDeadClient;
+                             curElement.client[]->pStoretable.deleteDeadClient;
+                             curElement.client[]->MRSWTable.deleteDeadClient
+                         if)
+                      #);
+                    sem.V
+                 #)
+            #)
+       #)
+  do
+     FailingClients.init;
+     Cycle
+       (# 
+       do
+          6->sleep;
+          failingClients.scanClients
+            (#  do false->curElement.failedAtThisPing #);
+          ClientList.scanClients
+            (# 
+            do
+               myerrorhandler
+                 (#
+                    onFailure:: 
+                      (# 
+                      do
+                         (if theError.theObj## <= PSClient## then
+                             theError.theObj[]
+                               ->
+                                 FailingClients.insert
+                                 (* Get rid of the failing Client. *)
+                         if)
+                      #)
+                 do curClient.ping
+                 #)
+            #);
+          FailingClients.scanClients
+            (# 
+            do
+               (if curElement.failedAtThisPing then
+                   curElement.noOfFailures+1->curElement.noOfFailures;
+                   write_warning_on_screen:
+                     (# 
+                     do
+                        'lock: Client not responding: '->puttext;
+                        curElement.client.ri.shellAdr.astext->puttext;
+                        ' ('->puttext;
+                        curElement.noOfFailures->putint;
+                        ':'->put;
+                        noOfFailuresRequired->putint;
+                        ').'->putline
+                     #)
+                else
+                   0->curElement.noOfFailures
+               if);
+               (if curElement.noOfFailures >= noOfFailuresRequired then
+                   'Lock: DELETING DEAD CLIENT!! '->puttext;
+                   curElement.client.ri.shellAdr.astext->putline;
+                   curElement[]->FailingClients.theList.at
+                     ->FailingClients.theList.delete;
+                   curElement.client[]->ClientList.deleteDeadClient;
+                   curElement.client[]->pStoretable.deleteDeadClient;
+                   curElement.client[]->MRSWTable.deleteDeadClient
+               if)
+            #)
+       #)
+  #)  
+
+-- LockManagerFailingClientsInsert: DoPart --
+do
+   theList.find
+     (# predicate::  (#  do (current.client[] = theClient[])->value #)
+     #)->theListElement[];
+   (if theListElement[] = none then
+   (* the client has never failed before. It is inserte once and for all. *)
+       make_new_element:
+         (# 
+         do
+            &listElement[]->theListElement[];
+            theClient[]->theListElement.client[];
+            0->theListElement.noOfFailures;
+            false->theListElement.failedAtThisPing
+         #);
+       theListElement[]->theList.append
+   if);
+   true->theListElement.failedAtThisPing  
+
+-- LockManagerFailingClientsScanClients: DoPart --
+do theList.scan (#  do current[]->curElement[]; INNER scanClients #);   
+
+-- LockManagerInit: DoPart --
+do
+   clientList.init;
+   pStoreTable.init;
+   MRSWTable.init;
+   ;
+   'datafiles'->createDirectory (* to be sure the directory exists *) ;
+   clientList.load;
+   clientList.save;
+   pStoreTable.load;
+   PStoreTable.save;
+   ;
+   'The lock manager has been started.'->screen.putline;
+   (if false then getRidOfFailingClients[]->fork if)  
+

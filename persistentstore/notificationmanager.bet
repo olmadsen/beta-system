@@ -1,0 +1,611 @@
+ORIGIN '~beta/distribution/basicshell';
+INCLUDE 'notification'
+        'samefile'
+        '~beta/containers/hashTable'
+        'perslib'
+        '~beta/basiclib/file'
+        '~beta/basiclib/directory'
+        '~beta/containers/sets';
+(* File notificationmanager.bet
+ * ===========================
+ * This file contains the interface to a notificationmanager serving
+ * notification control. This file has to be included by the server, 
+ * if it should provide notification control. 
+ *)
+-- shellEnvLib: Attributes --
+notificationmanagerinterface: remoteable
+  (#
+     subscribeNotification: entry
+       (# theSubscription: ^subscription; 
+       enter theSubscription[]
+       do theSubscription[]->subscribeNotificationImpl; 
+       #);
+     unsubscribeNotification: entry
+       (# theSubscription: ^subscription; value: @boolean; 
+       enter theSubscription[]
+       do theSubscription[]->unsubscribeNotificationImpl; 
+       exit value
+       #);
+     unsubscribeAll: entry
+       (# theClient: ^NPSClient; 
+       enter theClient[]
+       do theClient[]->unsubscribeAllImpl; 
+       #);
+     notify: entry
+       (# theNotification: ^notification; theClient: ^PSclient; 
+       enter (theClient[],theNotification[])
+       do (theClient[],theNotification[])->notifyImpl; 
+       #);
+     subscribeNotificationImpl:<
+       (# theSubscription: ^subscription; 
+       enter theSubscription[]
+       do
+          'noti: A client subscribed to '->puttext;
+          (if theSubscription.theEvent.type
+           // create then
+              'CREATE'->puttext; 
+           // open then
+              'OPEN'->puttext; 
+           // close then
+              'CLOSE'->puttext; 
+           // update then
+              'UPDATE'->puttext; 
+           // lock then
+              'LOCK'->puttext; 
+           // unlock then
+              'UNLOCK'->puttext; 
+           // waitforlock then
+              'WAITFORLOCK'->puttext; 
+          if);
+          INNER
+       #);
+     unsubscribeNotificationImpl:<
+       (# theSubscription: ^subscription; value: @boolean; 
+       enter theSubscription[]
+       do INNER
+       exit value
+       #);
+     unsubscribeAllImpl:<
+       (# theClient: ^NPSclient;  enter theClient[] do INNER #);
+     notifyImpl:<
+       (# theNotification: ^notification; theClient: ^PSclient
+       enter (theClient[],theNotification[])
+       do
+          (if false then
+              'notificationmanager.notify: NotificationManager told to notify clients of '
+                ->puttext;
+              (if theNotification.theEvent.type
+               // create then
+                  'CREATE'->putline; 
+               // open then
+                  'OPEN'->putline; 
+               // close then
+                  'CLOSE'->putline; 
+               // update then
+                  'UPDATE'->putline; 
+               // lock then
+                  'LOCK'->putline; 
+               // unlock then
+                  'UNLOCK'->putline; 
+               // waitforlock then
+                  'WAITFORLOCK'->putline; 
+              if)
+          if);
+          INNER
+       #);
+     init:< (#  do INNER #)
+  do INNER
+  #);
+notificationmanager: notificationmanagerinterface
+  (#
+     notifyImpl:: 
+       (# 
+       do (theClient[],theNotification[])->SubscriptionTable.sendNotifications
+       #);
+     subscribeNotificationImpl:: 
+       (# 
+       do
+          ' (total='->puttext;
+          subscriptiontable.size+1->putint;
+          ')'->putline;
+          theSubscription[]->SubscriptionTable.insert
+       #);
+     unsubscribeNotificationImpl:: 
+       (#  do theSubscription[]->SubscriptionTable.delete->value;  #);
+     unsubscribeAllImpl:: 
+       (#  do theClient[]->SubscriptionTable.deleteAllSubsMadeByClient;  #);
+     ;
+     getNextString:
+       (#
+       (* soeger fra nuvaerende position og frem til og med naeste semikolon. 
+        Returnerer herefter det foerste uden semikolon
+        *) txtref,outtxt: ^text; start: @integer; 
+       enter txtref[]
+       do
+          txtref.getpos->start;
+          while:
+            (# 
+            do
+               (if txtref.eos then
+                   (start+1,txtref.getpos)->txtref.sub->outtxt[]; leave while
+               if);
+               (if txtref.get = ';' then
+                   (start+1,txtref.getpos-1)->txtref.sub->outtxt[]; leave while
+               if);
+               restart while
+            #);
+          ;
+          outtxt[]->chop->outtxt[];
+          outtxt.reset;
+          
+       exit outtxt
+       #);
+     getNextInteger:
+       (# (* Kalder getNextString og konverterer resultatet til en integer *)
+          txtref: ^text; outtxt: @text; result: @integer; 
+       enter txtref[]
+       do
+          txtref[]->getNextString->outtxt;
+          outtxt.reset;
+          (if outtxt.length = 0 then
+              - 1->result; 
+           else
+              outtxt.getint->result; 
+          if);
+          
+       exit result
+       #);
+     chop: (* Afskærer foran- og efterstillede mellemrum, linieskift *)
+       (# t: ^text; 
+       enter t[]
+       do (* fjerner foranstillede mellemrum, linieskift *)
+          t.reset;
+          t.scan
+            (# while::  (#  do (ch = '\n') or (ch = ' ')->value #) #);
+          (if t.getpos >= 1 then (1,t.getpos)->t.delete if);
+          (* fjerner efterstillede mellemrum, linieskift *)
+          t.length->t.setPos;
+          loop
+            (#
+               while:: 
+                 (# 
+                 do
+                    ((t.length >= 1) and
+                     (((t.length->t.inxGet) = '\n') or
+                      ((t.length->t.inxGet) = ' ')))->value;
+                    
+                 #)
+            do (t.length,t.length)->t.delete; 
+            #);
+          
+       exit t[]
+       #);
+     ;
+     SubscriptionTable: @Monitor
+       (#
+          scanClients: entry
+            (#
+               curClient: ^NPSClient;
+               allClients:
+               (* A client may appear more than once in theList. This
+                set contains only one element per client *) @set
+                 (# element:: NPSClient #)
+            do
+               private.theTable.scan
+                 (#  do current.theClient[]->allClients.insert #);
+               allClients.scan
+                 (#  do current[]->curClient[]; INNER scanClients #)
+            #);
+          insert: entry
+            (# theSubscription: ^subscription; 
+            enter theSubscription[]
+            do theSubscription[]->private.theTable.insert; private.saveinfo
+            #);
+          delete: entry
+            (# theSubscription: ^subscription; found: @boolean; 
+            enter theSubscription[]
+            do
+               false->found;
+               theSubscription.theEvent.type
+                 ->private.theTable.scanIndexed
+                   (# 
+                   do
+                      (if
+                      ((theSubscription.theClient[] = current.theClient[]) and
+                       (current.theEvent[]->theSubscription.theEvent.match))
+                       then
+                          true->found; current[]->private.theTable.delete; 
+                      if)
+                   #);
+               private.saveinfo
+            exit found
+            #);
+          deleteAllSubsMadeByClient: entry
+            (# theClient: ^NPSClient; 
+            enter theClient[]
+            do
+               private.theTable.scan
+                 (# 
+                 do
+                    (if (theClient[] = current.theClient[]) then
+                        current[]->private.theTable.delete; 
+                    if);
+                    
+                 #);
+               private.saveinfo;
+               
+            #);
+          deleteDeadClient: entry
+            (# theClient: ^NPSClient; 
+            enter theClient[]
+            do
+               private.theTable.scan
+                 (# 
+                 do
+                    (if (theClient[] = current.theClient[]) then
+                        current[]->private.theTable.delete
+                    if);
+                    
+                 #);
+               private.saveinfo
+            #);
+          sendNotifications: entry
+            (#
+               theNotification: ^notification;
+               theClient: ^PSClient;
+               ClientsToBeNotified: @list (# element:: NPSClient #)
+            enter (theClient[],theNotification[])
+            do
+               theNotification.theEvent.type
+                 ->private.theTable.scanIndexed
+                   (# 
+                   do
+                      (if
+                      ((current.theClient[] <> theClient[]) and
+                       ((theNotification.theUser[]->current.user.equal) or
+                        ('all'->current.user.equal)) and
+                       (theNotification.theEvent[]->current.theEvent.match))
+                       then
+                          (if not
+                          (current.theClient[]->ClientsToBeNotified.has) then
+                              current.theClient[]->ClientsToBeNotified.append; 
+                          if)
+                       else
+                      (* The client subscribed for the event but for some reason 
+                       it should not be notified of it. *)
+                          
+                      if)
+                   #);
+               donotify: errorhandler
+                 (#
+                    wrongAnswer::< 
+                      (# 
+                      do
+                         'noti: wrongAnswer called!!! - continuing... (when notifying)'
+                           ->putline;
+                         continue
+                      #);
+                    onFailure:
+                      (# theError: ^error; c: ^NPSClient; 
+                      enter theError[]
+                      do
+                         'Notification of client '->puttext;
+                         theError.theobj[]->c[];
+                         c.ri.shellAdr.astext->puttext;
+                         ' failed'->putline;
+                         theError.ignore;
+                         
+                      #);
+                    connectionBroken:: 
+                      (#  do THIS(connectionBroken)[]->onFailure #);
+                    connectionFailed:: 
+                      (#  do THIS(connectionFailed)[]->onFailure #);
+                    timeOut::  (#  do THIS(timeOut)[]->onFailure #);
+                    timeOutValue::  (#  do 2->sec #)
+                 do
+                    ClientsToBeNotified.scan
+                      (# 
+                      do
+                         '-----------------> notifying client'->putline;
+                         theNotification[]->current.notify
+                      #);
+                    ClientstoBeNotified.clear
+                 #)
+            #);
+          display: entry
+            (# 
+            do
+               'Subscriptions stored:'->putline;
+               private.theTable.scan
+                 (#  do '------------'->putline; current.display;  #)
+            #);
+          size: entry (#  exit private.theTable.size #);
+          save: entry (#  do private.saveinfo #);
+          load: entry (#  do private.loadinfo #);
+          ;
+          private: @
+            (#
+               theTable: @hashtable
+                 (#
+                    element:: subscription;
+                    hashfunction::<  (#  do e.theEvent.type->value #);
+                    rangeInitial::<  (#  do 6->value #)
+                 #);
+               filename: (#  exit 'datafiles/subscriptions.txt' #);
+               saveinfo:
+                 (# outFile: @file
+                 do
+                    filename->outFile.name;
+                    outFile.openwrite;
+                    theTable.scan
+                      (# aPSEvent: ^PSevent
+                      do
+                         current.theEvent[]->aPSevent[];
+                         ;
+                         clientHostname:
+                           (# 
+                           do
+                              myErrorHandler
+                                (# theEnsemble: ^ensemble
+                                do
+                                   current.theClient.getMyEnsemble
+                                     ->theEnsemble[];
+                                   (if theEnsemble[] <> none then
+                                       theEnsemble.hostname[]->outFile.puttext
+                                    else
+                                       'Noti.subscriptionTable.saveinfo: getMyEnsemble returned none!'
+                                         ->putline;
+                                       'DefaultHostname'->outFile.puttext
+                                   if)
+                                #)
+                           #);
+                         ';'->outFile.put;
+                         current.theClient.ri.shellAdr.astext->outFile.puttext;
+                         ';'->outFile.put;
+                         aPSevent.theinfo.psname.copy->outFile.puttext;
+                         ';'->outFile.put;
+                         aPSevent.type->outFile.putint;
+                         ';'->outFile.put;
+                         current.user.copy->outFile.putline
+                      #);
+                    outFile.close
+                 #);
+               loadinfo:
+                 (#
+                    inFile: @file;
+                    hasInformedUser:
+                    (* If there are items to recover, then the user should be notified - but
+                     only once! *) @boolean
+                 do
+                    filename->inFile.name;
+                    inFile.touch (* to assure that a file _exists_.*) ;
+                    inFile.openread;
+                    loop
+                      (#
+                         while::  (#  do (not inFile.eos)->value;  #);
+                         tmptext: ^text;
+                         newSubscription: ^subscription;
+                         aPSevent: ^PSevent;
+                         hostname,shellAddress,pstorename,user: @text;
+                         eventType: @integer
+                      do
+                         (if not hasInformedUser then
+                             'The notification manager will try to recover from the crash...'
+                               ->putline;
+                             true->hasInformedUser
+                         if);
+                         inFile.getline->tmptext[];
+                         ;
+                         tmptext.reset;
+                         tmptext[]->getNextString->hostname;
+                         tmptext[]->getNextString->shellAddress;
+                         tmptext[]->getNextString->pstorename;
+                         tmptext[]->getNextInteger->eventType;
+                         tmptext[]->getNextString->user;
+                         ;
+                         (if not ('DefaultHostname'->hostname.equalNCS) then
+                             &subscription[]->newSubscription[];
+                             setup_event:
+                               (# 
+                               do
+                                  &PSevent[]->aPSevent[]
+                                    ->newSubscription.theEvent[];
+                                  pstorename.copy->aPSevent.theinfo.psname[];
+                                  eventType->newSubscription.theEvent.type
+                               #);
+                             setup_user:
+                               (#  do user.copy->newSubscription.user[] #);
+                             setup_client:
+                               (#
+                                  theClient: ^NPSclient;
+                                  clientensemble: ^ensemble
+                               do
+                                  (ensemble##,hostname.copy)
+                                    ->theShell.myEnsemble.ns.get
+                                      (#
+                                         notFound:: 
+                                           (# 
+                                           do
+                                              'Ensemble not found.'
+                                                ->screen.putText
+                                           #)
+                                      #)->clientEnsemble[];
+                                  (NPSclient##,shellAddress.copy)
+                                    ->clientensemble.ns.get
+                                      (#
+                                      (* notFound:: 
+                                       (# 
+                                       do 'Client not found '->screen.putText; 
+                                       #) *) 
+                                      #)->theClient[];
+                                  (if theClient[] = none then
+                                      ' => Client not found - is deleted'
+                                        ->putline
+                                   else
+                                      ' => Client found - subscription recovered'
+                                        ->putline;
+                                      theClient[]->newSubscription.theClient[];
+                                      newSubscription[]->theTable.insert
+                                  if)
+                               #)
+                          else
+                             'Default host name!'->putline; 
+                         if)
+                      #)
+                 #)
+            #);
+          init::  (#  do private.theTable.init #)
+       #);
+     ;
+     myErrorHandler: errorhandler
+       (#
+          wrongAnswer::< 
+            (# 
+            do 'noti: wrongAnswer called!!! - continuing...'->putline; continue
+            #);
+          onFailure:<
+            (# theError: ^error; 
+            enter theError[]
+            do
+               INNER onFailure;
+               (if theError.theObj## <= NPSClient## then
+               (* Get rid of the failing Client. *)
+                   theError.ignore
+                else
+                   theError.abort; 
+               if);
+               
+            #);
+          connectionBroken::  (#  do THIS(connectionBroken)[]->onFailure #);
+          connectionFailed::  (#  do THIS(connectionFailed)[]->onFailure #);
+          timeOut::  (#  do THIS(timeOut)[]->onFailure #);
+          timeOutValue::  (#  do 1->sec #)
+       do INNER
+       #);
+     ;
+     getRidOfFailingClients: @|System
+       (#
+          noOfFailuresRequired:
+          (* how many failed pings before a client should be deleted? *)
+            (#  exit 10 #)
+       do
+          FailingClients.init;
+          Cycle
+            (# 
+            do
+               6->sleep;
+               failingClients.scanClients
+                 (#  do false->curElement.failedAtThisPing #);
+               subscriptionTable.scanClients
+                 (# 
+                 do
+                    myerrorhandler
+                      (#
+                         onFailure:: 
+                           (# 
+                           do
+                              (if theError.theObj## <= PSClient## then
+                                  theError.theObj[]
+                                    ->
+                                      FailingClients.insert
+                                      (* Get rid of the failing Client. *)
+                              if)
+                           #)
+                      do curClient.ping
+                      #)
+                 #);
+               FailingClients.scanClients
+                 (# 
+                 do
+                    (if curElement.failedAtThisPing then
+                        curElement.noOfFailures+1->curElement.noOfFailures;
+                        write_warning_on_screen:
+                          (# 
+                          do
+                             'noti: Client not responding: '->puttext;
+                             curElement.client.ri.shellAdr.astext->puttext;
+                             ' ('->puttext;
+                             curElement.noOfFailures->putint;
+                             ':'->put;
+                             noOfFailuresRequired->putint;
+                             ').'->putline
+                          #)
+                     else
+                        0->curElement.noOfFailures
+                    if);
+                    (if curElement.noOfFailures >= noOfFailuresRequired then
+                        'noti: DELETING DEAD CLIENT!! '->puttext;
+                        curElement.client.ri.shellAdr.astext->putline;
+                        curElement[]->FailingClients.theList.at
+                          ->FailingClients.theList.delete;
+                        curElement.client[]->SubscriptionTable.deleteDeadClient
+                    if)
+                 #)
+            #)
+       #);
+     FailingClients: @Monitor
+       (#
+          insert: entry
+            (# theClient: ^PSClient; theListElement: ^listElement
+            enter theClient[]
+            do
+               theList.find
+                 (#
+                    predicate:: 
+                      (#  do (current.client[] = theClient[])->value #)
+                 #)->theListElement[];
+               (if theListElement[] = none then
+               (* the client has never failed before. It is inserte once and for all. *)
+                   make_new_element:
+                     (# 
+                     do
+                        &listElement[]->theListElement[];
+                        theClient[]->theListElement.client[];
+                        0->theListElement.noOfFailures;
+                        false->theListElement.failedAtThisPing
+                     #);
+                   theListElement[]->theList.append
+               if);
+               true->theListElement.failedAtThisPing
+            #);
+          scanClients: entry
+            (# curElement: ^listElement; 
+            do
+               theList.scan
+                 (#  do current[]->curElement[]; INNER scanClients #);
+               
+            #);
+          clear: entry (#  do theList.clear;  #);
+          ;
+          listElement:
+            (#
+               client: ^NPSClient;
+               noOfFailures: @integer;
+               failedAtThisPing: @boolean
+            #);
+          theList: @list (# element:: listElement #);
+          init::  (#  do theList.init #)
+       #);
+     ;
+     init:: 
+       (#
+          createDirectory:
+          (* Skaber directoriet path. Det antages, at path i forvejen eksisterer
+           i hvert fald ind til naest-dybeste niveau, saadan, at der her hoejst skal 
+           skabes ét directory. *)
+            (# theDirectory: @directory; thePath: ^text
+            enter thePath[]
+            do thePath[]->theDirectory.name; theDirectory.touch
+            #);
+          clientensemble: ^ensemble
+       do
+          SubscriptionTable.init;
+          ;
+          subscriptionTable.load;
+          subscriptionTable.save;
+          ;
+          'The notification manager has been started.'->screen.putline;
+          (if false then getRidOfFailingClients[]->fork if)
+       #)
+  #)  
+

@@ -1,0 +1,130 @@
+ORIGIN 'sharedpersistentstore';     
+(* File transaction.bet
+ * =====================
+ * This file is a transaction library for the shared PS.
+ * It has to be included by the clients if they want to use transactions.
+ *)
+--- sharedpersistentstoreLib: attributes ---
+
+transaction:
+  (#      
+     LockMode:< IntegerValue (# do Read -> value; INNER #);
+     LockPolicy:< IntegerValue (# do exclusive -> value; INNER #);
+     timeoutvalue:< IntegerValue (# do -1 -> value; INNER #);
+     
+     (*operations concerning overall transaction management*)
+     
+     start: (# do
+                'Transaction start'->putline;
+                this(sharedPersistentStore).getlock
+                (# LockMode::(# do this(transaction).LockMode->value #);
+                   LockPolicy::(# do this(transaction).LockPolicy->value #);
+                   timeoutvalue::(# do this(transaction).timeoutvalue->value #);
+                #);
+                (if not haslock then abort if);
+                (if (LockMode = Read) then
+                    'The ps is accessed for reading'->putline;
+                 else
+                    'The ps is accessed for writing'->putline;
+                if);
+                this(sharedPersistentStore).access;
+             #);
+     
+     
+     checkpoint:(# do 
+                   'Transaction checkpoint...'->putline;
+                   (if WriteLock then
+                       this(sharedPersistentStore).checkpoint;
+                   if);
+                 #);
+     
+     commit: (# do 
+                 'Transaction commit...'->putline;
+                 (if (not WriteLock) then
+                     this(sharedPersistentStore).commit (# doCheckpoint::< (# do false -> value #)#); 
+                  else
+                     this(sharedPersistentStore).commit;
+                 if);
+                 this(sharedPersistentStore).releaselock;
+              #);
+     
+     abort:< (# do 
+                'Transaction abort...'->putline;
+                (if not committed then
+                    (if WriteLock then
+                        this(sharedPersistentStore).commit 
+                        (# doUpdateInMemoryObjects::<(# do true->value #);
+                           docheckpoint ::< (# do false->value #) #);
+                     else (* a reader is assumed not to change persistent objects in memory*)
+                        this(sharedPersistentStore).commit 
+                        (# doUpdateInMemoryObjects::<(# do false->value #);
+                           docheckpoint ::< (# do false->value #) #);
+                    if);
+                if);
+                (if haslock then
+                    this(sharedPersistentStore).releaselock;
+                if);
+                
+                INNER;
+                theShell.kill;
+             #);
+     
+     (*manipulating objects*)
+     
+     
+     get:(# name:^text;
+            type:##Object;
+            theObject:^Object;
+         enter (name[], type##)
+         do 
+            doget: 
+              (# do 
+                 (name[], type##)->this(sharedPersistentStore).get->theObject[];
+              #);
+         exit theObject[]
+         #);
+     
+     reget: (# do
+               (if haslock then
+                    'Transaction reget...'->putline;
+                   this(sharedPersistentStore).reget;
+               if);
+            #);
+     
+     
+     put:(# dooverwrite:< BooleanValue 
+              (# do false -> value; INNER #);
+            obj: ^Object; name: ^text;
+         enter (obj[],name[])
+         do 
+            (if (not WriteLock) then
+                'No Write access, the put operation is not possible'->putline;
+             else
+                (obj[],name[])->
+                this(sharedPersistentStore).put
+                (# dooverwrite::< (# 
+                                  do this(put).dooverwrite -> value 
+                                  #)
+                #);
+            if);    
+         #);
+     
+     scanRootNames:        
+       (# current: ^Text;
+       do (if haslock then
+              this(SharedPersistentStore).scanrootnames
+              (#
+              do current[] -> this(scanRootNames).current[];
+                 INNER scanRootNames;
+              #);
+           else
+              'You have to obtain a lock before accessing the ps'->putline; 
+          if);    
+       #);
+     
+  do
+     start;
+     INNER;
+     commit;
+  #);	
+
