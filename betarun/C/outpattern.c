@@ -565,7 +565,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
     long addr;
     ref(Object)    staticObj=0;
     
-    /* Print Static Environment Object. */
+    /****** Print Static Environment Object. *******/
 
     theProto = theObj->Proto;
     if (!activeProto) activeProto = theProto;
@@ -583,6 +583,8 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       case (long) DopartObjectPTValue:
 	staticObj = (cast(DopartObject)theObj)->Origin;
 	break;
+
+      case (long) ObjectRepPTValue:
       case (long) StackObjectPTValue:
       case (long) ByteRepPTValue:
       case (long) WordRepPTValue:
@@ -659,6 +661,9 @@ void DisplayObject(output,theObj,retAddress)
       break;
     case (long) ValRepPTValue:
       fprintf(output,"  ValRep\n");
+      break;
+    case (long) ObjectRepPTValue:
+      fprintf(output, "  ObjectRep\n"); 
       break;
     case (long) RefRepPTValue:
       fprintf(output,"  RefRep\n");
@@ -1296,10 +1301,12 @@ void DescribeObject(theObject)
 	      "Dopart: origin: 0x%x", 
 	      (int)((cast(DopartObject)theObject)->Origin));
       return;
+    case (long) ObjectRepPTValue:
+      fprintf(output, "ObjectRep\n"); return;
     case (long) RefRepPTValue:
-      fprintf(output, "RefRep");	
+      fprintf(output, "RefRep"); return;
     case (long) ValRepPTValue:
-      fprintf(output, "IntegerRep");
+      fprintf(output, "IntegerRep"); return;
     case (long) ByteRepPTValue:
       fprintf(output, "CharRep: '");
       if ( (((cast(ValRep)theObject)->HighBorder)-((cast(ValRep)theObject)->LowBorder)+1) > 10 ){

@@ -17,7 +17,7 @@ static char theString[100];
 
 
 char *DumpItemFragment( theItem)
-  struct Item *theItem;
+     struct Item *theItem;
 { long index;
   char * str;
 
@@ -28,7 +28,7 @@ char *DumpItemFragment( theItem)
 }
 
 char *DumpValContents( theValRep) /* Needs checking ! */
-  struct ValRep *theValRep;
+     struct ValRep *theValRep;
 { long pos, i; char c;
 
   long empty;
@@ -50,9 +50,9 @@ char *DumpValContents( theValRep) /* Needs checking ! */
 }
 
 static DumpFormat( type, age, size, name, fragment)
-  char type;
-  long age,size;
-  char *name,*fragment;
+     char type;
+     long age,size;
+     char *name,*fragment;
 {
   fprintf( output,"%c\t%d\t%d", type, age, size);
   if( name != 0 ) fprintf( output,"\t%s\t%s\n", name, fragment);
@@ -60,7 +60,7 @@ static DumpFormat( type, age, size, name, fragment)
 }
 
 static DumpObject( theObj)
-  struct Object *theObj;
+     struct Object *theObj;
 {
   if( theObj == 0 ) fprintf( output,"none");
   else{
@@ -72,37 +72,39 @@ static DumpObject( theObj)
       if( isSpecialProtoType( theObj->Proto )){
         switch( (long) theObj->Proto ){
 	case (long) ComponentPTValue:
-  	    DumpFormat('C', theObj->GCAttr, 4*ObjectSize(theObj),
-                       DumpItemName( ComponentItem( theObj) ),
-                       DumpItemFragment( ComponentItem( theObj) ) );
-	    break;
+	  DumpFormat('C', theObj->GCAttr, 4*ObjectSize(theObj),
+		     DumpItemName( ComponentItem( theObj) ),
+		     DumpItemFragment( ComponentItem( theObj) ) );
+	  break;
 	case (long) StackObjectPTValue:
-	    DumpFormat('S', theObj->GCAttr, 4*ObjectSize(theObj), 0, 0);
-	    break;
+	  DumpFormat('S', theObj->GCAttr, 4*ObjectSize(theObj), 0, 0);
+	  break;
         case (long) ByteRepPTValue:
-	    DumpFormat('B', theObj->GCAttr, 4*ObjectSize(theObj), 
-                       DumpValContents( theObj), "" );
+	  DumpFormat('B', theObj->GCAttr, 4*ObjectSize(theObj), 
+		     DumpValContents( theObj), "" );
 	  break;
         case (long) WordRepPTValue:
-	    DumpFormat('W', theObj->GCAttr, 4*ObjectSize(theObj), 
-                       DumpValContents( theObj), "" );
+	  DumpFormat('W', theObj->GCAttr, 4*ObjectSize(theObj), 
+		     DumpValContents( theObj), "" );
 	  break;
         case (long) DoubleRepPTValue:
-	    DumpFormat('D', theObj->GCAttr, 4*ObjectSize(theObj), 
-                       DumpValContents( theObj), "" );
+	  DumpFormat('D', theObj->GCAttr, 4*ObjectSize(theObj), 
+		     DumpValContents( theObj), "" );
 	  break;
         case (long) ValRepPTValue:
-	    DumpFormat('V', theObj->GCAttr, 4*ObjectSize(theObj), 
-                       DumpValContents( theObj), "" );
+	  DumpFormat('V', theObj->GCAttr, 4*ObjectSize(theObj), 
+		     DumpValContents( theObj), "" );
 	  break;
+	case (long) ObjectRepPTValue:
+	  fprintf(output, "DumpObject: ObjectRepPTValue\n"); return;
         case (long) RefRepPTValue:
-	    DumpFormat('R', theObj->GCAttr, 4*ObjectSize(theObj), 0, 0);
-	    break;
+	  DumpFormat('R', theObj->GCAttr, 4*ObjectSize(theObj), 0, 0);
+	  break;
         default:
 	  fprintf( output,"U\n");
 	  break;
 	}
-      }else{ /* theObj is an item */
+      }else{			/* theObj is an item */
 	DumpFormat('I', theObj->GCAttr, 4*ObjectSize(theObj),
 		   DumpItemName( theObj ),
 		   DumpItemFragment( theObj) );
@@ -112,7 +114,7 @@ static DumpObject( theObj)
 }
 
 void DumpIOA( fileName)
-  char *fileName;
+     char *fileName;
 {
   ref(Object) theObj;
   ptr(long)   handled;

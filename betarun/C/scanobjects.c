@@ -97,6 +97,7 @@ printMessage(FILE *fp,
     case (long)ComponentPTValue: name = "[Component]"; break;
     case (long)StackObjectPTValue: name = "[Stack_Object]"; break;
     case (long)StructurePTValue: name = "[Struc_Object]"; break;
+    case (long) ObjectRepPTValue: name = "[Object_Repetition]"; break;
     case (long)RefRepPTValue: name = "[Reference_Repetition]"; break;
     case (long)ValRepPTValue: name = "[Value_Repetition]"; break;
     case (long)ByteRepPTValue: name = "[Byte_Repetition]"; break;
