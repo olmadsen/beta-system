@@ -19,12 +19,6 @@ static ptr(char) ProtoTypeName(theProto)
   return (ptr(char)) dyn;
 }
 
-static ptr(char) theItemName(theItem)
-     ref(Item) theItem;
-{
-  return ProtoTypeName(theItem->Proto);
-}
-
 static ptr(char) theFormName(theItem)
      ref(Item) theItem;
 {
@@ -61,7 +55,6 @@ DisplayObject(output,aObj,retAddress)
 	theProto = aItem->Proto;
 	if( retAddress ){
 	  /* try finding active prefix */
-	  long           activeDist;
 	  activeProto = theProto;
 	  activeDist  = retAddress - theProto->GenPart; 
 	  while(theProto->Prefix &&
@@ -228,6 +221,8 @@ ErrorMessage(output, errorNumber)
   fprintf(output,"Unknown error (%d)", errorNumber);
 }
 
+#ifndef sparc
+
 static NotInHeap( address)
      long address;
 {
@@ -235,7 +230,6 @@ static NotInHeap( address)
   else return TRUE;
 }
 
-#ifndef sparc
 /* Traverse the StackArea [low..high] and Process all references within it. 
  * Stop when theComp is reached.
  */
