@@ -1466,13 +1466,14 @@ void PrintStackPart(long *low, long *high)
       }
     } else {
       /* handle tagged data registers on the stack */
-      if ((-8<=(*current)) && ((*current)<=-5))
+      if ((-8<=(*current)) && ((*current)<=-5)) {
 	fprintf(output, 
 		"0x%08x: %d (SKIP NEXT %d)\n", 
 		(int)current, 
 		(int)*current, 
 		-(int)*current-4
 		);
+      }
       switch(*current){
       case -8: 
 	current++; 

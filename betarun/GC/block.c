@@ -216,6 +216,25 @@ Block * reserveBlock(long numbytes)
   return theBlock;
 }
 
+Block * reserveProtectedBlock(long numbytes)
+{
+  Block * theBlock;
+  INFO(fprintf(output, "(#reserveBlock(%08X))", (int)numbytes));
+  Claim((long)mmapHeap, "reserveBlock: mmapHeap=0");
+  Claim((long)mmapHeapTop, "reserveBlock: mmapHeapTop=0");
+  Claim((long)mmapHeapLimit, "reserveBlock: mmapHeapLimit=0");
+  Claim(numbytes >= 0, "reserveBlock: with negative numbytes");
+  Claim((numbytes & 8191)==0, "reserveBlock: numbytes must be aligned to 8Kb");
+
+  theBlock = mmapHeapTop;
+  mmapHeapTop = (void*)((char*)mmapHeapTop + numbytes);
+  Claim(mmapHeapTop < mmapHeapLimit, 
+	"reserveBlock: Reserved more than mmapInital got as maximum");
+  INFO(fprintf(output, "Got protected block at %08X)", (int)theBlock));
+
+  return theBlock;
+}
+
 int extendBlock(Block * theBlock, long numbytes)
 {
   int newnumbytes;
