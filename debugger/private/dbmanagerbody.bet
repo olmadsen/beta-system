@@ -10,7 +10,7 @@ ORIGIN '../processInterface';
  * 
  * See ../debugInfoFormat.txt for a description of the .db files format. *)
 
-INCLUDE '../binarystream';
+INCLUDE '~beta/sysutils/binarystream';
 INCLUDE '~beta/basiclib/file';
 INCLUDE '~beta/containers/hashTable';
 INCLUDE '~beta/sysutils/envstring';
@@ -45,7 +45,11 @@ do (# elm: @dbmprivate.fragInfo.element;
 do ofi[]->dbmprivate.read;
    
 --- DBManagerprivate:descriptor ---
-(# bin: @binarystream;
+(# dbAccessError:@boolean; (* vrong permissions on .db file *)
+   bin: @binarystream(# AccessError::<(# do true->dbAccessError;
+                                         true->continue;
+                                      #)
+                     #);
    impAddresses: [256]@Integer; 
    impAstRefs: [256]@ShortInt;
    accum: @Integer; (* Accumulated offset from M entrypoint *)
@@ -131,7 +135,6 @@ do ofi[]->dbmprivate.read;
         execDE,fragDE: @DiskEntry;
         makeFragInfo,missing: @Boolean;
         tmpBin: ^BinaryStream;
-        
         theInit: ^THIS(dbManager).init;
         
      enter theInit[]
@@ -157,14 +160,16 @@ do ofi[]->dbmprivate.read;
             if);
             
             scanObjectFileInfos
-            (# status: @Integer;
+            (# 
+               status:@integer; (* db file status *)
                new: ^fragInfo.element;
                noOfFrag, modTime: @Integer;
                groupNameHash,checkTime: @Integer;
             do 
+               false->dbAccessError;
                DBFILE_OK->status;
                current[]->makeDBName
-               (# notFound::< (# do DBFILE_NOTFOUND->status #)
+               (# notFound::< (# do DBFILE_NOTFOUND->status #);
                #)->(dbName[],modTime);
                
                (if status =DBFILE_OK then
@@ -174,10 +179,19 @@ do ofi[]->dbmprivate.read;
                if); 
                
                (dbName[],status)->DBstatus;
-               
+
                (if status =DBFILE_OK then 
                    
-                   dbName[]->bin.fragRestore;
+                   dbName[]->bin.fragRestore
+                   (# 
+                      NotFound::<(# do 
+                                    (if dbAccessError then
+                                        DBFILE_ACCESS->status;
+                                        true->continue;
+                                    if)
+                                 #);
+                   #);
+                   (dbName[],status)->DBstatus;
                    
                    (* TO BE ADDED:
                     * bin.getLong->groupNameHash;
@@ -220,12 +234,23 @@ do ofi[]->dbmprivate.read;
             
          else
             fragDE.path->theInit.doingCheapRead;
-            (# groupName: ^Text;
+            (# status:@integer; (* db file error *)
+               groupName: ^Text;
                noOfFrag: @Integer;
                new: ^fragInfo.element;
                groupNameHash,checkTime: @Integer;
             do
-               fragDE.path->bin.restore;
+               fragDE.path->bin.restore
+               (# notfound::<(# do  (* raised if error during reading *)
+                                (if dbAccessError then
+                                    true->continue;
+                                    DBFILE_ACCESS->status;
+                                    'accesserror 250'->screen.putline;
+                                if);
+                             #);
+               #);
+               (fragDE.path,status)->DBstatus;
+               
                loop:
                  (# 
                  do bin.gettext->groupName[];
@@ -320,6 +345,6 @@ do ofi[]->dbmprivate.read;
             LL_FULL->ofi.loadLevel;
          else
             (ofi[],dbName[],status)->dbLoadFailed;
-        if)    
+        if);
      #);
 #)
