@@ -212,6 +212,15 @@ int getStandardInNonBlock()
 
   return fd;
 }
+
+int setFdNonBlock(int fd)
+{
+  if (0>fcntl(fd,F_SETFL, O_NONBLOCK)) {
+    return -1;
+  }
+  return fd;
+}
+
 #endif
 
 int getStandardIn ()
