@@ -22,16 +22,14 @@ asmlabel(CopyT,
 	 "clr [%sp+0x48];"
 	 "clr [%sp+0x44];"
 	 "clr [%sp+0x40];"
-	 "mov %o0,%o5;"	
-	 "mov %o1,%o0;"
-	 /* "mov %o2,%o2;" */
-         "clr %o1;"
+	 "mov %o0,%o5;"	 /* Don't allow asciiz in %o0 */
+         "clr %o0;"
 	 "clr %o3;"
 	 "ba "CPREF"CopyT;"
          "clr %o4;"
          );	
-void CCopyT(ref(Item) theItem,
-	    int i1,
+void CCopyT(int i0,
+	    ref(Item) theItem,
 	    unsigned offset, /* i ints */
 	    int i3,
 	    int i4,
