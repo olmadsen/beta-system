@@ -274,6 +274,7 @@ public class BetaOutput
     {
 	indent(-3);
 	putln("do '" + packageName + '/' + className + "' -> className;");
+	putln("INNER;");
 	putln("#);\n");
 	indent(-2);
     }
