@@ -2,7 +2,6 @@ ORIGIN '../graphicaleditor';
 BODY 'graphicaleditorbody';
 INCLUDE '../../guienvstuff/mywalkingants';
 
-
 INCLUDE '~beta/guienv/v1.6/utils/guienvadds';
 INCLUDE '~beta/guienv/v1.6/utils/track';
 INCLUDE '~beta/guienv/v1.6/utils/iconname';
@@ -65,6 +64,12 @@ delay:
   #);
 
 -- graphicalEditorLib: attributes --
+
+hasPrivateAttributes:
+  (# 
+  enter private.hasPrivateAttributes
+  exit private.hasPrivateAttributes
+  #);
 
 instantiate:
   (# name: ^text;
@@ -397,8 +402,13 @@ adjustValue:
 
 
 defaultBodyGroup:
-  (# group: ^mps.fragmentGroup;
-  do
+  (# group: ^astInterface.fragmentGroup;
+     frag: ^astInterface.fragmentForm;
+  do private.contentsEditor.privateFrag[] -> frag[];
+     (if frag[] <> NONE then
+         frag.name -> putLine;
+         frag.father -> group[];
+     if);
   exit group[]
   #);
 
@@ -621,7 +631,8 @@ pushUndoStack:
   #);
 
 operation:
-  (# command:
+  (# undoable:< booleanValue (# do true -> value; INNER #);
+     command:
        (# 
        do inner;
        #);
@@ -632,10 +643,12 @@ operation:
        command;
      init:<
        (# 
-       do 
+       do 'Touch!' -> putLine;
           inner;
-          clearRedoStack;
-          this(operation)[] -> pushUndoStack;
+          (if undoable then
+              clearRedoStack;
+              this(operation)[] -> pushUndoStack;
+          if);
        #);
      name:<
        (# value: ^text;
@@ -1070,35 +1083,6 @@ translateRect:
  * Handling of private attributes
  *)
 
-
-findBody:
-  (# failure:< object;
-     body: ^astInterface.fragmentGroup;
-  do (# group: ^astInterface.fragmentGroup;
-        fullPath: ^text;
-     do node.frag.father -> group[];
-        (if group[] <> none then
-            search: group.scanBodyGroups
-              (# 
-              do 
-                 currentFullPath[] -> fullPath[];
-                 leave search;
-              #);
-            (if fullPath[] <> none then
-                fullPath[] -> MPS.safeOpen -> body[];
-                (if body[] = none then
-                    failure;
-                if);
-             else
-                failure;
-            if);
-         else
-            failure;
-        if);
-     #);
-  exit body[]
-  #);
-
 createPrivateAttributes:
   (# failure:< object;
      group: ^astInterface.fragmentGroup;
@@ -1466,7 +1450,13 @@ makeFitToContentsOperation: makeChangeBoundsOperation
         r[] -> newBounds.append;
      #);
   #);
-
+makeSpacingOperation: makeOperation
+  (# operationType:: spacingOperation;
+     theSelection: ^windowItemEditorList;
+     newBounds: ^rectanglelist;
+  enter (theSelection[], newBounds[])
+  do (theSelection[], newBounds[]) -> theOperation.init;
+  #);
   
 bounds:
   (# theBounds: ^rectangle;
@@ -1547,96 +1537,125 @@ selectable: booleanValue
   #);
 
 array: sequence
-  (# element::< windowItem;
+  (# element::
+       (# editor: ^windowItemEditor;
+          
+          init:
+            (# 
+            enter editor[]
+            do editor.frame -> frame[];
+            #);
+          frame: ^rectangle;
+          position:
+            (# 
+            enter (# x, y: @integer;
+                  enter (x, y) 
+                  do (x - frame.left, y - frame.top) -> frame.offset 
+                  #)
+            exit frame.topLeft
+            #);
+          size:
+            (# 
+            enter frame.size
+            exit frame.size
+            #);
+       #);
+     
+     add:
+       (# editor: ^windowItemEditor;
+          elm: ^element;
+       enter editor[]
+       do &element[] -> elm[];
+          editor[] -> elm.init;
+          elm[] -> append;
+       #);
      
      sortHorizontal: sort
        (# less::<
             (# leftpos,rightpos: @point;
-            do left.position -> leftpos;
-               right.position -> rightpos;
+            do left.editor.theWindowItem.position -> leftpos;
+               right.editor.theWindowItem.position -> rightpos;
                leftpos.h < rightpos.h -> value;
             #);
        #);
      sortVertical: sort
        (# less::<
             (# leftpos,rightpos: @point;
-            do left.position -> leftpos;
-               right.position -> rightpos;
+            do left.editor.theWindowItem.position -> leftpos;
+               right.editor.theWindowItem.position -> rightpos;
                leftpos.v < rightpos.v -> value;
             #)
        #);
-     
-     top: @Integer;
   #);
 
-
-sort:
-  (# sortedarray: ^array;
-  do &array[] -> sortedarray[];
-     sortedarray.init;
+makeArray:
+  (# theArray: ^array;
+  do &array[] -> theArray[];
+     theArray.init;
      scan
      (#
-     do current.theWindowitem[] -> sortedarray.append;
+     do current[] -> theArray.add;
      #);
-     inner;
-  exit sortedarray[]
-  #);
-sorthorizontal: sort
-  (# 
-  do sortedarray.sortHorizontal;
-  #);
-sortvertical: sort
-  (# 
-  do sortedarray.sortVertical;
+  exit theArray[]
   #);
 
 alignspacing:
   (# values: ^spacingValues;
-     sorted: ^Array;
+     theArray: ^array;
+     newBounds: ^rectangleList;
+     theSelection: ^windowItemEditorList;
   enter values[]
-  do (*  stopAnts; *)
+  do makeArray -> theArray[];
+     
      (if (values.doWidth OR values.doHeight)//true then
-         scan
+         theArray.scan
          (# width, height: @integer;
-         do current.theWindowItem.Size -> (width, height);
+         do current.size -> (width, height);
             (if values.doWidth//true then values.width -> width; if);
             (if values.doHeight//true then values.height -> height; if);
-            (width, height) -> current.theWindowItem.Size;
+            (width, height) -> current.size;
          #);
      if);
      (if values.doVerticalDist then
-         SortVertical -> sorted[];
-         sorted.Scan
+         theArray.sortVertical;
+         theArray.scan
          (# prevFrame: @rectangle;
             curPos: @Point;
-            Previous: ^WindowItem;
-         do (if Previous[]//None then
-             else
-                current.Position -> curPos;
-                Previous.Frame -> prevFrame;
-                prevFrame.Bottom + values.verticalDist -> curPos.v;
-                curPos -> current.Position;
+            previous: ^array.element;
+         do (if previous[] <> NONE then
+                current.position -> curPos;
+                previous.frame -> prevFrame;
+                prevFrame.bottom + values.verticalDist -> curPos.v;
+                curPos -> current.position;
             if);
-            current[] -> Previous[];
+            current[] -> previous[];
          #);
      if);
      (if values.doHorizontalDist then
-         SortHorizontal -> sorted[];
-         sorted.scan
+         theArray.sortHorizontal;
+         theArray.scan
          (# prevFrame: @rectangle;
             curPos: @Point;
-            Previous: ^WindowItem;
-         do (if Previous[]//None then
-             else
-                current.Position -> curPos;
-                Previous.Frame -> prevFrame;
+            previous: ^array.element;
+         do (if previous[] <> NONE then
+                current.position -> curPos;
+                previous.frame -> prevFrame;
                 prevFrame.Right + values.horizontalDist -> curPos.h;
-                curPos -> current.Position;
+                curPos -> current.position;
             if);
-            current[] -> Previous[];
+            current[] -> previous[];
          #);
      if);
-     (* startAnts; *)
+     &rectangleList[] -> newBounds[];
+     newBounds.init;
+     &windowItemEditorList[] -> theSelection[];
+     theSelection.init;
+     theArray.scan
+     (# 
+     do current.editor[] -> theSelection.append;
+        current.frame[] -> newBounds.append;
+     #);
+     (theSelection[], newBounds[]) -> makeSpacingOperation;
   #);
 
 
@@ -2603,7 +2622,7 @@ findOpenDoPart:
   do (# 
        
      do 
-        (node[], defaultBodyGroup, purpose) -> realFindOpenDoPart -> theDoPart[];
+        (node[], purpose) -> realFindOpenDoPart -> theDoPart[];
      #);
   exit theDoPart[]
   #);
@@ -2745,9 +2764,8 @@ forOpenStatements: (# exit 2 #);
 realFindOpenDoPart:
   (# theDoPart: ^astInterface.beta.doPart;
      node: ^astInterface.beta.attributeDecl;
-     group: ^astInterface.fragmentGroup;
      purpose: @integer;
-  enter (node[], group[], purpose)
+  enter (node[], purpose)
   do (# contents: ^astInterface.beta.attributeDecl;
         openDecl: ^astInterface.beta.attributeDecl;
         theObjectDescriptor: ^astInterface.beta.objectDescriptor;
@@ -2757,6 +2775,7 @@ realFindOpenDoPart:
         theUnExpanded: ^astInterface.unExpanded;
         theSlot: ^astInterface.slotDesc;
         doPartFrag: ^astInterface.fragmentForm;
+        group: ^astInterface.fragmentGroup;
         
      do node.frag.father -> group[];
         (if purpose
@@ -2874,7 +2893,7 @@ getAttributes:
           theDoPart: ^astInterface.beta.doPart;
           theImperatives: ^astInterface.beta.imperatives;
        enter node[]
-       do (node[], group[], forInitStatements) -> realFindOpenDoPart -> theDoPart[];
+       do (node[],forInitStatements) -> realFindOpenDoPart -> theDoPart[];
           (if theDoPart[] <> none then
               theDoPart.getImperatives -> theImperatives[];
               theImperatives.newScan
@@ -2893,8 +2912,7 @@ getAttributes:
      theImperativeList: ^imperativeList;
      proto1, proto2: ^astInterface.AST;
      gram: @grammar;
-     group: ^astInterface.fragmentGroup;
-  enter (node[], group[])
+  enter node[]
   do (node.frag[], '<<evaluation>> -> <<nameApl>>', gram.imp)
        -> parseText -> proto1[];
      (node.frag[], '<<evaluation>> -> <<remote>>', gram.imp)
@@ -2913,87 +2931,6 @@ getAttributes:
      
   exit (theAttributeList[], theImperativeList[])
   #);
-
-
-getInheritedAttributes:
-  (# node: ^astInterface.beta.attributeDecl;
-     theAttributeList: ^attributeList;
-     getPrivateAttributes:
-       (# node: ^astInterface.beta.attributeDecl;
-          theAttributes: ^astInterface.beta.attributes;
-          frag: ^astInterface.fragmentForm;
-          theDescriptorForm: ^astInterface.beta.descriptorForm;
-          theObjectDescriptor: ^astInterface.beta.objectDescriptor;
-          theMainPart: ^astInterface.beta.mainPart;
-       enter node[]
-       do node[] -> betaGram.getPrivateFragment -> frag[];
-          (if frag[] <> none then
-              (if frag.category = betaGram.descriptorForm then
-                  frag.root[] -> theDescriptorForm[];
-                  theDescriptorForm.getObjectDescriptor -> theObjectDescriptor[];
-                  theObjectDescriptor.getMainPart -> theMainPart[];
-                  theMainPart.getAttributes -> theAttributes[];
-              if);
-          if);
-       exit theAttributes[]
-       #);
-     
-     addAttributes:
-       (# theAttributes: ^astInterface.beta.attributes
-       enter theAttributes[]
-       do (if theAttributes[] <> none then
-              theAttributes.iterate
-              (# 
-              do current[] -> theAttributeList.prepend;
-              #);
-          if);
-       #);
-     addImperatives:
-       (# node: ^astInterface.beta.attributeDecl;
-          theNameApl: ^astInterface.beta.nameApl;
-          theDoPart: ^astInterface.beta.doPart;
-          theImperatives: ^astInterface.beta.imperatives;
-       enter node[]
-       do (node[], group[], forInitStatements) -> realFindOpenDoPart -> theDoPart[];
-          (if theDoPart[] <> none then
-              theDoPart.getImperatives -> theImperatives[];
-              theImperatives.newScan
-              (# doMatch: @boolean;
-              do 
-                 (mps[], current[], proto1[]) -> match -> doMatch;
-                 (if not doMatch then
-                     (mps[], current[], proto2[]) -> match -> doMatch;
-                 if);
-                 (if doMatch then
-                     current[] -> theImperativeList.prepend;
-                 if);
-              #);
-          if);
-       #);
-     theImperativeList: ^imperativeList;
-     proto1, proto2: ^astInterface.AST;
-     gram: @grammar;
-     group: ^astInterface.fragmentGroup;
-  enter (node[], group[])
-  do (node.frag[], '<<evaluation>> -> <<nameApl>>', gram.imp)
-       -> parseText -> proto1[];
-     (node.frag[], '<<evaluation>> -> <<remote>>', gram.imp)
-       -> parseText -> proto2[];
-     
-     &attributeList[] -> theAttributeList[];
-     theAttributeList.init;
-     &imperativeList[] -> theImperativeList[];
-     theImperativeList.init;
-     
-     node[] -> scanPrefixChain
-     (# 
-     do current[] -> betaGram.getAttributes -> addAttributes;
-        current[] -> getPrivateAttributes -> addAttributes;
-        current[] -> addImperatives;
-     #);
-  exit (theAttributeList[], theImperativeList[])
-  #);
-
 getClass:
   (# node: ^astInterface.beta.attributeDecl;
      prefixName: ^text;
@@ -3152,7 +3089,9 @@ shadowTree:
 #)
 
 -- graphicalEditorPrivateAttributes: descriptor --
-(# selectionChanged: @boolean;
+(# hasPrivateAttributes: @boolean;
+   
+   selectionChanged: @boolean;
    
    selectionTimer: @timer
      (# action::
@@ -3599,11 +3538,8 @@ shadowTree:
              showSpacingDialogItem.open;
           #);
      #);
-   (*
-    * Handling of private attributes
-    *)
    
-   body: ^astInterface.fragmentGroup;
+   
    
    (*
     * Fragment handler
@@ -3805,7 +3741,7 @@ shadowTree:
              theClassData: ^classData;
           enter thePattern[]
           do 
-             (thePattern[], defaultBodyGroup) -> getClassData -> theClassData[];
+             thePattern[] -> getClassData -> theClassData[];
              (if theClassData[] <> none then
                  theClassData[] -> patterns.append;
                  (none,
