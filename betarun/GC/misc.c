@@ -73,7 +73,7 @@ void assignRef(long *theCell, Item * newObject)
  */
 {
   *(Item **)theCell = newObject;
-  if (!inIOA(theCell)){
+  if (!inIOA(theCell)){/* inAOA? */
     /* theCell is in AOA */
     if (inIOA(newObject)){
 #ifdef MT

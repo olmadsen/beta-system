@@ -166,7 +166,7 @@ Retry:
 #ifdef RTDEBUG
 void reportAsgRef(Object **theCell)
 {
-  if (!inIOA(theCell)){
+  if (!inIOA(theCell)){ /* inAOA? */
     fprintf(output, "\n*** AsgRef: 0x%x: 0x%x", (int)theCell, (int)*theCell);
   }
 }

@@ -71,7 +71,7 @@ static void
 AssignReference(long *theCell, Item * newObject)
 {
   *(Item **)theCell = newObject;
-  if (! inIOA(theCell) && inIOA(newObject)){
+  if (! inIOA(theCell) /* inAOA? */&& inIOA(newObject)){
 #ifdef MT
     MT_AOAtoIOAInsert((Object **)theCell);
 #else /* MT */

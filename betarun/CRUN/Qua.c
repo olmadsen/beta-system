@@ -49,13 +49,13 @@ ParamProtoCellOriginThis(Qua)
     /* 1. Check reference assignment */
     if (isLazyRef(src)) {
       /* Qua check on lazy reference */
-      if (! inIOA(theCell)) 
+      if (! inIOA(theCell)) /* inAOA? */
 	/* in AOA area. */
 	negAOArefsINSERT((long)theCell);
       srcProto = (ProtoType *) findDanglingProto((int)src);
     } else 
 #endif
-      if (! inIOA(theCell) && inIOA(src)){
+      if (! inIOA(theCell) /* inAOA? */&& inIOA(src)){
 #ifdef MT
 	MT_AOAtoIOAInsert(theCell);
 #else /* MT */

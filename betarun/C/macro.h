@@ -317,7 +317,7 @@ extern void Claim(long, char*);
 
 #define AssignReference(theCell, newObject)                                  \
   *(Item **)(theCell) = (Item *)(newObject);                   \
-  if (!inIOA((Item *)(theCell)) && inIOA((Item *)(newObject))) \
+  if (!inIOA((Item *)(theCell))/* inAOA? */ && inIOA((Item *)(newObject))) \
     AOAtoIOAInsert((Object **)theCell)
 
 #define setup_item(theItem, proto, origin )                                     \
