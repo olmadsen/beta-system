@@ -263,12 +263,6 @@ int SetBreak(int pid, int address, int* oldInstruction) {
 	return 0;
 }
 
-void setCodeStart(long code_start) {
-  /* processOffset = code_start; */
-}
-
-
-
 
 #endif /* ppcmac */
 
@@ -277,13 +271,6 @@ void setCodeStart(long code_start) {
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-long processOffset=0;  
-
-void setCodeStart(long code_start) {
-  /* processOffset = code_start; */
-  processOffset = 0;
-}
 
 int coreaccess_init(HANDLE pid) { 
   /* no initialization requiered */

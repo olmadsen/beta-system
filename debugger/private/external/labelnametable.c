@@ -85,7 +85,7 @@ static char NextLabel[200]; /* The last label read from the fd. */
 #define NMSORTOUTFILE "temp.nmsortoutfile"
 #define pclose(fd) fclose(fd); unlink(NMSORTOUTFILE) /* ; fprintf(stderr,"Close & deleting %s\n",NMSORTOUTFILE)*/
 void DumpFile(LPSTR filename);
-extern long processOffset;  /* from coreaccess.c */
+long processOffset; 
 #else
 
 #ifndef nmcommand
