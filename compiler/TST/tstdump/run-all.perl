@@ -122,26 +122,14 @@ foreach $f (@files) {
 	    open(OUT, ">$f.apperr") || die "Unable to write processed stderr:$!";
 	    while(<IN>) {
 		next if (/\{/);
-		s/\015$//;
-		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
-		s/\(address 0x\w+\)\s*//g;
-		s/\(address 0x\w+ <[^>]+>\)\s*//g;
-		s/Segmentation fault/Bus error/g;
-		s/ \[ast: 0x\w+\,0x\w+\]//g;
-		print OUT;
+		print OUT &canonize($_);
 	    }
 	    close IN;
 	    close OUT;
 	    open(IN, "<output/$f.err");
 	    open(OUT, ">$f.ref") || die "Unable to write processed reference stderr: $!";
 	    while(<IN>) {
-		s/MACHINE_TYPE/$objdir/g;
-		s/\015$//;
-		s/\(address 0x\w+\)\s*//g;
-		s/\(address 0x\w+ <[^>]+>\)\s*//g;
-		s/Segmentation fault/Bus error/g;
-		s/ \[ast: 0x\w+\,0x\w+\]//g;
-		print OUT;
+		print OUT &canonize($_);
 	    }
 	    close IN;
 	    close OUT;
@@ -163,13 +151,7 @@ foreach $f (@files) {
 	    open(IN, "<dumps/$f.dump");
 	    open(OUT, ">$f.ref") || die "Unable to write processed reference dump:$!";
 	    while(<IN>) {
-		s/MACHINE_TYPE/$objdir/g;
-		s/\015$//;
-		s/\(address 0x\w+\)\s*//g;
-		s/\(address 0x\w+ <[^>]+>\)\s*//g;
-		s/Segmentation fault/Bus error/g;
-		s/ \[ast: 0x\w+\,0x\w+\]//g;
-		print OUT;
+		print OUT &canonize($_);
 	    }
 	    close IN;
 	    close OUT;
@@ -178,13 +160,7 @@ foreach $f (@files) {
 	    open(OUT, ">$f.app") || die "Unable to write processed application dump: $!";
 	    while(<IN>) {
 		next if (/\{/);
-		s/\015$//;
-		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
-		s/\(address 0x\w+\)\s*//g;
-		s/\(address 0x\w+ <[^>]+>\)\s*//g;
-		s/Segmentation fault/Bus error/g;
-		s/ \[ast: 0x\w+\,0x\w+\]//g;
-		print OUT;
+		print OUT &canonize($_);
 	    }
 	    close IN;
 	    close OUT;
@@ -205,11 +181,7 @@ foreach $f (@files) {
 	    open(OUT, ">$f.candidate") || die "Unable to write candidate dump: $!";
 	    while(<IN>) {
 		next if (/\{/);
-		s/\015$//;
-		s/$objdir/MACHINE_TYPE/g;
-		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
-		s/address 0x[0-9a-f]+/address 0xXXXXXXXX/g;
-		print OUT;
+		print OUT &canonize_reverse($_);
 	    }
 	    close IN;
 	    close OUT;
@@ -255,6 +227,29 @@ sub rm()
     } else {
 	system "/bin/rm -f @_";
     }
+}
+
+sub canonize()
+{
+    local ($line) = @_;
+    $line =~ s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
+    $line =~ s/MACHINE_TYPE/$objdir/g;
+    $line =~ s/\015$//;
+    $line =~ s/\(address 0x\w+\)\s*//g;
+    $line =~ s/\(address 0x\w+ <[^>]+>\)\s*//g;
+    $line =~ s/Segmentation fault/Bus error/g;
+    $line =~ s/ \[ast: 0x\w+\,0x\w+\]//g;
+    return $line;
+}
+
+sub canonize_reverse()
+{
+    local ($line) = @_;
+    $line =~ s/\015$//;
+    $line =~ s/$objdir/MACHINE_TYPE/g;
+    $line =~ s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
+    $line =~ s/address 0x[0-9a-f]+/address 0xXXXXXXXX/g;
+    return $line;
 }
 
 sub IntHandler 
