@@ -2,6 +2,65 @@
 #include <math.h>
 #include "betadither.h"
 
+
+
+typedef unsigned int Uint32;
+typedef int Sint32;
+
+
+/*
+ * How many 1 bits are there in the Uint32.
+ * Low performance, do not call often.
+ */
+static int number_of_bits_set( Uint32 a )
+{
+    if(!a) return 0;
+    if(a & 1) return 1 + number_of_bits_set(a >> 1);
+    return(number_of_bits_set(a >> 1));
+}
+
+
+/*
+ * How many 0 bits are there at least significant end of Uint32.
+ * Low performance, do not call often.
+ */
+static int free_bits_at_bottom( Uint32 a )
+{
+      /* assume char is 8 bits */
+    if(!a) return sizeof(Uint32) * 8;
+    if(((Sint32)a) & 1l) return 0;
+    return 1 + free_bits_at_bottom ( a >> 1);
+}
+
+
+static unsigned long r_pix[256];
+static unsigned long g_pix[256];
+static unsigned long b_pix[256];
+
+
+
+void static InitMakePixel
+(unsigned long Rmask, unsigned long Gmask, unsigned long Bmask)
+{
+  int i;
+
+  for ( i=0; i<256; ++i ) {
+    r_pix[i] = i >> (8 - number_of_bits_set(Rmask));
+    r_pix[i] <<= free_bits_at_bottom(Rmask);
+    g_pix[i] = i >> (8 - number_of_bits_set(Gmask));
+    g_pix[i] <<= free_bits_at_bottom(Gmask);
+    b_pix[i] = i >> (8 - number_of_bits_set(Bmask));
+    b_pix[i] <<= free_bits_at_bottom(Bmask);
+  }
+}
+
+unsigned long MakePixel
+(unsigned char red, unsigned char green, unsigned char blue)
+{
+  return r_pix[red] | g_pix[green] | b_pix[blue];
+}
+
+
 static void BetaSwapBig(BetaImage *image)
 {
   unsigned char *row;
@@ -383,26 +442,52 @@ int BetaImageToXImage8(Display *display, BetaImage *image, XImage **ximage)
   return 0;
 }
 
+
 int BetaImageToXImage24(Display *display, BetaImage *image, XImage **ximage)
 {
 
   Visual *visual;
   int  byte_order;
+  XImage *im;
+  int depth;
+  unsigned char *row;
+  unsigned char *pixel;
+  int i, j;
+  unsigned char r, g, b, a;
+
   
   visual = DefaultVisual(display, DefaultScreen(display));
+
+  InitMakePixel
+    (visual->red_mask, visual->green_mask, visual->blue_mask);
+
+  depth = DefaultDepth(display, DefaultScreen(display));
   byte_order = ImageByteOrder(display);
+
+  im = XCreateImage
+    (display, visual, depth, ZPixmap,0, 0,
+     image->width, image->height, 32, 0);
+
+  printf("bytes per line: %d\n", im->bytes_per_line);
+
   
-  if(byte_order == LSBFirst) {
-    BetaSwapLittle(image);
-  } else {
-    BetaSwapBig(image);
+  im->data = (char *) malloc(image->height * im->bytes_per_line);
+
+  row = image->data;
+  for (j = 0; j < image->height; j++) {
+    pixel = row;
+    for(i = 0; i < image->width; i++) {
+      r = pixel[0];
+      g = pixel[1];
+      b = pixel[2];
+      a = pixel[3];
+      XPutPixel(im, i, j, MakePixel(r, g, b));
+      pixel+=4;
+    }
+    row+=image->rowbytes;
   }
-  
-  (*ximage) = XCreateImage
-    (display, 
-     DefaultVisual(display, DefaultScreen(display)), 
-     image->pixel_size, ZPixmap, 0, 
-     image->data, image->width, image->height, 32, image->rowbytes);
+  *ximage = im;
+  return 0;
 }
 
 int BetaImageToXImage(Display *display, BetaImage *image, XImage **ximage)
