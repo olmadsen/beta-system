@@ -9,8 +9,8 @@
 ParamThisComp(void, HandleIndexErr)
 {
 #ifdef hppa
-    struct Object *this;
-    this = (struct Object *)getThisReg();
+    /* struct Item *this; */
+    this = (struct Item *)getThisReg();
 #endif
 
     BetaError(RepRangeErr, this);
