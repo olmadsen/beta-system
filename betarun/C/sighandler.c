@@ -43,6 +43,23 @@
 /*************************** HELPER FUNCTIONS ******************************/
 /***************************************************************************/
 
+static void NotifySignalDuringDump(int sig)
+{
+  BetaErr err;
+  switch ((int)sig){
+#ifdef UNIX
+#ifdef RTDEBUG
+  case SIGINT: err=InterruptErr; break;
+#endif /* RTDEBUG */
+  case SIGSEGV: err=SegmentationErr; break;
+  case SIGBUS: err=BusErr; break;
+  case SIGILL: err=IllegalInstErr; break;
+#endif /* UNIX */
+  default: err=UnknownSigErr;
+  }
+  NotifyErrorDuringDump(err);
+}
+
 #ifdef RTVALHALLA 
 
 /* FIXME: The SaveXXXRegisters and RestoreXXXRegisters functions
@@ -365,23 +382,6 @@ static void RestoreSGIRegisters(struct sigcontext *scp,
 #ifndef GetPCandSP
 #error GetPCandSP should be defined
 #endif
-
-static void NotifySignalDuringDump(int sig)
-{
-  BetaErr err;
-  switch ((int)sig){
-#ifdef UNIX
-#ifdef RTDEBUG
-  case SIGINT: err=InterruptErr; break;
-#endif /* RTDEBUG */
-  case SIGSEGV: err=SegmentationErr; break;
-  case SIGBUS: err=BusErr; break;
-  case SIGILL: err=IllegalInstErr; break;
-#endif /* UNIX */
-  default: err=UnknownSigErr;
-  }
-  NotifyErrorDuringDump(err);
-}
 
 /* This procedure is called if a nasty signal is received
  * during execution of BetaSignalHandler.

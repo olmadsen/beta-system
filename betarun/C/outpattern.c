@@ -82,9 +82,6 @@ char *machine_type(void)
 #endif
   
   /* NTI */
-#ifdef nti_bor
-#define MACHINE_TYPE "nti_bor"
-#endif
 #ifdef nti_ms
 #define MACHINE_TYPE "nti_ms"
 #endif
@@ -100,6 +97,58 @@ return MACHINE_TYPE;
 
 #undef MACHINE_TYPE
 
+}
+
+static void PrintLegend(void)
+{
+#undef P
+#define P(text) fprintf(output, "%s\n", text)
+  P("");
+  P("Legend:");
+  P("");
+  P("The above dump shows the dynamic call stack of invoked objects.");
+  P("The dump starts at the object that was the current object when");
+  P("the error occurred and continues down towards the basic component.");
+  P("The descriptions have the following meaning:");
+  P("1. Items are shown in two lines, like this:");
+  P("      item <name#>pname1#pname2#pname3 in ifile");
+  P("        -- sname#spname1#spname2 in sfile");
+  P("   meaning that the item is an instance of the descriptor \"name\" which has");
+  P("   prefix \"pname1\" which has prefix \"pname2\", etc. This item is defined in the");
+  P("   file \"ifile\". The part of the prefix chain enclosed in \"<\" and \">\" indicates");
+  P("   where in the action sequence the error occurred. The line beginning with");
+  P("   \"--\" shows the textually surrounding descriptor using the same notation.");
+  P("2. The descriptor names used in the above description will normally have one or");
+  P("   more \"meta characters\" appended. The meaning of these is:");
+  P("      #  The descriptor belongs to a pattern, e.g. P: (# ... #)");
+  P("      ~  Singular named descriptor, e.g. X: @(# ... #)");
+  P("      *  Singular unnamed descriptor, e.g. ... ; (# ... #) ; ...");
+  P("      -  Descriptor SLOT.");
+  P("3. Components are shown using a notation similar to that of items, like this:");
+  P("      comp <name#>pname1#pname2#pname3 in cfile");
+  P("4. The bottommost component corresponding to the basic environment is shown");
+  P("   like an ordinary component, but indicated with \"basic component\".");
+  P("5. In case the error occurred in some external code called from BETA, the top");
+  P("   of the call stack is shown as");
+  P("      [ EXTERNAL ACTIVATION PART ]");
+  P("6. In case the BETA code has called some external code which has in turn called");
+  P("   back into the BETA code, and the callback is still active at the point of");
+  P("   the error, the intermediate call stack part is also shown as");
+  P("      [ EXTERNAL ACTIVATION PART ]");
+  if (SimpleDump) return;
+  P("7. The lines containing '{' and '}' are lowlevel information, which");
+  P("   can normally be ignored. By setting ");
+#ifdef UNIX
+  P("     setenv BETART SimpleDump");
+#endif /* UNIX */
+#ifdef nti
+  P("     set BETART=SimpleDump");
+#endif /* nti */
+#ifdef MAC
+  P("     set -e BETART SimpleDump");
+#endif /* MAC */
+  P("   these lowlevel lines in the dump can be suppressed.");
+#undef P
 }
 
 
@@ -258,13 +307,13 @@ static void ObjectDescription(Object *obj,
     return;
   }  
 
-  DEBUG_CODE({
-    fprintf(output, "  [PC  0x%x", (int)PC);
-    PrintCodeAddress(PC);
+  if (!SimpleDump){
+    fprintf(output, "  { PC  0x%x", (int)PC);
+    DEBUG_CODE(PrintCodeAddress(PC));
     fprintf(output, ", object 0x%x, proto 0x%x ", (int)obj, (int)proto);
-    PrintProto(proto);
-    fprintf(output, "]\n");
-  });
+    DEBUG_CODE(PrintProto(proto); fprintf(output, " "));
+    fprintf(output, "}\n");
+  }
 
   if (activeDist == gDist)
     fprintf(output,"  allocating %s ", type);
@@ -340,13 +389,13 @@ static void ObjectDescription(Object *obj,
       }
       proto = GETPROTO(staticObj);
 
-      DEBUG_CODE({
-	fprintf(output, "    [surrounding object 0x%x, proto 0x%x ", 
+      if (!SimpleDump) {
+	fprintf(output, "    { Surrounding object 0x%x, proto 0x%x ", 
 		(int)staticObj, 
 		(int)proto);
-	PrintProto(proto);
-	fprintf(output, "]\n");
-      });
+	DEBUG_CODE(PrintProto(proto); fprintf(output, " "));
+	fprintf(output, "}\n");
+      }
 
       fprintf(output,"    -- ");
       fprintf(output,"%s", ProtoTypeName(proto));
@@ -1065,11 +1114,11 @@ void DisplaySPARCStack(BetaErr errorNumber,
     for (PC = (long *)theAR->i7, theAR = (RegWin *) theAR->fp;
 	 !IsBetaCodeAddrOfProcess((long)PC);
 	 PC = (long *)theAR->i7, theAR = (RegWin *) theAR->fp){
-      DEBUG_CODE({
-	fprintf(output, "    [");
-	PrintCodeAddress((int)PC);
-	fprintf(output, " ]\n");
-      });
+      if (!SimpleDump) {
+	fprintf(output, "  { PC  0x%x", (int)PC);
+	DEBUG_CODE(PrintCodeAddress((int)PC));
+	fprintf(output, " }\n");
+      }
       if ((theAR->fp==0) || (theAR->fp==StackStart) || (PC = 0)){
 	TRACE_DUMP({
 	  fprintf(output, 
@@ -1109,12 +1158,12 @@ void DisplaySPARCStack(BetaErr errorNumber,
       for (cAR = theAR;
 	   cAR != (RegWin *)((RegWin *)theAR->fp)->l6;
 	   PC = (long *)cAR->i7, cAR = (RegWin *) cAR->fp){
-	DEBUG_CODE({
-	  fprintf(output, "    [");
-	  PrintCodeAddress((int)PC);
-	  fprintf(output, " ]\n");
-	});
-      };
+	if (!SimpleDump) {
+	  fprintf(output, "  { PC  0x%x", (int)PC);
+	  DEBUG_CODE(PrintCodeAddress((int)PC));
+	  fprintf(output, " }\n");
+	}
+      }
       nextCBF = (RegWin*) ((RegWin*)(theAR->fp))->l5;
       theAR   = (RegWin*) ((RegWin*)(theAR->fp))->l6;
       TRACE_DUMP(fprintf(output, "  Winding done."));
@@ -1554,41 +1603,7 @@ int DisplayBetaStack(BetaErr errorNumber,
   DisplayINTELStack(errorNumber, theObj, (long)thePC, theSignal);
 #endif
 
-#undef P
-#define P(text) fprintf(output, "%s\n", text)
-  P("");
-  P("Legend:");
-  P("");
-  P("The above dump shows the dynamic call stack of invoked objects.");
-  P("The dump starts at the object that was the current object when");
-  P("the error occurred and continues down towards the basic component.");
-  P("The descriptions have the following meaning:");
-  P("1. Items are shown in two lines, like this:");
-  P("      item <name#>pname1#pname2#pname3 in ifile");
-  P("        -- sname#spname1#spname2 in sfile");
-  P("   meaning that the item is an instance of the descriptor \"name\" which has");
-  P("   prefix \"pname1\" which has prefix \"pname2\", etc. This item is defined in the");
-  P("   file \"ifile\". The part of the prefix chain enclosed in \"<\" and \">\" indicates");
-  P("   where in the action sequence the error occurred. The line beginning with");
-  P("   \"--\" shows the textually surrounding descriptor using the same notation.");
-  P("2. The descriptor names used in the above description will normally have one or");
-  P("   more \"meta characters\" appended. The meaning of these is:");
-  P("      #  The descriptor belongs to a pattern, e.g. P: (# ... #)");
-  P("      ~  Singular named descriptor, e.g. X: @(# ... #)");
-  P("      *  Singular unnamed descriptor, e.g. ... ; (# ... #) ; ...");
-  P("      -  Descriptor SLOT.");
-  P("3. Components are shown using a notation similar to that of items, like this:");
-  P("      comp <name#>pname1#pname2#pname3 in cfile");
-  P("4. The bottommost component corresponding to the basic environment is shown");
-  P("   like an ordinary component, but indicated with \"basic component\".");
-  P("5. In case the error occurred in some external code called from BETA, the top");
-  P("   of the call stack is shown as");
-  P("      [ EXTERNAL ACTIVATION PART ]");
-  P("6. In case the BETA code has called some external code which has in turn called");
-  P("   back into the BETA code, and the callback is still active at the point of");
-  P("   the error, the intermediate call stack part is also shown as");
-  P("      [ EXTERNAL ACTIVATION PART ]");
-#undef P
+  PrintLegend();
   
   fflush(output);
   fclose(output);

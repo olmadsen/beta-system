@@ -2,7 +2,7 @@
 
 . $BETALIB/configuration/env.sh
 
-BETART="";
+BETART="SimpleDump";
 export BETART
 
 LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:../lib/${objdir}"
