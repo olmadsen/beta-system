@@ -1,0 +1,113 @@
+ORIGIN 'tstenv';
+--PROGRAM: descriptor--
+(# Exception: 
+     (# 
+     do inner
+     #); 
+   LowlevelException: Exception
+     (# error, currentObject, SP, PC: @integer;
+        skip_dump: @boolean;
+     enter (error, currentObject, PC, SP)
+     do INNER
+     exit skip_dump
+     #);
+
+   Program:
+     (# RefNone:< LowlevelException;
+        IndexError:< LowlevelException;
+        DivByZero:< LowlevelException;
+        (* ... *)
+        
+        (* private *)
+        ErrorDispatcher: LowlevelException
+          (# 
+          do 
+             (if error
+              // -1  (* ref none *) then
+                 (if RefNone##<LowLevelException## then 
+                     &RefNone[] -> theException[]; 
+                 if)
+              // -3  (* index error *) then 
+                 (if IndexError##<LowLevelException## then 
+                     &IndexError[] -> theException[]; 
+                 if)
+              // -10 (* div by 0 *) then 
+                 (if DivByZero##<LowLevelException## then 
+                     &DivByZero[] -> theException[];
+                 if)
+              else 'not yet handled' -> putline;
+             if);
+             (if theException[]=NONE then 
+                 outer[] -> theException[] (* propagate *)
+             if);
+             (if theException[]<>NONE then
+                 (error, currentObject, PC, SP)
+                   -> theException 
+                   -> skip_dump;
+             if);
+          #);
+        outer: ^ErrorDispatcher;
+        theException: ^LowlevelException;
+        
+     do RuntimeExceptionHandler[] -> outer[];
+        &ErrorDispatcher[]->RuntimeExceptionHandler[];
+        INNER;
+        outer[]->RuntimeExceptionHandler[];
+     #);
+   RuntimeExceptionHandler: ^Program.ErrorDispatcher;
+   RuntimeErrorHandler: external (* private *)
+     (# error, currentObject, SP, PC: @integer;
+        skip_dump: @boolean;
+     enter (error, currentObject, PC, SP)
+     do cExternalEntry;
+        (if RuntimeExceptionHandler[]<>NONE then
+            (error, currentObject, PC, SP)
+              -> RuntimeExceptionHandler
+              -> skip_dump;
+        if);
+     exit skip_dump
+     #);
+   makeCBF: External
+     (# pat: ##External;
+     enter pat##
+     #);
+   
+   
+   tstprogram:
+     (# R: [10]^object;
+        i: @integer;
+     do 7 -> i;
+        TestNone: Program
+          (# Refnone::
+               (# 
+               do 'Reference is none in R at index ' -> puttext;
+                  i -> putint;
+                  newline;
+                  'Provoking index error' -> putline;
+                  TestInx: Program
+                    (# IndexError::
+                         (# 
+                         do 'Index error in R at index '-> puttext;
+                            i -> putint;
+                            newline;
+                            leave TestInx;
+                         #);
+                    do 17->i;
+                       R[i];
+                    #);
+                  'Surwived index error!' -> putline;
+                  'Back in handler for refnone'-> putline;
+                  'PC for refnone error is ' -> puttext;
+                  PC -> putint; newline;
+                  leave TestNone;
+               #);
+          do R[i];
+             'Should not be reached 1' -> putline;
+          #);
+        'Program is continuing after refnone error has been handled!'
+          -> putline;
+     #)
+   
+do RuntimeErrorHandler## -> makeCBF; (* MUST be first CB installed *)
+   &tstprogram;
+#)
