@@ -19,16 +19,22 @@ void ColorHashInsert(ColorHash *hash, Color *color)
 
   ColorHashEntryPtr current;
 
+  unsigned char r, g, b;
+
+  r = color->red | 0x7;
+  g = color->green | 0x7;
+  b = color->blue | 0x7;
+  
 
   
-  index = (color->red << 16) | (color->green << 8) | (color->blue);
+  index = (r << 16) | (g << 8) | (b);
   index = index % hash->nbuckets;
 
   current = hash->buckets[index];
   while(current) {
-    if((current->color.red == color->red) &&
-       (current->color.green == color->green) &&
-       (current->color.blue == color->blue))
+    if((current->color.red == r) &&
+       (current->color.green == g) &&
+       (current->color.blue == b))
       {
         return;
       }
@@ -36,7 +42,10 @@ void ColorHashInsert(ColorHash *hash, Color *color)
   }
 
   current = (ColorHashEntryPtr) malloc(sizeof(ColorHashEntry));
-  current->color = *color;
+  current->color.red = r;
+  current->color.green = g;
+  current->color.blue = b;
+  
   current->next = hash->buckets[index];
   hash->buckets[index] = current;
   hash->count++;
@@ -55,7 +64,12 @@ long  ColorHashLookup(ColorHash *hash, Color *color)
 
   ColorHashEntryPtr current;
 
-
+  unsigned char r, g, b;
+  
+  r = color->red | 0x7;
+  g = color->green | 0x7;
+  b = color->blue | 0x7;
+  
   if(hash->special_set) {
     if(hash->special.red == color->red
        || hash->special.green == color->green
@@ -66,14 +80,14 @@ long  ColorHashLookup(ColorHash *hash, Color *color)
   }
 
   
-  index = (color->red << 16) | (color->green << 8) | (color->blue);
+  index = (r << 16) | (g << 8) | (b);
   index = index % hash->nbuckets;
 
   current = hash->buckets[index];
   while(current) {
-    if((current->color.red == color->red) &&
-       (current->color.green == color->green) &&
-       (current->color.blue == color->blue))
+    if((current->color.red == r) &&
+       (current->color.green == g) &&
+       (current->color.blue == b))
       {
         if(hash->special_set) {
           return current->index + 1;

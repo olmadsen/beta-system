@@ -694,6 +694,9 @@ static void InitCustom(BetaPalette *palette, ColorHash *hash) {
   
   index = 0;
 
+  palette->ncolors = 0;
+  palette->special_set = 0;
+  
   for(i = 0; i < hash->nbuckets; i++) {
     current = hash->buckets[i];
     while(current) {
@@ -856,8 +859,8 @@ void write_pixels_to_png_area_indexed
     }
     dst_row += image.rowbytes;
   }
-
   if(hash.count < 256) {
+
     InitCustom(&custom, &hash);
     pal = &custom;
     if(transparent) {
