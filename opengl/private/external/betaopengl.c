@@ -201,8 +201,9 @@ int setPixelFormat(HDC hdc)
 #define SETPIXELFORMATOVERLAY_FORMAT_FAILED  -2
 #define SETPIXELFORMATOVERLAY_PALETTE_FAILED -3
 
-#define NORMAL 1
-#define OVERLAY 2
+#define PF_FAIL 0
+#define PF_NORMAL 1
+#define PF_OVERLAY 2
 
 int checkPixelFormat(HDC hDC, int pf, PIXELFORMATDESCRIPTOR *pfd)
 {
@@ -246,107 +247,22 @@ int checkPixelFormat(HDC hDC, int pf, PIXELFORMATDESCRIPTOR *pfd)
     
     if (pfd->bReserved == 0) {
        /* Has no overlay planes */
-       return NORMAL;
+       return PF_NORMAL;
     }
     
     wglDescribeLayerPlane(hDC, pf, 1, sizeof(LAYERPLANEDESCRIPTOR), &lpd);
 
     if (!(lpd.dwFlags & LPD_SUPPORT_OPENGL)) {
        /* does not support opengl */
-       return NORMAL;
+       return PF_NORMAL;
     }
 
-    return OVERLAY;
+    return PF_OVERLAY;
 }
 
 
 
-int setPixelFormatOverlay1(HDC hDC, BYTE type, DWORD flags, int nEntries, COLORREF *crEntries)
-{
-    int pf, maxpf, ne;
-    PIXELFORMATDESCRIPTOR pfd;
-    LAYERPLANEDESCRIPTOR  lpd;		/* layer plane descriptor */
 
-    /* get the maximum number of pixel formats */
-    maxpf = DescribePixelFormat(hDC, 0, 0, NULL);
-    
-    /* find an overlay layer descriptor */
-    for(pf = 0; pf < maxpf; pf++) {
-        DescribePixelFormat(hDC, pf, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
-
-	/* the bReserved field of the PIXELFORMATDESCRIPTOR contains the
-	   number of overlay/underlay planes */
-	if (pfd.bReserved > 0) {
-	  /* aha! This format has overlays/underlays */
-	  wglDescribeLayerPlane(hDC, pf, 1,
-				sizeof(LAYERPLANEDESCRIPTOR), &lpd);
-	  if (lpd.dwFlags & LPD_SUPPORT_OPENGL &&
-	      lpd.dwFlags & flags)
-	    {
-	      
-	      goto found;
-	    }
-	}
-    }
-    /* couldn't find any overlay/underlay planes */
-    return SETPIXELFORMATOVERLAY_NO_OVERLAYS;
-
-found:
-    /* now get the "normal" pixel format descriptor for the layer */
-    DescribePixelFormat(hDC, pf, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
-
-    /* set the pixel format */
-    if(SetPixelFormat(hDC, pf, &pfd) == FALSE) {
-        return SETPIXELFORMATOVERLAY_FORMAT_FAILED;
-    }
-    
-    /* set up the layer palette */
-#if 0
-    fprintf(stderr, "setPixelFormatOverlay: Number of overlay plane color bits: %d\n", pfd.cColorBits);
-#endif
-
-    ne = wglSetLayerPaletteEntries(hDC, 1, 0, nEntries, crEntries);
-    if (ne<nEntries){
-      return SETPIXELFORMATOVERLAY_PALETTE_FAILED;
-    }
-
-    /* realize the palette */
-    wglRealizeLayerPalette(hDC, 1, TRUE);
-
-    return pf;
-}    
-
-
-int forcePixelFormat(HDC hDC, int pf, int nEntries, COLORREF *crEntries)
-{
-   PIXELFORMATDESCRIPTOR pfd;
-   LAYERPLANEDESCRIPTOR  lpd;		/* layer plane descriptor */
-   
-   
-   DescribePixelFormat(hDC, pf, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
-   
-   if (pfd.bReserved > 0) {
-	  /* aha! This format has overlays/underlays */
-	  wglDescribeLayerPlane(hDC, pf, 1,
-				sizeof(LAYERPLANEDESCRIPTOR), &lpd);
-	  if (lpd.dwFlags & LPD_SUPPORT_OPENGL)
-	    {
-	       DescribePixelFormat(hDC, pf, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
-    	       /*printPixelFormat(&pfd);*/
-    	       SetPixelFormat(hDC, pf, &pfd);
-    	       wglSetLayerPaletteEntries(hDC, 1, 0, nEntries, crEntries);
-    	       wglRealizeLayerPalette(hDC, 1, TRUE);
-    	       return OVERLAY;
-	    }
-   }
-   
-   
-   
-   DescribePixelFormat(hDC, pf, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
-   /*printPixelFormat(&pfd);*/
-   SetPixelFormat(hDC, pf, &pfd);
-   return NORMAL;
-}
 
 
 int setPixelFormatOverlay(HDC hDC, BYTE type, DWORD flags, int nEntries, COLORREF *crEntries)
@@ -360,17 +276,16 @@ int setPixelFormatOverlay(HDC hDC, BYTE type, DWORD flags, int nEntries, COLORRE
     
     /* get the maximum number of pixel formats */
     maxpf = DescribePixelFormat(hDC, 0, 0, NULL);
-    
-    
+
     /* find an overlay layer descriptor */
     for(pf = 1; pf <= maxpf; pf++) {
         DescribePixelFormat(hDC, pf, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
         status = checkPixelFormat(hDC, pf, &pfd);
         switch (status) {
-          case OVERLAY:
+          case PF_OVERLAY:
              bestoverlay = pf;
              goto found;
-          case NORMAL:
+          case PF_NORMAL:
              if(bestnormal == 0) {
                 bestnormal = pf;
              }
@@ -385,16 +300,16 @@ found:
     	SetPixelFormat(hDC, bestoverlay, &pfd);
     	ne = wglSetLayerPaletteEntries(hDC, 1, 0, nEntries, crEntries);
     	wglRealizeLayerPalette(hDC, 1, TRUE);
-    	return OVERLAY;
+    	return PF_OVERLAY;
     }
     if (bestnormal != 0) {
     	DescribePixelFormat(hDC, bestnormal, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
     	/*printPixelFormat(&pfd);*/
     	SetPixelFormat(hDC, bestnormal, &pfd);
-    	return NORMAL;
+    	return PF_NORMAL;
     }
     
-    return -1;
+    return PF_FAIL;
     
 }
 
