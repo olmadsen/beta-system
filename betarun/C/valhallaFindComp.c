@@ -44,11 +44,14 @@ static void ShowStackPart(long *low, long *high, forEachCallType DoForEach)
   struct Object *theObj;
   struct Object **theCell;
 
+  DEBUG_VALHALLA(fprintf(output, "ShowStackPart: [0x%x..0x%x]\n", (int)low, (int)high));
+
   while (ptr<=high){
     if(inBetaHeap((struct Object *)(*ptr))){
       theCell = (handle(Object)) ptr;
       theObj  = *theCell;
       if (inIOA(theObj) || inAOA(theObj)){
+	DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", (int)*(ptr+1), (int)theObj));
 	DoForEach(*(ptr+1), (long)theObj);
       }
     } else {
@@ -63,13 +66,10 @@ static void ShowStackPart(long *low, long *high, forEachCallType DoForEach)
     }
     ptr++;
   }
-}
 
-#ifdef intel
-#define IfIntel(code) code
-#else
-#define IfIntel(code)
-#endif
+  DEBUG_VALHALLA(fprintf(output, "ShowStackPart done\n"));
+
+}
 
 int scanComponentStack (struct Component* comp,
 			struct Object *curObj,
@@ -83,26 +83,32 @@ int scanComponentStack (struct Component* comp,
   int stacktype, compfound;
 
   DEBUG_VALHALLA(fprintf(output, 
-			 "scanComponentStack(comp=0x%x, obj=0x%x, PC=0x%x\n)",
+			 "scanComponentStack(comp=0x%x, obj=0x%x, PC=0x%x)\n",
 			 (int)comp, (int)curObj, PC));
 
   if (comp->StackObj){
     struct StackObject *sObj = comp->StackObj;
+    DEBUG_VALHALLA(fprintf(output, "scanComponentStack: scanning stackObject\n"));
     ShowStackPart((long*)sObj->Body, 
 		  (long*)((long)sObj->Body + sObj->StackSize),
 		  forEach);
+    DEBUG_VALHALLA(fprintf(output, "scanComponentStack: stackObject done\n"));
     return CS_STACKOBJ;
   }
 
   if (comp==ActiveComponent) {
+    DEBUG_VALHALLA(fprintf(output, "scanComponentStack: scanning ActiveComponent\n"));
     compfound = TRUE;
     stacktype = CS_ACTIVECOMPONENT;
+    DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", (int)PC, (int)curObj));
     forEach(PC, (int)curObj);
+    DEBUG_VALHALLA(fprintf(output, "scanComponentStack: ActiveComponent done\n"));
   } else {
     compfound=0;
     stacktype=0;
   }
 
+  DEBUG_VALHALLA(fprintf(output, "scanComponentStack: scanning machinestack\n"));
   /* Scan through the machine stack. This is an adaption of
    * DisplayBetaStack from outpattern.c - see comments in the code
    * there, especially for the small constants added or subtracted
@@ -119,6 +125,7 @@ int scanComponentStack (struct Component* comp,
     long                  PC=0;
     
     /* First handle the topmost component block */
+    DEBUG_VALHALLA(fprintf(output, "scanComponentStack: topmost component block\n"));
     currentComponent = ActiveComponent;
     lowAddr  = (long *) StackEnd;
     highAddr = (long *) lastCompBlock;
@@ -127,31 +134,43 @@ int scanComponentStack (struct Component* comp,
     while (cbFrame) {
       if (compfound) ShowStackPart((long*)lowAddr, (long *)cbFrame-2, forEach);
       lowAddr = cbFrame->betaTop;
-      IfIntel(lowAddr += 4);
+      lowAddr += 4;
       cbFrame = cbFrame->next;
       if(compfound && isObject((ref(Object))(*lowAddr))) forEach(0,(*lowAddr));
       lowAddr += 2;
     }
     if (compfound) ShowStackPart(lowAddr, highAddr-3, forEach);  
+    DEBUG_VALHALLA(fprintf(output, "scanComponentStack: topmost component block done\n"));
     
     /* Then handle the remaining component blocks */
+    DEBUG_VALHALLA(fprintf(output, "scanComponentStack: other component blocks\n"));
     currentBlock     = lastCompBlock;
     currentObject    = currentComponent->CallerObj;
     PC               = currentComponent->CallerLSC;
     currentComponent = currentComponent->CallerComp;
     
     while (currentBlock->next){
+      /* handle next component block */
+      if (compfound){
+	DEBUG_VALHALLA(fprintf(output, "Relevant component block completed - returning\n"));
+	break;
+      }
       if (currentComponent==comp) compfound=TRUE;
       lowAddr  = (long *)((long)currentBlock+sizeof(struct ComponentBlock))+1;
       highAddr = (ptr(long)) currentBlock->next;
       cbFrame  = currentBlock->callBackFrame;
-      if (compfound && !cbFrame) forEach(PC, (int)currentObject);
+      if (compfound && !cbFrame) {
+	DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", (int)PC, (int)currentObject));
+
+	forEach(PC, (int)currentObject);
+      }
       while (cbFrame) {
 	if (compfound) ShowStackPart(lowAddr, (long *)cbFrame-2, forEach);
 	lowAddr = cbFrame->betaTop;
-	IfIntel(lowAddr += 4);
+	lowAddr += 4;
 	cbFrame = cbFrame->next;
 	if(compfound && isObject((ref(Object))(*lowAddr))){
+	  DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", 0, (int)(*lowAddr)));
 	  forEach(0, (*lowAddr));
 	}
 	lowAddr += 2;
@@ -162,7 +181,14 @@ int scanComponentStack (struct Component* comp,
       PC               = currentComponent->CallerLSC;
       currentComponent = currentComponent->CallerComp;
     }
+    DEBUG_VALHALLA(fprintf(output, "scanComponentStack: other component blocks done\n"));
   }
+  {
+    extern void Att(void);
+    DEBUG_VALHALLA(fprintf(output, "Dummy Attach Pair: PC=0x%x, obj=0x%x\n", (int)&Att, 0));
+    forEach(0, (int)&Att);
+  }
+  DEBUG_VALHALLA(fprintf(output, "scanComponentStack: machinestack done\n"));
 
   if (!stacktype){
     if (compfound){
@@ -171,10 +197,11 @@ int scanComponentStack (struct Component* comp,
       stacktype=CS_NOSTACK;
     }
   }
+  DEBUG_VALHALLA(fprintf(output, "scanComponentStack: returning %d\n", (int)stacktype));
   return stacktype;
  
 }
-#endif
+#endif /* intel */
 
 #ifdef NEWRUN
 

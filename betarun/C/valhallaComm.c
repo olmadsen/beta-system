@@ -440,12 +440,18 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       break;
 
     case VOP_OBJADRCANONIFY:
-      { int address;
+      { 
+	int address;
+	int legal;
 	struct Object *obj = (struct Object *) valhalla_readint ();
 
 	DEBUG_VALHALLA(fprintf(output,"Got object %d\n",(int) obj));
-	
-	if (obj) {
+	if (obj && inBetaHeap(obj) && isObject(obj)){
+	  legal=1;
+	} else {
+	  legal=0;
+	}
+	if (legal) {
 	  address = (int) obj;
 	  if ((obj->Proto) != (ComponentPTValue)) {
 	    DEBUG_VALHALLA(fprintf(output,"Not ComponentPTValue\n"));
@@ -458,6 +464,7 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
 	  }
 	} else {
 	  address=0;
+	  DEBUG_VALHALLA(if (obj && !legal) fprintf(output,"NOT object!\n"));
 	}
 	valhalla_writeint (opcode);
 	valhalla_writeint (address);
