@@ -137,17 +137,19 @@ extern void RotateTheCursorBack(void);
 #endif
 
 
-#ifdef sparc
+#if defined(sparc) || defined(crts)
 /* Fucking header files on sun4 do not include function prototypes?? */
 extern void *memalign(/*unsigned alignment, unsigned size*/);
 extern int fprintf(FILE *, const char *, ...);
 extern int fflush(FILE *);
 extern int tolower(int);
 extern int fclose(FILE *);
-#ifdef sun4s
+/*
+#if defined(sun4s) || defined(SUN4S)
 extern int pclose(FILE *);
 #else
 extern void pclose(FILE *);
 #endif
+*/
 extern int fscanf(FILE *stream, const char *format, ...);
 #endif
