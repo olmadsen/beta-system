@@ -272,14 +272,6 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
        */
       switch(code){
       case 0xd: /* int div by zero */
-	/* The current BETA compiler generates calls to .idiv
-	 * to handle integer division. Thus we need to go back
-	 * one register window.
-	 */
-	__asm__("ta 3");
-	StackEnd = (long*)          ((struct RegWin*)StackEnd)->fp;
-	theObj   = (struct Object *)((struct RegWin*)StackEnd)->i0;
-	PC       = (long*)          ((struct RegWin*)StackEnd)->o7;
 	todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
       case 0xe: /* fp div by zero */
 	todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
@@ -340,7 +332,9 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   signal( SIGEMT,  ExitHandler);
 
   
-  /* Set StackEnd to the stack pointer just before trap. */
+  /* Set StackEnd to the stack pointer just before trap. 
+   * REG_PC etc. are in /usr/include/sys/regset.h.
+   */
 #ifndef MT
   StackEnd = (long *) ucon->uc_mcontext.gregs[REG_SP];
 #endif
@@ -351,13 +345,17 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 #endif /* MT */
 
   /* Try to fetch the address of current Beta object from i0.*/
-  theCell = casthandle(Object) &(cast(RegWin)ucon->uc_mcontext.gregs[REG_SP])->i0;
+  theCell = (struct Object **) &((struct RegWin*)StackEnd)->i0;
   if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
 
   switch(sig){
   case SIGFPE: 
     switch(info->si_code){
     case FPE_INTDIV: /* int div by zero */
+      /* The current BETA compiler generates calls to the (leaf) routine
+       * .idiv to handle integer division. Thus we need to fix the PC value.
+       */
+      PC = (long*) ucon->uc_mcontext.gregs[REG_O7];
       todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
     case FPE_FLTDIV: /* fp div by zero */
       todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;

@@ -11,8 +11,12 @@ void PrintHeapUsage(char *prompt)
   struct Block        *aoa;
 
   fprintf(output, "Heap usage %s:\n", prompt);
-  fprintf(output, "  IOA:            %8d Kb\n", (IOA)?(int)IOASize/1024:0);
-  fprintf(output, "  ToSpace:        %8d Kb\n", (ToSpace)?(int)IOASize/1024:0);
+  fprintf(output, 
+	  "  IOA:            %8d Kb\n", 
+	  (GLOBAL_IOA) ? (int)IOASize/1024 : 0);
+  fprintf(output, 
+	  "ToSpace:        %8d Kb\n", 
+	  (ToSpace) ? (int)IOASize/1024 : 0);
   
   aoablocks = 0;
   if (AOABaseBlock){
