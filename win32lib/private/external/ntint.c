@@ -8,7 +8,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/timeb.h>
-#include <dos.h>
+#ifndef nti_gnu
+# include <dos.h>
+#endif
 #ifdef nti_bor
 # include <dir.h>
 #else
@@ -16,7 +18,11 @@
 #endif
 #include <stdlib.h>
 #include <windows.h>
+#ifdef nti_gnu
+# include <Windows32/Sockets.h>
+#else
 #include <winsock.h>
+#endif
 
 #undef INVSOCK
 #define INVSOCK(sock) ((sock)==INVALID_SOCKET)
@@ -33,6 +39,12 @@
 # define MAXHOSTNAMELEN 512
 #endif
 
+#ifdef nti_gnu
+FILE* fdopen (int nHandle, char* szMode)
+{
+  return _fdopen(nHandle,szMode);
+}
+#endif
 
 int EOFvalue(){return EOF;}
 
