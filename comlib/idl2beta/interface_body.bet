@@ -1,6 +1,6 @@
 ORIGIN 'translate'
 
--- interface_body_lib: attributes--
+-- dofilelib: attributes--
 do_export_type_dcl:
   (# e: ^idl.export_type_dcl;
   enter e[]
@@ -494,7 +494,8 @@ do_export_op_dcl:
           e: ^idl.op_dcl;
           virtual_name, property_name: ^text;
           att: @idl_attributes;
-       enter e[]
+          is_virtual: @boolean;
+       enter (e[], is_virtual)
        do NONE -> property_name[];
           output.indent;
           (* Start a virtual *)
@@ -527,8 +528,13 @@ do_export_op_dcl:
           if);
           virtual_name[] -> output.puttext;
           (if att.alias_marshal.call_as[]=NONE then
-              (* Normal virtual *)
-              ':<' -> output.puttext;
+              (if is_virtual then
+                  (* Normal virtual *)
+                  ':<' -> output.puttext;
+               else
+                  (* Using invoke *)
+                  ':' -> output.puttext;
+              if)
            else
               (* call_as attributd methods do not contribute to vtable
                * i.e. must not be virtual.
@@ -585,10 +591,17 @@ do_export_op_dcl:
               output.indent;
           if);
           'do ' -> output.puttext;
-          (if (e.getstd_call_opt -> optionalPresent) and (not compact) then
-              'callStd' -> output.comment; ' ' -> output.put;
+          (if is_virtual then
+              (if (e.getstd_call_opt -> optionalPresent) and (not compact) then
+                  'callStd' -> output.comment; ' ' -> output.put;
+              if);
+              'INNER;' -> output.puttext;
+           else
+              output.Commentbegin;
+              'Call Invoke with id=' -> output.puttext;
+              att.typelib.id[] -> output.puttext;
+              output.CommentEnd;
           if);
-          'INNER;' -> output.puttext;
           (if result_present then
               (if not compact then
                   output.newline;
@@ -640,8 +653,9 @@ do_export_op_dcl:
           if);
           symbols.clear (* forget symbols from this virtual before the next *)
        #);
-  enter e[]
-  do e.getop_dcl -> do_op_dcl;
+     is_virtual: @boolean;
+  enter (e[], is_virtual)
+  do (e.getop_dcl, is_virtual) -> do_op_dcl;
   #);
 do_cpp_quote:
   (# c: ^idl.cpp_quote;
@@ -671,7 +685,7 @@ do (if b.getexports_opt -> optionalPresent then
            // idl.export_attr_dcl then
               current[] -> do_export_attr_dcl
            // idl.export_op_dcl then
-              current[] -> do_export_op_dcl (* The usual entry *)
+              (current[],true) -> do_export_op_dcl (* The usual entry *)
            // idl.export_import then
               (* handled by scanForImports *)
            // idl.cpp_quote then

@@ -1,7 +1,8 @@
 ORIGIN 'translate';
+INCLUDE 'interface_body';
 
 --do_dispinterface_dcl_body:dopart--
-do (*2 -> output.indent.inc;
+do 2 -> output.indent.inc;
    true -> doing_interface;
    i.getdispinterface_header -> do_dispinterface_header;
    i.getdispinterface_body -> do_dispinterface_body;
@@ -10,28 +11,121 @@ do (*2 -> output.indent.inc;
        delayed_output[] -> output.puttext;
        delayed_output.clear;
    if);
-   2 -> output.indent.dec;*)
+   2 -> output.indent.dec;
    
+--dispinterface_header_body: descriptor--
+(# interface_name: ^text;
+   att: @idl_attributes;
+do propputs.clear;
+   propgets.clear;
+   (att[], h.getattributes_spec) -> do_attributes_spec;
+   h.getIdentifier -> IdentifierToText -> interface_name[];
+   (if att.interface_header.uuid[]<>NONE then
+       (* Declare the IID *)
+       (if not compact then output.newline; if);
+       output.indent;
+       interface_name[] -> output.puttext;
+       '_IID: (\# exit \'' -> output.puttext;
+       att.interface_header.uuid[] -> output.puttext;
+       '\' #\);\n' -> output.puttext;
+       (if not compact then output.newline if);
+   if);
+   
+   (if not quiet then
+       '    [dispinterface ' -> screen.puttext;
+       interface_name[] -> screen.puttext;
+       ']' -> screen.putline;
+   if);
+   
+   (* Add the interface name to known local types *)
+   (interface_name[],interface_name[]) -> local_types.add_interface_type;
+
+   (* Declare the interface *)
+   interface_name[] -> refholders.add (* EmitRefHolder *);
+   output.indent;
+   interface_name[] -> output.puttext;
+   ': ' -> output.puttext;
+   (* Always IDispatch prefix *)
+   'IDispatch (* dispinterface *)' -> output.puttext;
+   output.newline;
+   (* The following will be matched with corresponding lines
+    * in end of do_dispinterface_body.
+    *)
+   2 -> output.indent.inc;
+   output.indent;
+   (if att.typelib.helpstring[]<>NONE then
+       att.typelib.helpstring[] -> output.commentline;
+       (if not compact then output.indent; if);
+   if);
+   output.PatternBegin;
+   3 -> output.indent.inc;
+   (if att.typelib.version[]<>NONE then
+       'version: (\# exit ' -> output.puttext;
+       att.typelib.version[] -> output.puttext;
+       ' #\);' -> output.puttext;
+   if);
+   output.newline;
+#)   
+
 -- do_dispinterface_body_body: DoPart --
-do (*(if d.symbol
+do (if d.symbol
     // idl.interface_body then
        d[] -> do_interface_body;
     // idl.properties_methods then
        d[] -> do_properties_methods;
-    if);*)
-
+    if);
+   
+   (* End pattern.
+    * The following is matched by the pattern-begin in 
+    * do_dispinterface_header
+    *)
+   3 -> output.indent.dec;
+   output.indent;
+   output.PatternEnd;
+   ';\n' -> output.putline;
+   2 -> output.indent.dec;
+   
 -- do_properties_methods_body: DoPart --
-do (*p.getproperties -> do_properties;
-   p.getmethods -> do_methods;*)
+do p.getproperties -> do_properties;
+   p.getmethods -> do_methods;
 
 -- do_properties_body: DoPart --
-do (*p.newscan
+do output.indent;
+   'Properties: NYI' -> output.commentline;
+   (*p.newscan
    (#
    do current[] -> do_attributed_simple_type_declarator;
    #);*)
 
 -- do_methods_body: DoPart --
-do (*m.getexports_opt*)
+do (# a: ^astinterface.ast;
+      es: ^idl.exports;
+   do m.getexports_opt -> a[];
+      (if a.kind<>ast.kinds.optional then
+          output.indent;
+          'Methods:' -> output.commentline;
+          a[] -> es[];
+          es.newscan
+          (# e: ^idl.export;
+          do current[]->e[];
+             (if e.symbol
+              // idl.export_op_dcl then
+                 (e[],false) -> do_export_op_dcl;
+              // idl.cpp_quote then
+                 e[] -> do_cpp_quote;
+              else
+                 (# msg: ^text;
+                 do 'do_methods: unhandled kind: '->msg[];
+                    e.symbol -> msg.putint;
+                    msg[] -> warning;
+                 #);
+             if);
+          #);
+       else
+          output.indent;
+          'No Methods' -> output.commentline;
+      if);
+   #);
 
 -- do_attributed_simple_type_declarator_body: DoPart --
 do (*a.getattributes_spec -> do_attributes_spec;
