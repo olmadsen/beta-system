@@ -2,6 +2,7 @@ ORIGIN '../tableview';
 INCLUDE '~beta/containers/list';
 INCLUDE '../drawing';
 INCLUDE '~beta/guienv/controls';
+INCLUDE '~beta/guienv/private/datastructures/sequence';
 
 -- columnSetTitle: doPart --
 do value.copy -> private.theTitle[];
@@ -14,6 +15,36 @@ do value -> private.theWidth;
 
 -- columnGetWidth: doPart --
 do private.theWidth -> value;
+
+-- columnLess: doPart --
+do	left.private.data[private.index][] -> leftData[];
+	right.private.data[private.index][] -> rightData[];
+	INNER;
+	(if not doneInInner then
+		less:
+		  (if leftData[] <> NONE then
+				(if true
+				 //(leftData.lgth<rightData.lgth) then
+					 (for i: leftData.lgth repeat
+							(if leftData.T[i]<>rightData.T[i] then 
+								(leftData.T[i]<rightData.T[i])->value; 
+								leave less;
+							if)
+					 for);
+					 true->value;
+				 //(leftData.lgth>=rightData.lgth) then
+					 (for i: rightData.lgth repeat
+							(if leftData.T[i]<>rightData.T[i] then 
+								(leftData.T[i]<rightData.T[i])->value; 
+								leave less;
+							if)
+					 for);
+					 false->value;
+				if);
+		  else
+		  		true -> value;
+		  if);
+	if);
 
 -- columnOpen: doPart --
 do 'Column' -> private.theTitle[];
@@ -245,24 +276,9 @@ do  private.theSelection.scan
 		
 
 -- tableViewSetTheScroll: doPart --
-do (# itemNumber: @integer;
-	 	lineHeight: @integer;
-		inx: @integer;
-	do (x, y) -> (private.xScroll, private.yScroll);
-		rowHeight + rowDist -> lineHeight;
-		
-		(private.yScroll + lineHeight) div lineHeight -> itemNumber;
-		private.yScroll - (itemNumber - 1) * lineHeight -> private.yOffset;
-		search: private.tableItems.scan
-			(#
-			do inx + 1 -> inx;
-				(if inx = itemNumber then
-					current[] -> private.topItem[];
-					leave search;
-				if);
-			#);
-		updateMainView;
-	#);
+do (x, y) -> (private.xScroll, private.yScroll);
+	updateScrollCache;
+	updateMainView;
 
 -- tableViewGetTheScroll: doPart --
 do (private.xScroll, private.yScroll) -> (x, y);
@@ -290,6 +306,13 @@ do (# width, height: @integer;
 		if);
 	#);
 
+
+-- tableViewSetSortByColumn: doPart --
+do theColumn[] -> private.sortColumn[];
+	sortTableView;
+
+-- tableViewGetSortByColumn: doPart --
+do private.sortColumn[] -> theColumn[];
 
 
 -- tableViewOpen: doPart --
@@ -324,6 +347,71 @@ do layout;
 
 -- tableViewLib: attributes --
 
+sortTableView:
+	(# sorter: @sequence
+			(# element:: tableItem;
+			#);
+		index: @integer;
+		theLess: ^column.less;
+		
+	do sorter.init;
+		private.sortColumn.private.index -> index;
+		&private.sortColumn.less[] -> theLess[];
+		'inserting in sorter...' -> putText;
+		private.tableItems.scan
+			(#
+			do current[] -> sorter.append;
+			#);
+		'done' -> putLine;
+		'sorting...' -> putText;
+		sorter.sort
+			(# (* less::
+					(# leftData, rightData: ^text;
+					do left.private.data[index][] -> leftData[];
+						right.private.data[index][] -> rightData[];
+						(if rightData[] = NONE then
+							true -> value;
+						else
+							(if leftData[] = NONE then
+								true -> value;
+							else
+								leftData[] -> rightData.less -> value;
+							if);
+						if);
+					#);*)
+				less::
+					(#
+					do (left[], right[]) -> theLess -> value;
+					#);
+			#);
+		'done' -> putLine;
+		'writing back...' -> putText;
+		private.tableItems.clear;
+		sorter.scan
+			(#
+			do current[] -> private.tableItems.append
+							 -> current.private.pos[];
+			#);
+		'done' -> putLine;
+		updateScrollCache;
+		updateMainView;
+	#);
+updateScrollCache:
+	(# itemNumber: @integer;
+		lineHeight: @integer;
+		inx: @integer;
+	do rowHeight + rowDist -> lineHeight;
+		(private.yScroll + lineHeight) div lineHeight -> itemNumber;
+		private.yScroll - (itemNumber - 1) * lineHeight -> private.yOffset;
+		search: private.tableItems.scan
+			(#
+			do inx + 1 -> inx;
+				(if inx = itemNumber then
+					current[] -> private.topItem[];
+					leave search;
+				if);
+			#);
+	#);
 updateMainView:
 	(#
 	do (if not private.pendingUpdate then
@@ -406,6 +494,7 @@ rowdist: (# exit 1 #);
 	tableItems: @tableItemList;
 	titleStyle, bodyStyle: @textStyle;
 	
+	sortColumn: ^column;
 	theSelection: @tableItemList;
 	
 	titleView: @windowItem
@@ -439,33 +528,51 @@ rowdist: (# exit 1 #);
 				(# onRefresh::
 						(#
 						do	graphics
-								(# r: @rectangle;
+								(# box: @rectangle;
 									width, height: @integer;
 									str: ^text;
+									sortBox: @integer;
 								do size -> (width, height);
-									-yOffset -> r.top;
 									
+									(if sortColumn[] <> NONE then
+										0 -> box.left;
+										search: columns.scan
+											(#
+											do (if current[] = sortColumn[] then
+													box.left + sortColumn.width -> box.Right;
+													leave search;
+												else
+													box.left + sortColumn.width -> box.left;
+												if);
+											#);
+										0 -> box.top;
+										height -> box.bottom;
+										gray4 -> pen.foregroundColor;
+										box -> fillRect;
+									if);
+									
+									-yOffset -> box.top;
 									(if topItem[] <> NONE then
 										updating: topItem.private.pos[] -> tableitems.scanFrom
 											(# item: ^tableItem;
-											do (if r.top < height then
-													0 -> r.left;
-													r.top + rowHeight -> r.bottom;
+											do (if box.top < height then
+													0 -> box.left;
+													box.top + rowHeight -> box.bottom;
 													current[] -> item[];
 													columns.scan
 													(#
-													do r.left + current.width -> r.right;
+													do box.left + current.width -> box.right;
 														item.private.data[current.private.index][] -> str[];
 														(if str[] <> NONE then
-															(this(graphics)[], r[], item.private.selected, str[]) 
+															(this(graphics)[], box[], item.private.selected, str[]) 
 																-> current.theEventHandler.onDrawData;
 														if);
-														r.right -> r.left;
+														box.right -> box.left;
 													#);
 													gray1 -> pen.foreGroundColor;
-													(0, r.bottom) -> moveTo;
-													(width, r.bottom) -> drawTo;
-													r.bottom + 1 -> r.top;
+													(0, box.bottom) -> moveTo;
+													(width, box.bottom) -> drawTo;
+													box.bottom + 1 -> box.top;
 												else
 													leave updating;
 												if);
@@ -480,7 +587,7 @@ rowdist: (# exit 1 #);
 							item: ^tableItem;
 						do - yOffset -> r.top;
 							localPosition -> (x, y);
-							search: tableitems.scan
+							search: topItem.private.pos[] -> tableitems.scanFrom
 							(# 
 							do 0 -> r.left;
 								r.top + rowHeight -> r.bottom;
