@@ -1,7 +1,7 @@
 package beta;
 import java.io.*;
 
-public class BetaHelper
+public class BetaHelpers
 {
    
     // static methods
