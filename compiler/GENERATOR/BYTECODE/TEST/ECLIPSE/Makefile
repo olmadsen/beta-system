@@ -1,5 +1,7 @@
 ECLIPSE_INSTALLDIR=C:/eclipse2/eclipse/workspace/org.eclipse.ui.betaeditor
-BETALIB=C:/beta/r5.3
+
+# Mads - uncomment this line on windows
+# BETALIB=C:/beta/r5.3
 
 java: clean java_indenter eclipse
 	java -classpath jvm Eclipse
