@@ -1,0 +1,338 @@
+ORIGIN '~beta/basiclib/v1.4/private/basicsystemenv_unixbody';
+
+--- include '../../guienv'
+--- include 'guienv_unixprivate'
+
+--- lib:attributes---
+XtInputNoneMask:   (# exit 0 #);
+XtInputReadMask:   (# exit 1 #);
+XtInputWriteMask:  (# exit 2 #);
+XtInputExceptMask: (# exit 4 #);
+
+XtAppAddTimeOut: external
+  (# appContext: @integer;
+     interval: @integer;
+     proc: @Integer; (* We only install callbacks once. *)
+     closure: @integer;
+     intervalId: @integer;
+  enter (appContext,interval,proc,closure)
+  do callC
+  exit intervalId
+  #);
+XtAppAddInput: External
+  (# appCon, source, condition: @integer;
+     proc: @Integer;
+     closure: @integer;
+     result: @integer;
+  enter (appCon, source, condition, proc, closure)
+  exit result
+  #);
+XtAppAddWorkProc: external
+  (# appContext: @integer;
+     proc: @Integer;
+     closure: @integer;
+     workprocId: @integer;
+  enter (appContext,proc,closure)
+  exit workProcId
+  #);
+XtRemoveTimeOut: external
+  (# intervalId: @integer
+  enter intervalId
+  #);
+
+---BasicScheduler:descriptor---
+SysHead
+(# 
+do initBeforeScheduler;
+   private.mdpriv.pioPrivate.start;
+#)
+
+--- forksecond:descriptor ---
+(# do private.mdpriv.pioPrivate.ensure #)
+
+--- pioEnsure:descriptor ---
+(# do private.mdpriv.pioPrivate.ensure #)
+
+--- pioPrivate:descriptor ---
+(# 
+   theUIenv: ^guienv;
+   
+   idlePtr: @Integer;
+   idle: external
+     (# clientData: @integer; status: @Integer; res: @Integer;
+        oldTheActive: ^|sysHead;
+     enter clientData
+     do CExternalEntry;
+        
+        (if theActive[] //NONE then
+            NONE -> oldTheActive[]
+         else
+            (* We are about to reenter attNext. It is therefore 
+             * necessary to remove theActive from the active queue
+             * to ensure that it is not reattached before we are done
+             * with this idle call. *)
+            theActive[] -> oldTheActive[];
+            theActive.ce[] -> private.active.delete;
+        if);
+        
+        (if private.attNext -> res
+         //0 then
+            (* Ok. *)
+            (if active //false then
+                (* active must have been set to false by a nested idle call. *)
+                ensure;
+            if);
+         //1//2 then
+            (* Currently nothing to do. *)
+            false-> active;
+            true -> status;
+         else
+            (* There is nothing to do right now, but someone is
+             * sleeping. Setup a timer. *)
+            
+            false ->  active;
+            true -> status;
+            
+            (appContext,-res*1000,sleepCallbackPtr,0) 
+              -> XtAppAddTimeOut 
+              -> timerId;
+            true -> timerOn;
+        if);
+        
+        (if oldTheActive[] //NONE then else
+            0 -> attNext.value;
+            oldTheActive.ce[] -> private.active.append;
+            oldTheActive[] -> theActive[];
+        if);
+        
+     exit status
+     #);
+   
+   sleepCallbackPtr: @Integer;
+   sleepCallback: external
+     (# data,id: @Integer;
+     enter (data,id)
+     do CExternalEntry;
+        false -> timerOn;
+        ensure;
+     #);
+   
+   systemFileCallbackPtr: @Integer;
+   systemFileCallback: external
+     (# closure: @Integer;
+        fdPtr: @Integer;
+        idPtr: @Integer;
+        fd: @Integer;
+     enter (closure, fdPtr, idPtr)
+     do CExternalEntry;
+        fdPtr -> TOS'%AdrGetLong' -> fd;
+        (fd,closure) -> ioms[fd+1].continue;
+        ensure;
+     #);
+   
+   start:
+     (# makeCBF: External
+          (# pat: ##external;
+             cb: @integer;
+          enter pat##
+          exit cb
+          #);
+     do setWindowEnv;
+        
+        (if theWindowEnv[] //NONE then
+            (failure, 
+            'GuienvSystemEnv ERROR: setWindowEnv did not set theWindowEnv.') 
+              -> stop;
+        if);
+        
+        pioInsertInner[] -> pioInsert.doInner[];
+        pioDeleteInner[] -> pioDelete.doInner[];
+        
+        (if theWindowEnv.struc <= guienv## //true then
+            theWindowEnv[] -> theUIEnv[];
+         else
+            (failure, 
+            'GuienvSystemEnv ERROR: TheWindowEnv is not a subpattern of uienv.') 
+              -> stop;
+        if);
+        theUIenv.doSetup;
+        
+        idle## -> makeCBF -> idlePtr;
+        sleepCallback## -> makeCBF -> sleepCallbackPtr;
+        systemFileCallback## -> makeCBF -> systemFileCallbackPtr;
+        (* systemFileTimeOut## -> makeCBF -> systemFileTimeOutPtr; *)
+        
+        true -> theUIenv.XsystemEnvPresent;
+        
+        xcbt[] -> xcbt.init;
+        
+        &registerCallback[] -> theUIEnv.XsystemEnvHandleCallback[];
+        
+        ensure;
+        theUIEnv;
+     #);
+   
+   XcallbackThread: System
+     (# 
+        cb: ^Object;
+        forked: @Boolean;
+        active: @Boolean;
+        thisXcbt: ^|XcallbackThread;
+        oldTheActive: ^|sysHead;
+        
+        init: (# enter thisXcbt[] #);
+        
+        next: @
+          (# firstTime: @Boolean;
+          enter cb[]
+          do
+             true -> active;
+             
+             (if theActive[] //NONE then
+                 NONE -> oldTheActive[]
+              else
+                 (* We are about to reenter attNext. It is therefore 
+                  * necessary to make sure that theActive is not scheduled
+                  * before this XcallbackThread is finished doing its 
+                  * work (corresponding to a callback from some local 
+                  * event loop). Logically this XcallbackThread and theActive
+                  * are one and the same thread. *)
+                 theActive[] -> oldTheActive[];
+                 theActive.ce[] -> private.active.delete;
+             if);
+             
+             (if forked //false then
+                 thisXcbt[] -> fork;
+                 ce[] -> private.active.first[];
+                 true -> forked;
+              else
+                 ce[] -> private.active.prepend;
+             if);
+             true -> firstTime;
+             loop:
+               (if cb[] //NONE then
+                   (* The callback was executed until end. 
+                    * So we may forget about this XcallbackThread
+                    * and return to X. *)
+                   ce[] -> private.active.delete;
+                   ensure;
+                else
+                   (if firstTime //true then
+                       false -> firstTime
+                    else
+                       (* The callback blocked or paused. We need to handle 
+                        * pending I/O and the like using private.mdpriv.check.
+                        *)
+                       (if private.mdpriv.check //true then
+                           (* Surprise surprise. cb killed its own thread. *)
+                           stop;
+                       if)
+                   if);
+                   private.attNext;
+                   restart loop;
+               if);
+             
+             (if oldTheActive[] //NONE then else
+                 0 -> attNext.value;
+                 oldTheActive.ce[] -> private.active.append;
+                 oldTheActive[] -> theActive[];
+             if);
+             
+             false -> active;
+          #);
+        
+     do cycle (# do cb; NONE -> cb[]; pause #);
+     #);
+   
+   xcbt: @|XcallbackThread; 
+   (* This XcallbackThread is used in most cases. We only need multiple
+    * XcallbackThread in the case where some local event loop starts
+    * doing callbacks. In that case we need a XcallbackThread for callbacks
+    * from each of these eventloops. *)
+   
+   registerCallback: theUIenv.XsystemEnvHandleCallbackP
+     (# newxcbt: ^|XcallbackThread;
+     do (if xcbt.active //true then
+            (* This is a callback from a local event loop. It is necessary
+             * to create a temporary XcallbackThread to handle the callback. *)
+            &|XcallbackThread[] -> newxcbt[] -> newxcbt.init;
+            cb[] -> newxcbt.next;
+         else
+            cb[] -> xcbt.next 
+        if)
+     #);
+   
+   theId: @Integer;
+   active: @Boolean;
+   
+   timerId: @Integer;
+   timerOn: @Integer;
+   
+   ensure: @
+     (# 
+     do (if active //false then 
+            (if theUIenv[] //NONE then else
+                (*'ensure' -> screen.putLine;*)
+                (if timerOn //true then
+                    timerId -> XtRemoveTimeOut;
+                    false -> timerOn;
+                if);
+                true -> active;
+                (appContext, idlePtr,0) -> XtAppAddWorkProc -> theId;
+                (*'XtAppAddWorkProc called' -> screen.putline;*)
+            if);
+        if)
+     #);
+   
+   appContext: @
+     (# value: @Integer;
+     do (if value //0 then theUIenv.private.appCon -> value if);
+     exit value
+     #);
+   
+   rIds,wIds,xIds: [50]@Integer;
+   ioms: [50]^IOmask;
+   
+   pioInsertInner: @pioinsert.doInnerP
+     (# 
+     do elm.scan
+        (# 
+        do
+           (if curFD+1>rIds.range then
+               (rIds.range,curFD+1)->max->rIds.extend;
+               (wIds.range,curFD+1)->max->wIds.extend;
+               (xIds.range,curFD+1)->max->xIds.extend;
+               (ioms.range,curFD+1)->max->ioms.extend;
+           if);
+           (if read//true then 
+               (pioPrivate.appContext, curFD, XtInputReadMask,
+               pioPrivate.systemFileCallbackPtr, pioReadReady)
+                 -> XtAppAddInput -> rIds[curFD+1];
+           if);
+           (if write//true then 
+               (pioPrivate.appContext, curFD, XtInputWriteMask,
+               pioPrivate.systemFileCallbackPtr, pioWriteReady)
+                 -> XtAppAddInput -> wIds[curFD+1];
+           if);
+           (if except//true then 
+               ( pioPrivate.appContext, curFD, XtInputExceptMask,
+               pioPrivate.systemFileCallbackPtr, pioException)
+                 -> XtAppAddInput -> pioPrivate.xIds[curFD+1]; 
+           if);
+           elm[] -> ioms[curFD+1][];
+        #);
+     #);
+
+   pioDeleteInner: @piodelete.doInnerP
+     (#
+     do elm.scan
+        (# 
+        do
+           (if read//true then rIds[curFD+1] -> XtRemoveInput if);
+           (if write//true then wIds[curFD+1] -> XtRemoveInput if);
+           (if except//true then xIds[curFD+1] -> XtRemoveInput if);
+           NONE -> ioms[curFD+1][];
+        #);
+     #)
+
+#)

@@ -1,0 +1,3 @@
+extern WidgetClass xbIconButtonWidgetClass;
+typedef struct _XbIconButtonClassRec *XbIconButtonWidgetClass;
+typedef struct _XbIconButtonRec *XbIconButtonWidget;

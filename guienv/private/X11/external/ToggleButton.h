@@ -1,0 +1,3 @@
+extern WidgetClass xbToggleButtonWidgetClass;
+typedef struct _XbToggleButtonClassRec *XbToggleButtonWidgetClass;
+typedef struct _XbToggleButtonRec *XbToggleButtonWidget;

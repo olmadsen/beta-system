@@ -1,0 +1,1052 @@
+ORIGIN '../controlsbody';
+
+[[
+-- Include 'uienv_macprivate'
+-- Include 'controlmanager'
+-- Include '~beta/maclib/v2.7.1/textedit'
+-- Include '~beta/maclib/v2.7.1/memory'
+-- Include '~beta/maclib/v2.7.1/debug'
+-- Include '~beta/basiclib/v1.3.1/objinterface'
+-- Include 'quickdrawstuff'
+-- Include 'raster_macprivate'
+-- UIENVcontrolCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- UIENVcontrolOpen: descriptor --
+(#
+do &controlMethods[] -> windowitemMethods;
+	inner open;
+#)
+
+-- UIENVcontrolClose: descriptor --
+(#
+do inner close;
+	(if controlHandle<>0//true then
+		controlHandle -> disposeToolBoxControl;
+		0 -> controlHandle;
+	if);
+#)
+
+-- controlLib: attributes --
+
+(* updateToolboxControl and drawToolboxControl are designed to
+ * avoid flicker. The problem is that SizeControl redraws the
+ * control imediately and uienv wants the control to be drawn by
+ * the event loop. So when the control is resized it is first 
+ * hidden to prevent the flicker. And then when the control is
+ * drawn it is shown if it is invisible.
+ *)
+updateToolboxControl:
+	(# controlHandle: @integer;
+		width,height: @integer;
+		h,v: @integer;
+	enter (controlHandle,h,v,width,height)
+	do focusZero
+			(#
+			do HidePen;
+				controlHandle -> HideControl;
+				(controlHandle,width,height) -> SizeControl;
+				(controlHandle,h,v) -> MoveControl;
+				ShowPen;
+			#);
+	#);
+drawToolboxControl:
+	(# controlHandle: @integer;
+	enter controlHandle
+	do focusZero
+			(# controlRec: @controlRecord;
+				visible: @integer;
+			do controlHandle -> HLock;
+				controlHandle -> controlRec.initFromHandle;
+				controlRec.contrlVis -> visible;
+				controlHandle -> HUnLock;
+				(if visible//255 then
+					controlHandle -> Draw1Control;
+				else
+					controlHandle -> ShowControl;
+				if);
+			#);
+	#);
+removeToolboxControl:
+	(# controlHandle: @integer;
+		RemoveFromOwner: external
+			(# controlHandle: @integer;
+			enter controlHandle
+			#);
+	enter controlHandle
+	do controlHandle -> RemoveFromOwner;
+	#);
+disposeToolboxControl:
+	(# controlHandle: @integer;
+	enter controlHandle
+	do focusZero
+			(#
+			do hidePen;
+				controlHandle -> DisposeControl;
+				showPen;
+			#);
+	#);
+adjustBounds:
+	(# h,v,width,height: @integer;
+		f: @rectangle;
+	do (if controlHandle<>0//true then
+			((0,0),size) -> f;
+			origin -> f.offset;
+			f.size -> (width,height);
+			f.topLeft -> (h,v);
+			(controlHandle,h,v,width,height) -> updateToolboxControl;
+		if);
+	#);
+controlHandle:
+	(#
+	enter private.controlHandle
+	exit private.controlHandle
+	#);
+controlActionProc:
+	(#
+	enter private.controlActionProc
+	exit private.controlActionProc
+	#);
+controlMethods: methods
+	(#	hit::< defaultHitMethod;
+		focusChanged::<
+			(#
+			do adjustBounds;
+			#);
+		handleCursor::< defaultHandleCursorMethod;
+	#);
+-- UIENVcontrolPrivate: descriptor --
+(# controlHandle: @integer;
+	controlActionProc: @integer;
+#)
+
+-- UIENVScrollbarOnFrameChanged: descriptor --
+(# 
+do adjustBounds;
+	inner onFrameChanged;
+#)
+
+-- UIENVScrollbarOnRefresh: descriptor --
+(#
+do (if scrollbarActive//true then
+		controlHandle -> drawToolboxControl;
+	else
+		focus
+			(#	r: @rectangle;
+				mr: ^macRect;
+			do	((0,0),size) -> r;
+				r[] -> makeMacRect -> mr[];
+				PenNormal;
+				whiteColor -> BackColor;
+				blackColor -> ForeColor;
+				mr[] -> FrameRect;
+				(mr[],1,1) -> InsetRect;
+				mr[] -> EraseRect;
+			#);
+	if);
+	inner onRefresh;
+#)
+
+-- UIENVScrollbarOnMouseDown: descriptor --
+(#	macPt: @macPoint;
+	originalPart,returnPart,originalValue: @integer;
+	p: @point;
+do inner onMouseDown;
+	localPosition -> p;
+	origin -> p.add;
+	p -> macPt.setPoint;
+	(controlHandle,macPt) -> TestControl -> originalPart;
+	focusZero
+		(#
+		do (if originalPart//inThumb then
+				value -> originalValue;
+				(controlHandle,macPt,0) -> TrackControl -> returnPart;
+				(if returnPart//originalPart then
+					(value - originalValue) -> theEventHandler.onThumbMoved;
+				if);
+			else
+				(controlHandle,macPt,controlActionProc) -> TrackControl -> returnPart;
+			if);
+			(if returnPart//originalPart then
+				theEventHandler.onMouseUp;
+				none -> hitWindowItem;
+			if);
+		#);
+#)
+
+-- UIENVscrollbarOnActivate: descriptor --
+(#
+do	true -> scrollbarActive;
+	updateMaybe;
+	inner onActivate;
+#)
+
+-- UIENVscrollbarOnDeactivate: descriptor --
+(#
+do	false -> scrollbarActive;
+	updateMaybe;
+	inner onDeactivate;
+#)
+
+-- UIENVscrollbarSetScrollAmount: descriptor --
+(#
+do value -> scrollbarScrollamount;
+	theEventHandler.onScrollAmountChanged;
+#)
+
+-- UIENVscrollbarGetScrollAmount: descriptor --
+(#
+do scrollbarScrollamount -> value;
+#)
+
+-- UIENVscrollbarSetPageScrollAmount: descriptor --
+(#
+do value -> scrollbarPageScrollAmount;
+	theEventHandler.onPageScrollAmountChanged;
+#)
+
+-- UIENVscrollbarGetPageScrollAmount: descriptor --
+(#
+do scrollbarPageScrollAmount -> value;
+#)
+
+-- UIENVscrollbarSetMaxValue: descriptor --
+(#
+do focusZero
+		(#
+		do (controlHandle,value) -> SetCtlMax;
+		#);
+	theEventHandler.onMaxValueChanged;
+#)
+
+-- UIENVscrollbarGetMaxValue: descriptor --
+(#
+do controlHandle -> GetCtlMax -> value;
+#)
+
+-- UIENVscrollbarSetValue: descriptor --
+(#
+do focusZero
+		(#
+		do (controlHandle,value) -> SetCtlValue;
+		#);
+	theEventHandler.onValueChanged;
+#)
+
+-- UIENVscrollbarGetValue: descriptor --
+(#
+do controlHandle -> GetCtlValue -> value;
+#)
+
+-- UIENVscrollbarSetOrientation: descriptor --
+(#
+do theOrientation -> scrollbarOrientation;
+#)
+
+-- UIENVscrollbarGetOrientation: descriptor --
+(#
+do scrollbarOrientation -> theOrientation;
+#)
+
+-- UIENVscrollbarSetLength: descriptor --
+(#
+do (* not implemented !!! *)
+#) 
+
+-- UIENVscrollbarGetLength: descriptor --
+(#
+do (* not implemented !!! *)
+#)
+
+-- UIENVscrollbarCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- UIENVscrollbarOpen: descriptor --
+(# mr: @macRect;
+do ((0,0),size) -> mr;
+	(windowPointer,mr[],'',false,0,0,0,ScrollbarProc,0) 
+		-> NewControl -> controlHandle;
+	actionProc## -> setScrollbarActionProc;
+	16 -> scrollbarScrollamount;
+	50 -> scrollbarPageScrollamount;
+	inner open;
+#)
+
+-- UIENVscrollbarClose: descriptor --
+(#
+do inner close;
+#)
+
+-- scrollbarLib: attributes --
+actionProc: external
+	(# controlHandle: @integer;
+		partCode: @shortInt;
+		currentValue,currentMax,newValue: @integer;
+	enter (controlHandle,partCode)
+	do pascalExternalEntry;
+		value -> currentValue;
+		maxValue -> currentMax;
+		(if partCode
+			//inUpButton then
+				(currentValue - scrollbarScrollamount,0) -> max -> newValue;
+				newValue -> value;
+				theEventHandler.onButtonUp;
+			//inDownButton then
+				(currentValue + scrollbarScrollamount,currentMax) -> min -> newValue;
+				newValue -> value;
+				theEventHandler.onButtonDown;
+			//inPageUp then
+				(currentValue - scrollbarPageScrollamount,0) -> max -> newValue;
+				newValue -> value;
+				theEventHandler.onPageUp;
+			//inPageDown then
+				(currentValue + scrollbarPageScrollamount,currentMax) -> min -> newValue;
+				newValue -> value;
+				theEventHandler.onPageDown;
+		if);
+	#);
+scrollbarOrientation:
+	(#
+	enter private.scrollbarOrientation
+	exit private.scrollbarOrientation
+	#);
+scrollbarScrollamount:
+	(#
+	enter private.scrollbarScrollamount
+	exit private.scrollbarScrollamount
+	#);
+scrollbarPageScrollamount:
+	(#
+	enter private.scrollbarPageScrollamount
+	exit private.scrollbarPageScrollamount
+	#);
+scrollbarActive:
+	(#
+	enter private.scrollbarActive
+	exit private.scrollbarActive
+	#);
+setScrollbarActionProc:
+	(#	theActionProc: ##actionProc;
+		toFuncPtr: external
+			(# func: ##external;
+				ptr: @integer;
+			enter func##
+			do 'copyinput' -> callC;
+			exit ptr
+			#);
+	enter theActionProc##
+	do theActionProc## -> toFuncPtr -> controlActionProc;
+	#);
+
+-- UIENVscrollbarPrivate: descriptor --
+(# scrollbarOrientation: @integer;
+	scrollbarScrollamount: @integer;
+	scrollbarPageScrollamount: @integer;
+	scrollbarActive: @boolean;
+#)
+
+-- UIENVButtonOnFrameChanged: descriptor --
+(#
+do adjustBounds;
+	inner onFrameChanged;
+#)
+
+-- UIENVButtonOnRefresh: descriptor --
+(#
+do (if controlHandle<>0//true then
+		buttonStyle -> useTextStyle;
+		controlHandle -> drawToolboxControl;
+	if);
+	inner onRefresh;
+#)
+
+-- UIENVButtonOnMouseDown: descriptor --
+(#	macPt: @macPoint;
+	originalPart,returnPart,originalValue: @integer;
+	thisScrollbar: ^scrollbar;
+	p: @point;
+do inner onMouseDown;
+	(if controlHandle<>0//true then
+		localPosition -> p;
+		origin -> p.add;
+		p -> macPt.setPoint;
+		(controlHandle,macPt) -> TestControl -> originalPart;
+		focusZero
+			(#
+			do buttonStyle -> useTextStyle;
+				(controlHandle,macPt,controlActionProc) -> TrackControl -> returnPart;
+			#);
+		(if returnPart//originalPart then
+			theEventHandler.onMouseUp;
+		if);
+	if);
+#)
+
+-- UIENVbuttonSetLabel: descriptor --
+(#
+do theLabel.copy -> buttonLabel;
+	(if controlHandle<>0//true then
+		focusZero
+			(#
+			do (controlHandle,theLabel) -> SetCTitle;
+			#);
+	else
+		updateMaybe;
+	if);
+	theEventHandler.onLabelChanged;
+#)
+
+-- UIENVbuttonGetLabel: descriptor --
+(#
+do buttonLabel -> theLabel[];
+	theLabel.copy -> theLabel[];
+#)
+
+-- UIENVbuttonSetStyle: descriptor --
+(#
+do theStyle[] -> buttonStyle;
+	updateMaybe;
+	theEventHandler.onStyleChanged;
+#)
+
+-- UIENVbuttonGetStyle: descriptor --
+(#
+do buttonStyle -> theStyle[];
+#)
+
+-- UIENVbuttonCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- UIENVbuttonOpen: descriptor --
+(#	style: ^textStyle;
+do this(button)[] -> getPatternName -> buttonLabel;
+	&textStyle[] -> style[];
+	'Chicago' -> style.name;
+	12 -> style.size;
+	style[] -> buttonStyle;
+	inner open;
+#)
+
+-- UIENVbuttonClose: descriptor --
+(#
+do inner close;
+#)
+
+-- buttonLib: attributes --
+buttonLabel:
+	(#
+	enter private.buttonLabel[]
+	exit private.buttonLabel[]
+	#);
+buttonStyle:
+	(#
+	enter private.buttonStyle[]
+	exit private.buttonStyle[]
+	#);
+	
+-- UIENVbuttonPrivate: descriptor --
+(# buttonLabel: ^text;
+	buttonStyle: ^textStyle;
+#)
+
+-- UIENVpushButtonCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- UIENVpushButtonOpen: descriptor --
+(# mr: @macRect;
+	t: ^text;
+do ((0,0),size) -> mr;
+	buttonLabel -> t[];
+	(windowPointer,mr[],t,false,0,0,0,PushButProc + useWFont,0) 
+		-> NewControl -> controlHandle;
+	inner open;
+#)
+
+-- UIENVpushButtonClose: descriptor --
+(#
+do inner close;
+#)
+
+-- UIENVpushButtonPrivate: descriptor --
+(#
+#)
+
+-- UIENVstaticTextOnRefresh: descriptor --
+(#	mr: @macRect;
+	t: ^text;
+do ((0,0),size) -> mr;
+	buttonLabel -> t[];
+	focus
+		(#
+		do buttonStyle -> useTextStyle;
+			(@@t.T[1],t.lgth,mr[],0) -> TextBox;
+		#);
+	inner onRefresh;
+#)
+
+-- UIENVstaticTextCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- UIENVstaticTextOpen: descriptor --
+(#
+do inner open;
+#)
+
+-- UIENVstaticTextClose: descriptor --
+(#
+do inner close;
+#)
+
+-- UIENVstaticTextPrivate: descriptor --
+(#
+#)
+
+-- UIENViconButtonOnRefresh: descriptor --
+(# calcImageBounds:
+     (# 
+     do (if showLabel//true then
+            theLabel[] -> theStyle.widthOfText -> textWidth;
+            theStyle.lineHeight -> textHeight;
+         else
+            0 -> textWidth;
+            0 -> textHeight;
+        if);
+        (if private.iconButtonRaster[]<>none//true then
+            private.iconButtonRaster.width -> iconWidth;
+            private.iconButtonRaster.height -> iconHeight;
+         else
+            0 -> iconWidth;
+            0 -> iconHeight;
+        if);
+        (textHeight+iconHeight) -> imageHeight;
+        (textWidth,iconWidth) -> max -> imageWidth;
+     #);
+   calcImageAnchors:
+     (# width,height: @integer;
+     do size -> (width,height);
+        (width - iconWidth) div 2 -> iconAnchor.h;
+        (height - imageHeight) div 2 -> iconAnchor.v;
+        (width - textWidth) div 2 -> textAnchor.h;
+        iconAnchor.v + iconHeight + theStyle.ascent -> textAnchor.v;
+     #);
+   theStyle: ^textStyle;
+   theLabel: ^text;
+   imageWidth,imageHeight,textWidth,textHeight,iconWidth,iconHeight: @integer;
+   iconAnchor,textAnchor: @point;
+	
+	DrawBitMapInPort: external
+		(# bitmapHandle: @integer;
+			port: @integer;
+			from,to,width,height: @integer;
+		enter (bitmapHandle,port,from,to,width,height)
+		#);
+do style -> theStyle[];
+   label -> theLabel[];
+   calcImageBounds;
+   calcImageAnchors;
+	focus
+		(# f: @rectangle;
+			from,to: @macPoint;
+			wp: @integer;
+		do (if private.iconButtonRaster[]<>none//true then
+				(0,0) -> from.setPoint;
+				iconAnchor -> to.setPoint;
+				windowPointer -> wp;
+				private.iconButtonRaster.lock;
+				(private.iconButtonRaster.rasterAddress,wp,from,to,iconWidth,iconHeight) 
+					-> DrawBitMapInPort;
+				private.iconButtonRaster.unlock;
+				(if hilite//true then
+					((0,0),size) -> f;
+					f.bottom - 1 -> f.bottom;
+					f.right - 1 -> f.right;
+					f[] -> makeMacRect -> FrameRect;
+					(1,1) -> f.inset;
+					f[] -> makeMacRect -> FrameRect;
+				if);
+			if);
+			(if showLabel//true then
+				(textAnchor.h,textAnchor.v) -> MoveTo;
+				theStyle[] -> useTextStyle;
+				(@@theLabel.T[1],0,theLabel.lgth) -> DrawText;
+			if);
+		#);
+   inner onRefresh;
+#)
+
+-- UIENViconbuttonOnHiliteChanged: descriptor --
+(#
+do inner onHiliteChanged;
+#)
+
+-- UIENViconButtonSetShowLabel: descriptor --
+(#
+do doShow -> iconButtonShowLabel;
+	theEventHandler.onShowLabelChanged;
+	updateMaybe;
+#)
+
+-- UIENViconButtonGetShowLabel: descriptor --
+(#
+do iconButtonShowLabel -> doShow;
+#)
+
+-- UIENViconButtonSetIcon: descriptor --
+(#
+do theIcon[] -> iconButtonRaster;
+	theEventHandler.onIconChanged;
+	updateMaybe;
+#)
+
+-- UIENViconButtonGetIcon: descriptor --
+(#
+do iconButtonRaster -> theIcon[];
+#)
+
+-- UIENViconButtonCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- UIENViconButtonOpen: descriptor --
+(#	
+do true -> iconButtonShowLabel;
+	inner open;
+#)
+
+-- UIENViconButtonClose: descriptor --
+(#
+do inner close;
+#)
+
+-- iconButtonLib: attributes --
+iconButtonShowLabel:
+	(#
+	enter private.iconButtonShowLabel
+	exit private.iconButtonShowLabel
+	#);
+iconButtonRaster:
+	(#
+	enter private.iconButtonRaster[]
+	exit private.iconButtonRaster[]
+	#);
+
+-- UIENViconButtonPrivate: descriptor --
+(# iconButtonShowLabel: @boolean;
+	iconButtonRaster: ^raster;
+#)
+
+-- UIENVmenuButtonSetCurItem: descriptor --
+(#
+do	focusZero
+		(#
+		do (controlHandle,itemNo) -> SetCtlValue;
+		#);
+	theEventHandler.onCurrentItemChanged;
+#)
+
+-- UIENVmenuButtonGetCurItem: descriptor --
+(#
+do controlHandle -> GetCtlValue -> itemNo;
+#)
+
+-- UIENVmenuButtonSetPopupMenu: descriptor --
+(# SetMenubuttonMenu: external
+		(#	control,menuHandle: @integer;
+			menuID: @shortInt;
+		enter (control,menuHandle,menuID)
+		#);
+do	popupMenu[] -> menuButtonPopupMenu;
+	focusZero
+		(#
+		do hidePen;
+			controlHandle -> HideControl;
+			showPen;
+			(controlHandle,popupMenu.handle,popupMenu.menuID) -> SetMenubuttonMenu;
+		#);
+	updateMaybe;
+	theEventHandler.onPopUpMenuChanged;
+#)
+
+-- UIENVMenuButtonGetPopupMenu: descriptor --
+(#
+do menuButtonPopupMenu -> popupMenu[];
+#)
+
+-- UIENVmenuButtonCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- UIENVmenuButtonOpen: descriptor --
+(# nothingMenuID: (# exit 129 #);
+	bounds: @macRect;
+	t: ^text;
+do ((0,0),(200,30)) -> bounds;
+	buttonLabel -> t[];
+	(windowPointer,bounds[],t,false,0,nothingMenuID,50,popupMenuProc + useWFont,0) 
+		-> NewControl -> controlHandle;
+	-1 -> controlActionProc;
+	inner open;
+#)
+
+-- UIENVmenuButtonClose: descriptor --
+(#
+do inner close;
+#)
+
+-- menuButtonLib: attributes --
+menuButtonPopupMenu:
+	(#
+	enter private.menuButtonPopupMenu[]
+	exit private.menuButtonPopupMenu[]
+	#);
+
+-- UIENVmenuButtonprivate: descriptor --
+(#	menuButtonPopupMenu: ^menu;
+#)
+
+-- UIENVtoggleButtonSetState: descriptor --
+(#
+do	theState -> toggleButtonState;
+	(if controlHandle<>0//true then
+		focusZero
+			(#
+			do (controlHandle,theState) -> SetCtlValue;
+			#);
+	if);
+	theEventHandler.onStateChanged;
+#)
+
+-- UIENVtoggleButtonGetState: descriptor --
+(#
+do toggleButtonState -> theState;
+#)
+
+-- UIENVtoggleButtonCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- UIENVtoggleButtonOpen: descriptor --
+(#	
+do false -> toggleButtonState;
+	inner open;
+#)
+
+-- UIENVtoggleButtonClose: descriptor --
+(#
+do inner close;
+#)
+
+-- toggleButtonLib: attributes --
+toggleButtonState:
+	(#
+	enter private.toggleButtonState
+	exit private.toggleButtonState
+	#);
+
+-- UIENVtoggleButtonPrivate: descriptor --
+(# toggleButtonState: @boolean;
+#)
+
+-- UIENVradioButtonCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- UIENVRadioButtonOpen: descriptor --
+(#	r: @rectangle;
+	mr: ^macRect;
+	t: ^text;
+do	((0,0),size) -> r;
+	r[] -> makeMacRect -> mr[];
+	buttonLabel -> t[];
+	(windowPointer,mr[],t,false,0,0,1,radioButProc + useWFont,0) 
+		-> NewControl -> controlHandle;
+	inner open;
+#)
+
+-- UIENVRadioButtonClose: descriptor --
+(#
+do inner close;
+#)
+
+-- UIENVradioButtonPrivate: descriptor --
+(#
+#)
+
+-- UIENVcheckBoxCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- UIENVcheckBoxOpen: descriptor --
+(#	r: @rectangle;
+	mr: ^macRect;
+	t: ^text;
+do	((0,0),size) -> r;
+	r[] -> makeMacRect -> mr[];
+	buttonLabel -> t[];
+	(windowPointer,mr[],t,false,0,0,1,checkBoxProc + useWFont,0) 
+		-> NewControl -> controlHandle;
+	inner open;
+#)
+
+-- UIENVcheckBoxClose: descriptor --
+(#
+do inner close;
+#)
+
+-- UIENVcheckBoxPrivate: descriptor --
+(#
+#)
+
+-- UIENVeditTextSetStyle: descriptor --
+(#
+do txStyle[] -> editTextStyle;
+	txStyle[] -> updateStyle;
+#)
+
+-- UIENVeditTextGetStyle: descriptor --
+(#
+do editTextStyle -> txStyle[];
+#)
+
+-- UIENVeditTextSetContents: descriptor --
+(#
+do (@@str.T[1],str.lgth,editTextHandle) -> TESetText;
+	updateMaybe;
+#)
+
+-- UIENVeditTextGetContents: descriptor --
+(# length: @integer;
+	textHandle: @integer;
+	TextEditGetLength: external
+		(#	teHandle: @integer;
+			length: @integer;
+		enter teHandle
+		exit length
+		#);
+	CopyText: external
+		(#	h: @integer;
+			buffer: @integer;
+			count: @integer;
+		enter (h,buffer,count)
+		#);
+do editTextHandle -> TextEditGetLength -> length;
+	&text[] -> str[];
+	length - str.T.range -> str.extend;
+	editTextHandle -> TEGetText -> textHandle;
+	(textHandle,@@str.T[1],length) -> CopyText;
+	length -> str.lgth -> str.pos;
+#)
+
+-- UIENVeditTextonFrameChanged: descriptor --
+(#	viewRect,destRect: ^macRect;
+	UpdateTextEditRecord: external
+		(#	teHandle: @integer;
+			view,dest: ^macRect;
+		enter (teHandle,view[],dest[])
+		#);
+	style: ^textStyle;
+	width,height: @integer;
+do editTextStyle -> style[];
+	size -> (width,height);
+	((style.lineHeight * 2) > (height - 6)) -> editTextSingleLine;
+	calcViewRect -> makeMacRect -> viewRect[];
+	calcDestRect -> makeMacRect -> destRect[];
+	(editTextHandle,viewRect[],destRect[]) -> UpdateTextEditRecord;
+	editTextHandle -> TECalText;
+	inner onFrameChanged;
+#)
+
+-- UIENVeditTextonKeyDown: descriptor --
+(#
+do focusZero
+		(#	insertChar: @boolean;
+		do true -> insertChar;
+			(if ch
+				//13 then
+					(if editTextSingleLine//true then
+						false -> insertChar
+					if);
+				//3 then false -> insertChar;
+			if);
+			(if insertChar//true then
+				(ch,editTextHandle) -> TEKey;
+			if);
+		#);
+	inner onKeyDown;
+#)
+
+-- UIENVeditTextonMouseDown: descriptor --
+(#
+do focusZero
+		(#	p: @point;
+			macPt: @macPoint;
+		do localPosition -> p;
+			origin -> p.add;
+			p -> macPt.setPoint;
+			(macPt,false,editTextHandle) -> TEClick;
+		#);
+	inner onMouseDown;
+#)
+
+-- UIENVeditTextonRefresh: descriptor --
+(#
+do focusZero
+		(#	viewRect: ^macRect;
+		do calcViewRect -> makeMacRect -> viewRect[];
+			(viewRect[],editTextHandle) -> TEUpdate;
+			(viewRect[],-3,-3) -> InsetRect;
+			PenNormal;
+			viewRect[] -> FrameRect;
+		#);
+	inner onRefresh;
+#)
+
+-- UIENVeditTextonEnableTarget: descriptor --
+(#
+do focusZero
+		(#
+		do editTextHandle -> TEActivate
+		#);
+	inner onEnableTarget;
+#)
+
+-- UIENVeditTextonDisableTarget: descriptor --
+(#
+do focusZero
+		(#
+		do editTextHandle -> TEDeactivate
+		#);
+	inner onDisableTarget;
+#)
+
+-- UIENVeditTextCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- UIENVeditTextOpen: descriptor --
+(#	style: ^textStyle;
+	viewRect,destRect: ^macRect;
+do	&textStyle[] -> style[];
+	'Chicago' -> style.name;
+	12 -> style.size;
+	style[] -> editTextStyle;
+	((0,0),(100,6 + style.lineHeight + style.leading)) -> windowItemFrame;
+	calculateFocus;
+	true -> editTextSingleLine;
+	calcViewRect -> makeMacRect -> viewRect[];
+	calcDestRect -> makeMacRect -> destRect[];
+	focusZero
+		(#
+		do editTextStyle -> useTextStyle;
+			(destRect[],viewRect[]) -> TENew -> editTextHandle;
+			(true,editTextHandle) -> TEAutoView;
+		#);
+	cursors.iBeam[] -> theCursor;
+	inner open;
+#)
+
+-- UIENVeditTextClose: descriptor --
+(#
+do editTextHandle -> TEDispose;
+#)
+
+-- editTextLib: attributes --
+editTextStyle:
+	(#
+	enter private.editTextStyle[]
+	exit private.editTextStyle[]
+	#);
+editTextHandle:
+	(#
+	enter private.editTextHandle
+	exit private.editTextHandle
+	#);
+editTextSingleLine:
+	(#
+	enter private.editTextSingleLine
+	exit private.editTextSingleLine
+	#);
+calcViewRect:
+	(#	r: ^rectangle;
+		minInt: (# exit -32767 #);
+	do	&rectangle[] -> r[];
+		(if textVisible//true then
+			((0,0),size) -> r;
+			origin -> r.offset;
+			(3,3) -> r.inset;
+		else
+			((minInt,minInt),(minInt + 1,minInt + 1)) -> r; 
+		if);
+	exit r[]
+	#);
+calcDestRect:
+	(#	style: ^textStyle;
+		width,height,lineHeight: @integer;
+		singleLine: @boolean;
+		h,v: @integer;
+		r: ^rectangle;
+		minInt: (# exit -32767 #);
+	do	&rectangle[] -> r[];
+		editTextStyle -> style[];
+		(if textVisible//true then
+			size -> (width,height);
+			origin -> (h,v);
+			(h+3,v+3) -> r.topLeft;
+			(if editTextSingleLine//true then
+				r.left + 1000 -> r.right;
+				r.top + style.lineHeight + style.leading -> r.bottom;
+			else
+				r.left + (width - 6) -> r.right;
+				r.top + (height - 6) -> r.bottom;
+			if);
+		else
+			((minInt,minInt),(minInt + style.maxChWidth,minInt + 1)) -> r;
+		if);
+	exit r[]
+	#);
+updateStyle:
+	(# style: ^textStyle;
+	enter style[]
+	do
+	#);
+textVisible: booleanValue
+	(# width,height: @integer;
+		style: ^textStyle;
+	do editTextStyle -> style[];
+		size -> (width,height);
+		((width > (6 + style.maxChWidth)) and (height > 6)) -> value;
+	#);
+
+-- UIENVeditTextPrivate: descriptor --
+(#	editTextStyle: ^textStyle;
+	editTextHandle: @integer;
+	editTextSingleLine: @boolean;
+#)
+
+-- UIENVsetDefaultButton: descriptor --
+(#
+do	theButton[] -> windowDefaultButton;
+#)
+
+-- UIENVgetDefaultButton: descriptor --
+(#
+do windowDefaultButton -> theButton[];
+#)
+
+--]]

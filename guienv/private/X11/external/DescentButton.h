@@ -1,0 +1,3 @@
+extern WidgetClass xbDescentButtonWidgetClass;
+typedef struct _XbDescentButtonClassRec *XbDescentButtonWidgetClass;
+typedef struct _XbDescentButtonRec *XbDescentButtonWidget;

@@ -1,0 +1,455 @@
+ORIGIN '../guienvbody';
+INCLUDE 'guienvattributes';
+INCLUDE 'deviceinfo';
+INCLUDE '../linkedlist';
+INCLUDE 'xevents';
+[[
+
+-- guienvLib: attributes --
+
+motifMenu: interfaceObject
+  (# <<SLOT motifMenuLib: attributes>>;
+     theMenu: ^menu;
+     owner: ^interfaceObject;
+     popup: @boolean;
+     append:
+       (# theItem: ^theMenu.menuitem;
+       enter theItem[]
+       <<SLOT GUIENVmotifMenuappend: doPart>>
+       #);
+     delete:
+       (# theItem: ^theMenu.menuitem;
+       enter theItem[]
+       <<SLOT GUIENVmotifMenudelete: doPart>>
+       #);
+     
+     motifMenuitem: interfaceObject
+       (# <<SLOT motifMenuItemLib: attributes>>;
+          theMenuitem: ^theMenu.menuItem;
+          theMotifSubMenu: ^motifMenu;
+          checked: @boolean;
+          
+          open::<
+            (# create::<
+                 (# <<SLOT GUIENVmotifMenuItemCreate: doPart>>
+                 #);
+            #);
+          close::<
+            (# 
+            <<SLOT GUIENVmotifMenuItemClose: doPart>> 
+            #);
+       #);
+
+     open::<
+       (# create::< (# <<SLOT GUIENVmotifMenuCreate: doPart>> #);
+       <<SLOT GUIENVmotifMenuOpen: doPart>>
+       #);
+     close::<
+       (# 
+       <<SLOT GUIENVmotifMenuClose: doPart>>
+       #);
+     getItemByNumber:
+       (# position: @integer;
+          theMotifMenuItem: ^motifMenuitem;
+       enter position
+       <<SLOT GUIENVmotifMenuGetItemByNumber: doPart>>
+       exit theMotifMenuItem[]
+       #);
+     getNumberOfWidget:
+       (# position: @integer;
+          widget: @integer;
+       enter widget
+       <<SLOT GUIENVmotifMenugetNumberOfWidget: doPart>>
+       exit position
+       #);
+     
+     private: @<<SLOT GUIENVmotifMenuPrivate: descriptor>>;
+  #);
+motifMenubar: interfaceObject
+  (# <<SLOT motifMenubarLib: attributes>>;
+     theWindow: ^window;
+     append:
+       (# theMenu: ^menu;
+       enter theMenu[]
+       <<SLOT GUIENVmotifMenubarappend: doPart>>
+       #);
+     delete:
+       (# theMenu: ^menu;
+       enter theMenu[]
+       <<SLOT GUIENVmotifMenubardelete: doPart>>
+       #);
+     open::<
+       (# create::< (# <<SLOT GUIENVmotifMenubarcreate: doPart>> #);
+       <<SLOT GUIENVmotifMenubaropen: doPart>>
+       #);
+     close::<
+       (# 
+       <<SLOT GUIENVmotifMenubarClose: doPart>>
+       #);
+     private: @<<SLOT GUIENVmotifMenubarprivate: descriptor>>;
+  #);
+
+--- GUIENVPrivate: descriptor ---
+(# (* bifrost begin *)
+   damaged: @rectangle;
+   xcolormap: @integer;
+   defaultscreen: @integer;
+   defaultScreenNumber: @integer;
+   defaultDepth: @integer;
+   defaultVisual: @integer;
+   defaultDrawable: @integer;
+   blackpixelvalue, whitepixelvalue: @integer;
+   pixelsPerMillimeterHeight, pixelsPerMillimeterWidth: @Real;
+   xfont: 
+     (# name: @Text;
+        loaded: @Boolean;
+        maxdescent: @Integer;
+        fixedwidth : @ boolean; (* true iff the font is fixed-width *)
+        
+        (* The height, width and baseline of the font. width is only
+         * defined if fixedWidth is true
+         *)
+        width,height,baseline : @integer;
+        XfontId: @ integer;
+        fi: @fontinfo;
+        
+        (* the first and last chars in the font *)
+        firstCharInFont,LastCharInFont : @ char;
+        
+        upos: @
+          (# p: @integer
+          do (fi, XaUnderlinePosition, @@p) -> XGetFontProperty;
+             (if p//0 then 3 -> p if)
+          exit p 
+          #);
+        uthick: @
+          (# t: @integer 
+          do (if t//0 then
+                 (fi, XaUnderlineThickness, @@t) -> XGetFontProperty;
+                 (if t//0 then 1 -> t if);
+             if);
+          exit t 
+          #);
+        letterWidth: @
+          (* returns the width of a letter *)
+          (# ch: @char; w: @integer;
+          enter ch
+          do
+             (if Xfontid//0 then 
+                 'ERROR: XLetterWidth: trying to use uninitialized font' -> putline;
+             if);
+             (if ((ch >= firstCharInFont ) AND 
+                 (ch<= lastCharInFont))
+              // true then
+                 (if FixedWidth
+                  // true  then width -> w;
+                  // false then ch -> fi.perCharWidth -> w;
+                 if)
+              else 0->w
+             if)
+          exit w 
+          #);
+     #);
+   fonts: @
+     (* Declaration of a 3-dimensional array for fontspecifications.  A lot of
+      * trouble caused by the fact that multidimensional repetitions isn't
+      * possible in BETA, and that repetitions of arbitrary patterns is not
+      * implemented.
+      *)
+     (# sizearray: (# size: [40] ^xfont #);
+        stylearray: (# style: [3] ^sizearray #);
+        xfonts: [3] ^stylearray;
+        defaultfont: @xfont;
+        initialized: @integer;
+     #);
+   (* bifrost end *)
+   display: @integer;
+   wargs: @argList;
+   theXtLib: @xtlib;
+   appName: ^Text;
+   (* the name of the application *)
+   appClass: ^Text;
+   (* the class of the application *)
+   fallBackResources: @StringArray
+     (# 
+        init::<
+          (# 
+          do '*Background: grey75' -> addText;
+             '*Foreground: black' -> addText;
+          #);
+     #);
+   options: @XrmOptionDescRecList;
+   
+   appCon: @XtAppContext;
+   
+   
+   doubleClick: @Boolean;
+   x, y, x_root, y_root, state, detail: @integer;
+   theChar: @char;
+   time: @integer;
+   
+   theWindow: ^window;
+   
+   theMenubar: ^menubarType;
+   
+   
+   windows: @list
+     (# element::< window;
+     #);
+   lastButtonPress,lastButton: @integer;
+   lastX, lastY: @integer;
+   lastDoubleClick: @boolean;
+  
+   
+   
+   theDeviceInfo: ^deviceInfo;
+   busyCursor: ^cursor;
+   handleIdle: @idleProcedure
+     (# theIdle: @onIdle;
+     do theIdle;
+        windows.scan
+        (# 
+        do current.theEventHandler.onIdle;
+        #);
+     #);
+#)
+
+-- interfaceObjectLib: attributes --
+actionList: linkedList
+  (# element::< action;
+  #);
+eventSpec:
+  (# type: ##theEventHandler.event;
+  #);
+eventSpecList: linkedList
+  (# element::< eventSpec;
+     remove:
+       (# ev: ##theEventHandler.event;
+       enter ev##
+       do l: scan
+            (# 
+            do (if current.type## = ev##//true then
+                   current[] -> delete;
+                   leave l;
+               if);
+            #);
+       #);
+     has: booleanValue
+       (# ev: ##theEventHandler.event;
+       enter ev##
+       do false -> value;
+          l: scan
+            (# 
+            do (if ev## <= current.type##//true then
+                   true -> value;
+                   leave l;
+               if);
+            #);
+       #);
+  #);
+
+appendEventProcessor:
+  (# theEventProcessor: ##external;
+     type: @integer;
+     address: @integer;
+  enter (theEventProcessor##, type)
+  <<SLOT GUIENVinterfaceObjectappendEventProcessor: doPart>>
+  exit address
+  #);
+appendEventProcessorForSubWidget:
+  (# theEventProcessor: ##external;
+     type: @integer;
+     widget: @integer;
+     address: @integer;
+  enter (theEventProcessor##, type, widget)
+  <<SLOT GUIENVinterfaceObjectappendEventProcessorForSubWidget: doPart>>
+  exit address
+  #);
+
+prependEventProcessor:
+  (# theEventProcessor: ##external;
+     type: @integer;
+     address: @integer;
+  enter (theEventProcessor##, type)
+  <<SLOT GUIENVinterfaceObjectPrependEventProcessor: doPart>>
+  exit address
+  #);
+addCallbackProcessor:
+  (# theCallBackProcessor: ##external;
+     type: @integer;
+     address: @integer;
+  enter (theCallBackProcessor##, type)
+  <<SLOT GUIENVinterfaceObjectAddCallbackProcessor: doPart>>
+  exit address
+  #);
+addCallbackProcessorForSubWidget:
+  (# theCallBackProcessor: ##external;
+     type: @integer;
+     subWidget: @integer;
+     address: @integer;
+  enter (theCallBackProcessor##, type, subWidget)
+  <<SLOT GUIENVinterfaceObjectAddCallbackProcessorForSubWidget: doPart>>
+  exit address
+  #);
+--- GUIENVinterfaceObjectPrivate: descriptor ---
+(# widgetID: @integer;
+   isOpen: @boolean;
+   beforeActions,afterActions: ^actionList;
+   disabledEvents: ^eventSpecList;
+#)
+
+-- menuLib: attributes --
+buildMenu:
+  (# fatherWidget: @integer;
+  enter fatherWidget
+  do <<SLOT GUIENVmenuBuildMenu: descriptor>>;
+  #);
+buildPopupmenu:
+  (#  fatherWidget: @integer;
+  enter fatherWidget
+  do <<SLOT GUIENVmenuBuildPopupmenu: descriptor>>;
+  #);
+destroyMenu:
+  (# 
+  do <<SLOT GUIENVmenuDestroyMenu: descriptor>>
+  #);
+
+--- GUIENVmenuPrivate: descriptor ---
+(# menuitems: @List
+     (# element::< menuItem;
+     #);
+   motifMenus: @list
+     (# element::< motifMenu;
+        remove:
+          (# e: ^element;
+          enter e[]
+          do (if e[] -> has//true then
+                 e[] -> at -> delete;
+             if);
+          #);
+     #);
+   name: ^text;
+   enabled: @boolean;
+   theMenubar: ^menubar;
+   theEntry: ^theMenubar.menubarEntry;
+#)
+
+-- menuitemLib: attributes --
+doExpose:
+  (# 
+  <<SLOT GUIENVmenuItemDoExpose: doPart>>
+  #);
+scanMotifMenuItems:
+  (# currentMotifMenu: ^motifMenu;
+     current: ^currentMotifMenu.motifMenuItem;
+  <<SLOT GUIENVmenuitemscanMotifMenuItems: doPart>>
+  #);
+
+--- GUIENVmenuItemPrivate: descriptor ---
+(# key: @char;
+   name: ^text;
+   checked: @boolean;
+   theSubMenu: ^menu;
+#)
+
+-- menubarLib: attributes --
+menubarEntry:
+  (# <<SLOT menubarEntryLib: attributes>>;
+     theMenu: ^menu;
+     cascadeButtonWidget: @integer;
+     buildEntry: 
+       (# position: @integer;
+       enter position
+       <<SLOT GUIENVmenubarEntryDoBuildEntry: doPart>>
+       #);
+     destroyEntry:
+       (# <<SLOT GUIENVmenubarEntrydestroyEntry: doPart>> #);
+     rebuildEntry: 
+       (# <<SLOT GUIENVmenubarEntryRebuildEntry: doPart>> #);
+  #);
+
+-- windowLib: attributes --
+theTarget:
+  (# 
+  enter private.theTarget[]
+  exit private.theTarget[]
+  #);
+adjustContents: 
+  (#
+  <<SLOT GUIENVwindowadjustContents: doPart>>
+  #);
+
+-- GUIENVwindowPrivate: descriptor --
+(# theMenubar: ^menubar;
+   theMotifmenubar: ^motifMenubar;
+   theTarget: ^windowitem;
+   contentsForm: @interfaceObject;
+   
+   isModal,floating,visible: @boolean;
+   contents: @canvas
+     (# eventHandler::<
+          (# onMouseDown::<
+               (#
+               do this(window).theEventHandler.onMouseDown;
+               #);
+             onMouseUp::<
+               (# 
+               do this(window).theEventHandler.onMouseUp
+               #);
+             onKeyDown::<
+               (# 
+               do this(window).theEventHandler.onKeyDown;
+               #);
+          #);
+        open::<
+          (# create::<
+               (#
+               do (XbPlaneWidgetClass,contentsForm.widgetID) -> createSimple; 
+                  
+                  (# 
+                  do (XtNwidth,300) -> setIntegerResource;
+                     (XtNheight,200) -> setIntegerResource;
+                  #);
+               #);
+          #);
+     #);
+#)
+
+-- windowitemLib: attributes --
+
+getFrame: 
+  (# h,v,width,height: @integer;
+     bottom,right: @integer;
+     f: @rectangle;
+  do XtNx -> getIntegerResource -> h;
+     XtNy -> getIntegerResource -> v;
+     XtNwidth -> getIntegerResource -> width;
+     XtNheight -> getIntegerResource -> height;
+     h + width -> right;
+     v + height -> bottom;
+     ((h,v),(right,bottom)) -> f;
+  exit f
+  #);
+
+handleframeChanged:
+  (# newFrame,oldFrame: @rectangle;
+  enter (oldFrame,newFrame)
+  <<SLOT GUIENVwindowItemHandleFrameChanged: doPart>>
+  #);
+--- GUIENVwindowitemPrivate: descriptor ---
+(# visible,frameChangedHandled,hilite,borderVisible: @boolean;
+   borderStyle: @integer;
+   left, top, bottom, right: @integer;
+   mouseUpProcessorAddress: @integer;
+   theCursor: ^cursor;
+   
+   hit: ##hitMethod;
+#)
+
+-- GUIENVtextStylePrivate: descriptor --
+(# size,face: @integer;
+   name: @text;
+   fontStruct: @integer;
+#)
+
+--]]

@@ -1,0 +1,3063 @@
+ORIGIN 'guienv_unixprivate';
+MAKE default 'external/makefile';
+OBJFILE default 
+'$/guienv_unix.o' 
+'$/Canvas.o' 
+'$/Button.o' 
+'$/IconButton.o'
+'$/Plane.o'
+'$/ToggleButton.o';
+BODY 'develop';
+INCLUDE '~beta/Xt/v1.8/events';
+INCLUDE '~beta/sysutils/v1.4/cstring';
+INCLUDE 'widget';
+INCLUDE 'guienvattributes';
+INCLUDE 'motifstuff';
+INCLUDE '~beta/sysutils/v1.4/objinterface';
+INCLUDE '../../graphics';
+INCLUDE 'raster_unixbody';
+INCLUDE 'rubberband';
+INCLUDE 'callbacks';
+
+-- lib: attributes --
+putPoint:
+  (# p: @point
+  enter p
+  do '(' -> put;
+     p.h -> putInt;
+     ',' -> put;
+     p.v -> putInt;
+     ')' -> put;
+  #);
+putRectangle:
+  (# r: @rectangle;
+  enter r
+  do r.topLeft -> putPoint;
+     r.bottomRight -> putPoint;
+  #);
+
+-- guienvLib: attributes --
+
+
+
+SetAnswer: external
+  (# value: @Boolean;
+  enter value
+  #);
+
+menubarHeight: (# exit 30 #);
+inittickcount: external
+  (# 
+  #);
+tickcount: external
+  (# ticks: @integer;
+  exit ticks
+  #);
+
+GetTopShadowGC: external
+  (* The widget must be a manager widget or descendant thereof *)
+  (# w: @integer; (* The Manager widget *)
+     gc: @integer; (* The gc that should be used for the top shadow *)
+  enter w
+  exit gc
+  #);
+GetBottomShadowGC: external
+  (* The widget must be a manager widget or descendant thereof *)
+  (# w: @integer; (* The Manager widget *)
+     gc: @integer; (* The gc that should be used for the bottom shadow *)
+  enter w
+  exit gc
+  #);
+_XmDrawShadows: external
+  (# display,drawable,topgc,bottomgc,x,y,width,height,thickness,type: @integer;
+  enter (display,drawable,topgc,bottomgc,x,y,width,height,thickness,type)
+     
+  #);
+-- interfaceObjectLib: attributes --
+
+eventDisabled: booleanValue
+  (# ev: ##theEventHandler.event;
+  enter ev##
+  do (if private.disabledEvents[]//none then
+         false -> value;
+      else
+         ev## -> private.disabledEvents.has -> value;
+     if); 
+  #);
+addDisabledEvent:
+  (# e: ^eventSpec;
+     ev: ##theEventHandler.event;
+  enter ev##
+  do (if private.disabledEvents[]//none then
+        &eventSpecList[] -> private.disabledEvents[];
+     if);
+     (if ev## -> private.disabledEvents.has//false then
+         &eventSpec[] -> e[];
+         ev## -> e.type##;
+         e[] -> private.disabledEvents.append;
+     if);
+  #);
+removeDisabledEvent:
+  (# ev: ##theEventHandler.event;
+  enter ev##
+  do (if private.disabledEvents[]<>none//true then
+         ev## -> private.disabledEvents.remove;
+     if);
+  #);
+
+-- motifMenuLib: attributes --
+
+
+handleOnSelect:
+  (# 
+  do theMenu.theEventHandler.onSelect;
+     private.motifMenuItems.scan
+     (# 
+     do current.handleOnStatus; 
+     #)
+  #);
+setKey:
+  (# position: @integer;
+     key: @char;
+     theMotifMenuItem: ^motifMenuitem;
+     t: @text;
+  enter (position,key)
+  do position -> getItemByNumber -> theMotifMenuItem[];
+     t.clear;
+     'Ctrl-' -> t.putText;
+     key -> t.put;
+     (XmNacceleratorText,t[]) -> theMotifMenuItem.setMotifStringResource;
+     t.clear;
+     'Ctrl<Key>' -> t.putText;
+     key -> t.put;
+     (XmNaccelerator,t[]) -> theMotifMenuItem.setStringResource;
+  #);
+setName:
+  (# position: @integer;
+     name: ^text;
+     theMotifMenuItem: ^motifMenuitem;
+  enter (position,name[])
+  do position -> getItemByNumber -> theMotifMenuItem[];
+     (XmNlabelString,name[]) -> theMotifMenuItem.setMotifStringResource;
+  #);
+setChecked:
+  (# position: @integer;
+     checked: @boolean;
+     theMotifMenuItem: ^motifMenuitem;
+  enter (position,checked)
+  do position -> getItemByNumber -> theMotifMenuItem[];
+     checked -> theMotifMenuItem.checked;
+  #);
+setSubMenu:
+  (# position: @integer;
+     theMotifMenuItem: ^motifMenuitem;
+     theMenu: ^menu;
+  enter(position,theMenu[])
+  do position -> getItemByNumber -> theMotifMenuItem[];
+     (if theMotifMenuItem.theMotifSubmenu[]<>none//true then
+         theMotifMenuItem.theMotifSubmenu.close;
+     if);
+     (if theMenu[]//none then
+         none -> theMotifMenuItem.theMotifSubmenu[];
+         (XmNsubMenuID,0) -> theMotifMenuItem.setIntegerResource;
+      else
+         &motifMenu[] -> theMotifMenuItem.theMotifSubmenu[];
+         theMenu[] -> theMotifMenuItem.theMotifSubMenu.theMenu[];
+         this(motifMenu)[] -> theMotifMenuItem.theMotifSubMenu.owner[];
+         theMotifMenuItem.theMotifSubMenu.open;
+         (XmNsubMenuID,theMotifMenuItem.theMotifSubMenu.widgetID) -> theMotifMenuItem.setIntegerResource;
+     if);
+  #);
+
+-- GUIENVmotifMenuappend: doPart --
+do (# theMotifMenuItem: ^motifMenuitem;
+   do &motifMenuitem[] -> theMotifMenuItem[];
+      theItem[] -> theMotifMenuItem.theMenuitem[];
+      theMotifMenuItem.open;
+   #);
+   
+-- GUIENVmotifMenudelete: doPart --
+do (# theMotifItem: ^motifMenuitem;
+   do l: private.motifMenuItems.scan
+      (# 
+      do (if theItem[]//current.theMenuitem[] then
+             current[] -> theMotifItem[];
+             leave l;
+         if);
+      #);
+      (if theMotifItem[]<>none//true then
+          theMotifItem[] ->  private.motifMenuItems.remove;
+          theMotifItem.close;
+      if);
+   #)
+
+-- GUIENVmotifMenuCreate: doPart --
+do (# name: ^text;
+      args: @argList;
+      cstr: @cstring;
+   do theMenu.name -> name[];
+      tickCount -> name.putInt;
+      (if popup//true then
+          'Ctrl<Btn3Down>' -> cstr.set;
+          (1,XmNmenuPost,cstr) -> args.set;
+          (owner.widgetID,name,args[],1) -> XmCreatePopupMenu -> widgetID;
+          cstr.free;
+       else
+          (owner.widgetID,name,args[],0) -> XmCreatePullDownMenu -> widgetID;
+      if);
+      theMenu.scan
+      (# theMotifMenuitem: ^motifMenuitem;
+      do &motifMenuitem[] -> theMotifMenuitem[];
+         current[] -> theMotifMenuitem.theMenuitem[];
+         theMotifMenuitem.open;
+      #);
+      (widgetID,theMenu.enabled) -> XtSetSensitive;
+      this(motifMenu)[] -> theMenu.private.motifMenus.append;
+   #);
+
+-- GUIENVmotifMenuOpen: doPart --
+do inner open;
+   
+-- GUIENVmotifMenuClose: doPart --
+do private.motifMenuitems.scan
+   (# 
+   do current.close;
+   #);
+   private.motifMenuitems.clear;
+   this(motifMenu)[] -> theMenu.private.motifMenus.remove;
+   widgetID -> XtDestroyWidget;
+   0 -> widgetID; 
+   
+-- GUIENVmotifMenugetNumberOfWidget: doPart --
+do (# inx: @integer;
+   do 0 -> inx;
+      l: private.motifMenuitems.scan
+      (# 
+      do inx + 1 -> inx;
+         (if current.widgetID//widget then
+             inx -> position;
+             leave l
+         if);
+      #);
+      
+   #);
+   
+   
+-- GUIENVmotifMenuPrivate: descriptor --
+(# motifMenuItems: @list
+     (# element::< motifMenuitem;
+        remove:
+          (# e: ^element;
+          enter e[]
+          do e[] -> at -> delete;
+          #);
+     #);
+#)
+
+-- motifMenubarLib: attributes --
+
+cascadeButton: interfaceObject
+  (# theMotifmenu: ^motifMenu;
+     open::<
+       (# create::<
+            (# args: @argList;
+               mstr: @motifString;
+            do theMotifmenu.theMenu.name -> mstr.setText;
+               ('cascadebutton',xmCascadeButtonWidgetClass,this(motifMenubar).widgetID,args[],0) 
+                 -> XtCreateWidget -> widgetID;
+               manage;
+               (cascadingProcessor##, XmNcascadingCallback) -> addCallbackProcessor;
+               (1,XmNlabelString,mstr) -> args.set;
+               (2,XmNsubMenuId,theMotifMenu.widgetID) -> args.set;
+               (widgetID,args[],2) -> XtSetValues;
+              ;
+            #);
+       #);
+     close::<
+       (# 
+       do widgetID -> XtDestroyWidget;
+          0 -> widgetID;
+       #);
+      handleCascading: MotifcallbackSelector
+       (# 
+       do theMotifmenu.handleOnSelect;
+       #);
+     cascadingProcessor: callbackProcessor
+       (# 
+       do &handleCascading[] -> cb[];
+       #);
+  #);
+
+-- GUIENVmotifMenubarappend: doPart --
+do (# theCascadeButton: ^cascadeButton;
+      theMotifMenu: ^motifMenu;
+   do &motifMenu[] -> theMotifMenu[];
+      this(motifMenubar)[] -> theMotifMenu.owner[];
+      theMenu[] -> theMotifMenu.theMenu[];
+      theMotifMenu.open;
+      &cascadeButton[] -> theCascadeButton[];
+      theMotifMenu[] -> theCascadeButton.theMotifMenu[];
+      theCascadeButton.open;
+      theMotifMenu[] -> private.motifMenus.append;
+      theCascadeButton[] -> private.cascadeButtons.append;
+   #);
+
+-- GUIENVmotifMenubardelete: doPart --
+do (# theCascadeButton: ^cascadeButton;
+      theMotifMenu: ^motifMenu;
+   do theMenu[] -> private.motifMenus.findMenu -> theMotifMenu[];
+      theMotifMenu[] -> private.cascadeButtons.findButton -> theCascadeButton[];
+      (if theCascadeButton[]<>none//true then
+          theCascadeButton.close;
+          theCascadeButton[] -> private.cascadeButtons.remove;
+      if);
+      theMotifMenu[] -> private.motifMenus.remove;
+      theMotifMenu.close;
+   #)
+
+-- GUIENVmotifMenubarcreate: doPart --
+do (# args: @argList;
+      theFuncPtr: @integer;
+   do (1,XtNheight,menubarHeight) -> args.set;
+      (theWindow.private.contentsForm.widgetID,'Menubar',args[],1) -> XmCreateMenuBar -> widgetID;
+      (XmNresizeWidth,false) -> setIntegerResource;
+      (XmNresizeHeight,false) -> setIntegerResource;
+      (XmNresizable,true) -> setIntegerResource;
+      widgetID -> XtManageChild;
+   #)
+
+-- GUIENVmotifMenubaropen: doPart --
+do
+   
+-- GUIENVmotifMenubarClose: doPart --
+do private.motifMenus.scan
+   (# 
+   do current.close;
+   #);
+   private.motifMenus.clear;
+   widgetID -> XtDestroyWidget;
+   0 -> widgetID;
+   
+   
+-- GUIENVmotifMenubarprivate: descriptor --
+(# motifmenus: @list
+     (# element::< motifMenu;
+        remove:
+          (# e: ^element;
+          enter e[]
+          do e[] -> at -> delete;
+          #);
+        findMenu:
+          (# theMotifMenu: ^motifMenu;
+             theMenu: ^menu;
+          enter theMenu[]
+          do l: scan
+               (# 
+               do (if current.theMenu[]//theMenu[] then
+                      current[] -> theMotifMenu[];
+                      leave l;
+                  if);
+               #);
+          exit theMotifMenu[]
+          #);
+     #);
+   cascadeButtons: @list
+     (# element::< cascadeButton;
+        remove:
+          (# e: ^element;
+          enter e[]
+          do e[] -> at -> delete;
+          #);
+        findButton:
+          (# theMotifMenu: ^motifMenu;
+             theButton: ^cascadeButton;
+          enter theMotifMenu[]
+          do l: scan
+               (# 
+               do (if current.theMotifMenu[]//theMotifMenu[] then
+                      current[] -> theButton[];
+                      leave l;
+                  if);
+               #);
+          exit theButton[]
+          #);
+     #);
+#)
+
+--- GUIENVterminateBody: descriptor ---
+(#
+do Stop;
+#)
+--- GUIENVsetTheMenubar: descriptor ---
+(# shell: @integer;
+   args: @argList;
+   XtAppCreateShell: external
+     (# name: [1] @char;
+        class: [1] @char;
+        widgetClass: @integer;
+        display: @integer;
+        args: ^argList;
+        nArgs: @integer;
+        newWidget: @integer;
+     enter (name,class,widgetclass,display,args[],nArgs)
+     do callC
+     exit newWidget
+     #);
+do (* (if private.theMenubar[]<>none//true then
+    *        private.theMenubar.destroyMenubar;
+    *    if);
+    *    (1,XtNallowShellResize,true) -> args.set;
+    *    (this(guienv).private.appName,
+    *    this(guienv).private.appClass,
+    *    TopLevelShellWidgetClass,
+    *    display,
+    *    args[],
+    *    1) -> XtAppCreateShell -> shell;
+    *    shell -> themenubar.buildMenubar;
+    *    themenubar[] -> private.theMenubar[];
+    *    (shell,XtGrabNone) -> XtPopup;
+    *)
+   themenubar[] -> private.theMenubar[];
+   
+#)
+--- GUIENVgetTheMenubar: descriptor ---
+(# 
+do private.theMenubar[] -> themenubar[];
+#)
+
+--- GUIENVdoSetUp: descriptor ---
+(# initAppName:
+     (* initializes private.appName to the name of the executed file
+      * with the first letter in uppercase
+      *)
+     (# lastSlash: @integer;
+     do 1 -> arguments -> private.appName[];
+        '/' -> private.appName.findCh(# do inx->lastSlash #);
+        (if lastSlash//0 then else (1,lastSlash)->private.appName.delete if);
+        (1->private.appName.inxGet->ascii.upcase, 1) -> private.appName.inxPut;
+        trace
+        (#
+        do 'initAppName: ' -> putText;
+           private.appName[] -> putLine;
+        #);
+     #);
+   initAppClass:
+     (* initializes private.appClass to the name of the executed file with
+      * the first letter in uppercase. If the first letter i X the second 
+      * letter is also converted to uppercase
+      *)
+     (# lastSlash: @integer;
+     do 1 -> arguments -> private.appClass[];
+        '/' -> private.appClass.findCh(# do inx->lastSlash #);
+        (if lastSlash//0 then else (1,lastSlash)->private.appClass.delete if);
+        (1->private.appClass.inxGet->ascii.upcase, 1) -> private.appClass.inxPut;
+        (if ((1->private.appClass.inxGet)='X') and (private.appClass.length>1)
+         // true then 
+            (2->private.appClass.inxGet->ascii.upcase, 2) -> private.appClass.inxPut;
+        if);
+        trace
+        (#
+        do 'initAppClass: ' -> putText;
+           private.appClass[] -> putLine;
+        #);
+     #);
+   initMenubar:
+     (# theBar: ^menubar;
+     do &menubarType[] -> theBar[];
+        (if theBar.struc = menubar##//false then
+            theBar.open;
+            theBar[] -> applicationMenubar;
+        if);
+     #);
+   initCursors:
+     (# 
+     do (display,XC_left_ptr) -> XCreateFontCursor -> cursors.arrow.private.id;
+        (display,XC_xterm) -> XCreateFontCursor -> cursors.ibeam.private.id;
+        (display,XC_watch) -> XCreateFontCursor -> cursors.watch.private.id;
+        (display,XC_crosshair) -> XCreateFontCursor -> cursors.cross.private.id;
+        (display,XC_cross) -> XCreateFontCursor -> cursors.plus.private.id;
+     #);
+   initBitmaps:
+     (# bm: ^bitmap;
+        getblack: external
+          (# dpy,root: @integer;
+             pix: @integer;
+          enter (dpy,root)
+          exit pix
+          #);
+        getwhite: external
+          (# dpy,root: @integer;
+             pix: @integer;
+          enter (dpy,root)
+          exit pix
+          #);
+        getgray: external
+          (# dpy,root: @integer;
+             pix: @integer;
+          enter (dpy,root)
+          exit pix
+          #);
+        getlightgray: external
+          (# dpy,root: @integer;
+             pix: @integer;
+          enter (dpy,root)
+          exit pix
+          #);
+        getdarkgray: external
+          (# dpy,root: @integer;
+             pix: @integer;
+          enter (dpy,root)
+          exit pix
+          #);
+        root: @integer;
+     do display -> XDefaultRootWindow -> root;
+        
+        &bitmap[] -> bm[];
+        (display,root) -> getwhite -> bm.rasterPrivatePart.xpixmap;
+        bm[] -> patterns.white[];
+        
+        &bitmap[] -> bm[];
+        (display,root) -> getblack -> bm.rasterPrivatePart.xpixmap;
+        bm[] -> patterns.black[];
+        
+        &bitmap[] -> bm[];
+        (display,root) -> getlightgray -> bm.rasterPrivatePart.xpixmap;
+        bm[] -> patterns.ltgray[];
+        
+        &bitmap[] -> bm[];
+        (display,root) -> getgray -> bm.rasterPrivatePart.xpixmap;
+        bm[] -> patterns.gray[];
+        
+        &bitmap[] -> bm[];
+        (display,root) -> getdarkgray -> bm.rasterPrivatePart.xpixmap;
+        bm[] -> patterns.dkgray[];
+     #);
+   XtOpenDisplay: external
+     (# appContext: @integer;
+        displayString: @integer;
+        name,class: [1]@char;
+        options: ^cStruct; 
+        nOptions: @integer;
+        argcaddr,argvaddr: @integer;
+        display: @integer
+     enter (appContext,displayString,name,class,options[],nOptions,argcaddr,argvaddr)
+     do callC
+     exit display
+     #);
+   XtAppSetFallbackResources: external
+     (# appcontext: @integer;
+        resources: @integer;
+     enter (appcontext,resources)
+     #);
+   argv,argc: @integer;
+   
+   (* bifrost begin *)
+   initDeviceInfo: 
+     (# 
+     do 
+        (if debugGraphic //true then 'InitDevice ... ' -> puttext if);
+        private.display -> XDefaultScreenOfDisplay 
+          -> private.defaultScreen;
+        private.display -> XDefaultScreen
+          -> private.defaultScreenNumber;
+        private.defaultScreen -> XDefaultDepthOfScreen
+          -> private.defaultdepth;
+        private.defaultScreen -> XDefaultVisualOfScreen 
+          -> private.defaultVisual;
+        private.defaultScreen -> XRootWindowOfScreen
+          -> private.defaultDrawable; 
+        
+        private.defaultScreen -> XDefaultColorMapOfScreen
+          -> private.xcolormap;
+        private.defaultScreen -> XBlackPixelOfScreen
+          -> private.blackpixelvalue;
+        private.defaultScreen -> XWhitePixelOfScreen
+          -> private.whitepixelvalue;
+        
+        (private.defaultScreen->XHeightOfScreen) div
+         ((private.display,private.defaultScreenNumber)-> XDisplayHeightMM)
+          -> Private.pixelsPerMillimeterHeight;
+        
+        (private.defaultScreen->XWidthOfScreen) div
+        ((private.display, private.defaultScreenNumber) -> XDisplayWidthMM)
+          -> Private.pixelsPerMillimeterWidth;
+        
+        (if debugGraphic//true then 'done' -> putline if);
+     #);
+   initBifrost:
+     (# 
+     do true -> displaywarnings;
+        bifrostprivate.PH.init;
+     #);
+   (* bifrost end *)
+do inittickcount;
+   private.theXtlib.init;
+   initAppName;
+   initAppClass;
+   private.fallBackResources.init;
+   private.options.init;
+   &deviceInfo[] -> private.theDeviceInfo[] -> objectPool.put;
+   XtToolkitInitialize;
+   XtCreateApplicationContext -> private.appCon;
+   (private.appCon,private.fallBackResources.address) -> XtAppSetFallbackResources;
+   (private.appCon,0,
+   private.appName,private.appClass,private.options[],0,getargc,getargv) 
+     -> XtOpenDisplay -> private.display;
+   (if private.display//0 then
+       'Cannot open display' -> putLine;
+       stop;
+    else
+       private.display -> private.theDeviceInfo.init;
+       initCursors;
+       initBitmaps;
+       initMenubar;
+       initDeviceInfo; (* bifrost *)
+       initBifrost; (* bifrost *)
+       (* SBRANDT 19/4/94: To avoid doSetUp from being called twice. *)
+       true -> setupDone;
+       (* private.handleIdle.add; *)
+   if);
+#)
+
+-- GUIENVdoPart: descriptor --
+(# 
+do 
+   (* SBRANDT 19/4/94: To avoid doSetUp from being called twice. *)
+   (if setupDone //false then 
+       doSetUp;
+   if);
+   onStartApplication;
+   inner guienv;
+   private.appcon -> XtAppMainLoop;
+   (* the control is transferred to xtoolkit
+    * the rest is handled via callbacks
+    *)
+#)
+
+--- GUIENVmouseDownDelay: descriptor ---
+(# ticks: @integer;
+   start: @integer;
+do tickCount -> start;
+   l:
+     (if mouse.buttonState//buttonState then
+         tickCount -> ticks;
+         (if (ticks - start) < period//true then
+             restart l;
+          else
+             inner delay;
+         if);
+     if);
+#)
+
+-- GUIENVinterfaceObjectEvent: descriptor --
+(# 
+do (if this(event).struc -> eventDisabled//false then
+       (if private.beforeActions[]<>None//true then
+           private.beforeActions.scan
+           (# 
+           do (if (current.eventType## >= this(event).struc)//true then
+                  this(event)[] -> current;
+              if);
+           #);
+       if);
+       inner event;
+       (if private.afterActions[]<>None//true then
+           private.afterActions.scan
+           (# 
+           do (if (current.eventType## >= this(event).struc)//true then
+                  this(event)[] -> current;
+              if);
+           #);
+       if);
+   if);
+#)
+
+-- GUIENVbasicEventShiftKey: descriptor --
+(#
+do (((this(guienv).private.state,shiftMask) -> tos'%and')=shiftMask) -> value;
+#)
+
+-- GUIENVbasicEventAltKey: descriptor --
+(#
+do (* Not Implemented !!! *)
+#)
+
+-- GUIENVbasicEventMetaKey: descriptor --
+
+(#  
+do (((this(guienv).private.state,mod1Mask) -> tos'%and')=mod1Mask) -> value;
+#)
+
+-- GUIENVbasicEventControlKey: descriptor --
+
+(#
+do (((this(guienv).private.state,controlMask) -> tos'%and')=controlMask) -> value;
+#)
+
+-- GUIENVbasicEventButtonState: descriptor --
+
+(#
+do this(guienv).private.detail -> value;
+#)
+
+-- GUIENVbasicEventWhen: descriptor --
+
+(#
+do this(guienv).private.time -> value;
+#)
+
+-- GUIENVbasicEventGlobalPosition: descriptor --
+
+(#
+do (this(guienv).private.x_root, this(guienv).private.y_root) -> p;
+#)
+
+-- GUIENVbasicEventLocalPosition: descriptor --
+
+(#
+do (this(guienv).private.x, this(guienv).private.y) -> p;
+#)
+
+-- GUIENVmouseEventDoubleClick: descriptor --
+(# 
+do this(guienv).private.doubleClick -> value;
+#)
+
+-- GUIENVkeyEventCh: descriptor --
+(#   
+do this(guienv).private.theChar -> theChar;  
+#)
+
+-- GUIENVinterfaceObjectPrependAction: descriptor --
+(# 
+do (if private.beforeActions[]//none then
+       &actionList[] -> private.beforeActions[];
+   if);
+   (if theAction[] -> private.beforeActions.member//false then
+       theAction[] -> private.beforeActions.prepend;
+   if);
+#)
+
+-- GUIENVinterfaceObjectAppendAction: descriptor --
+(# 
+do (if private.afterActions[]//none then
+       &actionList[] -> private.afterActions[];
+   if);
+   (if theAction[] -> private.afterActions.member//false then
+       theAction[] -> private.afterActions.append;
+   if);
+#)
+
+-- GUIENVinterfaceObjectDeleteAction: descriptor --
+(# 
+do 
+   (if private.beforeActions[]<>none//true then
+       theAction[] -> private.beforeActions.delete;
+   if);
+   (if private.afterActions[]<>none//true then
+       theAction[] -> private.afterActions.delete;
+   if);
+#)
+
+
+--- GUIENVinterfaceObjectOpen: descriptor ---
+(# openTwiceException: exception
+     (# 
+     do 'Attempt to open interfaceobject twice' -> msg;
+     #);
+do  (if private.isOpen//false then
+        true -> private.isOpen;
+        create;
+        inner open;
+     else
+        openTwiceException;
+    if);
+#)
+
+-- GUIENVintefaceObjectCreate: descriptor --
+(#
+do inner create;
+#)
+
+--- GUIENVinterfaceObjectClose: descriptor ---
+assertOpen
+(#
+do inner close;
+   false -> private.isOpen;
+#)
+--- GUIENVenableEventType: descriptor ---
+(#
+do ev## -> removeDisabledEvent;
+#)
+--- GUIENVdisableEventType: descriptor ---
+(# 
+do ev## -> addDisabledEvent;
+#)
+
+
+--- GUIENVInterfaceObjectPutLayout: Descriptor ---
+(# 
+do
+#)
+--- GUIENVinterfaceObjectGetLayout: descriptor ---
+(# 
+do
+#)
+--- GUIENVinterfaceObjectException: descriptor ---
+(# 
+do 'interfaceobject-exception for ' -> msg.putText;
+   THIS(interfaceObject)[] -> getPatternName -> msg.putText;
+   msg.newline;
+   inner interfaceObjectException;
+#)
+
+-- GUIENVnotOpenedException: descriptor --
+(# 
+do 'attempt to use before calling open' -> msg.putLine;
+   inner
+#)
+
+-- GUIENVseparatorSetStyle: doPart --
+do (# xmStyle: @integer;
+   do value -> private.style;
+      (if value
+       //separatorStyles.singleLine then XmSINGLE_LINE -> xmStyle;
+       //separatorStyles.doubleLine then XmDOUBLE_LINE -> xmStyle;
+       //separatorStyles.singleDashedLine then XmSINGLE_DASHED_LINE -> xmStyle;
+       //separatorStyles.doubleDashedLine then XmDOUBLE_DASHED_LINE -> xmStyle;
+       //separatorStyles.etchedIn then XmSHADOW_ETCHED_IN -> xmStyle;
+       //separatorStyles.etchedOut then XmSHADOW_ETCHED_OUT -> xmStyle;
+      if);
+      (XmNseparatorType,xmStyle) -> setIntegerResource;
+   #)
+
+-- GUIENVseparatorGetStyle: doPart --
+do private.style -> value;
+
+-- GUIENVwindowseparatorCreate: doPart --
+do (# args: @argList;
+      width,height: @integer;
+   do father.size -> (width,height);
+      (if vertical//true then
+          (1,XmNorientation,XmVERTICAL) -> args.set;
+          (2,XtNheight,height) -> args.set;
+       else
+          (1,XmNorientation,XmHORIZONTAL) -> args.set;
+          (2,XtNwidth,width) -> args.set;
+      if);
+      (XmSeparatorWidgetClass,father.widgetID,'Separator',args[],2) -> createManagedArgs;
+      separatorStyles.etchedIn -> private.style;
+   #);
+
+-- GUIENVwindowseparatorOpen: doPart --
+do inner open;
+
+-- GUIENVwindowseparatorClose: doPart --
+do inner close;
+
+-- GUIENVseparatorPutLayout: doPart --
+do
+
+-- GUIENVseparatorGetLayout: doPart --
+do
+
+-- GUIENVwindowseparatorPrivate: descriptor --
+(# style: @integer;
+#)
+
+
+
+-- canvasLib: attributes --
+appendChild:
+  (# theWindowitem: ^windowitem;
+  enter theWindowitem[]
+  do theWindowitem[] -> private.children.append;
+  #);
+deleteChild:
+  (# theWindowitem: ^windowitem;
+  enter theWindowitem[]
+  do theWindowitem[] -> private.children.at -> private.children.delete;
+  #);
+handleChildframeChanged:
+  (# oldFrame,newFrame: @rectangle;
+  enter (oldFrame,newFrame)
+  do (oldFrame,newFrame) -> theEventHandler.onChildframeChanged;
+  #);
+
+-- GUIENVcanvasSelectionAdd: descriptor --
+(#
+do (if theWindowitem[] -> private.selection.has//false then
+       theWindowitem[] -> private.selection.append;
+       true -> theWindowitem.hilite;
+   if);
+#)
+
+-- GUIENVcanvasSelectionSet: descriptor --
+(#
+do private.selection.scan
+   (# 
+   do false -> current.hilite;
+      current[] -> private.selection.at -> private.selection.delete;
+   #);
+   theWindowitem[] -> private.selection.append;
+   true -> theWindowitem.hilite;
+#)
+
+-- GUIENVcanvasSelectionRemove: descriptor --
+(#
+do (if theWindowitem[] -> private.selection.has//true then
+       theWindowitem[] -> private.selection.at -> private.selection.delete;
+       false -> theWindowitem.hilite;
+   if);
+#)
+
+-- GUIENVcanvasSelectionEmpty: descriptor --
+(#
+do private.selection.empty -> value;
+#)
+
+-- GUIENVcanvasSelectionScan: descriptor --
+(#
+do private.selection.scan
+   (# 
+   do current[] -> this(scan).current[];
+      inner scan;
+   #);
+#)
+
+-- GUIENVcanvasSelectionClear: descriptor --
+(#
+do private.selection.scan
+   (# 
+   do false -> current.hilite;
+      current[] -> private.selection.at -> private.selection.delete;
+   #);
+#)
+
+
+-- GUIENVcanvasScan: descriptor --
+(# 
+do private.children.scan
+   (# 
+   do current[] -> this(scan).current[];
+      inner scan;
+   #);
+#)
+
+-- GUIENVcanvasCreate: descriptor --
+(# args: @argList;
+do inner create;
+   (if widgetID//0 then
+       (XbPlaneWidgetClass,father.widgetID) -> createSimple;
+   if);
+#)
+
+--- GUIENVcanvasOpen: descriptor ---
+(#
+do inner open;
+#)
+
+--- GUIENVcanvasClose: descriptor ---
+(# 
+do inner close;
+   private.children.scan
+   (# 
+   do current.close;
+   #);
+#)
+-- GUIENVcanvasPutLayout: doPart --
+do
+
+-- GUIENVcanvasGetLayout: doPart --
+do
+
+
+
+-- GUIENVcanvasOnActivate: descriptor --
+(# 
+do private.children.scan
+   (# 
+   do current.theEventHandler.onActivate;
+   #);
+   inner onActivate;
+#)
+
+-- GUIENVcanvasOnDeactivate: descriptor --
+(# 
+do private.children.scan
+   (# 
+   do current.theEventHandler.onDeactivate;
+   #);
+   inner onDeactivate;
+#)
+
+--- GUIENVcanvasPrintOpenPage: descriptor ---
+(# 
+do (* Not Implemented !!! *)
+#)
+
+-- GUIENVcanvasOnFrameChanged: descriptor --
+(#
+do update;
+   inner onFrameChanged;
+#)
+
+-- GUIENVcanvasPrivate: descriptor --
+(# children: @list
+     (# element::< windowitem;
+        scanNonWidgets: scan
+          (# where::<
+               (# 
+               do (current.widgetID = 0) -> value;
+               #);
+          do inner;
+          #);
+        scanNonWidgetsReverse: scanReverse
+          (# where::<
+               (# 
+               do (current.widgetID = 0) -> value;
+               #);
+          do inner;
+          #)
+     #);
+   selection: @list
+     (# 
+        element::< windowitem;
+     #);
+#)
+-- GUIENVcanvasOnMouseDown: descriptor --
+(# obj: ^windowitem;
+do l: private.children.scanNonWidgetsReverse
+     (# 
+     do (if localPosition -> current.hit//true then
+            current[] -> obj[];
+            leave l;
+        if);
+     #);
+   (if obj[]//none then
+       inner onMouseDown;
+    else
+       obj.theEventHandler.onMouseDown;
+   if);
+#)
+
+-- GUIENVcanvasOnRefresh: descriptor --
+(#
+do inner onRefresh;
+   private.children.scanNonWidgets
+   (# 
+   do current.theEventHandler.onRefresh;
+   #);
+#)
+
+-- GUIENVcanvasOnMouseUp: descriptor --
+(#
+do inner onMouseUp;
+#)
+
+--- GUIENVclipBoardHasText: descriptor ---
+(# do
+#)
+--- GUIENVclipBoardSetText: descriptor ---
+(# do
+#)
+--- GUIENVclipBoardGetText: descriptor ---
+(# do
+#)
+--- GUIENVclipBoardClearContents: descriptor ---
+(# do
+#)
+--- GUIENVcursorPrivate: descriptor ---
+(# id: @integer;
+#)
+
+-- menubarLib: attributes --
+buildMenubar: 
+  (# fatherWidget: @integer;
+     
+  enter fatherWidget
+  do
+  #);
+destroyMenubar: 
+  (# 
+  do 
+  #);
+
+-- menubarEntryLib: attributes --
+
+entryHandleCasading: motifCallbackSelector
+  (# subMenuId: @integer;
+     theMenu: ^menu;
+     args: @argList;
+  do (1, XmNsubMenuId, 0) -> args.set;
+     (cascadeButtonWidget, args[],1) -> XtGetValues;
+     1 -> args.get -> subMenuId;
+      subMenuId -> private.menus.findById -> theMenu[];
+      (if theMenu[]//none then
+          trace
+          (# 
+          do 'handleCascading: theMenu was not found in menu list' -> putLine;
+          #);
+       else
+          theMenu.handleOnSelect;
+      if);
+ #);
+entryCascadingProcessor: callbackProcessor
+  (# 
+  do &entryHandleCasading[] -> cb[];
+  #);
+
+(* -- GUIENVmenuBarEntryHandlCascading: doPart --
+do (# subMenuId: @widget;
+      theMenu: ^menu;
+   do
+      XmNsubMenuId -> getIntegerResource -> subMenuID;
+      subMenuId -> private.menus.findById -> theMenu[];
+      (if theMenu[]//none then
+          trace
+          (# 
+          do 'handleCascading: theMenu was not found in menu list' -> putLine;
+          #);
+       else
+          theMenu.handleOnSelect;
+      if);
+ #);
+ *)
+-- GUIENVmenubarEntryDoBuildEntry: doPart --
+do (#args: @argList;
+      mstr: @motifString;
+   do 
+      widgetID -> theMenu.buildMenu;
+      theMenu.name -> mstr.setText;
+      ('cascadebutton',xmCascadeButtonWidgetClass,widgetID,args[],0) 
+        -> XtCreateWidget -> cascadeButtonWidget;
+      cascadeButtonWidget -> XtManageChild;
+      (entryCascadingProcessor##, XmNcascadingCallback, cascadeButtonWidget) -> addCallbackProcessorForSubWidget;
+      (1,XmNlabelString,mstr) -> args.set;
+      (2,XmNsubMenuId,theMenu.widgetID) -> args.set;
+      (cascadeButtonWidget,args[],2) -> XtSetValues;
+      this(menubar)[] -> theMenu.private.theMenubar[];
+      this(menubarEntry)[] -> theMenu.private.theEntry[];
+   #);
+   
+-- GUIENVmenubarEntrydestroyEntry: doPart --
+do  (# args: @argList;
+    do
+       (1,XmNsubMenuId,0) -> args.set;
+       (cascadeButtonWidget,args[],1) -> XtSetValues;
+       theMenu.destroyMenu;
+       cascadeButtonWidget -> XtDestroyWidget;
+       0 -> cascadeButtonWidget;
+    #);
+-- GUIENVmenubarEntryRebuildEntry: doPart --
+do (# args: @argList;
+   do
+      theMenu.destroyMenu;
+      widgetID -> theMenu.buildMenu;
+      (1,XmNsubMenuId,theMenu.widgetID) -> args.set;
+      (cascadeButtonWidget,args[],1) -> XtSetValues;
+   #);
+-- GUIENVmenubarPutLayout: doPart --
+do
+
+-- GUIENVmenubarGetLayout: doPart --
+do
+
+
+--- GUIENVmenubarPrivate: descriptor ---
+(# menus: @list
+     (# element::< menu;
+        findById:
+          (# widgetId: @integer;
+             theMenu: ^menu;
+          enter widgetId
+          do l: scan
+             (# 
+             do (if current.widgetID//widgetId then
+                    current[] -> theMenu[];
+                    leave l;
+                if);
+             #);
+          exit theMenu[]
+          #);
+     #);
+   windows: @list
+     (# 
+        element::< window;
+     #);
+#)
+--- GUIENVmenubarAppend: descriptor ---
+assertOpen
+(#
+do (if theMenu[] -> private.menus.has//false then
+       theMenu[] -> private.menus.append;
+       private.windows.scan
+       (# 
+       do theMenu[] -> current.private.theMotifMenubar.append;
+       #);
+   if)
+#)
+
+--- GUIENVmenubarDelete: descriptor ---
+assertOpen
+(#
+do (if theMenu[] -> private.menus.has//true then
+       theMenu[] -> private.menus.at -> private.menus.delete;
+       private.windows.scan
+       (# 
+       do theMenu[] -> current.private.theMotifMenubar.delete;
+       #);
+   if);
+#)
+--- GUIENVmenubarClear: descriptor ---
+assertOpen
+(# 
+do private.menus.scan
+   (# 
+   do current[] -> delete;
+   #);
+#)
+--- GUIENVmenubarAppendMenubar: descriptor ---
+assertOpen
+(# 
+do theMenubar.scan
+   (# 
+   do current[] -> append;
+   #);
+#)
+
+--- GUIENVmenubarReplaceMenubar: descriptor ---
+assertOpen
+(# 
+do theMenubar[] -> deleteMenubar;
+   replacementMenubar[] -> appendMenubar;
+#)
+--- GUIENVmenubarDeleteMenubar: descriptor ---
+assertOpen
+(#
+do theMenubar.scan
+   (# 
+   do current[] -> delete;
+   #);
+#)
+
+--- GUIENVmenubarScan: descriptor ---
+assertOpen
+(#
+do private.menus.scan
+   (# 
+   do current[] -> THIS(scan).current[];
+      inner scan;
+   #);
+#)
+
+-- GUIENVmenubarOpen: descriptor --
+(# 
+do private.menus.init;
+   inner open;
+#)
+
+-- GUIENVmenubarCreate: descriptor --
+(#
+do inner create; 
+#)
+
+-- GUIENVmenubarClose: descriptor --
+
+(# 
+do inner Close;
+   clear;
+   (* widgetID -> XtParent -> XtDestroyWidget;
+   0 -> widgetID; *)
+#)
+
+
+-- GUIENVmenuBuildMenu: descriptor --
+(#(*  theFuncPtr: @integer;
+   args: @argList;
+   name: ^text;
+do (if widgetID//0 then
+       this(Menu)[] -> getPatternName -> name[];
+       tickCount -> name.putInt;
+       (fatherWidget,name,args[],0) -> XmCreatePullDownMenu -> widgetID;
+       private.menuitems.iterate
+       (#
+       do current.elm.buildItem;
+       #);
+       (widgetID,private.enabled) -> XtSetSensitive;
+    else
+       trace:
+         (# 
+         do 'buildMenu: the menu is already build' -> putLine;
+         #);
+   if); *)
+#)
+
+-- GUIENVmenuBuildPopupmenu: descriptor --
+
+(# (* theFuncPtr: @integer;
+   args: @argList;
+   name: ^text;
+do (if widgetID//0 then
+       this(Menu)[] -> getPatternName -> name[];
+       tickCount -> name.putInt;
+       (fatherWidget,name,args[],0) -> XmCreatePopupMenu -> widgetID;
+       private.menuitems.iterate
+       (#
+       do current.elm.buildItem;
+       #);
+       (widgetID,private.enabled) -> XtSetSensitive;
+    else
+       trace:
+         (# 
+         do 'buildMenu: the menu is already build' -> putLine;
+         #);
+   if); *)
+#)
+
+-- GUIENVmenuDestroyMenu: descriptor --
+
+(#(*  t: @text;
+do (if widgetID//0 then
+       trace
+       (# 
+       do 'destroyMenu: the menu is not build' -> putLine;
+       #);
+    else
+       private.menuitems.scan
+       (# 
+       do current.destroyItem;
+       #);
+       widgetID  -> XtDestroyWidget;
+       0 -> widgetID;
+   if);  *)
+#)
+
+
+-- GUIENVmenuSetName: descriptor --
+assertOpen
+(# 
+do theName.copy -> private.name[];
+#)
+
+-- GUIENVmenuGetName: descriptor --
+assertOpen
+(#
+do (if private.name[]//none then
+       &text[] -> theName[];
+    else
+       private.name.copy -> theName[];
+   if);
+#)
+
+-- GUIENVseparatorCreate: descriptor --
+(#
+do inner create
+#)
+
+-- GUIENVseparatorOpen: descriptor -- 
+(# 
+do inner open;   
+#)
+
+-- GUIENVseparatorClose: descriptor --
+(# 
+do inner close;
+#)
+
+--- GUIENVmenuAppend: descriptor ---
+assertOpen
+(#
+do (if theMenuItem[] -> private.menuitems.has//false then
+       theMenuItem[] -> private.menuitems.append;
+       private.motifMenus.scan
+       (# 
+       do theMenuItem[] -> current.append;
+       #);
+   if);
+#)
+
+--- GUIENVmenuDelete: descriptor ---
+assertOpen
+(# 
+do (if theMenuitem[] -> private.menuitems.has//true then
+       theMenuItem[] -> private.menuitems.at -> private.menuitems.delete;
+       private.motifMenus.scan
+       (# 
+       do theMenuItem[] -> current.delete;
+       #);
+    else
+       trace
+       (# 
+       do 'menu.delete: the menuitem is not in the menu' -> putLine;
+       #);
+   if);
+#)
+--- GUIENVmenuScan: descriptor ---
+assertOpen
+(#
+do private.menuitems.scan
+   (# 
+   do current[] -> THIS(scan).current[];
+      inner scan;
+   #);
+#)
+--- GUIENVmenuClear: descriptor ---
+assertOpen
+(# 
+do scan
+   (# 
+   do current[] -> delete;
+   #)
+#)
+--- GUIENVmenuNoOfMenuitems: descriptor ---
+assertOpen
+(#
+do private.menuitems.size -> value;
+#)
+
+--- GUIENVmenuGetMenuItemByNumber: descriptor ---
+assertOpen
+(# count: @integer;
+do 0 -> count;
+   l: private.menuitems.iterate
+   (# 
+   do count + 1 -> count;
+      (if count//number then
+          current.elm[] -> theMenuItem[];
+          leave l;
+      if);
+   #);
+#)
+--- GUIENVmenuEnable: descriptor ---
+assertOpen
+(#
+do true -> private.enabled;
+   (if widgetID//0 then
+    else
+       (widgetID,True) -> XtSetSensitive;
+       
+   if);
+#)
+--- GUIENVmenuDisable: descriptor ---
+assertOpen
+(#
+do false -> private.enabled;
+   (if widgetID//0 then
+    else
+       (widgetID,False) -> XtSetSensitive;
+   if);
+#)
+--- GUIENVmenuEnabled: descriptor ---
+assertOpen
+(#
+do private.enabled -> value;
+#)
+
+--- GUIENVmenuOpen: descriptor ---
+(#
+do this(Menu)[] -> getPatternName -> private.name[];
+   true -> private.enabled;
+   inner open;
+#)
+
+-- GUIENVmenuCreate: descriptor --
+(#
+do inner create;
+#)
+
+--- GUIENVmenuClose: descriptor ---
+(#
+do inner close;
+#)
+-- GUIENVmenuPutLayout: doPart --
+do
+
+-- GUIENVmenuGetLayout: doPart --
+do
+
+
+--- GUIENVmenuPopUp: descriptor ---
+assertOpen
+(# menuShell: @widget;
+   XtMoveWidget: external
+     (# w,x,y: @integer;
+     enter (w,x,y)
+     #);
+   id: @integer;
+   x_root,y_root: @shortRef;
+   popupMenu: @motifMenu
+     (# handleUnmap: @unMapEventSelector
+          (# 
+          do close;
+          #);
+        open::<
+          (# 
+          do (* XStructureNotifyMask -> handleUnmap.append; *)
+          #);
+     #);
+   theItem: ^popupMenu.motifMenuItem;
+do popupIn[] -> popupMenu.owner[];
+   this(menu)[] -> popupMenu.theMenu[];
+   true -> popupMenu.popup;
+   popupMenu.open;
+   popupMenu.handleOnSelect;
+   popupIn.widgetID -> id;
+   (id,popupAt.h,popupAt.v,x_root[],y_root[]) -> XtTranslateCoords;
+   
+   popupWith -> popupMenu.getItemByNumber -> theItem[];
+   (if theItem[]//None then
+    else
+       x_root - (XtNx -> theItem.getIntegerResource) - 5 -> x_root;
+       y_root - (XtNy -> theItem.getIntegerResource) - 5 -> y_root;
+   if);
+   
+   (popupMenu.widgetID,x_root,y_root) -> XtMoveWidget;
+   popupMenu.widgetID -> XtManageChild;
+#)
+
+
+-- GUIENVactionOnStatus: descriptor --
+(#
+do true -> value;
+   inner onStatus;
+#)
+
+(*
+ * menuitem
+ *)
+
+
+
+
+-- GUIENVmenuItemDoExpose: doPart --
+do
+
+--- GUIENVmenuItemSetKey: descriptor ---
+assertOpen
+(# t: @text;
+do c -> private.key;
+   this(menu).private.motifMenus.scan
+   (# 
+   do (position,c) -> current.setKey;
+   #);
+   
+#)
+--- GUIENVmenuItemGetKey: descriptor ---
+assertOpen
+(#
+do private.key -> c;
+#)
+
+--- GUIENVmenuItemSetName: descriptor ---
+assertOpen
+(# 
+do t.copy -> private.name[];
+   (* this(menu).private.motifMenus.scan
+    *    (# 
+    *    do (position,t[]) -> current.setName;
+    *    #);
+    *)
+   scanMotifMenuItems
+   (# 
+   do (XmNlabelString,t[]) -> current.setMotifStringResource;
+   #);
+#)
+
+--- GUIENVmenuItemGetName: descriptor ---
+assertOpen
+(# 
+do private.name.copy -> t[];
+#)
+
+-- UIENmenuitemsSetChecked: descriptor --
+assertOpen
+(#
+do checked -> private.checked;
+   this(menu).private.motifMenus.scan
+   (# 
+   do (position,checked) -> current.setChecked;
+   #);
+#)
+-- GUIENVmenuitemGetChecked: descriptor --
+assertOpen
+(# 
+do private.checked -> checked;
+   
+#)
+
+--- GUIENVsetSubMenu: descriptor ---
+assertOpen
+(# 
+do (* (if private.theSubMenu[]<>theMenu[]//true then
+    *        (if widgetID//0 then
+    *            theMenu[] -> private.theSubMenu[];
+    *         else
+    *            (if private.theSubMenu[]<>none//true then
+    *                private.theSubMenu.destroyMenu;
+    *            if);
+    *            theMenu[] -> private.theSubMenu[];
+    *            this(menu).rebuildItems;
+    *            {* (if private.theSubMenu[]//none then
+    *             *            position -> thePosition;
+    *             *            destroyItem;
+    *             *            theMenu[] -> private.theSubMenu[];
+    *             *            thePosition - 1 -> buildItem;
+    *             *         else
+    *             *            (XmNsubMenuID,0) -> setIntegerResource;
+    *             *            private.theSubMenu.destroyMenu;
+    *             *            (if theMenu[]<>none//true then
+    *             *                this(menu).widgetID -> theMenu.buildMenu;
+    *             *                (XmNsubMenuID,theMenu.widgetID) -> setIntegerResource;
+    *             *            if);
+    *             *            theMenu[] -> private.theSubMenu[];
+    *             *        if);
+    *             *}
+    *        if);
+    *    if)
+    *)
+   (if theMenu[]<>private.theSubMenu[]//true then
+       theMenu[] -> private.theSubMenu[];
+       this(menu).private.motifMenus.scan
+       (# 
+       do (position,theMenu[]) -> current.setSubMenu;
+       #);
+   if);
+#)
+--- GUIENVgetSubMenu: descriptor ---
+assertOpen
+(# 
+do private.theSubMenu[] -> theMenu[];
+#)
+--- GUIENVmenuItemPosition: descriptor ---
+assertOpen
+(# count: @integer;
+do l: scan
+   (# 
+   do count + 1 -> count;
+      (if THIS(menuitem)[]//current[] then
+          leave l;
+      if);
+   #);
+   count -> value;
+   trace
+   (# 
+   do (if count//0 then
+          'menuitem.position: the menuitem was not found in the menu' -> putLine;
+      if);
+   #);
+#)
+
+-- GUIENVmenuitemCreate: descriptor --
+(# 
+do inner create;
+#)
+
+-- GUIENVmenuitemOpen: descriptor --
+(# 
+do this(menuitem)[] -> getPatternName -> private.name[];
+   inner open;
+#)
+
+-- GUIENVmenuitemPutLayout: doPart --
+do
+
+-- GUIENVmenuitemGetLayout: doPart --
+do
+
+
+
+--- GUIENVmenuItemOnStatus: descriptor ---
+(# 
+do true -> value;
+   inner onStatus;
+#)
+
+--- GUIENVmenuItemAttach: descriptor ---
+assertOpen
+(#
+do (if theAction[]//none then
+    else
+       none -> theAction.theMenuitem[];
+   if);
+   anAction[] -> theAction[];
+   (if theAction[]//none then
+    else
+       THIS(dynamicMenuitem)[] -> theAction.theMenuitem[];
+   if);
+#)
+--- GUIENVmenuItemDetach: descriptor ---
+assertOpen
+(# 
+do (if theAction[]//none then
+    else
+       none -> theAction.theMenuitem[];
+   if);
+   none -> theAction[];
+#)
+--- GUIENVdynamicMenuItemOnStatus: descriptor ---
+(# 
+do (if theAction[]//none then
+       false -> value;
+    else
+       theAction.onStatus -> value;
+   if);
+#)
+--- GUIENVdynamicMenuItemOnSelect: descriptor ---
+(# 
+do (if theAction[]//none then
+    else
+       theAction.onSelect;
+   if);
+#)
+
+
+--- GUIENVmousePosition: descriptor ---
+(# info: ^mouseInfo;
+do(*    *  private.trackWindowId -> getMouseInfo -> info[];
+   *)
+   
+#)
+
+--- GUIENVmouseGlobalPosition: descriptor ---
+(# info: ^mouseInfo;
+do display -> XDefaultRootWindow -> getMouseInfo -> info[];
+   info.global -> pt;
+#)
+
+-- GUIENVmouseButtonState: descriptor --
+(# info: ^mouseInfo;
+do display -> XDefaultRootWindow -> getMouseInfo -> info[];
+   info.button -> value;
+#)
+
+--- GUIENVmouseTheCursorSet: descriptor ---
+(# cursorID: @integer;
+do (if theCur[]//none then
+       0 -> cursorID;
+    else
+       theCur.private.ID -> cursorID;
+   if);
+   this(guienv).private.windows.scan
+   (# displayID,windowID: @integer;
+   do current.displayID -> displayID;
+      current.windowID -> windowID;
+      (displayID,windowID,cursorID) -> XDefineCursor;
+      current.widgetID -> XmUpdateDisplay;
+   #);
+   theCur[] -> private.busyCursor[]
+#)
+
+--- GUIENVmouseTheCursorGet: descriptor ---
+(# 
+do private.busyCursor[] -> theCur[];
+#)
+
+--- GUIENVsharedWindowAddDisplay: descriptor ---
+(# 
+do (* Not Implemented !!! *)
+#)
+--- GUIENVsharedWindowRemoveDisplay: descriptor ---
+(# 
+do (* Not Implemented !!! *)
+#)
+
+--- GUIENVsystemScreenRectangle: descriptor ---
+(# rootID: @integer;
+   displayID: @integer;
+   ignore_root,x,y,width,height,ignore_border,ignore_depth: @integer;
+do display -> displayID;
+   displayID -> XDefaultRootWindow -> rootID;
+   (displayID,rootID,@@ignore_root,@@x,@@y,@@width,@@height,@@ignore_border,@@ignore_depth)
+     -> XGetGeometry;
+   (x,y) -> theRectangle.topLeft;
+   (width,height) -> theRectangle.size;
+#)
+--- GUIENVsystemScreenRgn: descriptor ---
+(# 
+do &region[] -> rgn[];
+   rgn.allocate;
+   screenRectangle -> rgn.setFromrectangle;
+#)
+--- GUIENVsystemBeepBody: descriptor ---
+(# 
+do (* Not Implemented !!! *)
+#)
+--- GUIENVsystemWaitBody: descriptor ---
+(# timeVal: data
+     (# tv_sec: @integer;
+        tv_usec: @integer;
+     #);
+   select: external
+     (# nfds, readfds, writefds, exceptfds: @integer;
+        timeout: ^timeVal;
+        result: @integer;
+     enter (nfds, readfds, writefds, exceptfds, timeout[])
+     exit result
+     #);
+   tv: @timeVal;
+do ticks div 60 -> tv.tv_sec;
+   ticks mod 60 -> tv.tv_usec;
+   (0, 0, 0, 0, tv[]) -> select;
+#)
+
+-- textStyleLib: attributes --
+gettextwidth: external
+  (# buffer: @integer;
+     count: @integer;
+     fontStruct: @integer;
+     width: @integer;
+  enter (buffer,count,fontStruct)
+  exit width
+  #);
+
+--- GUIENVtextStyleAscent: descriptor ---
+(# info: ^fontInfo;
+do allocate;
+   getFontInfo -> info[];
+   info.ascent -> value;
+#)
+--- GUIENVtextStyleDescent: descriptor ---
+(# info: ^fontInfo;
+do allocate;
+   getFontInfo -> info[];
+   info.descent -> value;
+#)
+--- GUIENVtextStyleLeading: descriptor ---
+(# 
+do 0 -> value;
+#)
+--- GUIENVtextStyleHeight: descriptor ---
+(# info: ^fontInfo;
+do allocate;
+   getFontInfo -> info[];
+   info.descent + info.ascent -> value;
+#)
+--- GUIENVtextStyleMaxChWidth: descriptor ---
+(# getcharinfo: external
+     (# width: @integer;
+        fontStruct: @integer;
+     enter fontStruct
+     exit width
+     #);
+do allocate;
+   private.fontStruct -> getcharinfo -> value;
+#)
+--- GUIENVtextStyleWidthOfChar: descriptor ---
+(# 
+do allocate;
+   (@@ch,1,private.fontStruct) -> gettextwidth -> value;
+#)
+--- GUIENVtextStyleStringWidth: descriptor ---
+(# length: @integer;
+do allocate;
+   str.length -> length;
+   (@@str.T[1],length,private.fontStruct) -> gettextwidth -> value;
+#)
+--- GUIENVtextStyleSetName: descriptor ---
+(# 
+do (if theName[] -> private.name.equalNCS//false then
+       theName -> private.name;
+       dispose;
+   if);
+#)
+--- GUIENVtextStyleGetName: descriptor ---
+(# 
+do private.name.copy -> theName[];
+#)
+
+-- GUIENVtextStyleSetSize: descriptor --
+(# 
+do (if value<>private.size//true then
+       value -> private.size;
+       dispose;
+   if);
+#)
+
+-- GUIENVtextStyleGetSize: descriptor --
+(#
+do private.size -> value;
+#)
+
+-- GUIENVtextStyleSetFace: descriptor --
+(#
+do (if value<>private.face//true then
+       value -> private.face;
+       dispose;
+   if);
+#)
+
+-- GUIENVtextStyleGetFace: descriptor --
+(#
+do private.face -> value;
+#)
+
+
+--- GUIENVtextStyleFamilySizes: descriptor ---
+(# do
+#)
+
+
+-- windowLib: attributes --
+
+handleWindowFocusChanged: focusChangeEventSelector
+  (# NotifyAncestor: (# exit 0 #);
+     NotifyNonLinear: (# exit 3 #);
+     NotifyNormal: (# exit 0 #);
+  do (if mode//NotifyNormal then
+         (if detail
+          //NotifyAncestor//NotifyNonLinear then
+             (if type
+              //XFocusIn then
+                 theEventHandler.onActivate;
+              //XFocusOut then
+                 theEventHandler.onDeactivate;
+             if);
+         if);
+     if);
+  #);
+focusChangeEventProcessor: eventProcessor
+  (# 
+  do &handleWindowFocusChanged[] -> es[];
+  #);
+handleContentsResize: configureEventSelector
+  (# 
+  do (if type//XConfigureNotify then
+         adjustContents;
+     if);
+  #);
+configureEventProcessor: eventProcessor
+  (# 
+  do &handleContentsResize[] -> es[];
+  #);
+
+appendMenubar:
+  (# theMenubar: ^menubar;
+     theMotifMenubar: ^motifMenubar;
+  enter theMenubar[]
+  do private.theMotifMenubar[] -> theMotifMenubar[];
+     (if theMotifMenubar[]//none then
+         &motifMenubar[] -> theMotifMenubar[];
+         this(window)[] -> theMotifMenubar.theWindow[];
+         theMotifMenubar.open;
+         theMotifMenubar[] -> private.theMotifMenubar[];
+     if);
+     theMenubar.scan
+     (# 
+     do current[] -> theMotifMenubar.append;
+     #);
+     this(window)[] -> theMenubar.private.windows.append;
+  #);
+hasWindow: booleanValue
+  (#
+  do (widgetID -> XtWindow) <> 0 -> value;
+  #);
+resizeMenubar:
+  (# itsHeight,itsBorderWidth: @integer;
+     width,height: @integer;
+  do 
+     (if private.theMenubar[]<>none//true then
+        size -> (width,height);
+         XtNborderWidth -> private.theMenubar.getIntegerResource -> itsBorderWidth;
+         XtNheight -> private.theMenubar.getIntegerResource -> itsHeight;
+         (private.theMenubar.widgetID,width,itsHeight,itsBorderWidth)
+           -> XtResizeWidget;
+     if);
+  #);
+
+-- GUIENVwindowadjustContents: doPart --
+do (# width,height: @integer;
+   do XtNwidth -> private.contentsForm.getIntegerResource -> width;
+      XtNheight -> private.contentsForm.getIntegerResource -> height;
+      
+      (if private.theMotifMenubar[]//none then
+          (0,0) -> private.contents.position;
+          (width,height) -> private.contents.size;
+       else
+          (0,menubarHeight) -> private.contents.position;
+          true -> SetAnswer;
+          (XtNwidth,width) -> private.theMotifMenubar.setIntegerResource;
+          false -> SetAnswer;
+          (width,height-menubarHeight) -> private.contents.size;
+      if);
+      
+   #);
+   
+-- GUIENVwindowOnActivate: descriptor --
+(# 
+do private.contents.theEventHandler.onActivate;
+   inner onActivate;
+#)
+
+-- GUIENVwindowOnDeactivate: descriptor --
+(#
+do private.contents.theEventHandler.onDeactivate;
+   inner onDeactivate;
+#)
+
+--- GUIENVwindowSetTheMenubar: descriptor ---
+assertOpen
+(# theMotifMenubar: ^motifMenubar;
+   applMenubar: ^menubar;
+do (if theBar[]<>private.theMenubar[]//true then
+       (* (if private.theMenubar[]<>none//true then
+        *            private.theMotifMenubar.close;
+        *            none -> private.theMotifMenubar[];
+        *        if);
+        *)
+       (if theBar[]//none then
+           (if private.theMenubar[]<>none//true then
+               (if menubarVisible then
+                   private.theMenubar.scan
+                   (# 
+                   do current[] -> private.theMotifMenubar.delete;
+                   #);
+               if);
+               none -> private.theMenubar[];
+           if);
+        else
+           theBar[] -> private.theMenubar[];
+           (if menubarVisible then
+               theBar[] -> appendMenubar;
+           if);
+       if);
+   if);
+#)
+--- GUIENVwindowGetTheMenubar: descriptor ---
+assertOpen
+(# 
+do private.theMenubar[] -> theBar[];
+#)
+
+-- GUIENVwindowSetFloating: descriptor --
+assertOpen
+(#
+do isFloating -> private.floating;
+#)
+
+-- GUIENVwindowGetFloating: descriptor --
+assertOpen
+(# 
+do private.floating -> isFloating;
+#)
+
+--- GUIENVwindowSetTitle: descriptor ---
+assertOpen
+(# 
+do (XtNtitle,theTitle[]) -> setStringResource;
+#)
+--- GUIENVwindowGetTitle: descriptor ---
+assertOpen
+(# 
+do XtNtitle -> getStringResource -> theTitle[];
+#)
+--- GUIENVwindowSetPosition: descriptor ---
+assertOpen
+(# 
+do 
+   (XtNx,pt.h) -> setIntegerResource;
+   (XtNy,pt.v) -> setIntegerResource;
+#)
+--- GUIENVwindowGetPosition: descriptor ---
+assertOpen
+(# x,y: @shortRef;
+do (widgetID,0,0,x[],y[]) -> XtTranslateCoords;
+   x -> pt.h;
+   y -> pt.v;
+#)
+--- GUIENVwindowSetSize: descriptor ---
+assertOpen
+(# h: @integer;
+do 
+   (if private.theMenubar[]//none then
+       height -> h;
+    else
+       height + menubarHeight -> h;
+   if);
+   (XtNwidth,width) -> setIntegerResource;
+   (XtNheight,h) -> setIntegerResource;
+   (XtNwidth,width) -> private.contentsForm.setIntegerResource;
+   (XtNheight,h) -> private.contentsForm.setIntegerResource;
+   adjustContents;
+#)
+--- GUIENVwindowGetSize: descriptor ---
+assertOpen
+(# 
+do private.contents.size -> (width,height);
+#)
+--- GUIENVwindowSetFrame: descriptor ---
+(# 
+do theFrame.topLeft -> position;
+   theFrame.size -> size;
+#)
+--- GUIENVwindowGetFrame: descriptor ---
+(# 
+do position -> theFrame.topLeft;
+   size -> theFrame.size;
+#)
+--- GUIENVwindowInsideRectangle: descriptor ---
+(# 
+do size -> theRectangle.bottomRight;
+#)
+
+--- GUIENVshowWindow: descriptor ---
+assertOpen
+(# 
+do 
+   widgetID -> XtMapWidget;
+   true -> private.visible;
+#)
+--- GUIENVwindowShowModal: descriptor ---
+assertOpen(# 
+do (if private.isModal//false then
+       true -> private.isModal;
+       (XmNmwmInputMode,MWM_INPUT_PRIMARY_APPLICATION_MODAL) -> setIntegerResource;
+       show;
+       bringToFront;
+       (widgetID,true,true) -> XtAddGrab;
+       l: 
+         (if private.isModal//true then
+             (this(guienv).private.appCon,XtIMAll) -> XtAppProcessEvent;
+             restart l;
+         if);
+   if);
+#)
+--- GUIENVhideWindow: descriptor ---
+assertOpen
+(# 
+do (if private.isModal//true then
+       false -> private.isModal;
+       widgetID -> XtRemoveGrab;
+       (XmNmwmInputMode,MWM_INPUT_MODELESS) -> setIntegerResource;
+   if);
+   widgetID -> XtUnmapWidget;
+   false -> private.visible;
+#)
+
+--- GUIENVwindowSetMaxSize: descriptor ---
+assertOpen
+(# 
+do (if widgetID//0 then
+    else
+       (XtNmaxWidth,width) -> setIntegerResource;
+       (XtNmaxHeight,height) -> setIntegerResource;
+   if);
+#)
+--- GUIENVwindowGetMaxSize: descriptor ---
+assertOpen
+(# 
+do (if widgetID//0 then
+    else
+       XtNmaxWidth  -> getIntegerResource -> width;
+       XtNmaxHeight  -> getIntegerResource -> height;
+   if);
+#)
+--- GUIENVwindowSetMinSize: descriptor ---
+assertOpen
+(# 
+do (if widgetID//0 then
+    else
+       (XtNminWidth,width) -> setIntegerResource;
+       (XtNminHeight,height) -> setIntegerResource;
+   if);
+#)
+--- GUIENVwindowGetMinSize: descriptor ---
+assertOpen
+(# 
+do (if widgetID//0 then
+    else
+       XtNminWidth  -> getIntegerResource -> width;
+       XtNminHeight  -> getIntegerResource -> height;
+   if);
+#)
+--- GUIENVwindowBringToFront: descriptor ---
+assertOpen
+(# 
+do (if widgetID//0 then
+    else
+       (widgetID -> XtDisplay,widgetID -> XtWindow) -> XRaiseWindow;
+   if);
+#)
+--- GUIENVwindowBringToBack: descriptor ---
+assertOpen
+(# 
+do (if widgetID//0 then
+    else
+       (widgetID -> XtDisplay,widgetID -> XtWindow) -> XLowerWindow;
+   if);
+#)
+--- GUIENVwindowBringBehind: descriptor ---
+assertOpen
+(# windowIDs: [2] @integer;
+   displayID: @integer;
+do (if widgetID//0 then
+    else
+       widgetID -> XtWindow -> windowIDs[2];
+       widgetID -> XtDisplay -> displayID;
+       (if theWindow[]<>none//true  then
+          (if theWindow.widgetID<>0//true then
+              theWindow.widgetID -> XtWindow -> windowIDs[1];
+              (displayID,@@windowIDs[1],2) -> XRestackWindows;
+          if);
+       if);
+   if);
+#)
+--- GUIENVwindowUpdate: descriptor ---
+assertOpen
+(# 
+do immediate -> private.contents.update;
+#)
+-- GUIENVwindowCreate: descriptor --
+(# args: @argList;
+   XtAppCreateShell: external
+     (# name: [1] @char;
+        class: [1] @char;
+        widgetClass: @integer;
+        display: @integer;
+        args: ^argList;
+        nArgs: @integer;
+        newWidget: @integer;
+     enter (name,class,widgetclass,display,args[],nArgs)
+     do callC
+     exit newWidget
+     #);
+   ID: @integer;
+do inner create;
+   (if widgetID//0 then
+       (1,XtNwidth,300) -> args.set;
+       (2,XtNheight,200) -> args.set;
+       (this(guienv).private.appName,
+       this(guienv).private.appClass,
+       TopLevelShellWidgetClass,
+       display,
+       args[],
+       2) -> XtAppCreateShell -> ID;
+       ID -> widgetID;
+       (widgetID,false) -> XtSetMappedWhenManaged;
+       widgetID -> XtRealizeWidget;
+   if);
+#)
+--- GUIENVwindowOpen: descriptor ---
+(# parent,contentsWidget: @widget;
+   aMenubar: ^menubarType;
+   applMenubar: ^menubar;
+   args: @argList;
+do this(window)[] -> getPatternName -> title;
+   (1,XtNwidth,300) -> args.set;
+   (2,XtNheight,200) -> args.set;
+   ('',XbPlaneWidgetClass,widgetID,args[],2) -> XtCreateManagedWidget 
+     -> private.contentsForm.widgetID;
+   (configureEventProcessor##, XStructureNotifyMask) -> appendEventProcessor;
+   (focusChangeEventProcessor##, XFocusChangeMask) -> appendEventProcessor;
+   true -> private.visible;
+   THIS(window)[] -> this(guienv).private.windows.append;
+   private.contents.open;
+   private.contents.widgetID -> contentsWidget;
+   (if menubarVisible then
+       applicationMenubar -> applMenubar[];
+       (if applMenubar[]<>none//true then
+           applMenubar[] -> appendMenubar;
+       if);
+   if);
+   &menubarType[] -> aMenubar[];
+   (if aMenubar.struc = menubar##//false then
+       aMenubar.open;
+       aMenubar[] -> theMenubar;
+   if);
+   (XtNwidth,300) -> setIntegerResource;
+   (XtNheight,200) -> setIntegerResource;
+   inner open;
+   (if private.visible//true then
+       widgetID -> XtMapWidget;
+   if);
+#)
+
+
+
+--- GUIENVwindowClose: descriptor ---
+assertOpen
+(# 
+do inner close;
+   widgetID -> XtUnmapWidget;
+   none -> theMenubar;
+   private.contents.close;
+   0 -> private.contentsForm.widgetID;
+   (if private.isModal//true then
+       false -> private.isModal;
+       widgetID -> XtRemoveGrab;
+   if);
+   widgetID -> XtDestroyWidget;
+   0 -> widgetID;
+   THIS(window)[] -> this(guienv).private.windows.at 
+     -> this(guienv).private.windows.delete;
+#)
+-- GUIENVwindowPutLayout: doPart --
+do
+
+-- GUIENVwindowGetLayout: doPart --
+do
+
+
+--- GUIENVwindowSetTarget: descriptor ---
+(# 
+do (if theTarget[]//None then
+       (private.contents.widgetID,XmTRAVERSE_CURRENT) ->  XmProcessTraversal;
+    else
+       (theTarget.widgetID,XmTRAVERSE_CURRENT) ->  XmProcessTraversal;
+   if);
+#)
+--- GUIENVwindowGetTarget: descriptor ---
+(# 
+do private.theTarget[] -> theTarget[];
+#)
+
+-- windowitemLib: attributes --
+
+exposeProcessor: eventProcessor
+  (# 
+  do &refreshSelector[] -> es[];
+  #);
+buttonPressProcessor: eventProcessor
+  (# 
+  do &mouseDownSelector[] -> es[];
+  #);
+buttonReleaseProcessor: eventProcessor
+  (# 
+  do &mouseUpSelector[] -> es[];
+  #);
+keyPressProcessor: eventProcessor
+  (# 
+  do &keyDownSelector[] -> es[];
+  #);
+focusChangeProcessor: eventProcessor
+  (# 
+  do &selectTarget[] -> es[];
+  #);
+
+refreshSelector: exposeEventSelector
+  (# 
+  do
+    
+     (if count//0 then
+    
+         (x, y) 
+           -> THIS(guienv).private.damaged.topleft; (* bifrost *)
+    
+         (width, height) 
+           -> THIS(guienv).private.damaged.size; (* bifrost *)
+    
+         theEventHandler.onRefresh;
+
+     if);
+     #);
+mouseDownSelector: buttonEventSelector
+  (# 
+  do theEventHandler.onMouseDown;
+  #);
+mouseUpSelector: buttonEventSelector
+  (# 
+  do theEventHandler.onMouseUp;
+  #);
+keyDownSelector: KeyEventSelector
+  (# 
+  do theEventHandler.onKeyDown;
+  #);
+
+
+selectTarget: focusChangeEventSelector
+  (# 
+  do (if type//XFocusIn then
+         this(windowitem)[] -> theTarget;
+         theEventHandler.onEnableTarget;
+      else
+         theEventHandler.onDisableTarget;
+         none -> theTarget;
+     if);
+  #);
+handleConfigure: configureEventSelector
+  (# 
+  do (if type//XConfigureNotify then
+         (if this(windowItem).private.frameChangedHandled//false then
+             (frame,getFrame) -> handleframeChanged;
+         if);
+         false -> this(windowItem).private.frameChangedHandled;
+     if);
+  #);
+configureProcessor: eventProcessor
+  (# 
+  do &handleConfigure[] -> es[];
+  #);
+
+handleFatherframeChanged:
+  (# oldFrame,newFrame,chainRect,itsFrame: @rectangle;
+     delta: @Point;
+  enter (oldFrame,newFrame)
+  do newFrame.size -> delta;
+     oldFrame.size -> delta.subTract;
+     (if (0,0) -> delta.isEqual//false then
+         frame -> chainRect -> itsFrame;
+         delta -> chainRect.offset;
+         (if bindLeft//false then
+             chainRect.left -> itsFrame.left;
+         if);
+         (if bindBottom//true then
+             chainRect.bottom -> itsFrame.bottom
+         if);
+         (if bindRight//true then
+             chainRect.right -> itsFrame.right
+         if);
+         (if bindTop//false then
+             chainRect.top -> itsFrame.top
+         if);
+         itsFrame -> frame;
+     if);
+     (oldFrame,newFrame) -> theEventHandler.onFatherframeChanged;
+  #);
+
+-- GUIENVwindowItemHandleFrameChanged: doPart --
+do (# thisCanvas: ^canvas;
+   do (if oldFrame -> newFrame.isEqual//false then
+          newFrame.left -> private.left;
+          newFrame.right -> private.right;
+          newFrame.bottom -> private.bottom;
+          newFrame.top -> private.top;
+          (oldFrame,newFrame) -> theEventHandler.onframeChanged;
+          (if father[]<>none//true then
+              (oldFrame,newFrame) -> father.handleChildframeChanged;
+          if);
+          (if this(windowitem).struc <= canvas##//true then
+              this(windowitem)[] -> thisCanvas[];
+              thisCanvas.private.children.scan
+              (# 
+              do (oldFrame,newFrame) -> current.handleFatherframeChanged;
+              #);
+           else
+              (if widgetID//0 then
+                  (# 
+                  do (father.displayID,father.windowID,
+                     oldFrame.left,oldFrame.top,
+                     oldFrame.right - oldFrame.left,oldFrame.bottom - oldFrame.top,
+                     true) -> XClearArea;
+                     (father.displayID,father.windowID,
+                     newFrame.left,newFrame.top,
+                     newFrame.right - newFrame.left,newFrame.bottom - newFrame.top,
+                     true) -> XClearArea;
+                  #);
+              if);
+          if);
+      if);
+   #)
+
+-- GUIENVwindowitemOnRefresh: descriptor --
+(# xmType: @integer;
+   topGC: @integer;
+   bottomGC: @integer;
+   width,height: @integer;
+   x,y: @integer;
+   drawable: @integer;
+do inner onRefresh;
+   (if border.visible//true then
+       father.widgetID -> GetTopShadowGC -> topGC;
+       father.widgetID -> GetBottomShadowGC -> bottomGC;
+       size -> (width,height);
+       (if border.style
+        //borderStyles.simple then XmSHADOW_IN -> xmType;
+        //borderStyles.shadowIn then XmSHADOW_IN -> xmType;
+        //borderStyles.shadowOut then XmSHADOW_OUT -> xmType;
+        //borderStyles.etchedIn then XmSHADOW_ETCHED_IN -> xmType;
+        //borderStyles.etchedOut then XmSHADOW_ETCHED_OUT -> xmType;
+       if);
+       (if widgetID//0 then
+           position -> (x,y);
+           father.windowID -> drawable;
+           (display,drawable,topGC,bottomGC,x,y,width,height,2,xmType) -> _XmDrawShadows;
+        else
+           windowID -> drawable;
+           (display,drawable,topGC,bottomGC,0,0,width,height,2,xmType) -> _XmDrawShadows;
+       if);
+   if);
+#)
+
+--- GUIENVwindowitemSetFrame: descriptor ---
+assertOpen
+(# oldFrame: @rectangle;
+   h,v,width,height: @integer;
+do frame -> oldFrame;
+   (if theFrame -> oldFrame.isEqual//false then
+       theFrame.topLeft -> (h,v);
+       theFrame.size -> (width,height);
+       (if widgetID<>0//true then
+           true -> SetAnswer;
+           (XtNx,h) -> setIntegerResource;
+           (XtNy,v) -> setIntegerResource;
+           (XtNwidth,width) -> setIntegerResource;
+           (XtNheight,height) -> setIntegerResource;
+           false -> SetAnswer;
+       if);
+       (oldFrame,theFrame) -> handleFrameChanged;
+       true -> private.frameChangedHandled;
+   if);
+#)
+
+--- GUIENVwindowitemGetFrame: descriptor ---
+assertOpen
+(# 
+do private.left-> theFrame.left;
+   private.right -> theFrame.right;
+   private.top -> theFrame.top;
+   private.bottom -> theFrame.bottom;
+   
+#)
+--- GUIENVwindowitemSetPosition: descriptor ---
+assertOpen
+(# theFrame: @rectangle;
+do pt -> theFrame.topLeft;
+   size -> theFrame.size;
+   theFrame -> frame;
+#)
+--- GUIENVwindowitemGetPosition: descriptor ---
+assertOpen
+(#
+do private.left -> pt.h;
+   private.top -> pt.v;
+#)
+--- GUIENVwindowitemMove: descriptor ---
+assertOpen
+(# pt: @point;
+do position -> pt;
+   (dh,dv) -> pt.add;
+   pt -> position;
+#)
+--- GUIENVwindowitemSetSize: descriptor ---
+assertOpen
+(# theFrame: @rectangle;
+do position -> theFrame.topLeft;
+   (width,height) -> theFrame.size;
+   theFrame -> frame;
+#)
+
+--- GUIENVwindowitemGetSize: descriptor ---
+assertOpen
+(#
+do private.right - private.left -> width;
+   private.bottom - private.top -> height;
+#)
+
+-- GUIENVwindowitemSetVisible: descriptor --
+assertOpen
+(#
+do (if value<>private.visible//true then
+       value -> private.visible;
+       (if value//true then
+           widgetID -> XtMapWidget;
+        else
+           widgetID -> XtUnmapWidget;
+       if);
+       theEventHandler.onVisibleChanged;
+   if);
+#)
+
+-- GUIENVwindowitemGetVisible: descriptor --
+assertOpen
+(#
+do private.visible -> value;
+#)
+
+-- GUIENVwindowitemSetHilite: descriptor --
+assertOpen
+(# 
+do value -> private.hilite;
+   theEventHandler.onHiliteChanged;
+#)
+
+-- GUIENVwindowitemGetHilite: descriptor --
+assertOpen
+(# 
+do private.hilite -> value;
+#)
+
+-- GUIENVwindowitemSetEnabled: descriptor --
+assertOpen
+(# 
+do (if value//enabled then
+    else
+       (widgetID,value) -> XtSetSensitive;
+       theEventHandler.onEnabledChanged;
+   if);
+#)
+
+-- GUIENVwindowitemGetEnabled: descriptor --
+assertOpen
+(# 
+do widgetID -> XtIsSensitive -> value;
+#)
+
+--- GUIENVwindowitemShow: descriptor ---
+assertOpen
+(# 
+do true -> visible;
+#)
+--- GUIENVwindowitemHide: descriptor ---
+assertOpen
+(# 
+do false -> visible;
+#)
+--- GUIENVwindowitemEnable: descriptor ---
+assertOpen
+(# 
+do true -> enabled;
+#)
+--- GUIENVwindowitemDisable: descriptor ---
+assertOpen
+(# 
+do false -> enabled;
+#)
+
+-- GUIENVwindowitemBorderSetVisible: doPart --
+do value -> private.borderVisible;
+   theEventHandler.onBorderVisibleChanged;
+   true -> update;
+
+-- GUIENVwindowitemBorderGetVisible: doPart --
+do private.borderVisible -> value;
+
+-- GUIENVwindowitemBorderSetStyle: doPart --
+do value -> private.borderStyle;
+   theEventHandler.onBorderStyleChanged;
+   true -> update;
+
+-- GUIENVwindowitemBorderGetStyle: doPart --
+do private.borderStyle -> value;
+
+-- GUIENVwindowiteminsideRectangle: doPart --
+do ((0,0),size) -> theRectangle;
+   (if border.visible//true then
+       (2,2) -> theRectangle.inset;
+   if);
+   
+--- GUIENVwindowitemSetTheCursor: descriptor ---
+assertOpen
+(# 
+   attributes: @XSetWindowAttributes;
+do theCur[] -> private.theCursor[];
+   (if theCur[]//none then
+       0 -> attributes.cursor;
+    else
+       theCur.private.id -> attributes.cursor;
+   if);
+   (displayID,windowID,CWCursor,attributes.address)
+     -> XChangeWindowAttributes;
+   theEventHandler.onTheCursorChanged;
+#)
+--- GUIENVwindowitemGetTheCursor: descriptor ---
+(# 
+do private.theCursor[] -> theCur[];
+#)
+
+-- GUIENVwindowItemTrackMouse: descriptor --
+(# info: ^mouseInfo;
+   theWindow: @integer;
+do widgetID -> XtWindow -> theWindow;
+   theWindow -> mouse.getMouseInfo -> info[];
+   info.local -> curPt -> prevPt;
+   mousePress;
+   l: (if info.button<>0//true then
+          info.local -> curPt;
+          (if (not (curPt -> prevPt.isEqual)) then
+              (curPt.h - prevPt.h,curPt.v - prevPt.v) -> mouseMove;
+              curPt -> prevPt;
+          if);
+          theWindow -> mouse.getMouseInfo -> info[];
+          restart l;
+      if);
+   mouseRelease;
+#)
+
+--- GUIENVwindowitemDrag: descriptor ---
+(# 
+do father.graphics
+   (# r: @rectangle;
+   do transferModes.xorBlend[] -> pen.mode;
+      father.trackMouse
+      (# r: @rectangle;
+         mousePress::<
+           (# 
+           do frame -> r;
+              r -> drawRect;
+           #);
+         mouseMove::<
+           (# 
+           do (if ((h<>0) or (v<>0))//true then
+                  r -> drawRect;
+                  (h,v) -> r.offset;
+                  r -> drawRect;
+              if);
+           #);
+         mouseRelease::<
+           (# 
+           do r -> drawRect;
+              r -> frame;
+           #);
+      #);
+   #);
+#)
+--- GUIENVwindowitemResize: descriptor ---
+(# newFrame: @rectangle;
+   w,h: @Integer;
+do frame -> father.defineRect -> newFrame;
+   newFrame.size -> (w,h);
+   (w,1) -> max -> w;
+   (h,1) -> max -> h;
+   (w,h) -> newFrame.size;
+   newFrame -> frame;
+#)
+
+--- GUIENVwindowitemUpdate: descriptor ---
+assertOpen
+(# 
+do (if widgetID//0 then
+       (# f: @rectangle;
+       do frame -> f;
+          (father.displayID,father.windowID,
+          f.left,f.top,
+          f.right - f.left + 1,f.bottom - f.top + 1,
+          true) -> XClearArea;
+          (if immediate//true then
+              father.widgetID -> XmUpdateDisplay;
+          if);
+       #);
+    else
+       (displayID,windowID,0,0,0,0,true) -> XClearArea;
+       (if immediate//true then
+           widgetID -> XmUpdateDisplay;
+       if);
+   if);
+#)
+
+-- GUIENVwindowitemCreate: descriptor --
+(# origin: ^object;
+   args: @argList;
+do  (if father[]//none then
+       THIS(windowitem)[] -> getOrigin -> origin[];
+       l:
+         (if origin[]//none then
+             (if THIS(windowitem)[]<>THIS(window).private.contents[]//true  then
+                 THIS(window).private.contents[] -> father[];
+             if);
+          else 
+             (if (origin.struc <= canvas##)// true then 
+                 origin[] -> father[];
+              else 
+                 origin[] -> getOrigin -> origin[];
+                 restart l;
+             if)
+         if);
+   if);
+   inner create;
+   (* (if widgetID//0 then
+    *        (xmDrawingAreaWidgetClass,father.widgetID) -> createSimple;
+    *    if);
+    *)
+#)
+
+--- GUIENVwindowitemOpen: descriptor ---
+(# frameHitMethod: hitMethod
+     (# f: @rectangle;
+     do frame -> f;
+        p -> f.containsPoint -> value;
+     #);
+   f: @rectangle;
+do true -> private.visible;
+   false -> private.hilite;
+   (if father[]<>none//true then
+       this(windowitem)[] -> father.appendChild;
+   if);
+   true -> bindLeft -> bindTop;
+   false -> private.borderVisible;
+   borderStyles.simple -> private.borderStyle;
+   (if widgetID<>0//true then
+       getFrame -> f;
+       f.left -> private.left;
+       f.right -> private.right;
+       f.bottom -> private.bottom;
+       f.top -> private.top;
+       (exposeProcessor##, XExposureMask) -> appendEventProcessor;
+       (configureProcessor##, XStructureNotifyMask) -> appendEventProcessor;
+       (keyPressProcessor##, XKeyPressMask) -> appendEventProcessor;
+       (focusChangeProcessor##, XFocusChangeMask) -> appendEventProcessor;
+       (buttonPressProcessor##, XButtonPressMask) -> appendEventProcessor;
+       (buttonReleaseProcessor##, XButtonReleaseMask) 
+         -> appendEventProcessor -> private.mouseUpProcessorAddress;
+    else
+       100 -> private.right;
+       100 -> private.bottom;
+       frameHitMethod## -> private.hit##;
+   if);
+   inner open;
+#)
+
+--- GUIENVwindowitemClose: descriptor ---
+assertOpen
+(# 
+do inner close;
+   (if father[]<>none//true then
+       this(windowitem)[] -> father.selection.remove;
+       this(windowitem)[] -> father.deleteChild;
+   if);
+   (if widgetID<>0//true then
+       widgetID -> XtDestroyWidget;
+       0 -> widgetID;
+   if);
+   none -> private.theCursor[];
+#)
+
+-- GUIENVwindowitemPutLayout: doPart --
+do
+
+-- GUIENVwindowitemGetLayout: doPart --
+do
+
+
+-- GUIENVstandardMenubarOpen: descriptor --
+(#
+do &fileMenu[] -> theFileMenu[];
+   (if theFileMenu.struc = menu##//false then
+       theFileMenu.open;
+       theFileMenu[] -> append;
+    else
+       none -> theFileMenu[];
+   if);
+   &editMenu[] -> theEditMenu[];
+   (if theEditMenu.struc = menu##//false then
+       theEditMenu.open;
+       theEditMenu[] -> append;
+    else
+       none -> theEditMenu[];
+   if);
+   inner open;
+#)
+
+--- GUIENVstandardFileMenuOpen: descriptor ---
+(#
+do 'File' -> name;
+   newMenuitem.open;
+   'New' -> newMenuitem.name;
+   newMenuitem[] -> append;
+   openMenuitem.open;
+   'Open' -> openMenuitem.name;
+   openMenuitem[] -> append;
+   closeMenuitem.open;
+   'Close' -> closeMenuitem.name;
+   closeMenuitem[] -> append;
+   quitMenuitem.open;
+   'Quit' -> quitMenuitem.name;
+   quitMenuitem[] -> append;
+   inner open;
+#)
+--- GUIENVstandardEditMenuOpen: descriptor ---
+(#
+do 'Edit' -> name;
+   undoMenuItem.open;
+   'Undo' -> undoMenuItem.name;
+   undoMenuItem[] -> append;
+   cutMenuItem.open;
+   'Cut' -> cutMenuItem.name;
+   cutMenuItem[] -> append;
+   copyMenuItem.open;
+   'Copy' -> copyMenuItem.name;
+   copyMenuItem[] -> append;
+   pasteMenuItem.open;
+   'Paste' -> pasteMenuItem.name;
+   pasteMenuItem[] -> append;
+   clearMenuItem.open;
+   'Clear' -> clearMenuItem.name;
+   clearMenuItem[] -> append;
+   inner open;
+#)
+-- GUIENVwindowGetContents: doPart --
+do private.contents[] -> theContents[];
+
+-- GUIENVwindowSeparatorOnRefresh: doPart --
+do inner onRefresh;
+   
+
+-- motifMenuItemLib: attributes --
+
+handleActivate: motifCallbackSelector
+  (# 
+  do theMenuitem.theEventHandler.onSelect;
+  #);
+motifMenuItemActivateProcessor: callbackProcessor
+  (#
+  do &handleActivate[] -> cb[];
+  #);
+
+handleCascading: motifCallbackSelector
+  (# 
+  do theMotifSubmenu.handleOnSelect;
+  #);
+motifMenuItemCascadingProcessor: callbackProcessor
+  (#
+  do &handleCascading[] -> cb[];
+  #);
+
+handleExpose: exposeEventSelector
+  (# 
+  do (if theMenuitem.checked//true then
+         drawCheckMark;
+     if);
+  #);
+motifMenuItemExposeProcessor: eventProcessor
+  (# 
+  do &handleExpose[] -> es[];
+  #);
+
+
+
+handleOnStatus:
+  (# enabled: @boolean;
+  do theMenuitem.theEventHandler.onStatus -> enabled;
+     (widgetID,enabled) -> XtSetSensitive;
+  #);
+drawCheckMark:
+  (# windowID,displayID,gcID,screenNumber: @integer;
+     black: @integer;
+  do widgetID -> XtWindow -> windowID;
+     widgetID -> XtDisplay -> displayID;
+     displayID -> XDefaultScreen -> screenNumber;
+     (displayID,windowID,0,0) -> XCreateGC -> gcID;
+     (displayID,screenNumber) -> XBlackPixel -> black;
+     (displayID,gcID,black) -> XSetForeGround;
+     (displayID,windowID,gcID,4,8,6,14) -> XDrawLine;
+     (displayID,windowID,gcID,6,14,9,4) -> XDrawLine;
+     (displayID,gcID) -> XFreeGC;
+  #);
+
+-- GUIENVmotifMenuItemCreate: doPart --
+do (# args: @argList;
+      buildSeparator: 
+        (# args: @argList;
+        do (XmSeparatorWidgetClass,this(motifMenu).widgetID,'')
+             -> createManaged;
+        #);
+      buildCascadeButtonItem: 
+        (# args: @argList;
+           
+        do (XmCascadeButtonWidgetClass,this(motifMenu).widgetID,'')
+             -> createManaged;
+           (motifMenuItemCascadingProcessor##, XmNcascadingCallback) -> addCallbackProcessor;
+           &motifMenu[] -> theMotifSubMenu[];
+           theMenuitem.subMenu -> theMotifSubMenu.theMenu[];
+           this(motifMenu)[] -> theMotifSubMenu.owner[];
+           theMotifSubMenu.open;
+           (XmNsubMenuID,theMotifSubMenu.widgetID) -> setIntegerResource;
+        #);
+      buildPushButtonItem: 
+        (#
+        do (XmPushButtonWidgetClass,this(menu).widgetID,'') -> createManaged;
+           (motifMenuItemExposeProcessor##, XExposureMask) -> appendEventProcessor;
+           (motifMenuItemActivateProcessor##, XmNActivateCallback) -> addCallbackProcessor;
+        #);
+      t: @text;
+   do (if theMenuitem.struc <= theMenu.separator##//true then
+          buildSeparator;
+       else
+          (if theMenuitem.subMenu//none then
+              buildPushButtonItem;
+           else
+              buildCascadeButtonItem;
+          if);
+      if);
+      (XmNlabelString,theMenuitem.name) -> setMotifStringResource;
+      (XmNmarginLeft,15) -> setIntegerResource;
+      (if theMenuitem.key//0 then
+       else
+          t.clear;
+          'Ctrl<Key>' -> t.append;
+          theMenuitem.key -> t.put;
+          (XmNaccelerator,t[]) -> setStringResource;
+          'Ctrl-' -> t;
+          theMenuitem.key -> t.put;
+          (XmNacceleratorText,t[]) -> setMotifStringResource;
+      if);
+      this(motifMenuitem)[] -> this(motifMenu).private.motifMenuitems.append;
+   #)
+   
+-- GUIENVmotifMenuItemClose: doPart --
+do widgetID -> XtDestroyWidget;
+   
+
+
+-- GUIENVmotifMenuGetItemByNumber: doPart --
+do (# i: @integer;
+   do l: private.motifMenuItems.scan
+     (# 
+     do i + 1 -> i;
+        (if i = position//true then
+            current[] -> theMotifMenuItem[];
+            leave l;
+        if);
+     #);
+   #);
+   
+-- GUIENVmenuitemscanMotifMenuItems: doPart --
+do this(menu).private.motifMenus.scan
+   (# 
+   do current[] -> currentMotifMenu[];
+      position  -> current.getItemByNumber -> this(scanMotifMenuItems).current[];
+      inner scanMotifMenuItems;
+   #);
+
+-- GUIENVinterfaceObjectappendEventProcessor: doPart --
+do (# 
+   do theEventProcessor## -> makeCBF -> address;
+      (private.widgetID,type,false,address,0,XtListTail)
+        -> XtInsertEventHandler;
+   #);
+-- GUIENVinterfaceObjectPrependEventProcessor: doPart --
+do (#
+   do theEventProcessor## -> makeCBF -> address;
+      (private.widgetID,type,false,address,0,XtListHead)
+        -> XtInsertEventHandler;
+   #);
+
+-- GUIENVinterfaceObjectAddCallbackProcessor: doPart --
+do (# XtAddCallback: external
+        (# widget: @integer;
+           name: @integer;
+           callbackP: @integer;
+           clientData: @integer;
+        enter (widget, name, callbackP, clientData)
+        #);
+      
+   do theCallBackProcessor## -> makeCBF -> address;
+      (private.widgetID,type,address,0) -> XtAddCallback; 
+      
+   #)
+   
+-- GUIENVinterfaceObjectAddCallbackProcessorForSubWidget: doPart --
+do (# XtAddCallback: external
+        (# widget: @integer;
+           name: @integer;
+           callbackP: @integer;
+           clientData: @integer;
+        enter (widget, name, callbackP, clientData)
+        #);
+      
+   do theCallBackProcessor## -> makeCBF -> address;
+      (subWidget,type,address,0) -> XtAddCallback; 
+      
+   #)
+   
+-- GUIENVinterfaceObjectappendEventProcessorForSubWidget: doPart --
+   
+do theEventProcessor## -> makeCBF -> address;
+   (widget, type,false,address,0,XtListTail)
+     -> XtInsertEventHandler;
+   
+-- menulib: attributes --
+
+handleOnSelect:
+  (# 
+  do theEventHandler.onSelect;
+  #);

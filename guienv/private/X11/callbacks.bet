@@ -1,0 +1,229 @@
+ORIGIN 'guienv_unixprivate';
+INCLUDE 'xevents';
+OBJFILE default 'utils.o';
+
+-- GUIenvLib: attributes --
+
+callbackProcessor: external (* prefix for callbackentries *)
+  (# w, clientdata, calldataAddress: @integer;
+     status: @integer;
+     cb: ^motifCallbackSelector;
+  enter (w, clientdata, calldataAddress)
+  do cexternalEntry;
+     inner;
+     (w, clientdata, calldataAddress) -> (cb.widget, cb.clientdata, cb.calldataAddress);
+     (if XSystemEnvPresent then
+         cb[] -> XsystemEnvHandleCallback;
+      else
+         cb;
+     if);
+  exit status
+  #);
+
+motifCallbackSelector:
+  (# widget: @integer;
+     clientData: @integer;
+     callDataAddress: @integer;
+     reason, eventAddress: @integer;
+  do callDataAddress + reasonOffset -> TOS'%adrGetLong' -> reason;
+     callDataAddress + eventOffset -> TOS'%adrGetLong' -> eventAddress;
+     inner;
+  #);
+textCallBackSelector: motifCallbackSelector
+  (# doit:
+       (# value: @boolean;
+       enter value
+       do (callDataAddress + textDoitOffset, value) -> TOS'%putByte';
+       #);
+     currInsert, newInsert, startPos, endPos, textP: @integer;
+  do callDataAddress + textCurrInsertOffset -> TOS'%adrGetLong' -> currInsert;
+     callDataAddress + textNewInsertOffset -> TOS'%adrGetLong' -> newInsert;
+     callDataAddress + textStartPosOffset -> TOS'%adrGetLong' -> startPos;
+     callDataAddress + textEndPosOffset -> TOS'%adrGetLong' -> endPos;
+     callDataAddress + textTextOffset -> TOS'%adrGetLong' -> textP;
+     inner;
+  #);
+
+eventProcessor: external
+  (# widget: @integer;
+     clientData: @integer;
+     eventAddress: @integer;
+     continueP: @integer;
+     status: @integer;
+     
+     es: ^eventSelector;
+  enter (widget, clientData, eventAddress, continueP) 
+  do cExternalEntry;
+     inner;
+     (widget, clientData, eventAddress) -> (es.widget, es.clientData, es.eventAddress);
+     (if XSystemEnvPresent then
+         es[] -> XsystemEnvHandleCallback
+      else
+         es;
+     if);
+  #);
+
+
+eventSelector:
+  (# clientData, eventAddress: @integer;
+     widget: @integer;
+     type: @integer;
+  do eventAddress -> TOS'%adrGetLong' -> type;
+     inner;
+  #);
+
+DeviceEventSelector: eventSelector
+  (# x, y, x_root, y_root: @integer;
+     dh, dv: @integer;
+     state: @integer;
+     detail: @integer;
+     time: @integer;
+  do
+     eventAddress + xOffset -> TOS'%adrGetLong' -> x -> private.x;
+     eventAddress + yOffset -> TOS'%adrGetLong' -> y -> private.y;
+     eventAddress + x_rootOffset -> TOS'%adrGetLong' -> x_root;
+     eventAddress + y_rootOffset -> TOS'%adrGetLong' -> y_root;
+     eventAddress + stateOffset -> TOS'%adrGetLong' -> state -> private.state;
+     eventAddress + detailOffset ->  TOS'%adrGetLong' -> detail;
+     eventAddress + timeOffset ->  TOS'%adrGetLong' -> time;
+     (if type
+      //XButtonRelease then
+         private.lastDoubleClick -> private.doubleClick;
+      //XButtonPress then
+         false -> private.doubleClick;
+         (if detail//private.detail then
+             (if (time - private.time) < 300//true then
+                 x_root - private.x_root -> dh;
+                 y_root - private.y_root -> dv;
+                 (if (dh*dh + dv*dv) < 10//true then
+                     true -> private.doubleClick;
+                 if);
+             if);
+         if);
+     if);
+     time -> private.time;
+     detail -> private.detail;
+     x_root -> private.x_root;
+     y_root -> private.y_root;
+     private.doubleClick -> private.lastDoubleClick;
+     inner;
+  #);
+KeyEventSelector: DeviceEventSelector
+  (# chBuffer: [20] @char;
+     theKeySym: @integer;
+     NoOfChars: @integer;
+     theChar: @char;
+  do  
+     (eventAddress,@@chbuffer[1],20,@@theKeySym,0) -> XLookupString -> noOfChars;
+     (if theKeySym
+      // xkLeft then
+      // xkUp then
+      // xkRight then
+      // xkDown then
+      else
+         (if noOfChars
+          // 0 then (* ignore *)
+          else 
+             (* use  only first character *)
+             chBuffer[1] -> theChar;
+         if)
+     if);
+     theChar -> private.theChar;
+     inner;
+  #);
+ButtonEventSelector: DeviceEventSelector
+  (# 
+  do inner;
+  #);
+MotionEventSelector: DeviceEventSelector
+  (# 
+  do inner;
+  #);
+CrossingEventSelector: eventSelector
+  (# 
+  do 
+     inner;
+  #);
+FocusChangeEventSelector: eventSelector
+  (# detail, mode: @integer;
+  do eventAddress + focusModeOffset -> TOS'%adrGetLong' -> mode;
+     eventAddress + focusDetailOffset -> TOS'%adrGetLong' -> detail;
+     inner;
+  #);
+ExposeEventSelector: eventSelector
+  (# count: @integer;
+     x, y, width, height: @integer;
+  do eventAddress + exposeXOffset -> TOS'%adrGetLong' -> x;
+     eventAddress + exposeYOffset -> TOS'%adrGetLong' -> y;
+     eventAddress + exposeWidthOffset -> TOS'%adrGetLong' -> width;
+     eventAddress + exposeHeightOffset -> TOS'%adrGetLong' -> height;
+     eventAddress + countOffset -> TOS'%adrGetLong' -> count;
+     inner;
+  #);
+VisibilityEventSelector: eventSelector
+  (# 
+  do inner;
+  #);
+CreateWindowEventSelector: eventSelector
+  (# 
+  do inner;
+  #);
+DestroyWindowEventSelector: eventSelector
+  (# 
+  do inner;
+  #);
+UnmapEventSelector: eventSelector
+  (# 
+  do inner;
+  #);
+MapEventSelector: eventSelector
+  (# 
+  do inner;
+  #);
+ConfigureEventSelector: eventSelector
+  (# 
+  do inner;
+  #);
+
+typeOffset: (# exit 0 #);
+serialOffset: (# exit 4 #);
+send_eventOffset: (# exit 8 #);
+displayOffset: (# exit 12 #);
+windowOffset: (# exit 16 #);
+
+rootOffset: (# exit 20 #);
+sub_windowOffset: (# exit 24 #);
+timeOffset: (# exit 28 #);
+xOffset: (# exit 32 #);
+yOffset: (# exit 36 #);
+x_rootOffset: (# exit 40 #);
+y_rootOffset: (# exit 44 #);
+stateOffset: (# exit 48 #);
+
+detailOffset: (# exit 52 #);
+key_codeOffset: (# exit 52 #);
+buttonOffset: (# exit 52 #);
+
+same_screenOffset: (# exit 56 #);
+
+focusModeOffset: (# exit 20 #);
+focusDetailOffset: (# exit 24 #);
+
+exposeXOffset: (# exit 20 #);
+exposeYOffset: (# exit 24 #);
+exposeWidthOffset: (# exit 28 #);
+exposeHeightOffset: (# exit 32 #);
+countOffset: (# exit 36 #);
+
+
+reasonOffset: (# exit 0 #);
+eventOffset: (# exit 4 #);
+pushButtonClickCount: (# exit 8 #);
+listItemOffset: (# exit 8 #);
+listItemPositionOffset: (# exit 16 #);
+textDoitOffset: (# exit 8 #);
+textCurrInsertOffset: (# exit 12 #);
+textNewInsertOffset: (# exit 16 #);
+textStartPosOffset: (# exit 20 #);
+textEndPosOffset: (# exit 24 #);
+textTextOffset: (# exit 28 #);
