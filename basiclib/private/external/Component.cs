@@ -17,7 +17,7 @@ public class Component
 
   private void run() 
     { 
-      body.@do();
+      body.Do();
       lock(this) { 
 	System.Threading.Monitor.Pulse(this);
       }

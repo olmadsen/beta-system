@@ -12,8 +12,6 @@ public class Component {
     //   kept in a freelist to avoid expensive allocation of Threads
 
     static final boolean do_trace       = false;
-    static final boolean use_reflection = false
-	/* use refection to call myComponent.body.do instead of myComponent.body.xdo */;
 
     static Component current;        // The current executing Component
     private static Runner firstFree; // First free Runner
@@ -173,29 +171,10 @@ public class Component {
 	    while (true) {
 		// myComponent.trace("Execute:body");
 		if (myComponent.body == null) return;
-		// Call myComponent.body.do()
-		// We cannot do this directly, since "do" is
+		// Call myComponent.body.Do()
+		// We cannot use "do" do this directly, since "do" is
 		// a reserved Java language word.
-		if (use_reflection){
-		    // Calling the real do(), using reflection:
-		    try {
-			myComponent.body
-			    .getClass()
-			    .getMethod("do",null)
-			    .invoke(myComponent.body,null);
-		    } catch (NoSuchMethodException e){
-			System.err.println("Component.java: myComponent.body.do(): no such method");
-		    } catch (Exception e){
-			System.err.println("Component.java: cannot call myComponent.body.do()");
-			System.out.println("Class: "+myComponent.body
-					   .getClass().getName());
-
-			myComponent.displayID();
-		    }
-		} else {
-		    // Calling this method xdo() instead.
-		    myComponent.body.xdo();
-		}
+		myComponent.body.Do();
 		myComponent.isTerminated = true;
 		//myComponent.trace("Terminating Runner:"+myRunId);
 		myComponent.swap();
