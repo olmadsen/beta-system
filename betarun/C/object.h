@@ -12,6 +12,8 @@ struct ProtoType{
     short           Size;      /* Object size -1 in longs           */
     short int       FormOff;   /* Reference to the FormID string    */
     short           AstRef;    /* AST reference of this object-desc.*/
+    short	    pad;
+    void	    (*CallBackRoutine)();
 };
 
 struct Object{ 
@@ -63,7 +65,7 @@ struct RefRep{
 };
 
 struct Structure{
-    ref(ProtoType)  Proto;     /* Reference to the Prototype  */
+    ref(ProtoType)  Proto;     /* StructurePTValue	      */
     long            GCAttr;    /* The GC attribute            */
     ref(Object)     iOrigin;   /* The origin of the structure */
     ref(ProtoType)  iProto;    /* The protoType of the struc  */
@@ -97,7 +99,7 @@ struct CallBackFrame {
 struct CallBackEntry {
 #ifdef sparc
     ref(Structure)	theStruct;
-    long		mov_i7_g1;
+    long		mov_o7_g1;
     long		call_HandleCallBack;
     long		nop;
 #else
