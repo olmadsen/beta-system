@@ -80,6 +80,10 @@ void BetaSignalHandler (sig, info, ucon)
     todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
   case SIGSEGV: /* Segmentation fault */
     todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
+#ifdef RTDEBUG
+  case SIGINT: /* Interrupt */
+    todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
+#endif
   default:  /* Unknown signal */
     todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
   }
@@ -221,6 +225,10 @@ void BetaSignalHandler(sig, code, scp, addr)
     todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
   case SIGSEGV: /* Segmentation fault */
     todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
+#ifdef RTDEBUG
+  case SIGINT: /* Interrupt */
+    todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
+#endif
   default:  /* Unknown signal */
     todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
   }
