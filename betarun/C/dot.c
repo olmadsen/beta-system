@@ -353,7 +353,7 @@ void ProcessDOT(void)
 	    *current = (long) theObj;
 	    if (!theObj) DOTSize--;
 	    
-	    DEBUG_IOA( Claim( (theObj == 0) || inToSpace (theObj) || inAOA (theObj) ,"DOT element NONE, in ToSpace, or in AOA "));
+	    Claim( (theObj == 0) || inToSpace (theObj) || inAOA (theObj) ,"DOT element NONE, in ToSpace, or in AOA ");
 	    
 	  }
 	}

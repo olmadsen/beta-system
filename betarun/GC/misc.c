@@ -88,7 +88,7 @@ void assignRef(long *theCell, Item * newObject)
  */
 {
   *(Item **)theCell = newObject;
-  if (!inIOA(theCell)){/* inAOA? */
+  if (!inIOA(theCell)){
     /* theCell is in AOA */
     if (inIOA(newObject)){
 #ifdef MT
@@ -172,6 +172,14 @@ long isObject(void *theObj)
     
   isObjectState = 8;
   if (!IsPrototypeOfProcess((long)proto))
+    return 0;
+
+  isObjectState = 9;
+  if (ObjectSize(obj) <= 0)
+    return 0;
+
+  isObjectState = 10;
+  if (ObjectAlign(4*ObjectSize(obj))!=4*(unsigned)ObjectSize(obj))
     return 0;
 
   isObjectState = 0;
@@ -340,24 +348,33 @@ long inBetaHeap(Object *theObj)
 }
 
 #ifdef RTDEBUG
-void Claim(long expr, char *message)
+void CClaim(long expr, char *description, char *fname, int lineno)
 {
-  if( expr == 0 ){
-    fprintf(output, "\n\nAssumption failed: %s\n\n", message);
-#ifdef intel
-    if (CkPC1 && CkPC2){
-      fprintf(output, "Caused by Ck called from PC=0x%x (called from 0x%x)\n\n", (int)CkPC1, (int)CkPC2); 
-    }
-#endif
+  if (expr)
+    return;
 
-    fprintf(output,
-	    "IOA:     0x%x, IOATop:     0x%x, IOALimit:     0x%x\n",
-	    (int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit);
-    fprintf(output,
-	    "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
-	    (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
-    Illegal(); /* Usefull to break in */
+  fprintf(output, "\n%s:%d:\nAssumption failed: %s\n\n", 
+	  fname, lineno, description);
+
+#ifdef intel
+  if (CkPC1 && CkPC2){
+    char *lab;
+    fprintf(output, "Caused by Ck called from PC=0x%x (called from 0x%x)\n\n",
+	    (int)CkPC1, (int)CkPC2); 
+    lab = getLabel(CkPC1);
+    fprintf(output, "I.e., Ck called from <%s+0x%x> ", lab, (int)labelOffset);
+    lab = getLabel(CkPC2);
+    fprintf(output, ", called from <%s+0x%x>\n", lab, (int)labelOffset);
   }
+#endif
+  
+  fprintf(output,
+	  "IOA:     0x%x, IOATop:     0x%x, IOALimit:     0x%x\n",
+	  (int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit);
+  fprintf(output,
+	  "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+	  (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
+  Illegal(); /* Usefull to break in */
 }
 #endif
 

@@ -77,6 +77,7 @@ static void BooleanProperty(char *name)
 	DebugAOA = TRUE;
 	DebugAOAtoIOA = TRUE;
 	DebugStack=TRUE;
+	DebugStackObj=TRUE;
 	DebugLazy = TRUE;
 	DebugCBFA=TRUE);
 #else

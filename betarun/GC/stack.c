@@ -326,7 +326,7 @@ void ProcessStackFrames(long SP,
   
   DEBUG_STACK(fprintf(output, "ProcessStackFrames(SP=0x%x, StackStart=0x%x)\n",
 		      SP, StackStart));
-  DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
+  Claim(SP<=(long)StackStart, "SP<=StackStart");
 
   /* Process the top frame */
   DEBUG_STACK(FrameSeparator());
@@ -405,10 +405,10 @@ void ProcessStackFrames(long SP,
 	/*SP=StackStart;*/
 	break;
       }
-      DEBUG_CODE(Claim(oldSP<SP, "SP greater before callback/allocation"));
+      Claim(oldSP<SP, "SP greater before callback/allocation");
       DEBUG_STACK(fprintf(output, " Skipping to prevSP=0x%x\n", SP));
       /* Treat this frame as a top frame */
-      DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
+      Claim(SP<=(long)StackStart, "SP<=StackStart");
       DEBUG_STACK(FrameSeparator());
       DEBUG_STACK(fprintf(output, 
 			  "Processing top frame before %s:\n",
@@ -531,8 +531,8 @@ void ProcessStackFrames(long SP,
        *          |            |
        */
       
-      DEBUG_CODE(Claim(!isSpecialProtoType(theObj->Proto), 
-		       "!isSpecialProtoType(theObj->Proto)"));
+      Claim(!isSpecialProtoType(theObj->Proto), 
+		       "!isSpecialProtoType(theObj->Proto)");
       
 #ifdef ppcmac
       SP = *(long*)SP; /* Use FramePointer */
@@ -571,7 +571,7 @@ void ProcessStackFrames(long SP,
      *    "this" is the current object in *current* frame (if RT_DEBUG)
      */
 
-    DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
+    Claim(SP<=(long)StackStart, "SP<=StackStart");
     DEBUG_STACK(FrameSeparator());
     DEBUG_STACK(fprintf(output, "Processing normal frame:\n"));
     TRACE_STACK(currentSP,currentPC,current);
@@ -582,7 +582,7 @@ void ProcessStackFrames(long SP,
   /* The following claim does not hold anymore because of the 
    * CallB frame after main and Att.
    */
-  DEBUG_CODE(Claim(SP==(long)StackStart, "SP==StackStart"));
+  Claim(SP==(long)StackStart, "SP==StackStart");
 #endif
 
   DEBUG_STACK(FrameSeparator());
@@ -711,8 +711,8 @@ void ProcessStackObj(StackObject *theStackObject, CellProcessFunc func)
 
   DEBUG_IOA(fprintf(output, "ProcessStackObj: theStack: 0x%x, size: 0x%x\n", (int)theStackObject, (int)(theStackObject->StackSize)));
 
-  DEBUG_IOA( Claim(theStackObject->StackSize <= theStackObject->BodySize,
-                   "ProcessReference: StackObjectType: Stack <= Object") );
+  Claim(theStackObject->StackSize <= theStackObject->BodySize,
+                   "ProcessReference: StackObjectType: Stack <= Object");
 
   theEnd = &theStackObject->Body[0] + theStackObject->StackSize;
 
@@ -759,10 +759,8 @@ void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
     
     DEBUG_STACK(PrintAR(ar, theEnd));
 
-    DEBUG_CODE({
-      Claim((long)ar < (long)theEnd,  "ProcessAR: ar is less than theEnd");
-      Claim(((long) theEnd) % 4 == 0, "ProcessAR: theEnd is 4 byte aligned");
-    });
+    Claim((long)ar < (long)theEnd,  "ProcessAR: ar is less than theEnd");
+    Claim(((long) theEnd) % 4 == 0, "ProcessAR: theEnd is 4 byte aligned");
         
     /* Process GC registers of the activation record. */
     ProcessReg(&ar->i0, "i0", func);
@@ -1110,8 +1108,8 @@ void ProcessStackObj(StackObject *theStack, CellProcessFunc func)
   Object **theCell; 
   long    *theEnd;
 	    
-  DEBUG_IOA( Claim(theStack->StackSize <= theStack->BodySize,
-		   "ProcessReference: StackObjectType: Stack > Object") );
+  Claim(theStack->StackSize <= theStack->BodySize,
+		   "ProcessReference: StackObjectType: Stack > Object");
 	    
   theEnd = &theStack->Body[0] + theStack->StackSize;
 	    

@@ -166,7 +166,7 @@ Retry:
 #ifdef RTDEBUG
 void reportAsgRef(Object **theCell)
 {
-  if (!inIOA(theCell)){ /* inAOA? */
+  if (!inIOA(theCell)){
     fprintf(output, "\n*** AsgRef: 0x%x: 0x%x", (int)theCell, (int)*theCell);
   }
 }
@@ -203,7 +203,7 @@ static int AOAtoIOAInsertImpl(Object **theCell)
     }
 #endif
 
-    DEBUG_AOAtoIOA( Claim( inAOA( theCell),"AOAtoIOAInsert: theCell in AOA"));
+    Claim(inAOA(theCell),"AOAtoIOAInsert: theCell in AOA");
     
 #if 0
     DEBUG_CODE(fprintf(output, "\n*** AOAtoIOAInsert(0x%x)\n", (int)theCell));

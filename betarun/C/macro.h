@@ -128,15 +128,15 @@ do {                               \
  * another object.  Also LINKEND is legal, and is alive.
  * Please note that GCAttr==0 is illegal as none of the above is zero...
  */
-#define AOAISDEAD(obj)  (obj->GCAttr == DEADOBJECT)
-#define AOAISFREE(obj)  (obj->GCAttr == FREECHUNK)
-#define AOAISALIVE(obj) (obj->GCAttr >=  LISTEND)
-#define isLink(gcattr) (gcattr > LISTEND)
-#define isEnd(gcattr) (gcattr == LISTEND)
+#define AOAISDEAD(obj)  ((obj)->GCAttr == DEADOBJECT)
+#define AOAISFREE(obj)  ((obj)->GCAttr == FREECHUNK)
+#define AOAISALIVE(obj) ((obj)->GCAttr >=  LISTEND)
+#define isLink(gcattr) ((gcattr) > LISTEND)
+#define isEnd(gcattr) ((gcattr) == LISTEND)
 
 #define isAutonomous(gc)   ((IOAMinAge <= (gc)) && ((gc) <= IOAMaxAge))
 #define isStatic(gc)       ((-0xFFFF <= (gc)) && ((gc) <= -1))
-#define isForward(gc)      ((gc) > IOAMaxAge )
+#define isForward(gc)      ((gc) > IOAMaxAge)
 
 #define isValRep(x)      (((long)(DoubleRepPTValue) <= (long)((x)->Proto))\
 			  && ((long)((x)->Proto) <= (long)(LongRepPTValue)))
@@ -292,7 +292,8 @@ extern void zero_check(char *p, long bytesize);
 extern void CkReg(char *func,long value, char *reg);
 extern void CCk(void *r, char *fname, int lineno, char* ref);
 #define Ck(r) CCk(r, __FILE__, __LINE__, #r)
-extern void Claim(long, char*);
+extern void CClaim(long cond, char *description, char *fname, int lineno);
+#define Claim(r,t) CClaim(r, t, __FILE__, __LINE__)
 
 #else /* !RTDEBUG */
 
@@ -317,7 +318,7 @@ extern void Claim(long, char*);
 
 #define AssignReference(theCell, newObject)                                  \
   *(Item **)(theCell) = (Item *)(newObject);                   \
-  if (!inIOA((Item *)(theCell))/* inAOA? */ && inIOA((Item *)(newObject))) \
+  if (!inIOA((Item *)(theCell)) && inIOA((Item *)(newObject))) \
     AOAtoIOAInsert((Object **)theCell)
 
 #define setup_item(theItem, proto, origin )                                     \

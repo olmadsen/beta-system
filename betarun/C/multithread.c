@@ -627,7 +627,7 @@ Object *doGC(unsigned long numbytes)
 	  }
 	}
 
-	DEBUG_MT(Claim(newObj!=0, "doGC: newObj allocated"));
+	Claim(newObj!=0, "doGC: newObj allocated");
 
 	DEBUG_MT(fprintf(output,"t@%d: GC completed.\n", (int)ThreadId);
 		 fflush(output);

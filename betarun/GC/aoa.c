@@ -14,41 +14,6 @@ extern void DoGC(long *SP);
 extern void DoGC(void);
 #endif
 
-/* GLOBAL FUNCTIONS, declared in C/function.h
- *
- *  void tempAOArootsAlloc(void)
- *  void tempAOArootsFree(void)
- *  Object *AOAallocate(long numbytes)
- *  Object *AOAalloc(AOA_ALLOC_PARAMS)
- *  Object *AOAcalloc(AOA_ALLOC_PARAMS)
- *  Object * CopyObjectToAOA( Object * theObj theObj)
- *  long sizeOfAOA(void)
- *  void AOAGc()
- *  #ifdef nti 
- *  void DoGC()
- *  #endif
- *  #ifdef RTDEBUG
- *  void AOACheck()
- *  void AOACheckObject(Object * theObj)
- *  void AOACheckReference(Object ** theCell)
- *  void AOACheckObjectSpecial(Object * theObj)
- *  #endif
- *  void StackRefActionWrapper(Object **theCell,Object *theObj)
- *  Object * getRealObject(Object * obj)
- *  void checkNotInList(Object *target) 
- *  void appendToList(Object *target)
- *  void appendToListNoIOA(REFERENCEACTIONARGSTYPE)
- *  void appendToListInAOA(REFERENCEACTIONARGSTYPE)
- *  void initialCollectList(Object * root,
- *                          void referenceAction(REFERENCEACTIONARGSTYPE))
- *  void extendCollectList(Object * root,
- *                         void referenceAction(REFERENCEACTIONARGSTYPE))
- *  void scanList(Object * root, void (foreach)(Object * current))
- *  void scanObject(Object *obj,
- *  		void referenceAction(REFERENCEACTIONARGSTYPE),
- *  		int doPartObjects)
- */
-
 /* LOCAL FUNCTIONS */
 static long AllocateBaseBlock(void);
 #if 0
@@ -74,7 +39,7 @@ void tempAOArootsAlloc(void)
   long size;
     
   if (tempAOAroots) {
-    DEBUG_CODE(Claim(AOArootsPtr == tempAOAroots, "AOArootsPtr == tempAOAroots"));
+    Claim(AOArootsPtr == tempAOAroots, "AOArootsPtr == tempAOAroots");
     oldPtr = AOArootsPtr;
     oldlimitPtr = AOArootsLimit;
     size = 2 * ((long)oldlimitPtr - (long)oldPtr);
@@ -202,7 +167,7 @@ Object *AOAallocate(long numbytes)
 {
   Object *newObj;
     
-  DEBUG_CODE( Claim(numbytes > 0, "AOAallocate: numbytes > 0") );
+  Claim(numbytes > 0, "AOAallocate: numbytes > 0");
     
   /* Try to find a chunk of memory in the freelist */
   newObj = AOAAllocateFromFreeList(numbytes);
@@ -601,8 +566,7 @@ void AOACheckObject(Object *theObj)
   if (!theProto) return;
 #endif
 
-  Claim(!inBetaHeap((Object *)theProto),
-	 "#AOACheckObject: !inBetaHeap(theProto)");
+  Claim(IsPrototypeOfProcess((long)theProto), "IsPrototypeOfProcess(theProto)");
 
   AOA_DUMP_TEXT(":");
   AOA_DUMP_LONG(theObj);
@@ -653,7 +617,7 @@ void AOACheckReference(Object **theCell)
   if (*theCell) {
     Claim(inAOA(*theCell) || inIOA(*theCell),
 	  "AOACheckReference: *theCell in IOA, AOA");
-    if( inIOA( *theCell) ){
+    if (inIOA( *theCell)) {
       IOACheckObject( *theCell);
       for(i=0; (i < AOAtoIOAtableSize) && (!found); i++){
 	if( *pointer ) found = (*pointer == (long) theCell);
@@ -690,9 +654,8 @@ void AOACheckObjectSpecial(Object *theObj)
   if (!theProto) return;
 #endif
   
-  Claim(!inBetaHeap((Object *)theProto),
-	 "#AOACheckObjectSpecial: !inBetaHeap(theProto)");
-  
+  Claim(IsPrototypeOfProcess((long)theProto), "IsPrototypeOfProcess(theProto)");
+
   scanObject(theObj,
 	     AOACheckObjectRefSpecial,
 	     TRUE);
@@ -709,7 +672,7 @@ static Object * head;   /* Head of list build by collectList */
 static Object * tail;   /* Tail of list build by collectList */
 static long totalsize;
 
-static void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
+static void (*StackRefAction)(REFERENCEACTIONARGSTYPE) = NULL;
 void StackRefActionWrapper(Object **theCell,Object *theObj)
 {
   if (theObj
@@ -831,45 +794,25 @@ void appendToListNoIOA(REFERENCEACTIONARGSTYPE)
 /* Append objects to the list including only objects in AOA. */
 void appendToListInAOA(REFERENCEACTIONARGSTYPE)
 {
-#ifdef RTDEBUG
-  if (!*theCell) {
-    fprintf(output,"appendToListInAOA: Target is NULL!\n");
-    Illegal();
-  }
-  
-  if (!inAOA(theCell)) {
-    fprintf(output,
-	    "appendToListInAOA: TheCell is not in AOA!\n");
-    Illegal();
-  }
-#endif
+  Claim(inAOA(theCell), "appendToListInAOA:inAOA(theCell)");
+  Claim((int)*theCell, "appendToListInAOA:*theCell");
+  Claim(!inIOA(*theCell), "!inIOA(*theCell)");
 
   if (inToSpace(*theCell)) {
     /* insert theCell in AOAtoIOAtable. */
     AOAtoIOAInsert(theCell);
   } else {
-    /* The cell is assumed to be in AOA if not in IOA. */
-    if (!inIOA(*theCell)) {
-#ifdef RTDEBUG
-      if (!inAOA(*theCell)) {
-	fprintf(output,"appendToListInAOA: Target points outside ToSpace!\n");
-	Illegal();
-      }
-#endif
-      appendToList(*theCell);
-    } else {
-#ifdef RTDEBUG
-      fprintf(output,
-	      "[appendToListInAOA: Target points into IOA!\n"
-	      " How did this happen?]\n");
-      Illegal();
-#endif
-    }
+    /* The cell is assumed to be in AOA if not in ToSpace. 
+     * There should be nothing in IOA, as IOAGc has just completed,
+     * and the semispaces have not been swapped yet.
+     */
+    Claim(inAOA(*theCell), "inAOA(*theCell)");
+    appendToList(*theCell);
   }
 }
 
 void initialCollectList(Object * root,
-                        void referenceAction(REFERENCEACTIONARGSTYPE))
+                        void (*referenceAction)(REFERENCEACTIONARGSTYPE))
 {
   Object * theObj;
 
@@ -885,12 +828,9 @@ void initialCollectList(Object * root,
     head = tail = (Object *)LISTEND;
     return;
   }
-#ifdef RTDEBUG    
-  if (!inAOA(root)) {
-    fprintf(output,"initialCollectList: root not in AOA\n");
-    Illegal();
-  }
-#endif    
+
+  Claim(inAOA(root), "inAOA(root)");
+
   /* set_start_time("initialCollectList"); */
     
   /* point to self to end list.
@@ -921,21 +861,16 @@ void initialCollectList(Object * root,
   /* set_end_time("initialCollectList"); */
 }
 
-void extendCollectList(Object * root,
-                       void referenceAction(REFERENCEACTIONARGSTYPE))
+void extendCollectList(Object *root,
+                       void (*referenceAction)(REFERENCEACTIONARGSTYPE))
 {
-  Object * theObj;
+  Object *theObj;
 
   /* set_start_time("extendCollectList"); */
     
   Claim((int)tail, "extendCollectList without initialCollectList");
 
-#ifdef RTDEBUG
-  if (!inAOA(root)) {
-    fprintf(output,"extendCollectList: root not in AOA\n");
-    Illegal();
-  }
-#endif    
+  Claim(inAOA(root), "inAOA(root)");
   appendToList(root);
     
   /* root has now been appended to the list, if not already
@@ -967,13 +902,15 @@ void scanList(Object * root, void (foreach)(Object * current))
   }
 }
 
+/* scanObject: */
 void scanObject(Object *obj,
-		void referenceAction(REFERENCEACTIONARGSTYPE),
+		void (*referenceAction)(REFERENCEACTIONARGSTYPE),
 		int doPartObjects)
 {
   ProtoType * theProto;
     
   theProto = obj->Proto;
+  Claim(IsPrototypeOfProcess((long)theProto), "IsPrototypeOfProcess(theProto)");
   if (!isSpecialProtoType(theProto)) {
     GCEntry *tab =
       (GCEntry *) ((char *) theProto + theProto->GCTabOff);
@@ -1066,14 +1003,10 @@ void scanObject(Object *obj,
 	Component * theComponent;
               
 	theComponent = ((Component*)obj);
-#if (defined(CRUN) || defined(RUN) || defined(NEWRUN))
 	if ((theComponent->StackObj) &&
 	    (long)(theComponent->StackObj) != -1) {
 	  referenceAction((Object **)&(theComponent->StackObj));
 	}
-#else
-#error liniarize of stack object not implemented on this platform
-#endif /* CRUN || RUN */
 	if (theComponent->CallerComp) {
 	  referenceAction((Object **)&(theComponent->CallerComp));
 	}
@@ -1085,8 +1018,22 @@ void scanObject(Object *obj,
 	break;
       }
     case SwitchProto(StackObjectPTValue):
-    StackRefAction = referenceAction;
-    ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
+      {
+	void (*oldStackRefAction)(REFERENCEACTIONARGSTYPE);
+	if (StackRefAction) {
+	  fprintf(output, 
+		  "\n[Note: Recursion in ScanObject on StackObject]\n");
+	  if (StackRefAction != referenceAction) {
+	    fprintf(output, 
+		    "\n[Note: Recursion in ScanObject "
+		    "Will change behaviour!!!]\n");
+	  }
+	}
+	oldStackRefAction = StackRefAction;
+	StackRefAction = referenceAction;
+	ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
+	StackRefAction = oldStackRefAction;
+      }
     break;
               
     case SwitchProto(StructurePTValue):

@@ -17,13 +17,14 @@ static Object * CopyObject(Object * theObj)
     long        size;
     
     size = 4*ObjectSize( theObj);
-    DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#CopyObject: ObjectSize(theObj) > 0") );
+    Claim(isObject(theObj), "isObject(theObj)");
+    
     
     /* Assure that IOAMinAge <= theObj->GCAttr <= IOAMaxAge. */
-    DEBUG_IOA( Claim(IOAMinAge <= theObj->GCAttr,
-		     "CopyObject: IOAMinAge <= Age of object."));
-    DEBUG_IOA( Claim( theObj->GCAttr<=IOAMaxAge,
-		     "CopyObject: Age of object<=IOAMaxAge."));
+    Claim(IOAMinAge <= theObj->GCAttr,
+	  "CopyObject: IOAMinAge <= Age of object.");
+    Claim(theObj->GCAttr<=IOAMaxAge,
+	  "CopyObject: Age of object<=IOAMaxAge.");
     
     if (theObj->GCAttr==IOAMaxAge) theObj->GCAttr--;
     IOAAgeTable[theObj->GCAttr-IOAMinAge] += size;
@@ -38,7 +39,7 @@ static Object * CopyObject(Object * theObj)
 	newObj     = (Object *) ToSpaceTop;
 	theEnd     = (long *) (((long) newObj) + size); 
 	
-	DEBUG_IOA( Claim(theEnd<=ToSpaceLimit, "theEnd<=ToSpaceLimit") );
+	Claim(theEnd<=ToSpaceLimit, "theEnd<=ToSpaceLimit");
 	
 	ToSpaceTop = theEnd;
 
@@ -71,36 +72,34 @@ static Object * CopyObject(Object * theObj)
  *  If theCell is not 0 it should be treated as an AOA root, in case
  *  theObj is moved to AOA.
  *  The function is used by IOAGc.
- * 
- * FIXME: better parameters: (Object **theCell, int useForAOAroot)
- *        will be more readable.
  */
 Object * NewCopyObject(Object * theObj, Object ** theCell)
 {
+  MCHECK();
+
+  if( theObj->GCAttr < IOAtoAOAtreshold ){
+    /* theObj is not old enough for AOA */
+    return CopyObject(theObj);
+  } else {
+    /* theObj is old enough to go into AOA */
+    Object * newObj;
+
     MCHECK();
-
-    if( theObj->GCAttr < IOAtoAOAtreshold ){
-        /* theObj is not old enough for AOA */
-        return CopyObject(theObj);
+    if( (newObj = CopyObjectToAOA(theObj)) ){
+      /* Insert theCell in AOAroots table. 
+       * Used as roots in AOA GC if invoked after IOAGc.
+       */
+      MCHECK();
+      if (theCell) {
+	Claim(!inAOA(theCell), "!inAOA(theCell)");
+	MCHECK();
+	saveAOAroot(theCell);
+	MCHECK();
+      }
+      return newObj;
     } else {
-        /* theObj is old enough to go into AOA */
-        Object * newObj;
-
-        MCHECK();
-        if( (newObj = CopyObjectToAOA(theObj)) ){
-            /* Insert theCell in AOAroots table. 
-             * Used as roots in AOA GC if invoked after IOAGc.
-             */
-            MCHECK();
-            if (theCell) {
-                MCHECK();
-                saveAOAroot(theCell);
-                MCHECK();
-            }
-            return newObj;
-        } else {
-            /* CopyObjectToAOA failed */
-            return CopyObject(theObj);
-        }
+      /* CopyObjectToAOA failed */
+      return CopyObject(theObj);
     }
+  }
 }

@@ -225,14 +225,14 @@ void removeDanglingProto (int dangler)
 
   DEBUG_LAZY(printf ("removeDanglingProto(%d)\n",dangler));
   
-  DEBUG_LAZY(Claim(isLazyRef(dangler), "isLazyRef(dangler)"));
+  Claim(isLazyRef(dangler), "isLazyRef(dangler)");
   inx = (-dangler)%ROOTSIZE;
-  DEBUG_LAZY(Claim((0<=inx)&&(inx<ROOTSIZE), 
-		   "removeDanglingProto: inx legal index"));
+  Claim((0<=inx)&&(inx<ROOTSIZE), 
+		   "removeDanglingProto: inx legal index");
   this = roots[inx];
 
   while (this) {
-    DEBUG_LAZY(Claim(++num<=ROOTSIZE, "At most ROOTSIZE protoPtr in roots"));
+    Claim(++num<=ROOTSIZE, "At most ROOTSIZE protoPtr in roots");
     if (this->dangler == dangler) {
       if (this->next) 
 	this->next->prev = this->prev;

@@ -110,7 +110,7 @@ void IOAGc()
         for(i=0; i<AOAtoIOAtableSize; i++){ 
             if(*pointer){
                 AOAtoIOACount++;
-                DEBUG_IOA(Claim(inAOA(*pointer), "AOAtoIOAtable has a cell outside AOA"));
+                Claim(inAOA(*pointer), "AOAtoIOAtable has a cell outside AOA");
                 ProcessAOAReference( (Object **)*pointer);
             }
             pointer++;
@@ -201,7 +201,7 @@ void IOAGc()
    */
     if (AOABaseBlock) {
       if (HandledInAOAHead) {
-	for (;;) {
+	while (1) {
 	  Object *nextHead;
 	  
 	  ProcessAOAObject(HandledInAOAHead);
@@ -285,7 +285,7 @@ void IOAGc()
     
         if (limit && (IOAtoAOAtreshold < IOAMaxAge))
             IOAtoAOAtreshold +=1;
-        DEBUG_CODE(Claim(IOAtoAOAtreshold <= IOAMaxAge, "IOAtoAOAtreshold <= IOAMaxAge"));
+        Claim(IOAtoAOAtreshold <= IOAMaxAge, "IOAtoAOAtreshold <= IOAMaxAge");
     }
     DEBUG_IOA( fprintf(output, " treshold=%d", (int)IOAtoAOAtreshold));
     DEBUG_IOA( fprintf(output, " AOAroots=%d", 
@@ -516,7 +516,7 @@ void ProcessReference( theCell)
         *theCell = (Object *) Offset( newObj, -Distance);
       }
     }
-    DEBUG_IOA( Claim( !inIOA(*theCell),"ProcessReference: !inIOA(*theCell)"));
+    Claim(!inIOA(*theCell),"ProcessReference: !inIOA(*theCell)");
   }else{
     /* '*theCell' is pointing outside IOA */
     /* If the forward pointer refers an AOA object, insert
@@ -558,65 +558,72 @@ void ProcessObject(theObj)
 
 /*
  * ProcessAOAReference:
- *  Takes as input a reference to a cell residing outside IOA.
+ *  Takes as input a reference to a cell residing inside AOA.
  *  If the cell refers an object residing in IOA, the 
  *  object is copied to ToSpace/AOA and the cell is updated.
- *  Furthermore one forward reference in the most enclosing
+ *  Furthermore a forward reference in the most enclosing
  *  object is inserted in the GC-attribute.
  */
 static void ProcessAOAReference(Object ** theCell)
 {
-    Object * theObj;
-    long GCAttribute;
-
-    /*fprintf(output, "ProcessAOAReference: 0x%x\n", *theCell);*/
+  Object * theObj;
+  long GCAttribute;
   
-    DEBUG_AOA( Claim( inAOA( theCell),"#ProcessAOAReference: theCell inside AOA\n"));
-    theObj = *theCell; /* the object referenced from the cell */
+  /*fprintf(output, "ProcessAOAReference: 0x%x\n", *theCell);*/
   
-    if( inIOA(theObj)){ /* theObj is inside IOA */
-        GCAttribute = theObj->GCAttr;
-        if( isForward(GCAttribute) ){ /* theObj has a forward pointer. */
-            *theCell = (Object *) GCAttribute;
-        }else{
-            if( isAutonomous(GCAttribute) ){ 
-                /* theObj is an autonomous object. Move it from IOA to AOA */
-                *theCell = NewCopyObject( theObj, 0);
-            }else{ /* theObj is a part object. */
-                long Distance;
-                Object * newObj;
-                Object * AutObj;
+  Claim(inAOA(theCell),"inAOA(theCell)");
+  if (*theCell) {
+    Claim(inBetaHeap(*theCell), "inBetaHeap(*theCell)");
+  }
+  theObj = *theCell; /* the object referenced from the cell */
+  
+  if (inIOA(theObj)) { /* theObj is inside IOA */
+    GCAttribute = theObj->GCAttr;
+    if (isForward(GCAttribute)) { 
+      /* The object has already been moved to ToSpace or AOA. */
+      *theCell = (Object *) GCAttribute;
+    } else {
+      if (isAutonomous(GCAttribute)) { 
+	/* theObj is an autonomous object. 
+	 * Move it from IOA to ToSpace/AOA */
+	*theCell = NewCopyObject(theObj, 0);
+      } else { 
+	/* theObj is a part object. */
+	long Distance;
+	Object * newObj;
+	Object * AutObj;
 	
-                GetDistanceToEnclosingObject(theObj, Distance);
-                AutObj = (Object *) Offset( theObj, Distance);
-		/* FIXME: was !isAutonomous(AutObj->GCAttr). Why? */
-                if (isForward(AutObj->GCAttr)) {
-                    newObj = (Object *) AutObj->GCAttr;
-                } else {
-                    newObj = NewCopyObject( AutObj, 0);
-		}
-                *theCell = (Object *) Offset( newObj, -Distance); 
-            }
-        }
+	Claim(isStatic(GCAttribute), "isStatic(GCAttribute)");
+	GetDistanceToEnclosingObject(theObj, Distance);
+	AutObj = (Object *) Offset(theObj, Distance);
+	Claim(!isStatic(AutObj->GCAttr), "!isStatic(AutObj->GCAttr)");
+	if (isForward(AutObj->GCAttr)) {
+	  newObj = (Object *) AutObj->GCAttr;
+	} else {
+	  newObj = NewCopyObject(AutObj, 0);
+	}
+	*theCell = (Object *) Offset(newObj, -Distance); 
+      }
     }
-    
-    DEBUG_AOA( Claim( !inIOA(*theCell),"ProcessAOAReference: !inIOA(*theCell)"));
-    DEBUG_AOA( if( inAOA( *theCell)){ AOACheckObjectSpecial( *theCell); } );
+  }
   
-    /* Insert 'theCell' in the AOAtoIOAtable iff *theCell is inToSpace. */
-    /* Otherwise, if *theCell is a dangling (negative) reference, insert it in
-     * negAOArefs */
-    if( inToSpace( *theCell ) ) {
+  Claim(!inIOA(*theCell),"!inIOA(*theCell)");
+  DEBUG_AOA(if(inAOA(*theCell)) { AOACheckObjectSpecial(*theCell); });
+  
+  /* Insert 'theCell' in the AOAtoIOAtable iff *theCell is inToSpace. */
+  /* Otherwise, if *theCell is a dangling (negative) reference, insert it in
+   * negAOArefs */
+  if (inToSpace(*theCell)) {
 #ifdef MT
-        MT_AOAtoIOAInsert( theCell);
+    MT_AOAtoIOAInsert( theCell);
 #else /* MT */
-        AOAtoIOAInsert( theCell);
+    AOAtoIOAInsert( theCell);
 #endif /* MT */
-    }
+  }
 #ifdef RTLAZY
-    else if (isLazyRef(*theCell)) {
-        negAOArefsINSERT((long) theCell);
-    }
+  else if (isLazyRef(*theCell)) {
+    negAOArefsINSERT((long) theCell);
+  }
 #endif
 }
 
@@ -655,11 +662,11 @@ void CompleteScavenging()
     theObj = (Object *) HandledInToSpace;
     HandledInToSpace = (long *) (((long) HandledInToSpace)
 				    + 4*ObjectSize(theObj));
-    DEBUG_CODE(Claim(ObjectSize(theObj)>0, "CompleteScavenging: ObjectSize(theObj)>0"));
+    Claim(ObjectSize(theObj)>0, "CompleteScavenging: ObjectSize(theObj)>0");
     ProcessObject(theObj);
   }
-  DEBUG_CODE(Claim( HandledInToSpace == ToSpaceTop,
-		     "CompleteScavenging: HandledInToSpace == ToSpaceTop"));
+  Claim( HandledInToSpace == ToSpaceTop,
+		     "CompleteScavenging: HandledInToSpace == ToSpaceTop");
 }
 
 #ifdef RTDEBUG
@@ -738,13 +745,18 @@ void IOACheck()
         }
 #else /* Not MT */
         Claim((long)(theObj->Proto), "IOACheck: theObj->Proto");
+	Claim(IsPrototypeOfProcess((long)(theObj->Proto)),
+				   "IsPrototypeOfProcess(Proto)");
 #endif /* MT */
 
         IOACheckPrintTheObj(theObj);
 
         Claim(inIOA(theObj), "IOACheck: theObj in IOA");
-        theObjectSize = 4*ObjectSize(theObj);
+	Claim(isObject(theObj), "isObject(theObj)");
         Claim(ObjectSize(theObj) > 0, "#IOACheck: ObjectSize(theObj) > 0");
+        theObjectSize = 4*ObjectSize(theObj);
+	Claim(ObjectAlign(theObjectSize)==(unsigned)theObjectSize,
+	      "ObjectSize aligned");
         IOACheckObject (theObj);
         lastObj = theObj;
         theObj = (Object *) Offset(theObj, theObjectSize);
@@ -763,13 +775,9 @@ void IOACheckReference(REFERENCEACTIONARGSTYPE)
         if (!(inIOA(*theCell) || inAOA(*theCell))) {
             fprintf (output, "theCell = 0x%x, *theCell = 0x%x\n", 
                      (int)theCell, (int)(*theCell));
-            Claim( inIOA(*theCell) || 
-                   inAOA(*theCell)
-#ifdef MT
-                   || (long)*theCell==16 /* dreadfull hack (see AlloBC) */
-#endif
-                   ,
-                   "IOACheckReference: *theCell lazy ref or inside IOA, AOA");
+            Claim(inIOA(*theCell) || 
+                  inAOA(*theCell),
+		  "IOACheckReference: *theCell lazy ref or inside IOA, AOA");
         }
     }
 }

@@ -275,14 +275,14 @@ extern Object * GetThis(long *SP);
 
 /* aoa.c */
 extern void scanObject(Object *obj,
-                       void referenceAction(REFERENCEACTIONARGSTYPE),
+                       void (*referenceAction)(REFERENCEACTIONARGSTYPE),
                        int doPartObjects);
 extern Object * getRealObject(Object * obj);
 extern void appendToListInAOA(REFERENCEACTIONARGSTYPE);
 extern void initialCollectList(Object * root,
-                               void referenceAction(REFERENCEACTIONARGSTYPE));
+                               void (*referenceAction)(REFERENCEACTIONARGSTYPE));
 extern void extendCollectList(Object * root,
-                              void referenceAction(REFERENCEACTIONARGSTYPE));
+                              void (*referenceAction)(REFERENCEACTIONARGSTYPE));
 extern void scanList(Object * root, void (foreach)(Object * current));
 
 /* aoafreelist.c */
