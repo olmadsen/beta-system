@@ -17,6 +17,13 @@ ParamOriginProto(struct Item *,AlloI)
 
     DEBUG_CODE(NumAlloI++);
 
+#if 0
+    if ((NumAlloI > 15000) && (NumAlloI<20000)) {
+      fprintf(output, "AlloI\n");
+      fprintf(output, "NumAlloI: %d\n", (int)NumAlloI);
+    }
+#endif
+
     Ck(origin);
 
 #if (defined(hppa) && defined(RTDEBUG)) || defined(crts)

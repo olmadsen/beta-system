@@ -208,6 +208,13 @@ asmlabel(CopyCPP, "
 void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 {
 
+#if 0
+    if ((NumAlloI > 15000) && (NumAlloI<20000)){
+      fprintf(output, "CopyCPP\n");
+      fprintf(output, "NumAlloI: %d\n", (int)NumAlloI);
+    }
+#endif
+
     if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
 
     /* Take the next free entry in the Call Back Functions Area.	*/
