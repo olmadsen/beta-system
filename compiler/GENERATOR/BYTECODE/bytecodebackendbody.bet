@@ -15,6 +15,11 @@ INCLUDE '~beta/basiclib/fileSetExe';
           enter V
           do V -> BC.putShort
           #);
+        emitLong:
+          (# V: @integer
+          enter V
+          do V -> BC.putLong
+          #);
         emit1: emit
           (# op1: @integer
           enter op1
@@ -162,7 +167,7 @@ do reg.out;
     else
        ONlevel -> mstate.BCM.emit;
    if);
-   (if isField then 
+   (if isField and (descName[] <> none) then 
        1 -> mstate.BCM.emit;
        descName[] -> mstate.BCM.emitText
     else 
@@ -185,8 +190,7 @@ do mstate.BCM.loadOrigin -> mstate.BCM.emit;
    '\n***OBS loadOrigin:shouldNotHappen' -> putline
    
 ---byteCode_InxRegAdr_out:doPart---   
-do 'InxRegAdr_out:'->puttext;
-   areg.out;
+do areg.out;
    off -> mstate.BCM.emit;
    size -> mstate.BCM.emit;   
    ONlevel -> mstate.BCM.emit;  
@@ -205,7 +209,19 @@ do 'InxRegAdr_out:'->puttext;
 do mstate.BCM.nop -> mstate.BCM.emit;
    
 ---byteCode_ldCst:doPart---
-do (mstate.BCM.pushCst,C) -> mstate.BCM.emit1;
+do (if true
+    // (- 128 <= C) and (C <= 127) then
+       (mstate.BCM.pushCst_s8,C) -> mstate.BCM.emit1;
+    // (- common.two15 <= C) and (C <= (common.two15-1)) then
+       mstate.BCM.pushCst_s16 -> mstate.BCM.emit;
+       C -> mstate.BCM.emitShort; (* is this one sign extended?*)
+    else
+       mstate.BCM.pushCst_s32 -> mstate.BCM.emit;
+       C -> mstate.BCM.emitLong
+   if)
+   
+---byteCode_ldNone:doPart---
+do mstate.BCM.pushNone -> mstate.BCM.emit;
    
 ---byteCode_ldValImpl:doPart---
 do (if mstate.methodType = 2 then
@@ -225,7 +241,14 @@ do (if mstate.methodType = 2 then
            A.descName[] -> mstate.BCM.emittext;
         else
            0 -> mstate.BCM.emit
-       if)
+       if);
+       (if A.fieldType[] <> none then
+           1 -> mstate.BCM.emit;
+           A.fieldType[] -> mstate.BCM.emittext;
+        else
+           0 -> mstate.BCM.emit
+       if);
+       
     else
        (if A.isRef then
            mstate.BCM.loadRef->mstate.BCM.emit
@@ -275,11 +298,18 @@ do (if true
        '\nglea: operand type not handled'->putline
    if)   
    
+--bytecodeBackend_gClr:doPart--
+do (* don't do this; too mnay zero constants
+    * will be pushed when clearing registers.
+    * (mstate.BCM.pushCst,0) -> mstate.BCM.emit1;
+    *)
+   
 --bytecode_loadRange:doPart--
 do mstate.BCM.loadRange ->mstate.BCM.emit
    
 ---byteCode_duplicate:doPart---
-do mstate.BCM.dup ->mstate.BCM.emit
+do mstate.BCM.dup -> mstate.BCM.emit;
+   pos -> mstate.BCM.emit;
 
 --bytecode_emitCk:doPart--
    (* OBS! This operation is used to initialize 
@@ -364,11 +394,34 @@ do mstate.BCM.call->mstate.BCM.emit; T[]->mstate.BCM.emitText
 do mstate.BCM.jmp->mstate.BCM.emit; op.out;
    
 --byteCode_gJsr:doPart---
-do mstate.BCM.call->mstate.BCM.emit; op.out;
+do mstate.BCM.call->mstate.BCM.emit; 
+   (if isStatic then 
+       1 -> mstate.BCM.emit
+    else
+       0 -> mstate.BCM.emit
+   if);
+   op.out;
    
---byteCode_cmpAndJmp:doPart---
+---byteCode_cmpToBool:doPart--   
+do op1.loadToReg; 
+   op2.loadToReg;
+   (* op3 is a register to load 0 or 1;
+    * here we use the stack instead
+    *)
+   
+   mstate.BCM.cmpToBool->mstate.BCM.emit; 
+   cond -> mstate.BCM.emit;
+
+   
+---byteCode_cmpAndJmp:doPart---
 do op1.loadToReg; op2.loadToReg;
    mstate.BCM.cmpAndJmp->mstate.BCM.emit; 
+   cond -> mstate.BCM.emit;
+   lab.out;  
+   
+---byteCode_cmpBoolAndJmp:doPart--
+do op.loadToReg;
+   mstate.BCM.cmpBoolAndJmp->mstate.BCM.emit; 
    cond -> mstate.BCM.emit;
    lab.out;  
    

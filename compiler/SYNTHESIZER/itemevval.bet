@@ -14,7 +14,7 @@ do &ItemEvVal[]->IV[]->V[]; (lEV[],lES[],lDesc[],lA[],lChain[])->IV
 ---asgToComNelm:doPart---
 do (# EH: @EvalHandler;
       V: ^evVal;
-   do (baseAdr,lV[],thisEv[],thisChain[])->EH.assignValToEval->V[];
+   do (baseAdr,lV[],thisEv[],false,thisChain[])->EH.assignValToEval->V[];
       (if V[] <> none then V.release if)
    #)
 ---asgToNelm:doPart---
@@ -54,7 +54,7 @@ do (# EH: @EvalHandler;
               *)
              rObjAdr.bAdr.localDesc[] -> localDesc[];
              (rObjAdr[],nScanN.PL,rObjAdr[]) -> SetSuperDesc -> rObjAdr[];
-             (rObjAdr[],lV[],nScanN.thisEv[],nScanN.thisChain[])
+             (rObjAdr[],lV[],nScanN.thisEv[],false,nScanN.thisChain[])
                -> EH.AssignValToEval 
                -> V[];
              localDesc[] -> rObjAdr.bAdr.localDesc[];
@@ -72,7 +72,7 @@ do (# EH: @EvalHandler;
 	      thisA.bAdr.localDesc[]->localDesc[]; 
               gen.thisRegAdr->A[]; localDesc[]->A.bAdr.localDesc[];
               (A[],PL,A[]) -> setSuperDesc -> A[];
-	      (A[],lV[],thisEv[],thisChain[])->EH.assignValToEval->V[]
+	      (A[],lV[],thisEv[],false,thisChain[])->EH.assignValToEval->V[]
 	   else
               313->trace(#
                         do 'asgToNelm:'->xT;
@@ -81,7 +81,7 @@ do (# EH: @EvalHandler;
                            (baseadr).display->xT                           
                         #);
               '!asgToNelmZ:'->mch.comment;
-	      (baseAdr,lV[],thisEv[],thisChain[])->EH.assignValToEval->V[];
+	      (baseAdr,lV[],thisEv[],false,thisChain[])->EH.assignValToEval->V[];
 	  if);
           (if V[] <> none then 
               V.hardRelease;
@@ -130,7 +130,7 @@ do prepareBaseAdr;
    cycle(#do cError(#do 'NX-list exhausted!'->xT; desc[]->xA #); SUSPEND #)
    
 ---BeforeEnter:doPart---
-do '!beforeEnter'->mch.comment;
+do '!beforeEnter:begin'->mch.comment;
    (if (A.regType <> mch.callO) and not common.switch[125] then
        (if (A.regType <> mch.thisO)
            OR
@@ -155,7 +155,7 @@ do '!beforeEnter'->mch.comment;
                '!beforeEnter:toCallReg'->mch.comment;
                AllocCallReg->callRegOnStack;
                (if switch182 then
-                    '!beforeEnter'->mch.comment;
+                    '!beforeEnter:loadRef'->mch.comment;
                    true -> A.isRef;
                    true -> A.noTmp; (* means A is pushed on stack *)
                    (A[],desc[] -> descName,none)->mch.loadRef;
@@ -403,7 +403,7 @@ do (if stest then
                  thisDesc[]->xA #);*)
                 leave M
             if);
-            (ES,common.itemKind,0,null)->DS.push
+            (ES,common.itemKind,2,null)->DS.push
          else 
             baseAdr.bAdr.localDesc[]->D[];
 
@@ -585,10 +585,45 @@ do (if stest then
         if)
      #)
 #)
+---itemVal_exeItem:doPart---
+do (*350->cTrace(#do 'exeItem'->T #);*)
+   (if (topDesc->semAtt.superObject.equal) then
+       (* in execution of e.g.  R: ^ Object,
+        * the object denoted by R may be implicitly prefixed
+        * by "Object". This means that direct execution of "Object"
+        * will not work
+        *)
+       (*350->cTrace(#do 'TopDesc is Object: exe INNER'->T #);*)
+       A[]->gen.ExeTop
+    else 
+       (if common.switch[44] or (topDesc[]->sematt.hasOnlyInner) then 
+           (* NOTE: combine with superObject above, 
+            * since superObject hasOnlyInner 
+            *)
+           A[]->gen.ExeTop (* avoid external entry-pt*)
+        else
+           (*(topDescNo,topFormId[])->gen.exeDo*)
+           (if doExit then
+               'doExit:dup'->mch.comment;
+               (* we need to execute the exit part *)
+                 mch.duplicate
+           if);
+           ('M',topDesc[],0)->callEntry
+   if)if)
+   
 ---EvalLib:attributes------
 ExitArgs: evVal
   (# evId:: (# do 'ExitArgs:'->id[] #);
      display:: (# do lEV[] -> xA#);
+     loadVal::
+       (# dr: @mch.dataRegOperand
+       do ExeExit; (* has this been done when called for ItemVal?*)
+          (dr,false,false,false) -> mkComputedEvVal -> V[];
+       #);
+     asgToAdr::
+       (# dr: @mch.dataRegOperand
+       do (dr[],rA[]) -> mch.stVal
+       #);
      asgToCproc::
        (# xScan: @ | scanXadr; 
           XV: ^evVal;
@@ -930,30 +965,45 @@ itemEvVal: EvVal
                      301->itemTrace(#do 'loadVal:B ' -> xT; XV.display #)if);
                  XV.loadVal -> V[];
                  (if stest then
-                     301->itemTrace(#do 'loadVal:A ' -> xT; V.display #)if);
+                     301->itemTrace(#do 'loadVal:C ' -> xT; V.display #)if);
               #);
               release
            else
-              true -> ItemVal(#do XV.loadVal->V[] #)
+              (if switch182 then
+                     (* we have executed exeExit and the simple
+                      * exit value is on the stack; we thus return
+                      * a computedVal
+                      *)
+                  (# dr: @mch.dataRegOperand
+                  do (dr,false,false,false) 
+                       -> mkComputedEvVal 
+                       -> V[];
+                  #)
+               else
+                  true -> SingleItemVal
+                  (# 
+                  do XV.loadVal->V[];
+                  #);
+              if)
           if)
        #);
-     loadVal2::< (#do true->ItemVal(#do XV.loadVal2->V[] #)#);
-     toDataRegA::< (#do true->ItemVal(#do XV.toDataRegA; freeLA #)#);
-     toDataRegX::< (#do true->ItemVal(#do XV.toDataRegX; freeLA #)#);
-     toDataRegY::< (#do true->ItemVal(#do XV.toDataRegY; freeLA #)#);
-     toRangeReg::< (#do ItemVal(#do XV.toRangeReg;(* freeLA*) #)#);
+     loadVal2::< (#do true->SingleItemVal(#do XV.loadVal2->V[] #)#);
+     toDataRegA::< (#do true->SingleItemVal(#do XV.toDataRegA; freeLA #)#);
+     toDataRegX::< (#do true->SingleItemVal(#do XV.toDataRegX; freeLA #)#);
+     toDataRegY::< (#do true->SingleItemVal(#do XV.toDataRegY; freeLA #)#);
+     toRangeReg::< (#do SingleItemVal(#do XV.toRangeReg;(* freeLA*) #)#);
      toDataReg::<
        (# xDr: ^mch.dataRegOperand
        do dReg.deAlloc;
-          ItemVal(#do XV.toDataReg->xDr[];
+          SingleItemVal(#do XV.toDataReg->xDr[];
                     xDr.fn->dReg.fn; xDr->dReg;
                     true->keep; (* do not release XV
                     (*.reUse*); (*freeLA*) 
                  #);
        #);
-     toPrimDest::< (#do ItemVal(#do pNo -> XV.toPrimDest #)#);
+     toPrimDest::< (#do SingleItemVal(#do pNo -> XV.toPrimDest #)#);
      evType::< (#do -1->type #);
-     mkReal::< (#do true->ItemVal(#do XV.mkReal->V[] #) #);
+     mkReal::< (#do true->SingleItemVal(#do XV.mkReal->V[] #) #);
      
      scanExit:
        (* scan exit elements of this object *)
@@ -1300,9 +1350,16 @@ itemEvVal: EvVal
        (# rA: ^mch.address; callRegOnStack,laIsCallReg: @boolean;
           localDesc: ^ASTindex; case: @integer;
           xScan: @ | scanXadr; V: ^evVal;
-          unfreeze: @boolean
+          unfreeze: @boolean;
+          EH: @evalHandler
        enter rA[]
        do ExeExit;
+          (if switch182 then
+              (lDesc[],lA[],0,lChain[]) -> xScan; 
+              xScan.getExitVal -> V[];
+              301->trace(#do 'itemVal:fixXadr:'-> xT; V.display #);
+              INNER
+           else
           (if switch181 then
               rA[] -> scanExit
               (#
@@ -1433,7 +1490,7 @@ itemEvVal: EvVal
               if);
           if);
               xScan.reset; freeLA
-          if)
+          if)if)
        exit V[]
        #);
      SimpleFixXadr:
@@ -1643,7 +1700,7 @@ itemEvVal: EvVal
        do (if stest then
               301->cTrace
               (#
-              do 'itemVal:AsgToAdr:'->xT; lDesc[]->xA;
+              do 'itemVal:AsgToAdr:'->xT; lDesc[]->xA; xN;
                  ' lA:'-> xT; lA.display->xT; ' rA:'->xT; rA.display->xT;
                  mch.dumpreg 
           #)if);
@@ -1800,8 +1857,9 @@ itemEvVal: EvVal
                                               nscan.thisEv[]->xA
                                            #)
                             if);
-                            (rObjAdr[],this(ItemEvVal)[],nscan.thisEv[],
-                            nScanN.thisChain[])
+                            (rObjAdr[],this(ItemEvVal)[],nscan.thisEv[]
+                            ,false
+                            ,nScanN.thisChain[])
                               -> AssignValToEval 
                               -> V[];
                             (if stest then
@@ -1833,7 +1891,7 @@ itemEvVal: EvVal
                                         'elm:XV='->xT; XV.display;
                                  #)if);
                                  (rObjAdr[],XV[],nscan.thisEv[]
-                                 ,nScanN.thisChain[])
+                                 ,false,nScanN.thisChain[])
                                    -> (*EH.*)AssignValToEval 
                                    -> V[];
                                  (if stest then
@@ -2139,7 +2197,7 @@ itemEvVal: EvVal
                      (* (if BA[] <> theBaseAdr[] then
                           theBaseAdrTmp.reSave
                       if);*)
-                      (BA[],XV[],E[],rChain[]) 
+                      (BA[],XV[],E[],false,rChain[]) 
                         -> AssignValToEval 
                         -> V[];
                       (if V[] <> none then V.release 
@@ -2172,7 +2230,7 @@ itemEvVal: EvVal
                              V.display; ' to:' -> xT; E[] -> xA;
                              mch.dumpreg 
                       #)if);
-                      (rA.copy,V[],E[],rChain[])->AssignValToEval->V[];
+                      (rA.copy,V[],E[],false,rChain[])->AssignValToEval->V[];
                       V.release;
                       (*301->cTrace(#do 'AsgToList2:'->xT; mch.dumpreg #);*)
                       (if xScan then xScan.getExitVal->V[] if)
@@ -2342,48 +2400,57 @@ itemEvVal: EvVal
           freeLA; 
           callRegOnStack->popCall
        #);
-     ItemVal: (* used when just a single EXIT value *)
+     SingleItemVal: (* used when just a single EXIT value *)
        (# xScan: @ | scanXadr; XV: ^evVal; case: @integer; 
           callRegOnStack: @boolean;
           keep: @boolean
-       enter  keep (* all uses of ItemVal should be checked *)
+       enter keep (* all uses of SingleItemVal should be checked *)
        do (if stest then
-              301->cTrace(#do 'ItemEvVal:ItemVal:'->xT; display #)
+              301->cTrace(#do 'SingleItemVal:'->display #)
           if);
-          (if switch181 then
-              scanExit(#do XV[] -> this(ItemVal).XV[]; INNER ItemVal #)
+          (if switch182 then
+              (lDesc[],lA[],0,lChain[])->xScan; 
+              xScan.getExitVal->XV[]; 
+              INNER
            else
-              (if lA.regType <> mch.thisO then 
-                  (if (lDesc[]->semAtt.hasXcode) then
-                      (* here we never come with NXoffSets *)
-                      (*350->cTrace(#do '(ItemVal:getExitVal'->xT #);*)
-                      (*350->cTrace(#do 'PushThis4b'-> xT #);*)
-                      pushThis; lA[]->toThis->lA[]; 3->case
-                   else 
-                      (if not lA.isCallReg then  (*OLM 25/1/95 *)
-                          AllocCallReg->callRegOnStack; lA.toCallReg->lA[]; 
-                          2->case (* does this work?*)
-                      if);
-              if)if);
-              (lDesc[],lA[],0,lChain[])->xScan; xScan.getExitVal->XV[]; 
-              xScan.reset;
-              (if case
-               // 2 then (false,true)->XV.elimReg; callRegOnStack->popCall
-               // 3 then
-                  (true,false)->XV.elimReg; 
-                  popThis;
-                  (*350->cTrace(#do 'ItemVal:getExitVal)'->mch.comment #)*)
+              (if switch181 then
+                  scanExit
+                  (#do XV[] -> this(SingleItemVal).XV[]; INNER SingleItemVal 
+                  #)
+               else
+                  (if lA.regType <> mch.thisO then 
+                      (if (lDesc[]->semAtt.hasXcode) then
+                          (* here we never come with NXoffSets *)
+                          (*350->cTrace(#do '(SingleItemVal:getExitVal'->xT #);*)
+                          (*350->cTrace(#do 'PushThis4b'-> xT #);*)
+                          pushThis; lA[]->toThis->lA[]; 3->case
+                       else 
+                          (if not lA.isCallReg then  (*OLM 25/1/95 *)
+                              AllocCallReg->callRegOnStack; lA.toCallReg->lA[]; 
+                              2->case (* does this work?*)
+                          if);
+                  if)if);
+                  (lDesc[],lA[],0,lChain[])->xScan; 
+                  xScan.getExitVal->XV[]; 
+                  xScan.reset;
+                  (if case
+                   // 2 then (false,true)->XV.elimReg; callRegOnStack->popCall
+                   // 3 then
+                      (true,false)->XV.elimReg; 
+                      popThis;
+                      (*350->cTrace(#do 'SingleItemVal:getExitVal)'->mch.comment #)*)
+                  if);
+                  INNER;
               if);
-              INNER;
-          if);
-          
-          (if not keep then (* some operations using ItemVal do release*)
-              XV.release 
-          if)
+              
+              (if not keep then 
+                  (* some operations using SingleItemVal do release*)
+                  XV.release 
+          if)if)
        exit XV[]
        #);
-     unMinus::<(#do ItemVal(#do XV.unMinus->res[] #)#);
-     notExp::<(#do ItemVal(#do XV.notExp->res[] #)#);
+     unMinus::<(#do SingleItemVal(#do XV.unMinus->res[] #)#);
+     notExp::<(#do SingleItemVal(#do XV.notExp->res[] #)#);
      (* apparently the binary operations below are never called;
       * for objects, loadVal is called to load the exit-value
       *)
@@ -2393,7 +2460,7 @@ itemEvVal: EvVal
               301->cTrace(#do 'ItemVal:cmp:'->xT #);
               ScanExit(#do (lV[],op,jmpCond,Lab[])->XV.cmp->res[] #)
            else
-              ItemVal(#do (lV[],op,jmpCond,Lab[])->XV.cmp->res[] #)
+              SingleItemVal(#do (lV[],op,jmpCond,Lab[])->XV.cmp->res[] #)
           if)
        #);
      adrCmp::<
@@ -2403,7 +2470,7 @@ itemEvVal: EvVal
               ScanExit(#do rA[]->XV.adrCmp
                           -> (op1[],op2[],size,deAllocOp1,deAllocOp2) #)
            else
-              ItemVal(#do rA[]->XV.adrCmp
+              SingleItemVal(#do rA[]->XV.adrCmp
                           -> (op1[],op2[],size,deAllocOp1,deAllocOp2) #)
           if)
        #);
@@ -2415,7 +2482,7 @@ itemEvVal: EvVal
                           ->(op1[],op2[],size,deAllocOp1,deAllocOp2) #)
               
            else
-              ItemVal(#do rC->XV.cstCmp
+              SingleItemVal(#do rC->XV.cstCmp
                           ->(op1[],op2[],size,deAllocOp1,deAllocOp2) #)
           if)
        #);
@@ -2426,45 +2493,45 @@ itemEvVal: EvVal
               ScanExit(#do rReg->XV.regCmp
                           ->(op1[],op2[],size,deAllocOp1,deAllocOp2) #)
            else
-              ItemVal(#do rReg->XV.regCmp
+              SingleItemVal(#do rReg->XV.regCmp
                           ->(op1[],op2[],size,deAllocOp1,deAllocOp2) #)
           if)
        #);
-     scmp::< (#do ItemVal(#do (lV[],op)->XV.sCmp->this(sCmp).res[] #)#);
+     scmp::< (#do SingleItemVal(#do (lV[],op)->XV.sCmp->this(sCmp).res[] #)#);
      add::< 
        (#
        do (if stest then 301->cTrace(#do 'add:'-> xT #)if);
-          ItemVal(#do lV[]->XV.add->res[] #)
+          SingleItemVal(#do lV[]->XV.add->res[] #)
        #);
      adrAdd::< 
        (#
        do (if stest then 301->cTrace(#do 'adrAdd:'-> xT #)if);
-          ItemVal(#do rA[]->XV.adrAdd->V[] #)
+          SingleItemVal(#do rA[]->XV.adrAdd->V[] #)
        #);
      cstAdd::< 
        (#
        do (if stest then 301->cTrace(#do 'cstAdd:'-> xT #)if);
-          ItemVal(#do rN->XV.cstAdd->V[] #)
+          SingleItemVal(#do rN->XV.cstAdd->V[] #)
        #);
      regAdd::< 
        (#
        do (if stest then 301->cTrace(#do 'regAdd:'-> xT #)if);
-          ItemVal(#do rReg->XV.regAdd->V[] #)
+          SingleItemVal(#do rReg->XV.regAdd->V[] #)
        #);
-     sub::< (#do ItemVal(#do lV[]->XV.sub->res[] #)#);
-     adrSub::< (#do ItemVal(#do rA[]->XV.adrSub->V[] #)#);
-     cstSub::< (#do ItemVal(#do rN->XV.cstSub->V[] #)#);
-     regSub::< (#do ItemVal(#do rReg->XV.regSub->V[] #)#);
-     times::< (#do ItemVal(#do lV[]->XV.times->res[] #)#);
-     adrTimes::< (#do ItemVal(#do rA[]->XV.adrTimes->V[] #)#);
-     cstTimes::< (#do ItemVal(#do rN->XV.cstTimes->V[] #)#);
-     regTimes::< (#do ItemVal(#do rReg->XV.regTimes->V[] #)#);
-     divMod::< (#do ItemVal(#do (lV[],isDiv)->XV.divMod->res[] #)#);
-     cstDivMod::< (#do ItemVal(#do (rN,isDiv)->XV.cstDivMod->V[] #)#);
+     sub::< (#do SingleItemVal(#do lV[]->XV.sub->res[] #)#);
+     adrSub::< (#do SingleItemVal(#do rA[]->XV.adrSub->V[] #)#);
+     cstSub::< (#do SingleItemVal(#do rN->XV.cstSub->V[] #)#);
+     regSub::< (#do SingleItemVal(#do rReg->XV.regSub->V[] #)#);
+     times::< (#do SingleItemVal(#do lV[]->XV.times->res[] #)#);
+     adrTimes::< (#do SingleItemVal(#do rA[]->XV.adrTimes->V[] #)#);
+     cstTimes::< (#do SingleItemVal(#do rN->XV.cstTimes->V[] #)#);
+     regTimes::< (#do SingleItemVal(#do rReg->XV.regTimes->V[] #)#);
+     divMod::< (#do SingleItemVal(#do (lV[],isDiv)->XV.divMod->res[] #)#);
+     cstDivMod::< (#do SingleItemVal(#do (rN,isDiv)->XV.cstDivMod->V[] #)#);
      adrDivMod::<
        (# V: ^evVal; (*computedEvVal*)
           dr: ^mch.dataRegOperand
-       do ItemVal
+       do SingleItemVal
           (#
           do (rA[],isDiv)->XV.adrDivMod->V[];
              (if isDiv then 
@@ -2479,7 +2546,7 @@ itemEvVal: EvVal
      regDivMod::<
        (# V: ^evVal (*computedEvval*);
           dr: ^mch.dataRegOperand
-       do ItemVal
+       do SingleItemVal
           (#
           do (rReg,isDiv)->XV.regDivMod->V[];
              (if isDiv then 
@@ -2491,17 +2558,17 @@ itemEvVal: EvVal
                  V.toDataReg->dr[]; dr->ddr.dNo1; 
                  ddr.dNo2.alloc (*dummy*) 
        if)#)#);
-     orr::< (#do ItemVal(#do lV[]->XV.orr-> res[] #)#);
-     cstOr::< (#do ItemVal(#do rN->XV.cstOr->V[] #)#);
-     adrOr::< (#do ItemVal(#do rA[]->XV.adrOr->V[] #)#);
-     regOr::< (#do ItemVal(#do rReg->XV.regOr->V[] #)#);
-     andd::< (#do ItemVal(#do lV[]->XV.andd-> res[] #)#);
-     cstAnd::< (#do ItemVal(#do rN->XV.cstAnd->V[] #)#);
-     adrAnd::< (#do ItemVal(#do rA[]->XV.adrAnd->V[] #)#);
-     regAnd::< (#do ItemVal(#do rReg->XV.regAnd->V[] #)#);
+     orr::< (#do SingleItemVal(#do lV[]->XV.orr-> res[] #)#);
+     cstOr::< (#do SingleItemVal(#do rN->XV.cstOr->V[] #)#);
+     adrOr::< (#do SingleItemVal(#do rA[]->XV.adrOr->V[] #)#);
+     regOr::< (#do SingleItemVal(#do rReg->XV.regOr->V[] #)#);
+     andd::< (#do SingleItemVal(#do lV[]->XV.andd-> res[] #)#);
+     cstAnd::< (#do SingleItemVal(#do rN->XV.cstAnd->V[] #)#);
+     adrAnd::< (#do SingleItemVal(#do rA[]->XV.adrAnd->V[] #)#);
+     regAnd::< (#do SingleItemVal(#do rReg->XV.regAnd->V[] #)#);
      asgToDispatch:: 
        (#
-       do true (* a release may have been made elsewhere *)-> ItemVal
+       do true (* a release may have been made elsewhere *)-> SingleItemVal
           (#
           do (EV[],externalName[],desc[],extKind) -> XV.asgToDispatch -> V[] 
           #) -> V[]

@@ -101,10 +101,21 @@ cstMult: (* datpete 22/7/94 *)
   enter (op1[], op2[], size)
   do (if op2.C
       // 0 then (* optimize 0*x *)
-         op1[] -> mch.gClr;
+         (if switch182 then
+             (op2[],op1[],size)->mch.gMult
+          else
+             op1[] -> mch.gClr;
+         if)
       // 1 then (* optimize 1*x *)
+          (if switch182 then
+              (op2[],op1[],size)->mch.gMult
+          if)
       // -1 then
-         (op1[],4)->mch.gNeg 
+         (if switch182 then
+             (op2[],op1[],size)->mch.gMult
+          else
+             (op1[],4)->mch.gNeg 
+         if)
       else
          (if op2.C < 0 then -op2.C->log else op2.C->log if);
          (if (log->exact_log2->log) <> -1  then
@@ -123,109 +134,123 @@ cstDiv: (* datpete 22/7/94 *)
    *   op1 div op2 -> res
    *   op1 mod op2 -> res
    *)
-  (# op1: ^mch.dataRegOperand;
-     op2: ^mch.cstOperand;
-     isDiv: @boolean;
-     C,log: @integer;
-     size: @integer;
-     ddr: @mch.doubleDataRegOperand; 
-     drx: @mch.dataRegOperand;
-     res: @mch.dataRegOperand;
-  enter (op1[], op2[], size, isDiv)
-  do (if op2.C
-         (*       // 0 then 
-          *          (if isDiv
-          *            then {* optimize x div 0 -> res *}
-          *              'Divide by zero!!!' -> mch.comment; 
-          *              {* Should probably make compilation stop *}
-          *           // false then {* optimize x mod 0 -> res *}
-          *              'Modulus by zero!!!' -> mch.comment;
-          *              {* Should probably make compilation stop *}
-          *          if);
-          * 
-          *)
-   // 1 then 
-         (if isDiv then (* optimize x div 1 -> res *)
-          else (* optimize x mod 1 -> res *)
-             op1[] -> mch.gClr;
-         if);
-      // -1 then
-         (if isDiv then
-             (op1[],4)->mch.gNeg
-          else
-             op1[]->mch.gClr
-         if)
-      else
-         (if op2.C < 0 then -op2.C->C else op2.C->C if);
-         (if (C->exact_log2->log) <> -1 then
-             (* exact power of two: use shifts *)
-             (# L: @mch.localLab; dr: @mch.dataRegOperand
-             do (if isDiv then (* Optimize divide by power of two *)
-                    (*'Optimizing divide' -> mch.comment;*)
-                    L.new;
-                    (* datpete 11/7/95:
-                     * These are not implemented on snake.
-                     * (0->mch.newCstOp,op1[],4)->mch.gCmp;
-                     * L[]->mch.gBge;
-                     *)
-                    (6 (*>=*),0->mch.newCstOp,op1[],4,L[])
-                      -> mch.cmpAndJmp;
-                    
-                    (C-1->mch.newCstOp,op1[],4)->mch.gAdd;
-                    L.def;
-                    (log->mch.newCstOp,op1(*res*)[])->mch.arithShiftRight;
-                    (if op2.C < 0 then (op1[],4)->mch.gNeg if)
+(# op1: ^mch.dataRegOperand;
+   op2: ^mch.cstOperand;
+   isDiv: @boolean;
+   C,log: @integer;
+   size: @integer;
+   ddr: @mch.doubleDataRegOperand; 
+   drx: @mch.dataRegOperand;
+   res: @mch.dataRegOperand;
+enter (op1[], op2[], size, isDiv)
+do (if switch182 then
+       (op2[],drx[])->mch.ldCst; 
+       op1 -> ddr.dNo2; (* probably not necessary *)
+       (drx[],ddr[],isDiv) -> mch.gDiv;         
+    else             
+       (if op2.C
+           (*       // 0 then 
+            *          (if isDiv
+            *            then {* optimize x div 0 -> res *}
+            *              'Divide by zero!!!' -> mch.comment; 
+            *              {* Should probably make compilation stop *}
+            *           // false then {* optimize x mod 0 -> res *}
+            *              'Modulus by zero!!!' -> mch.comment;
+            *              {* Should probably make compilation stop *}
+            *          if);
+            * 
+            *)
+        // 1 then 
+           (if isDiv then (* optimize x div 1 -> res *)
+            else (* optimize x mod 1 -> res *)
+               op1[] -> mch.gClr;
+           if);
+        // -1 then
+           (if isDiv then
+               (op1[],4)->mch.gNeg
+            else
+               op1[]->mch.gClr
+           if)
+        else
+           (if op2.C < 0 then -op2.C->C else op2.C->C if);
+           (if (C->exact_log2->log) <> -1 then
+               (* exact power of two: use shifts *)
+               (# L: @mch.localLab; dr: @mch.dataRegOperand
+               do (if isDiv then (* Optimize divide by power of two *)
+                      (*'Optimizing divide' -> mch.comment;*)
+                      (if switch182 then 
+                          (* cmpAndJmp below takes the top stack operand *)
+                          mch.duplicate 
+                      if);
+                      L.new;
+                      (* datpete 11/7/95:
+                       * These are not implemented on snake.
+                       * (0->mch.newCstOp,op1[],4)->mch.gCmp;
+                       * L[]->mch.gBge;
+                       *)
+                      (6 (*>=*),0->mch.newCstOp,op1[],4,L[])
+                        -> mch.cmpAndJmp;
+                      
+                      (C-1->mch.newCstOp,op1[],4)->mch.gAdd;
+                      L.def;
+                      (log->mch.newCstOp,op1(*res*)[])->mch.arithShiftRight;
+                      (if op2.C < 0 then (op1[],4)->mch.gNeg if)
 
-                 else  (* Optimize modulus by power of two *)    
-                    (*'Optimizing modulus' -> mch.comment;*)
-                    dr.alloc;
-                    (* on sparc a 'orcc op1,%g0,dr' can be used instead
-                     * of the next 2 instructions
-                     *)
-                    (op1[],dr[])->mch.cpReg;
-                    (if log > 1 then
-                        L.new;
-                        (* datpete 11/7/95:
-                         * These are not implemented on snake.
-                         * (0->mch.newCstOp,op1[],4)->mch.gCmp;
-                         * L[]->mch.gBge;
-                         *)
-                        (6 (*>=*),0->mch.newCstOp,op1[],4,L[]) 
-                          -> mch.cmpAndJmp;
-                        (C-1->mch.newCstOp,dr[],4)->mch.gAdd;
-                        L.def
-                    if);
-                    (-C->mch.newCstOp,dr[],size)->mch.gAnd;
-                    (dr[],op1[],4)->mch.gSub; 
-                    (* !! apparently  V mod K = V mod -K,
-                     * i.e. NO sign change for negative constant 
-                     *)
-                    dr.deAlloc
-                if);
-             #)
-          else
-             (* Perform division/remainder in register pair *)
-             (* Should only be in MC68machine!!! *)
-             op1->ddr.dNo2;       (* e.g. %do - result if div *)
-             op1.fn->ddr.dNo2.fn; 
-             ddr.dNo1.alloc;      (* e.g. %d1 - result if mod *)
-             drx.alloc;           (* e.g. %d2 - the constant *)
-             (op2[],drx[])->mch.ldCst; 
-             (drx[],ddr[],isDiv)->mch.gDiv; (* dr div rN *) 
-             (* ddr.alloc; (op1[],ddr.dNo2[],size)->mch.ldVl;
-              * drx.alloc;
-              * (op2[],drx[])->mch.ldCst;
-              * (drx[],ddr[],isDiv)->mch.gDiv; 
-              *)
-             (if isDiv then
-                 ddr.dNo2->op1; ddr.dNo1.deAlloc
-              else ddr.dNo1->op1; ddr.dNo2.deAlloc
-             if);
-             drx.deAlloc;
-         if)
-     if);
-     op1->res;
-  exit res (* should be op1, but problem with compiler error-fixed in beta5.1*)
+                   else  (* Optimize modulus by power of two *)    
+                      (*'Optimizing modulus' -> mch.comment;*)
+                      dr.alloc;
+                      (* on sparc a 'orcc op1,%g0,dr' can be used instead
+                       * of the next 2 instructions
+                       *)
+                      (op1[],dr[])->mch.cpReg;
+                      (if log > 1 then
+                          (if switch182 then 
+                              (* cmpAndJmp below takes the top stack operand *)
+                              mch.duplicate 
+                          if);
+                          L.new;
+                          (* datpete 11/7/95:
+                           * These are not implemented on snake.
+                           * (0->mch.newCstOp,op1[],4)->mch.gCmp;
+                           * L[]->mch.gBge;
+                           *)
+                          (6 (*>=*),0->mch.newCstOp,op1[],4,L[]) 
+                            -> mch.cmpAndJmp;
+                          (C-1->mch.newCstOp,dr[],4)->mch.gAdd;
+                          L.def
+                      if);
+                      (-C->mch.newCstOp,dr[],size)->mch.gAnd;
+                      (dr[],op1[],4)->mch.gSub; 
+                      (* !! apparently  V mod K = V mod -K,
+                       * i.e. NO sign change for negative constant 
+                       *)
+                      dr.deAlloc
+                  if);
+               #)
+            else
+               (* Perform division/remainder in register pair *)
+               (* Should only be in MC68machine!!! *)
+               op1->ddr.dNo2;       (* e.g. %do - result if div *)
+               op1.fn->ddr.dNo2.fn; 
+               ddr.dNo1.alloc;      (* e.g. %d1 - result if mod *)
+               drx.alloc;           (* e.g. %d2 - the constant *)
+               (op2[],drx[])->mch.ldCst; 
+               (drx[],ddr[],isDiv)->mch.gDiv; (* dr div rN *) 
+               (* ddr.alloc; (op1[],ddr.dNo2[],size)->mch.ldVl;
+                * drx.alloc;
+                * (op2[],drx[])->mch.ldCst;
+                * (drx[],ddr[],isDiv)->mch.gDiv; 
+                *)
+               (if isDiv then
+                   ddr.dNo2->op1; ddr.dNo1.deAlloc
+                else ddr.dNo1->op1; ddr.dNo2.deAlloc
+               if);
+               drx.deAlloc;
+           if)
+       if);
+       op1->res;
+   if)
+exit res (* should be op1, but problem with compiler error-fixed in beta5.1*)
   #);
 asgToNewRep:
   (* first version of 

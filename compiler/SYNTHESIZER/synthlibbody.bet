@@ -4,6 +4,20 @@ INCLUDE 'evlib';
 INCLUDE '../GENERATOR/machine';
 INCLUDE 'auxlib';
 INCLUDE 'signature';
+---SynthesizerBodyLib:attributes---
+com:
+  (# no: @integer; A: ^mch.address; T: @text
+  enter(no,A[])
+  do INNER;
+     no -> T.putint;
+     ':descName:'->T.append;
+     (if A.descName[] <> none then A.descName[] -> T.append if);
+     ':fieldType:'->T.append;
+     (if A.fieldType[] <> none then A.fieldType[] -> T.append if);
+     T -> mch.comment;
+     (*T[] -> putline*)
+  #);
+
 --GenLocalAdr:descriptor--
 (#
 do (&gen.thisRegAdr,ad[],isOrigin,chain[])->GenAdr->A[]
@@ -38,26 +52,41 @@ do (&gen.thisRegAdr,ad[],isOrigin,chain[])->GenAdr->A[]
      #);
    isD: @boolean;
    
+   aCom: com(#do '!genAdr'->T #);
+   rCom: com(#do '!remAdr'->T #);
    doGoOrigin:
-     (# toOrgReg: @boolean; orgDesc: @ ASTindex; 
+     (# toOrgReg: @boolean; orgDesc: @ASTindex; on: @integer;
+        D: ^ASTindex;
+        doCom: com
+          (#
+          do '!doGoOrigin' -> T;
+          #);
      enter toOrgReg
-     do (if (ad.on > 0) then 
-            (* (ad.on,toOrgReg) -> A.goOrigin -> GoOrigin -> A[] *)
+     do (if switch182 then
+            thisDesc[] -> EH.descName -> A.descName[]; (* No need to
+                                                        * initialize descName
+                                                        *)
+            A.bAdr.localDesc[] -> EH.descName -> A.fieldType[];
+        if);
+        (if (ad.on > 0) or inEnterDoExitMethod then 
             (if switch182 (* bytecode *) then
+                ad.on -> on;
+                (if inEnterDoExitMethod then on + 1 -> on if);
                 (if toOrgReg then
-                    '!doGoOrigin1'->mch.comment;
-                    (A[],A.copy,ad.on,false) -> GoOrigin -> A[];
+                    (1,A[]) -> doCom;
+                    (A[],A.copy,on,false) -> GoOrigin -> A[];
                  else      
-                    '!doGoOrigin2'->mch.comment;
-                    (A[],A.copy,ad.on,toOrgReg) -> GoOrigin -> A[]
+                    (2,A[]) -> doCom;
+                    (A[],A.copy,on,toOrgReg) -> GoOrigin -> A[]
                 if)
              else
                 (A[],A.copy,ad.on,toOrgReg) -> GoOrigin -> A[] 
             if)
         if);
-        '!doGoOrigin3'->mch.comment;        
-        (if switch182 then
-            A.bAdr.localDesc[] -> EH.descName -> A.descName[];
+        (* A.fieldType = type of object referred by A *)
+
+        (3,A[]) -> doCom;
+        (if false (*switch182*) then
             (if inEnterDoExitMethod and not A.isField then
                 (* bytecode only *)
                 313->trace(#
@@ -67,30 +96,31 @@ do (&gen.thisRegAdr,ad[],isOrigin,chain[])->GenAdr->A[]
                           #);
                 true -> A.isOrigin;
                 true -> A.isField;
-                '!doGoOrigin4'->mch.comment;
-                (*(A[],A.descName[],none) -> mch.loadRef; *)
+                A.fieldType[] -> A.descName[];
+                A.bAdr.localDesc[] -> sematt.descOrigin -> D[];
+
+                (4,A[]) -> doCom;
+
                 (A[],none) -> mch.ldVal;
-                '!doGoOrigin5'->mch.comment;
+                (if D.isNull then
+                    'object' -> A.fieldType[]
+                 else
+                    D[] -> EH.descName -> A.fieldType[];
+                if);
+        
+                (5,A[]) -> doCom;
                 A.ONlevel + 1 -> A.ONlevel
             if);
-
+            (*(6,A[]) -> doCom;*)
             (* follow super to correct superDesc *)
             (if ad.pn > 0 then 
                 (A[],ad.pn,A[]) -> SetSuperDesc -> A[] 
-            if);
-            A.bAdr.localDesc[] -> EH.descName -> A.descName[];
+            if); (* check why we do this ? This imp and
+                  * the next imp are probably superflous?
+                  *)
             A.bAdr.localDesc[] -> theGen.mkSignature -> A.fieldType[];
-            (# T: @text
-            do '!doGoOrigin6: ' -> T;
-               A.descName[] -> T.append;
-               T -> mch.comment
-            #);
 
-            (* A.descName[] = name of descriptor where ad is declared;
-             * if ad = 'foo' and 'fisk: (# ...; foo: ... #)'
-             * then A.descName[] = 'fisk'
-             *)
-
+            (3,A[]) -> doCom;
             (if ad.ON > 0 then true -> A.isField if);
             (* ad.ON = 0 : a local variable in a method *)
         if)
@@ -178,24 +208,24 @@ do (if stest then
            
         else
            doGoOrigin;
+           
            301 -> trace(#do 'adr:1'->xT; A.display->xT #);
            dcl.off -> A.addOff -> A[];
            
            (if switch182 then
-               (# T: @text
-               do 'field: F'->T; dcl.off -> T.putint; (* no base included *)
-                  ' ' -> T.put;
-                  
-                  (if false (*ad.ON > 0 *) then
-                      A.bAdr.localDesc[] -> EH.descName -> A.descName[]
-                        -> T.append;
-                      true -> A.isField;
-                  if);
-                  descRef[] -> theGen.mkSignature -> A.fieldType[];
-                  A.descName[] -> T.append;
-                  ' PN:'-> T.append; ad.pn -> T.putint;
-                  T -> mch.comment
-           #)if);
+               (1,A[]) -> aCom;               
+               A.fieldType[] -> A.descName[];
+               descRef[] -> theGen.mkSignature -> A.fieldType[];
+               (if (ad.on > 0) or inEnterDoExitMethod then 
+                   true -> A.isField 
+                else
+                   false -> A.isField
+               if);
+               (* A.descRef  : object containing field refereredd by A;
+                * A.fieldType: type of field referred by A *
+                *)
+               (2,A[]) -> aCom;
+           if);
            
            descRef[]->A.bAdr.localDesc[];
            (if (dcl.access->A.access) = common.direct then 
@@ -205,17 +235,18 @@ do (if stest then
            if);        
        if);
     // gram.remote then(* R.X *)
-       A.bAdr.localDesc[]->localDesc[];
-       ad.son->rDen; 
+       A.bAdr.localDesc[] -> localDesc[];
+       ad.son -> rDen; 
        301 -> trace(#do 'remote:1'->xT; A.display->xT #);
        'genadr:remote1:'->mch.comment;               
-       (A[],rDen[],false,chain[])->&GenAdr->A[];
+       (A[],rDen[],false,chain[]) -> GenAdr -> A[];
        301 -> trace(#do 'remote:2'->xT; A.display->xT #);
        (if switch182 then
            (# attD: @sematt.AttDesc;
               D,aD: @ASTindex; DN,aDN: ^text; descKind: @integer;
               T: @text
-           do rDen.descRef -> D;
+           do (1,A[]) -> rCom;
+              rDen.descRef -> D;
               (if D.label 
                // gram.objectDescriptor then
                   D[] -> EH.DescName -> DN[]
@@ -644,12 +675,12 @@ do call:
               '??callEntry??'->sig.addMethod
           if);          
           sig -> class[];
-          (class[]->mch.newTextOp,L,false(*?*)) -> mch.gJsr
+          (class[]->mch.newTextOp,L,false(*?*),false) -> mch.gJsr
        #)
     else
        (L,desc[])->mkEntryPoint->(T[],local);
        (if not local then T[]->mch.import if);
-       (T[]->mch.newTextOp,L,local)->mch.gJsr;
+       (T[]->mch.newTextOp,L,local,false)->mch.gJsr;
    if);
    (if false (* collect statistics on descriptor usage *) then
        (desc[],kind) -> dStat.new
@@ -804,7 +835,7 @@ do (if switch68 then
        (if kind
         // common.itemKind // common.holderKind then 
            (* 
-            * (T[]->mch.newTextOp,'V',local) -> mch.gJsr;
+            * (T[]->mch.newTextOp,'V',local,false) -> mch.gJsr;
             *)
            ('V',desc[],1) -> CallEntry;
         // common.compKind then
@@ -843,7 +874,11 @@ do (if mch.callRegInPrimReg2 and mch.callRegBusy then
        INNER ProtectCallReg
    if)
 ---GoOrigin:doPart---
-do (# reg1: @mch.adrRegOperand; D: @ASTindex
+do (# EH: @evalHandler;
+      nextReceiver: ^text;
+      reg1: @mch.adrRegOperand; 
+      D: @ASTindex;
+      gCom: com(# do '!goOrigin' -> T #);
    do (* thisA = start address for goOrigin
        * A1    = at entry a copy of thisA 
        *         later used as tmp. var
@@ -922,20 +957,42 @@ do (# reg1: @mch.adrRegOperand; D: @ASTindex
                       A1.theReg -> reg1
                   if);
                   (if switch182 then
+                      (1,A1[]) -> gCom;
                       true -> A1.isRef;
-                      true->A1.isOrigin;
+                      true -> A1.isOrigin;
+                      (if not inEnterDoExitMethod then
+                          A1.fieldType[] -> A1.descName[];
+                          thisA.bAdr.LocalDesc[]
+                            -> sematt.descOrigin 
+                            -> EH.descName 
+                            -> A1.fieldType[];
+                      if);
                       (if A1.ONlevel > 0 then
                           '\n***ONlevel: ' -> puttext;
                           A1.ONlevel -> putint; newline
                        else
                           0 -> A1.ONlevel;
                   if)if);
-                  (A1[],reg1[])->mch.ldVal;                   
+                  (2,A1[]) -> gCom;
+                  (A1[],reg1[]) -> mch.ldVal;                   
                   reg1->A2.reg; common.direct->A2.access;
                   (if switch182 then 1 -> A2.ONlevel if);
+                  A1.fieldType[] -> A2.fieldType[];
+                  A1.descName[] -> A2.descName[]
               if)
           if);
-          thisA.bAdr.LocalDesc[]->sematt.descOrigin->A2.bAdr.LocalDesc[];
+          (if switch182 then
+              (if inEnterDoExitMethod then
+                  thisA.bAdr.LocalDesc[] -> A2.bAdr.LocalDesc[]
+               else
+                  thisA.bAdr.LocalDesc[]
+                    -> sematt.descOrigin
+                    -> A2.bAdr.LocalDesc[]
+              if)
+           else
+              thisA.bAdr.LocalDesc[]->sematt.descOrigin->A2.bAdr.LocalDesc[]
+          if);
+          (3,A2[]) -> gCom;
        else
           (if stest then
               301->ctrace(#do 'goOrigin3:'->xT; reg1.display-> xT; mch.dumpreg #)
@@ -961,6 +1018,7 @@ do (# reg1: @mch.adrRegOperand; D: @ASTindex
                A2.bAdr.localDesc.originOff->A2.off
            if);
            (if isOrigin and (i = on-1) then 
+               (7,A2[]) -> gCom;
                1 -> mch.initPrimCall;
                1 -> A2.toPrimDest;
                0-> mch.getPrimRes;
@@ -976,8 +1034,13 @@ do (# reg1: @mch.adrRegOperand; D: @ASTindex
                    if)
                 else
                    true -> A2.isRef;
-                   (if switch182 (*bytecode*) then
+                   (if switch182 then
                        true->A2.isOrigin;
+                       A2.fieldType[] -> A2.descName[];
+                       A2.bAdr.LocalDesc[]
+                         -> sematt.descOrigin
+                         -> EH.descName -> A2.fieldType[];
+                       (4,A2[]) -> gCom;
                    if);
                    (if false (*common.switch[121]*) then
                        reg1.alloc;
@@ -993,7 +1056,8 @@ do (# reg1: @mch.adrRegOperand; D: @ASTindex
                if)
            if);
            A2.bAdr.LocalDesc[]->sematt.descOrigin->A2.bAdr.LocalDesc[];
+           (5,A2[]) -> gCom;
       for);
       0 -> A2.off;
-      thisA.size -> A2.size
+      thisA.size -> A2.size;
    #)

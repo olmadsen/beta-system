@@ -124,7 +124,10 @@ methodCall: evVal
        #);
      regCmp::<(* A COMP rReg *)
        (#
-       do '\nOBS! methodCall:regCmp'->putline 
+       do 'methodCall:regCmp' -> mch.comment;
+          &mch.dataRegOperand[] -> op1[];
+          rreg[] -> op2[];
+          false -> deAllocOp1 -> deAllocOp2
        #);
      
      add::< (# do '\nOBS! methodCall:add'->putline #);
@@ -255,7 +258,7 @@ mkByteCodeCall:
      sigTxt: ^text;
      sig: @theGen.Signature;
      descKind: @integer;
-     isSingular: @boolean
+     isStatic,isSingular: @boolean
   enter EV
   do EV.son->VN;
      '!mkByteCodeCall:'->mch.comment;
@@ -282,23 +285,42 @@ mkByteCodeCall:
           * N >= 0
           *)
          VN -> method;
-         (* to find originN, go origin meth.N times *)
-         (*method.descRef -> receiverDesc;*)
-         thisDesc -> receiverDesc;
-         (for i: method.on repeat
-              receiverDesc.origin -> receiverDesc;
-              (if receiverDesc.label 
-              // gram.descriptorForm (*then
-                 receiverdesc.xorigin -> receiverdesc;*)
-              // gram.doPart then
-                 receiverdesc.xorigin -> receiverdesc;
-                 receiverdesc.slotOrigin -> receiverdesc;
-             if)
-         for)
+         testLibLevel: (* is this a pattern at the outermost
+                        * lib level*)
+           (# org: @ASTindex
+           do sig.thisDesc.origin -> org;
+              (* dont work if virtual?*)
+              (if org.label
+               // gram.attributesForm then
+                  311->trace(#
+                          do'Pattern: ' -> xT;
+                             VN[] -> xA;
+                             ' is at the outermost lib level' -> putline
+                            #);
+                  'invoke static ' -> mch.comment;
+                  true -> isStatic;
+               else
+
+                  (* to find originN, go origin meth.N times *)
+
+                  thisDesc -> receiverDesc;
+                  (for i: method.on repeat
+                       receiverDesc.origin -> receiverDesc;
+                       (if receiverDesc.label 
+                        // gram.attributesForm
+                        // gram.descriptorForm 
+                        // gram.doPart then
+                           receiverdesc.xorigin -> receiverdesc;
+                           receiverdesc.slotOrigin -> receiverdesc;
+                       if)
+                  for)
+              if);
+           #)
       // gram.objectDescriptor then
-         (*  '\nobjectdescriptor' -> putline;
-         (VN[],screen[],500) -> thePP;
-         newline;*)
+        (* 313->trace(#
+                   do 'objectdescriptor' -> xT;
+                      VN[] -> xA;
+                   #);*)
          VN -> method; (* NOTE: VN IS AN OBJECTDESCRIPTOR *)
          method -> receiverDesc;
          (* Here we need to find the right origin of the method *)
@@ -318,23 +340,25 @@ mkByteCodeCall:
          true -> isSingular;
          (VN,common.itemKind,2,null)->DS.push
       // gram.unExpanded then
-         '\nMkByteCodeCall:DescriptorSlot' -> putline;
+         313->trace(#do 'MkByteCodeCall:DescriptorSlot' -> xT; VN[] -> xA #);
          thisDesc -> receiverDesc;
          VN -> method;
+         (VN,common.itemKind,3,VN) -> DS.push;
          true -> isSingular (* hack *)
       else
          '\n**** insert is NOT remote or nameApl'->putline
      if);
-          
-     313->ctrace(#
-                do receiverDesc.descId -> (descId[],descNo); 
-                   'call1:'->xT;
-                   descId[]->xT; descno -> xI;  ' ~> ' -> xT
-                #);
-     ('G',receiverDesc[]) -> mkEntryPoint -> (class[],local);
-     class[]-> sig.addReceiver;
-
-     (if isSingular then
+     (if not isStatic then
+         313->ctrace(#
+                    do receiverDesc.descId -> (descId[],descNo); 
+                       'call1:'->xT;
+                       descId[]->xT; descno -> xI;  ' ~> ' -> xT
+                    #);
+         ('G',receiverDesc[]) -> mkEntryPoint -> (class[],local);
+         class[]-> sig.addReceiver;
+     if);
+     (if true
+      // isSingular then
       else
          method.descRef -> method;
          LL: 
@@ -363,7 +387,10 @@ mkByteCodeCall:
                      #);
          
      if);
-
+     (if isStatic then
+         method[] -> descName -> sig.addReceiver;
+         sig.markStatic
+     if);
      method[] -> descName -> sig.addMethod;
      (if method.isSlot then
          sig.noEnter
@@ -380,7 +407,7 @@ mkByteCodeCall:
          do (*method[] *)
             sig.thisDesc[] (* descriptor for method *)
               -> sematt.descSonsRef
-              ->(p[],mp[],att[],n[],doP[],exitP[]);
+              -> (p[],mp[],att[],n[],doP[],exitP[]);
         
             (if exitP[] <> none then
                 exitP[] -> sig.addExit
@@ -388,22 +415,18 @@ mkByteCodeCall:
                 sig.setVoidXSig
             if)
      #)if);
-     (if true then
-         sig -> class[]
-      else
-         sig -> class.append;
-     if);
+     sig -> class[];
      313->trace(#do 'class: ' -> xT; class[] -> xT #);
      (if not local then T[]->mch.import if);
-     (class[]->mch.newTextOp,'M',local)->mch.gJsr;  
+     (class[]->mch.newTextOp,'M',local,isStatic)->mch.gJsr;  
      &methodCall[]->W[];
   exit W[]
   #)
 ----- EvalBody: descriptor ----
 (# V: ^evVal;
 do (if stest then
-       301->cTrace(#
-                  do 'EvBody: '->xT; Eval[]->xA;
+       302->cTrace(#
+                  do 'EvalBody: '->xT; Eval[]->xA;
                      mch.dumpreg; (*EHchain[]->printChain*)
                   #)
    if);
@@ -568,14 +591,21 @@ do (if stest then
                                                      * assign::< below
                                                      *)
         do (if stest then
-               301->ctrace(#
-                          do 'EvalBody:assign:A'->xH;
-                             EV1[] -> xA; xN;
+               302->ctrace(#
+                          do 'EvalBody:assign:A: EV1:'->xT;
+                             EV1[] -> xA; 
+                             ' EV2:' -> xT; EV2[] -> xA; xN;
                              baseAdr.display->xT
            #)if);         
+           (* EV  = E1 -> E2 -> ... -> En-1 -> En
+            * EV1 = E1 -> E2 -> ... -> En-1 
+            * EV2 = En
+            *)
            (if switch182 then
                '!EvalBody:assign:make:methodArgs'->mch.comment;
-               (baseAdr.copy,EV1[],EHchain[]->chain1[]) -> EH.methodArgs -> V[]
+               (baseAdr.copy,EV1[],EHchain[]->chain1[],false) 
+                 -> EH.methodArgs 
+                 -> V[]
             else              
                (if switch181 then
                    (baseAdr[],EV1[],false,EHchain[]->chain1[])
@@ -588,7 +618,7 @@ do (if stest then
                if);
            if);
            (if stest then
-               301->ctrace(#
+               302->ctrace(#
                           do 'EvalBody:assign:B'->xH;
                              (if V[] = none then
                                  'V is none' -> putline
@@ -599,12 +629,16 @@ do (if stest then
                              baseAdr.display->xT
            #)if);                  
            (if switch181 then
-               (baseAdr[],V[],EV2[],chain1[])->EH.assignValToEval->V[];
+               (baseAdr[],V[],EV2[],false,chain1[])
+                 -> EH.assignValToEval
+                 -> V[];
             else
-               (baseAdr.copy,V[],EV2[],chain1[])->EH.assignValToEval->V[];
+               (baseAdr.copy,V[],EV2[],false,chain1[])
+                 -> EH.assignValToEval
+                 -> V[];
            if);
            (if stest then
-               301->ctrace(#
+               302->ctrace(#
                           do 'EvalBody:assign:C'->xH;
                              (if V[] = none then 'V is none'->xT
                               else 
@@ -704,7 +738,7 @@ do (if stest then
                            * Should have been more clean
                            *)
 do (if stest then
-       301->cTrace(#
+       302->cTrace(#
                   do 'ExpEval:'->xT; EV[]->xA; xN;
                      'baseAdr='->xT; baseAdr.display->xT;
                      mch.dumpreg; (*EHchain[]->printChain*) 
@@ -716,14 +750,20 @@ do (if stest then
    (# assign::<
         (# 
         do (if stest then
-               301->ctrace(#
-                          do 'ExpEval:assign:A'->xH;
-                             EV1[] -> xA; xN;
+               302->ctrace(#
+                          do 'ExpEval:assign:A EV1:'->xT; EV1[] -> xA; 
+                             ' EV2:' -> xT; EV2[] -> xA; xN;
                              baseAdr.display->xT
-           #)if);                  
+           #)if); 
+           (* EV  = E1 -> E2 -> ... -> En-1 -> En
+            * EV1 = E1 -> E2 -> ... -> En-1 
+            * EV2 = En
+            *)
            (if switch182 then
                '!expEval:Assign' -> mch.comment;               
-               (baseAdr.copy,EV1[],EHchain[]->chain1[]) -> EH.methodArgs ->V[]
+               (baseAdr.copy,EV1[],EHchain[]->chain1[],true)
+                 -> EH.methodArgs
+                 ->V[]
             else              
                (if switch181 then
                    (baseAdr[],EV1[],false,chain1[])->EH.ExpEval->V[];
@@ -731,19 +771,30 @@ do (if stest then
                    (baseAdr.copy,EV1[],false,chain1[])->EH.ExpEval->V[];
            if)if);
            (if stest then
-               301->ctrace(#
-                          do 'ExpEval:assign:B'->xH;
+               302->ctrace(#
+                          do 'ExpEval:assign:B V:'->xH;
                              V.display; xN;
-                             EV2[] -> xA; xN;
+                             ' EV2:'->xT; EV2[] -> xA; xN;
+                             'multipleAssign: ' -> xT; succIsObj -> xB; xN;
                              baseAdr.display->xT
            #)if);
-           (if switch181 then
-               (baseAdr[],V[],EV2[],chain1[])->EH.assignValToEval->V[];
+           (if succIsObj then
+               '\nexpEval:itemEv:succIsobj:true'->putline
             else
-               (baseAdr.copy,V[],EV2[],chain1[])->EH.assignValToEval->V[];
+               '\nexpEval:itemEv:succIsobj:false'->putline
+           if);
+
+           (if switch181 then
+               (baseAdr[],V[],EV2[],succIsObj,chain1[])
+                 -> EH.assignValToEval
+                 -> V[];
+            else
+               (baseAdr.copy,V[],EV2[],succIsObj,chain1[])
+                 -> EH.assignValToEval
+                 -> V[];
            if);
            (if stest then
-               301->ctrace(#
+               302->ctrace(#
                           do 'ExpEval:assign:C'->xH;
                              (if V[] = none then 'V is none' -> xT 
                               else
@@ -830,11 +881,19 @@ do (if stest then
         #);
       itemEv::< 
         (# 
-        do (if switch181 then
-               (baseAdr[],EV[],succIsObj,chain1[])->doItem->V[] 
+        do (if switch182 then
+               (if succIsObj then
+                   '\nexpEval:itemEv:succIsobj:true'->putline
+                else
+                   '\nexpEval:itemEv:succIsobj:false'->putline
+               if);
+               (baseAdr[],EV[],true,chain1[])->doItem->V[] 
             else
-               (baseAdr.copy,EV[],succIsObj,chain1[])->doItem->V[] 
-           if)
+               (if switch181 then
+                   (baseAdr[],EV[],succIsObj,chain1[])->doItem->V[] 
+                else
+                   (baseAdr.copy,EV[],succIsObj,chain1[])->doItem->V[] 
+           if)if)
         #);
       compEv::< 
         (# 
@@ -1194,7 +1253,11 @@ do (if stest then
                Lx.new; 
                Lx[]->mch.gJmp;
                L.def;
-               dr[]->mch.gClr;
+               (if switch182 then
+                   (0->mch.NewCstOp,dr[]) -> mch.ldCst
+                else
+                   dr[]->mch.gClr;
+               if);
                Lx.def;
                lv.release; 
                (dr,false,false,false)->mkComputedEvVal->V[];
@@ -1265,7 +1328,13 @@ do (if stest then
                    (* switch 129 is byte code compiler: always evaluate 
                     * from left to right *)
                    (baseAdr.copy,ev1[],false,chain1[])->&EH.ExpEval->lv[];
+                   302 -> ctrace(#
+                                do 'expVal:binOp:beforeLoadVal:'->xT;
+                                   lv.display
+                                #);
+                                   
                    lv.loadVal->lv[];
+                   (if switch182 then true -> lv.pushVal -> lv[] if);
                    (baseAdr.copy,ev2[],false,chain1[])->&EH.ExpEval->rv[];
                 // (0<=lNo) and (lNo<=rNo) and (lNo<freeReg) then
                    (baseAdr.copy,ev2[],false,chain1[])->&EH.ExpEval->rv[];
@@ -1290,7 +1359,7 @@ do (if stest then
            if);
 
            (lv[],rv[]) -> CoerceTypes -> (lv[],rv[],binType);
-
+           
            (if ev.label = gram.realDivExp then
                lv.mkReal->lv[]; rv.mkReal->rv[]; 3->binType
            if);
@@ -1387,7 +1456,7 @@ do (if stest then
    singleList: (# enter EV[] #); 
    lEV1,V: ^evVal;
    chain1: ^DH.SuperChain;
-   noEval: @boolean; mEV: ^methodArgs
+   noEval: @boolean; 
 do lEV[]->lEV1[]; 
    (if stest then
        301->cTrace(# 
@@ -1398,21 +1467,6 @@ do lEV[]->lEV1[];
                      (*EHchain[]->printChain*)
    #)if);
    EHchain[]->chain1[];
-   (if false (*switch182 and not common.switch[184]*) then
-       (* very inefficient and clumsy *)
-       (*'mkEval:0'->mch.comment;*)
-       EV[] -> sematt.evCase(# insert::(# do true -> noEval #)#);
-       (if not noEval then 
-           lEV1[] -> mEV[];
-           (*'mkEval:1'->mch.comment;*)
-           mEV.eval -> lEV1[];
-           LEV1.pushVal -> lEV1[];
-           (*'mkEval:2'->mch.comment;*)
-           (* do we need lEV1.toDataReg 
-            * to push a possible constant on the stack?
-            * Calculator does not work - assignments like 10-> reg
-            *)
-   if)if);
    '!assignValToEval:'->mch.comment;
    EvalCase:
      EV[]->sematt.evCase
@@ -1429,9 +1483,9 @@ do lEV[]->lEV1[];
            (if switch181 then
                (baseAdr[],EV[],chain1[]) -> lEV1.asgToSImpleEv -> V[]
             else
-               (*'assignTo:simpleAdr:1'->mch.comment;*)
+               '!assignTo:simpleAdr:1'->mch.comment;
                EV[] -> SimpleAdr -> lEV1.asgToAdr -> V[];
-               (*'assignTo:simpleAdr:4'->mch.comment;*)
+               '!assignTo:simpleAdr:4'->mch.comment;
            if)
         #);
       realEv::<
@@ -1453,9 +1507,9 @@ do lEV[]->lEV1[];
             * since we assign to the same baseAdr-variable in EvalHandler
             *)
            (if switch181 then
-               (baseAdr[],Ev[],false,chain1[],lEV1[])->doEnterItem->V[]
+               (baseAdr[],Ev[],succIsObj,chain1[],lEV1[])->doEnterItem->V[]
             else
-               (baseAdr.copy,Ev[],false,chain1[],lEV1[])->doEnterItem->V[]
+               (baseAdr.copy,Ev[],succIsObj,chain1[],lEV1[])->doEnterItem->V[]
            if);
         #);
       compEv::<
@@ -1508,12 +1562,18 @@ do lEV[]->lEV1[];
                    (# 
                    do '!assignValToEval:insert:asgToMethod'->mch.comment;
                       (# T: [sig.noOfEnterArgs] @integer;
-                         top: @integer
+                         top,firstArg: @integer
                       do sig.scanEnter
                          (#
                          do current.elmType -> T[top+1 -> top]
                          #);
-                         (T,top,1) -> lEV1.asgToMethod 
+                         (if isStatic then
+                             (* arg 1 is origin/this *)
+                             2 -> firstArg 
+                          else 
+                             1 -> firstArg
+                         if);
+                         (T,top,firstArg) -> lEV1.asgToMethod 
                       #)
                    #)-> V[]
                 else
@@ -1684,7 +1744,7 @@ do lEV[]->lEV1[];
       assign::<
         (# 
         do (if stest then
-               301->ctrace(#
+               302->ctrace(#
                           do 'assignValToEval:assign:A'->xH;
                              lEV1.display; xN;
                              EV1[] -> xA; xN;
@@ -1692,24 +1752,32 @@ do lEV[]->lEV1[];
            #)if);
            '!assignValToEval:assign:'->mch.comment;
            (if switch181 then
-               (baseAdr[],lEV1[],EV1[],chain1[])->&EH.AssignValToEval->V[];
+               (baseAdr[],lEV1[],EV1[],succIsObj,chain1[])
+                 -> EH.AssignValToEval
+                 -> V[];
             else
-               (baseAdr.copy,lEV1[],EV1[],chain1[])->&EH.AssignValToEval->V[];
+               (baseAdr.copy,lEV1[],EV1[],succIsObj,chain1[])
+                 -> EH.AssignValToEval
+                 -> V[];
            if);
            (if stest then
-               301->ctrace(#
+               302->ctrace(#
                           do 'assignValToEval:assign:B'->xH;
                              V.display; xN;
                              EV2[] -> xA; xN;
                              baseAdr.display->xT
            #)if); 
            (if switch181 then
-               (baseAdr[],V[],EV2[],chain1[])->&EH.AssignValToEval->V[]
+               (baseAdr[],V[],EV2[],succIsObj,chain1[])
+                 -> EH.AssignValToEval
+                 -> V[]
             else
-               (baseAdr.copy,V[],EV2[],chain1[])->&EH.AssignValToEval->V[]
+               (baseAdr.copy,V[],EV2[],succIsObj,chain1[])
+                 -> EH.AssignValToEval
+                 -> V[]
            if);
            (if stest then
-               301->ctrace(#
+               302->ctrace(#
                           do 'assignValToEval:assign:C'->xH; 
                              (if V[] =none then 'V is none'->xT;
                               else
@@ -1722,7 +1790,7 @@ do lEV[]->lEV1[];
    #);
    V[]->RV[];
    (if stest then
-       301->ctrace(#
+       302->ctrace(#
                   do 'assignValToEval:exitEval:'->xH; 
                      (if RV[]=none then 'RV is none' -> xT 
                       else
@@ -1758,9 +1826,9 @@ do (if stest then
            V.toDataReg->dr[];
            (dr,false,false,false)->mkComputedEvVal->V[];
            (if jmpCond then
-               (lab[],2)->V.cmpBoolAndJmp
+               (lab[],common.cond_ne)->V.cmpBoolAndJmp
             else
-               (lab[],1)->V.cmpBoolAndJmp
+               (lab[],common.cond_eq)->V.cmpBoolAndJmp
            if)
 
         #);
@@ -1894,6 +1962,8 @@ do (if stest then
          // gram.geExp then
             EV.son->EV1; EV1.brother->EV2;
             (baseAdr.copy,EV1[],succIsObj,EHChain[])->ExpEval->lv[];
+            (if switch182 then true -> lv.pushVal -> lv[] if);
+            
             (* 16.7.98: FIX for 
              *   (if (c1->ascii.lowCase) <> (c2 -> ascii.lowCase)
              *)
