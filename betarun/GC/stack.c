@@ -130,15 +130,20 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	       )
         
     /* Process GC registers of the activation record. */
-    DEBUG_IOA(if (inBetaHeap(ar->i0) && objIsValRep(cast(Object)(ar->i0)))
+    DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i0)) 
+		  && objIsValRep(cast(Object)(ar->i0)))
 	      fprintf(output, "ProcessAR: ar->i0 (0x%x) is *ValRep\n", ar->i0));
-    DEBUG_IOA(if (inBetaHeap(ar->i1) && objIsValRep(cast(Object)(ar->i1)))
+    DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i1)) 
+		  && objIsValRep(cast(Object)(ar->i1)))
 	      fprintf(output, "ProcessAR: ar->i1 (0x%x) is *ValRep\n", ar->i1));
-    DEBUG_IOA(if (inBetaHeap(ar->i2) && objIsValRep(cast(Object)(ar->i2)))
+    DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i2)) 
+		  && objIsValRep(cast(Object)(ar->i2)))
 	      fprintf(output, "ProcessAR: ar->i2 (0x%x) is *ValRep\n", ar->i2));
-    DEBUG_IOA(if (inBetaHeap(ar->i3) && objIsValRep(cast(Object)(ar->i3)))
+    DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i3)) 
+		  && objIsValRep(cast(Object)(ar->i3)))
 	      fprintf(output, "ProcessAR: ar->i3 (0x%x) is *ValRep\n", ar->i3));
-    DEBUG_IOA(if (inBetaHeap(ar->i4) && objIsValRep(cast(Object)(ar->i4)))
+    DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i4)) 
+		  && objIsValRep(cast(Object)(ar->i4)))
 	      fprintf(output, "ProcessAR: ar->i4 (0x%x) is *ValRep\n", ar->i4));
 
     if (inBetaHeap(cast(Object)(ar->i0)) 
