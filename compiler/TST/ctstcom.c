@@ -8,6 +8,12 @@
 
 #define test 0
 
+struct myData{
+    long x;
+    short s;
+    char c;  
+};
+
 struct xCOMclass; /* forward */
 
 /********* definition of class xCOMclass to be impoted by BETA */
@@ -19,6 +25,7 @@ struct vtbl
   char (STDCALL *f2)(struct xCOMclass *this, long a, long b, long c);
   char (STDCALL *f3)(struct xCOMclass *this, char *t, long ix);
   char *(STDCALL *f4)(struct xCOMclass *this, long ix, char *t);
+  char (STDCALL *f5)(struct xCOMclass *this, struct myData *S);
 };
 
 /* xCOMclass is the class */
@@ -69,6 +76,14 @@ char *STDCALL f4(struct xCOMclass *this, long ix, char *t)
   return s;
 }
 
+char STDCALL f5(struct xCOMclass *this, struct myData *S)
+{ char c;
+  if (test) printf(" xCOMclass::F5: %i %i %c \n",S->x,S->s,S->c);
+  c = '!';
+  if (S->x == 1199) {c = 'q';};
+  return c;
+}
+
 /* This is a virtual dispatch table instance, 
  * that may be shared by all xCOMclass objects 
  */
@@ -82,6 +97,7 @@ struct xCOMclass * GetXobj()
   theVTBL.f2 = &f2;
   theVTBL.f3 = &f3;
   theVTBL.f4 = &f4;
+  theVTBL.f5 = &f5;
   /* Allocate xCOMclass object */
   R = (struct xCOMclass *)malloc(sizeof(struct xCOMclass));
   R->proto = &theVTBL;
@@ -94,7 +110,7 @@ struct xCOMclass * GetXobj()
  *   C declarations for using COM object implemented in BETA
  **************************************************************/
 
-/* argumnet type of g5 below  */
+/* argument type of g5 below  */
 typedef struct tag {
   int x;
   short y;
