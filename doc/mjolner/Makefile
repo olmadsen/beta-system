@@ -10,7 +10,7 @@ tags:
 	etags ../sif/src/*.html ../freja/src/*.html ../frigg/src/*.html ../valhalla/src/*.html
 
 clean:
-	-/bin/rm -f *~ 
+	-/bin/rm -f *~ ../sif/src/*~ ../freja/src/*~ ../frigg/src/*~ ../valhalla/src/*~
 
 distclean: clean
 	-/bin/rm -f *.html *.pdf
