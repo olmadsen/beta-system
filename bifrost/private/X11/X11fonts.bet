@@ -88,13 +88,12 @@ initBifrostFonts:
 XCheckFontLoaded:
   (# nam, orignam: @FontName;
      sty, origsty: @Style;
-     siz, origsiz: @integer;
+     siz, origsiz, range: @integer;
      legalsiz, legalnam, legalsty, subst: @boolean;
      xf: ^THIS(guienv).private.xfont;
      
   enter (nam,sty,siz)
-  do
-     (if debugGraphic then 
+  do (if debugGraphic then 
          'XCheckFontLoaded: Name style size ' -> puttext;
          nam -> screen.putint(# format::<(#do 6->width#)#);
          sty -> screen.putint(# format::<(#do 6->width#)#);
@@ -123,11 +122,28 @@ XCheckFontLoaded:
          1->siz; 
          false -> legalsiz;
      if);
-     (if siz>THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range then
+     THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range -> range;
+     (if siz>range then
+         (* Due to zoom, this may often happen. Extend array to allow
+          * caching of substitution font.
+          *)
          true -> subst;
-         THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range
-           -> siz;
-         false -> legalsiz;
+         siz-range -> THIS(guienv).private.fonts.xfonts[nam].style[sty].size.extend;
+         (for i:(siz-range) repeat
+              &THIS(guienv).private.xfont[] 
+                -> THIS(guienv).private.fonts.xfonts[nam].style[sty].size[range+i][];
+              false ->
+              THIS(guienv).private.fonts.xfonts[nam].style[sty].size[range+i].loaded;
+         for);
+         (if debugGraphic then 
+             'XCheckFontLoaded: Extended to Name style size ' -> puttext;
+             nam -> screen.putint(# format::<(#do 6->width#)#);
+             sty -> screen.putint(# format::<(#do 6->width#)#);
+             THIS(guienv).private.fonts.xfonts[nam].style[sty].size.range
+               -> screen.putint(# format::<(#do 6->width#)#); 
+             newline
+         if);
+         true -> legalsiz (* Can now be used as index *);
      if);
      
      findfont:
@@ -187,6 +203,13 @@ XCheckFontLoaded:
          if);
          (if legalnam and legalsty and legalsiz then
              (* cache it to avoid work on next call of XCheckFontLoaded *)
+             (if debugGraphic then 
+                 'XCheckFontLoaded: Caching ' -> puttext;
+                 nam -> screen.putint(# format::<(#do 6->width#)#);
+                 sty -> screen.putint(# format::<(#do 6->width#)#);
+                 siz -> screen.putint(# format::<(#do 6->width#)#); 
+                 xf.name[] -> putline;
+             if);
              true ->
              THIS(guienv).private.fonts.xfonts[orignam]
              .style[origsty].size[origsiz].loaded;
@@ -824,7 +847,8 @@ InitX11r3:
           ('-adobe-helvetica-medium-i-normal-*-60-*-*-*-*-*-*-*',
           Helvetica, Italic, 60) -> init;
        #);
-  do InitTimes;
+  do (* FIXME: use XListFonts instead! *)
+     InitTimes;
      InitCourier;
      InitHelvetica;
   #); 
