@@ -35,62 +35,67 @@ extrn	AlloVR2:proc
 extrn	AlloVR4:proc
 extrn	AlloVR8:proc
 extrn	_pReg1:dword
+extrn	_pReg2:dword
 _CODE	SEGMENT
 public	_DoAlloVR1
 _DoAlloVR1:
+	mov	edx,8[esp]	; offset to pReg1
+	mov	_pReg1,edx
+	mov	edx,12[esp]	; range to pReg2
+	mov	_pReg1,edx
 	mov	edx,4[esp]	; obj to RegObj
-	mov	eax,8[esp]	; offset to DataReg1
-	mov	ebx,12[esp]	; range to DataReg2
-	call	AlloVR1
-	ret
+	jmp	AlloVR1
 
 public	_DoAlloVR2
 _DoAlloVR2:
+	mov	edx,8[esp]	; offset to pReg1
+	mov	_pReg1,edx
+	mov	edx,12[esp]	; range to pReg2
+	mov	_pReg1,edx
 	mov	edx,4[esp]	; obj to RegObj
-	mov	eax,8[esp]	; offset to DataReg1
-	mov	ebx,12[esp]	; range to DataReg2
-	call	AlloVR2
-	ret
+	jmp	AlloVR2
 
 public	_DoAlloVR4
 _DoAlloVR4:
+	mov	edx,8[esp]	; offset to pReg1
+	mov	_pReg1,edx
+	mov	edx,12[esp]	; range to pReg2
+	mov	_pReg1,edx
 	mov	edx,4[esp]	; obj to RegObj
-	mov	eax,8[esp]	; offset to DataReg1
-	mov	ebx,12[esp]	; range to DataReg2
-	call	AlloVR4
-	ret
+	jmp	AlloVR4
 
 public	_DoAlloVR8
 _DoAlloVR8:
+	mov	edx,8[esp]	; offset to pReg1
+	mov	_pReg1,edx
+	mov	edx,12[esp]	; range to pReg2
+	mov	_pReg1,edx
 	mov	edx,4[esp]	; obj to RegObj
-	mov	eax,8[esp]	; offset to DataReg1
-	mov	ebx,12[esp]	; range to DataReg2
-	call	AlloVR8
-	ret
+	jmp	AlloVR8
 
 public	_DoAlloRR
 _DoAlloRR:
+	mov	edx,8[esp]	; offset to pReg1
+	mov	_pReg1,edx
+	mov	edx,12[esp]	; range to pReg2
+	mov	_pReg1,edx
 	mov	edx,4[esp]	; obj to RegObj
-	mov	eax,8[esp]	; offset to DataReg1
-	mov	ebx,12[esp]	; range to DataReg2
-	call	AlloRR
-	ret
+	jmp	AlloRR
 
 public	_DoAlloS
 _DoAlloS:
 	mov	edi,4[esp]
 	mov	_pReg1,edi	; origin to pReg1
-	mov	edi,8[esp]	; proto to RegArg
+	mov	edi,8[esp]	; proto to RegCall
 	call	AlloS
-	mov	eax,edi		; result in RegArg
+	mov	eax,edi		; result in RegCall
 	ret
 
 public	_DoAlloH
 _DoAlloH:
-	mov	_pReg1,0	; origin to pReg1 (unused]
-	mov	edi,4[esp]	; proto to RegArg
+	mov	edi,4[esp]	; proto to RegCall
 	call	AlloH
-	mov	eax,edi		; Result in RegArg
+	mov	eax,edi		; Result in RegCall
 	ret
 _CODE	ENDS
 	END

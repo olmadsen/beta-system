@@ -7,60 +7,66 @@
 ##
 .data
 .globl	pReg1
+.globl	pReg2
 .text
 .globl DoAlloVR1
 DoAlloVR1:
+      movl 8(%esp),%edx  # offset to pReg1
+      movl %edx,pReg1
+      movl 12(%esp),%edx # range to pReg2 
+      movl %edx,pReg2
       movl 4(%esp),%edx  # obj to RegObj 
-      movl 8(%esp),%eax  # offset to DataReg1 
-      movl 12(%esp),%ebx # range to DataReg2 
-      call AlloVR1
-      ret
+      jmp AlloVR1
+
 
 .globl DoAlloVR2
 DoAlloVR2:
+      movl 8(%esp),%edx  # offset to pReg1
+      movl %edx,pReg1
+      movl 12(%esp),%edx # range to pReg2 
+      movl %edx,pReg2
       movl 4(%esp),%edx  # obj to RegObj 
-      movl 8(%esp),%eax  # offset to DataReg1 
-      movl 12(%esp),%ebx # range to DataReg2 
-      call AlloVR2
-      ret
+      jmp AlloVR2
 
 .globl DoAlloVR4
 DoAlloVR4:
+      movl 8(%esp),%edx  # offset to pReg1
+      movl %edx,pReg1
+      movl 12(%esp),%edx # range to pReg2 
+      movl %edx,pReg2
       movl 4(%esp),%edx  # obj to RegObj 
-      movl 8(%esp),%eax  # offset to DataReg1 
-      movl 12(%esp),%ebx # range to DataReg2 
-      call AlloVR4
-      ret
+      jmp AlloVR4
 
 .globl DoAlloVR8
 DoAlloVR8:
+      movl 8(%esp),%edx  # offset to pReg1
+      movl %edx,pReg1
+      movl 12(%esp),%edx # range to pReg2 
+      movl %edx,pReg2
       movl 4(%esp),%edx  # obj to RegObj 
-      movl 8(%esp),%eax  # offset to DataReg1 
-      movl 12(%esp),%ebx # range to DataReg2 
-      call AlloVR8
-      ret
+      jmp AlloVR8
 
 .globl DoAlloRR
 DoAlloRR:
+      movl 8(%esp),%edx  # offset to pReg1
+      movl %edx,pReg1
+      movl 12(%esp),%edx # range to pReg2 
+      movl %edx,pReg2
       movl 4(%esp),%edx  # obj to RegObj 
-      movl 8(%esp),%eax  # offset to DataReg1 
-      movl 12(%esp),%ebx # range to DataReg2 
-      call AlloRR
-      ret
+      jmp AlloRR
 
 .globl DoAlloS
 DoAlloS:
       movl 4(%esp),%edi
-      movl %edi,pReg1   # origin to pReg1 
-      movl 8(%esp),%edi  # proto to RegArg 
+      movl %edi,pReg1    # origin to pReg1 
+      movl 8(%esp),%edi  # proto to RegCall
       call AlloS
-      movl %edi,%eax     # result in RegArg 
+      movl %edi,%eax     # result in RegCall 
       ret
 
 .globl DoAlloH
 DoAlloH:
-      movl $0,pReg1     # origin to pReg1 (unused) 
-      movl 4(%esp),%edi  # proto to RegArg 
+      movl 4(%esp),%edi  # proto to RegCall
       call AlloH
-      movl %edi,%eax     # Result in RegArg 
+      movl %edi,%eax     # Result in RegCall 
       ret
