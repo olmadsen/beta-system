@@ -1,13 +1,14 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: define.h,v $, rel: %R%, date: $Date: 1991-02-11 14:28:12 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: define.h,v $, rel: %R%, date: $Date: 1992-03-23 13:12:12 $, SID: $Revision: 1.3 $
  * by Lars Bak
  */
 #define FALSE	0
 #define TRUE	1
 
 /* Machines supported 
- * sun3os4    'sun-3'       is defined.
+ * sun3       'sun-3'       is defined.
+ * sun4       'sparc'       is defined.
  * hp         'hpux'        is defined.
  * dx200      'DX200'       is defined.
  * macintosh  'macintosh'   is defined.
@@ -24,6 +25,11 @@
 
 #ifdef apollo
 #  define UNIX
+#endif
+
+#ifdef sparc
+#  define UNIX
+#  undef sun-3
 #endif
 
 #ifdef sun-3
