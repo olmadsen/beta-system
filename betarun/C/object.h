@@ -1,5 +1,9 @@
 /*  Define structs describing all sorts of beta objects.  */
 
+/* 92-04-02 tthorn: All heap objects now have a Body element;
+   		    thus one can use the headsize macro
+ */
+
 struct ProtoType{
     short           GCTabOff;  /* Offset to the GC Table            */
     short           OriginOff; /* Where should the origin be        */
@@ -59,8 +63,9 @@ struct RefRep{
 struct Structure{
     ref(ProtoType)  Proto;     /* Reference to the Prototype  */
     long            GCAttr;    /* The GC attribute            */
-    long            iOrigin;   /* The origin of the structure */
+    ref(Object)     iOrigin;   /* The origin of the structure */
     ref(ProtoType)  iProto;    /* The protoType of the struc  */
+    long	    Body[1];   /* Dummy. Makes headsize work. */
 };
 
 /* Block is memory unit for AOArea and LVRArea. */
