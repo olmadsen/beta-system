@@ -143,7 +143,7 @@ struct group_header* NextGroup (struct group_header* current)
   extern long *BETA_end; /* C-variable */
   long *limit;
 
-  DEBUG_CODE(fprintf (output, "NextGroup. current = 0x%x\n", current));
+  /*DEBUG_CODE(fprintf (output, "NextGroup. current = 0x%x\n", current));*/
   
   if (current) {
     /* Get next data segment if any. Padding by linker 
@@ -155,15 +155,15 @@ struct group_header* NextGroup (struct group_header* current)
 
     for (; (long*) current < limit; ((long*)current)++) {
       if (current->self == current) {
-	DEBUG_CODE(fprintf (output, "NextGroup = %s\n", current->ascii));
+	/*DEBUG_CODE(fprintf (output, "NextGroup = %s\n", current->ascii));*/
 	return current;
       }
-      DEBUG_CODE(fprintf (output, "NextGroup pad\n"));
+      /*DEBUG_CODE(fprintf (output, "NextGroup pad\n"));*/
     }
     /* No next group. */
     return 0;
   } else {
-    DEBUG_CODE(fprintf (output, "NextGroup = %s\n", ((struct group_header *)&data1)->ascii));
+    /*DEBUG_CODE(fprintf (output, "NextGroup = %s\n", ((struct group_header *)&data1)->ascii));*/
     return (struct group_header *)&data1;
   }
 }
@@ -178,7 +178,7 @@ char *GroupName(long address, int isCode)
   struct group_header *last;
   long dist, distance;
   
-  DEBUG_CODE(fprintf (output, "GroupName\n"));
+  /*DEBUG_CODE(fprintf (output, "GroupName\n"));*/
 
   current = last = group = NextGroup (0);  /* first (betaenv) data segment */
   if ((isCode && (address<current->code_start)) || 
@@ -216,8 +216,8 @@ char *GroupName(long address, int isCode)
     c_on_top=0;
   }
   
-  DEBUG_CODE(fprintf (stderr, "GroupName returning (adr) 0x%x\n",(long) group->ascii));
-  DEBUG_CODE(fprintf (stderr, "GroupName returning (string) %s\n", group->ascii));
+  /*DEBUG_CODE(fprintf (stderr, "GroupName returning (adr) 0x%x\n",(long) group->ascii));*/
+  /*DEBUG_CODE(fprintf (stderr, "GroupName returning (string) %s\n", group->ascii));*/
 
   return group->ascii;
 }
@@ -512,19 +512,37 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
 #ifndef sparc
   ref(Component)      currentComponent;
 #endif
+  char *dumpname;
+  char dirCh;
+  char *execname, *localname;
   
   c_on_top = 0;
+
+#ifdef macintosh
+  dirCh = ':';
+  execname = ArgVector[0]; /* Always right ??? */
+#else
+  dirCh = '/';
+  execname = ArgVector[0];
+#endif
+  if ( (localname=strrchr(execname, dirCh)) ) 
+    localname = &localname[1];
+  else
+    localname = execname;
+  dumpname = MALLOC(strlen(localname)+9); /* Allow for ".dump", possibly 3 digits, and NULL */
+  strcpy(dumpname, localname);
+  strcat(dumpname, ".dump");
   
-  if( (output = fopen("beta.dump","w")) == NULL){
+  if( (output = fopen(dumpname,"w")) == NULL){
     /* beta.dump cannot be opened */
 #ifdef macintosh
     if (StandAlone){
       int i=2;
-      char dumpname[20];
-      char lookat[30];
+      char *lookat;
       do {
-	sprintf(dumpname, "beta.dump%d", i++);
+	sprintf(dumpname, "%s.dump%d", localname, i++);
       } while ((output = fopen(dumpname,"w")) == NULL);
+      lookat = MALLOC(strlen(dumpname)+12);
       sprintf(lookat, "\n\nLook at '%s'", dumpname);
       CPrompt("Beta execution aborted:\n\n", ErrorMessage(errorNumber), lookat, "");
     } else {
@@ -543,16 +561,18 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
     /* beta.dump opened successfully */
 #ifdef macintosh
     if (StandAlone){
-      CPrompt("Beta execution aborted:\n\n", ErrorMessage(errorNumber), "\n\nLook at 'beta.dump'", "");
+      lookat = MALLOC(strlen(dumpname)+12);
+      sprintf(lookat, "\n\nLook at '%s'", dumpname);
+      CPrompt("Beta execution aborted:\n\n", ErrorMessage(errorNumber), lookat, "");
     } else {
       fprintf(stderr, "\n# Beta execution aborted: ");
       fprintf(stderr, ErrorMessage(errorNumber));
-      fprintf(stderr, ", look at 'beta.dump'.\n");
+      fprintf(stderr, ".\n# Look at '%s'.\n", dumpname);
     }
 #else
     fprintf(stderr, "\n# Beta execution aborted: ");
     fprintf(stderr, ErrorMessage(errorNumber));
-    fprintf(stderr, ", look at 'beta.dump'.\n");
+    fprintf(stderr, ".\n# Look at '%s'.\n", dumpname);
 #endif
     fprintf(output, "Beta execution aborted: ");
     fprintf(output, ErrorMessage(errorNumber));
