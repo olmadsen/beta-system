@@ -74,12 +74,14 @@ static ref(Object) CopyObject( theObj)
 	newObj     = (ref(Object)) ToSpaceTop;
 	theEnd     = (ptr(long)) (((long) newObj) + size); 
 	
+	DEBUG_IOA( Claim(theEnd<ToSpaceLimit, "theEnd<ToSpaceLimit") );
+	
 	ToSpaceTop = theEnd;
 	if( !tempAOAroots &&
 	   (char *) ToSpaceTop+size > (char *) AOArootsPtr )
 	  tempAOArootsAlloc();
 	src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
-	
+
 	while( dst < theEnd) *dst++ = *src++; 
 	
     }
