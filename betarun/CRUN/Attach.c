@@ -164,7 +164,8 @@ struct Component * Att(struct Object *this, struct Component *comp)
     a0=(long)popAdr();
 
     /* fprintf(output,"\nAttach: comp TERMINATED: 0x%08x\n", (int)comp); 
-    fflush(stdout); */
+     * fflush(stdout); 
+     */
 
     /* TerminateComponent: */
     comp->StackObj   = 0;
@@ -280,12 +281,12 @@ ParamThisComp(struct Component *, Att)
     BetaError(RecursiveAttErr, this);
   
   /*
-  printf("\nAttach: comp: 0x%08x\n", comp);
-  printf("Attach: comp->CallerLSC: 0x%08x\n", comp->CallerLSC);
-  printf("Attach: ActiveComponent: 0x%08x\n", ActiveComponent);
-  printf("Attach: ActiveComponent->CallerLSC: 0x%08x\n", ActiveComponent->CallerLSC);
-  fflush(stdout);
-  */
+   * printf("\nAttach: comp: 0x%08x\n", comp);
+   * printf("Attach: comp->CallerLSC: 0x%08x\n", comp->CallerLSC);
+   * printf("Attach: ActiveComponent: 0x%08x\n", ActiveComponent);
+   * printf("Attach: ActiveComponent->CallerLSC: 0x%08x\n", ActiveComponent->CallerLSC);
+   * fflush(stdout);
+   */
 
   getret(ActiveComponent->CallerLSC);		/* Save our return address */
   
@@ -342,8 +343,9 @@ ParamThisComp(struct Component *, Att)
     
     /* TerminateComponent: */
     comp = ActiveComponent;
-    /*printf("\nAttach: comp TERMINATED: 0x%08x\n", comp);*/
-    fflush(stdout);
+    /* printf("\nAttach: comp TERMINATED: 0x%08x\n", comp);
+     * fflush(stdout);
+     */
     /* Fool gcc into believing that %i1 is used */
     asm(""::"r" (tmp));
     ActiveComponent  = comp->CallerComp;
