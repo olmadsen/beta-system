@@ -9,19 +9,19 @@ do_export_type_dcl:
 do_export_const_dcl:
   (# e: ^idl.export_const_dcl;
   enter e[]
-  do outfile.indent;
+  do (if not compact then outfile.indent; if);
      'do_export_const_dcl NYI' -> outfile.commentline;
   #);
 do_export_except_dcl:
   (# e: ^idl.export_except_dcl;
   enter e[]
-  do outfile.indent;
+  do (if not compact then outfile.indent; if);
      'do_export_except_dcl NYI' -> outfile.commentline;
   #);
 do_export_attr_dcl:
   (# e: ^idl.export_attr_dcl;
   enter e[]
-  do outfile.indent;
+  do (if not compact then outfile.indent; if);
      'do_export_attr_dcl NYI' -> outfile.commentline;
   #);
 
@@ -31,13 +31,13 @@ do_export_op_dcl:
        (# do_raises_expr:
             (# o: ^idl.raises_expr;
             enter o[]
-            do outfile.indent;
+            do (if not compact then outfile.indent; if);
                'do_raises_expr NYI' -> outfile.commentline;
             #);
           do_context_expr:
             (# o: ^idl.context_expr;
             enter o[]
-            do outfile.indent;
+            do (if not compact then outfile.indent;if);
                'do_context_expr NYI' -> outfile.commentline;
             #);
           do_parameter_dcls:
@@ -83,15 +83,13 @@ do_export_op_dcl:
                             'pointerlevel>1 for param_base_type_spec'
                               -> putline;
                         if);
-                        (if dcl_info.type_comment[]<>NONE then
-                            outfile.CommentBegin;
-                            dcl_info.type_comment[] -> outfile.puttext;
-                            outfile.CommentEnd;
+                        (if (dcl_info.type_comment[]<>NONE) and (not compact) then
+                            dcl_info.type_comment[] -> outfile.comment;
                         if);
                      // idl.param_string_type then
                         put_arg;
-                        '@integer (* param_string_type NYI *)' 
-                          -> outfile.puttext;
+                        '@integer' -> outfile.puttext;
+                        'param_string_type NYI' -> outfile.comment
                      // idl.param_scoped_name then
                         (t[]->s[]).getscoped_name -> do_scoped_name -> 
                         local_types.findtype
@@ -127,15 +125,16 @@ do_export_op_dcl:
                                    (if isWide then
                                        '@wtext' -> outfile.puttext;
                                     else
-                                       '[0]@char (* @text NYI *)' 
-                                         -> outfile.puttext;
+                                       '[0]@char' -> outfile.puttext;
+                                        '@text NYI' -> outfile.spacecomment;
                                    if);
                                 // 1 then
                                    (if isWide then
                                        '^wtext' -> outfile.puttext;
                                     else
-                                       '[0]@char (* ^text NYI *)' 
-                                         -> outfile.puttext;
+                                       '[0]@char' -> outfile.puttext;
+                                       '^text NYI' -> outfile.spacecomment;
+
                                        (* FIXME: arrrgh: The put_arg above has
                                         * added '[]' to the end of 
                                         * enter_parameters, since it is 
@@ -185,7 +184,14 @@ do_export_op_dcl:
                                    current.representation[]->outfile.puttext;
                                    'Holder' -> outfile.puttext;
                                    (if current.category=type_cat_basic then
-                                       'pointer-to-pointer-to-basictype not supported' -> error;
+                                       (# msg: ^text;
+                                       do 'pointer-to-pointer-to-basictype not supported. Using \'' -> msg[];
+                                           current.representation[]->msg.puttext;
+                                          'Holder\' for parameter \''->msg.puttext;
+                                          dcl_info.name[] -> msg.puttext;
+                                          '\'.'->msg.puttext;
+                                          msg[] -> error;
+                                       #);
                                    if);
                                 else
                                    'pointerlevel>2!;' 
@@ -202,19 +208,22 @@ do_export_op_dcl:
                         (if true
                          // arg_info.pointer_level=1 then
                             put_arg;
-                            '@integer (* void* *)' -> outfile.puttext;
+                            '@integer' -> outfile.puttext;
+                            'void*' -> outfile.spacecomment;
                          // arg_info.pointer_level=2 then
                             put_arg;
-                            '@integer (* void** *)' -> outfile.puttext;
+                            '@integer' -> outfile.puttext;
+                            'void**' -> outfile.spacecomment;
                          else
                             (* If a parameter has type 
                              * void, then it must mean that
                              * there are NO parameters! 
                              * I.e. foo(void).
                              *)
-                            (if num_enter_parameters=0 then
-                                'No parameters' 
-                                  -> outfile.comment;
+                            (if (num_enter_parameters=0) then
+                                (if not compact then
+                                    'No parameters' -> outfile.comment;
+                                if);
                              else
                                 (# msg: ^text;
                                 do 'Met void parameter at ' -> msg[];
@@ -226,7 +235,7 @@ do_export_op_dcl:
                             if);
                         if);
                     if);
-                    ' '->outfile.put; dcl_info.as_text->outfile.comment;
+                    dcl_info.as_text->outfile.spacecomment;
                  #);
                put_arg:
                  (* Put out the parameter name, and remember it in
@@ -259,7 +268,7 @@ do_export_op_dcl:
                  #);
                arg_info: ^declarator_info;
             enter (arg_info[], d[])
-            do outfile.indent;
+            do (if not compact then outfile.indent; if);
                (if d.getconst2->optionalPresent then
                    d.getconst2->do_const;
                if);
@@ -278,7 +287,8 @@ do_export_op_dcl:
                    (arg_info.attributes[],d.getattributes_spec_opt)->do_attributes_spec;
                if);
                (arg_info[], d.gettype) -> do_param_type_spec;
-               ';' -> outfile.putline;
+               '; ' -> outfile.puttext;
+               (if not compact then outfile.newline if);
             #);
           result_present: @boolean;
           num_enter_parameters: @integer;
@@ -294,8 +304,8 @@ do_export_op_dcl:
                    'No result' -> outfile.comment;
                 // idl.void_ref then
                    true -> result_present;
-                   'result: ^IUnknown ' -> outfile.puttext;
-                   'void*' -> outfile.comment;
+                   'result: ^IUnknown' -> outfile.puttext;
+                   'void*' -> outfile.spacecomment;
                    ';' -> outfile.put;
                    'void* result translated to ^IUnknown'->warning
                 // idl.param_base_type_spec then
@@ -334,7 +344,7 @@ do_export_op_dcl:
                           '@' -> outfile.put;
                           current.representation[] -> outfile.puttext;
                       if);
-                      ' '->outfile.put; current.as_text->outfile.comment;
+                      current.as_text->outfile.spacecomment;
                    #);                                  
                    ';' -> outfile.put;
                 // idl.param_void then
@@ -344,11 +354,14 @@ do_export_op_dcl:
                 // idl.param_type_spec_ref then
                    true -> result_present;
                    'result: @integer ' -> outfile.puttext;
-                   'param_type_spec_ref NYI'
-                     -> outfile.comment;
+                   'param_type_spec_ref NYI' -> outfile.comment;
                    ';' -> outfile.put;
                if);
-               outfile.newline;
+               (if compact then 
+                   ' '-> outfile.put;
+                else
+                   outfile.newline;
+               if);
             #);
           e: ^idl.op_dcl;
           virtual_name, property_name: ^text;
@@ -387,12 +400,14 @@ do_export_op_dcl:
               ']' -> screen.putline;
           if);
           virtual_name[] -> outfile.puttext;
-          ':< ' -> outfile.puttext;
-          outfile.newline;
-          2 -> outfile.indent.inc;
-          (if att.typelib.helpstring[] <> NONE then
-              outfile.indent;
-              att.typelib.helpstring[] -> outfile.commentline;
+          ':<' -> outfile.puttext;
+          (if not compact then 
+              outfile.newline;
+              2 -> outfile.indent.inc;
+              (if att.typelib.helpstring[] <> NONE then
+                  outfile.indent;
+                  att.typelib.helpstring[] -> outfile.commentline;
+              if);
           if);
           (if e.getraises_exprOpt -> optionalPresent then
               e.getraises_exprOpt -> do_raises_expr;
@@ -400,18 +415,20 @@ do_export_op_dcl:
           (if e.getcontext_exprOpt -> optionalPresent then
               e.getcontext_exprOpt -> do_context_expr;
           if);
-          outfile.indent;
+          (if not compact then 
+              outfile.indent;
+          if);
           outfile.PatternBegin;
           (* Handle the exit parameter *)
           e.getop_type_spec -> do_op_type_spec;
-          3 -> outfile.indent.inc;
+          (if not compact then 3 -> outfile.indent.inc; if);
           (* Handle the enter parameters *)
           e.getparameter_dcls -> do_parameter_dcls;
           
           (* Finish this virtual - emit enter,do,exit *)
-          3 -> outfile.indent.dec;
+          (if not compact then 3 -> outfile.indent.dec; if);
           (if num_enter_parameters>0 then
-              outfile.indent;
+              (if not compact then outfile.indent; if);
               'enter ' -> outfile.puttext;
               (if num_enter_parameters>1 then 
                   '(' -> outfile.put;
@@ -420,41 +437,48 @@ do_export_op_dcl:
               (if num_enter_parameters>1 then 
                   ')' -> outfile.put;
               if);
-              outfile.newline;
+              (if not compact then outfile.newline; if);
           if);
-          (if e.getstd_call_opt -> optionalPresent then
+          (if (e.getstd_call_opt -> optionalPresent) and (not compact) then
               outfile.indent;
-              (*'do CallStd;' -> outfile.putline;*)
               '__stdcall' -> outfile.commentline;
-           else
-              (* outfile.indent; *)
-              (*'do CallC;' -> outfile.putline;*)
           if);
           (if result_present then
-              outfile.indent;
-              'exit result' -> outfile.putline;
+              (if not compact then 
+                  outfile.indent;
+               else
+                  ' ' -> outfile.put
+              if);
+              'exit result' -> outfile.puttext;
           if);
-          outfile.indent;
+          (if not compact then 
+              outfile.newline;
+              outfile.indent;
+           else
+              ' ' -> outfile.put;
+          if);
           outfile.PatternEnd;
           ';' -> outfile.putline;
-          2 -> outfile.indent.dec;
-          (if property_name[]<>NONE then
-              (* Emit help pattern *)
-              outfile.indent;
-              property_name[] -> outfile.puttext;
-              ': ' -> outfile.puttext;
-              'property' -> outfile.commentline;
-              2 -> outfile.indent.inc;
-              outfile.indent;
-              outfile.patternbegin;
-              'enter put' -> outfile.puttext;
-              property_name[] -> outfile.puttext;
-              ' exit get' -> outfile.puttext;
-              property_name[] -> outfile.puttext;
-              ' '->outfile.put;
-              outfile.patternend;
-              ';' -> outfile.putline;
+          (if not compact then 
               2 -> outfile.indent.dec;
+              (if (property_name[]<>NONE) then
+                  (* Emit help pattern *)
+                  outfile.indent;
+                  property_name[] -> outfile.puttext;
+                  ': ' -> outfile.puttext;
+                  'property' -> outfile.commentline;
+                  2 -> outfile.indent.inc;
+                  outfile.indent;
+                  outfile.patternbegin;
+                  'enter put' -> outfile.puttext;
+                  property_name[] -> outfile.puttext;
+                  ' exit get' -> outfile.puttext;
+                  property_name[] -> outfile.puttext;
+                  ' '->outfile.put;
+                  outfile.patternend;
+                  ';' -> outfile.putline;
+                  2 -> outfile.indent.dec;
+              if);
           if);
           (if trace then
               newline;
@@ -472,7 +496,7 @@ do_export_op_dcl:
 do_cpp_quote:
   (# c: ^idl.cpp_quote;
   enter c[]
-  do outfile.indent;
+  do (if not compact then outfile.indent; if);
      c.getString -> StringToText -> outfile.commentline;
   #);
 do_export_import:
@@ -485,7 +509,7 @@ do_export_import:
 do_export_error:
   (# e: ^idl.export_error;
   enter e[]
-  do outfile.indent;
+  do (if not compact then outfile.indent; if);
      'do_export_error NYI' -> outfile.commentline;
   #);
 
