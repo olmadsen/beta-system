@@ -68,6 +68,13 @@ toStdText:
   exit t[]
   #);
 
+isModifierOn: booleanValue
+  (* Tell if theModifier is currently being pressed *)
+  (# theModifier: @Modifier;
+  enter theModifier
+  <<SLOT isModifierOnBody: doPart>>
+  #);
+
 Modifier: 
   (# m: @Integer; enter m do INNER exit m #);
 
@@ -155,7 +162,13 @@ field_info:
                            then
                            (if THIS(editSheet).private.currentFieldInfo.j = j
                                then
-                               (0x00,0x00,32000)->acColor; 
+                               selection.textColor->acColor; 
+                           if);
+                       if);
+                       
+                       (if myRow[]<>NONE then
+                           (if myRow.private.selected then
+                               selection.textColor->acColor; 
                            if);
                        if);
                        
@@ -222,6 +235,7 @@ field_info:
             #);
        #);
      
+     myRow: ^row;
      i,j: @integer;
      cellColor: @color;
      privCellPixmap: ^pixmap;
@@ -262,6 +276,10 @@ do (# firstRow: ^row; tempHeight: @integer;
       private.scroller1.contents.initTheTextField;
       private.theEditFields.init;
       gridOffset->private.next_vertical_pos;
+      
+      (0x00,0x00,32000) -> selection.textColor;
+      backgroundColor -> selection.backgroundColor;
+      
       INNER open;
       private.header.createHeadingLabels;
       (1,1)->private.theEditFields.select;
@@ -326,14 +344,50 @@ do
    private.noOfColumns+1->private.noOfColumns;
    theHeading[]->private.theHeadings.add;
 
--- editSheetSetSelection: DoPart --
+-- editSheetSetFocus: DoPart --
 do (c,r)->private.theEditFields.select;   
-
--- editSheetGetSelection: DoPart --
-do
-   (if private.currentFieldInfo[] <> none then
+   
+-- editSheetGetFocus:DoPart --
+do (if private.currentFieldInfo[] <> none then
        (private.currentFieldInfo.i,private.currentFieldInfo.j)->(c,r); 
    if);
+   
+-- setSelTextColor: doPart --
+do value -> this(editSheet).private.selTextCol;
+   value -> this(editSheet).private.theEditText.setEditTextColor;
+   update;
+   
+-- getSelTextColor: doPart --
+do this(editSheet).private.selTextCol -> value;
+   
+-- setSelBgColor: doPart --
+do value -> this(editSheet).private.selBgCol;
+   
+-- getSelBgColor: doPart --
+do this(editSheet).private.selBgCol -> value;
+   update;
+   
+-- editSheetSelectionFirst: doPart --
+do scanL:
+     private.selectionList.scan
+     (# 
+     do current[] -> theItem[];
+        leave scanL
+     #);
+   
+-- editSheetSelectionClear: doPart --
+do scan
+   (# 
+   do current.deselect;
+      current.update;
+   #);
+   
+-- editSheetSelectionScan: doPart --
+do private.selectionList.scan
+   (# 
+   do current[] -> this(scan).current[];
+      inner scan
+   #);
    
 -- setCellTextColor: DoPart --
 do (# result: @integer;
@@ -369,6 +423,7 @@ do
    (if theRow[] <> none then 
        private.noOfRows+1->private.noOfRows;
        (if not private.theEditText.visible then
+           theRow.select;
            private.theEditText.show;
        if);
        
@@ -401,6 +456,7 @@ do (if private.theFieldInfos.size < noOfColumns then
        (# aField_info: ^field_info;
        do (if (value[] <> none) and (not private.deleted) then
               &field_info[]->aField_info[];
+              this(row)[] -> aField_info.myrow[];
               value[]->toStyledText->aField_info.theCellRect.contents[];
               private.theFieldInfos.size+1 -> aField_info.i;
               aField_info[] -> private.theFieldInfos.append;
@@ -484,6 +540,20 @@ do (if (c > 0) and (c <= private.theFieldInfos.size) then
          #);    
    if);
    
+-- rowSelect: doPart --
+do this(row)[] -> this(editSheet).private.selectionList.insert;
+   true -> private.selected;
+   
+-- rowDeselect: doPart --
+do this(row)[] -> this(editSheet).private.selectionList.remove;
+   false -> private.selected;
+   
+-- rowUpdate: doPart --
+do private.theFieldInfos.scan
+   (# 
+   do current.theCellRect.update;
+   #);
+   
 -- rowPrivate: Descriptor --
 (#
    theFieldInfos: @sequence 
@@ -520,6 +590,52 @@ do (if (c > 0) and (c <= private.theFieldInfos.size) then
    lineHeight: @integer;
    hdc,thePen,prevPen: @integer;
    textTopOffset: @integer;
+   selTextCol: @color;
+   selBgCol: @color;
+   
+   selectionList: @list
+     (# element:: row;
+        
+        insert:
+          (# elm: ^element;
+             alreadyIn: @boolean;
+          enter elm[]
+          do 
+             (if (not multipleSelection)
+                 or
+                 not (ControlModifier->isModifierOn)
+                 then
+                 selection.clear;
+                 clear;
+             if);
+             (if not (elm[]->has) then
+                 elm[] -> append;
+             if);
+          #);
+        
+        remove:
+          (# elm: ^element;
+             okToDelete: @boolean;
+          enter elm[]
+          do (if (elm[]->has) then
+                 elm[] -> at -> delete;
+             if);
+          #);
+        
+        has: booleanValue
+          (# elm: ^element;
+          enter elm[]
+          do scanL:
+               scan
+               (# 
+               do (if current[]=elm[] then 
+                      true -> value;
+                      leave scanL
+                  if);
+               #);
+          #);
+     #);
+   
    clear:
      (# firstRow: ^row;
         height: @integer;
@@ -698,17 +814,18 @@ do (if (c > 0) and (c <= private.theFieldInfos.size) then
      (#
         <<SLOT theEditTextLib: attributes>>;
         
+        prohibitKeydown:
+          (# key: @char
+          enter key
+          <<SLOT prohibitKeydownImpl: doPart>>
+          #);
+        
         reactOnMouseUp: @boolean; (* TRUE if a cell got a mouseDown. The 
                                    * textfield will then get the mouseUp event
                                    * but guienv does not propagate this event.
                                    *)
         
-        isModifierOn: @booleanValue
-          (* Tell if theModifier is currently being pressed *)
-          (# theModifier: @Modifier;
-          enter theModifier
-          <<SLOT isModifierOnBody: doPart>>
-          #);
+        
         
         updateMargins:
           (# <<SLOT theEditTextUpdateMargins: doPart>> #);
@@ -719,15 +836,36 @@ do (if (c > 0) and (c <= private.theFieldInfos.size) then
           <<SLOT theEditTextSetReadOnly: doPart>>
           #);
         
+        doNotReactOnChangeEvent: @boolean;
+        
+        myInsert:
+          (# t: ^text;
+          enter t[]
+          do true -> doNotReactOnChangeEvent;
+             t[] -> contents;
+             false -> doNotReactOnChangeEvent;
+          #);
+        
         eventHandler:: 
           (#
+             onRefresh::
+               (# 
+               do (if currentFieldInfo[] <> none then
+                      currentFieldInfo.theCellRect.drawThePixmap;
+                  if);
+               #);
+             
              onBeforeChange:: 
                (# txt: ^text;
                   r,c: @integer;
                   doAllow: @boolean;
                do
-                  (if currentFieldInfo[] <> none then
-                      not (currentFieldInfo.i->columnsInfoList.getLock) -> allow;
+                  (if (currentFieldInfo[] <> none)
+                      and
+                      not doNotReactOnChangeEvent
+                      then
+                      not (currentFieldInfo.i->columnsInfoList.getLock) 
+                        -> allow;
                       (if length >= 1 then
                           theText->txt[];
                           (if txt[] <> none then
@@ -765,14 +903,33 @@ do (if (c > 0) and (c <= private.theFieldInfos.size) then
                                   1->txt.inxGet->theEditFields.navigate;
                                   
                                else
-                                  (if readOnly or (not allow) then false->allow; system.beep if);
+                                  (if readOnly or (not allow) then 
+                                      false->allow; system.beep 
+                                  if);
                               if);
                            else
-                                  false -> allow; system.beep
+                              false -> allow; system.beep
                           if);
                       if);
                   if);
                #);
+             
+             (* Use in r4.2.
+              * onKeydown::
+              *                (# 
+              *                do (if ch
+              *                    // ASCII.fs // ASCII.gs then
+              *                       (if (ShiftModifier->isModifierOn) then
+              *                           prohibitKeydown;
+              *                           ch->theEditFields.navigate;
+              *                       if);
+              *                       
+              *                    // ASCII.rs // ASCII.us then
+              *                       prohibitKeydown;
+              *                       ch->theEditFields.navigate;
+              *                   if);
+              *                #);
+              *)
              
              onEnableTarget:: 
                (# 
@@ -811,7 +968,10 @@ do (if (c > 0) and (c <= private.theFieldInfos.size) then
         isOpen: @boolean;
         
         setEditTextColor:
-          (#  <<SLOT setEditTextColorImpl: doPart>> #);
+          (# value: @color;
+          enter value
+          <<SLOT setEditTextColorImpl: doPart>> 
+          #);
         
         addChangeNotifications:
           (# windowID,theMask: @integer; 
@@ -941,9 +1101,9 @@ do (if (c > 0) and (c <= private.theFieldInfos.size) then
                      
                      (w+2,h)->theEditText.size;
                      (if current.theCellRect.contents[] <> none then
-                         current.theCellRect.contents[]->theEditText.contents; 
+                         current.theCellRect.contents[]->theEditText.myInsert; 
                       else
-                         ''->toStyledText->theEditText.contents; 
+                         ''->toStyledText->theEditText.myInsert; 
                      if);
                      theEditText.show;
 
@@ -959,14 +1119,17 @@ do (if (c > 0) and (c <= private.theFieldInfos.size) then
                          if);
                          currentFieldInfo.theCellRect[]
                            ->scroller1.scrollIntoView;
-                         (i1,j1,i2,j2)->onSelectionChanged;
+                         (i1,j1,i2,j2)->onFocusChanged;
                          j1->theRows.get->curRow[];
                          (if curRow[] <> none then
-                             true->curRow.private.selected; 
+                             curRow.select;
                          if);
                          j2->theRows.get->prevRow[];
                          (if prevRow[] <> none then
-                             false->prevRow.private.selected; 
+                             (* (if not multipleSelection then
+                              *                                  prevRow.deselect; 
+                              *                              if);
+                              *)
                          if);
                          (if j1 <> j2 then
                              (if curRow[] <> none then
@@ -982,6 +1145,10 @@ do (if (c > 0) and (c <= private.theFieldInfos.size) then
                                  (# 
                                  do current.theCellRect.drawTheText; 
                                  #);
+                             if);
+                          else
+                             (if currentFieldInfo[] <> none then
+                                 currentFieldInfo.theCellRect.drawThePixmap;
                              if);
                          if);
                      if);
@@ -1093,14 +1260,14 @@ do (if (c > 0) and (c <= private.theFieldInfos.size) then
           (# rowToRemove: ^row;
              rowNo: @integer;
              theRowList: ^element;
-             oldSelection: @point;
+             oldFocus: @point;
              topLeft: @point;
           enter rowToRemove[]
           do rowToRemove.private.getPosition -> topLeft;
              rowToRemove.r -> rowNo;
-             selection -> oldSelection;
+             focus -> oldFocus;
              NONE -> THIS(editSheet).private.currentFieldInfo[];
-             (if oldSelection.v = rowNo then
+             (if oldFocus.v = rowNo then
                  NONE -> THIS(editSheet).private.currentFieldInfo[];
              if);
              scan
@@ -1118,10 +1285,10 @@ do (if (c > 0) and (c <= private.theFieldInfos.size) then
                  theRowList[] -> delete;
              if);
              
-             (if oldSelection.v = noOfRows+1 then
-                 (oldSelection.h,oldSelection.v-1) -> selection;
+             (if oldFocus.v = noOfRows+1 then
+                 (oldFocus.h,oldFocus.v-1) -> focus;
               else
-                 oldSelection -> selection;
+                 oldFocus -> focus;
              if);
              
              (scroller1.contents[],(topLeft,scroller1.size)) -> updateRect;
