@@ -8,6 +8,18 @@
 
 #include "beta.h"
 
+#ifdef RTDEBUG
+#include <ieeefp.h>
+#define FPU_ZERODIVISION  FP_X_DZ
+#define FPU_INVALID       FP_X_INV
+#define FPU_DENORMALIZED  0
+#define FPU_OVERFLOW      FP_X_OFL
+#define FPU_UNDERFLOW     FP_X_UFL
+#define FPU_PRECISIONLOST FP_X_IMP
+#define EnableFPUexceptions(mask) fpsetmask(mask)
+#define DisableFPUexceptions() fpsetmask(0)
+#endif /* RTDEBUG */
+
 #ifndef MT
 
 extern void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
@@ -818,6 +830,7 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
 	ILLEGAL;
       } else {
 	long *ptr;
+	unsigned long oldmask = DisableFPUexceptions();
 	fprintf(output, 
 		"0x%08x: %d: Skipping tag and %d 8-byte stack cells:\n", 
 		(int)theCell,
@@ -833,6 +846,7 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
 	    fprintf(output, "\n");
 	  }
 	}
+	EnableFPUexceptions(oldmask);
 	/* Do the skip  */
       	theCell += (-tag-4);
 	continue;

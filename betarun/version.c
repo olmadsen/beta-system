@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(74+)";
+char betarun_version[] = "BETARUN VERSION 5.3(75)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.82  2002/03/13 22:15:13  corry
+ * Add include of <malloc.h> on Linux in order to get the nonstandard
+ * function memalign declared.  Needed for glibc 2.2.4 and later I think.
+ * Betarun version number: 74+
+ *
  * Revision 1.81  2002/03/13 14:14:20  henryml
  * Betarun version number: 74
  * Developer: hml+pa
