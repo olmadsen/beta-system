@@ -7,7 +7,7 @@
 #include <signal.h>
 #include <unistd.h>
 
-#define TRACE_COREACCESS 1
+#define TRACE_COREACCESS 0
 
 #if defined(sun4s) || defined(sgi)
 
