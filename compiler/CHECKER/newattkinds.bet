@@ -1,0 +1,399 @@
+ORIGIN 'sematt';
+LIB_ITEM 'betacompiler';
+---semattLib:attributes---
+(************* OBS: new semantic attributes *****
+ * 
+ *    descKind, mark1,mark2,type: @int8u
+ * 
+ * MUST be declared in betacfl
+ * **********************************************)
+(*-------------------- desc kind -------------------
+ *  Descriptors are classified into
+ *  beingChecked: currently being checked by chkDesc
+ *  undefined   : has not yet been checked
+ *  standard    : like integer, boolean, char, true, ...
+ *  const       : like integer, (#exit 9 #),
+ *  cProc       : a direct subpattern of Cproc 
+ *  general     : a general user defined pattern
+ * 
+ *  In addition various properties are associated with each  descriptor
+ *
+ *  descKind and the properties are packed into the AST attribute 'kind':
+ *  descKind    = kind[0-7] = descKind: @int8u
+ *  hasNcode    = kind[8]   = mark1: @int8u(0)
+ *  hasDcode    = kind[9]   = mark1: @int8u(1)
+ *  hasXcode    = kind[10]  = mark1: @int8u(2)
+ *  isData      = kind[11]  = mark1: @int8u(3)
+ *  hasInner    = kind[12]  = mark1: @int8u(4)
+ *  insertable  = kind[13]  = mark1: @int8u(5)
+ *  descAccess  = kind[14]  = mark1: @int8u(6)
+ *  interpreted = kind[15]  = NOT USED ANYMORE - from Jawahar interpreter
+ *                            used by interpreter: descriptor is interpreted
+ *  hasAcode    = kind[16]  = mark1: @int8u(7)   
+ *                            Allocation-code is needed (non-empty G-part)
+ *  hasOnlyInner= kind[17]  = mark2: @int8u(0)   
+ *                            On the form P(# ... do inner #), where P also
+ *                            hasOnlyInner - enter/exit-parts may appear
+ *  inlineNX    = kind[18]  = mark2: @int8u(1)   
+ *                            Form: (# a,b,c: @integer enter(a,b,c) exit E #)
+ *                            Code is inlined
+ *  inlineDo    = kind[19]     = mark2: @int8u(2) 
+ *  hasOnlyNX   = kind[20]     = mark2: @int8u(3) 
+ *  enter/exit  = kind[25:26]  = mark2: int8u(4:5)   
+ *                               Used by compciler to check for recursion
+ *                               in enter/exit list; chklst.bet
+ *  type        = kind[27:31]  = type: @int8u
+ *                               The type of basic patterns like
+ *                               boolean, char, short, integer, real
+ * 
+ *)
+beingChecked: (#exit 50(*must be positive*) #);
+unDefined: (#exit 0 #);
+standardKind: (#exit 1#); constKind: (#exit 2#); 
+externalKind: (#exit 3#); generalKind: (#exit 4#);
+dataKind: (#exit 5#); callBackKind: (#exit 6#);
+externalVirtualKind: (#exit 7 #);
+comKind: (#exit 8 #); holderKind: (#exit 9 #);
+stateKind: (#exit 10 #);
+dispatchKind: (#exit 11 #);  
+dispatchVirtualKind: (#exit 12 #); 
+classKind: (# exit 13 #);
+procKind: (# exit 14 #);
+externalClassKind: (# exit 15 #);
+consKind: (# exit 16 #);
+staticProcKind: (# exit 17 #);
+staticConsKind: (# exit 18 #);
+
+kindAstext:
+  (# kind: @integer; T: @text
+  enter kind
+  do (if kind
+      // standardKind then 'standard'->T;
+      // constKind then 'const'->T;
+      // generalKind then 'general'->T;
+      // classKind then 'class'->T;
+      // procKind then 'proc'->T
+      else
+         kind->T.putint
+     if)
+  exit T[]
+  #);
+
+insEval: (#exit 1#); simpleEval: (#exit 2#); 
+repValEval: (#exit 3#); repRefEval: (#exit 4 #);
+itemEval: (#exit 5#); compEval: (#exit 6#); sysKind: (#exit 7#);
+repKind: (#exit 8#); realEval: (#exit 9#);
+
+(* enter-exit list are classified using the following categories;
+ * see chkEvalBody
+ *)
+constEval: (#exit 1 #);
+simpleVarListEval: (#exit 2 #);
+inlineNXeval: (#exit 3 #);
+simpleExpEval: (#exit 4 #);
+generalEval: (#exit 5 #);
+
+(* for some unknown reason there seems to be a memory leak
+ * if the patterns below are made static items!
+ * Each of them should at most be able to hold on to one
+ * ref., but they seem to hold onto much more??
+ *)
+(* Operations using D.kind may fail if the descriptor (D) is
+ * not an objectDesciptor; this only occurs in very
+ * special cases; e.g. compiler/compiler/TST/FEJL/container.
+ * Perhaps all the operations below should check that
+ * D is a descriptor??
+ *)
+markBeingChecked: 
+  (# D: ^ASTindex; K: @integer
+  enter D[] 
+  do (if true then
+         beingChecked -> D.descKind
+      else
+         (beingChecked,0) -> K.%putByte; 
+         K->D.kind
+     if)
+  #);
+descKind:  
+  (# D: @ASTindex; K: @integer
+  enter D 
+  do (if true then
+         D.descKind -> K
+      else
+         D.kind -> K; 0 -> K.%getByte ->K 
+     if)
+  exit K
+  #);
+has1: 
+  (# d: ^ASTindex; K: @integer ; B: @boolean
+  enter d[] 
+  do (if true then
+         D.mark1 -> K;
+      else
+         D.kind -> K;
+     if);
+     INNER
+  exit B
+  #);
+has2: 
+  (# d: ^ASTindex; K: @integer ; B: @boolean
+  enter d[] 
+  do (if true then
+         D.mark2 -> K;
+      else
+         D.kind -> K;
+     if);
+     INNER
+  exit B
+  #);
+
+hasNcode:   has1(# do (0(*8*),1) -> K.%getBits -> B #);
+hasDo:      has1(# do (1(*9*),1) -> K.%getBits -> B #);
+hasXcode:   has1(# do (2(*10*),1) -> K.%getBits -> B #);
+isData:     has1(# do (3(*11*),1) -> K.%getBits -> B #);
+hasInner:   has1(# do (4(*12*),1) -> K.%getBits -> B #);
+insertable: has1(# do (5(*13*),1) -> K.%getBits -> B #);
+descAccess: integerValue
+  (# D: ^ASTindex; K: @integer
+  enter D[] 
+  do d.mark1 -> K; 
+     (6(*14*),1) -> K.%getBits -> value
+  #);
+
+hasAcode: has1
+  (#
+  do (if common.switch[214] then 
+         (if common.switch[64] and not common.switch[65] then 
+             true -> B
+          else
+             (7(*16*),1) -> K.%getBits -> B
+         if)
+      else 
+         true -> B
+     if)
+  #);
+hasOnlyInner: has2(# do (0(*17*),1) -> K.%getBits -> B #);
+inlineNX:     has2(# do (1(*18*),1) -> K.%getBits -> B #);
+inlineDO:     has2(# do (2(*19*),1) -> K.%getBits -> B #);
+hasOnlyNX:    has2(# do (3(*20*),1) -> K.%getBits -> B #);
+type: integerValue       
+  (# D: ^ASTindex; K: @integer
+  enter D[] 
+  do (if true then
+         d.type -> value
+      else
+         d.kind -> K; 
+         (27,5) -> K.%getBits -> value
+     if)
+  #);
+doPartHasTmp: booleanValue
+  (# doP: ^ASTindex
+  enter doP[]
+  do (doP.descNo > 0) -> value
+  #);
+MarkDesc:
+  (# desc: ^ASTindex; descKind,xType: @Integer; (* byte *)
+     hasNcode,hasDo,hasXcode,isData,hasInner,insertable
+     ,hasAcode,hasOnlyInner,inlineNX,inlineDO,hasOnlyNX: @boolean;
+     descAccess: @integer (* OBS only 0 or 1 *)
+  enter(desc[],descKind,hasNcode,hasDo,hasXcode,isData,hasInner
+     ,insertable,descAccess,hasAcode,hasOnlyInner,inlineNX,inlineDO
+     ,hasOnlyNX,xType)
+  do <<SLOT MarkDesc:descriptor>>
+  #);
+StandardMark:
+  (# d: @ASTindex; descKind,type,K: @integer
+  enter (d,descKind,type)
+  do (if true then
+         descKind -> K.descKind;
+         type -> D.type
+      else
+         (descKind,0) -> K.%putByte;
+         (type,27,5) -> K.%putBits;
+         K->d.kind
+     if)
+  #);   
+MarkInner:
+  (# d: @ASTindex; descKind,K: @integer
+  enter (d,descKind)
+  do (if true then
+         descKind -> d.descKind;
+         (1,4,1) -> d.%putBits;
+         K -> d.mark1
+      else
+         (descKind,0) -> K.%putByte;
+         (1,12,1) -> K.%putBits;
+         K->d.kind;
+     if)
+  #);
+StandardMarkInner:
+  (# d: @ASTindex; descKind,type,K: @integer
+  enter (d,descKind,type)
+  do (if true then
+         descKind -> K.descKind;
+         type -> K.type;
+         (1,4,1) -> K.%putBits;
+         K -> d.mark1
+      else
+         (descKind,0) -> K.%putByte;
+         (type,27,5) -> K.%putBits;
+         (1,12,1) -> K.%putBits;
+         K->d.kind
+     if)
+  #);  
+MarkOnlyInner:
+  (# d: @ASTindex; kind,k1,k2: @int8u
+  enter d
+  do (if true then
+         (* set hasInner = true *)
+         (1,4,1) -> k1.%putBits;
+         k1 -> d.mark1;
+         (*hasinner*)
+         (true,0,1) -> k2.%putBits;
+         (*only inner*)
+         k2->d.mark2;
+      else
+         (* set hasInner = true *)
+         d.kind->kind;
+         (true,12,1) -> kind.%putBits;
+         (*hasinner*)
+         (true,17,1) -> kind.%putBits;
+         (*only inner*)
+         kind->d.kind;     
+     if)
+  #);
+GetAndSetOp1: booleanValue
+  (# D: @ASTindex; K: @integer
+  enter D
+  do (if true then
+         D.mark2 -> K;
+         (4,1) -> K.%getBits -> value;
+         (1,4,1) -> K.%putBits;
+         K->D.mark2
+      else
+         D.kind -> K;
+         (25,1) -> K.%getBits -> value;
+         (1,25,1) -> K.%putBits;
+         K->D.kind
+     if)
+  #);
+GetAndSetOp2: booleanValue
+  (# D: @ASTindex; K: @integer
+  enter D
+  do (if true then
+         D.mark2 -> K;
+         (5,1) -> K.%getBits -> value;
+         (1,5,1) -> K.%putBits;
+         K -> D.mark2
+      else
+         D.kind -> K;
+         (26,1) -> K.%getBits -> value;
+         (1,26,1) -> K.%putBits;
+         K -> D.kind
+     if)
+  #);
+ClearOp1:
+  (# D: @ASTindex; K: @integer
+  enter D
+  do (if true then
+         D.mark2 -> K;
+         (0,4,1) -> K.%putBits;
+         K -> D.marks
+      else
+         D.kind -> K;
+         (0,25,1) -> K.%putBits;
+         K -> D.kind
+
+     if)
+  #);
+ClearOp2:
+  (# D: @ASTindex; K: @integer
+  enter D
+  do (if true then
+         D.mark2 -> K;
+         (0,5,1) -> K.%putBits;
+         K -> D.mark2
+      else
+         D.kind -> K;
+         (0,26,1) -> K.%putBits;
+         K -> D.kind
+     if)
+  #);
+
+---MarkDesc:descriptor---
+(# K,K1,K2: @Integer
+do (if true then
+       (if desc.label
+        // gram.objectDescriptor then
+           descKind -> desc.descKind;
+           (hasNcode  , 0,1) -> K1.%putBits;
+           (hasDo     , 1,1) -> K1.%putBits;
+           (hasXcode  , 2,1) -> K1.%putBits;
+           (isData    , 3,1) -> K1.%putBits;
+           (hasInner  , 4,1) -> K1.%putBits;
+           (insertable, 5,1) -> K1.%putBits;
+           (descAccess, 6,1) -> K1.%putBits;
+           
+           (if not common.switch[214] then true  -> hasAcode if);
+           (if not common.switch[215] then false -> hasOnlyInner if);
+           
+           (hasAcode    , 7,1) -> K1.%putBits; 
+           
+           (hasOnlyInner, 0,1) -> K2.%putBits;
+       
+           (if common.switch[211] then (inlineNX ,1,1) -> K2.%putBits if);
+           (if common.switch[212] then (inlineDO ,2,1) -> K2.%putBits if);
+           (if common.switch[213] then (hasOnlyNX,3,1) -> K2.%putBits if);
+
+           K1 -> desc.mark1;
+           K2 -> desc.mark2;    
+           xType -> desc.type
+        // gram.doPart then
+           '\n *** marking doPart ! ' -> putline
+        // gram.mainPart then
+           (*  '\n *** marking mainPart ! ' -> putline*)
+        // gram.attributes // gram.attributesForm then
+           '\n *** marking attributes ! ' -> putline
+        else
+           '\n *** marking unknown ! ' -> putline
+       if)        
+    else
+       (descKind  , 0)   -> K.%putByte;
+       (hasNcode  , 8,1) -> K.%putBits;
+       (hasDo     , 9,1) -> K.%putBits;
+       (hasXcode  ,10,1) -> K.%putBits;
+       (isData    ,11,1) -> K.%putBits;
+       (hasInner  ,12,1) -> K.%putBits;
+       (insertable,13,1) -> K.%putBits;
+       (descAccess,14,1) -> K.%putBits;
+       (* bit 15 is used by the interpreter *)   
+       
+       (if not common.switch[214] then true -> hasAcode if);
+       (if not common.switch[215] then false->hasOnlyInner if);
+       
+       (hasAcode    ,16,1) -> K.%putBits; 
+       (hasOnlyInner,17,1) -> K.%putBits;
+       
+       (if common.switch[211] then (inlineNX ,18,1) -> K.%putBits if);
+       (if common.switch[212] then (inlineDO ,19,1) -> K.%putBits if);
+       (if common.switch[213] then (hasOnlyNX,20,1) -> K.%putBits if);
+
+       (xType,27,5) -> K.%putBits;
+           (* 166->trace(#do 'Type:'->T; xType->I; newline#);
+            * 191->trace(#do (if hasAcode then 'hasAcode'->T if);
+            * (if hasOnlyInner then 'OnlyInner'->T if) #);
+            *)
+       (if desc.label 
+        // gram.objectDescriptor then
+           K -> desc.kind;
+        // gram.doPart then
+           '\n *** marking doPart ! ' -> putline
+        // gram.mainPart then
+           (*  '\n *** marking mainPart ! ' -> putline*)
+        // gram.attributes // gram.attributesForm then
+           '\n *** marking attributes ! ' -> putline
+        else
+           '\n *** marking unknown ! ' -> putline
+       if)  
+   if)
+#)
