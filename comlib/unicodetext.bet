@@ -1,0 +1,510 @@
+ORIGIN '~beta/basiclib/betaenv';
+BODY 'private/unicodebody'
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1997-98 
+ *       All rights reserved.
+ *
+ * This fragment implements a UniCode text concept
+ *)
+---lib:attributes---
+wStream: 
+  (# <<SLOT wStreamLib: attributes>>;
+     length:< integerValue (* returns the length of THIS(wStream) *)
+       (#
+       do -1->value; INNER length
+       #);
+     position: (* current position of THIS(wStream) *)
+       (# 
+       enter setPos
+       exit getPos
+       #);
+     eos:< (* returns 'true' if THIS(wStream) is at end-of-wStream *)
+       booleanValue;
+     reset: (* sets 'position' to zero *)
+       (#
+       do 0->setPos
+       exit THIS(wStream)[]
+       #);
+     peek:< (* looks at the next character of THIS(wStream) *)
+       (# ch: @wchar
+       do INNER peek
+       exit ch
+       #);
+     get:< (* reads a character from THIS(wStream) *)
+       (# ch: @wchar
+       do INNER get
+       exit ch
+       #);
+     getNonBlank: 
+       (* Reads first non-whitespace character from THIS(wStream).
+        * If called at end-of-wStream the character 'ascii.fs' is
+        * returned
+        *)
+       (# ch: @wchar;
+          skipblanks: @scanWhiteSpace;
+          testEOS: @EOS;
+          getCh: @get;
+       <<SLOT unicodeTextwStreamGetNonBlank: dopart>>
+       exit ch
+       #);
+     getint: integerValue
+       (* Reads an integer: skips whitespace characters and
+        * returns the following digits. 
+        * 
+        * See numberio.bet for more numerical output operations
+        *)
+       (# syntaxError:< wStreamException
+            (# 
+            do 'getint: syntax error - looking at: "'->msg.append;
+               peek->msg.put; '"'->msg.putline; INNER syntaxError
+            #);
+          geti: @<<SLOT unicodetextwStreamGetInt: descriptor>> 
+       do geti; INNER getint
+       #);
+     getAtom:<
+       (* Returns the next atom (i.e. sequence of non-white
+        * characters - skipping leading blanks)
+        *)
+       (# txt: ^wtext;
+       do &wText[]->txt[]; INNER getAtom;
+       exit txt[]
+       #);
+     getline:<
+       (* Reads a sequence of characters until nl-character
+        * appears and returns the characters read.
+        *)
+       (# txt: ^wText;
+       do &wText[]->txt[]; INNER getline
+       exit txt[]
+       #);
+     asInt:
+       (* converts THIS(wText) to an integer value, ignoring
+        * leading and trailing whitespace.  See numberio.bet for
+        * more numerical conversion operations.
+        *)
+       (# i: @integer;
+          syntaxError:< wStreamException
+            (# peekCh: @wchar
+            enter peekCh
+            do 'asInt: syntax error - looking at: "'->msg.append;
+               peekCh->msg.put; '"'->msg.put;
+               INNER syntaxError
+            #)
+       <<SLOT unicodetextwStreamAsIntdopart: dopart>>
+       exit i
+       #);
+     put:< (* writes a character to THIS(wStream) *)
+       (# ch: @wchar
+       enter ch
+       do INNER put
+       exit THIS(wStream)[]
+       #);
+     newline: (* writes the nl-character *) 
+       (#
+       do ascii.newline->put
+       exit THIS(wStream)[]
+       #);
+     putint: 
+       (* Writes an integer to THIS(wStream); The format may be
+        * controlled by the 'signed', 'blankSign', 'width',
+        * 'adjustLeft' and 'zeroPadding' variable attributes.
+        * 'width' is extended if it is too small.  Examples:
+        * '10->putint' yields: '10'; '10*pi->putint(# do 10->width;
+        * true->adjustLeft #)' yields: '10 '; and '10->putint(# do
+        * 10->width; true->zeroPadding #)' yields: '0000000010'.
+        * 
+        * See numberio.bet for more numerical output operations
+        *)
+       (# n: @integer;
+          signed: @boolean
+            (* If integer is positive, a '+' will always be
+             * displayed
+             *);
+          blankSign: @boolean 
+            (* If integer is positive, a ' ' space is displayed as
+             * the sign.  Ignored if 'signed=true'
+             *);
+          width: @integer
+            (* Minimum width *);
+          adjustLeft: @boolean
+            (* Specifies if the number is to be aligned left or
+             * right, if padding of spaces is necessary to fill up
+             * the specified width.
+             *);
+          zeroPadding: @boolean
+            (* width is padded with leading zero instead of
+             * spaces.  Ignored if 'adjustLeft=true'
+             *);
+          format:< (# do INNER format #);
+          puti: @<<SLOT unicodetextwStreamPutInt: descriptor>>
+       enter n
+       do 1->width; format; INNER putint; puti
+       exit THIS(wStream)[]
+       #);
+     putText:< (* Writes a wText to THIS(wStream). *)
+       (# txt: ^wText
+       enter txt[]
+       do (if txt[]<>NONE then INNER puttext if)
+       exit THIS(wStream)[]
+       #);
+     putline: 
+       (* 'puttext' followed by 'newline' *)
+       (# T: ^wText; putT: @puttext; newL: @newline
+       enter T[]
+       do INNER putline; T[]->putT; newL
+       exit THIS(wStream)[]
+       #);
+     scan: 
+       (* Scan chars from current position in THIS(wStream) while
+        * '(ch->while)=true'; perform INNER for each char being
+        * scanned
+        *)
+       (# while:<
+            (# ch: @wchar; value: @boolean
+            enter ch
+            do true->value; INNER while
+            exit value
+            #);
+          ch: @wchar;
+          whilecondition: @while;
+          testEOS: @EOS;
+          getPeek: @peek;
+          getCh: @get;
+       <<SLOT unicodetextwStreamScan: dopart>>
+       exit THIS(wStream)[]
+       #);
+     scanWhiteSpace: scan 
+       (* Scan whitespace characters *)
+       (# while::< (# do ch->ascii.isWhiteSpace->value #)
+       do INNER scanWhiteSpace
+       exit THIS(wStream)[]
+       #);
+     scanAtom: 
+       (* Scan until first non-whitespace char.  Scan the next
+        * sequence of non-whitespace chars.  Stop at first
+        * whitespace char.  For each non-whitespace char an INNER
+        * is performed. Usage: 'scanAtom(# do ch-><destination> #)'
+        *)
+       (# ch: @wchar;
+       <<SLOT unicodetextwStreamScanAtom: dopart>>
+       exit THIS(wStream)[]
+       #);
+     scanToNl: 
+       (* Scan all chars in current line including newline char *)
+       (# ch: @wchar; getCh: @get;
+       <<SLOT unicodetextwStreamScanToNl: dopart>>
+       exit THIS(wStream)[]
+       #);
+     wStreamException: exception
+       (# do INNER wStreamException #);
+     EOSerror:< wStreamException
+       (* Raised from 'get' and 'peek' when attempted to read past
+        * the end of the wStream.
+        *)
+       (# 
+       do 'Attempt to read past end-of-wStream'->msg.putline; 
+          INNER EOSerror
+       #);
+     otherError:< wStreamException
+       (* Raised when some other kind of wStream error apart from
+        * the one mentioned above occurs.
+        *);
+     getPos:< (* returns current position of THIS(wStream) *)
+       integerValue;
+     setPos:< (* sets current position in THIS(wStream) to 'p' *)
+       (# p: @integer
+       enter p
+       do INNER setPos
+       exit THIS(wStream)[]
+       #)
+  #); (* pattern wStream *)
+
+(*****  wText pattern **********************************************)
+wText: wStream
+  (* A wText is a sequence of characters.  Let 'T: @wText'. The
+   * range of 'T' is '[1,T.length]'.  A wText can be initialized by
+   * executing 'T.clear' or by assigning it another (initialized)
+   * wText.  A wText-constant has the form 'foo'.  The 'wText' pattern
+   * is primarily intended for small wTexts but there is no upper
+   * limit in the size. However, most of the operations becomes
+   * less efficient with larger wTexts.
+   *)
+  (# <<SLOT wTextLib: attributes>>;
+     length::< (* Returns the length of THIS(wText) *) 
+       (# do lgth->value; INNER length #);
+     eos::<
+       (# <<SLOT unicodetextwTextEOS: dopart>> #);
+     empty: 
+       (# exit (lgth = 0) #);
+     clear: (* Sets the length and position of THIS(wText) to zero *)
+       (#
+       do 0->pos->lgth
+       exit THIS(wText)[]
+       #);
+     equal: booleanValue
+       (* Tests if THIS(wText) is equal to the entered wText.  If
+        * 'NCS' is further bound to 'trueObject', the comparison
+        * will be done Non Case Sensitive.
+        *)
+       (# txt: ^wText;
+          NCS:< booleanObject
+       enter txt[]
+       <<SLOT unicodetextwTextEqual: dopart>>
+       #);
+     equalNCS: equal
+       (* As 'equal', except the the comparison will be done Non
+        * Case Sensitive
+        *)
+       (# NCS:: trueObject #);
+     less: booleanValue
+       (* Tests whether the entered wText 'T1[1: length]' is less
+        * than 'THIS(wText)[1: T1.length]'.  The lexicographical
+        * ordering is used.
+        *)
+       (# T1: ^wText
+       enter T1[]
+       <<SLOT unicodetextwTextLess: dopart>>
+       #);
+     greater: booleanValue
+       (* Tests whether the entered wText 'T1[1: length]' is
+        * greater than 'THIS(wText)[1: T1.length]'.  The
+        * lexicographical ordering is used.
+        *)
+       (# T1: ^wText
+       enter T1[]
+       <<SLOT unicodetextwTextGreater: dopart>>
+       #);
+     peek::<
+       (* Returns the character at current position; does not
+        * update 'position'
+        *)
+       (# <<SLOT unicodetextwTextPeek: dopart>> #);
+     get::<
+       (* Returns the character at current position; increments
+        * 'position'
+        *) 
+       (# <<SLOT unicodetextwTextGet: dopart>> #);
+     inxGet: wcharValue
+       (* Returns the character at position 'i' *)
+       (# i: @integer;
+          iget: @<<SLOT unicodetextwTextInxGet: descriptor>>
+       enter i
+       do iget
+       #);
+     getAtom::<
+       (* Returns the next atom (i.e. sequence of non-white
+        * characters - skipping leading blanks)
+        *)
+       (# <<SLOT unicodetextwTextGetAtom: dopart>> #);
+     getline::<
+       (* Reads a sequence of characters until nl-character
+        * appears and returns the characters read.
+        *)
+       (# <<SLOT unicodetextwTextGetLine: dopart>> #);
+     put::<
+       (* writes the character 'ch' at current position in
+        * THIS(wText); increments 'position'
+        *) 
+       (# <<SLOT unicodetextwTextPut: dopart>> #);
+     inxPut: 
+       (* Replaces the character at position 'i' *)
+       (# ch: @wchar;
+          i: @integer;
+          iput: @<<SLOT unicodetextwTextInxPut: descriptor>>
+       enter (ch,i)
+       do iput
+       exit THIS(wText)[]
+       #);
+     puttext::<
+       (# <<SLOT unicodetextwTextPuttext: dopart>> #);
+     append: 
+       (* Appends a wText to THIS(wText); does not change 'position'
+        *)
+       (# T1: ^wText
+       enter T1[]
+       <<SLOT unicodetextwTextAppend: dopart>>
+       exit THIS(wText)[]
+       #);
+     prepend: 
+       (* Inserts the wText in 'T1' in front of THIS(wText); updates
+        * current position to 'position+T1.length' if 'position>0'
+        *)
+       (# T1: ^wText
+       enter T1[]
+       <<SLOT unicodetextwTextPrepend: dopart>>
+       exit THIS(wText)[]
+       #);
+     insert: 
+       (* Inserts a wText before the character at position 'inx'.
+        * Note: inx<1 means inx=1; inx>length means inx=length+1.
+        * If 'position>=inx' then 'position+T1.length->position'.
+        *)
+       (# T1: ^wText;
+          inx: @integer
+       enter (T1[],inx)
+       <<SLOT unicodetextwTextInsert: dopart>>
+       exit THIS(wText)[]
+       #);
+     delete: 
+       (* Deletes THIS(wText)[i: j]; updates current position:
+        *      i<=position<j => i-1->position
+        *      j<=position   => position-(j-i+1)->position
+        *)
+       (# i,j: @integer; 
+          deleteT: @<<SLOT unicodetextwTextDelete: descriptor>>
+       enter (i,j)
+       do deleteT
+       exit THIS(wText)[]
+       #);
+     makeLC: (* Converts all characters to lower case *)
+       (# <<SLOT unicodetextwTextMakeLC: dopart>>
+       exit THIS(wText)[]
+       #);
+     makeUC: 
+       (* Converts all characters to upper case *)
+       (# <<SLOT unicodetextwTextMakeUC: dopart>>
+       exit THIS(wText)[]
+       #);
+     sub:
+       (* Returns a copy of THIS(wText)[i:j].  If 'i<1', 'i' is
+        * adjusted to 1. If 'j>length', 'j' is adjusted to
+        * 'length'.  If (after adjustment) 'i>j', an empty wText is
+        * returned.
+        *)
+       (# i,j: @integer; T1: ^wText;
+          subI: @<<SLOT unicodetextwTextSub: descriptor>>
+       enter (i,j)
+       do subI
+       exit T1[]
+       #);
+     copy: 
+       (# T1: ^wText;
+          copyI: @<<SLOT unicodetextwTextCopy: descriptor>>
+       do copyI
+       exit T1[]
+       #);
+     scanAll: 
+       (* Scans all the elements in THIS(wText).  For 'ch' in '[1:
+        * THIS(wText).length]' do INNER
+        *)
+       (# ch: @wchar
+       do (for i: lgth repeat T[i]->ch; INNER scanAll for)
+       exit THIS(wText)[]
+       #);
+     find:
+       (* find all occurrences of the character 'ch' in
+        * THIS(wText), executing INNER for each occurrence found,
+        * beginning at 'THIS(wText).position'.  'inx' will contain
+        * the position of each 'ch' in THIS(wText).  If 'NCS' is
+        * further bound to 'trueObject', the comparison will be
+        * done Non Case Sensitive.  If 'from' is further bound, the
+        * search will begin at position 'from'.
+        *)
+       (# ch: @wchar;
+          inx: @integer;
+          NCS:< booleanObject;
+          from:< integerObject(# do pos->value; INNER from #)
+       enter ch
+       <<SLOT unicodetextwTextFind: dopart>>
+       exit THIS(wText)[]
+       #);
+     findAll: find
+       (* As 'find', except that the entire wText will be searched.
+        * Replaces 'findCh' in previous versions of betaenv (v1.4
+        * and earlier)
+        *)
+       (# from:: (# do 0->value #)
+       do INNER findAll
+       #);
+     findwText:
+       (* find all occurrences of the 'txt' in THIS(wText),
+        * executing INNER for each occurrence found, beginning at
+        * 'THIS(wText).position'.  'inx' will contain the position
+        * of the first character of each occurrence found
+        * THIS(wText).  If 'NCS' is further bound to 'trueObject',
+        * the comparison will be done Non Case Sensitive.  If
+        * 'from' is further bound, the search will begin at
+        * position 'from'.
+        *)
+       (# txt: ^wText;
+          inx: @integer;
+          NCS:< booleanObject;
+          from:< integerObject(# do pos->value; INNER from #)
+       enter txt[]
+       <<SLOT unicodetextwTextFindwText: dopart>>
+       exit THIS(wText)[]
+       #);
+     findwTextAll: findwText
+       (* As 'findwText', except that the entire wText will be
+        * searched
+        *)
+       (# from:: (# do 0->value #)
+       do INNER findwTextAll
+       #);
+     extend: 
+       (* Extend THIS(wText) with 'L' (undefined) chars. Notice
+        * that it is only the representation of the THIS(wText),
+        * that is extended, the 'length' and 'position' are not
+        * changed.
+        *)
+       (# L: @integer
+       enter L do L->T.extend
+       exit THIS(wText)[]
+       #);
+     indexError:< wStreamException
+       (* Raised from 'Check' when the index goes outside the
+        * range of the wText. Message: "Index error in wText!".
+        *)
+       (# inx: @integer 
+       enter inx
+       <<SLOT unicodetextwTextIndexError: dopart>>
+       #);
+     EOSerror::<
+       (* Raised from 'get' and 'peek' when the end of the wStream is
+        * passed.
+        *) 
+       (# <<SLOT unicodetextwTextEOSerror: dopart>> #);
+     otherError::<
+       (* Raised when an error other than the Index-/EOSerror
+        * occurs.
+        *) 
+       (# <<SLOT unicodetextwTextOtherError: dopart>> #);
+     setPos::<
+       (# <<SLOT unicodeTextSetPos: dopart>> #);
+     getPos::<
+       (# do pos->value; INNER getPos #);
+     (* Private attributes: !!OBS!! The 3 attributes 'T', 'lgth'
+      * and 'pos' declared below MUST be the first data items
+      * declared in 'wStream' and 'wText' since their addresses are
+      * hardcoded into the compiler.
+      *)
+     T: [16] @wchar;
+     lgth,pos: (* 16 is default size *) @integer;
+     setT: (# enter T do T.range->lgth->pos #);
+     setAscii:
+       (# t: ^ text
+       enter T[]
+       do T.scanAll(#do ch -> put #)
+       #);
+     asAscii:
+       (# T: @text
+       do scanAll(#do ch -> T.put #)
+       exit T[]
+       #)
+  enter setT
+  exit T[1: lgth]
+  #) (* Pattern wText *); 
+
+ascii2wText:
+  (# T1: ^text; T2: @wText
+  enter T1[]
+  do T1.scanAll(#do ch -> T2.put #);  
+  exit T2[]
+  #);
+---textLib:attributes---
+aswText:
+  (# UT: @wText
+  do scanAll(#do ch -> UT.put #)
+  exit UT[]
+  #)
