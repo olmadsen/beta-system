@@ -20,6 +20,7 @@
 #include <X11/StringDefs.h>
 #include <Xm/Text.h>
 #include <Xm/TextP.h>
+#include <Xm/Protocols.h>
 
 #include "black.c"
 #include "white.c"
@@ -125,3 +126,10 @@ GC GetBottomShadowGC(XmManagerWidget w)
   return w->manager.bottom_shadow_GC;
 }
 
+void SetWindowDeleteAction (Widget shell, XtCallbackProc callback)
+{
+  Atom WM_DELETE_WINDOW;
+  
+  WM_DELETE_WINDOW = XInternAtom(XtDisplay(shell), "WM_DELETE_WINDOW", False);
+  XmAddWMProtocolCallback(shell, WM_DELETE_WINDOW, callback, 0);
+}
