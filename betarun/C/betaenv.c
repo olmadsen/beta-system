@@ -4,6 +4,9 @@
  */
 
 #include <stdio.h>
+#ifdef nti
+#include <stdlib.h>
+#endif
 
 #ifdef macintosh
 #include <StdLib.h>
@@ -20,7 +23,10 @@
 
 void GetBetaEnv()
 {
-  char *betaEnv, *getenv();
+  char *betaEnv;
+#ifndef nti
+  char *getenv();
+#endif
   
 #ifdef macintosh
   char **theHandle;
@@ -42,3 +48,45 @@ void GetBetaEnv()
     SetupProperties( betaEnv);
 #endif
 }
+
+#ifdef nti
+int beta_instance;
+int beta_previnstance;
+char *beta_cmdline;
+int beta_show;
+
+/* Create ArgVector and ArgCount from a command line string */
+void SetupArgValues(int ret, int inst, int prev, char *cmd, int show)
+{
+  char *p;
+
+  beta_instance = inst;
+  beta_previnstance = prev;
+  beta_cmdline = cmd;
+  beta_show = show;
+
+  /* Get copy of command line */
+  p = malloc(strlen(beta_cmdline));
+  strcpy(p, beta_cmdline);
+
+  ArgVector = NULL;
+  ArgCount = 0;
+  /* Cut command line into arguments */
+  while (*p) {
+    while (*p == ' ' || *p == '\t')
+      p++;
+    /* At start of argument or EOT */
+    if (*p) {
+      /* Make room for argument */
+      ArgVector = (char**)realloc(ArgVector, (ArgCount+1)*sizeof(char*));
+      ArgVector[ArgCount++] = p;
+      /* Skip argument */
+      while (*p && *p != ' ' && *p != '\t')
+        p++;
+      /* Terminate argument string */
+      if (*p)
+        *p++ = '\0';
+    }
+  }
+}
+#endif

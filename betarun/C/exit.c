@@ -1,8 +1,8 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
  * exit.c
- * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann, and
- *    S|ren Brandt
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann,
+ *    S|ren Brandt and S|ren Pingel Dalsgaard
  */
 
 #include "beta.h"
@@ -40,7 +40,7 @@ static volatile int InLazyHandler;
 #endif
 #endif
 
-#if defined(macintosh)
+#if defined(macintosh) || defined(nti)
 extern void CallLazyItem ();
 #endif
 
@@ -230,14 +230,23 @@ void BetaError(errorNo, theObj)
 	     * need to save %ebp, the stack-base register. There's no 
 	     * need to save other registers, since we will be returning 
 	     * to RefNone immediately after calling BETA. */
-	    
+
+#ifdef linux
+
 	    asm volatile ("pushl %ebp # Save base pointer for C");
 	    asm volatile ("movl _LazyItem,%edi # Call lazy handler");
 	    asm volatile ("movl (%edi),%edx");
 	    asm volatile ("movl -4(%edx),%edx");
 	    asm volatile ("call *%edx");
 	    asm volatile ("popl %ebp #restore base pointer");
-	    
+
+#else
+
+	    /* Borland C is not good at inline assembler */
+	    CallLazyItem();
+
+#endif
+
 	    InLazyHandler = 0;
 		  
 	    return;

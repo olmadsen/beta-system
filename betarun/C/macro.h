@@ -1,7 +1,11 @@
 /* macroes */
 
 #ifdef RTLAZY
-#define isLazyRef(ref) ((lastDangler <= ((int) ref)) && (((int) ref) < -101))
+#ifdef nti
+#define isLazyRef(ref) ((lastDangler <= (*(int*)&(ref))) && ((*(int*)&(ref)) < -101))
+#else
+#define isLazyRef(ref) ((lastDangler <= ((int)(ref))) && (((int)(ref)) < -101))
+#endif
 #else
 #define isLazyRef(ref) 0
 #endif
