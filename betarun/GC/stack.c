@@ -904,12 +904,14 @@ void PrintRef(ref(Object) ref)
   if (ref) {
     if (inBetaHeap(ref) && isObject(ref) ){
       fprintf(output, ", is object");
-      if (isProto((ref)->Proto))
-	fprintf(output, ", proto ok: 0x%x (%s)", 
-		(int)ref->Proto, 
-		DescribeObject(ref));
-      else
+      if (isProto((ref)->Proto)){
+	fprintf(output, ", proto ok: 0x%x (", 
+		(int)ref->Proto);
+	DescribeObject(ref);
+	fprintf(output, ")");
+      } else {
 	fprintf(output, ", proto NOT ok: 0x%x", (int)ref->Proto);
+      }
     } else {
       fprintf(output, ", is NOT object");
 #ifdef SPARC_LD_SEGMENT_TEST
