@@ -122,6 +122,10 @@ Initialize()
   InterpretItem[0] = 0;
   InterpretItem[1] = 0;
 
+#ifdef RTDEBUG
+  fprintf(output, "RTS: Garbage collector may perform consistency checks on heaps (use BETART).\n");
+#endif
+
   INFO( fprintf( output, "#(Heap info: IOA=2*%dKb", IOASize/Kb) );
   INFO( fprintf( output, ", AOABlock=%dKb", AOABlockSize/Kb) );
   INFO( fprintf( output, ", LVRABlock=%dKb", LVRABlockSize/Kb) );
