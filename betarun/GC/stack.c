@@ -996,7 +996,7 @@ void ProcessStackPart(long *low, long *high)
   Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
   
   while( current <= high ){
-    if(inBetaHeap( (Object *)*current)){
+    if(inBetaHeap((Object *)*current)){
       theCell = (Object **) current;
       theObj  = *theCell;
       if (isObject(theObj)) {
@@ -1022,7 +1022,8 @@ void ProcessStackPart(long *low, long *high)
 	});
       }
     } else {
-      /* handle value register objects on the stack ref. ../Asm/DataRegs.s */
+      /* Not in beta heap */
+      /* handle tagged data registers on the stack */
       DEBUG_STACK({
 	if ((-8<=(*current)) && ((*current)<=-5))
 	  fprintf(output, 
@@ -1100,7 +1101,7 @@ void ProcessStack()
 	theTop   = theFrame->betaTop;
 	theFrame = theFrame->next;
     }
-    ProcessStackPart( theTop, theBottom-1);  
+    ProcessStackPart(theTop, theBottom-1);  
     
     /*
      * Then handle the remaining component blocks.
@@ -1116,7 +1117,7 @@ void ProcessStack()
 	    theTop   = theFrame->betaTop;
 	    theFrame = theFrame->next;
 	}
-	ProcessStackPart( theTop, theBottom-1);  
+	ProcessStackPart(theTop, theBottom-1);  
 	currentBlock = currentBlock->next;
     }
     DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
@@ -1124,8 +1125,7 @@ void ProcessStack()
 
 void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 { 
-  long    *stackptr; 
-  Object **theCell; 
+  long    *current; 
   long    *theEnd;
   DEBUG_CODE(long oldDebugStack=DebugStack);
 
@@ -1136,26 +1136,66 @@ void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
     DebugStack=FALSE;
   });
     
-  Claim(sObj->StackSize <= sObj->BodySize,
-		   "ProcessReference: StackObjectType: Stack > Object");
+  Claim(sObj->StackSize <= sObj->BodySize, "sObj->StackSize <= sObj->BodySize");
 	    
   theEnd = &sObj->Body[0] + sObj->StackSize;
 	    
-  for (stackptr = &sObj->Body[0]; stackptr < theEnd; stackptr++) {
-    switch (*stackptr) {
-    case -8: stackptr++;
-    case -7: stackptr++;
-    case -6: stackptr++;
-    case -5: stackptr++;
+  for (current = &sObj->Body[0]; current < theEnd; current++) {
+    DEBUG_STACK({
+      if ((-8<=(*current)) && ((*current)<=-5))
+	fprintf(output, 
+		"0x%08x: %d (SKIP NEXT %d)\n", 
+		(int)current, 
+		(int)*current, 
+		-(int)*current-4
+		);
+    });
+    switch (*current) {
+    case -8: 
+      current++;
+      DEBUG_STACK(PrintSkipped(current)); 
+      /* deliberately no break here */
+    case -7: 
+      current++;
+      DEBUG_STACK(PrintSkipped(current)); 
+      /* deliberately no break here */
+    case -6: 
+      current++;
+      DEBUG_STACK(PrintSkipped(current)); 
+      /* deliberately no break here */
+    case -5: 
+      current++;
+      DEBUG_STACK(PrintSkipped(current)); 
       break;
     default:
       DEBUG_LAZY({
-	if (isLazyRef(*stackptr)) {
-	  fprintf(output, "dangler on stack: %d\n", (int)*stackptr);
+	if (isLazyRef(*current)) {
+	  fprintf(output, "Dangler on stack: 0x08%x: %d\n", (int)current, (int)*current);
 	}
       });
-      theCell = (Object**) stackptr;
-      func(theCell, *theCell);
+      DEBUG_STACKOBJ({
+	if(inBetaHeap((Object*)*current)){
+	  Object *theObj = *(Object **)current;
+	  if (isObject(theObj)) {
+	    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
+	    PrintRef(*(Object**)current);
+	    fprintf(output, "\n");
+	  } else {
+	    if (!isValRep(theObj)){
+	      fprintf(output, "*** SUSPICIOUS REFERENCE IN STACKOBJ: 0x%08x: 0x%08x", 
+		      (int)current, (int)(*current));
+	      if (IsPrototypeOfProcess((long)theObj->Proto)){
+		fprintf(output, " Proto: 0x%08x (%s)\n",
+			(int)theObj->Proto,
+			ProtoTypeName(theObj->Proto));
+	      } else {
+		fprintf(output, " *** ILLEGAL PROTOTYPE: 0x%08x\n", (int)theObj->Proto);
+	      }
+	    }
+	  }
+	}
+      }) /* DEBUG_STACKOBJ */;
+      func(theCell, *(Object**)current);
     }
   }
   DEBUG_STACKOBJ(fprintf(output, " *-*-* End StackObject 0x%x *-*-*\n", (int)sObj));
