@@ -89,10 +89,10 @@ ORIGIN 'generator';
              optSpec: ^mg.optionSpecification;
           enter (optionName,defaultText)
           do (if (optionName -> root.optionSet -> optSpec[])=none then
-                 defaultText[] -> genFile.putText;
+                 defaultText[] -> cflFile.putText;
               else
                  (optSpec[],optionName,mg.optionName)->root.checkOption->lex[];
-                 lex.getText -> genFile.putText;
+                 lex.getText -> cflFile.putText;
              if);
           #);
         writeSuper:
@@ -114,28 +114,34 @@ ORIGIN 'generator';
              #);
              (if super>=0 then
                  super -> pl.get -> p[];
-	         p.getSynDeclText -> genFile.putText;
+	         p.getSynDeclText -> cflFile.putText;
               else
-                 'cons' -> genFile.puttext;
+                 'cons' -> cflFile.puttext;
              if); 
           #);
         writeSlot:
           (# pr: ^mg.prod; nl: @boolean
           enter(pr[],nl)
           do (if pr.getson1 -> attributesSet then
-                 '<<SLOT ' -> genFile.putText;
-                 pr.getSynDeclText -> genFile.putText;
-                 'Attributes:attributes>> ' -> genFile.puttext;
-                 (if nl then genFile.newline if)
+                 (if nl then cflFile.indent; if);
+                 '<<SLOT ' -> cflFile.putText;
+                 pr.getSynDeclText -> cflFile.putText;
+                 'Attributes:attributes>> ' -> cflFile.puttext;
+                 (if nl then cflFile.newline; if)
              if); 
           #);
         writeexit: 
           (# prodno: @integer; nl: @boolean
           enter(prodno,nl)
-          do 'exit ' -> genFile.putText;
-             prodno -> genFile.putInt;
-             (if nl then genFile.newline else ' ' -> genFile.put if);
-             '#\);' -> genFile.putText;
+          do (if nl then cflFile.indent; if);
+             'exit ' -> cflFile.putText;
+             prodno -> cflFile.putInt;
+             (if nl then 
+                 cflFile.newline; cflFile.indent;
+              else 
+                 ' ' -> cflFile.put 
+             if);
+             '#\);' -> cflFile.putText;
           #);
         generateAlternation:  
           (# al: ^mg.alternation;
@@ -192,9 +198,13 @@ ORIGIN 'generator';
           do debug(# do 'begin generate alternation' -> screen.putText #);
              al[] -> printLeftSide->name[]; 
              al.getLeftSide -> writeSuper;
-             '(# ' -> genFile.putText;
+             cflFile.newline;
+             2 -> cflFile.indent.inc;
+             cflFile.indent;
+             '(\# ' -> cflFile.putText;
              (al[],false) -> writeSlot;
-                 '#);' -> genFile.puttext;
+             '\#);' -> cflFile.puttext;
+             2 -> cflFile.indent.dec;
              (if make_traverse then
                  ('do_' -> (name.copy).prepend, 'alternation') 
                    -> traversefile.patbegin;
@@ -263,11 +273,19 @@ ORIGIN 'generator';
              idx: @integer;
              name: ^text;
              initial: @char;
-             first_done: @boolean;
+             first_done, traverse_first_done: @boolean;
+             check_first:
+               (#
+               do (if first_done then
+                      cflFile.indent;
+                   else
+                      true -> first_done;
+                  if);
+               #);
           enter c[]
           do c[] -> printLeftside -> name[];
              (if make_traverse then
-                 false->first_done;
+                 false->traverse_first_done;
                  ('do_' -> (name.copy).prepend, 'cons') 
                    -> traversefile.patbegin;
                  1 -> name.inxget -> initial -> traversefile.put;
@@ -287,9 +305,13 @@ ORIGIN 'generator';
              if);
              c.getLeftSide -> writesuper;
              0 -> idx;
-             genFile.newline;
-             '(\#' -> genFile.puttext; 
+             cflFile.newline;
+             2 -> cflFile.indent.inc;
+             cflFile.indent;
+             '(\# ' -> cflFile.puttext; 
+             3 -> cflFile.indent.inc;
              c.getConsElemList -> clist[];
+             false -> first_done;
              clist.newScan
                (# ts: ^mg.TaggedSyn;
                   sc: ^mg.synCat;
@@ -297,25 +319,28 @@ ORIGIN 'generator';
                   tn: ^mg.TagName;
                   sn: ^mg.SynName;
                do (if current.symbol
-                   //mg.TaggedSyn then 
+                   // mg.TaggedSyn then 
                       idx+1 -> idx;
                       current[] -> ts[];
-                      ' get' -> genFile.puttext;
-                      ts.getTagText -> n[] -> genFile.puttext;
-                      ': getson' -> genFile.puttext;
-                      idx -> genFile.putInt;
-                      '(##);\n put' -> genFile.puttext;
-                      n[] -> genFile.puttext;
-                      ': putson' -> genFile.puttext;
-                      idx -> genFile.putInt;
-                      '(##);\n' -> genFile.puttext;
+                      check_first;
+                      'get' -> cflFile.puttext;
+                      ts.getTagText -> n[] -> cflFile.puttext;
+                      ': getson' -> cflFile.puttext;
+                      idx -> cflFile.putInt;
+                      '(# #);' -> cflFile.putline;
+                      cflFile.indent;
+                      'put' -> cflFile.puttext;
+                      n[] -> cflFile.puttext;
+                      ': putson' -> cflFile.puttext;
+                      idx -> cflFile.putInt;
+                      '(# #);\n' -> cflFile.puttext;
                       (if make_traverse then
-                          (if first_done then
+                          (if traverse_first_done then
                               traversebodyfile.indent;
                            else
                               'do ' -> traversebodyfile.puttext;
                               3 -> traversebodyfile.indent.inc;
-                              true -> first_done;
+                              true -> traverse_first_done;
                           if);
                           initial -> traversebodyfile.put;
                           '.get' -> traversebodyfile.puttext;
@@ -324,25 +349,28 @@ ORIGIN 'generator';
                           ts.getSynText -> traversebodyfile.puttext;
                           ';' -> traversebodyfile.putline;
                       if);
-                   //mg.Syncat then
+                   // mg.Syncat then
                       current[] -> sc[];
                       idx+1 -> idx;
-                      ' get' -> genFile.puttext;
-                      sc.getSynText -> n[] -> genFile.puttext;
-                      ': getson' -> genFile.puttext;
-                      idx -> genFile.putInt;
-                      '(##);\n put' -> genFile.puttext; 
-                      n[] -> genFile.puttext;
-                      ': putson' -> genFile.puttext;
-                      idx -> genFile.putInt;
-                      '(##);\n' -> genFile.puttext; 
+                      check_first;
+                      'get' -> cflFile.puttext;
+                      sc.getSynText -> n[] -> cflFile.puttext;
+                      ': getson' -> cflFile.puttext;
+                      idx -> cflFile.putInt;
+                      '(# #);' -> cflFile.putline;
+                      cflFile.indent;
+                      'put' -> cflFile.puttext;
+                      n[] -> cflFile.puttext;
+                      ': putson' -> cflFile.puttext;
+                      idx -> cflFile.putInt;
+                      '(# #);\n' -> cflFile.puttext; 
                       (if make_traverse then
-                          (if first_done then
+                          (if traverse_first_done then
                               traversebodyfile.indent;
                            else
                               'do ' -> traversebodyfile.puttext;
                               3 -> traversebodyfile.indent.inc;
-                              true->first_done;
+                              true->traverse_first_done;
                           if);
                           initial -> traversebodyfile.put;
                           '.get' -> traversebodyfile.puttext;
@@ -353,10 +381,12 @@ ORIGIN 'generator';
                       if);
                   if);
                #);
-             (c[],true) -> writeSlot;
-             (prodIdx,true) -> writeexit;
+             (c[],first_done) -> writeSlot;
+             3 -> cflFile.indent.dec;
+             (prodIdx,first_done) -> writeexit;
+             2 -> cflFile.indent.dec;
              (if make_traverse then
-                 (if first_done then 
+                 (if traverse_first_done then 
                      3 -> traversebodyfile.indent.dec;
                   else
                      'do ' -> traversebodyfile.putline;
@@ -369,8 +399,9 @@ ORIGIN 'generator';
              sn: ^mg.SynDeclName;
              n: ^text;
           enter pr[]
-          do pr.getSynDeclText -> n[] -> genFile.putText;
-             ': ' -> genFile.putText;
+          do cflFile.indent;
+             pr.getSynDeclText -> n[] -> cflFile.putText;
+             ': ' -> cflFile.putText;
           exit n[]
           #);
         generateList:  
@@ -382,27 +413,30 @@ ORIGIN 'generator';
              initial: @char;
           enter l[]
           do l[] -> printLeftSide -> name[];
-             'list(\# soncat::< ' -> genFile.puttext;
+             'list' -> cflFile.putline;
+             2 -> cflFile.indent.inc;
+             cflFile.indent;
+             '(\# soncat::< ' -> cflFile.puttext;
              l.getSon2 -> sc[];
 	     sc.getSynName -> sn[];
 	     l: (#
 	        do sn.dclRefProd
                      (# predefined::<
                           (# 
-                          do 'lexem' -> syn[] -> genFile.putText;
-                             ' ' -> genFile.put;
+                          do 'lexem' -> syn[] -> cflFile.putText;
+                             ' ' -> cflFile.put;
                              leave l;
                           #)
                      #) -> prod[];
                    (if prod.symbol=mg.opt then
                        prod.getSon2 -> sc[];
                    if);
-                   sc.getSynText -> syn[] -> genFile.putText;
-                   ';' -> genFile.put; (* a slot may later be generated *)
-                   ' ' -> genFile.put;
+                   sc.getSynText -> syn[] -> cflFile.putText;
+                   ';' -> cflFile.putline; (* a slot may later be generated *)
                 #);
-             (l[],false) -> writeSlot;
-             (prodIdx,false)-> writeexit;
+             (l[],true) -> writeSlot;
+             (prodIdx,true)-> writeexit;
+             2 -> cflFile.indent.dec;
              (if make_traverse then 
                  ('do_' -> (name.copy).prepend, 'list') 
                    -> traversefile.patbegin;
@@ -458,28 +492,52 @@ ORIGIN 'generator';
           #);
         generateGrammarName:
           (# t: @text
-          do '  grammarIdentification::< (# do \'' -> genFile.putText;
-             gnNameDecl.getText -> genFile.putText;
-             '\' -> theGrammarName #);\n\n' -> genFile.putText;
-             '  version::< (# do ' -> genFile.putText;
-             ('version',undefinedVersion) -> root.getOptionValue -> genFile.putInt;
-             ' -> value #);\n\n' -> genFile.putText;
-             '  suffix::< (# do \'' -> genFile.putText;
+          do cflFile.newline;
+             cflFile.indent;
+             'grammarIdentification::<' -> cflFile.putline;
+             cflFile.indent;
+             '  (\# do \'' -> cflFile.putText;
+             gnNameDecl.getText -> cflFile.putText;
+             '\' -> theGrammarName #\);' -> cflFile.putline;
+             cflFile.indent;
+             'version::<' -> cflFile.putline;
+             cflfile.indent;
+             '  (\# do ' -> cflFile.putText;
+             ('version',undefinedVersion) -> root.getOptionValue -> cflFile.putInt;
+             ' -> value #\);' -> cflFile.putLine;
+             cflfile.indent;
+             'suffix::<' -> cflfile.putline;
+             cflFile.indent;
+             '  (\# do \'' -> cflFile.putText;
              ('suffix','.text') -> root.getOptionString -> t;
-             t[] -> genFile.putText;
-             '\' -> theSuffix #);\n\n' -> genFile.putText;
-             '  maxproductions::< (# do ' -> genFile.putText;
-             pl.noOfSons -> genFile.putInt;
-             ' -> value #);\n ' -> genFile.putLine; 
+             t[] -> cflFile.putText;
+             '\' -> theSuffix #\);' -> cflFile.putLine;
+             cflfile.indent;
+             'maxproductions::<' -> cflfile.putline;
+             cflfile.indent;
+             '  (\# do ' -> cflFile.putText;
+             pl.noOfSons -> cflFile.putInt;
+             ' -> value #\);' -> cflFile.putLine;
              (if ('substanceSlot' -> root.optionSet)<>none then
                  (('substanceSlot','cflAtt') -> root.getOptionName) -> t;
-                 t[]-> genFile.putText;
-                 ': @<<SLOT ' -> genFile.putText;
-                 t[] -> genFile.putText;
-                 ': descriptor>>;\n\n' -> genFile.putText;
+                 cflfile.indent;
+                 t[]-> cflFile.putText;
+                 ': @<<SLOT ' -> cflFile.putText;
+                 t[] -> cflFile.putText;
+                 ': descriptor>>;\n' -> cflFile.putLine;
              if);
           #);
         generateInit:
+          (#  
+          do debug(# do 'generating init' -> screen.putText; #);
+             cflFile.newline;
+             cflfile.indent;
+             'init::<' -> cflfile.putline;
+             cflfile.indent;
+             '  (\# <<SLOT InitBody:dopart>> #\);' 
+               -> cflFile.putLine;
+          #);
+        generateInitBody:
           (# compExtra: 
                (# ls: ^mg.LeftSide;
                   extra: @integer;
@@ -507,42 +565,38 @@ ORIGIN 'generator';
              genProd:
                (# prodNo,type,extra,sons: @integer;
                enter (prodNo,type,sons,extra)
-               do '    ' -> genFile.putText;
-                  type -> genFile.putInt;
-                  ' -> kindArray[' -> genFile.putText;
-                  prodNo -> genFile.putInt;
-                  ']; ' -> genFile.putText;
-                  2 * ((extra+1) div 2) -> genFile.putInt;
-                  ' -> roomArray[' -> genFile.putText;
-                  prodNo -> genFile.putInt;
-                  ']; ' -> genFile.putText;
-                  sons -> genFile.putInt;
-                  ' -> sonArray[' -> genFile.putText;
-                  prodNo -> genFile.putInt;
-                  ']; ' -> genFile.putText;
-                  genFile.newLine;
+               do '   ' -> cflFile.putText;
+                  type -> cflFile.putInt;
+                  ' -> kindArray[' -> cflFile.putText;
+                  prodNo -> cflFile.putInt;
+                  ']; ' -> cflFile.putText;
+                  2 * ((extra+1) div 2) -> cflFile.putInt;
+                  ' -> roomArray[' -> cflFile.putText;
+                  prodNo -> cflFile.putInt;
+                  ']; ' -> cflFile.putText;
+                  sons -> cflFile.putInt;
+                  ' -> sonArray[' -> cflFile.putText;
+                  prodNo -> cflFile.putInt;
+                  ']; ' -> cflFile.putText;
+                  cflFile.newLine;
                #);
              genRefGen:
                (# prodNo: @integer;
                   AstCatName: ^text;
                enter (prodNo,astCatName[])
-               do '    &referenceGenerator(# do &' -> genFile.putText;
-                  astCatName[] -> genFile.putText;
-                  '[] -> as[] #)[] -> genRefArray[' -> genFile.putText;
-                  prodNo -> genFile.putInt;
-                  '][];\n' -> genFile.putText;
+               do '   ' -> cflFile.putText;
+                  astCatName[] -> cflFile.putText;
+                  '## -> genRefArray[' -> cflFile.putText;
+                  prodNo -> cflFile.putInt;
+                  ']##;\n' -> cflFile.putText;
                #);
-          do debug(# do 'generating init' -> screen.putText; #);
-             '  init::<\n(#\ndo\n  &(# do \n' -> genFile.putText;
+          do debug(# do 'generating init body' -> screen.putText; #);
+             '--InitBody:dopart--\ndo\n' -> cflFile.putText;
              pl.newscan
                (# co: ^mg.Constructor;
                   clist: ^mg.ConsElemList;
                   NuOfSCSons: @integer;
-               do
-                  (if (currentSonNo mod 20)=0 then
-                  '  #);\n  &(# do\n' -> genFile.putText;
-                   if);
-                  (if current.symbol
+               do (if current.symbol
                    //mg.opt then  
                       (currentSonNo,kinds.optional,0,1) -> genProd;
                       (currentSonNo,'Optional') -> genRefGen
@@ -567,23 +621,26 @@ ORIGIN 'generator';
                       (currentSonNo, current.getSynDeclText) -> genRefGen
                   if);
                #);
-             '  #)\n#);\n' -> genFile.puttext
           #);
         genHeadForm:
           (# formNo: @integer;
              originName,catName,subName,grammarpath: ^text;
           enter (formNo,originName[],catName[],subName[])
-          do 'ORIGIN \'' -> genfile.putText;
-             originName[] -> genFile.putText;
-             '\'' -> genfile.put;
-             '\n--- astInterfaceLib: attributes---\n\n' -> genFile.putText;
-             catName[] -> genFile.putText;
-             ':  ' -> genFile.puttext; 
-             subName[] -> genFile.putText;
-             genFile.newline;
-             '(\# <<SLOT ' -> genFile.puttext;
-             catName[] -> genFile.puttext;
-             'Attributes:attributes>>;' -> genFile.putline;
+          do 0 -> cflFile.indent.set;
+             'ORIGIN \'' -> cflFile.putText;
+             originName[] -> cflFile.putText;
+             '\'' -> cflFile.put;
+             '\n--astInterfaceLib: attributes--\n\n' -> cflFile.putText;
+             catName[] -> cflFile.putText;
+             ': ' -> cflFile.puttext; 
+             subName[] -> cflFile.putText;
+             cflFile.newline;
+             2 -> cflFile.indent.inc;
+             cflFile.indent;
+             '(\# <<SLOT ' -> cflFile.puttext;
+             catName[] -> cflFile.puttext;
+             'Attributes:attributes>>;' -> cflFile.putline;
+             3 -> cflFile.indent.inc;
              (if make_traverse then
                  (if formNo=1 then
                      0 -> traversefile.indent.set;
@@ -645,16 +702,16 @@ ORIGIN 'generator';
           (# postFormName: @text;
              formNo: @integer;
              suffix: @text;
-             first_done: @boolean;
+             traverse_first_done: @boolean;
              optionstring: @text;
              check_indent:
                (# 
                do (if make_traverse then
-                      (if first_done then
+                      (if traverse_first_done then
                           traversefile.newline;
                           traversefile.indent;
                        else
-                          true -> first_done;
+                          true -> traverse_first_done;
                       if);
                   if);
                #);
@@ -767,7 +824,7 @@ ORIGIN 'generator';
                            -> traversebodyfile.putline;
                      if);
                      (* FIXME: set the other boolean virtuals too *)
-                     (if first_done then
+                     (if traverse_first_done then
                          traversebodyfile.indent;
                      if);
                      traversebodyfile.patend;
@@ -780,14 +837,14 @@ ORIGIN 'generator';
           (# originName, str: @text; t: ^Text;
           do formNo + 1 -> formNo;
              (if formNo = noOfFiles (* the last file *) then
-                 genFileName -> str; 
-                 str[]-> genFile.Name
+                 cflFileName -> str; 
+                 str[]-> cflFile.Name
               else
                  gnNameDecl.getText -> formName[];
                  formNo -> formName.putInt;
                  '.bet' 
                    -> (formName.copy).append
-                   -> genFile.name;
+                   -> cflFile.name;
              if);
              (if formNo = 1 then
                  '~beta/mps/astlevel' -> originName;
@@ -800,9 +857,9 @@ ORIGIN 'generator';
                  gnNameDecl.gettext -> t[]; t -> catName;
                  formNo -> catName.putInt;
              if);
-             genFile.openWrite;
+             cflFile.openWrite;
              'Generating ' -> screen.putText; 
-             genFile.name -> screen.putText; 
+             cflFile.name -> screen.putText; 
              (if make_traverse then
                  (if formNo = 1 then
                      traverseFile.openWrite;
@@ -824,12 +881,15 @@ ORIGIN 'generator';
         closeAndReOpen:
           (#
           do debug(# do 'close and reopen' -> screen.putText; #);
-             '#\);' -> genFile.putText; genFile.newLine;
+             3 -> cflFile.indent.dec;
+             cflFile.indent;
+             '#\);' -> cflFile.putText; cflFile.newLine;
+             2 -> cflFile.indent.dec;
              gnNameDecl.gettext -> formName[];
              formNo + 1 -> formName.putInt;
              'FORM' -> formName.append;
              (formNo,formName) -> genTailForm;
-             genFile.close;
+             cflFile.close;
              (if make_traverse then
                  traverseFile.close;
              if);
@@ -854,15 +914,17 @@ ORIGIN 'generator';
          OpenForm;
          debug(# do 'form opened' -> screen.putText #);
          (pl.noOfSons + 40) div NoOfFiles -> prodNumbersPerFile;
-         debug(# do 'generating alternations' -> screen.putText #);
-         pl.scan
-           (#
-           do (if current.symbol=mg.Alternation then
-                  current[] -> generateAlternation; genFile.newLine
-              if);
-              debug(# do current.index -> screen.putInt; '       ' -> screen.putText  #);
-           #);
-         debug(# do 'finished alternation' -> screen.putText; #);
+                 (* debug(# do 'generating alternations' -> screen.putText #);
+                  *          pl.scan
+                  *            (#
+                  *            do (if current.symbol=mg.Alternation then
+                  *                   current[] -> generateAlternation; cflFile.newLine
+                  *               if);
+                  *               debug(# do current.index -> screen.putInt; '       ' -> screen.putText  #);
+                  *            #);
+                  *          debug(# do 'finished alternation' -> screen.putText; #);
+                  *          
+                  *)
          0 -> prodidx;
          pl.scan
            (# pr: ^mg.prod
@@ -877,15 +939,18 @@ ORIGIN 'generator';
                   (current[]->pr[]).getSynDeclText -> CheckForReservedWord;
               if);
               (if current.symbol
+               // mg.Alternation then
+                  current[] -> generateAlternation; 
+                  cflFile.newLine
                // mg.Constructor then 
                   current[] -> generateConstructor; 
-                  genFile.newLine
+                  cflFile.newLine
                // mg.Opt then 
                   current[] -> generateOptional;
                // mg.ListOne
                // mg.ListZero then 
                   current[] -> generateList; 
-                  genFile.newLine
+                  cflFile.newLine
               if);
            #);
          generateGrammarName;
@@ -893,14 +958,15 @@ ORIGIN 'generator';
          (if formNo<NoOfFiles then
              CloseAndReOpen
          if);
-         '#\); ' -> genFile.putText; genFile.newLine;
+         '  #\); ' -> cflFile.putText; cflFile.newLine;
          applicationProg.clear;
          gnNameDecl.gettext -> applicationProg.append;
          'prog' -> applicationProg.append;
          ('postname',applicationProg) -> root.getOptionName -> applicationProg;
          (NoOfFiles,applicationProg) -> genTailForm;
-         debug(# do genfile.name -> screen.putText; ' closed' -> screen.putText #);
-         genFile.close;
+         debug(# do cflFile.name -> screen.putText; ' closed' -> screen.putText #);
+         generateInitBody;
+         cflFile.close;
        #);
    NoOfFiles: @integer;
 do ('splitonfiles',1) -> root.getOptionValue -> NoOfFiles;
