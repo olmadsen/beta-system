@@ -1,4 +1,5 @@
 ORIGIN 'diagramattributes';
+INCLUDE '~beta/mps/private/notificationsbody';
 -- astUtilsGetEnclosingDecl: DoPart --
 do
    (if anAST.father <> none then
@@ -43,7 +44,13 @@ do
    od.getMainPart->mp[];
    mp.getActionPart->ap[];
    ap.getDoPartOpt->anAST[];
-   (if anAST.kind = mps.kinds.interior then anAST[]->dp[] if)  
+   (if anAST.kind = mps.kinds.interior then
+       anAST[]->dp[]
+    else
+       (if anAST.kind = mps.kinds.unExpanded then
+           anAST[]->unexp[]; (if unexp.isSLOT then unexp[]->dp[] if)
+       if)
+   if)  
 
 -- astUtilsGetCommentPos: DoPart --
 do
@@ -1729,8 +1736,36 @@ do
      (#
         doUpdate: @boolean;
         performedUpdates: @text;
+        removeDiagram:
+        (* remove all diagrams from WorkPage and GroupPage that has to do with fragNode.theGroup *)
+          (#
+             theGroupName: ^text;
+             thePropDiag: ^SimplePropertyDiagram;
+             theFragDiag: ^FragmentDiagram
+          enter theGroupName[]
+          do
+             theList.scanPropertyDiagrams
+               (# 
+               do
+                  (if
+                  thisDiagram.titlenode.UDtheGroup.theGroupName
+                    ->theGroupName.equal then
+                      thisDiagram[]->thePropDiag[]
+                  if)
+               #);
+             theList.scanFragmentDiagrams
+               (# 
+               do
+                  (if thisDiagram.fullname->theGroupName.equal then
+                      thisDiagram[]->theFragDiag[]
+                  if)
+               #);
+             theFragDiag.titleNode.abstract;
+             thePropDiag.titleNode.abstract
+          #);
         askUpdate:
-          (# ok: @integer
+          (# ok: @integer; fgname: ^text
+          enter fgname[]
           do
              (if doUpdate then
                  yes->ok
@@ -1738,7 +1773,11 @@ do
                  ('Open Diagram',
                   'Inconsistencies between diagram and code where detected.\nAutomatically update diagram?')
                    ->promptForBoolean->ok;
-                 (if ok = yes then true->doUpdate if)
+                 (if ok = yes then
+                     true->doUpdate
+                  else
+                     fgname[]->removeDiagram
+                 if)
              if)
           exit ok
           #);
@@ -1800,6 +1839,13 @@ do
           (# ld: ^listDiagram; theAttributes: ^betaGram.Attributes
           enter (theAttributes[],ld[])
           do
+             18
+               ->trace
+                 (# 
+                 do
+                    'parseDiagram: %s'
+                      ->t.putformat (#  do ld.titletext[]->s #)
+                 #);
              thisOp:
                (# 
                do
@@ -1873,7 +1919,7 @@ do
                                            #);
                                        (nd[],theNode[])->signatureMatch
                                     else
-                                       askUpdate->ok;
+                                       (nd.frag.father).fullname->askUpdate->ok;
                                        (if ok = yes then
                                            (theNode[],true)
                                              ->
@@ -2045,7 +2091,7 @@ do
                                                   do newText[]->s; oldText[]->s
                                                   #)
                                            #);
-                                       askUpdate->ok;
+                                       (nd.frag.father).fullname->askUpdate->ok;
                                        (if ok = yes then
                                            newText->theNode.theText.set;
                                            ndtext[]->theNode.theName;
@@ -2072,6 +2118,13 @@ do
                               help: @text;
                               ok: @integer
                            do
+                              18
+                                ->trace
+                                  (# 
+                                  do
+                                     'scanAttributeDecls: it was an attribute'
+                                       ->t.puttext
+                                  #);
                               nd.getNameDecl->anAST[];
                               (if anAST.kind
                                // mps.kinds.unExpanded then
@@ -2130,7 +2183,7 @@ do
                                             ->checkCategoryAndSignature
                                       if)
                                    else
-                                      askUpdate->ok;
+                                      (nd.frag.father).fullname->askUpdate->ok;
                                       (if ok = yes then
                                           (((nd.father).father).father,
                                            ((nd.father).father).sonNo)
@@ -2152,13 +2205,20 @@ do
                               help: @text;
                               ok: @integer
                            do
+                              18
+                                ->trace
+                                  (# 
+                                  do
+                                     'scanAttributeDecls: it was an unExp'
+                                       ->t.puttext
+                                  #);
                               nonTerminals+1->nonTerminals->ld.noToNonTerminal
                                 ->theNode[];
                               (if theNode[] <> none then
                                   unExp[]->theNode.unExp[];
                                   unExp.index->theNode.astIndex
                                else
-                                  askUpdate->ok;
+                                  (unExp.frag.father).fullname->askUpdate->ok;
                                   (if ok = yes then
                                       (unExp.father,unExp.sonNo)
                                         ->listElementInserted;
@@ -2170,7 +2230,17 @@ do
                                   if)
                               if)
                            #);
-                         thisOptional::  (#  do  #);
+                         thisOptional:: 
+                           (# 
+                           do
+                              18
+                                ->trace
+                                  (# 
+                                  do
+                                     'scanAttributeDecls: it was an optional'
+                                       ->t.puttext
+                                  #)
+                           #);
                          thisSlot:: 
                            (#
                               theNode: ^ld.SlotNode;
@@ -2178,6 +2248,13 @@ do
                               slotText: ^text;
                               ok: @integer
                            do
+                              18
+                                ->trace
+                                  (# 
+                                  do
+                                     'scanAttributeDecls: it was a SLOT'
+                                       ->t.puttext
+                                  #);
                               (mps[],unExp.frag[],unExp[],indextext[],none
                                (*streamName[]*) ,80,0,false
                                (*abstractPresentation*) ,false
@@ -2193,7 +2270,7 @@ do
                                   unExp[]->theNode.unExp[];
                                   unExp.index->theNode.astIndex
                                else
-                                  askUpdate->ok;
+                                  (unExp.frag.father).fullname->askUpdate->ok;
                                   (if ok = yes then
                                       (unExp.father,unExp.sonNo)
                                         ->listElementInserted;
@@ -2213,13 +2290,18 @@ do
                        dn: ^ld.DiagramNode;
                        ntn: ^ld.NonTerminalNode;
                        sn: ^ld.SlotNode;
+                       fndiag: ^FragmentDiagram;
+                       fn: ^FragmentDiagram.FragmentNode;
                        ok: @integer
                     do
                        (if true
                         // current## <= ld.DiagramNode## then
                            current[]->dn[];
                            (if dn.theDeclaration[] = none then
-                               askUpdate->ok;
+                               ((dn.theDiagram).theFragmentNode).theDiagram
+                                 ->fndiag[];
+                               (dn.theDiagram).theFragmentNode->fn[];
+                               fn.theFragment.theGroupName->askUpdate->ok;
                                (if ok = yes then
                                    'Deleted %s in %s\n'
                                      ->performedUpdates.putformat
@@ -2234,20 +2316,26 @@ do
                         // current## <= ld.NonTerminalNode## then
                            current[]->ntn[];
                            (if ntn.unexp[] = none then
-                               askUpdate->ok;
+                               ((ntn.theDiagram).theFragmentNode).theDiagram
+                                 ->fndiag[];
+                               (ntn.theDiagram).theFragmentNode->fn[];
+                               fn.theFragment.theGroupName->askUpdate->ok;
                                (if ok = yes then
                                    'Deleted <<AttributeDeclOpt>> in %s\n'
                                      ->performedUpdates.putformat
                                        (#  do ld.titletext[]->s #);
                                    (ntn[],true)->ld.deleteDiagramNode
+                                else
+                                   leave thisOp
                                if)
-                            else
-                               leave thisOp
                            if)
                         // current## <= ld.SlotNode## then
                            current[]->sn[];
                            (if sn.unexp[] = none then
-                               askUpdate->ok;
+                               ((sn.theDiagram).theFragmentNode).theDiagram
+                                 ->fndiag[];
+                               (sn.theDiagram).theFragmentNode->fn[];
+                               fn.theFragment.theGroupName->askUpdate->ok;
                                (if ok = yes then
                                    'Deleted %s in %s\n'
                                      ->performedUpdates.putformat
@@ -2589,7 +2677,11 @@ do
                                           do fn.theFragment.theGroupName->s
                                           #)
                                    #)
+                            else
+                               fn.theFragment.theGroupName->removeDiagram
                            if)
+                        else
+                           fn.theFragment.theGroupName->removeDiagram
                        if)
                     exit retry
                     #);
@@ -2612,7 +2704,12 @@ do
                   fgOpen:
                   (if (fn.theFragment.theGroupName->topDotOpen->fg[]) <> none
                    then
-                      fg[]->sifCheckAutoSaveFile->didRecover;
+                      (if not fg.private.wasRecovered then
+                          fg[]->sifCheckAutoSaveFile->didRecover;
+                          (if didRecover then
+                              true->fg.private.wasRecovered
+                          if)
+                      if);
                       (fn.theFragment.theFragName,error[])
                         ->fg.open
                           (#
@@ -2813,8 +2910,12 @@ do
                            else
                               'FragmentForm has changed category!'->alertUser;
                               false->status;
+                              fn.theFragment.theGroupName->removeDiagram;
                               leave thisOperation
                           if)
+                       else
+                          fn.theFragment.theGroupName->removeDiagram;
+                          leave thisOperation
                       if)
                    else
                       (if fn[]->fgNotFound then
