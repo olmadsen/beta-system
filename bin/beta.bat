@@ -24,7 +24,7 @@ goto getopts
 
 :compile
 rem Start the compiler
-"%BETALIB%"\bin\%sdk%\ntibeta52 %BETAOPTS% %_opts_%
+"%BETALIB%"\system\v5.2\nti\%sdk%\beta %BETAOPTS% %_opts_%
 
 rem Clean-up
 set _opts_=
