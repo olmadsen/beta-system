@@ -36,7 +36,7 @@ void PrintValhallaRefStack(void)
 #ifdef RTLAZY
     else if (isLazyRef(theObj)) {
       DEBUG_LAZY(fprintf (output, "ProcessRefStack: Lazy ref: %d\n", (int)theObj));
-      ProcessReference((Object **)(theCell));
+      ProcessReference((Object **)(theCell), REFTYPE_DYNAMIC);
     }
 #endif
     else {
@@ -64,12 +64,12 @@ void ProcessValhallaRefStack(void)
   for(; size > 0; size--, theCell++) {
     theObj = *theCell;
     if (theObj && inBetaHeap(theObj) && isObject(theObj)) {
-      ProcessReference(theCell);
+      ProcessReference(theCell, REFTYPE_DYNAMIC);
       CompleteScavenging();
     }
 #ifdef RTLAZY
     else if (isLazyRef(theObj)) {
-      ProcessReference(theCell);
+      ProcessReference(theCell, REFTYPE_DYNAMIC);
     }
 #endif /* RTLAZY */
   }
@@ -1258,7 +1258,7 @@ void ProcessStackPart(long *low, long *high)
 			PrintRef(*(Object**)current);
 			fprintf(output, "\n");
 		      });
-	  ProcessReference( (Object **)current);
+	  ProcessReference( (Object **)current, REFTYPE_DYNAMIC);
 	  CompleteScavenging();
       } else {
 	DEBUG_CODE({
@@ -1308,7 +1308,7 @@ void ProcessStackPart(long *low, long *high)
 	if (isLazyRef(*current)) {
 	  /* (*current) is a dangling reference */
 	  DEBUG_STACK(fprintf(output, "0x%08x: %d - LAZY\n", (int)current, (int)*current));
-	  ProcessReference ((Object **)current);
+	  ProcessReference ((Object **)current, REFTYPE_DYNAMIC);
 	} else {
 	  DEBUG_STACK({
 	    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);

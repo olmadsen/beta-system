@@ -74,6 +74,9 @@ void PITAlloc(void)
   PIT = mmapHeapTop;
   PITTop = mmapHeapTop;
   PITLimit = mmapHeapLimit;
+
+  Claim((unsigned long)PITLimit < 0x7fffffff,
+	"PIT must be in positive adresses");
 }
 
 Object *newPUID(unsigned long offset)
@@ -439,9 +442,10 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
   unsigned char* PC;
   unsigned char modrm;
 
+  PC = (unsigned char*)pContextRecord->Eip;
+
   Claim(!IOAActive, "!IOAActive");
 
-  PC = (unsigned char*)pContextRecord->Eip;
   switch (PC[0]) {
   case 0x62:  /* BOUND R32, M32, M32 */
   case 0x80:  /* CMP R/M8, IMM8 */

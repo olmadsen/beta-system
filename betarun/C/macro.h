@@ -251,11 +251,11 @@ do {                               \
   long           _GCAttribute;                                 \
   Object *_theObj=theObj;                               \
   Distance = 0;                                                \
-  _GCAttribute = _theObj->GCAttr*4;                            \
+  _GCAttribute = _theObj->GCAttr;                            \
   while( _GCAttribute < 0 ){                                   \
-    Distance += _GCAttribute;                                  \
-    _theObj = (Object *) Offset(_theObj, _GCAttribute); \
-    _GCAttribute = _theObj->GCAttr*4;                          \
+    Distance += _GCAttribute*4;                                  \
+    _theObj = (Object *) Offset(_theObj, _GCAttribute*4); \
+    _GCAttribute = _theObj->GCAttr;                          \
   }                                                            \
 }
 

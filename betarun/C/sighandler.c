@@ -832,7 +832,7 @@ BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
   case EXCEPTION_ACCESS_VIOLATION:
 #ifdef PERSIST
     DEBUG_CODE({
-      if (0) {
+      if (1) {
 	unsigned char* pc;
 	pc = (unsigned char*)PC;
 	fprintf(output, "EXCEPTION_ACCESS_VIOLATION: PC=0x%8x: "
