@@ -122,13 +122,15 @@ struct CallBackEntry {
     void 	        (*handleCallBackPtr)();
     short		rts;
 #endif
-#ifdef linux 
+#if defined(linux) || defined(nti)
     ref(Structure)      theStruct;
-    short 		code[3];
+    char                call;
+    long                address;
+    char                rts;
 #endif
 };
 
-#ifdef linux
+#if defined(linux) || defined(nti)
 #define CallBackEntrySize 10
 #else
 #define CallBackEntrySize sizeof(struct CallBackEntry)
