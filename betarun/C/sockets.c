@@ -40,9 +40,11 @@
 #  include <sys/ioctl.h>	/* to see FIONREAD & SIOCSPGRP */
 #  include <signal.h>
 #endif
-#ifdef linux
-#  include <linux/termios.h>
-#endif
+/* Not needed anymore. --mannan */
+/* #ifdef linux
+   #include <linux/termios.h>
+   #endif
+*/
 
 /* Architecture dependant types/values */
 

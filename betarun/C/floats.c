@@ -58,7 +58,7 @@
 #endif
 
 #ifdef linux
-#include <i386/fpu_control.h>
+#include <fpu_control.h> /* Changed from <i386/fpu_control.h> -mannan */
 #define FPU_ZERODIVISION  _FPU_MASK_ZM
 #define FPU_INVALID       _FPU_MASK_IM
 #define FPU_DENORMALIZED  _FPU_MASK_DM
