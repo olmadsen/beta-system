@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(72)";
+char betarun_version[] = "BETARUN VERSION 5.3(73)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.76  2002/03/01 12:25:17  corry
+ * Get rid of nonbreak spaces in make output - didn't work on Windows - not necessary with
+ * new gnumake/shell combo
+ * Betarun version number: 72
+ *
  * Revision 1.75  2002/03/01 12:10:55  corry
  * Make it work on nti_ms
  * Use -j2 to make in parallel
