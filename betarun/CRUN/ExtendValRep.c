@@ -14,18 +14,32 @@ register long _dummyx asm("r16");
 #include "crun.h"
 
 asmlabel(ExtVR, "
+	mov	%o1, %o2
+	mov	%l7, %o5
+        clr     %o1
+        clr     %o3
 	ba	_CExtVR
-	mov	%l7, %o2
+        clr     %o4
 ");
 
 #ifdef hppa
 #  define CExtVR ExtVR
 #endif
 
+#ifdef sparc
+void CExtVR(ref(Object) theObj,
+	    int i1,
+	    unsigned offset, /* in longs */
+	    int i3, 
+	    int i4,
+	    long add /* What to extend the range with */
+	    )
+#else
 void CExtVR(ref(Object) theObj,
 	    unsigned offset, /* in longs */
 	    long add /* What to extend the range with */
 	    )
+#endif
 {
     DeclReference1(struct ValRep *, theRep);
     DeclReference2(struct ValRep *, newRep);

@@ -13,18 +13,32 @@ register long _dummyx asm("r16");
 #include "crun.h"
 
 asmlabel(ExtRR, "
+	mov	%o1, %o2
+	mov	%l7, %o5
+        clr     %o1
+        clr     %o3
 	ba	_CExtRR
-	mov	%l7, %o2
+        clr     %o4
 ");
 
 #ifdef hppa
 #  define CExtRR ExtRR
 #endif
 
+#ifdef sparc
+void CExtRR(ref(Object) theObj,
+	    int i1,
+	    unsigned offset, /* in longs */
+	    int i3, 
+	    int i4,
+	    long add
+	    )
+#else
 void CExtRR(ref(Object) theObj,
 	    unsigned offset, /* in longs */
 	    long add
 	    )
+#endif
 {
     DeclReference1(struct RefRep *, theRep);
     DeclReference2(struct RefRep *, newRep);
