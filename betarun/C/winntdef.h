@@ -1,5 +1,6 @@
+#ifndef EXTRA_WINNTDEF_H
+#define EXTRA_WINNTDEF_H
 #include <Windows32/Base.h>
-
 //
 // Calculate the byte offset of a field in a structure of type type.
 //
@@ -58,12 +59,13 @@ typedef struct _IMAGE_DATA_DIRECTORY {
 //
 
 
-
+#if !(__GNUC_MINOR__ >= 91)
 #define IMAGE_DOS_SIGNATURE                 0x5A4D      // MZ
+#define IMAGE_NT_SIGNATURE                  0x00004550  // PE00
+#endif //!(__GNUC_MINOR__ >= 91)
 #define IMAGE_OS2_SIGNATURE                 0x454E      // NE
 #define IMAGE_OS2_SIGNATURE_LE              0x454C      // LE
 #define IMAGE_VXD_SIGNATURE                 0x454C      // LE
-#define IMAGE_NT_SIGNATURE                  0x00004550  // PE00
 
 #define IMAGE_SIZEOF_SECTION_HEADER          40
 
@@ -307,6 +309,7 @@ typedef struct _IMAGE_ARCHIVE_MEMBER_HEADER {
 } IMAGE_ARCHIVE_MEMBER_HEADER, *PIMAGE_ARCHIVE_MEMBER_HEADER;
 
 #define IMAGE_SIZEOF_ARCHIVE_MEMBER_HDR      60
+#if !(__GNUC_MINOR__ >= 91)
 typedef struct _IMAGE_DOS_HEADER {      // DOS .EXE header
     WORD   e_magic;                     // Magic number
     WORD   e_cblp;                      // Bytes on last page of file
@@ -328,6 +331,7 @@ typedef struct _IMAGE_DOS_HEADER {      // DOS .EXE header
     WORD   e_res2[10];                  // Reserved words
     LONG   e_lfanew;                    // File address of new exe header
   } IMAGE_DOS_HEADER, *PIMAGE_DOS_HEADER;
+#endif // !(__GNUC_MINOR__ >= 91)
 
 #define IMAGE_FIRST_SECTION( ntheader ) ((PIMAGE_SECTION_HEADER)        \
     ((DWORD)ntheader +                                                  \
@@ -389,3 +393,4 @@ typedef struct _IMAGE_SECTION_HEADER {
 #define IMAGE_FILE_MACHINE_R10000            0x168   // MIPS little-endian
 #define IMAGE_FILE_MACHINE_ALPHA             0x184   // Alpha_AXP
 #define IMAGE_FILE_MACHINE_POWERPC           0x1F0   // IBM PowerPC Little-Endian
+#endif // WINNTDEF_H
