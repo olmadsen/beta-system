@@ -13,6 +13,7 @@ usage: pack_dotnet [-h][-v][-C][-z][-p]
      -v  verbose mode
      -C  skip compilation of compilers
      -Z  skip zipping of directory
+     -T  include testall and reference output
      -p  "publish" new zip file on web (datpete only)
 EOT
     exit;
@@ -29,16 +30,13 @@ $jbeta       = "$BETALIB/bin/$objdir/jbeta.exe";
 $publish_dir = "Z:public_html/dotnet/beta_net";
 
 @examples    = (# betaenv and implementation
-		"betaenv.bet",
-		"betaenvbody.bet",
-		"betaenv_clrbody.bet",
-		"betaenv_jvmbody.bet",
 		# output from testall -d -l
 		"Aclass.bet",
 		"Bmini0.bet",
 		"Bmini1.bet",
 		"Calculator.bet",
 		"Counter.bet",
+		"ECStest.bet",
 		"ECtest.bet",
 		"LL1.bet",
 		"List.bet",
@@ -62,6 +60,9 @@ $publish_dir = "Z:public_html/dotnet/beta_net";
 		"small.bet",
 		"stackuser.bet",
 
+		# hello implementation
+		"hellolib.bet",
+
 		# stack implementation
 		"stack.bet",
 		"stackbody.bet",
@@ -80,6 +81,8 @@ $publish_dir = "Z:public_html/dotnet/beta_net";
 		"nstringuser.cs",
 
 		# java specific stuff
+		"bpackage.bet",
+		"bpackageuser.java",
 		"jstringuser.java",
 		"jstring.bet",
 		"javastring.bet",
@@ -90,6 +93,7 @@ $publish_dir = "Z:public_html/dotnet/beta_net";
 		# External programs
 		"EC.{cs,java}",
 		"Bclass*.{bet,cs,config,java}",
+		"xreal32class.{cs,java}",
 
 		# Misc
 		"GNUmakefile",
@@ -99,9 +103,9 @@ $publish_dir = "Z:public_html/dotnet/beta_net";
 @cleanup = ( "*/CVS",
 	     "*/*/CVS",
 	     "configuration/mbs_id",
-	     "configuration/MBSgrammars*",
 	     "configuration/ymer.pjt",
 	     "configuration/env.*",
+	     "documentation/*~",
 	     "grammars/*/CVS",
 	     "grammars/*/*.lst",
 	     "examples/googleapi/CVS",
@@ -131,7 +135,8 @@ print "Creating BETA .Net preliminary distribution in directory $dest\n";
  
 if ( -d $dest ){
    print "Deleting existing $dest\n";
-   &rmtree($dest, 0, 1);
+   #&rmtree($dest, 0, 1);
+   system "rm -rf $dest";
 }
 
 if ($skipcompilation){
@@ -147,11 +152,12 @@ print "Creating directory $dest\n";
 
 print "Copying compilers\n";
 &mkpath("$dest/bin", 0, 0755);
-&copy($nbeta, "$dest/bin");
-&copy($jbeta, "$dest/bin");
+&copy($nbeta, "$dest/bin/nbeta.exe");
+chmod 0755, "$dest/bin/nbeta.exe";
+&copy($jbeta, "$dest/bin/jbeta.exe");
+chmod 0755, "$dest/bin/jbeta.exe";
 
 print "Copying grammars\n";
-&mkpath("$dest/grammars", 0, 0755);
 &copydir("$BETALIB/grammars/metagram", "$dest/grammars");
 &copydir("$BETALIB/grammars/pretty", "$dest/grammars");
 &copydir("$BETALIB/grammars/beta", "$dest/grammars");
@@ -159,27 +165,29 @@ print "Copying grammars\n";
 print "Copying configuration\n";
 &copydir("$BETALIB/configuration", "$dest");
 
+print "Copying basiclib\n";
+&copyfiles("$BETALIB/basiclib", "*.bet",         "basiclib");
+&copyfiles("$BETALIB/basiclib", "private/*.bet", "basiclib");
+#&copyfiles("$BETALIB/basiclib", "demo/*/*.bet",  "basiclib");
+
 print "Copying examples\n";
-&mkpath("$dest/examples", 0, 0755);
 foreach $f (@examples){
-    foreach $g (glob("$f")){
-	my ($path) = "$dest/examples/" . $g;
-	$path =~ s%/[^/]*$%%;
-	&mkpath($path, 0, 0755);
-	&copy($g, "$dest/examples/$g");
-    }
+    &copyfiles(".", $f, "examples");
 }
 
 print "Copying documentation\n";
-&mkpath("$dest/documentation", 0, 0755);
-foreach $f (<$BETALIB/compiler/DOC/BYTECODE/*.*>){
-    next if ($f =~ /~$/);
-    &copy($f, "$dest/documentation");
-}
+&copyfiles("$BETALIB/compiler/DOC/BYTECODE", "*.*", "documentation");
 
 print "Copying setup files\n";
 &copy("cmd_setup.bat", "$dest");
 &copy("bash_setup.sh", "$dest");
+
+if ($T){
+    print "Copying testall suite (-T option)\n";
+    &copy("testall", "$dest/examples");
+    &copydir("reference", "$dest/examples");
+    &copydir("$BETALIB/bin/admin", "$dest/bin");
+}
 
 print "Creating README-dotnet.txt\n";
 open README, ">$dest/README-dotnet.txt" || die "Cannot open README-dotnet.txt for writing: $\n";
@@ -225,6 +233,7 @@ if ($publish){
 
 sub copydir($srcdir, $destdir){
     my ($srcdir, $destdir) = @_;
+    &mkpath("$destdir", 0, 0755);
     if (1){
 	system "cp -rp $srcdir $destdir";
     } else {
@@ -240,5 +249,19 @@ sub copydir($srcdir, $destdir){
 		copy $_, $dest;
 	    }
 	}, $srcdir;
+    }
+}
+
+sub copyfiles ($srcbase, $filespec, $destdir){
+    my ($srcbase, $filespec, $destdir) = @_;
+    foreach $g (glob("$srcbase/$filespec")){
+	my ($path) = "$g";
+	$path = substr $path, length($srcbase);  # remove srcbase/ prefix
+	$path =~ s%/[^/]*$%%;                    # delete file component
+	$path = "$dest/$destdir$path";
+	print "Making directory $path\n" if ($verbose);
+	&mkpath($path, 0, 0755);
+	print "Copy $g $path\n" if ($verbose);
+	&copy($g, "$path");
     }
 }
