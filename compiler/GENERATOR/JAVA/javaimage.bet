@@ -8,12 +8,27 @@ traceDebuginfo:
 trace_labs: 
   (# exit false #);
 
+
+(****** having this here yields a bad sementic error!!
+ * (# exit true #);
+ *)
+
 JavaImage:
   (# cf: @ClassFile;
      
      traceClassFile: @boolean;
      traceClassFileName: @boolean;
-    
+     
+     local_variables_always_live_until_exit: @
+       (* True if local variables should be marked as alive from first
+        * access and the rest of the method. Ideally only variables that
+        * are used in the exit part should have this property, but this
+        * cannot currently be distinguished
+        *)
+       boolean;
+     report_undefined_local_variable_use: @
+       boolean;
+     
      thisClassIndex, superClassIndex: @integer;
           
      init:<
@@ -90,7 +105,10 @@ JavaImage:
           length: @int16u; (* length=65535 means "lives through entire method" *)
           name, type: ^text;
        enter (start_pc, length, name[], type[])
-       do (start_pc, length, name[], type[], currentmethod.numLocals)
+       do (if local_variables_always_live_until_exit then
+              65535 -> length;
+          if);
+          (start_pc, length, name[], type[], currentmethod.numLocals)
             -> currentmethod.variable_definition;
           currentmethod.numLocals+1 -> currentmethod.numLocals;
        #);
@@ -282,11 +300,13 @@ JavaImage:
           variables: ^CF_LocalVariableTable_attribute;
           thrown_exceptions: ^CF_Exceptions_attribute;
           LIP: (# exit _code.code_length #);
+          LIP_beginning_of_line: @integer;
           new: 
             (# access, maxstack, maxlocals: @integer;
                name_index, descriptor_index, code_index: @integer;
             enter (access, name[], signature[], maxstack, maxlocals)
             do fix_variables;
+               -1 -> LIP_beginning_of_line;
                (access %Band ACC_STATIC) <> 0 -> isStatic;
                name[] -> constant_pool.utf8strings.add -> name_index;
                signature[] -> constant_pool.utf8strings.add -> descriptor_index;
@@ -333,6 +353,7 @@ JavaImage:
                if);
                &CF_LineNumber_info[] -> i[] -> line_numbers.line_number_table.add;
                (pc, line) -> i;
+               pc -> LIP_beginning_of_line;
             #);
           variable_slots: [1]^CF_LocalVariable_info;
           variable_definition: 
@@ -379,7 +400,7 @@ JavaImage:
             (# index, pc: @int16u;
             enter (index,pc)
             do (if (index+1>variable_slots.range) or (variable_slots[index+1][]=NONE) then
-                   (if false(*OLM: FIXME*) then
+                   (if report_undefined_local_variable_use then
                        'method '->screen.puttext;
                        currentmethod.name[] -> screen.puttext;
                        ': use of undefined variable no '
@@ -400,7 +421,17 @@ JavaImage:
                    if);
                    (if variable_slots[index+1].start_pc=65535 then
                        (* first use of slot#index *)
-                       pc -> variable_slots[index+1].start_pc;
+                       (if (LIP_beginning_of_line<>-1) and
+                           (LIP_beginning_of_line<pc) then
+                           (* Mark variable as becoming alive from beginning
+                            * of line - makes the most sence when inspected 
+                            * in debugger
+                            *)
+                           LIP_beginning_of_line 
+                             -> variable_slots[index+1].start_pc;
+                        else
+                           pc -> variable_slots[index+1].start_pc;
+                       if)
                    if);
                    (if variable_slots[index+1].length<>65535 then
                        (* 65535 means lives through entire method - fixed by fix_variables *)
