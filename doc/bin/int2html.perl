@@ -365,25 +365,16 @@ sub print_index()
 	if ($_ =~ m/(.*):([^:]+)/){
 	    $scopes = $1;
 	    $id = $2;
+	    # We are in a specific scope. There cannot be identical index entries
+	    # here (BETA semantic error!). So no need to check for prev_id.
+	    $prev_id="";
+	    $prev_no=0;
 	    if ($entries{$scopes}){
 		# foo:bar already emitted
-		if ($prev_id eq $id){
-		    $prev_no++;
-		    if (!($prev_no % 10)){
-			# break line of references
-			$html_index .= "\n";
-			# indent with double-spaces
-			$html_index .= "  " x (2+&num_chars(':', $scopes));
-		    }
-		    $html_index .= " <A href=\"$htmlfile\#" . $index[$i] . "\">[" . $prev_no . "]</A>";
-		} else {
-		    $prev_no=1;
-		    $html_index .= "\n";
-		    # indent with double-spaces
-		    $html_index .= "  " x (1+&num_chars(':', $scopes));
-		    $html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\">" . $id . "</A>";
-		    $prev_id = $id;
-		}
+		$html_index .= "\n";
+		# indent with double-spaces
+		$html_index .= "  " x (1+&num_chars(':', $scopes));
+		$html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\">" . $id . "</A>";
 		$entries{$_} = 1;
 	    } else {
 		$html_index .= "Index Error: $_ ($scopes) ($id)\n";
