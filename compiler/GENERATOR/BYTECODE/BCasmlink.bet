@@ -15,7 +15,7 @@ INCLUDE '~beta/basiclib/texthash';
 
 (* FIXME: Could fragment windows/unix dependant code out into 
  *   BCasmlinkWindows.bet and BCasmlinkUnix.beta
- * (all places with an explicit hostIsWindows test.
+ * (all places with an explicit common.hostIsWindows test.
  *)
 
 --lib: attributes--
@@ -84,7 +84,7 @@ AppendExe:
   enter objname[]
   exit '.exe' -> objname.appendExtension
   #);
- 
+
 containerlist: list(# #);
 
 --translateasmlinklib: attributes ---
@@ -102,6 +102,8 @@ isJava:
   (# exit common.targetMachineId = common.jvm #);
 isIL:    
   (# exit common.targetMachineId = common.clr #);
+isRotor:
+  (# exit common.switch[328] #);
 applicationbase:
   (# path: ^text;
      e: @diskentry;
@@ -145,6 +147,31 @@ ReplaceBetalib:
      if);
      (*T[] -> putline;*)
   exit T[]
+  #);
+
+del:
+  (# name: ^text;
+     check: @boolean;
+     AFF: ^stream;
+  enter (name[], check, AFF[])
+  do (if common.hostIsWindows then
+         (if check then
+             'if exist "'->AFF.putText; 
+             name[]->AFF.putText; 
+             '" '->AFF.putText;
+         if);
+         'del "'->AFF.putText; 
+         name[]->AFF.putText; 
+         '"' -> AFF.put; 
+         (if verboseLevel > verboseLevel.verbose then
+             ' >NUL 2>&1'->AFF.puttext;
+         if);
+      else
+         'rm -f "'->AFF.putText; 
+         name[]->AFF.putText; 
+         '"' -> AFF.put; 
+     if);
+     '' -> AFF.putline;
   #);
     
 --asmlinklib: attributes --
@@ -253,18 +280,18 @@ do lineCont -> AFFputtext
 do (if use_pcre then
        (* 'jvm/' -> asmstate.jvmregexp; (* used by jvm linkObj *)
    if);
-   asmstate.duplicateCheck.init; (* used by clr linkObj *)
-   asmstate.jvmDirs.init;        (* used by jvm linkObj *)
    (if true
-    // isIL or common.hostIsWindows then
+    // isIL then
        asmstate.verifylist.init;
-       '@echo off\n'
-         ->AFF.putText;
-       (if isIL then
-           'if exist "ilasm.out" del "ilasm.out" >NUL 2>&1\n'
-             ->AFF.putText;
-       if);
+       asmstate.duplicateCheck.init; (* used by clr linkObj *)
     // isJava then
+       asmstate.jvmDirs.init;        (* used by jvm linkObj *)
+    else
+       'AsmHeader: unknown platform' -> TODO; 
+   if);
+   (if common.hostIsWindows then
+       '@echo off' ->AFF.putline;
+    else
        '#!/bin/sh '->AFF.putLine;
        'BETALIB=${BETALIB-/usr/local/lib/beta}' ->AFF.putline;
        '. $BETALIB/configuration/env.sh' -> AFF.putline;
@@ -272,8 +299,9 @@ do (if use_pcre then
        'PATH=${JAVAHOME}/bin:$PATH' -> AFF.putline;
        'export PATH' -> AFF.putline;
        'TMPDIR=${TMPDIR-/tmp}'->AFF.putLine;
-    else
-       'AsmHeader: unknown platform' -> TODO; 
+   if);
+   (if isIL then
+       ('ilasm.out', true, AFF[]) -> del;
    if);
 #)
 ---AsmExt: descriptor ---
@@ -304,13 +332,10 @@ do 'LibExt'->TODO
 #)
 ---JobExt: descriptor ---
 (# 
-do (if true
-    // isIL or common.hostIsWindows then
+do (if common.hostIsWindows then
        '.bat' -> ext;
-    // isJava then
+    else 
        '..job' -> ext
-    else
-       'JobExt: unknown platform' -> TODO;
    if);
 #) 
 ---ExeExt:descriptor---
@@ -324,73 +349,51 @@ do (if true
    #)
 ---Echo: descriptor ---
 (# 
-do (if true
-    // isIL then
-       'echo '->AFF.puttext;
-    // isJava then
-       'echo '->AFF.puttext;
-    else
-       'Echo: unknown platform' -> TODO;
-   if);
+do 'echo '->AFF.puttext; (* same in bat/sh *)
 #)
 ---Remove: descriptor ---
-(# del:
-     (# name: ^text
-     enter name[]
-     do (if check then
-            'if exist "'->AFF.putText; 
-            name[]->AFF.putText; 
-            '" '->AFF.putText
-        if);
-        'del "'->AFF.putText; 
-        name[]->AFF.putText; 
-        '"' -> AFF.put; 
-        (if verboseLevel > verboseLevel.verbose then
-            ' >NUL 2>&1'->AFF.puttext;
-        if);
-        '' -> AFF.putline;
-     #);
-do (if true
-    // isIL or common.hostIsWindows then
+(# 
+do (if common.hostIsWindows then
        (* Delete .exe file - even for java *)
        name.copy -> name[]; 
        '.exe' -> name.appendExtension;
-       name[] -> del;
+       (name[], check, AFF[]) -> del;
        (if isJava then
-           (* Delete .bat file too *)
+           (* Delete existing wrapper too *)
            '.exe' -> name.stripExtension;
            '.bat' -> name.appendExtension;
-           name[] -> del;
+           (name[], check, AFF[]) -> del; (* delete cmd wrapper *)
        if)
-    // isJava then
-       'rm -f '->AFF.puttext; name[]->AFF.putline
     else
-       'remove' -> todo
+       (name[], check, AFF[]) -> del;
+   if);
+   (if isRotor then
+       (* Delete existing wrapper too *)
+       '.exe' -> name.stripExtension;
+       (if common.hostIsWindows then
+           '.bat' -> name.appendExtension;
+       if);
+       (name[], check, AFF[]) -> del; (* delete cmd/sh wrapper *)
    if);
 #)
 ---ChangeDirectory:doPart---
 do (if true
-    // isIL or common.hostIsWindows then
+    // common.hostIsWindows then
        (if (dir.lgth>1) and (dir.T[2]=':') then
            (* change drive *)
            dir.T[1]->AFF.put; ':' -> AFF.put; AFF.newline;
        if);
        'cd '->AFF.puttext; dir[] -> slashToBackslash -> quote -> AFF.putline
-    // isJava then
-       'cd '->AFF.puttext; dir[] -> tick -> AFF.putline
     else
-       'ChangeDirectory'->TODO
+       'cd '->AFF.puttext; dir[] -> tick -> AFF.putline
    if);
        
 ---AddCommand:doPart---
-do (if true
-    // isIL or common.hostIsWindows then
+do (if common.hostIsWindows then
        cmd[] -> sh2cmd -> AFF.putline;
        'if errorlevel 1 goto builderror' -> AFF.putLine;
-    // isJava then
-       cmd[] -> AFF.putline;
     else
-       'AddCommand'->TODO
+       cmd[] -> AFF.putline;
    if);
 ---Make: descriptor ---
 (# 
@@ -436,7 +439,11 @@ do (if common.switch[184] or common.switch[189] then
            (if not isJava then
                echo;
                'assembling '->AFF.puttext;
-               FF[] ->AFF.putline;
+               (if common.hostIsWindows then
+                   FF[] ->AFF.putline;
+                else
+                   FF[] ->escDollar-> AFF.putline;
+               if);
            if);
        if);
        (if true
@@ -450,14 +457,20 @@ do (if common.switch[184] or common.switch[189] then
            if);
            '/output:' -> AFF.puttext;
            '.il' -> F.stripextension;
-           '.dll' -> (F.copy).appendExtension -> AFF.puttext;
-           ' '-> AFF.put;
-           '.il' -> (F.copy).appendExtension -> AFF.puttext;
+           (if common.hostIsWindows then
+               '.dll' -> (F.copy).appendExtension -> AFF.puttext;
+               ' '-> AFF.put;
+               '.il' -> (F.copy).appendExtension -> AFF.puttext;
+            else
+               '.dll' -> (F.copy).appendExtension->escDollar->AFF.puttext;
+               ' '-> AFF.put;
+               '.il' -> (F.copy).appendExtension->escDollar->AFF.puttext;
+           if);
            (if verboseLevel > verboseLevel.verbose then
                ' >"ilasm.out" 2>&1'->AFF.puttext;
            if);
            AFF.newline;
-           (if not common.switch[21] then
+           (if common.hostIsWindows and (not common.switch[21]) then
                'if errorlevel 1 goto asmerror' -> AFF.putLine;
            if);
            (if false then
@@ -565,8 +578,9 @@ do 'ldTmp'->TODO
         (if not common.switch[21] then
             CheckLinkError -> AFF.putline;
         if);
-        (if common.switch[41](*highlevel debug*) and (not common.switch[23](*preserve*)) then
-            'del clr\\_main.il >NUL 2>&1' -> AFF.putline;
+        (if common.switch[41](*highlevel debug*) 
+            and (not common.switch[23](*preserve*)) then
+            ('clr\\_main.il', true, AFF[])->del;
         if);
      #);
    
@@ -616,11 +630,18 @@ do (if true
        do applicationbase -> applicationbasedir.name;
           applicationbasedir.touch;
        #);
-       (* Delete exising applicationbase directory contents *)
-       'del /f /q /s ' -> AFF.puttext;
-       applicationbase -> quote -> AFF.puttext;
-       (if verboseLevel > verboseLevel.verbose then
-           ' >NUL 2>&1' -> AFF.puttext;
+       (* Delete existing applicationbase directory contents *)
+       (if common.hostIsWindows then
+           'del /f /q /s ' -> AFF.puttext;
+           applicationbase -> quote -> AFF.puttext;
+           (if verboseLevel > verboseLevel.verbose then
+               ' >NUL 2>&1' -> AFF.puttext;
+           if);
+        else
+           'rm -rf ' -> AFF.puttext;
+           applicationbase -> quote -> AFF.putline;
+           'mkdir ' -> AFF.puttext;
+           applicationbase -> quote -> AFF.puttext;
        if);
        AFF.newline;
        (if not common.switch[6] then
@@ -748,14 +769,22 @@ do 'asmlinkdynamic'->TODO
             if);
             
             (* Copy source dll *)
-            'copy ' -> ldA.puttext;
-            src[] -> quote -> ldA.append;
-            ' ' -> ldA.append;
-            dest[] -> quote -> ldA.puttext;
-            (if verboseLevel > verboseLevel.verbose then
-                ' >NUL 2>&1' -> ldA.puttext;
+            (if common.hostIsWindows then
+                'copy ' -> ldA.puttext;
+                src[] -> quote -> ldA.append;
+                ' ' -> ldA.append;
+                dest[] -> quote -> ldA.puttext;
+                (if verboseLevel > verboseLevel.verbose then
+                    ' >NUL 2>&1' -> ldA.puttext;
+                if);
+                ldA.newline;
+             else
+                'cp ' -> ldA.puttext;
+                src[] -> escDollar -> ldA.append;
+                ' ' -> ldA.append;
+                dest[] -> escDollar -> ldA.puttext;
+                ldA.newline;
             if);
-            ldA.newline;
         if);
      #);
    addFile:
@@ -1078,21 +1107,36 @@ do (if true
              -> AFF.putline;
         else
            (* Link has been done *)
-           'if exist "' -> AFF.puttext;
-           objName[] -> AFF.puttext;
-           '.exe" ' -> AFF.puttext;
-           
-           '(echo Object program on file: '->AFF.puttext;
-           objName[] -> AFF.puttext;
-           '.exe)' -> AFF.putline;
+           (if common.hostIsWindows then
+               'if exist "' -> AFF.puttext;
+               objName[] -> AFF.puttext;
+               '.exe" ' -> AFF.puttext;
+               '(echo Object program on file: '->AFF.puttext;
+               objName[] -> AFF.puttext;
+               '.exe)' -> AFF.putline;
+            else
+               'echo Object program on file: '->AFF.puttext;
+               objName[] -> AFF.puttext;
+               '.exe' -> AFF.putline;
+           if);
+           (if isRotor then
+               'echo Rotor wrapper on file: '->AFF.puttext;
+               objName[] -> AFF.puttext;
+               (if common.hostIsWindows then
+                   '.bat' -> AFF.puttext;
+               if);
+               AFF.newline;
+           if);
        if);
        AFF.newline;
-       generateBatFileLabels;
-       (if not common.switch[18] then
-           'if exist "ilasm.out" (del "ilasm.out")\n'
-             ->AFF.putText;
+       (if common.hostIsWindows then
+           generateBatFileLabels;
+           (if not common.switch[18] then
+               'if exist "ilasm.out" (del "ilasm.out")\n'
+                 ->AFF.putText;
+           if);
        if);
-       (if common.switch[328] then
+       (if isRotor then
            generateRotorWrapperScript;
        if);
     // isJava then
@@ -1120,14 +1164,7 @@ do (if true
        if);
        (if not common.switch[18] then
            (* delete jar @file *)
-           (if common.hostIsWindows then
-               'del ' -> AFF.puttext;
-               jatfilename -> AFF.puttext;
-               ' >NUL 2>&1' -> AFF.putline;
-            else
-               'rm -f ' -> AFF.puttext;
-               jatfilename -> AFF.putline;
-           if)
+           (jatfilename, true, AFF[]) -> del; 
        if);
     else
        'trailer: unknown platform' -> TODO;
