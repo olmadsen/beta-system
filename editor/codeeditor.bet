@@ -20,13 +20,14 @@ BODY 'private/misc'
      'private/editorenvsearchbody'
      'private/groupeditorbody'
      'private/historybody'
-     'private/frejacommbody'
      'private/slotbody'
+     'private/frejacommbody'
      'private/externalinterfacebody'
      'private/propertyeditorbody'
      'private/subeditorbody'
      'private/fghandlerbody'
      'private/ffhandlerbody'
+     'private/ffobserverbody'
      'private/codeeditormenus'
      'private/search';
 (*
@@ -35,12 +36,97 @@ BODY 'private/misc'
  *   All rights reserved.
  *)
 -- windowlib: Attributes --
+fragmentFormSubject:
+  (#
+     ff: ^astInterface.fragmentForm;
+     observers: @list (# element:: fragmentFormObserver #);
+     notify:
+       (#
+          where:< booleanValue (#  do true->value; INNER #);
+          start:< object
+          (* executed before the notification is posted to all observers *) ;
+          current: ^fragmentFormObserver;
+          node: ^astInterface.ast;
+          fg: ^astInterface.fragmentGroup;
+          ff: ^astInterface.fragmentForm;
+          
+       <<SLOT fragmentFormSubjectNotify:DoPart>>
+       #);
+     astNotify: notify
+     (* abstract superpattern *) (#  enter node[] do INNER #);
+     notifyAstReplaced: notify
+       (# oldAst,newAst: ^astInterface.ast; 
+       enter (oldAst[],newAst[])
+       do (oldAst[],newAst[])->current.onAstReplaced
+       #);
+     notifyAstReplacedSequence: astnotify
+       (#  do (node[])->current.onAstReplacedSequence #);
+     notifyListElementInserted: astnotify
+       (# position: @integer
+       enter position
+       do (node[],position)->current.onListElementInserted
+       #);
+     notifyListElementsDeleted: astnotify
+       (# oldElements: ^astInterface.astList; position,length: @integer
+       enter (position,length,oldElements[])
+       do (node[],position,length,oldElements[])->current.onListElementsDeleted
+       #);
+     notifyListElementsReplaced: astnotify
+       (#
+          oldElements: ^astInterface.astList;
+          position,length,newLength: @integer
+       enter (position,length,oldElements[],newLength)
+       do
+          (node[],position,length,oldElements[],newLength)
+            ->current.onListElementsReplaced
+       #)
+  #);
+fragmentFormObserver:
+  (#
+     ff: ^astInterface.fragmentForm;
+     ffSubject: ^fragmentFormSubject;
+     no: @integer;
+     ignore:< booleanValue
+     (* if this returns TRUE, this(fragmentFormObserver) will be ignored *)
+       (#  do INNER #);
+     event: (* abstract superpattern *) (#  do INNER #);
+     astEvent: event (* abstract superpattern *)
+       (# node: ^astInterface.ast enter node[] do INNER #);
+     onAstReplaced:< event (* invoked when an ast have been replaced in ff[] *)
+       (# oldAst,newAst: ^astInterface.ast; 
+       enter (oldAst[],newAst[])
+       do INNER ; 
+       #);
+     onAstReplacedSequence:< astEvent
+     (* invoked when an ast have been replaced in ff[] *)
+       (#  do INNER #);
+     onListElementInserted:< astEvent
+     (* invoked when a new list element have been inserted in node[] *)
+       (# position: @integer;  enter position do INNER ;  #);
+     onListElementsDeleted:< astEvent
+     (* invoked when a list of elements have been deleted from node[] *)
+       (# oldElements: ^astInterface.astList; position,length: @integer
+       enter (position,length,oldElements[])
+       do INNER ; 
+       #);
+     onListElementsReplaced:< astEvent
+     (* invoked when a list of elements have been replaced in node[] *)
+       (#
+          oldElements: ^astInterface.astList;
+          position,length,newLength: @integer
+       enter (position,length,oldElements[],newLength)
+       do INNER ; 
+       #)
+  #);
 codeEditor: codeViewer
   (#
      edenv: ^editorEnv;
      thisGroupEditor: ^editorEnv.groupeditor;
      thePropertyEditor: ^propertyEditor;
      ffh: ^editorEnv.fragmentFormHandler;
+     ffObserver: @fragmentFormObserver
+       (# onAstReplaced:: (#  <<SLOT ffObserverOnAstReplaced:DoPart>> #)
+       #);
      theEditMenu: ^codeEditorEditMenu;
      theViewMenu: ^codeEditorViewMenu;
      theSLOTsMenu: ^codeEditorSLOTsMenu;
@@ -53,9 +139,12 @@ codeEditor: codeViewer
      editingMode: @integer;
      structureMode: (#  exit 0 #);
      editLexemMode: (#  exit 1 #);
-     editAndParseMode: (#  exit 2 #);
+     editAndParseMode:
+       (#  exit 2 #);
      askBeforeTextediting::< 
-       (#  <<SLOT codeeditorAskBeforeTextediting:DoPart>> #);
+       (# 
+       <<SLOT codeeditorAskBeforeTextediting:DoPart>>
+       #);
      askBeforeTexteditingMessage::< 
        (#  <<SLOT codeeditorAskBeforeTexteditingMessage:DoPart>> #);
      adaptivePrettyprinting:: 
@@ -2369,6 +2458,24 @@ editorenv: sifEditorEnv
             #);
           aListElementsReplacedEvent: @listElementsreplacedEvent;
           
+       #);
+     ffSubjectHandler: @list
+       (#
+          element:: fragmentFormSubject;
+          private: @<<SLOT editorenvffSubjectHandlerPrivate:Descriptor>>;
+          attach:
+            (#
+               ffObserver:
+                 ^fragmentFormObserver
+            enter ffObserver[]
+            <<SLOT editorenvAttach:DoPart>>
+            #);
+          detach:
+            (#
+               ffObserver: ^fragmentFormObserver
+            enter ffObserver[]
+            <<SLOT editorenvDetach:DoPart>>
+            #)
        #);
      externalFragmentFormHandler:
        (#
