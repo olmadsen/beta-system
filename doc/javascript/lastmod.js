@@ -58,7 +58,7 @@ if (lastmodnumber == 0) {
     // For dates in 19xx
     //   Both browsers report year=xx
     // There is another function called getFullYear, which works,
-    // *except* that Netscape 4.5 for windows report year=1900 then (:-(
+    // *except* that Netscape 4.5 for windows reports year=1900 (:-(
     // The following works for all variants of the two browser, I have
     // tried :
     year %= 100;
