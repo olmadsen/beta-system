@@ -77,13 +77,15 @@ sub findprogs
 sub print_status()
 {
     my ($status, $msg, $prog) = @_;
-    print sprintf("%-7s",$status) . " : " . sprintf("%-40s",$msg) . " : " . $prog . "\n";
+    print SUMMARY sprintf("%-7s",$status) . " : " . sprintf("%-40s",$msg) . " : " . $prog . "\n";
 }
 
 sub print_summary
 {
-    print "\nProgram run status ($target):\n";
-    print "===============================\n";
+    open SUMMARY, ">run.demos.$target.summary";
+
+    print SUMMARY "\nProgram run status ($target):\n";
+    print SUMMARY "===============================\n";
     foreach $prog (sort keys %progs){
 	$status = &get_prog_status($prog);
 	if (! defined($status)){
@@ -112,6 +114,12 @@ sub print_summary
 	}
     }
     print "\n";
+
+    close SUMMARY;
+
+    &cat("run.demos.$target.summary");
+
+    print "\n[This summary available in file run.demos.$target.summary]\n";
 }
    
 sub expand_envvar
@@ -191,6 +199,13 @@ sub compare_expected()
     }
 }
 
+sub declare_success()
+{
+    local ($dir, $exec) = @_;
+    $progs{&trim_path("$dir/$exec")} = 0;
+    $status{&trim_path("$dir/$exec")} = 1;
+}
+    
 
 sub find_local_progs()
 {
@@ -409,6 +424,7 @@ sub compile_demo()
 {
     my ($dir, $f) = @_;
     return if ($skip_compile);
+    $dir = "." if ($dir eq "");
     my $compilecmd = &compile_command();
     print "-"x10 . "Compiling " . &trim_path("$dir/$f") . "-"x10  . "\n"; 
     &pushd($dir);
@@ -418,8 +434,12 @@ sub compile_demo()
     } else {
 	$compilecmd .= " $base";
     }
-    system "$compilecmd > $f.out 2>&1" if (!$verbose);
-    system "$compilecmd" if ($verbose);
+    if ($verbose){
+	print  "$compilecmd\n";
+	system "$compilecmd";
+    } else {
+	system "$compilecmd > $f.out 2>&1";
+    }
     &popd();
     if ((-f &trim_path("$dir/$f")) || (-f &trim_path("$dir/$f.exe"))){
 	#print "Setting status of $dir/$f to 999\n";
