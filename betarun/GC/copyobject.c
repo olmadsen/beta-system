@@ -17,7 +17,7 @@ void tempAOArootsAlloc()
     ptr(long) pointer = ToSpaceLimit; /* points to end of old table */
 
     if ( ! (tempAOAroots = (long *) MALLOC(IOASize)) ){
-	fprintf(output, "Could not allocate AOAroots table.\n");
+	Notify("Could not allocate AOAroots table.");
 	exit(1);
     } 
     AOArootsLimit = (long *) ((char *) tempAOAroots + IOASize);

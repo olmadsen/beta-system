@@ -95,7 +95,7 @@ static ref(Object) AOAalloc( size)
 	AOATopBlock->top = (ptr(long)) Offset( oldTop, size);
 	return (ref(Object)) oldTop;
       }else{
-	fprintf( output, "#AOA warning: Object size is larger then AOABlockSize\n"); 
+	Notify("#AOA warning: Object size is larger then AOABlockSize"); 
 	return 0;
       }
     }else{
@@ -241,8 +241,11 @@ static extendRAFStackArea(void)
 		     "#(AOA: RAF stack area allocated: %d longs)\n", 
 		     newSize/4));
   } else {
-    fprintf(output,"AOA GC: Failed to malloc RAF stack area: %d longs.\n", 
+    char buf[100];
+    sprintf(buf,
+	    "AOA GC: Failed to malloc RAF stack area: %d longs.", 
 	    newSize/4);
+    Notify(buf);
     exit(-1);
   }
   memcpy(newBase, RAFStackBase, oldSize);
@@ -425,7 +428,7 @@ static void FollowObject( theObj)
       return;
       
     case (long) StackObjectPTValue:
-      fprintf( output,"FollowObject: OOPS a StackObject in AOA.\n");
+      Notify("FollowObject: Error: StackObject in AOA.");
       return;
       
     case (long) StructurePTValue:
@@ -743,7 +746,9 @@ static void Phase3()
     table = IOA;
   else {
     if( !(table = (ptr(long)) MALLOC( AOAtoIOACount * 4))){
-      fprintf(output,"#Phase3: malloc failed %d longs\n", AOAtoIOACount);
+      char buf[50];
+      sprintf(buf,"#Phase3: malloc failed %d longs\n", AOAtoIOACount);
+      Notify(buf);
       exit(-1);
     }
     INFO_AOA( fprintf( output, "#(AOA: new block for table %d longs)\n",

@@ -75,7 +75,7 @@ void CNewVR(ref(Object) theObj,
 	      break;
 #endif
 	    default:
-	      fprintf(output, "NewValRep: wrong prototype\n");
+	      Notify("NewValRep: wrong prototype");
 	      exit(1);
 	    }
 #ifdef hppa

@@ -9,11 +9,12 @@
 void BetaExit( number )
      long number;
 {
+  char buf[100];
   InfoS_End();
 #ifdef RTDEBUG
-  fprintf(output, "NumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d", 
+  sprintf(buf, "NumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d", 
 	  NumIOAGc, NumAOAGc, NumLVRAGc);
-  fprintf(output, "\n");
+  Notify(buf);
 #endif /* RTDEBUG */
 #ifdef apollo
   AsmExit( number );

@@ -148,7 +148,7 @@ You may order an unconstrained version from\n",
     
     /* Follow ActiveComponent */ 
     if (!ActiveComponent && NumIOAGc == 1) {
-      fprintf(output, "#BETA: Could not allocate basic component\n");
+      Notify("Could not allocate basic component");
       exit(1);
     }
     ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
@@ -351,8 +351,10 @@ You may order an unconstrained version from\n",
     
     if (IOATop+4*ReqObjectSize > IOALimit)
       if (IOALooksFullCount > 2) {
-	fprintf(output, "Sorry, IOA is full: cannot allocate %d bytes.\n"
+	char buf[100];
+	sprintf(buf, "Sorry, IOA is full: cannot allocate %d bytes.\n"
 		"Program terminated.\n", 4*ReqObjectSize);
+	Notify(buf);
 	BetaExit(1);
       } else
 	IOALooksFullCount++;

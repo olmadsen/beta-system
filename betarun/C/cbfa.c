@@ -7,60 +7,65 @@
 
 void CBFAAlloc()
 {
-    /* Allocate the Call Back Functions Area. */
-    if ( CBFABlockSize < 0 ) {
-	fprintf(output,"#Beta: Too small CBFA specified %dKb\n", CBFABlockSize/Kb);
-	fprintf(output,"#Beta: Check your BETART environment variable\n");
-	exit(1);
-    }
-    if ( CBFABlockSize == 0 ) {
-	INFO_CBFA( fprintf(output,"#CBFA: Warning, CBFA size of 0Kb specified\n"));
-	INFO_CBFA( fprintf(output,"#CBFA: Check your BETART environment variable\n"));
-    } else {
+  /* Allocate the Call Back Functions Area. */
+  if ( CBFABlockSize < 0 ) {
+    char buf[100];
+    sprintf(buf, "Too small CBFA specified: %dKb", CBFABlockSize/Kb);
+    Notify2(buf, "Check your BETART environment variable");
+    exit(1);
+  }
+  if ( CBFABlockSize == 0 ) {
+    INFO_CBFA( Notify2("Warning, CBFA size of 0Kb specified.",
+		       "CBFA: Check your BETART environment variable"));
+  } else {
 #ifdef hppa
-	(void) MALLOC(16); /* to avoid spurious bug, with overwriten CBFA */
+    (void) MALLOC(16); /* to avoid spurious bug, with overwriten CBFA */
 #endif
-	if ( ! (CBFA = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {
-	    fprintf(output,"#Beta: Couldn't allocate CBFA\n");
-	    exit(1);
-	}
-	lastCBFA = CBFA;
-	if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
-	    fprintf(output,"#Beta: Couldn't allocate CBFA (%dKb)\n", CBFABlockSize/Kb);
-	    exit(1);
-	}
-	lastCBFA->next = 0;
-	CBFATop = lastCBFA->entries;
-	CBFALimit = cast(CallBackEntry) ((long) lastCBFA->entries + CBFABlockSize);
+    if ( ! (CBFA = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {
+      Notify("Couldn't allocate CBFA");
+      exit(1);
     }
-    INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb) );
-}
-
-void CBFArelloc()
-{
-    /* BetaError(CBFAfullErr, 0); */
-    
-    if ( CBFABlockSize == 0 ) {
-	fprintf(output,"#CBFA: Using callbacks and CBFA size of 0Kb specified\n");
-	fprintf(output,"#Beta: Check your BETART environment variable\n");
-	exit(1);
-    }
-	
-    /* Allocate new CBFA block */
-    if ( ! (lastCBFA->next = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {
-	fprintf(output,"#Beta: Couldn't allocate CBFA\n");
-	exit(1);
-    }
-    lastCBFA = lastCBFA->next;
+    lastCBFA = CBFA;
     if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
-	fprintf(output,"#Beta: Couldn't allocate CBFA (%dKb)\n", CBFABlockSize/Kb);
-	exit(1);
+      char buf[100];
+      fprintf(buf,"Couldn't allocate CBFA (%dKb)\n", CBFABlockSize/Kb);
+      Notify(buf);
+      exit(1);
     }
     lastCBFA->next = 0;
     CBFATop = lastCBFA->entries;
     CBFALimit = cast(CallBackEntry) ((long) lastCBFA->entries + CBFABlockSize);
-    
-    INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb) );
+  }
+  INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb) );
+}
+
+void CBFArelloc()
+{
+  /* BetaError(CBFAfullErr, 0); */
+  
+  if ( CBFABlockSize == 0 ) {
+    Notify2("Using callbacks and CBFA size of 0Kb specified",
+	    "Check your BETART environment variable");
+    exit(1);
+  }
+  
+  /* Allocate new CBFA block */
+  if ( ! (lastCBFA->next = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {
+    Notify("Couldn't allocate CBFA");
+    exit(1);
+  }
+  lastCBFA = lastCBFA->next;
+  if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
+    char buf[100];
+    sprintf(buf,"Couldn't allocate CBFA (%dKb)", CBFABlockSize/Kb);
+    Notify(buf);
+    exit(1);
+  }
+  lastCBFA->next = 0;
+  CBFATop = lastCBFA->entries;
+  CBFALimit = cast(CallBackEntry) ((long) lastCBFA->entries + CBFABlockSize);
+  
+  INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb) );
 }
 
 void freeCBF(external_entry)
@@ -69,7 +74,7 @@ void freeCBF(external_entry)
   /* For now we just clear the struct of the entry  */
   struct CallBackEntry *theCBE 
     = (struct CallBackEntry *)(external_entry - sizeof(struct Structure *));
-
+  
 #ifdef RTDEBUG
   Claim(inBetaHeap((ref(Object))(theCBE->theStruct)), 
 	"inBetaHeap(theCBE->theStruct)");
@@ -83,19 +88,19 @@ void freeCBF(external_entry)
 #endif /* sparc */
   Claim(CBFABlockSize != 0, "CBFABlockSize != 0");
   Claim(CBFATop != CBFA->entries, "CBFATop != CBFA->entries");
-
+  
   { ref(CallBackArea) cbfa = CBFA;
     ref(CallBackEntry) current = cbfa->entries;
     long limit = (long) cbfa->entries + CBFABlockSize;
     int found = 0;
-
+    
     for (; current != CBFATop;
 	 current=(ref(CallBackEntry))((long)current+CallBackEntrySize)){
       if ( (long) current >= limit){
 	/* Go to next block */
 	cbfa = cbfa->next;        
 	/* guarentied to be non-nil since current != CBFATop */
-	  
+	
 	current = cbfa->entries; 
 	/* guarentied to be different from CBFATop. 
 	 * If not the block would not have been allocated 
@@ -110,17 +115,16 @@ void freeCBF(external_entry)
     Claim(found, "CallbackEntry is in CBFA");
   }
 #endif /* RTDEBUG */
-
+  
   theCBE->theStruct = 0;
   /* theStruct will no longer constitute a root for GC */
-
+  
 }
 
 void freeCallbackCalled()
 {
-  fprintf(output, 
-	  "Call of Callback function, that has been explicitly freed!\n"
-	  );
+  Notify2("Call of Callback function, that has been explicitly freed.",
+	  "Ignored.");
 }
 
 /* makeCBF: 

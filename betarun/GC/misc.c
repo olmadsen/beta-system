@@ -93,7 +93,7 @@ void RotateTheCursorBack() { if(StandAlone == 0 || gcRotateCursor) SpinCursor(-3
 void NotifyRTDebug() 
 {
 #ifdef RTDEBUG
-  fprintf(output, "RTS: Runtime routines perform consistency checks on registers.\n");
+  Notify("RTS: Runtime routines perform consistency checks on registers.");
 #endif /* RTDEBUG */
 }
 

@@ -1,5 +1,17 @@
 /* macroes */
 
+#ifdef macintosh
+#define Notify(s1)           CPrompt(s1, "", "", "");
+#define Notify2(s1,s2)       CPrompt(s1, s2, "", "");
+#define Notify3(s1,s2,s3)    CPrompt(s1, s2, s3, "");
+#define Notify4(s1,s2,s3,s4) CPrompt(s1, s2, s3, s4);
+#else /* not macintosh */
+#define Notify(s1)           fprintf(output, "%s\n", s1);
+#define Notify2(s1,s2)       fprintf(output, "%s\n%s\n", s1, s2);
+#define Notify3(s1,s2,s3)    fprintf(output, "%s\n%s\n%s\n", s1, s2, s3);
+#define Notify4(s1,s2,s3,s4) fprintf(output, "%s\n%s\n%s\n%s\n", s1, s2, s3, s4);
+#endif
+
 #define inHeap(x)    (inIOA(x) || inLVRA(x))
 #define inIOA(x)     (((long)IOA <= (long)(x)) && ((long)(x) < (long)IOATop))
 #define inToSpace(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceTop)) 

@@ -34,9 +34,12 @@ ParamThis(struct Component *, Susp)
    */
   Ck(this);
   if (ActiveCallBackFrame)
-    if (SuspCont)
-      fprintf (stderr, "WARNING!! Suspending component involving callback. (SuspCont is TRUE)\n");
-    else
+    if (SuspCont) {
+      /* This is a test. On SPARC it should work to suspend components
+       * even if they involve callbacks. */
+      DEBUG_STACK(fprintf(stderr,
+			  "Suspending component involving callback.\n"));
+    } else
       BetaError(CompCallBackErr, this);
   
   

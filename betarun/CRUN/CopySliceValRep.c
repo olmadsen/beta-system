@@ -109,7 +109,7 @@ void CCopySVR(ref(ValRep) theRep,
 	}
 	break;
       default:
-	fprintf(output, "CopySliceValRep: wrong prototype\n");
+	Notify("CopySliceValRep: wrong prototype");
 	exit(1);
     }
         

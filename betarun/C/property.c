@@ -55,8 +55,11 @@ static BooleanProperty( name)
 
   ENTRY("infos", isStatRecordOn = TRUE);
 
-  /* IF NO ENTRY IS SELECTED PLEASE REPORT UNKNOWN PROPERTY */
-  fprintf( output, "#Property '%s' not known!\n", name);
+  /* IF NO ENTRY IS SELECTED REPORT UNKNOWN PROPERTY */
+  { char buf[100];
+    sprintf( buf, "Property '%s' not known!", name);
+    Notify(buf);
+  }
 }
 
 #ifndef DEMO
@@ -78,13 +81,17 @@ static ValueProperty( name, value)
   ENTRY("ioapercentage",
         IOAPercentage = intScan(name, value);
         if( IOAPercentage < 3 ){
-	  fprintf( output, "#IOAPercentage (%d) is too low, adjusted to 3\n",
-		   IOAPercentage);
-	  LVRAPercentage = 3;
+	  char buf[100];
+	  sprintf(buf, "IOAPercentage (%d) is too low, adjusted to 3.",
+		  IOAPercentage);
+	  Notify(buf);
+	  IOAPercentage = 3;
 	}
 	if( IOAPercentage > 40 ){
-	  fprintf( output, "#IOAPercentage (%d) is too high, adjusted to 40\n",
+	  char buf[100];
+	  sprintf( buf, "IOAPercentage (%d) is too high, adjusted to 40\n",
 		   IOAPercentage);
+	  Notify(buf);
 	  IOAPercentage = 40;
 	});
 
@@ -94,13 +101,17 @@ static ValueProperty( name, value)
 	AOAPercentage = intScan(name, value);
 	AOAMinFree = 0;
         if( AOAPercentage < 3 ){
-	  fprintf( output, "#AOAPercentage (%d) is too low, adjusted to 3\n",
+	  char buf[100];
+	  sprintf(buf, "AOAPercentage (%d) is too low, adjusted to 3\n",
 		  AOAPercentage);
+	  Notify(buf);
 	  AOAPercentage = 3;
 	}
 	if( AOAPercentage > 97 ){
-	  fprintf( output, "#AOAPercentage (%d) is too high, adjusted to 97\n",
+	  char buf[100];
+	  sprintf(buf, "AOAPercentage (%d) is too high, adjusted to 97\n",
 		  AOAPercentage);
+	  Notify(buf);
 	  AOAPercentage = 97;
 	});
 
@@ -110,26 +121,34 @@ static ValueProperty( name, value)
 	LVRAPercentage = intScan(name, value);
 	LVRAMinFree = 0;
         if( LVRAPercentage < 3 ){
-	  fprintf( output, "#LVRAPercentage (%d) is too low, adjusted to 3\n",
-		   LVRAPercentage);
+	  char buf[100];
+	  sprintf(buf, "LVRAPercentage (%d) is too low, adjusted to 3",
+		  LVRAPercentage);
+	  Notify(buf);
 	  LVRAPercentage = 3;
 	}
 	if( LVRAPercentage > 97 ){
-	  fprintf( output, "#LVRAPercentage (%d) is too high, adjusted to 97\n",
-		   LVRAPercentage);
+	  char buf[100];
+	  sprintf(buf, "LVRAPercentage (%d) is too high, adjusted to 97",
+		  LVRAPercentage);
+	  Notify(buf);
 	  LVRAPercentage = 97;
 	});
 
   ENTRY("infofile",
     if( !(output = fopen(value, "w")) ){
-      
-      fprintf( stderr, "#InfoFile '%s' couldn't be opened, stderr is used\n", value);
+      char buf[100];
       output = stderr;
+      sprintf(buf, "InfoFile '%s' couldn't be opened, stderr is used", value);
+      Notify(buf);
     });
 
    
-  /* IF NO ENTRY IS SELECTED PLEASE REPORT UNKNOWN PROPERTY */
-  fprintf( output, "#Property '%s#%s' not known!\n", name, value);
+  /* IF NO ENTRY IS SELECTED REPORT UNKNOWN PROPERTY */
+  { char buf[100];
+    sprintf(buf, "Property '%s#%s' not known!\n", name, value);
+    Notify(buf);
+  }
 }
 #endif DEMO
 
@@ -147,7 +166,9 @@ static long intScan( name, value)
     if( (*pointer >= '0') && ( *pointer <= '9') )
       result = result + (long) *pointer++ - (long) '0';
     else{
-      fprintf( output,"#Property '%s': '%s' is not an integer, 0 is assumed!\n", name, value);
+      char buf[100];
+      sprintf(buf,"Property '%s': '%s' is not an integer, 0 is assumed.", name, value);
+      Notify(buf);
       return 0;
     }
   }

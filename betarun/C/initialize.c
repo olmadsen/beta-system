@@ -50,15 +50,15 @@ void Prompt(char *msg1, char *msg2, char *msg3, char *msg4)
 Mj\277lner BETA System - DEMO VERSION rel. 2.6\n\
 \n\
 This program is constructed using a DEMO version "
-
+  
 #define DEMOSTRING2 "\p\
 of the Mj\277lner BETA System and may only be used \
 for evaluation purposes and not for any teaching \
 or commercial purposes. Use of the program is "
-
+  
 #define DEMOSTRING3 "\p\
 subject to the restrictions in the demo license."
-
+  
 #define DEMOSTRING4 ""
 #else
 #define DEMOSTRING "\n\
@@ -74,16 +74,16 @@ subject to the restrictions in the demo license."
 \n"
 #endif
 #endif
-
-long AllocateHeap( base, top, limit, size)
-  ptr(long) base; /* points out a cell which should refer the base. */
-  ptr(long) top;
-  ptr(long) limit;
-  long size;      /* the size of the requested heap in bytes.       */
+  
+  long AllocateHeap( base, top, limit, size)
+ptr(long) base; /* points out a cell which should refer the base. */
+     ptr(long) top;
+     ptr(long) limit;
+     long size;      /* the size of the requested heap in bytes.       */
 {
   if( (*base = (long) MALLOC( size)) != 0){
     *top   = *base;
-
+    
     *limit = *base + size; 
     return *base;
   }else
@@ -94,7 +94,7 @@ Initialize()
 {
   /* This hack is to cope with the sparc, where
      IOA and IOATop(off) is register vars */
-
+  
   long *tmpIOA, *tmpIOATop;
 #ifdef macintosh
   InitGraf((Ptr) &qd.thePort);
@@ -109,9 +109,9 @@ Initialize()
   CouldAlert(PromptID);
   CouldAlert(CPromptID);
 #endif
-
+  
   GetBetaEnv();
-
+  
 #ifdef DEMO
 #ifdef macintosh
   Prompt(DEMOSTRING1, DEMOSTRING2, DEMOSTRING3, DEMOSTRING4);
@@ -119,89 +119,94 @@ Initialize()
   fprintf(stdout, DEMOSTRING);
 #endif
 #endif
-
+  
   InterpretItem[0] = 0;
   InterpretItem[1] = 0;
-
+  
 #ifdef RTDEBUG
-  fprintf(output, "RTS: Garbage collector may perform consistency checks on heaps (use BETART).\n");
+  Notify("RTS: Garbage collector may perform consistency checks on heaps (use BETART).");
 #endif
-
+  
   INFO( fprintf( output, "#(Heap info: IOA=2*%dKb", IOASize/Kb) );
   INFO( fprintf( output, ", AOABlock=%dKb", AOABlockSize/Kb) );
   INFO( fprintf( output, ", LVRABlock=%dKb", LVRABlockSize/Kb) );
   INFO( fprintf( output, ", CBFABlock=%dKb\n", CBFABlockSize/Kb) );
-
+  
   /* Setup the Infant Object Area */
   if ( IOASize <= 0 ) {
-      fprintf(output,"#Beta: Too small IOA size specified: %dKb\n", IOASize/Kb);
-      fprintf(output,"#Beta: Check your BETART environment variable\n");
-      exit(1);
-  }
-  if( !AllocateHeap( &tmpIOA,     &tmpIOATop,     &IOALimit, IOASize ) ){
-    fprintf(output,"#Beta: Couldn't allocate IOA (%dKb)\n", IOASize/Kb);
+    char buf[100];
+    sprintf(buf,"Too small IOA size specified: %dKb", IOASize/Kb);
+    Notify2(buf, "Check your BETART environment variable.");
     exit(1);
   }
-
+  if( !AllocateHeap( &tmpIOA,     &tmpIOATop,     &IOALimit, IOASize ) ){
+    char buf[100];
+    sprintf(buf,"Couldn't allocate IOA (%dKb)", IOASize/Kb);
+    Notify(buf);
+    exit(1);
+  }
+  
 #ifdef hppa
   setIOAReg(tmpIOA);
   setIOATopoffReg(tmpIOATop - tmpIOA);
   setRefSP((void *)&ReferenceStack[0]);
 #endif
-
+  
 #ifdef mc68020
   IOA = tmpIOA;
   IOATop = tmpIOATop;
 #endif
-
+  
 #if defined(linux) || defined(nti)
   IOA = tmpIOA;
   IOATop = tmpIOATop;
 #endif
-
+  
 #ifdef sparc
   IOA = tmpIOA;
   IOATopoff = tmpIOATop - IOA;
 #endif
-
+  
   if( !AllocateHeap( &ToSpace, &ToSpaceTop, &ToSpaceLimit, IOASize ) ){
-    fprintf(output,"#Beta: Couldn't allocate ToSpace (%dKb)\n", IOASize/Kb);
+    char buf[100];
+    sprintf(buf,"Couldn't allocate ToSpace (%dKb)\n", IOASize/Kb);
+    Notify(buf);
     exit(1);
   }
-
+  
   /* Allocate the Callback Function Area */
   CBFAAlloc();
-
+  
 #ifndef sun4s
 #ifdef UNIX
-   { /* Setup signal handles for the Beta system */
-     signal( SIGFPE,  BetaSignalHandler);
-     signal( SIGILL,  BetaSignalHandler);
-     signal( SIGBUS,  BetaSignalHandler);
-     signal( SIGSEGV, BetaSignalHandler);
+  { /* Setup signal handles for the Beta system */
+    signal( SIGFPE,  BetaSignalHandler);
+    signal( SIGILL,  BetaSignalHandler);
+    signal( SIGBUS,  BetaSignalHandler);
+    signal( SIGSEGV, BetaSignalHandler);
 #ifndef linux
-     signal( SIGEMT,  BetaSignalHandler);
+    signal( SIGEMT,  BetaSignalHandler);
 #endif
 #ifdef apollo
-     signal( SIGINT,  BetaSignalHandler);
-     signal( SIGQUIT, BetaSignalHandler);
+    signal( SIGINT,  BetaSignalHandler);
+    signal( SIGQUIT, BetaSignalHandler);
 #endif
-   }
+  }
 #endif
-
+  
 #else /* sun4s */
   /* sbrandt 9/7 93. See man sigaction and <sys/signal.h>. */
   { /* Setup signal handlers for the Beta system */
     struct sigaction sa;
-
+    
     /* Specify that we want full info about the signal, and that
      * the handled signal should not be blocked while being handled: */
     sa.sa_flags = SA_SIGINFO | SA_NODEFER;
-
+    
     /* No further signals should be blocked while handling the specified
      * signals. */
     sigemptyset(&sa.sa_mask); 
-
+    
     /* Specify handler: */
     sa.sa_handler = BetaSignalHandler;
     
@@ -212,7 +217,7 @@ Initialize()
     sigaction( SIGEMT,  &sa, 0);
   }
 #endif /* sun4s */
-
+  
   InfoS_Start();
 }
 
