@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "betapng.h"
+#include "colorhash.h"
 
 static void SetBit(unsigned char *data, unsigned long n)
 {
@@ -663,7 +664,7 @@ void write_pixels_to_png_area_rgb(HBITMAP hbmp, int x, int y, int width, int hei
   return;
 }
 
-static BetaPalette std;
+static BetaPalette _std;
 
 
 static void InitPalette(void)
@@ -676,77 +677,67 @@ static void InitPalette(void)
   }
   initialized = 1;
 
-  MakeColorMap1(&std);
-  BetaInitRGBmap(&std);
-  for(i = 0; i < std.ncolors; i++) {
-    std.xpixel[i] = i;
+  MakeColorMap1(&_std);
+  BetaInitRGBmap(&_std);
+  for(i = 0; i < _std.ncolors; i++) {
+    _std.xpixel[i] = i;
   }
   return;
 }
 
-void DibsectionToImage8(HBITMAP hbmp, int x, int y, int width, int height,
-                        BetaImage *image8,
-                        int transparent, int t_red, int t_green, int t_blue)
-{
-  BetaImage image;
-  BITMAP bitmap;
-  int result;
-  unsigned char *data;
 
-  InitPalette();
+static void InitCustom(BetaPalette *palette, ColorHash *hash) {
 
-  if(transparent) {
-    std.special.red = t_red;
-    std.special.green = t_green;
-    std.special.blue = t_blue;
-    std.special_set = 1;
-  } else {
-    std.special_set = 0;
-  }
+  int index;
+  int i;
+  ColorHashEntryPtr current;
   
-  result = GetObject((HGDIOBJ) hbmp, sizeof(BITMAP), (void *) &bitmap);
-  
-  if(!result) {
-    return;
-  }
-  data = bitmap.bmBits;
-  
-  BetaCreateImage(&image, width, height, 32, NULL);
-  
-  {
-    int i;
-    int j;
-    unsigned char *row;
-    unsigned char *pixel;
+  index = 0;
 
-    unsigned char *dst_row;
-    unsigned char *dst_pixel;
-
-    row = data + (bitmap.bmWidthBytes * y) + x*4;
-    dst_row = (unsigned char *) image.data;
-    
-    for(i = 0; i < height; i++) {
-      pixel = row;
-      dst_pixel = dst_row;
-      
-      for(j = 0; j < width; j++) {
-        dst_pixel[0] = pixel[2];
-        dst_pixel[1] = pixel[1];
-        dst_pixel[2] = pixel[0];
-        pixel += 4;
-        dst_pixel += 4;
-      }
-      row += bitmap.bmWidthBytes;
-      dst_row += image.rowbytes;
+  for(i = 0; i < hash->nbuckets; i++) {
+    current = hash->buckets[i];
+    while(current) {
+      palette->colormap[index].red = current->color.red;
+      palette->colormap[index].green = current->color.green;
+      palette->colormap[index].blue = current->color.blue;
+      current->index = index;
+      index++;
+      palette->ncolors++;
+      current = current->next;
     }
   }
-
-  BetaDitherImage24To8(&std, &image, image8);
-  free(image.data);
-  image8->palette_size = std.ncolors;
-  image8->palette = std.colormap;
   return;
 }
+
+void Translate24to8(BetaImage *image, BetaImage *image8, ColorHash *hash)
+{
+  unsigned char *src;
+  unsigned char *dst;
+  unsigned char *src_row;
+  unsigned char *dst_row;
+  
+  int i, j;
+  Color color;
+  
+  src_row= image->data;
+  dst_row = image8->data;
+  
+  for (i = 0; i < image->height; i++) {
+    src = src_row;
+    dst = dst_row;
+    for (j = 0; j < image->width; j++) {
+      color.red = src[0];
+      color.green = src[1];
+      color.blue = src[2];
+      *dst = ColorHashLookup(hash, &color);
+      src += 4;
+      dst += 1;
+    }
+    src_row += image->rowbytes;
+    dst_row += image8->rowbytes;
+  }
+}
+
 
 
 void write_pixels_to_png_area_indexed
@@ -759,18 +750,33 @@ void write_pixels_to_png_area_indexed
   png_structp png_ptr;
   png_infop info_ptr;
   unsigned char **rows;
-  unsigned char *image;
+  unsigned char *imagedata;
   long k;
-  int i;
+  int i, j;
   png_color_8 sig_bit;
   
   unsigned char *data;
   unsigned char *line1;
   unsigned char *line2;
   png_colorp palette;
+
+  BetaImage image;
+  BITMAP bitmap;
+  int result;
+
+  unsigned char *row;
+  unsigned char *pixel;
   
+  unsigned char *dst_row;
+  unsigned char *dst_pixel;
+
+  ColorHash hash;
+  Color color;
   BetaImage image8;
 
+  BetaPalette *pal;
+  BetaPalette custom;
+  
   
   fp = fopen(file_name, "wb");
 
@@ -778,33 +784,57 @@ void write_pixels_to_png_area_indexed
     return;
   }
 
-  
   BetaCreateImage(&image8, width, height, 8, NULL);
-
-  DibsectionToImage8(hbmp, x, y, width, height, &image8, transparent, t_red, t_green, t_blue);
+  result = GetObject((HGDIOBJ) hbmp, sizeof(BITMAP), (void *) &bitmap);
   
-  png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+  if(!result) {
+    return;
+  }
+  data = bitmap.bmBits;
+  
+  BetaCreateImage(&image, width, height, 32, NULL);
 
+
+  row = data + (bitmap.bmWidthBytes * y) + x*4;
+  dst_row = (unsigned char *) image.data;
+  
+  for(i = 0; i < height; i++) {
+    pixel = row;
+    dst_pixel = dst_row;
+    
+    for(j = 0; j < width; j++) {
+      dst_pixel[0] = pixel[2];
+      dst_pixel[1] = pixel[1];
+      dst_pixel[2] = pixel[0];
+      pixel += 4;
+      dst_pixel += 4;
+    }
+    row += bitmap.bmWidthBytes;
+    dst_row += image.rowbytes;
+  }
+
+  png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+  
   if(!png_ptr) {
     fclose(fp);
     return;
   }
-
+  
   info_ptr = png_create_info_struct(png_ptr);
-
+  
   if(!info_ptr) {
     fclose(fp);
     png_destroy_write_struct(&png_ptr, NULL);
     return;
   }
-
+  
   if(setjmp(png_ptr->jmpbuf)) {
     fclose(fp);
     png_destroy_write_struct(&png_ptr, NULL);
     return;
   }
-
-
+  
+  
   png_init_io(png_ptr, fp);
   png_set_compression_level(png_ptr, Z_BEST_COMPRESSION);
   
@@ -812,46 +842,97 @@ void write_pixels_to_png_area_indexed
                3, PNG_INTERLACE_NONE,
                PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
+
+  ColorHashInit(&hash);
+  dst_row = (unsigned char *) image.data;
+  for(i = 0; i < height; i++) {
+    dst_pixel = dst_row;
+    for(j = 0; j < width; j++) {
+      color.red = dst_pixel[0];
+      color.green = dst_pixel[1];
+      color.blue = dst_pixel[2];
+      ColorHashInsert(&hash, &color);
+      dst_pixel += 4;
+    }
+    dst_row += image.rowbytes;
+  }
+
+  if(hash.count < 256) {
+    InitCustom(&custom, &hash);
+    pal = &custom;
+    if(transparent) {
+      pal->special.red = t_red;
+      pal->special.green = t_green;
+      pal->special.blue = t_blue;
+      pal->special_set = 1;
+      hash.special.red = t_red;
+      hash.special.green = t_green;
+      hash.special.blue = t_blue;
+      hash.special_set = 1;
+      
+    } else {
+      pal->special_set = 0;
+      hash.special_set = 0;
+    }
+    
+    Translate24to8(&image, &image8, &hash);
+
+    
+  } else {
+    InitPalette();
+    pal = &_std;
+    if(transparent) {
+      pal->special.red = t_red;
+      pal->special.green = t_green;
+      pal->special.blue = t_blue;
+      pal->special_set = 1;
+    } else {
+      pal->special_set = 0;
+    }
+    BetaDitherImage24To8(pal, &image, &image8);
+  }
+  
+  free(image.data);
+  image8.palette_size = pal->ncolors;
+  image8.palette = pal->colormap;
+  
   if(transparent) {
     png_byte index;
     
-    palette = (png_colorp)malloc((std.ncolors+1) * sizeof (png_color));
+    palette = (png_colorp)malloc((pal->ncolors+1) * sizeof (png_color));
     /* ... set palette colors ... */
     
-    for(i = 0; i < std.ncolors; i++) {
-      palette[i+1].red = std.colormap[i].red;
-      palette[i+1].green = std.colormap[i].green;
-      palette[i+1].blue = std.colormap[i].blue;
+    for(i = 0; i < pal->ncolors; i++) {
+      palette[i+1].red = pal->colormap[i].red;
+      palette[i+1].green = pal->colormap[i].green;
+      palette[i+1].blue = pal->colormap[i].blue;
     }
-    palette[0].red = std.special.red;
-    palette[0].green = std.special.green;
-    palette[0].blue = std.special.blue;
+    palette[0].red = pal->special.red;
+    palette[0].green = pal->special.green;
+    palette[0].blue = pal->special.blue;
     index = 0;
-    png_set_PLTE(png_ptr, info_ptr, palette, std.ncolors+1);
+    png_set_PLTE(png_ptr, info_ptr, palette, pal->ncolors+1);
     png_set_tRNS(png_ptr, info_ptr, &index, 1, NULL);
     
   } else {
-    palette = (png_colorp)malloc(std.ncolors * sizeof (png_color));
+    palette = (png_colorp)malloc(pal->ncolors * sizeof (png_color));
     /* ... set palette colors ... */
-    for(i = 0; i < std.ncolors; i++) {
-      palette[i].red = std.colormap[i].red;
-      palette[i].green = std.colormap[i].green;
-      palette[i].blue = std.colormap[i].blue;
+    for(i = 0; i < pal->ncolors; i++) {
+      palette[i].red = pal->colormap[i].red;
+      palette[i].green = pal->colormap[i].green;
+      palette[i].blue = pal->colormap[i].blue;
     }
-    png_set_PLTE(png_ptr, info_ptr, palette, std.ncolors);
+    png_set_PLTE(png_ptr, info_ptr, palette, pal->ncolors);
   }
-  
-   
-
   
   png_write_info(png_ptr, info_ptr);
   
   rows = (unsigned char **) malloc(height * sizeof(unsigned char *));
-  image = image8.data;
+  imagedata = image8.data;
   
   for(k = 0; k < height; k++) {
-    rows[k] = image;
-    image += image8.rowbytes;
+    rows[k] = imagedata;
+    imagedata += image8.rowbytes;
   }
 
   png_write_image(png_ptr, rows);

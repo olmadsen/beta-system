@@ -239,7 +239,6 @@ static int  fserrmap[512];   /* -255 .. 0 .. +255 */
 static int FSError(int comp)
 {
   return fserrmap[256 + comp];
-  return comp;
 }
 
 static void fsclamp(Color *color)
