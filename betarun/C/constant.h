@@ -96,3 +96,11 @@
 #define REFTYPE_OFFLINE  1
 #define REFTYPE_ORIGIN   2
 
+/* Possible values of the stacktype:
+ *
+ * These constants are replicated in ~debugger/processCommCodes.bet. 
+*/
+#define CS_PROCESSORSTACK  1  /* component stack on processor stack. */
+#define CS_ACTIVECOMPONENT 2  /* component is the currently active.  */
+#define CS_STACKOBJ        3  /* component stack in stack object.    */
+#define CS_NOSTACK         4  /* component has no stack.             */
