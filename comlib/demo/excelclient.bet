@@ -23,6 +23,8 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
    
    excel_progid: (# exit 'Excel.Application' #);
    
+   use_abstraction: (# exit true #);
+   
    use_dual: (# exit false (* does NOT work?? *)#);
    dual: ^Workbooks;
    RHS: @int32holder;
@@ -52,7 +54,8 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
         
         check: 
           (# add: @integer;
-          do (if cArgs+1>maxArgs then
+          do 'check' -> putline;
+             (if cArgs+1>maxArgs then
                  (2*rgvarg.range, cArgs+1) -> max -> add;
                  add -> rgvarg.extend;
                  add -> alpszArgNames.extend;
@@ -95,15 +98,20 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
           do varg[]->VARIANT_init
              (# 
              do VT_BOOL -> vt;
-                value -> bool;
+                (if value then
+                    VARIANT_TRUE -> bool;
+                 else
+                    VARIANT_FALSE -> bool;
+                if);                    
              #);
           #);
      #);
    
-   DispatchInvoke:
+   CallInvoke:
      (# pdisp: ^IDispatch;
         member: ^text;
         params: ^DispatchParams;
+        dParms: @DISPPARAMS;
         wAction: @integer;
         vReturn: ^VARIANT;
         cNamedArgs: @integer;
@@ -112,21 +120,24 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
      do params.cNamedArgs -> cNamedArgs;
         (* Look up DISPIDs of member name, and any possibly arguments
          * previously put to params.
-         * 
+         *)
         params.check
-        (# do member[] -> wstr.set; (wstr, 0) -> alpszArgNames.inxPut; #);
+        (# 
+        do member[] -> wstr.set; 
+           (wstr, 0) -> params.alpszArgNames.inxPut;
+        #);
         (IID_NULL, params.alpszArgNames, 1+cNamedArgs, lcid, params.rgdispidNamedArgs)
           -> pDisp.GetIdsOfNames
           -> hr;
         (if hr.succeeded then
             'Got Id for \'' -> puttext;
-            Name[]->puttext;
+            member[]->puttext;
             '\': ' -> puttext;
             dispid.value -> putint;
             newline;
          else
             ('GetIdsOfNames Failed', hr.value) -> ComErrorMessage;
-            leave DispatchInvoke;
+            leave CallInvoke;
         if);
         
         (* If doing a propertyput, we need to put adjust the first argument
@@ -145,9 +156,9 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
         dparms.cNamedArgs = cNamedArgs;
         
         (* Finally call invoke *)
-        (0->params.rgdispidNamedArgs.inxGet, IID_NULL, lcid, wAction, dParms[], vReturn[], NONE, NONE)
+        (# dummy: @char do (0->params.rgdispidNamedArgs.inxGet, IID_NULL, lcid, wAction, dParms[], vReturn[], NONE, NONE)
          -> pDisp.Invoke
-         -> hr;
+             -> hr;#);
         (if hr.succeeded then
             'Invoke succeeded' -> putline;
          else
@@ -163,9 +174,9 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
         Name[] -> wstr.set;
         1 -> rgszNames.new;
         (wstr,0) -> rgszNames.inxPut;
-        (IID_NULL, rgszNames, 1, LOCALE_SYSTEM_DEFAULT, dispid[])
+        (*(IID_NULL, rgszNames, 1, LOCALE_SYSTEM_DEFAULT, dispid[])
           -> pDisp.GetIdsOfNames
-          -> hr;
+          -> hr;*)
         (if hr.succeeded then
             'Got Id for \'' -> puttext;
             Name[]->puttext;
@@ -179,7 +190,7 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
         rgszNames.free;
      #);
    
-   dParms: @DispParams;
+   dParms: @DispatchParams;
    
 do 0->CoInitialize;
    LOCALE_USER_DEFAULT -> lcid;
@@ -198,31 +209,37 @@ do 0->CoInitialize;
    (if pDispExcelApp[]<>NONE then
        'Succeeded creating component.'->putLine;
        
-       'Invoking pDispExcelApp.Visible: Getting DispId' -> putline;
-       ('Visible', pDispExcelApp[]) -> GetDispId;
-       'Invoking pDispExcelApp.Visible: Calling Invoke' -> putline;
-       
-       (* Set up parameters for Invoke *)
-       1 -> rgszNames.new;
-       (DISPID_PROPERTYPUT,0) -> rgszNames.inxPut;
-       varg[]->VARIANT_init
-       (# 
-       do VT_BOOL -> vt;
-          VARIANT_TRUE -> bool;
-       #);
-       @@varg -> params.rgvarg; (* Now we're getting insecure! *)
-       rgszNames->params.rgdispidNamedArgs;
-       1->params.cArgs;
-       1->params.cNamedArgs;
-       (dispid.value, IID_NULL, lcid, DISPATCH_PROPERTYPUT, params[], NONE, NONE, NONE)
-         -> pDispExcelApp.Invoke
-         -> hr;
-       (if hr.succeeded then
-           'Invoke succeeded' -> putline;
+       'Invoking pDispExcelApp.Visible:' -> putline;
+       (if use_abstraction then
+           (NONE, true) -> dParms.putBoolean;
+           (pDispExcelApp[], 'Visible', dparms[], DISPATCH_PROPERTYPUT, NONE) 
+             -> CallInvoke;
         else
-           ('Invoke Failed', hr.value) -> ComErrorMessage;
+           'Invoking pDispExcelApp.Visible: Getting DispId' -> putline;
+           ('Visible', pDispExcelApp[]) -> GetDispId;
+           'Invoking pDispExcelApp.Visible: Calling Invoke' -> putline;
+           (* Set up parameters for Invoke *)
+           1 -> rgszNames.new;
+           (DISPID_PROPERTYPUT,0) -> rgszNames.inxPut;
+           varg[]->VARIANT_init
+           (# 
+           do VT_BOOL -> vt;
+              VARIANT_TRUE -> bool;
+           #);
+           @@varg -> params.rgvarg; (* Now we're getting insecure! *)
+           rgszNames->params.rgdispidNamedArgs;
+           1->params.cArgs;
+           1->params.cNamedArgs;
+           (dispid.value, IID_NULL, lcid, DISPATCH_PROPERTYPUT, params[], NONE, NONE, NONE)
+             -> pDispExcelApp.Invoke
+             -> hr;
+           (if hr.succeeded then
+               'Invoke succeeded' -> putline;
+            else
+               ('Invoke Failed', hr.value) -> ComErrorMessage;
+           if);
+           rgszNames.free;
        if);
-       rgszNames.free;
        
        'Adding a sheet to the workbook' -> putline;
        
@@ -269,7 +286,7 @@ do 0->CoInitialize;
        (if use_dual then 
            'Calling Add using vtable' -> putline;
            pdispWorkbooks[] -> dual[]; (* should be a QIF *)
-           (# dummy:@char do (varg, lcid, RHS[]) -> dual.add -> hr;#);
+           (*(# dummy:@char do (varg, lcid, RHS[]) -> dual.add -> hr;#);*)
            (if hr.succeeded then
                'pdispWorkbooks.Add(template:=xlWorksheet) succeeded' -> putline;
             else
