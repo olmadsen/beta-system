@@ -25,37 +25,29 @@ namespace beta.converter
 			  TextWriter outstream,
 			  bool isValue)
 	  {
-			
+	    // Open wrapper
 	    openStream(betalib, ns, "_" + cls, overwrite, outstream);
-	    if (output != null)
-	      putWrapper(resolution, ns, cls, supNs, sup, isValue);
+	    if (output != null) putWrapper(resolution, ns, cls, supNs, sup, isValue);
+	    // Open non-wrapper
 	    openStream(betalib, ns, cls, overwrite, outstream);
 	  }
 
-	public static FileInfo needsConversion(String betalib, 
-					       String ns, 
-					       String cls, 
-					       int overwrite){
-	  FileInfo entry = new FileInfo(betalib + "/dotnetlib/" + ns + "/" + cls + ".bet");
-	  if (File.Exists(entry.FullName) || Directory.Exists(entry.FullName)) {
-	    if (overwrite == - 1) {
-	      // Ignore if already converted
-	      return null;
-	    }
-	  } 
-	  return entry;
-	}
-		
 	internal virtual void  openStream(String betalib, 
 					  String ns, String cls, 
 					  int overwrite, 
 					  TextWriter outstream)
 	  {
-	    entry = needsConversion(betalib, ns, cls, overwrite);
-	    if (entry == null) return;
-	    if (overwrite == 0) {
-	      existing = entry;
-	      entry = new FileInfo(entry.FullName + ".new");
+	    entry = new FileInfo(betalib + "/dotnetlib/" + ns + "/" + cls + ".bet");
+	    if (File.Exists(entry.FullName) || Directory.Exists(entry.FullName)) {
+	      if (overwrite == - 1) {
+		// Ignore if already converted
+		output = null;
+		return;
+	      }
+	      if (overwrite == 0) {
+		existing = entry;
+		entry = new FileInfo(entry.FullName + ".new");
+	      }
 	    }
 	    if (trace){
 	      Console.Error.Write("Creating directory " + entry.Directory.FullName + "\n");
@@ -63,17 +55,15 @@ namespace beta.converter
 	    Directory.CreateDirectory(entry.Directory.FullName);
 	    if (outstream != null) {
 	      output = outstream;
-	    }
-	    else
-	      {
-		if (output != null) {
-		  output.Close();
-		}
-		if (trace){
-		  Console.Error.Write("Creating file " + entry.FullName + "\n");
-		}
-		output = new StreamWriter(new FileStream(entry.FullName, FileMode.Create));
+	    } else {
+	      if (output != null) {
+		output.Close();
 	      }
+	      if (trace){
+		Console.Error.Write("Creating file " + entry.FullName + "\n");
+	      }
+	      output = new StreamWriter(new FileStream(entry.FullName, FileMode.Create));
+	    }
 	  }
 		
 		
@@ -256,6 +246,7 @@ namespace beta.converter
 	    }
 	    putln("ORIGIN '~beta/basiclib/betaenv';");
 	    if ((superClass != null) && !superClass.Equals("Object")) {
+	      if (superNs != null) superNs = superNs.Replace('/', '.');
 	      if (use_wrapper_super){
 		// Include wrapper version of superclass
 		putln("INCLUDE '~beta/dotnetlib/" + superNs + "/" + "_" + superClass + "' (* Cannot use non-wrapper *);");
@@ -276,6 +267,7 @@ namespace beta.converter
 	      putPatternBegin("_" + className, superClass);
 	    }
 	    nl();
+	    namespaceName = namespaceName.Replace('/', '.');
 	    putTrailer(resolution, namespaceName, className, isValue);
 	  }
 		

@@ -31,6 +31,8 @@ namespace beta.converter
 	internal String namespaceName;
 	internal String superClass;
 	internal String superNs;
+	internal bool isValue;
+	internal String resolution;
 		
 	internal static void  usage(String msg)
 	  {
@@ -177,6 +179,7 @@ namespace beta.converter
 			
 	    MethodInfo[] methlist;
 	    methlist = cls.GetMethods(BindingFlags.Instance 
+				      | BindingFlags.Static
 				      | BindingFlags.Public 
 				      | BindingFlags.DeclaredOnly);
 	    if (methlist.Length == 0) return ;
@@ -560,23 +563,26 @@ namespace beta.converter
 		
 	internal virtual String slashToDot(String name)
 	  {
+	    if (name == null) return null;	    
 	    return name.Replace("/", ".");
 	  }
 		
 	internal virtual String dotToSlash(String name)
 	  {
+	    if (name == null) return null;
 	    return name.Replace(".", "/");
 	  }
 		
 	internal virtual String dollarToUnderscore(String name)
 	  {
-			
+	    if (name == null) return null;			
 	    return name.Replace("$", "_");
 	  }
 		
 	internal virtual String stripNamespace(String name)
 	  {
 	    int i;
+	    if (name == null) return null;
 	    i = slashToDot(name).LastIndexOf((Char) '.');
 	    return (i >= 0)?name.Substring(i + 1, (name.Length) - (i + 1)):name;
 	  }
@@ -584,6 +590,7 @@ namespace beta.converter
 	internal virtual String stripPath(String name)
 	  {
 	    int i;
+	    if (name == null) return null;
 	    i = name.LastIndexOf((Char) '/');
 	    return (i >= 0)?name.Substring(i + 1, (name.Length) - (i + 1)):name;
 	  }
@@ -591,6 +598,7 @@ namespace beta.converter
 	internal virtual String stripExtension(String name)
 	  {
 	    int i;
+	    if (name == null) return null;	    
 	    i = name.LastIndexOf((Char) '.');
 	    return (i >= 0)?name.Substring(1, i-1):name;
 	  }
@@ -619,14 +627,7 @@ namespace beta.converter
 	    String innerName = null;
 	    String innerSuper = null;
 	    Type sup;
-	    bool isValue = false;
 	    sup = cls.BaseType;
-
-	    String resolution = stripPath(stripExtension(codebase(cls.FullName)));
-	    // Special case: classes with immediate base type System.ValueType must have keyword valuetype in resolution
-	    if (sup != null && sup.FullName == "System.ValueType"){
-	      isValue = true;
-	    }
 
 	    if (outer == null){
 	      beta.putHeader(namespaceName, className, doIncludes(cls));
@@ -645,10 +646,10 @@ namespace beta.converter
 	    doClasses(cls);
 	    
 	    if (outer == null){
-	      beta.putTrailer(resolution, slashToDot(namespaceName), className, isValue);
+	      beta.putTrailer(resolution, namespaceName, className, isValue);
 	      beta.close();
 	    } else {
-	      beta.putTrailer(resolution, slashToDot(namespaceName), innerClass, isValue); // Assuming same resolution/namespace!
+	      beta.putTrailer(resolution, namespaceName, innerClass, isValue); // Assuming same resolution/namespace!
 	    }
 	  }
 		
@@ -700,11 +701,11 @@ namespace beta.converter
 	    try
 	      {
 		thisClass = gettype(className);
-		namespaceName = dotToSlash(thisClass.Namespace);
+		namespaceName = slashToDot(thisClass.Namespace);
 		className = stripNamespace(thisClass.FullName);
 		Type sup = thisClass.BaseType;
-		String resolution = stripPath(stripExtension(codebase(thisClass.FullName)));
-		bool isValue = false;
+		resolution = stripPath(stripExtension(codebase(thisClass.FullName)));
+		isValue = false;
 		// Special case: classes with immediate base type System.ValueType must have keyword valuetype in resolution
 		if (sup != null && sup.FullName == "System.ValueType"){
 		  isValue = true;
@@ -714,7 +715,7 @@ namespace beta.converter
 		    superNs = dotToSlash(sup.Namespace);
 		    superClass = stripNamespace(sup.FullName);
 		  }
-		beta = new BetaOutput(betalib, resolution, namespaceName, className, superNs, superClass, overwrite, output, isValue);
+		beta = new BetaOutput(betalib, resolution, dotToSlash(namespaceName), className, dotToSlash(superNs), superClass, overwrite, output, isValue);
 		if (beta.output == null)
 		  return null;
 	      }
@@ -764,53 +765,57 @@ namespace beta.converter
 
 	internal static Type gettype(String cls)
 	  {
+	    // First try Type.GetType.
+	    // Looks in .....
 	    Type t = Type.GetType(cls);
-	    if (t != null){
-	      return t;
-	    } else {
-	      try {
-		String dir = RuntimeEnvironment.GetRuntimeDirectory();
-		Assembly asm;
-		// First try obvious prefix as assembly
-		int dotpos = cls.LastIndexOf('.');
-		if (dotpos>0){
-		  String firsttry = cls.Substring(0,dotpos);
-		  if (trace_runtime) Console.WriteLine("[  trying " + firsttry + "]");
-		  try {
-		    asm = Assembly.LoadFile(dir + Path.DirectorySeparatorChar + firsttry + ".dll");
-		    if (asm != null){
-		      t = asm.GetType(cls);
-		      if (t != null){
-			if (trace_runtime) Console.WriteLine("   FOUND!");
-			return t;
-		      }
+	    if (t != null) return t;
+	    
+	    // Then try by loading DLLs
+	    try {
+	      String dir = RuntimeEnvironment.GetRuntimeDirectory();
+	      Assembly asm;
+	      // First try obvious prefix as assembly
+	      int dotpos = cls.LastIndexOf('.');
+	      if (dotpos>0){
+		String firsttry = cls.Substring(0,dotpos);
+		if (trace_runtime) Console.WriteLine("[  trying " + firsttry + "]");
+		try {
+		  asm = Assembly.LoadFile(dir + Path.DirectorySeparatorChar + firsttry + ".dll");
+		  if (asm != null){
+		    t = asm.GetType(cls);
+		    if (t != null){
+		      if (trace_runtime) Console.WriteLine("   FOUND!");
+		      return t;
 		    }
-		  } catch (Exception) {
 		  }
+		} catch (Exception) {
 		}
-		// Then search all files in system runtime directory (:-(
-		String[] dlls = Directory.GetFiles(dir, "*.dll");
-		for (int i=0; i<dlls.Length; i++){
-		  if (trace_runtime) Console.WriteLine("  [searching " + dlls[i] + "]");
-		  try {
-		    asm = Assembly.LoadFile(dlls[i]);
-		    if (asm != null){
-		      t = asm.GetType(cls);
-		      if (t != null){
-			if (trace_runtime) Console.WriteLine("  FOUND!");
-			return t;
-		      }
-		    }
-		  } catch (Exception) {
-		  }
-		}
-		return null;
-	      } catch (Exception e) {
-		if (trace_runtime) Console.WriteLine(e.Message);
-		if (trace_runtime) Console.WriteLine(e.StackTrace);
-		return null;
 	      }
-	    } 
+	      // Then search all files in system runtime directory (:-(
+	      // Can I search the GAC instead programmatically?
+	      // Or is it better to exec "gacutil -l" and analyze output?
+	      String[] dlls = Directory.GetFiles(dir, "*.dll");
+	      for (int i=0; i<dlls.Length; i++){
+		if (trace_runtime) Console.WriteLine("  [searching " + dlls[i] + "]");
+		if (dlls[i].EndsWith("mscorlib.dll")) continue; // mscorlib already examined
+		try {
+		  asm = Assembly.LoadFile(dlls[i]);
+		  if (asm != null){
+		    t = asm.GetType(cls);
+		    if (t != null){
+		      if (trace_runtime) Console.WriteLine("  FOUND!");
+		      return t;
+		    }
+		  }
+		} catch (Exception) {
+		}
+	      }
+	      return null;
+	    } catch (Exception e) {
+	      if (trace_runtime) Console.WriteLine(e.Message);
+	      if (trace_runtime) Console.WriteLine(e.StackTrace);
+	      return null;
+	    }
 	  }
 
 	internal static String codebase(String cls)
