@@ -12,11 +12,7 @@
 # To install in $HOME instead of /usr/local, use:
 #    make install prefix=$HOME
 
-# henryml: Removed definition of CC, beta job file sets
-# an appropriate default.
-#CC=cc
-
-RM = rm -f
+CC=cc
 
 CFLAGS=-O
 #CFLAGS=-O -DMAX_WBITS=14 -DMAX_MEM_LEVEL=7
@@ -26,8 +22,9 @@ CFLAGS=-O
 
 LDFLAGS=-L. -lz
 LDSHARED=$(CC)
+CPP=$(CC) -E
 
-VER=1.1.2
+VER=1.1.3
 LIBS=libz.a
 SHAREDLIB=libz.so
 
@@ -36,35 +33,31 @@ RANLIB=ranlib
 TAR=tar
 SHELL=/bin/sh
 
-OBJDIR = ../../$(MACHINETYPE)
-
 prefix = /usr/local
 exec_prefix = ${prefix}
+libdir = ${exec_prefix}/lib
+includedir = ${prefix}/include
 
 OBJS = adler32.o compress.o crc32.o gzio.o uncompr.o deflate.o trees.o \
        zutil.o inflate.o infblock.o inftrees.o infcodes.o infutil.o inffast.o
 
+OBJA =
+# to use the asm code: make OBJA=match.o
+
 TEST_OBJS = example.o minigzip.o
 
-DISTFILES = README INDEX ChangeLog configure Make*[a-z0-9] *.[ch] descrip.mms \
+DISTFILES = README FAQ INDEX ChangeLog configure Make*[a-z0-9] *.[ch] *.mms \
   algorithm.txt zlib.3 msdos/Make*[a-z0-9] msdos/zlib.def msdos/zlib.rc \
-  nt/Makefile.nt nt/zlib.dnt amiga/Make*.??? contrib/README.contrib \
-  contrib/*.txt contrib/asm386/*.asm contrib/asm386/*.c \
-  contrib/asm386/*.bat contrib/asm386/zlibvc.d?? contrib/iostream/*.cpp \
+  nt/Make*[a-z0-9] nt/zlib.dnt amiga/Make*.??? os2/M*.os2 os2/zlib.def \
+  contrib/RE*.contrib contrib/*.txt contrib/asm386/*.asm contrib/asm386/*.c \
+  contrib/asm386/*.bat contrib/asm386/zlibvc.d?? contrib/asm[56]86/*.?86 \
+  contrib/asm[56]86/*.S contrib/iostream/*.cpp \
   contrib/iostream/*.h  contrib/iostream2/*.h contrib/iostream2/*.cpp \
   contrib/untgz/Makefile contrib/untgz/*.c contrib/untgz/*.w32 \
-  contrib/minizip/[CM]*[pe] contrib/minizip/*.[ch] contrib/minizip/*.[td]??
+  contrib/minizip/[CM]*[pe] contrib/minizip/*.[ch] contrib/minizip/*.[td]?? \
+  contrib/delphi*/*.???
 
-
-all: $(OBJDIR)/libz.a
-
-# henryml: Added extra target to allow building only when
-#          lib file is missing.
-
-$(OBJDIR)/libz.a:
-	make lib
-
-original: example minigzip
+all: example minigzip
 
 test: all
 	@LD_LIBRARY_PATH=.:$(LD_LIBRARY_PATH) ; export LD_LIBRARY_PATH; \
@@ -76,10 +69,15 @@ test: all
 	  echo '		*** zlib test FAILED ***'; \
 	fi
 
-# henryml: Changed from  $(OBJDIR)/libz.a to lib.
-lib: $(OBJS)
-	$(AR) $(OBJDIR)/libz.a $(OBJS)
-	$(RM) *.o
+libz.a: $(OBJS) $(OBJA)
+	$(AR) $@ $(OBJS) $(OBJA)
+	-@ ($(RANLIB) $@ || true) >/dev/null 2>&1
+
+match.o: match.S
+	$(CPP) match.S > _match.s
+	$(CC) -c _match.s
+	mv _match.o match.o
+	rm -f _match.s
 
 $(SHAREDLIB).$(VER): $(OBJS)
 	$(LDSHARED) -o $@ $(OBJS)
@@ -94,14 +92,14 @@ minigzip: minigzip.o $(LIBS)
 	$(CC) $(CFLAGS) -o $@ minigzip.o $(LDFLAGS)
 
 install: $(LIBS)
-	-@if [ ! -d $(prefix)/include  ]; then mkdir $(prefix)/include; fi
-	-@if [ ! -d $(exec_prefix)/lib ]; then mkdir $(exec_prefix)/lib; fi
-	cp zlib.h zconf.h $(prefix)/include
-	chmod 644 $(prefix)/include/zlib.h $(prefix)/include/zconf.h
-	cp $(LIBS) $(exec_prefix)/lib
-	cd $(exec_prefix)/lib; chmod 755 $(LIBS)
-	-@(cd $(exec_prefix)/lib; $(RANLIB) libz.a || true) >/dev/null 2>&1
-	cd $(exec_prefix)/lib; if test -f $(SHAREDLIB).$(VER); then \
+	-@if [ ! -d $(includedir)  ]; then mkdir $(includedir); fi
+	-@if [ ! -d $(libdir) ]; then mkdir $(libdir); fi
+	cp zlib.h zconf.h $(includedir)
+	chmod 644 $(includedir)/zlib.h $(includedir)/zconf.h
+	cp $(LIBS) $(libdir)
+	cd $(libdir); chmod 755 $(LIBS)
+	-@(cd $(libdir); $(RANLIB) libz.a || true) >/dev/null 2>&1
+	cd $(libdir); if test -f $(SHAREDLIB).$(VER); then \
 	  rm -f $(SHAREDLIB) $(SHAREDLIB).1; \
 	  ln -s $(SHAREDLIB).$(VER) $(SHAREDLIB); \
 	  ln -s $(SHAREDLIB).$(VER) $(SHAREDLIB).1; \
@@ -111,19 +109,20 @@ install: $(LIBS)
 # ldconfig is for Linux
 
 uninstall:
-	cd $(prefix)/include; \
+	cd $(includedir); \
 	v=$(VER); \
 	if test -f zlib.h; then \
 	  v=`sed -n '/VERSION "/s/.*"\(.*\)".*/\1/p' < zlib.h`; \
           rm -f zlib.h zconf.h; \
 	fi; \
-	cd $(exec_prefix)/lib; rm -f libz.a; \
+	cd $(libdir); rm -f libz.a; \
 	if test -f $(SHAREDLIB).$$v; then \
 	  rm -f $(SHAREDLIB).$$v $(SHAREDLIB) $(SHAREDLIB).1; \
 	fi
 
 clean:
-	rm -f *.o *~ example minigzip libz.a libz.so* foo.gz
+	rm -f *.o *~ example minigzip libz.a libz.so* foo.gz so_locations \
+	   _match.s maketree
 
 distclean:	clean
 

@@ -47,12 +47,12 @@
  *
  */
 
-/* @(#) $Id: deflate.c,v 1.1 2000-05-01 09:42:00 datpete Exp $ */
+/* @(#) $Id: deflate.c,v 1.2 2000-08-12 12:54:27 henryml Exp $ */
 
 #include "deflate.h"
 
 const char deflate_copyright[] =
-   " deflate 1.1.2 Copyright 1995-1998 Jean-loup Gailly ";
+   " deflate 1.1.3 Copyright 1995-1998 Jean-loup Gailly ";
 /*
   If you use the zlib library in a product, an acknowledgment is welcome
   in the documentation of your product. If for some reason you cannot
@@ -608,11 +608,13 @@ int ZEXPORT deflateCopy (dest, source)
     deflate_state *ss;
     ushf *overlay;
 
-    ss = source->state;
 
-    if (source == Z_NULL || dest == Z_NULL || ss == Z_NULL) {
+    if (source == Z_NULL || dest == Z_NULL || source->state == Z_NULL) {
         return Z_STREAM_ERROR;
     }
+
+    ss = source->state;
+
     *dest = *source;
 
     ds = (deflate_state *) ZALLOC(dest, 1, sizeof(deflate_state));
