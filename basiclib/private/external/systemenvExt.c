@@ -1,15 +1,39 @@
-#include <sys/types.h>
-#include <sys/time.h>
-#include <stdio.h>
-#include <sys/ioctl.h> 
-#include <fcntl.h>
-#include <errno.h>
-#include <unistd.h>
-#include <time.h>
+#ifdef nti
+# include <sys/types.h>
+# include <stdio.h>
+# include <fcntl.h>
+# include <errno.h>
+# include <time.h>
+# include <winsock.h>
+#else
+# include <sys/types.h>
+# include <sys/time.h>
+# include <stdio.h>
+# include <sys/ioctl.h> 
+# include <fcntl.h>
+# include <errno.h>
+# include <unistd.h>
+# include <time.h>
+#endif
 
 #ifdef sun4s
-#include <stropts.h>
+# include <stropts.h>
 #endif
+
+#ifdef nti
+  void sleep(long period)
+  {
+    Sleep(1000*period);
+  }
+# define ioctl ioctlsocket
+#endif
+
+#if (defined(sun4s) || defined(nti))
+# define CASTFDSET 
+#else 
+# define CASTFDSET (int *)
+#endif
+
 
 
 /* DEBUGGING OUTPUT: comment out the following #define to remove it.
@@ -163,12 +187,6 @@ char sysenvKeyboardPeek()
  *    -1: Error in select call.
  *
  */
-
-#ifdef sun4s
-#define CASTFDSET 
-#else
-#define CASTFDSET (int *)
-#endif
 
 
 int 
