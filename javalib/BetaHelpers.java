@@ -39,11 +39,15 @@ public class BetaHelpers
     return System.err;
   }
   
-  public static native String getenv(String key);
-  
   public static void loadJNILibraries (){
     // Cannot be static class constructor - e.g. applets will fail then
     java.lang.System.loadLibrary("BetaHelpers"); // OK to call more than once
     //System.err.println("Loaded JNI library BetaHelpers");
   }
+
+  public static native String getenv(String key);
+
+  public static native   void setFileExePermission(String path);
+  
+
 }
