@@ -482,8 +482,6 @@ extern "C"
 	}
       cout << endl; 
     }
-}
-
 
 // just to be able to link with tstdispatch
 int getType(VARIANT *S,long N) 
@@ -532,5 +530,7 @@ void copyText(char *name, char *dest, long len)
 { int i;
   if (test) printf("copytext %s\n",name);  
   for (i=0; i<len; i++) dest[i] = name[i];
+}
+
 }
 
