@@ -119,9 +119,7 @@ do
    'groupSetupListView on %s\n'->putformat (#  do location[]->s #);
    findCP;
    (if fg[] = none then
-       location[]->mps.AST.expandToFullPath
-         ->mps.fragmentGroupTable.getFragmentGroup->fg[]
-         ->theProjectInfoGroup.fg[]
+       findfg
    if);
    (if fg[] <> selectedFG[] then
          (# g: ^hierarchy.group
@@ -129,15 +127,15 @@ do
             &sourceView.listView.contents.contents.group[]->g[];
             (label[],location[],lastSelectedFF[])
               ->(g.label[],g.location[],g.lastSelectedFf[]);
-            (* (sourceView.listView.contents.contents[],g[],true) *)
-            (* (formview[],g[],true)->setupGroup; *)
-            (* g[]->sourceView.listView.install;*)
             THIS(group)[]->formview.theGroup[];
             g[]->updateFolderView
          #)
    if);
    theProjectInfoGroup[]->Interface.currentGroup[];
-   (if not isinusedGroups then (fg.fullname,false)->addToUsedGroups if);
+   (if not isinusedGroups then 
+       (fg.fullname,false)->addToUsedGroups
+       
+   if);
    fg[]->selectedFG[]  
 
 -- originSetupListView: DoPart --
@@ -224,7 +222,18 @@ do
          #)[]->lfmenuitem[]
    if);
    lfmenuitem.open;
-   lfmenuitem[]->lfmenu.append  
+   lfmenuitem[]->lfmenu.append;
+   &lfmenu.menuitem
+   (#
+      eventhandler:: 
+        (#
+           onStatus:: (# do not HasDomain->value #);
+           onSelect:: (# do InsertDomain #)
+        #);
+      open::  (#  do 'Compute Domain"'->name #)
+   #)[]->lfmenuitem[];
+   lfmenuitem.open;
+   lfmenuitem[]->lfmenu.append;
 
 -- directoryProjectinit: DoPart --
 do
@@ -245,7 +254,20 @@ do
    if);
    (if label[] <> none then label.copy->theProjectInfoProject.name[] if);
    true->theProjectInfoProject.isProjectFile;
-   'ProjectFileinit os %s\n'->putformat (#  do label[]->s #)  
+   'ProjectFileinit os %s\n'->putformat (#  do label[]->s #);
+   lfmenu.open;
+   lfmenu[]->popupmenu;
+   &lfmenu.menuitem
+     (#
+        eventhandler::  
+          (# onSelect:: (# do SelectAsUsedGroups #);
+             onStatus:: (# do not isUsedGroup->value #)
+          #);
+        open::  (#  do 'Select as Recent'->name #)
+     #)[]->lfmenuitem[];
+   lfmenuitem.open; 
+   lfmenuitem[]->lfmenu.append
+
 
 -- temporaryProjectInit: DoPart --
 do
@@ -261,23 +283,26 @@ do
    lfmenu[]->popupMenu;
    &lfmenu.menuitem
      (#
-        eventhandler::  (# onSelect::  (#  do SaveProjectFile #) #);
-        open::  (#  do 'Save Project'->name #)
+        eventhandler::  (# onSelect::  (#  do SaveProjectFileAs #) #);
+        open::  (#  do 'Save Project As'->name #)
      #)[]->lfmenuitem[];
    lfmenuitem.open;
-   lfmenuitem[]->lfmenu.append  
-
+   lfmenuitem[]->lfmenu.append
+   
 -- temporaryProjectonSelect: DoPart --
 do findcp  
 
--- temporaryProjectSavePrjFile: DoPart --
+-- temporaryProjectSavePrjFileAs: DoPart --
 do
-     (# filename: ^text; prjFile: @file; 
+   l:(#  prjFile: @file; 
      do
-        '.recentProject.pjt'->filename[];
+        (if fileName[]=none then
+            fileSelectionDialog->filename[];
+            (if filename[]=none then leave l if);
+            '.pjt'->filename.append
+        if);
         filename[]->prjfile.name;
         prjfile.openWrite;
-        'project Files '->prjfile.putline;
         items.scan
           (# grp: ^group
           do
@@ -290,5 +315,67 @@ do
      #)  
 
 -- temporaryProjectChange: DoPart --
-do saveProjectFile  
-
+do saveProjectFile;
+   '/home/gram/beta/r5.2/sourcebrowser/private/hierarchybody.bet: Line 319'->screen.putline;
+   true->hasChanged
+   
+--DPProjectInit:DoPart--
+do 
+   &projects.project[]->theProjectInfoProject[];
+   true->theProjectInfoProject.isDomain;
+   location.copy->theProjectInfoProject.location.puttext;
+   'Domain of '->theProjectInfoProject.name[];
+   location.copy->theProjectInfoProject.name.append
+   
+--groupInsertDomain:dopart--
+do (# dmp:@sbprivate.hierarchyView.hir.DPproject
+   do
+      true->hasdomain;
+      'Domain'->dmp.label[];
+      location.copy->dmp.location[];
+      dmp.init;
+      dmp[]->items.prepend;
+      (if not isExpanded then
+          onExpand
+       else
+          changed 
+      if)
+   #)
+      
+--temporaryProjectSavePrjFile:DoPart--
+do location[]->putline;
+   location[]->saveProjectFileAs
+   
+--SelectAsUsedGroups:dopart--
+do (# usedGrp:^temporaryProject;
+   do
+      ReadFile;
+      getUsedGroups->usedGrp[];
+      usedGrp.items.clear;
+      items.scan
+      (# ngrp,grp:^group
+      do (if current##=group## then
+             current[]->grp[];
+             &group[]->ngrp[];
+             grp.location.copy->ngrp.location[];
+             grp.label.copy->ngrp.label[];
+             usedGrp[]->ngrp.init;
+             ngrp[]->usedGrp.additem
+         if)
+      #);
+      true->isUsedGroup;
+      onCollapse;
+      father.onCollapse;
+      'Recent Files ('->usedGrp.label[];
+      label[]->usedGrp.label.append;
+      ')'->usedGrp.label.put;
+      usedGrp.onExpand;
+      usedGrp.onProjectChange;
+      false->usedGrp.hasChanged;
+      location.copy->usedGrp.originalproject[];
+      changed
+   #)
+   
+--projectFileReadFile:dopart--
+do (hir[],THIS(projectFile)[])->setupProjectFile
+   

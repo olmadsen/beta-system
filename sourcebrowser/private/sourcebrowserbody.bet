@@ -416,6 +416,7 @@ AddToUsedGroups:
      fgName: ^text;
      fg: ^astInterface.fragmentGroup;
      usedGroups: ^sbprivate.hierarchyView.hir.temporaryProject;
+     fld:^hierarchy.folder;
      doSelect: @boolean
   enter (fgName[],doSelect)
   do (* 'Addtousedgroups on %s\n'->putformat(# do fgName[]->s#); *)
@@ -432,24 +433,23 @@ AddToUsedGroups:
             do
                current[]->g[];
                (if g.fg[] = none then
-                   g.location[]->mps.AST.expandToFullPath->mps.fragmentGroupTable.getFragmentGroup->g.fg[]
+                   g.findfg
                if);
-               (g.fg[] = fg[])->value;
+               (g.fg[] = fg[])->value
             #);
           notFound:: 
             (#
                newGroup: ^sbprivate.hierarchyView.hir.group;
                ff: ^astInterface.fragmentForm;
-               catname,t: ^text;
-               
+               catname,t: ^text               
             do
                &sbprivate.hierarchyView.hir.group[]->newGroup[];
-               true->newGroup.isinusedGroups;
                fgName.copy->newGroup.location[];
                mps.ast.astFileExtension->newGroup.location.append;
                fgName[]->fragmentDefaultName->newGroup.label[];
                fg[]->newGroup.fg[];
                newGroup[]->usedGroups.additem;
+               usedGroups.onProjectChange;
                true->newGroup.isSubGroup;
                (* newGroup.onexpand; *)
                usedGroups[]->newGroup.init;
@@ -467,7 +467,9 @@ AddToUsedGroups:
                    sbprivate.hierarchyView.theScroller[]
                      ->newGroup.scrollIntoView
                 else
-                   sbprivate.sourceView.popdown;
+                   (if newGroup.items.size>1 then
+                       sbprivate.sourceView.popdown
+                   if);                       
                    sbprivate.hierarchyView.hir.changed
                if);
                usedGroups.SaveProjectFile
@@ -477,7 +479,10 @@ AddToUsedGroups:
               current.select;
               sbprivate.hierarchyView.theScroller[]->current.scrollIntoView
            else
-              sbprivate.sourceView.popdown
+              current[]->fld[];
+              (if fld.items.size>1 then
+                  sbprivate.sourceView.popdown
+              if)
           if)
        #);
      
@@ -648,7 +653,7 @@ do
    initialWindowWidth: (#  exit 510 #);
    stdMinSize: (#  exit 50 #);
    stdPaneWidth: (#  exit 3 #);
-   fficon,fgicon,includeicon,bodyicon,originicon: @pixmap;
+   fficon,prjicon,fgicon,includeicon,bodyicon,originicon: @pixmap;
    outerctrl: @pane (* Vertical pane containing upctrl and locationView. *)
      (#
         fatherFrame::  (#  do THIS(sourcebrowser).frame->fr #);
@@ -793,7 +798,8 @@ do
                   sel: ^item;
                   dp: ^directoryProject;
                   pf: ^projectFile;
-                  tp: ^temporaryProject
+                  tp: ^temporaryProject;
+                  dpp:^DPproject
                do
                   selection[]->sel[];
                   'findcp on %s'->putformat (#  do sel.label[]->s #);
@@ -809,37 +815,26 @@ do
                    else
                       (if sel## = project## then sel.father[]->sel[] if)
                   if);
-                  (if sel## = directoryProject## then
+                  (if sel##
+                   // directoryProject## then
                       sel[]->dp[]; dp.theProjectInfoProject[]->setCP; 
+                   // projectFile## then
+                      sel[]->pf[]; pf.theProjectInfoProject[]->setCP
+                   // temporaryProject## then
+                      sel[]->tp[]; tp.theProjectInfoProject[]->setCP
+                   // DPproject## then
+                      sel[]->dpp[]; dpp.theProjectInfoProject[]->setCP
                    else
-                      (if sel## = projectFile## then
-                          sel[]->pf[]; pf.theProjectInfoProject[]->setCP
-                       else
-                          (if sel## = temporaryProject## then
-                              sel[]->tp[]; tp.theProjectInfoProject[]->setCP
-                           else
-                              'project not found'->putline; none ->setCP
-                          if)
-                      if)
+                      'project not found'->putline; none ->setCP
                   if)
                #);
              hideRoot:: trueObject;
              usedGroups: ^temporaryProject;
              getUsedGroups: @
-               (# 
-               do
-                  (if usedGroups[] = none then
-                      '/home/gram/beta/r5.2/sourcebrowser/private/sourcebrowserbody.bet: Line 798'
-                        ->screen.putline;
-                      (*&temporaryProject[]->usedGroups[];
-                       'Used Files'->usedGroups.label[];
-                       usedGroups.init;
-                       usedGroups[]->(root).addItem;
-                       changed*)
-                      
-                  if)
-               exit usedGroups[]
+               (# exit usedGroups[]
                #);
+             setUsedGroups:
+               (# enter usedGroups[] #);
              directoryProject:: 
                (#
                   theProjectInfoProject: ^projects.project;
@@ -868,8 +863,8 @@ do
                #);
              projectFile:: 
                (#
-                  theProjectInfoProject:
-                    ^projects.project;
+                  theProjectInfoProject: ^projects.project;
+                  isUsedGroup:@boolean;
                   onSelected:: 
                     (# 
                     do
@@ -881,18 +876,28 @@ do
                     (# 
                     <<SLOT projectFileOnExpand:DoPart>>
                     #);
+                  readFile:
+                    (# <<SLOT projectFileReadFile:dopart>> #);                       
+                  SelectAsUsedGroups:
+                    (# <<SLOT SelectAsUsedGroups:dopart>> #);
                   setupListView::< 
                     (#  <<SLOT projectFileSetupListView:DoPart>> #);
                   init:: 
-                    (# 
+                    (# lfmenuitem: ^lfmenu.menuitem
                     <<SLOT ProjectFileinit:DoPart>>
                     #)
                #);
              temporaryProject:: 
-               (#
+               (# originalproject:^text;
+                  hasChanged:@boolean;
                   theProjectInfoProject: ^projects.project;
+                  SaveProjectFileAs:
+                    (# filename:^text
+                    enter filename[]
+                    <<SLOT temporaryProjectSavePrjFileAs:DoPart>>
+                    #);
                   SaveProjectFile:
-                    (#  <<SLOT temporaryProjectSavePrjFile:DoPart>> #);
+                    (# <<SLOT temporaryProjectSavePrjFile:DoPart>> #);                  
                   onSelected:: 
                     (# 
                     <<SLOT temporaryProjectonSelect:DoPart>>
@@ -903,6 +908,15 @@ do
                     #);
                   onProjectChange::
                     (# <<SLOT temporaryProjectChange:dopart >>
+                    #)
+               #);
+             DPProject:: 
+               (#
+                  theProjectInfoProject: ^projects.project;
+                  onSelected::(# do theProjectInfoProject[]->setCP #);
+                  init:: 
+                    (# lfmenuitem: ^lfmenu.menuitem
+                      <<SLOT DPProjectInit:DoPart>>
                     #)
                #);
              properties:: 
@@ -916,18 +930,13 @@ do
                     do
                        (if cge <> none then
                            (if true
-                            //
-                            father##
-                            <=
-                            group## then
-                               father[]
-                                 ->grp[];
-                               grp.fg[]
-                                 ->
-                                   sourceview.pelist.findorcreatePropertyEditor
+                            // father## <= group## then
+                               father[] ->grp[];
+                               grp.fg[] 
+                                 -> sourceview.pelist.findorcreatePropertyEditor
                             // father## < propertyElement## then
                                father[]->pe[];
-                               pe.fg[]
+                               pe.fg[]  
                                  ->sourceview.pelist.findorcreatePropertyEditor
                            if)
                         else
@@ -936,8 +945,17 @@ do
                     #)
                #);
              group:: 
-               (#
+               (# HasDomain:@boolean;     
                   theProjectInfoGroup: ^projects.group;
+                  findfg:
+                    (#  
+                    do location[]->mps.AST.expandToFullPath
+                         ->mps.fragmentGroupTable.getFragmentGroup->fg[]
+                         ->theProjectInfoGroup.fg[]
+                    #);
+                  isInUsedGroups:(# exit theProject[]=UsedGroups[] #);
+                  InsertDomain:
+                    (# <<SLOT groupInsertDomain:dopart>> #);
                   onSelected:: 
                     (# 
                     do
@@ -1267,7 +1285,7 @@ do
              p[]->aeList.findOrCreateAsciiEditor->cte[];
              (if cte[] <> none then cte.show; none ->cfe if)
           #);
-        popdown: (#  do defaultView[]->popup #);
+        popdown: (# do defaultView[]->popup #);
         popup:
           (# view: ^overlayType
           enter view[]
@@ -1276,8 +1294,7 @@ do
              (if (currentView[] <> none ) and (currentView[] <> view[]) then
                  currentView.hide
              if);
-             view[]->currentView[];
-             
+             view[]->currentView[]             
           #);
         overlayType: labelled
           (#
@@ -1286,8 +1303,7 @@ do
                (#
                   onMouseDown:: 
                     (# 
-                    do
-                       (if doubleclick then
+                    do (if doubleclick then
                            (if zoomed then
                                false->zoomed; upctrl.unzoom
                             else
@@ -1298,8 +1314,7 @@ do
                   onFatherFrameChanged:: 
                     (#  do (if visible then sourceView.size->size if) #);
                   onVisibleChanged:: 
-                    (#  do (if visible then sourceView.size->size if) #);
-                  
+                    (#  do (if visible then sourceView.size->size if) #)                  
                #);
              open::< 
                (# sz: @point;  enter sz do hide; sz->size; INNER #)
@@ -1357,8 +1372,7 @@ do
                     do
                        not THIS(asciiEditorView).allowEdit
                          ->THIS(asciiEditorView).allowEdit;
-                       not THIS(asciiEditorView).allowEdit->locationView.locked;
-                       
+                       not THIS(asciiEditorView).allowEdit->locationView.locked                       
                     #);
                   changed::  (#  do THIS(asciiEditorView).changed->value #);
                   cutStatus:: 
@@ -1682,6 +1696,7 @@ do
         'tv-origin'->originicon.read;
         'tv-include'->includeicon.read;
         'tv-body'->bodyicon.read;
+        'tv-prj'->prjicon.read;
         &sbprivate.hierarchyView.hir.project[]->rootproject[];
         'Projects'->rootProject.label[];
         rootProject[]->sbprivate.hierarchyView.hir.root;
