@@ -120,9 +120,12 @@ extern int dmalloc_verify(int);
  */
 
 #ifdef intel
-typedef unsigned char *pc_t;
+  typedef unsigned char *pc_t;
+# ifndef UNIX
+    typedef long off_t;
+# endif
 #else
-typedef long *pc_t;
+  typedef long *pc_t;
 #endif
 
 /* macro to be used to declare global variables (including static ones)
