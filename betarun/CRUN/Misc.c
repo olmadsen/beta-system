@@ -241,6 +241,112 @@ signed long SignExtWord(signed short a)
 
 #include <setjmp.h>
 
+/* This is a new jumpbuf implementation (pool of jmpbuffers). 
+ *  PRJ
+ */
+
+#define maxNoInPool 10
+
+/* Basis type in pool of jump buffers */
+typedef struct jmpInfoElem {
+  jmp_buf *jumpBuffer;
+  long refTop;
+  struct jmpInfoElem * nextElem;
+} jmpInfoElem;
+
+jmp_buf *CRTSjbp;
+jmpInfoElem *jumpList;
+jmpInfoElem *jumpListHead;
+
+void initJmpPool()
+{
+  jmpInfoElem *tmp;
+  jmp_buf *jumpBufPool;
+  int i;
+  
+  jumpList = (jmpInfoElem *)malloc(sizeof(jmpInfoElem)*maxNoInPool);
+  jumpListHead = jumpList;
+  jumpBufPool = (jmp_buf *)malloc(sizeof(jmp_buf)*maxNoInPool);
+  tmp = jumpList;
+  for (i=0; i<(maxNoInPool-1); i++){ 
+    tmp->jumpBuffer = jumpBufPool+i;
+    tmp->nextElem = tmp+1; /* next points to next element in list */
+    tmp = tmp->nextElem;
+  }
+  /* Last element needs special care */
+  tmp->jumpBuffer = jumpBufPool+i;
+  tmp->nextElem = NULL; /* Last element in list points to zero */
+}
+
+void reallocJmpList()     
+{
+  int i=0;
+  jmpInfoElem *p=jumpListHead;
+  jmp_buf * jmpBufPool;
+  while (p != NULL){
+    /* Calculate number in current chain. This may be larger than maxNoInPool. */
+    p = p->nextElem;
+    i++;
+  }
+  jumpListHead = (jmpInfoElem *) realloc(jumpListHead,
+					 (i+maxNoInPool)*sizeof(jmpInfoElem));
+  jumpList = jumpListHead+i-1; /* Point to previously last element in chain */
+  jumpList->nextElem = jumpList+1;
+  jmpBufPool = (jmp_buf *)malloc(maxNoInPool*sizeof(jmp_buf));
+  p = jumpList->nextElem;
+  /* Initialize new chain section to point to malloc'ed pool area */
+  for (i=0; i<maxNoInPool-1; i++){
+    p->jumpBuffer = jmpBufPool+i;
+    p->nextElem = p+1;
+    p = p->nextElem;
+  }
+  p->jumpBuffer = jmpBufPool+i;
+  p->nextElem = NULL; /* Last element in chain has to be NULL */
+}
+
+
+jmp_buf *GetJmpBuf(int addr, int off)
+{
+  jmp_buf *tmp;
+
+  if (jumpList->nextElem==NULL)
+    reallocJmpList();
+  tmp = jumpList->jumpBuffer;
+  jumpList->refTop = reftop; 
+  *(jmpInfoElem **)(addr+off) = jumpList;
+  jumpList=jumpList->nextElem;
+  return tmp;
+}
+
+void FreeJmpBuf(int addr, int off)
+{
+  jmpInfoElem *p;
+
+  p = *(jmpInfoElem **)(addr+off);
+  jumpList = jumpList-1; /* Previous element in list */
+  jumpList->jumpBuffer = p->jumpBuffer;
+  jumpList->nextElem = jumpList+1; /* Next element in list */
+}
+
+
+jmp_buf *UseJmpBuf(int addr, int off)
+{
+  jmpInfoElem *p;
+  jmp_buf *jbuf;
+
+  a0 = (char *)addr;                                
+  p = *(jmpInfoElem **)(addr+off); 
+  reftop = p->refTop;                               
+  CRTSjbp = p->jumpBuffer;
+  jbuf = p->jumpBuffer;
+  FreeJmpBuf(addr, off);
+  return jbuf;
+}
+
+
+
+#if 0
+/* Old jump buffer implementation. PRJ */
 typedef struct jmpInfo {
   jmp_buf *jumpBuffer;
   long refTop;
@@ -282,7 +388,15 @@ jmp_buf *UseJmpBuf(int addr, int off)
   reftop = p->refTop;                                /* 2 */
   tmp = p->jumpBuffer;
   free(p);                                           /* 5 */
-  CRTSjbp = p->jumpBuffer; /* To be free'd later! */ /* 5 */
+  CRTSjbp = tmp;           /* To be free'd later! */ /* 5 */
   return tmp;                                        /* 4 */
 }
+
+
+void FreeJmpBuf(int a, int b)
+{
+  printf("FreeJumpBuf NYI\n");
+}
+
+#endif
 #endif /* crts */
