@@ -9,50 +9,56 @@ extern long glwMDrawingAreaWidgetClass;
 /*-----C-function definitions -----*/
 #ifdef nti
 #include <windows.h>
-#include <GL/gl.h>
-#include <GL/glu.h>
 #else
-void glClearIndex( float c );
-void glClearColor(float red,float green,float blue,float alpha);
-void glPointSize(float size);
-void glLineWidth(float width );
-void glPolygonOffset(float,float);
-void glClearAccum( float red, float green, float blue,float alpha );
-void glAccum( int op, float value );
-void glFrumstum(double left,double right,double bottom,double top,double near_,double far_);
-void glVertex4d(double,double,double,double); 
-void glColor4d(double,double,double,double);
-void glTexCoord1f(float);
-void glTexCoord4d(double,double,double,double);
-void glRasterPos4d(double,double,double,double);
-void glRectd(double,double,double,double);
-void glLightf(int,int,float);
-void glLightfv(int,int,float*);
-void glLightModelf(int,float);
-void glLightModelfv(int,float*);
-void glMaterialf(int face,int pname, float param );
-void glMaterialfv(int,int,float*);
-void glPixelZoom(float,float);
-void glPixelStoref(int,float);
-void glBitmap(int,int,float,float,float,float,char*);
-void glTexEnvf(int,int,float);
-void glTexParameterf(int,int,float);
-void glMap2d( int target, double u1, double u2, int ustride, int uorder, double v1, double v2, int vstride, int vorder, double* points );
-void glMapGrid2d(int,double,double,int,double,double);
-void glFogf(int,float);
-void glPassThrough(float);
-void glBlendColorEXT(float,float,float,float);
-void glPolygonOffsetEXT(float,float);
-/*void glPointParameterfEXT(int,float);*/
-/*GLU prototypes */
-void gluLookAt(double,double,double,double,double,double,double,double,double);
-void gluOrtho2D(double,double,double,double);
-void gluPerspective(double,double,double,double);
-void gluPickMatrix(double,double,double,double,int*);
-void gluCylinder(void*,double,double,double,int,int);
-void gluPartialDisk(void*,double,double,int,int,double,double);
-void gluNurbsProperty(void*,int,float);
+#define WINGDIAPI 
+#define APIENTRY
 #endif
+
+WINGDIAPI void APIENTRY glClearIndex( float c );
+WINGDIAPI void APIENTRY glClearColor(float red,float green,float blue,float alpha);
+WINGDIAPI void APIENTRY glPointSize(float size);
+WINGDIAPI void APIENTRY glLineWidth(float width );
+WINGDIAPI void APIENTRY glPolygonOffset(float,float);
+WINGDIAPI void APIENTRY glClearAccum( float red, float green, float blue,float alpha );
+WINGDIAPI void APIENTRY glAccum( int op, float value );
+WINGDIAPI void APIENTRY glFrumstum(double left,double right,double bottom,double top,double near_,double far_);
+WINGDIAPI void APIENTRY glVertex4d(double,double,double,double); 
+WINGDIAPI void APIENTRY glColor4d(double,double,double,double);
+WINGDIAPI void APIENTRY glTexCoord1f(float);
+WINGDIAPI void APIENTRY glTexCoord4d(double,double,double,double);
+WINGDIAPI void APIENTRY glRasterPos4d(double,double,double,double);
+WINGDIAPI void APIENTRY glRectd(double,double,double,double);
+WINGDIAPI void APIENTRY glLightf(int,int,float);
+WINGDIAPI void APIENTRY glLightfv(int,int,float*);
+WINGDIAPI void APIENTRY glLightModelf(int,float);
+WINGDIAPI void APIENTRY glLightModelfv(int,float*);
+WINGDIAPI void APIENTRY glMaterialf(int face,int pname, float param );
+WINGDIAPI void APIENTRY glMaterialfv(int,int,float*);
+WINGDIAPI void APIENTRY glPixelZoom(float,float);
+WINGDIAPI void APIENTRY glPixelStoref(int,float);
+WINGDIAPI void APIENTRY glBitmap(int,int,float,float,float,float,char*);
+WINGDIAPI void APIENTRY glTexEnvf(int,int,float);
+WINGDIAPI void APIENTRY glTexParameterf(int,int,float);
+WINGDIAPI void APIENTRY glMap2d( int target, double u1, double u2, int ustride, int uorder, double v1, double v2, int vstride, int vorder, double* points );
+WINGDIAPI void APIENTRY glMapGrid2d(int,double,double,int,double,double);
+WINGDIAPI void APIENTRY glFogf(int,float);
+WINGDIAPI void APIENTRY glPassThrough(float);
+WINGDIAPI void APIENTRY glBlendColorEXT(float,float,float,float);
+WINGDIAPI void APIENTRY glPolygonOffsetEXT(float,float);
+/*WINGDIAPI void APIENTRY glPointParameterfEXT(int,float);*/
+WINGDIAPI void APIENTRY glOrtho(double,double,double,double,double,double);
+WINGDIAPI void APIENTRY glFrustum(double,double,double,double,double,double);
+WINGDIAPI void APIENTRY glRotated(double,double,double,double);
+WINGDIAPI void APIENTRY glPixelTransferf(unsigned int,float);
+/*GLU prototypes */
+WINGDIAPI void APIENTRY gluLookAt(double,double,double,double,double,double,double,double,double);
+
+WINGDIAPI void APIENTRY gluOrtho2D(double,double,double,double);
+WINGDIAPI void APIENTRY gluPerspective(double,double,double,double);
+WINGDIAPI void APIENTRY gluPickMatrix(double,double,double,double,int*);
+WINGDIAPI void APIENTRY gluCylinder(void*,double,double,double,int,int);
+WINGDIAPI void APIENTRY gluPartialDisk(void*,double,double,int,int,double,double);
+WINGDIAPI void APIENTRY gluNurbsProperty(void*,int,float);
 
 /*----------HELPERS-------------*/
 #ifndef nti
