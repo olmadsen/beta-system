@@ -153,11 +153,16 @@ if ($UseLastBuild) {
 open (LST, ">setup.lst") || die "Unable to create setup.lst: $!";
 
 foreach $file (@FileList) {
-    if (8 < length($file)) {
-	$nam = substr($file, 0, 8);
-    } else {
-	$nam = $file;
-    }
+    open (CMD, "<$file.cmd") || die "Unable to read $file: $!";
+    $nam = <CMD>;
+    close CMD;
+    chop $nam;
+#    if (8 < length($file)) {
+#	$nam = substr($file, 0, 8);
+#    } else {
+#	$nam = $file;
+#    }
+
     $CopyLast = 0;
     if ($UseLastBuild && -e "zfiles/$nam.z" 
 	&& (-M "zfiles/$nam.z" < -M "$file.cmd")) {
@@ -178,11 +183,12 @@ foreach $file (@FileList) {
 	close(LOG);
 	unlink "$betalib/$nam.z" if (-e "$betalib/$nam.z");
 	for ($i=0; $i < 10; $i++) {
-	    unlink "$betalib/$nam.00$i" if (-e "$betalib/$nam.00$i");
-	    unlink "$betalib/$nam.01$i" if (-e "$betalib/$nam.01$i");
-	    unlink "$betalib/$nam.02$i" if (-e "$betalib/$nam.02$i");
+	    &mayrm("$betalib/$nam.00$i",
+		   "$betalib/$nam.01$i",
+		   "$betalib/$nam.02$i");
 	}
-	open (IN, "<$file.cmd") || die "$!";
+	open (IN, "<$file.cmd") || die "unable to read $file.cmd: $!";
+	$quale = <IN>;
 	chdir $betalib;
 	foreach $line (<IN>) {
 	    chop $line;
@@ -208,10 +214,10 @@ foreach $file (@FileList) {
 	close(IN);
 	chdir $CWD;
 	unlink "zfiles/$nam.z" if (-e "zfiles/$nam.z");
-	rename("$betalib/$nam.z", "zfiles/$nam.z") || die "$!";
+	rename("$betalib/$nam.z", "zfiles/$nam.z") || die "file $nam.z: $!";
     }
-    open (LOG, ">>datafiles/$log") || die "$!";
-    open (LOG2, "<zfiles/$nam.lst") || die "$!";
+    open (LOG, ">>datafiles/$log") || die "datafiles/$log: $!";
+    open (LOG2, "<zfiles/$nam.lst") || die "zfiles/$nam.lst: $!";
     while(<LOG2>) {
 	print LOG $_;
     }
@@ -219,16 +225,22 @@ foreach $file (@FileList) {
     close(LOG2);
 }
 
+print "Packing done, now splitting\n";
+
 chdir 'datafiles' || die "Unable to chdir(datafiles): $!";
 
 $ByteSize = 0;
 $FileCount = 0;
 foreach $basefile (@FileList) {
-    if (8 < length($basefile)) {
-	$file = substr($basefile, 0, 8);
-    } else {
-	$file = $basefile;
-    }
+    open (CMD, "<../$basefile.cmd") || die "Unable to read $file: $!";
+    $file = <CMD>;
+    close CMD;
+    chop $file;
+#    if (8 < length($basefile)) {
+#	$file = substr($basefile, 0, 8);
+#    } else {
+#	$file = $basefile;
+#    }
     $file .= ".z";
     if (!-e "../zfiles/$file") {
 	print "Unable to read file '$file'.\n";
@@ -286,7 +298,7 @@ foreach $basefile (@FileList) {
 	print $RestSize - $RoomLeftOnCurDisk;
 	print " kb.)\n";
 	
-	if ($base eq "doc") { # Doc is handled specifically by the template.
+	if ($base =~ /^doc/) { # Doc is handled specifically by the template.
 	    # Hmm. Should signal to template, that doc is available.
 	    # For now, this is just asumed by the template... 
 	} else {
@@ -360,7 +372,8 @@ close RUL;
 close TMP;
 if ($found) {
     system("$InstallShieldDir\\program\\compile.exe disk1\\setup.rul >>$log");
-    unlink "disk1/setup.rul";
+    &mayrm("zfiles/setup.rul");
+    rename "disk1/setup.rul", "../zfiles/setup.rul";
     print "done\n";
 } else {
     print "FATAL: did not find Autoinsert-magic key in Rule-template\n";
