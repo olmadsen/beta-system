@@ -6,6 +6,12 @@
 #include "beta.h"
 #include "crun.h"
 
+#if 0
+#define DO_TRACE_EXITOBJECT
+#else
+#undef  DO_TRACE_EXITOBJECT
+#endif
+
 #ifndef MT
 
 #ifdef sparc
@@ -35,7 +41,7 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
    * Ck(theObj);
    */
 
-#if 0
+#if DO_TRACE_EXITOBJECT
   fprintf(output, "\nExO: ");
   fprintf(output, "\n  exitAddr:"); PrintCodeAddress((long)exitAddr);
   fprintf(output, "\n  exitObj: "); PrintObject(exitObj);
@@ -126,6 +132,23 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
 
 /**************** NEW VERSION(s) ******************/
 
+static Object *ExitObj=0;
+static int     ExitObjInINNER=0;
+
+static void ExitINNER(long PC, Object *theObj)
+{
+  if (ExitObjInINNER) return;
+  if (theObj == ExitObj){
+    ExitObjInINNER = 1;
+#if DO_TRACE_EXITOBJECT
+    fprintf(output, 
+	    "ExitINNER: found object 0x%x in INNER chain\n", 
+	    (int)theObj);
+    fflush(output);
+#endif /* DO_TRACE_EXITOBJECT */
+  }
+}
+
 /* ExOx(exitAddr, exitObject)
    - pop stack until *and including* exitObject stack frame
 */
@@ -156,7 +179,7 @@ void CExitOx(long exitAddr, Object * exitObj, Object * theObj)
    * Ck(theObj);
    */
 
-#if 1
+#if DO_TRACE_EXITOBJECT
   fprintf(output, "\nExO: ");
   fprintf(output, "\n  exitAddr:"); PrintCodeAddress((long)exitAddr);
   fprintf(output, "\n  exitObj: "); PrintObject(exitObj);
@@ -179,8 +202,9 @@ void CExitOx(long exitAddr, Object * exitObj, Object * theObj)
 
   /* Start from framepointer (skip frame of CExitO) */
   rw = (RegWin *) FramePointer;
+  ExitObjInINNER = 0;
 
-  while ((theObj = (Object *) rw->i0) != exitObj) {
+  while ((!ExitObjInINNER) && ((theObj = (Object *) rw->i0) != exitObj)) {
 #ifdef LEAVE_ACROSS_CALLBACK
     if (rw == nextCBF){
       /* This is AR of HandleCB. Skip to betaTop and update nextCBF */
@@ -226,7 +250,9 @@ void CExitOx(long exitAddr, Object * exitObj, Object * theObj)
 
     /* Normal Frame - investigate stack part for INNER chains.
      */
-    
+    ExitObj = exitObj;
+    ExitObjInINNER = 0;
+    TraverseSparcStackPart(rw, (Object*)rw->i0, ExitINNER);
     
     /* go one step back */
     rw = (RegWin *) rw->fp;
@@ -251,43 +277,6 @@ void CExitOx(long exitAddr, Object * exitObj, Object * theObj)
   return; /* Will jump to exitAddr and restore SP from FramePointer */
 }
 
-
-/******** Below version not (yet) used! ***********/
-
-
-static void ProcessExitStackCell(Object **theCell,Object *theObj)
-{
-}
-
-static Component *SavedComp;
-static RegWin    *SavedCBF;
-static RegWin    *SavedCompBlock;
-static Object    *ExitObj;
-
-
-void CExitOx1(long exitAddr, Object * exitObj, Object * theObj)
-{
-  DEBUG_CODE(NumExO++);
-
-  Ck(exitObj); 
-
-  /* FIXME: Compiler currently (v384) generates offset in theObj parameter
-   * Ck(theObj);
-   */
-
-  /* Put things in global vars */
-  SavedComp       = ActiveComponent;
-  SavedCBF        = (RegWin*)ActiveCallBackFrame;
-  SavedCompBlock  = (RegWin*)lastCompBlock;
-  ExitObj         = exitObj;
-
-  GeneralProcessStack(ProcessExitStackCell);
-
-  /* For this to work, GeneralProcessStack (and ProcessAR) must have a 
-   * CurrentOnly flag (like NEWRUN dynOnly).
-   */
-
-}
 
 #endif /* sparc */
 
