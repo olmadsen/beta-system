@@ -25,6 +25,7 @@ static void AOANewBlock(long newBlockSize);
 static void AOAMaybeNewBlock(long minNewBlockSize);
 #ifdef RTDEBUG
 static void AOACheckObjectRefSpecial(REFERENCEACTIONARGSTYPE);
+void scanPartObjects(Object *obj);
 #endif /* RTDEBUG */
 
 /* LOCAL VARIABLES */
@@ -480,6 +481,9 @@ void AOAGc()
     
     while (pointer < AOArootsLimit) {
       cellptr = (long*)(*pointer & ~1);
+#ifdef PERSIST
+      Claim(!inPIT((void *)*cellptr), "What ??");
+#endif /* PERSIST */
       target = getRealObject((Object *)*cellptr);
 #ifdef PERSIST
       if (!AOAISPERSISTENT(target)) {
@@ -1041,6 +1045,7 @@ void prependToListInAOA(REFERENCEACTIONARGSTYPE)
     /* This reference is a proxy reference */
     INFO_PERSISTENCE(TtoP++);
     referenceAlive((void *)theObj);
+    newAOAclient(getPUID((void *)theObj), theCell);
   }
 #else
   realObj = getRealObject(theObj);
@@ -1163,11 +1168,24 @@ void scanObject(Object *obj,
   ProtoType * theProto;
   
   theProto = GETPROTO(obj);
-  Claim(IsPrototypeOfProcess((long)theProto), "IsPrototypeOfProcess(theProto)");
-  
+
+#ifdef PERSIST
+#ifdef RTDEBUG
+  if (!dontCheckProtoTypes) {
+    Claim(IsPrototypeOfProcess((long)theProto), "IsPrototypeOfProcess(theProto)");
+  }
+#endif /* RTDEBUG */
+#endif /* PERSIST */
+
   if (objectAction) {
     objectAction(obj);
   }
+
+#ifdef PERSIST
+  if (dontCheckProtoTypes) {
+    theProto = GETPROTO(obj);
+  }
+#endif /* PERSIST */
   
   if (!isSpecialProtoType(theProto)) {
     GCEntry *tab =
@@ -1292,26 +1310,30 @@ void scanObject(Object *obj,
 	    referenceAction(&(theComponent->CallerObj));
 	  }
 	}
-	scanObject((Object *)ComponentItem( theComponent),
-		   referenceAction, TRUE);
+	if (doPartObjects) { 
+	  scanObject((Object *)ComponentItem( theComponent),
+		     referenceAction, TRUE);
+	}
 	break;
       }
     case SwitchProto(StackObjectPTValue):
       {
-	void (*oldStackRefAction)(REFERENCEACTIONARGSTYPE);
-	if (StackRefAction) {
-	  fprintf(output, 
-		  "\n[Note: Recursion in ScanObject on StackObject]\n");
-	  if (StackRefAction != referenceAction) {
+	if (referenceAction) {
+	  void (*oldStackRefAction)(REFERENCEACTIONARGSTYPE);
+	  if (StackRefAction) {
 	    fprintf(output, 
-		    "\n[Note: Recursion in ScanObject "
-		    "Will change behaviour!!!]\n");
+		    "\n[Note: Recursion in ScanObject on StackObject]\n");
+	    if (StackRefAction != referenceAction) {
+	      fprintf(output, 
+		      "\n[Note: Recursion in ScanObject "
+		      "Will change behaviour!!!]\n");
+	    }
 	  }
+	  oldStackRefAction = StackRefAction;
+	  StackRefAction = referenceAction;
+	  ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
+	  StackRefAction = oldStackRefAction;
 	}
-	oldStackRefAction = StackRefAction;
-	StackRefAction = referenceAction;
-	ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
-	StackRefAction = oldStackRefAction;
       }
     break;
               
@@ -1390,6 +1412,7 @@ void scanOrigins(Object *theObj, void (*originAction)(Object **theCell))
 	
       case SwitchProto(StackObjectPTValue):
 	Claim(FALSE,"scanOrigins: What are origins in ??");
+	return;
 	break; 
 	
       case SwitchProto(StructurePTValue):
@@ -1409,8 +1432,93 @@ void scanOrigins(Object *theObj, void (*originAction)(Object **theCell))
 	break;
 	
       default:
-	Claim( FALSE, "scanOrigins: theObj must be KNOWN.");
+	Claim(FALSE, "scanOrigins: theObj must be KNOWN.");
+	return;
       }
     }
   }
 }
+
+#ifdef RTDEBUG
+
+static void originAction(Object **theCell) {
+  ;
+}
+
+static void checkOrigin(Object *theObj)
+{
+  scanOrigins(theObj, originAction);
+}
+
+void checkOrigins(Object *theObj, void *generic)
+{
+  void (*temp)(Object *theObj);
+  temp = objectAction;
+  objectAction = checkOrigin;
+  scanPartObjects(theObj);
+  objectAction = temp;
+}
+
+void scanPartObjects(Object *obj)
+{
+  ProtoType * theProto;
+  
+  theProto = GETPROTO(obj);
+  
+  if (objectAction) {
+    objectAction(obj);
+  }
+  
+  if (!isSpecialProtoType(theProto)) {
+    GCEntry *tab =
+      (GCEntry *) ((char *) theProto + theProto->GCTabOff);
+        
+    /* Handle all the static objects. 
+     *
+     * The static table, tab[0], tab[1], ..., 0,
+     * contains all static objects on all levels.
+     * We call recursively on every one, is we're told
+     * to do so. When we do so, we make sure that there is no 
+     * further recursion going on.
+     */
+    for (;tab->StaticOff; ++tab) {
+      if (objectAction) {
+	objectAction((Object *)((long *)obj + tab->StaticOff));
+      }
+    }
+    
+  } else {
+    switch (SwitchProto(theProto)) {
+    case SwitchProto(ByteRepPTValue):
+    case SwitchProto(ShortRepPTValue):
+    case SwitchProto(DoubleRepPTValue):
+    case SwitchProto(LongRepPTValue): 
+    case SwitchProto(DynItemRepPTValue):
+    case SwitchProto(DynCompRepPTValue):
+    case SwitchProto(RefRepPTValue): 
+      break;
+      
+    case SwitchProto(ComponentPTValue):
+      {
+	Component * theComponent;
+	
+	theComponent = ((Component*)obj);
+	scanPartObjects((Object *)ComponentItem( theComponent));
+	break;
+      }
+    case SwitchProto(StackObjectPTValue):
+      break;
+      
+    case SwitchProto(StructurePTValue):
+      break;
+              
+    case SwitchProto(DopartObjectPTValue):
+      break;
+    default:
+      Claim( FALSE, "scanObject: theObj must be KNOWN.");
+      
+    }
+  } 
+}
+
+#endif /* RTDEBUG */

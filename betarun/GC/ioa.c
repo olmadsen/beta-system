@@ -19,6 +19,8 @@
 #include "../P/misc.h"
 #include "../P/referenceTable.h"
 #include "../P/PException.h"
+#include "../P/profile.h"
+#include "../P/transitObjectTable.h"
 #endif /* PERSIST */
 
 #define REP ((ObjectRep *)theObj)
@@ -48,6 +50,10 @@ void IOAGc()
   
  IOAGCstart:
 #endif /* PERSIST */
+  
+#ifdef PROFILE_PERSISTENCE
+  show_vtimer();
+#endif /* PROFILE_PERSISTENCE */
   
   MAC_CODE(RotateTheCursor());
   
@@ -89,6 +95,13 @@ void IOAGc()
   /* AOA roots start out by residing in upper part of ToSpace */
   AOArootsLimit = AOArootsPtr = ToSpaceLimit;
   
+#ifdef PERSIST
+  /* Clear registered indirect refs in IOA. Information about these will be 
+     rebuild during the following GC.
+  */
+  clearIOAclients();
+#endif /* PERSIST */
+
   /* Clear IOAAgeTable */
   { long i; for(i=0; i < IOAMaxAge; i++) IOAAgeTable[i] = 0; }
   
@@ -222,6 +235,11 @@ void IOAGc()
   }
 #endif
 
+#ifdef PERSIST
+  /* Will flush all persistent objects loaded since last IOAGc */
+  TOTFlush();
+#endif /* PERSIST */
+
   if (!noAOAGC) {
 #ifdef PERSIST
     if (AOANeedCompaction || forceAOAGC) {
@@ -235,10 +253,10 @@ void IOAGc()
 	/* All persistent objects have now been moved to AOA and
 	   inserted in the PObjects table. All persistent references in
 	   IOA have been marked ALIVE. */
-	
+
+	clearAOAclients();
+
 	AOAGc();
-	
-	showStatistics();
 	
 	repeatIOAGc = 0;
       } else {
@@ -270,6 +288,7 @@ void IOAGc()
     }
 #endif /* PERSIST */
   }
+  
   if (tempAOAroots) {
     /* ToSpace was not big enough to hold both objects and table.
      * Free the table that was allocated by saveAOAroot().  */
@@ -627,8 +646,9 @@ void ProcessReference(Object ** theCell)
 #endif
 #ifdef PERSIST
     if (inPIT((void *)*theCell)) {
-	referenceAlive(((void *)*theCell));
-	INFO_PERSISTENCE(TtoP++);
+      referenceAlive(((void *)*theCell));
+      newIOAclient(getPUID((void *)*theCell), theCell);
+      INFO_PERSISTENCE(TtoP++);
     } else 
 #endif /* PERSIST */
     if (inAOA(*theCell)) {
@@ -670,11 +690,13 @@ static void ProcessAOAReference(Object ** theCell)
   long GCAttribute;
 
 
+#ifndef PERSIST
   if (*theCell) {
     Claim(inBetaHeap(*theCell), "inBetaHeap(*theCell)");
   } else {
     return;
   }
+#endif /* PERSIST */
 
   theObj = *theCell; /* the object referenced from the cell */
   
@@ -735,6 +757,7 @@ static void ProcessAOAReference(Object ** theCell)
 #ifdef PERSIST
   else if (inPIT((void *)*theCell)) {
     referenceAlive(((void *)*theCell));
+    newAOAclient(getPUID((void *)*theCell), theCell);
     INFO_PERSISTENCE(TtoP++);
   }
 #endif /* PERSIST */
