@@ -21,9 +21,6 @@ int BetaReadPNGFileToXImage(Display *display, char *name, XImage **ximage)
   
   if (error == 0) {
     BetaImageToXImage(display, &image, ximage);
-    if(!truecolor) {
-      free(image.data);
-    }
     if(image.palette) {
       free(image.palette);
     }
