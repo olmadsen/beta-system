@@ -104,6 +104,12 @@ sub read_file
     return $line;
 }
 
+sub rename_file
+{
+    local ($old, $new) = @_;
+    rename $old, $new || die "Cannot rename file $old to $new: $!\n";
+}
+
 sub SmartMkdir {
     my ($path) = @_;
     my ($full) = '';
@@ -2199,29 +2205,18 @@ EOT
     printf STDERR "done.\n" if $verbose==1;
 }
 
-sub filter_url_for_pdf
-{
-    local ($link) = @_;
-    local ($url);
-    $link =~ m%<A HREF="([^\"]+)">%is;
-    $url = $1;
-    if (($url !~ m%^http:%i) && ($url !~ m%^\.\./%i)){
-	$url = "pdf_" . $url;
-    }
-    #print STDERR "substituting $link with <A HREF=\"$url\">\n";
-    $link = "<A HREF=\"$url\">";
-    return $link;
-}
-
 sub filter_for_pdf
 {
-    local ($file) = @_;
-    local ($pfile);
+    local ($file, $distfile) = @_;
     local ($contents);
     local ($done, $before, $match, $after, $number, $i);
 
-    $pfile = "pdf_$file";
-    $contents = &read_file($file);
+    #print STDERR "filter_for_pdf($file, $distfile)\n";
+
+    #print STDERR "rename_file($file, $distfile)\n";
+    &rename_file($file, $distfile);
+    #print STDERR "read_file($distfile)\n";
+    $contents = &read_file($distfile);
 
     ### This eats too much because it matches from start of first
     ### script to end of last.
@@ -2238,6 +2233,9 @@ sub filter_for_pdf
     # No - not htmldoc 1.8.8
     #$contents =~ s%\&COPY;%(C)%gi;
     #$contents =~ s%\&\#169;%(C)%gi;
+    # However, the copyright file is not present as part of pdf
+    # Remove link:
+    $contents =~ s%<A HREF="[./]*copyright.html">&#169;</A>%&#169;%gi;
 
     # Remove modification notices
     $contents =~ s&\<TD width\=\"40\%\" align\=\"right\">\s*\<DIV STYLE=\".+\"\>\[Modified:[^\]]+\]\s*</DIV>\s*</TD>&&gsi;
@@ -2247,21 +2245,16 @@ sub filter_for_pdf
     # And the left column may be 50%:
     $contents =~ s&<TD width="40%" align="left">&<TD width="50%" align="left">&gi;
 
-    # Fix links to local files: All now have a prefix "pdf_"
-    $contents =~ s%\<A HREF=\"[^\"]+\"\>%filter_url_for_pdf($&)%gies;
-
-    open (STDOUT, ">$pfile") || die "Cannot open $pfile for writing: $!\n";
+    #print STDERR "open($file)\n";
+    open (STDOUT, ">$file") || die "Cannot open $file for writing: $!\n";
     print $contents;
     close STDOUT;
-    return $pfile;
 }
-
 
 sub generate_pdf
 {
     local ($cmd, $v) = ("", "");
     local (@sequence) = ();
-    local (@pdfsequence) = ();
     if ($skippdf){
 	print STDERR "Skipping PDF generation (-p option)\n" if $verbose;
     } else {
@@ -2278,29 +2271,22 @@ sub generate_pdf
 	if ($do_figure_list){
 	    push @sequence, $figuresfile;
 	}
-	foreach $s (@srcfiles){
-	    local $f = $s;
-	    $s =~ s%^$src%%;
-	    push @sequence, $s;
-	}
-	if ($#intsrcfiles>0){
-	    for ($filenumber=0; $filenumber<=$#intsrcfiles; $filenumber++){
-		next if ($intsrcfiles[$filenumber] eq "");
-		push @sequence, "interface/" . &strip_extension(&strip_path($intsrcfiles[$filenumber])) . ".html";
-	    }
+	push @sequence, @dstfiles;
+	foreach $f (@intdstfiles){
+	    # Ignore intdst directories
+	    push @sequence, $f if (-f $f);
 	}
 	push @sequence, $indexfile if (-f $indexfile);
 
 	# htmldoc does not handle <script>...</script> too well
 	# We filter it out in copies of the files in sequence
-	&SmartMkdir("pdf_interface");
 	foreach $f (@sequence){
-	    push (@pdfsequence, &filter_for_pdf($f));
+	    &filter_for_pdf($f, "$f-dist")
 	}
 
 	# run htmldoc
 	$v = "-v" if $verbose;
-	$cmd = "$htmldoc $v -t pdf -f $pdf --toclevels 4 --bodycolor \#ffffff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.i --firstpage p1 --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Helvetica --bodyfont Helvetica --headfootsize 11.0 --headfootfont Helvetica " . join (' ', @pdfsequence);
+	$cmd = "$htmldoc $v -t pdf -f $pdf --toclevels 4 --bodycolor \#ffffff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.i --firstpage p1 --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Helvetica --bodyfont Helvetica --headfootsize 11.0 --headfootfont Helvetica " . join (' ', @sequence);
 
 	print STDERR "Generating $pdf\n" if ($verbose);
 	print STDERR "$cmd\n" if $debug;
@@ -2311,12 +2297,15 @@ sub generate_pdf
 	    print STDERR "   executable via your path.\n";
 	    print STDERR "   It must be version 1.8.8 or later.\n";
 	    print STDERR "   You may download htmldoc from\n\tftp://ftp.easysw.com/pub/htmldoc/\n";
-	    unlink $pdftitlefile, @pdfsequence;
-	    rmdir "pdf_interface";
-	    return;
 	};
-	unlink $pdftitlefile, @pdfsequence;
-	rmdir "pdf_interface";
+	unlink @sequence;
+	foreach $f (@sequence){
+	    if ($f eq $pdftitlefile){
+		unlink "$f-dist";
+	    } else {
+		&rename_file("$f-dist", $f);
+	    }
+	}
 	if (-f $pdf){
 	    print STDERR "Wrote $pdf\n" if $verbose;
 	} else {
@@ -2339,7 +2328,7 @@ $date
 <P>
 <TABLE border=1 cellpadding=3>
 <TR><TD align=center>
-Copyright $copyrightyears <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A>.<BR>
+Copyright &#169; $copyrightyears <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A>.<BR>
 All rights reserved.<BR>
 No part of this document may be copied or distributed<BR>
 without the prior written permission of Mjølner Informatics
