@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-02 15:15:11 $, SID: $Revision: 1.14 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-03 09:56:31 $, SID: $Revision: 1.15 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -193,7 +193,7 @@ void IOAGc()
       while( HandledInAOA < HandledAOABlock->top ){
 	ProcessAOAObject( (ref(Object))  HandledInAOA );
 	HandledInAOA = (ptr(long)) (((long) HandledInAOA)
-				  + 4 * ObjectSize( (ref(Object)) HandledInAOA ));
+				  + ObjectSize( (ref(Object)) HandledInAOA ));
 	CompleteScavenging();
       }
       HandledAOABlock = HandledAOABlock->next;
@@ -614,7 +614,7 @@ void CompleteScavenging()
   while( HandledInToSpace < ToSpaceTop){
     theObj = (ref(Object)) HandledInToSpace;
     HandledInToSpace = (ptr(long)) (((long) HandledInToSpace)
-                                + 4*ObjectSize(theObj));
+                                + ObjectSize(theObj));
     ProcessObject( theObj);
   }
   DEBUG_IOA( Claim( HandledInToSpace == ToSpaceTop,
@@ -649,7 +649,7 @@ void IOACheck()
 
   theObj = (ref(Object)) IOA;
   while( (ptr(long)) theObj < IOATop ){
-    theObjectSize = 4*ObjectSize( theObj);
+    theObjectSize = ObjectSize( theObj);
     IOACheckObject( theObj);
     theObj = (ref(Object)) Offset( theObj, theObjectSize);
   }
@@ -658,6 +658,8 @@ void IOACheck()
 void IOACheckObject( theObj)
   ref(Object) theObj;
 { ref(ProtoType) theProto;
+
+  printf("IOACheckObject: theObj=%x\n", theObj);
 
   theProto = theObj->Proto;
 
@@ -688,7 +690,11 @@ void IOACheckObject( theObj)
     case ComponentPTValue:
       { ref(Component) theComponent;
 
+	printf("ComponentObject\n");
+
         theComponent = Coerce( theObj, Component);
+	printf("theComponent->StackObj=%x\n", theComponent->StackObj);
+	printf("&theComponent->StackObj=%x\n", &theComponent->StackObj);
         IOACheckReference( &theComponent->StackObj);
         IOACheckReference( &theComponent->CallerComp);
         IOACheckReference( &theComponent->CallerObj);
@@ -766,8 +772,9 @@ void IOACheckObject( theObj)
 void IOACheckReference( theCell)
   handle(Object) theCell;
 {
+  printf("IOACheckReference: theCell=%x, *theCell=%x\n", theCell, *theCell);
   if( *theCell ){
-    Claim( inAOA(*theCell) || inIOA(*theCell) || inLVRA(*theCell),
+    Claim( inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell),
 	  "IOACheckReference: *theCell inside IOA, AOA or LVRA");
     if( inLVRA(*theCell) ){
       Claim( ((ref(ValRep)) *theCell)->GCAttr == (long) theCell,
