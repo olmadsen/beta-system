@@ -17,8 +17,6 @@ sub usage
 }
 
 ##### Global variables ####
-# Mentioning of option variables once more to prevent "used only once" warns
-$v = $t = $x = $f = $c = $w = "";
 # Variables set from command options
 my $verbose     = (defined($v)) ? 1 : 0;
 my $trace       = (defined($t)) ? 1 : 0;
@@ -26,6 +24,9 @@ my $extradir    = (defined($x)) ? 1 : 0;
 my $fullpath    = (defined($f)) ? 1 : 0;
 my $nocopyright = (defined($c)) ? 1 : 0;
 my $wiki        = (defined($w)) ? 1 : 0;
+# Mentioning of option variables once more to prevent "used only once" warns
+# NO overwrites command line values!
+#$v = $t = $x = $f = $c = $w = "";
 
 # Other global variables
 my $insert_validhtml40 = 0;
