@@ -18,7 +18,7 @@
 (defun beta-hilit-off ()
   "Turn of highlight"
   (interactive)
-  (require 'beta-hilit19)
+  (load 'beta-hilit19)
   (hilit-unhighlight-region (point-min) (point-max))
   (setq hilit-auto-rehighlight nil)
   (setq hilit-auto-highlight nil))
@@ -26,7 +26,7 @@
 (defun beta-hilit-on ()
   "Turn on highlight"
   (interactive)
-  (require 'beta-hilit19)
+  (load 'beta-hilit19)
   (hilit-highlight-region (point-min) (point-max))
   (setq hilit-auto-rehighlight t)
   (setq hilit-auto-highlight t))
