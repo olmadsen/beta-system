@@ -75,7 +75,7 @@ char *
 {
     long bodysize;
     long i;
-    unsigned char *oldBody;
+    unsigned char *oldBody, *retval=CTextPoolEnd;
 #ifdef hppa
     ref(Object) currentObj;
     currentObj = cast(Object) getThisReg();
@@ -106,5 +106,5 @@ char *
     asm volatile ("COPY %0,%%r26" : /* no out */ 
 		  : "r" (CTextPoolEnd - bodysize) : "r26");
 #endif
-    return CTextPoolEnd - bodysize;
+    return retval;
 }
