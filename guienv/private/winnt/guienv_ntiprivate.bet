@@ -1,244 +1,255 @@
 ORIGIN '../guienvbody';
-BODY 'pixmapbody';
-
-(*
+INCLUDE '~beta/win32lib/windowmanagement'
+        '~beta/win32lib/wingdi'
+        '~beta/win32lib/winuserconsts'
+        (*
  * COPYRIGHT
  *       Copyright (C) Mjolner Informatics, 1994-96
  *       All rights reserved.
  *)
-INCLUDE '~beta/win32lib/windowmanagement';
-INCLUDE '~beta/win32lib/wingdi';
-INCLUDE '~beta/win32lib/winuserconsts';
-INCLUDE '~beta/win32lib/menusupport';
-INCLUDE '~beta/win32lib/errorhandling';
-INCLUDE '~beta/containers/hashTable';
-INCLUDE '../linkedlist';
-INCLUDE '../../stddialogs';
-INCLUDE '../../guienvactions';
-INCLUDE '~beta/sysutils/objinterface';
-
-
--- guienvLib: attributes --
-
+        '~beta/win32lib/menusupport'
+        '~beta/win32lib/errorhandling'
+        '~beta/containers/hashTable'
+        '../linkedlist'
+        '../../stddialogs'
+        '../../guienvactions'
+        '~beta/sysutils/objinterface';
+BODY 'pixmapbody';
+-- guienvLib: Attributes --
 mainLoop:
-  (# processOne: @processOneEvent;
-  do l:
-       (if not private.done then
-           processOne;
-           restart l;
-       if);
-  #);  
+  (# processOne: @processOneEvent; 
+  do l: (if not private.done then processOne; restart l;  if); 
+  #);
 processOneEvent:
-  (# continue: @integer;
+  (#
+     continue: @integer;
      idle: @doIdle;
      result: @integer;
      dispatchResult: @integer;
-     msg, wParam: @integer;
+     msg,wParam: @integer;
      peekresult: @integer;
-     motion_compress: (# exit false #);
-  do idle;
+     motion_compress: (#  exit false #);
+     done: @boolean
+  do
+     idle;
      compress:
-       (#
+       (# 
        do
-          (private.message, 0, 0, 0, PM_REMOVE) -> PeekMessage -> result;
+          (private.message,0,0,0,PM_REMOVE)->PeekMessage->result;
           (if motion_compress then
               (if result <> 0 then
-                  (private.peek, 0, WM_MOUSEFIRST, WM_MOUSELAST, PM_NOREMOVE) -> PeekMessage -> peekresult;
+                  (private.peek,0,WM_MOUSEFIRST,WM_MOUSELAST,PM_NOREMOVE)
+                    ->PeekMessage->peekresult;
                   (if peekresult <> 0 then
-                      'GOTCHA!' -> putline;
-                      restart compress;
+                      'GOTCHA!'->putline; restart compress; 
                   if);
+                  
               if);
+              
           if);
+          
        #);
-     
-     (if XsystemEnvPresent then
-         private.sysenv_UIIdle;
-     if);
-     (if result = 0 then
-         (* Systemenv version. *)
-         (if XsystemEnvPresent then 
-             (if private.sysenv_UIIdle then
-                 WaitMessage
-             if)
+     (if XsystemEnvPresent then private.sysenv_UIIdle;  if);
+     (if result = 0 then (* Systemenv version. *)
+         (if XsystemEnvPresent then
+             (if private.sysenv_UIIdle then WaitMessage if)
           else
-             WaitMessage;
-         if);         
-      else
-         (private.message + 4 -> TOS'%adrGetLong') -> msg;
-         (private.message + 8 -> TOS'%adrGetLong') -> wParam;
-         (if msg  
-          // WM_QUIT then
-             cleanUp;
-             Stop;
-          else
-             (if this(guienv).private.hAccelTable=0 then 
-                 private.message -> TranslateMessage -> result;
-                 private.message -> DispatchMessage -> dispatchResult;
-              else
-                 (if ((GetActiveWindow,hAccelTable,private.message) 
-                       -> TranslateAccelerator) = 0 then
-                     private.message -> TranslateMessage -> result;
-                     private.message -> DispatchMessage -> dispatchResult;
-                 if); 
-             if);
+             WaitMessage; 
          if);
+         
+      else
+         (private.message+4->tos'%adrGetLong')->msg;
+         (private.message+8->tos'%adrGetLong')->wParam;
+         (if msg
+          // WM_QUIT then cleanUp; Stop; 
+          else
+             (if msg = WM_KEYDOWN then
+                 l:
+                   (# 
+                   do
+                      private.beforeKeyDown.scan
+                        (# 
+                        do
+                           (wParam,VK_CONTROL->isVKeyDown)->current->done;
+                           (if done then leave l;  if);
+                           
+                        #);
+                      (VK_CONTROL->isVKeyDown,wParam)->THIS(GUIENV).onKeyDown
+                        ->done;
+                      (if done then leave l if);
+                      private.afterKeyDown.scan
+                        (# 
+                        do
+                           (wParam,VK_CONTROL->isVKeyDown)->current->done;
+                           (if done then leave l;  if);
+                           
+                        #);
+                      
+                   #);
+                 
+             if);
+             (if not done then
+                 (if THIS(guienv).private.hAccelTable = 0 then
+                     private.message->TranslateMessage->result;
+                     private.message->DispatchMessage->dispatchResult;
+                     
+                  else
+                     (if
+                     ((GetActiveWindow,hAccelTable,private.message)
+                        ->TranslateAccelerator) = 0 then
+                         private.message->TranslateMessage->result;
+                         private.message->DispatchMessage->dispatchResult;
+                         
+                     if);
+                     
+                 if);
+                 
+             if)
+         if);
+         
      if);
+     
   #);
-
-
 cleanUp:
   (# 
-  do private.colors.cleanUp;
+  do
+     private.colors.cleanUp;
      private.textstyles.cleanUp;
      private.menus.cleanUp;
      private.windows.cleanUp;
-     (if private.ghPal<>0 then
-         private.ghPal -> DeleteObject;
-         0 -> private.ghPal;
+     (if private.ghPal <> 0 then
+         private.ghPal->DeleteObject; 0->private.ghPal; 
      if);
-     (if private.curhPal<>0 then
-         private.curhPal -> DeleteObject;
-         0 -> private.curhPal;
+     (if private.curhPal <> 0 then
+         private.curhPal->DeleteObject; 0->private.curhPal; 
      if);
-     (if patterns.black[]<>NONE then patterns.black.dispose; if);
-     (if patterns.white[]<>NONE then patterns.white.dispose; if);
-     (if patterns.dkGray[]<>NONE then patterns.dkGray.dispose; if);
-     (if patterns.gray[]<>NONE then patterns.gray.dispose; if);
-     (if patterns.ltGray[]<>NONE then patterns.ltGray.dispose; if);
+     (if patterns.black[] <> none then patterns.black.dispose;  if);
+     (if patterns.white[] <> none then patterns.white.dispose;  if);
+     (if patterns.dkGray[] <> none then patterns.dkGray.dispose;  if);
+     (if patterns.gray[] <> none then patterns.gray.dispose;  if);
+     (if patterns.ltGray[] <> none then patterns.ltGray.dispose;  if);
+     
   #);
-
 toData: external
-  (# in: @integer;
-     out: ^data;
+  (# in: @integer; out: ^data; 
   enter in
-  do 'copyinput' -> callC;
+  do 'copyinput'->callC; 
   exit out[]
   #);
-
-doIdle:
-  (#
-  do 
-  #);
+doIdle: (#  do  #);
 CallWindowProc: external
-    (# theProc,window,message,wParam,lParam: @integer;
-        result: @integer;
-    enter (theProc,window,message,wParam,lParam)
-    do 'CallWindProc' -> callC
-    exit result
-    #);
-
-
+  (# theProc,window,message,wParam,lParam: @integer; result: @integer; 
+  enter (theProc,window,message,wParam,lParam)
+  do 'CallWindProc'->callC
+  exit result
+  #);
 win32Menu: interfaceObject
-  (# <<SLOT win32MenuLib: attributes>>;
+  (#
+     <<SLOT win32MenuLib:Attributes>>;
      theMenu: ^menu;
      append:
-       (# theItem: ^menu.menuitem;
+       (# theItem: ^menu.menuitem; 
        enter theItem[]
-       <<SLOT GUIENVwin32Menuappend: doPart>>
+       <<SLOT GUIENVwin32Menuappend:DoPart>>
        #);
      delete:
-       (# theItem: ^menu.menuitem;
+       (# theItem: ^menu.menuitem; 
        enter theItem[]
-       <<SLOT GUIENVwin32Menudelete: doPart>>
+       <<SLOT GUIENVwin32Menudelete:DoPart>>
        #);
-     open::<
-       (# create::< (# <<SLOT GUIENVwin32MenuCreate: doPart>> #);
-       <<SLOT GUIENVwin32MenuOpen: doPart>>
+     open::< 
+       (#
+          create::< 
+            (# 
+            <<SLOT GUIENVwin32MenuCreate:DoPart>>
+            #);
+          
+       <<SLOT GUIENVwin32MenuOpen:DoPart>>
        #);
-     init: (# <<SLOT GUIENVwin32MenuInit: doPart>> #);
-     close::<
+     init:
        (# 
-       <<SLOT GUIENVwin32MenuClose: doPart>>
+       <<SLOT GUIENVwin32MenuInit:DoPart>>
        #);
-     private: @<<SLOT GUIENVwin32MenuPrivate: descriptor>>;
+     close::<  (#  <<SLOT GUIENVwin32MenuClose:DoPart>> #);
+     private:
+       @<<SLOT GUIENVwin32MenuPrivate:Descriptor>>;
+     
   #);
 win32Menubar: interfaceObject
-  (# <<SLOT win32MenubarLib: attributes>>;
+  (#
+     <<SLOT win32MenubarLib:Attributes>>;
      theWindow: ^window;
      append:
-       (# theMenu: ^menu;
+       (# theMenu: ^menu; 
        enter theMenu[]
-       <<SLOT GUIENVwin32Menubarappend: doPart>>
+       <<SLOT GUIENVwin32Menubarappend:DoPart>>
        #);
      insert:
-       (# theMenu: ^menu;
+       (# theMenu: ^menu; 
        enter theMenu[]
-       <<SLOT GUIENVwin32Menubarinsert: doPart>>
+       <<SLOT GUIENVwin32Menubarinsert:DoPart>>
        #);
      delete:
-       (# theMenu: ^menu;
+       (# theMenu: ^menu; 
        enter theMenu[]
-       <<SLOT GUIENVwin32Menubardelete: doPart>>
+       <<SLOT GUIENVwin32Menubardelete:DoPart>>
        #);
-     open::<
-       (# create::< (# <<SLOT GUIENVwin32Menubarcreate: doPart>> #);
-       <<SLOT GUIENVwin32Menubaropen: doPart>>
+     open::< 
+       (# create::<  (#  <<SLOT GUIENVwin32Menubarcreate:DoPart>> #); 
+       <<SLOT GUIENVwin32Menubaropen:DoPart>>
        #);
-     close::<
-       (# 
-       <<SLOT GUIENVwin32MenubarClose: doPart>>
-       #);
-     private: @<<SLOT GUIENVwin32Menubarprivate: descriptor>>;
+     close::<  (#  <<SLOT GUIENVwin32MenubarClose:DoPart>> #);
+     private:
+       @<<SLOT GUIENVwin32Menubarprivate:Descriptor>>;
+     
   #);
-
-getOsVersionId: external
-  (# osId: @integer;
-  do callC;
-  exit osId
-  #);
-
-getOsMajorVersionId: external
-  (# osId: @integer;
-  do callC;
-  exit osId
-  #);
-
+getOsVersionId: external (# osId: @integer;  do callC;  exit osId #);
+getOsMajorVersionId: external (# osId: @integer;  do callC;  exit osId #);
 isVKeyDown: external
-  (# button: @integer;
-     res: @boolean;
+  (# button: @integer; res: @boolean; 
   enter button
-  do 'isButtonDown' -> callC;
+  do 'isButtonDown'->callC; 
   exit res
   #);
-
 isVKeyToggled: external
-  (# button: @integer;
-     res: @boolean;
+  (# button: @integer; res: @boolean; 
   enter button
-  do 'isVKeyToggled' -> callC;
+  do 'isVKeyToggled'->callC; 
   exit res
   #);
-
 reportLastError:
-  (# msg: @text;
-     error: @integer;
+  (# msg: @text; error: @integer; 
   enter msg
-  <<SLOT GUIENVreportLastError: doPart>>
+  <<SLOT GUIENVreportLastError:DoPart>>
   #);
 checkNullError:
-  (# value: @integer;
-     msg: @text;
-  enter (value, msg)
-  do (if value=0 then
-         msg -> reportLastError;
-     if);
-  #);
-checkMinusOneError: 
-  (# value: @integer;
-     msg: @text;
+  (# value: @integer; msg: @text; 
   enter (value,msg)
-  do (if value=-1 then
-         msg -> reportLastError;
+  do
+     (if value = 0 then
+         msg->reportLastError; 
      if);
+     
   #);
-checkSetTextError: 
-  (# value: @integer;
-     msg: @text;
+checkMinusOneError:
+  (# value: @integer; msg: @text; 
   enter (value,msg)
-  do (if value//LB_ERRSPACE//CB_ERRSPACE//CB_ERR then
-         msg -> reportLastError;
+  do
+     (if value = - 1 then
+         msg->reportLastError; 
      if);
+     
+  #);
+checkSetTextError:
+  (# value: @integer; msg: @text; 
+  enter (value,msg)
+  do
+     (if value
+      // LB_ERRSPACE // CB_ERRSPACE
+      // CB_ERR then
+         msg->reportLastError; 
+     if);
+     
   #);
 theScreenRectangle:
   (# 
@@ -250,183 +261,156 @@ doubleClickPossible:
   enter private.doubleClickPossible
   exit private.doubleClickPossible
   #);
-modalState: 
-  (#
+modalState:
+  (# 
   enter private.modalState
   exit private.modalState
   #);
 activeWindow:
-  (# theWindow: ^window;
-     hWnd: @integer;
-  <<SLOT GUIENVactiveWindow: doPart>>
-  exit theWindow[]
-  #);
-
-makeModal:
- (# ID: @integer
- enter ID
- <<SLOT GUIENVwindowsMakeModal: doPart>>
- #);
-
-removeModal:
   (#
-  <<SLOT GUIENVwindowsRemoveModal: doPart>>
+     theWindow: ^window; hWnd: @integer; 
+  <<SLOT GUIENVactiveWindow:DoPart>>
+  exit
+  theWindow[]
   #);
-
-lastActiveWindowID:
+makeModal:
+  (# ID: @integer enter ID <<SLOT GUIENVwindowsMakeModal:DoPart>> #);
+removeModal:
   (# 
-  enter private.lastActiveWindowID
-  exit  private.lastActiveWindowID
+  <<SLOT GUIENVwindowsRemoveModal:DoPart>>
   #);
-
+lastActiveWindowID:
+  (#  enter private.lastActiveWindowID exit private.lastActiveWindowID #);
 findInterfaceObjecById:
-  (# id: @integer;
-     theInterfaceObject: ^interfaceobject;
+  (# id: @integer; theInterfaceObject: ^interfaceobject; 
   enter id
-  do id -> private.interfaceobjects.findById -> theInterfaceObject[]
+  do id->private.interfaceobjects.findById->theInterfaceObject[]
   exit theInterfaceObject[]
   #);
-
-modeless: (# exit 1 #);
-applicationModal: (# exit 2 #);
-systemModal: (# exit 3 #);
-
-rectLeftOffset:   (# exit 0 #);
-rectTopOffset:    (# exit 4 #);
-rectRightOffset:  (# exit 8 #);
-rectBottomOffset: (# exit 12 #);
-
+modeless: (#  exit 1 #);
+applicationModal: (#  exit 2 #);
+systemModal: (#  exit 3 #);
+rectLeftOffset: (#  exit 0 #);
+rectTopOffset: (#  exit 4 #);
+rectRightOffset: (#  exit 8 #);
+rectBottomOffset: (#  exit 12 #);
 makeNtRectPtr:
-  (# r: ^rectangle;
-     ntRectPtr: @integer;
+  (# r: ^rectangle; ntRectPtr: @integer; 
   enter r[]
-  do 16 -> malloc -> ntRectPtr;
-     (ntRectPtr + rectLeftOffset,  r.left) -> TOS'%PutLong';
-     (ntRectPtr + rectTopOffset,   r.top) -> TOS'%PutLong';
-     (ntRectPtr + rectRightOffset, r.right) -> TOS'%PutLong';
-     (ntRectPtr + rectBottomOffset,r.bottom) -> TOS'%PutLong';
+  do
+     16->malloc->ntRectPtr;
+     (ntRectPtr+rectLeftOffset,r.left)->tos'%PutLong';
+     (ntRectPtr+rectTopOffset,r.top)->tos'%PutLong';
+     (ntRectPtr+rectRightOffset,r.right)->tos'%PutLong';
+     (ntRectPtr+rectBottomOffset,r.bottom)->tos'%PutLong';
+     
   exit ntRectPtr
   #);
-
 getRectFromNtRectPtr:
-  (# r: ^rectangle;
-     ntRectPtr: @integer;
+  (# r: ^rectangle; ntRectPtr: @integer; 
   enter ntRectPtr
-  do &rectangle[] -> r[];
-     ntRectPtr + rectLeftOffset   -> TOS'%adrGetLong' -> r.left;
-     ntRectPtr + rectTopOffset    -> TOS'%adrGetLong' -> r.top;
-     ntRectPtr + rectRightOffset  -> TOS'%adrGetLong' -> r.right;
-     ntRectPtr + rectBottomOffset -> TOS'%adrGetLong' -> r.bottom;
+  do
+     &rectangle[]->r[];
+     ntRectPtr+rectLeftOffset->tos'%adrGetLong'->r.left;
+     ntRectPtr+rectTopOffset->tos'%adrGetLong'->r.top;
+     ntRectPtr+rectRightOffset->tos'%adrGetLong'->r.right;
+     ntRectPtr+rectBottomOffset->tos'%adrGetLong'->r.bottom;
+     
   exit r
-  #); 
-
-pointXoffset: (# exit 0 #);
-pointYoffset: (# exit 4 #);
-
+  #);
+pointXoffset: (#  exit 0 #);
+pointYoffset: (#  exit 4 #);
 makeNtPointPtr:
-  (# h,v: @integer;
-     ntPointPtr: @integer;
+  (# h,v: @integer; ntPointPtr: @integer; 
   enter (h,v)
-  do 8 -> malloc -> ntPointPtr;
-     (ntPointPtr + pointXoffset, h) -> TOS'%PutLong';
-     (ntPointPtr + pointYoffset, v) -> TOS'%PutLong';
+  do
+     8->malloc->ntPointPtr;
+     (ntPointPtr+pointXoffset,h)->tos'%PutLong';
+     (ntPointPtr+pointYoffset,v)->tos'%PutLong';
+     
   exit ntPointPtr
   #);
-
 getPointFromNtPointPtr:
-  (# h,v: @integer;
-     ntPointPtr: @integer;
+  (# h,v: @integer; ntPointPtr: @integer; 
   enter ntPointPtr
-  do ntPointPtr + pointXoffset -> TOS'%adrGetLong' -> h;
-     ntPointPtr + pointYoffset -> TOS'%adrGetLong' -> v;
+  do
+     ntPointPtr+pointXoffset->tos'%adrGetLong'->h;
+     ntPointPtr+pointYoffset->tos'%adrGetLong'->v;
+     
   exit (h,v)
   #);
-
-std16x4:external
-  (# a:@integer;
-  enter (a,a,a,a)
-  do stdExternalEntry
-  exit a
-  #);
-
+std16x4: external
+  (# a: @integer;  enter (a,a,a,a) do stdExternalEntry exit a #);
 (* FIXME: Could use MakeCBF - but compiler error *)
 std16x4toint: external
-  (# func: ##StandardWindowProc;
-     int: @integer;
+  (# func: ##StandardWindowProc; int: @integer; 
   enter func##
   do 'copyinput'->callC
   exit int
   #);
-
 StandardWindowProc: external
-  (# windowHandle,message,wParam,lParam: @integer;
-     result: @integer;               
-     dispatch: <<SLOT GUIENVStandardWindowProc: descriptor>>;
-  enter (windowHandle,message,wParam,lParam)
-  do StdExternalEntry;
+  (#
+     windowHandle,message,wParam,lParam: @integer;
+     result: @integer;
+     dispatch: <<SLOT GUIENVStandardWindowProc:Descriptor>>;
+     
+  enter
+  (windowHandle,message,wParam,
+   lParam)
+  do
+     StdExternalEntry;
      (if XsystemEnvPresent then
-         &dispatch[]->XsystemEnvHandleCallback;
+         &dispatch[]->XsystemEnvHandleCallback; 
       else
-         dispatch;
+         dispatch; 
      if);
+     
   exit result
   #);
-
 addInterfaceObject:
-  (# theObject: ^interfaceObject;
+  (# theObject: ^interfaceObject; 
   enter theObject[]
-  <<SLOT GUIENVaddInterfaceObject: doPart>>
+  <<SLOT GUIENVaddInterfaceObject:DoPart>>
   #);
 removeInterfaceObject:
-  (#	theObject: ^interfaceObject;
+  (# theObject: ^interfaceObject; 
   enter theObject[]
-  <<SLOT GUIENVremoveInterfaceObject: doPart>>
+  <<SLOT GUIENVremoveInterfaceObject:DoPart>>
   #);
 addWindow:
-  (# theWindow: ^window;
+  (# theWindow: ^window; 
   enter theWindow[]
-  <<SLOT GUIENVaddWindow: doPart>>
+  <<SLOT GUIENVaddWindow:DoPart>>
   #);
 removeWindow:
-  (# theWindow: ^window;
+  (# theWindow: ^window; 
   enter theWindow[]
-  <<SLOT GUIENVremoveWindow: doPart>>
+  <<SLOT GUIENVremoveWindow:DoPart>>
   #);
-
 uienvStandardWindowClass:
-  (#
+  (# 
   enter private.uienvStandardWindowClass
   exit private.uienvStandardWindowClass
   #);
 uienvDialogWindowClass:
-  (#
+  (# 
   enter private.uienvDialogWindowClass
   exit private.uienvDialogWindowClass
   #);
 uienvHInstance:
-  (#
-  enter private.uienvHInstance
-  exit private.uienvHInstance
-  #);
+  (#  enter private.uienvHInstance exit private.uienvHInstance #);
 uienvStandardWindowProcAddress:
   (# 
   enter private.uienvStandardWindowProcAddress
   exit private.uienvStandardWindowProcAddress
   #);
-applIconId:
-  (# 
-  enter private.applIconId
-  exit private.applIconId
-  #);
+applIconId: (#  enter private.applIconId exit private.applIconId #);
 uniqueMenuItemID: integerValue
-    (#
-    do private.lastMenuItemID + 1 -> value -> private.lastMenuItemID;
-    #);
+  (#  do private.lastMenuItemID+1->value->private.lastMenuItemID;  #);
 messageInfo:
-  (# message: @integer;
-     param: integerObject
-       (# hiWord,loWord: @integer;
-       #);
+  (#
+     message: @integer;
+     param: integerObject (# hiWord,loWord: @integer;  #);
      wParam,lParam: @param;
      result: @integer;
      handled: @boolean;
@@ -436,29 +420,27 @@ messageInfo:
      button: @integer;
      key,speckey: @integer;
      next: ^messageInfo;
-    #);
+     
+  #);
 currentMessageInfo:
-    (#
-    enter private.currentMessageInfo[]
-    exit private.currentMessageInfo[]
-    #);
+  (# 
+  enter private.currentMessageInfo[]
+  exit private.currentMessageInfo[]
+  #);
 pushMessageInfo:
-    (# info: ^messageInfo;
-    enter info[]
-    do currentMessageInfo -> info.next[];
-       info[] -> currentMessageInfo;
-    #);
+  (# info: ^messageInfo; 
+  enter info[]
+  do currentMessageInfo->info.next[]; info[]->currentMessageInfo; 
+  #);
 popMessageInfo:
-    (# info: ^messageInfo;
-    do currentMessageInfo -> info[];
-       (if (info[]<>none) then
-           info.next[] -> currentMessageInfo;
-       if);
-    #);
+  (# info: ^messageInfo; 
+  do
+     currentMessageInfo->info[];
+     (if (info[] <> none ) then info.next[]->currentMessageInfo;  if);
+     
+  #);
 modalWindowInfo:
-  (# theWindow: ^window;
-     targetID: @integer;;
-     next: ^modalWindowInfo;
+  (# theWindow: ^window; targetID: @integer; ; next: ^modalWindowInfo; 
   #);
 currentModalWindowInfo:
   (# 
@@ -466,44 +448,29 @@ currentModalWindowInfo:
   exit private.currentModalWindowInfo[]
   #);
 pushModalWindowInfo:
-  (# info: ^modalWindowInfo;
+  (# info: ^modalWindowInfo; 
   enter info[]
-  do currentModalWindowInfo -> info.next[];
-     info[] -> currentModalWindowInfo;
+  do currentModalWindowInfo->info.next[]; info[]->currentModalWindowInfo; 
   #);
 popModalWindowInfo:
-  (# info: ^modalWindowInfo;
-  do currentModalWindowInfo -> info[];
-     (if info[]<>NONE then
-         info.next[] -> currentModalWindowInfo;
-     if);
+  (# info: ^modalWindowInfo; 
+  do
+     currentModalWindowInfo->info[];
+     (if info[] <> none then info.next[]->currentModalWindowInfo;  if);
+     
   #);
 uienvTheMenubar:
-  (# 
-  enter private.theMenubar[]
-  exit private.theMenuBar[]
-  #);
+  (#  enter private.theMenubar[] exit private.theMenuBar[] #);
 backgroundBrush:
-  (# 
-  enter private.backgroundBrush
-  exit private.backgroundBrush
-  #);
-hAccelTable:
-  (#
-  enter private.hAccelTable
-  exit private.hAccelTable
-  #);
+  (#  enter private.backgroundBrush exit private.backgroundBrush #);
+hAccelTable: (#  enter private.hAccelTable exit private.hAccelTable #);
 setHMainWindow:
-  (# hMainWindow: @integer;
+  (# hMainWindow: @integer; 
   enter hMainWindow
-  do (if private.hMainWindow=0 then
-     hMainWindow -> private.hMainWindow;
-     if);
+  do
+     (if private.hMainWindow = 0 then hMainWindow->private.hMainWindow;  if); 
   #);
-getHMainWindow:
-  (#
-  exit private.hMainWindow
-  #);
+getHMainWindow: (#  exit private.hMainWindow #);
 defaultButtonTextStyle:
   (# 
   enter private.defaultButtonTextStyle[]
@@ -520,7 +487,7 @@ defaultEditTextTextStyle:
   exit private.defaultEditTextTextStyle[]
   #);
 defaultStaticTextTextStyle:
-  (#
+  (# 
   enter private.defaultStaticTextTextStyle[]
   exit private.defaultStaticTextTextStyle[]
   #);
@@ -529,59 +496,51 @@ defaultScrollListTextStyle:
   enter private.defaultScrollListTextStyle[]
   exit private.defaultScrollListTextStyle[]
   #);
-doDebug:
-  (#
-  enter private.doDebug
-  exit private.doDebug
-  #);
-
+doDebug: (#  enter private.doDebug exit private.doDebug #);
 makeColorRef:
-  (# theColor: ^color;
-     theColorRef: @integer;
+  (# theColor: ^color; theColorRef: @integer; 
   enter theColor[]
-  do (if theColor[]<>NONE then
-         (theColor.red div 256,0) -> theColorRef.%putByte;
-         (theColor.green div 256,1) -> theColorRef.%putByte;
-         (theColor.blue div 256,2) -> theColorRef.%putByte;
-         (2,3) -> theColorRef.%putByte;
+  do
+     (if theColor[] <> none then
+         (theColor.red div 256,0)->theColorRef.%putByte;
+         (theColor.green div 256,1)->theColorRef.%putByte;
+         (theColor.blue div 256,2)->theColorRef.%putByte;
+         (2,3)->theColorRef.%putByte;
+         
      if);
+     
   exit theColorRef
   #);
-
-colorInfo: 
-  (# red, green, blue: @integer;
+colorInfo:
+  (#
+     red,green,blue: @integer;
      theColorRef: @integer;
      hBrush: @integer;
      equal: booleanValue
-       (# theRed, theGreen, theBlue: @integer;
-       enter (theRed, theGreen, theBlue)
-       do ((red = theRed) and (green = theGreen) and (blue = theBlue))
-            -> value;
+       (# theRed,theGreen,theBlue: @integer; 
+       enter (theRed,theGreen,theBlue)
+       do ((red = theRed) and (green = theGreen) and (blue = theBlue))->value; 
        #);
-     
      dispose:
        (# 
-       do (if hBrush<>0 then hBrush -> DeleteObject; 0 -> hBrush; if);
+       do (if hBrush <> 0 then hBrush->DeleteObject; 0->hBrush;  if); 
        #);
-     
      refCount: @integer;
      
-  enter (red, green, blue)
-  exit (red, green, blue)
+  enter (red,green,blue)
+  exit (red,green,blue)
   #);
+  
 
--- GUIENVPrivate: descriptor --
-(# doDebug: @boolean;
+-- GUIENVPrivate: Descriptor --
+(#
+   doDebug: @boolean;
    counter: @integer;
-   
-   menuChanged:<
-     (# theMenu: ^menu;
-     enter theMenu[]
-     do inner
-     #);
-   
+   ActionList: List (# element:: globalKeyDownAction;  #);
+   beforeKeyDown: @ActionList;
+   afterKeyDown: @ActionList;
+   menuChanged:< (# theMenu: ^menu;  enter theMenu[] do INNER #);
    EnumFontFamiliesProcAddress: @integer;
-   
    theScreenRectangle: @rectangle;
    hMainWindow: @integer;
    hAccelTable: @integer;
@@ -598,7 +557,7 @@ colorInfo:
    done: @boolean;
    message: @integer;
    peek: @integer;
-   modalState: @integer; 
+   modalState: @integer;
    currentModalWindowInfo: ^modalWindowInfo;
    lastMenuitemID: @integer;
    currentMessageInfo: ^messageInfo;
@@ -609,264 +568,306 @@ colorInfo:
    defaultEditTextTextStyle: ^textStyle;
    defaultStaticTextTextStyle: ^textStyle;
    defaultScrollListTextStyle: ^textStyle;
-   currentMouseCursor, prevMouseCursor: ^cursor;
-   ghPal, curhPal: @integer;      
-   
+   currentMouseCursor,prevMouseCursor: ^cursor;
+   ghPal,curhPal: @integer;
    colors: @hashTable
-     (# element:: colorInfo;
-        hashfunction:: (# do e.theColorRef mod 31 -> value #);
-        equal:: (# do (left -> right.equal) -> value; #);
-        rangeInitial:: (# do 31 -> value; INNER #);
-        
+     (#
+        element:: colorInfo;
+        hashfunction::  (#  do e.theColorRef mod 31->value #);
+        equal::  (#  do (left->right.equal)->value;  #);
+        rangeInitial::  (#  do 31->value; INNER #);
         findByRGB: @
-          (# theColor: @color; theColorRef: @integer;
+          (#
+             theColor: @color;
+             theColorRef: @integer;
              foundObject: ^element;
              fi: @findIndexed
-               (# predicate:: 
-                    (# 
-                    do theColor->current.equal -> value 
-                    #);
-                  notFound:: (# do NONE -> foundObject[]; #);
-               do current[] -> foundObject[];
+               (#
+                  predicate::  (#  do theColor->current.equal->value #);
+                  notFound::  (#  do none ->foundObject[];  #);
+                  
+               do current[]->foundObject[]; 
                #);
+             
           enter theColor
-          do theColor[] -> makeColorRef -> theColorRef;
-             theColorRef mod 31 -> fi;
-             (if foundObject[]<>NONE then
-                 foundObject.refCount + 1 -> foundObject.refCount;
+          do
+             theColor[]->makeColorRef->theColorRef;
+             theColorRef mod 31->fi;
+             (if foundObject[] <> none then
+                 foundObject.refCount+1->foundObject.refCount; 
              if);
+             
           exit foundObject[]
           #);
-        
         remove:
-          (# theColorInfo: ^colorInfo;
+          (# theColorInfo: ^colorInfo; 
           enter theColorInfo[]
-          do theColorInfo.refCount - 1 -> theColorInfo.refCount;
-             (if theColorInfo.refCount=0 then
-                 theColorInfo.dispose;
-                 theColorInfo[] -> delete;
+          do
+             theColorInfo.refCount-1->theColorInfo.refCount;
+             (if theColorInfo.refCount = 0 then
+                 theColorInfo.dispose; theColorInfo[]->delete; 
              if);
+             
           #);
-        
         add:
-          (# theColorInfo: ^colorInfo;
+          (# theColorInfo: ^colorInfo; 
           enter theColorInfo[]
-          do theColorInfo.refCount + 1 -> theColorInfo.refCount;
-             theColorInfo[] -> insert;
+          do
+             theColorInfo.refCount+1->theColorInfo.refCount;
+             theColorInfo[]->insert;
+             
           #);
+        cleanUp: (#  do scan (#  do current.dispose;  #);  #);
         
-        cleanUp:
-          (# 
-          do scan
-               (# 
-               do current.dispose;
-               #);
-          #);
      #);
-   
    interfaceObjects: @hashTable
-     (# element:: interfaceObject;
-        hashfunction:: (# do e.interfaceObjectID -> value #);
-        equal:: (# do (left.interfaceObjectID=right.interfaceObjectID) -> value; #);
-        rangeInitial::< (# do 317 -> value; INNER #);
-        
+     (#
+        element:: interfaceObject;
+        hashfunction::  (#  do e.interfaceObjectID->value #);
+        equal:: 
+          (# 
+          do (left.interfaceObjectID = right.interfaceObjectID)->value; 
+          #);
+        rangeInitial::<  (#  do 317->value; INNER #);
         findByID: @
-          (# ID: @integer;
+          (#
+             ID: @integer;
              foundObject: ^element;
              fi: @findIndexed
-               (# predicate:: (# do current.interfaceObjectID = ID -> value #);
-                  notFound:: (# do NONE -> foundObject[]; #);
-               do current[] -> foundObject[];
+               (#
+                  predicate:: 
+                    (#  do current.interfaceObjectID = ID->value #);
+                  notFound::  (#  do none ->foundObject[];  #);
+                  
+               do current[]->foundObject[]; 
                #);
+             
           enter ID
-          do ID -> fi;
+          do ID->fi; 
           exit foundObject[]
           #);
-        
         hasObject: @BooleanValue
-          (# ID: @Integer;
+          (#
+             ID: @Integer;
              anInterfaceObject: ^interfaceobject;
              fi: @findIndexed
-               (# predicate:: (# do current.interfaceObjectID = ID -> value #);
-               do true -> value;
+               (#
+                  predicate:: 
+                    (#  do current.interfaceObjectID = ID->value #);
+                  
+               do true->value; 
                #);
+             
           enter anInterfaceObject[]
-          do false -> value; 
-             anInterfaceObject.interfaceObjectID -> ID;
-             ID -> fi;
+          do false->value; anInterfaceObject.interfaceObjectID->ID; ID->fi; 
           #);
-     #);
-   
-   windows: @hashTable
-     (# element::< window;
-        hashfunction:: (# do e.interfaceObjectID -> value #);
-        equal:: (# do (left.interfaceObjectID=right.interfaceObjectID) -> value; #);
-        rangeInitial::< (# do 31 -> value; INNER #);
         
+     #);
+   windows: @hashTable
+     (#
+        element::< window;
+        hashfunction::  (#  do e.interfaceObjectID->value #);
+        equal:: 
+          (# 
+          do (left.interfaceObjectID = right.interfaceObjectID)->value; 
+          #);
+        rangeInitial::<  (#  do 31->value; INNER #);
         findByID:
-          (# ID: @integer;
+          (#
+             ID: @integer;
              foundObject: ^element;
              fi: @findIndexed
-               (# predicate:: (# do current.interfaceObjectID = ID -> value #);
-                  notFound:: (# do NONE -> foundObject[]; #);
-               do current[] -> foundObject[];
+               (#
+                  predicate:: 
+                    (#  do current.interfaceObjectID = ID->value #);
+                  notFound::  (#  do none ->foundObject[];  #);
+                  
+               do current[]->foundObject[]; 
                #);
+             
           enter ID
-          do ID -> fi;
+          do ID->fi; 
           exit foundObject[]
           #);
-        
         hasWindow: @BooleanValue
-          (# ID: @Integer;
+          (#
+             ID: @Integer;
              aWindow: ^window;
              fi: @findIndexed
-               (# predicate:: (# do current.interfaceObjectID = ID -> value #);
-               do true -> value;
-               #);
-          enter aWindow[]
-          do false -> value; 
-             aWindow.interfaceObjectID -> ID;
-             ID -> fi;
-          #);
-        
-        cleanUp:
-          (# 
-          do scan
-             (# 
-             do (if current.isOpen then
-                    (current.contents).scan
-                    (# 
-                    do (if current.theBkColorInfo<>NONE then
-                           current.theBkColorInfo 
-                             -> this(guienv).private.colors.remove;
-                       if);
-                    #);
-                if);
-             #);
-          #);
-     #); (* End of windows *)
-   
-   win32Menubars: @linkedList
-     (# element:: win32Menubar;
-        
-        cleanUp:
-          (# 
-          do scan
-             (# do current.close; #);
-          #);
-     #);
-   
-   menus: @list
-     (# element::< menu;
-        findByID:
-          (# ID: @integer;
-             e: ^element;
-             found: @boolean;
-          enter ID
-          do l: scan
                (#
-               do lm: 
-                    current.private.win32Menus.scan
-                    (# 
-                    do (if current.interfaceObjectID=ID then
-                           true -> found;
-                           leave lm;
-                       if);
-                    #);
-                  (if found then
-                      current[] -> e[];
-                      leave l;
-                  if);
+                  predicate:: 
+                    (#  do current.interfaceObjectID = ID->value #);
+                  
+               do true->value; 
                #);
+             
+          enter aWindow[]
+          do false->value; aWindow.interfaceObjectID->ID; ID->fi; 
+          #);
+        cleanUp:
+          (# 
+          do
+             scan
+               (# 
+               do
+                  (if current.isOpen then
+                      (current.contents).scan
+                        (# 
+                        do
+                           (if current.theBkColorInfo <> none then
+                               current.theBkColorInfo
+                                 ->THIS(guienv).private.colors.remove;
+                               
+                           if);
+                           
+                        #);
+                      
+                  if);
+                  
+               #);
+             
+          #);
+        
+     #);
+   (* End of windows *)
+   win32Menubars: @linkedList
+     (#
+        element:: win32Menubar;
+        cleanUp: (#  do scan (#  do current.close;  #);  #);
+        
+     #);
+   menus: @list
+     (#
+        element::< menu;
+        findByID:
+          (# ID: @integer; e: ^element; found: @boolean; 
+          enter ID
+          do
+             l: scan
+               (# 
+               do
+                  lm: current.private.win32Menus.scan
+                    (# 
+                    do
+                       (if current.interfaceObjectID = ID then
+                           true->found; leave lm; 
+                       if);
+                       
+                    #);
+                  (if found then current[]->e[]; leave l;  if);
+                  
+               #);
+             
           exit e[]
           #);
         remove:
-          (# e: ^element;
+          (# e: ^element; 
           enter e[]
-          do e[] -> at -> delete
-             (# empty::
-                  (# 
-                  do true -> continue;
-                     (none,msg[],none) -> alertUser;
-                  #);
-             #);
+          do
+             e[]->at
+               ->delete
+                 (#
+                    empty:: 
+                      (# 
+                      do true->continue; (none ,msg[],none )->alertUser; 
+                      #);
+                    
+                 #);
+             
           #);
         cleanUp:
           (# 
-          do win32Menubars.cleanUp;
+          do
+             win32Menubars.cleanUp;
              scan
-             (# 
-             do current.private.win32Menus.scan
-                (# 
-                do (if (current.interfaceObjectID -> IsMenu)<>0 then 
-                       current.close;
-                   if);
-                #);
-             #);
+               (# 
+               do
+                  current.private.win32Menus.scan
+                    (# 
+                    do
+                       (if (current.interfaceObjectID->IsMenu) <> 0 then
+                           current.close; 
+                       if);
+                       
+                    #);
+                  
+               #);
+             
           #);
+        
      #);
    textStyles: @linkedList
-     (# element::< textStyle;
+     (#
+        element::< textStyle;
         cleanUp:
           (# 
-          do this(textStyles).scan
+          do
+             THIS(textStyles).scan
                (# 
-               do (if (current.textStyleID<>0) then
-                      (if (current.textStyleID -> DeleteObject)=0 then
-                          'Failed to delete font' -> Screen.putline;
+               do
+                  (if (current.textStyleID <> 0) then
+                      (if (current.textStyleID->DeleteObject) = 0 then
+                          'Failed to delete font'->Screen.putline; 
                       if);
+                      
                   if);
+                  
                #);
+             
           #);
         size:
-            (#  count: @integer;
-          do this(textStyles).scan
-               (# 
-               do count + 1 -> count;
-               #);
+          (# count: @integer; 
+          do THIS(textStyles).scan (#  do count+1->count;  #); 
           exit count
-           #);
+          #);
+        
      #);
    sysenv_UIIdle: ^BooleanValue;
-#)
+   
+#)  
 
--- GUIENVmenuPrivate: descriptor --
-(# menuName: ^text;
+-- GUIENVmenuPrivate: Descriptor --
+(#
+   menuName: ^text;
    menuFather: ^menubar;
    menuEnabled: @boolean;
    menuItems: @list
-     (# element::< menuItem;
+     (#
+        element::< menuItem;
         findByID:
-          (# id: @integer;
-             found: ^element;
+          (# id: @integer; found: ^element; 
           enter id
-          do theScan: scan
-               (#
-               do (if id=current.interfaceObjectID then
-                      current[] -> found[];
-                      leave theScan;
+          do
+             theScan: scan
+               (# 
+               do
+                  (if id = current.interfaceObjectID then
+                      current[]->found[]; leave theScan; 
                   if);
+                  
                #);
+             
           exit found[]
           #);
+        
      #);
    win32PopupMenu: ^win32Menu;
    win32Menus: @list
-     (# element::< win32Menu;
+     (#
+        element::< win32Menu;
         remove:
-          (# e: ^element;
+          (# e: ^element; 
           enter e[]
-          do (if (e[] -> has) then
-                 e[] -> at -> delete;
-             if);
+          do (if (e[]->has) then e[]->at->delete;  if); 
           #);
+        
      #);
-     
-#)
+   
+#)  
 
--- interfaceObjectLib: attributes --
+-- interfaceObjectLib: Attributes --
 interfaceObjectWindProc:
-  (#
+  (# 
   enter private.interfaceObjectWindProc
   exit private.interfaceObjectWindProc
   #);
@@ -875,339 +876,292 @@ interfaceObjectCursorHandle:
   enter private.interfaceObjectCursorHandle
   exit private.interfaceObjectCursorHandle
   #);
-actionList: linkedList
-  (# element::< action;
-  #);
-eventSpec:
-  (# type: ##theEventHandler.event;
-  #);
+actionList: linkedList (# element::< action;  #);
+eventSpec: (# type: ##theEventHandler.event;  #);
 eventSpecList: linkedList
-  (# element::< eventSpec;
+  (#
+     element::< eventSpec;
      remove:
-       (# ev: ##theEventHandler.event;
+       (# ev: ##theEventHandler.event; 
        enter ev##
-       do l: scan
-            (# 
-            do (if (current.type## = ev##) then
-                   current[] -> delete;
-                   leave l;
-               if);
-            #);
-       #);
-     has: booleanValue
-       (# ev: ##theEventHandler.event;
-       enter ev##
-       do false -> value;
+       do
           l: scan
             (# 
-            do (if (ev## <= current.type##) then
-                   true -> value;
-                   leave l;
+            do
+               (if (current.type## = ev##) then
+                   current[]->delete; leave l; 
                if);
+               
             #);
+          
        #);
+     has: booleanValue
+       (# ev: ##theEventHandler.event; 
+       enter ev##
+       do
+          false->value;
+          l: scan
+            (# 
+            do (if (ev## <= current.type##) then true->value; leave l;  if); 
+            #);
+          
+       #);
+     
   #);
-
 interfaceObjectID:
-  (#
-  enter private.interfaceObjectID
-  exit private.interfaceObjectID
-  #);
-isOpen:
-  (# 
-  enter private.isOpen
-  exit private.isOpen
-  #);
-theMethods:
-  (#
-  enter private.methods[]
-  exit private.methods[]
-  #);
-doAddToList:
-  (#
-  enter private.doAddToList
-  exit private.doAddToList
-  #);
+  (#  enter private.interfaceObjectID exit private.interfaceObjectID #);
+isOpen: (#  enter private.isOpen exit private.isOpen #);
+theMethods: (#  enter private.methods[] exit private.methods[] #);
+doAddToList: (#  enter private.doAddToList exit private.doAddToList #);
 interfaceObjectMethods:
-  (# dispatchMessage:<
-       (# info: ^messageInfo;
-       do <<SLOT interfaceObjectMethodsdispatchMessage: descriptor>>;
-       #);
-  #);
-dispatchMessage: 
   (#
-  do <<SLOT GUIENVinterfaceObjectdispatchMessage: descriptor>>;
+     dispatchMessage:<
+       (# info: ^messageInfo; 
+       do <<SLOT interfaceObjectMethodsdispatchMessage:Descriptor>>; 
+       #);
+     
+  #);
+dispatchMessage:
+  (# 
+  do
+     <<SLOT GUIENVinterfaceObjectdispatchMessage:Descriptor>>;
+     
   #);
 interfaceObjectUpdateRgn:
   (# 
   enter private.interfaceObjectUpdateRgn
   exit private.interfaceObjectUpdateRgn
   #);
+  
 
--- GUIENVinterfaceObjectPrivate: descriptor --
-(# interfaceObjectUpdateRgn: @integer;
+-- GUIENVinterfaceObjectPrivate: Descriptor --
+(#
+   interfaceObjectUpdateRgn: @integer;
    interfaceObjectID: @integer;
-   isOpen, doAddToList: @boolean;
+   isOpen,doAddToList: @boolean;
    methods: ^interfaceObjectMethods;
    beforeActions,afterActions: ^actionList;
    disabledEvents: ^eventSpecList;
-   interfaceObjectWindProc: @integer; (* address of window procedure. Does 
-                                       * only contain a valid value
-                                       * for windowItems that are subclasses 
-                                       * of standard window controls.
-                                       *)
+   interfaceObjectWindProc: @integer;
+   (* address of window procedure. Does 
+    * only contain a valid value
+    * for windowItems that are subclasses 
+    * of standard window controls.
+    *)
    interfaceObjectCursorHandle: @integer;
-#)
+   
+#)  
 
-
--- windowLib: attributes --
+-- windowLib: Attributes --
 callOnActivate:
-  (# 
-  enter private.callOnActivate
-  exit private.callOnActivate
-  #);
+  (#  enter private.callOnActivate exit private.callOnActivate #);
 windowMethods: interfaceObjectMethods
-  (# dispatchMessage::<
-       (#
-       do <<SLOT GUIENVwindowMethodsdispatchMessage: descriptor>>;
-       #);
+  (#
+     dispatchMessage::< 
+       (#  do <<SLOT GUIENVwindowMethodsdispatchMessage:Descriptor>>;  #);
+     
   #);
 windowFloating:
-  (#
-  enter private.windowFloating
-  exit private.windowFloating
+  (# 
+  enter
+  private.windowFloating
+  exit
+  private.windowFloating
   #);
 windowTarget:
-  (#
-  enter private.windowTarget[]
-  exit private.windowTarget[]
-  #);
+  (#  enter private.windowTarget[] exit private.windowTarget[] #);
 windowContents:
-  (# 
-  enter private.windowContents[]
-  exit private.windowContents[]
-  #);
+  (#  enter private.windowContents[] exit private.windowContents[] #);
 windowMenuBar:
-  (#
-  enter private.windowMenuBar[]
-  exit private.windowMenuBar[]
-  #);
+  (#  enter private.windowMenuBar[] exit private.windowMenuBar[] #);
 windowMinSize:
-  (#
-  enter private.windowMinSize
-  exit private.windowMinSize
-  #);
+  (#  enter private.windowMinSize exit private.windowMinSize #);
 windowMaxSize:
-  (#
-  enter private.windowMaxSize
-  exit private.windowMaxSize
-  #);
-uniqueID: integerValue
-  (#
-  do private.lastID + 1 -> value -> private.lastID;
-  #);
-
-windowDefaultButton:  (* les *)
-  (#
+  (#  enter private.windowMaxSize exit private.windowMaxSize #);
+uniqueID: integerValue (#  do private.lastID+1->value->private.lastID;  #);
+windowDefaultButton: (* les *)
+  (# 
   enter private.windowDefaultButton[]
   exit private.windowDefaultButton[]
   #);
-windowFrame:
-    (#
-    enter private.windowFrame
-    exit private.windowFrame
-    #);
-windowStyle:
-  (# 
-  enter private.windowStyle
-  exit private.windowStyle
-  #);
+windowFrame: (#  enter private.windowFrame exit private.windowFrame #);
+windowStyle: (#  enter private.windowStyle exit private.windowStyle #);
 windowExStyle:
-  (# 
-  enter private.windowExStyle
-  exit private.windowExStyle
-  #);
+  (#  enter private.windowExStyle exit private.windowExStyle #);
+  
 
--- GUIENVwindowPrivate: descriptor --
-(# 
-   theToolTipControl: ^object; 
+-- GUIENVwindowPrivate: Descriptor --
+(#
+   theToolTipControl: ^object;
    windowMenuBar: ^menubar;
    theWin32Menubar: ^win32Menubar;
-   
    windowStyle,windowExStyle: @integer;
    backGroundColor: @integer;
    owner: @integer;
-   
    iconId: @integer;
    visibleFlag: @boolean;
    callOnActivate: @boolean;
    windowFloating: @boolean;
    windowTarget: ^windowItem;
    lastID: @integer;
-   windowDefaultButton: ^windowItem;  (* les *)
+   windowDefaultButton: ^windowItem;
+   (* les *)
    windowFrame: @rectangle;
    windowMinSize,windowMaxSize: @point;
    windowContents: @canvas
-     (# eventHandler::<
-          (# onMouseDown::<
+     (#
+        eventHandler::< 
+          (#
+             onMouseDown::< 
                (# 
-               do this(window).theEventHandler.onMouseDown;
-                  inner onMouseDown;
+               do
+                  THIS(window).theEventHandler.onMouseDown; INNER onMouseDown; 
                #);
-             onMouseUp::<
+             onMouseUp::< 
                (# 
-               do this(window).theEventHandler.onMouseUp;
-                  inner onMouseUp;
+               do THIS(window).theEventHandler.onMouseUp; INNER onMouseUp; 
                #);
-             onKeyDown::<
+             onKeyDown::< 
                (# 
-               do this(window).theEventHandler.onKeyDown;
-                  inner onKeyDown;
+               do THIS(window).theEventHandler.onKeyDown; INNER onKeyDown; 
                #);
+             
           #);
-        open::
-          (# do false -> this(windowItem).private.updateOnResize; inner open; #);
+        open:: 
+          (# 
+          do false->THIS(windowItem).private.updateOnResize; INNER open; 
+          #);
+        
      #);
-#)
+   
+#)  
 
--- windowItemLib: attributes --
+-- windowItemLib: Attributes --
 handleframeChanged:
-  (# newFrame,oldFrame: @rectangle;
-     thisCanvas: ^canvas; 
+  (#
+     newFrame,oldFrame: @rectangle;
+     thisCanvas: ^canvas;
      windowID: @integer;
      theNtRect: @ntRECTextR;
      w,h: @integer;
+     
   enter (oldFrame,newFrame)
-  <<SLOT GUIENVwindowItemHandleFrameChanged: doPart>>
+  <<SLOT GUIENVwindowItemHandleFrameChanged:DoPart>>
   #);
-
 (* drawBorder:
-     (# whitePen, blackPen: @integer;
-        theStyle: @integer;
-        drawable: @integer;
-        topHdc, bottomHdc: @integer;
-        width,height: @integer;
-        x,y: @integer;
-     enter (topHdc,bottomHdc,theStyle,x,y,width,height)
-     do <<SLOT drawborderbody: descriptor>>
+ (# whitePen, blackPen: @integer;
+ theStyle: @integer;
+ drawable: @integer;
+ topHdc, bottomHdc: @integer;
+ width,height: @integer;
+ x,y: @integer;
+ enter (topHdc,bottomHdc,theStyle,x,y,width,height)
+ do <<SLOT drawborderbody: descriptor>>
  #);
  *)
-
 drawBorder:
-  (# theStyle: @integer;
+  (#
+     theStyle: @integer;
      width,height: @integer;
      x,y: @integer;
      theWindowItem: ^windowItem;
-  enter (theWindowItem[], theStyle,x,y,width,height)
-  do <<SLOT drawborderbody: descriptor>>
+     
+  enter (theWindowItem[],theStyle,x,y,width,height)
+  do <<SLOT drawborderbody:Descriptor>>
   #);
-
 windowItemMethods: interfaceObjectMethods
-  (# dispatchMessage::<
-       (#
-       do <<SLOT GUIENVwindowItemMethodsdispatchMessage: descriptor>>;
+  (#
+     dispatchMessage::< 
+       (# 
+       do
+          <<SLOT GUIENVwindowItemMethodsdispatchMessage:Descriptor>>;
+          
        #);
+     
   #);
 (* 060396 /les begin *)
 windowItemNotificationMethods:
-  (# handleNotification:<
+  (#
+     handleNotification:<
        (# info: ^messageInfo; 
-       do currentMessageInfo -> info[];
-          INNER handleNotification; 
+       do currentMessageInfo->info[]; INNER handleNotification; 
        #);
+     
   #);
 handleNotification:
   (# 
-  do (if theNotiMethods<>NONE then
-         private.theNotiMethods.handleNotification;
+  do
+     (if theNotiMethods <> none then
+         private.theNotiMethods.handleNotification; 
      if);
+     
   #);
 theNotiMethods:
-  (# 
-  enter private.theNotiMethods[]
-  exit private.theNotiMethods[]
-  #);
+  (#  enter private.theNotiMethods[] exit private.theNotiMethods[] #);
 (* 060396 /les end *)
 callDefaultWindowProc:
-    (# info: ^messageInfo;
-    <<SLOT GUIENVwindowItemCallDefaultWindowProc: doPart>>
-    #);
+  (# info: ^messageInfo; 
+  <<SLOT GUIENVwindowItemCallDefaultWindowProc:DoPart>>
+  #);
 windowItemHilite:
-  (#
-  enter private.windowItemHilite
-  exit private.windowItemHilite
-  #);
-
-windowItemClass:
-  (#
-  enter private.windowItemClass
-  exit private.windowItemClass
-  #);
-windowItemExStyle:
-  (#
-  enter private.windowItemExStyle
-  exit private.windowItemExStyle
-  #);
-windowItemStyle:
-  (#
-  enter private.windowItemStyle
-  exit private.windowItemStyle
-  #);
-
-windowItemDevice:
-  (#
-  enter private.windowItemDevice
-  exit private.windowItemDevice
-  #);
-windowItemUpdateRgn:
   (# 
-  enter private.windowItemUpdateRgn
-  exit private.windowItemUpdateRgn
+  enter
+  private.windowItemHilite
+  exit
+  private.windowItemHilite
   #);
+windowItemClass:
+  (#  enter private.windowItemClass exit private.windowItemClass #);
+windowItemExStyle:
+  (#  enter private.windowItemExStyle exit private.windowItemExStyle #);
+windowItemStyle:
+  (#  enter private.windowItemStyle exit private.windowItemStyle #);
+windowItemDevice:
+  (#  enter private.windowItemDevice exit private.windowItemDevice #);
+windowItemUpdateRgn:
+  (#  enter private.windowItemUpdateRgn exit private.windowItemUpdateRgn #);
 windowItemClassStatus:
-  (#
+  (# 
   enter private.windowItemClassStatus
   exit private.windowItemClassStatus
   #);
-isStandardClass: (# exit 1 #);
-isSubClass: (# exit 2 #);
-isNoClass: (# exit 3 #);
-
+isStandardClass: (#  exit 1 #);
+isSubClass: (#  exit 2 #);
+isNoClass: (#  exit 3 #);
 hit: booleanValue
-  (# pt: @point;
-     r: @rectangle;
+  (# pt: @point; r: @rectangle; 
   enter pt
-  <<SLOT GUIENVWindowItemHit: doPart>>
+  <<SLOT GUIENVWindowItemHit:DoPart>>
   #);
 windowItemFrame:
-    (#
-    enter private.windowItemFrame
-    exit private.windowItemFrame
-    #);
+  (# 
+  enter private.windowItemFrame
+  exit private.windowItemFrame
+  #);
 enabledFlag:
-  (#
+  (# 
   enter private.enabledFlag
   exit private.enabledFlag
   #);
 hiliteFlag:
-  (#
+  (# 
   enter private.hiliteFlag
   exit private.hiliteFlag
   #);
 windowitemCursor:
-  (#
+  (# 
   enter private.windowItemCursor[]
   exit private.windowItemCursor[]
   #);
-
 theBkColorInfo:
   (# 
   enter private.theBkColorInfo[]
   exit private.theBkColorInfo[]
   #);
+  
 
--- GUIENVwindowItemPrivate: descriptor --
-(# 
+-- GUIENVwindowItemPrivate: Descriptor --
+(#
    uid: @integer;
    theBkColorInfo: ^colorInfo;
    windowItemHilite,borderVisible,mouseOver: @boolean;
@@ -1224,140 +1178,128 @@ theBkColorInfo:
    updateOnResize: @boolean;
    disableDefaultEventHandling: @boolean;
    windowItemCursor: ^cursor;
-   theNotiMethods: ^windowItemNotificationMethods; 
-#)
+   theNotiMethods: ^windowItemNotificationMethods;
+   
+#)  
 
--- GUIENVcanvasPrivate: descriptor --
-(# hit: ^windowItem;
+-- GUIENVcanvasPrivate: Descriptor --
+(#
+   hit: ^windowItem;
    children: @list
-     (# element::< windowItem;
-        remove:
-          (# e: ^element;
-          enter e[]
-          do e[] -> at -> delete;
-          #);
+     (#
+        element::< windowItem;
+        remove: (# e: ^element;  enter e[] do e[]->at->delete;  #);
         findHitObject:
-          (# pt: @point;
-             e: ^element;
+          (# pt: @point; e: ^element; 
           enter pt
-          do l: scanReverse
-               (# where::<
-                    (#
-                    do (if current.enabledFlag then
-                           pt -> current.hit -> value;
+          do
+             l: scanReverse
+               (#
+                  where::< 
+                    (# 
+                    do
+                       (if current.enabledFlag then
+                           pt->current.hit->value; 
                         else
-                           false -> value;
+                           false->value; 
                        if);
+                       
                     #);
-               do current[] -> e[];
-                  leave l;
+                  
+               do current[]->e[]; leave l; 
                #);
+             
           exit e[]
           #);
+        
      #);
-   selection: @list
-     (# element::< windowitem;
-     #);
+   selection: @list (# element::< windowitem;  #);
    
-#)
+#)  
 
--- textStyleLib: attributes --
-
-textStyleID: 
-  (#
-  enter private.textStyleID
-  exit private.textStyleID
-  #);
+-- textStyleLib: Attributes --
+textStyleID: (#  enter private.textStyleID exit private.textStyleID #);
 textStyleName:
-  (#
-  enter private.textStyleName
-  exit private.textStyleName
-  #);
+  (#  enter private.textStyleName exit private.textStyleName #);
 textStyleSize:
-  (#
-  enter private.textStyleSize
-  exit private.textStylesize
-  #);
+  (#  enter private.textStyleSize exit private.textStylesize #);
 textStyleFace:
-  (#
-  enter private.textStyleFace
-  exit private.textStyleFace
-  #);
+  (#  enter private.textStyleFace exit private.textStyleFace #);
 create:
-  (# height,width,escapement,orientation,weight: @integer;
+  (#
+     height,width,escapement,orientation,weight: @integer;
      italic,underline,strikeOut: @integer;
      charSet,outPrecision,clipPrecision,pitchAndFamily: @integer;
      quality: @integer;
      face: @text;
      error: @integer;
-  <<SLOT GUIENVtextStyleCreate: doPart>>
+     
+  <<SLOT GUIENVtextStyleCreate:DoPart>>
   #);
 dispose:
-  (# <<SLOT GUIENVtextStyleDispose: doPart>> #);
-
-equal: booleanValue
-  (# theTextStyle: ^textStyle;
-  enter theTextStyle[]
-  <<SLOT GUIENVtextStyleEqual: doPart>>
+  (# 
+  <<SLOT GUIENVtextStyleDispose:DoPart>>
   #);
+equal: booleanValue
+  (# theTextStyle: ^textStyle; 
+  enter theTextStyle[]
+  <<SLOT GUIENVtextStyleEqual:DoPart>>
+  #);
+  
 
--- GUIENVtextStylePrivate: descriptor --
-(# textStyleSize,textStyleFace: @integer;
-   textStyleID: @integer; (* HFONT *)
+-- GUIENVtextStylePrivate: Descriptor --
+(#
+   textStyleSize,textStyleFace: @integer;
+   textStyleID: @integer;
+   (* HFONT *)
    textStyleName: @text;
-#)
+   
+#)  
 
--- pixmapLib: attributes --
-
+-- pixmapLib: Attributes --
 assertInitialized:
   (# 
-  do (if private.handleToPixmap = 0 then
+  do
+     (if private.handleToPixmap = 0 then
          exception
-         (#
-         do 'Accesing a pixmap that is not initialized.' -> msg.append;
-         #);
+           (# 
+           do 'Accesing a pixmap that is not initialized.'->msg.append; 
+           #);
+         
      if);
+     
   #);
+  
 
-
--- pixmapPrivate: descriptor --
+-- pixmapPrivate: Descriptor --
 (#
    handleToPixmap: @integer;
    handleToDib: @integer;
-   handleToBrush:@integer;
+   handleToBrush: @integer;
    pixels: @integer;
-   hdc:@integer;
+   hdc: @integer;
    isIcon: @boolean;
    width,height: @integer;
    depth: @integer;
    isFromResource: @boolean;
-   
-   drawtransparent:@boolean;
-   transparentcolor:@color;
-   transparentmask:^pixmap;
-   
+   drawtransparent: @boolean;
+   transparentcolor: @color;
+   transparentmask: ^pixmap;
    bitMapGetWidth: external
-     (# hBitmap: @integer;
-        width: @integer;
+     (# hBitmap: @integer; width: @integer; 
      enter hBitmap
-     do 'bitMapGetWidth' -> callC
+     do 'bitMapGetWidth'->callC
      exit width
      #);
-
    bitMapGetHeight: external
-     (# hBitmap: @integer;
-        height: @integer;
+     (# hBitmap: @integer; height: @integer; 
      enter hBitmap
-     do 'bitMapGetHeight' -> callC
+     do 'bitMapGetHeight'->callC
      exit height
      #);
+   
+#)  
 
-#)
+-- LIB: Attributes --
+IsMakingDump: external (# isMakingDump: @boolean exit isMakingDump #);   
 
-
---LIB:attributes --
-
-IsMakingDump: external
-  (# isMakingDump: @boolean
-  exit isMakingDump
-  #);
