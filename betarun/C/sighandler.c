@@ -401,6 +401,7 @@ void RestoreSGIRegisters(SIGNAL_CONTEXT scp,
 
 void set_BetaStackTop(long *sp)
 {
+  DEBUG_STACK(fprintf(output, "set_BetaStackTop: BetaStackTop=0x%08x\n", (int)sp));
 #if defined(sparc) || defined(intel)
   BetaStackTop = sp;
 #else 
