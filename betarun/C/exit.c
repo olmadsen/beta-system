@@ -164,8 +164,8 @@ GLOBAL(int *RefNoneStackEnd) = 0;
  * containing the lazy reference. */
 GLOBAL(static unsigned char regnum);
 GLOBAL(static volatile int InLazyHandler);
-#endif
-#endif
+#endif /* RUN */
+#endif /* RTLAZY */
 
 #ifdef nti /* NOT linux */
 extern void CallLazyItem (void);
@@ -340,7 +340,6 @@ void BetaError(enum BetaErr err, struct Object *theObj)
       }
 
 #ifdef RTLAZY
-      
       /* Treat REFNONE errors specially */
 
 #ifdef intel
@@ -374,7 +373,6 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	   */
 	  regnum = (* (unsigned char *) (RefNonePC-8)) & 7;
 #endif
-
 	  DEBUG_LAZY(switch(regnum){
 	  case 0:
 	    fprintf(output, "Dangler in %%eax\n"); break;
@@ -454,9 +452,9 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	    /* NTI: Borland C is not good at inline assembler */
 	    CallLazyItem();
 #endif /* linux */
-
+	    
 	    InLazyHandler = 0;
-		  
+	    
 	    return;
 	  }
 	}
@@ -470,7 +468,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
       }
 #endif /* linux || nti */
 #endif /* RTLAZY */
-
+      
       /* If not QUA error with QuaCont or 
        * REFNONE error with lazy reference, 
        * we fall through to here */
