@@ -704,7 +704,7 @@ static void proxyTrapHandler(long sig, long code, struct sigcontext * scp, char 
             proxy = DecodeFormatI(scp, instruction);
             if (proxy >= (unsigned long)PIT) {
                if (proxy <= (unsigned long)PITLimit) {
-                  proxy = (unsigned long)unswizzleReference((long*)proxy);
+                  proxy = (unsigned long)unswizzleReference((long*)proxy, FOLLOWDEPTH);
                   DEBUG_CODE({
                      fprintf(output, ", reg=%d set to value=0x%08x)\n", 
                              (int)regToSet, (int)proxy);

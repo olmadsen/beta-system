@@ -7,7 +7,7 @@
 
 void SMinit(void);
 void SMopen(CAStorage *csb);
-void SMGC();
+void SMGC(void);
 
 #endif /* PERSIST */
 #endif /* _STORAGEMANAGER_H_ */

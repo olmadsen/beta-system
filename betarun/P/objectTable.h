@@ -35,7 +35,7 @@ void setCurrentStoreID(CAStorage *ID);
 void phaseOne(void);
 void handlePersistentCell(REFERENCEACTIONARGSTYPE);
 void phaseThree(void);
-void phaseFive();
+void phaseFive(void);
 void OTEndGC(void);
 
 #define FLAG_INSTORE      1
