@@ -104,8 +104,6 @@ long CBstub(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
 
 void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 {
-  DEBUG_CODE(NumCopyCPP++);
-
   if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
 
   /* Take the next free entry in the Call Back Functions Area.	*/
@@ -209,13 +207,7 @@ asmlabel(CopyCPP, "
 
 void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 {
-
-#if 0
-    if ((NumAlloI > 15000) && (NumAlloI<20000)){
-      fprintf(output, "CopyCPP\n");
-      fprintf(output, "NumAlloI: %d\n", (int)NumAlloI);
-    }
-#endif
+    DEBUG_CODE(NumCopyCPP++);
 
     if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
 
