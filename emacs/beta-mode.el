@@ -712,7 +712,7 @@ a prefix and/or a comment in between."
     (beginning-of-line)
     (beta-skip-comment-backward)
     (skip-chars-backward " \t\n")
-    (skip-chars-backward "A-Za-z0-9().");; prefix
+    (skip-chars-backward "_A-Za-z0-9().");; prefix
     (skip-chars-backward " \t\n<@^|");; whitespace and instantiation
     (if (> (point) 1) (backward-char 1))
     (looking-at ":")))
