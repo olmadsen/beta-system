@@ -19,7 +19,7 @@ echo "End-of-BOBS"
 if not exist tables goto gramerrors
 
 echo Creating tables (tabc version 1.6)
-call tabc tables %1-parser
+call tabc tables %1-parser %1
 
 echo makepretty
 call makepretty %1
