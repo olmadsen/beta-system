@@ -11,7 +11,7 @@ trace_opcodes: (# exit common.switch[190] #);
 
 --LIB:attributes--
 trace_init_close: (# exit false #);
-
+_checkcast:			(# exit 192 #);
 makeSignature:
   (# sig: ^text
   enter sig[]
@@ -251,6 +251,7 @@ splitClassSignature: SplitSignature
      #);
    
    textOperandArg: ^text; (* ugly *)
+   localLabArg: @integer; (* ugly *)
    
    A: @Address;
    
@@ -360,6 +361,7 @@ splitClassSignature: SplitSignature
                                                 'missing floadlocal' -> xT
                                              #)
                                   else
+                                     display;
                                      (fload, fload_0, off) -> emitMemOp
                                  if);
                                  
@@ -447,8 +449,8 @@ splitClassSignature: SplitSignature
           do (*BC.gettext -> class[];*)
              ((class.lgth>=1) and ((class.T[1] = 'L') or (class.T[1]='['))) -> isRef;
              (if withQua then
-                 (* checkcast  -> jcf.emit;*)
-                 'checkcast  -> jcf.emit;'->putline;
+                 _checkcast  -> jcf.emit;
+
                  (if true then
                      class[] -> emitCheckCast
                   else
@@ -459,6 +461,10 @@ splitClassSignature: SplitSignature
                  putfield  -> jcf.emit; 
                  isOrigin -> emitFieldAndType(# do class.copy -> TheFieldType[] #); 
               else 
+                 1->trace(#
+                         do 'storeRef:'->xT; isField->xI; off->xI;
+                            isRef -> xB; fieldType[] -> xT
+                         #);
                  (if isField = 1 then
                      putfield  -> jcf.emit; 
                      isOrigin -> emitFieldAndType(# do class.copy -> TheFieldType[] #); 
@@ -466,7 +472,7 @@ splitClassSignature: SplitSignature
                      (if isField = 2 then
                          aastore -> jcf.emit;
                       else                       
-                         (if off<0 then
+                         (if off < 0 then
                              (if false then
                                  '\nstoreref: negative off: '->puttext; 
                                  off->putint; ' class: ' -> puttext; 
@@ -496,8 +502,8 @@ splitClassSignature: SplitSignature
           #);
         loadRef:
           (# withQua,isRef: @boolean;
-             sig: ^text
-          enter(withQua,sig[])
+             sig,knownSig: ^text
+          enter(withQua,sig[],knownSig[])
           do (*BC.gettext -> sig[];*)
              ((sig.lgth>=1) and ((sig.T[1] = 'L') or (sig.T[1]='['))) -> isRef;
              (if ONlevel > 0 then
@@ -511,7 +517,7 @@ splitClassSignature: SplitSignature
                      (if isField = 2 then
                          aaload -> jcf.emit;
                       else 
-                         (if off<0 then
+                         (if off < 0 then
                              (if false then
                                  '\nloadref: negative off: '->puttext; 
                                  off->putint; ' sig: ' -> puttext; 
@@ -534,11 +540,9 @@ splitClassSignature: SplitSignature
                  if)
              if); 
              (if withQua then
-                 (*sig[] -> puttext;*)
-                 (* checkcast  -> jcf.emit;*)
-                 'checkcast  -> jcf.emit;'->putline;
+                 _checkcast  -> jcf.emit;
                  (if true then
-                     (* BC.gettext -> emitCheckCast*)
+                     knownSig[] -> emitCheckCast
 
                  if)
              if);
@@ -581,9 +585,9 @@ splitClassSignature: SplitSignature
              ' size:'->puttext; size -> putint; 
              ' ONlevel:'->puttext; ONlevel -> putint;
              ' isField:'->puttext; isField -> putint;
-             (if isField = 1 then
-                 descName[] -> puttext
-             if)
+             descName[] -> puttext; ' '->put;
+             fieldName[] -> puttext; ' '->put;
+             fieldType[] -> putline
           #);
      #);
    loadOrigin:
@@ -1631,40 +1635,163 @@ splitClassSignature: SplitSignature
      exit locnum
      #);
 
-
-   BCM: @ BCmachine
-     (# emit:
-          (# opCode: @integer
-          enter opCode
-          do opCode -> BC.put; 
-             INNER
+   emitEndLabel:
+     (* stack: ExoException object *)
+     (# restartLabno: @integer;
+        leaveLabno: @integer;
+        handler_pc: @integer;
+        restart_pc: @integer;
+        loc: @integer; (* Save exception object into this local *)
+        rethrowOff: integerValue
+          (* Calculate offset to rethrow label from current PC.
+           * Code between the two labels:
+           *   loc -> aloadLocal;  (1 or 2 bytes)
+           *   athrow-> jcf.emit;  (1 byte)
+           *)
+          (# 
+          do (if loc<=3 then
+                 (leavelabno -> jcf.labs.off)-2 -> value
+              else
+                 (leavelabno -> jcf.labs.off)-3 -> value
+             if)                            
           #);
-        emitShort:
-          (# V: @integer;
-          enter V
-          do V -> BC.putShort
-          #);
-        emitLong:
-          (# V: @integer
-          enter V
-          do V -> BC.putLong
-          #);
-        emit1: emit
-          (# op1: @integer
-          enter op1
-          do op1->BC.put; INNER
-          #);
-        emit2: emit1
-          (# op2: @integer
-          enter op2
-          do
-          #);
-        emitText: 
-          (# T: ^text
-          enter T[]
-          do T[]->BC.puttext
-          #);
+        isLocal: @boolean
+     enter(restartLabNo,leaveLabNo,isLocal)
+     do (* End try clause by jumping over handler *)
+        goto -> jcf.emit; 
+        leavelabno -> jcf.labs.off -> jcf.emitShort;
+        (if isLocal then
+            (* Start handler:
+             * if (e.exitobj == this){
+             *   if (e.labno == restartlabno){
+             *      // We have a restart in this Object
+             *      continue Lrestart;
+             *   } else if (e.labno==leavelabno){
+             *     // We have a leave in this Object
+             *     break Lleave;
+             *   }
+             * }
+             * /* Not leave/restart for this Object - propagate further */
+             * throw e;
+             *)
+            jcf.currentmethod.LIP -> handler_pc;
+            allocLocal -> loc -> astoreLocal;
+            loc -> aloadLocal; 
+            getfield  -> jcf.emit; ('ExOException'->(common.BetaPackage).append, 'exitobj', 'Ljava/lang/Object;') -> jcf.emitfieldref;
+            aload_0   -> jcf.emit; 
+            if_acmpne -> jcf.emit; rethrowOff -> jcf.emitShort; (* Lrethrow*)
+            (* Ltestrestart: *)
+            loc -> aloadLocal; 
+            getfield  -> jcf.emit; 
+            ('ExOException'->(common.BetaPackage).append, 'labno', 'I') -> jcf.emitfieldref;
+            restartlabno -> jcf.emitLoadIntegerConstant;
+            if_icmpne -> jcf.emit; 6 -> jcf.emitShort; (* Ltestleave *)
+            (* We have a restart in this Object *)
+            goto      -> jcf.emit; 
+            restartlabno -> jcf.labs.off -> jcf.emitShort; (* Lrestart *)
+            (* Ltestleave: *)
+            loc -> aloadLocal; 
+            getfield  -> jcf.emit; 
+            ('ExOException'->(common.BetaPackage).append
+            , 'labno', 'I') 
+              -> jcf.emitfieldref;
+            leavelabno -> jcf.emitLoadIntegerConstant;
+            if_icmpne -> jcf.emit; 
+            rethrowOff -> jcf.emitShort; (* Lrethrow *)
+            (* We have a restart in this Object *)
+            goto      -> jcf.emit; 
+            leavelabno -> jcf.labs.off -> jcf.emitShort; (* Lleave*)
+            (* Lrethrow: *)
+            
+            (* Not the right label in this Object 
+             * - propagate further *)
+            loc -> aloadLocal; 
+            athrow-> jcf.emit; 
+            (* Lleave: *)
+            
+            (* Set up try-catch info *)
+            RestartLabNo -> jcf.labs.off -> restart_pc;
+            (if restart_pc=0 then
+                'endLab: error: Restartlabel not yet defined?' 
+                  -> jvmFIXME;
+            if);
+            (if false then
+                'endlab: L' -> screen.puttext;
+                restartlabno->screen.putint;
+                ': restart offset: ' -> screen.puttext;
+                restart_pc -> screen.putint;
+                ' at PC ' -> screen.puttext;
+                jcf.currentmethod.LIP -> screen.putint;
+                screen.newline;
+            if);
+            (jcf.currentmethod.LIP + restart_pc - 1) -> restart_pc;
+            (restart_pc (*start_pc*)
+            , handler_pc (*end_pc*)
+            , handler_pc (*handler_pc*)
+            , 'ExOException'->(common.BetaPackage).append) 
+              -> jcf.emitExceptionHandlerDef;
+            loc -> releaseLocal;
+        if)
      #);
+   emitBreak:
+     (# labno: @integer;
+        isLeave: @boolean (* not used?*)
+     enter(labNo,isLeave)
+     do (* exitObj already pushed *)
+        new           -> jcf.emit; 
+        'ExOException'->(common.BetaPackage).append -> jcf.emitClassRef;
+        (* stack: ExOException; exitObj *)
+        dup_x1        -> jcf.emit;
+        (* stack: ExOException; exitObj, ExOException *)
+        swap          -> jcf.emit;
+        (* stack: exitObj, ExOException; ExOException *)
+        labno         -> jcf.emitLoadIntegerConstant; (* potentially 32 bit constant *)
+        (* stack: labno, exitObj, ExOException; ExOException *)
+        invokespecial -> jcf.emit; ('ExOException'->(common.BetaPackage).append, '<init>', '(Ljava/lang/Object;I)V') -> jcf.emitMethodRef;
+        athrow        -> jcf.emit;
+     #);
+   emitCallExternal:
+     (# prim, n, d, m: ^text; s: @boolean;
+     enter prim[]
+     do (*BC.getText -> prim[];*)
+        prim[] ->splitClassSignature->(n[], d[], s, m[]);
+        (if true 
+         // ('java/io/PrintStream'-> ((1,19)->prim.sub).equal) then
+            (* FIXME: hardcoded 
+             * Assuming that operation is on the static instance of 
+             * PrintStream in java/lang/System.out.
+             * We must load this first.
+             *)
+            getstatic -> jcf.emit;
+            ('java/lang/System', 'out', 'Ljava/io/PrintStream;')
+              ->jcf.emitFieldRef;
+            swap -> jcf.emit;
+            invokevirtual -> jcf.emit; 
+            (m[], n[], d[]) -> jcf.emitMethodRef;
+         // ('java/io/InputStream'-> ((1,19)->prim.sub).equal) then
+            (* FIXME: hardcoded 
+             * Assuming that operation is on the static instance of 
+             * InputStream in java/lang/System.in.
+             * We must load this first.
+             *)
+            getstatic -> jcf.emit;
+            ('java/lang/System', 'in', 'Ljava/io/InputStream;')->jcf.emitFieldRef;
+            (* swap -> jcf.emit;*)
+            invokevirtual -> jcf.emit; 
+            (m[], n[], d[]) -> jcf.emitMethodRef;
+         else
+            'callExternal' -> jvmFIXME;
+            (if s then
+                invokestatic -> jcf.emit;
+             else
+                invokevirtual -> jcf.emit;
+            if);
+            (m[], n[], d[]) -> jcf.emitMethodRef; 
+        if);
+     #);
+
+   BCM: @ BCmachine;
+   
    splitPathAndName:
      (# orgPath,path,FN: ^text; slashPos,dotPos: @integer;
         e: @diskentry
@@ -1686,45 +1813,6 @@ splitClassSignature: SplitSignature
           -> dep.name;
         (*'touching file ' -> screen.puttext; dep.name ->screen.putline;*)
         dep.touch;
-     #);
-   mkAsmFile:
-     (# BC: ^text;
-        jvm: @directory;
-        dep: @file;
-     do 183->trace
-        (#
-        do 'mkAsmFile: ' ->xT; thisFullPath[] -> xT 
-        #);
-        (if not BCisSplit then
-            thisFullPath[] -> splitPathAndNAme -> (thisFullPath[],c[]);
-            true -> BCisSplit
-        if);
-        thisFileName[] -> (thisFullPath.copy).append -> BC[];
-        183->trace(#do 'mkasmFile:BC:' -> xT; BC[] -> xT #);
-        (if false then
-            '.bin'->(BC.copy).append->mstate.BCM.save;
-            '.bin'->(BC.copy).append->mstate.BCM.restore;
-         else
-            '.bin'->(BC.copy).append->mstate.BCM.restore; (* should be renamed,
-                                                           * see BCmachine
-                                                           *)
-        if);
-        (if common.targetMachineId 
-         // common.jvm then
-           (* mstate.BCM.emitJasmin;*)
-         // common.clr then
-            mstate.BCM.emitClr
-         else
-            'byteCode_close: unknown platform' -> screen.putline;
-        if);
-        (if false then
-            (if not common.switch[23] then
-                (* Delete .bin file *)
-                (# e: @file;
-                do '.bin'->(BC.copy).append->e.name;
-                   e.delete;
-                #);
-        if)if)
      #);
    numTempLocals: @integer;
    thisPackagePath,      (* package path *)
@@ -1751,6 +1839,12 @@ splitClassSignature: SplitSignature
    commentStream: ^stream;
    jasmin: @file;
    jasminIsOpen: @boolean;
+   lastLocalAllocated:
+     (* used by allocAndStoreLocal and just for testing .NET stuff 
+      * And never assigned a value here?
+      *)
+     @integer;
+
    classes: @
      (# L: [4] ^text; 
         start,end: [4] @integer;
@@ -1836,7 +1930,7 @@ do rn -> mstate.A.reg;
 do labNo -> mstate.jcf.labs.def; 
    
 ---byteCode_LocalLab_out:doPart--- (* unused? *)
-do 
+do labNo -> mstate.localLabArg
    
 ---byteCode_RegAdr_out:doPart---   
 do reg.out;
@@ -1868,6 +1962,8 @@ do reg.out;
        0 -> mstate.A.isField
    if);
    fieldType[] -> mstate.A.fieldType[];   
+   1->trace(#do 'RegAdrOut:'-> xT
+           #)
    
 ---byteCode_RegAdr_index:doPart---
 do '\nOBS! RegADr:index:'->puttext;
@@ -1886,8 +1982,10 @@ do areg.out;
    (* All the fields; areg,off,size,ONlevel, are superflous
     * and not used by the bytecode
     *)
-   fieldType[] -> mstate.A.fieldType[]
-   
+   fieldType[] -> mstate.A.fieldType[];
+   1->trace(#do 'inxRegAdrOut:'-> xT
+           #)
+
 ---byteCode_nop:doPart---
 do _nop -> mstate.jcf.emit;
    
@@ -1898,7 +1996,7 @@ do (if true
        C -> mstate.jcf.emit;       
     // (- common.two15 <= C) and (C <= (common.two15-1)) then
        sipush -> mstate.jcf.emit;
-       C -> mstate.jcf.emit;
+       C -> mstate.jcf.emitShort;
     else
        C -> mstate.jcf.emitLoadIntegerConstant;
    if)
@@ -1948,23 +2046,14 @@ do (if A.isOrigin then
           (A.ONlevel,receiverType[],A.fieldType[]) -> mstate.loadOrigin
        #)
     else
-       (if A.isRef then
-           mstate.BCM.loadRef->mstate.BCM.emit;
-           (if isDotnet then 0->mstate.BCM.emit if);
-        else
-           mstate.BCM.pushVal->mstate.BCM.emit
-       if); 
        A.out;
        (if A.isRef then (* cleanup/elim isRef?*)
            (if A.fieldType[] <> none then
-               A.fieldType[] -> mstate.BCM.emittext;
-               (false(*?*),A.fieldType[]) -> mstate.A.loadRef
+               (false(*?*),A.fieldType[],none) -> mstate.A.loadRef
             else
-               'ldValImpl_UnknownType' -> mstate.BCM.emittext;
-               (false(*?*), 'ldValImpl_UnknownType') -> mstate.A.loadRef
-           if);
+               (false(*?*), 'ldValImpl_UnknownType',none) -> mstate.A.loadRef
+           if)
         else
-           
            mstate.A.load; 
        if)
    if);
@@ -1997,54 +2086,26 @@ do (if long then
    if);
 
 ---byteCode_loadRef:doPart---
-do (if knownSourceClassName[] <> NONE then
-       mstate.BCM.loadQRef->mstate.BCM.emit;
-    else
-       mstate.BCM.loadRef->mstate.BCM.emit;
-       (if isDotnet then
-           (if A.isValueTypeOrigin then
-               (if false then
-                   (*1->trace(#do 'byteCodeBackendBody:loadRef:valueType:Origin'->xT #);*)
-                   (* datpete: 2003-okt-13: turned this off, since the mechanisme 
-                    * used by the following mch.gJsr now handles this using a local variable.
-                    * And it is not currently able to know whether this preceeding 
-                    * loadref has loaded address or value, so for now it assumes that it's 
-                    * the value, and not the address, that is on stack.
-                    *)
-                   1->mstate.BCM.emit;
-                else
-                   0->mstate.BCM.emit;
-               if)
-            else
-               0->mstate.BCM.emit;
-           if);
-       if)
-   if);
-   A.out;
-   basicSourceClassName[] -> mstate.BCM.emittext;
-   (if knownSourceClassName[] <> NONE then
-       knownSourceClassName[] -> mstate.BCM.emittext
-   if);
+do A.out;
+   (knownSourceClassName[] <> NONE
+   ,basicSourceClassName[]
+   ,knownSourceClassName[]) -> mstate.A.loadRef
    
 ---byteCode_stValImpl:doPart---
-do mstate.BCM.stVal->mstate.BCM.emit; 
-   A.out;   
-   
+do A.out;      
    mstate.A.store;
    
 ---byteCode_cpReg:doPart---
-do mstate.BCM.pushReg->mstate.BCM.emit; R1.out;   
-   
+do (* called from synthesizer, but no code generated *)
+      
 ---byteCode_gLea:doPart---
-do (if true 
+do op1.out;
+   (if true 
     // op1.isRegAdr then
-       mstate.BCM.pushAdr->mstate.BCM.emit; op1.out
+       mstate.A.pushAdr
     // op1.isInxRegAdr then
-       mstate.BCM.pushAdr->mstate.BCM.emit; op1.out
+       mstate.A.pushAdr
     // op1.isTextOp then
-       mstate.BCM.pushtext->mstate.BCM.emit; 
-       op1.out; (* MUST be kept *)
-       
        mstate.textOperandArg[] -> mstate.jcf.emitLoadString;
     else
        '\nglea: operand type not handled'->putline
@@ -2057,13 +2118,13 @@ do (* don't do this; too many zero constants
     *)
    
 ---bytecode_int64ToInt32:doPart---
-do mstate.BCM.int64ToInt32 -> mstate.BCM.emit
+do l2i -> mstate.jcf.emit
    
 ---bytecode_int32ToInt64:doPart---
-do mstate.BCM.int32ToInt64 -> mstate.BCM.emit
+do i2l -> mstate.jcf.emit
    
 --bytecode_loadRange:doPart--
-do mstate.BCM.loadRange ->mstate.BCM.emit
+do arraylength -> mstate.jcf.emit;
    
 ---byteCode_duplicate:doPart---
 do (if type = 0 then
@@ -2109,67 +2170,38 @@ do (# RA: ^mch.RegAdr;
       RA[] -> A[]
    #)
    
-   (********************NOT used below ***
-    ---bytecodebackend_getBits:doPart---
-    do ( * StackTop logicalShiftLeft pos * ) 
-    (mstate.BCM.pushCst_s8,pos) -> mstate.BCM.emit1;
-    mstate.BCM.func -> mstate.BCM.emit;
-    arithCodes.logicalShiftLeft -> mstate.BCM.emit;
-
-    
-    ( * StackTop logicalShiftRight 32-pos * )
-    (mstate.BCM.pushCst_s8,32-length) -> mstate.BCM.emit1;
-    mstate.BCM.func -> mstate.BCM.emit;
-    arithCodes.logicalShiftRight -> mstate.BCM.emit;
-    
-    ---bytecodebackend_getSignedBits:doPart---
-    do (* StackTop logicalShiftLeft pos * ) 
-        (mstate.BCM.pushCst_s8,pos) -> mstate.BCM.emit1;
-        mstate.BCM.func -> mstate.BCM.emit;
-        arithCodes.logicalShiftLeft -> mstate.BCM.emit;
-
-        
-        ( * StackTop arithShiftRight 32-pos * )
-        (mstate.BCM.pushCst_s8,32-length) -> mstate.BCM.emit1;
-        mstate.BCM.func -> mstate.BCM.emit;
-        arithCodes.arithShiftRight -> mstate.BCM.emit;
-        ********************************************************)
    
 ---byteCode_loadLocal:doPart---
 do (* FIXME: don't we need the variable offset? *)
-   mstate.BCM.loadLocal -> mstate.BCM.emit
-   
+   (if mstate.BCstate.fields.LocalVariables[mstate.lastLocalAllocated]
+    // -1 then
+       'opcode loadlocal: using unknown local variable type' 
+         -> mstate.JVMFIXME;
+    // 0 then
+       'opcode loadlocal: using unassigned local variable' 
+         -> mstate.JVMFIXME;
+    // 1 then
+       mstate.lastLocalAllocated -> mstate.loadLocal
+    // 2 then
+       mstate.lastLocalAllocated -> mstate.aloadLocal
+    else
+       'opcode loadlocal: using local variable of unknown kind' 
+         -> mstate.JVMFIXME;
+   if)
    
 --byteCode_popStack:doPart---
 do (if isDouble then
-       mstate.BCM.pop2-> mstate.BCM.emit
+       _pop2 -> mstate.jcf.emit;
     else
-       mstate.BCM.pop-> mstate.BCM.emit
+       _pop -> mstate.jcf.emit;
    if)
    
 --bytecode_declareField:doPart---
-   (* to replace emitCk 
-    *)
-do mstate.BCM.field ->mstate.BCM.emit; 
-   off -> mstate.BCM.emit;
-   (if fieldName[]<> none then
-       1 -> mstate.BCM.emit;
-       fieldName[] -> mstate.BCM.emitText;
-    else
-       'declareField:no fieldName' -> putline;
-       0 -> mstate.BCM.emit
-   if);
-   (if fieldSig[]<> none then
-       fieldSig[] -> mstate.BCM.emitText;
-    else
-       'OBS! no fieldSig' -> putline
-   if);
-   fieldKind -> mstate.BCM.emit;
-   
-   (# F: ^text
+   (* to replace emitCk  *)
+do (# F: ^text
    do 'F' -> F[]; off -> F.putInt; 
       (F[],fieldName[],fieldSig[],fieldKind)
-        -> mstate.BCstate.fields.new
+        -> mstate.BCstate.fields.new;
    #)
    
 --bytecode_emitCk:doPart--
@@ -2184,8 +2216,8 @@ do mstate.BCM.field ->mstate.BCM.emit;
     *              'p': a part object 
     *              '[': an array object
     *)
-do mstate.BCM.field ->mstate.BCM.emit; 
-   regRef -> mstate.BCM.emit;
+do 'emitCk:mstate.BCM.field ->mstate.BCM.emit;'->putline;
+   (*regRef -> mstate.BCM.emit;
    (if routineName[] <> none then
        RoutineName[] -> mstate.BCM.emitText;
     else
@@ -2195,13 +2227,10 @@ do mstate.BCM.field ->mstate.BCM.emit;
        1 -> RefName.inxGet -> mstate.BCM.emit
     else
        '?' -> mstate.BCM.emit
-   if)
+   if)*)
    
 ---byteCode_constructorDef:doPart---
-do mstate.BCM.initCons -> mstate.BCM.emit;
-   signature[] -> mstate.BCM.emitText;
-   
-   (if ('-' -> mstate.thisOrgName.equal) then
+do (if ('-' -> mstate.thisOrgName.equal) then
        (ACC_PUBLIC, '<init>', '()V', 8, 3) 
          -> mstate.jcf.currentmethod.new;
     else
@@ -2218,62 +2247,79 @@ do mstate.BCM.initCons -> mstate.BCM.emit;
    
    
 ---byteCode_tstNone:doPart---
-do mstate.BCM.loadRef->mstate.BCM.emit; A.out;
-   (if isDotnet then 0->mstate.BCM.emit if);
-   'UnknownNONE' -> mstate.BCM.emittext
+do 'tstNone:mstate.BCM.loadRef->mstate.BCM.emit; A.out;'->putline
+   (*   'UnknownNONE' -> mstate.BCM.emittext*)
    
 ---byteCode_doAsgRefAdr:doPart---
-do thisAdr.out;
-   
+do thisAdr.out;   
    (if destClassName[] = none then
-       'UnknownAsgRefAdr'-> mstate.BCM.emittext
+       'Unknown:doAsgRefAdr'->destClassName[]
    if);
-   
+   1->trace(#
+           do
+              'asgRefAdr:'->xT;
+              withQua->xB;
+              thisAdr.isOrigin->xB;
+              destClassName[] -> xT
+           #);
    (withQua,thisAdr.isOrigin(*?*),destClassName[]) -> mstate.A.storeRef
    
 ---byteCode_doAsgRegAdr:doPart---
 do (* source reg on stack *)
    thisAdr.out;
+   (if destClassName[] = none then
+       'Unknown:doAsgRegAdr'->destClassName[]
+   if);
+   1->trace(#
+           do
+              'asgRegAdr:'->xT;
+              withQua->xB;
+              thisAdr.isOrigin->xB;
+              destClassName[] -> xT
+           #);
+
    (withQua,thisAdr.isOrigin(*?*),destClassName[]) -> mstate.A.storeRef
    
 ---bytecode_checkCast:doPart---
-do (*checkcast  -> mstate.jcf.emit; type[] -> mstate.emitCheckCast*)
-   'Missing: checkcast  -> mstate.jcf.emit;' -> putline
+do _checkcast  -> mstate.jcf.emit; type[] -> mstate.emitCheckCast
    
 ---byteCode_jmpTlong:doPart---
-do mstate.BCM.jmpt->mstate.BCM.emit; T[]->mstate.BCM.emitText
+do 'mstate.BCM.jmpt->mstate.BCM.emit; T[]->mstate.BCM.emitText: '->puttext;
+   T[] -> putline;
    
 ---byteCode_jmplong:doPart---
-do mstate.BCM.jmpt->mstate.BCM.emit; T[]->mstate.BCM.emitText
+do 'mstate.BCM.jmpt->mstate.BCM.emit; T[]->mstate.BCM.emitText:A: ' ->puttext;
+   T[] -> putline;
    
 ---byteCode_jsrT:doPart---
-do mstate.BCM.call->mstate.BCM.emit; T[]->mstate.BCM.emitText   
+do 'mstate.BCM.call->mstate.BCM.emit; T[]->mstate.BCM.emitText:B: ' -> puttext;
+   T[] -> putline;
    
 --byteCode_gJmp:doPart---
-do mstate.BCM.jmp->mstate.BCM.emit; op.out;
+do op.out;
+   goto -> mstate.jcf.emit;
+   (*BC.get -> theL (* opcode label *); 
+   (if mstate.localLabArg = 0 then
+       '\nOOPS opcode jmp: use of strange label L0'->putline;
+   if);
+   mstate.localLabArg -> mstate.jcf.labs.off -> mstate.jcf.emitShort;
    
 --byteCode_gJsr:doPart---
-do mstate.BCM.call->mstate.BCM.emit; 
-   (# isInterfaceMethod: @boolean;
-   do
-      (# calltype: @integer;
-      do (if isStatic then 
-             calltype %Bor 1 -> calltype;
-         if);
-         (if isValueType then
-             (* Call on valuetype *)
-             calltype %Bor 2 -> calltype;
-         if);
-         (if op.T.T[1]='|' then
-             (* Interface method *)
-             calltype %Bor 4 -> calltype;
-             (1,1) -> op.T.delete;
-             
-             true -> isInterfaceMethod;
-             
-         if);
-         calltype -> mstate.BCM.emit
-      #);
+do (# isInterfaceMethod: @boolean;
+      calltype: @integer;
+   do (if isStatic then 
+          calltype %Bor 1 -> calltype;
+      if);
+      (if isValueType then
+          (* Call on valuetype *)
+          calltype %Bor 2 -> calltype;
+      if);
+      (if op.T.T[1]='|' then
+          (* Interface method *)
+          calltype %Bor 4 -> calltype;
+          (1,1) -> op.T.delete;          
+          true -> isInterfaceMethod;             
+      if);
       op.out;
       
       (# T, n, d, m: ^text; 
@@ -2297,48 +2343,21 @@ do mstate.BCM.call->mstate.BCM.emit;
              if);
              (m[], n[], d[]) -> mstate.jcf.emitMethodRef; 
          if);
-      #);
+      #)
    #)
 
 ---bytecode_beginLabel:doPart---
-do mstate.BCM.beginLab -> mstate.BCM.emit;
-   (*'beginLab' -> comment;*)
-   restartLab.labno -> mstate.BCM.emitLong;
-   leaveLab.labno -> mstate.BCM.emitLong;
-   (if hasCalls or hasSlots then
-       1 -> mstate.BCM.emit
-    else
-       0 -> mstate.BCM.emit
-   if);
+do (* no code needed here?*)
    
 ---bytecode_endLabel:doPart---
-do mstate.BCM.endLab -> mstate.BCM.emit; 
-   (*'endLab'->comment;*)
-   restartLab.labno -> mstate.BCM.emitLong;
-   leaveLab.labno -> mstate.BCM.emitLong;
-   (if hasCalls or hasSlots then
-       1 -> mstate.BCM.emit
-    else
-       0 -> mstate.BCM.emit
-   if)
+do (restartLab.labNo,leaveLab.labno,(hasCalls or hasSlots))
+     -> mstate.emitEndLabel
    
 ---bytecode_break:doPart---
-do mstate.BCM.break -> mstate.BCM.emit; 
-   JmpAdr.labno -> mstate.BCM.emitLong;
-   (if isLeave then 
-       0 -> mstate.BCM.emit
-    else
-       1 -> mstate.BCM.emit
-   if);
+do (JmpAdr.labno,isLeave) -> mstate.emitBreak
    
 ---bytecode_breaksimple:doPart---
-do (if common.isCLR then
-       mstate.BCM.breaksimple -> mstate.BCM.emit; 
-       (*'breaksimple'->comment;*)
-       JmpAdr.labno -> mstate.BCM.emitLong;
-    else
-       JmpAdr[] -> gJmp
-   if);
+do JmpAdr[] -> gJmp
    
 ---byteCode_cmpToBool:doPart--   
 do op1.loadToReg; 
@@ -2347,47 +2366,83 @@ do op1.loadToReg;
     * here we use the stack instead
     *)
    (if isRef then 
-       mstate.BCM.cmpToBoolRef->mstate.BCM.emit; 
+       (* 0:      if_xxx L1
+        * 3:      bipush 0 or 1
+        * 5:      goto L2
+        * 8:  L1: bipush 1 or 1
+        * 10: L2:
+        *)
+       (if cond = 1 (* =  *) then
+           if_acmpeq -> mstate.jcf.emit;
+        else (* cond = 2  <> *) 
+           if_acmpeq -> mstate.jcf.emit;
+       if);
+       8-0 -> mstate.jcf.emitShort; (* L1 *)
+       bipush -> mstate.jcf.emit; 
+       (if cond = 1 (* = *) then 
+           0 -> mstate.jcf.emit
+        else
+           1 -> mstate.jcf.emit
+       if);
+       goto -> mstate.jcf.emit;
+       10-5 -> mstate.jcf.emitShort; (* L2 *)
+       bipush -> mstate.jcf.emit; 
+       (if cond = 1 then 
+           1 -> mstate.jcf.emit;
+        else
+           0 -> mstate.jcf.emit;
+       if)
     else
-       mstate.BCM.cmpToBool->mstate.BCM.emit; 
+       (* 0:      if_xxx L1
+        * 3:      bipush 0
+        * 5:      goto L2
+        * 8:  L1: bipush 1
+        * 10: L2:
+        *)
+       (if cond
+        // 1 (* =  *) then
+           if_icmpeq -> mstate.jcf.emit;
+        // 2 (* <> *) then
+           if_icmpne -> mstate.jcf.emit;
+        // 3 (* <  *) then
+           if_icmplt -> mstate.jcf.emit;
+        // 4 (* <= *) then
+           if_icmple -> mstate.jcf.emit;
+        // 5 (* >  *) then
+           if_icmpgt -> mstate.jcf.emit;
+        // 6 (* >= *) then
+           if_icmpge -> mstate.jcf.emit;
+       if);
+       8-0 -> mstate.jcf.emitShort; (* L1 *)
+       bipush -> mstate.jcf.emit; 0 -> mstate.jcf.emit;
+       goto -> mstate.jcf.emit;
+       10-5 -> mstate.jcf.emitShort; (* L2 *)
+       bipush -> mstate.jcf.emit; 1 -> mstate.jcf.emit;
    if);
-   cond -> mstate.BCM.emit;
 
    
 ---byteCode_cmpAndJmp:doPart---
 do op1.loadToReg; op2.loadToReg;
-   mstate.BCM.cmpAndJmp->mstate.BCM.emit; 
-   cond -> mstate.BCM.emit;
-   lab.out; 
-   (if isRef then
-       1 -> mstate.BCM.emit
-    else
-       0 -> mstate.BCM.emit
-   if)
+   lab.out;
+   (cond,'L',mstate.localLabArg,isRef %band 1) -> mstate.emitCmpJmp 
    
 ---byteCode_cmpBoolAndJmp:doPart--
 do op.loadToReg;
-   mstate.BCM.cmpBoolAndJmp->mstate.BCM.emit; 
-   cond -> mstate.BCM.emit;
    lab.out;  
+   (cond,'L',mstate.localLabArg) -> mstate.emitCmpBoolJmp
    
 ---byteCode_floatConst:doPart---
-do mstate.BCM.pushRealCst -> mstate.BCM.emit;
-   value -> real2ints -> (mstate.BCM.emitLong, mstate.BCM.emitLong)
+do ldc2_w  -> mstate.jcf.emit;
+   value -> real2ints -> mstate.jcf.emitDoubleConstant;
    
 ---byteCode_saveReturn:doPart---
 do (if isGpart then
        '\nShouldNotHappen:saveReturn:initCons'->putline;
        (failuretrace,'initcons') -> stop;
-       mstate.BCM.initCons -> mstate.BCM.emit;
-       '()V' -> mstate.BCM.emitText
    if)
    
 ---byteCode_return:doPart---
-do mstate.BCM.return -> mstate.BCM.emit;
-   RToff -> mstate.BCM.emit;
-
-   (if RToff
+do (if RToff
     // 0 // 10 then 
        _return -> mstate.jcf.emit;
     // 1 // 2 // 3 // 4 // 5 then 
@@ -2428,134 +2483,118 @@ do (if (Lab[] <> none) and ( Lab.length > 0) then
    
 ---byteCode_callUnFunc:doPart---   
 do arg.loadToReg;
-   mstate.BCM.func -> mstate.BCM.emit;
-   opCode -> mstate.BCM.emit;
-   
+   opCode -> mstate.emitFunc
    
 ---byteCode_callBinFunc:doPart---
 do op1.loadToReg; op2.loadToReg;
-   mstate.BCM.func -> mstate.BCM.emit;
-   opCode -> mstate.BCM.emit;
-   
    opCode -> mstate.emitFunc
    
 --byteCode_classDef:doPart--
-do (if true 
-    // common.switch[184] 
-    // common.switch[189] then
-       (* .NET *)
-    else
-       (* java *)
-       mstate.BCM.init;
-       (* when using package as in
-        *    PACKAGE 'foo.bar.fisk'
-        * and a pattern
-        *    myClass: (# ... #)
-        * className = 'foo.bar.fisk.myClass'
-        * 
-        * Only 'myClass' should be used as thisFileName 
-        *)
-       (# lastDot: @integer; realClassName: ^text
-       do (if true then
-              className.scanAll
-              (# pos: @integer
-              do pos+1 -> pos;
-                 (if ch //  '.' // '\/' then pos -> lastDot if)
-              #);          
-          if);
-          (lastDot+1,className.length)
-            -> className.sub
-            -> realClassName[]
-            -> mstate.thisFileName[];
-       #);
-       (className[],startPos,endPos) -> mstate.classes.add;
-       
-       (* BCjavaBody elim *)
-       (# fn: ^text
-       do &JavaImage[] -> mstate.jcf[];
-          not common.switch[188]
-            -> mstate.jcf.display_warnings;
-          (common.verboselevel<=common.verboselevel.verbose)
-            -> mstate.jcf.traceClassFileName;
-          common.switch[190] 
-            -> mstate.jcf.traceClassFile;
-          true
-            -> mstate.jcf.local_variables_always_live_until_exit;
-          false
-            -> mstate.jcf.report_undefined_local_variable_use;
-
-          mstate.thisFileName[] -> (mstate.thisFullPath.copy).append -> fn[];
-          (if common.hostIsWindows then
-              (* Since package paths may now be part of the file name,
-               * the file name may now contain forward slashes.
-               * Thats not OK on windows.
-               *)
-              fn[] -> SlashToBackslash -> fn[];
-          if);
-          '.class' -> (fn.copy).AppendExtension -> mstate.jcf.init;
-          '.bet' (* wrong! *)
-            -> (mstate.thisSourceFileName.copy).AppendExtension 
-            -> mstate.jcf.SourceFile;
-
-          newline;
-          fn[] -> putline;
-          false -> mstate.isMainMethod;
-
-          className[]
-            -> mstate.jcf.constant_pool.classes.addtext
-            -> mstate.jcf.thisClassIndex;
-          blockLevel-> mstate.thisBlockLevel;
-          (mstate.thisBlockLevel,mstate.thisClassname[]) 
-            -> mstate.BCstate.blocks.mark;
-          superName[] 
-            -> mstate.thisSuperName[]
-            -> mstate.jcf.constant_pool.classes.addtext 
-            -> mstate.jcf.superClassIndex;
+do (* when using package as in
+    *    PACKAGE 'foo.bar.fisk'
+    * and a pattern
+    *    myClass: (# ... #)
+    * className = 'foo.bar.fisk.myClass'
+    * 
+    * Only 'myClass' should be used as thisFileName 
+    *)
+   (# lastDot: @integer; realClassName: ^text
+   do (if true then
+          className.scanAll
+          (# pos: @integer
+          do pos+1 -> pos;
+             (if ch //  '.' // '\/' then pos -> lastDot if)
+          #);          
+      if);
+      (lastDot+1,className.length)
+        -> className.sub
+        -> realClassName[]
+        -> mstate.thisFileName[];
+   #);
+   (className[],startPos,endPos) -> mstate.classes.add;
+   
+   (* BCjavaBody elim *)
+   (# fn: ^text
+   do &JavaImage[] -> mstate.jcf[] -> mstate.BCM.jcf[];;
+      not common.switch[188]
+        -> mstate.jcf.display_warnings;
+      (common.verboselevel<=common.verboselevel.verbose)
+        -> mstate.jcf.traceClassFileName;
+      common.switch[190] 
+        -> mstate.jcf.traceClassFile;
+      true
+        -> mstate.jcf.local_variables_always_live_until_exit;
+      false
+        -> mstate.jcf.report_undefined_local_variable_use;
+      
+      mstate.thisFileName[] -> (mstate.thisFullPath.copy).append -> fn[];
+      (if common.hostIsWindows then
+          (* Since package paths may now be part of the file name,
+           * the file name may now contain forward slashes.
+           * Thats not OK on windows.
+           *)
+          fn[] -> SlashToBackslash -> fn[];
+      if);
+      '.class' -> (fn.copy).AppendExtension -> mstate.jcf.init;
+      '.bet' 
+        -> (mstate.thisSourceFileName.copy).AppendExtension 
+        -> mstate.jcf.SourceFile;
+      (*
+       newline;
+       fn[] -> putline;
+       *)
+      false -> mstate.isMainMethod;
+      
+      className[]
+        -> mstate.jcf.constant_pool.classes.addtext
+        -> mstate.jcf.thisClassIndex;
+      blockLevel-> mstate.thisBlockLevel;
+      (mstate.thisBlockLevel,mstate.thisClassname[]) 
+        -> mstate.BCstate.blocks.mark;
+      superName[] 
+        -> mstate.thisSuperName[]
+        -> mstate.jcf.constant_pool.classes.addtext 
+        -> mstate.jcf.superClassIndex;
+      
+      'java/lang/Object'->mstate.thisSuperOrgName[];
+      
+      subLevel -> mstate.subLevel;
+      orgName[] -> mstate.thisOrgName[];
+      (if (subLevel = 0) 
+          and (common.betaenv.packagename->className.equalNCS) then
+          ('betaenvRef', className.copy->makeSignature)
+            -> mstate.jcf.fields.addText_static;
           
-          'java/lang/Object'->mstate.thisSuperOrgName[];
+      if);
+      (if not ('-'->orgName.equal) then
+          (if true then
+              ('origin', orgName[]) 
+                -> mstate.jcf.emitPublicSyntheticFieldDef
+          if)
           
-           subLevel -> mstate.subLevel;
-          orgName[] -> mstate.thisOrgName[];
-          (if (subLevel = 0) 
-              and (common.betaenv.packagename->className.equalNCS) then
-              ('betaenvRef', className.copy->makeSignature)
-                -> mstate.jcf.fields.addText_static;
-              
-          if);
-          (if not ('-'->orgName.equal) then
-              (if true then
-                  ('origin', orgName[]) 
-                    -> mstate.jcf.emitPublicSyntheticFieldDef
-              if)
-              
-          if);
-(*          className[] -> markAsInnerIfInnerClass;*)
-          mstate.BCstate.fields.init
-          
-       #);
-   if);
+      if);
+      className[] -> mstate.markAsInnerIfInnerClass;
+      mstate.BCstate.fields.init
+      
+   #);
    className[] -> mstate.thisClassName[];
-   mstate.BCM.classDef -> mstate.BCM.emit; 
-   className[]->mstate.BCM.emittext;
-   blockLevel -> mstate.BCM.emit;
-   superName[]->mstate.BCM.emittext;
-   subLevel -> mstate.BCM.emit; (* OBS: int8 assumed here *)
-   orgName[] -> mstate.BCM.emittext;
 
 --byteCode_marknested:doPart---
-do (if isJava then
-       mstate.BCM.markNested -> mstate.BCM.emit;
-       nestedMangled[]->mstate.BCM.emittext;
-       nested[]->mstate.BCM.emittext;
-   if);
-   
+do (nestedMangled[],mstate.thisClassName[],nested[],ACC_PUBLIC)
+     -> mstate.jcf.emitInnerClassRef
+
 --byteCode_endClass:doPart---
-do mstate.BCM.endClass -> mstate.BCM.emit;
-   (if not common.switch[184] then
-       mstate.BCM.end -> mstate.BCM.emit;
-       mstate.mkAsmFile
+do mstate.jcf.EmitToFile;
+   (if (mstate.thisClassName[]<>NONE) 
+       and (common.BetaObjectClass->mstate.thisClassName.equal) then
+       (* Just finished generating BetaObject (in betaenv). *)
+       mstate.BCM.GenerateJvmClassExOException;
+       mstate.bcm.GenerateJvmClassStructure;
+       mstate.BCM.GenerateJvmClassBetaArray;
+       (if not common.ComponentDotCJ then
+           mstate.BCM.GenerateJvmClassComponent;
+       if);
    if);
-   mstate.jcf.EmitToFile;
 
 --byteCode_endCodeSeg:doPart---
 do (if not isJava then 
@@ -2564,18 +2603,12 @@ do (if not isJava then
    
 --byteCode_methodDef:doPart--
 do 0 -> mstate.numTempLocals;
-   mstate.BCM.methodDef -> mstate.BCM.emit; 
-   methodName[]->mstate.BCM.emittext;
-   signature[]->mstate.BCM.emittext;
-   noOfEnterArgs -> mstate.BCM.emit;
-   type -> mstate.BCM.emit;
-   
    (# aux: @integer; (* 0 or 1 *)
       isStatic: @boolean;
       access: @integer;
       argn: ^text;
    do 1 -> mstate.BCstate.fields.LocalVariables.new;
-      (*1 -> MappedLocals.new;*)
+      1 -> mstate.MappedLocals.new;
       
       methodname[] -> mstate.thisInnerMethodName[];  
       signature[] -> mstate.thisSignature[];
@@ -2593,7 +2626,7 @@ do 0 -> mstate.numTempLocals;
        else
           false -> mstate.isMainMethod;
           (if aux = 0 then
-              (0 (*%Bor ACC_PUBLIC*), mstate.thisInnerMethodName[], '()V', 1, 1)
+              (0 (*%Bor ACC_PUBLIC*), mstate.thisInnerMethodName[], '()V', 1,1)
                 -> mstate.jcf.currentmethod.new;
               (if generateDebugInfo then
                   (if mstate.thisClassName[] = none then
@@ -2603,7 +2636,8 @@ do 0 -> mstate.numTempLocals;
                     -> makeSignature) 
                     -> mstate.jcf.emitLocalVariableDefinition;
               if);
-              1 -> mstate.jcf.emitLinenumber; (* test to see if this satifies eclipse *)
+              1 -> mstate.jcf.emitLinenumber; (* test to see if 
+                                               * this satifies eclipse *)
               _return -> mstate.jcf.emit;
           if);
           mstate.thisSignature[] 
@@ -2649,7 +2683,9 @@ do S[] -> mstate.jcf.emitLoadString;
    
 ---byteCode_close:doPart---
 do (if trace_init_close then
-       '\nCLOSE: ' -> puttext; mstate.thisFullPath[] -> puttext; mstate.thisFileName[]->putline;
+       '\nCLOSE: ' -> puttext; 
+       mstate.thisFullPath[] -> puttext; 
+       mstate.thisFileName[]->putline;
    if);
    183->trace(#
              do 'Close:' ->xT; mstate.thisFullPath[] -> xT; xN;
@@ -2662,8 +2698,16 @@ do (if trace_init_close then
        mstate.mkDepFile
    if);
    (if not isJava then
-       mstate.BCM.end -> mstate.BCM.emit;
-       mstate.mkAsmFile; 
+       (if (mstate.thisClassName[]<>NONE) 
+           and (common.BetaObjectClass->mstate.thisClassName.equal) then
+           (* Just finished generating BetaObject (in betaenv). *)
+           mstate.BCM.GenerateJvmClassExOException;
+           mstate.bcm.GenerateJvmClassStructure;
+           mstate.BCM.GenerateJvmClassBetaArray;
+           (if not common.ComponentDotCJ then
+               mstate.BCM.GenerateJvmClassComponent;
+           if);
+       if);       
    if);
    mstate.BCM.imports.clear;
    
@@ -2675,14 +2719,26 @@ do f2d -> mstate.jcf.emit
    
 ---byteCode_cmpToBoolFloat:doPart--
 do op1.loadToReg; op2.loadToReg;
-   mstate.BCM.cmpToBoolFloat -> mstate.BCM.emit;
-   cond -> mstate.BCM.emit;
+   dcmpg -> mstate.jcf.emit;
+   (if cond
+    // 1 (* =  *) then ifeq -> mstate.jcf.emit
+    // 2 (* <> *) then ifne -> mstate.jcf.emit
+    // 3 (* <  *) then iflt -> mstate.jcf.emit
+    // 4 (* <= *) then ifle -> mstate.jcf.emit
+    // 5 (* >  *) then ifgt -> mstate.jcf.emit
+    // 6 (* >= *) then ifge -> mstate.jcf.emit
+   if);
+   8-0 -> mstate.jcf.emitShort; (* L1 *)
+   bipush -> mstate.jcf.emit; 0 -> mstate.jcf.emit;
+   goto -> mstate.jcf.emit;
+   10-5 -> mstate.jcf.emitShort; (* L2 *)
+   bipush -> mstate.jcf.emit; 1 -> mstate.jcf.emit;   
    
 ---byteCode_cmpAndJmpFloat:doPart--
 do op1.loadToReg; op2.loadToReg;
-   mstate.BCM.cmpAndJmpFloat -> mstate.BCM.emit;
-   cond -> mstate.BCM.emit;
    lab.out; 
+   dcmpg -> mstate.jcf.emit;
+   (cond,'L',mstate.localLabArg) -> mstate.emitCmpBoolJmp
    
 ---byteCode_addFloat:doPart---
 do dadd -> mstate.jcf.emit
@@ -2710,13 +2766,13 @@ do d2i -> mstate.jcf.emit
    
 ---byteCode_CallCproc:doPart---
 do (# S: ^text
-   do mstate.BCM.callExternal -> mstate.BCM.emit;
-      '' -> S[];
+   do '' -> S[];
       T.scanAll(#
                do (if ch > 0 then
                       ch -> S.put
                if)#);
-      S[] -> mstate.BCM.emitText;   
+      (* S[] -> mstate.BCM.emitText;   *)
+      S[] -> mstate.emitCallExternal
    #)
    
 ---byteCode_jsrTable:doPart---
@@ -2725,10 +2781,14 @@ do
        (# R: @adrRegOperand
        do R.alloc;
           (A[],R[],4) -> ldVlImpl;
-          mstate.BCM.newVirt -> mstate.BCM.emit;
+         '??? mstate.BCM.newVirt -> mstate.BCM.emit;'->putline
        #)
     else
-       mstate.BCM.callInner -> mstate.BCM.emit;
+       aload_0 -> mstate.jcf.emit;
+       invokevirtual -> mstate.jcf.emit;
+       (* NOT in accordance with design - FIX *)
+       (mstate.thisClassName[], mstate.thisInnerMethodName[], '()V') 
+         -> mstate.jcf.emitMethodRef; 
    if)
    
 ---byteCode_init:doPart---
@@ -2779,7 +2839,6 @@ do (if localFilePath[] = none then
    if);
    
    FIXME.init;
-   mstate.BCM.init;
    
    1->ThisRegOp;
    2->CallRegOp;
@@ -2789,8 +2848,14 @@ do packagepath.copy -> mstate.thisPackagePath[];
    packagePath[] -> mstate.thisFullPath.append;
    
 ---bytecode_comment:doPart--
-do mstate.BCM.comment -> mstate.BCM.emit;
-   T[] -> mstate.BCM.emittext
+do (if common.switch[319]
+       and 
+       (T.length > 0)
+       and 
+       ((T.length > 0) and ((1 -> T.inxget) <> '!') or common.switch[185])  
+       then
+       T[] -> mstate.jcf.emitComment;
+   if)
    
 ---new_BCstate:descriptor---
 (# ObjectName:
@@ -2839,7 +2904,8 @@ do mstate.BCM.comment -> mstate.BCM.emit;
                  // 'M' // 'C' then (* ???*)
                  else
                     '\nField.add: ' -> puttext;
-                    FN[] -> puttext; ' : "' -> puttext; T[] -> puttext; '"'->put;
+                    FN[] -> puttext; 
+                    ' : "' -> puttext; T[] -> puttext; '"'->put;
                     methodclassTag -> put; newline;
                     (failureTrace,'fields.new:Unknown methodClassTag') -> stop
                 if);
