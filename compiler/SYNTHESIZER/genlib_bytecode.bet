@@ -418,16 +418,55 @@ newInstanceWithOrigin:
          #)
      if)
   #);
+virtualTopDesc:
+  (# VD,topDesc: ^ASTindex; VN: @ASTindex; descKind: @integer
+  enter VD[]
+  do (if VD.label // gram.bindingDecl // gram.finalDecl then
+         VD.son -> sematt.singleName -> VN;
+         L: (#
+            do VN.virtDcl -> VN;
+               VN.sort -> VD;
+               313->trace(#
+                         do 'genPtnClass:binding: ' -> xT;
+                            VN[] -> xA;
+                            VD[] -> xA
+                         #);                        
+               (if not (VD.label = gram.virtualDecl) then
+                   restart L
+               if)
+            #);
+         313->trace(#do VN[] -> xA #);
+         VN.father -> VN;
+         &ASTindex[] -> topDesc[];
+         VN.brother -> topDesc;
+         313->trace(#do topDesc[] -> xA #);
+         (if not (topDesc.label = gram.objectDescriptor) then
+             (thisDesc[](*?*),topDesc[])
+               -> GetActualDesc 
+               -> (topDesc,descKind)
+         if);
+         313->trace(#
+                   do 'genPtnClass:topDesc: ' -> xT;
+                      topDesc[] -> xA;
+                   #);              
+     if);          
+  exit topDesc[]
+  #);
 CallClassPtnMethod:
-  (# OA: ^mch.address; VN,ES: ^ASTindex; sig: @signature;
+  (# OA: ^mch.address; VN,ES,topDesc: ^ASTindex; sig: @signature;
      EH: @evalHandler;
-     sigT: ^text
+     sigT: ^text; sort: @ASTindex
   enter(VN[],OA[],ES[])
   do ES[] -> sig.setDesc;
      (OA.bAdr.localDesc[],true) -> EH.descName -> sig.addReceiver;
      VN.gettext -> sig.addMethod;
      sig.noEnter;
-     sig.exitRef;
+     VN.sort -> sort;
+     (if (sort[] -> virtualTopDesc -> topDesc[]) <> none then
+         topDesc[] -> sig.exitRef
+      else
+         sig.exitRef
+     if);
      (sig.asText->mch.newTextOp,'M',false(*?*),false) -> mch.gJsr;
      sig.thisDesc[] -> theGen.mkSignature -> sigT[]
   exit sigT[]
@@ -887,7 +926,61 @@ genSuper:
                        thisDesc[] -> xA; xN;
                     #);
           storeOrigin
-       #) 
+       #) ;
+     IsSpecialVirtual: (* see the same pattern in genlib.bet 
+                        * we should unify the two patterns
+                        *       V::< (# ... #);  
+                        *)
+       (# preDen: ^ASTindex;
+          special,rem: @boolean;
+          preName,preX,preSort,realPre,realPreN
+          ,preDescOrg: @ASTindex;
+          thisDescOrigin: ^ASTindex;
+          chain: ^DH.SuperChain
+       enter preDen[]
+       do preDen -> sematt.getName -> preName;
+          preName.dclRef -> preSort;
+          preSort.sort -> preSort;
+          (if preSort.label
+           // gram.virtualDecl // gram.bindingDecl then
+              (* thisDesc is V :: < (# ... #)                   
+               * the super may then be  V :< (# ... #)
+               *        no problems on generating origin
+               * or                  V :< A
+               *        special code for generating origin
+               *        if A is not at the same level as V
+               * or                   V:< R.A
+               *        same as above
+               *)
+              preSort.son -> realPre;
+              realPre.brother -> realPre;
+              (if realPre.label
+               // gram.objectDescriptor then
+                  
+               // gram.nameApl then (* V:< A *)
+                  realPre -> sematt.getName -> realPreN;
+                  (if (realPreN.on > 0) then true -> special if)
+               // gram.remote then
+                  true -> special
+               else
+                  'Unknown implicit super-pattern' 
+                    -> thisTranslate.SystemException
+              if);
+              (if special then
+                  thisDesc[] -> semAtt.DescOrigin -> thisDescOrigin[];
+                  thisDescOrigin -> preDescOrg;
+                  ThisSuperChain -> chain[];
+                  chain[] -> DH.ENC -> chain[];
+                  (for i: preName.pn repeat
+                       preDescOrg.son -> preX;
+                       preX.son -> sematt.Descrip -> preDescOrg;
+                       chain[] -> DH.PRE -> chain[]
+                  for);                  
+              if)
+          if)
+       exit(special,realPre[],preDescOrg[],chain[])
+       #);
+     isSpecial: @boolean; preDescOrg,realpre: ^ASTindex
   enter(pref[],subLevel)
   do 313->trace(#
                do 'genSuper:'->xT;
@@ -916,8 +1009,25 @@ genSuper:
          thisDesc[]
            -> sematt.descOrigin
            -> originDesc[];
-         
-         (if false (* isSpecialVirtual *) then
+         preDen[] -> isSpecialVirtual 
+           -> (isSpecial,realPre[],preDescOrg[],chain[]);
+         (if isSpecial then
+             311->trace(#
+                       do 'SpecialVirtual: realpre: '->xT; realPre[]->xA; xN;
+                          'preDescOrg: ' -> xT; preDescOrg[] -> xA
+                       #);
+             preDescOrg[] -> preBase.bAdr.LocalDesc[];
+             '' -> callInit
+             (#
+             do true -> preBase.isOrigin;
+                2 -> prebase.ONlevel;
+                (preBase[],none(*not used*),realPre[],chain[])
+                  -> genOrgAdr
+                  -> preBase[];
+                (preBase.bAdr.localDesc[],true)
+                  -> EH.descName 
+                  -> orgName[];
+             #)
           else
              (* overvej *)
              thisDesc[]
@@ -925,7 +1035,7 @@ genSuper:
                -> originDesc[]
                -> preBase.bAdr.LocalDesc[];
              thisSuperChain->chain[];
-                chain[]->DH.ENC->chain[];
+             chain[]->DH.ENC->chain[];
              (* NOTE: We enter the empty string '' as orgName,
               * and redefined orgName in the do-part below;
               * we need to reconsider the abstraction
@@ -942,7 +1052,7 @@ genSuper:
                 (preBase[],originDesc[],preDen[],chain[])
                   -> genOrgAdr
                   -> preBase[];
-                 (preBase.bAdr.localDesc[],true)
+                (preBase.bAdr.localDesc[],true)
                   -> EH.descName 
                   -> orgName[];
                 311->trace(#
@@ -950,8 +1060,7 @@ genSuper:
                              'localDesc:' -> xT;
                              preBase.bAdr.localDesc[] -> xA; xN;
                              'orgName: ' -> xT; orgName[] -> xT
-                          #);
-                
+                          #);                
              #)
          if);
          storeOrigin;
@@ -1140,12 +1249,14 @@ do (# sig: @Signature;
    
 ---genPtnClass:doPart---
 do (# sig: @Signature;
-      objSpec,theDesc,D,VN,VD,topDesc: @ASTindex;
+      objSpec,theDesc,D,VN,VD: @ASTindex;
+      topDesc: ^ASTindex;
       nonLocal: @boolean;
       descKind: @integer
    do 311->trace(#
-                do 'genPtnClass: '->xT; patternName[] -> xT;
-                   xN; desc[] -> xA
+                do 'genPtnClass: '->xT; patternName[] -> xT; xN;
+                   'desc:' -> xT; desc[] -> xA; xN;                 
+                   'thisDesc:' -> xT; thisDesc[] -> xA; 
                 #);
       (if desc.isSlot then
           '\n*** OBS! Slots are not handled by genPtnClass: '->puttext;
@@ -1164,36 +1275,11 @@ do (# sig: @Signature;
               &ASTindex[] -> desc[]; (* to prevent aliasing; ugly! *)
               D -> desc;
           if);
-          desc -> theDesc -> topDesc;
-          (if VD.label // gram.bindingDecl // gram.finalDecl then
-              VD.son -> sematt.singleName -> VN;
-              L: (#
-                 do VN.virtDcl -> VN;
-                    VN.sort -> VD;
-                    313->trace(#
-                              do 'genPtnClass:binding: ' -> xT;
-                                 VN[] -> xA;
-                                 VD[] -> xA
-                              #);                        
-                    (if not (VD.label = gram.virtualDecl) then
-                        restart L
-                    if)
-                 #);
-              313->trace(#do VN[] -> xA #);
-              VN.father -> VN;
-              VN.brother -> topDesc;
-              313->trace(#do topDesc[] -> xA #);
-              (if not (topDesc.label = gram.objectDescriptor) then
-                  (thisDesc[](*?*),topDesc[])
-                    -> GetActualDesc 
-                    -> (topDesc,descKind)
-              if);
-              313->trace(#
-                        do 'genPtnClass:topDesc: ' -> xT;
-                           topDesc[] -> xA;
-                        #);              
-          if);          
-
+          desc -> theDesc;
+          (if (VD[] -> virtualTopDesc -> topDesc[]) = none then
+              &ASTindex[] -> topDesc[];
+              theDesc -> topDesc;
+          if);
           (desc[],false) -> initPtnGen;
           thisDesc[] -> sig.setDesc;
           sig.noEnter;
@@ -1472,7 +1558,7 @@ do (# genMain:
           if);
           false -> inEnterDoExitMethod;
           handleNestedDescriptors
-          (#
+          (# pref: @ASTindex
           do 
              (* this is currently a nested singular descriptor;
               * we don't know whether it is an item or an insertion;
@@ -1489,7 +1575,15 @@ do (# genMain:
                   // 1 (* singular static item *) then
                      currentDesc[] -> locals.save
                   // 2 (* singular inserted procedure item *) then
-                     currentDesc[] -> locals.addMethod
+                     currentDesc.son -> pref;
+                     (if pref.label = gram.prefix then
+                         currentDesc[] -> locals.save
+                      else
+                         (* just generating a method is an
+                          * insufficient optimization
+                          *)
+                         currentDesc[] -> locals.addMethod
+                     if)
                   // 3 (* singular dynamic descriptor *) then
                      currentDesc[] -> locals.save
                   else
@@ -1503,8 +1597,9 @@ do (# genMain:
              if)
           #);
           locals.scanPtns
-          (# desc: @ASTindex; descKind: @integer
-          do (if not (current[] -> skipDesc) then (* skip *)
+          (# D: @ASTindex; descKind: @integer
+          do thisDesc -> D; (* ugly *)
+             (if not (current[] -> skipDesc) then (* skip *)
                  (if current.label 
                   // gram.unExpanded then
                      (* '\n*** descriptor: ' -> puttext;
@@ -1527,19 +1622,22 @@ do (# genMain:
                          ((current[],false)->EH.descName
                          ,current[],false,theDesc[],none)
                            -> genPtnMethod;
+                         D -> thisDesc;
                          ((current[],false)->EH.descName
                          ,current[],theDesc[]) 
                            -> genPtnClass
                      if)
                   else
-                     (* attributeDenotation as 'A' in 'V:<A' *)
+                    (* attributeDenotation as 'A' in 'V:<A' *)
                      ((current[],false)->EH.descName
                      ,current[],false,theDesc[],none)
                        -> genPtnMethod;
+                     D -> thisDesc;
                      ((current[],false)->EH.descName
                      ,current[],theDesc[]) 
                        -> genPtnClass
-             if)if)
+             if)if);
+             D -> thisDesc
           #);
           
           (if isMain then
@@ -1752,7 +1850,9 @@ do (# sig: @Signature;
            else 'other? ' ->puttext
            if);*)
           desc[] -> descChain -> (superName[],superDesc[],subLevel);
-          
+          (* is this waht we want? subLevel should not of thisDesc
+           * but from enclosing desc?
+           *)
           methodName.copy -> innerName[];
           (if subLevel > 0 then          
               '_do_' -> methodName.append;
@@ -1804,8 +1904,10 @@ do (# sig: @Signature;
               (* else call of foo/do leaves return value on stack *)
           if);
           (false,exitId) -> mch.return; 
-          (pref[],att[])->BindVirtuals;
-          (nameId[],singular)->genSymbTable;
+          (if false then
+              (pref[],att[])->BindVirtuals;
+              (nameId[],singular)->genSymbTable;
+          if)
       if)
    #)
 
