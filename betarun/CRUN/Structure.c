@@ -1,14 +1,14 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-06-09 15:19:28 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-06-11 17:15:33 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-ref(Structure) AllocateStruc(ref(Object) origin,
-			     ref(ProtoType) proto
+ref(Structure) AllocateStruc(ref(ProtoType) proto,
+			     ref(Object) origin
 			     )
 {
     register ref(Structure) newStruct;
@@ -65,11 +65,16 @@ AllocateStrucComponent(ref(Structure) theStruct)
 }
 
 
-/* params ?? */
-int
-eqStruc(ref(Structure) arg1,
-	ref(Structure) arg2
-	)
+asmlabel(eqStruc, "
+	ld	[%sp+18*4], %o0
+	ld	[%sp+16*4], %o1
+	ba	_CeqStruc
+	inc	16, %sp
+");
+
+int CeqStruc(ref(Structure) arg1,
+	     ref(Structure) arg2
+	     )
 {
     if (!arg1) {
 	if (!arg2)
@@ -86,30 +91,45 @@ eqStruc(ref(Structure) arg1,
 }
 
 
-/* params ?? */
-int
-neStruc(ref(Structure) arg1,
-	ref(Structure) arg2
-	)
+asmlabel(neStruc, "
+	ld	[%sp+18*4], %o0
+	ld	[%sp+16*4], %o1
+	ba	_CneStruc
+	inc	16, %sp
+");
+
+int CneStruc(ref(Structure) arg1,
+	     ref(Structure) arg2
+	     )
 {
     return !eqStruc(arg1, arg2);
 }
 
 
-/* params ?? */
-int
-ltStruc(ref(Structure) arg1,
-	ref(Structure) arg2
-	)
+asmlabel(ltStruc, "
+	ld	[%sp+18*4], %o0
+	ld	[%sp+16*4], %o1
+	ba	_CltStruc
+	inc	16, %sp
+");
+
+int CltStruc(ref(Structure) arg1,
+	     ref(Structure) arg2
+	     )
 {
     fprintf(stderr, "ltStruc: Unfinished code, doesn't work\n");
     return 0; /* Hmm, I got bored (??) */
 }
 
 
-/* params ?? */
-int
-gtStruc(ref(Structure) arg1,
+asmlabel(gtStruc, "
+	ld	[%sp+18*4], %o0
+	ld	[%sp+16*4], %o1
+	ba	_CgtStruc
+	inc	16, %sp
+");
+
+int CgtStruc(ref(Structure) arg1,
 	ref(Structure) arg2
 	)
 {
@@ -118,9 +138,14 @@ gtStruc(ref(Structure) arg1,
 }
 
 
-/* params ?? */
-int
-leStruc(ref(Structure) arg1,
+asmlabel(leStruc, "
+	ld	[%sp+18*4], %o0
+	ld	[%sp+16*4], %o1
+	ba	_CleStruc
+	inc	16, %sp
+");
+
+int CleStruc(ref(Structure) arg1,
 	ref(Structure) arg2
 	)
 {
@@ -129,27 +154,18 @@ leStruc(ref(Structure) arg1,
 }
 
 
-/* params ?? */
-int
-geStruc(ref(Structure) arg1,
-	ref(Structure) arg2
-	)
+asmlabel(geStruc, "
+	ld	[%sp+18*4], %o0
+	ld	[%sp+16*4], %o1
+	ba	_CgeStruc
+	inc	16, %sp
+");
+
+int CgeStruc(ref(Structure) arg1,
+	     ref(Structure) arg2
+	     )
 {
     fprintf(stderr, "geStruc: Unfinished code, doesn't work\n");
     return 0; /* Hmm, I got bored (??) */
 }
-
-#include "beta.h"
-#include "crun.h"
-
-/* Need to do this in assembler, as the arguments to
-   my caller normally isn't accesseable */
-asmlabel(SetArgValues, "
-	set _ArgCount, %g1
-	st %i0, [%g1]
-	set _ArgVector, %g1
-	retl
-	st %i1, [%g1]
-");
-
 
