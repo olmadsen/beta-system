@@ -126,7 +126,6 @@ else
 
 	/bin/rm -rf betarun
 	mkdir betarun
-	mkdir betarun
 	mkdir betarun/$TARGET
 	cp ${BETALIB}/betarun/$TARGET/betarun_pe.o ./betarun/$TARGET/betarun.o
 	cp ${BETALIB}/betarun/$TARGET/betarun_pe.o ./betarun/$TARGET/betarun_v.o
