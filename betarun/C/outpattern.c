@@ -574,6 +574,8 @@ void DisplayObject(FILE   *output, /* Where to dump object */
 
 void DisplayHPPAStack(long *thePC) 
 {
+  /* FIXME: Could possibly use ProcessHPPAStack with appropriate func */
+
 #ifdef UseRefStack
   /*
    * The ReferenceStack way of tracing the Beta stack.
@@ -890,6 +892,8 @@ void DisplayINTELStack(BetaErr errorNumber,
 		       long theSignal /* theSignal is zero if not applicable. */
 		       )
 { 
+
+  /* FIXME: Could possibly use ProcessINTELStack with appropriate func */
   Component       *currentComponent = ActiveComponent;
   long            *low              = (long *) StackEnd;
   long            *high             = (long *) lastCompBlock;

@@ -251,7 +251,6 @@ extern void IOAGc(void);
 extern void ProcessReference(Object **, long refType);
 extern void ProcessObject(Object *);
 extern void CompleteScavenging(void);
-extern void DoStackCell(Object **theCell,Object *theObj);
 extern void foreachObjectInIOA(void (*objectAction)(Object *, void *),
 			       void *generic);
 #ifdef RTDEBUG

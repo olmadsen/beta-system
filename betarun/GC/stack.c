@@ -12,6 +12,53 @@
 
 extern void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
 
+/* DoStackCell:
+ *  Used by the routines that traverse the stack.
+ */
+static void DoStackCell(Object **theCell,Object *theObj)
+{    
+#ifdef intel
+  DEBUG_STACK({ 
+    fprintf(output, "0x%08x: 0x%08x", (int)theCell, (int)theObj);
+    PrintRef(theObj);
+    fprintf(output, "\n");
+  });
+#endif /* intel */
+  if (!theObj) {
+    return;
+  }
+  if (inBetaHeap(theObj)) {
+    if (isObject(theObj)){
+      DEBUG_CODE(if (!CheckHeap) Ck(theObj));
+      ProcessReference(theCell, REFTYPE_DYNAMIC);
+      CompleteScavenging();
+    } else {
+      DEBUG_CODE({
+        fprintf(output, "[DoStackCell: ***Illegal: 0x%x: 0x%x]\n", 
+                (int)theCell,
+                (int)theObj);
+        ILLEGAL;
+      });
+    }
+  } else {
+    /* Object pointing outside BETA heaps. Maybe a COM reference? */
+    DEBUG_CODE({
+      fprintf(output, 
+	      "0x%08x: 0x%08x stack cell points outside BETA. COM?\n", 
+	      (int)theCell, 
+	      (int)theObj);
+      NEWRUN_CODE({
+	/* Because of the very well-defined structure of stackframes
+	 * there should be no GC-able cells, that refer outside BETA heaps.
+	 */
+	if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
+	  ILLEGAL;
+	}
+      });
+    });
+  }
+}
+
 /************************* Valhalla/persist reference stack ****************/
 #ifdef RTVALHALLA
 
@@ -584,7 +631,7 @@ void ProcessStackFrames(long SP,
 } /* ProcessStackFrames */
 
 static
-void ProcessNEWRUNStack(void)
+void ProcessNEWRUNStack(CellProcessFunc func)
 {
   /* There are two set of GC roots:
    * 1. The ReferenceStack contains roots
@@ -596,10 +643,10 @@ void ProcessNEWRUNStack(void)
   DEBUG_STACK(fprintf(output, "\n"));
   DEBUG_STACK(FrameSeparator());
   DEBUG_STACK(fprintf(output, "Processing internal ReferenceStack used by RTS.\n"));
-  ProcessRefStack(RefSP-1, FALSE, DoStackCell); /* RefSP points to first free */
+  ProcessRefStack(RefSP-1, FALSE, func); /* RefSP points to first free */
   DEBUG_STACK(FrameSeparator());
   DEBUG_STACK(fprintf(output, "Processing MachineStack.\n"));
-  ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoStackCell);
+  ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, func);
 }
 
 static
@@ -700,11 +747,11 @@ void ProcessRefStack(unsigned size, Object **bottom, CellProcessFunc func)
 }
 
 static 
-void ProcessHPPAStack(void)
+void ProcessHPPAStack(CellProcessFunc func)
 {
   ProcessRefStack(((unsigned)RefSP-(unsigned)&ReferenceStack[0]) >> 2,
                   (Object **)ReferenceStack, 
-		  DoStackCell);
+		  func);
 }
 
 /*
@@ -1229,41 +1276,6 @@ int SkipDataRegs(long *theCell)
   return 0;
 }
 
-static 
-void ProcessIntelStackCell(Object **theCell, Object *theObj)
-{    
-  DEBUG_STACK({ 
-    fprintf(output, "0x%08x: 0x%08x", (int)theCell, (int)theObj);
-    PrintRef(theObj);
-    fprintf(output, "\n");
-  });
-  if (!theObj) {
-    return;
-  }
-  if (inBetaHeap(theObj)) {
-    if (isObject(theObj)){
-      DEBUG_CODE(if (!CheckHeap) Ck(theObj));
-      ProcessReference(theCell, REFTYPE_DYNAMIC);
-      CompleteScavenging();
-    } else {
-      DEBUG_CODE({
-        fprintf(output, "[ProcessIntelStackCell: ***Illegal: 0x%x: 0x%x]\n", 
-                (int)theCell,
-                (int)theObj);
-        ILLEGAL;
-      });
-    }
-  } else {
-    /* Object pointing outside BETA heaps. Maybe a COM reference? */
-    DEBUG_CODE({
-      fprintf(output, 
-	      "0x%08x: 0x%08x stack cell points outside BETA. COM?\n", 
-	      (int)theCell, 
-	      (int)theObj);
-    });
-  }
-}
-
 /* Traverse the StackArea [low..high] and Process all references within it. */
 void ProcessStackPart(long *low, 
 		      long *high, 
@@ -1345,15 +1357,16 @@ static
 long *ProcessCallbackFrames(CallBackFrame *cbFrame, long *low)
 {
   while (cbFrame){
-    ProcessStackPart(low, (long *)cbFrame-1, ProcessIntelStackCell, 0);
+    ProcessStackPart(low, (long *)cbFrame-1, DoStackCell, 0);
     low     = cbFrame->betaTop;
     cbFrame = cbFrame->next;
   }
   return low;
 }
 
+/* ProcessINTELStack: */
 static
-void ProcessINTELStack(void)
+void ProcessINTELStack(CellProcessFunc func)
 {
     long *low                    = StackEnd;
     long *high                   = (long *) lastCompBlock;
@@ -1365,7 +1378,7 @@ void ProcessINTELStack(void)
      * First handle the topmost component block
      */
     if (cbFrame){ low = ProcessCallbackFrames(cbFrame, low); }
-    ProcessStackPart(low, high-1, ProcessIntelStackCell,0);  
+    ProcessStackPart(low, high-1, func,0);  
     
     /*
      * Then handle the remaining component blocks.
@@ -1375,7 +1388,7 @@ void ProcessINTELStack(void)
 	high     = (long *) currentBlock->next;
 	cbFrame  = currentBlock->callBackFrame;
 	if (cbFrame){ low = ProcessCallbackFrames(cbFrame, low); }
-	ProcessStackPart(low, high-1, ProcessIntelStackCell,0);  
+	ProcessStackPart(low, high-1, func,0);  
 	currentBlock = currentBlock->next;
     }
     DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
@@ -1543,13 +1556,13 @@ void PrintStack(long *StackEnd)
 void ProcessStack(void)
 {
 #ifdef NEWRUN
-  ProcessNEWRUNStack();
+  ProcessNEWRUNStack(DoStackCell);
 #endif /* NEWRUN */
 #ifdef hppa
-  ProcessHPPAStack();
+  ProcessHPPAStack(DoStackCell);
 #endif /* HPPA */
 #ifdef intel
-  ProcessINTELStack();
+  ProcessINTELStack(DoStackCell);
 #endif /* INTEL */
 #ifdef sparc
   ProcessSPARCStack(DoStackCell);
@@ -1616,7 +1629,15 @@ long *CollectStackRoots(long *SP)
   DEBUG_CODE(frame_PC = 0);
   ProcessSPARCStack(CollectStackCell);
 #endif /* sparc */
-
+#ifdef intel
+  ProcessINTELStack(CollectStackCell);
+#endif /* intel */
+#ifdef NEWRUN
+  ProcessNEWRUNStack(CollectStackCell);
+#endif
+#ifdef hppa
+  ProcessHPPAStack(CollectStackCell);
+#endif
   /* NULL terminate */
   SaveStackCell(0);
   return StackRoots;

@@ -564,44 +564,6 @@ Program terminated.\n", (int)(4*ReqObjectSize));
   });
 } /* End IOAGc */
 
-/* DoStackCell:
- *  Used by the routines in stack.c, that traverse the stack.
- */
-void DoStackCell(Object **theCell,Object *theObj)
-{    
-  if (!theObj) {
-    return;
-  }
-  if (inBetaHeap(theObj)) {
-    if (isObject(theObj)){
-      DEBUG_CODE(if (!CheckHeap) Ck(theObj));
-      ProcessReference(theCell, REFTYPE_DYNAMIC);
-      CompleteScavenging();
-    } else {
-      DEBUG_CODE({
-        fprintf(output, "[DoStackCell: ***Illegal: 0x%x: 0x%x]\n", 
-                (int)theCell,
-                (int)theObj);
-        ILLEGAL;
-      });
-    }
-  } else {
-#if defined(RTDEBUG) && defined(NEWRUN)
-    /* Because of the very well-defined structure of stackframes
-     * there should be no GC-able cells, that refer outside BETA heaps.
-     */
-    if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
-      fprintf(output, 
-	      "DoStackCell: 0x%x: 0x%x is outside BETA heaps!\n", 
-	      theCell, 
-	      theObj);
-      fflush(output);
-      ILLEGAL;
-    }
-#endif
-  }
-}
-
 static void IOAUpdateAOARoots(Object **theCell, long GCAttribute)
 {
   if (!inToSpace(GCAttribute)) {
