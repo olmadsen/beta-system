@@ -70,6 +70,22 @@ sub usage
 $css = "../../style/miadoc.css";
 $indexfile = "inx.html";
 
+sub print_button
+{
+    local ($type, $href) = @_;
+    local ($alt) = ucfirst ($type);
+    if ("$href" eq ""){
+	print "<A><IMG ALIGN=BOTTOM SRC=\"../../images/";
+	print $type . "g.gif\" ALT=";
+	print $alt . " BORDER=0></A>\n";
+    } else {
+	print "<A HREF=\"" .$href . "\">";
+	print "<IMG ALIGN=BOTTOM SRC=\"../../images/";
+	print $type . ".gif\" ALT=";
+	print $alt . " BORDER=0></A>\n";
+    }
+}
+
 sub print_header
 {
     local ($title) = @_;
@@ -83,10 +99,15 @@ sub print_header
 </HEAD>
 <BODY>
 <P></P>
-<A><IMG ALIGN=BOTTOM SRC="../../images/nextg.gif" ALT=Next BORDER=0></A> 
-<A><IMG ALIGN=BOTTOM SRC="../../images/prevg.gif" ALT=Previous BORDER=0></A> 
-<A><IMG ALIGN=BOTTOM SRC="../../images/topg.gif" ALT=Top BORDER=0></A> 
-<A><IMG ALIGN=BOTTOM SRC="../../images/contentg.gif" ALT=Contents BORDER=0></A>
+EOT
+
+    &print_button("next", "");
+    &print_button("prev", "");
+    &print_button("top", "");
+    &print_button("content", "");
+    &print_button("index", "$indexfile");
+
+    print<<EOT;
 <A HREF="$indexfile"><IMG ALIGN=BOTTOM SRC="../../images/index.gif" ALT=Index BORDER=0></A>
 <P></P>
 <P>$title</P>
@@ -109,12 +130,15 @@ sub print_trailer
 <P></P>
 <ADDRESS>$title</ADDRESS>
 <P></P>
-<A><IMG ALIGN=BOTTOM SRC="../../images/nextg.gif" ALT=Next BORDER=0></A> 
-<A><IMG ALIGN=BOTTOM SRC="../../images/prevg.gif" ALT=Previous BORDER=0></A> 
-<A><IMG ALIGN=BOTTOM SRC="../../images/topg.gif" ALT=Top BORDER=0></A> 
-<A><IMG ALIGN=BOTTOM SRC="../../images/contentg.gif" ALT=Contents BORDER=0></A>
-<A HREF="$indexfile"><IMG ALIGN=BOTTOM SRC="../../images/index.gif" ALT=Index BORDER=0></A>
+EOT
 
+    &print_button("next", "");
+    &print_button("prev", "");
+    &print_button("top", "");
+    &print_button("content", "");
+    &print_button("index", "$indexfile");
+
+    print<<EOT;
 </BODY>
 </HTML>
 EOT
@@ -131,8 +155,12 @@ sub print_index_header
 </HEAD>
 <BODY>
 <P></P>
-<A><IMG ALIGN=BOTTOM SRC="../../images/topg.gif" ALT=Top BORDER=0></A> 
-<A><IMG ALIGN=BOTTOM SRC="../../images/contentg.gif" ALT=Contents BORDER=0></A>
+EOT
+
+    &print_button("top", "");
+    &print_button("content", "");
+
+    print<<EOT;
 <P></P>
 <P>Index of Identifiers</P>
 <HR>
@@ -152,9 +180,12 @@ sub print_index_trailer
 <P></P>
 <ADDRESS>Index of Identifiers</ADDRESS>
 <P></P>
-<A><IMG ALIGN=BOTTOM SRC="../../images/topg.gif" ALT=Top BORDER=0></A> 
-<A><IMG ALIGN=BOTTOM SRC="../../images/contentg.gif" ALT=Contents BORDER=0></A>
+EOT
 
+    &print_button("top", "");
+    &print_button("content", "");
+
+    print<<EOT;
 </BODY>
 </HTML>
 EOT
