@@ -113,7 +113,7 @@ void valhalla_init_sockets (int valhallaport)
   }
 }
 
-void valhalla_await_connection ()
+void valhalla_await_connection (void)
 { int blocked;
   unsigned long inetAdr;
   TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_await_connection\n"));  
@@ -126,7 +126,7 @@ void valhalla_await_connection ()
   }
 }
 
-static void valhalla_socket_flush ()
+static void valhalla_socket_flush (void)
 {
   if (!wnext) return;
 
