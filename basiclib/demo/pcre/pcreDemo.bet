@@ -1,5 +1,6 @@
 ORIGIN '~beta/basiclib/pcre';
 INCLUDE '~beta/basiclib/formatio';
+INCLUDE '~beta/containers/list';
 --- program: descriptor ---
 (#
    after: ^Text;
@@ -83,7 +84,12 @@ do ('^([a-zA-Z])[a-zA-Z_0-9]+$', 'p9') -> simpleMatch;
    '**Words' -> putline;
    '[ \\n,.]+' -> regex;
    tt[] -> regex.matchAll (# split:: (# do splitText -> putLine; #); #);
-   '> Kan du spesifisere hva du mener med "naturtalent"/egnet?\n\nThore kan sikkert det på egenhånd, men jeg pleier å si at bugs\ner hint fra maskinen til mennesket om at mennesket ikke har skjønt\nmaskinen.  Et naturtalent av en programmerer skjønner maskinen.  En\nprogrammerer som sliter med bugs i månedsvis, burde ta et hint.' -> tt[];
+   '> Kan du spesifisere hva du mener med "naturtalent"/egnet?\n'
+   '\n'
+   'Thore kan sikkert det på egenhånd, men jeg pleier å si at bugs\n'
+   'er hint fra maskinen til mennesket om at mennesket ikke har skjønt\n'
+   'maskinen.  Et naturtalent av en programmerer skjønner maskinen.  En\n'
+   'programmerer som sliter med bugs i månedsvis, burde ta et hint.' -> tt[];
    '***Test text: \n%s\n' -> putFormat (# do tt[] -> s #);
    '**HTMLise' -> putline;
    '[\n<>&]|[^ -~]' -> regex;
@@ -106,4 +112,108 @@ do ('^([a-zA-Z])[a-zA-Z_0-9]+$', 'p9') -> simpleMatch;
        #);
     #) -> (success, after[]);
    after[] -> putLine;
+   'root:x:0:0:root:/root:/bin/bash' -> tt[];
+   '***Test text: \n%s\n' -> putFormat (# do tt[] -> s #);
+   ':' -> regex;
+   '**Split /etc/passwd entry into fields, put in a list, dump list' ->
+        putLine;
+   (# fieldlist: @list (# element :: Text #);
+      name: ^Text;
+      hash: ^Text;
+      uid: ^Text;
+      gid: ^Text;
+      gecos: ^Text;
+      home: ^Text;
+      shell: ^Text;
+   do tt[] -> regex.matchAll
+      (#
+      split:: (# do splitText -> fieldlist.append; #);
+      #);
+      fieldlist.scan (# do current[] -> putLine; #);
+      '**Split /etc/passwd entry into named fields' -> putLine;
+      tt[] -> regex.matchAll
+      (#
+         post::
+	 (#
+	 do ways7 -> (name[], hash[], uid[], gid[], gecos[], home[], shell[]);
+	    (if matches <> 6 then 'Error parsing passwd line' -> putLine if);
+	 #);
+      #);
+      'User name is %s, hashed password is %s, uid/gid is %s/%s\n' -> putFormat
+      (#
+      do name[] -> s; hash[] -> s; uid[] -> s; gid[] -> s;
+      #);
+      'Real name is \'%s\', home directory is %s, shell is "%s"\n' -> putFormat
+      (#
+      do gecos[] -> s; home[] -> s; shell[] -> s;
+      #);
+   #);
+   (#
+      nameSplit: @Pcre;
+      stripFinalSpace: @Pcre;
+      vonUndZu: @Pcre;
+      senname: @Pcre;
+      (* Use extended regexp syntax /x format in order to embed comments *)
+      (* Note that to get a \ in the regexp you need \\ in the beta code *)
+   do '(?x)                                  #  Extended regexp syntax   \n'
+      '(?i)                                  #  Case independent pattern \n'
+      '^                                     #  Start of name            \n'
+      '(([a-z]+\\s+)+?)                      #  First names (not greedy) \n'
+      '(([a-z]+)\\s+)?                       #  Middle name              \n'
+      '([a-z]+)                              #  Surname                  \n'
+      '$                                     #  End of name              \n'
+           -> nameSplit;
+      '^(.*?)\\s*$' -> stripFinalSpace;
+      '^von|zu|van|de|del|da$' -> vonUndZu;
+      'sen$' -> senName;
+      'Lars  Balker Rasmussen\n'
+      'Erik Haldane  Corry\n'
+      'Flemming Gram  Christensen\n'
+      'Mick Jagger\n'
+      'Peter da Silva\n'
+      'Lars von Trier\n'
+      'Georg Jensen\n'
+      'Jeeves\n'
+      'William Jefferson Clinton' -> tt[];
+      '***Test text: \n%s\n' -> putFormat (# do tt[] -> s #);
+      '**Recognise given and surnames' -> putLine;
+      tt[] -> ('\\s*\n\\s*' -> Pcre).matchAll
+      (#
+         split::   (* for each line in input *)
+         (#
+         do splitText -> nameSplit.match
+            (# givenname: ^Text;
+	       middlename: ^Text;
+	       surname: ^Text;
+	       noMatch::
+	       (#
+	       do '"%s"\n' -> putFormat (# do subject[] -> s #);
+	       #);
+	    do sub1 -> stripFinalSpace.match (# do sub1 -> givenname[] #);
+	       sub4 -> middlename[];
+	       sub5 -> surname[];
+	       (if (middlename[] -> vonUndZu.match) or
+	           ((surname[] -> senname.match) and
+		    (middlename.lgth <> 0)) then
+                   '"%s %s, %s"\n' -> putFormat
+		   (#
+		   do middlename[] -> s; surname[] -> s; givenname[] -> s;
+		   #);
+	       else
+	           (if middlename.lgth <> 0 then
+                       '"%s, %s %s"\n' -> putFormat
+		       (#
+		       do surname[] -> s; givenname[] -> s; middlename[] -> s;
+		       #);
+		   else
+                       '"%s, %s"\n' -> putFormat
+		       (#
+		       do surname[] -> s; givenname[] -> s;
+		       #);
+		   if);
+	       if);
+	    #)
+         #)
+      #);
+  #);
 #)
