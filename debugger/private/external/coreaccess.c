@@ -1,15 +1,39 @@
 #include <errno.h>
 #include <stdio.h>
 #include <signal.h>
+#include <unistd.h>
 
 #include "coreaccess.h"
 
-#if defined(sun4s) || defined(sgi) /* just a guess for sgi */
+#if defined(sun4s) || defined(sgi) 
 
 /* Implementation using the /proc file system. */
 #include <fcntl.h>
 
+#ifdef sgi
+static ssize_t pwrite(int fildes,
+		      const void  *buf, 
+		      size_t  nbyte, 
+		      off_t offset)
+{
+  lseek(fildes, offset, SEEK_SET);
+  return write(fildes, buf, nbyte);
+}
+#endif
+
+
 #define MAX_PID_COUNT 10
+
+#ifdef sparc
+#define BREAK_INST 0
+#endif
+#ifdef sgi
+#define BREAK_INST 0x00000a0d /* big-endian */
+#endif
+
+#ifndef BREAK_INST
+#error BREAK_INST must be defined
+#endif
 
 static pid_t pids[MAX_PID_COUNT];
 static int fds[MAX_PID_COUNT];
@@ -25,7 +49,6 @@ int getfd (pid_t pid)
 
 int newfd (pid_t pid)
 { char filename[30];
-  int i;
   
   lastpid++;
   if (lastpid==MAX_PID_COUNT) {
@@ -36,7 +59,7 @@ int newfd (pid_t pid)
   
   pids[lastpid] = pid;
   
-  sprintf (filename, "/proc/%d", pid);
+  sprintf (filename, "/proc/%d", (int)pid);
   fds[lastpid] = open (filename,O_RDWR | O_SYNC);
   if (fds[lastpid] == -1) {
     lastpid--;
@@ -61,6 +84,7 @@ void closefd (pid_t pid)
 
 int coreaccess_init (pid_t pid)
 { 
+  /*fprintf(stderr, "coreaccess_init(0x%x)\n", pid); fflush(stderr);*/
   return newfd (pid);
 }
 
@@ -116,8 +140,7 @@ int SetBreak (pid_t pid, int address, int* oldInstruction)
     fprintf (stderr,"ReadImage failed. SetBreak returning %d.\n",res);
     return res;
   };
-  
-  return WriteImage (pid,address,0);
+  return WriteImage (pid,address,BREAK_INST);
 }
 
 int UnsetBreak (pid_t pid, int address, int oldInstruction)
@@ -126,7 +149,7 @@ int UnsetBreak (pid_t pid, int address, int oldInstruction)
 }
 
 
-#else /* Not Solaris */
+#else /* Neither Solaris no sgi */
 
 /* Implementation of coreaccess.h using ptrace. */
 #include <sys/ptrace.h>

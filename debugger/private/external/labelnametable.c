@@ -10,16 +10,16 @@
 #include <stdio.h>
 #include <string.h>
 
-FILE *thePipe; /* The pipe from which the nameTable is read */
-int NextAddress;    
-char NextLabel[100]; /* The last address and label read from the pipe. */
+FILE *thePipe;       /* The pipe from which the nameTable is read */
+int NextAddress;     /* The last address read from the pipe. */
+char NextLabel[100]; /* The last label read from the pipe. */
 
 #ifdef sgi
-#define nmcommand "nm -hvdp %s"
+#define nmcommand "/bin/nm -Bhnd %s"
 #define Decimal
 #endif
 #ifdef sun4s
-#define nmcommand "nm -hvp %s"
+#define nmcommand "/usr/ccs/bin/nm -hvp %s"
 #define Decimal
 #endif
 #ifdef sun4
@@ -27,20 +27,20 @@ char NextLabel[100]; /* The last address and label read from the pipe. */
 #define Hexadecimal
 #endif
 #ifdef hpux9pa
-#define nmcommand "nm -hp %s | grep ' T ' | sort"
+#define nmcommand "/bin/nm -hp %s | grep ' T ' | sort"
 #define Decimal
 #endif
 
 void findNextLabel ()
 { char type;
-  char ch;
+  signed char ch;
   int inx,val;
 
   while (1) {
     NextAddress=0;
     while ((ch=fgetc (thePipe))!=' ') {
       if (ch==EOF) {
-	NextAddress = 0;
+	NextAddress = -1; /* datpete 14/3/96: changed from 0 */
 	pclose (thePipe);
 	return;
       }
@@ -73,14 +73,29 @@ void findNextLabel ()
 
     return;
   }
-};
+}
 
 void initReadNameTable (char* execFileName)
 { char command[100];
   
   sprintf (command,nmcommand,execFileName);
   thePipe = popen (command, "r");
-};
+}
 
-int nextAddress () { findNextLabel (); return NextAddress; };
-char* nextLabel () { return NextLabel; };
+int nextAddress () 
+{ 
+  findNextLabel ();
+#if 0
+  fprintf(stderr, 
+	  "NextAddress: %d (0x%x), NextLabel: %s\n",
+	  NextAddress,
+	  NextAddress,
+	  NextLabel);
+#endif
+  return NextAddress;
+}
+
+char* nextLabel () 
+{ 
+  return NextLabel;
+}
