@@ -9,17 +9,15 @@ INCLUDE '~beta/comlib/MsHTML';
 --PROGRAM: descriptor--
 (# CLSID_IE: ^CLSID;
    clsstr: @BSTR;
-   IID_Web: @IID;
+   IID_Web, IID_HTML: @IID;
    pIWebBrowser2: ^IWebBrowser2;
-   str: @BSTR;
-   url: @VARIANT;
-   empty: @VARIANT;
-   hr: @HRESULT;
-   ppDisp: @IDispatchHolder;
    pHTML: ^IHTMLDocument2;
-   bstrh: @BSTRHolder;
-   IIDHTML: @IID;
-   pBool: @int16Holder;
+   str: @BSTR;
+   empty, url: @VARIANT;
+   hr: @HRESULT;
+   dh: @IDispatchHolder;
+   bh: @BSTRHolder;
+   ih: @int16Holder;
    
    ie_progid: (# exit 'InternetExplorer.Application.1' #);
    
@@ -45,47 +43,60 @@ do 0->CoInitialize;
        str -> url.bstrVal;
        'Initializing empty VARIANT' -> putline;
        VT_EMPTY -> empty.vt;
-       'Calling pIWebBrowser2.visible' -> putline;
+       'Calling pIWebBrowser2.putVisible' -> putline;
        1 -> pIWebBrowser2.putvisible; (* pIWebBrowser2.visible gives fatal error in compiler *)
        'Calling pIWebBrowser2.Navigate2' -> putline;
        (url[], empty[], empty[], empty[], empty[])->pIWebBrowser2.Navigate2;
+       'Waiting while page loads' -> putline;
        wait:
          (# 
-         do pBool[]->pIWebBrowser2.getBusy->hr;
+         do ih[]->pIWebBrowser2.getBusy->hr;
             (if hr.failed then
-                'Failed to ask if browser is busy' -> putline;
+                ('Failed to ask if browser is busy', hr.value) -> ComErrorMessage;
                 leave wait; 
             if);
-            (if (pBool<>0) then 
+            (if (ih<>0) then 
                 'Browser busy - waiting'->putline;
-                (for 100000 repeat for);
+                (for 100000 repeat for) (* FIXME: a sleep function would be better *);
                 restart wait
             if)
          #);
        'Getting HTML document'->putLine;
-       ppDisp[]->pIWebBrowser2.getdocument->hr;
+       dh[]->pIWebBrowser2.getdocument->hr;
        (if hr.succeeded then
-           IHTMLDocument2_IID-> IIDHTML;
-           'querying for IHTMLDocument2_IID'->putLine;
-           IIDHTML[]-> ppDisp.ref.Query->pHTML[];
-           'done'->putLine;
+           IHTMLDocument2_IID -> IID_HTML;
+           'Querying for IHTMLDocument2_IID'->putLine;
+           IID_HTML[]-> dh.ref.Query->pHTML[];
            (if pHTML[]<>NONE then
-               'Got pHTML'->putLine;
-               bstrh[]->pHTML.getTitle->hr;
-               (if hr.succeeded then
+               'Got IHTMLDocument2 interface'->putLine;
+               'Asking for document title' -> putline;
+               bh[]->pHTML.getTitle->hr;
+               (if hr.failed then
+                   ('Failed to get title of document', hr.value) -> ComErrorMessage;
+                else
                    'Title of doc is: '->putText;
-                   bstrh.getText->putLine;
+                   bh.getText->putLine;
                if)
             else
-               'Query failed on HTML interface'->putLine;
+               'Query for IHTMLDocument2 interface failed'->putLine;
            if)
         else
-           ('failed to get document interface',  hr.value)-> ComErrorMessage;
+           ('failed to get document interface', hr.value)-> ComErrorMessage;
        if);
        
        'Releasing interfaces' -> putline;
-       pIWebBrowser2.Release;
-       'Succeeded releasing interface IWebBrowser2'->putline;
+       (if pIWebBrowser2[]<>NONE then 
+           pIWebBrowser2.Release; 
+           'Succeeded releasing interface IWebBrowser2'->putline;
+       if);
+       (if dh.ref[]<>NONE then 
+           dh.ref.Release; 
+           'Succeeded releasing interface IDispatch'->putline;
+       if);
+       (if pHTML[]<>NONE then 
+           pHTML.Release; 
+           'Succeeded releasing interface IHTMLDocument2'->putline;
+       if);
     else
        'Could not create component'->putline;
    if); 
