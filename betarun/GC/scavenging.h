@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.h,v $, rel: %R%, date: $Date: 1992-06-01 14:11:09 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: scavenging.h,v $, rel: %R%, date: $Date: 1992-08-27 16:01:23 $, SID: $Revision: 1.3 $
  * by Lars Bak.
  */
 extern ref(Object) NewCopyObject();
@@ -71,6 +71,14 @@ extern void CompleteScavenging();
    
 extern int GetDistanceToEnclosingObject();
 
+/* Safe way to save ToSpaceToAOA references */
+#define SaveToSpaceToAOAref(cell)				\
+  ((ToSpaceTop == ToSpaceToAOAptr)?tempToSpaceToAOAalloc():0,	\
+   *--ToSpaceToAOAptr = (long) (cell))
+
+extern void tempToSpaceToAOAalloc();
+extern void tempToSpaceToAOAfree();
+     
 #ifdef RTDEBUG
 extern void IOACheck();
 
