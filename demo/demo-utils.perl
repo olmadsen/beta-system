@@ -12,6 +12,7 @@ sub usage(){
     print "  -v  verbose mode\n";
     print "  -O  do not display correct outputs, only errors\n";
     print "  -p  preserve executables after execution\n";
+    print "  -P  no disassembly for JVM\n";
     print "  -c  skip compilation (run only)\n";
     print "  -d  target clr (.NET bytecode)\n";
     print "  -j  target jvm (Java bytecode)\n";
@@ -34,6 +35,7 @@ sub read_command_options()
     $preserve     = 1     if (defined($p));
     $verbose      = 1     if (defined($v));
     $skipoutput   = 1     if (defined($O));
+    $nodisassembly= 1     if (defined($P));
 };
 
 sub findprogs
@@ -165,6 +167,7 @@ sub setup_demo_run
 	print( "Testing demos against reference output in directory 'reference'\n");
 	print  "BETALIB: $betalib\n";
 	print  "Platform: $target\n";
+	print  "Compiling with command: " . &compile_command() . "\n";
     }
 }
 
@@ -265,14 +268,25 @@ sub write_to_demo
 
 }
 
+sub compile_command()
+{
+    my $compilecmd;
+    if ($target eq "jvm"){
+	$compilecmd = "jbeta -s 188";
+	$compilecmd .= " -p" unless ($nodisassembly);
+    } elsif ($target eq "clr"){
+	$compilecmd = "nbeta";
+    } else {
+	$compilecmd = "beta";
+    } 
+    return $compilecmd;
+}
+
 sub compile_demo()
 {
     my ($f) = @_;
     return if ($skip_compile);
-    $compilecmd = "beta";
-    $compilecmd = "jbeta -s 188" if ($target eq "jvm");
-    $compilecmd = "nbeta" if ($target eq "clr");
-
+    my $compilecmd = &compile_command();
     print "-"x10 . "Compiling $f" . "-"x10  . "\n"; 
     system "$compilecmd $f > $f.out 2>&1" if (!$verbose);
     system "$compilecmd $f" if ($verbose);
