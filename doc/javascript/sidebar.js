@@ -5,7 +5,7 @@ var DrawStepTime = 30;
 
 function AdjustSideBar() {
   if (document.layers) { 
-     document.layers.SideBar.top = top.pageYOffset+37; 
+     document.layers.SideBar.top = window.pageYOffset+37; 
   } else if (document.all) { 
      document.all.SideBar2.style.top=document.body.scrollTop+15; 
   }
