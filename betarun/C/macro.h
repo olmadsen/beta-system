@@ -64,15 +64,13 @@ extern int dmalloc_verify(int);
 /* To handle indirect references:
  */
 
-#define inLIN(ref) ((ref >= (long) (l -> liniarization)) && (ref < (long) (l -> liniarization) + l -> liniarizationTop))
+#define inLIN(ref) (((long) ref >= (long) (l -> liniarization)) && ((long) ref < (long) (l -> liniarization) + l -> liniarizationTop))
 #define isIndirRef(ref) ((int)(ref) < 0)
 /* End of indirect reference handling */
 #else
 #define inLIN(ref) 0
 #define isIndirRef(ref) 0
 #endif /* LIN */
-
-
 
 #if defined (MAC)
 #define Notify(s1)           CPrompt(s1, "","","")
