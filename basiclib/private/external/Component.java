@@ -218,7 +218,7 @@ public class Component {
 		System.err.println("# Beta execution aborted: " + e.getMessage());
 	    }
 	    try {
-		dumpFileName = new String(beta.betaenv.betaenvRef.ArgVector[0].T) + ".dump";
+		dumpFileName = new String("beta" /*beta.betaenv.betaenvRef.ArgVector[0].T*/) + ".dump";
 		PrintWriter dumpWriter = new PrintWriter(new FileWriter(dumpFileName));
 		System.err.println("# Look at '" + dumpFileName + "'");
 		e.printStackTrace(dumpWriter);
