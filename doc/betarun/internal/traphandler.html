@@ -1,0 +1,522 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+                      "http://www.w3.org/TR/REC-html40/loose.dtd"
+>
+<HTML>
+
+<HEAD>
+<LINK REL="stylesheet" HREF="http://www.mjolner.dk/include/css/mjolner.css" TYPE="text/css">
+<LINK REL="stylesheet" HREF="http://www.mjolner.dk/include/css/ns-styles.css" TYPE="text/css">
+
+<LINK REV=MADE HREF="mailto:sosh@mjolner.dk">
+<TITLE>Mj&oslash;lner Informatics: BETA Persistence Proxy Traphandler</TITLE>
+</HEAD>
+<BODY style="margin:8px;">
+
+<H1>What happens when the BETA Persistence Traphandler is called?</H1>
+
+<p>This document contains a walkthrough of what happens when a beta
+program tries to follow a reference to an object which is not in
+memory because it is persistent. This will cause a trap in the
+operating system kernel which will call the <em>proxyTrapHandler</em>
+function.</p>
+
+<p>Here follows a description of the functions and datastructures
+involved. After each function name in the function description is the
+name of the file in which to find the function. If nothing else is
+stated, file <em>f</em> is in the directory
+<em>betarun/arch/P/f</em>. Otherwise the file is in the specified
+subdirectory to <em>betarun/arch</em>.
+
+<ul>
+<li>Functions</li>
+<ul>
+<li><a href="#proxytraphandler">proxyTrapHandler</a></li>
+<li><a href="#sourcereg">SourceReg</a></li>
+<li><a href="#unswizzlereference">UnswizzleReference</a></li>
+<li><a href="#pitlookup">PITlookup</a></li>
+<li><a href="#pitinsert">PITinsert</a></li>
+<li><a href="#usloadobject">USloadObject</a></li>
+<li><a href="#sbobjlookup">SBOBJlookup</a></li>
+<li><a href="#importstoreobject">importStoreObject</a></li>
+<li><a href="#importscanobject">importScanObject</a></li>
+<li><a href="#updateotherreferences">updateOtherReferences</a></li>
+<li><a href="#loadsave">loadsave</a></li>
+<li><a href="#idtoprotoaddr">IDtoProtoAddr</a></li>
+<li><a href="#processstackobj">ProcessStackObj</a></li>
+<li><a href="#insertobjectintransit">insertObjectInTransit</a></li>
+<li><a href="#insertstoreoffset">insertStoreOffset</a></li>
+<li><a href="#refhandler">refhandler</a></li>
+</ul>
+<li>Data structures</li>
+<ul>
+<li><a href="#trie">Trie</a></li>
+<li><a href="#refinfo">RefInfo</a></li>
+<li><a href="#objinfo">ObjInfo</a></li>
+<li><a href="#sequencetable">sequenceTable</a></li>
+</ul>
+<li>Small Helper Functions</li>
+<ul>
+<li>getRegisterContents: PException.c. It just fetches the contents of
+the register or of the corresponding stack cell.</li>
+<li>inPIT: C/macro.h. Checks if a given pointer lies between
+<em>PIT</em> and <em>PITLimit</em></li>
+<li>isOutReference: storageblock.h. Checks the tag bits</li>
+<li>isSpecialReference: storageblock.h. Checks the tag bits</li>
+<li>getRealObject: GC/aoa.c. Returns the enclosing object if it
+exists. Otherwise it returns the object.</li>
+<li>CAload: cache.c. Calls <em>loadsave</em> with <em>func =
+load</em></li>
+<li>load: cache.c. Does a <em>memcpy</em> into a buffer</li>
+<li>desload: des.c. Locates the right position in the current file and
+reads a specified amount of data into the buffer.</li>
+<li>dessave: des.c. Locates the right position in the current file and
+writes a specified amount of data from a buffer to the file.</li>
+<li>windTo: PSfile.c. Uses <em>lseek</em> to move to a specified
+location in a file</li>
+<li>readSome: PSfile.c. Uses <em>read</em> to read a specified number
+of bytes from a file.</li>
+<li>writeSome: PSfile.c. Uses <em>write</em> to write a specified
+number of bytes from a buffer to a file.</li>
+<li>flushFromCache: dache.c. Uses <em>TIVisit</em> to visit every
+element in the from cache and calls <em>DESsave</em> on each if it is
+dirty; ie if there are changes made to that object.</li>
+<li>importProtoType: proto.c. Sets the prototype to the prototype
+returned by <em>translateStoreProto</em></li>
+<li>translateStoreProto: proto.c. Extracts the group and proto type
+number from the proto type and calls <em>IDtoProtoAddr</em></li>
+<li>FindNameByGroupID: proto.c. Looks in the correct offset of the
+store to return the name of the group. Uses <em>SBGNlookup</em>.</li>
+<li>SBGNlookup: storageblock.c. Uses <em>CAload</em> to load the name
+of the group.</li>
+<li>NextGroup: C/group.c. Given a group header, find the next group
+header.</li>
+<li>PrototypeNoToProto: proto.c. In each group header, there is a
+table of proto types. Returns the proto type with the right index in
+this table.</li>
+<li>lookupObjectInfo: objectTable.c. First checks if the store is
+member in <em>loadedObjects</em> and then tries to look up the
+object</li>
+<li>lookupReferenceInfo: referenceTable.c. First checks if the store is
+member in <em>loadedObjects</em> and then tries to look up the
+reference</li>
+<li>referenceInfo: referenceTable.c. Allocates a new <em>RefInfo</em>,
+inserts it into the PIT using <em>PITinsert</em> and inserts the
+(store, offset) pair into <em>loadedObjectsST</em> using
+<em>insertStoreOffset</em></li>
+<li>insertObject: objectTable.c. Calls <em>insertStoreOffset</em></li>
+<li>updateTransitObjectTable: PImport.c. If forced, it calls
+<em>insertObjectInTransit</em> to insert the object into the transit
+table. Then it calls <em>insertObject</em> to update the loaded
+objects table.</li>
+<li>ObjectSize: GC/objectsize.c. Returns the size of an object in
+number of longs</li>
+<li>newAOAcell: referenceTable.c. It looks the reference up in PIT and
+calls <em>Aappend</em> to insert the cell into the array of references
+from the object to AOA.</li>
+<li>Aappend: referenceTable.c. Works on arrays and reallocates if
+necessary</li>
+<li>Arealloc: referenceTable.c. Reallocates an array</li>
+</ul>
+<li>Functions not described yet</li>
+<ul>
+<li>handleSpecialReference: unswizzle.c. This is aparently a quite
+lowlevel function which I haven't had the time to document yet.</li>
+</ul>
+</ul>
+
+<h2><a name="proxytraphandler"></a>proxyTrapHandler: PException.c</h2>
+
+<p><em>ProxyTrapHandler</em> is supposed to find out which instruction
+caused the trap, load the appropriate object from the persistent
+store, patch the register with the correct memory address and return
+program control back to the instruction, where the trap occured.</p>
+
+<p>The first thing, <em>proxyTrapHandler</em> does is to fetch the
+instruction which caused the trap, PC and SP using
+<em>ucon->uc_mcontext.gregs</em> with various parameters. Then it
+calls <em>sourceReg</em> which finds out which register is the source,
+ie which register holds the trapped reference. If it is able to find
+out which register is the source, it calls
+<em>getRegisterContents</em> to get the actual reference. If this
+reference is to an object which is not in memory, it calls
+<em>unswizzleReference</em> to fetch the object from the store and
+patches the resulting address into the source register.</p>
+
+<p>If the trap was not caused by a proxy reference, it sends the
+signal on to the BETA signal handler. This could for instance be a ref
+none</p>
+
+<h2><a name="sourcereg"></a>SourceReg: PException.c</h2>
+
+<p><em>SourceReg</em> is given an instruction and is supposed to find
+out which of the registers in that instruction is the source. It does
+this by decoding the instruction and extracting the two
+registers. Then it uses <em>getRegisterContents</em> to get the
+contents of those registers and checks if one of those contents is a
+reference into the PIT (proxy indirection table). It is assumed that
+both registers do not reference into the PIT but one of them has.</p>
+
+<h2><a name="unswizzlereference"></a>UnswizzleReference: unswizzle.c</h2>
+
+<p><em>unswizzleReference</em> is given a pointer into the PIT and
+should return a pointer to the object which is loaded from the
+persistent storage if necessary. Since a trap can occur every time a
+reference to an object is followed until the garbage collecter is
+called, the loaded objects are cached.</p>
+
+<p><em>unswizzleReference</em> first calls <em>PITlookup</em> to fetch
+the real pointer to the object. Then is checks if the object has been
+cached by checking <em>refInfo->objInTransit</em>; if it has been
+cached it does not need to load it again and it just returns this
+address. There is the possibility that the object has been loaded
+indirectly by loading for example a part object. This is found out by
+calling <em>lookupObjectInfo</em> which will return an
+<em>ObjInfo</em> if it has been loaded. Otherwise it calls
+<em>USloadObject</em> to load the object. The resulting pointer is
+then stored in <em>refInfo->objInTransit</em> to cache it.</p>
+
+<p>Lastly it calls <em>GetRealObject</em> to get the outermost
+enclosing object. If that is the object we just loaded, it sets the
+size of the object, otherwise it sets the <em>bytesize</em> field of
+the <em>refinfo</em> structure to the distance to the outermost
+enclosing object. Then it calls <em>updateOtherReferences</em> to
+update all references to the object.
+
+<h2><a name="pitlookup"></a>PITlookup: pit.c</h2>
+
+<p><em>PITlookup</em> takes a pointer into the PIT and should return a
+pointer to an object. It does this by using the index of the pointer
+into the PIT to lookup the object in a sequence table which maps such
+an index into an object pointer </p>
+
+<h2><a name="pitinsert"></a>PITinsert: pit.c</h2>
+
+<p>First it uses <em>STInsert</em> to insert the reference info into
+the sequence table <em>map</em>. Then it calculates the actual
+reference into the PIT and returns that.</p>
+
+<h2><a name="usloadobject"></a>USloadObject: unswizzle.c</h2>
+
+<p><em>USloadObject</em> loads a specified object from a persistent
+storage and returns a pointer to the loaded object. It starts by
+calling <em>SBOBJlookup</em> to load the object. If the object is a
+part object in another object, this is the loaded object and to find
+the real object, <em>SBOBJlookup</em> returns the distance to the part
+object. The (part) object is stored in the variable
+<em>theRealStoreObj</em>. Now there is allocated space for the object
+and a shaddow object in AOA. The shaddow object can be used to check
+if changes where made to the object when it is to be saved.</p>
+
+<p>There is a demand that there are not too many persistent objects in
+AOA at a given time, so if there are too many loaded bytes
+<em>(loadedBytes > MAXPERSISTENTBYTES</em>, we force an AOA garbage
+collection.</p>
+
+<p>The object which was just loaded is in store format, so it has to
+be converted to the format of normal objects. This is done by calling
+<em>importStoreObject</em>. The shaddow object is now made by copying
+the imported object. Lastly the object is marked as alive in order for
+the garbage collector to know that it should not free the space used
+by the object.</p>
+
+<h2><a name="sbobjlookup"></a>SBOBJlookup: storageblock.c</h2>
+
+<p><em>SBOBJlookup</em> loads an object from a persistent storage. If
+the object is a part object in another object, the outer object is
+loaded instead and the distance from the start of the loaded object
+and the part object is returned, so it is possible to find the object
+which was looked for. </p>
+
+<p>It can be seen in the GC-field of the stored object if it is a part
+object or not. Show <em>SBOBJlookup</em> starts by reading this
+field. If this field contains a pointer to a part object, it calls
+recursively to load the enclosing object and remembers the distance to
+the part object. If the GC field is 0 it reads the size of the object
+to load and allocates an object which is big enough to hold it. Then
+it loads the stored object into this new object and returns a pointer
+to it. It uses <em>CAload</em> to load from the persistent
+storage. This function uses a cache for efficiency.</p>
+
+<h2><a name="importstoreobject"></a>importStoreObject: PImport.c</h2>
+
+<p>If an object is in store format, all references to other objects in
+the same store are implemented as offsets. References to objects in
+other stores can be identified as such because they are offsets to a
+proxy object. <em>importStoreObject</em> is supposed to translate
+various fields in the object into memory format.</p>
+
+<p>It starts by allocating an object info object for the object to
+load. Then it calls <em>importScanObject</em></p>
+
+<h2><a name="importscanobject"></a>importScanObject: PImport.c</h2>
+
+<p>The task of <em>importScanObject</em> is to import and endian
+convert the proto type, the GC attribute, all references and all
+values.</p>
+
+<p><em>importScanObject</em> consists of three phases. First it
+imports the proto type, then the GC attribute and then references and
+values. To import the proto type, it calls
+<em>importProtoType</em>. If the GC attribute is non-zero, it endian
+converts that (on INTEL). Note: <em>PSENDIAN</em> is used to find out
+if values should be endian converted. This currently only happens on
+INTEL, since all values are stored in big endian format</p>
+
+<p>That was the easy part. Then it has to run through the object and
+endian convert all values and handle all references. There are two
+cases: The prototype is special, ie it is a repetition, ..., or it is
+an ordinary prototype, ie an object created by the programmer. If the
+prototype is not special it starts by handling all static part
+objects. The first one is in <em>theProto + theProto->GCTabOff</em>
+and are stored in a sequence. The handling is done by calling
+<em>importScanObject</em> recursively on each of them one recursion
+level down. Then the non-static references are handled.
+</p>
+
+<p>To handle non-static references, it needs to know the reference
+type and where it points to. The reference is actually an offset to
+another place in the store and it is always a multiple of 4, so it
+masks out all but the 2 least significant bits and uses that as the
+offset. The reference type is then fetched as the 2 least significant
+bits. There are three types: dynamic, offline and origin. Then it
+calls <em>refhandler</em>. If the program runs on an INTEL machine, it
+then has to run through all values and endian convert them too. That
+is done through a lot of bit arithmetics.</p>
+
+<p>That was the case of a non-special prototype. Now for the case
+where the prototype is special, ie a prototype that the programmer has
+not created: repetition, component, ... It starts by switching on the
+possible types of the prototype. There are some cases:</p>
+
+<dl>
+<dt>Repetition</dt>
+<dd>There is not much to say about this other than on INTEL machines,
+a lot of endian converting has to be done. The proper values of the
+different repetitions has to be set up.</dd>
+<dt>Component</dt>
+<dd>There are some objects which are referenced from a component: a
+stack object, a caller component, a caller object and possibly some
+dopart objects. For the first three it calls <em>refhandler</em> and
+for the last, it calls <em>importScanObject</em>. On INTEL machines it
+does some endian converting on the references before they are
+used.</dd>
+<dt>Stack Object</dt>
+<dd>Besides endian converting, it calls <em>ProcessStackObj</em></dd>
+<dt>Structure</dt>
+<dd>It calls <em>refhandler</em> to handle the origin reference</dd>
+<dt>Dopart Object</dt>
+<dd>It calls <em>refhandler</em> to handle the origin reference</dd>
+</dl>
+
+<h2><a name="updateotherreferences"></a>updateOtherReferences:
+referencetable.c</h2>
+
+<p><em>updateOtherReferences</em> should update all references to the
+given object so that there can be no situation, where there are two
+references to the same object, which are not equal. This is actually
+done by running through all references and setting
+<em>objInTransit</em> if a reference is actually to that object.</p>
+
+<p>It does this by calling a visitor function
+(<em>visitReferenceFunc</em>) which visits all references and looks up
+if the reference is an indirect reference to the object through the
+PIT. If so, it sets <em>objInTransit</em> for the current
+reference</p>
+
+<h2><a name="loadsave"></a>loadsave: cache.c</h2>
+
+<p><em>loadsave</em> first checks if the object we are trying to load
+or save is in cache (<em>fromCache</em> or <em>toCache</em>). If it is
+then it runs <em>func</em> on the correct place in cache; ie it does
+not need to access the hard disk. If it is not in cache, it checks
+whether there is room enough in the from- or to cache to hold the
+object to load or save. If so it uses <em>DESload</em> to load the
+object from the hard disk and calls <em>TInsert</em> to insert the
+loaded object into the cache. Then it calls recursively and will find
+the object in cache and call run <em>func</em> on it.</p>
+
+<p>If there is not room for another object in cache, if flushes the
+cache to disk using <em>flushFromCache</em> and <em>TIFree</em>. Then
+it calls recursively. Now there is room for the object in cache, and
+it will load it like described above.</p>
+
+<h2><a name="idtoprotoaddr"></a>IDtoProtoAddr</h2>
+
+<p>To handle translation of proto types, there is a cache,
+<em>ItoPCache</em> which is used to cache the most recently translated
+proto types. Using the group and proto type number, the function
+calculates a key to look up the proto type in the cache, a trie, using
+<em>TILookup</em>. If it is there, it just returns that. Otherwise it
+checks if the proto type is special. It then calls
+<em>FindNameByGroupID</em> to get the name of the group and runs
+through all beta data groups calling <em>NextGroup</em> to find the
+one with that name. If it was found it calls
+<em>PrototypeNoToProto</em> to get the actual proto type, inserts that
+into the trie and returns the proto type.</p>
+
+<h2><a name="processstackobj"></a>ProcessStackObj: GC/arch_stack.c</h2>
+
+<p><em>ProcessStackObj</em> is given an object and a function to call
+on all values in the object which resides on the stack. There is a
+function for all architectures, since the stack layout varies on the
+different platforms. The way it does this is not important for this
+document. For all practical purposes, <em>ProcessStackObj</em> calls
+the function on all values on the stack which is not registers.</p>
+
+<h2><a name="insertobjectintransit"></a>insertObjectInTransit:
+transitObjectTable.c</h2>
+
+<p>First tries to look up the reference using
+<em>lookupReferenceInfo</em>. If it does not exitst, it creates it
+using <em>referenceInfo</em>. Then it uses
+<em>PITlookup</em> to find the reference info which it inserts into
+the <em>objectInTransit</em> fields of the object.</p>
+
+<h2><a name="insertstoreoffset"></a>insertStoreOffset:
+objectTable.c</h2>
+
+<p>First it checks if the store is a member of
+<em>loadedObjects</em>. If it is not, it creates a new trie for loaded
+objects of that store using <em>TInit</em>. Then it insert the offset
+pointer into the (possibly newly created) trie using
+<em>TInsert</em>. If the trie was just created, it then inserts that
+into the table of loaded objects with the store reference as key using
+<em>TInsert</em>.</p>
+
+<h2><a name="refhandler"></a>refhandler: PImport.c</h2>
+
+<p><em>refhandler</em> has to take care of references in a persistent
+storage. These are either offsets into the object area to another
+object in the same storage block, or offsets within the out references
+area. It starts by getting the size of the object with
+<em>ObjectSize</em>. Then it checks if the reference is to somewhere
+inside the object. If it is, it sets <em>theCell</em> to have the
+value at the place in the object.</p>
+
+<p>If the reference is not into the object itself, it checks if it is
+a reference into the out reference area using
+<em>isOutReference</em>. If it is, there is an error, because cross
+stores are not implemented yet. If not there are two cases: The
+reference is special or the reference is not special. If it is a
+special reference, it calls <em>handleSpecialReference<em> and moves
+the object to AOA. Otherwise if the reference is static or the
+referenced object has not been loaded yet, it allocates a new AOAcell
+for it using <em>newAOAcell</em>.</p>
+
+<p> If it is a dynamic reference or the object has been loaded, it
+calls <em>lookupObjectInfo</em>. If that returns not NULL it can set
+<em>theCell</em> directyly. Otherwise it has to check if the cell is
+offline or an origin reference. If so it fetches the reference info
+using <em>referenceInfo</em> and allocates a new AOA cell. Otherwise
+it loads the object using <em>USloadObject</em></p>
+
+<hr>
+
+<h2><a name="trie"></a>Trie: trie.h</h2>
+
+<p>A trie is a tree which is well suited for sorting and searching for
+strings. The structure consists of a <em>trie</em> struct and a struct
+for leaves, <em>contentsBox</em>:</p>
+
+<code><pre>
+typedef struct trie {
+  unsigned long size;
+  unsigned long top;
+  char buffer[INITIALTRIESIZE];
+} Trie;
+
+typedef struct contentsBox {
+  unsigned long contents;
+  unsigned long key;
+} contentsBox;
+</pre></code>
+
+<p>There are a number of functions that operate on a trie:</p>
+
+<ul>
+<li>TInit</li>
+<li>TInsert</li>
+<li>TILookup</li>
+<li>TIVisit</li>
+<li>TIFree</li>
+<li>TIAdd</li>
+<li>TTInsert</li>
+<li>TTLookup</li>
+</ul>
+
+<p>The first five is quite self explaining. <em>TIAdd</em> adds one
+trie to another. The last two are used by text tries.</p>
+
+<h2><a name="refinfo"></a>RefInfo: referenceTable.h</h2>
+
+<p>A <em>RefInfo</em> structure is actually a reference to a runtime
+info object, but is is tagged to ensure a bus error if
+dereferenced.</p>
+
+<code><pre>
+typedef struct _RefInfo {
+#ifdef COM
+   long *vtbl;
+#else /* !COM */
+   ProtoType *Proto;     
+#endif /* COM */
+   u_long     GCAttr;       /* The GC attribute            */
+   CAStorage *store;        /* The store in which the referredobject is saved */
+   u_long     offset;       /* The byte offset in the store of the referred object */  
+   Array     *AOAcells;     /* List of cells in AOA containing ip to this ref info obj */
+   Object    *objInTransit; /* See comment LLL in 'unswizzle.c' */
+   void      *ip;           /* The proxy corresponding to this reference info object */
+   void      *filler;
+} RefInfo;
+</pre></code>
+
+<h2><a name="objinfo"></a>ObjInfo: objectTable.h</h2>
+
+<p>A <em>ObjInfo</em> structure is a persistent object. It looks much
+like the ordinary beta object, but the fields are not always used for
+the same things</p>
+
+<code><pre>
+typedef struct _ObjInfo {
+#ifdef COM
+   long *vtbl;
+#else /* !COM */
+   ProtoType *Proto;     
+#endif /* COM */
+   u_long     GCAttr;       /* The GC attribute            */
+   u_long     flags;        /* Misc. flags for this entry. */
+   CAStorage *store;        /* The store in which this object is saved */
+   u_long     offset;       /* The byte offset in the store of the object */  
+   Object    *theObj;       /* The object in memory */
+} ObjInfo;
+</pre></code>
+
+<h2><a name="sequencetable"></a>sequenceTable: sequenceTable.h</h2>
+
+<p>A sequence table is defined by the following structure:</p>
+
+<code><pre>
+typedef struct sequenceTable { 
+  unsigned long elemSize;        /* size of elements in byts */ 
+  int (*isFree)(void *);         /* determines if an entry is free */ 
+  void (*Free)(void *);          /* function to free entry */ 
+  unsigned long maxIndex;        /* number of entries allocated for this table */ 
+  unsigned long nextFree;        /* Index of the next free entry */ 
+  void *body[1];
+} sequenceTable;
+</pre></code>
+
+<p>The init function allocates space for the elements of the table
+after the struct. It supports the following operations:</p>
+
+<ul>
+<li>STInit</li>
+<li>STSize</li>
+<li>STInsert</li>
+<li>STLookup</li>
+<li>STFree</li>
+<li>STtop</li>
+</ul>
+
+</BODY>
+</HTML>
