@@ -16,6 +16,10 @@
 #include "function.h"
 #include "data.h"
 
+#ifdef Macintosh
+#include "memory.h"
+#endif
+
 #ifdef sparc
 #include "sparcdep.h"
 #endif

@@ -20,7 +20,6 @@ GetBetaEnv()
   char *betaEnv, *getenv();
   
 #ifdef macintosh
-  char *malloc();
   char **theHandle;
   long length;
   
@@ -31,7 +30,7 @@ GetBetaEnv()
   } else {
     if( theHandle = GetNamedResource('STR ',"\pBETART") ){
       betaEnv = *theHandle; length = betaEnv[0];
-      betaEnv = strncpy( malloc(length+1), &betaEnv[1], length);
+      betaEnv = strncpy( NewPtr(length+1), &betaEnv[1], length);
       betaEnv[length] = 0; SetupProperties( betaEnv);
     }
   }
