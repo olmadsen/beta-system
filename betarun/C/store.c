@@ -1,6 +1,7 @@
 #include "beta.h"
 
-void sto_dummy() {
+void sto_dummy()
+{
 #ifdef sparc
   USE();
 #endif /* sparc */

@@ -346,7 +346,11 @@ Program terminated.\n", (int)(4*ReqObjectSize));
     }
     INFO_IOA(fprintf(output, "[%d]\n", IOALooksFullCount));
   } else {
-    IOALooksFullCount = 0;
+    if (((long)IOATop-(long)IOA)/(((long)IOALimit-(long)IOA)/100+1) > 70) {
+      IOALooksFullCount = 1;
+    } else {
+      IOALooksFullCount = 0;
+    }
   }
 #endif /* MT */
   
@@ -790,6 +794,17 @@ void CompleteScavenging()
    * (This is debug code only)
    */
   Claim(IOAActive, "CompleteScavenging: IOAActive");
+
+  /* If ToSpace is filled more than half, there won't be much space
+   * left for new objects
+   * Make sure AOA accepts allocationrequests, even if it means
+   * allocating more memory
+   */
+  if (((long)ToSpaceTop-(long)ToSpace*2)/((long)ToSpaceLimit-(long)ToSpace)
+      && !IOALooksFullCount) {
+    IOALooksFullCount = 1;
+  }
+  
   while (HandledInToSpace < ToSpaceTop) {
     theObj = (Object *) HandledInToSpace;
     HandledInToSpace = (long *) (((long) HandledInToSpace)

@@ -1,11 +1,10 @@
 #include "beta.h"
 
-void pro_dummy() {
-
+void pro_dummy()
+{
 #ifdef sparc
   USE();
 #endif /* sparc */
-  
 }
 
 #ifdef PERSIST

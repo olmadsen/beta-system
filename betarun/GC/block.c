@@ -23,7 +23,7 @@
 
 void blo_dummy()
 {
-#ifdef sun4s
+#ifdef sparc
   USE();
 #endif
 }
