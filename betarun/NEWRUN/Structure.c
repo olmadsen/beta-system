@@ -14,6 +14,7 @@ struct Structure *AlloS(struct Object *origin, struct ProtoType *proto, long *SP
 
   /* Allocate a StructObject. */
     
+  /* No need to check for IOAMAXSIZE */
   Ck(origin);
   Protect(origin, newStruct = (struct Structure *)IOAalloc(StructureSize, SP));
   Ck(origin);
@@ -72,6 +73,7 @@ struct Structure *ThisS(struct Object *this, long *SP)
 
   /* Allocate a StructObject. */
   
+  /* No need to check for IOAMAXSIZE */
   Ck(this);
   Protect(this, newStruct = (struct Structure *)IOAalloc(StructureSize, SP));
   Ck(this);
@@ -108,6 +110,7 @@ struct Structure *ObjS(struct Object *theObj, long *SP)
 
   /* Allocate a StructObject. */
   
+  /* No need to check for IOAMAXSIZE */
   Ck(theObj);
   Protect(theObj, newStruct = (struct Structure *)IOAalloc(StructureSize, SP));
   Ck(theObj);

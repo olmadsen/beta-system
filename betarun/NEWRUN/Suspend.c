@@ -63,10 +63,15 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
    struct StackObject *sObj; 
    struct Component *returnComp;
    struct Object *returnObj;
-
    long SPx, SPy, i;
 
    DEBUG_CODE(NumSusp++);
+
+#if 0
+   fprintf(output, 
+	   "Susp(this=0x%x, prevSP=0x%x, RA=0x%x, SPz=0x%x, SPy=0x%x\n",
+	   this, prevSP, RA, SPz, *(CompSP-2));
+#endif
 
    /* Get SPy. Do NOT pop, since this will confuse a GC during AlloSO below */
    SPy = *(CompSP-2);
@@ -89,9 +94,19 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
    /* Remember where ActiveComponent where in the code */
    ActiveComponent->CallerLSC = RA;
 
+#if 0
+   fprintf(output, "Susp: packing stack object:\n");
+   for (i=0;  i < (SPy-SPz)/4; i++)
+     fprintf(output, "  0x%x=*0x%x (0x%x)\n", 
+	     (long)((long *)sObj->Body+i), 
+	     (long)((long *)SPz+i), 
+	     *((long *)SPz+i));
+#endif
+
    /* copy SPz[0],  SPz[1], ... , SPz[(SPy-SPz-4)/4] = SPy[-1] */
    for (i=0;  i < (SPy-SPz)/4; i++)
      *((long *)sObj->Body+i) = *((long *)SPz+i);
+
    /* Save size of top frame in sObj->StackSize.
     * Used by ProcessStackObj in stack.c.
     */

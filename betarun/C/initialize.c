@@ -274,10 +274,6 @@ void Initialize()
 
   GetBetaEnv();
 
-#ifdef NEWRUN
-  BETA_data1_addr = GetBetaData1();
-#endif
-  
 #ifdef PE  
   {
     char *p;
@@ -503,7 +499,7 @@ void Initialize()
   
 }
 
-#ifdef RTDEBUG
+#if (defined(RTDEBUG) && (!defined(NEWRUN)))
 static long BETA_code_start=-1, BETA_code_end=-1;
 
 long GetBetaCodeStart()

@@ -196,36 +196,40 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #endif
 
 #ifdef sgi
-  PC = (long *) scp->sc_pc;
-  StackEnd = (long *) scp->sc_regs[29];
-  theObj = (struct Object *) scp->sc_regs[30];
-  if( !(inBetaHeap(theObj) && isObject(theObj))) theObj  = 0;
-  switch( sig){
-  case SIGFPE: 
-    todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig);break;
-  case SIGEMT:
-    todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
-  case SIGILL:
-    todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
-  case SIGBUS:
-    todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
-  case SIGSEGV:
-    todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
-  case SIGTRAP:
-    DEBUG_CODE(fprintf(stderr, "SIGTRAP caught; code is %d\n", code);
-	       fflush(stderr));
-    switch(code){
-    case 14:
-      todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
-    default:
+  { long SPoff;
+    PC = (long *) scp->sc_pc;
+    theObj = CurrentObject = (struct Object *) scp->sc_regs[30];
+    GetSPoff(SPoff, CodeEntry(theObj->Proto, (long)PC)); 
+    StackEnd = (long *) ((long)scp->sc_regs[29]+SPoff);
+
+    if( !(inBetaHeap(theObj) && isObject(theObj))) theObj  = 0;
+    switch( sig){
+    case SIGFPE: 
+      todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig);break;
+    case SIGEMT:
       todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
-    }
+    case SIGILL:
+      todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
+    case SIGBUS:
+      todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
+    case SIGSEGV:
+      todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
+    case SIGTRAP:
+      DEBUG_CODE(fprintf(stderr, "SIGTRAP caught; code is %d\n", code);
+		 fflush(stderr));
+      switch(code){
+      case 14:
+	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
+      default:
+	todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
+      }
 #ifdef RTDEBUG
-  case SIGINT: /* Interrupt */
-    todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
+    case SIGINT: /* Interrupt */
+      todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
 #endif
-  default: 
-    todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
+    default: 
+      todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
+    }
   }
 #endif
 

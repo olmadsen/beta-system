@@ -46,7 +46,7 @@ ref(ValRep) CopyCT(unsigned char *textPtr)
 
     /* Assign the text to the body part of the repetition. */
 
-    strcpy((char *)theRep->Body, (char *)textPtr);
+    if (textPtr) strcpy((char *)theRep->Body, (char *)textPtr);
 
     Ck(theRep);
 

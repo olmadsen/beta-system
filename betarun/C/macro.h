@@ -50,15 +50,16 @@ register unsigned IOATopOff asm("%g7");
 
 #else
 /* not sparc */
+#ifdef RUN
+/* RUN: all are declared as variables */
+#else
+/* Not sparc, not RUN */
 #define IOA           _IOA.start
 #define IOALimit      _IOA.limit
 #define IOASize       _IOA.size
-#if defined(NEWRUN)
 #define IOATopOff     _IOA.topoff
 #define IOATop        ((long *) ((long)IOA+IOATopOff))
-#else
-#define IOATop        _IOA.top
-#endif /* NEWRUN */
+#endif /* RUN */
 #endif /* sparc */
 
 #ifdef RTLAZY
@@ -271,9 +272,8 @@ register unsigned IOATopOff asm("%g7");
                       (long)(cell)));                      \
     *--AOArootsPtr = (long) (cell);                        \
   }
-
 #ifdef NEWRUN
-#define BETA_DATA1_ADDR BETA_data1_addr
+#define BETA_DATA1_ADDR &BETA_DATA
 #else
 #define BETA_DATA1_ADDR &BETA_data1
 #endif
@@ -360,6 +360,7 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 
 #define CkReg(func, value, reg)
 #define Ck(r)
+#define Claim(cond, string)
 
 #endif /* RTDEBUG */
 
@@ -375,6 +376,36 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
     *((long *)(p)+i) = 0;                                           \
   }                                                                 \
 }
+
+/*
+ * GetDistanceToEnclosingObject:
+ *  Find the offset (negative) to the most inclosing object e.g.
+ *  the offset to the autonomous object in which theObj reside. 
+ *  Placed here to allow 
+ */
+
+#define GetDistanceToEnclosingObject(theObj, Distance)      \
+{                                                           \
+  long GCAttribute;                                         \
+  Distance = 0;                                             \
+  GCAttribute = theObj->GCAttr*4;                           \
+  while( GCAttribute < 0 ){                                 \
+    Distance += GCAttribute;                                \
+    theObj = (struct Object *) Offset(theObj, GCAttribute); \
+    GCAttribute = theObj->GCAttr*4;                         \
+  }                                                         \
+}
+
+/* NameOfGroupMacro:
+ *  return the groupName corresponding to the group_header
+ *  given as parameter. 
+ */
+#if (defined(crts) || defined(NEWRUN))
+#define NameOfGroupMacro(groupheader) (groupheader)->group_id
+#else
+#define NameOfGroupMacro (groupheader)\
+  ((char *) &((groupheader)->protoTable[((groupheader)->protoTable[0]) + 1]))
+#endif
 
 #define AssignReference(theCell, newObject)                                  \
   *(struct Item **)(theCell) = (struct Item *)(newObject);                   \

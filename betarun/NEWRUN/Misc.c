@@ -56,7 +56,7 @@ void FailureExit(long *SP, struct Object *this)
 void RefNone()
 {
   DEBUG_CODE(NumRefNone++);
-  fprintf(output, "RefNone() called\n");
+  DEBUG_CODE(fprintf(output, "RefNone() called\n"));
 }
 
 void SetArgValues(long argc, char *argv[])

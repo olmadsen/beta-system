@@ -89,6 +89,7 @@ long inBetaHeap( theObj)
   return FALSE;
 }
 
+#ifdef RTDEBUG
 void Claim( expr, message)
   long  expr;
   ptr(char) message;
@@ -108,6 +109,7 @@ void Claim( expr, message)
       BetaExit(0);
   }
 }
+#endif
 
 #ifdef RTDEBUG
 static char __CkString[100];

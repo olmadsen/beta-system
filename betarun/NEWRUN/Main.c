@@ -25,6 +25,7 @@ void main(long argc, char *argv[])
   push(0); /* NULL terminate internal ReferenceStack */
 
   StackStart = GetSP();
+  DEBUG_STACK(fprintf(output, "StackStart=0x%x\n", StackStart));
 
   /* M1BETAENV(0,BasicItem) */
   CallBetaEntry( *((long *)BasicItem->Proto-1)-8, BasicItem /*dyn*/, BasicItem);

@@ -116,7 +116,9 @@ int getNextDangler ()
   return lastDangler;
 }
 
+#endif /* not sparc */
 
+#ifndef AssignReference
 static INLINE void AssignReference(long *theCell, ref(Item) newObject)
 /* If theCell is in AOA and will now reference an object in IOA, then insert in table */
 {
@@ -124,7 +126,7 @@ static INLINE void AssignReference(long *theCell, ref(Item) newObject)
   if (! inIOA(theCell) && inIOA(newObject))
     AOAtoIOAInsert((handle(Object))theCell);
 }
-#endif
+#endif /* AssignReference */
 
 
 void setupDanglers (int* danglers, long* objects, int count)

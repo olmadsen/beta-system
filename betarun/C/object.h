@@ -224,25 +224,19 @@ typedef struct IOAStatistic {
 } IOAStatistic;
 #endif
 
-#ifdef crts
-typedef struct group_header
-{  
-  long                *code_start;
-  long                *code_end;
-  long                *protoTable;
-  long                *form_id;
-  long                NoOfPrototypes;
-} group_header;
-#else
 typedef struct group_header
 {
-  struct group_header *self;
+  struct group_header *data_start;
   long                *protoTable;
-  struct group_header *next;
+  struct group_header *data_end;
   long                code_start;
   long                code_end;
+  /* The next entry is only used internally in RTS and only in
+   * new implementations of nextgroup etc (sgi, b2c, ... )
+   */
+  char                *group_id;
+  struct group_header **ptr;
 } group_header;
-#endif
 
 #if defined(linux) || defined(nti)
 /* Header files do not declare this! */

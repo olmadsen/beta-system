@@ -42,7 +42,7 @@ struct ValRep *CopyCT(unsigned char *textPtr, long *SP)
     theRep->HighBorder = range;
 
     /* Assign the text to the body part of the repetition. */
-    strcpy((char *)theRep->Body, textPtr);
+    if (textPtr) strcpy((char *)theRep->Body, textPtr);
 
     Ck(theRep);
 

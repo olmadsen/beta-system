@@ -12,8 +12,12 @@
 #endif
 
 #ifdef RTDEBUG
-/* #define DO_TRACE_DUMP  */ /* Trace DisplayBetaStack() */
-/* #define DO_TRACE_GROUP */ /* Trace GroupName() */
+#if 0
+#define DO_TRACE_DUMP /* Trace DisplayBetaStack() */
+#endif
+#if 0
+#define DO_TRACE_GROUP /* Trace GroupName() */
+#endif
 #endif
 
 #ifdef DO_TRACE_DUMP
@@ -247,42 +251,114 @@ char *ProtoTypeName(struct ProtoType *theProto)
  */
 static signed long c_on_top;
 
-/********************* NextGroup, GroupName *********************/
+/************** NEXTGROUP ******************/
 
 /* NextGroup is used by objectserver/persistent store to scan through the
  * data-segments, in order to implement InitFragment.
  * It must be non-static.
  */
 
-#ifdef crts
+#if (defined(crts) || defined(NEWRUN))
 
-extern void BETA_code_end(void);
+/********** NEW NEXTGROUP IMPLEMENTATION ***********/
 
-/* NameOfGroup return the groupName corresponding to the group_header
- * given as parameter. */
-char* NameOfGroup (group_header *group)
-{
-   return (char*) (*group->form_id);
+/* NextGroup: (new)
+ *  return the next group after the group_header given as parameter
+ */
+group_header* NextGroup (group_header* current)
+{ group_header **ptr;
+  TRACE_GROUP(fprintf (output, "NextGroup(0x%x)\n", (long)current));
+  if (current) {
+    /* Get ptr from current (stored by previous NextGroup) and increment */
+    ptr = current->ptr+1;
+  } else {
+    /* Start from betaenv */
+    ptr = BETA_DATA1_ADDR;
+  }
+  TRACE_GROUP(fprintf (output, "NextGroup: ptr=0x%x\n", (long)ptr));
+  if (!ptr) {
+    TRACE_GROUP(fprintf (output, "NextGroup returns 0\n"));
+    return 0;
+  }
+  current = *ptr;
+  TRACE_GROUP(fprintf (output, "NextGroup. current = 0x%x\n", (long)current));
+
+  if (current){
+    /* Save ptr in current, so that next NextGroup can continue */
+    current->ptr = ptr;
+  }
+
+  return current;
 }
 
-static long* CURRENT_BETA_DATA;
+#ifdef __powerc
+#define GroupCodeStart(group) (*(long*)((group)->code_start))
+#define GroupCodeEnd(group)   (*(long*)((group)->code_end))
+#else
+#define GroupCodeStart(group) ((long)((group)->code_start))
+#define GroupCodeEnd(group)   ((long)((group)->code_end))
+#endif
+
+#else 
+/********** OLD NEXTGROUP IMPLEMENTATION ***********/
+
+/* NextGroup: (old)
+ *  return the next group after the group_header given as parameter
+ */
 group_header* NextGroup (group_header* current)
+     /* Return group in executable following current. 
+      * If current is NULL, first group is returned. */
 { 
+  long *limit;
+
+  TRACE_GROUP(fprintf (output, "NextGroup. current = 0x%x\n", current));
+  
   if (current) {
-    CURRENT_BETA_DATA++;
-    /*DEBUG_CODE(fprintf (output, "NextGroup. current = 0x%x\n", (long)CURRENT_BETA_DATA));*/
-    return (group_header *)*CURRENT_BETA_DATA;
+    /* Get next data segment if any. Padding by linker 
+     * may have moved it some longs down */
+    current=current->data_end;
+
+    limit = (long *) current + 10;
+    if (limit > (long *) &BETA_end) limit = (long *) &BETA_end;
+
+    for (; (long*)current<limit; current=(group_header*)((long*)current+1)) {
+      if (current->data_start == current) {
+	TRACE_GROUP(fprintf (output, "NextGroup returns 0x%x\n", current));
+	return current;
+      }
+      TRACE_GROUP(fprintf (output, "NextGroup pad\n"));
+    }
+    /* No next group. */
+    TRACE_GROUP(fprintf (output, "NextGroup returns 0\n"));
+    return 0;
   } else {
-    CURRENT_BETA_DATA= (long*) BETA_DATA1_ADDR;
-    /*DEBUG_CODE(fprintf (output, "NextGroup. current = 0x%x\n", (long)CURRENT_BETA_DATA));*/
-    return (group_header *)*CURRENT_BETA_DATA;
+    TRACE_GROUP(fprintf (output, "NextGroup returns 0x%x\n", BETA_DATA1_ADDR));
+    return (struct group_header *)BETA_DATA1_ADDR;
   }
 }
 
+#ifdef macintosh
+#define GroupCodeStart(group) (*(long*)((group)->code_start))
+#define GroupCodeEnd(group)   (*(long*)((group)->code_end))
+#else
+#define GroupCodeStart(group) ((long)((group)->code_start))
+#define GroupCodeEnd(group)   ((long)((group)->code_end))
+#endif
+
+/********** END NEXTGROUP ***********/
+
+#endif /* crts or NEWRUN */
+
+/* IsBetaPrototype (generic):
+ * Run through the prototype table of a file and
+ * check if the gives address is equal to one of
+ * the prototype adresses.
+ */
 int IsBetaPrototype(group_header *gh, long data_addr) 
 { long* proto=gh->protoTable;
-  int i;
-  for (i=0; i<gh->NoOfPrototypes; i++)
+  int i, NoOfPrototypes;
+  NoOfPrototypes = gh->protoTable[0];
+  for (i=0; i<NoOfPrototypes; i++)
     if ((*proto)==data_addr) 
        return 1;
      else
@@ -290,193 +366,80 @@ int IsBetaPrototype(group_header *gh, long data_addr)
   return 0;
 }
 
-/* GroupName is used by DisplayBetaStack (beta.dump) and objinterface.bet.
- * It must be non-static.
+/* GroupName: (generic)
+ *  Return the name of the fragment group that the address resides in.
+ *  If isCode is 0, the address is assumed to be a prototype address.
+ *  Is used by DisplayBetaStack (beta.dump) and objinterface.bet.
+ *  It must be non-static.
+ * 
  */
 char *GroupName(long address, int isCode)
 {
-  group_header *group;
   group_header *current;
-  group_header *last;
-  signed long dist, distance;
-  
+
   TRACE_GROUP(fprintf (output, 
 		       "GroupName(addr: 0x%x, %s)\n",
 		       (int)address,
 		       isCode ? "code" : "data"));
 
-  current = last = group = NextGroup (0);  /* first (betaenv) data segment */
-#ifdef __powerc
-  if (isCode && (address<(*(long*)current->code_start))) { /* code addr < betaenv code start */
-#else
-  if (isCode && ((long*)address<current->code_start)) { /* code addr < betaenv code start */
-#endif
-     c_on_top++;
-     TRACE_GROUP(fprintf (output, "c_on_top\n"));
-     return ""; 
-  }
-  distance = MAXINT;
-  
+  current = NextGroup (0);  /* first (betaenv) data segment */
+
+  /* In general we cannot know anything about the order in which the
+   * code- and data-segments of the various fragment groups are linked
+   * together (because of shared code, position independent code etc).
+   * So we just run through each fragment group (found via the table
+   * starting at the global label BETA_DATA), and check if the address
+   * is in that fragment.
+   */
+
   while (current){
-    
-    if (!isCode) { /* data address; try find a Prototype... */
-       if (IsBetaPrototype(current,address))
-	  return NameOfGroup (current);
+    if (isCode){
+      if ((GroupCodeStart(current) <= address) &&
+	  (address <= GroupCodeEnd(current))){
+	TRACE_GROUP(fprintf (output, "GroupName: returns "));
+	TRACE_GROUP(fprintf (output, "%s\n", NameOfGroupMacro (current)));
+	c_on_top=MININT;
+	return NameOfGroupMacro (current);
+      }
     } else {
-#ifdef __powerc
-      dist = address - (*(long*)current->code_start);
-#else
-      dist = address - (long)current->code_start;
-#endif
-      if (dist >= 0 && dist < distance) {
-        distance = dist;
-        group = current;
+      /* data address; seach for Prototype */
+      if (IsBetaPrototype(current,address)) {
+	TRACE_GROUP(fprintf (output, "GroupName: proto: returns "));
+	TRACE_GROUP(fprintf (output, "%s\n", NameOfGroupMacro (current)));
+	c_on_top=MININT;
+	return NameOfGroupMacro (current);
       }
     }
     TRACE_GROUP(if (isCode){
-      fprintf(output, 
-	      " cur->code: 0x%x-0x%x, dist: %d: %s\n", 
-	      (int)current->code_start,
-	      (int)current->code_end,
-	      (int)distance, 
-	      NameOfGroup(current));
-    } else {
-      fprintf(output, 
-	      " cur: 0x%x, dist: %d: %s\n", 
-	      (int)current,
-	      (int)distance, 
-	      NameOfGroup(current));
-    });
-    last = current;
+		  fprintf(output, 
+			  " GroupName: cur->code: 0x%x-0x%x, name: '%s'\n", 
+			  (int)current->code_start,
+			  (int)current->code_end,
+			  NameOfGroupMacro(current));
+		} else {
+		  fprintf(output, 
+			  " GroupName: cur: 0x%x, name: '%s'\n", 
+			  (int)current,
+			  NameOfGroupMacro(current));
+		});
     current = NextGroup (current);
   }
-  if (isCode && (address>(long)BETA_code_end)) { /* code addr > code end */
-    c_on_top++; 
-    return ""; 
-  } else {
-    /* GroupName succeeded. From now on we are in the beta-stack */
-    c_on_top=MININT;
-  }
 
-  return NameOfGroup (group);
+  /* GroupName failed */
+  TRACE_GROUP(fprintf (output, "GroupName returns 0\n"));
+  return NULL; 
 }
 
-#else /* !crts */
-
-/* NameOfGroup return the groupName corresponding to the group_header
- * given as parameter. */
-char* NameOfGroup (struct group_header *group)
-{
-   return (char *) &(group->protoTable[(group->protoTable[0]) + 1]);
-}
-
-group_header* NextGroup (group_header* current)
-     /* Return group in executable following current. 
-      * If current is NULL, first group is returned. */
-{ 
-  long *limit;
-
-  /*DEBUG_CODE(fprintf (output, "NextGroup. current = 0x%x\n", current));*/
-  
-  if (current) {
-    /* Get next data segment if any. Padding by linker 
-     * may have moved it some longs down */
-    current=current->next;
-
-    limit = (long *) current + 10;
-    if (limit > (long *) &BETA_end) limit = (long *) &BETA_end;
-
-    for (; (long*)current<limit; current=(group_header*)((long*)current+1)) {
-      if (current->self == current) {
-	return current;
-      }
-      /*DEBUG_CODE(fprintf (output, "NextGroup pad\n"));*/
-    }
-    /* No next group. */
-    return 0;
-  } else {
-    return (struct group_header *)BETA_DATA1_ADDR;
-  }
-}
-
-/* GroupName is used by DisplayBetaStack (beta.dump) and objinterface.bet.
- * It must be non-static.
+/* NameOfGroup:
+ * Declared as *function* because objectserver uses it.
+ * Not used internally in RTS - here we use NameOfGroupMacro.
  */
-char *GroupName(long address, int isCode)
+char *NameOfGroup(struct group_header *group)
 {
-  group_header *group;
-  group_header *current;
-  group_header *last;
-  signed long dist, distance;
-  
-  TRACE_GROUP(fprintf (output, 
-		       "GroupName(addr: 0x%x, %s)\n",
-		       (int)address,
-		       isCode ? "code" : "data"));
-
-  current = last = group = NextGroup (0);  /* first (betaenv) data segment */
-  if (
-#ifndef macintosh
-      (isCode && (address<current->code_start)) /* code addr < betaenv code start */
-      ||
-#endif
-      (!isCode && (address<(long)current))){    /* data addr < betaenv data start */
-    c_on_top++;
-    TRACE_GROUP(fprintf (output, "c_on_top\n"));
-    return ""; 
-  }
-  distance = MAXINT;
-  
-  while (current){
-    
-    /* Check if the address is closer to the start 
-     * of current segment than previous segments 
-     */
-    if (isCode)
-      dist = address - (long)current->code_start;
-    else
-      dist = address - (long) current;
-    if (dist >= 0 && dist < distance) {
-      distance = dist;
-      group = current;
-    }
-    TRACE_GROUP(if (isCode){
-      fprintf(output, 
-	      " cur->code: 0x%x-0x%x, dist: %d: %s\n", 
-	      (int)current->code_start,
-	      (int)current->code_end,
-	      (int)distance, 
-	      NameOfGroup(current));
-    } else {
-      fprintf(output, 
-	      " cur: 0x%x, dist: %d: %s\n", 
-	      (int)current,
-	      (int)distance, 
-	      NameOfGroup(current));
-    });
-    last = current;
-    current = NextGroup (current);
-  }
-  if (
-#ifndef macintosh
-      (isCode && (address>last->code_end))       /* code addr > code end */
-      || 
-#endif
-         (!isCode && (address>(long)last->next)) ){ /* data addr > data end */
-    c_on_top++; 
-    return NULL; 
-  } else {
-    /* GroupName succeeded. From now on we are in the beta-stack */
-    c_on_top=MININT;
-  }
-
-  return NameOfGroup (group);
+  return NameOfGroupMacro(group);
 }
 
-#endif
-
-
-/*************************** ObjectDescription **********************/
+/*************************** ObjectDescription: **********************/
 
 static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, int print_origin)
 {
@@ -493,7 +456,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
   }
   
 #ifdef NEWRUN
-  /* use Misc.c:CodeEntry() here */
+  /* FIXME: use stack.c:CodeEntry() here */
 #endif
 
   if (retAddress) {
@@ -559,7 +522,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
     /* GroupName failed, and since we reached this point, it was not
      * due to external part on top of stack.
      */
-    TRACE_DUMP(fprintf(output, ">>> GroupName failed for object 0x%x\n", (int)theObj));
+    TRACE_DUMP(fprintf(output, ">>>TraceDump: GroupName failed for object 0x%x\n", (int)theObj));
     return;
   }  
   
@@ -652,7 +615,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
   }
 }
 
-/********************** DisplayObject ********************/
+/********************** DisplayObject: ********************/
 
 void DisplayObject(output,theObj,retAddress)
      ptr(FILE)   output;       /* Where to dump object */
@@ -769,6 +732,36 @@ char *ErrorMessage(errorNumber)
   return UnknownError;
 }
 
+#ifdef NEWRUN
+
+static struct Object **lastCell=0;
+static void DumpCell(struct Object **theCell, struct Object *theObj)
+{
+  TRACE_DUMP(fprintf(output, ">>>TraceDump: theCell=0x%x, theObj=0x%x",
+		     theCell,
+		     theObj));
+
+  if (theCell!=lastCell-1){
+    if (theObj==CurrentObject){
+      TRACE_DUMP(fprintf(output, " (ignored - is current)\n"));
+    } else {
+      TRACE_DUMP(fprintf(output, " *\n"));
+      /* theObj is dyn in a frame. This is the current object in the 
+       * previous frame. Dump it.
+       */
+      DisplayObject(output, theObj, 0);
+      if (theObj->Proto==ComponentPTValue){
+	fprintf(output, "\n");
+      }
+    }
+  } else {
+    TRACE_DUMP(fprintf(output, "\n"));
+  }
+  lastCell=theCell;
+}
+
+#endif /* NEWRUN */
+
 #ifndef sparc
 #ifndef hppa
 #ifndef crts
@@ -798,7 +791,7 @@ static void DisplayStackPart( output, low, high, theComp)
   handle(Object) theCell;
   long retAddr=0;
 
-  TRACE_DUMP(fprintf(output, ">>> StackPart [0x%x..0x%x]\n", (int)low, (int)high));
+  TRACE_DUMP(fprintf(output, ">>>TraceDump: StackPart [0x%x..0x%x]\n", (int)low, (int)high));
   while( current <= high ){
     retAddr=0;
     if( inBetaHeap( (ref(Object))(*current))){
@@ -1056,7 +1049,7 @@ static char *OpenDumpFile(long errorNumber)
 
 static int isMakingDump=0;
 
-/**************** DisplayBetaStack *******************/
+/**************** DisplayBetaStack: *******************/
 
 /* If DisplayBetaStack returns non-zero, the debugger was invoked, and
  * the process should continue execution. */
@@ -1073,6 +1066,19 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   ref(Component)      currentComponent;
 #endif
 #endif
+#endif
+
+#if 0
+  fprintf(stdout, 
+	  "DisplayBetaStack(errorNumber=%d, theObj=0x%x, thePC=0x%x, theSignal=%d\n",
+	  errorNumber, 
+	  theObj, 
+	  thePC, 
+	  theSignal);
+  fprintf(stdout, "StackEnd=0x%x, StackStart=0x%x\n", 
+	  (long)StackEnd, 
+	  (long)StackStart
+	  );
 #endif
   
 #ifdef RTVALHALLA
@@ -1121,7 +1127,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   /* If we are able to retrieve information about the current object
    * dump it.
    */
-  TRACE_DUMP(fprintf(output, ">>> Current object 0x%x\n", (int)theObj));
+  TRACE_DUMP(fprintf(output, ">>>TraceDump: Current object 0x%x\n", (int)theObj));
   if( theObj != 0 ){
     if( isObject(theObj)){
       if (theObj==cast(Object)ActiveComponent->Body){
@@ -1196,9 +1202,8 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   /*
    * This is the NEWRUN specifics of DisplayBetaStack
    */
-  {
-    /* FIXME: */
-    fprintf(output, "DisplayBetaStack NYI\n");
+  { 
+    ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, DumpCell);
   }
 #endif
   
@@ -1341,7 +1346,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
       
       /* Display current object in ComponentBlock */
       if (cbFrame){
-	  TRACE_DUMP(fprintf(output, ">>> current: 0x%x\n", (int)currentObject));
+	  TRACE_DUMP(fprintf(output, ">>>TraceDump: current: 0x%x\n", (int)currentObject));
 	  /* Current object will be shown along with the first CB frame */
       } else {
 	  DisplayObject(output, currentObject, retAddr);
@@ -1365,7 +1370,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 #endif
 	cbFrame = cbFrame->next;
 	if( isObject( (ref(Object))(*lowAddr)) ){
-	    TRACE_DUMP(fprintf(output, ">>> lowAddr: 0x%x\n", (int)lowAddr));
+	    TRACE_DUMP(fprintf(output, ">>>TraceDump: lowAddr: 0x%x\n", (int)lowAddr));
 	    DisplayObject( output, (void *)(*lowAddr), 0);
 	}
 	lowAddr += 2;
@@ -1391,13 +1396,13 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 #endif
 #endif
 #endif
-  
+
 #undef P
 #define P(text) fprintf(output, "%s\n", text);
-P("Legend:")
-P("The above dump shows the dynamic call stack of invoked objects. The dump starts")
-P("at the object that was the current object when the error occurred and continues")
-P("down towards the basic component. The descriptions have the following meaning:")
+P("The above dump shows the dynamic call stack of invoked objects.")
+P("The dump starts at the object that was the current object when the error occurred")
+P("and continues down towards the basic component.")
+P("The descriptions have the following meaning:")
 P("1. Items are shown in two lines, like this:")
 P("      item <name#>pname1#pname2#pname3 in ifile")
 P("        -- sname#spname1#spname2 in sfile")

@@ -290,7 +290,7 @@ void valhallaInit ()
       
       betalib = getenv ("BETALIB");
       if (!betalib) {
-	betalib="/users/beta";
+	betalib="/usr/local/lib/beta";
 	DEBUG_VALHALLA(fprintf(output,"BETALIB not found\n"));
       }
       /*sprintf (valhallaname,"%s/%s",betalib,"bin/valhalla2.0");*/
@@ -413,9 +413,9 @@ int valhallaCommunicate (int curPC)
 
 	valhalla_writeint (opcode);
 	while ((current = NextGroup (current))) {
-	  valhalla_writetext (NameOfGroup(current));     /* groupName */
-	  valhalla_writeint ((int) current->self);       /* dataStart */ 
-	  valhalla_writeint ((int) current->next);       /* dataEnd   */
+	  valhalla_writetext (NameOfGroupMacro(current));/* groupName */
+	  valhalla_writeint ((int) current->data_start); /* dataStart */ 
+	  valhalla_writeint ((int) current->data_end);   /* dataEnd   */
 	  valhalla_writeint ((int) current->code_start); /* codeStart */
 	  valhalla_writeint ((int) current->code_end);   /* codeEnd   */
 	}

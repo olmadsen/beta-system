@@ -42,7 +42,6 @@ extern void  DisplayObject(ptr(FILE),ref(Object),long);
 extern char *ErrorMessage(long);
 extern int  DisplayBetaStack(long, ref(Object), long *, long);
 extern struct group_header* NextGroup (struct group_header*);
-extern char* NameOfGroup (struct group_header *);
 extern char *GroupName(long, int);
 #ifdef RTDEBUG
 extern void DescribeObject(struct Object *);
@@ -125,6 +124,7 @@ extern ref(Object) NewCopyObject(ref(Object), handle(Object));
 /* GC/stack.c */
 extern void ProcessStack(void);
 #ifdef NEWRUN
+struct Object *ProcessStackFrames(long SP, long StackStart, long stopAtComp, void (*func)(struct Object **,struct Object *));
 extern void ProcessStackObj(struct StackObject *, void (*func)(struct Object **,struct Object *));
 #else
 extern void ProcessStackObj(struct StackObject *);
@@ -137,7 +137,6 @@ extern void ProcessObject(ref(Object));
 extern void ProcessAOAReference(handle(Object));
 extern void ProcessAOAObject(ref(Object));
 extern void CompleteScavenging(void);
-extern long GetDistanceToEnclosingObject(ref(Object));
 #ifdef NEWRUN
 extern void DoIOACell(struct Object **theCell, struct Object *theObj);
 #endif
@@ -167,7 +166,9 @@ extern void Illegal(void);
 #endif
 extern long isObject(ref(Object));
 extern long inBetaHeap(ref(Object));
+#ifdef RTDEBUG
 extern void Claim(long, char*);
+#endif
 #if defined(macintosh) || defined(MAC)
 extern void InitTheCursor(void);
 extern void RotateTheCursor(void);
@@ -175,9 +176,8 @@ extern void RotateTheCursorBack(void);
 #endif
 
 #ifdef NEWRUN
-extern struct Object *      GetThis(long *SP);
-extern long *               GetBetaData1(void);
-extern long *               GetSP(void);
+extern struct Object *        GetThis(long *SP);
+extern long *                 GetSP(void);
 #endif
 
 

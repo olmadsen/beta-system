@@ -75,7 +75,7 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
     }
   }
   if (minDist == MAXINT) {
-    fprintf(output, "CodeEntry: minDist == MAXINT\n");
+    fprintf(output, "Fatal Error: CodeEntry: minDist == MAXINT\n");
     BetaExit(1);
   }
   if (minDist == gDist) {
@@ -123,22 +123,20 @@ DEBUG_STACK(if (theObj&&((long)theObj!=CALLBACKMARK)){                 \
  *  The main stack traversal routine.
  *  Scans through frames in stack part.
  */
-static
 struct Object *ProcessStackFrames(long SP, 
 				  long StackStart, 
 				  long stopAtComp,
 				  void (*func)(struct Object **,struct Object *))
 {
-  /* At entry two variables are defined:
-   *  - SP points to address just above last BETA stack frame,
+  /* Arguments:
+   *  - SP points to address just ABOVE last BETA stack frame,
    *    i.e. to the top of the next-to-last frame.
    *  - StackStart point just above the bottom frame to process.
    * Returns:
    *  - dynamic link of last frame processed.
    *
-   * These are used as the starting point of the stack traversal.
    * 
-   *  STACK LAYOUT:
+   *  STACK LAYOUT at entry:
    * 
    *            |            |   
    *StackStart->|____________|   
@@ -154,8 +152,8 @@ struct Object *ProcessStackFrames(long SP,
    *            |   RTS      |     = current PC for next-to-last frame
    *            |   dyn      |     = current object for next-to-last frame
    *            |            |     
-   *            |            |  
-   *            |            |    
+   *            | also       |  
+   *            | processed  |    
    *            |____________|   
    *            |  AlloXXX   |
    *            |   IOAGC    |

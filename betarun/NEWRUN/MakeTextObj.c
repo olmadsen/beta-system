@@ -58,8 +58,6 @@ void MkTO(char *asciz,
     }
     pop(theItem);
 
-    Protect(theItem, theText=(struct TextObject*)IOAcalloc(size, SP));
-
     /* The new TextObject and Repetition are now allocated */
     /* No need to call setup_item - no inlined partobjects in Text */
     theText->Proto = TextProto;

@@ -194,8 +194,8 @@ void IOAGc()
 
 	      theObj = cast(Object)(*current);
 	      if (isStatic(theObj->GCAttr)) {
-		enclObj = cast(Object) 
-		  Offset(theObj,enclDist=GetDistanceToEnclosingObject(theObj));
+		GetDistanceToEnclosingObject(theObj,enclDist);
+		enclObj = cast(Object) Offset(theObj,enclDist);
 		if (isForward(enclObj->GCAttr))
 		  theObj = cast(Object) Offset(enclObj->GCAttr,-enclDist);
 		else
@@ -371,7 +371,11 @@ void DoIOACell(struct Object **theCell, struct Object *theObj)
   if (!theObj) return;
   if(inBetaHeap(theObj)){
     if(inLVRA(theObj)){
-      DEBUG_IOA(fprintf(output, "0x%x is *ValRep)", (int)theCell));
+#ifdef RTDEBUG
+      fprintf(output, "[DoIOACell: ***InLVRA: 0x%x: 0x%x]\n", 
+	      (int)theCell, 
+	      (int)theObj);
+#endif
     } else {
       if (isObject(theObj)) {
 	ProcessReference(theCell);
@@ -384,17 +388,10 @@ void DoIOACell(struct Object **theCell, struct Object *theObj)
 	  ProcessReference(theCell);
 	} else {
 #ifdef RTDEBUG
-	  if (isValRep(theObj)){
-	    if (inLVRA(theObj))
-	      fprintf(output, "[DoIOACell: ***InLVRA: 0x%x: 0x%x]\n", 
-		      (int)theCell, 
-		      (int)theObj);
-	  } else {
-	    fprintf(output, "[DoIOACell: ***Illegal: 0x%x: 0x%x]\n", 
-		    (int)theCell,
-		    (int)theObj);
-	    Illegal();
-	  }
+	  fprintf(output, "[DoIOACell: ***Illegal: 0x%x: 0x%x]\n", 
+		  (int)theCell,
+		  (int)theObj);
+	  Illegal();
 #endif /* RTDEBUG */
 	}
 #endif /* RTLAZY */
@@ -443,7 +440,7 @@ static void CheckIOACell(struct Object **theCell, struct Object *theObj)
  *  Copies at most one object to ToSpace/AOA. You must call 
  *  CompleteScavenging sometimes later to process references from the 
  *  copied object.
- *  Optimization: USE theObj instead of newObj and inline GetDistanceToEnc....
+ *  FIXME: use theObj instead of newObj
  */
 
 void ProcessReference( theCell)
@@ -489,8 +486,8 @@ void ProcessReference( theCell)
 	ref(Object) newObj;
 	ref(Object) AutObj;
 	
-	Distance = GetDistanceToEnclosingObject( theObj);
-	AutObj = (ref(Object)) Offset( theObj, Distance);
+	GetDistanceToEnclosingObject(theObj, Distance);
+	AutObj = (ref(Object)) Offset(theObj, Distance);
 	if( isForward(AutObj->GCAttr) ){
 	  newObj = (ref(Object)) AutObj->GCAttr;
 	  /* If the forward pointer refers an AOA object, insert
@@ -738,7 +735,7 @@ void ProcessAOAReference( theCell)
 	ref(Object) newObj;
 	ref(Object) AutObj;
 	
-	Distance = GetDistanceToEnclosingObject( theObj);
+	GetDistanceToEnclosingObject(theObj, Distance);
 	AutObj = (ref(Object)) Offset( theObj, Distance);
 	if( !isAutonomous(AutObj->GCAttr)) 
 	  newObj = (ref(Object)) AutObj->GCAttr;
@@ -982,27 +979,6 @@ void CompleteScavenging()
   DEBUG_IOA( fprintf(output, "CompleteScavenging: ToSpaceTop=0x%x\n", ToSpaceTop));
   DEBUG_CODE( Claim( HandledInToSpace == ToSpaceTop,
 		   "CompleteScavenging: HandledInToSpace == ToSpaceTop"));
-}
-
-/*
- * GetDistanceToEnclosingObject:
- *  Find the offset (negative) to the most inclosing object e.g.
- *  the offset to the autonomous object in which theObj reside.  
- */
-
-long GetDistanceToEnclosingObject( theObj)
-     ref(Object)theObj;
-{
-  long Distance, GCAttribute;
-  
-  Distance = 0;
-  GCAttribute = theObj->GCAttr*4;
-  while( GCAttribute < 0 ){
-    Distance += GCAttribute; 
-    theObj = (struct Object *) Offset( theObj, GCAttribute);
-    GCAttribute = theObj->GCAttr*4;
-  }
-  return Distance;
 }
 
 #ifdef RTDEBUG

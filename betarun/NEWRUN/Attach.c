@@ -20,6 +20,11 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
 
    DEBUG_CODE(NumAtt++);
 
+#if 0
+   fprintf(output, "Att(this=0x%x, comp=0x%x, RA=0x%x, SPx=0x%x\n",
+	   this, comp, RA, SPx);
+#endif
+
    SPy = (long)GetSP();
    if (ActiveComponent) {
      ActiveComponent->CallerLSC = RA;
@@ -64,6 +69,15 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
      /* Unpack sObj on stack. Must be done as the last thing to prevent
       * calls to other functions to destroy the new stack part.
       */
+#if 0
+     fprintf(output, "Att: unpacking stack object:\n");
+     for (i=0; i < sObj->BodySize/4; i++){
+       fprintf(output, 
+	       "  *0x%x=0x%x\n", 
+	       (long)((long *)SPz+i), 
+	       *((long *)sObj->Body+i));
+     }
+#endif
      for (i=0; i < sObj->BodySize/4; i++){
        *((long *)SPz+i) = *((long *)sObj->Body+i);
      }

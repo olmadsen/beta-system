@@ -38,7 +38,7 @@ void CCopyRR(ref(ValRep) theRep,
     range = theRep->HighBorder;
 
     Protect2(theObj, theRep,
-	     newRep = cast(RefRep) IOAcalloc(RefRepSize(range)));
+	     newRep = cast(RefRep) IOAalloc(RefRepSize(range)));
     
     Ck(theRep); Ck(theObj);
 

@@ -166,7 +166,7 @@ static void ValueProperty(char *name, char *value)
    
   /* IF NO ENTRY IS SELECTED REPORT UNKNOWN PROPERTY */
   { char buf[100];
-    sprintf(buf, "Property '%s#%s' not known.", name, value);
+    sprintf(buf, "Property '%s=%s' not known.", name, value);
     Notify(buf);
   }
 }

@@ -891,8 +891,8 @@ static void Phase2(ptr(long) numAddr, ptr(long) sizeAddr, ptr(long) usedAddr)
 
 	  theObj = cast(Object)(*current);
 	  if (isStatic(theObj->GCAttr)) {
-	    enclObj = cast(Object) 
-	      Offset(theObj,enclDist=GetDistanceToEnclosingObject(theObj));
+	    GetDistanceToEnclosingObject(theObj,enclDist);
+	    enclObj = cast(Object) Offset(theObj,enclDist);
 	    if (enclObj->GCAttr)
 	      theObj = cast(Object) Offset(enclObj->GCAttr,-enclDist);
 	    else

@@ -10,6 +10,75 @@
 #define RTVALHALLA
 #endif
 
+/******* Define specific machine types *********/
+#ifdef sun
+#  define UNIX
+#  ifdef sparc
+#    ifdef __svr4__
+#      define sun4s
+#    else
+#      define sun4
+#    endif
+#  else
+#    define sun3
+#  endif
+#endif
+
+#ifdef hpux
+#if !defined(hppa)
+#define hpux9mc
+#endif
+#endif
+
+/********* Definition of RUN, CRUN, NEWRUN *********/
+
+#if defined(linux) || defined(nti) || defined(macintosh) || defined(hpux9mc)
+#define RUN
+#endif
+
+#if defined(sparc) || defined(hppa)
+#define CRUN
+#endif
+
+#if defined(sgi) || defined(_powerc)
+#define NEWRUN
+#endif
+
+/********** Machine specific definitions **********/
+#ifdef linux
+#define intel
+#define UNIX
+#endif
+
+#ifdef sgi
+#define UNIX
+#endif
+
+#ifdef hppa
+#define UseRefStack
+#endif
+
+#ifdef nti
+#define intel
+#endif
+
+#ifdef hpux
+#  define UNIX
+#endif
+
+#ifdef crts
+#undef sparc
+#undef hppa
+#undef NEWRUN
+#undef CRUN
+#undef RUN
+#define UseRefStack
+#endif
+
+/******** Misc. *******/
+#define FALSE	0
+#define TRUE	1
+
 #ifdef __GNUC__
 #define INLINE static inline 
 #else 
@@ -29,32 +98,6 @@
 #define KEEP_STACKOBJ_IN_IOA
 #endif
 
-#ifdef crts
-#undef sparc
-#undef hppa
-#define UseRefStack
-#endif
-
-#ifdef linux
-#define intel
-#define UNIX
-#endif
-
-#ifdef sgi
-#define UNIX
-#endif
-
-#ifdef hppa
-#define UseRefStack
-#endif
-
-#ifdef nti
-#define intel
-#endif
-
-#define FALSE	0
-#define TRUE	1
-
 #define ptr(x)    x *
 #define ref(x)    struct x *
 #define handle(x) struct x **
@@ -67,23 +110,7 @@
 
 #define headsize(x) (sizeof(struct x) - sizeof(long))
 
-#ifdef hpux
-#  define UNIX
-#endif
-
-#ifdef sun
-#  define UNIX
-#  ifdef sparc
-#    ifdef __svr4__
-#      define sun4s
-#    else
-#      define sun4
-#    endif
-#  else
-#    define sun3
-#  endif
-#endif
-
+/********* Debug macros *******/
 #ifdef RTDEBUG
 #  define DEBUG_IOA( code)  if( DebugIOA )  { code; }
 #  define DEBUG_ALLOI( code)  if( DebugAlloI )  { code; }
