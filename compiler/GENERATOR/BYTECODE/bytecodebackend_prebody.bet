@@ -34,6 +34,12 @@ do (if true then
        fieldName[] -> mstate.A.fieldName[];
        fieldType[] -> mstate.A.fieldType[];
        off -> mstate.A.off;
+       (if isField then
+           1 -> mstate.A.isField;
+        else 
+           (* A method variable and this should be ok so no error here *)
+           0 -> mstate.A.isField
+       if);
     else
        fieldName[] -> mstate.preF.puttext;
        ' ' -> mstate.preF.put;
@@ -49,14 +55,13 @@ do '\nOBS! RegADr:index:'->puttext;
 do '\n***OBS loadOrigin:shouldNotHappen' -> putline
    
 ---byteCode_InxRegAdr_out:doPart---   
-do        fieldName[] -> mstate.A.fieldName[];
-       fieldType[] -> mstate.A.fieldType[];
-       off -> mstate.A.off;
+do fieldName[] -> mstate.A.fieldName[];
+   fieldType[] -> mstate.A.fieldType[];
+   off -> mstate.A.off;
    2 -> mstate.A.isField; (* isField = 2 signals array *)
 
-
 ---byteCode_nop:doPart---
-do 
+do '\tnop\n'->mstate.preF.puttext
    
 ---byteCode_ldCst:doPart---
 do '\tpush.constant ' -> mstate.preF.puttext; 
@@ -64,7 +69,7 @@ do '\tpush.constant ' -> mstate.preF.puttext;
    mstate.preF.newline;
    
 ---byteCode_ldNone:doPart---
-do 
+do  '\tpush.constant 0 // none\n' -> mstate.preF.puttext; 
    
 ---byteCode_ldValImpl:doPart---
 do 
@@ -76,18 +81,23 @@ do
         else
            A.out;
            (if A.isField then
-               '\tpush.field ' -> mstate.preF.puttext;        
-               mstate.A.fieldName[] -> mstate.preF.puttext;
+               (* '\tpush.field ' -> mstate.preF.puttext;        *)
+               '\tsend ' -> mstate.preF.puttext; 
+               (if mstate.A.isField = 2 then
+                   'at:' -> mstate.preF.puttext
+                else
+                   mstate.A.fieldName[] -> mstate.preF.puttext;
+               if);
                mstate.preF.newline
             else
-               mstate.A.load; (*
-               '\tpush.local ' -> mstate.preF.puttext;        *)
+               mstate.A.load; 
            if);
        if)
    if)
    
 ---byteCode_ByteSwap:doPart---
-do 
+do  '\tswap '->mstate.preF.putline
+   
 ---byteCode_loadRef:doPart---
 do A.out;
    '\tpush.field ' -> mstate.preF.puttext;        
@@ -96,15 +106,33 @@ do A.out;
 
 ---byteCode_stValImpl:doPart---
 do A.out;
-   '\tpop.field ' -> mstate.preF.puttext;
-   mstate.A.fieldName[] -> mstate.preF.puttext;
+   (* '\tpop.field ' -> mstate.preF.puttext;*)
+   '\tsend ' -> mstate.preF.puttext;
+   (if mstate.A.isField = 2 then
+       'at:put:' -> mstate.preF.puttext
+    else
+       mstate.A.fieldName[] -> mstate.preF.puttext;
+       ':' -> mstate.preF.put      
+   if);
    mstate.preF.newline
    
 ---byteCode_cpReg:doPart---
 do (* called from synthesizer, but no code generated *)
       
 ---byteCode_gLea:doPart---
-do 
+do '\t//gLea' -> mstate.preF.putline;
+   op1.out;
+   (if true 
+    // op1.isRegAdr then
+       mstate.A.pushAdr
+    // op1.isInxRegAdr then
+       mstate.A.pushAdr
+    // op1.isTextOp then
+       '\tpush.constant \n' -> mstate.preF.puttext; 
+       mstate.textOperandArg[] -> mstate.preF.putline
+    else
+       '\nglea: operand type not handled'->putline
+   if)   
    
 --bytecodeBackend_gClr:doPart--
 do (* don't do this; too many zero constants
@@ -113,25 +141,25 @@ do (* don't do this; too many zero constants
     *)
    
 ---bytecode_int64ToInt32:doPart---
-do 
+do '\t// int64ToInt32\n' -> mstate.preF.puttext
    
 ---bytecode_int32ToInt64:doPart---
-do 
+do '\t// int32ToInt64\n' -> mstate.preF.puttext
    
 --bytecode_loadRange:doPart--
-do 
+do  '\tsend arraylength\n' -> mstate.preF.puttext
    
 ---byteCode_duplicate:doPart---
 do '\tdup\n' -> mstate.preF.puttext
    
 ---byteCode_allocAndStoreLocal:doPart---
-do 
+do '// allocandStoreLocal ' -> mstate.preF.putline;
    
 ---byteCode_loadLocal:doPart---
-do 
+do '// loadLocal ' -> mstate.preF.putline;
    
 --byteCode_popStack:doPart---
-do 
+do '\tpop\n' -> mstate.preF.puttext
    
 --bytecode_declareField:doPart---
    (* to replace emitCk  *)
@@ -141,7 +169,8 @@ do (if fieldKind
     // '['
     // 's' (* synthetic field, like 'comp$' *)
        then
-       '.field ' -> mstate.preF.puttext;
+       (* '.field ' -> mstate.preF.puttext;*)
+       '.property ' -> mstate.preF.puttext;
        fieldName[] -> mstate.preF.putline
     // 'm' then
        (if mstate.fields.numCells > mstate.fields.numArguments then
@@ -170,37 +199,43 @@ do (if fieldKind
 do 
    
 ---byteCode_constructorDef:doPart---
-do '.method CONSTRUCTOR: '
+do '.i_method CONSTRUCTOR: '
    '// origin is to be supplied as argument' -> mstate.preF.puttext;
    '\n{\n'-> mstate.preF.puttext;
    
 ---byteCode_tstNone:doPart---
-do 
+do (* not used *)
    
 ---byteCode_doAsgRefAdr:doPart---
 do thisAdr.out;
-   '\tpop.field ' -> mstate.preF.puttext;
+   (*'\tpop.field ' -> mstate.preF.puttext;*)
+   '\tsend ' -> mstate.preF.puttext;
    mstate.A.fieldName[] -> mstate.preF.puttext;
+   ':' -> mstate.preF.put;
    mstate.preF.newline
 
 ---byteCode_doAsgRegAdr:doPart---
 do (* source reg on stack *)
    thisAdr.out;
-   '\tpop.field ' -> mstate.preF.puttext;
+   (* '\tpop.field ' -> mstate.preF.puttext; *)
+   '\tsend ' -> mstate.preF.puttext;
    mstate.A.fieldName[] -> mstate.preF.puttext;
+   ':' -> mstate.preF.put;
    mstate.preF.newline
 
 ---bytecode_checkCast:doPart---
-do 
+do '\tpush.constant ' -> mstate.preF.puttext;
+   type[] -> mstate.preF.putline;
+   '\tsend checkcast\n' -> mstate.preF.puttext
    
 ---byteCode_jmpTlong:doPart---
-do 
+do (* not used *)
    
 ---byteCode_jmplong:doPart---
-do 
+do (* not used *)
    
 ---byteCode_jsrT:doPart---
-do 
+do (* not used *)
    
 --byteCode_gJmp:doPart---
 do op.out;
@@ -210,26 +245,32 @@ do op.out;
    
 --byteCode_gJsr:doPart---
 do 
-   (# T, n, d, m: ^text; 
-      s: @boolean;
+   (# T, class, sig, method: ^text; 
+      b: @boolean;
       nargs: @int16;
    do op.out;
       mstate.textOperandArg[] -> T[];
       (if T[] = none then
-          '::no_method::'->n[];
+          '::no_method::'->method[];
        else
-          T[]->splitClassSignature->(n[], d[], s, m[]);
+          T[]->splitClassSignature->(class[], sig[], b, method[]);
+          (* NOTE: 'static' is not encoded in the signature,
+           * but the argument 'isStatic' can be used.
+           * 'b' is ALWYAS false - should be eliminated
+           *)
           (if isStatic then
-              '\tsendstatic ' -> mstate.preF.puttext;
+              (*'\tpush.global ' -> mstate.preF.puttext;
+              class[] -> mstate.preF.putline;*)
+              '\tsend ' -> mstate.preF.puttext;
            else
               '\tsend ' -> mstate.preF.puttext;
           if);
       if);
-      n[] -> mstate.preF.puttext;
+      method[] -> mstate.preF.puttext;
       (* a hack to check if zero or one argument;
        * must parse signature to count noOfArgs
        *)
-      (if '()' -> ((1,2)->d.sub).equal then
+      (if '()' -> ((1,2)->sig.sub).equal then
        else
           ':'-> mstate.preF.put
       if);
@@ -240,16 +281,16 @@ do
 do (* no code needed here?*)
    
 ---bytecode_endLabel:doPart---
-do 
+do '// END label' -> mstate.preF.putline
    
 ---bytecode_break:doPart---
-do 
+do  '// BREAK' -> mstate.preF.putline
    
 ---bytecode_breaksimple:doPart---
-do 
+do  '//  BREALSIMPLE' -> mstate.preF.putline
    
 ---byteCode_cmpToBool:doPart--   
-do 
+do  '// cmpToBool' -> mstate.preF.putline
    
 ---byteCode_cmpAndJmp:doPart---
 do op1.loadToReg; op2.loadToReg;
@@ -262,10 +303,10 @@ do op.loadToReg;
    (cond,'L',mstate.localLabArg) -> mstate.emitCmpBoolJmp   
    
 ---byteCode_floatConst:doPart---
-do 
+do '// Float const' -> mstate.preF.putline
    
 ---byteCode_saveReturn:doPart---
-do 
+do (* no code needed here *)
    
 ---byteCode_return:doPart---
 do (if RToff
@@ -287,13 +328,14 @@ do (if RToff
    '\treturn.local\n' -> mstate.preF.puttext;
    
 ---bytecode_endMethod:doPart---
-do '\n}\n' -> mstate.preF.puttext
+do '}\n' -> mstate.preF.puttext
    
 ---byteCode_callPrim:doPart--
-do 
+do (T[],'Unknown') -> mstate.emitPrim
    
 --byteCode_callAlloPrim:doPart--
-do 
+do (if proto[] = none then 'UnknownProto' -> proto[] if);
+   (T[],proto[]) -> mstate.emitPrim
    
 --byteCode_callPrimNo:doPart--
 do (if arg[] = none then 'UnknownProto' -> arg[] if);
@@ -303,7 +345,8 @@ do (if arg[] = none then 'UnknownProto' -> arg[] if);
 do 
    
 ---byteCode_callUnFunc:doPart---   
-do 
+do arg.loadToReg;
+   opCode -> mstate.emitFunc
    
 ---byteCode_callBinFunc:doPart---
 do op1.loadToReg; op2.loadToReg;
@@ -335,23 +378,26 @@ do (# lastDot: @integer;
       className[] -> mstate.preF.putline;
       '.super ' -> mstate.preF.puttext;
       superName[] -> mstate.preF.putline;
-      '.instance_side' -> mstate.preF.putline;
-      '{\n.field origin\n'-> mstate.preF.puttext;
+      (* '.instance_side{\n' -> mstate.preF.putline;*)
+      (* '.field origin\n'-> mstate.preF.puttext; *)
+      '.property origin\n'-> mstate.preF.puttext;
    #)
    
 --byteCode_marknested:doPart---
 do 
 
 --byteCode_endClass:doPart---
-do '\n}\n' -> mstate.preF.puttext;
-   '.class_side { \n'
-   '\t.method new: // origin is to be supplied as argument\n'
-   '\t{ super new\n'
-   '\t  push.argument 0 0 // origin\n'
-   '\t  send CONSTRUCTOR:\n'
-   '\t  return.local\n'
-   '\t}\n'
-   '}\n' -> mstate.preF.puttext;
+do (* '\n}\n' -> mstate.preF.puttext;
+    * '.class_side { \n'
+    *)
+   '.c_method new: // origin is to be supplied as argument\n'
+   '{\tsuper new\n'
+   '\tpush.argument 0 0 // origin\n'
+   '\tsend CONSTRUCTOR:\n'
+   '\treturn.local\n'
+   '}\n'
+   (* '}\n'*)
+     -> mstate.preF.puttext; 
    
 --byteCode_endCodeSeg:doPart---
 do 
@@ -363,12 +409,14 @@ do (#
       signature[] -> mstate.thisSignature[];
       noOfEnterArgs -> mstate.fields.numArguments;
       0 -> mstate.fields.numCells;
-      
       mstate.thisSignature[] 
         -> splitSignature 
         -> (methodname[], mstate.thisSignature[], isStatic);
-      
-      '\n.method ' -> mstate.preF.puttext;
+      (if isStatic then
+          '\n.c_method ' -> mstate.preF.puttext;       
+       else
+          '\n.i_method ' -> mstate.preF.puttext
+      if);
       methodName[] -> mstate.preF.puttext;
       (for i: noOfEnterArgs repeat ':' -> mstate.preF.put for);
       '\n{\n\t.maxstacksize 3\n'-> mstate.preF.puttext;
