@@ -587,7 +587,7 @@ void FixupPrefetch()
           perror("mprotect");
 	  fprintf(stderr, "Warning: could not fix up prefetch info\n");
       } else {
-#ifdef waste_time_jumping_over_old_prefetch_code
+#if 1
           /* we don't use this method right now, but we might need it if
 	   * AlloI at some point can't just be block copied down to a lower
 	   * address because it contains non-relative jumps.  The advantage
