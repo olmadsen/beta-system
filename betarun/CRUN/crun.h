@@ -52,10 +52,10 @@ extern long *popAdr();
 #define DeclReference1(type, name) type name
 #define DeclReference2(type, name) type name
 
-#define FetchOriginProto
-#define FetchStruc
-#define FetchThis
-#define FetchThisComp
+#define FetchOriginProto()
+#define FetchStruc()
+#define FetchThis()
+#define FetchThisComp()
 
 #endif /* crts */
 
@@ -169,6 +169,21 @@ setup_item(ref(Item) theItem,
 
 #ifdef RTDEBUG
   /* Consistency checks - Checks for valid references */
+
+extern void Illegal();
+
+#define CkReg(func, value, reg)                                                  \
+{ struct Object *theObj = (struct Object *)(value);                              \
+  if (!isLazyRef(theObj) &&                                                      \
+      !isProto(theObj) && /* e.g. AlloI is called with prototype in ref. reg. */ \
+      !isCode(theObj) && /* e.g. at INNER a ref. reg contains code address */    \
+      !(inBetaHeap(theObj) && isObject(theObj))){                                \
+    fprintf(output,                                                              \
+	    "%s: ***Illegal reference register %s: 0x%x\n", func, reg, theObj);  \
+    Illegal();								         \
+   }								                 \
+}
+
 #ifdef hppa
   static char __CkString[80];
 #define Ck(r) \
@@ -181,8 +196,12 @@ setup_item(ref(Item) theItem,
 extern void CCk(ref(Object) r); /* Easier to debug a function call - PA */
 #define Ck(r) CCk(cast(Object)r)
 #endif /* hppa */
+
 #else /* RTDEBUG */
+
+#define CkReg(func, value, reg)
 #define Ck(r)
+
 #endif /* RTDEBUG */
 
 #endif
