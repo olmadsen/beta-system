@@ -502,7 +502,7 @@ static LVRACompaction()
 #endif
   
 #ifdef macintosh
-  RotateTheCursor();
+  RotateTheCursorBack();
 #endif
   
   NumLVRAGc++;
@@ -642,7 +642,7 @@ static LVRAConstructFreeList()
   long           sizeBlocks;
   
 #ifdef macintosh
-  RotateTheCursor();
+  RotateTheCursorBack();
 #endif
   
   INFO_LVRA(fprintf( output, "#(LVRA: make free list"));
