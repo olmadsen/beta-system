@@ -132,7 +132,7 @@ class JavaConverter
 		if (value!=null){
 		    beta.putConstant(f.getName(), value);
 		} else {
-		    beta.putField(dollarToUnderscore(f.getName()), mapType(cls, f.getType(),false), isStatic);
+		    beta.putField(dollarToUnderscore(f.getName()), mapType(f.getType(),false), isStatic);
 		}
 	    }
 	}
@@ -162,7 +162,7 @@ class JavaConverter
 		boolean isStatic = Modifier.isStatic(ct.getModifiers());
 		String parameters[] = new String[params.length];
 		for (int j=0; j<params.length; j++){
-		    parameters[j] = mapType(cls, params[j], false);
+		    parameters[j] = mapType(params[j], false);
 		}
 		if (ctorlist.length>1) {
 		    mangledName = dollarToUnderscore(mangle(name, params));
@@ -211,11 +211,11 @@ class JavaConverter
 		first = false;
 		String name = m.getName();
 		boolean isStatic = Modifier.isStatic(m.getModifiers());
-		String returnType = mapType(cls, m.getReturnType(), false);
+		String returnType = mapType(m.getReturnType(), false);
 		Class params[] = m.getParameterTypes();
 		String parameters[] = new String[params.length];
 		for (int j=0; j<params.length; j++){
-		    parameters[j] = mapType(cls, params[j], false);
+		    parameters[j] = mapType(params[j], false);
 		}
 		if (methodcount.value(name)>1) {
 		    mangledName = dollarToUnderscore(mangle(name, params));
@@ -251,14 +251,14 @@ class JavaConverter
 	// are used as formal parameters, thus causing a need for a BETA INCLUDE.
 	
 	// Super class
-	mapType(cls, cls.getSuperclass(), true);
+	mapType(cls.getSuperclass(), true);
 
 	// scan fields 
 	Field fieldlist[] = cls.getDeclaredFields();
 	for (int i = 0; i < fieldlist.length; i++) {
 	    Field f = fieldlist[i];
 	    if (isRelevant(f.getModifiers())) {
-		mapType(cls, f.getType(), true);
+		mapType(f.getType(), true);
 	    }
 	}
 
@@ -269,7 +269,7 @@ class JavaConverter
 	    if (isRelevant(ct.getModifiers())) {
 		Class params[] = ct.getParameterTypes();
 		for (int j=0; j<params.length; j++){
-		    mapType(cls, params[j], true);
+		    mapType(params[j], true);
 		}
 	    }
 	}
@@ -279,10 +279,10 @@ class JavaConverter
 	for (int i = 0; i < methlist.length; i++) {  
 	    Method m = methlist[i];
 	    if (isRelevant(m.getModifiers())) {
-		mapType(cls, m.getReturnType(), true);
+		mapType(m.getReturnType(), true);
 		Class params[] = m.getParameterTypes();
 		for (int j=0; j<params.length; j++){
-		    mapType(cls, params[j], true);
+		    mapType(params[j], true);
 		}
 	    }
 	}
@@ -362,7 +362,7 @@ class JavaConverter
 	return mangled;
     }
 
-    String mapType(Class user, Class type, boolean doIncludes){
+    String mapType(Class type, boolean doIncludes){
 	if (type==null) {
 	    return null; // can happen for empty superclass
 	}
