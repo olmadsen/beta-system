@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <math.h>
-#include "betacolor.h"
+#include "betadither.h"
 
 
 static int gammascreen[256];

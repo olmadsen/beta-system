@@ -1,7 +1,13 @@
 #ifndef _BETAIMAGE_H
 #define _BETAIMAGE_H
 
-#include "betacolor.h"
+
+typedef struct Color {
+  long red;
+  long green;
+  long blue;
+} Color;
+
 
 typedef struct BetaImage {
   long width;
@@ -15,16 +21,8 @@ typedef struct BetaImage {
 } BetaImage;
 
 
-int BetaCreateImage(BetaImage *image, 
-		    long width, 
-		    long height,
-		    long pixel_size,
-		    void *data);
 
 
 
-void BetaDitherImage (BetaImage *image);
-void BetaOrderedDitherImage (BetaImage *image);
-void BetaDitherImage24To8 (BetaImage *image, BetaImage *image8);
 
 #endif
