@@ -1106,19 +1106,38 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
     break;
 
     case VOP_PROGRAM_PATH: {
-      long m1program = 0;
-#ifdef nti
-      extern long GetM1PROGRAM(void);
-      m1program = GetM1PROGRAM();
-#else
-      extern void (M1PROGRAM)(void); 
-      m1program = (long)M1PROGRAM;
-#endif
-      DEBUG_VALHALLA(fprintf(output,
-                             "VOP_PROGRAM_PATH()=%s\n",
-                             GroupName(m1program,1)));
+      /* Previously we referenced M1PROGRAM as a symbol here,
+       * but that caused linking problems on SGI, where M1PROGRAM
+       * might be in a shared library, which did not expose all
+       * symbols to linker.
+       * Instead we search through prototype symbols to look for
+       * the name of the PROGRAM SLOT. The corresponding
+       * group's groupname is what is requested.
+       * Rather expensive, but this is only done once.
+       */
+      group_header *gh = NextGroup(0);
+      char *group_name = "";
+      int done = 0;
+      while (!done && gh){
+	long* protoptr=&gh->protoTable[1];
+	int i, NoOfPrototypes;
+	
+	NoOfPrototypes = gh->protoTable[0];
+	for (i=0; i<NoOfPrototypes; i++){
+	  ProtoType *proto = (ProtoType*)protoptr;
+	  if (strcmp(ProtoTypeName(proto), "PROGRAM-~") == 0){
+	    /* Found the group containing M1PROGRAM */
+	    group_name = gh->group_name;
+	    done = 1;
+	    break;
+	  } else {
+	    protoptr++;
+	  }
+	}
+	gh = NextGroup(gh);
+      }
       valhalla_writeint(opcode);
-      valhalla_writetext(GroupName(m1program,1));
+      valhalla_writetext(group_name);
       valhalla_socket_flush();
     }
     break;
