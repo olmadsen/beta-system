@@ -1,13 +1,13 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-06-12 14:57:12 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-06-12 19:00:45 $, SID: $Revision: 1.5 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-void HandleCallBack();
+int HandleCallBack();
 
 asmlabel(CopyCProcPar, "
 	ba	_CCopyCProcPar
@@ -36,14 +36,14 @@ void *CCopyCProcPar(ref(Structure) theStruct, ref(Object) theObj)
     return (void *)&CBFATop->mov_o7_g1;
 }
 
-extern void HandleCallBack() asm("HandleCallBack");
+extern int HandleCallBack() asm("HandleCallBack");
 
 /* HandleCallBack is called from a CallBackEntry, setup like
    above. This means that the real return address is in %g1
    and our %i7 pointes to the call instruction in the
    CallBackEntry. */
 
-void HandleCallBack(int i0, int i1, int i2, int i3,
+int HandleCallBack(int i0, int i1, int i2, int i3,
 		    int i4, int i5)
 {
     register long		 g1	       asm("%g1");
@@ -62,6 +62,5 @@ void HandleCallBack(int i0, int i1, int i2, int i3,
     level         = 0;
 
     theObj = AllocateItem(cb->theStruct->iProto, cb->theStruct->iOrigin);
-    theObj->Proto->CallBackRoutine(theObj, i0, i1, i2, i3, i4);
-    
+    return theObj->Proto->CallBackRoutine(theObj, i0, i1, i2, i3, i4);
 }
