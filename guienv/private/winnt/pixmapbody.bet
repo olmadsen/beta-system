@@ -99,6 +99,60 @@ loadDIBitmapFile: external
   exit result
   #);
 
+drawBitmapOnBitmap:external
+  (# hbitmap:@integer;
+     intx,inty:@integer;
+     hsrcbitmap:@integer;
+     intxs,intys:@integer;
+     width,height:@integer;
+     tc:@integer;
+     hmaskbitmap:@integer;
+     result:@integer;
+  enter (hbitmap,intx,inty,hsrcbitmap,intxs,intys,width,height,tc,hmaskbitmap)
+  do CallC;
+  exit result
+  #);
+
+createBitmap:external
+  (# handle:@integer;
+     width,height:@integer;
+  enter (width,height)
+  do CallC;
+  exit handle
+  #);
+
+CreateCompatibleBitmap:external
+  (# hdc,width,height:@integer;
+     hbmp:@integer;
+  enter (hdc,width,height)
+  do CallStd;
+  exit hbmp
+  #);
+
+CreateCompatibleDC:external
+  (# hdcorig:@integer;
+     hdccomp:@integer;
+  enter hdcorig
+  do callStd;
+  exit hdccomp
+  #);
+
+GetDC:external
+  (# hdcorig:@integer;
+     hdccomp:@integer;
+  enter hdcorig
+  do callStd;
+  exit hdccomp
+  #);
+
+DeleteDC:external
+  (# hdc:@integer;
+     result:@integer;
+  enter hdc
+  do CallStd;
+  exit result
+  #);
+
 -- pixmapLib: attributes --
 
 search:
@@ -305,8 +359,45 @@ do l: (# expandedName: ^text;
       #);
 
 -- pixmapInit: doPart --
+do (# hdc:@integer;
+   do 0->GetDC->hdc;
+   (if ((hdc,width,height)->createCompatibleBitmap->private.handletopixmap)>0 then
+       width->private.width;
+       height->private.height;
+   if);
+      hdc->DeleteDC;
+   #);
+   
+--- pixmapClear:DoPart ---
 do
+   (# 
+      colorref:@integer;
 
+      ntFillRect2: external
+        (# hdc: @integer; (* HDC *)
+           theRect: ^ntRECT; (* const RECT FAR* *)
+           hbr: @integer; (* HBRUSH *)
+           result: @integer; (* int *)
+        enter (hdc,theRect[],hbr)
+        do 'FillRect' -> callStd;
+        exit result
+        #);
+      theRect: @ntRECT;
+      tempHdc, tempPenBrush: @integer;
+   do 
+      (if private.handleToBrush=0 then
+          theColor[]->makecolorref->colorref -> CreateSolidBrush -> private.handleToBrush; 
+      if);
+      0->createCompatibleDC->private.hdc;
+      (private.hdc, private.handletopixmap)-> SelectObject;
+      0-> theRect.left;
+      private.width -> theRect.right;
+      0 -> theRect.top;
+      private.height -> theRect.bottom;
+      (private.hdc,theRect[],private.handleToBrush) -> ntFillRect2;
+      private.hdc->deleteDC;
+   #)
+   
 -- pixmapDispose: doPart --
 do assertInitialized;
    0 -> private.width;
@@ -327,3 +418,56 @@ do assertInitialized;
 do assertInitialized;
    private.height -> value;
 
+-- pixmapSetTransparent: doPart --
+do value->private.drawtransparent;
+   (if not value then
+       (0,0,0)->private.transparentcolor;
+       none->private.transparentmask[];
+   if);
+
+-- pixmapGetTransparent: doPart --
+do
+   private.drawtransparent->value;
+   
+-- pixmapSetTransparentColor: doPart --
+do    
+   true->private.drawtransparent;
+   theColor->private.transparentcolor;
+
+-- pixmapGetTransparentColor: doPart --
+do
+   private.transparentcolor->theColor;
+   
+-- pixmapSetMask: doPart --
+do
+   true->private.drawtransparent;
+   theMask[]->private.transparentmask[];
+
+-- pixmapGetMask: doPart --
+do
+   private.transparentmask[]->theMask[];
+
+
+-- pixmapDrawPixmap: doPart --
+do 
+ (# result:@boolean;
+      colorref:@integer;
+ do
+    (if other.private.drawtransparent then
+          (if other.private.transparentmask[]<>none then (* draw with mask *)
+              (private.handletopixmap,to.h,to.v,other.private.handletopixmap,from.h,from.v,width,height,-2,
+              other.private.transparentmask.private.handletopixmap)->drawbitmaponbitmap->result;
+           else (* draw with transparentcolor *)
+              other.private.transparentcolor[]->makeColorRef->colorref;
+              (private.handletopixmap,to.h,to.v,other.private.handletopixmap,from.h,from.v,width,height,
+              colorref,0)->drawbitmaponbitmap->result;
+          if);
+     else  (* draw normal *)
+          (private.handletopixmap,to.h,to.v,other.private.handletopixmap,from.h,from.v,width,height,
+          -1,0)->drawbitmaponbitmap->result;
+          
+      if);
+      (if not result then
+          'draw pixmap on pixmap failed' -> screen.putline;
+      if);
+   #)

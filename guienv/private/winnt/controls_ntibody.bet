@@ -502,10 +502,24 @@ do inner close;
      do 'drawBitmap' -> callC;
      exit result
      #);
-   DrawTransparentPixmap: external
-     (# hdc, hPixmap, xStart, yStart, transparentColor: @integer;
-     enter (hdc, hPixmap, xStart, yStart, transparentColor)
+   DrawTransparentBitmap: external
+     (# hWnd, hBitmap, xStart, yStart, xDestPos, yDestPos, width, height,
+        transparentColor: @integer;
+        result:@integer;
+     enter (hWnd, hBitmap, xStart, yStart, xDestPos, yDestPos, width, height,
+        transparentColor)
      do callC;
+     exit result
+     #);
+   DrawTransparentBitmapFromMask: external
+     (# hWnd, hBitmap, xStart, yStart, xDestPos, yDestPos, 
+        width,height,
+        pixmapMask: @integer;
+        result: @integer;
+     enter (hWnd, hBitmap, xStart, yStart, xDestPos, yDestPos, width, height,
+        pixmapMask)
+     do callC;
+     exit result
      #);
    result: @boolean;
    theStyle: ^textStyle; ascent: @integer;
@@ -517,6 +531,7 @@ do inner close;
    doReleaseHdc: @boolean;
    bkColor,textColor: @integer;
    windowID: @integer;
+   iconpxm:^pixmap;
 do assertOpen;
    interfaceObjectID -> windowID;
    (if (windowItemDevice=0) then
@@ -548,11 +563,36 @@ do assertOpen;
            0,0,0,0,DI_NORMAL) 
              -> DrawIconEx)<>0) -> result;
         else
-           (hdc,
-           private.iconButtonPixmap.private.handleToPixmap,
-           0,0,iconAnchor.h,iconAnchor.v)
-             -> drawPixmap -> result; 
-       if);
+          private.iconButtonPixmap[]->iconpxm[];
+           (if iconpxm.Transparent then 
+               (if iconpxm.private.transparentmask[]=none then (* use TransPcolor *)
+                   (# tc:@color; theColor:@integer;
+                   do
+                      iconpxm.transparentColor->tc;
+                      (tc.red div 256,0) -> theColor.%putByte;
+                      (tc.green div 256,1) -> theColor.%putByte;
+                      (tc.blue div 256,2) -> theColor.%putByte;
+                      (0,3) -> theColor.%putByte;
+                      
+                      (this(windowitem).interfaceObjectID,
+                      iconpxm.private.handleToPixmap,0,0,iconAnchor.h,iconAnchor.v,iconpxm.width,iconpxm.height,theColor)
+                        -> DrawTransparentBitmap;
+                   #);
+                   true->result;
+                else   (* draw using mask *)
+                   (this(windowitem).interfaceObjectID,
+                   iconpxm.private.handleToPixmap,0,0,iconAnchor.h,iconAnchor.v,iconpxm.width,iconpxm.height,
+                   iconpxm.private.transparentmask.private.handleToPixmap)
+                     -> DrawTransparentBitmapFromMask;
+                   true->result;
+               if);
+            else
+               (hdc,
+               private.iconButtonPixmap.private.handleToPixmap,
+               0,0,iconAnchor.h,iconAnchor.v)
+                 -> drawPixmap -> result; 
+           if);
+       if); 
        (if not result then
            'iconbutton.onRefresh: drawPixmap failed. Errorcode: ' -> puttext;
            GetLastError -> putint; newline;
