@@ -18,7 +18,7 @@ void NewVR(struct Object *theObj,
   DEBUG_CODE(NumNewVR++);
   Ck(theObj);
   
-  Protect(theObj, 
+  push(theObj); 
 	  theRep = ((struct ValRep **)theObj)[offset];
 	  switch(SwitchProto(theRep->Proto)){
 	  case SwitchProto(ByteRepPTValue):
@@ -45,6 +45,6 @@ void NewVR(struct Object *theObj,
 	    BetaExit(1);
 #endif
 	  }
-	  );
+	 pop(theObj);
   
 }

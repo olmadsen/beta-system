@@ -528,7 +528,7 @@ void LVRACompaction(void)
   long numFree=0;
 #endif
   
-#if defined(macintosh) ||defined(MAC)
+#if defined(MAC)
   RotateTheCursorBack();
 #endif
   
@@ -689,7 +689,7 @@ static void LVRAConstructFreeList(void)
   long           theObjectSize;
   long           sizeBlocks;
   
-#if defined(macintosh) ||defined(MAC)
+#if defined(MAC)
   RotateTheCursorBack();
 #endif
   

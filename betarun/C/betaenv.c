@@ -17,7 +17,7 @@ void GetBetaEnv()
 {
   char *betaEnv;
   
-#if defined(macintosh) || defined(MAC)
+#if defined(MAC)
   char **theHandle;
   long length;
   

@@ -24,7 +24,7 @@ static IOALooksFullCount = 0; /* consecutive unsuccessful IOAGc's */
  */
 void IOAGc()
 {
-#if defined(macintosh) ||defined(MAC)
+#if defined(MAC)
   RotateTheCursor();
 #endif
   
@@ -94,7 +94,7 @@ void IOAGc()
     if (!ActiveComponent && NumIOAGc == 1) {
       char buf[300];
       sprintf(buf, "Could not allocate basic component");
-#ifdef macintosh
+#ifdef MAC
       EnlargeMacHeap(buf);
 #endif
       Notify(buf);

@@ -86,7 +86,7 @@ void BetaExit(long number)
 }
 
 #ifdef RTLAZY
-#if defined(linux) || defined(nti) || defined(macintosh)
+#if defined(linux) || defined(nti) || defined(mac68k)
 long RefNonePC = 0; 
 int *RefNoneStackEnd = 0;
 /* SBRANDT 7/6/94: RefNonePC is set by RefNone in Misc.run to point to return 
@@ -98,7 +98,7 @@ static volatile int InLazyHandler;
 #endif
 #endif
 
-#if defined(macintosh) || defined(nti)
+#if defined(mac68k) || defined(nti)
 extern void CallLazyItem ();
 #endif
 
@@ -191,7 +191,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 #endif
 
 
-#if defined(mac) || defined(hpux9mc) || defined(intel)
+#if defined(mac68k) || defined(hpux9mc) || defined(intel)
       /* Ordinary MOTOROLA-like stack */
       thePC = 0;
       switch(err){
@@ -263,7 +263,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
       
       /* Treat REFNONE errors specially */
 
-#if defined(macintosh)
+#if defined(mac68k)
       else if (err==RefNoneErr) {
 
 	/* Check whether it is a genuine error or whether the RefNoneErr

@@ -110,7 +110,7 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
 	     *((long *)SPz+i));
 #endif
 
-#ifdef _powerc
+#ifdef macppc
    {
      /* on PPC the stack contains SP pointers that links stack segments;
       * these must be made relative, since the stack may be unpacked

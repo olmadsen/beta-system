@@ -29,7 +29,7 @@ void tempAOArootsAlloc(void)
     if ( ! (tempAOAroots = (long *) MALLOC(IOASize)) ){
       char buf[300];
       sprintf(buf, "Could not allocate temporary AOAroots table.");
-#ifdef macintosh
+#ifdef MAC
       EnlargeMacHeap(buf);
 #endif
       Notify(buf);
@@ -250,24 +250,24 @@ void AOAGc()
 
   INFO_AOA( fprintf(output, "\n#(AOA-%d ", (int)NumAOAGc); fflush(output) );
   /* Mark all reachable objects within AOA and reverse all pointers. */
-#if defined(macintosh) ||defined(MAC)
+#if defined(MAC)
   RotateTheCursorBack();
 #endif
   DEBUG_AOA( fprintf( output, "1"); fflush(output) );
   Phase1();  
   /* Calculate new addresses for the reachable objects and reverse pointers. */
-#if defined(macintosh) ||defined(MAC)
+#if defined(MAC)
   RotateTheCursorBack();
 #endif
   DEBUG_AOA( fprintf( output, "2"); fflush(output) );
   Phase2( &blocks, &size, &used); 
   /* Copy all reachable objects to their new locations. */
-#if defined(macintosh) ||defined(MAC)
+#if defined(MAC)
   RotateTheCursorBack();
 #endif
   DEBUG_AOA( fprintf( output, "3"); fflush(output) );
   Phase3();  
-#if defined(macintosh) ||defined(MAC)
+#if defined(MAC)
   RotateTheCursorBack();
 #endif
   AOANeedCompaction = FALSE;
@@ -335,7 +335,7 @@ static void extendRAFStackArea(void)
     sprintf(buf,
 	    "AOA GC: Failed to allocate RAF stack area: %d longs.", 
 	    (int)newSize/4);
-#ifdef macintosh
+#ifdef MAC
     EnlargeMacHeap(buf);
 #endif
     Notify(buf);
@@ -966,7 +966,7 @@ static void Phase3()
     if( !(table = (long *) MALLOC( AOAtoIOACount * 4))){
       char buf[300];
       sprintf(buf,"#Phase3: allocation failed %d longs\n", (int)AOAtoIOACount);
-#ifdef macintosh
+#ifdef MAC
       EnlargeMacHeap(buf);
 #endif
       Notify(buf);

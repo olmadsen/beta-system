@@ -10,7 +10,7 @@ typedef struct Heap {
   unsigned long size;
 } Heap;
 
-#ifdef macintosh
+#ifdef mac68k
 
 #ifndef DEFAULT_IOASIZE
 #define DEFAULT_IOASIZE  200 * Kb
@@ -32,7 +32,7 @@ typedef struct Heap {
 #define DEFAULT_LVRAMINFREE    50 * Kb 
 #endif
 
-#else /* macintosh */
+#else /* mac68k */
 
 #ifndef DEFAULT_IOASIZE
 #define DEFAULT_IOASIZE  512 * Kb
@@ -54,7 +54,7 @@ typedef struct Heap {
 #define DEFAULT_LVRAMINFREE    200 * Kb   /* Less on Macintosh? */
 #endif
 
-#endif /* macintosh */
+#endif /* mac68k */
 
 
 #ifndef DEFAULT_CBFASIZE

@@ -29,7 +29,7 @@ typedef struct {
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
 
-#if defined(macintosh) ||defined(MAC)
+#if defined(MAC)
 #include <Quickdraw.h>
 #include <TextEdit.h>
 #include <Fonts.h>
@@ -70,7 +70,7 @@ void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4)
 #endif
 
 #ifdef PE
-#if defined(macintosh) || defined(MAC)
+#if defined(MAC)
 /* The following data was created using C/scramble.c with template
 #define SCRAMBLETEMPLATE "\n\
 Note:\n\nThis program was compiled using a Personal Edition of the \
@@ -158,7 +158,7 @@ Mjølner BETA System and may not be used for commercial\npurposes\n\
 #define PELEN 274
 #define PECHK 17700
 #endif /* nti */
-#endif /* macintosh */
+#endif /* mac */
 #endif /* PE */
 
 long AllocateHeap(
@@ -198,7 +198,7 @@ static char *unscrambleString(unsigned char *p, int len, int sum)
 }
 #endif /* PE */
 
-#if defined(macintosh) && !defined(crts)
+#if defined(mac68k) && !defined(crts)
 /*
  * PatchDataLabels by Per Jessen Schmidt
  * Fix BETA_data labels for the Macintosh
@@ -212,7 +212,7 @@ void PatchDataLabels(void)
 
   //Debugger();
   start = (long *)BETA_DATA1_ADDR;
-#ifdef macintosh
+#ifdef mac68k
   *start = (long)BETA_DATA1_ADDR;
 #else
   *start = (long *)BETA_DATA1_ADDR;
@@ -228,13 +228,9 @@ void PatchDataLabels(void)
     *(start+2) = *start+*(start+2);
   }//while
 }
-#endif /* macintosh */
+#endif /* mac/crts */
 
-#ifdef __powerc
-  extern void PPC_InitApplication();
-//extern void PutLine(char *);
-#endif
-#ifdef macintosh
+#ifdef MAC
 QDGlobals qd;
 #endif
 
@@ -244,7 +240,7 @@ void Initialize()
      IOA and IOATop(off) is register vars */
   
   long *tmpIOA, *tmpIOATop;
-#ifdef macintosh
+#ifdef mac68k
   InitGraf((Ptr) &qd.thePort);
   InitFonts();
   InitWindows();
@@ -257,8 +253,15 @@ void Initialize()
   PatchDataLabels ();
 #endif
   
-#ifdef __powerc
+#ifdef macppc
   if (StandAlone) {
+    /* PPC_InitApplication is found in
+     *  {betalib}basiclib/v1.4/private/ppc/betaenv_ppcconsole.o
+     * which is produced from 
+     *  {betalib}basiclib/v1.4/private/external/TextWindow/InlineInputSample.c
+     * Temporary hack for the PPC console.
+     */
+    extern void PPC_InitApplication(); 
     PPC_InitApplication();
   } else {
     InitGraf((Ptr) &qd.thePort);
@@ -280,7 +283,7 @@ void Initialize()
     unsigned char peMessage[] = PESTRING;
 
     p = unscrambleString(peMessage,PELEN, PECHK);
-#ifdef macintosh
+#ifdef MAC
     CPrompt(p,"","","");
 #else
 #ifdef nti
@@ -288,7 +291,7 @@ void Initialize()
 #else
     printf("%s", p);
 #endif /* nti */
-#endif /* macintosh */
+#endif /* mac */
     FREE(p);
   }
 #endif /* PE */
@@ -326,7 +329,7 @@ void Initialize()
     sprintf(buf,"%s: Cannot allocate the IOA heap (%dKb).", 
 	    ArgVector[0],
 	    (int)IOASize/Kb);
-#ifdef macintosh
+#ifdef MAC
     EnlargeMacHeap(buf);
 #endif
     Notify(buf);
@@ -365,7 +368,7 @@ void Initialize()
 	    "%s: Cannot allocate the Reference Stack (%dKb)\n", 
 	    ArgVector[0],
 	    (int)REFSTACKSIZE*sizeof(struct Object *)/Kb);
-#ifdef macintosh
+#ifdef MAC
     EnlargeMacHeap(buf);
 #endif
     Notify(buf);
@@ -380,7 +383,7 @@ void Initialize()
 	    "%s: Cannot allocate the Component Stack (%dKb)\n", 
 	    ArgVector[0],
 	    (int)REFSTACKSIZE*sizeof(long)/Kb);
-#ifdef macintosh
+#ifdef MAC
     EnlargeMacHeap(buf);
 #endif
     Notify(buf);
@@ -396,7 +399,7 @@ void Initialize()
 	    "%s: Cannot allocate the ToSpace heap (%dKb)\n", 
 	    ArgVector[0],
 	    (int)IOASize/Kb);
-#ifdef macintosh
+#ifdef MAC
     EnlargeMacHeap(buf);
 #endif
     Notify(buf);

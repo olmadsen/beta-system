@@ -10,6 +10,7 @@
 #define RTVALHALLA
 #endif
 
+
 #define BETARUN_ID "2.9"
 
 /******* Define specific machine types *********/
@@ -32,6 +33,27 @@
 #endif
 #endif
 
+/************* Macintosh defines ***************
+ *  mac68k is for Motorola 680x0 macintosh platforms (used to be "macintosh")
+ *  macppc is for PowerPC macintosh platforms (native and crts)
+ *  MAC    is for all macintosh platforms. Defined by -D MAC for C compiler
+ */
+ 
+#ifdef MAC
+#ifdef __powerc
+
+#define macppc
+#define ppcmac /* alias */
+#ifdef RTVALHALLA
+#undef RTVALHALLA
+#endif
+
+#else
+
+#define mac68k
+
+#endif
+
 /********* Definition of RUN, CRUN, NEWRUN *********/
 
 #if defined(linux) || defined(nti) || defined(macintosh) || defined(hpux9mc)
@@ -42,7 +64,8 @@
 #define CRUN 1
 #endif
 
-#if defined(sgi) || defined(_powerc)
+#if defined(sgi) || defined(macppc)
+#undef RUN
 #define NEWRUN 1
 #endif
 

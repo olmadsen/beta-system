@@ -14,10 +14,10 @@
 extern struct group_header *BETA_DATA; /* Defined in BETA */
 #else
 extern long *BETA_data1; /* Defined in BETA */
-#endif /* NEWRUN */
 extern long *BETA_end; /* C-variable */
+#endif /* NEWRUN */
 
-#if defined(macintosh) || defined (MAC)
+#if defined (MAC)
 # include <Resources.h>
 # include <Memory.h>
 # include <StdLib.h>

@@ -14,7 +14,7 @@
 #include "beta.h"
 #include <ctype.h>
 
-#if defined(macintosh) || defined(MAC)
+#if defined(MAC)
 #include <String.h>
 #include <Files.h>
 #endif
@@ -251,7 +251,7 @@ void SetupProperties(char *betart)
       while( (betart[pos] != '\0') && (betart[pos] != ':') ) pos++;
     }
   }
-#if defined(macintosh) || defined(MAC)
+#if defined(MAC)
   if ((output == stderr) && StandAlone) {
      char *infoname; 
      char *execname;

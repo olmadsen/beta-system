@@ -6,7 +6,7 @@
 
 #include "beta.h"
 
-#if defined(macintosh) ||defined(MAC)
+#if defined(MAC)
 #include <String.h>
 #include <Files.h>
 #endif
@@ -57,7 +57,7 @@ group_header* NextGroup (group_header* current)
   return current;
 }
 
-#ifdef __powerc
+#ifdef macppc
 #define GroupCodeStart(group) (*(long*)((group)->code_start))
 #define GroupCodeEnd(group)   (*(long*)((group)->code_end))
 #else
@@ -103,7 +103,7 @@ group_header* NextGroup (group_header* current)
   }
 }
 
-#ifdef macintosh
+#ifdef mac68k
 #define GroupCodeStart(group) (*(long*)((group)->code_start))
 #define GroupCodeEnd(group)   (*(long*)((group)->code_end))
 #else

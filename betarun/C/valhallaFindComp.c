@@ -11,7 +11,7 @@
 #endif
 
 
-#if (defined(hpux) || defined(linux) || defined(macintosh)) 
+#if (defined(hpux) || defined(linux) || defined(mac68k)) 
 
 int scanComponentStack (struct Component* comp,
 			struct Object *curObj,

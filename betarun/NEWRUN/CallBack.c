@@ -36,7 +36,7 @@
 
 #endif /* sgi */
 
-#ifdef _powerc
+#ifdef macppc
 #define GEN_CB_STUB()                                                         \
                                                                               \
  /*  0: &CBFATop->code[3]                                                     \
@@ -51,7 +51,7 @@
   *  9: bctr                                                                  \
   */                                                                          \
                                                                               \
-  CBFATop->code[0] = &CBFATop->code[3];                                       \
+  CBFATop->code[0] = (long)&CBFATop->code[3];                                 \
   CBFATop->code[1] = 0;                                                       \
   CBFATop->code[2] = 0x3c000000 | (12<<21) | (entry >> 16);                   \
   CBFATop->code[3] = 0x3c000000 | (24<<21) | (strucaddr >> 16);               \
@@ -62,7 +62,7 @@
   CBFATop->code[8] = 0x80000000 | ( 2<<21) | (12<<16) | 4;                    \
   CBFATop->code[9] = 0x4e800420
  
-#endif /* _powerc */
+#endif /* macppc */
 
 
 /* CopyCPP:
@@ -94,7 +94,7 @@ void *CopyCPP(struct Structure *theStruct)
   entry     = (unsigned long)theStruct->iProto->CBR;
   strucaddr = (unsigned long)&CBFATop->theStruct;
 
-  GEN_CB_STUB();
+  GEN_CB_STUB();                               
 
   /* DEBUG_CBFA(fprintf(output, "CopyCPP: allocated callback stub 0x%x\n", CBFATop)); */
 

@@ -16,7 +16,7 @@
  * Corresponding changes for the C runtime system are made in Misc.c, Qua.c
  * and CheckReferenceAssignment.c. */
 
-#if defined(macintosh) || defined(nti) || defined(MAC)
+#if defined(nti) || defined(MAC)
 #include "beta.h"
 #include "data.h"
 #else
@@ -29,7 +29,7 @@
 #endif
 
 #ifndef sparc
-#if defined(macintosh) || defined(nti) || defined(MAC) || defined(sgi)
+#if defined(nti) || defined(MAC) || defined(sgi)
 #define INLINE
 #else
 #define INLINE inline

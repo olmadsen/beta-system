@@ -6,9 +6,9 @@
 
 #include "beta.h"
 
-#if defined(macintosh) ||defined(MAC)
+#if defined(MAC)
 #include <CursorCtl.h>
-#endif /* macintosh */
+#endif
 
 #ifdef RTDEBUG
 
@@ -135,12 +135,12 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 }
 #endif
 
-#if defined(macintosh) ||defined(MAC)
+#if defined(MAC)
 long gcRotateCursor=0;
 void InitTheCursor()   { if(StandAlone == 0 || gcRotateCursor) InitCursorCtl(0); }
 void RotateTheCursor() { if(StandAlone == 0 || gcRotateCursor) SpinCursor(32); }
 void RotateTheCursorBack() { if(StandAlone == 0 || gcRotateCursor) SpinCursor(-32); }
-#endif /* macintosh */
+#endif
 
 
 /* Only used in debug version, but declared unconditionally in Declaration.run */

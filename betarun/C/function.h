@@ -1,6 +1,6 @@
 /* C/initialize.c */
 extern void Initialize(void);
-#if defined(macintosh) || defined(MAC)
+#if defined(MAC)
 extern void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4);
 extern long StandAlone;
 extern void EnlargeMacHeap(char *buf);
@@ -81,7 +81,10 @@ extern void BetaSignalHandler (long sig);
 #if defined(linux) || defined(nti)
 extern void BetaSignalHandler(long sig, struct sigcontext scp);
 #else
+/* Not sun4s, crts, linux, nti */
+#ifndef MAC
 extern void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr);
+#endif
 #endif /* linux || nti */
 #endif /* crts */
 #endif /* sun4s */
@@ -173,7 +176,7 @@ extern long inBetaHeap(ref(Object));
 #ifdef RTDEBUG
 extern void Claim(long, char*);
 #endif
-#if defined(macintosh) || defined(MAC)
+#if defined(MAC)
 extern void InitTheCursor(void);
 extern void RotateTheCursor(void);
 extern void RotateTheCursorBack(void);

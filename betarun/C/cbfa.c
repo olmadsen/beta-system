@@ -34,7 +34,7 @@ void CBFAAlloc()
 	      "%s: Cannot allocate the CBFA heap (%dKb)\n", 
 	      ArgVector[0],
 	      (int)CBFABlockSize/Kb);
-#ifdef macintosh
+#ifdef MAC
       EnlargeMacHeap(buf);
 #endif
       Notify(buf);

@@ -52,7 +52,7 @@
 #ifdef sgi
 #define DYNOFF 2
 #endif
-#ifdef _powerc
+#ifdef macppc
 #define DYNOFF 1
 #endif
 

@@ -52,6 +52,31 @@ void SetArgValues(long argc, char *argv[])
   ArgVector = argv;
 }
 
+#ifdef macppc
+double i2f(long n) 
+{ 
+  return (double)n;
+}
+
+#ifdef RTDEBUG
+void CallLazyItem()
+{
+	printf("error: CallLazyItem called\n");
+}
+void printCompStack(long * SPz, long dummy, long SPsize)
+{ 
+ int i;
+ for (i=0; i < (SPsize / 4)+4; i++) {
+    printf("StackElm: %i: &SPz[i]= 0x%x, SPz[i]=0x%x\n",
+	i*4, 
+	&((long *)SPz)[i],
+	((long *)SPz)[i]);
+ }
+}
+#endif /* RTDEBUG */
+
+#endif /* macppc */
+
 #ifndef __GNUC__
 /* Only gcc is able to inline. If not inlined, the functions in
  * IOAAlloc.h are defined as normal C functions here.

@@ -5,7 +5,7 @@
  */
 #undef DMALLOC 
 
-#if defined(macintosh) || defined(MAC)
+#if defined(MAC)
 #  define MALLOC(size) NewPtr(size)
 #  define REALLOC(src,size) 0
 #  define FREE(ptr) DisposPtr((Ptr)ptr)
@@ -68,7 +68,7 @@ register unsigned IOATopOff asm("%g7");
 #define isLazyRef(ref) 0
 #endif
 
-#if defined(macintosh) || defined (MAC)
+#if defined (MAC)
 #define Notify(s1)           CPrompt(s1, "","","")
 #define Notify2(s1,s2)       CPrompt(s1, s2, "", "")
 #define Notify3(s1,s2,s3)    CPrompt(s1, s2, s3, 0)
@@ -356,11 +356,11 @@ extern long *etext;
        *(long *)(((char *)(dst))+i) = *(long *)(((char *)(src))+i); \
 }
 
-#ifdef macintosh
+#ifdef mac68k
 #define JUMP_TABLE(addr) (*(long *)(((long)(addr))+2))
 #define G_Part(proto) (long) JUMP_TABLE(proto->GenPart)
 #else
-#ifdef __powerc
+#ifdef macppc
 #define G_Part(proto) ((long) *(long*)proto->GenPart)
 #else
 #define G_Part(proto) (long) proto->GenPart
@@ -485,7 +485,7 @@ typedef union FormatI
 }
 #endif
 
-#ifdef _powerc
+#ifdef macppc
 
 #define GetPC(SP)     (*((long*)(SP)+2))
 #define GetSPbeta(SP) (*((long *)(SP)+6))

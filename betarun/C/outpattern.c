@@ -6,7 +6,7 @@
 
 #include "beta.h"
 
-#if defined(macintosh) ||defined(MAC)
+#if defined(MAC)
 #include <String.h>
 #include <Files.h>
 #endif
@@ -64,7 +64,7 @@ long M_Part(ref(ProtoType) proto)
 static char *machine_name()
 {
 #ifdef NEWRUN
-#ifdef _powerc
+#ifdef macppc
   return "(ppcmac)";
 #endif
 #ifdef sgi
@@ -108,7 +108,7 @@ static char *machine_name()
 #endif
   
   /* Macintosh */
-#ifdef macintosh
+#ifdef mac68k
   return "(mac)";
 #endif
 
@@ -712,7 +712,7 @@ static int OpenDumpFile(long errorNumber)
 }
 #endif /* UNIX */
 
-#if defined(macintosh) ||defined(MAC)
+#if defined(MAC)
 static char dumpname[33]; /* max filename length is 32 */
 static int OpenDumpFile(long errorNumber)
 {
@@ -1258,7 +1258,7 @@ P("      [ EXTERNAL ACTIVATION PART ]")
   
   fclose(output);
 
-#if defined(macintosh) ||defined(MAC)
+#if defined(MAC)
   /* Set file type and creator to make xxx.dump an MPW file */
   {  FInfo fn;
      Str255 fname;
@@ -1338,7 +1338,7 @@ void DescribeObject(theObject)
     
     while (*(short *) stat) stat++;	/* Step over static gc entries */ 
     dyn = ((short *) stat) + 1;		/* Step over the zero */
-    while (*dyn++);			/* Step over dynamic gc entries */
+    while (*dyn++){};			/* Step over dynamic gc entries */
     
 #ifdef sparc
     if (DebugStack){
