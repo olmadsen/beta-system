@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(19)";
+char betarun_version[] = "BETARUN VERSION 5.3(20)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.19  2001/06/25 13:56:44  corry
+ * Fix calls of isdigit to get _unsigned_ char parameter to avoid warning
+ * on Sun.
+ * Betarun version number: 19
+ *
  * Revision 1.18  2001/06/21 12:06:50  datpete
  * Fixes for dynamic exception handling on intel.
  * Now stack traversal can determine if external activation records found

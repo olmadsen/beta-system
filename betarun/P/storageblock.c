@@ -91,27 +91,27 @@ typedef struct sbgroupname
 static u_long objects;
 
 /* Local function declarations */
-static char *DBname(char *path);
+static char *DBname(char *path, int checkdirectory /* backward compatibility */);
 
 /* */
 CAStorage *SBcreate(char *host, char *path)
 {
    CAStorage *csb; /* cached storage block */
    DEStorage *des; /* dynamic extendable storage */
-   
    if (!isDir(path)) {
-     if (createDirectory(path
+     /*if (createDirectory(path
 #ifdef UNIX
                          , S_IFDIR | S_IREAD | S_IWRITE | S_IEXEC 
 #endif
 #ifdef nti
                          , 0
-#endif /* nti_ms */
+#endif 
 #ifdef MAC
 						, 0
 #endif
-                         ) >= 0) {         
-       char *dbn = DBname(path);
+) >= 0) {         */
+     if (!fileExists(path)) {
+       char *dbn = DBname(path, 0);
        
        /* First we create the dynamic extendable storage used to hold
           * this storage block.
@@ -211,9 +211,8 @@ u_long SBstat(CAStorage *csb)
 CAStorage *SBopen(char *host, char *path)
 {
    DEStorage *des; /* dynamic extendable storage */
-   char *dbn = DBname(path);
+   char *dbn = DBname(path, 1);
    u_long rcode;
-   
     /* First we create the dynamic extendable storage used to hold
      * this storage block.
      */
@@ -637,16 +636,46 @@ void SBend(void)
 
 static char dbname[MAXDBNAMELENGTH];
 
-static char *DBname(char *path)
+static char *DBname(char *path, int checkdir)
 {
+  if (checkdir && isDir(path)) {
     if (strlen(path) + strlen(DBNAME) + 1 < MAXDBNAMELENGTH) {
-        sprintf(dbname, "%s/%s", path, DBNAME);
-        return &dbname[0];
+      sprintf(dbname, "%s/%s", path, DBNAME);
+      return &dbname[0];
     } else {
-        fprintf(output, "DBname: path name length exceeded only %d characters are allowed\n", MAXDBNAMELENGTH - strlen(DBNAME) - 1);
-        BetaExit(1);
-        return NULL;
+      fprintf(output, "DBname: path name length exceeded only %d characters are allowed\n", MAXDBNAMELENGTH - strlen(DBNAME) - 1);
+      BetaExit(1);
+      return NULL;
     }
+    if (fileExists(dbname)) {
+      return &dbname[0];
+    } else {
+      checkdir = 0;
+    }
+  }
+  else {
+    checkdir = 0;
+  }
+
+  if (checkdir) {
+    if (strlen(path) + strlen(DBNAME) + 1 < MAXDBNAMELENGTH) {
+      sprintf(dbname, "%s/%s", path, DBNAME);
+      return &dbname[0];
+    } else {
+      fprintf(output, "DBname: path name length exceeded only %d characters are allowed\n", MAXDBNAMELENGTH - strlen(DBNAME) - 1);
+      BetaExit(1);
+      return NULL;
+    }
+  } else {
+    if (strlen(path)+1 < MAXDBNAMELENGTH) {
+      sprintf(dbname, "%s.pst", path);
+      return &dbname[0];
+    } else {
+      fprintf(output, "DBname: path name length exceeded only %d characters are allowed\n", MAXDBNAMELENGTH - strlen(DBNAME) - 1);
+      BetaExit(1);
+      return NULL;
+    }
+  }
 }
 
 #endif /* PERSIST */
