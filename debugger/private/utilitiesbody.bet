@@ -55,7 +55,7 @@ missingDoPart:
   enter (index,fragmentName[],groupName[])
   do
      &Text[]->errormsg[];
-     'ERROR: Dopart ast index %d not found in fragment\n   "%s"\nin\n   %s'
+     'MSGDP-ERROR: Dopart ast index %d not found in fragment\n   "%s"\nin\n   %s'
        ->errormsg.putFormat
          (#  do index->d; fragmentName[]->s; groupname[]->s;  #);
      errormsg[]->utilitiesFailure;
@@ -317,7 +317,7 @@ do utprivate.init;
 (#
    debug: @Boolean;
    init:
-     (#  do ptinfoTable.init; adrToImpTable.init; astToImpTable.init;  #);
+     (#  do ptinfoTable.init; adrToImpTable.init; astToImpTable.init; false->debug #);
    astToImpTable: @hashTable
    (* Mapping from imperatives (ast nodes) to imperateInfo's. *)
      (#
@@ -330,7 +330,7 @@ do utprivate.init;
              impi: ^imperativeInfo;
              
           enter (imp[],thecati[])
-          do
+          do 
              imp.index
                ->findIndexed
                  (#
@@ -358,7 +358,11 @@ do utprivate.init;
                       (imp.frag.father).fullName->fgFullNameToOFIname
                         ->mps.ast.expandtofullpath->groupName[]
                         ->groupNameToObjectFileInfo->ofi[];
-                      (if debug then ofi[]->debugGroupsInfo if);
+                      (if debug then 
+                          'GroupName is:'->puttext;
+                          groupName[]->putline;
+                          ofi[]->debugGroupsInfo 
+                      if);
                       (if ofi[] = none then
                           groupName[]->missingGroup; leave fullFind; 
                       if);
@@ -413,6 +417,9 @@ do utprivate.init;
                            (* Current is an inserted item of the inlined kind.
                             * No prototype for this one... *)
                                od[]->a[];
+                               (if debug then
+                                   'astToImpTable: Found inlined inserted item, restarting!'->putline
+                               if);
                                restart getSignificantDopartAndDescriptor;
                                
                            if);
@@ -429,6 +436,9 @@ do utprivate.init;
                        * ->odGroupName[]
                        * ->groupNameToObjectFileInfo
                        * ->odofi[];*)
+                          (if debug then
+                              'astToImpTable: descriptor in origin fragmentgroup'->putline
+                          if);
                           od.frag.father->mps.getUniqueGroupID
                             ->uniqueGroupIDToObjectFileInfo->odofi[];
                           (if debug then odofi[]->debugGroupsInfo if);
@@ -436,10 +446,15 @@ do utprivate.init;
                        else
                           ofi[]->odofi[]; 
                       if);
-                      (dp.getImperatives).index->fi.findDopartInfo->dpi[];
+                      (if debug then
+                          'astToImpTable: dp.index=%d dp.imperatives.index=%d\n'->putformat
+                          (# do dp.index->d; (dp.getImperatives).index->d #)
+                      if);
+                      (dp.getImperatives).index->fi.findDopartInfo->dpi[]; 
+                      
                       (if dpi[] = none then
                           &Text[]->errormsg[];
-                          'ERROR: Missing dopart info on\n   %s'
+                          'FGC-ERROR: Missing dopart info on\n   %s'
                             ->errormsg.putFormat (#  do groupName[]->s #);
                           errormsg[]->utilitiesFailure;
                           leave fullFind;
@@ -559,7 +574,7 @@ do utprivate.init;
                   im: ^MPS.BETACFL.Imperatives;
                   fi: ^fragmentInfo;
                   ff: ^MPS.AST.fragmentForm;
-                  ok: @Boolean;
+                  ok,first: @Boolean;
                   
                do
                (* HAIRY STUFF!!! Locate the dopart corresponding to nval,
@@ -568,18 +583,18 @@ do utprivate.init;
                   TRUE->ok;
                   (* First get hold of the ObjectDescriptor whose 
                    * dopart we're looking for: *)
-                  (ninx-1,nofi.groupName[])->groupsInfo.protoGroupToOd->od[];
+                  (ninx-1,nofi.groupName[])->groupsInfo.protoGroupToOd->od[]; 
                   (if od[] = none then leave getDoPart if);
                   (if debug then
-                      'getDopart: Found objectdescriptor %d:\n'
-                        ->putformat (#  do ninx-1->d;  #);
+                      'getDopart: Found objectdescriptor %d od.descNO=%d:\n'
+                        ->putformat (#  do ninx-1->d; od.descNO->d  #);
                       (od[],5)->doPrettyPrint->putline;
                       newline;
-                      
                   if);
                   (* Then dig out the dopart. This may involve 
                    * dopart SLOTS!! (May they burn in hell :-) *)
                   od.getMainPart->mp[];
+                  
                   (if mp[] = none then leave getDoPart if);
                   mp.getActionPart->ap[];
                   (if ap[] = none then leave getDoPart if);
@@ -616,9 +631,29 @@ do utprivate.init;
                       ((unexp.theSlot).name,MPS.BETA.dopart)
                         ->ofi.findFragmentInfo->fi[];
                       (if fi[] = none then
+                          (if debug then
+                              'no FI: Found mainpart:'->putline;
+                              (od[],5)->doPrettyPrint->putline;
+                              newline
+                          if);
                           FALSE->ok;
-                          (dp.frag.name,dp.frag.root.symbol,nofi.groupName[])
-                            ->missingFragment;
+                          (* ?? dp = what? 
+                           * (dp.frag.name,dp.frag.root.symbol,nofi.groupName[])
+                           ->missingFragment;
+                           We try this:*)
+                          (if debug then
+                              'a.inx=%d, a.symbol=%d\n'->putformat(# do a.index->d; a.symbol->d #);
+                              (unexp.theSlot).name->putline
+                          if);
+                          
+                          (* try next index, sometimes confused ??? *)
+                          ninx+1->ninx;
+                          (if not first then
+                              true->first;
+                              (* restart getDopart *)
+                          if);
+                          (unexp.frag.name,unexp.frag.root.symbol,nofi.groupName[])
+                           ->missingFragment;
                           (nofi.Tentries[ninx],codeAdr-nofi.Gentries[ninx],none
                            )->thecati.onPartialMinfo;
                           leave getDopart;
@@ -748,32 +783,26 @@ do utprivate.init;
                         tmpofi.Mentries[i]->tmp;
                         (if tmp <= codeAdr then
                             (if tmp > nval then
-                                tmpofi[]->nofi[]; i->ninx; tmp->nval; 
-                            if);
-                            
+                                tmpofi[]->nofi[]; i->ninx; tmp->nval
+                            if)
                         if);
                         tmpofi.Gentries[i]->tmp;
                         (if tmp <= codeAdr then
                             (if tmp > nval then
-                                tmpofi[]->nofi[]; - i->ninx; tmp->nval; 
-                            if);
-                            
-                        if);
-                        
+                                tmpofi[]->nofi[]; - i->ninx; tmp->nval
+                            if)
+                        if)
                       for);
                       tmpofi.originOfi[]->tmpofi[];
-                      restart scanOrigins;
-                      
-                  if);
-                  (if debug then
-                      'findNearestEntry: Found %d while searching for %d\n'
-                        ->putformat (#  do nval->d; codeAdr->d #);
-                      
+                      restart scanOrigins
                   if);
                   
+                  (if debug then
+                      'findNearestEntry: Found %d while searching for %d ninx=%d\n'
+                        ->putformat (#  do nval->d; codeAdr->d; ninx->d #)                      
+                  if)                  
                #);
-             noffsetinx,noffset,offset,tmp: @Integer;
-             
+             noffsetinx,noffset,offset,tmp: @Integer             
           enter (codeAdr,thecati[])
           do
              codeAdr->find->impi[];
