@@ -14,21 +14,21 @@ if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
 	echo "Creating $DST/freja.cmd"
-	FILES=`/users/beta/export/distribution/r4.0/files/freja.files`
-	echo "$FILES" | /users/beta/export/distribution/r4.0/misc/icomp $DST/freja.cmd
+	FILES=`/users/beta/export/distribution/r4.0.1/files/freja.files`
+	echo "$FILES" | /users/beta/export/distribution/r4.0.1/misc/icomp $DST/freja.cmd
 else
 	echo ""
 	echo "Creating $DST/freja.tar.${ZEXT} "
 	echo "(Listing in $DST/freja.lst)"
 
-	FILES=`/users/beta/export/distribution/r4.0/files/freja.files`
+	FILES=`/users/beta/export/distribution/r4.0.1/files/freja.files`
 
-	cd /users/beta
+	cd ${BETALIB}; echo cd ${BETALIB}
 
 	tar -covhf -  $FILES \
 	2> $DST/freja.lst \
 	| $COMPRESS >  $DST/freja.tar.${ZEXT}
 fi
 
-. /users/beta/export/distribution/r4.0/misc/check_problems.sh
+. /users/beta/export/distribution/r4.0.1/misc/check_problems.sh
 check_pack freja

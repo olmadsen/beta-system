@@ -15,13 +15,13 @@ then
 	# Special windows packing
 	echo ""
 	echo "Creating $DST/system.cmd"
-	FILES=`/users/beta/export/distribution/r4.0/files/system-pe.files`
+	FILES=`/users/beta/export/distribution/r4.0.1/files/system-pe.files`
 	echo "\
 $FILES \
 ./betarun/${BETARUN}/${CODEDIR}/betarun.lib \
 ./betarun/${BETARUN}/${CODEDIR}/betarunv.lib\
 " \
-| /users/beta/export/distribution/r4.0/misc/icomp $DST/system.cmd
+| /users/beta/export/distribution/r4.0.1/misc/icomp $DST/system.cmd
 
 echo "cd %BETALIB%\\betarun\\${BETARUN}\\${CODEDIR}" > $DST/system-pe.cmd
 echo "ren  betarun.lib  betarun.lib.orig"          >> $DST/system-pe.cmd
@@ -46,16 +46,16 @@ else
 	echo "Creating $DST/system.tar "
 	echo "(Listing in $DST/system.lst)"
 
-	cd /users/beta
+	cd ${BETALIB}; echo cd ${BETALIB}
 
-	FILES=`/users/beta/export/distribution/r4.0/files/system-pe.files`
+	FILES=`/users/beta/export/distribution/r4.0.1/files/system-pe.files`
 
 
 	tar -covhf - $FILES \
 	2> $DST/system.lst \
 	 > $DST/system.tar
 
-	cd /users/beta/test
+	cd ${BETALIB}; echo cd ${BETALIB}/test
 	echo "Adding betarun.pe as betarun.o and betarunv.o from directory"
 	pwd
 
@@ -80,5 +80,5 @@ else
 
 fi
 
-. /users/beta/export/distribution/r4.0/misc/check_problems.sh
+. /users/beta/export/distribution/r4.0.1/misc/check_problems.sh
 check_pack system

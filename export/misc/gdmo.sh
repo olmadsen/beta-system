@@ -14,21 +14,21 @@ if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
 	echo "Creating $DST/gdmo.cmd"
-	FILES=`/users/beta/export/distribution/r4.0/files/gdmo.files`
-	echo "$FILES" | /users/beta/export/distribution/r4.0/misc/icomp $DST/gdmo.cmd
+	FILES=`/users/beta/export/distribution/r4.0.1/files/gdmo.files`
+	echo "$FILES" | /users/beta/export/distribution/r4.0.1/misc/icomp $DST/gdmo.cmd
 else
 	echo ""
 	echo "Creating $DST/gdmo.tar.${ZEXT} "
 	echo "(Listing in $DST/gdmo.lst)"
 
-	FILES=`/users/beta/export/distribution/r4.0/files/gdmo.files`
+	FILES=`/users/beta/export/distribution/r4.0.1/files/gdmo.files`
 
-	cd /users/beta
+	cd ${BETALIB}; echo cd ${BETALIB}
 
 	tar -covhf -  $FILES \
 	2> $DST/gdmo.lst \
 	| $COMPRESS >  $DST/gdmo.tar.${ZEXT}
 fi
 
-. /users/beta/export/distribution/r4.0/misc/check_problems.sh
+. /users/beta/export/distribution/r4.0.1/misc/check_problems.sh
 check_pack gdmo

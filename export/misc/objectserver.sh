@@ -14,16 +14,16 @@ if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
 	echo "Creating $DST/objectserver.cmd"
-	FILES=`/users/beta/export/distribution/r4.0/files/objectserver.files`
-	echo "$FILES" | /users/beta/export/distribution/r4.0/misc/icomp $DST/objectserver.cmd
+	FILES=`/users/beta/export/distribution/r4.0.1/files/objectserver.files`
+	echo "$FILES" | /users/beta/export/distribution/r4.0.1/misc/icomp $DST/objectserver.cmd
 else
 	echo ""
 	echo "Creating $DST/objectserver.tar.${ZEXT} "
 	echo "(Listing in $DST/objectserver.lst)"
 
-	FILES=`/users/beta/export/distribution/r4.0/files/objectserver.files`
+	FILES=`/users/beta/export/distribution/r4.0.1/files/objectserver.files`
 
-	cd /users/beta
+	cd ${BETALIB}; echo cd ${BETALIB}
 
 	tar -covhf -  $FILES \
 	2> $DST/objectserver.lst \
