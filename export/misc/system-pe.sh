@@ -19,15 +19,15 @@ then
 	echo "\
 $FILES \
 ./betarun/${BETARUN}/${CODEDIR}/betarun.lib \
-./betarun/${BETARUN}/${CODEDIR}/betarunv.lib\
+./betarun/${BETARUN}/${CODEDIR}/betarun_v.lib\
 " \
 | ${BETALIB}/export/misc/icomp $DST/system.cmd
 
 echo "cd %BETALIB%\\betarun\\${BETARUN}\\${CODEDIR}"  > $DST/system-pe.cmd
 echo "ren /Q betarun.lib  betarun.lib.orig"           >> $DST/system-pe.cmd
-echo "ren /Q betarunv.lib betarunv.lib.orig"          >> $DST/system-pe.cmd
+echo "ren /Q betarun_v.lib betarun_v.lib.orig"        >> $DST/system-pe.cmd
 echo "copy /Q betarun.pe betarun.lib"                 >> $DST/system-pe.cmd
-echo "copy /Q betarun.pe betarunv.lib"                >> $DST/system-pe.cmd
+echo "copy /Q betarun.pe betarun_v.lib"               >> $DST/system-pe.cmd
 echo "copy /Q bin\\README.txt README.txt"             >> $DST/system-pe.cmd
 echo ""                                               >> $DST/system-pe.cmd
 cat $DST/system.cmd                                   >> $DST/system-pe.cmd
@@ -35,8 +35,8 @@ echo ""                                               >> $DST/system-pe.cmd
 echo ""                                               >> $DST/system-pe.cmd
 echo "cd %BETALIB%\\betarun\\${BETARUN}\\${CODEDIR}"  >> $DST/system-pe.cmd
 echo "del /Q betarun.lib"                             >> $DST/system-pe.cmd
-echo "del /Q betarunv.lib"                            >> $DST/system-pe.cmd
-echo "ren /Q betarunv.lib.orig betarunv.lib"          >> $DST/system-pe.cmd
+echo "del /Q betarun_v.lib"                           >> $DST/system-pe.cmd
+echo "ren /Q betarun_v.lib.orig betarun_v.lib"        >> $DST/system-pe.cmd
 echo "ren /Q betarun.lib.orig  betarun.lib"           >> $DST/system-pe.cmd
 echo "cd %BETALIB%"                                   >> $DST/system-pe.cmd
 mv $DST/system-pe.cmd  $DST/system.cmd
@@ -78,7 +78,7 @@ echo "newfolder {newbeta}betarun:v2.9:ppcmac: „ Dev:Null"  >> $DST/system.pack
 # add special betarun files
 echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun.pe {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun.obj"  \
   >> $DST/system.pack
-echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun.pe {newbeta}betarun:${BETARUN}:${CODEDIR}:betarunv.obj" \
+echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun.pe {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun_v.obj" \
   >> $DST/system.pack
 
 # Add locking of betarun files if specified in environment.
@@ -104,7 +104,7 @@ else
 
 	if [ ! -d ${BETALIB}/test ]; then mkdir ${BETALIB}/test; fi
 	cd ${BETALIB}/test
-	echo "Adding betarun.pe as betarun.o and betarunv.o from directory"
+	echo "Adding betarun.pe as betarun.o and betarun_v.o from directory"
 	pwd
 
 	/bin/rm -rf betarun
@@ -112,11 +112,11 @@ else
 	mkdir betarun/${BETARUN}
 	mkdir betarun/${BETARUN}/$TARGET
 	cp ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun.pe ./betarun/${BETARUN}/$TARGET/betarun.o
-	cp ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun.pe ./betarun/${BETARUN}/$TARGET/betarunv.o
+	cp ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun.pe ./betarun/${BETARUN}/$TARGET/betarun_v.o
 
 	tar -rovhf $DST/system.tar \
 	  ./betarun/${BETARUN}/${CODEDIR}/betarun.o \
-	  ./betarun/${BETARUN}/${CODEDIR}/betarunv.o  \
+	  ./betarun/${BETARUN}/${CODEDIR}/betarun_v.o  \
 	>> $DST/system.lst
 
 	echo "Compressing..."
