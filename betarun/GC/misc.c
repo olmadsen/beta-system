@@ -38,6 +38,24 @@ void gcmisc_dummy() {
 #endif /* sparc */
 }
 
+#ifndef MAC
+/* Empty implementation of StartGiveTime and StopGiveTime,
+ * which are mac specific operations that enables Mjolner
+ * to multitask while compiling.
+ */
+
+void StartGiveTime(void)
+{
+  return;
+}
+
+void StopGiveTime(void)
+{
+  return;
+}
+
+#endif
+
 static Trie *trie;
 
 /* Used by 
