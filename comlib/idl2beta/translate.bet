@@ -3,7 +3,6 @@ INCLUDE './idlsematt';
 --Translate: Descriptor --
 (#
    BobsTab: (# exit '~beta/grammars/idl/v2.0/idl-parser.btab' #);
-   AstTrace: (# exit false #);
    MaxFragments: (# exit 100 #);
    
    ast: @astInterface
@@ -22,7 +21,7 @@ INCLUDE './idlsematt';
    ConstToInteger: (# con: ^ast.Const   enter con[] exit con.getValue #);
    ConstToText:    (# con: ^ast.Const   enter con[] exit con.getText #);
    
-   isOptionalPresent: 
+   optionalPresent: 
      (# opt: ^ast.ast; 
      enter opt[]
      exit opt.kind<>ast.kinds.optional
@@ -39,7 +38,7 @@ INCLUDE './idlsematt';
      (* Initialization of the meta programming system *)
      (# 
      do 
-	(if AstTrace then
+	(if Debug then
             (ast.trace.topOpen,true) -> ast.trace.set;
             (ast.trace.fragmentOpen,true) -> ast.trace.set;
             (ast.trace.grammars,true) -> ast.trace.set;
@@ -130,10 +129,10 @@ INCLUDE './idlsematt';
             Stop
 	if);
 	
-	(if AstTrace then 'scanincludes: ' -> putline; if);
+	(if Debug then 'scanincludes: ' -> putline; if);
         fg.scanIncludes
 	(# 
-        do (if AstTrace then
+        do (if Debug then
                'current.linkname: ' -> puttext; current.linkname[]->putline;
            if);
 	   (current.linkname[], fg.FullName) -> Insert;
@@ -206,6 +205,30 @@ INCLUDE './idlsematt';
         'do_except_dcl not yet implemented' -> outfile.commentline;
      #);
    
+   do_scoped_name:
+     (# n: ^idl.scoped_name;
+        s1: ^idl.scoped_name1;
+        s2: ^idl.scoped_name2;
+        s3: ^idl.scoped_name3;
+     enter n[]
+     do (if n.symbol
+         // idl.scoped_name1 then
+            n[] -> s1[];
+            s1.getIdentifier -> IdentifierToText 
+              -> outfile.puttext;
+         // idl.scoped_name2 then
+            n[] -> s2[];
+            s2.getIdentifier -> IdentifierToText 
+              -> outfile.puttext;
+         // idl.scoped_name3 then
+            n[] -> s3[];
+            s3.getscoped_name -> do_scoped_name;
+            '.' -> outfile.put;
+            s3.getIdentifier -> IdentifierToText 
+              -> outfile.puttext;
+        if);
+     #);
+   
    do_interface_dcl:
      (# i: ^idl.interface_dcl;
         do_interface_header:
@@ -213,29 +236,7 @@ INCLUDE './idlsematt';
              do_inheritance_spec:
                (# i: ^idl.inheritance_spec;
                   n: ^idl.scoped_names;
-                  do_scoped_name:
-                    (# n: ^idl.scoped_name;
-                       s1: ^idl.scoped_name1;
-                       s2: ^idl.scoped_name2;
-                       s3: ^idl.scoped_name3;
-                    enter n[]
-                    do (if n.symbol
-                        // idl.scoped_name1 then
-                           n[] -> s1[];
-                           s1.getIdentifier -> IdentifierToText 
-                             -> outfile.puttext;
-                        // idl.scoped_name2 then
-                           n[] -> s2[];
-                           s2.getIdentifier -> IdentifierToText 
-                             -> outfile.puttext;
-                        // idl.scoped_name3 then
-                           n[] -> s3[];
-                           s3.getscoped_name -> do_scoped_name;
-                           '.' -> outfile.put;
-                           s3.getIdentifier -> IdentifierToText 
-                             -> outfile.puttext;
-                       if);
-                    #);
+                  
                   numPrefixes: @integer;
                enter i[]
                do 0->numPrefixes;
@@ -286,6 +287,7 @@ INCLUDE './idlsematt';
                        'uuid: ' -> outfile.puttext;
                        u.getuuid_rep -> do_uuid_rep;
                        outfile.CommentEnd;
+                       outfile.newline;
                     #);
                   do_iversion:
                     (# v: ^idl.iversion
@@ -330,6 +332,7 @@ INCLUDE './idlsematt';
                        'do_pointer_default NYI: ' -> outfile.puttext;
                        p.getptr_attr->do_ptr_attr;
                        outfile.CommentEnd;
+                       outfile.newline;
                     #);
                   do_object:
                     (# o: ^idl.object
@@ -357,7 +360,7 @@ INCLUDE './idlsematt';
              outfile.indent;
              h.getIdentifier -> IdentifierToText -> outfile.puttext;
              ': ' -> outfile.puttext;
-             (if h.getinheritance_specOpt -> isOptionalPresent then
+             (if h.getinheritance_specOpt -> optionalPresent then
                  h.getinheritance_specOpt -> do_inheritance_spec;
              if);
              outfile.newline;
@@ -421,21 +424,276 @@ INCLUDE './idlsematt';
                          #);
                        do_parameter_dcls:
                          (# p: ^idl.parameter_dcls;
+                            d: ^idl.param_dcls;
                          enter p[]
-                         do outfile.indent;
-                            true -> parameters_present;
-                            'do_parameter_dcls NYI' -> outfile.commentline
-                            ;
+                         do 0 -> num_enter_parameters;
+                            p.getparam_dcls -> d[];
+                            d.newscan
+                            (# 
+                            do current[] -> do_param_dcl;
+                            #);
+                         #);
+                       do_param_dcl:
+                         (# d: ^idl.param_dcl;
+                            do_param_attributes:
+                              (# do_attributeY:
+                                   (# y: ^idl.attributeY;
+                                      ca: ^idl.call_as;
+                                      aii: ^idl.att_iid_is;
+                                      ii: ^idl.iid_is;
+                                      ta: ^idl.transmit_as;
+                                      st: ^idl.switch_type;
+                                      si: ^idl.switch_is;
+                                      ac: ^idl.att_case;
+                                   enter y[]
+                                   do (if y.symbol
+                                       // idl.att_unique then
+                                          'unique'->outfile.puttext;
+		                       // idl.att_ref then
+                                          'ref'->outfile.puttext;
+		                       // idl.att_in then
+                                          'in'->outfile.puttext;
+		                       // idl.att_out then
+                                          'out'->outfile.puttext;
+		                       // idl.att_in_out then
+                                          'in_out'->outfile.puttext;
+		                       // idl.att_local then
+                                          'local'->outfile.puttext;
+		                       // idl.call_as then
+                                          'call_as('->outfile.puttext;
+                                          (y[]->ca[]).getIdentifier
+                                            -> IdentifierToText
+                                            -> outfile.puttext;
+                                          ')'->outfile.put;
+		                       // idl.att_iid_is then
+                                          'iid_is('->outfile.puttext;
+                                          (y[]->aii[]).getiid_is->ii[];
+                                          ii.getIdentifier
+                                            -> IdentifierToText
+                                            -> outfile.puttext;
+                                          ')'->outfile.put;
+		                       // idl.size_is then
+                                          'size_is('->outfile.puttext;
+                                          'NYI' -> outfile.puttext;
+                                          ')'->outfile.put;
+		                       // idl.length_is then
+                                          'length_is('->outfile.puttext;
+                                          'NYI' -> outfile.puttext;
+                                          ')'->outfile.put;
+		                       // idl.v1_enum then
+                                          'v1_enum'->outfile.puttext;
+		                       // idl.transmit_as then
+                                          'transmit_as('->outfile.puttext;
+                                          (y[]->ta[]).getIdentifier
+                                            -> IdentifierToText
+                                            -> outfile.puttext;
+                                          ')'->outfile.put;
+		                       // idl.att_string then
+                                          'string'->outfile.puttext;
+		                       // idl.switch_type then
+                                          'switch_type('->outfile.puttext;
+                                          (y[]->st[]).getIdentifier
+                                            -> IdentifierToText
+                                            -> outfile.puttext;
+                                          ')'->outfile.put;
+		                       // idl.switch_is then
+                                          'switch_is(('->outfile.puttext;
+                                          (y[]->si[]).getId1
+                                            -> IdentifierToText
+                                            -> outfile.puttext;
+                                          ')'->outfile.put;
+                                          si.getId2
+                                            -> IdentifierToText
+                                            -> outfile.puttext;
+                                          ')'->outfile.put;
+		                       // idl.att_case then
+                                          'case('->outfile.puttext;
+                                          (y[]->ac[]).getIdentifier
+                                            -> IdentifierToText
+                                            -> outfile.puttext;
+                                          ')'->outfile.put;
+		                       // idl.async then
+                                          'async'->outfile.puttext;
+                                     if);
+                                   #);
+                                 a: ^idl.param_attribute;
+                                 do_param_attribute_list:
+                                   (# l: ^idl.param_attribute_list;
+                                      x: ^idl.attributeX;
+                                      a: ^idl.attributes;
+                                   enter l[]
+                                   do l.getattributeX -> x[];
+                                      x.getattributes -> a[];
+                                      ' '->outfile.put;
+                                      outfile.CommentBegin;
+                                      a.newscan
+                                      (# first_done: @boolean;
+                                      do (if first_done then
+                                             ',' -> outfile.put;
+                                          else
+                                             true->first_done
+                                         if);
+                                         current[]->do_attributeY;
+                                      #);
+                                      outfile.CommentEnd;
+                                   #);
+                              enter a[]
+                              do (if a.symbol
+                                  // idl.in then
+                                     'in' -> outfile.comment;
+                                  // idl.out then
+                                     'out' -> outfile.comment;
+                                  // idl.in_out then
+                                     'inout' -> outfile.comment;
+                                  // idl.param_attribute_list then
+                                     a[] -> do_param_attribute_list;
+                                 if);
+                              #);
+                            do_const:
+                              (# c: ^idl.const_key;
+                              enter c[]
+                              do (*'const' -> outfile.comment;*)
+                              #);
+                            do_declarator: 
+                              (# d: ^idl.declarator;
+                                 s: ^idl.simple_declarator;
+                                 p: ^idl.pointer_declarator;
+                                 a: ^idl.array_declarator;
+                                 pa: ^idl.pointer_to_array_declarator;
+                                 pp: ^idl.pointer_to_pointer_declarator;
+                              enter d[]
+                              do (* Find the NAME and POINTER STATUS
+                                  * of the parameter.
+                                  *)
+                                 (if d.symbol
+                                  // idl.simple_declarator then
+                                     (d[]->s[]).getidentifier 
+                                       -> IdentifierToText
+                                       -> arg[];
+                                  // idl.array_declarator then
+                                     (d[]->a[]).getidentifier
+                                       -> IdentifierToText
+                                       -> arg[];
+                                     true -> arg_is_pointer;
+		                  // idl.pointer_declarator then
+                                     (d[]->p[]).getidentifier 
+                                       -> IdentifierToText
+                                       -> arg[];
+                                     true -> arg_is_pointer;
+		                  // idl.pointer_to_pointer_declarator 
+                                     then
+                                     (d[]->pp[]).getidentifier 
+                                       -> IdentifierToText
+                                       -> arg[];
+                                     true -> arg_is_pointer_pointer;
+		                  // idl.pointer_to_array_declarator then
+                                     (d[]->pa[]).getarray_declarator->a[];
+                                     a.getidentifier
+                                       -> IdentifierToText
+                                       -> arg[];
+                                     true -> arg_is_pointer_pointer;
+                                 if)
+                              #);
+                            generate_param_name:
+                              (# 
+                              do 'arg' -> arg[];
+                                 num_enter_parameters->arg.putint;
+                              #);
+                            do_param_type_spec:
+                              (# t: ^idl.param_type_spec;
+                                 s: ^idl.param_scoped_name;
+                              enter t[]
+                              do (if t.symbol
+                                  // idl.param_base_type_spec then
+                                     'do_param_base_type_spec NYI'
+                                       -> outfile.comment;
+			          // idl.param_string_type then
+                                     'do_param_string_type NYI'
+                                       -> outfile.comment;
+                                  // idl.param_scoped_name then
+                                     '@' -> outfile.put;
+                                     (t[]->s[]).getscoped_name
+                                       -> do_scoped_name;
+			          // idl.param_void then
+                                     (if true
+                                      // arg_is_pointer then
+                                         '@integer (* void* *)'
+                                           -> outfile.puttext;
+                                      // arg_is_pointer_pointer then
+                                         '@integer (* void** *)'
+                                           -> outfile.puttext;
+                                      else
+                                         (* If a parameter has type 
+                                          * void, then it must mean that
+                                          * there are NO parameters! 
+                                          * I.e. foo(void).
+                                          *)
+                                         (if num_enter_parameters=1 then
+                                             'found (void)' -> outfile.comment;
+                                             0->num_enter_parameters
+                                          else
+                                             'Error: Met void parameter at num_enter_parameters='
+                                               -> screen.puttext;
+                                             num_enter_parameters
+                                               -> screen.putint;
+                                             screen.newline;
+                                             stop;
+                                         if);
+                                     if)
+                                 if);
+                              #);
+                            arg: ^text;
+                            arg_is_pointer: @boolean;
+                            arg_is_pointer_pointer: @boolean;
+                         enter d[]
+                         do NONE -> arg[];
+                            false -> arg_is_pointer;
+                            false -> arg_is_pointer_pointer;
+                            outfile.indent;
+                            (if d.getconst2->optionalPresent then
+                                d.getconst2->do_const;
+                            if);
+                            (if d.getdeclarator->optionalPresent then
+                                d.getdeclarator->do_declarator
+                             else
+                                generate_param_name;
+                            if);
+                            arg[] -> outfile.puttext;
+                            ': ' -> outfile.puttext;
+                            num_enter_parameters+1->num_enter_parameters;
+                            (if num_enter_parameters>enter_parameters.range then
+                                enter_parameters.range
+                                  -> enter_parameters.extend;
+                            if);
+                            arg[]
+                              ->enter_parameters[num_enter_parameters][];
+                            (if d.getconst1->optionalPresent then
+                                d.getconst1->do_const;
+                            if);
+                            d.gettype -> do_param_type_spec;
+                            (if d.getattributes->optionalPresent then
+                                d.getattributes->do_param_attributes;
+                            if);
+                            ';' -> outfile.putline;
                          #);
                        emit_enter_parameters:
-                         (# p: ^idl.parameter_dcls;
-                         enter p[]
-                         do 'emit_enter_parameters NYI' 
-                              -> outfile.comment;
+                         (# first_done: @boolean;
+                         do (for i:num_enter_parameters repeat
+                                 (if first_done then
+                                     ', '->outfile.puttext;
+                                  else
+                                     true -> first_done;
+                                 if);
+                                 enter_parameters[i][]
+                                   -> outfile.puttext;
+                            for)
                          #);
-                       result_present, parameters_present: @boolean;
+                       result_present: @boolean;
+                       enter_parameters: [4]^text;
+                       num_enter_parameters: @integer;
                        do_op_type_spec:
                          (# t: ^idl.op_type_spec;
+                            s: ^idl.param_scoped_name;
                          enter t[]
                          do false -> result_present;
                             (if t.symbol
@@ -446,13 +704,25 @@ INCLUDE './idlsematt';
                                 'result: @integer ' -> outfile.puttext;
                                 'void*' -> outfile.comment;
                                 ';' -> outfile.put;
-                             // idl.param_base_type_spec
-                             // idl.param_string_type
-                             // idl.param_scoped_name
-                             // idl.param_void then
+                             // idl.param_base_type_spec then
                                 true -> result_present;
                                 'result: @integer ' -> outfile.puttext;
-                                'param_type_spec NYI' -> outfile.comment;
+                                'param_base_type_spec NYI' -> outfile.comment;
+                                ';' -> outfile.put;
+                             // idl.param_string_type then
+                                true -> result_present;
+                                'result: @integer ' -> outfile.puttext;
+                                'param_string_type' -> outfile.comment;
+                                ';' -> outfile.put;
+                             // idl.param_scoped_name then
+                                true -> result_present;
+                                'result: @' -> outfile.puttext;
+                                (t[]->s[]).getscoped_name 
+                                  -> do_scoped_name;
+                                ';' -> outfile.put;
+                             // idl.param_void then
+                                false -> result_present;
+                                'No result' -> outfile.comment;
                                 ';' -> outfile.put;
                              // idl.param_type_spec_ref then
                                 true -> result_present;
@@ -469,16 +739,17 @@ INCLUDE './idlsematt';
                        (* Start a virtual *)
                        e.getIdentifier 
                          -> IdentifierToText -> outfile.puttext;
-                       ':< External' -> outfile.puttext;
+                       (*':< External' -> outfile.puttext;*)
+                       ':< ' -> outfile.puttext;
                        outfile.newline;
                        2 -> outfile.indent.inc;
-                       (if e.getop_attributeOpt -> isOptionalPresent then
+                       (if e.getop_attributeOpt -> optionalPresent then
                            e.getop_attributeOpt -> do_op_attribute
                        if);
-                       (if e.getraises_exprOpt -> isOptionalPresent then
+                       (if e.getraises_exprOpt -> optionalPresent then
                            e.getraises_exprOpt -> do_raises_expr;
                        if);
-                       (if e.getcontext_exprOpt -> isOptionalPresent then
+                       (if e.getcontext_exprOpt -> optionalPresent then
                            e.getcontext_exprOpt -> do_context_expr;
                        if);
                        outfile.indent;
@@ -491,17 +762,25 @@ INCLUDE './idlsematt';
                        
                        (* Finish this virtual - emit enter,do,exit *)
                        3 -> outfile.indent.dec;
-                       (if parameters_present then
+                       (if num_enter_parameters>0 then
                            outfile.indent;
-                           'enter (' -> outfile.puttext;
-                           e.getparameter_dcls -> emit_enter_parameters;
-                           ')' -> outfile.putline;
+                           'enter ' -> outfile.puttext;
+                           (if num_enter_parameters>1 then 
+                               '(' -> outfile.put;
+                           if);
+                           emit_enter_parameters;
+                           (if num_enter_parameters>1 then 
+                               ')' -> outfile.put;
+                           if);
+                           outfile.newline;
                        if);
-                       outfile.indent;
-                       (if e.getstd_call_opt -> isOptionalPresent then
-                           'do CallStd;' -> outfile.putline;
+                       (if e.getstd_call_opt -> optionalPresent then
+                           outfile.indent;
+                           (*'do CallStd;' -> outfile.putline;*)
+                           '__stdcall' -> outfile.commentline;
                         else
-                           'do CallC;' -> outfile.putline;
+                           (* outfile.indent; *)
+                           (*'do CallC;' -> outfile.putline;*)
                        if);
                        (if result_present then
                            outfile.indent;
@@ -574,6 +853,7 @@ INCLUDE './idlsematt';
         'forward_dcl ignored: ' -> outfile.puttext;
         f.getIdentifier -> IdentifierToText -> outfile.puttext;
         outfile.CommentEnd;
+        outfile.newline;
         2 -> outfile.indent.dec;
      #);
    
