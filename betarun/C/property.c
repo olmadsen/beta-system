@@ -91,6 +91,8 @@ static void BooleanProperty(char *name)
 #ifdef RTDEBUG
   ENTRY("DebugIOA",   DebugIOA = TRUE);
   ENTRY("CheckHeap",   CheckHeap = TRUE);
+  ENTRY("PrintStackAtIllegal",   PrintStackAtIllegal = TRUE);
+  ENTRY("PSAI",   PrintStackAtIllegal = TRUE);
   ENTRY("StopAtIllegal",   StopAtIllegal = TRUE);
   ENTRY("SAI",   StopAtIllegal = TRUE);
   ENTRY("DebugAlloI",   DebugAlloI = TRUE);

@@ -447,6 +447,15 @@ void Illegal(char *file, int line)
     }
   }
 #endif /* NEWRUN */
+
+  if (PrintStackAtIllegal){
+#ifdef intel
+    long stackvariable = 0;
+    fprintf(output, "Illegal: Attempting to dump stack to stderr\n");
+    fflush(output);
+    PrintStack(&stackvariable);
+#endif /* intel */
+  }
   
   if (StopAtIllegal){
 #ifdef RTVALHALLA
