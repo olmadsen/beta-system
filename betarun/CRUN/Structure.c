@@ -107,7 +107,7 @@ ref(Structure) Struc(ref(Object) theObj)
   GCable_Entry();
   
 #ifdef hppa
-  this = cast(Object) getCallReg();
+  theObj = cast(Object) getCallReg();
 #endif
   
   /* Allocate a StructObject. */
