@@ -129,7 +129,7 @@ void BetaError(BetaErr err, Object *theObj)
 	/* DELIBERATELY NO BREAK HERE */
       case LeaveBasicCompErr:
 	/* Wind back to start of frame of caller of betaenv.o code stub */
-	SP = (long*)WindBackSP((long)SP, theObj, (long)thePC);
+	SP = (long*)WindBackSP((long)SP, theObj, thePC);
       }
       StackEnd = SP;
 #endif /* NEWRUN */

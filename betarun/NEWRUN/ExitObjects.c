@@ -14,21 +14,21 @@
       {                                                       \
         long SPoff;                                           \
         /* size allocated on stack when this became active */ \
-        GetSPoff(SPoff, CodeEntry(GETPROTO(this), (long)PC)); \
+        GetSPoff(SPoff, CodeEntry(GETPROTO(this), PC));       \
         SP = (long *)((long)SP+SPoff);                        \
       }
 #endif
 
   
-long *ExO(long *jumpAdr, 
+long *ExO(pc_t jumpAdr, 
 	  Object *exitObj, 
-	  long *PC, 
+	  pc_t PC, 
 	  Object* this, 
 	  long *SP) 
 {
   long *CSP = CompSP;
   long *OrigSP = SP;
-  long *OrigPC = PC;
+  pc_t OrigPC = PC;
   Object *theObj = this;
   Component *OrigActiveComponent = ActiveComponent;
   /* ActiveCallBackFrame and lastCompBlock not used on NEWRUN */
@@ -37,16 +37,16 @@ long *ExO(long *jumpAdr,
 
 #if 0
   fprintf(output, "\nExO: ");
-  fprintf(output, "\n  jumpAdr:"); PrintCodeAddress((long)jumpAdr);
+  fprintf(output, "\n  jumpAdr:"); PrintCodeAddress(jumpAdr);
   fprintf(output, "\n  exitObj:"); PrintObject(exitObj);
-  fprintf(output, "\n  PC:     "); PrintCodeAddress((long)PC);
+  fprintf(output, "\n  PC:     "); PrintCodeAddress(PC);
   fprintf(output, "\n  this:   "); PrintObject(this);
   fprintf(output, "\n");
   fflush(output);
 #define TRACE_EXO() \
  fprintf(output, "File %s; Line %d", __FILE__, __LINE__);      \
  fprintf(output, "\nNew SP:     0x%08x", (long)SP);            \
- fprintf(output, "\nNew PC:    "); PrintCodeAddress((long)PC); \
+ fprintf(output, "\nNew PC:    "); PrintCodeAddress(PC); \
  fprintf(output, "\nNew object:"); PrintObject(this);          \
  fprintf(output, "\n");                                        \
  fflush(output)
@@ -93,7 +93,7 @@ long *ExO(long *jumpAdr,
 	return 0;
       }
       /* Continue down the stack */
-      PC = (long*)GetPC(SP);
+      PC = GetPC(SP);
       this = *((Object **)SP-DYN_OFF);       
       TRACE_EXO();
       continue;
@@ -113,9 +113,9 @@ long *ExO(long *jumpAdr,
       DEBUG_STACK(fprintf(output, "ExO: passing comp 0x%x\n", (int)comp); fflush(output));
       SP     = (long*) *--CSP; CSP--; /* count down one before reading and one after */
 #ifdef ppcmac
-      PC = (long*)-1; /* Check everywhere */
+      PC = (pc_t)-1; /* Check everywhere */
 #else
-      PC     = (long*)callerComp->CallerLSC;
+      PC     = callerComp->CallerLSC;
 #endif
 
       /* TerminateComponent: (see Attach.c) */
@@ -125,7 +125,7 @@ long *ExO(long *jumpAdr,
        */
       ActiveComponent  = comp->CallerComp;
       this             = comp->CallerObj;
-      comp->CallerLSC  = -2; /* indicate that comp is terminated */
+      comp->CallerLSC  = (pc_t)-2; /* indicate that comp is terminated */
       comp->StackObj   = 0;
       comp->CallerComp = 0;
       comp->CallerObj  = 0;
@@ -143,7 +143,7 @@ long *ExO(long *jumpAdr,
       /* normal dyn from the start of this frame gives current object */
       this = *((Object **)SP-DYN_OFF); 
       /* RTS from the start of this frame gives PC */
-      PC = (long*)GetPC(SP);
+      PC = GetPC(SP);
       TRACE_EXO();
     }
   }
@@ -153,15 +153,15 @@ long *ExO(long *jumpAdr,
 /****************************** New version *******************************/
 
 
-long *ExOx(long *jumpAdr, 
+long *ExOx(pc_t jumpAdr, 
 	   Object *exitObj, 
-	   long *PC, 
+	   pc_t PC, 
 	   Object* this, 
 	   long *SP) 
 {
   long *CSP = CompSP;
   long *OrigSP = SP;
-  long *OrigPC = PC;
+  pc_t OrigPC = PC;
   Object *theObj = this;
   int one_more_done = 0;
   Component *OrigActiveComponent = ActiveComponent;
@@ -171,16 +171,16 @@ long *ExOx(long *jumpAdr,
 
 #if 1
   fprintf(output, "\nExOx: ");
-  fprintf(output, "\n  jumpAdr:"); PrintCodeAddress((long)jumpAdr);
+  fprintf(output, "\n  jumpAdr:"); PrintCodeAddress(jumpAdr);
   fprintf(output, "\n  exitObj:"); PrintObject(exitObj);
-  fprintf(output, "\n  PC:     0x%08x", (int)PC); PrintCodeAddress((long)PC);
+  fprintf(output, "\n  PC:     0x%08x", (int)PC); PrintCodeAddress(PC);
   fprintf(output, "\n  this:   "); PrintObject(this);
   fprintf(output, "\n");
   fflush(output);
 #define TRACE_EXOX() \
  fprintf(output, "File %s; Line %d", __FILE__, __LINE__);      \
  fprintf(output, "\nNew SP:     0x%08x", (long)SP);            \
- fprintf(output, "\nNew PC:     0x%08x", (int)PC); PrintCodeAddress((long)PC); \
+ fprintf(output, "\nNew PC:     0x%08x", (int)PC); PrintCodeAddress(PC); \
  fprintf(output, "\nNew object:"); PrintObject(this);          \
  fprintf(output, "\n");                                        \
  fflush(output)
@@ -235,7 +235,7 @@ long *ExOx(long *jumpAdr,
 	return 0;
       }
       /* Continue down the stack */
-      PC = (long*)GetPC(SP);
+      PC = GetPC(SP);
       this = *((Object **)SP-DYN_OFF);       
       TRACE_EXOX();
       continue;
@@ -256,9 +256,9 @@ long *ExOx(long *jumpAdr,
       DEBUG_CODE(fprintf(output, "ExO: passing comp 0x%x\n", (int)comp); fflush(output));
       SP     = (long*) *--CSP; CSP--; /* count down one before reading and one after */
 #ifdef ppcmac
-      PC = (long*)-1; /* Check everywhere */
+      PC = (pc_t)-1; /* Check everywhere */
 #else
-      PC     = (long*)callerComp->CallerLSC;
+      PC     = callerComp->CallerLSC;
 #endif
 
       /* TerminateComponent: (see Attach.c) */
@@ -268,7 +268,7 @@ long *ExOx(long *jumpAdr,
        */
       ActiveComponent  = comp->CallerComp;
       this             = comp->CallerObj;
-      comp->CallerLSC  = -2; /* indicate that comp is terminated */
+      comp->CallerLSC  = (pc_t)-2; /* indicate that comp is terminated */
       comp->StackObj   = 0;
       comp->CallerComp = 0;
       comp->CallerObj  = 0;
@@ -288,7 +288,7 @@ long *ExOx(long *jumpAdr,
       /* normal dyn from the start of this frame gives current object */
       this = *((Object **)SP-DYN_OFF); 
       /* RTS from the start of this frame gives PC */
-      PC = (long*)GetPC(SP);
+      PC = GetPC(SP);
       TRACE_EXOX();
     }
   }

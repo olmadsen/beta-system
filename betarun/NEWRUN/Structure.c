@@ -27,7 +27,7 @@ Structure *AlloS(Object *origin, ProtoType *proto, long *SP)
   return newStruct;
 }
 
-Structure *VAlloS(ProtoType *proto, long *SP, long PC)
+Structure *VAlloS(ProtoType *proto, long *SP, pc_t PC)
 {
   return AlloS(0, proto, SP);
 }

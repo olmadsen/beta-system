@@ -12,7 +12,7 @@
 
 extern void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
 
-long WindBackSP(long SP, Object *obj, long PC)
+long WindBackSP(long SP, Object *obj, pc_t PC)
 {
 
 #ifdef ppcmac
@@ -60,7 +60,7 @@ void PrintStackFrame(long *PrevSP, long *SP)
   /* Print LR and CR too */
   fprintf(output, "   +8:  0x%08x: 0x%08x", (int)PrevSP+2, (int)*(PrevSP+2));
   fprintf(output, "(LR/RTS)");
-  PrintCodeAddress((int)*StackCell);
+  PrintCodeAddress((pc_t)*StackCell);
   fprintf(output, "\n");
   fprintf(output, "   +4:  0x%08x: 0x%08x", (int)PrevSP+1, (int)*(PrevSP+2));
   fprintf(output, "(CR)");
@@ -78,7 +78,7 @@ void PrintStackFrame(long *PrevSP, long *SP)
 #ifdef sgi
     if (StackCell==PrevSP+PC_OFF){
       fprintf(output, "(RTS)");
-      PrintCodeAddress((int)*StackCell);
+      PrintCodeAddress((pc_t)*StackCell);
     }
 #endif /* sgi */
     if (StackCell==PrevSP-DYN_OFF){
@@ -149,8 +149,8 @@ static void TRACE_NEW_FRAME(void)
   if (DebugStack){
     fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__); 
     fprintf(output, "Own SP:        0x%x\n", SP);              
-    fprintf(output, "Caller PC:     0x%x " , PC);              
-    if (PC==-1){                                               
+    fprintf(output, "Caller PC:     0x%x " , (int)PC);              
+    if (PC==(pc_t)-1){                                               
       fprintf(output, "<UNKNOWN_MARK>\n");                    
     } else {                                                   
       PrintCodeAddress(PC);                                    
@@ -168,14 +168,14 @@ static void TRACE_NEW_FRAME(void)
 
 
 #ifdef RTDEBUG
-static void TRACE_STACK(long SP, long PC, Object *theObj, int line) 
+static void TRACE_STACK(long SP, pc_t PC, Object *theObj, int line) 
 {
   if (DebugStack){
     fprintf(output, "File %s; Line %d\n", __FILE__, line); 
     fprintf(output, "---------------------\n", SP);            
     fprintf(output, "SP:        0x%08x\n", SP);                
-    fprintf(output, "PC:        0x%08x ",  PC);                
-    if (PC==-1){                                               
+    fprintf(output, "PC:        0x%08x ",  (int)PC);                
+    if (PC==(pc_t)-1){                                               
       fprintf(output, "<UNKNOWN_MARK>\n");                    
     } else {                                                   
       PrintCodeAddress(PC);                                    
@@ -245,14 +245,16 @@ void ProcessStackFrames(long SP,
    */
   Object *theObj;
   long *CSP = CompSP;
-  long PC;
+  pc_t PC;
 #ifdef macppc
   long SPz = StackObjEnd; /* Used for stackobjects */
 #endif
 #ifdef RTDEBUG
   Object *current;
-  long currentSP, currentPC;
-  int unknown=-1;
+  long currentSP;
+  pc_t currentPC;
+  pc_t unknown = (pc_t)-1;
+  long unknown_sp = -1;
 #endif
   
   DEBUG_STACK(fprintf(output, "ProcessStackFrames(SP=0x%x, StackStart=0x%x)\n",
@@ -345,7 +347,7 @@ void ProcessStackFrames(long SP,
 			  "Processing top frame before %s (prevSP=0x%x):\n",
 			  (isGen) ? "allocation" : "callback",
 			  (int)SP));
-      TRACE_STACK(unknown,unknown,GetThis((long*)SP),__LINE__);
+      TRACE_STACK(unknown_sp,unknown,GetThis((long*)SP),__LINE__);
       ProcessRefStack((Object **)SP-DYN_OFF, dynOnly, func);
       PC = GetPC(SP);
       theObj = *((Object **)SP-DYN_OFF); 
@@ -420,9 +422,9 @@ void ProcessStackFrames(long SP,
       /* SP     = (long)callerComp->SPx; */
       SP     = *--CSP; CSP--; /* count down one before reading and one after */
 #ifdef ppcmac
-      PC = (long)-1; /* Check everywhere */
+      PC = (pc_t)-1; /* Check everywhere */
 #else
-      PC     = (long)callerComp->CallerLSC;
+      PC     = callerComp->CallerLSC;
 #endif
       theObj = comp->CallerObj;
       TRACE_NEW_FRAME();
@@ -556,10 +558,10 @@ ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 	    (int)(sObj->StackSize),
 	    WhichHeap((Object*)sObj));
     fprintf(output, "func is 0x%x", (int)func);
-    PrintCodeAddress((long)func);
+    PrintCodeAddress((pc_t)func);
     fprintf(output, "\n");
     fprintf(output, "StackRefAction is 0x%x", (int)StackRefAction);
-    PrintCodeAddress((long)StackRefAction);
+    PrintCodeAddress((pc_t)StackRefAction);
     fprintf(output, "\n");
   });
   DEBUG_CODE(if (DebugStackObj){
@@ -588,7 +590,7 @@ ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 
 static void DumpCell(Object **theCell, Object *theObj)
 { 
-  register long pc=-1;
+  register pc_t pc = (pc_t)-1;
   long *SP;
 
   /* theObj is dyn in a frame. This is the current object in the 
@@ -605,13 +607,13 @@ static void DumpCell(Object **theCell, Object *theObj)
   /* First check if theObj is CALLBACKMARK */
   if ((theObj==CALLBACKMARK)||(theObj==GENMARK)){
     SP = (long *)theCell+DYN_OFF; /* Frame starts DYN_OFF longs above dyn */
-    pc = *((long *)SP+PC_OFF);
+    pc = *((pc_t*)SP+PC_OFF);
     if (theObj==CALLBACKMARK){
       TRACE_DUMP(fprintf(output, "  cb: "));
       fprintf(output, 
 	      "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
 	      (int)pc);
-      if (!SimpleDump) PrintCodeAddress((long)pc);
+      if (!SimpleDump) PrintCodeAddress(pc);
       fprintf(output, ") ]\n");
     } else {
       TRACE_DUMP(fprintf(output, "  allo: "));
@@ -649,25 +651,25 @@ static void DumpCell(Object **theCell, Object *theObj)
     theObj = (Object *)EnclosingComponent(theObj);
   } 
     
-  if (pc==-1){
+  if (pc == (pc_t)-1){
     SP = (long *)theCell+DYN_OFF; /* Frame starts DYN_OFF longs above dyn */
-    pc = *((long *)SP+PC_OFF);
+    pc = *((pc_t *)SP+PC_OFF);
   }
 
   TRACE_DUMP(fprintf(output, ", PC=0x%x *\n", (int)pc));
   DisplayObject(output, theObj, pc);
 }
 
-void DisplayNEWRUNStack(long *pc, Object *theObj, int signal)
+void DisplayNEWRUNStack(pc_t pc, Object *theObj, int signal)
 { 
 
   /* First check for errors occured outside BETA */
-  if (!IsBetaCodeAddrOfProcess((long)pc)){
+  if (!IsBetaCodeAddrOfProcess(pc)){
     long *betatop = BetaStackTop[0];
     fprintf(output, 
 	    "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
 	    (int)pc);
-    if (!SimpleDump) PrintCodeAddress((long)error_pc);
+    if (!SimpleDump) PrintCodeAddress(error_pc);
     fprintf(output, ") ]\n");
     
     /* 
@@ -720,16 +722,16 @@ GLOBAL(static Component *TheComponent);
 GLOBAL(static CellDisplayFunc DoForEach);
 GLOBAL(static int BasicItemShown);
 
-static void ShowCell(int pc, Object *theObj)
+static void ShowCell(pc_t pc, Object *theObj)
 {
   if (theObj==(Object *)BasicItem){
     if (!BasicItemShown){
-      TRACE_SCAN(fprintf(output, ", PC=0x%x *\n", pc));
+      TRACE_SCAN(fprintf(output, ", PC=0x%x *\n", (int)pc));
       DoForEach(pc, theObj);
       BasicItemShown=TRUE;
     }
   } else {
-    TRACE_SCAN(fprintf(output, ", PC=0x%x *\n", pc));
+    TRACE_SCAN(fprintf(output, ", PC=0x%x *\n", (int)pc));
     if (!strongIsObject(theObj)) {
       TRACE_SCAN(fprintf(output, "(strongIsObject failed!?)\n"));
       return;
@@ -744,7 +746,7 @@ static void HandleStackCell(Object **theCell,Object *theObj)
    * in outpattern.c. An abstraction could be useful (i.e. having
    * DumpCell take a CellDisplayFunc pointer as argument).
    */
-  register long pc;
+  register pc_t pc;
   long *sp;
 
   TRACE_SCAN(fprintf(output, 
@@ -789,7 +791,7 @@ static void HandleStackCell(Object **theCell,Object *theObj)
       pc = 0;  /* not known - is somewhere in the C frames */
     } else {
       sp = (long *)theCell+DYN_OFF; /* Frame starts DYN_O longs above dyn */
-      pc = *((long *)sp+PC_OFF);
+      pc = *((pc_t *)sp+PC_OFF);
     }
     
     /* Check if theObj IS a component */
@@ -841,7 +843,7 @@ static void HandleStackCell(Object **theCell,Object *theObj)
 
 int scanComponentStack (Component* comp,
 			Object *curObj,
-			int pc,
+			pc_t pc,
 			CellDisplayFunc forEach)
 { /* scan through the stackpart corresponding to the comp parameter.
    * pc is the top code-address.

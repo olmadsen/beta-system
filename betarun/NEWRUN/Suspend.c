@@ -69,7 +69,7 @@ static void CheckReferences(Object **theCell, Object *theObj)
 #define TRACE_SO(code)
 #endif
 
-void Susp(Object *this, long prevSP, long RA, long SPz)
+void Susp(Object *this, long prevSP, pc_t RA, long SPz)
 {
    StackObject *sObj; 
    Component *returnComp;
@@ -81,7 +81,7 @@ void Susp(Object *this, long prevSP, long RA, long SPz)
    TRACE_SUSP(
    fprintf(output, 
 	   "Susp#%d(this=0x%x, prevSP=0x%x, RA=0x%x, SPz=0x%x, SPy=0x%x\n",
-	   NumSusp, this, prevSP, RA, SPz, *(CompSP-2)));
+	   NumSusp, this, prevSP, (int)RA, SPz, *(CompSP-2)));
 
    /* Get SPy. Do NOT pop, since this will confuse a GC during AlloSO below */
    SPy = *(CompSP-2);
@@ -109,7 +109,7 @@ void Susp(Object *this, long prevSP, long RA, long SPz)
 	   "Susp#%d: comp=0x%x, CallerLSC set to 0x%x\n",
 	   NumSusp,
 	   (int)ActiveComponent,
-	   RA));
+	   (int)RA));
 
    TRACE_SO(
    fprintf(output, "Susp#%d: packing stack object:\n", NumSusp);

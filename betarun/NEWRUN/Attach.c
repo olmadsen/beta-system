@@ -26,7 +26,7 @@ static void TerminateActiveComponent(void)
 { 
   Component *comp = ActiveComponent;
   Object *callerObj;
-  long RA;
+  pc_t RA;
   long SPx;
   
   /* printf("\ncomp TERMINATED: 0x%08x\n", comp); fflush(stdout); */
@@ -40,7 +40,7 @@ static void TerminateActiveComponent(void)
   RA               = ActiveComponent->CallerLSC;
   
   /* indicate that comp (old ActiveComponent) is terminated */
-  comp->CallerLSC  = -2; 
+  comp->CallerLSC  = (pc_t) -2; 
   comp->StackObj   = 0;
   comp->CallerComp = 0;
   comp->CallerObj  = 0;
@@ -48,7 +48,7 @@ static void TerminateActiveComponent(void)
   /* we must return a proper a0 and a1, since th and SP are set after Att */
 #ifdef RTVALHALLA
   if (valhallaIsStepping)
-    ValhallaOnProcessStop ((long*)RA,0,0,0,RTS_ATTACH);
+    ValhallaOnProcessStop (RA,0,0,0,RTS_ATTACH);
 #endif
   CallBetaEntry(RA, SPx, callerObj);
 }
@@ -57,7 +57,7 @@ static void TerminateActiveComponent(void)
 
 /*************************** Solution using doAtt *********************/
 
-void Att(Object *this, Component *comp, long RA, long SPx)
+void Att(Object *this, Component *comp, pc_t RA, long SPx)
 {
   long SPy;
   int isFirst = (comp->CallerLSC == 0);
@@ -69,13 +69,13 @@ void Att(Object *this, Component *comp, long RA, long SPx)
 
   TRACE_ATT(
   fprintf(output, "Att#%d(this=0x%x, comp=0x%x, RA=0x%x, SPx=0x%x) (%s)\n",
-	  NumAtt, this, comp, RA, SPx, isFirst?"first":"not first");
+	  NumAtt, this, comp, (int)RA, SPx, isFirst?"first":"not first");
   fprintf(output, "Att#%d: comp= 0x%x, CallerLSC=0x%x\n",
           NumAtt,
 	  (int)comp, 
 	  (int)comp->CallerLSC));
 
-  if ((long)comp->CallerLSC == -2) {
+  if ((long)comp->CallerLSC == (pc_t)-2) {
     /* CallerLCS is set to -2 in ExitObjects.c when the component terminates.
      * So we are attempting to attach a component, that is terminated.
      */
@@ -83,7 +83,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
     /* adjust SPx to be SP of previous frame. */
     GetSPoff(SPoff, CodeEntry(GETPROTO(this), RA)); 
     SPx = ((long)SPx+SPoff);
-    BetaError(CompTerminatedErr, this, (long *)SPx, (long *)RA); 
+    BetaError(CompTerminatedErr, this, (long *)SPx, RA); 
   }
 
   if (((long)comp->CallerLSC != 0) && ((long)comp->StackObj==0)) {
@@ -94,7 +94,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
     /* adjust SPx to be SP of previous frame. */
     GetSPoff(SPoff, CodeEntry(GETPROTO(this), RA)); 
     SPx = ((long)SPx+SPoff);
-    BetaError(RecursiveAttErr, this, (long *)SPx, (long *)RA);
+    BetaError(RecursiveAttErr, this, (long *)SPx, RA);
   }
 
   SPy = (long)GetSP();
@@ -120,7 +120,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
   AssignReference(&comp->CallerComp, ActiveComponent); /* may call AOAtoIOAinsert */
   AssignReference(&comp->CallerObj, this); /* may call AOAtoIOAinsert */
   comp->StackObj   = 0;
-  comp->CallerLSC = -1; /* indicate that comp is attached */
+  comp->CallerLSC = (pc_t)-1; /* indicate that comp is attached */
 
   TRACE_ATT(fprintf(output, "Att#%d: comp=0x%x, CallerLSC set to -1\n", NumAtt, comp));
 
@@ -202,7 +202,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
 /************************ Solution NOT using doAtt *******************/
 
 
-void Att(Object *this, Component *comp, long RA, long SPx)
+void Att(Object *this, Component *comp, pc_t RA, long SPx)
 {
   Object *compObj;
   StackObject *sObj=0;
@@ -214,7 +214,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
 
 #if 0
   fprintf(output, "Att(this=0x%x, comp=0x%x, RA=0x%x, SPx=0x%x\n",
-	  this, comp, RA, SPx);
+	  this, comp, (int)RA, SPx);
   fprintf(output, "Att: comp= 0x%x, CallerLSC=0x%x\n", 
 	  (int)comp, 
 	  (int)comp->CallerLSC);
@@ -228,7 +228,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
     /* adjust SPx to be SP of previous frame. */
     GetSPoff(SPoff, CodeEntry(GETPROTO(this), RA)); 
     SPx = ((long)SPx+SPoff);
-    BetaError(CompTerminatedErr, this, (long *)SPx, (long *)RA); 
+    BetaError(CompTerminatedErr, this, (long *)SPx, RA); 
   }
 
   if (((long)comp->CallerLSC != 0) && ((long)comp->StackObj==0)) {
@@ -239,7 +239,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
     /* adjust SPx to be SP of previous frame. */
     GetSPoff(SPoff, CodeEntry(GETPROTO(this), RA)); 
     SPx = ((long)SPx+SPoff);
-    BetaError(RecursiveAttErr, this, (long *)SPx, (long *)RA);
+    BetaError(RecursiveAttErr, this, (long *)SPx, RA);
   }
 
   SPy = (long)GetSP();
@@ -249,7 +249,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
     fprintf(output, 
 	    "Susp: comp=0x%x, CallerLSC set to 0x%x\n",
 	    (int)ActiveComponent,
-	    RA);
+	    (int)RA);
 #endif
     comppush(SPy); /* fprintf(output, "comppush SPy: 0x%x\n", SPy); */
     comppush(SPx); /* fprintf(output, "comppush SPx: 0x%x\n", SPx); */
@@ -274,7 +274,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
   AssignReference(&comp->CallerComp, ActiveComponent); /* may call AOAtoIOAinsert */
   AssignReference(&comp->CallerObj, this); /* may call AOAtoIOAinsert */
   comp->StackObj   = 0;
-  comp->CallerLSC = -1; /* indicate that comp is attached */
+  comp->CallerLSC = (pc_t)-1; /* indicate that comp is attached */
 
 #if 0
   fprintf(output, "Att: comp=0x%x, CallerLSC set to -1\n", comp);

@@ -232,7 +232,7 @@ void IOAGc()
             Claim(inAOA(*pointer), "AOAtoIOAtable has a cell outside AOA");
             ProcessAOAReference( (Object **)*pointer, REFTYPE_DYNAMIC);
             if (!((inIOA(**(long**)pointer) || inToSpace(**(long**)pointer)))) {
-               *pointer = 0;  // Null out entries we don't need any more
+               *pointer = 0;  /* Null out entries we don't need any more */
             }
          }
          pointer++;

@@ -695,8 +695,8 @@ static void addLabelsFromGroupTable(void)
 {
   group_header *gh;
   char theLabel[256];
-  long mPart;
-  long gPart;
+  pc_t mPart;
+  pc_t gPart;
 
   gh = NextGroup(0);
   while (gh) {
@@ -710,12 +710,12 @@ static void addLabelsFromGroupTable(void)
 
       gPart=  G_Part(((ProtoType*)(*proto)));
       sprintf(theLabel, "%s:G%d", NameOfGroupMacro(gh), i+1);
-      addGroupLabel((pc_t)gPart, theLabel);
+      addGroupLabel(gPart, theLabel);
       
       mPart =  M_Part(((ProtoType*)(*proto)));
-      if (mPart != MAXINT) {
+      if (mPart != (pc_t)MAXINT) {
 	sprintf(theLabel, "%s:M%d", NameOfGroupMacro(gh), i+1);
-	addGroupLabel((pc_t)mPart, theLabel);
+	addGroupLabel(mPart, theLabel);
       }
 
       proto++;

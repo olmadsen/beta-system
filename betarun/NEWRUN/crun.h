@@ -53,7 +53,7 @@ extern Item *        AlloSICB(Structure **struchandle, long *SP);
 extern Item *	    AlloSI(long dummy, Structure *struc, long *SP);
 extern Component *   AlloSC(Structure *struc, long *SP);
 extern StackObject * AlloSO(unsigned size, long *SP);
-extern void                 Susp(Object *this, long prevSP, long RA, long SPz); /* calls AlloSO */
+extern void                 Susp(Object *this, long prevSP, pc_t RA, long SPz); /* calls AlloSO */
 extern long 		    leS(Structure *arg1, Structure *arg2, long *SP);
 extern long 		    geS(Structure *arg1, Structure *arg2, long *SP);
 extern long 		    gtS(Structure *arg1, Structure *arg2, long *SP);
@@ -77,7 +77,7 @@ extern char *		    PpkCT(char *, long *SP);
 extern char *		    PpkSVT(ValRep *theRep, unsigned low, long high, long *SP);
 #endif
 extern void 		    ChkRA(Object **theObjHandle);
-extern void                 Att(Object *this, Component *comp, long RA, long SPx);
+extern void                 Att(Object *this, Component *comp, pc_t RA, long SPx);
 extern void                 SetProtos(ProtoType *basic, ProtoType *text);
 
 /* Garbage collector interface */

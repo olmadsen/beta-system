@@ -439,9 +439,9 @@ extern long *etext;
 #endif
 
 #ifdef macppc
-#define G_Part(proto) ( (proto->GenPart) ? *(long*)proto->GenPart : 0)
+#define G_Part(proto) ( (proto->GenPart) ? *(pc_t *)proto->GenPart : 0)
 #else
-#define G_Part(proto) (long) proto->GenPart
+#define G_Part(proto) (pc_t) proto->GenPart
 #endif /* macppc */
 
 #ifdef RTDEBUG
@@ -527,7 +527,7 @@ extern void CClaim(long cond, char *description, char *fname, int lineno);
 
 #ifdef sgi
 
-#define GetPC(SP) (*((long*)(SP)+PC_OFF))
+#define GetPC(SP) ((pc_t)((*((long*)(SP)+PC_OFF))))
 #define GetDyn(SP) (*((long*)(SP)-DYN_OFF))
 #define GetSPbeta(SP) (*((long *)(SP)))
 

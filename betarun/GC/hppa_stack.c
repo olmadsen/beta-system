@@ -95,10 +95,10 @@ ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 	      (int)(sObj->StackSize),
 	      WhichHeap((Object*)sObj));
       fprintf(output, "func is 0x%x", (int)func);
-      PrintCodeAddress((long)func);
+      PrintCodeAddress((pc_t)func);
       fprintf(output, "\n");
       fprintf(output, "StackRefAction is 0x%x", (int)StackRefAction);
-      PrintCodeAddress((long)StackRefAction);
+      PrintCodeAddress((pc_t)StackRefAction);
       fprintf(output, "\n");
   });
 
@@ -119,7 +119,7 @@ ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 }
 
 /************ beta.dump/valhalla/exception stuff below *****************/
-void DisplayHPPAStack(long *thePC) 
+void DisplayHPPAStack(pc_t thePC) 
 {
   /* FIXME: Could possibly use ProcessHPPAStack with appropriate func */
 
@@ -129,7 +129,7 @@ void DisplayHPPAStack(long *thePC)
    */
   Object **theCell = /*getRefSP()*/ (Object **)(RefSP-1);
   Object *theObj;
-  long   *pc=thePC;
+  pc_t    pc=thePC;
   
   while((void **)theCell > &ReferenceStack[0]) {
     if ((*theCell)==(Object *)ExternalMarker){
@@ -142,7 +142,7 @@ void DisplayHPPAStack(long *thePC)
 #if 0 /* not yet */
 #ifdef RTVALHALLA
       theCell--;
-      pc = (long *)*theCell
+      pc = (pc_t)*theCell
 #endif
 #endif
 	if(theObj && isObject(theObj)) {
@@ -150,10 +150,10 @@ void DisplayHPPAStack(long *thePC)
 	  if (!isComponent(theObj) && IsComponentItem(theObj)) {
 	    DisplayObject(output, 
 			  (Object *)EnclosingComponent(theObj), 
-			  (long)pc);
+			  pc);
 	    if (theObj==(Object *)BasicItem) break;
 	  } else {
-	    DisplayObject(output, theObj, (long)pc);
+	    DisplayObject(output, theObj, pc);
 	  }
 	} else {
 	  if (theObj) fprintf(output, "  [Damaged object!: %x]\n", (int)theObj);
@@ -169,7 +169,7 @@ void DisplayHPPAStack(long *thePC)
 
 int scanComponentStack (Component* comp,
 			Object *curObj,
-			int pc,
+			pc_t pc,
 			CellDisplayFunc forEach)
 { 
   fprintf(output, "scanComponentStack: NYI\n");

@@ -41,7 +41,7 @@ void InstallSystemExceptionHandler(SYSTEMEXCEPTIONHANDLER sex){
 
 /******************************* M_Part: *****************************/
 
-long M_Part(ProtoType * proto)
+pc_t M_Part(ProtoType * proto)
      /* Return the address of the M-entry for the prototype proto.
       *
       * If the pattern has NO do-part and NO explicit prefix,
@@ -51,19 +51,19 @@ long M_Part(ProtoType * proto)
       * return the entry part of the last prefix.
       */
 {
-  if (!proto) return MAXINT;
+  if (!proto) return (pc_t)MAXINT;
   while ((!proto->MpartOff) && (proto!=proto->Prefix)){
     proto=proto->Prefix;
   }
   
   if (proto->MpartOff){
 #ifdef macppc
-    return **(long **)((long)proto+proto->MpartOff);
+    return **(pc_t **)((long)proto+proto->MpartOff);
 #else
-    return *(long *)((long)proto+proto->MpartOff);
+    return *(pc_t *)((long)proto+proto->MpartOff);
 #endif
   } else {
-    return MAXINT;
+    return (pc_t)MAXINT;
   }
 
 }
@@ -300,8 +300,8 @@ static void ObjectDescription(Object *obj,
   ProtoType   *proto=GETPROTO(obj);
   ProtoType   *activeProto=proto;
   char        *groupname;
-  long         mPart = M_Part(proto);
-  long         gPart = G_Part(proto);
+  pc_t         mPart = M_Part(proto);
+  pc_t         gPart = G_Part(proto);
 
   if (isMakingDump && (obj==(Object *)BasicItem)){
     /* BasicItem will be shown as component */
@@ -319,9 +319,9 @@ static void ObjectDescription(Object *obj,
      * to PC is smallest (and positive).
      */
     
-    gDist  = (long)pc - gPart; 
+    gDist  = pc - gPart; 
     TRACE_CODEENTRY(fprintf(output, "initial gPart: 0x%x, gDist: 0x%x\n", (int)gPart, (int)gDist));
-    mDist  = (long)pc - mPart;
+    mDist  = pc - mPart;
     TRACE_CODEENTRY(fprintf(output, "initial mPart: 0x%x, mDist: 0x%x\n", (int)mPart, (int)mDist));
     if (gDist < 0) gDist = MAXINT;
     if (mDist < 0) mDist = MAXINT;
@@ -332,18 +332,18 @@ static void ObjectDescription(Object *obj,
       mPart = M_Part(proto);
       gPart = G_Part(proto);
       TRACE_CODEENTRY(fprintf(output, "ObjectDescription: proto=0x%x (%s), mPart=0x%x, gPart=0x%x\n", (int)proto, ProtoTypeName(proto), (int)mPart, (int)gPart)); 
-      if(((long)pc - gPart > 0) &&
-	 ((long)pc - gPart <= activeDist)){ 
+      if((pc - gPart > 0) &&
+	 (pc - gPart <= activeDist)){ 
 	/* Use <= to get the LAST level, that has the entry point */ 
 	activeProto = proto;
-	activeDist  = gDist = (long)pc - gPart; 
+	activeDist  = gDist = pc - gPart; 
 	TRACE_CODEENTRY(fprintf(output, "gDist: 0x%x\n", (int)gDist));
       }
-      if(((long)pc - mPart > 0) &&
-	 ((long)pc - mPart <= (long) activeDist)){ 
+      if((pc - mPart > 0) &&
+	 (pc - mPart <= (long) activeDist)){ 
 	/* Use <= to get the LAST level, that has the entry point */ 
 	activeProto = proto;
-	activeDist  = mDist = (long)pc - mPart; 
+	activeDist  = mDist = pc - mPart; 
 	TRACE_CODEENTRY(fprintf(output, "mDist: 0x%x\n", (int)mDist));
       }
     }
@@ -994,9 +994,9 @@ int DisplayBetaStack(BetaErr errorNumber,
    * stack pointer should be adjusted to point to second topmost frame.
    */
   if (theSignal){
-    if (IsBetaCodeAddrOfProcess((long)thePC)){ 
+    if (IsBetaCodeAddrOfProcess(thePC)){ 
       DEBUG_CODE(fprintf(output, "DisplayBetaStack: Adjusting StackEnd\n"));
-      StackEnd = (long*)WindBackSP((long)StackEndAtSignal, theObj, (long)thePC);
+      StackEnd = (long*)WindBackSP((long)StackEndAtSignal, theObj, thePC);
       DEBUG_CODE({
 	fprintf(output, 
 		"DisplayBetaStack: "
@@ -1231,7 +1231,7 @@ void NotifyErrorDuringDump(BetaErr errorNumber, BetaErr errorNumber2)
 /*************************** CodeEntry: ***************************/
 
 /* Return the M or G part obtained from theProto, that PC is in */
-unsigned long CodeEntry(ProtoType *theProto, long pc)
+unsigned long CodeEntry(ProtoType *theProto, pc_t pc)
 {
   /* Find the active prefix level based on the PC.
    * Here we use both the G-entry and the M-entry. 
@@ -1239,21 +1239,22 @@ unsigned long CodeEntry(ProtoType *theProto, long pc)
    * G-entry or M-entry of the corresponding prefix-level
    * to PC is smallest.
    */
-  long gPart, gDist, mPart, mDist, minDist;
+  long gDist, mDist, minDist;
+  pc_t gPart, mPart;
   ProtoType *activeProto;
   ProtoType *protoArg=theProto;
 
   TRACE_CODEENTRY({
     fprintf(output, "CodeEntry(theProto=0x%x", (int)theProto);
     PrintProto(theProto);
-    fprintf(output, " PC=0x%x", pc); 
+    fprintf(output, " PC=0x%x", (int)pc); 
     PrintCodeAddress(pc);
     fprintf(output, ")\n");
     fflush(output);
   });
   mPart = M_Part(theProto);
   gPart = G_Part(theProto);
-  gDist  = pc - gPart; 
+  gDist  = pc - gPart;
   mDist  = pc - mPart;
   activeProto = theProto;
   if (gDist < 0) gDist = MAXINT;
@@ -1291,6 +1292,7 @@ unsigned long CodeEntry(ProtoType *theProto, long pc)
     DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
+#ifdef bizarre_code_what_is_this_for /* EC */
   if (minDist == pc) {
     fprintf(output, 
 	    "RTS: Fatal Error: CodeEntry(proto=0x%x, PC=0x%x) returns 0.\n",
@@ -1302,6 +1304,7 @@ unsigned long CodeEntry(ProtoType *theProto, long pc)
     DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
+#endif
   if (minDist == gDist) {
     TRACE_CODEENTRY(fprintf(output, "CodeEntry returns G_part(0x%x): 0x%x\n", (int)activeProto, G_Part(activeProto)));
     return (unsigned long)G_Part(activeProto);

@@ -51,7 +51,7 @@ ParamThisComp(void, AttBC)
     cb.RefBlock = (void *)/*getRefSP()*/RefSP;
     StackStart = (long)RefSP;
     lastCompBlock = (void *)RefSP;
-    comp->CallerLSC = 1;
+    comp->CallerLSC = (pc_t)1;
 #endif
 
     BasicItem = (Item *) &comp->Body;
