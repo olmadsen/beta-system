@@ -34,7 +34,7 @@
 #define LPOLESTR LPSTR
 #endif
 
-#define test 0
+#define test 1
 
 extern "C" 
 {
@@ -519,7 +519,7 @@ void PutDispId(long dispId, long *dispList)
   dispList[0] = dispId;
 }
 
-long textLen(char *name)
+long textLen(short *name)
 { long i,len=0;
   for (i=0; name[i]>0; i++) len= len +1;
   if (test) printf("textLen %s %i\n", name,len);
