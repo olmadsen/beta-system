@@ -8,6 +8,9 @@
  * This file is used by both the debugger and the dynamic linker.
  * The debugger needs only the text (code) labels, whereas the dynamic
  * linker needs most symbols.
+ * 
+ * FIXME: In betarun/C/stack.c some of this code is replicated.
+ * Probably this file should be included in betarun as "the one and only".
  */
 
 #include <stdio.h>
@@ -38,6 +41,11 @@ int nextAddress(labeltable *handle)
 
 labeltable *initReadNameTable (char* execFileName) { 
   return 0;
+}
+
+void freeNameTable(labeltable *handle)
+{
+  return;
 }
 
 #else /* !ppcmac */
@@ -193,6 +201,12 @@ labeltable *initReadNameTable (char* execFileName, int full)
 
   return table;
 }
+
+void freeNameTable(labeltable *handle)
+{
+  free(handle);
+}
+
 
 int nextAddress(labeltable *table) 
 { 
