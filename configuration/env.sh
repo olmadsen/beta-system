@@ -46,9 +46,9 @@ case "`uname -m`" in
 			MACHINETYPE=SUN4S
 			objdir=sun4s
 			MOTIFHOME=${MOTIFHOME-/usr/dt}
-			MOTIFINC=${MOTIFINC-$MOTIFHOME/include}
-			# We use Motif 1.2.3 since our C object files 
-			# are compiled with Motif 1.2.3 headers.
+			MOTIFINC=${MOTIFINC-$BETALIB/Xt/motif/private/external/include}
+			# We use Motif 1.2 since our C object files 
+			# are compiled with Motif 1.2 headers.
 		        MOTIFLINKOPT="$MOTIFHOME/lib/libXm.so.3"
 			OPENWINHOME=${OPENWINHOME-/usr/openwin}
 			export OPENWINHOME
