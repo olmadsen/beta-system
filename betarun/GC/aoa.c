@@ -55,7 +55,7 @@
 #ifdef USEMMAP
 static Object* ExtendBaseBlock(unsigned long numbytes);
 #else
-static long AllocateBaseBlock();
+static long AllocateBaseBlock(void);
 static void AOANewBlock(long newBlockSize);
 /* static void AOAMaybeNewBlock(long minNewBlockSize); */
 #endif
