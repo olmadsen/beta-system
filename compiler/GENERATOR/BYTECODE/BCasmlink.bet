@@ -81,7 +81,7 @@ use_java_classpath:
 main_in_program:
   (# exit true #);
 no_jar_compression:
-  (# exit false #);
+  (# exit hostIsWindows #);
 use_directory_map:
   (* Change directory to jvm directory and add all needed files 
    * from there using one jar command. 
@@ -116,13 +116,21 @@ is_full_path: booleanValue
   #)
 --asmlinklib: attributes --
 break_long_line: booleanValue
-  (# 
+  (# length: @integer
+  enter length
   do (if hostIsWindows then
          (* http://www.ss64.com/nt/cmd.html *)
-         asmstate.link_line_length>8000 -> value
+         length+asmstate.link_line_length>8192 -> value
       else
-         asmstate.link_line_length>4096 -> value
+         (* SH limit? *)
+         length+asmstate.link_line_length>30000 -> value
      if);
+  #);
+AFFputText:
+  (# T: ^text
+  enter T[]
+  do asmstate.link_line_length+T.lgth->asmstate.link_line_length;
+     T[] -> AFF.puttext;
   #);
 jarfilename: applicationbase
   (# 
@@ -132,7 +140,8 @@ jarcommand:
   (# cmd: ^text;
      update: @boolean;
   enter update
-  do '' -> cmd[];
+  do 0 -> asmstate.link_line_length;
+     '' -> cmd[];
      (if update then
          (if verboseLevel <= verboseLevel.verbose then
              'echo jar -u ...' ->cmd.putline;
@@ -151,14 +160,25 @@ jarcommand:
          '0' -> cmd.put;
      if);
      ' '-> cmd.puttext; 
-     jarfilename -> tick -> cmd.puttext; 
      (if hostIsWindows then
+         jarfilename -> cmd.puttext; 
          ' ^\n\t'->cmd.puttext;
       else
+         jarfilename -> tick -> cmd.puttext; 
          ' \\\n\t' -> cmd.puttext
      if);
   exit cmd[]
   #);  
+CheckLinkError:
+  (# cmd: ^text;
+  do ''->cmd[];
+     (if hostIsWindows then
+         '\nif errorlevel 1 goto linkerror' -> cmd.putLine;
+      else
+         '# Missing: check for link error' -> cmd.putline;
+     if);
+  exit cmd[]
+  #);
 
 --asmState:descriptor--
 (# link_line_length: @integer;
@@ -199,9 +219,9 @@ jarcommand:
 ---cont: descriptor --
 (# 
 do (if hostIsWindows then
-       ' ^\n\t'->AFF.puttext;
+       ' ^\n\t'->AFFputtext;
     else
-       ' \\\n\t' -> AFF.puttext
+       ' \\\n\t' -> AFFputtext
    if);
 #)
 ---header: descriptor ---
@@ -320,7 +340,7 @@ do (if true
            (* change drive *)
            dir.T[1]->AFF.put; ':' -> AFF.put; AFF.newline;
        if);
-       'cd '->AFF.puttext; dir[] -> quote -> AFF.putline
+       'cd '->AFF.puttext; dir[] -> slashToBackslash -> quote -> AFF.putline
     // isJava then
        'cd '->AFF.puttext; dir[] -> tick -> AFF.putline
     else
@@ -517,7 +537,7 @@ do 'ldTmp'->TODO
         if);
         AFF.newline;
         (if not common.switch[21] then
-            'if errorlevel 1 goto linkerror' -> AFF.putLine;
+            CheckLinkError -> AFF.putline;
         if);
      #);
    
@@ -558,12 +578,24 @@ do 'ldTmp'->TODO
           (# files: ^textlist
           enter files[]
           do (if first_done then
-                 true -> jarcommand -> AFF.puttext;
+                 CheckLinkError -> AFF.putline;
+                 true -> jarcommand -> AFFputtext;
               else
-                 false -> jarcommand -> AFF.puttext;
+                 false -> jarcommand -> AFFputtext;
                  true -> first_done;
              if);
-             files.scan(# do current[] -> tick -> AFF.puttext; cont; #);
+             files.scan
+             (# 
+             do (if 7+current.length->break_long_line then
+                    CheckLinkError -> AFF.putline;
+                    true -> jarcommand -> AFFputtext;
+                if);
+                (if hostIsWindows then
+                    current[] -> AFFputtext; cont;
+                 else
+                    current[] -> tick -> AFFputtext; cont;
+                if);
+             #);
           #);
      do CurrentDirectory -> cwd[];
         asmstate.directoryMap.scanAssociations
@@ -588,8 +620,8 @@ do (if true
        (if use_directory_map then
            GenerateJarFromDirectories
         else
-           '\n' -> AFF.puttext;
-           false -> jarcommand -> AFF.puttext;
+           '\n' -> AFFputtext;
+           false -> jarcommand -> AFFputtext;
        if);
     // isIL then
        (* Ensure applicationbase directory existence *)
@@ -674,6 +706,10 @@ do 'asmlinkdynamic'->TODO
                     if);
                 if);
             if);
+            (if 13+jvmpath.length+path.length->break_long_line then
+                CheckLinkError -> ldA.putline;
+                true -> jarcommand -> ldAputtext;
+            if);
             ' -C ' -> ldAputtext;
             jvmpath[] -> tick -> ldAputtext;
             ' ' -> ldA.putText;
@@ -720,11 +756,6 @@ do 'asmlinkdynamic'->TODO
 do (*'linkObj: ' -> puttext; lObj[] -> putline;*)
    (if true
     // isJava then
-       (if break_long_line then
-           '\n\n' -> ldA.puttext;
-           true -> jarcommand -> ldA.puttext;
-           0 -> asmstate.link_line_length;
-       if);
        lObj[] -> unquote -> path[];
        '.class' -> path.AppendExtension -> addClassFile;
        (if hostIsWindows then
@@ -804,7 +835,8 @@ do (if isJava then AFF.newline; if);
      #);
    generateJavaWrapperScript:
      (# 
-     do (if hostIsWindows then
+     do CheckLinkError                   -> AFF.putline;
+        (if hostIsWindows then
             'echo @echo off    > '       -> AFF.puttext; 
          else
             'echo "#!/bin/sh"  > '       -> AFF.puttext;
