@@ -115,7 +115,7 @@
 #if defined(sparc) || defined(intel) || defined(sgi)
 #define PERSIST
 #define USEMMAP 
-#endif /* sparc || intel */
+#endif /* sparc || intel || defined(sgi) */
 
 #define RTLAZY /* Include support for lazy fetch */
 
