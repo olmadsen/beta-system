@@ -267,7 +267,7 @@ sub register_status()
     local $prog = &trim_path("$dir/$exec");
     $progs{&trim_path($prog)}=$status;
     local $baseprog = &trim_path(&stripcounter($prog));
-    if (! defined($progs{$baseprog})){
+    if ($progs{$baseprog} == 999){
 	# base program not attempted run
 	$progs{$baseprog} = 222; # set to implicitly ignore
     }
@@ -316,6 +316,7 @@ sub write_to_demo
     open(SAVEOUT, ">&STDOUT");
     select(SAVEOUT); $| = 1;       # make unbuffered
     open(STDOUT, ">$exec.run") || die "Can't redirect stdout";
+    select(STDOUT); $| = 1;       # make unbuffered
     open (EXEC, "| " . &stripcounter($exec) . " $args");
     foreach $input (@inputlines){
 	print EXEC $input;
