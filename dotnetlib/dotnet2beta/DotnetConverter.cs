@@ -549,46 +549,51 @@ namespace beta.converter
 		return primitive;
 	    } else {
 	      // Reference to a class
+	      return "^" + checkForNestedName(type, doIncludes);
+	    }
+	  }
 
-	      // Find out if that class is an inner class of some outmost class
-	      Type outmost = null;
-	      Type outer = type.DeclaringType;
-	      while (outer!=null){ 
-		outmost = outer;
-		outer = outer.DeclaringType; 
-	      }
-	      if (outmost!=null){
-		if ((trace&TraceFlags.Type)!=0)
-		  Console.Error.Write(name + " is inner class in " + outmost.FullName + "\n");
-		name = unmangle(outmost, name); // get name relative to outmost
-		if (doIncludes) include(outmost.FullName);
-		return makeBetaReference(name, false);
-	      } else {
-		if (doIncludes) include(name);
-		return makeBetaReference(name, true);
-	      }
+	internal virtual String checkForNestedName(Type type, bool doIncludes)
+	  {
+	    // Find out if "type" is an inner class of some outmost class
+	    String name = type.FullName;
+	    Type outmost = null;
+	    Type outer = type.DeclaringType;
+	    while (outer!=null){ 
+	      outmost = outer;
+	      outer = outer.DeclaringType; 
+	    }
+	    if (outmost!=null){
+	      if ((trace&TraceFlags.Type)!=0)
+		Console.Error.Write(name + " is inner class in " + outmost.FullName + "\n");
+	      name = unmangle(outmost, name); // get name relative to outmost
+	      if (doIncludes) include(outmost.FullName);
+	      return makeBetaReference(name, false);
+	    } else {
+	      if (doIncludes) include(name);
+	      return makeBetaReference(name, true);
 	    }
 	  }
 		
 	internal virtual String makeBetaReference(String name, bool use_wrapper)
 	  {
 	    if (stripNamespace(name).Equals(className)){
-	      name = "^" + stripNamespace(name);
+	      name = stripNamespace(name);
 	    } else {
 	      switch (name){
 	      case "[mscorlib]System.Object":
 	      case "System.Object":
 	      case "Object":
 	      case "object":
-		name = "^Object";
+		name = "Object";
 		break;
 	      default:
 		if (use_wrapper){
 		  // Make reference to wrapper class
-		  name = "^" + "_" + stripNamespace(name);
+		  name = "_" + stripNamespace(name);
 		} else {
 		  // Make reference to non-wrapper class
-		  name = "^" + stripNamespace(name);
+		  name = stripNamespace(name);
 		}
 		break;
 	      }
