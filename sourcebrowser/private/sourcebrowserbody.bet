@@ -1,0 +1,496 @@
+ORIGIN '../sourcebrowser';
+
+INCLUDE '~beta/objectbrowser/v2.0/UI/obguienvadds';
+INCLUDE '~beta/objectbrowser/v2.0/UI/listmoveable';
+INCLUDE '~beta/objectbrowser/v2.0/UI/labelled';
+
+INCLUDE '~beta/basiclib/v1.4/formatio';
+INCLUDE '~beta/basiclib/v1.4/file';
+
+INCLUDE '~beta/editor/v5.0/fragmentscanner';
+
+--- sourcebrowserprivate:descriptor ---
+(#   
+   initDone: @Boolean;
+   
+   minHorizControlWidth: (# exit 100 #);
+   initialSize: (# exit (200,150) #);
+   
+   outerctrl: @groupcontrol
+     (* Vertical control containing upctrl and down. *)
+     (# dobind:
+          (#
+          do TRUE->bindTop->bindLeft->bindRight->bindBottom;
+             upctrl.dobind; down.dobind;
+          #);
+        open::
+          (# onGroupSizeComputed:: 
+               (#
+               do size->THIS(sourcebrowser).size; dobind;
+               #);
+          do TRUE->verticalStacking;
+             outerctrl[]->upctrl.open;
+             outerctrl[]->down.open;
+          #);
+     #);
+   
+   upctrl: @groupcontrol
+     (* Horizontal group containing projectList, groupList and right *)
+     (# dobind:
+          (# 
+          do projectList.dobind; 
+             grouplist.dobind;
+             FragmentGroupView.dobind;
+             installResizeRelativeAction;
+          #);
+        open::
+          (# onGroupSizeComputed:: 
+               (#
+               do (upctrl[],FALSE)->outerctrl.appendMember 
+               #);
+          do FALSE->verticalStacking;
+             minHorizControlWidth div 2 ->minsize;
+             upctrl[]->projectList.open;
+             upctrl[]->grouplist.open;
+             upctrl[]->FragmentGroupView.open;
+          #)
+     #);
+   
+   projectList: @labelled
+     (# dobind: (# do contents.dobindings; installResizeRelativeAction #);
+        shownprojects: @List
+          (# element::
+               (# index: @Integer;
+                  p: ^projects.project;
+               #);
+             getProjectByIndex:
+               (# index: @Integer; p: ^projects.project;
+               enter index
+               do doscan: scan
+                    (# where:: (# do (current.index=index)->value #)
+                    do current.p[]->p[]; leave doscan;
+                    #);
+               exit p[]                  
+               #);
+             getIndexByProject:
+               (# index: @Integer; p: ^projects.project;
+               enter p[]
+               do doscan: scan
+                    (# where:: (# do (current.p[]=p[])->value #)
+                    do current.index->index; leave doscan;
+                    #);
+               exit index  
+               #);
+             appendProject:
+               (# p: ^projects.project; index: @Integer;
+                  new: ^element;
+               enter (p[],index)
+               do &element[]->new[];
+                  (p[],index)->(new.p[],new.index);
+                  new[]->append;
+               #);
+          #);
+        contentsType:: listmoveableList
+          (# eventHandler::
+               (# onMouseUp::
+                    (# newp: ^projects.project;
+                    do (if buttonState=1 then
+                           (if not doubleClick then
+                               getSelectedProject->newp[];
+                               (if newp[]<>NONE then
+                                   newp[]->THIS(sourcebrowser).setProject 
+                               if);
+                           if);
+                       if);
+                    #);
+               #);               
+             getSelectedProject:
+               (# value: ^projects.project;
+               do (if selection.first<>0 then
+                      selection.first
+                        ->shownprojects.getProjectByIndex
+                        ->value[];
+                  if);
+               exit value[]
+               #);
+             setProject:
+               (# p: ^projects.project; index: @Integer;
+               enter p[]
+               do p[]->shownprojects.getIndexByProject->index;
+                  (if index<>0 then
+                      (index,FALSE)->selection.select;
+                   else
+                      selection.clear;
+                  if);
+               #);
+             scanProjects:
+               (# first: ^projects.project;
+               do shownprojects.clear;
+                  projects.numberOfProjects->setNumberOfItems;
+                  projects.scanProjects
+                  (# index: @Integer;
+                     forEach::
+                       (# 
+                       do index+1->index;
+                          (index,current.name[])->setText;
+                          (if index=1 then current[]->first[] if);
+                          (current[],index)->shownprojects.appendProject;
+                       #);
+                  #);
+                  projectsLabel->label;
+               exit first[]
+               #);
+             open::
+               (# first: ^projects.project;
+               do scanProjects;
+                  projectlist.contents[]->onProjectListOpen;
+               #);
+          #);
+        open:: 
+          (# 
+          do shownprojects.init;
+             projectsLabel->label;
+             initialSize->size;
+             (projectList[],FALSE)->upctrl.appendMember;
+          #);
+     #);
+   
+   grouplist: @labelled
+     (# dobind: (# do contents.dobindings; installResizeRelativeAction #);
+        clear:
+          (# 
+          do emptyProjectListLabel->label;
+             showngroups.clear;
+          #);
+        showngroups: @List
+          (# element::
+               (# index: @Integer;
+                  g: ^projects.group;
+               #);
+             getGroupByIndex:
+               (# index: @Integer; g: ^projects.group;
+               enter index
+               do doscan: scan
+                    (# where:: (# do (current.index=index)->value #)
+                    do current.g[]->g[]; leave doscan;
+                    #);
+               exit g[]
+               #);
+             getIndexByGroup:
+               (# index: @Integer; g: ^projects.group;
+               enter g[]
+               do doscan: scan
+                    (# where:: (# do (current.g[]=g[])->value #)
+                    do current.index->index; leave doscan;
+                    #);
+               exit index  
+               #);
+             appendGroup:
+               (# g: ^projects.group; index: @Integer;
+                  new: ^element;
+               enter (g[],index)
+               do &element[]->new[];
+                  (g[],index)->(new.g[],new.index);
+                  new[]->append;
+               #);
+          #);
+        contentsType:: listmoveableList
+          (# clear:
+               (# 
+               do showngroups.clear;
+                  0->setNumberOfItems;
+                  emptyProjectListLabel->label;
+               #);
+             setgroup:
+               (# g: ^projects.group; index: @Integer;
+               enter g[]
+               do (if g[]=NONE then
+                      selection.clear;
+                   else
+                      g[]->showngroups.getIndexByGroup->index;
+                      (if index<>0 then
+                          (index,FALSE)->selection.select;
+                          g[]->fragmentgroupView.contents.setgroup;
+                      if);                      
+                  if);
+               #);
+             eventHandler::
+               (# onMouseUp::
+                    (#
+                    do (if (buttonState=1) then
+                           (if (not doubleClick) and (selection.first<>0) then
+                               (currentProject[],
+                               selection.first->showngroups.getGroupByIndex)
+                                 ->THIS(sourcebrowser).setGroup;
+                           if);
+                       if)
+                    #);
+               #);
+             open::
+               (# 
+               do grouplist.contents[]->onGroupListOpen;
+               #);
+             scanGroups:
+               (# p: ^projects.project;
+                  first: ^projects.group;
+               enter p[]
+               do showngroups.clear;
+                  p.numberOfGroups->setNumberOfItems;
+                  p.scanGroups
+                  (# index: @Integer;
+                     foreach::
+                       (#
+                       do index+1->index;
+                          (current[],index)->showngroups.appendGroup;
+                          (index,current.name[])->settext;
+                          (if index=1 then
+                              current[]->first[]
+                          if);
+                       #)
+                  #);
+                  p.name[]->label;
+               exit first[]
+               #);
+          #);
+        open::
+          (#
+          do showngroups.init;
+             emptyProjectListLabel->label;
+             initialSize->size;
+             (grouplist[],FALSE)->upctrl.appendMember;
+          #);
+     #);
+   
+   fragmentGroupView: @labelled
+     (# dobind: (# do contents.dobindings; installResizeRelativeAction #);
+        contentsType:: listmoveableList
+          (# fgs: @fragmentGroupScanner;
+             g: ^projects.group;
+             AST: ^astInterface;
+             setgroup:
+               (# inx,lc: @Integer;
+               enter g[]
+               do 
+                  (AST[],g.getfg)->fgs;                        
+                  fgs.scanPropsAndFragsForText 
+                  (# myAddText:: (# do lc+1->lc #)#);
+                  lc->setNumberOfItems;
+                  fgs.scanPropsAndFragsForText
+                  (# myAddText:: (# do inx+1->inx; (inx,t[])->setText #);
+                  #);
+                  g.name[]->fragmentGroupView.label;
+                  INNER;
+               #);
+             clear:
+               (# 
+               do emptyGroupViewLabel->fragmentGroupView.label;
+                  NONE->g[];
+                  0->setNumberOfItems;
+               #);
+             eventHandler::
+               (# onMouseUp::
+                    (# inx: @Integer;
+                    do (if buttonState=1 then
+                           (if (selection.first->inx)<>0 then
+                               find: (g.getfg,inx)->fgs.scanPropsAndFrags
+                               (# doProperty::
+                                    (# t: ^Text;
+                                    do (* ORIGIN,BODY or MDBODY *)
+                                       (if doubleClick then
+                                           (if true
+                                            //'ORIGIN'->prop.equalNCS
+                                            //'BODY'->prop.equalNCS
+                                            //'MDBODY'->prop.equalNCS then
+                                               s[]->followLink;
+                                           if);
+                                       if);
+                                       leave find;
+                                    #);
+                                  doFragmentLink::
+                                    (# fl: ^astInterface.FragmentLink;
+                                    do (* INCLUDE *)
+                                       (if doubleClick then
+                                           fle.open->fl[];
+                                           fl.name->followLink;
+                                           leave find;
+                                       if);
+                                    #);
+                                  doFragmentForm::
+                                    (# 
+                                    do (currentProject[],currentGroup[],
+                                       fle.open)->setFragmentForm;
+                                       leave find;
+                                    #);
+                               #);
+                           if);   
+                       if)
+                    #)
+               #);
+             followLink:
+               (# groupName: ^Text; s,t: ^Text;
+               enter s[]
+               do 
+                  (g.getfg).fullName->AST.stripPathName->t[];
+                  (if t[]//NONE then 
+                      (s.copy,AST.thePathHandler.currentDirectory) 
+                        ->AST.thePathHandler.convertFilePath
+                        ->THIS(sourceBrowser).followLink;
+                   else 
+                      (s.copy,t[])
+                        ->AST.thePathHandler.convertFilePath
+                        ->THIS(sourceBrowser).followLink;
+                  if);
+               #);
+             open::
+               (# 
+               do editorencloser.getAST->AST[];
+                  fragmentgroupview.contents[]->onFragmentgroupViewOpen;
+               #);
+          #);
+        open::
+          (#
+          do emptyGroupViewLabel->label;
+             initialSize->size;
+             (fragmentGroupView[],TRUE)->upctrl.appendMember; 
+          #);
+     #);
+   
+   down: @Canvas
+     (# dobind:
+          (# 
+          do fragmentView.dobind;
+             installResizeRelativeAction;
+          #);
+        open::
+          (# sz: @Point; 
+          do initialSize->sz;
+             (sz.h*3+4(*4 is space for separators in upctrl*),2*sz.v)->size;
+             (down[],size)->fragmentView.open;
+             (down[],TRUE)->outerctrl.appendMember;
+          #);    
+        fragmentView: @labelled
+          (# dobind: (# do contents.dobind; TRUE->bindRight->bindBottom;  #);
+             lastFragment: ^astInterface.fragmentForm;
+             clearing: @Boolean;
+             clear:
+               (# 
+               do TRUE->clearing;
+                  contents.contents.all->contents.contents.selection.set;
+                  contents.contents.delete;
+                  NONE->newfragment;
+                  (*contents.disable;*)
+                  NONE->lastFragment[];
+                  FALSE->clearing;
+               #);
+             newfragment:
+               (# ff: ^astInterface.fragmentForm;
+               enter ff[]
+               do (if true
+                   //ff[]=NONE then
+                      (NONE,NONE,NONE,NONE)->contents.newfragment;
+                   //lastFragment[]=NONE
+                   //not (lastFragment.root[]->ff.root.equal) then
+                      ff[]->lastFragment[];
+                      (editorencloser.getAST,editorencloser.getBETACFL,ff[],NONE)
+                        ->contents.newfragment;
+                  if);
+               #);
+             contentsType::< codemoveableEditor
+               (# dobind: (# do TRUE->bindRight->bindBottom->bindLeft->bindTop #);
+                  open:: 
+                    (# 
+                    do innerFrame->frame;
+                       fragmentView.contents[]->onCodeViewOpen;
+                    #);
+                  newfragment:: 
+                    (# 
+                    do (if frag[]<>NONE then
+                           frag.name->fragmentView.label;
+                        else
+                           emptyCodeViewLabel->fragmentView.label; 
+                       if);
+                    #);
+                  initialContractionLevel:: (# do 1->value #);
+                  charWidthType::
+                    (# 
+                    do (* HACK NEEDED UNTIL textEditor.defaultStyle gets 
+                        * implemented !!! *)
+                       THIS(fragmentView).private.theLabel.style->ts[];
+                    #);
+                  contentsType::
+                    (# eventHandler::
+                         (# onBeforeChange:: 
+                              (# do (if not allow then clearing->allow if) #);
+                         #);
+                    #);
+                  getEncloser:: (# do editorEncloser[]->theEncloser[] #);
+               #);
+             open::
+               (# sz: @Point;
+               enter sz
+               do sz->size;
+                  NONE->lastFragment[];
+                  NONE->newfragment;
+               #);
+          #);
+     #);
+   
+   open:
+     (#
+     do projects.init;
+        THIS(sourcebrowser)[]->outerctrl.open;
+        INNER;
+        TRUE->initDone;
+     #);
+#)
+
+--- sourcebrowseropen:dopart ---
+do sbprivate.open (# do INNER open #);
+   
+--- sourcebrowserProjectsChanged:dopart ---
+do 
+   sbprivate.projectlist.contents.scanProjects;
+   
+   NONE->sbprivate.projectlist.contents.setProject;
+   NONE->currentProject[]->onCurrentProjectChange;
+   
+   sbprivate.grouplist.contents.clear;
+   NONE->currentGroup[]->onCurrentGroupChange;
+   
+   sbprivate.down.fragmentView.clear;
+   NONE->currentForm[]->onCurrentFormChange;
+   
+--- sourcebrowserSetProject:dopart ---
+do 
+   cursors.watch[]->mouse.busycursor;
+   p[]->onCurrentProjectChange;
+   p[]->sbprivate.projectlist.contents.setProject;
+   (if true
+    //p[]=NONE then
+       sbprivate.grouplist.contents.clear;       
+    //p[]<>currentProject[] then
+       p[]->sbprivate.grouplist.contents.scanGroups;
+   if);
+   p[]->currentProject[]; 
+   NONE->currentGroup[];
+   NONE->currentForm[];
+   INNER;
+   (if currentGroup[]=NONE then
+       NONE->sbprivate.grouplist.contents.setgroup;
+       sbprivate.fragmentGroupView.contents.clear;
+   if);
+   (if currentForm[]=NONE then
+       sbprivate.down.fragmentView.clear;
+   if);
+   NONE->mouse.busycursor;
+      
+---sourcebrowserSetGroup:dopart ---
+do g[]->onCurrentGroupChange;
+   g[]->currentGroup[];
+   g[]->sbprivate.grouplist.contents.setgroup;
+   INNER;
+   
+--- sourcebrowserSetFragmentForm:dopart ---
+do ff[]->oncurrentFormChange;
+   ff[]->sbprivate.down.fragmentView.newfragment;
+   ff[]->currentForm[];
