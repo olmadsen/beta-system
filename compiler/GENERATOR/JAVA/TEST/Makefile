@@ -42,6 +42,6 @@ odpi:
 
 
 clean:
-	-@rm -f *~ *.dump *.class *.ast *.astL *.a2s *.lst writehello writehello2 writedanish writepi
+	-@rm -f *~ *.dump *.class *.ast *.astL *.a2s *.lst writehello writehello2 writedanish writepi dump writehello2withtrace
 	-@rm -rf sun4s linux nti_ms nti_gnu
 
