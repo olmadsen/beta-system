@@ -7,7 +7,9 @@
 # usage in C-shell (/bin/csh or descendants) script:
 # -------------------------------------------------- 
 # setenv BETALIB ...
-# source $BETALIB/configuration/r3.0/env.csh
+# source $BETALIB/configuration/env.csh
+
+setenv CONFIGURATION_ENV_CSH 1
 
 switch("`uname -m`")
 case "sun4*"
