@@ -1,4 +1,4 @@
-/* C definition of COM tst part for BETA */
+/* C definition of COM tst part for BETA */ 
 
 #ifdef nti
 # define STDCALL _stdcall
@@ -26,6 +26,8 @@ struct vtbl
   char (STDCALL *f3)(struct xCOMclass *this, char *t, long ix);
   char *(STDCALL *f4)(struct xCOMclass *this, long ix, char *t);
   char (STDCALL *f5)(struct xCOMclass *this, struct myData *S);
+  char (STDCALL *f6)(struct xCOMclass *this, struct myData S);
+  struct myData (STDCALL *f7)(struct xCOMclass *this, long a, long b, long c);
 };
 
 /* xCOMclass is the class */
@@ -41,11 +43,11 @@ struct xCOMclass
  * to the xCOMclass object;
  */
 
-char STDCALL f1(struct xCOMclass *this, long n)
+char STDCALL f1(struct xCOMclass *this, long n) 
 { char ch;
   if (test) printf("  xCOMclass::f1: %i\n",n);
   this->val = this->val + n;
-  ch = '!';
+  ch = '!';           
   if (n == 1013)  ch = 'a';
   return ch;
 }
@@ -84,6 +86,23 @@ char STDCALL f5(struct xCOMclass *this, struct myData *S)
   return c;
 }
 
+char STDCALL f6(struct xCOMclass *this, struct myData S)
+{ char ch = '!';
+  if (test) printf(" xCOMclass::F6: %i %i %c \n",S.x,S.s,S.c);
+  if ((S.x == 6060) & (S.s == 7070)) ch = S.c;
+  return ch;
+}    
+
+struct myData STDCALL f7(struct xCOMclass *this, long a, long b, long c)
+{ struct myData mD;
+  if (test) printf(" xCOMclass::F7: %i, %i, %c \n",a,b,c);
+  mD.x = 1234;
+  mD.s = 321;
+  mD.c = '=';
+  return mD;
+}
+
+
 /* This is a virtual dispatch table instance, 
  * that may be shared by all xCOMclass objects 
  */
@@ -98,6 +117,8 @@ struct xCOMclass * GetXobj()
   theVTBL.f3 = &f3;
   theVTBL.f4 = &f4;
   theVTBL.f5 = &f5;
+  theVTBL.f6 = &f6;
+  theVTBL.f7 = &f7;
   /* Allocate xCOMclass object */
   R = (struct xCOMclass *)malloc(sizeof(struct xCOMclass));
   R->proto = &theVTBL;
@@ -166,3 +187,9 @@ void PutBobj(struct bCOMclass * R)
 }
 
 
+void olsen()
+{ struct myData mD;
+  struct xCOMclass * R;
+  mD = f7(R,11,12,'*');
+  printf(" xCOMclass::F6: %i %i %c \n",mD.x,mD.s,mD.c);
+}
