@@ -43,7 +43,7 @@ static void updateObjectInStore(Object *theObj,
 				unsigned long store, 
 				unsigned long offset,
 				unsigned short Flags);
-static void freeLoadedObjectsOF(void *contents);
+static void freeLoadedObjectsOF(unsigned long contents);
 
 /* FUNCTIONS */
 static int isFree(void *entry)
@@ -145,9 +145,9 @@ unsigned long indexLookupOT(unsigned long store, unsigned long offset)
   Trie *loadedObjectsOF;
   
   /* Check if store is member of 'loadedObjects' */
-  if ((loadedObjectsOF = TILookup(store, loadedObjectsST))) {
+  if ((loadedObjectsOF = (Trie *)TILookup(store, loadedObjectsST))) {
     unsigned long inx;
-    if ((inx = (unsigned long)TILookup(offset, loadedObjectsOF))) {
+    if ((inx = TILookup(offset, loadedObjectsOF))) {
       return inx - 1;
     }
   }
@@ -207,7 +207,7 @@ void insertStoreOffsetOT(unsigned long store, unsigned long offset, unsigned lon
   insertStoreOffset(store, offset, inx, &loadedObjectsST);
 }
 
-static void freeLoadedObjectsOF(void *contents)
+static void freeLoadedObjectsOF(unsigned long contents)
 {
   TIFree((Trie *)contents, NULL);
 }
