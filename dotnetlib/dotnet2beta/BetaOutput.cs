@@ -218,7 +218,7 @@ namespace beta.converter
 	      {
 		put(mapReserved(className) + ": ");
 	      }
-	    if (superClass == null || superClass.Equals("Object")) {
+	    if (superClass == null || superClass.Equals("Object") || superClass.Equals("_Object")) {
 	      put("ExternalClass");
 	    }
 	    else

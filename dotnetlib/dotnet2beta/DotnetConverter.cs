@@ -144,7 +144,7 @@ namespace beta.converter
 		if ((trace&TraceFlags.Type)!=0){
 		  beta.commentline("Field: " + f.Name + ", type: " + f.FieldType);
 		}
-		beta.putField(plusToUnderscore(f.Name), mapType(cls, f.FieldType, false), isStatic);
+		beta.putField(plusToDot(f.Name), mapType(cls, f.FieldType, false), isStatic);
 	      }
 	    }
 	  }
@@ -175,9 +175,9 @@ namespace beta.converter
 		  parameternames[j] = mapType(cls, parameters[j].ParameterType, false);
 		}
 		if (ctorlist.Length > 1){
-		  mangledName = plusToUnderscore(mangle(name, parameternames));
+		  mangledName = plusToDot(mangle(name, parameternames));
 		} else {
-		  nestedName = plusToUnderscore(name);
+		  nestedName = plusToDot(name);
 		  if (nestedName.Equals(name)){
 		    mangledName = null;
 		  } else {
@@ -233,9 +233,9 @@ namespace beta.converter
 		  parameternames[j] = mapType(cls, parameters[j].ParameterType, false);
 		}
 		if (methodcount.val(name) > 1){
-		  mangledName = plusToUnderscore(mangle(name, parameternames));
+		  mangledName = plusToDot(mangle(name, parameternames));
 		} else {
-		  nestedName = plusToUnderscore(name);
+		  nestedName = plusToDot(name);
 		  if (nestedName.Equals(name)){
 		    mangledName = null;
 		  } else {
@@ -318,6 +318,7 @@ namespace beta.converter
 	    String[] inc = new String[includes.Values.Count];
 	    int i=0;
 	    foreach (String include in includes.Values){
+	      // include wrapper version
 	      inc[i++] = prependClassWithUnderscore(include);
 	    };
 	    return inc;
@@ -349,6 +350,10 @@ namespace beta.converter
 	  {
 	    if ((trace&TraceFlags.File)!=0){
 	      Console.Error.Write("prependClassWithUnderscore(" + name + ")\n");
+	    }
+	    if (name.StartsWith("+")){
+	      // See checkForNestedName
+	      return dotToSlash(name.Substring(1));
 	    }
 	    try
 	      {
@@ -578,7 +583,6 @@ namespace beta.converter
 	internal virtual String checkForNestedName(Type type, bool doIncludes)
 	  {
 	    // Find out if "type" is an inner class of some outmost class
-	    String name = type.FullName;
 	    Type outmost = null;
 	    Type outer = type.DeclaringType;
 	    while (outer!=null){ 
@@ -586,12 +590,17 @@ namespace beta.converter
 	      outer = outer.DeclaringType; 
 	    }
 	    if (outmost!=null){
+	      String name = unmangle(outmost, type); // get name relative to outmost
 	      if ((trace&TraceFlags.Type)!=0)
 		Console.Error.Write(name + " is inner class in " + outmost.FullName + "\n");
-	      name = unmangle(outmost, name); // get name relative to outmost
-	      if (doIncludes) include(outmost.FullName);
+	      if (doIncludes) {
+		// Indicate to the BETA outputter that this is a nested class, so that
+		// include of the non-wrapper version is used
+		include('+' + outmost.FullName);
+	      }
 	      return makeBetaReference(name, false);
 	    } else {
+	      String name = type.FullName;
 	      if (doIncludes) include(name);
 	      return makeBetaReference(name, true);
 	    }
@@ -635,10 +644,10 @@ namespace beta.converter
 	    return name.Replace(".", "/");
 	  }
 		
-	internal virtual String plusToUnderscore(String name)
+	internal virtual String plusToDot(String name)
 	  {
 	    if (name == null) return null;			
-	    return name.Replace("$", "_");
+	    return name.Replace("+", ".");
 	  }
 		
 	internal virtual String stripNamespace(String name)
@@ -665,41 +674,68 @@ namespace beta.converter
 	    return (i >= 0)?name.Substring(1, i-1):name;
 	  }
 		
-	internal virtual String unmangle(Type outer, String innerName)
+	internal virtual String unmangle(Type outer, Type nested)
 	  {
-	    String unmangled = innerName;
-	    if (outer != null)
-	      {
-		String outerName = outer.FullName + '+';
-		if (innerName.StartsWith(outerName))
-		  {
-		    unmangled = unmangled.Substring(outerName.Length, (unmangled.Length) - (outerName.Length));
+	    String unmangled = nested.FullName;
+	    Type declaring = nested.DeclaringType;
+	    if (outer != null){
+	      while (declaring != null){
+		if (declaring == outer){
+		  String declaringName = declaring.FullName;
+		  if (nested.FullName.StartsWith(declaringName)){
+		    unmangled = unmangled.Substring(declaringName.Length, (unmangled.Length) - (declaringName.Length));
+		    if (unmangled.StartsWith("+")) unmangled = unmangled.Substring(1);
 		  }
+		  break;
+		}
+		declaring = nested.DeclaringType;
 	      }
+	    }
 	    if ((trace&TraceFlags.Type)!=0) 
-	      Console.Error.Write("unmangle(" + outer.FullName + ", " + innerName + ") --> " + plusToUnderscore(unmangled) + "\n");
-	    return plusToUnderscore(unmangled);
+	      Console.Error.Write("unmangle(" 
+				  + outer.FullName 
+				  + ", " 
+				  + nested.FullName 
+				  + ") --> " 
+				  + plusToDot(unmangled) 
+				  + "\n");
+	    return plusToDot(unmangled);
 	  }
 		
 	internal virtual void  processClass(Type outer, Type cls)
 	  {
 	    if ((trace&TraceFlags.Type)!=0)
 	      {
-		Console.Error.Write("processClass(" + ((outer == null)?"null":outer.FullName) + "," + ((cls == null)?"null":cls.FullName) + ")" + "\n");
+		Console.Error.Write("processClass(" 
+				    + ((outer == null)?"null":outer.FullName) 
+				    + "," 
+				    + ((cls == null)?"null":cls.FullName) 
+				    + ")" + "\n");
+		beta.commentline("Class: " + cls.FullName + ": " + cls.BaseType);
 	      }
-	    String innerClass = null;
-	    String innerName = null;
-	    String innerSuper = null;
-	    Type sup;
-	    sup = cls.BaseType;
 
 	    if (outer == null){
 	      beta.putHeader(namespaceName, className, doIncludes(cls));
 	    } else {
-	      innerClass = stripNamespace(cls.FullName);
-	      innerName = stripNamespace(unmangle(outer, cls.FullName));
+	      String innerSuper = null;
+	      Type sup = cls.BaseType;
+	      // Get name of inner class, but leave out prefix of name that is shared with outer class
+	      String innerName = stripNamespace(unmangle(outer, cls));
 	      if (sup != null){
-		innerSuper = checkForNestedName(sup, false); // stripNamespace(sup.FullName);
+		// Get name for superclass of inner class.
+		innerSuper = stripNamespace(sup.FullName); 
+		// Check if the super class is an inner class of some other class
+		int plusPos = innerSuper.IndexOf('+');
+		if (plusPos>=0){
+		  // super is an inner class of some other class.
+		  // That other class may be 'outer' but it's OK to use 'outer.inner'
+		  // even if we are insaide 'outer'.
+		  innerSuper = plusToDot(innerSuper);
+		} else {
+		  // super is not an inner class.
+		  // Use wrapper class
+		  innerSuper = '_' + makeBetaReference(innerSuper, false);
+		}
 	      }
 	      beta.indent();
 	      beta.putPatternBegin(innerName, innerSuper);
@@ -713,7 +749,8 @@ namespace beta.converter
 	      beta.putTrailer(resolution, namespaceName, className, isValue);
 	      beta.close();
 	    } else {
-	      beta.putTrailer(resolution, namespaceName, innerClass, isValue); // Assuming same resolution/namespace!
+	      // Assuming same resolution/namespace:
+	      beta.putTrailer(resolution, namespaceName, stripNamespace(cls.FullName), isValue); 
 	    }
 	  }
 		
@@ -721,7 +758,12 @@ namespace beta.converter
 	  {
 	    Object[] inc = new Object[includes.Values.Count];
 	    includes.Values.CopyTo(inc,0);
-	    foreach (String i in inc){
+	    foreach (String _i in inc){
+	      String i = _i;
+	      if (i.StartsWith("+")){
+		// See checkForNestedName
+		i = i.Substring(1);
+	      }
 	      if (verbose) Console.Error.Write("\nRefered by " 
 					       + slashToDot(namespaceName + "." + className) 
 					       + ": " 
