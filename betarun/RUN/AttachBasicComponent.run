@@ -1,5 +1,16 @@
 ------- AttachBasicComponent: System ----
 
+{
+  nti call chain at startup:
+  DllMain                         # ntiadditions.run (only when DLL)
+  or WinMain                      # betaenv - compilergenerated
+  -> main                         # betaenv - compilergenerated
+  -> AttBC(theComp)               # ntiadditions.run
+  -> beta_main(_AttBC, theComp)   # sighandler.c
+  -> _AttBC(theComp)              # AttachBasicComponent.run
+     (returns via TerminateBasicComponent)
+}
+
 _AttBC: public
   (#
      { Attach the basic component. }
@@ -15,6 +26,11 @@ _AttBC: public
      theProto:     ProtoType = AddrReg1;
      startAddress: CodeArea = AddrReg1
   do
+     { stack:
+       0: <return address>
+       4: theComp (nti only)
+     }
+     
      (if debug then
          (if gas then
              PushAll;
@@ -23,10 +39,25 @@ _AttBC: public
          if)
      if);
      
-     (if nti then
-         stack[4] -> theComp;
-     if);
+     PushAll; { needed to allow correct return in case we are called from DllMain }
      
+     { stack:
+       0:  <PushAll>
+       4:  <PushAll>
+       8:  <PushAll>
+       12: <PushAll>
+       16: <PushAll>
+       20: <PushAll>
+       24: <PushAll>
+       28: <PushAll>
+       32: <return address>
+       36: theComp (nti only)
+     }
+     
+     (if nti then
+         stack[36] -> theComp;
+     if);
+          
      (if debug then call Ck if);
      
      stack -> StackStart;
@@ -35,12 +66,28 @@ _AttBC: public
      { Terminates the list of component blocks on the stack. }
      push 0;  push 0;  push 0;
      
+     { stack:
+       0:  0
+       4:  0
+       8:  0
+       12: <PushAll>
+       16: <PushAll>
+       20: <PushAll>
+       24: <PushAll>
+       28: <PushAll>
+       32: <PushAll>
+       36: <PushAll>
+       40: <PushAll>
+       44: <return address>
+       48: theComp (nti only)
+     }
+     
      0     -> ActiveCallBackFrame;
      stack -> lastCompBlock;
      
      theComp -> BasicItem;  { Save a reference to the betaenv object in BasicItem. } 
      24 -> BasicItem+;      { It is used as origin in MakeTextObj }
-    
+     
      TerminateBasicComponent[] -> exitAddress;
      push exitAddress;
      exitAddress -> theComp.CallerLSC;
@@ -56,12 +103,53 @@ _AttBC: public
      futureObject.ProtoType -> theProto;
      clear theObj;
      theProto.TopMpart -> startAddress;
+     
+     { stack:
+       0:  <TerminateBasicComponent>
+       4:  0
+       8:  0
+       12: 0
+       16: <PushAll>
+       20: <PushAll>
+       24: <PushAll>
+       28: <PushAll>
+       32: <PushAll>
+       36: <PushAll>
+       40: <PushAll>
+       44: <PushAll>
+       48: <return address>
+       52: theComp (nti only)
+     }
+     
+     { Jump to Top Mpart of theComp. Will later return to TerminateBasicComponent }
      goto startAddress; {AddrRegs ok; stack ok, too}
   #);
 
 TerminateBasicComponent: public
   (#
   do (if debug then call Ck if);
+     
+     { stack:
+       0:  0
+       4:  0
+       8:  0
+       12: <PushAll>
+       16: <PushAll>
+       20: <PushAll>
+       24: <PushAll>
+       28: <PushAll>
+       32: <PushAll>
+       36: <PushAll>
+       40: <PushAll>
+       44: <return address>
+       48: theComp (nti only)
+     }   
+     12 -> SP+;
+     PopAll;
+     (if ReturnFromBasicComponent=1 then
+         return;
+     if);
+  Exit:
      push 0;
      call BetaExit
   #)

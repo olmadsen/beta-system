@@ -1,7 +1,17 @@
-char betarun_version[] = "BETARUN VERSION 5.3(94)";
+char betarun_version[] = "BETARUN VERSION 5.3(95)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.116  2002/07/10 12:15:33  datpete
+ *     Allocation in AOA of large objects on sparc
+ * Betarun version number: 94
+ *     Changed files:
+ *         CRUN/AllocateItem.c
+ *         CRUN/AllocateValRep.c
+ *         CRUN/CopyValRep.c
+ *         CRUN/ExtendValRep.c
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.115  2002/05/07 09:27:44  datpete
  * Minor dladdr() fix
  * Betarun version number: 93
