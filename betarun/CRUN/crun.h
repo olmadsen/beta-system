@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-19 15:45:26 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-20 15:56:01 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -44,7 +44,7 @@ extern ref(Component)   Susp() asm("Susp");
 extern char	      * IOAalloc();
 extern char	      * IOAcalloc();
 
-
+/*
 static inline long DispatchValRepSize(ref(ValRep) theRep, unsigned range)
 {
   switch ( (int) (theRep)->Proto){
@@ -64,6 +64,7 @@ static inline long DispatchValRepBodySize(ref(ValRep) theRep, unsigned range)
   case (int) DoubleRepPTValue: return ByteRepBodySize(range);
   }
 }
+*/
 
 static inline void
 CCheckRefAsgn(handle(Object) theObjHandle)
