@@ -343,7 +343,7 @@ C-xC-ri calls indent-buffer.\"
 	(let ((end (point)))
 	  (if (re-search-backward "\\(\(\\*\\|\\*\)\\)" 1 t)
 	      (if (looking-at "\(\\*")
-		  (not (beta-within-string end))
+		  t;;(not (beta-within-string end))
 		nil)
 	    nil))))))
 
@@ -665,7 +665,7 @@ Returns new value of point in all cases."
 	  ;; check that it was a real beginning construct:
 	  (setq cont t)
 	  (while cont
-	    (if (beta-within-string end)
+	    (if nil;;(beta-within-string end)
 		(progn
 		  (setq p (point))
 		  (re-search-backward beta-construct-delimiters 1 'move)
