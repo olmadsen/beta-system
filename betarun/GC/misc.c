@@ -21,10 +21,8 @@ long isObject( theObj)
   /* check that the GCAttr of the object is valid. */
   if( inBetaHeap(theObj->Proto) ) return FALSE;
   if( theObj->Proto == 0 ) return FALSE;
-#ifdef AO_Area
   if( inAOA(theObj) && (isStatic(theObj->GCAttr) || (theObj->GCAttr == 0)) ) 
     return TRUE;
-#endif
   if( isStatic(theObj->GCAttr) || isAutonomous(theObj->GCAttr) ){
     return TRUE;
   }else{
@@ -43,12 +41,8 @@ long inBetaHeap( theObj)
       return FALSE;
 #endif
   if( inIOA( theObj)) return TRUE;
-#ifdef AO_Area
   if( inAOA( theObj)) return TRUE;
-#endif
-#ifdef LVR_Area
   if( inLVRA( theObj)) return TRUE;
-#endif
   return FALSE;
 }
 

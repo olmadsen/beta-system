@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: AllocateValRep.c,v 1.19 1992-11-06 16:55:03 beta Exp $
+ * Mod: $Id: AllocateValRep.c,v 1.20 1992-12-16 10:12:49 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -44,7 +44,6 @@ ref(ValRep) CAlloVR1(ref(Object) theObj,
     Ck(theObj);
     Size = ByteRepSize(range);
 
-#ifdef LVR_Area
     if (range > LARGE_REP_SIZE) {
 	theRep = cast(ValRep) LVRACAlloc(ByteRepPTValue, range);
 	if (theRep) {
@@ -57,7 +56,6 @@ ref(ValRep) CAlloVR1(ref(Object) theObj,
 	    RETURN(theRep);
 	}
     }
-#endif
 
   
     Protect(theObj, theRep = cast(ValRep) IOAcalloc(Size));
@@ -100,7 +98,6 @@ ref(ValRep) CAlloVR2(ref(Object) theObj,
 
     Size = WordRepSize(range);
 
-#ifdef LVR_Area
     if (range > LARGE_REP_SIZE) {
 	theRep = cast(ValRep) LVRACAlloc(WordRepPTValue, range);
 	if (theRep) {
@@ -112,7 +109,6 @@ ref(ValRep) CAlloVR2(ref(Object) theObj,
 	    RETURN(theRep);
 	}
     }
-#endif
 
     Protect(theObj, theRep = cast(ValRep) IOAcalloc(Size));
     Ck(theObj);
@@ -154,7 +150,6 @@ ref(ValRep) CAlloVR4(ref(Object) theObj,
 
     Size = ValRepSize(range);
 
-#ifdef LVR_Area
     if (range > LARGE_REP_SIZE) {
 	theRep = cast(ValRep) LVRACAlloc(ValRepPTValue, range);
 	if (theRep) {
@@ -166,7 +161,6 @@ ref(ValRep) CAlloVR4(ref(Object) theObj,
 	    RETURN(theRep);
 	}
     }
-#endif
 
     Protect(theObj, theRep = cast(ValRep) IOAcalloc(Size));
     Ck(theObj);
@@ -211,7 +205,6 @@ ref(ValRep) CAlloVR8(ref(Object) theObj,
 
     Size= DoubleRepSize(range);
 
-#ifdef LVR_Area
     if (range > LARGE_REP_SIZE) {
 	theRep = cast(ValRep) LVRACAlloc(DoubleRepPTValue, range);
 	if (theRep) {
@@ -223,7 +216,6 @@ ref(ValRep) CAlloVR8(ref(Object) theObj,
 	    RETURN(theRep);
 	}
     }
-#endif
 
     Protect(theObj, theRep = cast(ValRep) IOAcalloc(Size));
     Ck(theObj);

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: ExtendValRep.c,v 1.18 1992-11-06 16:55:16 beta Exp $
+ * Mod: $Id: ExtendValRep.c,v 1.19 1992-12-16 10:12:54 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -48,7 +48,6 @@ void CExtVR(ref(Object) theObj,
     if (newRange < 0) newRange = 0;
     copyRange = DispatchValRepBodySize(theRep->Proto, (add < 0) ? newRange : theRep->HighBorder) >> 2;
 
-#ifdef LVR_Area
     if (newRange > LARGE_REP_SIZE) 
       newRep = LVRACAlloc(theRep->Proto, newRange);
     if (newRep) {
@@ -69,7 +68,6 @@ void CExtVR(ref(Object) theObj,
 
       return;
     }
-#endif
     
     /* Allocate and nullify new repetition: There is a little overhead here;
      * only extension needs to be nullified

@@ -107,12 +107,8 @@ Initialize()
 #endif
 
   INFO( fprintf( output, "#(Heap info: IOA=2*%dKb", IOASize/Kb) );
-#ifdef AO_Area
   INFO( fprintf( output, ", AOABlock=%dKb", AOABlockSize/Kb) );
-#endif
-#ifdef LVR_Area
   INFO( fprintf( output, ", LVRABlock=%dKb", LVRABlockSize/Kb) );
-#endif
   INFO( fprintf( output, ", CBFABlock=%dKb\n", CBFABlockSize/Kb) );
 
   /* Setup the Infant Object Area */

@@ -74,11 +74,9 @@ static ref(Object) CopyObject( theObj)
 	theEnd     = (ptr(long)) (((long) newObj) + size); 
 	
 	ToSpaceTop = theEnd;
-#ifdef AO_Area
 	if( !tempToSpaceToAOA &&
 	   (char *) ToSpaceTop+size > (char *) ToSpaceToAOAptr )
 	  tempToSpaceToAOAalloc();
-#endif
 	src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
 	
 	while( dst < theEnd) *dst++ = *src++; 
@@ -103,7 +101,6 @@ ref(Object) NewCopyObject( theObj, theCell)
      ref(Object)    theObj;
      handle(Object) theCell;
 {
-#ifdef LVR_Area
     extern ref(Object) CopyObjectToLVRA(); 
     if (isValRep(theObj)) {
 	
@@ -122,9 +119,7 @@ ref(Object) NewCopyObject( theObj, theCell)
 	    }
 	}
     }
-#endif
     
-#ifdef AO_Area
     if( theObj->GCAttr >= IOAtoAOAtreshold ){
 	/* theObj is old enough to go into AOA */
 	extern ref(Object) CopyObjectToAOA(); 
@@ -142,7 +137,6 @@ ref(Object) NewCopyObject( theObj, theCell)
 	    }
 	}
     }
-#endif
     /* theObj is not copied to LVRA, not copied to AOA, or theObj is a stack object */
     return CopyObject(theObj);
 }

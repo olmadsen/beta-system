@@ -79,18 +79,11 @@ void ProcessStackObj(struct StackObject *theStackObject)
    Notice end is *not* included
    */
 
-    
-
-
-#ifdef LVR_Area
 /* Don't process references from the stack to LVRA. The ValReps in
  * in LVRA are not moved by CopyObject, but if PrecessReference
  * is called with such a reference, the LVRA cycle is broken!
  */
 # define objIsValRep(theObj) inLVRA(theObj)
-#else
-# define objIsValRep(theObj) 0
-#endif
 
 void ProcessAR(struct RegWin *ar, struct RegWin *end)
 {
@@ -373,7 +366,6 @@ You may order an unconstrained version from\n",
     DEBUG_IOA( IOACheck() );
     DEBUG_LVRA( LVRACheck() );
     
-#ifdef AO_Area
     DEBUG_AOA( AOAtoIOACheck() );
     DEBUG_AOA( AOACheck() );
     IOAStackObjectSum = IOAStackObjectNum = 0;
@@ -398,7 +390,6 @@ You may order an unconstrained version from\n",
     }
     DEBUG_AOA( AOAtoIOAReport() );
     DEBUG_AOA( AOAcopied = 0; IOAcopied = 0; );
-#endif
     
     /* Follow ActiveComponent */ 
     if (!ActiveComponent && NumIOAGc == 1) {
@@ -438,7 +429,6 @@ You may order an unconstrained version from\n",
 	}
     }
     
-#ifdef AO_Area  
     /* Objects copied til AOA until now has not been proceesed. 
      * During proceesing these objects, new objects may be copied to
      * ToSpace and AOA, therefore we must alternate between handeling
@@ -496,8 +486,6 @@ You may order an unconstrained version from\n",
     }
 #endif
     
-#endif
-    
     /* Swap IOA and ToSpace */
     {
 	ptr(long) Tmp; ptr(long) TmpTop; ptr(long) TmpLimit;
@@ -524,13 +512,15 @@ You may order an unconstrained version from\n",
     
     IOAActive = FALSE;
     
-#ifdef AO_Area
     {
 	long limit = areaSize(IOA,IOALimit) / 10;long sum = 0;
       
 	limit -= IOAStackObjectSum;
 	if (limit < 0) {
-	    DEBUG_IOA( fprintf(output, "#IOA: %d StackObjects fill up more than 10%% of IOA (%d)\n", IOAStackObjectNum, IOAStackObjectSum));
+	    DEBUG_IOA( fprintf(output, 
+			       "#IOA: %d StackObjects fill up more than 10%% of IOA (%d)\n", 
+			       IOAStackObjectNum, 
+			       IOAStackObjectSum));
 	    limit = 0;
 	}
 	IOAtoAOAtreshold = 0;
@@ -545,7 +535,6 @@ You may order an unconstrained version from\n",
     DEBUG_IOA( fprintf( output, " treshold=%d", IOAtoAOAtreshold));
     DEBUG_IOA( fprintf( output, " ToSpaceToAOA=%d", 
 		       areaSize(ToSpaceToAOAptr,ToSpaceToAOALimit)));
-#endif
     
     INFO_IOA( fprintf( output," %d%%)\n",
 		      (100 * areaSize(IOA,IOATop))/areaSize(IOA,IOALimit)));
@@ -593,7 +582,6 @@ void ProcessReference( theCell)
 	    /* theObj has a forward pointer. */
 	    *theCell = (ref(Object)) GCAttribute;
 	    DEBUG_LVRA( Claim( !inLVRA(GCAttribute), "ProcessReference: Forward ValRep"));
-#ifdef AO_Area
 	    /* If the forward pointer refers an AOA object, insert
 	     * theCell in ToSpaceToAOA table.
 	     */
@@ -601,7 +589,6 @@ void ProcessReference( theCell)
 	      if (inAOA( GCAttribute)) {
 		  SaveToSpaceToAOAref(theCell);
 	      }
-#endif
 	}else{
 	    if( GCAttribute >= 0 ){ 
 		/* '*theCell' is an autonomous object. */
@@ -616,7 +603,6 @@ void ProcessReference( theCell)
 		AutObj = (ref(Object)) Offset( theObj, Distance);
 		if( isForward(AutObj->GCAttr) ){
 		    newObj = (ref(Object)) AutObj->GCAttr;
-#ifdef AO_Area
 		    /* If the forward pointer refers an AOA object, insert
 		     * theCell in ToSpaceToAOA table.
 		     */
@@ -624,7 +610,6 @@ void ProcessReference( theCell)
 		      if( inAOA( AutObj->GCAttr)){
 			  SaveToSpaceToAOAref(theCell);
 		      }
-#endif
 		}else
 		  newObj = NewCopyObject( AutObj, theCell);
 		*theCell = (ref(Object)) Offset( newObj, -Distance);
@@ -633,7 +618,6 @@ void ProcessReference( theCell)
 	DEBUG_IOA( Claim( !inIOA(*theCell),"ProcessReference: !inIOA(*theCell)"));
     }else{
 	/* '*theCell' is pointing outside IOA */
-#ifdef AO_Area
 	/* If the forward pointer refers an AOA object, insert
 	 * theCell in ToSpaceToAOA table.
 	 */
@@ -641,8 +625,6 @@ void ProcessReference( theCell)
 	    SaveToSpaceToAOAref(theCell);
 	    return;
 	}
-#endif
-#ifdef LVR_Area
 	if( inLVRA( *theCell)){
 	    /* Preserve the LVRA-cycle. */
 	    ((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
@@ -650,7 +632,6 @@ void ProcessReference( theCell)
 			      "ProcessObject: isValRep(*theCell)"));
 	    return;
 	}
-#endif
     }
 }
 
@@ -803,7 +784,6 @@ void ProcessObject(theObj)
 }
 
 
-#ifdef AO_Area
 /*
  * ProcessAOAReference:
  *  Takes as input a reference to a cell residing outside IOA.
@@ -830,7 +810,6 @@ void ProcessAOAReference( theCell)
 	}else{
 	    if( GCAttribute >= 0 ){ /* theObj is an autonomous object. */
 		*theCell = NewCopyObject( theObj, 0);
-#ifdef LVR_Area
 		if( !inToSpace( *theCell)){
 		    if( inLVRA( *theCell)){
 			/* Preserve the LVRA-cycle. */
@@ -839,7 +818,6 @@ void ProcessAOAReference( theCell)
 					  "ProcessAOAReference: isValRep(*theCell)"));
 		    }
 		}
-#endif
 	    }else{ /* theObj is a part object. */
 		long Distance;
 		ref(Object) newObj;
@@ -855,14 +833,12 @@ void ProcessAOAReference( theCell)
 	    }
 	}
     }else{
-#ifdef LVR_Area
 	if( inLVRA( *theCell)){
 	    /* Preserve the LVRA-cycle. */
 	    ((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
 	    DEBUG_LVRA( Claim( isValRep(*theCell), 
 			      "ProcessAOAReference: isValRep(*theCell)"));
 	}
-#endif
     }
     DEBUG_AOA( Claim( !inIOA(*theCell),"ProcessAOAReference: !inIOA(*theCell)"));
     DEBUG_AOA( if( inAOA( *theCell)){ AOACheckObjectSpecial( *theCell); } );
@@ -953,7 +929,6 @@ void ProcessAOAObject(theObj)
       }
   }
 }
-#endif
 
 /*
  * CompleteScavenging:

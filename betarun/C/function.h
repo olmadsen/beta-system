@@ -31,7 +31,6 @@ extern void AOAtoIOAInsert();
 extern long AOAtoIOAAlloc();
 extern void AOAtoIOAClear();
 
-#ifdef AO_Area
 /* GC/aoa.c */
 extern ref(Object) CopyObjectToAOA();
 extern void AOAGc();
@@ -43,7 +42,6 @@ extern void AOACheckReference();
 extern void AOACheckObjectSpecial();
 #endif
 
-#endif AO_Area
 
 /* GC/scavenging.c */
 extern void ProcessStackPart();
@@ -51,11 +49,8 @@ extern void ProcessStack();
 extern void IOAGc();
 extern void ProcessReference();
 extern void ProcessObject();
-
-#ifdef AO_Area
 extern void ProcessAOAReference();
 extern void ProcessAOAObject();
-#endif
 
 extern void CompleteScavenging();
 extern long GetDistanceToEnclosingObject();
