@@ -12,12 +12,11 @@ AlloC: public
      
      { Used variable.   }
      Size:          Word       = DataReg2;
+     Offset:        Word       = DataReg2;
      DataReg2Long:  Long       = DataReg2; 
      Tmp:           Word       = DataReg1; 
      initTab:       CodeArea   = AddrReg1; { index in GC table of prototype }
      Entry:         CodeArea   = AddrReg1;
-     Index:         Word       = RegAdr; { saved and restored }
-     RegAdrLong:    Long       = RegAdr; { saved and restored }
      newTop:        DataArea   = AddrReg1;
      theComp:       Component  = AddrReg2;
      
@@ -29,6 +28,7 @@ AlloC: public
      
      push AddrReg1, AddrReg2, DataReg2Long;
      
+     0 -> Size!l;
      protoType.Size -> Size;
      IOATop -> theComp;
      theComp[24+Size*4][] -> newTop;
@@ -49,45 +49,39 @@ AlloC: public
      -6        -> theComp[28]!l;
      
      { Initialize the body part of the item, according to the genTable. }
-     { FIXME: change like in AlloI }
-     clear initTab; 
-     protoType.GCTabel -> initTab!w+;
-     protoType -> initTab+;
+     protoType -> initTab!l;
+     protoType.GCTabel!w -> initTab!l+;
      
      { initTab is now pointing to the static GCTable. 
        This table has zero or more elements terminated with a zero word. 
        Each element looks like: 
        
        WORD Offset in the generated object, where this static object begins 
-       WORD Signed distance to inclosing object 
-       LONG Prototype of this static object
+       WORD Signed distance to enclosing object 
+       LONG Prototype of this static object 
      }
      
-     push RegAdrLong;
-     
-     2 -> Index; { index in object }
+     0->Offset!l;
+     initTab[0]!w -> Offset;
      loop:
-     (if Index < Size then
-         (if Index = initTab[0]!w then
-             { Insert the offset to the autonomous object. }
-             initTab[2]!w -> Tmp;
-             extend Tmp;
-             Tmp!l -> theComp[28+Index*4];
-             { Insert the protoType from the initTab. }
-             initTab[4]!l -> Tmp!l; Tmp!l -> theComp[24+Index*4]!l;
-             8 -> initTab+;
-             2 -> Index+;     
-             goto loop
-         if);
-         1 -> Index+;
+     (if Offset!l<>0 then
+         { Insert the distance to the autonomous object. }
+         -1 -> Tmp;
+         initTab[2]!w -> Tmp!w;
+         Tmp!l -> theComp[28+Offset*4];
+         { Insert the protoType from the initTab. }
+         initTab[4]!l -> Tmp!l; 
+         Tmp!l -> theComp[24+Offset*4]!l;
+         8 -> initTab+;
+         0 -> Offset!l;
+         initTab[0]!w -> Offset;
          goto loop
      if);
      
-     protoType.OrigOff -> Index;
+     0 -> Offset!l;
+     protoType.OrigOff -> Offset;
      pReg1 -> Tmp!l;
-     Tmp!l -> theComp[24+Index*4];
-     
-     pop RegAdrLong;
+     Tmp!l -> theComp[24+Offset*4];
      
      protoType.GenPart -> Entry;
      (if Entry=0 then 
