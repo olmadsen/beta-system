@@ -3,6 +3,6 @@
 #include "beta.h"
 #include "objectStore.h"
 
-void importStoreObject(Object *theObj, BlockID store, u_long offset);
+void importStoreObject(Object *theObj, BlockID store, unsigned long offset);
 
 #endif /* _PIMPORT_H_ */

@@ -22,7 +22,7 @@ void objt_dummy() {
 typedef struct OTEntry { /* Object Table Entry */
   char GCAttr;           /* The GC state of this entry. */
   BlockID store;         /* The store in which this object is saved */
-  u_long offset;         /* The byte offset in the store of the object */  
+  unsigned long offset;         /* The byte offset in the store of the object */  
   Object *theObj;        /* The object in memory */       
 } OTEntry;
 
@@ -34,11 +34,11 @@ static sequenceTable *currentTable = NULL;
 static Node *loadedObjectsST;
 
 #ifdef RTINFO
-static u_long bytesExported, objectsExported;
+static unsigned long bytesExported, objectsExported;
 #endif /* RTINFO */
 
 /* LOCAL FUNCTION DECLARATIONS */
-static void updateObjectInStore(Object *theObj, BlockID store, u_long offset);
+static void updateObjectInStore(Object *theObj, BlockID store, unsigned long offset);
 static void freeLoadedObjectsOF(void *contents);
 
 /* FUNCTIONS */
@@ -61,26 +61,26 @@ void initObjectTable(void)
   initTransitObjectTable();
 }
 
-u_long OTSize(void)
+unsigned long OTSize(void)
 {
   return STSize(currentTable);
 }
 
-static u_long currentStore;
-static u_long currentOffset;
+static unsigned long currentStore;
+static unsigned long currentOffset;
 static Object *theRealObj;
-static u_long OTinx;
+static unsigned long OTinx;
 
 static void registerReverse(Object *theObj)
 {
-  u_long distanceToPart;
-  distanceToPart = (u_long)theObj - (u_long)theRealObj;
+  unsigned long distanceToPart;
+  distanceToPart = (unsigned long)theObj - (unsigned long)theRealObj;
   insertStoreOffsetOT(currentStore,
 		      currentOffset + distanceToPart,
 		      OTinx);
 }
 
-static void registerObjectAndParts(BlockID store, u_long offset, Object *theObj, u_long inx)
+static void registerObjectAndParts(BlockID store, unsigned long offset, Object *theObj, unsigned long inx)
 {  
   OTinx = inx;
   currentStore = store;
@@ -97,13 +97,13 @@ static void registerObjectAndParts(BlockID store, u_long offset, Object *theObj,
   }
 }
 
-u_long insertObject(char GCAttr,
+unsigned long insertObject(char GCAttr,
 		    BlockID store,
-		    u_long offset,
+		    unsigned long offset,
 		    Object *theObj)
 {
   OTEntry *newEntry;
-  u_long inx;
+  unsigned long inx;
 
   Claim(theObj == getRealObject(theObj), "Unexpected part object");
   
@@ -122,10 +122,10 @@ u_long insertObject(char GCAttr,
 }
 
 /* Looks up GCAttr, store, offset and object based on index into table */
-void objectLookup(u_long inx,
+void objectLookup(unsigned long inx,
 		  char *GCAttr,
 		  BlockID *store,
-		  u_long *offset,
+		  unsigned long *offset,
 		  Object **theObj)
 {
   OTEntry *entry;
@@ -140,14 +140,14 @@ void objectLookup(u_long inx,
 
 /* Returns inx of entry containing (??, store, object, ??). Returns -1 if
    not found. */
-u_long indexLookupOT(BlockID store, u_long offset)
+unsigned long indexLookupOT(BlockID store, unsigned long offset)
 {
   Node *loadedObjectsOF;
   
   /* Check if store is member of 'loadedObjects' */
   if ((loadedObjectsOF = TILookup(store, loadedObjectsST))) {
-    u_long inx;
-    if ((inx = (u_long)TILookup(offset, loadedObjectsOF))) {
+    unsigned long inx;
+    if ((inx = (unsigned long)TILookup(offset, loadedObjectsOF))) {
       return inx - 1;
     }
   }
@@ -156,7 +156,7 @@ u_long indexLookupOT(BlockID store, u_long offset)
 
 void OTCheck(void (*checkAction)(Object *theObj, void *generic))
 {
-  u_long inx, maxIndex;
+  unsigned long inx, maxIndex;
   OTEntry *entry;
   
   maxIndex = STSize(currentTable);
@@ -172,7 +172,7 @@ void OTCheck(void (*checkAction)(Object *theObj, void *generic))
 /* Marks all entries as potentially dead. */
 void OTStartGC(void)
 {
-  u_long inx, maxIndex;
+  unsigned long inx, maxIndex;
   OTEntry *entry;
   
   maxIndex = STSize(currentTable);
@@ -190,7 +190,7 @@ void OTStartGC(void)
 void objectAlive(Object *theObj)
 {
   OTEntry *entry;
-  u_long inx;
+  unsigned long inx;
   
   inx = getPUID((void *)(theObj -> GCAttr));
   entry = STLookup(currentTable, inx);
@@ -201,7 +201,7 @@ void objectAlive(Object *theObj)
   entry -> GCAttr = ENTRYALIVE;
 }
 
-void insertStoreOffsetOT(BlockID store, u_long offset, u_long inx)
+void insertStoreOffsetOT(BlockID store, unsigned long offset, unsigned long inx)
 {
   Node *loadedObjectsOF;
   
@@ -223,7 +223,7 @@ static void freeLoadedObjectsOF(void *contents)
 
 void OTEndGC(void)
 {
-  u_long inx, maxIndex;
+  unsigned long inx, maxIndex;
   OTEntry *entry;
   sequenceTable *newTable = NULL;
   
@@ -244,7 +244,7 @@ void OTEndGC(void)
       
     } else if (entry -> GCAttr == ENTRYALIVE) {
       if (!closingGC) {
-	u_long newInx;
+	unsigned long newInx;
 	OTEntry *newEntry;
 	
 	newEntry = (OTEntry *)malloc(sizeof(OTEntry));
@@ -270,8 +270,8 @@ void OTEndGC(void)
 
 void flushDelayedEntries(void)
 {
-  u_long count;
-  u_long maxIndex;
+  unsigned long count;
+  unsigned long maxIndex;
   OTEntry *entry;
   
   if (currentTable == NULL) {
@@ -295,8 +295,8 @@ void flushDelayedEntries(void)
 void updatePersistentObjects(void)
 {
   Object *root;
-  u_long count;
-  u_long maxIndex;
+  unsigned long count;
+  unsigned long maxIndex;
   OTEntry *entry;
   
   /* All objects referred from persistent objects shall be made
@@ -335,7 +335,7 @@ void updatePersistentObjects(void)
   INFO_PERSISTENCE(fprintf(output, "  AOAGc\n"));
 }
 
-static void updateObjectInStore(Object *theObj, BlockID store, u_long offset)
+static void updateObjectInStore(Object *theObj, BlockID store, unsigned long offset)
 {
   Claim(inAOA(theObj), "Where is theObj?");      
   Claim(AOAISPERSISTENT(theObj), "not persistent??");
@@ -357,8 +357,8 @@ static void updateObjectInStore(Object *theObj, BlockID store, u_long offset)
    checkpointed and removed */
 void removeUnusedObjects()
 {
-  u_long count;
-  u_long maxIndex;
+  unsigned long count;
+  unsigned long maxIndex;
   OTEntry *entry;  
   /* All objects in the ObjectTable that are marked as POTENTIALLYDEAD
      are no longer referred from this process and can be updated in

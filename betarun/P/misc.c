@@ -45,7 +45,7 @@ void markPersistentObject(Object *theObj)
   }
 }
 
-void markSpecialObject(u_long tag, Object *theObj)
+void markSpecialObject(unsigned long tag, Object *theObj)
 {
   Object *realObj;
   
@@ -62,7 +62,7 @@ void markSpecialObject(u_long tag, Object *theObj)
 /* 'theObj' is a new object just declared persistent. */
 void newPersistentObject(Object *theObj) 
 {
-  u_long inx, GCMark;
+  unsigned long inx, GCMark;
   StoreProxy *sp;
   
   Claim(theObj == getRealObject(theObj), "Unexpected part object");
@@ -149,10 +149,10 @@ void handleNewPersistentObject(Object *theObj)
 static void markOriginAlive(Object **theCell)
 {
   Object *theOrigin, *theRealOrigin;
-  u_long inx;
+  unsigned long inx;
   char GCAttr;
   BlockID store;
-  u_long offset;
+  unsigned long offset;
   Object *theObj;
 
   if ((theOrigin = *theCell)) {
@@ -194,10 +194,10 @@ void markOriginsAlive(Object *theObj)
 void handlePersistentCell(REFERENCEACTIONARGSTYPE)
 {
   Object *realObj, *theObj;
-  u_long inx;
+  unsigned long inx;
   char GCAttr;
   BlockID store;
-  u_long offset;
+  unsigned long offset;
   
   theObj = *theCell;
   
@@ -215,10 +215,10 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
     INFO_PERSISTENCE(PtoD++);
     return;
   } else {
-      u_long newEntryInx, distanceToPart;
+      unsigned long newEntryInx, distanceToPart;
       
       realObj = getRealObject(theObj);
-      distanceToPart = (u_long)theObj - (u_long)realObj;
+      distanceToPart = (unsigned long)theObj - (unsigned long)realObj;
       
       if (AOAISPERSISTENT(realObj)) {
 	Claim(inAOA(realObj), "Where is the object?");
@@ -287,10 +287,10 @@ void showStatistics(void)
 
 void getKeyForObject(ObjectKey *ok, Object *theObj)
 {
-  u_long inx;
+  unsigned long inx;
   char GCAttr;
   BlockID store;
-  u_long offset;
+  unsigned long offset;
   Object *theObjInTable;
   
   Claim(getRealObject(theObj) == theObj, "Cannot get key for part object");

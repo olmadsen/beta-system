@@ -4,14 +4,14 @@
 #include "beta.h"
 
 void initSpecialObjectTable(void);
-u_long SOTSize(void);
-u_long insertSpecialObject(u_long tag, Object *theObj);
+unsigned long SOTSize(void);
+unsigned long insertSpecialObject(unsigned long tag, Object *theObj);
 void unmarkSpecialObjects(void);
 void GCspecialObjectsTable(void);
 void remarkSpecialObjects(void);
-void saveTagForObject(Object *realObj, u_long tag);
-u_long getTagForObject(Object *theObj);
-u_long getTag(Object *theObj);
+void saveTagForObject(Object *realObj, unsigned long tag);
+unsigned long getTagForObject(Object *theObj);
+unsigned long getTag(Object *theObj);
 void freeSOTags(void);
 
 #endif /* _SPECIALOBJECTTABLE_H_ */

@@ -13,12 +13,12 @@ void proto_dummy() {
 
 /* LOCAL TYPES */
 typedef struct protoID {
-  u_long group;
-  u_long protoNo;
+  unsigned long group;
+  unsigned long protoNo;
 } protoID;
 
 /* LOCAL FUNCTION DECLARATIONS */
-static ProtoType *PrototypeNoToProto(group_header *gh, u_long protoNo);
+static ProtoType *PrototypeNoToProto(group_header *gh, unsigned long protoNo);
 
 /* Maps prototype references to prototype ID's (group, protoNo) */
 static Node *PtoICache;
@@ -41,12 +41,12 @@ void freeProtoHandling(void)
   TIFree(ItoPCache, NULL);
 }
 
-void protoAddrToID(ProtoType *theProto, u_long *group, u_long *protoNo)
+void protoAddrToID(ProtoType *theProto, unsigned long *group, unsigned long *protoNo)
 {
   group_header *gh;
   protoID *id;
   
-  if ((id = TILookup((u_long)theProto, PtoICache))) {
+  if ((id = TILookup((unsigned long)theProto, PtoICache))) {
     *group = id -> group;
     *protoNo = id -> protoNo;
     return;
@@ -54,10 +54,10 @@ void protoAddrToID(ProtoType *theProto, u_long *group, u_long *protoNo)
   
   if (isSpecialProtoType(theProto)) {
     *group = -1; /* Mark indicating special prototype */
-    *protoNo = (u_long)theProto;
+    *protoNo = (unsigned long)theProto;
     
   } else {
-    u_long count;
+    unsigned long count;
     
     *group = 0;
     *protoNo = -1; /* Mark as illegal proto id. If the proto is not
@@ -65,7 +65,7 @@ void protoAddrToID(ProtoType *theProto, u_long *group, u_long *protoNo)
     gh = NextGroup(0);
     count = 0;
     while (gh) {
-      u_long pNo;
+      unsigned long pNo;
       
       if ((pNo = IsPrototypeOfGroup(gh, (long)theProto)) > 0) {
 	*group = count;
@@ -78,7 +78,7 @@ void protoAddrToID(ProtoType *theProto, u_long *group, u_long *protoNo)
 	  id -> group = *group;
 	  id -> protoNo = *protoNo;
 	  
-	  TInsert((u_long)theProto, (void *)id, PtoICache, (u_long)theProto);
+	  TInsert((unsigned long)theProto, (void *)id, PtoICache, (unsigned long)theProto);
 	}
 	return;
       }
@@ -89,10 +89,10 @@ void protoAddrToID(ProtoType *theProto, u_long *group, u_long *protoNo)
   /* Failing Lookups are not cached */
 }
 
-ProtoType *IDtoProtoAddr(u_long group, u_long protoNo)
+ProtoType *IDtoProtoAddr(unsigned long group, unsigned long protoNo)
 {
   group_header *gh;
-  u_long count, key;
+  unsigned long count, key;
   ProtoType *theProto;
   
   Claim(group < 0xFFFF, "group too large");
@@ -120,7 +120,7 @@ ProtoType *IDtoProtoAddr(u_long group, u_long protoNo)
   return 0;
 }
 
-static ProtoType *PrototypeNoToProto(group_header *gh, u_long protoNo) 
+static ProtoType *PrototypeNoToProto(group_header *gh, unsigned long protoNo) 
 { 
   long* proto=&gh->protoTable[1];
   int NoOfPrototypes;
@@ -136,8 +136,8 @@ static ProtoType *PrototypeNoToProto(group_header *gh, u_long protoNo)
 
 static void exportProtoType(Object *theObj)
 {
-  u_long group;
-  u_long protoNo;
+  unsigned long group;
+  unsigned long protoNo;
   
   protoAddrToID(GETPROTO(theObj),
 		&group,
@@ -169,14 +169,14 @@ void exportProtoTypes(Object *theObj)
 
 ProtoType *translateStoreProto(ProtoType *theProto)
 {
-  u_long group;
-  u_long protoNo;
+  unsigned long group;
+  unsigned long protoNo;
   
   if (isSpecialProtoType(theProto)) {
     return theProto;
   } else {
-    group = (u_long)(theProto) >> 16;
-    protoNo = (u_long)(theProto) & 0x0000FFFF;
+    group = (unsigned long)(theProto) >> 16;
+    protoNo = (unsigned long)(theProto) & 0x0000FFFF;
     
     return IDtoProtoAddr(group, protoNo);
   }
@@ -202,7 +202,7 @@ void importProtoTypes(Object *theObj)
   objectAction = temp;
 }
 
-u_long StoreObjectSize(Object * theObj)
+unsigned long StoreObjectSize(Object * theObj)
 { 
   ProtoType * theProto = GETPROTO(theObj);
   

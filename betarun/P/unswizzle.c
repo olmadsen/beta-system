@@ -23,7 +23,7 @@ void unswizzle_dummy()
 /* LOCAL FUNCTION DECLARATIONS */
 static void originReferenceAction(Object **theCell);
 static void getOriginChain(Object *theObj);
-static Object *loadObject(BlockID store, u_long offset);
+static Object *loadObject(BlockID store, unsigned long offset);
 
 /* FUNCTIONS */
 
@@ -35,8 +35,8 @@ Object *unswizzleReference(void *ip)
 {
   char GCAttr;
   BlockID store;
-  u_long offset;
-  u_long inx;
+  unsigned long offset;
+  unsigned long inx;
   Array *IOAclients;
   Array *AOAclients;
   
@@ -54,7 +54,7 @@ Object *unswizzleReference(void *ip)
   return lookUpReferenceEntry(store, offset);
 }
 
-Object *lookUpReferenceEntry(BlockID store, u_long offset)
+Object *lookUpReferenceEntry(BlockID store, unsigned long offset)
 {
   Object *theObj;
   
@@ -65,9 +65,9 @@ Object *lookUpReferenceEntry(BlockID store, u_long offset)
   }
 }
 
-static Object *loadObject(BlockID store, u_long offset)
+static Object *loadObject(BlockID store, unsigned long offset)
 {
-  u_long size, distanceToPart;
+  unsigned long size, distanceToPart;
   Object *theStoreObj, *theRealStoreObj, *theRealObj;
 
   setCurrentObjectStore(store);
@@ -76,13 +76,13 @@ static Object *loadObject(BlockID store, u_long offset)
   Claim(theStoreObj != NULL, "Could not look up store object");
   
   theRealStoreObj = getRealObject(theStoreObj);
-  distanceToPart = (u_long)theStoreObj - (u_long)theRealStoreObj;
+  distanceToPart = (unsigned long)theStoreObj - (unsigned long)theRealStoreObj;
   
   if (distanceToPart) {
     Object *theRealObj;
     
     theRealObj = lookUpReferenceEntry(store, offset - distanceToPart);
-    return (Object *)((u_long)theRealObj + distanceToPart);
+    return (Object *)((unsigned long)theRealObj + distanceToPart);
   } else {
     size = 4*StoreObjectSize(theRealStoreObj);
     theRealObj = AOAallocate(size);
@@ -133,14 +133,14 @@ static void getOriginChain(Object *theObj)
    changed then the define below should be changed accordingly.  */
 #define UNKNOWNTAG 0
 
-void registerRebinderFunc(Object *(*rebinderFunc)(u_long objectTag, u_long typeTag))
+void registerRebinderFunc(Object *(*rebinderFunc)(unsigned long objectTag, unsigned long typeTag))
 {
   callRebinderC = rebinderFunc;
 }
 
-Object *handleSpecialReference(u_long specRef)
+Object *handleSpecialReference(unsigned long specRef)
 {
-  u_long tag, distanceToPart;
+  unsigned long tag, distanceToPart;
   Object *target;
   void (*temp)(Object *theObj);
   
@@ -162,7 +162,7 @@ Object *handleSpecialReference(u_long specRef)
   BETAREENTERED = FALSE;
   objectAction = temp;
   
-  target = (Object *)((u_long)getRealObject(target) + distanceToPart);
+  target = (Object *)((unsigned long)getRealObject(target) + distanceToPart);
 
   return target;
 }

@@ -13,8 +13,8 @@ void st_dummy() {
 #define TABLESIZE(length) (sizeof(struct sequenceTable) + sizeof(void *) * ((length) - 1))
 
 static void clearTable(sequenceTable *currentTable, 
-		       u_long start, 
-		       u_long end)
+		       unsigned long start, 
+		       unsigned long end)
 {
   while(start < end) {
     currentTable -> body[start] = (void *)calloc(currentTable -> elemSize, 1);
@@ -22,10 +22,10 @@ static void clearTable(sequenceTable *currentTable,
   }
 }
 
-sequenceTable *STInit(u_long NoElems, 
+sequenceTable *STInit(unsigned long NoElems, 
 		      int (*isFree)(void *), 
 		      void (*Free)(void *), 
-		      u_long elemSize)
+		      unsigned long elemSize)
 {
   sequenceTable *new;
   
@@ -41,7 +41,7 @@ sequenceTable *STInit(u_long NoElems,
 
 static sequenceTable *STRealloc(sequenceTable *currentTable)
 {
-  u_long newLength;
+  unsigned long newLength;
   sequenceTable *newTable;
   
   Claim(currentTable != NULL, "STRealloc: currentTable is NULL");
@@ -59,15 +59,15 @@ static sequenceTable *STRealloc(sequenceTable *currentTable)
   return newTable;
 }
 
-u_long STSize(sequenceTable *currentTable)
+unsigned long STSize(sequenceTable *currentTable)
 {
   return currentTable -> maxIndex;
 }
 
-u_long STInsert(sequenceTable **tableSite, void *elm)
+unsigned long STInsert(sequenceTable **tableSite, void *elm)
 {
-  u_long inx;
-  static u_long once = 0;
+  unsigned long inx;
+  static unsigned long once = 0;
   sequenceTable *currentTable;
   
   Claim(elm != NULL, "STInsert: Trying to insert NULL element");
@@ -101,7 +101,7 @@ u_long STInsert(sequenceTable **tableSite, void *elm)
   }
 }
 
-void *STLookup(sequenceTable *currentTable, u_long inx)
+void *STLookup(sequenceTable *currentTable, unsigned long inx)
 {
   Claim(inx < currentTable -> maxIndex, "STLookup: Illegal inx");
 
@@ -114,7 +114,7 @@ void *STLookup(sequenceTable *currentTable, u_long inx)
 
 void STFree(sequenceTable **currentTable)
 {
-  u_long count, maxIndex;
+  unsigned long count, maxIndex;
   void **body;
   
   maxIndex = (*currentTable) -> maxIndex;

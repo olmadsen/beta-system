@@ -12,8 +12,8 @@ void dom_dummy() {
 
 /* LOCAL TYPES */
 typedef struct DomainTable {
-  u_long maxIndex;
-  u_long nextFree;
+  unsigned long maxIndex;
+  unsigned long nextFree;
   ProtoType *body[1];
 } DomainTable;
 
@@ -33,7 +33,7 @@ static void initDomainTable(void);
 /* FUNCTIONS */
 static void initDomainTable(void)
 {
-  u_long newSize;
+  unsigned long newSize;
   
   newSize = TABLESIZE(INITIALTABLELENGTH);
   
@@ -45,7 +45,7 @@ static void initDomainTable(void)
 
 static void DTRealloc(void)
 {
-  u_long newLength;
+  unsigned long newLength;
   DomainTable *newTable;
   
   Claim(currentTable != NULL, "DTRealloc: currentTable is NULL");
@@ -60,10 +60,10 @@ static void DTRealloc(void)
   currentTable = newTable;
 }
 
-u_long newDomain(Structure *structure)
+unsigned long newDomain(Structure *structure)
 {
   ProtoType *theProto;
-  u_long inx;
+  unsigned long inx;
   
   if (currentTable == NULL) {
     initDomainTable();
@@ -83,9 +83,9 @@ u_long newDomain(Structure *structure)
   
 }
 
-u_long getDomain(Object *theObj)
+unsigned long getDomain(Object *theObj)
 {
-  u_long inx, max;
+  unsigned long inx, max;
   ProtoType *theProto;
   
   theProto = GETPROTO(theObj);

@@ -27,7 +27,7 @@ static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
 {
   char GCAttr;
   BlockID store;
-  u_long offset, distanceToPart;
+  unsigned long offset, distanceToPart;
   Object *theObj, *realObj;
   void *puid;  /* puid of referred object */
   Array *IOAclients;
@@ -49,7 +49,7 @@ static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
     Object *dummy;
     
     realObj = getRealObject(theObj);
-    distanceToPart = (u_long)theObj - (u_long)realObj;
+    distanceToPart = (unsigned long)theObj - (unsigned long)realObj;
     
     if (AOAISPERSISTENT(realObj)) {
       Claim(inAOA(realObj), "Where is theObj ?");
@@ -63,7 +63,7 @@ static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
       
       Claim(dummy == realObj, "Table mismatch ?");
     } else {
-      u_long tag;
+      unsigned long tag;
       
       tag = getTag(realObj);
       
@@ -104,7 +104,7 @@ static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
       
     }
 #endif /* RTDEBUG */
-    Claim((u_long)*theCell != ILLEGALBlockID, "??");
+    Claim((unsigned long)*theCell != ILLEGALBlockID, "??");
   }
 }
 

@@ -19,7 +19,7 @@ void reft_dummy() {
 typedef struct RTEntry {          /* Reference Table Entry */
   char GCAttr;                    /* The GC state of this entry. */
   BlockID store;                  /* The store in which this object is saved */
-  u_long offset;                  /* The byte offset in the store of the object */  
+  unsigned long offset;                  /* The byte offset in the store of the object */  
   Array *IOAclients, *AOAclients; /* List of cells referring this reference */
 } RTEntry;
 
@@ -33,11 +33,11 @@ static sequenceTable *currentTable = NULL;
 static Node *loadedObjectsST;
 
 /* LOCAL FUNCTION DECLARATIONS */
-static void insertStoreOffsetRT(BlockID store, u_long offset, u_long inx);
+static void insertStoreOffsetRT(BlockID store, unsigned long offset, unsigned long inx);
 
 static Array *newArray(void);
 static void Arealloc(Array *array);
-static void Aappend(Array *array, u_long theCell);
+static void Aappend(Array *array, unsigned long theCell);
 
 /* FUNCTIONS */
 static Array *newArray(void)
@@ -47,13 +47,13 @@ static Array *newArray(void)
 
 static void Arealloc(Array *array)
 {
-  u_long *new;
-  u_short newMax;
+  unsigned long *new;
+  unsigned short newMax;
   
   newMax = 2*array -> max + 1;
-  new = (u_long *)malloc(sizeof(u_long)*newMax);
+  new = (unsigned long *)malloc(sizeof(unsigned long)*newMax);
   if (array -> theCells) {
-    memcpy(new, array -> theCells, array -> max * sizeof(u_long));
+    memcpy(new, array -> theCells, array -> max * sizeof(unsigned long));
     free(array -> theCells);
     array -> theCells = 0;
   }
@@ -61,7 +61,7 @@ static void Arealloc(Array *array)
   array -> max = newMax;
 }
 
-static void Aappend(Array *array, u_long theCell)
+static void Aappend(Array *array, unsigned long theCell)
 {
   if (array -> top < array -> max) {
     array -> theCells[array -> top] = theCell;
@@ -121,7 +121,7 @@ void initReferenceTable(void)
   initProtoHandling();
 }
 
-void newIOAclient(u_long inx, Object **theCell)
+void newIOAclient(unsigned long inx, Object **theCell)
 {
   RTEntry *entry;
   
@@ -135,10 +135,10 @@ void newIOAclient(u_long inx, Object **theCell)
     entry -> IOAclients = newArray();
   }
   
-  Aappend(entry -> IOAclients, (u_long)theCell);
+  Aappend(entry -> IOAclients, (unsigned long)theCell);
 }
 
-void newAOAclient(u_long inx, Object **theCell)
+void newAOAclient(unsigned long inx, Object **theCell)
 {
   RTEntry *entry;
   
@@ -151,10 +151,10 @@ void newAOAclient(u_long inx, Object **theCell)
   if (entry -> AOAclients == NULL) {
     entry -> AOAclients = newArray();
   }
-  Aappend(entry -> AOAclients, (u_long)theCell);
+  Aappend(entry -> AOAclients, (unsigned long)theCell);
 }
 
-void inxToObject(u_long inx)
+void inxToObject(unsigned long inx)
 {
   RTEntry *entry;
   
@@ -163,7 +163,7 @@ void inxToObject(u_long inx)
 
 void clearAOAclients(void)
 {
-  u_long maxIndex, inx;
+  unsigned long maxIndex, inx;
   RTEntry *entry;
 
   maxIndex = STSize(currentTable);
@@ -183,7 +183,7 @@ void clearAOAclients(void)
 
 void clearIOAclients(void)
 {
-  u_long maxIndex, inx;
+  unsigned long maxIndex, inx;
   RTEntry *entry;
 
   maxIndex = STSize(currentTable);
@@ -201,12 +201,12 @@ void clearIOAclients(void)
   }
 }
 
-u_long insertReference(char GCAttr,
+unsigned long insertReference(char GCAttr,
 		       BlockID store,
-		       u_long offset)
+		       unsigned long offset)
 {
   RTEntry *newEntry;
-  u_long inx;
+  unsigned long inx;
   
   newEntry = (RTEntry *)malloc(sizeof(RTEntry));
   newEntry -> GCAttr = GCAttr;
@@ -223,7 +223,7 @@ u_long insertReference(char GCAttr,
   return inx;
 }
 
-static void insertStoreOffsetRT(BlockID store, u_long offset, u_long inx)
+static void insertStoreOffsetRT(BlockID store, unsigned long offset, unsigned long inx)
 {
   Node *loadedObjectsOF;
   
@@ -239,10 +239,10 @@ static void insertStoreOffsetRT(BlockID store, u_long offset, u_long inx)
 }
 
 /* Looks up GCAttr, store and offset based on index into table */
-void referenceLookup(u_long inx,
+void referenceLookup(unsigned long inx,
 		     char *GCAttr,
 		     BlockID *store,
-		     u_long *offset,
+		     unsigned long *offset,
 		     Array **IOAclients,
 		     Array **AOAclients)
 {
@@ -259,14 +259,14 @@ void referenceLookup(u_long inx,
 
 /* Returns inx of entry containing (??, store, object). Returns -1 if
    not found. */
-u_long indexLookupRT(BlockID store, u_long offset)
+unsigned long indexLookupRT(BlockID store, unsigned long offset)
 {
   Node *loadedObjectsOF;
   
   /* Check if store is member of 'loadedObjects' */
   if ((loadedObjectsOF = TILookup(store, loadedObjectsST))) {
-    u_long inx;
-    if ((inx = (u_long)TILookup(offset, loadedObjectsOF))) {
+    unsigned long inx;
+    if ((inx = (unsigned long)TILookup(offset, loadedObjectsOF))) {
       return inx - 1;
     }
   }
@@ -276,7 +276,7 @@ u_long indexLookupRT(BlockID store, u_long offset)
 /* Marks all entries as potentially dead. */
 void RTStartGC(void)
 {
-  u_long inx, maxIndex;
+  unsigned long inx, maxIndex;
   RTEntry *entry;
   
   if (currentTable == NULL) {
@@ -298,7 +298,7 @@ void RTStartGC(void)
 void referenceAlive(void *ip)
 {
   RTEntry *entry;
-  u_long inx;
+  unsigned long inx;
   
   inx = getPUID(ip);
   entry = STLookup(currentTable, inx);
@@ -316,7 +316,7 @@ static void freeLoadedObjectsOF(void *contents)
 
 void RTEndGC(void)
 {
-  u_long inx, maxIndex;
+  unsigned long inx, maxIndex;
   RTEntry *entry;
   sequenceTable *newTable = NULL;
   
@@ -337,7 +337,7 @@ void RTEndGC(void)
       
     } else if (entry -> GCAttr == ENTRYALIVE) {
       if (!closingGC) {
-	u_long newInx;
+	unsigned long newInx;
 	RTEntry *newEntry;
 	
 	newEntry = (RTEntry *)malloc(sizeof(RTEntry));

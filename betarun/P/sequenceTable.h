@@ -3,21 +3,21 @@
 #include "beta.h"
 
 typedef struct sequenceTable {
-  u_long elemSize;        /* size of elements in byts */
+  unsigned long elemSize;        /* size of elements in byts */
   int (*isFree)(void *);  /* determines if an entry is free */
   void (*Free)(void *);    /* function to free entry */
-  u_long maxIndex;        /* number of indices allocated for this table */
-  u_long nextFree;        /* Index of the next free entry */
+  unsigned long maxIndex;        /* number of indices allocated for this table */
+  unsigned long nextFree;        /* Index of the next free entry */
   void *body[1];
 } sequenceTable;
 
-sequenceTable *STInit(u_long NoElems, 
+sequenceTable *STInit(unsigned long NoElems, 
 		      int (*isFree)(void *), 
 		      void (*Free)(void *), 
-		      u_long elemSize);
-u_long STSize(sequenceTable *currentTable);
-u_long STInsert(sequenceTable **tableSite, void *elm);
-void *STLookup(sequenceTable *currentTable, u_long inx);
+		      unsigned long elemSize);
+unsigned long STSize(sequenceTable *currentTable);
+unsigned long STInsert(sequenceTable **tableSite, void *elm);
+void *STLookup(sequenceTable *currentTable, unsigned long inx);
 void STFree(sequenceTable **currentTable);
 
 #endif /* _SEQUENCETABLE_H_ */

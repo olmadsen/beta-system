@@ -18,17 +18,17 @@ void pimport_dummy() {
 /* LOCAL VARIABLES */
 static BlockID currentStore;
 static Object *theRealObj;
-static u_long currentOffset;
+static unsigned long currentOffset;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static void storeReferenceToProcessReference(REFERENCEACTIONARGSTYPE);
-static Object *importReference(BlockID store, u_long offset, Object **theCell);
-static Object *updateReferenceTable(BlockID store, u_long offset, Object **theCell);
+static Object *importReference(BlockID store, unsigned long offset, Object **theCell);
+static Object *updateReferenceTable(BlockID store, unsigned long offset, Object **theCell);
 
 /* FUNCTIONS */
 static void storeReferenceToProcessReference(REFERENCEACTIONARGSTYPE)
 {
-  *theCell = importReference(currentStore, (u_long)*theCell, theCell);
+  *theCell = importReference(currentStore, (unsigned long)*theCell, theCell);
 
   /* theCell is in AOA. The reference returned by 'importReference'
      may be in IOA if the rebinder is called */
@@ -38,13 +38,13 @@ static void storeReferenceToProcessReference(REFERENCEACTIONARGSTYPE)
   }
 }
 
-static Object *importReference(BlockID store, u_long offset, Object **theCell)
+static Object *importReference(BlockID store, unsigned long offset, Object **theCell)
 {
   StoreProxy *sp;
-  u_long inxOT;
+  unsigned long inxOT;
   char OTGCAttr;
   BlockID OTstore;
-  u_long OToffset;
+  unsigned long OToffset;
   Object *theRealObj;
   
   if (!isCrossStoreReference(offset)) {
@@ -61,7 +61,7 @@ static Object *importReference(BlockID store, u_long offset, Object **theCell)
 	Claim((offset >= OToffset) && (offset < OToffset + 4*ObjectSize(theRealObj)),
 	      "Table mismatch");
 	
-	return (Object *)((u_long)theRealObj + (offset - OToffset));
+	return (Object *)((unsigned long)theRealObj + (offset - OToffset));
       } else {
 	/* */
 	return updateReferenceTable(store, offset, theCell);
@@ -76,9 +76,9 @@ static Object *importReference(BlockID store, u_long offset, Object **theCell)
   }
 }
 
-static Object *updateReferenceTable(BlockID store, u_long offset, Object **theCell)
+static Object *updateReferenceTable(BlockID store, unsigned long offset, Object **theCell)
 {
-  u_long inxRT;
+  unsigned long inxRT;
   
   if ((inxRT = indexLookupRT(store, offset)) == -1) { 
     inxRT = insertReference(ENTRYALIVE,
@@ -91,14 +91,14 @@ static Object *updateReferenceTable(BlockID store, u_long offset, Object **theCe
 
 static void updateTransitObjectTable(Object *theObj)
 {
-  u_long distanceToPart;
-  distanceToPart = (u_long)theObj - (u_long)theRealObj;
+  unsigned long distanceToPart;
+  distanceToPart = (unsigned long)theObj - (unsigned long)theRealObj;
   insertObjectInTransit(currentStore,
 			currentOffset + distanceToPart,
 			theObj);
 }
 
-void importStoreObject(Object *theObj, BlockID store, u_long offset)
+void importStoreObject(Object *theObj, BlockID store, unsigned long offset)
 {
   void (*temp)(Object *theObj);
   

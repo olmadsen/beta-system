@@ -5,7 +5,7 @@
 /* */
 typedef struct contentsBox {
   void *contents;
-  u_long key;
+  unsigned long key;
 } contentsBox;
 
 typedef struct Node Node;
@@ -18,8 +18,8 @@ struct Node {
 };
 
 Node *TInit(void);
-void TInsert(u_long key, void *contents, Node *current, u_long insertKey);
-void *TILookup(u_long key, Node *current);
+void TInsert(unsigned long key, void *contents, Node *current, unsigned long insertKey);
+void *TILookup(unsigned long key, Node *current);
 void TIVisit(Node *current, void (*visitFunc)(contentsBox *));
 void TIFree(Node *current, void (*freeFunc)(void *));
 

@@ -13,17 +13,17 @@
 #include <errno.h>
 
 /* readLong: reads a long from fd. */
-void readLong(int fd, u_long *n) 
+void readLong(int fd, unsigned long *n) 
 {
   int nb;
   
-  if ((nb = read(fd, n, sizeof(u_long))) < 0) {
+  if ((nb = read(fd, n, sizeof(unsigned long))) < 0) {
     perror("readLong");
     DEBUG_CODE(Illegal());
     BetaExit(1);
   }
   
-  if (nb != sizeof(u_long)) {
+  if (nb != sizeof(unsigned long)) {
     fprintf(output, "readLong: Could not read long\n");
     DEBUG_CODE(Illegal());
     BetaExit(1);
@@ -31,7 +31,7 @@ void readLong(int fd, u_long *n)
 }
 
 /* readSome: reads size bytes into buffer from fd. */
-void readSome(int fd, char *buffer, u_long size) 
+void readSome(int fd, char *buffer, unsigned long size) 
 {
   int nb, toread = size;
   char *ptr = (char*)buffer;
@@ -47,7 +47,7 @@ void readSome(int fd, char *buffer, u_long size)
     toread -= nb;
   }
   
-  if ((u_long)(ptr - (char*)buffer) != size) {
+  if ((unsigned long)(ptr - (char*)buffer) != size) {
     fprintf(output, "readSome: Could not read\n");
     DEBUG_CODE(Illegal());
     BetaExit(1);
@@ -65,17 +65,17 @@ void Rewind(int fd)
 }
 
 /* writeLong: writes a long to fd. */
-void writeLong(int fd, u_long *n)
+void writeLong(int fd, unsigned long *n)
 {
   int nb;
   
-  if ((nb = write(fd, n, sizeof(u_long))) < 0) {
+  if ((nb = write(fd, n, sizeof(unsigned long))) < 0) {
     perror("writeLong");
     DEBUG_CODE(Illegal());
     BetaExit(1);
   }
   
-  if (nb != sizeof(u_long)) {
+  if (nb != sizeof(unsigned long)) {
     fprintf(output, "putName: Could not write long\n");
     DEBUG_CODE(Illegal());
     BetaExit(1);
@@ -83,7 +83,7 @@ void writeLong(int fd, u_long *n)
 }
 
 /* windTo: Goes to position pos in fd. */
-void windTo(int fd, u_long pos) 
+void windTo(int fd, unsigned long pos) 
 {
   if (lseek(fd, pos, SEEK_SET) < 0) {
     perror("windTo");
@@ -93,7 +93,7 @@ void windTo(int fd, u_long pos)
 }
 
 /* writeSome: writes size bytes from buffer onto fd. */
-void writeSome(int fd, void *buffer, u_long size)
+void writeSome(int fd, void *buffer, unsigned long size)
 {
   int nb;
   
@@ -135,7 +135,7 @@ long isDir(char *name)
   return 0;
 }
 
-u_long preferredBufferSize(char *path)
+unsigned long preferredBufferSize(char *path)
 {
 #ifdef nti
   return 32*1024;

@@ -44,17 +44,17 @@ void mmapInitial(unsigned long numbytes);
 
 /* LOCAL VARIABLES */
 static long returnPC, returnSP, absAddr, sourcereg;
-static u_long rd;
-static u_long rs1;
-static u_long rs2;
+static unsigned long rd;
+static unsigned long rs1;
+static unsigned long rs2;
 
 /* The indirection table */
 static void *PIT, *PITTop, *PITLimit; 
 
 /* LOCAL FUNCTION DECLARATIONS */
 #ifdef sparc
-static void *getRegisterContents(u_long reg, ucontext_t *ucon);
-static long sourceReg(u_long instruction, ucontext_t *ucon);
+static void *getRegisterContents(unsigned long reg, ucontext_t *ucon);
+static long sourceReg(unsigned long instruction, ucontext_t *ucon);
 static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon);
 #endif
 
@@ -76,18 +76,18 @@ void PITAlloc(void)
   PITLimit = mmapHeapLimit;
 }
 
-Object *newPUID(u_long offset)
+Object *newPUID(unsigned long offset)
 {
   Claim(offset < MAXENTRIES, "Illegal offset of puid");
   
-  return (Object *)((u_long )PIT + offset);
+  return (Object *)((unsigned long )PIT + offset);
 }
 
-u_long getPUID(void *ip)
+unsigned long getPUID(void *ip)
 {
   Claim(((ip >= PIT) && (ip < PITLimit)),"Illegal ip");
   
-  return (u_long)ip - (u_long)PIT;
+  return (unsigned long)ip - (unsigned long)PIT;
 }
 
 int inPIT(void *ip)
@@ -103,7 +103,7 @@ int inPIT(void *ip)
    stack. The stack pointer is in the global variable 'returnSP'. Why
    this separation has been made between the O/G and I/L registers is
    unclear to me but it is imposed by the system. */
-static void *getRegisterContents(u_long reg, ucontext_t *ucon) 
+static void *getRegisterContents(unsigned long reg, ucontext_t *ucon) 
 {
   if (reg == 0) {
     return 0;
@@ -112,7 +112,7 @@ static void *getRegisterContents(u_long reg, ucontext_t *ucon)
     return (void *)(ucon->uc_mcontext.gregs[reg + 3]);
   } else if ((reg >= 10) && (reg < 0x20)) {
     /* Get the value from the stack */
-    return (void *)(((u_long *) returnSP)[reg - 16]);
+    return (void *)(((unsigned long *) returnSP)[reg - 16]);
   } else {
     fprintf(output, "getRegisterContents: "
 	    "Unsupported register\n");
@@ -124,11 +124,11 @@ static void *getRegisterContents(u_long reg, ucontext_t *ucon)
 
 /* sourceReg: Decodes the instruction and returns the register
    containing the proxy. */
-static long sourceReg(u_long instruction, ucontext_t *ucon) 
+static long sourceReg(unsigned long instruction, ucontext_t *ucon) 
 {
   
-  u_long op3;
-  u_long simm13=-1;
+  unsigned long op3;
+  unsigned long simm13=-1;
   
   sourcereg = -1;
   rd = -1;
@@ -210,14 +210,14 @@ static long sourceReg(u_long instruction, ucontext_t *ucon)
   return 0;
 }
 
-static u_long dummy;
+static unsigned long dummy;
 
 /* proxyTrapHandler: Will decode the faulting instruction, lookup the
    object, and insert a reference to it in the register previously
    containing the proxy. */
 static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 {
-  u_long instruction;
+  unsigned long instruction;
   void *ip;
   
   INFO_PERSISTENCE(numPF++);
@@ -311,7 +311,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 	case 0x1D:
 	case 0x1E:
 	case 0x1F:
-	  ((u_long *) returnSP)[sourcereg - 16] = absAddr;
+	  ((unsigned long *) returnSP)[sourcereg - 16] = absAddr;
 	  break;
 	default:
 	  fprintf(output, "proxyTrapHandler: "

@@ -16,9 +16,9 @@ void os_dummy() {
 /* LOCAL TYPES */
 
 typedef struct ObjectStore {
-  u_long maxSize;        /* Space allocated for this store in bytes */
-  u_long nextFree;       /* Offset of the next free entry in bytes */
-  u_long lookupCount;    /* Number of times this block has been requested */
+  unsigned long maxSize;        /* Space allocated for this store in bytes */
+  unsigned long nextFree;       /* Offset of the next free entry in bytes */
+  unsigned long lookupCount;    /* Number of times this block has been requested */
   BlockID store;         /* The id of the store belonging to this
 			    ObjectStore */
   Object body[1];        /* The objects. */
@@ -31,15 +31,15 @@ static ObjectStore *currentTable = NULL;   /* The current table loaded */
 #define BLOCKSINSTORE 1
 
 /* LOCAL FUNCTION DECLARATIONS */
-static int createObjectStore(BlockID store, u_long minSize);
+static int createObjectStore(BlockID store, unsigned long minSize);
 
 /* IMPEMENTATION */
-static int createObjectStore(BlockID store, u_long minSize)
+static int createObjectStore(BlockID store, unsigned long minSize)
 {
   char *file_name;
   int fd;
   ObjectStore *newTable;
-  u_long storeSize;
+  unsigned long storeSize;
   
   /* Object stores are the smallest unit of data that this process can
      access in the store. If an object saved in a certain object store
@@ -66,7 +66,7 @@ static int createObjectStore(BlockID store, u_long minSize)
       
       newTable = (ObjectStore *)calloc(storeSize, 1);
       newTable -> maxSize = storeSize;
-      newTable -> nextFree = (u_long)&(newTable -> body[0]) - (u_long)newTable;
+      newTable -> nextFree = (unsigned long)&(newTable -> body[0]) - (unsigned long)newTable;
       newTable -> lookupCount = 0;
       newTable -> store = store;
       
@@ -131,7 +131,7 @@ int setCurrentObjectStore(BlockID store)
       perror("setCurrentObjectStore");
       return 0;
     } else {
-      u_long maxSize;
+      unsigned long maxSize;
       
       readLong(fd, &maxSize);
       currentTable = (ObjectStore *)calloc(maxSize, 1);
@@ -162,7 +162,7 @@ void printObjectStoreStatistics(void)
 /* Allocates and inserts space for a new object in the current store */
 StoreProxy *newStoreObject(Object *theObj)
 {
-  u_long size;
+  unsigned long size;
   
   Claim(theObj == getRealObject(theObj), "Trying to insert part object");
   
@@ -175,7 +175,7 @@ StoreProxy *newStoreObject(Object *theObj)
       
       Claim(theObj == getRealObject(theObj), "Unexpected part object");
       
-      nextObject = (Object *)((u_long)currentTable + currentTable -> nextFree);
+      nextObject = (Object *)((unsigned long)currentTable + currentTable -> nextFree);
       memcpy(nextObject, theObj, size);
       sp -> store = currentTable -> store;
       sp -> offset = currentTable -> nextFree;
@@ -200,13 +200,13 @@ StoreProxy *newStoreObject(Object *theObj)
   }
 }
 
-Object *lookupStoreObject(BlockID store, u_long offset)
+Object *lookupStoreObject(BlockID store, unsigned long offset)
 {
   if (currentTable) {
     if (compareBlockID(store, currentTable -> store)) {
       if (offset < currentTable -> nextFree) {
 	currentTable -> lookupCount += 1;
-	return (Object *)((u_long)currentTable + (u_long)offset);
+	return (Object *)((unsigned long)currentTable + (unsigned long)offset);
       }
     }
   }
@@ -215,14 +215,14 @@ Object *lookupStoreObject(BlockID store, u_long offset)
 }
 
 /* Updates the Object in the current table */
-int setStoreObject(BlockID store, u_long offset, Object *theObj)
+int setStoreObject(BlockID store, unsigned long offset, Object *theObj)
 {
   if (currentTable) {
     if (offset < currentTable -> nextFree) {
       Object *ObjectInStore;
       
       Claim(theObj == getRealObject(theObj), "Unexpected part object");
-      ObjectInStore = (Object *)((u_long)currentTable + offset);
+      ObjectInStore = (Object *)((unsigned long)currentTable + offset);
       memcpy(ObjectInStore, theObj, ObjectSize(theObj)*4);
       
       /* Handle prototype */

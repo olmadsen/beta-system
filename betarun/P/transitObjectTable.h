@@ -4,12 +4,12 @@
 #include "objectStore.h"
 
 void initTransitObjectTable(void);
-u_long TOTSize(void);
-u_long insertObjectInTransit(BlockID store,
-			     u_long offset,
+unsigned long TOTSize(void);
+unsigned long insertObjectInTransit(BlockID store,
+			     unsigned long offset,
 			     Object *theObj);
 void TOTFlush(void);
-Object *indexLookupTOT(BlockID store, u_long offset);
+Object *indexLookupTOT(BlockID store, unsigned long offset);
 void redirectCells(Array *clients, Object *from, Object *to);
 void clearCells(Array *clients);
 

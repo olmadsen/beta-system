@@ -34,8 +34,8 @@ void cst_dummy() {
 /* LOCAL TYPES */
 
 typedef struct crossStoreTable {
-  u_long length;         /* Antries allocated in this table */
-  u_long nextFree;       /* Index of the next free entry */
+  unsigned long length;         /* Antries allocated in this table */
+  unsigned long nextFree;       /* Index of the next free entry */
   BlockID store;         /* The id of the store belonging to this
 			    StoreProxyTable */
   StoreProxy body[1];    /* The proxies */
@@ -52,7 +52,7 @@ static crossStoreTable *currentTable = NULL;   /* The current table loaded */
 #define MAP(inx) (MAXTYPE*inx  + CROSSSTORETYPE)     /* Turn inx into a cross store reference */
 #define UNMAP(inx) ((inx - CROSSSTORETYPE)/MAXTYPE)  /* get the original value of inx */
 
-#define tableSizeLength(length) (2*sizeof(u_long) + sizeof(BlockID) + length*sizeof(StoreProxy))
+#define tableSizeLength(length) (2*sizeof(unsigned long) + sizeof(BlockID) + length*sizeof(StoreProxy))
 #define tableSize(table) tableSizeLength(table -> length)
 
 /* FUNCTIONS */
@@ -141,7 +141,7 @@ int setCurrentCrossStoreTable(BlockID store)
       perror("setCurrentCrossStoreTable");
       return 0;
     } else {
-      u_long length;
+      unsigned long length;
       
       readLong(fd, &length);
       currentTable = (crossStoreTable *)calloc(tableSizeLength(length), 1);
@@ -170,11 +170,11 @@ void printCrossStoreStatistics(void)
 
 /* Allocates and inserts space for a new cross store reference in the
    current store. It checks for duplicates. */
-u_long newStoreProxy(BlockID store,
-		     u_long offset)
+unsigned long newStoreProxy(BlockID store,
+		     unsigned long offset)
 {
   if (currentTable) {
-    u_long count;
+    unsigned long count;
     /* Check if a proxy to the same object is present allready */
     
     for (count = 0; count < currentTable -> nextFree; count++) {
@@ -190,7 +190,7 @@ u_long newStoreProxy(BlockID store,
     }
     
     if (currentTable -> nextFree < currentTable -> length) {
-      u_long nextFree;
+      unsigned long nextFree;
       
       nextFree = currentTable -> nextFree;
       
@@ -219,7 +219,7 @@ u_long newStoreProxy(BlockID store,
 }
 
 /* Looks up the proxy object in the current table */
-StoreProxy *lookupStoreProxy(u_long inx) 
+StoreProxy *lookupStoreProxy(unsigned long inx) 
 {
   if (currentTable) {
     if (UNMAP(inx) < currentTable -> nextFree) {

@@ -4,8 +4,8 @@
 #include "objectStore.h"
 
 Object *unswizzleReference(void *ip);
-Object *lookUpReferenceEntry(BlockID store, u_long offset);
-Object *handleSpecialReference(u_long specRef);
-void registerRebinderFunc(Object *(*rebinderFunc)(u_long objectTag, u_long typeTag));
+Object *lookUpReferenceEntry(BlockID store, unsigned long offset);
+Object *handleSpecialReference(unsigned long specRef);
+void registerRebinderFunc(Object *(*rebinderFunc)(unsigned long objectTag, unsigned long typeTag));
 
 #endif /* _UNSWIZZLE_H_ */

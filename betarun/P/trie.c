@@ -26,7 +26,7 @@ Node *TInit(void)
   return new;
 }
 
-static OURINLINE void insertDown(u_long key, void *contents, Node *current, u_long insertKey)
+static OURINLINE void insertDown(unsigned long key, void *contents, Node *current, unsigned long insertKey)
 {
   if (current -> down == NULL) {
     current -> down = (Node *)calloc(sizeof(struct Node), 1);
@@ -35,7 +35,7 @@ static OURINLINE void insertDown(u_long key, void *contents, Node *current, u_lo
   TInsert(key, contents, current -> down, insertKey);
 }
 
-static OURINLINE void insertRight(u_long key, void *contents, Node *current, u_long insertKey)
+static OURINLINE void insertRight(unsigned long key, void *contents, Node *current, unsigned long insertKey)
 {
   if (current -> right == NULL) {
     current -> right = (Node *)calloc(sizeof(struct Node), 1);
@@ -44,7 +44,7 @@ static OURINLINE void insertRight(u_long key, void *contents, Node *current, u_l
   TInsert(key, contents, current -> right, insertKey);
 }
 
-void TInsert(u_long key, void *contents, Node *current, u_long insertKey)
+void TInsert(unsigned long key, void *contents, Node *current, unsigned long insertKey)
 {
   if (key > 10) {
     if (current -> d == -1) {
@@ -77,7 +77,7 @@ void TInsert(u_long key, void *contents, Node *current, u_long insertKey)
   }
 }
 
-static OURINLINE void *downLookup(u_long key, Node *current)
+static OURINLINE void *downLookup(unsigned long key, Node *current)
 {
   if (current -> down != NULL) {
     return TILookup(key, current -> down);
@@ -86,7 +86,7 @@ static OURINLINE void *downLookup(u_long key, Node *current)
   }
 }
 
-static OURINLINE void *rightLookup(u_long key, Node *current)
+static OURINLINE void *rightLookup(unsigned long key, Node *current)
 {
   if (current -> right != NULL) {
     return TILookup(key, current -> right);
@@ -95,7 +95,7 @@ static OURINLINE void *rightLookup(u_long key, Node *current)
   }
 }
 
-void *TILookup(u_long key, Node *current)
+void *TILookup(unsigned long key, Node *current)
 {
   if (key > 10) {
     if (key % 10 == current -> d) {

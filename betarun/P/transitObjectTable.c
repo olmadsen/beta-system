@@ -15,7 +15,7 @@ void tobjt_dummy() {
 /* LOCAL TYPES */
 typedef struct TOTEntry { /* Object Table Entry */
   BlockID store;
-  u_long offset;
+  unsigned long offset;
   Object *theObj;         /* The object in memory */       
 } TOTEntry;
 
@@ -30,7 +30,7 @@ static Node *loadedObjectsST;
 static int isFree(void *entry);
 static void Free(void *entry);
 static void freeLoadedObjectsOF(void *contents);
-static void insertStoreOffsetTOT(BlockID store, u_long offset, u_long inx);
+static void insertStoreOffsetTOT(BlockID store, unsigned long offset, unsigned long inx);
 
 /* FUNCTIONS */
 static int isFree(void *entry)
@@ -50,17 +50,17 @@ void initTransitObjectTable(void)
   loadedObjectsST = TInit();
 }
 
-u_long TOTSize(void)
+unsigned long TOTSize(void)
 {
   return STSize(currentTable);
 }
 
-u_long insertObjectInTransit(BlockID store,
-			     u_long offset,
+unsigned long insertObjectInTransit(BlockID store,
+			     unsigned long offset,
 			     Object *theObj)
 {
   TOTEntry *newEntry;
-  u_long inx;
+  unsigned long inx;
   
   newEntry = (TOTEntry *)malloc(sizeof(TOTEntry));
   newEntry -> store = store;
@@ -73,14 +73,14 @@ u_long insertObjectInTransit(BlockID store,
   return inx;
 }
 
-Object *indexLookupTOT(BlockID store, u_long offset)
+Object *indexLookupTOT(BlockID store, unsigned long offset)
 {
   Node *loadedObjectsOF;
   
   /* Check if store is member of 'loadedObjects' */
   if ((loadedObjectsOF = TILookup(store, loadedObjectsST))) {
-    u_long inx;
-    if ((inx = (u_long)TILookup(offset, loadedObjectsOF))) {
+    unsigned long inx;
+    if ((inx = (unsigned long)TILookup(offset, loadedObjectsOF))) {
       TOTEntry *entry;
       
       entry = STLookup(currentTable, inx - 1);
@@ -90,7 +90,7 @@ Object *indexLookupTOT(BlockID store, u_long offset)
   return NULL;
 }
 
-static void insertStoreOffsetTOT(BlockID store, u_long offset, u_long inx)
+static void insertStoreOffsetTOT(BlockID store, unsigned long offset, unsigned long inx)
 {
   Node *loadedObjectsOF;
   
@@ -112,7 +112,7 @@ static void freeLoadedObjectsOF(void *contents)
 
 void redirectCells(Array *clients, Object *from, Object *to)
 {
-  u_long max, count;
+  unsigned long max, count;
   Object **theCell;
   
   if (clients) {
@@ -129,7 +129,7 @@ void redirectCells(Array *clients, Object *from, Object *to)
 
 void clearCells(Array *clients)
 {
-  u_long max, count;
+  unsigned long max, count;
   Object **theCell;
   
   if (clients) {
@@ -146,7 +146,7 @@ void clearCells(Array *clients)
 
 void TOTFlush(void)
 {
-  u_long inx, maxIndex, inserted = 0;
+  unsigned long inx, maxIndex, inserted = 0;
   TOTEntry *entry;
   
   maxIndex = STSize(currentTable);
@@ -154,7 +154,7 @@ void TOTFlush(void)
   for (inx = 0; inx < maxIndex; inx++) {
     entry = STLookup(currentTable, inx);
     if (entry -> theObj != NULL) {
-      u_long RTinx;
+      unsigned long RTinx;
       Object *theObj;
       
       theObj = entry -> theObj;
@@ -162,7 +162,7 @@ void TOTFlush(void)
 	Array *IOAclients, *AOAclients;
 	char GCAttr;
 	BlockID store;
-	u_long offset;
+	unsigned long offset;
 
 	referenceLookup(RTinx,
 			&GCAttr,
@@ -185,7 +185,7 @@ void TOTFlush(void)
       }
       
       if (theObj == getRealObject(theObj)) {
-	u_long OTinx;
+	unsigned long OTinx;
 	
 	OTinx = insertObject(ENTRYALIVE,
 			     entry -> store,

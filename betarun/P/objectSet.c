@@ -12,8 +12,8 @@ void objs_dummy() {
 
 /* LOCAL TYPES */
 typedef struct OSTable {
-  u_long maxIndex;
-  u_long nextFree;
+  unsigned long maxIndex;
+  unsigned long nextFree;
   Object *body[1];
 } OSTable;
 
@@ -33,7 +33,7 @@ static void initOSTable(void);
 /* FUNCTIONS */
 static void initOSTable(void)
 {
-  u_long newSize;
+  unsigned long newSize;
   
   newSize = TABLESIZE(INITIALTABLELENGTH);
   
@@ -45,7 +45,7 @@ static void initOSTable(void)
 
 static void OSRealloc(void)
 {
-  u_long newLength;
+  unsigned long newLength;
   OSTable *newTable;
   
   Claim(currentTable != NULL, "OSRealloc: currentTable is NULL");
@@ -62,7 +62,7 @@ static void OSRealloc(void)
 
 void OSinsert(Object *theObj)
 {
-  u_long inx;
+  unsigned long inx;
   
   Claim(currentTable != NULL, "OSinsert: currentTable is NULL");
   Claim(theObj != NULL, "Inserting NULL");
@@ -79,7 +79,7 @@ void OSinsert(Object *theObj)
 
 void OSscan(void (*foreach)(Object *theObj))
 {
-  u_long inx, max;
+  unsigned long inx, max;
   
   max = currentTable -> nextFree;
   for (inx = 0; inx < max; inx++) {

@@ -3,27 +3,27 @@
 #include "objectStore.h"
 
 typedef struct Array {
-  u_long *theCells;
-  u_short top;
-  u_short max;
+  unsigned long *theCells;
+  unsigned short top;
+  unsigned short max;
 } Array;
 
-u_long insertReference(char GCAttr,
+unsigned long insertReference(char GCAttr,
 		       BlockID store,
-		       u_long offset);
-void referenceLookup(u_long inx,
+		       unsigned long offset);
+void referenceLookup(unsigned long inx,
 		     char *GCAttr,
 		     BlockID *store,
-		     u_long *offset,
+		     unsigned long *offset,
 		     Array **IOAclients,
 		     Array **AOAclients);
-u_long indexLookupRT(BlockID store, u_long offset);
+unsigned long indexLookupRT(BlockID store, unsigned long offset);
 void RTStartGC(void);
 void referenceAlive(void *ip);
 void RTEndGC(void);
 void initReferenceTable(void);
-void newAOAclient(u_long inx, Object **theCell);
-void newIOAclient(u_long inx, Object **theCell);
+void newAOAclient(unsigned long inx, Object **theCell);
+void newIOAclient(unsigned long inx, Object **theCell);
 void clearAOAclients(void);
 void clearIOAclients(void);
 

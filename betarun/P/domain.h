@@ -4,7 +4,7 @@
 
 #define DEFAULTDOMAIN -1
 
-u_long newDomain(Structure *structure);
-u_long getDomain(Object *theObj);
+unsigned long newDomain(Structure *structure);
+unsigned long getDomain(Object *theObj);
 
 #endif /* _DOMAIN_H_ */

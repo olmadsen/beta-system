@@ -7,9 +7,9 @@ BlockID createCrossStoreTable(BlockID store);
 BlockID getCurrentCrossStoreTable();
 int saveCurrentCrossStoreTable();
 int setCurrentCrossStoreTable(BlockID store);
-u_long newStoreProxy(BlockID store,
-		     u_long offset);
-StoreProxy *lookupStoreProxy(u_long inx);
+unsigned long newStoreProxy(BlockID store,
+		     unsigned long offset);
+StoreProxy *lookupStoreProxy(unsigned long inx);
 void printCrossStoreStatistics(void);
 
 #endif /* _CROSSSTORETABLE_H_ */

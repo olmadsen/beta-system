@@ -3,11 +3,11 @@
 #include "../C/beta.h"
 
 typedef struct ObjectKey {
-  u_long theProto;
-  u_long GCattr;
-  u_long theOrigin;
-  u_long store;
-  u_long offset;
+  unsigned long theProto;
+  unsigned long GCattr;
+  unsigned long theOrigin;
+  unsigned long store;
+  unsigned long offset;
 } ObjectKey;
 
 void delayedInsert(Object *theObj);
@@ -23,6 +23,6 @@ void getKeyForObject(ObjectKey *ok, Object *theObj);
 void setClosingGC(void);
 Object *keyToObject(ObjectKey *ok);
 void setForceAOAGG(void);
-void markSpecialObject(u_long tag, Object *theObj);
+void markSpecialObject(unsigned long tag, Object *theObj);
 
 #endif /* _P_MISC_H_ */

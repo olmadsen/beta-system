@@ -38,17 +38,17 @@ void pstoreserver_dummy() {
 
 /* LOCAL TYPES */
 typedef struct charRep {
-  u_long Proto;
-  u_long GCAttr;
-  u_long LowBorder;
-  u_long HighBorder;
+  unsigned long Proto;
+  unsigned long GCAttr;
+  unsigned long LowBorder;
+  unsigned long HighBorder;
   char elements[1];
 } charRep;
 
 typedef struct Text {
-  u_long Proto;
-  u_long GCAttr;
-  u_long Origin;
+  unsigned long Proto;
+  unsigned long GCAttr;
+  unsigned long Origin;
   charRep *theRep;
 } Text;
 
@@ -65,14 +65,14 @@ typedef struct storeInfo {
 /* LOCAL VARIABLES */
 static char storename[SMALLTEXTSIZE];
 static char *currentStore = NULL;
-static u_long permission;
+static unsigned long permission;
 static char *currentDir;
 static storeInfo si;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static void CallbackFnc(char *s);
-static char *getBetaText(u_long name_r);
-static u_long openExt(u_long name_r, u_long perm);
+static char *getBetaText(unsigned long name_r);
+static unsigned long openExt(unsigned long name_r, unsigned long perm);
 static int getNameMap(void);
 static int setNameMap(void);
 
@@ -180,7 +180,7 @@ BlockID getNextBlockID(void)
   return ++si.next;
 }
 
-static char *getBetaText(u_long name_r)
+static char *getBetaText(unsigned long name_r)
 {
   return strdup((char*)name_r);
 
@@ -188,7 +188,7 @@ static char *getBetaText(u_long name_r)
   Text *currentText;
   charRep *theRep;
   char *name;
-  u_long j;
+  unsigned long j;
   
   currentText = (Text *)name_r;
   theRep = currentText -> theRep;
@@ -204,7 +204,7 @@ static char *getBetaText(u_long name_r)
 #endif
 }
 
-static u_long openExt(u_long name_r, u_long perm)
+static unsigned long openExt(unsigned long name_r, unsigned long perm)
 {
   char *name;
   
@@ -236,23 +236,23 @@ static u_long openExt(u_long name_r, u_long perm)
   }
 }
 
-u_long openWriteExt(u_long name_r)
+unsigned long openWriteExt(unsigned long name_r)
 {
   return openExt(name_r, S_IWRITE);
 }
 
-u_long openReadExt(u_long name_r)
+unsigned long openReadExt(unsigned long name_r)
 {
   return openExt(name_r, S_IREAD);
 }
 
-u_long deleteExt(u_long name_r)
+unsigned long deleteExt(unsigned long name_r)
 {
   fprintf(output, "deleteExt: Not implemented yet!\n");
   BetaExit(1);
 }
 
-u_long createExt(u_long name_r)
+unsigned long createExt(unsigned long name_r)
 {
   char *name;
   
@@ -293,17 +293,17 @@ u_long createExt(u_long name_r)
   }
 }
 
-u_long putExt(u_long dooverwrite, u_long name_r, Object *theObj)
+unsigned long putExt(unsigned long dooverwrite, unsigned long name_r, Object *theObj)
 {
   ObjectKey ok;
-  u_long return_value;
+  unsigned long return_value;
 
   return_value = 0;
   if (name_r) {
     getKeyForObject(&ok, theObj);
     
     if (ok.store != -1) {
-      u_long count;
+      unsigned long count;
       char *name;
       
       name = getBetaText(name_r);
@@ -366,19 +366,19 @@ void closeExt(void)
   currentStore = NULL;
 }
 
-u_long isOpen(void)
+unsigned long isOpen(void)
 {
   return (currentStore != NULL);
 }
 
-u_long getExt(u_long name_r, Object *theObj, Object **theCell)
+unsigned long getExt(unsigned long name_r, Object *theObj, Object **theCell)
 {
-  u_long count;
-  u_long offset;
+  unsigned long count;
+  unsigned long offset;
 
-  Claim((u_long)theCell > (u_long)theObj, "getExt: theCell is before theObj");
+  Claim((unsigned long)theCell > (unsigned long)theObj, "getExt: theCell is before theObj");
   
-  offset = (u_long)theCell - (u_long)theObj;
+  offset = (unsigned long)theCell - (unsigned long)theObj;
   
   if (name_r) {
     char *name;
@@ -395,7 +395,7 @@ u_long getExt(u_long name_r, Object *theObj, Object **theCell)
 	/* FIXME: Should protect regs */
 	target = keyToObject(&(si.nameMap[count].ok));
 #endif
-	theCell = (Object **)((u_long)theObj + offset);
+	theCell = (Object **)((unsigned long)theObj + offset);
 	*theCell = target;
 	free(name);
 	return 0;

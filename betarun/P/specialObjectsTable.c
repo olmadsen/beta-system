@@ -12,7 +12,7 @@ void sobjt_dummy() {
 #ifdef PERSIST
 /* LOCAL TYPES */
 typedef struct SOTEntry { /* Special Object Table Entry */
-  u_long tag;             /* Tag for the object */       
+  unsigned long tag;             /* Tag for the object */       
   Object *theObj;         /* The special object in memory */       
 } SOTEntry;
 
@@ -41,15 +41,15 @@ void initSpecialObjectTable(void)
   currentTable = STInit(INITIALTABLELENGTH, isFree, Free, sizeof(SOTEntry));
 }
 
-u_long SOTSize(void)
+unsigned long SOTSize(void)
 {
   return STSize(currentTable);
 }
 
-u_long insertSpecialObject(u_long tag, Object *theObj)
+unsigned long insertSpecialObject(unsigned long tag, Object *theObj)
 {
   SOTEntry *newEntry;
-  u_long inx;
+  unsigned long inx;
   
   if (currentTable) {
     Claim(theObj == getRealObject(theObj), "Unexpected part object");
@@ -70,7 +70,7 @@ u_long insertSpecialObject(u_long tag, Object *theObj)
 
 void unmarkSpecialObjects(void)
 {
-  u_long inx, maxIndex;
+  unsigned long inx, maxIndex;
   SOTEntry *entry;
 
   if (currentTable) {
@@ -88,7 +88,7 @@ void unmarkSpecialObjects(void)
 
 void GCspecialObjectsTable(void)
 {
-  u_long inx, maxIndex;
+  unsigned long inx, maxIndex;
   SOTEntry *entry;
 
   if (currentTable) {
@@ -107,7 +107,7 @@ void GCspecialObjectsTable(void)
 
 void remarkSpecialObjects(void)
 {
-  u_long inx, maxIndex;
+  unsigned long inx, maxIndex;
   SOTEntry *entry;
   
   if (currentTable) {
@@ -126,9 +126,9 @@ void remarkSpecialObjects(void)
 /* 'getTagForObject' and 'getTag' should be only one function. This is
    just a stupid implementation that will be fixed. */
 
-u_long getTag(Object *theObj)
+unsigned long getTag(Object *theObj)
 {
-  u_long inx, maxIndex;
+  unsigned long inx, maxIndex;
   SOTEntry *entry;
   
   if (currentTable) {
@@ -144,23 +144,23 @@ u_long getTag(Object *theObj)
   return -1;
 }
 
-void saveTagForObject(Object *realObj, u_long tag)
+void saveTagForObject(Object *realObj, unsigned long tag)
 {
   if (SOTags) {
-    TInsert((u_long)realObj, (void *)tag, SOTags, (u_long)realObj);
+    TInsert((unsigned long)realObj, (void *)tag, SOTags, (unsigned long)realObj);
   } else {
     SOTags = TInit();
     saveTagForObject(realObj, tag);
   }
 }
 
-u_long getTagForObject(Object *theObj)
+unsigned long getTagForObject(Object *theObj)
 {
-  u_long tag;
+  unsigned long tag;
 
   Claim(SOTags != NULL, "getTagForObject: Where are SOTags?");
   
-  tag = (u_long)TILookup((u_long)theObj, SOTags);
+  tag = (unsigned long)TILookup((unsigned long)theObj, SOTags);
   Claim(tag > 0, "getTagForObject: Could not get tag for object");
   
   return tag;
