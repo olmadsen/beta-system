@@ -454,9 +454,10 @@ OSStatus BetaSignalHandler(ExceptionInformation *info)
     todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig); break;
 #endif
   case trapException:
-    /* possibly some details in the exception records can determine
-	 * if it is a refnone or another trap.
-	 */
+    /* FIXME: possibly some details in the exception records can determine
+     * if it is a refnone or another trap. E.g. one could check if the
+     * instruction at PC is "twlei reg,0".
+     */
     todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
   case illegalInstructionException:
     todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig);break;
