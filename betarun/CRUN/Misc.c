@@ -19,7 +19,9 @@ void Return() {}
 #endif
 
 #ifdef crts
-void Return() {}
+void Return() 
+{
+}
 #endif
 
 #ifdef sparc
@@ -33,8 +35,8 @@ void Return() {}
 #endif
 #endif
      
-     void
-       RefNone(ref(Object) theObj)
+void
+  RefNone(ref(Object) theObj)
 {
   BetaError(RefNoneErr, theObj);
 }
