@@ -14,6 +14,29 @@
 
 #ifdef sparc
 
+#if 0 
+#define TRACE_ATTACH() \
+{ printf("\nAttach: comp: 0x%08x\n", comp); \
+  printf("Attach: comp->CallerLSC: 0x%08x\n", comp->CallerLSC); \
+  printf("Attach: ActiveComponent: 0x%08x\n", ActiveComponent); \
+  printf("Attach: ActiveComponent->CallerLSC: 0x%08x\n", ActiveComponent->CallerLSC); \
+  fflush(stdout); \
+}
+#else
+#define TRACE_ATTACH()
+#endif
+
+#define CLOBBER(var) \
+  /* Fool gcc into believing that var is used */ \
+  __asm__(""::"r" (var))
+
+#define FLUSH_REGWINS() \
+  __asm__("ta 3")
+
+#define ASM_ASSIGN(var, val) \
+  __asm__ volatile ("mov %1,%0": "=r" (var): "r" (val))
+ 
+
 /* IMPORTANT NOTE: I have departed from the former practice
    of saving LSC of the caller in the called component.
    CallerLSC now always denotes the point in the code to where
@@ -45,14 +68,7 @@ ParamThisComp(Component *, Att)
     BetaError(CompTerminatedErr, this);
   }
   
-  /*
-   * printf("\nAttach: comp: 0x%08x\n", comp);
-   * printf("Attach: comp->CallerLSC: 0x%08x\n", comp->CallerLSC);
-   * printf("Attach: ActiveComponent: 0x%08x\n", ActiveComponent);
-   * printf("Attach: ActiveComponent->CallerLSC: 0x%08x\n", ActiveComponent->CallerLSC);
-   * fflush(stdout);
-   */
-
+  TRACE_ATTACH();
   getret(ActiveComponent->CallerLSC);		/* Save our return address */
   
   AssignReference((long *)&comp->CallerComp, (Item *) ActiveComponent);
@@ -70,20 +86,15 @@ ParamThisComp(Component *, Att)
   
   /* Push a new Component Block. (It lives in our RegWin) */
   /* level = 0; */
-  __asm__ volatile ("clr %0": "=r" (level));
-  
   /* nextCompBlock = (long *) lastCompBlock; */
-  __asm__ volatile ("mov %1,%0": "=r" (nextCompBlock): "r" (lastCompBlock));
- 
+  ASM_ASSIGN(nextCompBlock, lastCompBlock);
   /* callBackFrame = ActiveCallBackFrame; */
-  __asm__ volatile ("mov %1,%0": "=r" (callBackFrame): "r" (ActiveCallBackFrame));
+  ASM_ASSIGN(callBackFrame, ActiveCallBackFrame);
   
-  ActiveCallBackFrame = 0;		    /* Clear the CallBackFrame list */
-  /* Fool gcc into believing that %i1 is used */
-  __asm__(""::"r" (tmp));
+  ActiveCallBackFrame = 0; /* Clear the CallBackFrame list */
+  CLOBBER(tmp);
   lastCompBlock = (ComponentBlock *) StackPointer;
-  /* Fool gcc into believing that %i1 is used */
-  __asm__(""::"r" (tmp));
+  CLOBBER(tmp);
   
   if (first) {
     /* Hack to indicate that comp has now been attached once.
@@ -96,8 +107,7 @@ ParamThisComp(Component *, Att)
     comp->StackObj = (StackObject *) -1;
 
     ActiveComponent = comp;
-    /* Fool gcc into believing that %i1 is used */
-    __asm__(""::"r" (tmp));
+    CLOBBER(tmp);
     
     entryAdr = (long*)OBJPROTOFIELD(ComponentItem(comp), TopMpart);
 
@@ -110,21 +120,20 @@ ParamThisComp(Component *, Att)
 #else
     CallBetaEntry(entryAdr, ComponentItem(comp));
 #endif
-    
-    /* Fool gcc into believing that level, next.. is used */
-    __asm__(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
-    
+
+    CLOBBER(level);
+    CLOBBER(nextCompBlock);
+    CLOBBER(callBackFrame);
+
     /* TerminateComponent: */
     DEBUG_CODE(NumTermComp++);
     comp = ActiveComponent;
     /* printf("\nAttach: comp TERMINATED: 0x%08x\n", comp);
      * fflush(stdout);
      */
-    /* Fool gcc into believing that %i1 is used */
-    __asm__(""::"r" (tmp));
+    CLOBBER(tmp);
     ActiveComponent  = comp->CallerComp;
-    /* Fool gcc into believing that %i1 is used */
-    __asm__(""::"r" (tmp));
+    CLOBBER(tmp);
     this             = comp->CallerObj;
     comp->StackObj   = 0;
     comp->CallerComp = 0;
@@ -132,19 +141,16 @@ ParamThisComp(Component *, Att)
     
     /* Pop the Component Block */
     ActiveCallBackFrame = callBackFrame;
-    /* Fool gcc into believing that %i1 is used */
-    __asm__(""::"r" (tmp));
+    CLOBBER(tmp);
     lastCompBlock = (ComponentBlock *) nextCompBlock;
-    /* Fool gcc into believing that %i1 is used */
-    __asm__(""::"r" (tmp));
+    CLOBBER(tmp);
     setret(ActiveComponent->CallerLSC);
     
     return comp;  /* maintain %o0 ?? */
   } /* End first */
 
   ActiveComponent = comp;
-  /* Fool gcc into believing that %i1 is used */
-  __asm__(""::"r" (tmp));
+  CLOBBER(tmp);
   
   /* Unpack 'ActiveComponent.StackObj' on top of the stack.
      
@@ -165,8 +171,7 @@ ParamThisComp(Component *, Att)
 
     ActiveComponent->StackObj = (StackObject *) -1;
     
-    /* Fool gcc into believing that %i1 is used */
-    __asm__(""::"r" (tmp));
+    CLOBBER(tmp);
     
     StackPointer = (long*)((char *)StackPointer - size);
     dest = (char *)FramePointer - size;
@@ -181,24 +186,17 @@ ParamThisComp(Component *, Att)
       }
       rw = (RegWin *) rw->fp;
     }
-#ifdef RTDEBUG
-    fprintf(stderr, "Upps, stack handling gone crazy\n");
-#endif
+    DEBUG_CODE(fprintf(stderr, "Upps, stack handling gone crazy\n"));
   ok:
     lastCompBlock = (ComponentBlock *) rw;
-    /* Fool gcc into believing that %i1 is used */
-    __asm__(""::"r" (tmp));
+    CLOBBER(tmp);
     /* Update ComponentBlock in the restored RegWin */
     rw->l5 = (long) callBackFrame;
-    /* Fool gcc into believing that %i1 is used */
-    __asm__(""::"r" (tmp));
-    /* Fool gcc into believing that %i1 is used */
-    __asm__(""::"r" (tmp));
+    CLOBBER(tmp);
     rw->l6 = (long) nextCompBlock;
-    /* Fool gcc into believing that %i1 is used */
-    __asm__(""::"r" (tmp));
+    CLOBBER(tmp);
     rw->l7 = level;
-    __asm__("ta 3");
+    FLUSH_REGWINS();
     FramePointer = (long*)((char *)FramePointer - size);
 
 #ifdef RTVALHALLA
@@ -207,9 +205,11 @@ ParamThisComp(Component *, Att)
 #endif
 
     setret(comp->CallerLSC);
-    /* Fool gcc into believing that level, next.. is used */
-    __asm__(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
     
+    CLOBBER(level);
+    CLOBBER(nextCompBlock);
+    CLOBBER(callBackFrame);
+
     return comp; /* still ?? */
   }
 }
