@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-15 15:23:35 $, SID: $Revision: 1.22 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-07-20 11:50:11 $, SID: $Revision: 1.23 $
  * by Lars Bak.
  */
 #include "beta.h"
