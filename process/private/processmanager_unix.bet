@@ -15,27 +15,31 @@ INCLUDE '~beta/sysutils/cstring';
 (#
    assignGuard: (# assigned: @Boolean do true -> assigned #);
    pid: @Integer;
-   inputIndex, outputIndex: @assignGuard(# rep: @Integer enter rep exit rep #);
+   inputIndex, outputIndex, stderrIndex: @
+       assignGuard (# rep: @Integer enter rep exit rep #);
 
    (* temporary items used within operations *)
    aPipe: ^pipe;
    readCh: ^readChannel;
    writeCh: ^writeChannel;
    pipeIntoParent: @boolean;
+   pipeErrIntoParent: @boolean;
 #)
 
 
 --- ProcessStartMDBody:descriptor---
-(# a,b: @Integer; 
+(# a,b,c: @Integer; 
    namestr, argstr: @CString;
 do 
    (if not private.inputIndex.assigned  then 0 -> private.inputIndex if);
    (if not private.outputIndex.assigned then 1 -> private.outputIndex if);
+   (if not private.stderrIndex.assigned then 2 -> private.stderrIndex if);
    private.inputIndex -> a;
    private.outputIndex -> b;
+   private.stderrIndex -> c;
    name[] -> namestr.set;
    argument.argument[] -> argstr.set;
-   (namestr,argstr,a,b)
+   (namestr,argstr,a,b,c)
      -> startUnixProcess -> private.pid;
    (if private.pid = -1  then 'failed to start process ' -> error if);
 
@@ -47,6 +51,7 @@ do
     *)
 
    (if private.pipeIntoParent then private.outputIndex->close if);
+   (if private.pipeErrIntoParent then private.stderrIndex->close if);
 
    (* If we have a write fd which we are using to write to the child
     * (or another child) then the child should close its copy of that
@@ -56,6 +61,7 @@ do
    
    false -> private.inputIndex.assigned;
    false -> private.outputIndex.assigned;
+   false -> private.stderrIndex.assigned;
    namestr.free;
    argstr.free;
 #)
@@ -106,6 +112,16 @@ do
    INNER;
    
 
+--- connectErrToProcess:dopart ---
+do
+   (* send stderr to other process *)
+   &Pipe[] -> private.aPipe[];
+   private.aPipe.init;
+   private.aPipe.readEnd[] -> toProcess.redirectFromChannel;
+   private.aPipe.writeEnd[] -> redirectErrToChannel;
+   INNER;
+   
+
 --- connectInPipe:dopart ---
 do
    (* get input from other process *)
@@ -133,6 +149,14 @@ do
    INNER;
 
    
+--- redirectErrToFile:dopart ---
+do	
+   (* (THIS(Process),stderrFile) => THIS(Process) > outputFile *)
+   outputFile.openWrite;
+   outputFile.private.Index -> THIS(Process).private.stderrIndex;
+   INNER;
+
+   
 --- redirectFromChannel:dopart ---
 do
    (* (THIS(Process),inputChannel) => 
@@ -151,6 +175,17 @@ do
    outputChannel[] -> private.writeCh[];
    private.writeCh.private.fd(*Index*) -> THIS(Process).private.outputIndex ;
    true -> private.pipeIntoParent;
+   INNER;
+   
+
+--- redirectErrToChannel:dopart ---
+do
+   (* (THIS(Process),outputChannel) => 
+    * Redirect the stderr from This(Process) to outputChannel.
+    *)
+   outputChannel[] -> private.writeCh[];
+   private.writeCh.private.fd(*Index*) -> THIS(Process).private.stderrIndex ;
+   true -> private.pipeErrIntoParent;
    INNER;
    
 

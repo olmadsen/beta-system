@@ -10,7 +10,7 @@
 static void
 usage()
 {
-	fprintf(stderr, "Usage: slowwriter [-sn]\n");
+	fprintf(stderr, "Usage: slowwriter [-sne]\n");
 	exit(1);
 }
 
@@ -19,6 +19,8 @@ main(int argc, char **argv)
 	int i;
         int sleepatend = 0;
         int newlineatend = 1;
+        int usestderr = 0;
+	int useboth = 0;
         if (argc > 2 || argc < 1)
 		usage();
 	if (argc == 2) {
@@ -28,11 +30,18 @@ main(int argc, char **argv)
 			sleepatend = 1;
 		if (strchr(argv[1], 'n'))
 			newlineatend = 0;
+		if (strchr(argv[1], 'e'))
+			usestderr = 1;
+		if (strchr(argv[1], 'b'))
+			useboth = 1;
 	}
 	for (i = 0; i < 5; i++) {
-		printf("%c", 'A' + i);
+		fprintf(usestderr ? stderr : stdout, "%c", 'A' + i);
 		if (i < 4 || newlineatend)
-			printf("\n");
+			fprintf(usestderr ? stderr : stdout, "\n");
+		if (useboth)
+		    usestderr = !(i & 1);
+		fflush(stdout);
 		sleep(i SLEEPFACTOR);
 	}
 	if (sleepatend)

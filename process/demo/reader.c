@@ -62,7 +62,7 @@ main(int argc, char **argv)
 			perror("reading from pipe");
 		} else {
 			sleep(100 SLEEPFACTOR);
-			printf("Reader normal exit\n");
+			printf("READER NORMAL EXIT\n");
 		}
 #ifdef __WIN32
 	}

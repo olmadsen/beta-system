@@ -15,29 +15,40 @@ INCLUDE 'commpipe_nt';
 (#
    assignGuard: (# assigned: @Boolean do true -> assigned #);
    pid: @Integer;
-   inputIndex, outputIndex: @assignGuard(# rep: @Integer enter rep exit rep #);
+   inputIndex, outputIndex, stderrIndex:
+       @assignGuard (# rep: @Integer enter rep exit rep #);
    debug: (# do (if doDebug//true then inner if)#);
    (* debug: (# do inner #);  *)
    pipeIntoParent: @boolean;
+   pipeErrIntoParent: @boolean;
    
    (* temporary items used within operations *)
    aPipe: ^pipe;
    readCh: ^readChannel;
    writeCh: ^writeChannel;
+   _get_osf_handle: external
+   (#
+       filedescriptor, windowshandle: @integer;
+       enter filedescriptor
+       do CallStd
+       exit windowshandle
+   #);
 #)
 
 
 --- ProcessStartMDBody:descriptor---
-(# a,b: @Integer; 
+(# a,b,c: @Integer; 
    namestr, argstr: @CString;
 do 
    (if not private.inputIndex.assigned then 0 -> private.inputIndex if);
    (if not private.outputIndex.assigned then 0 -> private.outputIndex if);
+   (if not private.stderrIndex.assigned then 0 -> private.stderrIndex if);
    private.inputIndex -> a;
    private.outputIndex -> b;
+   private.stderrIndex -> c;
    name[] -> namestr.set;
    argument.argument[] -> argstr.set;
-   (namestr,argstr,a,b)
+   (namestr,argstr,a,b,c)
      -> startNtProcess -> private.pid;
    (if private.pid // -1  then 'failed to start process ' -> error if);
    private.debug(# 
@@ -55,9 +66,11 @@ do
     * can't detect EOF
     *)
    (if private.pipeIntoParent then private.outputIndex->CloseHandle; if);
+   (if private.pipeErrIntoParent then private.stderrIndex->CloseHandle; if);
 
    false -> private.inputIndex.assigned;
    false -> private.outputIndex.assigned;
+   false -> private.stderrIndex.assigned;
    namestr.free;
    argstr.free;
 #)
@@ -104,6 +117,13 @@ do &Pipe[] -> private.aPipe[];
    private.aPipe.writeEnd[] -> redirectToChannel;
    INNER;
 
+--- connectErrToProcess:dopart ---
+(* send output to other process *)
+do &Pipe[] -> private.aPipe[];
+   private.aPipe.init;
+   private.aPipe.readEnd[] -> toProcess.redirectFromChannel;
+   private.aPipe.writeEnd[] -> redirectErrToChannel;
+   INNER;
 
 --- connectInPipe:dopart ---
 (* get input from other process *)
@@ -117,12 +137,20 @@ do &Pipe[] -> private.aPipe[];
    
 --- redirectFromFile:dopart ---
 (* (THIS(Process),inputFile) => inputFile > THIS(Process) *)
-do (failureTrace, 'Input redirection not Implemented on NT/Win95') -> this(systemEnv).BetaEnvStop;
+do inputFile.openRead;
+   inputFile.private.index -> _get_osf_handle -> THIS(Process).private.inputIndex;
+   INNER;
    
 --- redirectToFile:dopart ---
 (* (THIS(Process),outputFile) => THIS(Process) > outputFile *)
-do (failureTrace, 'Output redirection not Implemented on NT/Win95') -> this(systemEnv).BetaEnvStop;
+do outputFile.openWrite;
+   outputFile.private.index -> _get_osf_handle -> THIS(Process).private.outputIndex;
       
+--- redirectErrToFile:dopart ---
+(* (THIS(Process),stderrFile) => THIS(Process) > outputFile *)
+do outputFile.openWrite;
+   outputFile.private.index -> _get_osf_handle -> THIS(Process).private.stderrIndex;
+
 --- redirectFromChannel:dopart ---
 (* (THIS(Process),inputChannel) => 
  * Redirect the input to THIS(Process) from inputChannel.
@@ -138,6 +166,15 @@ do inputChannel[] -> private.readCh[];
 do outputChannel[] -> private.writeCh[];
    private.writeCh.private.Index -> THIS(Process).private.outputIndex ;
    true -> private.pipeIntoParent;
+   INNER;
+
+--- redirectErrToChannel:dopart ---
+(* (THIS(Process),outputChannel) => 
+ * Redirect the stderr from This(Process) to outputChannel.
+ *)
+do outputChannel[] -> private.writeCh[];
+   private.writeCh.private.Index -> THIS(Process).private.stderrIndex ;
+   true -> private.pipeErrIntoParent;
    INNER;
    
 --- ProcessManagerExceptionMDBody:descriptor ---
