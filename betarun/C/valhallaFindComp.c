@@ -14,9 +14,11 @@ void scanComponentStack (struct ComponentStack* compStack,
 
 #ifdef sparc
 
+# define objIsValRep(theObj) inLVRA(theObj)
+
 void handleStackPart (struct RegWin *theAR, int lastReturnAdr, forEachCallType forEach)
 { long* this, *end;
-  struct Object *lastObj;
+  struct Object *lastObj, *theObj;
   
   lastObj= (struct Object *) theAR->i0;
   forEach ((int) lastReturnAdr,(int) lastObj);
@@ -26,13 +28,15 @@ void handleStackPart (struct RegWin *theAR, int lastReturnAdr, forEachCallType f
   
   while (this<=end) {
     if (isCode(this[0])) {
-      if (isObject((struct Object *) this[2])) {
+      theObj = (struct Object *) this[2];
+      if (inBetaHeap(theObj) 
+	  && isObject(theObj) 
+	  && !objIsValRep(theObj)) {
 	/* Add 8 to get the real SPARC return address. */
-	forEach (this[0]+8,this[2]);
-	lastObj= (struct Object *) this[2];
+	forEach (this[0]+8,(int) theObj);
+	lastObj= theObj;
 	this+=2;
-      }
-      else {
+      } else {
 	forEach (this[0]+8,(int) lastObj);
       }
     }
