@@ -38,9 +38,9 @@ ParamThisComp(void, AttBC)
     /* Terminates the list of component blocks on the stack. */
 
 #ifdef sparc
-    callBackFrame = cast(CallBackFrame) 0;
-    nextCompBlock = cast(RegWin) 0;
-    level = 0;
+    __asm__ volatile ("clr %0": "=r" (callBackFrame));
+    __asm__ volatile ("clr %0": "=r" (nextCompBlock));
+    __asm__ volatile ("clr %0": "=r" (level));
 
     lastCompBlock = cast(ComponentBlock) StackPointer;
     StackStart = (long)StackPointer;

@@ -61,13 +61,14 @@ ParamThisComp(struct Component *, Att)
   ActiveComponent->StackObj = cast(StackObject) -1;
   
   /* Push a new Component Block. (It lives in our RegWin) */
-  level = 0;
-  nextCompBlock = (long *) lastCompBlock;
-  /* Fool gcc into believing that %i1 is used */
-  __asm__(""::"r" (tmp));
-  callBackFrame = ActiveCallBackFrame;
-  /* Fool gcc into believing that %i1 is used */
-  __asm__(""::"r" (tmp));
+  /* level = 0; */
+  __asm__ volatile ("clr %0": "=r" (level));
+  
+  /* nextCompBlock = (long *) lastCompBlock; */
+  __asm__ volatile ("mov %1,%0": "=r" (nextCompBlock): "r" (lastCompBlock));
+ 
+  /* callBackFrame = ActiveCallBackFrame; */
+  __asm__ volatile ("mov %1,%0": "=r" (callBackFrame): "r" (ActiveCallBackFrame));
   
   ActiveCallBackFrame = 0;		    /* Clear the CallBackFrame list */
   /* Fool gcc into believing that %i1 is used */

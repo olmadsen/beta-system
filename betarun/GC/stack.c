@@ -1245,6 +1245,9 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
   fprintf(output, "%%i2: 0x%x", (int)ar->i2); PrintRef(cast(Object)ar->i2);
   fprintf(output, "%%i3: 0x%x", (int)ar->i3); PrintRef(cast(Object)ar->i3);
   fprintf(output, "%%i4: 0x%x", (int)ar->i4); PrintRef(cast(Object)ar->i4);
+  fprintf(output, "%%fp: 0x%x\n", (int)ar->fp); 
+  fprintf(output, "%%l5: 0x%x\n", (int)ar->l5); 
+  fprintf(output, "%%l6: 0x%x\n", (int)ar->l6); 
 
   fprintf(output, "stackpart:\n");
   /* Notice that in INNER some return adresses are pushed. This is no
