@@ -27,6 +27,8 @@
 #include "CanvasP.h"
 #include "Canvas.h"
 
+/* */
+
 Bool answer = False;
 
 void SetAnswer(Bool value)
