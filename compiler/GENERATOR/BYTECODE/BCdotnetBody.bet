@@ -1,4 +1,5 @@
 ORIGIN 'BCmachineBody'; 
+INCLUDE 'bytecodebackendbody'; 
 INCLUDE '~beta/basiclib/formatio'; 
 INCLUDE '~beta/basiclib/pcre'; 
 INCLUDE '~beta/basiclib/streamPosition'; 
@@ -24,7 +25,7 @@ use_betarun:
 use_modules:
   (# exit false #);
 generateLineNumbers:
-  (# exit false #);
+  (# exit true #);
 
 emitcomment:
   (# T: ^text
@@ -38,28 +39,28 @@ fixme: emitcomment
   (# 
   do 'FIXME:' -> out.puttext;
   #);
-ConvertJavaType:
+ConvertType:
   (# T: ^text
   enter T[]
   do (if trace_convert then
-         '/*ConvertJavaType('->out.puttext;
+         '/*ConverType('->out.puttext;
          T[]->out.puttext;
          ')*/' ->out.puttext;
      if);
      (if true 
       // 'I' -> T.equal then
-         'int32 /*FIXME:ConvertJavaType I*/' -> T[];
+         'int32 /*I*/' -> T[];
       // 'C' -> T.equal then
-         'char /*FIXME:ConvertJavaType C*/' -> T[];
+         'char /*C*/' -> T[];
       // '[I' -> T.equal then
-         'int32[] /*FIXME:ConvertJavaType I*/' -> T[];
+         'int32[] /*I*/' -> T[];
       // '[C' -> T.equal then
-         'char[] /*FIXME:ConvertJavaType C*/' -> T[];
+         'char[] /*C*/' -> T[];
      if);
      INNER;
   exit T[]
   #);
-AddClass: ConvertJavaType
+AddClass: ConvertType
   (# isStatic: @boolean;
      location: ^text;
      nonstatic:< object;
@@ -79,24 +80,6 @@ AddClass: ConvertJavaType
       // 'int32[]' -> ((1,7)->T.sub).equal
          then
          (* nothing *)
-      // 'tstenv' -> T.equal 
-      // 'program' -> T.equal
-      // 'xput' -> T.equal
-      // 'Bmini0' -> T.equal
-      // 'isPlatform' -> T.equal
-      // 'slot_isPlatform' -> T.equal
-         then
-         (if trace_class then 'AddClass' -> emitcomment if);
-         'class [/*FIXME: hardcoded:*/' -> location[];
-         (if use_modules then
-             '.module ' -> location.append;;
-             T[] -> location.append;
-             '.netmodule]' -> location.append;
-          else
-             T[] -> location.append;
-             ']' -> location.append;
-         if);
-         location[] -> T.prepend;
       else
          (* Local reference. Add class keyword but no location *)
          (if trace_class then 'AddClass' -> emitcomment if);
@@ -189,8 +172,8 @@ do (if currentTag
         else
            '\tldnull \n' -> out.puttext
        if);
-       '\tstfld\t' -> out.puttext;
-       currentType[] -> ConvertJavaType -> out.puttext;
+       '\tstfld /*1*/\t' -> out.puttext;
+       currentType[] -> ConvertType -> out.puttext;
        ' ' -> out.puttext;
        thisClassName[] -> out.puttext;
        '::' -> out.puttext;
@@ -222,12 +205,14 @@ do (if currentTag
    betafilename: ^text;
    line, column: @integer;
    init:
-     (# 
-     do (if generateLineNumbers then
+     (# BCmch: ^ByteCodeMachine;
+     do out.entry.path.name -> thisModuleName[];
+        (if generateLineNumbers then
+            (mch[]->BCmch[]).mstate.thisSourceFileName.copy -> betafilename[];
+            '.bet' -> betafilename.append;
             betafilename[] -> betafile.name;
             betafile.openRead;
         if);
-        out.entry.path.name -> thisModuleName[];
         '.il' -> thisModuleName.stripExtension;
         thisModuleName.copy -> BCstate.thisModuleName[];
         (if use_betarun then
@@ -293,30 +278,6 @@ do (if currentTag
            e.path.name -> out.puttext;
            ' {}\n' -> out.puttext;
         #);
-        '// FIXME: hardcoded:\n'
-        '.assembly extern tstenv {}\n'
-          -> out.puttext;
-        '// FIXME: hardcoded:\n'
-        '.assembly extern program {}\n'
-          -> out.puttext;
-        '// FIXME: hardcoded:\n'
-        '.assembly extern xput {}\n'
-          -> out.puttext;
-        '// FIXME: hardcoded:\n'
-        '.assembly extern Bmini0 {}\n'
-          -> out.puttext;
-        '// FIXME: hardcoded:\n'
-        '.assembly extern put {}\n'
-          -> out.puttext;
-        '// FIXME: hardcoded:\n'
-        '.assembly extern newline {}\n'
-          -> out.puttext;
-        '// FIXME: hardcoded:\n'
-        '.assembly extern isPlatform {}\n'
-          -> out.puttext;
-        '// FIXME: hardcoded:\n'
-        '.assembly extern slot_isPlatform {}\n'
-          -> out.puttext;
      #);
    
    emitFileReferences:
@@ -561,12 +522,12 @@ do (if currentTag
                  if)
               else
                  (if ONlevel > 0 then
-                     'stfld\t' -> out.puttext;
+                     'stfld /*2*/\t' -> out.puttext;
                      emitType;
                      emitField;
                   else
                      (if isField=1 then
-                         'stfld\t' -> out.puttext;
+                         'stfld /*3*/\t' -> out.puttext;
                          emitType;
                          emitField;
                       else
@@ -585,15 +546,13 @@ do (if currentTag
                  '\n\t'->out.puttext
              if);
              (if ONlevel > 0 then
-                 'stfld\t' -> out.puttext;
-                 class[] -> AddClass -> emitSignature;
-                 ' '->out.put;
+                 'stfld /*4*/\t' -> out.puttext;
+                 emittype;
                  isOrigin -> emitField;
               else           
                  (if isField = 1 then
-                     'stfld\t' -> out.puttext;
-                     class[] -> AddClass -> emitSignature;
-                     ' '->out.put;
+                     'stfld /*5*/\t' -> out.puttext;
+                     emittype;
                      isOrigin -> emitField;
                   else
                      ('st',off) -> emitMemOp
@@ -606,14 +565,12 @@ do (if currentTag
           do BC.gettext -> sig[];
              (if ONlevel > 0 then
                  'ldfld /*3*/\t' -> out.puttext;
-                 sig[] -> AddClass -> emitSignature;
-                 ' '->out.put;
+                 emittype;
                  emitField;
               else 
                  (if isField = 1 then
                      'ldfld /*4*/\t' -> out.puttext;
-                     class[] -> AddClass -> emitSignature;
-                     ' '->out.put;
+                     emittype;
                      emitField;
                   else
                      ('ld',off) -> emitMemOp
@@ -889,13 +846,13 @@ do init;
              #)
           // position then
              (if generateLineNumbers then
-                 '\t//.line ' -> out.puttext; 
+                 '\t.line ' -> out.puttext; 
                  BC.getShort -> betafile.pc.posToLineCol -> (line, column);
                  line -> out.putint;
                  ':' -> out.put;
                  column -> out.putint;
                  ' \'' -> out.puttext;
-                 (*thisModuleName[]*) betafilename[] -> out.puttext;
+                 betafilename[] -> out.puttext;
                  '\'' -> out.putline;
              if);
           // func then
