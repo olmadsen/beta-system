@@ -275,6 +275,10 @@ long isInIOA(long x)
 {
   return (long)inIOA(x);
 }
+long isInToSpace(long x)
+{
+  return (long)inToSpace(x);
+}
 long isInAOA(long x)
 {
   return (long)inAOA(x);

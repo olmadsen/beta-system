@@ -458,7 +458,7 @@ void BETA_MT_unlock(void)
   __asm__("stbar"); 
   mutex_unlock(&cond_pause_lock); 
 }
-void BETA_MT_suspend(void)
+void BETA_MT_csuspend(void)
 {
   DEBUG_MT(fprintf(output,"t@%d: BETA_MT_suspend\n", (int)ThreadId);
 	   fflush(output);

@@ -1133,7 +1133,7 @@ void IOACheck()
       if (ptr==TheIOATOP) break;
       if ((long*)theObj<ptr){
 	IOACheckPrintSkipped(ptr, theObj);
-	if (NumTSD==1) {
+	if (NumIOASlices==1) {
 	  Claim(FALSE, "No skip should be needed when only one thread");
 	}
       }
