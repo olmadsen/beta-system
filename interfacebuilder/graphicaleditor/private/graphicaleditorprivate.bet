@@ -73,6 +73,20 @@ rubber:
 
 -- graphicalEditorLib: Attributes --
 
+friggObserver: fragmentFormObserver
+  (# onAstReplaced:: 
+       (#  do (oldAst[],newAst[])->handleAstReplaced;  #);
+  #);
+
+registerFragment:
+  (# theObserver: ^fragmentFormObserver;
+     frag: ^astInterface.fragmentForm;
+  enter frag[]
+  do &friggObserver[] -> theObserver[];
+     theObserver[] -> frag.attachObserver;
+     frag.father ->  private.groups.append;
+  #);
+
 abstractNode:
   (#
      node: ^astInterface.beta.attributeDecl;
@@ -685,7 +699,30 @@ clearRedoStack: (#  do private.redoStack.clear;  #);
 pushUndoStack:
   (# theOperation: ^operation; 
   enter theOperation[]
-  do theOperation[]->private.undoStack.push; 
+  do theOperation[]->private.undoStack.push;
+     touch;
+  #);
+touch:
+  (#
+  do private.touched + 1 -> private.touched;
+     (if private.touched mod 10 = 0 then
+         autoSave;
+     if);
+  #);
+autoSave:
+  (#
+  do private.groups.scan
+     (#
+     do current[] -> com.autoSaveGroup;
+     #);
+  #);
+save:
+  (#
+  do 0 -> private.touched;
+     private.groups.scan
+     (#
+     do current[] -> com.saveFragmentGroup;
+     #);
   #);
 operation:
   (#
@@ -1712,6 +1749,7 @@ handleAstReplaced:
      false->succes;
      (if oldAst[]->node.equal then
          newAst[]->node[]; (* !!! Check for validitet *) true->succes; 
+         node[] -> comp.node[];
       else
          (if (node[],newAst[])->isAncestor then
              true->succes; 
@@ -1730,7 +1768,9 @@ handleAstReplaced:
                             do
                                (if current[]->betaGram.getName->name.equalNCS
                                 then
-                                   current[]->node[]; true->succes; leave l; 
+                                   current[]->node[]; 
+                                   node[] -> comp.node[];
+                                   true->succes; leave l; 
                                if);
                                
                             #);
@@ -1746,7 +1786,9 @@ handleAstReplaced:
          if);
          
      if);
-     
+     (if succes then
+         selectionChanged;
+     if);
   exit succes
   #);
 deleteImperative:
@@ -2348,8 +2390,8 @@ updateOpen:
               (mps[],theImperatives[],oldStmProto[])->listSearch->oldStm[];
               (if oldStm[] <> none then
                   (oldStm.sonNo,newStm[])->theImperatives.put;
-                  (oldStm[],newStm[])->frag.notifyAstReplaced;
-                  frag[] -> fragmentChanged;
+                  (oldStm[],newStm[])->theImperatives.frag.notifyAstReplaced;
+                  theImperatives.frag[] -> fragmentChanged;
                   
               if);
               
@@ -2765,7 +2807,12 @@ hasInclude: booleanValue
 #)  
 
 -- graphicalEditorPrivateAttributes: Descriptor --
-(#
+(# groups: @list
+     (#
+        element:: MPS.fragmentGroup;
+     #);
+   touched: @integer;
+   
    gridSize: @integer;
    thePropertyInspector: @propertyInspector
      (#
