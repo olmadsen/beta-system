@@ -22,7 +22,7 @@
 #define REP ((struct ObjectRep *)theObj)
 
 #ifndef MT
-GLOBAL(static IOALooksFullCount) = 0; /* consecutive unsuccessful IOAGc's */
+GLOBAL(static int IOALooksFullCount) = 0; /* consecutive unsuccessful IOAGc's */
 #endif
 
 /*

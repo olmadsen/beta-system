@@ -32,6 +32,29 @@
 #endif
 
 #ifdef hppa
+/* FIXME: There is a bug in the HP-UX 10 signal.h file. It still
+ * defines sc_gr31 as 
+ *    #define       sc_gr31 sc_sl.sl_ss.ss_gr31
+ * despite that the save_state (ss) structure in machine/save_state.h
+ * is very much reorganized.
+ * Here we try to work around it by checking if SS_WIDEREGS is defined.
+ * This flag has appeared in HP-UX10 and can thus be used to identify
+ * the buggy gr31 etc macros. 
+ */
+#ifdef SS_WIDEREGS
+/* HP-UX 10 */
+/* The following will work with SS_WIDEREGS set in ss_flags, which is
+ * always the case on "our" HP's (HPPA 1.1). See large comment in the 
+ * beginning of /usr/include/machine/save_state.h.
+ */
+#undef sc_gr31
+#define sc_gr31 sc_sl.sl_ss.ss_narrow.ss_gr31
+#undef sc_gr3
+#define sc_gr3 sc_sl.sl_ss.ss_narrow.ss_gr3
+#undef sc_pcoq_head
+#define sc_pcoq_head sc_sl.sl_ss.ss_narrow.ss_pcoq_head
+#endif /* SS_WIDEREGS */
+
 #ifdef UseRefStack
 #define GetPCandSP() { \
   PC = (long *) (scp->sc_pcoq_head & (~3)); \
