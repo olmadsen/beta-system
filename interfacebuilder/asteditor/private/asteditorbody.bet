@@ -1,7 +1,7 @@
 ORIGIN '../asteditor';
 INCLUDE '~beta/guienv/v1.3.1/fields';
 INCLUDE 'parsing';
-INCLUDE '~beta/interfacebuilder/v1.1/mpsstuff/mpsutils';
+INCLUDE '../../mpsstuff/mpsutils';
 
 -- astEditorLib: attributes --
 
@@ -22,7 +22,7 @@ textContents:
 
 prettyPrint:
   (# t: @styledText;
-  do (astControl.node[],t[]) -> pretty.printNode;
+  do (node[],t[]) -> pretty.printNode;
      t[] -> textContents;
   #);
 closeEditor:
@@ -35,8 +35,9 @@ closeEditor:
 
 -- IBastEditorInit: doPart --
 do open;
-   node[] -> astControl.init;
    prettyPrint;
+   node.frag[] -> private.fragHandler.frag[];
+   private.fragHandler[] -> theFragServer.subscribe;
   
 -- IBastEditorOpen: doPart --
 do (500, 200) -> size;
@@ -47,6 +48,48 @@ do (500, 200) -> size;
 (# dirtyFlag: @boolean;
    obsoleteFlag: @boolean;
    settingContents: @boolean;
+   fragHandler: @fragmentHandler
+     (# astReplaced::
+          (#
+          do (if (oldAst[], node[]) -> astEqual then
+                 newAst[] -> node[];
+                 prettyPrint;
+              else
+                 (if (node[], newAst[]) -> isAncestor then
+                     prettyPrint;
+                  else
+                     (if (oldAst[], node[]) -> isAncestor then
+                         obsolete;
+                     if)
+                 if)
+             if);
+          #);
+        (* astReplacedSequence:<
+         *           (# rootOfSequence: ^astInterface.ast
+         *           enter rootOfSequence[]
+         *           do inner;
+         *           #);
+         *         listElementInserted:<
+         *           (# position: @integer; listNode: ^astInterface.expanded; 
+         *           enter (listNode[], position)
+         *           do inner;
+         *           #);
+         *         listElementsDeleted:<
+         *           (# oldElements: ^astInterface.astList;
+         *              listNode: ^astInterface.expanded;
+         *              position, length: @integer
+         *           enter (listNode[], position, length, oldElements[])
+         *           do inner;
+         *           #);
+         *         listElementsReplaced:<
+         *           (# oldElements: ^astInterface.astList;
+         *              listNode: ^astInterface.expanded;
+         *              position, length, newLength: @integer
+         *           enter (listNode[], position, length, oldElements[], newLength)
+         *           do inner;
+         *           #);
+         *)
+     #);
    open:
      (# 
      do 
@@ -137,21 +180,19 @@ do (500, 200) -> size;
      #);
 #)
 
--- AstEditorAstControlChanged: doPart --
-do (if not dirty then
-       prettyPrint
-   if);
--- AstEditorAstControlReplaced: doPart --
-do (if not dirty then
-       prettyPrint;
-       
-   if);
-
+(* -- AstEditorAstControlChanged: doPart --
+ * do (if not dirty then
+ *        prettyPrint
+ *    if);
+ * -- AstEditorAstControlReplaced: doPart --
+ * do (if not dirty then
+ *        prettyPrint;
+ *        
+ *    if);
+ * 
+ *)
 -- EditorEnvAstEditorClose: doPart --
 do inner;
-   (if not private.obsoleteFlag then 
-       astControl.release;
-   if);
    this(astEditor)[] -> delete;
    
 -- EditorEnvAstEditorEnterDirty: doPart --
@@ -188,7 +229,7 @@ do (# textToParse: ^text;
    do MPS.theErrorReporter[] -> oldErrorReporter[];
       &MPS.interactiveErrorReporter[] -> MPS.theErrorReporter[];
       
-      astControl.node[] -> astToReplace[];
+      node[] -> astToReplace[];
       astToReplace[] -> parsingSynCatNo -> synCatNo;
       astToReplace.father -> father[];
       (if father[] <> none then
@@ -198,54 +239,47 @@ do (# textToParse: ^text;
       frag.root[] -> root[];
       textContents -> textToParse[];
       textToParse.reset;
-      replacing:
-        astControl.notifyReplace
-        (# 
-        do (synCatNo,textToParse[],Screen[],frag[]) -> frag.grammar.parser.doParse
+      (synCatNo,textToParse[],Screen[],frag[]) -> frag.grammar.parser.doParse
+      (#
+         fatalParseError::<
            (#
-              fatalParseError::<
-                (#
-                do
-                   'Parse errors: ' -> errorText.putText;
-                   msg[] -> errorText.putLine;
-                   true -> fatal;
-                   true -> continue;
-                #);
-           #) -> parseOK;
-           
-           (if parseOK then
-               (* Now the parser has placed the new AST in the root of frag *)
-               frag.root[] -> newAST[];
-               (if father[]<>None then
-                   (sonNo,newAST[]) -> father.put;
-                   root[] -> frag.root[]; (* Reestablish old root *)
-                else
-                   (* Do nothing *)
-               if);
-               newAST[] -> newNode[];
-            else
-               (if not fatal then
-                   textToParse.Reset;
-                   (textToParse[],errorText[]) -> frag.grammar.parser.errorReport;
-                   
-               if);
-               root[] -> frag.root[];
-               errorText[] -> showParseErrors;
-               leave replacing;
-           if);
-        #);
+           do
+              'Parse errors: ' -> errorText.putText;
+              msg[] -> errorText.putLine;
+              true -> fatal;
+              true -> continue;
+           #);
+      #) -> parseOK;
+      
       (if parseOK then
-          prettyPrint;
+          (* Now the parser has placed the new AST in the root of frag *)
+          frag.root[] -> newAST[];
+          (if father[]<>None then
+              (sonNo,newAST[]) -> father.put;
+              root[] -> frag.root[]; (* Reestablish old root *)
+           else
+              (* Do nothing *)
+          if);
+          (frag[], node[], newAst[]) -> theFragServer.notifyAstReplaced;
+       else
+          (if not fatal then
+              textToParse.Reset;
+              (textToParse[],errorText[]) -> frag.grammar.parser.errorReport;
+              
+          if);
+          root[] -> frag.root[];
+          errorText[] -> showParseErrors;
       if);
       parseOK -> OK;
       oldErrorReporter[] -> MPS.theErrorReporter[];
    #)
    
--- AstEditorAstControlDeleted: doPart --
-do obsolete;
-   
---  AstEditorAstControlAncestorReplaced: doPart --
-do obsolete;
+   (* -- AstEditorAstControlDeleted: doPart --
+    * do obsolete;
+    *    
+    * --  AstEditorAstControlAncestorReplaced: doPart --
+    * do obsolete;
+    *)
    
 -- AstEditorObsolete: doPart --
 do true -> private.obsoleteFlag;
@@ -265,7 +299,7 @@ do (if private.obsoleteFlag then
 do search:
      private.editors.iterate
      (# 
-     do (if node[] -> current.elm.astControl.node.equal then
+     do (if node[] -> current.elm.node.equal then
             current.elm[] -> editor[];
             leave search;
         if);
