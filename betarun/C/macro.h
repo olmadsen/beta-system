@@ -87,7 +87,7 @@
 #  ifdef RTDEBUG
 #    ifdef sparc
        /* 64 bit alignment because of the reals */
-#      define MALLOC(size) memset(memalign(64, (size)), 0, (size))
+#      define MALLOC(size) memset((void *)memalign(64, (size)), 0, (size))
 #    else
 #      define MALLOC(size) calloc(size,1)
 #    endif
