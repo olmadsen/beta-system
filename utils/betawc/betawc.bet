@@ -1,0 +1,500 @@
+ORIGIN '~beta/basiclib/v1.5/betaenv';
+INCLUDE '~beta/mps/v5.1/astlevel';
+INCLUDE '~beta/betaast/v5.1/index';
+INCLUDE '~beta/dependency/v1.2/dependency';
+INCLUDE '~beta/basiclib/v1.5/formatio';
+INCLUDE '~beta/containers/v1.5/sets';
+INCLUDE '~beta/process/v1.5/osinterface';
+--- program: descriptor ---
+(# ast: @astInterface; OS: @osInterface;
+   first: @boolean;
+   
+   ConflictSet: @set
+     (# 
+        element::
+          (# lib: ^text;
+             v1,v2: ^text;
+          #);
+        
+        addConflict: find
+          (# lib: ^text;
+             v1,v2: ^text;
+             e: ^element;
+             predicate::
+               (#
+               do ((lib[]->current.lib.equalNCS) and
+                  (v1[]->current.v1.equalNCS) and
+                  (v2[]->current.v2.equalNCS))
+                    ->value
+               #);
+             notFound::
+               (#
+               do &element[]->e[];
+                  lib[]->e.lib[]; v1[]->e.v1[]; v2[]->e.v2[];
+                  e[]->insert
+               #)
+          enter (lib[],v1[],v2[])
+          #);
+     #);
+   
+   Module: 
+     (# Name, Version, Library, Path: ^text;
+        NumberOfForms: @integer;
+
+        isLibrary: (# exit (version[]<>NONE) and (Version.Length <> 0) #);
+
+        Dump: 
+          (# out: ^stream
+          enter out[]
+          do Name[]->out.putText; ascii.ht->out.put;
+             (NumberOfForms)->out.putInt; out.newLine;
+          #);
+        DumpProg: 
+          (# out: ^stream
+          enter out[]
+          do Path[]->out.putText; ascii.ht->out.put;
+             '.'->out.putText; ascii.ht->out.put;
+             '.'->out.putText; ascii.ht->out.put;
+             Name[]->out.putText; ascii.ht->out.put;
+             (NumberOfForms)->out.putInt; out.newLine;
+          #);
+        
+        equal:
+          (# m: ^Module;
+          enter m[]
+          exit (name[]->m.name.equal) and
+             (version[]->m.version.equal) and
+             (library[]->m.version.equal)
+          #)
+     #);
+
+   Library: 
+     (# Name, Version, Path: ^text;
+
+        maxMod: (# exit 100 #);
+        ModList: [maxMod]^Module;
+        ModEnd: @integer;
+
+        insert: 
+          (# theModule: ^Module; isPresent: @boolean;
+          enter theModule[]
+          do false->isPresent;
+             loop: 
+               (for i: ModEnd repeat
+                    (if (theModule.name[]->ModList[i].name.equal) then
+                    true->isPresent; leave loop if) for);
+              (if not isPresent then
+                 (if (ModEnd=ModList.range) then
+                     ModList.range/2->ModList.extend
+                 if);
+                 theModule[]->ModList[ModEnd+1->ModEnd][];
+             if)
+          exit isPresent
+          #);
+     
+        Dump: 
+          (# out: ^stream
+          enter out[]
+          do (for i: ModEnd repeat
+                  Path[]->out.putText; ascii.ht->out.put;
+                  Version[]->out.putText; ascii.ht->out.put;
+                  Name[]->out.putText; ascii.ht->out.put;
+                  out[]->ModList[i].Dump
+             for);
+          #)
+     #);
+
+   System: 
+     (# maxLib: (# exit 100 #);
+        LibList: [maxLib]^Library;
+        LibEnd: @integer;
+
+        maxProg: (# exit 100 #);
+        ProgList: [maxProg]^Module;
+        ProgEnd: @integer;
+
+        Insert: 
+          (#
+             conflict:<
+               (# lib,v1,v2: ^text;
+               enter (lib[],v1[],v2[])
+               do 
+                  INNER
+               #);
+             
+             theModule: ^Module; isPresent, libFound: @boolean;
+          enter theModule[]
+          do false->isPresent->libFound;
+             (if theModule.isLibrary then
+                 (* Check the LibList *)
+                 loop: 
+                   (for i: LibEnd repeat
+                        (if (theModule.Library[]->LibList[i].name.equal) then
+                            true->libFound;
+                            (if not (LibList[i].version[]->theModule.version.equal) or not (LibList[i].path[]->theModule.path.equal) then
+                                (theModule.Library[],
+                                LibList[i].version[],
+                                theModule.version[])->conflict;
+                                false->libFound;
+                            if);
+                            theModule[]->LibList[i].insert->isPresent;
+                            leave loop
+                        if)
+                   for);
+                 (if not libFound then
+                     (if (LibEnd=LibList.range) then 
+                         libList.range/2->LibList.extend
+                     if);
+                     &Library[]->LibList[LibEnd+1->LibEnd][];
+                     theModule.Library[]->LibList[LibEnd].name[];
+                     theModule.version[]->LibList[LibEnd].version[];
+                     theModule.path[]->LibList[LibEnd].path[];
+                     theModule[]->LibList[LibEnd].insert
+                 if);
+              else
+                 (* Check the ProgList *)
+                 loop: 
+                   (for i: ProgEnd repeat
+                        (if (theModule.name[]->ProgList[i].name.equal) then
+                        true->isPresent; leave loop if) for);
+                 (if not isPresent then
+                     (if (ProgEnd=ProgList.range) then 
+                         ProgList.range/2->ProgList.extend
+                     if);
+                     theModule[]->ProgList[ProgEnd+1->ProgEnd][];
+                 if)
+             if)
+          exit isPresent
+          #);
+
+        Dump: 
+          (# out: ^stream
+          enter out[]
+          do 
+             (if (ProgEnd<>0) then
+                 (for i: ProgEnd repeat out[]->ProgList[i].DumpProg for);
+             if);
+             (if (LibEnd<>0) then
+                 (for i: LibEnd  repeat out[]->LibList[i].Dump  for)
+             if)
+          #)
+     #);
+
+   ParseModuleName: 
+     (# SplitName: 
+          (# name: ^text; index: @integer
+          enter name[]
+          do '/'->name.FindAll(# do inx->index #);
+          exit ((1,index-1)->name.Sub, (index+1,name.Length)->name.Sub)
+          #);
+        
+        CheckVersion: 
+          (# String: ^text; result: @boolean
+          enter String[]
+          do (if (string.Length >= 2) then
+                 (string.T[1] = 'v') AND
+                 (string.T[2] >= '0') AND
+                 (string.T[2] <= '9')->result
+              else
+                 false->result;
+             if);
+          exit result
+          #);
+
+        theModule: ^Module; fileName, tryVersion, rest, path, name, loc: ^text
+     enter fileName[]
+     do &module[]->themodule[];
+        &text[]->theModule.name[]->theModule.version[]
+          ->theModule.library[]->theModule.path[];
+        filename[]->rest[];
+        l: (if not rest.empty then
+               rest[]->SplitName->(path[], name[]);
+               path[]->SplitName->(loc[], tryVersion[]);
+               (if (tryVersion[]->CheckVersion) then
+                   tryVersion[]->theModule.Version[];
+                   loc[]->SplitName->(theModule.path[], theModule.library[]);
+                   (if theModule.name.empty then
+                       name[]->theModule.name[]
+                    else
+                       '/'->theModule.name.prepend;
+                       name[]->theModule.name.prepend;
+                   if);
+                else
+                   (if theModule.name.empty then
+                       name[]->theModule.name[]
+                    else
+                       '/'->theModule.name.prepend;
+                       name[]->theModule.name.prepend;
+                   if);
+                   path[]->rest[];
+                   restart L
+               if)
+            else
+               filename[]->splitName->(theModule.path[], theModule.name[]);
+           if)
+     exit theModule[]
+     #);
+
+   ListGraph: 
+     (# fg: ^ast.fragmentGroup;
+        maxList: (# exit 100 #);
+        List: [maxList]^text; End: @integer;
+        NodeName: ^text;
+
+        PleaseInsert: 
+          (# Name, Path: ^text
+          enter (Name[], Path[])
+          do (if (End=List.range) then 
+                 List.range/2->List.extend
+             if);
+             &text[]->List[End+1->End][]; 
+             (Name[],Path[])->ast.thePathHandler.convertFilePath->List[End][];
+          #);
+
+        Target: ^text;
+        Found: @boolean;
+        thisModule: ^Module;
+        NumberOfForms: @integer;
+        ph: @pathHandler;
+        f: @file; filename: ^text;
+     enter NodeName[]
+     do ph.init;
+        ast.dependencyGraph
+        (#
+        do init; xverboselevel.nothing->xverboselevel;
+           OS.hostMachine->TargetMachine;
+           OS.hostMachine->TargetDirectory;
+           
+           0->NumberOfForms;
+
+           nodename[]->scanextent
+           (# MPSexception::
+                (# do T[]->puttext; ' too large (MPS overflow)'->putline; true->continue #);
+              DoubleFormException::
+                (# do true->continue #);
+              propertyException::
+                (# do p[]->putline; true->continue #);
+              circularDependencyException::
+                (# do fg.name->putline; true->continue #);
+              unknownPropertyException::
+                (# do true->continue #);
+              emptyFragmentException::
+                (# do fg.name->putline; true->continue #);
+              transAccessException::
+                (# do 'No read access to: '->puttext; FN[]->putline; true->continue #);
+              notExistingException::
+                (# do  'Not a fragment file: '->puttext; fullFN[]->putline; true->continue #);
+              parseException::
+                (# do 'Parse errors in: '->puttext; fullFN[]->putline; true->continue #);
+              transCreateDirException::
+                (# do 'Unable toi create directory: '->puttext; FN[]->putline; true->continue #);
+           do
+              current.fullname->ParseModuleName->thisModule[];
+              (if not (thisModule[]->MySystem.insert
+                  (# conflict::
+                       (# do 
+                          (lib[],v1[],v2[])->ConflictSet.addConflict;
+                       #)
+                  #)
+                  ) then
+                  0->NumberOfForms;
+                  current[]->fg[];
+                  fg.fragmentList.scan
+                  (# do (if current.type
+                         // ast.formType  then
+                            NumberOfForms + 1->NumberOfForms; 
+                  if) #);
+                  NumberOfForms->thisModule.NumberOfForms;
+              if)
+           #)
+        #)
+     #);
+   
+   ListConflicts:
+     (# 
+        nodename: ^text; f: @file;
+        FindIncludePlace:
+          (# 
+             scanPropsAndFrags:
+               (# doDependOn:< 
+                    (# prop,filename: ^text 
+                    enter (prop[],filename[]) 
+                    do INNER 
+                    #);
+                  
+                  g: ^ast.fragmentGroup;
+               enter g[]
+               do g.prop.scanProp
+                  (#
+                     help: @text;
+                     doProp::< 
+                       (# 
+                       do (* Ignore some properties. *)
+                          (if true
+                           // ('donecheck'->prop.equalNCS)
+                           // ('ABSTRACTED'->prop.equal) then (* nothing *)
+                           else
+                              scanParameters
+                              (#
+                                 doString::< 
+                                   (# 
+                                   do
+                                      (if true
+                                       // ('BODY'->prop.equalNCS)
+                                       // ('MDBODY'->prop.equalNCS)
+                                       // ('ORIGIN'->prop.equalNCS) then
+                                          prop.makeUC;
+                                          (prop[],s[])->doDependOn; 
+                                      if)
+                                   #);
+                              #);
+                          if);
+                       #)
+                  #);
+                  g.fragmentList.scan
+                  (# t: ^text; help: @text; 
+                  do
+                     (if current.type
+                      // ast.linkType then
+                         ('INCLUDE',current.f.nameT[](*current.fullNameOfLink[]*))->doDependOn;
+                     if);
+                  #);
+               #);
+             
+             stripName:
+               (# t: ^text;
+                  inx: @integer;
+               enter t[]
+               do
+                  (* Find last / *)
+                  1->inx;
+                  L: (for i: t.length repeat
+                          (t.length-i)->inx->t.pos;
+                          (if t.get='/' then inx+1->inx; leave  L if)
+                     for);
+               exit (1,inx)->t.sub
+               #);
+             
+             fg: ^ast.fragmentGroup;
+             NodeName,path,name,lib: ^text;
+             curModule,parentModule: ^Module;
+             firstDependency: @boolean;
+          enter (NodeName[],lib[])
+          do ast.dependencyGraph
+             (#
+             do init; xverboselevel.nothing->xverboselevel;
+                OS.hostMachine->TargetMachine;
+                OS.hostMachine->TargetDirectory;
+                
+                nodename[]->scanextent
+                (# MPSexception::
+                     (# do T[]->puttext; ' too large (MPS overflow)'->putline; true->continue #);
+                   DoubleFormException::
+                     (# do true->continue #);
+                   propertyException::
+                     (# do p[]->putline; true->continue #);
+                   circularDependencyException::
+                     (# do fg.name->putline; true->continue #);
+                   unknownPropertyException::
+                     (# do true->continue #);
+                   emptyFragmentException::
+                     (# do fg.name->putline; true->continue #);
+                   transAccessException::
+                     (# do 'No read access to: '->puttext; FN[]->putline; true->continue #);
+                   notExistingException::
+                     (# do  'Not a fragment file: '->puttext; fullFN[]->putline; true->continue #);
+                   parseException::
+                     (# do 'Parse errors in: '->puttext; fullFN[]->putline; true->continue #);
+                   transCreateDirException::
+                     (# do 'Unable toi create directory: '->puttext; FN[]->putline; true->continue #);
+                do
+                   current.fullname->stripName->path[];
+                   current.fullname->parseModuleName->parentModule[];
+                   true->firstDependency;
+                   current[]->scanPropsAndFrags
+                   (# 
+                      doDependOn::
+                        (# t: @text;
+                        do 
+                           (if (filename.T[1]<>'~') and
+                               (filename.T[1]<>'/') then
+                               path[]->name[];
+                               filename[]->name.append;
+                            else
+                               filename[]->name[];
+                           if);
+                           name[]->parseModuleName->curModule[];
+                           (if curModule.library[]->lib.equalNCS then
+                               (if not (
+                                   (curModule.isLibrary) and
+                                   (parentModule.isLibrary) and
+                                   (curModule.library[]->parentModule.library.equalNCS) and
+                                   (curModule.version[]->parentModule.version.equalNCS)) then
+                                                    
+                                   (if firstDependency then
+                                       '   %s:\n'->t.putformat
+                                       (# do current.fullname->s#);
+                                       false->firstDependency;
+                                   if);
+                                   '      %s %s\n'
+                                     ->t.putFormat(# do prop[]->s; name[]->s; #);
+                                   t[]->f.puttext;
+                          if);
+                           if);
+                        #);
+                   #);
+                #);
+             #);
+          #);
+     enter nodename[]
+     do (if ConflictSet.size > 0 then
+            conflictfile[]->f.name;
+            f.openwrite;
+            ConflictSet.scan
+            (# 
+            do
+               '#### Conflict between: '->f.puttext;
+               current.lib[]->f.putText;
+               ' '->f.put; current.v1[]->f.putText;
+               ' and '->f.putText; current.v2[]->f.putLine;
+               (nodename[],current.lib[])->FindIncludePlace;
+            #);
+            f.close;
+        if)
+     #);
+                   
+   ExpandFileName: 
+     (# 
+        Name: ^text; ExpandedName: ^text
+     enter Name[]
+     do (Name[], ast.thePathHandler.currentDirectory)
+          -> ast.thePathHandler.convertFilePath->ExpandedName[];
+    exit ExpandedName[]
+     #);
+   
+   MySystem: @System;
+
+   programFilename: ^text;
+   filename, conflictfile: ^text; f: @file;
+   
+do ('',true)->ast.init;
+   OS.init;
+   
+   (if noOfArguments <> 4 then
+       'ERROR: Illegal number of arguments'->screen.putline;
+       (normal,'Usage: betawc fragment-file result-file conflict-file')->stop
+    else
+       2->arguments->ExpandFileName->ProgramFilename[];
+       3->arguments->filename[];
+       4->arguments->conflictfile[];
+       ProgramFilename[]->ExpandFileName->&ListGraph;
+       ProgramFilename[]->ExpandFileName->listConflicts;
+       
+       filename[]->f.name;
+       f.openwrite;
+       f[]->MySystem.Dump;
+       f.close;
+       
+   if);
+   
+#)

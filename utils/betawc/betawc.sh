@@ -1,0 +1,222 @@
+#!/bin/sh
+
+BETALIB=${BETALIB-/usr/local/lib/beta}
+. $BETALIB/configuration/r3.0/env.sh
+
+usage(){
+  if [ "$1" != "" ]
+  then
+     echo
+     echo $0: $1
+  fi
+  echo
+  echo "Usage: $0 [options] file"
+  echo "      file:          name of fragment to analyse"
+  echo "Legal options are:"
+  echo "      --all:         same as --conflict --full --list"
+  echo "      --conflict:    check for conflicts"
+  echo "      --full:        include standard files"
+  echo "                        (files located in $BETALIB)"
+  echo "      --exclude str: exclude all files containing str"
+  echo "                         Note, that str may be any egrep pattern"
+  echo "      --include str: include all files containing str"
+  echo "                         Note, that str may be any egrep pattern"
+  echo "      --list:        list the fragment groups in the dependency graph."
+  echo "      --help:        prints this text"
+  exit 1
+}
+
+# defaults
+
+doConflict=0
+doFull=0
+exclude=""
+include=""
+doList=0
+
+file=""
+
+if [ -z "$1" ]
+then
+	usage
+	exit 1
+fi
+
+# parse args
+
+while [ $# -gt 0 ]
+do
+  case $1 in
+  --help)   usage
+        exit 1
+        ;;
+  --all)   doConflict=1; doFull=1; doList=1;
+        shift
+        ;;
+  --conflict)   doConflict=1
+        shift
+        ;;
+  --full)   doFull=1
+        shift
+        ;;
+  --exclude)   
+        shift
+	case $1 in
+	--*)	;;
+	*)	if [ "$exclude" = "" ]
+		then
+			exclude=$1
+		else
+			exclude=$exclude"|"$1
+		fi
+   	shift
+		;;
+	esac
+	;;
+  --include)   
+        shift
+	case $1 in
+	--*)	;;
+	*)	if [ "$include" = "" ]
+		then
+			include=$1
+		else
+			include=$include"|"$1
+		fi
+   	shift
+		;;
+	esac
+	;;
+  --list)   doList=1
+        shift
+        ;;
+  --*)    usage "illegal option: $1"
+        exit 1
+        ;;
+  *)    break
+  esac
+done
+
+if [ $# -gt 0 ]
+then
+	file=$1
+	shift
+else
+	usage "no fragment file specified"
+        exit 1
+fi
+
+if [ $# -gt 0 ]
+then
+	usage "too many arguments"
+	exit 1
+fi
+
+
+# main
+
+dir=`dirname $file`
+name=`basename $file .bet`
+name=`basename $name .ast`
+root=$dir/$name
+
+if [ ! \( -r $root.bet -o -r $root.ast -o -r $root.astL \) ]
+then
+	usage "no fragment file: $root"
+	exit 1
+fi
+
+echo
+echo "Analysis of fragment:" $file 
+
+${BETALIB}/betawc/v1.1/betawc $file /tmp/1.$$ /tmp/0.$$
+
+if [ ! $doConflict -eq 0 ]
+then
+  echo
+  if [ -s /tmp/0.$$ ]
+  then
+    cat /tmp/0.$$
+  else
+    echo "No version conflicts"
+  fi
+fi
+
+echo
+echo "Libraries used:"
+if [ -s /tmp/0.$$ ]
+then
+  echo "  --- NOTE: version conflicts."
+  if [ $doConflict -eq 0 ]
+  then
+    echo "  --- Use '--conflict' to obtain more detailed info."
+  fi
+fi
+awk ' { if ($2 !=".") {print $3,$2,$1 }} ' /tmp/1.$$ | sort -uf | awk ' { printf "  %-15s %-10s (%s/%s/%s)\n", $1, $2, $3, $1, $2 } '
+
+awk ' { if ($2==".")\
+             {print $1 "/" $4 ".bet "$5               }\
+        else {print $1 "/" $3 "/" $2 "/" $4 ".bet "$5 } } ' /tmp/1.$$ | sort -uf -o /tmp/2.$$
+
+if [ $doFull -eq 0 ]
+then
+  echo "  EXCLUDED: Libraries with "$BETALIB"/" >> /tmp/5.$$
+  echo "            in the beginning of their path" >> /tmp/5.$$
+  egrep -v "^$BETALIB" /tmp/2.$$ | egrep -v "^~beta" > /tmp/3.$$
+else
+  cp /tmp/2.$$ /tmp/3.$$
+fi
+
+if [ "$exclude" = "" ]
+then
+  sed "s@~beta@$BETALIB@g" < /tmp/3.$$ > /tmp/4.$$
+else
+  echo "  EXCLUDED: Libraries with '"$exclude"'" >> /tmp/5.$$
+  echo "            in their path" >> /tmp/5.$$
+  (sed "s@~beta@$BETALIB@g" | egrep -v "$exclude") < /tmp/3.$$ > /tmp/4.$$
+fi
+
+if [  "$include" != "" ]
+then
+  echo "  INCLUDED: Libraries with '"$include"'" >> /tmp/5.$$
+  echo "            in their path" >> /tmp/5.$$
+  (sed "s@~beta@$BETALIB@g" | egrep "$include") < /tmp/2.$$ >> /tmp/4.$$
+fi
+
+if [ -r /tmp/5.$$ ]
+then
+  echo
+  echo "--------------------------------------------"
+  echo " The following information is based on the  "
+  echo " entire dependency graph with the following "
+  echo " exceptions:                                "
+  cat /tmp/5.$$
+  echo "--------------------------------------------"
+fi
+
+echo
+echo "Number of:"
+awk '
+  { sum += $2 }
+END { printf "  Fragment groups: %8d\n", NR
+      printf "  Fragment forms:  %8d\n", sum } ' /tmp/4.$$
+awk ' { print "wc " $1 } ' /tmp/4.$$ | sh | \
+awk '
+ { linesum += $1
+   wordsum += $2
+   charsum += $3 }
+END { printf "  Lines:           %8d\n", linesum
+      printf "  Words:           %8d\n", wordsum
+      printf "  Chars:           %8d\n", charsum } '
+
+
+if [ $doList -eq 1 ]
+then
+  echo
+  echo "List of fragment groups:"
+  echo "--------------------------------------------"
+
+  awk ' { print "  "$1 } ' /tmp/4.$$
+fi
+
+rm -f /tmp/1.$$ /tmp/2.$$ /tmp/3.$$ /tmp/4.$$ /tmp/5.$$
