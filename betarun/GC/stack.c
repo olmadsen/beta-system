@@ -78,8 +78,22 @@ void ProcessStackObj(struct StackObject *theStackObject)
 #endif /* hppa */
 /*************************** SPARC *********************************/
 #ifdef sparc
-/* Traverse an activation record (AR) [ar, end[
-   Notice end is *not* included
+
+extern long *etext;
+extern long *end;
+#define isData(addr) ( ((long*)&etext <= (long*)(addr)) && ((long*)(addr) < (long*)&end) )
+#define isProto(addr) ( isSpecialProtoType(addr) || isData(addr) )
+
+#ifdef RTDEBUG
+
+struct RegWin *BottomAR=0, *lastAR=0;
+long PC = 0;
+void PrintAR(struct RegWin *ar, struct RegWin *theEnd);
+
+#endif
+
+/* Traverse an activation record (AR) [ar, theEnd[
+   Notice theEnd is *not* included
    */
 
 /* Don't process references from the stack to LVRA. The ValReps in
@@ -88,16 +102,16 @@ void ProcessStackObj(struct StackObject *theStackObject)
  */
 # define objIsValRep(theObj) inLVRA(theObj)
 
-void ProcessAR(struct RegWin *ar, struct RegWin *end)
+
+void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 {
     struct Object **theCell = (struct Object **) &ar[1];
     
-    DEBUG_IOA (fprintf(output, "***** ProcessAR: ar: 0x%x, end: 0x%x\n", ar, end);
-	       fflush(output);
-	       )
-    DEBUG_CODE(Claim((long)ar < (long)end,   "ProcessAR: ar is less than end");
-	       Claim(((long) end) % 4 == 0, "ProcessAR: end is 4 byte aligned");
-	       Claim(((long) end) % 4 == 0, "ProcessAR: end is 4 byte aligned");
+    DEBUG_STACK(PrintAR(ar, theEnd));
+
+    DEBUG_CODE(Claim((long)ar < (long)theEnd,   "ProcessAR: ar is less than theEnd");
+	       Claim(((long) theEnd) % 4 == 0, "ProcessAR: theEnd is 4 byte aligned");
+	       Claim(((long) theEnd) % 4 == 0, "ProcessAR: theEnd is 4 byte aligned");
 	       )
         
     /* Process GC registers of the activation record. */
@@ -116,30 +130,28 @@ void ProcessAR(struct RegWin *ar, struct RegWin *end)
 	      });
 
     if (inBetaHeap(ar->i0) && isObject(ar->i0) && !objIsValRep(cast(Object)(ar->i0)))
-      ProcessReference(&ar->i0);
+      if (isProto((cast(Object)ar->i0)->Proto)) ProcessReference(&ar->i0);
     if (inBetaHeap(ar->i1) && isObject(ar->i1) && !objIsValRep(cast(Object)(ar->i1)))
-      ProcessReference(&ar->i1);
+      if (isProto((cast(Object)ar->i1)->Proto)) ProcessReference(&ar->i1);
     if (inBetaHeap(ar->i3) && isObject(ar->i3) && !objIsValRep(cast(Object)(ar->i3)))
-      ProcessReference(&ar->i3);
+      if (isProto((cast(Object)ar->i3)->Proto)) ProcessReference(&ar->i3);
     if (inBetaHeap(ar->i4) && isObject(ar->i4) && !objIsValRep(cast(Object)(ar->i4)))
-	ProcessReference(&ar->i4);
+      if (isProto((cast(Object)ar->i4)->Proto)) ProcessReference(&ar->i4);
     CompleteScavenging();
 
     /* Process the stack part */
-    for (; theCell != (struct Object **) end; theCell+=2)
+    for (; theCell != (struct Object **) theEnd; theCell+=2)
       if (inBetaHeap(*theCell) && isObject(*theCell))
 	if( objIsValRep(*theCell) ){
 	  DEBUG_IOA( fprintf(output, "STACK(%d) (0x%x) is *ValRep", 
 			     (long)theCell-(long)&ar[1], *theCell));
 	} else {
-	  ProcessReference(theCell);
-	  CompleteScavenging();
+	  if (isProto((cast(Object)*theCell)->Proto)){
+	    ProcessReference(theCell);
+	    CompleteScavenging();
+	  }
 	}
 }
-
-#ifdef RTDEBUG
-struct RegWin *BottomAR=0, *lastAR=0;
-#endif
 
 void ProcessStack()
 {
@@ -150,16 +162,24 @@ void ProcessStack()
     /* Flush register windows to stack */
     asm("ta 3");
 
+    DEBUG_STACK(fprintf(output, "\n ***** Trace of stack *****\n"));
+
     /* StackEnd points to the activation record of doGC, which in turn was called
      * from either DoGC, or IOA(c)alloc.
      */
     StackEnd = (long *)((struct RegWin *) StackEnd)->fp; /* Skip AR of doGC() */
+    DEBUG_CODE( PC=((struct RegWin *) StackEnd)->i7 +8);
     StackEnd = (long *)((struct RegWin *) StackEnd)->fp; /* Skip AR of IOA(c)alloc / DoGC() */
 
-    
+#ifdef RTDEBUG
+    for (theAR =  (struct RegWin *) StackEnd;
+	 theAR != (struct RegWin *) 0;
+	 PC = theAR->i7 +8, theAR = (struct RegWin *) theAR->fp) {
+#else    
     for (theAR =  (struct RegWin *) StackEnd;
 	 theAR != (struct RegWin *) 0;
 	 theAR =  (struct RegWin *) theAR->fp) {
+#endif
 	if (theAR == nextCompBlock) {
 	    /* This is the AR of attach. Continue GC, but get
 	     * new values for nextCompBlock and nextCBF. 
@@ -182,21 +202,43 @@ void ProcessStack()
     DEBUG_CODE(if (BottomAR) Claim(lastAR==BottomAR, "lastAR==BottomAR");
 	       else BottomAR=lastAR;
 	       )
+    DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
+
 }
+
+#ifdef RTDEBUG
+long lastPC=0;
+#endif
 
 void ProcessStackObj(struct StackObject *theStack)
 {
     struct RegWin *theAR;
     long delta = (char *) &theStack->Body[1] - (char *) theStack->Body[0];
     
+    DEBUG_STACK(fprintf(output, " *-*-* StackObject *-*-* \n");
+		lastPC=PC;
+		PC = 0;
+		)
+
+#ifdef RTDEBUG
     for (theAR =  (struct RegWin *) &theStack->Body[1];
 	 theAR != (struct RegWin *) &theStack->Body[theStack->StackSize];
-	 theAR =  (struct RegWin *) (theAR->fp + delta)) {
+	 PC = theAR->i7 +8, theAR =  (struct RegWin *) (theAR->fp + delta))
+#else
+    for (theAR =  (struct RegWin *) &theStack->Body[1];
+	 theAR != (struct RegWin *) &theStack->Body[theStack->StackSize];
+	 theAR =  (struct RegWin *) (theAR->fp + delta))
+#endif
+      {
 	Claim(&theStack->Body[1] <= (long *) theAR
 	      && (long *) theAR <= &theStack->Body[theStack->StackSize],
 	      "ProcessStackObj: theAR in StackObject");
 	ProcessAR(theAR, (struct RegWin *) (theAR->fp + delta));
-    }
+      }
+
+    DEBUG_STACK(fprintf(output, " *-*-* End StackObject *-*-*\n");
+		PC=lastPC;
+		)
 }
 #endif /* sparc */
 
@@ -289,104 +331,148 @@ void ProcessStack()
 }
 #endif /* mc68020 */
 
+/*************************** DEBUG ****************************/
 
 #ifdef RTDEBUG
 
 #ifdef sparc
 
-void CheckStackReference(theCell)
-     handle(Object) theCell;
+static FILE *thePipe=0; 
+static char theLabel[100]; 
+static long labelAddress;
+long labelOffset = 0;
+static char *labels=0;
+
+static void initLabels()
 {
-  fprintf(output, "0x%x: 0x%x\n", theCell, *theCell); 
+  char ch;
+  char command[200];
+  int size=0;
+
+  fprintf(output, "(initLabels ...");
   fflush(output);
-  Ck(*theCell);
-  ObjectSize(*theCell);
+
+  (void) strcpy (command, "nm -grn ");
+  (void) strcat (command, ArgVector[0]);
+
+  thePipe = popen (command, "r");
+
+  for (;;){
+    fscanf(thePipe, "%x %c %s", &labelAddress, &ch, theLabel);
+    if (labelAddress==(long)&etext) break;
+  }
+      
+  while (fgetc (thePipe) != EOF)
+    size+=1;
+
+  if (! (labels=(char *)malloc(size+1)))
+    fprintf(output, "Failed to allocate memory for labels\n");
+  else
+    {
+      pclose (thePipe);
+      thePipe = popen (command, "r");
+      for (;;){
+	fscanf(thePipe, "%x %c %s", &labelAddress, &ch, theLabel);
+	if (labelAddress==(long)&etext) break;
+      }
+      fread(labels, 1, size, thePipe);
+      pclose (thePipe);
+    }
+  fprintf(output, " done)\n");
+  fflush(output);
 }
 
-void CheckAR(struct RegWin *ar, struct RegWin *end)
+char *getLabel (addr)
+     long addr;
 {
-    struct Object **theCell = (struct Object **) &ar[1];
+  char ch;
+  char *lab;
+  int chars;
 
-    Claim((long)ar < (long)end,   "ProcessAR: ar is less than end");
-    Claim(((long) end) % 4 == 0, "ProcessAR: end is 4 byte aligned");
-    Claim(((long) end) % 4 == 0, "ProcessAR: end is 4 byte aligned");
-        
-    fprintf(output, "---activation record: 0x%x\niregs:\n", ar); fflush(output);
-    /* Check GC registers of the activation record. */
-    if (ar->i0 && (! (inBetaHeap(ar->i0) && isObject(ar->i0)))){
-	fprintf(output, "-- %%i0: 0x%x NOT AN OBJECT\n", ar->i0); 
-	fflush(output);
-    } else {
-      fprintf(output, "-- %%i0: 0x%x\n", ar->i0); 
-      fflush(output);
-    }
+  if (labels==0) initLabels();
 
-    if (inBetaHeap(ar->i0) && isObject(ar->i0) && !objIsValRep(cast(Object)(ar->i0)))
-      CheckStackReference(&ar->i0);
-    if (inBetaHeap(ar->i1) && isObject(ar->i1) && !objIsValRep(cast(Object)(ar->i1)))
-      CheckStackReference(&ar->i1);
-    if (inBetaHeap(ar->i3) && isObject(ar->i3) && !objIsValRep(cast(Object)(ar->i3)))
-      CheckStackReference(&ar->i3);
-    if (inBetaHeap(ar->i4) && isObject(ar->i4) && !objIsValRep(cast(Object)(ar->i4)))
-	CheckStackReference(&ar->i4);
-
-    /* Check the stack part */
-    fprintf(output, "stackpart:\n"); fflush(output);
-    for (; theCell != (struct Object **) end; theCell+=2)
-      if (inBetaHeap(*theCell) && isObject(*theCell))
-	if( objIsValRep(*theCell) ){
-	  DEBUG_IOA( fprintf(output, "STACK(%d) (0x%x) is *ValRep", 
-			     (long)theCell-(long)&ar[1], *theCell));
+  if (!addr){
+    labelOffset=0;
+    labelAddress=0;
+    return "<unknovn>";
+  }
+  
+  if (labels)
+    for (lab=labels;;){
+      if (sscanf (lab, "%x %c %s%n", &labelAddress, &ch, theLabel, &chars) 
+	  == EOF)
+	{
+	  labelAddress = 0;
+	  break;
+	}
+      else 
+	if (labelAddress <= addr){
+	  labelOffset = addr-labelAddress;
+	  return theLabel;
 	} else {
-	  CheckStackReference(theCell);
+	  lab += chars;
 	}
+    }
 }
 
-void CheckStack()
+void PrintRef(ref(Object) ref)
 {
-    struct RegWin *theAR;
-    struct RegWin *nextCBF = (struct RegWin *) ActiveCallBackFrame;
-    struct RegWin *nextCompBlock = (struct RegWin *) lastCompBlock;
-    
-    if (!lastCompBlock) 
-      /* BasicComponent hasn't been attached yet: There is an AlloC
-       * before AttBC.
-       */
-      return;
-
-    NumCheckStack++;
-
-    fprintf(output, "---------------CheckStack--------------\n"); fflush(output);
-    StackEnd = StackPointer;
-
-    /* Flush register windows to stack */
-    asm("ta 3");
-    
-    StackEnd = (long *)((struct RegWin *) StackEnd)->fp; /* Skip AR of CheckStack() */
-
-    for (theAR =  (struct RegWin *) StackEnd;
-	 theAR != (struct RegWin *) 0;
-	 theAR = (struct RegWin *) theAR->fp) {
-	if (theAR == nextCompBlock) {
-	    /* This is the AR of attach. Continue check, but get
-	     * new values for nextCompBlock and nextCBF. 
-	     * Please read StackLayout.doc
-	     */
-	    nextCBF = (struct RegWin *) theAR->l5;
-	    nextCompBlock = (struct RegWin *) theAR->l6;
-	    if (nextCompBlock == 0)
-	      break; /* we reached the bottom */
-	}
-	else if (theAR == nextCBF) {
-	    /* This is AR of HandleCB. Don't check this, but
-	     * skip to betaTop and update nextCBF */
-	    nextCBF = (struct RegWin *) theAR->l5;
-	    theAR = (struct RegWin *) theAR->l6;
-	}
-	CheckAR(theAR, (struct RegWin *) theAR->fp);
+  if (ref) {
+    if (inBetaHeap(ref) && isObject(ref) ){
+      if(objIsValRep(ref)) {
+	fprintf(output, ", is *ValRep");
+      } else {
+	fprintf(output, ", is object");
+	if (isProto((ref)->Proto))
+	  fprintf(output, ", proto ok: 0x%x", ref->Proto);
+	else
+	  fprintf(output, ", proto NOT ok: 0x%x", ref->Proto);
+      }
+    } else {
+      fprintf(output, ", is NOT object");
     }
+  }
+  fprintf(output, "\n");
+}
+
+void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
+{
+  struct Object **theCell = (struct Object **) &ar[1];
+
+  if (DebugLabels){
+    fprintf(output, 
+	    "----- ar: 0x%x, theEnd: 0x%x, PC: 0x%x (%s+0x%x)\n",
+	    ar, 
+	    theEnd,
+	    PC,
+	    getLabel(PC),
+	    labelOffset);
+  } else {
+    fprintf(output, 
+	    "----- ar: 0x%x, theEnd: 0x%x, PC: 0x%x\n",
+	    ar, 
+	    theEnd,
+	    PC);
+  }    
+  fprintf(output, "%%i0: 0x%x", ar->i0); PrintRef(cast(Object)ar->i0);
+  fprintf(output, "%%i1: 0x%x", ar->i1); PrintRef(cast(Object)ar->i1)
+    /* Notice that AlloVR1-4 gets an offset in this parameter.
+     * This should be safe.
+     */;
+  fprintf(output, "%%i3: 0x%x", ar->i3); PrintRef(cast(Object)ar->i3);
+  fprintf(output, "%%i4: 0x%x", ar->i4); PrintRef(cast(Object)ar->i4);
+
+  fprintf(output, "stackpart:\n");
+  /* Notice that in INNER some return adresses are pushed. This is no
+   * danger.
+   */
+  for (; theCell != (struct Object **) theEnd; theCell+=2) {
+    fprintf(output, "0x%x", *theCell);
+    PrintRef(cast(Object)(*theCell));
+  }
+  fflush(output);
 }
 
 #endif /* sparc */
 
-#endif
+#endif /* RTDEBUG */
