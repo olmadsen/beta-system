@@ -66,8 +66,8 @@ foreach $file (@ARGV) {
     next if ($file =~ /~$/) ; # skip tilde files
     next if (!open(IN, $file));
     while (<IN>) {
-	if (m/<A NAME=\"?([a-zA-Z0-9_]+\.bet)\"?><H4 CLASS=betacaption>[a-zA-Z0-9_]+\.bet<\/H4><\/A>/i){
-	    print "<DT><A HREF=$file#$1>$1</A>\n<DD>\n";
+	if (m/<A NAME=\"?([a-zA-Z0-9_]+\.bet.*)\"?><H4 CLASS=betacaption>([a-zA-Z0-9_]+\.bet.*)<\/H4><\/A>/i){
+	    print "<DT><A HREF=$file#$1>$2</A>\n<DD>\n";
 	}
     }
     close IN;
