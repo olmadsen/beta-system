@@ -28,7 +28,7 @@ long AOAtoIOAalloc()
 }
 
 /* Allocate a larger AOAtoIOAtable based on the next entry in primes. */
-void AOAtoIOAReAlloc(void)
+static void AOAtoIOAReAlloc(void)
 {
   /* POTENTIAL ERROR: The AOAtoIOAInsert call below may cause 
    * AOAtoIOAReAlloc to be called in which case entries will be LOST!!!
@@ -104,7 +104,7 @@ void AOAtoIOAReAlloc(void)
 
 void AOAtoIOAInsert(handle( Object) theCell)
 {
-    ptr(long) table = BlockStart( AOAtoIOAtable);
+    ptr(long) table;
     unsigned long      index, count;
 
 #ifdef RTDEBUG
@@ -124,24 +124,51 @@ void AOAtoIOAInsert(handle( Object) theCell)
 
     DEBUG_AOA( Claim( inAOA( theCell),"AOAtoIOAInsert: theCell in AOA"));
     
+    MT_CODE(mutex_lock(&aoatoioa_lock));
+
+    table = BlockStart( AOAtoIOAtable);
     /* First Hash function. */
     index = ((unsigned long) theCell) % AOAtoIOAtableSize;
-    if( table[index] == 0){ table[index] = (unsigned long) theCell; return; }
-    if( table[index] == (long) theCell ) return;
+    if( table[index] == 0){ 
+      table[index] = (unsigned long) theCell;
+      goto exit;
+    }
+    if( table[index] == (long) theCell ) {
+      goto exit;
+    }
     
     /* Second Hash function. */
     index = (((unsigned long) theCell)<<4) % AOAtoIOAtableSize;
-    if( table[index] == 0 ){ table[index] = (long) theCell; return; }
-    if( table[index] == (unsigned long) theCell ) return;
+    if( table[index] == 0 ){ 
+      table[index] = (long) theCell; 
+      goto exit; 
+    }
+    if( table[index] == (unsigned long) theCell ) {
+      goto exit;
+    }
     
     count = 0;
     while( count < 100 ){
 	count++; index = (count + (unsigned long) theCell) % AOAtoIOAtableSize;
-	if( table[index] == 0 ){ table[index] = (long) theCell; return; }
-	if( table[index] == (unsigned long) theCell ) return;
+	if( table[index] == 0 ){ 
+	  table[index] = (long) theCell; 
+	  goto exit;
+	}
+	if( table[index] == (unsigned long) theCell ) {
+	  goto exit;
+	}
     }
+
+    /* Both functions failed */
     AOAtoIOAReAlloc();
+
+    /* Try again */
+    MT_CODE(mutex_unlock(&aoatoioa_lock));
     AOAtoIOAInsert( theCell);
+
+exit:
+    MT_CODE(mutex_unlock(&aoatoioa_lock));
+    return;
 }
 
 void AOAtoIOAClear(void)

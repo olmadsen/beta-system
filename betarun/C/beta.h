@@ -32,6 +32,7 @@ extern struct group_header *BETA_DATA; /* Defined in BETA */
 /* synchronization variables */
 extern mutex_t lvra_lock;
 extern mutex_t aoa_lock;
+extern mutex_t aoatoioa_lock;
 extern mutex_t cbfa_lock;
 #endif
 
