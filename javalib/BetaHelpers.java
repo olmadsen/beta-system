@@ -27,4 +27,10 @@ public class BetaHelpers
 	return System.err;
     }
 
+    public static String getenv (String key){
+	// Make a JNI based solution calling getenv() in C
+	// See e.g. http://www.tigress.co.uk/rmy/java/getenv/getenv.html
+	System.err.println("*** FIXME: BetaHelpers.getEnv not yet implemented");
+	return "";
+    }
 }
