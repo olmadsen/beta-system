@@ -6,6 +6,10 @@
 
 #include "beta.h"
 
+#ifdef macintosh
+#include <String.h>
+#endif
+
 #define MAXINT 2147483647
 
 static long M_Part(ref(ProtoType) proto)
@@ -102,12 +106,7 @@ static ptr(char) ProtoTypeName(theProto)
  */
 static int c_on_top;
 
-#ifdef macintosh
-#error Functions NextGroup and GroupName are not yet implemented for macintosh. \
-The are used by beta.dump, objinterface, and persistent store / datpete
-#else
-  
-  typedef struct group_header
+typedef struct group_header
 {
   struct group_header *self;
   char                *ascii;
@@ -206,8 +205,6 @@ char *GroupName(long address, int isCode)
 
   return group->ascii;
 }
-
-#endif /* not macintosh */
 
 static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, int print_origin)
 {
@@ -553,6 +550,7 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
 #ifdef macintosh
     if (StandAlone){
       /* macintosh, dump file opened OK: running as stand alone application */
+      char *lookat;
       lookat = MALLOC(strlen(dumpname)+12);
       sprintf(lookat, "\n\nLook at '%s'", dumpname);
       CPrompt("Beta execution aborted:\n\n", ErrorMessage(errorNumber), lookat, "");
