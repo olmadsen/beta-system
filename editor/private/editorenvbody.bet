@@ -1,8 +1,13 @@
 ORIGIN '../codeeditor';
-INCLUDE '~beta/mps/v4.9.1/propertyparser'
+INCLUDE '~beta/basiclib/v1.4/directory'
+        'mypropertyparser'
         '~beta/pretty/v4.9.1/pplib'
         'modtime'
         '../searchdialog';
+(*'~beta/mps/v4.9.1/propertyparser'*)
+(*'~beta/mps/v4.9.1/propertyparser'*)
+(*'~beta/mps/v4.9.1/propertyparser'*)
+(*'~beta/mps/v4.9.1/propertyparser'*)
 -- editorenvMetaGrammarInit: Descriptor --
 (#
    theMetaGrammar: ^astInterface.treelevel;
@@ -83,16 +88,10 @@ do
         
      exit noExt[]
      #);
-   dirWriteable: (# f: @file enter f.name do  exit f.entry.writeable #);
    fileWriteable:
-     (# f: @file; value: @boolean
-     enter f.name
-     do
-        (if (f.entry.path.head->dirWriteable) then
-            (if f.entry.writeable then true->value if)
-        if)
-     exit value
-     #);
+   (* test whether the path is OK and the dir can be written into and whether the file can be written
+    on if the path is OK and the file exists *)
+     (# f: @file enter f.name exit f.entry.writeable #);
    showEditors:
      (# 
      do
@@ -163,7 +162,7 @@ do
                          'ORIGIN ''~beta/basiclib/v1.4/betaenv'''->propText[];
                          (if isAFrejaEditor then
                              '; '->propText.putLine;
-                             'INCLUDE ''~beta/freja/v2.0/associations'''
+                             'INCLUDE ''~beta/freja/v2.1/associations'
                                ->propText.putLine
                          if);
                          propText.reset;
@@ -233,6 +232,7 @@ do
                                      'Grammar: '->help;
                                      language[]->help.putText;
                                      ' not found'->help.putText;
+                                     help[]->putLine;
                                      (none ,help[],'Alert')->UI.alertUser;
                                      leave thisOperation
                                   #);
@@ -240,8 +240,7 @@ do
                              #)->mps.newFragmentForm->ff[];
                          fragmentName[]->ff.name;
                          ff[]->fg.fragmentList.addFragment;
-                         ff.grammar[]->fg.defaultGrammar[];
-                         
+                         ff.grammar[]->fg.defaultGrammar[]
                      if);
                      
                  if);
@@ -256,8 +255,44 @@ do
      (#
         fg: ^astInterface.fragmentGroup;
         ff,newff: ^astInterface.fragmentform;
-        ge: ^groupEditor;
-        dummy: @integer
+        
+     enter fg[]
+     do
+        fg.fragmentList.scan
+          (# 
+          do
+             (if current.type = mps.formType then
+                 current.f[]->ff[];
+                 loop: ff.prop.scanProp
+                   (#
+                      doProp::< 
+                        (# 
+                        do
+                           prop.makeLC;
+                           (if ('touched'->prop.equal) then
+                               ' AST GC in '->putText;
+                               ff.name->putText;
+                               ' ('->putText;
+                               ff.a.range->putInt;
+                               '->'->putText;
+                               ff.grammar[]->mps.newFragmentForm->newff[];
+                               newff[]->ff.root.copy->newff.root[];
+                               ff.name->newff.name;
+                               ff.grammar[]->newff.grammar[];
+                               fg[]->newff.father;
+                               newff[]->current.f[];
+                               leave loop
+                           if)
+                        #);
+                      
+                   #);
+                 
+             if)
+          #);
+        
+     #);
+   recomputeSLOTchain:
+     (# fg: ^astInterface.fragmentGroup; ff: ^astInterface.fragmentform; 
      enter fg[]
      do
         fg.fragmentList.scan
@@ -275,17 +310,6 @@ do
                                'Recomputing slot chain for: '->putText;
                                ff.name->putLine;
                                ff.recomputeSlotChain;
-                               ' AST GC in '->putText;
-                               ff.name->putText;
-                               ' ('->putText;
-                               ff.a.range->putInt;
-                               '->'->putText;
-                               ff.grammar[]->mps.newFragmentForm->newff[];
-                               newff[]->ff.root.copy->newff.root[];
-                               ff.name->newff.name;
-                               ff.grammar[]->newff.grammar[];
-                               fg[]->newff.father;
-                               newff[]->current.f[];
                                leave loop
                            if)
                         #);
@@ -452,23 +476,27 @@ do
      (# fg: ^astInterface.fragmentGroup; textFile: ^text; f: @file
      enter fg[]
      do
-        (if true (*writeAccess*)
-         // true then
-            fg[]->backupTextFile;
-            'Prettyprinting '->putText;
-            fg.name->putText;
-            fg.textFileName->textFile[];
-            '...'->putText;
+        fg[]->backupTextFile;
+        'Prettyprinting '->putText;
+        fg.name->putText;
+        fg.textFileName->textFile[];
+        '...'->putText;
+        (if fg.fragmentList[] <> none then
             (mps[],fg[],none ,textFile[])
               ->prettyprintFragment
                 (# showSemanticErrors::< falseObject #);
-            newLine;
-            textfile[]->f.name;
-            (textfile,fg.modtime-120)->setEntryModtime;
             
          else
-            (none ,'This file is read-only','Alert')->UI.alertUser; 
+            (mps[],fg[],none ,textFile[])
+              ->prettyprintFragment
+                (#
+                   onlyProperties::< trueObject;
+                   showSemanticErrors::< falseObject
+                #)
         if);
+        ' Done'->putLine;
+        textfile[]->f.name;
+        (textfile,fg.modtime-120)->setEntryModtime;
         
      #);
    deleteAutoSaveFile:
@@ -737,7 +765,25 @@ do
 #)  
 
 -- editorenvNew: DoPart --
-do   
+do
+   (if groupName[]->editorenvPrivate.fileWriteable then
+       (groupName[],formName[],grammarName[],1,theBrowser[],false)
+         ->editorenvPrivate.doNewGroup->fg[];
+       (if fg[]
+        // none then
+           grammarName[]->putLine;
+           groupName[]->putLine;
+           formName[]->putLine;
+           ' fragmentgroup not created'->putLine;
+           
+        else
+           fg.markAsChanged
+           (* this is done in order to
+            open the new group in ymer *)
+       if)
+    else
+       (none ,'Error in path','New...')->UI.alertUser
+   if)  
 
 -- editorEnvNewBetaProgram: DoPart --
 do
@@ -753,7 +799,7 @@ do
                  (if name[] <> none then
                      name[]->f.name->editorenvPrivate.stripExtension->f.name
                        ->putLine;
-                     (if not (f.entry.path.head->editorenvPrivate.dirWriteable)
+                     (if not (f.name->editorenvPrivate.fileWriteable)
                       then
                          (none ,'No write permission','New BETA Program')
                            ->UI.alertUser;
@@ -803,9 +849,13 @@ do
              // none then
                 name[]->putText; ' fragmentgroup not created'->putLine; 
              else
-                fg.markAsChanged
-                (* this is done in order to
-                 open the new group in ymer *)
+                (if
+                fg.name->mps.expandToFullPath
+                  ->editorenvPrivate.fileWriteable then
+                    fg.markAsChanged
+                    (* this is done in order to
+                     open the new group in ymer *)
+                if)
             if)
         if)
      #)  
@@ -824,7 +874,7 @@ do
                  (if name[] <> none then
                      name[]->f.name->editorenvPrivate.stripExtension->f.name
                        ->putLine;
-                     (if not (f.entry.path.head->editorenvPrivate.dirWriteable)
+                     (if not (f.name->editorenvPrivate.fileWriteable)
                       then
                          (none ,'No write permission','New BETA Library')
                            ->UI.alertUser;
@@ -874,9 +924,13 @@ do
              // none then
                 name[]->putText; ' fragmentgroup not created'->putLine; 
              else
-                fg.markAsChanged
-                (* this is done in order to
-                 open the new group in ymer *)
+                (if
+                fg.name->mps.expandToFullPath
+                  ->editorenvPrivate.fileWriteable then
+                    fg.markAsChanged
+                    (* this is done in order to
+                     open the new group in ymer *)
+                if)
             if)
         if)
      #)  
@@ -1066,6 +1120,10 @@ do
                    cancel::<  (#  do leave l #);
                    
                 #)
+         else
+            (if current.needToUpdateTextFile and not current.isAFrejaEditor then
+                current.fg[]->editorenvPrivate.makeNewTextFile
+            if)
         if)
      #)  
 
@@ -1432,8 +1490,9 @@ do
                 
             if);
             
-         // dir.root then (* editorRoot[]->node[];
-                           1->length;*)
+         // dir.root then
+         (* editorRoot[]->node[];
+          1->length;*)
             
          // dir.extend then
               (# prod: ^mg.prod; 
@@ -1536,7 +1595,8 @@ do
         fg[]->editorenvPrivate.getGrammarName->ge.grammarName[];
         ge[]->fgHandler.subscribe;
         ge[]->append;
-        (if not onGoingRecovery and (ge.fgh.groupEditors.size = 1) then
+        (if not onGoingRecovery and (ge.fgh.groupEditors.size = 1) and not
+        ge.isAfrejaEditor then
             ge.fg[]->editorenvPrivate.checkAutoSaveFile
         if)
      #)  
@@ -1553,22 +1613,41 @@ do
 (# help: ^text; 
 do
    (if ge[] <> none then
-       theEditorRoot.frag[]->ge.formeditorList.findEditor->fe[];
+   (* overfloedigt theEditorRoot.frag[]->ge.formeditorList.findEditor->fe[];*)
        (if trace[2] then
            'creating formeditor: '->putText;
-           (theEditorRoot.frag.father).name->putText;
-           '-'->put;
-           theEditorRoot.frag.name->putLine;
-           
+           (if theEditorRoot[] <> none then
+               (theEditorRoot.frag.father).name->putText;
+               '-'->put;
+               theEditorRoot.frag.name->putLine;
+               
+            else
+               'theEditorRoot is none'->putLine
+           if)
        if);
        (if theSifTextEditor[] <> none then
            &theSifTextEditor.codeviewerType[]->fe[];
            fe[]->theSifTexteditor.SifViewer[];
            theSifTextEditor[]->fe.theSifTextEditor[];
-           theEditorRoot.frag[]->theSifTexteditor.frag[];
-           theEditorRoot[]->theSifTexteditor.editorRoot[];
-           (mps[],theEditorRoot.frag.grammar[],UI[],theSifTextEditor[],
-            theEditorRoot[],initialSelection[])->fe.init;
+           (if theEditorRoot[] <> none then
+               theEditorRoot.frag[]->theSifTexteditor.frag[];
+               theEditorRoot[]->theSifTexteditor.editorRoot[];
+               (mps[],theEditorRoot.frag.grammar[],UI[],theSifTextEditor[],
+                theEditorRoot.Frag[],theEditorRoot[],initialSelection[])
+                 ->fe.init;
+               
+            else
+               (if ff[] <> none then
+                   ff[]->theSifTexteditor.frag[];
+                   none ->theSifTexteditor.editorRoot[];
+                   (* the editorRoot is set up by codeeditor.init *)
+                   (mps[],ff.grammar[],UI[],theSifTextEditor[],ff[],
+                    theEditorRoot[],initialSelection[])->fe.init;
+                   
+                else
+                   'createFormEditor: theEditorRoot and ff are none!!'->putLine
+               if)
+           if);
            fe[]->ge.formeditorList.append;
            ge[]->fe.thisGroupEditor[];
            not ge.writeAccess->fe.isReadOnly->fe.theSifTextEditor.isReadOnly;
@@ -1613,27 +1692,32 @@ do
                    
                if)
            if);
-           theEditorRoot.frag[]->ge.formeditorList.findEditor->fe[];
-           (if fe[] <> none then
-               fe[]->theSifTexteditor.SifViewer[];
-               theSifTextEditor[]
-                 ->theSifTextEditor.sifViewer.theSifTextEditor[];
-               fe.editorRoot.frag[]->theSifTextEditor.frag[];
-               fe.editorRoot[]->theSifTexteditor.editorRoot[];
-               fe.isReadOnly->theSifTexteditor.isReadOnly;
-               (if trace[2] then
-                   'findOrcreateFormEditor readOnly: '->putText;
-                   (if fe.theSifTextEditor.isReadOnly then
-                       'true'->putLine
-                    else
-                       'false'->putLine
+           (if theEditorRoot[] <> none then
+               theEditorRoot.frag[]->ge.formeditorList.findEditor->fe[];
+               (if fe[] <> none then
+                   fe[]->theSifTexteditor.SifViewer[];
+                   theSifTextEditor[]
+                     ->theSifTextEditor.sifViewer.theSifTextEditor[];
+                   fe.editorRoot.frag[]->theSifTextEditor.frag[];
+                   fe.editorRoot[]->theSifTexteditor.editorRoot[];
+                   fe.isReadOnly->theSifTexteditor.isReadOnly;
+                   (if trace[2] then
+                       'findOrcreateFormEditor readOnly: '->putText;
+                       (if fe.theSifTextEditor.isReadOnly then
+                           'true'->putLine
+                        else
+                           'false'->putLine
+                       if);
+                       
                    if);
-                   
-               if);
-               fe.doReprettyprint;
-               fe.cs->fe.setFocus
+                   fe.doReprettyprint;
+                   fe.cs->fe.setFocus
+                else
+                   (ff[],theEditorRoot[],initialSelection[],theSifTexteditor[],
+                    ge[])->createFormEditor->fe[]
+               if)
             else
-               (theEditorRoot[],initialSelection[],theSifTexteditor[],ge[])
+               (ff[],theEditorRoot[],initialSelection[],theSifTexteditor[],ge[])
                  ->createFormEditor->fe[]
            if)
         else

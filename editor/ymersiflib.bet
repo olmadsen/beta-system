@@ -2,7 +2,8 @@ ORIGIN '~beta/sourcebrowser/v1.0/ymer';
 INCLUDE '~beta/guienv/v1.3.1/utils/simplemenu'
         '~beta/sourcebrowser/v1.0/private/parseEditor'
         '~beta/sourcebrowser/v1.0/private/semanticEditor'
-        'ymercall';
+        'ymercall'
+        'createdialog';
 BODY 'private/globalfrejacommbody'
      'private/compiler'
      'private/globalexternalinterfacebody';
@@ -37,6 +38,17 @@ fragmentBrowser: ymerApplication
           groupEditorExists:
             (# value: @boolean do (cge[] <> none )->value exit value #);
           allowCommand:
+            (# value: @boolean
+            do
+               (if groupEditorExists then
+                   (if not checkOngoingTextediting and cge.writeAccess and not
+                   cge.isAfrejaEditor then
+                       true->value
+                   if)
+               if)
+            exit value
+            #);
+          allowPerform:
             (# value: @boolean
             do
                (if groupEditorExists then
@@ -239,9 +251,11 @@ fragmentBrowser: ymerApplication
             do
                (if theSemanticErrorViewer[] <> none then
                    (if theSemanticErrorViewer.opened then
-                       theSemanticErrorViewer.close
+                   (*theSemanticErrorViewer.close*)
+                       none ->theSemanticErrorViewer.registerFragmentGroup
                    if);
-                   none ->theSemanticErrorViewer[]
+                   (*none ->theSemanticErrorViewer[]*)
+                   
                if);
                ''->writeInfoView;
                formsWithSemanticErrors.clear;
@@ -276,7 +290,7 @@ fragmentBrowser: ymerApplication
                               #);
                             (if node[] <> none then node[]->findAndSelect if)
                         if);
-                        current.father->openSemanticErrorEditor;
+                        current.father->showSemanticErrors;
                         leave l
                      #);
                    savedGroups.clear
@@ -359,12 +373,18 @@ fragmentBrowser: ymerApplication
                  #)
             #);
           theGroupWithSemanticErrors: ^astInterface.fragmentGroup;
-          openSemanticErrorEditor:
+          showSemanticErrors:
             (# 
             enter theGroupWithSemanticErrors[]
             do
-               &semanticErrorViewer[]->theSemanticErrorViewer[];
-               theSemanticErrorViewer.open
+               (if theSemanticErrorViewer[] = none then
+                   &semanticErrorViewer[]->theSemanticErrorViewer[];
+                   theSemanticErrorViewer.open
+                else
+                   theGroupWithSemanticErrors[]
+                     ->theSemanticErrorViewer.registerFragmentGroup;
+                   theSemanticErrorViewer.show
+               if)
             #);
           recoverGroup:
             (#
@@ -444,21 +464,31 @@ fragmentBrowser: ymerApplication
                  (#
                     iNew: @item
                       (#
-                         onStatus::  (#  do false->value #);
+                         onStatus::  (#  do true->value #);
                          onSelect:: 
                            (#
-                              ff: ^astInterface.fragmentForm;
-                              ge: ^editorEnv.groupEditor
+                              fg: ^astInterface.fragmentGroup;
+                              created: @createDialog
+                                (#
+                                   create:: 
+                                     (# 
+                                     do
+                                        (browser[],grammar[],groupName[],
+                                         formName[])->edenv.new->fg[];
+                                        (if fg[] <> none then
+                                            fg.fullName->addproject;
+                                            (*(browser[],fg[],none )->updateBrowser*)
+                                            
+                                        if);
+                                        
+                                     #);
+                                   cancel::  (#  do  #);
+                                   
+                                #)
                            do
-                              edenv.new->ge[];
-                              ge.fg.fragmentlist.scan
-                                (# 
-                                do
-                                   (if current.type = mps.ast.formType then
-                                       current.f[]->ff[]
-                                   if)
-                                #);
-                              ff[]->findForm
+                              created.open;
+                              (none ,'Create new group','untitled','untitled')
+                                ->created.popup
                            #)
                       #);
                     iNewBetaProgram: @item
@@ -499,7 +529,7 @@ fragmentBrowser: ymerApplication
                            (# 
                            do
                               groupEditorExists and not checkOngoingTextediting
-                                ->value;
+                              and not cge.isAfrejaEditor->value;
                               
                            #);
                          onSelect:: 
@@ -517,7 +547,12 @@ fragmentBrowser: ymerApplication
                       #);
                     iSaveAs: @item
                       (#
-                         onStatus::  (#  do groupEditorExists->value #);
+                         onStatus:: 
+                           (# 
+                           do
+                              groupEditorExists and not cge.isAfrejaEditor
+                                ->value
+                           #);
                          onSelect:: 
                            (# newName: ^text
                            do
@@ -563,7 +598,9 @@ fragmentBrowser: ymerApplication
                                   cge.touched > 0->value
                                else
                                   false->value
-                              if)
+                              if);
+                              (* temporarily disabled *)
+                              false->value
                            #);
                          onSelect::  (#  do cge[]->revertGroup #)
                       #);
@@ -819,7 +856,7 @@ fragmentBrowser: ymerApplication
                  (#
                     iCheck: @item
                       (#
-                         onStatus::  (#  do allowCommand->value #);
+                         onStatus::  (#  do allowPerform->value #);
                          onSelect:: 
                            (# 
                            do cge.fg[]->lastCompiledFg[]; cge.fg[]->check
@@ -830,7 +867,7 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              (if allowCommand then
+                              (if allowPerform then
                                   (lastCompiledFg[] <> none )->value
                                else
                                   false->value
@@ -840,7 +877,7 @@ fragmentBrowser: ymerApplication
                       #);
                     iCompile: @item
                       (#
-                         onStatus::  (#  do allowCommand->value #);
+                         onStatus::  (#  do allowPerform->value #);
                          onSelect:: 
                            (# 
                            do cge.fg[]->lastCompiledFg[]; cge.fg[]->compile
@@ -851,7 +888,7 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              (if allowCommand then
+                              (if allowPerform then
                                   (lastCompiledFg[] <> none )->value
                                else
                                   false->value
@@ -901,9 +938,8 @@ fragmentBrowser: ymerApplication
                       #);
                     iSemanticErrors: @item
                       (#
-                         onStatus::  (#  do allowCommand->value #);
-                         onSelect:: 
-                           (#  do cge.fg[]->openSemanticErrorEditor #)
+                         onStatus::  (#  do allowPerform->value #);
+                         onSelect::  (#  do cge.fg[]->showSemanticErrors #)
                       #);
                     iSemanticLinks: @item
                       (#
@@ -955,7 +991,7 @@ fragmentBrowser: ymerApplication
                          'Show Diagram'->iShowDiagram.new
                       #)
                  #);
-               open::<
+               open::< 
                  (# 
                  do
                     'Group'->GroupFile.new;
@@ -978,6 +1014,8 @@ fragmentBrowser: ymerApplication
           ymerBrowser.browser[]->ymerBrowser.ymerCallBack.theBrowser[];
           ymerBrowser.ymerCallback[]->ymerBrowser.edenv.ymerCallback[];
           ymerBrowser.initCompiler;
+          ('Sif: Known Bugs and Inconveniences','~beta/editor/agenda/TODO')
+            ->ymerBrowser.helpDocument;
           INNER
        exit (mps.ast[],mps.betaCFL[])
        #);
