@@ -11,7 +11,7 @@ long ObjectSize(theObj)
 { 
   ref(ProtoType) theProto = theObj->Proto;
 
-  if( (long) theProto < 0 ){
+  if( isNegativeProto(theProto) ){
     switch((long) theProto){
     case (long) WordRepPTValue:
       return WordRepSize(toValRep(theObj)->HighBorder) >> 2;

@@ -70,7 +70,7 @@ void AOAtoIOAInsert( theCell)
     long      index, count;
 
 #ifdef RTLAZY
-    if ((*(int *) theCell) < 0) {
+    if ( isNegativeProto(*(int *) theCell)) {
       /* This could happen if called from extobjinterface.assignRef. */
       negAOArefsINSERT ((long) theCell);
       return;

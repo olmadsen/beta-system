@@ -212,7 +212,7 @@ void AOAGc()
 	  pointer--;
 	  if((long)*pointer & 1) {
 	      (long)*pointer &= ~1; /* clear tag bit in table */
-	      **pointer |= 1;	    /* set it in stackobject */
+	      **pointer |= 1;       /* set it in stackobject */
 	  }
       }
   }
@@ -315,7 +315,7 @@ static void FollowObject( theObj)
   
   theProto = theObj->Proto;
   
-  if( (long) theProto < 0 ){  
+  if( isNegativeProto(theProto) ){  
     switch( (long) theProto ){
     case (long) ByteRepPTValue:
     case (long) WordRepPTValue:
@@ -393,7 +393,7 @@ static void Phase1()
       /* See below... */
       if(*((long *)*(pointer-1)) & 1) {
 	*((long *)*(pointer-1)) &= ~1; /* clear tag bit */
-	*(pointer-1) |= 1;		   /* set it in table */
+	*(pointer-1) |= 1;                 /* set it in table */
       }
 #endif
       if (old == *--pointer){
@@ -417,7 +417,7 @@ static void Phase1()
      */
     if(*((long *)*pointer) & 1) {
       *((long *)*pointer) &= ~1; /* clear tag bit in stackobject */
-      *pointer |= 1;	     /* set it in table */
+      *pointer |= 1;         /* set it in table */
     }
 #endif
     ReverseAndFollow( *pointer & ~1);
@@ -427,7 +427,13 @@ static void Phase1()
 
 #define isAlive(x)  (toObject(x)->GCAttr != 0)
 #define isMarked(x) (x->GCAttr == 1)
+#ifdef nti
+long VeryStupidBCC;
+#define endChain(x) (( -0xFFFF <= (VeryStupidBCC=(x))) && \
+		     ((VeryStupidBCC=(x)) <= 1))
+#else
 #define endChain(x) (( -0xFFFF <= ((long) (x))) && (((long) (x)) <= 1))
+#endif
 
 static handleAliveStatic( theObj, freeObj )
      ref(Object) theObj;
@@ -446,7 +452,7 @@ static handleAliveStatic( theObj, freeObj )
   theObj->GCAttr = (long) theCell; /* Save forward pointer to Phase3. */
   DEBUG_AOA( Claim( theObj->GCAttr < 0, "handleAliveStatic:  theObj->GCAttr < 0"));
   
-  if( (long) theProto > 0){
+  if( !isNegativeProto(theProto)){
     /* theObj is an item. */
     /* Calculate a pointer to the GCTable inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
@@ -485,7 +491,7 @@ static handleAliveObject( theObj, freeObj)
 		   "handleAliveObject:  chainEnd == 0 or 1"));
   theObj->GCAttr = (long) freeObj; /* Save forward pointer to Phase3. */
   
-  if( (long) theProto > 0){
+  if( !isNegativeProto(theProto)){
     /* theObj is an item. */
     /* Calculate a pointer to the GCTable inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
@@ -571,7 +577,7 @@ static void Phase2( numAddr, sizeAddr, usedAddr)
 	if (!inIOA(*current)){
 	  INFO_DOT(fprintf(output, "#DOT: updating AOA reference 0x%x\n", *current));
 	  *current = (cast(Object)(*current))->GCAttr;
-          if (!(*current))
+	  if (!(*current))
 	    DOTSize--; /* Element was deleted. */
 	}
       }
@@ -777,7 +783,7 @@ void AOACheckObject( theObj)
   
   Claim( !inBetaHeap(theProto),"#AOACheckObject: !inBetaHeap(theProto)");
   
-  if( (long) theProto < 0 ){  
+  if( isNegativeProto(theProto) ){  
     switch( (long)  theProto ){
     case (long) ByteRepPTValue:
     case (long) WordRepPTValue:
@@ -908,7 +914,7 @@ void AOACheckObjectSpecial( theObj)
   
   Claim( !inBetaHeap(theProto),"#AOACheckObjectSpecial: !inBetaHeap(theProto)");
   
-  if( (long) theProto < 0 ){  
+  if( isNegativeProto(theProto) ){  
     switch( (long) theProto ){
     case (long) ByteRepPTValue:
     case (long) WordRepPTValue:
