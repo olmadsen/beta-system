@@ -7,7 +7,7 @@ public class Component
   private BetaObject body;
   private System.Threading.Thread thread;
 
-  Component(BetaObject b) { 
+  public Component(BetaObject b) { 
     body = b; 
     thread = new System.Threading.Thread(new System.Threading.ThreadStart(run));
     thread.IsBackground = true;
@@ -17,7 +17,12 @@ public class Component
 
   private void run() 
     { 
-      body.Do();
+      try
+	{
+	  body.Do();
+	} catch (System.Exception e) {
+	  makeDumpFile(e);
+	}
       lock(this) { 
 	System.Threading.Monitor.Pulse(this);
       }
@@ -38,32 +43,30 @@ public class Component
       }
     }
 
-#if ATT_NEEDED
-  public void att()
-    { 
-      lock (this){
-	caller = current;
-	current = this;
-	if (!thread.IsAlive){
-	  thread.Start();
-	} else {
-	  System.Threading.Monitor.Pulse(this);
+  public void makeDumpFile(System.Exception e){
+      System.String dumpFileName;
+      if (e is ExOException){
+	  System.Console.Error.WriteLine("# Beta execution aborted: Cross Component leave/restart NYI.");
+		// Stop this thread and delegate exception to caller???
+	    } else {
+		System.Console.Error.WriteLine("# Beta execution aborted: " + e.Message);
+	    }
+	    try {
+		dumpFileName = System.Environment.GetCommandLineArgs()[0];
+		dumpFileName = dumpFileName.Substring(0,dumpFileName.Length-4); // strip .exe
+		dumpFileName = dumpFileName.Replace('\\','/');
+		dumpFileName += ".dump";
+		System.Console.Error.WriteLine("# Look at '" + dumpFileName + "'");
+		System.IO.StreamWriter dumpWriter 
+		  = new System.IO.StreamWriter(new System.IO.FileStream(dumpFileName, System.IO.FileMode.Create));
+		dumpWriter.WriteLine(e.Message);
+		dumpWriter.WriteLine(e.StackTrace);
+		dumpWriter.Close();
+	    } catch (System.Exception){		    
+		System.Console.Error.WriteLine(e.StackTrace);
+	    }
+	    System.Environment.Exit(-1);
 	}
-	System.Threading.Monitor.Wait(this);
-      }
-    }
-#endif
-
-#if SUSP_NEEDED
-  public void susp()
-    { 
-      lock (this){
-	current = caller;
-	System.Threading.Monitor.Pulse(this);
-	System.Threading.Monitor.Wait(this);
-      } 
-    }
-#endif
 
 }
 
