@@ -418,6 +418,20 @@ newInstanceWithOrigin:
          #)
      if)
   #);
+CallClassPtnMethod:
+  (# OA: ^mch.address; VN,ES: ^ASTindex; sig: @signature;
+     EH: @evalHandler;
+     sigT: ^text
+  enter(VN[],OA[],ES[])
+  do ES[] -> sig.setDesc;
+     (OA.bAdr.localDesc[],true) -> EH.descName -> sig.addReceiver;
+     VN.gettext -> sig.addMethod;
+     sig.noEnter;
+     sig.exitRef;
+     (sig.asText->mch.newTextOp,'M',false(*?*),false) -> mch.gJsr;
+     sig.thisDesc[] -> theGen.mkSignature -> sigT[]
+  exit sigT[]
+  #);
 LocalDescriptors:
   (* container used to collect nested patterns, etc.during GenAlloc *)
   (# methodList,classList,ptnList: [5] ^ASTindex; 
@@ -598,9 +612,11 @@ genFields: scanFields
          if);
          
          (if spec.label 
-          // gram.dynamicItem then
+          // gram.dynamicItem 
+          // gram.dynamicComponent then
              desc[] -> declareRef
-          // gram.staticItem then
+          // gram.staticItem 
+          // gram.staticComponent then
              desc->sematt.descKind->descKind; (* descKind from actualDesc
                                                * don't work? *)
              (if desc.label
@@ -1124,17 +1140,19 @@ do (# sig: @Signature;
    
 ---genPtnClass:doPart---
 do (# sig: @Signature;
-      objSpec,theDesc,D: @ASTindex;
+      objSpec,theDesc,D,VN,VD,topDesc: @ASTindex;
       nonLocal: @boolean;
       descKind: @integer
    do 311->trace(#
-                do 'genPtnClass: '->xT; patternName[] -> xT
+                do 'genPtnClass: '->xT; patternName[] -> xT;
+                   xN; desc[] -> xA
                 #);
       (if desc.isSlot then
           '\n*** OBS! Slots are not handled by genPtnClass: '->puttext;
           patternName[] -> putline;          
        else
           desc -> objSpec;
+          desc.father -> VD;
           (if desc.label 
            // gram.objectDescriptor 
            // gram.unExpanded then
@@ -1146,11 +1164,40 @@ do (# sig: @Signature;
               &ASTindex[] -> desc[]; (* to prevent aliasing; ugly! *)
               D -> desc;
           if);
-          desc -> theDesc;
+          desc -> theDesc -> topDesc;
+          (if VD.label // gram.bindingDecl // gram.finalDecl then
+              VD.son -> sematt.singleName -> VN;
+              L: (#
+                 do VN.virtDcl -> VN;
+                    VN.sort -> VD;
+                    313->trace(#
+                              do 'genPtnClass:binding: ' -> xT;
+                                 VN[] -> xA;
+                                 VD[] -> xA
+                              #);                        
+                    (if not (VD.label = gram.virtualDecl) then
+                        restart L
+                    if)
+                 #);
+              313->trace(#do VN[] -> xA #);
+              VN.father -> VN;
+              VN.brother -> topDesc;
+              313->trace(#do topDesc[] -> xA #);
+              (if not (topDesc.label = gram.objectDescriptor) then
+                  (thisDesc[](*?*),topDesc[])
+                    -> GetActualDesc 
+                    -> (topDesc,descKind)
+              if);
+              313->trace(#
+                        do 'genPtnClass:topDesc: ' -> xT;
+                           topDesc[] -> xA;
+                        #);              
+          if);          
+
           (desc[],false) -> initPtnGen;
           thisDesc[] -> sig.setDesc;
           sig.noEnter;
-          thisDesc[] -> sig.exitRef;
+          topDesc[] -> sig.exitRef;
           patternName[] -> sig.addMethod;
           (doP.nodeId,patternName[],true,sig.asText,sig.noOfEnterArgs) 
             -> mch.initDo;
@@ -1205,9 +1252,18 @@ do (# genMain:
              -> mkListSignature
              -> sig.setEnter;
            BetaTextSignatureId -> SpecialSignature -> sig.setExit;
-           (1,'Text2BetaText',false,sig.asText,1) -> mch.initDo;     
+           (1,'Text2BetaText_i',false,sig.asText,1) -> mch.initDo;     
            sematt.textDesc[] -> newThisInstance;
            (false,2) -> mch.return; (* return reference *)
+        #);
+      genAttach:
+        (# sig: @signature
+        do 'attach' -> sig.addMethod; 
+           sematt.superObject[] -> sig.setDesc; (* ???*)
+           sematt.superObject[] -> sig.addEnter; 
+           sig.exitVoid;
+           (1,'attach_i',false,sig.asText,1) -> mch.initDo; 
+           (false,0) -> mch.return;
         #);
       theDesc,topSuperName,topDesc: @ASTindex;
       subLevel: @integer;
@@ -1497,7 +1553,8 @@ do (# genMain:
               if)
           if);
           (if isBetaenv then
-              genText2BetaText
+              genText2BetaText;
+              genAttach
           if);
 
           mch.endClass; (* for Java this will close the jasmin-file *)
