@@ -22,8 +22,7 @@ java_indenter: dummies
 	javac -classpath jvm -d jvm BetaAutoIndentStrategy.java
 
 beta_indenter: dummies
-	rm -rf ../jvm	
-	cd ..; jbeta -s 188 tstenv.bet
+	rm -rf ../jvm
 	jbeta -qw -s 188 BetaAutoIndentStrategy.bet
 
 eclipse:
