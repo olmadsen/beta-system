@@ -26,6 +26,18 @@ do (* Find the xfont specified by nam, sty and siz *)
    theLines.size*xf.lineheight -> height;
    
 #)
+-- TextGetWidth: descriptor --
+(# xf: ^THIS(guienv).private.xfont;
+do (* Find the xfont specified by nam, sty and siz *)
+   (nam,sty,siz) -> XCheckFontLoaded -> (xf[],nam,sty,siz);
+   
+   (* Now obtain the width *)
+   (if xf.fixedwidth then 
+       T.length*xf.width ->width
+    else
+       (xf.fi, T.t, T.t.range) -> XTextWidth -> width
+   if);
+#)
 
 -- TextShapeMaxDescent: dopart --
 do (nam,sty,siz) -> XCheckFontLoaded;
@@ -45,199 +57,81 @@ do (nam,sty,siz) -> XCheckFontLoaded;
    (t+1) div 2 + depth -> depth;
 #)
 
--- TextShapeInteractiveCreateBody: descriptor --
-(# mousePoint: @Point;
-   theCh, prevCh: @Char;
-   ChWidth, prevChWidth: @Integer;
-   chArray: [1] @Char;
-   base_x, base_y, uppery, minx, maxx: @Integer;
-   theString: ^Text;
-   xf: ^THIS(guienv).private.xfont;
+(* TextShapeInteractiveCreate *)
+--TextShapeInteractiveCreateBodyPrivate: descriptor--
+(# xf: ^THIS(guienv).private.xfont; #)
+--TextShapeInteractiveCreateBodyDrawInsertionMark: descriptor--
+(#
+do theCanvas.prepareInteraction;
+   ((base_x,base_y + private.xf.maxdescent), (base_x,uppery)) 
+     -> theCanvas.immediateline;
+   theCanvas.endInteraction;
+   theCanvas[] -> thecanvas.privatepart.interactionpaint.setcanvaspaint;
+#)
+--TextShapeInteractiveCreateBodyLetterWidth: dopart--
+do (ch -> private.xf.letterwidth) -> value
+--TextShapeInteractiveCreateBodyDrawCh: descriptor--
+(#
+do
+   (* Cannot use XDrawImageString with TiledSolidColor,
+    * so simulate it instead
+    *)
+   (xdisplay, 
+   theCanvas.implpart.xdrawable,
+   base_x, uppery, ChWidth, private.xf.lineheight, 0) -> XClearArea;
    
-   DrawInsertionMark:@
-     (#
-     do theCanvas.prepareInteraction;
-        ((base_x,base_y + xf.maxdescent), (base_x,uppery)) 
-          -> theCanvas.immediateline;
-        theCanvas.endInteraction;
-        theCanvas[] -> thecanvas.privatepart.interactionpaint.setcanvaspaint;
-     #);
+   theCh -> chArray[1];
+   (xdisplay, 
+   theCanvas.implpart.xdrawable, 
+   theCanvas.implpart.xgc,
+   base_x, base_y,
+   chArray, 1) -> XDrawString;
    
-   LetterWidth: @
-     (# ch: @Char;
-     enter ch
-     exit (ch -> xf.letterwidth)
-     #);
-   
-   DrawCh: @
-     (#
-     do
-        (* Cannot use XDrawImageString with TiledSolidColor,
-         * so simulate it instead
-         *)
-        (xdisplay, 
-        theCanvas.implpart.xdrawable,
-        base_x, uppery, ChWidth, xf.lineheight, 0) -> XClearArea;
-        
-        theCh -> chArray[1];
-        (xdisplay, 
-        theCanvas.implpart.xdrawable, 
-        theCanvas.implpart.xgc,
-        base_x, base_y,
-        chArray, 1) -> XDrawString;
-        
-        (if textprivate.underline then	    
-            (xdisplay,
-            theCanvas.implpart.xdrawable, 
-            theCanvas.implpart.xgc,
-            base_x,
-            base_y + THIS(guienv).private.fonts.
-            xfonts[textprivate.theFontName].
-            style[textprivate.theStyle].
-            size[textprivate.theSize].upos,
-            theCh -> letterwidth,
-            THIS(guienv).private.fonts.
-            xfonts[textprivate.theFontName].
-            style[textprivate.theStyle].
-            size[textprivate.theSize].uthick)
-              -> XFillRectangle;
-        if);
-     #);
-   
-   ClearPrevCh: @
-     (#
-     do
-        (xdisplay, 
-        theCanvas.implpart.xdrawable,
-        base_x, uppery, prevChWidth, xf.lineheight, 0) -> XClearArea;
-     #);
-   
-do (* TextShapeInteractiveCreateBody *)
-   (if theCanvas.privatepart.interactionpaint[]=NONE then
-       (if displayWarnings then
-           'TextShape: No paint specified for interaction - using solid black' 
-             ->PutLine;
-       if);
-       blackPaint -> theCanvas.privatepart.interactionpaint[];
+   (if textprivate.underline then	    
+       (xdisplay,
+       theCanvas.implpart.xdrawable, 
+       theCanvas.implpart.xgc,
+       base_x,
+       base_y + THIS(guienv).private.fonts.
+       xfonts[textprivate.theFontName].
+       style[textprivate.theStyle].
+       size[textprivate.theSize].upos,
+       theCh -> letterwidth,
+       THIS(guienv).private.fonts.
+       xfonts[textprivate.theFontName].
+       style[textprivate.theStyle].
+       size[textprivate.theSize].uthick)
+         -> XFillRectangle;
    if);
-   
-   (* Set font *)
-   (theCanvas[], textprivate.theFontName, textprivate.theStyle, textprivate.theSize)
+#)
+--TextShapeInteractiveCreateBodyClearPrevCh: descriptor--
+(#
+do (xdisplay, 
+   theCanvas.implpart.xdrawable,
+   base_x, uppery, prevChWidth, private.xf.lineheight, 0) -> XClearArea;
+#)
+--TextShapeInteractiveCreateBodySetFontAndLine: descriptor--
+(# 
+do (theCanvas[], textprivate.theFontName, textprivate.theStyle, textprivate.theSize)
      -> SetXFont
      -> (textprivate.theFontName,textprivate.theStyle,textprivate.theSize);
    THIS(guienv).private.fonts.
    xfonts[textprivate.theFontName].
    style[textprivate.theStyle].
-   size[textprivate.theSize][] -> xf[];
-   
-   (* Determine where to start *)
-   (* startpoint is in GO coords *)
-   
-   (startPoint.x, startpoint.y - 8) (* 8 is half height of xterm cursor *)
-     -> position
-     -> theCanvas.canvastodevice
-     -> (base_x, base_y);
-   
-   (* Now we work in device coords *)
-   (* base_y is ypos of baseline *)
-   base_x -> minx -> maxx;
-   base_y - xf.maxascent (*size + xf.maxdescent*) -> uppery;
+   size[textprivate.theSize][] -> private.xf[];
    
    (* Set linewidth (for DrawInsertionMark) *)
    (xdisplay, 
    theCanvas.implpart.xgc,
    0, 0, 0, 0) -> XSetLineAttributes;
-   
-   (* Open the shape *)
-   open;
-   
-   (* Start interaction *)
-   DrawInsertionMark;
-   &text[] -> theString[];
-   (* Read letters *)
-   theCanvas.interactionHandler
-   (# stopinteraction: @boolean;
-      
-      buttonpress ::< (# do true -> stopinteraction #);
-      
-      terminateCondition ::<
-        (# do stopinteraction -> value; #);
-      
-      keyPress ::<
-        (#
-        do (if ch->theCh
-            // ascii.esc then
-               true -> stopinteraction;
-            // ascii.nl
-            // ascii.cr then
-               DrawInsertionMark;
-               theString[] -> TextPrivate.theStrings.append;
-               &text[] -> theString[];
-               minx -> base_x;
-               base_y + xf.lineheight -> base_y;
-               uppery + xf.lineheight -> uppery;
-               DrawInsertionMark;
-            // ascii.bs
-            // ascii.del then
-               (if (theString.length=0) then
-                   (* No more characters to delete in current string.
-                    * Look for a possible previous string (text line)
-                    *)
-                   (if TextPrivate.theStrings.size>0 then
-                       (* Fetch string for previous text line *)
-                       (TextPrivate.theStrings.last).elm[]
-                         -> theString[];
-                       (* Delete it - it will later be inserted below *)
-                       TextPrivate.theStrings.last 
-                         -> TextPrivate.theStrings.delete;
-                       DrawInsertionMark;
-                       minx+((xf.fi,theString.t,theString.t.range)->XTextWidth)
-                         -> base_x;
-                       base_y - xf.lineheight -> base_y;
-                       uppery - xf.lineheight -> uppery;
-                       DrawInsertionMark;
-                   if);
-                else
-                   (* Delete last character of the current string *)
-                   DrawInsertionMark;
-                   theString.length -> theString.inxGet -> prevCh;
-                   (theString.length,theString.length)
-                     -> theString.delete;
-                   base_x - (prevCh->LetterWidth->prevChWidth) -> base_x;
-                   ClearPrevCh;
-                   DrawInsertionMark;
-               if);
-            else
-               (if debugGraphic then ch -> put if);
-               ch -> theString.put;
-               DrawInsertionMark; (* Clear previous mark *)
-               ch -> letterwidth -> ChWidth;
-               DrawCh;
-               base_x + ChWidth -> base_x;
-               (base_x, maxx) -> Max -> maxx;
-               DrawInsertionMark;
-           if);
-        #);
-   #);
-   DrawInsertionMark;
-   (* Interaction done *)
-   
-   theCh -> lastCh;
-   
-   theString[] -> TextPrivate.theStrings.append;
-   
-   (TextPrivate.position.x,
-   TextPrivate.position.y+xf.maxascent,
-   maxx-startpoint.x,
-   xf.lineheight) -> theCanvas.damaged;
-   theCanvas.repair;
-   
-#)	
+#)
+--TextShapeInteractiveCreateBodyFontAscent: dopart--
+do private.xf.maxascent->value
+--TextShapeInteractiveCreateBodyLineHeight: dopart--
+do private.xf.lineheight->value
+--TextShapeInteractiveCreateBodyCleanUp: descriptor--
+(# #)
 
--- TextShapeInteractiveReshapeBody: dopart --
-do 'TextShape: InteractiveReshape not implemented !' -> putline;
-   INNER;
-   
 -- TextShapeHiliteOutlineBody: descriptor --
 (# pos: @point;
    itext: @theCanvas.immediateText;

@@ -41,6 +41,16 @@ TextShapeGetWidthHeight:
   do <<SLOT TextShapeGetWidthHeight: descriptor >>;
   exit (width,height)
   #);
+TextGetWidth:
+  (# T: ^Text;
+     nam: @Fontname;
+     sty: @Style;
+     siz: @Integer;
+     width: @Integer;
+  enter (T[], nam, sty, siz)
+  do <<SLOT TextGetWidth: descriptor >>;
+  exit (width)
+  #);
 
 TextShapeMaxDescent:
   (# nam: @Fontname;
@@ -245,3 +255,163 @@ do
    (r.x+r.width, r.y-r.height) -> spots.addpoint;
    (r.x, r.y-r.height) -> spots.addpoint;
 #)
+
+-- TextShapeInteractiveCreateBody: descriptor --
+(# mousePoint: @Point;
+   theCh, prevCh: @Char;
+   ChWidth, prevChWidth: @Integer;
+   chArray: [1] @Char;
+   base_x, base_y, uppery, minx, maxx: @Integer;
+   theString: ^Text;
+   
+   private: @
+     <<SLOT TextShapeInteractiveCreateBodyPrivate: descriptor>>;
+   
+   DrawInsertionMark:@
+     <<SLOT TextShapeInteractiveCreateBodyDrawInsertionMark: descriptor>>;
+   
+   LetterWidth: @IntegerValue
+     (# ch: @Char;
+     enter ch
+     <<SLOT TextShapeInteractiveCreateBodyLetterWidth: dopart>>
+     #);
+   
+   DrawCh: @
+     <<SLOT TextShapeInteractiveCreateBodyDrawCh: descriptor>>;
+   
+   ClearPrevCh: @
+     <<SLOT TextShapeInteractiveCreateBodyClearPrevCh: descriptor>>;
+   
+   SetInteractionFontAndLine:
+     <<SLOT TextShapeInteractiveCreateBodySetFontAndLine: descriptor>>;
+   
+   font_ascent: @integervalue
+     (#
+     <<SLOT TextShapeInteractiveCreateBodyFontAscent: dopart>>
+     #);
+   
+   lineheight: @integervalue
+     (#
+     <<SLOT TextShapeInteractiveCreateBodyLineHeight: dopart>>
+     #);
+   
+do (* TextShapeInteractiveCreateBody *)
+   (if theCanvas.privatepart.interactionpaint[]=NONE then
+       (if displayWarnings then
+           'TextShape: No paint specified for interaction - using solid black' 
+             ->PutLine;
+       if);
+       blackPaint -> theCanvas.privatepart.interactionpaint[];
+   if);
+   
+   SetInteractionFontAndLine;
+   
+   (* Determine where to start *)
+   (* startpoint is in GO coords *)
+   
+   (startPoint.x, startpoint.y - 8) (* 8 is half height of xterm cursor *)
+     -> position
+     -> theCanvas.canvastodevice
+     -> (base_x, base_y);
+   
+   (* Now we work in device coords *)
+   (* base_y is ypos of baseline *)
+   base_x -> minx -> maxx;
+   base_y - font_ascent -> uppery;
+   
+   (* Open the shape *)
+   open;
+   
+   (* Start interaction *)
+   DrawInsertionMark;
+   &text[] -> theString[];
+   (* Read letters *)
+   theCanvas.interactionHandler
+   (# stopinteraction: @boolean;
+      
+      buttonpress ::< (# do true -> stopinteraction #);
+      
+      terminateCondition ::<
+        (# do stopinteraction -> value; #);
+      
+      keyPress ::<
+        (#
+        do (if ch->theCh
+            // ascii.fs
+            // ascii.rs
+            // ascii.gs
+            // ascii.us then
+               (* These are the arrow keys. Do nothing. *)
+            // ascii.esc then
+               true -> stopinteraction;
+            // ascii.nl
+            // ascii.cr then
+               DrawInsertionMark;
+               theString[] -> TextPrivate.theStrings.append;
+               &text[] -> theString[];
+               minx -> base_x;
+               base_y + lineheight -> base_y;
+               uppery + lineheight -> uppery;
+               DrawInsertionMark;
+            // ascii.bs
+            // ascii.del then
+               (if (theString.length=0) then
+                   (* No more characters to delete in current string.
+                    * Look for a possible previous string (text line)
+                    *)
+                   (if TextPrivate.theStrings.size>0 then
+                       (* Fetch string for previous text line *)
+                       (TextPrivate.theStrings.last).elm[]
+                         -> theString[];
+                       (* Delete it - it will later be inserted below *)
+                       TextPrivate.theStrings.last 
+                         -> TextPrivate.theStrings.delete;
+                       DrawInsertionMark;
+                       minx+((theString[],TextPrivate.theFontName,TextPrivate.theStyle,TextPrivate.theSize)->TextGetWidth)
+                         -> base_x;
+                       base_y - lineheight -> base_y;
+                       uppery - lineheight -> uppery;
+                       DrawInsertionMark;
+                   if);
+                else
+                   (* Delete last character of the current string *)
+                   DrawInsertionMark;
+                   theString.length -> theString.inxGet -> prevCh;
+                   (theString.length,theString.length)
+                     -> theString.delete;
+                   base_x - (prevCh->LetterWidth->prevChWidth) -> base_x;
+                   ClearPrevCh;
+                   DrawInsertionMark;
+               if);
+            else
+               (if debugGraphic then ch -> put if);
+               ch -> theString.put;
+               DrawInsertionMark; (* Clear previous mark *)
+               ch -> letterwidth -> ChWidth;
+               DrawCh;
+               base_x + ChWidth -> base_x;
+               (base_x, maxx) -> Max -> maxx;
+               DrawInsertionMark;
+           if);
+        #);
+   #);
+   DrawInsertionMark;
+   (* Interaction done *)
+   
+   theCh -> lastCh;
+   
+   theString[] -> TextPrivate.theStrings.append;
+   
+   (TextPrivate.position.x,
+   TextPrivate.position.y+font_ascent,
+   maxx-startpoint.x,
+   lineheight) -> theCanvas.damaged;
+   theCanvas.repair;
+   
+   <<SLOT TextShapeInteractiveCreateBodyCleanUp: descriptor>>
+   
+#)	
+
+-- TextShapeInteractiveReshapeBody: dopart --
+do 'TextShape: InteractiveReshape not implemented !' -> putline;
+   INNER;
