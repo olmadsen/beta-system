@@ -1,0 +1,2734 @@
+ORIGIN 'astPrivate';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1986-93
+ *       All rights reserved.
+ *)
+INCLUDE '~beta/basiclib/v1.5/private/filebody'
+        '~beta/sysutils/v1.5/endian'
+        '../metagramsematt';
+
+-- treeLevelVersion: DoPart --
+do (*undefinedVersion->value; *) private.versionNo->value; INNER  
+
+-- treeLevelGrammarIdentification: DoPart --
+do (*&text[]->theGrammarName[];
+    undefinedGrammarName->theGrammarName;*)
+   (if private.grammarName[] <> none then
+       private.grammarName[]->theGrammarName[]
+    else
+       &text[]->theGrammarName[]; undefinedGrammarName->theGrammarName
+   if);
+   INNER  
+
+-- treeLevelSuffix: DoPart --
+do (*&text[]->theSuffix[]; 
+    '.text'->theSuffix; *)
+   (if private.applgramSuffix[] <> none then
+       private.applgramSuffix[]->theSuffix[]
+    else
+       &text[]->theSuffix[]; '.text'->theSuffix
+   if);
+   INNER  
+
+-- treelevelInit: Descriptor --
+(#
+   meta: ^metagrammar;
+   grammar: ^meta.Agrammar;
+   p,NoOfSons,maxProd: @integer;
+   root: ^meta.Agrammar;
+   pl: ^meta.productionList;
+   cns: ^meta.Constructor;
+   clist: ^meta.ConsElemList;
+   exp: ^expanded;
+   ls: ^meta.LeftSide;
+   gn: ^meta.grammarName;
+   nd: ^nameDecl;
+   opAst: ^ast;
+   op: ^meta.optionPart;
+   consGenerator,unExpGenerator,listGenerator,optGenerator:
+     ^referenceGenerator;
+   
+do
+   false->parser.haveBeenInitialized;
+   (*(for i: genRefArray.range repeat
+    &referenceGenerator[]->genRefArray[i][]
+    for);*)
+   grammarTable.meta[]->meta[];
+   &referenceGenerator (#  do &cons[]->as[] #)[]->consGenerator[];
+   genUnExpanded[]->unExpGenerator[];
+   &referenceGenerator (#  do &list[]->as[] #)[]->listGenerator[];
+   genOptional[]->optGenerator[];
+   (if grammarAst[] <> none then
+   (* this should always be the case, except for the metagrammar *)
+       grammarAst.root[]->root[];
+       root.getOptionOp->opAst[];
+       (if opAst## <= cons## then
+           opAst[]->op[];
+           meta.optionElement
+             ->op.suffixWalkForProd
+               (#
+                  oe: ^meta.optionElement;
+                  on: ^meta.optionName;
+                  na: ^nameAppl;
+                  os: ^string;
+                  t: ^text
+               do
+                  current[]->oe[];
+                  oe.getOptionName->on[];
+                  on.getNameAppl->na[];
+                  na.getText->t[];
+                  t.copy->t[];
+                  (if ('suffix'->t.equalNCS) then
+                      String
+                        ->oe.suffixWalkForProd
+                          (# 
+                          do
+                             current[]->os[];
+                             os.getText->private.applGramSuffix[];
+                             private.applGramSuffix.copy
+                               ->private.applGramSuffix[];
+                             
+                          #)
+                  if)
+               #)
+       if);
+       grammarAst.root[]->grammar[];
+       ('version',undefinedversion)->grammar.getOptionValue->private.versionNo;
+       root.getProductionList->pl[];
+       (* check if the arrays need extensions *)
+       ;
+       pl.noOfSons->maxProd;
+       (if (maxProd > kindArray.range) then
+           maxProd+1-kindArray.range->kindArray.extend;
+           maxProd+1-nodeClassArray.range->nodeClassArray.extend;
+           maxProd+1-sonArray.range->sonArray.extend;
+           maxProd+1-roomArray.range->roomArray.extend;
+           maxProd+1-genRefArray.range->genRefArray.extend;
+           
+       if);
+       root.getGrammarName->gn[];
+       gn.getNameDecl->nd[];
+       nd.getText->private.grammarName[];
+       private.grammarName.copy->private.grammarName[];
+       0->p;
+       pl.scan
+         (# 
+         do
+            p+1->p;
+            current[]->exp[];
+            exp.getson1->ls[];
+            2*(((2->ls.getAttribute)+1) div 2)->roomArray[p];
+            (if current.symbol
+             // meta.Constructor then
+                kinds.interior->kindArray[p];
+                kinds.cons->nodeClassArray[p];
+                current[]->cns[];
+                cns.getConsElemList->clist[];
+                0->NoOfSons;
+                clist.scan
+                  (# 
+                  do
+                     (if current.symbol
+                      // meta.Syncat // meta.TaggedSyn then
+                         NoOfSons+1->NoOfSons; 
+                     if);
+                     
+                  #);
+                NoOfSons->sonArray[p];
+                consGenerator[]->genRefArray[p][];
+                
+             // meta.Alternation then
+                kinds.unExpanded->kindArray[p];
+                kinds.unExpanded->nodeClassArray[p];
+                unExpGenerator[]->genRefArray[p][];
+                
+             // meta.ListOne // meta.ListZero then
+                kinds.interior->kindArray[p];
+                kinds.list->nodeClassArray[p];
+                listGenerator[]->genRefArray[p][];
+                
+             // meta.Dummy then
+                0->nodeClassArray[p]
+             // meta.Opt then
+                kinds.optional->kindArray[p];
+                kinds.optional->nodeClassArray[p];
+                optGenerator[]->genRefArray[p][];
+                
+            if)
+         #);
+       
+   if);
+   INNER init;
+   THIS(treeLevel)[]->grammartable.insert
+#)  
+
+-- treeLevelPrivateVariables: Descriptor --
+(# grammarName,applGramSuffix: ^text; versionNo: @integer #)  
+
+-- fragmentFullName: DoPart --
+do
+   &text[]->N[];
+   (if fatherR[] = none then
+       FullNameT[]->N.append
+    else
+       fatherR.FullName->N.append;
+       (if not fatherR.isDirectory then ffNameSeparatorChar->N.put;  if);
+       NameT[]->N.append
+   if)  
+
+-- fragmentMarkAsChangedCatcher: DoPart --
+do
+   (if no
+    // notificationNumbers.startingParsing then
+       startingParsing
+    // errorNumbers.notExisting then
+       msg[]->fragmentNotExisting
+    // errorNumbers.arrayTooBig then
+       msg[]->astOverflow
+    // errorNumbers.grammarNotFound then
+       msg[]->grammarNotFound
+    // errorNumbers.badFormat then
+       msg[]->badFormat
+    // errorNumbers.parseErrors then
+       msg[]->parseErrors
+    // errorNumbers.doubleFormDeclaration then
+       msg[]->doubleFormDeclaration
+    // errornumbers.noReadAccess then
+       msg[]->readAccessError
+    // errornumbers.noWriteAccess then
+       msg[]->writeAccessError
+    // errornumbers.writeAccessOnLstFileError then
+       msg[]->writeAccessOnLstFileError
+    // errornumbers.EOSError then
+       msg[]->EOSError
+    // errornumbers.noSuchFile then
+       msg[]->noSuchFileError
+    // errornumbers.fileExists then
+       msg[]->fileExistsError
+    // errornumbers.noSpaceLeft then
+       msg[]->noSpaceLeftError
+    // errornumbers.otherFileError then
+       msg[]->otherFileError
+    else
+       (if no->errorNumbers.fatalParseError then
+           (msg[],no-100)->fatalParseError
+       if)
+   if)  
+
+-- fragmentMarkAsChanged: Descriptor --
+(# 
+do
+   (if theCatcher[] = none then
+       theCatcher[]->markAsChangedCatcher.oldCatcher[];
+       markAsChangedCatcher[]->theCatcher[]
+   if);
+   pack;
+   false->changed;
+   (if theCatcher[] = markAsChangedCatcher[] then
+       markAsChangedCatcher.oldCatcher[]->theCatcher[]
+   if);
+   
+#)  
+
+-- fragmentCheckDiskRepresentation: Descriptor --
+(# diskFile: @file (# binary:: trueObject #); 
+do
+   diskFileName->diskFile.name;
+   (if
+   ((diskFile.entry.modTime (# error::  (#  do true->continue #) #) > modTime)
+      ->haveBeenChanged) then
+       INNER checkDiskRepresentation
+   if)
+#)  
+
+-- fragmentBind: DoPart --
+do
+   (if not BindMark then
+       True->BindMark;
+       INNER bind;
+       (* If not bound by INNER then try origin *)
+       (if OP[] = none then
+           (if originR[] = none then (* try setting up origin *)
+               screen[]->setupOrigin
+           if);
+           (if originR[] <> none then
+               F[]->originR.Bind (*BindToOrigin*) ->OP[]
+           if);
+           
+       if)
+   if);
+   False->BindMark  
+
+-- fragmentBindToOrigin: DoPart --
+do (if (originR[] <> none ) then F[]->originR.Bind->OP[] if)  
+
+-- fragmentSetupOrigin: Descriptor --
+(# t: ^text; 
+do
+   FindOrigin: THIS(fragment).prop.ScanProp
+     (#
+        doProp:: 
+          (# 
+          do
+             prop.makelc;
+             (if 'origin'->prop.equal then
+                 ScanParameters
+                   (#
+                      doString:: 
+                        (# 
+                        do
+                        (*** This exception is already handled in control-module
+                         * (if originDefined then
+                         * (# m: ^text
+                         * do &text[]->m[];
+                         * '*** Error: two or more origins in '-> m.putText;
+                         * this(fragment).name -> m.putLine;
+                         * '    ' -> m.puttext;
+                         * this(fragment).originR.name ->m.putline;
+                         * '    ' -> m.putText; S[] -> m.putline;
+                         * 'Perhaps a missing '';'' after origin name'
+                         * -> m.putline;
+                         * m[]->AstInterfaceException(# do true->continue #)
+                         * #)
+                         * if);
+                         *)
+                           THIS(fragment).fullName->stripPathName->t[];
+                           (if t[] = none then
+                               ((S.copy,currentDirectory)
+                                  ->thePathHandler.convertFilePath,error[])
+                                 ->top.open->THIS(fragment).origin
+                            else
+                               ((S.copy,t[])->thePathHandler.convertFilePath,
+                                error[])->top.open->THIS(fragment).origin
+                           if);
+                           leave FindOrigin;
+                           
+                        #)
+                   #)
+             if)
+          #)
+     #)
+#)  
+
+-- fragmentCatcher: DoPart --
+do
+   (if theCatcher[] = none then
+       (if (fatherR[] <> none ) then
+           (no,msg[])->fatherR.catcher
+        else
+           msg[]->AstInterfaceError
+       if)
+    else
+       (no,msg[])->theCatcher
+   if)  
+
+-- fragmentLinkUnpack: Descriptor --
+(# n,t: ^text
+do
+   &text[]->n[];
+   name->n.append;
+   fatherR.fullName->stripPathName->t[];
+   (if t[] = none then
+       ((n.copy,currentDirectory)->thePathHandler.ConvertFilePath,error[])
+         ->top.open->f[]
+    else
+       ((n.copy,t[])->thePathHandler.ConvertFilePath,error[])->top.open->f[]
+   if);
+   (if f[] = none then
+       (n[],error[])->top.open->f[]
+    else
+   (* &text[] -> fullNameOfLink[]; f.fullName -> fullNameOfLink; *)
+       
+   if)
+#)  
+
+-- fragmentLinkInit: DoPart --
+do linkType->fragType; none ->prop[]; nameT[]->fullNameOfLink[]  
+
+-- fragmentGroupOpenOpenCatcher: DoPart --
+do
+   (if no
+    // notificationNumbers.startingParsing then
+       startingParsing
+    // errorNumbers.notExisting then
+       msg[]->fragmentNotExisting
+    // errorNumbers.arrayTooBig then
+       msg[]->astOverflow
+    // errorNumbers.grammarNotFound then
+       msg[]->grammarNotFound
+    // errorNumbers.badFormat then
+       msg[]->badFormat
+    // errorNumbers.parseErrors then
+       msg[]->parseErrors
+    // errorNumbers.doubleFormDeclaration then
+       msg[]->doubleFormDeclaration
+    // errornumbers.noReadAccess then
+       msg[]->readAccessError
+    // errornumbers.noWriteAccess then
+       msg[]->writeAccessError
+    // errornumbers.writeAccessOnLstFileError then
+       msg[]->writeAccessOnLstFileError
+    // errornumbers.EOSError then
+       msg[]->EOSError
+    // errornumbers.noSuchFile then
+       msg[]->noSuchFileError
+    // errornumbers.fileExists then
+       msg[]->fileExistsError
+    // errornumbers.noSpaceLeft then
+       msg[]->noSpaceLeftError
+    // errornumbers.otherFileError then
+       msg[]->otherFileError
+    else
+       (if no->errorNumbers.fatalParseError then
+           (msg[],no-100)->fatalParseError
+       if)
+   if)  
+
+-- fragmentGroupOpen: Descriptor --
+(# 
+do
+   trace.FragmentOpen
+     ->tracer
+       (# 
+       do
+          'group-open of '->dmp.putText;
+          localPath[]->dmp.putText;
+          ' in '->dmp.putText;
+          fullName->dmp.putText;
+          
+       #);
+   (if theCatcher[] = none then
+       theCatcher[]->openCatcher.oldCatcher[]; openCatcher[]->theCatcher[]
+   if);
+   0->localPath.pos;
+   (if localPath.getNonBlank = ascii.fs then
+         (# msg: @text
+         do
+            'Fragment name is empty: '->msg;
+            localPath[]->msg.putLine;
+            (errorNumbers.notExisting,msg[])->catcher
+         #)
+   if);
+   l:
+     (# 
+     do
+        (if fatherR[] = none (* we are in the top *) then
+            localPath[]->expandToFullPath->localPath[]; 
+         else
+            (if (1->localPath.inxGet) = '~' then leave l if); 
+        if);
+        0->dirInx->groupInx;
+        ffNameSeparatorChar->localPath.findAll (#  do inx->groupInx #);
+        thePathHandler.directoryChar
+          ->localPath.findAll (#  do inx->dirInx #);
+        (if (groupInx > 0) then (* xx-yy *)
+            (if (dirInx < groupInx) then (* zz/xx-yy *)
+                ((1,groupInx-1)->localPath.sub,error[])->open->f[];
+                (if f[] = none then
+                    
+                 else
+                    (if f.type = groupType then
+                        f[]->g[];
+                        ((groupInx+1,localPath.length)->localPath.sub,error[])
+                          ->g.open->f[];
+                        
+                     else
+                        none ->f[]
+                    if)
+                if);
+                leave l
+            if)
+        if);
+        (localPath[],error[])->fragmentList.open->f[];
+        
+     #);
+   (if f[] = none then
+         (# msg: @text
+         do
+            'Fragment not found in open: '->msg;
+            localPath[]->msg.putLine;
+            (errorNumbers.notExisting,msg[])->catcher
+         #)
+    else
+       true->f.isOpen
+   if);
+   (if theCatcher[] = openCatcher[] then
+       openCatcher.oldCatcher[]->theCatcher[]
+   if);
+   trace.fragmentOpen
+     ->tracer
+       (# 
+       do
+          (if f[] = none then
+              'FAILED: '->dmp.putText
+           else
+              'SUCCEEDED: '->dmp.putText; 
+          if);
+          'group-open of '->dmp.putText;
+          localPath[]->dmp.putText;
+          ' in '->dmp.putText;
+          fullName->dmp.putText;
+          
+       #);
+   
+#)  
+
+-- fragmentGroupAlreadyOpen: Descriptor --
+(# dotInx,dirInx,groupInx: @integer
+do
+   0->localPath.pos;
+   (if localPath.getNonBlank <> ascii.fs then
+       localPath[]->expandToFullPath->localPath[];
+       l:
+         (# 
+         do
+            fragmentList.scan
+              (# found: @boolean
+              do
+                 (if current.type = formType then
+                     current.name[]->localPath.equalNCS->found
+                  else
+                     current.name[]->localPath.equal->found
+                 if);
+                 (if found then
+                     screen[]->current.open;
+                     current.f[]->f[];
+                     true->value;
+                     INNER alreadyOpen;
+                     leave l
+                 if)
+              #)
+         #)
+   if)
+#)  
+
+-- fragmentGroupClose: DoPart --
+do
+   trace.FragmentClose
+     ->tracer
+       (# 
+       do
+          'group-close of '->dmp.putText;
+          name->dmp.putText;
+          ' in '->dmp.putText;
+          fullName->dmp.putText;
+          
+       #);
+   fragmentList.scan
+     (# 
+     do
+        (if current.type = formType then
+            (if (current.f[] <> none ) then
+                current.f.close; none ->current.f[]
+            if)
+        if);
+        
+     #);
+   THIS(FragmentGroup)[]->top.delete;
+   none ->fragmentList[];
+   none ->prop[];
+     
+
+-- fragmentGroupNamedClose: DoPart --
+do
+   trace.FragmentClose
+     ->tracer
+       (# 
+       do
+          'group-namedClose of '->dmp.putText;
+          localPath[]->dmp.putText;
+          ' in '->dmp.putText;
+          fullName->dmp.putText;
+          
+       #);
+   0->localPath.pos;
+   (if localPath.getNonBlank <> ascii.fs then
+       localPath[]->expandToFullPath->localPath[];
+       theScan: fragmentList.scan
+         (# found: @boolean
+         do
+            (if current.type = formType then
+                current.name[]->localPath.equalNCS->found
+             else
+                current.name[]->localPath.equal->found
+            if);
+            (if found then
+                (if current.type = formtype then
+                    (if current.f[] = none then
+                        current.f.close; none ->current.f[]
+                    if)
+                if);
+                current[]->fragmentList.at->fragmentList.delete;
+                leave theScan
+            if)
+         #)
+   if)  
+
+-- fragmentGroupFragmentListElementOpen: DoPart --
+do
+   (if f[] = none then
+       (if type
+        // formType then
+           newFragmentForm->f[]; 
+        // groupType then
+           newFragmentGroup->f[]; 
+        // linktype then
+             (# l: ^fragmentLink
+             do
+                newFragmentLink->l[]->f[];
+                &text[]->l.localName[];
+                localName[]->l.localName.append;
+                
+             #);
+           
+       if);
+       name.copy->f.name;
+       THIS(fragmentGroup)[]->f.father;
+       (if type // linkType // groupType then error[]->f.unPack if)
+   if)  
+
+-- fragmentGroupFragmentListDescriptorDeleteLocalName: DoPart --
+do
+   l: scan
+     (# 
+     do (if (current.name[]->n.equal) then current[]->at->delete; leave l if)
+     #)  
+
+-- fragmentGroupFragmentListDescriptorFind: DoPart --
+do
+   l: scan
+     (# 
+     do (if (current.name[]->n.equal) then current.f[]->r[]; leave l if)
+     #);
+     
+
+-- fragmentGroupFragmentListDescriptorOpen: DoPart --
+do
+   trace.fragmentOpen
+     ->tracer
+       (# 
+       do
+          'Fragment-list open of '->dmp.putText;
+          n[]->dmp.putText;
+          ' in '->dmp.putText;
+          fullName->dmp.putText;
+          
+       #);
+   loop:
+     (# 
+     do
+        scan
+          (# l: ^fragmentlink; found: @boolean
+          do
+             (if current.type = formType then
+                 current.name[]->n.equalNCS->found
+              else
+                 current.name[]->n.equal->found
+             if);
+             (if found then
+                 (if (current.f[]->f[]) = none then
+                     error[]->current.open; current.f[]->f[]
+                  else
+                     (if current.type = linkType then
+                         f[]->l[];
+                         (if l.f[] = none then
+                             error[]->current.open; current.f[]->f[]
+                         if)
+                     if)
+                 if);
+                 trace.fragmentOpen
+                   ->tracer (#  do 'Found in list'->dmp.putText;  #);
+                 leave loop
+             if)
+          #);
+        (* if we are here, the local name of the fragment could not be
+         * found in the fragmentList. We will newer the less try and see if
+         * we can find the fragment
+         *)
+          (#
+             g: ^fragmentGroup;
+             fName,origFName: ^text;
+             dirInx,groupInx,dotInx: @integer;
+             fileExist:
+               (# f: @file
+               enter f.name
+               exit f.entry.exists
+                 (#
+                    error:: 
+                      (# 
+                      do
+                         true->continue;
+                         (errorNumbers.otherFileError,msg[])->catcher
+                      #)
+                 #)
+               #);
+             isFile:
+               (# f: @file
+               enter f.name
+               exit f.entry.isFile
+                 (#
+                    error:: 
+                      (# 
+                      do
+                         true->continue;
+                         (errorNumbers.otherFileError,msg[])->catcher
+                      #)
+                 #)
+               #);
+             fileReadable:
+               (# f: @file
+               enter f.name
+               exit f.entry.readable
+                 (#
+                    error:: 
+                      (# 
+                      do
+                         true->continue;
+                         (errorNumbers.otherFileError,msg[])->catcher
+                      #)
+                 #)
+               #)
+          do
+             &Element[]->e[];
+             none ->e.f[];
+             (*
+              (if this(fragmentGroup)[]=top[] then 
+              n.copy -> fName[]; fName[] -> e.name[];  
+              else
+              *)
+             fullName->fName[];
+             fName.copy->fName[];
+             ffNameSeparatorChar->fName.put;
+             n[]->(fName.Copy).Append->fName[];
+             n.copy->e.name[];
+             (*if);*)
+             fName.copy->origFName[];
+             try:
+             (if true
+              // (astFileExtension->(fName.Copy).Append->fileExist) then
+              (* o.k. we are in real group *)
+                 groupType->e.type;
+                 e[]->append;
+                 error[]->e.open->f[];
+                 MarkAsChanged;
+                 
+              // ('.text'->(fName.Copy).Append->fileExist) then
+                 groupType->e.type; e[]->append; error[]->e.open->f[]; 
+              else
+                 loop:
+                   (# 
+                   do
+                      grammarTable.scan
+                        (# name: ^text
+                        do
+                           (if
+                           (current.suffix->(fName.Copy).Append->name[]
+                              ->fileExist) then
+                               groupType->e.type;
+                               e[]->append;
+                               error[]->e.open->f[];
+                               leave loop
+                           if)
+                        #);
+                      0->dotInx;
+                      '.'->fName.findAll (#  do inx->dotInx #);
+                      (if dotInx > 1 then
+                          0->dirInx->groupInx;
+                          ffNameSeparatorChar
+                            ->fName.findAll (#  do inx->groupInx #);
+                          thePathHandler.directoryChar
+                            ->fName.findAll (#  do inx->dirInx #);
+                          (if true
+                           // (dirInx > groupInx) then (* xx-yy/zz *)
+                              (if (dotInx > dirInx) then (* xx-yy/zz.rr *)
+                                  (dotInx,fName.length)->fName.delete;
+                                  restart try
+                              if)
+                           // (dirInx < groupInx) then (* xx/yy-zz *)
+                              (if true
+                               // (dotInx > groupInx) then (* xx/yy-zz.rr *)
+                                  (dotInx,fName.length)->fName.delete;
+                                  restart try
+                               // (dotInx > dirInx) then (* xx/yy.rr-zz *)
+                                  (dotInx,groupInx-1)->fName.delete; restart try
+                              if)
+                           else
+                          (* xx.rr *)
+                              (dotInx,fName.length)->fName.delete; restart try
+                          if)
+                      if);
+                      (* well. we did not find the file. If the file ifself
+                       * exist, lets us try to parse it
+                       *)
+                      origFName[]->fName[];
+                      (if (fName[]->fileExist) then
+                          (if (fName[]->isFile) then
+                              (if (fName[]->fileReadable) then
+                                    (# fg: ^fragmentGroup; dotInx: @integer
+                                    do
+                                       '.'
+                                         ->fName.findAll
+                                           (#  do inx->dotInx #);
+                                       (if (dotInx > 1) then
+                                       (* >1 to avoid empty filename before '.' *)
+                                           newFragmentGroup->fg[];
+                                           (1,dotInx-1)->fName.sub->e.name[];
+                                           e.name[]->fg.name;
+                                           e.name[]->fg.fullNameT[];
+                                           (notificationNumbers.startingParsing,
+                                            '')->catcher;
+                                           theParse:
+                                           (if
+                                           ((fName[],error[])
+                                              ->fg.parse
+                                                (#
+                                                   parseErrors:: 
+                                                     (# 
+                                                     do
+                                                        (errorNumbers.
+                                                           parseErrors,
+                                                         ' Parse errors ')
+                                                          ->catcher;
+                                                        false->ok;
+                                                        true->continue
+                                                     #);
+                                                   doubleFormDeclaration:: 
+                                                     (# 
+                                                     do
+                                                        (errorNumbers.
+                                                           doubleFormDeclaration,
+                                                         ' Double declaration of form ')
+                                                          ->catcher;
+                                                        true->continue
+                                                     #);
+                                                   
+                                                #)) then
+                                               fg[]->f[];
+                                               groupType->e.type;
+                                               e[]->append;
+                                               
+                                           if)
+                                       if)
+                                    #)
+                               else
+                                    (# t: @text
+                                    do
+                                       'No read access to the file: "'->t;
+                                       fName[]->t.append;
+                                       '"'->t.putline;
+                                       (errorNumbers.noReadAccess,t[])->catcher
+                                    #)
+                              if)
+                           else
+                                (# t: @text
+                                do
+                                   'Filename "'->t;
+                                   fName[]->t.append;
+                                   '" refers to a directory, not a file'
+                                     ->t.putline;
+                                   (errorNumbers.otherFileError,t[])->catcher
+                                #)
+                          if)
+                       else
+                            (# t: @text
+                            do
+                               'Filename "'->t;
+                               fName[]->t.append;
+                               '" does not exist'->t.putline;
+                               (errorNumbers.notExisting,t[])->catcher
+                            #)
+                      if)
+                   #)
+             if)
+          #)
+     #);
+   (if f[] <> none then true->f.isOpen if);
+   trace.fragmentOpen
+     ->tracer
+       (# 
+       do
+          (if f[] = none then
+              'FFAILED: '->dmp.putText
+           else
+              'FSUCCEEDED: '->dmp.putText; 
+          if);
+          'Fragment-list open of '->dmp.putText;
+          n[]->dmp.putText;
+          ' in '->dmp.putText;
+          fullName->dmp.putText
+       #);
+     
+
+-- fragmentGroupFragmentListDescriptorInsertFragment: Descriptor --
+(# 
+do
+   (if theCatcher[] = none then
+       theCatcher[]->addFragmentHandler.oldCatcher[];
+       addFragmentHandler[]->theCatcher[]
+   if);
+   l:
+     (# 
+     do
+        scan
+          (# 
+          do
+             (if (f.name->current.name.equalNCS) then
+                 current[]->newElement[];
+                   (# t: @text
+                   do
+                      'Fragment: "'->t;
+                      f.name->t.append;
+                      '" is already in this fragment group: "'->t.append;
+                      THIS(fragmentGroup).name->t.append;
+                      '"'->t.append;
+                      t[]->alreadyThere
+                   #);
+                 leave l
+             if)
+          #);
+        &Element[]->newElement[];
+        f.name->newElement.name[];
+        INNER insertFragment;
+        
+     #);
+   f[]->newElement.f[];
+   f.type->newElement.type;
+   (if f.type = linktype then
+         (# l: ^fragmentLink
+         do
+            f[]->l[];
+            l.fullNameOfLink[]->newElement.fullNameOfLink[];
+            l.localName[]->newElement.localName[];
+            
+         #);
+       
+   if);
+   THIS(fragmentGroup)[]->f.father;
+   f.markAsChanged;
+   (if theCatcher[] = addFragmentHandler[] then
+       addFragmentHandler.oldCatcher[]->theCatcher[]
+   if);
+   
+#)  
+
+-- fragmentGroupFragmentListDescriptorInsertFragmentCatcher: DoPart --
+do
+   (if no
+    // notificationNumbers.startingParsing then
+       startingParsing
+    // errorNumbers.notExisting then
+       msg[]->fragmentNotExisting
+    // errorNumbers.arrayTooBig then
+       msg[]->astOverflow
+    // errorNumbers.grammarNotFound then
+       msg[]->grammarNotFound
+    // errorNumbers.badFormat then
+       msg[]->badFormat
+    // errorNumbers.parseErrors then
+       msg[]->parseErrors
+    // errorNumbers.doubleFormDeclaration then
+       msg[]->doubleFormDeclaration
+    // errornumbers.noReadAccess then
+       msg[]->readAccessError
+    // errornumbers.noWriteAccess then
+       msg[]->writeAccessError
+    // errornumbers.writeAccessOnLstFileError then
+       msg[]->writeAccessOnLstFileError
+    // errornumbers.EOSError then
+       msg[]->EOSError
+    // errornumbers.noSuchFile then
+       msg[]->noSuchFileError
+    // errornumbers.fileExists then
+       msg[]->fileExistsError
+    // errornumbers.noSpaceLeft then
+       msg[]->noSpaceLeftError
+    // errornumbers.otherFileError then
+       msg[]->otherFileError
+    else
+       (if no->errorNumbers.fatalParseError then
+           (msg[],no-100)->fatalParseError
+       if)
+   if)  
+
+-- fragmentSaveAsCatcher: DoPart --
+do
+   (if no
+    // notificationNumbers.startingParsing then
+       startingParsing
+    // errorNumbers.notExisting then
+       msg[]->fragmentNotExisting
+    // errorNumbers.arrayTooBig then
+       msg[]->astOverflow
+    // errorNumbers.grammarNotFound then
+       msg[]->grammarNotFound
+    // errorNumbers.badFormat then
+       msg[]->badFormat
+    // errorNumbers.parseErrors then
+       msg[]->parseErrors
+    // errorNumbers.doubleFormDeclaration then
+       msg[]->doubleFormDeclaration
+    // errornumbers.noReadAccess then
+       msg[]->readAccessError
+    // errornumbers.noWriteAccess then
+       msg[]->writeAccessError
+    // errornumbers.writeAccessOnLstFileError then
+       msg[]->writeAccessOnLstFileError
+    // errornumbers.EOSError then
+       msg[]->EOSError
+    // errornumbers.noSuchFile then
+       msg[]->noSuchFileError
+    // errornumbers.fileExists then
+       msg[]->fileExistsError
+    // errornumbers.noSpaceLeft then
+       msg[]->noSpaceLeftError
+    // errornumbers.otherFileError then
+       msg[]->otherFileError
+    else
+       (if no->errorNumbers.fatalParseError then
+           (msg[],no-100)->fatalParseError
+       if)
+   if)  
+
+-- FragmentGroupSaveAs: Descriptor --
+(# savename1,savename2: ^text; 
+do
+   (if theCatcher[] = none then
+       theCatcher[]->saveAsCatcher.oldCatcher[]; saveAsCatcher[]->theCatcher[]
+   if);
+   fullnameT.copy->savename1[];
+   nameT.copy->savename2[];
+   fullname[]->fullnameT[];
+   fullname[]->nameT[];
+   pack;
+   savename1.copy->fullnameT[];
+   savename2.copy->nameT[];
+   (if theCatcher[] = saveAsCatcher[] then
+       saveAsCatcher.oldCatcher[]->theCatcher[]
+   if);
+   
+#)  
+
+-- fragmentSaveBackupCatcher: DoPart --
+do
+   (if no
+    // notificationNumbers.startingParsing then
+       startingParsing
+    // errorNumbers.notExisting then
+       msg[]->fragmentNotExisting
+    // errorNumbers.arrayTooBig then
+       msg[]->astOverflow
+    // errorNumbers.grammarNotFound then
+       msg[]->grammarNotFound
+    // errorNumbers.badFormat then
+       msg[]->badFormat
+    // errorNumbers.parseErrors then
+       msg[]->parseErrors
+    // errorNumbers.doubleFormDeclaration then
+       msg[]->doubleFormDeclaration
+    // errornumbers.noReadAccess then
+       msg[]->readAccessError
+    // errornumbers.noWriteAccess then
+       msg[]->writeAccessError
+    // errornumbers.writeAccessOnLstFileError then
+       msg[]->writeAccessOnLstFileError
+    // errornumbers.EOSError then
+       msg[]->EOSError
+    // errornumbers.noSuchFile then
+       msg[]->noSuchFileError
+    // errornumbers.fileExists then
+       msg[]->fileExistsError
+    // errornumbers.noSpaceLeft then
+       msg[]->noSpaceLeftError
+    // errornumbers.otherFileError then
+       msg[]->otherFileError
+    else
+       (if no->errorNumbers.fatalParseError then
+           (msg[],no-100)->fatalParseError
+       if)
+   if)  
+
+-- FragmentGroupSaveBackup: Descriptor --
+(# 
+do
+   (if theCatcher[] = none then
+       theCatcher[]->saveBackupCatcher.oldCatcher[];
+       saveBackupCatcher[]->theCatcher[]
+   if);
+   ext.copy->backUpExt[];
+   pack;
+   none ->backUpExt[];
+   (if theCatcher[] = saveBackupCatcher[] then
+       saveBackupCatcher.oldCatcher[]->theCatcher[]
+   if);
+   
+#)  
+
+-- fragmentRestoreBackupCatcher: DoPart --
+do
+   (if no
+    // notificationNumbers.startingParsing then
+       startingParsing
+    // errorNumbers.notExisting then
+       msg[]->fragmentNotExisting
+    // errorNumbers.arrayTooBig then
+       msg[]->astOverflow
+    // errorNumbers.grammarNotFound then
+       msg[]->grammarNotFound
+    // errorNumbers.badFormat then
+       msg[]->badFormat
+    // errorNumbers.parseErrors then
+       msg[]->parseErrors
+    // errorNumbers.doubleFormDeclaration then
+       msg[]->doubleFormDeclaration
+    // errornumbers.noReadAccess then
+       msg[]->readAccessError
+    // errornumbers.noWriteAccess then
+       msg[]->writeAccessError
+    // errornumbers.writeAccessOnLstFileError then
+       msg[]->writeAccessOnLstFileError
+    // errornumbers.EOSError then
+       msg[]->EOSError
+    // errornumbers.noSuchFile then
+       msg[]->noSuchFileError
+    // errornumbers.fileExists then
+       msg[]->fileExistsError
+    // errornumbers.noSpaceLeft then
+       msg[]->noSpaceLeftError
+    // errornumbers.otherFileError then
+       msg[]->otherFileError
+    else
+       (if no->errorNumbers.fatalParseError then
+           (msg[],no-100)->fatalParseError
+       if)
+   if)  
+
+-- FragmentGroupRestoreBackup: Descriptor --
+(#
+   diskFile: @file (# binary:: trueObject #);
+   name: ^Text;
+   oldDoRealOpen: @boolean;
+   
+do
+   (if theCatcher[] = none then
+       theCatcher[]->restoreBackupCatcher.oldCatcher[];
+       restoreBackupCatcher[]->theCatcher[]
+   if);
+   diskFileName->name[];
+   ext[]->(name.copy).append->name[];
+   name[]->diskFile.name;
+   init;
+   ext.copy->backUpExt[];
+   doRealOpen->oldDoRealOpen;
+   true->doRealOpen;
+   screen[]->unpack;
+   oldDoRealOpen->doRealOpen;
+   none ->backUpExt[];
+   (if theCatcher[] = restoreBackupCatcher[] then
+       restoreBackupCatcher.oldCatcher[]->theCatcher[]
+   if);
+   
+#)  
+
+-- fragmentGroupDiskFullName: DoPart --
+do
+   astFileExtension->((fullName).copy).Append->t[];
+   (if backUpExt[] <> none then backupExt[]->t.append if);
+     
+
+-- fragmentGroupTextFileName: DoPart --
+do
+   l:
+   (if defaultGrammar[] = none then
+       grammarTable.scan
+         (# name: @text; f: @file
+         do
+            fullName->t[];
+            t->t;
+            current.suffix->t.append;
+            t.copy->f.name;
+            (if f.entry.exists
+              (#
+                 error:: 
+                   (# 
+                   do
+                      true->continue;
+                      (errorNumbers.otherFileError,msg[])->catcher
+                   #)
+              #) then
+                current[]->defaultGrammar[]; leave l
+            if);
+            
+         #);
+       fullName->t[];
+       t->t;
+       '.text'->t.append;
+       
+    else
+       fullName->t[]; t->t; defaultGrammar.suffix->t.append
+   if);
+     
+
+-- fragmentGroupIsRealOpen: DoPart --
+do
+   (if isOpen then
+       (if none
+        // prop[] // fragmentList[] then false->opened
+        else
+           scanner: fragmentList.scan
+             (# ff: ^astinterface.fragmentForm
+             do
+                (if current.type
+                 // formType then
+                    (if current.f[] <> none then
+                        current.f[]->ff[];
+                        (if none
+                         // ff.grammar[] // ff.root[] then
+                            false->opened; leave scanner
+                         else
+                            true->opened
+                        if);
+                        
+                     else
+                        false->opened; leave scanner
+                    if)
+                if)
+             #)
+       if)
+    else
+       false->opened
+   if)  
+
+-- fragmentRealOpenCatcher: DoPart --
+do
+   (if no
+    // notificationNumbers.startingParsing then
+       startingParsing
+    // errorNumbers.notExisting then
+       msg[]->fragmentNotExisting
+    // errorNumbers.arrayTooBig then
+       msg[]->astOverflow
+    // errorNumbers.grammarNotFound then
+       msg[]->grammarNotFound
+    // errorNumbers.badFormat then
+       msg[]->badFormat
+    // errorNumbers.parseErrors then
+       msg[]->parseErrors
+    // errorNumbers.doubleFormDeclaration then
+       msg[]->doubleFormDeclaration
+    // errornumbers.noReadAccess then
+       msg[]->readAccessError
+    // errornumbers.noWriteAccess then
+       msg[]->writeAccessError
+    // errornumbers.writeAccessOnLstFileError then
+       msg[]->writeAccessOnLstFileError
+    // errornumbers.EOSError then
+       msg[]->EOSError
+    // errornumbers.noSuchFile then
+       msg[]->noSuchFileError
+    // errornumbers.fileExists then
+       msg[]->fileExistsError
+    // errornumbers.noSpaceLeft then
+       msg[]->noSpaceLeftError
+    // errornumbers.otherFileError then
+       msg[]->otherFileError
+    else
+       (if no->errorNumbers.fatalParseError then
+           (msg[],no-100)->fatalParseError
+       if)
+   if)  
+
+-- fragmentGroupRealOpen: Descriptor --
+(#
+   f: @file
+     (#
+        accessError:: 
+          (# 
+          do (errorNumbers.noReadAccess,msg[])->catcher; true->continue
+          #);
+        binary:: trueObject
+     #);
+   getRep: @f.getRep;
+   b: [2] @integer;
+   garbagefl: ^fragmentListDescription;
+   garbageProp: ^propertyList;
+   
+do
+   (if theCatcher[] = none then
+       theCatcher[]->realOpenCatcher.oldCatcher[];
+       realOpenCatcher[]->theCatcher[]
+   if);
+   diskFileName->f.name;
+   trace.FragmentOpen
+     ->tracer
+       (# 
+       do 'OpenRead fragmentGroup-file: '->dmp.puttext; f.name->dmp.puttext
+       #);
+   (if f.entry.isFile
+     (#
+        error:: 
+          (# 
+          do true->continue; (errorNumbers.otherFileError,msg[])->catcher
+          #)
+     #) then
+       (if f.entry.readable
+         (#
+            error:: 
+              (# 
+              do true->continue; (errorNumbers.otherFileError,msg[])->catcher
+              #)
+         #) then
+           f.openRead
+        else
+             (# t: @text
+             do
+                'No read access to the file: "'->t;
+                f.name->t.append;
+                '"'->t.putline;
+                (errorNumbers.noReadAccess,t[])->catcher
+             #)
+       if)
+    else
+         (# t: @text
+         do
+            'Filename "'->t;
+            f.name->t.append;
+            '" refers to a directory, not a file'->t.putline;
+            (errorNumbers.otherFileError,t[])->catcher
+         #)
+   if);
+   (@@ b[1],b.range)->getRep;
+   (if (b[2] > repS.r.range) then b[2]-repS.r.range->repS.extend;  if);
+   0->repS.top;
+   (@@ repS.r[1],b[2])->getRep;
+   (* get r from f *)
+   &fragmentListDescription[]->garbagefl[];
+   repS[]->garbagefl.repRestore;
+   none ->garbagefl[];
+   &propertyList[]->garbageProp[];
+   repS[]->garbageProp.repRestore;
+   none ->garbageprop[];
+   fragmentList.scan
+     (# ff: ^fragmentForm
+     do
+        (if current.type = formType then
+            screen[]->current.open;
+            current.f[]->ff[];
+            repS[]->ff.repRestoreStruct
+        if)
+     #);
+   fragmentList.scan
+     (# ff: ^fragmentForm
+     do
+        (if current.type = formType then
+            current.f[]->ff[];
+            (@@ ff.a[1],ff.curTop)->getRep;
+            ff.rootInx->ff.indexToNode->ff.root[];
+            
+        if)
+     #);
+   f.close;
+   (if theCatcher[] = realOpenCatcher[] then
+       realOpenCatcher.oldCatcher[]->theCatcher[]
+   if);
+   
+#)  
+
+-- fragmentGroupPack: DoPart --
+do
+   l:
+     (#
+        f: @file
+          (#
+             accessError:: 
+               (# 
+               do (errorNumbers.noWriteAccess,msg[])->catcher; leave l
+               #);
+             writeError:: 
+               (# 
+               do (errorNumbers.noWriteAccess,msg[])->catcher; leave l
+               #);
+             readError:: 
+               (# 
+               do (errorNumbers.noReadAccess,msg[])->catcher; leave l
+               #);
+             EOSError:: 
+               (#  do (errorNumbers.EOSerror,msg[])->catcher; leave l #);
+             noSuchFileError:: 
+               (#  do (errorNumbers.noSuchFile,msg[])->catcher; leave l #);
+             fileExistsError:: 
+               (#  do (errorNumbers.fileExists,msg[])->catcher; leave l #);
+             noSpaceError:: 
+               (#  do (errorNumbers.noSpaceLeft,msg[])->catcher; leave l #);
+             otherError:: 
+               (# 
+               do (errorNumbers.otherFileError,msg[])->catcher; leave l
+               #);
+             binary:: trueObject
+          #);
+        putRep: @f.putRep;
+        b: [2] @integer;
+        dirWriteable:
+          (# f: @file
+          enter f.name
+          exit f.entry.writeable
+            (#
+               error:: 
+                 (# 
+                 do
+                    true->continue; (errorNumbers.otherFileError,msg[])->catcher
+                 #)
+            #)
+          #)
+     do
+        (if not isDirectory then
+            0->repS.top;
+            repS[]->fragmentList.repSave;
+            repS[]->prop.repSave;
+            fragmentList.scan
+              (# ff: ^fragmentForm
+              do
+                 (if current.type = formType then
+                     current.f[]->ff[]; repS[]->ff.repSaveStruct
+                 if)
+              #);
+            groupBlackNumber->b[1];
+            repS.top->b[2];
+            diskFileName->f.name;
+            trace.FragmentOpen
+              ->tracer
+                (# 
+                do
+                   'OpenWrite fragmentGroup-file: '->dmp.puttext;
+                   f.name->dmp.puttext
+                #);
+            (if (f.entry.path.head->dirWriteable) then
+                (if f.entry.writeable
+                  (#
+                     error:: 
+                       (# 
+                       do
+                          true->continue;
+                          (errorNumbers.otherFileError,msg[])->catcher
+                       #)
+                  #) then
+                    f.openWrite
+                 else
+                      (# t: @text
+                      do
+                         'No write access to the file: "'->t;
+                         f.name->t.append;
+                         '"'->t.putline;
+                         (errorNumbers.noWriteAccess,t[])->catcher;
+                         leave l
+                      #)
+                if)
+             else
+                  (# t: @text
+                  do
+                     'No write access to the directory: "'->t;
+                     f.entry.path.head->t.append;
+                     '"'->t.putline;
+                     (errorNumbers.noWriteAccess,t[])->catcher;
+                     leave l
+                  #)
+            if);
+            (@@ b[1],b.range)->putRep;
+            (@@ repS.r[1],repS.top)->putRep;
+            (* save r on f *)
+            fragmentList.scan
+              (# ff: ^fragmentForm
+              do
+                 (if current.type = formType then
+                     current.f[]->ff[]; (@@ ff.a[1],ff.curTop)->putRep
+                 if)
+              #);
+            f.close;
+            (if backUpExt[] = none then
+                f.entry.modTime (# error::  (#  do true->continue #) #)->modTime
+            if)
+        if)
+     #)  
+
+-- fragmentGroupUnpack: Descriptor --
+(#
+   f: @file
+     (#
+        accessError:: 
+          (# 
+          do (errorNumbers.noReadAccess,msg[])->catcher; true->continue
+          #);
+        binary:: trueObject
+     #);
+   textFile: @file
+     (#
+        accessError:: 
+          (# 
+          do (errorNumbers.noReadAccess,msg[])->catcher; true->continue
+          #)
+     #);
+   t,s: ^text;
+   
+do
+   fragmentlist.clear;
+   diskFileName->t[];
+   t.copy->f.name;
+   textFileName->t[];
+   t.copy->textFile.name;
+   (if
+   ((textFile.entry.ModTime (# error::  (#  do true->continue #) #) >
+     f.entry.ModTime (# error::  (#  do true->continue #) #)) or
+    (options.forceParse)) then
+       (if textFile.entry.exists
+         (#
+            error:: 
+              (# 
+              do true->continue; (errorNumbers.otherFileError,msg[])->catcher
+              #)
+         #) then
+           (if textFile.entry.isFile
+             (#
+                error:: 
+                  (# 
+                  do
+                     true->continue;
+                     (errorNumbers.otherFileError,msg[])->catcher
+                  #)
+             #) then
+               (if textFile.entry.readable
+                 (#
+                    error:: 
+                      (# 
+                      do
+                         true->continue;
+                         (errorNumbers.otherFileError,msg[])->catcher
+                      #)
+                 #) then
+                   (notificationNumbers.startingParsing,'')->catcher;
+                   trace.onParse
+                     ->silentTracer
+                       (# 
+                       do
+                          'parsing "'->dmp.putText;
+                          fullName->dmp.putText;
+                          '"'->dmp.put
+                       #);
+                   theParse:
+                   (if
+                   ((textfile.name,error[])
+                      ->parse
+                        (#
+                           parseErrors:: 
+                             (# 
+                             do
+                                (errorNumbers.parseErrors,' Parse errors ')
+                                  ->catcher;
+                                false->ok;
+                                true->continue
+                             #);
+                           doubleFormDeclaration:: 
+                             (# 
+                             do
+                                (errorNumbers.doubleFormDeclaration,
+                                 ' Double declaration of form ')->catcher;
+                                true->continue
+                             #)
+                        #)) then
+                       trace.onParse->silentTracer (#  do dmp.newLine #)
+                   if)
+                else
+                     (# t: @text
+                     do
+                        'No read access to the file: "'->t;
+                        textFile.name->t.append;
+                        '"'->t.putline;
+                        (errorNumbers.noReadAccess,t[])->catcher
+                     #)
+               if)
+            else
+                 (# t: @text
+                 do
+                    'Filename "'->t;
+                    textFile.name->t.append;
+                    '" refers to a directory, not a file'->t.putline;
+                    (errorNumbers.otherFileError,t[])->catcher
+                 #)
+           if)
+        else
+             (# t: @text
+             do
+                'Filename "'->t;
+                textFile.name->t.append;
+                '" does not exist'->t.putline;
+                (errorNumbers.noSuchFile,t[])->catcher
+             #)
+       if)
+    else
+       (if f.entry.exists
+         (#
+            error:: 
+              (# 
+              do true->continue; (errorNumbers.otherFileError,msg[])->catcher
+              #)
+         #) then
+             (# getRep: @f.getRep; b: [2] @integer
+             do
+                trace.FragmentOpen
+                  ->tracer
+                    (# 
+                    do
+                       'OpenRead(unpack) fragmentGroup-file: '->dmp.puttext;
+                       f.name->dmp.puttext
+                    #);
+                (if f.entry.isFile
+                  (#
+                     error:: 
+                       (# 
+                       do
+                          true->continue;
+                          (errorNumbers.otherFileError,msg[])->catcher
+                       #)
+                  #) then
+                    (if f.entry.readable
+                      (#
+                         error:: 
+                           (# 
+                           do
+                              true->continue;
+                              (errorNumbers.otherFileError,msg[])->catcher
+                           #)
+                      #) then
+                        f.openRead
+                     else
+                          (# t: @text
+                          do
+                             'No read access to the file: "'->t;
+                             f.name->t.append;
+                             '"'->t.putline;
+                             (errorNumbers.noReadAccess,t[])->catcher
+                          #)
+                    if)
+                 else
+                      (# t: @text
+                      do
+                         'Filename "'->t;
+                         f.name->t.append;
+                         '" refers to a directory, not a file'->t.putline;
+                         (errorNumbers.otherFileError,t[])->catcher
+                      #)
+                if);
+                (@@ b[1],b.range)->getRep;
+                (if (b[1] <> groupBlackNumber) then
+                      (# t: @text
+                      do
+                         ' Trying to access a group file with wrong magic number "'
+                           ->t;
+                         fullName->t.append;
+                         '"'->t.put;
+                         (errorNumbers.badformat,t[])->catcher;
+                         
+                      #);
+                    
+                if);
+                (if (b[2] > repS.r.range) then
+                    b[2]-repS.r.range->repS.extend; 
+                if);
+                0->repS.top;
+                (@@ repS.r[1],b[2])->getRep;
+                (* get r from f *)
+                repS[]->fragmentList.repRestore;
+                repS[]->prop.repRestore;
+                (if doRealOpen then
+                    fragmentList.scan
+                      (# ff: ^fragmentForm
+                      do
+                         (if current.type = formType then
+                             current.f[]->ff[]; repS[]->ff.repRestoreStruct
+                         if)
+                      #);
+                    fragmentList.scan
+                      (# ff: ^fragmentForm
+                      do
+                         (if current.type = formType then
+                             current.f[]->ff[];
+                             (@@ ff.a[1],ff.curTop)->getRep;
+                             ff.rootInx->ff.indexToNode->ff.root[];
+                             (if defaultGrammar[] = none then
+                                 ff.grammar[]->defaultGrammar[]
+                             if);
+                             
+                         if)
+                      #);
+                    
+                if);
+                f.close;
+                f.entry.modTime (# error::  (#  do true->continue #) #)
+                  ->modTime;
+                
+             #)
+       if)
+   if);
+   
+#)  
+
+-- fragmentGroupInit: DoPart --
+do
+   GroupType->FragType;
+   false->isDirectory;
+   &fragmentListDescription[]->fragmentList[];
+   fragmentList.init;
+     
+
+-- fragmentGroupBind: Descriptor --
+(# fName: ^text
+do
+   F.name->fName[];
+   L: scanSlots
+     (# 
+     do
+        (if (current.Name->fName.equalNCS) then
+            current[]->op[]->f.binding[]; leave l
+        if)
+     #)
+#)  
+
+-- fragmentGroupGetBinding: DoPart --
+do
+   trace.GetBinding
+     ->tracer
+       (# 
+       do
+          'GetBinding of '->dmp.putText;
+          (0,dmp[])->sl.dump;
+          ' for '->dmp.putText;
+          THIS(fragmentGroup).fullName->dmp.putText;
+          
+       #);
+   THIS(fragmentGroup)[]->markRelatedFragments;
+   (* mark visible groups *)
+   Mark.Scan (* scan visible groups for forms *)
+     (#
+        currentScan: current.Scan
+          (# F: ^FragmentForm; B: ^SlotDesc
+          do
+             (if current.FragType = FormType then
+                 current[]->f[];
+                 (if f.binding[] = none then
+                     f[]->THIS(currentScan).current.bind
+                 if);
+                 f.binding[]->b[];
+                 (if (b[] <> none ) then
+                     (if (b[]->sl.equal) then current[]->found if)
+                 if)
+             if)
+          #)
+     do currentScan
+     #)  
+
+-- fragmentGroupGetBindingMark: DoPart --
+do
+   Insert:
+     (# R: ^Elm
+     do
+        false->inserted;
+        head[]->R[];
+        L:
+        (if (R[] <> none ) then
+            (if R.F[] = F[] then leave insert if); R.succ[]->R[]; restart L
+        if);
+        (* not found *)
+        &Elm[]->R[];
+        F[]->R.F[];
+        head[]->R.succ[];
+        R[]->Head[];
+        True->inserted;
+        trace.GetBindingMark
+          ->tracer
+            (#  do 'marked: '->dmp.putText; f.fullname->dmp.putText;  #);
+        
+     #)  
+
+-- fragmentGroupGetBindingMarkScan: Descriptor --
+(# R: ^Elm
+do
+   head[]->R[];
+   L:
+   (if (R[] <> none ) then
+       R.F[]->current[]; INNER scan; R.succ[]->R[]; restart L
+   if)
+#)  
+
+-- fragmentGroupGetBetaBindings: Descriptor --
+(# G: ^FragmentGroup
+do
+   (if F.FragType = groupType then
+       (if (F[]->G[]->mark) then
+           G.Scan
+             (# FL: ^FragmentLink
+             do
+                (if current.FragType = LinkType then
+                    current[]->FL[]; FL.F[]->markRelatedFragments
+                if)
+             #);
+           (if g.origin = none then screen[]->g.setupOrigin if);
+           G.origin->markRelatedFragments
+       if)
+   if)
+#)  
+
+-- fragmentFormCategory: DoPart --
+do (if root[] = none then 0->sy else root.symbol->sy if)  
+
+-- fragmentFormRecomputeSlotChain: Descriptor --
+(# theExpanded: ^expanded
+do
+   0->firstSlot;
+   (if root.kind = kinds.interior then
+       root[]->theExpanded[];
+       unExpanded
+         ->theExpanded.suffixWalkForProd
+           (# scanCat:: unExpanded; theSlot: ^slotDesc; 
+           do
+              (if current.isSlot then
+                  current.theSlot->theSlot[];
+                  firstSlot->a[theSlot.index+offset.usage];
+                  theSlot.index->firstSlot;
+                  
+              if);
+              
+           #);
+       
+   if)
+#)  
+
+-- fragmentFormScanSlots: DoPart --
+do
+   firstSlot->inx;
+   loop:
+   (if (inx <> 0) then
+       inx->indexToNode->current[];
+       current.usageInx->inx;
+       INNER scanSlots;
+       restart loop
+   if);
+     
+
+-- fragmentFormIndexToNode: Descriptor --
+(#
+   symbol,val: @integer;
+   errorMsg:
+     (# t,msg: ^text
+     enter t[]
+     do
+        '*** Error in IndexToNode: '->msg[];
+        t[]->msg.append;
+        '\nIndex='->msg.puttext;
+        inx->msg.putint;
+        '\nSymbol='->msg.puttext;
+        symbol->msg.putint;
+        '\nVal='->msg.puttext;
+        val->msg.putint;
+        '\nFragment='->msg.puttext;
+        fullname->msg.puttext;
+        '\nFragment is '->msg.puttext;
+        (if (father).isRealOpen then
+            'open'->msg.puttext 
+         else
+            'ONLY semiOpen'->msg.puttext
+        if);
+        msg.newline;
+     exit msg[]
+     #)
+do
+   l:
+   (if true
+    // (0 < inx) and (inx <= a.range) then
+       a[inx]->val->tos'%GetSignedBits[4,12]'->symbol;
+       (* inline expansion of inx -> getSymbol -> symbol *)
+       (if (0 < symbol) and (symbol <= grammar.genRefArray.range) then
+           (if (grammar.genRefArray[symbol]->as[]) = none then
+           (* IndexToNode: genRefArray problem *)
+               'genRefArray problem'->errorMsg->grammarGenRefArrayError; leave l
+           if)
+        else
+           (if symbol
+            // prodNo.unExpanded then
+               &UnExpanded[]->as[]
+            // prodNo.optional then
+               &Optional[]->as[]
+            // prodNo.nameDecl then
+               &NameDecl[]->as[]
+            // prodNo.nameAppl then
+               &NameAppl[]->as[]
+            // prodNo.string then
+               &String[]->as[]; 
+            // prodNo.Const then
+               &Const[]->as[]; 
+            // prodNo.Comment then
+               &Comment[]->as[]
+            // prodNo.SlotDesc then
+               &SlotDesc[]->as[]
+            else
+           (* IndexToNode: no match for symbol! *)
+               none ->as[]; 'no such symbol'->errorMsg->noSuchSymbol; leave l
+           if)
+       if);
+       inx->as.index;
+       THIS(fragmentForm)[]->as.frag[]
+    // (0 = inx) then (* Zero index is the same as a NONE ast *)
+       none ->as[]
+    else
+   (* IndexToNode: index out of range *)
+       none ->as[]; 'index out of range'->errorMsg->indexOutOfRange
+   if)
+#)  
+
+-- fragmentFormInit: DoPart --
+do 2->curTop; formtype->fragtype; import.init; INNER init  
+
+-- fragmentFormReset: DoPart --
+do import.makeNull; 'Semanticerrors'->prop.deleteProp  
+
+-- topTableOpen: DoPart --
+do
+   trace.topOpen
+     ->tracer
+       (# 
+       do
+          'top-table open of '->dmp.putText;
+          fullname[]->dmp.putText;
+          dmp.newline;
+          scan
+            (#  do current.fullname[]->dmp.putline #);
+          
+       #);
+   (* is the group already open? *)
+   fullname[]->dummy.fullname[];
+   dummy[]->hashfunction
+     ->findIndexed
+       (#
+          predicate::  (#  do fullname[]->current.fullname.equal->value #); 
+       do current.g[]->g[]; 
+       #);
+   none ->dummy.fullname[];
+   (if g[] = none then
+   (* if we are here, the fragment could not be
+    * found in the fragmentList. 
+    * Try look at the disk for the file.
+    *)
+         (#
+            fileExist:
+              (# f: @file
+              enter f.name
+              exit f.entry.exists
+                (#
+                   error:: 
+                     (# 
+                     do
+                        true->continue;
+                        (errorNumbers.otherFileError,msg[])->catcher
+                     #)
+                #)
+              #);
+            
+         do
+            &Element[]->e[];
+            fullName.copy->e.fullName[];
+            (if true
+             // (astFileExtension->(fullName.Copy).Append->fileExist) then
+                trace.topOpen
+                  ->tracer (#  do 'opening .ast file...'->dmp.puttext #);
+                (* o.k. we are in real group *)
+                error[]->e.open->g[];
+                e[]->insert;
+                
+             // ('.bet'->(fullName.Copy).Append->fileExist) then
+                trace.topOpen
+                  ->tracer (#  do 'opening .bet file...'->dmp.puttext #);
+                error[]->e.open->g[];
+                e[]->insert;
+                
+             // ('.text'->(fullName.Copy).Append->fileExist) then
+                trace.topOpen
+                  ->tracer (#  do 'opening .text file...'->dmp.puttext #);
+                error[]->e.open->g[];
+                e[]->insert;
+                
+             else
+                loop: grammarTable.scan
+                  (# 
+                  do
+                     (if (current.suffix->(fullName.Copy).Append->fileExist)
+                      then
+                         trace.topOpen
+                           ->tracer
+                             (# 
+                             do
+                                'opening '->dmp.puttext;
+                                current.suffix->dmp.puttext;
+                                ' file...'->dmp.puttext;
+                                
+                             #);
+                         error[]->e.open->g[];
+                         e[]->insert;
+                         leave loop
+                     if)
+                  #);
+                (if g[] = none then
+                      (#
+                         t: ^Text;
+                         dotInx: @integer;
+                         fg: ^FragmentGroup;
+                         isFile:
+                           (# f: @file
+                           enter f.name
+                           exit f.entry.isFile
+                             (#
+                                error:: 
+                                  (# 
+                                  do
+                                     true->continue;
+                                     (errorNumbers.otherFileError,msg[])
+                                       ->catcher
+                                  #)
+                             #)
+                           #);
+                         fileReadable:
+                           (# f: @file
+                           enter f.name
+                           exit f.entry.readable
+                             (#
+                                error:: 
+                                  (# 
+                                  do
+                                     true->continue;
+                                     (errorNumbers.otherFileError,msg[])
+                                       ->catcher
+                                  #)
+                             #)
+                           #)
+                      do
+                         (if not (fullname[]->fileExist) then
+                             'Filename "'->t[];
+                             fullName[]->t.append;
+                             '" could not be opened using any known grammar'
+                               ->t.putline;
+                             (errorNumbers.notExisting,t[])->catcher
+                         if);
+                         (if not (fullname[]->isFile) then
+                             'Filename "'->t[];
+                             fullName[]->t.append;
+                             '" refers to a directory, not a file'->t.putline;
+                             (errorNumbers.otherFileError,t[])->catcher
+                         if);
+                         (if not (fullname[]->fileReadable) then
+                             'No read access to the file: "'->t[];
+                             fullName[]->t.append;
+                             '"'->t.putline;
+                             (errorNumbers.noReadAccess,t[])->catcher
+                         if);
+                         (* ok. try parse the file *)
+                         (*'ok. try parse the file'->screen.putline;*)
+                         '.'->fullName.findAll (#  do inx->dotInx #);
+                         (if (dotInx > 1) then
+                         (* >1 to avoid empty filename before '.' *)
+                             newFragmentGroup->fg[];
+                             (1,dotInx-1)->fullName.sub->e.fullname[];
+                             e.fullname[]->fg.fullnameT[]->fg.nameT[];
+                             (notificationNumbers.startingParsing,'')->catcher;
+                             theParse:
+                             (if
+                             ((fullName[],error[])
+                                ->fg.parse
+                                  (#
+                                     parseErrors:: 
+                                       (# 
+                                       do
+                                          (errorNumbers.parseErrors,
+                                           ' Parse errors ')->catcher;
+                                          false->ok;
+                                          true->continue
+                                       #);
+                                     doubleFormDeclaration:: 
+                                       (# 
+                                       do
+                                          (errorNumbers.doubleFormDeclaration,
+                                           ' Double declaration of form ')
+                                            ->catcher;
+                                          true->continue
+                                       #);
+                                     
+                                  #)) then
+                                 fg[]->e.g[]->g[]; e[]->insert; 
+                             if)
+                         if)
+                      #)
+                if);
+                
+            if)
+         #)
+   if);
+   (if g[] <> none then true->g.isOpen if);
+   trace.topOpen
+     ->tracer
+       (# 
+       do
+          (if g[] = none then
+              'F_FAILED: '->dmp.putText
+           else
+              'F_SUCCEEDED: '->dmp.putText; 
+          if);
+          'Top-Table open of '->dmp.putText;
+          fullName[]->dmp.putText;
+          
+       #);
+     
+
+-- topTableElementOpen: DoPart --
+do
+   trace.topOpen
+     ->tracer
+       (# 
+       do 'top-table-element-open of '->dmp.putText; fullname[]->dmp.putText
+       #);
+   (if g[] = none then
+       newFragmentGroup->g[];
+       fullname.copy->g.fullnameT[]->g.nameT[];
+       error[]->g.unPack;
+       trace.topOpen
+         ->tracer
+           (# 
+           do
+              'top-table-element-unpack of '->dmp.putText;
+              g.fullname->dmp.putText
+           #)
+   if)  
+
+-- topTableFind: DoPart --
+do
+   fullname[]->dummy.fullname[];
+   dummy[]->hashfunction
+     ->findIndexed
+       (#
+          predicate::  (#  do fullname[]->current.fullname.equal->value #); 
+       do current.g[]->g[]; 
+       #);
+     
+
+-- topOpenCatcher: DoPart --
+do
+   (if no
+    // notificationNumbers.startingParsing then
+       startingParsing
+    // errorNumbers.notExisting then
+       msg[]->fragmentNotExisting
+    // errorNumbers.arrayTooBig then
+       msg[]->astOverflow
+    // errorNumbers.grammarNotFound then
+       msg[]->grammarNotFound
+    // errorNumbers.badFormat then
+       msg[]->badFormat
+    // errorNumbers.parseErrors then
+       msg[]->parseErrors
+    // errorNumbers.doubleFormDeclaration then
+       msg[]->doubleFormDeclaration
+    // errornumbers.noReadAccess then
+       msg[]->readAccessError
+    // errornumbers.noWriteAccess then
+       msg[]->writeAccessError
+    // errornumbers.writeAccessOnLstFileError then
+       msg[]->writeAccessOnLstFileError
+    // errornumbers.EOSError then
+       msg[]->EOSError
+    // errornumbers.noSuchFile then
+       msg[]->noSuchFileError
+    // errornumbers.fileExists then
+       msg[]->fileExistsError
+    // errornumbers.noSpaceLeft then
+       msg[]->noSpaceLeftError
+    // errornumbers.otherFileError then
+       msg[]->otherFileError
+    else
+       (if no->errorNumbers.fatalParseError then
+           (msg[],no-100)->fatalParseError
+       if)
+   if)  
+
+-- topInit: DoPart --
+do groupTable.init; &FragmentGroup[]->topGroup[];   
+
+-- topOpen: Descriptor --
+(# fullName: ^Text; 
+do
+   trace.TopOpen
+     ->tracer
+       (#  do 'top-open of '->dmp.putText; filename[]->dmp.putText #);
+   (if theCatcher[] = none then
+       theCatcher[]->openCatcher.oldCatcher[]; openCatcher[]->theCatcher[]
+   if);
+   0->fileName.pos;
+   (if fileName.getNonBlank = ascii.fs then
+         (# msg: @text
+         do
+            'Fragment file name is empty: '->msg;
+            fullname[]->msg.putLine;
+            (errorNumbers.notExisting,msg[])->theCatcher
+         #)
+   if);
+   (if (1->fileName.inxGet) <> '/' then
+       fileName[]->expandToFullPath->fullName[]; 
+    else
+       fileName.copy->fullName[]; 
+   if);
+   (fullName[],error[])->groupTable.open->g[];
+   (if g[] = none then
+         (# msg: @text
+         do
+            'Fragment file not found in open: '->msg;
+            fullName[]->msg.putLine;
+            (errorNumbers.notExisting,msg[])->theCatcher
+         #)
+    else
+       true->g.isOpen; topGroup[]->g.father; 
+   if);
+   (if theCatcher[] = openCatcher[] then
+       openCatcher.oldCatcher[]->theCatcher[]
+   if);
+   trace.topOpen
+     ->tracer
+       (# 
+       do
+          (if g[] = none then
+              'FAILED: '->dmp.putText
+           else
+              'SUCCEEDED: '->dmp.putText; 
+          if);
+          'top-open of '->dmp.putText;
+          fullName[]->dmp.putText;
+          
+       #);
+   
+#)  
+
+-- topNewGroup: DoPart --
+do
+   (if (fullname[]->isOpen) = none then
+       newFragmentGroup->fg[];
+       fullname.copy->fg.name;
+       fullname.copy->fg.fullnameT[];
+       fg[]->insert;
+       (* insert into top table *)
+       
+    else
+         (# msg: @text
+         do
+            'top.newGroup: '->msg.puttext;
+            fullname[]->msg.puttext;
+            'is already open'->msg.putline;
+            msg[]->alreadyOpen;
+            
+         #);
+       
+   if);
+     
+
+-- topClose: Descriptor --
+(# 
+do
+   trace.TopClose
+     ->tracer
+       (#  do 'top-close of '->dmp.putText; fg.fullname->dmp.putText #);
+   fg.nameT[]->groupTable.dummy.fullname[];
+   groupTable.dummy[]->groupTable.hashfunction
+     ->groupTable.findIndexed
+       (#
+          predicate::  (#  do fg.nameT[]->current.fullname.equal->value #); 
+       do current.g.close; current[]->groupTable.delete; 
+       #);
+   
+#)  
+
+-- topDelete: Descriptor --
+(# 
+do
+   (if fg.fullnameT[] = none then
+       'top.delete: fragmentgroup name is NONE'->screen.putline; 
+    else
+       (if fg.fullnameT.length = 0 then
+           'top.delete: fragmentgroup name is empty'->screen.putline; 
+        else
+           fg.fullnameT[]->groupTable.dummy.fullname[];
+           groupTable.dummy[]->groupTable.hashfunction
+             ->groupTable.findIndexed
+               (#
+                  predicate:: 
+                    (# 
+                    do
+                       groupTable.dummy.fullname[]->current.fullname.equal
+                         ->value
+                    #);
+                  
+               do current[]->groupTable.delete; 
+               #);
+           
+       if)
+   if);
+   
+#)  
+
+-- topInsert: Descriptor --
+(# e: ^groupTable.Element; 
+do
+   (if fg.fullnameT[] = none then
+       'top.delete: fragmentgroup name is NONE'->screen.putline; 
+    else
+       (if fg.fullnameT.length = 0 then
+           'top.delete: fragmentgroup name is empty'->screen.putline; 
+        else
+           fg.fullnameT[]->groupTable.dummy.fullname[];
+           groupTable.dummy[]->groupTable.hashfunction
+             ->groupTable.findIndexed
+               (#
+                  predicate:: 
+                    (# 
+                    do
+                       groupTable.dummy.fullname[]->current.fullname.equal
+                         ->value
+                    #);
+                  
+               do current[]->e[]; 
+               #);
+           (if e[] = none then
+               &groupTable.Element[]->e[];
+               fg.fullNameT.copy->e.fullname[];
+               fg[]->e.g[];
+               e[]->groupTable.insert;
+               
+            else
+           (* fragmentgroup already exists *)
+               'WARNING: tried to insert fragmentgroup already in top-table: '
+                 ->screen.puttext;
+               fg.fullname->screen.putline;
+               
+           if);
+           
+       if)
+   if);
+   
+#)  
+
+-- topIsOpen: DoPart --
+do
+   fullname[]->groupTable.dummy.fullname[];
+   (if groupTable.dummy.fullname[] = none then
+       'top.isOpen: fragmentgroup name is NONE'->screen.putline; 
+    else
+       (if groupTable.dummy.fullname.length = 0 then
+           'top.isOpen: fragmentgroup name is empty'->screen.putline; 
+        else
+           groupTable.dummy[]->groupTable.hashfunction
+             ->groupTable.findIndexed
+               (#
+                  predicate:: 
+                    (# 
+                    do
+                       groupTable.dummy.fullname[]->current.fullname.equal
+                         ->value
+                    #);
+                  
+               do current.g[]->fg[]; 
+               #);
+           
+       if)
+   if)  
+
+-- topCatcher: DoPart --
+do
+   (if theCatcher[] = none then
+       msg[]->AstInterfaceError
+    else
+       (no,msg[])->theCatcher
+   if)  
+
+-- astLevelIsRefenced: DoPart --
+do
+   L: Top.groupTable.Scan
+     (#
+        testForm:
+          (# ff: ^fragmentForm
+          enter ff[]
+          do
+             ff.import.scan
+               (# 
+               do (if current.g[] = fx[] then true->found; leave l if)
+               #)
+          #);
+        testLink:
+          (# fl: ^fragmentLink
+          enter fl[]
+          do (if FL.F[] = FX[] then true->found; leave L if)
+          #);
+        testGroup:
+          (# fg: ^fragmentGroup
+          enter fg[]
+          do
+             (if fg.origin = FX[] then True->found; leave L if);
+             fg.fragmentList.Scan
+               (# 
+               do
+                  (if (current.f[] <> none ) then
+                      (if current.type
+                       // linkType then
+                          current.f[]->testLink
+                       // formType then
+                          current.f[]->testForm
+                       // groupType then
+                          current.f[]->testGroup
+                      if)
+                  if)
+               #)
+          #);
+        
+     do (if (current.g[] <> none ) then current.g[]->testGroup if)
+     #)  
+
+-- AstInterfaceException: DoPart --
+do
+   (if m[] <> none then m->msg if);
+   INNER AstInterfaceException;
+   'Yggdrasil stops'->msg.putText  
+
+-- AstInterfaceNotification: DoPart --
+do (if m[] <> none then m->msg if); INNER AstInterfaceNotification  
+
+-- astlevelInit: Descriptor --
+(#
+   theFirstErrorReporter: errorReporter
+     (#
+        forEachError:: 
+          (#
+             l: @text;
+             lastPos: @integer;
+             t,cd: ^text;
+             tabCount: @integer;
+             ch: @char
+          do
+             0->errorLines.pos;
+             loop:
+               (# 
+               do
+                  '#'->errorStream.put;
+                  startLineNo
+                    ->errorStream.putInt
+                      (# format::  (#  do 4->width #) #);
+                  ' '->errorStream.put;
+                  startLineNo+1->startLineNo;
+                  errorLines.pos->lastPos;
+                  &text[]->t[];
+                  L:
+                  (if errorLines.eos then
+                      leave L
+                   else
+                      (if ((errorLines.get->ch) <> ascii.newLine) then
+                          ch->t.put; restart L
+                      if)
+                  if);
+                  (* Changed from the following by JLK (2/11/92)
+                   * L: (if ((errorLines.get -> ch) = ascii.newLine) 
+                   *     // false then 
+                   *        ch -> t.put;
+                   *        (if errorLines.eos//false then restart L if)
+                   *    if);
+                   *)
+                  t[]->errorStream.putLine;
+                  (if not errorLines.eos then restart loop if)
+               #);
+             0->tabCount;
+             ascii.ht->t.findAll (#  do 1+tabCount->tabCount #);
+             '# ****'->errorStream.putText;
+             (for tabCount repeat ascii.ht->errorStream.put for);
+             (for errorPos-lastPos-3-tabCount repeat '*'->errorStream.put for);
+             ' ^'->errorStream.putLine;
+             '#  Expected symbol'->errorStream.putText;
+             (if legalSymbols.terminals.range = 1 then
+                 ': '->errorStream.putText; 
+              else
+                 's: '->errorStream.putText
+             if);
+             (for i: legalSymbols.terminals.range repeat
+               legalSymbols.terminals[i][]->errorStream.putText;
+               (if (i <> legalSymbols.terminals.range) then
+                   ' '->errorStream.put
+               if)
+             for);
+             errorStream.newLine;
+             (if frag.fatherR[] = none then
+             (* we have a stand alone fragmentForm.  Do not write file and
+              * line-number information
+              *)
+                 
+              else
+                 ' File "'->errorStream.putText;
+                 frag.textFileName->t[];
+                 currentDirectory->cd[];
+                 (frag.textFileName,currentDirectory)
+                   ->thePathHandler.convertFilePath->errorStream.putText;
+                 '"; Line '->errorStream.putText;
+                 startLineNo-1->errorStream.putInt;
+                 errorStream.newLine;
+                 
+             if);
+             
+          #);
+        
+     #);
+   
+do
+   (if isBigEndian then
+       '.ast'->astFileExt[] (* used to be .group *) ;
+       '.btab'->parserFileExt[];
+       '.ptbl'->ppFileExt[];
+       
+    else
+       '.astL'->astFileExt[]; '.btabL'->parserFileExt[]; '.ptblL'->ppFileExt[]; 
+   if);
+   true->doRealOpen;
+   (*&text[] -> top.fullNameT[];
+    * '' -> top.fullNameT;
+    *)
+   (for i: 256 repeat i->CommentSieve[i] for);
+   32->CommentSieve[1];
+   32->CommentSieve[2];
+   32->CommentSieve[3];
+   top.init;
+   ''->top.topGroup.fullNameT[];
+   true->top.topGroup.isDirectory;
+   thePathHandler.init;
+   (* installing a default grammarFinder *)
+   ;
+   &defaultGrammarFinder[]->grammarMissing[];
+   &repetitionStream[]->repS[];
+   &theFirstErrorReporter[]->theErrorReporter[];
+   (* register the grammars known by default *)
+   screen[]->grammarMissing.registerGrammars
+#)  
+
+-- treelevelSymbolName: Descriptor --
+(# exp: ^expanded
+do
+   (if (symbol > 0) then
+       (if (grammarAst[] <> none ) then
+           grammarAst.root[]->exp[];
+           3->exp.get->exp[];
+           (* productionList *)
+           symbol->exp.get->exp[];
+           (* leftside *)
+           1->exp.get->exp[];
+           (* synDeclName *)
+           prodNo.nameDecl
+             ->exp.suffixWalkForProd
+               (# nd: ^nameDecl
+               do current[]->nd[]; &text[]->t[]; nd.getText->t[]
+               #);
+           
+       if)
+   if)
+#)  
+
+-- treelevelSymbolToAst: DoPart --
+do
+   (if (symbol < 0) then
+       (if symbol
+        // prodNo.unExpanded then
+           &UnExpanded[]->as[]; 
+        // prodNo.optional then
+           &Optional[]->as[]; 
+        // prodNo.nameDecl then
+           &NameDecl[]->as[]; 
+        // prodNo.nameAppl then
+           &NameAppl[]->as[]; 
+        // prodNo.string then
+           &String[]->as[]; 
+        // prodNo.Const then
+           &Const[]->as[]; 
+        // prodNo.Comment then
+           &Comment[]->as[]; 
+        // prodNo.SlotDesc then
+           &SlotDesc[]->as[]; 
+       if)
+    else
+       genRefArray[symbol]->as[]; 
+   if);
+     
+
+-- treelevelGrammarTableFindCatcherBody: DoPart --
+do (if no
+    // errornumbers.noReadAccess // errornumbers.noWriteAccess
+    // errornumbers.EOSError // errornumbers.noSuchFile
+    // errornumbers.WriteAccessOnLstFileError // errornumbers.fileExists then
+       msg[]->accessError
+    // errornumbers.noSpaceLeft // errornumbers.otherFileError
+    // errorNumbers.notExisting // errorNumbers.badFormat
+    // errorNumbers.parseErrors // errorNumbers.doubleFormDeclaration
+    // errorNumbers.grammarNotFound // errorNumbers.arrayTooBig then
+       msg[]->mpsError
+    // notificationNumbers.startingParsing then
+       startParsing
+    // notificationNumbers.noParserAvailable then
+       noParserAvailable
+    else
+       (if no->errorNumbers.fatalParseError then msg[]->mpsError if)
+   if)  
+
+-- treelevelGrammarTableIfNotFoundBody: DoPart --
+do INNER ifNotFound;
+   'Grammar "'->msg.puttext;
+   grammarName[]->msg.puttext;
+   '" not loaded'->msg.putline;
+   'Going to stop'->msg.putline;
+   
+-- treelevelGrammarTableNoParserAvailableBody: DoPart --
+do
+   'No parser available for grammar: "'->msg;
+   grammarName[]->msg.puttext;
+   '"'->msg.putline;
+   INNER noParserAvailable  
+
+-- treelevelGrammarTableFind: Descriptor --
+(#
+   doFind:
+     (#
+        tgi,gn: @text;
+        tgir: ^text (* only used to avoid an error in text.equalNCS !!!! *)
+     do
+        loop:
+        (for i: NoOfKnownGrammars repeat
+          t[i].grammarIdentification->tgir[];
+          (if tgir[] <> none then tgir->tgi if);
+          (if grammarName[] <> none then grammarName->gn if);
+          trace.grammars
+            ->tracer
+              (# 
+              do
+                 'matching grammar: "'->dmp.putText;
+                 gn[]->dmp.putText;
+                 '" against grammarTable grammar: '->dmp.putText;
+                 tgir[]->dmp.putText
+              #);
+          (if (tgi[]->gn.equalNCS) then i->inx; leave loop if)
+        for);
+        
+     #);
+   installed: @boolean
+do
+   (if theCatcher[] = none then
+       theCatcher[]->treelevelGrammarTableFindCatcher.oldCatcher[];
+       treelevelGrammarTableFindCatcher[]->theCatcher[]
+   if);
+   trace.grammars
+     ->tracer
+       (# 
+       do
+          'find grammar: "'->dmp.putText;
+          grammarName[]->dmp.putText;
+          '" in grammarTable'->dmp.putText
+       #);
+   doFind;
+   (if inx = 0 then
+         (# savedRepS: ^repetitionStream
+         do (* save rep *)
+            repS[]->savedRepS[];
+            &repetitionStream[]->repS[];
+            install: (grammarName[],error[])->grammarMissing->installed;
+            savedRepS[]->repS[];
+            
+         #);
+       (if installed then doFind if)
+   if);
+   (if inx = 0 then
+       trace.grammars
+         ->tracer
+           (# 
+           do
+              'FAILURE: find grammar: "'->dmp.putText;
+              grammarName[]->dmp.putText;
+              '" in grammarTable'->dmp.putText
+           #);
+       'Could not find '->ifNotFound
+    else
+       trace.grammars
+         ->tracer
+           (# 
+           do
+              'SUCCEEDED: find grammar: "'->dmp.putText;
+              grammarName[]->dmp.putText;
+              '" in grammarTable'->dmp.putText
+           #);
+       
+   if);
+   (if theCatcher[] = treelevelGrammarTableFindCatcher[] then
+       treelevelGrammarTableFindCatcher.oldCatcher[]->theCatcher[]
+   if)
+#)  
+
+-- treelevelGrammarTableInsert: Descriptor --
+(#
+   tgi,gn: @text;
+   tgir,help: ^text;
+   (* only used to avoid an error in text.equalNCS !!!! *)
+   inx: @integer
+do
+   (if noOfKnownGrammars >= t.range then 10->t.extend if);
+   loop:
+   (for i: NoOfKnownGrammars repeat
+     t[i].grammarIdentification->tgir[];
+     (if tgir[] <> none then tgir->tgi if);
+     (if theGrammar.grammarIdentification <> none then
+         theGrammar.grammarIdentification->help[]; help->gn
+     if);
+     (if (tgi[]->gn.equalNCS) then i->inx; leave loop if)
+   for);
+   (if inx = 0 then
+       trace.grammars
+         ->tracer
+           (# 
+           do
+              'insert grammar: "'->dmp.putText;
+              help[]->dmp.putText;
+              '" in grammarTable'->dmp.putText
+           #);
+       theGrammar[]->t[noOfKnownGrammars+1->noOfKnownGrammars][];
+       
+   if);
+   
+#)  
+
+-- treelevelGrammarTableMetagrammarInsert: DoPart --
+do
+   trace.grammars
+     ->tracer (#  do 'insert metagrammar in grammarTable'->dmp.putText #);
+   (if noOfKnownGrammars >= t.range then 10->t.extend if);
+   meta[]->t[noOfKnownGrammars+1->noOfKnownGrammars][];
+     
+
+-- astlevelGrammarFinderRegisterGrammars: DoPart --
+do
+   trace.grammars->tracer (#  do 'registering  grammars'->dmp.putText #);
+   INNER registerGrammars;
+   trace.grammars
+     ->tracer (#  do 'DONE: registering  grammars'->dmp.putText #)  
+
+-- astlevelGrammarFinderNoRegisteredGrammarsBody: DoPart --
+do 'No grammars have been registered\n'->msg; INNER noRegisteredGrammars  
+
+-- astlevelGrammarFinder: DoPart --
+do
+   trace.grammars
+     ->tracer
+       (# 
+       do 'GrammarMissing: grammar: "'->dmp.putText; grammar[]->dmp.putText
+       #);
+   false->installed;
+   INNER grammarFinder;
+     
+

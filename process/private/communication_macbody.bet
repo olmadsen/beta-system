@@ -1,298 +1,197 @@
 ORIGIN '../communication';
-(*
- * COPYRIGHT
- *       Copyright (C) Mjolner Informatics, 1992,93,94
- *       All rights reserved.
- *)
 [[
---- include '~beta/basiclib/v1.5/private/unixinterface'
---- include '~beta/basiclib/v1.5/private/unixerror'
+--- lib:attributes ---
 
---- TCPStreamPrivate:descriptor ---
+
+--- waitForIO:descriptor ---
 (#
-   (* The UNIX filedescriptor index on top of which buffered
-    * I/O is provided.
-    *)
-   index: @integer;
-
-   unixStream: @integer; (* UNIX FILE (cf. stdio.h)  pointer for file. *)
-   UnixErrNo: @integer; (* may contain UNIX variable 'errno'*)
-   statusBuf: @cStruc(# byteSize::<(#do statusBufSize->value #)#);
-   outputFile: @boolean; (* True iff this file is opened for writing. *)
-   
-   fdopen: External
-     (# fildes: @integer; type: [1]@char; unixStream: @integer;
-     enter(fildes,type)
-     do CallC
-     exit(unixStream)
-     #);
-   
-   ProcessError:
-     (# msg: @text
-     enter msg
-     do (if (getErrno->UnixErrNo)
-         // EPERM// EACCESS then msg->AccessError
-         // ENOSPC then msg->NoSpaceError
-         else inner
-        if);
-     #);
-   
-   SetUpUnixStream:
-     (# type: @text;
-     enter type
-     do	(index,type) -> fdopen -> private.unixStream;
-        (if private.unixStream//0 then
-            private.processError(# do 'Cannot open file'->OtherError #);
-        if);
-     #);
 #)
 
---- TCPStreamPut:descriptor ---
-(# fputc: External
-     (# unixStream: @integer;
-        ch: @char;
-        status: @integer;
-     enter(ch,unixStream)
-     do CallC
-     exit status
-     #);
-do 
-   (if ((ch,private.unixStream)->fputc)//EOFvalue then WriteError if);
-#)
-
---- TCPStreamGet:descriptor ---
-(# fgetc: External
-     (# unixStream: @integer;
-        ch: @char;
-     enter unixStream
-     do CallC
-     exit ch
-     #);
-   EOFfunction: External
-     (# unixStream: @integer; 
-        yes: @boolean; 
-     enter unixStream
-     do CallC
-     exit yes
-     #);
-do
-   private.unixStream -> fgetc -> ch;
-   (if ch//EOFvalue then   (* Either a read error or simply end of file. *)
-       (if true//(private.unixStream -> EOFfunction) then
-           EOSError;
-        else
-           ReadError;
-       if);
-   if);
-#)
-
---- TCPStreamPeek:descriptor ---
-(# fgetc: External
-     (# unixStream: @integer;
-        ch: @char;
-     enter unixStream
-     do CallC
-     exit ch
-     #);
-   ungetc: External
-     (# unixStream: @integer;
-        ch: @char;
-     enter (ch,unixStream)
-     do CallC
-     exit ch
-     #);
-   EOFfunction: External
-     (# unixStream: @integer; 
-        yes: @boolean; 
-     enter unixStream
-     do CallC
-     exit yes
-     #);
-do
-   private.unixStream -> fgetc -> ch;
-   (if ((ch,private.unixStream) -> ungetc)//EOFvalue 
-       then   (* Either a read error or simply end of file. *)
-       (if true//(private.unixStream -> EOFfunction) then
-           EOSError;
-        else
-           ReadError;
-       if);
-   if);
-#)
-
---- TCPStreamPutText:descriptor ---
-(# fputs: External
-     (# unixStream: @integer;
-        T: [1]@char;
-        status: @integer;
-     enter(T,unixStream)
-     do CallC
-     exit status
-     #);
-do
-   (if ((T,private.unixStream)->fputs)//EOFvalue then WriteError; if);;
-#)
-
---- TCPStreamGetText:descriptor ---
-(# StreamError: External(# yes: @boolean do CallC exit yes #);
-   GetTextFromStream: External
-     (# unixStream: @integer;
-        toEOL: @boolean;
-        T: [1]@char;
-     enter(unixStream,toEOL)
-     do CallC
-     exit T
-     #);
-do
-   (private.unixStream,true) -> GetTextFromStream -> T;
-   (if true//StreamError then '' -> T if);
-#)
-
---- GetRep:descriptor ---
-(# fread: External
-     (# addr, size, n, unixStream: @integer; (* n is no of elems. to read. *)
-        n1: @integer; (* The number of elements successfully read. *)
-     enter(addr,size,n,unixStream)
-     do CallC   
-     exit n1
-     #);
-do
-   (repAdr,1,length*4,private.unixStream) -> fread -> length;
-#)
-
---- PutRep:descriptor ---
-(# fwrite: External
-     (# addr, size, n, unixStream: @integer; (* n is no of elems. to write. *)
-        n1: @integer; (* The number of elements successfully written. *)
-     enter(addr,size,n,unixStream)
-     do CallC
-     exit n1
-     #);
-do
-   (repAdr,1,length*4,private.unixStream) -> fwrite -> length;
-#)
-
---- TCPStreamOpenRead:descriptor ---
-(# z: [1]@char;
-do
-   'r' -> z[1];
-   z -> private.SetUpUnixStream;
-#)
-
---- TCPStreamOpenWrite:descriptor ---
-(# z: [1]@char;
-do
-   true -> private.outputFile;
-   'w' -> z[1];
-   z -> private.SetUpUnixStream;
-#)
-
---- TCPStreamOpenReadWrite:descriptor ---
+--- PipePrivate:descriptor ---
 (#
-do
-   true -> private.outputFile;
-   'r+' -> private.SetUpUnixStream;
-#)
-
---- TCPStreamOpenExeWrite:descriptor ---
-(# z: [1]@char;
-do
-   true -> private.outputFile;
-   'w' -> z[1];
-   z -> private.SetUpUnixStream;
-#)
-
---- TCPStreamFlush:descriptor ---
-(# fflush: External
-     (# unixStream,status: @integer; 
-     enter unixStream
-     do CallC
-     exit status 
-     #);
-do
-   (if true//private.OutputFile then
-       (if (private.unixStream->fflush)//EOFvalue then WriteError; if);
-   if);
-#)
-
---- TCPStreamClose:descriptor ---
-(# fclose: External
-     (# unixStream,status: @integer; 
-     enter unixStream
-     do CallC 
-     exit status 
-     #);
-do
-   (if (private.unixStream->fclose)//EOFvalue then OtherError; if);
-   (* Note that the fclose call closes both the unixStream and the
-    filedescriptor (index). *)
-#)
-
---- SocketOpen:descriptor ---
-(#
-do
-   (if index.assigned // false then 
-       'Can not open a socket with unassigned index' -> otherError 
-   if);
-   index -> inStream.private.index;
-   index -> outStream.private.index;
-   inStream.openRead;
-   outStream.openWrite;
-#)
-
---- ActiveSocketConnect:descriptor ---
-(#
-do
-   (if port.assigned // false then
-       'Can not open an active socket with unassigned port' -> error 
-   if);
-   (if host.assigned // false then 
-       'Can not open an active socket with unassigned host' -> error 
-   if); 
-   (host,port) -> &openActive -> index;
-   (if index // -1 then 'Error in open active' -> error if);
-#)
-
---- PassiveSocketBind:descriptor ---
-(#
-do
-   (if port.assigned // false then 
-       'Can not bind a passive socket with unassigned port' -> error
-   if);
-   (if (port -> &bindPort -> listenIndex) // -1 then
-       'Error when binding a socket' -> error;
-   if);
-#)
-
----  PassiveSocketAwaitConnection:descriptor  ---
-(#
-do
-   (if listenIndex.assigned // false then 
-       'Await connection on an unbound passive socket' -> error
-   if);
-   listenIndex -> &acceptConnection -> index;
-   (if index // -1 then 'Error in an accept call' -> error if);
 #)
 
 --- PipeInit:descriptor ---
 (#
-   descriptors: ^unixPipe; 
-do
-   &unixPipe[] -> descriptors[];
-   (if (descriptors[] -> &openPipe) 
-    // -1 then 'failed to open pipe' -> error;
-   if);
-   descriptors.writeIndex -> writeEnd.private.Index; 
-   descriptors.readIndex -> readEnd.private.Index;
-   readEnd.openRead;
-   writeEnd.openWrite;
 #)
 
---- TCPStreamException:descriptor ---
-(#  
-do
-   'TCPStream exception: ' -> msg.puttext;
-   message -> msg.puttext;
+--- SSocketPrivate:descriptor ---
+(#
+#)
+
+--- SSocketOpen:descriptor ---
+(#
+#)
+
+--- SSocketClose:descriptor ---
+(#
+#)
+
+--- SSocketFlush:descriptor ---
+(#
+#)
+
+--- SSocketPut:descriptor ---
+(#
+#)
+
+--- SSocketGet:descriptor ---
+(#
+#)
+
+--- SSocketPeek:descriptor ---
+(#
+#)
+
+--- SSocketEos:descriptor ---
+(#
+#)
+
+--- SSocketPutText:descriptor ---
+(#
+#)
+
+--- SSocketGetLine:descriptor ---
+(#
+#)
+
+--- SSocketGetAtom:descriptor ---
+(#
+#)
+
+--- SSocketNonBlockingScope:descriptor ---
+(#
+#)
+
+--- SSocketLeaveNBScope:descriptor ---
+(#
+#)
+
+--- BSocketPrivate:descriptor ---
+(#
+#)
+
+--- BSocketOpen:descriptor ---
+(#
+#)
+
+--- BSocketClose:descriptor ---
+(#
+#)
+
+--- BSocketWrite:descriptor ---
+(#
+#)
+
+--- BSocketRead:descriptor ---
+(#
+#)
+
+--- BSocketEndOfData:descriptor ---
+(#
+#)
+
+--- BSocketPutBlock:descriptor ---
+(#
+#)
+
+--- BSocketGetBlock:descriptor ---
+(#
+#)
+
+--- BSocketGetBlockLen:descriptor ---
+(#
+#)
+
+--- BSocketGetBlockRest:descriptor ---
+(#
+#)
+
+--- BSocketPutRep:descriptor ---
+(#
+#)
+
+--- BSocketGetRep:descriptor ---
+(#
+#)
+
+--- BSocketNonBlockingScope:descriptor ---
+(#
+#)
+
+
+--- BSocketLeaveNBScope:descriptor ---
+(#
+#)
+
+--- ActiveSSocketConnect:descriptor ---
+(#
+#)
+
+--- ActiveBSocketConnect:descriptor ---
+(#
+#)
+
+--- PassiveSSocketPrivate:descriptor ---
+(#
+#)
+
+--- PassiveSSocketBind:descriptor ---
+(#
+#)
+
+---  PassiveSSocketAwait:descriptor  ---
+(#
+#)
+
+--- PassiveSSocketClose:descriptor ---
+(#
+#)
+
+--- PassiveBSocketPrivate:descriptor ---
+(#
+#)
+
+--- PassiveBSocketBind:descriptor ---
+(#
+#)
+
+---  PassiveBSocketAwait:descriptor  ---
+(#
+#)
+
+--- PassiveBSocketClose:descriptor ---
+(#
+#)
+
+--- SocketGeneratorPrivate:descriptor ---
+(#
+#)
+
+--- SocketGeneratorBind:descriptor ---
+(#
+#)
+
+--- SocketGeneratorClose:descriptor ---
+(#
+#)
+
+--- SocketGeneratorGetStream:descriptor ---
+(#
+#)
+
+--- SocketGeneratorGetBinary:descriptor ---
+(#
+#)
+
+--- SocketGeneratorNBScope:descriptor ---
+(#
+#)
+
+--- SocketGeneratorLeaveNBScope:descriptor ---
+(#
 #)
 
 ---]]
+
+

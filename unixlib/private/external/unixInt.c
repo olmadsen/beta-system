@@ -44,13 +44,6 @@ struct unixPipe
 #define MAXHOSTNAMELEN 512
 #endif
 
-extern char *machine_name(void);
-char *getHostMachine()
-{
-  return machine_name();
-}
-
-
 int EOFvalue(){return EOF;}
 
 

@@ -108,20 +108,22 @@ do
 
 
 -- PrototypeScanSimples: descriptor --
-(* (From documentation of the prototype-layout)
- * EndianTable:	
+(* EndianTable:	
  *              The endian table holds information about the location in
  * 		the object about possible integer, short and real values
- * 		tha ust be converted from/to big/little endian when
+ * 		that must be converted from/to big/little endian when
  * 		the object is exchanged between big/little endian machines.
  * 		As of writing, this table is always generated for little
- * 		endian machines. Switch 47 will generated it for big endian
+ * 		endian machines. Switch 47 will generate it for big endian
  * 		machines as well.
  * 
  * 		However, the format and generation of the table is currently
  * 		being revisited. Ths current format is:
  * 
- *  		a	A bit vector describing offsets holding a long 
+ * 		NOTE!  Bits are counted "as they are laid out in memory".
+ * 		This means that bit 0 is 0x80 in the byte, and bit 7 is 0x01
+ * 
+ *              a	A bit vector describing offsets holding a long 
  * 			attributes (i.e 4 bytes). Ig e.g. bit 12 is 1,
  * 			then byte offset 48 holds a long.
  * 
@@ -129,39 +131,37 @@ do
  * 
  * 				((size - 1 ) div 32) + 1
  * 
- * 			Each byte holds information about 32 longs, one
+ * 			Each byte holds information about 8 longs, one
  * 			pr. bit.
  * 
- * 		b	A zero sequence of shorst (2 bytes) holding byte 
- * 			offsets to attributes holding a short.
+ * 		b	A zero-terminated list of shorts (2 bytes) holding 
+ * 			byte offsets to attributes holding a short.
  * 
- * 		c	A zero sequence of shorst (2 bytes) holding byte 
- * 			offsets to attributes holding a shortreal.
+ * 		c	A zero-terminated list of shorts (2 bytes) holding
+ * 			byte offsets to attributes holding a real.
  * 
  * 		Note: the bit vector is paded with a possible byte to make
  * 		sure that the short- and real-lists are half-word aligned.
  * 
- * 		A proposal for a further compaction is the following:
+ * 		A further compaction is performed:
  * 
- * 			An object rarely has shorst and/or reals. In case
- * 			of no  shorst/reals a bit coulld indicate if the lists
- * 			are present. 
+ * 			Objects rarely have shorts or reals.  In case
+ * 			of shorts/reals, a bit indicate that the 
+ *			corresponding list is present.
  * 
  * 			The first 2 bits in the long bit vector represents
  * 			information about offset 0 (zero) and 4. Offset 0
- * 			is the protytype pointer of the object and offset
- * 			is the GC-field. Since this is always, the case bits
+ * 			is the protytype pointer of the object and offset 4
+ * 			is the GC-field. Since this is always the case, bits
  * 			0 and 1 can be used to represent information about 
- * 			shorts and longs. Ths suggestion is to use bit 0 to 
- * 			mark if a short-list is present and bit 1 is used to
- * 			indicate if the real -lits is present.
+ * 			shorts and reals:
  * 
- * 			This proposal will also eliminate the need for padding
- * 			the bit vector.
+ * 			Bit 0 (0x80) is set if a short-list is present.
+ * 			Bit 1 (0x40) is set if the real-list is present.
  *)
 
-(# l: @longWord;
-   i, j, b, N, (* no. of bytes to represent longs *)
+(# b, (* Current byte of the bitvector *)
+   N, (* no. of bytes to represent longs *)
    ptr, (* points at current byte/word in endiantable. *)
    pos: @Integer; (* thisOffset at start of the current byte *)
    do_int16, do_real64: @Boolean;
@@ -207,7 +207,7 @@ do
          #);                 
    if);
    
-   32->pos; (* Ready for rest of bytestream *)
+   32->pos; (* Ready for rest of bytestream representing longs. *)
    ((Size-1) div 32) -> N;
    
    (for i: N repeat
