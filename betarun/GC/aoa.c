@@ -4,6 +4,12 @@
  * by Lars Bak
  */
 #include "beta.h"
+#include "aoa.h"
+
+static FollowObject();
+static Phase1();
+static Phase2();
+static Phase3();
 
 /* EXPORTING:
  *
