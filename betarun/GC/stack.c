@@ -778,6 +778,7 @@ void ProcessHPPAStackObj(StackObject *sObj, CellProcessFunc func)
 
 #ifdef sparc
 #include "../CRUN/crun.h"
+#define MAXDATAREGSONSTACK 64 /* FIXME: Is this sufficient? --mg */
 
 #ifdef RTDEBUG
 static RegWin *BottomAR=0 /* Currently never set up - use StackStart? */;
@@ -861,8 +862,12 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
      * Since for-loop skips 2 after continue, skip n*2 = -tag-4 longs.
      */
     int tag = (int)*theCell /* potential tag */;
-    if (tag<=-4){
-      if ( (int)(theCell+(-tag-2)) > (int)(ar->fp) ){
+    if (tag <= -4
+#if MMAPANYADDR
+	&& -MAXDATAREGSONSTACK-4 <= tag
+#endif
+	) {
+      if ((int)(theCell+(-tag-2)) > (int)(ar->fp)) {
 	/* Skip would be out of frame */
 	DEBUG_CODE({
 	  fprintf(output, "Attempt to skip out of frame!\n");
@@ -1077,8 +1082,12 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
   for (; theCell != (Object **) theEnd; theCell+=2) {
     /* Test for floating point regs on stack. See comment in ProcessAR */
     int tag = (int)*theCell /* potential tag */;
-    if (tag<=-4){
-      if ( (int)(theCell+(-tag-2)) > (int)(ar->fp) ){
+    if (tag <= -4
+#if MMAPANYADDR
+	&& -MAXDATAREGSONSTACK-4 <= tag
+#endif
+	) {
+      if ((int)(theCell+(-tag-2)) > (int)(ar->fp)) {
 	/* Skip would be out of frame */
 	fprintf(output, 
 		"0x%08x: %d: NOT skipping %d 8-byte cells: skip would be out of frame! (%%fp=0x%08x).\n",

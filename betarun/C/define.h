@@ -117,6 +117,14 @@
 
 #define RTLAZY /* Include support for lazy fetch */
 
+#ifndef RTLAZY
+#define MMAPANYADDR 1 /* If set to 1, allow mmap at any address. Otherwise,
+		       * mmap is only allowed to return in the positive
+		       * region of the address space.
+		       * RTLAZY requires a heap purely in positive addresses.
+		       */
+#endif /* !RTLAZY */
+
 /******** Misc. *******/
 #define FALSE	0
 #define TRUE	1

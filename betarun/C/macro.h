@@ -127,16 +127,16 @@ do {                               \
 
 #if defined(sparc) || defined(NEWRUN)
 #ifdef MT
-#define inIOA(x)     ((x) && ((unsigned)(gIOA) <= (unsigned)(x) && (unsigned)(x)< (unsigned)(gIOATop)))
+#define inIOA(x)     ((x) && ((unsigned long)(gIOA) <= (unsigned long)(x) && (unsigned long)(x)< (unsigned long)(gIOATop)))
 #else
-#define inIOA(x)     (((unsigned)(x) - (unsigned)(IOA)) < (unsigned)(IOATopOff))
+#define inIOA(x)     (((unsigned long)(x) - (unsigned long)(IOA)) < (unsigned long)(IOATopOff))
 #endif /* MT */
 #else
-#define inIOA(x)     (((long)IOA <= (long)(x)) && ((long)(x) < (long)IOATop))
+#define inIOA(x)     (((unsigned long)IOA <= (unsigned long)(x)) && ((unsigned long)(x) < (unsigned long)IOATop))
 #endif /* sparc || newrun */
      
-#define inToSpace(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceTop)) 
-#define inToSpaceArea(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceLimit)) 
+#define inToSpace(x) (((unsigned long)ToSpace <= (unsigned long)(x)) && ((unsigned long)(x) < (unsigned long)ToSpaceTop)) 
+#define inToSpaceArea(x) (((unsigned long)ToSpace <= (unsigned long)(x)) && ((unsigned long)(x) < (unsigned long)ToSpaceLimit)) 
 #define inAOA(x)     inArea(AOABaseBlock, (Object *)(x))
 #define inAOAUnused(x) inAreaUnused(AOABaseBlock, (Object *)(x))
      
@@ -155,21 +155,21 @@ do {                               \
  */
 #define AOAISDEAD(obj)       ((obj)->GCAttr == DEADOBJECT)
 #define AOAISFREE(obj)       ((obj)->GCAttr == FREECHUNK)
-#define AOAISALIVE(obj)      ((obj)->GCAttr >=  LISTEND)
+#define AOAISALIVE(obj)      ((unsigned long)((obj)->GCAttr) >=  LISTEND)
 #ifdef PERSIST
 #define inPIT(ip)            (((void *)(ip) < PITLimit) && ((void *)(ip) >= PIT))
 #define AOAISPERSISTENT(obj) (inPIT((void *)((obj)->GCAttr)))
 #define PERSISTENTMARK(inx)  ((long)newPUID(inx))
 #endif /* PERSIST */
-#define isLink(gcattr)       ((gcattr) > LISTEND)
+#define isLink(gcattr)       ((unsigned long)(gcattr) > LISTEND)
 #define isEnd(gcattr)        ((gcattr) == LISTEND)
 
 #ifdef PERSIST
 #define isAutonomous(gc)   ((IOAMinAge <= (gc)) && ((gc) <= IOAPersist))
-#define isForward(gc)      ((gc) > LISTEND)
+#define isForward(gc)      (!isStatic(gc) && (unsigned long)(gc) > LISTEND)
 #else 
 #define isAutonomous(gc)   ((IOAMinAge <= (gc)) && ((gc) <= IOAMaxAge))
-#define isForward(gc)      ((gc) > IOAMaxAge)
+#define isForward(gc)      (!isStatic(gc) && (unsigned long)(gc) > IOAMaxAge)
 #endif /* PERSIST */
 #define isStatic(gc)       ((-0xFFFF <= (gc)) && ((gc) <= -1))
 
@@ -274,7 +274,7 @@ do {                               \
   Object *_theObj=theObj;                               \
   Distance = 0;                                                \
   _GCAttribute = _theObj->GCAttr;                            \
-  while( _GCAttribute < 0 ){                                   \
+  while(isStatic(_GCAttribute)){                                   \
     Distance += _GCAttribute*4;                                  \
     _theObj = (Object *) Offset(_theObj, _GCAttribute*4); \
     _GCAttribute = _theObj->GCAttr;                          \

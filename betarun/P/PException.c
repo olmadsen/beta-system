@@ -45,8 +45,10 @@ void PITAlloc(void)
   PIT = (void *)reserveProtectedBlock((unsigned long) MAXENTRIES);
   PITLimit = (void *)((unsigned long)PIT + (unsigned long)MAXENTRIES);
 
+#if !MMAPANYADDR
   Claim((unsigned long)PITLimit < 0x7fffffff,
 	"PIT must be in positive adresses");
+#endif
 }
 
 Object *newPUID(unsigned long offset)

@@ -15,14 +15,6 @@
 #include <errno.h>
 #endif
 
-#ifndef RTLAZY
-#define ANYADDR 1 /* If set to 1, allow mmap at any address. Otherwise,
-		   * mmap is only allowed to return in the positive
-		   * region of the address space.
-		   * RTLAZY requires a heap purely in positive addresses.
-		   */
-#endif /* !RTLAZY */
-
 #define inBlock( theB, addr) (((BlockStart( theB)) <= (long *) addr) \
                               && ((long *) addr < theB->limit) )
 #define inBlockUnused( theB, addr) ((theB->top <= (long *) addr) \
@@ -120,7 +112,7 @@ void mmapInitial(unsigned long numbytes)
 #endif /* hpux9pa */
 
 #ifdef sun4s
-#if ANYADDR
+#if MMAPANYADDR
   mmapflags = MAP_NORESERVE | MAP_PRIVATE;
 #else
   mmapflags = MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED;
@@ -139,7 +131,7 @@ void mmapInitial(unsigned long numbytes)
 	      (int)startadr, (int)numbytes, PROT_NONE, (int)mmapflags, fd,0);
     });
 #endif
-#if ANYADDR
+#if MMAPANYADDR
     mmapHeap = mmap(NULL, numbytes, PROT_NONE, mmapflags, fd,0);
 #else
     mmapHeap = mmap((void*)startadr, numbytes, PROT_NONE, mmapflags, fd,0);
@@ -149,7 +141,7 @@ void mmapInitial(unsigned long numbytes)
 #endif
     if ((long)mmapHeap == (long)MAP_FAILED) {
       mmapHeap = NULL;
-#if ANYADDR
+#if MMAPANYADDR
       numbytes /= 2;
 #else
       startadr += MMAPINCR;
@@ -173,7 +165,7 @@ void mmapInitial(unsigned long numbytes)
 #ifdef nti
 #define MMAPSTART 0x10000000
 #define MMAPINCR  0x10000000
-#if ANYADDR
+#if MMAPANYADDR
   while (!mmapHeap) {
     mmapHeap = VirtualAlloc(NULL, numbytes, 
 			    MEM_RESERVE, PAGE_NOACCESS);

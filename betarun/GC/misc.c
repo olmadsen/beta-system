@@ -513,7 +513,9 @@ void Illegal(char *file, int line)
 
 long inBetaHeap(Object *theObj)
 { 
+#if !MMAPANYADDR
   if (!isPositiveRef(theObj)) return FALSE;
+#endif
   if (inIOA(theObj)) return TRUE;
   if (inToSpace(theObj)) return TRUE;
   if (inAOA(theObj)) return TRUE;
