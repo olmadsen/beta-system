@@ -844,6 +844,10 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       
       valhalla_writeint (-1);
       valhalla_writeint (stacktype);
+      for(comp=comp->CallerComp;comp;comp=comp->CallerComp) {
+	valhalla_writeint ((int)comp);
+      };
+      valhalla_writeint (-1);
       valhalla_writeint (opcode);
       valhalla_socket_flush ();
     }
