@@ -1,5 +1,4 @@
 ORIGIN 'control';
-BODY 'preprocess';
 BODY 'interface_header';
 BODY 'interface_body';
 BODY 'type_dcl';
@@ -7,6 +6,7 @@ BODY 'const_exp';
 BODY 'declarator';
 BODY 'attributes';
 BODY 'typelib';
+BODY 'private/translatebody';
 
 (* The following two includes are in order to
  * report byte position at astoverflow errors.
@@ -32,90 +32,55 @@ BODY 'typelib';
      exit ExpandedName[]
      #);
    
-   EmitComments: FetchComments
-     (# 
-     do (if currentSubcomment.lgth<>0 then
-            currentSubcomment[]->outfile.CommentLine;
-         else
-            (* empty line comment *)
-            outfile.newline;
-        if)
-     #);
-   
    IdentifierToText:
      (# i: ^idl.identifier;
      enter i[]
      exit i.getnameAppl -> NameApplToText -> CheckForReservedWord
      #);
    
-   EmitHolders:
-     (# 
-     do (if not holders.empty then
-            2 -> outfile.indent.inc;
-            (if not compact then 
-                outfile.newline;
-                outfile.indent;
-                'Holders' -> outfile.CommentLine;
-                outfile.newline;
-            if);
-            holders.scan
-            (# 
-            do outfile.indent;
-               current[] -> outfile.puttext;
-               'Holder: Holder' -> outfile.puttext;
-               2 -> outfile.indent.inc;
-               (if not compact then 
-                   outfile.newline;
-                   outfile.indent;
-               if);
-               outfile.PatternBegin;
-               'value: @' ->outfile.puttext;
-               current[] -> outfile.puttext;
-               '; ' -> outfile.puttext;
-               outfile.PatternEnd;
-               2 -> outfile.indent.dec;
-               ';' -> outfile.putline;
-            #);
-            2 -> outfile.indent.dec;
-            (if not compact then outfile.newline; if);
-        if);
-     #);
-   EmitRefholders:
-     (# 
-     do (if not refholders.empty then
-            2 -> outfile.indent.inc;
-            (if not compact then 
-                outfile.newline;
-                outfile.indent;
-                'Reference Holders' -> outfile.CommentLine;
-                outfile.newline;
-            if);
-            refholders.scan
-            (# 
-            do outfile.indent;
-               current[] -> outfile.puttext;
-               'Holder: refHolder' -> outfile.puttext;
-               2 -> outfile.indent.inc;
-               (if not compact then outfile.newline; outfile.indent; if);
-               outfile.PatternBegin;
-               'type:: ' ->outfile.puttext;
-               current[] -> outfile.puttext;
-               ' '->outfile.put;
-               outfile.PatternEnd;
-               ';' -> outfile.putline;
-               2 -> outfile.indent.dec;
-            #);
-            outfile.newline;
-            2 -> outfile.indent.dec;
-        if);
-     #);
-   
+        do_scoped_name:
+          (# n: ^idl.scoped_name;
+             s1: ^idl.scoped_name1;
+             s2: ^idl.scoped_name2;
+             s3: ^idl.scoped_name3;
+             id: ^text;
+          enter n[]
+          do (if n.symbol
+              // idl.scoped_name1 then
+                 n[] -> s1[];
+                 s1.getIdentifier -> IdentifierToText 
+                   -> id[] 
+              // idl.scoped_name2 then
+                 n[] -> s2[];
+                 s2.getIdentifier -> IdentifierToText 
+                   -> id[] 
+              // idl.scoped_name3 then
+                 n[] -> s3[];
+                 s3.getscoped_name -> do_scoped_name -> id[];
+                 '.' -> id.put;
+                 s3.getIdentifier -> IdentifierToText 
+                   -> id.puttext;
+             if);
+          exit id[]
+          #);
+        
    DoFile:
      (# ifile: @file;
-        last_include: ^text;
+        idl_entry, beta_entry: @diskentry;
         ok: @boolean;
         ff: ^ast.fragmentForm;
         info: ^declarator_info;
+        OutFileName, IdlFileName, HeadOfIdlFileName, Ifilename, Cfilename: ^text;   
+        propputs: @textlist;
+        propgets: @textlist;
+        symbols: @ 
+          (* symbols (name,type) local to current function *)
+          declarator_list;
+        local_types: ^type_list (* types local to current file *);
+
+        holders: @textlist;
+        refholders: @textlist;
+        Output: @OutputFile;
         
         Preprocess:
           (# 
@@ -125,396 +90,337 @@ BODY 'typelib';
           (# 
           do <<SLOT Postprocess:descriptor>>
           #);
+        EmitComments: FetchComments
+          (# 
+          do (if currentSubcomment.lgth<>0 then
+                 currentSubcomment[]->output.CommentLine;
+              else
+                 (* empty line comment *)
+                 output.newline;
+             if)
+          #);
+        EmitHolders:
+          (# 
+          do (if not holders.empty then
+                 2 -> output.indent.inc;
+                 (if not compact then 
+                     output.newline;
+                     output.indent;
+                     'Holders' -> output.CommentLine;
+                     output.newline;
+                 if);
+                 holders.scan
+                 (# 
+                 do output.indent;
+                    current[] -> output.puttext;
+                    'Holder: Holder' -> output.puttext;
+                    2 -> output.indent.inc;
+                    (if not compact then 
+                        output.newline;
+                        output.indent;
+                    if);
+                    output.PatternBegin;
+                    'value: @' ->output.puttext;
+                    current[] -> output.puttext;
+                    '; ' -> output.puttext;
+                    output.PatternEnd;
+                    2 -> output.indent.dec;
+                    ';' -> output.putline;
+                 #);
+                 2 -> output.indent.dec;
+                 (if not compact then output.newline; if);
+             if);
+          #);
+        EmitRefholders:
+          (# 
+          do (if not refholders.empty then
+                 2 -> output.indent.inc;
+                 (if not compact then 
+                     output.newline;
+                     output.indent;
+                     'Reference Holders' -> output.CommentLine;
+                     output.newline;
+                 if);
+                 refholders.scan
+                 (# 
+                 do output.indent;
+                    current[] -> output.puttext;
+                    'Holder: refHolder' -> output.puttext;
+                    2 -> output.indent.inc;
+                    (if not compact then output.newline; output.indent; if);
+                    output.PatternBegin;
+                    'type:: ' ->output.puttext;
+                    current[] -> output.puttext;
+                    ' '->output.put;
+                    output.PatternEnd;
+                    ';' -> output.putline;
+                    2 -> output.indent.dec;
+                 #);
+                 output.newline;
+                 2 -> output.indent.dec;
+             if);
+          #);
         scanForImports:
           (# root: ^ast.expanded;
           enter root[]
-          do idl.import -> root.suffixWalkForProd
-             (# scancat::idl.import;
-                imported_name, lib: ^text;
-                e: @diskentry;
-                remaining: ^text;
-                exists: @boolean;
-                
-             do current.getstring -> StringToText -> imported_name[];
-                IdlFileName.copy -> e.path;
-                imported_name.copy -> lib[];
-                '.idl' -> lib.stripExtension;
-                (* add path to the predefined interfaces *)
-                (if true 
-                 // 'unknwn' -> lib.equalNCS then
-                    'INCLUDE \'~beta/comlib/unknwn\';' -> outfile.putline;
-                 else
-                    HeadOfIdlFileName.copy -> remaining[];
-                    imported_name[] -> remaining.append;
-                    remaining[] -> e.path;
-                    e.exists -> exists;
-                    (if chain then
-                        (if exists then lib.copy -> last_include[]; if);
-                     else
-                        (if not exists then outfile.commentbegin if);
-                        'INCLUDE \'' -> outfile.puttext;
-                        lib[] -> outfile.puttext;
-                        '\'' -> outfile.put;
-                        (if not exists then outfile.commentend if);
-                        ';' -> outfile.putline;
-                    if);
-                       
-                    (* Add imported library to list of files remaining,
-                     * disregarding if it exists or not. The user still needs
-                     * to get a warning if it does not exists. This is done
-                     * elsewhere.
-                     *)
-                    remaining[] -> files_remaining.add;
-                if);
+          <<SLOT ScanForImports: dopart>>
+          #);
+        
+        do_specification:
+          (* Translate the top node of the IDL *)
+          (# s: ^idl.specification;
+          enter s[]
+          do s.getDefinitions -> do_definitions;
+             EmitHolders;
+             EmitRefHolders;
+          #);
+        
+        do_declarator: 
+          (* Find the NAME and POINTER STATUS
+           * of the parameter. 
+           *)
+          (# d: ^idl.declarator;
+             info: ^declarator_info;
+          enter (info[],d[])
+          do <<SLOT declarator_body: descriptor>>
+          #);
+        
+        do_attributes_specs:
+          (# a: ^idl.attributes_specs;
+             att: ^idl_attributes;
+          enter (att[], a[])
+          do a.newscan(# do (att[],current[]) -> do_attributes_spec #);
+          #);
+        
+        do_attributes_spec:
+          (# a: ^idl.attributes_spec;
+             att: ^idl_attributes;
+          enter (att[], a[])
+          do (att[],a.getattributes) -> do_attributes;
+          #);
+        
+        do_attributes:
+          (# a: ^idl.attributes;
+             att: ^idl_attributes;
+          enter (att[], a[])
+          do a.newscan
+             (# 
+             do (if debug then ':' -> screen.put; if);
+                (current[], att[]) -> do_attribute_spec; (* no 's' (:-) *)
              #);
           #);
-     do        
-        (* Defines not cleared - should be used for all files *)
-        holders.clear;
-        refholders.clear;
-        (* global_types should not be cleared - global to all files.*)
-        (* local_types, propputs, propgets not cleared either: 
-         * The types from imported files should be kept.
-         *)
         
-        (if not quiet then '  Preprocessing...' -> screen.putline; if);
-        PreProcess;
-        Ifilename[] -> ifile.name;
-        ifile.openread;
-        idl[] -> ast.newFragmentForm -> ff[];
-        (if not quiet then 
-            '  Parsing...' -> screen.putline; 
-            '    [' -> screen.puttext;
-            BobsTab -> ast.expandToFullPath -> screen.puttext;
-            ' '->screen.put;
-            ifilename[] -> screen.puttext;
-            ']' -> screen.putline;
-        if);
-        (0,fromBeginning) -> ifile.setpos;
-        (1,ifile[],screen[],ff[]) -> 
-        idl.parser.doParse
-        (# astOverflow::
+        do_attribute_spec:
+          (# y: ^idl.attribute_spec;
+             att: ^idl_attributes (* attributes read are put into this one *);
+          enter (y[], att[])
+          do <<SLOT attribute_spec_body: descriptor>>
+          #);
+        
+        do_cpp_quote:
+          (# c: ^idl.cpp_quote;
+          enter c[]
+          do 2 -> output.indent.inc;
+             output.indent;
+             c.getString -> StringToText -> output.commentline;
+             2 -> output.indent.dec;
+          #);
+        
+        do_definitions:
+          (# d: ^idl.definitions;
+          enter d[]
+          do d.newscan
+	     (# t: ^text;
+                q: ^idl.def_cpp_quote;
+	     do (if current.symbol
+                 // idl.import then 
+                    (* handled by scanForImports *)
+                 // idl.def_type_dcl then current[] -> do_def_type_dcl 
+                 // idl.const_dcl then current[] -> do_const_dcl;
+                 // idl.except_dcl then current[] -> do_except_dcl;
+                 // idl.interface_dcl then current[] -> do_interface_dcl;
+                 // idl.dispinterface_dcl then current[] -> do_dispinterface_dcl;
+                 // idl.forward_dcl then current[] -> do_forward_dcl;
+                 // idl.module then current[] -> do_module;
+                 // idl.def_cpp_quote then 
+                    (current[]->q[]).getcpp_quote -> do_cpp_quote
+                 // idl.library then
+                    current[] -> do_library;
+                 // idl.coclass then
+                    current[] -> do_coclass;
+	         else
+                    (# msg: ^text
+                    do 'do_specification: illegal current.symbol: ' -> msg[];
+	               current.symbol -> msg.putint;
+                       msg[] -> error;
+                    #);
+	        if);
+	     #)
+          #);
+        
+        do_def_type_dcl: 
+          (# d: ^idl.def_type_dcl;
+          enter d[]
+          do 2 -> output.indent.inc;
+             d.gettype_dcl -> do_type_dcl;
+             2 -> output.indent.dec;
+          #);
+        
+        do_base_type_spec:
+          (# s: ^idl.base_type_spec;
+             dcl_info: ^declarator_info;
+          enter (dcl_info[], s[])
+          do <<SLOT do_base_type_spec: descriptor>>
+          #);
+        
+        do_type_dcl: 
+          (# <<SLOT type_dcl_lib: attributes>>;
+             type_name: ^text;
+             d: ^idl.type_dcl;
+          enter d[]
+          do <<SLOT type_dcl_body: descriptor>>
+          #);
+        
+        do_fnc_ptr_type_declarator:
+          (# f: ^idl.fnc_ptr_type_declarator ;
+             name: ^text;
+             msg: ^text;
+             type: ^type_info;
+          enter f[]
+          do f.getfname -> IdentifierToText -> name[];
+             'Function pointers not yet supported, sorry!.\n' -> msg[];
+             '        Using \'int32\' for \'' -> msg.puttext;
+             name[] -> msg.puttext;
+             '\'.' -> msg.puttext;
+             msg[] -> error;
+             (name[], 'int32') -> local_types.add_basic_type -> type[]
+          exit (name[],type[])
+          #);
+
+        do_const_dcl: 
+          (# c: ^idl.const_dcl;
+             info: @declarator_info;
+          enter c[]
+          do 2 -> output.indent.inc;
+             output.indent;
+             (info[], c.getdeclarator) -> do_declarator;
+             (* FIXME: currently ignoring const_type and pointer declarators *)
+             info.name[] -> output.puttext;
+             ': '-> output.puttext;
+             output.patternbegin;
+             'exit ' -> output.puttext;
+             (c.getconst_exp, true) -> do_const_exp -> output.puttext;
+             ' '-> output.put;
+             output.patternend;
+             ';' -> output.putline;
+             2 -> output.indent.dec;
+          #);
+        
+        do_except_dcl: 
+          (# e: ^idl.except_dcl;
+          enter e[]
+          do output.indent;
+             'do_except_dcl NYI' -> output.commentline;
+          #);
+        
+        do_const_exps:
+          (# e: ^idl.const_exps;
+             exp: ^text;
+             add_ticks_to_string: @boolean
+          enter (e[], add_ticks_to_string)
+          do (* If more than one expression, only the last one counts.
+              * This is OK with semantics of comma-evaluation in IDL.
+              *)
+             e.newscan
              (# 
-             do '\n*** AST overflow:' -> screen.putline;
-                'An overflow occurred in the internal representation'
-                  -> screen.putline;
-                'of the parsed IDL file. Sorry!'
-                  -> screen.putline;
-                'Try splitting up ' 
-                  -> screen.puttext;
-                IdlFileName[]
-                  -> screen.putline;
-                'and run bidl again.' -> screen.putline;
-                (*'File pos: ' -> screen.puttext;*)
-                (*idl.parser.privatepart.b.lex.pos -> screen.putint;*)
-                screen.newline;
-                stop;
-             #)
-        #) -> ok;
-	(if ok then
-            (if not quiet then '  Translating...' -> screen.putline; if);
-            Outfile.OpenWrite;
-            IdlFileName[] -> Outfile.Identification;
-            (chain, PreviousFile[]) -> Outfile.Origin;
-            ff.root[] -> scanForImports;
-            ff.root[] -> EmitComments;
-            outfile.Lib;
-            ff.root[] -> do_specification;
-            ifile.close;
-            Outfile.Epilog;
-            PostProcess;
-            (*'closing ' -> screen.puttext; Outfile.Name -> screen.putline;*)
-            Outfile.Close;
-            (if not quiet then 
-                '  Translated BETA file in: \'' -> screen.puttext;
-                outfilename[] -> screen.puttext;
-                '\'' -> screen.putline;
-            if);
-         else
-            (0,fromBeginning) -> ifile.setpos;
-            'Parse errors:' -> screen.putline;
-            (ifile[],screen[]) -> idl.parser.ErrorReport;
-            ifile.close;
-            PostProcess;
-        if);
-     #);
-      
-   do_specification:
-     (* Translate the top node of the IDL *)
-     (# s: ^idl.specification;
-     enter s[]
-     do s.getDefinitions -> do_definitions;
-        EmitHolders;
-        EmitRefHolders;
-     #);
-   
-   do_declarator: 
-     (* Find the NAME and POINTER STATUS
-      * of the parameter. 
-      *)
-     (# d: ^idl.declarator;
-        info: ^declarator_info;
-     enter (info[],d[])
-     do <<SLOT declarator_body: descriptor>>
-     #);
-   
-   do_attributes_specs:
-     (# a: ^idl.attributes_specs;
-        att: ^idl_attributes;
-     enter (att[], a[])
-     do a.newscan(# do (att[],current[]) -> do_attributes_spec #);
-     #);
-   
-   do_attributes_spec:
-     (# a: ^idl.attributes_spec;
-        att: ^idl_attributes;
-     enter (att[], a[])
-     do (att[],a.getattributes) -> do_attributes;
-     #);
-   
-   do_attributes:
-     (# a: ^idl.attributes;
-        att: ^idl_attributes;
-     enter (att[], a[])
-     do a.newscan
-        (# 
-        do (if debug then ':' -> screen.put; if);
-           (current[], att[]) -> do_attribute_spec; (* no 's' (:-) *)
-        #);
-     #);
-   
-   do_attribute_spec:
-     (# y: ^idl.attribute_spec;
-        att: ^idl_attributes (* attributes read are put into this one *);
-     enter (y[], att[])
-     do <<SLOT attribute_spec_body: descriptor>>
-     #);
-   
-   do_cpp_quote:
-     (# c: ^idl.cpp_quote;
-     enter c[]
-     do 2 -> outfile.indent.inc;
-        outfile.indent;
-        c.getString -> StringToText -> outfile.commentline;
-        2 -> outfile.indent.dec;
-     #);
-   
-   do_definitions:
-     (# d: ^idl.definitions;
-     enter d[]
-     do d.newscan
-	(# t: ^text;
-           q: ^idl.def_cpp_quote;
-	do (if current.symbol
-            // idl.import then 
-               (* handled by scanForImports *)
-            // idl.def_type_dcl then current[] -> do_def_type_dcl 
-            // idl.const_dcl then current[] -> do_const_dcl;
-            // idl.except_dcl then current[] -> do_except_dcl;
-            // idl.interface_dcl then current[] -> do_interface_dcl;
-            // idl.dispinterface_dcl then current[] -> do_dispinterface_dcl;
-            // idl.forward_dcl then current[] -> do_forward_dcl;
-            // idl.module then current[] -> do_module;
-            // idl.def_cpp_quote then 
-               (current[]->q[]).getcpp_quote -> do_cpp_quote
-            // idl.library then
-               current[] -> do_library;
-            // idl.coclass then
-               current[] -> do_coclass;
-	    else
-               (# msg: ^text
-               do 'do_specification: illegal current.symbol: ' -> msg[];
-	          current.symbol -> msg.putint;
-                  msg[] -> error;
+             do (current[], add_ticks_to_string) -> do_const_exp -> exp[];
+             #);
+          exit exp[]
+          #);
+        
+        do_const_exp:
+          (# e: ^idl.const_exp;
+             exp: ^text;
+             <<SLOT const_exp_lib: attributes>>;
+             it: @<<SLOT const_exp_body:descriptor>>;
+             add_ticks_to_string: @boolean
+          enter (e[], add_ticks_to_string)
+          do it
+          exit exp[]
+          #);
+        
+        do_interface_body:
+          (# <<SLOT interface_body_lib: attributes>>;
+             b: ^idl.interface_body;
+             e: ^idl.exports;
+          enter b[]
+          <<SLOT interface_body_body: dopart>>
+          #);
+        do_interface_dcl:
+          (# i: ^idl.interface_dcl;
+             do_interface_header:
+               (# h: ^idl.interface_header;
+               enter h[]
+               do <<SLOT interface_header_body: descriptor>>
                #);
-	   if);
-	#)
-     #);
-   
-   do_def_type_dcl: 
-     (# d: ^idl.def_type_dcl;
-     enter d[]
-     do 2 -> outfile.indent.inc;
-        d.gettype_dcl -> do_type_dcl;
-        2 -> outfile.indent.dec;
-     #);
-   
-   do_base_type_spec:
-     (# s: ^idl.base_type_spec;
-        dcl_info: ^declarator_info;
-     enter (dcl_info[], s[])
-     do <<SLOT do_base_type_spec: descriptor>>
-     #);
-   
-   do_type_dcl: 
-     (# <<SLOT type_dcl_lib: attributes>>;
-        type_name: ^text;
-        d: ^idl.type_dcl;
-     enter d[]
-     do <<SLOT type_dcl_body: descriptor>>
-     #);
-   
-   do_fnc_ptr_type_declarator:
-     (# f: ^idl.fnc_ptr_type_declarator ;
-        name: ^text;
-        msg: ^text;
-        type: ^type_info;
-     enter f[]
-     do f.getfname -> IdentifierToText -> name[];
-        'Function pointers not yet supported, sorry!.\n' -> msg[];
-        '        Using \'int32\' for \'' -> msg.puttext;
-        name[] -> msg.puttext;
-        '\'.' -> msg.puttext;
-        msg[] -> error;
-        (name[], 'int32') -> local_types.add_basic_type -> type[]
-     exit (name[],type[])
+          enter i[]
+          do 2 -> output.indent.inc;
+             i.getinterface_header -> do_interface_header;
+             i.getinterface_body -> do_interface_body;
+             2 -> output.indent.dec;
+          #);
+        do_dispinterface_dcl:
+          (# i: ^idl.dispinterface_dcl;
+             do_dispinterface_header:
+               (# h: ^idl.dispinterface_header;
+               enter h[]
+               do <<SLOT dispinterface_header_body: descriptor>>
+               #);
+          enter i[]
+          do 2 -> output.indent.inc;
+             i.getdispinterface_header -> do_dispinterface_header;
+             i.getinterface_body -> do_interface_body;
+             2 -> output.indent.dec;
+          #);
+        
+        do_library:
+          (# lib: ^idl.library;
+          enter lib[]
+          do <<SLOT do_library: descriptor>>
+          #);
+        
+        do_forward_dcl:
+          (# f: ^idl.forward_dcl;
+             i: ^text;
+          enter f[]
+          do f.getIdentifier -> IdentifierToText -> i[];
+             (i[],i[]) -> local_types.add_interface_type;
+          #);
+        
+        do_module: 
+          (# m: ^idl.module;
+          enter m[]
+          do output.indent;
+             'do_module NYI' -> output.commentline;
+          #);
+        
+        do_coclass:
+          (# cc: ^idl.coclass
+          enter cc[]
+          do <<SLOT do_coclass: descriptor>>
+          #);
+        
+        do_definition_error: 
+          (# d: ^idl.definition_error
+          enter d[]
+          do output.indent;
+             'do_definition_error NYI' -> output.commentline;
+          #);
+     enter IdlFileName[]
+     <<SLOT DoFile: dopart>>
+     exit local_types[]
      #);
 
-   do_const_dcl: 
-     (# c: ^idl.const_dcl;
-        info: @declarator_info;
-     enter c[]
-     do 2 -> outfile.indent.inc;
-        outfile.indent;
-        (info[], c.getdeclarator) -> do_declarator;
-        (* FIXME: currently ignoring const_type and pointer declarators *)
-        info.name[] -> outfile.puttext;
-        ': '-> outfile.puttext;
-        outfile.patternbegin;
-        'exit ' -> outfile.puttext;
-        (c.getconst_exp, true) -> do_const_exp -> outfile.puttext;
-        ' '-> outfile.put;
-        outfile.patternend;
-        ';' -> outfile.putline;
-        2 -> outfile.indent.dec;
-     #);
-   
-   do_except_dcl: 
-     (# e: ^idl.except_dcl;
-     enter e[]
-     do outfile.indent;
-        'do_except_dcl NYI' -> outfile.commentline;
-     #);
-   
-   do_scoped_name:
-     (# n: ^idl.scoped_name;
-        s1: ^idl.scoped_name1;
-        s2: ^idl.scoped_name2;
-        s3: ^idl.scoped_name3;
-        id: ^text;
-     enter n[]
-     do (if n.symbol
-         // idl.scoped_name1 then
-            n[] -> s1[];
-            s1.getIdentifier -> IdentifierToText 
-              -> id[] 
-         // idl.scoped_name2 then
-            n[] -> s2[];
-            s2.getIdentifier -> IdentifierToText 
-              -> id[] 
-         // idl.scoped_name3 then
-            n[] -> s3[];
-            s3.getscoped_name -> do_scoped_name -> id[];
-            '.' -> id.put;
-            s3.getIdentifier -> IdentifierToText 
-              -> id.puttext;
-        if);
-     exit id[]
-     #);
-   
-   do_const_exps:
-     (# e: ^idl.const_exps;
-        exp: ^text;
-        add_ticks_to_string: @boolean
-     enter (e[], add_ticks_to_string)
-     do (* If more than one expression, only the last one counts.
-         * This is OK with semantics of comma-evaluation in IDL.
-         *)
-        e.newscan
-        (# 
-        do (current[], add_ticks_to_string) -> do_const_exp -> exp[];
-        #);
-     exit exp[]
-     #);
-   
-   do_const_exp:
-     (# e: ^idl.const_exp;
-        exp: ^text;
-        <<SLOT const_exp_lib: attributes>>;
-        it: @<<SLOT const_exp_body:descriptor>>;
-        add_ticks_to_string: @boolean
-     enter (e[], add_ticks_to_string)
-     do it
-     exit exp[]
-     #);
-   
-   do_interface_body:
-     (# <<SLOT interface_body_lib: attributes>>;
-        b: ^idl.interface_body;
-        e: ^idl.exports;
-     enter b[]
-     <<SLOT interface_body_body: dopart>>
-     #);
-   do_interface_dcl:
-     (# i: ^idl.interface_dcl;
-        do_interface_header:
-          (# h: ^idl.interface_header;
-          enter h[]
-          do <<SLOT interface_header_body: descriptor>>
-          #);
-     enter i[]
-     do 2 -> outfile.indent.inc;
-        i.getinterface_header -> do_interface_header;
-        i.getinterface_body -> do_interface_body;
-        2 -> outfile.indent.dec;
-     #);
-   do_dispinterface_dcl:
-     (# i: ^idl.dispinterface_dcl;
-        do_dispinterface_header:
-          (# h: ^idl.dispinterface_header;
-          enter h[]
-          do <<SLOT dispinterface_header_body: descriptor>>
-          #);
-     enter i[]
-     do 2 -> outfile.indent.inc;
-        i.getdispinterface_header -> do_dispinterface_header;
-        i.getinterface_body -> do_interface_body;
-        2 -> outfile.indent.dec;
-     #);
-   
-   do_library:
-     (# lib: ^idl.library;
-     enter lib[]
-     do <<SLOT do_library: descriptor>>
-     #);
-   
-   do_forward_dcl:
-     (# f: ^idl.forward_dcl;
-        i: ^text;
-     enter f[]
-     do f.getIdentifier -> IdentifierToText -> i[];
-        (i[],i[]) -> local_types.add_interface_type;
-     #);
-   
-   do_module: 
-     (# m: ^idl.module;
-     enter m[]
-     do outfile.indent;
-        'do_module NYI' -> outfile.commentline;
-     #);
-   
-   do_coclass:
-     (# cc: ^idl.coclass
-     enter cc[]
-     do <<SLOT do_coclass: descriptor>>
-     #);
-   
-   do_definition_error: 
-     (# d: ^idl.definition_error
-     enter d[]
-     do outfile.indent;
-        'do_definition_error NYI' -> outfile.commentline;
-     #);
-   
-do DoFile;
+do (* translate *)
+   IdlFileName[] -> DoFile;
 #)

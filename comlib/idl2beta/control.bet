@@ -5,6 +5,7 @@ INCLUDE 'idlsematt';
 INCLUDE 'mpsadditions';
 BODY   'translate';
 BODY   'symboltable';
+BODY   'private/controlbody';
 INCLUDE 'outfile';
 INCLUDE 'idl_attributes';
 
@@ -29,14 +30,13 @@ Control:
        (# defaultGrammarFinder:: findGrammar #);
      
      idl: @ast.idl; (* The MPS interface to the BETA grammar/ASTs *)
-   
-     Outfile: @OutputFile;
+     
      Debug, trace, mps_trace, preserve, verbose, quiet, mute, 
      nowarnings, errorwarnings, force, chain, compact: @boolean;
    
      StartOfFilenames: @integer; 
-     aText: ^text;
-     OutFileName, IdlFileName, PreviousFile, HeadOfIdlFileName, Ifilename, Cfilename: ^text;
+     last_include: ^text;
+     IdlFileName, PreviousFile: ^text;
      
      textlist: list
        (# element::text;
@@ -51,8 +51,6 @@ Control:
        #);
      includepaths: @textlist;
      defines: @textlist;
-     holders: @textlist;
-     refholders: @textlist;
      files_remaining: @textlist
        (* (# add::
         *    (#
@@ -61,8 +59,6 @@ Control:
         *    #)
         * #);
         *);
-     propputs: @textlist;
-     propgets: @textlist;
      
      type_cat_basic:     (# exit 1 #);
      type_cat_struct:    (# exit 2 #);
@@ -89,7 +85,8 @@ Control:
           attributes: ^idl_attributes;
        #);
      type_list: list
-       (# element::type_info;
+       (# name: ^text (* identification for debug/trace purposes *);
+          element::type_info;
           outer_scope: ^type_list;
           findtype: 
             (# name: ^text;
@@ -152,7 +149,6 @@ Control:
             #);
        #);
      global_types: @type_list(# #)(* globally known types *);
-     local_types: @type_list(# #)(* types local to current file *);
      
      declarator_info:
        (# as_text:
@@ -190,11 +186,7 @@ Control:
             <<SLOT declarator_list_print: dopart>>
             #);
        #);
-     
-     symbols: @ 
-       (* symbols (name,type) local to current function *)
-       declarator_list;
-     
+          
      CheckForReservedWord:
        (# word: ^text
        enter word[]
@@ -236,174 +228,19 @@ Control:
      
      
   do (* Control *)
-     global_types[] -> local_types.outer_scope[];
+     'Global Types' -> global_types.name[];
      block:
        (#
-          Usage:(# 
-                do 'Usage: ' -> putText; 1 -> Arguments -> putText;
-                   ' [Options] [-o <name>] <filename>' -> putLine;
-                   '\nOptions:' -> putline;
-                   '  -c' -> putline; 		   
-                   '  --chain        \tChain ORIGINs.' -> putline;
-                   '  -C' -> putline; 		   
-                   '  --compact      \tCompact output - no comments, less newlines.' -> putline;
-                   '  -w' -> putline; 		   
-                   '  --nowarnings   \tDon\'t display warnings.' -> putline;
-                   '  -e' -> putline; 		   
-                   '  --errorwarnings\tMake warnings become errors (displayed despite -q).' -> putline;
-                   '  -f' -> putline; 		   
-                   '  --force        \tForce generation of BETA files.' -> putline;
-                   '  -v' -> putline; 		   
-                   '  --verbose      \tPrint verbose info on progress' -> putline;
-                   '  -q' -> putline; 		   
-                   '  --quiet        \tBe quiet - print minimal output, like files opened, ' -> putline;
-                   '                 \terror messages (but not warnings)' -> screen.putline;
-                   '  -m' -> putline; 		   
-                   '  --mute         \tBe absolutely quiet - print nothing' -> putline;
-                   '  -p' -> putline; 		   
-                   '  --preserve     \tPreserve temporary files' -> putline;
-                   '  -D name' -> putline;
-                   '  --define name  \tDefine preprocessor name' -> putline;
-                   '  -I path' -> putline;
-                   '  --include path \tAdd path to list of paths known by preprocessor' -> putline;
-                   '\nDebug options:' -> putline;
-                   '  -d' -> putline; 
-                   '  --debug        \tEnable debug of bidl' -> putline;
-                   '  -t' -> putline; 
-                   '  --trace        \tEnable tracing of bidl' -> putline;
-                   '  -T' -> putline; 
-                   '  --mps_trace    \tEnable tracing of mps' -> putline;
-                #);
-          
+          Usage: 
+            <<SLOT Usage: descriptor>>;
           InitAstEnv:
-            
             (* Initialization of the meta programming system *)
-            (# parser_entry, bidl_entry: @diskentry;
-            do 
-	       (if debug and mps_trace then
-                   (ast.trace.topOpen,true) -> ast.trace.set;
-                   (ast.trace.fragmentOpen,true) -> ast.trace.set;
-                   (ast.trace.grammars,true) -> ast.trace.set;
-                   (ast.trace.compactOpen,true) -> ast.trace.set;
-                   (ast.trace.onParse,true) -> ast.trace.set;
-                   (ast.trace.parser,true) -> ast.trace.set;
-                   (ast.trace.getBinding,true) -> ast.trace.set;
-                   (ast.trace.getBindingMark,true) -> ast.trace.set;
-               if);
-               BobsTab -> ast.expandToFullPath -> parser_entry.path;
-               1 -> Arguments -> bidl_entry.path;
-               (* FIXME: the stuff below fails on NTI *)
-               (if false then
-                   (if bidl_entry.modtime < parser_entry.modtime then
-                       'Parser is newer than bidl executable - recompile bidl!'
-                         -> screen.putline;
-                       stop;
-                   if);
-               if);
-	       ast.astLevelInit;
-               idl.init; 
-	       parser_entry.path -> idl.parser.initialize
-               (# EOLasComEnd::(# do true->value #);
-                  caseSensitive::(# do true->value #);
-               #);
-            #);
-          
+            <<SLOT InitAstEnv: descriptor>>;
        do
           (if (NoOfArguments <= 1) then Usage; leave block if);
           2 -> StartOfFilenames;
           
-          args: 
-            (# 
-            do StartOfFilenames -> Arguments -> aText[];    
-               (if true 
-                // ('-o' -> aText.Equal) then
-                   (if (NoOfArguments <= StartOfFilenames+1) then 
-                       Usage; leave block
-                   if);      
-                   StartOfFilenames+1 -> Arguments -> OutFileName[]; 
-                   StartOfFilenames+2 -> StartOfFilenames;
-                   restart args;
-                // ('-D' -> aText.Equal) then
-                // ('--define' -> aText.Equal) then
-                   (if (NoOfArguments <= StartOfFilenames+1) then 
-                       Usage; leave block
-                   if);      
-                   StartOfFilenames+1 -> Arguments -> defines.append; 
-                   StartOfFilenames+2 -> StartOfFilenames;
-                   restart args;
-                // ('-I' -> aText.Equal) then
-                // ('--include' -> aText.Equal) then
-                   (if (NoOfArguments <= StartOfFilenames+1) then 
-                       Usage; leave block
-                   if);      
-                   StartOfFilenames+1 -> Arguments -> includepaths.append; 
-                   StartOfFilenames+2 -> StartOfFilenames;
-                   restart args;
-                // ('-p' -> aText.equal)
-                // ('--preserve' -> aText.equal) then 
-                   true -> preserve;
-                   StartOfFilenames+1 -> StartOfFilenames;
-                   restart args;
-                // ('-e' -> aText.equal)
-                // ('--errorwarnings' -> aText.equal) then 
-                   true -> errorwarnings;
-                   StartOfFilenames+1 -> StartOfFilenames;
-                   restart args;
-                // ('-w' -> aText.equal)
-                // ('--nowarnings' -> aText.equal) then 
-                   true -> nowarnings;
-                   StartOfFilenames+1 -> StartOfFilenames;
-                   restart args;
-                // ('-f' -> aText.equal)
-                // ('--force' -> aText.equal) then 
-                   true -> force;
-                   StartOfFilenames+1 -> StartOfFilenames;
-                   restart args;
-                // ('-c' -> aText.equal)
-                // ('--chain' -> aText.equal) then 
-                   true -> chain;
-                   StartOfFilenames+1 -> StartOfFilenames;
-                   restart args;
-                // ('-C' -> aText.equal)
-                // ('--compact' -> aText.equal) then 
-                   true -> compact -> outfile.compact;
-                   StartOfFilenames+1 -> StartOfFilenames;
-                   restart args;
-                // ('-q' -> aText.equal)
-                // ('--quiet' -> aText.equal) then 
-                   true -> quiet; false -> verbose -> mute;
-                   StartOfFilenames+1 -> StartOfFilenames;
-                   restart args;
-                // ('-v' -> aText.equal)
-                // ('--verbose' -> aText.equal) then 
-                   true -> verbose;
-                   false -> quiet -> mute;
-                   StartOfFilenames+1 -> StartOfFilenames;
-                   restart args;
-                // ('-m' -> aText.equal)
-                // ('--mute' -> aText.equal) then 
-                   true -> mute -> quiet;
-                   false -> verbose;
-                   StartOfFilenames+1 -> StartOfFilenames;
-                   restart args;
-                // ('-d' -> aText.equal)  
-                // ('--debug' -> aText.equal) then 
-                   true -> debug -> verbose;
-                   false -> quiet -> mute;
-                   StartOfFilenames+1 -> StartOfFilenames;
-                   restart args;
-                // ('-t' -> aText.equal)  
-                // ('--trace' -> aText.equal) then 
-                   true -> trace;
-                   StartOfFilenames+1 -> StartOfFilenames;
-                   restart args;
-                // ('-T' -> aText.equal)  
-                // ('--mps_trace' -> aText.equal) then 
-                   true -> mps_trace;
-                   StartOfFilenames+1 -> StartOfFilenames;
-                   restart args;
-               if);
-            #);
+          <<SLOT CollectArguments: descriptor>>;
           
           (if StartOfFilenames<>NoOfArguments then
               (* Temporarily only allowing one file, since all 
@@ -414,10 +251,20 @@ Control:
           if);
           
           (if not quiet then 'IDL to BETA translator.' -> putLine; if);
-          
+
+          (if debug then 'With DEBUG.' -> screen.putline; 
+              false -> quiet;
+              'Using parser: ' -> screen.puttext;
+              BobsTab -> screen.putline;
+          if);
+          (if trace then 'With TRACE.' -> screen.putline; 
+              false -> quiet -> mute;
+          if);
+                         
           <<SLOT add_basic_types: descriptor>>;
           
           collect_files:
+            (* Currently only collects one file *)
             (# 
             do (if StartOfFilenames<=NoOfArguments then
                    StartOfFilenames -> Arguments -> files_remaining.add;
@@ -427,125 +274,25 @@ Control:
             #);
           
           process_files:
-            (# idl_entry, beta_entry: @diskentry;
+            (# 
             do 
                (if files_remaining.empty then leave process_files if);
-               (files_remaining.head -> files_remaining.delete).elm[]
+               (files_remaining.head 
+                 -> files_remaining.delete).elm[]
                  -> IdlFileName[];
-               
-               InitAstEnv;
-               (if debug then 'With DEBUG.' -> screen.putline; 
-                   false -> quiet;
-                   'Using parser: ' -> screen.puttext;
-                   BobsTab -> screen.putline;
-               if);
-               (if trace then 'With TRACE.' -> screen.putline; 
-                   false -> quiet -> mute;
-               if);
                
                '.idl' -> IdlFileName.appendExtension;
                
-               (* First check that IDL file is there *)
-               IdlFileName[] -> idl_entry.path;
-               (if not idl_entry.exists then
-                   (if not mute then
-                       '    [IDL file \'' -> screen.puttext;
-                       idl_entry.path -> screen.puttext;
-                       '\' does not exist; skipped]' -> screen.putline;
-                   if);
-                   restart process_files;
-               if);
-          
-               (if OutFileName[]=NONE then
-                   IdlFileName.copy -> OutFileName[];
-                   '.idl' -> OutFileName.stripExtension;
-                   (* Prevent identically named ast files: 
-                    * NOT needed anymore, since the ast file for
-                    * the IDL is not saved.
-                    *)
-                   (* '-beta' -> OutFileName.append; *)
-                   '.bet' -> OutFileName.append;
-               if);
-               IdlFileName.copy -> IFilename[];
-               '.idl' -> IFileName.stripExtension;
-               '.i' -> IFileName.appendExtension;
-               IdlFileName.copy -> CFilename[];
-               '.idl' -> CFileName.stripExtension;
-               '.c' -> CFileName.appendExtension;
-               
-               
-               OutFileName[] -> Outfile.Name;
-               (*'opening ' -> screen.puttext; Outfile.Name -> screen.putline;*)
-	       (if not mute then
-                   'Processing '''->screen.puttext; 
-	           (IdlFileName[], '') -> ast.thePathhandler.localpath 
-                     -> screen.puttext; 
-	           '''...'->screen.putline;
-               if);
-               
-               idl_entry.path.head -> HeadOfIdlFileName[];
-               (if HeadOfIdlFileName.length>0 then
-                   directorychar -> HeadOfIdlFileName.put;
-               if);
-               (* We do not use top.open, since this enforces fragment
-                * syntax on the source files. And we would like to be able to
-                * use the IDL files "as-is", without modification.
-                * This means, that we will have to do the following ourselves:
-                *    dependency analysis
-                *    include handling 
-                *)
-               (if not force then
-                   (* Check if .bet file needs to be generated *)
-                   OutFileName[] -> beta_entry.path;
-                   (if beta_entry.exists then
-                       (if beta_entry.modtime>idl_entry.modtime then
-                           (if not quiet then
-                               '    [BETA file is up-to-date; skipped]' 
-                                 -> screen.putline
-                           if);
-                           restart process_files;
-                       if)
-                   if);
-               if);
-               
-               (if false then
-                   'before: idlfilename: ' -> screen.puttext;
-                   IdlFileName[] -> screen.putline;
-                   'before: PreviousFile: ' -> screen.puttext;
-                   PreviousFile[] -> screen.putline;
-               if);
-               
-               <<SLOT Translate:descriptor>>;
-               
-               (if chain and (IdlFileName[]<>NONE) then
-                   (if false then
-                       'after: idlfilename: ' -> screen.puttext;
-                       IdlFileName[] -> screen.putline;
-                   if);
-                   IdlFileName.copy -> PreviousFile[];
-                   (PreviousFile[], HeadOfIdlFileName[]) 
-                     -> ast.thePathHandler.localpath 
-                     -> PreviousFile[];
-                   '.idl' -> PreviousFile.stripExtension;
-                   (if false then
-                       'after: PreviousFile: ' -> screen.puttext;
-                       PreviousFile[] -> screen.putline;
-                   if);
-               if);
-               
+              
                (if debug then
                    newline;
                    'Trace: Global types:'->putline;
                    screen.line;
                    global_types.print;
-                   'Trace: Local types for file '->puttext;
-                   IdlFileName[] -> puttext;
-                   ':' -> putline;
-                   screen.line;
-                   local_types.print;
                if);
                
-               NONE -> OutFileName[];
+               <<SLOT Translate:descriptor>>;
+               
                restart process_files;
             #);
        #)
