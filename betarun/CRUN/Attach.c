@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Attach.c,v 1.12 1992-09-03 12:55:34 beta Exp $
+ * Mod: $Id: Attach.c,v 1.13 1992-10-02 14:45:12 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -22,15 +22,12 @@ ParamThisComp(struct Component *, Att)
     register long              * nextCompBlock asm("%l6");
     register long                level         asm("%l7");
     int first = comp->CallerLSC == 0;
-/*    void (*entrypoint)();*/
     
     GCable_Entry();
     FetchThisComp
-
-    /* printf("\nAttach: comp = %x", comp); */
-
     Ck(comp); Ck(this);
-    getret(ActiveComponent->CallerLSC);
+
+    getret(ActiveComponent->CallerLSC);		/* Save our return address */
 
     AssignReference((long *)&comp->CallerComp, cast(Item) ActiveComponent);
     AssignReference((long *)&comp->CallerObj, cast(Item) this);
@@ -38,22 +35,20 @@ ParamThisComp(struct Component *, Att)
     /* -1 tells that ActiveComponent is active */
     ActiveComponent->StackObj = cast(StackObject) -1;
 
-    /* Push a new Component Block. */
+    /* Push a new Component Block. (It lives in our RegWin) */
     level = 0;
     nextCompBlock = (long *) lastCompBlock;
     callBackFrame = ActiveCallBackFrame;
 
+    ActiveCallBackFrame = 0;			/* Clear the CallBackFrame list */
     lastCompBlock = cast(ComponentBlock) StackPointer;
-    ActiveCallBackFrame = 0;
 
     if (first) {
 	ActiveComponent = comp;
+
+	/* comp->Body is the Object and comp->Body->Proto[-1] is the M-entry address */
 	CallBetaEntry(((void (**)())(cast(Item) &comp->Body)->Proto)[-1],
 		      &comp->Body);
-
-/*	entrypoint = ((void (**)())
-		      (cast(Item) &comp->Body)->Proto)[-1];
-	(*entrypoint)(cast(Item) &comp->Body);  Activate the Comp */
 
 	/* Fool gcc into believing that level, next.. is used */
 	asm(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
@@ -77,7 +72,7 @@ ParamThisComp(struct Component *, Att)
       BetaError(-2, this);
     }
     ActiveComponent = comp;
-
+	
     /* Unpack 'ActiveComponent.StackObj' on top of the stack.
        
       The situation is this:
@@ -99,25 +94,29 @@ ParamThisComp(struct Component *, Att)
 	dest = (char *)FramePointer - size;
 	memcpy(dest, theStackObj->Body+1, size);
 	
-	/* Now correct all frame pointers */
+	/* Now correct all frame pointers in the restored stackpart */
 	delta = dest - (char *)theStackObj->Body[0];
 	rw = cast(RegWin) dest;
 	while ((long *)rw < FramePointer) {
 	    if ((rw->fp += delta) == (int)FramePointer) {
-		lastCompBlock = cast(ComponentBlock) rw;
 		goto ok;
 	    }
 	    rw = cast(RegWin) rw->fp;
 	}
 	fprintf(stderr, "Upps, stack handling gone crazy\n");
       ok:
+	lastCompBlock = cast(ComponentBlock) rw;
+	/* Update ComponentBlock in the restored RegWin */
+	rw->l5 = (long) callBackFrame;
+	rw->l6 = (long) nextCompBlock;
+	rw->l7 = level;
 	asm("ta 3");
 	((char *)FramePointer) -= size;
-    }
     
-    setret(comp->CallerLSC);
-    /* Fool gcc into believing that level, next.. is used */
-    asm(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
-
-    return comp; /* still ?? */
+	setret(comp->CallerLSC);
+	/* Fool gcc into believing that level, next.. is used */
+	asm(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
+	
+	return comp; /* still ?? */
+      }
 }
