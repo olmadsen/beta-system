@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1992-06-01 14:05:49 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1992-06-12 12:10:04 $, SID: $Revision: 1.10 $
  * by Lars Bak
  */
 
@@ -29,6 +29,7 @@ static BooleanProperty( name)
   ENTRY("InfoIOA",  InfoIOA = TRUE);
   ENTRY("InfoAOA",  InfoAOA = TRUE);
   ENTRY("InfoLVRA", InfoLVRA = TRUE);
+  ENTRY("InfoCBFA", InfoCBFA = TRUE);
   ENTRY("InfoLVRAAlloc", InfoLVRAAlloc = TRUE);
 
 #ifdef RTDEBUG
