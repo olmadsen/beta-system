@@ -22,21 +22,22 @@ class JavaConverter
     static void usage(String msg){
 	if (msg!=null) System.err.println("\n" + msg + "\n");
 	System.err.println("Usage:\n");
+	System.err.println("Script: java2beta [-h][-F|-] <java class name>");
+	System.err.println(" e.g.   java2beta java.lang.String\n");
 	System.err.println("Java:   java JavaConverter [-h][-F|-] <java class name> <BETALIB>");
 	System.err.println(" e.g.   java JavaConverter java.lang.String /users/beta/r5.3\n");
-	System.err.println("Script: java2beta [-F] <java class name>");
-	System.err.println(" e.g.   java2beta java.lang.String\n");
 	System.err.println("Output files will be placed in $BETALIB/javalib in a directory");
 	System.err.println("structure corresponding to the package of the class.");
 	System.err.println(" e.g.   $BETALIB/javalib/java/lang/String.bet\n");
 	System.err.println("Options:");
 	System.err.println("   -h  Display this help");
 	System.err.println("   -f  Force overwrite of existing output file");
-	System.err.println("   -F  Force overwrite of existing output file AND files for refered classes");
+	System.err.println("   -F  Force overwrite of existing output file ");
+	System.err.println("       AND files for refered classes");
 	System.err.println("   -   Output to terminal instead of file");
 	System.err.println("");
 	System.err.println("(BETALIB argument is a workaround for the deprecated System.getenv()).");
-	System.exit(1);
+	System.exit((msg==null)?0:1);
     }
   
     public static void main(String[] args){
