@@ -4,11 +4,8 @@ debug =
 make: $(odir)extShellSockets.o $(odir)getUser.o \
       $(odir)remoteStart.o $(odir)outputRedirection.o \
       $(odir)timing.o $(odir)thisHost.o \
-      $(MACHINETYPE) $(MACHINETYPE)/startAsDeamon
+      $(MACHINETYPE)/startAsDeamon
       
-$(MACHINETYPE):
-	-sh -c 'if [ ! -d $(MACHINETYPE) ]; then mkdir $(MACHINETYPE); fi'
-
 $(odir)getUser.o: getUser.c
 	$(CC) $(debug) -D$(MACHINETYPE) -c getUser.c -o $(odir)getUser.o
 
@@ -33,5 +30,6 @@ $(odir)startAsDeamon.o: startAsDeamon.c
 $(odir)thisHost.o: thisHost.c
 	$(CC) $(debug) -D$(MACHINETYPE) -I $(BETALIB)/process/v1.5/private/external  -c thisHost.c -o $(odir)thisHost.o
 
-$(MACHINETYPE)/startAsDeamon: $(MACHINETYPE) $(odir)startAsDeamon.o $(odir)deamonStart.o 
+$(MACHINETYPE)/startAsDeamon: $(odir)startAsDeamon.o $(odir)deamonStart.o 
+	-sh -c 'if [ ! -d $(MACHINETYPE) ]; then mkdir $(MACHINETYPE); fi'
 	$(CC) $(debug) -D$(MACHINETYPE) $(odir)startAsDeamon.o $(odir)deamonStart.o -o $(MACHINETYPE)/startAsDeamon
