@@ -80,7 +80,7 @@ void initProxySpace(void)
     nextFree = &proxySpace[0];
     
     /* Allocate mmapped proxy indirection table. */
-    mmapInitial((u_long) MAXNUMPROXIES * 4);
+    mmapInitial((unsigned long) MAXNUMPROXIES * 4);
     PIT = mmapHeapTop;
     PITTop = mmapHeapTop;
     PITLimit = mmapHeapLimit;
