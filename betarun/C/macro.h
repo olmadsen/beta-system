@@ -120,9 +120,19 @@ do {                               \
 #define isPositiveRef(x) ((long)(x) > 0)
 
 
+#if defined(LIN)
+#define isAutonomous(gc)   ((IOAMinAge <= (gc)) && ((gc) <= IOAMaxAge + 1))
+#else /* LIN */
 #define isAutonomous(gc)   ((IOAMinAge <= (gc)) && ((gc) <= IOAMaxAge))
+#endif /* LIN */
+
 #define isStatic(gc)       (-0xFFFF <= (gc)) && ((gc) <= -1)
+
+#if defined(LIN)
+#define isForward(gc)      ((gc) > IOAMaxAge + 1)
+#else /* LIN */
 #define isForward(gc)      ((gc) > IOAMaxAge )
+#endif /* LIN */
 
 #define isValRep(x)      (((long)(DoubleRepPTValue) <= (long)((x)->Proto))\
 			  && ((long)((x)->Proto) <= (long)(LongRepPTValue)))

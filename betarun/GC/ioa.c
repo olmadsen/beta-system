@@ -490,9 +490,10 @@ void ProcessReference( theCell)
 	      saveAOAroot(theCell);
 	      MCHECK();
 	    }
-	}else
-	  newObj = NewCopyObject( AutObj, theCell);
-	*theCell = (ref(Object)) Offset( newObj, -Distance);
+	}else{
+            newObj = NewCopyObject( AutObj, theCell);
+        }
+        *theCell = (ref(Object)) Offset( newObj, -Distance);
       }
     }
     DEBUG_IOA( Claim( !inIOA(*theCell),"ProcessReference: !inIOA(*theCell)"));

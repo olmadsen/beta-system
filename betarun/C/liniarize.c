@@ -291,6 +291,10 @@ ref (Object) copyObjectToLinearizationInAOA(ref (Object) theObj, long size)
      * previously to hold the linearization, this function will copy
      * theObj to the end of that linearization.
      */
+
+    /* This function is called from 'CopyObjectToAOA' in aoa.c, which
+       in turn is called from 'NewCopyObject' in objectsize, which in
+       turn is called from 'IOAGc' in ioa.c */
     
     newObj = AOALinTop;
     theEnd = (ptr(long)) (((long) newObj) + size); 
@@ -332,9 +336,12 @@ void markIOARelinkAOA(ref (Object) current)
 
 long linearizeAbsoluteMove(ref (Object) root)
 {
+    long sizeOfLinearizationInAOA;
+    
     /* Step 1: Collect the transitive closure of the root in a linked
      * list.  */
     initialCollectList(root, appendToList);
+    sizeOfLinearizationInAOA = totalsize;
     
     /* Step 2: Mark in the GCAttribute of the objects in IOA that they
        should be moved to the linearization at the next IOAGc.
@@ -342,7 +349,18 @@ long linearizeAbsoluteMove(ref (Object) root)
     head = NULL;
     tail = NULL;
     scanList(root, markIOARelinkAOA);
+    /* Now head points to the head of a new linked list containing
+       those objects in the transitive closure that does not reside in
+       IOA, and lets hope most of them are in AOA, since those are the
+       only ones we now how to handle.
+       */
+       
+    /* Step 3: Allocate space in AOA for the linearization.  */
+    allocateLinearizationInAOA(sizeOfLinearizationInAOA);
     
+    /* Now we are ready to do an IOAGc. This will move those objects
+       in the transitive closure that reside in IOA to the
+       linearization in AOA. */
 }
 
 #endif /* LIN */
