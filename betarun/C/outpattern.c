@@ -510,8 +510,13 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
   dirCh = ':';
   execname = ArgVector[0]; /* Always right ??? */
 #else
+#ifdef nti
+  dirCh = '\\';
+  execname = ArgVector[0];
+#else
   dirCh = '/';
   execname = ArgVector[0];
+#endif
 #endif
   if ( (localname=strrchr(execname, dirCh)) ) 
     localname = &localname[1];
@@ -519,7 +524,24 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
     localname = execname;
   dumpname = (char *)MALLOC(strlen(localname)+9); /* Allow for ".dump", possibly 3 digits, and NULL */
   strcpy(dumpname, localname);
+#ifdef nti
+  { /* If a '.' is present overwrite it and what follows */
+    char *exetype = strrchr(dumpname, '.');
+    char *pathsep = strrchr(dumpname, dirCh);
+    /* If local name is 1 or 2 overwrite extension. Case 3 appends extension.
+     * 1. D:\USERS\BETA\TEST.EXE   => D:\USERS\BETA\TEST.DUMP
+     * 2. BETA.EXE                 => BETA.DUMP
+     * 3. D:\USERS\BETA\V1.0\TEST  => not D:\USERS\BETA\V1.DUMP
+     *                             => but D:\USERS\BETA\V1.0\TEST.DUMP
+     */
+    if (exetype && (!pathsep || pathsep < exetype))
+      strcpy(exetype, ".dump");
+    else
+      strcat(dumpname, ".dump");
+  }
+#else
   strcat(dumpname, ".dump");
+#endif
   
   if( (output = fopen(dumpname,"w")) == NULL){
     /* beta.dump cannot be opened */
