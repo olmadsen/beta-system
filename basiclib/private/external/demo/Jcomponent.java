@@ -1,3 +1,12 @@
+/* Jcomponent.java is a clean Java version of Component.java.
+ * Component.java implements coroutines for BETA on jvm.
+ * Jcomponent.java is for implementing coroutines in Java.
+ * The differences between Component.java and Jcomponent.java are:
+ * - Jcomponent.java includes a class Coroutine.java
+ * - in Jcomponent.java, BetaObject has been replaced by Coroutine
+ * See CoEx.java and Merger.java for examples of using Jcomponent.java
+ */
+
 import java.lang.Thread;
 import java.lang.reflect.*;
 import java.io.*;

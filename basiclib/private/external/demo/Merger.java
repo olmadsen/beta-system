@@ -5,10 +5,10 @@
 
 */
 
-class Producer1 extends Coroutine {
+class Adder extends Coroutine {
     public int res;
     int start, max;
-    public Producer1(int s, int m) { 
+    public Adder(int s, int m) { 
       start = s; max = m; 
     }
     void compute(int V){
@@ -22,10 +22,10 @@ class Producer1 extends Coroutine {
 	res = 1000000;
     }
 }
-class Producer2 extends Coroutine {
+class Multiplier extends Coroutine {
     public int res;
     int start, max;
-    public Producer2(int s, int m) { 
+    public Multiplier(int s, int m) { 
       start = s; max = m; 
     }
     void compute(int V){
@@ -41,8 +41,8 @@ class Producer2 extends Coroutine {
 }
 
 class Merger {
-    Producer1 P1 = new Producer1(3,6);
-    Producer2 P2 = new Producer2(2,5);
+    Adder P1 = new Adder(3,6);
+    Multiplier P2 = new Multiplier(2,5);
     void merge() {
 	int i;
         P1.call();
