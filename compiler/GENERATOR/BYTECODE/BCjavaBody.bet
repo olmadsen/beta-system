@@ -15,7 +15,8 @@ splitSignature:
      name: ^text;
      isStatic: @boolean;
   enter signature[]
-  do signature.copy -> signature[];
+  do (* Signature e.g.: java/lang/String/endsWith(Ljava/lang/String;)Z *)
+     signature.copy -> signature[];
      &text[] -> name[];
      (if 'static ' -> ((1,7) -> signature.sub).equal then
          true -> isStatic;
@@ -30,12 +31,15 @@ splitSignature:
             if);
        for);
      INNER;
+     (* name:      java/lang/String/endsWith *)
+     (* signature: (Ljava/lang/String;)Z     *)
   exit (name[], signature[], isStatic)
   #);
 SplitClassSignature: SplitSignature
   (# lastSlash: @integer;
      method: ^text;
-  do &text[] -> method[];
+  do (* name e.g.: java/lang/String/endsWith *)
+     &text[] -> method[];
      scan:
        (for i:name.lgth repeat
             (if name.T[i]='(' then leave scan if);
@@ -1780,6 +1784,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                 (# n, d, m: ^text; 
                    calltype: @integer;
                    s, isValueType, isInterfaceMethod, isStatic: @boolean;
+                   nargs: @int16;
                 do BC.get -> calltype;
                    callType %Band 1 = 1 -> isStatic;
                    callType %Band 2 = 2 -> isValueType;
@@ -1789,6 +1794,15 @@ do (# commentstream: @stream (* maybe something more useful *);
                    (if isInterfaceMethod then
                        invokeinterface -> jcf.emit;
                        (m[], n[], d[]) -> jcf.emitInterfaceMethodRef;
+                       1 -> nargs; (* interface pointer counts for one *)
+                       (if ((d.T[1]='(') and (d.T[2]=')')) then
+                           (* d = signature = '()...' i.e. no arguments *)
+                        else
+                           ',' -> d.findAll(# do nargs+1 -> nargs #);
+                           nargs+1 -> nargs;
+                       if);
+                       nargs -> jcf.emit;
+                       0 -> jcf.emit;
                     else
                        (if isStatic then
                            invokestatic  -> jcf.emit;
