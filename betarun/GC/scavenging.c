@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.43 1992-09-22 17:54:27 beta Exp $
+ * Mod: $Id: scavenging.c,v 1.44 1992-09-25 22:05:40 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
@@ -90,16 +90,49 @@ void ProcessAR(struct RegWin *ar, struct RegWin *end)
     
     Claim(((long)  ar) % 4 == 0, "ProcessAR: ar is 4 byte aligned");
     Claim(((long) end) % 4 == 0, "ProcessAR: end is 4 byte aligned");
-    
+        
+    /* Process GC registers of the activation record */
+#ifdef LVR_Area
+    /* Don't process references from the stack to LVRA. Such references are temporary, and
+     * do not constitute a real reference to LVRA.
+     */
+    DEBUG_IOA( if (inLVRA(ar->i0)) fprintf(output, "ProcessAR: ar->i0 is in LVRA\n"));
+    DEBUG_IOA( if (inLVRA(ar->i1)) fprintf(output, "ProcessAR: ar->i1 is in LVRA\n"));
+    DEBUG_IOA( if (inLVRA(ar->i3)) fprintf(output, "ProcessAR: ar->i3 is in LVRA\n"));
+    DEBUG_IOA( if (inLVRA(ar->i4)) fprintf(output, "ProcessAR: ar->i4 is in LVRA\n"));
+    if (inBetaHeap(ar->i0) && isObject(ar->i0) && !inLVRA(ar->i0)) ProcessReference(&ar->i0);
+    if (inBetaHeap(ar->i1) && isObject(ar->i1) && !inLVRA(ar->i1)) ProcessReference(&ar->i1);
+    if (inBetaHeap(ar->i3) && isObject(ar->i3) && !inLVRA(ar->i3)) ProcessReference(&ar->i3);
+    if (inBetaHeap(ar->i4) && isObject(ar->i4) && !inLVRA(ar->i4)) ProcessReference(&ar->i4);
+#else
     if (inBetaHeap(ar->i0) && isObject(ar->i0)) ProcessReference(&ar->i0);
     if (inBetaHeap(ar->i1) && isObject(ar->i1)) ProcessReference(&ar->i1);
     if (inBetaHeap(ar->i3) && isObject(ar->i3)) ProcessReference(&ar->i3);
     if (inBetaHeap(ar->i4) && isObject(ar->i4)) ProcessReference(&ar->i4);
+#endif
     
+    /* Process the stack part */
     for (; theCell != (struct Object **) end; theCell+=2)
       if (inBetaHeap(*theCell) && isObject(*theCell))
-	ProcessReference(theCell);
-    CompleteScavenging();
+	if( inLVRA( *theCell) ){
+	  /* Don't process references from the stack to LVRA. Such references are temporary, and
+	   * do not constitute a real reference to LVRA.
+	   */
+	  DEBUG_IOA( fprintf(output, "(STACK(%d) is in LVRA)", (long)theCell-(long)&ar[1]));
+	} else {
+	  ProcessReference(theCell);
+	  CompleteScavenging();
+	}
+      else
+	/* handle value register objects on the stack */
+	switch((int) *theCell){
+	case -8: (long) theCell += 4; /* 4 longs on stack */
+	case -7: (long) theCell += 4; /* 3 longs on stack */
+	case -6: (long) theCell += 4; /* 2 longs on stack */
+	case -5: (long) theCell += 4; /* 1 long on stack */
+	  break;
+        }
+      
 }
 
 void ProcessStack()
