@@ -202,6 +202,12 @@ long tstreal11(long n1, double d1, double d2, double d3, double d4)
 { return n1+d1+d2+d3+d4;
 }
 
+long tstreal12(double d1, double d2, double d3, double d4)
+{ 
+  /* printf("\n%f %f %f %f %f \n",d1,d2,d3,d4,d1+d2+d3+d4);*/
+   return d1+d2+d3+d4;
+}
+
 long tstrealX()
 { long x,y,z,w,v;
  x = tstreal1(11,11.1);
@@ -209,4 +215,8 @@ long tstrealX()
  z = tstreal3(33,14.4,15.5,16.6);
  v = tstreal4(44,55,17.7,18.8);
  w = tstreal5(66,77,88,20.2);
+ x = tstreal12(1.1,2.2,3.3,4.4);
 }
+
+
+
