@@ -194,11 +194,20 @@ do {                               \
 /*** Object sizes in BYTES ****/
 
 /* Objects must be multiples of 8 bytes because of reals */
-#define ObjectAlign(numbytes)     (unsigned long)(((numbytes)+7) & ~7)
-#define ObjectAlignDown(numbytes) (unsigned long)(((numbytes))   & ~7)
+#define ObjectAlign(numbytes)     ((unsigned long)(((numbytes)+7) & ~7))
+#define ObjectAlignDown(numbytes) ((unsigned long)(((numbytes))   & ~7))
 
-#define ByteRepBodySize(range)   ((((range)+4)/4)*4)
-#define ShortRepBodySize(range)  (((2*(range)+3)/4)*4)
+#define LongAlign(numbytes)       ((unsigned long)(((numbytes)+3) & ~3))
+#define LongAlignDown(numbytes)   ((unsigned long)(((numbytes))   & ~3))
+
+/* FIXME: It is currently unclear if the use of LongAlign instead of 
+ * ObjectAlign below is intentional or something that was not fixed when
+ * ObjectAlign was changed to 8.
+ * Things seem to work as is, but all direct and indirect uses of the four
+ * macros below should be checked. 
+ */
+#define ByteRepBodySize(range)   LongAlign((range)+1) /* +1 for NULL termination */
+#define ShortRepBodySize(range)  LongAlign(2*(range))
 #define LongRepBodySize(range)   ((range)*4)
 #define DoubleRepBodySize(range) ((range)*8)
 
@@ -224,20 +233,6 @@ do {                               \
  * so just in case, we default to the size of a pointer if we don't recognise
  * the prototype.
  */
-
-#define DispatchValRepSize(proto, range)			                \
-(((long)(proto) == (long)(ByteRepPTValue)) ? ByteRepSize(range) :		\
- (((long)(proto) == (long)(LongRepPTValue))   ? LongRepSize(range)  :		\
-  (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepSize(range) :    	\
-   (((long)(proto) == (long)(ShortRepPTValue)) ? ShortRepSize(range) :    	\
-    LongRepSize(range)))))
-
-#define DispatchValRepBodySize(proto, range)			                \
-(((long)(proto) == (long)(ByteRepPTValue)) ? ByteRepBodySize(range) :      	\
- (((long)(proto) == (long)(LongRepPTValue))   ? LongRepBodySize(range)  : 	\
-  (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepBodySize(range) :	\
-   (((long)(proto) == (long)(ShortRepPTValue)) ? ShortRepBodySize(range) :	\
-    LongRepBodySize(range)))))
 
 /* DispatchRepSize works for both value repetitions and reference repetitions */
 #define DispatchRepSize(proto, range)			                \
