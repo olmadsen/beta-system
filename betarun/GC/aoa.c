@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-02-19 08:21:37 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-02-28 09:44:50 $, SID: $Revision: 1.5 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -447,6 +447,16 @@ static Phase2( numAddr, sizeAddr, usedAddr)
     theBlock = theBlock->next;
   }
   freeBlock->info.nextTop = (ptr(long)) freeObj;
+
+  /* After AOAGc should freeBlock be the new AOATopBlock. */
+  AOATopBlock = freeBlock;
+
+  /* If there exists Blocks after freeBlock, make them empty. */
+  freeBlock = freeBlock->next;
+  while( freeBlock ){
+    freeBlock->info.nextTop = BlockStart(freeBlock);
+    freeBlock = freeBlock->next;
+  }
 
   *numAddr  = numOfBlocks;
   *sizeAddr = allSpace;
