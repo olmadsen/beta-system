@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-08-31 10:00:39 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-08-31 14:07:07 $, SID: $Revision: 1.9 $
  * by Tommy Thorn
  */
 
@@ -173,7 +173,7 @@ register volatile void *GCreg3 asm("%o4");
 
 /* On the SPARC we need to skip the first instruction */
 #define CallBetaEntry(entry,item)			\
-    (* (void (*)()) ((long*)entry+1) )(item); ForceVolatileRef(item)
+    (* (void (*)()) ((long*)entry+1) )(item);
 
 #define Protect(var, code) \
   { code; } __asm__("": "=r" (var))
