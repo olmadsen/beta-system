@@ -1,0 +1,274 @@
+ORIGIN '../dragdrop';
+INCLUDE '~beta/sysutils/cstring'
+        '~beta/guienv/private/winnt/guienv_ntiprivate'
+        '../additionslib';
+-- private: Descriptor --
+(#
+   Handle2Pointer: external
+     (# hglobal: @int32; cptr: @int32 enter hglobal do callc exit cptr #);
+   theHandle:
+     (# handle: @integer; theInterfaceObject: ^InterfaceObject
+     enter theInterfaceObject[]
+     do
+        (if theInterfaceObject[] <> none then
+            theInterfaceObject.InterfaceObjectID->handle
+         else
+            'theHandle: theCanvas[]=none'->putline
+        if)
+     exit handle
+     #);
+   IDropTargetType: IDropTarget
+     (#
+        tempFormatETC: @struct_tagFORMATETC;
+        tempSTGMedium: @STGMEDIUM;
+        tempIEnumFORMATETC: ^IEnumFORMATETC;
+        tempIEnumFORMATETCHolder: @IEnumFORMATETCHolder;
+        refCount: @integer;
+        ;
+        supportedTypes:
+        (* The types (e.g., CF_TEXT) that are supported by the drag-data *) [0]
+        @integer;
+        modifiers: (* OR of some of MK_SHIFT, MK_CONTROL, MK_LBUTTON, ... *)
+          @integer;
+        preferredType: (* e.g., CF_TEXT *) @integer;
+        action: (* move/copy/none/... *) @int32;
+        ;
+        QueryInterface::<  (#  do 'DropTarget: QueryInterface'->putline #);
+        AddRef::< 
+          (# 
+          do 'DropTarget: AddRef'->putline; refCount+1->refCount->result
+          #);
+        Release::< 
+          (# 
+          do 'DropTarget: Release'->putline; refCount-1->refCount->result
+          #);
+        ;
+        DragEnter::< 
+          (# hr: @Hresult
+          do
+             get_supportedTypes:
+             (* Asks the dataobject what types it support. Answer is in supportedTypes. *)
+               (# 
+               do
+                  0->supportedTypes.new;
+                  (DATADIR_GET,tempIEnumFORMATETCHolder[])
+                    ->pDataObj.EnumFormatEtc->hr;
+                  ;
+                  (if hr.value = S_OK then
+                      tempIEnumFORMATETCHolder->tempIEnumFORMATETC[];
+                      tempIEnumFORMATETC.reset;
+                      enum_loop:
+                        (# 
+                        do
+                           (1,tempFORMATETC[],none )->tempIEnumFORMATETC.next
+                             ->hr;
+                           (if hr.value = S_OK then
+                               1->supportedTypes.extend;
+                               tempFORMATETC.cfFormat
+                                 ->supportedTypes[supportedTypes.range];
+                               restart enum_loop
+                            else
+                               leave enum_loop
+                           if)
+                        #);
+                      tempIEnumFORMATETC.Release
+                   else
+                      'pDataObj.EnumFormatEtc: IKKE OK'->putline;
+                      handle_error:
+                        (# 
+                        do
+                           (if hr.value
+                            // E_INVALIDARG then
+                               'E_INVALIDARG'->putline
+                            // E_OUTOFMEMORY then
+                               'E_OUTOFMEMORY'->putline
+                            // E_NOTIMPL then
+                               'E_NOTIMPL'->putline
+                            // OLE_S_USEREG then
+                               'OLE_S_USEREG'->putline
+                            else
+                               'EnumFormatEtc: hr er underlig: '->puttext;
+                               hr.value->putint;
+                               newline
+                           if)
+                        #)
+                  if)
+               #);
+             grfKeyState->modifiers;
+             (supportedTypes,grfKeyState,pdwEffect)->media
+               ->(preferredType,action);
+             S_OK->result
+          #);
+        DragOver::< 
+          (# 
+          do
+             (if grfKeyState <> modifiers then
+             (* modifiers changed since last time - ask user for action again *)
+                 grfKeyState->modifiers;
+                 (supportedTypes,grfKeyState,pdwEffect)->media
+                   ->(preferredType,action)
+             if);
+             ;
+             (if preferredType <> 0 then (* We can accept the drag-data *)
+                 DROPEFFECT_COPY->pdwEffect (* default *) ;
+                 (if action
+                  // DROPEFFECT_COPY then
+                     DROPEFFECT_COPY->pdwEffect
+                  // DROPEFFECT_MOVE then
+                     DROPEFFECT_MOVE->pdwEffect
+                 if)
+              else
+             (* none of the types can be accepted *)
+                 DROPEFFECT_NONE->pdwEffect
+             if);
+             S_OK->result
+          #);
+        DragLeave::<  (#  do S_OK->result #);
+        Drop::< 
+          (# hr: @Hresult
+          do
+             preferredType->tempFormatETC.cfFormat;
+             none ->tempFormatETC.ptd[];
+             DVASPECT_CONTENT->tempFormatETC.dwAspect;
+             - 1->tempFormatETC.lindex;
+             TYMED_HGLOBAL->tempFormatETC.tymed;
+             (tempFormatETC[],tempSTGMedium[])->pDataObj.GetData->hr;
+             ;
+             (if hr.value = S_OK then
+                 (if grfKeyState <> modifiers then
+                 (* modifiers changed since last time - ask user for action again *)
+                     (supportedTypes,grfKeyState,pdwEffect)->media
+                       ->(preferredType,action)
+                 if);
+                 (preferredType,action,tempSTGMedium.hglobal)
+                   ->THIS(DropTarget).drop;
+                 action
+                   ->pdwEffect
+                   (* If e.g. action is DROPEFFECT_MOVE, then
+                    the source should be told so - in order to delete the selection. *)
+                   ;
+                 S_OK->result
+              else
+                 write_debug:
+                   (# 
+                   do
+                      ' (GetData: '->puttext;
+                      (if hr.value
+                       // S_OK then
+                          'S_OK'->puttext
+                       // DV_E_LINDEX then
+                          'DV_E_LINDEX'->puttext
+                       // DV_E_FORMATETC then
+                          'DV_E_FORMATETC'->puttext
+                       // DV_E_TYMED then
+                          'DV_E_TYMED'->puttext
+                       // DV_E_DVASPECT then
+                          'DV_E_DVASPECT'->puttext
+                       // OLE_E_NOTRUNNING then
+                          'OLE_E_NOTRUNNING'->puttext
+                       // STG_E_MEDIUMFULL then
+                          'STG_E_MEDIUMFULL'->puttext
+                       // S_FALSE then
+                          'S_FALSE'->puttext
+                       else
+                          'hr er underlig: '->puttext; hr.value->putint
+                      if);
+                      ').'->putline
+                   #);
+                 E_INVALIDARG->result
+             if);
+             
+          #)
+     #);
+   pDropTarget: ^IDropTargetType;
+   initialised: @boolean;
+   init:
+     (# 
+     do
+        (if not initialised then
+            true->initialised; &private.IDropTargetType[]->private.pDropTarget[]
+         else
+            'COleDropTarget.private.init: already initialised!'->putline
+        if)
+     #)
+#)  
+
+-- register: DoPart --
+do
+     (# theInterfaceObject: ^InterfaceObject; hr: @HRESULT
+     do
+        (if not private.initialised then private.init if);
+        THIS(InterfaceObject)[]->theInterfaceObject[];
+        DETTE_SKAL_SLETTES:
+          (# (* do target_btn[]->theInterfaceObject[] *)  #);
+        (theInterfaceObject[]->private.theHandle,private.pDropTarget[])
+          ->MyRegisterDragDrop->hr;
+        (if hr.succeeded then
+            'RegisterDragDrop succeeded'->putline; INNER register
+         else
+            'RegisterDragDrop failed!'->putline;
+            (if hr.value
+             // S_OK then
+                'S_OK'->putline
+             // DRAGDROP_E_INVALIDHWND then
+                'DRAGDROP_E_INVALIDHWND'->putline
+             // DRAGDROP_E_ALREADYREGISTERED then
+                'DRAGDROP_E_ALREADYREGISTERED'->putline
+             else
+                'hr er underlig'->putline
+            if);
+            onError
+        if)
+     #)  
+
+-- revoke: DoPart --
+do
+     (# theInterfaceObject: ^InterfaceObject; hr: @HRESULT
+     do
+        (if not private.initialised then private.init if);
+        THIS(InterfaceObject)[]->theInterfaceObject[];
+        DETTE_SKAL_SLETTES:
+          (# (* do target_btn[]->theInterfaceObject[] *)  #);
+        (theInterfaceObject[]->private.theHandle)->RevokeDragDrop->hr;
+        (if hr.succeeded then
+            'RevokeDragDrop succeeded'->putline; INNER revoke
+         else
+            'RevokeDragDrop failed!'->putline;
+            (if hr.value
+             // S_OK then
+                'S_OK'->putline
+             // DRAGDROP_E_INVALIDHWND then
+                'DRAGDROP_E_INVALIDHWND'->putline
+             // DRAGDROP_E_NOTREGISTERED then
+                'DRAGDROP_E_NOTREGISTERED'->putline
+             else
+                'hr er underlig'->putline
+            if);
+            onError
+        if)
+     #)  
+
+-- media: DoPart --
+do
+   (if DROPEFFECT_MOVE->actionIsSupported then (* MOVE is default action *)
+       DROPEFFECT_MOVE->action
+   if);
+   (if (MK_CONTROL->modifierIsPressed) and (DROPEFFECT_COPY->actionIsSupported)
+    then (* CONTROL means COPY. *)
+       DROPEFFECT_COPY->action
+   if);
+   (if (MK_SHIFT->modifierIsPressed) and (DROPEFFECT_MOVE->actionIsSupported)
+    then (* SHIFT means MOVE. *)
+       DROPEFFECT_MOVE->action
+   if);
+   INNER media  
+
+-- drop: DoPart --
+do INNER  
+
+-- dropAsText: DoPart --
+do
+     (# str: @cstring
+     do objectHandle->private.Handle2Pointer->str.charptr; str.get->t[]
+     #)  
+

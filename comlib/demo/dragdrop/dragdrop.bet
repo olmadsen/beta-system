@@ -1,401 +1,107 @@
 ORIGIN '~beta/guienv/guienv';
-INCLUDE '~beta/comlib/comtypes'
+INCLUDE '~beta/guienv/controls'
+        '~beta/win32lib/winuserconsts'
+        '~beta/comlib/comtypes'
         '~beta/comlib/comlib'
         '~beta/comlib/oleidl'
-        '~beta/guienv/private/winnt/guienv_ntiprivate'
-        '~beta/win32lib/winerror'
-        'additionslib'
-        '~beta/guienv/controls'
-        '~beta/sysutils/cstring';
+        '~beta/win32lib/winerror';
 BUILD default '$$/dragdrop_nti.obj' 'external/dragdrop_nti.c' 'betacc $0 $1';
+BODY 'private/dragdropbody';
+-- InterfaceObjectLib: Attributes --
+DropTarget:
+  (#
+     private: @<<SLOT private:Descriptor>>;
+     register:<
+     (* Makes this(interfaceobject) work as a possible drop target. *)
+       (#
+          onError:< exception
+            (# 
+            do 'COleDropTarget error: unable to register window.'->msg.append
+            #)
+       <<SLOT register:DoPart>>
+       #);
+     revoke:<
+     (* Removes this(interfaceobject) as a drop target. *)
+       (#
+          onError:< exception
+            (# 
+            do
+               'COleDropTarget error: unable to revoke window registering.'
+                 ->msg.append
+            #)
+       <<SLOT revoke:DoPart>>
+       #);
+     media:<
+     (* Furtherbind to specify which type you want (text/bitmap/...),
+      and what action (copy/move/...) should be taken when dropped. *)
+       (#
+          types: (* Types supported by the clipboard data. *) [0] @integer;
+          modifiers:
+          (* What modifiers are enabled?
+           (bitwise AND of MK_SHIFT, MK_CONTROL, MK_LBUTTON, ...).*) @integer;
+          actions:
+          (* What actions are supported by the clipboard data?
+           (bitwise AND of DROPEFFECT_MOVE/COPY/LINK/...). *) @integer;
+          preferredType:
+          (* Which of the types in 'types' do you prefer. (0 for none of them). *)
+          @integer;
+          action: (* Which of the actions in 'actions' should be taken. *)
+            @integer;
+          ;
+          typeIsSupported: (* Is the type on of the supported types? *)
+            (# type: @integer; answer: @boolean
+            enter type
+            do
+               loop:
+               (for i: types.range repeat
+                 (if type = types[i] then true->answer; leave loop if)
+               for)
+            exit answer
+            #);
+          actionIsSupported: (* Is the action one of the supported actions? *)
+            (# action: @integer; answer: @boolean
+            enter action
+            do (if (action %band actions) <> 0 then true->answer if)
+            exit answer
+            #);
+          modifierIsPressed: (* Is the modifier enabled? *)
+            (# modifier: @integer; answer: @boolean
+            enter modifier
+            do (if (modifier %band modifiers) <> 0 then true->answer if)
+            exit answer
+            #)
+       enter (types,modifiers,actions)
+       <<SLOT media:DoPart>>
+       exit (preferredType,action)
+       #);
+     drop:<
+     (* Furtherbind to accept a drop.
+      NOTE: the drop virtual should process the data (in 'objectHandle') immediately,
+      as the data is reclaimed after drop has been called. *)
+       (#
+          type: (* The type of the data (e.g. CF_TEXT). *) @integer;
+          action:
+          (* The action that should be taken (DROPEFFECT_COPY/MOVE/...). *)
+            @integer;
+          objectHandle:
+          (* A "handle" to the data.
+           Use the auxillary functions to extract the content in case
+           of a standard format. *) @int32;
+          ;
+          asText:
+          (* If the data is known to be regular text, then
+           this function returns a reference to a copy of the text. *)
+            (# t: ^text <<SLOT dropAsText:DoPart>> exit t[] #)
+       enter (type,action,objectHandle)
+       <<SLOT drop:DoPart>>
+       #)
+  #)  
+
 -- program: Descriptor --
 guienv
   (#
      mainWindow: @window
        (#
-          ;
-          SKAL_LIGGE_I_WINDOWLIB: (#  #);
-          DropTarget:
-            (#
-               privatedroptarget: @
-                 (#
-                    Handle2Pointer: external
-                      (# hglobal: @int32; cptr: @int32
-                      enter hglobal
-                      do callc
-                      exit cptr
-                      #);
-                    theHandle:
-                      (#
-                         handle: @integer;
-                         theInterfaceObject: ^InterfaceObject
-                      enter theInterfaceObject[]
-                      do
-                         (if theInterfaceObject[] <> none then
-                             theInterfaceObject.InterfaceObjectID->handle
-                          else
-                             'theHandle: theCanvas[]=none'->putline
-                         if)
-                      exit handle
-                      #);
-                    IDropTargetType: IDropTarget
-                      (#
-                         tempFormatETC: @struct_tagFORMATETC;
-                         tempSTGMedium: @STGMEDIUM;
-                         tempIEnumFORMATETC: ^IEnumFORMATETC;
-                         tempIEnumFORMATETCHolder: @IEnumFORMATETCHolder;
-                         refCount: @integer;
-                         ;
-                         supportedTypes:
-                         (* The types (e.g., CF_TEXT) that are supported by the drag-data *)
-                         [0] @integer;
-                         modifiers:
-                         (* OR of some of MK_SHIFT, MK_CONTROL, MK_LBUTTON, ... *)
-                         @integer;
-                         preferredType: (* e.g., CF_TEXT *) @integer;
-                         action: (* move/copy/none/... *) @int32;
-                         ;
-                         QueryInterface::< 
-                           (#  do 'DropTarget: QueryInterface'->putline #);
-                         AddRef::< 
-                           (# 
-                           do
-                              'DropTarget: AddRef'->putline;
-                              refCount+1->refCount->result
-                           #);
-                         Release::< 
-                           (# 
-                           do
-                              'DropTarget: Release'->putline;
-                              refCount-1->refCount->result
-                           #);
-                         ;
-                         DragEnter::< 
-                           (# hr: @Hresult
-                           do
-                              get_supportedTypes:
-                              (* Asks the dataobject what types it support. Answer is in supportedTypes. *)
-                                (# 
-                                do
-                                   0->supportedTypes.new;
-                                   (DATADIR_GET,tempIEnumFORMATETCHolder[])
-                                     ->pDataObj.EnumFormatEtc->hr;
-                                   ;
-                                   (if hr.value = S_OK then
-                                       tempIEnumFORMATETCHolder
-                                         ->tempIEnumFORMATETC[];
-                                       tempIEnumFORMATETC.reset;
-                                       enum_loop:
-                                         (# 
-                                         do
-                                            (1,tempFORMATETC[],none )
-                                              ->tempIEnumFORMATETC.next->hr;
-                                            (if hr.value = S_OK then
-                                                1->supportedTypes.extend;
-                                                tempFORMATETC.cfFormat
-                                                  ->supportedTypes
-                                                  [supportedTypes.range];
-                                                restart enum_loop
-                                             else
-                                                leave enum_loop
-                                            if)
-                                         #);
-                                       tempIEnumFORMATETC.Release
-                                    else
-                                       'pDataObj.EnumFormatEtc: IKKE OK'
-                                         ->putline;
-                                       handle_error:
-                                         (# 
-                                         do
-                                            (if hr.value
-                                             // E_INVALIDARG then
-                                                'E_INVALIDARG'->putline
-                                             // E_OUTOFMEMORY then
-                                                'E_OUTOFMEMORY'->putline
-                                             // E_NOTIMPL then
-                                                'E_NOTIMPL'->putline
-                                             // OLE_S_USEREG then
-                                                'OLE_S_USEREG'->putline
-                                             else
-                                                'EnumFormatEtc: hr er underlig: '
-                                                  ->puttext;
-                                                hr.value->putint;
-                                                newline
-                                            if)
-                                         #)
-                                   if)
-                                #);
-                              grfKeyState->modifiers;
-                              (supportedTypes,grfKeyState,pdwEffect)->media
-                                ->(preferredType,action);
-                              S_OK->result
-                           #);
-                         DragOver::< 
-                           (# 
-                           do
-                              (if grfKeyState <> modifiers then
-                              (* modifiers changed since last time - ask user for action again *)
-                                  grfKeyState->modifiers;
-                                  (supportedTypes,grfKeyState,pdwEffect)->media
-                                    ->(preferredType,action)
-                              if);
-                              ;
-                              (if preferredType <> 0 then
-                              (* We can accept the drag-data *)
-                                  DROPEFFECT_COPY->pdwEffect (* default *) ;
-                                  (if action
-                                   // DROPEFFECT_COPY then
-                                      DROPEFFECT_COPY->pdwEffect
-                                   // DROPEFFECT_MOVE then
-                                      DROPEFFECT_MOVE->pdwEffect
-                                  if)
-                               else
-                              (* none of the types can be accepted *)
-                                  DROPEFFECT_NONE->pdwEffect
-                              if);
-                              S_OK->result
-                           #);
-                         DragLeave::<  (#  do S_OK->result #);
-                         Drop::< 
-                           (# hr: @Hresult
-                           do
-                              preferredType->tempFormatETC.cfFormat;
-                              none ->tempFormatETC.ptd[];
-                              DVASPECT_CONTENT->tempFormatETC.dwAspect;
-                              - 1->tempFormatETC.lindex;
-                              TYMED_HGLOBAL->tempFormatETC.tymed;
-                              (tempFormatETC[],tempSTGMedium[])
-                                ->pDataObj.GetData->hr;
-                              ;
-                              (if hr.value = S_OK then
-                                  (if grfKeyState <> modifiers then
-                                  (* modifiers changed since last time - ask user for action again *)
-                                      (supportedTypes,grfKeyState,pdwEffect)
-                                        ->media->(preferredType,action)
-                                  if);
-                                  (preferredType,action,tempSTGMedium.hglobal)
-                                    ->THIS(DropTarget).drop;
-                                  action
-                                    ->pdwEffect
-                                    (* If e.g. action is DROPEFFECT_MOVE, then
-                                     the source should be told so - in order to delete the selection. *)
-                                    ;
-                                  S_OK->result
-                               else
-                                  write_debug:
-                                    (# 
-                                    do
-                                       ' (GetData: '->puttext;
-                                       (if hr.value
-                                        // S_OK then
-                                           'S_OK'->puttext
-                                        // DV_E_LINDEX then
-                                           'DV_E_LINDEX'->puttext
-                                        // DV_E_FORMATETC then
-                                           'DV_E_FORMATETC'->puttext
-                                        // DV_E_TYMED then
-                                           'DV_E_TYMED'->puttext
-                                        // DV_E_DVASPECT then
-                                           'DV_E_DVASPECT'->puttext
-                                        // OLE_E_NOTRUNNING then
-                                           'OLE_E_NOTRUNNING'->puttext
-                                        // STG_E_MEDIUMFULL then
-                                           'STG_E_MEDIUMFULL'->puttext
-                                        // S_FALSE then
-                                           'S_FALSE'->puttext
-                                        else
-                                           'hr er underlig: '->puttext;
-                                           hr.value->putint
-                                       if);
-                                       ').'->putline
-                                    #);
-                                  E_INVALIDARG->result
-                              if);
-                              
-                           #)
-                      #);
-                    pDropTarget: ^IDropTargetType;
-                    initialised: @boolean;
-                    init:
-                      (# 
-                      do
-                         (if not initialised then
-                             true->initialised;
-                             &private.IDropTargetType[]->private.pDropTarget[]
-                          else
-                             'COleDropTarget.private.init: already initialised!'
-                               ->putline
-                         if)
-                      #)
-                 #);
-               register:<
-               (* Makes this(interfaceobject) work as a possible drop target. *)
-                 (#
-                    onError:< exception
-                      (# 
-                      do
-                         'COleDropTarget error: unable to register window.'
-                           ->msg.append
-                      #)
-                 do
-                      (# theInterfaceObject: ^InterfaceObject; hr: @HRESULT
-                      do
-                         (if not private.initialised then private.init if);
-                         THIS(InterfaceObject)[]->theInterfaceObject[];
-                         DETTE_SKAL_SLETTES:
-                           (#  do target_btn[]->theInterfaceObject[] #);
-                         (theInterfaceObject[]->private.theHandle,
-                          private.pDropTarget[])->MyRegisterDragDrop->hr;
-                         (if hr.succeeded then
-                             'RegisterDragDrop succeeded'->putline
-                          else
-                             'RegisterDragDrop failed!'->putline;
-                             (if hr.value
-                              // S_OK then
-                                 'S_OK'->putline
-                              // DRAGDROP_E_INVALIDHWND then
-                                 'DRAGDROP_E_INVALIDHWND'->putline
-                              // DRAGDROP_E_ALREADYREGISTERED then
-                                 'DRAGDROP_E_ALREADYREGISTERED'->putline
-                              else
-                                 'hr er underlig'->putline
-                             if);
-                             onError
-                         if)
-                      #)
-                 #);
-               revoke:< (* Removes this(interfaceobject) as a drop target. *)
-                 (#
-                    onError:< exception
-                      (# 
-                      do
-                         'COleDropTarget error: unable to revoke window registering.'
-                           ->msg.append
-                      #)
-                 do
-                      (# theInterfaceObject: ^InterfaceObject; hr: @HRESULT
-                      do
-                         (if not private.initialised then private.init if);
-                         THIS(InterfaceObject)[]->theInterfaceObject[];
-                         DETTE_SKAL_SLETTES:
-                           (#  do target_btn[]->theInterfaceObject[] #);
-                         (theInterfaceObject[]->private.theHandle)
-                           ->RevokeDragDrop->hr;
-                         (if hr.succeeded then
-                             'RevokeDragDrop succeeded'->putline
-                          else
-                             'RevokeDragDrop failed!'->putline;
-                             (if hr.value
-                              // S_OK then
-                                 'S_OK'->putline
-                              // DRAGDROP_E_INVALIDHWND then
-                                 'DRAGDROP_E_INVALIDHWND'->putline
-                              // DRAGDROP_E_NOTREGISTERED then
-                                 'DRAGDROP_E_NOTREGISTERED'->putline
-                              else
-                                 'hr er underlig'->putline
-                             if);
-                             onError
-                         if)
-                      #)
-                 #);
-               media:<
-               (* Furtherbind to specify which type you want (text/bitmap/...),
-                and what action (copy/move/...) should be taken when dropped. *)
-                 (#
-                    types: (* Types supported by the clipboard data. *) [0]
-                    @integer;
-                    modifiers:
-                    (* What modifiers are enabled?
-                     (bitwise AND of MK_SHIFT, MK_CONTROL, MK_LBUTTON, ...).*)
-                      @integer;
-                    actions:
-                    (* What actions are supported by the clipboard data?
-                     (bitwise AND of DROPEFFECT_MOVE/COPY/LINK/...). *)
-                      @integer;
-                    preferredType:
-                    (* Which of the types in 'types' do you prefer. (0 for none of them). *)
-                    @integer;
-                    action:
-                    (* Which of the actions in 'actions' should be taken. *)
-                      @integer;
-                    ;
-                    typeIsSupported:
-                    (* Is the type on of the supported types? *)
-                      (# type: @integer; answer: @boolean
-                      enter type
-                      do
-                         loop:
-                         (for i: types.range repeat
-                           (if type = types[i] then
-                               true->answer; leave loop
-                           if)
-                         for)
-                      exit answer
-                      #);
-                    actionIsSupported:
-                    (* Is the action one of the supported actions? *)
-                      (# action: @integer; answer: @boolean
-                      enter action
-                      do
-                         (if (action %band actions) <> 0 then true->answer if)
-                      exit answer
-                      #);
-                    modifierIsPressed: (* Is the modifier enabled? *)
-                      (# modifier: @integer; answer: @boolean
-                      enter modifier
-                      do
-                         (if (modifier %band modifiers) <> 0 then
-                             true->answer
-                         if)
-                      exit answer
-                      #)
-                 enter (types,modifiers,actions)
-                 do
-                    (if (MK_SHIFT->modifierIsPressed) and
-                    (DROPEFFECT_MOVE->actionIsSupported) then
-                        DROPEFFECT_MOVE->action
-                    if);
-                    (if (MK_CONTROL->modifierIsPressed) and
-                    (DROPEFFECT_COPY->actionIsSupported) then
-                        DROPEFFECT_COPY->action
-                    if);
-                    INNER media
-                 exit (preferredType,action)
-                 #);
-               drop:<
-               (* Furtherbind to accept a drop.
-                NOTE: the drop virtual should process the data (in 'objectHandle') immediately,
-                as the data is reclaimed after drop has been called. *)
-                 (#
-                    asText:
-                    (* If the data is known to be regular text, then
-                     this function returns a reference to a copy of the text. *)
-                      (# t: ^text
-                      do
-                           (# str: @cstring
-                           do
-                              objectHandle->private.Handle2Pointer->str.charptr;
-                              str.get->t[]
-                           #)
-                      exit t[]
-                      #);
-                    ;
-                    type: (* The type of the data (e.g. CF_TEXT). *) @integer;
-                    action:
-                    (* The action that should be taken (DROPEFFECT_COPY/MOVE/...). *)
-                    @integer;
-                    objectHandle:
-                    (* A "handle" to the data.
-                     Use the auxillary functions to extract the content in case
-                     of a standard format. *) @int32
-                 enter (type,action,objectHandle)
-                 do INNER
-                 #)
-            #);
-          ;
-          ;
-          TING_SOM_HOERER_TIL_NETOP_DETTE_VINDUE: (#  #);
           theDropTarget: @DropTarget
             (#
                media:: 
