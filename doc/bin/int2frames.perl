@@ -190,6 +190,16 @@ sub print_trailer
 <TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
 </TABLE>
 EOT
+
+#    print<<EOT;
+#</PRE>
+#<SCRIPT LANGUAGE=JavaScript TYPE="text/javascript" SRC="$scriptdir/footer.js">
+#<--
+#footer("$title");
+#// -->
+#</SCRIPT>
+#EOT
+
 }
 
 sub print_frameset()
