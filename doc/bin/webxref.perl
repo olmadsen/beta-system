@@ -206,12 +206,17 @@ are out of patience.
 - - - - - - - - - - - - - - - - - - - - - - - - - - -
 E_O_T
 
-  }
+}
 
 
   &InitStatusMessages;
   &Check_External_URLs("Checking external URLs:", %HTTPList);
 }
+
+$Xref=0;
+&PrintList(*FileList,"Local documents found:",0);
+&PrintList(*HTTPList,"External URLs found:",0);
+&PrintList(*MailList,"Mailto: links found",0);
 
 print STDERR "\nAll done.\n";
 
@@ -1871,8 +1876,9 @@ $file =~ s/^$SiteRootExpr//o if (!$FullPath); # delete root from path
 
 # datpete: hack: because we place output HTML in subdirectory 'admin'
 # we need to add '../':
-
-$file = "../" . $file if (!$FullPath && (substr($file,1,4) ne "http"));
+if (("$file" ne "") && !$FullPath && (substr($file,0,4) ne "http") && (substr($file,0,6) ne "mailto")){
+    $file = "../" . $file;
+}
 
 return $file;
 
