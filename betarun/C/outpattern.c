@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-10-28 11:20:14 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-11-14 10:14:59 $, SID: $Revision: 1.10 $
  * by Lars Bak
  */
 
@@ -152,6 +152,7 @@ struct errorEntry {
    -32, "Segmentation fault",
    -33, "AOAtoIOAtable is full (temporary)",
    -34, "AOAtoLVRAtable is full (temporary)",
+   -35, "Text param. to C routine to big (max. 1000 bytes)",
   -100, "Unknown signal",
      0, 0
 };
