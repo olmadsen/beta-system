@@ -289,7 +289,8 @@ sub setup_linux {
 	$ENV{'MOTIFHOME'} = '/usr/lib/X11/Motif';
     }
     if (!defined $ENV{'MOTIFINC'}) {
-	$ENV{'MOTIFINC'} = '/usr/include/Xm';
+        $ENV{'MOTIFINC'} = '/usr/X11R6/include';
+	#$ENV{'MOTIFINC'} = '/usr/include/Xm';
     }
     if ($rev =~ /^1\.1/) {
 	$xlib = '/usr/X11R5/lib';

@@ -114,7 +114,8 @@ case "i?86":
 	setenv objdir linux
 	if ( ! $?MOTIFHOME ) setenv MOTIFHOME /usr/lib/X11/Motif
 	#if ( ! $?MOTIFINC  ) setenv MOTIFINC  /usr/include/Xm
-	if ( ! $?MOTIFINC  ) setenv MOTIFINC  /usr/X11/include
+	#if ( ! $?MOTIFINC  ) setenv MOTIFINC  /usr/X11/include
+	if ( ! $?MOTIFINC  ) setenv MOTIFINC  /usr/X11R6/include
 	switch("`uname -r`")
 	case "1.1*":
 		set xlib=/usr/X11R5/lib

@@ -101,7 +101,8 @@ case "`uname -m`" in
 		MACHINETYPE=LINUX
 		objdir=linux
 		#MOTIFINC=${MOTIFINC-/usr/include/Xm}
-		MOTIFINC=${MOTIFINC-/usr/X11/include}
+		#MOTIFINC=${MOTIFINC-/usr/X11/include}
+		MOTIFINC=${MOTIFINC-/usr/X11R6/include}
 		#MOTIFHOME=${MOTIFHOME-/usr/lib/X11/Motif}
 		PATH=/usr/bin/X11:$PATH
 		export PATH
