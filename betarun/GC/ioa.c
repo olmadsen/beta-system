@@ -4,6 +4,10 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
  */
 
+#ifdef RTDEBUG
+#define IOAGC_START_TRACE 0
+#endif
+
 #include "beta.h"
 #ifdef sparc
 #include "../CRUN/crun.h"
@@ -1041,25 +1045,52 @@ void IOACheck()
   
   theObj = (ref(Object)) GLOBAL_IOA;
 
+#ifdef MT
+#define TheIOATOP ((NumTSD==1)?IOATop:GLOBAL_IOATop)
+#else
+#define TheIOATOP GLOBAL_IOATop
+#endif
+
   lastObj=0;
-  while ((long *) theObj < GLOBAL_IOATop) {
+  fprintf(output, 
+	  "IOACheck: [0x%x..0x%x[\n", 
+	  (int)GLOBAL_IOA, 
+	  (int)TheIOATOP);
+  fflush(output);
+  while ((long *) theObj < TheIOATOP) {
 #ifdef MT
     /* Skip blank cells in beginning of objects */
     {
       long *ptr = (long *)theObj;
-      while ( (ptr<(long*)GLOBAL_IOATop) && (*ptr==0) ) ptr++;
-      if (ptr == (long*)GLOBAL_IOATop) return;
+      while ( (ptr<(long*)TheIOATOP) && (*ptr==0) ) ptr++;
+      if ((long*)theObj<ptr){
+	if (NumIOAGc>=IOAGC_START_TRACE) {
+	  fprintf(output, 
+		  "Skipped %d longs\n",
+		  (int)((long)ptr-(long)theObj)/4);
+	  fflush(output);
+	}
+	if (NumTSD==1) {
+	  Claim(FALSE, "No skip should be needed when only one thread");
+	}
+      }
+      if (ptr == (long*)TheIOATOP) goto finished;
       theObj = (struct Object *)ptr;
     }
 #else
     Claim((long)(theObj->Proto), "IOACheck: theObj->Proto");
 #endif /* MT */
 
+#if 1
+    if (NumIOAGc>=IOAGC_START_TRACE){
+      fprintf(output, 
+	      "IOACheck: 0x%x (size 0x%x)\n", 
+	      (int)theObj, 
+	      (int)(4*ObjectSize(theObj)));
+    }
 #if 0
     {
       long i;
-      fprintf(output, "IOACheck: 0x%x\n", (int)theObj);
-#if 0
       for (i=0; i<ObjectSize(theObj); i++){
 	fprintf(output, 
 		"  0x%x: 0x%x\n",
@@ -1067,16 +1098,20 @@ void IOACheck()
 		(int)(*((long *)theObj+i)));
       }
       fflush(output);
-#endif
     }
 #endif
+#endif
 
+    Claim(inIOA(theObj), "IOACheck: theObj in IOA");
     theObjectSize = 4*ObjectSize(theObj);
     Claim(ObjectSize(theObj) > 0, "#IOACheck: ObjectSize(theObj) > 0");
     IOACheckObject (theObj);
     lastObj = theObj;
     theObj = (ref(Object)) Offset(theObj, theObjectSize);
   }
+finished:
+  fprintf(output, "done\n"); fflush(output);
+  return;
 }
   
 void IOACheckObject (struct Object *theObj)

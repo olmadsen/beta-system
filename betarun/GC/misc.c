@@ -201,6 +201,8 @@ void CCk(void *r, char *fname, int lineno, char *ref)
   register struct Object* rr = (struct Object *)r; 
 
   CHECK_HEAP(IOACheck(); LVRACheck(); AOACheck());
+
+  fprintf(output, "Ck: IOATop is 0x%x\n", IOATop); fflush(output);
  
   if(r) 
     {
