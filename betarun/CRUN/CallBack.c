@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-06-11 17:17:39 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-06-12 14:57:12 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -21,14 +21,18 @@ void *CCopyCProcPar(ref(Structure) theStruct, ref(Object) theObj)
     /* Find a free entry in the Call Back Functions Area.		*/
     /* This area is defined by [ CBFA <= CBFATop <= CBFALimit ].	*/
 
-    if (theCBStruct+1 > CBFALimit)
-      BetaError(-11, theObj);
+    if (theCBStruct+1 > CBFALimit){
+      CBFArelloc();
+      return CCopyCProcPar(theStruct, theObj);
+    }
 
     CBFATop++;
     CBFATop->theStruct = theStruct;
     CBFATop->mov_o7_g1 = MOV_O7_G1;
     MK_CALL(&CBFATop->call_HandleCallBack, HandleCallBack);
     CBFATop->nop       = NOP;
+    /* Nullify the first long in the following CBStruct */
+    *((long *)(theCBStruct+1)) = 0;
     return (void *)&CBFATop->mov_o7_g1;
 }
 
