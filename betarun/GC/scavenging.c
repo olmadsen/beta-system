@@ -291,39 +291,76 @@ void IOAGc()
     
     NumIOAGc++;
 
+/******************** Limitation in IOAGc ****************************/
 #ifdef MADA
-    if (NumIOAGc==250) {
-      fprintf(output, "\n\
-  *********************************************************\n\
-  * This program was compiled using the demo version of   *\n\
-  * the Mjolner BETA System. The demo version is limited  *\n\
-  * in the number of garbage collections allowed. This    *\n\
-  * limit will soon be reached; if you want to save your  *\n\
-  * work, please do it now, and quit your program.        *\n\
-  *********************************************************\n\
+    if (NumIOAGc==20) {
+
+#ifdef macintosh
+      Prompt(
+"\p\
+This program was compiled using the demo version of \
+the Mjølner BETA System. The demo version is limited \
+in the number of garbage collections allowed. This ",
+"\p\
+limit will soon be reached; if you want to save your \
+work, please do it now, and quit your program.",
+"", "");
+
+#else macintosh
+      fprintf(output, "\
+  ********************************************************\n\
+  * This program was compiled using the demo version of  *\n\
+  * the Mjolner BETA System. The demo version is limited *\n\
+  * in the number of garbage collections allowed. This   *\n\
+  * limit will soon be reached; if you want to save your *\n\
+  * work, please do it now, and quit your program.       *\n\
+  ********************************************************\n\
 ");
+#endif macintosh
+
     } else
-    if (NumIOAGc==300) {
-      fprintf(output, "\n\
-  *********************************************************\n\
-  * This program was compiled using the demo version of   *\n\
-  * the Mjolner BETA System. The demo version is limited  *\n\
-  * in the number of garbage collections allowed. This    *\n\
-  * limit has been reached and your program is terminated *\n\
-  * - sorry!                                              *\n\
-  * You may order a full version from                     *\n\
-  *                                                       *\n\
-  *     Mjolner Informatics, Gustav Wiedsvej 10,          *\n\
-  *     Science Park Aarhus, DK-8000 Aarhus C, Denmark,   *\n\
-  *     Phone: +45 86 20 20 00,  Fax: +45 86 20 12 22     *\n\
-  *     e-mail: support@mjolner.dk                        *\n\
-  *                                                       *\n\
-  *********************************************************\n\
+    if (NumIOAGc==30) {
+
+#ifdef macintosh
+      Prompt(
+"\p\
+This program was compiled using the demo version of \
+the Mjølner BETA System. The demo version is limited \
+in the number of garbage collections allowed. This ",
+"\p\
+limit has now been reached and your program will be \
+terminated - sorry!\n\
+You may order an unconstrained version from\n",
+"\p\n\
+    Mjølner Informatics, Gustav Wiedsvej 10,\n\
+    Science Park Aarhus, DK-8000 Aarhus C, Denmark,\n",
+"\p\
+    Phone: +45 86 20 20 00,  Fax: +45 86 20 12 22\n\
+    e-mail: support@mjolner.dk"
+);
+
+#else macintosh
+      fprintf(output, "\
+  ********************************************************\n\
+  * This program was compiled using the demo version of  *\n\
+  * the Mjolner BETA System. The demo version is limited *\n\
+  * in the number of garbage collections allowed. This   *\n\
+  * limit has now been reached and your program will be  *\n\
+  * terminated - sorry!                                  *\n\
+  * You may order an unconstrained version from          *\n\
+  *                                                      *\n\
+  *     Mjolner Informatics, Gustav Wiedsvej 10,         *\n\
+  *     Science Park Aarhus, DK-8000 Aarhus C, Denmark,  *\n\
+  *     Phone: +45 86 20 20 00,  Fax: +45 86 20 12 22    *\n\
+  *     e-mail: support@mjolner.dk                       *\n\
+  ********************************************************\n\
 ");
+#endif macintosh
+
       exit(0);
     }
-#endif
-
+#endif MADA
+/***************** End of Limitation in IOAGc ****************************/
 
     IOAActive = TRUE;
     

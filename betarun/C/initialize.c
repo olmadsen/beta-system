@@ -11,11 +11,43 @@ extern CBFAAlloc();
 #endif
 
 #ifdef macintosh
+#include <Quickdraw.h>
+#include <TextEdit.h>
+#include <Fonts.h>
+#include <Dialogs.h>
+#include <CursorCtl.h>
+#include <Menus.h>
+#include <Windows.h>
 #include <SegLoad.h>
 extern void _DataInit();
+
+#define PromptID 7129
+
+void Prompt(char *msg1, char *msg2, char *msg3, char *msg4)
+{
+  ParamText(msg1, msg2, msg3, msg4);
+  Alert(PromptID,0);
+}
 #endif
 
 #ifdef DEMO
+#ifdef macintosh
+
+#define DEMOSTRING1 "\p\
+Mjølner BETA System - DEMO VERSION rel. 2.4\n\
+\n\
+This program is constructed using a DEMO version "
+
+#define DEMOSTRING2 "\p\
+of the Mjølner BETA System and may only be used \
+for evaluation purposes and not for any teaching \
+or commercial purposes. Use of the program is "
+
+#define DEMOSTRING3 "\p\
+subject to the restrictions in the demo license."
+
+#define DEMOSTRING4 ""
+#else
 #define DEMOSTRING "\n\
   ******************************************************\n\
   *    Mjolner BETA System - DEMO VERSION rel. 2.4     *\n\
@@ -27,6 +59,7 @@ extern void _DataInit();
   *  subject to the restrictions in the demo license   *\n\
   ******************************************************\n\
 \n"
+#endif
 #endif
 
 long AllocateHeap( base, top, limit, size)
@@ -51,14 +84,26 @@ Initialize()
 
   long *tmpIOA, *tmpIOATop;
 #ifdef macintosh
+  InitGraf((Ptr) &qd.thePort);
+  InitFonts();
+  InitWindows();
+  InitMenus();
+  TEInit();
+  InitDialogs(nil);
+  InitCursor();
   InitTheCursor();
   UnloadSeg((Ptr)_DataInit); /* Unload %A5Init% segment */
+  CouldAlert(PromptID);
 #endif
 
   GetBetaEnv();
 
 #ifdef DEMO
+#ifdef macintosh
+  Prompt(DEMOSTRING1, DEMOSTRING2, DEMOSTRING3, DEMOSTRING4);
+#else
   fprintf(stdout, DEMOSTRING);
+#endif
 #endif
 
   INFO( fprintf( output, "#(Heap info: IOA=2*%dKb", IOASize/Kb) );
