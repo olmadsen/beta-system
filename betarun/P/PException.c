@@ -628,6 +628,64 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
 /******************************* LINUX end ******************************/
 #endif /* linux */
 
+/******************************* SGI: ********************************/
+#ifdef sgi
+static void *getRegisterContents(unsigned long reg, ucontext_t *ucon, long returnSP) 
+{
+  if (reg == 0) {
+    return 0;
+  } else if ((reg > 0) && (reg < 0x10)) {
+    /* Get the value from the context */
+    return (void *)(ucon->uc_mcontext.gregs[reg + 3]);
+  } else if ((reg >= 10) && (reg < 0x20)) {
+    /* Get the value from the stack */
+    return (void *)(((unsigned long *) returnSP)[reg - 16]);
+  } else {
+    fprintf(output, "getRegisterContents: "
+	    "Unsupported register\n");
+    DEBUG_CODE(Illegal());
+    BetaExit(1);
+  }
+  return (void *)-1;
+}
+
+int DecodeFormatI(unsigned long instruction)
+{
+  fprintf(output, "DecodeFormatI: instruction=0x%08x\n",instruction);
+}
+
+static unsigned long dummy;
+
+/* proxyTrapHandler: Will decode the faulting instruction, lookup the
+   object, and insert a reference to it in the register previously
+   containing the proxy. */
+/* See /usr/include/sys/signal.h, man siginfo */
+static void proxyTrapHandler(struct sigcontext *scp, unsigned long *PC)
+{
+  unsigned long instruction, opcode;
+  unsigned long absAddr = 0;
+  void *ip;
+  
+  INFO_PERSISTENCE(numPF++);
+
+  /* Fetch the faulting instruction. */
+  dummy = instruction = *PC;
+  opcode = (instruction & 0xfc000000);
+  switch (opcode) {
+    case /* LW   */ 0x8c000000: 
+      DecodeFormatI(instruction);
+      break;
+  default:
+    fprintf(output, "proxyTrapHandler: instruction=0x%08x\n",instruction);
+  }
+
+  /* If we get here, it was an ordinary SIGBUS, SIGSEGV or object
+     could not be loaded */
+  return 1;
+}
+/******************************* SGI end ******************************/
+#endif /* sgi */
+
 /******************************* UNIX: ********************************/
 #ifdef UNIX
 /* initProxyTrapHandler: */
@@ -654,7 +712,7 @@ void initProxyTrapHandler(void)
   signal (SIGSEGV, (void (*)(int))proxyTrapHandler);
 #endif
 }
-#endif
+#endif /* UNIX */
 
 
 

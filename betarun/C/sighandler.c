@@ -432,7 +432,19 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
     case SIGILL:
       todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
     case SIGBUS:
-      todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
+#ifdef PERSIST
+    todo = proxyTrapHandler(scp, (unsigned long*)PC);
+    if (!todo) {
+      todo = 1; break;
+    } else if (todo == 2) {
+      todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); break;
+    } else {
+      todo=DisplayBetaStack(BusErr, theObj, PC, sig); break;
+    }
+#else
+    todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
+#endif
+      
     case SIGSEGV:
       todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
     case SIGTRAP:
