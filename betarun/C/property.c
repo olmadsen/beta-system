@@ -107,7 +107,7 @@ static void BooleanProperty(char *name)
   ENTRY("nocatchexception", NoCatchException = TRUE);
 
   /* IF NO ENTRY IS SELECTED REPORT UNKNOWN PROPERTY */
-  { char buf[100];
+  { char buf[512];
     sprintf( buf, "Property '%s' not known.", name);
     Notify(buf);
   }
@@ -115,7 +115,7 @@ static void BooleanProperty(char *name)
 
 static void ValueProperty(char *name, char *value)
 {
-  char buf[100];
+  char buf[512];
 
 #ifdef RTVALHALLA
   ENTRY("valhallaid", valhallaID = strdup (value));
@@ -268,7 +268,7 @@ static long intScan( name, value)
     if( (*pointer >= '0') && ( *pointer <= '9') )
       result = result + (long) *pointer++ - (long) '0';
     else{
-      char buf[100];
+      char buf[512];
       sprintf(buf,"Property '%s': '%s' is not an integer, 0 is assumed.", name, value);
       Notify(buf);
       return 0;

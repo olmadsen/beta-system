@@ -22,7 +22,7 @@ void CBFAalloc()
 #endif /* 0 */
   /* Allocate the Call Back Functions Area. */
   if ( CBFABlockSize < 0 ) {
-    char buf[100];
+    char buf[512];
     sprintf(buf, "Too small CBFA specified: %dKb", (int)CBFABlockSize/Kb);
     Notify2(buf, "Check your BETART environment variable");
     BetaExit(1);
@@ -35,14 +35,14 @@ void CBFAalloc()
     (void) MALLOC(16); /* to avoid spurious bug, with overwriten CBFA */
 #endif
     if ( ! (CBFA = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {
-      char buf[300];
+      char buf[512];
       sprintf(buf, "%s: Cannot allocate CBFA", ArgVector[0]);
       Notify(buf);
       BetaExit(1);
     }
     lastCBFA = CBFA;
     if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
-      char buf[300];
+      char buf[512];
       sprintf(buf,
 	      "%s: Cannot allocate the CBFA heap (%dKb)\n", 
 	      ArgVector[0],
@@ -79,14 +79,14 @@ void CBFArelloc()
 
   /* Allocate new CBFA block */
   if ( ! (lastCBFA->next = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {
-    char buf[300];
+    char buf[512];
     sprintf(buf, "%s: Cannot allocate CBFA", ArgVector[0]);
     Notify(buf);
     BetaExit(1);
   }
   lastCBFA = lastCBFA->next;
   if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
-    char buf[100];
+    char buf[512];
     sprintf(buf,
 	    "%s: Cannot allocate CBFA (%dKb)", 
 	    ArgVector[0],
