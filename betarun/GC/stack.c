@@ -181,7 +181,7 @@ void ProcessMachineStack(void)
      *  
      * Before this the compiler pushes two things:
      *   1. the object that was current object before the callback
-     *      (saved in BetaStackTop[0]). NOT USED!
+     *      (saved in BetaStackTop[0]). NOT USED.
      *   2. the SP pointing to the *end* of the frame for this previous
      *      object (saved in BetaStackTop[1]).
      *
@@ -221,6 +221,35 @@ void ProcessMachineStack(void)
     }
 
     /* Check for passing of a component.
+     * 
+     * STACK LAYOUT for component:
+     * 
+     *          |            |
+     *          |            |                             
+     *          |            |      ____________            ____________ 
+     *          |            |     |            |<--.  ,-> | Proto = -1 |
+     *          |            |     |  X item    |   |  |   | GCAttr     |
+     *          |            |     |            |   |  |   | StackObj   |
+     *          |            |     |____________|   |  |   | CallerObj  |
+     *          | Frame for  |                      |  |   | CallerComp |
+     *          |  item X    |                      |  |   | CallerLSC  |=PC(X)
+     *          |____________|<---------------------|--|---| SPx        | 
+     *          |            |    ,-----------------|--|---| SPy        |
+     *          | Att frame  |   /                  |  |   | level      |
+     *          |____________|<-'                   |  |   | dummy      |
+     *          |   RTS      |        ____________  |  |   |------------|
+     *          |   dyn      |------>| Proto = -1 | |  |   | ......     |
+     *          |            |       | GCAttr     | |  |    
+     *          |  Frame for |       | StackObj   | |  |
+     *          |   item Y   |       | CallerObj  |-'  |
+     *          |            |       | CallerComp |---'
+     *          |____________|       | CallerLSC  | 
+     *      SP->|            |       | SPx        |
+     *          |            |       | SPy        |
+     *                               | level      |
+     *                               | dummy      |
+     *                               |------------|
+     *                               |  Y item    |
      * 
      */
     if ((long)theObj->Proto == (long)ComponentPTValue) {
