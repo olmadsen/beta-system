@@ -10,7 +10,7 @@
 #endif
 
 #ifdef hpux
-#include <sys/cache.h>
+/* #include <sys/cache.h> */
 #endif
 
 #ifdef hppa
