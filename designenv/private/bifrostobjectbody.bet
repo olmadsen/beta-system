@@ -12,7 +12,7 @@ MDBODY nti 'bifrostdesignNTbody'
 -- bifrostobjectbodyCVSINFO: Descriptor --
 (# 
 do
-   '$Id: bifrostobjectbody.bet,v 1.22 1999-07-27 11:45:49 mannan Exp $'
+   '$Id: bifrostobjectbody.bet,v 1.23 1999-08-03 11:28:17 pahe Exp $'
      ->msg.putLine;
    <<SLOT bifrostobjectbodymdbodyCVSINFO:Descriptor>>
 #)  
@@ -81,11 +81,12 @@ do
 
 -- bifrostObjectOnDrag: DoPart --
 do
-   (if theObject[]
-    // none then 'Can\'t find dragged object '->puttext; ID->putint; newline
+   INNER;
+   (if theObject[] // none then
+       'Can\'t find dragged object '->puttext; ID->putint; newline
     else
        theObject.onDrag
-   if)  
+   if)
 
 -- bifrostObjectSetColor: DoPart --
 do INNER  
@@ -235,10 +236,11 @@ do true->doneInInner
 -- bifrostConnSetend: DoPart --
 do
    (end,connPrivate.thePoints.npoints)->connPrivate.thePoints.setPoint;
-   connPrivate.setPoints  
+   connPrivate.thePoints[] -> connPrivate.setPoints
 
 -- bifrostConnSetbegin: DoPart --
-do (begin,1)->connPrivate.thePoints.setPoint; connPrivate.setPoints  
+do (begin,1)->connPrivate.thePoints.setPoint;
+   connPrivate.thePoints[] -> connPrivate.setPoints
 
 -- bifrostConnWrite: DoPart --
 do
@@ -318,11 +320,11 @@ do
      do
         thePoints.scanPoints
           (#  do ((current,off)->addPoints,inx)->thePoints.setPoint #);
-        setPoints;
+	thePoints[] -> setPoints;
         connect
      #);
    setPoints:
-     (# 
+     (#
      enter thePoints[]
      do
         thePoints[]->theLine.points;
@@ -538,15 +540,17 @@ do
         pe->setend
      #);
    setup: connectOrient
-     (# 
+     (#
      do
-        (b1,p1,p2)->connectPoint->pb;
-        (b2,p2,p1)->connectPoint->pe;
-        (pe,pb)->theArrow.position;
-        &pointArray[]->connPrivate.thePoints[];
-        theArrow.connectPoint->connPrivate.thePoints.addPoint;
-        pe->connPrivate.thePoints.addPoint;
-        connPrivate.setPoints
+	( b1, p1, p2 ) -> connectPoint -> pb;
+	( b2, p2, p1 ) -> connectPoint -> pe;
+
+        (pe,pb) -> theArrow.position;
+        &pointArray[] -> thePoints[];
+        theArrow.connectPoint -> thePoints.addPoint;
+
+        pe -> thePoints.addPoint;
+        thePoints[] -> setPoints
      #);
    normalize: (* currently not used anywhere *)
    (* calculates the lower left, which is used for text-coordinates.
@@ -576,8 +580,48 @@ do
         theArrow.getBounds->damage;
         theLine.getBounds->damage;
         thefatLine.getBounds->damage
+     #);
+   moveStartConn:
+     (#
+	b1,b2: @rectangle;
+	p1,p2: @point
+     do
+	setConnectPointsOrient;
+	node1.nodePrivate.transformedNodeBounds -> b1;
+	node1.nodePrivate.transformedNodeCenter -> p1;
+	(if thePoints.npoints > 2 then
+	    lastConnectPoint -> p2
+	 else
+	    node2.nodePrivate.transformedNodeBounds -> b2;
+	    node2.nodePrivate.transformedNodeCenter -> p2;
+	    ( b2, p2, p1 ) -> connectPoint -> p2
+	if);
+	( b1, p1, p2 ) -> connectPoint -> p1;
+	p1 -> theScroller.contents.CanvasToDevice -> p1;
+	p2 -> theScroller.contents.CanvasToDevice -> p2;
+	( p1, p2 ) -> theScroller.contents.immediateline
+     #);
+   moveEndConn:
+     (#
+	b1,b2: @rectangle;
+	p1,p2: @point
+     do
+	setConnectPointsOrient;
+	node2.nodePrivate.transformedNodeBounds -> b2;
+	node2.nodePrivate.transformedNodeCenter -> p2;
+	(if thePoints.npoints > 2 then
+	    firstConnectPoint -> p1
+	 else
+	    node1.nodePrivate.transformedNodeBounds -> b1;
+	    node1.nodePrivate.transformedNodeCenter -> p1;
+	    ( b1, p1, p2 ) -> connectPoint -> p1
+	if);
+	( b2, p2, p1 ) -> connectPoint -> p2;
+	p1 -> theScroller.contents.CanvasToDevice -> p1;
+	p2 -> theScroller.contents.CanvasToDevice -> p2;
+	(p1,p2) -> theScroller.contents.immediateline
      #)
-#)  
+#)
 
 -- designConnShapeDescGetBounds: DoPart --
 do
@@ -822,7 +866,7 @@ do
    regionConnectors: @connSet;
    alreadyMoved: [0] @boolean;
    interactiveMove: @boolean;
-   interactiveTM: ^matrix;
+   isMoved: (* if this object is being moved *) @boolean;
    getSubConnectors:
      (# startConns,endConns: ^connset; hitNode: ^designNode
      enter (startConns[],endConns[])
@@ -844,28 +888,23 @@ do
      (# nc: @point
      enter nc
      do
-        (if interactiveTM[] = none then (* No transformation *)
-            
-         else
-            nc->interactiveTM.transformpoint->nc
-        if)
+        (if isMoved then
+	    nc -> pagePrivate.interactionTM.transformpoint -> nc
+	if)
      exit nc
      #);
    transformRect:
-     (# r: @rectangle; 
+     (# r: @rectangle;
      enter r
      do
-        (if interactiveTM[] = none then (* No transformation *)
-            
-         else
-            (r.x,r.y)->interactiveTM.transformpoint->(r.x,r.y)
+        (if isMoved then
+            (r.x,r.y) -> pagePrivate.interactionTM.transformpoint -> (r.x,r.y)
         if)
      exit r
      #);
    transformedNodeBounds: (#  exit shape.getBounds->transformRect #);
-   transformedNodeCenter: (#  exit nodecenter->transform #);
-   
-#)  
+   transformedNodeCenter: (#  exit nodecenter->transform #)
+#)
 
 -- bifrostNodeMove: DoPart --
 do
@@ -879,10 +918,9 @@ do
         UI.bifrostObjectList.newID.value->nodePrivate.alreadyMoved.new;
         (THIS(designNode)[],pt)->moveConnectors;
         false->isDragged;
-        0
-          -> (* release the memory used by alreadyMoved*)
-            nodePrivate.alreadyMoved.new
-     #)  
+        0 -> (* release the memory used by alreadyMoved*)
+	  nodePrivate.alreadyMoved.new
+     #)
 
 -- groupPictureMove: DoPart --
 do
@@ -896,7 +934,7 @@ do
             (hitObject[],offset)->hitObject.moveConnectors;
             false->hitObject.isDragged
         if)
-     #)  
+     #)
 
 -- groupPictureInteractivemove: DoPart --
 do
@@ -1037,65 +1075,25 @@ do
 
 -- bifrostNodeHiliteOutLine: DoPart --
 do
-   TM[]
-     ->
-     (* could be that this is not enough - it depends on
-      * hiliteOutLine (of the node for which isDragged is true)
-      * to be called as the last.
-      * Furthermore there can be old interactiveTM's hanging around
-      * which may or may not have the correct values.
-      *) nodePrivate.interactiveTM[];
-   (* FIXME: move this to connPrivate to avoid "dotting" in to
-    * current.connprivate
-    *)
+   (if TM[] <> NONE then
+       TM[] -> pagePrivate.interactionTM[]
+   if);
+   (if not nodePrivate.isMoved then
+       true -> nodePrivate.isMoved;
+       this(designNode)[] -> pagePrivate.interactionNodes.insert
+   if);
    (if isDragged then
        nodePrivate.startConnectorsToMove.scan
-         (# b1,b2: @rectangle; p1,p2: @point; 
-         do
-            current.connPrivate.setConnectPointsOrient;
-            current.connPrivate.node1.nodePrivate.transformedNodeBounds->b1;
-            current.connPrivate.node1.nodePrivate.transformedNodeCenter->p1;
-            (if current.connPrivate.thePoints.npoints > 2 then
-                current.connPrivate.lastConnectPoint->p2
-             else
-                current.connPrivate.node2.nodePrivate.transformedNodeBounds->b2;
-                current.connPrivate.node2.nodePrivate.transformedNodeCenter->p2;
-                (b2,p2,p1)->current.connPrivate.connectPoint->p2;
-                
-            if);
-            (b1,p1,p2)->current.connPrivate.connectPoint->p1;
-            p1->theScroller.contents.CanvasToDevice->p1;
-            p2->theScroller.contents.CanvasToDevice->p2;
-            (p1,p2)->theScroller.contents.immediateline;
-            
-         #);
+	 (# do current.connPrivate.moveStartConn #);
        nodePrivate.endConnectorsToMove.scan
-         (# b1,b2: @rectangle; p1,p2: @point; 
-         do
-            current.connPrivate.setConnectPointsOrient;
-            current.connPrivate.node2.nodePrivate.transformedNodeBounds->b2;
-            current.connPrivate.node2.nodePrivate.transformedNodeCenter->p2;
-            (if current.connPrivate.thePoints.npoints > 2 then
-                current.connPrivate.firstConnectPoint->p1
-             else
-                current.connPrivate.node1.nodePrivate.transformedNodeBounds->b1;
-                current.connPrivate.node1.nodePrivate.transformedNodeCenter->p1;
-                (b1,p1,p2)->current.connPrivate.connectPoint->p1;
-                
-            if);
-            (b2,p2,p1)->current.connPrivate.connectPoint->p2;
-            p1->theScroller.contents.CanvasToDevice->p1;
-            p2->theScroller.contents.CanvasToDevice->p2;
-            (p1,p2)->theScroller.contents.immediateline;
-            
-         #);
+	 (# do current.connPrivate.moveEndConn #);
        nodePrivate.regionConnectors.scan
-         (# 
+         (#
          do
             (theCanvas[],draw,TM[])
               ->current.connPrivate.theLine.theShape.hiliteOutLine
          #)
-   if)  
+   if)
 
 -- bifrostNodeDump: DoPart --
 do INNER ; 'Text: \''->putText; theText.theText->putText; '\''->putLine  
@@ -1206,7 +1204,7 @@ do hideborder
    moved: @boolean;
    dontRepairGroup: @boolean;
    doMove: delay
-     (# 
+     (#
      do
         true->moved;
         (if true
@@ -1219,10 +1217,19 @@ do hideborder
                      current[]->current.load_prevPicture.delete
                  if);
                  current[]->theMainPicture.group.add;
-                 cnt->current.setCenter;
-                 
+                 cnt->current.setCenter
               #);
+
+	    IDMatrix -> pagePrivate.interactionTM[];
+	    pagePrivate.interactionNodes.init;
             (theMainPicture.group[],mousepos,noModifier)->interactivemove;
+	    IDMatrix -> pagePrivate.interactionTM[];
+	    (for i: pagePrivate.interactionNodes.size repeat
+		 false ->
+		   pagePrivate.interactionNodes.list[i].nodePrivate.isMoved
+	    for);
+	    pagePrivate.interactionNodes.release;
+
             designGroup.private.implList.scan
               (# cnt: @point
               do
@@ -1231,8 +1238,7 @@ do hideborder
                  (if current.load_prevPicture[] <> none then
                      current[]->current.load_prevPicture.add
                  if);
-                 cnt->current.setCenter;
-                 
+                 cnt->current.setCenter
               #);
             (* toby says that onDrag should be called on all nodes in
              * group selection
@@ -1242,7 +1248,16 @@ do hideborder
          // hitObject## <= designNode## then
             hitObject[]->hitNode[];
             (if hitNode.moveable then
-                (hitNode[],mousepos,noModifier)->interactivemove; hitNode.onDrag
+		IDMatrix -> pagePrivate.interactionTM[];
+		pagePrivate.interactionNodes.init;
+                (hitNode[],mousepos,noModifier) -> interactivemove;
+		IDMatrix -> pagePrivate.interactionTM[];
+		(for i: pagePrivate.interactionNodes.size repeat
+		     false ->
+		       pagePrivate.interactionNodes.list[i].nodePrivate.isMoved
+                for);
+		pagePrivate.interactionNodes.release;
+		hitNode.onDrag
             if)
          // hitObject## <= designConn## then
             'Should not happen: doMove hitObject## <= designConn##'->putLine
@@ -1300,7 +1315,7 @@ do hideborder
          (* doubleclicked (not on controlpoint) - insert a new point *)
             (mousePos,mousePos->hitConn.connPrivate.theLine.closestLineSegment)
               ->hitConn.connPrivate.thePoints.insertPoint;
-            hitConn.connPrivate.setPoints
+	    hitConn.connPrivate.thePoints[] -> hitConn.connPrivate.setPoints
          // (exactpos[] <> none ) then
          (* clicked on a control point - move it *)
             exactPos->hitConn.connPrivate.isEndPoint->(isEnd,whichEnd);
@@ -1434,6 +1449,7 @@ do hideborder
         n1,n2: ^designNode;
         ho: ^designObject;
         pts: [0] @integer;
+	bnd: @rectangle;
         initialiser: @object
           (# 
           do
@@ -1460,12 +1476,35 @@ do hideborder
         (if pa.npoints < 2 then leave connIA if);
         (pa.npoints->pa.getPoint,none )->findHitObject->ho[];
         (if ho[] // none then leave connIA if);
-        (if ho[] // n1[] then leave connIA if);
         (if ho## <= designNode## then
             ho[]->n2[]; (if ho## <= designLabel## then leave connIA if)
          else
             leave connIA
         if);
+
+        (if ho[] // n1[] then
+	    (if pa.npoints // 2 then
+		n1.shape.getBounds -> bnd;
+
+		2 -> pa.deletePoint;
+		1 -> pa.deletePoint;
+
+		( bnd.x + ( bnd.width div 2), bnd.y - ( bnd.height div 2 ) )
+		  -> pa.addPoint;
+
+		( bnd.x + bnd.width + 30, bnd.y - ( bnd.height div 2 ) )
+		  -> pa.addPoint;
+
+		( bnd.x + bnd.width + 30, bnd.y + 30 )
+		  -> pa.addPoint;
+
+		( bnd.x + ( bnd.width div 2 ), bnd.y + 30 )
+		  -> pa.addPoint;
+
+		1 -> pa.getPoint -> pa.addPoint
+            if)
+	if);
+
         pa.npoints*2->pts.new;
         pa.scanPoints
           (#  do current->bifrost2design->(pts[inx*2-1],pts[inx*2]) #);
@@ -2213,33 +2252,30 @@ modify (#  do o->connPrivate.orient; connPrivate.connect #)
 
 -- bifrostObjectAutoPan: DoPart --
 do
+   (if UI.Verbose then 'bifrostObjectAutoPan: DoPart called!'->putLine if);
    (if not dontRepair then
-       none (* we don't want it to autoPan more than once! *) ->autoPanObject[];
+       none (* we don't want it to autoPan more than once! *)
+	 -> autoPanObject[];
        getbounds->r;
-       (if false then
-           r->rtmp;
-           'getbounds->r: (top=%f, %f)(size=%f, %f)\n\n' 
-             -> putFormat (# do (rtmp.x,rtmp.y)->(f,f); (rtmp.width,rtmp.height)->(f,f) #);
-       if);
-       INNER ;
+       INNER;
+       (* take the zoom factor into account *)
+       (#
+	  zoom: @vector
+       do
+	  theScroller.contents.ZoomFactor -> zoom;
+	  (if UI.verbose then
+	      r -> putBounds; putLine;
+	      'zoom factor: %f %f\n' -> putFormat(# do zoom -> (f,f) #);
+	  if);
+	  zoom.x * r.x -> r.x;
+	  zoom.x * r.width -> r.width;
+	  zoom.y * r.y -> r.y;
+	  zoom.y * r.height -> r.height;
+	  (if UI.verbose then r -> putBounds; putLine if)
+       #);
        theScroller.contents.size->s;
-       (if false then
-           s->ptmp;
-           'theScroller.contents.size->s: (real=%f, %f)\n\n' 
-             -> putFormat (# do (ptmp.x,ptmp.y)->(f,f) #);
-       if);
        theScroller.viewSize->vs;
-       (if false then
-           vs->ptmp;
-       'theScroller.viewSize->vs: (real=%f, %f)\n\n' 
-             -> putFormat (# do (ptmp.x,ptmp.y)->(f,f) #);
-       if);
        (r.x,s.y-r.y)->stl;
-       (if false then 
-             stl->ptmp;
-           '(r.x,s.y-r.y): (real=%f, %f)\n\n' 
-             -> putFormat (# do (ptmp.x,ptmp.y)->(f,f) #);
-       if);
        (stl,(r.width,r.height))->addPoints->sbr;
        theScroller.theScroll->vtl;
        (vtl,vs)->addPoints->vbr;
@@ -2257,15 +2293,14 @@ do
        (if true
         // stl.y < vtl.y then
            (if UI.verbose then 'stl.y < vtl.y'->putLine if);
-           (vtl.x-10,stl.y-10)->theScroller.theScroll->vtl;
-           (vtl,vs)->addPoints->vbr
+           (vtl.x-10,stl.y-10)->theScroller.theScroll
         // sbr.y > vbr.y then
            (if UI.verbose then 'sbr.y > vbr.y'->putLine if);
-           (vtl.x,sbr.y-vs.y)->theScroller.theScroll->vtl
+           (vtl.x,sbr.y-vs.y)->theScroller.theScroll
        if);
        (if designSelection <> none then (designSelection).hilite if)
     else
-   (* Let repair do the work later *)
+       (* Let repair do the work later *)
        THIS(designObject)[]->autoPanObject[]
    if)  
 
@@ -2596,29 +2631,34 @@ do
 
 -- bifrostPageUpdateMenuBar: DoPart --
 do
-     (# fileMenuSeen: @boolean
-     do
-        (theMenuBar).clear;
-        (if bifrostDesignDebug then
-            (theMenuBar).extraMenu[]->(theMenuBar).append
-        if);
-        THIS(designEnv).menuBar.scan
-          (# t: ^text
-          do
-             (if current.att.menu[] <> none then
-                 current.att.menu.name->t[];
-                 (if (* This is a hack for windows (may it fry in hell) *)
-                 'file'->t.equalNCS then
-                     (if not fileMenuSeen then
-                         current.att.menu[]->(theMenuBar).append;
-                         true->fileMenuSeen
-                     if)
-                  else
-                     current.att.menu[]->(theMenuBar).append
-                 if)
-             if)
-          #)
-     #)  
+   (#
+      fileMenuSeen: @boolean;
+      newMenuBar: ^theGUI.menuBar
+   do
+      &theGUI.menuBar[] -> newMenuBar[];
+      newMenuBar.open;
+      newMenuBar.clear;
+      (if bifrostDesignDebug then
+	  (theMenuBar).extraMenu[] -> newMenuBar.append
+      if);
+      THIS(designEnv).menuBar.scan
+	(# t: ^text
+	do
+	   (if current.att.menu[] <> none then
+	       current.att.menu.name -> t[];
+	       (if (* This is a hack for windows *) 'file'->t.equalNCS then
+		   (if not fileMenuSeen then
+		       current.att.menu[] -> newMenuBar.append;
+		       true -> fileMenuSeen
+		   if)
+		else
+		   current.att.menu[] -> newMenuBar.append
+	       if)
+	   if)
+	#);
+      ((theMenuBar), newMenuBar[]) -> (theMenuBar).replaceMenubar;
+      newMenuBar.close
+   #)
 
 -- bifrostGroupSet: DoPart --
 do
@@ -2832,7 +2872,7 @@ do
           (pt->design2bifrost,i)->pa.insertPoint
         for);
         pa[]->connPrivate.thePoints[];
-        connPrivate.setPoints;
+	connPrivate.thePoints[] -> connPrivate.setPoints;
         connPrivate.connect;
         (if theScroller.contents.ready then
         (* FIXME: should draw be called or not *)
@@ -3104,7 +3144,11 @@ do
      (#
         currentMenus: [0] ^theGUI.menu; menuInx: @integer; extraName: @text; 
      do
+	(if dontUpdate then leave check if);
         (if currentBifrostPage[] // none then leave check if);
+	(if not currentBifrostPage.theScroller.contents.ready then
+	    leave check
+        if);
         (if UI.verbose then
             '%d: bifrostPageCheckMenuBar-bifrostobjectbody\n'
               ->putFormat (#  do currentBifrostPage.theMainPicture.ID->d #)
@@ -3145,12 +3189,22 @@ do
              if);
              (if not (current## <= THIS(designenv).designMenu##) then
                  (if not (theMenu.name->current.att.name.equal) then
-                     theMenu.name->putLine;
                      currentBifrostPage.updateMenuBar;
                      leave check
                  if);
                  (if theMenu.noOfMenuitems <> current.itemList.size then
-                     currentBifrostPage.updateMenuBar; leave check
+		     (if current.att.menu.noOfMenuitems <>
+			   theMenu.noOfMenuitems
+			   (*
+			    * This check is not necessary, but someone
+			    * is by-passing the designenv menu
+			    * interface somehow. The `Windows' menu in
+			    * freja is an example of this.
+			    * /pahe
+			    *)
+		      then
+			 currentBifrostPage.updateMenuBar; leave check
+                     if)
                  if);
                  theMenu.noOfMenuitems->currentMenuItems.new;
                  0->itemInx;
@@ -3192,7 +3246,7 @@ do
                    #)
              if)
           #)
-     #)  
+     #)
 
 -- bifrostPageRepair: DoPart --
 do
@@ -3208,21 +3262,52 @@ do
        updateInfoBar
    if)  
 
+-- bifrostPageSetZoom: doPart --
+do
+   (#
+      oldzoom: @vector;
+      scroll: @point
+   do
+      theScroller.contents.ZoomFactor -> oldzoom;
+      (if UI.verbose then
+	  'designenv/private/bifrostobjectbody.bet: bifrostPageZoom:DoPart'
+	    -> putLine;
+	  'new zoom factor: %f %f\n' -> putFormat(# do newzoom -> (f,f) #);
+	  'old zoom factor: %f %f\n' -> putFormat(# do oldzoom -> (f,f) #);
+      if);
+      theScroller.theScroll -> scroll;
+      newzoom -> theScroller.contents.ZoomFactor;
+      (if UI.verbose then scroll -> putPoint if);
+      scroll.x / oldzoom.x -> scroll.x;
+      scroll.y / oldzoom.y -> scroll.y;
+      (if UI.verbose then scroll -> putPoint if);
+      scroll.x * newzoom.x -> scroll.x;
+      scroll.y * newzoom.y -> scroll.y;
+      (if UI.verbose then scroll -> putPoint if);
+      scroll -> theScroller.theScroll
+   #)
+
+-- bifrostPageGetZoom: doPart --
+do
+   theScroller.contents.ZoomFactor -> v
+
 -- bifrostPageBlowup: DoPart --
 do
-     (# PTM: @Matrix
-     do (* (2.0, 0.0, 0.0, 2.0, 0.0, 0.0)->PTM.set; *)
-     (* PTM[]->theMainPicture.transform; *)
-        'blowup not implemented yet'->putLine
-     #)  
+   (#
+      oldzoom: @vector
+   do
+      zoom -> oldzoom;
+      ( oldzoom.x + 0.25, oldzoom.y + 0.25 ) -> zoom
+   #)
 
 -- bifrostPageReduce: DoPart --
 do
-     (# PTM: @Matrix
-     do (* (0.5, 0.0, 0.0, 0.5, 0.0, 0.0)->PTM.set; *)
-     (* PTM[]->theMainPicture.transform; *)
-        'reduce not implemented yet'->putLine
-     #)  
+   (#
+      oldzoom: @vector
+   do
+      zoom -> oldzoom;
+      ( oldzoom.x - 0.25, oldzoom.y - 0.25 ) -> zoom
+   #)
 
 -- bifrostObjectOnRightMouseDown: DoPart --
 do
@@ -3243,152 +3328,257 @@ do
 
 -- designPictureInteractiveMove: DoPart --
 do
-   INNER ;
-   (* TAKEN from bifrost/private/Impl/GoImpl.bet cvs ver 1.4 *)
+   INNER;
    (if not doneInInner then
        thecanvas.InteractionHandler
          (#
-            mousePoint: @Point;
-            stopinteraction: @boolean;
-            mm: @MoveMatrix;
-            offset: @Point;
-            myabs: @abs;
-            vs: (* View Size*) @Point;
-            cs: (* Canvas Size *) @Point;
-            oldoff: (* old offset *) @Point;
-            vtl: (* view top left *) @Point;
-            vbr: (* view bottom right *) @Point;
-            xscroll: (#  exit 10 #);
-            yscroll: (#  exit 10 #);
-            everScrolled: @boolean;
-            movepict:@boolean; (* for debugging: mannan *)
-            Initialize::< 
-              (# 
+	    (* When to stop *)
+            stopInteraction:  (* user released button *) @boolean;
+            abortInteraction: (* user pressed `Esc' *)   @boolean;
+
+	    (* These are share between doIdle, doMotion or doTerminate *)
+	    mm: @MoveMatrix;
+            offset: (* the movement *)                             @Point;
+            vtl:    (* view top left *)                            @Point;
+            vbr:    (* view bottom right *)                        @Point;
+	    gloPtr: (* mouse pos relative to the Screen (Xroot) *) @Point;
+	    moved:        (* used byt doIdle and doMove *)      @boolean;
+            everScrolled: (* if the canvas has been scrolled *) @boolean;
+
+	    (* These are initialized for efficiency *)
+            vs:    (* View Size *)                  @Point;
+            zvs:   (* View Size with zoom factor *) @Point;
+            cs:    (* Canvas Size *)                @Point;
+	    frame: (* the frame of the view *)      @Rectangle;
+	    zoom:  (* canvas zoomfactor *)          @vector;
+
+	    myPointInRect: @
+	      (# p: @Point; r: @Rectangle
+	      enter (p,r)
+	      exit ((r.x <= p.x) and (p.x <= r.x+r.width)
+		    and
+		   (r.y <= p.y) and (p.y <= r.y+r.height))
+	      #);
+	    setVTL: @
+	      (#
+	      do
+		 theScroller.theScroll -> vtl;
+
+		 (* correct for zoom *)
+		 vtl.x / zoom.x -> vtl.x;
+		 (* Bifrost y coordinates are reversed *)
+		 (cs.y - vtl.y) / zoom.y -> vtl.y
+              #);
+            Initialize::<
+              (#
               do (* Erase original highlight *)
                  (if private.hilited then
-                     (theCanvas[],false,none )->theshape.drawhilite; 
+                     (theCanvas[],false,none )->theshape.drawhilite
                  if);
                  (* Highlight outline *)
-                 (theCanvas[],true,none )->theshape.ho;
-                 startPoint->mousePoint;
-                 theCanvas.size->cs;
-                 theScroller.viewSize->vs;
-                 
+                 (theCanvas[],true,none)->theshape.ho;
+
+		 (* Initialize mm - this is needed in the special case *)
+		 (* where doMotion isn't called *)
+		 offset -> mm;
+
+		 (* Used in doIdle *)
+                 theCanvas.size -> cs;
+                 theScroller.viewSize -> vs;
+
+		 (* used in both doIdle and doMotion *)
+		 this(bifrostPage).frame
+		   -> ((frame.x,frame.y),(frame.width,frame.height));
+		 frame.width - frame.x -> frame.width;
+		 frame.height - frame.y -> frame.height;
+		 theCanvas.ZoomFactor -> zoom;
+		 vs.x / zoom.x -> zvs.x;
+		 vs.y / zoom.y -> zvs.y;
               #);
-            Motion::< 
-              (# scrolled: @Boolean
-              do (* erase outline at old position *)
-                 offset->oldoff->mm;
-                 (theCanvas[],false,mm[])->theshape.ho;
-                 (* Find new offset and draw outline *)
-                 GetPointerLocation->thecanvas.DeviceToCanvas->mousePoint;
-                 (if false then
-                     'GetPointerLocation'->puttext;
-                     GetPointerLocation->point2text->putline;
-                 if);
+	    idle::< (# do doIdle #);
+	    doIdle: @
+	      (#
+		 scrolled: @Boolean;
+		 scrolloffset: @point;
+		 theScroll: @point;
+		 vdamage, hdamage: @rectangle;
+		 absscroll: @Integer
+	      do
+		 (* leave if `doMotion' hasn't been called, we let *)
+		 (* `doMotion' set gloPtr for efficiency *)
+		 (if not moved then leave doIdle if);
+
+		 (* Check that pointer is outside the window *)
+		 (if ( ( gloPtr, frame ) -> myPointInRect ) then
+		     leave doIdle
+		 if);
+
+		 (* Initalize local variables *)
+		 false -> scrolled;
+		 (0,0) -> scrolloffset;
+		 0 -> vdamage.width -> hdamage.width;
+
+		 setVTL;
+
+		 vtl.x + zvs.x -> vbr.x;
+		 vtl.y - zvs.y -> vbr.y;
+
+		 (* Horizontal scrolls *)
+		 (if true
+		  // gloPtr.x <= frame.x then
+		     (* scroll left *)
+		     ( ( gloPtr.x - frame.x ) div 2 ) -> scrolloffset.x;
+		     ( ( - scrolloffset.x ) / zoom.x ) -> absscroll;
+		     ( vtl.x - absscroll, vtl.y, absscroll, zvs.y ) -> hdamage
+		  // frame.x + frame.width <= gloPtr.x then
+		     (* scroll right *)
+		     ( ( gloPtr.x - frame.x - frame.width ) div 2 )
+		       -> scrolloffset.x;
+		     ( scrolloffset.x / zoom.x ) -> absscroll;
+		     ( vbr.x, vtl.y, absscroll, zvs.y ) -> hdamage
+		 if);
+
+		 (* Vertical scrolls *)
+		 (if true
+		  // gloPtr.y <= frame.y then
+		     (* scroll up *)
+		     ( ( gloPtr.y - frame.y ) div 2 ) -> scrolloffset.y;
+		     ( ( - scrolloffset.y) / zoom.y ) -> absscroll;
+		     ( vtl.x, vtl.y + absscroll, zvs.x, absscroll ) -> vdamage
+		  // frame.y + frame.height <= gloPtr.y then
+		     (* scroll down *)
+		     ( ( gloPtr.y - frame.y - frame.height ) div 2 )
+		       -> scrolloffset.y;
+		     ( scrolloffset.y / zoom.y ) -> absscroll;
+		     ( vtl.x, vbr.y, zvs.x, absscroll ) -> vdamage
+		 if);
+
+		 (if (scrolloffset.x <> 0) or (scrolloffset.y <> 0) then
+		     true -> everScrolled;
+
+		     (* Do the scrolling *)
+		     ( scrolloffset, theScroller.theScroll )
+		       -> addPoints -> theScroll;
+		     (* don't exceed the scrollers boundaries *)
+		     (if theScroll.x < 0 then 0 -> theScroll.x if);
+		     (if theScroll.x + vs.x > cs.x then
+			 cs.x - vs.x -> theScroll.x
+		     if);
+		     (if theScroll.y < 0 then 0 -> theScroll.y if);
+		     (if theScroll.y + vs.y > cs.y then
+			 cs.y - vs.y -> theScroll.y
+		     if);
+		     theScroll -> theScroller.theScroll;
+
+		     (* repair the canvas *)
+		     (if vdamage.width <> 0 then
+			 vdamage -> theCanvas.damaged
+		     if);
+		     (if hdamage.width <> 0 then
+			 hdamage -> theCanvas.damaged
+		     if);
+		     theCanvas.repair
+                 if)
+              #);
+            Motion::< (# do doMotion #);
+	    doMotion: @
+              (#
+		 myabs: (* for efficiency *) @abs;
+		 outside: (* mouse is outside window *) @boolean;
+		 mousePoint: @Point
+              do
+		 getGlobalPointerLocation -> gloPtr;
+		 true -> (* used in doIdle *) moved;
+
+		 (if (gloPtr, frame) -> myPointInRect then
+		     (* Inside the view - erase outline *)
+		     offset -> mm;
+		     (if not outside then
+			 (* FIXME: error in ho? - see below *)
+			 (* erase outline at old position *)
+			 (theCanvas[],false,mm[])->theshape.ho;
+                     if);
+		     false -> outside
+		  else
+		     (* outside the view - erase outline *)
+		     (if not outside then
+			 (* FIXME: there seems to be an error in ho -
+			  * the outside variable shouldn't be necessary and 
+			  * we should be able to use false (erase) ...
+			  *)
+			 (theCanvas[],true,mm[]) -> theshape.ho
+		     if);
+		     true -> outside;
+		     leave doMotion;
+		 if);
+
+		 (* Get mouse location *)
+                 GetPointerLocation
+		   -> thecanvas.DeviceToCanvas
+		   -> mousePoint;
+
+                 (*
+		  * Find new offset and draw outline
+		  *)
                  (mousePoint.x-startpoint.x,mousePoint.y-startpoint.y)->offset;
                  (if themodifier->isModifierOn then
                  (* Constrain to orthogonal movements *)
                      (if (offset.y->myabs) > (offset.x->myabs) then
                      (* 90 degrees *)
-                         0->offset.x; 
+                         0->offset.x;
                       else
                      (* 0 degrees *)
-                         0->offset.y; 
+                         0->offset.y;
                      if)
                  if);
-                 theScroller.theScroll->vtl;
-                 (vtl,vs)->addPoints->vbr;
-                 (if true
-                  // (vbr.x-10 < mousepoint.x) and (offset.x > oldoff.x) then
-                  (* scroll right *)
-                     (vtl.x+xscroll,vtl.y)->theScroller.theScroll;
-                     (vbr.x,vbr.y,xscroll,vs.y)->theCanvas.damaged;
-                     true->scrolled
-                  //
-                  (vtl.x-500 < mousepoint.x) (* FIXME: HACK *)
-                  and
-                  (mousepoint.x < vtl.x)
-                  and
-                  (offset.x < oldoff.x) then (* scroll left *)
-                     (vtl.x-xscroll,vtl.y)->theScroller.theScroll;
-                     (vtl.x-xscroll,vbr.y,xscroll,vs.y)->theCanvas.damaged;
-                     true->scrolled
-                 if);
-                 (if true
-                  //
-                  ((cs.y-vtl.y) < mousepoint.y)
-                  and
-                  (mousepoint.y < (cs.y-vtl.y)+500) (* FIXME: HACK *)
-                  and
-                  (offset.y > oldoff.y) then (* scroll up *)
-                     (vtl.x,vtl.y-yscroll)->theScroller.theScroll;
-                     (vtl.x,cs.y-vtl.y+yscroll,vs.x,yscroll)->theCanvas.damaged;
-                     true->scrolled
-                  // (mousepoint.y < (cs.y-vbr.y)) and (offset.y < oldoff.y)
-                  then (* scroll down *)
-                     (vtl.x,vtl.y+yscroll)->theScroller.theScroll;
-                     (vtl.x,cs.y-vbr.y,vs.x,yscroll)->theCanvas.damaged;
-                     true->scrolled
-                 if);
-                 (if scrolled then true->everScrolled; theCanvas.repair if);
+		 (* draw outline *)
                  offset->mm;
                  (theCanvas[],true,mm[])->theshape.ho
               #);
-            ButtonRelease::<  (#  do true->stopinteraction #);
-            TerminateCondition::<  (#  do stopinteraction->value;  #);
-            Terminated::< 
-              (# GB: @GetBounds;
-                 aDO: ^designobject;
-              do (* Erase outline highlight *)
-                 (theCanvas[],false,none )->theshape.ho;
-                 (if (offset.x <> 0) or (offset.y <> 0) then
-                     false->movepict;
-                     (if true
-                      //(offset.x<=0)and(offset.y<=0) then
-                         (if (offset.x+startpoint.x > 0)and(offset.y+startpoint.y > 0) then
-                             true->movepict;
-                         if);
-                      //(offset.x>=0)and(offset.y<=0) then
-                         (if (offset.x+startpoint.x < cs.x)and(offset.y+startpoint.y > 0) then
-                             true->movepict;
-                         if);
-                      //(offset.x<=0)and(offset.y>=0) then
-                         (if (offset.x+startpoint.x > 0)and(offset.y+startpoint.y < cs.y) then
-                             true->movepict;
-                         if);
-                      //(offset.x>=0)and(offset.y>=0) then
-                         (if (offset.x+startpoint.x < cs.x)and(offset.y+startpoint.y < cs.y) then
-                             true->movepict;
-                         if);
-                     if);
-                     (if movepict then
-                         GB->thecanvas.damaged;
-                         'terminated: offset:'->puttext; offset->point2text->putline;
-                         offset->move;
-                         'terminated: position:'->puttext; position->point2text->putline;
-                         'terminated, getbounds: (top=%f, %f)(size=%f, %f)\n\n' 
-                           -> putFormat (# do GB->(f,f,f,f); #); 
-                         (if this(designpicture)##<=designobject## then
-                             this(designpicture)[]->aDO[];
-                             aDO.autopan;
-                          else
-                             'Did not succed in designobject'->putline;
-                         if);
-                         GB->thecanvas.damaged;
-                     if);
-                 if);
-                 (if everScrolled then cleanUp if);
+            ButtonRelease::< (# do true -> stopInteraction #);
+	    keyPress::<
+	      (# do (if ch // ascii.esc then true -> abortInteraction if) #);
+            TerminateCondition::<
+	      (# do (stopInteraction or abortInteraction) -> value #);
+            Terminated::< (# do doTerminate #);
+	    doTerminate:
+              (#
+              do
+		 (* Erase outline *)
+		 (theCanvas[],false,mm[])->theshape.ho;
+
+		 (if ( ( offset.x <> 0 ) or ( offset.y <> 0 ) )
+		       and ( not (* user pressed `Esc' *) abortInteraction )
+		  then
+		     (if not everScrolled then
+			 (* Repair parts of the view area *)
+			 getBounds -> thecanvas.damaged
+		     if);
+
+		     (* Do the actual move *)
+		     offset -> move;
+
+		     (if not everScrolled then
+			 (* Repair parts of the view area *)
+			 getBounds -> thecanvas.damaged
+		     if)
+		 if);
+
+                 (if everScrolled then
+		     (* Repair the entire view area *)
+		     setVTL;
+		     ( vtl.x, vtl.y, zvs.x, zvs.y ) -> theCanvas.damaged
+		 if);
+
                  (* Restore original highlight *)
                  (if private.hilited then
                      (theCanvas[],false,none )->theshape.drawHilite
-                 if);
-                 
+                 if)
               #)
          #);
        thecanvas.repair;
        true->doneInInner
-   if)  
+   if)
 
 -- bifrostConnMoveRegions: DoPart --
 do
@@ -3426,3 +3616,32 @@ do
      #)
 #)  
 
+-- bifrostPagePrivatePart: descriptor --
+(#
+   (*
+    * The following patterns are used when interactively moving
+    * designNodes (moveStartConn and moveEndConn in
+    * bifrostConnPrivate: Descriptor)
+    *)
+   interactionTM: (* used by designNode.nodePrivate.transform *) ^matrix;
+   interactionNodes: (* list of designNodes beeing moved interactively *) @
+     (#
+	initialSize: (* initial size of the list *) (# exit 1 #);
+	list: (* implemetation of the list *) [0] ^designNode;
+	size: (* number of elements in the list *) @integer;
+	init: (* reset the list *)
+	  (# do initialSize -> list.new; 0 -> size #);
+	insert:
+	  (* insert an element in the list *)
+	  (#
+	     elm: ^designNode;
+	  enter elm[]
+	  do
+	     (if list.range // size then list.range -> list.extend if);
+	     size + 1 -> size;
+	     elm[] -> list[size][];
+          #);
+	release: (* release the memory used by the list *)
+	  (# do 0 -> list.new; 0 -> size #)
+     #)
+#)
