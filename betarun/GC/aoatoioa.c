@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $Id: aoatoioa.c,v 1.10 1992-09-22 19:36:52 beta Exp $
+ * Mod: $Id: aoatoioa.c,v 1.11 1992-10-22 14:17:10 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -35,7 +35,7 @@ AOAtoIOAReAlloc()
     int        oldBlockSize  = AOAtoIOAtableSize;
     
     /* Exit if we can't find a new entry in prims. */
-    if( primes[++prim_index] == 0 ) BetaError(-33, 0);
+    if( primes[++prim_index] == 0 ) BetaError(AOAtoIOAfullErr, 0);
     
     /* Allocate a new and larger block to hold AOAtoIOA references. */
     AOAtoIOAtableSize = primes[prim_index];
@@ -47,7 +47,7 @@ AOAtoIOAReAlloc()
     } else {
 	/* If the allocation of the new AOAtoIOAtable failed please
 	   terminate the program execution. */
-	BetaError( -36, 0);
+	BetaError(AOAtoIOAallocErr, 0);
     }
     
     /* Move all entries from the old table into to new. */

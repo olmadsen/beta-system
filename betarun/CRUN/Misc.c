@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Misc.c,v 1.18 1992-10-08 11:00:51 beta Exp $
+ * Mod: $Id: Misc.c,v 1.19 1992-10-22 14:16:41 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -24,7 +24,7 @@ asmlabel(Return, "retl; nop");
 void
 RefNone(ref(Object) theObj)
 {
-    BetaError(-1, theObj);
+    BetaError(RefNoneErr, theObj);
 }
 
 #ifdef hppa

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CInterface.c,v 1.19 1992-10-08 11:00:17 beta Exp $
+ * Mod: $Id: CInterface.c,v 1.20 1992-10-22 14:16:30 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -41,7 +41,7 @@ char *
 
     Ck(theObj); Ck(theRep);
     if (bodysize > (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
-      BetaError(-35, theObj);
+      BetaError(CTextPoolErr, theObj);
     
     /* Copy the contents of the repetition to the CTextPool. */
     for (i = 0; i < bodysize/4; ++i)
@@ -85,8 +85,8 @@ char *
 #endif
 
     Ck(currentObj); Ck(theRep);
-    if (low<theRep->LowBorder) BetaError(-6, currentObj);
-    if (high>theRep->HighBorder) BetaError(-7, currentObj);
+    if (low<theRep->LowBorder) BetaError(RepLowRangeErr, currentObj);
+    if (high>theRep->HighBorder) BetaError(RepHighRangeErr, currentObj);
     high = high - low + 1;
     if (high<0) high=0;
 
@@ -96,7 +96,7 @@ char *
      * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
      */
     if (bodysize > (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
-      BetaError(-35, currentObj);
+      BetaError(CTextPoolErr, currentObj);
     
     /* Copy the contents of the repetition to the CTextPool. */
     oldBody = (unsigned char *)((unsigned)theRep->Body+(low-theRep->LowBorder));

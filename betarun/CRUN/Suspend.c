@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Suspend.c,v 1.12 1992-10-08 11:01:08 beta Exp $
+ * Mod: $Id: Suspend.c,v 1.13 1992-10-22 14:16:46 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -26,7 +26,7 @@ ParamThis(struct Component *, Susp)
    * in an error.
    */
   Ck(this);
-  if (ActiveCallBackFrame) BetaError(-13, this);
+  if (ActiveCallBackFrame) BetaError(CompCallBackErr, this);
   
   /* This situation is this:
      sp -> Suspend..RegWin

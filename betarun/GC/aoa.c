@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: aoa.c,v 1.36 1992-10-20 21:00:38 tthorn Exp $
+ * Mod: $Id: aoa.c,v 1.37 1992-10-22 14:17:06 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -220,7 +220,7 @@ static ReverseAndFollow( theCell)
       DEBUG_LVRA( Claim( isValRep(*theCell), "Phase1: LVRA cycle"));
       DEBUG_LVRA( Claim( (*theCell)->GCAttr == (long) theCell,
 			"Phase1: LVRA cycle"));
-      if( AOAtoLVRAsize > (IOASize/4) ) BetaError(-34, 0);
+      if( AOAtoLVRAsize > (IOASize/4) ) BetaError(AOAtoLVRAfullErr, 0);
     }
   }
 }

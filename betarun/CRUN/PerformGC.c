@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: PerformGC.c,v 1.7 1992-09-03 12:56:22 beta Exp $
+ * Mod: $Id: PerformGC.c,v 1.8 1992-10-22 14:16:43 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -43,7 +43,7 @@ asmlabel(_FailureExit, "
 #ifdef hppa
 void FailureExit()
 {
-  BetaError(-8, getD0Reg());
+  BetaError(StopCalledErr, getD0Reg());
 }
 #endif
     

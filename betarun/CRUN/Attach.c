@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Attach.c,v 1.14 1992-10-08 11:00:12 beta Exp $
+ * Mod: $Id: Attach.c,v 1.15 1992-10-22 14:16:28 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -69,7 +69,7 @@ ParamThisComp(struct Component *, Att)
     } 
     if (comp->StackObj == 0){
       /* printf("\nAttach: comp->StackObj == 0, comp=%x", (long)comp); */
-      BetaError(-2, this);
+      BetaError(CompTerminatedErr, this);
     }
     ActiveComponent = comp;
 	
