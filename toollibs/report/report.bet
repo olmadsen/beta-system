@@ -1,0 +1,209 @@
+ORIGIN '~beta/containers/v1.5/container';
+INCLUDE '~beta/basiclib/v1.5/formatio';
+
+INCLUDE 'outputFormat';
+BODY 'private/reportBody';
+
+--- containerlib: attributes ---
+
+Report:
+  (# (* This pattern is designed to be inherited by a report
+      * specified by the programmer. This 'report' pattern specifies
+      * nested patterns which can be further specialised by the
+      * programmer and nested patterns which can be directly used for
+      * generating the desired report.
+      * 
+      * A report will consist of one or more tables, with one column
+      * for each attribute, the programmer have selected for inclusion
+      * in the report, and a row for each object in the container.
+      * The number of rows in a single table is defined by the
+      * 'rowsPrTable' attribute (if zero, only one table will be
+      * generated).  In both cases, the table can be split explicitly
+      * by executing the 'splitTable' attribute.
+      * 
+      * The specialisation of this report require some minimum
+      * specialisation from the user to make the report-generation
+      * work:
+      * 
+      * 2) It must be specified which attributes of these objects
+      * should be printed and when they should be printed. This is
+      * done by specifying sub-patterns of the 'field' patterns and
+      * further bind the 'value', 'name' and 'predicate' attributes of
+      * this pattern.
+      * 
+      * 3) The programmer must generate objects from these patterns
+      * and 'setup' them to the report.
+      * 
+      * 4) The programmer must decide which format should be generated
+      * (latex, html or ascii).  This is done through the
+      * 'reportFormat' virtual attribute.  The fragmant-files
+      * latexFormat.bet, htmlFormat.bet and asciiFormat.bet contains
+      * the currently defined report format.s
+      * 
+      * Furthermore the programmer can specify a caption of the
+      * tables, and table numbering.  Table numbers are shown in the
+      * captions. All of which is specified by further binding.
+      * 
+      * The report takes as argument a stream or a specialisation of a
+      * stream such as a file, the screen, a text variable etc.
+      * 
+      * New reprot formats can be construvted easily by making new
+      * specializations on the 'outputFormat' pattern (defined in
+      * 'outputFormat.bet').  See the existing format patterns for
+      * inspiration on how to make such new formats.
+      *)
+
+     (* The layout of the report can be specialised in the application
+      * by binding the virtual patterns in the virtual layout-pattern
+      *)
+     reportFormat:< outputFormat;
+
+     tableNumbering:< booleanValue
+       (* if true, each table caption will contain the table number *);
+     rowsPrTable:< integerValue
+       (* if value<>0, each table will contain at most rowsPrTable rows *);
+     caption:<
+       (* used to specify the caption to be put below each table *)
+       (# caption: ^text
+       do '' -> caption[]; INNER
+       exit caption[]
+       #);
+     splitTable:
+       (* invoke this if you want to split the table explicitly -
+	* that is, irrespectively of 'rowsPrTable'
+	*)
+       (# <<SLOT reportSplitTable:dopart>> #);
+
+     field:
+       (* General pattern for specifying columns containing e.g. text
+	* or integers
+	*)
+       (# type:< object
+	    (* defines the type of values in this column *);
+	  elm: ^element
+	    (* reference to the element in the container during the scan *);
+	  name:<
+	    (* used to define the name displayed in the table header for
+	     * this column
+	     *)
+	    (# name: ^text
+	    do INNER
+	    exit name[]
+	    #);
+	  calculate:<
+	    (* used to specify the calculation of the values in this column
+	     *)
+	    (# do INNER #);
+	  width:< integerValue
+	    (* defined the width of this column - the interpretation of this
+	     * attribute is dependent on the chosen report format
+	     *)
+	    (# do 7->value; INNER #);
+	  predicate:<
+	    (* if false, this field will not be displayed *)
+	    (# predicate: @boolean
+	    do true -> predicate; INNER
+	    exit predicate
+	    #);
+	  value: @
+	    (* used to read and write the value of this field *)
+	    (# value: ^type;
+	    enter value[]
+	    exit value[]
+	    #);
+	  prevValue: @
+	    (* used to gain access to previous values of this field in the
+	     * table.  'index' numbers these values as '0' being the current
+	     * value, '1' being the previous value, '2' being the second
+	     * previous vaule, etc.  If NONE is returned, no previous value
+	     * exist (i.e. we are at the very first row in the table.
+	     *)
+	    (# index: @integer;
+	       value: ^type;
+	    enter index
+	    <<SLOT reportFieldPrevValue: dopart>>
+	    exit value[]
+	    #);
+	  setup:<
+	    (* used to specify, that this(field) spould be included as a
+	     * column in this(report)
+	     *)
+	    (# <<SLOT reportFieldSetup:dopart>> #);
+	  write:<
+	    (* only used when defining new field types.  Used to specify how
+	     * to write the value of this(field) onto the reportFormat
+	     *)
+	    (# <<SLOT reportFieldWrite:dopart>> #);
+	  blank: (* Private *)
+	    (# <<SLOT reportFieldBlank:dopart>> #);
+	  elements: @list (* Private *)
+	    (# element:: type;
+	       get:
+		 (# index: @integer; elm: ^element; pos: ^theCellType;
+		 enter index
+		 <<SLOT reportFieldElements: dopart>>
+		 exit elm[]
+		 #)
+	    #);
+       do INNER;
+       #);
+
+     (* Specialisations of the field-pattern to handle text and
+      * integer fields
+      *)
+     textField: field
+       (# type:: text;
+	  write::
+	    (# <<SLOT reportTextFieldWrite: dopart>> #);
+       do INNER;
+       #);
+     integerField: field
+       (# type:: integerObject;
+	  calculate::<
+	    (# value: ^integerObject
+	    do &integerObject[]->value[]->this(integerField).value;
+	       INNER
+	    #);
+	  write::
+	    (# <<SLOT reportIntegerFieldWrite: dopart>> #);
+       do INNER;
+       #);
+     integerAccField: integerField
+       (* integer field type which accumulates 'value' *)
+       (# acc: @integer;
+	  calculate::<
+	    (# do INNER; acc+value->acc->value #);
+       do INNER;
+       #);
+     sumField: integerField
+       (* automatic summation field.  This(sumField) will
+	* automatically calculate the running sum of the values of
+	* another integerField in this(report).  This other
+	* integerField is specified as arkument to the setup field.
+	* NOTE, that this field _must_ be located in a colums _before_
+	* this(sumField)
+	*)
+       (# origin: ^integerField;
+	  acc: @integer;
+	  calculate::<
+	    (# do INNER; acc+(origin.value).value->acc->value #);
+	  setup::<
+	    (# enter origin[] #);
+       do INNER;
+       #);
+
+     reportStream: ^stream
+       (* a stream onto which this(report) will be written - if the
+	* reportFormat generates the reprot in stream format.  The
+	* predefined reportFormats does all define the report in
+	* stream format, but other reportFormats might instead
+	* generate e.g. a Lidskjalv User Interface Object
+	*);
+
+     private: @<<SLOT reportPrivate: descriptor>>;
+  enter reportStream[]
+  do INNER; (* in INNER you shloud execute the 'setup' routines for
+	     * each field you want in the report
+	     *)
+     <<SLOT reportBody: descriptor>>
+  #)
