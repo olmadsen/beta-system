@@ -1,18 +1,16 @@
 CC        = gcc -O 
-BASEDIR   = $(BETALIB)/objectserver/v2.11/private
-EXTERNALDIR = $(BASEDIR)/external
-OBJECTDIR = $(BASEDIR)/$(MACHINETYPE)
+dir   = $(BETALIB)/objectserver/v2.11/private
+extdir = $(dir)/external/
+odir = $(dir)/$(MACHINETYPE)/
 
-make: run rest
-run: $(OBJECTDIR)/runAlloc_$(MACHINETYPE).o 
-rest:$(OBJECTDIR)/searchHack.o $(OBJECTDIR)/lazyref_gc.o 
+make: $(odir)runAlloc_$(MACHINETYPE).o $(odir)searchHack.o $(odir)lazyref_gc.o 
 
-$(OBJECTDIR)/searchHack.o: $(EXTERNALDIR)/searchHack.c
-	$(CC) -D$(MACHINETYPE) -c -o $(OBJECTDIR)/searchHack.o $(EXTERNALDIR)/searchHack.c
+$(odir)searchHack.o: $(extdir)searchHack.c
+	$(CC) -D$(MACHINETYPE) -c -o $(odir)searchHack.o $(extdir)searchHack.c
 
-$(OBJECTDIR)/lazyref_gc.o: $(EXTERNALDIR)/lazyref_gc.c
-	$(CC) -D$(MACHINETYPE) -DRTLAZY -c -o $(OBJECTDIR)/lazyref_gc.o $(EXTERNALDIR)/lazyref_gc.c -I$(BETALIB)/betarun/v2.6/$(MACHINETYPE)/
+$(odir)lazyref_gc.o: $(extdir)lazyref_gc.c
+	$(CC) -D$(MACHINETYPE) -DRTLAZY -c -o $(odir)lazyref_gc.o $(extdir)lazyref_gc.c -I$(BETALIB)/betarun/v2.6/$(MACHINETYPE)/
 
-$(OBJECTDIR)/runAlloc_$(MACHINETYPE).o: $(EXTERNALDIR)/runAlloc_$(MACHINETYPE).s
-	as -o $(OBJECTDIR)/runAlloc_$(MACHINETYPE).o $(EXTERNALDIR)/runAlloc_$(MACHINETYPE).s
+$(odir)runAlloc_$(MACHINETYPE).o: $(extdir)runAlloc_$(MACHINETYPE).s
+	as -o $(odir)runAlloc_$(MACHINETYPE).o $(extdir)runAlloc_$(MACHINETYPE).s
 

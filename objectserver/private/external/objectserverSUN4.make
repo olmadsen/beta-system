@@ -1,12 +1,12 @@
 CC        = gcc -O 
-BASEDIR   = $(BETALIB)/objectserver/v2.11/private
-EXTERNALDIR = $(BASEDIR)/external
-OBJECTDIR = $(BASEDIR)/$(MACHINETYPE)
+dir   = $(BETALIB)/objectserver/v2.11/private
+extdir = $(dir)/external/
+odir = $(dir)/$(MACHINETYPE)/
 
-rest:$(OBJECTDIR)/searchHack.o $(OBJECTDIR)/lazyref_gc.o 
+make: $(odir)searchHack.o $(odir)lazyref_gc.o 
 
-$(OBJECTDIR)/searchHack.o: $(EXTERNALDIR)/searchHack.c
-	$(CC) -D$(MACHINETYPE) -c -o $(OBJECTDIR)/searchHack.o $(EXTERNALDIR)/searchHack.c
+$(odir)searchHack.o: $(extdir)searchHack.c
+	$(CC) -D$(MACHINETYPE) -c -o $(odir)searchHack.o $(extdir)searchHack.c
 
-$(OBJECTDIR)/lazyref_gc.o: $(EXTERNALDIR)/lazyref_gc.c
-	$(CC) -D$(MACHINETYPE) -DRTLAZY -c -o $(OBJECTDIR)/lazyref_gc.o $(EXTERNALDIR)/lazyref_gc.c -I/users/beta/betarun/v2.6/$(MACHINETYPE)/
+$(odir)lazyref_gc.o: $(extdir)lazyref_gc.c
+	$(CC) -D$(MACHINETYPE) -DRTLAZY -c -o $(odir)lazyref_gc.o $(extdir)lazyref_gc.c -I/users/beta/betarun/v2.6/$(MACHINETYPE)/
