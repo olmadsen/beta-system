@@ -1,7 +1,9 @@
 /*
-  Compilation statements: 
+  Compilation: 
     nbeta Bclass.bet
-    csc /nologo /r:System.dll /r:clr/Bclass/betaenv.dll /r:clr/Bclass/Bclass.dll BclassUser.cs 
+    csc /nologo /r:System.dll /r:clr/Bclass/betaenv.dll /r:clr/Bclass/Bclass.dll BclassUser.cs
+  Execution:
+    BclassUser.exe
 */ 
 using System;
 

@@ -1,8 +1,11 @@
 /*
-  Compilation statements: 
+  Compilation: 
     jbeta Bclass.bet
     javac -d jvm -classpath jvm/Bclass.jar BclassUser.java
-    java -classpath jvm/Bclass.jar:jvm betauser.BclassUser
+  Execution UNIX:
+    java -classpath "jvm/Bclass.jar:jvm" betauser.BclassUser
+  Execution Windows:
+    java -classpath "jvm/Bclass.jar;jvm" betauser.BclassUser
 */ 
 
 package betauser;
