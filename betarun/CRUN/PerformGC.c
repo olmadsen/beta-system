@@ -33,6 +33,7 @@ void doGC() /* The one called from IOA(c)alloc */
         "\tLDWS,MA\t-4(0,%r14),%r4\n"
         "\tLDWS,MA\t-4(0,%r14),%r3\n");
 #endif
+    asmemptylabel(EndGC);
 }
 
 void DoGC() /* The one called directly from betaenv */
