@@ -4,7 +4,7 @@ rem Used to boot grammars by invoking the
 rem grammar tools of the previous release.
 
 rem --- configuration---
-set OLD_BETALIB=d:\beta\r4.2.boot
+set OLD_BETALIB=e:\beta\r5.0.boot
 
 rem --- don't change below ---
 
