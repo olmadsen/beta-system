@@ -9,7 +9,7 @@
 #define ByteRepPTValue         -6
 
 #define MaxPTValue             -1
-#define MinPTValue             -5
+#define MinPTValue             -6
 
 
 #define ItemType                1
