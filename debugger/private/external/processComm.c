@@ -119,7 +119,7 @@ char *valhallaMachineName() {
   exit(1);
 }
 
-int executeProcess (char *execName) { 
+HANDLE executeProcess (char *execName) { 
   STARTUPINFO si;
   PROCESS_INFORMATION pi;
   
@@ -396,7 +396,7 @@ int executeProcess (char *execName) {
 		    lpStartupInfo,
 		    lpProcessInformation)) {
     /* Call succeeded */
-    return (int)(lpProcessInformation -> dwProcessId);
+    return lpProcessInformation -> hProcess;
   } else {
     /* Call failed */
     LPVOID lpMsgBuf;

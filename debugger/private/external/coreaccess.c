@@ -253,22 +253,59 @@ int SendSIGINT (pid_t pid)
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <windows.h>
 
-int ReadImage (int pid, int address, int *value) {
+int coreaccess_init(HANDLE pid) { 
+  /* no initialization requiered */
+  return 0;
+}
+
+void coreaccess_close(HANDLE pid) {
+  /* no cleanup requiered */
+  return;
+}
+
+extern void process_comm_exception(char *message);
+
+int SendSIGINT(int pid) {
+  UINT exit_code;
+  HANDLE hProcess=(HANDLE)pid;
+
+  exit_code= 0; /* which is the prober exit-code ? */
+
+  if (TerminateProcess(hProcess, exit_code)) {
+    /* call succeeded */
+    return 0;
+  } else {
+    /* call failed */
+    LPVOID lpMsgBuf;
+    FormatMessage
+      (FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+       NULL,
+       GetLastError(),
+       MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
+       (LPTSTR) &lpMsgBuf,
+       0,
+       NULL);
+    process_comm_exception((char *)lpMsgBuf);
+  }
+}
+
+int ReadImage(int pid, int address, int *value) {
   errno = 0; 
   printf("ReadImage not implemented\n");
   exit(1);
   return errno;
 }
 
-int WriteImage (int pid, int address, int value) { 
+int WriteImage(int pid, int address, int value) { 
   errno = 0;
   printf("WriteImage not implemented\n");
   exit(1);
   return errno;
 }
 
-int SetBreak (int pid, int address, int* oldInstruction) { 
+int SetBreak(int pid, int address, int* oldInstruction) { 
   int res;
   errno = 0;
   printf("SetBreak not implemented\n");
@@ -276,16 +313,11 @@ int SetBreak (int pid, int address, int* oldInstruction) {
   return errno;
 }
 
-int UnsetBreak (int pid, int address, int oldInstruction) {
+int UnsetBreak(int pid, int address, int oldInstruction) {
   errno = 0;
   printf("UnsetBreak not implemented\n");
   exit(1);
   return errno;
-}
-
-int SendSIGINT (int pid) {
-  printf("SendSIGINT not implemented\n");
-  exit(1);
 }
 
 #endif /* not nti */
