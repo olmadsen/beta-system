@@ -58,8 +58,9 @@ extern long M_Part(ProtoType * proto);
 extern void  DisplayObject(FILE *,Object *,long);
 extern int  DisplayBetaStack(BetaErr, Object *, long *, long);
 #ifdef sparc
-  extern void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func);
-#endif
+extern void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func);
+extern void TraverseSparcStackPart(RegWin *theAR, Object* prevObj, CellDisplayFunc func);
+#endif /* sparc */
 #ifdef intel
   extern long *DisplayCallbackFrames(CallBackFrame *cbFrame, long *low, Object *currentObject, CellDisplayFunc func);
   extern void DisplayStackPart(long *low, long *high, Object *currentObject, CellDisplayFunc func);

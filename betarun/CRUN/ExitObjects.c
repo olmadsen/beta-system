@@ -138,7 +138,7 @@ asmlabel(ExOx,
 /* Note: The offset parameter is complely ignored. It's not needed
    on the SPARC */
 
-void CExitOx1(long exitAddr, Object * exitObj, Object * theObj)
+void CExitOx(long exitAddr, Object * exitObj, Object * theObj)
 {
   RegWin *rw;		    /* Callers Register Window */
 
@@ -183,6 +183,7 @@ void CExitOx1(long exitAddr, Object * exitObj, Object * theObj)
   while ((theObj = (Object *) rw->i0) != exitObj) {
 #ifdef LEAVE_ACROSS_CALLBACK
     if (rw == nextCBF){
+      /* This is AR of HandleCB. Skip to betaTop and update nextCBF */
       DEBUG_STACK({
 	fprintf(output, "ExO: Passing callback\n");
 	fflush(output);
@@ -194,9 +195,10 @@ void CExitOx1(long exitAddr, Object * exitObj, Object * theObj)
       continue;
     } 
 #endif
-    /* Ordinary BETA activation record */
     if (rw == nextCompBlock) {
-      /* Passing a component, this is the RegWin of CAttach */
+      /* This is the AR of attach. Continue, but get
+       * new values for nextCompBlock and nextCBF. 
+       */
       /* Terminate theComp as in AttachComponent: */
       DEBUG_STACK({
 	fprintf(output, "ExO: passing comp 0x%x\n", (int)theComp);
@@ -221,6 +223,10 @@ void CExitOx1(long exitAddr, Object * exitObj, Object * theObj)
       TRACE_EXOX();
       continue;
     } 
+
+    /* Normal Frame - investigate stack part for INNER chains.
+     */
+    
     
     /* go one step back */
     rw = (RegWin *) rw->fp;
@@ -229,7 +235,7 @@ void CExitOx1(long exitAddr, Object * exitObj, Object * theObj)
     continue;
   }
 
-  /* go one more step back */
+  /* ExOx: go one more step back */
   rw = (RegWin *) rw->fp;
   TRACE_EXOX();
 
@@ -245,6 +251,10 @@ void CExitOx1(long exitAddr, Object * exitObj, Object * theObj)
   return; /* Will jump to exitAddr and restore SP from FramePointer */
 }
 
+
+/******** Below version not (yet) used! ***********/
+
+
 static void ProcessExitStackCell(Object **theCell,Object *theObj)
 {
 }
@@ -255,7 +265,7 @@ static RegWin    *SavedCompBlock;
 static Object    *ExitObj;
 
 
-void CExitOx(long exitAddr, Object * exitObj, Object * theObj)
+void CExitOx1(long exitAddr, Object * exitObj, Object * theObj)
 {
   DEBUG_CODE(NumExO++);
 

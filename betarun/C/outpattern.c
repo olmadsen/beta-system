@@ -1040,7 +1040,6 @@ void DisplayINTELStack(BetaErr errorNumber,
 void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func)
 {
   Object *prevObj /* used for last successfully identified object */;
-  long* this, *end;
 
   TRACE_DUMP({
     fprintf(output, 
@@ -1067,7 +1066,17 @@ void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func)
     func(PC, prevObj);
   }
 
-  /* Then handle possible pushed PCs (%o7s) in the
+  TraverseSparcStackPart(theAR, prevObj, func);
+  
+}
+
+void TraverseSparcStackPart(RegWin *theAR, Object* prevObj, CellDisplayFunc func)
+{
+
+  long* this, *end;
+  long PC;
+
+  /* handle possible pushed PCs (%o7s) in the
    * stackpart (INNER call chains).
    * In case of INNER P, the previous current object has been
    * pushed before the code address.
