@@ -26,8 +26,10 @@ use File::Copy;
 
 $minorupdate = 0;
 
+# Get options
+
 while (1) {
-    print "ARGV0 = '$ARGV[0]'\n";
+    #print "ARGV0 = '$ARGV[0]'\n";
     if ($ARGV[0] eq "+") {
 	$minorupdate = 1;
 	shift @ARGV;
@@ -66,6 +68,8 @@ while (1) {
     }
 }
 
+# If there is no parameter, then implicitly we mean the current directory.
+
 if (!defined($ARGV[0])) {
     $ARGV[0] = ".";
 }
@@ -75,7 +79,7 @@ $origcwd = $cwd;
 
 $path = "";
 
-print "CWD is '$cwd'\n";
+print STDERR "CWD is '$cwd'\n";
 
 # Find the top dir of betarun by looking for a dir where there is a file
 # called version.c.  Also, since there is a version.c in the C subdir, we
@@ -92,7 +96,7 @@ while (! -f "version.c" || -f "initialize.c") {
         $lastpart = $2;
         $separator = $1;
         $path = $lastpart . $separator . $path;
-        print "CDed up to $cwd\n";
+        print STDERR "CDed up to $cwd\n";
         chdir("..");
     } else {
         print STDERR "Couldn't find version.c starting from `$origcwd'\n";
@@ -100,13 +104,20 @@ while (! -f "version.c" || -f "initialize.c") {
     }
 }
 
+# If we are updating version.c then open a new file for the new version.c
+
 if (!$dontupdate) {
     open(NEWVERSION, ">", "newversion.c") || die "Can't open the file newversion.c for writing\n";
 }
 
+# Delete version.c and get a fresh version.c from CVS.  Means we always
+# increment by only one, even if a previous mbs_commit failed, and also
+# avoids not-up-to-date errors on version.c
+
 if (!$dontdeleteversion) {
     move("version.c", "oldversion.c");
 
+    print STDERR "Getting newest version.c with cvs\n";
     if (system("cvs up version.c")) {
 	print STDERR "Couldn't get version.c from CVS server\n";
 	move("oldversion.c", "version.c") || print STDERR "Failed to restore version.c!\n";
@@ -118,11 +129,13 @@ if (!$dontdeleteversion) {
 
 open(VERSION, "<", "version.c") || die "Can't open the file version.c\n";
 
+# Increment the version number in version.c
+
 while (defined($line = <VERSION>)) {
-    if ($line =~ /(BETARUN VERSION \d+.\d+\()(\d+)(\+?)\)/) {
+    if ($line =~ /(BETARUN VERSION \d+.\d+\()(\d+)(\+*)\)/) {
         if ($minorupdate) {
-	    $line = "$`$1$2+)$'";
-            $version = "$2+";
+	    $line = "$`$1$2$3+)$'";
+            $version = "$2$3+";
         } elsif (!$dontupdate) {
 	    $line = "$`$1" . ($2 + 1) . ")$'";
             $version = $2 + 1;
@@ -149,6 +162,9 @@ if (defined($message)) {
     print MESSAGE "\n";
 }
 
+# If there is a CVS/Template file then use it.  Otherwise just make one
+# up that is near enough the official one
+
 if (-f "CVS/Template") {
     open(TEMPLATE, "<", "CVS/Template") || die "Couldn't open CVS/Template for reading\n";
     while (defined ($line = <TEMPLATE>)) {
@@ -166,7 +182,12 @@ if (-f "CVS/Template") {
     print MESSAGE "Betarun version number: $version\n";
 }
 
+# We run a diff and put the result in the editor file so the user
+# can see what has changed.  This is preceeded with CVS: so that it
+# doesn't end up in the actual commit message.
+
 if (!defined($message)) {
+    print STDERR "Getting differences with cvs\n";
     if (open(DIFFS, "cvs diff -u version.c " . join(" ", map {$path . $_} @ARGV) . "|")) {
         while (defined($line = <DIFFS>)) {
             print MESSAGE "CVS: $line";
@@ -176,6 +197,9 @@ if (!defined($message)) {
 }
 
 close(MESSAGE) || die ("Couldn't write message.txt\n");
+
+# Call the user's editor.  Should we be looking at the EDITOR variable
+# on Windows too?  Perhaps.
 
 if (!defined($message)) {
     if ($^O =~ /win/i) {
@@ -195,9 +219,22 @@ if (!defined($message)) {
     }
 }
 
+# We need to remove the CVS: lines, since the cvs client doesn't do
+# this itself if we invoke it with the -F option.
+open(NEWMESSAGE, ">", "newmessage.txt") || die "Couldn't open newmessage.txt for writing\n";
+open(MESSAGE, "message.txt") || die "Couldn't open message.txt\n";
+while (defined($line =<MESSAGE>)) {
+    print NEWMESSAGE $line if ($line !~ /^CVS:/);
+}
+close(NEWMESSAGE) || die "Error closing newmessage.txt";
+close(MESSAGE) || die "Error closing message.txt";
+move("newmessage.txt", "message.txt") || die "Couldn't overwrite message.txt with newmessage.txt\n";
+
+# Actually commit
+
 if ($donothing) {
-    print join(" ", "cvs", "-f", "message.txt", "commit", "-F", "version.c", map {$path . $_} @ARGV, "\n");
+    print STDERR join(" ", "cvs", "commit", "-F", "message.txt", "version.c", map {$path . $_} @ARGV, "\n");
 } else {
-    print "!!!\n";
-    #exec("cvs", "-f", "message.txt", "commit", "-F", "version.c", map {$path . $_} @ARGV);
+    print STDERR "Committing:\n";
+    exec("cvs", "commit", "-F", "message.txt", "version.c", map {$path . $_} @ARGV);
 }
