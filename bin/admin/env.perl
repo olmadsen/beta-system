@@ -21,12 +21,13 @@
 #   PARENTDIR       set to '..' or '::' or whatever parent-directory is.
 #
 # - List of legal machinetypes. Allows errorchecking of if's.
-#   @MachineTypes  (Only avaiable from perl)
+#   @MachineTypes  (Only avaiable from perl) (Uppercase)
+#   @ObjDirs       (Only avaiable from perl) (lowercase)
 #
 # - List of legal OS'es. Allows errorchecking of if's.
 #   @OsTypes  (Only avaiable from perl)
 #
-
+# - $ObjExt{$objdir} Extension for objextfiles.
 
 # When running the script using "perl5 -s" the following options will be set.
 # This, of course, assumes that you have not used $n,$v, etc. for other 
@@ -41,8 +42,15 @@ require "utils.perl";
 $betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
 
 @MachineTypes = ('NTI', 'SUN4S', 'HPUX9PA', 'LINUX', 'SGI', 'PPCMAC');
-
+@ObjDirs =  ('nti', 'sun4s', 'hpux9pa', 'linux', 'sgi', 'ppcmac');
 @OsTypes = ('WIN', 'UNIX', 'MAC');
+
+%ObjExt = ('nti', 'obj',
+	   'sun4s', 'o',
+	   'hpux9pa', 'o',
+	   'linux', 'o',
+	   'sgi', 'o',
+	   'ppcmac', 'obj');
 
 if (-e "c:\\") {
     $CURRENTDIR='.';
