@@ -98,7 +98,8 @@ int BetaReadPNGToBetaImage(char *name, BetaImage *image)
     else if (depth == 16) {
       png_set_strip_16(png_ptr);
     }
-    png_set_filler(png_ptr, 0, PNG_FILLER_BEFORE);
+    //png_set_filler(png_ptr, 0, PNG_FILLER_BEFORE);
+    png_set_bgr(png_ptr);
   }
 
   /* The following code converts grayscale to paletted

@@ -20,7 +20,6 @@ int BetaCreateImage(BetaImage *image,
 		    long pixel_size,
 		    void *data);
 
-int BetaImageToXImage(Display *display, BetaImage *image, XImage **ximage);
 
 
 void BetaDitherImage (BetaImage *image);

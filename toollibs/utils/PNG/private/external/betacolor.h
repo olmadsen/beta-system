@@ -1,4 +1,3 @@
-#include <X11/Xlib.h>
 
 #ifndef _BETACOLOR_H
 #define _BETACOLOR_H
@@ -35,7 +34,6 @@ typedef struct Color {
   
  **********************************************************************/
 
-void BetaInitColor(Display *display, Colormap cmap);
 
 
 /**********************************************************************

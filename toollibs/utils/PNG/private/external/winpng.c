@@ -1,6 +1,7 @@
 #include <png.h>
 #include <windows.h>
 #include <stdio.h>
+#include "betapng.h"
 
 
 
@@ -159,4 +160,51 @@ void write_bmp_to_png(HDC hdc, HBITMAP hbmp, char *file_name)
   free(rows);
   png_destroy_write_struct(&png_ptr, NULL);
   return;
+}
+
+
+int readPNG(char *name, HBITMAP *phbmp, int *width, int *height, int *depth)
+{
+  HDC hdc;
+  HDC hdcmem;
+  
+  HBITMAP hbmp;
+  
+  BetaImage image;
+  UINT start;
+  UINT num;
+  BITMAPINFO bmi;
+  UINT uUsage;
+  int result;
+  
+
+  result = BetaReadPNGToBetaImage(name, &image);
+
+  printf("read = %d\n", result);
+
+  *width = image.width;
+  *height = image.height;
+
+  hdc = GetDC(NULL);
+
+  if(!hdc) {
+    printf("failed to get dc\n");
+  }
+  
+
+  
+  bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  bmi.bmiHeader.biWidth = image.width;
+  bmi.bmiHeader.biHeight = -image.height;
+  bmi.bmiHeader.biPlanes = 1;
+  bmi.bmiHeader.biBitCount = 24;
+  bmi.bmiHeader.biCompression = BI_RGB;
+ 
+  
+  *phbmp = CreateDIBitmap(hdc, (LPBITMAPINFOHEADER) &bmi, CBM_INIT, image.data, &bmi, DIB_RGB_COLORS);
+  if(!(*phbmp)) {
+    result = GetLastError();
+  }
+  ReleaseDC(NULL, hdc);
+  return result;
 }
