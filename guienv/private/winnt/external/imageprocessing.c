@@ -21,6 +21,16 @@ void Rothstein(char *roth, int p, int q)
 #include <math.h>
 
 
+unsigned char clamp(double value)
+{
+  if (value > 254.0) {
+    return 255;
+  }
+  else {
+    return (unsigned char) (value + 0.5);
+  }
+}
+
 void WeimanExpansionOut(unsigned char *src, long src_width, long src_height,
                         unsigned char *dst, long dst_width, long dst_height,
                         int p, int q) 
@@ -29,7 +39,7 @@ void WeimanExpansionOut(unsigned char *src, long src_width, long src_height,
   int k;
   char *roth;
 
-  unsigned short *buffer;
+  unsigned long *buffer;
   
   int i, j, s;
   int targetWidth;
@@ -43,7 +53,7 @@ void WeimanExpansionOut(unsigned char *src, long src_width, long src_height,
   
   targetWidth = ceil((double) (k * p)/ (double) q);
 
-  buffer = (unsigned short *) malloc(4 * sizeof(unsigned short) * targetWidth);
+  buffer = (unsigned long *) malloc(4 * sizeof(unsigned long) * targetWidth);
 
   roth = (char *) malloc(p);
   Rothstein(roth, q, p);
@@ -66,7 +76,7 @@ void WeimanExpansionOut(unsigned char *src, long src_width, long src_height,
       }
     }
     for (i = 0; i < (4 * targetWidth); i++) {
-      dst[s * (dst_width * 4) + i] = buffer[i] / (double) q;
+      dst[s * (dst_width * 4) + i] = clamp(buffer[i] / (double) q);
     }
   }
   
@@ -82,7 +92,7 @@ void WeimanExpansionOutVert(unsigned char *src, long src_width, long src_height,
   int k;
   char *roth;
 
-  unsigned short *buffer;
+  unsigned long *buffer;
   
   int i, j, s;
   int targetHeight;
@@ -94,7 +104,7 @@ void WeimanExpansionOutVert(unsigned char *src, long src_width, long src_height,
   targetHeight= ceil((double) (n * p)/ (double) q);
 
   
-  buffer = (unsigned short *) malloc(4 * sizeof(unsigned short) * targetHeight);
+  buffer = (unsigned long *) malloc(4 * sizeof(unsigned long) * targetHeight);
 
   roth = (char *) malloc(p);
   Rothstein(roth, q, p);
@@ -117,10 +127,10 @@ void WeimanExpansionOutVert(unsigned char *src, long src_width, long src_height,
       }
     }
     for (i = 0; i <  targetHeight; i++) {
-      dst[i * dst_width*4 + (s*4)] = buffer[i*4] / (double) q;
-      dst[i * dst_width*4 + (s*4) + 1] = buffer[i*4 + 1] / (double) q;
-      dst[i * dst_width*4 + (s*4) + 2] = buffer[i*4 + 2] / (double) q;
-      dst[i * dst_width*4 + (s*4) + 3] = buffer[i*4 + 3] / (double) q;
+      dst[i * dst_width*4 + (s*4)] = clamp(buffer[i*4] / (double) q);
+      dst[i * dst_width*4 + (s*4) + 1] = clamp(buffer[i*4 + 1] / (double) q);
+      dst[i * dst_width*4 + (s*4) + 2] = clamp(buffer[i*4 + 2] / (double) q);
+      dst[i * dst_width*4 + (s*4) + 3] = clamp(buffer[i*4 + 3] / (double) q);
     }
   }
 
@@ -137,7 +147,7 @@ void WeimanExpansionIn(unsigned char *src, long src_width, long src_height,
   int k;
   char *roth;
 
-  unsigned short *buffer;
+  unsigned long *buffer;
   
   int i, j, s;
   int targetWidth;
@@ -151,7 +161,7 @@ void WeimanExpansionIn(unsigned char *src, long src_width, long src_height,
   
   targetWidth = ceil((double) (k * p)/ (double) q);
 
-  buffer = (unsigned short *) malloc(4 * sizeof(unsigned short) * targetWidth);
+  buffer = (unsigned long *) malloc(4 * sizeof(unsigned long) * targetWidth);
 
   roth = (char *) malloc(q);
   
@@ -175,7 +185,7 @@ void WeimanExpansionIn(unsigned char *src, long src_width, long src_height,
       }
     }
     for (i = 0; i < (4 * targetWidth); i++) {
-      dst[s * (dst_width * 4) + i] = buffer[i] / (double) q;
+      dst[s * (dst_width * 4) + i] = clamp(buffer[i] / (double) q);
     }
   }
   
@@ -191,7 +201,7 @@ void WeimanExpansionInVert(unsigned char *src, long src_width, long src_height,
   int k;
   char *roth;
 
-  unsigned short *buffer;
+  unsigned long *buffer;
   
   int i, j, s;
   int targetHeight;
@@ -205,7 +215,7 @@ void WeimanExpansionInVert(unsigned char *src, long src_width, long src_height,
   
   targetHeight = ceil((double) (n * p)/ (double) q);
 
-  buffer = (unsigned short *) malloc(4 * sizeof(unsigned short) * targetHeight);
+  buffer = (unsigned long *) malloc(4 * sizeof(unsigned long) * targetHeight);
 
   roth = (char *) malloc(q);
   
@@ -229,10 +239,10 @@ void WeimanExpansionInVert(unsigned char *src, long src_width, long src_height,
       }
     }
     for (i = 0; i < targetHeight; i++) {
-      dst[i * dst_width*4 + (s*4)] = buffer[i*4] / (double) q;
-      dst[i * dst_width*4 + (s*4) + 1] = buffer[i*4 + 1] / (double) q;
-      dst[i * dst_width*4 + (s*4) + 2] = buffer[i*4 + 2] / (double) q;
-      dst[i * dst_width*4 + (s*4) + 3] = buffer[i*4 + 3] / (double) q;
+      dst[i * dst_width*4 + (s*4)] = clamp(buffer[i*4] / (double) q);
+      dst[i * dst_width*4 + (s*4) + 1] = clamp(buffer[i*4 + 1] / (double) q);
+      dst[i * dst_width*4 + (s*4) + 2] = clamp(buffer[i*4 + 2] / (double) q);
+      dst[i * dst_width*4 + (s*4) + 3] = clamp(buffer[i*4 + 3] / (double) q);
     }
   }
   
