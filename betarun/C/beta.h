@@ -27,10 +27,13 @@
 # include <stdlib.h>
 #endif
 
+#ifdef __linux__
+# define __USE_GNU 1  /* Make sure we get non-standard routines from dlfcn.h */
+#endif
 #ifdef UNIX
-#ifndef hppa
-#include <dlfcn.h>
-#endif /* hppa */
+# ifndef hppa
+#   include <dlfcn.h>
+# endif /* hppa */
 #endif /* UNIX */
 
 #ifdef RTVALHALLA
