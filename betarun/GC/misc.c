@@ -865,7 +865,7 @@ char *getLabel (long addr)
       }
     }
   }
-#ifdef sparc /* also possible on linux, libc 2 */
+#if defined(sparc) || defined(linux)
   /* Fall back on dladdr (for dynamic symbols not found by nm) */
   {
     static Dl_info info;

@@ -561,12 +561,13 @@ void DisplayNEWRUNStack(long *PC)
 }
 
 #endif /* NEWRUN */
-/*************************** End NEWRUN ***************************/
+/************************* End NEWRUN ***************************/
+
+/************************* Begin INTEL ****************************/
 
 #ifdef intel
 
-#define NotInHeap(address) \
-  (!(inIOA(address) || inAOA(address)))
+#define NotInHeap(address) (!(inIOA(address) || inAOA(address)))
 
 /* Traverse the StackArea [low..high] and Process all references within it. 
  * Stop when theComp is reached.
@@ -615,7 +616,142 @@ static void DisplayStackPart(FILE *output,
   fflush(output);
 }
 
+void DisplayINTELStack(BetaErr errorNumber, 
+		       Object *theObj, 
+		       long *thePC, 
+		       long theSignal /* theSignal is zero if not applicable. */
+		       )
+{ 
+  long            *lowAddr;
+  long            *highAddr;
+  CallBackFrame   *cbFrame;
+  ComponentBlock  *currentBlock;
+  Component       *currentComponent;
+  Object          *currentObject;
+  long             retAddr;
+
+  /* First check for errors occured outside BETA */
+  if (!IsBetaCodeAddrOfProcess((long)thePC)){
+    fprintf(output, 
+	    "  [ EXTERNAL ACTIVATION PART (address 0x%x",
+	    (int)error_pc
+	    );
+    DEBUG_CODE(PrintCodeAddress((long)error_pc));
+    fprintf(output, ") ]\n");
+  }
+
+  /*
+   * Handle the topmost component block, designated by 
+   * StackEnd, ActiveCallbackFrame and lastCompBlock.
+   */
+  currentComponent = ActiveComponent;
+  lowAddr  = (long *) StackEnd;
+  highAddr = (long *) lastCompBlock;
+  cbFrame  = ActiveCallBackFrame; 
+
+  /* Follow the stack */
+  while (cbFrame) {
+    DisplayStackPart(output, lowAddr, (long *)cbFrame-2, 0);
+    /* -2 because 2 longs are not shown:
+     *    1. The last of the three pushed words in the callback frame
+     *    2. The address of the call back stub.
+     */
+    TRACE_DUMP(fprintf(output, "  cb: "));
+    fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n"); 
+    lowAddr = cbFrame->betaTop;
+#ifdef intel
+    lowAddr += 4;
+    /* lowAddr+4 because the compiler saves 4 intel registers
+     * before setting BetaStackTop.
+     */
+#endif
+    cbFrame = cbFrame->next;
+    if( isObject( (Object *)(*lowAddr)) ) {
+      TRACE_DUMP(fprintf(output, ">>> lowAddr: 0x%x\n", (int)lowAddr));
+      DisplayObject( output, (void *)(*lowAddr), 0);
+    }
+    lowAddr += 2;
+  }
+  
+  /* Displays the objects from the last callback was initiated
+   * (if any) and onwards to the ComponentBlock.
+   */
+  DisplayStackPart(output, lowAddr, highAddr-3, currentComponent);  
+  /* -3 because 3 longs are not shown: 
+   *    1. The last of the three pushed words in the comp block
+   *    2. The address of the M-part for the component.
+   *    3. The current object saved by the M-part.
+   */
+  
+  fflush( output);
+  
+  /*
+   * Then handle the remaining component blocks designated by the linked
+   * list of ComponentBlocks from lastCompBlock and onwards.
+   */
+  currentBlock     = lastCompBlock;
+  currentObject    = currentComponent->CallerObj;
+  retAddr          = currentComponent->CallerLSC;
+  currentComponent = currentComponent->CallerComp;
+  
+  while (currentBlock->next){
+    lowAddr  = (long *)((long)currentBlock+sizeof(ComponentBlock))+1
+      /* +1 because the compiler always pushes the component before calling
+       * attach.
+       */;
+    highAddr = (long *) currentBlock->next;
+    cbFrame  = currentBlock->callBackFrame;
+    
+    /* Display current object in ComponentBlock */
+    if (cbFrame){
+      TRACE_DUMP(fprintf(output, ">>>TraceDump: current: 0x%x\n", (int)currentObject));
+      /* Current object will be shown along with the first CB frame */
+    } else {
+      DisplayObject(output, currentObject, retAddr);
+    }
+
+    /* Display callbackframes in the component */
+    while (cbFrame) {
+      DisplayStackPart(output, lowAddr, (long *)cbFrame-2, 0);
+      /* -2 because 2 longs are not shown:
+       *    1. The last of the three pushed words in the callback frame
+       *    2. The address of the call back stub.
+       */
+      TRACE_DUMP(fprintf(output, "  cb: "));
+      fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
+      lowAddr = cbFrame->betaTop;
+#ifdef intel
+      lowAddr += 4;
+      /* lowAddr+4 because the compiler saves 4 intel registers
+       * before setting BetaStackTop.
+       */
+#endif
+      cbFrame = cbFrame->next;
+      if (isObject( (Object *)(*lowAddr)) ){
+	TRACE_DUMP(fprintf(output, ">>>TraceDump: lowAddr: 0x%x\n", (int)lowAddr));
+	DisplayObject( output, (void *)(*lowAddr), 0);
+      }
+      lowAddr += 2;
+    }
+    
+    /* Displays the objects from the last callback was initiated
+     * (if any) and onwards to the ComponentBlock.
+     */
+    DisplayStackPart(output, lowAddr, highAddr-3, currentComponent); 
+    /* -3 because:
+     *  3 longs are not shown: 
+     *    1. The last of the three pushed words in the comp block
+     *    2. The address of the M-part for the component.
+     *    3. The current object saved by the M-part.
+     */
+    currentBlock = currentBlock->next;
+    currentObject    = currentComponent->CallerObj;
+    retAddr          = currentComponent->CallerLSC;
+    currentComponent = currentComponent->CallerComp;
+  }
+}
 #endif /* intel */
+/***************************** End INTEL **********************************/
 
 /*************************** Begin SPARC ******************************/
 #ifdef sparc
@@ -778,7 +914,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
     /* PC is execution point in THIS frame. The update of PC
      * in the for-loop is not done until it is restarted.
      */
-    TRACE_DUMP(fprintf(output, ">>>TraceDump: DisplayBetaStack: theAR->fp: 0x%x\n", (int)theAR->fp));
+    TRACE_DUMP(fprintf(output, ">>>TraceDump: DisplaySPARCStack: theAR->fp: 0x%x\n", (int)theAR->fp));
     if (theAR->fp == (long)nextCBF) {
       /* This is AR of the code stub (e.g. <foo>) called from HandleCB. 
        * Don't display objects in this, but skip to betaTop and update 
@@ -1100,9 +1236,6 @@ int DisplayBetaStack(BetaErr errorNumber,
 		     )
 {
   FILE *old_output=0;
-#ifdef intel
-  Component *currentComponent;
-#endif
 
   DEBUG_CODE({
     fprintf(output, "\n");
@@ -1199,19 +1332,20 @@ int DisplayBetaStack(BetaErr errorNumber,
   NotifyMessage[0]=0;
 
   old_output = output;
-  if (!OpenDumpFile(errorNumber))
-    return 0;
+  if (!OpenDumpFile(errorNumber)) return 0;
   
-  DEBUG_CODE(fprintf(output,
-		     "\nIOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
-		     (int)GLOBAL_IOA, 
-		     (int)GLOBAL_IOATop, 
-		     (int)GLOBAL_IOALimit));
-  DEBUG_CODE(fprintf(output,
-		     "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
-		     (int)ToSpace, 
-		     (int)ToSpaceTop, 
-		     (int)ToSpaceLimit));
+  DEBUG_CODE({
+    fprintf(output,
+	    "\nIOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+	    (int)GLOBAL_IOA, 
+	    (int)GLOBAL_IOATop, 
+	    (int)GLOBAL_IOALimit);
+    fprintf(output,
+	    "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+	    (int)ToSpace, 
+	    (int)ToSpaceTop, 
+	    (int)ToSpaceLimit);
+  });
 
   fprintf(output,"\nCall chain: (%s)\n\n", machine_type());
   fflush(output);
@@ -1291,132 +1425,9 @@ int DisplayBetaStack(BetaErr errorNumber,
 #ifdef sparc
   DisplaySPARCStack(errorNumber, theObj, thePC, theSignal);
 #endif
-
-/************************* Begin INTEL ****************************/
-
 #ifdef intel
-  { 
-    long                *lowAddr;
-    long                *highAddr;
-    
-    CallBackFrame *  cbFrame;
-    
-    ComponentBlock * currentBlock;
-    Object *         currentObject;
-    long                retAddr;
-    
-    /*
-     * First handle the topmost component block, designated by 
-     * StackEnd, ActiveCallbackFrame and lastCompBlock.
-     */
-    currentComponent = ActiveComponent;
-    lowAddr  = (long *) StackEnd;
-    highAddr = (long *) lastCompBlock;
-    cbFrame  = ActiveCallBackFrame; 
-
-    /* Follow the stack */
-    while (cbFrame) {
-	DisplayStackPart(output, lowAddr, (long *)cbFrame-2, 0);
-	/* -2 because 2 longs are not shown:
-	 *    1. The last of the three pushed words in the callback frame
-	 *    2. The address of the call back stub.
-	 */
-      TRACE_DUMP(fprintf(output, "  cb: "));
-      fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n"); 
-      lowAddr = cbFrame->betaTop;
-#ifdef intel
-      lowAddr += 4;
-      /* lowAddr+4 because the compiler saves 4 intel registers
-       * before setting BetaStackTop.
-       */
+  DisplayINTELStack(errorNumber, theObj, thePC, theSignal);
 #endif
-      cbFrame = cbFrame->next;
-      if( isObject( (Object *)(*lowAddr)) ) {
-	  TRACE_DUMP(fprintf(output, ">>> lowAddr: 0x%x\n", (int)lowAddr));
-	  DisplayObject( output, (void *)(*lowAddr), 0);
-      }
-      lowAddr += 2;
-    }
-    
-    /* Displays the objects from the last callback was initiated
-     * (if any) and onwards to the ComponentBlock.
-     */
-    DisplayStackPart(output, lowAddr, highAddr-3, currentComponent);  
-    /* -3 because 3 longs are not shown: 
-     *    1. The last of the three pushed words in the comp block
-     *    2. The address of the M-part for the component.
-     *    3. The current object saved by the M-part.
-     */
-    
-    fflush( output);
-    
-    /*
-     * Then handle the remaining component blocks designated by the linked
-     * list of ComponentBlocks from lastCompBlock and onwards.
-     */
-    currentBlock     = lastCompBlock;
-    currentObject    = currentComponent->CallerObj;
-    retAddr          = currentComponent->CallerLSC;
-    currentComponent = currentComponent->CallerComp;
-    
-    while (currentBlock->next){
-      lowAddr  = (long *)((long)currentBlock+sizeof(ComponentBlock))+1
-	  /* +1 because the compiler always pushes the component before calling
-	   * attach.
-	   */;
-      highAddr = (long *) currentBlock->next;
-      cbFrame  = currentBlock->callBackFrame;
-      
-      /* Display current object in ComponentBlock */
-      if (cbFrame){
-	  TRACE_DUMP(fprintf(output, ">>>TraceDump: current: 0x%x\n", (int)currentObject));
-	  /* Current object will be shown along with the first CB frame */
-      } else {
-	  DisplayObject(output, currentObject, retAddr);
-      }
-
-      /* Display callbackframes in the component */
-      while (cbFrame) {
-	DisplayStackPart(output, lowAddr, (long *)cbFrame-2, 0);
-	/* -2 because 2 longs are not shown:
-	 *    1. The last of the three pushed words in the callback frame
-	 *    2. The address of the call back stub.
-	 */
-	TRACE_DUMP(fprintf(output, "  cb: "));
-	fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
-	lowAddr = cbFrame->betaTop;
-#ifdef intel
-	lowAddr += 4;
-	/* lowAddr+4 because the compiler saves 4 intel registers
-	 * before setting BetaStackTop.
-	 */
-#endif
-	cbFrame = cbFrame->next;
-	if( isObject( (Object *)(*lowAddr)) ){
-	    TRACE_DUMP(fprintf(output, ">>>TraceDump: lowAddr: 0x%x\n", (int)lowAddr));
-	    DisplayObject( output, (void *)(*lowAddr), 0);
-	}
-	lowAddr += 2;
-      }
-      
-      /* Displays the objects from the last callback was initiated
-       * (if any) and onwards to the ComponentBlock.
-       */
-      DisplayStackPart(output, lowAddr, highAddr-3, currentComponent); 
-      /* -3 because:
-       *  3 longs are not shown: 
-       *    1. The last of the three pushed words in the comp block
-       *    2. The address of the M-part for the component.
-       *    3. The current object saved by the M-part.
-       */
-      currentBlock = currentBlock->next;
-      currentObject    = currentComponent->CallerObj;
-      retAddr          = currentComponent->CallerLSC;
-      currentComponent = currentComponent->CallerComp;
-    }
-  }
-#endif /* RUN */
-/***************************** End INTEL **********************************/
 
 #undef P
 #define P(text) fprintf(output, "%s\n", text)
