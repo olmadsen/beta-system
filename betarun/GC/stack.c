@@ -13,8 +13,11 @@
 extern void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
 
 /************************* Valhalla reference stack ****************/
+#ifdef RTVALHALLA
 
-#if (defined(RTVALHALLA) && defined(intel))
+/* Various stuff for supporting valhalla evaluators (VOP_EXECUTEOBJECT) */
+
+#ifdef intel
 
 #ifdef RTDEBUG
 void PrintValhallaRefStack(void)
@@ -72,8 +75,33 @@ void ProcessValhallaRefStack(void)
   }
 }
 
-#endif /* RTVALHALLA && intel */
+#endif /* intel */
 
+#ifdef sparc
+/* ReferenceStack is used to store SP values corresponding to 
+ * VOP_EXECUTEOBJECT stack values.
+ */
+static int isExecuteObjectSP(long *SP)
+{
+  long *theSP;
+  long **theCell = (long **)&ReferenceStack[0];
+  long size = ((long)RefSP - (long)&ReferenceStack[0])/4;
+
+  /*fprintf(output, "isExecuteObjectSP(0x%x)=", (int)SP);*/
+  for(; size > 0; size--, theCell++) {
+    theSP = *theCell;
+    /*fprintf(output, "[0x%x:0x%x]", (int)theCell, (int)theSP);*/
+    if (theSP == SP) {
+      /*fprintf(output, "TRUE\n");*/
+      return 1;
+    }
+  }
+  /*fprintf(output, "FALSE\n");*/
+  return 0;
+}
+#endif /* sparc */
+
+#endif /* RTVALHALLA */
 /************************* End Valhalla reference stack ****************/
 
 
@@ -761,61 +789,60 @@ static __inline__ void ProcessStackCell(long *addr, char *desc, CellProcessFunc 
 
 static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
 {
-    long *theCell = (long *) &ar[1];
-    
-    DEBUG_STACK(PrintAR(ar, theEnd));
-
-    Claim((long)ar < (long)theEnd,  "ProcessAR: ar is less than theEnd");
-    Claim(((long) theEnd) % 4 == 0, "ProcessAR: theEnd is 4 byte aligned");
-        
-    /* Process GC registers of the activation record. */
-    ProcessStackCell(&ar->i0, "i0", func);
-    ProcessStackCell(&ar->i1, "i1", func);
-    ProcessStackCell(&ar->i2, "i2", func);
-    ProcessStackCell(&ar->i3, "i3", func);
-    ProcessStackCell(&ar->i4, "i4", func);
-
-    /* Process the stack part */
-    if (skipCparams){
-      /* This AR called C, skip one hidden word, and (at least) 
-       * six parameters (compiler allocates 12, that may be too much...)
-       */
+  long *theCell = (long *) &ar[1] /* first cell after regwin */;
+  
+  /* Claim(ar->fp == theEnd)? 
+   * No: sometimes fp is zero (for frame of _start, e.g.)
+   */
+  
+  DEBUG_STACK(PrintAR(ar, theEnd));
+  
+  Claim((long)ar < (long)theEnd,  "ProcessAR: ar is less than theEnd");
+  Claim(((long) theEnd) % 4 == 0, "ProcessAR: theEnd is 4 byte aligned");
+  
+  /* Process GC registers of the activation record. */
+  ProcessStackCell(&ar->i0, "i0", func);
+  ProcessStackCell(&ar->i1, "i1", func);
+  ProcessStackCell(&ar->i2, "i2", func);
+  ProcessStackCell(&ar->i3, "i3", func);
+  ProcessStackCell(&ar->i4, "i4", func);
+  
+  /* Process the stack part */
+  if (skipCparams){
+    /* This AR called C, skip one hidden word, and (at least) 
+     * six parameters (compiler allocates 12, that may be too much...)
+     */
 #ifdef RTVALHALLA
-      extern int valhalla_exelevel;
-      if (valhallaID && (valhalla_exelevel>1)){
-	/* We are running under valhalla, and at least one evaluator is
-	 * under execution.
-	 * In this case a callback is simulated by setting BetaStackTop
-	 * to the value of SP at the time valhallaOnProcess was called.
-	 * This resembles a C call (BETA code was left, external code
-	 * was entered). However, the BETA code was NOT left using
-	 * an actual call instruction, and there was NOT allocated
-	 * room on the stack for parameteres.
-	 * Here is a simple (non-proof) test to prevent skipping
-	 * the 12 words in this case.
-	 * FIXME: This will NOT work, if BETA frame had pushed 6 or more
-	 * things on stack (each decrements stack with 8).
-	 * A better solution could be saving the SP values in 
-	 * valhallaOnProcessStop in a local stack, and comparing the 
-	 * frame-SP-before-callback values with this list to uniquely 
-	 * determine if we actually hit a frame before a valhalla evaluator.
-	 */
-	if ((long)theCell+48>=(long)ar->fp){
-	  skipCparams = 0;
-	} 
-      }
+    Claim((long)theCell+48>=(long)ar->fp, "C Skip must be inside frame");
+    if (valhallaID && (valhalla_exelevel>0)){
+      /* We are running under valhalla, and at least one evaluator is
+       * under execution.
+       * In this case a callback is simulated by setting BetaStackTop
+       * to the value of SP at the time valhallaOnProcess was called.
+       * This resembles a C call (BETA code was left, external code
+       * was entered). However, the BETA code was NOT left using
+       * an actual call instruction, and there was NOT allocated
+       * room on the stack for parameteres.
+       */
+      if (isExecuteObjectSP((long*)ar)){ 
+	DEBUG_VALHALLA(fprintf(output, 
+			       "ProcessAR: SP of VOP_EXECUTEOBJECT: 0x%x\n",
+			       (int)ar));
+	skipCparams = 0;
+      } 
+    }
 #endif /* RTVALHALLA */
-      if (skipCparams){
-	/* Will not skip out of frame - let's do it... */
-        theCell += (48/sizeof(long*));
-      }
+    if (skipCparams){
+      /* Will not skip out of frame - let's do it... */
+      theCell += (48/sizeof(long*));
     }
-
-    for (; theCell != (long*)theEnd; theCell+=2) {
-      /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
-      /* (Maybe build a more descriptive description using sprintf) */
-      ProcessStackCell(theCell, "stackpart", func);
-    }
+  }
+  
+  for (; theCell != (long*)theEnd; theCell+=2) {
+    /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
+    /* (Maybe build a more descriptive description using sprintf) */
+    ProcessStackCell(theCell, "stackpart", func);
+  }
 }
 
 static void ProcessSPARCStack(void)
@@ -992,6 +1019,7 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
 {
   Object **theCell = (Object **) &ar[1];
   char *lab = getLabel(PC);
+  int oldSkipCparams = skipCparams;
 
   fprintf(output, 
 	  "\n----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x <%s+0x%x>\n",
@@ -1032,14 +1060,12 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
      * six parameters. See comments in ProcessAR.
      */
     int i;
-    if (valhallaID){
-      if ((long)theCell+48>=(long)ar->fp){
+    Claim((long)theCell+48>=(long)ar->fp, "C Skip must be inside frame");
+    if (valhallaID && (valhalla_exelevel>0)){
+      if (isExecuteObjectSP((long*)ar)){
 	DEBUG_STACK({
 	  fprintf(output, 
-		  "ProcessAR: NOT skipping 12 longs - would be out of frame.\n"
-		  );
-	  fprintf(output, 
-		  "Frame looks like invoker of valhalla.\n"
+		  "Frame is invoker of valhalla evaluator.\n"
 		  );
 	});
 	skipCparams = 0;
@@ -1057,6 +1083,7 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
     fprintf(output, "\n");
   }
   fflush(output);
+  skipCparams = oldSkipCparams;
 }
 
 /* PrintStack: (sparc).

@@ -367,6 +367,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
                     (int)ToSpace, 
                     (int)ToSpaceTop, 
                     (int)ToSpaceLimit);
+	    fflush(output);
             );
   INFO_HEAP_USAGE(PrintHeapUsage("after IOA GC"));
 

@@ -55,8 +55,6 @@ static void *self=0;
  * in case of bus-errors or the like during communication with
  * valhalla. 
 */
-
-int valhalla_exelevel = 1;
 static int invops = 0;
 
 
@@ -910,15 +908,18 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       DEBUG_VALHALLA(DescribeObject((Object *)struc));
       DEBUG_VALHALLA(fprintf(output, "\n"));
 
-      /* Call the constructed callback function */
+      /* Construct callback function */
       cb = (void (*)(void))valhalla_CopyCPP(struc, (long*)SP, curObj);
       DEBUG_VALHALLA(fprintf(output, "Installed callback at 0x%08x\n", (int)cb));
-
       /* Notice: origin and curObj are now invalid: May have moved.
        * Don't use them below!
        */
 
-      DEBUG_VALHALLA(fprintf(output, "Calling callback function\n"));
+      DEBUG_VALHALLA(fprintf(output, 
+			     "Calling callback function [%d]\n",
+			     valhalla_exelevel
+			     ));
+      SPARC_CODE(pushSP(SP));
       old_valhallaIsStepping = valhallaIsStepping;
       valhallaIsStepping = FALSE;
       valhalla_exelevel++;
@@ -926,6 +927,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       cb();
       valhalla_exelevel--;
       valhallaIsStepping = old_valhallaIsStepping;
+      SPARC_CODE(popSP());
       DEBUG_VALHALLA(fprintf(output, "VOP_EXECUTEOBJECT done.\n"));
       valhalla_writeint (opcode);
       valhalla_socket_flush ();
@@ -1234,7 +1236,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj,
   char *txt; int res;
   DEBUG_VALHALLA(fprintf(output,"debuggee: ValhallaOnProcessStop: PC=%d, SP=0x%x, curObj=%d,sig=%d,errorNumber=%d\n",(int) PC, (int) SP, (int) curObj, (int) sig, (int) errorNumber));
   invops++;
-  if (invops > valhalla_exelevel) {
+  if (invops > valhalla_exelevel+1) {
     fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
 #ifdef UNIX
     DEBUG_CODE(fprintf(output,"debuggee: sleeping for 10 minuttes...\n"); sleep(10*60));

@@ -329,6 +329,11 @@ extern void CClaim(long cond, char *description, char *fname, int lineno);
 
 #endif /* RTDEBUG */
 
+#if defined(RTVALHALLA) && defined(sparc)
+/* FIXME: pushSP should do boundary check and realloc if needed */
+#define pushSP(SP) *RefSP++ = (Object *) SP
+#define popSP()  --RefSP
+#endif /*  RTVALHALLA && sparc */
 #if defined(NEWRUN) || (defined(RTVALHALLA) && defined(intel))
 /* FIXME: push should do boundary check and realloc if needed */
 #define push(v) /* printf("push: RefSP=0x%x\n", RefSP); */ *RefSP++ = (Object *) v

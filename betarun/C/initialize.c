@@ -416,7 +416,7 @@ void Initialize()
   INFO_HEAP_USAGE(PrintHeapUsage("After ToSpace heap allocation"));
 #endif /* USEMMAP */
 
-#if defined(NEWRUN) || (defined(RTVALHALLA) && defined(intel))
+#if defined(NEWRUN) || (defined(RTVALHALLA) && (defined(intel)||defined(sparc)))
   /* Allocate the internal Reference Stack */
   ReferenceStack = (Object **)MALLOC(REFSTACKSIZE*sizeof(Object *));
   if (!ReferenceStack){
@@ -425,7 +425,7 @@ void Initialize()
   INFO_HEAP_USAGE(PrintHeapUsage("after ReferenceStack allocation"));
   RefSP = &ReferenceStack[0]; /* points to first free element */
 
-#endif /* NEWRUN || (RTVALHALLA && intel) */
+#endif /* NEWRUN || (RTVALHALLA && (intel || sparc)) */
 
 #ifdef NEWRUN
   /* Allocate the internal Component Stack */
