@@ -221,7 +221,7 @@ void AOAGc()
   INFO_AOA( fprintf(output, "%dKb in %d blocks, %d%% free)\n", 
 		    (int)toKb(size), 
 		    (int)blocks, 
-		    (int)(100 - (100 * used)/size)); 
+		    (int)(100 - used/(size/100))); 
 	   fflush(output));
   asmemptylabel(EndAOA);
 }
@@ -245,10 +245,13 @@ static void extendRAFStackArea(void)
 		     "#(AOA: RAF stack area allocated: %d longs)\n", 
 		     (int)newSize/4));
   } else {
-    char buf[100];
+    char buf[300];
     sprintf(buf,
-	    "AOA GC: Failed to malloc RAF stack area: %d longs.", 
+	    "AOA GC: Failed to allocate RAF stack area: %d longs.", 
 	    (int)newSize/4);
+#ifdef macintosh
+    EnlargemacHeap(buf);
+#endif
     Notify(buf);
     exit(-1);
   }
@@ -772,8 +775,11 @@ static void Phase3()
     table = IOA;
   else {
     if( !(table = (ptr(long)) MALLOC( AOAtoIOACount * 4))){
-      char buf[50];
-      sprintf(buf,"#Phase3: malloc failed %d longs\n", (int)AOAtoIOACount);
+      char buf[300];
+      sprintf(buf,"#Phase3: allocation failed %d longs\n", (int)AOAtoIOACount);
+#ifdef macintosh
+      EnlargemacHeap(buf);
+#endif
       Notify(buf);
       exit(-1);
     }
