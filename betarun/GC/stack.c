@@ -79,11 +79,13 @@ void ProcessStackObj(struct StackObject *theStackObject)
 /*************************** SPARC *********************************/
 #ifdef sparc
 
+extern long *start asm("start");
 extern long *etext;
 extern long *end;
+#define isCode(addr) ( ((long*)&start <= (long*)(addr)) && ((long*)(addr) < (long*)&etext) )
 #define isData(addr) ( ((long*)&etext <= (long*)(addr)) && ((long*)(addr) < (long*)&end) )
 #define isProto(addr) (isSpecialProtoType(addr) || \
-		       (isData(addr) && ((int)(addr) % 4 == 0)))
+		       (isData(addr) && (((int)(addr) & 3) == 0)))
 
 static long skipCparams=FALSE;
 
@@ -515,6 +517,8 @@ void PrintRef(ref(Object) ref)
 	fprintf(output, ", proto NOT ok: 0x%x", ref->Proto);
     } else {
       fprintf(output, ", is NOT object");
+      if (isCode(ref) && (((int)ref & 3) == 0)) fprintf(output, " (is code)");
+      if (isData(ref) && (((int)ref & 3) == 0)) fprintf(output, " (is data)");
     }
   }
   fprintf(output, "\n");
