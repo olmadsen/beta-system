@@ -1,10 +1,105 @@
 ORIGIN 'genlib_bytecode';
 INCLUDE '~beta/basiclib/formatio';
 ---theGenlib:attributes---
-genVirtualLoadOrigin:
-  (# name: ^ text; dcl: ^ASTindex
+newBCstrucObject:
+  (* don't confuse this one with the one ien evbpdy;
+   * this one is used for the body of genVirtualStrucMethod 
+   * below; perhaps they should be unified
+   *)
+  (# EV: ^ASTindex; EH: @evalHandler;
+     chain1: ^DH.superChain;
+     (* exit *)
+     W: ^EH.evVal;                    
+     
+     ES,desc: @ASTindex; 
+     MN: @integer;
+     EVchain: ^DH.superChain;
+     isVirtual: @integer;
+     OA: ^mch.address;
+     N: ^text;
+     sig: @theGen.signature
+  enter(EV[],chain1[]) 
+  do (* handle externalClass
+      *
+      *)
+     313->trace(#
+               do 'genlib_bytecode:newBCStrucObject:'->xT;
+                  100 -> switchon;
+                  EV[] -> xA;
+                  100 -> switchoff
+               #);
+     (if EV.label = gram.structureReference then
+         EV.son -> ES;
+      else
+         EV -> ES
+     if);
+     ES -> sematt.descrip -> desc;  
+     313->trace(#
+               do desc[] -> xA;
+               #);
+     true -> inEnterDoExitMethod;
+     (gen.thisRegAdr,thisDesc[],ES[],chain1[])
+       -> genOrgAdrToOrgReg
+       -> OA[];
+     false -> inEnterDoExitMethod;
+
+     313 -> trace(#do OA.display -> xT #);
+     (if desc.label <> gram.objectDescriptor then 
+         (* we should never come here 
+          * in evbody:newBCstrucObject we do come here
+          *)
+         (* virtual ... *)
+         (* see newBCobject *)
+         newline; ES.gettext -> N[];
+         '$struc' -> N.append;
+         N[] -> sig.addMethod;
+         sig.noEnter;
+         theGen.StructureSignatureId->theGen.specialSignature->sig.setExit;
+         (sig.asText-> mch.newTextOp,'M',false,false) -> mch.gJsr;  
+      else
+         313->trace(#do 'newBCstrucObject:actualDesc:'->xT; desc[] -> xA #);
+         (chain1[],ES) -> DH.theDesc -> (desc,MN,EVchain[],isVirtual);
+         (if isJava then (* FIXME *)
+             ('AlloS',(desc[],true)->EH.descName) -> mch.callAlloPrim
+          else
+             ('AlloS',desc[]->theGen.mkSignature) -> mch.callAlloPrim
+         if);
+     if);  
+     (mch.callO,true,ES[],chain1[])->EH.mkComputedRefEvVal->W[];
+  exit W[]
+  #);
+genVirtualStrucMethod:
+  (# name: ^ text; dcl: ^ASTindex;
+     EH: @evalHandler;
+     spec,desc: @ASTindex;
+     sig: @Signature;
+     descKind: @integer;
+     strucMethodName: ^text
   enter(name[],dcl[])
-  do
+  do 311 -> trace(#
+                 do 'genVirtualStrucMethod:'->xT; name[] -> xT
+                 #);
+     (dcl.sonref).brother -> spec;
+     (if dcl.label = gram.finalDecl then
+         spec -> sematt.descrip -> desc;
+         (if desc.label
+          // gram.virtualDecl // gram.bindingDecl then
+             '\nFinal2Virtual binding not supported for variablePatterns'
+               -> putline;
+             leave genVirtualStrucMethod
+         if)
+     if);
+     (thisDesc[],spec[]) -> GetActualDesc -> (desc,descKind);
+     sig.noEnter;
+     StructureSignatureId 
+       -> SpecialSignature 
+       -> mkListSignature
+       -> sig.setExit;
+     '$struc' -> (name.copy).append -> strucMethodName[] -> sig.addMethod;
+
+     (14,strucMethodName[], true,sig.asText,0) -> mch.initdo;
+     (spec[],thisSuperChain) -> newBCstrucObject;
+     (false,11) -> mch.return;
   #);
 genPtnVarMethod:
   (# N,               (* name of pattern variable *)
@@ -19,39 +114,22 @@ genPtnVarMethod:
                     ':'->put; spec[] -> xA 
                  #);
      (thisDesc[],spec.sonRef) -> GetActualDesc -> (desc,descKind);
-     (if true then
-         thisDesc -> receiver;
-         (N.gettext,desc[],false,true,none,none,false,true,true)
-           -> genPtnMethod
-         (# A: @mch.RegAdr;
-         do 311 -> trace(#do 'GenPtnVarMethod:Inner:'->xT; N[] -> xA; #);
-            theGen.pushThis;
-            true -> A.isField;
-            receiver[] -> theGen.mkSignature -> A.receiverType[];
-            N.getText -> A.fieldName[];
-            'Structure' -> text2signature -> A.fieldType[];
-            311->trace(#do A.display ->xT #);
-            (A[],A.fieldType[],none) -> mch.loadRef;
-            'AlloSI' -> mch.CallPrim; 
-            desc[] -> theGen.mkSignature -> mch.checkCast
-         #);
-         
-      else
-
-     desc.son -> pref;
-     &ASTindex[] -> topDesc[]; (* prevent aliasing *)
-     (if pref.label = gram.prefix then
-         pref.son -> topSuperName;
-         topSuperName -> sematt.descChain -> (topDesc,subLevel)
-      else
-         desc -> topDesc;
-      if);
-     311->trace(#
-               do 'ptnVarMethod:'->xT; desc[] -> xA; xN;
-                  topDesc[] -> xA
-               #);
-         (desc[],false) -> initPtnGen;
-     if)
+     thisDesc -> receiver;
+     (N.gettext,desc[],false,true,none,none,false,true,true)
+       -> genPtnMethod
+     (# A: @mch.RegAdr;
+     do 311 -> trace(#do 'GenPtnVarMethod:Inner:'->xT; N[] -> xA; #);
+        theGen.pushThis;
+        true -> A.isField;
+        receiver[] -> theGen.mkSignature -> A.receiverType[];
+        N.getText -> A.fieldName[];
+        'Structure' -> text2signature -> A.fieldType[];
+        311->trace(#do A.display ->xT #);
+        (A[],A.fieldType[],none) -> mch.loadRef;
+        'AlloSI' -> mch.CallPrim; 
+        desc[] -> theGen.mkSignature -> mch.checkCast
+     #);
+        
   #)
 ---genPtnMethod:doPart---
    (* Calling a general pattern as a method
@@ -1200,13 +1278,22 @@ do (# findBetaenv:
                          (* see gdbody for patterns we ignore;
                           * do we have the right ones here ?
                           *)
-                         ((current[],false) -> EH.descName
+                         (current[],false) -> EH.descName -> name[];
+                         (name[]
                          ,current[],false,false,theDesc[],none,false,true,true)
                            -> genPtnMethod;
                          D -> theDesc -> thisDesc;
-                         ((current[],false)->EH.descName
+                         (name[]
                          ,current[],theDesc[]) 
-                           -> genPtnClass
+                           -> genPtnClass;
+                         current.father -> N;
+                         (if N.label
+                          // gram.virtualDecl
+                          // gram.bindingDecl
+                          // gram.finalDecl then
+                             D -> thisDesc -> theDesc;
+                             (name[],N[]) -> genVirtualStrucMethod
+                         if)
                      if)
                   else
                      (* attributeDenotation as 'A' in 'V:<A' 
@@ -1226,7 +1313,7 @@ do (# findBetaenv:
                          ,current[],theDesc[]) 
                            -> genPtnClass;
                          D -> thisDesc -> theDesc;
-                         (name[],N[]) -> genVirtualLoadOrigin
+                         (name[],N[]) -> genVirtualStrucMethod
                       else
                          N.father->N;
                          (N.sonref).brother -> N;
