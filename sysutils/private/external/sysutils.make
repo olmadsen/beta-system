@@ -1,4 +1,4 @@
-BETARUNDIR = /users/beta/betarun/v2.8/$(MACHINETYPE)/C
+BETARUNDIR = $(BETALIB)/betarun/v2.8/$(MACHINETYPE)/C
 CFLAGS	   = -D$(MACHINETYPE) -I$(BETARUNDIR)
 
 ../$(MACHINETYPE)/scanobjects.o: 

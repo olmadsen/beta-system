@@ -8,8 +8,8 @@ ORIGIN '../pathhandler';
 
 INCLUDE '~beta/basiclib/v1.5/file';
 INCLUDE '~beta/basiclib/v1.5/external';
-INCLUDE '~beta/sysutils/v1.5/envstring';
-INCLUDE '~beta/ntlib/v1.0/ntinterface';
+INCLUDE '../envstring';
+INCLUDE '~beta/win32lib/v1.1/ntinterface';
 
 -- LIB: attributes --
 
@@ -21,6 +21,41 @@ INCLUDE '~beta/ntlib/v1.0/ntinterface';
 
 homeDirectories:
   (# exit 'configuration\\r3.0\\homeDirectories' #);
+
+removedoubleslash:
+  (# p: ^text;
+     inx, slashinx: @integer;
+  enter p[]
+  do (* Check that there are no double slashes in p *)
+     -2 -> slashInx;
+     search:
+       (for inx: p.lgth repeat
+            (if inx>p.lgth // true then leave search if);
+            (if p.T[inx] // '/' // '\' then 
+                (if inx > slashInx
+                 // true then
+                    (if inx = slashInx+1
+                     // true then 
+                        (* two consecutive slashes *)
+                        (slashinx, slashinx) -> p.delete;
+                        inx-1 -> inx; (* one less char ! *)
+                     // false then 
+                        (* remember position of last slash *)
+                        inx -> slashInx;
+                    if)
+                if)
+            if);
+       for);
+  #);
+
+substChars:
+  (# p: ^text;
+     from, to: @char
+  enter (from,to,p[])
+  do
+     (* replace 'from' with 'to' *)
+     from->p.findCh(# do (to,inx)->p.inxPut #);
+  #)
 
 -- ConvertFileNameNoFather: dopart --
 do 'Error in file path conversion in PathHandler: '->msg.putline;
@@ -264,7 +299,7 @@ do (if THIS(ConvertFilePath).path[]//NONE then
                    then '\'->path.put; if)
            if);
            (* replace / with \ *)
-           '/'->path.findCh(# do ('\',inx)->path.inxPut #);
+           ('/','\',path[])->substChars;
            (* Check that there are no '\\' in the path unless first *)
            -1->slashInx;
            '\'->path.findCh
@@ -394,47 +429,89 @@ do 'Error in localpath conversion of \n'''->msg.puttext;
    ''''->msg.putline;
 
 ------ localPathBody: descriptor ------
-(# pathIndex,basisIndex: @integer;
-   path,basis: ^text;
-do (if (this(LocalPath).path[]<>NONE) and
-       (this(LocalPath).basis[]<>NONE)
-    // true then
-       (* copy paths to avoid side-effects *)
-       this(LocalPath).path.copy->path[];
-       this(LocalPath).basis.copy->basis[];
-       '/'->basis.findCh(# do inx->basisIndex #);
-       (if basisIndex//0 then
-           '\'->basis.findCh(# do inx->basisIndex #) if);
-       '/'->path.findCh(# do inx->pathIndex #);
-       (if pathIndex//0 then
-           '\'->path.findCh(# do inx->pathIndex #) if);
-       (1,basisIndex)->basis.sub->basis[];
-       tester: 
-         (if ((1,pathIndex)->path.sub->basis.equal)
+(# path,basis: ^text;
+   inx, slashinx, parents: @integer;
+   tmp: ^text;
+   rmdbl: @removedoubleslash;
+do
+   findpart:
+     (if (this(LocalPath).path[]<>NONE) and
+         (this(LocalPath).basis[]<>NONE)
+      // true then
+         (* copy paths to avoid side-effects *)
+         this(LocalPath).path.copy->path[];
+         this(LocalPath).basis.copy->basis[];
+         (* check that basis can be used *)
+         (if basis.length > 0 // true then 
+             (if (basis.length -> basis.inxget) <> '/' 
+              // true then '/' -> basis.append
+             if);
+          else currentdirectory -> tmp[]; tmp -> basis;
+         if);
+         path[] -> rmdbl;
+         basis[] -> rmdbl;
+         ('/','\',path[]) -> substChars;
+         ('/','\',basis[]) -> substChars;
+         
+         (* Check if basis is a prefix of path *)
+         (if (1,basis.lgth) -> path.sub -> basis.equal
           // true then
-             (pathIndex+1,path.length)->path.sub->localName[]
-          else 
-             (* well.. We did not find any match.  Let us se if it matches
-              * something in the pathhandler data-structure
-              *)
-             private.nameTable.scan
-             (# 
-             do (if ((1,thisDir.length)->path.sub->thisDir.equal)//true then
-                    (thisDir.length+1,path.length)->path.sub 
-                     ->thisHome.CopyAppend->localName[];
-                    leave tester
-             if)#);
-             path.copy->localName[]
-   if)if);     
+             &text[] -> localName[];
+             path.t[basis.lgth+1:path.lgth] -> localName;
+             leave findpart;
+         if);
+         
+         (* Let us se if something in the pathhandler data-structure
+          * of home directories (this includes the contents of 
+          * $(BETALIB)/homeDirectories) is prefix of path. 
+          *)
+         (* Private.nameTable.scan {* home directories *}
+          * (# 
+          * do (if ((1,thisDir.lgth) -> path.sub -> thisDir.equal)
+          *     // true then
+          *        &text[] -> localName[];
+          *        (thisDir.lgth+1,path.lgth) -> path.sub
+          *          -> thisHome.CopyAppend -> localName[];
+          *        leave findpart
+          *    if)
+          * #);
+          *)
+         
+         (* Check if basis and path have a common prefix *)
+         0 -> inx;
+         0 -> slashinx;
+         0 -> parents;
+         common:
+           (for i: (basis.lgth,path.lgth)->min repeat
+                (if basis.T[i] <> path.T[i] // true then leave common if);
+                i -> inx;
+                (if basis.T[i] // directorychar then i -> slashinx if);
+           for);
+
+         (* inx points to last char common of the two paths, slashinx points
+          * to last common directorychar.
+          *)
+         (if slashinx > 1 // true then
+             (* There was a common prefix (in addition to '/') *)
+             path.t[slashinx+1:path.lgth] -> path;
+             basis.t[slashinx+1:basis.lgth] -> basis;
+             (* find number of '../'s to prepend to path *)
+             '\' -> basis.findCh(# do parents+1 -> parents #);
+             (for parents repeat '..\' -> path.prepend for);
+             path.copy -> localname[];
+             leave findpart;
+         if);
+     if); (* findpart *)
+
    (if localName[]//NONE then 
        (if path[]//NONE then 
         else
            path.copy->localName[];
        if)
-    else
-       '\'
-         ->localName.findCh(# do ('/',inx)->localName.inxPut #);
    if);
+   
+   (* Convert back to normal slashes *)
+   ('\','/',localname[])->substChars;
 #)
 
 ------ pathHandlerInit: dopart -----
