@@ -252,6 +252,7 @@ typedef void (*CellProcessFunc)(struct Object **theCell,struct Object *theObj);
 typedef struct nums
 {
   long NumAlloI;
+  long NumAlloCOM;
   long NumAlloC;
   long NumAlloDO;
   long NumAlloRR;
@@ -372,6 +373,7 @@ typedef struct TSD
 
 #ifdef RTDEBUG
 #define NumAlloI	Nums->NumAlloI
+#define NumAlloCOM	Nums->NumAlloCOM
 #define NumAlloC	Nums->NumAlloC
 #define NumAlloDO	Nums->NumAlloDO
 #define NumAlloRR	Nums->NumAlloRR

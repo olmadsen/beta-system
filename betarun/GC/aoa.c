@@ -125,7 +125,7 @@ static struct Object *AOAallocate(long numbytes)
     }
   }
   
-  if( AOACreateNewBlock ){
+  if (noAOAGC || AOACreateNewBlock) {
     if( (AOATopBlock->next = newBlock( AOABlockSize)) ){
       INFO_AOA( fprintf( output, "#(AOA: new block allocated %dKb.)\n",
 			(int)AOABlockSize/Kb) );
@@ -144,7 +144,8 @@ static struct Object *AOAallocate(long numbytes)
       MallocExhausted = TRUE;
       INFO_AOA( fprintf( output, "#(AOA: block allocation failed %dKb.)\n",
 			(int)AOABlockSize/Kb));
-      AOANeedCompaction = TRUE;
+      if (!noAOAGC)
+	AOANeedCompaction = TRUE;
       return 0;
     }
   }else{

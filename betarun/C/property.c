@@ -51,6 +51,7 @@ static void BooleanProperty(char *name)
    ENTRY("infoheapusage", InfoHeapUsage = TRUE);
    ENTRY("infoheap", InfoHeapUsage = TRUE);
    ENTRY("quacont",  QuaCont = TRUE);
+   ENTRY("noaoagc",  noAOAGC = TRUE);
 
 #ifdef sparc
   ENTRY("suspcont", SuspCont = TRUE);
