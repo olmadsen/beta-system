@@ -114,6 +114,12 @@
 # endif
 #endif
 
+#ifndef MAXINT
+#define MAXINT (signed long)0x7fffffff
+#endif
+#ifndef MININT
+#define MININT (signed long)0x80000000
+#endif
 
 #if (defined(nti_ms) || defined(nti_bor))
 #  define MAXHOSTNAMELEN 256 /* Value from fraxinus:'man gethostname' */
