@@ -6,8 +6,63 @@
 # define STDCALL
 #endif
 
-#define test 0
-  
+#define test 1
+
+struct data4a { long x; };
+struct data4b { short x; short y; };
+struct data8a { long x; long y; };
+struct data8b { long x;  short y; short z; };
+struct data12a { long x; long y; long z; };
+struct data12b { long x; long y;  short z; short z2; };
+
+struct data4a STDCALL f_data4a(struct xCOMclass *this)
+{
+  struct data4a d = { 7 };
+  return d;
+}
+struct data4b STDCALL f_data4b(struct xCOMclass *this)
+{
+  struct data4b d = { 7, 9 };
+  return d;
+}
+struct data8a STDCALL f_data8a(struct xCOMclass *this)
+{
+  struct data8a d = { 11, 13 };
+  return d;
+}
+struct data8b STDCALL f_data8b(struct xCOMclass *this)
+{
+  struct data8b d = { 14, 15, 16 };
+  return d;
+}
+struct data12a STDCALL f_data12a(struct xCOMclass *this)
+{
+  struct data12a d = { 11, 13, 14 };
+  return d;
+}
+struct data12b STDCALL f_data12b(struct xCOMclass *this)
+{
+  struct data12b d = { 14, 15, 16, 17 };
+  return d;
+}
+
+void teststructreturn(struct xCOMclass *this)
+{
+  struct data4a d4a;
+  struct data4b d4b;
+  struct data8a d8a;
+  struct data8b d8b;
+  struct data12a d12a;
+  struct data12b d12b;
+
+  d4a = f_data4a(this);
+  d4b = f_data4b(this);
+  d8a = f_data8a(this);
+  d8b = f_data8b(this);
+  d12a = f_data12a(this);
+  d12b = f_data12b(this);
+}
+
 struct myData{
     long x;
     short s;
@@ -119,7 +174,6 @@ struct myBigData STDCALL f8(struct xCOMclass *this, long a, long b, long c)
   mD.c = '=';
   return mD;
 }
-
 
 /* This is a virtual dispatch table instance, 
  * that may be shared by all xCOMclass objects 
