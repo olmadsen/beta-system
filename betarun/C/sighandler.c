@@ -831,15 +831,6 @@ BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
   switch (pExceptionRec->ExceptionCode){
   case EXCEPTION_ACCESS_VIOLATION:
 #ifdef PERSIST
-    DEBUG_CODE({
-      if (1) {
-	unsigned char* pc;
-	pc = (unsigned char*)PC;
-	fprintf(output, "EXCEPTION_ACCESS_VIOLATION: PC=0x%8x: "
-		"%02x %02x %02x %02x\n", (int)PC,
-		pc[0], pc[1], pc[2], pc[3]);
-      }
-    });
     todo = proxyTrapHandler(pContextRecord);
     if (!todo) {
       return OUR_EXCEPTION_CONTINUE_EXECUTION;
