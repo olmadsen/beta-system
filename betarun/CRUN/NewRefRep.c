@@ -16,19 +16,11 @@ ParamObjOffRange(NewRR)
     DEBUG_CODE(NumNewRR++);
     Ck(theObj);
 
-#ifdef hppa
-    if (range<0) range=0;
-    pushReference(theObj);
-    pushReference(getThisReg());
-    setThisReg(theObj);
-    setPrimReg1(offset * 4);
-    setPrimReg2(range);
-    AlloRR(theObj, offset, range);
-    setThisReg(popReference());
-    theObj = popReference();
-#endif
 #ifdef sparc
     Protect(theObj,if (range<0) range=0; CAlloRR(theObj, 0, offset*4, 0, 0, range));
+#endif
+#ifdef hppa
+    Protect(theObj,if (range<0) range=0; CAlloRR(offset*4, range, theObj));
 #endif
 #ifdef crts
     Protect(theObj,if (range<0) range=0; AlloRR(theObj, offset*4, range));

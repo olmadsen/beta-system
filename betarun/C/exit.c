@@ -135,6 +135,7 @@ extern void CallLazyItem (void);
 #define RefNoneFrameSize 0x80
 #define HandleIndexErrFrameSize 0x80
 
+#if 0 /* valhalla not yet ready for hppa */
 static __inline__ long GetBetaPC(long errno)
 {
   register long PC, SP;
@@ -153,6 +154,7 @@ static __inline__ long GetBetaPC(long errno)
   }
   return PC & ~3 /* The lower bits are not always cleared in the rp register */;
 }
+#endif
 #endif /* hppa */
 #endif /* RTVALHALLA */
 
@@ -193,11 +195,12 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 
 
 #ifdef hppa
+      thePC=(long*)0;
 #ifdef RTVALHALLA
+#if 0
       thePC=(long *)GetBetaPC(err);
       fprintf(output, "BetaError %d: PC is 0x%x\n", (int)err, (int)thePC);
-#else
-      thePC=(long*)0;
+#endif
 #endif /* RTVALHALLA */
 #ifdef UseRefStack
       /* RefSP or SP is used - no need to do anything */

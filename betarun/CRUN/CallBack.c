@@ -325,8 +325,6 @@ static __inline__ unsigned long bletch(unsigned long x)
   return (x << 1) & 0x03ffe;
 }
 
-extern void HandleCB();
-
 #include <sys/cache.h>
 
 void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
@@ -341,10 +339,32 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 
     CBFATop->theStruct = theStruct;
 
-    hcb = (unsigned long) HandleCB; /* this does not work, but imports the symbol !!!! */
-    __asm__ volatile ("LDIL L'HandleCB, %0;"
-		      "LDO  R'HandleCB(%0),%0;": "=r" (hcb)
-		      );
+    /* Get the address of HandleCB */
+#if 0
+    /* datpete: 10/10/96.
+     * The following does not work because the function pointer
+     * is NOT the function address, but a "Procedure Label"
+     * as explained in "PA-RISC Procedure Calling Conventions 
+     * Reference Manual", section 5.3.2 (i.e. because the
+     * address is loaded with a P' fixup).
+     * See, however, HACK below.
+     */
+    { 
+      extern void HandleCB();
+      hcb = (unsigned long) HandleCB;
+      /* HACK:
+       * The following extracts the address as described in section 
+       * 5.3.2 in the Calling Conventions manual. It is, however,
+       * too inefficient, and the solution below is chosen instead.
+       */
+      hcb = *(unsigned long *)(hcb & ~3);
+    }
+#else
+    /* We do it ourselves */
+    __asm__ volatile (".IMPORT HandleCB,CODE");
+    __asm__ volatile ("LDIL L'HandleCB, %0"    : "=r" (hcb));
+    __asm__ volatile ("LDO  R'HandleCB(%0),%0" : "=r" (hcb));
+#endif
 
     /* Construct the following code in the CBF:
      * 0 LDIL L'HandleCB, %r1
@@ -455,7 +475,7 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
     setCallReg(theObj);
     retval = theObj->Proto->CBR(a1, a2, a3, a4, &FOR - 128/4);
 
-    BETA_CLOBBER;
+    BETA_CLOBBER();
 
     /* Pop CallBackFrame */
     ActiveCallBackFrame = cbf.next;

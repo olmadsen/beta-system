@@ -10,6 +10,17 @@
 #define TRACE_SCAN(code)
 #endif
 
+#if defined(MT) || defined(hppa)
+int scanComponentStack (struct Component* comp,
+			struct Object *curObj,
+			int PC,
+			forEachCallType forEach)
+{ 
+  fprintf(output, "scanComponentStack: NYI\n");
+  return 0;
+}
+#endif
+
 int isBETAcode(int PC)
 { 
   group_header *current = 0;
@@ -317,21 +328,9 @@ int scanComponentStack (struct Component* comp,
 
 
 
-
-
 #ifdef sparc
 
-#ifdef MT
-int scanComponentStack (struct Component* comp,
-			struct Object *curObj,
-			int PC,
-			forEachCallType forEach)
-{ 
-  fprintf(output, "scanComponentStack: NYI for MT\n");
-  return 0;
-}
-
-#else /* MT */
+#ifndef MT
 #define objIsValRep(theObj) inLVRA(theObj)
 
 

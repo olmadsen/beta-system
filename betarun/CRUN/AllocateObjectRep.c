@@ -11,7 +11,7 @@
 /* parameters:
  *   prim1 = originReg = origin, 
  *   prim2 = callReg = proto, NOTE that on some platforms,
- *                         e.g. sparc, p2 <> callReg
+ *                         e.g. sparc, prim2 <> callReg
  *                         so proto is then NOT in prim2 (is in %i1)
  *   prim3 = off, 
  *   prim4 = range,

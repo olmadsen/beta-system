@@ -77,16 +77,20 @@ void RefNone(ref(Object) theObj)
     CkReg("RefNone", *(RefSP-4), "%r4");
     CkReg("RefNone", *(RefSP-5), "%r3");
     /* Save data registers on machine stack in case of dangling reference */
-    pushReg((void *)getPrimReg1());
-    pushReg((void *)getPrimReg2());
-    pushReg((void *)getR8Reg());
+    pushReg((void *)getD1Reg());
+    pushReg((void *)getD2Reg());
+    pushReg((void *)getD3Reg());
+    pushReg((void *)getD4Reg());
+    pushReg((void *)getR8Reg()); /* R8 is NOT to be GC'ed */
     
     LazyDangler = (long)theObj; /* dangling reference */
     CallBetaEntry(LazyItem->Proto->TopMpart, LazyItem);
     
     setR8Reg((long)popReg());
-    setPrimReg2((long)popReg());
-    setPrimReg1((long)popReg());
+    setD4Reg((long)popReg());
+    setD3Reg((long)popReg());
+    setD2Reg((long)popReg());
+    setD1Reg((long)popReg());
     PopGCRegs();
   } else {
     /* Reference was NONE */

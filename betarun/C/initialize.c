@@ -392,7 +392,7 @@ void Initialize()
   
   /* Allocate the Callback Function Area */
   CBFAAlloc();
-  
+
 #ifndef sun4s
 #if defined(UNIX) || defined(crts)
    { /* Setup signal handles for the Beta system */
