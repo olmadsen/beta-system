@@ -1,6 +1,7 @@
 ORIGIN '../dynpane';
 INCLUDE '~beta/guienv/v1.3.1/graphics';
 INCLUDE '~beta/guienv/v1.3.1/utils/graphicsadds'; (* graphics.clipChildren *)
+INCLUDE '~beta/guienv/v1.3.1/utils/guienvadds'; (* translate *)
 
 --- dynpanelib:attributes ---
 enforceConstraints:
@@ -37,7 +38,8 @@ panecanvas: canvas
   (# inx: @Integer; (* Index in dppriv.seps *)
      eventHandler::
        (# onMouseDown::
-            (# pos,oldpos,fsize: @Point;
+            (# pos,oldpos,fsize,fpos: @Point;
+               mouseMoved: @Boolean;
                sepinx: @Integer; sep: ^panecanvas;
                down: (# exit 1 #);
                up: (# exit 2 #);
@@ -60,8 +62,7 @@ panecanvas: canvas
                       #);
                     sepinx: @Integer;
                  enter direction
-                 do
-                    position->oldpos;
+                 do position->oldpos;
                     TRUE->dppriv.moved[inx];
                     (if direction
                      //down then
@@ -105,23 +106,50 @@ panecanvas: canvas
                     if);
                     enforceConstraints;
                  #);
-            do (if not dppriv.deleting then
+            do 
+               (if not (dppriv.sliding or ((inx=dppriv.last) and not shiftKey)) then
                    position->oldpos;
                    father.size->fsize;
-                   father.graphics
-                   (#  
+                   (position,this(paneCanvas)[],father.father[])
+                     ->translate->fpos;
+                   father.father.graphics
+                   (# 
                    do FALSE->clipChildren; 
                       patterns.black[]->Pen.stipple; 
                       TransferModes.xorBlend[]->Pen.mode;
                       2->pen.size;
-                      father.trackmouse
+                      father.father.trackmouse
                       (# draw: @
                            (# 
                            do
                               (if dppriv.vs then
-                                  ((0,pos.v),(fsize.h,pos.v))->drawLine;
+                                  ((fpos.h,pos.v-dppriv.pw),(fpos.h,pos.v))
+                                    ->drawLine;
+                                  (if not (shiftKey and (onMemberResize=dynpaneResizable)) then
+                                      ((fpos.h,pos.v),(fpos.h,pos.v+dppriv.pw))
+                                        ->drawLine;
+                                  if);
+                                  ((fpos.h+fsize.h,pos.v-dppriv.pw),(fpos.h+fsize.h,pos.v))
+                                    ->drawLine;
+                                  ((fpos.h,pos.v),(fpos.h+fsize.h,pos.v))->drawLine;
+                                  (if not (shiftKey and (onMemberResize=dynpaneResizable)) then
+                                      ((fpos.h+fsize.h,pos.v),(fpos.h+fsize.h,pos.v+dppriv.pw))
+                                        ->drawLine;
+                                  if);
                                else
-                                  ((pos.h,0),(pos.h,fsize.v))->drawLine;
+                                  ((pos.h-dppriv.pw,fpos.v),(pos.h,fpos.v))
+                                    ->drawLine;
+                                  (if not (shiftKey and (onMemberResize=dynpaneResizable)) then
+                                      ((pos.h,fpos.v),(pos.h+dppriv.pw,fpos.v))
+                                        ->drawLine;
+                                  if);
+                                  ((pos.h,fpos.v),(pos.h,fpos.v+fsize.v))->drawLine;
+                                  ((pos.h-dppriv.pw,fpos.v+fsize.v),(pos.h,fpos.v+fsize.v))
+                                    ->drawLine;
+                                  (if not (shiftKey and (onMemberResize=dynpaneResizable)) then
+                                      ((pos.h,fpos.v+fsize.v),(pos.h+dppriv.pw,fpos.v+fsize.v))
+                                        ->drawLine;
+                                  if);
                               if);
                            #);
                          mousePress:: (# do curPt->pos; draw #);
@@ -132,12 +160,14 @@ panecanvas: canvas
                                       draw;
                                       curPt->pos;
                                       draw;
+                                      true->mouseMoved;
                                   if);
                                else
                                   (if curPt.h<>prevPt.h then
                                       draw;
                                       curPt->pos;
                                       draw;
+                                      true->mouseMoved;
                                   if);
                               if);      
                            #);
@@ -147,33 +177,74 @@ panecanvas: canvas
                            #);
                       #);
                    #);
-                   (if dppriv.vs then
-                       (inx*dppriv.ms+(inx-1)*dppriv.pw,pos.v)->max->pos.v;
-                       (fsize.v-(dppriv.last-inx)*(dppriv.ms+dppriv.pw),pos.v)
-                         ->min->pos.v;
-                       (if true
-                        //pos.v>oldpos.v then
-                           (* Walk down *)
-                           pos.v->oldpos.v; oldpos->position;
-                           down->walkPanes;
-                        //pos.v<oldpos.v then
-                           (* Walk up *)
-                           pos.v->oldpos.v; oldpos->position;
-                           up->walkPanes;
-                       if);
+                   (if Shiftkey and (onMemberResize=dynpaneResizable) then
+                       (# delta: @Integer;
+                          sz: @Point;
+                          oldmembers: [0]^Canvas;
+                       do
+                          (* Resize member before separator *)
+                          (if dppriv.vs then
+                              (if (pos.v-oldpos.v->delta)<>0 then
+                                  prevmember.size->sz;
+                                  (sz.h,sz.v+delta)->prevmember.size;
+                              if);
+                           else
+                              (if (pos.h-oldpos.h->delta)<>0 then
+                                  prevmember.size->sz;
+                                  (sz.h+delta,sz.v)->prevmember.size;
+                              if);
+                          if);
+                          
+                          (* Use appendMember to slide members into position. *)
+                          TRUE->dppriv.sliding;
+                          (0,0)->dppriv.szaccum;
+                          dppriv.members->oldmembers;
+                          0->dppriv.last->dppriv.members.new;
+                          
+                          (for j:oldmembers.range repeat
+                               oldmembers[j][]->appendMember
+                               (# 
+                               do (* Slide separator into new position: *)
+                                  (if dppriv.seps[j][]<>NONE then
+                                      j->dppriv.seps[j].attach;
+                                  if);
+                               #);
+                          for);
+                          appendsDone;
+                          FALSE->dppriv.sliding;
+                       #)
                     else
-                       (inx*dppriv.ms+(inx-1)*dppriv.pw,pos.h)->max->pos.h;
-                       (fsize.h-(dppriv.last-inx)*(dppriv.ms+dppriv.pw),pos.h)
-                         ->min->pos.h;
                        (if true
-                        //pos.h>oldpos.h then
-                           (* Walk right *)
-                           pos.h->oldpos.h; oldpos->position;
-                           down->walkPanes;
-                        //pos.h<oldpos.h then
-                           (* Walk left *)
-                           pos.h->oldpos.h; oldpos->position;
-                           up->walkPanes;
+                        //not mouseMoved then
+                           (* nothing *)
+                        //dppriv.vs then
+                           (inx*dppriv.ms+(inx-1)*dppriv.pw,pos.v)->max->pos.v;
+                           (fsize.v-(dppriv.last-inx)*(dppriv.ms+dppriv.pw),pos.v)
+                             ->min->pos.v;
+                           (if true
+                            //pos.v>oldpos.v then
+                               (* Walk down *)
+                               pos.v->oldpos.v; oldpos->position;
+                               down->walkPanes;
+                            //pos.v<oldpos.v then
+                               (* Walk up *)
+                               pos.v->oldpos.v; oldpos->position;
+                               up->walkPanes;
+                           if);
+                        else
+                           (inx*dppriv.ms+(inx-1)*dppriv.pw,pos.h)->max->pos.h;
+                           (fsize.h-(dppriv.last-inx)*(dppriv.ms+dppriv.pw),pos.h)
+                             ->min->pos.h;
+                           (if true
+                            //pos.h>oldpos.h then
+                               (* Walk right *)
+                               pos.h->oldpos.h; oldpos->position;
+                               down->walkPanes;
+                            //pos.h<oldpos.h then
+                               (* Walk left *)
+                               pos.h->oldpos.h; oldpos->position;
+                               up->walkPanes;
+                           if);
                        if);
                    if);
                if);
@@ -182,7 +253,7 @@ panecanvas: canvas
      memberaction: prevmember.action
        (# eventType:: prevmember.theEventHandler.frameChanged;
           sz,nsz: @Point;
-       do (if not dppriv.deleting then
+       do (if not dppriv.sliding then
               (if not dppriv.moved[inx] then
                   (* The event was not generated due to this pane being 
                    * moved. *)
@@ -230,6 +301,47 @@ panecanvas: canvas
        #);
   #);
 
+--- dynpaneonframechanged:descriptor ---
+(# tmpFrame: @rectangle;
+   ofw,ofh,nfw,nfh: @Integer;
+do
+   (if (not dppriv.resizing) and (dppriv.last<>0) then
+       
+       (* External event caused resize *)
+       
+       oldFrame.size->(ofw,ofh);
+       (* OldFatherWidth, OldFatherHeight *)
+       
+       newFrame.size->(nfw,nfh);
+       (* NewFatherWidth, NewFatherHeight *)
+       
+       (if (nfw<>ofw) or (nfh<>ofh) then
+       
+           (for i:dppriv.last repeat
+                dppriv.members[i].frame->tmpFrame;
+                
+                ((tmpFrame.left*nfw) div ofw)->tmpFrame.left;
+                ((tmpFrame.top*nfh) div ofh)-> tmpFrame.top;
+                
+                ((tmpFrame.right*nfw) div ofw)->tmpFrame.right;
+                ((tmpFrame.bottom*nfh) div ofh)->tmpFrame.bottom;
+                
+                tmpFrame->dppriv.members[i].frame;
+           for);
+           
+           (* Update dppriv.szaccum to new size plus an extra separator. *)
+           (nfw,nfh)->dppriv.szaccum;
+           (if dppriv.vs then
+               (0,dppriv.pw)->dppriv.szaccum.add;
+            else
+               (dppriv.pw,0)->dppriv.szaccum.add;
+           if);          
+       if);
+   if);
+   
+   INNER onFrameChanged;
+#)
+
 --- dynpaneopen:dopart ---
 do setDefaults;
    (2,panewidth)->max->dppriv.pw;
@@ -241,9 +353,10 @@ do setDefaults;
 
 --- dynpaneappendmember:dopart ---
 do (# msz: @Point;
-   do dppriv.last+1->dppriv.last;
+   do 
+      dppriv.last+1->dppriv.last;
       1->dppriv.members.extend;
-      (if not dppriv.deleting then dppriv.extcount+1->dppriv.extcount if);
+      dppriv.extcount+1->dppriv.extcount;
       
       member.size->msz;
       (if dppriv.vs then
@@ -264,36 +377,57 @@ do (# msz: @Point;
 
 --- dynpaneappenddone: dopart ---
 do
-   (# sz: @Point;
+   (# sz,msz: @Point;
    do dppriv.szaccum->sz;
-      (if dppriv.vs then
-          (0,-dppriv.pw)->sz.add;
-       else
-          (-dppriv.pw,0)->sz.add;
-      if);          
       (dppriv.pw,sz.v)->max->sz.v;
       (dppriv.pw,sz.h)->max->sz.h; (* to avoid zero-sized pane *)
-      sz->size;
+      
+      (if onMemberResize=dynpaneFixed then
+          (if dppriv.vs then
+              (0,-dppriv.pw)->sz.add;
+           else
+              (-dppriv.pw,0)->sz.add;
+          if);          
+      if);
+      
+      TRUE->dppriv.resizing; sz->size; FALSE->dppriv.resizing; 
+   
+      (if not dppriv.sliding then
+          (if dppriv.extcount>0 then
+              dppriv.extcount->dppriv.seps.extend;
+              dppriv.extcount->dppriv.moved.extend;
+          if);
+      if);
+      
+      (for i: dppriv.last-1 repeat
+           (if not dppriv.sliding then
+               (if dppriv.seps[i][]//NONE then 
+                   (* Ensure members are same heigth (or width) *)
+                   dppriv.members[i].size->msz;
+                   (if dppriv.vs then
+                       (if msz.h<>sz.h then
+                           (sz.h,msz.v)->dppriv.members[i].size;
+                       if);
+                    else
+                       (if msz.v<>sz.v then
+                           (msz.h,sz.v)->dppriv.members[i].size;
+                       if);
+                   if);
+                   (NONE,i)->(&panecanvas[]).open 
+               if);
+           if)
+      for);
+      (if not dppriv.sliding  and (onMemberResize=dynpaneResizable) then
+          (NONE,dppriv.last)->(&panecanvas[]).open
+      if);
+      
+      0->dppriv.extcount;
    #);
    
-   (if not dppriv.deleting then
-       (if dppriv.extcount>0 then
-           dppriv.extcount->dppriv.seps.extend;
-           dppriv.extcount->dppriv.moved.extend;
-       if);
-   if);
-   
-   (for i: dppriv.last-1 repeat
-        (if not dppriv.deleting then
-            (if dppriv.seps[i][]//NONE then (NONE,i)->(&panecanvas[]).open if);
-        if)
-   for);
-
-   0->dppriv.extcount;
 
 --- dynpanedeletemember:dopart ---
 do 
-   TRUE->dppriv.deleting;
+   TRUE->dppriv.sliding;
 
    (* Find and remove member and corresponding separator. *)
    remove:
@@ -306,7 +440,7 @@ do
 	      (if dppriv.last>1 then
                   (* Deattach and close a separator: *)
                   (if true
-                   //i<dppriv.last then
+                   //i<=dppriv.last then
                       dppriv.seps[i].deattach; dppriv.seps[i].close;
                       NONE->dppriv.seps[i][];
                    else
@@ -351,10 +485,23 @@ do
           if)
      for);
 
-   FALSE->dppriv.deleting;
+   FALSE->dppriv.sliding;
    
+--- dynpanefithorizdefault:descriptor ---
+(# do dppriv.vs->value #)
+--- dynpanefitvertdefault:descriptor ---
+(# do not dppriv.vs->value #)
+--- dynpanefittofather:descriptor ---
+(# fsz,msz,newsz: @Point; 
+do fatherSize->fsz;
+   size->msz->newsz;
+   (if fitHoriz then fsz.h->newsz.h if);
+   (if fitVert then fsz.v->newsz.v if);
+   (if not (newsz->msz.isEqual) then newsz->size if);       
+#)
+
 --- dynpaneprivate:descriptor ---
-(# seps: [0]^panecanvas; (* separators. seps[last][] = NONE *)
+(# seps: [0]^panecanvas;
    moved: [0]@Boolean;
    members: [0]^Canvas;
    last: @Integer;
@@ -364,5 +511,6 @@ do
    pw: @Integer; (* panewidth        *)
 
    extcount: @Integer; (* Number of panes to add in this append round. *)
-   deleting: @Boolean; (* TRUE iff deleteMember in progress. *)
+   sliding: @Boolean;  (* TRUE iff appendMember is used to slide members. *)
+   resizing: @Boolean; (* TRUE iff appendsDone is setting size. *)
 #)

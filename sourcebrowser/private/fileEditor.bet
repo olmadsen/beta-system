@@ -1,9 +1,10 @@
-ORIGIN  '~beta/guienv/v1.3.1/guienv';
+ORIGIN  '../ymer';
 
 INCLUDE '~beta/guienv/v1.3.1/fields';
 INCLUDE '~beta/guienv/v1.3.1/stddialogs';
 
 INCLUDE '../xprompts';
+INCLUDE 'ymerFileUtils';
 
 INCLUDE '~beta/basiclib/v1.4/file';
 
@@ -11,7 +12,7 @@ INCLUDE '../dynpane';
 INCLUDE '~beta/objectbrowser/v2.0/UI/obguienvadds';
 INCLUDE '~beta/objectbrowser/v2.0/UI/labelled';
 
---- guienvlib: attributes ---
+--- browserLib: attributes ---
 fileEditor: window
   (# path: ^text;
      loadFile:
@@ -19,7 +20,8 @@ fileEditor: window
        enter path[]
        do (if path[]<>NONE then
               (* load text file *)
-                path[]->contents.loadFile;
+              path[]->contents.loadFile;
+              path[]->fragmentDefaultName->(title).copyAppend->title;
           if)
        #);
      menubarType::
@@ -36,7 +38,12 @@ fileEditor: window
                saveItem: @menuItem
                  (# eventHandler::
                       (# onSelect::
-                           (# do contents.saveFile #)
+                           (#
+                           do (if contents.changed then
+                                  contents.saveFile;
+                                  false->contents.changed
+                              if)
+                           #)
                       #);
                     open:: 
                       (# do 'Save'->name #)
@@ -53,8 +60,12 @@ fileEditor: window
                                      #);
                                    notok:: (# do this(fileEditor).close #)
                                 #)
-                           do (this(fileEditor)[],'Quit','Save before close?')
+                           do (if contents.changed then
+                                  (this(fileEditor)[],'Quit','Save before close?')
                                 ->(&askUser[]).popup
+                               else
+                                  this(fileEditor).close
+                              if)
                            #)
                       #);
                     open:: 
@@ -124,14 +135,20 @@ fileEditor: window
             #)
        #); (* menubarType *)
      contents: @textEditor
-       (# path: ^text;
+       (# changed, loading: @boolean;
+          contentsType::
+            (# eventhandler::
+                 (# onTextChanged:: (# do not loading->changed #) #)
+            #);
+          path: ^text;
           textFile: @file;
           loadFile:
             (# t: ^text;
                theText: @StyledText;
                pos, lineInx: @integer;
             enter path[]
-            do path[]->textFile.name;
+            do true->loading;
+               path[]->textFile.name;
                (if textFile.entry.exists
                    and textfile.entry.readable then
                    textFile.openRead;
@@ -149,10 +166,12 @@ fileEditor: window
                    'no file'->theText.puttext;
                    theText[]->contents.contents;
                if);
+               false->loading;
             #);
           saveFile:
             (# t: ^text
-            do (if textFile.entry.exists
+            do true->loading;
+               (if textFile.entry.exists
                    and textfile.entry.writeable then
                    textFile.openWrite;
                    contents.contents->textFile.puttext;
@@ -163,16 +182,18 @@ fileEditor: window
                    (this(fileEditor)[], t[],'Write Error')
                      ->alertUser
                if);
+               false->loading;
             #);
           dobind:
             (#
             do TRUE->bindTop->bindLeft->bindRight->bindBottom;
             #);
+          open:: (# do this(fileEditor).size->size; doBind #);
        #);
      open::<
        (#
-       do 'Parse Errors Editor'->title;
+       do 'File Editor for: '->title;
           INNER;
-          contents.open; contents.dobind
+          contents.open;
        #)
   #)
