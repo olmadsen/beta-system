@@ -22,9 +22,9 @@
 Block * newBlock(long size)
 {
   Block * theBlock;
-  unsigned long sizeAlign;
 
 #ifdef USEMMAP
+  unsigned long sizeAlign;
   sizeAlign = (size + sizeof(Block) + 8191) & ~8191;
   theBlock = AllocateBlock(sizeAlign);
 #else

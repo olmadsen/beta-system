@@ -14,6 +14,10 @@
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
 
+#ifdef UNIX
+#include <fcntl.h>
+#endif /* UNIX */
+
 #ifdef RTDEBUG
 #ifdef UNIX
 #include <unistd.h>
@@ -175,6 +179,15 @@ void BetaExit(long number)
   fflush(output);
 
   fclose(output);
+
+#ifdef UNIX
+  {
+    /* Make STDIN blocking, in case this was a systemEnv program */
+    int fd = fileno(stdin);
+    fcntl(fd, F_SETFL, 0); 
+  }
+#endif /* UNIX */
+
   exit(number);
 #endif
 }
