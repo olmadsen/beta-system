@@ -1,3 +1,12 @@
+(defun miadoc-replace0 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing newlines")
+    (tags-query-replace "" "
+" nil)))
+
 (defun miadoc-replace1 (basefilename)
   (interactive "sWebMaker base filename: " )
   (set-variable 'tags-file-name nil)
@@ -14,14 +23,6 @@
   (let ((case-replace t))
     (message "Replacing contents.html with index.html")
     (tags-query-replace "contents.html" "index.html" nil)
-))
-(defun miadoc-replace2-1 (manualname)
-  (interactive "sManual name: ")
-  (set-variable 'tags-file-name nil);;;
-
-  (let ((case-replace t))
-    (message "Replacing Contents headers with %s" manualname)
-    (tags-query-replace "<P> Contents</P>" (format "<P>%s</P>" manualname) nil)
 ))
 (defun miadoc-replace2-2 ()
   (interactive)
@@ -171,4 +172,29 @@
   (let ((case-replace t))
     (message "Replacing &iquest;")
     (tags-query-replace "&iquest;" "&oslash;" nil)))
+
+(defun miadoc-replace18 (manualname)
+  (interactive "sManual name: ")
+  (set-variable 'tags-file-name nil);;;
+
+  (let ((case-replace t))
+    (message "Replacing Contents headers with %s" manualname)
+    (tags-query-replace "<P> Contents</P>" (format "<P>%s</P>" manualname) nil)
+))
+
+(defun miadoc-replace19 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Removing up buttons")
+    (tags-query-replace "<LINK REL=UP HREF=index.html>" "" nil)))
+
+(defun miadoc-replace20 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Removing up buttons")
+    (tags-query-replace "<A HREF=index.html><IMG ALIGN=BOTTOM SRC=\"../images/up.gif\" ALT=Up BORDER=0></A>" "" nil)))
 
