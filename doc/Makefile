@@ -32,12 +32,16 @@ tags:
 *.html \
 */src/*.html
 
+# Remove garbage in top directory
+topclean:
+	/bin/rm -f *~ 
+
 # Remove garbage
-clean:
+clean: topclean
 	@env -i PATH=$$PATH BETALIB=$$BETALIB QUIET=1 sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then /usr/xpg4/bin/grep -q clean: $$d/Makefile; status=$$?; if [ $$status -eq 0 ] ; then cd $$d; echo ""; echo "---$$d---"; make clean; cd ..; fi; fi; done'
 
 
 # Remove all generated files
-distclean:
+distclean: topclean
 	@env -i PATH=$$PATH BETALIB=$$BETALIB QUIET=1 sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then /usr/xpg4/bin/grep -q distclean: $$d/Makefile; status=$$?; if [ $$status -eq 0 ] ; then cd $$d; echo ""; echo "---$$d---"; make distclean; cd ..; fi; fi; done'
 
