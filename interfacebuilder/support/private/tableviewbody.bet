@@ -1,7 +1,7 @@
 ORIGIN '../tableview';
 INCLUDE '~beta/containers/list';
 INCLUDE '../drawing';
-
+INCLUDE '~beta/guienv/controls';
 
 -- columnSetTitle: doPart --
 do value.copy -> private.theTitle[];
@@ -172,16 +172,23 @@ do INNER;
 do theTableItem[] 
 		-> private.tableItems.append
 		-> theTableItem.private.pos[];
+	(if private.tableItems.size = 1 then
+		theTableItem[] -> private.topItem[];
+	if);
+	updateMainView;
 
 -- tableViewPrepend: doPart --
 do theTableItem[] 
 		-> private.tableItems.prepend
 		-> theTableItem.private.pos[];
+	theTableItem[] -> private.topItem[];
+	updateMainView;
 
 -- tableViewInsert: doPart --
 do (theTableItem[], after.private.pos[]) 
 		-> private.tableItems.insertAfter
 		-> theTableItem.private.pos[];
+	updateMainView;
 
 -- tableViewScan: doPart --
 do private.tableitems.scan
@@ -235,6 +242,39 @@ do  private.theSelection.scan
 		do current[] -> this(scan).current[];
 			INNER scan;
 		#);
+		
+
+-- tableViewSetTheScroll: doPart --
+do (x, y) -> (private.xScroll, private.yScroll);
+	private.yScroll -> private.yOffset;
+	updateMainView;
+
+-- tableViewGetTheScroll: doPart --
+do (private.xScroll, private.yScroll) -> (x, y);
+
+-- tableViewScroll: doPart --
+do
+
+-- tableViewMaxScroll: doPart --
+do (# width, height: @integer;
+	do private.mainView.size -> (width, height);
+		private.columns.scan
+			(#
+			do maxX + current.width -> maxX;
+			#);
+		maxX + 50 -> maxX;
+		maxX - width -> maxX;
+		(if maxX < 0 then
+			0 -> maxX;
+		if);
+		
+		private.tableItems.size * (rowHeight +  rowDist) -> maxY;
+		maxY - height -> maxY;
+		(if maxY < 0 then
+			0 -> maxY;
+		if);
+	#);
+
 
 
 -- tableViewOpen: doPart --
@@ -245,6 +285,7 @@ do 'Geneva' -> private.titleStyle.name;
 	
 	this(tableView)[] -> private.titleView.open;
 	this(tableView)[] -> private.mainView.open;
+	this(tableView)[] -> private.verticalScrollbar.open;
 	private.tableItems.init;
 	private.columns.init;
 	private.theSelection.init;
@@ -263,6 +304,7 @@ do INNER;
 
 -- tableViewOnFrameChanged: doPart --
 do layout;
+	updateScrollBars;
 	INNER;
 
 -- tableViewLib: attributes --
@@ -273,6 +315,17 @@ updateMainView:
 			private.mainView.update;
 			true -> private.pendingUpdate;
 		if);
+	#);
+	
+updateScrollBars:
+	(# maxX, maxY: @integer;
+		x, y: @integer;
+	do true -> private.updatingScrollbars;
+		maxScroll -> (maxX, maxY);
+		theScroll -> (x, y);
+		maxY -> private.verticalScrollBar.maxValue;
+		y -> private.verticalScrollBar.value;
+		false -> private.updatingScrollbars;
 	#);
 
 hiliteColor:
@@ -288,12 +341,16 @@ tableItemList: list
 		element:: tableItem;
 	#);
 titleHeight: (# exit 20 #);
-
+scrollbarWidth: (# exit 16 #);
 layout:
 	(# width, height: @integer;
 	do size -> (width, height);
-		((0, 0), (width, titleHeight)) -> private.titleView.frame;
-		((0, titleHeight), (width, height)) -> private.mainView.frame;
+		((0, 0), (width - scrollbarWidth, titleHeight)) 
+			-> private.titleView.frame;
+		((0, titleHeight), (width - scrollbarWidth, height)) 
+			-> private.mainView.frame;
+		((width - scrollbarWidth, titleHeight), (width, height)) 
+			-> private.verticalScrollbar.frame;
 	#);
 	
 tableItemClick:
@@ -318,13 +375,21 @@ tableViewClick:
 	do selection.clear;
 	#);
 
+
+rowheight: (# exit 18 #);
+rowdist: (# exit 1 #);
+
+
 -- tableViewPrivate: descriptor --
-(# pendingUpdate: @boolean;
+(# topItem: ^tableItem;
+	xScroll, yScroll: @integer;
+	xOffset, yOffset: @integer;
+	
+	pendingUpdate: @boolean;
+	updatingScrollbars: @boolean;
 	columns: @columnList;
 	tableItems: @tableItemList;
 	titleStyle, bodyStyle: @textStyle;
-	rowheight: (# exit 18 #);
-	rowdist: (# exit 1 #);
 	
 	theSelection: @tableItemList;
 	
@@ -358,46 +423,47 @@ tableViewClick:
 		(# eventHandler::
 				(# onRefresh::
 						(#
-						do	'updating table...' -> putText;
-							graphics
+						do	graphics
 								(# r: @rectangle;
 									width, height: @integer;
 									str: ^text;
 								do size -> (width, height);
-									0 -> r.top;
-									updating: tableitems.scan
-									(# item: ^tableItem;
-									do (if r.top < height then
-											0 -> r.left;
-											r.top + rowHeight -> r.bottom;
-											current[] -> item[];
-											columns.scan
-											(#
-											do r.left + current.width -> r.right;
-												item.private.data[current.private.index][] -> str[];
-												(if str[] <> NONE then
-													(this(graphics)[], r[], item.private.selected, str[]) 
-														-> current.theEventHandler.onDrawData;
+									-yOffset -> r.top;
+									
+									(if topItem[] <> NONE then
+										updating: topItem.private.pos[] -> tableitems.scanFrom
+											(# item: ^tableItem;
+											do (if r.top < height then
+													0 -> r.left;
+													r.top + rowHeight -> r.bottom;
+													current[] -> item[];
+													columns.scan
+													(#
+													do r.left + current.width -> r.right;
+														item.private.data[current.private.index][] -> str[];
+														(if str[] <> NONE then
+															(this(graphics)[], r[], item.private.selected, str[]) 
+																-> current.theEventHandler.onDrawData;
+														if);
+														r.right -> r.left;
+													#);
+													gray1 -> pen.foreGroundColor;
+													(0, r.bottom) -> moveTo;
+													(width, r.bottom) -> drawTo;
+													r.bottom + 1 -> r.top;
+												else
+													leave updating;
 												if);
-												r.right -> r.left;
 											#);
-											gray1 -> pen.foreGroundColor;
-											(0, r.bottom) -> moveTo;
-											(width, r.bottom) -> drawTo;
-											r.bottom + 1 -> r.top;
-										else
-											leave updating;
-										if);
-									#);
+									if);
 								#);
 							false -> pendingUpdate;
-							'done' -> putLine;
 						#);
 					onMouseDown::
 						(# r: @rectangle;
 							x, y: @integer;
 							item: ^tableItem;
-						do 0 -> r.top;
+						do - yOffset -> r.top;
 							localPosition -> (x, y);
 							search: tableitems.scan
 							(# 
@@ -413,6 +479,17 @@ tableViewClick:
 								(this(onMouseDown)[], item[]) -> tableItemClick;
 							else
 								this(onMouseDown)[] -> tableViewClick;
+							if);
+						#);
+				#);
+		#);
+	verticalScrollBar: @scrollbar
+		(# eventHandler::
+				(# onValueChanged::
+						(# x, y: @integer;
+						do (if NOT updatingScrollbars then
+								theScroll -> (x, y);
+								(x, value) -> theScroll;
 							if);
 						#);
 				#);
