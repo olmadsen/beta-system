@@ -5,8 +5,19 @@ do
    metaGrammarInit;
    &mps.astViewer[]->astView[];
    &windowOutput[]->astView.out[];
-   betaGrammar.grammarAst.root[]->grammar[];
-   betaGrammar[]->ag[];
+   root.frag[]->frag[];
+   (if root.father <> none then true->isAsubeditor if);
+   (if 'beta'->(frag.grammar.grammarIdentification).equal then
+       theGrammar[]->betaGrammar[];
+       betaGrammar.grammarAst.root[]->grammar[];
+       betaGrammar[]->ag[]
+    else
+       (if 'property'->(frag.grammar.grammarIdentification).equal then
+           true->isApropertyEditor;
+           theGrammar.grammarAst.root[]->grammar[];
+           theGrammar[]->ag[]
+       if)
+   if);
    grammar.getProductionList->prodList[];
    astView.out.init;
    frag.grammar.grammarAst.father->fg[];
@@ -17,12 +28,6 @@ do
    theSifTextEditor.contents.size->theSifTextEditor.charWidth->astView.pp.width;
    getPropertiesFromGrammar;
    INNER init;
-   (* (if node[] <> none then
-    node[]->updateHistory
-    else
-    frag.root[]->exp[]; exp.getSon1->updateHistory
-    if);
-    *)
    theSifTexteditor.onOpen
 #)  
 
@@ -32,7 +37,131 @@ do INNER checkFormEditorExistence
 -- codeviewerSetupFormEditor: DoPart --
 do INNER setupFormEditor  
 
--- selectionToAst: Descriptor --
+-- codeviewerNodeExists: Descriptor --
+(# 
+do
+   false->value;
+   (if node[] = none then
+       'NodeExists: node is none!!'->putLine; 
+    else
+       (if subtree[] = none then
+           'NodeExists: subtree is none!!'->putLine; 
+        else
+           (if node.frag[] <> subtree.frag[] then
+               'NodeExists: node and subtree are not in same fragment!!'
+                 ->putLine;
+               
+            else
+               loop: subtree.suffixwalk
+                 (# 
+                 do
+                    (if node[]->current.equal then true->value; leave loop if)
+                 #);
+               
+           if)
+       if)
+   if)
+#)  
+
+-- codeviewerSetFocus: Descriptor --
+(# found: @boolean
+do
+   (if newCS.node[] <> none then
+       (if true (*checkExistence*) then
+           (newCS.node[],newCS.node.frag.root[])->nodeExists->found;
+           (if not found then nodeNotFound if)
+        else
+           true->found
+       if);
+       (if found then
+           newCS->cs;
+           checkSon;
+           cs->aFocusChangedEvent;
+           theSifTexteditor.contents.selection.scrollIntoView;
+           (*cs->astToSelection; is done in focuschangedEvent*)
+           (* must be deleted on mac? *)
+           
+       if)
+    else
+       'SetFocus: newCS.node is none!!'->putLine; nodeNotFound
+   if)
+#)  
+
+-- codeviewerFocusChangedEvent: Descriptor --
+(#
+   t: ^text;
+   commentAst: ^mps.comment;
+   inContr: @boolean;
+   contractionNode,fatherNode: ^mps.ast;
+   unexp: ^mps.unexpanded
+do (* from notification.focusChanged *)
+   newCS.node[]->inContraction->(inContr,contractionNode[]);
+   (if inContr then
+       newCS.node[]->openContractionsUntilRoot;
+       ( (* root *) frag.root[],- 1)
+         ->
+           astView.pp.present
+           (* should be update, mut disabled due to an error *)
+   if);
+   newCS->cs->astToSelection;
+   false->cs.isComment->cs.isContraction->cs.isSlot->cs.hasSemanticLink;
+   (if (cs.subcommentInx1 <> 0) and ((cs.subcommentInx2 <> 0)) then
+       (cs.subCommentInx1,cs.subCommentInx2)->cs.node.getSubcomment->t[];
+       (if t[] <> none then
+           (t.length <> 0)->cs.isComment;
+           true->ShowCommentPermit;
+           false->MakeCommentPermit
+       if)
+   if);
+   (if not cs.isComment then
+       true->MakeCommentPermit;
+       false->ShowCommentPermit;
+       (if cs.node.hasComment then
+           (if cs.node.typeOfComment = astView.pp.holocomment then
+               true->cs.isContraction
+           if)
+       if);
+       (if cs.node.kind = mps.kinds.unexpanded then
+           cs.node[]->unexp[]; (if unexp.isSlot then true->cs.isSlot;  if)
+       if);
+       (if (mps[],cs.node.frag.father)->getDoneCheckProperty (* isChecked *)
+        then
+           (if cs.node.kind
+            // mps.kinds.nameDecl // mps.kinds.nameAppl then
+               cs.node.father->fatherNode[];
+               (if fatherNode.symbol
+                // betaGrammar.nameDcl then
+                   fatherNode.father->fatherNode[];
+                   (if fatherNode.symbol
+                    // betaGrammar.names then
+                       fatherNode.father->fatherNode[];
+                       (if fatherNode.symbol
+                        // betaGrammar.bindingDecl // betaGrammar.finalDecl then
+                           true->cs.hasSemanticLink
+                       if)
+                   if)
+                // betaGrammar.nameApl then
+                   true->cs.hasSemanticLink; 
+               if)
+           if)
+       if)
+   if);
+   (if false then
+       'cs.isComment      : '->putText;
+       (if cs.isComment then 'TRUE'->putLine else 'false'->putLine;  if);
+       'cs.isContraction  : '->putText;
+       (if cs.isContraction then 'TRUE'->putLine else 'false'->putLine;  if);
+       'cs.isSlot         : '->putText;
+       (if cs.isSlot then 'TRUE'->putLine else 'false'->putLine;  if);
+       'cs.hasSemanticLink: '->putText;
+       (if cs.hasSemanticLink then 'TRUE'->putLine else 'false'->putLine;  if)
+   if);
+   (if doObserveAST then newCS.node[]->ASTObserver if);
+   INNER focusChangedEvent;
+   
+#)  
+
+-- codeviewerSelectionToAst: Descriptor --
 (#
    line1,char1,line2,char2: @integer;
    newCS: @astFocus;
@@ -44,9 +173,9 @@ do INNER setupFormEditor
    startInx,startSubinx,endInx,endSubInx: @integer
 do
    (if start = end then
-       start->theSifTexteditor.contents.posToRowCol->(line1,char1);
+       start->theSifTexteditor.posToLineChar->(line1,char1);
        (if switch[2] then
-           'onClick after posToRowCol: '->putText;
+           'onClick after posToLineChar: '->putText;
            line1->screen.putint;
            ' '->screen.put;
            char1->screen.putint;
@@ -70,10 +199,10 @@ do
            
        if)
     else
-       start->theSifTexteditor.contents.posToRowCol->(line1,char1);
-       end->theSifTexteditor.contents.posToRowCol->(line2,char2);
+       start->theSifTexteditor.posToLineChar->(line1,char1);
+       end->theSifTexteditor.posToLineChar->(line2,char2);
        (if switch[2] then
-           'onClick after posToRowCol: '->putText;
+           'onClick after posToLineChar: '->putText;
            line1->screen.putint;
            ' '->screen.put;
            char1->screen.putint;
@@ -189,13 +318,29 @@ do
        
    if)  
 
+-- codeviewerSetContraction: DoPart --
+do
+     (# newComment: ^mps.comment; t: ^text
+     do
+        (if node[] = none then cs.node[]->node[] if);
+        (if not node.hasComment then
+            (mps.comment,0,frag[])->theGrammar.newlexemText->newComment[];
+            &text[]->t[];
+            t[]->newcomment.putText;
+            newComment[]->node.addComment;
+            
+        if);
+        astView.pp.holocomment->node.typeOfComment;
+        
+     #)  
+
 -- showAstBody: Descriptor --
 (# 
 do
    trace
      (#  do 'showAst'->str[] #);
    (if edDebug then
-       (1,screen[])->frag.root.dump;
+       (1,screen[])-> (* root *) frag.root.dump;
        newLine;
        'cs.node.index/isSon: '->screen.putText;
        cs.node.index->putInt;

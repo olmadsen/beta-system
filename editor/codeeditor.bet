@@ -1,7 +1,11 @@
 ORIGIN 'codeviewer';
 INCLUDE '~beta/guienv/v1.3.1/utils/simplemenu'
         '~beta/freja/v2.0/frejasifcomm'
-        '~beta/containers/v1.4/sets';
+        '~beta/containers/v1.4/sets'
+        '~beta/containers/v1.4/seqContainers'
+        '~beta/mps/v4.9.1/propertycfl'
+        '~beta/prettygen/v4.9.1/prettyprintcfl'
+        'ymercall';
 BODY 'private/misc'
      'private/parsing'
      'private/derivation'
@@ -16,12 +20,15 @@ BODY 'private/misc'
      'private/groupeditorbody'
      'private/historybody'
      'private/frejacommbody'
-     'private/slotbody';
+     'private/slotbody'
+     'private/propertyeditorbody'
+     'private/subeditorbody';
 -- windowlib: Attributes --
 codeEditor: codeViewer
   (#
      edenv: ^editorEnv;
      thisGroupEditor: ^edenv.groupeditor;
+     thePropertyEditor: ^propertyEditor;
      isAFrejaEditor,notifyFreja: @boolean;
      frejaStatusOn: @boolean;
      frejaEditTypeStatus: @text;
@@ -437,18 +444,62 @@ codeEditor: codeViewer
      doFillAllSlots::< 
        (#  <<SLOT doFillAllSlots:DoPart>> #);
      doHideImplementation::<  (#  <<SLOT doHideImplementation:DoPart>> #);
-     init::< 
+     openSubeditor::< 
        (# 
-       <<SLOT codeeditorinit:DoPart>>
-       #)
+       <<SLOT subeditorOpenSubeditor:DoPart>>
+       #);
+     subeditors: @list (# element::< subeditor #);
+     init::<  (#  <<SLOT codeeditorinit:DoPart>> #)
+  #);
+propertyEditor: codeeditor
+  (#
+     theGroupEditor: ^edenv.groupeditor;
+     updateProperties:
+       (# 
+       <<SLOT propertyeditorUpdateProperties:DoPart>>
+       #);
+     astReplacedEvent::<  (#  <<SLOT propertyeditorAstReplaced:DoPart>> #);
+     astReplacedSequenceEvent::< 
+       (# 
+       <<SLOT propertyeditorAstReplacedSequence:DoPart>>
+       #);
+     listElementInsertedEvent::< 
+       (#  <<SLOT propertyeditorListElementInserted:DoPart>> #);
+     listElementsDeletedEvent::< 
+       (#  <<SLOT propertyeditorListElementsDeleted:DoPart>> #);
+     listElementsReplacedEvent::< 
+       (#  <<SLOT propertyeditorListElementsReplaced:DoPart>> #);
+     
+  #);
+subeditor: codeeditor
+  (#
+     fatherEditor:
+       ^codeeditor;
+     astReplacedEvent::<  (#  <<SLOT subeditorAstReplaced:DoPart>> #);
+     astReplacedSequenceEvent::< 
+       (# 
+       <<SLOT subeditorAstReplacedSequence:DoPart>>
+       #);
+     listElementInsertedEvent::< 
+       (#  <<SLOT subeditorListElementInserted:DoPart>> #);
+     listElementsDeletedEvent::< 
+       (# 
+       <<SLOT subeditorListElementsDeleted:DoPart>>
+       #);
+     listElementsReplacedEvent::< 
+       (#  <<SLOT subeditorListElementsReplaced:DoPart>> #);
+     
   #);
 editorenv:
   (#
-     mps:
-       ^astInterface;
-     betaGrammar: (*^mps.treelevel;*) ^mps.beta;
+     mps: ^astInterface;
+     betaGrammar:
+     (*^mps.treelevel;*) ^mps.beta;
      betaGram: (* contains all the syntactic category numbers *) @grammar;
+     propertyGrammar: ^mps.treeLevel;
+     prettyprintGrammar: ^mps.treeLevel;
      UI: ^guienv;
+     initiator: ^text;
      contractOnOpen,onlyNotifyFreja: @boolean;
      doQuit: @boolean;
      onGoingRecovery: @boolean;
@@ -561,6 +612,7 @@ editorenv:
           <<SLOT openFormBody:Descriptor>>
        exit (ff[],node[])
        #);
+     saveAll: (#  <<SLOT editorenvSaveAll:DoPart>> #);
      groupEditor:
        (#
           fg: ^mps.fragmentGroup;
@@ -570,11 +622,14 @@ editorenv:
           isAFrejaEditor: @boolean;
           needToUpdateTextFile: @boolean;
           autoSaveFileExists: @boolean;
+          thePropertyEditor: ^codeeditor;
           formEditorList: @list
             (#
                element:: codeeditor;
                findOrCreateEditor:
-                 (# ff: ^mps.fragmentForm; fe: ^codeviewer
+                 (#
+                    ff: ^mps.fragmentForm;
+                    fe: ^codeviewer
                  enter ff[]
                  <<SLOT groupeditorFormeditorListFindOrCreateEditor:DoPart>>
                  exit fe[]
@@ -602,8 +657,9 @@ editorenv:
             <<SLOT groupEditorSave:DoPart>>
             #);
           saveAs:
-            (# 
+            (# newName: ^text
             <<SLOT groupeditorSaveAs:DoPart>>
+            exit newName[]
             #);
           saveAbstract: (#  <<SLOT groupeditorSaveAbstract:DoPart>> #);
           recover: doCommand
@@ -689,23 +745,34 @@ editorenv:
             enter ff[]
             <<SLOT groupeditorEditFormName:DoPart>>
             #);
+          searchSLOT:
+            (#
+               ff: ^mps.fragmentForm;
+               theSLOTNode: ^mps.ast
+            enter ff[]
+            do
+               <<SLOT groupeditorSearchSlot:Descriptor>>
+            exit theSLOTnode[]
+            #);
           onExternCommand:
             (# command,status: ^text; 
             enter command[]
-            do
-               <<SLOT onGroupExternCommandBody:Descriptor>>
+            do <<SLOT onGroupExternCommandBody:Descriptor>>
             exit status[]
             #);
           compilerSavedGroup:
-            (# fg: ^mps.fragmentGroup
+            (#
+               fg:
+                 ^mps.fragmentGroup
             enter fg[]
-            do <<SLOT groupeditorCompilerSavedGroup:Descriptor>>; 
+            do
+               <<SLOT groupeditorCompilerSavedGroup:Descriptor>>;
+               
             #)
        #);
      groupEditorList: @list
        (#
-          element::
-           groupEditor;
+          element:: groupEditor;
           findOrCreateGroupEditor:
             (# fg: ^mps.fragmentGroup; ge: ^groupEditor
             enter fg[]
@@ -741,6 +808,7 @@ editorenv:
        exit fe[]
        #);
      commObject: ^communication;
+     ymerCallback: ^ymerCall;
      nonterminalsExist:
        (#
           unexpandedExist: @boolean;

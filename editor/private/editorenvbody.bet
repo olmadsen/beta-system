@@ -15,6 +15,30 @@ INCLUDE '~beta/mps/v4.9.1/propertyparser'
         if)
      exit t.copy
      #);
+   splitPath:
+     (# e: @diskEntry;  enter e.path exit (e.path.head,e.path.name) #);
+   splitFileName:
+     (# e: @diskEntry; 
+     enter e.path
+     exit (e.path.name.prefix,e.path.name.suffix)
+     #);
+   stripExtension:
+     (# e: @diskEntry;  enter e.path exit e.path.name.prefix #);
+   
+   dirWriteable:
+     (# f: @file enter f.name exit f.entry.writeable #);
+   
+   fileWriteable:
+     (# f: @file; value: @boolean
+     enter f.name
+     do
+        (if (f.entry.path.head->dirWriteable) then
+            (if f.entry.writeable then
+                true->value
+            if)
+        if)
+     exit value
+     #);
    doNewGroup:
      (#
         theFile,fragmentName,language: ^text;
@@ -538,6 +562,142 @@ INCLUDE '~beta/mps/v4.9.1/propertyparser'
      enter fg[]
      do fg.diskFileName->f.name; (f.entry.writeable)->writeAccess
      exit writeAccess
+     #);
+   astToProps:
+     (#
+        propText: @text;
+        synCatNo: @integer;
+        fg: ^mps.fragmentGroup;
+        fl: ^mps.fragmentLink;
+        propff: ^mps.fragmentForm;
+        status: @boolean;
+        S: @stack (# element:: text #)
+     enter (propff[],fg[])
+     do
+        propText.clear;
+        (mps[],propff[],propText[],'')
+          ->prettyprintFragment (*(# test::<trueObject #)*) ;
+        (if trace[9] then
+            'astToProps, prettyprinted ast: '->putLine;
+            '<'->put;
+            propText[]->putText;
+            '>'->put;
+            newLine;
+            
+        if);
+        propText.reset;
+        (if fg[] = none then
+            'astToProps: fg is none!!'->putLine
+         else
+            (if fg.fragmentlist[] = none then
+                'astToProps: fg.fragmentlist is none!!'->putLine
+             else
+                fg.fragmentlist.scan
+                  (# 
+                  do
+                     (if (current.type = mps.linkType) then
+                         current.name[]->S.push
+                     if)
+                  #);
+                loop:
+                (if not S.empty then
+                    S.pop->fg.fragmentList.deleteLocalName; restart loop
+                if);
+                l:
+                (propText[],screen[])
+                  ->fg.parseProperty
+                    (#
+                       parseErrors::< (* exception called if parse-errors *) 
+                         (# 
+                         do
+                            'parse errors in the property list'->screen.putLine;
+                            leave l;
+                            
+                         #);
+                       doubleFormDeclaration::<
+                       (* exception called if two fragmentForms with the same name *)
+                       
+                         (# 
+                         do
+                            ' this one is never called!!! double form declaration'
+                              ->screen.putLine;
+                            leave l
+                         #);
+                       
+                    #)->status;
+                (if trace[9] then
+                    'parseProperty status: '->putText;
+                    status->putInt;
+                    newLine;
+                    (if fg.prop.propList.Size
+                     // 0 then 'The property list is emty'->putLine; 
+                     else
+                        fg.prop.scanProp
+                          (#
+                             doProp::< 
+                               (# 
+                               do
+                                  prop[]->putText;
+                                  ' '->put;
+                                  scanParameters
+                                    (#
+                                       doString::< 
+                                         (# 
+                                         do
+                                            ''''->put;
+                                            s[]->putText;
+                                            ''''->put;
+                                            ' '->put;
+                                            
+                                         #);
+                                       doName::< 
+                                         (#  do n[]->putText; ' '->put;  #);
+                                       doConst::< 
+                                         (#  do c->putInt; ' '->put;  #);
+                                       
+                                    #);
+                                  newLine;
+                                  
+                               #);
+                             
+                          #);
+                        
+                    if);
+                    ;
+                    
+                if)
+            if)
+        if)
+     #);
+   propsToAst:
+     (#
+        propText: @text;
+        synCatNo: @integer;
+        fg,propfg: ^mps.fragmentGroup;
+        ff: ^mps.fragmentForm;
+        pos: @integer
+     enter fg[]
+     do
+        (mps[],fg[],propText[],'')
+          ->prettyprintFragment (# onlyProperties::< trueObject #);
+        (if trace[9] then
+            'PropsToAst, prettyprint of properties:'->putLine;
+            '<'->put;
+            propText[]->putText;
+            '>'->put;
+            newLine;
+            
+        if);
+        mps.newFragmentGroup->propfg[];
+        'Prop'->(fg.name).copyAppend->propfg.name;
+        mps.top.topgroup[]->propfg.father;
+        propertyGrammar[]->mps.newFragmentForm->ff[];
+        propText.reset;
+        (1 (*root*) ,propText[],screen[],ff[])->propertyGrammar.parser.doParse;
+        'property'->ff.name;
+        ff[]->propfg.fragmentList.addFragment;
+        
+     exit propfg[]
      #)
 #)  
 
@@ -549,7 +709,17 @@ do
      (# help,language: ^text; f: @file
      do
         (if name[] = none then
-            editorenvPrivate.nextUntitled->help[]; help.copy->f.name
+            (*editorenvPrivate.nextUntitled->help[]; help.copy->f.name*)
+            loop:
+              (#
+              do
+                 UI.fileCreationDialog->f.name->putLine;
+                 f.name->editorenvPrivate.stripExtension->f.name;
+                 (if f.name->editorenvPrivate.fileWriteable then
+                     (none,'No write permission','New BETA Program')->UI.alertUser; 
+                     restart loop
+                 if)
+              #)
          else
             name[]->help[]; help.copy->f.name
         if);
@@ -597,7 +767,18 @@ do
      (# help,language: ^text; f: @file
      do
         (if name[] = none then
-            editorenvPrivate.nextUntitled->help[]; help.copy->f.name
+            (*editorenvPrivate.nextUntitled->help[]; help.copy->f.name*)
+            loop:
+              (#
+              do
+                 UI.fileCreationDialog->f.name->putLine;
+                 f.name->editorenvPrivate.stripExtension->f.name;
+                 (if f.name->editorenvPrivate.fileWriteable then
+                     (none,'No write permission','New BETA Library')->UI.alertUser
+                     ; 
+                     restart loop
+                 if)
+              #)
          else
             name[]->help[]; help.copy->f.name
         if);
@@ -628,7 +809,7 @@ do
          else
             'lib'->name[];
             'beta'->language[];
-            (f.name,name[],language[],betaGram.descriptorForm,isAFrejaEditor)
+            (f.name,name[],language[],betaGram.attributesForm,isAFrejaEditor)
               ->editorenvPrivate.doNewGroup->ge[];
             (if ge[]
              // none then name[]->putText; ' editor not opened'->putLine; 
@@ -802,6 +983,27 @@ do
    
 #)  
 
+-- editorenvSaveAll: DoPart --
+do
+   l: groupEditorList.scan
+     (# help: ^text
+     do
+        (if (current.touched > 0) and not current.isAfrejaEditor then
+            'Save changes to '->help[];
+            current.fg.name->help.append;
+            '?'->help.append;
+            help[]->putLine;
+            (none ,'Save group',help[])
+              ->UI.promptForBoolean
+                (#
+                   ok::<  (#  do (true,true)->current.save #);
+                   notOK::<  (#  do  #);
+                   cancel::<  (#  do leave l #);
+                   
+                #)
+        if)
+     #)  
+
 -- editorenvFindOrCreateGroupEditor: DoPart --
 do
      (# textfile: @file
@@ -812,6 +1014,14 @@ do
             &groupEditor[]->ge[];
             fg[]->ge.fg[];
             fg[]->editorenvPrivate.checkWriteAccess->ge.writeAccess;
+            (if trace[2] then
+                'writeAccess: '->putText;
+                (if ge.writeAccess then
+                    'true'->putLine
+                 else
+                    'false'->putLine
+                if)
+            if);
             fg.textfilename->textfile.name;
             (if not textfile.entry.exists then
                 '### Text file does not exist'->putLine;
@@ -970,5 +1180,100 @@ do
 #)  
 
 -- editorEnvInit: DoPart --
-do &clipBoard[]->clip[]; history.init  
+do
+     (# grammarWithPath,help: ^text; gg: ^mps.fragmentGroup; bobsfile: @file
+     do
+        &clipBoard[]->clip[];
+        history.init;
+        (if trace[9]
+         // true then '*************** prettygrammar.init'->putLine
+        if);
+        &mps.prettyprint[]->prettyprintGrammar[];
+        prettyprintGrammar.init;
+        '~beta/grammars/pretty/v2.3/prettyprint'->grammarWithPath[];
+        (grammarWithPath[],screen[])->mps.top.open->gg[];
+        (if gg[]
+         // none then
+            'Could not open: '->screen.putText;
+            grammarWithPath[]->putLine;
+            (failure,'')->stop;
+            
+        if);
+        ('meta',screen[])->gg.open->gg[];
+        (if gg[]
+         // none then
+            'Could not open: '->screen.putText;
+            '-meta'->grammarWithPath.copyAppend->screen.putLine;
+            (failure,'')->stop;
+            
+         else
+            ('prettyprint',screen[])->gg.open->prettyprintGrammar.grammarAst[];
+            (if prettyprintGrammar.grammarAst[]
+             // none then
+                'No grammarAst for '->screen.putText;
+                grammarWithPath[]->screen.putLine;
+                (failure,'')->stop;
+                
+             else
+                '-parser'->help[];
+                mps.parserFileExtension->help.append;
+                help[]->grammarWithPath.copyAppend->mps.expandToFullPath
+                  ->bobsFile.name;
+                (if bobsFile.entry.exists
+                 // true then
+                    bobsFile.name->prettyprintGrammar.parser.initialize; 
+                 else
+                    'No parser available: '->screen.putText;
+                    bobsFile.name->screen.putLine;
+                    
+                if)
+            if);
+            
+        if);
+        (if trace[9]
+         // true then '*************** propertygrammar.init'->putLine
+        if);
+        &mps.property[]->propertyGrammar[];
+        propertyGrammar.init;
+        '~beta/grammars/property/v1.1/property'->grammarWithPath[];
+        (grammarWithPath[],screen[])->mps.top.open->gg[];
+        (if gg[]
+         // none then
+            'Could not open: '->screen.putText;
+            grammarWithPath[]->putLine;
+            (failure,'')->stop;
+            
+        if);
+        ('meta',screen[])->gg.open->gg[];
+        (if gg[]
+         // none then
+            'Could not open: '->screen.putText;
+            '-meta'->grammarWithPath.copyAppend->screen.putLine;
+            (failure,'')->stop;
+            
+         else
+            ('property',screen[])->gg.open->propertyGrammar.grammarAst[];
+            (if propertyGrammar.grammarAst[]
+             // none then
+                'No grammarAst for '->screen.putText;
+                grammarWithPath[]->screen.putLine;
+                (failure,'')->stop;
+                
+             else
+                '-parser'->help[];
+                mps.parserFileExtension->help.append;
+                help[]->grammarWithPath.copyAppend->mps.expandToFullPath
+                  ->bobsFile.name;
+                (if bobsFile.entry.exists
+                 // true then
+                    bobsFile.name->propertyGrammar.parser.initialize; 
+                 else
+                    'No parser available: '->screen.putText;
+                    bobsFile.name->screen.putLine;
+                    
+                if)
+            if);
+            
+        if)
+     #)  
 

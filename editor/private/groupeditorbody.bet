@@ -28,12 +28,18 @@ do
         position: ^groupEditorList.theCellType;
         help: ^text;
         cleanUp:
-          (#  do formEditorList.scan (#  do current.closeForm #) #)
+          (# 
+          do
+             formEditorList.scan
+               (#  do current.closeForm #);
+             position[]->groupEditorList.delete
+          #)
      do
         (if (THIS(groupEditor)[]->groupEditorList.at->position[]) <> none then
-            (if true (*trace[2]*) then
+            (if trace[2] then
                 'GroupEditor.CloseGroup: '->putText; fg.name->putLine; 
             if);
+            ;
             (if (touched > 0) and not isAfrejaEditor then
                 'Save changes to '->help[];
                 fg.name->help.putText;
@@ -54,7 +60,7 @@ do
                 cleanUp;
                 true->value
             if);
-            position[]->groupEditorList.delete
+            
          else
             (if trace[2] then
                 'GroupEditor.CloseGroup: already closed!!!'->putText;
@@ -151,11 +157,60 @@ do
      #)  
 
 -- groupeditorSaveAs: DoPart --
-do   
+do loop:
+     (#
+     do
+        UI.fileCreationDialog->newName[]->putLine;
+        newName[]->editorenvPrivate.stripExtension->newName[];
+        (if newName[]->editorenvPrivate.fileWriteable then
+            'Saving group as '->putText;
+            newName[]->putText;
+            '...'->putText;
+            fg[]->editorenvPrivate.ASTGC;
+            newName[]->mps.expandToFullPath->fg.saveAs;
+            newLine;
+            (* to avoid save prompt! :*)
+            resetGroupTouch;
+            formEditorList.scan
+            (#  do current.resetFragmentTouch;  #);
+            false->needToUpdateTextFile;
+            closeGroup;
+         else
+            (none,'No write permission','Save As')->UI.alertUser; 
+            restart loop
+        if)
+     #)
 
 -- groupeditorSaveAbstract: DoPart --
-do   
-
+do
+   loop:   (# fileName: ^text
+   do
+      (*(none ,'Save Abstract',
+       'Save fragment group at current abstraction level on which text file?','')
+       ->promptForText
+       (#
+       ok::< 
+       (# 
+       do
+       (mps[],fg[],none ,userText[])
+       ->prettyprintFragment
+       (# abstractPresentation::< trueObject #);
+       
+       #)
+       #)
+       *)
+      
+      UI.fileCreationDialog->fileName[]->putLine;
+      (if fileName[]->editorenvPrivate.fileWriteable then
+          (mps[],fg[],none ,fileName[])
+            ->prettyprintFragment
+          (# abstractPresentation::< trueObject #);
+       else
+          (none,'No write permission','Save Abstract')->UI.alertUser;
+          restart loop
+      if)
+   #)
+               
 -- groupeditorRecover: DoPart --
 do   
 
@@ -336,7 +391,69 @@ do
      #)  
 
 -- groupeditorEditProperties: DoPart --
-do   
+do
+     (#
+        propGroup: ^mps.fragmentGroup;
+        ff: ^mps.fragmentForm;
+        thePropertyWindow: ^propertyWindow;
+        propertyWindow: window
+          (#
+             editor: @sifTextEditor (# codeViewerType::< propertyEditor #);
+             open:: 
+               (#
+                  ff: ^mps.fragmentForm;
+                  node: ^mps.ast;
+                  help: ^text;
+                  ped: ^propertyeditor
+               enter node[]
+               do
+                  (if node[] <> none then
+                      ((node.frag.father).name).copy->help[];
+                      help.length->help.pos;
+                      '-'->help.put;
+                      node.frag.name->help.putText;
+                      help[]->title;
+                      help[]->putLine;
+                      editor.open;
+                      (mps[],propertyGrammar[],node.frag.root[],node[])
+                        ->editor.newfragment->ped[];
+                      (if ped[] <> none then
+                          THIS(GroupEditor)[]->ped.theGroupEditor[]; 
+                       else
+                          'no propertyeditor created!'->putLine
+                      if);
+                      editor.size->size;
+                      true->editor.bindBottom->editor.bindRight
+                  if);
+                  
+               #);
+             
+          #);
+        
+     do
+        (if thePropertyEditor[] <> none then
+            'thePropertyWindow.editor.wriggle'->putLine
+         else
+            fg[]->editorenvPrivate.propsToAst->propGroup[];
+            l: propGroup.fragmentList.scan
+              (# 
+              do
+                 (if current.type = mps.formType then
+                     current.f[]->ff[]; leave l
+                 if)
+              #);
+            (* prettyprint property list
+             * and parse corresponding to the 
+             * property grammar
+             *)
+            (if ff[] <> none then
+                &propertyWindow[]->thePropertyWindow[];
+                ff.root[]->thePropertyWindow.open
+             else
+                'editProperties: ff is none'->putLine
+            if)
+        if)
+     #)  
 
 -- groupeditorEditFormName: DoPart --
 do
@@ -354,6 +471,75 @@ do
                 #)
         if)
      #)  
+
+-- groupeditorSearchSlot: Descriptor --
+(#
+   slotName: ^text;
+   searchFrag: ^mps.fragmentGroup;
+   originName,help,path,name2: ^text;
+   fg2: ^mps.fragmentGroup;
+   found: @boolean;
+   
+do
+   ff.name->slotName[];
+   'Searching for the SLOT definition of '''->putText;
+   slotName[]->putText;
+   ''' in:'->putLine;
+   fg[]->searchFrag[];
+   searchSlot: searchFrag.prop.scanProp
+     (#
+        doProp::< 
+          (# 
+          do
+             (if true
+              // ('ORIGIN'->prop.equalNCS) then
+                 getString->originName[];
+                 (if (originName.length > 0)
+                  // true then
+                     originName[]->putLine;
+                     searchFrag.fullName->editorenvPrivate.splitPath
+                       ->(path[],name2[]);
+                     ((originName[],path[] (*g.fullName*) )
+                        ->mps.thePathHandler.convertFilePath->help[],screen[])
+                       ->mps.top.open->fg2[];
+                     (if fg2[]
+                      // none then
+                         ' not found'->help.putText;
+                         (none ,help[],'Search SLOT')->UI.alertUser;
+                         
+                      else
+                         l: fg2.scanSlots
+                           (# 
+                           do
+                              (if (current.Name->slotName.equalNCS)
+                               // true then
+                                  true->found;
+                                  current.father->theSlotNode[];
+                                  leave l
+                              if)
+                           #);
+                         (if found
+                          // false then
+                             fg2[]->searchFrag[];
+                             ''->originName[];
+                             restart searchSlot
+                         if);
+                         
+                     if);
+                     
+                  else
+                     'Could not find the SLOT '''->help[];
+                     slotName[]->help.putText;
+                     ''' on the ORIGIN chain'->help.putText;
+                     (none ,help[],'Search SLOT')->UI.alertUser;
+                     
+                 if)
+             if);
+             
+          #)
+     #);
+   
+#)  
 
 -- groupeditorCompilerSavedGroup: Descriptor --
 (# 

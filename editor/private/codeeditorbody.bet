@@ -1,6 +1,12 @@
+(*
+ COPYRIGHT
+ Copyright Mjolner Informatics, 1986-94
+ All rights reserved.
+ *)
 ORIGIN '../codeeditor';
 INCLUDE '~beta/mps/v4.9.1/findgrammar'
         '~beta/betaast/v4.9.1/donecheck'
+        '~beta/sysutils/v1.4/objinterface'
         'editorenvbody';
 (*
  COPYRIGHT
@@ -11,9 +17,19 @@ INCLUDE '~beta/mps/v4.9.1/findgrammar'
 do
      (# ge: ^editorenv.groupEditor; fe: ^codeEditor
      do
-        ff.father->edenv.groupEditorList.findOrCreateGroupEditor->ge[];
-        ff[]->ge.formeditorList.findEditor->fe[];
-        (if fe[] <> none then fe[]->theSifViewer[] if)
+        (if createIfNotExists then
+            ff.father->edenv.groupEditorList.findOrCreateGroupEditor->ge[]
+         else
+            ff.father->edenv.groupEditorList.findGroupEditor->ge[]
+        if);
+        (if ge[] <> none then
+            ff[]->ge.formeditorList.findEditor->fe[];
+            (if fe[] <> none then
+                fe[]->theSifViewer[]
+             else
+                none ->theSifViewer[]
+            if)
+        if)
      #)  
 
 -- codeeditorSetupFormEditor: DoPart --
@@ -24,19 +40,24 @@ do
           ->ge[];
         theSifViewer[]->ge.formeditorList.append;
         theSifViewer[]->fe[];
-        ge[]->fe.thisGroupEditor[]
+        ge[]->fe.thisGroupEditor[];
+        not ge.writeAccess->theSifViewer.theSifTextEditor.isReadOnly;
+        (if false then
+            'readOnly: '->putText;
+            (if theSifViewer.theSifTextEditor.readOnly then
+                'true'->putLine
+             else
+                'false'->putLine
+            if);
+            
+        if)
      #)  
 
 -- codeeditorCloseGroup: DoPart --
 do (*thisGroupEditor.closeGroup->value*)
    shutdown: edenv.groupEditorList.scan
      (# 
-     do
-        current.closeGroup->value;
-        'value is: '->putText;
-        (if value then 1->putInt else 0->putInt if);
-        newLine;
-        (if not value then leave shutdown if)
+     do current.closeGroup->value; (if not value then leave shutdown if)
      #)  
 
 -- codeeditorCloseForm: DoPart --
@@ -52,14 +73,16 @@ do
 -- autoSaveBody: DoPart --
 do
    (if switch[7] then 'autosave'->putLine;  if);
-   (if not thisGroupEditor.isAfrejaEditor then
-   (*'Auto save...'->  screen.putText*) (*UI.setAutoSaveCursor;*)
-       thisOperation:
-         (# 
-         do ('#',frag.father)->edenv.editorenvPrivate.extendedSaveBackup
-         #);
-       (*UI.setStructureCursor*)
-       
+   (if not isApropertyEditor and not isASubeditor then
+       (if not thisGroupEditor.isAfrejaEditor then
+       (*'Auto save...'->  screen.putText*) (*UI.setAutoSaveCursor;*)
+           thisOperation:
+             (# 
+             do ('#',frag.father)->edenv.editorenvPrivate.extendedSaveBackup
+             #);
+           (*UI.setStructureCursor*)
+           
+       if)
    if)  
 
 -- fragmentChangedEventBody: Descriptor --
@@ -104,12 +127,40 @@ do
 
 -- codeeditorinit: DoPart --
 do
-     (# grammarWithPath,help: ^text; gg: ^mps.fragmentGroup; bobsfile: @file
+     (#
+        grammarWithPath,help: ^text;
+        gg: ^mps.fragmentGroup;
+        bobsfile: @file;
+        inithere: @boolean;
+        
      do
      (*&editorEnv[]->edenv[]
       ->objectPool.put
       (# alreadyThere::<  (#  do true->continue #) #);
       (mps[],betagrammar[],UI[])->edenv.init;*)
+        '***** objectpool: '->putLine;
+        objectpool.scan
+          (# ee: ##object;
+          do
+             'pattern: '->putText;
+             current[]->getPatternName->putLine;
+             current[]->getprototype->putInt;
+             newline;
+             'origin: '->putText;
+             current.origin[]->getPatternName->putLine;
+             current.origin[]->getprototype->putint;
+             newline;
+             'editorenv: '->putText;
+             'origin: '->putText; editorenv## -> ee##;
+             (@@ee -> tos'%AdrGetLong') + 8 -> tos'%AdrGetLong' -> putint;
+             newline;
+             ee##->getprototypeforStruc->putint;
+             newline;
+             (if current## = ee## then
+                 'is equal to editorenv'->putline
+             if)
+          #);
+        newline;
         objectPool.get
           (#
              type:: editorEnv;
@@ -117,9 +168,13 @@ do
                (# 
                do
                   'init editorEnv from codeeditor'->putLine;
+                  true->inithere;
                   (mps[],betagrammar[],UI[])->obj.init
                #)
           #)->edenv[];
+        (if inithere then
+            edenv.initiator[]->putLine; 'codeeditor'->edenv.initiator[]->putLine
+        if);
         &undoElemType[]->undoElem[];
         &expmenuprivate[]->expandmenuprivate[];
         &texteditingPrivate[]->TE[];
@@ -183,6 +238,8 @@ do
         (* group editing *)
         false->edenv.trace[7];
         (* touched trace *)
-        false->edenv.trace[8] (* history trace *)
+        false->edenv.trace[8];
+        (* history trace *)
+        false->edenv.trace[9] (* propertyEditor *)
      #)  
 
