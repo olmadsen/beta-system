@@ -114,11 +114,17 @@ void ExtVR(ref(Object) theObj,
     /* Assign into theObj */
     AssignReference((long *) theObj + offset, cast(Item) newRep);
     
-    /* Copy contents of old rep to new rep */
-    for (i = 0; i < copyRange; ++i)
-      newRep->Body[i] = theRep->Body[i];
+    if (isValRep(theRep)){
+      /* Copy contents of old rep to new rep */
+      for (i = 0; i < copyRange; ++i)
+	newRep->Body[i] = theRep->Body[i];
+    } else {
+      /* Object Rep */
 
-    if (isObjectRep(theRep)){
+      /* Copy contents of old rep to new rep */
+      for (i = 0; i < copyRange; ++i)
+	NEWREP->Body[i] = theRep->Body[i];
+
       NEWREP->iProto = REP->iProto;
       NEWREP->iOrigin = REP->iOrigin;
 

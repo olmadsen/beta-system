@@ -87,6 +87,10 @@ void CCopyVR(ref(ValRep) theRep,
 
       size -= headsize(ValRep); /* adjust size to be bodysize */
 
+      /* Copy theRep to newRep. Copy the whole body as longs */
+      for (i = 0; i < size/4; ++i)
+	newRep->Body[i] = theRep->Body[i];
+
     } else {
       /* object-repetition */
       size = DispatchObjectRepSize(theRep->Proto, range, REP->iProto);
@@ -104,11 +108,11 @@ void CCopyVR(ref(ValRep) theRep,
       NEWREP->iProto = REP->iProto;
 
       size -= headsize(ObjectRep); /* adjust size to be bodysize */
-    }
 
-    /* Copy theRep to newRep. Copy the whole body as longs */
-    for (i = 0; i < size/4; ++i)
-      NEWREP->Body[i] = theRep->Body[i];
+      /* Copy theRep to newRep. Copy the whole body as longs */
+      for (i = 0; i < size/4; ++i)
+	NEWREP->Body[i] = theRep->Body[i];
+    }
         
     AssignReference((long *)theObj + offset, cast(Item) newRep);
 }
