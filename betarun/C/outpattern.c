@@ -1885,9 +1885,18 @@ void NotifyErrorDuringDump(BetaErr errorNumber, BetaErr errorNumber2)
     fprintf(stderr, "%s", buffer);
     fflush(stderr);
     fflush(stdout);
-    fprintf(stderr, "NotifyErrorDuringDump: Showing MsgBox. isMakingDump=%d\n", (int)isMakingDump); fflush(stderr);
+    DEBUG_CODE({
+      fprintf(stderr, 
+	      "NotifyErrorDuringDump: Showing MsgBox. isMakingDump=%d\n", 
+	      (int)isMakingDump); 
+      fflush(stderr);
+    });
     Notify(buffer);
-    fprintf(stderr, "NotifyErrorDuringDump: MsgBox done\n"); fflush(stderr);
+    DEBUG_CODE({
+      fprintf(stderr, 
+	      "NotifyErrorDuringDump: MsgBox done\n"); 
+      fflush(stderr);
+    });
   }
   return;
 }

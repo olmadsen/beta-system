@@ -421,9 +421,9 @@ void valhallaInit (int debug_valhalla)
 
   /* Initialize DOT */
 
-  fprintf(output, "DOTinit()\n");
+  /*fprintf(output, "DOTinit()\n");*/
   DOTinit ();
-  fprintf(output, "DOTinit() done\n");
+  /*fprintf(output, "DOTinit() done\n");*/
   /* Do initial communication with valhalla. ValhallaCommunicate returns
    * what to do next. */
 
@@ -721,7 +721,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 { 
   int opcode=0;
   
-  fprintf(output,"debuggee: valhallaCommunicate\n");
+  /*fprintf(output,"debuggee: valhallaCommunicate\n");*/
   
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhallaCommunicate\n"));  
   while (TRUE) {
