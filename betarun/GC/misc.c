@@ -1015,11 +1015,6 @@ static void initLabels(void)
   addLabelsFromGroupTable();
 
   INFO_LABELS(fprintf(output, " done]"); fflush(output));
-#ifdef sgi
-  fprintf(output, 
-	  "[*** NOTICE: initLabels: if linked shared, "
-	  "most symbols will be missing!] ");
-#endif
 
   DEBUG_LABELS({
     fprintf(output, "Labels:\n");
