@@ -321,18 +321,18 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       staticObj = *(handle(Object))addr;
     else
       staticObj = 0;
-    if( staticObj )
-      if( isObject( staticObj ) ){
-	fprintf(output,"    -- ");
-	theProto = staticObj->Proto;
+    if( staticObj && isObject( staticObj ) ){
+      fprintf(output,"    -- ");
+      theProto = staticObj->Proto;
+      fprintf(output,"%s", ProtoTypeName(theProto));
+      while(theProto->Prefix &&
+	    theProto->Prefix->Prefix != theProto->Prefix){
+	theProto = theProto->Prefix;
 	fprintf(output,"%s", ProtoTypeName(theProto));
-	while(theProto->Prefix &&
-	      theProto->Prefix->Prefix != theProto->Prefix){
-	  theProto = theProto->Prefix;
-	  fprintf(output,"%s", ProtoTypeName(theProto));
-	}
-	fprintf(output, " in %s\n", GroupName((long)theObj->Proto,0) );
       }
+      fprintf(output, " in %s\n", GroupName((long)theObj->Proto,0) );
+    } else {
+      fprintf(output,"    -- Surrounding object damaged!\n");
   }
 }
 
