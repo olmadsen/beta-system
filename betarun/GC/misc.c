@@ -5,7 +5,13 @@
  */
 
 #include "beta.h"
+
+#ifdef MAC
+#include "trie.h"
+#else
 #include "../P/trie.h"
+#endif /* MAC */
+
 
 void misc_dummy()
 {
