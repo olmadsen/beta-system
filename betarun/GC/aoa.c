@@ -41,9 +41,9 @@ static ref(Object) AOAalloc( size)
   ptr(long)  oldTop;
 
   DEBUG_CODE( Claim(size > 0, "AOAalloc: size > 0") );
-  DEBUG_AOA(if (AOATopBlock) 
+  /*DEBUG_AOA(if (AOATopBlock) 
 	    fprintf(output, "AOATopBlock 0x%x, diff 0x%X\n",
-		    AOATopBlock, (long)AOATopBlock->limit - (long)AOATopBlock->top));
+		    AOATopBlock, (long)AOATopBlock->limit - (long)AOATopBlock->top));*/
   
   if( AOABaseBlock == 0){
     if( MallocExhausted || (AOABlockSize == 0) ) return 0;
