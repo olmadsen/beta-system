@@ -29,9 +29,9 @@
 #define GCable_Entry()
 #define GCable_Exit(v)
 
-extern char *a1;
+extern long a1;
 #define CallBetaEntry(entry,item)	                \
-    a1=(char *)(item); (* (void (*)()) (entry))()
+    a1=(long)(item); (* (void (*)()) (entry))()
 
 extern void pushAdr(long *a);
 extern long *popAdr();
