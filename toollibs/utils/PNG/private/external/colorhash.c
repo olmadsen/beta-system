@@ -72,8 +72,8 @@ long  ColorHashLookup(ColorHash *hash, Color *color)
   
   if(hash->special_set) {
     if(hash->special.red == color->red
-       || hash->special.green == color->green
-       || hash->special.blue == color->blue)
+       && hash->special.green == color->green
+       && hash->special.blue == color->blue)
       {
         return 0;
       }
