@@ -21,6 +21,10 @@ ContainerList: List
 
 AstInterface:
   (# <<SLOT AstInterfaceLib: attributes>>;
+     theCatcher: ^Object;
+     offendingFormName: ^Text;
+     doRealOpen: @boolean;
+     
      astLevelInit:<
        (#
        do thePathHandler.init;
@@ -87,6 +91,38 @@ AstInterface:
             enter (# enter  error do (if error > 0 then true -> hasSemanticError; else false -> hasSemanticError if); #)
             exit error
             #);
+	  pack:<
+	    (# output: ^Stream;
+	       putValue:
+	         (# value: @integer;
+		 enter value
+		 <<SLOT ASTPackPutValue: doPart>>
+		 #);
+	       putAstRef:
+	         (# ref: ^AST;
+		 enter ref[]
+		 <<SLOT AstPackPutAstRef: doPart>>
+		 #);
+	    enter output[]
+	    <<SLOT AstPack: doPart>>
+	    #);
+	  unPack:<
+	   (# input: ^Stream;
+	      inx: @integer;
+	      getValue:
+	        (# value: @integer;
+		<<SLOT AstUnPackGetValue: doPart>>
+		exit value
+		#);
+	      getAstRef:
+	        (# ref: ^AST;
+		   inx: @integer;
+		<<SLOT AstUnPackGetAstRef: doPart>>
+		exit ref[]
+		#);
+	   enter input[]
+	   <<SLOT AstUnPack: doPart>>
+	   #);
           dump:<
             (# level: @integer;
                output: ^stream;
@@ -201,6 +237,15 @@ AstInterface:
             #);
           category: @integer;
           isBound: @boolean;
+	  
+	  pack::
+	    (#
+	    <<SLOT SlotDescPack: doPart>>
+	    #);
+	  unPack::
+	    (#
+	    <<SLOT SlotDescUnPack: doPart>>
+	    #);
           dump::<
             (# <<SLOT SlotDescDump: doPart>> #);
        exit prodNo.slotDesc
@@ -225,6 +270,10 @@ AstInterface:
             do t.T[1: t.lgth] -> value;
                t.lgth -> lgth;
             #);
+	  pack::<
+	    (# <<SLOT LexemTextPack: doPart>> #);
+	  unpack::<
+	    (# <<SLOT LexemTextUnPack: doPart>> #);
           dump::<
             (# <<SLOT LexemTextDump: doPart>> #);
        #);
@@ -253,7 +302,6 @@ AstInterface:
      Const: LexemText
        (# dump::<
             (# <<SLOT ConstDump: doPart>> #);   
-          
        exit prodNo.const
        #);
      
@@ -328,9 +376,9 @@ AstInterface:
             enter input[]
             do INNER;
             #);
+         close: (# do INNER #); 
           
-          
-          
+          checkDiskRepresentation: (# do INNER #);
           prop: ^PropertyList;
           nameT, fullnameT: ^text;
           fatherR: ^FragmentGroup;
@@ -367,8 +415,37 @@ AstInterface:
             (#
             exit (0, this(FragmentForm)[])
             #);
+	  pack::
+	    (#
+	    <<SLOT FragmentFormPack: doPart>>
+	    #);
+	  unPack::
+	    (#
+	    <<SLOT FragmentFormUnpack: doPart>>
+	    #);
           init::< (# do FormType -> fragtype; INNER #);
-          grammar: ^treeLevel
+	  
+	  register:
+	  (# frag: ^FragmentForm;
+	     index: @integer;
+	  enter frag[]
+	  <<SLOT FragmentFormRegister: doPart>>
+	  exit index
+	  #);
+	lookup:
+	  (# frag: ^FragmentForm;
+	     index: @integer;
+	  enter index
+	  <<SLOT FragmentFormLookup: doPart>>
+	  
+	  exit frag[]
+	  #);
+
+
+	  import: [1] ^FragmentForm;
+	  importtop: @integer;
+	  table: [0] ^Ast;
+          grammar: ^treeLevel;
        #);
      newFragmentGroup:
        (* returns a new instance of fragmentGroup *)
@@ -407,10 +484,10 @@ AstInterface:
             <<SLOT FragmentGroupScanSlots: doPart>>
             #);
           markAsChanged: protect
-            (# #);
+            (# do save #);
           realOpen: protect
             (# #);
-          modtime: integerValue (# #);
+          modtime: @integer;
           Include:
             (# linkname: ^text;
                fullname:
@@ -422,23 +499,21 @@ AstInterface:
           loadIncludes:
             (# <<SLOT FragmentGroupLoadIncludes: doPart>> #);
           save:
-            (# filename: ^Text;
-               failure:< Exception
+            (# failure:< Exception
                  (# what: ^Text;
                  enter what[]
                  <<SLOT FragmentGroupSaveFailure: doPart>>
                  #);
-            enter filename[]
             <<SLOT FragmentGroupSave: doPart>>
             #);
           load:
-            (# filename: ^Text;
-               failure:< Exception
+            (# failure:< Exception
                  (# what: ^Text;
                  enter what[]
                  <<SLOT FragmentGroupLoadFailure: doPart>>
                  #);
-            enter filename[]
+	        name: ^Text;
+            enter name[]
             <<SLOT FragmentGroupLoad: doPart>>
             #);
           init::<
@@ -455,6 +530,11 @@ AstInterface:
             #);
           controller: @
             (# status: @integer;
+	       ancestorTime: @integer;
+	       ancestorsChecked: @boolean;
+	       doneCheck: @boolean;
+	       groupT: @Integer;
+	       printName: ^Text;
             #);
           isRealOpen: @boolean;
        #);
@@ -477,13 +557,14 @@ AstInterface:
           if)
        exit newPN[]
        #);
+     astFileExtension: (# exit '.byt' #);
      expandToFullPath:
        (# name: ^text;
        enter name[]
        exit (name[],currentDirectory)->thePathHandler.convertFilePath
        #);
      TOP: @
-       (# open:
+       (# open: protect
             (# name: ^Text;
                error: ^Stream;
                group: ^FragmentGroup;

@@ -2,13 +2,82 @@ ORIGIN '../astlevel';
 INCLUDE '../propertyparser';
 INCLUDE '~beta/basiclib/file';
 INCLUDE '../bytestream';
+INCLUDE '../donecheck';
 
 
 -- AstInterfaceLib: attributes --
+
+
 groupMagicNumber1: (# exit 0x79657321 #);
 groupMagicNumber2: (# exit 0x6173742E #);
 groupVersion: (# exit 1 #);
 
+
+-- FragmentFormLib: attributes --
+
+  
+packAst:
+  (# output: ^Stream;
+     table: @ContainerList
+         (# element:: Ast;
+	 #);
+      index: @integer;
+      exp: ^Expanded;
+  enter output[]
+  do root[] -> exp[];
+      exp.suffixWalk
+        (#
+	do index + 1 -> index;
+	   index -> current.inx;
+	   current[] -> table.append;
+	#);
+      index -> output.putInt32u;
+      table.scan
+        (# slot: ^SlotDesc;
+	do (if current.symbol = prodNo.unExpanded then
+	      (if current.isSlot then
+	         current.theSlot -> slot[];
+		 slot.category -> output.putInt16u;
+	      else
+	         prodNo.unExpanded -> output.putInt16u;
+	      if);
+	   else
+	      current.symbol -> output.putInt16u;
+	   if);
+	#);
+      table.scan
+        (#
+	do output[] -> current.pack;
+	#);
+      (if firstSlot[] = NONE then
+        0 -> output.putInt32u;
+      else
+         firstSlot.inx -> output.putInt32u;
+      if);
+  #);
+unPackAst:
+  (# size: @integer;
+      symbol: @int16;
+      input: ^Stream;
+      index: @integer;
+   enter input[]
+   do  input.getInt32u -> size;
+       size -> table.new;
+       (for inx: size repeat
+           input.getInt16u -> symbol;
+	   symbol -> grammartable.beta.symbolToAst -> table[inx][];
+	   THIS(FragmentForm)[] -> table[inx].form[];
+	   inx -> table[inx].inx;
+       for);
+       (for inx: size repeat
+	   input[] -> table[inx].unPack;
+       for);
+       table[1][] -> root[];
+       input.getInt32u -> index;
+       (if index > 0 then
+          table[index][] -> firstSlot[];
+       if);
+   #);
 -- FragmentFormCategory: doPart --
 do root.symbol -> sy;
 
@@ -20,14 +89,102 @@ do firstSlot[] -> current[];
          current.nextSlot[] -> current[];
          restart loop; 
      if);
+     
+-- FragmentFormPack: doPart --
+do (# data: ^Text;
+      groupID: ^Text;
+   do &Text[] -> data[];
+      data[] -> packAst;
+      importtop -> output.putInt32u;
+      (for inx: importtop repeat
+	 (THIS(AstInterface)[], import[inx].father) -> getGroupIDProperty -> groupID[];
+	 
+         (import[inx].father).fullname -> output.putBinText;
+	 import[inx].name -> output.putBinText;
+	 groupID[] -> output.putBinText;
+      for);
+      data[] -> output.putBinText;
+   #);
    
+-- FragmentFormUnpack: doPart --
+do (# fullname: ^Text;
+      name: ^Text;
+      data: ^Text;
+      group: ^astInterface.FragmentGroup;
+      groupID: ^TEXT;
+      value: ^Text;
+      clear: @boolean;
+   do input.getInt32u -> importtop;
+      importtop + 1 -> import.new;
+      (for inx: importtop repeat
+         input.getBinText -> fullname[];
+	 input.getBinText -> name[];
+	 input.getBinText -> groupID[];
+	 (fullname[], screen[]) -> top.open  -> group[];
+	 (if group[] <> NONE then
+	     (THIS(AstInterface)[], group[]) -> getGroupIDProperty -> value[];
+	    (if value[] <> NONE then
+	            (if groupID[] -> value.equal then
+			    search: group.scan
+			      (#
+			      do (if current.name -> name.equalNCS then
+				    current[] -> import[inx][];
+				    leave search;
+				 if);
+			      #);
+		    if);
+	    if);
+	 if);
+	 
+      for);
+      
+      (for inx: importtop repeat
+         (if import[inx][] = NONE then
+	    true -> clear;
+	 if);
+      for);
+      (if clear then
+         1 -> import.new;
+	 0 -> importtop;
+      if);
+      input.getBinText -> data[];
+      data.reset;
+      data[] -> unPackAst;
+   #);
+   
+   
+-- FragmentFormRegister: doPart --
+do search:
+     (#
+     do  
+         (for inx: importtop repeat
+	   (if frag[] = import[inx][] then
+	      inx -> index;
+	      leave search;
+	   if);
+	 for);
+	 importtop + 1 -> importtop;
+	 (if importtop = import.range then
+	    importtop -> import.extend;
+	 if);
+	 frag[] -> import[importtop][];
+	 importtop -> index;
+     #);
+-- FragmentFormLookup: doPart --
+do (if (index > 0) AND (index <= importtop) then
+      import[index][] -> frag[];
+   if);
+	   
+	     
 -- FragmentGroupScan: doPart --
 do fragmentlist.scan
    (#
    do current[] -> this(scan).current[];
       INNER scan;
    #);
-
+   
+  
+	    
 -- FragmentGroupSetupOrigin: doPart --
 do
    FindOrigin: THIS(fragment).prop.ScanProp
@@ -97,7 +254,7 @@ do search: scanSlots
            f[] -> (origin).bind -> op[];
        if);
    if);
-
+   
 -- FragmentGroupScanSlots: doPart --
 do scan
    (# frag: ^FragmentForm;
@@ -149,10 +306,14 @@ do saving:
      (# output: @File
           (# binary:: (# do true -> value #);
           #);
-     do filename[] -> output.name;
+	filename: ^Text;
+     do (fullname).copy -> filename[];
+        '.byt' -> filename.append;
+        filename[] -> output.name;
         output.openWrite;
         output[] -> pack;
         output.close;
+	output.entry.modtime (# error:: (# do true -> continue #) #) -> modtime;
      #);
 
 -- FragmentGroupLoadFailure: doPart --
@@ -163,21 +324,63 @@ do loading:
      (# input: @File
           (# binary:: (# do true -> value #);
           #);
-     do filename[] -> input.name;
+	filename: ^Text;
+	
+	stripExtension:
+          (# path: ^text;
+             stripped: ^text;
+             dotPos: @integer;
+             slashPos: @integer;
+             
+          enter path[]
+          do (if path[] <> NONE then
+                 (if path.length > 0 then
+                     directoryChar -> path.findAll
+                     (#
+                     do inx -> slashPos;
+                     #);
+                     '.' -> path.findAll
+                     (#
+                     do inx -> dotPos;
+                     #);
+                     (if dotPos > slashPos then
+                         (1, dotpos -1) -> path.sub -> stripped[];
+                      else
+                         path.copy -> stripped[]
+                     if);
+                     
+                 if);
+             if);
+          exit stripped[]
+          #);
+	fullname: ^Text;
+     do name[] -> expandToFullPath -> fullname[];
+        fullname[] -> stripExtension -> fullname[];
+	fullname.copy -> filename[];
+	'.byt' -> filename.append;
+        filename[] -> input.name;
+	fullname.copy -> THIS(FragmentGroup).fullname;
+	fullname.copy -> THIS(FragmentGroup).name;
         input.openRead;
         input[] -> unpack;
         input.close;
+	input.entry.modtime (# error:: (# do true -> continue #) #) -> modtime;
      #);
 
 
 -- FragmentGroupPack: doPart --
-do groupMagicNumber1 -> output.putInt32u;
-   groupMagicNumber2 -> output.putInt32u;
-   groupVersion -> output.putInt32u;
-   fragmentlist.size -> output.putint32u;
-   fragmentlist.scan
-   (#
-   do current.nameT[] -> output.putBinText;
+do (#
+   do groupMagicNumber1 -> output.putInt32u;
+      groupMagicNumber2 -> output.putInt32u;
+      groupVersion -> output.putInt32u;
+      output[] -> prop.pack;
+      fragmentlist.size -> output.putInt32u;
+      fragmentlist.scan
+        (#
+        do current.name -> output.putBinText;
+	   output[] -> current.pack;
+        #);
+      
    #);
 
 -- FragmentGroupUnpack: doPart --
@@ -186,6 +389,7 @@ do unpacking:
         version: @int32u;
         no: @integer;
         frag: ^fragmentForm;
+	data: ^Text;
      do input.getInt32u -> magic1;
         (if magic1 <> groupMagicNumber1 then
             'wrong magic' -> putline;
@@ -201,14 +405,16 @@ do unpacking:
             'wrong version' -> putline;
             leave unpacking;
         if);
+	&PropertyList[] -> prop[];
+	input[] -> prop.unPack;
         input.getInt32u -> no;
         (for no repeat
              grammartable.beta[] -> newFragmentForm -> frag[];
              input.getBinText -> frag.nameT[];
+	     input[] -> frag.unPack;
              frag[] -> fragmentList.append;
              THIS(FragmentGroup)[] -> frag.father;
         for);
-        'success' -> putline;
      #);
    
 -- AstInterfaceTopOpen: doPart --
@@ -266,7 +472,9 @@ do opengroup:
              if);
           exit stripped[]
           #);
-     do name[] -> expandToFullPath -> fullname[];
+	  
+	bytfile: @file;
+     do  name[] -> expandToFullPath -> fullname[];
         fullname[] -> stripExtension -> fullname[];
         
         
@@ -279,13 +487,27 @@ do opengroup:
         (if group[] <> NONE then
             leave openGroup;
         if);
+	
+	
+	
         
         newFragmentGroup -> group[];
         fullname.copy -> group.name;
         fullname.copy -> group.fullname;
         
         group[] -> grouptable.insert;
+	
+	
+	'.byt' -> (fullname.copy).append -> bytfile.name;
         
+	(if bytfile.entry.exists then
+	   bytfile.openRead;
+	   bytfile[] -> group.unPack;
+	   bytfile.close;
+	   bytfile.entry.modtime -> group.modtime;
+	   leave openGroup;
+	if);
+	
         grammarTable.beta[] -> beta[];
         '.bet' -> (fullname.copy).append -> input.name;
         input.openRead;
@@ -332,6 +554,7 @@ do opengroup:
               if);
           if);
         input.close;
+	group.save;
      #);
 -- AstInterfacePrivate: descriptor --
 (#
