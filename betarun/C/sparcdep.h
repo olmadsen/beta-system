@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-06-15 20:50:36 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-07-31 16:33:01 $, SID: $Revision: 1.2 $
  * by Tommy Thorn
  */
 
@@ -74,3 +74,10 @@ register long   retAddress   asm("%i7");
 #define NOP 0x1000000
 
 
+/* Redefine inIOA as to make gcc generate optimal code */
+#ifdef inIOA
+#undef inIOA
+#endif
+
+/* Isn't life swell? */
+#define inIOA(x) (((unsigned) x - (unsigned) IOA) < (unsigned) IOATopoff)
