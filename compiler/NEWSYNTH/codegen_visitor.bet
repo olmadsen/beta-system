@@ -1,12 +1,22 @@
-ORIGIN '~beta/grammars/beta/betacfl';
+(*ORIGIN '~beta/grammars/beta/betacfl';*)
+ORIGIN '../SYNTHESIZER/synthesizerbody';
 INCLUDE '~beta/grammars/beta/betasem';
 INCLUDE '../GENERATOR/machine';
-INCLUDE 'gen';
----cfllevellib:attributes---
-IVisitor: visitor
-  (# G: ^gen
-  enter G[]
+INCLUDE '../SYNTHESIZER/signature';
+INCLUDE '../SYNTHESIZER/genlib_bytecode';
+INCLUDE 'newgen';
+(*---cfllevellib:attributes---*)
+---thegenlib:attributes---
+a2i:
+  (# A: ^ast; I: @ASTindex
+  enter A[]
+  do A[] -> astAsAstIndex -> I
+  exit I[]
   #);
+IVisitor: visitor
+  (# G: ^newgen
+  enter G[]
+  #); 
 FormVisitor: Ivisitor
   (#  visit_descriptorForm::
        (#
@@ -77,14 +87,20 @@ CodeGenVisitor: Ivisitor
        do 'prefix:'->puttext
        #);
      visit_patternDecl::
-       (# OD: ^beta.ObjectDescriptor
-       do N.getObjectDescriptor -> OD[];
-          (G[],'foo',OD[],false) -> genPtnMethod;
+       (# OD: ^beta.ObjectDescriptor;
+          NS: ^beta.names
+       do N.getNames -> NS[];
+          N.getObjectDescriptor -> OD[];
+          ns.newScan
+          (# ND: ^NameDecl
+          do current.getNameDecl->ND[];
+             (G[],ND.getText,OD[],false) -> genPtnMethod;
+          #);
           this(CodeGenVisitor)[] -> OD.accept
        #);
      visit_mainPart::
        (# A: ^beta.attributes;
-          M: ^Beta.actionPart
+          M: ^Beta.actionPart;
        do 
           N.getAttributes -> A[];
           A.newScan
@@ -96,21 +112,42 @@ CodeGenVisitor: Ivisitor
           this(CodeGenVisitor)[] -> M.accept
        #);
      visit_actionPart::
-       (# A: ^ast; dp: ^beta.doPart;
+       (# A: ^ast; doP: ^beta.doPart;
        do N.getDoPartOpt -> A[]; 
           (if A## // optional## // unexpanded## then
            else
-              A[] -> dp[];
-              this(CodeGenVisitor)[] -> dp.accept
+              A[] -> doP[];
+              this(CodeGenVisitor)[] -> doP.accept
           if)
        #);
      visit_doPart::
-       (# imps: ^beta.imperatives
-       do 'dopart:'->putline;
-          (0,'do_1',false,'do(I)V',0) -> G.mch.initDo;
+       (# imps: ^beta.imperatives;
+          sig: @signature;
+          D: @ASTindex;
+          innerName,methodName: ^text;
+          subLevel: @integer; (* currently no value *)
+          GD: @GenDo
+       do 'dopart:'->puttext;
+          ((N.father).father).father -> astAsAstIndex -> D;
+          (D[],thisSuperChain,false) -> sig.setMethodDesc;
+          sig.noEnter;
+          sig.exitVoid;
+          (common.doMethod,subLevel) 
+            -> methodAndInnerName 
+            -> (methodName[],innerName[]);
+          methodName[] -> sig.addMethod;
+          sig.asText -> putline;
+          (0,innerName[],false,sig.asText,0) -> G.mch.initDo;
 
-          N.getImperatives -> imps[];
-          imps.newScan(#do this(CodeGenVisitor)[] -> current.accept #);
+          true -> inEnterDoExitMethod;
+          GD.restartLab.new; 
+          GD.restartLab.def;                 
+          N.getImperatives 
+            -> astAsAstIndex
+            -> GD.Scan;
+          (* false -> inDoPartWithTmp*)
+          false -> inEnterDoExitMethod;
+
           (false,0) -> G.mch.return;
           G.mch.endMethod
        #);
@@ -189,24 +226,24 @@ DescName: Ivisitor
   #);
 
 GenClass:
-  (# G: ^gen;
+  (# G: ^newgen;
      path: ^text;
      desc: ^beta.objectDescriptor;
      blockLevel: @integer;
   enter(G[],path[],desc[],blockLevel)
-  <<SLOT genClass:doPart>>
+  <<SLOT new_genClass:doPart>>
   #);
 GenPtnMethod:
-  (# G: ^gen;
+  (# G: ^newgen;
      methodName: ^text;
      desc: ^beta.objectDescriptor;
      isStatic: @boolean
   enter(G[],methodName[],desc[],isStatic)
-  <<SLOT GenPtnMethod:doPart>>
+  <<SLOT new_GenPtnMethod:doPart>>
   #);
 isJava: (# exit true #); (* perhaps isJava in com.bet *)
 
----genClass:doPart---
+---new_genClass:doPart---
 do (# className: @descName;
       superDesc,supername,orgName: ^text;
       subLevel: @integer;
@@ -215,6 +252,8 @@ do (# className: @descName;
           (* open file *)
       if);
       '\nGenClass: '->puttext;
+      desc[] -> astAsAstIndex -> thisDesc;
+      '***'->putline;
       G[] -> className;
       className[] -> (desc.father).accept;
       className.name[] -> putline;
@@ -239,12 +278,39 @@ do (# className: @descName;
       do (G[],G.BCname[],current[],1) -> genClass
       #)
    #)
----GenPtnMethod:doPart---
-do (# 
-   do  
-      (0,methodName[],true,'foo(I)V',0) -> G.mch.initDo;
+---new_GenPtnMethod:doPart---
+do (# sig: @signature;
+      nScan,xScan: @sematt.nxScanner;
+      hasNcode,hasDoCode,hasXcode: @boolean;
+      exitId: @integer;
+      exitVal: ^ASTindex
+   do desc[] -> astAsAstIndex -> thisDesc;
+      true -> hasDoCode;
+      (desc[]->a2i,true,thisSuperChain) -> nScan;
+      nScan.length > 0 -> hasNcode;
+      (desc[]->a2i,false,thisSuperChain) -> xScan;
+      xScan.length > 0 -> hasXcode;
+      
+      (desc[]->a2i,thisSuperChain,false) -> sig.setMethodDesc;
 
-      (false,0) -> G.mch.return;
+      (if isStatic then sig.markStatic if);
+      desc[]->a2i -> sig.addEnter;
+      exitP[] -> sig.addExit;
+      methodName[] -> sig.addMethod;
+      
+      sig.exitId -> exitId;
+      sig.exitVal[] -> exitVal[];
+      
+      sig.exitVal[] <> none -> hasXcode; (* note we override hasXcode
+                                          * above; exitP is only for
+                                          * the mainpart; possible exitlist
+                                          * in superpatterns are not
+                                          * handled
+                                          *)
+
+      (0,methodName[],true,sig.asText,sig.noOfEnterArgs) -> G.mch.initDo;
+
+      (false,exitId) -> G.mch.return;
       G.mch.endMethod
    #)
    
