@@ -218,5 +218,6 @@ long tstrealX()
  x = tstreal12(1.1,2.2,3.3,4.4);
 }
 
-
-
+void flush_stdout(void){
+  fflush(stdout);
+}
