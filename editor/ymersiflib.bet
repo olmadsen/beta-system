@@ -29,6 +29,10 @@ fragmentBrowser: ymerApplication
                refreshGroup::  (#  do (cb[],fg[],none )->updateBrowser #);
                findAndSelect:: 
                  (#  do node[]->THIS(ymerBrowserWindow).findAndSelect #);
+               getFragmentGroup:: 
+                 (# 
+                 do name[]->mps.fragmentGroupTable.getFragmentGroup->fg[]
+                 #);
                check:: 
                  (#  do fg[]->THIS(ymerBrowserWindow).check->status #);
                betaenvVersion:: 
@@ -65,6 +69,12 @@ fragmentBrowser: ymerApplication
                         ('*',10)->t.inxPut;
                         t[]->locationView.label
                     if)
+                 #);
+               externalTextEdit:: 
+                 (# 
+                 do
+                    textBefore[]->THIS(ymerBrowserWindow).externalTextEdit
+                      ->textAfter[]
                  #)
             #);
           doCommand:
@@ -126,7 +136,7 @@ fragmentBrowser: ymerApplication
                cbg: (* current browser group *) ^browser.projects.group
             enter (cb[],fg[],ff[])
             do
-               (if cb[] <> none then
+               (if (cb[] <> none ) and (cb## <= sourceBrowser##) then
                    cb[]->browser[];
                    browser.currentgroup[]->cbg[];
                    (if (cbg[] <> none ) and (cbg.fg[] = fg[]) then
@@ -277,9 +287,15 @@ fragmentBrowser: ymerApplication
             enter t
             do <<SLOT commFrejaHandleFrejaCommand:Descriptor>>; 
             #);
-          lastCompiledFg:
-            ^astInterface.
-               fragmentGroup;
+          externalTextEdit:<
+            (#
+               textBefore,
+                 textAfter: ^text
+            enter textBefore[]
+            do INNER
+            exit textAfter[]
+            #);
+          lastCompiledFg: ^astInterface.fragmentGroup;
           compilerPrivate: @<<SLOT compilerPrivate:Descriptor>>;
           activateCompiler:
             (#
@@ -722,6 +738,7 @@ fragmentBrowser: ymerApplication
                            (#  do THIS(workspace).cfe[]->cfe[] #);
                          setup:
                            (# 
+                           enter useExternalTextEditor
                            do open; THIS(editMenu)[]->THIS(menubarType).append
                            #)
                       #);
@@ -739,7 +756,7 @@ fragmentBrowser: ymerApplication
                       (# 
                       do
                          fileMenu.setup;
-                         editMenu.setup;
+                         useExternalTexteditor->editMenu.setup;
                          isBETAsif->viewMenu.setup;
                          importMenu.setup;
                          scrollMenu.setup;
@@ -757,6 +774,7 @@ fragmentBrowser: ymerApplication
                          formEditorExists::  (#  do fe[]->cfe[] #);
                          setup:
                            (# 
+                           enter useExternalTextEditor
                            do open; THIS(editMenu)[]->THIS(menubarType).append
                            #)
                       #);
@@ -773,7 +791,7 @@ fragmentBrowser: ymerApplication
                       (# 
                       do
                          fileMenu.setup;
-                         editMenu.setup;
+                         useExternalTexteditor->editMenu.setup;
                          isBETAsif->viewMenu.setup;
                          buffersMenu.setup
                       #)
@@ -891,7 +909,7 @@ fragmentBrowser: ymerApplication
                            (#
                               ge: ^editorenv.groupEditor;
                               help: ^text;
-                              cancelled: @boolean
+                              cancelled,done: @boolean
                            enter ge[]
                            do
                               'Save changes to '->help[];
@@ -900,9 +918,30 @@ fragmentBrowser: ymerApplication
                               (THIS(ymerBrowserWindow)[],'Save group',help[])
                                 -> (*UI.*) promptForBoolean
                                   (#
-                                     ok::<  (#  do (true,false)->ge.save #);
-                                     notOK::<  (#  do  #);
-                                     cancel::<  (#  do true->cancelled #);
+                                     done: @boolean;
+                                     ok::< 
+                                       (# 
+                                       do
+                                          (if not done then
+                                              hide;
+                                              true->done;
+                                              (true,false)->ge.save
+                                          if)
+                                       #);
+                                     notOK::< 
+                                       (# 
+                                       do
+                                          (if not done then
+                                              hide; true->done
+                                          if)
+                                       #);
+                                     cancel::< 
+                                       (# 
+                                       do
+                                          (if not done then
+                                              hide; true->done; true->cancelled
+                                          if)
+                                       #);
                                      
                                   #)
                            exit cancelled
@@ -1383,12 +1422,71 @@ fragmentBrowser: ymerApplication
                       #);
                     
                  #);
+               Test: @TestMenuType;
+               testMenuType:< simplemenu
+                 (#
+                    iuseExternalTextEditor: @item
+                      (#
+                         onStatus:: 
+                           (# 
+                           do true->value; edenv.useExternalTextEditor->checked
+                           #);
+                         onSelect:: 
+                           (# 
+                           do
+                              not edenv.useExternalTextEditor
+                                ->edenv.useExternalTextEditor
+                           #)
+                      #);
+                    iEventTrace: @item
+                      (#
+                         onStatus:: 
+                           (#  do true->value; edenv.trace[7]->checked #);
+                         onSelect:: 
+                           (# 
+                           do
+                              not edenv.switch[7]->edenv.switch[7];
+                              not edenv.trace[7]->edenv.trace[7]
+                           #)
+                      #);
+                    iTraceStart: @item
+                      (#
+                         onStatus:: 
+                           (#  do true->value; edenv.trace[2]->checked #);
+                         onSelect:: 
+                           (#  do not edenv.trace[2]->edenv.trace[2] #)
+                      #);
+                    iTraceGetNextComment: @item
+                      (#
+                         isSet: @boolean;
+                         onStatus::  (#  do true->value; isSet->checked #);
+                         onSelect:: 
+                           (# 
+                           do
+                              (mps.ast.trace.getNextComment,true)
+                                ->mps.ast.trace.set;
+                              true->isSet
+                           #)
+                      #);
+                    open::< 
+                      (# 
+                      do
+                         'Use emacs'->iUseExternalTextEditor.new;
+                         newSeparator;
+                         'Trace start'->iTraceStart.new;
+                         'Event trace'->iEventTrace.new;
+                         'Trace getnextComments'->iTraceGetNextComment.new;
+                         INNER
+                      #);
+                    
+                 #);
                open::< 
                  (# 
                  do
                     fileMenu.setup;
                     projectMenu.setup;
                     'Group'->GroupFile.new;
+                    useExternalTexteditor->Edit.useExternalTextEditor;
                     Edit.new;
                     Edit[]->append;
                     isBETAsif->View.BETAsif;
@@ -1402,7 +1500,8 @@ fragmentBrowser: ymerApplication
        #);
      inithere: @boolean;
      isBETAsif:< booleanValue;
-     editorVersion: (#  exit '5.0.2(5) Pre-release' #);
+     useExternalTextEditor:< booleanValue;
+     editorVersion: (#  exit '5.0.2(6) Pre-release' #);
      compilerVersion:
        (# version: ^text
        <<SLOT sifCompilerVersion:DoPart>>
@@ -1439,6 +1538,8 @@ fragmentBrowser: ymerApplication
        (# fg: ^astInterface.fragmentGroup enter fg[] do INNER #);
      onGroupSaved:<
        (# fg: ^astInterface.fragmentGroup enter fg[] do INNER #);
+     onGroupNotSaved:<
+       (# fg: ^astInterface.fragmentGroup enter fg[] do INNER #);
      onGroupCompiled:<
        (#
           fg: ^astInterface.fragmentGroup;
@@ -1463,7 +1564,7 @@ fragmentBrowser: ymerApplication
           INNER
        exit (mps.ast[],mps.betaCFL[])
        #);
-     myDG: (* should not be local copy *) ^mps.ast.dependencyGraph;
+     doTest,useExtTextEd: @boolean;
      
   do init; INNER fragmentBrowser
   #)  

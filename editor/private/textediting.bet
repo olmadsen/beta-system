@@ -1,5 +1,11 @@
 ORIGIN '../codeeditor';
-INCLUDE '~beta/basiclib/v1.4/numberio';
+INCLUDE '~beta/basiclib/v1.4/numberio'
+        '~beta/guienv/v1.3.1/styledtext';
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-96
+ *   All rights reserved.
+ *)
 (*
  * COPYRIGHT
  *   Copyright Mjolner Informatics, 1995-96
@@ -9,17 +15,40 @@ INCLUDE '~beta/basiclib/v1.4/numberio';
 (#
    selRow,selCol,endRow,endCol: @integer;
    editingLexems: @boolean;
+   useExternalTextEditor: @boolean;
+   updateList:
+     (# listNode: ^astInterface.expanded; containsLastElement: @boolean
+     enter (listNode[],containsLastElement)
+     do (* (editorRoot[] ,- 1)->astView.pp.present;*)
+        (if containsLastElement then
+            (if listNode[]->editorRoot.equal then
+                doReprettyprint
+             else
+                (if listNode.father <> none then
+                    (listNode.father,listNode.father)->astView.pp.update
+                 else
+                    doReprettyprint
+                if)
+            if)
+         else
+            (listNode[],listNode[])->astView.pp.update
+        if)
+     #);
    teInfo: @
      (#
         lineS1,charS1,lineS2,charS2: @integer;
         posStartBefore,posEndBefore: @integer;
         oldnode: ^astInterface.ast;
         fatherNode: ^astInterface.expanded;
+        inList: @boolean;
+        listNode: ^astInterface.list;
+        oldNoOfSons: @integer;
         sonNo: @integer;
         lastPosBefore: @integer;
         synCatNo: (* editAndParse: *) @mps.nonterminalSymbol;
         oldLength: @integer;
-        textBefore: @text
+        textBefore: @text;
+        textAfter: ^text
      #);
    test4:
      (# xstart,ystart,xend,yend: @integer; com,t: ^text
@@ -72,6 +101,18 @@ INCLUDE '~beta/basiclib/v1.4/numberio';
             (teInfo.posStartBefore,teInfo.posEndBefore)
               ->theSifTextEditor.contents.scantext
                 (#  do ch->teInfo.textBefore.put #);
+            (if useExternalTextEditor then
+                false->useExternalTextEditor;
+                TEinfo.textBefore[]->externalTextEdit->TEinfo.TextAfter[];
+                (teInfo.posStartBefore,teInfo.posEndBefore)
+                  ->theSifTextEditor.contents.selection;
+                theSifTextEditor.contents.delete;
+                (teInfo.posStartBefore,teInfo.posStartBefore)
+                  ->theSifTextEditor.contents.selection;
+                TEinfo.textAfter[]->theSifTextEditor.contents.insert;
+                false->textEditMode;
+                (TEexit.exitMode,(none ,1,0,0))->TE.exitEditLexemMode
+            if);
             
         if)
      #);
@@ -286,9 +327,9 @@ INCLUDE '~beta/basiclib/v1.4/numberio';
      (#
         oldParsingInformation,oldIncludeComments: @boolean;
         textToParse,help: ^text;
-        node,tmpNode: ^astInterface.ast;
+        node,tmpNode,theListElement: ^astInterface.ast;
         fatherNode: ^astInterface.expanded;
-        startPos: @integer;
+        startPos,dummyInt: @integer;
         temporaryhasComment:
           (#
              node: ^astInterface.ast;
@@ -325,8 +366,7 @@ INCLUDE '~beta/basiclib/v1.4/numberio';
              if);
              
           exit hasOne
-          #);
-        
+          #)
      do (*  ch->enterTextediting;*)
         (if switch[4] then 'enterEditAndParseMode: '->putLine if);
         editAndParseMode->editingMode;
@@ -383,6 +423,9 @@ INCLUDE '~beta/basiclib/v1.4/numberio';
         cs.node[]->teInfo.oldNode[];
         cs.length->teInfo.oldLength;
         cs.node.father->teInfo.fatherNode[];
+        teInfo.fatherNode.noOfSons->teInfo.oldNoOfSons;
+        cs.node[]->parsingSynCatNo->(dummyInt,teInfo.inList,theListElement[]);
+        (if teInfo.inList then theListElement.father->teInfo.listNode[] if);
         (if (teInfo.fatherNode[] <> none ) then
             cs.node.sonNo->teInfo.sonNo
         if);
@@ -413,6 +456,18 @@ INCLUDE '~beta/basiclib/v1.4/numberio';
              (teInfo.lineS2,teInfo.charS2)->theSifTextEditor.LineChartoPos)
               ->test2;
             
+        if);
+        (if useExternalTextEditor then
+            false->useExternalTextEditor;
+            TEinfo.textBefore[]->externalTextEdit->TEinfo.TextAfter[];
+            (teInfo.posStartBefore,teInfo.posEndBefore)
+              ->theSifTextEditor.contents.selection;
+            theSifTextEditor.contents.delete;
+            (teInfo.posStartBefore,teInfo.posStartBefore)
+              ->theSifTextEditor.contents.selection;
+            TEinfo.textAfter[]->theSifTextEditor.contents.insert;
+            false->textEditMode;
+            (TEexit.parseMode,(none ,1,0,0))->TE.exitEditAndParseMode
         if);
         
      #);
@@ -511,15 +566,32 @@ INCLUDE '~beta/basiclib/v1.4/numberio';
              if);
              (if (* text editor exited by a key stroke or menu *) exitKind
               // TEexit.escape then
-                 (if (teInfo.oldLength = 1) then
-                     (teInfo.oldNode[],teInfo.oldNode[])->astView.pp.update;
-                     cs->astToSelection;
-                     
+              (* (if teInfo.inList then
+               'inList'->putLine;
+               (teInfo.listNode[],
+               (teInfo.sonNo+teInfo.oldLength = teInfo.oldNoOfSons))
+               ->updateList
+               else
+               'not inList'->putLine;
+               (if teInfo.fatherNode[] <> none then
+               (teInfo.fatherNode[],teInfo.fatherNode[])
+               ->astView.pp.update
+               else
+               (teInfo.oldNode[],teInfo.oldNode[])->astView.pp.update
+               if);
+               cs->astToSelection
+               if);
+               *)
+                 doReprettyprint;
+                 (*  (if (teInfo.oldLength = 1) then
+                  (teInfo.oldNode[],teInfo.oldNode[])->astView.pp.update;
+                  cs->astToSelection;
+                  
                   else
-                     (teInfo.fatherNode[],teInfo.fatherNode[])
-                       ->astView.pp.update;
-                     
-                 if);
+                  (teInfo.fatherNode[],teInfo.fatherNode[])
+                  ->astView.pp.update;
+                  
+                  if);*)
                  structureMode->editingMode;
                  
               // TEexit.exitMode // TEexit.parseMode then
@@ -599,9 +671,7 @@ INCLUDE '~beta/basiclib/v1.4/numberio';
                               (if textToParse.eos then 'eos!!'->putLine if);*)
                              &text[]->tt[];
                              textToParse.scanAll
-                               (#
-                               (* this is to avoid eos error in the error reporter!!! *)
-                               
+                               (# 
                                do
                                   (if ch
                                    // '''' then
@@ -726,6 +796,9 @@ do
         ;
         
      #)  
+
+-- doExternalTextEdit: DoPart --
+do true->TE.useExternalTextEditor; doTextedit  
 
 -- checkTexteditingFinished: Descriptor --
 (#
