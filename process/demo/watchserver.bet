@@ -1,0 +1,113 @@
+ORIGIN '~beta/basiclib/systemenv';
+INCLUDE '~beta/basiclib/formatio';
+INCLUDE '~beta/process/streamsocket';
+
+--- program:descriptor ---
+systemEnv
+(# 
+   SPL: ^Stream.putLine;
+   SPT: ^Stream.putText;
+
+   ping: system
+     (# msecs: @Integer;
+        lastTryTime: @Real;
+        
+     do L:
+          (# s: ^StreamSocket;
+             timedOutFlag: @Boolean;
+             elapsed: @Real;
+             
+          do timeStamp->lastTryTime;
+             &StreamSocket[]->s[];
+             s.init;
+             portno->s.port;
+             hostaddr->s.inetAddr;
+             s.connect
+             (# error::
+                  (# 
+                  do true->timedOutFlag;
+                     errCB_abortOperation->value;
+                  #);
+             #);
+             timeStamp-lastTryTime->elapsed;
+             s.close;
+             
+             (if timedOutFlag or (elapsed>maxconntime) then
+                 lostPackets+1->lostpackets;
+              else
+                 totalTime+elapsed->totaltime;
+                 finepackets+1->finepackets;
+             if);
+             
+             '%4dms.  %4d (%02.2f%%) lost of %3d total.    Avr good time: %4dms\n'
+             ->screen.putFormat
+             (# 
+             do 1000*elapsed->d; lostpackets->d;
+                100*lostpackets/(lostpackets+finepackets)->f;
+                lostpackets+finepackets->d; 
+                (if finepackets>0 then
+                    (totaltime*1000)/finepackets->d
+                 else 
+                    0->d;
+                if);
+             #);
+                
+             (if repeatFlag then 
+                 (lastTryTime+sleeptime)->lastTryTime;
+                 lastTryTime-timeStamp->sleep;
+                 restart L
+             if)
+          #);
+     #);
+   
+   hostname: ^Text;
+   portno: @Integer;
+   sleeptime: @Real;
+   maxconntime: @Real;
+   repeatFlag: @Boolean;
+   t: ^Text;
+   
+   lostPackets, finepackets: @Integer;
+   totalTime: @Real;
+   hostaddr: @Integer;
+
+do &screen.putLine[]->SPL[];
+   &screen.putText[]->SPT[];
+   
+   (if noOfArguments<>4 then
+       'Usage: watchserver <hostname> <maxconntime> <sleeptime>'->SPL;
+    else
+       2->arguments->hostname[];
+       3->arguments->t[]; t.reset;
+       '%f'->t.getFormat(# do f->maxconntime #);
+       4->arguments->t[]; t.reset;
+       '%f'->t.getFormat(# do f->sleeptime #);
+       80->portno; 
+       true->repeatflag;
+       (if sleeptime<0 then 0->sleeptime if);
+       (if maxconntime<0 then 0->maxconntime if);
+       'Looking up address of '->SPT; hostname[]->SPT; '... '->SPL;
+       hostname[]->gethostbyname
+       (#
+          notfound::
+            (# 
+            do 'Unable to look up hostname!'->screen.putLine;
+               true->continue;
+               0->inadr;
+            #)
+       #)->hostaddr;
+       (if hostaddr<>0 then
+           '\nmeasuring %s.\n'
+           'Connects taking more than %dms are counted as lost.\n'
+           'The rest are included in the average time.\n'
+           'Connects will be tried with at least %dms spacing.\n\n'
+             ->screen.putFormat
+           (# 
+           do hostname[]->s;
+              1000*maxconntime->d;
+              1000*sleeptime->d;
+           #);
+           &|ping[]->fork;
+       if);
+   if);
+#)
