@@ -72,7 +72,6 @@ $(OBJDIR)/libXpm.a:
 
 lib: $(OBJS)
 	$(AR) $(OBJDIR)/libXpm.a $(OBJS)
-	$(RANLIB) $(OBJDIR)/libXpm.a
 	-# datpete: added the following to prevent reusing object files
 	-# from one platform on another platform.
 	$(RM) *.o
