@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CInterface.c,v 1.13 1992-09-21 14:58:08 beta Exp $
+ * Mod: $Id: CInterface.c,v 1.14 1992-09-21 17:04:52 tthorn Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 

@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $Id: lvra.c,v 1.21 1992-09-09 13:51:47 tthorn Exp $
+ * Mod: $Id: lvra.c,v 1.22 1992-09-21 17:05:13 tthorn Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -321,9 +321,11 @@ ref(ValRep) LVRAAlloc(proto, range)
   long           size = DispatchValRepSize(proto, range);
   ref(LVRABlock) block;
   long           rest;
-  
-  DEBUG_LVRA(fprintf(output, "# LVRAAlloc(%d, %d)\n",proto, range));
-  INFO_LVRA_ALLOC( fprintf( output, "<%d>", range) );
+
+  DEBUG_LVRA(fprintf(output, 
+		     "#LVRAAlloc(proto= %d, range= %d, size= %d (0x%x))\n",
+		     proto, range, size, size));
+  DEBUG_LVRA(Claim(isSpecialProtoType(proto), "isSpecialProtoType(proto)"));  
   if( LVRABaseBlock == 0 ){
     /* No LVRA blocks allocated yet */
     if( LVRABlockSize == 0) return 0;
