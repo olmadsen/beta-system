@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.50 1992-10-19 13:16:19 beta Exp $
+ * Mod: $Id: scavenging.c,v 1.51 1992-10-19 13:19:49 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
@@ -398,6 +398,8 @@ void IOAGc()
 		if( isForward( (cast(Object)(*current))->GCAttr ) ){ 
 		  /* *current has a forward pointer. */
 		  *current = (long) (ref(Object)) (cast(Object)(*current))->GCAttr;
+		} else {
+		  *current = 0;
 		}
 	      }
 	    }
