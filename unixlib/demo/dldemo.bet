@@ -1,45 +1,88 @@
 ORIGIN '~beta/basiclib/v1.6/betaenv';
 INCLUDE '~beta/unixlib/v1.6/dlfcn';
 INCLUDE '~beta/basiclib/v1.6/numberio';
+INCLUDE '~beta/sysutils/v1.6/pathhandler';
 
 --PROGRAM: descriptor--
 (# self, libX, regexp, address: @integer;
+   system: external
+     (# command: [0]@char;
+     enter command
+     #);
+   PH: @pathhandler;
+   objfile, command: ^text;
 do 'Getting handle to current process ... ' -> puttext;
-   (0, RTLD_NOW) -> dlopen_integer -> self;
+   (0, RTLD_NOW %Bor RTLD_GLOBAL) -> dlopen_integer -> self;
    (if self=0 then
        '\ndlopen failed: ' -> puttext; 
        dlerror->putline;
-       stop;
     else
        'done' -> putline;
+       'Finding address of M1PROGRAM.'->putline;
+       (self, 'M1PROGRAM') -> dlsym -> address;
+       'The address of M1PROGRAM is: 0x' -> puttext;
+       address -> puthex; newline;
+       'Type <RETURN> to continue' ->puttext;
+       getline;
+       newline;
+       'Finding address of sqrt (all programs are linked with -lm).'->putline;
+       (self, 'sqrt') -> dlsym -> address;
+       'The address of sqrt is: 0x' -> puttext;
+       address -> puthex; newline;
+       'Type <RETURN> to continue' ->puttext;
+       getline;
    if);
-   'Finding address of M1PROGRAM.'->putline;
-   (self, 'M1PROGRAM') -> dlsym -> address;
-   'The address of M1PROGRAM is: 0x' -> puttext;
-   address -> puthex; newline;
-   'Type <RETURN> to continue' ->puttext;
-   getline;
-   'Finding address of sqrt (all programs are linked with -lm).'->putline;
-   (self, 'sqrt') -> dlsym -> address;
-   'The address of sqrt is: 0x' -> puttext;
-   address -> puthex; newline;
-   'Type <RETURN> to continue' ->puttext;
-   getline;
-   
+   newline;
+
    'Dynamically linking in libX.so ... ' -> puttext;
    (* Notice: path not needed! *)
    ('libX.so', RTLD_LAZY) -> dlopen -> libX;
    (if libX=0 then
        '\ndlopen failed: ' -> puttext; 
        dlerror->putline;
-       stop;
     else
        'done' -> putline;
+       'Finding address of XSetWindowBorder'->putline;
+       (libX, 'XSetWindowBorder') -> dlsym -> address;
+       'The address of XSetWindowBorder is: 0x' -> puttext;
+       address -> puthex; newline;
+       'Type <RETURN> to continue' ->puttext;
+       getline;
    if); 
-   'Finding address of XSetWindowBorder'->putline;
-   (libX, 'XSetWindowBorder') -> dlsym -> address;
-   'The address of XSetWindowBorder is: 0x' -> puttext;
-   address -> puthex; newline;
-   'Type <RETURN> to continue' ->puttext;
-   getline;
+   newline;
+   
+   (* Now - here's how to handle an object file *)
+   '~beta/basiclib/v1.6/private/' -> objfile[];
+   machine_type -> objfile.append;
+   '/regexpr.o' -> objfile.append;
+   PH.init;
+   (* Expand ~beta *)
+   (objfile[], NONE) -> PH.convertFilePath -> objfile[];
+   'Dynamically linking in ' -> puttext;
+   objfile[] -> puttext;
+   ' ... ' -> puttext;
+   (* The following may vary. On linux it should be:
+    *   'ld -shared -o /tmp/regexpr.so ' -> command[];
+    *)
+   'ld -r -o /tmp/regexpr.so ' -> command[];
+   objfile[] -> command.append;
+   command -> system;
+   ('/tmp/regexpr.so', RTLD_LAZY) -> dlopen -> regexp;
+   (if regexp=0 then
+       '\ndlopen failed: ' -> puttext; 
+       dlerror->putline;
+    else
+       'done' -> putline;
+       'Finding address of re_match'->putline;
+       (regexp, 're_match') -> dlsym -> address;
+       'The address of re_match is: 0x' -> puttext;
+       address -> puthex; newline;
+       'Type <RETURN> to continue' ->puttext;
+       getline;
+   if); 
+   newline;
+   
+   (if self<>0 then self -> dlclose if);
+   (if libX<>0 then libX -> dlclose if);
+   (if regexp<>0 then regexp -> dlclose if);
 #)
