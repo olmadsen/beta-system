@@ -28,9 +28,11 @@ long  Argc(){ return ArgCount; }
 char *Argv(n) long n; { return ArgVector[n-1]; }
 
 
-#include <stdarg.h>
+
 char *XcallName;
 long  XcallNum;
+
+#include <stdarg.h>
 void TraceXcall(long arg1, ...)
 {
   va_list ap;
@@ -51,3 +53,4 @@ void TraceXcall(long arg1, ...)
   }
   fprintf(output, ")\n"); fflush(output);
 }
+
