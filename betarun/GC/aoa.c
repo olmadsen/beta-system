@@ -564,21 +564,6 @@ static FindInterval( table, size, block, startAddr, stopAddr)
   *stopAddr  = stop;
 }
 
-#if 0
-BubbleSort( table, size)
-
-     ptr(long) table;
-     long size;
-{ /* Sorts table[0..size-1]. */
-  long i,j,tmp;
-  for( j=size-1; j > 0; j--)
-    for( i=1; i <= j; i++)
-      if( table[i] < table[i-1] ){
-	tmp = table[i]; table[i] = table[i-1]; table[i-1] = tmp;
-      }
-}
-#endif
-
 /* Phase 3:
  *  Update the AOAtoIOATable,
  *  then sort the Table in area[ToSpaceLimit..ToSpaceTop].
