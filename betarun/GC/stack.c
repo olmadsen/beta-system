@@ -1454,13 +1454,13 @@ void ProcessStack(void)
 #ifdef NEWRUN
   ProcessNEWRUNStack();
 #endif /* NEWRUN */
-#ifdef HPPA
+#ifdef hppa
   ProcessHPPAStack();
 #endif /* HPPA */
-#ifdef INTEL
+#ifdef intel
   ProcessINTELStack();
 #endif /* INTEL */
-#ifdef SPARC
+#ifdef sparc
   ProcessSPARCStack();
 #endif /* SPARC */
 }
