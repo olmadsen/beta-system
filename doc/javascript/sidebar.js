@@ -10,7 +10,7 @@ function AdjustSideBar() {
 function SetupSideBar() {
   if (document.layers) { 
      rightboundary=20
-     leftboundary=-44
+     leftboundary=-28
   } else if (document.all) { 
      rightboundary=0
      leftboundary=-67
