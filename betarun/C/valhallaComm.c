@@ -460,7 +460,7 @@ INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
   /* This area is defined by 
    * [ lastCBFABlock->entries <= CBFATop < CBFALimit ].
    */
-  if (CBFATop+1 > CBFALimit){
+  if ((long)CBFATop+CallBackEntrySize > (long)CBFALimit){
     CBFArelloc();
   }
   CBFATop->theStruct = struc;
@@ -470,9 +470,9 @@ INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
   *(long*)(&CBFATop->code[1]) = (signed long)&HandleCB-(signed long)&CBFATop->code[5];
   /* Write ret opcode */
   CBFATop->code[5] = 0xc3;
+  cb = (void *)&CBFATop->code[0];
   CBFATop  = (CallBackEntry*)((long)CBFATop + CallBackEntrySize);
   /* __asm__("invd"); Flush cache -- i486 only */
-  return (void *)&(CBFATop-1)->code[0];
 #endif /* intel */
 #ifdef NEWRUN
   extern void *CopyCPP(struct Structure *theStruct);

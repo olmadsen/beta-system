@@ -231,16 +231,27 @@ void ProcessCBFA(void)
 #ifdef RTDEBUG
 void CBFACheck()
 {
+  DEBUG_CBFA(fprintf(output, "CBFACheck begin\n"));
   if (CBFABlockSize){
     if( CBFATop != CBFA->entries ){
       ref(CallBackArea) cbfa = CBFA;
       ref(CallBackEntry) current = cbfa->entries;
       long limit = (long) cbfa->entries + CBFABlockSize;
+      DEBUG_CBFA({
+	fprintf(output, "CBFACheck: CBFA =    0x%x\n", (int)CBFA);
+	fprintf(output, "CBFACheck: CBFATop = 0x%x\n", (int)CBFATop);
+	fprintf(output, "CBFACheck: initial CBFA block:");
+	fprintf(output, "header:  0x%x\n", (int)cbfa);
+	fprintf(output, "next:    0x%x\n", (int)cbfa->next);
+	fprintf(output, "entries: 0x%x\n", (int)cbfa->entries);
+	fprintf(output, "limit:   0x%x\n", (int)limit);
+      });
       
       for (; current != CBFATop;
 	   current = (ref(CallBackEntry))((long)current+CallBackEntrySize)){
 	if ( (long) current >= limit){
 	  /* Go to next block */
+	  DEBUG_CBFA(fprintf(output, "CBFACheck: fetching next block.\n"));
 	  cbfa = cbfa->next;        
 	  /* guarentied to be non-nil since current != CBFATop */
 	  
@@ -250,21 +261,34 @@ void CBFACheck()
 	   * If not the block would not have been allocated 
 	   */
 	  limit = (long)cbfa->entries + CBFABlockSize;
+	  DEBUG_CBFA({
+	    fprintf(output, "CBFACheck: CBFA block:");
+	    fprintf(output, "header:  0x%x\n", (int)cbfa);
+	    fprintf(output, "next:    0x%x\n", (int)cbfa->next);
+	    fprintf(output, "entries: 0x%x\n", (int)cbfa->entries);
+	    fprintf(output, "limit:   0x%x\n", (int)limit);
+	  });
 	}
-	/*DEBUG_CBFA(fprintf(output, "CBFACheck: current=0x%x", current));*/
+	DEBUG_CBFA(fprintf(output, "CBFACheck: current=0x%x", (int)current));
 	if (current->theStruct) {
-	  /*DEBUG_CBFA(fprintf(output, "\n"));*/
+	  DEBUG_CBFA({
+	    fprintf(output, "\n  ");
+	    DescribeObject((Object*)current->theStruct);
+	    fprintf(output, "\n");
+	  });
 	  Claim(inBetaHeap((ref(Object))(current->theStruct)), 
 		"inBetaHeap(current->theStruct)");
 	  Claim(inBetaHeap(current->theStruct->iOrigin), 
 		"inBetaHeap(current->theStruct->iOrigin)");
 	} else {
-	  /*DEBUG_CBFA(fprintf(output, " (free)\n"));*/
+	  DEBUG_CBFA(fprintf(output, " (free)\n"));
 	}
       }
     }
   }
+  DEBUG_CBFA(fprintf(output, "CBFACheck end\n"));
 }
+
 void PrintCBFA()
 {
   int numBlock=0;
