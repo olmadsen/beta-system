@@ -193,7 +193,7 @@ static struct errorEntry {
   LeaveBasicCompErr, "Attempt to leave basic component",
   QuaErr,            "Qualification error in reference assignment",
   QuaOrigErr,        "Qualification error in reference assignment; origins differ",
-  RecursiveAttErr,   "Attempt to attach a component that is already attached",
+  RecursiveAttErr,   "Attach of component that is already attached",
   EmulatorTrapErr,   "Emulator trap",
   IllegalInstErr,    "Illegal instruction",
   BusErr,            "Bus error",
