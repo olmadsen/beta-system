@@ -63,17 +63,18 @@ void CBFArelloc()
     INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb); );
 }
 
-void freeCBF(cb)
-     ref(CallBackEntry) cb;
+void freeCBF(external_entry)
+     unsigned long external_entry;
 {
   /* For now we just clear the entry */
-  cb->theStruct = 0; /* theStruct will no longer constitute a root for GC */
+  (cast(CallBackEntry)(external_entry - sizeof(ref(Structure))))->theStruct = 0; 
+  /* theStruct will no longer constitute a root for GC */
 }
 
 /* makeCBF: 
  * If the following external is declared in BETA:
  *   makeCBF: External
- *     (# pat: ##Object;
+ *     (# pat: ##external;
  *        cb: @integer;
  *     enter pat##
  *     exit cb
