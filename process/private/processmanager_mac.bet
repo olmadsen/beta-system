@@ -1,9 +1,7 @@
 ORIGIN 'processmanagerbody';
 LIB_ITEM 'processmanager';
-
 INCLUDE '~beta/maclib/appleevents';
 INCLUDE '~beta/containers/sets'
-
 
 (*
  * COPYRIGHT
@@ -281,16 +279,49 @@ buildCommand:
 
 
 --- ProcessStartMDBody:descriptor---
-(# 
-	startScript:
+(#  startScript:
 		(* The script file is exuted by sending an
 		 * appleevent to the tool-server.
 		 *)
-		(# theToolServer: ^toolServer;
-		do getToolServer -> theToolServer[];
-			this(process)[] -> theToolServer.executeScript;
+		(# command: @text;
+		do 
+			'''' -> command.put;
+			name.copy -> command.putText;
+			'''' -> command.put;
+			argument.scanArguments
+			(#
+			do ' "' -> command.putText;
+				current[] -> command.putText;
+				'"' -> command.put;
+			#);
 			
-		   
+		   (# 
+				target: @AEAddressDesc;
+				event, reply: @AppleEvent;
+				error: @integer;
+				keyDiag: (# exit 0x64696167 #);
+			do getToolServer;
+				(target[], toolserverSignature) -> makeTarget -> error;
+				(if error = 0 then
+					(event[], kAEMPSclass, kAEScript, target[]) -> makeAppleEvent -> error;
+					(if error = 0 then
+						(event[], command[]) -> putDirectTextParameter -> error;
+						(if error = 0 then
+							(event[], reply[], kAEQueueReply) -> sendAppleEvent -> error;
+							(if error = 0 then
+							else
+								('sending appleevent', error) -> reportToolServerError;
+							if);
+						else
+							('adding arguments to appleevent', error) -> reportToolServerError;
+						if);
+					else
+						('creating appleevent', error) -> reportToolServerError;
+					if);
+				else
+					('creating target specification', error) -> reportToolServerError;
+				if);	
+			#)
 		#);
 	startApplication:
 		(#
@@ -302,6 +333,7 @@ do (if name[] -> isScript then
 		startApplication;
 	if);
 
+
 #)
 
 
@@ -312,21 +344,42 @@ do 'ProcessStopMDBody:descriptor' -> putLine;
 
 
 --- ProcessAwaitStopped:dopart ---
-do name[] -> putText;
-   
-	' ProcessAwaitStopped:dopart' -> putLine;
+do ' ProcessAwaitStopped:dopart' -> putLine;
 
    
 --- ProcessStillRunning:dopart ---
-do private.running -> value;
-   name[] -> putText;
-   ' ProcessStillRunning ' -> putText;
-   (if private.running then
-   		'YES' -> putLine;
-	else
-		'NO' -> putLine;
-	if);
-
+do (# target: @AEAddressDesc;
+		event, reply: @AppleEvent;
+		error: @integer;
+		keyDiag: (# exit 0x64696167 #);
+		who: ^text;
+   do getToolServer;
+	   (target[], toolserverSignature) -> makeTarget -> error;
+		(if error = 0 then
+			(event[], kAEMPSclass, kAEstat, target[]) -> makeAppleEvent -> error;
+			(if error = 0 then
+				(event[], reply[], kAEWaitReply) -> sendAppleEvent -> error;
+				(if error = 0 then
+					&text[] -> who[];
+					(reply[], keyWho, who[]) -> getTextParameter -> error;
+					(if error <> 0 then
+						('reading the who parameter', error) -> reportToolServerError;
+					if);
+					'[' -> put;
+					who[] -> putText;
+					']' -> putLine;
+				else
+					('sending appleevent', error) -> reportToolServerError;
+				if);
+			else
+				('creating appleevent', error) -> reportToolServerError;
+			if);
+		else
+			('creating target specification', error) -> reportToolServerError;
+		if);	
+	#);
+   INNER;
+   
 --- connectToProcess:dopart ---
 (* send output to other process *)
 do  'connectToProcess:dopart' -> putLine;
