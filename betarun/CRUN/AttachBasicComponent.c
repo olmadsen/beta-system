@@ -29,6 +29,12 @@ ParamThisComp(void, AttBC)
 
     GCable_Entry();
 
+    /*
+    printf("\nAttachBasicComponent: comp: 0x%08x\n", comp);
+    printf("AttachBasicComponent: comp->CallerLSC: 0x%08x\n", comp->CallerLSC);
+    fflush(stdout);
+    */
+
     Ck(comp);
     /* Push the bottom component block. */
     /* Terminates the list of component blocks on the stack. */

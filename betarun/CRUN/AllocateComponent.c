@@ -21,10 +21,13 @@ ParamOriginProto(struct Component *,AlloC)
 
     Protect(origin, 
 	    comp = cast(Component) IOAcalloc(ComponentSize(proto->Size)));
+    
+    /*
+    printf("\nAllocateComponent: comp: 0x%08x\n", comp); 
+    fflush(stdout);
+    */
 
     /* The new Component is now allocated, but not initialized yet! */
-
-    /* printf("\nAllocateComponent: comp = %x", comp); */
 
     /* Initialize the structual part; prototype, age etc. */
     comp->Proto = ComponentPTValue;

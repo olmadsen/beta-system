@@ -85,6 +85,11 @@ setup_item(ref(Item) theItem,
 	po = cast(PartObject) ((long *)theItem + initTab->StaticOff);
 	po->Proto = initTab->Proto;
 	po->OrigOff = initTab->OrigOff;
+
+	/*
+	if ( (long)po->Proto == -1)
+	  printf("\nsetup_item: component: 0x%08x\n", po);
+        */
     }
 
   ((long *)theItem)[prototype->OriginOff] = (long) origin;
