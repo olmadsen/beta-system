@@ -47,12 +47,14 @@ char *CCpkSVT(ValRep *theRep, unsigned low, long high, long *SP)
 
   /* printf("CpkSVT: theRep=0x%x, low=0x%x, high=0x%x, SP=0x%x\n", theRep, low, high, SP); */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ){ 
-    RangeErr = low;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepLowRangeErr, 0, SP, 0);
   }
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-    RangeErr = high;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepHighRangeErr, 0, SP, 0);
   }
@@ -122,12 +124,14 @@ char *CCpkSVT_W(ValRep *theRep, unsigned low, long high, long *SP)
 
   /* printf("CpkSVT_W: theRep=0x%x, low=0x%x, high=0x%x, SP=0x%x\n", theRep, low, high, SP); */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ){ 
-    RangeErr = low;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepLowRangeErr, 0, SP, 0);
   }
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-    RangeErr = high;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepHighRangeErr, 0, SP, 0);
   }
@@ -216,12 +220,14 @@ char * PpkSVT(ValRep *theRep, unsigned low, long high, long *SP)
   Ck(theRep);
 
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-    RangeErr = low;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepLowRangeErr, 0, SP, 0);
   }
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) { 
-    RangeErr = high;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepHighRangeErr, 0, SP, 0);
   }

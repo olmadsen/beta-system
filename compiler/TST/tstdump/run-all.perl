@@ -36,6 +36,7 @@ print "======================================================\n";
 &rm("*.diff");
 &rm("*.nodump");
 &rm("*.candidate");
+&rm("../tstenv.ast*");
 
 if ($FastMode) {
     print "\nUsing existing executables.\n";

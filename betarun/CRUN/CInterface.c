@@ -87,12 +87,14 @@ char *CpkSVT(ValRep * theRep,
   
   Ck(currentObj); Ck(theRep);
   if (low<theRep->LowBorder){
-    RangeErr = low;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepLowRangeErr, currentObj);
   }
   if (high>theRep->HighBorder) {
-    RangeErr = high;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepHighRangeErr, currentObj);
   }
@@ -205,12 +207,14 @@ char *CpkSVT_W(ValRep * theRep,
   
   Ck(currentObj); Ck(theRep);
   if (low<theRep->LowBorder){
-    RangeErr = low;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepLowRangeErr, currentObj);
   }
   if (high>theRep->HighBorder) {
-    RangeErr = high;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepHighRangeErr, currentObj);
   }
@@ -287,12 +291,14 @@ unsigned char * PpkSVT(Object *currentObj, ValRep * theRep, unsigned low, long h
 
     Ck(currentObj); Ck(theRep);
     if (low<theRep->LowBorder) {
-      RangeErr = low;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, currentObj);
     }
     if (high>theRep->HighBorder) {
-      RangeErr = high;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepHighRangeErr, currentObj);
     }
