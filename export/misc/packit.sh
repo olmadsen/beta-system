@@ -51,6 +51,8 @@ else
 	    exit 0
 	else
 	    cd ${BETALIB};
+	    FILES=`ls -d $FILES | grep -v CVS | xargs`
+	    #echo $FILES
 	    tar -covhf -  $FILES \
 	    2> ${DST}/${SRC}.lst \
 	    | $COMPRESS >  ${DST}/${SRC}.tar.${ZEXT}

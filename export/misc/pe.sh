@@ -50,16 +50,16 @@ echo Removing existing tar/lst files:
 ls $DST/*
 rm -f $DST/*
 
-if [ "$PACKSYSTEM" = "yes" ]; then
-   ${BETALIB}/export/misc/system-pe.sh
-fi
-
 if [ "$PACKLIB" = "yes" ]; then
    PACKOBJECTSERVER=yes
    export PACKOBJECTSERVER
    ${BETALIB}/export/misc/lib.sh
    PACKOBJECTSERVER=packed
    export PACKOBJECTSERVER
+fi
+
+if [ "$PACKSYSTEM" = "yes" ]; then
+   ${BETALIB}/export/misc/system-pe.sh
 fi
 
 if [ "$PACKCOM" = "yes" ]; then

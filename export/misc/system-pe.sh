@@ -70,14 +70,7 @@ else
 
 	tar -covhf - $FILES \
 	2> $DST/system.lst \
-	 > $DST/system.tar
-
-	echo "Compressing..."
-	if [ -f $DST/system.tar.${ZEXT} ]
-	then
-	   /bin/rm -f $DST/system.tar.${ZEXT}
-	fi
-	$COMPRESS $DST/system.tar
+	 | $COMPRESS >  $DST/system.tar.${ZEXT}
 fi
 fi
 
