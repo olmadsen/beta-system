@@ -13,6 +13,12 @@ int (*f)();
    return x;  
 }
 
+void doCallBar(f)
+void (*f)();
+{
+   f();
+}
+
 typedef double real;        /* The C representation of a Beta real.  */
 
 real radd(x1,x2)
