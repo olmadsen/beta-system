@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-02-11 14:28:26 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-04-03 07:31:43 $, SID: $Revision: 1.4 $
  * by Lars Bak
  */
 
@@ -79,7 +79,7 @@ ErrorMessage(output, errorNumber)
       fprintf(output,"Repetition index out of range"); return;
     }
   if( errorNumber == -4){
-      fprintf(output,"Arithmetic execption"); return;
+      fprintf(output,"Arithmetic exception"); return;
     }
   if( errorNumber == -5){
       fprintf(output,"Repetition subrange out of range"); return;
