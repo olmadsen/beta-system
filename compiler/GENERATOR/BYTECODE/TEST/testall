@@ -51,6 +51,7 @@ $javaoptions   = "-qw -s 188 23";
     (
      "jstring",
      "greetings", # currently has hardcoded java string signature
+     "go"      , # dotnet: betaenv.il does not assemble
      );
 
 # Programs specific for dotnet
@@ -71,7 +72,6 @@ $javaoptions   = "-qw -s 188 23";
 
 %known_failures =
     (
-     "go"      => "dotnet: betaenv.il does not assemble",
      "ECStest" => "javabc: ECStest.<init> wrong signature\n\tdotnet: problem with default location",
      );
 
@@ -84,7 +84,7 @@ sub usage()
     local($msg) = @_;
     print "testall: $msg\n" if ($msg ne "");
     print<<EOT;
-usage: testall [-h][-v][-r][-c][-C][-x][-d][-k][-j]
+usage: testall [-h][-v][-r][-c][-C][-x][-g][-t][-k][-d][-j]
      -h  print this help
      -v  verbose mode
      -O  do not display correct outputs, only errors
@@ -94,6 +94,7 @@ usage: testall [-h][-v][-r][-c][-C][-x][-d][-k][-j]
      -x  use diff with context when reporting errors
      -k  keep programs after execution
      -g  do not execute graphics programs
+     -t  do not test TST
      -d  compile for target dotnet
      -j  compile for target javabc
          If no target options given, script will try to guess target
@@ -101,84 +102,21 @@ EOT
     exit;
 }
 
-&usage("Compile and execute all test programs") if ($h);
-if (-d "/cygdrive" || -d "C:"){
-    $host   = "windows";
-    $target = "dotnet";
-} else {
-    $host   = "unix";
-    $target = "javabc";
-}
-
-&usage("Both -d and -f specified") if ($d && $j);
-$target="dotnet" if ($d);
-$target="javabc" if ($j);
+&process_command_line();
 
 print "*** Testing for target $target ***\n";
 
-$verbose = $v;
-$compileonly = $c;
-$runonly = $r;
-$context = "-c" if (defined($x));
-$skipoutput = $O;
-$keepprograms = $k;
-$nographics = $g;
+&build_program_list();
 
-if ($runonly && $compileonly){
-    print "*** Both -c (compile only) and -r (run only) specified.\n";
-    print "    Ignoring -c.\n";
-    $compileonly=0;
-}
-
-if ($target eq "dotnet"){
-    $sbetasrc="$BETALIB/compiler/nbeta.bet";
-    $sbeta="$BETALIB/bin/$objdir/nbeta${EXESUFFIX}";
-} else {
-    $sbetasrc="$BETALIB/compiler/jbeta.bet";
-    $sbeta="$BETALIB/bin/$objdir/jbeta${EXESUFFIX}";
-}
-
-unless ($C || $runonly){
-    print "*** Compiling $sbeta ***\n" if ($verbose);
-    system "$beta -qw -o $sbeta $sbetasrc > bootbeta.out" if (!$verbose);
-    system "$beta -qw -o $sbeta $sbetasrc"                if ($verbose);
-}
+&compile_compiler();
 
 $options = $dotnetoptions     if ($target eq "dotnet");
 $options = $javaoptions       if ($target eq "javabc");
 
-if ($target eq "dotnet"){
-    foreach $key (keys %dotnet_with_input){
-	$programs_with_input{"$key"} = $dotnet_with_input{"$key"};
-    }
-    foreach $key (keys %dotnetgraphics){
-	$graphics{"$key"} = $dotnetgraphics{"$key"};
-    }
-}
-if ($target eq "javabc"){
-    foreach $key (keys %java_with_input){
-	$programs_with_input{"$key"} = $java_with_input{"$key"};
-    }
-    foreach $key (keys %javagraphics){
-	$graphics{"$key"} = $javagraphics{"$key"};
-    }
-}
-
-push @programs, keys %programs_with_input;
-push @programs, @dotnetonly   if ($target eq "dotnet");
-push @programs, @javaonly     if ($target eq "javabc");
-
-$compilecmd = "$sbeta $options"; # -t $target 
-
-print "*** Removing ast files ***\n" if ($verbose);
-system "rm *.ast *.astL >/dev/null 2>&1";
-
+$compilecmd = "$sbeta $options"; 
 print "*** Compiling with command ***\n\t$compilecmd\n\n" unless ($runonly);
 
-$f="tstenv";
-print "-"x10 . "Compiling $f" . "-"x10  . "\n"; # if ($verbose);
-system "$compilecmd $f > $f.out" if (! $verbose);
-system "$compilecmd $f" if ($verbose);
+&make_clean();
 
 foreach $f (@programs){
     
@@ -278,6 +216,8 @@ if (scalar %known_failures){
     }
 }
 
+&test_tst();
+
 &test_graphics();
 
 
@@ -314,11 +254,13 @@ sub test_graphics()
 {
     if (scalar %graphics){
 	if ($nographics){
-	    print "\nGraphics programs not (testall -g). Do it manually:\n";
+	    print "\nGraphics programs not tested (testall -g). Do it manually:\n";
+	    print "========================================================\n";
 	} else {
 	    print "\nStarting test of graphics programs\n";
+	    print "========================================================\n";
+	    &make_clean();
 	}
-	print "========================================================\n";
 	foreach $key (keys(%graphics)){
 	    $command = $graphics{$key};
 	    if ($nographics){
@@ -336,6 +278,110 @@ sub test_graphics()
 	    print "\n";
 	}
 	print "\n";
+    }
+}
+
+sub test_tst()
+{
+    if ($notst){
+	print "\nTST not tested (testall -t). Do it manually.\n";
+    } else {
+	print "\nStarting test of TST/btst\n";
+    }
+    print "========================================================\n";
+    $testdir = `pwd`; chomp $testdir;
+    if (chdir "../../../TST"){
+	unlink ("tstenv." . $AstExt{$objdir});
+	$exec = &compile_program("btst");
+	print "-"x10 . "Testing $exec" . "-"x10  . "\n";
+	system "$exec";
+	unless ($keepprograms) {
+	    unlink "$exec";
+	}
+    } else {
+	print "Cannot chdir(../../../TST): $!\n";
+    }
+    if (!chdir("$testdir")){
+	print "Cannot change dir back to $test: $!\n";
+    }
+}
+
+sub make_clean()
+{
+    print "*** Removing ast files ***\n" if ($verbose);
+    system "rm *.ast *.astL >/dev/null 2>&1";
+    &compile_program("tstenv");
+}
+
+sub compile_compiler()
+{
+    if ($target eq "dotnet"){
+	$sbetasrc="$BETALIB/compiler/nbeta.bet";
+	$sbeta="$BETALIB/bin/$objdir/nbeta${EXESUFFIX}";
+    } else {
+	$sbetasrc="$BETALIB/compiler/jbeta.bet";
+	$sbeta="$BETALIB/bin/$objdir/jbeta${EXESUFFIX}";
+    }
+    
+    unless ($C || $runonly){
+	print "*** Compiling $sbeta ***\n" if ($verbose);
+	system "$beta -qw -o $sbeta $sbetasrc > bootbeta.out" if (!$verbose);
+    system "$beta -qw -o $sbeta $sbetasrc"                if ($verbose);
+    }
+}
+
+sub build_program_list()
+{
+    if ($target eq "dotnet"){
+	foreach $key (keys %dotnet_with_input){
+	    $programs_with_input{"$key"} = $dotnet_with_input{"$key"};
+	}
+	foreach $key (keys %dotnetgraphics){
+	    $graphics{"$key"} = $dotnetgraphics{"$key"};
+	}
+    }
+    if ($target eq "javabc"){
+	foreach $key (keys %java_with_input){
+	    $programs_with_input{"$key"} = $java_with_input{"$key"};
+	}
+	foreach $key (keys %javagraphics){
+	    $graphics{"$key"} = $javagraphics{"$key"};
+	}
+    }
+    
+    push @programs, keys %programs_with_input;
+    push @programs, @dotnetonly   if ($target eq "dotnet");
+    push @programs, @javaonly     if ($target eq "javabc");
+}
+
+sub process_command_line()
+{
+    &usage("Compile and execute all test programs") if ($h);
+    if (-d "/cygdrive" || -d "C:"){
+	$host   = "windows";
+	$target = "dotnet";
+    } else {
+	$host   = "unix";
+	$target = "javabc";
+    }
+    
+    &usage("Both -d and -f specified") if ($d && $j);
+    
+    $target="dotnet" if ($d);
+    $target="javabc" if ($j);
+    $verbose = $v;
+    $compileonly = $c;
+    $runonly = $r;
+    $context = "-c" if (defined($x));
+    $skipoutput = $O;
+    $keepprograms = $k;
+    $nographics = $g;
+    $notst = $t;
+    
+    if ($runonly && $compileonly){
+	print "*** Both -c (compile only) and -r (run only) specified.\n";
+	print "    Ignoring -c.\n";
+	$compileonly=0;
     }
 }
 
