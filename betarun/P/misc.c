@@ -298,7 +298,6 @@ void showStatistics(void)
   */
 
   printObjectStoreStatistics();
-  printCrossStoreStatistics();
   printProxyStatistics();
 }
 
