@@ -82,9 +82,6 @@ void SignalHandler(sig, code, scp, addr)
   switch( sig){
     case SIGFPE: 
       switch(code){
-      /*case FPE_CHKINST_TRAP: // Index error (chk2) //
-       *DisplayBetaStack( RepRangeErr, theObj); break;
-       */
       case FPE_INTDIV_TRAP: /* div by zero */
 	DisplayBetaStack( ZeroDivErr, theObj); break;
       default: /* arithmetic exception */
@@ -93,8 +90,16 @@ void SignalHandler(sig, code, scp, addr)
       break;
     case SIGEMT:
       DisplayBetaStack( EmulatorTrapErr, theObj); break;
-    case SIGILL: /* Illegal instruction */
-      DisplayBetaStack( IllegalInstErr, theObj); break;
+    case SIGILL: /* Illegal instruction of trap */
+      switch (code){
+      case ILL_TRAP_FAULT(17): /* tle 17 trap => ref none */
+	DisplayBetaStack( RefNoneErr, theObj);
+	break;
+      default:
+	DisplayBetaStack( IllegalInstErr, theObj);
+	break;
+      }
+      break;
     case SIGBUS: /* Bus error */
       DisplayBetaStack( BusErr, theObj); break;
     case SIGSEGV: /* Segmentation fault */
