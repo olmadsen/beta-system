@@ -79,8 +79,8 @@ static unsigned long openExt(unsigned long host_r,
 	unsigned long storeID;
 	
 	if ((storeID = registerNewStore(host, path)) != -1) {
-	  setCurrentPStore(storeID);
 	  markStoreAsOpen(storeID);
+	  setCurrentPStore(storeID);
 	  r = 0;
 	} else {
 	  r = ACCESSERRORERROR;

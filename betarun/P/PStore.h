@@ -1,6 +1,12 @@
 #ifndef _PSTORE_H_
 #define _PSTORE_H_
-#include "beta.h"
+#include "../C/beta.h"
+
+#ifdef sparc
+#define OURINLINE __inline__
+#else
+#define OURINLINE
+#endif
 
 #define MAXNAMELENGTH     100
 #define MAXNAMES          10
@@ -75,7 +81,7 @@ typedef struct PStoreHeader {
 #define isIllegalReference(inx)           (((inx) % MAXTYPE > CROSSSTORETYPE) && ((inx) % MAXTYPE < MAXTYPE))
 
 int createPStore(char *host, char *path);
-int setCurrentPStore(unsigned long storeID);
+OURINLINE int setCurrentPStore(unsigned long storeID);
 StoreProxy *allocateObject(unsigned long storeID,
 			   unsigned long size);
 Object *lookupStoreObject(unsigned long storeID, 

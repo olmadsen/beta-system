@@ -1,43 +1,15 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991-94 Mjolner Informatics Aps.
  * sighandler.c
- * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, 
+ * Jacob Seligmann and S|ren Brandt
  */
 #include "beta.h"
 
 /***************************************************************************/
-/************************ INCLUDES and DEFINITIONS *************************/
+/************************ LOCAL INCLUDES and DEFINITIONS********************/
 /***************************************************************************/
-
-#if defined(UNIX)
-#include <signal.h>
-#endif /* UNIX  */
-
-#ifdef ppcmac
-#include <MachineExceptions.h>
-#endif /* ppcmac */
-
-#ifdef sun4s
-#include <siginfo.h>
-#include <sys/regset.h>
-#include <sys/ucontext.h>
-#endif
-
-#ifdef linux
-#include <asm/sigcontext.h> 
-#endif
-
-#ifdef nti
-#include <float.h>
-#ifdef nti_gnu
-#include <excpt.h>
-#define OUR_EXCEPTION_CONTINUE_SEARCH ExceptionContinueSearch
-#define OUR_EXCEPTION_CONTINUE_EXECUTION ExceptionContinueExecution
-#else /* !nti_gnu */
-#define OUR_EXCEPTION_CONTINUE_SEARCH EXCEPTION_CONTINUE_SEARCH
-#define OUR_EXCEPTION_CONTINUE_EXECUTION EXCEPTION_CONTINUE_EXECUTION
-#endif /* nti_gnu */
-#endif /* nti */
+#include "rtsighandler.h"
 
 /***************************************************************************/
 /*************************** HELPER FUNCTIONS ******************************/
@@ -80,17 +52,10 @@ static void NotifySignalDuringDump(int sig)
  * valhallaOnProcessStop).
  */
 
-typedef struct register_handles {
-  int edx;
-  int edi;
-  int ebp;
-  int esi;
-} register_handles;
-
 #ifdef linux
 
-static void SaveLinuxRegisters(struct sigcontext_struct *scp, 
-			       register_handles *handles)
+void SaveLinuxRegisters(SIGNAL_CONTEXT *scp, 
+			register_handles *handles)
 {
   DEBUG_VALHALLA({
     fprintf(output, 
@@ -118,7 +83,7 @@ static void SaveLinuxRegisters(struct sigcontext_struct *scp,
   DEBUG_VALHALLA(fprintf(output, "\n"));
 }
 
-static void RestoreLinuxRegisters(struct sigcontext_struct *scp, 
+static void RestoreLinuxRegisters(SIGNAL_CONTEXT scp, 
 				  register_handles *handles)
 {
   DEBUG_VALHALLA({
@@ -146,8 +111,8 @@ static void RestoreLinuxRegisters(struct sigcontext_struct *scp,
 #endif /* linux */
 
 #ifdef nti
-static void SaveWin32Registers(CONTEXT *scp, 
-			       register_handles *handles)
+void SaveWin32Registers(SIGNAL_CONTEXT *scp, 
+			register_handles *handles)
 {
   DEBUG_VALHALLA({
     fprintf(output, 
@@ -175,7 +140,7 @@ static void SaveWin32Registers(CONTEXT *scp,
   DEBUG_VALHALLA(fprintf(output, "\n"));
 }
 
-static void RestoreWin32Registers(CONTEXT *scp, 
+static void RestoreWin32Registers(SIGNAL_CONTEXT *scp, 
 				  register_handles *handles)
 {
   DEBUG_VALHALLA({
@@ -216,16 +181,8 @@ static void RestoreWin32Registers(CONTEXT *scp,
  * valhallaOnProcessStop).
  */
 
-typedef struct register_handles {
-  int s0;
-  int s1;
-  int s2;
-  int s8;
-  int a1;
-} register_handles;
-
-static void SaveSGIRegisters(struct sigcontext *scp, 
-			     register_handles *handles)
+void SaveSGIRegisters(SIGNAL_CONTEXT scp, 
+		      register_handles *handles)
 {
   DEBUG_VALHALLA({
     fprintf(output, 
@@ -274,8 +231,8 @@ static void SaveSGIRegisters(struct sigcontext *scp,
   }
 }
 
-static void RestoreSGIRegisters(struct sigcontext *scp, 
-				register_handles *handles)
+void RestoreSGIRegisters(SIGNAL_CONTEXT scp, 
+			 register_handles *handles)
 {
   DEBUG_VALHALLA({
     fprintf(output, "Sighandler: Restoring registers from ReferenceStack:\n");
@@ -323,6 +280,18 @@ static void RestoreSGIRegisters(struct sigcontext *scp,
 }
 #endif /* sgi */
 
+void set_BetaStackTop(long *SP)
+{
+#if defined(sparc) || defined(intel)
+  BetaStackTop = SP;
+#else 
+#ifdef NEWRUN
+  BetaStackTop[0] = SP;
+#else
+  fprintf(output, "set_BetaStackTop: Not implemented for this platform\n");
+#endif /* NEWRUN */
+#endif /* sparc || intel */
+}
 
 #endif /* RTVALHALLA */
 

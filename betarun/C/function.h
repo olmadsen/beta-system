@@ -11,6 +11,10 @@ extern long GetBetaCodeEnd(void);
 #endif /* RTDEBUG */
 extern unsigned long address_of_me(void);
 
+#ifdef RTLAZY
+unsigned long lazyTrapHandler(unsigned long lazyDangler);
+#endif /* RTLAZY */
+
 /* C/floats.c */
 void SetupFPU(void);
 

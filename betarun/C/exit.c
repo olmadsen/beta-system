@@ -8,6 +8,7 @@
 
 #ifdef PERSIST
 #include "../P/misc.h"
+#include "../P/PStore.h"
 #endif /* PERSIST */
 
 #ifdef RTVALHALLA
@@ -188,6 +189,11 @@ void BetaExit(long number)
   }
 #endif /* UNIX */
 
+#ifdef PERSIST
+  saveCurrentStore();
+  closeCurrentStore();
+#endif /* PERSIST */
+  
   exit(number);
 #endif
 }

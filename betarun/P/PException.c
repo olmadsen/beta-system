@@ -1,40 +1,9 @@
 #include "beta.h"
 #include "PException.h"
 #include "unswizzle.h"
+#include "../C/rtsighandler.h"
 
 #ifdef PERSIST
-
-#ifdef UNIX
-# include <signal.h>
-# ifdef sun4s
-#  include <siginfo.h>
-#  include <sys/regset.h>
-#  include <sys/ucontext.h>
-# endif
-# ifdef linux
-#  include <asm/sigcontext.h> 
-# endif
-#endif
-
-#ifdef nti
-#ifdef nti_gnu
-#include <excpt.h>
-#define OUR_EXCEPTION_CONTINUE_SEARCH ExceptionContinueSearch
-#define OUR_EXCEPTION_CONTINUE_EXECUTION ExceptionContinueExecution
-#else /* !nti_gnu */
-#define OUR_EXCEPTION_CONTINUE_SEARCH EXCEPTION_CONTINUE_SEARCH
-#define OUR_EXCEPTION_CONTINUE_EXECUTION EXCEPTION_CONTINUE_EXECUTION
-#endif /* nti_gnu */
-#endif /* nti */
-
-/* sighandler.c */
-#ifdef UNIX
-# ifdef linux
-   void BetaSignalHandler(long sig, struct sigcontext_struct scp);
-# else
-   extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
-# endif
-#endif
 
 /* block.c */
 void mmapInitial(unsigned long numbytes);
@@ -182,22 +151,52 @@ static long sourceReg(unsigned long instruction, ucontext_t *ucon, long returnSP
       }
       
       /* its assumed that only rs1 or sr2 can be the culprit, not both */
-      if (simm13 != -1) {
-	if (inPIT(getRegisterContents(rs1, ucon, returnSP))) {
-	  sourcereg = rs1;
-	} 
-      } else {
-	if (inPIT(getRegisterContents(rs1, ucon, returnSP))) {
-	  sourcereg = rs1;
-	  Claim(!inPIT(getRegisterContents(rs2, ucon, returnSP)), "sourceReg: proxy in both rs1 and rs2\n");
-	} else if (inPIT(getRegisterContents(rs2, ucon, returnSP))) {
-	  sourcereg = rs2;
-	  Claim(!inPIT(getRegisterContents(rs1, ucon, returnSP)), "sourceReg: proxy in both rs1 and rs2\n");
+      {
+	void *reg_contents1;
+	reg_contents1 = getRegisterContents(rs1, ucon, returnSP);
+	
+	if (simm13 != -1) {
+	  if (inPIT(reg_contents1)
+#ifdef RTLAZY
+	      || isLazyRef(reg_contents1)
+#endif /* RTLAZY */
+	      ) {
+	    sourcereg = rs1;
+	  } 
+	} else {
+	  void *reg_contents2;
+	  reg_contents2 = getRegisterContents(rs2, ucon, returnSP);
+	  
+	  if (inPIT(reg_contents1)
+#ifdef RTLAZY
+	      || isLazyRef(reg_contents1)
+#endif /* RTLAZY */
+	      ) {
+	    sourcereg = rs1;
+	    Claim(!inPIT(reg_contents2), 
+		  "sourceReg: proxy in both rs1 and rs2\n");
+#ifdef RTLAZY
+	    Claim(!isLazyRef(reg_contents2), 
+		  "sourceReg: proxy in both rs1 and rs2\n");
+#endif /* RTLAZY */
+	  } else if (inPIT(reg_contents2)
+#ifdef RTLAZY     
+		     || isLazyRef(reg_contents2)
+#endif /* RTLAZY */
+		     ) {
+	    sourcereg = rs2;
+	    Claim(!inPIT(reg_contents1), 
+		  "sourceReg: proxy in both rs1 and rs2\n");
+#ifdef RTLAZY
+	    Claim(!isLazyRef(reg_contents1), 
+		  "sourceReg: proxy in both rs1 and rs2\n");
+#endif /* RTLAZY */
+	  }
 	}
+	/* Source reg is now set to the register containing the
+	   proxy */
+	return 1;
       }
-      /* Source reg is now set to the register containing the
-	 proxy */
-      return 1;
     }
   }
   return 0;
@@ -210,7 +209,7 @@ static unsigned long dummy;
    containing the proxy. */
 static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 {
-  unsigned long instruction, returnPC, returnSP, absAddr;
+  unsigned long instruction, returnPC, returnSP, absAddr = 0;
   void *ip;
   
   INFO_PERSISTENCE(numPF++);
@@ -232,38 +231,33 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
       Claim(!BETAREENTERED, "Proxy met during rebinding!");
       
       ip = getRegisterContents(sourcereg, ucon, returnSP);
-      
-      /* Before calling unswizzleReference, which may call the callback entry 
-       * 'callRebinderC' the C variable  BetaStackTop should be set to the value of the
-       * stack pointer at the point where the process left BETA via the trap.
-       */
-      BetaStackTop = (long *)returnSP; /* Must be set in case og GC during callback */
-      /* datpete 21/5/99: no need to push SP for GC anymore.
-       * Thus could be saved in a local variable instead.
-       */
-      pushSP(returnSP);
-
+            
       /* Calculate absolute address by looking in appropriate tables */
+      if (inPIT(ip)) {
+	/* 'unswizzleReference' *might* call back into beta code to
+           rebind special references. Thus the call is protected using
+           the 'BetaCallback' abstraction. */
+	BetaCallback(ucon, 
+		     returnSP, 
+		     absAddr = (long)unswizzleReference(ip));
+      } 
+#ifdef RTLAZY
+      else if (isLazyRef(ip)) {
+	/* 'lazyTrapHandler' *will* call back into beta code to
+           rebind special references. Thus the call is protected using
+           the 'BetaCallback' abstraction. */
+	BetaCallback(ucon, 
+		     returnSP, 
+		     absAddr = lazyTrapHandler((unsigned long)ip));
+      }
+#endif /* RTLAZY */
       
-      if ((absAddr = (long)unswizzleReference(ip))) {
-	
-	popSP();
-	
-	/* We have fetched the object, and should continue execution.
-	 * With the introduction of dynamic compilation into debuggee, the 
-	 * debuggee may have allocated in IOA and even caused GC.
-	 * That is, the current value (right here in the signal handler)
-	 * of the two global sparc registers holding IOA and IOATopOff
-	 * MUST be written back into the ucontext to prevent the signal-
-	 * handler from restoring these registers to the old values.
-	 * Otherwise objects allocated during valhalla evaluators will
-	 * be forgotten!.
-	 * See register binding in registers.h.
-	 */
-	
-	ucon->uc_mcontext.gregs[REG_IOA] = (long)IOA;
-	ucon->uc_mcontext.gregs[REG_IOATOPOFF] = (long)IOATopOff;
-	
+      /* The object must now be in the beta heap */
+      Claim (inBetaHeap((Object *)absAddr), 
+	     "proxyTrapHandler: Failed to unswizzle reference");
+      
+      if (absAddr) {
+	/* We have fetched the object, and should continue execution. */
 	switch (sourcereg) {
 	case 0x0: /* g0 */
 	  fprintf(output, "proxyTrapHandler: "
@@ -315,7 +309,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 	return;
       } else {
 	/* loading failed. We pass on control to the real signal handler */
-	Claim(FALSE, "Object could not be loaded");
+	;
       }
     }
   }

@@ -88,13 +88,9 @@ void DOTscan (DOTforEach foreach)
 static void privDOThandleDelete (int handle)
 {
   /* Inform user that the handle is being deleted: */
-#if 0
   if (onDeleteTable[(int)handle]){
     onDeleteTable[(int)handle] (handle);
   }
-#else
-  onDeleteTable[(int)handle] (handle);
-#endif
   onDeleteTable[(int)handle] = 0;
 
   handleTable[(int)handle] = firstFreeHandle;

@@ -1,4 +1,6 @@
 #include "beta.h"
+#include "rtsighandler.h"
+
 extern int doshutdown(int fd, int how);
 
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
@@ -74,7 +76,6 @@ void valhalla_create_buffers ()
   wbuf = (char *) &wheader[2];
   rbuf = (char *) &rheader[2];
 }
-
 
 void valhalla_init_sockets (int valhallaport)
 {
@@ -581,19 +582,6 @@ long fix_stacks(long SP, Object *curObj, long PC)
 }
 #endif /* NEWRUN */
 
-void set_betastacktop(long *SP)
-{
-#if defined(sparc) || defined(intel)
-  BetaStackTop = SP;
-#endif /* sparc || intel */
-#ifdef NEWRUN
-  BetaStackTop[0] = SP;
-#endif /* NEWRUN*/
-#ifdef hppa
-  fprintf(output, "set_betastacktop: NYI for hppa\n");
-#endif /* hppa */
-}
-
 INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
 {
   void *cb = 0;
@@ -965,7 +953,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       /* Save stackpointer in BetaStackTop to make the trap look like 
        * an external call
        */
-      set_betastacktop((long*)SP);
+      set_BetaStackTop((long*)SP);
       /* valhalla_socket_flush? */
       /* Callback: cb() may cause GC. Stack setup has been adjust for this */
       cb();

@@ -8,7 +8,10 @@
 Object *unswizzleReference(void *ip);
 Object *lookUpReferenceEntry(unsigned long store, unsigned long offset, unsigned long inx);
 Object *handleSpecialReference(unsigned long specRef);
-void registerRebinderFunc(Object *(*rebinderFunc)(unsigned long objectTag, unsigned long typeTag));
+void registerRebinderFunc(Object *(*rebinderFunc)(unsigned long objectTag, 
+						  unsigned long typeTag));
+void registerOpenCrossStoreFunc(void (*openCrossStoreFunc)(char *host, 
+							   char *path));
 void showUnswizzleStatistics(void);
 void registerBETAENV(Object *theObj);
 

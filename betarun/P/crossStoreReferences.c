@@ -5,6 +5,12 @@
 
 #ifdef PERSIST
 
+#ifdef sparc
+#define OURINLINE __inline__
+#else
+#define OURINLINE
+#endif
+
 /* Import:
 
    A crossstorereference 'csr' is encountered. Proxy is looked up in
@@ -76,7 +82,7 @@ void markStoreAsClosed(unsigned long storeID)
   markStoreAs(storeID, STOREISCLOSED);
 }
 
-unsigned long storeIsOpen(unsigned long storeID)
+OURINLINE unsigned long storeIsOpen(unsigned long storeID)
 {
   storeLocation *current;
   

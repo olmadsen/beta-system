@@ -19,16 +19,11 @@
 #include "beta.h"
 
 #ifdef RTLAZY
-#ifdef PERSIST
-#error RTLAZY and PERSIST defined
-#endif /* PERSIST */
 #include "data.h"
-
-#ifndef MT
 
 #ifdef sparc
 #include "../CRUN/crun.h"
-#endif
+#endif /* sparc */
 
 #ifdef INLINE
 #undef INLINE
@@ -274,237 +269,35 @@ int FindDanglingProto (int dangler)
   return 0;
 }
 
-#if !defined(hppa) && !defined(linux)
-GLOBAL(static volatile int returnPC);
-GLOBAL(static volatile int returnSP);
-#endif
-
-#include <signal.h>
-#if defined(hpux)
-extern void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr);
-#endif
-
-/* Reference is NONE checks are handled as follows:
- *
- *
- * 
- * SPARC: 
- *      tst %in         (pseudo instruction for orcc %g0, %in, %g0)
- *      tle 17
- * 
- * The tst (xorcc) instruction should thus have the following format.
- *
- * SPARC: 31 30  29 28 27 26 25  24 23 22 21 20 19   18 17 16 15 14
- *                  DestReg         orcc opcode         Source1    
- *         1  0   0  0  0  0  0   0  1  0  0  1  0    0  0  0  0  0
- * 
- *   13  12 11 10 9 8 7 6 5  4 3 2 1 0
- *          Dummys            Source2
- *    0                      ? ? ? ? ?
- *
- *
- * 
- */
-
-
-/* SPARC
- * ===== */
-
-#ifdef sparc
-
-#ifdef sun4s
-#include <siginfo.h>
-#include <sys/regset.h>
-#include <sys/ucontext.h>
-#else
-#include <machine/trap.h>
-#endif
-
-#ifdef sun4s
-extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
-#endif
-
-#define KnownMask 0x80900000
-#define instructionOk(instruction) ((instruction & KnownMask) == (KnownMask))
-#define sourceReg(instruction) (instruction & 0x0000001F)
-
-#ifndef sun4s
-/* Temporary neccessary for trapHandler: */
-GLOBAL(static volatile int smask);
-#endif
-
-#ifdef sun4s
-void trapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
-#else
-void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
-#endif
-{ int instruction;
-
-#if LAZYDEBUG
-  fprintf (output, "trapHandler\n");
-#endif
-
-#ifdef sun4s  
-  if (info->si_trapno-0x80 == 17  /* solaris 2.3, 2.4, 2.5 */ || 
-      info->si_trapno-0x100 == 17 /* solaris 2.5.1, 2.6? */
-      ) {
-#else
-  if (code == ILL_TRAP_FAULT(17)) {
-#endif
-
-#if LAZYDEBUG
-    fprintf (output, "Caused by trap no 17\n");
-#endif
-
-    /* Ok, the signal was caused by a "tle 17" trap, meaning either
-     * "reference is NONE" or dereference of a dangling reference */
-    
-    /* Fetch the 'tst %lm' instruction. */
-#ifdef sun4s
-    instruction = (* (long *) (ucon->uc_mcontext.gregs[REG_PC] - 4));
-#else
-    instruction = (* (long *) (scp->sc_pc - 4));
-#endif
-
-    if (instructionOk(instruction)) {
-
-#if LAZYDEBUG
-      fprintf (output, "Instruction format ok\n");
-#endif
-
-      if (LazyDangler) 
-	fprintf (output, "WARNING: Lazy trap handler reentered\n");
-
-#ifdef sun4s 
-      /* PC to jump to when fetch has completed: */
-      returnPC = ucon->uc_mcontext.gregs[REG_PC] - 4; 
-      /* SP to restore when fetch has completed: */
-      returnSP = ucon->uc_mcontext.gregs[REG_SP]; 
-#else      
-      returnPC = scp->sc_pc-4; /* PC to jump to when fetch has completed. */
-      returnSP = scp->sc_sp;   /* SP to restore when fetch has completed. */
-#endif
-
-      /* flush register windows to stack and fetch value of register causing
-       * the trap. */
-      __asm__ volatile  ("ta 3");
-
-      /* LazyDangler = ((int *) returnSP)[sourceReg(instruction) - 26]; */
-      LazyDangler = ((int *) returnSP)[sourceReg(instruction) - 16];
-
-#if LAZYDEBUG
-      fprintf (output, "returnPC = 0x%x, LazyDangler = %d, sourceReg = %d\n", 
-	       returnPC, LazyDangler, sourceReg(instruction));
-#endif
-      
-      if (isLazyRef(LazyDangler)) {
-
-	/* Ok, so this is a genuine lazy reference, and not simply a NONE
-	 * reference. */
-
-#if LAZYDEBUG
-      fprintf (output, "It was actually a dangler\n");
-#endif
-
-	/* Return to trap window. */
-	__asm__ volatile ("restore; restore ! return to trap window");
-      
-	/* Now we are back in the register window where the trap occurred.
-	 * Only global registers may be changed. Now reset correct sp. (UNIX 
-	 * pushed some information on the stack). */
-#ifdef sun4s 
-	__asm__ volatile ("sethi %hi(returnSP),%g1 ! reset sp to returnSP");
-	__asm__ volatile ("ld [%g1+%lo(returnSP)],%sp");
-#else
-	__asm__ volatile ("sethi %hi(_returnSP),%g1 ! reset sp to returnSP");
-	__asm__ volatile ("ld [%g1+%lo(_returnSP)],%sp");
-#endif    
-	
-	/* Allocate a new register window to avoid changing trap registers. */
-	__asm__ volatile ("save %sp,-64,%sp ! save trap window");
-	
-	/* Tell compiler to assume nothing about register contents: */
-	__asm__ volatile ("" : : : "i0", "i1", "i2", "i3", "i4", "i5", "fp", "i7",\
-		      "o0", "o1", "o2", "o3", "o4", "o5", "sp", "o7", \
-		      "l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7");
-      
-
-#ifndef sun4s
-	/* Unblock SIGILL signal: */
-	smask = (~sigmask (SIGILL)) & sigsetmask (0);
-	sigsetmask (smask);
-	
-	/* Make sure signal handler is reinstalled. */
-	signal (SIGILL, (void (*)(int)) trapHandler);
-#endif
-	
-        /* Save and then clear 'i' registers to avoid strange GC behaviour. 
-	 * The i registers are the o registers of the trap frame. They may
-	 * contain garbage that should not be interpreted as objects. */
-
-	__asm__ volatile ("mov %i0,%l0; set 0,%i0   ! Save and clear i registers");
-	__asm__ volatile ("mov %i1,%l1; set 0,%i1");
-	__asm__ volatile ("mov %i2,%l2; set 0,%i2");
-	__asm__ volatile ("mov %i3,%l3; set 0,%i3");
-	__asm__ volatile ("mov %i4,%l4; set 0,%i4");
-	
-	/* call beta object handling the lazy fetch */
-#ifdef sun4s
-	__asm__ volatile ("sethi %hi(LazyItem),%i1  ! Call BETA lazy handler");
-	__asm__ volatile ("ld [%i1+%lo(LazyItem)],%i1 ! Object in %i1");
-#else
-	__asm__ volatile ("sethi %hi(_LazyItem),%i1  ! Call BETA lazy handler");
-	__asm__ volatile ("ld [%i1+%lo(_LazyItem)],%i1 ! Object in %i1");
-#endif
-	__asm__ volatile ("ld [%i1],%g1 ! Prototype in %g1");
-	__asm__ volatile ("ld [%g1+24],%g1 ! Entry point in %g1");
-	__asm__ volatile ("call %g1; nop");
-
-        /* Restore 'i' registers. */
-	
-	__asm__ volatile ("mov %l0,%i0 ! Restore i registers");
-	__asm__ volatile ("mov %l1,%i1");
-	__asm__ volatile ("mov %l2,%i2");
-	__asm__ volatile ("mov %l3,%i3");
-	__asm__ volatile ("mov %l4,%i4");
-
-	/* Get back to returnPC and continue from there. */
-#ifdef sun4s
-	__asm__ volatile ("sethi %hi(returnPC),%g1  ! Jump back to before trap");
-	__asm__ volatile ("ld [%g1+%lo(returnPC)],%g1");
-#else
-	__asm__ volatile ("sethi %hi(_returnPC),%g1  ! Jump back to before trap");
-	__asm__ volatile ("ld [%g1+%lo(_returnPC)],%g1");
-#endif
-	__asm__ volatile ("restore");
-	__asm__ volatile ("jmp %g1; nop");
-      } 
-    } 
-#if LAZYDEBUG
-    else {
-      fprintf (output, "Unexpected instruction format\n");
-    }
-#endif
-  }
-
-  /* If we get here, it was not a lazy reference. Call the usual 
-   * BetaSignalHandler. */
-#ifdef sun4s
-  BetaSignalHandler (sig, info, ucon);
-#else
-  BetaSignalHandler (sig, code, scp, addr);
-#endif
-  LazyDangler = 0; 
-}
-
-#endif
-
-
-
-
+unsigned long lazyTrapHandler(unsigned long lazyDangler)
+{  
+  /* Ok, so this is a genuine lazy reference, and not simply a NONE
+   * reference. */
+  
+  /* call beta object handling the lazy fetch */
+  /* A reference in this object is saved in 'LazyItem'. Since
+     callback back into BETA code have not been implemented
+     completely yet, it is not possible to handle this lazy
+     reference. */
+  
+  fprintf(output, 
+	  "lazyTrapHandler: \n"
+	  "             Lazy reference encountered. In order to handle\n"
+	  "             the lazy reference a call back to BETA code must\n"
+	  "             be made. This is not implemented completely yet.\n"
+	  "               Please disallow the use of lazy references by\n"
+	  "             setting 'allowLazyFetch' in the persistentstore to\n"
+	  "             false.\n"
+	  "               If large amount of data is scanned the new\n"
+	  "             persistent store can be used instead of the old."
+	  "             Include '~beta/persistentstore/virtualobjectstore'\n"
+	  "             instead to use the new persistent store.\n"); 
+  return 0;
+} 
 
 int getDangler ()
-{ return LazyDangler; }
+{ return LazyDangler; 
+}
 
 void clearDangler ()
 { LazyDangler = 0; }
@@ -522,28 +315,11 @@ void clearDangler ()
  */
 void initLazyTrapHandler (Item * lazyHandler)
 { 
-#ifdef sun4s
-  struct sigaction sa;
-
-  /* Specify that we want full info about the signal, and that
-   * the handled signal should not be blocked while being handled: */
-  sa.sa_flags = SA_SIGINFO | SA_NODEFER;
-
-  /* No further signals should be blocked while handling the specified
-   * signals. */
-  sigemptyset(&sa.sa_mask); 
-
-  /* Specify handler: */
-  sa.sa_handler = trapHandler;
-
-  sigaction (SIGILL,&sa,0);
-#endif
-
   /* Set up the LazyItem variable, which will be called
    * when a dangler is hit.
    */
   LazyItem = lazyHandler;
-
+  
   /* save pointers for objects/functions in the
    * variables in the RTS, that are always present.
    * This allows for programs, that do not use lazyref_gc.o
@@ -554,8 +330,6 @@ void initLazyTrapHandler (Item * lazyHandler)
   negAOArefsRESET = NegAOArefsRESET;
   findDanglingProto = FindDanglingProto;
 }
-
-#endif /* MT */
 
 /* Used by persistentstore to determine if the runtimesystem 
  * supports lazyFetch on the current platform.

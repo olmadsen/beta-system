@@ -22,7 +22,8 @@ void ChkRA()
 {
 #ifdef sparc
   /* Called with theCell in %g1, which is a super temp. */
-  register Object **theCell __asm__("%g1");
+  register Object **g1 __asm__("%g1");
+  Object **theCell = g1;
 #endif
 #ifdef hppa
   Object **theCell;
@@ -40,6 +41,7 @@ void ChkRA()
     }
 #endif
 #ifdef PERSIST
+    Claim(!inPIT(theCell), "ChkRA: theCell in PIT??");
     if (inPIT((void *)*theCell)) {
       newAOAclient(getPUID((void *)*theCell), theCell);
     }

@@ -97,6 +97,7 @@ unsigned long newPersistentObject(unsigned long storeID, Object *theObj)
   } else {
     GCMark = ENTRYALIVE;
   }
+
   /* Create space for the object in which store ?? */
   sp = allocateObject(storeID, 4*ObjectSize(theObj));
   

@@ -6,6 +6,7 @@
 #include "crossStoreReferences.h"
 
 #ifdef PERSIST
+
 #ifdef nti
 #include <io.h>
 #include <direct.h>
@@ -374,7 +375,7 @@ void closeStore(unsigned long storeID)
   }
 }
 
-int setCurrentPStore(unsigned long storeID)
+OURINLINE int setCurrentPStore(unsigned long storeID)
 {
   storeLocation *sl;
   
@@ -387,26 +388,33 @@ int setCurrentPStore(unsigned long storeID)
     }
   }
   
-  if ((sl = IDToName(storeID))) {
-    if ((currentFd = open(DBname(sl -> path), O_RDWR 
+  if (storeIsOpen(storeID)) {
+    if ((sl = IDToName(storeID))) {
+      if ((currentFd = open(DBname(sl -> path), O_RDWR 
 #ifdef nti
-			  | _O_BINARY
+			    | _O_BINARY
 #endif /* nti */
-			  )) < 0) {
-      perror("setCurrentPStore");
-      Claim(FALSE, "setCurrentPStore: Failed");
-      return 0;
+			    )) < 0) {
+	perror("setCurrentPStore");
+	Claim(FALSE, "setCurrentPStore: Failed");
+	return 0;
+      } else {
+	unsigned long headerSize;
+	
+	readLong(currentFd, &headerSize);
+	currentPStore = (PStoreHeader *)malloc(headerSize);
+	Rewind(currentFd);
+	readSome(currentFd, currentPStore, headerSize);
+	currentStoreID = storeID;
+      }
     } else {
-      unsigned long headerSize;
-      
-      readLong(currentFd, &headerSize);
-      currentPStore = (PStoreHeader *)malloc(headerSize);
-      Rewind(currentFd);
-      readSome(currentFd, currentPStore, headerSize);
-      currentStoreID = storeID;
+      fprintf(output, "setCurrentPStore: Failed to look up store id (%d)\n", (int)(storeID));
+      return 0;
     }
   } else {
-    fprintf(output, "setCurrentPStore: Failed to look up store id (%d)\n", (int)(storeID));
+    /* The store is not open. This is an error at this point. */
+    fprintf(output, "setCurrentPStore: Attempting access to closed store\n");
+    fflush(output);
     return 0;
   }
   return 1;
@@ -418,38 +426,54 @@ StoreProxy *allocateObject(unsigned long storeID,
   /* Allocates an object in the store with context local store id
      eq. storeID */
   
-  if (currentPStore) {
-    if (storeID == currentStoreID) {
-      sp.storeID = currentStoreID;
-      if (size + currentPStore -> nextFree < currentPStore -> blockSize) {
-	/* There is still room in the last block */
-	sp.offset = 
-	  (currentPStore -> topBlock * currentPStore -> blockSize) + currentPStore -> nextFree;
-	/* The offset does not include the store header */
-	currentPStore -> nextFree += size;
-	
+  if (storeIsOpen(storeID)) {
+    if (currentPStore) {
+      if (storeID == currentStoreID) {
+	sp.storeID = currentStoreID;
+	if (size + currentPStore -> nextFree < currentPStore -> blockSize) {
+	  /* There is still room in the last block */
+	  sp.offset = 
+	    (currentPStore -> topBlock * currentPStore -> blockSize) + currentPStore -> nextFree;
+	  /* The offset does not include the store header */
+	  currentPStore -> nextFree += size;
+	  
+	} else {
+	  unsigned long blocks, bytes;
+	  
+	  blocks = size / currentPStore -> blockSize;
+	  bytes = size % currentPStore -> blockSize;
+	  
+	  currentPStore -> topBlock += 1;
+	  markStartBlock(currentPStore, currentPStore -> topBlock);
+	  
+	  sp.offset = (currentPStore -> topBlock * currentPStore -> blockSize);
+	  
+	  currentPStore -> topBlock += blocks;
+	  currentPStore -> nextFree = bytes;
+	}
       } else {
-	unsigned long blocks, bytes;
-	
-	blocks = size / currentPStore -> blockSize;
-	bytes = size % currentPStore -> blockSize;
-	
-	currentPStore -> topBlock += 1;
-	markStartBlock(currentPStore, currentPStore -> topBlock);
-	
-	sp.offset = (currentPStore -> topBlock * currentPStore -> blockSize);
-	
-	currentPStore -> topBlock += blocks;
-	currentPStore -> nextFree = bytes;
+	setCurrentPStore(storeID);
+	return allocateObject(storeID, size);
       }
     } else {
-      setCurrentPStore(storeID);
-      return allocateObject(storeID, size);
+      return NULL;
     }
+    return &sp;
   } else {
-    return NULL;
+    storeLocation *sl;
+    
+    sl = IDToName(storeID);
+    
+    fprintf(output, 
+	    "allocateObject: Trying to allocate new object in store\n"
+	    "  that has been closed. Please defer closing of store\n\n"
+	    "    [%s]\n\n"
+	    "  until a later time. The update has been forced, even though\n"
+	    "  store is closed.\n",
+	    &(sl -> path[0]));
+    markStoreAsOpen(storeID);
+    return allocateObject(storeID, size);
   }
-  return &sp;
 }
 
 void printObjectStoreStatistics(void)

@@ -344,35 +344,43 @@ static void updateObjectInStore(Object *theObj,
   
   /* The object is exported. 'exportObject' does not export the proto
      types. */
+
+  /* We need to set the current store since 'exportObject' might
+     create new proxy objects in the store holding the exported object.
+  */
   
-  setCurrentPStore(store);
-  exportObject(theObj, store);
-  
-  if ((!Flags & FLAG_INSTORE)) {
-    docopy = TRUE;
-  } else {
-    objcopy = (Object*)((char*)theObj+objSize);
-    /* We compare the objects disregarding the protypes and
-       GCattribute values */
-    if (memcmp((char *)(theObj) + SIZEOFPROTOANDGCATTRIBUTE, 
-	       (char *)(objcopy) + SIZEOFPROTOANDGCATTRIBUTE, 
-	       objSize - SIZEOFPROTOANDGCATTRIBUTE)) {
-      docopy = TRUE;
-    }
-  }
-  
-  /* If the store has been closed the object is not saved in the
-     store. */
-  docopy = docopy && storeIsOpen(store);
-  
-  if (docopy) {
+  if (storeIsOpen(store)) {
     setCurrentPStore(store);
-    if (setStoreObject(store, offset, theObj)) {
-      /* Object has been updated */
-      INFO_PERSISTENCE(objectsExported++);
+    exportObject(theObj, store);
+    
+    if ((!Flags & FLAG_INSTORE)) {
+      docopy = TRUE;
     } else {
-      Claim(FALSE, "Could not update object");
+      objcopy = (Object*)((char*)theObj+objSize);
+      /* We compare the objects disregarding the protypes and
+	 GCattribute values */
+      if (memcmp((char *)(theObj) + SIZEOFPROTOANDGCATTRIBUTE, 
+	       (char *)(objcopy) + SIZEOFPROTOANDGCATTRIBUTE, 
+		 objSize - SIZEOFPROTOANDGCATTRIBUTE)) {
+	docopy = TRUE;
+      }
     }
+        
+    if (docopy) {
+      setCurrentPStore(store);
+      if (setStoreObject(store, offset, theObj)) {
+	/* Object has been updated */
+	INFO_PERSISTENCE(objectsExported++);
+      } else {
+	Claim(FALSE, "Could not update object");
+      }
+    }
+  } else {
+    /* The store is no longer open. Sometimes it is necessary to keep
+       an object in memory eventhough the store is closed. This is
+       because the object might be the origin of some other object
+       which are retained in memory. */
+    ;
   }
 }
 

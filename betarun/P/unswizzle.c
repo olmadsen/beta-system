@@ -28,6 +28,9 @@ extern PStoreHeader *currentPStore;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static Object *loadObject(unsigned long store, u_long offset, unsigned long inx);
+static Object *storeNotOpen(unsigned long store, 
+			    unsigned long offset, 
+			    unsigned long inx);
 
 /* FUNCTIONS */
 
@@ -100,20 +103,15 @@ static Object *loadObject(unsigned long store, unsigned long offset, unsigned lo
     theRealStoreObj = getRealObject(theStoreObj);
     distanceToPart = (unsigned long)theStoreObj - (unsigned long)theRealStoreObj;
     
-    if (distanceToPart) {
-      Object *theRealObj;
-      
-      theRealObj = lookUpReferenceEntry(store, offset - distanceToPart, -1);
-      return (Object *)((unsigned long)theRealObj + distanceToPart);
-    } else {
+    if (distanceToPart == 0) {
       size = 4*StoreObjectSize(theRealStoreObj);
       theRealObj = AOAallocate(2*size);
       loadedBytes += 2*size;
       if (loadedBytes > MAXPERSISTENTBYTES) {
 	loadedBytes = 0;
 	forceAOACompaction = TRUE;
-	DEBUG_CODE(fprintf(output, "Max persistent bytes exceeded\n"))
-	  }
+	DEBUG_CODE(fprintf(output, "Max persistent bytes exceeded\n"));
+      }
       if (forceAOACompaction) {
 	DEBUG_CODE(fprintf(output, "Requesting GC at next allocation\n"));
 	/* Request GC at next IOAAllocation */
@@ -144,26 +142,55 @@ static Object *loadObject(unsigned long store, unsigned long offset, unsigned lo
 	    == ObjectSize(theRealObj), "Claim");
       INFO_PERSISTENCE(objectsLoaded++);
       return theRealObj;
+    } else {
+      Object *theRealObj;
+      
+      theRealObj = lookUpReferenceEntry(store, offset - distanceToPart, -1);
+      return (Object *)((unsigned long)theRealObj + distanceToPart);
     }
   } else {
-    fprintf(output, "loadObject: Attempting access to closed store\n");
-    return NULL;
+    /* The store that we are trying to access is not open. We call user
+       code in order to have this done */
+    return storeNotOpen(store, offset, inx);
   }
+}
+
+static Object *storeNotOpen(unsigned long store, 
+			    unsigned long offset, 
+			    unsigned long inx)
+{
+  storeLocation *sl;
+  
+  if ((sl = IDToName(store))) {
+    if (callOpenCrossStoreC) {
+      callOpenCrossStoreC(&(sl -> host[0]), &(sl -> path[0]));
+      if (storeIsOpen(store)) {
+	setCurrentPStore(store);
+	return loadObject(store, offset, inx);
+      } else {
+	fprintf(output, 
+		"storeNotOpen: User function 'openpstore' failed to open store\n");
+	BetaExit(1);
+      }
+    } else {
+      fprintf(output, "storeNotOpen: Store is not initialized\n");
+      BetaExit(1);
+    }
+  } else {
+    fprintf(output, "storeNotOpen: Unknown store id (%d)\n", (int)store);
+    BetaExit(1);
+  }
+  return NULL;
 }
 
 /* If the implementation of the UNKNOWNTAG in virtualobjectstore.bet is
    changed then the define below should be changed accordingly.  */
 #define UNKNOWNTAG 0
 
-void registerRebinderFunc(Object *(*rebinderFunc)(unsigned long objectTag, unsigned long typeTag))
-{
-  callRebinderC = rebinderFunc;
-}
-
 Object *handleSpecialReference(unsigned long specRef)
 {
   unsigned long tag, distanceToPart;
-  Object *target;
+  Object *target = NULL;
   
   Claim(isSpecialReference(specRef), "handleSpecialReference: Is not special reference");
   
@@ -182,16 +209,37 @@ Object *handleSpecialReference(unsigned long specRef)
     target = DOThandleLookup(programHandle);
   } else {
     BETAREENTERED = TRUE;
-    target = callRebinderC(tag, UNKNOWNTAG);
-    BETAREENTERED = FALSE;
+    if (callRebinderC) {
+      target = callRebinderC(tag, UNKNOWNTAG);
+      BETAREENTERED = FALSE;
+    } else {
+      fprintf(output, "handleSpecialReference: Store is not initialized");
+      BetaExit(1);
+    }
   }
-  target = (Object *)((unsigned long)getRealObject(target) + distanceToPart);
+  if (target) {
+    target = (Object *)((unsigned long)getRealObject(target) + distanceToPart);
+  } else {
+    fprintf(output, 
+	    "handleSpecialReference: User code failed to rebind\n"
+	    "reference to special object tagged %d. Make sure\n"
+	    "the 'rebindSpecialReference' virtual has been implemented\n"
+	    "correctly.\n", (int)tag);
+    BetaExit(1);
+  }
   return target;
 }
 
-static void dummy(int handle)
-{ 
-  ;
+void registerRebinderFunc(Object *(*rebinderFunc)(unsigned long objectTag, 
+						  unsigned long typeTag))
+{
+  callRebinderC = rebinderFunc;
+}
+
+void registerOpenCrossStoreFunc(void (*openCrossStoreFunc)(char *host, 
+							   char *path))
+{
+  callOpenCrossStoreC = openCrossStoreFunc;
 }
 
 void registerBETAENVandPROGRAM(Component *theProgram)
@@ -203,12 +251,12 @@ void registerBETAENVandPROGRAM(Component *theProgram)
   DOTinit();
 
   /* */
-  if ((betaenvHandle = DOThandleInsert(betaenvObj, dummy, TRUE)) == -1) {
+  if ((betaenvHandle = DOThandleInsert(betaenvObj, (void (*)(int handle))0, TRUE)) == -1) {
     fprintf(output, "registerBETAENVandPROGRAM: Failed to insert betaenvObj in dot!");
     BetaExit(1);
   }
   
-  if ((programHandle = DOThandleInsert(programObj, dummy, TRUE)) == -1) {
+  if ((programHandle = DOThandleInsert(programObj, (void (*)(int handle))0, TRUE)) == -1) {
     fprintf(output, "registerBETAENVandPROGRAM: Failed to insert programObj in dot!");
     BetaExit(1);
   }
