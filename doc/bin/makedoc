@@ -26,7 +26,8 @@ sub usage
 #   Top link (refering top of current page)
 #   remove trailing numbers from interface index entries?
 #   Two-column index?
-#   print.html to supplement PDF? Possibly Problem with internal links (fix as for pdf generation).
+#   print.html to supplement PDF? Possibly Problem with internal links 
+#   (fix as for pdf generation or possibly even USE pdf prepered html files).
 
 
 # Global variables
@@ -173,6 +174,15 @@ sub strip_extension
     return $string;
 }
 
+sub strip_prefix
+{
+    local ($path, $prefix) = @_;
+    $path  = &trim_path($path);
+    $refix = &trim_path($prefix);
+    $path =~ s%^$prefix/%%;
+    return $path;
+}
+
 sub strip_path
 {
     local ($string) = @_;
@@ -180,6 +190,39 @@ sub strip_path
 	$string = $1;
     }
     return $string;
+}
+
+sub strip_dirs
+{
+    local ($path, $numdirs) = @_;
+    $path = &trim_path($path);
+    do{
+	$path =~ s%^[^/]*/%%;
+	$numdirs--;
+    } while ($numdirs>0);
+    return $path;
+}
+
+sub trim_path
+{
+    local ($path) = @_;
+    # delete double slashes
+    $path =~ s%//+%/%g;
+    # delete trailing slash
+    $path =~ s%/$%%;
+    # delete initial ./
+    $path =~ s%^\./%%;
+    return $path;
+}
+
+sub countdirs
+{
+    local ($path) = @_;
+    local $numdirs = 0;
+    $path = &trim_path($path);
+    $path =~ s%/%$numdirs++%ge;
+    #print STDERR "numdirs($path)=$numdirs\n";
+    return $numdirs;
 }
 
 sub legal_identifier
@@ -573,23 +616,31 @@ EOT
 
 sub print_interface_toc_header
 {
-    local ($title) = @_;
-    local ($next, $nexttip, $prev, $prevtip);
-
-    $next = &strip_extension(&strip_path($intsrcfiles[0]));
-    $nexttip = ucfirst($next) . " Interface";
-    $next .= ".html";
+    local ($title, $up) = @_;
+    local ($next, $nexttip, $prev, $prevtip, $nextno) = 0;
+    
+    $next = "";
+    $nextno = 0;
+    do {
+	if ($intsrcfiles[$nextno] ne ""){
+	    $next = $intdstfiles[$nextno];
+	    print STDERR "Try intdstfiles[$nextno] = $next\n";
+	}
+	$nextno++;
+    } while (($next eq "") && ($nextno<=$#intsrcfiles));
+    $next = &strip_dirs($next, $up);
+    $nexttip = ucfirst(&strip_extension(&strip_path($next))) . " Interface";
     $prev = $dstfiles[$#dstfiles];
     $prevtip = $prev;
-    &print_header($title, &go_up($prev,$up), $prevtip, $next, $nexttip, 1)
+    &print_header($title, &go_up($prev,$up), $prevtip, $next, $nexttip, $up)
 }
 
 sub print_interface_header
 {
-    local ($title) = @_;
+    local ($title,$up) = @_;
     local ($next, $nexttip, $prev, $prevtip);
 
-    print_head_begin($title, 1);
+    print_head_begin($title, $up);
 
     if ($filenumber==$#intsrcfiles){
 	# last interface file
@@ -605,11 +656,14 @@ sub print_interface_header
 	$prev = "index.html";
 	$prevtip = "Interface Descriptions"; # interface/index.html
     } else {
-	$prev = &strip_extension(&strip_path($intsrcfiles[$filenumber-1]));
+	local ($prevno) = $filenumber-1;
+	do {
+	    $prev = &strip_extension(&strip_path($intsrcfiles[$prevno--]));
+	} while ($prev eq "");
 	$prevtip = ucfirst($prev) . " Interface";
 	$prev .= ".html";
     }
-    &print_header($title, $prev, $prevtip, $next, $nexttip, 1)
+    &print_header($title, $prev, $prevtip, $next, $nexttip, $up)
 }
 
 sub read_command_line()
@@ -652,18 +706,23 @@ sub read_book_file
 		$date = $1;
 	    };
 	    if (m/^src:\s*(.*)$/){ 
-		$src = &expand($1) . "/";
+		$src = &trim_path(&expand($1)) . "/";
 	    };
 	    if (m/^dst:\s*(.*)$/){ 
-		$dst = &expand($1) . "/";
+		$dst = &trim_path(&expand($1)) . "/";
 		&SmartMkdir($dst);
 	    };
 	    if (m/^intsrc:\s*(.*)$/){ 
-		$intsrc = &expand($1) . "/";
+		$intsrc = &trim_path(&expand($1)) . "/";
 	    };
 	    if (m/^intdst:\s*(.*)$/){ 
 		local $cap = $1;
-		$intdst = &expand($1) . "/";
+		$intdst = &trim_path(&expand($1)) . "/";
+		if (($intdst =~ m%^\.\./%) || ($intdst =~ m%^/%)){
+		    print STDERR "Illegal intdst: $intdst.\n";
+		    print STDERR "intdst: must be a local directory\n";
+		    exit 1;
+		}
 		&SmartMkdir($intdst);
 		$cap = &strip_extension(&strip_path($cap)) . " Interface:";
 		push @intsrcfiles, "";
@@ -1126,7 +1185,7 @@ EOT
 	print "  " x ($level), "<DT><A HREF=\"$link\">$heading</A><DD>\n";
     }
 
-    print_interface_toc(0);
+    print_interface_toc("");
 
     print<<EOT;
   <DT><A HREF="$indexfile">Index</A><DD>
@@ -1258,7 +1317,8 @@ sub generate_interface_file
 
     open (STDOUT, ">$htmlfile") || die "\nCannot open $htmlfile for writing: $!\n";
 
-    print_interface_header($inttitle);
+    local ($up) = &countdirs($htmlfile); # $htmlfile assumed being local path
+    print_interface_header($inttitle, $up);
     print<<EOT;
 <H1>$inttitle</H1>
 <PRE CLASS=interface>
@@ -1509,7 +1569,7 @@ EOT
     print<<EOT;
 </PRE>
 EOT
-    print_trailer("$inttitle", 1, $betafile);
+    print_trailer("$inttitle", $up, $betafile);
 
     close (STDOUT);
     printf STDERR "done.\n" if $verbose==1;
@@ -1519,7 +1579,7 @@ EOT
 sub print_interface_toc
 {
 
-    local ($chop_interface_dir) = @_;
+    local ($prefix) = @_;
 
     local ($headinfo, $link, $heading, $headnum);
     local ($intcap) = "";
@@ -1531,8 +1591,8 @@ sub print_interface_toc
     if ($#intsrcfiles>0){
 	$headinfo = $intheadings[0];
 	($heading, $link) = split("\@", $headinfo);
-	if ($chop_interface_dir){
-	    $link =~ s%^interface/%%;
+	if ($prefix ne ""){
+	    $link = &strip_prefix($link, $prefix);
 	    $heading =~ s%I>%B>%; 
 	}
 	print "    ", "<DT><A HREF=\"$link\">$heading</A><DD>\n";
@@ -1548,8 +1608,8 @@ sub print_interface_toc
 		print "    ", "<DT><I>$heading</I><DD>\n";
 		print "    <DL>\n";
 	    } else {
-		if ($chop_interface_dir){
-		    $link =~ s%^interface/%%;
+		if ($prefix ne ""){
+		    $link = &strip_prefix($link, $prefix);
 		}
 		print "    ", "<DT><A HREF=\"$link\">$heading</A><DD>\n";
 	    }
@@ -1566,9 +1626,10 @@ sub print_interface_toc
 sub generate_interface_toc_page
 {
     local ($title) = @_;
+    local ($up) = &countdirs($inttocfile);
     printf STDERR "\nWriting interface toc page $inttocfile ... " if $verbose==1;
     open (STDOUT, ">$inttocfile") || die "\nCannot open $inttocfile for writing: $!\n";
-    &print_interface_toc_header($title);
+    &print_interface_toc_header($title, $up);
 
     print<<EOT;
 <H1>$title</H1>
@@ -1579,7 +1640,7 @@ sub generate_interface_toc_page
 <DL>
 EOT
 
-    &print_interface_toc(1);
+    &print_interface_toc("interface");
 
     print<<EOT;
 </DL>
@@ -1587,7 +1648,7 @@ EOT
 <P></P>
 EOT
 
-    &print_trailer($title, 1, "");
+    &print_trailer($title, $up, "");
     close (STDOUT);
     printf STDERR "done.\n" if $verbose==1;
 }
@@ -2077,7 +2138,7 @@ $date
 Copyright $copyrightyears <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A>.<BR>
 All rights reserved.<BR>
 No part of this document may be copied or distributed<BR>
-without the prior written permission of Mjolner Informatics
+without the prior written permission of Mjølner Informatics
 </TD></TR>
 </TABLE>
 </center>
@@ -2090,7 +2151,6 @@ EOT
 }
 
 ### main #######
-
 
 # variables
 &set_default_variable_values();
