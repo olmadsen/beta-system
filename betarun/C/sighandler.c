@@ -345,7 +345,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 #endif /* MT */
 
   /* Try to fetch the address of current Beta object from i0.*/
-  theCell = (struct Object **) &((struct RegWin*)StackEnd)->i0;
+  theCell = (struct Object **) &((struct RegWin*)ucon->uc_mcontext.gregs[REG_SP])->i0;
   if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
 
   switch(sig){
