@@ -21,11 +21,9 @@ sub usage
 #   Fix titles for src-generated files (OK for intsrcfiles)
 #   Fix prev/next TITLE for src-generated files (OK for intsrcfiles)
 #   Eliminate global $filenumber
-#   Problem with index for ::<, :<, :: -  Kategory becomes '&'
-# Continuation indications in all but first column in index 'foo, continued'.
+#   Continuation indications in all but first column in index 'foo, continued'.
 # IDEAS:
 #   Possibly a <FOOTNOTE> tag. Use <HR width=100>
-#   Possibly a <GIF SRC=... ALT=...> tag. Read width/height from gif file.
 #   Possibly a CAP attribute for INX (to appear in index instead of indexed word)?
 #   remove trailing numbers from interface index anchors?
 #   print.html to supplement PDF? Problem with internal links).
@@ -109,6 +107,23 @@ sub read_file
     };
     close (FILE);
     return $line;
+}
+
+sub read_gif_dim
+{
+    local ($filename) = @_;
+    local ($buffer,$header, $width, $height);
+    open(GIF, "$filename") || die "***Cannot open GIF file $filename for reading: $!\n";
+    binmode GIF;
+    read GIF, $buffer, 10 || die "***Cannot read header of GIF file $filename: !$\n";
+    close GIF;
+    ($header, $width, $height) = unpack "A6 v2", $buffer;
+    if ($header =~ /^GIF8[79]a$/) {
+        return ($width, $height);
+    } else {
+        print STDERR "***$filename: Unknown GIF file format $header\n";
+	return (0,0);
+    }
 }
 
 sub rename_file
@@ -307,20 +322,18 @@ sub num_chars
     return $num;
 }
 
-sub print_file_size
+sub get_file_size
 {
     local ($filename) = @_;
     local ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,@rest)
 	= stat($filename);
     if ($size>(1024*1024)){
-	printf "%.2fMb", $size/(1024*1024);
-	return;
+	return sprintf "%.2fMb", $size/(1024*1024);
     }
     if ($size>1024){
-	printf "%.0fkb", $size/1024;
-	return;
+	return sprintf "%.0fkb", $size/1024;
     }
-    printf "%d bytes", $size;
+    return sprintf "%d bytes", $size;
 }
 
 sub print_lastmod
@@ -893,7 +906,7 @@ sub parse_special_tags
     $_=$srcline;
     $done = $before = $match = $remaining = "";
 
-    while(m%\<H[1-6]|\</H[1-6]\>|\<BETA|\</BETA\>|\<FIG|\</FIG\>|\<INX|\</INX\>%i ){
+    while(m%\<H[1-6]|\</H[1-6]\>|\<BETA|\</BETA\>|\<FIG|\</FIG\>|\<GIF|\</GIF\>|\<INX|\</INX\>%i ){
 	$before = $`;
 	$match  = $&; 
 	$remaining  = $';
@@ -1084,6 +1097,8 @@ sub parse_special_tags
 		$entry = $`;
 		# delete initial whitespace
 		$entry =~ s%^\s+%%;
+		# delete trailing whitespace
+		$entry =~ s%\s+$%%;
 		#print STDERR "$htmlfile: INX entry: $entry\n";
 		if ($entry eq ""){
 		    &error($full_length-length($remaining), "Empty index entry? <<INX></INX>)");
@@ -1200,6 +1215,71 @@ sub parse_special_tags
 	    # Found FIG end
 	    &error($full_length-length($remaining), "Unmatched end-of-figure? (</FIG>)");
 	    $done .= $match;
+	} elsif ($match =~ m%\<GIF%i){
+	    ######################## Found GIF start ####################
+	    local ($attributes, $alt, $source, $tit, $height, $width, $align, $info);
+	    local ($iw,$ih);
+	    $attributes = $alt = $source = $tit = $height = $width = $align = "";
+	    #print STDERR "$htmlfile: GIF start\n";
+	    if ($remaining =~ m%^([^>]*)\>%si){
+		# Matched <GIF xxx>
+		$attributes = $1; # xxx
+		#print STDERR "$htmlfile: <GIF> attributes:'$attributes'\n";
+		$remaining = $';
+	    }
+	    # Handle attributes
+	    if ($attributes =~ m%SRC\s*=\s*\"([^\"]+)\"%i){
+		$source = $1;
+	    } elsif ($attributes =~ m%SRC\s*=\s*([^\s]+)%i){
+		$source = $1;
+	    }
+	    if ($attributes =~ m%ALT\s*=\s*\"([^\"]+)\"%i){
+		$alt = $1;
+	    } elsif ($attributes =~ m%ALT\s*=\s*([^\s]+)%i){
+		$alt = $1;
+	    }
+	    if ($attributes =~ m%TITLE\s*=\s*\"([^\"]+)\"%i){
+		$tit = $1;
+	    } elsif ($attributes =~ m%TITLE\s*=\s*([^\s]+)%i){
+		$tit = $1;
+	    }
+	    if ($attributes =~ m%WIDTH\s*=\s*\"([^\"]+)\"%i){
+		$tit = $1;
+	    } elsif ($attributes =~ m%WIDTH\s*=\s*([^\s]+)%i){
+		$tit = $1;
+	    }
+	    if ($attributes =~ m%HEIGHT\s*=\s*\"([^\"]+)\"%i){
+		$height = $1;
+	    } elsif ($attributes =~ m%HEIGHT\s*=\s*([^\s]+)%i){
+		$height = $1;
+	    }
+	    if ($attributes =~ m%ALIGN\s*=\s*\"([^\"]+)\"%i){
+		$align = $1;
+	    } elsif ($attributes =~ m%ALIGN\s*=\s*([^\s]+)%i){
+		$align = $1;
+	    }
+
+	    if ($source eq ""){
+		&error($full_length-length($remaining), "GIF tag with no SRC");
+	    }
+	    ($iw, $ih) = &read_gif_dim($source);
+	    if ($width eq "" || $height eq ""){
+		$width = $iw if ($width eq "");
+		$height = $ih if ($height eq "");
+	    }
+	    $tit = $alt if ($alt ne "" && $tit eq "");
+	    $info  = " [" . &get_file_size($source) . " ${width}x$height GIF]";
+	    $alt .= $info;
+	    $tit .= $info;
+	    
+	    $done .= "<IMG SRC=\"$source\"";
+	    $done .= " WIDTH=\"$width\" HEIGHT=\"$height\"";
+	    $done .= " ALIGN=\"$align\"" if ($align ne "");
+	    $done .= " ALT=\"$alt\" TITLE=\"$tit\">";
+	} elsif ($match =~ m%\</GIF\>%i){
+	    # Found GIF end
+	    &error($full_length-length($remaining), "GIF tags have no end-tag (</GIF>)");
+	    
 	} else {
 	    # Hmmm, error? Should not happen.
 	    $done .= $match;
@@ -1364,7 +1444,7 @@ EOT
 	print "  <DT><SPAN CLASS=disabled><B>PDF</B></SPAN>\n";
     } else {
 	print "  <DT><A HREF=\"$pdf\"><B>PDF</B></A> (";
-	&print_file_size($pdf);
+	print &get_file_size($pdf);
 	print ")\n";
     }
     print<<EOT;
