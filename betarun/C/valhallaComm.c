@@ -28,6 +28,13 @@ extern int doshutdown(int fd, int how);
 static void *self=0;
 #endif /* UNIX */
 
+static int invops = 0; 
+/* TRUE iff ValhallaOnProcessStop is active. Used to check
+ * for reentrance of ValhallaOnProcessStop. This could happen
+ * in case of bus-errors or the like during communication with
+ * valhalla. 
+*/
+
 /* Opcodes for communication between valhalla and debugged process.
  *
  * VOP_* constants are replicated in
@@ -139,7 +146,7 @@ void valhalla_socket_flush ()
   wnext=0;
 }
 
-void valhalla_writebytes (char* buf, int bytes)
+void valhalla_writebytes (const char* buf, int bytes)
 { int written = 0;
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_writebytes\n"));  
   while (written<bytes) { 
@@ -162,7 +169,7 @@ void valhalla_writeint (int val)
   valhalla_writebytes ((char *)&val,sizeof(val));
 }
 
-void valhalla_writetext (char* txt)
+void valhalla_writetext (const char* txt)
 { 
   int len = strlen (txt);
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_writetext\n"));  
@@ -689,6 +696,9 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
     case VOP_EXECUTEOBJECT: {
       struct Structure * struc;
       void (*cb)(void);
+      Object *old_vop_curobj;
+      long   *old_vop_sp;
+      long   old_invops;
 
       struc = (struct Structure *) valhalla_readint ();
       /* Debuggee is currently stopped in C code.
@@ -708,7 +718,16 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "Installed callback at 0x%08x\n", (int)cb));
 
       DEBUG_VALHALLA(fprintf(output, "Calling callback function\n"));
+      old_vop_sp = vop_sp;
+      vop_sp=0;
+      old_vop_curobj = vop_curobj;
+      vop_curobj=0;
+      old_invops = invops;
+      invops = 0;
       cb();
+      vop_sp = old_vop_sp;
+      vop_curobj = old_vop_curobj;
+      invops = old_invops;
       DEBUG_VALHALLA(fprintf(output, "VOP_EXECUTEOBJECT done.\n"));
       valhalla_writeint (opcode);
       valhalla_socket_flush ();
@@ -725,9 +744,9 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
     break;
     case VOP_LOOKUP_SYM_OFF: {
       long addr = valhalla_readint();
-      char *sym=0;
+      const char *sym=0;
       long off=0;
-      DEBUG_VALHALLA(fprintf(output,"VOP_LOOKUP_SYM_OFF(%d)\n",addr));
+      DEBUG_VALHALLA(fprintf(output,"VOP_LOOKUP_SYM_OFF(%d)\n",(int)addr));
 #ifdef sun4s
       /* Not available for sgi - grrrr... */
       {
@@ -814,12 +833,6 @@ void forEachAlive (int handle, int address, DOTonDelete onDelete)
  *
  * Calls back to valhalla to inform that this process has stopped and
  * is ready to serve requests. */
-
-static int invops = 0; /* TRUE iff ValhallaOnProcessStop is active. Used to check
-			* for reentrance of ValhallaOnProcessStop. This could happen
-			* in case of bus-errors or the like during communication with
-			* valhalla . */
-
 
 int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj, 
 			   long sig, long errorNumber)
