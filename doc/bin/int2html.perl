@@ -54,6 +54,7 @@ $extradir=$x;
 # 
 # Indexed words are set in bold.
 #
+# FIXME:
 # BUGS:
 #   "enter (foo, type##)" where type is pattern variable does not work
 #   Has to be written "enter (foo, type ## )"
@@ -72,8 +73,14 @@ $extradir=$x;
 #
 # 4. ANONYMOUS.1:(.*)\@betaenv.html could probably be replaced
 #    with betaenv.1:$1\@betaenv.html.
-#    Requires emission of an index entry for betaenv (href=betaenv.html) when the
-#    first such match is found in index.
+#    Requires emission of an index entry for betaenv (href=betaenv.html) when 
+#    thefirst such match is found in index.
+#
+# 5. "do" inside comments tend to "eat" the newline after the "do"?
+#
+
+
+##### Configuration #####
 
 # Style sheet:
 if ($extradir){
