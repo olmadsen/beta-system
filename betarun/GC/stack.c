@@ -1263,7 +1263,137 @@ void PrintRef(ref(Object) ref)
   }
   fprintf(output, "\n");
 }
-#endif
+
+/* Traverse the StackArea [low..high] and print all references within it. */
+void PrintStackPart(long *low, long *high)
+{
+  ptr(long) current = low;
+  ref(Object) theObj;
+  handle(Object) theCell;
+  fprintf(output, 
+	  "\n----- AR: low: 0x%08x, high: 0x%08x\n", (int)low, (int)high);
+  fprintf(output, "ComponentBlock/CallbackFrame: [0x%08x, 0x%08x, 0x%08x]\n", 
+	  (int)(*(high+1)), (int)(*(high+2)), (int)(*(high+3)));
+  Claim( high <= (long *)StackStart, "PrintStackPart: high<=StackStart" );
+  
+  while( current <= high ){
+    if(inBetaHeap( (ref(Object))*current)){
+      theCell = (handle(Object)) current;
+      theObj  = *theCell;
+      if( isObject( theObj) ){
+	if(inLVRA(theObj)){
+	  fprintf(output, "(STACK(%d) is pointer into LVRA)", current-low);
+	} else {
+	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
+	  PrintRef(*(Object**)current);
+	}
+      } else {
+	if (!isValRep(theObj)){
+	  fprintf(output, "*** SUSPICIOUS REFERENCE ON STACK: 0x%08x: 0x%08x", 
+		  (int)current, (int)(*current));
+	  if (IsPrototypeOfProcess((long)theObj->Proto)){
+	    fprintf(output, " Proto: 0x%08x (%s)\n",
+		    (int)theObj->Proto,
+		    ProtoTypeName(theObj->Proto));
+	  } else {
+	    fprintf(output, " *** ILLEGAL PROTOTYPE: 0x%08x\n", (int)theObj->Proto);
+	  }
+	}
+      }
+    } else {
+      /* handle value register objects on the stack ref. ../Asm/DataRegs.s */
+      if ((-8<=(*current)) && ((*current)<=-5))
+	fprintf(output, 
+		"0x%08x: %d (SKIP NEXT %d)\n", 
+		(int)current, 
+		(int)*current, 
+		-(int)*current-4
+		);
+      switch(*current){
+      case -8: 
+	current++; 
+	PrintSkipped(current); 
+	/* deliberately no break here */
+      case -7: /* skip 3 */
+	current++; 
+	PrintSkipped(current); 
+	/* deliberately no break here */
+      case -6: /* skip 2 */
+	current++; 
+	PrintSkipped(current);
+	/* deliberately no break here */
+      case -5: /* skip 1 */
+	current++;
+	PrintSkipped(current); 
+	break;
+      default:
+	if (isLazyRef (*current)){
+	  /* (*current) is a dangling reference */
+	  fprintf(output, "0x%08x: %d - LAZY\n", (int)current, (int)*current);
+	} else {
+	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
+	  if (*current){
+	    fprintf(output, " (%s+0x%x)\n",
+		    getLabel((long*)*current),
+		    (int)labelOffset);
+	  } else {
+	    fprintf(output, "\n");
+	  }
+	}
+	break;
+      }
+    }
+    current++;
+  }
+}
+
+void PrintStack(long *StackEnd)
+{
+  /* FIXME: Would be nice to have some way of determining
+   * stack top from here. Maybe inline assembler? Maybe &theTop?
+   */
+  ptr(long)          theTop;
+  ptr(long)          theBottom;
+  
+  ref(CallBackFrame)  theFrame;
+  ref(ComponentBlock) currentBlock;
+  
+  fprintf(output, "\n ***** Trace of stack *****\n");
+  /*
+   * First handle the topmost component block
+   */
+  theTop    = StackEnd;
+  theBottom = (ptr(long)) lastCompBlock;
+  theFrame  = ActiveCallBackFrame;
+  /* Follow the stack */
+  while( theFrame){
+    PrintStackPart( theTop, (long *)theFrame-1);
+    theTop   = theFrame->betaTop;
+    theFrame = theFrame->next;
+  }
+  PrintStackPart( theTop, theBottom-1);  
+  
+  /*
+   * Then handle the remaining component blocks.
+   */
+  currentBlock = lastCompBlock;
+  while( currentBlock->next ){
+    theTop    = (long *) ((long) currentBlock +
+			  sizeof(struct ComponentBlock) );
+    theBottom = (long *) currentBlock->next;
+    theFrame  = currentBlock->callBackFrame;
+    while( theFrame){
+      PrintStackPart( theTop, (long *)theFrame-1);
+      theTop   = theFrame->betaTop;
+      theFrame = theFrame->next;
+    }
+    PrintStackPart( theTop, theBottom-1);  
+    currentBlock = currentBlock->next;
+  }
+  fprintf(output, " *****  End of trace  *****\n");
+}
+
+#endif /* RTDEBUG */
 
 
 #endif /* intel */
