@@ -91,6 +91,10 @@ static __inline__ void *popReference()
   return p;
 }
 
+#define push(v) pushReference((void*)v)
+#define pop(v) ((v) = (__typeof__(v))popReference())
+
+
 static __inline__ void pushReg(void *r) 
 { /* This is how compiler pushes: strange big frame (64)? */
   __asm__ volatile("STW\t%0,-36(0,%%r30)" : /* no out */ : "r" (r));
