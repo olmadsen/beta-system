@@ -1,5 +1,6 @@
 #include "trie.h"
 #include <stdio.h>
+#include <string.h>
 
 #ifdef sparc
 #define OURINLINE __inline__
