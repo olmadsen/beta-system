@@ -2,6 +2,7 @@ ORIGIN '../valhalla';
 INCLUDE '~beta/editor/codeeditor';
 INCLUDE '~beta/editor/private/nouser';
 INCLUDE '~beta/sourcebrowser/private/ymerPrivate';
+INCLUDE '~beta/toollibs/utils/architecture';
 (*
  * COPYRIGHT
  *   Copyright Mjolner Informatics, 1995-96
@@ -12,10 +13,37 @@ INCLUDE '~beta/sourcebrowser/private/ymerPrivate';
 (# outline: @boolean;
    fg: ^gui.mps.ast.fragmentGroup;
    ff: ^gui.mps.ast.fragmentForm;
+   execname:^text;
+   warningmsg:^text;
 do
+   getExecNameParam->execname[];
+   'Executable: '->screen.puttext;
+   ExecName[]->screen.putline;
+   (if (ExecName[]->is_native_executable) then
+       'Program ok'->screen.putline;
+    else
+       'Program of type: '->screen.puttext;
+       ExecName[]->type_of_executable->screen.putline;
+       NONE->debuggee[];
+       'No Process'->gui.putpinfo;
+       'Binary: '->warningmsg[];
+       execname[]->warningmsg.puttext;
+       ' is not a correct binary for this CPU!.\n'->warningmsg.puttext;
+       'Seems to be of type: '->warningmsg.puttext;
+       ExecName[]->type_of_executable->warningmsg.putline;
+       warningmsg.newline;
+       'Quit immediately (and recompile) to be able to continue debugging'
+         ->warningmsg.puttext;
+       (warningmsg[],'Warning')->gui.alertInfo;
+       NONE->execname[];
+   if);
    dorunNewDebuggee:
      (# 
      do
+        (if execname[]=NONE then (* wrong type of executable *)
+            FALSE->success;
+            leave dorunNewDebuggee;
+        if);
         TRUE->success;
         
         (if debuggee[]<>NONE then
@@ -41,7 +69,7 @@ do
               (*
                * (if sources[]<>NONE then sources.close; NONE->sources[] if);
                *)
-              gui.codeviews.newscan(# do cur.encl.tryclose #);
+              gui.codeviews.newscan(# do cur.encl.tryclose  #);
               
               &gui.GUIprocess[]->debuggee[];
               
@@ -293,14 +321,18 @@ do (# edenv: ^gui.main.editorEnv
 do 
       
 --- newcodemoveable:dopart ---
-do findCode: gui.codeviews.newscan
-     (# end::
+do 
+   findCode: gui.codeviews.newscan
+     (# 
+        end::
           (# 
-          do (if openIfNotFound then
+          do
+             (if openIfNotFound then
                  getFrame
                  (# done::
                       (# mc: ^mycodeview;
-                      do &mycodeview[]->mc[];
+                      do 
+                         &mycodeview[]->mc[];
                          (gui.main.objworld[],result,cast[])->mc.open;
                          cast[]->mc.selectNode;
                          mc.contents.editor[]->lastEditor[];
@@ -308,7 +340,8 @@ do findCode: gui.codeviews.newscan
                  #);
              if)
           #);
-     do (if cur.frag[]<>NONE then
+     do 
+        (if cur.frag[]<>NONE then
             (if cur.frag.root[]->cast.frag.root.equal then
                 (if cur[]->acceptFound then
                     cast[]->cur.select;
@@ -351,7 +384,7 @@ do findStack: gui.stackviews.newscan
                do (gui.main.objworld[],result,debuggee[],comp[])
                     ->(&mystackview[]).open;
                #);
-          #);
+        #);
      do (if cur.component[]->comp.equal then
             cur.encl.onHighlight;
             leave findStack;
@@ -447,7 +480,9 @@ do gui.ymerPrivate.edenv[]->private.edenv[];
    (this(mycodeview)[],node.frag.father,true)
      ->private.edenv.findOrCreateGroupEditor
      ->private.ge[];
-   (node.frag[],node.frag.root[],node[],contents.editor[],private.ge[])
-     ->private.edenv.findOrCreateFormEditor
-     ->private.cfe[];
+   (node.frag[],node.frag.root[],(*node[]*)none,contents.editor[],private.ge[])
+     ->private.edenv.findOrCreateFormEditor 
+     ->private.cfe[]; (* rettet af fgc, for at sifeditor expander 2 niveauer
+                       * hvis det er roden. (forste gang et codevindue vises)
+                       *)
    node[]->contents.editor.select;
