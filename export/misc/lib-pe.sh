@@ -14,13 +14,13 @@ if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
 	echo "Creating $DST/lib.cmd"
-	FILES=`/users/beta/export/distribution/r3.1.1/files/lib-pe.files` 
-	echo "$FILES" | /users/beta/export/distribution/r3.1.1/misc/icomp $DST/lib.cmd
+	FILES=`/users/beta/export/distribution/r4.0/files/lib-pe.files` 
+	echo "$FILES" | /users/beta/export/distribution/r4.0/misc/icomp $DST/lib.cmd
 else
 	echo ""
 	echo "Creating $DST/lib.tar.${ZEXT} "
 	echo "(Listing in $DST/lib.lst)"
-	FILES=`/users/beta/export/distribution/r3.1.1/files/lib-pe.files` 
+	FILES=`/users/beta/export/distribution/r4.0/files/lib-pe.files` 
 
 	cd /users/beta/
 
@@ -29,5 +29,5 @@ else
 	| $COMPRESS >  $DST/lib.tar.${ZEXT}
 fi
 
-. /users/beta/export/distribution/r3.1.1/misc/check_problems.sh
+. /users/beta/export/distribution/r4.0/misc/check_problems.sh
 check_pack lib

@@ -14,7 +14,7 @@ export PACKOBJECTSERVER
 
 # === PERSONAL EDITION SYSTEM ===
 
-DST=/users/beta/export/tarfiles/r3.1.1.pe
+DST=/users/beta/export/tarfiles/r4.0.pe
 if [ ! -d $DST ]; then mkdir $DST; fi
 DST=${DST}/${TARGET}
 if [ ! -d $DST ]; then mkdir $DST; fi
@@ -25,28 +25,28 @@ ls $DST/*
 rm -f $DST/*
 
 if [ "$PACKSYSTEM" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/system-pe.sh
+   /users/beta/export/distribution/r4.0/misc/system-pe.sh
 fi
 
 if [ "$PACKLIB" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/lib-pe.sh
+   /users/beta/export/distribution/r4.0/misc/lib-pe.sh
 fi
 
 if [ "$PACKXT" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/xt.sh
+   /users/beta/export/distribution/r4.0/misc/xt.sh
 fi
 
 if [ "$PACKLIDSKJALV" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/lidskjalv.sh
+   /users/beta/export/distribution/r4.0/misc/lidskjalv.sh
 fi
 
 if [ "$PACKCONTRIB" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/contrib.sh
+   /users/beta/export/distribution/r4.0/misc/contrib.sh
 fi
 
 if [ "$TARGET" = "nti" ]
 then
-   /users/beta/export/distribution/r3.1.1/misc/make_list.perl $DST/*.cmd
+   /users/beta/export/distribution/r4.0/misc/make_list.perl $DST/*.cmd
 else
-   /users/beta/export/distribution/r3.1.1/misc/make_list.perl $DST/*.lst
+   /users/beta/export/distribution/r4.0/misc/make_list.perl $DST/*.lst
 fi

@@ -42,57 +42,57 @@ ls $DST/*
 rm -f $DST/*
 
 if [ "$PACKSYSTEM" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/system.sh
+   /users/beta/export/distribution/r4.0/misc/system.sh
 fi
 
 if [ "$PACKLIB" = "yes" ]; then
    PACKOBJECTSERVER=yes
    export PACKOBJECTSERVER
-   /users/beta/export/distribution/r3.1.1/misc/lib.sh
+   /users/beta/export/distribution/r4.0/misc/lib.sh
    PACKOBJECTSERVER=packed
    export PACKOBJECTSERVER
 fi
 
 if [ "$PACKYGGDRASIL" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/yggdrasil.sh
+   /users/beta/export/distribution/r4.0/misc/yggdrasil.sh
 fi
 
 if [ "$PACKEDITOR" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/editor.sh
+   /users/beta/export/distribution/r4.0/misc/editor.sh
 fi
 if [ "$PACKEDITOR5_0" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/editor5_0.sh
+   /users/beta/export/distribution/r4.0/misc/editor5_0.sh
 fi
 
 if [ "$PACKXT" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/xt.sh
+   /users/beta/export/distribution/r4.0/misc/xt.sh
 fi
 
 if [ "$PACKBIFROST" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/bifrost.sh
+   /users/beta/export/distribution/r4.0/misc/bifrost.sh
 fi
 
 if [ "$PACKVALHALLA" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/valhalla.sh
+   /users/beta/export/distribution/r4.0/misc/valhalla.sh
 fi
 if [ "$PACKVALHALLA2_0" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/valhalla2_0.sh
+   /users/beta/export/distribution/r4.0/misc/valhalla2_0.sh
 fi
 
 if [ "$PACKFREJA" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/freja.sh
+   /users/beta/export/distribution/r4.0/misc/freja.sh
 fi
 
 if [ "$PACKYMER" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/ymer.sh
+   /users/beta/export/distribution/r4.0/misc/ymer.sh
 fi
 
 if [ "$PACKFRIGG" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/frigg.sh
+   /users/beta/export/distribution/r4.0/misc/frigg.sh
 fi
 
 if [ "$PACKLIDSKJALV" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/lidskjalv.sh
+   /users/beta/export/distribution/r4.0/misc/lidskjalv.sh
 fi
 
 if [ "$PACKOODB" = "yes" ]; then
@@ -103,7 +103,7 @@ if [ "$PACKOODB" = "yes" ]; then
    fi
    PACKDISTRIBUTION=yes
    export PACKDISTRIBUTION
-   /users/beta/export/distribution/r3.1.1/misc/oodb.sh
+   /users/beta/export/distribution/r4.0/misc/oodb.sh
    PACKOBJECTSERVER=packed
    export PACKOBJECTSERVER
    PACKDISTRIBUTION=packed
@@ -116,30 +116,30 @@ if [ "$PACKDISTRIBUTION" = "yes" ]; then
      PACKOBJECTSERVER=yes
      export PACKOBJECTSERVER
    fi
-   /users/beta/export/distribution/r3.1.1/misc/distribution.sh
+   /users/beta/export/distribution/r4.0/misc/distribution.sh
    PACKOBJECTSERVER=packed
    export PACKOBJECTSERVER
 fi
 
 if [ "$PACKOBJECTSERVER" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/objectserver.sh
+   /users/beta/export/distribution/r4.0/misc/objectserver.sh
 fi
 
 if [ "$PACKGDMO" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/gdmo.sh
+   /users/beta/export/distribution/r4.0/misc/gdmo.sh
 fi
 
 if [ "$PACKCONTRIB" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/contrib.sh
+   /users/beta/export/distribution/r4.0/misc/contrib.sh
 fi
 
 if [ "$PACKBETACL" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/betacl.sh
+   /users/beta/export/distribution/r4.0/misc/betacl.sh
 fi
 
 if [ "$TARGET" = "nti" ]
 then
-   /users/beta/export/distribution/r3.1.1/misc/make_list.perl $DST/*.cmd
+   /users/beta/export/distribution/r4.0/misc/make_list.perl $DST/*.cmd
 else
-   /users/beta/export/distribution/r3.1.1/misc/make_list.perl $DST/*.lst
+   /users/beta/export/distribution/r4.0/misc/make_list.perl $DST/*.lst
 fi

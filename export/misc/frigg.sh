@@ -14,8 +14,8 @@ if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
 	echo "Creating $DST/frigg.cmd"
-	FILES=`/users/beta/export/distribution/r3.1.1/files/frigg.files`
-	echo "$FILES" | /users/beta/export/distribution/r3.1.1/misc/icomp $DST/frigg.cmd
+	FILES=`/users/beta/export/distribution/r4.0/files/frigg.files`
+	echo "$FILES" | /users/beta/export/distribution/r4.0/misc/icomp $DST/frigg.cmd
 
 else
 
@@ -23,7 +23,7 @@ else
 	echo "Creating $DST/frigg.tar.${ZEXT} "
 	echo "(Listing in $DST/frigg.lst)"
 
-	FILES=`/users/beta/export/distribution/r3.1.1/files/frigg.files`
+	FILES=`/users/beta/export/distribution/r4.0/files/frigg.files`
 
 	cd /users/beta
 
@@ -32,5 +32,5 @@ else
 	| $COMPRESS >  $DST/frigg.tar.${ZEXT}
 fi
 
-. /users/beta/export/distribution/r3.1.1/misc/check_problems.sh
+. /users/beta/export/distribution/r4.0/misc/check_problems.sh
 check_pack frigg

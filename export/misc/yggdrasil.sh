@@ -14,14 +14,14 @@ if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
 	echo "Creating $DST/yggdrasil.cmd"
-	FILES=`/users/beta/export/distribution/r3.1.1/files/yggdrasil.files`
-	echo "$FILES" | /users/beta/export/distribution/r3.1.1/misc/icomp $DST/yggdrasil.cmd
+	FILES=`/users/beta/export/distribution/r4.0/files/yggdrasil.files`
+	echo "$FILES" | /users/beta/export/distribution/r4.0/misc/icomp $DST/yggdrasil.cmd
 else
 	echo ""
 	echo "Creating $DST/yggdrasil.tar.${ZEXT} "
 	echo "(Listing in $DST/yggdrasil.lst)"
 
-	FILES=`/users/beta/export/distribution/r3.1.1/files/yggdrasil.files`
+	FILES=`/users/beta/export/distribution/r4.0/files/yggdrasil.files`
 
 	cd /users/beta/
 
@@ -30,5 +30,5 @@ else
 	| $COMPRESS >  $DST/yggdrasil.tar.${ZEXT}
 fi
 
-. /users/beta/export/distribution/r3.1.1/misc/check_problems.sh
+. /users/beta/export/distribution/r4.0/misc/check_problems.sh
 check_pack yggdrasil

@@ -15,13 +15,13 @@ then
 	# Special windows packing
 	echo ""
 	echo "Creating $DST/system.cmd"
-	FILES=`/users/beta/export/distribution/r3.1.1/files/system-pe.files`
+	FILES=`/users/beta/export/distribution/r4.0/files/system-pe.files`
 	echo "\
 $FILES \
 ./betarun/${BETARUN}/${CODEDIR}/%SDK%/betarun.lib \
 ./betarun/${BETARUN}/${CODEDIR}/%SDK%/betarunv.lib\
 " \
-| /users/beta/export/distribution/r3.1.1/misc/icomp $DST/system.cmd
+| /users/beta/export/distribution/r4.0/misc/icomp $DST/system.cmd
 
 echo "cd %BETALIB%\\betarun\\${BETARUN}\\${TARGET}\%SDK%" > $DST/system-pe.cmd
 echo "ren  betarun.lib  betarun.lib.orig"          >> $DST/system-pe.cmd
@@ -45,7 +45,7 @@ else
 	echo ""
 	echo "Creating $DST/system.tar "
 	echo "(Listing in $DST/system.lst)"
-	FILES=`/users/beta/export/distribution/r3.1.1/files/system-pe.files`
+	FILES=`/users/beta/export/distribution/r4.0/files/system-pe.files`
 
 	cd /users/beta
 
@@ -78,5 +78,5 @@ else
 
 fi
 
-. /users/beta/export/distribution/r3.1.1/misc/check_problems.sh
+. /users/beta/export/distribution/r4.0/misc/check_problems.sh
 check_pack system
