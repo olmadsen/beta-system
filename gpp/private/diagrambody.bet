@@ -15,13 +15,16 @@ INCLUDE '~beta/sysutils/v1.4/objinterface'
 (# 
 do
    UDPrivate.UDDiagram
-     ->UserDataInit (*toby 1-11-94:
-                     User data initializations*) ;
+     ->UserDataInit
+     (*toby 1-11-94:
+      User data initializations*) ;
    UDtheParentNode.Init;
    UDtheFragmentNode.Init;
    thePrefixConn.Init;
+   theSimplePrefixConn.init;
    gppProp.fontSize->theText.size;
    bold->titleNode.theText.style;
+   false->sizeable;
    INNER OnInit;
    (* titleText -> theText.set; resposibility of sub patterns *)
    
@@ -32,6 +35,8 @@ do
 do
    (PatternDiagrams.oldSelection[],THIS(title)[])->changedFocus;
    THIS(title)[]->PatternDiagrams.oldSelection[];
+   enableEditName;
+   INNER onSelect;
    
 #)
 (* LISTDIAGRAM *)  
@@ -45,8 +50,13 @@ do
    true->onGoingTitleEditing;
    THIS(title).geometry->(oldX,oldY,oldWidth,oldHeight);
    getRegionList->theRegionList[];
-   theRegionList.scan
-     (# anObj: ^DesignObject do current[]->anObj[]; anObj.unmakeRegion #);
+   (if theRegionList[] <> none then
+       theRegionList.scan
+         (# anObj: ^DesignObject
+         do current[]->anObj[]; anObj.unmakeRegion
+         #);
+       
+   if);
    (3*GppProp.titleWidth div 2,3*GppProp.height)->THIS(title).size;
    
 #)  
@@ -64,49 +74,63 @@ do
         else
        (* theNode[]->currentObject;*)
            ((thisDiagram).theParentNode).getAstNode->anExp[];
-           (theNode[],(anExp.getSon1).index,t[])->declarationTextChanged;
-           true->changed;
+           (theNode[],anExp.getSon1,t[])->declarationTextChanged;
+           (if parseErrorOccurred then false->OKToExit else true->changed if);
            
        if)
     else
-       false->ongoingTextediting; false->onGoingTitleEditing
+       false->ongoingTextediting;
+       false->onGoingTitleEditing;
+       false->parseErrorOccurred
    if);
    
 #)  
 
--- onTextModeOff: DoPart --
+-- TitleTextOnTextModeOff: DoPart --
 do
-     (# w,h: @integer
+     (# w,h,newX: @integer
      do
         (if changed then
             FitToText;
             THIS(title).size->(w,h);
-            (oldX,oldY,(w,gppProp.titleWidth)->max,(h,gppProp.height)->max)
+            oldX-oldWidth div 2+((w,gppProp.titleWidth)->max) div 2->newX;
+            (newX,oldY,(w,gppProp.titleWidth)->max,(h,gppProp.height)->max)
               ->THIS(title).geometry
          else
             (oldX,oldY,oldWidth,oldHeight)->THIS(title).geometry
         if);
-        theRegionList.scan
-          (# anObj: ^DesignObject
-          do current[]->anObj[]; THIS(title)[]->anObj.createRegion
-          #)
+        (if theRegionList[] <> none then
+            theRegionList.scan
+              (# anObj: ^DesignObject
+              do current[]->anObj[]; THIS(title)[]->anObj.createRegion
+              #)
+        if)
      #)  
 
--- TitleSifEditorInstance: Descriptor --
-(# fn: ^PatternDiagramNode; 
+-- TitleTextOnTextModeOn: DoPart --
+do (*  theText.getLength->length;
+    (0,length)->theText.SetSelection; *)
+(*   (#
+ t: @Text;
+ TWMetaTextFromWidget: external
+ (# object: @integer do 'TW_MetaTextFromWidget'->callC #);
+ TextHighlight: external
+ (# text: @integer enter text do 'Text_Highlight'->callC #))
+ do theText.get->t; @@ t.T[1]->TextHighlight
+ #)*)   
+
+-- TitleTheSifEditor: DoPart --
 do
-   (if theFragmentNode <> none
-    // true then
-       (if no
-        // 0 then theFragmentNode->fn[]; fn.SifEditorInstanceNo->no; 
+   (if theFragmentNode <> none then
+       (if se[] = none then
+           theFragmentNode->fn[]; fn.theSifEditor->se[]; 
         else
-           theFragmentNode->fn[]; no->fn.SifEditorInstanceNo; 
+           theFragmentNode->fn[]; se[]->fn.theSifEditor; 
        if);
        
     else
-       'titleNode: SifEditorInstanceNo: no FragmentNode'->screen.putline
-   if)
-#)  
+       'titleNode: theSifEditor: no FragmentNode'->screen.putline
+   if)  
 
 -- LocalNodesAbstractAll: Descriptor --
 (# dummy: ^DiagramNode; theDiagram: ^Diagram; 
@@ -166,6 +190,9 @@ do
    n1,n2: ^DesignObject;
    theTitleNode: ^theListDiagram.title;
    theListdiagram: ^ListDiagram;
+   nd1,nd2: @integerRef;
+   object1,object2: ^designObject;
+   wed: ^wedgeNode;
    
 do
    (if switch[23]
@@ -276,7 +303,32 @@ do
                                          newline
                                      if);
                                      node1[]->inheritanceEnds.insert;
-                                     con.delete
+                                     (if
+                                     (con.ID,true,nd1[],nd2[])
+                                       ->DSRdAttrGetConnEnds then
+                                         nd1->theObjectList.Find->object1[];
+                                         (if object1[] <> none then
+                                             (if object1## <= wedgeNode## then
+                                                 object1[]->wed[]
+                                              else
+                                                 nd2->theObjectList.Find
+                                                   ->object2[];
+                                                 (if object2[] <> none then
+                                                     (if object2## <=
+                                                     wedgeNode## then
+                                                         object2[]->wed[]
+                                                     if)
+                                                 if)
+                                             if)
+                                         if)
+                                      else
+                                         'GetEnds failed connector ID: '
+                                           ->puttext;
+                                         con.ID->putint;
+                                         newline
+                                     if);
+                                     con.delete;
+                                     (if wed[] <> none then wed.delete if)
                                   else
                                      (if switch[23] then
                                          'It is not a prefixConnector'->putline
@@ -293,7 +345,32 @@ do
                                          newline
                                      if);
                                      node2[]->inheritanceEnds.insert;
-                                     con.delete
+                                     (if
+                                     (con.ID,true,nd1[],nd2[])
+                                       ->DSRdAttrGetConnEnds then
+                                         nd1->theObjectList.Find->object1[];
+                                         (if object1[] <> none then
+                                             (if object1## <= wedgeNode## then
+                                                 object1[]->wed[]
+                                              else
+                                                 nd2->theObjectList.Find
+                                                   ->object2[];
+                                                 (if object2[] <> none then
+                                                     (if object2## <=
+                                                     wedgeNode## then
+                                                         object2[]->wed[]
+                                                     if)
+                                                 if)
+                                             if)
+                                         if)
+                                      else
+                                         'GetEnds failed connector ID: '
+                                           ->puttext;
+                                         con.ID->putint;
+                                         newline
+                                     if);
+                                     con.delete;
+                                     (if wed[] <> none then wed.delete if)
                                   else
                                      (if switch[23] then
                                          'It is not a prefixConnector'->putline
@@ -383,7 +460,10 @@ do
    theTitleNode: ^theListDiagram.title;
    dListDiagram,theListDiagram: ^ListDiagram;
    dDiagramNode: ^dListDiagram.DiagramNode;
-   dNonTerminalNode: ^dListDiagram.NonTerminalNode
+   dNonTerminalNode: ^dListDiagram.NonTerminalNode;
+   nd1,nd2: @integerRef;
+   object1,object2: ^designObject;
+   wed: ^wedgeNode
 do
    (if switch[23]
     // true then 'Gpp ------- DeleteDiagramNode'->putLine; 
@@ -443,7 +523,35 @@ do
                                              newline
                                          if);
                                          node1[]->inheritanceEnds.insert;
-                                         con.delete
+                                         (if
+                                         (con.ID,true,nd1[],nd2[])
+                                           ->DSRdAttrGetConnEnds then
+                                             nd1->theObjectList.Find->object1[];
+                                             (if object1[] <> none then
+                                                 (if object1## <= wedgeNode##
+                                                  then
+                                                     object1[]->wed[]
+                                                  else
+                                                     nd2->theObjectList.Find
+                                                       ->object2[];
+                                                     (if object2[] <> none then
+                                                         (if object2## <=
+                                                         wedgeNode## then
+                                                             object2[]->wed[]
+                                                         if)
+                                                     if)
+                                                 if)
+                                             if)
+                                          else
+                                             'GetEnds failed connector ID: '
+                                               ->puttext;
+                                             con.ID->putint;
+                                             newline
+                                         if);
+                                         con.delete;
+                                         (if wed[] <> none then
+                                             wed.delete
+                                         if)
                                       else
                                          (if switch[23] then
                                              'It is not a prefixConnector'
@@ -461,7 +569,35 @@ do
                                              newline
                                          if);
                                          node2[]->inheritanceEnds.insert;
-                                         con.delete
+                                         (if
+                                         (con.ID,true,nd1[],nd2[])
+                                           ->DSRdAttrGetConnEnds then
+                                             nd1->theObjectList.Find->object1[];
+                                             (if object1[] <> none then
+                                                 (if object1## <= wedgeNode##
+                                                  then
+                                                     object1[]->wed[]
+                                                  else
+                                                     nd2->theObjectList.Find
+                                                       ->object2[];
+                                                     (if object2[] <> none then
+                                                         (if object2## <=
+                                                         wedgeNode## then
+                                                             object2[]->wed[]
+                                                         if)
+                                                     if)
+                                                 if)
+                                             if)
+                                          else
+                                             'GetEnds failed connector ID: '
+                                               ->puttext;
+                                             con.ID->putint;
+                                             newline
+                                         if);
+                                         con.delete;
+                                         (if wed[] <> none then
+                                             wed.delete
+                                         if)
                                       else
                                          (if switch[23] then
                                              'It is not a prefixConnector'
@@ -642,6 +778,9 @@ do
    dListDiagram,theListDiagram: ^ListDiagram;
    dAbstractNode: ^dListDiagram.AbstractNode;
    theSimpleNode: ^SimpleNode;
+   nd1,nd2: @integerRef;
+   object1,object2: ^designObject;
+   wed: ^wedgeNode;
    
 do
    (if switch[23]
@@ -713,7 +852,32 @@ do
                                          newline
                                      if);
                                      node1[]->inheritanceEnds.insert;
-                                     con.delete
+                                     (if
+                                     (con.ID,true,nd1[],nd2[])
+                                       ->DSRdAttrGetConnEnds then
+                                         nd1->theObjectList.Find->object1[];
+                                         (if object1[] <> none then
+                                             (if object1## <= wedgeNode## then
+                                                 object1[]->wed[]
+                                              else
+                                                 nd2->theObjectList.Find
+                                                   ->object2[];
+                                                 (if object2[] <> none then
+                                                     (if object2## <=
+                                                     wedgeNode## then
+                                                         object2[]->wed[]
+                                                     if)
+                                                 if)
+                                             if)
+                                         if)
+                                      else
+                                         'GetEnds failed connector ID: '
+                                           ->puttext;
+                                         con.ID->putint;
+                                         newline
+                                     if);
+                                     con.delete;
+                                     (if wed[] <> none then wed.delete if)
                                   else
                                      (if switch[23] then
                                          'It is not a prefixConnector'->putline
@@ -730,7 +894,32 @@ do
                                          newline
                                      if);
                                      node2[]->inheritanceEnds.insert;
-                                     con.delete
+                                     (if
+                                     (con.ID,true,nd1[],nd2[])
+                                       ->DSRdAttrGetConnEnds then
+                                         nd1->theObjectList.Find->object1[];
+                                         (if object1[] <> none then
+                                             (if object1## <= wedgeNode## then
+                                                 object1[]->wed[]
+                                              else
+                                                 nd2->theObjectList.Find
+                                                   ->object2[];
+                                                 (if object2[] <> none then
+                                                     (if object2## <=
+                                                     wedgeNode## then
+                                                         object2[]->wed[]
+                                                     if)
+                                                 if)
+                                             if)
+                                         if)
+                                      else
+                                         'GetEnds failed connector ID: '
+                                           ->puttext;
+                                         con.ID->putint;
+                                         newline
+                                     if);
+                                     con.delete;
+                                     (if wed[] <> none then wed.delete if)
                                   else
                                      (if switch[23] then
                                          'It is not a prefixConnector'->putline
@@ -828,6 +1017,7 @@ do
    theNames: ^betaGram.Names;
    theDecomposDiagram: ^Diagram;
    theSimpleNode: ^SimpleNode;
+   syncatNo: @integer;
    updateName:
      (#
         theNewNameDcl,theOldNameDcl: ^betaGram.NameDcl;
@@ -835,7 +1025,9 @@ do
         oldText,newText: ^text;
         doUpdate: @Boolean;
         aPatternDiagram: ^PatternDiagram;
-        theNewAST,theOldAST: ^MPS.AST
+        theNewAST,theOldAST: ^MPS.AST;
+        oldX,oldY,oldWidth,oldHeight,w,h,newX: @integer;
+        theRegionList: ^ObjectList
      do
         (if theNode.currentDecomposDiagram <> none
         (*Update name in titlenode of detailed*) then
@@ -868,8 +1060,31 @@ do
             if);
             (if doUpdate then
                 theNode.currentDecomposDiagram->aPatternDiagram[];
+                aPatternDiagram.titleNode.geometry
+                  ->(oldX,oldY,oldWidth,oldHeight);
+                aPatternDiagram.titleNode.getRegionList->theRegionList[];
+                (if theRegionList[] <> none then
+                    theRegionList.scan
+                      (# anObj: ^DesignObject
+                      do current[]->anObj[]; anObj.unmakeRegion
+                      #);
+                    
+                if);
                 newText->aPatternDiagram.titleText
                   ->aPatternDiagram.titleNode.theText.set;
+                aPatternDiagram.titleNode.FitToText;
+                aPatternDiagram.titleNode.size->(w,h);
+                oldX-oldWidth div 2+((w,gppProp.titleWidth)->max) div 2->newX;
+                (newX,oldY,(w,gppProp.titleWidth)->max,(h,gppProp.height)->max)
+                  ->aPatternDiagram.titleNode.geometry;
+                (if theRegionList[] <> none then
+                    theRegionList.scan
+                      (# anObj: ^DesignObject
+                      do
+                         current[]->anObj[];
+                         aPatternDiagram.titleNode[]->anObj.createRegion
+                      #)
+                if);
                 (if switch[23] then
                     'UpdateDiagramNode: name updated in detailed is '->puttext;
                     (theNode.currentDecomposDiagram).titleText[]->putline
@@ -938,7 +1153,18 @@ do
                  (#  do current[]->anAST[] #);
                keepNewAST[]->ASTtoNode->theNode[];
                (if theNode[] <> none then
-                   updateName; (keepNewAST[],anAST[])->theNode.Redisplay
+                   newAST[]->getSyncatNo->syncatNo;
+                   (if (syncatNo = gram.NameDcl) or (syncatNo = gram.prefix) or
+                   (syncatNo = gram.prefixOpt) then
+                       
+                    else
+                       (if theNode.CurrentDecomposDiagram <> none then
+                           theNode.CurrentDecomposDiagram->theDecomposDiagram[];
+                           theDecomposDiagram.titleNode.abstract
+                       if)
+                   if);
+                   updateName;
+                   (keepNewAST[],anAST[])->theNode.Redisplay
                 else
                    (if switch[23] then
                        'Surrounding declaration not present in IndexIDList??'
@@ -947,7 +1173,7 @@ do
                if)
             else
                (if switch[23] then
-                   'No part of a declatation was changed - no redisplay is done'
+                   'No part of a declaration was changed - no redisplay is done'
                      ->putline
                if);
                (if (oldAST.kind = mps.kinds.optional) and
@@ -1141,8 +1367,10 @@ do
                             true->theConn.initialisingSaved;
                             (if OtherEnd.theDiagram <> theNode.theDiagram then
                                 (OtherEnd[],theNode[])->theConn.new;
-                                (if not gppProp.references then
-                                    false->theConn.BorderVisible
+                                (if (not gppProp.references) or
+                                (not gppProp.showAttributes) then
+                                    false->theConn.BorderVisible;
+                                    false->theConn.selectable
                                 if);
                                 theConn[]->OtherEnd.theReferenceConnector
                             if)
@@ -1163,8 +1391,10 @@ do
                                 (if OtherEnd.theDiagram <> theNode.theDiagram
                                  then
                                     (OtherEnd[],theNode[])->theConn.new;
-                                    (if not gppProp.references then
-                                        false->theConn.BorderVisible
+                                    (if (not gppProp.references) or
+                                    (not gppProp.showAttributes) then
+                                        false->theConn.BorderVisible;
+                                        false->theConn.selectable
                                     if);
                                     theConn[]->OtherEnd.theReferenceConnector
                                 if)
@@ -1213,38 +1443,6 @@ do
    if);
    
 #)  
-
--- listDiagramUpdateAstFromDisk: Descriptor --
-(# fn: ^FragmentNode; 
-do
-   (if switch[1] // true then 'listDiagramUpdateAstFromDisk'->putLine;  if);
-   (if (theObject.theDiagram).theFragmentNode <> none
-    // true then (theObject.theDiagram).theFragmentNode->fn[]; 
-    else
-       (if theObject.struc <= FragmentNode##
-        // true then
-           'Freja[[listDiagramUpdateAst:: we got a FragmentNode to update]'
-             ->screen.putline;
-           theObject[]->fn[];
-           
-        else
-           (theObject[],screen[])->PrintObject; 
-       if);
-       
-   if);
-   (if fn[] <> none
-    // true then fn.ReReadAST->newFF[]; 
-    else
-       'Freja[[ERROR: listDiagramUpdateAstFromDisk no fragmentnode!!]]'
-         ->screen.putline;
-       
-   if);
-   (if switch[1]
-    // true then 'end listDiagramUpdateAstFromDisk'->putLine; 
-   if);
-   
-#)
-(* OADDIAGRAMS *)  
 
 -- updateMaxWH: Descriptor --
 (# 

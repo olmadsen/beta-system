@@ -1,11 +1,11 @@
-ORIGIN '~beta/designenv/v2.0/designenv';
+ORIGIN '~beta/designenv/v2.1/designenv';
 BODY 'private/diagramattributes'
      'private/menubody'
      'private/OADobjectpagebody'
      'private/objectdiagrambody'
      'private/objectmenubody'
      'private/userdatabody';
-INCLUDE '~beta/designenv/v2.0/designenvutils'
+INCLUDE '~beta/designenv/v2.1/designenvutils'
         '~beta/mps/v4.9.1/metagrammarcfl'
         '~beta/betaast/v4.9.1/betasematt'
         '~beta/betaast/v4.9.1/gram'
@@ -37,10 +37,13 @@ GppInterface:
               
           if)
        #);
-     updateFragmentForm:<
-     (* used in Frejas sifEditorList, when the fragmentform is updated *)
-       (# ff: ^mps.fragmentform;  enter ff[] do INNER #);
-     sendSifCommand:< (# t: ^Text enter t[] do INNER #);
+     enableEditName:< (#  do INNER enableEditName #);
+     disableEditName:< (#  do INNER disableEditName #);
+     sifSaveAndQuit:< (#  do INNER sifSaveAndQuit #);
+     sifSave:< (#  do INNER sifSave #);
+     sifAutoSave:< (#  do INNER sifAutoSave #);
+     (*to be further bound in freja to call theFragmentBrowser.alertUser*)
+     alertUser:< (# message: ^text enter message[] do INNER #);
      theDesignInterface: @DesignInterface;
      DesignInterface:< designenv (* interface to OO DesignEnvironment *)
        (#
@@ -154,6 +157,7 @@ GppInterface:
           OADDocument:< Document
           (* my special document *)
             (#
+               checkEditmenuTextEdit:< (#  do INNER #);
                onInit::<  (#  do <<SLOT OADDocumentInit:Descriptor>> #);
                ObjectPage:< Page
                  (#
@@ -701,7 +705,6 @@ GppInterface:
                               InitLocalNode:<
                                 (#  do <<SLOT InitLocalNode:Descriptor>> #)
                            #);
-                         ;
                          decomposDiagramsUDAttributes: @integerUserData
                            (#
                               init::< 
@@ -751,6 +754,8 @@ GppInterface:
                            (# Type::< MarkNode #);
                          theDiagram: @DiagramReferenceUserData
                            (# Type::< Diagram #);
+                         invisibleText: @ReferenceUserData
+                           (# type::< text #);
                          abstract:< Object;
                          detail:< Object;
                          abstractedFromDiagramBelow:< Object;
@@ -790,7 +795,16 @@ GppInterface:
                          GetFragment:<
                          (* return the Fragment this node belongs to *)
                            (# f: ^mps.fragment;  do INNER exit f[] #);
-                         SifEditorInstanceNo:<
+                         theSifEditor:<
+                         (* In case SIF is open: sets or returns the fragment editor
+                          * the AST of this node is displayed on in SIF
+                          *)
+                           (# se: ^SifEditor; 
+                           enter se[]
+                           do INNER
+                           exit se[]
+                           #);
+                         SifEditorInstance:<
                          (* In case SIF is open: sets or returns the fragment editor no
                           * the AST of this node is displayed on in SIF
                           *)
@@ -883,6 +897,8 @@ GppInterface:
                                 (# Type::< PatternDiagramNode #);
                               thePrefixConn: @ReferenceUserData
                                 (# Type::< Connector #);
+                              theSimplePrefixConn: @ReferenceUserData
+                                (# Type::< Connector #);
                               interactiveNew::< 
                                 (#
                                    w,h: @Integer;
@@ -917,12 +933,18 @@ GppInterface:
                                      do <<SLOT TitleTextModeOff:Descriptor>>
                                      #);
                                    onTextModeOff::< 
-                                     (#  <<SLOT onTextModeOff:DoPart>> #);
+                                     (# 
+                                     <<SLOT TitleTextOnTextModeOff:DoPart>>
+                                     #);
+                                   onTextModeOn::< 
+                                     (# length: @integer
+                                     <<SLOT TitleTextOnTextModeOn:DoPart>>
+                                     #);
                                    
                                 #);
-                              SifEditorInstanceNo::< 
-                                (# 
-                                do <<SLOT TitleSifEditorInstance:Descriptor>>; 
+                              theSifEditor::< 
+                                (# fn: ^PatternDiagramNode
+                                <<SLOT TitleTheSifEditor:DoPart>>
                                 #);
                               
                            #);
@@ -963,15 +985,6 @@ GppInterface:
                            exit newNode[]
                            #);
                          new:< Object;
-                         updateAstFromDisk:<
-                           (#
-                              oldff,newff: ^mps.fragmentform;
-                              theObject: ^PatternDiagramNode;
-                              
-                           enter (oldff[],theObject[])
-                           do INNER
-                           exit newff[]
-                           #);
                          
                       #);
                     ListDiagram: Diagram
@@ -1105,12 +1118,6 @@ GppInterface:
                               
                            #);
                          remakingDiagram: @Boolean;
-                         updateAstFromDisk::< 
-                           (# 
-                           do
-                              <<SLOT ListDiagramUpdateAstFromDisk:Descriptor>>;
-                              INNER
-                           #);
                          
                       #);
                     <<SLOT PropertyDiagramLib:Attributes>>;
@@ -1514,7 +1521,10 @@ GppInterface:
                     DeletableConnector: Connector
                       (#
                          initialisingSaved: @Boolean;
-                         invisibleText: @Text;
+                         invisibleText: @ReferenceUserData
+                           (# type::< Text #);
+                         onInit::< 
+                           (#  do invisibleText.init; INNER onInit #);
                          onDelete:< (#  do INNER #);
                          onReattach:<
                            (#
@@ -1593,17 +1603,16 @@ GppInterface:
                       #);
                     theTextBefore,
                       parseableText: @text;
-                    reattachPrefixText: ^Text;
-                    reattachingPrefix: @Boolean;
                     onGoingTextediting: @boolean;
                     onGoingTitleEditing: @Boolean;
+                    parseErrorOccurred: @Boolean;
                     declarationTextChanged:<
                       (#
                          theObject: ^PatternDiagramNode;
-                         index: @integer;
+                         node: ^mps.ast;
                          theParseText: ^text;
                          
-                      enter (theObject[],index,theParseText[])
+                      enter (theObject[],node[],theParseText[])
                       do INNER ; 
                       #);
                     openFormInSif:<
@@ -1650,67 +1659,55 @@ GppInterface:
                       #);
                     insertBefore:< Object;
                     insertAfter:< Object;
-                    updateASTfromDisk:
-                      (#
-                         oldff,newff: ^mps.fragmentform;
-                         oldIndex: @integer;
-                         status: @boolean;
-                         theObject: ^PatternDiagramNode;
-                         
-                      enter (oldff[],oldIndex)
-                      do <<SLOT updateASTfromDisk:Descriptor>>
-                      exit status
+                    ASTtoNearestNode:
+                      (# anAST: ^mps.ast; node: ^PatternDiagramNode
+                      enter anAST[]
+                      <<SLOT ASTtoNearestNode:DoPart>>
+                      exit node[]
                       #);
                     newFragment:<
                       (#
-                         ff:
-                           ^mps.
-                              fragmentform;
+                         ff: ^mps.fragmentform;
                          status: @Boolean;
                          
                       enter ff[]
-                      do INNER ; <<SLOT newFragment:Descriptor>>; 
+                      do
+                         INNER ;
+                         <<SLOT newFragment:Descriptor>>;
+                         
                       exit status
                       #);
-                    astReplaced:<
-                    (* we must do a new prettyprint from oldIndex using the new sub-ast
-                     * with new index.
-                     * Currently implemented using the diskrepresentation
-                     *)
-                      (#
-                         ff: ^mps.fragmentform;
-                         oldIndex,newIndex: @Integer;
-                         status: @Boolean;
-                         
-                      enter (ff[],oldIndex,newIndex)
-                      do INNER ; <<SLOT astReplaced:Descriptor>>
-                      exit status
+                    astReplaced:
+                      (# oldAst,newAst: ^mps.ast
+                      enter (oldAst[],newAst[])
+                      <<SLOT astReplaced:DoPart>>
                       #);
                     listElementInserted:<
                       (#
-                         ff: ^mps.fragmentform;
-                         fatherIndex,position:
-                           @Integer;
+                         father: ^mps.expanded;
+                         position: @Integer;
                          
-                      enter (ff[],fatherIndex,position)
-                      do INNER ; <<SLOT listElementInserted:Descriptor>>; 
+                      enter (father[],position)
+                      do
+                         INNER ;
+                         <<SLOT listElementInserted:Descriptor>>;
+                         
                       #);
                     listElementsDeleted:<
-                    (* changeSpec:
-                     * <fatherIndex> <position> <length> <oldElements>
-                     *  <oldElements> ::= { <elementIndex> } i    (i = <length>)
-                     *)
-                      (# ff: ^mps.fragmentform; changeSpec: ^text; 
-                      enter (ff[],changeSpec[])
+                      (#
+                         father: ^mps.ast;
+                         position,length: @integer;
+                         oldElements: [1] ^mps.ast
+                      enter (father[],position,length,oldElements)
                       do INNER ; <<SLOT listElementsDeleted:Descriptor>>; 
                       #);
                     listElementsReplaced:<
-                    (* changeSpec:
-                     * <fatherIndex> <position> <length> <oldElement> <newLength> 
-                     * <oldElement> ::= { <elementIndex> } i    (i = <length>)
-                     *)
-                      (# ff: ^mps.fragmentform; changeSpec: ^text; 
-                      enter (ff[],changeSpec[])
+                      (#
+                         father: ^mps.expanded;
+                         position,length,newLength: @integer;
+                         oldElements: [1] ^mps.ast;
+                         
+                      enter (father[],position,length,oldElements,newLength)
                       do INNER ; <<SLOT listElementsReplaced:Descriptor>>; 
                       #);
                     makeAnchors:<
@@ -1964,6 +1961,10 @@ GppInterface:
                            #)
                       #);
                     SimpleCheck: @<<SLOT SimpleCheckDisplay:Descriptor>>;
+                    ShowAttributesItem: @item
+                      (#
+                         hit::<  (#  <<SLOT ShowAttributesItemHit:DoPart>> #)
+                      #);
                     SimpleAsNameAndTypeItem: @Item
                       (#
                          hit::< 
@@ -2079,8 +2080,8 @@ GppInterface:
                            do <<SLOT DumpIndexIDListItem:Descriptor>>; 
                            #)
                       #);
-                    sep,sep1,sep2,sep3:
-                      @item;
+                    sep,sep1,sep2,sep3,
+                      sep4: @item;
                     init::<  (#  do <<SLOT ViewMenuInit:Descriptor>> #);
                     
                  #);
@@ -2208,8 +2209,8 @@ GppInterface:
           openFragmentForm:
           (* open the group and form
            *)
-            (# name: @Text; editorID: @Integer; ff: ^mps.fragmentform; 
-            enter (name,editorID)
+            (# name: @Text; se: ^SifEditor; ff: ^mps.fragmentform; 
+            enter (name,se[])
             do <<SLOT OpenFragmentForm:Descriptor>>; 
             exit ff[]
             #);
@@ -2233,9 +2234,14 @@ GppInterface:
             do
                <<SLOT revert:Descriptor>>; 
             #);
+          recoverDiagFile:
+            (# name: @text enter name <<SLOT recoverDiagFile:DoPart>> #);
           checkDiagFile:
-            (# name: @text; fromRecovery,OK: @boolean
-            enter (name,fromRecovery)
+            (#
+               name: @text;
+               fromRecovery,canTryRevert,OK:
+                 @boolean
+            enter (name,fromRecovery,canTryRevert)
             do <<SLOT checkdiagFile:Descriptor>>; 
             exit OK
             #);
@@ -2256,6 +2262,59 @@ GppInterface:
           CurrentDiagramName: ^Text;
           
        do (* designenv *) INNER ; 
+       #);
+     getSynCatNo:
+       (#
+          node: ^mps.ast;
+          synCatNo: @mps.nonterminalSymbol;
+          nontNode: ^mps.unExpanded;
+          
+       enter node[]
+       <<SLOT getSynCatNo:DoPart>>
+       exit synCatNo
+       #);
+     (*SifEditor is Freja's shadowversion of the codeeditors in Sif
+      that are communicating with Freja (further bound in freja.bet)*)
+     SifEditor:<
+       (#
+          undo:< (#  do INNER undo #);
+          cut:< (#  do INNER cut #);
+          copy:< (#  do INNER copy #);
+          paste:< (#  do INNER paste #);
+          pasteBefore:< (#  do INNER pasteBefore #);
+          pasteAfter:< (#  do INNER pasteAfter #);
+          before:< (#  do INNER before #);
+          after:< (#  do INNER after #);
+          changeFocus:<
+            (# node: ^mps.ast; length: @integer
+            enter (node[],length)
+            do INNER changeFocus
+            #);
+          getStatus:< (#  do INNER getStatus #);
+          expandNormal:<
+            (# synCatNo: @integer enter synCatNo do INNER expandNormal #);
+          expandOptional:<
+            (# synCatNo: @integer
+            enter synCatNo
+            do INNER expandOptional
+            #);
+          expandLexem:<
+            (# theText: @text enter text do INNER expandLexem #);
+          insertOptionals:< (#  do INNER insertOptionals #);
+          removeOptionals:< (#  do INNER removeOptionals #);
+          parse:<
+            (#
+               node: ^mps.ast;
+               parseText: @text;
+               ok: @boolean;
+               errorPos: @integer;
+               parseErrorText: ^Text
+            enter (node[],parseText)
+            do INNER parse
+            exit (ok,errorPos,parseErrorText[])
+            #);
+          search:< (#  do INNER search #);
+          init:< (#  do INNER init #)
        #);
      mps: ^astInterface;
      (* AST interface *)
