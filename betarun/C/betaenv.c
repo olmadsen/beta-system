@@ -9,6 +9,7 @@
 #include <StdLib.h>
 #include <Resources.h>
 #include <String.h>
+#include <memory.h>
 #endif
 
 #ifndef DEFAULT_PROPERTY_NAME
@@ -30,7 +31,7 @@ GetBetaEnv()
   } else {
     if( theHandle = GetNamedResource('STR ',"\pBETART") ){
       betaEnv = *theHandle; length = betaEnv[0];
-      betaEnv = strncpy( NewPtr(length+1), &betaEnv[1], length);
+      betaEnv = strncpy( (Ptr) NewPtr(length+1), &betaEnv[1], length);
       betaEnv[length] = 0; SetupProperties( betaEnv);
     }
   }
