@@ -85,10 +85,10 @@ case "`uname -m`" in
 			objdir=hpux9pa
 			betaopt=
 			MOTIFINC=${MOTIFINC-/usr/include/Motif1.2}
-			MOTIFHOME=${MOTIFHOME-/usr/lib/Motif1.2}
+			MOTIFHOME=${MOTIFHOME-/usr/lib/Motif1.2_R6}
 			PATH=/usr/bin/X11:$PATH
 			export PATH
-			LD_LIBRARY_PATH=$MOTIFHOME:/usr/lib/X11R5:$LD_LIBRARY_PATH
+			LD_LIBRARY_PATH=$MOTIFHOME:/usr/lib/X11R6:$LD_LIBRARY_PATH
 			;;
 		*)
 			echo $0: Unsupported HP-UX version.

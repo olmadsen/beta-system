@@ -94,12 +94,12 @@ case "9000/7??":
 		setenv MACHINETYPE HPUX9PA
 		setenv objdir hpux9pa
 		setenv betaopt 
-		if ( ! $?MOTIFHOME ) setenv MOTIFHOME /usr/lib/Motif1.2
+		if ( ! $?MOTIFHOME ) setenv MOTIFHOME /usr/lib/Motif1.2_R6
 		if ( ! $?MOTIFINC  ) setenv MOTIFINC  /usr/include/Motif1.2
 		if ( $?LD_LIBRARY_PATH ) then
-			setenv LD_LIBRARY_PATH ${MOTIFHOME}:/usr/lib/X11R5:$LD_LIBRARY_PATH
+			setenv LD_LIBRARY_PATH ${MOTIFHOME}:/usr/lib/X11R6:$LD_LIBRARY_PATH
 		else
-			setenv LD_LIBRARY_PATH ${MOTIFHOME}:/usr/lib/X11R5
+			setenv LD_LIBRARY_PATH ${MOTIFHOME}:/usr/lib/X11R6
 		endif
 		breaksw
 	default:
