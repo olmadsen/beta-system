@@ -1,4 +1,4 @@
-#! /usr/local/bin/tcsh
+#!/usr/local/bin/tcsh
 
 # Der er frysning nu, lad vaer med at blande dig!!!
 # exit 0  Den er overstaaet nu...
