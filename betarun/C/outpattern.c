@@ -25,7 +25,11 @@ static long M_Part(ref(ProtoType) proto)
       * object with do-part.
       */
 {
+#ifdef macintosh
+#error Address of label Return not yet calculated for Macintosh / datpete
+#else
   extern long *Return asm("Return");
+#endif
   long *m;
   long *r;
   
@@ -58,26 +62,39 @@ typedef struct group_header
  struct group_header *self;
  char                *ascii;
  struct group_header *next;
- long                code;
+ long                code_start;
+ long                code_end;
 } group_header;
+
+static int c_on_top;
 
 static char *GroupName(long address, int isCode)
 {
+#ifdef macintosh
+#error Function GroupName not yet implemented for Macintosh / datpete
+#else /* Not macintosh */
   extern long *data1 asm("BETA_data1");
   struct group_header *group;
   struct group_header *current;
+  struct group_header *last;
   long *limit;
   int  more_segments=1;
   long dist, distance;
 
-  current = group = (struct group_header *)&data1; /* betaenv data segment */
+  current = last = group = (struct group_header *)&data1;  /* betaenv data segment */
+  if ((isCode && (address<current->code_start)) || 
+      (!isCode && (address<(long)current))){  
+    c_on_top++;
+    return ""; 
+  }
+
   distance = MAXINT;
   
   while (more_segments){
 
     /* Check if the address is closer to the start of current segment than previous segments */
     if (isCode)
-      dist = address - current->code;
+      dist = address - current->code_start;
     else
       dist = address - (long) current;
     if (dist >= 0 && dist < distance) {
@@ -87,6 +104,7 @@ static char *GroupName(long address, int isCode)
 
     /* Get next data segment if any. Padding by linker may have moved it some longs down */
     more_segments = 0;
+    last=current;
     current=current->next;
     for (limit=((long *)current)+10;
 	 (long*)current < limit;
@@ -97,8 +115,18 @@ static char *GroupName(long address, int isCode)
       }
     }
   }
+
+  if ((isCode && (address>last->code_end)) 
+      || (!isCode && (address>(long)last->next)) ){ 
+    c_on_top++; 
+    return ""; 
+  } else {
+    /* GroupName succeeded. From now on we are in the beta-stack */
+    c_on_top=0;
+  }
   
   return group->ascii;
+#endif /* not macintosh */
 }
 
 static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, int print_origin)
@@ -143,17 +171,30 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       }
     }
     if (activeDist == MAXINT) return;
-  } /* if(retAddress) */
+    groupname = GroupName(retAddress,1);
+  } else {
+    /* retAddress == 0 */
+    groupname = (activeDist == gDist) ? GroupName(gPart,1) : GroupName(mPart,1);
+  }
 
   theProto = theObj->Proto;
-  if (activeDist == gDist){
-    fprintf(output,"  allocating %s ", type);
-    groupname = GroupName(gPart,1);
-  } else {
-    fprintf(output,"  %s ", type);
-    groupname = GroupName(mPart,1);
+
+  if (c_on_top){
+    /* c_on_top may have been set by GroupName if there is one or more C-frame(s)
+     * on top of the stack
+     */
+    if (c_on_top == 1){
+      c_on_top++;
+      fprintf(output, "  [ C ACTIVATION PART ]\n");
+    } 
+    return;
   }
-  
+ 
+  if (activeDist == gDist)
+    fprintf(output,"  allocating %s ", type);
+  else
+    fprintf(output,"  %s ", type);
+ 
   if(theProto==activeProto || /* active prefix */
      (!activeProto && 
       theProto->Prefix &&
@@ -378,6 +419,8 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
 #ifndef sparc
   ref(Component)      currentComponent;
 #endif
+
+  c_on_top = 0;
   
   fprintf(stderr,"\n# Beta execution aborted: ");
   ErrorMessage(stderr, errorNumber);
