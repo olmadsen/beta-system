@@ -103,8 +103,8 @@ if ( $REMOVEASTS == "yes" ) then
     endif
 
     if ( $CVSUPDATE == "yes" ) then
-        echo "rebuildall.sh: Doing mbs_cvsupdate -u." >>& $LOG
-        mbs_cvsupdate -u >>& $LOG
+        echo "rebuildall.sh: Doing mbs_cvsupdate -u -c." >>& $LOG
+        mbs_cvsupdate -u -c >>& $LOG
     endif
     if ( $RCMUPDATE == "yes" ) then
 	if ( $MACHINETYPE == "SUN4S" ) then
@@ -121,6 +121,11 @@ if ( $REMOVEASTS == "yes" ) then
     #mbs_compiletools compiler >>& $LOG
     #unsetenv BETAOPTS
     date >>& $LOG
+    echo "rebuildall.sh: Building betarun." >>& $LOG
+    date >>& $LOG
+    cd $BETALIB/betarun/$objdir
+    make all >>& $LOG
+    date >>& $LOG
     echo "rebuildall.sh: Building compiler." >>& $LOG
     mbs_compiletools compiler >>& $LOG
     date >>& $LOG
@@ -131,10 +136,6 @@ if ( $REMOVEASTS == "yes" ) then
     foreach mach ($BUILDMACHINES) 
          ( rsh $mach $BETALIB/bin/admin/rebuildall.sh $BETALIB no < /dev/zero ) &
     end
-    echo "rebuildall.sh: Building betarun." >>& $LOG
-    date >>& $LOG
-    cd $BETALIB/betarun/$objdir
-    make all >>& $LOG
     date >>& $LOG
     echo "rebuildall.sh: mbs_compile." >>& $LOG
     mbs_compile >> $LOG
@@ -144,14 +145,15 @@ if ( $REMOVEASTS == "yes" ) then
     date >>& $LOG
 else
     date >>& $LOG
-    echo "rebuildall.sh: Building compiler." >>& $LOG
-    mbs_compiletools compiler >>& $LOG
     echo "rebuildall.sh: Building betarun." >>& $LOG
-    date >>& $LOG
     cd $BETALIB/betarun/$objdir
     make all >>& $LOG
     cd $BETALIB
     date >>& $LOG
+    echo "rebuildall.sh: Building compiler." >>& $LOG
+    mbs_compiletools compiler >>& $LOG
+    date >>& $LOG
+    echo "rebuildall.sh: mbs_compile." >>& $LOG
     mbs_compile >> $LOG
     date >>& $LOG
     echo "rebuildall.sh: Building tools." >>& $LOG
