@@ -14,7 +14,13 @@ INCLUDE '~beta/sysutils/endian'
  * If no .a2s file exists, getPos returns (0,0)
  *)
 a2sHandle: a2sInterface
-  (# warning:<
+  (# (* Note! The constants bigEndianValue and littleEndianValue 
+      * are endian independent in the sense that their 4-byte 
+      * value is the same on both a little- and big endian machine
+      *)
+     bigEndianValue: (# exit 0xffffffff #);
+     littleEndianValue: (# exit 0x11111111 #);
+     warning:<
        (# msg: ^text
        enter msg[]
        do INNER;          
@@ -22,7 +28,10 @@ a2sHandle: a2sInterface
      
      forms: [1] ^map; formsTop: @integer;
      
-     head: [4] @integer;
+     head: [4] @integer; (* head[1] = range of astIndex, start and end
+                          * head[2] = top
+                          * head[3] = littleEndianValue or bigEndianValue
+                          *)
      astIndex,start,end: [100]@integer;
      top: @integer;
      
@@ -99,31 +108,45 @@ a2sHandle: a2sInterface
                  #);
                getB: @a2sFile.getBytes;
                firstPos: @integer;
+               Swap:
+                 (#
+                 do (for i: top repeat
+                         astIndex[i].%byteSwapLong;
+                         start[i].%byteSwapLong;
+                         end[i].%byteSwapLong;
+                    for)
+                 #);
+               endianSwap: @boolean
             do (if a2sFile.mkFileName then
                    a2sFile.openRead; (* check existence and exceptions *)
                    (@@head[1],head.range*4) -> getB;
-                   (if head[1] <> head.range then
-                       '*** Invalid a2s-file ' -> warning
-                   if);
                    (if true 
                     // isBigEndian then
-                       (if head[3] <> 1111 then 
-                           '*** BigEndian file expected'
-                             -> warning;
+                       (if head[3] <> bigEndianValue then 
+                           true -> endianSwap
                        if)
                     // isLittleEndian then
-                       (if head[3] <> 11 then 
-                           '*** LittleEndian file expected'
-                             -> warning;
+                       (if head[3] <> littleEndianValue then 
+                           true -> endianSwap;
                        if)
                    if);
-                   head[2] -> top;
+                   (if endianSwap then
+                       head[1].%byteSwapLong;
+                       head[2].%byteSwapLong;
+                   if);
+                   
+                   (if head[1] <> head.range then
+                       '*** Invalid a2s-file ' -> warning
+                   if); 
+                   head[2] -> top;                   
                    top -> astIndex.new;
                    top -> start.new;
                    top -> end.new;
                    (@@astIndex[1],top*4) -> getB;
                    (@@start[1],top*4) -> getB;
                    (@@end[1],top*4) -> getB;
+                   (if endianSwap then swap if);
+
                    (*dump;*)
                    1 -> top;
                    L:
@@ -160,9 +183,9 @@ a2sHandle: a2sInterface
                    head.range -> head[1];
                    top -> head[2];
                    (if isBigEndian then
-                       111 -> head[3]
+                       bigEndianValue -> head[3]
                     else
-                       11 -> head[3]
+                       littleEndianValue -> head[3]
                    if);
                    (*dump;*)
                    a2sFile.mkFileName;        
