@@ -894,8 +894,9 @@ void write_pixels_to_png_area_indexed
     }
     BetaDitherImage24To8(pal, &image, &image8);
   }
-  
+  ColorHashFree(&hash);
   free(image.data);
+  
   image8.palette_size = pal->ncolors;
   image8.palette = pal->colormap;
   
@@ -944,6 +945,8 @@ void write_pixels_to_png_area_indexed
   fclose(fp);
   free(rows);
   free(palette);
+  free(image8.data);
+  
   png_destroy_write_struct(&png_ptr, NULL);
   return;
 }

@@ -24,5 +24,6 @@ void ColorHashInit(ColorHash *hash);
 void ColorHashInsert(ColorHash *hash, Color *color);
 long  ColorHashLookup(ColorHash *hash, Color *color);
 long ColorHashCount(ColorHash *hash);
+void ColorHashFree(ColorHash *hash);
 
 #endif
