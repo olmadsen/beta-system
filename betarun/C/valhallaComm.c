@@ -310,6 +310,8 @@ void printOpCode (int opcode)
     fprintf (output,"VOP_MAIN_PHYSICAL"); break;
   case VOP_HEAPINFO:
     fprintf (output,"VOP_HEAPINFO"); break;
+  case VOP_PROGRAM_PATH:
+    fprintf (output,"VOP_PROGRAM_PATH"); break;
   case VOP_EXT_HEAPINFO:
     fprintf (output,"VOP_EXT_HEAPINFO"); break;
   case VOP_SCANHEAPS:
@@ -1101,6 +1103,18 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       valhalla_writeint(-1);
       DEBUG_VALHALLA(fprintf(output, "\n"));
       valhalla_socket_flush();
+    }
+    break;
+
+    case VOP_PROGRAM_PATH: {
+      extern void (M1PROGRAM)(void); /* probably problem with underscore on NTI */
+      DEBUG_VALHALLA(fprintf(output,
+                             "VOP_PROGRAM_PATH()=%s\n",
+                             GroupName(M1PROGRAM)));
+      valhalla_writeint(opcode);
+      valhalla_writetext(GroupName(M1PROGRAM));
+      valhalla_socket_flush();
+      
     }
     break;
 
