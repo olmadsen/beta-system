@@ -476,7 +476,7 @@ STATIC void DumpSymbolTable(labeltable *table,
 
 	if (!pSymbolTable){
 	  TRACE("pSymbolTable is NULL");
-	  fprintf(output,"DumpSymbolTable (i=%d) pSymbolTable is NULL\n", pSymbolTable->Value);
+	  fprintf(output,"DumpSymbolTable (i=%ld) pSymbolTable is NULL\n", pSymbolTable->Value);
 	  break;
 	}
         /* Strings in C really suck rocks through a straw!  I need 8 for
@@ -513,7 +513,7 @@ STATIC void DumpSymbolTable(labeltable *table,
 	TRACEX("  pSymbolTable now", pSymbolTable);
 	TRACEX("  value", pSymbolTable->Value);
 	TRACEX("  value->name_buffer", table->name_buffer);
-	sprintf(table->name_buffer,"%08X N ", pSymbolTable->Value);
+	sprintf(table->name_buffer,"%08lX N ", pSymbolTable->Value);
 	if ( pSymbolTable->N.Name.Short != 0 ){
 	  TRACE("Short name");
 	  memcpy(table->name_buffer+11,
