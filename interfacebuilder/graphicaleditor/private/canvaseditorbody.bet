@@ -1,0 +1,303 @@
+ORIGIN '../canvaseditor';
+INCLUDE 'graphicaleditorprivate';
+
+-- canvasEditorLib: Attributes --
+
+
+  
+getMainFrag:
+  (#
+     theAttributes: ^astInterface.beta.attributes;
+     frag: ^astInterface.fragmentForm;
+     
+  do
+     getMainAttributes->theAttributes[];
+     (if theAttributes[] <> none then theAttributes.frag[]->frag[];  if);
+     
+  exit frag[]
+  #);
+
+scanAttributes:
+  (#
+     current: ^astInterface.beta.attributeDecl;
+     theAttributes: ^astInterface.beta.attributes;
+     
+  do
+     getMainAttributes->theAttributes[];
+     (if theAttributes[] <> none then
+         theAttributes.iterate
+           (# 
+           do
+              current[]->THIS(scanAttributes).current[]; INNER scanAttributes; 
+           #);
+         
+     if);
+     
+  #);
+  
+  
+-- canvasEditorNewData: DoPart --
+do
+   (if hasBorder then
+       borderStyles.shadowIn->data.borderStyle; false->data.borderVisible; 
+   if);
+   INNER  
+
+-- canvasEditorInitialize: DoPart --
+do
+(#
+	initAttributes:
+	  (# aClassData: ^classData; super: @boolean; 
+	  enter (aClassData[],super)
+	  do
+		 5
+		   ->trace
+			 (# 
+			 do 'Init attributes'->xT; aClassData.classname[]->xT
+			 #);
+		 (if aClassData.superClassData[] <> none then
+			 (aClassData.superClassData[],true)->initAttributes; 
+		 if);
+		 4->trace (#  do 'canvas init data'->xT #);
+		 7
+		   ->trace
+			 (# 
+			 do
+				node[]->betaGram.getName->xT;
+				' initdata BEFORE'->xT;
+				xN;
+				data[]->xData
+			 #);
+		 (data[],aClassData.theImperatives[])->initData;
+		 7
+		   ->trace
+			 (# 
+			 do
+				node[]->betaGram.getName->xT;
+				' initdata AFTER'->xT;
+				xN;
+				data[]->xData
+			 #);
+		 applyObjectData;
+		 aClassData.theAttributes.scan
+		   (# theEditor: ^windowItemEditor; theClassData: ^classData; 
+		   do
+			  (if current[]->isStaticItem then
+				  current[]->getClassData->theClassData[];
+				  (if theClassData[] <> none then
+					  (theClassData.className.copy,theClassData.vertical)
+						->makeEditor->theEditor[];
+					  (if theEditor[] <> none then
+						  (THIS(canvasEditor)[],current[],none ,super,
+						   theClassData[],none )->theEditor.init
+					  if);
+					  
+				  if);
+				  
+			  if);
+			  
+		   #);
+		 
+	  #);
+	initAttributes2:
+	  (# anInst: ^instantiator; super: @boolean; 
+	  enter (anInst[],super)
+	  do
+		 anInst.scanAttributes
+		   (#
+			  whenPartObject:: 
+				(# theEditor: ^windowItemEditor; theClassData: ^classData
+				do
+				   current[]->getClassData->theClassData[];
+				   (if theClassData[] <> none then
+					   (theClassData.className.copy,theClassData.vertical)
+						 ->makeEditor->theEditor[];
+					   (THIS(canvasEditor)[],current[],none ,super,
+						theClassData[],none )->theEditor.init;
+					   
+				   if)
+				#);
+			  
+		   #);
+		 
+	  #);
+	proto: ^astInterface.AST;
+	isStaticItem: booleanValue
+	  (# node: ^astInterface.beta.attributeDecl; 
+	  enter node[]
+	  do (mps[],node[],proto[])->match->value; 
+	  #);
+	frag: ^astInterface.fragmentForm;
+	inst: ^instantiator;
+	
+ do
+	className[]->lookup->inst[];
+	true->createTheWindowItem;
+	betaGram[]->mps.newFragmentForm->frag[];
+	(frag[],'<<nameDcl>>: @<<nameApl>> <<mainpart>>',betaGram.simpleDecl)
+	  ->parseText->proto[];
+	(theClassData[],inherited)->initAttributes;
+	true->done;
+	
+ #);
+     
+	  
+-- canvasEditorClose: DoPart --
+do INNER ; children.scan (#  do current.close;  #);   
+
+-- canvasEditorMousedown: DoPart --
+do
+   INNER mouseDown;
+   (if not skip then
+       (if not theEvent.doubleClick then
+           (if (owner[] = none ) or (theEvent.controlKey) then
+                 (#
+                    r: @rectangle;
+                    width,height: @integer;
+                    intersectedObjects: @windowItemEditorList;
+                    
+                 do
+                    intersectedObjects.init;
+                    (theEvent.localPosition,theEvent.localPosition)->r;
+                    (r,false,false,true,true)->theWindowItem.defineRect->r;
+                    children.scan
+                      (# itsFrame: ^rectangle; 
+                      do
+                         (if not current.inherited then
+                             current.frame->itsFrame[];
+                             (if (r,itsFrame)->itsFrame.intersection then
+                                 current[]->intersectedObjects.append; 
+                             if);
+                             
+                         if);
+                         
+                      #);
+                    (if intersectedObjects.empty then
+                        (if theEvent.shiftKey then
+                            (if selected then deSelect;  else select;  if); 
+                         else
+                            selection.clear; select; 
+                        if);
+                        
+                     else
+                        (if theEvent.shiftKey then
+                            intersectedObjects.scan
+                              (# 
+                              do
+                                 (if current.selected then
+                                     current.deSelect; 
+                                  else
+                                     current.select; 
+                                 if);
+                                 
+                              #);
+                            
+                         else
+                            selection.clear;
+                            intersectedObjects.scan
+                              (#  do current.select;  #);
+                            
+                        if);
+                        
+                    if);
+                    true->skip;
+                    
+                 #);
+               
+           if)
+       if);
+       
+   if);
+     
+-- canvasEditorAppendChild: doPart --
+do (# theDoPart: ^astInterface.beta.doPart;
+      theImperatives: ^astInterface.beta.imperatives;
+	  imp: ^astInterface.beta.imp;
+	  insertInx: @integer;
+   do child[]->children.append;
+	  forOpenStatements->findOpenDoPart->theDoPart[];
+	  (if theDoPart[] <> none then
+		  theDoPart.getImperatives->theImperatives[];
+		  l: theImperatives.iterate
+			(# 
+			do
+			   current.sonNo->insertInx;
+			   (if current.symbol = betaGram.innerImp then leave l;  if);
+			   
+			#);
+		  theImperatives.frag[]->child.generateOpenImp->imp[];
+		  (insertInx,imp[])->theImperatives.insert;
+		  (true,theImperatives.frag[],theImperatives[],insertInx)
+			->theFragServer.notifyListElementInserted;
+		  
+	  if);
+	  
+   #);
+
+-- canvasEditorDeleteChild: doPart --
+do 
+     
+-- canvasEditorFindEditor: DoPart --
+do
+   (if not locked then
+       search: children.scan
+         (# theFrame: ^rectangle; 
+         do
+            (if current[] <> ignoreEditor[] then
+                current.frame->theFrame[];
+                (if pt->theFrame.containsPoint then
+                    theFrame.topLeft->pt.subTract;
+                    (pt,ignoreEditor[])->current.findEditor->theEditor[];
+                    leave search;
+                    
+                if);
+                
+            if);
+            
+         #);
+       (if theEditor[] = none then THIS(canvasEditor)[]->theEditor[];  if);
+       
+   if);
+     
+-- canvasEditorCreateTheWindowItem: DoPart --
+do
+   theWindowItem.scan
+     (# 
+     do
+        (current[],THIS(canvasEditor)[])->makeDelegateMousedownAction;
+        current.disableDefaultBehaviour;
+        none ->current.theCursor;
+        
+     #);
+   (if not initial then
+       children.scan (#  do current.createTheWindowItem;  #); 
+   if);
+   INNER ;
+	
+-- recievingCanvasEditorAccept: DoPart --
+do
+   (if not locked then
+       (if dragee.palette then
+           TRUE->value; 
+        else
+           (if (THIS(graphicalEditor).selection.first).owner[] = THIS(
+           canvasEditor)[] then
+               TRUE->value; 
+            else
+               THIS(canvasEditor)[]->THIS(graphicalEditor).selection.moveAllowed
+                 ->value;
+               
+           if);
+           
+       if);
+       
+   if);
+     
+-- recievingCanvasEditorRecieve: DoPart --
+do (THIS(canvasEditor)[],bounds[])->dragee.moveTo;   
+
+-- windowEditorNewData: DoPart --
+do 'untitled'->data.title; INNER ;   
+
+-- windowEditorApplyObjectData: DoPart --
+do false->theWindowItem.border.visible; data.title->titleBar; INNER  
