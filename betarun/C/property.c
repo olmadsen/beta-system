@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1991-02-11 14:28:29 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1991-02-22 12:50:44 $, SID: $Revision: 1.4 $
  * by Lars Bak
  */
 
@@ -83,7 +83,7 @@ static ValueProperty( name, value)
 
   ENTRY("InfoFile",
     if( !(output = fopen(value, "w")) ){
-      fprintf( stderr, "#InfoFile %s couldn't be opened, stderr is used\n");
+      fprintf( stderr, "#InfoFile '%s' couldn't be opened, stderr is used\n", value);
       output = stderr;
     });
    
