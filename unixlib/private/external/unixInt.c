@@ -414,7 +414,7 @@ int in,out;
 */
 
 {int thisIn,thisOut;
- int i,fail=0; 
+ int i; 
  int pid;
  char *argRep[MAX_NO_OF_ARGS + 1];
  
@@ -429,7 +429,7 @@ int in,out;
     for(i=2;*args != '\0';args++)
        {if(*args==SEPARATOR)
           {argRep[i++]=args+1;
-           if(i>MAX_NO_OF_ARGS)
+           if(i>=MAX_NO_OF_ARGS)
 	      return -2;
            *args='\0';
           }
@@ -450,23 +450,33 @@ int in,out;
 #else
  switch(pid=vfork()){
 #endif
- case 0 : {dup2(in,0);
-           dup2(out,1);
-           execve(name,argRep,environ); 
-           _exit(1);
-          }
- case -1 : return -1;
- default : {dup2(thisIn,0);
-            dup2(thisOut,1);
-            /* clean up the table of filedescriptors */
-            close(thisIn);
-            close(thisOut);
-            if(in != 0) 
-              close(in);
-            if(out != 1) 
-              close(out);
-            return fail?-1:pid;
-           }
+ case 0 : 
+   /* Child: */
+   {
+     dup2(in,0);
+     dup2(out,1);
+     execve(name,argRep,environ); 
+     _exit(1);
+   }
+ case -1 : 
+   /* Error: */
+   {
+     return -1;
+   }
+ default : 
+   /* Parent: */
+   {
+     dup2(thisIn,0);
+     dup2(thisOut,1);
+     /* clean up the table of filedescriptors */
+     close(thisIn);
+     close(thisOut);
+     if(in != 0) 
+       close(in);
+     if(out != 1) 
+       close(out);
+     return pid;
+   }
  }
 }
 
