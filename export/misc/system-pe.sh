@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Any 16 bit integer as key for REAL-betarun;  Just don't forget the key!!
-PRODKEY=23594
+PRODKEY=39746
 
 if [ -z "$TARGET" ]; then echo "TARGET not set"; exit 1 ;fi
 MACHINE=`echo "$TARGET" | tr "[a-z]" "[A-Z]"`
@@ -29,7 +29,8 @@ $FILES \
 " \
 | ${BETALIB}/export/misc/icomp $DST/system.cmd
 
-echo "cd %BETALIB%\\betarun\\${CODEDIR}"           > $DST/system-pe.cmd
+echo "system0"                                       > $DST/system-pe.cmd
+echo "cd %BETALIB%\\betarun\\${CODEDIR}"            >> $DST/system-pe.cmd
 echo "ren  betarun.lib  betarun.lib.orig"           >> $DST/system-pe.cmd
 echo "ren  betarun_v.lib betarun_v.lib.orig"        >> $DST/system-pe.cmd
 echo "copy  betarun_pe.lib betarun.lib"             >> $DST/system-pe.cmd
@@ -40,7 +41,7 @@ echo "%BETALIB%\\crypt\\nti\\encrypt.exe $PRODKEY 0 betarun_v.lib.orig betarun_v
 echo "cd %BETALIB%"                                 >> $DST/system-pe.cmd
 echo "copy  bin\\README.txt README.txt"             >> $DST/system-pe.cmd
 echo ""                                             >> $DST/system-pe.cmd
-cat $DST/system.cmd                                 >> $DST/system-pe.cmd
+cat $DST/system0.cmd                                >> $DST/system-pe.cmd
 echo ""                                             >> $DST/system-pe.cmd
 echo ""                                             >> $DST/system-pe.cmd
 echo "cd %BETALIB%\\betarun\\${CODEDIR}"           >> $DST/system-pe.cmd
@@ -51,7 +52,7 @@ echo "del  decrypt.exe"                             >> $DST/system-pe.cmd
 echo "ren  betarun_v.lib.orig betarun_v.lib"        >> $DST/system-pe.cmd
 echo "ren  betarun.lib.orig  betarun.lib"           >> $DST/system-pe.cmd
 echo "cd %BETALIB%"                                   >> $DST/system-pe.cmd
-mv $DST/system-pe.cmd  $DST/system.cmd
+mv $DST/system-pe.cmd  $DST/system0.cmd
 
 else
 if [ "$COMPRESS" = "maccomp" ]

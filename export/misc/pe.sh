@@ -73,9 +73,6 @@ fi
 if [ "$PACKEDITOR" = "yes" ]; then
    ${BETALIB}/export/misc/editor.sh
 fi
-if [ "$PACKEDITOR5_0" = "yes" ]; then
-   ${BETALIB}/export/misc/editor5_0.sh
-fi
 
 if [ "$PACKXT" = "yes" ]; then
    ${BETALIB}/export/misc/xt.sh
@@ -87,9 +84,6 @@ fi
 
 if [ "$PACKVALHALLA" = "yes" ]; then
    ${BETALIB}/export/misc/valhalla.sh
-fi
-if [ "$PACKVALHALLA2_0" = "yes" ]; then
-   ${BETALIB}/export/misc/valhalla2_0.sh
 fi
 
 if [ "$PACKFREJA" = "yes" ]; then
