@@ -16,8 +16,13 @@
  * Corresponding changes for the C runtime system are made in Misc.c, Qua.c
  * and CheckReferenceAssignment.c. */
 
+#if defined(macintosh) || defined(nti)
+#include <beta.h>
+#include <data.h>
+#else
 #include <C/beta.h>
 #include <C/data.h>
+#end
 
 #ifdef sparc
 #include <CRUN/crun.h>
@@ -36,8 +41,8 @@ static int negIOAmax = 0;
 
 #define DEFAULTNEGTABLESIZE 25
 
-void NegAOArefsRESET () { negAOAsize = 0; }
-void negIOArefsFREE () { free (negIOArefs); negIOArefs = 0; }
+void NegAOArefsRESET (void) { negAOAsize = 0; }
+void negIOArefsFREE (void) { free (negIOArefs); negIOArefs = 0; }
    
 void NegAOArefsINSERT(long fieldAdr)  
 {     
@@ -78,7 +83,7 @@ void preLazyGC ()
   /* fprintf (stderr, "preLazyGC done\n"); */
 }
 
-#ifdef macintosh
+#if defined(macintosh) || defined(nti)
 static int danglerLookup (int* danglers, int low, int high, int dangler)
 #else
 static inline int danglerLookup (int* danglers, int low, int high, int dangler)
@@ -109,7 +114,11 @@ int getNextDangler ()
 }
 
 #ifndef sparc
+#if defined(macintosh) || defined(nti)
+   static void
+#else
    static inline void
+#end
    AssignReference(long *theCell, ref(Item) newObject)
    {
      *(struct Item **)theCell = newObject;
@@ -152,7 +161,8 @@ void setupDanglers (int* danglers, long* objects, int count)
   if (negAOArefs) {
     i = 0;
     while (i < negAOAsize) {
-      if (isLazyRef(dangler = (*((int *) negAOArefs[i])))) {
+      dangler = (*((int *) negAOArefs[i]));
+      if (isLazyRef(dangler)) {
 	if ((inx = danglerLookup (danglers, 0, count - 1, dangler)) >= 0) {
 	  /* fprintf (stderr, "setupDanglerAOA(%d)\n", dangler); */
 	  AssignReference ((long *) negAOArefs[i], cast(Item) objects[inx]);
