@@ -160,7 +160,7 @@ static LVRAInsertFreeElement(freeRep)
 
 /* LVRAFindInFree tries to find space for at repetition with size given by
  * proto and range.
- * A first shut is to find a equally sized repetition in the free list.
+ * A first shot is to find an equally sized repetition in the free list.
  * Second try is to find a larger repetition in the free list and split it
  * into two repetitions. 
  * If none of the above tries succeed, the function returns 0.
@@ -208,7 +208,7 @@ static ref(ValRep) LVRAFindInFree(proto, range, size)
     while( currentRep != 0 ){
       if( currentRep->HighBorder >= size+headsize(ValRep)) {
 	/* currentRep is large enough for a repetition of size 'size', and
-	 * at least an empty repetiotion too.
+	 * at least an empty repetition too.
 	 */
 
         /* Update the chain in the freeList. */

@@ -95,7 +95,7 @@ You may order an unconstrained version from\n",
   * terminated - sorry!                                  *\n\
   * You may order an unconstrained version from          *\n\
   *                                                      *\n\
-  *     Mjolner Informatics, Gustav Wiedsvej 10,         *\n\
+  *     Mjolner Informatics, Gustav Wieds Vej 10,        *\n\
   *     Science Park Aarhus, DK-8000 Aarhus C, Denmark,  *\n\
   *     Phone: +45 86 20 20 00,  Fax: +45 86 20 12 22    *\n\
   *     e-mail: support@mjolner.dk                       *\n\
