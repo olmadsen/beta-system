@@ -90,7 +90,9 @@ getErrors:
             #)
        #)
   exit (Message,SQLState,NativeError)
-  #)  
+  #);
+trueText: (#  exit 'true' #);
+falseText: (#  exit 'false' #)  
 
 -- ConnectionClose: DoPart --
 do
@@ -179,6 +181,12 @@ do
              if)
           #)
      do
+        (if name[] = none then
+            exception
+              (# 
+              do 'Name of connection is none in open of connection'->msg
+              #)
+        if);
         (if THIS(connection).private.isOpen then
             twiceOpen
          else
@@ -312,8 +320,7 @@ do
        INNER execute;
        res[]->private.theResultSet.set
     else
-       exception
-         (#  do 'Attempt to execute SQLStatement before open'->msg #)
+       exception (#  do 'Attempt to execute SQLStatement before set'->msg #)
    if)  
 
 -- SQLStatementClose: DoPart --
@@ -362,30 +369,35 @@ findDelimited:
               (if ch->start then pos->startPos; true->started if)
           if)
        #);
-     (if started then pos->endPos if)
+     (if started then pos->endPos if);
+     INNER
   exit (startPos,endPos)
   #);
-findName: findDelimited
+findVars: findDelimited
   (#
-     start::  (#  do (not (ch->ascii.isLetter))->value #);
-     end:: 
-       (#  do ((ch = ':') or (ch = '%') or (ch->ascii.isLetter))->value #)
-  #);
-findVar: findDelimited
-  (#
-     start::  (#  do ((ch = ':') or (ch = '%'))->value #);
-     end:: 
-       (# 
-       do ((ch = ':') or (ch = '%') or not (ch->ascii.isLetter))->value
+     isVarChar: booleanValue
+       (# ch: @char
+       enter ch
+       do ((ch->ascii.isDigit) or (ch->ascii.isLetter))->value; INNER
        #)
+  do INNER
+  #);
+findName: findVars
+  (#
+     start::  (#  do (ch->ascii.isLetter)->value #);
+     end::  (#  do (not (ch->isVarChar))->value #)
+  #);
+findVar: findVars
+  (#
+     isBetaVarChar: booleanValue
+       (# ch: @char enter ch do ((ch->isVarChar) or (ch = '_'))->value #);
+     start::  (#  do ((ch = ':') or (ch = '%'))->value #);
+     end::  (#  do (not (ch->isBetaVarChar))->value #)
   #);
 findMarker: findDelimited
   (#
      start::  (#  do (ch = '%')->value #);
-     end:: 
-       (# 
-       do ((ch = ':') or (ch = '%') or (ch->ascii.isWhiteSpace))->value
-       #)
+     end::  (#  do (pos = startPos+1)->value #)
   #);
 BetaDBCPutClock:
   (# c: @time
@@ -448,7 +460,7 @@ do
                (#
                   start,end: @integer;
                   colNo: @integer;
-                  varElm: ^varColumnList.element;
+                  varElm: ^varList.element;
                   done: @boolean
                enter colNo
                do
@@ -502,6 +514,7 @@ do
                        (if theColumn[] = none then
                            (start,end)->pattern.sub->unknownColumn
                        if);
+                       (if (end+2->pattern.inxGet) = '%' then pattern.get if);
                        (if not (theColumn.no->parseVar) then restart L if)
                     #)
                #)
@@ -630,10 +643,11 @@ do
           (# name: ^text
           enter name[]
           do
-             ''''->puttext;
-             name[]->puttext;
-             ''''->puttext;
-             ' not declared'->putline;
+             'Variable '''->msg.append;
+             name[]->msg.append;
+             ''''->msg.append;
+             ' used in DirectSQLStatement not declared'->msg.append;
+             msg.putline;
              INNER
           #);
         makeVar:
@@ -712,9 +726,9 @@ do
                       ''''->t.puttext
                    // var## <= declareBoolean## then
                       (if (var[]->qua (# as:: declareBoolean #)).get then
-                          'yes'->t.puttext
+                          trueText->t.puttext
                        else
-                          'no'->t.puttext
+                          falseText->t.puttext
                       if)
                    // var## <= declareReal## then
                       (var[]->qua (# as:: declareReal #)).get->t.putReal
@@ -749,7 +763,8 @@ do
                #)
           #)
      #);
-   posList: ^positionList;
+   posList: (* List of positions of all vars and markers in this statement *)
+     ^positionList;
    varList: ^declareVarList;
    markList: ^markerList;
    markerRef: ^markerList.theCellType
@@ -1089,9 +1104,9 @@ do
 -- directSQLStatementB: DoPart --
 do
    (if value then
-       'yes'->private.markerRef.elm.value
+       trueText->private.markerRef.elm.value
     else
-       'no'->private.markerRef.elm.value
+       falseText->private.markerRef.elm.value
    if);
    'b'->private.markerRef.elm.mark  
 
@@ -1158,4 +1173,18 @@ do private.elm.elm->private.getClock->value
 
 -- resultSetScanT: DoPart --
 do private.elm.elm->private.getTime->value  
+
+-- resultSetScanVarNotDeclared: DoPart --
+do
+   'Variable named '''->msg.append;
+   name[]->msg.append;
+   ''' not declared in this connection'->msg.append;
+   INNER  
+
+-- resultSetScanUnknownColumn: DoPart --
+do
+   'Unknown column: '''->msg.append;
+   name[]->msg.append;
+   ''' is not in the resultSet'->msg.append;
+   INNER  
 
