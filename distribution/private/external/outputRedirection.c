@@ -11,13 +11,19 @@ void redirectOutput (char *fname)
 { 
   if (strlen (fname)) {
 
-    freopen (fname, "a", stdout); setbuf (stdout, 0);
-    freopen (fname, "a", stderr); setbuf (stderr, 0);
-
+    if (freopen (fname, "a", stdout)){
+      setbuf (stdout, 0); /* disable buffering on stdout */
+    } else {
+      freopen ("/dev/null", "w", stdout);
+    }
+      
+    if (freopen (fname, "a", stderr)){
+      setbuf (stderr, 0); /* disable buffering on stderr */
+    } else {
+      freopen ("/dev/null", "w", stderr);
+    }
   } else {
-
     freopen ("/dev/null", "w", stdout);
     freopen ("/dev/null", "w", stderr);
-    
   }
 }
