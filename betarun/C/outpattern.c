@@ -444,14 +444,14 @@ char *ErrorMessage(errorNumber)
     }
     index++;
   }
-  sprintf(UnknownError, "Unknown error (%d)", errorNumber);
+  sprintf(UnknownError, "Unknown error (%d)", (int)errorNumber);
   BetaErrorString = UnknownError;
   return UnknownError;
 }
 
 #ifndef sparc
 
-static NotInHeap( address)
+static int NotInHeap( address)
      long address;
 {
   if( inIOA(address) || inAOA(address) || inLVRA((ref(Object))address) ) 
@@ -462,7 +462,7 @@ static NotInHeap( address)
 /* Traverse the StackArea [low..high] and Process all references within it. 
  * Stop when theComp is reached.
  */
-static DisplayStackPart( output, low, high, theComp)
+static void DisplayStackPart( output, low, high, theComp)
      ptr(long) low;
      ptr(long) high;
      FILE *output;
@@ -770,7 +770,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 #ifndef hppa
 #ifndef sparc
 #ifndef crts  
-  { 
+  { /* RUN based DisplayBetaStack() */
     ptr(long)           theTop;
     ptr(long)           theBottom;
     
@@ -790,7 +790,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
     /* Follow the stack */
     while( theFrame){
       DisplayStackPart( output, theTop+1, (long *)theFrame-1, 0);
-      fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
+      fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n"); 
       theTop   = theFrame->betaTop;
       theFrame = theFrame->next;
       if( isObject( (ref(Object))(*theTop)) ) 
@@ -907,13 +907,13 @@ char *DescribeObject(theObject)
     case (long) StructurePTValue:
       sprintf(buffer, 
 	      "Struc: origin: 0x%x, proto: 0x%x", 
-	      (cast(Structure)theObject)->iOrigin,
-	      (cast(Structure)theObject)->iProto);
+	      (int)((cast(Structure)theObject)->iOrigin),
+	      (int)((cast(Structure)theObject)->iProto));
       return buffer;
     case (long) DopartObjectPTValue:
       sprintf(buffer, 
 	      "Dopart: origin: 0x%x", 
-	      (cast(DopartObject)theObject)->Origin);
+	      (int)((cast(DopartObject)theObject)->Origin));
       return buffer;
     case (long) RefRepPTValue:
       return "RefRep";	
@@ -933,6 +933,8 @@ char *DescribeObject(theObject)
       return "ShortRep";
     case (long) DoubleRepPTValue:
       return "RealRep";
+    default:
+      return "Unknown object type!";
     }
   } else {
     ref(GCEntry) stat = cast(GCEntry) ((long) theProto + theProto->GCTabOff);

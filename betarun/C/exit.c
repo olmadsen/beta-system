@@ -17,7 +17,7 @@ void BetaExit( number )
   InfoS_End();
 #ifdef RTDEBUG
   sprintf(buf, "NumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d", 
-	  NumIOAGc, NumAOAGc, NumLVRAGc);
+	  (int)NumIOAGc, (int)NumAOAGc, (int)NumLVRAGc);
   Notify(buf);
 #endif /* RTDEBUG */
 #ifdef apollo
@@ -74,11 +74,27 @@ void BetaError(errorNo, theObj)
 #if !(defined(hppa) || defined(sparc) || defined(crts))
       /* Ordinary Motorola-like stack */
       thePC = 0;
-      StackEnd = (ptr(long)) &theObj; StackEnd++;
-      /* Current object was pushed as the first thing, when
-       * the error was detected. The "thing" just below
-       * is the first real part of the Beta stack
-       */
+      switch(errorNo){
+      case StopCalledErr:
+	/* betaenv.stop -> FailureExit -> BetaError */
+	StackEnd = BetaStackTop;
+#ifdef mc68020
+	/* a0 and a1 were pushed before calling FailureExit */
+	StackEnd += 2;
+#endif
+#ifdef intel
+	/* edx, edi, ebp, esi were pushed before calling FailureExit */
+	StackEnd += 4;
+#endif
+	break;
+      default:
+	/* Current object was pushed as the first thing, when
+	 * the error was detected. The "thing" just below
+	 * is the first real part of the Beta stack
+	 */
+	StackEnd = (ptr(long)) &theObj; StackEnd++;
+	break;
+      }
 #endif
 
       /* Treat QUA errors specially */
