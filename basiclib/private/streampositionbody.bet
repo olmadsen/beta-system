@@ -1,0 +1,132 @@
+ORIGIN '../streamPosition';
+
+--LIB: attributes--
+debug: (# exit false #);
+
+--StreamPositionConverterCache: descriptor--
+(# numlines: @integer;
+   breakpositions: [0]@integer;
+   missing_nl: @boolean;
+#)
+
+--StreamPositionConverterUpdate: Dopart--
+do (* Random guess: assume 20 chars pr line *)
+   1 + length div 20 -> cache.breakpositions.new; 
+   false -> cache.missing_nl;
+   scanlines:
+     (if not eos then
+         cache.numLines+1 -> cache.numLines;
+         scanToNl(# missing_newline::(# do true -> cache.missing_nl #)#);
+         (if cache.numLines>cache.breakpositions.range then
+             cache.breakpositions.range -> cache.breakpositions.extend;
+         if);
+         getpos -> cache.breakpositions[cache.numLines];
+         restart scanlines;
+     if);
+   (* We are now at end of stream. Save last position *)
+   (if cache.numLines+1>cache.breakpositions.range then
+       1 -> cache.breakpositions.extend;
+   if);
+   length -> cache.breakpositions[cache.numLines+1];
+   
+   (if debug then
+       'Line break positions:' -> screen.putline;
+       (for i:cache.numlines+1 repeat
+            i -> screen.putint(# format::(# do 5->width #)#); 
+            ': ' -> screen.puttext;
+            cache.breakpositions[i] -> screen.putint;
+            screen.newline;
+       for);
+   if);
+         
+
+--StreamPositionConverterPosToLineCol: Dopart--
+do PosToLineCol:
+     (# low,mid,high: @Integer;
+     do (if pos=0 then getpos->pos if);
+        (if pos<0 then (1,1)->(line,col); leave PosToLineCol if);
+        (if cache.breakpositions.range=0 then update if);
+        (if pos>cache.breakpositions[cache.numlines+1] then
+            (if cache.missing_nl then
+                (* No break at last line *)
+                cache.numlines -> line;
+                1 + cache.breakpositions[cache.numlines]
+                -   cache.breakpositions[cache.numlines-1] -> col;
+             else
+                (* last line empty *)
+                cache.numlines+1 -> line;
+                1 -> col;
+            if);
+            leave PosToLineCol;
+        if);
+        (* Find largest linebreak position smaller than pos *)
+        (if cache.numlines > 0 then
+            1->low;
+            cache.numlines->high;
+            (low+high) div 2->mid;
+            binsearch:
+              (if high = low then
+                  (if cache.breakpositions[low]  = pos then
+                      low -> line;
+                      pos-cache.breakpositions[line] -> col;
+                   else
+                      (if mid > 1 then
+                          low-1 -> line;
+                          pos-cache.breakpositions[line] -> col;
+                       else
+                          0 -> line;
+                          1 -> col;
+                      if);
+                  if);
+               else
+                  (if cache.breakpositions[mid] < pos then
+                      mid+1->low;
+                   else
+                      mid->high;
+                  if);
+                  (low+high) div 2->mid;
+                  restart binsearch;
+              if)
+         else
+            (* cache.numlines=0 => empty file *)
+            0->line;
+            1->col;
+        if);
+        (* Largest break smaller than pos found. This marks
+         * end of previous line. Thus result is line+1.
+         *)
+        line+1 -> line;
+     #)
+   
+
+
+--StreamPositionConverterLineColToPos:dopart--
+do (if line<0 then 
+       1 -> pos; 
+       leave LineColToPos 
+   if);
+   (if (line=0) and (col=0) then 
+       getpos -> pos; 
+       leave LineColToPos 
+   if);
+   (if cache.breakpositions.range=0 then 
+       update 
+   if);
+   (if line>cache.numlines then 
+       cache.breakpositions[cache.numlines+1]+col -> pos; 
+       leave LineColToPos 
+   if);
+   cache.breakpositions[line]+col -> pos;
+   
+   
+--StreamPositionConverterNumLines: dopart--
+do (if cache.breakpositions.range=0 then 
+       update 
+   if);
+   (if cache.missing_nl then
+       cache.numlines->value
+    else
+       cache.numlines+1->value;
+   if);
+
+
