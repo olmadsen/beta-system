@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-09-02 12:33:18 $, SID: $Revision: 1.14 $
+ * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-09-02 13:22:13 $, SID: $Revision: 1.15 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -16,12 +16,13 @@ extern ref(ValRep) 	AlloVR();
 extern char 	      * LVRAAlloc();
 extern char 	      * LVRAByteAlloc();
 extern ref(RefRep)	AlloRR();
-extern ref(StackObject) AlloSO() asm ("AlloSO");
-extern void		CopyT() asm ("CopyT");
-extern void		CopySRR() asm ("CopySRR");
-extern void		CopySVR() asm ("CopySVR");
+extern ref(StackObject) AlloSO() asm("AlloSO");
+extern void		CopyT() asm("CopyT");
+extern void		CopySRR() asm("CopySRR");
+extern void		CopySVR() asm("CopySVR");
 extern ref(Structure)	AlloS() asm("AlloS");
 extern ref(Structure)	ThisS() asm("ThisS");
+extern void		DoGC() asm("DoGC");
 extern ref(Item)	AlloSI() asm("AlloSI");
 extern ref(Component)	AlloSC() asm("AlloSC");
 /* The following not capitalized to avoid loosing the ones starting with L */
@@ -32,7 +33,6 @@ extern int              GtS() asm("gtS");
 extern int              LeS() asm("leS");
 extern int              GeS() asm("geS");
 extern void             Return() asm ("Return");
-extern void             DoGC();
 extern void             RefNone() asm("RefNone");
 extern void             AttBC() asm("AttBC");
 extern void             CopyRR() asm("CopyRR");
