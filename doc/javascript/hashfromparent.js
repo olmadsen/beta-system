@@ -1,10 +1,15 @@
-function HashFromParent()
+function HashFromParent(filename)
 { 
-  if (parent && parent.location.search){
-     var oldhash = location.hash;
-     var newhash = "#" + parent.location.search.substring(1);
-     if (newhash != oldhash) {
-	location.replace(newhash);
-     }
+  if ((!parent) || (parent.frames["" + filename + "Body"] != self)){
+     // Open frameset instead
+     location.replace("" + filename + ".html" + location.hash);
+  } else {
+    if (parent.location.hash){
+       var oldhash = location.hash;
+       var newhash = parent.location.hash;
+       if (newhash != oldhash) {
+	  location.replace(newhash);
+       }
+    }
   }
 }

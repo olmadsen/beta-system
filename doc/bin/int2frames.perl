@@ -28,6 +28,7 @@ my $wiki        = (defined($w)) ? 1 : 0;
 $v = $t = $x = $f = $c = $w = "";
 
 # Other global variables
+my $insert_validhtml40 = 0;
 my $scriptdir = "";
 my $imagedir = "";
 my $topfile = "";
@@ -231,7 +232,8 @@ sub H4(){
 
 sub print_valid_html_button()
 {
-    print<<EOT;
+
+    print<<EOT if ($insert_validhtml40);
 <TABLE BORDER=0 ALIGN=RIGHT>
 <TR>
 <TD>
@@ -534,7 +536,7 @@ sub print_body_frame(){
     
     &print_header($title,($flag_base|$flag_hash));
     print<<"EOT";
-<BODY onLoad='HashFromParent()'$bodyatt>
+<BODY onLoad='HashFromParent("$basename")'$bodyatt>
 $header
 <PRE CLASS=interface>
 EOT
@@ -725,7 +727,7 @@ sub calculate_index()
     @index = sort {lc($a) cmp lc($b)} @index;
 
     # Local variables
-    local ($prev_id, $prev_no, $initial_ch, $htmlfile, $i, %entries);
+    local ($prev_id, $prev_no, $initial_ch, $htmlfile, $htmlbodyfile, $i, %entries);
 
     #print STDERR "index:++++++++++++++++++++\n";
     #print STDERR join ("\n", @index);
@@ -741,6 +743,7 @@ sub calculate_index()
 	$index[$i] =~ s/(.+)\@(.+)/$1/;
 	# save target file name
 	$htmlfile = $2;
+	($htmlbodyfile = $htmlfile) =~ s/\.html$/-body.html/;
 	$_ = $index[$i];
 
 	# In betaenv: exit T[1:lgth] is taken to be
@@ -816,7 +819,7 @@ sub calculate_index()
 		$html_index .= "\n";
 		# indent with double-spaces
 		$html_index .= "  " x (1+&num_chars(':', $scopes));
-		$html_index .= "  <A href=\"$htmlfile?" . &legalize_hash($index[$i]) . "\">" . $id . "</A>";
+		$html_index .= "  <A href=\"$htmlbodyfile\#" . &legalize_hash($index[$i]) . "\">" . $id . "</A>";
 		$entries{$_} = 1;
 	    } else {
 		$html_index .= "Index Error: $_ ($scopes) ($id)\n";
@@ -829,11 +832,11 @@ sub calculate_index()
 		    # break line of references
 		    $html_index .= "\n   ";
 		}
-		$html_index .= " <A href=\"$htmlfile?" . &legalize_hash($index[$i]) . "\">[" . $prev_no . "]</A>";
+		$html_index .= " <A href=\"$htmlbodyfile\#" . &legalize_hash($index[$i]) . "\">[" . $prev_no . "]</A>";
 	    } else {
 		$prev_no=1;
 		$html_index .= "\n";
-		$html_index .= "  <A href=\"$htmlfile?" . &legalize_hash($index[$i]) . "\">" . $id . "</A>";
+		$html_index .= "  <A href=\"$htmlbodyfile\#" . &legalize_hash($index[$i]) . "\">" . $id . "</A>";
 		$prev_id = $id;
 	    }
 	    $entries{$_} = 1;

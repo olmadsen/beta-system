@@ -357,7 +357,7 @@ sub print_body_frame()
     &print_header($title, $flag_hash);
 
     print<<"EOT";
-<BODY onLoad='HashFromParent();'>
+<BODY onLoad='HashFromParent("$basename");'>
 <H1>$title</H1>
 <PRE CLASS=gram>
 EOT
@@ -470,7 +470,7 @@ EOT
 
 sub calculate_index()
 {
-    local ($initial_ch, $i);
+    local ($initial_ch, $i, $htmlbodyfile);
 
     # Sort index ignoring case
     @index = sort {lc($a) cmp lc($b)} @index;
@@ -483,7 +483,8 @@ sub calculate_index()
 	    $caps{$initial_ch} = 1;
 	}
 	# Generate index line
-	$html_index .= "  <A href=\"$htmlfile\?" . lc($index[$i]) . "\">&lt;" . $index[$i] . "&gt</A>\n";
+	($htmlbodyfile = $htmlfile) =~ s/\.html$/-body.html/;
+	$html_index .= "  <A href=\"$htmlbodyfile\#" . lc($index[$i]) . "\">&lt;" . $index[$i] . "&gt</A>\n";
     }
     &print_index_toc;
     print "<PRE CLASS=gram>\n$html_index</PRE>\n";
