@@ -5,7 +5,7 @@
  * Copyright (C) 1992-94 Mjolner Informatics Aps.
  * Written by Ole Lehrmann Madsen, Jacob Seligmann, and Peter Andersen.
  *
- * $Id: crts.h,v 1.1 1994-04-11 14:27:53 beta Exp $
+ * $Id: crts.h,v 1.2 1994-04-11 16:07:00 beta Exp $
  *
  */
 
@@ -90,11 +90,14 @@ extern void pushAdr();
 extern long *popAdr();
 extern long CallBackPar(long off);
 extern void Trap();
-extern long GetByte(long a,long byteNo);
-extern long GetShort(long a,long shortNo);
-extern long PutBits(long a,long b,long c,long d);
-extern long GetBits(long a,long b,long c);
-extern long GetSignedBits(long a,long b,long c);
+
+extern char 		GetByte(unsigned long a, int byteNo /* 0-3 */);
+extern unsigned short 	GetShort(unsigned long a,int shortNo /* 0-1 */);
+extern void 		PutBits(unsigned long a, unsigned long *b, int pos, int len);
+extern unsigned long 	GetBits(unsigned long a, int pos, int len);
+extern signed long 	GetSignedBits(unsigned long a, int pos, int len);
+extern signed long 	SignExtByte(signed char a);
+extern signed long 	SignExtWord(signed char a);
 
 extern struct Component *	AlloC(struct Object *origin, struct ProtoType *proto);
 extern struct DopartObject * 	AlloDO(unsigned size, struct Object *origin);
