@@ -1176,11 +1176,10 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
         break;
       }
 
-      if (target) {
-        HasRefToTarget = getRealObject(target);
+      HasRefToTarget = target;
+      if (HasRefToTarget) {
         HasRefToTargetSize = 4*ObjectSize(HasRefToTarget);
       } else {
-        HasRefToTarget = target;
         HasRefToTargetSize = 4;
       }
       
