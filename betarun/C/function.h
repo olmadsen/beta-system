@@ -219,8 +219,9 @@ extern Object * NewCopyObject(Object *, Object **);
 extern void ProcessStackObj(StackObject *, CellProcessFunc func);
 extern void ProcessStack(void);
 #ifdef NEWRUN
+extern long WindBackSP(long SP, Object *obj, long PC);
 extern void ProcessStackFrames(long SP, long StackStart, long stopAtComp, long dynOnly, CellProcessFunc func);
-void PrintStackFrames(long *SP, int numcells);
+extern void PrintStackFrame(long *PrevSP, long *SP);
 #endif /* NEWRUN */
 #if (defined(RTVALHALLA) && defined(intel))
 extern void ProcessValhallaRefStack(void);

@@ -229,6 +229,7 @@ void ProcessCBFA(void)
 int NumCBFAEntries(void)
 {
   int n=0;
+  if (!CBFA) return 0;
   if (CBFABlockSize){
     if (CBFATop != CBFA->entries ){
       CallBackArea  *cbfa    = CBFA;

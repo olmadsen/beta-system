@@ -626,10 +626,8 @@ void DisplayNEWRUNStack(long *PC, Object *theObj, int signal)
    */
   if (signal){
     if (IsBetaCodeAddrOfProcess((long)PC)){ 
-      long SPoff;
       DEBUG_CODE(fprintf(output, "DisplayBetaStack: Adjusting StackEnd\n"));
-      GetSPoff(SPoff, CodeEntry(GETPROTO(theObj), (long)PC)); 
-      StackEnd = (long *) ((long)StackEndAtSignal+SPoff);
+      StackEnd = (long*)WindBackSP((long)StackEndAtSignal, theObj, (long)PC);
       DEBUG_CODE({
 	fprintf(output, 
 		"DisplayBetaStack: "
@@ -1634,7 +1632,14 @@ unsigned long CodeEntry(ProtoType *theProto, long PC)
   ProtoType *activeProto;
   ProtoType *protoArg=theProto;
 
-  TRACE_CODEENTRY(fprintf(output, "CodeEntry(theProto=0x%x (%s), PC=0x%x)\n", theProto, ProtoTypeName(theProto), PC)); 
+  TRACE_CODEENTRY({
+    fprintf(output, "CodeEntry(theProto=0x%x", (int)theProto);
+    PrintProto(theProto);
+    fprintf(output, " PC=0x%x", PC); 
+    PrintCodeAddress(PC);
+    fprintf(output, ")\n");
+    fflush(output);
+  });
   mPart = M_Part(theProto);
   gPart = G_Part(theProto);
   gDist  = PC - gPart; 

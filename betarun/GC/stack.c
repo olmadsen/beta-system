@@ -130,12 +130,20 @@ static void PrintSkipped(long *current)
 #ifdef NEWRUN
 /************************* Begin NEWRUN ****************************/
 
-/* FIXME: Possibly add function
- *    long *WindBackSP(long *SP, Object *obj, long *PC)
- * and use instead of macro unwinding. The overhead in calling function
- * is probably less than the overhead introduced by cache misses due to
- * large code.
- */
+long WindBackSP(long SP, Object *obj, long PC)
+{
+  long SPoff /* size allocated on stack when theObj became active */;
+  GetSPoff(SPoff, CodeEntry(GETPROTO(obj), PC)); 
+  DEBUG_STACK({
+    fprintf(output, "WindBackSP:\n");
+    fprintf(output, "Old SP:      0x%x\n", SP);
+    fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(GETPROTO(obj), PC));
+    fprintf(output, "SPoff:       0x%x\n", SPoff);
+    fprintf(output, "New SP:      0x%x\n", SP+SPoff);
+  });
+  SP = (long)SP+SPoff;
+  return SP;
+}
 
 #ifdef RTDEBUG
 static void DumpProto(Object *theObj)
@@ -149,21 +157,57 @@ static void DumpProto(Object *theObj)
      }                                                           
   }                                                              
 }
-void PrintStackFrames(long *SP, int numlongs)
+void PrintStackFrame(long *PrevSP, long *SP)
 {
   long *StackCell;
+  int in_refs=0;
 
-  for (StackCell=SP-1; StackCell>=(SP-numlongs); StackCell--){
-    fprintf(output, "\t0x%08x: 0x%08x ", (int)StackCell, (int)*StackCell);
-    if (StackCell==SP-1){
+  DEBUG_STACK(fprintf(output, 
+		      "PrintStackFrame(PrevSP=0x%x, SP=0x%x)\n",
+		      (int)PrevSP,
+		      (int)SP));
+  Claim(PrevSP>=SP, "PrevSP=>SP");
+#ifdef ppcmac
+  /* Print LR and CR too */
+  fprintf(output, "   +8:  0x%08x: 0x%08x", (int)PrevSP+2, (int)*(PrevSP+2));
+  fprintf(output, "(LR/RTS)");
+  PrintCodeAddress((int)*StackCell);
+  fprintf(output, "\n");
+  fprintf(output, "   +4:  0x%08x: 0x%08x", (int)PrevSP+1, (int)*(PrevSP+2));
+  fprintf(output, "(CR)");
+  fprintf(output, "\n");
+#endif /* ppcmac */
+  fprintf(output, "PrevSP->0x%08x: 0x%08x\n", (int)PrevSP, (int)*PrevSP);
+  fprintf(output, "        ----------------------\n");  
+  for (StackCell=PrevSP-1; StackCell>=SP; StackCell--){
+    if (StackCell==SP){
+      fprintf(output, "    SP->");
+    } else {
+      fprintf(output, "        ");      
+    }
+    fprintf(output, "0x%08x: 0x%08x ", (int)StackCell, (int)*StackCell);
+#ifdef sgi
+    if (StackCell==PrevSP+PC_OFF){
       fprintf(output, "(RTS)");
       PrintCodeAddress((int)*StackCell);
     }
-    if (StackCell==SP-2){
-      fprintf(output, "(DYN)"); /* FIXME: ppcmac: not correct */
-      PrintRef((Object*)*StackCell);
+#endif /* sgi */
+    if (StackCell==PrevSP-DYN_OFF){
+      fprintf(output, "(DYN)");
+      in_refs=1;
+    }
+    if (in_refs){
+      if (*StackCell){
+	PrintRef((Object*)*StackCell);
+      } else {
+	fprintf(output, "(RefStack termination)");
+	in_refs = 0;
+      }
     }
     fprintf(output, "\n");
+    if (StackCell==SP){
+      fprintf(output, "        ----------------------\n");  
+    }
     fflush(output);
   }
 }

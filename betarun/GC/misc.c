@@ -319,16 +319,16 @@ void PrintRef(Object *ref)
 {
   if (ref) {
     if (inBetaHeap(ref) && isObject(ref) ){
-      fprintf(output, ", is object");
+      fprintf(output, " is object");
       if (IsPrototypeOfProcess((long)GETPROTO(ref))) {
 	fprintf(output, " (");
 	DescribeObject(ref);
 	fprintf(output, ")");
       } else {
-	fprintf(output, ", proto NOT ok: 0x%x", (int)GETPROTO(ref));
+	fprintf(output, " proto NOT ok: 0x%x", (int)GETPROTO(ref));
       }
     } else {
-      fprintf(output, ", is NOT object");
+      fprintf(output, " is NOT object");
       if (isCode(ref)) {
 	char *lab = getLabel((long)ref);
 	fprintf(output, " (is code: <%s+0x%x>)", lab, (int)labelOffset);
@@ -356,11 +356,14 @@ void Illegal()
 #ifdef NEWRUN
   if (IOAActive){
     /* An IOAGc is going on. Thus StackEnd should be well defined */
-  fprintf(output, "Attempting to do a stack dump\n");
-  DebugStack=1;
-  ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoNothing);
+    fprintf(output, "Attempting to do a stack dump\n");
+    DebugStack=1;
+    if (!isMakingDump){
+      ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoNothing);
+      isMakingDump=1;
+    }
   }
-#endif
+#endif /* NEWRUN */
   
   if (StopAtIllegal){
 #ifdef RTVALHALLA
@@ -827,6 +830,12 @@ GLOBAL(long maxLabels) = 2048;
 GLOBAL(long process_offset) = 0;
 #endif
 
+#ifdef UNIX
+#ifndef hppa
+/* static void *dl_self=0; */
+#endif /* hppa */
+#endif /* UNIX */
+
 static void initLabels(void)
 {
   char exefilename[500];
@@ -838,6 +847,12 @@ static void initLabels(void)
 #ifdef ppcmac
   return;
 #endif /* ppcmac */
+
+#ifdef UNIX
+#ifndef hppa
+  /* dl_self = dlopen(NULL, (RTLD_NOW | RTLD_GLOBAL) ); */
+#endif /* hppa */
+#endif /* UNIX */
 
   INFO_LABELS(fprintf(output, "[initLabels ... "); fflush(output););
   strcpy(exefilename, ArgVector[0]);
@@ -938,6 +953,13 @@ char *getLabel (long addr)
     labelOffset=0;
     return "<unknown>";
   }
+
+#ifdef UNIX
+#ifndef hppa
+  /* FIXME: could use dladdr here - but not on sgi (:-( */
+#endif /* hppa */
+#endif /* UNIX */
+
 #ifdef nti
   addr -= process_offset;
 #endif

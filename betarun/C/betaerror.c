@@ -121,12 +121,8 @@ void BetaError(BetaErr err, Object *theObj)
 	theObj = (Object *)GetDyn(SP);
 	/* DELIBERATELY NO BREAK HERE */
       case RepRangeErr /* called via HandleIndexErr in betaenv.o */:
-	{
-	  /* Wind back to start of frame of caller of betaenv.o code stub */
-	  long SPoff;
-	  GetSPoff(SPoff, CodeEntry(GETPROTO(theObj), (long)thePC)); 
-	  SP = (long *) ((long)SP+SPoff);
-	}
+	/* Wind back to start of frame of caller of betaenv.o code stub */
+	SP = (long*)WindBackSP((long)SP, theObj, (long)thePC);
       }
       StackEnd = SP;
 #endif /* NEWRUN */

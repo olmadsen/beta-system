@@ -519,30 +519,23 @@ void HasRefDoRef(Object** theCell)
 extern void Return ();
 
 #ifdef NEWRUN
-static void terminate_reference_stack(long *SP)
+static void terminate_reference_stack(long *PrevSP, long *SP)
 {
   long *StackCell;
   DEBUG_VALHALLA({
-    long numbytes = (long)SP - (long)StackEndAtSignal;
-    Claim(numbytes>0, "numbytes>0");
     fprintf(output, "terminate_reference_stack: top frame:\n");
-    PrintStackFrames(SP, numbytes/sizeof(long*));
-    
+    PrintStackFrame(PrevSP, SP);
   });
 
-#ifdef sgi
-  StackCell = SP-(DYN_OFF+1) /* Don't clear DYN */;
+  StackCell = PrevSP-(DYN_OFF+1) /* Don't clear DYN */;
   DEBUG_VALHALLA(fprintf(output, 
-			 "terminate_reference_stack(SP=0x%x): 0x%x=0\n",
-			 (int)SP,
-			 (int)(StackCell));
+			 "terminate_reference_stack(PrevSP=0x%x):"
+			 "cell 0x%x changed from 0x%0x to 0.\n",
+			 (int)PrevSP,
+			 (int)(StackCell),
+			 (int)(*StackCell));
 		 fflush(output));
   *StackCell=0;
-#endif /* sgi */
-
-#ifdef ppcmac
-#error terminate_reference_stack NYI
-#endif /* ppcmac */
   return;
 }
 #endif /* NEWRUN */
@@ -908,27 +901,39 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "Prototype: %s\n", ProtoTypeName(proto)));
 
 #ifdef NEWRUN
-      /* The referencestack part of the top frame is not
-       * necessarily terminated at this point (depending on
-       * how the debuggee stopped).
-       * The two main cases are:
-       *   1. Debuggee is stopped in a breakpoint.
-       *   2. Debuggee detected a fatal error
-       *      (Qua may be an exception, if QuaCont is set).
-       * Here we go in and terminate the reference stack as if there was no
-       * references on it. This is assumed OK in case 1, since Ole
-       * claims that the compiler has nothing on the reference stack
-       * at the points where breakpoints may be set.
-       * In case two, we may forget a few references on the stack by terminating
-       * it, but since a fatal error has happened in the debugee, this should
-       * not harm it - it will not be able to continue anyway (yet - has to be
-       * reconsidered when system exceptions are introduced).
-       * A more elegant solution would be to include in the .db file format
-       * how many references are on stack between each imperative.
+      /* The SP points to end of current frame. We have to
+       * adjust it to point to end of previous frame, as
+       * this is expected when callback occurs (see figure
+       * "STACK LAYOUT at callback/gpart" in stack.c.
        */
-      
-      DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: Terminating reference stack."));
-      terminate_reference_stack((long*)SP);
+      {
+	long PrevSP;
+        DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: Finding previous frame:\n"));
+	PrevSP = WindBackSP(SP, curObj, (long)PC);
+
+	/* The referencestack part of the top frame is not
+	 * necessarily terminated at this point (depending on
+	 * how the debuggee stopped).
+	 * The two main cases are:
+	 *   1. Debuggee is stopped in a breakpoint.
+	 *   2. Debuggee detected a fatal error
+	 *      (Qua may be an exception, if QuaCont is set).
+	 * Here we go in and terminate the reference stack as if there was no
+	 * references on it. This is assumed OK in case 1, since Ole
+	 * claims that the compiler has nothing on the reference stack
+	 * at the points where breakpoints may be set.
+	 * In case two, we may forget a few references on the stack by terminating
+	 * it, but since a fatal error has happened in the debugee, this should
+	 * not harm it - it will not be able to continue anyway (yet - has to be
+	 * reconsidered when system exceptions are introduced).
+	 * A more elegant solution would be to include in the .db file format
+	 * how many references are on stack between each imperative.
+	 */
+	
+	DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: Terminating reference stack.\n"));
+	terminate_reference_stack((long*)PrevSP, (long*)SP);
+	SP=PrevSP;
+      }
       
 #endif /* NEWRUN */
 
