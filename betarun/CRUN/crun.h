@@ -7,58 +7,6 @@
 #ifndef _CRUN_H_
 #define _CRUN_H_
 
-#ifdef crts
-#define ParamOriginProto(retType,name)			 \
-  retType name(struct Object *origin, struct ProtoType *proto)
-#define ParamThisComp(retType,name)                            \
-  retType name(struct Object *this, struct Component *comp)
-#define ParamObjOffRange(retType, name)			 \
-  retType name(struct Object *theObj,			         \
-	 unsigned offset, /* in bytes */		 \
-	 unsigned range				         \
-	 )
-#define ParamStruc(retType, name)                              \
-  retType name(struct Structure *struc)
-#define ParamThis(retType,name)                                \
-  retType name(struct Object *this)
-
-#define setret(newret)
-#define getret(saved)
-
-#define RETURN(v) return v
-#define GCable_Entry()
-#define GCable_Exit(v)
-
-extern long a1;
-#define CallBetaEntry(entry,item)	                \
-    a1=(long)(item); (* (void (*)()) (entry))()
-
-extern void pushAdr(long *a);
-extern long *popAdr();
-#define push(v) pushAdr((long*)v)
-#define pop(v) (long*)v=popAdr()
-
-#define Protect(var, code)				\
-  push(var);						\
-  { code; }						\
-  pop(var);
-
-#define Protect2(v1, v2, code)				\
-  push(v1); push(v2);					\
-  { code; }						\
-  pop(v2); pop(v1);
-
-
-#define DeclReference1(type, name) type name
-#define DeclReference2(type, name) type name
-
-#define FetchOriginProto()
-#define FetchStruc()
-#define FetchThis()
-#define FetchThisComp()
-
-#endif /* crts */
-
 extern void             Return();
 extern void             BetaError();
 
