@@ -146,6 +146,10 @@ if ( $REMOVEASTS == "yes" ) then
     echo "rebuildall.sh: Building tools." >>& $LOG
     mbs_compiletools -u >>& $LOG
     date >>& $LOG
+    # datpete: 4/2/2002: Added one call of dogram to get 
+    # $BETALIB/configuration/MBSgrammars_STD.ast rebuilt.
+    dogram $BETALIB/grammars/idl/idl >>& $LOG
+    date >>& $LOG
 else
     date >>& $LOG
     echo "rebuildall.sh: Building betarun." >>& $LOG
@@ -161,6 +165,10 @@ else
     date >>& $LOG
     echo "rebuildall.sh: Building tools." >>& $LOG
     mbs_compiletools -u >>& $LOG
+    date >>& $LOG
+    # datpete: 4/2/2002: Added one call of dogram to get 
+    # $BETALIB/configuration/MBSgrammars_STD.ast rebuilt.
+    dogram $BETALIB/grammars/idl/idl >>& $LOG
     date >>& $LOG
 endif
 
