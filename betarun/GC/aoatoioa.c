@@ -167,12 +167,10 @@ void AOAtoIOAInsert(handle( Object) theCell)
     
     DEBUG_AOA(fprintf(output, "\nAOAtoIOAInsert collision"));
     /* linear search at most 100 forward */
-    count = 0;
-    index = ((unsigned long) theCell) % AOAtoIOAtableSize;
-    while( count++ < 100 ){
-      index++;
+    count = 100;
+    index = ((unsigned long) theCell+1) % AOAtoIOAtableSize;
+    do {
       DEBUG_AOA(fprintf(output, "[%d]", (int)count));
-      if (index==AOAtoIOAtableSize) index=0; /* cheaper than modulus */
       if (table[index]==0){
 	/* Found free */
 	table[index] = (unsigned long) theCell; 
@@ -184,7 +182,9 @@ void AOAtoIOAInsert(handle( Object) theCell)
 	DEBUG_AOA(fprintf(output, "\n"));
 	goto exit;
       }
-    }
+      index++;
+      if (index==AOAtoIOAtableSize) index=0; /* cheaper than modulus */
+    } while(--count);
 
     /* Both functions failed */
     AOAtoIOAReAlloc();
