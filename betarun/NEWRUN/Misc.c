@@ -33,8 +33,31 @@ void Return()
 }
 
 void FailureExit()
-{
-  BetaError(StopCalledErr, GetThis(BetaStackTop[0]), BetaStackTop[0], 0);
+{ 
+  /* Stop leads to the following chain of calls:
+   *   betaenv.stop -> betaenvbody.betaenvStop -> FailureExit
+   * The stacktop when calling FailureExit points to the
+   * *previous* frame. It is possible to find the SP itself
+   * using GetSPbeta(prevSP), but we currently do not know
+   * how to find the PC of the caller of FailureExit inside
+   * the stack frame of FailureExit, so there is no use
+   * for the top SP. For valhalla it is fine to use
+   * the PC of the caller of the caller of FailureExit - 
+   * this is the betaenv.stop pattern 
+   * (instead of betaenvbody.betaenvStop as on other platforms).
+   */
+  
+  long *prevSP;
+  Object *theObj;
+  
+  prevSP = BetaStackTop[0];
+  theObj = GetThis(prevSP);
+  
+  BetaError(StopCalledErr /* error number */, 
+	    theObj /* Current object */, 
+	    prevSP /* Stack Pointer */, 
+	    (long*)GetPC(prevSP) /* PC */
+	    );
 }
 
 /* RefNone always referenced by betaenv, but not called on platforms,
