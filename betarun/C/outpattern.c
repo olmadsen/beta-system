@@ -387,6 +387,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
     ref(Object)    staticObj=0;
     
     /* Print Static Environment Object. */
+
     theProto = theObj->Proto;
     if (!activeProto) activeProto = theProto;
     if (!activeProto) return;
@@ -395,6 +396,26 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       staticObj = *(handle(Object))addr;
     else
       staticObj = 0;
+    if( isSpecialProtoType(staticObj->Proto) ){
+      switch ((long) staticObj->Proto){
+      case (long) ComponentPTValue:
+	staticObj = cast(Object) ComponentItem(theObj);
+	break;
+      case (long) DopartObjectPTValue:
+	staticObj = (cast(DopartObject)theObj)->Origin;
+	break;
+      case (long) StackObjectPTValue:
+      case (long) ByteRepPTValue:
+      case (long) WordRepPTValue:
+      case (long) DoubleRepPTValue:
+      case (long) ValRepPTValue:
+      case (long) RefRepPTValue:
+	/* This is an error */
+	fprintf(output,"    -- Surrounding object damaged!\n");
+	return;
+	break;
+      } 
+    }
     if( staticObj && isObject( staticObj ) ){
       groupname = GroupName((long)staticObj->Proto,0);
       if (groupname==NULL){
@@ -601,6 +622,8 @@ void
 }
 #endif
 
+static int isMakingDump=0;
+
 /***** DisplayBetaStack: the main routine for producing the dump file *********/
 
 /* If DisplayBetaStack returns non-zero, the debugger was invoked, and
@@ -623,6 +646,19 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   char *dumpname;
   char dirCh;
   char *execname, *localname;
+
+  if (isMakingDump){
+    /* Something went wrong during the dump. Stop here! */
+#ifdef UNIX
+    fprintf(stderr, "\n# Error during dump: ");
+    fprintf(stderr, ErrorMessage(errorNumber));
+    fprintf(stderr, ". Aborting.\n\n");
+#endif
+    fflush(output);
+    fflush(stdout);
+    exit(1);
+  }
+  isMakingDump=1;
 
 #ifdef valhallaRT
   if (valhallaTest)
