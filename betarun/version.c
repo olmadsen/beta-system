@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(115)";
+char betarun_version[] = "BETARUN VERSION 5.3(116)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.137  2003/03/19 12:23:38  datpete
+ *     Added info check for allocation of AOA objects larger than AOA block sector size
+ * Betarun version number: 115
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.136  2003/02/28 13:47:25  datpete
  *     COM debug
  * Betarun version number: 114

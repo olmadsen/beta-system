@@ -6,10 +6,10 @@
 /* macros */
 
 /* define DMALLOC to 1 to use dmalloc library - requires manual link
- * with /users/beta/GNU/dmalloc-3.2.1/libdmalloc.a before -lc
+ * with -ldmalloc before -lc
  */
 #undef DMALLOC
-
+/*#define DMALLOC 1*/
 
 #define FREE(ptr) free(ptr)
 #define REALLOC(src,size) realloc(src,size)
@@ -93,7 +93,7 @@
 #endif
 
 #ifdef DMALLOC
-/* #include "/users/beta/GNU/dmalloc-3.2.1/include/dmalloc.h" */
+/* #include <dmalloc.h>*/
 extern long mcheck_line;
 extern int dmalloc_verify(int);
 #define MCHECK() mcheck_line=__LINE__; dmalloc_verify(0); mcheck_line=0

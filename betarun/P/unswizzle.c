@@ -14,7 +14,6 @@
 #include "pit.h"
 
 /* */
-#define DEBUG_PERSISTENCE 1
 #define MAXPERSISTENTBYTES 2048 * Kb
 
 /* LOCAL VARIABLES */

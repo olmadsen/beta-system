@@ -225,6 +225,13 @@ void BetaExit(long number)
   /* persistence? */
 #endif /* RTDEBUG */
 
+#if DMALLOC
+  {
+    extern void dmalloc_shutdown();
+    dmalloc_shutdown();
+  }
+#endif
+
   exit(number);
 
 #endif /* MT */
