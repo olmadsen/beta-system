@@ -8,10 +8,6 @@
 { Do NOT call Ck in this routine! TheCell points into the middle of }
 { an object }
 
-lastDangler:       cvar;
-IOATop:            cvar;
-AOAtoIOAInsert:    cproc;
-negAOArefsINSERT:  cvar;
 
 ChkRA: public
   (#
@@ -88,4 +84,243 @@ ChkRA: public
      Exit:
      pop DataReg1, AddrReg1;
      return 4;
+  #);
+
+ChkRA_EBP: public
+  (#
+     { Used variables. }
+     stack:      StackArea = SP;
+     theCell:    DataArea  = AddrReg1;  { ebp }
+     theObj:     DataArea  = DataReg1;  { eax }
+  do 
+     
+     (if debug then 1 -> NumChkRA+ if); 
+     
+     (if call_chkra_unconditionally then
+         { Check if theCell (EBP) is outside IOA - if not: return }
+         (if linux then
+             (code '	cmpl	IOA,%ebp     	' code);
+             (code '	jb	L5000	     	' code); 
+             (code '	cmpl	IOATop,%ebp  	' code); 
+             (code '	jae	L5000	     	' code); 
+             (code '	xorl	%ebp,%ebp    	' code); 
+             (code '	ret		     	' code); 
+             (code 'L5000:     		     	' code); 
+          else { nti }
+             (code '	cmp	ebp, IOA	' code);
+             (code '	jb	L5000		' code);
+             (code '	cmp	ebp,IOATop	' code);
+             (code '	jae	L5000		' code);
+             (code '	xor	ebp,ebp		' code);
+             (code '	ret		 	' code); 
+             (code 'L5000:     		  	' code); 
+         if);
+      else
+         AsmComment 'Not checking if theCell is outside IOA';
+     if);
+     
+     push DataReg1;
+     {
+       stack:
+       <DataReg1>          +0
+       <return address>    +4
+     }
+     
+     theCell[0] -> theObj;
+     
+     { Check if theObj (EAX) is inside IOA - if not: lazycheck }
+     (if linux then
+         (code '        cmpl	IOA,%eax     	' code);
+         (code '        jb	L5010	     	' code); 
+         (code '        cmpl	IOATop,%eax  	' code); 
+         (code '        jb	L5011	     	' code); 
+         (code 'L5010:        		     	' code); 
+      else
+         (code '	cmp	eax, IOA	' code);
+         (code '	jb	L5010		' code);
+         (code '	cmp	eax,IOATop	' code);
+         (code '	jb	L5011		' code);
+         (code 'L5010:        		  	' code); 
+     if);
+     
+     { theObj is outside IOA and should not go into AOAtoIOATable. }
+     { Check if it should go into negAOArefs table.} 
+     
+     (if theObj >= -101 then 
+         0->theCell; pop DataReg1; return; 
+     if);
+     (if lastDangler > theObj then
+         0->theCell; pop DataReg1; return; 
+     if);
+     
+     { Now: lastDangler <= theObj < -101 }
+     
+     { LazyInsert: }
+     { Put into negAOArefs table }
+     { Save remaining registers before entering c-world }
+     push AddrReg1;
+     push AddrReg2;
+     push RegThis;
+     push RegCall;
+     push RegAdr;
+     push DataReg2;
+     { argument }
+     push theCell;
+     negAOArefsINSERT -> AddrReg1;
+     call AddrReg1;
+     pop theCell;
+     pop DataReg2;
+     pop RegAdr;
+     pop RegCall;
+     pop RegThis;
+     pop AddrReg2;
+     pop AddrReg1;
+     
+     0->theCell; 
+     pop DataReg1;
+     return;
+     
+     (code 'L5011: ' code); 
+     { TableInsert: }
+     { theObj is in IOA. Put theCell into AOAtoIOATable }
+     { Save remaining registers before entering c-world }
+     push AddrReg1;
+     push AddrReg2;
+     push RegThis;
+     push RegCall;
+     push RegAdr;
+     push DataReg2;
+     { argument }
+     push theCell;
+     call AOAtoIOAInsert;
+     pop theCell;
+     pop DataReg2;
+     pop RegAdr;
+     pop RegCall;
+     pop RegThis;
+     pop AddrReg2;
+     pop AddrReg1;
+     
+     0->theCell; 
+     pop DataReg1;
+     return;
+  #);
+
+ChkRA_ESI: public
+  (#
+     { Used variables. }
+     stack:      StackArea = SP;
+     theCell:    DataArea  = AddrReg2;  { esi }
+     theObj:     DataArea  = DataReg1;  { eax }
+  do 
+     { FIXME: Apparently this is called VERY seldomly - maybe it should
+       be eliminated and parameter should be fixed at call site.
+     }
+     
+     (if debug then 1 -> NumChkRA+ if); 
+     
+     (if call_chkra_unconditionally then
+         { Check if theCell (ESI) is outside IOA - if not: return }
+         (if linux then
+             (code '	cmpl	IOA,%esi     ' code);
+             (code '	jb	L5001	     ' code); 
+             (code '	cmpl	IOATop,%esi  ' code); 
+             (code '	jae	L5001	     ' code); 
+             (code '	xorl    %esi,%esi    ' code); 
+             (code '	ret		     ' code); 
+             (code 'L5001:     		     ' code); 
+          else { nti }
+             (code '	cmp	esi, IOA	' code);
+             (code '	jb	L5001		' code);
+             (code '	cmp	esi,IOATop	' code);
+             (code '	jae	L5001		' code);
+             (code '	xor	esi,esi		' code);
+             (code ' 	ret		 	' code); 
+             (code 'L5001:     		  	' code); 
+         if);
+      else
+         AsmComment 'Not checking if theCell is outside IOA';
+     if);
+     
+     push DataReg1;
+     {
+       stack:
+       <DataReg1>          +0
+       <return address>    +4
+     }
+     
+     theCell[0] -> theObj;
+     
+     { Check if theObj (EAX) is inside IOA - if not: lazycheck }
+     (if linux then
+         (code '        cmpl	IOA,%eax     	' code);
+         (code '        jb	L5012	     	' code); 
+         (code '        cmpl	IOATop,%eax  	' code); 
+         (code '        jb	L5013	     	' code); 
+         (code 'L5012:        		     	' code); 
+      else
+         (code '	cmp	eax, IOA	' code);
+         (code '	jb	L5012		' code);
+         (code '	cmp	eax,IOATop	' code);
+         (code '	jb	L5013		' code);
+         (code 'L5012:        		  	' code); 
+     if);
+     
+     { theObj is outside IOA and should not go into AOAtoIOATable. }
+     { Check if it should go into negAOArefs table.} 
+     
+     (if theObj >= -101 then 0->theCell; pop DataReg1; return; if);
+     (if lastDangler > theObj then 0->theCell; pop DataReg1; return; if);
+     
+     { Now: lastDangler <= theObj < -101 }
+     
+     { LazyInsert: }
+     { Put into negAOArefs table }
+     { Save remaining registers before entering c-world }
+     push AddrReg1;
+     push AddrReg2;
+     push RegThis;
+     push RegCall;
+     push RegAdr;
+     push DataReg2;
+     { argument }
+     push theCell;
+     negAOArefsINSERT -> AddrReg1;
+     call AddrReg1;
+     pop theCell;
+     pop DataReg2;
+     pop RegAdr;
+     pop RegCall;
+     pop RegThis;
+     pop AddrReg2;
+     pop AddrReg1;
+     
+     0->theCell; 
+     pop DataReg1;
+     return;
+     
+     (code 'L5013: ' code); 
+     { TableInsert: }
+     { theObj is in IOA. Put theCell into AOAtoIOATable }
+     { Save remaining registers before entering c-world }
+     push AddrReg1;
+     push AddrReg2;
+     push RegThis;
+     push RegCall;
+     push RegAdr;
+     push DataReg2;
+     { argument }
+     push theCell;
+     call AOAtoIOAInsert;
+     pop theCell;
+     pop DataReg2;
+     pop RegAdr;
+     pop RegCall;
+     pop RegThis;
+     pop AddrReg2;
+     pop AddrReg1;
+     
+     0->theCell; 
+     pop DataReg1;
+     return;
   #)
