@@ -81,10 +81,9 @@ GenerateClassExOException:
      
      ('exitobj', 'Ljava/lang/Object;') -> exo.emitFieldDef;
      ('labno', 'I')                    -> exo.emitFieldDef;
-     ('restart', 'Z')                  -> exo.emitFieldDef;
      
      (* Method: <init> *)
-     (ACC_PUBLIC, '<init>', '(Ljava/lang/Object;IZ)V', 2,  4) -> exo.currentmethod.new;
+     (ACC_PUBLIC, '<init>', '(Ljava/lang/Object;I)V', 2,  4) -> exo.currentmethod.new;
      aload_0       -> exo.emit;
      invokespecial -> exo.emit; ('java/lang/Exception', '<init>', '()V') -> exo.emitMethodRef;
      aload_0       -> exo.emit;
@@ -93,9 +92,6 @@ GenerateClassExOException:
      aload_0       -> exo.emit;
      iload_2       -> exo.emit;
      putfield      -> exo.emit; ('ExOException', 'labno', 'I') -> exo.emitFieldRef;
-     aload_0       -> exo.emit;
-     iload_3       -> exo.emit;
-     putfield      -> exo.emit; ('ExOException', 'restart', 'Z') -> exo.emitFieldRef;
      _return       -> exo.emit;
      
      exo.emitToFile;
@@ -1002,10 +998,10 @@ do (# commentstream: @stream (* maybe something more useful *);
              // beginLab then
                 (# restartLabno: @integer;
                    leaveLabno: @integer;
-                   try_pc: @integer;
                 do BC.getLong -> restartlabno;
                    BC.getLong -> leavelabno;
                 #);
+                (* Lleave: *)
              // endLab then
                 (# restartLabno: @integer;
                    leaveLabno: @integer;
@@ -1014,10 +1010,19 @@ do (# commentstream: @stream (* maybe something more useful *);
                 do BC.getLong -> restartlabno;
                    BC.getLong -> leavelabno;
                    (* End try clause by jumping over handler *)
-                   goto -> jcf.emit;
-                   leavelabno -> jcf.labs.off -> jcf.emitShort;
-                   (* Start handler.
-                    * Test (e.exitobj == this) && (e.labno==restartlabno)
+                   goto -> jcf.emit; leavelabno -> jcf.labs.off -> jcf.emitShort;
+                   (* Start handler:
+                    * if (e.exitobj == this){
+		    *   if (e.labno == restartlabno){
+                    *      // We have a restart in this Object
+                    *      continue Lrestart;
+                    *   } else if (e.labno==leavelabno){
+                    *     // We have a leave in this Object
+                    *     break Lleave;
+                    *   }
+		    * }
+		    * /* Not leave/restart for this Object - propagate further */
+		    * throw e;
                     *)
                    jcf.currentmethod.LIP -> handler_pc;
                    (* FIXME: Using local variable 1 hardcoded *)
@@ -1025,23 +1030,27 @@ do (# commentstream: @stream (* maybe something more useful *);
                    aload_1   -> jcf.emit; 
                    getfield  -> jcf.emit; ('ExOException', 'exitobj', 'Ljava/lang/Object;') -> jcf.emitfieldref;
                    aload_0   -> jcf.emit; 
-                   if_acmpne -> jcf.emit; (leavelabno -> jcf.labs.off)-2 -> jcf.emitShort; (* RethrowLab *)
-
+                   if_acmpne -> jcf.emit; (leavelabno -> jcf.labs.off)-2 -> jcf.emitShort; (* Lrethrow*)
+                   (* Ltestrestart: *)
                    aload_1   -> jcf.emit; 
                    getfield  -> jcf.emit; ('ExOException', 'labno', 'I') -> jcf.emitfieldref;
                    ldc       -> jcf.emit; restartlabno -> jcf.emitIntegerConstant;
-                   if_icmpne -> jcf.emit; (leavelabno -> jcf.labs.off)-2 -> jcf.emitShort; (* RethrowLab *)
-                   (* We have a leave/restart of L1 in this Object. Test whether it is leave or restart *)
+                   if_icmpne -> jcf.emit; 6 -> jcf.emitShort; (* Ltestleave *)
+                   (* We have a restart in this Object *)
+                   goto      -> jcf.emit; restartlabno -> jcf.labs.off -> jcf.emitShort; (* Lrestart *)
+                   (* Ltestleave: *)
                    aload_1   -> jcf.emit; 
-                   getfield  -> jcf.emit; ('ExOException', 'restart', 'Z') -> jcf.emitfieldref;
-                   ifeq      -> jcf.emit; (leavelabno -> jcf.labs.off) -> jcf.emitShort; (* LeaveLab *)
-                   (* Restart *)
-                   goto      -> jcf.emit; (restartlabno -> jcf.labs.off) -> jcf.emitShort; (* RestartLab *)
-                   (* RethrowLab: *)
+                   getfield  -> jcf.emit; ('ExOException', 'labno', 'I') -> jcf.emitfieldref;
+                   ldc       -> jcf.emit; leavelabno -> jcf.emitIntegerConstant;
+                   if_icmpne -> jcf.emit; 6 -> jcf.emitShort; (* Lrethrow *)
+                   (* We have a restart in this Object *)
+                   goto      -> jcf.emit; leavelabno -> jcf.labs.off -> jcf.emitShort; (* Lleave *)
+                   (* Lrethrow: *)
                    (* Not the right label in this Object - propagate further *)
                    aload_1-> jcf.emit; 
                    athrow-> jcf.emit; 
-                   (* LeaveLab: *)
+                   (* Lleave: *)
+                   
                    (* Set up try-catch info *)
                    RestartLabNo -> jcf.labs.off -> restart_pc;
                    (if restart_pc=0 then
@@ -1075,10 +1084,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                    ldc           -> jcf.emit;
                    labno         -> jcf.emitIntegerConstant; (* potentially 32 bit constant *)
                    (* stack: labno, exitObj, ExOException; ExOException *)
-                   bipush        -> jcf.emit; 
-                   re_start      -> jcf.emit; (* 8 bit constant *)
-                   (* stack: restart, labno, exitObj, ExOException; ExOException *)
-                   invokespecial -> jcf.emit; ('ExOException', '<init>', '(Ljava/lang/Object;IZ)V') -> jcf.emitMethodRef;
+                   invokespecial -> jcf.emit; ('ExOException', '<init>', '(Ljava/lang/Object;I)V') -> jcf.emitMethodRef;
                    athrow        -> jcf.emit;
                  #)
              // cmpToBool then
