@@ -72,11 +72,58 @@ do\\2" nil)))
 
 ;;; Find patterns by BETA entry number
 
+(setq beta-pattern-begin "\\(\(#\\|\<\<\\s\-\*SLOT\\s\-\+\\w\+\\s\-\*\:\\s\-\*MainPart\\s\-\*\>\>\\)")
+(setq beta-pattern-end "\\(#\)\\|MainPart\\s\-\*\>\>\\)")
+(setq beta-pattern-delimiter "\\(\(#\\|\<\<\\s\-\*SLOT\\s\-\+\\w\+\\s\-\*\:\\s\-\*MainPart\\s\-\*\>\>\\|#\)\\|MainPart\\s\-\*\>\>\\)")
+(setq beta-mainpart "\<\<\\s\-\*SLOT\\s\-\+\\w\+\\s\-\*\:\\s\-\*MainPart\\s\-\*\>\>")
+(setq beta-mainpart-end "\\(MainPart\\s\-\*\>\>\\)")
+
+
+(defun beta-beginning-of-pattern ()
+  "Move backward to the beginning of current pattern.
+Returns new value of new point."
+  (interactive)
+
+  (if (looking-at "#\\|\<\<") (backward-char 1))
+  ;; First go back out of nearest slot/pattern
+  (if (not (looking-at beta-pattern-begin))
+      (progn
+	(re-search-backward "#\\|\<\<" 1 'move)
+	(if (not (looking-at "\<\<")) (forward-char 1))))
+  (if (not (looking-at beta-pattern-begin))
+      (let ((end (point)) (cnt 0) (case-fold-search t))
+	;; cnt is the number of non-matched pattern-begin to skip backwards
+	(while (>= cnt 0)
+	  (re-search-backward beta-pattern-delimiter 1 'move)
+	  (if (looking-at "--") 
+	      (setq cnt -1)
+	    (progn
+	      (if (= (point) 1)
+		  ;; beginning of buffer reached
+		  (setq cnt -1)
+		(if (looking-at beta-pattern-end)
+		    (if (not (or (beta-in-pattern-variable) (beta-within-comment)))
+			;; looking at pattern ending
+			(progn
+			  (if (looking-at beta-mainpart-end)
+			      ; handle mainpart immediately
+			      (search-backward "<<" 1 'move)
+			    ; else
+			    (setq cnt (1+ cnt))
+			    )))
+		  ;; else:
+		  ;; looking at pattern begin: one less to match
+		  (setq cnt (1- cnt)))))))
+	(point))
+    (point))
+  (point))
+
 (defun beta-find-pattern (num)
   "Find '(#' number NUM in current fragment that is not within a comment"
   (interactive "NGoto pattern number: ")
-
-  (let ( (number num)
+  
+  (let ( (mainp 0)
+	 (number num)
 	 (case-fold-search t)
 	 (prefixed nil)
          (ulimit (save-excursion 
@@ -104,25 +151,36 @@ do\\2" nil)))
       ;; else
       (re-search-forward "\-\-\+\\s\-\*" (point-max) 'move))
     (while (> num 0)
-      (if (search-forward "(#" ulimit 'move)
-	  (if (not (beta-within-comment)) (setq num (1- num)))
+      (if (re-search-forward beta-pattern-begin ulimit 'move)
+	  (if (not (beta-within-comment))
+	      (progn
+		(setq num (1- num))
+		(save-excursion
+		  (backward-char 2)
+		  (if (looking-at "\>\>") (setq mainp (1+ mainp)))
+		  )
+		))
 	(error "There are only %d patterns in this fragment" (- number num))))
     (if prefixed
-	(message "Positioned at pattern number %d in current fragment (prefix counts too)" number)
-      (message "Positioned at pattern number %d in current fragment" number)
-    )))
+	(if (> mainp 0)
+	    (message "Positioned at pattern number %d in current fragment (counting prefix and %d mainpart slots)" number mainp)
+	  (message "Positioned at pattern number %d in current fragment (counting prefix)" number))
+      ;; else: not prefixed
+      (if (> mainp 0)
+	  (message "Positioned at pattern number %d in current fragment (counting %d mainpart slots)" number mainp)
+	(message "Positioned at pattern number %d in current fragment" number)))
+    ))
       
 (defun beta-what-pattern ()
-  "Find the number of the current pattern (counting '(#' not within a comments)
+  "Find the number of the current pattern (counting '(#' and MainPart slots not within comments)
 within current fragment"
   (interactive)
+  (set-mark (point))
+  (beta-beginning-of-pattern)
   (save-excursion
-    (if (looking-at "#") (backward-char 1))
-    (if (not (looking-at "(#"))
-	(if (not (search-backward "(#" (point-min) 'move))
-	    (error "Not inside pattern")))
-    ;; we are now positioned just before current '(#'.
-    (let ( (case-fold-search t) (prefixed nil) (num 0) (pos (point)))
+    (if (> (point) 1) (backward-char 1))
+    ;; we are now positioned just before current pattern-begin.
+    (let ( (case-fold-search t) (prefixed nil) (num 0) (mainp 0) (pos (point)))
       ;; go to beginning of form
       (re-search-backward "^\-\-" (point-min) 'move)
       (re-search-forward ":\\s\-\*" (point-max) 'move)
@@ -131,19 +189,31 @@ within current fragment"
 	    (re-search-forward "\-\-\+\\s\-\*" (point-max) 'move)
 	    ;; now we are positioned just after "--foo:descriptor--"
 	    ;; if this is a prefixed descriptor, add one to count.
-	    (if (not (looking-at "\(\#")) 
+	    (if (not (looking-at beta-pattern-begin))
 		(progn
 		  (setq num (1+ num))
 		  (setq prefixed t))))
 	;; else
 	(re-search-forward "\-\-\+\\s\-\*" (point-max) 'move))
       (while (<= (point) pos)
-	(if (search-forward "(#" (point-max) 'move)
-	    (if (not (beta-within-comment)) (setq num (1+ num)))
+	(if (re-search-forward beta-pattern-begin (point-max) 'move)
+	    (if (not (beta-within-comment)) 
+		(progn
+		  (setq num (1+ num))
+		  (save-excursion
+		    (backward-char 2)
+		    (if (looking-at "\>\>") (setq mainp (1+ mainp)))
+		    )
+		  ))
 	  (error "End of buffer reached")))
       (if prefixed
-	  (message "The pattern is number %d in current fragment (prefix counts too)" num)
-	(message "The pattern is number %d in current fragment" num)))))
+	  (if (> mainp 0)
+	      (message "This pattern is number %d in current fragment (counting prefix and %d mainpart slots)" num mainp)
+	  (message "This pattern is number %d in current fragment (counting prefix)" num))
+	; else: not prefixed
+	(if (> mainp 0)
+	    (message "This pattern is number %d in current fragment (counting %d mainpart slots)" num mainp)
+	  (message "This pattern is number %d in current fragment" num))))))
 
 ;;; Functions to convert from old fragment syntax to new fragment syntax
     

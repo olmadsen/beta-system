@@ -288,9 +288,17 @@ Invoking beta-mode:
 Add the following to your .emacs file to automatically go into beta-mode when
 the name of the buffer ends in \".bet\"
 
- (autoload 'beta-mode \"/usr/local/lib/beta/emacs/current/beta-mode\")
- (setq auto-mode-alist (append (list (cons \"\\\\.bet$\" 'beta-mode))
-                                auto-mode-alist))
+(setq betalib (getenv "BETALIB"))
+(if (not betalib) (setq betalib "/usr/local/lib/beta"))
+;; or if you are on a PC, e.g.: 
+;; (if (not betalib) (setq betalib "c:\\beta"))
+
+(setq load-path (append load-path 
+			(list (format "%s/emacs" betalib))))
+
+(autoload 'beta-mode "beta-mode")
+(setq auto-mode-alist (append (list (cons "\\.bet$" 'beta-mode))
+                               auto-mode-alist))
 
 beta-mode-hook:
 ===============
@@ -326,7 +334,7 @@ C-xC-ri calls indent-buffer.\"
   (setq local-abbrev-table beta-mode-abbrev-table)
   (set-syntax-table beta-mode-syntax-table)
   (make-local-variable 'beta-mode-version)
-  (setq beta-mode-version "v1.6")
+  (setq beta-mode-version "5.0")
   (make-local-variable 'paragraph-start)
   (setq paragraph-start (concat "^$\\|" page-delimiter))
   (make-local-variable 'paragraph-separate)
