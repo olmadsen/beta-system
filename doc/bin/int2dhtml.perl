@@ -136,13 +136,13 @@ sub print_std_links
     &print_rel_link("contents", $tocfile);
     &print_rel_link("index", $indexfile);
     &print_rel_link("up", "index.html");
-    &print_rel_link("author", "mailto:support\@mjolner.com");
+    &print_rel_link("author", "mailto:support\@mjolner.com?Subject=MIADOC Manual Comment");
     #&print_rel_link("copyright", "copyright.html");
     #&print_rel_link("help", "help.html");
     #&print_rel_link("search", "search.html");
 }
 
-sub print_button
+sub print_nav_link
 {
     local ($type, $href, $title) = @_;
     local ($label) = ucfirst ($type);
@@ -151,17 +151,17 @@ sub print_button
     }
 }
 
-sub print_std_buttons
+sub print_std_nav_links
 {
     local ($next, $prev);
 
     if ($filenumber==$#files){
 	# last file
-	&print_button("next", $indexfile, "Next: Interface Descriptions Index");
+	&print_nav_link("next", $indexfile, "Next: Interface Descriptions Index");
 	print " | " if ($wiki);
     } else {
 	$next = &strip_path(&strip_extension($files[$filenumber+1]));
-	&print_button("next", 
+	&print_nav_link("next", 
 		      "$next.html",
 		      "Next: " . ucfirst($next) . " Interface");
 	print " | " if ($wiki);
@@ -171,19 +171,19 @@ sub print_std_buttons
 	if ($wiki){
 	    # Print nothing
 	} else {
-	    &print_button("previous", $tocfile, "Previous: Interface Descriptions Contents");
+	    &print_nav_link("previous", $tocfile, "Previous: Interface Descriptions Contents");
 	};
     } else {
 	$prev = &strip_path(&strip_extension($files[$filenumber-1]));
-	&print_button("previous", 
+	&print_nav_link("previous", 
 		      "$prev.html",
 		      "Previous: " . ucfirst($prev) . " Interface");
 	print " | " if ($wiki);
     }
-    &print_button("top", $topfile, "Top: Manuals Main Entry") if (!$wiki);
-    &print_button("content", $tocfile, "Interface Descriptions Contents");
+    &print_nav_link("top", $topfile, "Top: Manuals Main Entry") if (!$wiki);
+    &print_nav_link("content", $tocfile, "Interface Descriptions Contents");
     print " | " if ($wiki);
-    &print_button("index", $indexfile, "Interface Descriptions Index");
+    &print_nav_link("index", $indexfile, "Interface Descriptions Index");
 }
 
 sub print_layer_begin
@@ -241,7 +241,7 @@ EOT
 EOT
 
     &print_layer_begin;
-    &print_std_buttons;
+    &print_std_nav_links;
     &print_layer_end;
 
     print<<EOT;
@@ -287,18 +287,33 @@ sub print_index_header()
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript1.2" SRC="$jsdir/sidebar.js">
 </SCRIPT>
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
+EOT
+
+    &print_rel_link("prev", "$prev.html");
+    &print_rel_link("start", $topfile);
+    &print_rel_link("first", &strip_path(&strip_extension($files[0])) . ".html");
+    &print_rel_link("last", &strip_path(&strip_extension($files[$#files])) . ".html");
+    &print_rel_link("contents", $tocfile);
+    &print_rel_link("index", $indexfile);
+    &print_rel_link("up", "index.html");
+    &print_rel_link("author", "mailto:support\@mjolner.com?Subject=MIADOC Manual Comment");
+    #&print_rel_link("copyright", "copyright.html");
+    #&print_rel_link("help", "help.html");
+    #&print_rel_link("search", "search.html");
+
+    print<<EOT;
 </HEAD>
 <BODY style="margin-left:${leftmargin}px">
 EOT
 
     &print_layer_begin;
-    &print_button("previous", 
+    &print_nav_link("previous", 
 		  "$prev.html",
 		  "Previous: " . ucfirst($prev) . " Interface");
     print " | " if ($wiki);
-        &print_button("content", $tocfile, "Interface Descriptions Contents");
+        &print_nav_link("content", $tocfile, "Interface Descriptions Contents");
     print " | " if ($wiki);
-    &print_button("top", $topfile, "Top: Manuals Main Entry") if (!$wiki);
+    &print_nav_link("top", $topfile, "Top: Manuals Main Entry") if (!$wiki);
     &print_layer_end;
 
     print<<EOT;
@@ -497,19 +512,35 @@ sub print_toc_header
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript1.2" SRC="$jsdir/sidebar.js">
 </SCRIPT>
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
+EOT
+
+    &print_rel_link("next", "$next.html");
+    &print_rel_link("start", $topfile);
+    &print_rel_link("first", &strip_path(&strip_extension($files[0])) . ".html");
+    &print_rel_link("last", &strip_path(&strip_extension($files[$#files])) . ".html");
+    &print_rel_link("contents", $tocfile);
+    &print_rel_link("index", $indexfile);
+    &print_rel_link("up", "index.html");
+    &print_rel_link("author", "mailto:support\@mjolner.com?Subject=MIADOC Manual Comment");
+    #&print_rel_link("copyright", "copyright.html");
+    #&print_rel_link("help", "help.html");
+    #&print_rel_link("search", "search.html");
+
+
+    print<<EOT;
 </HEAD>
 <BODY style="margin-left:${leftmargin}px">
 EOT
 
     &print_layer_begin;
-    &print_button("next", 
+    &print_nav_link("next", 
 		  "$next.html",
 		  "Next: " . ucfirst($next) . " Interface");
     print " | " if ($wiki);
-    &print_button("previous", "", "No Previous Interface Description");
-    &print_button("up", $upfile, "Up: Manual Main Page") if (!$wiki);
-    &print_button("top", $topfile, "Top: Manuals Main Entry") if (!$wiki);
-    &print_button("index", $indexfile, "Interface Descriptions Index");
+    &print_nav_link("previous", "", "No Previous Interface Description");
+    &print_nav_link("up", $upfile, "Up: Manual Main Page") if (!$wiki);
+    &print_nav_link("top", $topfile, "Top: Manuals Main Entry") if (!$wiki);
+    &print_nav_link("index", $indexfile, "Interface Descriptions Index");
     print " | " if ($wiki);
     &print_layer_end;
 
