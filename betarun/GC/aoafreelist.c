@@ -620,7 +620,7 @@ void AOADisplayFreeList(void)
       fprintf(output, "0x%07X 0x%07X  %5lu %7lu 0x%07X ",
 	      (int)blksize,
 	      (int)freeOfSize,
-	      dead, live, AOAInUseSize[index]);
+	      dead, live, (int)AOAInUseSize[index]);
       
       dead = (dead+10-1)/10;  /* Scale graph by 10 */
       if (dead > 24) {
