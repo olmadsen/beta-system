@@ -1,25 +1,39 @@
 ORIGIN '../mpsinterface';
 
-INCLUDE 'newExecGroupTable';
-
 INCLUDE '~beta/guienv/v1.2/guienv';
 INCLUDE '~beta/basiclib/v1.4/formatio';
 
-INCLUDE '~beta/betaast/v4.9/betasematt';
-INCLUDE '~beta/mps/v4.9/private/astparser';
-INCLUDE 'betagrammarinit';
+INCLUDE '~beta/betaast/v4.9.1/betasematt';
+INCLUDE '~beta/mps/v4.9.1/private/astparser';
+INCLUDE '../betagrammarinit';
 
-INCLUDE '~beta/editor/v5.0/codeviewer';
+INCLUDE '~beta/editor/v5.0.old/codeviewer';
 
-INCLUDE '~beta/objectbrowser/v2.0/UI/objectview';
+INCLUDE '../UI/objectview';
 
-INCLUDE '~beta/persistentstore/v1.4/psobjdumper';
-INCLUDE '~beta/persistentstore/v1.4/odOffsetTable';
+INCLUDE 'psobjdumper';
+INCLUDE 'odOffsetTable';
+INCLUDE 'psfullnamepatch';
+
 INCLUDE '~beta/persistentstore/v1.4/psLocation';
+INCLUDE '~beta/persistentstore/v1.4/private/psLocationBody'; 
+(* psLocationBody is needed to implement scanAll. *)
 
 --- program:descriptor ---
 mpsinterface
-(# fromLoc: @psLocation;
+(# fromLoc: @psLocation
+     (# locationObjectsImpl::
+          (# scanAll:
+               (# curproto,curgroup,curOIDb: @Integer;
+               do (for i: pslopriv.last repeat
+                       pslopriv.protos[i]->curproto;
+                       pslopriv.groups[i]->curgroup;
+                       i->curOIDb;
+                       INNER;
+                  for);
+               #);
+          #);
+     #);
    dumper: @psdumper;
    
    onOpenGroup::
@@ -50,8 +64,23 @@ mpsinterface
      #);
    
    gui: @guienv
-     (# win: @window
-          (# showObject:
+     (#
+        editwin: @window
+          (# editor: @SifTextEditor
+               (# open::
+                    (# 
+                    do father.size->size;
+                    #);
+               #);
+             open::
+               (# 
+               do (500,400)->size; editor.open;
+               #);
+          #);
+        
+        win: @window
+          (# 
+             showObject:
                (# obj: ^object;
                   bo: ^PSBetaObject;
                   OID: @OIDtype;
@@ -109,7 +138,8 @@ mpsinterface
                     #);
                   open::
                     (# 
-                    do filemenu.open; filemenu[]->append;
+                    do (400,200)->size;
+                       filemenu.open; filemenu[]->append;
                     #);
                #);
           #);
@@ -146,13 +176,10 @@ mpsinterface
                    elm.groupName[]->nextPattern.groupName[];
                 #)->od[];
                 
-                &SifWIndow[]->theSifWindow[];
-           
                 (if not seen then
-                    (AST[],BETACFL[],od.frag[],od[])->theSifWindow.init;
-                    theSifWindow.open;
+                    (AST[],BETACFL[],od.frag[],od[])
+                      ->editwin.editor.newfragment;
                     suspend;
-                    theSifWindow.close;
                 if);
              #);
              false->more;
@@ -160,22 +187,21 @@ mpsinterface
           #);
 
      do win.open;
+        editwin.open;
      #);
-   theSifWindow: ^gui.SifWindow;
    
-   execGroups: @newExecGroupTable;
-   
-do (if noOfArguments = 2 then
+do persistentstore_fullnamepatch;
+   (if noOfArguments = 2 then
        (2->Arguments,read)->fromLoc.open;
     else
        'Usage: %s <oldstore>\n' -> putFormat
        (#
        do 1 -> Arguments -> s;
-       #)
+       #);
+       stop;
    if);
    init; (* Altsaa mpsinterface.init *)
-   execGroups.newInit; execGroups[]->objectPool.put;
-   groupsInfo.init; groupsInfo->objectPool.put;
+   groupsInfo.init; groupsInfo[]->objectPool.put;
    (AST[],BETACFL[])->dumper.init;
    betaGrammarInit;
    gui; 
