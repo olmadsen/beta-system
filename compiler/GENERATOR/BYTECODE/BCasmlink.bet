@@ -1,0 +1,320 @@
+ORIGIN '../asmlinkbody' ;
+INCLUDE '~beta/basiclib/fileSetExe';
+
+--lib: attributes--
+TODO: 
+  (# T: ^text enter T[] 
+  do 'TODO: ' -> screen.puttext;
+     T[] -> screen.putline 
+  #);
+AppendExe:
+  (# objname: ^text;
+  enter objname[]
+  do '.exe' -> objname.appendExtension
+  exit objname[]
+  #);
+SlashToBackslash: 
+  (# T: ^Text;
+  enter T[]
+  do (for i:T.lgth repeat
+          (if T.T[i] = '/' then '\\' -> T.T[i] if)
+     for);
+  exit T[]
+  #);
+BackslashToSlash: 
+  (# T: ^Text;
+  enter T[]
+  do (for i:T.lgth repeat
+          (if T.T[i] = '\\' then '/' -> T.T[i] if)
+     for);
+  exit T[]
+  #);
+
+--translateasmlinklib: attributes ---
+isJava:  (# exit common.targetMachineId = common.javabc #);
+isIL:    (# exit common.targetMachineId = common.dotnet #);
+
+
+--asmState:descriptor--
+(#  #)
+--HasSharedLibs:descriptor--
+(#do false -> value #)
+---cont: descriptor --
+(# do '\\\n\t' -> AFF.puttext  #)
+---header: descriptor ---
+(#
+do (if true
+    // isIL then
+       '@echo off\n'->AFF.putText;
+       (* Disable linking *)
+       true -> common.switch[6];
+    // isJava then
+       '#! /bin/sh '->AFF.putLine;
+       'BETALIB='->AFF.putText; BetaLib[]->AFF.putLine;
+       'export BETALIB'->AFF.putLine;
+       'CC=${CC-"gcc -O6"}\nexport CC'-> AFF.putLine;
+       'MACHINETYPE='->AFF.putText; TargetMachine->AFF.putLine;
+       'export MACHINETYPE'->AFF.putLine;
+       'TMPDIR=${TMPDIR-/tmp}'->AFF.putLine;
+       (* Disable linking *)
+       (*true -> common.switch[6];*)
+    else
+       'AsmHeader: unknown platform' -> TODO; 
+   if);
+#)
+---AsmExt: descriptor ---
+(#
+do (if true
+    // isIL then
+       '.il' -> ext;
+    // isJava then
+       '.J' -> ext
+    else
+       'AsmExt: unknown platform' -> TODO;
+   if);
+#) 
+---BinExt: descriptor ---
+(# 
+do (if true
+    // isIL then
+       '.dll' -> ext;
+    // isJava then
+       '.class' -> ext
+    else
+       'BinExt: unknown platform' -> TODO;
+   if);
+#)
+---LibExt: descriptor ---
+(# 
+do 'LibExt'->TODO
+#)
+---JobExt: descriptor ---
+(# 
+do (if true
+    // isIL then
+       '.bat' -> ext;
+    // isJava then
+       '..job' -> ext
+    else
+       'JobExt: unknown platform' -> TODO;
+   if);
+#) 
+---ExeExt:descriptor---
+(# 
+do ''-> ext (* not used by Java *)
+#)
+---Echo: descriptor ---
+(# 
+do (if true
+    // isIL then
+       'echo '->AFF.puttext;
+    // isJava then
+       'echo '->AFF.puttext;
+    else
+       'Echo: unknown platform' -> TODO;
+   if);
+#)
+---Remove: descriptor ---
+(# 
+do '/bin/rm -f '->AFF.puttext; name[]->AFF.putline (* only OK for unix *)
+#)
+---ChangeDirectory:doPart---
+do 'ChangeDirectory'->TODO
+---AddCommand:doPart---
+do 'AddCommand'->TODO
+---Make: descriptor ---
+(# 
+do 'Make'->TODO
+#)
+---resource:descriptor---
+(#
+do 'resource'->TODO
+#)
+---assemble: descriptor ---
+(# e: @diskentry;
+   out: ^text;
+   FF: ^text;
+do (if common.switch[184] then
+       asmext -> F.append;
+   if);
+   F[] -> e.path;
+   (if not e.exists then
+       'OOPS! AsmLink: skipping\n\t' -> screen.puttext;
+       F[] -> screen.putline;
+       'as is has not been generated (compiler error).' -> screen.putline;
+    else
+       (F.copy, '') -> thePathHandler.localPath -> FF[];
+       (if verboseLevel <= verboseLevel.actions then
+           echo;
+           'assembling '->AFF.puttext;
+           FF[] ->AFF.putline;
+       if);
+       (if true
+        // isIL then
+           (* Create .module in DLL.
+            * Possibly create assembly instead, see
+            * C:\Program Files\Microsoft.Net\FrameworkSDK\Samples\tutorials\Debugging/Calc
+            *)
+           'ilasm /nologo /dll '->AFF.puttext; 
+           (if verboseLevel > verboseLevel.verbose then
+               '/quiet ' ->AFF.puttext;
+           if);
+           (if common.switch[41] then 
+               '/debug '->AFF.puttext
+           if);
+           '/output:' -> AFF.puttext;
+           objName[] -> e.path;
+           (if (e.path.head).length>0 then
+               ((*objDirectory.copy*) e.path.head, '') 
+                 -> thePathHandler.localPath
+                 -> AFF.puttext;
+               '\\' -> AFF.puttext;
+           if);
+           F.copy -> BackslashToSlash -> e.path;
+           e.path.name -> out[];
+           '.il' -> out.stripextension;
+           out[] -> AFF.puttext;
+           '.dll ' -> AFF.puttext;
+           F[] -> AFF.putline;
+        // isJava then
+           'jasmin '->AFF.putText; F[]->AFF.putLine
+        else
+           'assemble: unknown platform' -> TODO;
+       if);
+   if);
+#)
+--linkLibraries:descriptor--
+(#
+do 'linkLibraries'->TODO
+#)
+--contCh:descriptor--
+(# 
+do '\\' -> value
+#)
+--ldArgMax:descriptor--
+(# 
+do 1000000 -> value
+#)
+--ldTmp:descriptor--
+(# 
+do 'ldTmp'->TODO
+#)
+---link: descriptor ---
+(# 
+do (if true
+    // isJava then
+       'echo "Main-Class: ' -> AFF.puttext;
+       (if common.switch[186] then
+           'tstenv" >' -> AFF.puttext;
+        else
+           'program" >' -> AFF.puttext;
+       if);
+       objName[]->AFF.puttext;
+       '.manifest' -> AFF.putline;
+       
+       'jar cmf' -> AFF.puttext;
+       (if verboseLevel <= verboseLevel.verbose then
+           'v' ->AFF.puttext;
+       if);
+       ' '-> AFF.puttext; 
+       objName[]->AFF.puttext;
+       '.manifest ' -> AFF.puttext;  
+       objName[]->AFF.puttext; '.jar '->AFF.puttext; cont
+    else
+       'link' -> TODO;
+   if);
+#)
+
+---addBetaRun:descriptor---
+(#
+do 'addBetaRun'->TODO
+#)
+--asmlinkdynamic:descriptor--
+(#
+do 'asmlinkdynamic'->TODO
+#)
+---linkObj:descriptor ---
+(#
+do (* hack *)
+   (if (lObj.length >= 9) and ((lObj.length-8->lObj.inxGet) = '.') then
+       (* lObj = foo.J.class *)
+       (lObj.length-7,lObj.length-6) -> lObj.delete;
+   if);
+   lObj[] -> ldA.putText; '\\\n\t' -> ldA.puttext
+#)
+---libraries: descriptor ---
+(#
+do 'libraries'->TODO
+#)
+--linktrailer:descriptor--
+(# 
+do AFF.newline;
+#)
+---trailer: descriptor ---
+(# e: @diskentry;
+do (if true
+    // isIL then
+       'echo Generating assembly ' -> AFF.puttext;
+       objName.copy -> AppendExe -> AFF.putline;
+       'ilasm /nologo /exe ' -> AFF.puttext;
+       (if verboseLevel > verboseLevel.verbose then
+           '/quiet ' ->AFF.puttext;
+       if);
+       (if common.switch[41] then 
+           '/debug '->AFF.puttext
+       if);
+       '/output:' -> AFF.puttext;
+       objName.copy -> AppendExe -> AFF.puttext;
+       ' ' -> AFF.puttext;
+       objName.copy -> e.path;
+       (if (e.path.head).length>0 then
+           ((*objDirectory.copy*) e.path.head, '') 
+             -> thePathHandler.localPath
+             -> AFF.puttext;
+           '\\' -> AFF.puttext;
+       if);
+       codeDirectory[] -> AFF.puttext;
+       '\\' -> AFF.puttext;
+       (if common.switch[184] then
+           objName[] -> AFF.puttext;
+        else
+           'Main' -> AFF.puttext;
+       if);
+       '.il' -> AFF.putline;
+       '\necho Object program on file: '->AFF.puttext;
+       objName[] -> AFF.putline
+    // isJava then
+       '/bin/rm -f '                             -> AFF.puttext; 
+       objName[]                                 -> AFF.puttext;
+       '.manifest'                               -> AFF.putline;
+       'echo "#!/bin/sh"                       >'-> AFF.puttext; 
+       objName[]                                 -> AFF.puttext;
+       '\necho "exec java -jar '                 -> AFF.puttext;
+       objName[]                                 -> AFF.puttext; 
+       '.jar" >> '                               -> AFF.puttext;
+       objName[]                                 -> AFF.puttext;
+       '\nchmod a+x '                            -> AFF.puttext;
+       objName[] -> AFF.puttext;
+       '\necho Object program on file: '->AFF.puttext;
+       objName[] -> AFF.putline
+    else
+       'trailer: unknown platform' -> TODO;
+   if);
+#)
+
+--AddSharedLibFile: descriptor--
+(# 
+do 'AddSharedLibFile'->TODO
+#)
+
+--jobFilePermission: descriptor--
+(# 
+do AFF.setExe;
+#)
+
+--AddLinkDirs: descriptor--
+(# 
+do 'AddLinkDirs'->TODO   
+#)
+
+

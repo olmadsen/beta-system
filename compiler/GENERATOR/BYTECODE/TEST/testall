@@ -1,0 +1,134 @@
+#!/usr/local/bin/perl -s
+
+#### Configuration
+
+# Files to compile for both java and dotnet
+@files    = ("hello", 
+	     "Bmini0", 
+	     "Bmini1", 
+	     "Server", 
+	     "Calculator", 
+	     "Counter", 
+	     "List", 
+	     "NumList",
+	     "Aclass", 
+	     "Singular", 
+	     "SuperFields",
+	     "Ptn", # currently stackoverflow on .NET
+	     );
+
+# Files currently only working for java
+@javaonly = (
+	     );
+
+##################### Don't change below ########################
+
+$SIG{'INT'}  = 'IntHandler';
+
+sub usage()
+{
+    local($msg) = @_;
+    print "testall: $msg\n" if ($msg ne "");
+    print<<EOT;
+usage: testall [-h][-v][-r][-c][-C][-x][-d][-j]
+     -h  print this help
+     -v  verbose mode
+     -r  run only (do not compile programs)
+     -c  compile only (do not execute programs)
+     -C  skip compilation of compiler
+     -x  use diff with context when reporting errors
+     -d  compile for target dotnet
+     -j  compile for target javabc
+         If no target options given, script will try to guess target
+EOT
+    exit;
+}
+
+&usage("Compile and execute all test programs") if ($h);
+&usage("Both -d and -f specified") if ($d && $j);
+$target="dotnet" if ($d);
+$target="javabc" if ($j);
+if ($target eq ""){
+    # Try to guess
+    if (-d "/cygdrive" || -d "C:"){
+	$target = "dotnet";
+    } else {
+	$target = "javabc";
+    }
+}
+print "*** Testing for target $target ***\n";
+
+$verbose = $v;
+$compileonly = $c;
+$runonly = $r;
+$context = "-c" if (defined($x));
+
+if ($runonly && $compileonly){
+    print "*** Both -c (compile only) and -r (run only) specified.\n";
+    print "    Ignoring -c.\n";
+    $compileonly=0;
+}
+
+$BETALIB=$ENV{'BETALIB'};
+$BETALIB=~s%\\%/%g;
+
+require "$BETALIB/bin/admin/env.perl";
+
+$sbetasrc="$BETALIB/compiler/sbeta.bet";
+$sbeta="$BETALIB/compiler/$objdir/sbeta${EXESUFFIX}";
+
+unless ($C || $runonly){
+    print "*** Compiling $sbeta ***\n" if ($verbose);
+    system "bootbeta -qw -o $sbeta $sbetasrc > bootbeta.out" if (!$verbose);
+    system "bootbeta -qw -o $sbeta $sbetasrc"                if ($verbose);
+}
+
+$options = "-s 23 184" if ($target eq "dotnet");
+$options = "-qwp -s 23 "    if ($target eq "javabc");
+push @files, @javaonly    if ($target eq "javabc");
+
+$compilecmd = "$sbeta -t $target $options";
+
+print "*** Removing ast files ***\n" if ($verbose);
+system "rm *.ast *.astL >/dev/null 2>&1";
+
+print "*** Compiling with command ***\n\t$compilecmd\n\n" unless ($runonly);
+
+foreach $f (@files){
+    unless ($runonly){
+	print "-"x20 . "Removing $f/$f.exe" . "-"x20  . "\n" if ($verbose);
+	unlink ("$f $f.exe");
+	print "-"x20 . "Compiling $f" . "-"x20  . "\n" if ($verbose);
+	system "$compilecmd $f > $f.out" if (! $verbose);
+	system "$compilecmd $f" if ($verbose);
+    }
+    unless ($compileonly){
+	print "-"x20 . "Executing $f" . "-"x20  . "\n"; # if ($verbose);
+	system "./$f > $f.run";
+	if ( -f "reference/$f.run" ){
+	    if (system("diff $context reference/$f.run $f.run") == 0){
+		system "cat $f.run";
+		print "[output is correct]\n";
+		system "rm $f.run";
+	    } else {
+		if ($x){
+		    print "[Difference in output - see above]\n";
+		} else {
+		    print "[Difference in output - see above. Correct output below]\n";
+		    system "cat -n $f.run";
+		}
+	    }
+	} else {
+	    system "cat $f.run";
+	    system "cp $f.run reference";
+	    print "[No reference existed. Output above used for future reference]\n";
+	    print "[Please do a manual 'af $f.run text' in reference directory]\n";
+	}
+    }
+}
+
+sub IntHandler 
+{
+   print "User interrupt. Exitting.\n";
+   exit(1);
+}

@@ -1,0 +1,471 @@
+ORIGIN 'bytecodebackend';
+include '~beta/basiclib/file';
+INCLUDE '~beta/basiclib/fileSetExe';
+---byteCode_mstate:descriptor---
+(#  
+   BCM: @ BCmachine
+     (# emit:
+          (# opCode: @integer
+          enter opCode
+          do opCode -> BC.put; 
+             INNER
+          #);
+        emitShort:
+          (# V: @integer;
+          enter V
+          do V -> BC.putShort
+          #);
+        emit1: emit
+          (# op1: @integer
+          enter op1
+          do op1->BC.put; INNER
+          #);
+        emit2: emit1
+          (# op2: @integer
+          enter op2
+          do
+          #);
+        emitText: 
+          (# T: ^text
+          enter T[]
+          do T[]->BC.puttext
+          #);
+     #);
+   splitPathAndName:
+     (# orgPath,path,FN: ^text; slashPos,dotPos: @integer;
+     enter orgPath[]
+     do orgPath.copy->path[];
+        path.scanAll
+        (# i: @integer 
+        do i+1->i; 
+           (if ch = '.' then i->dotPos 
+            else 
+               (if ch = '/'(* thePathHandler.directoryChar*) then
+                   i -> slashPos
+           if)if)
+        #);
+        (*'\nsplit1: ' -> puttext; path[] -> putline;*)
+        
+        (if dotPos > 0 then
+            (dotPos,path.length)->path.delete
+        if);
+        (*'split2: ' -> puttext; path[] -> putline;*)
+        (if slashPos > 0 then
+            (slashPos+1,path.length)->path.sub -> FN[];
+            (slashPos+1,path.length)->path.delete
+        if);
+        (*'split3: ' -> puttext; path[] -> puttext; 
+        ' '->put; FN[] -> putline;*)
+     exit(path[],FN[])
+     #);
+   
+   BCisSplit: @boolean;
+   c: ^text; (* ugly *)
+   
+   mkAsmFile:
+     (# BC: ^text
+     do (*'mkasm: ' ->puttext;
+        BCname[] -> putline;*)
+        (if not BCisSplit then
+            BCname[] -> splitPathAndNAme -> (BCname[],c[]);
+            true -> BCisSplit
+        if);
+        thisClassName[] -> (BCname.copy).append -> BC[];
+        (*BC[] -> putline;*)
+        '.bin'->(BC.copy).append->mstate.BCM.save;
+        '.bin'->(BC.copy).append->mstate.BCM.restore;
+        (if true
+         // common.targetMachineId = common.javabc then
+            mstate.BCM.emitJasmin;
+         // common.targetMachineId = common.dotnet then
+            mstate.BCM.emitDotnet
+         else
+            'byteCode_close: unknown platform' -> screen.putline;
+        if)
+     #);
+   thisClassName: ^text;
+   jasmin: @file;
+   path: ^text;
+   jasminIsOpen: @boolean;
+   methodType: @integer; (* 0: for calling a ptn as a method
+                          * 1: for generating a vclass-instance of a ptn
+                          * 2: enter- do- or exit-method
+                          *)
+   extraOrigin:
+     (#
+     do (if methodType = 2 then
+            '****extra origin'->putline;
+            BCM.loadOrigin->mstate.BCM.emit;
+            0 -> BCM.emit
+        if);
+     #);
+   classes: @
+     (# L: [4] ^text; top: @integer;
+        init: (# do 0 -> top #);
+        add:
+          (# cn: ^text
+          enter cn[]
+          do (if (top+1->top) > L.range then
+                 L.range -> L.extend
+             if);
+             cn[] -> L[top][]
+          #);
+        scan:
+          (# current: ^text
+          do (for i: top repeat
+                  L[i][] -> current[];
+                  inner
+          for)#)
+     #);
+   mkClassListFile:
+     (# BCname: ^text; F: @file;
+     enter BCname[]
+     do '.clst'-> (c[]->(BCname.copy).append).append -> F.name;
+        (*'\nClassFileName: ' -> puttext; F.name -> putline;*)
+        F.openWrite;
+        classes.scan
+        (#
+        do current[] -> F.putline;
+        #);
+        F.close
+     #)
+#)
+---bytecode_newImp:doPart---
+do (* mstate.BCM.position -> mstate.BCM.emit;
+    astRef -> mstate.BCM.emitShort 
+    *)
+
+---byteCode_textOperand_out:doPart---
+do T[]->mstate.BCM.emittext
+   
+---byteCode_dataRegOperand_out:doPart---
+do rn->mstate.BCM.emit 
+   
+---byteCode_adrRegOperand_out:doPart---
+do rn -> mstate.BCM.emit 
+   
+---byteCode_LocalLab_def:doPart---
+do mstate.BCM.labelDef -> mstate.BCM.emit;
+   labNo -> mstate.BCM.emit;
+   
+---byteCode_LocalLab_out:doPart---
+do mstate.BCM.label -> mstate.BCM.emit;
+   labNo -> mstate.BCM.emit
+   
+---byteCode_RegAdr_out:doPart---   
+do reg.out; 
+   off -> mstate.BCM.emit; 
+   size -> mstate.BCM.emit;
+   (if mstate.methodType = 2 then
+       '**** extra ON '->putline;
+       ONlevel+1 -> mstate.BCM.emit;
+    else
+       ONlevel -> mstate.BCM.emit;
+   if);
+   (if isField then 
+       1 -> mstate.BCM.emit;
+       descName[] -> mstate.BCM.emitText
+    else 
+       0 -> mstate.BCM.emit 
+   if);
+   
+---byteCode_RegAdr_index:doPart---
+do  mstate.BCM.index->mstate.BCM.emit;
+   '\nindex:'->puttext;
+   
+---bytecode_goOrigin:doPart---
+do mstate.BCM.loadOrigin -> mstate.BCM.emit;
+   on -> mstate.BCM.emit;
+   '\n***OBS loadOrigin:shouldNotHappen' -> putline
+   
+---byteCode_InxRegAdr_out:doPart---   
+do 'InxRegAdr_out:'->puttext;
+   areg.out;
+   off -> mstate.BCM.emit;
+   size -> mstate.BCM.emit;   
+   ONlevel -> mstate.BCM.emit;  
+   2 -> mstate.BCM.emit; (* isField = 2 signals array *)
+   (* all the fields; areg,off,size,ONlevel, are superflous
+    * and not used by the bytecode
+    *)
+   
+---byteCode_nop:doPart---
+do mstate.BCM.nop -> mstate.BCM.emit;
+   
+---byteCode_ldCst:doPart---
+do (mstate.BCM.pushCst,C) -> mstate.BCM.emit1;
+   
+---byteCode_ldValImpl:doPart---
+do (if mstate.methodType = 2 then
+       '**** extra ldvl origin'->putline;
+       mstate.BCM.loadOrigin->mstate.BCM.emit;
+       0 -> mstate.BCM.emit
+   if);
+   (if A.isOrigin then
+       mstate.BCM.loadOrigin->mstate.BCM.emit;
+       (if mstate.methodType = 2 then
+           A.ONlevel+1 -> mstate.BCM.emit;
+        else
+            A.ONlevel -> mstate.BCM.emit
+       if);
+       (if A.descName[] <> none then
+           1 -> mstate.BCM.emit;
+           A.descName[] -> mstate.BCM.emittext;
+        else
+           0 -> mstate.BCM.emit
+       if)
+    else
+       (if A.isRef then
+           mstate.BCM.loadRef->mstate.BCM.emit
+        else
+           mstate.BCM.pushVal->mstate.BCM.emit
+       if); 
+       A.out;
+       (if A.isRef then
+           'UnknownType' -> mstate.BCM.emittext
+       if)
+   if)
+   
+---byteCode_loadRef:doPart---
+do mstate.extraOrigin;
+   (if A.isOrigin then
+       mstate.BCM.loadOrigin->mstate.BCM.emit
+    else
+       (if knownSourceClassName[] <> NONE then
+           mstate.BCM.loadQRef->mstate.BCM.emit;
+        else
+           mstate.BCM.loadRef->mstate.BCM.emit;
+       if);
+       A.out;
+       basicSourceClassName[] -> mstate.BCM.emittext;
+       (if knownSourceClassName[] <> NONE then
+           knownSourceClassName[] -> mstate.BCM.emittext
+       if)
+   if)
+   
+---byteCode_stValImpl:doPart---
+do mstate.extraOrigin;
+   mstate.BCM.stVal->mstate.BCM.emit; 
+   A.out;   
+   
+---byteCode_cpReg:doPart---
+do mstate.BCM.pushReg->mstate.BCM.emit; R1.out;   
+   
+---byteCode_gLea:doPart---
+do (if true 
+    // op1.isRegAdr then
+       mstate.BCM.pushAdr->mstate.BCM.emit; op1.out
+    // op1.isInxRegAdr then
+       mstate.BCM.pushAdr->mstate.BCM.emit; op1.out
+    // op1.isTextOp then
+       mstate.BCM.pushtext->mstate.BCM.emit; op1.out
+    else
+       '\nglea: operand type not handled'->putline
+   if)   
+   
+---byteCode_duplicate:doPart---
+do mstate.BCM.dup ->mstate.BCM.emit
+
+--bytecode_emitCk:doPart--
+   (* OBS! This operation is used to initialize 
+    * fields of an object/class. It is a HACK, 
+    * since emitCk is used for another purpose
+    * in other backends and reused here.
+    * regReg      :offSet of field
+    * RoutineName :type of field
+    * RefName     :'m': a field in a method
+    *              'c': a field in a class
+    *              'p': a part object 
+    *              '[': an array object
+    *)
+do mstate.BCM.field ->mstate.BCM.emit; 
+   regRef -> mstate.BCM.emit;
+   RoutineName[] -> mstate.BCM.emitText;
+   1 -> RefName.inxGet -> mstate.BCM.emit;
+   
+--byteCode_tstNone:doPart--
+do mstate.BCM.loadRef->mstate.BCM.emit; A.out;
+   'UnknownNONE' -> mstate.BCM.emittext
+   
+---byteCode_doAsgRefAdr:doPart---
+do (* mstate.BCM.pushAdr->mstate.BCM.emit; thisAdr.out; *)
+   (if withQua then
+       'withQUA'->putline;
+       mstate.BCM.storeQRef->mstate.BCM.emit; (* OBS! Don't work *)
+    else
+       (if thisAdr.isOrigin then
+           'doAsgRefAdr:storeorigin'->mch.comment;
+           mstate.BCM.storeOrigin->mstate.BCM.emit
+        else
+           mstate.BCM.storeRef->mstate.BCM.emit
+       if)
+   if);   
+   thisAdr.out;
+   DestClassName[] -> mstate.BCM.emittext
+   
+---byteCode_doAsgRegAdr:doPart---
+do (* source reg on stack *)
+   (* mstate.BCM.pushAdr->mstate.BCM.emit; thisAdr.out; (* destination *)
+   (* a swap is probably needed here *)
+   (if withQua then
+       mstate.BCM.storeQRef->mstate.BCM.emit; (* OBS! Don't work *)
+    else
+       (if thisAdr.isOrigin then
+           'doAsgRegAdr:storeorigin'->mch.comment;
+           'DestClassName:'->mch.comment;
+           DestClassName -> mch.comment;
+           'thisAdr.descName: ' -> mch.comment;
+           thisAdr.descName -> mch.comment;
+           mstate.BCM.storeOrigin->mstate.BCM.emit
+        else
+           mstate.BCM.storeRef->mstate.BCM.emit;
+       if)
+   if);
+   thisAdr.out;
+   DestClassName[] -> mstate.BCM.emittext
+   
+---byteCode_jmpTlong:doPart---
+do mstate.BCM.jmp->mstate.BCM.emit; T[]->mstate.BCM.emitText
+   
+---byteCode_jmplong:doPart---
+do mstate.BCM.jmp->mstate.BCM.emit; T[]->mstate.BCM.emitText
+   
+---byteCode_jsrT:doPart---
+do mstate.BCM.call->mstate.BCM.emit; T[]->mstate.BCM.emitText   
+   
+--byteCode_gJmp:doPart---
+do mstate.BCM.jmp->mstate.BCM.emit; op.out;
+   
+--byteCode_gJsr:doPart---
+do mstate.BCM.call->mstate.BCM.emit; op.out;
+   
+--byteCode_cmpAndJmp:doPart---
+do op1.loadToReg; op2.loadToReg;
+   mstate.BCM.cmpAndJmp->mstate.BCM.emit; 
+   cond -> mstate.BCM.emit;
+   lab.out;  
+   
+---byteCode_saveReturn:doPart---
+do (if isGpart then
+       mstate.BCM.initCons -> mstate.BCM.emit;
+   if)
+   
+---byteCode_return:doPart---
+do mstate.BCM.return -> mstate.BCM.emit;
+   RToff -> mstate.BCM.emit;
+   0 -> mstate.methodType
+   
+---byteCode_callPrim:doPart--
+do mstate.BCM.callPrim->mstate.BCM.emit; T[]->mstate.BCM.emitText;
+   'Unknown'->mstate.BCM.emitText;
+   
+--byteCode_callAlloPrim:doPart--
+do mstate.BCM.callPrim->mstate.BCM.emit; 
+   T[]->mstate.BCM.emitText;   (* the primitive *)
+   proto[]->mstate.BCM.emitText;  
+   
+---byteCode_callUnFunc:doPart---   
+do arg.loadToReg;
+   mstate.BCM.func -> mstate.BCM.emit;
+   opCode -> mstate.BCM.emit;
+
+---byteCode_callBinFunc:doPart---
+do op1.loadToReg; op2.loadToReg;
+   mstate.BCM.func -> mstate.BCM.emit;
+   opCode -> mstate.BCM.emit;
+      
+--byteCode_classDef:doPart--
+do (if not common.switch[184] then mstate.BCM.init if);
+   className[] -> mstate.thisClassName[];
+   className[] -> mstate.classes.add;
+   mstate.BCM.classDef -> mstate.BCM.emit; 
+   className[]->mstate.BCM.emittext;
+   blockLevel -> mstate.BCM.emit;
+   superName[]->mstate.BCM.emittext;
+   subLevel -> mstate.BCM.emit; (* OBS: int8 assumed here *)
+   orgName[] -> mstate.BCM.emittext;
+   0 -> mstate.methodType
+   
+--byteCode_endClass:doPart---
+do mstate.BCM.endClass -> mstate.BCM.emit;
+   (if not common.switch[184] then
+       mstate.BCM.end -> mstate.BCM.emit;
+       mstate.mkAsmFile
+   if)
+   
+--byteCode_methodDef:doPart--
+do mstate.BCM.methodDef -> mstate.BCM.emit; 
+   methodName[]->mstate.BCM.emittext;
+   signature[]->mstate.BCM.emittext;
+   noOfEnterArgs -> mstate.BCM.emit;
+   type -> mstate.BCM.emit;
+   (*type -> mstate.methodType*)
+   
+--byteCode_emitTextConst:doPart---
+do (*13->mstate.BCM.emit;
+   112->mstate.BCM.emit;
+   113->mstate.BCM.emit;
+   *)
+   mstate.BCM.pushText->mstate.BCM.emit; S[]->mstate.BCM.emitText;
+(* 97 -> mstate.BCM.emit;
+   97 -> mstate.BCM.emit;
+   97 -> mstate.BCM.emit;
+   97 -> mstate.BCM.emit;
+   0 -> mstate.BCM.emit;*)
+(*   '\nemitTextConst: ' -> screen.puttext;
+   mstate.BCM.pushText-> screen.putint; ' '->screen.put;
+   S[] ->screen. putline*)
+
+---byteCode_close:doPart---
+do (*'\n***Close:' ->puttext; BCname[] -> putline;*)
+   BCname[] -> mstate.mkClassListFile;
+   mstate.BCM.end -> mstate.BCM.emit;
+   '.bin'->(BCname.copy).append->mstate.BCM.save;
+   '.bin'->(BCname.copy).append->mstate.BCM.restore;
+   (if true
+    // common.targetMachineId = common.javabc then
+       mstate.BCM.emitJasmin;
+    // common.targetMachineId = common.dotnet then
+       mstate.BCM.emitDotnet
+    else
+       'byteCode_close: unknown platform' -> screen.putline;
+   if); 
+   
+---byteCode_CallCproc:doPart---
+do (# S: @text
+   do mstate.BCM.callExternal -> mstate.BCM.emit;
+      T.scanAll(#
+               do (if ch > 0 then
+                      ch -> S.put
+               if)#);
+      S[] -> mstate.BCM.emitText;   
+   #)
+   
+---byteCode_jsrTable:doPart---
+do 
+   (if newVirt then
+       (# R: @adrRegOperand
+       do R.alloc;
+          (A[],R[],4) -> ldVlImpl;
+          mstate.BCM.newVirt -> mstate.BCM.emit;
+       #)
+    else
+       mstate.BCM.callInner -> mstate.BCM.emit;
+   if)
+   
+---byteCode_init:doPart---
+do 313->trace(#do 'bytecode:open: '->xT; BCname[] -> xT #);
+   (*'\n***Open: ' -> puttext; localFilePath[] -> putline;*)
+   (*localFilePath[] -> mstate.path[];  *)
+   
+   FIXME.init;
+   mstate.BCM.init;
+   mstate.classes.init;
+   
+   1->ThisRegOp;
+   2->CallRegOp;
+
+   
+---bytecode_comment:doPart--
+do mstate.BCM.comment -> mstate.BCM.emit;
+   T[] -> mstate.BCM.emittext

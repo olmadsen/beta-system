@@ -61,16 +61,25 @@ do (# EH: @EvalHandler;
           #)
             -> rA[];
        else
-          (if common.switch[125] then 0 -> case if);
+          (if switch182 or common.switch[125] then 0 -> case if);
           (if case = 1  then
 	      (true,true)->lV.elimReg;
 	      pushThisAndCall->callRegOnStack;
+              '!asgToNelmX:'->mch.comment;
 	      (thisA[],mch.thisRegOp[])->mch.glea;
+              '!asgToNelmY:'->mch.comment;
 	      thisA.bAdr.localDesc[]->localDesc[]; 
               gen.thisRegAdr->A[]; localDesc[]->A.bAdr.localDesc[];
               (A[],PL,A[]) -> setSuperDesc -> A[];
 	      (A[],lV[],thisEv[],thisChain[])->EH.assignValToEval->V[]
 	   else
+              313->trace(#
+                        do 'asgToNelm:'->xT;
+                           lV.display; xN;
+                           'thisEv:'->xT; thisEv[] -> xA; xN;
+                           (baseadr).display->xT                           
+                        #);
+              '!asgToNelmZ:'->mch.comment;
 	      (baseAdr,lV[],thisEv[],thisChain[])->EH.assignValToEval->V[];
 	  if);
           (if V[] <> none then 
@@ -96,10 +105,7 @@ do none->thisEV[]; none->thisChain[]->chain[]; none->desc[]->NX[];
    
 ---ScanNXadr:doPart---
 do prepareBaseAdr;
-   (if stest then
-       179->cTrace
-       (#
-       do 'ScanNXAdr: '->xT; desc[]->xA; 
+   (if stest then 179->cTrace(#do  'ScanNXAdr: '->xT; desc[]->xA; 
           (*(if chain[] = none then 'Chain is none!'->xT else chain if)*)
    #)if);
 
@@ -107,23 +113,24 @@ do prepareBaseAdr;
    (desc[],isN,chain[])->NXS;
    true->more; NXS.length->N; (* in enclosing ScanNXadr *)
    (for i: NXS.length repeat
-        (if reverse then NXS.length-i+1->j else i->j if);
-        j->NXS.getNXElm->(thisEv[],PL,thisChain[]); 
-        (i=NXS.length)->last;
+        (if reverse then NXS.length-i+1 -> j else i -> j if);
+        j -> NXS.getNXElm -> (thisEv[],PL,thisChain[]); 
+        (i=NXS.length) -> last;
         
-        (if stest then
-            179->cTrace
-            (#
-            do 'EvLib:ScanNXadr:Thisev:'->xT; thisEv[] -> xA; 
-               mch.dumpReg
-               (* thisChain[]->printChain*)
+        (if stest then 179->cTrace(# do 'EvLib:ScanNXadr:Thisev:'->xT; 
+                                     thisEv[] -> xA; 
+                                     mch.dumpReg
+                                     (* thisChain[]->printChain*)
         #)if);
         SUSPEND 
    for);
-   false->more; SUSPEND;
+   false -> more; 
+   SUSPEND;
    cycle(#do cError(#do 'NX-list exhausted!'->xT; desc[]->xA #); SUSPEND #)
+   
 ---BeforeEnter:doPart---
-do (if (A.regType <> mch.callO) and not common.switch[125] then
+do '!beforeEnter'->mch.comment;
+   (if (A.regType <> mch.callO) and not common.switch[125] then
        (if (A.regType <> mch.thisO)
            OR
            ((desc.label = gram.objectDescriptor)
@@ -136,6 +143,7 @@ do (if (A.regType <> mch.callO) and not common.switch[125] then
                              A.display->xT;
                           #)
            if);
+           '!beforeEnter:predToTmp'->mch.comment;
            predToTmp; (* may already be the case *)
            (if switch181 then
                (if not A.frozenReg then
@@ -143,8 +151,18 @@ do (if (A.regType <> mch.callO) and not common.switch[125] then
                    A.toCallReg->A[]
                if);
             else
+               '!beforeEnter:toCallReg'->mch.comment;
                AllocCallReg->callRegOnStack;
-               A.toCallReg->A[]
+               (if switch182 then
+                    '!beforeEnter'->mch.comment;
+                   true -> A.isRef;
+                   true -> A.noTmp; (* means A is pushed on stack *)
+                   (A[],desc[] -> descName,none)->mch.loadRef;
+                   mch.duplicate;
+                   (*(A[],none) -> mch.ldVal*)
+                 else
+                    A.toCallReg->A[]
+               if)
            if)
    if)if); 
    (if switch181 then afterAdr if);
@@ -411,9 +429,14 @@ do (if stest then
             (if baseAdr[] -> gen.UseTmpReg then
                 beforeAdr 
         if)if);
+        
+        '!exeobj:before:getAdr'->mch.comment;
         GetAdr; (* A may be in callReg *)
+        '!exeobj:after:getAdr'->mch.comment;
         
         TransferEnter; (* this may move A from callReg to tmpReg *)
+        '!exeobj:after:transferEnter'->mch.comment;
+        
         (if stest then
             301->cTrace(#do 'After:transferEnter:'->xH; 
                       'A='->xT; A.display-> xT; mch.dumpreg 
@@ -452,7 +475,17 @@ do (if stest then
                     301->cTrace(#do 'Before:toCallReg:'->xT; A.display->xT;
                                   mch.dumpreg #)
                 if);
-                A.toCallReg->A[];
+                (if switch182 then
+                    (if not A.noTmp then
+                        '!exeobj:push receiver:'->mch.comment;
+                        true -> A.isRef;
+                        (* Handle possible virtual desc *) 
+                        (A[],desc[] -> descName,none)->mch.loadRef;
+                        (*(A[],none) -> mch.ldVal*)
+                    if)
+                 else
+                    A.toCallReg->A[];
+                if);
                 (if stest then
                     301->cTrace(#do 'After:toCallReg:'->xT; A.display->xT;
                                   mch.dumpreg #)
@@ -554,6 +587,7 @@ doTransferEnter:
             mch.dumpReg;
             xU
      #)if);
+     'transferEnter:start'->mch.comment;
      (if switch180 AND (desc[] -> sematt.hasNcode) then
          (* hasNcode may fail if newindex.bet *)
          (if stest then
@@ -616,7 +650,12 @@ doTransferEnter:
                             (*shall we restore noTmp after asgToItem?*)
                 if)if)if)
             if);
+            '!transferenter1:'->mch.comment;
             (rBaseReg,desc[],A[],EVchain[]) -> V.asgToItem ->A[];
+            (if switch182 then
+                ('N',desc[],0)->callEntry
+            if);
+            '!transferenter2:'->mch.comment;
             (if rAtmpXinx > 0 then
                 (# aR: @mch.adrRegOperand; 
                    BR: ^mch.RegAdr;
@@ -1983,8 +2022,15 @@ itemEvVal: EvVal
                 else
                    EV->scanList
                    (# E: @ASTindex;
-                   do currentNode->E; 
-                      (*301->cTrace(#do 'AsgToList1:'->xT; mch.dumpreg #);*)
+                   do currentNode->E;
+                      (if stest then 
+                          301->cTrace
+                          (#do 'itemVal:asgToList1:xScan.N=' ->xT; 
+                             xScan.N->xI;
+                             'V:'->xT; 
+                             V.display; ' to:' -> xT; E[] -> xA;
+                             mch.dumpreg 
+                      #)if);
                       (rA.copy,V[],E[],rChain[])->AssignValToEval->V[];
                       V.release;
                       (*301->cTrace(#do 'AsgToList2:'->xT; mch.dumpreg #);*)

@@ -2,7 +2,8 @@ ORIGIN 'evlib';
 LIB_ITEM 'betacodegen';
 INCLUDE 'prototype'
         'gen'
-        'synthlib';
+'synthlib';
+INCLUDE 'auxlib';
 BODY 'genlib_alloc' 'genexternal';
 BODY 'genlib_com';
 BODY 'genlib_bindvirtuals';
@@ -259,15 +260,15 @@ GenPrefix:
           preSort.sort->preSort;
           (if preSort.label
            // gram.virtualDecl // gram.bindingDecl then
-           (* thisDesc is V :: < (# ... #)                   
-            * the super may then be  V :< (# ... #)
-            *        no problems on generating origin
-            * or                  V :< A
-            *        special code for generating origin
-            *        if A is not at the same level as V
-            * or                   V:< R.A
-            *        same as above
-            *)
+              (* thisDesc is V :: < (# ... #)                   
+               * the super may then be  V :< (# ... #)
+               *        no problems on generating origin
+               * or                  V :< A
+               *        special code for generating origin
+               *        if A is not at the same level as V
+               * or                   V:< R.A
+               *        same as above
+               *)
               preSort.son->realPre;
               realPre.brother->realPre;
               (if realPre.label
@@ -302,28 +303,28 @@ GenPrefix:
      preDescOrg: @ASTindex;
      superOrgOff,kind,off: @integer;
      chain: ^DH.SuperChain
+     
   enter (pref,kind)
-  do (if (thisDesc[]->Sematt.hasDo) then thisDesc[]->GS.thisPT.mainAdr if);
+  do 313->trace(#
+               do 'GenPrefix:'->xT; pref[]->xA
+               #);
+     (if (thisDesc[]->Sematt.hasDo) then thisDesc[]->GS.thisPT.mainAdr if);
      L:
-       (if hasPref then (*pref.label // gram.prefix then*)
+       (if hasPref then
            SaveReturn;
            pref.son->preDen->SemAtt.descrip-> prefDesc;
            (if (prefDesc->sematt.cProcdesc.equal) then
                false->hasPref; restart L (* dirty *)
            if);
            prefDesc[]->emitSuperGCtab->superOrgOff;
-           (if superOrgOff <> ThisDescOrgOff then
+           (if superOrgOff <> ThisDescOrgOff then 
                (# prebase: ^mch.address;
                   originDesc: ^ASTindex;
                do (* origin for prefix must be added one *)
                   Gen.ThisRegAdr->preBase[];
-                  (*(1,false)->preBase.goOrigin->preBase[];*)
-                  (*(1,false)
-                   *-> preBase.goOrigin
-                   *-> goOrigin
-                   *-> preBase[];*)
+                  
                   (preBase[],preBase.copy,1,false) -> GoOrigin -> preBase[];
-                  (if (*switch[480] and*) IsSpecialVirtual then
+                  (if IsSpecialVirtual then
                       preDescOrg[]->preBase.bAdr.localDesc[];
                       (preBase[],originDesc[],realPre[],chain[])
                         -> genOrgAdr
@@ -335,21 +336,18 @@ GenPrefix:
                         -> preBase.bAdr.LocalDesc[];
                       thisSuperChain->chain[];
                       chain[]->DH.ENC->chain[];
-                      (* this imp is superflous and makes the compiler crash;
-                       * furthemore bAdr.originOff is no longer used.
-                       * originDesc.originOff->originOff->preBase.bAdr.originOff;
-                       *)
                       (preBase[],originDesc[],preDen[],chain[])
                         -> genOrgAdr
                         -> preBase[];
                   if);
                   preBase[] -> (prefDesc.originOff->&Gen.ThisRegAdr).storeOrigin;
                   prebase.freeAdr;
+
                   thisDescOrgOff+orgTag->GS.thisPT.dyn.add
                #)
-         if);
+           if);
          INNER          
-      else
+        else
          thisDescOrgOff+orgTag->GS.thisPT.dyn.add;
          sematt.superObject.descId->(prefFormId[],prefDescNo);
          sematt.superObject->thisPrefDesc (* used to generate prototypes *)
@@ -368,11 +366,6 @@ PrefixAlloc: genPrefix
              (- 1->mch.newCstOp,1->mch.getPrimReg)->mch.ldCst;
              (* origin *)
              5 -> common.count; ('V',prefDesc[],3)->callEntry;
-             (*(if common.switch[64] then
-              (# p,m,at,n,d,x: ^ASTindex
-              do prefDesc[] ->sematt.descSonsRef -> (p[],m[],at[],n[],d[],x[]);
-              (at,0,&RepList[],none) -> GenAlloc
-              #)if)*)         
           else
              (mch.thisRegOp[],mch.callRegOp[])->mch.cpReg;
              ('G',prefDesc[],3)->callEntry 
@@ -386,10 +379,10 @@ GenAlloc:
   (# att: @ASTindex;
      base: @integer; (*  base only when switch[64] *)
      reps: ^RepList; (* Only for COM objects *)
-     mainDesc: ^ASTindex; (* program descriptor for slot program 
-                      * - only for bytecode generation - switch 182
-                      *)
-  enter (att,base,reps[],mainDesc[])
+     saveLocalDesc:< (* for bytecode generation *)
+       (# D: ^ASTindex enter D[] do inner #);
+
+  enter (att,base,reps[])
   <<SLOT genlib_alloc:doPart>>
   #);
 GetSingular: (* find possible singular descs in enter/exit-parts *)
@@ -430,7 +423,17 @@ GenDo:
    * If size>0 then this is a code gen for a dopart slot,
    * where tmp. attributes are needed
    *)
-  (# size: @integer; insertDo: ^ASTindex; 
+  (# <<SLOT GenDoLib:attributes>>;
+     scan:
+       (# node: @ ASTindex;
+       enter node
+       <<SLOT genDo_scan:doPart>>
+       #);
+          
+     topReturn,isDoPartForm: @boolean;
+     restartLab: @mch.localLab;
+     
+     size: @integer; insertDo: ^ASTindex; 
      evalChain: ^DH.superChain; 
      globalMlab,isComVirtual: @boolean;
      descName,signature: ^text
@@ -489,7 +492,7 @@ GenObj:
      (if objKind <> sematt.stateKind then
          (pref,common.itemKind)->PrefixAlloc;
      if);
-     (att,0,&RepList[],none)->GenAlloc;
+     (att,0,&RepList[])->GenAlloc;
      (if isComVirtual then
          (* do NOT generate normal return 
           * Transfer arguments to object
@@ -555,9 +558,23 @@ GenCom: <<SLOT GenCom:descriptor>>;
 GenComVirtual: <<SLOT genComVirtual:descriptor>>;
 
 GenByteCode: 
-  (# thisDesc: ^AStindex
+  (# thisDesc: ^ASTindex
   enter thisDesc[]
      <<SLOT GenByteCode:doPart>>
+  #);
+genPtnMethod:
+  (# path,patternName: ^text;
+     desc: ^ASTindex;
+     blockLevel: @integer
+  enter((*path[],*)patternName[],desc[](*,blockLevel*))
+  <<SLOT genPtnMethod:doPart>>
+  #);
+genPtnClass:
+  (# path,patternName: ^text;
+     desc: ^ASTindex;
+     blockLevel: @integer
+  enter((*path[],*)patternName[],desc[](*,blockLevel*))
+  <<SLOT genPtnClass:doPart>>
   #);
 genClass:
   (# path,className: ^text;
@@ -566,10 +583,35 @@ genClass:
   enter(path[],className[],desc[],blockLevel)
   <<SLOT genClass:doPart>>
   #);
+genExternalClass:
+  (# path,className: ^text;
+     desc: ^ASTindex;
+     blockLevel: @integer
+  enter(path[],className[],desc[],blockLevel)
+  <<SLOT genExternalClass:doPart>>
+  #);
 genMethod:
   (# methodName: ^text; desc: ^ASTindex
   enter(methodName[],desc[])
   <<SLOT genMethod:doPart>>
+  #);
+genEnterMethod:
+  (# desc: ^ASTindex
+  enter desc[]
+  <<SLOT genEnterMethod:doPart>>
+  #);
+genDoMethod:
+  (# desc: ^ASTindex; 
+     simpleEnter,simpleExit: @boolean (* enter/exit-arguments are 
+                                       * simple procedure arguments
+                                       *)
+  enter(desc[],simpleEnter,simpleExit)
+  <<SLOT genDoMethod:doPart>>
+  #);  
+genExitMethod:
+  (# desc: ^ASTindex; 
+  enter desc[]
+  <<SLOT genExitMethod:doPart>>
   #);
 ScanCOMArgs: 
   (# noOfCOMargs,dataByValueByteSize: @integer;
@@ -600,7 +642,7 @@ insAtt:
             GS.insOff-common.preStrucSize->GS.insOff;
             
          #);
-     (att,0,&RepList[],none)->&GenAlloc
+     (att,0,&RepList[])->&GenAlloc
   #);
 insEnter:
   (# pref,entP: @ASTindex; p,a,n,d,x: ^ASTindex

@@ -4,8 +4,28 @@ INCLUDE 'evlib';
 INCLUDE 'nxoffsetsval';
 INCLUDE '../CHECKER/nxoffsets';
 INCLUDE '../CHECKER/setnxoffsets';
+INCLUDE 'genlib_bytecode';
 ---genlib_alloc:doPart---
-do (# SimpleAlloc:
+do (# GetAndSaveDescriptor: 
+        (# es,desc,N: @ ASTindex; first: @ boolean;
+        enter(es,first,N)
+        do (if es.label = gram.objectDescriptor  then 
+               es -> desc;
+               (if not switch182 then
+                   (* bytecode case is handled in genfields *)
+                   (if first then (desc,0,1,N) -> DS.push if);
+                   (* kind,cons are not correct *)
+               if)
+            else 
+               (* why do we not used GetActulaDesc here?
+                * see genfields
+                *)
+               es -> SemAtt.Descrip -> desc
+           if)
+        exit desc
+        #);
+
+      SimpleAlloc:
         (# dataSpec,N,desc,es,son,VN: @ASTindex;
            first: @boolean;
            kind,descNo,PL,baseOff,Noff,max: @integer;
@@ -39,7 +59,7 @@ do (# SimpleAlloc:
            descKind: @integer
         enter (N,dataSpec,first) (* no allocation for dynIns *)
         do dataSpec.son->es;
-           (es,first,N)->&descrip-> desc;
+           (es,first,N)-> GetAndSaveDescriptor -> desc;
            (if desc.label = gram.objectDescriptor then 
                desc->sematt.descKind->descKind
             else
@@ -88,6 +108,7 @@ do (# SimpleAlloc:
                             * seems to work fine!
                             *)                       
                     // sematt.generalKind 
+                    // sematt.classKind
                     // sematt.holderKind (* OBS GC problem*) then
                        (if desc[]->sematt.descAccess
                         // common.direct then
@@ -106,9 +127,31 @@ do (# SimpleAlloc:
                                if);
                                common.compHeadSize*4->A.addOff->A[];
                            if);
-                           (Gen.ThisRegAdr,thisDesc[],es[],thisSuperChain)
-                             -> genOrgAdr
-                             -> A1[];
+                           (if switch182 then
+                               theGen.pushThis; (* for storing ref later *)
+                               desc[] -> theGen.newInstance
+                               (#
+                               do 'genOrigin1:'->mch.comment;
+                                  (Gen.ThisRegAdr,thisDesc[],es[],thisSuperChain)
+                                    -> genOrgAdr
+                                    -> A1[];
+                                  313->trace(#
+                                            do 'genOrigin:'->xT; A1.display->xT
+                                            #);
+                                  'genOrigin2:'->mch.comment;
+                                  true -> A1.isOrigin; 
+                                  (A1[],none) -> mch.ldVal;
+                                  (*A1.toOriginReg;*)
+                                  'genOrigin3:'->mch.comment;
+                               #)
+                            else
+                               (Gen.ThisRegAdr,thisDesc[],es[],thisSuperChain)
+                                 -> genOrgAdr
+                                 -> A1[];
+                               313->trace(#
+                                         do 'genOrigin:'->xT; A1.display->xT
+                                         #);
+                           if);
                            desc.descId->(formId[],descNo);
                            (if common.switch[68] then
                                (# p,m,at,n1,d,x: ^ASTindex;
@@ -153,7 +196,7 @@ do (# SimpleAlloc:
                                   OA.freeAdr;
                                   (if false (* inlining *) then
                                       (* gen alloc for desc.Gpart *)
-                                      (at,Noff,&RepList[],none)->&GenAlloc; 
+                                      (at,Noff,&RepList[])->&GenAlloc; 
                                    else
                                       (if desc[] -> sematt.hasAcode then
                                           1->mch.getPrimReg->mch.gClr;
@@ -166,7 +209,15 @@ do (# SimpleAlloc:
                                   if)if);
                                #)
                             else
-                               (if desc[]->sematt.hasAcode then
+                               (if switch182 then
+                                   (# EH: @evalHandler
+                                   do (*theGen.pushThis;*)
+                                      1 -> A.onLevel;
+                                      (none,false,'',desc[]->EH.descname)
+                                        -> A.asgRefReg
+                                   #)
+                                else
+                                   (if desc[]->sematt.hasAcode then
                                    A.toCallReg->A[];
                                    &gen.callRegAdr->OA[];
                                    desc.originOff->OA.addOff->OA[];
@@ -178,7 +229,8 @@ do (# SimpleAlloc:
                                    desc.originOff->A.addOff->A[];
                                    A1[] -> A.storeOrigin;
                                    A1.freeAdr;
-                               if);
+                                   if);
+                               if);                                   
                                A.freeAdr;
                            if);
                         else
@@ -266,7 +318,11 @@ do (# SimpleAlloc:
                   #);
                 callRegOnStack: @boolean
              enter n
-             do n+1 (* SP *) ->mch.initPrimCall;
+             do 308->trace(#
+                          do 'repAlloc:ObjKind:'->xT;
+                             thisDesc->sematt.descKind->xI
+                          #);
+                n+1 (* SP *) ->mch.initPrimCall;
                 INNER ;
                 (* parameters:
                  * simple:  p1 = off , 
@@ -331,7 +387,7 @@ do (# SimpleAlloc:
                then
                3 -> AllocRep(#do 'AlloRR'->prim #)
             // gram.staticItem // gram.staticComponent then
-               (dataSpec.son->spec,first,N)->descrip->desc;
+               (dataSpec.son->spec,first,N) -> GetAndSaveDescriptor -> desc;
                (if desc.label
                 // gram.objectDescriptor then
                    desc->sematt.descKind->descKind;
@@ -419,34 +475,13 @@ do (# SimpleAlloc:
                if)
            if)
         #);
-      methodList: [5] ^ASTindex; mTop: @integer;
-      classList: [5] ^ASTindex; ctop: @integer;
-      saveDesc:
-        (# E: ^ASTindex; ES: @ASTindex
-        enter E[]
-        do E -> ES;
-           (if ES[] -> sematt.hasDo then
-               (* method - we assume so far *)
-               (if (mTop+1->mTop) > methodList.range then
-                   methodList.range -> methodList.extend
-               if);
-               ES[] -> methodList[mTop][];
-            else
-               (* class *) 
-               (if (cTop+1->cTop) > classList.range then
-                   classList.range -> classList.extend
-               if);
-               ES[] -> classList[cTop][];
-           if)
-        #)
-           
    do
       att
         ->scanList
       (# dcl,nameL,ES,desc: @ASTindex; first: @boolean;        
       do
          currentNode->dcl;
-         308->trace (#  do dcl[]->xA #);
+         308->trace (# do 'genAlloc:' -> xT; dcl[]->xA #);
          (if common.switch[28] then dcl[]->gen.comment if);
          (if not dcl.isSlot then
              dcl.son->nameL;
@@ -463,7 +498,7 @@ do (# SimpleAlloc:
                     (N,ES,ES.brother,first)->repAlloc
                  // gram.patternDecl then
                     (if switch182 (*bytecode*) then
-                        ES[] -> saveDesc
+                        ES[] -> saveLocalDesc
                      else
                         (ES,0,0,N)->DS.push
                     if)
@@ -471,7 +506,7 @@ do (# SimpleAlloc:
                  // gram.finalDecl then
                     (if ES.label = gram.objectDescriptor then
                         (if switch182 (*bytecode*) then
-                            ES[] -> saveDesc
+                            ES[] -> saveLocalDesc
                          else
                             (ES,0,0,N)->DS.push
                         if)
@@ -483,28 +518,6 @@ do (# SimpleAlloc:
             
          if)
       #);
-      (if switch182 (* bytecode *) then
-          (# EH: @evalHandler
-          do
-             '\n*** handle methods: mtop='->puttext; mTop->putint;
-             (if mainDesc[] <> none then
-                 ('main',mainDesc[]) -> genMethod
-             if);
-             (for i: mTop repeat '.'->put;
-                  (* FIXME: foo*)
-                  (methodList[i][]->EH.descName,methodList[i][]) -> genMethod
-             for);
-             mch.close; (* main.mkDataSeg;*)
-             '\n*** handle inner classes' ->putline;
-             (for i: cTop repeat
-                  (* currently we can only handle one level of nesting;
-                   * we need a counter somewhere
-                   *)
-                  (BCname.copy,classList[i][]->EH.descName,classList[i][],1) 
-                    -> genClass
-             for)
-          #)
-      if);
    #)
 --- genNpart:doPart---
 do

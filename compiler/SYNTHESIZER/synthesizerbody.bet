@@ -121,6 +121,10 @@ INCLUDE '../GENERATOR/machine';
     * and used at several places. For SpecialInitCall they
     * are also defined below before calling SpecialInitCall.
     *)
+   inEnterDoExitMethod: @boolean; (* bytecode generation: code
+                                   * is generated for an enter-,
+                                   * do, or exit- method
+                                   *)
    ThisSuperChain: @
      (# chain: ^DH.SuperChain
      do thisDesc->DH.newSingle->chain[] 
@@ -193,11 +197,39 @@ INCLUDE '../GENERATOR/machine';
      #);
    mkDataSeg: <<SLOT mkDataSeg:descriptor>>;
    
+   HandleNestedDescriptors:
+     (# currentDesc: ^ASTindex; 
+        currentKind,currentCons: @integer;
+        currentId: ^text
+     do loop:
+          (# thisDescNo: @integer; thisForm: ^Text; ID: ^ASTindex
+          do DS.pop -> (currentDesc[],currentKind,currentCons,ID[]);
+             (if currentDesc[] <> NONE then (* skip *)
+                 (if (currentDesc->sematt.DescKind)
+                  // sematt.standardKind // sematt.constKind then
+                  else 
+                     (if (currentDesc.descId
+                           ->( thisForm[],thisDescno)
+                           -> descSet.notTranslated) then
+                         (if ID.isNull then 
+                             none -> currentId[]
+                          else 
+                             ID.getText -> currentId[]
+                         if);
+                         INNER HandleNestedDescriptors;
+                         (*(D,(K<>0),descId[]) -> &theGen.genDesc; *)
+                     if)
+                 if);
+                 restart loop
+     if)#)#);
+
    thisFormName: ^ text;
    theFormDesc,formDesc: ^ASTindex;
    (* formDesc = (descriptorForm <descriptor> )
     *          | (attributesForm <pattern-attributes> )
     *)
+   thisBlocklevel: @integer; (* current level of nested classes *)
+   
    notFirst: @boolean (* hack *)
 enter(thisFormName[],theFormDesc[]->formDesc[])
 do (*309->trace(#do 'Translating:'->T;thisFormName[]->T;formDesc[]->A#);*)
@@ -218,8 +250,16 @@ do (*309->trace(#do 'Translating:'->T;thisFormName[]->T;formDesc[]->A#);*)
           (if not dcl.isSlot then
               (* the checker accepts attributes-slots here, 
                * perhaps it works*)
-              dcl.son->son->sematt.singleName->N; 
-              (son.brother,0,0,N) -> DS.Push
+              dcl.son -> son -> sematt.singleName -> N;
+              (if switch182 then
+                  (* for bytecode compiler we use DS to collect
+                   * nested singular descriptors; this should
+                   * be cleaned up
+                   *)
+                  (son.brother,false,N.gettext) -> &theGen.genDesc 
+               else
+                  (son.brother,0,0,N) -> DS.Push
+              if)
           if)
        #);
     // gram.doPart then 
@@ -230,25 +270,10 @@ do (*309->trace(#do 'Translating:'->T;thisFormName[]->T;formDesc[]->A#);*)
          ->&theGen.GenMainPart
     else 'Synthesizer called with illegal AST'->bugstream.putLine
    if);
-   (# D,DI: ^ASTindex; K,C: @integer
-   do 
-      loop:
-        (# thisDescNo: @integer; thisForm,descId: ^Text
-        do DS.pop -> (D[],K,C,DI[]);
-           (if D[] <> NONE then (* skip *)
-               (if (D->sematt.DescKind)
-                // sematt.standardKind // sematt.constKind then
-                else 
-                   (if (D.descId->(thisForm[],thisDescno)
-                         ->descSet.notTranslated) then
-                       (if DI.isNull then none->descId[]
-                        else DI.getText->descID[]
-                       if);
-                       (D,(K<>0),descId[]) -> &theGen.genDesc; 
-                   if)
-               if);
-               restart loop
-   if)#)#)
+   HandleNestedDescriptors
+   (# 
+   do (currentDesc,(currentKind<>0),currentId[]) -> &theGen.genDesc 
+   #);
 #) (* end main. Must be a static item! *)
 ---synthesizerBody:dopart---
 do (***** Initialize mch *****)
@@ -333,7 +358,13 @@ do (***** Initialize mch *****)
         'DescSet:'->tracestream.putline;
         descSet.statistics
         #);*)
-       (if not switch182 then main.mkDataSeg if)
+       (if switch182 then 
+           mch.close (* close the file - needed for dotnet;
+                      * harmless for javabc???
+                      *)
+        else
+           main.mkDataSeg 
+       if)
    if);
    (if verboseLevel < verboseLevel.actions then
        '\n   Fragment group done!' -> infostream.puttext

@@ -1,0 +1,525 @@
+<html>
+<head>
+<TITLE>BETA.NET DESIGN DOCUMENT </TITLE>
+
+<body>
+
+<h1> Introduction </h1>
+This working note contains a discussion of design critera for
+translating BETA into byte code, such as .NET, Java-bytecode, etc.
+The current status is very primliminary.
+
+<p>
+Appendix A contains links to additional information.
+
+<p>
+The general scheme will be illustrated by examples.  The scheme and
+examples shows how BETA may be translated into a subset of C#- and
+Java-like languages. In the following we will use a syntax that
+resembles C# and Java and we wil refer to this language as <b>CJ</b>.
+Most design problems in translating BETA into bytecode will be
+illustrated by showing how BETAs general pattern mechanism can be
+translated into CJ.
+
+<p>
+A CJ subset has been chosen since: 
+<ul>
+<li>
+A CJ-language like C# or Java, is available on most platforms.
+</li>
+<li>
+The CJ subset has been chosen such that it
+can be directly mapped into C# and Java.
+One example of this is with respect to nested classes, which are available
+in its full generality in BETA. Java and C# have nested classes, but
+in C#, an inner class cannot refer to its enclosing object.
+In the CJ susbset we use nested classes, but an explict reference
+(origin) to its enclosing object is used.
+</li>
+</ul>
+
+<h1> General Scheme </h1>
+Here we present the general schemes for translating BETA into CJ.
+
+<h2>Patterns and attributes </h2>
+
+A pattern in BETA can be used as as class and/or as a procedure. This
+means that there is no direct mapping of patterns into classes and
+methods.  The design has to be prepared for a pattern being used in
+several ways.  (At this point we have not considered using a pattern
+as a coroutine or concurrent process).
+<p>
+A pattern like
+<pre>
+   P : superP(# ... enter ... do ... exit ... #)
+</pre>
+is in general translated into the following CJ elements
+consisting of one class and two methods:
+
+<pre>
+   class P extends superP { 
+     P(Porigin org) { ... } // constructor with explict origin
+     ...
+   }
+
+   P P(Porigin org){ return new P(org); }
+
+   Pexit P(enter arguments){ ... return aPexitValue; }
+</pre>
+
+where Porigin is the class of the enclosing pattern of P. For
+outermost patterns Porigin is Object.  Pexit is the class
+corresponding to the type of the exit-part of P. Here we assume an
+exit-part with only one element. Exit-parts with more than one
+elements have not yet been considered.
+
+<p>
+The method - called the <b>instance-method</b> for P
+<pre>
+   P P(Porigin org){ return new P(org); }
+</pre>
+is for generating a class-instance of P. 
+
+<p>The method - called the <b>call-method</b> for P
+<pre>
+   Pexit P(enter arguments){ ... return aPexitValue; }
+</pre>
+is for generating and executing a procedure-instance of P.
+Note that the name of both methods is P, but the signatures
+differ. If, however, pattern P has no enter part
+and exits a reference to P, the signatures will be the same.
+In this case the instance-method will get the name new_P.
+
+<p>
+In the following we may use the term new_P and call_P 
+as abbreviations in the text for referring to the instance- and
+call-methods.
+<p>
+For patterns at the outermost level (in betaenv-lib), only class P is
+generated. The two methods new_P and call_P are not generated, since
+there can be no outermost methods in CJ.  This is a preliminary
+design decision (as all the other ones:-) We may have to revise this
+by generating new_P and call_P as a static method of class P.
+
+<h3>Example</h3>
+The next example gives a more detailed scheme for the
+translation of a pattern into CP elements.
+<pre>
+   myClass:
+     (# i: @integer;
+        R: ^someClass;
+        foo1: (# a,b,c: @integer enter(a,b,c) do ... exit c #);
+
+        foo2:< (# n,m: @integer enter (n,m) do ... exit m #);
+     #);
+</pre>
+
+Translation of this pattern is shown below.  As can bee seen myClass
+is translated into a class at the outermost level. For the pattern
+attributes foo1 and foo2, a class and two methods are generated as
+described above. Notice that there are no differences between a
+non-virtual and a virtual method.
+<p>
+So far we have not descibed how possible enter-, do- and exit-parts of
+a pattern are handled.  This will be described in a following section.
+
+<pre>
+   class myClass extends Object {
+      Object origin;
+      int i;
+      someClass R;
+
+      public myClass(Object org) {
+        origin = org;
+        i = 0;
+        R = null;
+      }
+
+      // foo1: (# ... #)
+      public int foo1(int a, int b, int c) {
+          // generate an instance of foo1;
+          // execute this isntance and return the result
+      }
+
+      public foo1 foo1() { return new foo1(this); }
+
+      class foo1 extends Object {
+         myClass origin;
+         int a,b,c;
+
+         public foo1(myClass org) {
+           origin = org;
+           a = 0; b = 0; c = 0;
+         }
+
+	 // methods for enter- do- exit-part of foo1
+      }
+
+      // foo2: (# ... #)
+
+      public int foo2(int n, int m) {
+          // generate an instance of foo2;
+          // execute this isnatnce and return the result
+      }
+
+      public foo2 foo2() { return new foo2(this); }
+
+      class foo2 extends Object {
+         myClass origin;
+         int n,m;
+
+         public foo2(myClass org) {
+           origin = org;
+           n = 0; m = 0; 
+         }
+
+         // methods for enter- do- exit-part of foo1
+      }
+   }        
+</pre>
+
+<h2>Mapping of enter, do, exit and inner</h2>
+Consider a pattern:
+<pre>
+   P: (# ...
+      enter(e1,e2,e3)
+      do ...; inner P; ...
+      exit e
+      #)
+</pre>
+The generated CJ-class for P will have four methods: 
+<ul>
+<li>An enter-method corresponding to the enter-part.
+<li>A do-method correpsonding to the do-part.
+<li>An exit-method corresponding to the exit-part.
+<li>An inner-method corresponding to inner.
+</ul>
+
+For pattern P this will give the following class and methods shown
+below. We assume that the types of the enter-elements are T2, t2 and T3
+respectively.
+
+<pre>
+   class P extends Object {
+      ...
+      public void enter(T1 a1, T2 a2, T3 a3) {
+        e1 = a1;
+	e2 = a2;
+	e3 = a3;
+     }
+
+     public void do() { 
+        ...; 
+        do_1(); // call inner
+        ... 
+     }
+
+     public void do_1(); // inner method for P at this level
+
+     public Pexit exit(){ return e; }
+   }
+</pre>
+The assignments like <tt>e1 = a1;</tt> in the enter-method
+is too simplistic to cover the full generality of enter-parts
+in BETA. However, for simple enter-elements consisting of
+variables, this will work. 
+<p>
+The pattern P may be used as a procedure in the following way:
+<pre>
+    Pexit V;
+    P p = new P();
+    p.enter(f1,f2,f3);
+    p.do
+    V = p.exit()
+</pre>
+That is a P-instance is generated and the enter- do and exit-methods
+are called.
+<p>
+As can be seen inner is implemented by the method do_1()
+which may be redefined in subpatterns of P.
+(This should be elaborated)
+
+<h3>Example</h3>
+The next example shows how enter, do, exit and inner from
+the previous example are mapped into CJ.
+<pre>
+   myClass:
+     (# i: @integer;
+        R: ^someClass;
+
+        foo1: (# a,b,c: @integer enter(a,b,c) do ...; inner; ... exit c #);
+
+        foo2:< (# n,m: @integer enter (n,m) do ...; inner; ... exit m #);
+     #);
+</pre>
+
+Translation of this pattern is shown below.
+As can bee seen myClass is translated into a class at the outermost
+level. For the pattern attributes foo1 and foo2, a class and two methods
+are generated as described above. Notice that there are
+no differences between a non-virtual and a virtual method.
+
+<pre>
+   class myClass extends Object {
+      Object origin;
+      int i;
+      someClass R;
+
+      public myClass(Object org) {
+        origin = org;
+        i = 0;
+        R = null;
+      }
+
+      // foo1: (# ... #)
+      public int foo1(int a, int b, int c) {
+         foo1 f1 = new foo1();
+         f1.enter(a,b,c);
+         f1.do();
+         return f1.exit();
+      }
+
+      public foo1 foo1() { return new foo1(this); }
+
+      class foo1 extends Object {
+         myClass origin;
+         int a,b,c;
+
+         public foo1(myClass org) {
+           origin = org;
+           a = 0; b = 0; c = 0;
+         }
+
+	 public void enter(int a1, int a2, int a3) {a = a1; b = a2; c = a3; }
+
+         public void do() {
+           ...
+           do1(); // call inner 
+           ...
+         }
+         public void do1() {} // inner method
+
+         public int exit(){ return c; }
+      }
+
+      // foo2: (# ... #)
+
+      public int foo2(int n, int m) {
+         foo2 f2 = new foo2();
+         f2.enter(n,m);
+         f2.do();
+         return f2.exit();
+      }
+
+      public foo2 foo2() { return new foo2(this); }
+
+      class foo2 extends Object {
+         myClass origin;
+         int n,m;
+
+         public foo2(myClass org) {
+           origin = org;
+           n = 0; m = 0; 
+         }
+
+	 public void enter(int a1, int a2) { n = a1; m = a2; }
+
+         public void do() {
+           ...
+           do1(); // call inner
+           ...
+         }
+         public void do1() {}; // inner method
+
+	 public int exit(){ return m; }
+      }
+   }        
+</pre>
+
+<h2>Subpatterns, virtuals, and inner </h2>
+Here is the the scheme for subpatterns.
+
+<pre>
+   yourClass: myClass
+     (# j: @integer;
+        
+        foo2::< (# do ...; inner; ... #);
+
+        foo3: (# ... #);
+     #)
+
+</pre>
+
+<pre>
+   class yourClass extends myClass {
+      Object origin;
+      int j;
+
+      public yourClass(Object org) {
+        super(org);
+        origin = org;
+	j = 0;
+      }
+
+      public foo2 foo2() {return new foo2(this);};
+      // We have a signature problem here; 
+      // the return type should be yourClass.foo1,
+      // but CJ does not allow this
+
+      class foo2 extends myClass.foo1 {
+         yourClass origin;
+         public foo2(yourClass org) {
+            super(org);
+            origin = org;
+         }
+
+         public void do_1() {
+           ...; do_2(); ...
+         }
+
+         public void do_2(){};
+      }
+
+      // foo3: ...
+      ...
+}
+</pre>
+
+<h1> Example with non-virtual pattern </h1>
+
+The following example shows how a pattern with a non-virtual pattern
+attribute is translated into CJ-sub.  To ease experimentation with
+real Beta and CJ-programs, the examples are show as source links.
+(Please note that the CJ code is generated automatically from the
+Beta code. The generator is currently not complete, which means that
+some parts are incorrect. These include: do-part methods are not
+appended the correct subpattern level; the exit type is not handled
+in call_foo methods; handling of ';' does not always work)
+<p>
+
+<b>Note! The CJ code shown in the following examples is out-of-date
+and does not correspond in all details with the above descriptions.</b>
+
+<p>
+
+<a href="myEx.bet"> Here is a link to the BETA source file </a>
+ 
+<p>
+
+<a href="myEx.java"> Here is a link to the generated CJ source file </a>
+<p>
+
+
+<h1> Example with virtual pattern </h1>
+
+The following example shows how a pattern with a virtual pattern
+attribute is translated into CJ-sub. 
+
+<p>
+
+<a href="mySubEx.bet"> Here is a link to the BETA source file</a>
+ 
+<p>
+
+<a href="mySubEx.java"> Here is a link to the generated CJ source file</a>
+<p>
+
+
+<h1> Example with nested class pattern </h1>
+
+The following example shows how a pattern with a nested class pattern
+attribute is translated into CJ-sub. (The CJ code is currently bot
+up-to-date)
+
+<p>
+
+<a href="myNestedEx.bet"> Here is a link to the BETA source file</a>
+ 
+<p>
+
+<a href="myNestedEx.java">Here is a link to the generated CJ source file</a>.
+
+<p>
+In the current version of the CJ code, we have not included the
+complete translations for some of the methods attributes.
+<p>
+
+<h1>Mapping the fragment structure</h1>
+
+
+<h1>Discussion</h1>
+As mentioned the current design is very preliminary.
+<p>
+It may seem heavy to have to generate a class and two methods per
+pattern. For pattern only used as a class or as a pattern it may be
+possible to simplify the scheme. If a pattern is only used as a
+procedure, the call_P method may include all the code of P and avoid
+class P and method new_P. A similar simplification'is possible if a
+class is only used as a class.
+<p>
+A more serious problem with generating three elements is that its
+should be possible to use a BETA pattern from other languages.  This
+implies that a BETA pattern should be available with a simple
+interface seen from external languages. In the original design of BETA
+it was planned that a pattern could be annotated with an attribute
+that could limit the use of the pattern. This a.o included limiting a
+pattern to be used only as a procedure or as a class. It shoud be
+considered to introduce this possibility. In adition it might be a
+good idea to consider introducing constructors for class patterns.
+<p>
+A BETA pattern
+<pre>
+   myClass:
+     (# foo1: (# ... #); (* method*)
+        foo1: (# ... #); (* method*)
+        foo1: (# ... #); (* method*)
+
+        Elem: (# ... #); (* class *)
+     #)
+</pre>
+may then be translated into ( for simplicity, no enter- and exit-parts
+are assumed):
+<pre>
+   class myClass extends Object {
+
+      public void foo1() { ... }
+      public void foo2() { ... }
+      public void foo3() { ... }
+
+      public myClass.Elem Elem() {return new myClass_Elem(this); }
+   }
+
+   class myClass_Elem extends Object { ... }
+</pre>
+
+<h1>Appendix A - Status </h1>
+
+<A HREF="Status.html">Status for the implementation may be found here</A>.
+
+<h1>Appendix B - Implementation Notes</h1>
+
+<A HREF="ImplNotes.html">
+Low level implementation notes are collected here</A>.
+
+
+<h1>Appendix C - Links</h1>
+
+<H2>Java</H2>
+<h3>Jasmin Assembler</h3>
+<a HREF="http://www.cat.nyu.edu/meyer/jasmin/">
+Jasmin is a Java Assembler Interface 
+</a>
+<UL>
+<LI><A HREF="http://mrl.nyu.edu/~meyer/jvm/jasmin.html">Alternative URL</A>
+<LI><A HREF="http://mrl.nyu.edu/~meyer/jvmref/">Online Instruction Reference Manual</A>
+</UL>
+<H3>Java Bytecodes</H3>
+<UL>
+<LI><A HREF="http://www.csee.wvu.edu/~callahan/cs136/bytecode.htm">Sorted by Instruction</A>
+<LI><A HREF="http://www.csee.wvu.edu/~callahan/cs136/opcodes.htm">Sorted by opcode</A>
+</UL>
+
+
+</body>
+</head>
+</html>

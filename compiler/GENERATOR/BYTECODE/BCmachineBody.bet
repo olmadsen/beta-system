@@ -1,0 +1,217 @@
+ORIGIN 'BCmachine';
+BODY 'BCjasminBody';
+BODY 'BCdotnetBody';
+---BCstate:descriptor---
+(# ObjectName:
+     (# superName: ^text
+     do (if true
+         // common.targetMachineId = common.javabc then
+            'java/lang/Object'->supername[];
+         // common.targetMachineId = common.dotnet then
+            '[mscorlib]System.Object'->supername[];
+         else
+            'Unknown_platform.Object' -> supername[];
+        if);
+     exit superName[]
+     #);
+
+   fields: @
+     (# Field: [5] ^text; Type: [5] ^text; Tag: [5] @char;
+        top: @integer;
+        init: (# do 0 -> top #);
+        numLocals, numArguments: @integer;
+        new:
+          (# F,T: ^text; methodClassTag: @char; 
+          enter(F[],T[],methodClassTag)
+          do (if (top+1->top) > Field.range then
+                 Field.range -> Field.extend;
+                 Type.range -> Type.extend;
+                 Tag.range -> Tag.extend
+             if);
+             F[] -> Field[top][];
+             T[] -> Type[top][];
+             methodClassTag -> Tag[top];
+             (if true
+              // common.targetMachineId = common.javabc then
+                 <<SLOT FieldsNewJasmin:descriptor>>
+              // common.targetMachineId = common.dotnet then
+                 <<SLOT FieldsNewDotnet:descriptor>>
+              else
+                 'fields.init: unknown platform' -> screen.putline;
+             if);
+          #);
+        scan:
+          (# currentField,currentType: ^text;
+             currentTag: @char
+          do (for i: top repeat
+                  Field[i][] -> currentField[];
+                  Type[i][] -> currentType[];
+                  Tag[i] -> currentTag;
+                  INNER scan
+             for)
+          #);
+        emitInit:
+          (# 
+          do scan
+             (#
+             do (if currentType.length>0 then
+                    (if true
+                     // common.targetMachineId = common.javabc then
+                        <<SLOT FieldsEmitInitItemJasmin:descriptor>>
+                     // common.targetMachineId = common.dotnet then
+                        <<SLOT FieldsEmitInitItemDotnet:descriptor>>
+                     else
+                        'fields.emitInit: unknown platform' -> screen.putline;
+                    if);
+                if)
+             #)
+          #)
+     #);
+   thisClassName, thisModuleName: ^text;
+   blocks: @
+     (# D: [5] ^blockDescriptor;
+        level: @integer; (* the class level of this block
+                          * starting with 0 (zero) at the
+                          * outermost level;  currently we only
+                          * count class levels; methods in
+                          * classes are not counted; for methods
+                          * containing classes we should reconsider
+                          * the counting of levels
+                          *)
+        blockDescriptor:
+          (# name: ^text
+          #);
+        mark:
+          (# L: @integer; N: ^text
+          enter(L,N[])
+          do N[] -> thisClassName[];
+             (if true            (* check that the new class to be handled
+                                  * is on one of the following levels: *)
+              // L = level       (* the same level *)
+              // L = (level + 1) (* a level down *)
+              // L = (level - 1) (* a level up   *)then
+              else
+                 '\n%%%inconsistent block levels: ' -> puttext;
+                 level -> putint; ' '->put; L -> putint;
+                 newline
+             if);
+             E: (if L > D.range then D.range -> D.extend; restart E if);
+             &blockDescriptor[] -> D[L+1][];
+             N[] -> D[L+1].name[];
+             L -> level
+          #);
+        pop: (# do level - 1 -> level #);
+        (* When accessing fields we need the className
+         * and possibly the names of enclosing classes;
+         *  level:   the level of the current class;
+         *           counting from 0 (zero), 1, ... from the outermost level
+         *  ONlevel: no of origin levels to access a field;
+         *           0: variable in method in which case we do not come here
+         *           1: field in this class
+         *           2: field in enclosing class of this class
+         *           3: ...
+         * Invariant: (0 <= ONlevel) and (ONlevel <= (level+1))
+         * D[level+1]              : this class
+         * D[level - (ONlevel-1)+1]: class at ONlevel from method in this class
+         *                           ONlevel=1 ===> this class
+         * D[level - (ONlevel-1)]  : enclosing class at ONlevel
+         *                           ONlevel=1 ===> origin of this class
+         *)
+        class:
+          (# ONlevel: @integer; CN : ^text
+          enter ONlevel
+          do ONlevel->check
+             (# 
+             do D[level-(ONlevel-1)+1].name[] -> CN[]
+             #)
+          exit CN[]
+          #);
+        orgClass: 
+          (# ONlevel: @integer; CN : ^text
+          enter ONlevel
+          do 313->trace(#
+                       do 'orgClass: level:' -> xT; level -> xI; 
+                          ' ONlevel:'->xT; ONlevel -> Xi
+                       #);
+             ONlevel->check
+             (# 
+             do (if ONlevel > level then
+                    ObjectName ->  CN[]
+                 else
+                    D[level-(ONlevel-1)].name[] -> CN[] 
+                if)
+             #)
+          exit CN[]
+          #);
+        check:
+          (* *)
+          (# ONlevel: @integer
+          enter ONlevel
+          do (if (0 <= ONlevel) and (ONlevel <= (level+1)) then
+              else
+                 '\n%%%blocks:check: inconsistent level: ' -> puttext;
+                 ONlevel -> putint; ' '->put; level -> putint;
+                 newline
+             if);
+             inner
+          #)
+     #);
+     
+   
+#)
+
+
+---byteCode_dump:doPart---
+do (#          
+      dumpReg:
+        (# 
+        do
+           '%'->put;
+           (if BC.get
+            // thisO then 'this'->puttext // callO then 'call'->puttext
+            else
+               'top'->puttext
+           if);
+           
+        #);
+      dumpAdr:
+        (# 
+        do
+           dumpReg; '('->put; BC.get->putint; ')s='->puttext; BC.get->putint
+        #);
+      opCode: @integer
+   do
+      read:
+        (if opCode <> end then
+            BC.get->opCode;
+            (if opCode
+             // classDef // methodDef (* FIXME *) then
+                BC.gettext->puttext; ':'->put; 
+             // labelDef then
+                'L'->put; 
+             else
+                '\t'->put; opCode->asText->puttext; '\t'->put; 
+            if);
+            (if opCode
+             // labelDef then
+                BC.get->putint; ':'->put; '\t'->put
+             // pushCst then
+                BC.get->putint
+             // pushAdr // pushVal then
+                dumpAdr
+             // pushReg then
+                dumpReg
+             // stVal then
+                dumpAdr
+             // pushText // call // callPrim then
+                ' '->put; BC.getText->puttext
+             // jmp // cmpAndJmp then
+                BC.get->asText->puttext; BC.get->putint; 
+             // func then
+                BC.get->asText->puttext
+            if);
+            newline;
+            restart read
+        if)
+   #)
+   

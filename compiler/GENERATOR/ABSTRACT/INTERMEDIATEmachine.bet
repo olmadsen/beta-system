@@ -5,33 +5,29 @@ INCLUDE '~beta/sysutils/objinterface';
 BODY 'IMmachinebody';
 LIB_ITEM 'betacodegen';
 
--- streamlib: Attributes --
-ptab: (* put tab *) (#  do '\t'->put;  #);   
-
--- lib: Attributes --
-IMtrace: (# exit true #); 
-IMtrace_log : (# exit true #);
-OriginReg: (#  exit 3 #);   
-b2d:
-  (# b:@boolean; d:@integer;
-  enter b
-  do (if b then 1->d if)
-  exit d
-  #);
-
-
 -- MachineFactoryLIB: Attributes --
+IMtrace:      (# exit false #); 
+IMtrace_log:  (# exit false #); (* NOTICE: another IMtrace_log in IMgraph *)
+IMtrace_low:  (# exit false (*common.switch[124]*) #);
+     
+(* FIXME: The following should be enabled, if intelbackend is compared 
+ * with old INTELBmachine (getRegForXres and new getExternalResult 
+ * vs. old EndX. 
+ * But setting this to true makes tst fail several places.
+ *)
+PushIntelDataRegDuringExternalCall: (# exit false #);
+
+OriginReg: (#  exit 3 #);   
+
 IntermediateMachine: abstractMachine
   (#
      <<SLOT IntermediateMachinelib:attributes >>;
      
-     IMtrace_low: (# exit common.switch[124] #);
-     
      FIXME: @
        (# init:
             (#
-            do 'notUsed' -> msg[1][];
-               'notUsed' -> msg[2][];
+            do 'NewIntermediateGraf generated in VirtLabDef' -> msg[1][];
+               'NewIntermediateGraf generated in newProto' -> msg[2][];
                'notUsed' -> msg[3][]; 
                'ChkIndex: size,isISmple,repAdr,toReg,index' -> msg[4][]; 
                'StackAlloPrim: stackCount,size,proto,s,t' -> msg[5][];
@@ -66,6 +62,28 @@ IntermediateMachine: abstractMachine
                (# 
                do (if currentIP.graph.regs[current] = DataReg then
                       currentIP.colors[current]->liveData.insert
+                  if)
+               #)
+            #);
+          calculateLiveAdr::
+            (# 
+            do liveAdr.clear;
+               currentIP.liveAnalysis.rep[CurrentInstructionAnalysisNumber][]->
+               scanBIset
+               (# 
+               do (if currentIP.graph.regs[current] = AdrReg then
+                      currentIP.colors[current]->liveAdr.insert
+                  if)
+               #)
+            #);
+          calculateLiveFloats::
+            (# 
+            do liveFloats.clear;
+               currentIP.liveAnalysis.rep[CurrentInstructionAnalysisNumber][]->
+               scanBIset
+               (# 
+               do (if currentIP.graph.regs[current] = FloatReg then
+                      currentIP.colors[current]->liveFloats.insert
                   if)
                #)
             #);
@@ -408,6 +426,7 @@ IntermediateMachine: abstractMachine
                     * and virtual bindings that require 
                     * code to be generated
                     *)
+                   1->FIXME;
                    (999998,'Bind',false,false) -> newIntermediateGraf;
                if);
                labNO->IntermediateGraf.appendlabel;
@@ -824,23 +843,27 @@ IntermediateMachine: abstractMachine
           if);
           
           (if c->backend.Cap.CanStoreConstant then
-              IstCst->addNewNode->i[];
-              (* reduce parameters to simple values 
-               * and save in instruction node. 
-               * We should stregthen the qualifications.
-               * FIXME: What does this comment say?? *)
-              c->i.imm;
-              size->i.size;
-              a.reg1->i.readReg;
-              a.offset->i.readOffset;
-              (* FIXME: datpete: 1/5/2001: temporary hack in the lack of stCstInx: *)
               (if A.isInxRegAdr then
-                  true -> I.condition;
+                  IstCstInx->addNewNode->i[];
+                  c->i.imm;
+                  size->i.size;
+                  a.reg1->i.readReg;
+                  a.offset->i.readOffset;
                   a.size -> i.scale;
                   (# IA: ^InxRegAdr;
                   do A[]->IA[];
                      IA.dreg->I.inxReg;
                   #);
+               else
+                  IstCst->addNewNode->i[];
+                  (* reduce parameters to simple values 
+                   * and save in instruction node. 
+                   * We should stregthen the qualifications.
+                   * FIXME: What does this comment say?? *)
+                  c->i.imm;
+                  size->i.size;
+                  a.reg1->i.readReg;
+                  a.offset->i.readOffset;
               if);
                   
            else
@@ -1059,10 +1082,10 @@ IntermediateMachine: abstractMachine
            else
               (if true
                // R1.isPrimRegOp then
-                  '\tCPreg:\t'->amc.puttext;
+                  (if IMtrace then '\tCPreg:\t'->amc.puttext; if);
                   (R1.asText, R2[]) -> ldValFromText
                // r2.isPrimRegOp then
-                  '\tCPreg:\t'->amc.puttext;
+                  (if IMtrace then '\tCPreg:\t'->amc.puttext; if);
                   (R1[], R2.asText) -> stValInText
                else
                   IcpReg->addNewNode->i[];
@@ -2837,39 +2860,48 @@ IntermediateMachine: abstractMachine
           IpopFStack->addNewNode->i[];
        #);
      cmpFloat:: 
-       (* NOTE for Intel/stack-oriented floating-point units:
-        * For an expression 
-        *     E1 op E2
-        * the synthesizer evaluates in the order
-        *    E2,E1
-        * which means that E2 is pushed, followed by a push of E1
-        * Except for the following situations
-        *    x op y
-        * where x and y are simple (real) variables:
-        *    when cmpfloat is called, x has been pushed
-        *    A.loadFloatOp will push y
-        * resulting in  y being on top of the stack, ie the reverse
-        * order of the general case.
-        * In the old backend this works since 'fcompl st,y'
-        * is used. 
-        *)
        (# i: ^backendInstruction;  
           op: ^floatRegOp
-       do A.loadFloatOp->op[];
-          (if IMtrace then 
-              ('cmpFloat',LF[],op[]) -> amc.emit2
+       do (if floatStackUnit then
+              (if A.isFloatRegOp then 
+                  A.loadFloatOp->op[];
+                  (* compare two stack top elements *)
+                  (if IMtrace then 
+                      ('cmpFloat',LF[],op[]) -> amc.emit2
+                  if);
+                  IcmpFloat->addNewNode->i[];
+                  LF.reg1->I.readReg;
+                  op.reg1->I.readReg2; 
+                  (I.readReg<I.readReg2) -> I.condition;
+                  (* True if swapfreg - see intelbackend *)
+               else 
+                  (* cmp mem32 to stacktop *)
+                  (if A.isInxRegAdr then
+                      (if IMtrace then 
+                          ('cmpFloatMemInx',LF[],A[]) -> amc.emit2
+                      if);
+                      IcmpFloatMemInx->addNewNode->i[];
+                      A.reg1->I.readReg;
+                      A.reg2->I.inxReg;
+                      A.offSet->I.readOffset;
+                   else
+                      (if IMtrace then 
+                          ('cmpFloatMem',LF[],A[]) -> amc.emit2
+                      if);
+                      IcmpFloatMem->addNewNode->i[];
+                      A.reg1->I.readReg;
+                      A.offset -> I.readOffset;
+                  if);
+              if); 
+           else
+              A.loadFloatOp->op[];
+              (if IMtrace then 
+                  ('cmpFloat',LF[],op[]) -> amc.emit2
+              if);
+              IcmpFloat->addNewNode->i[];
+              LF.reg1->I.readReg;
+              op.reg1->I.readReg2; 
           if);
-          IcmpFloat->addNewNode->i[];
-          LF.reg1->I.readReg;
-          op.reg1->I.readReg2; 
-          (if floatStackUnit then
-              A.isFloatRegOp -> I.condition;
-              (* true if reverse order the case x < y mentioned above *);
-              (* FIXME: introduce a cmpFloatMem and cmpFloatMemInx instead *);
-              I.condition or (I.readReg<I.readReg2) -> I.condition;
-              (* True if swapfreg - see intelbackend *)
-          if);
-          
           INNER (* HP neeeds the condition to compare*)
        #);
      fBeq:: 
@@ -2945,13 +2977,34 @@ IntermediateMachine: abstractMachine
        #);
      FloatBinOp: floatSig
        (# opcode: @integer;
-          I: ^backendInstruction; op: ^floatRegOp
+          I: ^backendInstruction; op: ^mOperand; iA: ^InxRegAdr;
        enter(opcode)
-       do A.loadFloatOp->op[];
+       do (if common.isIntel and (not A.isFloatRegOp) then
+              (* Second operand in memory.
+               * Do not load second operand to floating point stack
+               * The floating point instruction will only pop one
+               * and will thus leave one too many on floting point 
+               * stack if both are pushed. 
+               *)
+              A[] -> op[];
+              opcode->addNewNode->I[];
+              A.offset -> I.readOffset;
+              true -> I.condition;
+              (if A.isInxRegAdr then
+                  (* FIXME: We really need to split this up into more 
+                   * backend instructions *)
+                  -1 -> I.cond; (* hack, hack, hack *)
+                  A.reg2 -> I.InxReg;
+                  A[] -> iA[];
+                  iA.size -> I.size;
+              if);
+           else
+              A.loadFloatOp->op[];
+              opcode->addNewNode->I[];
+          if);
           (if IMtrace then 
               (opcode->ins2text,lf[],op[])->amc.emit2
           if); 
-          opcode->addNewNode->I[];
           LF.reg1->I.readReg;
           op.reg1->I.readReg2;
           LF.reg1->I.writeReg
@@ -3104,14 +3157,18 @@ IntermediateMachine: abstractMachine
               '\tPushDataReg\t'->amc.putline;              
           if);
           IPushDataReg->addNewNode->i[]; 
+          i[]-> PushPopStack.markPush
        #);
-     PopDataReg:: 
+     PopDataReg::
        (# i: ^backendInstruction; 
        do (if IMtrace then 
               '\tPopDataReg\t'->amc.putline;              
           if);
           IPopDataReg->addNewNode->i[];
-          max->i.imm 
+          max->i.imm;
+          intermediategraf.irin.r.inx->i.pos;
+          i[]-> pushpopstack.markPop;
+          INNER (* for intel *);
        #);
      PushFloatReg:: 
        (# i: ^backendInstruction; 
@@ -3254,6 +3311,9 @@ IntermediateMachine: abstractMachine
           parSize->i.size;
           exitType->i.type;          
           exitSize->i.length; (* yikes! *)
+          (if common.isIntel and PushIntelDataRegDuringExternalCall then
+              PopDataReg (* datpete: 29/11/2001 *)
+          if);
        #);
      getSimpleXres::
        (# I: ^backendInstruction; 
@@ -3271,6 +3331,10 @@ IntermediateMachine: abstractMachine
           exitSize->i.length; (* yikes! *)
           
           backend.CAP.externalResultRegister -> preColor[i.writeReg];
+          (if common.isIntel and PushIntelDataRegDuringExternalCall then
+              PopDataReg(# do true->I.condition #); (* datpete: 29/11/2001 *)
+          if);
+
        #);
      getTextXres::
        (# I: ^backendInstruction; 
@@ -3308,6 +3372,9 @@ IntermediateMachine: abstractMachine
           IFakeRegisterWrite->addNewNode->I[];
           drA.reg1-> I.readreg;
           drB.reg1-> I.readreg2;  
+          (if common.isIntel and PushIntelDataRegDuringExternalCall then
+              PopDataReg(# do true->I.condition #); (* datpete: 29/11/2001 *)
+          if);
        #);
      getFloatXres::
        (# I: ^backendInstruction; 
@@ -3321,6 +3388,9 @@ IntermediateMachine: abstractMachine
           parSize->i.size;
           exitType->i.type;          
           exitSize->i.length; (* yikes! *)
+          (if common.isIntel and PushIntelDataRegDuringExternalCall then
+              PopDataReg(# do true->I.condition #); (* datpete: 29/11/2001 *)
+          if);
        #);
      getDataRefXres::
        (# I: ^backendInstruction; 
@@ -3334,6 +3404,9 @@ IntermediateMachine: abstractMachine
           parSize->i.size;
           exitType->i.type;          
           exitSize->i.length; (* yikes! *)
+          (if common.isIntel and PushIntelDataRegDuringExternalCall then
+              PopDataReg(# do true->I.condition #); (* datpete: 29/11/2001 *)
+          if);
        #);
      getDataPartXres::
        (# I: ^backendInstruction
@@ -3347,6 +3420,9 @@ IntermediateMachine: abstractMachine
           parSize->i.size;
           exitType->i.type;          
           exitSize->i.length; (* yikes! *)
+          (if common.isIntel and PushIntelDataRegDuringExternalCall then
+              PopDataReg(# do true->I.condition #); (* datpete: 29/11/2001 *)
+          if);
        #);
      SaveHeapTop::
        (# I: ^backendInstruction; 
@@ -3432,7 +3508,7 @@ IntermediateMachine: abstractMachine
           i: ^backendInstruction;
           hasnogp: @boolean
        do (if IMtrace then 
-              '\tPRIMAlloc\t lp='->amc.puttext;
+              '\tCallAlloPrim\t lp='->amc.puttext;
               loadprototype->b2d->amc.putint; amc.ptab;
               T[]->amc.puttext;
               '\t'->amc.put;
@@ -3448,8 +3524,12 @@ IntermediateMachine: abstractMachine
           2 (* callReg *) -> i.writeReg;
           
           (if proto[] <> none then
-              proto[] -> puttext;
-              proto.copy->i.proto[]
+              (if ''->proto.equal then
+                  (* No prototype loaded, e.g. NewRR *)
+               else
+                  (*proto[] -> puttext;*)
+                  proto.copy->i.proto[]
+              if);
            else
               2 (* callReg *) -> i.readReg
           if);
@@ -3995,8 +4075,10 @@ IntermediateMachine: abstractMachine
      GetRegForXres:: (* allocate register(s) for result of external call *)
        (#I: ^backendInstruction
        do (if IMtrace then 'GetRegForXres'->amc.emit if);
+          (if common.isIntel and PushIntelDataRegDuringExternalCall then
+              PushDataReg (* datpete: 29/11/2001 *)
+          if);
           IGetRegForXres->addNewNode->i[];
-          (*exit (max,dummyMax)*)
        #);
      endX:<
        (# I: ^backendInstruction
@@ -4066,7 +4148,19 @@ IntermediateMachine: abstractMachine
        #);
      newProto::
        (# I: ^backendInstruction;
-       do InewProto->addNewNode-> I[];
+       do (if IntermediateGraf[] = NONE then
+              (* Should probably be cleaned up:
+               * we may arrive here if a file
+               * has no descriptors that require code
+               * for G-parts, or Do-parts, or
+               * virtual bindings; this is the case
+               * if a file only has constant descriptors
+               * like: max: (# exit 12 #)
+               *)
+              2->FIXME;
+              (999999,'newProto',false,false) -> newIntermediateGraf;
+          if);
+          InewProto->addNewNode-> I[];
           index->I.index; 
           astRef->I.astRef;
        #);
@@ -4074,8 +4168,7 @@ IntermediateMachine: abstractMachine
        (# I: ^backendInstruction;
        do releaseReg; 
           (if IMtrace then
-              '---newImp: '->amc.emit
-              (#do astRef->amc.putint#)
+              '---newImp: '->amc.emit(#do astRef->amc.putint#)
           if);
           InewImp->addNewNode-> I[];
           astRef->I.astRef;
@@ -4358,5 +4451,15 @@ IntermediateMachine: abstractMachine
      lpl: logfile.putline (# #);
      logfile,optfile:@file;
      lpf: logfile.putformat(# do inner #);
-  #)  
+  #);
 
+b2d:
+  (# b:@boolean; d:@integer;
+  enter b
+  do (if b then 1->d if)
+  exit d
+  #);
+
+
+-- streamlib: Attributes --
+ptab: (* put tab *) (#  do '\t'->put;  #);   

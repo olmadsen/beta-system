@@ -1,0 +1,696 @@
+ORIGIN 'BCmachineBody';
+
+--FieldsNewJasmin:descriptor--
+(# 
+do (if methodClassTag 
+    // 'c' // 'p' // '[' then
+       '.field '->out.puttext; 
+       F[] -> out.puttext;
+       ' ' -> out.puttext; 
+       (if methodClassTag = '[' then '[' -> out.put if);
+       T[] -> out.puttext;
+   if)
+#)
+
+--FieldsEmitInitItemJasmin:descriptor--
+(# class: ^ text
+do (if currentTag <> 'p' (* part object*) then
+       '\taload_0\n' -> out.puttext;
+       (if 'I' -> currentType.equal then
+           '\tbipush 0\n' -> out.puttext;
+        else
+           '\taconst_null \n' -> out.puttext
+       if);
+       '\tputfield ' -> out.puttext;
+       thisClassName[] -> out.puttext;
+       '/' -> out.puttext;
+       currentField[] -> out.puttext;
+       ' ' -> out.puttext;
+       currentType[] -> out.putline
+   if)     
+#)
+
+-- emitJasmin: DoPart --
+do (# thisClassName                (* name of current class           *)
+      ,thisOrgName                 (* name of current origin class    *)
+      ,thisSuperName               (* name of current super           *)
+      ,thisSuperOrgName            (* nameof origin of current super  *)
+      ,thisSignature               (* signature of current method     *)
+      ,thisInnerMethodName: ^text; (* name of a possible inner method;
+                                    * or the name of method 'main'
+                                    *)
+      thisBlockLevel,
+      subLevel: @integer; (* current subpattern level *)
+      class: ^text;       (* name of class being called - 
+                           * used by subsequent init - ugly
+                           *)
+      isMainMethod: @boolean; (* true if generating code for main method *)
+      opMap: [500] ^text;
+      init:
+        (# 
+        do
+           'bipush '->opMap[pushCst][];
+           'return\n.end method'->opMap[return][];
+           'call\t'->opMap[call][];
+           'goto '->opMap[jmp][];
+           'nop ' -> opMap[nop][];
+           ''->opMap[func][];
+           ''->opMap[end][]
+        #);
+      dumpOpCode:
+        (# opCode: @integer
+        enter opCode
+        do
+           (if opMap[opCode][] <> none then
+               opMap[opCode][]->out.puttext
+            else
+               opCode->asText->out.puttext
+           if)
+        #);
+      astext:
+        (# opCode: @integer; T: @text
+        enter opCode
+        do
+           (if opCode
+            // pushCst then
+               'pushCst'->T
+            // pushVal then
+               'pushVal'->T
+            // pushReg then
+               'pushReg'->T
+            // stVal then
+               'stVal'->T
+            // index then
+               'index'->T
+            // cmpAndJmp then
+               'cmpAndJmp'->T
+            // call then
+               'call'->T
+            // callInner then 'callInner' -> T
+            // newVirt then 'newVirt' -> T
+            // return then
+               'return\n'->T
+            // label then
+               'L'->T
+            // callPrim then
+               'callPrim'->T
+            // end then
+               'end'->T
+            // pushText then
+               'ldc'->T
+            // pushAdr then
+               'pushAdr'->T
+            // loadRef then
+               'loadRef' -> T
+            // storeRef then
+               'storeRef'->T
+            // storeQref then
+               'storeQref'->T
+            // dup then 'dup' -> T
+            // jmp then
+               'jmp'->T
+            // func then
+               'FUNC'->T
+            // add then
+               'iadd'->T
+            // sub then
+               'isub'->T
+            // orr then
+               'or'->T
+            // andd then
+               'and'->T
+            // xorr then
+               'xor'->T
+            // cmp then
+               'cmp'->T
+            // mult then
+               'imul'->T
+            // divv then
+               'idiv'->T
+            // modd then
+               'mod'->T
+            // nott then
+               'not'->T
+            // logNot then
+               'logNot'->T
+            // neg then
+               'ineg'->T
+            // logicalShiftLeft then 'ishl'->T
+            else
+               '?'->T; opCode->T.putint; '?'->T.put
+           if)
+        exit T[]
+        #);
+      emitMemOp:
+        (# op: ^text; varNo: @integer;
+        enter(op[],varNo)
+        do (if varNo > 0 then
+               (* currently we assume that local variables have
+                * addresses: 0,12,16,20,... that are 
+                * mapped to: 0, 1, 2, 3,...
+                * address 0 represents this
+                *)
+               (varNo div 4) - 2 -> varNo;
+           if);
+           op[] -> out.puttext;
+           (if varNo <= 3 then '_' -> out.put else ' ' -> out.put if);
+           varNo -> out.putint               
+        #);
+      dumpReg:
+        (# 
+        do
+           '%'->out.put;
+           (if BC.get
+            // thisO then 'this'->out.puttext // callO then 'call'->out.puttext
+            else
+               'top'->out.puttext
+           if);
+           
+        #);
+      getReg: (#  exit BC.get #);
+      Address:
+        (#
+           reg,off,size,isField,ONlevel: @integer; 
+           descName: ^text;
+           get: 
+             (#  
+             do getReg->reg; BC.get->off; BC.get->size; 
+                BC.get->ONlevel; BC.get -> isField; 
+                (if isField = 1 then
+                    BC.getText -> descName[]
+                if);
+             #);
+           emitField:
+             (# isOrigin: @boolean
+             enter isOrigin
+             do (if isField = 1 then
+                    descName[] -> out.putText
+                 else 
+                    (* this part should be eliminated *)
+                    ONlevel -> BCstate.blocks.class -> out.puttext;
+                if);
+                (if isOrigin then
+                    '/origin ' -> out.puttext
+                 else
+                    '/F' -> out.puttext;  
+                    off -> out.putint;
+                    ' '->out.put;
+                if)
+             #);
+           load:
+             (#
+             do (* local field - object/method ??*)
+                (if isField = 2 then
+                    (* array *)
+                    'iaload' -> out.puttext
+                 else
+                    (if ONlevel > 0 then
+                        'getfield ' -> out.puttext;
+                        emitField;
+                        'I' -> out.put;
+                     else
+                        (if isField=1 then
+                            'getfield ' -> out.puttext;
+                            emitField;
+                            'I' -> out.put;
+                         else
+                            (* method field *)
+                            ('iload',off) -> emitMemOp
+                        if)
+                if)if)
+             #);
+           store:
+             (# 
+             do (* local field - object/method ??*)
+                (if isField = 2 then
+                    (* array *)
+                    'iastore' -> out.puttext
+                 else
+                    (if ONlevel > 0 then
+                        'putfield ' -> out.puttext;
+                        emitField;
+                        'I' -> out.put
+                     else
+                        (if isField=1 then
+                            'putfield ' -> out.puttext;
+                            emitField; 
+                            'I' -> out.put
+                         else
+                            ('istore',off) -> emitMemOp
+                        if)
+                if)if)
+             #);
+           storeRef:
+             (# withQua,isOrigin: @boolean; class: ^text
+             enter(withQua,isOrigin)
+             do BC.gettext -> class[];
+                (if withQua then
+                    'checkcast ' -> out.puttext;
+                    class[] -> out.puttext;
+                    '\n\t'->out.puttext
+                if);
+                (if ONlevel > 0 then
+                    'putfield ' -> out.puttext; 
+                    isOrigin -> emitField; 
+                    class[] -> emitSignature
+                 else 
+                    (if isField = 1 then
+                        'putfield ' -> out.puttext; 
+                        isOrigin -> emitField;
+                        class[] -> emitSignature
+                     else                       
+                        ('astore',off) -> emitMemOp
+                    if)
+                if);
+             #);
+           loadRef:
+             (# withQua: @boolean; sig: ^text
+             enter withQua
+             do BC.gettext -> sig[];
+                (if ONlevel > 0 then
+                    'getfield ' -> out.puttext;
+                    emitField; 
+                    sig[] -> emitSignature
+                 else 
+                     (if isField = 1 then
+                         'getfield ' -> out.puttext; 
+                         emitField; 
+                         class[] -> emitSignature
+                      else 
+                         ('aload',off) -> emitMemOp
+                if)if); 
+                (if withQua then
+                    sig[] -> puttext;
+                    '\n\tcheckcast ' -> out.puttext;
+                    BC.gettext -> sig[]; 
+                    sig[] -> out.puttext
+                if);
+             #);
+           pushAdr:
+             (#
+             do (if off = 0 then
+                    (if reg
+                     // thisO then
+                        'aload_0' -> out.puttext;
+                     else
+                        '; Warning: pushAdr:register not this'->out.puttext                    if)
+                 else
+                    '; Warning: pushAdr:registeroff <>0'->out.puttext
+                if)
+             #);
+           dump:
+             (# 
+             do
+                (if size = 0 then 4->out.putint else size->out.putint if);
+                '.'->out.put;
+                (if reg
+                 // thisO then  // callO then '%call.'->out.puttext
+                 else
+                    '%top.'->out.puttext
+                if);
+                off->out.putint
+             #);
+           display:
+              (# 
+              do ' reg:'-> puttext; reg -> putint;
+                 ' off:'-> puttext; off-> putint;
+                 ' size:'->puttext; size -> putint; 
+                 ' ONlevel:'->puttext; ONlevel -> putint;
+                 ' isField:'->puttext; isField -> putint;
+                 (if isField = 1 then
+                     descName[] -> puttext
+                 if)
+             #);
+        #);
+      emitLocals:
+        (#
+        do '\t.limit stack 8\n'
+           '\t.limit locals 8\n'
+         (*  '\taconst_null\n'
+           '\tastore_1\n'*)
+             -> out.puttext;                          
+        #);
+      emitSignature:
+        (# sig: ^text
+        enter sig[]
+        do (if (1->sig.inxGet) = '[' then
+               (* this should really be handled at a higher level *)
+               sig[] -> out.puttext
+            else
+               'L' -> out.puttext; sig[] -> out.puttext; ';' -> out.puttext
+           if)
+        #);
+      emitString:
+        (# T: ^text; 
+        enter T[]
+        do '"'->out.put; 
+           T.scanAll
+           (#
+           do (if ch
+                  (* we should handle more special characters
+                   * and generate the form '\n';
+                   * currently other special chars are generated
+                   * as octal values '\001'
+                   *)
+               // ascii.newline then
+                  '\\'->out.put; 'n'->out.put
+               // '"' then '\\'->out.put; '"'->out.put
+               // '\\' then '\\'->out.put; '\\'->out.put
+               else 
+                  (if ch < ' ' then
+                      '\\'-> out.put;
+                      '0' + (ch div 64) -> out.put;
+                      ch mod 64 -> ch;
+                      '0' + (ch div 8) -> out.put;
+                      ch mod 8 -> ch;
+                      '0' + ch -> out.put
+                   else                  
+                      (if ch > 255 then
+                          ' ' -> out.put;
+                       else
+                          ch->out.put 
+                      if);
+                  if)
+              if)
+           #);
+           '"'->out.put; 
+        #);
+      emitCmpJmp:
+        (# cond,L,lab: @integer
+        enter(cond,L,lab)
+        do (if cond
+            // 1 (* =  *) then
+               'if_icmpeq' -> out.puttext 
+            // 2 (* <> *) then
+               'if_icmpne' -> out.puttext 
+            // 3 (* <  *) then
+               'if_icmplt' -> out.puttext 
+            // 4 (* <= *) then
+               'if_icmple' -> out.puttext 
+            // 5 (* >  *) then
+               'if_icmpgt' -> out.puttext 
+            // 6 (* >= *) then
+               'if_icmpge' -> out.puttext 
+           if);
+           '\tL'->out.puttext;
+           lab -> out.putint
+        #);
+      opCode: @integer; 
+      A: @Address;
+      T: ^text
+   do init;
+      read:
+        (if opCode <> end then
+            BC.get->opCode; 
+            (* opCode:'->puttext; opCode -> putint; ' ' -> put;*)
+            (if opCode
+             // classDef then
+                '.class '->out.puttext;
+                BC.gettext
+                  -> thisClassName[]
+                  -> out.putLine;
+                BC.get -> thisBlockLevel;
+                (thisBlockLevel,thisClassname[]) -> BCstate.blocks.mark;
+                '.super ' -> out.puttext;
+                BC.getText -> thisSuperName[] -> out.putline;
+                'java/lang/Object'->thisSuperOrgName[];
+                BC.get -> subLevel; 
+                BC.gettext -> thisOrgName[];
+                '.field origin L'
+                  -> out.puttext;
+                thisOrgName[] -> out.puttext;
+                ';'->out.puttext;
+                313->ctrace(# do '%%%class: "'->xT;
+                              thisClassName[] -> xT;
+                              '" blocklevel: ' -> xT;
+                              thisBlockLevel -> xI; xN;
+                              'super: "'->xT;
+                              thisSuperName[] -> xT; 
+                              '" sublevel: ' -> xT;
+                              subLevel -> xI
+                           #);
+                
+                BCstate.fields.init
+                
+             // endClass then (* skip *)
+
+             // methodDef then
+                (# aux,noOfEnterArgs: @integer; (* 0 or 1 *)
+                do BC.gettext -> thisInnerMethodName[];  
+                   BC.gettext -> thisSignature[];
+                   BC.get -> noOfEnterArgs;
+                   BC.get -> aux;
+                   (* '\nMethdDef: ' -> puttext;
+                   thisSignature[] -> putline;
+                   ' noOfArgs: ' -> puttext;
+                   noOfEnterArgs -> putint;
+                   ' Signature:'->puttext;
+                   ' InnerName;' -> puttext;
+                    thisInnerMethodName[] -> puttext;*)
+                   
+                   (if 'main' -> thisInnerMethodName.equal then
+                       '\n.method public static '
+                       'main([Ljava/lang/String;)V\n'
+                         ->out.puttext;
+                       true -> isMainMethod
+                    else
+                       false -> isMainMethod;
+                       (if aux = 0 then
+                           (*newline;
+                           thismethodname[] -> puttext;
+                           ' has inner'->putline;*)
+                           '\n.method ' -> out.puttext;
+                           thisInnerMethodName[]-> out.puttext;
+                           (if false then
+                               '_do_' -> out.puttext;
+                               subLevel+1 -> out.putint;
+                           if);
+                           '()V\n'
+                           '\treturn\n' -> out.puttext;
+                           '.end method\n' -> out.puttext;
+                       if);
+                       
+                       '\n.method ' -> out.puttext; 
+
+                       (if false (*subLevel > 0*) then
+                           (if true then
+                               'do_' -> out.puttext;
+                               subLevel -> out.putint;
+                               '_'->out.put;
+                               thisSignature[] ->out.puttext
+                            else
+                               thisInnerMethodName[]->out.puttext; 
+                               '_do_' -> out.puttext;
+                               subLevel -> out.putint;
+                               '()V' -> out.puttext
+                           if)
+                        else
+                           thisSignature[] ->out.puttext; 
+                       if);
+                       out.newline
+                   if);    
+                   emitLocals;
+                #)
+             // initCons then
+
+                '.method public <init>(L' -> out.puttext;
+                thisOrgName[] -> out.puttext;
+                ';)V\n'
+                '\t.limit  stack 8\n'
+                '\t.limit locals 3\n' -> out.puttext;
+                
+             // field then
+                (# F: @text
+                do 'F' -> F; BC.get->F.putInt;
+                   (F[], BC.gettext,BC.get) -> BCstate.fields.new
+                #)
+             // labelDef then
+                '  L'->out.puttext; BC.get->out.putint; 
+                ':'->out.put; '\t'->out.put
+             // callPrim then
+                (# prim,arg: ^text
+                do BC.gettext -> prim[];
+                   BC.getText -> arg[];
+                   (if true 
+                    // 'new' -> prim.equal then
+                       '\tnew '-> out.puttext;
+                       arg[] -> out.puttext; (* class name*)
+                       '\n\tdup' -> out.puttext;
+                       arg[] -> class[]; (* ugly *)                       
+                    // 'initSuper' -> prim.equal then                       
+                       '\tinvokenonvirtual ' -> out.puttext;
+                       thisSuperName[] -> out.puttext;
+                       '/<init>(' -> out.puttext;
+                       (if not ('-'->arg.equal) then
+                           arg[] -> emitSignature
+                       if);
+                       ')V\n' -> out.puttext;
+                       BCstate.fields.emitInit;
+                    // 'init' -> prim.equal  then
+                       '\tinvokenonvirtual ' -> out.puttext;
+                       class[] -> out.puttext;
+                       '/<init>(' -> out.puttext;
+                       (if not ('-'->arg.equal) then
+                           arg[] -> emitSignature
+                       if);
+                       ')V' -> out.puttext
+                    else
+                       '; Primitive: '->out.puttext; 
+                       prim[] -> out.puttext;
+                       arg[] -> out.puttext;
+                   if);
+                #)
+             // callExternal then
+                (# prim: ^text
+                do BC.getText -> prim[];
+                   '\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n'
+                     -> out.puttext;
+                   (if 'newline' -> prim.equalNCS then
+                       '\tinvokevirtual java/io/PrintStream/println()V' 
+                         -> out.puttext
+                    else
+                       '\tswap\n'
+                       '\tinvokevirtual ' -> out.puttext;  
+                       (if true 
+                        // 'put' -> prim.equalNCS then
+                           'java/io/PrintStream/print(C)V' -> out.puttext
+                        // 'puttext' -> prim.equalNCS then
+                           'java/io/PrintStream/print(Ljava/lang/String;)V' 
+                             -> out.puttext
+                        // 'putline' -> prim.equalNCS then
+                           'java/io/PrintStream/println(Ljava/lang/String;)V'
+                             -> out.puttext
+                        // 'putint' -> prim.equalNCS then 
+                           'java/io/PrintStream/print(I)V' -> out.puttext
+                        else
+                           prim[] -> out.puttext;
+                           '\nPrim:'->puttext;
+                           prim[] -> putline
+                   if)if)
+                #)
+             // callInner then
+                '\taload_0\n'
+                '\tinvokevirtual ' -> out.puttext;
+                (* NOT in accordance with design - FIX *)
+                thisClassName[] -> out.puttext;
+                '/'->out.put;
+                thisInnerMethodName[]->out.puttext;
+                (if false then
+                    '_do_'-> out.puttext;
+                    subLevel+1 -> out.putint;
+                if);
+                '()V'->out.puttext
+             // comment then
+                (# T: ^text
+                do BC.gettext -> T[];
+                   (if (T.length > 0) and ((1 -> T.inxget) <> '!') 
+                       or common.switch[185] then
+                       ' ; ' -> out.puttext; 
+                       T[] -> out.puttext
+                    else
+                       restart read (* skip newline *)
+                   if)
+                #)
+             // position then
+                '; position: ' -> out.puttext; 
+                BC.getShort -> out.putint;
+             else
+                '\t' -> out.put; 
+                (if opCode
+                 // pushVal then 
+                    A.get; 
+                    (*'\nload: '->puttext; A.display;*)
+                    A.load; 
+                 // stVal then
+                    A.get; 
+                    (*'\nload: '->puttext; A.display;*)
+                    A.store
+                 // loadRef then
+                    A.get; A.loadRef
+                 // loadQRef then
+                    A.get; true->A.loadRef
+                 // pushAdr then
+                    A.get; A.pushAdr
+                 // storeRef then
+                    A.get; A.storeRef
+                 // storeQref then 
+                    A.get; (true,false) -> A.storeRef
+                 // storeOrigin then
+                    A.get; (false,true) -> A.storeRef
+                 // loadOrigin then
+                    (# ONlevel,tag: @integer; className: ^text
+                    do BC.get -> ONlevel;
+                       BC.get -> tag;
+                       (if tag = 1 then
+                           BC.getText -> className[];
+                           (*'; loadOrigin:tag=1: '->out.puttext;
+                           className[] -> out.puttext;
+                           out.newline;*)
+                       if);
+                       (if isMainMethod then
+                           (* reconsider for main/program-slot;
+                            * in Java:main, we cannot access class fields;
+                            * but we may do in BETA
+                            *)
+                           'aconst_null' -> out.puttext;
+                        else
+                           (if ONlevel = 0 then
+                               'aload_0' -> out.puttext;
+                            else
+                               'getfield ' -> out.puttext;
+                               ONlevel 
+                                 -> BCstate.blocks.class 
+                                 -> out.puttext;
+                               '/origin ' -> out.puttext;
+                               (if tag = 0 then
+                                   ONlevel 
+                                     -> BCstate.blocks.orgClass
+                                     -> emitSignature
+                                else
+                                   className[] -> emitSignature
+                               if);                                   
+                           if);
+                       if)
+                    #)
+                 // call then 
+
+                    (if false (* non virtual *) then
+                        'invokenonvirtual ' -> out.puttext;
+                     else
+                        'invokevirtual ' -> out.puttext;
+                    if);
+                    BC.getText->T[]->out.puttext;
+                    313->trace(#do '%%%call: '->xT; T[]->xT #)
+                 // return then
+                    (if BC.get 
+                     // 0 then 'return' -> out.puttext
+                     // 1 then 'ireturn' -> out.puttext
+                     // 2 then 'areturn' -> out.puttext
+                     else (* error *) 'xreturn' -> out.puttext
+                    if);
+                    '\n.end method'->out.puttext
+                 // cmpAndJmp then
+                    (BC.get,BC.get,BC.get) -> emitCmpJmp  
+                 else
+                    opCode->dumpOpCode; '\t'->out.put;
+                    (if opCode
+                     // pushCst then
+                        BC.get->out.putint
+                     // pushReg then
+                        dumpReg
+                     // pushText then 
+                        BC.getText->emitString
+                     // jmp then 
+                        BC.get->asText->out.puttext; BC.get->out.putint; 
+                    
+                     // func then
+                        BC.get->asText->out.puttext
+                    if);
+                    
+                if)
+            if);
+            out.newline;
+            restart read
+        if);
+      out.close
+   #)  

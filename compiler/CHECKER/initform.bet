@@ -64,6 +64,10 @@ do (# FixExternal:
       externalWasDefined: @boolean
    do base -> scanList
       (# dcl,names,d: @ASTindex;
+         (*** OBS! when adding anew special descriptor like data,
+          * it must be handled in initDesc below to avoid that
+          * possible initializations of 'kind  to be overwritten
+          *)
          Mark:
            (# names,ndesc: ^ ASTindex; size,attsize,kind,type: @integer
            enter(names[],nDesc[],size,attsize,kind,type)
@@ -78,6 +82,13 @@ do (# FixExternal:
            do (@@ K,descKind)->tos'%putByte[0]';
               (@@ K,type)->tos'%putBits[27,5]';
               K->d.kind
+           #);   
+         MarkInner:
+           (# d: @ASTindex; descKind,K: @integer
+           enter (d,descKind)
+           do (@@ K,descKind)->tos'%putByte[0]';
+              (@@ K,1)->tos'%putBits[12,1]';
+              K->d.kind;
            #);
 
       do currentNode->dcl;
@@ -152,6 +163,18 @@ do (# FixExternal:
                      common.standard->cStrucDesc.size;*)
                  // ('Object'->name.textEQ) then
                     names.brother->superObject
+                 // ('proc'->name.textEQ) then
+                    names.brother->procDesc;
+                    (procDesc,procKind)->MarkInner;
+                    12->procDesc.size
+                 // ('class'->name.textEQ) then
+                    names.brother->classDesc;
+                    (classDesc,classKind,0)->standardMark;
+                    12->classDesc.size
+                 // ('externalClass'->name.textEQ) then
+                    names.brother->externalClassDesc;
+                    (externalClassDesc,externalClassKind,0)->standardMark;
+                    12->externalClassDesc.size                    
                  // ('Repetition'->name.textEQ) then
                     names.brother->repDesc; 
                  // 'data'->name.textEQ then
@@ -160,7 +183,7 @@ do (# FixExternal:
                     (dataDesc,dataKind,0)->standardMark;
                     (* hack to handle TOS'%..' *)
                  // 'com' -> name.textEq then 
-                    (* if com is also checked the kindseems to 
+                    (* if com is also checked the kind seems to 
                      * be cleared; FIX! *)
                     names.brother -> comDesc;
                     (comDesc,comKind,0) -> standardMark;
@@ -453,7 +476,12 @@ do (if not hasOrigin then (* BetaEnv *)
                exit (pre[],mainP[],att[],enterP[],doP[],exitP[])
                #);
              mp: @ASTindex
-          do level+1->level;
+          do (if ctst then
+                 132->trace(#
+                           do 'initDesc:'->xT; node[] -> xA; xN;
+                              origin[]->xA
+             #)if);
+             level+1->level;
              node[]->DescSonsRef->(pref[],mainP[],att[],enterP[],doP[],exitP[]);
              (* hack to handle T<<SLOT A:mainPart>> *)
              node.son->mp;
@@ -461,17 +489,27 @@ do (if not hasOrigin then (* BetaEnv *)
              (if mp.isSlot then (mp,node)->&init if);
              (FF.fragNode,descNo+1->descNo)->node.descId;
              (if (node->DescKind)
-              // standardKind // constKind then (*skip*)
+                 (* probably add comDesc, etc here *)
+              // standardKind 
+              // constKind then (****** skip ******)
               // dataKind then
-              (* FIX 8/3/95: for a fragment not being parsed,
-               * descKind will not be cleared. This implies that
-               * such data descriptor will not be rechecked.
-               * It is only pattern 'data' that should not have
-               * its kind set to undefined
-               *)
+                 (* FIX 8/3/95: for a fragment not being parsed,
+                  * descKind will not be cleared. This implies that
+                  * such data descriptor will not be rechecked.
+                  * It is only pattern 'data' that should not have
+                  * its kind set to undefined
+                  *)
                  (if not (node->dataDesc.equal) then
                      0->node.attSize; 0->node.kind
-                 if)
+                 if);
+              // procKind then
+                 (if not (node->procDesc.equal) then
+                     0->node.attSize; 0->node.kind;
+                 if);
+              // classKind then 
+                 (if not (node->classDesc.equal) then
+                     0->node.attSize; 0->node.kind;
+                 if);
               else
                  0->node.attSize;
                  0->node.kind;
@@ -668,7 +706,6 @@ do (if not hasOrigin then (* BetaEnv *)
         (* reference to fragment origin *)
      #)
 do Prepare;
-   
    (if sysForm.label
     // gram.descriptorForm then
        sysForm.son->formDesc;
@@ -697,7 +734,8 @@ do Prepare;
        0->descNo;
        sysForm->formDesc;
        (formDesc (*node*) ,sysForm)->&Init;
-       (if hasTmpSto then
+       (if hasTmpSto and not switch182 then
+           (* for bytecode we do not allocate dopart objects *)
            1->formDesc.descNo;
            (*135->trace(#do 'TmpSto needed:'->T; formDesc[]->A #)*)
            

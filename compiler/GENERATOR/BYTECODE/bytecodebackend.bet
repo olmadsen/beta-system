@@ -1,0 +1,1502 @@
+ORIGIN '../machine';
+INCLUDE '~beta/basiclib/textUtils'; 
+INCLUDE '~beta/basiclib/formatio';
+INCLUDE 'BCmachine';
+
+BODY 'bytecodebackendbody'; (* this is supposed to be change to
+                             * an MDBODY, selecting Java, .NET,etc
+                             *)
+BODY 'bytecodetarget'
+
+-- lib: Attributes --
+
+OriginReg: (#  exit 3 #);   
+
+---machineFactory:doPart---
+do &ByteCodemachine[] -> mch[];
+   
+-- MachineFactoryLIB: Attributes --
+ByteCodeMachine: abstractMachine
+  (#
+     <<SLOT ByteCodeMachinelib:attributes >>;
+     
+     regCount: @integer;
+     MISSING: 
+       (# T: ^text
+       enter T[]
+       do 'MISSING: '->puttext; T[]->putline;
+       #);
+     FIXME: @
+       (# init:
+            (#
+            do 'notUsed' -> msg[1][];
+               'notUsed' -> msg[2][];
+               'notUsed' -> msg[3][]; 
+               'ChkIndex: size,isISmple,repAdr,toReg,index' -> msg[4][]; 
+               'StackAlloPrim: stackCount,size,proto,s,t' -> msg[5][];
+               '' -> msg[6][];
+               'warn adrreg inuse called' -> msg[7][];
+               'ChkIndex' -> msg[8][];
+               'Endlabel (not used for sparc, but needed for MIPS)'
+                 -> msg[9][];
+            #);
+          reported: [10] @boolean;
+          msg: [10] ^text;
+          no: @integer
+       enter no
+       do (if (1 <= no) and (no <= reported.range) then
+              (if not reported[no] then 
+                  '\n*** FIXME: ' -> puttext;              
+                  msg[no][] -> putline 
+              if);
+              true-> reported[no];              
+          if)
+       #);
+     
+     mstate: @<<SLOT byteCode_mstate:descriptor>>;
+     
+     NewCtextOp:: (# S: @text do T[]->S.puttext; S[]->op #);
+     CstOperand::  
+       (# out::  (# #);  
+          loadOp:: (#do THIS(CstOperand)[]->op[] #);
+          loadToReg:: (# do (THIS(cstOperand)[],R[])->ldCst; R[]->res[] #)
+       #);
+     TextOperand::  
+       (# out:: (# <<SLOT byteCode_textOperand_out:doPart>> #) #);
+     DataRegOperand:: 
+       (# out::  (#  <<SLOT byteCode_dataRegOperand_out:doPart>> #);
+          loadOp:: (# do THIS(dataRegOperand)[]->op[] #);
+          alloc:: (# do regCount+1->regCount->rN #);
+          reg1:: (# do rn->value #); 
+          dealloc:: (# #);
+          reUse:: (# #);
+          inuse:: (# #);
+       #);
+     doubleDataRegOperand::
+       (# out:: (# #)
+       #);
+     AdrRegOperand:: 
+       (# out:: (# <<SLOT byteCode_adrRegOperand_out:doPart>> #);
+          alloc::  
+            (#  
+            do regCount+1->regCount->rN;
+            #); 
+          reg1::  (#  do rn->value #);  
+          loadOp::<  (#  do THIS(adrRegOperand)[]->op[] #);
+          loadAdrOp::<  
+            (#  
+            do THIS(adrRegOperand)[]->op[] 
+            #);
+          inuse:: (# do true->value #);
+          isCallReg::(# do (rn=2)->value #);
+       #);
+     FloatRegOp::  
+       (# out:: (# #);
+          loadOp:: (# do THIS(floatRegOp)[]->op[] #);   
+          loadFloatOp::  (#  do THIS(floatRegOp)[]->op[] #);
+          load::
+            (# dr: @dataRegOperand;
+            do 
+            #);
+          store::
+            (# dr: @dataRegOperand;
+            do 
+
+            #);
+          loadInt:
+            (# A: ^address;
+               dr: @dataRegOperand;
+            enter A[]
+            do 
+            #);               
+          storeTmp:: (# do THIS(floatRegOp)[]->A[] #);
+          store2Int:: 
+            (# op: ^address;
+               F: @floatRegOp; 
+            do ;
+
+            #);
+          alloc::  
+            (#  
+            do (* regalloc*)
+               regCount+1->regCount->rN;
+
+            #);
+          reg1::  (#  do rn->value #); 
+          dealloc::(# (* alloc *) #);
+          reUse::(# #);
+          inuse::(# #);
+       #);
+     LocalLab:: 
+       (# def:: (# <<SLOT byteCode_LocalLab_def:doPart>> #);
+          VirtLabDef::
+            (# 
+            do
+            #);
+          out:: (# <<SLOT byteCode_LocalLab_out:doPart>> #);
+          AsText:: 
+            (# 
+            do &text[]->localLabText[];
+               (if type = interFragment then
+                   descId[]->localLabText.puttext; 
+                   labNo->localLabText.putInt; 
+                else
+                   (* OBS! Gives 'L7' on ALL platforms;
+                    * for sparc we may need '.L7';
+                    * Clean up
+                    *)
+                   'L'->localLabText.put;
+                   labNO->localLabText.putint
+               if)
+            #)
+       #);
+     RegAdr:: 
+       (# loadAdrOp::<  
+            (#  
+            do 
+               THIS(RegAdr)[]->op[] 
+            #);
+          loadFloatOp::
+            (#
+            do &floatRegOp[]->op[];
+               op.alloc;
+
+              
+            #);
+          loadOp::
+            (# D: @dataRegOperand
+            do D.alloc;
+               D[] -> op[];                
+               (thisOp,op[],size)->ldVl;
+            #);
+          out:: (# <<SLOT byteCode_RegAdr_out:doPart>> #);
+          index::< 
+            (* For R[e] we assume
+             *    push e
+             *    push R (address of R-object)
+             *    index  (pushing adress of R[e] - perhaps missing an offset)
+             * 
+             * These instructions are then followed by:
+             * 
+             * for R[e] -> a
+             *     ldVal (%top+offset, where offset must be add to %top 
+             *                         for final address af R[e]
+             *     stVal @a
+             * 
+             * for a -> R[e]
+             *     ldVal @a
+             *     stVal (%top+offSet)
+             * 
+             *)
+            (# aR: @adrRegOperand; IA: @InxRegAdr; toReg:@InxRegAdr;
+            do reAlloc->aR;
+               (THIS(RegAdr)[],aR[])->ldVal;
+               access->toReg.access;
+               aR->toReg.aReg;
+               dReg->toReg.dReg;
+               size->toReg.size;
+               (if isSimple then
+                   (if size
+                    // 1 then
+                       15->toReg.off
+                    // 2 then
+                       14->toReg.off 
+                    // 4 then
+                       12->toReg.off
+                    // 8 then
+                       8->toReg.off
+                   if)
+                else
+                    24-size->toReg.off;
+               if);
+               
+               (*(aR[],dReg[],size,toReg[],isSimple)->chkIndex;*)
+               (* I assume that the following is done here (olm):
+                * - checkIndexBound aR[8], aR[12];
+                * - dReg ->adjustIndex -> dReg
+                * - return toReg = (aR,dR,size)
+                *)
+               (#<<SLOT byteCode_RegAdr_index:doPart>> #);
+               toReg[]->a[]
+            #);
+          toTmp::
+            (# A1: @regAdr; aR: @AdrRegOperand
+            do 
+               (if access 
+                // common.cstInd // common.varInd then
+                   0->addOff->A[]; (if A.useCallReg then A.toTmp->A[] if)
+                else 
+                   aR.alloc; aR->A1.reg; 
+                   this(RegAdr).off -> A1.off;
+                   (this(RegAdr).reg[],aR[]) -> cpReg;
+                   A1[]->A[]
+               if);
+               A[]->bAdr.copy   
+            #);
+          goOrigin:: (# <<SLOT byteCode_goOrigin:doPart>> #);
+          toOriginReg::< 
+            (# A: ^address;
+               oReg:@AdrRegOperand;
+            do (if access // common.cstInd // common.varInd then
+                   (this(RegAdr)[],'UnknownToOriginRef',none) -> loadRef
+                else
+                   (if true (*off <> 0*) then 
+                       (if off<>0 then
+                           'toOriginReg:off<>0'->comment
+                        else
+                           'toOriginReg:off=0'->comment
+                       if);
+                       primreg1->oReg;
+                       (this(RegAdr)[],oreg[])->glea
+                   if)
+               if)
+            #);
+       #);
+     InxRegAdr::
+       (# isInxRegAdr:: TrueValue;
+          out:: (# <<SLOT byteCode_InxRegAdr_out:doPart>> #);
+
+          loadAdr::
+            (# #);
+          loadOp::
+            (# dr: @dataRegOperand
+            do dr.alloc;
+               (this(InxRegAdr)[],dr[],size)->ldVlImpl;
+               dr[]->op[]
+            #);
+          loadAdrOp::
+            (# IX: @inxRegAdr
+            do
+               
+            #);
+          loadFloatOp::
+            (# tmp: ^inxRegAdr
+            do &floatRegOp[]->op[];
+               op.alloc; (* dest *)
+               loadAdrOp -> tmp[];
+               tmp[]->op.load
+            #);
+          toTmp::
+            (# A1: @inxRegAdr; aR: @adrRegOperand 
+            do (* only tested in case common.varInd !! *)
+               (if access
+                // common.cstInd // common.varInd then 
+                   0->addOff->A[]; 
+                   (if A.useCallReg then
+                       A.toTmp->A[] 
+                   if)
+                else
+                   reAlloc -> aR -> A1.aReg; 
+                   this(inxRegAdr).dReg -> A1.dReg;
+                   this(inxRegAdr).off -> A1.off;
+                   (this(InxRegAdr).aReg[],aR[]) ->  cpReg;
+                   A1[]->A[]; 
+                   (* NO: freeAdr; since dReg is still in use *)
+               if);
+               A[]->bAdr.copy;
+            #);
+          pushRegAndOff::
+            (* pushRegAndOff for RegAdr is in machine - clean up*)
+            (#
+            do (off->newCstOp,dReg[],4)->gAdd;
+               (2->newCstOp,dReg[])->arithShiftRight;
+               aReg[]->pushClong;
+               dReg[]->pushClong
+            #)
+       #);
+     PrimRegOperand: registerOperand
+       (# isPrimRegOp:: trueValue;
+          primRegIsReg:: trueValue;
+          primRegIsRegAdr::
+            (#
+            do 
+            #);
+          asText:: (* currently INTEL/LINUX specific: FIX '_' for WIN32 *)
+            (# 
+            do 'pReg'->T; (*primRegs[rN]->T.putInt; *)
+            #);
+          out::  
+            (#            #);
+          reg1::(#do rn -> value #);
+          loadOp:: (#  do THIS(PrimRegOperand)[]->op[] #);
+       #);
+     
+     (* register operations *)
+     nop:: (# <<SLOT bytecode_nop:do Part>>#);
+     
+     ldCst:: (# <<SLOT byteCode_ldCst:doPart>> #);
+     
+     stCst:: 
+       (# tmp: @dataRegOperand
+       do tmp.alloc;
+          (C[],tmp[])->ldCst;
+          (tmp[],A[]) -> stVal
+       #);
+     
+     ldvlImpl:
+       (# A: ^address; R: ^registerOperand; size: @integer
+       enter (A[], R[], size)
+       <<SLOT byteCode_ldValImpl:doPart>>
+       #);
+     
+     ldByte:: 
+       (# 
+       do (op1[], op2[], 1)->ldvlImpl
+       #);
+     ldHalf:: 
+       (# 
+       do (op1[], op2[], 2)->ldvlImpl
+       #);
+     ldVal:: 
+       (# 
+       do (A[], R[], 4)->ldvlImpl
+       #);
+     ldVl:: 
+       (# 
+       do (A[], R[], size)->ldvlImpl
+       #);
+     
+     ldvalFromLab:: 
+       (# 
+       do (failureTrace,'ldvalFromLab NOT supported')->stop
+       #);
+     
+     stByte:: 
+       (# 
+       do (op1[], op2[], 1)->stValImpl
+       #);
+     stHalf:: 
+       (# 
+       do (op1[], op2[], 2)->stValImpl
+       #);
+     stVal::
+       (# 
+       do (R[], A[], 4)->stValImpl
+       #);
+     
+     stValImpl:
+       (# A: ^address; R: ^registerOperand; size: @integer
+       enter (R[], A[], size)
+       <<SLOT byteCode_stValImpl:doPart>>
+       #);
+     
+     stValInLab:: 
+       (# 
+       do (failureTrace,'stValInLab')->stop
+       #);
+     
+     cpReg:: (# <<SLOT byteCode_cpReg:doPart>> #);
+     
+     cpByteMem:: 
+       (#
+       do &dataregOperand[]->dr[];
+          dr.alloc;
+          (* no current machine can copy mem to mem *)
+          (a1[],dr[])->ldByte;
+          (dr[],a2[])->stByte;
+       #);
+     cpHalfMem:: 
+       (#
+       do &dataregOperand[]->dr[];
+          dr.alloc;
+          (a1[],dr[])->ldHalf;
+          (dr[],a2[])->stHalf;
+       #);
+     cpMem:: 
+       (#
+       do &dataregOperand[]->dr[];
+          dr.alloc; (* use the one returned by cpMem *)
+          (A1[],dr[])->ldVal;
+          (dr[],A2[])->stVal   
+       #);
+     
+     stValInText:: 
+       (#
+       do 
+       #);
+     duplicate:: (# <<SLOT byteCode_duplicate:doPart>> #);
+          
+     addMem::
+       (# R1: @dataRegoperand
+       do R1.alloc;
+          &dataRegOperand[]->R[];
+          R.alloc;
+          (if op1.isCstOp then
+              (op1[],R1[])->ldCst;
+           else
+              (op1[],R1[],4)->ldVl;
+          if);
+          (op2[],R[],4)->ldVl;
+          (R1[],R[],4)-> gAdd;
+          duplicate; (* we assume that the value is used subsequently;
+                      * this is the case for for-repeat, whicj currently
+                      * is the ONLY use of addMem
+                      *)
+          (R[],op2[])->stVal
+       #);
+     gNot:: 
+       (# 
+       do (arithCodes.nott,op[])->callUnFunc
+       #);
+     logNot:: 
+       (# 
+       do (arithCodes.logNot,op[])->callUnFunc
+       #);
+     gNeg:: 
+       (# 
+       do (arithCodes.neg,op[])->callUnFunc
+       #);
+     gAdd:: 
+       (#
+       do (arithCodes.add,op1[],op2[])->callBinFunc
+       #);
+     gSub:: 
+       (# 
+       do (arithCodes.sub,op1[],op2[])->callBinFunc
+       #);
+     gOr:: 
+       (# 
+       do (arithCodes.orr,op1[],op2[])->callBinFunc
+       #);
+     gAnd:: 
+       (# 
+       do (arithCodes.andd,op1[],op2[])->callBinFunc
+       #);
+     gXor:: 
+       (# 
+       do (arithCodes.xorr,op1[],op2[])->callBinFunc
+       #);
+     gCmp:: 
+       (# 
+       do (arithCodes.cmp,op1[],op2[])->callBinFunc
+       #);
+     gMult:: 
+       (# 
+       do (arithCodes.mult,op1[],op2[])->callBinFunc
+       #);
+     gDIV:: 
+       (# 
+       do (if isDiv then
+              (arithCodes.divv,op1[],op2[])->callBinFunc
+           else
+              (arithCodes.modd,op1[],op2[])->callBinFunc
+          if)
+       #);
+     (* Bit operations *)
+     SignExtByte:: 
+       (#
+       do
+          
+       #);
+     SignExtWord:: 
+       (#
+       do
+          
+       #);
+     getBitsImpl:
+       (#
+          op1,op2,drF,op: ^mOperand;
+          pos,length:@Integer;
+       enter (op1[],pos,length,op2[],drF[])
+       do
+       #);
+     getBits:: 
+       (# 
+       do (op1[],pos,length,op2[],drF[])->getBitsImpl;
+       #);
+     GetSignedBits:: 
+       (# 
+       do (op1[],pos,length,op2[],drF[])
+            ->getBitsImpl
+       #);
+     
+     gGetBits:: 
+       (# 
+       #);
+     gGetSignedBits:: 
+       (# 
+       #);     
+     putBits:: 
+       (#
+      
+       #);
+     gPutBits:: 
+       (# ; 
+      
+       #);
+     ByteSwap:: 
+       (# 
+      
+       #);
+     loadRef:: (# <<SLOT byteCode_loadRef:doPart>>#);
+     doAsgRefAdr:: 
+       (# value: @adrRegOperand
+       do value.alloc;
+          (if A.access = common.direct then
+              '\n*** direct loadRef *** ' ->putline;
+              (A[],value[])->gLea
+           else
+              'doAsgRefAdr1'->mch.comment;
+              (A[],sourceClassName[],none) -> loadRef;
+              'doAsgRefAdr2'->mch.comment;
+          if);
+          
+          (# <<SLOT byteCode_doAsgRefAdr:doPart>> #);
+          
+          &adrRegOperand[]->dest[];
+          dest.alloc;
+       #);
+     doAsgRefReg:: 
+       (#
+       do (# <<SLOT byteCode_doAsgRegAdr:doPart>> #);
+          
+          (* just to avoid ref is none error *)
+          &adrRegOperand[]->dest[];
+          dest.alloc;
+       #);
+     ChkHeap:: 
+       (#
+       do 
+          (* the code is generated in asgRefAdr/asgRegAdr *)
+       #);
+     (* Arithmetic *)
+     gGetDataByte:: 
+       (#
+       do 
+       #);
+     gGetDataWord:: 
+       (# 
+       do 
+       #);
+     arithShiftLeft:: 
+       (# 
+       do (arithCodes.arithShiftLeft,op1[],op2[])->callBinFunc
+       #);
+     logicalShiftLeft:: 
+       (# 
+       do (arithCodes.logicalShiftLeft,op1[],op2[])->callBinFunc
+       #);
+     arithShiftright:: 
+       (#
+       do (arithCodes.arithShiftRight,op1[],op2[])->callBinFunc
+       #);
+     logicalShiftRight:: 
+       (#
+       do (arithCodes.logicalShiftRight,op1[],op2[])->callBinFunc
+       #);
+     rotateLeft:: 
+       (# tmp,tmp2: @DataRegOperand;
+          CO: @cstOperand;
+       do (arithCodes.rotateLeft,op1[],op2[])->callBinFunc
+       #);
+     rotateRight:: 
+       (# 
+       do (arithCodes.rotateRight,op1[],op2[])->callBinFunc
+       #);
+     
+     (* Control Flow operations *)
+     jumpIfTrue:: 
+       (# 
+       do 
+       #);
+     emitCk:: (# <<SLOT byteCode_emitCk:doPart>> #);
+     tstNone:: (# <<SLOT byteCode_tstNone:doPart>> #);
+     gBeq:: 
+       (# 
+       do 
+       #);
+     gBne:: 
+       (# 
+       do
+       #);
+     gBge:: 
+       (# 
+       do 
+       #);
+     gBae:: 
+       (# 
+       do 
+       #);
+     gBle:: 
+       (# 
+       do 
+       #);
+     gBbe:: 
+       (# 
+       do 
+       #);
+     gBgt:: 
+       (# 
+       do 
+       #);
+     gBab:: 
+       (# 
+       do
+       #);
+     gBlt:: 
+       (# 
+       do 
+       #);
+     gBbl:: 
+       (# 
+       do 
+       #);
+     trap:: 
+       (# 
+       do 
+       #);
+     jsrTable:: (# <<SLOT byteCode_jsrTable:doPart>> #);
+     
+     (* this is only for testing class tests in synthesizer, 
+      * note virtdecl, not binding! *)
+     jsrTableTest:<
+       (#          
+       do 
+          (* only used to test classtest based jumps ! *)
+       #);
+     jmpTlong:: 
+       (# 
+       <<SLOT byteCode_jmpTlong:doPart>>
+       #);
+     jmpT:: 
+       (# 
+       <<SLOT byteCode_jmplong:doPart>>
+       #);
+     jsrT:: 
+       (# 
+      <<SLOT byteCode_jsrT:doPart>>
+       #);
+     jsrReg:: 
+       (# 
+       do
+       #);
+     jmpReg:: 
+       (# 
+       do 
+       #);
+     gJmp:: 
+       (# 
+       <<SLOT byteCode_gJmp:doPart>>
+       #);
+     gJsr:: 
+       (# 
+       <<SLOT byteCode_gJsr:doPart>>
+       #);
+     BeginLabel:: (# #);
+     Break:: 
+       (# T: @textOperand;
+       do
+       #);
+     FreeLabel:: 
+       (# 
+       do (* NOT used anymore ! *)
+       #);
+     EndLabel:: 
+       (# 
+       do (* USED in MIPSmachine and perhaps other ones *)
+         
+       #);
+     saveInnerReturn:: 
+       (# 
+       do 
+       #);
+     returnInner:: 
+       (# 
+       do (isLeavePtn,RToff) -> return
+       #);
+     EmitTextConst:: 
+       (# 
+       <<SLOT byteCode_emitTextConst:doPart>>
+       #);
+     
+     rts::
+       (# 
+       do 
+       #);
+     glea:: 
+       (# 
+       <<SLOT byteCode_gLea:doPart>>
+       #);
+     gleaLabel:: 
+       (#
+       do 
+       #);
+     leaToPrimReg:: 
+       (# 
+       do 
+       #);
+     gClr:: 
+       (# 
+       do 
+       #);
+     pushAdr:: 
+       (# 
+       do 
+       #);
+     Push:: 
+       (# 
+       do 
+       #);
+     Pop:: 
+       (# 
+       do 
+       #);
+     PushThisOrCall:: 
+       (# 
+       do 
+       #);
+     popThisOrCall:: 
+       (# 
+       do 
+       #);
+     setTop:: 
+       (# 
+       do
+       #);
+     ChkCase:: 
+       (# 
+       do 
+       #);
+     ChkIndex:: 
+       (# size: @integer;
+          isSimple: @boolean;
+          repAdr: ^mOperand;
+          toReg: ^inxRegAdr
+       do 
+       #);
+     (* for using const rep. lookup in synthesizer, note not binding ! *)
+     chkConstIndex:<
+       (#
+          isSimple: @boolean;
+          index,size: @integer;
+       do 
+       #);
+     cmpToBool:: 
+       (#
+       do 
+       #);
+     cmpAndJmp:: 
+       (#
+       <<SLOT byteCode_cmpAndJmp:doPart>>
+       #);
+     cmpBoolAndJmp:: 
+       (# 
+       do 
+       #);
+     (* Floating point operations *)
+     floatConst:: 
+       (# 
+       do FR.alloc;
+          
+       #);
+     int2float:: 
+       (# F: @floatRegOp
+       do 
+       #);
+     intReg2float:: 
+       (# fTmp: @floatRegOp
+       do FR.alloc;
+          fTmp.alloc;
+          
+       #);
+     float2int:: 
+       (# 
+       do 
+       #);
+     cmpToBoolFloat:: 
+       (# 
+       do (op2[],op1[])->cmpFloat;
+          
+       #);
+     cmpAndJmpFloat:: 
+       (# 
+       do 
+       #);
+     popFStack:: 
+       (# 
+       do 
+       #);
+     cmpFloat:: 
+       (#  
+          op: ^floatRegOp
+       do 
+       #);
+     fBeq:: 
+       (# 
+       do 
+       #);
+     fBge:: 
+       (# 
+       do 
+       #);
+     fBle:: 
+       (# 
+       do 
+       #);
+     fBne:: 
+       (# 
+       do 
+       #);
+     fBgt:: 
+       (# 
+       do 
+       #);
+     fBlt:: 
+       (# 
+       do 
+       #);
+     addFloat:: 
+       (# 
+       do 
+       #);
+     subFloat:: 
+       (# 
+       do 
+       #);
+     mulFloat:: 
+       (# 
+       do 
+       #);
+     divFloat:: 
+       (# 
+       do 
+       #);
+     negFloat:: 
+       (# 
+       do 
+       #);
+     FreeData::  (#  #);
+
+     thisO:: (# do 1->rNO #);
+     callO:: (# do 2->rNO #);
+     primReg1: (# exit 3 #);
+     callRegCount:@integer;
+     CallRegBusy::
+       (# 
+       do 
+          (callregCount>0)->value
+       #);
+     DecrCallReg::  
+       (#
+       do 
+          callRegCount-1->callRegCount;
+       #);
+     GetCallReg::  
+       (# 
+       do 
+          callRegCount+1->callRegCount;
+       #);
+          FreeCallReg::  (#  #);
+     CallRegInPrimReg2:: 
+       (#  
+       #);
+     GetOriginReg::  
+       (# 
+       do 
+
+       #);
+     FreeOriginReg::  (#  #);
+     DataRegMax::  (#  do 5->val #);
+          NoOfFreeDataReg::  (#  #);
+     DumpReg:: (# #);
+     PushReg:: (# #);
+     PopReg:: (##);
+     PushDataReg:: 
+       (#
+       do 
+       #);
+     PopDataReg:: 
+       (# 
+       do 
+       #);
+     PushFloatReg:: 
+       (# 
+       do 
+       #);
+     PopFloatReg:: 
+       (# 
+       do 
+       #);
+     (* external not working *)
+     InitExternalCall::
+       (# 
+       do 
+       #);
+     
+     PushClong::
+       (# R: @dataRegOperand;
+       do R.alloc; 
+          (if true 
+           // op.isCstOp then
+              (op[], R[]) -> ldCst
+           // op.IsRegAdr then
+              (op[], R[], 4)->ldvlImpl
+           // op.isDataRegOp then
+           else
+              '\nOBS! pushClong: perhaps unknown operand'->putline
+          if)
+       #);
+     PushCword::< (# do op[] -> PushClong #);
+     PushCbyte::< (# do op[] -> PushClong #);
+     PushCdoubleAdr::<
+       (# 
+       do 
+       #);
+     PushCfloat::<
+       (# 
+       do 
+       #);
+     PushCtext::<(# do 'PushCtext'->putline #);
+     CallCproc:: (# <<SLOT byteCode_CallCproc:doPart>> #);
+     SaveReg::
+       (#  
+       do 
+       #);
+     RestoreReg::
+       (# 
+       do 
+       #);
+     
+     externalDispatch::
+       (#
+       do 
+       #);
+     noXres::
+       (#
+       do 
+       #);
+     getSimpleXres::
+       (# 
+       do 
+       #);
+     getTextXres::
+       (# 
+       do 
+       #);
+     realXresIsDouble::
+       (# 
+       do
+       #);
+     getDoubleXres::
+       (# 
+       do 
+       #);
+     getFloatXres::
+       (# 
+       do fp.alloc;
+         
+       #);
+     getDataRefXres::
+       (# 
+       do
+       #);
+     getDataPartXres::
+       (# 
+       do 
+       #);
+     SaveHeapTop::
+       (# 
+       do
+       #);
+     PopCallStack::
+       (# 
+       do '\n**** Not Implemented: PopCallStack' -> putline
+       #);
+     AllocExternalResult::
+       (# 
+       do 
+       #);
+     PascalTrap::
+       (* Only meaningful on  Macintosh *)
+       (# 
+       do '\n**** Not Implemented: PascalTrap' -> putline
+       #);
+     
+     xParForward:: (# do true ->  forward #);
+     
+     (* BETA run-time routines *)
+     GetPrimReg::  
+       (# pR: @primRegOperand;  
+          prn:@integer;
+       do (* primreg1 is preAllocated in register 3 *)
+          (if pno<>1 then
+              regCount+1->regCount->prn;
+           else
+              primreg1->prn
+           if);
+          prn->pR; pR[]->primReg[];
+       #);
+     initPrimCall::
+       (#
+       do 
+       #);
+     CallPrim::  
+       (# 
+       <<SLOT byteCode_callPrim:doPart>>
+       #);
+     CallAlloPrim:: 
+       (# <<SLOT byteCode_callAlloPrim:doPart>>       
+       #);
+     StackAlloPrim:
+       (# p:@PrimRegOperand;         
+          proto,t,s: ^text;
+          stackCount,size: @integer
+       do 5 -> FIXME;
+         
+       #);
+     InlineAlloiNGNP:
+       (# p:@PrimRegOperand;
+          size,orgOff: @integer;
+          proto: ^text;
+       do 
+       #);
+     deAllocIOA:
+       (# 
+       do 
+       #);
+     GetPrimRes:: 
+       (# 
+       do 
+       #);
+     
+     SPtoPrimReg::
+       (# 
+       do 
+       #);
+     LabelDef:: 
+       (* is ONLY called for M-part labels in COM virtuals *)
+       (#
+       do
+       #);
+     GlobalLabelDef:: (# #);
+     (* entry point / return *)
+     Export::   
+       (#  
+       do 
+       #);
+     Import:: 
+       (#  
+       do 
+       #);
+     ImportData::
+       (#  
+       do 
+       #);
+     switchToData::
+       (#  
+       do 
+       #);
+     switchToCode::
+       (# 
+       do 
+       #);
+     declareAddress:: 
+       (# 
+       do
+       #);
+     declareLong::  
+       (#  
+       do 
+       #);
+     declareWord::  
+       (#  
+       do 
+       #);
+     dclWord::
+       (# 
+       do 
+       #);
+     emitByte::
+       (# 
+       do 
+       #);
+     asciiText::
+       (# 
+       do 
+       #);
+     DefineMainLabel1::
+       (# 
+       do 
+       #);
+     doFinal2VirtJump::
+       (# do #);
+     GetVirtualOriginStart1:: 
+       (# A1: @RegAdr; aR: @adrRegOperand
+       do 
+          OriginReg->aR->A1.reg; A1[]->startA[]
+       #);
+     GetVirtualOriginStart2:: 
+       (#  
+       do 
+          startA.toOriginReg
+       #);
+     AllocObj::
+       (# 
+       do 
+       #);
+     allocDoPartObject::
+       (# ar: @adrRegOperand
+       do 
+       #);
+     deAllocDoPartObject::
+       (# A: @RegAdr
+       do 
+          (* before return, thisReg must be defined to be the object 
+           * containing the dopart. This object is the origin of the 
+           * dopart object
+           *)
+          thisO->A.reg; 8->A.addOff;
+          (A[],thisRegOp[])->ldVal
+       #);
+     SaveReturn::  (#   <<SLOT byteCode_saveReturn:doPart>>#);
+     Return:: (# <<SLOT byteCode_return:doPart>> #);
+     ReturnVirtualCom::
+       (#
+       do 
+       #);
+     ExternalEntry::
+       (#
+       do 
+       #);
+     ExternalMark::
+       (#
+       do '++++++++++ Missing ExternalMark' -> putline
+       #);
+     ExternalReturn::
+       (# 
+       do 
+       #);
+     initXpar::
+       (# dr: @dataRegOperand
+            (*enter (extKind,BC,SC,LC)*)
+       do 
+       #);
+     xPar: @
+       (# top,no: @integer;
+          D: [3] @integer;
+          init: (# do 0->top->no #);
+          put:
+            (# dr: @integer
+            enter dr
+            do (if (top+1->top) > D.range then
+                   D.range->D.extend
+               if);
+               dr->D[top]
+            #);
+          newReg: (# exit no >= (top-1) #);
+          getPre:
+            (# reg: @integer
+            do no+1->no;
+               (if no < top then
+                   D[no]->reg
+                else 
+                   '\nERROR: getPre call'->putline
+               if)
+            exit reg
+            #);
+          getNew:
+            (# rReg,wReg: @integer; dr: @dataRegOperand
+            do dr.alloc;
+               dr.reg1->wReg;
+               D[top]->rReg;
+            exit(rReg,wReg)
+            #)
+       #);
+     getXlong::
+       (# 
+       do         
+       #);
+     getXword::
+       (# 
+            (*enter dr[]*)
+       do
+       #);
+     getXbyte::
+       (# 
+            (*enter dr[]*)
+       do
+       #);
+     toXres:: (* NO longer in use - can be eliminated *)
+       (# 
+            (*enter rNo*)
+       do
+       #);
+     GetRegForXres:: (* allocate register(s) for result of external call *)
+       (#
+       do 
+          (*exit (max,dummyMax)*)
+       #);
+     endX:<
+       (# 
+            (*enter (extType,exitType,BC,SC,LC,max,dummyMax)*)
+       do          
+       #);
+     GetComPar::
+       (# 
+       do 
+          (if isValPar then
+              &dataRegOperand[]->paramAdr[]
+           else
+              &adrRegOperand[]->paramAdr[]
+          if); 
+          paramAdr.alloc;
+       #);
+     doHead::< (*FIXME*) 
+       (# 
+       do 1->thisRegOp;
+          2->callRegOp;
+          (if true (* sun4s - FIX THIS *) then
+              thisRegOp[]->dataRegA[]
+           else
+              &dataRegOperand[]->dataRegA[];
+              24->DataRegA;
+          if);
+          &dataRegOperand[]->dataRegB[];
+          25->DataRegB;
+          &dataRegOperand[]->dataRegX[];
+          &dataRegOperand[]->dataRegY[];
+          7->dataRegX;
+          6->dataRegY;
+          (* we start after this and callee*) 
+          2->regCount;
+          (* next from 2 *)           
+          
+       #);
+
+     InitDataSeg::
+       (# 
+       do doHead; (* moved from SPARCmachine *)
+       #);
+     newFragment::< 
+       (#
+       do 
+       #);
+     newProto::
+       (#
+       do 
+       #);
+     newImp:: (# <<SLOT bytecode_newImp:doPart>> #);
+     newEval::
+       (#
+       do
+       #); 
+     openDbgInf::
+       (#
+       do
+       #);
+     saveDbgInf::
+       (# 
+       do 
+       #);
+     initGen:: (*FIXME*)
+       (# 
+       do true->inGpart;
+          (EP[],nodeId,superName[],subLevel,orgName[]) -> classDef
+       #);
+     initDo:: (*FIXME*)
+       (# 
+       do (*OBS data is used as aux; see medthodDef below *)
+          (if true
+           // 'do' -> EP.equal
+           // 'enter' -> EP.equal
+           // 'exit' -> EP.equal then
+              (EP[],signature[],noOfEnterArgs,2) -> methodDef
+           else
+              (if data then
+                  (EP[],signature[],noOfEnterArgs,1) -> methodDef
+               else
+                  (EP[],signature[],noOfEnterArgs,0) -> methodDef
+          if)if)                  
+       #);
+     endClass:: (# <<SLOT  byteCode_endClass:doPart>> #);
+     EndCodeSeg:: (*FIXME*)
+       (# 
+       do
+       #);
+     classDef: 
+       (# className,superName: ^text; 
+          blockLevel,subLevel: @integer;
+          orgName: ^text
+       enter(className[],blockLevel,superName[],subLevel,orgName[]) 
+       <<SLOT byteCode_classDef:doPart>> 
+       #);
+     methodDef: 
+       (# methodName,signature: ^text; 
+          noOfEnterArgs,
+          type: @integer; (* An aux.-method in the form of one of:
+                           * 0: for calling a ptn as a method
+                           * 1: for generating a vclass-instance of a ptn
+                           * 2: enter- do- or exit-method
+                          *)
+       enter(methodName[],signature[],noOfEnterArgs,type)
+       <<SLOT byteCode_methodDef:doPart>>
+       #);
+     (********** handling of prototypes ********)
+     
+     InitEmitProtoIndexTable:: 
+       (# 
+       do 
+       #);
+     EmitProtoIndex:: 
+       (# 
+       do 
+       #);
+     EndEmitProtoIndexTable:: 
+       (# 
+       do 
+       #);
+     EmitProto:: 
+       (# 
+       do 
+       #);
+     EmitInnerTable:: 
+       (# 
+       do 
+       #);
+     InnerEntry:: 
+       (# 
+       do 
+       #);
+     EmitVirtAdr:: 
+       (# 
+       do 
+       #); 
+     EmitObjTableOff:: 
+       (# 
+       do 
+       #);
+     EmitText:: 
+       (# 
+       do 
+       #);
+     EmitRefTableOff::
+       (# 
+       do 
+       #);
+     comment:: (# <<SLOT bytecode_comment:dopart>>#);
+       
+     skipExtension:
+       (# FN: ^text; dotPos: @integer;
+       enter FN[]
+       do FN.scanAll
+          (# i: @integer 
+          do i+1->i; 
+             (if ch = '.' then i->dotPos if)
+          #);
+          (*(dotPos-1,FN.length)->FN.sub->putline;  *)
+          (dotPos-1,FN.length)->FN.delete;
+       exit FN[]
+       #);
+
+     init:: (# <<SLOT byteCode_init:doPart>>  #);
+     close:: (*FIXME*)
+       (# 
+       do 
+
+          (* IFragmentSet.printgraphs; *)
+          (* (if not common.switch[250] then IFragmentSet.dumpvcg if); *)
+          (* dumpObjectCode; *)
+
+          
+          (#<<SLOT byteCode_close:doPart>>#);
+                    
+       #);
+     
+     initCreateDataFile::
+       (# 
+       do 
+       #);
+     
+     NextGroup::
+       (#
+       do 
+       #);
+     
+     endCreateDataFile:: 
+       (# 
+       do 
+       #);
+     
+     (**************** unary and binary functions **********)
+     arithCodes: @
+       (# add: (# exit 51 #);
+          sub:(# exit 52 #);
+          orr: (#exit 53 #);
+          andd: (# exit 54 #);
+          xorr: (# exit 55 #);
+          cmp: (# exit 56 #);
+          mult: (# exit 57 #);
+          divv: (# exit 58 #);
+          modd: (# exit 59 #);
+          nott: (# exit 60 #);
+          logNot: (# exit 61 #); 
+          neg: (# exit 62 #);
+          arithShiftLeft: (# exit 63 #);
+          logicalShiftLeft: (# exit 64 #);
+          arithShiftRight: (# exit 65 #);
+          logicalShiftRight: (# exit 66 #);
+          rotateLeft: (# exit 67 #);
+          rotateRight: (# exit 68 #);
+       #);
+     
+     callUnFunc:
+       (# opCode: @integer; arg: ^mOperand
+       enter(opCode,arg[])
+       <<SLOT byteCode_callUnFunc:doPart>>
+       #);
+     callBinFunc:
+       (# opCode: @integer; op1,op2: ^mOperand
+       enter(opCode,op1[],op2[])
+       <<SLOT byteCode_callBinFunc:doPart>>
+       #);
+     trace:
+       (# xT:
+            (# T: ^text
+            enter T[]
+            do T[]->common.tracestream.putText
+            #);
+          xI:
+            (# n: @integer
+            enter n
+            do
+               ' '->xC;
+               n->common.traceStream.putInt;
+               ' '->xC
+            #);
+          xC:
+            (# ch: @char
+            enter ch
+            do ch->common.traceStream.put
+            #);
+          xB:
+            (# b: @boolean
+            enter b
+            do
+               (if b then
+                   ' true '->xT
+                else
+                   ' false '->xT
+               if)
+            #);
+          xN:
+            (# 
+            do common.tracestream.newline
+            #);
+          N: @integer;
+          
+       enter N
+       do
+          (if common.switch[N] then
+              xN;
+              '%'->xC;
+              N->common.traceStream.putInt;
+              ':'->xC;
+              ' '->xC;
+              INNER
+          if)
+       #);
+     cTrace: trace (#  do INNER #);
+
+
+  #)  
+

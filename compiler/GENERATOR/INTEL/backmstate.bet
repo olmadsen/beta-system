@@ -11,7 +11,7 @@ INCLUDE 'intel';
 --backendatt:attributes--
 
 (* TRACING: change this to disable/enable tracing *)
-intel_trace: (# exit false #);
+intel_trace: (# exit false (*common.switch[45]*) #);
 
 TODO: 
   (# t:^Text
@@ -148,6 +148,7 @@ emitdec: (# enter mstate.b.emitdec #);
 emitCmpRegReg: (# enter mstate.b.emitCmpRegReg #);
 emitCmpImmReg: (# enter mstate.b.emitCmpImmReg #);
 emitMovRegMemIndirect: (# enter mstate.b.emitMovRegMemIndirect #);
+emitMovMemIndirectReg: (# enter mstate.b.emitMovMemIndirectReg #);
 emitJsrT: (# enter mstate.b.emitJsrT #);
 emitSwapFreg: (#do 1 -> fxch -> emit2bytes; eoo #);
 emitMovAddressToReg: (# enter mstate.b.emitMovAddressToReg #);
@@ -179,21 +180,34 @@ reverseCond:
    *)
   (# I: ^backendInstruction;
   enter I[]
-  do (if I.cond
+  do (if intel_trace then
+         'reverseCond: ' -> puttext;
+         I.cond -> putint;
+     if);
+     (if I.cond
       // common.cond_lt then common.cond_gt -> I.cond
       // common.cond_le then common.cond_ge -> I.cond
       // common.cond_gt then common.cond_lt -> I.cond
       // common.cond_ge then common.cond_le -> I.cond
      if);
+     (if intel_trace then
+         ' -> ' -> puttext;
+         I.cond -> putint;
+         newline;
+     if);
   #);
 
-PushBusyRegDuring:
+IsDataRegBusy:
   (# reg: @integer;
      busy: @boolean;
   enter reg
   do calculateLiveData;
      reg -> liveData.has -> busy;
-     (if busy then reg -> pushRegister if);
+     INNER;
+  #);
+PushBusyDataReg: IsDataRegBusy
+  (# 
+  do (if busy then reg -> pushRegister if);
      INNER;
      (if busy then reg -> popRegister if);
   #);
@@ -229,11 +243,18 @@ RestoreAllReg:
      EDX -> popRegister;
      ECX -> popRegister;
   #);
-   
+
+IntelSetTop: IntegerObject
+  (# I: ^BackendInstruction;
+  do &BackendInstruction[] -> I[];
+     value -> I.imm;
+     I[] -> SetTopImpl;
+  #);
+  
 TstFloat:
   (# 
   do (if intel_trace then 'TstFloat' -> comment if);
-     eax -> PushBusyRegDuring
+     eax -> PushBusyDataReg
      (# 
      do (* Test for unordered result - see chapter 17.4, page 17.4 in 
          * "Intel486 Microprocessor Family - Programmer's Reference manual, 
@@ -246,6 +267,52 @@ TstFloat:
      ('UoFV'->mstate.Cidentifier,jmpMark)->mstate.b.mark;
      mstate.B.LIP -> emitrel32off;
      INNER TstFloat;
+  #);
+FloatSetChopping:
+  (* Save old FPU status word on stack, calculate new status word, 
+   * which specify chopping in int2float conversion and set this status 
+   * word during INNER.
+   * EAX used during this. Saved on stack too, if busy prior.
+   * Restore old FPU status word after INNER.
+   * Stack layout:
+   *   ESP+0: EAX (if busy)
+   *   ESP+4: Old Status word
+   *   ESP+8: New Status word
+   * FIXME: If specialization causes GC, a tag must be put on stack too.
+   *)
+  (# framesize: @integer;
+  do (* Allocate stack space for two control words and EAX *)
+     12 -> framesize;
+     -framesize -> IntelSetTop;
+     eax -> IsDataRegBusy
+     (# 
+     do (if busy then
+            (* save eax on stack *)
+            (EAX, ESP, 0, 4) -> emitMovRegMemIndirect;
+        if);
+        (* Get existing control word into stack memory *)
+        fstcw -> emit2bytes; (esp,4) -> IndirectReg;
+        (* Move existing control word to eax *)
+        eax -> movl_mr -> emit2bytes; (esp,4) -> IndirectReg;
+        (* Change ah *)
+        ah -> _movb_i8r -> B_emitbyte; 12 -> B_emitbyte;
+        (* move new control word to memory on stack *)
+        eax -> movl_rm -> emit2bytes; (esp,8) -> IndirectReg;
+        (* Set new controlword from stack *)
+        fldcw -> emit2bytes; (esp,8) -> IndirectReg;
+        (if busy then
+            (* restore eax from stack. Cheapest to use a pop *)
+            EAX -> PopRegister;
+            8 -> framesize;
+        if);
+     #);
+     INNER; (* INNER must be outside EAX saved region in case
+             * the stuff done in INNER reads something into EAX.
+             *)
+     (* restore old FPU control word from stack frame *)
+     fldcw -> emit2bytes; (esp,framesize-8) -> IndirectReg; 
+     (* Deallocate stack frame *)
+     framesize -> IntelSetTop;
   #);
 SynchronizeFPU:
   (* Causes the processor to check for and handle pending, unmasked, 
@@ -270,13 +337,12 @@ saveProfStackTop:
      mstate.b.eoo;
   #);
 
-(* IntelStackOff: address
- *   (# off: @integer;
- *      putOp:: (# do (ESP, off) -> IndirectReg #);
- *   enter off
- *   exit off
- *   #);
- *)
+StackOff:
+  (# off: @integer;
+     putOp: (# do (ESP, off) -> IndirectReg #);
+  enter off
+  exit off
+  #);
 
 IndirectReg:
   (# RegNo, Offset: @integer; 
@@ -670,7 +736,7 @@ doPop:
   (# 
   do (if intel_trace then
          '==doPop#'->puttext;
-         mstate.framesize -> putint; newline;
+         mstate.framesize-4 -> putint; newline;
      if);
      mstate.framesize-4 -> mstate.framesize;
      (if mstate.framesize<0 then
@@ -757,7 +823,7 @@ getExternalResult:
        (# 
        do (if I.writeReg<>EAX then
               (EAX, I.writeReg) -> movl_rr -> emit2bytes;
-          if)
+          if);
        #);
      getDoubleResult:
        (* return (eax,ebx) -> (drB,drA)
@@ -769,7 +835,7 @@ getExternalResult:
           if);
           (if I.writeReg<>EDX then
               (EDX, I.writeReg) -> movl_rr -> emit2bytes;
-          if)
+          if);
        #);
      
   enter I[]
@@ -846,25 +912,48 @@ getExternalResult:
       else
          CError(# do 'GetExternalResult: unknown external kind: '->T; extType->I #);
      if);
-     (* The following is matched by code in getRegForXres *)
-     esi -> _popl_r -> B_emitbyte;
-     ebp -> _popl_r -> B_emitbyte;
+     (* The following is matched by code in getRegForXres (intelbackend.bet) *)
+     esi -> PopRegister;
+     ebp -> PopRegister;
      restoreRegImpl; (* pop edi, edx *)
+     (* (datpete: 28/11/2001)
+      * - Now done in INTERMEDIATEmachine
+      * &backendInstruction[] -> I[];
+      * hasResult -> I.condition;
+      * I[] -> popDataRegImpl; 
+      *)
      eoo;
   #);
 
 
 --backendmstate:descriptor--
-(# do_float:
-     (# r1, r2: @integer;
-        swapped:< object;
-     enter (r1, r2)
-     do (if (r1, r2)->swapFreg then
-            swapped;
+(# doFloatBinOp:
+     (# (* See FloatBinOp in INTERMEDIATEmachine *)
+        I: ^backendInstruction;
+        memory:<object;
+        register:<object;
+        swapped:<object;
+        r1, r2: @integer;
+     enter I[]
+     do (if I.condition (* not A.isFloatRegOp *) then 
+            (* operate mem64 and top stack element *)
+            memory;
+            (if I.cond=-1 then
+                (* indexed *)
+                (I.readReg2,I.InxReg,I.size,I.readOffset) -> IndexReg
+             else
+                (I.readReg2,I.readOffset) -> IndirectReg
+            if);
          else
-            INNER;
+            (* operate two top stack elements *)
+            (I.readReg, I.readReg2) -> (r1, r2);
+            (if (r1, r2)->swapFreg then
+                swapped;
+             else
+                register;
+            if);
+            (if common.switch[13] then SynchronizeFPU if);
         if);
-        (if common.switch[13] then SynchronizeFPU if);
      #);
      
    framesize: @integer;
@@ -905,6 +994,114 @@ getExternalResult:
            * should be precise.
            *)
           (# 
+             ncurrent: ^nframe;
+             nframe:
+               (# mustSave: @boolean;
+                  top: @integer; 
+                  pred: ^nframe;
+                  saveSpace:
+                    (# 
+                    do liveFloats[]->scanBitvektor32(#do true->mustSave#);
+                       (* FIXME: count registers, and subtract pred.count *)
+                       (if mustSave then
+                           (* save 108  bytes *)
+                           (sub_ttt,108,esp,4) -> mstate.b.emitAluImmReg;
+                           mstate.b.eoo;
+                           108 -> top;
+                           mstate.framesize + 108 -> mstate.framesize;
+                           (if intel_trace then
+                               '==float.saveSpace#'->puttext;
+                               mstate.framesize -> putint; newline;
+                           if);
+                       if);
+                    #);
+                  freeSpace:
+                    (#
+                    do (if mustSave then
+                           (* FIXME: must save possible return value? *)
+                           (add_ttt,108,esp,4) -> mstate.b.emitAluImmReg;
+                           mstate.framesize - 108 -> mstate.framesize;
+                           (if intel_trace then
+                               '==float.freeSpace#'->puttext;
+                               mstate.framesize -> putint; newline;
+                           if);
+                       if);
+                    exit pred[]
+                    #);
+                  save:
+                    (# stackAdr,off: @stackOff
+                    enter stackAdr
+                    do (if mustSave then
+                           fnsave -> mstate.b.emit2bytes;
+                           stackAdr -> off;
+                           off.putop 
+                       if);
+                       false -> returnBusy
+                    #);
+                  restore:
+                    (# off: @ stackOff; 
+                    do (if mustSave then
+                           0 -> off;
+                           (* must check and save possible return value *)
+                           (if returnBusy then
+                               pushCfloatImpl;
+                               off + 8 -> off;
+                           if);
+                           frstor -> mstate.b.emit2bytes;
+                           off.putop;
+                           (if returnBusy then
+                               fldl -> mstate.b.emit2bytes;
+                               0 -> off;
+                               off.putop;
+                               (add_ttt,8,esp,4) -> mstate.b.emitAluImmReg;
+                               mstate.framesize - 8 -> mstate.framesize;
+                               (if intel_trace then
+                                   '==float.restore(popCfloat)#'->puttext;
+                                   mstate.framesize -> putint; newline;
+                               if);
+                               mstate.b.eoo
+                           if);
+                           (*false -> mustSave*)
+                       if)
+                    #)
+               enter pred[]
+               do saveSpace
+               exit this(nframe)[]
+               #);
+             saveSpace:
+               (# 
+               do ncurrent[] -> &nframe -> ncurrent[];
+               #);
+             freeSpace:
+               (#
+               do (if ncurrent[] <> NONE then
+                      ncurrent.freeSpace -> ncurrent[]
+                  if)
+               #);
+             nsave:
+               (# stackOff: @integer
+               enter stackOff
+               do (if ncurrent[] <> none then
+                      stackOff -> ncurrent.save
+                  if)
+               #);
+             nrestore:
+               (#
+               do (if ncurrent[] <> NONE then ncurrent.restore if)
+               #);
+             fTop:
+               (# top: @integer; 
+               do (if ncurrent[] <> NONE then
+                      ncurrent.top -> top
+                  if)
+               exit top
+               #);
+             (* information on possible return float value from external *)
+             returnBusy: @boolean;
+             markReturn:
+               (# 
+               do true -> returnBusy;
+               #);
           #);
         dummyReg:[100]@integer; (* used by getRegForX /endX*)
      #);
@@ -1011,14 +1208,14 @@ getExternalResult:
                  (if fromdata then
                      D.LIP->s.usesite; 
                      (if intel_trace then
-                         '\nUse of undefined L'->puttext; labno->putInt; 
+                         '\nUse of (yet) undefined L'->puttext; labno->putInt; 
                          ' from .data at:'->puttext; 
                          D.LIP->puthex; newline;
                      if);
                   else
                      b.LIP->s.usesite; 
                      (if intel_trace then
-                         '\nUse of undefined L'->puttext; labno->putInt; 
+                         '\nUse of (yet) undefined L'->puttext; labno->putInt; 
                          ' from .text at:'->puttext; 
                          B.LIP->puthex; newline;
                      if);
@@ -1419,6 +1616,18 @@ getExternalResult:
                  readReg -> movl_rm -> emit2bytes;
              if);
              (writeReg,writeOffSet) -> IndirectReg; 
+          #);
+        emitMovMemIndirectReg:
+          (* FIXME: Fails for radreg=esp? *)
+          (# readReg, writeReg, readOffset, size: @integer;
+          enter (readReg, readOffset, size, writeReg)
+          do (if size = 2 then op_size_prefix -> emitbyte if);
+             (if size = 1 then
+                 writeReg -> movb_mr -> emit2bytes;
+              else
+                 writeReg -> movl_mr -> emit2bytes;
+             if);
+             (readReg,readOffSet) -> IndirectReg; 
           #);
         emitMovAddressToReg:
           (# I: ^backendInstruction
@@ -1995,7 +2204,7 @@ getAddr: integerValue
               do &epUse[]->s[];
                  mstate.B.LIP->s.usesite;
                  (if intel_trace then
-                     '\nUse of undefined local entrypoint '->puttext; 
+                     '\nUse of (yet) undefined local entrypoint '->puttext; 
                      entry[]-> puttext;
                      ' from .text at: '->puttext; 
                      mstate.B.LIP->puthex; ' e.LIP='->putText;
@@ -2019,7 +2228,7 @@ getAddr: integerValue
          do (if not notFoundWasCalled then
                 (if E.LIP=-1 then
                     (if intel_trace then
-                        'Second or later use of undefined entry'->putLine;
+                        'Second or later use of (yet) undefined entry'->putLine;
                     if);
                     addEpUse;
                     0 -> value;

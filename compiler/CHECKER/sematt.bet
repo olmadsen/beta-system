@@ -216,7 +216,25 @@ BODY 'checker' 'virtual' 'semattbody';
    comKind: (#exit 8 #); holderKind: (#exit 9 #);
    stateKind: (#exit 10 #);
    dispatchKind: (#exit 11 #);  
-   dispatchVirtualKind: (#exit 12 #);  
+   dispatchVirtualKind: (#exit 12 #); 
+   classKind: (# exit 13 #);
+   procKind: (# exit 14 #);
+   externalClassKind: (# exit 15 #);
+   
+   kindAstext:
+     (# kind: @integer; T: @text
+     enter kind
+     do (if kind
+         // standardKind then 'standard'->T;
+         // constKind then 'const'->T;
+         // generalKind then 'general'->T;
+         // classKind then 'class'->T;
+         // procKind then 'proc'->T
+         else
+            kind->T.putint
+        if)
+     exit T[]
+     #);
    
    insEval: (#exit 1#); simpleEval: (#exit 2#); 
    repValEval: (#exit 3#); repRefEval: (#exit 4 #);
@@ -447,6 +465,9 @@ BODY 'checker' 'virtual' 'semattbody';
    xrealdesc,                (* tmp. real desc *)
    repDesc,                  (* desc for general repetition *)
    superObject,              (* desc for the general super object *)
+   classDesc,                (* desc restricting a subpattern to be a class *)
+   procDesc,                 (* desc restricting a subpattern to be a proc *)
+   externalClassDesc,        (* dessc for external classes - bytecode *)
    holderDesc,               (* desc for Holder; used by COM/IDL to define 
                               * an object holding a reference to a simple
                               * value or a reference to a reference
@@ -940,22 +961,44 @@ BODY 'checker' 'virtual' 'semattbody';
      #);
 
    DescStack:
-     (* pattern used by check and synthesizer *)
-     (# Desc,    (* a desriptor to be checked  *)
-        Id:      (* an identifaction of the descriptor *)
-          [100] ^ASTindex;
+     (* Used by checker and synthesizer for saving
+      * descriptors to be checked or codegenerated
+      *)
+     (# Desc,                  (* a desriptor to be checked  *)
+        Id  : [100] ^ASTindex; (* an identifaction of the descriptor *)
+
         Kind,Cons: [100] @Integer; 
-        (* kind and construction mode; 
-         * kind=0 means that desc is a general pattern and cons is also 0; 
-         * kind<>1 means singular and Cons describes the construction mode.
+        (* kind and construction mode. Has so far not been used by
+         * the compiler; is currently used by the bytecode backend.
+         * kind: item. component, com, etc
+         * cons: 0 - no meaning
+         *       1 - singular static item
+         *       2 - singular inserted procedure item with no 
+         *           possible references to its instances
+         *       3 - singular dynamic decriptor, in do-part
          *)
         top: @ integer;
+        
+        InnerDescs: @
+          (# mark:
+               (# D: @ASTindex
+               enter D <<SLOT InnerDescs_mark:doPart>> 
+               #);
+             getId:
+               (# D: @ASTindex; id: ^text
+               enter D <<SLOT InnerDescs_getId:doPart>> 
+               exit id[]
+               #);
+             rep: @ <<SLOT InnerDescs_rep:descriptor>>
+          #);
         
         Push: 
           (# D,I: @ ASTindex ; K,C: @integer
           enter(D,K,C,I)
           do (if D.label
-              // gram.objectDescriptor // gram.attributesForm //gram.doPart then
+              // gram.objectDescriptor 
+              // gram.attributesForm 
+              // gram.doPart then
                  top+1->top;
                  (if (top >= Desc.range) then
                      (desc.range )->desc.extend;
@@ -965,7 +1008,16 @@ BODY 'checker' 'virtual' 'semattbody';
                  if);
                  &ASTindex[]->Desc[top][]; D->Desc[top]; 
                  &ASTindex[]->Id[top][]; I->Id[top];
-                 K->Kind[top]; C->Cons[top]
+                 K->Kind[top]; 
+                 C->Cons[top];
+                 (if C > 1 then 
+                     (* singular descriptors are marked in order
+                      * to generate unique class names.
+                      * Static objects are NOT amrked since
+                      * we use the object name
+                      *)
+                     D -> InnerDescs.mark 
+                 if)
           if)#);
 
         Pop:

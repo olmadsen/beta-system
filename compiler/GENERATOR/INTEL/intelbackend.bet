@@ -123,35 +123,40 @@ do (if intel_trace then 'backendstCst' -> comment if);
    (if I.size
     // 1 then
        movb_i8m -> emit2bytes;
-       (if I.condition then
-           (* FIXME: in the lack of stCstInx: *)
-           (i.readReg,i.inxReg,I.scale,i.readOffset)->IndexReg;
-        else
-           (i.readReg,i.readOffset)->IndirectReg;
-       if);
+       (i.readReg,i.readOffset)->IndirectReg;
        i.imm -> B_emitbyte;
     // 2 then
        op_size_prefix -> B_emitbyte;
        movl_im -> emit2bytes;
-       (if I.condition then
-           (* FIXME: in the lack of stCstInx: *)
-           (i.readReg,i.inxReg,I.scale,i.readOffset)->IndexReg;
-        else
-           (i.readReg,i.readOffset)->IndirectReg;
-       if);
+       (i.readReg,i.readOffset)->IndirectReg;
        i.imm -> emithalf;
     // 4 then
        movl_im -> emit2bytes;
-       (if I.condition then
-           (* FIXME: in the lack of stCstInx: *)
-           (i.readReg,i.inxReg,I.scale,i.readOffset)->IndexReg;
-        else
-           (i.readReg,i.readOffset)->IndirectReg;
-       if);
+       (i.readReg,i.readOffset)->IndirectReg;
        i.imm -> emitlong;
    if);
    eoo;
-
+   
+---backendstCstInx:dopart---
+do (if intel_trace then 'backendstCst' -> comment if);
+   (if I.size
+    // 1 then
+       movb_i8m -> emit2bytes;
+       (i.readReg,i.inxReg,I.scale,i.readOffset)->IndexReg;
+       i.imm -> B_emitbyte;
+    // 2 then
+       op_size_prefix -> B_emitbyte;
+       movl_im -> emit2bytes;
+       (i.readReg,i.inxReg,I.scale,i.readOffset)->IndexReg;
+       i.imm -> emithalf;
+    // 4 then
+       movl_im -> emit2bytes;
+       (i.readReg,i.inxReg,I.scale,i.readOffset)->IndexReg;
+       i.imm -> emitlong;
+   if);
+   eoo;
+ 
+   
 -- backendldVal:dopart --
 do (if intel_trace then 'backendldVl' -> comment if);
    I[]->emitMovAddressToReg;
@@ -267,6 +272,9 @@ do (if intel_trace then 'backendChkHeap' -> comment if);
               (* Lfail: *)
               regF -> _pushl_r -> B_emitbyte;          (* 1 byte *)
               (* Do NOT use doPush - ChkRA does the pop *)
+              (if intel_trace then 
+                  'ChkHeap# Not changing framesize' -> putline;
+              if);
               (if common.switch[87] then
                   saveProfStackTop;                    (* -s 87: 5 bytes *)
               if);
@@ -729,10 +737,11 @@ do (if intel_trace then 'backendtoXres' -> comment if);
 
 ---backendGetRegForXres:doPart---
 do (if intel_trace then 'backendGetRegForXres' -> comment; if);
-   (* The following is matched by code in getExternalResult *)
-   saveRegImpl;
-   ebp -> _pushl_r -> B_emitbyte;
-   esi -> _pushl_r -> B_emitbyte;
+   (* The following is matched by code in getExternalResult (backmstate.bet) *)
+   (* pushDataRegImpl; (datpete: 28/11/2001) - Now done in INTERMEDIATEmachine *)
+   saveRegImpl; (* Pushes edi and edx *)
+   ebp -> PushRegister;
+   esi -> PushRegister;
    eoo;
 
 --backendreturnInner:dopart --
@@ -799,13 +808,16 @@ do (if intel_trace then 'backendsetTop' -> comment if);
     // (i.imm<0) then
        (* Negative (push)- could be an add, but easier to read if using sub *)
        (sub_ttt, -i.imm, esp, 4) -> emitAluImmReg;
-       mstate.framesize + i.imm -> mstate.framesize;
     else
        (* Positive or 0 (pop): add. If zero, could possibly be optimized
         * out. But might be a zero with relocation?!
         *)
        (add_ttt, i.imm, esp, 4) -> emitAluImmReg;
-       mstate.framesize - i.imm -> mstate.framesize;
+   if);
+   mstate.framesize - i.imm -> mstate.framesize;
+   (if intel_trace then
+       '==setTop#'->puttext;
+       mstate.framesize -> putint; newline;
    if);
    eoo;
 
@@ -945,21 +957,11 @@ do (if intel_trace then 'backendStoreFloatInx' -> comment if);
 
 ---backendStoreFloat2int:dopart---
 do (if intel_trace then 'backendStoreFloat2int' -> comment if);
-   
-   (* save old FPU control word and set chopping *)
-   eax -> PushBusyRegDuring
+   FloatSetChopping
    (# 
-   do fstcw -> emit2bytes; (esp,-4) -> IndirectReg;
-      eax -> movl_mr -> emit2bytes; (esp,-4) -> IndirectReg;
-      ah -> _movb_i8r -> B_emitbyte; 12 -> B_emitbyte;
-      eax -> movl_rm -> emit2bytes; (esp,-8) -> IndirectReg;
-      fldcw -> emit2bytes; (esp,-8) -> IndirectReg;
+   do fistpl -> emit2bytes; 
+      (i.readReg, i.readOffset) -> IndirectReg; 
    #);
-   
-   fistpl -> emit2bytes; 
-   (i.readReg, i.readOffset) -> IndirectReg; 
-   (* restore old FPU control word *)
-   fldcw -> emit2bytes; (esp,-8) -> IndirectReg; (* FIXME: done above? *)
    eoo;
 
 ---backendLoadInt2FloatInx:dopart---
@@ -1024,31 +1026,21 @@ do (if intel_trace then 'backendintReg2float' -> comment if);
 
 --backendfloat2int:dopart --
 do (if intel_trace then 'backendfloat2int' -> comment if);
-
-   (* save old FPU control word and set chopping *)
-   eax -> PushBusyRegDuring
+   FloatSetChopping
    (# 
-   do fstcw -> emit2bytes; (esp,-4) -> IndirectReg;
-      eax -> movl_mr -> emit2bytes; (esp,-4) -> IndirectReg;
-      ah -> _movb_i8r -> B_emitbyte; 12 -> B_emitbyte;
-      eax -> movl_rm -> emit2bytes; (esp,-8) -> IndirectReg;
-      fldcw -> emit2bytes; (esp,-8) -> IndirectReg;
+   do fistpl -> emit2bytes; 
+      mstate.d.tmplab (* ensure it is allocated *);
+      (mstate.d.tmplab.lab.labno, mstate.d.tmplab.lab.type, true, 0, 0, ea_d32)
+        -> LocalLabPutWithReloc;
+      (mstate.d.tmplab, I.writeReg) -> ldRegFromLab;
    #);
-   
-   fistpl -> emit2bytes; 
-   mstate.d.tmplab (* ensure it is allocated *);
-   (mstate.d.tmplab.lab.labno, mstate.d.tmplab.lab.type, true, 0, 0, ea_d32)
-    -> LocalLabPutWithReloc;
-   (* restore old FPU control word *)
-   fldcw -> emit2bytes; (esp,-8) -> IndirectReg; (* FIXME: done above? *)
-   
-   (mstate.d.tmplab, I.writeReg) -> ldRegFromLab;
 
 --backendcmpFloat:dopart --
 do (if intel_trace then 'backendcmpFloat' -> comment if);
-   (* stack top operations. Generate fcompp - i.e. pop arguments*)
+   (* stack top operations. Generate fcomp(p) - i.e. pop arguments*)
    (if I.condition (* see INTERMEDIATEmachine.cmpFloat *) then
-       I[] -> reverseCond
+       (if intel_trace then 'backendcmpFloat:reverseCond' -> comment if);
+       I[] -> reverseCond;
    if);
    (if I.PopFloatStack then
        (* Compare and pop two operands *)
@@ -1058,15 +1050,27 @@ do (if intel_trace then 'backendcmpFloat' -> comment if);
        1 -> fcomp -> emit2bytes;
    if);
    eoo;
----backendgCmpFloatMemInx:dopart---
-do 
-   
----backendstCstInx:dopart---
-do 
    
 ---backendgCmpFloatMem:dopart--
-do
+do (if I.PopFloatStack then
+       (* Compare and pop two operands *)
+       fcompl -> emit2bytes;
+    else
+       (* Compare and pop only one operand *)
+       fcoml -> emit2bytes;
+   if);
+   (I.readReg, I.readOffset) -> IndirectReg;
    
+---backendgCmpFloatMemInx:dopart---
+do (if I.PopFloatStack then
+       (* Compare and pop two operands *)
+       fcompl -> emit2bytes;
+    else
+       (* Compare and pop only one operand *)
+       fcoml -> emit2bytes;
+   if);
+   (I.readReg, I.InxReg, 8, I.ReadOffset) -> IndexReg;
+
 --backendcmpToBoolFloat:dopart --
 do (if intel_trace then 'backendcmpToBoolFloat' -> comment if);
    (# Lab: @backendLocalLab;
@@ -1074,6 +1078,7 @@ do (if intel_trace then 'backendcmpToBoolFloat' -> comment if);
       Lab.LabNo -> I.Labno;
       (1, I.writeReg) -> emitMovlImmReg;
       (if I.condition (* see INTERMEDIATEmachine.cmpFloat *) then
+          (if intel_trace then 'backendcmpToBoolFloat:reverseCond' -> comment if);
           I[] -> reverseCond;
       if);
       (if I.cond (* IF T1 cc R then goto L *)
@@ -1106,10 +1111,11 @@ do (if intel_trace then
        ('writereg', i.writeReg) -> putfreg;
        newline;
    if);
-   (I.readReg, I.readReg2) -> mstate.do_float
-   (# swapped:: (# do 1 -> faddp -> emit2bytes #);
-   do 1 -> faddp -> emit2bytes
-   #); 
+   I[] -> mstate.doFloatBinOp
+   (# memory::   (# do faddl -> emit2bytes; #);
+      swapped::  (# do 1 -> faddp -> emit2bytes; #);
+      register:: (# do 1 -> faddp -> emit2bytes; #);
+   #);
    eoo;
 
 --backendsubFloat:dopart --
@@ -1120,10 +1126,11 @@ do (if intel_trace then
        ('writereg', i.writeReg) -> putfreg;
        newline;
    if);
-   (I.readReg, I.readReg2) -> mstate.do_float
-   (# swapped:: (# do 1->fsubrp -> emit2bytes; #);
-   do 1 -> fsubp -> emit2bytes
-   #); 
+   I[] -> mstate.doFloatBinOp
+   (# memory::   (# do fsubl -> emit2bytes; #);
+      swapped::  (# do 1 -> fsubrp -> emit2bytes; #);
+      register:: (# do 1 -> fsubp -> emit2bytes; #);
+   #);
    eoo;
 
 --backendmulFloat:dopart --
@@ -1134,10 +1141,11 @@ do (if intel_trace then
        ('writereg', i.writeReg) -> putfreg;
        newline;
    if);
-   (I.readReg, I.readReg2) -> mstate.do_float
-   (# swapped:: (# do 1 -> fmulp -> emit2bytes #);
-   do 1 -> fmulp -> emit2bytes
-   #); 
+   I[] -> mstate.doFloatBinOp
+   (# memory::   (# do fmull -> emit2bytes; #);
+      swapped::  (# do 1 -> fmulp -> emit2bytes; #);
+      register:: (# do 1 -> fmulp -> emit2bytes; #);
+   #);
    eoo;
    
 --backenddivFloat:dopart --
@@ -1148,9 +1156,10 @@ do (if intel_trace then
        ('writereg', i.writeReg) -> putfreg;
        newline;
    if);
-   (I.readReg, I.readReg2) -> mstate.do_float
-   (# swapped:: (# do 1 -> fdivrp -> emit2bytes; #);
-   do 1 -> fdivp -> emit2bytes;
+   I[] -> mstate.doFloatBinOp
+   (# memory::   (# do fdivl -> emit2bytes; #);
+      swapped::  (# do 1 -> fdivrp -> emit2bytes; #);
+      register:: (# do 1 -> fdivp -> emit2bytes; #);
    #);
    eoo;
 
@@ -1195,58 +1204,34 @@ do(if intel_trace then ' backendDumpReg' -> comment if);
 
 --backendPushReg:dopart --
 do (if intel_trace then 'backendPushReg' -> comment if);
-   (# dataCount,tag:@integer;
-   do liveAdr[]->scanBitvektor32
-      (# 
-      do (if current<>EDI then (* CallReg/Ca/CallO *)
-             (*'intel.pushAdrreg, %d\n'->screen.putformat(# do current -> d #);*)
-             current -> pushRegister;
-         if)
-      #);
-      liveData[]->scanBitvektor32
-      (# 
-      do (*'intel.pushDatareg, %d\n'->screen.putformat(# do current -> d #);*)
-         dataCount+1->dataCount;
-         current -> pushRegister;
-      #);
-      dataCount->pushProtectTag
+   liveAdr[]->scanBitvektor32
+   (# 
+   do (if current<>EDI then (* CallReg/Ca/CallO *)
+          (*'pushAdrreg, %d\n'->screen.putformat(# do current -> d #);*)
+          current -> pushRegister;
+      if)
    #);
+   PushDataRegImpl;
    eoo;
    
 --backendPopReg:dopart --
 do (if intel_trace then 'backendPopReg' -> comment if);
-   (# Areg,Dreg:[8]@boolean;
-      dataCount:@integer;
-   do liveData[]->scanBitvektor32
-      (# 
-      do (*'intel.popDatareg, %d\n'->screen.putformat(# do current -> d #);*) 
-         true -> Dreg[current+1];
-         dataCount+1->dataCount
-      #);
-      
-      liveAdr[]->scanBitvektor32
+   
+   PopDataRegImpl;
+   (# Areg: [8]@boolean;
+      popTag: @boolean;
+      (* scan live address regs forward *)
+   do liveAdr[]->scanBitvektor32
       (# 
       do (if current<>EDI then
              (*'intel.popAdrreg, %d\n'->screen.putformat(# do current -> d #);*) 
              true -> Areg[current+1]
          if)
       #);
-      
-      (if dataCount>0 then
-          (for i:8 repeat
-               (if dReg[8-i+1] then
-                   (if dataCount>0 then
-                       (* pop data tag *)
-                       8-i -> popRegister;
-                       0->dataCount
-                   if);
-                   8-i -> popRegister;
-               if)
-          for)
-      if);
+      (* Pop live address regs backward *)
       (for i:8 repeat
            (if aReg[8-i+1] then 
-               8 - i -> popRegister;
+               8-i -> popRegister;
            if)
       for)
    #);
@@ -1254,12 +1239,88 @@ do (if intel_trace then 'backendPopReg' -> comment if);
 
 --backendPushDataReg:dopart --
 do (if intel_trace then 'backendPushDataReg' -> comment if);
-   'backendPushDataReg' -> TODO;
+   (# dataCount: @integer;
+   do liveData[]->scanBitvektor32
+      (# 
+      do (*'pushDatareg: %d\n'->screen.putformat(# do current -> d #);*)
+         dataCount+1->dataCount;
+         current -> pushRegister;
+      #);
+      
+      mstate.reg.float.saveSpace;
+      (* the actual save of floating point registers
+       * is made just before the call - 
+       * - either callCproc for external calls
+       * or gjsr for BETA calls
+       *)
+      
+      mstate.reg.float.fTop/4 + dataCount->pushProtectTag;
+   #);
    eoo;
 
 --backendPopDataReg:dopart --
 do (if intel_trace then 'backendPopDataReg' -> comment if);
-   'backendPopDataReg' -> TODO;
+   (# Dreg:[8]@boolean;
+      popTag: @boolean;
+   do liveData[]->scanBitvektor32
+      (# 
+      do (*'popDatareg: %d\n'->screen.putformat(# do current -> d #);*)
+         (if false and (current=EAX) and (I[]<>NONE) and (I.condition) then
+             (* Ignore eax alive after external; 
+              * see INTEERMEDIATEmachine.get***Xres
+              *)
+          else
+             true -> Dreg[current+1];
+             true -> popTag;
+         if);
+      #);
+      
+      (mstate.reg.float.fTop>0) or popTag -> popTag;
+      pop:
+        (if popTag then
+            (* Pop into first data register restored below *)
+            (for i:8 repeat
+                 (if dReg[8-i+1] then
+                     (if popTag then
+                         (* pop data tag into first data register *)
+                         (if intel_trace then
+                             'popDataRegs: pop tag into reg' -> putline;
+                         if);
+                         8-i -> popRegister;
+                         false->popTag;
+                         leave pop;
+                     if);
+                 if)
+            for);
+            (if popTag then
+                (* popTag still true: No data regs on stack.
+                 * Pop tag caused by floating point regs.
+                 * FIXME: make mstate.reg.float.nrestore offset by
+                 * 4 and mstate.reg.float.freeSpace subtract 4 more.
+                 *)
+                (# I: ^backendInstruction;
+                do &backendInstruction[] -> I[];
+                   4->I.imm;
+                   I[] -> SetTopImpl;
+                #);
+            if);
+        if);
+      
+      (* Possible tag now removed. Restore floats *)
+      mstate.reg.float.nrestore;
+      mstate.reg.float.freeSpace;
+      
+      (* Restore data regs *)
+      (for i:8 repeat
+           (if dReg[8-i+1] then
+               (if intel_trace then
+                   'popDataRegs: pop reg ' -> puttext;
+                   8-i -> putint; newline;
+               if);
+               8-i -> popRegister;
+           if)
+      for);
+   #);
    eoo;
 
 --backendPushFloatReg:dopart --
@@ -1447,14 +1508,11 @@ do (if intel_trace then 'backendjmpReg' -> comment if);
 
 --backendgJsr:dopart --
 do (if intel_trace then 'gJsr' -> comment if);
-       (*(if intel_trace then (op[], none) -> traceOps; if);*)
-   (if common.switch[85] then
-       (* we rely on that NO values have been pushed
-        * on the stack since float.saveSpace in pushDataReg
-        *)
-       (*4 -> rep.float.nsave*)
-       (* restore is made in popDataReg *)
-   if);
+   (* we rely on that NO values have been pushed
+    * on the stack since float.saveSpace in pushData
+    *)
+   4 -> mstate.reg.float.nsave;
+   
    (if I.isLocal then
        I.label -> mstate.b.emitCallLocal;
     else
@@ -1595,7 +1653,8 @@ do (if intel_trace then 'backendcmpAndJmpFloat' -> comment if);
     * since it may be used in subsequent compares
     *)
    (if I.condition (* see INTERMEDIATEmachine.cmpFloat *) then
-       I[] -> reverseCond
+       (if intel_trace then 'backendcmpAndJmpFloat:reverseCond' -> comment if);
+       I[] -> reverseCond;
    if);
    (if I.cond (* IF T1 cc R then goto L *)
     // common.cond_eq then I[]->fBeqImpl
@@ -1670,6 +1729,10 @@ do (if common.switch[87] then
         * pushpop counter.
         *)
        mstate.framesize - 3*4 -> mstate.framesize;
+       (if intel_trace then
+           '==CallPrim/MkTO/CopyT#'->puttext;
+           mstate.framesize -> putint; newline;
+       if);
     // ('CopyPPP'->I.label.equal)
     // ('CopySPP'->I.label.equal) then
        mstate.framesize - 1*4 -> mstate.framesize;
@@ -1679,6 +1742,10 @@ do (if common.switch[87] then
     // ('CpkSVT_W'->I.label.equal) then
        (* Each of these runtime routines push 1 argument onto the stack *)
        mstate.framesize + 1*4  -> mstate.framesize;
+       (if intel_trace then
+           '==CallPrim/Cpk#'->puttext;
+           mstate.framesize -> putint; newline;
+       if);
    if);
    i[]->jsrTimpl;
    (if intel_trace then
@@ -1688,13 +1755,12 @@ do (if common.switch[87] then
    eoo;
 
 --backendCallAlloPrim:dopart --
-do (if common.switch[85] then
-       (* we rely on that NO values have been pushed
-        * on the stack since float.saveSpace in pushDataReg
-        *)
-       (*4 -> rep.float.nsave*)
-       (* restore is made in popDataReg *)
-   if);
+do (* we rely on that NO values have been pushed
+    * on the stack since float.saveSpace in pushDataReg
+    *)
+   4 -> mstate.reg.float.nsave;
+   (* restore is made in popDataReg *)
+   
    (if common.switch[87] then
        saveProfStackTop;
    if);
@@ -1732,6 +1798,10 @@ do (if intel_trace then 'backendPushCfloat' -> comment if);
    (* Push 2 top elements of floating point stack onto activation-stack *)
    (sub_ttt,8, esp, 4) -> emitAluImmReg;
    mstate.framesize+2*4 -> mstate.framesize;
+   (if intel_trace then
+       '==PushCfloat#'->puttext;
+       mstate.framesize -> putint; newline;
+   if);
    fstpl -> emit2bytes; (esp,0) -> IndirectReg;
    eoo;
    
@@ -1744,12 +1814,12 @@ do (# proc: (# exit I.label[] #);
       extType: (# exit i.imm #);
       noOfParam: (# exit i.size #);
       exitType: (# exit i.type #);
-   do (if common.switch[85] then
-          (* stackOff is 
-           * noOfPar*4 + (stackMark+svavedRegisters)*4
-           *)
-          (*I.size*4 + (1+4)*4 -> mstate.reg.float.nsave*)
-      if);
+   do (* stackOff is 
+       * noOfPar*4 + (tag+savedRegisters)*4
+       * savedregisters is 4 (see getRegForXres)
+       *)
+      I.size*4 + (1+4)*4 -> mstate.reg.float.nsave;
+      
       I.label.copy -> I.label[];
       (if common.switch[87] then
           saveProfStackTop;
@@ -1802,7 +1872,7 @@ do (if intel_trace then 'backendgetSimpleXres' -> comment if);
 ---backendgetTextXres:doPart---
 do (if intel_trace then 'backendgetTextXres' -> comment if);
    (* Not used anymore *)
-   I[] -> getExternalResult(# do getSimpleResult #);
+   'backendgetTextXres' -> TODO;
    eoo;
    
 ---realXresIsDouble:doPart---
@@ -1817,6 +1887,7 @@ do (if intel_trace then 'backendgetDoubleXres' -> comment if);
    
 ---backendgetFloatXres:doPart---
 do (if intel_trace then 'backendgetFloatXres' -> comment if);
+   mstate.reg.float.markReturn;
    I[] -> getExternalResult;
    eoo;
    
@@ -1837,6 +1908,10 @@ do (if i.imm (*exitType*) = common.dataXpartPar then
        newline;
        (sub_ttt, i.size(*byteSize*), esp, 4) -> emitAluImmReg;
        mstate.framesize + I.size -> mstate.framesize;
+       (if intel_trace then
+           '==allocExternalResult#'->puttext;
+           mstate.framesize -> putint; newline;
+       if);
    if);
 
 ---backendSPtoPrim:dopart---
@@ -2215,6 +2290,10 @@ do (if intel_trace then 'backendReturnVirtualCOM' -> comment if);
        ret_pop -> B_emitbyte;
        I.length(*noOfReg*) * 4 -> emitHalf; 
        mstate.framesize - I.length*4 -> mstate.framesize;
+       (if intel_trace then
+           '==ReturnVirtualCOM#'->puttext;
+           mstate.framesize -> putint; newline;
+       if);
     else
        rtsImpl;
    if);   
@@ -2244,7 +2323,7 @@ do
       if);
       t[] -> mstate.Cidentifier -> t[];
       i.imm-(i.type->CAP.getNumberOfRegisters)->t.putint;
-      (i.readReg,t[])->emitMovlRegText
+      (i.readReg,t[])->emitMovlRegText;
    #)
       
 --backendLoadSpilledDataRegImpl:dopart--
@@ -2260,5 +2339,23 @@ do
       if);
       t[] -> mstate.Cidentifier -> t[];
       i.imm-(i.type->CAP.getNumberOfRegisters)->t.putint;
-      (t[],i.writeReg)->emitMovlTextReg
+      (t[],i.writeReg)->emitMovlTextReg;
+      
+      (* datpete: 12/12/01: Since address registers are used to point into
+       * the middle of objects, e.g. at reference assignments, and not only 
+       * as GC root registers, these registers may be spilled into memory 
+       * locations. These locations can survive a long time, and cause GC 
+       * errors if not cleared. This is true for spilling on the stack too 
+       *)
+      (if i.type=adrReg then
+          (*(0,t[]) -> emitMovlImmText;*)
+          (* One could consider this code instead:
+           *   xor  r32, r32   # 1/3 (2 bytes)
+           *   xchg r32, m32   # 3/5 (5 bytes)
+           * The code is lightly smaller, but the two mov instructions 
+           * used above only take 1 cycles to complete, whereas the xor/xchg 
+           * takes 8 cycles plus a LOCK pipeline stall
+           *)
+      if);
+
    #)

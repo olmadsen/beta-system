@@ -60,8 +60,9 @@ do actionPart:
                    (if (FullFN[]->thisElm.T.equal) then
                        leave actionPart;
         if)if)#)if);  
+       (* '\ninsert: ' ->puttext; FullFN[] -> putline;*)
         FullFN[]->E.T[]; kind->E.kind;  
-        assemble->E.assemble; inLib->E.inLib
+        assemble->E.assemble; inLib->E.inLib;
      #);  
    
 ---asmlink_Libs_insert:doPart---
@@ -149,7 +150,7 @@ do d[] -> E.directory[]; c[] -> E.command[]
      enter t[]
      do &Text[] -> copy[]; 
         '"' -> copy.put;
-        (if common.switch[56] then
+        (if switch182 or common.switch[56] then
             t[] -> stripPath -> copy.puttext
          else
             t[] -> copy.puttext;
@@ -187,6 +188,20 @@ do d[] -> E.directory[]; c[] -> E.command[]
    
    LinkLibraries: <<SLOT linkLibraries:descriptor>>;
    
+   addClassList:
+     (# FN,N: ^text; F: @file; ch: @char
+     enter FN[]
+     do '.clst' -> (FN.copy).append -> F.name;
+        F.openRead;
+        L: (if not F.eos then
+               BinExt->(F.getline).append 
+               (*-> N[] -> quote -> putline;
+                N[] *)
+                 -> quote -> linkObj;
+
+               restart L;
+           if)
+     #);
    BetaLib,BetaRunLib: ^Text;
    AFF: @File
      (# AccessError:: (# do name -> thisTranslate.TransAccessException #);
@@ -269,35 +284,50 @@ do d[] -> E.directory[]; c[] -> E.command[]
          * The first beta.o file MUST be betaenv/tstenv
          *)
              (*(if common.switch[16] then mkSym.init if);*)
-        L: TX.Scan
-          (#
-          do (if thisElm.kind = BetaEnvKind then 
-                 (*(if common.switch[16] then thisElm.T[]->mkSym.addFile if);*)
-                 BinExt -> thisElm.T.CopyAppend -> betaenvObj[];
-                 thisElm.inLib and hasSharedLibs -> betaenvIsSharedLib;
-                 (* Some linkers may have problems with betaenv 
-                  * if it is a shared library
-                  *)
-                 leave L (* there is only one betaenv *)
-             if);
-          #);
-        (if not common.switch[61] then
-            betaenvObj[] -> quote -> linkObj
-            (* ELSE
-             * On SGI, etc. we may have to split the link list
-             * before inserting betaenv
+        (if not switch182 then
+            (* an entry for betaenv.bet with kind = BetaEndkind
+             * is generated; another one for betaenv.J/.class
+             * is also generated; the betaenvKind should be skipped
              *)
-        if);
-
-        TX.Scan
-        (#
-        do (if thisElm.kind = BetaKind then 
-               (*(if common.switch[16] then thisElm.T[]->mkSym.addFile if);*)
-               (if not (thisElm.inLib and hasSharedLibs) then
-                   BinExt->thisElm.T.CopyAppend-> quote -> linkObj
-        if)if)#);
+            L: TX.Scan
+              (#
+              do (if thisElm.kind = BetaEnvKind then 
+                     (*(if common.switch[16] then thisElm.T[]->mkSym.addFile if);*)
+                     BinExt -> thisElm.T.CopyAppend -> betaenvObj[];
+                     thisElm.inLib and hasSharedLibs -> betaenvIsSharedLib;
+                     (* Some linkers may have problems with betaenv 
+                      * if it is a shared library
+                      *)
+                     leave L (* there is only one betaenv *)
+                 if);
+              #);
+            (if not common.switch[61] then
+                betaenvObj[] -> quote -> linkObj
+                (* ELSE
+                 * On SGI, etc. we may have to split the link list
+                 * before inserting betaenv
+                 *)
+        if)if);
         
-           (* (if common.switch[16] then mkSym.fini if);*)
+        (if switch182 then
+            TX.Scan
+            (#
+            do (if thisElm.kind 
+                // byteCodeFileKind then
+                   (*'\nBytecodeFile:'->puttext; thisElm.T[] -> putline;*)
+                   thisElm.T[] -> addClassList;
+                // ByteCodeKind then
+                   (if not (thisElm.inLib and hasSharedLibs) then
+                       BinExt->thisElm.T.CopyAppend-> quote -> linkObj
+            if)if)#);
+         else
+            TX.Scan
+            (#
+            do (if thisElm.kind = BetaKind then
+                   (if not (thisElm.inLib and hasSharedLibs) then
+                       BinExt->thisElm.T.CopyAppend-> quote -> linkObj
+            if)if)#);
+        if);
         
         SplitLdA;
         
@@ -310,26 +340,28 @@ do d[] -> E.directory[]; c[] -> E.command[]
                contCh -> S.put; '\n\t'->S.append;
                S[] -> ldA.prepend;
         #)if);
-
-        (* put the BETA_DATA-file into the link directive;
-         * it must appear before any shared libraries; 
-         * otherwise  problmes for sgi.
-         *)
-        TX.scan
-        (#
-        do (if thisElm.kind = BetaDataKind then
-               thisElm.T[] -> betaDataFile[];
-	       (if (common.targetMachineId = common.nti_ms) 
-                   or (common.targetMachineId = common.nti_gnu) 
-                   or (common.targetMachineId = common.nti) then
-                   BinExt -> thisElm.T.CopyAppend -> LinkObj
-	        else 
-                   BinExt -> thisElm.T.CopyAppend -> xLinkObj
-               if)
-        if)#);
         
-        
-        (BetaRun[],userDefinedBetaRun)->addBetaRun;
+        (if not switch182 then
+            (* put the BETA_DATA-file into the link directive;
+             * it must appear before any shared libraries; 
+             * otherwise  problmes for sgi.
+             *)
+            TX.scan
+            (#
+            do (if thisElm.kind = BetaDataKind then
+                   thisElm.T[] -> betaDataFile[];
+	           (if (common.targetMachineId = common.nti_ms) 
+                       or (common.targetMachineId = common.nti_gnu) 
+                       or (common.targetMachineId = common.nti) then
+                       BinExt -> thisElm.T.CopyAppend -> LinkObj
+	            else 
+                       BinExt -> thisElm.T.CopyAppend -> xLinkObj
+                   if)
+            if)#);
+            
+            
+            (BetaRun[],userDefinedBetaRun)->addBetaRun;
+        if);
         
         (* Put the OBJFILES into the link directive *)
         TX.Scan
@@ -338,39 +370,40 @@ do d[] -> E.directory[]; c[] -> E.command[]
                thisElm.T[] -> quote -> linkObj
         if)#);
         
-        <<SLOT asmlinkdynamic:descriptor>>; (* solaris hack*)
-        
-        (* Put the shared libs into the link directive *)
-        Libs.scan
-        (#
-        do (if hasSharedLibs then 
-               thisElm.T[]-> addSharedLibFile -> linkObj 
-           if)
-        #);
-        
-        (* Put the LIBFILES into the link directive *)
-        TX.scan
-        (#
-        do (if thisElm.kind = LibKind then 
-               thisElm.T[]-> quote -> linkObj
-        if)#); 
-        
-        (* Specify directories needed by LINKOPT libraries *)
-        <<SLOT AddLinkDirs: descriptor>>;
-        
-        (* Put the LINKOPT into the link directive: will this work for MAC? *)
-        TX.scan
-        (#
-        do (if thisElm.kind = LinkOptKind then 
-               thisElm.T[] -> linkObj (* NO quote here *)
-        if)#); 
-        
-        <<SLOT libraries: descriptor>>;
-        
-        (*lda[]->putline;*)
-        
+        (if not switch182 then
+            <<SLOT asmlinkdynamic:descriptor>>; (* solaris hack*)
+            
+            (* Put the shared libs into the link directive *)
+            Libs.scan
+            (#
+            do (if hasSharedLibs then 
+                   thisElm.T[]-> addSharedLibFile -> linkObj 
+               if)
+            #);
+            
+            (* Put the LIBFILES into the link directive *)
+            TX.scan
+            (#
+            do (if thisElm.kind = LibKind then 
+                   thisElm.T[]-> quote -> linkObj
+            if)#); 
+            
+            (* Specify directories needed by LINKOPT libraries *)
+            <<SLOT AddLinkDirs: descriptor>>;
+            
+            (* Put the LINKOPT into the link directive: will this work for MAC? *)
+            TX.scan
+            (#
+            do (if thisElm.kind = LinkOptKind then 
+                   thisElm.T[] -> linkObj (* NO quote here *)
+            if)#); 
+            
+            <<SLOT libraries: descriptor>>;
+            
+            (*lda[]->putline;*)
+        if); (* end of skip *)
         << SLOT link: descriptor >>;
-        ldA[]->AFF.putText
+        ldA[]->AFF.putline
      #);
    
    hostMachineType: @text;
@@ -460,7 +493,15 @@ do &text[]->ldA[];
    (* Assemble (some of) the Beta files *)
    TX.Scan
    (#
-   do (if ThisElm.assemble then thisElm.T[]->&Assembler  if);
+   do (if switch182 and (not common.switch[184]) then 
+          (if thisElm.kind = ByteCodeKind then
+              thisElm.T[]->&Assembler;
+          if);
+       else
+          (if ThisElm.assemble then 
+              thisElm.T[]->&Assembler
+          if);
+      if);
    #);
    
    (* Put possible build commands into the job-file *)
@@ -488,11 +529,11 @@ do &text[]->ldA[];
        //ResourceKind then
           (if (not common.switch[6]) or ('nti' -> hostMachineType.equal) then
               (* if not link then not resource (except on Windows NT) *)
-          (if verboseLevel<verboseLevel.nothing then
-              echo; 'Resource '->AFF.puttext; thisElm.T[] -> AFF.putLine;
+              (if verboseLevel<verboseLevel.nothing then
+                  echo; 'Resource '->AFF.puttext; thisElm.T[] -> AFF.putLine;
+              if);
+              (NOT notFirst,thisElm.T) -> resource; true->notFirst    
           if);
-          (NOT notFirst,thisElm.T) -> resource; true->notFirst    
-      if);
       if);
    #);
    (if hasSharedLibs then LinkLibraries if);
@@ -527,10 +568,10 @@ do &text[]->ldA[];
    <<SLOT jobFilePermission:descriptor>>;
    
    L:
-   (if (not common.switch[33]) (* -j/--nojob *) then
-       (AFF[],common[],infoStream[],messageStream[],
-       hostMachineType[], TargetMachine, jobfilemachine[],
-       interactiveCompiler)
-         -> thisTranslate.JobFileRunner
-   if);
+     (if (not common.switch[33]) (* -j/--nojob *) then
+         (AFF[],common[],infoStream[],messageStream[],
+         hostMachineType[], TargetMachine, jobfilemachine[],
+         interactiveCompiler)
+           -> thisTranslate.JobFileRunner
+     if);
 #)

@@ -1,0 +1,439 @@
+ORIGIN 'genlib';
+INCLUDE 'auxlib';
+---theGenLib:attributes---
+
+Type: 
+  (# isRef: < booleanValue;
+     isList:< booleanValue;
+     asText:<
+       (# T: ^text
+       do inner
+       exit T[]
+       #)
+  do inner
+  exit this(Type)[]
+  #);
+int32Value: Type 
+  (# asText::
+       (#
+       do (if isJava then 'I'->T[] else 'int32'->T[] if)
+       #)
+  #);
+charValue: Type 
+  (# asText::
+       (#
+       do (if isJava then 'C'->T[] else 'Char'->T[] if)
+       #)
+  #);
+
+Void: Type
+  (# asText:: 
+       (#
+       do (if isJava then 'V'->T[] else 'void'->T[] if)
+       #)
+  #);
+            
+Reference: Type 
+  (# class: ^text;
+     isRef:: TrueValue;
+     asText::
+       (# 
+       do (if isJava then
+              'L' -> T[]; class[] -> T.append; ';'->T.put;
+           else 
+              'class ' -> T[]; class[] -> T.append
+          if)
+       #)
+  enter class[]
+  do (if 'object' -> class.equalNCS then
+         (if true
+          // isJava then
+             'java/lang/Object' -> class[]
+          // isDotNet then
+             '[mscorlib]System.Object' -> class[]
+          else
+             'Unknown_platform.Object' -> class[]
+         if);
+     if);
+  #);
+Array: Type
+  (# element: ^Type;
+     isRef:: trueValue;
+     asText::
+       (#
+       do (if isJava then 
+              '[' -> T[];
+              element.asText -> T.append; 
+           else (* FIXME *)
+              element.asText -> T[]; '[]' -> T.append
+          if)
+       #)
+  enter element[]
+  #);
+List: Type
+  (# L: [3] ^Type; top: @integer;
+     isList::trueValue;
+     append:
+       (# T: ^Type; TL: ^List
+       enter T[]
+       do (if T.isList then
+              T[] -> TL[];
+              TL.scan(# do current[] -> append #)
+           else
+              (if (top+1->top) > L.range then
+                  L.range -> L.extend
+              if);              
+              T[]-> L[top][]
+          if)
+       #);
+     scan:
+       (# current: ^Type
+       do (for i: top repeat
+               L[i][] -> current[];
+               INNER
+          for)
+       #);
+     asText::
+       (# 
+       do &text[] -> T[];
+          (if isJava then
+              scan(#do current.asText -> T.append #);
+           else
+              scan
+              (# addSep: @boolean;
+              do (if addSep then ','->T.put if);
+                 current.asText -> T.append;
+                 true -> addSep;
+              #);
+          if)
+       #)
+  #);
+
+valueSignature:
+  (# desc: ^ASTindex; sig: ^Type
+  enter desc[]
+  do (if true 
+      // desc -> sematt.integerDesc.equal then
+         int32Value -> sig[]
+      // desc -> sematt.charDesc.equal then
+         charValue -> sig[]
+      else
+         int32Value -> sig[]
+     if)
+  exit sig[]
+  #);
+
+Signature:
+  (# NNsig: ^List;
+     XXsig: ^Type;
+     method: ^text;
+
+     noOfEnterArgs: 
+       (# N: @integer 
+       do (if NNsig[] <> none then NNsig.top -> N if) 
+       exit N 
+       #);
+     enterSig:
+       (# noNsig: @boolean;
+          T: @text
+       enter noNsig
+       do '('->T;
+          (if not NoNsig then NNsig.asText -> T.append if);
+          ')'->T.put;
+       exit T[]
+       #);
+     exitSig:
+       (# noXsig: @boolean; T: ^text
+       enter noXsig
+       do (if noXsig then voidExitSig -> T[] else XXsig.asText -> T[] if)
+       exit T[]
+       #);
+     voidExitSig: 
+       (# T: @text 
+       do (if isJava then 'V' -> T else 'void'->T if);
+       exit T[]
+       #);
+     asText:
+       (# noNsig,noXsig: @boolean;
+          T: ^text
+       enter(noNsig,noXsig)          
+       do (if isJava then
+              (if method[] <> none then
+                  method.copy -> T[]
+               else
+                  &text[] -> T[];
+                  '\n*** method is none ' -> putline
+              if);
+              noNsig-> enterSig -> T.append;
+              noXsig -> exitSig -> T.append;
+           else
+              noXsig -> exitSig -> T[];
+              ' '->T.append;
+              (if method[] <> none then
+                  '\'' -> T.put; (* Quote to avoid clash with IL reserved words, e.g. add *)
+                  method.copy -> T.append;
+                  '\'' -> T.put;
+               else
+                  '\n*** method is none ' -> putline
+              if);
+              noNsig -> enterSig -> T.append
+          if)
+       exit T[]
+       #);
+
+     thisDesc: @ASTindex;
+     thisChain: ^DH.superChain;
+     
+     setDesc:
+       (# EV: ^ASTindex; MN,vKind: @integer
+       enter EV[]
+       do (thisSuperChain,EV) 
+            -> DH.theDesc
+            -> (thisDesc,MN,thisChain[],vKind);
+       #);
+     addMethod: (# enter method[] #);
+     noEnter: (# do List -> NNsig[] #);
+     addEnter:
+       (# EH: @EvalHandler;
+          nScan: @ | EH.scanNAdr;   
+          nD: ^sematt.AttDesc; 
+          theDesc: ^ASTindex;
+          more: @boolean;
+       enter theDesc[]
+       do 313->trace(#
+                    do 'addEnter:'->xT; theDesc[] -> xA
+                    #);
+          List -> NNsig[];
+          (if thisChain[] <> none then
+              (if not (theDesc->thisDesc.equal) then 
+                  'addEnter:desc not equal'->putline
+              if);
+              313->trace(#
+                        do 'addEnter-B:'->xT;
+                           theDesc[]->xA; xN;
+                           thisDesc[] -> xA;
+                           (if thisChain[] <> none then
+                               thisChain
+                           if) 
+                        #);
+              
+              (thisDesc[],gen.thisRegAdr,0,thisChain[],true) -> nScan -> more;
+           else
+              (theDesc[],gen.thisRegAdr,0,thisSuperChain,true) -> nScan -> more;
+          if);
+          Loop:
+            (if more then
+                (nScan.thisEv[],theDesc[]) -> getAttSig -> NNsig.append;
+                313->trace(#do 'Nsig: '->xt; NNsig.asText -> xT #);
+                nScan -> more;
+                restart Loop
+            if);
+          313->trace(#do 'enterNsig: '->xT; NNsig.asText -> xT #);
+       #);
+     scanEnter:
+       (# isRef,doInner,skip: @boolean
+       do NNsig.scan
+          (#
+          do current.isRef -> isRef; 
+             INNER scanEnter
+          #)
+       #);
+     exitVoid: 
+       (# 
+       do setVoidXsig
+       #);
+     setVoidXsig: 
+       (#
+       do Void -> xxSig[]; 
+       #);
+     exitRef:
+       (# desc: ^ASTindex;
+          EH: @evalHandler
+       enter desc[]
+       do setVoidXsig;
+          desc[] -> EH.descName -> Reference -> XXsig[];
+       #);
+     addExit:
+       (# EH: @EvalHandler;
+          xScan: @ | EH.scanXadr;
+          exitP: ^ASTindex;    
+          more: @boolean
+       enter exitP[]
+       do 313->trace(#
+                    do 'Signature:addExit:'->xT; xN;
+                       thisDesc[]->xA; xN;
+                       (if thisChain[] <> none then
+                           thisChain
+                       if)
+                    #);
+                       
+          setVoidXsig;
+
+          (if thisChain[] <> none then
+              (thisDesc[],gen.thisRegAdr,0,thisChain[]) 
+                -> xScan 
+                -> more;
+              (if not more then exitVoid; leave addExit if);
+              loop:
+                (if more then
+                    (xScan.thisEv[]->exitVal[],thisDesc[]) 
+                      -> getAttSig 
+                      -> XXsig[];
+                    xScan -> more;
+                    (if more then
+                        '\n***OBS! exit-part has more than one element'
+                          ->putline
+                    if);
+                    restart loop
+              if)
+           else
+              '\n***OBS. thisChain is none '->putline;
+              (if (exitP[]->theGen.scanXarg -> exitVal[]) <> NONE then
+                  (exitVal[],thisDesc[]) -> theGen.getAttSig -> XXsig[];
+          if)if);
+          (if XXsig.isRef then
+              2 -> exitId
+           else
+              1 -> exitId
+          if);
+       #);
+     exitVal: ^ASTindex;
+     exitId: @integer (* dirty *)
+  exit asText
+  #);
+scanNargs:
+  (# EH: @EvalHandler;
+     nScan: @ | EH.scanNAdr;   
+     nD: ^sematt.AttDesc; 
+     theDesc: ^ASTindex;
+     more: @boolean;
+     xSig: ^List
+  enter theDesc[]
+  do (theDesc[],gen.thisRegAdr,0,ThisSuperChain,true) -> nScan -> more;
+     List -> xSig[];
+     Loop:
+       (if more then
+           313->trace(#
+                     do 'scanNargs:elm:'->xT;
+                        nScan.thisEv[]->xA
+                     #);
+           (nScan.thisEv[],theDesc[]) -> getAttSig -> xSig.append;
+           313->trace(#do 'sig: '->xt; xSig.asText -> xT #);
+           nScan -> more;
+           restart Loop
+       if)
+  exit xSig[]
+  #);
+
+ScanXarg:
+  (# exitP: ^ASTindex;
+     ex: ^ASTindex;
+  enter exitP[]
+  do (if exitP.label <> gram.empty then
+         &ASTindex[] -> ex[];
+         exitP.son -> ex; (* check that ONLY one exit elm *)         
+     if)
+  exit ex[]
+  #);
+getAttSig:
+  (# EV: ^ASTindex;
+     nD: ^sematt.AttDesc; EH: @EvalHandler;
+     theDesc: ^ASTindex;
+     desc: @ASTindex; 
+     MN,isVirtual: @integer;
+     EVchain: ^DH.superChain;
+     xSig: ^Type;
+     referenceSignature: (* unify with dynamicItem case in do-part below*)
+       (# EV: ^ASTindex;
+          sig: ^Type
+       enter EV[]
+       do EV[] -> sematt.AttDesc -> nD[];
+          (*nD.display;*)
+          (if nD.spec.label = gram.dynamicItem then
+              (theDesc->DH.newSingle,nD.apl)
+                -> DH.theDesc
+                -> (desc,MN,EVchain[],isVirtual);
+              (if desc.label = gram.objectDescriptor then
+                  desc[] 
+                    -> EH.descName
+                    -> Reference 
+                    -> sig[];                         
+               else 
+                  ' ***??? not descriptor ' -> putline;
+                  '?notDescriptor?'->Reference -> sig[];
+              if)
+           else
+              '?notDynamicItem?'->Reference -> sig[];
+          if);
+       exit sig[]
+       #);
+  enter(EV[],theDesc[])
+  do 313->trace(#
+               do 'getAttSig:'->xT;
+                  EV[] -> xA;
+                  ev.label -> xI;
+                  ev.label -> sematt.evalClass -> xI
+               #);
+     (if EV.label
+      // gram.insertedItem  then
+         (# den: @ASTindex;
+         do EV.son -> den;
+            (if den.label = gram.objectDescriptor then                
+                den[] -> scanNargs -> xSig[];
+                313->trace(#do 'getAttSig:inserted:'->xT;  xSig.asText->xT#)
+             else
+                'unknownInsertedItem;'-> Reference -> xSig[]                
+         if)#)
+         (* // gram.objectDenotation then
+          'LunknownObjectDenotation;'->sig[]*)
+      // gram.objectReference 
+      // gram.structureReference then
+         EV[] -> referenceSignature -> xSig[];         
+      // gram.thisObject then
+         (# AD: @ASTindex
+         do EV.son -> AD;
+            AD.dclRef -> AD;
+            AD.getText -> Reference -> xSig[]
+         #)
+      else
+         (if (EV.label -> sematt.evalClass) = sematt.evalClass.binOp then
+             int32Value -> xSig[]
+          else
+             EV[] -> sematt.AttDesc -> nD[];
+             (*nD.display;*)
+
+             (if nD.kind
+              // sematt.standardKind then
+                 (if nD.isRep then
+                     nD.desc[] -> valueSignature -> Array -> xSig[]
+                  else
+                     nD.desc[] -> valueSignature -> xSig[]
+                 if)
+              // sematt.generalKind 
+              // sematt.classKind then
+                 nD.desc[] -> scanNargs -> xSig[] (*sig[]*)
+              else
+                 (* don't work if virtual - we should get generalKind
+                  * but ...
+                  *)
+                 (if nD.spec.label = gram.dynamicItem then
+                     (theDesc->DH.newSingle,nD.apl)
+                       -> DH.theDesc
+                       -> (desc,MN,EVchain[],isVirtual);
+                     (if desc.label = gram.objectDescriptor then
+                         desc[] 
+                           -> EH.descName
+                           -> Reference 
+                           -> xsig[];
+                         
+                      else 
+                         ' ***??? not descriptor ' -> putline;
+                         '?notDescriptor?'->Reference -> xSig[];
+                     if)
+                  else
+                     '?notDynamicItem?'->Reference -> xSig[];
+                 if);
+     if)if)if);
+     313->trace(#do 'signature:addExit:'->xT; xSig.asText -> xT #)
+  exit xsig[]
+  #);
