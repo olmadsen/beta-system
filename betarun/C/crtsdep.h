@@ -2,7 +2,7 @@
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * crtsdep.h
  * by Ole Lehrmann Madsen, Peter Andersen and Peter Ryberg Jensen
- * $Id: crtsdep.h,v 1.6 1995-02-03 09:50:09 beta Exp $
+ * $Id: crtsdep.h,v 1.7 1995-02-22 12:39:28 beta Exp $
  */
 
 #define JUMPSTACK 1

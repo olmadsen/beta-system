@@ -5,7 +5,7 @@
  * Copyright (C) 1992-94 Mjolner Informatics Aps.
  * Written by Ole Lehrmann Madsen, Jacob Seligmann, and Peter Andersen.
  *
- * $Id: betarun.h,v 1.10 1995-02-03 12:32:09 beta Exp $
+ * $Id: betarun.h,v 1.11 1995-02-22 12:38:15 beta Exp $
  *
  */
 
