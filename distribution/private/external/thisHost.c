@@ -59,3 +59,4 @@ struct hostent* thisHost ()
   else
     return (struct hostent *)0; 
 }
+
