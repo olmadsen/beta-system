@@ -105,45 +105,51 @@ extern long mcheck_line;
 #define ItemSize(proto)          (4*((proto)->Size))
 #define ComponentSize(proto)     (headsize(Component)+4*((proto)->Size))
 
-/* Object sizes in BYTES */
-#define ByteRepBodySize(range)   ((((range)+4)/4)*4)
-#define ShortRepBodySize(range)   (((2*(range)+3)/4)*4)
-#define LongRepBodySize(range)    ((range)*4)
-#define DoubleRepBodySize(range) ((range)*8)
+/*** Object sizes in BYTES ****/
 
 #if defined(sparc) || defined(hppa) || defined(crts) || defined(NEWRUN)
 /* Objects must be multiples of 8 bytes because of reals */
-# define StructureSize          ((headsize(Structure)+7) & ~7)
-# define RefRepSize(range)      (((range)*4 + headsize(RefRep)+7) & ~7)
-# define DynObjectRepSize(range)(((range)*4 + headsize(ObjectRep)+7) & ~7)
-# define LongRepSize(range)      (((LongRepBodySize(range) + headsize(ValRep))+7) & ~7)
-# define ByteRepSize(range)     ((ByteRepBodySize(range) + headsize(ValRep)+7) & ~7)
-# define ShortRepSize(range)     ((ShortRepBodySize(range) + headsize(ValRep)+7) & ~7)
-# define DoubleRepSize(range)   ((DoubleRepBodySize(range) + headsize(ValRep)+7) & ~7)
-
-#ifdef MT
-# define StackObjectSize(size)  (((size) + headsize(StackObject) +7) & ~7)
+#define ObjectAlign(numbytes) (((numbytes)+7) & ~7)
 #else
-#ifdef NEWRUN
-/* See Suspend.c: it is number of BYTES */
-# define StackObjectSize(size)  (((size) + headsize(StackObject) +7) & ~7)
-#else
-# define StackObjectSize(size)  ((4*(size) + headsize(StackObject) +7) & ~7)
-#endif
+#define ObjectAlign(numbytes) (numbytes)
 #endif
 
-# define DopartObjectSize(size) (((size) + headsize(DopartObject) +7) & ~7)
+#define ByteRepBodySize(range)   ((((range)+4)/4)*4)
+#define ShortRepBodySize(range)  (((2*(range)+3)/4)*4)
+#define LongRepBodySize(range)   ((range)*4)
+#define DoubleRepBodySize(range) ((range)*8)
+
+#define StructureSize          ObjectAlign(headsize(Structure))
+#define RefRepSize(range)      ObjectAlign((range)*4 + headsize(RefRep))
+#define DynObjectRepSize(range)ObjectAlign((range)*4 + headsize(ObjectRep))
+#define LongRepSize(range)     ObjectAlign(LongRepBodySize(range) + headsize(ValRep))
+#define ByteRepSize(range)     ObjectAlign(ByteRepBodySize(range) + headsize(ValRep))
+#define ShortRepSize(range)    ObjectAlign(ShortRepBodySize(range) + headsize(ValRep))
+#define DoubleRepSize(range)   ObjectAlign(DoubleRepBodySize(range) + headsize(ValRep))
+#define DopartObjectSize(size) ObjectAlign((size) + headsize(DopartObject))
+
+#if defined(MT) || defined(NEWRUN)
+/* size is number of BYTES */
+#define StackObjectSize(size)  ObjectAlign((size) + headsize(StackObject))
 #else
-# define StructureSize          headsize(Structure)
-# define RefRepSize(range)      ((range)*4 + headsize(RefRep))
-# define DynObjectRepSize(range)((range)*4 + headsize(ObjectRep))
-# define LongRepSize(range)      (LongRepBodySize(range) + headsize(ValRep))
-# define ByteRepSize(range)     (ByteRepBodySize(range) + headsize(ValRep))
-# define ShortRepSize(range)     (ShortRepBodySize(range) + headsize(ValRep))
-# define DoubleRepSize(range)   (DoubleRepBodySize(range) + headsize(ValRep))
-# define StackObjectSize(size)  (4*(size) + headsize(StackObject))
-# define DopartObjectSize(size) ((size) + headsize(DopartObject))
+#define StackObjectSize(size)  ObjectAlign(4*(size) + headsize(StackObject))
 #endif
+
+/* Generic ValRepSize */
+
+#define DispatchValRepSize(proto, range)			                \
+(((long)(proto) == (long)(ByteRepPTValue)) ? ByteRepSize(range) :		\
+ (((long)(proto) == (long)(LongRepPTValue))   ? LongRepSize(range)  :		\
+  (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepSize(range) :    	\
+   ShortRepSize(range))))
+
+#define DispatchValRepBodySize(proto, range)			                \
+(((long)(proto) == (long)(ByteRepPTValue)) ? ByteRepBodySize(range) :      	\
+ (((long)(proto) == (long)(LongRepPTValue))   ? LongRepBodySize(range)  : 	\
+  (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepBodySize(range) :	\
+   ShortRepBodySize(range))))
+
+/**** Cast operations ****/
 
 #define toObject(x)      ((ref(Object))      x)
 #define toItem(x)        ((ref(Item))        x)
@@ -223,23 +229,6 @@ extern long mcheck_line;
 (item && \
  (((struct Item *)(item))->GCAttr == -(headsize(Component)/sizeof(long))) && \
  ((long)(EnclosingComponent(item)->Proto)==(long)(ComponentPTValue)))
-
-/* Generic ValRepSize */
-
-#define DispatchValRepSize(proto, range)			                        \
-(((long)(proto) == (long)(ByteRepPTValue)) ? ByteRepSize(range) :		\
- (((long)(proto) == (long)(LongRepPTValue))   ? LongRepSize(range)  :		\
-  (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepSize(range) :    	\
-   ShortRepSize(range))))
-
-#define DispatchValRepBodySize(proto, range)			                        \
-(((long)(proto) == (long)(ByteRepPTValue)) ? ByteRepBodySize(range) :      	\
- (((long)(proto) == (long)(LongRepPTValue))   ? LongRepBodySize(range)  : 	\
-  (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepBodySize(range) :	\
-   ShortRepBodySize(range))))
-
-#define DispatchObjectRepSize(proto, range, iproto)                      \
-  DynObjectRepSize(range)
 
 /* Safe way to save AOAroots references */
 #define saveAOAroot(cell)				   \
