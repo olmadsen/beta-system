@@ -137,16 +137,20 @@ static inline unsigned long bletch(unsigned long x)
   return (x << 1) & 0x03ffe;
 }
 
-extern long HandleCB() asm("HandleCB");
+extern void HandleCB();
 
 void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
-{
+{   register unsigned long hcb;
     theObj = cast(Object) getThisReg();
 
     Ck(theObj);
     if (CBFATop+1 > CBFALimit) CBFArelloc();
 
     CBFATop->theStruct = theStruct;
+
+    hcb = (unsigned long) HandleCB; /* this does not work, but imports the symbol !!!! */
+    asm volatile ("LDIL L'HandleCB, %0
+                   LDO  R'HandleCB(%0),%0": "=r" (hcb));
 
     /* Construct the following code in the CBF:
      * 0 LDIL L'HandleCB, %r1
@@ -158,10 +162,10 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
      * 6 LDO  R'<&CBFATop->theStruct>(%r28),%r28
      */
     CBFATop->code[0] = (8<<26)|(1<<21)
-      |mangle21(((unsigned long)HandleCB >> 11) & 0x1fffff);
+      |mangle21(((unsigned long)hcb >> 11) & 0x1fffff);
     CBFATop->code[1] = (1<<13)|(0x25<<5)|31;
     CBFATop->code[2] = (0xd<<26)|(1<<21)|(1<<16)
-      |bletch((unsigned long)HandleCB & 0x7ff);
+      |bletch((unsigned long)hcb & 0x7ff);
     CBFATop->code[3] = (31<<16)|(0xc1<<5);
     CBFATop->code[4] = (8<<26)|(28<<21)
       |mangle21(((unsigned long)&CBFATop->theStruct >> 11) & 0x1fffff);
@@ -187,53 +191,6 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
     asm("COPY %0, %%r26" : /*no out*/ : "r" (&(CBFATop-1)->code[0]) : "r26");
     return((void *)&(CBFATop-1)->code[0]);
 }
-
-/* HandleCallBack is called from a CallBackEntry, setup like
-   above. This means that %r28 is the address of a pointer to the struct.
- */
-
-asm("\t.EXPORT HandleCB,ENTRY\n" /* ENTRY is significant - CODE cannot be used */
-    "HandleCB:\n"
-    "\tstw %r2,-20(%r30)\n"   /* Save return - normal procedure entry */
-    "\tldo 128(%r30),%r30\n"  /* Allocate stack frame for 32 words */
-    "\tstw %r3,-128(%r30)\n"  /* Save the 15 words that may be destroyed by beta */
-    "\tstw %r4,-124(%r30)\n"
-    "\tstw %r5,-120(%r30)\n"
-    "\tstw %r6,-116(%r30)\n"
-    "\tstw %r7,-112(%r30)\n"
-    "\tstw %r8,-108(%r30)\n"
-    "\tstw %r9,-104(%r30)\n"
-    "\tstw %r10,-100(%r30)\n"
-    "\tstw %r11,-96(%r30)\n"
-    "\tstw %r12,-92(%r30)\n"
-    "\tstw %r13,-88(%r30)\n"
-    "\tstw %r14,-84(%r30)\n"
-    "\tstw %r15,-80(%r30)\n"
-    "\tstw %r17,-72(%r30)\n"
-    "\tstw %r18,-68(%r30)\n"
-    "\tbl CHandleCB,%r2\n"    /* Call CHandleCB */
-    "\tstw %r16,-76(%r30)\n"  /* Restore 15 words */
-    "\tldw -68(%r30),%r18\n"
-    "\tldw -72(%r30),%r17\n"
-    "\tldw -76(%r30),%r16\n"
-    "\tldw -80(%r30),%r15\n"
-    "\tldw -84(%r30),%r14\n"
-    "\tldw -88(%r30),%r13\n"
-    "\tldw -92(%r30),%r12\n"
-    "\tldw -96(%r30),%r11\n"
-    "\tldw -100(%r30),%r10\n"
-    "\tldw -104(%r30),%r9\n"
-    "\tldw -108(%r30),%r8\n"
-    "\tldw -112(%r30),%r7\n"
-    "\tldw -116(%r30),%r6\n"
-    "\tldw -120(%r30),%r5\n"
-    "\tldw -124(%r30),%r4\n"
-    "\tldw -128(%r30),%r3\n"
-    "\tldw -20-128(%r30),%r2\n"  /* Restore return */
-    "\tldsid (0,%r2),%r1\n"      
-    "\tmtsp %r1,%sr0\n"          
-    "\tbe 0(%sr0,%r2)\n"         /* Return */
-    "\tldo -128(%r30),%r30\n");  /* Deallocate stackframe */
 
 long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
 {
