@@ -652,4 +652,5 @@ CAlloVRC(struct Object *origin,
   { code; } \
   v2 = (__typeof__(v2))popReference(); v1 = (__typeof__(v1))popReference();
 
+#define GetProto(s_obj) s_obj->iProto
 #endif /* ! _SNAKEDEP_H_ */
