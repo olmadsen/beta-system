@@ -18,7 +18,7 @@ ParamThisComp(void, AttBC)
 #endif
 
 #ifdef hppa
-    long dummy; /* don't move without changing SnakeAdditions.S */
+    __attribute__((unused)) long dummy; /* don't move without changing SnakeAdditions.S */
     ComponentBlock  cb
 	/* Used to hold value of lastCompBlock at time of Attach.
 	 * This value is used by Susp to find out which parts of
