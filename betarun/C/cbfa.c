@@ -71,6 +71,13 @@ void freeCBF(external_entry)
   /* theStruct will no longer constitute a root for GC */
 }
 
+void freeCallbackCalled()
+{
+  fprintf(output, 
+	  "Call of Callback function, that has been explicitly freed!\n"
+	  );
+}
+
 /* makeCBF: 
  * If the following external is declared in BETA:
  *   makeCBF: External
