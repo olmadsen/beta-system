@@ -9,7 +9,7 @@
 <BODY>
 <H1>Stack Layout Documentation for the SPARC</H1>
 
-<H2>Understanding the SPARC Stack</H2>
+<H2><A NAME="sparcstack">Understanding the SPARC Stack</A></H2>
 
 As we are using the register windows on the SPARC and generally are
 complying with the C convention, we need to use the SPARC stack
@@ -69,7 +69,7 @@ SP+0	%l0
 </PRE>
 
 
-<H2>BETA Runtime Stack Frames</H2>
+<H2><A NAME="betaframe">BETA Runtime Stack Frames</A></H2>
 
 Executing an object allocates a news activation record on the stack
 and a corresponding register window. 
@@ -77,8 +77,8 @@ As of release 5.0 we allocate the same frame as the default of GCC
 (which is used for building the runtime system):
 
 <PRE>
-%sp+112 (0x70) |__________|
-%sp+108 (0x6c) |   arg10  | <- end of frame
+%sp+112 (0x70) |__________| = %fp
+%sp+108 (0x6c) |   arg10  | &lt;- end of frame
 %sp+104 (0x68) |   arg9   |
 %sp+100 (0x64) |   arg8   | Area not used by BETA compiler
 %sp+96  (0x60) |   arg7   | can be used for up to 5 arguments
@@ -105,7 +105,7 @@ As of release 5.0 we allocate the same frame as the default of GCC
 %sp+12  (0x0c) |          |
 %sp+8   (0x08) |          |
 %sp+4   (0x04) |          |
-%sp+0   (0x00) |__________| <- start of frame
+%sp+0   (0x00) |__________| &lt;- start of frame
 </PRE>
 
 It is unclear why GCC allocates 112 bytes and not just round8(92)=96
@@ -121,8 +121,12 @@ risking to meet a strange value here when an allocation routine is on
 the stack (e.g. when a G-part has been called from one allocation
 routine, and this G-part calls another allocation routine, which
 causes GC).
+<P>
+Notice that up to 5 stack parameters (beyond the sixth external
+argument) will fit into the default stack, as the BETA compiler does
+not use the space from %sp+92 to %sp+108 for anything else. 
 
-<H3>Pushing</H3>
+<H3><A NAME="push">Normal Push</A></H3>
 <P>
 When the BETA runtime needs to push words on the stack, the record is
 automatically expanded by subtracting from the stack pointer. As the
@@ -160,12 +164,137 @@ SP -&gt;			Default stack frame
 			======================================
 </PRE>
 
+<H2><A NAME="savebusy">Push of busy output- and floating point registers</A></H2>
+
+When another BETA entry or an external entry is called and some of the 16 double
+floatingpoint registers are busy, these need to be saved on stack.
+This could be done with a series of pushes of each register, followed
+by a push of a protection tag. This is not how it is done,
+however. The following paragraph explains what is done instead.
+<P>
+When an external entry is called from the argument list
+of another external entry, some of <CODE>%o0</CODE> - <CODE>%o5</CODE>
+may have already been set up with arguments for the outer external
+call.
+In this situation arguments beyond the sixth of the outer external
+call will also have been pushed on the stack part. This means that
+here we cannot just pull down SP a number of bytes and save values
+at offset 112 from the new SP: This will potentionally overwrite the
+parameters beyond the sixth pushed on the stack for the outer external
+call arguments.
+<P>
+So instead, after the stack frame is expanded sufficiently, the stuff
+to save is put just below the (possibly) pushed arguments beyond the
+sixt in the frame.
+<P>
+Since stack memory usage is probably not an issue, the maximum amont
+of space is allocated each time. This amount needs to be
+<PRE>
+	6*4  bytes for 6 %o  registers
+	16*8 bytes for 16 %fr (double)registers
+	2*4  bytes for protect tag (two to ensure 8-alignment)
+</PRE>
+amounting to 24+128+8 = 160 bytes.
+There are 92 bytes available in the original frame. Thus SP needs to
+be decremented with 112 + (160-92) = 180 bytes.
+<P>
+The figure below shows the frame before and after save of
+(some) of these registers - the full space will be set aside on stack
+no matter how many are to be saved (more than zero naturally (:-)):
+<PRE>
+%fp             __________                  %fp             __________                        
+%sp+124 (0x7c) | possibly | /|\		    %sp+304 (0x130)| possibly | /|\                   
+%sp+120 (0x78) | pushed   |  | Potential    %sp+300 (0x12c)| pushed   |  |                    
+%sp+116 (0x74) | stuff    |  | GC roots	    %sp+296 (0x128)| stuff    |  |                    
+%sp+112 (0x70) |__________| \|/		    %sp+292 (0x124)|__________|  |                    
+%sp+108 (0x6c) |   arg10  | 		    %sp+288 (0x120)|   arg10  |  |                    
+%sp+104 (0x68) |   arg9   |		    %sp+284 (0x11c)|   arg9   |  |                    
+%sp+100 (0x64) |   arg8   | 		    %sp+280 (0x118)|   arg8   |  |                    
+%sp+96  (0x60) |   arg7   | 		    %sp+276 (0x114)|   arg7   |  |                    
+%sp+92  (0x5c) |___arg6___|		    %sp+272 (0x110)|___arg6___|  |                    
+%sp+88  (0x58) |          |		    %sp+268 (0x10c)|   %o5    |  |                    
+%sp+84  (0x54) | arg0 - 5 |		    %sp+264 (0x108)|   %o4    |  |                    
+%sp+80  (0x50) |   save   |		    %sp+260 (0x104)|   %o3    |  |                    
+%sp+76  (0x4c) |   area   |		    %sp+256 (0x100)|   %o2    |  |                    
+%sp+72  (0x48) |          |		    %sp+252 (0xfc) |   %o1    |  |                    
+%sp+68  (0x44) |__________|		    %sp+248 (0xf8) |   %o0    |  |                    
+%sp+64  (0x40) |__________| 		    %sp+244 (0xf4) |          |  |                    
+%sp+60  (0x3c) |          |		    %sp+240 (0xf0) |   %fr30  |  |                  
+%sp+56  (0x38) |          |		    %sp+236 (0xec) |          |  |                  
+%sp+52  (0x34) |          |		    %sp+232 (0xd8) |   %fr28  |  |                  
+%sp+48  (0x30) |  regwin  |		    %sp+228 (0xd4) |          |  |        
+%sp+44  (0x2c) |   save   |		    %sp+224 (0xe0) |   %fr26  |  |           
+%sp+40  (0x28) |   area   |		    %sp+220 (0xdc) |          |  |                    
+%sp+36  (0x24) |          |		    %sp+216 (0xd8) |   %fr24  |  |                    
+%sp+32  (0x20) |          |		    %sp+212 (0xd4) |          |  |                    
+%sp+28  (0x1c) |          |		    %sp+208 (0xd0) |   %fr22  |  |                    
+%sp+24  (0x18) |          |		    %sp+204 (0xcc) |          |  | Potential                  
+%sp+20  (0x14) |          |		    %sp+200 (0xc8) |   %fr20  |  | GC roots
+%sp+16  (0x10) |          |		    %sp+196 (0xc4) |          |  |  
+%sp+12  (0x0c) |          |		    %sp+192 (0xc0) |   %fr18  |  |                    
+%sp+8   (0x08) |          |		    %sp+188 (0xbc) |          |  |                    
+%sp+4   (0x04) |          |		    %sp+184 (0xb8) |   %fr16  |  |                    
+%sp+0   (0x00) |__________| 		    %sp+180 (0xb4) |          |  |                    
+					    %sp+176 (0xb0) |   %fr14  |  |                    
+					    %sp+172 (0xac) |          |  |                    
+					    %sp+168 (0xa8) |   %fr12  |  |                    
+					    %sp+164 (0xa4) |          |  |                    
+					    %sp+160 (0xa0) |   %fr10  |  |                    
+					    %sp+156 (0x9c) |          |  |                    
+					    %sp+152 (0x98) |   %fr8   |  |                    
+					    %sp+148 (0x94) |          |  |                    
+					    %sp+144 (0x90) |   %fr6   |  |                    
+					    %sp+140 (0x8c) |          |  |                    
+					    %sp+136 (0x88) |   %fr4   |  |                    
+					    %sp+132 (0x84) |          |  |                    
+					    %sp+128 (0x80) |   %fr2   |  |                    
+					    %sp+124 (0x7c) |          |  |                    
+					    %sp+120 (0x78) |   %fr0   |  |                    
+					    %sp+116 (0x74) |   ///    |  |                    
+					    %sp+112 (0x70) |___tag____| \|/                   
+					    %sp+108 (0x6c) |   arg10' |                       
+					    %sp+104 (0x68) |   arg9'  |                       
+					    %sp+100 (0x64) |   arg8'  |                       
+					    %sp+96  (0x60) |   arg7'  |                       
+					    %sp+92  (0x5c) |___arg6'__|                       
+					    %sp+88  (0x58) |          |                       
+					    %sp+84  (0x54) | arg0 - 5 |                       
+					    %sp+80  (0x50) |   save   |                       
+					    %sp+76  (0x4c) |   area   |                       
+					    %sp+72  (0x48) |          |                       
+					    %sp+68  (0x44) |__________|                       
+					    %sp+64  (0x40) |__________|                       
+					    %sp+60  (0x3c) |          |                       
+					    %sp+56  (0x38) |          |                       
+					    %sp+52  (0x34) |          |                       
+					    %sp+48  (0x30) |  regwin  |                       
+					    %sp+44  (0x2c) |   save   |                       
+					    %sp+40  (0x28) |   area   |                       
+					    %sp+36  (0x24) |          |                       
+					    %sp+32  (0x20) |          |                       
+					    %sp+28  (0x1c) |          |                       
+					    %sp+24  (0x18) |          |                       
+					    %sp+20  (0x14) |          |                       
+					    %sp+16  (0x10) |          |                            
+					    %sp+12  (0x0c) |          |     
+					    %sp+8   (0x08) |          |     
+					    %sp+4   (0x04) |          |     
+					    %sp+0   (0x00) |__________|     
+ </PRE>
+
+The tag is (-(160/4 + 4))= -44.<BR>
+Notice that new pushes will ble slided in at offset 112 from the new
+%sp, just after the saved registers.<BR>
+If the entrypoint to be called is an external with more than 11
+arguments, as usual the extra stack space will be set aside just above
+the <CODE>arg10'</CODE> cell.
+
 <HR>
 <H1><BLINK>datpete: 8/7/99: The sections on components and callbacks
 have not been updated for r5.0!</BLINK></H1>
 <HR>
 
-<H2>Components</H2>
+<H2><A NAME="components">Components</A></H2>
 
 Components each has their own stack, consisting of callback frames
 (which in turn consists of activation records). For effiency, the
@@ -213,7 +342,7 @@ Attach activation record:
 		---------------------------------------
 </PRE>
 
-<H2>Call Back Frames</H2>
+<H2><A NAME="callback">Call Back Frames</A></H2>
 
 When BETA is called back from C the C part of the stack is wrapped
 into a CallBackFrame to make it distinguisable at GC.
@@ -329,7 +458,7 @@ HandleCallBack activation record:
 </PRE>
 
 
-<H3>Implementation</H3>
+<H3><A NAME="callbackimplementation">Implementation</A></H3>
 
 In the case of call back in a CompBlock, CallBackFrame (saved or actual)
 pointes to the activation record of the "C-wrapper" call back routine. In
