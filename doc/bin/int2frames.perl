@@ -368,11 +368,8 @@ EOT
 //-->
 </SCRIPT>
 EOT
-}
-
-</SCRIPT>
-EOT
-}
+        }
+    }
 
     print <<"EOT" if ($flags&$flag_print);
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$printframe"></SCRIPT>
