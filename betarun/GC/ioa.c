@@ -1130,6 +1130,7 @@ void IOACheck()
     {
       long *ptr = (long *)theObj;
       while ( (ptr<(long*)TheIOATOP) && (*ptr==0) ) ptr++;
+      if (ptr==TheIOATOP) break;
       if ((long*)theObj<ptr){
 	IOACheckPrintSkipped(ptr, theObj);
 	if (NumTSD==1) {
@@ -1144,11 +1145,6 @@ void IOACheck()
 
     IOACheckPrintTheObj(theObj);
 
-    if ((long*)theObj==TheIOATOP){
-      fprintf(output, 
-	      "\nIOACheck: theObj (0x%x) is equal to TheIOATOP\n", 
-	      (int)theObj);
-    }
     Claim(inIOA(theObj), "IOACheck: theObj in IOA");
     theObjectSize = 4*ObjectSize(theObj);
     Claim(ObjectSize(theObj) > 0, "#IOACheck: ObjectSize(theObj) > 0");
