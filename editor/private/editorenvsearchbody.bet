@@ -1,0 +1,498 @@
+ORIGIN '../codeeditor';
+INCLUDE '../searchdialog';
+-- editorenvSearchPrivate: Descriptor --
+(#
+   startNode,currentNode: ^astInterface.ast;
+   currentFrag: ^astInterface.fragmentForm;
+   currentFle: ^astInterface.fragmentGroup.fragmentListElement;
+   thesearchText: ^text;
+   prodList: ^mg.productionList;
+   dir: @
+     (#
+        up: (#  exit 0 #);
+        down: (#  exit 1 #);
+        pred: (#  exit 2 #);
+        next: (#  exit 3 #);
+        root: (#  exit 4 #);
+        extend: (#  exit 5 #);
+        nextNonterminal: (#  exit 6 #);
+        prevNonterminal: (#  exit 7 #);
+        nonCyclicDown: (#  exit 8 #)
+     #);
+   checkSonNode:
+     (#
+        node: ^astInterface.ast;
+        expNode: ^astInterface.expanded;
+        prod: ^mg.prod;
+        constructor: ^mg.constructor;
+        consElemList: ^mg.consElemList;
+        
+     enter node[]
+     do
+        loop:
+        (if (node.kind = mps.kinds.interior) then
+            node[]->expNode[];
+            (if expNode.noOfSons
+             // 1 then
+                expNode.symbol->searchPrivate.prodList.get->prod[];
+                (if prod.symbol
+                 // mg.listZero // mg.listOne then
+                    expNode.getson1->node[]; restart loop; 
+                 // mg.constructor then
+                    prod[]->constructor[];
+                    constructor.getConsElemList->consElemList[];
+                    (if consElemList.noOfSons
+                     // 1 then expNode.getson1->node[]; restart loop; 
+                    if);
+                    
+                if);
+                
+            if);
+            
+        if)
+     #);
+   checkFatherNode:
+     (#
+        node: ^astInterface.ast;
+        fatherNode: ^astInterface.expanded;
+        prod: ^mg.prod;
+        constructor: ^mg.constructor;
+        consElemList: ^mg.consElemList;
+        
+     enter node[]
+     do
+        loop:
+        (if (node.father <> none ) then
+            node.father->fatherNode[];
+            fatherNode.symbol->searchPrivate.prodList.get->prod[];
+            (if fatherNode.noOfSons
+             // 1 then
+                (if prod.symbol
+                 // mg.constructor then
+                    prod[]->constructor[];
+                    constructor.getConsElemList->consElemList[];
+                    (if consElemList.noOfSons
+                     // 1 then fatherNode[]->node[]; restart loop; 
+                    if);
+                    
+                if);
+                
+            if);
+            
+        if);
+        
+     #);
+   navigate:
+     (#
+        node: ^astInterface.ast;
+        direction: @integer;
+        allowWrap,wrapped: @boolean;
+        length: @integer;
+        fatherNode: ^astInterface.expanded;
+        exp: ^astInterface.expanded;
+        current: ^astInterface.ast;
+        goDownRight:
+          (# 
+          do
+             loop:
+               (# 
+               do
+                  (if (node.kind = mps.kinds.interior) then
+                      node[]->exp[];
+                      (if (exp.noOfSons <> 0) then (* go to rightmost son *)
+                          exp.noOfSons->exp.get->node[]; restart loop; 
+                      if);
+                      
+                  if);
+                  
+               #);
+             1->length;
+             
+          #);
+        sonExists:
+          (# exists: @boolean; 
+          do
+             (if (node.kind <> mps.kinds.interior) then
+                 false->exists; 
+              else
+                 node[]->exp[]; (exp.noOfSons <> 0)->exists; 
+             if);
+             
+          exit exists
+          #)
+     enter (node[],direction,allowWrap)
+     do
+        node[]->current[];
+        node.father->fatherNode[];
+        (if direction
+         // dir.up then
+            (if (node.father = none ) then
+                (if allowWrap then
+                    &goDownRight (* to keeop symmetry *)
+                 else
+                    true->wrapped; 'wrapped'->putLine
+                if);
+                
+             else
+                (if (node.sonNo = 1) then (* no left brother *)
+                    node.father->node[];
+                    (* go up *)
+                    (* node[]->checkFatherNode;*)
+                    
+                 else
+                (* go left and downto rightmost leaf *)
+                    node.sonNo-1 (* go left *) ->fatherNode.get->node[];
+                    &goDownRight;
+                    
+                if);
+                
+            if);
+            1->length;
+            
+         // dir.down then
+            (if (1 < length) then
+                1->length; 
+             else
+                (if not sonExists then
+                    (if (node.father <> none ) then
+                        (if (node.sonNo = fatherNode.noOfSons) then
+                        (* no right brother *)
+                            loop:
+                              (# 
+                              do
+                                 node.father->node[];
+                                 (* go up *)
+                                 (if (node.father <> none ) then
+                                     node.father->fatherNode[];
+                                     (if (node.sonNo < fatherNode.noOfSons) then
+                                     (* right brother exists *)
+                                         node.sonNo+1
+                                           -> (* go right *) fatherNode.get
+                                           ->node[];
+                                         
+                                      else
+                                     (* go up *)
+                                         restart loop; 
+                                     if);
+                                     
+                                  else
+                                     (if not allowWrap then
+                                         true->wrapped; 'wrapped'->putLine
+                                     if)
+                                 if);
+                                 
+                              #);
+                            
+                         else
+                        (* right brother exists *)
+                            node.sonNo+1-> (* go right *) fatherNode.get
+                              ->node[];
+                            
+                        if);
+                        (* right brother exists? *)
+                        
+                    if);
+                    (* father exists *)
+                    
+                 else
+                (* son exists *)
+                (* go down *)
+                    node[]->exp[]; exp.getSon1->node[]; 
+                if);
+                (* sons exists ? *)
+                1->length;
+                
+            if);
+            (*node[]->checkSonNode;*)
+            
+         // dir.nonCyclicDown then
+            thisOp:
+              (# 
+              do
+              (* this is really awfull, but I have only 5 minutes :-)
+               it is a copy of dir.down, except that only traversal 
+               in the selected subtree is allowed  *)
+                 (if (1 < length) then
+                     1->length; 
+                  else
+                     (if not sonExists then
+                         (if (node.father <> none ) then
+                             (if (node.sonNo = fatherNode.noOfSons) then
+                             (* no right brother *)
+                                 loop:
+                                   (# 
+                                   do
+                                      node.father->node[];
+                                      (if (node[]->current.equal) then
+                                          'back again from select '->putLine;
+                                          leave thisOp;
+                                          
+                                      if);
+                                      (if (node.father <> none ) then
+                                          node.father->fatherNode[];
+                                          (if
+                                          (node.sonNo < fatherNode.noOfSons)
+                                           then (* right brother exists *)
+                                              node.sonNo+1
+                                                -> (* go right *) fatherNode.get
+                                                ->node[];
+                                              
+                                           else
+                                          (* go up *)
+                                              restart loop; 
+                                          if);
+                                          
+                                      if);
+                                      
+                                   #);
+                                 
+                              else
+                             (* right brother exists *)
+                                 node.sonNo+1-> (* go right *) fatherNode.get
+                                   ->node[];
+                                 
+                             if);
+                             (* right brother exists? *)
+                             
+                         if);
+                         (* father exists *)
+                         
+                      else
+                     (* son exists *)
+                     (* go down *)
+                         node[]->exp[]; exp.getSon1->node[]; 
+                     if);
+                     (* sons exists ? *)
+                     1->length;
+                     
+                 if);
+                 
+              #)
+         // dir.pred then
+            (if (node.father <> none ) then
+                (if (node.sonNo = 1) then (* no left brother *)
+                    
+                 else
+                (* go left *)
+                    node.sonNo-1->fatherNode.get->node[] (*->checkSonNode*) ; 
+                if);
+                1->length;
+                
+             else
+            (* no left brother *)
+                
+            if);
+            
+         // dir.next then
+            (if (node.father <> none ) then
+                (if (node.sonNo+length-1 < fatherNode.noOfSons) then
+                    node.sonNo+length->fatherNode.get
+                      ->node[] (*->checkSonNode*) ;
+                    
+                if);
+                1->length;
+                
+             else
+            (* no right brother *)
+                
+            if);
+            
+         // dir.root then
+         (* editorRoot[]->node[];
+          1->length;*)
+            
+         // dir.extend then
+              (# prod: ^mg.prod; 
+              do
+                 (if not ((node.father->fatherNode[]) = none ) then
+                     fatherNode.symbol->searchPrivate.prodList.get->prod[];
+                     (if
+                     (((prod.symbol = mg.listZero) or
+                       (prod.symbol = mg.listOne)) and
+                      (node.sonNo+length <= fatherNode.noOfSons)) then
+                         length+1->length; 
+                      else
+                         fatherNode[]->node[] (*->checkFatherNode*) ;
+                         1->length;
+                         
+                     if);
+                     
+                 if);
+                 
+              #);
+            
+         // dir.nextNonterminal then (*&nextNonterminal *)
+            
+         // dir.prevNonterminal then (*prevNontermina*)
+            
+        if);
+        
+     exit (node[],wrapped)
+     #);
+   textWithFindSub: text
+     (#
+        FindCh:
+        (* Finds all occurences of ch:
+         * For 'inx' where THIS(text).inx=ch do inner
+         *)
+          (# inx: @integer; ch: @char
+          enter ch
+          do
+             (for i: lgth repeat
+               (if T[i->inx]->ascii.upCase
+                // ch->ascii.upCase then INNER
+               if)
+             for)
+          #);
+        findSubstring:
+          (# texttofind: ^text; firstch: @char; 
+          enter texttofind[]
+          do
+             1->texttofind.inxget->firstch
+               ->findCh
+                 (# foundtext: ^text; 
+                 do
+                    (inx,inx+texttofind.length-1)->sub->foundtext[];
+                    (if (foundtext[]->texttofind.equalNCS) then
+                        INNER findSubstring; 
+                    if)
+                 #)
+          #);
+        isSubstring:
+          (# string: ^text; found: @boolean; 
+          enter string[]
+          do
+             FALSE->found;
+             l: string[]->findSubstring (#  do TRUE->found; leave l #);
+             
+          exit found
+          #);
+        
+     #);
+   
+#)  
+
+-- editorenvSearchTextDialog: Descriptor --
+(#
+   searchd: @UI.search
+     (#
+        node: ^astInterface.ast;
+        next:: 
+          (# 
+          do
+             (if searchPrivate.thesearchText[] = none then
+                 ''->searchPrivate.thesearchText[]
+             if);
+             (if userText.length > 0 then
+                 (if searchPrivate.thesearchText[]->userText.equal then
+                     ('',searchPrivate.dir.down,none ,none ,none )->searchText
+                       ->node[];
+                     (if node[] <> none then
+                         node[]->found
+                      else
+                         userText[]->notFound
+                     if)
+                  else
+                     (userText[],searchPrivate.dir.down,fg[],ff[],startNode[])
+                       ->searchText->node[];
+                     (if node[] <> none then
+                         node[]->found
+                      else
+                         userText[]->notFound
+                     if)
+                 if)
+             if)
+          #);
+        previous:: 
+          (# 
+          do
+             ('',searchPrivate.dir.up,none ,none ,none )->searchText->node[];
+             (if node[] <> none then
+                 node[]->found
+              else
+                 userText[]->notFound
+             if)
+          #);
+        cancel::  (#  do  #);
+        
+     #);
+   help: ^text;
+   grammar: ^mg.aGrammar
+do
+   searchd.open;
+   (if fg[] <> none then
+       l: fg.fragmentList.scan
+         (# 
+         do
+            (if current.type = mps.formType then
+                current.f[]->ff[];
+                ff.grammar.grammarASt.root[]->grammar[];
+                grammar.getProductionList->searchPrivate.prodList[];
+                leave l
+            if)
+         #);
+       (fg.name).copy->fragmentDefaultName->help[];
+       (none ,help[],'Search for:',searchPrivate.thesearchText[])->searchd.popup
+    else
+       'searchTextDialog: fg[] is none!'->putLine
+   if)
+#)  
+
+-- editorenvSearchText: Descriptor --
+(# wrapped: @boolean
+do
+   (if fg[] <> none then
+       (if ff[] <> none then
+           (if startNode[] <> none then
+               'searchtext: '->putText;
+               t[]->putLine;
+               'startnode: '->putText;
+               startnode.index->putInt;
+               newLine;
+               startNode[]->searchPrivate.currentNode[]
+                 ->searchPrivate.startNode[];
+               ff[]->searchPrivate.currentFrag[];
+               fg.fragmentList.scan
+                 (# 
+                 do
+                    (if current.f[] = ff[] then
+                        current[]->searchPrivate.currentFle[]
+                    if)
+                 #);
+               (searchPrivate.currentNode[],direction,false)
+                 ->searchPrivate.navigate->(node[],wrapped);
+               (if wrapped then
+                   'did wrap'->putLine
+                else
+                   (if node[] <> none then
+                       'node: '->putText;
+                       node.index->putInt;
+                       newLine;
+                       node[]->searchPrivate.currentNode[]
+                    else
+                       'node is none'->putLine
+                   if)
+               if)
+           if)
+       if)
+    else
+       (searchPrivate.currentNode[],direction,false)->searchPrivate.navigate
+         ->(node[],wrapped);
+       (if wrapped then
+           'did wrap 2'->putLine
+        else
+           (if node[] <> none then
+               'node2: '->putText;
+               node.index->putInt;
+               newLine;
+               node[]->searchPrivate.currentNode[]
+            else
+               'node2 is none'->putLine
+           if)
+       if)
+   if)
+#)  
+
+-- editorenvScanGroupForText: Descriptor --
+(#  #)  
+

@@ -17,6 +17,7 @@ BODY 'private/misc'
      'private/updatemenus'
      'private/textediting'
      'private/editorenvbody'
+     'private/editorenvsearchbody'
      'private/groupeditorbody'
      'private/historybody'
      'private/frejacommbody'
@@ -25,7 +26,8 @@ BODY 'private/misc'
      'private/propertyeditorbody'
      'private/subeditorbody'
      'private/fragmentgrouphandlerbody'
-     'private/fragmentformhandlerbody';
+     'private/fragmentformhandlerbody'
+     'private/codeeditormenus';
 (*
  * COPYRIGHT
  *   Copyright Mjolner Informatics, 1995-96
@@ -37,7 +39,6 @@ codeEditor: codeViewer
      edenv: ^editorEnv;
      thisGroupEditor: ^editorEnv.groupeditor;
      thePropertyEditor: ^propertyEditor;
-     fatherEditor: ^codeeditor;
      ffh: ^editorEnv.fragmentFormHandler;
      isAFrejaEditor,notifyFreja: @boolean;
      frejaStatusOn: @boolean;
@@ -891,12 +892,6 @@ codeeditorEditMenu: mysimplemenu
           onStatus::  (#  do allowCommand->value #);
           onSelect::  (#  do cfe.doShowOptionals #)
        #);
-     iSearch: @item
-       (#
-          onStatus:: 
-            (#  do formeditorexists and not cfe.textEditMode->value #);
-          onSelect::  (#  do cfe.doSearch #)
-       #);
      iSubeditor: @item
        (#
           onStatus:: 
@@ -958,8 +953,6 @@ codeeditorEditMenu: mysimplemenu
           ('Remove Optionals','n')->iRemoveOptionals.newKey;
           ('Show Optionals','l')->iShowOptionals.newKey;
           newSeparator;
-          ('Search...','s')->iSearch.newKey;
-          newSeparator;
           ('Create Subeditor')->iSubeditor.new;
           newSeparator;
           'Form Write Protection'->iSetIsReadOnly.new;
@@ -982,11 +975,11 @@ codeeditorViewMenu: mysimplemenu
             #)
        #);
      cfe: ^codeeditor;
-     edenv: ^editorEnv;
+     betaSif: @boolean;
      attach: (#  enter cfe[] #);
      formEditorExists:<
        (# value: @boolean
-       do INNER ; (if cfe[] <> none then not cfe.texteditMode->value if)
+       do INNER ; (if cfe[] <> none then true->value if)
        exit value
        #);
      allowCommand:
@@ -1019,12 +1012,54 @@ codeeditorViewMenu: mysimplemenu
           onStatus::  (#  do allowCommand->value #);
           onSelect::  (#  do cfe.doDetailRecursively;  #)
        #);
-     iZoomIn: @item
+     iSearch: @item
+       (#
+          onStatus:: 
+            (#  do formeditorexists and not cfe.textEditMode->value #);
+          onSelect::  (#  do cfe.doSearch #)
+       #);
+     iFollowSemanticLink: @item
        (#
           onStatus:: 
             (# 
             do
                (if allowCommand then
+                   cfe.cs.hasSemanticLink->value
+                else
+                   false->value
+               if)
+            #);
+          onSelect:: 
+            (#  do (cfe.cs.node[],false)->cfe.followSemanticLink #)
+       #);
+     iFollowSLOTlink: @item
+       (#
+          onStatus:: 
+            (# 
+            do
+               (if allowCommand then
+                   cfe.cs.isSlot->value
+                else
+                   false->value
+               if)
+            #);
+          onSelect::  (#  do cfe.makeSearchSlotBinding #)
+       #);
+     iFollowFragmentLink: @item
+       (#
+          onStatus::  (#  do allowCommand->value #);
+          onSelect:: 
+            (# node: ^astInterface.ast
+            <<SLOT viewMenuFollowSLOTLinkonSelect:DoPart>>
+            #)
+       #);
+     iZoomIn: @item
+       (#
+          onStatus:: 
+            (# 
+            do
+               (if allowCommand
+                then
                    (if cfe.thisGroupEditor[] <> none then
                        not cfe.thisGroupEditor.isAfrejaEditor and cfe.askZoomIn
                          ->value
@@ -1083,23 +1118,7 @@ codeeditorViewMenu: mysimplemenu
           onStatus::  (#  do allowCommand->value #);
           onSelect::  (#  do cfe.cs.node[]->cfe.doShowAst;  #)
        #);
-     open:: 
-       (# 
-       do
-          ('Abstract')->iAbstract.new;
-          'Astract Recursively'->iAbstractRecursively.new;
-          ('Overview','o')->iOverview.newkey;
-          ('Detail','d')->iDetail.newkey;
-          'Detail Recursively'->iDetailRecursively.new;
-          newSeparator;
-          ('Zoom In','1')->iZoomIn.newKey;
-          ('Zoom Out','2')->iZoomOut.newKey;
-          ('Zoom To Full Editor','3')->iZoomFullEditor.newKey;
-          newSeparator;
-          ('Reprettyprint','p')->iReprettyprint.newKey;
-          'Show AST Current Selection'->iShowAstCS.new;
-          'View'->name
-       #);
+     open::  (#  <<SLOT viewMenuOpen:DoPart>> #);
      
   #);
 codeeditorSLOTsMenu: mysimplemenu
@@ -1135,19 +1154,6 @@ codeeditorSLOTsMenu: mysimplemenu
               if)
           if)
        exit value
-       #);
-     iSearchSlotBinding: @item
-       (#
-          onStatus:: 
-            (# 
-            do
-               (if formeditorExists and not cfe.textEditMode then
-                   cfe.cs.isSlot->value
-                else
-                   false->value
-               if)
-            #);
-          onSelect::  (#  do cfe.makeSearchSlotBinding #)
        #);
      iMakeDoPartSlot: @item
        (#
@@ -1227,8 +1233,6 @@ codeeditorSLOTsMenu: mysimplemenu
      open:: 
        (# 
        do
-          'Search SLOT Binding'->iSearchSlotBinding.new;
-          newSeparator;
           'Make DoPart SLOT...'->iMakeDoPartSlot.new;
           'Make Descriptor SLOT...'->iMakeDescriptorSlot.new;
           'Make Attributes SLOT...'->iMakeAttributesSlot.new;
@@ -1285,6 +1289,7 @@ editorenv: sifEditorEnv
      adaptivePrettyprinting: @boolean;
      doQuit: @boolean;
      onGoingRecovery: @boolean;
+     BETAsif: @boolean;
      partList: (# elm: [50] ^astInterface.ast #);
      clip: ^clipBoard;
      clipBoard:
@@ -1437,8 +1442,8 @@ editorenv: sifEditorEnv
        enter (fg[],ff[],startNode[])
        do <<SLOT editorenvSearchTextDialog:Descriptor>>
        #);
-     searchTextPrivate:
-       @<<SLOT editorenvSearchTextPrivate:Descriptor>>;
+     searchPrivate:
+       @<<SLOT editorenvSearchPrivate:Descriptor>>;
      searchText:
        (#
           t: ^text;
