@@ -4,16 +4,16 @@ namespace beta.converter
 	
     class DotnetConverter
       {
-	internal Map includes;
-	internal static Map converted;
+	internal System.Collections.IDictionary includes;
+	internal static System.Collections.IDictionary converted;
 		
 	public DotnetConverter()
 	  {
-	    includes = new HashMap(10);
+	    includes = new System.Collections.Specialized.ListDictionary();
 	  }
 	static DotnetConverter()
 	  {
-	    converted = new HashMap(10);
+	    converted = new System.Collections.Specialized.ListDictionary();
 	  }
 	internal bool trace = false;
 		
@@ -48,7 +48,7 @@ namespace beta.converter
 	  public static void  Main(System.String[] args)
 	  {	    
 	    int overwrite = 0;
-	    /*System.IO.StreamWriter*/ SYstem.IO.TextWriter output = null;
+	    /*System.IO.StreamWriter*/ System.IO.TextWriter output = null;
 	    if (args.Length >= 1)
 	      {
 		for (int i = 0; i < args.Length; i++)
@@ -109,23 +109,18 @@ namespace beta.converter
 	    for (int i = 0; i < fieldlist.Length; i++)
 	      {
 		System.Reflection.FieldInfo f = fieldlist[i];
-		//UPGRADE_TODO: Method java.lang.reflect.Field.getModifiers was not converted. 
-		if (isRelevant(f.getModifiers()))
+		if (isRelevant(f))
 		  {
 		    if (first)
 		      {
 			beta.nl();
-			beta.commentline("Public/protected fields");
+			beta.commentline("Public/family fields");
 			beta.nl();
 		      }
 		    first = false;
-		    //UPGRADE_TODO: Method java.lang.reflect.Modifier.isStatic was not converted. 
-		    //UPGRADE_TODO: Method java.lang.reflect.Field.getModifiers was not converted. 
-		    bool isStatic = Modifier.isStatic(f.getModifiers());
-		    System.String value_Renamed = null;
-		    //UPGRADE_TODO: Method java.lang.reflect.Modifier.isFinal was not converted. 
-		    //UPGRADE_TODO: Method java.lang.reflect.Field.getModifiers was not converted. 
-		    if (isStatic && Modifier.isFinal(f.getModifiers()))
+		    bool isStatic = f.IsStatic;
+		    System.String val = null;
+		    if (isStatic && f.IsFinal)
 		      {
 			System.String type = f.FieldType.FullName;
 			if (o == null)
@@ -152,43 +147,43 @@ namespace beta.converter
 			  {
 			    if (type.Equals("byte"))
 			      {
-				value_Renamed = ((sbyte) f.GetValue(o)).ToString();
+				val = ((sbyte) f.GetValue(o)).ToString();
 			      }
 			    else if (type.Equals("short"))
 			      {
-				value_Renamed = ((short) f.GetValue(o)).ToString();
+				val = ((short) f.GetValue(o)).ToString();
 			      }
 			    else if (type.Equals("int"))
 			      {
-				value_Renamed = ((int) f.GetValue(o)).ToString();
+				val = ((int) f.GetValue(o)).ToString();
 			      }
 			    else if (type.Equals("long"))
 			      {
-				value_Renamed = ((long) f.GetValue(o)).ToString();
+				val = ((long) f.GetValue(o)).ToString();
 			      }
 			    else if (type.Equals("float"))
 			      {
 				//UPGRADE_TODO: The equivalent in .NET for method 'java.lang.Float.toString' may return a different value. 
-				value_Renamed = ((float) f.GetValue(o)).ToString();
+				val = ((float) f.GetValue(o)).ToString();
 			      }
 			    else if (type.Equals("double"))
 			      {
-				value_Renamed = ((double) f.GetValue(o)).ToString();
+				val = ((double) f.GetValue(o)).ToString();
 			      }
 			    else if (type.Equals("char"))
 			      {
-				value_Renamed = ((char) f.GetValue(o)).ToString();
+				val = ((char) f.GetValue(o)).ToString();
 			      }
 			    else if (type.Equals("boolean"))
 			      {
 				//UPGRADE_TODO: The equivalent in .NET for method 'java.lang.Boolean.toString' may return a different value. 
-				value_Renamed = ((bool) f.GetValue(o)).ToString();
+				val = ((bool) f.GetValue(o)).ToString();
 			      }
 			  }
 		      }
-		    if (value_Renamed != null)
+		    if (val != null)
 		      {
-			beta.putConstant(f.Name, value_Renamed);
+			beta.putConstant(f.Name, val);
 		      }
 		    else
 		      {
@@ -213,12 +208,12 @@ namespace beta.converter
 		System.Reflection.ConstructorInfo ct = ctorlist[i];
 		if (trace)
 		  System.Console.Error.WriteLine("Constructor: modifiers: " + SupportClass.GetConstructorModifiers(ct));
-		if (isRelevant(SupportClass.GetConstructorModifiers(ct)))
+		if (isRelevant(ct))
 		  {
 		    if (first)
 		      {
 			beta.nl();
-			beta.commentline("Public/protected constructors");
+			beta.commentline("Public/family constructors");
 			beta.nl();
 		      }
 		    first = false;
@@ -268,8 +263,7 @@ namespace beta.converter
 	    methodcount = new IntegerMap(methlist.Length);
 	    for (int i = 0; i < methlist.Length; i++)
 	      {
-		//UPGRADE_ISSUE: Method 'java.lang.reflect.Method.getModifiers' was not converted. 
-		if (isRelevant(methlist[i].getModifiers()))
+		if (isRelevant(methlist[i]))
 		  {
 		    methodcount.increment(methlist[i].Name);
 		  }
@@ -281,25 +275,17 @@ namespace beta.converter
 	    for (int i = 0; i < methlist.Length; i++)
 	      {
 		System.Reflection.MethodInfo m = methlist[i];
-		if (trace)
-		  {
-		    //UPGRADE_ISSUE: Method 'java.lang.reflect.Method.getModifiers' was not converted. 
-		    System.Console.Error.WriteLine("Method " + m.Name + ": modifiers: " + m.getModifiers());
-		  }
-				//UPGRADE_ISSUE: Method 'java.lang.reflect.Method.getModifiers' was not converted. 
-		if (isRelevant(m.getModifiers()))
+		if (isRelevant(m))
 		  {
 		    if (first)
 		      {
 			beta.nl();
-			beta.commentline("Public/protected methods");
+			beta.commentline("Public/family methods");
 			beta.nl();
 		      }
 		    first = false;
 		    System.String name = m.Name;
-		    //UPGRADE_TODO: Method java.lang.reflect.Modifier.isStatic was not converted. 
-		    //UPGRADE_ISSUE: Method 'java.lang.reflect.Method.getModifiers' was not converted. 
-		    bool isStatic = Modifier.isStatic(m.getModifiers());
+		    bool isStatic = m.IsStatic;
 		    System.String returnType = mapType(cls, m.ReturnType, false);
 		    //UPGRADE_TODO: The equivalent in .NET for method 'java.lang.reflect.Method.getParameterTypes' may return a different value. 
 		    System.Type[] params_Renamed = m.GetParameters();
@@ -308,7 +294,7 @@ namespace beta.converter
 		      {
 			parameters[j] = mapType(cls, params_Renamed[j], false);
 		      }
-		    if (methodcount.value_Renamed(name) > 1)
+		    if (methodcount.val(name) > 1)
 		      {
 			mangledName = dollarToUnderscore(mangle(name, params_Renamed));
 		      }
@@ -329,24 +315,6 @@ namespace beta.converter
 	      }
 	  }
 		
-	internal virtual void  doClasses(System.Type cls)
-	  {
-	    System.Type[] classlist = cls.GetNestedTypes();
-	    if (classlist.Length == 0)
-	      return ;
-			
-	    beta.nl();
-	    beta.commentline("Inner classes");
-	    beta.nl();
-			
-	    for (int i = 0; i < classlist.Length; i++)
-	      {
-				//UPGRADE_ISSUE: Method 'java.lang.Class.getModifiers' was not converted. 
-		if (isRelevant(classlist[i].getModifiers()))
-		  processClass(cls, classlist[i]);
-	      }
-	  }
-		
 	internal virtual System.Object[] doIncludes(System.Type cls)
 	  {
 	    // Scan all parameters of all methods to determine if other types
@@ -360,8 +328,7 @@ namespace beta.converter
 	    for (int i = 0; i < fieldlist.Length; i++)
 	      {
 		System.Reflection.FieldInfo f = fieldlist[i];
-				//UPGRADE_TODO: Method java.lang.reflect.Field.getModifiers was not converted. 
-		if (isRelevant(f.getModifiers()))
+		if (isRelevant(f))
 		  {
 		    mapType(cls, f.FieldType, true);
 		  }
@@ -372,7 +339,7 @@ namespace beta.converter
 	    for (int i = 0; i < ctorlist.Length; i++)
 	      {
 		System.Reflection.ConstructorInfo ct = ctorlist[i];
-		if (isRelevant(SupportClass.GetConstructorModifiers(ct)))
+		if (isRelevant(ct))
 		  {
 		    //UPGRADE_TODO: The equivalent in .NET for method 'java.lang.reflect.Constructor.getParameterTypes' may return a different value. 
 		    System.Type[] params_Renamed = ct.GetParameters();
@@ -388,8 +355,7 @@ namespace beta.converter
 	    for (int i = 0; i < methlist.Length; i++)
 	      {
 		System.Reflection.MethodInfo m = methlist[i];
-				//UPGRADE_ISSUE: Method 'java.lang.reflect.Method.getModifiers' was not converted. 
-		if (isRelevant(m.getModifiers()))
+		if (isRelevant(m))
 		  {
 		    mapType(cls, m.ReturnType, true);
 		    //UPGRADE_TODO: The equivalent in .NET for method 'java.lang.reflect.Method.getParameterTypes' may return a different value. 
@@ -423,11 +389,14 @@ namespace beta.converter
 	      }
 	  }
 		
-	internal virtual bool isRelevant(int m)
+	internal virtual bool isRelevant(System.Reflection.FieldInfo f)
 	  {
-	    //UPGRADE_TODO: Method java.lang.reflect.Modifier.isPublic was not converted. 
-	    //UPGRADE_TODO: Method java.lang.reflect.Modifier.isProtected was not converted. 
-	    return Modifier.isPublic(m) || Modifier.isProtected(m);
+	    return true;
+	  }
+		
+	internal virtual bool isRelevant(System.Reflection.MethodBase m)
+	  {
+	    return m.IsPublic || m.IsFamily;
 	  }
 		
 	internal virtual System.String mangleType(System.String type)
@@ -509,7 +478,7 @@ namespace beta.converter
 	      }
 	    else if (name.Equals("byte"))
 	      {
-		return "@char";
+		return "@int8";
 	      }
 	    else if (name.StartsWith("["))
 	      {
@@ -546,91 +515,11 @@ namespace beta.converter
 	    else
 	      {
 		// Reference to a class
-		// Find out if that class is an inner class of some outmost class
-		System.Type outmost = null;
-		System.Type outer = type.DeclaringType;
-		while (outer != null)
-		  {
-		    outmost = outer;
-		    outer = outer.DeclaringType;
-		  }
-		if (outmost != null)
-		  {
-		    name = unmangle(outmost, name);
-		    if (doIncludes)
-		      include(outmost.FullName);
-		  }
-		else
-		  {
-		    if (doIncludes)
-		      include(name);
-		  }
+		if (doIncludes) include(name);
 		return "^" + stripNamespace(dollarToUnderscore(name));
 	      }
 	  }
-		
-	internal virtual System.String mapInternalType(System.String name, bool doIncludes)
-	  {
-	    // name == "[..."
-	    name = name.Substring(1, (name.Length) - (1));
-	    if (name.StartsWith("["))
-	      {
-		System.Console.Error.WriteLine("Warning: mapInternalType: [" + name + ": Cannot map multidimensional arrays to BETA");
-		beta.fixme("[" + name + ": Cannot map multidimensional arrays to BETA");
-		return "[0]" + mapInternalType(name, doIncludes);
-	      }
-	    else if (name.Equals("B"))
-	      {
-		return "[0]@char";
-	      }
-	    else if (name.Equals("C"))
-	      {
-		return "[0]@char";
-	      }
-	    else if (name.Equals("D"))
-	      {
-		return "[0]@real";
-	      }
-	    else if (name.Equals("F"))
-	      {
-		return "[0]@real32";
-	      }
-	    else if (name.Equals("I"))
-	      {
-		return "[0]@int32";
-	      }
-	    else if (name.Equals("J"))
-	      {
-		return "[0]@int64";
-	      }
-	    else if (name.Equals("S"))
-	      {
-		return "[0]@int16";
-	      }
-	    else if (name.Equals("Z"))
-	      {
-		return "[0]@boolean";
-	      }
-	    else if (name.Equals("V"))
-	      {
-		System.Console.Error.WriteLine("Warning: mapInternalType: [V: Array of void???");
-		beta.fixme("[V: Array of void???");
-		return "[0]@int32";
-	      }
-	    else if (name.StartsWith("L"))
-	      {
-		name = name.Substring(1, (name.Length - 1) - (1));
-		if (doIncludes)
-		  include(name);
-		return "[0]^" + stripNamespace(name);
-	      }
-	    else
-	      {
-		System.Console.Error.WriteLine("Warning: mapInternalType: [" + name + ": unknown type");
-		return "[0]@int32";
-	      }
-	  }
-		
+	
 	internal virtual System.String slashToDot(System.String name)
 	  {
 	    return name.replaceAll("/", ".");
@@ -641,31 +530,11 @@ namespace beta.converter
 	    return name.replaceAll("\\.", "/");
 	  }
 		
-	internal virtual System.String dollarToUnderscore(System.String name)
-	  {
-			
-	    return name.replaceAll("\\$", "_");
-	  }
-		
 	internal virtual System.String stripNamespace(System.String name)
 	  {
 	    int i;
 	    i = slashToDot(name).LastIndexOf((System.Char) '.');
 	    return (i >= 0)?name.Substring(i + 1, (name.Length) - (i + 1)):name;
-	  }
-		
-	internal virtual System.String unmangle(System.Type outer, System.String innerName)
-	  {
-	    System.String unmangled = innerName;
-	    if (outer != null)
-	      {
-		System.String outerName = outer.FullName + '$';
-		if (innerName.StartsWith(outerName))
-		  {
-		    unmangled = unmangled.Substring(outerName.Length, (unmangled.Length) - (outerName.Length));
-		  }
-	      }
-	    return dollarToUnderscore(unmangled);
 	  }
 		
 	internal virtual void  processClass(System.Type outer, System.Type cls)
@@ -685,7 +554,7 @@ namespace beta.converter
 	    else
 	      {
 		innerClass = stripNamespace(cls.FullName);
-		innerName = stripNamespace(unmangle(outer, cls.FullName));
+		innerName = stripNamespace(cls.FullName);
 		sup = cls.BaseType;
 		if (sup != null)
 		  {
@@ -697,7 +566,6 @@ namespace beta.converter
 	    doFields(cls);
 	    doConstructors(cls);
 	    doMethods(cls);
-	    doClasses(cls);
 	    if (outer == null)
 	      {
 		beta.putTrailer(namespaceName, className);
@@ -768,13 +636,13 @@ namespace beta.converter
 	      }
 	    catch (System.Exception e)
 	      {
-		SupportClass.WriteStackTrace(e, Console.Error);
+		System.Console.Error.WriteLine(System.Environment.StackTrace);
 		return null;
 	      }
 	    return thisClass;
 	  }
 		
-	internal virtual int convert(System.String clsname, System.String betalib, int overwrite, System.IO.StreamWriter output)
+	internal virtual int convert(System.String clsname, System.String betalib, int overwrite, System.IO.TextWriter output)
 	  {
 	    //UPGRADE_NOTE: Exception 'java.lang.Throwable' was converted to 'System.Exception' which has different behavior. 
 	    try
@@ -791,7 +659,7 @@ namespace beta.converter
 	      }
 	    catch (System.Exception e)
 	      {
-		SupportClass.WriteStackTrace(e, Console.Error);
+		System.Console.Error.WriteLine(System.Environment.StackTrace);
 		return 1;
 	      }
 	    converted.put(slashToDot(clsname), clsname);
@@ -800,18 +668,14 @@ namespace beta.converter
 	  }
       }
 	
-    class IntegerMap:HashMap
+    class IntegerMap:System.Collections.Specialized.ListDictionary
       {
-	public IntegerMap(int initialCapacity):base(initialCapacity)
-	  {
-	  }
-		
 	public virtual void  increment(System.String key)
 	  {
-	    put(key, value_Renamed(key) + 1);
+	    put(key, val(key) + 1);
 	  }
 		
-	public virtual int value_Renamed(System.String key)
+	public virtual int val(System.String key)
 	  {
 	    if (containsKey(key))
 	      return ((System.Int32) get(key));
