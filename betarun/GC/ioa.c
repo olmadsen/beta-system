@@ -6,14 +6,24 @@
 
 #ifdef RTDEBUG
 #define IOAGC_START_TRACE 100000
-#endif
+#endif /* RTDEBUG */
 
 #include "beta.h"
 #include "dot.h"
 
 #ifdef sparc
 #include "../CRUN/crun.h"
+/* Hej Peter!  
+ *
+ * Jeg bliver nød til at have denne funktion nedenunder
+ * med, ellers kan jeg ikke compilere denne fil uden optimering. Jeg
+ * har brug for at kompilere denne fil uden optimering.
+ */
+void ioa_dummy() {
+  CRUN_USE();
+}
 #endif /* sparc */
+
 
 #ifdef PERSIST
 #include "../P/objectTable.h"
@@ -286,7 +296,7 @@ void IOAGc()
 	repeatIOAGc = 0;
       } else {
 	/* To handle objects explicitly marked as persistent by
-	   'markPersistentObject' */
+	   'put' */
 	flushDelayedEntries();
 	
 	/* Mark special objects moved to AOA as special */
@@ -733,10 +743,7 @@ static void ProcessAOAReference(Object ** theCell, long refType)
         Claim(!isStatic(AutObj->GCAttr), "!isStatic(AutObj->GCAttr)");
 	
         if (isForward(AutObj->GCAttr)) {
-	  
 	  newObj = (Object *) AutObj->GCAttr;
-	  *theCell = (Object *) Offset(newObj, -Distance); 
-
         } else {
 	  newObj = NewCopyObject(AutObj, 0);
 	}

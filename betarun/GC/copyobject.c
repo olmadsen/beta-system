@@ -111,14 +111,7 @@ Object * NewCopyObject(Object * theObj, Object ** theCell)
       }
 
 #ifdef PERSIST
-      if (GCAttribute == IOAPersist) {
-	/* KKK: We have just moved a persistent object to AOA. The
-	   object is registered so that we can create an entry for it
-	   in the ObjectTable, and mark it as persistent when this
-	   IOAGc has finished. We cannot do it now as the GCAttribute
-	   of the new object in AOA is needed by IOAGc. */
-	delayedInsert(newObj);
-      } else if (GCAttribute == IOASpecial) {
+      if (GCAttribute == IOASpecial) {
 	insertSpecialObject(getTagForObject(theObj), newObj);
       }
 #endif /* PERSIST */

@@ -816,6 +816,16 @@ void ProcessHPPAStackObj(StackObject *sObj, CellProcessFunc func)
 #ifdef sparc
 #include "../CRUN/crun.h"
 
+/* Hej Peter!  
+ *
+ * Jeg bliver nød til at have denne funktion nedenunder
+ * med, ellers kan jeg ikke compilere denne fil uden optimering. Jeg
+ * har brug for at kompilere denne fil uden optimering.
+ */
+void stack_dummy() {
+  CRUN_USE();
+}
+
 #ifndef gcc_frame_size
 static long skipCparams;
 #endif

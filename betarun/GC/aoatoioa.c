@@ -9,6 +9,18 @@
 /* Max number of linear probes in AOAtoIOAInsert */
 #define MAX_PROBES 30
 
+/* Hej Peter!  
+ *
+ * Jeg bliver nød til at have denne funktion nedenunder
+ * med, ellers kan jeg ikke compilere denne fil uden optimering. Jeg
+ * har brug for at kompilere denne fil uden optimering.
+ */
+void aoatoioa_dummy() {
+#ifdef sparc
+  USE();
+#endif /* sparc */
+}
+
 #ifdef PERSIST
 #include "../P/PException.h"
 #endif /* PERSIST */

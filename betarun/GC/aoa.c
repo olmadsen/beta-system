@@ -5,6 +5,18 @@
  */
 #include "beta.h"
 
+/* Hej Peter!  
+ *
+ * Jeg bliver nød til at have denne funktion nedenunder
+ * med, ellers kan jeg ikke compilere denne fil uden optimering. Jeg
+ * har brug for at kompilere denne fil uden optimering.
+ */
+void aoa_dummy() {
+#ifdef sparc
+  USE();
+#endif /* sparc */
+}
+
 #ifdef PERSIST
 #include "../P/PException.h"
 #include "../P/objectTable.h"
@@ -949,107 +961,8 @@ void checkNotInList(Object *target)
   }
 }
     
-/* Append objects to the list regardless of where they are */
-void appendToList(Object *target)
-{
-  long GCAttribute;
-    
-  /* We are about to append 'target' to the list. We will only do so
-   * if target points to an object that is not already part of the
-   * list. Whether this is the case can be inferred by looking at
-   * the GC-Attribute. The GCAttribute can be,
-
-   (1) Before AOAGc the value of the GCAttribute of all objects that
-   is reachable should be DEADOBJECT. This goes for all autonomous
-   objects, but not staticly inlined objects. The GCAttr of staticly
-   inlined objects contains the offset to the enclosing object. This
-   offset is a negative offset allways.
-
-   (2) During AOAGc all live objects are linked together in their GC
-   attribute. Of course only autonomous objects may be linked
-   together. Thus if we have a reference to a staticly inlined
-   object we should not link this object into the list but link the
-   enclosing object into the list.
-
-   */
-
-  /* Since this is a highly central function for the GC'er, we do
-     not check for NULL refrences in the normal case. It is the
-     responsibillity of the caller. */
-
-  GCAttribute = target -> GCAttr;
-    
-  if (GCAttribute == DEADOBJECT) {
-    /* Normal case. All objects in AOA are initially dead and
-     * not linked into the list.
-     */
-#ifdef RTDEBUG
-    if (tail->GCAttr != LISTEND) {
-      fprintf(output, 
-	      "appendToList: List is not properly terminated!\n");
-      Illegal();
-    }
-#endif
-    tail->GCAttr = (long) target;
-    tail=target;
-    tail->GCAttr = LISTEND;
-    totalsize += 4 * ObjectSize(target);
-  } else if (GCAttribute == LISTEND) {
-    /* target is already in the list (it is the tail actually) */
-    ;
-  } else if (GCAttribute < 0) {
-    /* We have encountered a staticly inlined object or a component. */
-    appendToList(getRealObject(target));
-  } else {
-    /* 'target' has a reference in it's GCField. 
-     * Thus it is allready in the list. */
-#ifdef RTDEBUG
-    if ((GCAttribute == FREECHUNK) ||
-	(GCAttribute == (long) NULL)) {
-      fprintf(output,"appendToList: UNexpected GCAttribute\n");
-      Illegal();
-    }
-#endif
-  }
-}
-
-/* Append objects to the list not including objects in IOA */
-void appendToListNoIOA(REFERENCEACTIONARGSTYPE)
-{
-#ifdef RTDEBUG
-  if (!*theCell) {
-    fprintf(output,"appendToListNoIOA: Target is NULL!\n");
-    Illegal();
-  }
-#endif
-    
-  if (!inIOA(*theCell)) {
-    appendToList(*theCell);
-  }
-}
-
-/* Append objects to the list including only objects in AOA. */
-void appendToListInAOA(REFERENCEACTIONARGSTYPE)
-{
-  Claim(inAOA(theCell), "appendToListInAOA:inAOA(theCell)");
-  Claim((int)*theCell, "appendToListInAOA:*theCell");
-  Claim(!inIOA(*theCell), "!inIOA(*theCell)");
-
-  if (inToSpace(*theCell)) {
-    /* insert theCell in AOAtoIOAtable. */
-    AOAtoIOAInsert(theCell);
-  } else {
-    /* The cell is assumed to be in AOA if not in ToSpace. 
-     * There should be nothing in IOA, as IOAGc has just completed,
-     * and the semispaces have not been swapped yet.
-     */
-    Claim(inAOA(*theCell), "inAOA(*theCell)");
-    appendToList(*theCell);
-  }
-}
-
 /* Prepend objects to the list regardless of where they are */
-void prependToListInIOA(Object *target)
+static void prependToListInIOA(Object *target)
 {
   long GCAttribute;
 
@@ -1125,21 +1038,6 @@ void prependToList(Object *target)
        * Thus it is already in the list. */
       Claim(isForward((long)target), "Target is not in the list");
     }
-  }
-}
-
-/* Prepend objects to the list not including objects in IOA */
-void prependToListNoIOA(REFERENCEACTIONARGSTYPE)
-{
-#ifdef RTDEBUG
-  if (!*theCell) {
-    fprintf(output,"prependToListNoIOA: Target is NULL!\n");
-    Illegal();
-  }
-#endif
-    
-  if (!inIOA(*theCell)) {
-    prependToList(*theCell);
   }
 }
 

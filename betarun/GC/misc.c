@@ -5,6 +5,11 @@
  */
 
 #include "beta.h"
+#include "../P/trie.h"
+
+#ifdef PERSIST
+#include "../P/referenceTable.h"
+#endif /* PERSIST */
 
 #ifdef MAC
 #include "trie.h"
@@ -26,7 +31,7 @@
 #include <Windows.h>
 #endif
 
-static Node *trie;
+static Trie *trie;
 
 /* Used by 
  *    objinterface.bet for: extGetCstring
@@ -110,11 +115,17 @@ void assignRef(long *theCell, Item * newObject)
       return;
     }
 #ifdef RTLAZY
-    if (isLazyRef(newObject)){
+    else if (isLazyRef(newObject)){
       negAOArefsINSERT((long)theCell);
       return;
     }
 #endif /* RTLAZY */
+#ifdef PERSIST
+    else if (inPIT(newObject)) {
+      newAOAclient((unsigned long)newObject, (Object **)theCell);
+      return;
+    }
+#endif /* PERSIST */
   }
 }
 
@@ -521,21 +532,29 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 			 lineno));
 	return;
       }
-#endif /* NEWRUN */
+#endif /* MT */
 
       /* Check alignment */
-      if (!(isLazyRef(r) || (ObjectAlign((unsigned)r)==(unsigned)r))) {
-          fprintf(output, "CCk:%s:%d: Ck(%s): bad aligment: (%s=0x%x)\n",
-                  fname, lineno, ref, ref, (int)(r));
-	  fflush(output);
-	  Illegal();
+      if (!(isLazyRef(r) || 
+#ifdef PERSIST
+	    inPIT(r) || 
+#endif /* PERSIST */
+	    (ObjectAlign((unsigned)r)==(unsigned)r))) {
+	fprintf(output, "CCk:%s:%d: Ck(%s): bad aligment: (%s=0x%x)\n",
+		fname, lineno, ref, ref, (int)(r));
+	fflush(output);
+	Illegal();
       }
-/* Check it's in a heap */
-      if (!(inIOA(rr) || inAOA(rr) || isLazyRef(rr))) {
-          fprintf(output, "CCk:%s:%d: Ck(%s): not in Heap: (%s=0x%x)\n",
-                  fname, lineno, ref, ref, (int)(r));
-	  fflush(output);
-	  Illegal();
+      /* Check it's in a heap */
+      if (!(inIOA(rr) || inAOA(rr) || isLazyRef(rr) 
+#ifdef PERSIST
+	    || inPIT(rr)
+#endif /* PERSIST */
+	    )) {
+	fprintf(output, "CCk:%s:%d: Ck(%s): not in Heap: (%s=0x%x)\n",
+		fname, lineno, ref, ref, (int)(r));
+	fflush(output);
+	Illegal();
       }
     }
 }
@@ -913,7 +932,7 @@ static void addLabel(long adr, char *id)
   /* Register label in trie */
   TInsert((unsigned long)(lab -> address), 
 	  (void *)(lab -> id), 
-	  trie, 
+	  &trie, 
 	  (unsigned long)(lab -> address));
   
   numLabels++;
