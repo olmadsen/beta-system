@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopyText.c,v 1.11 1992-09-03 12:55:57 beta Exp $
+ * Mod: $Id: CopyText.c,v 1.12 1992-11-27 10:46:07 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -23,6 +23,8 @@ void CopyT(char *asciz,
     /* Allocate a ValueRepetition and initialize it with some text.    */
     
     range = strlen(asciz);
+
+    /* LVRA missing */
     
     /* Allocate a value repetition */
     size = ByteRepSize(range);

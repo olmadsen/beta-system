@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopyCtext.c,v 1.13 1992-09-03 15:16:49 beta Exp $
+ * Mod: $Id: CopyCtext.c,v 1.14 1992-11-27 10:46:00 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -31,7 +31,7 @@ ref(ValRep) CCopyCT(unsigned char *textPtr)
     range = strlen(textPtr);
     size = ByteRepSize(range);
 
-    /* LVRA ?? */
+    /* LVRA missing */
     theRep = cast(ValRep) IOAalloc(size);
 
     theRep->Proto = ByteRepPTValue;

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopySliceValRep.c,v 1.22 1992-11-06 16:55:12 beta Exp $
+ * Mod: $Id: CopySliceValRep.c,v 1.23 1992-11-27 10:46:05 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -51,6 +51,8 @@ void CCopySVR(ref(ValRep) theRep,
     /* Calculate the range of the new repetition. */
     high =  (high - low) + 1;
     if (high < 0) high = 0;
+
+    /* LVRA missing */
     
     Protect2(theRep,theItem,newRep = cast(ValRep) IOAalloc(DispatchValRepSize(theRep->Proto, high)));
     
