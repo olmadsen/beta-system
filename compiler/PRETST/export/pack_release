@@ -1,0 +1,252 @@
+#!/usr/local/bin/perl -s
+$BETALIB=$ENV{'BETALIB'};
+$BETALIB=~s%\\%/%g;
+push(@INC, $ENV{'BETALIB'} . "/bin/admin");
+if (-e "c:\\" && $ENV{'MIASDK'} eq ""){
+    $ENV{'MIASDK'} = ms;
+}
+require "env.perl";
+
+# -------------- Configuration-----------------------------------------
+
+$dest        = "PRE-BETA";
+$beta        = "$BETALIB/boot/bin/$objdir/beta";
+
+# Examples to include from compiler/PRETST
+@examples    = (
+		"LL1.bet",
+		"List.bet",
+		"NumList.bet",
+		"STuser.bet",
+		"Server.bet",
+		"beer.bet",
+		"faclink.bet",
+		"minienv.bet",
+		"minienv_prebody.bet",
+		"minienvbody.bet",
+		"read.bet",
+		"stack.bet",
+		"stackbody.bet",
+		"stackuser.bet",
+
+		# SmallTalk Components
+		"BetaComponent.st",
+		"BetaStructure.st",
+);
+
+# Stuff to remove from copy before packing
+@cleanup = ( "configuration/mbs_id",
+	     "configuration/ymer.pjt",
+	     "configuration/env.*",
+	     );
+
+# -------------- Main -------------------------------------------------
+
+
+sub usage()
+{
+    local($msg) = @_;
+    print "pack_release: $msg\n" if ($msg ne "");
+    print<<EOT;
+usage: pack_release [-h][-v][-C][-z][-p]
+     -h  print this help
+     -v  verbose mode
+     -C  skip compilation of compilers
+     -Z  skip zipping of directory
+EOT
+    exit;
+}
+
+use File::Path;
+use File::Copy;
+use File::Find;
+
+&usage() if ($h);
+
+$skipcompilation = $C;
+$skipzipping = $Z;
+$publish = $p;
+
+$|=1;
+
+print "Creating BETA for pre-vm preliminary distribution in directory $dest\n";
+ 
+if ( -d $dest ){
+   print "Deleting existing $dest\n";
+   #&rmtree($dest, 0, 1);
+   system "rm -rf $dest";
+}
+
+if ($skipcompilation){
+    print "Skipping recompilation of compilers (-C option)\n";
+} else {
+    print "Recompiling compilers\n";
+    $pbetasrc = "$BETALIB/compiler/pbeta.bet";
+    $pbeta    = "$BETALIB/bin/$objdir/pbeta.exe";
+    system "$beta -qwd -o $pbeta $pbetasrc > pbetaboot.out";
+}
+
+print "Creating directory $dest\n";
+&mkpath($dest, 0, 0755);
+
+print "Copying compiler\n";
+&my_copyexecutable("$BETALIB/bin/$objdir", "pbeta.exe", "bin");
+
+print "Copying grammars\n";
+&my_copydir("$BETALIB/grammars/metagram", "grammars/metagram");
+&my_copydir("$BETALIB/grammars/pretty", "grammars/pretty");
+&my_copydir("$BETALIB/grammars/beta", "grammars/beta");
+
+print "Copying configuration\n";
+&my_copydir("$BETALIB/configuration", "configuration");
+
+print "Copying setup files\n";
+copy("cmd_setup.bat", "$dest/configuration");
+copy("cygwin_bash_setup.sh", "$dest/configuration");
+
+print "Copying examples\n";
+foreach $f (@examples){
+    &my_copyfiles("..", $f, "examples");
+}
+
+print "Creating README.txt\n";
+open README, ">$dest/README.txt" || die "Cannot open README.txt for writing: $\n";
+print README<<EOT;
+Preliminary Windows release of BETA for pre-vm.
+
+Setup
+-----
+It is assumed that you have a working PalCom Runtime Environment set up,
+specificly that you can call "pre-asm", "pre-st", and "pre-vm" from the command line.
+
+If you use Windows Command Prompt (cmd.exe), you can augment your setup 
+for PRE-BETA by issuing the command
+
+.\\configuration\\cmd_setup.bat
+
+If you are using the cygwin bash shell, you can instead use
+
+. configuration/cygwin_bash_setup.sh
+
+This will set up needed environment variables and change directory to the 
+"examples" directory.
+
+Examples
+--------
+The .bet files in the examples directory can be compiled and run using "pbeta".
+Compiling, e.g. beer.bet is done as such:
+   pbeta beer
+This will result in windows batch file "beer.bat", which calls pre-vm with the
+components generated from the BETA compilation.
+
+The .st files in the examples directory are SmallTalk components currently
+needed for implementation purposes.
+
+EOT
+close README;
+
+print "Clean up\n";
+foreach $f (@cleanup){
+    foreach $g (glob("$dest/$f")){
+	print "  Deleting $g\n" if ($verbose);
+	&rmtree($g, 0, 1);
+    }
+}
+
+if ($skipzipping){
+    print "Skipping zipping of directory (-Z option)\n";
+} else {
+    local ($sec,$min,$hour,$date,$month,$year,$day,$yday,$isdst) = localtime(time);
+    $zipname = sprintf("$dest-%02d-%02d-%02d.zip", 1900+$year, $month+1, $date);
+    unlink "$zipname" if (-e "$zipname");
+    print "Zipping directory to $zipname\n";
+    system "zip -qr $zipname $dest";
+}
+
+# -------------- Routines  ---------------------------------------------
+
+sub my_copydir($srcbase, $destbase){
+    my ($srcbase, $destbase) = @_;
+    &my_copyfiles($srcbase, "*", $destbase);
+}
+
+sub my_copyexecutable($srcbase, $file, $destdir){
+    my ($srcbase, $file, $destdir) = @_;
+    &my_copyfiles ($srcbase, $file, $destdir);
+    chmod 0755, "$dest/$destdir/$file";
+}
+
+sub my_copyfiles ($srcbase, $filespec, $destdir){
+    my ($srcbase, $filespec, $destdir) = @_;
+    foreach $g (glob("$srcbase/$filespec")){
+	my ($path) = "$g";
+	next if ($path =~ m%~$%); # skip tilde files
+	next if ($path =~ m%/CVS%); # skip CVS files
+	# skip various autogenerated files:
+	next if ($path =~ m%(\.lst$|\.pdb$|\.sln$|\.duo$|\.suo$|\.dln$)%); 
+	next if ($path =~ m%\.pdb$%);
+	next if ($path =~ m%\.sln$%); 
+	$path = substr $path, length($srcbase);  # remove srcbase/ prefix
+	$path =~ s%/[^/]*$%%;                    # delete file component
+	$path = "$dest/$destdir$path";
+	if (! -d "$path"){
+	    print "Making directory $path\n" if ($verbose);
+	    &mkpath($path, 0, 0755);
+	}
+	print "Copy $g $path\n" if ($verbose);
+	# system "/usr/bin/cp -p $g \"$path\""; # very slow
+	copy($g, "$path"); 
+    }
+}
+
+
+
+sub find_beta_files()
+{
+    $f = $File::Find::name;
+    next unless $f =~ m%(\.bet$|\.c$|\.h$|\.java$|\.cs$)%;
+    next if ($f =~ m%/test/%);
+    $f =~ s%^\./%%; # strip ./ prefix
+    push @beta_files, $f;
+}
+
+sub my_copy_beta_dir_recursively($srcdir, $destdir, $progress)
+{
+    my ($srcdir, $destdir, $progress) = @_;
+    &pushd($srcdir);
+    undef @beta_files;
+    find(\&find_beta_files, ".");
+    &popd();
+    print "(" . scalar(@beta_files) . " files)\n" if ($progress);
+    foreach $f (@beta_files){
+	print (".") if ($progress);
+	&my_copyfiles("$srcdir", $f, "$destdir");
+    }
+    print ("\n") if ($progress);
+}
+
+sub my_copy_std_library($name)
+{
+    my ($name) = @_;
+    print "     -> $name ";
+    &my_copy_beta_dir_recursively("$BETALIB/$name", "$name", 1);
+};
+
+sub my_copy_clr_directory($srcbase, $destbase)
+{
+    my ($srcbase, $destbase) = @_;
+    return if (! -d "$srcbase/clr");
+    &my_copyfiles($srcbase, "clr/*.il",  $destbase);
+    &my_copyfiles($srcbase, "clr/*.pdb",  $destbase);
+    &my_copyfiles($srcbase, "clr/*.clst",  $destbase);
+    &my_copyfiles($srcbase, "clr/*.dll",  $destbase);
+}
+
+sub my_copy_jvm_directory($srcbase, $destbase)
+{
+    my ($srcbase, $destbase) = @_;
+    return if (! -d "$srcbase/jvm");
+    &my_copyfiles($srcbase, "jvm/*.dep",  $destbase);
+    &my_copyfiles($srcbase, "jvm/*.clst",  $destbase);
+    &my_copyfiles($srcbase, "jvm/beta/*.class",  $destbase);
+}
