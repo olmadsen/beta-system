@@ -21,7 +21,7 @@ require "ctime.pl";
 $nti = ($OS eq "WIN");
 $exe = "\.exe" if ($nti);
 
-$ENV{'BETART'}="";
+$ENV{'BETART'}="NoDumpDialog";
 $ENV{'LD_LIBRARY_PATH'}= $ENV{'LD_LIBRARY_PATH'} . ":" . $ENV{'BETALIB'} . "/lib/${objdir}:../lib/${objdir}";
 
 $SIG{'INT'}  = 'IntHandler';
@@ -60,7 +60,7 @@ foreach $f (@files) {
     $f =~ s/${exe}$//;
     next if ($f !~ m/^$match$/);
     print "\n-------- $f: -------\n";
-    if ( $f eq "tstdump24" ){
+    if ( $f eq "tstdump24" || $f eq "tstdump20" ){
 	print "$f skipped.\n";
 	print "--------------------------\n";
 	next;
@@ -140,6 +140,7 @@ foreach $f (@files) {
 	    open(OUT, ">$f.ref") || die "Unable to write processed reference dump:$!";
 	    while(<IN>) {
 		s/MACHINE_TYPE/$objdir/g;
+		s/BETAENV/TSTENV/g;
 		s/\(address 0x\w+\)\s*//g;
 		s/\(address 0x\w+ <[^>]+>\)\s*//g;
 		s/Segmentation fault/Bus error/g;
@@ -154,6 +155,7 @@ foreach $f (@files) {
 	    while(<IN>) {
 		next if (/\{/);
 		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
+		s/\~beta\/compiler\/TST/\~beta\/betarun\/$objdir\/TST/g;
 		s/\(address 0x\w+\)\s*//g;
 		s/\(address 0x\w+ <[^>]+>\)\s*//g;
 		s/Segmentation fault/Bus error/g;
