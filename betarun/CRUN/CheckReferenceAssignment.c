@@ -27,7 +27,7 @@ void ChkRA()
 #ifdef RTLAZY
     /* It may be a dangling (negative) reference */
     if (isLazyRef(*theObjHandle))
-      negAOArefsINSERT(theObjHandle);
+      negAOArefsINSERT((long) theObjHandle);
 #endif
     return; 
   }
