@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-10-28 11:18:41 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-01-01 22:20:41 $, SID: $Revision: 1.9 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -410,18 +410,11 @@ ProcessObject(theObj)
     /* Calculate a pointer to the GCTabel inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
 
-    /* Handle all the references in the Object. */
-    while( *Tab != 0 ){
-      theCell = (ptr(long)) Offset( theObj, *Tab++ );
-      if( *theCell != 0 ) ProcessReference( theCell );
-    }
-    Tab++;
-
     /* Handle all the static objects. 
      * The static table have the following structure:
      * { .word Offset
-     *   .long T_entry_point
      *   .word Distance_To_Inclosing_Object
+     *   .long T_entry_point
      * }*
      * This table contains all static objects on all levels.
      * Here vi only need to perform ProcessObject on static objects
@@ -432,9 +425,16 @@ ProcessObject(theObj)
      */
 
     while( *Tab != 0 ){
-      if( *Tab == -Tab[3] ) 
+      if( *Tab == -Tab[1] ) 
 	ProcessObject( Offset( theObj, *Tab * 4));
       Tab += 4;
+    }
+    Tab++;
+
+    /* Handle all the references in the Object. */
+    while( *Tab != 0 ){
+      theCell = (ptr(long)) Offset( theObj, *Tab++ );
+      if( *theCell != 0 ) ProcessReference( theCell );
     }
   }
 }
@@ -559,19 +559,11 @@ ProcessAOAObject(theObj)
     /* Calculate a pointer to the GCTabel inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
 
-    /* Handle all the references in the Object. */
-    while( *Tab != 0 ){
-      theCell = (ptr(long)) Offset( theObj, *Tab++ );
-      if( *theCell != 0 ) ProcessAOAReference( theCell );
-    }
-    Tab++;
-
-
     /* Handle all the static objects. 
      * The static table have the following structure:
      * { .word Offset
-     *   .long T_entry_point
      *   .word Distance_To_Inclosing_Object
+     *   .long T_entry_point
      * }*
      * This table contains all static objects on all levels.
      * Here vi only need to perform ProcessAOAObject on static objects
@@ -582,12 +574,17 @@ ProcessAOAObject(theObj)
      */
 
     while( *Tab != 0 ){
-      if( *Tab == -Tab[3] ) 
+      if( *Tab == -Tab[1] ) 
 	ProcessAOAObject( Offset( theObj, *Tab * 4));
       Tab += 4;
     }
+    Tab++;
 
-
+    /* Handle all the references in the Object. */
+    while( *Tab != 0 ){
+      theCell = (ptr(long)) Offset( theObj, *Tab++ );
+      if( *theCell != 0 ) ProcessAOAReference( theCell );
+    }
   }
 }
 #endif
@@ -725,19 +722,11 @@ IOACheckObject( theObj)
     /* Calculate a pointer to the GCTabel inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
 
-    /* Handle all the references in the Object. */
-    while( *Tab != 0 ){
-      theCell = (ptr(long)) Offset( theObj, *Tab++ );
-      if( *theCell != 0 ) IOACheckReference( theCell );
-    }
-    Tab++;
-
-
     /* Handle all the static objects. 
      * The static table have the following structure:
      * { .word Offset
-     *   .long T_entry_point
      *   .word Distance_To_Inclosing_Object
+     *   .long T_entry_point
      * }*
      * This table contains all static objects on all levels.
      * Here vi only need to perform ProcessObject on static objects
@@ -748,9 +737,16 @@ IOACheckObject( theObj)
      */
 
     while( *Tab != 0 ){
-      if( *Tab == -Tab[3] ) 
+      if( *Tab == -Tab[1] ) 
 	IOACheckObject( Offset( theObj, *Tab * 4));
       Tab += 4;
+    }
+    Tab++;
+
+    /* Handle all the references in the Object. */
+    while( *Tab != 0 ){
+      theCell = (ptr(long)) Offset( theObj, *Tab++ );
+      if( *theCell != 0 ) IOACheckReference( theCell );
     }
   }
 }

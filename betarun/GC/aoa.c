@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-11-14 10:14:09 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1992-01-01 22:20:45 $, SID: $Revision: 1.10 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -242,19 +242,18 @@ static FollowItem( theObj)
     /* Calculate a pointer to the GCTabel inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
 
+    while( *Tab != 0 ){
+      if( *Tab == -Tab[1] ) 
+	FollowObject( Offset( theObj, *Tab * 4));
+      Tab += 4;
+    }
+    Tab++;
+
     /* Handle all the references in the Object. */
     while( *Tab != 0 ){
       theCell = (ptr(long)) Offset( theObj, *Tab++ );
       if( *theCell != 0 ) ReverseAndFollow( theCell );
     }
-    Tab++;
-
-    while( *Tab != 0 ){
-      if( *Tab == -Tab[3] ) 
-	FollowObject( Offset( theObj, *Tab * 4));
-      Tab += 4;
-    }
-
 }
 
 /* FollowObject is used during Phase1 of the Mark-Sweep GC. 
@@ -349,13 +348,11 @@ static handleAliveStatic( theObj, freeObj )
     /* Calculate a pointer to the GCTabel inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
 
-    while( *Tab++ != 0 );
-
     while( *Tab != 0 ){
-      if( *Tab == -Tab[3] ){ 
+      if( *Tab == -Tab[1] ){ 
 	handleAliveStatic( Offset( theObj, *Tab * 4), Offset( freeObj, *Tab * 4) );
         DEBUG_AOA( Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4)
-			 == (long) Tab[3],
+			 == (long) Tab[1],
 			 "AOACheckObject: EnclosingObject match GCTab entry."));
       }
       Tab += 4;
@@ -390,13 +387,11 @@ static handleAliveObject( theObj, freeObj)
     /* Calculate a pointer to the GCTabel inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
 
-    while( *Tab++ != 0 );
-
     while( *Tab != 0 ){
-      if( *Tab == -Tab[3] ){
+      if( *Tab == -Tab[1] ){
 	handleAliveStatic( Offset( theObj, *Tab * 4), Offset( freeObj, *Tab * 4) );
         DEBUG_AOA( Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4)
-			 == (long) Tab[3],
+			 == (long) Tab[1],
 			 "AOACheckObject: EnclosingObject match GCTab entry."));
       }
       Tab += 4;
@@ -683,19 +678,11 @@ AOACheckObject( theObj)
     /* Calculate a pointer to the GCTabel inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
 
-    /* Handle all the references in the Object. */
-    while( *Tab != 0 ){
-      theCell = (ptr(long)) Offset( theObj, *Tab++ );
-      if( *theCell != 0 ) AOACheckReference( theCell );
-    }
-    Tab++;
-
-
     /* Handle all the static objects. 
      * The static table have the following structure:
      * { .word Offset
-     *   .long T_entry_point
      *   .word Distance_To_Inclosing_Object
+     *   .long T_entry_point
      * }*
      * This table contains all static objects on all levels.
      * Here vi only need to perform ProcessObject on static objects
@@ -706,11 +693,18 @@ AOACheckObject( theObj)
      */
 
     while( *Tab != 0 ){
-      Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4) == (long) Tab[3],
+      Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4) == (long) Tab[1],
 	    "AOACheckObject: EnclosingObject match GCTab entry.");
-      if( *Tab == -Tab[3] ) 
+      if( *Tab == -Tab[1] ) 
 	AOACheckObject( Offset( theObj, *Tab * 4));
       Tab += 4;
+    }
+    Tab++;
+
+    /* Handle all the references in the Object. */
+    while( *Tab != 0 ){
+      theCell = (ptr(long)) Offset( theObj, *Tab++ );
+      if( *theCell != 0 ) AOACheckReference( theCell );
     }
   }
 }
@@ -769,18 +763,11 @@ AOACheckObjectSpecial( theObj)
     /* Calculate a pointer to the GCTabel inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
 
-    /* Handle all the references in the Object. */
-    while( *Tab != 0 ){
-      theCell = (ptr(long)) Offset( theObj, *Tab++ );
-    }
-    Tab++;
-
-
     /* Handle all the static objects. 
      * The static table have the following structure:
      * { .word Offset
-     *   .long T_entry_point
      *   .word Distance_To_Inclosing_Object
+     *   .long T_entry_point
      * }*
      * This table contains all static objects on all levels.
      * Here vi only need to perform ProcessObject on static objects
@@ -791,9 +778,15 @@ AOACheckObjectSpecial( theObj)
      */
 
     while( *Tab != 0 ){
-      if( *Tab == -Tab[3] ) 
+      if( *Tab == -Tab[1] ) 
 	AOACheckObjectSpecial( Offset( theObj, *Tab * 4));
       Tab += 4;
+    }
+    Tab++;
+
+    /* Handle all the references in the Object. */
+    while( *Tab != 0 ){
+      theCell = (ptr(long)) Offset( theObj, *Tab++ );
     }
   }
 }

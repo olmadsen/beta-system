@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-11-14 10:14:59 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1992-01-01 22:21:06 $, SID: $Revision: 1.11 $
  * by Lars Bak
  */
 
@@ -18,8 +18,8 @@ static ptr(char) ProtoTypeName(theProto)
   Tab = (ptr(short)) TabValue;
 
   index = 0;
-  while( Tab[index++] != 0 );
   while( Tab[index]   != 0 ) index += 4;
+  while( Tab[index++] != 0 );
       
   return (ptr(char)) &Tab[index+1];
 }
@@ -36,8 +36,8 @@ static ptr(char) theItemName(theItem)
   Tab = (ptr(short)) TabValue;
 
   index = 0;
-  while( Tab[index++] != 0 );
   while( Tab[index]   != 0 ) index += 4;
+  while( Tab[index++] != 0 );
       
   return (ptr(char)) &Tab[index+1];
 }

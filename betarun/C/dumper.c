@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: dumper.c,v $, rel: %R%, date: $Date: 1991-01-30 10:53:35 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: dumper.c,v $, rel: %R%, date: $Date: 1992-01-01 22:20:55 $, SID: $Revision: 1.2 $
  * by Lars Bak
  */
 #include <ctype.h>
@@ -20,8 +20,8 @@ char *DumpItemName( theItem)
   Tab = (ptr(short)) TabValue;
 
   index = 0;
-  while( Tab[index++] != 0 );
   while( Tab[index] != 0 ) index += 4;
+  while( Tab[index++] != 0 );
   
   return (ptr(char)) &Tab[index+1];
 }
