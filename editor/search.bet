@@ -4,7 +4,13 @@ INCLUDE '~beta/guienv/utils/pane'
         '~beta/guienv/utils/listview'
         '~beta/sourcebrowser/ymerInterface'
         '~beta/sourcebrowser/codemoveable'
-        '~beta/guienv/utils/private/promptsbody';
+        '~beta/guienv/utils/private/promptsbody'
+        '~beta/interfacebuilder/support/auxcontrols';
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-2000
+ *   All rights reserved.
+ *)
 (*
  * COPYRIGHT
  *   Copyright Mjolner Informatics, 1995-2000
@@ -30,6 +36,7 @@ searchBrowser: Window
      setNodesListLabel:< (# t: ^text do INNER exit t[] #);
      showSourceLine:< booleanValue;
      checkAll,doNotCheckAll,cancelCommand: @boolean;
+     isSemanticErrorViewer:< booleanValue;
      checkGroupStatus:<
        (# fg: ^astInterface.fragmentGroup; value: @boolean
        enter fg[]
@@ -439,9 +446,61 @@ searchBrowser: Window
                  (# w,h: @integer; 
                  do
                     THIS(searchBrowser).size->(w,h);
-                    (w,(h div aspect)-1)->size;
+                    (if isSemanticErrorViewer then
+                        (w,2*(h div aspect)-1)->size
+                     else
+                        (w,2*(h div aspect)-1)->size
+                    if);
                     
                  #)
+            #);
+          errorMessageWindow: @labelled
+            (#
+               clear: (#  do ''->contents.writeText #);
+               contentsType:: staticText
+                 (#
+                    eventHandler::< 
+                      (#
+                         onLabelChanged::< 
+                           (# 
+                           do (labelWidth,labelHeight*linesinMessage)->size; 
+                           #)
+                      #);
+                    linesInMessage: @integer;
+                    writeText:
+                      (# msg: ^text; msg2: @text
+                      enter msg[]
+                      do
+                         1->linesInMessage;
+                         msg2.reset;
+                         msg.scanAll
+                           (# 
+                           do
+                              (if ch
+                               // ascii.newline then
+                                  linesInMessage+1->linesInMessage; ch->msg2.put
+                               // ascii.ht then (* ignore *)
+                                  (if includeWarnings then
+                                      '          '->msg2.putText
+                                  if)
+                               else
+                                  ch->msg2.put
+                              if)
+                           #);
+                         msg2[]->label
+                      #);
+                    open::  (#  do 'Semantic error'->label #);
+                    
+                 #);
+               open:: 
+                 (# w,h: @integer; 
+                 do
+                    THIS(searchBrowser).size->(w,h);
+                    (w,(h div aspect)-5)->size;
+                    'Error message'->label;
+                    
+                 #);
+               
             #);
           open::< 
             (#
@@ -452,6 +511,10 @@ searchBrowser: Window
                nodesList.open;
                FFlist[]->appendMember;
                nodesList[]->appendMember;
+               (if isSemanticErrorViewer then
+                   errorMessageWindow.open;
+                   errorMessageWindow[]->contents.appendMember
+               if);
                INNER open;
                appendsDone;
                dobind;
@@ -463,7 +526,8 @@ searchBrowser: Window
        do
           false->checkAll->doNotCheckAll->cancelCommand;
           clear;
-          contents.FFlist.clear
+          contents.FFlist.clear;
+          (if isSemanticErrorViewer then contents.errorMessageWindow.clear if)
        #);
      registerFragmentGroup:
        (#
@@ -522,6 +586,7 @@ searchBrowser: Window
      open::< 
        (# w,h: @integer; 
        do
+          (300,200)->size;
           true->opened;
           hide;
           INNER open;
@@ -535,7 +600,7 @@ searchBrowser: Window
   #);
 searchViewer: searchBrowser
   (#
-     aspect::  (#  do 2->value #);
+     aspect::  (#  do 3->value #);
      contentsType::< 
        (#
           onNewfragmentForm::< 
@@ -631,7 +696,8 @@ searchViewer: searchBrowser
   #);
 mySemanticViewer: searchBrowser
   (#
-     aspect::<  (#  do 2->value; INNER #);
+     aspect::<  (#  do 4->value; INNER #);
+     isSemanticErrorViewer:: trueObject;
      contentsType::< 
        (#
           onNewfragmentForm::< 
@@ -659,7 +725,7 @@ mySemanticViewer: searchBrowser
                             ((l1 = 1) and (c1 = 1) and (l2 = 1) and (c2 = 1))
                              then
                                 i.name->msg[];
-                                ': '->msg.append;
+                                (if false then ': '->msg.append if);
                                 l1->browser.cfe.theSifTexteditor.getLine
                                   ->msg.append;
                                 msg[]->i.name;
@@ -681,8 +747,24 @@ mySemanticViewer: searchBrowser
                INNER
             #);
           onSelectNode::< 
-            (# 
+            (# t: ^text
             do
+               (if (node.semanticError->mps.AST.isWarning) then
+                   (if includeWarnings then
+                       'Warning: '->t[];
+                       node.semanticError->mps.ast.semanticErrorText->t.append
+                    else
+                       ''->t[]
+                   if)
+                else
+                   (if includeWarnings then
+                       'Error:   '->t[]
+                    else
+                       &text[]->t[]
+                   if);
+                   node.semanticError->mps.AST.semanticErrorText->t.append
+               if);
+               t[]->errorMessageWindow.contents.writeText;
                (node.frag.root[],node[],false)->browser.selectNode;
                2 (* semantic error *) ->browser.cfe.setTextStyle
             #)
