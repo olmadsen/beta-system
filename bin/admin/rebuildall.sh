@@ -4,12 +4,15 @@
 # exit 0  Den er overstaaet nu...
 
 # configuration:
-setenv CVSUPDATE yes
-setenv RCMUPDATE yes
+set CVSUPDATE=yes
+set RCMUPDATE=no 
+set BUILDMACHINES=(lisa amigo)
 
 ### Usage:
-# Put in crontab on machines where a periodical recompilation 
-# of all files and programs is desired.
+# Put in crontab on the machine where a periodical recompilation 
+# of all files and programs is desired and the files are physically located.
+# Insert other machines into BUILDMACHINES to get them to rebuild too,
+# after the machine running this script has cleaned up everything.
 #
 # Arguments: 
 #   First aguments is the bealib to cleanup.
@@ -66,6 +69,7 @@ setenv REMOVEASTS $2
 source ${BETALIB}/configuration/env.csh >& /dev/null
 
 setenv LOG ${BETALIB}/log/rebuildall.$MACHINETYPE
+setenv RAGNAROOT /users/beta/.Ragnarok
 
 # Hack:  HP machines have too little space on /tmp.  Use ~beta/tmp instead.
 # Well, lisa has enough room on /tmp.  No need for now.
@@ -77,6 +81,10 @@ rm -f $LOG
 echo "rebuildall.sh: Starting on BETALIB $BETALIB." >>& $LOG
 date >>& $LOG
 if ( $REMOVEASTS == "yes" ) then
+    echo "rebuildall.sh: Removing all asts files for all platforms." >>& $LOG
+    mbs_rmast -u >>& $LOG
+    echo "rebuildall.sh: Removing all code files for all platforms." >>& $LOG
+    mbs_rmcode -u sun4s linux sgi hpux9pa nti_ms nti_gnu ms gnu bor >>& $LOG
     if ( $CVSUPDATE == "yes" ) then
         echo "rebuildall.sh: Doing mbs_cvsupdate -u." >>& $LOG
         mbs_cvsupdate -u >>& $LOG
@@ -89,27 +97,50 @@ if ( $REMOVEASTS == "yes" ) then
 	    cd $BETALIB
 	endif
     endif
-    echo "rebuildall.sh: Removing all asts files for all platforms." >>& $LOG
-    mbs_rmast -u >>& $LOG
-    echo "rebuildall.sh: Removing all code files for all platforms." >>& $LOG
-    mbs_rmcode -u sun4s linux sgi hpux9pa nti_ms nti_gnu ms gnu bor >>& $LOG
-    echo "rebuildall.sh: Checking compiler." >>& $LOG
-    setenv BETAOPTS --nocode
-    date >>& $LOG
-    mbs_compiletools compiler >>& $LOG
-    unsetenv BETAOPTS
-else
-    #Has already been taken care of by ariel...
-    #echo "rebuildall.sh: Removing all code files for $objdir." >>& $LOG
     #date >>& $LOG
-    #mbs_rmcode -u $objdir >>& $LOG
+    #echo "rebuildall.sh: Checking compiler." >>& $LOG
+    #setenv BETAOPTS --nocode
+    #date >>& $LOG
+    #mbs_compiletools compiler >>& $LOG
+    #unsetenv BETAOPTS
+    date >>& $LOG
+    echo "rebuildall.sh: Building compiler." >>& $LOG
+    mbs_compiletools compiler >>& $LOG
+    date >>& $LOG
+    echo "rebuildall.sh: mbs_compile -- --nocode." >>& $LOG
+    mbs_compile -- --nocode >> $LOG
+    date >>& $LOG
+    echo "rebuildall.sh: rsh'ing to other machines." >>& $LOG
+    foreach mach ($BUILDMACHINES) 
+         ( rsh $mach /users/beta/r5.0/bin/admin/rebuildall.sh /users/beta/r5.0 no < /dev/zero ) &
+    end
+    echo "rebuildall.sh: Building betarun." >>& $LOG
+    date >>& $LOG
+    cd $BETALIB/betarun/$objdir
+    make all >>& $LOG
+    date >>& $LOG
+    echo "rebuildall.sh: mbs_compile." >>& $LOG
+    mbs_compile >> $LOG
+    date >>& $LOG
+    echo "rebuildall.sh: Building tools." >>& $LOG
+    mbs_compiletools -u >>& $LOG
+    date >>& $LOG
+else
+    date >>& $LOG
+    echo "rebuildall.sh: Building compiler." >>& $LOG
+    mbs_compiletools compiler >>& $LOG
+    echo "rebuildall.sh: Building betarun." >>& $LOG
+    date >>& $LOG
+    cd $BETALIB/betarun/$objdir
+    make all >>& $LOG
+    cd $BETALIB
+    date >>& $LOG
+    mbs_compile >> $LOG
+    date >>& $LOG
+    echo "rebuildall.sh: Building tools." >>& $LOG
+    mbs_compiletools -u >>& $LOG
+    date >>& $LOG
 endif
-date >>& $LOG
-mbs_compiletools compiler >>& $LOG
-date >>& $LOG
-mbs_compile >> $LOG
-date >>& $LOG
-mbs_compiletools -u >>& $LOG
-date >>& $LOG
+
 echo "rebuildall.sh: Completed." >>& $LOG
 
