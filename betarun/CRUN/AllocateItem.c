@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: AllocateItem.c,v 1.15 1992-09-03 12:55:24 beta Exp $
+ * Mod: $Id: AllocateItem.c,v 1.16 1992-11-05 14:22:07 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -18,7 +18,7 @@ ParamOriginProto(struct Item *,AlloI)
     Ck(origin);
 
 #if defined(hppa) && defined(RTDEBUG)
-    if((unsigned)getRefSP() > (unsigned)ReferenceStack + 490*4) {
+    if((unsigned)getRefSP() > (unsigned)ReferenceStack + 990*4) {
       fprintf(stderr,"#ReferenceStack overflow!!!\n");
     }
 #endif
