@@ -109,7 +109,6 @@ void CopyGWorldToWindow (GWorldPtr src, WindowPtr dst,
 		good = LockPixels(pix);
 		if (good) {
 			asGrafPtr = (GrafPtr) src;
-					srcRect->top, dstRect->top, srcRect->bottom, dstRect->bottom,dstRect->right );
 			CopyBits(&asGrafPtr->portBits, &dst->portBits,
 					 srcRect, dstRect, mode, maskRgn);
 		}
