@@ -863,7 +863,7 @@ void AOACheckReference( theCell)
   long found = FALSE;
 
 #ifdef RTLAZY
-  if( *theCell > 0){
+  if( (int) *theCell > 0){
 #else
   if ( *theCell ){
 #endif
