@@ -5,7 +5,7 @@ ORIGIN 'diagramattributes';
  * 22 = AstReplaced
  *)
 INCLUDE 'objectgppproperties'
-        '~beta/designenv/v2.1.1/private/userdatabody';
+        '~beta/designenv/v2.2/private/userdatabody';
 -- IndexIDListInsert: Descriptor --
 (# 
 do
@@ -38,17 +38,16 @@ do
        search:
        anAST.index
          ->indexIDList.scan
-           (# 
+           (# theObject: ^PatternDiagramNode; ff: ^mps.fragmentForm
            do
-              currentNode[]->theNode[];
-              (if theNode.getFragment
+              currentNode[]->theObject[];
+              (if theObject.getFragment
                // none then
                   'ASTtoNode: theNode.getFragment is none!'->putLine; 
                else
-                  (if
-                  (theNode.getFragment).fullName->(anAST.frag.fullname).equal
-                   then
-                      leave search
+                  theObject.getFragment->ff[];
+                  (if ff[] = anAST.frag[] then
+                      theObject[]->theNode[]; leave search
                   if)
               if);
               
@@ -81,19 +80,20 @@ do
            search:
            oldAST.index
              ->indexIDList.scan
-               (# 
+               (# theObject: ^PatternDiagramNode
                do
-                  currentNode[]->theNode[];
-                  (if theNode.getFragment
+                  currentNode[]->theObject[];
+                  (if theObject.getFragment
                    // none then
                       'ASTtoNodeListUpdate: theNode.getFragment is none!'
                         ->putLine;
                       
                    else
-                      theNode.getFragment->ff[];
-                      oldAST.frag.fullname->oldASTName[];
-                      (if ff.fullname->oldASTName.equal then
-                          newAst.Index->indexIDList.impl[i]; leave search
+                      theObject.getFragment->ff[];
+                      (if ff[] = newAST.frag[] then
+                          newAst.Index->indexIDList.impl[i];
+                          theObject[]->theNode[];
+                          leave search
                       if)
                   if);
                   
@@ -577,8 +577,6 @@ do
      ->Max->PatternDiagrams.SecondFreeColumn;
    0->y;
    730->h;
-   (* check that nextFreeLine is inside the bound of the page *)
-   (* THIS(OADPage).Geometry->(x,y,w,h);*)
    (if PatternDiagrams.NextFreeLine > y+(h div 2) then
    (* PatternDiagrams.SecondFreeLine -> PatternDiagrams.NextFreeLine;*)
        y-(h div 2)+gppProp.DownOnPage->PatternDiagrams.NextFreeLine;
@@ -672,6 +670,134 @@ do
 (# 
 do (if switch[22] // true then 'Gpp ------- newFragment'->putLine;  if); 
 #)  
+
+-- fragmentChanged: DoPart --
+do
+     (# foundDiagram: ^ListDiagram
+     do
+        FragmentDiagram##
+          ->ScanDiagrams
+            (# theDiagram: ^FragmentDiagram; theRegionList: ^ObjectList
+            do
+               current[]->theDiagram[];
+               (if ff.father
+                // theDiagram.theGroup then (* find formname in the diagram *)
+                   theDiagram[]->foundDiagram[];
+                   theDiagram.localnodes.scan
+                     (#
+                        theFragmentNode: ^theDiagram.FragmentNode;
+                        t: ^text;
+                        index: @integer;
+                        w1,h1: @integer;
+                        
+                     do
+                        current[]->theFragmentNode[];
+                        (if ff[] = theFragmentNode.theFragment then
+                            ff[]->theFragmentNode.redisplay;
+                            (if theFragmentNode.currentDecomposDiagram <> none
+                             then
+                                (ff.father).name->t[];
+                                '/'->t.findCh (#  do inx->index #);
+                                (index+1,t.length)->t.sub->t[];
+                                '-'->t.put;
+                                theFragmentNode.theName->t.puttext;
+                                t
+                                  ->
+                                    (theFragmentNode.currentDecomposDiagram).
+                                    titleNode.theText.set;
+                                (theFragmentNode.currentDecomposDiagram).
+                                titleNode.getRegionList->theRegionList[];
+                                (if theRegionList[] <> none then
+                                    theRegionList.scan
+                                      (# anObj: ^DesignObject
+                                      do current[]->anObj[]; anObj.unmakeRegion
+                                      #);
+                                    
+                                if);
+                                (theFragmentNode.currentDecomposDiagram).
+                                titleNode.FitToText;
+                                (theFragmentNode.currentDecomposDiagram).
+                                titleNode.Size->(w1,h1);
+                                ((w1,gppProp.titleWidth)->max,h1)
+                                  ->
+                                    (theFragmentNode.currentDecomposDiagram).
+                                    titleNode.size;
+                                (if theRegionList[] <> none then
+                                    theRegionList.scan
+                                      (# anObj: ^DesignObject
+                                      do
+                                         current[]->anObj[];
+                                         (theFragmentNode.currentDecomposDiagram
+                                         ).titleNode[]->anObj.createRegion
+                                      #)
+                                if);
+                                t
+                                  ->
+                                    (theFragmentNode.currentDecomposDiagram).
+                                    titleText
+                            if)
+                        if)
+                     #)
+               if)
+            #);
+        foundDiagram.localNodes.adjustsizes;
+        autosave
+     #)  
+
+-- fragmentInserted: DoPart --
+do
+   FragmentDiagram##
+     ->ScanDiagrams
+       (# theDiagram: ^FragmentDiagram; pos: @integer
+       do
+          current[]->theDiagram[];
+          (if ff.father
+           // theDiagram.theGroup then (* find formname in the diagram *)
+              1->pos;
+              scanner: (ff.father).fragmentList.scan
+                (# 
+                do
+                   (if current.type
+                    // mps.linkType then (* ignore *)
+                       
+                    // mps.groupType then
+                       'Groups in groups not suported'->putline; 
+                    // mps.formType then
+                       (if current.f[] = ff[] then
+                           leave scanner
+                        else
+                           pos+1->pos
+                       if);
+                       
+                   if);
+                   
+                #);
+              (pos-1,ff[])->theDiagram.insertFragmentNode
+          if)
+       #);
+   autosave  
+
+-- fragmentDeleted: DoPart --
+do
+   scanner:
+   FragmentDiagram##
+     ->ScanDiagrams
+       (# theDiagram: ^FragmentDiagram; pos: @integer
+       do
+          current[]->theDiagram[];
+          (if ff.father = theDiagram.theGroup then
+              theDiagram.localNodes.scan
+                (# theFragmentNode: ^theDiagram.FragmentNode
+                do
+                   current[]->theFragmentNode[];
+                   (if ff[] = theFragmentNode.theFragment then
+                       theFragmentNode[]->theDiagram.deleteFragmentNode;
+                       leave scanner
+                   if)
+                #)
+          if)
+       #);
+   autosave  
 
 -- astReplaced: DoPart --
 do
@@ -1469,6 +1595,9 @@ do
                     else
                        myDocument.CurrentPage->myDocument.theGroupPage[];
                        myDocument[]->theDocument[]->theOADDocument[];
+                       &myDocument.OADPage[]->myDocument.theWorkPage[];
+                       myDocument.theWorkPage.InvisibleNew;
+                       'WorkSheet'->myDocument.theWorkPage.PageTitle;
                        
                    if);
                    'Group Window'->myDocument.theGroupPage.PageTitle;
@@ -2318,6 +2447,9 @@ do
    theOADPage: ^theOADDocument.OADPage;
    theObject: ^thePage.DesignObject;
    theConnID: @integer;
+   num,w,h,vis: @IntegerRef;
+   nameStr: [64] @char;
+   t: @text;
    
 do
    name[]->currentDiagramName[];
@@ -2331,15 +2463,24 @@ do
    (if pages.range > 0 then
        (for i: pages.range repeat
          (if i = 1 then
-             &theOADDocument.OADPage[]->thePage[]
-               ->theOADDocument.theGroupPage[];
-             
+             &theOADDocument.OADPage[]
+               ->thePage[] (* ->theOADDocument.theGroupPage[];*)
           else
-             &theOADDocument.OADPage[]->thePage[]->theOADDocument.theWorkPage[];
-             
+             &theOADDocument.OADPage[]
+               ->thePage[] (*->theOADDocument.theWorkPage[];*)
          if)
          (* toby 24-11-94: VERY temporary hack (i hope)!!*)
          ;
+         (if (pages[i],@@ nameStr[1],num[],w[],h[],vis[])->DSRdAttrGetPageAttr
+          // true then @@ nameStr[1]->cStringToCharRep->t; 
+          else
+             'Could not read page name before initialization'->putline
+         if);
+         (if 'Group Window'->t.equal then
+             thePage[]->theOADDocument.theGroupPage[]
+          else
+             thePage[]->theOADDocument.theWorkPage[]
+         if);
          pages[i]->thePage.onInit;
          true->thePage.PageCallBack.specialNode;
          thePage.onReadDiagram;
@@ -2438,10 +2579,12 @@ do
             theListDiagram: ^theOADDocument.theGroupPage.ListDiagram;
             thisOADDiagram: ^theOADDocument.theGroupPage.OADDiagram;
             thisFragmentDiagram: ^theOADDocument.theGroupPage.FragmentDiagram;
+            thePropertyDiagram: ^theOADDocument.theGroupPage.PropertyDiagram;
             theDummyDesc: ^betaGram.ObjectDescriptor;
             thisPatternAttDiagram:
               ^theOADDocument.theGroupPage.PatternAttDiagram;
-            theDummyAST: ^MPS.AST
+            theDummyAST: ^MPS.AST;
+            theNodeID: @integer
          do
             current.e[]->theListDiagram[];
             (if current.e.struc <= theOADDocument.theGroupPage.OADDiagram##
@@ -2456,6 +2599,17 @@ do
                         thisOADDiagram[]->thisPatternAttDiagram[];
                         thisPatternAttDiagram.theAST->theDummyAST[];
                         theDummyAST.index->current.index
+                    if)
+                if);
+                (if thisOADDiagram## <=
+                theOADDocument.theGroupPage.propertyDiagram## then
+                    thisOADDiagram[]->thePropertyDiagram[];
+                    thePropertyDiagram.titleNode.UDSurroundBox.getID->theNodeID;
+                    (if theNodeID <> 0 then
+                        (thePropertyDiagram[],theNodeID)
+                          ->
+                            theOADDocument.theGroupPage.pageCallback.
+                              makeSurroundBox
                     if)
                 if);
                 
@@ -3823,7 +3977,6 @@ do
     else
        theNameDcl.getText->t[]->keepT[]
    if);
-   (*ref=qual only happens with associations*)
    (if not (ref[]->qual.equal) then
        (if ref.frag[] = qual.frag[] then
            ref[]->qual.nearestCommonAncestor->(nca[],qualSonNo,refSonNo);
