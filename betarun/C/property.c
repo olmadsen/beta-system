@@ -12,6 +12,9 @@
  */
 #include <stdio.h>
 #include "beta.h"
+#ifdef macintosh
+#include <CType.h>
+#endif
 
 static long intScan(), CmpStr();
 
@@ -108,6 +111,7 @@ static ValueProperty( name, value)
 
   ENTRY("infofile",
     if( !(output = fopen(value, "w")) ){
+      
       fprintf( stderr, "#InfoFile '%s' couldn't be opened, stderr is used\n", value);
       output = stderr;
     });
