@@ -54,14 +54,14 @@ public class BetaHelpers
     return result;
   }
 
-  public static void WriteInt8(BinaryWriter bw, sbyte v){
-    // Not really needed, since there is a Write(sbyte)
-    bw.Write(v);
+  public static void WriteInt8u(BinaryWriter bw, sbyte v){
+    bw.Write((byte)v);
   }  
 
-  public static sbyte ReadInt8(BinaryReader br){
-    // Not really needed, since there is a ReadSByte()
-    return br.ReadSByte();
+  public static short ReadInt8u(BinaryReader br){
+    byte b = br.ReadByte();
+    //System.Console.WriteLine("ReadInt8u: {0}, {1}", b, (short)b);
+    return (short)b;
   }  
 
   public static void WriteInt8Array(BinaryWriter bw, sbyte[] R, int range){

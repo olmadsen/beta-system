@@ -14,7 +14,7 @@ public class Component
     // Parse BETART
     betart = System.Environment.GetEnvironmentVariable("BETART");
     if (betart!=null && betart.Length>0){
-      System.Console.WriteLine("Using BETART: " + betart);
+      //System.Console.WriteLine("Using BETART: " + betart);
       string[] values = betart.Split(new char[]{':'}, 100);
       foreach (string v in values){
 	// System.Console.WriteLine("  " + v);
