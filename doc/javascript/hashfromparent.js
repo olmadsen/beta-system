@@ -1,6 +1,10 @@
 function HashFromParent()
 { 
   if (parent.location.search){
-     location.replace("#" + parent.location.search.substring(1));
+     var oldhash = location.hash;
+     var newhash = "#" + parent.location.search.substring(1);
+     if (newhash != oldhash) {
+	location.replace(newhash);
+     }
   }
 }
