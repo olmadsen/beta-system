@@ -1,0 +1,1559 @@
+ORIGIN '../Xlib/xlib';
+LIB_DEF 'xtlib' '../lib';
+BODY 'private/xtprop';
+
+(*
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-97
+ *       All rights reserved.
+ *)
+
+INCLUDE '~beta/sysutils/cstring';
+--- LIB: attributes ---
+
+ShortRef: cStruct
+  (# bytesize::< (# do 4 -> value #);
+     w: short(# #); 
+  enter w
+  exit w
+  #);
+
+LongRef: cStruct
+  (# bytesize::< (# do 4 -> value #);
+  enter r[1]
+  exit r[1]
+  #);
+
+CharRepToCString: external
+  (# charRep: [1]@char;
+     cStr: @integer
+  enter charRep
+  do 'copyInput' -> callC
+  exit cStr
+  #);
+
+cStringToCharRep: external
+  (# cStr: @integer;
+     c: [1]@char
+  enter cStr
+  do 'copyInput' -> callC;
+  exit c
+  #);
+
+CStringToText: 
+  (# ptr: @integer;
+     t: ^text;
+  enter ptr
+  do &text[]->t[];
+     ptr -> CStringToCharRep -> t
+  exit t[]
+  #);
+
+callbackProc: (* prefix for virtual callbacks patterns *)
+  (# widget, client_data, call_data: @integer;
+  enter (widget, client_data, call_data)
+  do INNER;
+  #);
+
+selectPref: external (* prefix for callbackentries *)
+  (# w, clientdata, calldata: @integer;
+     status: @integer
+  enter (w, clientdata, calldata)
+  do cexternalEntry;
+     INNER;
+  exit status
+  #);
+
+
+argList: cStruct
+  (#
+     byteSize::< (# do 100 -> value; INNER #);
+     
+     max: (# exit R.range div 2 #);
+     
+     extend: 
+       (# size: @integer;
+       enter size
+       do (if size=0 then R.range -> size
+           else size-R.range->size;
+          if);
+          size -> R.extend;
+       #);
+     set: @
+       (# number: @integer;
+          cStr: @integer;
+          value: @integer;
+       enter (number,cstr,value)
+       do (* Cannot check ranges since no GC's may occur.
+           * The user needs to do the bookkeeping himself
+           * using 'max' and 'extend'.
+           * The reason for this is that 'value' may be 
+           * the computed address of an integer.
+           *)
+          cstr -> R[number*2-1];
+          value -> R[number*2]
+       #);
+     get: @
+       (# number: @integer;
+       enter number
+       exit R[number*2]
+       #);
+     getName: @
+       (# number: @integer;
+          t: ^text;
+       enter number
+       do r[2*number-1] -> CStringToText -> t[];
+       exit t[]
+       #);
+  #);
+
+actionTable: externalRecord
+  (#
+     init: 
+       (# enter max
+       do (if max=0 then 50->max if);
+          (8*max, 1) -> xtcalloc -> ptr;
+          0 -> number;
+       #);
+     
+     number, max: @integer; (* current and max number of XtActionRecs *)
+       
+     (* printf: external
+      *        (# str: [1]@char;
+      *           arg: @integer;
+      *        enter (str, arg)
+      *        #);
+      *)
+          
+     addAction: 
+       (# actionName: @text;
+          actionProc: ##external;
+          cStr: ^cString;
+          offset: @integer;
+          value: @integer;
+        
+       enter (actionName,actionProc##)
+       do (if ptr=0 then init if);
+          
+          (* 'actionTable.addaction: actionName=''->puttext;
+           * actionName[] -> puttext; '\''->putline;
+           *)
+           
+          (if number >= max then
+              'actionTable.addaction: too many actions!' -> putline;
+           else
+              8*number -> offset;
+              &cString[] -> cStr[];
+              actionName[] -> cStr.set -> value;
+              (offset, value) -> putLong;
+              actionProc## -> makeCBF -> value;
+              (* ('actionTable.addaction: ptr=0x%x\n', ptr) -> printf;
+               * ('actionTable.addaction: offset=%d\n', offset) -> printf;
+               * ('actionTable.addaction: string=%s\n', cStr.address) -> printf;
+               * ('actionTable.addaction: proc=0x%x\n', value) -> printf;
+               *)
+              offset+4 -> offset;
+              (offset, value) -> putLong;
+              number + 1 -> number;
+          if);
+       #);
+  #);
+
+
+resourceList: cStruct
+  (#
+     bytesize::< (# do 300 -> value; INNER #);
+     
+     add: 
+       (#
+          resourceName,resourceString: @integer;
+          representationType: @integer;
+          size: @integer;
+          offset: @integer;
+          defaultValueRepresentationType: @integer;
+          defaultValue: @integer;
+          
+       enter (resourceName,resourceString,representationType,size,offset,
+          defaultValueRepresentationType,defaultValue)
+       do 
+          resourceName -> r[number*7+1];
+          resourceString -> r[number*7+2];
+          representationType -> r[number*7+3];
+          size -> r[number*7+4];
+          offset -> r[number*7+5];
+          defaultValueRepresentationType -> r[number*7+6];
+          defaultValue -> r[number*7+7];
+          number + 1 -> number;
+       #);
+     
+     number: @integer;
+     
+     init:< object;
+  #);
+
+XrmOptionDescRecList: cStruct
+  (#
+     bytesize::< (# do 200 -> value; INNER #);
+     number: @integer;
+     
+     add: 
+       (# option: @text;
+          resourceSpecification,value: @text;
+          argumentStyle: @integer;
+          c: ^cstring;
+       enter (option,resourceSpecification,argumentStyle,value)
+       do
+          &cstring[] -> c[];
+          option[] -> c.set -> r[number*4+1];
+          &cstring[] -> c[];
+          resourceSpecification[] -> c.set -> r[number*4+2];
+          (if (value.t.range > 0) then
+              &cstring[] -> c[];
+              value[] -> c.set -> r[number*4+4];
+          if); 
+          argumentStyle -> r[number*4+3];
+          number + 1 -> number
+       #);
+     
+     init:< object;
+  #);
+
+XrmoptionNoArg: (# exit 0 #);     (* Value is specified in OptionDescRec.value        *)
+XrmoptionIsArg: (# exit 1 #);     (* Value is the option string itself                *)
+XrmoptionStickyArg: (# exit 2 #); (* Value is characters immediately following option *)
+XrmoptionSepArg: (# exit 3 #);    (* Value is next argument in argv                   *)
+XrmoptionResArg: (# exit 4 #);    (* Resource and value in next argument in argv      *)
+XrmoptionSkipArg: (# exit 5 #);   (* Ignore this option and the next argument in argv *)
+XrmoptionSkipLine: (# exit 6 #);  (* Ignore this option and the rest of argv          *)
+XrmoptionSkipNArgs: (# exit 7 #); (* Ignore this option and the next
+                                   * OptionDescRes.value arguments in argv
+                                   *)
+
+XtAppContext: cStruct
+  (# bytesize::< (# do 4 -> value #);
+  enter r[1]
+  exit r[1]
+  #);
+
+XtGetMultiClickTime: External
+     (# display: @integer;
+        result: @integer;
+     enter display
+     exit result
+     #);
+
+XtNextEvent: External
+  (# event_return: @integer;
+  enter (event_return)
+  #);
+XtDispatchEvent: External
+  (# event: @integer;
+     result: @boolean;
+  enter event
+  exit result
+  #);
+XtAppNextEvent: External
+  (# appCon: @integer;
+     event_return: @integer;
+  enter (appCon, event_return)
+  #);
+XtPeekEvent: External
+  (# event_return: @integer;
+  enter (event_return)
+  #);
+XtAppPeekEvent: External
+  (# appCon: @integer;
+     event_return: @integer;
+  enter (appCon, event_return)
+  #);
+XtProcessEvent: External
+  (# mask: @integer;
+  enter mask
+  #);
+XtAppProcessEvent: External
+  (# appCon: @integer;
+     mask: @integer;
+  enter (appCon, mask)
+  #);
+XtPending: External
+  (# result: @integer;
+  exit result
+  #);
+XtAppPending: External
+  (# appCon: @integer;
+     result: @integer;
+  enter appCon
+  exit result
+  #);
+
+XtBuildEventMask: External
+  (# widget: @integer;
+     mask: @integer;
+  enter widget
+  exit mask
+  #);
+
+XtInitialize: external
+  (# name,class: [1]@char;
+     options: ^cStruct; 
+     nOptions: @integer;
+     argcAddress,argvAddress: @integer;
+     toplevel: @integer
+  enter (name,class,options[],nOptions,argcAddress,argvAddress)
+  exit toplevel
+  #);
+XtAppInitialize: external
+  (# appContextReturn: ^XtAppContext;
+     class: [1]@char;
+     options: ^cStruct; 
+     nOptions: @integer;
+     argcAddress,argvAddress: @integer;
+     toplevel: @integer;
+     fallBackResources: @integer;
+     args: ^argList;
+     numArgs: @integer;
+  enter (appContextReturn[],class,options[],nOptions,argcAddress,argvAddress,fallBackResources,
+     args[],numArgs)
+  exit toplevel
+  #);
+
+XtDisplayInitialize: external
+  (# appContext,display: @integer;
+     name,class: [1]@char;
+     options: ^cStruct; 
+     nOptions: @integer;
+     toplevel: @integer;
+     argcaddr,argvaddr: @integer
+  enter (appContext,display,name,class,options[],nOptions,argcaddr,argvaddr)
+  do callC
+  #);
+
+XtOpenDisplay: external
+  (# appContext: @integer;
+     displayString: [1]@char;
+     name,class: [1]@char;
+     options: ^cStruct; 
+     nOptions: @integer;
+     toplevel: @integer;
+     argcaddr,argvaddr: @integer;
+     display: @integer
+  enter (appContext,displayString,name,class,options[],nOptions,argcaddr,argvaddr)
+  do callC
+  exit display
+  #);
+
+XtCloseDisplay: external
+  (# display: @integer;
+  enter display
+  #);
+
+XtCreateWidget: external
+  (# name: [1]@char;
+     class: @integer;
+     parent: @integer;
+     args: ^argList;
+     nArgs: @integer;
+     newWidget: @integer
+  enter (name,class,parent,Args[],nArgs)
+  do callC
+  exit newWidget
+  #);
+
+XtCreateManagedWidget: external
+  (# name: [1]@char;
+     class: @integer;
+     parent: @integer;
+     args: ^argList;
+     nArgs: @integer;
+     newWidget: @integer
+  enter (name,class,parent,Args[],nArgs)
+  do callC
+  exit newWidget
+  #);
+
+XtCreatePopupShell: external
+  (# name: [1]@char;
+     class: @integer;
+     parent: @integer;
+     args: ^argList;
+     nArgs: @integer;
+     newWidget: @integer
+  enter (name,class,parent,Args[],nArgs)
+  do callC
+  exit newWidget
+  #);
+
+XtAppCreateShell: external
+  (# name: [1] @char;
+     class: @integer;
+     widgetClass: @integer;
+     display: @integer;
+     args: ^argList;
+     nArgs: @integer;
+     newWidget: @integer;
+  enter (name,class,widgetclass,display,args[],nArgs)
+  do callC
+  exit newWidget
+  #);
+
+widgetBased: external
+  (# theWidget: @integer
+  enter theWidget
+    #);
+
+XtUnmanageChild: External
+  (# child: @integer 
+  enter child
+  #);
+XtManageChild: External
+  (# child: @integer 
+  enter child
+  #);
+
+XtDestroyWidget: widgetBased(# #);
+XtRealizeWidget: widgetBased(# #);
+
+XtDisplay: external
+  (# widget: @integer;
+     result: @integer
+  enter widget
+  do callC
+  exit result
+  #);
+
+XtParent: external
+  (# widget: @integer;
+     result: @integer
+  enter widget
+  do callC
+  exit result
+  #);
+
+XtScreen: external
+  (# widget: @integer;
+     result: @integer
+  enter widget
+  do callC
+  exit result
+  #);
+
+XtWindow: external
+  (# widget: @integer;
+     result: @integer
+  enter widget
+  do callC
+  exit result
+  #);
+
+XtDisplayOfObject: external
+  (# object: @integer;
+     result: @integer
+  enter object
+  do callC
+  exit result
+  #);
+
+XtScreenOfObject: external
+  (# object: @integer;
+     result: @integer
+  enter object
+  do callC
+  exit result
+  #);
+
+XtWindowOfObject: external
+  (# object: @integer;
+     result: @integer
+  enter object
+  do callC
+  exit result
+  #);
+
+XtName: external
+  (# widget: @integer;
+     theName: [1]@char
+  enter widget
+  do callC
+  exit theName
+  #);
+
+XtNameToWidget: external
+  (# widget,result: @integer;
+     theName: [1]@char
+  enter (widget,theName)
+  do callC
+  exit result
+  #);
+
+
+XtMapWidget: widgetBased(# #);
+XtUnmapWidget: widgetBased(# #);
+XtUnrealizeWidget: widgetBased(# #);
+
+
+XtMainLoop: external
+  (# do callC #);
+XtAppMainLoop: external
+  (# appContext: @integer enter appContext #);
+
+XtAddTimeOut: external
+  (# interval: @integer;
+     proc: ##external;
+     closure: @integer;
+     intervalId: @integer;
+  enter (interval,proc##,closure)
+  do callC
+  exit intervalId
+  #);
+XtAppAddTimeOut: external
+  (# appContext: @integer;
+     interval: @integer;
+     proc: @integer;
+     closure: @integer;
+     intervalId: @integer;
+  enter (appContext,interval,proc,closure)
+  do callC
+  exit intervalId
+  #);
+
+XtRemoveTimeOut: external
+  (# intervalId: @integer
+  enter intervalId
+  do callC
+  #);
+
+XtInputNoneMask: (# exit 0 #);
+XtInputReadMask: (# exit 1 #);
+XtInputWriteMask: (# exit 2 #);
+XtInputExceptMask: (# exit 4 #);
+
+XtAddInput: External
+  (# source, condition: @integer;
+     proc: ##external;
+     closure: @integer;
+     result: @integer;
+  enter (source, condition, proc##, closure)
+  exit result
+  #);
+XtAppAddInput: External
+  (# appCon, source, condition: @integer;
+     proc: ##external;
+     closure: @integer;
+     result: @integer;
+  enter (appCon, source, condition, proc##, closure)
+  exit result
+  #);
+XtRemoveInput: External
+  (# id: @integer
+  enter id
+  #);
+
+XtAddWorkProc: external
+  (# proc: ##external;
+     closure: @integer;
+     workprocId: @integer;
+  enter (proc##,closure)
+  do callC
+  exit workProcId
+  #);
+XtAppAddWorkProc: external
+  (# appContext: @integer;
+     proc: ##external;
+     closure: @integer;
+     workprocId: @integer;
+  enter (appContext,proc##,closure)
+  do callC
+  exit workProcId
+  #);
+
+XtRemoveWorkProc: external
+  (# workProcId: @integer
+  enter workProcId
+  do callC
+  #);
+
+
+
+XtGetApplicationResources: external
+  (#
+     widget: @integer;
+     appData: ^cStruct;
+     resources: ^resourceList;
+     resourcesLength: @integer;
+     args: ^argList;
+     argsLength: @integer
+  enter (widget,appData[],resources[],resourcesLength,args[],argslength)
+  do callC
+  #);
+
+(**** Error Handling ****)
+
+XtAppSetErrorMsgHandler: External
+  (# App: @Integer;
+     Handler: ##External;
+     result: @integer;
+  enter (app,handler##)
+  exit result
+  #);
+XtSetErrorMsgHandler: External
+  (# Handler: ##External;
+  enter (handler##)
+  #);
+XtAppSetWarningMsgHandler: External
+  (# App: @Integer;
+     Handler: ##External;
+     result: @integer;
+  enter (handler##)
+  exit result
+  #);
+XtSetWarningMsgHandler: External
+  (# Handler: ##External;
+  enter (handler##)
+  #);
+XtAppErrorMsg: External
+  (# App: @Integer;
+     Name: [1]@char;
+     Type: [1]@char;
+     Class: [1]@char;
+     Defaultp: [1]@char;
+     params_ptr: @integer;
+     num_params_ptr: @integer;
+  enter (App, Name, Type, Class, Defaultp, params_ptr, num_params_ptr)
+  #);
+XtErrorMsg: External
+  (# Name: [1]@char;
+     Type: [1]@char;
+     Class: [1]@char;
+     Defaultp: [1]@char;
+     params_ptr: @integer;
+     num_params_ptr: @integer;
+  enter (Name, Type, Class, Defaultp, params_ptr, num_params_ptr)
+  #);
+XtAppWarningMsg: External
+  (# App: @Integer;
+     Name: [1]@char;
+     Type: [1]@char;
+     Class: [1]@char;
+     Defaultp: [1]@char;
+     params_ptr: @integer;
+     num_params_ptr: @integer;
+  enter (App, Name, Type, Class, Defaultp, params_ptr, num_params_ptr)
+  #);
+XtWarningMsg: External
+  (# Name: [1]@char;
+     Type: [1]@char;
+     Class: [1]@char;
+     Defaultp: [1]@char;
+     params_ptr: @integer;
+     num_params_ptr: @integer;
+  enter (Name, Type, Class, Defaultp, params_ptr, num_params_ptr)
+  #);
+XtAppSetErrorHandler: External
+  (# App: @Integer; 
+     Handler: ##External;
+     result: @integer;
+  enter (app, handler##)
+  exit result
+  #);
+XtSetErrorHandler: External
+  (# Handler: ##External;
+  enter (handler##)
+  #);
+XtAppSetWarningHandler: External
+  (# App: @Integer;
+     Handler: ##External;
+     result: @integer;
+  enter (app, handler##)
+  exit result
+  #);
+XtSetWarningHandler: External
+  (# Handler: ##External;
+  enter (handler##)
+  #);
+XtAppError: External
+  (# App: @Integer;
+     Message: [1]@char;
+  enter (app, message)
+  #);
+XtError: External
+  (# Message: [1]@char;
+  enter (message)
+  #);
+XtAppWarning: External
+  (# App: @Integer;
+     Message: [1]@char;
+  enter (app, message)
+  #);
+XtWarning: External
+  (# Message: [1]@char;
+  enter (message)
+  #);
+XtAppGetErrorDatabase: External
+  (# App: @Integer;
+     result: @integer;
+  enter (app)
+  exit result
+  #);
+XtGetErrorDatabase: External
+  (# result: @integer;
+  exit result
+  #);
+XtAppGetErrorDatabaseText: External
+  (# App: @Integer;
+     Name: [1]@char;
+     Type: [1]@char;
+     Class: [1]@char;
+     Defaultp: [1]@char; 
+     Buffer: [1]@char; 
+     nbytes: @integer; 
+     Database: @integer;
+  enter (App, Name, Type, Class, Defaultp, Buffer, nbytes, Database)
+  #);
+XtGetErrorDatabaseText: External
+  (# Name: [1]@char;
+     Type: [1]@char;
+     Class: [1]@char;
+     Defaultp: [1]@char; 
+     Buffer: [1]@char; 
+     nbytes: @integer;
+  enter (Name, Type, Class, Defaultp, Buffer, nbytes)
+  #);
+
+XtAppSetSelectionTimeout: External
+  (# app: @integer;
+     timeout: @integer;
+  enter (app,timeout)
+  #);
+XtSetSelectionTimeout: External
+  (# timeout: @integer;
+  enter timeout
+  #);
+XtAppGetSelectionTimeout: External
+  (# app: @integer;
+     result: @integer;
+  enter app
+  exit result
+  #);
+XtGetSelectionTimeout: External
+  (# result: @integer;
+  exit result
+  #);
+
+XtIsWidget: external
+  (# obj, result: @integer;
+  enter obj
+  exit result
+  #);
+
+XtIsSubclass: external
+  (# obj, class, result: @integer;
+  enter (obj, class)
+  exit result
+  #);
+
+XtCallActionProc: external
+  (# widget: @integer;
+     action: [1]@char;
+     event, params, num_params: @integer;
+  enter (widget, action, event, params, num_params)
+  #);
+
+XtLastTimestampProcessed: External
+  (# display: @integer;
+     time: @integer;
+  enter display
+  exit time
+  #);
+
+
+getargc: external (# val: @integer do callC exit val #);
+getargv: external (# val: @integer do callC exit val #);
+
+CoreWidgetClass: external(# val: @integer do 'getCoreWidgetClass' -> callC exit val #);
+ObjectClass: external(# val: @integer do 'getObjectClass' -> callC exit val #);
+RectObjClass: external(# val: @integer do 'getRectObjClass' -> callC exit val #);
+CompositeWidgetClass: external(# val: @integer do 'getCompositeWidgetClass' -> callC exit val #);
+ConstraintWidgetClass: external(# val: @integer do 'getConstraintWidgetClass' -> callC exit val #);
+ShellWidgetClass: external(# val: @integer do 'getShellWidgetClass' -> callC exit val #);
+WMShellWidgetClass: external(# val: @integer do 'getWMShellWidgetClass' -> callC exit val #);
+OverrideShellWidgetClass: external(# val: @integer do 'getOverrideShellWidgetClass' -> callC exit val #);
+VendorShellWidgetClass: external(# val: @integer do 'getVendorShellWidgetClass' -> callC exit val #);
+TopLevelShellWidgetClass: external(# val: @integer do 'getTopLevelShellWidgetClass' -> callC exit val #);
+TransientShellWidgetClass: external(# val: @integer do 'getTransientShellWidgetClass' -> callC exit val #);
+ApplicationShellWidgetClass: external(# val: @integer do 'getApplicationShellWidgetClass' -> callC exit val #);
+
+
+XtorientHorizontal: (# exit 0 #);
+XtorientVertical: (# exit 1 #);
+XtJustifyLeft: (# exit 0 #);
+XtJustifyCenter: (# exit 1 #);
+XtJustifyRight: (# exit 2 #);
+XmuShapeRectangle: (# exit 1 #);
+XmuShapeOval: (# exit 2 #);
+XmuShapeEllipse: (# exit 3 #);
+XmuShapeRoundedRectangle: (# exit 4 #);
+
+
+widget: 
+  (# i: @integer
+  enter i
+  exit i
+  #);
+
+XtAddCallback:
+  (* Compatible with previous versions, but exits callback ID *)
+  (# w: @integer;
+     name: @integer;
+     callBack: ##external;     
+     data: @integer;
+     cb: @integer;
+     doit: external
+       (# w,n,c,d: @integer;
+       enter (w,n,c,d)
+       do 'XtAddCallback' -> callC;
+       #)
+  enter (w,name,callBack##,data)
+  do callback## -> makeCBF -> cb;
+     (w,name,cb,data) -> doit;
+  exit cb
+  #);
+
+XtRemoveCallback: external
+  (# w: @integer;
+     id: @integer;
+     callBack: @integer;     
+     data: @integer
+  enter (w,id,callback,data)
+  do callC
+  #);
+
+XtAddEventHandler: external
+  (# w: @integer;
+     eventMask: @integer;
+     nonmaskable: @integer;
+     callBack: ##external;     
+     data: @integer
+  enter (w,eventMask,nonmaskable,callBack##,data)
+  do callC
+  #);
+
+XtRemoveEventHandler: external
+  (# w: @integer;
+     eventMask: @integer;
+     nonmaskable: @integer;
+     callBack: ##external;     
+     data: @integer
+  enter (w,eventMask,nonmaskable,callBack##,data)
+  do callC
+  #);
+
+XtAddActions: external
+  (# act: @integer;
+     number: @integer;
+  enter (act,number)
+  do callC
+  #);
+XtAppAddActions: external
+  (# appCon: @integer;
+     act: @integer;
+     number: @integer;
+  enter (appCon,act,number)
+  do callC
+  #);
+
+XtSetValues: external
+  (# widget: @integer;
+     args: ^argList;
+     n: @integer
+  enter (widget,args[],n)
+  do callC
+  #);
+
+XtGetValues: external
+  (# widget: @integer;
+     args: ^argList;
+     n: @integer
+  enter (widget,args[],n)
+  do callC
+  #);
+
+XtParseTranslationTable: external
+  (# table: [1] @char;
+     result: @integer
+  enter table
+  do callC
+  exit result
+  #);
+
+XtAugmentTranslations: external
+  (# widget: @integer;
+     table: @integer
+  enter (widget,table)
+  do callC
+  #);
+
+XtOverrideTranslations: external
+  (# widget: @integer;
+     table: @integer
+  enter (widget,table)
+  do callC
+  #);
+
+XtUninstallTranslations: external
+  (# widget: @integer
+  enter widget
+  do callC
+  #);
+
+XtParseAcceleratorTable: external
+  (# source: [1]@char;
+     result: @integer
+  enter source
+  do callC
+  exit result
+  #);
+
+XtInstallAccelerators: external
+  (# destination,source: @integer
+  enter (destination,source)
+  do callC
+  #);
+
+XtInstallAllAccelerators: external
+  (# destination,source: @integer
+  enter (destination,source)
+  do callC
+  #);
+
+XtSetKeyboardFocus: external
+  (# subtree, descendant: @integer;
+  enter (subtree, descendant)
+  do callC
+  #);
+
+XtGrabNone: (# exit 0 #);
+XtGrabNonExclusive: (# exit 1 #);
+XtGrabExclusive: (# exit 2 #);
+
+XtPopupSpringLoaded: external
+  (# widget: @integer
+  enter widget
+  do callC
+  #);
+
+XtPopup: external
+  (# widget,grabkind: @integer
+  enter (widget,grabKind)
+  do callC
+  #);
+
+XtPopdown: external
+  (# widget: @integer
+  enter widget
+  do callC
+  #);
+
+
+XtGrabPointer: external
+  (# widget, ownerevents, eventmask, pointermode, keyboardmode,
+     confineto, cursor, time: @integer;
+     status: @integer;
+  enter (widget, ownerevents, eventmask, pointermode, keyboardmode,
+     confineto, cursor, time)
+  do callC
+  exit status
+  #);
+
+XtUngrabPointer: external
+  (# widget, time: @integer;
+  enter (widget, time)
+    #);
+
+XtSetSensitive: external
+  (# widget,value: @integer
+  enter (widget,value)
+  do callC
+  #);
+
+XtTranslateCoords: external
+  (# widget,x,y: @integer;
+     addrx,addry: ^shortRef;
+  enter (widget,x,y,addrx[],addry[])
+  do callC
+  #);
+
+
+XtNColumnSpacing: IntegerObject(# do 'columnSpacing' ->charReptoCString -> value #);
+XtNRowSpacing: IntegerObject(# do 'rowSpacing' ->charReptoCString -> value #);
+XtNDefaultColumns: IntegerObject(# do 'defaultColumns' ->charReptoCString -> value #);
+XtNLongest: IntegerObject(# do 'longest' ->charReptoCString -> value #);
+XtNList: IntegerObject(# do 'list' ->charReptoCString -> value #);
+XtNNumberStrings: IntegerObject(# do 'numberStrings' ->charReptoCString -> value #);
+XtNMenuName: IntegerObject(# do 'menuName' ->charReptoCString -> value #);
+XtNx: IntegerObject(# do 'x' ->charReptoCString -> value #);
+XtNy: IntegerObject(# do 'y' ->charReptoCString -> value #);
+XtNwidth: IntegerObject(# do 'width' ->charReptoCString -> value #);
+XtNheight: IntegerObject(# do 'height' ->charReptoCString -> value #);
+XtNborderWidth: IntegerObject(# do 'borderWidth' ->charReptoCString -> value #);
+XtNlabel: IntegerObject(# do 'label' ->charReptoCString -> value #);
+XtNstring: IntegerObject(# do 'string' ->charReptoCString -> value #);
+XtNeditType: IntegerObject(# do 'editType' ->charReptoCString -> value #);
+XtNsubMenu: IntegerObject(# do 'subMenu' ->charReptoCString -> value #);
+XtNancestorSensitive: 
+  IntegerObject(# do 'ancestorSensitive' ->charReptoCString -> value #);
+XtNSensitive: 
+  IntegerObject(# do 'sensitive' ->charReptoCString -> value #);
+XtNManaged: 
+  IntegerObject(# do 'managed' ->charReptoCString -> value #);
+XtNDepth: 
+  IntegerObject(# do 'depth' ->charReptoCString -> value #);
+XtNVisible: 
+  IntegerObject(# do 'visible' ->charReptoCString -> value #);
+XtNMappedWhenManaged: 
+  IntegerObject(# do 'mappedWhenManaged' ->charReptoCString -> value #);
+XtNNumChildren: 
+  IntegerObject(# do 'numChildren' ->charReptoCString -> value #);
+XtNAllowShellResize: 
+  IntegerObject(# do 'allowShellResize' ->charReptoCString -> value #);
+XtNGeometry: 
+  IntegerObject(# do 'geometry' ->charReptoCString -> value #);
+XtNoverrideRedirect: 
+  IntegerObject(# do 'overrideRedirect' ->charReptoCString -> value #);
+XtNsaveUnder: 
+  IntegerObject(# do 'saveUnder' ->charReptoCString -> value #);
+
+XtNbaseHeight: IntegerObject(# do 'baseHeight' ->charReptoCString -> value #);
+XtNbaseWidth: IntegerObject(# do 'baseWidth' ->charReptoCString -> value #);
+XtNheightInc: IntegerObject(# do 'heightInc' ->charReptoCString -> value #);
+XtNiconMask: IntegerObject(# do 'iconMask' ->charReptoCString -> value #);
+XtNiconPixmap: IntegerObject(# do 'iconPixmap' ->charReptoCString -> value #);
+XtNiconWindow: IntegerObject(# do 'iconWindow' ->charReptoCString -> value #);
+XtNiconX: IntegerObject(# do 'iconX' ->charReptoCString -> value #);
+XtNiconY: IntegerObject(# do 'iconY' ->charReptoCString -> value #);
+XtNinput: IntegerObject(# do 'input' ->charReptoCString -> value #);
+XtNmaxAspectX: IntegerObject(# do 'maxAspectX' ->charReptoCString -> value #);
+XtNmaxAspectY: IntegerObject(# do 'maxAspectY' ->charReptoCString -> value #);
+XtNmaxHeight: IntegerObject(# do 'maxHeight' ->charReptoCString -> value #);
+XtNmaxWidth: IntegerObject(# do 'maxWidth' ->charReptoCString -> value #);
+XtNminAspectX: IntegerObject(# do 'minAspectX' ->charReptoCString -> value #);
+XtNminAspectY: IntegerObject(# do 'minAspectY' ->charReptoCString -> value #);
+XtNminHeight: IntegerObject(# do 'minHeight' ->charReptoCString -> value #);
+XtNminWidth: IntegerObject(# do 'minWidth' ->charReptoCString -> value #);
+XtNtitle: IntegerObject(# do 'title' ->charReptoCString -> value #);
+XtNtransient: IntegerObject(# do 'transient' ->charReptoCString -> value #);
+XtNwaitforwm: IntegerObject(# do 'waitForWm' ->charReptoCString -> value #);
+XtNwidthInc: IntegerObject(# do 'widthInc' ->charReptoCString -> value #);
+XtNwinGravity: IntegerObject(# do 'winGravity' ->charReptoCString -> value #);
+XtNwmTimeOut: IntegerObject(# do 'wmTimeOut' ->charReptoCString -> value #);
+XtNwindowGroup: IntegerObject(# do 'windowGroup' ->charReptoCString -> value #);
+XtNIconName: IntegerObject(# do 'iconName' ->charReptoCString -> value #);
+XtNIconic: IntegerObject(# do 'iconic' ->charReptoCString -> value #);
+XtNUseRight: IntegerObject(# do 'useRight' ->charReptoCString -> value #);
+XtNUseBottom: IntegerObject(# do 'useBottom' ->charReptoCString -> value #);
+XtNForceBars: IntegerObject(# do 'forceBars' ->charReptoCString -> value #);
+XtNForceColumns: IntegerObject(# do 'forceColumns' ->charReptoCString -> value #);
+XtNtransientFor: IntegerObject(# do 'transientFor' ->charReptoCString -> value #);
+
+XtNAllowVert: IntegerObject(# do  'allowVert' ->charReptoCString -> value #);
+XtNAllowHoriz: IntegerObject(# do  'allowHoriz' ->charReptoCString -> value #);
+XtNDefaultDistance: IntegerObject(# do  'defaultDistance' ->charReptoCString -> value #);
+XtNOrientation: IntegerObject(# do  'orientation' ->charReptoCString -> value #);
+XtNRefigureMode: IntegerObject(# do  'refigureMode' ->charReptoCString -> value #);
+XtNVSpace: IntegerObject(# do  'vSpace' ->charReptoCString -> value #);
+XtNHSpace: IntegerObject(# do  'hSpace' ->charReptoCString -> value #);
+XtNInternalBorderWidth: IntegerObject(# do  'internalBorderWidth' ->charReptoCString -> value #);
+XtNGripTranslation: IntegerObject(# do  'gripTranslation' ->charReptoCString -> value #);
+XtNGripIndent: IntegerObject(# do  'gripIndent' ->charReptoCString -> value #);
+XtNGripCursor: IntegerObject(# do  'gripCursor' ->charReptoCString -> value #);
+XtNCursor: IntegerObject(# do  'cursor' ->charReptoCString -> value #);
+XtNResizable: IntegerObject(# do  'resizable' ->charReptoCString -> value #);
+XtNVertDistance: IntegerObject(# do  'vertDistance' ->charReptoCString -> value #);
+XtNHorizDistance: IntegerObject(# do  'horizDistance' ->charReptoCString -> value #);
+  XtNTop: IntegerObject(# do  'top' ->charReptoCString -> value #);
+  XtNRight: IntegerObject(# do  'right' ->charReptoCString -> value #);
+  XtNLeft: IntegerObject(# do  'left' ->charReptoCString -> value #);
+  XtNBottom: IntegerObject(# do  'bottom' ->charReptoCString -> value #);
+  XtNSkipAdjust: IntegerObject(# do  'skipAdjust' ->charReptoCString -> value #);
+  XtNShowGrip: IntegerObject(# do  'showGrip' ->charReptoCString -> value #);
+  XtNResizeToPreferred: IntegerObject(# do  'resizeToPreferred' ->charReptoCString -> value #);
+  XtNPreferredPaneSize: IntegerObject(# do  'preferredPaneSize' ->charReptoCString -> value #);
+  XtNMax: IntegerObject(# do  'max' ->charReptoCString -> value #);
+  XtNMin: IntegerObject(# do  'min' ->charReptoCString -> value #);
+  XtNAllowResize: IntegerObject(# do  'allowResize' ->charReptoCString -> value #);
+  XtNFromHoriz: IntegerObject(# do  'fromHoriz' ->charReptoCString -> value #);
+  XtNFromVert: IntegerObject(# do  'fromVert' ->charReptoCString -> value #);
+
+ XtNaccelerators: IntegerObject(# do  'accelerators' ->charReptoCString -> value #);
+ XtNbackground: IntegerObject(# do  'background' ->charReptoCString -> value #);
+ XtNbackgroundPixmap: IntegerObject(# do  'backgroundPixmap' ->charReptoCString -> value #);
+ XtNbitmap: IntegerObject(# do  'bitmap' ->charReptoCString -> value #);
+ XtNborderColor: IntegerObject(# do  'borderColor' ->charReptoCString -> value #);
+ XtNborder: IntegerObject(# do  'borderColor' ->charReptoCString -> value #);
+ XtNborderPixel: IntegerObject(# do  'borderPixel' ->charReptoCString -> value #);
+ XtNborderPixmap: IntegerObject(# do  'borderPixmap' ->charReptoCString -> value #);
+ XtNcallback: IntegerObject(# do  'callback' ->charReptoCString -> value #);
+ XtNchildren: IntegerObject(# do  'children' ->charReptoCString -> value #); 
+ XtNcolormap: IntegerObject(# do  'colormap' ->charReptoCString -> value #);
+ XtNdestroyCallback: IntegerObject(# do  'destroyCallback' ->charReptoCString -> value #);
+ XtNfile: IntegerObject(# do  'file' ->charReptoCString -> value #);
+ XtNfont: IntegerObject(# do  'font' ->charReptoCString -> value #);
+ XtNforeground: IntegerObject(# do  'foreground' ->charReptoCString -> value #);
+ XtNfunction: IntegerObject(# do  'function' ->charReptoCString -> value #);
+ XtNhighlight: IntegerObject(# do  'highlight' ->charReptoCString -> value #);
+ XtNhighlightThickness: IntegerObject(# do 'highlightThickness' ->charReptoCString -> value #);
+ XtNindex: IntegerObject(# do  'index' ->charReptoCString -> value #);
+ XtNinitialResourcesPersistent: IntegerObject(# do  'initialResourcesPersistent' ->charReptoCString -> value #);
+ XtNinnerHeight: IntegerObject(# do  'innerHeight' ->charReptoCString -> value #);
+ XtNinnerWidth: IntegerObject(# do  'innerWidth' ->charReptoCString -> value #);
+ XtNinnerWindow: IntegerObject(# do  'innerWindow' ->charReptoCString -> value #);
+ XtNinsertPosition: IntegerObject(# do  'insertPosition' ->charReptoCString -> value #);
+ XtNinternalHeight: IntegerObject(# do  'internalHeight' ->charReptoCString -> value #);
+ XtNinternalWidth: IntegerObject(# do  'internalWidth' ->charReptoCString -> value #);
+ XtNjumpProc: IntegerObject(# do  'jumpProc' ->charReptoCString -> value #);
+ XtNjustify: IntegerObject(# do  'justify' ->charReptoCString -> value #);
+ XtNknobHeight: IntegerObject(# do  'knobHeight' ->charReptoCString -> value #);
+ XtNknobIndent: IntegerObject(# do  'knobIndent' ->charReptoCString -> value #);
+ XtNknobPixel: IntegerObject(# do  'knobPixel' ->charReptoCString -> value #);
+ XtNknobWidth: IntegerObject(# do  'knobWidth' ->charReptoCString -> value #);
+ XtNlength: IntegerObject(# do  'length' ->charReptoCString -> value #);
+ XtNlowerRight: IntegerObject(# do  'lowerRight' ->charReptoCString -> value #);
+ XtNmenuEntry: IntegerObject(# do  'menuEntry' ->charReptoCString -> value #);
+ XtNname: IntegerObject(# do  'name' ->charReptoCString -> value #);
+ XtNnotify: IntegerObject(# do  'notify' ->charReptoCString -> value #);
+ XtNparameter: IntegerObject(# do  'parameter' ->charReptoCString -> value #);
+ XtNpixmap: IntegerObject(# do  'pixmap' ->charReptoCString -> value #);
+ XtNpopupCallback: IntegerObject(# do  'popupCallback' ->charReptoCString -> value #);
+ XtNpopdownCallback: IntegerObject(# do  'popdownCallback' ->charReptoCString -> value #);
+ XtNresize: IntegerObject(# do  'resize' ->charReptoCString -> value #);
+ XtNreverseVideo: IntegerObject(# do  'reverseVideo' ->charReptoCString -> value #);
+ XtNscreen: IntegerObject(# do  'screen' ->charReptoCString -> value #);
+ XtNscrollProc: IntegerObject(# do  'scrollProc' ->charReptoCString -> value #);
+ XtNscrollDCursor: IntegerObject(# do  'scrollDCursor' ->charReptoCString -> value #);
+ XtNscrollHCursor: IntegerObject(# do  'scrollHCursor' ->charReptoCString -> value #);
+ XtNscrollLCursor: IntegerObject(# do  'scrollLCursor' ->charReptoCString -> value #);
+ XtNscrollRCursor: IntegerObject(# do  'scrollRCursor' ->charReptoCString -> value #);
+ XtNscrollUCursor: IntegerObject(# do  'scrollUCursor' ->charReptoCString -> value #);
+ XtNscrollVCursor: IntegerObject(# do  'scrollVCursor' ->charReptoCString -> value #);
+ XtNselection: IntegerObject(# do  'selection' ->charReptoCString -> value #);
+ XtNselectionArray: IntegerObject(# do  'selectionArray' ->charReptoCString -> value #);
+ XtNshown: IntegerObject(# do  'shown' ->charReptoCString -> value #);
+ XtNspace: IntegerObject(# do  'space' ->charReptoCString -> value #);
+ XtNtextOptions: IntegerObject(# do  'textOptions' ->charReptoCString -> value #);
+ XtNtextSink: IntegerObject(# do  'textSink' ->charReptoCString -> value #);
+ XtNtextSource: IntegerObject(# do  'textSource' ->charReptoCString -> value #);
+ XtNthickness: IntegerObject(# do  'thickness' ->charReptoCString -> value #);
+ XtNthumb: IntegerObject(# do  'thumb' ->charReptoCString -> value #);
+ XtNthumbProc: IntegerObject(# do  'thumbProc' ->charReptoCString -> value #);
+ XtNtranslations: IntegerObject(# do  'translations' ->charReptoCString -> value #);
+ XtNunrealizeCallback: IntegerObject(# do  'unrealizeCallback' ->charReptoCString -> value #);
+ XtNupdate: IntegerObject(# do  'update' ->charReptoCString -> value #);
+ XtNvalue: IntegerObject(# do  'value' ->charReptoCString -> value #);
+ XtNwindow: IntegerObject(# do  'window' ->charReptoCString -> value #);
+ XtNpasteBuffer: IntegerObject(# do  'pasteBuffer' ->charReptoCString -> value #);
+ XtNinsensitiveBorder: IntegerObject(# do  'insensitiveBorder' ->charReptoCString -> value #);
+ XtNshapeStyle: IntegerObject(# do  'shapeStyle' ->charReptoCString -> value #);
+ XtNhightlightThickness: IntegerObject(# do  'hightlightThickness' ->charReptoCString -> value #);
+ XtNcornerRoundPercent: IntegerObject(# do  'cornerRoundPercent' ->charReptoCString -> value #);
+ XtNstate: IntegerObject(# do  'state' ->charReptoCString -> value #);
+ XtNradioGroup: IntegerObject(# do  'radioGroup' ->charReptoCString -> value #);
+ XtNradioData: IntegerObject(# do  'radioData' ->charReptoCString -> value #);
+ XtNgetValue: IntegerObject(# do  'getValue' ->charReptoCString -> value #);
+ XtNminScale: IntegerObject(# do  'minScale' ->charReptoCString -> value #);
+ XtNjumpScroll: IntegerObject(# do  'jumpScroll' ->charReptoCString -> value #);
+ XtNrightBitmap: IntegerObject(# do 'rightBitmap' -> charReptoCString -> value #);
+ XtNleftBitmap: IntegerObject(# do 'leftBitmap' -> charReptoCString -> value #);
+ XtNStipple: IntegerObject(# do 'stipple' -> charReptoCString -> value #);
+ XtNLineWidth: IntegerObject(# do 'lineWidth' -> charReptoCString -> value #);
+ XtNRightMargin: IntegerObject(# do 'rightMargin' -> charReptoCString -> value #);
+ XtNLeftMargin: IntegerObject(# do 'leftMargin' -> charReptoCString -> value #);
+ XtNVertSpace: IntegerObject(# do 'vertSpace' -> charReptoCString -> value #);
+ XtNbackingStore: IntegerObject(# do 'backingStore' -> charReptoCString -> value #);
+ XtNTopMargin: IntegerObject(# do 'topMargin' -> charReptoCString -> value #);
+ XtNLabelClass: IntegerObject(# do 'labelClass' -> charReptoCString -> value #);
+ XtNMenuOnScreen: IntegerObject(# do 'menuOnScreen' -> charReptoCString -> value #);
+ XtNPopupOnEntry: IntegerObject(# do 'popupOnEntry' -> charReptoCString -> value #);
+ XtNRowheight: IntegerObject(# do 'rowHeight' -> charReptoCString -> value #);
+ XtNBottomMargin: IntegerObject(# do 'bottomMargin' -> charReptoCString -> value #);
+ XtNwrap: IntegerObject(# do 'wrap' -> charReptoCString -> value #);
+ XtNselectTypes: IntegerObject(# do 'selectTypes' -> charReptoCString -> value #);
+ XtNscrollVertical: IntegerObject(# do 'scrollVertical' -> charReptoCString -> value #);
+ XtNscrollHorizontal: IntegerObject(# do 'scrollHorizontal' -> charReptoCString -> value #);
+ XtNdisplayPosition: IntegerObject(# do 'displayPosition' -> charReptoCString -> value #);
+ XtNautoFill: IntegerObject(# do 'autoFill' -> charReptoCString -> value #);
+ XtNdisplayNonprinting: IntegerObject(# do 'displayNonprinting' -> charReptoCString -> value #);
+
+
+XtMalloc: external(# size,addr: @integer enter size do callC exit addr #);
+XtCalloc: external(# num,size,addr: @integer enter (num,size) do callC exit addr #);
+
+Xtlib: 
+(#
+(* Class types *) 
+XtCAccelerators,
+XtCBackground ,
+XtCBitmap,
+XtCBoolean,
+XtCBorderColor,
+XtCBorderWidth,
+XtCCallback,
+XtCColormap,
+XtCColor,
+XtCCursor,
+XtCDepth,
+XtCEditType,
+XtCEventBindings,
+XtCFile,
+XtCFont,
+XtCForeground,
+XtCFraction,
+XtCFunction,
+XtCHeight,
+XtCHSpace,
+XtCIndex,
+XtCInitialResourcesPersistent,
+XtCInsertPosition,
+XtCInterval,
+XtCJustify,
+XtCKnobIndent,
+XtCKnobPixel,
+XtCLabel,
+XtCLength,
+XtCMappedWhenManaged,
+XtCMargin,
+XtCMenuEntry,
+XtCNotify,
+XtCOrientation,
+XtCParameter,
+XtCPixmap,
+XtCPosition,
+XtCReadOnly,
+XtCResize,
+XtCReverseVideo,
+XtCScreen,
+XtCScrollProc,
+XtCScrollDCursor,
+XtCScrollHCursor,
+XtCScrollLCursor,
+XtCScrollRCursor,
+XtCScrollUCursor,
+XtCScrollVCursor,
+XtCSelection,
+XtCSensitive,
+XtCSelectionArray,
+XtCSpace,
+XtCString,
+XtCtextOptions,
+XtCtextPosition,
+XtCtextSink,
+XtCtextSource,
+XtCThickness,
+XtCThumb,
+XtCTranslations,
+XtCValue,
+XtCVSpace,
+XtCWidth,
+XtCWindow,
+XtCX,
+XtCY,
+
+(* Representation types *)
+
+XtRAcceleratorTable,
+XtRAtom,
+XtRBitmap,
+XtRBool,
+XtRBoolean,
+XtRCallback,
+XtRCallProc,
+XtRCardinal,
+XtRColor,
+XtRColormap,
+XtRCursor,
+XtRDimension,
+XtRDisplay,
+XtREditMode,
+XtREnum,
+XtRFile,
+XtRFloat,
+XtRFont,
+XtRFontStruct,
+XtRFunction,
+XtRGeometry,
+XtRImmediate,
+XtRInitialState,
+XtRInt,
+XtRJustify,
+XtRLongBoolean,
+XtRObject,
+XtROrientation,
+XtRPixel,
+XtRPixmap,
+XtRPointer,
+XtRPosition,
+XtRScreen,
+XtRShort,
+XtRString,
+XtRStringArray,
+XtRStringTable,
+XtRUnsignedChar,
+XtRTranslationTable,
+XtRVisual,
+XtRWidget,
+XtRWidgetClass,
+XtRWidgetList,
+XtRWindow,
+
+XtEoff,
+XtEfalse,
+XtEno,
+XtEon,
+XtEtrue,
+XtEyes,
+
+XtEvertical,
+XtEhorizontal,
+XtEtextRead,
+XtEtextAppend,
+XtEtextEdit,
+Xtextdefaultbackground,
+Xtextdefaultforeground: @integer;
+
+XtUnspecifiedPixmap,
+XtUnspecifiedShellInt,
+XtUnspecifiedWindow,
+XtUnspecifiedWindowGroup,
+XtDefaultForeground,
+XtDefaultBackground,
+XtDefaultFont: @integer;
+
+init: 
+(#
+do
+(* Class types *) 
+'Accelerators' -> charRepToCString -> XtCAccelerators ;
+'Background' -> charRepToCString -> XtCBackground ;
+'Bitmap' -> charRepToCString -> XtCBitmap ;
+'Boolean' -> charRepToCString -> XtCBoolean ;
+'BorderColor' -> charRepToCString -> XtCBorderColor ;
+'BorderWidth' -> charRepToCString -> XtCBorderWidth ;
+'Callback' -> charRepToCString -> XtCCallback ;
+'Colormap' -> charRepToCString -> XtCColormap ;
+'Color' -> charRepToCString -> XtCColor ;
+'Cursor' -> charRepToCString -> XtCCursor ;
+'EditType' -> charRepToCString -> XtCEditType ;
+'EventBindings' -> charRepToCString -> XtCEventBindings ;
+'File' -> charRepToCString -> XtCFile ;
+'Font' -> charRepToCString -> XtCFont ;
+'Foreground' -> charRepToCString -> XtCForeground ;
+'Fraction' -> charRepToCString -> XtCFraction ;
+'Function' -> charRepToCString -> XtCFunction ;
+'Height' -> charRepToCString -> XtCHeight ;
+'HSpace' -> charRepToCString -> XtCHSpace ;
+'Index' -> charRepToCString -> XtCIndex ;
+'InitialResourcesPersistent' -> charRepToCString -> XtCInitialResourcesPersistent ;
+'InsertPosition' -> charRepToCString -> XtCInsertPosition ;
+'Interval' -> charRepToCString -> XtCInterval ;
+'Justify' -> charRepToCString -> XtCJustify ;
+'KnobIndent' -> charRepToCString -> XtCKnobIndent ;
+'KnobPixel' -> charRepToCString -> XtCKnobPixel ;
+'Label' -> charRepToCString -> XtCLabel ;
+'Length' -> charRepToCString -> XtCLength ;
+'MappedWhenManaged' -> charRepToCString -> XtCMappedWhenManaged ;
+'Margin' -> charRepToCString -> XtCMargin ;
+'MenuEntry' -> charRepToCString -> XtCMenuEntry ;
+'Notify' -> charRepToCString -> XtCNotify ;
+'Orientation' -> charRepToCString -> XtCOrientation ;
+'Parameter' -> charRepToCString -> XtCParameter ;
+'Pixmap' -> charRepToCString -> XtCPixmap ;
+'Position' -> charRepToCString -> XtCPosition ;
+'ReadOnly' -> charRepToCString -> XtCReadOnly ;
+'Resize' -> charRepToCString -> XtCResize ;
+'ReverseVideo' -> charRepToCString -> XtCReverseVideo ;
+'Screen' -> charRepToCString -> XtCScreen ;
+'ScrollProc' -> charRepToCString -> XtCScrollProc ;
+'ScrollDCursor' -> charRepToCString -> XtCScrollDCursor ;
+'ScrollHCursor' -> charRepToCString -> XtCScrollHCursor ;
+'ScrollLCursor' -> charRepToCString -> XtCScrollLCursor ;
+'ScrollRCursor' -> charRepToCString -> XtCScrollRCursor ;
+'ScrollUCursor' -> charRepToCString -> XtCScrollUCursor ;
+'ScrollVCursor' -> charRepToCString -> XtCScrollVCursor ;
+'Selection' -> charRepToCString -> XtCSelection ;
+'Sensitive' -> charRepToCString -> XtCSensitive ;
+'SelectionArray' -> charRepToCString -> XtCSelectionArray ;
+'Space' -> charRepToCString -> XtCSpace ;
+'String' -> charRepToCString -> XtCString ;
+'textOptions' -> charRepToCString -> XtCtextOptions ;
+'textPosition' -> charRepToCString -> XtCtextPosition ;
+'textSink' -> charRepToCString -> XtCtextSink ;
+'textSource' -> charRepToCString -> XtCtextSource ;
+'Thickness' -> charRepToCString -> XtCThickness ;
+'Thumb' -> charRepToCString -> XtCThumb ;
+'Translations' -> charRepToCString -> XtCTranslations ;
+'Value' -> charRepToCString -> XtCValue ;
+'VSpace' -> charRepToCString -> XtCVSpace ;
+'Width' -> charRepToCString -> XtCWidth ;
+'Window' -> charRepToCString -> XtCWindow ;
+'X' -> charRepToCString -> XtCX ;
+'Y' -> charRepToCString -> XtCY ;
+
+(* Representation types *)
+
+'AcceleratorTable' -> charRepToCString -> XtRAcceleratorTable ;
+'Atom' -> charRepToCString -> XtRAtom ;
+'Bitmap' -> charRepToCString -> XtRBitmap ;
+'Bool' -> charRepToCString -> XtRBool ;
+'Boolean' -> charRepToCString -> XtRBoolean ;
+'Callback' -> charRepToCString -> XtRCallback ;
+'CallProc' -> charRepToCString -> XtRCallProc ;
+'Cardinal' -> charRepToCString -> XtRCardinal ;
+'Color' -> charRepToCString -> XtRColor ;
+'Colormap' -> charRepToCString -> XtRColormap ;
+'Cursor' -> charRepToCString -> XtRCursor ;
+'Dimension' -> charRepToCString -> XtRDimension ;
+'Display' -> charRepToCString -> XtRDisplay ;
+'EditMode' -> charRepToCString -> XtREditMode ;
+'Enum' -> charRepToCString -> XtREnum ;
+'File' -> charRepToCString -> XtRFile ;
+'Float' -> charRepToCString -> XtRFloat ;
+'Font' -> charRepToCString -> XtRFont ;
+'FontStruct' -> charRepToCString -> XtRFontStruct ;
+'Function' -> charRepToCString -> XtRFunction ;
+'Geometry' -> charRepToCString -> XtRGeometry ;
+'Immediate' -> charRepToCString -> XtRImmediate ;
+'InitialState' -> charRepToCString -> XtRInitialState ;
+'Int' -> charRepToCString -> XtRInt ;
+'Justify' -> charRepToCString -> XtRJustify ;
+XtRBool -> XtRLongBoolean;
+'Object' -> charRepToCString -> XtRObject ;
+'Orientation' -> charRepToCString -> XtROrientation ;
+'Pixel' -> charRepToCString -> XtRPixel ;
+'Pixmap' -> charRepToCString -> XtRPixmap ;
+'Pointer' -> charRepToCString -> XtRPointer ;
+'Position' -> charRepToCString -> XtRPosition ;
+'Screen' -> charRepToCString -> XtRScreen ;
+'Short' -> charRepToCString -> XtRShort ;
+'String' -> charRepToCString -> XtRString ;
+'StringArray' -> charRepToCString -> XtRStringArray ;
+'StringTable' -> charRepToCString -> XtRStringTable ;
+'UnsignedChar' -> charRepToCString -> XtRUnsignedChar ;
+'TranslationTable' -> charRepToCString -> XtRTranslationTable ;
+'Visual' -> charRepToCString -> XtRVisual ;
+'Widget' -> charRepToCString -> XtRWidget ;
+'WidgetClass' -> charRepToCString -> XtRWidgetClass ;
+'WidgetList' -> charRepToCString -> XtRWidgetList ;
+'Window' -> charRepToCString -> XtRWindow ;
+
+'off' -> charRepToCString -> XtEoff ;
+'false' -> charRepToCString -> XtEfalse ;
+'no' -> charRepToCString -> XtEno ;
+'on' -> charRepToCString -> XtEon ;
+'true' -> charRepToCString -> XtEtrue ;
+'yes' -> charRepToCString -> XtEyes ;
+
+'vertical' -> charRepToCString -> XtEvertical ;
+'horizontal' -> charRepToCString -> XtEhorizontal ;
+'read' -> charRepToCString -> XtEtextRead ;
+'append' -> charRepToCString -> XtEtextAppend ;
+'edit' -> charRepToCString -> XtEtextEdit ;
+'Xtdefaultbackground' -> charRepToCString -> Xtextdefaultbackground ;
+'Xtdefaultforeground' -> charRepToCString -> Xtextdefaultforeground ;
+
+ 2 -> XtUnspecifiedPixmap;
+ -1 -> XtUnspecifiedShellInt;
+ 2 -> XtUnspecifiedWindow;
+ 3 -> XtUnspecifiedWindowGroup;
+ 'XtDefaultForeground' -> charRepToCString -> XtDefaultForeground;
+ 'XtDefaultBackground' -> charRepToCString -> XtDefaultBackground;
+ 'XtDefaultFont' -> charRepToCString -> XtDefaultFont;
+#);
+do INNER
+#);
+
+
+DefaultFont: external
+(# widget: @integer;
+   font: @integer;
+enter widget
+exit font
+#);
+
+DefaultFontStruct: external
+(# widget: @integer;
+   xfontstruct: @integer;
+enter widget
+exit xfontstruct
+#);
+
+XtFree: external
+(# ptr: @integer enter ptr #);
+
+XtToolkitInitialize: external
+  (#
+  #);
+XtCreateApplicationContext: external
+  (# appcon: @integer;
+  exit appcon
+  #);
+
+XtInsertEventHandler  : external
+  (# w : @integer;
+     eventMask :@integer;
+     nonmaskable :@integer;
+     callBack :@ integer;
+     data : @integer;
+     where: @integer;
+  enter (w,eventMask,nonmaskable,callBack,data,where)
+  do callC
+  #);
+
+
+XtListHead: (# exit 0 #);
+XtListTail: (# exit 1 #);
+
+XtGetGC: external
+  (# w,values_mask,values: @integer;
+     gc: @integer;
+  enter (w,values_mask,values)
+  exit gc
+  #);
+
+XtSetMappedWhenManaged: external
+  (# 
+     w: @integer;
+     map_when_managed: @integer;
+  enter (w,map_when_managed)
+  #);
+XtResizeWidget: external
+  (# w,width,height,borderwidth: @integer;
+  enter (w,width,height,borderwidth)
+  #);
+XtAddGrab: external
+  (# w: @integer;
+     exclusive: @integer;
+     springloaded: @integer;
+  enter (w,exclusive,springloaded)
+  #);
+XtIsSensitive: external
+  (# w: @integer;
+     b: @integer;
+  enter w
+  exit b
+  #);
+XtIsRealized: external
+  (# w: @integer;
+     b: @integer;
+  enter w
+  exit b
+  #);
+XtConfigureWidget: external
+  (# w,x,y,width,height,border: @integer;
+  enter (w,x,y,width,height,border)
+  #);
+XtRemoveGrab: external
+  (# w: @integer;
+  enter w
+  #);
+XtIMXEvent: (# exit 1 #);
+XtIMTimer: (# exit 2 #);
+XtIMAlternateInput: (# exit 4 #);
+XtIMAll: (# exit XtIMXEvent + XtIMTimer + XtIMAlternateInput #);

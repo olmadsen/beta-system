@@ -1,0 +1,130 @@
+ORIGIN '../xterm';
+INCLUDE '~beta/process/processmanager';
+INCLUDE '~beta/sysutils/envstring';
+INCLUDE '~beta/sysutils/pathhandler';
+INCLUDE '~beta/basiclib/file';
+
+--StartCommandInXterm: descriptor--
+(# xterm: @process;
+   executable, xtermProgram: @file;
+   rawcommand: ^text;
+do command[] -> executable.name;
+   startCommand:
+   (if executable.entry.exists // false then
+       '\''->puttext; executable.name->puttext; 
+       '\' does not exist.'->putline;
+    else
+       (* Build title *)
+       (if title[]//NONE then
+           0 -> Arguments                    -> title[];
+           ': Executing "'                   -> title[];
+           executable.entry.path.name.prefix -> title.append;
+           ' '                               -> title.append;
+           args[]                            -> title.append;
+           '"'                               -> title.append;
+       if);
+       (* Add arguments to command *)
+       (if args[]//NONE then else
+           (if args.length>0 then
+               ' '    -> command.append;
+               args[] -> command.append;
+           if)
+       if);
+       (if verbose then
+           command.copy -> rawcommand[];
+       if);
+       (* Add loop to command to prevent window to close
+        * after execution ends: 
+        *)
+       '; echo ""' -> command.append;
+       '; echo "(Type Control-C to close window)"' -> command.append;
+       '; while true; do sleep 1; done' -> command.append;
+       
+       (* Find xterm program *)
+       findXterm:
+         (# 
+         do scanSearchPath
+            (# 
+            do '/xterm' -> (path.copy).append -> xtermProgram.name;
+               (if xtermProgram.entry.exists then
+                   leave findXterm;
+               if);
+            #);
+            (* xterm not found in standard search path *)
+            '/usr/bin/X11/xterm' -> xtermProgram.name;
+            (if not xtermProgram.entry.exists then
+                '/usr/openwin/bin/xterm' -> xtermProgram.name;
+                (if not xtermProgram.entry.exists then
+                    '$(XTERM)' -> expandEnvVar -> xtermProgram.name;
+                    (if xtermProgram.entry.exists//false then
+                        'Can\'t find xterm program in neither'->screen.putline;
+                        '$PATH, $XTERM, /usr/bin/X11/xterm nor'->screen.putline;
+                        '/usr/openwin/bin/xterm' -> screen.putline;
+                        leave startCommand;
+                    if);
+                if)
+            if)
+         #);
+       
+       (* initialize xterm process *)
+       xtermProgram.name -> xterm.init;
+       (if ('$(DISPLAY)' -> expandenvvar).length = 0 then
+           (if verbose then
+               'StartCommandInXterm: DISPLAY not set - using \'unix:0\''
+                 -> screen.putline;
+           if);
+           '-display' -> xterm.argument.append;
+           'unix:0'   -> xterm.argument.append;
+       if);
+       (* Set xterm title bar *)
+       '-T'         -> xterm.argument.append;
+       title[]      -> xterm.argument.append;
+       (* xterm arguments *)
+       '-ls'        -> xterm.argument.append;
+       '-si'        -> xterm.argument.append;
+       '-sk'        -> xterm.argument.append;
+       '-sb'        -> xterm.argument.append;
+       '-sl'        -> xterm.argument.append;
+       '300'        -> xterm.argument.append;
+       '-wf'        -> xterm.argument.append;
+       (* specify command to execute in xterm *)
+       '-e'         -> xterm.argument.append;
+       'sh'         -> xterm.argument.append;
+       '-c'         -> xterm.argument.append;
+       command[]    -> xterm.argument.append;
+       (* start the xterm *)
+       (if verbose then
+           'Executing command in ' ->screen.puttext;
+           xtermProgram.name -> screen.puttext;
+           ': \n  ' ->screen.puttext;
+           rawcommand[] ->screen.putline;
+       if);
+       xterm.start;
+   if);
+#)
+
+--SetXtermTitle: dopart--
+do (if (titletext[]=NONE) or (titletext.length=0) then
+       'Unknown' -> titletext[];
+   if);
+   (if 'xterm' -> ('$(TERM)' -> expandenvvar).equal then
+       '\033]2;'->screen.puttext;
+       titletext[] -> screen.puttext;
+       ascii.bel -> screen.put;
+    else
+       'SetXtermTitle: TERM is not \'xterm\' - request ignored' 
+         -> screen.putline;
+   if)
+   
+--SetXtermIconName: dopart--
+do (if (icontext[]=NONE) or (icontext.length=0) then
+       'Unknown' -> icontext[];
+   if);
+   (if 'xterm' -> ('$(TERM)' -> expandenvvar).equal then
+       '\033]1;'->screen.puttext;
+       icontext[] -> screen.puttext;
+       ascii.bel -> screen.put;
+    else
+       'SetXtermIconName: TERM is not \'xterm\' - request ignored' 
+         -> screen.putline;
+   if)
