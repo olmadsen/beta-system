@@ -8,9 +8,7 @@
 #endif
 
 
-#define test 1
-
-
+#define test 0
 
 struct VARIANT { long argType, argVal;} VARIANT;
 
@@ -133,12 +131,12 @@ struct struct_tagDISPPARAMS *MkArgList(long noOfArgs,...)
 struct idispatch; // forward
 struct vtbl
 { long (STDCALL *QI)(struct idispatch *this);
-  long(STDCALL *AddRef)(struct idispatch *this);
+  long (STDCALL *AddRef)(struct idispatch *this);
   long (STDCALL *DeleteRef)(struct idispatch *this);
   long (STDCALL *GetIdsOfNames)(struct idispatch *this
 				, char *names
 				, long *resList);
-  char (STDCALL *Invoke)(struct idispatch *this
+  long (STDCALL *Invoke)(struct idispatch *this
 			 ,long dispIdMember
 			 ,struct struct_tagDISPPARAMS *pDispParams );
 };
