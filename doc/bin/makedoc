@@ -4,9 +4,11 @@
 
 sub usage
 {
-    print "usage: makedoc [-v] <manual>.book\n";
-    print"   -v   verbose output\n";
-    print"   -d   debug makedoc script\n";
+    print "usage: makedoc [-v] [-d] <manual>.book | <file>.html\n";
+    print "  -v   verbose output\n";
+    print "  -d   debug makedoc script\n";
+    print "  If .book file is given as argument, a full manual set is generated.\n";
+    print "  If a single HTML file is given as input, that file is preprocessed.\n"
     exit(1);
 }
 
@@ -15,7 +17,6 @@ sub usage
 #   fix <BETA SRC="...">
 #   Numbers on headings
 #   Implement <FIG> and <INX>
-#   makedoc foo.html should preview that file only
 
 # Global variables
 # FIXME: use strict and -w, and define remaining global variables here
@@ -28,11 +29,15 @@ my @index = ();            # used to build index
 my @num_h = (0,0,0,0,0,0); # array of occurrences of headings 1 to 6
 
 # variables
-my $filenumber = 0;    # used to index @srcfiles and @headings
-my $num_beta   = 0;    # Number of occurences of <BETA>
-my $num_fig    = 0;    # Number of occurences of <FIG>
-my $num_inx    = 0;    # Number of occurences of <INX>
-my $level      = 0;    # Current heading level
+my $book_file_name = "";   # Name of BOOK file
+my $filenumber = 0;        # used to index @srcfiles and @headings
+my $num_beta   = 0;        # Number of occurences of <BETA>
+my $num_fig    = 0;        # Number of occurences of <FIG>
+my $num_inx    = 0;        # Number of occurences of <INX>
+my $level      = 0;        # Current heading level
+my $srcline    = "";       # Used to read files from src directory into
+my $verbose    = 0;
+my $debug      = 0;
 # ...
 
 sub set_default_variable_values
@@ -521,15 +526,24 @@ EOT
 
 }
 
-
-sub read_book_file
+sub read_command_line()
 {
+    # Command line options
+    $verbose = 1 if (defined($v));
+    $debug = 1 if (defined($d));
     if ($#ARGV == 0){ 
-	$book_file_name = $ARGV[0];
+	local ($file) = $ARGV[0];
+	if ($file =~ m/\.book$/){
+	    $book_file_name = $file;
+	}
     } else {
 	&usage();
     };
-    
+}
+
+
+sub read_book_file
+{
     open SEQUENCE, $book_file_name || die "Cannot open \"$book_file_name\" file: !$\n";
     while (<SEQUENCE>){
 	chomp;
@@ -680,24 +694,29 @@ sub parse_special_tags
     #$*=0;
 }
 
+sub generate
+{
+    local ($file, $title) = @_;
+    printf STDERR "Reading $file ...\n" if $debug;
+    $srcline = &read_file("$file");
+    printf STDERR "Writing HTML ...\n" if $debug;
+    &parse_special_tags();
+    &print_header($title);
+    print $srcline;
+    &print_trailer($title, 0);
+}
+
 sub process_file
 {
     local ($file) = @_;
     print STDERR "Generating $file from src/$file\n" if $verbose;
 
-    printf STDERR "Reading src/$file ...\n" if $debug;
-
-    $srcline = &read_file("src/$file");
-
-    printf STDERR "Writing to $file ... " if $debug;
+    printf STDERR "Opening $file for writing ... " if $debug;
     if (!open (STDOUT, ">$file")){
 	print "\nCannot open $file for writing: $!\n";
 	return;
     }
-    &parse_special_tags();
-    &print_header($title);
-    print $srcline;
-    &print_trailer($title, 0);
+    &generate("src/$file", $title);
     close (STDOUT);
 
     printf STDERR "done\n\n" if $verbose==1;
@@ -1303,19 +1322,20 @@ EOT
 
 ### main #######
 
-# Command line options
-$verbose = 1 if (defined($v));
-$debug = 1 if (defined($d));
 
 # variables
 &set_default_variable_values();
 
-&read_book_file;
+&read_command_line();
 
-&process_src_files;
-
-&process_interface_files;
-
-&make_title_page;
-
-&make_index_page;
+if ($book_file_name eq ""){
+    print STDERR "Processing single file \"$ARGV[0]\"\n" if $verbose;
+    @srcfiles = ($ARGV[0]);
+    &generate($ARGV[0], "PREVIEW");
+} else {
+    &read_book_file;
+    &process_src_files;
+    &process_interface_files;
+    &make_title_page;
+    &make_index_page;
+}
