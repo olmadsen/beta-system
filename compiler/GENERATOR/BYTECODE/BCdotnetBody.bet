@@ -191,7 +191,7 @@ AddClass: ConvertType
      location: ^text;
      static:< object;
      nonstatic:< object;
-     omitstatic: @boolean;
+     omitstatic:< booleanValue;
   do (if 'static '  -> ((1,7)->T.sub).equal then
          true -> isStatic;
          (1,7)->T.delete;
@@ -247,7 +247,7 @@ AddClass: ConvertType
      if);
      (if isStatic and (not omitstatic) then
          'static ' -> T.prepend;
-     if);
+     if)
   #);
 
 parseNumberOfArguments: 
@@ -745,6 +745,7 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
    opLocal:
      (# num: @integer;
         delta: @integer;
+        isAddressOf:< booleanValue
      enter num (* local number, NOT offset *)
      do (if trace_locals then
             '/*opLocal(num=' ->out.puttext; 
@@ -753,17 +754,26 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
         if);
         INNER;
         'loc' -> out.puttext;
-        (if true
-         // num<0 then
-            'Negative opLocal' -> screen.putline;
-            'Negative opLocal' -> emitcomment;
-            (*(dumpstack, 'Negative opLocal') -> stop*)
-         // num <= 3 
-            then '.' -> out.put
-         // num <= 255 
-            then '.s ' -> out.puttext
+        (if isAddressOf then
+            'a' -> out.put;
+            (if num <= 255 
+                then '.s ' -> out.puttext
+             else
+                ' ' -> out.put 
+            if);
          else
-            ' ' -> out.put 
+            (if true
+             // num<0 then
+                'Negative opLocal' -> screen.putline;
+                'Negative opLocal' -> emitcomment;
+                (*(dumpstack, 'Negative opLocal') -> stop*)
+             // num <= 3 
+                then '.' -> out.put
+             // num <= 255 
+                then '.s ' -> out.puttext
+             else
+                ' ' -> out.put 
+            if);
         if);
         num -> out.putint; 
         delta-> stack_delta; 
@@ -773,6 +783,8 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
      opLocal(# do 'st' -> out.puttext; -1->delta; #);
    loadLocal: 
      opLocal(# do 'ld' -> out.puttext; 1->delta; #);
+   loadLocalAddress: 
+     loadLocal(# isAddressOf::trueValue #);
    numLastLocal (* Real number of last local *):
      (# exit BCstate.fields.numLocals-1 #);
    
@@ -1469,16 +1481,21 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
         if)
      #);
    
+   thisWasAddressOf, lastWasAddressOf: @boolean;
+   
    ldfld:
-     (# addressOff: @boolean;
-     enter addressOff
+     (# addressOf: @boolean;
+     enter addressOf
      do 'ldfld' -> out.puttext;
-        (if addressOff then 'a' -> out.put if);
+        (if addressOf then 'a' -> out.put if);
         '  '->out.puttext;
+        true -> thisWasAddressOf;
      #);
             
    
 do init;
+   thisWasAddressOf -> lastWasAddressOf;
+   false -> thisWasAddressOf;
    read:
      (if opCode <> end then
          BC.get->opCode -> trace_opcode;
@@ -2345,20 +2362,45 @@ do init;
               // call then 
                  (# calltype: @integer;
                     delta: @integer;
+                    sig: ^text;
+                    isStatic, isValueType: @boolean;
+                    loc_val, start, end: @integer;
                  do BC.get -> calltype;
+                    callType %Band 1 = 1 -> isStatic;
+                    callType %Band 2 = 2 -> isValueType;
                     BC.getText->T[];
                     (*'// call: ' -> out.puttext; T[]->out.putline;*)
                     T[] -> function_stack_delta -> delta;
-                    (if calltype = 1 then
-                        'call' -> out.puttext 
-                     else
-                        'callvirt' -> out.puttext;
+                    T[] -> AddClass(# omitStatic::trueValue #) -> sig[];
+                    (if isValueType and (not isStatic) then
+                        'Instance call on ValueType' -> emitcomment; out.nl;
+                        (if lastWasAddressOf then
+                            'Address already loaded' -> emitcomment; out.nl;
+                         else
+                            (* If previous was not ldflda, store receiver value type in tmp cell, and ldloca *)
+                            (* Find last 'valuetype ' (there may be return type ones before the last one *)
+                            'valuetype '->sig.findTextAll(# do inx->start; #); 
+                            (* Find method start == type end *)
+                            '::'->sig.findTextAll(# do inx-1->end; #);
+                            (start,end) -> sig.sub -> allocLocal -> loc_val;
+                            loc_val -> storeLocal;
+                            loc_val -> loadLocalAddress;
+                        if);
                     if);
-                    ' '->out.put;
+                    (if true
+                     // isStatic then
+                        'call'        -> out.puttext;
+                        '  '          -> out.puttext;
+                     // isValueType then
+                        (* Not static *)
+                        'call'        -> out.puttext;
+                        '  instance ' -> out.puttext;
+                     else
+                        'callvirt'    -> out.puttext;
+                        '  instance ' -> out.puttext;
+                    if);
                     2->_n;
-                    T[] -> AddClass(# static::(# do true->omitstatic; #);
-                                      nonstatic::(# do 'instance '->out.puttext; delta-1->delta #)
-                                   #) ->out.puttext;
+                    sig[] -> out.puttext;
                     delta -> stack_delta;
                     313->trace(#do '%%%call: '->xT; T[]->xT #)
                  #)
@@ -2638,7 +2680,7 @@ do init;
                  'conv.i4'->out.puttext;
                  -1 -> stack_delta;
               // int64ToInt32 then
-                 '\n*** NOT emitting int64ToInt32' -> screen.putline;
+                 'NOT emitting int64ToInt32' -> FIXME;
                  (*'conv.i4'->out.puttext;*)
                  -1 -> stack_delta;
               // func then
