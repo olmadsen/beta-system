@@ -36,11 +36,11 @@
 #define isValRep(x)      (((long)DoubleRepPTValue <= (long)((x)->Proto))\
 			  && ((long)((x)->Proto) <= (long)ValRepPTValue))
 #ifdef STATIC_OBJECT_REPETITIONS
-#define isObjectRep(x)   (((long)DynItemRepPTValue <= (long)((x)->Proto))\
-			  && ((long)((x)->Proto) <= (long)StatCompRepPTValue))
+#define isObjectRep(x)   (((long)StatCompRepPTValue <= (long)((x)->Proto))\
+			  && ((long)((x)->Proto) <= (long)DynItemRepPTValue))
 #else /* STATIC_OBJECT_REPETITIONS */
-#define isObjectRep(x)   (((long)DynItemRepPTValue <= (long)((x)->Proto))\
-			  && ((long)((x)->Proto) <= (long)DynCompRepPTValue))
+#define isObjectRep(x)   (((long)DynCompRepPTValue <= (long)((x)->Proto))\
+			  && ((long)((x)->Proto) <= (long)DynItemRepPTValue))
 #endif /* STATIC_OBJECT_REPETITIONS */
 
 #define isStackObject(x) ((x)->Proto == StackObjectPTValue)
