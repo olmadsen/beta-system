@@ -88,6 +88,8 @@ sub print_summary
 	    &print_status("CHECK", "Program not attempted run", $prog);
 	} elsif ($progs{$prog}==111){
 	    &print_status("ok", "Program explicitly ignored", $prog);
+	} elsif ($progs{$prog}==222){
+	    # implicitly ignored
 	} elsif ($progs{$prog}==0){
 	    if ($status{$prog}==1){
 		&print_status("ok", "Program tested ok", $prog);
@@ -259,6 +261,18 @@ sub popd()
     }
 }
 
+sub register_status()
+{
+    local ($dir, $exec, $status) = @_;
+    local $prog = &trim_path("$dir/$exec");
+    $progs{&trim_path($prog)}=$status;
+    local $baseprog = &trim_path(&stripcounter($prog));
+    if (! defined($progs{$baseprog})){
+	# base program not attempted run
+	$progs{$baseprog} = 222; # set to implicitly ignore
+    }
+}
+
 sub run_demo
 {
     # If $exec is of the form 'foo[1]' the executable will be expected to be
@@ -276,7 +290,7 @@ sub run_demo
     unlink "$exec.dump", "$exec.run", "$exec.out", "$exec.ref", "$exec.diff";
     print "-"x10 . "Executing " . &trim_path("$dir/$exec") . "-"x10  . "\n"; 
     system &stripcounter($exec) . " $args > $exec.run";
-    $progs{&trim_path("$dir/$exec")}=$?;
+    &register_status($dir, $exec, $?);
 
     &cat("$exec.run") unless ($skipoutput);
     
@@ -309,7 +323,7 @@ sub write_to_demo
     close EXEC;
     close(STDOUT);
     open(STDOUT, ">&SAVEOUT");
-    $progs{&trim_path("$dir/$exec")}=$?;
+    &register_status($dir, $exec, $?);
 
     &cat("$exec.run") unless ($skipoutput);
 
@@ -322,6 +336,11 @@ sub ignore()
 {
     my ($dir, $exec) = @_;
     $progs{&trim_path("$dir/$exec")}=111;
+}
+sub ignore_completely()
+{
+    my ($dir, $exec) = @_;
+    $progs{&trim_path("$dir/$exec")}=222;
 }
 
 sub compile_command()
@@ -544,6 +563,17 @@ sub cp()
     while (<FILE1>) { print FILE2; };
     close FILE1;
     close FILE2;
+}
+
+sub touch ()
+{
+    local ($time, $entry) = @_;
+    if (! -e $entry){
+	open E, ">$entry" || die "touch: cannot create $entry: $!\n";
+	close E;
+    }
+    if ($time==0){ $time = time; }
+    utime $time, $time, $entry;
 }
 
 sub IntHandler 
