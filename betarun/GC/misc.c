@@ -116,6 +116,52 @@ GLOBAL(Object * CkP4);
 GLOBAL(Object * CkP5);
 #endif
 
+int strongIsObject(Object *obj)
+{
+  ProtoType *proto;
+  long gc;
+  
+  if (ObjectAlign((unsigned)obj) != (unsigned)obj)
+    return 0;
+
+  if (!inBetaHeap(obj))
+    return 0;
+
+  proto = obj->Proto;
+  gc = obj->GCAttr;
+
+  if (inAOA(obj)) {
+    if (gc == FREECHUNK)
+      return 0;
+  }
+
+  if (inIOA(obj)) {
+    if (IOAActive) {
+      if (!(isStatic(gc) || isAutonomous(gc) || isForward(gc)))
+	return 0;
+    } else {
+      if (!(isStatic(gc) || isAutonomous(gc)))
+	return 0;
+    }
+  } 
+
+  if (inToSpace(obj)) {
+    if (!(isStatic(gc) || isAutonomous(gc)))
+      return 0;
+  }
+    
+  if (!IsPrototypeOfProcess((long)proto))
+    return 0;
+
+  if (ObjectSize(obj) <= 0)
+    return 0;
+
+  if (ObjectAlign(4*ObjectSize(obj))!=4*(unsigned)ObjectSize(obj))
+    return 0;
+
+  return 1;
+}
+
 #ifdef RTDEBUG
 
 #ifdef NEWRUN

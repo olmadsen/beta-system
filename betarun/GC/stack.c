@@ -699,10 +699,7 @@ void PrintCAR(RegWin *cAR);
  */
 static __inline__ void ProcessStackCell(long *addr, char *desc, CellProcessFunc func)
 {
-  /* 
-   * FIXME: 
-   *
-   * On the sparc, the register windows for CAlloI and CAlloC 
+  /* On the sparc, the register windows for CAlloI and CAlloC 
    * may be used as roots for GC, since these routines may have called
    * G-parts, that have triggered the GC.
    * Although the C routines are written so that gcc should avoid putting
@@ -719,12 +716,14 @@ static __inline__ void ProcessStackCell(long *addr, char *desc, CellProcessFunc 
    * but this is probably a price we have to pay for the generality of the
    * function-parameterized routines.
    */
-  func((Object **)addr, *(Object **)addr);
-  DEBUG_LAZY({
-    if (isLazyRef(*addr)) {
-      fprintf (output, "Lazy ref in %s: %d\n", desc, (int)(*addr));
-    }
-  });
+  if (strongIsObject(*(Object **)addr)) {
+    func((Object **)addr, *(Object **)addr);
+    DEBUG_LAZY({
+      if (isLazyRef(*addr)) {
+	fprintf (output, "Lazy ref in %s: %d\n", desc, (int)(*addr));
+      }
+    });
+  }
 }
 
 /* ProcessAR:
@@ -734,8 +733,7 @@ static __inline__ void ProcessStackCell(long *addr, char *desc, CellProcessFunc 
  * stack objects.
  */
 
-static
-void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
+static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
 {
     Object **theCell = (Object **) &ar[1];
     
@@ -789,16 +787,16 @@ void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
 
     for (; theCell != (Object **) theEnd; theCell+=2) {
       /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
-      /* FIXME: replace the func-call below with 
-       *  ProcessStackCell(theCell, "stackpart", func);
-       * or build a more descriptive description using sprintf.
+      /* replaced the func-call below with 
+       * ProcessStackCell(theCell, "stackpart", func);
+       * (Maybe build a more descriptive description using sprintf)
        */
-      func(theCell, *theCell);
+      ProcessStackCell(theCell, "stackpart", func);
+      /* func(theCell, *theCell); */
     }
 }
 
-static
-void ProcessSPARCStack(void)
+static void ProcessSPARCStack(void)
 {
     RegWin *theAR;
     RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;

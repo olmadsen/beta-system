@@ -644,7 +644,6 @@ void DisplayStackPart(long *low,
 {
   long *current = low;
   long  retAddr=0;
-  Object *lastObj;
 
   TRACE_DUMP(fprintf(output, ">>>TraceDump: StackPart [0x%x..0x%x]\n", (int)low, (int)high));
   while (current<=high){
