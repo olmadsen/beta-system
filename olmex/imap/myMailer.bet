@@ -224,38 +224,66 @@ systemenv
           #);
         exists::
           (# mno: @integer;
+             C: ^response;
              msg: ^messageResponse;
              header: ^text;
-          do 'EXIST: fetching mailbox:'->putline;
+          do 'EXIST: fetching mailbox: '->puttext; R.value -> putint; newline;
              (for i: R.value repeat
-                  '.'->put;
-                  i -> sendFetch
+                  i -> putint; ','->put;
+                  (if false then
+                      loop:
+                        (# do
+                           getresponse -> putline;
+                           restart Loop
+                        #)
+                   else
+                      Loop:
+                        (#
+                        do outSocket[] -> parseImap -> C[];
+                           (if (C[]=none) or
+                               not C.isCompleted then
+                               restart Loop
+                        if)#);
+                  if);               
+
+                  (i,false) -> sendFetch
                   (#
-                  do (if false then
-                         loop:
-                           (# do
-                              getresponse -> putline;
+                  do Loop:
+                       (#
+                       do outSocket[] -> parseImap -> msg[];
+                          '>>MSG'->putline;
+                          (if (msg[]=none) or
+                              not msg.isMsg then
                               restart Loop
-                           #)
-                      else
-                         Loop:
-                           (#
-                           do outSocket[] -> parseImap -> msg[];
-                              (if (msg[]=none) or
-                                  not msg.isCompleted then
-                                  restart Loop
-                           if)#);
-                                  
-                         msg.subject -> header[];
-                         '   ' -> header.append;
-                         msg.sender -> header.append;
-                         '   ' -> header.append;
-                         msg.date -> header.append;
-                         (mno+1->mno,header[]) 
-                           -> myWindowEnv.theWindow.mails.setText;
-                     if)
+                       if)#);
+                     
+                     msg.subject -> header[];
+                     '   ' -> header.append;
+                     msg.sender -> header.append;
+                     '   ' -> header.append;
+                     msg.date -> header.append;
+                     (mno+1->mno,header[]) 
+                       -> myWindowEnv.theWindow.mails.setText;
+                     none -> currentID[]
                   #)
              for);
+             'EXIST: done fetching mailbox'->putline;
+             (R.value,true) -> sendFetch
+             (#
+             do Loop:
+                  (#
+                  do outSocket[] -> parseImap -> C[];
+                     '>>MSG-TEXT'->putline;
+                     (if C[] <> none then
+                         (if true 
+                          // C.isCompleted then
+                             restart Loop
+                          // C.isMsg then
+                             C[] -> msg[];
+                             msg.message -> myWindowEnv.clipboard.textContents;
+                             myWindowEnv.theWindow.TE.contents.paste;
+                  if)if)#)                
+             #);
           #);
         addFolder:
           (# f,f1: ^myWindowEnv.theWindow.scrolltv.contents.folder;
