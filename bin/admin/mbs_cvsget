@@ -1,0 +1,223 @@
+#!/usr/local/bin/perl5
+#-*-Perl-*-
+
+#----- configuration
+
+$betalib=$ENV{'BETALIB'}  || "/users/beta";
+$betalib =~ s#\\#/#g;
+
+$dirs=require "$betalib/bin/admin/dirlist";
+
+print <<EOF;
+This script will cvs-checkout all the directories constituting "$RELEASE"
+of the MBS.  It will place this in the directory "$betalib".
+EOF
+
+sub SmartMkdir {
+    my ($path, $full) = @_;
+    $full = '';
+    foreach $dir (split '/', $path) {
+	$full .= $dir . '/';
+	if (!-d $full) {
+	    print "\tmkdir $full\n" if ($verbose);
+	    mkdir ($full, 0755) if (!$simulate);
+	}
+    }
+}
+
+sub CvsGetLib {
+    my ($destdir, $cvsmodule, $prefix, $tag) = @_;
+    if (!defined $prefix || length($prefix) == 0) { 
+	print "\tchdir $betalib\n" if ($verbose);
+	chdir $betalib if (!$simulate);
+    } else {
+	&SmartMkdir("$betalib/$prefix");
+	print "\tchdir $betalib/$prefix\n" if ($verbose);
+	if (!$simulate) {
+	    chdir "$betalib/$prefix";
+	}
+    }
+
+    $cvscmd = "cvs ";
+    $cvscmd .= "-Q " if (!$verbose);
+    $cvscmd .= "get ";
+    $cvscmd .= "-r $tag " if ($tag);
+    $cvscmd .= "-d $destdir " if ($destdir);
+    $cvscmd .= "$cvsmodule ";
+
+    print "\t$cvscmd\n" if ($verbose);
+    system($cvscmd) if (!$simulate);
+}
+
+# Get all tags hashed by module:
+sub CvsGetHistory {
+    my ($line, $T, $date, $time, $zero, $user, $lib, $tag);
+    print "Getting CVS history, please wait.\n";
+    open(TAG, "cvs history -a -T|") || die "Unable to start cvs history: $!";
+    foreach $line (<TAG>) {	 
+	($T,$date,$time,$zero,$user,$lib,$tag) = split(' ', $line);
+	if ($tag =~ /^\[([^\:\]]+)/) {
+	    $tag = $1;
+	}
+	if (defined $TagList{$lib}) {
+	    $TagList{$lib} .= $tag . ' ';
+	} else {
+	    $TagList{$lib} =  $tag . ' ';
+	}
+    }
+    close(TAG);
+}
+
+
+sub UserChooseTag {
+    foreach $dir (sort split ' ', $dirs) {
+	if ($CvsTags{$dir} =~ /^\%(\S+)/) {
+	    next if ($1 eq 'IGNORE');
+	    if ($1 eq 'NONCVS') {
+		print "NonCVS: $dir, skipping\n" if ($verbose);
+		next;
+	    }
+	    print "Unknown '%'-tag in CvsTag: \"$1\", skipping $dir\n";
+	    next;
+	}
+	
+	($cvsmodule, $DefaultTag) = split(/[\/\s]+/,$CvsTags{$dir});
+
+	if ($dir =~ m#^([^\/]+)\/([^\/]+)\/$#) {
+	    $version = $2;
+	} else {
+	    undef $version;
+	}
+
+	($matchrel = $RELEASE_) =~ s/(\W)/\\$1/g;
+	# FIXME: What is the version in tags for those without version???
+	if (defined $version) {
+	    ($version_ = $version) =~ s/\./\_/g; 
+	    ($matchver = $version_) =~ s/(\W)/\\$1/g;
+	    $matchtag = '^' . $matchrel . '([a-z])_' . $matchver;
+	} else {
+	    $matchtag = '^' . $matchrel . '([a-z])';
+	}
+
+	# print "$dir: $matchtag\n"; 
+	# print $TagList{$cvsmodule}, "\n";
+
+	$lastA = 'a';
+	@Tags = (); @otherTags = ();
+	if (defined $TagList{$cvsmodule}) {
+	    foreach $tag (split(' ', $TagList{$cvsmodule})) {
+		if ($tag =~ /$matchtag/i) {
+		    $atoz = $1;
+		    #$subversion = $2;
+		    if ($lastA lt $atoz) {
+			@Tags = ();
+			$lastA = $atoz;
+		    }
+		    push(@Tags, $tag);
+		} else {
+		    push(@otherTags, $tag);
+		}
+	    }
+	}
+	$defaultChoice = -1;
+	@Tags = sort(@Tags);
+	@otherTags = sort(@otherTags);
+	unshift(@Tags, "No tag, get head-revision");
+	push(@Tags, @otherTags);
+	print "\n\n" if (!$UseDefaults);
+	print "===== $dir  ";
+	if ($DefaultTag eq 'HEAD') {
+	    $defaultChoice = 0;
+	} else {
+	    for ($i = 0; $i < scalar @Tags; $i++) {
+		if ($DefaultTag eq $Tags[$i]) {
+		    $defaultChoice = $i;
+		}
+	    }
+	    $defaultChoice = 0 if ((scalar @Tags) == 1);
+	}
+
+	if (0 <= $defaultChoice && $UseDefaults) {
+	    if ($defaultChoice) {
+		print "Tag: $Tags[$defaultChoice]\n";
+	    } else {
+		print "$Tags[$defaultChoice]\n";
+	    }
+	    $line = $defaultChoice;
+	} else {
+	    print "\n";
+	    for ($i = 0; $i < scalar @Tags; $i++) {
+		print "$i) $Tags[$i]\n";
+	    }
+	    $line = "";
+	    while (length($line) < 1) {
+		if ($defaultChoice != -1) {
+		    print "Default is $Tags[$defaultChoice]: ";
+		} else {
+		    print "Choose: ";
+		}
+
+		$line = <STDIN>;
+		chop $line;
+		if (0 <= $defaultChoice && length($line)<1) {
+		    $line = $defaultChoice;
+		}
+	    }
+	}
+
+	if ($dir =~ /^(.*)\/([^\/]+)\//) {
+	    $destdir = $2;
+	    $prefix = $1;
+	} else {
+	    undef $prefix;
+	    $destdir = $dir;
+	}
+	if ($line == 0) {
+	    &CvsGetLib($destdir, $cvsmodule, $prefix);
+	} else {
+	    &CvsGetLib($destdir, $cvsmodule, $prefix, $Tags[$line]);
+	}
+    }
+}
+
+# --- program:descriptor---   ;)
+
+$verbose = 0;
+$simulate =0;
+$UseDefaults = 0;
+
+foreach (@ARGV) {
+    if (/^\-\-(.*)$/) {
+	if ($1 eq 'verbose') {
+	    $verbose = 1;
+	} elsif ($1 eq 'usedefaults') {
+	    $UseDefaults = 1;
+	} else {
+	    print "mbs_cvsget: Unrecognized option: $_\n";
+	    exit 1;
+	}
+    } elsif (/^\-(.*)$/) {
+	for ($i = 0; $i < length($1); $i++) {
+	    $c = substr($1,$i,1);
+	    if ($c eq 'v') {
+		$verbose = 1;
+	    } elsif ($c eq 'n') {
+		$simulate = 1;
+	    } else {
+		print "mbs_cvsget: Unrecognized option: $_\n";
+		exit 1;
+	    }
+	}
+    } else {
+	print "mbs_cvsget: Unable to graps \"$_\"\n";
+	print "Options start with a '-' and long options start with '--'\n";
+	exit(1);
+    }
+}
+
+
+($RELEASE_ = $RELEASE) =~ s/\./\_/g;
+chdir $betalib;		
+
+&CvsGetHistory;
+&UserChooseTag;

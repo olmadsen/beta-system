@@ -1,0 +1,172 @@
+#! perl
+
+$| = 1;   # Flush all read/writes
+
+# Takes the list of files.z to be included as args. 
+# Configure:
+
+# Where do I find InstalllShield:
+$InstallShieldDir = "d:\\stirling\\installshield";  
+
+# Disk sizes, modify if installShield outgrows the current reserved room.
+$Minimum          =   30;                # Minimum size of chunks (in kb)
+$FirstSize        =  600;                # Size of first disk. (in kb)
+$RestSize         = 1380;                # Size of rest of disks. (in kb)
+
+# The name of the template for "setup.rul". Try to leave this untouched.
+$RuleTemplate     = "../setup.rul.template";
+
+
+
+##############################################################
+
+$SPLIT ="$InstallShieldDir\\program\\split.exe";
+$LastUsed = $RestSize - $FirstSize;
+$LastDisk = 0;
+$CurDisk = 1;
+$AutoRuleText = "";
+$AllCmds = 1;
+
+# Check existance of some cricial files:
+if (!-e $SPLIT) {
+    print "Unable to find split.exe in '$SPLIT'\n";
+    exit 1;
+}
+
+unlink 'log' if (-e 'log');
+if (-d "disk1" || -d "disk2" || -d "disk3" || -d "disk4" || -d "disk5") {
+    print "\n\nWARNING!!! the directory 'disk?' exists allready!\n";
+    print "Enter 'yes' to delete disk* from current dir! :\n";
+    $ans = <STDIN>; chop $ans;
+    if ($ans ne 'yes') {
+	print "Quitting\n";
+	exit 1;
+    }
+    print "\n\nDELETING ALL DISK? AND DISK?? DIRECTORIES AND FILES!!!\n\n";
+    system "rm -rf disk? disk??";
+    print "done.\n\n\n";
+}
+
+open (LST, ">setup.lst") || die "Unable to create setup.lst: $!";
+
+foreach $file (@ARGV) {
+    if (!-e $file) {
+	print "Unable to read file '$file'.\n";
+	exit 1;
+    }
+    if ($file =~ /^(.*\/)?([^\/]+).z$/i) {
+	$path = ($1 || ".");
+	$base = $2;
+	chop $path if ($path =~ /\/$/);	# remove trailing slash.
+	$first = $RestSize - $LastUsed;
+	if ($first < $Minimum) {
+	    $CurDisk++;
+	    $first = $RestSize;
+	}
+	print "Splitting $file...";
+	system "$SPLIT $file -F$RestSize -d1\@$first >>log";
+	opendir (DIR, $path);
+	$lastfound = 0;
+	foreach (readdir DIR) {
+	    if (/$base\.(\d+)/) {
+		if ($lastfound < $1) {
+		    $lastfound = $1;
+		    $lastused = int(((-s $_) + 1023) / 1024);
+		}
+	    }
+	}
+	if ($lastfound == 1) {
+	    $LastUsed -= $lastused;
+	} elsif ($lastfound > 1) {
+	    $LastUsed = $lastused;
+	} else {
+	    print "Unable to find any split files.\n";
+	    exit 1;
+	}
+	$startdisk = $CurDisk;
+	for ($i = 1; $i <= $lastfound; $i++) {
+	    $dirname = "disk$CurDisk";
+	    if (!-d $dirname) {
+		mkdir($dirname,0777);
+		open (TMP, ">$dirname/disk$CurDisk.id");
+		close TMP;
+	    }		    
+	    rename "$path/$base.$i", "$dirname/$base.$i";
+	    if ($CurDisk != $LastDisk) {
+		$LastDisk = $CurDisk;
+		print LST "$CurDisk;\n" ;
+	    }
+	    print LST "$path\\$base.z\n";
+	    $CurDisk++;
+	}
+	$CurDisk--;
+
+	print "\t (On disk $startdisk..$CurDisk, last used $lastused kb.)\n";
+	
+	$AutoRuleText .= "             CompressGet( \"$base.z\", \"*.*\", INCLUDE_SUBDIR );\n";
+
+	open (ICOMP, "$InstallShieldDir\\program\\icomp.exe -l $base.z |");
+	undef $count;
+	foreach $line (<ICOMP>) {
+	    if ($line =~ /(\d+)\s+(\d+)\s+(\d+)/) {
+		$orgsize=$1; $compsize=$2; $count=$3;
+	    }
+	}
+	close ICOMP;
+	if ($count) {
+	    $ByteSize += $orgsize;
+	    $FileCount += $count;
+	} else {
+	    print "Unable to parse output from icomp.\n";
+	}
+    } else {
+	print "Skipping $file\n";
+    }
+}
+
+close LST;
+
+print "\n";
+
+system "$InstallShieldDir\\program\\packlist.exe setup.lst >>log";
+system "move /Q setup.pkg disk1\\setup.pkg >>log";
+foreach $file ("setup.exe", "uninst.exe", "_isres.dll", "_setup.dll", "_setup.lib", "_inst32i.ex_") {
+    system "copy /Q $InstallShieldDir\\program\\$file disk1 >>log";
+}
+
+print "\n\n\nI have calculated the following sizes of the installation:\n";
+print "(Normally, choose the 2048-value as Minimum Required, and mention\n";
+print "the others in the installation-notes. You cannot install, if there\n";
+print "is less than the Min.Req available.)\n\n";
+print  "ClusterSize   Maximal Need\n";
+foreach $c (0,512,1024,2048,4096,8192,16384,32768) {
+    printf "%9d     %9d\n", $c, ($ByteSize + $c * $FileCount);
+    }
+print "\n\nPlease edit '$RuleTemplate' NOW, then press enter to continue:\n";
+$a = <STDIN>;
+
+open (TMP, $RuleTemplate) || die "Unable to read RuleTemplate: $!\n";
+open (RUL, ">disk1/setup.rul");
+$found = 0;
+foreach (<TMP>) {
+    chop;
+    if ($_ eq '/*---BETA-AUTOSPLIT-INSERT-HERE-MAGIC-KEY---*/') {
+	print "Found Autoinsertkey in Rule-template, inserting filelist\n";
+	print RUL $AutoRuleText;
+	$found = 1;
+    } else {
+	print RUL "$_\n";
+    }
+}
+close RUL;
+close TMP;
+if ($found) {
+    system("$InstallShieldDir\\program\\compile.exe disk1\\setup.rule >>log");
+    unlink "disk1/setup.rul";
+} else {
+    print "FATAL: did not find Autoinsert-magic key in Rule-template\n";
+    exit 1;
+}
+
+print "\n\nNow the ready-to-ship disks should reside in diskXX.\n";
+print "BUT please check the output from the programs in 'log'\n";

@@ -1,0 +1,73 @@
+#!/usr/local/bin/perl
+#-*-Perl-*-
+
+$betalib=$ENV{'BETALIB'} || "/users/beta";
+$betalib =~ s#\\#/#g;
+
+require "$betalib/bin/admin/env.perl";
+
+sub LegalMach {
+    local ($mach, $elm, $legal) = @_;
+    $legal = 0;
+    foreach $elm (@MachineTypes) {
+	$legal = 1 if ($elm eq $mach);
+    }
+    return $legal;
+}
+ 
+if (! &LegalMach($MACHINETYPE)) {
+    print "Dirlist does not know about Machinetype \"$MACHINETYPE\".\n";
+    exit 1;
+}
+open(IN, "$betalib/bin/admin/dirlist.txt") || die "No dirlist: $!";
+while (<IN>) {
+    next if (/^\#/);    # Skip lines starting with '#' (Comments)
+    next if (/^\s*$/);  # Skip blank lines.
+    $include = 0;
+    if (/^\s*if\s*(\(.*)$/) {
+	$if = $1;
+	if ($if =~ /^\((\S+)\s*(\!)?\=\s*(.*)\s*\)\s*(.*)/) {
+	    $keyword = $1;
+	    $not = $2;
+	    $values = $3;
+	    $dir = $4;
+	    # print "keyword=\"$keyword\"\nvalues=\"$values\"\ndir=\"$dir\"\n";
+	    if ($keyword eq 'MACHINETYPE') {
+		
+		foreach $val (split(/[ \t\n]+/, $values)) {
+		    if (! &LegalMach($val)) {
+			print "\"$val\" is not a legal machinetype at line $..\n";
+			exit 1;
+		    }
+		    $include = 1 if ($MACHINETYPE eq $val);
+		}
+		if ($not) {
+		    $include = ! $include;
+		}
+	    } else {
+		print "Unknow keyword \"$keyword\" in if ().\n";
+		exit 1;
+	    }
+	} else {
+	    print "Unable to parse \"if $if\"\n";
+	    exit 1;
+	}
+    } else {
+	$dir=$_;
+	$include = 1; # Unconditional include.
+    }
+    
+    if ($include) {
+	($dir, $compile, $cvs) = split(' ', $dir);
+	$dir .= '/' if ($dir !~ m/\/$/);
+	$CompileFlag{$dir} = $compile;
+	$CvsTags{$dir} = $cvs;
+	if (defined $dirs) {
+	    $dirs .= "$dir ";
+	} else {
+	    $dirs =  "$dir ";
+	}
+    }
+}
+
+$dirs;

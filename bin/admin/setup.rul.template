@@ -1,0 +1,422 @@
+/*----------------------------------------------------------------------------*\
+ *
+ *  IIIIIII SSSSSS
+ *    II    SS                          InstallSHIELD (R)
+ *    II    SSSSSS          (c) 1990-1995, Stirling Technologies, Inc.
+ *    II        SS                     All Rights Reserved.
+ *  IIIIIII SSSSSS
+ *
+ *
+ *  This source code is intended as a supplement to Stirling Technologies,
+ *  Inc., product documentation.  Refer to your Stirling Technologies, Inc.,
+ *  product documentation for more detailed information.
+ *
+ *
+ *    File Name:  SETUP.RUL
+ *
+ *  Description:  InstallSHIELD SDK Edition Mjolner BETA system r4.0 script.
+ *
+ *
+ *
+ *
+ *       Author:  Lennert Sloth.       Date:  26-11-95
+ *
+ *     Comments:  This template script performs a basic installation to a
+ *                Windows 95 or Windows NT platform.  The installation
+ *                includes components: Application Program Files, Sample
+ *                Files and Online Help Files.
+ *
+ *
+\*----------------------------------------------------------------------------*/
+
+
+
+// Size of components.
+#define SIZE_REQ_SAMPLES              0
+#define SIZE_REQ_TEMPLATES            0
+#define SIZE_REQ_PROGRAM        45200000
+
+#define APP_NAME                "MjølnerBETA"
+#define PROGRAM_GROUP_NAME      "Mjølner BETA"
+#define APPBASE_PATH            "BETA\\"
+#define COMPANY_NAME            "Mjølner Informatics"
+#define PRODUCT_NAME            "Mjølner BETA System"
+#define PRODUCT_VERSION         "4.0"
+#define PRODUCT_KEY             "beta.bat"
+#define UNINSTALL_KEY           "Mjolner BETA System 4.0"
+#define APPBASE_DIR95           ""
+#define BASE_REGISTRYNT         "Software\\Microsoft\\Windows NT\\CurrentVersion\\App Paths\\"
+#define BASE_REGISTRY95         "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\"
+
+#define STR_COMPLETE95 "by selecting the program icon in the Programs menu.\n\n"
+#define STR_COMPLETENT "by selecting the program icon in the program group.\n\n"
+
+declare
+
+        // Global variable declarations.
+        STRING  svGrp, szMsg, szFileSet, szTitle, szAppPath;
+        STRING  szProgram, szTemp, svUninstLogFile, szRegKey;
+        STRING  svMainDirectory[ _MAX_STRING ];
+        BOOL    bSpaceOk, bReshowSetupType;
+        NUMBER  nResult, nStatusId, nType;
+
+	STRING szPath, szFileNameIn, szFileNameOut, svLine, szBetalib;
+        NUMBER nFileHandleIn, nFileHandleOut, nFlag;	
+
+	// Note that svAsmResult is set to 53 which makes the maximum
+        // number of characters that svResult can hold 52 (plus one
+        // for the terminating character).
+        STRING szAsmQuestion, szAsmDefault, svAsmResult[53];
+        NUMBER nAsmReturn;
+
+	BOOL    bIncludeSamples, bIncludeProgram, bIncludeHelp;
+        BOOL    bWinNT;
+
+        // Function declarations.
+        prototype SetupScreen();
+        prototype CheckRequirements();
+        prototype CheckSpaceRequirements( number, number, number, string );
+        prototype CreateRegDBEntries();
+
+program
+
+StartHere:
+        Disable( BACKGROUND );
+
+        // Set up the installation screen.
+        SetupScreen();
+
+        // Set installation info., which is required for registry entries.
+        InstallationInfo( COMPANY_NAME, PRODUCT_NAME, PRODUCT_VERSION, PRODUCT_KEY );
+
+// Create a Welcome dialog.
+WelcomeDlg:
+        Disable( BACKBUTTON );
+        Welcome( "Welcome", 0 );
+        Enable( BACKBUTTON );
+
+        // Test target system proper configuration.
+        CheckRequirements();
+
+        // Ask user for a destination location for the installation.
+GetTargetDirectory:
+
+        svMainDirectory = TARGETDISK ^ APPBASE_DIR95 ^ APPBASE_PATH;
+
+        szMsg = "";
+        if ( AskDestPath( "Choose Destination Location", szMsg,
+                          svMainDirectory, 0 ) = BACK ) then
+           goto WelcomeDlg;
+        endif;
+
+        szAppPath = svMainDirectory ^ "bin";
+
+        //In this version there is no installation options.
+       	bIncludeProgram = TRUE;
+
+        // Check to see if target system meets space requirements.
+        bSpaceOk = CheckSpaceRequirements( bIncludeSamples,
+                                           bIncludeProgram,
+                                           bIncludeHelp,
+                                           svMainDirectory );
+
+        // Ask user to try again if not enough space available.
+        if (bSpaceOk = FALSE) then 
+	   goto GetTargetDirectory;
+        endif;
+
+FolderSelection:
+        if ( bWinNT ) then
+           svGrp = PROGRAM_GROUP_NAME;
+
+           // Allow user to modify folder name.
+           if ( SelectFolder( "Folder Selection", svGrp, svGrp ) = BACK ) then
+              goto GetTargetDirectory;
+           endif;
+        endif;
+
+FileTransferSetup:
+
+        // Prepare InstallSHIELD to record deinstallation information.
+        DeinstallStart( svMainDirectory, svUninstLogFile, UNINSTALL_KEY, 0 );
+        RegDBSetItem( REGDB_UNINSTALL_NAME, APP_NAME );
+
+        // Set registry App Paths key information for the main application.
+        RegDBSetItem( REGDB_APPPATH, szAppPath );
+        szProgram = svMainDirectory ^ "bin\\beta.bat";
+        RegDBSetItem( REGDB_APPPATH_DEFAULT, szProgram );
+
+        // Define the "General" file set.
+        szFileSet = "General";
+        TARGETDIR = svMainDirectory;
+
+        FileSetBeginDefine( szFileSet );
+
+          SetStatusWindow( -1, "Copying program files..." );
+
+          // Always copy README & related files, located at
+          // the root level in the DATA.Z library file.
+          //CompressGet( "system.z", "*.*", COMP_NORMAL );
+
+          if (bIncludeProgram) then
+             TARGETDIR = svMainDirectory;
+
+// The following line makes the autosplit program autoinsert the needed files. DO NOT EDIT!
+/*---BETA-AUTOSPLIT-INSERT-HERE-MAGIC-KEY---*/
+// End of Autogenerated files.
+
+          endif;
+
+          if (bIncludeSamples) then
+             TARGETDIR = svMainDirectory;
+             CompressGet( "data.z", "samples\\*.*", INCLUDE_SUBDIR );
+          endif;
+
+          if (bIncludeHelp) then
+             TARGETDIR = svMainDirectory ^ "TEMPLATE";
+             CompressGet( "data.z", "template\\*.*", INCLUDE_SUBDIR );
+          endif;
+
+        FileSetEndDefine( szFileSet );
+
+DoFileTransfer:
+        // Set up progress indicator and information gauge.
+        Enable( STATUSDLG );
+        StatusUpdate( ON, 90 );
+
+        // Perform the file set.
+        nResult = FileSetPerformEz( szFileSet, 0 );
+
+        switch (nResult)
+
+        case FS_DONE: // Successful completion.
+
+        case FS_CREATEDIR: // Create directory error.
+             MessageBox( "Unable to create a directory under " + TARGETDIR + "."+
+                         "Please check write access to this directory.", SEVERE );
+             abort;
+
+        default: // Group all other errors under default label.
+             NumToStr( szTemp, nResult );
+             MessageBox( "General file transfer error."+
+                          "Please check your target location and try again."+
+                          "\n\n Error Number:"+szTemp, SEVERE );
+
+             abort;
+        endswitch;
+
+
+CreateFolderIcons:
+        SetStatusWindow( 95, "Creating Folder and Icons...." );
+
+        if ( bWinNT ) then
+	   if ( CreateProgramFolder( svGrp ) < 0 ) then
+		MessageBox("Failed To Create Program Folder.", SEVERE);
+	   else 
+           	ShowProgramFolder( svGrp, SW_SHOW );
+           	LongPathToShortPath( svMainDirectory );
+           	Delay(1);
+	   endif;
+        endif;
+
+        TARGETDIR = svMainDirectory;
+
+        if (bIncludeProgram) then
+           szProgram = TARGETDIR ^ "bin\\beta.bat";
+           if ( bWinNT ) then
+              AddFolderIcon( svGrp, APP_NAME, szProgram,
+                             TARGETDIR ^ "bin",
+                             TARGETDIR ^ "bin\\HAMMER.ICO", 0, "", REPLACE );
+           else
+              LongPathToQuote( szProgram, TRUE );
+              AddFolderIcon( "", APP_NAME, szProgram,
+                             TARGETDIR ^ "bin",
+                             TARGETDIR ^ "bin\\HAMMER.ICO", 0, "", REPLACE );
+           endif;
+           Delay( 1 );
+        endif;	
+
+	if ( bWinNT ) then
+           AddFolderIcon( svGrp, "ReadmeFile",
+                          "NOTEPAD.EXE " + TARGETDIR ^ "README.TXT",
+                          TARGETDIR,
+                          "", 0, "", REPLACE );
+           Delay( 1 );
+
+           szProgram = WINDIR ^ "UNINST.EXE";
+           LongPathToShortPath( szProgram );
+           LongPathToShortPath( svUninstLogFile );
+           AddFolderIcon( svGrp, "Uninstaller",
+                          szProgram + " -f" + svUninstLogFile,
+                          WINDIR,
+                          "", 0, "", REPLACE );
+           Delay( 1 );
+        endif;
+
+        // Announce setup complete and offer to read README file.
+
+        SetStatusWindow( 100, "Installation complete." );
+
+        // If shared files could not be installed, then users must restart system.
+        if (BATCH_INSTALL = TRUE) then
+           szMsg = "Some files could not be installed because they are "+
+                   "currently in use by other programs in the system.  "+
+                   "To allow for proper operation of the new program you should restart"+
+                   "your system at this time.";
+           CommitSharedFiles(0);
+           RebootDialog( "Restart Windows", szMsg, SYS_BOOTMACHINE );
+        else
+
+           szMsg = "Setup is complete.  You may run the installed program ";
+           if ( bWinNT ) then
+              szMsg = szMsg + STR_COMPLETENT;
+           else
+              szMsg = szMsg + STR_COMPLETE95;
+           endif;
+
+           MessageBeep( 0 );
+           MessageBox( szMsg, INFORMATION );
+        endif;
+
+        exit;
+
+
+/*---------------------------------------------------------------------------*\
+ *
+ * Function:  SetupScreen
+ *
+ *  Purpose:  This function will set up the screen look.  This includes
+ *            colors, fonts, text to be displayed, etc.
+ *
+ *
+ *    Input:
+ *
+ *  Returns:
+ *
+ * Comments:
+\*---------------------------------------------------------------------------*/
+
+function SetupScreen()
+        begin
+
+          Enable( INDVFILESTATUS );
+
+          SetTitle( APP_NAME + " Setup", 28, WHITE );
+
+          SetTitle( "Setup", 0, BACKGROUNDCAPTION ); // Caption bar text.
+
+          Enable( BACKGROUND );
+
+        end;
+
+
+/*---------------------------------------------------------------------------*\
+ *
+ * Function:  CheckRequirements
+ *
+ *  Purpose:  This function will check all minimum requirements for the
+ *            application being installed.  If any fail, then the user
+ *            is informed and the installation is terminated.
+ *
+ *
+ *    Input:
+ *
+ *  Returns:
+ *
+ * Comments:
+\*---------------------------------------------------------------------------*/
+
+function CheckRequirements()
+          number  nvDx, nvDy;
+          number nvResult;
+          STRING szResult;
+        begin
+
+          // Determine if target system uses NT or Windows 95.
+          GetSystemInfo( WINMAJOR, nvResult, szResult );
+          bWinNT = TRUE;
+          if (nvResult = 4) then
+             bWinNT = FALSE; // Running Windows 95.
+          endif;
+
+          // Check screen resolution.
+          GetExtents( nvDx, nvDy );
+          if (nvDy < 480) then
+             MessageBox( "This program requires VGA or better resolution.", WARNING );
+             exit;
+          endif;
+
+        end;
+
+/*---------------------------------------------------------------------------*\
+ *
+ * Function:  CheckSpaceRequirements
+ *
+ *  Purpose:  This function will check space requirements based on the
+ *            elements being installed.
+ *
+ *    Input:
+ *
+ *  Returns:
+ *
+ * Comments:
+\*---------------------------------------------------------------------------*/
+
+function CheckSpaceRequirements( bIncludeSamples,
+                                 bIncludeProgram,
+                                 bIncludeHelp,
+                                 szDir )
+          number  nSizeRequired;
+        begin
+
+          nSizeRequired = 0;
+
+          // Determine total size.
+          if (bIncludeSamples) then
+            nSizeRequired = nSizeRequired + SIZE_REQ_SAMPLES;
+          endif;
+
+          if (bIncludeHelp) then
+            nSizeRequired = nSizeRequired + SIZE_REQ_TEMPLATES;
+          endif;
+
+          if (bIncludeProgram) then
+            nSizeRequired = nSizeRequired + SIZE_REQ_PROGRAM;
+          endif;
+
+          // Check space on target drive.
+          bSpaceOk = TRUE;
+          if (GetDiskSpace( szDir ) < nSizeRequired) then
+             szMsg = "There is not enough space available on the disk\n" +
+                     "'" + svMainDirectory + "' \n" +
+                     "Please free up some space or change the target location\n" +
+                     "to a different disk";
+             MessageBeep(0);
+             MessageBox( szMsg, WARNING );
+             bSpaceOk = FALSE;
+          endif;
+
+          return bSpaceOk;
+        end;
+
+
+/*---------------------------------------------------------------------------*\
+ *
+ * Function:  CreateRegDBEntries
+ *
+ *  Purpose:  This function will create necessary keys and values for
+ *            the sample program.
+ *
+ *    Input:
+ *
+ *  Returns:
+ *
+ * Comments:
+\*---------------------------------------------------------------------------*/
+
+function CreateRegDBEntries()
+        string szKey[255], szValue, szDemo, szProgram;
+begin
+
+end;
+

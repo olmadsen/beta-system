@@ -1,0 +1,99 @@
+#! /usr/local/bin/perl
+#-*-Perl-*-
+
+$betalib=$ENV{'BETALIB'}  || "/users/beta";
+$betalib =~ s#\\#/#g;
+
+$dirs=require "$betalib/bin/admin/dirlist4.0";
+
+# add some directories if needed
+# the folowing dirs are not included in dirs4.0, since
+# not all files are in a state where they can be compiled.
+# And since dirs4.0 is used by compile4.0 etc. they are left 
+# out from dirs4.0, but included here.
+
+$dirs .= "\
+designlib/v2.2 \
+designenv/v2.2 \
+gpp/v2.2 \
+freja/v2.2 \
+";
+
+$match='(~$)|(\.lst$)|(\.\.job$)|(\.dump$)|(\.\.gs$)|(\.\.s$)';
+
+print "$MACHINETYPE\n";
+if ("$MACHINETYPE" eq "NTI"){
+    $match .= '|(\.rr$)|(\.ro$)|(\.pdb$)|(\.ilk$)|(\.rsp$)';
+}
+
+print "This script will recursively remove files matching \n\t$match\nfrom release 4.0:\n\n";
+
+foreach $dir (split(' ', $dirs)) {
+    if (-d "$betalib/$dir") {
+	print "$dir\n";
+    } else {
+	print "$dir   -- does not exist\n";
+    }
+}
+
+print "Are you sure that you want to remove files matching\n\t$match\n";
+print "from these directories? (no/yes) ";
+
+$yes = <STDIN>;
+chop $yes;
+exit if ($yes ne 'yes');
+
+print "Really sure? ";
+$yes = <STDIN>;
+chop $yes;
+exit if ($yes ne 'yes');
+
+print "\nWould you like to be prompted for each directory? (yes/no) ";
+$doprompt = <STDIN>;
+chop $doprompt;
+
+foreach $dir (split(' ', $dirs)) {
+    ($basedir ="$betalib/$dir") =~ s#/$##;
+    next if (! -d $basedir);
+    if ($doprompt eq "yes"){
+	print  "Recursively remove files matching\n\t$match\n";
+	print "  from $basedir? (y/n/q) ";
+	$answer=<STDIN>;
+	chop $answer;
+	if ($answer eq "y"){
+	    # just go on
+	} elsif ($answer eq "n"){
+	    next;
+	} elsif ($answer eq "q"){
+	    exit 0;
+	}
+    } else {
+	print "*********** Removing from $basedir ***************\n";
+    }
+    @todo=('.');
+    ($basedir ="$betalib/$dir") =~ s#/$##;
+    next if (! -d $basedir);
+    while ($curdir = pop @todo) {
+	$curdir .= '/';
+	$curdir =~ s#^\./$##;
+	$ntdirfix = "$basedir/$curdir";
+	#$ntdirfix =~ s/^.\://;
+	#$ntdirfix =~ s#\/#\\#g;
+	#print "Scanning $ntdirfix\n";
+	chdir $ntdirfix || die "Unable to chdir: $!";
+	opendir(DIR, '.') || die "Unable to readdir $!";
+	@files=readdir(DIR);
+	closedir DIR;
+	foreach $file (@files) {
+	    next if ($file =~ /^\./);
+	    if (-d $file) {
+		push(@todo, "$curdir$file");
+		#print "Pushing $file\n";
+	    }
+	    elsif ($file =~ /$match/) {
+		print "$file\n";
+		unlink $file || print "Unable to delete file $file\n";
+	    }
+	}
+    }
+}
