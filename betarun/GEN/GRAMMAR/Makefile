@@ -1,12 +1,8 @@
-runsematt.bet  runtime-parser.btab: runtime-meta.gram
+runsematt.bet: runtime-meta.gram
 	dogram runtime
 	cp runtimecfl.bet  runsematt.bet 
 
-
-runtime-parser.btabL: runtime-meta.gram
-	bobsit runtime
-
-runtime-parser.btab: runtime-meta.gram
+runtime-parser.btabL runtime-parser.btab: runtime-meta.gram
 	bobsit runtime
 
 clean: 
