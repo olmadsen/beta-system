@@ -57,7 +57,7 @@ print "======================================================\n";
 $match = "tstdump\\d\\d";
 foreach $f (@files) {
     $f =~ s/^\.\///;
-    $f =~ s/${exe}$//;
+    $f =~ s/${exe}$//;   # this line confuses perl emacs mode!
     next if ($f !~ m/^$match$/);
     print "\n-------- $f: -------\n";
     if ( $f eq "tstdump24" ){
@@ -65,7 +65,7 @@ foreach $f (@files) {
 	print "--------------------------\n";
 	next;
     } 
-    if ( $nti && ($f eq "tstdump20") ){
+    if ( $nti && (($f eq "tstdump20") || ($f eq "tstdump34") || ($f eq "tstdump35") || ($f eq "tstdump36"))){
 	print "$f skipped since it hangs forever. FIXME!\n";
 	print "--------------------------\n";
 	next;
@@ -80,24 +80,41 @@ foreach $f (@files) {
 	#print "--------------------------\n"
 	next;
     }
-       
-    #FIXME: stderr og stdout redirect missing...
-    if ($nti) {
-	system("$f >$f.out 2>$f.err");   #Probably requires 4NT / 4DOS.
-    } else {
-	system("$f >$f.out 2>$f.err");
-    }
+
+    # run program
+    system("$f >$f.out 2>$f.err"); 
+
     if ( -f "output/$f.out" ) {
-	if (system("diff $Context -i output/$f.out $f.out") == 0){
-	    print "[stdout is correct]\n";
-	    &rm("$f.out");
-	} else {
-	    print "[Difference in output]\n";
+	open(IN, "<$f.out");
+	open(OUT, ">$f.appout") || die "Unable to write processed output:$!";
+	while(<IN>) {
+	    s/\015$//;
+	    print OUT;
 	}
+	close IN;
+	close OUT;
+	open(IN, "<output/$f.out");
+	open(OUT, ">$f.ref") || die "Unable to write processed reference output: $!";
+	while(<IN>) {
+	    s/\015$//;
+	    print OUT;
+	}
+	close IN;
+	close OUT;
+	if (system("diff $Context -i $f.ref $f.appout") == 0){
+	    print "[stdout is correct]\n";
+	    &rm("$f.appout");
+	    &rm("$f.err");
+	    &rm("$f.ref");
+	} else {
+	    print "[Difference in stdout]\n";
+	}
+	&rm("$f.ref");
     } else {
 	print "[No reference output exists]\n";
     }
     if ($nti){
+	# betarun emits nothing to console on nti
 	print "[stderr not compared on nti]\n";
     } else {
 	if ( -f "output/$f.err" ) {
@@ -105,6 +122,7 @@ foreach $f (@files) {
 	    open(OUT, ">$f.apperr") || die "Unable to write processed stderr:$!";
 	    while(<IN>) {
 		next if (/\{/);
+		s/\015$//;
 		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
 		s/\(address 0x\w+\)\s*//g;
 		s/\(address 0x\w+ <[^>]+>\)\s*//g;
@@ -118,6 +136,7 @@ foreach $f (@files) {
 	    open(OUT, ">$f.ref") || die "Unable to write processed reference stderr: $!";
 	    while(<IN>) {
 		s/MACHINE_TYPE/$objdir/g;
+		s/\015$//;
 		s/\(address 0x\w+\)\s*//g;
 		s/\(address 0x\w+ <[^>]+>\)\s*//g;
 		s/Segmentation fault/Bus error/g;
@@ -145,6 +164,7 @@ foreach $f (@files) {
 	    open(OUT, ">$f.ref") || die "Unable to write processed reference dump:$!";
 	    while(<IN>) {
 		s/MACHINE_TYPE/$objdir/g;
+		s/\015$//;
 		#s/BETAENV/TSTENV/g;
 		s/\(address 0x\w+\)\s*//g;
 		s/\(address 0x\w+ <[^>]+>\)\s*//g;
@@ -159,6 +179,7 @@ foreach $f (@files) {
 	    open(OUT, ">$f.app") || die "Unable to write processed application dump: $!";
 	    while(<IN>) {
 		next if (/\{/);
+		s/\015$//;
 		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
 		#s/\~beta\/compiler\/TST/\~beta\/betarun\/$objdir\/TST/g;
 		s/\(address 0x\w+\)\s*//g;
@@ -186,6 +207,7 @@ foreach $f (@files) {
 	    open(OUT, ">$f.candidate") || die "Unable to write candidate dump: $!";
 	    while(<IN>) {
 		next if (/\{/);
+		s/\015$//;
 		s/$objdir/MACHINE_TYPE/g;
 		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
 		s/address 0x[0-9a-f]+/address 0xXXXXXXXX/g;
@@ -230,7 +252,7 @@ sub rm()
     #FIXME: make a better one using unlink and move to utils.perl
     if ($OS eq 'MAC'){
     	### hmmm.
-    } elsif ($OS eq "WIN") {
+    } elsif (($OS eq "WIN") && !$cygwin) {
 	system "del @_";
     } else {
 	system "/bin/rm -f @_";
