@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopyValRep.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:28 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: CopyValRep.c,v $, rel: %R%, date: $Date: 1992-06-09 15:19:15 $, SID: $Revision: 1.3 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -27,7 +27,7 @@ void CopyValRep(ref(ValRep) theRep,
       {
 	  newRep = cast(ValRep) IOAcalloc(range*4 + headsize(ValRep));
 
-	  newRep->Proto = cast(ProtoType) -3;
+	  newRep->Proto = ValRepPTValue;
 	  newRep->GCAttr = 1;
 	  newRep->LowBorder = 1;
 	  newRep->HighBorder = range;

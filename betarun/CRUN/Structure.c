@@ -1,27 +1,22 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:38 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-06-09 15:19:28 $, SID: $Revision: 1.3 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-/* $Id: Structure.c,v 1.2 1992-06-06 03:57:38 beta Exp $
- */
-
-/* params ?? */
-ref(Structure)
-AllocateStruc(ref(Object) origin,
-	      ref(ProtoType) proto
-	      )
+ref(Structure) AllocateStruc(ref(Object) origin,
+			     ref(ProtoType) proto
+			     )
 {
     register ref(Structure) newStruct;
 
     /* Allocate a StructObject. */
 
     newStruct = cast(Structure) IOAalloc(headsize(Structure));
-    newStruct->Proto = cast(ProtoType) -5;
+    newStruct->Proto = StructurePTValue;
     newStruct->GCAttr = 1;
     newStruct->iOrigin = origin; /* er dette rigtigt ?? */
     newStruct->iProto = proto;
@@ -38,7 +33,7 @@ ref(Structure) ThisStruc(ref(Object) this)
     /* Allocate a StructObject. */
 
     newStruct = cast(Structure) IOAalloc(headsize(Structure));
-    newStruct->Proto = cast(ProtoType) -5;
+    newStruct->Proto = StructurePTValue;
     newStruct->GCAttr = 1;
 
     origin = (casthandle(Object)this)[this->Proto->OriginOff];

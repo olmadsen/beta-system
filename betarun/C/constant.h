@@ -1,12 +1,12 @@
 /* constants */
 
 /* -- Prototype constants */
-#define ComponentPTValue       -1
-#define StackObjectPTValue     -2
-#define ValRepPTValue          -3
-#define RefRepPTValue          -4
-#define StructurePTValue       -5
-#define ByteRepPTValue         -6
+#define ComponentPTValue       ((struct ProtoType *) -1)
+#define StackObjectPTValue     ((struct ProtoType *) -2)
+#define ValRepPTValue          ((struct ProtoType *) -3)
+#define RefRepPTValue          ((struct ProtoType *) -4)
+#define StructurePTValue       ((struct ProtoType *) -5)
+#define ByteRepPTValue         ((struct ProtoType *) -6)
 
 #define MaxPTValue             -1
 #define MinPTValue             -6

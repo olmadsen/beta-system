@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateStackObject.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:15 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: AllocateStackObject.c,v $, rel: %R%, date: $Date: 1992-06-09 15:19:00 $, SID: $Revision: 1.3 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -14,7 +14,7 @@ AllocateStackObject(unsigned size)
 
   theStack = cast(StackObject) IOAalloc(size*4 + headsize(StackObject));
 
-  theStack->Proto = cast(ProtoType) -2;
+  theStack->Proto = StackObjectPTValue;
   theStack->GCAttr = 1;
   theStack->ObjectSize = size;
   theStack->StackSize = 0;

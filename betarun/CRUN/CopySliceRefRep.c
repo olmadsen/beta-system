@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-06-09 00:57:39 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-06-09 15:19:18 $, SID: $Revision: 1.5 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -48,7 +48,7 @@ void CCopySliceRefRep(ref(RefRep) theRep,
     /* The new Object is now allocated, but not assigned yet! */
     
     /* Initialize the structual part of the repetition. */
-    newRep->Proto = cast(ProtoType) -4;
+    newRep->Proto = RefRepPTValue;
     newRep->GCAttr = 1;
     newRep->LowBorder = 1;
     newRep->HighBorder = size;

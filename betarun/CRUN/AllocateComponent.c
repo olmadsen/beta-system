@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-06-09 00:31:43 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-06-09 15:18:57 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -20,7 +20,7 @@ ref(Component) AllocateComponent(ref(ProtoType) prototype,
     /* The new Component is now allocated, but not initialized yet! */
 
     /* Initialize the structual part; prototype, age etc. */
-    theComp->Proto = cast(ProtoType) -1;
+    theComp->Proto = ComponentPTValue;
     theComp->GCAttr = 1;
     theComp->StackObj = cast(StackObject) 0;
     theComp->CallerObj = cast(Object) 0;

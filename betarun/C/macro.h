@@ -13,10 +13,11 @@
 #define isStatic(x)       (  -0xFFFF <= x) && ( x <= -1)
 #define isForward(x)      ( x > 2048 )
 
-#define isValRep(x)      (((long) (x)->Proto) == ValRepPTValue)
-#define isByteRep(x)     (((long) (x)->Proto) == ByteRepPTValue)
-#define isStackObject(x) (((long) (x)->Proto) == StackObjectPTValue)
-#define isComponent(x)   (((long) (x)->Proto) == ComponentPTValue)
+#define isValRep(x)      ((x)->Proto == ValRepPTValue)
+#define isByteRep(x)     ((x)->Proto == ByteRepPTValue)
+#define isStackObject(x) ((x)->Proto == StackObjectPTValue)
+#define isComponent(x)   ((x)->Proto == ComponentPTValue)
+
 #define ComponentItem(x) ((ref(Item)) (((long) x) + headsize(Component)))
 
 #define ValRepSize(range) (range*4 + 16)

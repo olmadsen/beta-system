@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopyText.c,v $, rel: %R%, date: $Date: 1992-06-08 23:55:43 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: CopyText.c,v $, rel: %R%, date: $Date: 1992-06-09 15:19:13 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -27,7 +27,7 @@ ref(ValRep) CopyText(char *theText,
     /* Allocate a value repetition with bodysize = Size. */
     theRep = cast(ValRep) IOAalloc(headsize(ValRep) + size*4);
 
-    theRep->Proto = cast(ProtoType) -3;
+    theRep->Proto = ValRepPTValue;
     theRep->GCAttr = 1;
     theRep->LowBorder = 1;
     theRep->HighBorder = size;
