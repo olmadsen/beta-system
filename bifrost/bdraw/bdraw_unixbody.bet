@@ -2,105 +2,101 @@ ORIGIN 'bdrawenv';
 INCLUDE '../private/X11/CanvasXtImpl';
 INCLUDE '~beta/guienv/private/X11/guienv_unixbody';
 INCLUDE '~beta/sysutils/envstring';
+INCLUDE '~beta/basiclib/file';
 INCLUDE 'menus';
 INCLUDE '~beta/guienv/utils/prompts';
 INCLUDE 'cursors';
 
 --LIB: attributes--
-(* Process does not handle pipes too well, so we do it manually... *)
-fputc: external
-  (# c: @char;
-     file: @integer;
-     status: @integer;
-  enter (c,file)
-  exit status
+getpid: external
+  (# pid: @integer;
+  exit pid 
   #);
-popen: external
-  (# command: [1]@char;
-     type: [1]@char;
-     file: @integer;
-  enter (command,type)
-  exit file
-  #);
-pclose: external
-  (# file: @integer;
-     status: @integer;
-  enter file
-  exit status
-  #);
-SIGPIPE: (# exit 13 #);
-signal: external
-  (# sig: @integer;
-     handler: ##external;
-  enter (sig, handler##)
-  #);
-EOF: 
-  (# exit -1 #);
-pipe: Stream
-  (# command: ^text;
-     file: @integer;
-     open: 
-       (# error:< exception;
-       enter command[]
-       do (command, 'w')->popen->file;
-          (if file//0 then error if);
-       #);
-     close: 
-       (# error:< exception;
-       do (if file->pclose//-1 then error if) 
-       #);
-     putError:< exception;
-     puttext::(# putc: @put; do txt.scanAll(# do ch->putc #)#);
-     put:: (# do (if (ch,file)->fputc//EOF then putError if) #);
-  #);
+system: external
+  (# cmd: [0]@char;
+     diag: @integer;
+  enter cmd
+  exit diag    
+  #)
 
 -- BdrawPrint: descriptor--
 (# A4: (# exit (0, 0, 595, 822) #);
    oldSelection: @picture;
    printDialog: @PromptForText
-     (# ok:: (# do usertext[]->extensions.printcommand[]; printEPS #)#);
-   
+     (# ok:: 
+          (# 
+          do 'Spooling ...' -> Inform;
+             usertext[]->extensions.printcommand[]; 
+             printEPS;
+             (if extensions.print_failed then
+                 error;
+              else
+                 'Spooling ... done' -> Inform;
+             if);
+             (if out.entry.exists then
+                 out.delete;
+             if);
+          #)
+     #);
+   fname: ^text;
+   cmd: ^text;
+   out: @file;
+   error:
+     (# msg: ^text;
+     do 'Bdraw: Print: Failed to execute print command '''-> msg[];
+        cmd[]->msg.puttext;
+        ''''->msg.puttext;
+        msg -> Inform;
+        msg[] -> Note;
+     #);
    printEPS:
      (# 
      do SaveCursor;
         WatchCursor;
-        print: 
-          (# out: @pipe(# putError:: (# do forget #)#);
-             forget:
-               (# msg: ^text;
-               do 'Bdraw: Print: Failed to pipe EPS to '''-> msg[];
-                  extensions.printcommand[]->msg.puttext;
-                  ''''->msg.puttext;
-                  msg[] -> Note;
-                  leave print;
-               #);
-          do false -> extensions.pipe_broken;
-             extensions.printcommand[]->out.open(# error:: (# do forget #)#);
-             
-             (* If the selection has been moved or otherwise transformed, this 
-              * transformation is only registered by the selection TM matrix.
-              * Temporarily remove the GOs in theSelection to make the GOs
-              * incorporate the transformations.
-              *)
-             oldSelection.init;
-             theSelection.scanGOs(# do go[] -> oldSelection.add #);
-             theSelection.clear;
-             
-             (* Produce the postscript on the stream 'out' *)
-             (A4, true, 1, out[]) -> maincanvas.writeEPS;
-             (* Restore selection *)
-             oldSelection.scanGOs(# do go[] -> theSelection.add #);
-             
-             out.close(# error:: (# do forget #)#);
-             
-             (if extensions.pipe_broken then forget if);
-             
-          #);
+        false -> extensions.print_failed;
+        
+        (* Construct unique temporary file name *)
+        '$(TMPDIR)' -> expandEnvVar -> fname[];
+        (if fname.length=0 then 
+            '/tmp' -> fname[] 
+        if);
+        '/bdraw'->fname.append;
+        getpid -> fname.putint;
+        '.eps' -> fname.append;
+        
+        (* Open temporary file *)
+        fname[]->out.name;
+        out.openwrite;
+        
+        (* Construct print command *)
+        extensions.printcommand.copy -> cmd[];
+        ' '->cmd.append;
+        fname[] -> cmd.append;
+        
+        (* If the selection has been moved or otherwise transformed, this 
+         * transformation is only registered by the selection TM matrix.
+         * Temporarily remove the GOs in theSelection to make the GOs
+         * incorporate the transformations.
+         *)
+        oldSelection.init;
+        theSelection.scanGOs(# do go[] -> oldSelection.add #);
+        theSelection.clear;
+        
+        (* Produce the postscript on the file 'out' *)
+        (A4, true, 1, out[]) -> maincanvas.writeEPS;
+        (* Restore selection *)
+        oldSelection.scanGOs(# do go[] -> theSelection.add #);
+        out.close;
+        
+        (* Execute the print command *)
+        (*cmd[] -> screen.putline;*)
+        (cmd->system)<>0 -> extensions.print_failed;
+        
         RestoreCursor;
      #);
 do (if extensions.printcommand[]//NONE then
        '$(BDRAWPRINT)' -> expandEnvVar -> extensions.printcommand[];
-       (if extensions.printcommand.length//0 then 
+       (if extensions.printcommand.length=0 then 
            'lpr' -> extensions.printcommand[] 
        if);
    if);
@@ -110,15 +106,7 @@ do (if extensions.printcommand[]//NONE then
 
 -- BdrawExtensions: descriptor --
 (# printcommand: ^text;
-   pipe_broken: @boolean;
-   handleSigPipe: external
-     (# sig: @integer;
-     enter sig
-     do CExternalEntry;
-        (* Be carefull not to cause GC here! *)
-        true->pipe_broken;
-     #);
-   
+   print_failed: @boolean;
    dpy, root, bitmap, status: @integer;
    filename: ^text;
    width, height, bmap: @integerref;
@@ -150,9 +138,6 @@ do (if extensions.printcommand[]//NONE then
      #);
    menubar: ^menubarpattern;
 do 
-   (* Specify signal handler for SIGPIPE *)
-   (SIGPIPE, handleSigPipe##) -> signal;
-
    (* Add iconify pattern *)
    doiconify## -> iconify##;
    
