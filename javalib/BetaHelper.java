@@ -11,6 +11,12 @@ public class BetaHelper
     public static int  long2int(long j){
 	return (int)j;
     }
+    public static long int2longMul1000(int i){
+	return 1000L*(long)i;
+    }
+    public static int  long2intDiv1000(long j){
+	return (int)(j/1000L);
+    }
     public static InputStream get_System_in(){
 	return System.in;
     }
