@@ -53,7 +53,7 @@ ParamOriginProto(struct Component *,AlloC)
 
 #ifdef sparc
 /* Functions used to call RT routines directly from C.
- * Needed because %i1 in calling regwin is destroyed by (C)AlloI
+ * Needed because %i1 in calling regwin is destroyed by (C)AlloC
  */
 
 struct Component *SPARC_AlloC(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4)

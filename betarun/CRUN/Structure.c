@@ -145,7 +145,7 @@ ParamStruc(struct Item *, AlloSI)
 
 #ifdef sparc
 /* Functions used to call RT routines directly from C.
- * Needed because %i1 in calling regwin is destroyed by (C)AlloI
+ * Needed because %i1 in calling regwin is destroyed by (C)AlloSI
  */
 
 struct Item *SPARC_AlloSI(struct Structure *s, int i1, int i2, int i3, int i4)
