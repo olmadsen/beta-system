@@ -317,7 +317,7 @@ public class BetaOutput
 	    indent(+3);
 	}
 	indent(-3);
-	if (mangledName!=null && !isConstructor) {
+	if ((mangledName!=null && !isConstructor) || !name.equals(mapReserved(name)) ) {
 	    indent();
 	    put("do '" + name + "' -> procname;");
 	    nl();

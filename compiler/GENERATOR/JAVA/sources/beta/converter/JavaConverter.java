@@ -90,6 +90,7 @@ class JavaConverter
 		String value = null;
 		if (isStatic && Modifier.isFinal(f.getModifiers())){
 		    String type = f.getType().getName();
+		    // System.err.println("Field " + f.getName());
 		    if (o == null){
 			// Create object to look up static final fields from
 			// FIXME: Object really needed?
@@ -97,11 +98,13 @@ class JavaConverter
 			Constructor ctorlist[] = cls.getDeclaredConstructors();
 			for (int j = 0; j < ctorlist.length; j++) {
 			    Constructor ct = ctorlist[j];
-			    Class params[] = ct.getParameterTypes();
-			    if (params.length==0){
-				// Found default (parameterless) constructor)
-				o = ct.newInstance(null);
-				break;
+			    if (isRelevant(ct.getModifiers())){
+				Class params[] = ct.getParameterTypes();
+				if (params.length==0){
+				    // Found default (parameterless) constructor)
+				    o = ct.newInstance(null);
+				    break;
+				}
 			    }
 			}
 		    }
