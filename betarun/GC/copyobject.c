@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-08-20 16:18:09 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-08-20 16:20:37 $, SID: $Revision: 1.8 $
  * by Lars Bak.
  */
 
@@ -45,7 +45,7 @@ static ref(Object) CopyObject( theObj)
       ptr(long) oldPtr;
       ptr(long) pointer = ToSpaceToAOAtable; /* points to start of old table */
 
-      if ( ! (ToSpaceToAOAtable = (long) malloc(IOASize)) ){
+      if ( ! (ToSpaceToAOAtable = (long *) malloc(IOASize)) ){
 	fprintf(output, "Could not allocate ToSpaceToAOAtable.\n");
 	exit(1);
       } 
