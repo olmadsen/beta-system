@@ -6,5 +6,5 @@ cs:
 	helloworld.exe
 
 clean:
-	rm -f *~ *.dll *.astL *.a2s *.exp *.ilk *.obj *.config.new *.exe *.stackdump *.pdb *.dump
+	rm -f *~ *.dll *.astL *.a2s *.exp *.ilk *.obj *.lib *.config.new *.exe *.stackdump *.pdb *.dump
 	rm -rf clr jvm
