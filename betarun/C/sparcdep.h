@@ -221,7 +221,7 @@ register volatile void *GCreg3 asm("%o4");
 	      unsigned offset, /* in bytes */		\
 	      int i3,					\
 	      int i4,					\
-	      unsigned range)
+	      /*unsigned*/ int range)
 
 /* On the SPARC we need to skip the first instruction */
 #define CallBetaEntry(entry,item)			\
@@ -274,7 +274,7 @@ register volatile void *GCreg3 asm("%o4");
 
 #endif
 
-static inline USE()
+static inline void USE()
 { int x;
   x=(int)IOA;
   x=(int)IOATopoff;
@@ -283,3 +283,40 @@ static inline USE()
   x=(int)retAddress;
 }
 
+extern ref(RefRep) CAlloRR(struct Object *theObj,
+			   int i1,
+			   unsigned offset, /* in bytes */
+			   int i3,
+			   int i4,
+			   /*unsigned*/ int range);
+extern ref(ValRep) CAlloVR1(struct Object *theObj,
+			    int i1,
+			    unsigned offset, /* in bytes */
+			    int i3,
+			    int i4,
+			    /*unsigned*/ int range);
+extern ref(ValRep) CAlloVR2(struct Object *theObj,
+			    int i1,
+			    unsigned offset, /* in bytes */
+			    int i3,
+			    int i4,
+			    /*unsigned*/ int range);
+extern ref(ValRep) CAlloVR4(struct Object *theObj,
+			    int i1,
+			    unsigned offset, /* in bytes */
+			    int i3,
+			    int i4,
+			    /*unsigned*/ int range);
+extern ref(ValRep) CAlloVR8(struct Object *theObj,
+			    int i1,
+			    unsigned offset, /* in bytes */
+			    int i3,
+			    int i4,
+			    /*unsigned*/ int range);
+extern void CCopyT(int i0,
+		   ref(Item) theItem,
+		   unsigned offset, /* i ints */
+		   int i3,
+		   int i4,
+		   char *asciz
+		   );

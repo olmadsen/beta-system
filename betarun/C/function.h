@@ -50,6 +50,7 @@ extern void BetaError(long, ref(Object));
 extern void CBFAAlloc(void);
 extern void CBFArelloc(void);
 extern void freeCBF(unsigned long);
+extern void freeCallbackCalled();
 #ifdef RTDEBUG
 extern void CBFACheck(void);
 #endif

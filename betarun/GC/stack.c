@@ -362,7 +362,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
       if (inBetaHeap(*theCell) && isObject(*theCell))
 	if( objIsValRep(*theCell) ){
 	  DEBUG_IOA( fprintf(output, "STACK(%d) (0x%x) is *ValRep", 
-			     (long)theCell-(long)&ar[1], *theCell));
+			     (int)((long)theCell-(long)&ar[1]), (int)(*theCell)));
 	} else {
 	  if (isProto((cast(Object)*theCell)->Proto)){
 	    ProcessReference(theCell);
@@ -907,9 +907,11 @@ void PrintRef(ref(Object) ref)
     if (inBetaHeap(ref) && isObject(ref) ){
       fprintf(output, ", is object");
       if (isProto((ref)->Proto))
-	fprintf(output, ", proto ok: 0x%x (%s)", ref->Proto, DescribeObject(ref));
+	fprintf(output, ", proto ok: 0x%x (%s)", 
+		(int)ref->Proto, 
+		DescribeObject(ref));
       else
-	fprintf(output, ", proto NOT ok: 0x%x", ref->Proto);
+	fprintf(output, ", proto NOT ok: 0x%x", (int)ref->Proto);
     } else {
       fprintf(output, ", is NOT object");
 #ifdef SPARC_LD_SEGMENT_TEST
@@ -925,11 +927,11 @@ void PrintCAR(struct RegWin *cAR)
 {
   fprintf(output, 
 	  "----- C AR: 0x%x, end: 0x%x, PC: 0x%x (%s+0x%x)\n",
-	  cAR, 
-	  cAR->fp,
-	  PC,
+	  (int)cAR, 
+	  (int)cAR->fp,
+	  (int)PC,
 	  getLabel(PC),
-	  labelOffset);
+	  (int)labelOffset);
 }
 
 void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
@@ -966,7 +968,7 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
   }
 
   for (; theCell != (struct Object **) theEnd; theCell+=2) {
-    fprintf(output, "0x%x", *theCell);
+    fprintf(output, "0x%x", (int)(*theCell));
     PrintRef(cast(Object)(*theCell));
   }
   fflush(output);

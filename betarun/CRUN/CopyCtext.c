@@ -23,7 +23,7 @@ ref(ValRep) CopyCT(unsigned char *textPtr)
 #endif
 {
     DeclReference1(struct ValRep *, theRep);
-    register unsigned range, size, i;
+    register unsigned range, size;
 
     GCable_Entry();
 

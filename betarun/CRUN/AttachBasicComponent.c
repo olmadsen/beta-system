@@ -8,13 +8,9 @@
 #include "beta.h"
 #include "crun.h"
 
-static TerminateBasicComponent() { BetaExit(0); }
-
 ParamThisComp(void, AttBC)
 /* = void AttBC(struct Object *this, struct Component *comp) */
 {
-    register long *entrypoint;
-
 #ifdef sparc
     register ref(CallBackFrame) callBackFrame asm("%l5");
     register ref(RegWin)	nextCompBlock asm("%l6");
