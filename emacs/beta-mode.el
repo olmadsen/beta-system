@@ -288,15 +288,15 @@ Invoking beta-mode:
 Add the following to your .emacs file to automatically go into beta-mode when
 the name of the buffer ends in \".bet\"
 
-(setq betalib (getenv "BETALIB"))
-(if (not betalib) (setq betalib "/usr/local/lib/beta"))
+(setq betalib (getenv \"BETALIB\"))
+(if (not betalib) (setq betalib \"/usr/local/lib/beta\"))
 ;; or if you are on a PC, e.g.: 
-;; (if (not betalib) (setq betalib "c:\\beta"))
+;; (if (not betalib) (setq betalib \"c:\\\\beta\"))
 
 (setq load-path (append load-path 
-			(list (format "%s/emacs" betalib))))
+			(list (format \"%s/emacs\" betalib))))
 
-(autoload 'beta-mode "beta-mode")
+(autoload 'beta-mode \"beta-mode\")
 (setq auto-mode-alist (append (list (cons \"\\\\.bet$\" 'beta-mode))
                                auto-mode-alist))
 
