@@ -26,3 +26,33 @@ long  Argc(){ return ArgCount; }
  */
 
 char *Argv(n) long n; { return ArgVector[n-1]; }
+
+
+#ifdef RTDEBUG
+#include <stdarg.h>
+
+char *XcallName;
+long  XcallNum;
+
+void TraceXcall(long arg1, ...)
+{
+  va_list ap;
+  fprintf(output, "External call: %s(", XcallName);
+  if (XcallNum--){
+    /* At least 1 arg */
+    fprintf(output, "0x%x", arg1);
+    if (XcallNum) {
+      /* At least 2 args */
+      fprintf(output, ", ");
+      va_start(ap, arg1);
+      while (XcallNum--){
+	fprintf(output, "0x%x", va_arg(ap, long));
+	if (XcallNum) fprintf(output, ", ");
+      }
+      va_end(ap);
+    }
+  }
+  fprintf(output, ")\n"); fflush(output);
+}
+
+#endif /* RTDEBUG */

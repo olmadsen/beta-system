@@ -109,7 +109,7 @@ static int c_on_top;
 typedef struct group_header
 {
   struct group_header *self;
-  char                *ascii;
+  long                *protoTable;
   struct group_header *next;
   long                code_start;
   long                code_end;
@@ -139,7 +139,6 @@ struct group_header* NextGroup (struct group_header* current)
 
     for (; (long*) current < limit; ((long*)current)++) {
       if (current->self == current) {
-	/*DEBUG_CODE(fprintf (output, "NextGroup = %s\n", current->ascii));*/
 	return current;
       }
       /*DEBUG_CODE(fprintf (output, "NextGroup pad\n"));*/
@@ -147,10 +146,17 @@ struct group_header* NextGroup (struct group_header* current)
     /* No next group. */
     return 0;
   } else {
-    /*DEBUG_CODE(fprintf (output, "NextGroup = %s\n", ((struct group_header *)&BETA_data1)->ascii));*/
     return (struct group_header *)&BETA_data1;
   }
 }
+
+/* NameOfGroup return the groupName corresponding to the group_header
+ * given as parameter. */
+char* NameOfGroup (struct group_header *group)
+{
+  return (char *) &group[group[0]+1];
+}
+
 
 /* GroupName is used by DisplayBetaStack (beta.dump) and objinterface.bet.
  * It must be non-static.
@@ -199,11 +205,8 @@ char *GroupName(long address, int isCode)
     /* GroupName succeeded. From now on we are in the beta-stack */
     c_on_top=0;
   }
-  
-  /*DEBUG_CODE(fprintf (stderr, "GroupName returning (adr) 0x%x\n",(long) group->ascii));*/
-  /*DEBUG_CODE(fprintf (stderr, "GroupName returning (string) %s\n", group->ascii));*/
 
-  return group->ascii;
+  return NameOfGroup (group);
 }
 
 static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, int print_origin)
