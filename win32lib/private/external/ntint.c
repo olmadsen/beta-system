@@ -32,17 +32,6 @@
 # define MAXHOSTNAMELEN 512
 #endif
 
-
-char *getHostMachine()
-{
-#ifdef MACHINE
-  return MACHINE;
-#else
-#error Please define MACHINE to the string equivalent of MACHINETYPE
-#endif
-}
-
-
 int EOFvalue(){return EOF;}
 
 
@@ -476,8 +465,10 @@ int in,out;
 
 /* New version by M.Grouleff June'96 */
 /* Set to get arguments quoted in "". It seems that CreateProcess 
-   parses the text, and removes the quotes, effectively creating argv.*/
-#define QOUTEARGS 1
+   parses the text, and removes the quotes, effectively creating argv.
+   On the other hand, not all programs like their arguments quoted...
+*/
+#define QOUTEARGS 0
 
   name = malloc(strlen(aname) + strlen(args) + 8 + 2 * MAX_NO_OF_ARGS);
   
