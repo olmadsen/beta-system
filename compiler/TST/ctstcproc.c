@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 char *ident( r) char *r; { return r; }
 int  giveMe1Argument(a,b,c) int a,b,c; { return a; }
@@ -77,9 +76,4 @@ char *XdataToText(r) struct Xdata *r;
 	{return "012";} else {return "!!!";};
     }
   else {return "???";}
-}
-
-int* FreeJmpBuf(a1,off)int a1; int off; {
-a1=12;
-return ((int*)a1);
 }
