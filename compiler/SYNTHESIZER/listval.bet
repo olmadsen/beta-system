@@ -1351,6 +1351,49 @@ ListVal: EvVal
 	       if)
             exit(val,V[])
             #);
+          mask1:
+            (# len,left,M: @integer; neg: @boolean
+            enter(len,left,neg)
+            do (for i: len repeat
+                    M*2 + 1 -> M
+               for);
+               (for i: left repeat M*2 -> M for);
+               (if neg then (%bNot M) -> M if);
+               (* newline; M -> puthex *)
+            exit M
+            #);
+          putBitsForByteCode:
+            (* (Val,pos,length)->R.%putbits
+             * 
+             * push R                 ; ..., Val",R
+             * push M2                ; ..., Val",R,M2
+             * and                    ; ..., Val, R'   R' bit field cleared
+             * push Val               ; ..., Val
+             * push M1                ; ..., Val,M1
+             * and                    ; ..., Val'   bits left of pos cleared
+             * push 32-len-pos  
+             * sll                    ; ..., Val"   Val' in correct pos
+             * or                     ; ..., R"        Val written in field
+             * store R
+             *)
+            (# val,pos,length: @integer;
+               V: ^evVal
+            enter(val,V[],pos,length)
+            do mch.duplicate; (* adr of object with field addressed by A *)
+               (A[],mch.dataTop[]) -> mch.ldVal;
+               ((length,32-length-pos,true)->Mask1->mch.newCstOp
+               ,mch.dataTop[]) 
+                 -> mch.ldCst;
+               (mch.dataTop[],mch.dataTop[],4)->mch.gAnd;
+               (V[],val)->const2Reg->lDr[];
+               ((length,0,false)->Mask1->mch.newCstOp,mch.dataTop[])
+                 -> mch.ldCst;
+               (mch.dataTop[],mch.dataTop[],4)->mch.gAnd;
+               (32-length-pos->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+               (mch.dataTop[],mch.dataTop[])->mch.logicalShiftLeft;
+               (mch.dataTop[],mch.dataTop[],4)->mch.gOr;
+               (mch.dataTop[],A[]) -> mch.stVal; (*using adr from duplicate*)
+            #);
 	  ClrAndDeAlloc:
             (# ar: @mch.adrRegOperand
             enter ar
@@ -1412,7 +1455,7 @@ ListVal: EvVal
 	         (dr,false,false,false)->mkComputedEvval->V[];
 	      #)
            // 21 (* (Val,pos,length)->R.%putbits *) then 
-	      evl->scanList
+              evl->scanList
               (# E: @ASTindex;; i: @integer
               do currentNode->E;
                  (if i+1->i
@@ -1421,29 +1464,34 @@ ListVal: EvVal
                   // 3 then (* length *) E[]->getConst->(length,V2[])
                  if);
               #);
-	      A.toReg2->ar; ar.mkIndirect;
-              (V[],val)->const2Reg->lDr[];
-              (if v1[]=none then (* pos is constant *)
-                  (if v2[]=NONE then (* pos and width are constant *)
-                      (* the current case of putBits *)
-                      (lDr[],pos,length,ar[],none)->mch.putBits
-                   else (* length is variable *)
-                      (* general case *)
-                      (V1[],pos)->const2Reg->pDr[];
-                      V2.toDataReg->wDr[];
-                      (lDr[],pDr[],wDr[],ar[])->mch.gPutBits
-                  if)
-               else 
-                  V1.toDataReg->pDr[];
-                  (if (v2[]=NONE) then
-                      (V2[],length)->const2Reg->wDr[];
-                      (lDr[],pDr[],wDr[],ar[])->mch.gPutBits
+              (if switch182 then
+                  (val,V[],pos,length) -> putBitsForByteCode
+               else
+	          A.toReg2->ar; ar.mkIndirect;
+                  mch.nop;
+                  (V[],val)->const2Reg->lDr[];
+                  (if v1[]=none then (* pos is constant *)
+                      (if v2[]=NONE then (* pos and width are constant *)
+                          (* the current case of putBits *)
+                          (lDr[],pos,length,ar[],none)->mch.putBits
+                       else (* length is variable *)
+                          (* general case *)
+                          (V1[],pos)->const2Reg->pDr[];
+                          V2.toDataReg->wDr[];
+                          (lDr[],pDr[],wDr[],ar[])->mch.gPutBits
+                      if)
                    else 
-                      (* pos is variable *)
-                      (* general case *)
-                      V2.todataReg->wDr[];
-                      (lDr[],pDr[],wDr[],ar[])->mch.gPutBits
-              if)if);
+                      V1.toDataReg->pDr[];
+                      (if (v2[]=NONE) then
+                          (V2[],length)->const2Reg->wDr[];
+                          (lDr[],pDr[],wDr[],ar[])->mch.gPutBits
+                       else 
+                          (* pos is variable *)
+                          (* general case *)
+                          V2.todataReg->wDr[];
+                          (lDr[],pDr[],wDr[],ar[])->mch.gPutBits
+                  if)if);
+              if);
               (lDr,false,false,false)->mkComputedEvval->V[];
               (* the following call is 'inherited' from the old primitive-code
                * from gen1body! It is a coincidence that it works,since ar 
@@ -1451,7 +1499,9 @@ ListVal: EvVal
                * It works since ar is transferred by value, which does NOT
                * transfer the inDirect flag!!!! Ugly:-(
                *)
-              ar->ClrAndDeAlloc;
+              (if not switch182 then
+                  ar->ClrAndDeAlloc
+              if)
           if)
        #);
      pushCPar::<(#do 'ListPushCpar'->NotImpl #);
