@@ -628,14 +628,14 @@ sub read_book_file
 
 sub parse_special_tags
 {
-    local ($done, $before, $match, $after, $number, $i, $attributes);
+    local ($done, $before, $match, $after, $number, $i);
     local ($htmlfile) = &strip_extension(&strip_path("$srcfiles[$filenumber]")) . ".html";   
 
     #$*=1;
     $_=$srcline;
     $done = $before = $match = $after = "";
 
-    while(m%\<H[1-6]\>|\</H[1-6]\>|\<BETA|\</BETA\>|\<FIG\>|\</FIG\>|\<INX\>|\</INX\>%i ){
+    while(m%\<H[1-6]\>|\</H[1-6]\>|\<BETA|\</BETA\>|\<FIG|\</FIG\>|\<INX\>|\</INX\>%i ){
 	$before = $`;
 	$match  = $&; 
 	$after  = $';
@@ -687,6 +687,7 @@ sub parse_special_tags
 	    local $caption = "";
 	    local $list = 0;
 	    local $listcap = "";
+	    local $attributes = "";
 	    if ($after =~ m%^([^>]*)\>%si){
 		# Matched <BETA xxx>
 		$attributes = $1; # xxx
@@ -789,13 +790,75 @@ sub parse_special_tags
 	    push (@index, "$entry.0\@$htmlfile\#INX_$num_inx");
 	} elsif ($match =~ m%\</INX\>%i){
 	    # Found INX end
+	    print STDERR "src/$htmlfile: ***Unmatched end-of-index-entry? (</INX>)\n";
 	    $done .= $match;
-	} elsif ($match =~ m%\<FIG\>%i){
+	} elsif ($match =~ m%\<FIG%i){
 	    # Found FIG start
-	    $done .= $match;
+	    local $list = 0;
+	    local $figure = "";
+	    local $caption = "";
+	    local $listcap = "";
+	    local $attributes = "";
+	    print STDERR "src/$htmlfile: FIG start\n";
+	    $num_fig++;
+	    if ($after =~ m%^([^>]*)\>%si){
+		# Matched <FIG xxx>
+		$attributes = $1; # xxx
+		print STDERR "src/$htmlfile: <FIG> attributes:'$attributes'\n";
+		$after = $';
+	    }
+	    # Handle attributes
+	    if ($attributes =~ m%CAP\s*=\s*\"([^\"]+)\"%i){
+		$caption = $1;
+	    } elsif ($attributes =~ m%CAP\s*=\s*([^\s]+)%i){
+		$caption = $1;
+	    }
+	    if ($attributes =~ m%LIST\s%i){
+		$list=1;
+	    } elsif ($attributes =~ m%LIST$%i){
+		$list=1;
+	    } elsif ($attributes =~ m%LIST\s*=\s*\"([^\"]+)\"%i){
+		$list=1;
+		$listcap = $1;
+	    } elsif ($attributes =~ m%LIST\s*=\s*([^\s]+)%i){
+		$list=1;
+		$listcap = $1;
+	    }
+	    # Handle rest until (and including) end tag
+	    if ($after =~ m%^(.+)\</FIG\>%si){
+		$figure = $1;
+		#print STDERR "src/$htmlfile: figure: $figure\n";
+		if ($figure eq ""){
+		    print STDERR "src/$htmlfile: Empty figure? (<FIG></FIG>)\n";
+		}
+		$after = $';
+	    } else {
+		printf STDERR "Unterminated figure tag? (<FIG>)\n";
+	    }
+	    if ($listcap eq ""){
+		if ($caption eq ""){
+		    if ($list){
+			print STDERR "src/$htmlfile: <FIG> tag with LIST attribute and no caption found.\n";
+			print STDERR "Using \"Figure " . $num_fig . "\" for caption.\n";
+		    }
+		    $listcap = $caption = "Figure " . $num_fig;
+		} else {
+		    $listcap = $caption;
+		}
+	    }
+	    if ($caption eq ""){
+		$caption = $listcap;
+	    }
+	    $listcap = "" . $num_fig . "&nbsp;" . $listcap;
+	    $caption = "Figure " . $num_fig . ":&nbsp;" . $caption;
+	    $done .= $figure . "\n<P></P>\n<A NAME=\"FIG_$num_fig\">";
+	    $done .= "<STRONG CLASS=figure>$caption</STRONG>\n</A>\n";
+	    if ($list){
+		push (@figures, "$listcap\@$htmlfile\#FIG_$num_fig");
+	    }
 	} elsif ($match =~ m%\</FIG\>%i){
 	    # Found FIG end
-	    print STDERR "src/$htmlfile: ***Unmatched end-of-inx? (</INX>)\n";
+	    print STDERR "src/$htmlfile: ***Unmatched end-of-figure? (</FIG>)\n";
 	    $done .= $match;
 	} else {
 	    # Hmmm, error? Should not happen.
@@ -1608,4 +1671,9 @@ if ($book_file_name eq ""){
     &generate_program_list_page;
     &generate_index_page;
     &generate_pdf;
+
+    print STDERR "\nfigures:++++++++++++++++++++\n";
+    print STDERR join ("\n", @figures);
+    print STDERR "\n++++++++++++++++++++\n";
+
 }
