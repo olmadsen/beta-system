@@ -720,24 +720,29 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
       theCell = (struct Object **)((long)theCell+48);
     }
 
-    for (; theCell != (struct Object **) theEnd; theCell+=2)
+    for (; theCell != (struct Object **) theEnd; theCell+=2) {
       /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
-      if (inBetaHeap(*theCell) && isObject(*theCell))
-	if(inLVRA(*theCell) ){
+      if (inBetaHeap(*theCell) && isObject(*theCell)) {
+	if (inLVRA(*theCell)) {
 	  DEBUG_IOA( fprintf(output, "STACK(%d) (0x%x) is pointer into LVRA", 
 			     (int)((long)theCell-(long)&ar[1]), (int)(*theCell)));
 	} else {
-	  if (isProto((cast(Object)*theCell)->Proto)){
+	  if (isProto((cast(Object)*theCell)->Proto)) {
 	    ProcessReference(theCell);
 	    CompleteScavenging();
 	  }
 	}
+      } else {
 #ifdef RTLAZY
-      else if (isLazyRef(*theCell))
-	/* Assumes that the only negative values on sparcstack are danglers. */
-	ProcessReference(theCell);
+	if (isLazyRef(*theCell)) {
+	  /* Assumes that the only negative values 
+	   * on sparcstack are danglers. 
+	   */
+	  ProcessReference(theCell);
+	}
 #endif
-	
+      }
+    }
 }
 
 void ProcessStack()
