@@ -42,11 +42,14 @@ binsock_buffer:
      close: (# do NONE->sock[] #);
           
      binGetInt: 
-       (# error:< Exception;
+       (# timeOutValue:< IntegerValue (# do -1->value; INNER #);
+          timedOut:< Notification;
+          tov: @timeOutValue;
           val: @Integer;
           ok: @Boolean;
           gb: @binGetBytes 
-            (# readFailure:: (# do error #)
+            (# timeOutValue:: (# do tov->value #);
+               timedOut:: (# do THIS(binGetInt).timedOut #);
             do @@val->repAdr 
             #);
        do 4->gb
@@ -55,9 +58,8 @@ binsock_buffer:
      
      binPutInt:
        (# val: @Integer;
-          error:< Exception;
           pb: @binPutBytes
-            (# writeFailure:: (#  do error #)
+            (#
             do @@val->repAdr;   
             #);
        enter val
@@ -65,14 +67,13 @@ binsock_buffer:
        #);
      
      getText:
-       (# error:< Exception;
-          len: @Integer;
+       (# len: @Integer;
           t: ^Text;
           gb: @binGetBytes 
-            (# readFailure:: (# do error #)
+            (#
             do @@t.T[1]->repAdr 
             #);
-       do binGetInt(# error:: (# do THIS(getText).error #)#)->len;
+       do binGetInt->len;
           &Text[]->t[]; len+1->t.T.new;
           len+1->gb;
           len->t.lgth;
@@ -81,7 +82,7 @@ binsock_buffer:
      
      flush: 
        (* Flush the buffer. Only relevant for write-buffers. *)
-       (# writeFailure:< Exception;
+       (# 
        do 
           (if oflag=BINSOCK_WRITE then
               (if sock[]<>NONE then
@@ -104,7 +105,13 @@ binsock_buffer:
         * in the buffer pointed to by repAdr. *)
        (# repAdr: @Integer; (* Address of buffer. Should be set in INNER. *)
           length,didread,ready: @Integer; (* In bytes *)
-          readFailure:< Exception;
+          timedOut:< Notification;
+          timeOutValue:< IntegerValue
+            (#
+            do sysenv.waitForEver->value; INNER
+            #);
+          bgbtov: @timeOutValue;
+          failure: @Boolean;
        enter length
        do (if sock[]<>NONE then
               (if oflag=BINSOCK_READ THEN
@@ -128,8 +135,14 @@ binsock_buffer:
                        (* If we get here, the buffer is empty, and we
                         * need more data. *)
                        0->next;
-                       (sysenv.waitForEver,buffer[])->sock.getRep->last;
-                       restart loop;
+                       (bgbtov,buffer[])->sock.getRepPattern
+                       (# timedOut:: (# do TRUE->failure; abort #);
+                       #)->last;
+                       (if failure then
+                           FALSE->failure; timedOut; leave loop;
+                        else
+                           restart loop;
+                       if)
                     #)
                else
                   (failuretrace,'ERROR reading from binsock_buffer opened for write')
@@ -143,7 +156,6 @@ binsock_buffer:
      binPutBytes:
        (# repAdr: @Integer; (* Address of buffer. Should be set in INNER. *)
           length,written: @Integer; (* In bytes *)
-          writeFailure:< Exception;
        enter length
        do (if sock[]<>NONE then
               (if oflag=BINSOCK_WRITE then
@@ -166,10 +178,7 @@ binsock_buffer:
                            written+spaceleft->written;
                            written+spaceleft->next;
                        if);
-                       flush 
-                       (# writeFailure::
-                            (# do THIS(binPutBytes).writeFailure #)
-                       #);
+                       flush;
                        restart loop;
                     #);
                else
