@@ -8,6 +8,8 @@
 
 #ifdef MT
 
+#define IOAMinSliceSize 1024
+
 #if defined(UNIX) || defined(nti)
 #include <signal.h>
 #endif /* UNIX || nti */
@@ -123,8 +125,8 @@ void CalculateSliceSize(void)
   /* However, we will not allow too small slice sizes (0 would be
    * foolish!).
    */
-  if (IOASliceSize<2048){
-    IOASliceSize=2048;
+  if (IOASliceSize<IOAMinSliceSize){
+    IOASliceSize=IOAMinSliceSize;
     /* NumIOASlices = (((long)gIOALimit-(long)gIOATop) / IOASliceSize); */
   }
   
@@ -611,7 +613,6 @@ struct Object *doGC(unsigned long numbytes)
 	      break;
 	    }
 	  
-#if 0
 	    /* Have now tried everything to get enough space in IOA */
 	    /* Aber dann haben wir anderen metoden! */
 	    /* (6.2) */
@@ -622,7 +623,6 @@ struct Object *doGC(unsigned long numbytes)
 		     );
 	    newObj = AOAcalloc(numbytes);
 	    savedIOALimit = IOALimit = IOATop = gIOATop;
-#endif
 	    break;
 	  }
 	}
