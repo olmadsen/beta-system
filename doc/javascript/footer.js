@@ -28,7 +28,7 @@ function footer(title,scriptdir)
 		   + "</TD>\n"
                    + "<TD WIDTH=\"20%\" ALIGN=\"center\">\n"
                    + "  <FONT SIZE=\"-1\">&COPY; \n"
-		   + "     <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A>\n"
+		   + "     <A HREF=\"http://www.mjolner.com\" TARGET=\"_top\">Mj&oslash;lner Informatics</A>\n"
                    + "  </FONT>\n"
                    + "</TD>\n"
                    + "<TD WIDTH=\"40%\" ALIGN=\"right\">\n"

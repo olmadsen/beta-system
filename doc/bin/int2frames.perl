@@ -63,7 +63,7 @@ if ($wiki){
 if ($nocopyright){
     $copyright = "";
 } else {
-    $copyright = "<FONT size=-1>&COPY; <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A></FONT>";
+    $copyright = "<FONT size=-1>&COPY; <A HREF=\"http://www.mjolner.com\" TARGET=\"_top\">Mj&oslash;lner Informatics</A></FONT>";
 }
 if ($fullpath){
     if ($extradir){
