@@ -58,51 +58,126 @@ structure:
 
 A semi-coroutine is a simple form of thread. Each coroutine is a
 thread of method activitations, but at most one coroutine is executing
-at a given point in time.
+at a given point in time.  In a situation we concurrent threads, each
+such thread may contain coroutines.In this paper, we assume that at
+most one thread is executing
 
-If more than one thread is executing concurrenly, each thread may
-contain coroutines. 
-
-\note{Clarify this; perhaps assume only one thread and say that in a
-  multi-thread situation there are a number of alternatives for
-  defining the behavior of coroutines}
 
 The following is an example of a program in CJ using coroutines:
 
 {\tt\small\begin{verbatim}
-   class Co1 extends Coroutine {
-   
-      void Do() { ... }
-      void foo1() { ... }
+   class Adder extends Coroutine {
+      public int res;
+      int start, max;
+      public Adder(int s, int m) { 
+         start = s; max = m; 
+      }
+      void compute(int V) {
+         res = V+V;
+         A: suspend();
+         if (V < max) compute(V+1);
+      }
+      public void Do() { compute(start); }
+   }
+   class Multiplier extends Coroutine {
+      public int res;
+      int start, max;
+      public Multiplier(int s, int m) { 
+         start = s; max = m; 
+      }
+      void compute(int V){
+         res = V*V;
+         M: suspend();
+         if (V < max) compute(V+1);
+      }
+      public void Do() { compute(start); }
    }
 
-   class Co2 extends Coroutine {
-   
-      void Do() { ... }
-      void foo2() { ... }
-   }
-
-   class Co extends Coroutine {
-
-      static void main(String args[]) {
-         Co C = new Co();
-         C.call();
-         ...
+   class Merger extends Coroutine {
+      Adder A = new Adder(3,6);
+      Multiplier M = new Multiplier(2,5);
+      public void Do() {
+         int i;
+         A.call();
+         L1:
+         M.call();
+         for (i=0; i<6; i++){
+            if (A.res < M.res) {
+                System.out.println("A: " + A.res);
+                A.call();
+            }
+            else {
+                System.out.println("M: " + M.res);
+                M.call();
+                L2:
+            }
+        }
+      }      
+      public static void main(String args[]) {
+         Merger merger = new Merger();
+         merger.call();
       }
    }
-
 \end{verbatim}
 }
 
-\note{Elaborate -- meaningful example is needed}
+\begin{figure}[htb]
+  \begin{center}
+    \includegraphics[width=1.2\textwidth]{Coroutines.pdf}
+    \caption{Execution states of Merger coroutines}
+    \label{coroutine}
+  \end{center}
+\end{figure}
 
-\note{Graphic example showing coroutine shifts. X.1: call; X.2: suspend}
+
+In figure \ref{coroutine} is shown four snapshots of the execution states
+of the Merger example.
+
+\begin{itemize}
+\item The round square boxes illustrate {\tt Coroutine}-objects.
+\item The oval boxes illustrate method invocations
+\item The arrows illustrate {\it caller-links} showing the calling
+  structure of method invocations, i.e. the method invocation stack.
+\item Figure (a) shows the initial situation after execution of {\tt
+  merger.call()} in {\tt main} at the beginning of {\tt merger.Do}.
+  \begin{itemize}
+  \item The coroutines {\tt A} and {\tt M} have been generated.
+  \item
+    At most one coroutine at a time is executing. By convention the
+    active coroutine is marked by a {\tt *}. The caller-link of the
+    active coroutine refers to the method currently being executed. In
+    (a), {\tt Merger*} refers to {\tt Do} which is currently
+    executing.
+  \item For suspended coroutines, the caller-link refers to the top
+    element of the execution stack of the coroutine. In the initial
+    situation after a coroutine has been generated, the caller-link
+    refers to the coroutine object. This is the situation in figure
+    (a) where the caller-link of {\tt A} and {\tt M} refers to the
+    {\tt A} and {\tt M} respectively.
+  \end{itemize}
+\item Figure (b) shows the situation where the first {\tt A.call()} in
+  merge is being executed. This leads to the {\tt Do}-method of {\tt
+  A} being invoked.  The {\tt Do}-method then calls compute. The
+  snapshot is at the label {\tt A:} just before {\tt suspend} in this
+  first invocation of {\tt compute}.
+\item Figure (c) shows the situation after execution of {\tt suspend}
+  in {\tt A} at the label {\tt L1:} in {\tt Merger.do}.  Execution of
+  {\tt suspend} in {\tt A} implies that execution of {\tt A} is
+  suspended.  In a suspended coroutine, the caller-reference of the
+  coroutine ({\tt A} in this example) refers the top element of the
+  execution stack of the coroutine -- {\tt compute} in this example.
+\item Figure (d) shows the situation where {\tt M.call()} has been
+   executed by {\tt Merger} ...
+\item Figure (e) shows the situation at {\tt L2:} in {\tt Merger}.
+   Both {\tt A} and {\tt M} are suspended.
+\item Figure (f) shows the situation after a subsequent call of {\tt
+   A} has been executed.
+\end{itemize}
+
 
 \subsection{Implementation of class {\tt Coroutine}}
-
-BETA coroutines are implemented by means of a class {\tt Component},
-which also can be used to implement class {\tt Coroutine}.  The
-example of class {\tt Coroutine} is shown in the next example:
+Class {\tt Coroutine} is implemented by means of a class {\tt Component}
+as shown in the following example:
 
 {\tt\small\begin{verbatim}
    class Coroutine {
@@ -119,13 +194,31 @@ As can be seen, the implementation of {\tt call} and {\tt suspend} is
 identical and the magic is in the {\tt swap}-method.
 
 A coroutine shift (call or suspend) is basically just a {\it swap} of
-two references. 
+two references. Consider Figure \ref{coroutine} (d), (e) and (f).
 
-Consider figure X.1 illustrating a call. As can be seen the active
-reference and the caller reference of S are swapped.  Consider figure
-X.2 illustrating a suspend. As can be seen the active reference and
-the caller reference of S are swapped.  In both cases there is a swap
-of two references.
+\begin{itemize}
+\item The transition from (d) to (e) illustrates a suspend of {\tt M}.
+   In (d) there is a caller-link from the object {\tt M} to the method
+   invocation {\tt Merger.Do} and a caller-link from the object {\tt
+   Merger*} to the method invocation {\tt M.compute}. Execution of
+   suspend implies that these two links are swapped. The result may be
+   seen in part (e) of the figure.
+
+\item The transition from (e) to (f) illustrates a call of {\tt A}.
+  Consider the caller-links from {\tt Merger*} to {\tt Merger.do} and
+  the caller-link from {\tt A} to {\tt A.compute}. Execution of {\tt
+  A.call()} implies that these two links are swapped. The result may
+  be seen on part (f) of the figure.
+
+\end{itemize}
+\noindent 
+As can be seen it is pretty simple to implement coroutines. All that
+is needed is a caller-link to implement the call-stack and a simple
+swap-operation.  The caller-link corresponds to the return link of a
+usual method invocation stack. The BETA-implementation of coroutines
+is implemented this way. Unfortunately the situation i CJ is a bit
+more complicated since we have to get around the CJ-run time structure
+and thread mechanism. This is further described in the next section.
 
 The notion of semi-coroutine originates from Simula, which also
 includes the original Conway-style of symmetric coroutine
@@ -136,6 +229,8 @@ how to implement symmetric coroutines using semi-coroutines.
 
 
 \subsection{Class {\tt Component}}
+In this section we describe the details of the cortoutine implementation
+in CJ. 
 Class {\tt Component} is as mentioned implemented using threads and
 could be defined as a subclass of class {\tt Thread}. For reasons of
 efficiency -- see later -- the thread-part of a {\tt Component} is
