@@ -2,6 +2,7 @@ ORIGIN 'guienv_macprivate';
 INCLUDE '../pathmanager';
 INCLUDE '~beta/basiclib/private/file_macbody';
 INCLUDE '~beta/sysutils/private/mjolnerprefs_mac';
+INCLUDE '~beta/maclib/qdoffscreen';
 
 BUILD default ':$$/raster_mac.obj' ':external/raster_mac.c' 'mrc -shared_lib_export on -o $0 $1';
 BUILD default ':$$/imaging.obj' ':external/imaging.c' 'mrc -shared_lib_export on -o $0 $1';
@@ -12,6 +13,25 @@ INCLUDE '~beta/maclib/mactypes';
 
 
 -- guienvLib: attributes --
+allocate_bitmap: external
+		(# bits: ^macBitMap;
+		enter bits[]
+		#);
+calc_pixmap_mask: external
+	(# gworld: @integer; (* GWorldPtr *)
+		bits: ^macBitMap;
+		seedColor: ^RGBColor;
+	enter (gworld, bits[], seedColor[])
+	#);
+copy_mask_to_window: external
+	(# gworld: @integer;
+		window: @integer;
+		srcRect: ^MacRect;
+		maskRect: ^MacRect;
+		dstRect: ^MacRect;
+		mask: ^macBitMap;
+	enter (gworld, window, srcRect[], maskRect[], dstRect[], mask[])
+	#);
 
 getPixmapPathManager: objectPool.get
   (# type:: pixmapPathManager;
@@ -354,10 +374,81 @@ do l: (# expandedName: ^text;
 		#);
 
 -- pixmapInit: doPart --
-do
+do (# bounds: @rectangle;
+	  mcBounds: ^macRect;
+	  theGWorld: @longInt;
+	  error: @integer;
+	  pix: @integer;
+   do (0, 0) -> bounds.topLeft;
+   	  (width, height) -> bounds.size;
+	  bounds[] -> makeMacRect -> mcBounds[];
+	  (theGWorld[], 0, mcBounds[], 0, 0, 0) -> NewGWorld -> error;
+	  (if error = 0 then
+	  	theGWorld -> private.gworld;
+	  	width -> private.width;
+		height -> private.height;
+		gworldKind -> private.kind;
+		
+		private.gworld -> GetGWorldPixmap -> pix;
+		(if pix -> LockPixels then
+			private.gworld -> SetPort;
+			mcBounds[] -> EraseRect;
+			pix -> UnlockPixels;
+		if);
+	  if);
+   #);
+
+
+-- pixmapClear: doPart --
+do 
+(# rgb: @RGBColor;
+	mcBounds: ^macRect;
+	bounds: @Rectangle;
+	pix: @integer;
+do (if private.kind
+    //gWorldKind then
+		(if private.gWorld <> 0 then
+			private.gworld -> GetGWorldPixmap -> pix;
+			(if pix -> LockPixels then
+				private.gworld -> SetPort;
+				theColor.red -> rgb.red;
+				theColor.green -> rgb.green;
+				theColor.blue -> rgb.blue;
+				rgb[] -> RGBBackColor;
+				(width, height) -> bounds.size;
+	  			bounds[] -> makeMacRect -> mcBounds[];
+				mcBounds[] -> EraseRect;
+				0xFFFF -> rgb.red;
+				0xFFFF -> rgb.green;
+				0xFFFF -> rgb.blue;
+				rgb[] -> RGBBackColor;
+				pix -> UnlockPixels;
+			if);
+		if);
+	if);
+#)
+
 
 -- pixmapDispose: doPart --
-do
+do (if private.kind
+	//gWorldKind then
+		
+		(if private.gworld <> 0 then
+			private.gworld -> DisposeGWorld;
+			0 -> private.gworld;
+			0 -> private.width;
+			0 -> private.height;
+			0 -> private.kind;
+		if);
+	//iconSuiteKind then
+		(if private.resourceHandle <> 0 then
+			private.resourceHandle -> ReleaseResource;
+			0 -> private.resourceHandle;
+			0 -> private.width;
+			0 -> private.height;
+			0 -> private.kind;
+		if);
+   if);
 
 -- pixmapWidth: doPart --
 do private.width -> value;
@@ -365,3 +456,99 @@ do private.width -> value;
 -- pixmapHeight: doPart --
 do private.height -> value;
 
+-- pixmapSetTransparent: doPart --
+do (if value <> private.TransparentFlag then
+		value -> private.TransparentFlag;
+		(if private.TransparentFlag then
+		else
+			none -> private.theMask[];
+		if);
+	if);
+
+-- pixmapGetTransparent: doPart --
+do private.TransparentFlag -> value;
+
+-- pixmapSetTransparentColor: doPart --
+do theColor -> private.TransparentColor;
+	&pixmap[] -> private.theMask[];
+	(this(pixmap)[], private.TransparentColor) -> private.theMask.calculateMask;
+	true -> private.TransparentFlag;
+
+-- pixmapGetTransparentColor: doPart --
+do private.TransparentColor -> theColor;
+
+-- pixmapSetMask: doPart --
+do (if theMask[] <> NONE then
+		true -> private.TransparentFlag;
+		theMask[] -> private.theMask[];
+		private.theMask.convertToMask;
+	else
+		NONE -> private.theMask[];
+		false -> private.TransparentFlag;
+	if);
+	
+
+-- pixmapGetMask: doPart --
+do private.theMask[] -> theMask[];
+
+-- pixmapDrawPixmap: doPart --
+do (# otherPixmap, thisPixmap: @integer; (* Pixmap Handle *)
+			srcRect, dstRect: @rectangle;
+			srcMcRect, dstMcRect: ^macRect;
+			mask: ^macBitMap;
+		do other.private.gworld -> GetGWorldPixmap -> otherPixmap;
+			(if otherPixmap <> 0 then
+				private.gworld -> GetGWorldPixmap -> thisPixmap;
+				(if thisPixmap <> 0 then
+					(if otherPixmap -> LockPixels then
+						(if thisPixmap -> LockPixels then
+							from -> srcRect.topLeft;
+							(width, height) -> srcRect.size;
+							srcRect[] -> makeMacRect -> srcMcRect[];
+							to -> dstRect.topLeft;
+							(width, height) -> dstRect.size;
+							dstRect[] -> makeMacRect -> dstMcRect[];
+							thisPixmap -> HLock;
+							otherPixmap -> HLock;
+							
+							(if other.private.theMask[] <> NONE then
+								other.private.theMask.private.asMask[]
+									-> mask[];
+								(%getLongAt otherPixmap, @@mask.R[1], %getLongAt thisPixmap,
+								 srcMcRect[], srcMcRect[], dstMcRect[])
+								  -> CopyMask;
+							else
+								(%getLongAt otherPixmap, %getLongAt thisPixmap,
+								 srcMcRect[], dstMcRect[], srcCopy, 0)
+								  -> CopyBits;
+							if);
+							thisPixmap -> HUnlock;
+							otherPixmap -> HUnlock;
+							thisPixmap -> UnLockPixels;
+						if);
+						otherPixmap -> UnLockPixels;
+					if);
+				if);
+			if);
+		#);
+
+-- pixmapCalculateMask: doPart --
+do (# rgb: @RGBColor;
+	do (if other[] <> NONE then
+		  (if other.private.gworld <> 0 then
+				&maskBitmap[] -> private.asMask[];
+				other.width -> private.asMask.right;
+				other.height -> private.asMask.bottom;
+				other.width -> private.width;
+				other.height -> private.height;
+				private.asMask[] -> allocate_bitmap;
+				theColor.red -> rgb.red;
+				theColor.green -> rgb.green;
+				theColor.blue -> rgb.blue;
+				(other.private.gworld, private.asMask[], rgb[]) -> calc_pixmap_mask;
+		  if);
+	   if);
+	#);
+
+-- pixmapConvertToMask: doPart --
+do 

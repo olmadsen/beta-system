@@ -37,10 +37,10 @@ Objects¥PPC  = ¶
 		{ObjDir¥PPC}:C:property.debug ¶
 		{ObjDir¥PPC}:C:sighandler.debug ¶
 		{ObjDir¥PPC}:C:scanobjects.debug ¶
-		{ObjDir¥PPC}:C:wordsort.debug ¶
 		{ObjDir¥PPC}:C:valhallaComm.debug ¶
 		{ObjDir¥PPC}:C:valhallaSOCKETS.debug ¶
 		{ObjDir¥PPC}:C:valhallaFindComp.debug ¶
+		{ObjDir¥PPC}:C:labelnametable.debug ¶
 		{ObjDir¥PPC}:C:macsockets.debug ¶
 		{ObjDir¥PPC}:C:heapview.debug ¶
 		{ObjDir¥PPC}:C:proxy.debug ¶
@@ -54,6 +54,7 @@ Objects¥PPC  = ¶
 		{ObjDir¥PPC}:GC:misc.debug ¶
 		{ObjDir¥PPC}:GC:objectsize.debug ¶
 		{ObjDir¥PPC}:GC:stack.debug ¶
+	    {ObjDir¥PPC}:GC:lvra.debug ¶
 		{ObjDir¥PPC}:NEWRUN:AllocateComponent.debug ¶
 		{ObjDir¥PPC}:NEWRUN:AllocateDopartObject.debug ¶
 		{ObjDir¥PPC}:NEWRUN:AllocateItem.debug ¶

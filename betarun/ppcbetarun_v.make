@@ -13,7 +13,7 @@ MAKEFILE     = ppcbetarun_v.make
 		:C:valhallaFindComp.h ¶
 		:C:valhallaSOCKETS.h
 		
-Includes     = -i :C:
+Includes     = -i :C: -i :P:
 Sym¥PPC      = 
 ObjDir¥PPC   =
 
@@ -36,14 +36,15 @@ Objects¥PPC  = ¶
 		{ObjDir¥PPC}:C:property.v ¶
 		{ObjDir¥PPC}:C:sighandler.v ¶
 		{ObjDir¥PPC}:C:scanobjects.v ¶
-		{ObjDir¥PPC}:C:wordsort.v ¶
 		{ObjDir¥PPC}:C:valhallaComm.v ¶
 		{ObjDir¥PPC}:C:valhallaSOCKETS.v ¶
 		{ObjDir¥PPC}:C:valhallaFindComp.v ¶
 		{ObjDir¥PPC}:C:heapview.v ¶
+		{ObjDir¥PPC}:C:labelnametable.v ¶
 		{ObjDir¥PPC}:C:macsockets.v ¶
 		{ObjDir¥PPC}:C:proxy.v ¶
 		{ObjDir¥PPC}:C:betaerror.v ¶
+		{ObjDir¥PPC}:C:store.v ¶
 		{ObjDir¥PPC}:GC:aoa.v ¶
 		{ObjDir¥PPC}:GC:aoafreelist.v ¶
 		{ObjDir¥PPC}:GC:aoatoioa.v ¶
@@ -53,6 +54,7 @@ Objects¥PPC  = ¶
 		{ObjDir¥PPC}:GC:misc.v ¶
 		{ObjDir¥PPC}:GC:objectsize.v ¶
 		{ObjDir¥PPC}:GC:stack.v ¶
+	    {ObjDir¥PPC}:GC:lvra.v ¶
 		{ObjDir¥PPC}:NEWRUN:AllocateComponent.v ¶
 		{ObjDir¥PPC}:NEWRUN:AllocateDopartObject.v ¶
 		{ObjDir¥PPC}:NEWRUN:AllocateItem.v ¶

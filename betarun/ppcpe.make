@@ -48,6 +48,7 @@ Objects¥PPC  = ¶
 		{ObjDir¥PPC}:GC:misc.pe ¶
 		{ObjDir¥PPC}:GC:objectsize.pe ¶
 		{ObjDir¥PPC}:GC:stack.pe ¶
+		{ObjDir¥PPC}:GC:lvra.pe ¶
 		{ObjDir¥PPC}:NEWRUN:AllocateComponent.pe ¶
 		{ObjDir¥PPC}:NEWRUN:AllocateDopartObject.pe ¶
 		{ObjDir¥PPC}:NEWRUN:AllocateItem.pe ¶

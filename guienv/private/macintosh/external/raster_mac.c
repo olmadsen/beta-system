@@ -3,6 +3,8 @@
 #include <Quickdraw.h>
 #include <Windows.h>
 #include <StdIO.h>
+#include <QDOffscreen.h>
+
 
 #define Check(error) if(error) goto clean;
 
@@ -27,6 +29,17 @@ long PixMapGetWidth (PixMapHandle pixels);
 long PixMapGetHeight (PixMapHandle pixels);
 
 PixPatHandle CreatePixPatFromPixMap (PixMapHandle pixels, Handle data);
+
+void copy_mask_to_window (GWorldPtr src, WindowPtr dst,
+						 		  Rect *srcRect, Rect *maskRect, Rect *dstRect,
+						 		  BitMap *mask);
+								  
+
+void allocate_bitmap(BitMap *bitmap);
+
+void calc_pixmap_mask (GWorldPtr gworld, BitMap *mask, RGBColor *seedRGB);
+
+								  
 
 int CreateBitmapFromPictureFile (unsigned char *name,BitMapHandle *bitmap,Handle *data)
 {
@@ -280,3 +293,94 @@ PixPatHandle CreatePixPatFromPixMap (PixMapHandle pixels, Handle data)
 	
 	return pixPat;
 }
+
+
+void allocate_bitmap(BitMap *bitmap)
+{
+	short width;
+	short height;
+	long size;
+	
+	width = bitmap->bounds.right - bitmap->bounds.left;
+	height = bitmap->bounds.bottom - bitmap->bounds.top;
+	bitmap->rowBytes = ((((width + 7) >> 3) + 3) >> 2) << 2;
+	
+	size = height * bitmap->rowBytes;
+
+	bitmap->baseAddr = NewPtr(size);
+	return;
+}
+
+
+Boolean EqualRGB (RGBColor *left, RGBColor *right)
+{
+	if ((left->red >> 11) == (right->red >> 11)) 
+		if ((left->green >> 11) == (right->green >> 11)) 
+			if ((left->blue >> 11) == (right->blue >> 11))
+				return true;
+	return false;
+}
+
+void calc_pixmap_mask (GWorldPtr gworld, BitMap *mask, RGBColor *seedRGB)
+{
+	PixMap **pixmap;
+	Boolean good;
+	Byte *data;
+	RGBColor rgb;
+	short right, bottom;
+	short left, top;
+	long i;
+	short h, v;
+	
+	pixmap = GetGWorldPixMap(gworld);
+	good = LockPixels(pixmap);
+	SetPort((GrafPtr) gworld);
+	SetOrigin(0, 0);
+	HLock((Handle) pixmap);
+	
+	if (good) {		
+		left = (*pixmap)->bounds.left;
+		top = (*pixmap)->bounds.top;
+		right = (*pixmap)->bounds.right;
+		bottom = (*pixmap)->bounds.bottom;
+		
+		for (h = 0; h < (right - left); h++) {
+			for (v = 0; v < (bottom - top); v++) {
+				GetCPixel(h, v, &rgb);
+				if (EqualRGB(&rgb, seedRGB)) {
+					BitClr(mask->baseAddr, v * (mask->rowBytes) * 8 + h);
+				}
+				else {
+					BitSet(mask->baseAddr, v * (mask->rowBytes) * 8 + h);
+				}
+			}
+		}
+
+	}
+	HUnlock((Handle) pixmap);
+	UnlockPixels(pixmap);
+	return;
+}
+
+
+void copy_mask_to_window (GWorldPtr src, WindowPtr dst,
+						 		  Rect *srcRect, Rect *maskRect, Rect *dstRect,
+						 		  BitMap *mask)
+{
+	GrafPtr 			asGrafPtr;
+	PixMapHandle 	pix;
+	Boolean			good;
+	
+	if (dst != nil && src != nil) {
+		pix = GetGWorldPixMap(src);
+		good = LockPixels(pix);
+		if (good) {
+			asGrafPtr = (GrafPtr) src;
+			CopyMask((BitMap *) (*pix), mask, &dst->portBits,
+					   srcRect, maskRect, dstRect);
+		}
+		UnlockPixels(pix);
+	}
+	return;
+}
+
