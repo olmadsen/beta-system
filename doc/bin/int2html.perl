@@ -471,7 +471,7 @@ EOT
 sub print_toc
 {
     &print_toc_header;
-    print "<DL>\n";
+    print "<DIV CLASS=toc>\n";
     print "<DL>\n";
     for ($i=0; $i<=$#htmlfiles; $i++){
 	print "<DT><A HREF=\"" . $htmlfiles[$i] . ".html\">";
@@ -480,7 +480,7 @@ sub print_toc
     print "<DT>&nbsp;\n<DD>\n";
     print "<DT><A HREF=\"" . $indexfile . "\">Index</A>\n<DD>\n";
     print "</DL>\n";
-    print "</DL>\n";
+    print "</DIV>\n";
     &print_toc_trailer;
 }
 
