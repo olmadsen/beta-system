@@ -70,7 +70,7 @@ if (lastmodnumber == 0) {
       year = "0" + year;
     }
  	      
-    document.writeln("<FONT size=\"-1\">"
+    document.writeln("<DIV STYLE=\"font:smaller\">"
 		     + "[Modified: " 
 		     + day_names[lastmod.getDay()] 
 		     + " " 
@@ -82,7 +82,7 @@ if (lastmodnumber == 0) {
 		     + " at " 
 		     + hours + ":" + minutes
 		     + "]"
-		     + "</FONT>"
+		     + "</DIV>"
 		     );
   }
 }
