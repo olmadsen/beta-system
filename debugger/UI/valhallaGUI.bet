@@ -2,30 +2,95 @@ ORIGIN '~beta/guienv/v1.3.1/guienv';
 
 INCLUDE '~beta/guienv/v1.3.1/stddialogs';
 INCLUDE '~beta/guienv/v1.3.1/utils/pane';
+INCLUDE '~beta/guienv/v1.3.1/utils/simplemenu';
 
 INCLUDE '~beta/objectbrowser/v2.0/options';
 INCLUDE '~beta/objectbrowser/v2.0/optionlist';
 
 INCLUDE '~beta/objectbrowser/v2.0/UI/objectview';
 INCLUDE '~beta/objectbrowser/v2.0/UI/moveable';
-INCLUDE '~beta/objectbrowser/v2.0/UI/obguienvadds';
 INCLUDE '~beta/objectbrowser/v2.0/UI/icons';
 INCLUDE '~beta/objectbrowser/v2.0/UI/iconlist';
 INCLUDE '~beta/objectbrowser/v2.0/UI/labelled';
 
+INCLUDE '~beta/sourcebrowser/v1.0/ymer';
+
 INCLUDE '../valhallaoptionlist';
 INCLUDE '../valhallaiconlist';
+INCLUDE '../processInterface';
 
 INCLUDE '~beta/sysutils/v1.4/envstring';
 
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-96
+ *   All rights reserved.
+ *)
 
 --- lib:attributes ---
 
-initialMAINsize: (# exit (600,400) #);
-
-valhallaGUI: guienv
+valhallaGUI: ymerApplication
   (# <<SLOT valhallaGUIlib:attributes>>;
+     newCodeView:<
+       (# cast: ^astInterface.ast
+       enter cast[]
+       do INNER
+       #);
+     mpsType::
+       (# onOpenGroup::
+            (# t: @Text;
+            do 'Opening %s'->t.putFormat (# do groupName[]->s #);
+               t[]->putinfo;
+            #);
+          onOpenGroupDone::
+            (# 
+            do ''->putinfo;
+            #);
+          onOldGroup::
+            (# t: @Text;
+            do '"%s%s" is older than "%s.%s"'->t.putFormat
+               (# 
+               do groupName[]->s; MPS.AST.astFileExtension->s;
+                  groupName[]->s; 'bet'->s;
+               #);
+               (t[],'Debug Info Error: Recompilation required')->alertInfo;
+               false->allowParsing; true->continue; true->doneInInner;
+            #);
+          onNewGroup::
+            (# t: @Text;
+            do '"%s%s" is newer than executable'->t.putFormat
+               (# 
+               do groupName[]->s; MPS.AST.astFileExtension->s;
+               #);
+               (t[],'Debug Info Error: Recompilation required')->alertInfo;
+               true->continue;
+            #);
+          onUncheckedGroup::
+            (#  t: @Text;
+            do '"%s%s" has not been checked by compiler'->t.putFormat
+               (# 
+               do groupName[]->s; MPS.AST.astFileExtension->s;
+               #);
+               (t[],'Debug Info Error: Recompilation required')->alertInfo;
+               false->allowChecking; true->continue;
+            #);
+          modtimeOk::
+            (#
+            do (if debuggee[]<>NONE then
+                   (modtime<debuggee.executable.modtime)->value
+                else true->value
+               if)
+            #);
+       #);
      
+     initialMAINsize: @point;
+     
+     editMode:: readOnlyMode;
+     
+     ymerBrowserWindow::<
+       (# <<SLOT debuggerBrowserLib: attributes>>
+       #);
+     debuggee: ^processInterface;
      icons: @iconDB
        (# movIcon, stackIcon, codeIcon: ^bitmap;
           getIcon::
@@ -44,17 +109,17 @@ valhallaGUI: guienv
                  #);
             do (if TRUE
                 //ObjectViewIcon -> name.equalNCS then
-                   (if movIcon[]//NONE then
+                   (if movIcon[]=NONE then
                        'ObjectViewIcon.xbm'->newIcon->movIcon[];
                    if);
                    movIcon[]->theIcon[];
                 //StackViewIcon -> name.equalNCS then
-                   (if stackIcon[]//NONE then
+                   (if stackIcon[]=NONE then
                        'StackViewIcon.xbm'->newIcon->stackIcon[];
                    if);
                    stackIcon[]->theIcon[];
                 //CodeViewIcon -> name.equalNCS then
-                   (if codeIcon[]//NONE then
+                   (if codeIcon[]=NONE then
                        'CodeViewIcon.xbm'->newIcon->codeIcon[];
                    if);
                    codeIcon[]->theIcon[];
@@ -106,6 +171,7 @@ valhallaGUI: guienv
      onTerminate:< Object;
      
      newDebuggee:< Object;
+     debuggeeStatus:< BooleanValue;
      debuggeeRerun:< Object;
      rerunStatus:< BooleanValue;
      killDebuggee:< Object;
@@ -137,6 +203,33 @@ valhallaGUI: guienv
      main: @mainType;
      mainType:< window
        (# <<SLOT valhallaMainLib:attributes>>;
+          
+          myCodemoveable: codemoveable
+            (# contentsType::
+                 (# editorType::<
+                      (# selectNode::<
+                           (# t: ^text
+                           do (if true
+                               // (theEditorRoot.frag.root[]
+                                    ->theEditorRoot.equal)
+                                  and separate then
+                                  node[]->newCodeView
+                               // (theEditorRoot.frag.root[]
+                                    ->theEditorRoot.equal)
+                                  and not separate then
+                                  node[]->newCodeView
+                               // (not (theEditorRoot.frag.root[]
+                                    ->theEditorRoot.equal)) and separate then
+                                  node[]->newCodeView
+                               else
+                                  'myview.contents.editor.selectnode: theEditorRoot[]<> theEditorRoot.frag.root[] and not separate'
+                                    ->putLine
+                              if)  
+                           #)
+                      #)
+                 #)
+            #);
+
           
           eventHandler::<
             (# onAboutToClose::<
@@ -185,10 +278,10 @@ valhallaGUI: guienv
           mainMenuBar: ^menuBarType;
           menuBarType::<
             (# fileMenu: @fileMenuType;
-               fileMenuType:< bettermenu
+               fileMenuType:< simplemenu
                  (# inew: @item (# onSelect:: (# do newDebuggee #)#);
                     isource: @item (# onSelect:: (# do source #);
-                                      onStatus:: (# do sourceStatus->enabled #);
+                                      onStatus:: (# do sourceStatus->enabled #)
                                    #);
                     
                     iquit: @item (# onSelect:: (# do quit #)#);
@@ -196,85 +289,61 @@ valhallaGUI: guienv
                       (# 
                       do INNER; 
                          ('New...')         -> inew.new;
-                         ('Source Browser...','B')  -> isource.newkey;
-                         ('Quit','Q')       -> iquit.newkey;
-                      #);
-                 #);
-               controlMenu: @controlMenuType;
-               controlMenuType:< bettermenu
-                 (# icontinue: @item (# onSelect:: (# do debuggeeContinue #);
-                                        onStatus:: (# do continueStatus->enabled #);
-                                     #);
-                    istepo: @item (# onSelect:: (# do debuggeeStepOver #);
-                                     onStatus:: (# do stepOverStatus->enabled #);
-                                  #);
-                    istepi: @item (# onSelect:: (# do debuggeeStepInto #);
-                                     onStatus:: (# do stepIntoStatus->enabled #);
-                                  #);
-                    istop: @item (# onSelect:: (# do debuggeeStop #);
-                                    onStatus:: (# do stopStatus->enabled #);
-                                 #);
-                    irerun: @item (# onSelect:: (# do debuggeeRerun #);
-                                     onStatus:: (# do rerunStatus->enabled #);
-                                  #);
-                    ikill: @item (# onSelect:: (# do killDebuggee #);
-                                    onStatus:: (# do killStatus->enabled #);
-                                 #);
-                    
-                    open::<
-                      (# 
-                      do ('Go','G')   -> icontinue.newkey;
-                         ('Step','S')  -> istepi.newkey;
-                         ('Step Over','N')  -> istepo.newkey;
-                         'Stop'->istop.new;
-                         newseparator;
-                         ('Rerun','R')      -> irerun.newkey;
-                         ('Kill','K')       -> ikill.newkey;
+                         ('Source Browser...')  -> isource.new;
+                         ('Quit','q')       -> iquit.newkey;
                       #);
                  #);
                editMenu: @editMenuType;
-               editMenuType:< bettermenu
-                 (# ienv: @item (# onSelect:: (# do editenv #);
-                                   onStatus:: (# do editenvStatus->enabled #);
-                                #);
-                    icmdline: @item (# onSelect:: (# do editcmdline #);
-                                       onStatus:: (# do editcmdlineStatus->enabled #)
-                                    #);
-                    irefresh: @item (# onSelect:: (# do refresh #)#);
-                    iclose: @item (# onSelect:: (# do closeMoveables #);
-                                     onStatus:: (# do closeMoveablesStatus->enabled #);
-                                  #);
+               editMenuType:< simplemenu
+                 (# ienv: @item
+                      (# onSelect:: (# do editenv #);
+                         onStatus:: (# do editenvStatus->enabled #);
+                      #);
+                    icmdline: @item
+                      (# onSelect:: (# do editcmdline #);
+                         onStatus:: (# do editcmdlineStatus->enabled #)
+                      #);
+                    irefresh: @item
+                      (# onSelect:: (# do refresh #) #);
+                    iclose: @item
+                      (# onSelect:: (# do closeMoveables #);
+                         onStatus:: (# do closeMoveablesStatus->enabled #);
+                      #);
                     open::<
                       (# 
                       do 'Command Line...'->icmdline.new;
                          'Environment...'->ienv.new;
                          ('Refresh')   -> irefresh.new;
-                         ('Close','W') -> iclose.newkey;
+                         ('Close','w') -> iclose.newkey;
                          INNER;
                       #);
                     
                  #);
                windowMenu: @windowMenuType;
-               windowMenuType:< bettermenu
-                 (# icurobj: @item (# onSelect:: (# do debuggeeCurObj #);
-                                      onStatus:: (# do curObjStatus->enabled #);
-                                   #);
-                    icurcode: @item (# onSelect:: (# do debuggeeCurCode #);
-                                       onStatus:: (# do curCodeStatus->enabled #);
-                                    #);
-                    icurcomp: @item (# onSelect:: (# do debuggeeCurComp #);
-                                       onStatus:: (# do curCompStatus->enabled #);
-                                    #);
-                    iactivestack: @item (# onSelect:: (# do debuggeeActiveStack #);
-                                           onStatus:: (# do activeStackStatus->enabled#)
-                                        #);
+               windowMenuType:< simplemenu
+                 (# icurobj: @item
+                      (# onSelect:: (# do debuggeeCurObj #);
+                         onStatus:: (# do curObjStatus->enabled #);
+                      #);
+                    icurcode: @item
+                      (# onSelect:: (# do debuggeeCurCode #);
+                         onStatus:: (# do curCodeStatus->enabled #);
+                      #);
+                    icurcomp: @item
+                      (# onSelect:: (# do debuggeeCurComp #);
+                         onStatus:: (# do curCompStatus->enabled #);
+                      #);
+                    iactivestack: @item
+                      (# onSelect:: (# do debuggeeActiveStack #);
+                         onStatus:: (# do activeStackStatus->enabled#)
+                      #);
                     
                     open::<
                       (# 
-                      do ('Current Code','C')    -> icurcode.newkey;
-                         ('Current Object','O')  -> icurobj.newkey;
+                      do ('Current Code')    -> icurcode.new;
+                         ('Current Object')  -> icurobj.new;
                          ('Current Component')   -> icurcomp.new;
-                         ('Active Stack','A')    -> iactivestack.newkey;
+                         ('Active Stack')    -> iactivestack.new;
                       #);
                     
                     appendMoveable:
@@ -288,7 +357,7 @@ valhallaGUI: guienv
                       #);
                  #);
                optionsMenu: @optionsMenuType;
-               optionsMenuType:< bettermenu
+               optionsMenuType:< simplemenu
                  (# optionitem: toggleitem
                       (# option: ^Text; 
                          defaultvalue: @Boolean;
@@ -330,16 +399,36 @@ valhallaGUI: guienv
                  (# 
                  do 'File'->fileMenu.new; fileMenu[]->append;
                     'Edit'->editMenu.new; editMenu[]->append;
-                    'Control'->controlMenu.new; controlMenu[]->append;
-                    'Windows'->windowMenu.new; windowMenu[]->append;
                     INNER;
+                    'Windows'->windowMenu.new; windowMenu[]->append;
                     'Preferences'->optionsMenu.new; optionsMenu[]->append;
                  #)
             #);
           
+          maxButtonText: @Text;
+
           open::<
-            (# 
+            (#
             do moveables[] -> objectPool.put;
+               
+               'Step Over'->maxButtonText;
+                    
+               (# tst: @pushButton
+                    (# width: @integer;
+                       open:: 
+                         (# ts: ^textStyle;
+                            buttonWidth: @integer
+                         do hide;
+                            maxButtonText[]->label;
+                            style->ts[];
+                            maxButtonText[]->ts.widthOfText->width
+                         #)
+                    #);
+               do (600,400)->initialMAINsize;
+                  tst.open; tst.close;
+                  (8*(tst.width+9)+20+3,400)->initialMAINsize;
+               #);
+               
                initialMAINsize -> size; 'valhalla' -> title;
                contents->status.open; contents->objworld.open;
                INNER;
@@ -374,9 +463,7 @@ valhallaGUI: guienv
                       (# contentsType::< staticText
                            (# open::<
                                 (#
-                                do 
-                                   TRUE->bindLeft->bindRight->bindTop; FALSE->bindBottom;
-                                   ''->label;
+                                do ''->label;
                                    INNER;
                                 #);
                            #);
@@ -389,30 +476,18 @@ valhallaGUI: guienv
                               sz->size;
                               INNER;
                            #);
-                         dobind: 
-                           (# 
-                           do installResizeRelativeAction;
-                           #);
                       #);
                     pinfo: @infoText
                       (# contentsType::
                            (# open::
-                                (# 
-                                do 'No Process'->label;
-                                #);
+                                (# do 'No Process'->label #);
                            #);
                          open::
-                           (# 
-                           do 'Process Info'->label;
-                              (pinfo[],FALSE)->info.appendMember;
-                           #);
+                           (# do 'Process Info'->label #);
                       #);
                     vinfo: @infoText
                       (# open::
-                           (# 
-                           do 'Valhalla Info'->label;
-                              (vinfo[],TRUE)->info.appendMember;
-                           #);
+                           (# do 'Valhalla Info'->label #);
                       #);
                     open::
                       (#
@@ -421,12 +496,13 @@ valhallaGUI: guienv
                          10->minsize;
                          pinfo.open;
                          vinfo.open;
+                         pinfo[]->appendMember;
+                         vinfo[]->appendMember; appendsDone;
                          (3,3)->position;
                       #);
                     dobind:
                       (# 
-                      do pinfo.dobind; vinfo.dobind;
-                         TRUE->bindRight->bindLeft->bindTop;
+                      do TRUE->bindRight->bindLeft->bindTop;
                          FALSE->bindBottom;
                       #);
                  #);
@@ -449,14 +525,14 @@ valhallaGUI: guienv
                       do 
                          father.size->sz;
                          sz.v-3->fr.bottom;
-                         (if prev[]//NONE then
+                         (if prev[]=NONE then
                              3->fr.left;
                           else
                              prev.frame->pfr;
                              pfr.right+3+prevOffset->fr.left;
                          if);
                          style->ts[];
-                         fr.left+(maxtext[]->ts.widthOfText)+6->fr.right;
+                         fr.left+(maxButtonText[]->ts.widthOfText)+6->fr.right;
                          fr.bottom-ts.lineHeight-6->fr.top;
                          fr->frame;
                          name[]->label;
@@ -470,7 +546,6 @@ valhallaGUI: guienv
                            #);
                       #);
                  #);
-               maxtext: @Text;
                ccodeButton, cobjButton, cstackButton: @shortcutButton;
                goButton,stepButton,overButton,stopButton,rerunButton: @shortcutButton;
                
@@ -482,9 +557,7 @@ valhallaGUI: guienv
                     borderstyles.shadowOut->border.style;
                     
                     info.open;
-                    
-                    'Step Over'->maxtext;
-                    
+                   
                     (NONE,NONE,'Code',debuggeeCurCode##,curcodeStatus##)
                       ->ccodeButton.open;
                     (NONE,ccodeButton[],'Object',debuggeeCurObj##,curObjStatus##)
@@ -503,7 +576,7 @@ valhallaGUI: guienv
                     (NONE,stopButton[],'Rerun',debuggeeRerun##,rerunStatus##)
                       ->rerunButton.open;
                     
-                    ccodeButton.size->sz;
+                    ccodeButton.size->sz.add;
                     info.size->sz.add;
                     (0,9)->sz.add;
                     sz->size;
@@ -514,11 +587,12 @@ valhallaGUI: guienv
                     pos->position;
                     
                     info.dobind;
+                    
                     setenabling;
                  #);
             #);
        #);
-     init:<
+     init::<
        (# 
        do globalOptions.init; globalOptions[]->objectPool.put;
           icons[]->objectPool.put;

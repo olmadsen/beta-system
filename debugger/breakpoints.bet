@@ -1,4 +1,9 @@
 ORIGIN 'processInterface';
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-96
+ *   All rights reserved.
+ *)
 BODY 'private/breakpointsbody';
 
 INCLUDE 'remotedumper';
@@ -6,16 +11,16 @@ INCLUDE 'stepping';
 
 (* Breakpoint types are:
  * 
- *                                      breakPoint
- *                    ______________________|________________________
- *                   |                                               |
- *              oneShotBreak                                       sticky  
- *          _________|________                              _________|_________
- *         |                  |                            |                   |
- *   userOneShotBreak     skipOrStepBreak            standardBreak        conditional
- *                                                                      .......|________
- *                                                                                      |
- *                                                                                  exitBreak
+ *                                      breakpoint
+ *                    ______________________|_____________________
+ *                   |                                            |
+ *              oneShotBreak                                    sticky  
+ *          _________|________                        ____________|_____________
+ *         |                  |                      |            |             |
+ *   userOneShotBreak     skipOrStepBreak      standardBreak  traceBreak  conditional
+ *                                                                      ......|_______
+ *                                                                                    |
+ *                                                                                 exitBreak
  *   
  * *oneShotBreaks* are simple in the sense that they are cleared the first time hit.
  * They are used in the following situations:
@@ -46,6 +51,9 @@ INCLUDE 'stepping';
  * 
  *     A *standardBreak* is simply a breakpoint set by the user that causes the process stop 
  *     on each hit.
+ * 
+ *     A *traceBreak* is a breakpoint that will return control to the debugger, allowing the debugger
+ *     to output some text, whereafter the deguggee will be automatically continued.
  * 
  *     A *conditional* is a breakpoint associated with some expression deciding
  *     when the breakpoint should have effect. 
@@ -97,6 +105,11 @@ breakManagerList: list
       * a skipBreak was, the process should continue at once, without further
       * notice. *)
      
+     traceBreakHit: @Boolean;
+     (* Set to TRUE if a trace breakpoint was hit. If no userBreak was hit, but
+      * a traceBreak was, the process should continue at once, without further
+      * notice. *)
+     
      pending: ^breakManager;
      (* A breakManager that needs to reset its breakpoint as soon as possible. The
       * breakpoint was temporarily cleared to step over the breakpoint. *)
@@ -141,7 +154,7 @@ findBreakManager:
 ensureBreakManager: findBreakManager
   (# numberManager: @Integer;
   enter numberManager (* One of MNGR_* *)
-  do (if bm[]//NONE then
+  do (if bm[]=NONE then
          (* Create a new breakManager for this address. *)
          &breakManager[]->bm[];
          (codeAddress,numberManager)->bm.init;
@@ -151,7 +164,7 @@ ensureBreakManager: findBreakManager
 ImperativeToCodeAddress:
   (# noEnclosingDopart:< Notification; (* Raised if imp is not inside a dopart. *)
      impi: ^imperativeInfo; (* Where the breakpoint was actually set. *)
-     imp: ^AST.ast; (* The ast on which to set a breakpoint. *)
+     imp: ^mps.AST.ast; (* The ast on which to set a breakpoint. *)
   enter imp[]
   do doSetBreak: imp[]->utilities.codeAstToImperative
      (# noEnclosingDopart::
@@ -164,7 +177,7 @@ ImperativeToCodeAddress:
              (if imp[]<>NONE then restart doSetBreak else leave doSetBreak if);
           #);
      #)->impi[];
-     (if impi[]//NONE then unknownImpFailure if);
+     (if impi[]=NONE then unknownImpFailure if);
   exit impi[]
   #);
 
@@ -244,7 +257,7 @@ skipOrStepBreak: oneShotBreak
 userSkipOrStepBreak: skipOrStepBreak
   (# onhit::< 
        (# 
-       do (if mngr.bml.userBreakHit//0 then
+       do (if mngr.bml.userBreakHit=0 then
               mngr.number->mngr.bml.userBreakHit; 
           if);
           INNER 
@@ -252,6 +265,17 @@ userSkipOrStepBreak: skipOrStepBreak
   #);
 
 sticky: breakPoint (# #);
+traceBreak: sticky
+  (# message: ^Text;
+     onhit::< 
+       (#
+       do message[]->screen.putline; TRUE->mngr.bml.traceBreakHit;
+       #);
+     init::<
+       (#
+       enter message[]
+       #);
+  #);
 standardBreak: sticky
   (# onhit::< (# do mngr.number->mngr.bml.userBreakHit; INNER #)#);
 conditional: sticky (# #);

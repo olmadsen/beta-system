@@ -1,5 +1,11 @@
 ORIGIN '~beta/guienv/v1.3.1/guienvsystemenv';
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-96
+ *   All rights reserved.
+ *)
 BODY 'private/valhallabody';
+BODY 'private/breakpointMenus';
 
 INCLUDE 'processInterface';
 INCLUDE 'processCommCodes';
@@ -9,8 +15,6 @@ INCLUDE 'UI/valhallaGUI';
 INCLUDE 'UI/GUIprocess';
 INCLUDE 'UI/stackview';
 INCLUDE 'UI/objectviewadds';
-INCLUDE 'UI/codemoveable';
-INCLUDE 'UI/grouplist';
 INCLUDE 'UI/enveditor';
 INCLUDE '~beta/guienv/v1.3.1/utils/promptForArgs';
 
@@ -18,10 +22,9 @@ INCLUDE '~beta/objectbrowser/v2.0/systemenvcoroutinespawner';
 INCLUDE '~beta/objectbrowser/v2.0/UI/moveable';
 
 INCLUDE '~beta/guienv/v1.3.1/stddialogs';
+INCLUDE '~beta/guienv/v1.3.1/utils/simplemenu';
 
 INCLUDE '~beta/process/v1.4/systemComm';
-
-(*OBJFILE default '~beta/debugger/v2.0/betarun/$/C/valhallaFIFOS.o';*)
 
 --- lib:attributes ---
 
@@ -35,42 +38,7 @@ systemenv
    thespawner: @systemenvspawner;
    
    debuggee: ^gui.GUIprocess; (* The process being debugged. *)
-   sources: ^sourcesType;     (* source browser for debuggee. *)
-   
-   sourcesType: gui.sourceBrowser
-     (# onClose:: (# do NONE->sources[] #);
-        openCodeView:: 
-          (#
-          do a[]->newcodemoveable 
-             (# acceptFound::
-                  (# 
-                  do (found[]<>sbcodeview[])->value
-                  #);
-             #);
-          #);
-        codeViewExists::
-          (# 
-          do ff.root[]->newcodemoveable
-             (# openIfNotFound:: 
-                  (# 
-                  do FALSE->value->THIS(codeViewExists).value
-                  #);
-                wriggleIfFound::
-                  (# 
-                  do gui.main.bringToFront;
-                     TRUE->value->THIS(codeViewExists).value
-                  #);
-                acceptFound::
-                  (# 
-                  do (found[]<>sbcodeview[])->value
-                  #);
-             #);
-          #);
-        generalInfo:: (# do inf[]->gui.putinfo #);
-        errorInfo:: (# do (inf[],'ERROR!')->gui.alertInfo #);
-        continue:: (# do (if debuggeeIsReady then doContinue if) #);
-        processIsReady:: (# do debuggeeIsReady->value #);
-     #);
+   sources: ^gui.ymerBrowserWindow;     (* source browser for debuggee. *)
    
    theEnveditor: ^enveditType; (* Environment editor. *)
    enveditType: gui.envEditor (# onClose:: (# do NONE->theEnveditor[] #)#);
@@ -213,17 +181,20 @@ systemenv
           #);
      #);
    
-   mycodeview: gui.main.codemoveable
-     (# editorEncloserType::
-          (# continue:: (# do (if debuggeeIsReady then doContinue if) #);
-             processIsReady:: (# do debuggeeIsReady->value #);
-             newCodeView:: (# do node[]->newcodemoveable #);
-             generalInfo:: (# do inf[]->gui.putinfo #);
-             errorInfo:: (# do (inf[],'Error!')->gui.alertInfo #);
+   mycodeview: gui.main.myCodemoveable
+     (# private: @<<SLOT mycodeviewPrivate: descriptor>>;
+        wriggle::<
+          (# <<SLOT mycodeviewWriggle: dopart>> #);
+        selectNode:<
+          (# node: ^astInterface.ast 
+          enter node[]
+          <<SLOT mycodeviewSelectNode: dopart>>
           #);
+        open::
+          (# <<SLOT mycodeviewopen: dopart>> #)
      #);
    
-   lastEditor: ^gui.main.codemoveableEditor;
+   lastEditor: ^gui.window.codemoveableEditor;
    newcodemoveable: 
      (# openIfNotFound:< BooleanValue (# do true->value; INNER #);
         wriggleIfFound:< BooleanValue
@@ -309,15 +280,49 @@ systemenv
    sockgen: @socketGenerator;
    
    gui: @valhallaGUI
-     (# 
+     (# newCodeView::
+          (# do cast[]->newcodemoveable #);
+        ymerBrowserWindow::<
+          (# <<SLOT debuggerBrowserWindowLib: attributes>>;
+             workspace::
+               (# menubarType::
+                    (# open::
+                         (# <<SLOT workspaceMenubarOpen: dopart>> #)
+                    #)
+               #);
+             codeViewWindow::
+               (# menubarType::
+                    (# open::
+                         (# <<SLOT codeViewWindowMenubarOpen: dopart>> #)
+                    #)
+               #);
+             onCodeViewOpen::
+               (# <<SLOT onCodeViewOpen: dopart>> #);
+             onTerminateApplication::
+               (# do false->okToTerminate; none->sources[] #);
+             eventhandler::<
+               (# onAboutToClose:: (# do none->sources[] #) #);
+             menubarType::
+               (# open:: (# <<SLOT guiMenubarTypeOpen: dopart>> #) #);
+          #);
+        
         (* The following final bound virtuals are declared in valhallaGUI,
          * and called by menus and buttons in the user-interface. *)
         
         newDebuggee::
           (# 
-          do (if newExecName<>NONE then ensureKilled; FALSE->runNewDebuggee if)
+          do (if newExecName<>NONE then
+                 ensureKilled; FALSE->runNewDebuggee;
+                 (if sources[]<>NONE then
+                     getEXECNAMEparam
+                       ->mps.ast.expandToFullPath
+                       ->sources.appendProject;
+                     sources.appendDone
+                 if)
+             if)
           #);
-        
+        debuggeeStatus::
+          (# do debuggeeIsReady->value #);
         debuggeeRerun::
           (# 
           do (if rerunStatus then ensureKilled; TRUE->runNewDebuggee if)
@@ -340,13 +345,20 @@ systemenv
                        
         source:: 
           (#
-          do (if debuggeeIsReady then
-                 (if sources[]<>NONE then sources.wriggle;
-                  else  &sourcesType[]->sources[]; debuggee[]->sources.open;
+          do (if sources[]<>NONE then
+                 sources.wriggle;
+              else
+                 &gui.ymerBrowserWindow[]->sources[]; 
+                 sources.open; sources.loadSettings;
+                 (if debuggeeIsReady then
+                     getEXECNAMEparam
+                       ->mps.ast.expandToFullPath
+                       ->sources.appendProject;
+                     sources.appendDone;
                  if);
              if)
           #);
-        sourceStatus:: debuggeeIsReady (# #);
+        sourceStatus:: (# do true->value #);
         
         
         editenv::
@@ -441,22 +453,8 @@ systemenv
         
         onMoveablesInsert:: (# #);
         
-        codeviews: @codemoveableEditorList
-          (# onInsert::
-               (# 
-               #);
-             onDelete::
-               (# 
-               #);
-          #);
-        stackviews: @stackviewlistlist
-          (# onInsert::
-               (# 
-               #);
-             onDelete::
-               (# 
-               #);
-          #);
+        codeviews: @codemoveableEditorList;
+        stackviews: @stackviewlistlist;
         objectviews: @objectviewList
           (# onInsert::
                (# addItemMenuItems: 
@@ -484,53 +482,9 @@ systemenv
                (# 
                #);
           #);
-                  
         mainType::
-          (# menuBarType::
-               (# breakPointMenu: @bettermenu
-                    (# breakPointItem: item
-                         (# onSelect::
-                              (# 
-                              do (if bm.impi[]<>NONE then
-                                     bm.impi.cast[]->newcodemoveable
-                                 if);
-                              #);
-                            bm: ^processInterface.breakManager;
-                            newBreak: new (# enter bm[] #);
-                         #);
-                       eventHandler::<
-                         (# onSelect::<
-                              (# bml: ^processInterface.breakManagerList;
-                              do clear;
-                                 (if debuggeeIsReady then
-                                     debuggee.getBreakManagerList->bml[];
-                                     (if bml.size=0 then
-                                         'No Breakpoints'->(&item[]).new;
-                                      else
-                                         bml.scan
-                                         (# bpi: ^breakPointItem; num: @Text;
-                                         do &breakPointItem[]->bpi[];
-                                            num.clear; current.number->num.putInt;
-                                            (if current.impi[]<>NONE then
-                                                ': '->num.append;
-                                                current.impi.cast.frag.name
-                                                  ->num.append;
-                                            if);
-                                            (num[],current[])->bpi.newBreak;
-                                         #);
-                                     if)
-                                  else
-                                     'No Process'->(&item[]).new;
-                                 if);
-                              #);
-                         #)
-                    #);
-                  open::
-                    (# 
-                    do 'Breakpoints'->breakpointMenu.new; 
-                       breakpointMenu[]->append;
-                    #);
-               #);
+          (# menubarType::
+               (# open:: (# <<SLOT mainTypeMenubarTypeOpen: dopart>> #) #)
           #);
         init:: (* gui.init *)
           (#  
