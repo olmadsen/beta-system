@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: lvra.c,v $, rel: %R%, date: $Date: 1991-03-04 11:40:42 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: lvra.c,v $, rel: %R%, date: $Date: 1991-03-09 12:05:51 $, SID: $Revision: 1.6 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -321,6 +321,10 @@ LVRACompaction()
   long           numBlocks;
   long           sizeBlocks;
 
+#ifdef macintosh
+  RotateTheCursor();
+#endif
+
   NumLVRAGc++;
   /* Run compaction elements in 'LVRABlock{->next}*'  */
   INFO_LVRA( fprintf( output, "#(LVRA-%d ", NumLVRAGc) ); 
@@ -441,6 +445,10 @@ LVRAConstructFreeList()
   long           theObjectSize;
   long           numBlocks;
   long           sizeBlocks;
+
+#ifdef macintosh
+  RotateTheCursor();
+#endif
 
   INFO_LVRA( fprintf( output, "#(LVRA: make free list")); 
 

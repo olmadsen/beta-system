@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1991-02-26 08:54:37 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1991-03-09 12:06:04 $, SID: $Revision: 1.3 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -25,6 +25,10 @@ long AllocateHeap( base, top, limit, size)
 
 Initialize()
 {
+#ifdef macintosh
+  InitTheCursor();
+#endif
+
   GetBetaEnv();
 
   INFO( fprintf( output, "#(Heap info: IOA=2*%dKb", IOASize/Kb) );

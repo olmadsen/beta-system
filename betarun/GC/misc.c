@@ -1,10 +1,14 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: misc.c,v $, rel: %R%, date: $Date: 1991-02-11 14:28:06 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: misc.c,v $, rel: %R%, date: $Date: 1991-03-09 12:06:01 $, SID: $Revision: 1.4 $
  * by Lars Bak.
  */
 
 #include "beta.h"
+
+#ifdef macintosh
+#include <CursorCtl.h>
+#endif macintosh
 
 BetaExit( number )
      int number;
@@ -84,4 +88,8 @@ Claim( expr, message)
   }
 }
 
-
+#ifdef macintosh
+extern int StandAlone;
+InitTheCursor()   { if(StandAlone == 0) InitCursorCtl(0); }
+RotateTheCursor() { if(StandAlone == 0) RotateCursor(32); }
+#endif

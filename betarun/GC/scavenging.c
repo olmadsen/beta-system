@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-03-04 11:38:12 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-03-09 12:05:56 $, SID: $Revision: 1.6 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -17,6 +17,10 @@ IOAGc()
   ptr(long)      stackptr;
   handle(Object) theCell;
   ref(Object)    theObj;
+
+#ifdef macintosh
+  RotateTheCursor();
+#endif
 
   NumIOAGc++;
   IOAActive = TRUE;
