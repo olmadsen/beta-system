@@ -4,7 +4,7 @@
 
   (let ((case-replace t))
     (message "Fixing headings level 3")
-    (tags-query-replace "<H[1-6]>\\s-*[0-9]+\\.[0-9]+\\.[0-9]+\\.*\\s-*\\([^<]+\\)\\s-*</H[1-6]>" "<H3>\\1</H3>" nil)))
+    (tags-query-replace "<h[1-6]>\\s-*[0-9]+\\.[0-9]+\\.[0-9]+\\.*\\s-*\\([^<]+\\)\\s-*</h[1-6]>" "<H3>\\1</H3>" nil)))
 
 (defun miadoc-replace2 ()
   (interactive)
@@ -73,7 +73,7 @@
 
   (let ((case-replace nil)(case-fold-search t))
     (message "Changing WORD MARKER to <INX>WORD</INX>")
-    (tags-query-replace "\\(\\w+\\)\\s-*<a\\s-+name=marker[-0-9]+>\\s-*</a>" "<INX>\\1</INX>" nil)))
+    (tags-query-replace "\\(\\w+\\)<a name=marker[-0-9]+></a>" "<INX>\\1</INX>" nil)))
 
 (defun miadoc-replace8a ()
   (interactive)
