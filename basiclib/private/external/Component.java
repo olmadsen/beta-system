@@ -2,6 +2,7 @@ package beta;
 
 import java.lang.Thread;
 import java.lang.reflect.*;
+import java.io.*;
 
 
 public class Component { 
@@ -177,19 +178,7 @@ public class Component {
 		try{
 		    myComponent.body.Do();
 		} catch (Throwable e){
-		    // Cannot have a catch ExOException, since
-		    // myComponent.body.Do (the BETA code) does not
-		    // declare that it throws this particular exception.
-		    // So instead we test it explicitly:
-		    if (e instanceof ExOException){
-			System.err.println("# Beta execution aborted: Cross Component leave/restart NYI.");
-			// Stop this thread and delegate exception to 
-			// myComponent.caller???
-		    } else {
-			System.err.print("# Beta execution aborted: ");
-		    }
-		    e.printStackTrace();
-		    System.exit(-1);
+		    makeDumpFile(e);
 		}
 		myComponent.isTerminated = true;
 		//myComponent.trace("Terminating Runner:"+myRunId);
@@ -217,6 +206,27 @@ public class Component {
 		// notify();
 		synchronized(this) {notify();};
 	    }
+	}
+
+	void makeDumpFile(Throwable e){
+	    String dumpFileName;
+	    if (e instanceof ExOException){
+		System.err.println("# Beta execution aborted: Cross Component leave/restart NYI.");
+		// Stop this thread and delegate exception to 
+		// myComponent.caller???
+	    } else {
+		System.err.println("# Beta execution aborted: " + e.getMessage());
+	    }
+	    try {
+		dumpFileName = new String(beta.betaenv.betaenvRef.ArgVector[0].T) + ".dump";
+		PrintWriter dumpWriter = new PrintWriter(new FileWriter(dumpFileName));
+		System.err.println("# Look at '" + dumpFileName + "'");
+		e.printStackTrace(dumpWriter);
+		dumpWriter.close();
+	    } catch (Throwable t){		    
+		e.printStackTrace();
+	    }
+	    System.exit(-1);
 	}
     }
 
