@@ -227,6 +227,7 @@ namespace beta.converter
 	    indent(+ 2);
 	    indent();
 	    put("(#");
+
 	    indent(+ 3);
 	  }
 		
@@ -241,6 +242,10 @@ namespace beta.converter
 	    switch (className){
 	    case "TypeCode":
 	    case "Type":
+	    case "MenuItem":
+	    case "ContextMenu":
+	    case "Form":
+	    case "ScrollableControl":
 	      // Special cases which causes circularity in INCLUDE */
 	      use_wrapper_super = true;
 	      break;
@@ -367,7 +372,8 @@ namespace beta.converter
 	    indent();
 	    put("do '");
 	    if (isValue) put("valuetype ");
-	    put("[" + resolution + ']' + namespaceName + '.' + className + "' -> className;");
+	    put("[" + resolution + ']' + namespaceName + '.' + className.Replace('+', '/') + "' -> className;");
+	    // Nested classes are indicated by '/' in IL, but by '+' in the type system!
 	    nl();
 	    putln("INNER;");
 	    putln("#);\n");
