@@ -1,6 +1,12 @@
+#if defined(sun4s) || defined(hpux9pa) || defined(linux) || defined(sgi)
+#define UNIX
+#endif
+
 #include <stdio.h>
+#ifdef UNIX
 #include <errno.h>
 #include <sys/time.h>
+#endif
 
 void PutToScreen(char ch)
   {
@@ -17,6 +23,7 @@ static int my_getchar(void)
 {
     int ch;
     ch=getchar();
+#ifdef UNIX
     if (ch == EOF && errno==EAGAIN) {
         fd_set fdset;
         int fd = fileno(stdin);
@@ -25,6 +32,7 @@ static int my_getchar(void)
         select(1, &fdset,NULL,NULL,NULL);
         ch=getchar();
     }
+#endif
     return ch;
 }
 
