@@ -349,7 +349,7 @@ void ProcessStack()
 }
 
 void ProcessStackObj(theStack)
-     struct StackObject *theStack
+     struct StackObject *theStack;
 { ptr(long)        stackptr; 
   handle(Object)   theCell; 
   ptr(long)        theEnd;
