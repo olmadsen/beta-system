@@ -171,10 +171,26 @@ addCBF:
 
 -- motifMenuLib: attributes --
 
+unmapcallbackSelector: callbackSelector
+  (# 
+  do (* enable all motifmenuitems to make keyboard shortcuts work without having to
+      * post the menu first to evaluate item.onStatus.
+      *)
+     private.motifMenuitems.scan
+     (# 
+     do (current.widgetID,1) -> XtSetSensitive;
+     #);
+     false -> private.isVisible;
+  #);
+unmapCallbackProcessor: callbackProcessor
+  (# 
+  do &unmapCallbackSelector[] -> cb[];
+  #);
 
 handleOnSelect:
   (# 
-  do theMenu.theEventHandler.onSelect;
+  do true -> private.isVisible;
+     theMenu.theEventHandler.onSelect;
      private.motifMenuItems.scan
      (# 
      do current.handleOnStatus; 
@@ -234,6 +250,7 @@ setSubMenu:
      if);
   #);
 
+
 -- GUIENVmotifMenuappend: doPart --
 do (# theMotifMenuItem: ^motifMenuitem;
    do &motifMenuitem[] -> theMotifMenuItem[];
@@ -259,19 +276,15 @@ do (# theMotifItem: ^motifMenuitem;
 -- GUIENVmotifMenuCreate: doPart --
 do (# name: ^text;
       args: @argList;
-      cstr: @cstring;
    do theMenu.name -> name[];
       tickCount -> name.putInt;
       (if popup then
-          'Ctrl<Btn3Down>' -> cstr.set;
-          (1,XmNmenuPost,cstr) -> args.set;
-          (owner.widgetID,name,args[],1) -> XmCreatePopupMenu -> widgetID;
-          (* 'Created popup menu widget: ID = ' -> putText;
+          (owner.widgetID,name,args[],0) -> XmCreatePopupMenu -> widgetID;
+          (* 'Created motif popup menu widget: ID = ' -> putText;
            * widgetID -> putInt;
            * ' name = ' -> putText;
            * name[] -> putline;
            *)
-          cstr.free;
        else
           (owner.widgetID,name,args[],0) -> XmCreatePullDownMenu -> widgetID;
           (* 'Created pulldown menu widget: ID = ' -> putText;
@@ -279,6 +292,7 @@ do (# name: ^text;
            * ' name = ' -> putText;
            * name[] -> putline;
            *)
+          (unmapCallbackProcessor##, XmNunmapCallback) -> addCallbackProcessor;
       if);
       theMenu.scan
       (# theMotifMenuitem: ^motifMenuitem;
@@ -333,6 +347,7 @@ do (# inx: @integer;
           do e[] -> at -> delete;
           #);
      #);
+   isVisible: @boolean;
 #)
 
 -- motifMenubarLib: attributes --
@@ -477,9 +492,7 @@ do private.motifMenus.scan
 do Stop;
 #)
 --- GUIENVsetTheMenubar: descriptor ---
-(# shell: @integer;
-   args: @argList;
-   XtAppCreateShell: external
+(# XtAppCreateShell: external
      (# name: [1] @char;
         class: [1] @char;
         widgetClass: @integer;
@@ -491,21 +504,7 @@ do Stop;
      do callC
      exit newWidget
      #);
-do (* (if private.theMenubar[]<>none then
-    *        private.theMenubar.destroyMenubar;
-    *    if);
-    *    (1,XtNallowShellResize,true) -> args.set;
-    *    (this(guienv).private.appName,
-    *    this(guienv).private.appClass,
-    *    TopLevelShellWidgetClass,
-    *    display,
-    *    args[],
-    *    1) -> XtAppCreateShell -> shell;
-    *    shell -> themenubar.buildMenubar;
-    *    themenubar[] -> private.theMenubar[];
-    *    (shell,XtGrabNone) -> XtPopup;
-    *)
-   themenubar[] -> private.theMenubar[];
+do themenubar[] -> private.theMenubar[];
    
 #)
 --- GUIENVgetTheMenubar: descriptor ---
@@ -1382,74 +1381,13 @@ do inner Close;
 
 
 -- GUIENVmenuBuildMenu: descriptor --
-(#
-   (* theFuncPtr: @integer;
-    *    args: @argList;
-    *    name: ^text;
-    * do (if widgetID=0 then
-    *        this(Menu)[] -> getPatternName -> name[];
-    *        tickCount -> name.putInt;
-    *        (fatherWidget,name,args[],0) -> XmCreatePullDownMenu -> widgetID;
-    *        private.menuitems.iterate
-    *        (#
-    *        do current.elm.buildItem;
-    *        #);
-    *        (widgetID,private.enabled) -> XtSetSensitive;
-    *     else
-    *        trace:
-    *          (# 
-    *          do 'buildMenu: the menu is already build' -> putLine;
-    *          #);
-    *    if);
-    *)
-#)
+(# #)
 
 -- GUIENVmenuBuildPopupmenu: descriptor --
-
-(# 
-   (* theFuncPtr: @integer;
-    *    args: @argList;
-    *    name: ^text;
-    * do (if widgetID=0 then
-    *        this(Menu)[] -> getPatternName -> name[];
-    *        tickCount -> name.putInt;
-    *        (fatherWidget,name,args[],0) -> XmCreatePopupMenu -> widgetID;
-    *        private.menuitems.iterate
-    *        (#
-    *        do current.elm.buildItem;
-    *        #);
-    *        (widgetID,private.enabled) -> XtSetSensitive;
-    *     else
-    *        trace:
-    *          (# 
-    *          do 'buildMenu: the menu is already build' -> putLine;
-    *          #);
-    *    if);
-    *) 
-#)
+(# #)
 
 -- GUIENVmenuDestroyMenu: descriptor --
-
-(#
-   
-   (*  t: @text;
-do (if widgetID=0 then
-       trace
-       (# 
-       do 'destroyMenu: the menu is not build' -> putLine;
-       #);
-    else
-       private.menuitems.scan
-       (# 
-       do current.destroyItem;
-       #);
-       widgetID  -> DestroyWidget;
-       0 -> widgetID;
-    if);  *)
-   
-   
-#)
-
+(# #)
 
 -- GUIENVmenuSetName: descriptor --
 assertOpen
@@ -1583,52 +1521,75 @@ do inner create;
 
 --- GUIENVmenuClose: descriptor ---
 (#
-do inner close;
+do (if private.popupevent[]<>NONE then private.popupevent -> XtFree if);
+   inner close;
 #)
 -- GUIENVmenuPutLayout: doPart --
 do
 
 -- GUIENVmenuGetLayout: doPart --
 do
-
+   
+-- MenuLib: attributes --
+handleOnSelect:
+  (# 
+  do theEventHandler.onSelect;
+  #);
 
 --- GUIENVmenuPopUp: descriptor ---
 assertOpen
 (# location::(# do 'Menu.popup'->t[] #);
-   menuShell: @widget;
-   XtMoveWidget: external
-     (# w,x,y: @integer;
-     enter (w,x,y)
-     #);
    id: @integer;
    x_root,y_root: @shortRef;
-   popupMenu: @motifMenu
-     (# handleUnmap: @unMapEventSelector
-          (# 
-          do close;
-          #);
-        open::<
-          (# 
-          do (* XStructureNotifyMask -> handleUnmap.append; *)
-          #);
-     #);
-   theItem: ^popupMenu.motifMenuItem;
-do popupIn[] -> popupMenu.owner[];
-   this(menu)[] -> popupMenu.theMenu[];
-   true -> popupMenu.popup;
-   popupMenu.open;
-   popupMenu.handleOnSelect;
-   popupIn.widgetID -> id;
-   (id,popupAt.h,popupAt.v,x_root[],y_root[]) -> XtTranslateCoords;
-   
-   popupWith -> popupMenu.getItemByNumber -> theItem[];
-   (if theItem[]<>None then
-       x_root - (XtNx -> theItem.getShortResource) - 5 -> x_root;
-       y_root - (XtNy -> theItem.getShortResource) - 5 -> y_root;
+   theItem: ^Motifmenu.motifMenuItem;
+   menuPost: ^text;
+do (if (private.motifpopupmenu[]=NONE) 
+       (* create motif menu *)
+       or (popupin[]<>private.motifPopupMenu.owner[]) then
+       (if private.motifPopupMenu[]<>NONE then
+           (* destroy old motif menu *)
+           private.motifPopupMenu.close;
+       if);
+       &motifmenu[] -> private.MotifpopupMenu[];
+       popupIn[] -> private.MotifpopupMenu.owner[];
+       this(menu)[] -> private.MotifpopupMenu.theMenu[];
+       true -> private.MotifpopupMenu.popup;
+       private.MotifpopupMenu.open;
+       (if (private.popupbutton=0) then 3 -> private.popupbutton if);
+       '<Btn' -> menupost[];
+       private.popupbutton -> menuPost.putint;
+       '>' -> menupost.put;
+       (XmNmenuPost, menuPost[]) -> private.MotifpopupMenu.setStringResource;
+       (if private.popupevent[]=NONE then
+           &XButtonEvent[] -> private.popupevent[];
+           private.popupevent.init;
+           XButtonPress -> private.popupevent.type;
+       if);
    if);
    
-   (popupMenu.widgetID,x_root,y_root) -> XtMoveWidget;
-   popupMenu.widgetID -> XtManageChild;
+   private.MotifpopupMenu.handleOnSelect;
+   popupIn.widgetID -> id;
+   
+   (* translate to root coordinates *)
+   (id,popupAt.h,popupAt.v,x_root[],y_root[]) -> XtTranslateCoords;
+   
+   (* Adjust for the popupWith item *)
+   popupWith -> private.MotifpopupMenu.getItemByNumber -> theItem[];
+   (if theItem[]<>None then
+       y_root - (XtNy -> theItem.getShortResource) -> y_root;
+   if);
+   
+   (* Place menu using XmMenuPosition - ensures that menu is on screen *)
+   y_root     -> private.popupevent.y_root;
+   x_root + 2 -> private.popupevent.x_root(* + 2 to ensure that we are outside the item
+                                           * - otherwise highlight does not work for this 
+                                           * item before another has been selected
+                                           *);
+   (private.MotifpopupMenu.widgetID, private.popupevent) -> XmMenuPosition;
+   
+   (* manage menu *)
+   private.MotifpopupMenu.widgetID -> XtManageChild;
+   
 #)
 
 
@@ -3095,7 +3056,9 @@ do inner onRefresh;
 
 handleActivate: motifCallbackSelector
   (# 
-  do theMenuitem.theEventHandler.onSelect;
+  do (if this(motifMenu).private.isVisible or theMenuitem.theEventHandler.onStatus then
+         theMenuitem.theEventHandler.onSelect
+     if)
   #);
 motifMenuItemActivateProcessor: callbackProcessor
   (#
@@ -3276,10 +3239,3 @@ do callback## -> makeCBF -> address;
    1 -> private.callbacks.extend;
    address -> private.callbacks[private.callbacks.range];
    
--- menulib: attributes --
-
-handleOnSelect:
-  (# 
-  do theEventHandler.onSelect;
-  #);
-
