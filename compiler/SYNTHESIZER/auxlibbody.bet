@@ -627,19 +627,27 @@ do (# isLocal: booleanValue
            addOriginId: @boolean;
            name: ^text
         enter(desc[],addOriginId)
-        do (if desc.isNull then 
+        do (if true
+            // (desc[] = none) then
+               common.descNameStat[1] + 1 -> common.descNameStat[1] 
+            // desc.isNull then
+               common.descNameStat[2] + 1 -> common.descNameStat[2] 
+            // desc.label < -10 then
+               common.descNameStat[3] + 1 -> common.descNameStat[3] 
+            // desc.label > 118 then
+               common.descNameStat[4] + 1 -> common.descNameStat[4] 
+            else
+               common.descNameStat[5 + desc.label + 9] + 1 
+                 -> common.descNameStat[5 + desc.label + 9] 
+           if);
+           (if desc.isNull then 
                (* perhaps we should avoid calling with null?*)
-               (if true then
-                   none -> name[]
-                else
-                   'object' -> name[]
-               if)
+               none -> name[]
             else
                317->trace(# 
-                         do 'DescName:Begin:level: '->xT; dLevel -> xI; xN; 
+                         do 'DescName:Begin:level: '->xT; xN; 
                             desc[] -> xA
                          #);
-               dLevel+1 -> dLevel;
                desc -> F;
                (* onlye some of the cases below may happen with an
                 * initail call of descName; others may happen from 
@@ -815,8 +823,7 @@ do (# isLocal: booleanValue
                      if)
                   else
                      313 -> trace(# do 'descName:Singular:'->xT; F[] -> xA #);
-                     (if true 
-                      // isDescriptorForm then
+                     (if isDescriptorForm then
                          (* 'descName:singularDescriptorForm: '->puttext;*)
                          FO.theSlotName -> slotName -> name[];
                          false -> addOriginId (* hmm! *)
@@ -830,25 +837,12 @@ do (# isLocal: booleanValue
                                restart singular
                             // gram.objectDescriptor then
                                'singular_' -> name[];
-                               (if true then
-                                   (# D: ^ASTindex; PL: @integer
-                                   do F[] -> sematt.enclosingDesc -> D[];
-                                      D -> sematt.descChain -> (D,PL);
-                                      PL -> name.putint;
-                                      '_' -> name.put
-                                   #)
-                                else
-                                   (if (formDesc.label = gram.doPart)
-                                       and (f[] -> isLocal) then
-                                       (# N:  ^text
-                                       do (formDesc.theFragmentForm).name -> N[];
-                                          N[] -> name.append;
-                                       #);
-                                       '_'->name.put;
-                                    else
-                                       (*     thisForm[]-> name.append; THINK *)
-                                   if);                    
-                               if);
+                               (# D: ^ASTindex; PL: @integer
+                               do F[] -> sematt.enclosingDesc -> D[];
+                                  D -> sematt.descChain -> (D,PL);
+                                  PL -> name.putint;
+                                  '_' -> name.put
+                               #);
                                F.descNo -> name.putint;
                             // gram.unExpanded then
                                '\ShouldNotHappen:descName:unExpanded:' -> puttext;
@@ -891,9 +885,234 @@ do (# isLocal: booleanValue
            if)if)
         exit name[]
         #);
+      newGetDescName:
+        (# N,F,FO: @ASTindex;
+           FF: ^FragmentForm;
+           getFirstnameDecl:
+             (# F: @ASTindex; name: ^text
+             enter F
+             do L: F.son -> scanList(# do currentNode -> F; leave L #);
+                F.getText -> name[];
+             exit name[]
+             #);
+           originId:
+             (# desc,origin: ^ASTindex; id: ^text
+             enter desc[]
+             do 317->trace(#do xU; 'OriginId:'->xT; desc[] -> xA; xD#);
+                (if not desc.isNull then
+                    (if desc.label = gram.objectDescriptor then
+                        desc[] -> sematt.enclosingDesc -> origin[]
+                     else
+                        (* virtual, final, etc.
+                         * This could probably be simpler
+                         *)
+                        desc[] -> sematt.encDescOfNode -> origin[]
+                    if);
+                    (origin[],true) -> getDescName -> id[];
+                if)
+             exit id[]
+             #);
+           catIdAndName:
+             (# id,name: ^text
+             enter(id[],name[])
+             do (if id[] <> none then
+                    common.nameManglingCh -> id.put; 
+                    name[] -> id.append -> name[];
+                if)
+             exit name[]
+             #);
+           slotName:
+             (# N,T: ^text
+             enter N[]
+             do 'slot' -> T[];
+                common.nameManglingCh -> T.put;
+                N[] -> T.append
+             exit T[]
+             #);
+           getDclName:
+             (# spec: ^ASTindex; F: @ASTindex
+             enter spec[]
+             do spec.father -> F;
+                L: (#
+                   do 317 ->trace(#do 'getDclName: '->xT; F[] -> xA #);
+                      (if F.label
+                       // gram.patternDecl
+                       // gram.virtualDecl then
+                          F -> getFirstNameDecl -> name[];
+                       // gram.bindingDecl
+                       // gram.finalDecl then
+                          (# N: @ASTindex
+                          do F.son -> sematt.singleName -> N;
+                             (* We must use the name at the virtual
+                              * declaration to get the correct case
+                              *)
+                             L: (#
+                                do N.virtDcl -> N;
+                                   N.sort -> F;
+                                   (if F.label <> gram.virtualDecl then
+                                       restart L
+                                if)#);
+                             N.gettext -> name[];
+                          #)                       
+                       // gram.staticItem // gram.staticComponent then
+                          F.father (* gram.simpleDecl *) 
+                            -> getFirstNameDecl
+                            -> name[];
+                       // gram.variablePattern then
+                          'FIXME_variablePattern' -> putline;
+                          'FIXME_variablePattern' -> NAME[];
+                          F.father (* gram.simpleDecl *) 
+                            -> getFirstNameDecl
+                            -> name[];
+                       // gram.descriptorForm then
+                          (* In cases like
+                           *    ---xxx:objectDescriptor---
+                           *    (# ... #)
+                           * DescName for this descriptor will have 
+                           * descriptorForm as father
+                           *)
+                          F.xOrigin -> FO;
+                          F.son -> lastDesc;
+                          (if FO.isNull then
+                              none -> name[]
+                           else 
+                              FO -> F;
+                              (# un: ^unExpanded
+                              do F -> FO;
+                                 (if ((F.asAST->un[]).theSlot).category
+                                  // gram.objectDescriptor then
+                                     true -> isDescriptorSlot;
+                                     F -> lastDesc;
+                                     F.father -> F;
+                                  else
+                                     F.slotOrigin -> F;
+                                 if);
+                                 restart L;
+                              #)                          
+                          if)
+                       // gram.insertedItem
+                       // gram.dynamicItemGeneration 
+                       // gram.dynamicComponentGeneration then
+                          (* Singular descriptor in do-part *)
+                          (if isDescriptorSlot then
+                              (* We should eliminate isDescriptorSlot *)
+                              FO.theSlotName -> slotName -> name[];
+                              false -> addOriginId (* hmm! *)
+                           else
+                              (if spec.label                              
+                               // gram.objectDescriptor then
+                                  'singular_' -> name[];
+                                  (# D: ^ASTindex; PL: @integer
+                                  do spec[] -> sematt.enclosingDesc -> D[];
+                                     D -> sematt.descChain -> (D,PL);
+                                     PL -> name.putint;
+                                     '_' -> name.put
+                                  #);
+                                  spec.descNo -> name.putint;
+                               // gram.unExpanded then
+                                  (* Currently we do probably never com here.
+                                   * But we may if isDescriptorSlot is
+                                   * eliminated - would be nicer
+                                   *)
+                                  FO.theSlotName -> slotName -> name[];
+                                  false -> addOriginId (* hmm! *)
+                               else
+                                  '\nSingular case not handled: ' -> puttext;
+                                  spec.label -> putint; newline
+                          if)if)
+                       else
+                          '\nShould not come here: ' -> puttext;
+                          F.label -> putint; newline
+                      if)
+                   #)
+             #);
+           isDescriptorSlot: @boolean;
+           lastDesc: @ASTindex; (* the desc we are computing descName for;
+                                 * is used to store desc while we are
+                                 * going via father-ref to find enclosing
+                                 * construct defining the name; e.g.
+                                 * when descname is called with a desc
+                                 * we need the enclosing decl, like
+                                 * patternDecl, virtualDecl, etc. to
+                                 * find the name, e.g.pattern name
+                                 *)
+           id: ^text;
+           desc: ^ASTindex;
+           addOriginId: @boolean;
+           name: ^text
+        enter(desc[],addOriginId)
+        do (if true
+            // (desc[] = none) then
+               common.descNameStat[1] + 1 -> common.descNameStat[1] 
+            // desc.isNull then
+               common.descNameStat[2] + 1 -> common.descNameStat[2] 
+            // desc.label < -10 then
+               common.descNameStat[3] + 1 -> common.descNameStat[3] 
+            // desc.label > 118 then
+               common.descNameStat[4] + 1 -> common.descNameStat[4] 
+            else
+               common.descNameStat[5 + desc.label + 9] + 1 
+                 -> common.descNameStat[5 + desc.label + 9] 
+           if);
+           (if desc.isNull then 
+               (* Perhaps we should avoid calling with null? *)
+               none -> name[]
+            else
+               317->trace(# 
+                         do 'DescName: '->xT; xN; desc[] -> xA
+                         #);
+               desc -> F;
+               L:
+                 (if F.label
+                  // gram.objectDescriptor then
+                     F -> lastDesc;
+                     F[] -> getDclName
+                  // gram.doPart 
+                  // gram.mainPart then 
+                     F.xOrigin -> F;
+                     restart L
+                  // gram.descriptorForm then
+                     (* Perhaps we can/should avoid calling 
+                      * with descriptorForm? *)
+                     F.sonRef -> getDclName
+                  // gram.unExpanded then
+                     (# un: ^unExpanded
+                     do (if ((F.asAST->un[]).theSlot).category
+                         = gram.objectDescriptor then
+                            true -> isDescriptorSlot;
+                            F -> FO;
+                            F -> lastDesc;
+                            F[] -> getDclName;
+                         else
+                            (* doPart, mainPart *)
+                            F.slotOrigin -> F;
+                            restart L;
+                        if);
+                     #)
+                  // gram.nameApl then
+                     (* As 'A' in 'V:< A' *)
+                     F[] -> getDclName                     
+                  // gram.remote then
+                     (* As 'R.F.foo' in 'V:: R.F.foo' *)
+                     F[] -> getDclName
+                  else
+                     '\nMissing case:'->puttext; F.label->putint; newline
+                 if);
+               (if addOriginId then lastDesc[] -> originId -> id[] if);    
+               (id[],name[]) -> catIdAndName -> name[];
+           if);
+           (if name[] <> none then
+               (if 'object' -> name.equalNCS then
+                   common.BetaObjectClass -> name[];
+                   (if isJava then
+                       (* Strip package path 'beta/'*)
+                       (6,name.length) -> name.sub -> name[]
+                   if)
+           if)if)
+        exit name[]
+        #);
       p: ^text;
-      dLevel: @integer
-   do (desc[],addOriginId) -> getDescName -> name[];
+   do (desc[],addOriginId) -> newGetDescName -> name[];
       (if name[] = none then
           common.betaenv.groupname -> name[] 
       if);
@@ -902,9 +1121,6 @@ do (# isLocal: booleanValue
           (if addOriginId then
               (if common.BetaObjectClass->name.equal then
                   (* default package already there *)
-                  1->trace(#
-                          do 'descName:betaObjectClass'->xT
-                          #)
                else
                   (if (desc[] -> isLocal) then
                       thisPackagePath[] -> name.prepend;
