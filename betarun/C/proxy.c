@@ -66,7 +66,9 @@ void sweepAndCollectProxySpace(void)
 void initProxySpace(void) 
 {
   static isInitialized = 0;
+#ifdef sparc
   USE(); /* This has no meaning. So don't worry about it. */
+#endif
   if (!isInitialized) {
     long count;
 
