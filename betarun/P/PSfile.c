@@ -25,6 +25,18 @@
 #endif /* nti */
 #include <errno.h>
 
+/* Get definition of ntohl */
+#if defined(sun4s) || defined(sgi) || defined(linux)
+#include <sys/types.h>
+#include <netinet/in.h>
+#else
+#if defined(nti)
+#include "winsock.h"
+#else
+#error Include definition of ntohl, please
+#endif
+#endif 
+
 /* createDirectory,
  */
 int createDirectory(char *path, u_long attr)
@@ -56,6 +68,8 @@ void readLong(int fd, unsigned long *n)
     DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
+
+  *n = ntohl(*n);
 }
 
 /* readSome: reads size bytes into buffer from fd. */
@@ -99,8 +113,11 @@ void Rewind(int fd)
 void writeLong(int fd, unsigned long *n)
 {
    int nb;
-  
-   if ((nb = write(fd, n, sizeof(unsigned long))) < 0) {
+   u_long nendian;
+   
+   nendian = ntohl(*n);
+
+   if ((nb = write(fd, &nendian, sizeof(unsigned long))) < 0) {
       perror("writeLong");
       DEBUG_CODE(ILLEGAL);
       BetaExit(1);

@@ -44,6 +44,18 @@
 #include "error.h"
 #include "PSfile.h"
 
+/* Get definition of ntohl */
+#if defined(sun4s) || defined(sgi) || defined(linux)
+#include <sys/types.h>
+#include <netinet/in.h>
+#else
+#if defined(nti)
+#include "winsock.h"
+#else
+#error Include definition of ntohl, please
+#endif
+#endif 
+
 #define SBINReferences  0
 #define SBOUTReferences 1
 #define SBGroupNames    2
@@ -253,7 +265,7 @@ u_long /* in reference id */ SBINREFcreate(CAStorage *csb, u_long offset)
     id = CAallocate(csb, SBINReferences, sizeof(struct sbinreference));
     
     /* Write the offset in the id */
-    sbin.offset = offset;
+    sbin.offset = ntohl(offset);
     CAsave(csb, SBINReferences, (char *)&sbin, id, sizeof(struct sbinreference));
     
     return id;
@@ -266,7 +278,7 @@ u_long /* offset */ SBINREFlookup(CAStorage *csb, u_long id)
     Claim(csb -> open, "Store closed");
 
     CAload(csb, SBINReferences, (char *)&sbin, id, sizeof(struct sbinreference));
-    
+    sbin.offset = ntohl(sbin.offset);
     return sbin.offset;
 }
 
@@ -283,12 +295,10 @@ u_long /* out reference id */ SBOUTREFcreate(CAStorage *csb,
                                              u_long id)
 {
     u_long hostnamelength, pathnamelength, alignedsize;
-    u_long outid;
+    u_long hostnamelengthendian, pathnamelengthendian;
+    u_long outid, idendian;
     
     Claim(csb -> open, "Store closed");
-
-    hostnamelength = strlen(host);
-    pathnamelength = strlen(path);
     
     /* See comment (1) below for explenation of the alignment below.
      */
@@ -300,11 +310,13 @@ u_long /* out reference id */ SBOUTREFcreate(CAStorage *csb,
     outid = CAallocate(csb, SBOUTReferences, alignedsize);
 
     /* Write hostname length */
+    hostnamelengthendian = ntohl(hostnamelength);
+    
     CAsave(csb, SBOUTReferences,
-           (char *)&hostnamelength,
+           (char *)&hostnamelengthendian,
            outid,
            sizeof(u_long));
-
+    
     /* Write hostname */
     CAsave(csb, SBOUTReferences,
            (char *)host,
@@ -312,11 +324,12 @@ u_long /* out reference id */ SBOUTREFcreate(CAStorage *csb,
            hostnamelength);
 
     /* Write pathname length */
+    pathnamelengthendian = ntohl(pathnamelength);
     CAsave(csb, SBOUTReferences,
-           (char *)&pathnamelength,
+           (char *)&pathnamelengthendian,
            outid + sizeof(u_long) + hostnamelength,
            sizeof(u_long));
-
+    
     /* Write pathname */
     CAsave(csb, SBOUTReferences,
            (char *)path,
@@ -324,10 +337,12 @@ u_long /* out reference id */ SBOUTREFcreate(CAStorage *csb,
            pathnamelength);
     
     /* write id */
+    idendian = ntohl(id);
     CAsave(csb, SBOUTReferences,
-           (char *)&id,
+           (char *)&idendian,
            outid + sizeof(u_long) * 2 + hostnamelength + pathnamelength,
            sizeof(u_long));
+    
     
     return outid | OUTREFERENCE;
 }
@@ -344,17 +359,24 @@ void SBOUTREFlookup(CAStorage *csb,
     Claim(isOutReference(outid), "SBOUTREFlookup: Illegal out reference");
     
     CAload(csb, SBOUTReferences, (char *)&hostnamelength, outid, sizeof(u_long));
+    hostnamelength = ntohl(hostnamelength);
+
     *host = (char *)malloc(sizeof(char)*(hostnamelength + 1));
     CAload(csb, SBOUTReferences, *host, outid + sizeof(u_long), hostnamelength);
-
+    *host[hostnamelength] = 0;
+    
     CAload(csb, SBOUTReferences, (char *)&pathnamelength,
            outid + sizeof(u_long) + hostnamelength, sizeof(u_long));
+    pathnamelength = ntohl(pathnamelength);
+
     *path = (char *)malloc(sizeof(char)*(pathnamelength + 1));
     CAload(csb, SBOUTReferences, *path,
            outid + 2*sizeof(u_long) + hostnamelength, pathnamelength);
+    *path[pathnamelength] = 0;
 
     CAload(csb, SBOUTReferences, (char *)id,
            outid + 2*sizeof(u_long) + hostnamelength + pathnamelength, sizeof(u_long));
+    *id = ntohl(*id);
     
     return;
 }
@@ -368,21 +390,23 @@ void SBOUTREFlookup(CAStorage *csb,
 u_long /* group name id */ SBGNcreate(CAStorage *csb, char *groupname)
 {
     u_long groupid;
-    u_long length;
+    u_long length, lengthendian;
 
     Claim(csb -> open, "Store closed");
+
     length = strlen(groupname);
     
     /* Allocate room for a new groupname */
     groupid = CAallocate(csb, SBGroupNames, sizeof(u_long) + length);
-
+    
     /* write length */
-    CAsave(csb, SBGroupNames, (char *)&length, groupid, sizeof(u_long));
+    lengthendian = ntohl(length);
+    CAsave(csb, SBGroupNames, (char *)&lengthendian, groupid, sizeof(u_long));
     
     /* Write groupname */
     CAsave(csb, SBGroupNames, groupname, groupid + sizeof(u_long), length);
-    return groupid;
     
+    return groupid;    
 }
 
 static char *buffer = NULL;
@@ -390,22 +414,24 @@ static u_long bufferlength = 0;
 
 char *SBGNlookup(CAStorage *csb, u_long id, u_long *length)
 {
-    Claim(csb -> open, "Store closed");
+   Claim(csb -> open, "Store closed");
 
-    /* load length */
-    CAload(csb, SBGroupNames, (char *)length, id, sizeof(u_long));
-    if (*length + 1 < bufferlength) {
-        CAload(csb, SBGroupNames, buffer, id + sizeof(u_long), *length);
-        buffer[*length] = '\0';
-        return buffer;
-    } else {
-        if (buffer) {
-            free(buffer);
-        }
-        bufferlength = bufferlength*2 + 1;
-        buffer=(char *)malloc(sizeof(char)*bufferlength);
-        return SBGNlookup(csb, id, length);
-    }
+   /* load length */
+   CAload(csb, SBGroupNames, (char *)length, id, sizeof(u_long));
+   *length = ntohl(*length);
+
+   if (*length + 1 < bufferlength) {
+      CAload(csb, SBGroupNames, buffer, id + sizeof(u_long), *length);
+      buffer[*length] = '\0';
+      return buffer;
+   } else {
+      if (buffer) {
+         free(buffer);
+      }
+      bufferlength = bufferlength*2 + 1;
+      buffer=(char *)malloc(sizeof(char)*bufferlength);
+      return SBGNlookup(csb, id, length);
+   }
 }
 
 u_long SBGNtop(CAStorage *csb)
@@ -508,6 +534,8 @@ u_long SBOBJpresent(CAStorage *csb, u_long oid)
 
     return CApresent(csb, SBObjects, oid);
 }
+
+/* Endian conversions */
 
 /* Profiling */
 void SBstart(void)

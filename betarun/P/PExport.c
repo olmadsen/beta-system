@@ -99,8 +99,6 @@ static void refhandler(REFERENCEACTIONARGSTYPE)
    Claim(*theCell != NULL, "Assigning NULL to cell");
 }
 
-extern void EndianconvertFromStore(Object *obj);
-
 void extendBufferSize(u_long size)
 {
    if (current.buffer) {
@@ -109,6 +107,10 @@ void extendBufferSize(u_long size)
    current.buffer = (Object *)malloc(sizeof(char)*size);
    current.size = size;
 }
+
+#ifdef PSENDIAN
+extern void EndianconvertFromStore(Object *obj);
+#endif
 
 /* Exports the object to 'store' */
 Object *exportObject(Object *theObj, CAStorage *store, u_long size)

@@ -13,6 +13,18 @@
 #include "dot.h"
 #include "pit.h"
 
+/* Get definition of ntohl */
+#if defined(sun4s) || defined(sgi) || defined(linux)
+#include <sys/types.h>
+#include <netinet/in.h>
+#else
+#if defined(nti)
+#include "winsock.h"
+#else
+#error Include definition of ntohl, please
+#endif
+#endif 
+
 /* */
 
 #define MAXPERSISTENTBYTES 2048 * Kb
@@ -210,7 +222,7 @@ void EndianconvertFromStore(Object *obj)
               
            offset =  (char*)(&((ValRep*)(obj))->Body[0]) - (char*)obj;
            offsetTop = offset + 2 * ((ValRep*)(obj))->HighBorder;
-	
+           
            while (offset < offsetTop) {
               pointer = (unsigned short*)((char*)obj + offset);
               *pointer = ntohs(*pointer);

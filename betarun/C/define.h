@@ -116,6 +116,11 @@
 /* #define USEMMAP  uses to mych RAM */
 #endif /* sparc || intel || defined(sgi) */
 
+/* Endianess */
+#ifdef intel
+#define PSENDIAN
+#endif
+
 /* #define RTLAZY    Include support for lazy fetch */
 
 /* #ifndef RTLAZY */
