@@ -106,17 +106,18 @@ int SkipDataRegs(long *theCell)
    * Returns number of longs to skip (exluding tag)
    */
   long tag = *theCell /* potential tag */;
+  long numLongs = (-tag-4);
   if ((-(MAXDATAREGSONSTACK+4)<=tag) && (tag<=-4)){
     DEBUG_STACK({
       Object *ref = (Object *)tag;
       long *ptr;
       long *end;
-      end = theCell+(-tag-4);
+      end = theCell+numLongs;
       fprintf(output, 
 	      "0x%08x: %d: Skipping tag and %d long (4-byte) stack cells:\n", 
 	      (int)theCell,
 	      (int)tag,
-	      (int)-tag-4);
+	      (int)numLongs);
       for (ptr = theCell+1 /* start at cell after tag */; 
 	   ptr <= end;
 	   ptr++){
@@ -143,7 +144,7 @@ int SkipDataRegs(long *theCell)
       fflush(output);
     });
     /* Do the skip  */
-    return (-tag-4);
+    return numLongs;
   } else {
     DEBUG_CODE({
       if (tag < 0 && -4 < tag) {
