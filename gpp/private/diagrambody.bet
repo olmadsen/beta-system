@@ -1,4 +1,6 @@
 ORIGIN 'diagramattributes';
+INCLUDE '~beta/sysutils/v1.4/objinterface'
+        '~beta/gpp/v1.5/private/gppinterfacebody';
 (* switch
  * 1  = general debugging
  * 21 = IndexIDList
@@ -6,7 +8,6 @@ ORIGIN 'diagramattributes';
  * 23 = DiagramList
  *)
 (* DIAGRAM *)
-INCLUDE '~beta/sysutils/v1.4/objinterface';
 -- TitleInteractiveNew: Descriptor --
 (#  do (w,h)->Size #)  
 
@@ -14,9 +15,8 @@ INCLUDE '~beta/sysutils/v1.4/objinterface';
 (# 
 do
    UDPrivate.UDDiagram
-     ->UserDataInit
-     (*toby 1-11-94:
-      User data initializations*) ;
+     ->UserDataInit (*toby 1-11-94:
+                     User data initializations*) ;
    UDtheParentNode.Init;
    UDtheFragmentNode.Init;
    thePrefixConn.Init;
@@ -292,26 +292,48 @@ do
            connectorList.scan
              (# 
              do
-                (if (current## <= PrefixConnector##) and
-                (current[] <> titleNode.thePrefixConn) then
-                    current[]->con[];
-                    true->con.getEnds->(node1[],node2[]);
-                    (if node1[] <> previousNode[] then
-                        (if switch[23] then
-                            'Inserting in inheritanceEnds: '->puttext;
-                            node1.id->putint;
-                            newline
-                        if);
-                        node1[]->inheritanceEnds.insert
+                current[]->con[];
+                true->con.getEnds->(n1[],n2[]);
+                (if (n1## <= patternDiagramNode##) and
+                (n2## <= patternDiagramNode##) then
+                    n1[]->node1[];
+                    n2[]->node2[];
+                    (if (node1[] <> previousNode[]) and
+                    (node2[] = previousNode[]) then
+                        node1.theDiagram->theListDiagram[];
+                        (if current## <= theListDiagram.PrefixConnector## then
+                            (if switch[23] then
+                                'Inserting in inheritanceEnds: '->puttext;
+                                node1.id->putint;
+                                newline
+                            if);
+                            node1[]->inheritanceEnds.insert;
+                            con.delete
+                         else
+                            (if switch[23] then
+                                'It is not a prefixConnector'->putline
+                            if)
+                        if)
                      else
-                        (if switch[23] then
-                            'Inserting in inheritanceEnds: '->puttext;
-                            node2.id->putint;
-                            newline
-                        if);
-                        node2[]->inheritanceEnds.insert
-                    if);
-                    con.delete
+                        (if (node2[] <> previousNode[]) and
+                        (node1[] = previousNode[]) then
+                            node2.theDiagram->theListDiagram[];
+                            (if current## <= theListDiagram.PrefixConnector##
+                             then
+                                (if switch[23] then
+                                    'Inserting in inheritanceEnds: '->puttext;
+                                    node2.id->putint;
+                                    newline
+                                if);
+                                node2[]->inheritanceEnds.insert;
+                                con.delete
+                             else
+                                (if switch[23] then
+                                    'It is not a prefixConnector'->putline
+                                if)
+                            if)
+                        if)
+                    if)
                 if)
              #)
        if);
@@ -724,6 +746,7 @@ do
    theTitleNode: ^theListDiagram.title;
    dListDiagram,theListDiagram: ^ListDiagram;
    dAbstractNode: ^dListDiagram.AbstractNode;
+   theSimpleNode: ^SimpleNode;
    
 do
    (if switch[23]
@@ -847,6 +870,21 @@ do
                                 
                             if);
                             (newAST[],startpos)->DisplayAST->startpos;
+                            (if (private.dynamicReferenceQual[] <> none ) and
+                            (private.dynamicConnector[] <> none ) then
+                                (if PatternDiagrams.newNode[]
+                                 // none then
+                                    'OOBS: newNode is NONE'->screen.putline; 
+                                 else
+                                    PatternDiagrams.newNode[]->theSimpleNode[];
+                                    private.dynamicReferenceQual[]
+                                      ->theSimpleNode.theQualification;
+                                    private.dynamicConnector[]
+                                      ->theSimpleNode.theReferenceConnector;
+                                    none ->private.dynamicReferenceQual[];
+                                    none ->private.dynamicConnector[]
+                                if)
+                            if);
                             
                         if);
                         
@@ -958,12 +996,14 @@ do
 -- UpdateDiagramNode: Descriptor --
 (#
    theNode,theNode2: ^DiagramNode;
+   theAbstractNode: ^AbstractNode;
    testNode: ^IdObject;
    aDeclaration: ^betaGram.AttributeDecl;
    anAST,keepOldAST,keepNewAST: ^ast;
    anExp: ^expanded;
    theNames: ^betaGram.Names;
    theDecomposDiagram: ^Diagram;
+   theSimpleNode: ^SimpleNode;
    updateName:
      (#
         theNewNameDcl,theOldNameDcl: ^betaGram.NameDcl;
@@ -1085,6 +1125,20 @@ do
                (if switch[23] then
                    'No part of a declatation was changed - no redisplay is done'
                      ->putline
+               if);
+               (if (oldAST.kind = kinds.optional) and
+               (newAST.kind = kinds.unexpanded) then
+                   (if switch[23] then
+                       'Show optionals was performed on outermost descriptor'
+                         ->putline
+                   if)
+                else
+                   keepNewAST[]->ASTtoNode->theAbstractNode[];
+                   (if theAbstractNode[] <> none then
+                       theAbstractNode.abstract
+                    else
+                       'Could not find fragmentNode in IndexIDList!?'->putline
+                   if)
                if)
            if);
            ;
@@ -1183,11 +1237,22 @@ do
 #)  
 
 -- ListDiagramOnRemove: Descriptor --
-(# theParent: ^PatternDiagramNode
+(#
+   theParent: ^PatternDiagramNode;
+   theNode: ^PatternDiagramNode;
+   theListDiagram: ^ListDiagram;
+   theFragNode: ^theListDiagram.FragmentNode
 do (* tell the parent node that it is no longer detailed *)
    (if theParentNode <> none
     // true then
-       theParentNode->theParent[]; theParent.abstractedFromDiagramBelow; 
+       theParentNode->theParent[]; theParent.abstractedFromDiagramBelow
+    else
+       (if theFragmentNode <> none then
+           theFragmentNode->theNode[];
+           theNode.theDiagram->theListDiagram[];
+           theNode[]->theFragNode[];
+           none ->theFragNode.currentDecomposDiagram
+       if)
    if);
    
 #)  
@@ -1492,9 +1557,15 @@ do (* remove the diagram from the list of patterndiagrams on the page *)
    (if theDescriptor <> none
     // true then
        theDescriptor->theDummyDesc[];
-       theDummyDesc.index->PatternDiagrams.theList.deletePD;
        (*if this is the last diagram on the page close the page *)
-       (if PatternDiagrams.theList.size // 0 then close if);
+       theDummyDesc.index->PatternDiagrams.theList.deletePD;
+       (if PatternDiagrams.theList.size
+        // 0 then
+           close;
+           true->theGroupPage.visible;
+           theFragmentNode
+             ->theGroupPage.currentObject (#  do true->autoPan #)
+       if);
        
    if);
    
@@ -1803,11 +1874,7 @@ do (* show fragments starting at low-left of the titleNode *)
        (x-(w+1) div 2,y-((h+1) div 2))->(x,y);
        theGroup->theDummyGroup[];
        theDummyGroup.fragmentList.scan
-         (#
-            f: ^FragmentForm;
-            theForm: ^betaGram.BetaForm;
-            theNode: ^FragmentNode;
-            
+         (# f: ^FragmentForm; theRoot: ^AST; theNode: ^FragmentNode; 
          do
             (if current.type
              // linkType then (* ignore *)
@@ -1816,12 +1883,14 @@ do (* show fragments starting at low-left of the titleNode *)
                 'Groups in groups not suported'->putline; 
              // formType then
                 current.f[]->f[];
-                f.root[]->theForm[];
-                (if theForm.symbol
+                f.root[]->theRoot[];
+                (if theRoot.symbol
                  // betaGram.DescriptorForm then
                     &DescriptorNode[]->theNode[]; 
                  // betaGram.AttributesForm then
                     &AttributesNode[]->theNode[]; 
+                 // betaGram.DoPart then
+                    &DoPartNode[]->theNode[]
                  else
                     'Other type'->putline; 
                 if);
