@@ -1,0 +1,700 @@
+ORIGIN '../bdbc';
+INCLUDE 'sql'
+        '~beta/sysutils/v1.6/objinterface'
+        '~beta/sysutils/v1.6/cstring'
+        '~beta/containers/v1.6/list'
+        '~beta/basiclib/v1.6/formatio';
+-- ConnectionClose: DoPart --
+do private.close; INNER close  
+
+-- ConnectionOpen: DoPart --
+do (name[],username[],password[])->private.open;   
+
+-- DBEnvClose: DoPart --
+do private.close; INNER close  
+
+-- DBEnvOpen: DoPart --
+do private.open; INNER open  
+
+-- DBEnvBDBCException: DoPart --
+do
+   THIS(exception)[]->getPatternName->msg.putLine;
+     (#
+        MAX_ERROR: (#  exit 255 #);
+        Sqlst: @cString;
+        NativeErrorNo: @integer;
+        RecNumber: @shortint;
+        MessageText: @cString;
+        BufferLength: @shortint;
+        TextLength: @shortint;
+        rc: @integer
+     do
+        1->RecNumber;
+        loop:
+          (# 
+          do
+             6->Sqlst.init;
+             MAX_ERROR->MessageText.init;
+             (HandleType,Handle,RecNumber,Sqlst,@@ NativeErrorNo,MessageText,
+              MAX_ERROR,@@ TextLength)->SQLGetDiagRec->rc;
+             (if rc = SQL_SUCCESS then
+                 (if Sqlstate.length > 0 then ', '->Sqlstate.append if);
+                 Sqlst.get->Sqlstate.append;
+                 (if NativeError.length > 0 then ', '->NativeError.append if);
+                 NativeErrorNo->NativeError.putInt;
+                 MessageText.get->msg.append;
+                 msg.newLine;
+                 Sqlst.free;
+                 MessageText.free;
+                 RecNumber+1->RecNumber;
+                 restart loop
+             if)
+          #)
+     #);
+   INNER BDBCException  
+
+-- DirectSQLStatementExecute: DoPart --
+do private.execute->res[];   
+
+-- SQLStatementPrivate: Descriptor --
+(# hstmt: @integer; hasHandle: @boolean #)  
+
+-- ResultGetColumn: DoPart --
+do INNER getColumn  
+
+-- ResultGetInteger: DoPart --
+do i->private.getInteger->res;   
+
+-- ResultGetText: DoPart --
+do i->private.getText->res[]  
+
+-- ResulGetBoolean: DoPart --
+do i->private.getBoolean->res;   
+
+-- lib: Attributes --
+shortIntToSigned: integerValue
+  (# k: (* 8 bit unsigned half *) @shortInt
+  enter k
+  do k->value; (if value >= 32768 then - (65536-value)->value if)
+  #)  
+
+-- ResultSetPrivate: Descriptor --
+(#
+   hstmt: @integer;
+   theColInfos: ^colInfos;
+   colInfos:
+   (* Return first column no corresponding to 'name'
+    Returns -1 if not found *)
+     (#
+        elms: [0] ^Info.ColumnInfo;
+        getColumnByName:
+          (# name: ^text; res: @integer
+          enter name[]
+          do
+             L:
+             (for j: elms.range repeat
+               elms[j].ColumnName[]
+                 ->name.findTextAll
+                   (# NCS:: trueObject do j->res; leave L #)
+             for)
+          exit res
+          #);
+        getInfoByName:
+          (# name: ^text; res: ^info.ColumnInfo
+          enter name[]
+          do name[]->getColumnByName->getInfoByNo->res[]
+          exit res[]
+          #);
+        getInfoByNo: (# i: @integer enter i exit elms[i][] #);
+        init:
+          (#
+             ColumnName: @cString;
+             NameLength: @shortint;
+             DataType: @shortint;
+             DataTypeS: @integer;
+             ColumnSize: @integer;
+             DecimalDigits: @shortint;
+             NullAble: @shortint;
+             ColumnNo: @shortint;
+             ColumnTypeName: @cString;
+             StringLengthPtr: @shortint;
+             hstmt: @integer;
+             rc1,rc2: @shortint;
+             theInfo: ^info.ColumnInfo
+          enter hstmt
+          do
+             info.NoOfCols->elms.new;
+             (for i: info.NoOfCols repeat
+               &Info.ColumnInfo[]->theInfo[];
+               THIS(DBEnv).Private.MAX_COL_TXT->ColumnName.init;
+               i->ColumnNo;
+               (hstmt,ColumnNo,ColumnName,THIS(DBEnv).Private.MAX_COL_TXT,@@
+                NameLength,@@ DataType,@@ ColumnSize,@@ DecimalDigits,@@
+                NullAble)->SQLDescribeCol->rc1;
+               ColumnName.get->theInfo.ColumnName[];
+               ColumnName.free;
+               ColumnNo->theInfo.ColumnNo;
+               DataType-> (* SIC! *) shortIntToSigned->DataTypeS;
+               DataTypeS->THIS(DBEnv).private.SQLTypeToPattern
+                 ->theInfo.DataType##;
+               DataTypeS->theInfo.DataTypeNo;
+               (if NullAble <> 0 then true->theInfo.NullAble if);
+               THIS(DBEnv).Private.MAX_COL_TXT->ColumnTypeName.init;
+               (hstmt,ColumnNo,SQL_DESC_TYPE_NAME,ColumnTypeName,
+                THIS(DBEnv).Private.MAX_COL_TXT,@@ StringLengthPtr,NULL)
+                 ->SQLColAttribute->rc2;
+               ColumnTypeName.get->theInfo.DataTypeName[];
+               ColumnTypeName.free;
+               theInfo[]->elms[i][]
+             for)
+          exit (rc1,rc2)
+          #)
+     #);
+   scan:
+     (# 
+     do
+        while:
+          (# rc: @shortint; done: @boolean
+          do
+             private.hstmt->SQLFetch->rc;
+             (if rc
+              // SQL_SUCCESS then
+                 INNER scan; restart while
+              // SQL_NO_DATA then
+                 true->done
+              // SQL_SUCCESS_WITH_INFO then
+                 (SQL_HANDLE_STMT,private.hstmt)->resultSetWarning
+              else
+                 (SQL_HANDLE_STMT,private.hstmt)->resultSetException
+             if)
+          #)
+     #);
+   checkError:
+     (# rc: @shortint; hstmt: @integer
+     enter (rc,hstmt)
+     do
+        (if rc <> SQL_SUCCESS then
+            (if rc = SQL_SUCCESS_WITH_INFO then
+                (SQL_HANDLE_STMT,hstmt)->resultSetWarning
+             else
+                (SQL_HANDLE_STMT,hstmt)->resultSetException
+            if)
+        if)
+     #);
+   init: (* Set up metadata *)
+     (#
+        getNumCols:
+          (# hstmt,cCols: @integer; rc: @shortint
+          enter hstmt
+          do (hstmt,@@ cCols)->SQLNumResultCols->rc
+          exit (cCols,rc)
+          #);
+        rc,rcp: @shortint
+     do
+        hstmt->getNumCols->(info.NoOfCols,rc);
+        (rc,hstmt)->checkError;
+        &colInfos[]->theColInfos[];
+        hstmt->theColInfos.init->(rc,rcp);
+        (rc,hstmt)->checkError;
+        (rcp,hstmt)->checkError
+     #)
+#)  
+
+-- getTables: DoPart --
+do private.getTables->res[];   
+
+-- SQLStatementExecute: DoPart --
+do INNER execute; res.private.init  
+
+-- ResultGetColumnByName: DoPart --
+do INNER getColumnByName  
+
+-- ResultSetInfoGetColumnInfo: DoPart --
+do i->private.theColInfos.getInfoByNo->res[]  
+
+-- ResultSetInfogetColumnInfoByName: DoPart --
+do name[]->private.theColInfos.getInfoByName->res[]  
+
+-- resultSetScan: DoPart --
+do private.scan (#  do INNER scan #)  
+
+-- ConnectionInfoAutoCommitModeEnter: DoPart --
+do (THIS(Connection).private.hdbc,AutoCommitOn)->private.setCommitMode  
+
+-- ConnectionInfoAutoCommitModeExit: DoPart --
+do THIS(Connection).private.hdbc->private.getCommitMode->AutoCommitOn  
+
+-- ConnectionInfoPrivate: Descriptor --
+(#
+   getTables:
+     (# res: ^tableList; rc: @shortint; hstmt: @integer
+     do
+        &tableList[]->res[];
+        res.init;
+        (SQL_HANDLE_STMT,THIS(Connection).private.hdbc,@@ hstmt)->SQLAllocHandle
+          ->rc;
+        (if rc <> SQL_SUCCESS then
+            (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)->infoException
+        if);
+        (hstmt,0,0,0,0,0,0,0,0)->SQLTables->rc;
+        (if rc <> SQL_SUCCESS then (SQL_HANDLE_STMT,hstmt)->infoException if);
+        hstmt->SQLFetch->rc;
+        while:
+          (#
+             getByNumber:
+               (#
+                  i: @integer;
+                  res: ^text;
+                  target: @cString;
+                  StrLen_or_IndPtr: @integer
+               enter i
+               do
+                  255->target.init;
+                  (hstmt,i,SQL_CHAR,target,255,@@ StrLen_or_IndPtr)->SQLGetData
+                    ->rc;
+                  (if rc <> SQL_SUCCESS then
+                      (SQL_HANDLE_STMT,hstmt)->infoException
+                  if);
+                  target.get->res[];
+                  target.free
+               exit res[]
+               #);
+             newTable: ^table
+          do
+             (if rc = SQL_SUCCESS then
+                 &table[]->newTable[];
+                 1->getByNumber->newTable.CatalogName[];
+                 2->getByNumber->newTable.SchemaName[];
+                 3->getByNumber->newTable.TableName[];
+                 4->getByNumber->newTable.TableType[];
+                 newTable[]->res.append;
+                 hstmt->SQLFetch->rc;
+                 restart while
+              else
+                 (if rc <> SQL_NO_DATA then
+                     (SQL_HANDLE_STMT,hstmt)->infoException
+                 if)
+             if)
+          #);
+        (SQL_HANDLE_STMT,hstmt)->SQLFreeHandle->rc;
+        (if rc <> SQL_SUCCESS then
+            (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)->infoException
+        if)
+     exit res[]
+     #);
+   getCommitMode:
+     (#
+        hdbc: @integer;
+        autoCommit: @boolean;
+        commitAttr: @integer;
+        rc: @shortint
+     enter hdbc
+     do
+        (hdbc,SQL_ATTR_AUTOCOMMIT,@@ commitAttr,0,NULL)->SQLGetConnectAttr->rc;
+        (rc,THIS(Connection).private.hdbc)->checkError;
+        (if commitAttr = SQL_AUTOCOMMIT_ON then true->autoCommit if)
+     exit autoCommit
+     #);
+   setCommitMode:
+     (#
+        hdbc: @integer;
+        autoCommit: @boolean;
+        commitAttr: @integer;
+        rc: @shortint
+     enter (hdbc,autoCommit)
+     do
+        (if autoCommit then
+            SQL_AUTOCOMMIT_ON->commitAttr
+         else
+            SQL_AUTOCOMMIT_OFF->commitAttr
+        if);
+        (hdbc,SQL_ATTR_AUTOCOMMIT,commitAttr,0)->SQLSetConnectAttr->rc;
+        (rc,THIS(Connection).private.hdbc)->checkError
+     exit autoCommit
+     #);
+   transactionsSupported:
+     (# isSupported: @boolean; support: @integer; rc: @shortint
+     do
+        (THIS(connection).private.hdbc,SQL_TXN_CAPABLE,@@ support,0,NULL)
+          ->SQLGetInfo->rc;
+        (rc,THIS(connection).private.hdbc)->checkError;
+        (if support <> SQL_TC_NONE then true->isSupported if)
+     exit isSupported
+     #);
+   getTransactionLevel:
+     (# level: @integer
+     do exception (#  do 'Get TransactionLevel not supported...!'->msg #)
+     exit level
+     #);
+   setTransactionLevel:
+     (# level: @integer; rc: @shortint
+     enter level
+     do
+        (THIS(Connection).private.hdbc,SQL_ATTR_TXN_ISOLATION,level,0)
+          ->SQLSetConnectAttr->rc;
+        (rc,THIS(Connection).private.hdbc)->checkError
+     #);
+   checkError:
+     (# rc: @shortint; hdbc: @integer
+     enter (rc,hdbc)
+     do
+        (if rc <> SQL_SUCCESS then
+            (if rc = SQL_SUCCESS_WITH_INFO then
+                (SQL_HANDLE_DBC,hdbc)->infoWarning
+             else
+                (SQL_HANDLE_DBC,hdbc)->infoException
+            if)
+        if)
+     #)
+#)  
+
+-- ConnectionCommit: DoPart --
+do private.commit  
+
+-- ConnectionRollBack: DoPart --
+do private.rollBack  
+
+-- ConnectionInfoTransactionsSupported: DoPart --
+do private.transactionsSupported->isSupported  
+
+-- ConnectionInfoTransactionLevelEnter: DoPart --
+do level->private.setTransactionLevel  
+
+-- ConnectionInfoTransactionLevelExit: DoPart --
+do private.getTransactionLevel->level  
+
+-- ConnectionInfoREAD_UNCOMMITTED: DoPart --
+do SQL_TXN_READ_UNCOMMITTED->value  
+
+-- ConnectionInfoREAD_COMMITTED: DoPart --
+do SQL_TXN_READ_COMMITTED->value  
+
+-- ConnectionInfoREPEATABLE_READ: DoPart --
+do SQL_TXN_REPEATABLE_READ->value  
+
+-- ConnectionInfoSERIALIZABLE: DoPart --
+do SQL_TXN_SERIALIZABLE->value  
+
+-- ResultGetReal: DoPart --
+do i->private.getReal->res;   
+
+-- ResultGetIntegerByName: DoPart --
+do name[]->private.getIntegerByName->res  
+
+-- ResultGetRealByName: DoPart --
+do name[]->private.getRealByName->res  
+
+-- ResultGetTextByName: DoPart --
+do name[]->private.getTextByName  
+
+-- ResultGetBooleanByName: DoPart --
+do name[]->private.getBooleanByName->res  
+
+-- ResultPrivate: Descriptor --
+(#
+   getByNo:
+     (# i: @integer; rc: @shortint
+     enter i
+     do INNER getByNo; (rc,THIS(ResultSet).private.hstmt)->checkError
+     #);
+   getInteger: getByNo
+     (# StrLen_or_IndPtr: @integer; res: @integer
+     do
+        (THIS(ResultSet).private.hstmt,i,SQL_INTEGER,@@ res,4,@@
+         StrLen_or_IndPtr)->SQLGetData->rc
+     exit res
+     #);
+   getText: getByNo
+     (# res: ^text; target: @cString; StrLen_or_IndPtr: @integer
+     do
+        THIS(DBEnv).private.MAX_COL_TXT->target.init;
+        (THIS(ResultSet).private.hstmt,i,SQL_CHAR,target,
+         THIS(DBEnv).private.MAX_COL_TXT,@@ StrLen_or_IndPtr)->SQLGetData->rc;
+        target.get->res[];
+        target.free
+     exit res[]
+     #);
+   getBoolean: getByNo
+     (# StrLen_or_IndPtr: @integer; tmp: @integer; res: @boolean
+     do
+        (THIS(ResultSet).private.hstmt,i,SQL_INTEGER,@@ tmp,4,@@
+         StrLen_or_IndPtr)->SQLGetData->rc;
+        (if tmp <> 0 then true->res if)
+     exit res
+     #);
+   getReal: getByNo
+     (# StrLen_or_IndPtr: @integer; res: @real
+     do
+        (THIS(ResultSet).private.hstmt,i,SQL_DOUBLE,@@ res,4,@@
+         StrLen_or_IndPtr)->SQLGetData->rc
+     exit res
+     #);
+   getByName:
+     (# name: ^text; i: @integer
+     enter name[]
+     do
+        name[]->THIS(ResultSet).private.theColInfos.getColumnByName->i;
+        INNER getByName
+     #);
+   getIntegerByName: getByName
+     (# res: @integer do i->getInteger->res exit res #);
+   getTextByName: getByName
+     (# res: ^text do i->getText->res[] exit res[] #);
+   getBooleanByName: getByName
+     (# res: @boolean do i->getBoolean->res exit res #);
+   getRealByName: getByName (# res: @real do i->getReal->res exit res #);
+   checkError:
+     (# rc: @shortint; hstmt: @integer
+     enter (rc,hstmt)
+     do
+        (if rc <> SQL_SUCCESS then
+            (if rc = SQL_SUCCESS_WITH_INFO then
+                (SQL_HANDLE_STMT,hstmt)->resultWarning
+             else
+                (SQL_HANDLE_STMT,hstmt)->resultException
+            if)
+        if)
+     #)
+#)  
+
+-- DirectSQLStatementPrivate: Descriptor --
+(#
+   execute:
+     (# res: ^ResultSet; rc: @integer
+     do
+        (if not THIS(SQLStatement).private.hasHandle then
+            (SQL_HANDLE_STMT,THIS(Connection).private.hdbc,@@
+             THIS(SQLStatement).private.hstmt)->SQLAllocHandle->rc;
+            (if rc <> SQL_SUCCESS then
+                (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)
+                  ->execDirectException
+            if)
+        if);
+        ;
+        (THIS(SQLStatement).private.hstmt,Contents.t,SQL_NTS)->SQLExecDirect
+          ->rc;
+        (if rc <> SQL_SUCCESS then
+            (if rc = SQL_SUCCESS_WITH_INFO then
+                (SQL_HANDLE_STMT,THIS(SQLStatement).private.hstmt)
+                  ->execDirectWarning
+             else
+                (SQL_HANDLE_STMT,THIS(SQLStatement).private.hstmt)
+                  ->execDirectException
+            if)
+        if);
+        &ResultSet[]->res[];
+        THIS(SQLStatement).private.hstmt->res.private.hstmt
+     exit res[]
+     #)
+#)  
+
+-- ConnectionOpenPrivate: Descriptor --
+(#
+   open:
+     (# 
+     enter (name[],userName[],password[])
+     do
+          (#
+             twiceOpen: exception
+               (# 
+               do
+                  'Attempt to open '->msg;
+                  THIS(Connection)[]->getPatternName->msg.append;
+                  ' twice.'->msg.append
+               #);
+             allocateHDBC:
+               (# rc: @shortint; henv: @integer
+               enter henv
+               do
+                  (SQL_HANDLE_DBC,henv,@@ THIS(connection).private.hdbc)
+                    ->SQLAllocHandle->rc;
+                  (if rc <> SQL_SUCCESS then
+                      (SQL_HANDLE_ENV,henv)->openException
+                  if)
+               #);
+             openConnection:
+               (# rc: @shortint; henv: @integer
+               enter henv
+               do
+                  (if true
+                   // userName[] = none then
+                      (THIS(connection).private.hdbc,@@ name.t[1],SQL_NTS,0,0,0,
+                       0)->SQLConnect->rc
+                   // password[] = none then
+                      (THIS(connection).private.hdbc,@@ name.t[1],SQL_NTS,@@
+                       userName.t[1],SQL_NTS,@@ passWord.t[1],SQL_NTS)
+                        ->SQLConnect->rc
+                   else
+                      (THIS(connection).private.hdbc,@@ name.t[1],SQL_NTS,@@
+                       userName.t[1],SQL_NTS,@@ passWord.t[1],SQL_NTS)
+                        ->SQLConnect->rc
+                  if);
+                  (if rc = SQL_SUCCESS then
+                      (if rc = SQL_SUCCESS then
+                          true->THIS(connection).private.isOpen
+                       else
+                          (SQL_HANDLE_DBC,THIS(connection).private.hdbc)
+                            ->openException
+                      if)
+                   else
+                      (SQL_HANDLE_DBC,THIS(connection).private.hdbc)
+                        ->openException
+                  if)
+               #)
+          do
+             (if THIS(connection).private.isOpen then
+                 twiceOpen
+              else
+                 THIS(DBEnv).private.henv->allocateHDBC
+             if);
+             THIS(DBEnv).private.henv->openConnection;
+             THIS(Connection)[]->THIS(DBEnv).private.addConnection;
+             
+          #)
+     #)
+#)  
+
+-- ConnectionClosePrivate: Descriptor --
+(#
+   close:
+     (# 
+     do
+          (#
+             twiceClose: exception
+               (# 
+               do
+                  'Attempt to close '->msg;
+                  THIS(Connection)[]->getPatternName->msg.append;
+                  ' that is not open.'->msg.append
+               #);
+             checkError:
+               (# 
+               do
+                  (if rc <> SQL_SUCCESS then
+                      (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)
+                        ->closeException
+                  if)
+               #);
+             rc: @shortint
+          do
+             (if not THIS(Connection).private.isOpen then twiceClose if);
+             THIS(Connection).private.hdbc->SQLDisconnect->rc;
+             checkError;
+             (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)->SQLFreeHandle->rc;
+             checkError;
+             false->THIS(Connection).private.isOpen
+          #)
+     #)
+#)  
+
+-- ConnectionPrivate: Descriptor --
+(#
+   hdbc: @integer;
+   isOpen: @boolean;
+   debug: putText (#  #);
+   commit:
+     (# rc: @shortint
+     do (SQL_HANDLE_DBC,hdbc,SQL_COMMIT)->SQLEndTran->rc; (rc,hdbc)->checkError
+     #);
+   rollBack:
+     (# rc: @shortint
+     do
+        (SQL_HANDLE_DBC,hdbc,SQL_ROLLBACK)->SQLEndTran->rc;
+        (rc,hdbc)->checkError
+     #);
+   checkError:
+     (# rc: @shortint; hdbc: @integer
+     enter (rc,hdbc)
+     do
+        (if rc <> SQL_SUCCESS then
+            (if rc = SQL_SUCCESS_WITH_INFO then
+                (SQL_HANDLE_DBC,hdbc)->connectionWarning
+             else
+                (SQL_HANDLE_DBC,hdbc)->connectionException
+            if)
+        if)
+     #)
+#)  
+
+-- DBEnvPrivate: Descriptor --
+(#
+   henv: @integer;
+   open:
+     (#
+        rc: @shortint;
+        twiceOpen: exception
+          (# 
+          do
+             'Attempt to open '->msg;
+             THIS(DBEnv)[]->getPatternName->msg.append;
+             ' twice.'->msg.append
+          #)
+     do
+        (if private.isOpen then
+            twiceOpen
+         else
+            (@@ private.henv)->SQLAllocEnv->rc
+        if);
+        (if rc = SQL_SUCCESS then
+            true->private.isOpen; private.Connections.init
+         else
+            (SQL_HANDLE_ENV,SQL_NULL_HANDLE)->BDBCException
+        if)
+     #);
+   close:
+     (#
+        rc: @shortint;
+        twiceClose: exception
+          (# 
+          do
+             'Attempt to close '->msg;
+             THIS(DBEnv)[]->getPatternName->msg.append;
+             ' that is not open.'->msg.append
+          #)
+     do
+        (if not private.isOpen then
+            twiceClose
+         else
+            private.Connections.scan
+              (#  do (if current.private.isOpen then current.close if) #);
+            (SQL_HANDLE_ENV,private.henv)->SQLFreeHandle->rc
+        if);
+        (if rc = SQL_SUCCESS then
+            false->private.isOpen
+         else
+            (SQL_HANDLE_ENV,private.henv)->BDBCException
+        if)
+     #);
+   isOpen: @boolean;
+   addConnection:
+     (# aConn: ^Connection enter aConn[] do aConn[]->Connections.append #);
+   Connections: @list (# element:: Connection #);
+   MAX_COL_TXT: (*Artificial upper bound for all text in columns *)
+     (#  exit 255 #);
+   SQLTypeToPattern:
+     (# DataType: @integer; Pattern: ##Object
+     enter DataType
+     do
+        (if DataType
+         // SQL_CHAR then
+            charObject##->Pattern##
+         // SQL_VARCHAR // SQL_LONGVARCHAR then
+            text##->Pattern##
+         // SQL_DECIMAL then
+            Text##->Pattern##
+         // SQL_Numeric then
+            Text##->Pattern##
+         // SQL_SMALLINT // SQL_INTEGER then
+            integerObject##->Pattern##
+         // SQL_REAL // SQL_FLOAT // SQL_DOUBLE then
+            realObject##->Pattern##
+         // SQL_BIT then
+            booleanObject##->Pattern##
+         // SQL_TINYINT then
+            charObject##->Pattern##
+        if)
+     exit Pattern##
+     #);
+   debug: putText (#  #)
+#)  
+
