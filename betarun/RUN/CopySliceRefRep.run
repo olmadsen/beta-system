@@ -19,7 +19,10 @@ CopySRR: public
      stack:  StackArea  = SP;    
      theRep: Repetition = AddrReg1;
      theObj: Object     = RegThis;
+     
      newRep: Repetition = AddrReg2;
+     copyCell: DataArea = AddrReg2;
+     
      newTop: DataArea   = AddrReg1;
      value:  Long       = DataReg1;
      offset: Long       = DataReg1;
@@ -66,12 +69,9 @@ CopySRR: public
      (if high < 0 then 0 -> high if);
      { high is now converted to the range of the resulting repetition. }
      
-     { FIXME: LVRA missing }
-     
      (if debug then
          (if do_unconditional_GC then
              { See general comment in AllocateItem.run }
-             push offset;
              high -> BodySize;
              4 -> BodySize*;
              ObjectAlign -> BodySize|;
@@ -80,7 +80,33 @@ CopySRR: public
      if);
      
      again:
-     push offset;
+     
+     (if high > LARGE_REP_SIZE then
+         push RegCall, RegThis;
+         
+         push low; { Save low across LVRAAlloc. }
+         push high; { Parameter to LVRAAlloc. }
+         push RefRepPTValue; { Parameter to LVRAAlloc. }
+         call LVRAAlloc;
+         DataReg1 -> newRep; {Fetch LVRAAlloc result}
+         {Restore theRep, may have been destroyed by LVRAAlloc}
+         pReg1 -> theRep;
+         
+         4 -> SP+; {Discard proto}
+         pop high; {Restore high}
+         pop low; {Restore high}
+         
+         pop RegThis, RegCall;
+         
+	 (if newRep = 0 then 
+             high -> BodySize; 
+             4 -> BodySize*;
+             ObjectAlign -> BodySize|;
+             goto GC;
+	 if);
+         goto copyBody
+     if);
+
      high -> BodySize;
      4 -> BodySize*;
      ObjectAlign -> BodySize|;
@@ -90,7 +116,6 @@ CopySRR: public
      (if newTop > IOALimit then goto GC if);
      newTop -> IOATop;
      
-     pop offset;
      { Restore theRep; it was destroyed by newTop }
      pReg1 -> theRep;
      
@@ -104,19 +129,52 @@ CopySRR: public
      1     -> newRep.LowBorder;
      high  -> newRep.HighBorder;
      
-     { Copy the body part of the repetition. }
-     1 -> low-;
-     theRep[low*4][] -> theRep; { Start at low. }
-     
+     copyBody:
      (if high <> 0 then
-         1 -> high-;
-         loop:
+         1 -> low-; { zero based offsets }
+         theRep[low*4][] -> theRep; { Start at low. }
+         { Copy the body part of the repetition. }
+         push newRep;
+         1 -> high-; { zero based offsets }
+         newRep[16+high*4][] -> copyCell;  { Cell to copy to }
+         (if copyCell outside IOA then  { The theCell resides in AOA. }
+             { Loop which calls ChkRA for each element }
+             loop1:
+             theRep[16+high] -> value;
+             value -> copyCell[0];
+             (if call_chkra_unconditionally then
+                 call ChkRA_ESI;
+              else
+                 (if copyCell outside IOA then  { The theCell resides in AOA. }
+                     push copyCell;
+                     call ChkRA { No need to remove parameter. }
+                 if);
+             if);
+             4 -> copyCell-;
+             1 -> high-;
+             (if FLAGS >= 0 then goto loop1 if);
+             
+             goto CopyDone;
+         if);
+         
+         { Loop which does not call ChkRA }
+         loop2:
          theRep[16+high*4] -> value;
-         value -> newRep[16+high*4];
+         value -> copyCell[0];
+         (if call_chkra_unconditionally then
+             call ChkRA_ESI;
+         if);
+         4 -> copyCell-;
          1 -> high-;
-         (if FLAGS >= 0 then goto loop if)
+         (if FLAGS >= 0 then goto loop2 if);
+         
+         CopyDone:
+         pop newRep; { pop unmodified newRep }
      if);
      
+     { theRep no longer needed }
+     
+     AssignReference:
      pReg2 -> theItem;
      pReg3 -> offset;
      newRep -> theItem[offset*4];
@@ -140,7 +198,6 @@ CopySRR: public
      4 -> ReqObjectSize;     { Set the requested Object Size.            }
      4 -> BodySize/;
      BodySize -> ReqObjectSize+;
-     pop offset;
      pop AddrReg2, AddrReg1;
      { Stack: as on entry }
      push pReg1; { force update of pReg1 during GC }
