@@ -6,12 +6,10 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifdef sparc
 #ifdef PERSIST
 #include "../P/PException.h"
 #include "../P/referenceTable.h"
 #endif /* PERSIST */
-#endif /* sparc */
 
 /* The Assignment *theCell = theObj has just been
  * done. We know the theCell is in AOA, now check if

@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(36)";
+char betarun_version[] = "BETARUN VERSION 5.3(37)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.36  2001/09/06 08:03:02  corry
+ * Add version.c to xmakefile_nti to avoid
+ * > mjolner.obj : error LNK2001: unresolved external symbol _get_betarun_version
+ * Betarun version number: 36
+ *
  * Revision 1.35  2001/08/24 09:58:38  datpete
  * Removed test prints from valhallaComm.c "sock = 3; done creating buffers"
  * Betarun version number: 35
