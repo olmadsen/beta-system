@@ -229,6 +229,22 @@ sub H4(){
     }
 }
 
+sub print_valid_html_button()
+{
+    print<<EOT;
+<TABLE BORDER=0 ALIGN=RIGHT>
+<TR>
+<TD>
+<A HREF="http://validator.w3.org/check/referer">
+<IMG BORDER=0 SRC="${imagedir}vh40.gif" ALT="Valid HTML 4.01!" HEIGHT=31 WIDTH=88>
+</A>
+</TD>
+</TR>
+</TABLE>
+<BR CLEAR=right>
+EOT
+}
+
 sub print_button
 {
     local ($type, $href, $alt) = @_;
@@ -306,12 +322,12 @@ sub print_header
 
     if ($flags&$flag_frame){
 	$doctype=<<EOT
-"-//W3C//DTD HTML 4.0 Frameset//EN"
+"-//W3C//DTD HTML 4.01 Frameset//EN"
                       "http://www.w3.org/TR/REC-html40/frameset.dtd"
 EOT
     } else {
 	$doctype=<<EOT
-"-//W3C//DTD HTML 4.0 Transitional//EN"
+"-//W3C//DTD HTML 4.01 Transitional//EN"
                       "http://www.w3.org/TR/REC-html40/loose.dtd"
 EOT
     }
@@ -350,17 +366,9 @@ sub print_trailer
 
     return if ($wiki);
 
+    print_valid_html_button();
+
     print<<EOT;
-<TABLE BORDER=0 ALIGN=RIGHT>
-<TR>
-<TD>
-<A HREF="http://validator.w3.org/check/referer">
-<IMG BORDER=0 SRC="${imagedir}vh40.gif" ALT="Valid HTML 4.0!" HEIGHT=31 WIDTH=88>
-</A>
-</TD>
-</TR>
-</TABLE>
-<BR CLEAR=right>
 <P></P>
 <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 <HR>
@@ -509,7 +517,10 @@ EOT
 $javascript
 //-->
 </SCRIPT>
+<P></P>
 EOT
+
+    print_valid_html_button();
 
     print<<EOT;
 </BODY>
@@ -640,6 +651,12 @@ EOT
 </TD>
 </TR>
 </TABLE>
+<P></P>
+EOT
+
+    print_valid_html_button();
+
+    print<<EOT;
 </BODY>
 </HTML>
 EOT
@@ -862,6 +879,12 @@ EOT
 <TH ALIGN=right>Interface Descriptions: Contents</TH>
 </TR>
 </TABLE>
+<P></P>
+EOT
+
+    print_valid_html_button();
+
+    print<<EOT;
 </BODY>
 </HTML>
 EOT

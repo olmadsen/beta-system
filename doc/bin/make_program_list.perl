@@ -36,7 +36,7 @@ while ($#ARGV>=0) {
 &usage() if ($waiting_for_next || $waiting_for_prev || $waiting_for_title);
 
 print<<"EOT";
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
                       "http://www.w3.org/TR/REC-html40/loose.dtd"
 >
 <HTML>

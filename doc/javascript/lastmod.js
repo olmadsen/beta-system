@@ -8,6 +8,7 @@ var sup_date;
 var lastmodnumber = Date.parse(document.lastModified);
 var lastmod = new Date(document.lastModified);
 var year = lastmod.getYear();
+var century;
 var hours;
 var minutes;
 var sup = new Array();
@@ -53,6 +54,11 @@ if (lastmodnumber == 0) {
     // Y2K hack
     // NetScape reports year=100;
     // Internet explorer reports year=2000;
+    if (year<=98){
+      century = "19";
+    } else {
+      century = "20";
+    }
     year %= 100;
     if (year<10){
       year = "0" + year;
@@ -66,7 +72,7 @@ if (lastmodnumber == 0) {
 		     + " " 
 		     + sup_date
 		     + " " 
-		     + "20" + year 
+		     + century + year 
 		     + " at " 
 		     + hours + ":" + minutes
 		     + "]"

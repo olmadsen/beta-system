@@ -57,7 +57,7 @@ foreach $betafile (@ARGV) {
     open(OUT, ">$htmlfile") || die "$0: Cannot write output $!";
 
     print OUT<<"EOT";
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
                       "http://www.w3.org/TR/REC-html40/loose.dtd"
 >
 <HTML>

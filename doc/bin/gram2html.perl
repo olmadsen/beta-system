@@ -40,7 +40,7 @@ sub print_header()
     local ($file, $title) = @_;
 
     print<<"EOT";
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
                       "http://www.w3.org/TR/REC-html40/loose.dtd"
 >
 <!-- Generated from $file by gram2html.perl -->
@@ -278,7 +278,7 @@ sub print_button
 sub print_index_header
 {
     print<<EOT;
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
                       "http://www.w3.org/TR/REC-html40/loose.dtd"
 >
 <HTML>

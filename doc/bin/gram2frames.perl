@@ -231,12 +231,12 @@ sub print_header
 
     if ($flags&$flag_frame){
 	$doctype=<<EOT
-"-//W3C//DTD HTML 4.0 Frameset//EN"
+"-//W3C//DTD HTML 4.01 Frameset//EN"
                       "http://www.w3.org/TR/REC-html40/frameset.dtd"
 EOT
     } else {
 	$doctype=<<EOT
-"-//W3C//DTD HTML 4.0 Transitional//EN"
+"-//W3C//DTD HTML 4.01 Transitional//EN"
                       "http://www.w3.org/TR/REC-html40/loose.dtd"
 EOT
     }
