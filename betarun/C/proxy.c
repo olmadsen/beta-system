@@ -1,11 +1,11 @@
 #include "beta.h"
 
+#ifdef PERSIST
 #include <siginfo.h>
 #include <sys/regset.h>
 #include <sys/ucontext.h>
 #include <signal.h>
 
-#ifdef PERSIST
 
 /* block.c */
 extern void mmapInitial(unsigned long numbytes);
