@@ -79,7 +79,7 @@ void valhalla_await_connection ()
   sock = valhalla_acceptConn (psock,&blocked,&inetAdr);
   if (sock==-1) {
     fprintf (output,"valhalla_await_connection: acceptConn failed\n");
-    BetaExit (99);
+    exit (99);
   } else {
     valhalla_create_buffers ();
   }
@@ -125,25 +125,22 @@ void valhalla_writetext (char* txt)
   valhalla_writebytes (txt,len+1);
 }
 
+void on_valhalla_crashed ()
+{
+  fprintf (output, "Debuggee: Valhalla crashed? Exiting.\n");
+  exit (99);
+}
+
 void valhalla_fill_buffer ()
 { 
   DEBUG_VALHALLA (fprintf(output,"valhalla_fill_buffer\n"));
-  if (valhalla_readDataMax (sock,(char *) &rheader[0],sizeof(int)) != sizeof(int)) {
-    fprintf (output, "valhalla_fill_buffer failed (1) \n");
-    BetaExit (99);
-  }
-  if (valhalla_readDataMax (sock,(char *) &rheader[1],sizeof(int)) != sizeof(int)) {
-    fprintf (output, "valhalla_fill_buffer failed (2) \n");
-    BetaExit (99);
-  }
-  if (rheader[0]*4>commbufsize) {
-    fprintf (output, "valhalla_fill_buffer failed (3) \n");
-    BetaExit (99);
-  }
-  if (valhalla_readDataMax (sock,rbuf,rheader[0]*4) != rheader[0]*4) {
-    fprintf (output, "valhalla_fill_buffer failed (4) \n");
-    BetaExit (99);
-  }
+  if ((valhalla_readDataMax (sock,(char *) &rheader[0],sizeof(int)) != sizeof(int))
+      || (valhalla_readDataMax (sock,(char *) &rheader[1],sizeof(int)) != sizeof(int))
+      || (rheader[0]*4>commbufsize) 
+      || (valhalla_readDataMax (sock,rbuf,rheader[0]*4) != rheader[0]*4))
+    {
+      on_valhalla_crashed();
+    }
   rnext=0; rlen=rheader[1];
   DEBUG_VALHALLA (fprintf(output,"valhalla_fill_buffer: Done\n"));
 }
@@ -211,6 +208,8 @@ void printOpCode (int opcode)
   case VOP_OBJADRCANONIFY:
     fprintf (output,"VOP_OBJADRCANONIFY"); break;
   case VOP_SCANSTACK:
+    fprintf (output,"VOP_SCANSTACK"); break;
+  case VOP_BETARUN:
     fprintf (output,"VOP_SCANSTACK"); break;
   default:
     fprintf (output,"UNKNOWN OPCODE"); break;
@@ -301,7 +300,7 @@ void valhallaInit ()
       
       execl (valhallaname,valhallaname,"-PORT",tmpport,"-PID",tmppid,"-EXECNAME",Argv(1),(char *) 0);
       fprintf (output, "Could not exec\n");
-      BetaExit (99);
+      exit (99);
     }
   }
 
@@ -322,11 +321,11 @@ void valhallaInit ()
   { int todo;
     switch (todo=valhallaCommunicate (0,0)) {
     case CONTINUE: break;
-    case TERMINATE: BetaExit (99);
+    case TERMINATE: exit (99);
     default:
       fprintf (output, "Unexpected return from valhallaCommunicate: %d \n",
 	       todo);
-      BetaExit (99);
+      exit (99);
     }
   }
     
@@ -606,7 +605,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
 
   if (invops) {
     fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
-    BetaExit (99);
+    exit (99);
   } else
     invops=TRUE;
 
@@ -662,7 +661,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   
   switch (res=valhallaCommunicate ((int) PC, curObj)){
   case CONTINUE: break;
-  case TERMINATE: BetaExit (99);
+  case TERMINATE: exit (99);
   }
   invops=FALSE;
 
