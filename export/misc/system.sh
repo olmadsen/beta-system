@@ -24,7 +24,34 @@ cat $DST/system.cmd                                   >> $DST/system.new
 mv $DST/system.new  $DST/system.cmd
 
 else
+if [ "$COMPRESS" = "maccomp" ]
+then
 
+	echo ""
+	echo "Creating $DST/mac.pack"
+	echo '# Usage:    makeExport MyDisk:beta:'                    > $DST/mac.pack
+	echo 'if {#} == 0'                                            >>$DST/mac.pack
+	echo 'else'                                                   >>$DST/mac.pack
+	echo '    Set newBeta {1}         # The directory to copy to' >>$DST/mac.pack
+	echo '    export newBeta'                                     >>$DST/mac.pack
+	echo 'End'                                                    >>$DST/mac.pack
+	echo 'IF {newBeta} == ""'                                     >>$DST/mac.pack
+	echo '  echo "# Usage - {0} folder" > Dev:StdErr'             >>$DST/mac.pack
+	echo '  echo "# "'                                            >>$DST/mac.pack
+	echo '  echo "mac.pack Disk:beta:"'                           >>$DST/mac.pack
+	echo '  exit 4;'                                              >>$DST/mac.pack
+	echo 'End'                                                    >>$DST/mac.pack
+	echo 'echo mac.pack: Installing into {newBeta}'               >>$DST/mac.pack
+	echo 'newfolder {newBeta} „ Dev:Null'                      >>$DST/mac.pack
+
+	echo ""
+	echo "Creating $DST/system.pack"
+        echo "echo 'Doing system ...'" >>$DST/mac.pack
+        echo "system.pack"           >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/system.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/system.pack
+
+else
 	echo ""
 	echo "Creating $DST/system.tar.${ZEXT} "
 	echo "(Listing in $DST/system.lst)"
@@ -36,6 +63,7 @@ else
 	tar -covhf -  $FILES \
 	2> $DST/system.lst \
 	| $COMPRESS >  $DST/system.tar.${ZEXT}
+fi
 fi
 
 . ${BETALIB}/export/misc/check_problems.sh

@@ -18,6 +18,15 @@ then
 	FILES=`${BETALIB}/export/files/lib.files` 
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/lib.cmd
 else
+if [ "$COMPRESS" = "maccomp" ]
+then
+	echo ""
+	echo "Creating $DST/lib.pack"
+        echo "echo 'Doing lib ...'" >>$DST/mac.pack
+        echo "lib.pack"             >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/lib.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/lib.pack
+else
 
 	echo ""
 	echo "Creating $DST/lib.tar.${ZEXT} "
@@ -31,6 +40,6 @@ else
 	2> $DST/lib.lst \
 	| $COMPRESS >  $DST/lib.tar.${ZEXT}
 fi
-
+fi
 . ${BETALIB}/export/misc/check_problems.sh
 check_pack lib

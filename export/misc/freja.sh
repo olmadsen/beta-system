@@ -17,6 +17,15 @@ then
 	FILES=`${BETALIB}/export/files/freja.files`
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/freja.cmd
 else
+if [ "$COMPRESS" = "maccomp" ]
+then
+	echo ""
+	echo "Creating $DST/freja.pack"
+        echo "echo 'Doing freja ...'" >>$DST/mac.pack
+        echo "freja.pack"             >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/freja.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/freja.pack
+else
 	echo ""
 	echo "Creating $DST/freja.tar.${ZEXT} "
 	echo "(Listing in $DST/freja.lst)"
@@ -28,6 +37,7 @@ else
 	tar -covhf -  $FILES \
 	2> $DST/freja.lst \
 	| $COMPRESS >  $DST/freja.tar.${ZEXT}
+fi
 fi
 
 . ${BETALIB}/export/misc/check_problems.sh

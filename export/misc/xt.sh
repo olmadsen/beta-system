@@ -17,6 +17,15 @@ then
 	FILES=`${BETALIB}/export/files/xt.files`
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/xt.cmd
 else
+if [ "$COMPRESS" = "maccomp" ]
+then
+	echo ""
+	echo "Creating $DST/xt.pack"
+        echo "echo 'Doing xt ...'" >>$DST/mac.pack
+        echo "xt.pack"             >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/xt.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/xt.pack
+else
 	echo ""
 	echo "Creating $DST/xt.tar.${ZEXT} "
 	echo "(Listing in $DST/xt.lst)"
@@ -28,6 +37,7 @@ else
 	tar -covhf -  $FILES \
 	2> $DST/xt.lst \
 	| $COMPRESS >  $DST/xt.tar.${ZEXT}
+fi
 fi
 
 . ${BETALIB}/export/misc/check_problems.sh

@@ -18,6 +18,15 @@ then
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/lidskjalv.cmd
 
 else
+if [ "$COMPRESS" = "maccomp" ]
+then
+	echo ""
+	echo "Creating $DST/lidskjalv.pack"
+        echo "echo 'Doing lidskjalv ...'" >>$DST/mac.pack
+        echo "lidskjalv.pack"             >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/lidskjalv.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/lidskjalv.pack
+else
 	echo ""
 	echo "Creating $DST/lidskjalv.tar.${ZEXT} "
 	echo "(Listing in $DST/lidskjalv.lst)"
@@ -35,6 +44,7 @@ else
 	tar -covhf -  $FILES \
 	2> $DST/lidskjalv.lst \
 	| $COMPRESS >  $DST/lidskjalv.tar.${ZEXT}
+fi
 fi
 
 . ${BETALIB}/export/misc/check_problems.sh

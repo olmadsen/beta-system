@@ -17,6 +17,15 @@ then
 	FILES=`${BETALIB}/export/files/yggdrasil.files`
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/yggdrasil.cmd
 else
+if [ "$COMPRESS" = "maccomp" ]
+then
+	echo ""
+	echo "Creating $DST/yggdrasil.pack"
+        echo "echo 'Doing yggdrasil ...'" >>$DST/mac.pack
+        echo "yggdrasil.pack"             >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/yggdrasil.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/yggdrasil.pack
+else
 	echo ""
 	echo "Creating $DST/yggdrasil.tar.${ZEXT} "
 	echo "(Listing in $DST/yggdrasil.lst)"
@@ -28,6 +37,7 @@ else
 	tar -covhf -  $FILES \
 	2> $DST/yggdrasil.lst \
 	| $COMPRESS >  $DST/yggdrasil.tar.${ZEXT}
+fi
 fi
 
 . ${BETALIB}/export/misc/check_problems.sh

@@ -17,6 +17,15 @@ then
 	FILES=`${BETALIB}/export/files/betacl.files`
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/betacl.cmd
 else
+if [ "$COMPRESS" = "maccomp" ]
+then
+	echo ""
+	echo "Creating $DST/betacl.pack"
+        echo "echo 'Doing betacl ...'" >>$DST/mac.pack
+        echo "betacl.pack"             >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/betacl.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/betacl.pack
+else
 	echo ""
 	echo "Creating $DST/betacl.tar.${ZEXT}"
 	echo "(Listing is in $DST/betacl.lst)"
@@ -28,6 +37,7 @@ else
 	tar -covhf -  $FILES \
 	2> $DST/betacl.lst \
 	| $COMPRESS >  $DST/betacl.tar.${ZEXT}
+fi
 fi
 
 . ${BETALIB}/export/misc/check_problems.sh

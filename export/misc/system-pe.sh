@@ -42,7 +42,53 @@ echo "cd %BETALIB%"                                   >> $DST/system-pe.cmd
 mv $DST/system-pe.cmd  $DST/system.cmd
 
 else
-	
+if [ "$COMPRESS" = "maccomp" ]
+then
+
+	echo ""
+	echo "Creating $DST/mac.pack"
+	echo '# Usage:    makeExport MyDisk:beta:'                    > $DST/mac.pack
+	echo 'if {#} == 0'                                            >>$DST/mac.pack
+	echo 'else'                                                   >>$DST/mac.pack
+	echo '    Set newBeta {1}         # The directory to copy to' >>$DST/mac.pack
+	echo '    export newBeta'                                     >>$DST/mac.pack
+	echo 'End'                                                    >>$DST/mac.pack
+	echo 'IF {newBeta} == ""'                                     >>$DST/mac.pack
+	echo '  echo "# Usage - {0} folder" > Dev:StdErr'             >>$DST/mac.pack
+	echo '  echo "# "'                                            >>$DST/mac.pack
+	echo '  echo "mac.pack  Disk:beta:"'                          >>$DST/mac.pack
+	echo '  exit 4;'                                              >>$DST/mac.pack
+	echo 'End'                                                    >>$DST/mac.pack
+	echo 'echo mac.pack: Installing into {newBeta}'               >>$DST/mac.pack
+	echo 'newfolder {newBeta} „ Dev:Null'                      >>$DST/mac.pack
+
+	echo ""
+	echo "Creating $DST/system.pack"
+        echo "echo 'Doing system ...'" >>$DST/mac.pack
+        echo "system.pack"           >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/system-pe.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/system.pack
+
+echo ""                                                       >> $DST/system.pack
+echo "# special PE betarun"                                   >> $DST/system.pack
+echo "newfolder {newbeta}betarun: „ Dev:Null"              >> $DST/system.pack
+echo "newfolder {newbeta}betarun:v2.9: „ Dev:Null"         >> $DST/system.pack
+echo "newfolder {newbeta}betarun:v2.9:ppcmac: „ Dev:Null"  >> $DST/system.pack
+
+# add special betarun files
+echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun.pe {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun.obj"  \
+  >> $DST/system.pack
+echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun.pe {newbeta}betarun:${BETARUN}:${CODEDIR}:betarunv.obj" \
+  >> $DST/system.pack
+
+# Add locking of betarun files if specified in environment.
+if [ "$BETALOCK" = "yes" ]
+then
+  echo "setfile -a L {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun‰" \
+  >> $DST/system.pack
+fi
+
+else	
 	echo ""
 	echo "Creating $DST/system.tar "
 	echo "(Listing in $DST/system.lst)"
@@ -80,6 +126,7 @@ else
 	fi
 	$COMPRESS $DST/system.tar
 
+fi
 fi
 
 . ${BETALIB}/export/misc/check_problems.sh

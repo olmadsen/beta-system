@@ -17,6 +17,15 @@ then
 	FILES=`${BETALIB}/export/files/oodb.files`
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/oodb.cmd
 else
+if [ "$COMPRESS" = "maccomp" ]
+then
+	echo ""
+	echo "Creating $DST/oodb.pack"
+        echo "echo 'Doing oodb ...'" >>$DST/mac.pack
+        echo "oodb.pack"             >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/oodb.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/oodb.pack
+else
 	echo ""
 	echo "Creating $DST/oodb.tar.${ZEXT} "
 	echo "(Listing in $DST/oodb.lst)"
@@ -28,6 +37,7 @@ else
 	tar -covhf -  $FILES \
 	2> $DST/oodb.lst \
 	| $COMPRESS >  $DST/oodb.tar.${ZEXT}
+fi
 fi
 
 . ${BETALIB}/export/misc/check_problems.sh

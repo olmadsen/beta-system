@@ -16,6 +16,15 @@ then
 	echo "Creating $DST/frigg.cmd"
 	FILES=`${BETALIB}/export/files/frigg.files`
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/frigg.cmd
+else
+if [ "$COMPRESS" = "maccomp" ]
+then
+	echo ""
+	echo "Creating $DST/frigg.pack"
+        echo "echo 'Doing frigg ...'" >>$DST/mac.pack
+        echo "frigg.pack"             >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/frigg.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/frigg.pack
 
 else
 
@@ -30,6 +39,7 @@ else
 	tar -covhf -  $FILES \
 	2> $DST/frigg.lst \
 	| $COMPRESS >  $DST/frigg.tar.${ZEXT}
+fi
 fi
 
 . ${BETALIB}/export/misc/check_problems.sh

@@ -149,3 +149,8 @@ then
 else
    ${BETALIB}/export/misc/make_list.perl $DST/*.lst
 fi
+
+if [ -f $DST/errors.lst ]
+then
+  echo List of errors in file $DST/errors.lst
+fi

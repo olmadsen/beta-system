@@ -16,6 +16,15 @@ then
 	echo "Creating $DST/ymer.cmd"
 	FILES=`${BETALIB}/export/files/ymer.files`
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/ymer.cmd
+else
+if [ "$COMPRESS" = "maccomp" ]
+then
+	echo ""
+	echo "Creating $DST/ymer.pack"
+        echo "echo 'Doing ymer ...'" >>$DST/mac.pack
+        echo "ymer.pack"             >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/ymer.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/ymer.pack
 
 else
 
@@ -30,6 +39,7 @@ else
 	tar -covhf -  $FILES \
 	2> $DST/ymer.lst \
 	| $COMPRESS >  $DST/ymer.tar.${ZEXT}
+fi
 fi
 
 . ${BETALIB}/export/misc/check_problems.sh

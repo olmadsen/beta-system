@@ -17,6 +17,15 @@ then
 	FILES=`${BETALIB}/export/files/valhalla.files`
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/valhalla.cmd
 else
+if [ "$COMPRESS" = "maccomp" ]
+then
+	echo ""
+	echo "Creating $DST/valhalla.pack"
+        echo "echo 'Doing valhalla ...'" >>$DST/mac.pack
+        echo "valhalla.pack"             >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/valhalla.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/valhalla.pack
+else
 	echo ""
 	echo "Creating $DST/valhalla.tar.${ZEXT} "
 	echo "(Listing in $DST/valhalla.lst)"
@@ -28,6 +37,7 @@ else
 	tar -covhf -  $FILES \
 	2> $DST/valhalla.lst \
 	| $COMPRESS >  $DST/valhalla.tar.${ZEXT}
+fi
 fi
 
 . ${BETALIB}/export/misc/check_problems.sh

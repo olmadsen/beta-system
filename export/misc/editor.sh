@@ -16,6 +16,15 @@ then
 	echo "Creating $DST/editor.cmd"
 	FILES=`${BETALIB}/export/files/editor.files`
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/editor.cmd
+else
+if [ "$COMPRESS" = "maccomp" ]
+then
+	echo ""
+	echo "Creating $DST/editor.pack"
+        echo "echo 'Doing editor ...'" >>$DST/mac.pack
+        echo "editor.pack"             >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/editor.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/editor.pack
 
 else
 
@@ -31,6 +40,6 @@ else
 	2> $DST/editor.lst \
 	| $COMPRESS >  $DST/editor.tar.${ZEXT}
 fi
-
+fi
 . ${BETALIB}/export/misc/check_problems.sh
 check_pack editor

@@ -9,6 +9,9 @@ if ($target =~ m/^nti$/){
 	exit 0;
     }
 }
+if ($target =~ m/^ppcmac$/){
+    exit 0;
+}
 
 chdir($dst);
 $dirs="";

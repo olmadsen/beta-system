@@ -16,7 +16,16 @@ then
 	FILES=`${BETALIB}/export/files/bifrost.files`
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/bifrost.cmd
 else
+if [ "$COMPRESS" = "maccomp" ]
+then
 	echo ""
+	echo "Creating $DST/bifrost.pack"
+        echo "echo 'Doing bifrost ...'" >>$DST/mac.pack
+        echo "bifrost.pack"             >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/bifrost.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/bifrost.pack
+
+else	echo ""
 	echo "Creating $DST/bifrost.tar.${ZEXT} "
 	echo "(Listing in $DST/bifrost.lst)"
 
@@ -28,6 +37,6 @@ else
 	2> $DST/bifrost.lst \
 	| $COMPRESS >  $DST/bifrost.tar.${ZEXT}
 fi
-
+fi
 . ${BETALIB}/export/misc/check_problems.sh
 check_pack bifrost

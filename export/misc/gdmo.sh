@@ -17,6 +17,15 @@ then
 	FILES=`${BETALIB}/export/files/gdmo.files`
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/gdmo.cmd
 else
+if [ "$COMPRESS" = "maccomp" ]
+then
+	echo ""
+	echo "Creating $DST/gdmo.pack"
+        echo "echo 'Doing gdmo ...'" >>$DST/mac.pack
+        echo "gdmo.pack"             >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/gdmo.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/gdmo.pack
+else
 	echo ""
 	echo "Creating $DST/gdmo.tar.${ZEXT} "
 	echo "(Listing in $DST/gdmo.lst)"
@@ -28,6 +37,7 @@ else
 	tar -covhf -  $FILES \
 	2> $DST/gdmo.lst \
 	| $COMPRESS >  $DST/gdmo.tar.${ZEXT}
+fi
 fi
 
 . ${BETALIB}/export/misc/check_problems.sh

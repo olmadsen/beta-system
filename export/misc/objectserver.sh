@@ -17,6 +17,15 @@ then
 	FILES=`${BETALIB}/export/files/objectserver.files`
 	echo "$FILES" | ${BETALIB}/export/misc/icomp $DST/objectserver.cmd
 else
+if [ "$COMPRESS" = "maccomp" ]
+then
+	echo ""
+	echo "Creating $DST/objectserver.pack"
+        echo "echo 'Doing objectserver ...'" >>$DST/mac.pack
+        echo "objectserver.pack"             >>$DST/mac.pack
+	FILES=`${BETALIB}/export/files/objectserver.files`
+	echo "$FILES" | ${BETALIB}/export/misc/maccomp $DST/objectserver.pack
+else
 	echo ""
 	echo "Creating $DST/objectserver.tar.${ZEXT} "
 	echo "(Listing in $DST/objectserver.lst)"
@@ -28,4 +37,5 @@ else
 	tar -covhf -  $FILES \
 	2> $DST/objectserver.lst \
 	| $COMPRESS >  $DST/objectserver.tar.${ZEXT}
+fi
 fi
