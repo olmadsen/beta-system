@@ -145,17 +145,14 @@ void IOAGc()
   CompleteScavenging();
   
 #ifdef MT
-  /* FIXME: run through all TSD's and process the objects therein */
   {
-    INFO_IOA(fprintf(output, " #(IOA: CurrentObject"); fflush(output));
-    ProcessReference((handle(Object))(&CurrentObject));
-    INFO_IOA(fprintf(output, ")"); fflush(output));
-    INFO_IOA(fprintf(output, " #(IOA: Origin"); fflush(output));
-    ProcessReference((handle(Object))(&Origin));
-    INFO_IOA(fprintf(output, ")"); fflush(output));
-    INFO_IOA(fprintf(output, " #(IOA: ActiveStack"); fflush(output));
-    ProcessReference((handle(Object))(&ActiveStack));
-    INFO_IOA(fprintf(output, ")"); fflush(output));
+    int i;
+    for (i = 0; i < NumTSD; i++) {
+      ProcessReference((handle(Object))(&TSDlist[i]->_CurrentObject));
+      ProcessReference((handle(Object))(&TSDlist[i]->_Origin));
+      ProcessReference((handle(Object))(&TSDlist[i]->_ActiveStack));
+      ProcessReference((handle(Object))(&TSDlist[i]->_ActiveComponent));
+    }
     CompleteScavenging();
   }
 #else

@@ -20,11 +20,9 @@
  */
 register unsigned *RefTopOffReg   __asm__("%g2");
 register unsigned *DataTopOffReg  __asm__("%g3");
-register TSD      *TSDReg         __asm__("%g4");
-register long     *G7Reg          __asm__("%g7");
+register TSD      *TSDReg         __asm__("%g6");
 
 register long     *IOATop         __asm__("%g5");
-register long      G6Reg          __asm__("%g6");
 
 #else
 

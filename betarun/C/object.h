@@ -351,12 +351,13 @@ typedef struct TSD
   /* 12 */ long                 _MallocExhausted;
   /* 16 */ thread_t             _thread_id;
   /* 20 */ nums               * _nums;
+  /* 24 */ struct Object      * _CurrentObject;
+  /* 28 */ struct Object      * _Origin;
   /* 24 */ char               * _CTextPoolEnd;
   /* 28 */ long                 _CTextPool [MAXCTEXTPOOL/4];
 } TSD;
 
 #define ActiveComponent TSDReg->_ActiveComponent
-#define ActiveStack     TSDReg->_ActiveStack
 #define IOALimit        TSDReg->_IOALimit
 #define ThreadId        TSDReg->_thread_id
 #define Nums            TSDReg->_nums

@@ -46,9 +46,7 @@ void initSynchVariables(void)
   mutex_init(&cbfa_lock, USYNC_THREAD, NULL);
 }
 
-long NumTSD=0;
-TSD  **TSDlist=0;
-long TSDlistlen=0;
+static long TSDlistlen=0;
 
 void create_TSD(void)
 {
@@ -158,12 +156,15 @@ thread_t attToProcessor(struct Component *comp)
     fflush(output);
     exit (1);
   }
+  /* FIXME: why does this make 'threads' fail when run with BETART=DebugMt? */
+#if 0
   DEBUG_MT(fprintf(output, 
 		   "[Created thread 0x%x for comp 0x%x]\n", 
 		   (int)tid, 
 		   (int)comp);
 	   fflush(output););
-    
+#endif
+
   return tid;
 }
 
