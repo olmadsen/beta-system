@@ -29,10 +29,13 @@ void initReferenceTable(void)
 {
    /* Allocate indirection table */
    PITalloc();
-   
-#ifdef UNIX
-   initProxyTrapHandler();
-#endif
+
+   /* datpete: 10/01/2001: Moved initProxyTrapHandler to 
+    * SetupBetaSignalHandlers in C/sighandler.c in order to handle
+    * RefNone correctly independently of whether persistence is 
+    * enabled or not.
+    */
+
    loadedObjectsST = TInit();
    initProtoHandling();
 }

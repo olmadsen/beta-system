@@ -12,6 +12,7 @@
 #include "rtsighandler.h"
 #ifdef UNIX
 #include <unistd.h>
+#include "PException.h"
 #endif
 #ifdef linux
 #include <fpu_control.h>
@@ -1175,6 +1176,13 @@ void SetupBetaSignalHandlers(void)
   }
 #endif /* sun4s */
 #endif /* ppcmac */
+
+#ifdef UNIX
+  /* Install Proxy Trap Handler to catch RefNone correctly
+   * independently of whether Persistence is enabled or not.
+   */
+   initProxyTrapHandler();
+#endif
 
 } /* SetupBetaSignalHandlers */
 

@@ -521,6 +521,11 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
    unsigned char modrm;
    int isBeta;
    
+   DEBUG_CODE({
+     fprintf(output, "(proxyTrapHandler:PC=0x%08x, sig=%d)", (int)PC, (int)sig);
+     fflush(output);
+   });
+
    if (scp.trapno==5 || scp.trapno==12) {
       BetaSignalHandler(sig, scp);
       DEBUG_CODE(ILLEGAL);
