@@ -3,7 +3,7 @@
 
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $Id: snakedep.h,v 1.5 1992-09-03 12:54:33 beta Exp $
+ * Mod: $Id: snakedep.h,v 1.6 1992-09-07 12:27:36 poe Exp $
  * by Peter Orbaek
  */
 
@@ -125,7 +125,7 @@ static inline long *getIOAReg()
 
 static inline void setIOAReg(long *p)
 {     
-  asm volatile ("COPY\t%0, %%r17" : /* no out */ : "r" (p)); 
+  asm volatile ("COPY\t%0, %%r17" : /* no out */ : "r" (p) : "r17"); 
 }
 
 static inline unsigned getIOATopoffReg()
@@ -137,7 +137,7 @@ static inline unsigned getIOATopoffReg()
 
 static inline void setIOATopoffReg(unsigned v)
 {     
-  asm volatile ("COPY\t%0, %%r18" : /* no out */ : "r" (v)); 
+  asm volatile ("COPY\t%0, %%r18" : /* no out */ : "r" (v) : "r18"); 
 }
 
 #define IOA    getIOAReg()
@@ -292,17 +292,31 @@ extern struct Item *AlloI();
 
 static inline struct Item *CAlloI(struct Object *org, struct ProtoType *prot)
 {
-  setOriginReg(org);
-  setCallReg(prot);
-  return((struct Item *)AlloI());
+    struct Item *item;
+
+    pushReference(getCallReg());
+    pushReference(getOriginReg());
+    setOriginReg(org);
+    setCallReg(prot);
+    item = (struct Item *)AlloI();
+    setOriginReg(popReference());
+    setCallReg(popReference());
+    return item;
 }
 
 static inline struct Component *
   CAlloC(struct Object *org, struct ProtoType *prot)
 {
-  setOriginReg(org);
-  setCallReg(prot);
-  return((struct Component *)AlloC());
+    struct Component *comp;
+
+    pushReference(getCallReg());
+    pushReference(getOriginReg());
+    setOriginReg(org);
+    setCallReg(prot);
+    comp = AlloC();
+    setOriginReg(popReference());
+    setCallReg(popReference());
+    return comp;
 }
 
 #define CallBetaEntry(entry,item)       \
