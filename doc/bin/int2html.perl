@@ -2,12 +2,17 @@
 
 sub usage
 {
-    print "Usage: int2html.perl [-v] [-t] <interfacefiles>\n";
+    print "Usage: int2html.perl [-v] [-t] [-x] <interfacefiles>\n";
     print "  -v: print progress to STDERR\n";
     print "  -t: print trace to STDERR\n";
+    print "  -x: reference images, javascripts, stylesheets three directory levels up.\n";
+    print "      default is two directory levels up.\n";
     print "  Generate HTML file in local directory for each <interfacefile>\n";
     print "  Also generates index.html with table of contents and idx.html with index.\n";
 }
+$verbose=$v;
+$trace=$t;
+$extradir=$x;
 
 # Insert World Wide Web tags for declarations (HTML format).
 # Outermost declaration is indexed by its own name, inner declarations are 
@@ -71,7 +76,15 @@ sub usage
 #    first such match is found in index.
 
 # Style sheet:
-$css = "../../style/miadoc.css";
+if ($extradir){
+    $css = "../../../style/miadoc.css";
+    $lastmodscript = "../../../javascript/lastmod.js";
+    $imagedir = "../../../images/";
+} else {
+    $css = "../../style/miadoc.css";
+    $lastmodscript = "../../javascript/lastmod.js";
+    $imagedir = "../../images/";
+}
 
 # File names:
 $topfile = "../index.html";
@@ -88,12 +101,12 @@ sub print_button
     # special case for "prev":
     $alt =~ s/Prev/Previous/g;
     if ("$href" eq ""){
-	print "<A><IMG ALIGN=BOTTOM SRC=\"../../images/";
+	print "<A><IMG ALIGN=BOTTOM SRC=\"$imagedir";
 	print $type . "g.gif\" ALT=";
 	print $alt . " BORDER=0></A>\n";
     } else {
 	print "<A HREF=\"" .$href . "\">";
-	print "<IMG ALIGN=BOTTOM SRC=\"../../images/";
+	print "<IMG ALIGN=BOTTOM SRC=\"$imagedir";
 	print $type . ".gif\" ALT=";
 	print $alt . " BORDER=0></A>\n";
     }
@@ -159,7 +172,7 @@ sub print_trailer
 <P></P>
 <TABLE border=0 width=100%>
 <TR><TD><ADDRESS>Interface Description</ADDRESS></TD>
-<SCRIPT LANGUAGE=JavaScript SRC="../../javascript/lastmod.js"></SCRIPT>
+<SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT>
 </TABLE>
 <P></P>
 EOT
@@ -211,7 +224,7 @@ sub print_index_trailer
 <P></P>
 <TABLE border=0 width=100%>
 <TR><TD><ADDRESS>Interface Description</ADDRESS></TD>
-<SCRIPT LANGUAGE=JavaScript SRC="../../javascript/lastmod.js"></SCRIPT>
+<SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT>
 </TABLE>
 <P></P>
 EOT
@@ -390,7 +403,7 @@ sub print_toc_trailer
 <P></P>
 <TABLE border=0 width=100%>
 <TR><TD><ADDRESS>Interface Description</ADDRESS></TD>
-<SCRIPT LANGUAGE=JavaScript SRC="../../javascript/lastmod.js"></SCRIPT>
+<SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT>
 </TABLE>
 <P></P>
 EOT
@@ -796,9 +809,6 @@ if ($#ARGV==-1){
     &usage();
     exit 1;
 }
-
-$verbose=$v;
-$trace=$t;
 
 $indexid=0;
 
