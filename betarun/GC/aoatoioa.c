@@ -16,7 +16,7 @@
 /* Some primes to use as the size of the AOAtoIOAtable.
  * primes(n+1) ~~ primes(n) * 1.5
  */
-static long prim_index = 0;
+static long prim_index = 3;
 static long primes[] = 
        { 2617, 3919, 5879,  8821, 13241, 19867, 29803, 44711, 67079,
 	 99991, 149993, 224993, 337511, 506269, 759431, 1139191, 

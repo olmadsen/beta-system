@@ -183,6 +183,7 @@ static void AllocateHeapFailed(char *name, int numbytes)
   BetaExit(1);
 }
 
+#ifndef USEMMAP
 static long  AllocateHeap(long * base, 
 	     long * top,
 	     long * limit,
@@ -204,7 +205,7 @@ static long  AllocateHeap(long * base,
     return 0;
   }
 }
-#ifdef USEMMAP
+#else
 static int mmapAllocateHeap(Block **BaseBlock, 
 			    long numbytes, char *name)
 {
@@ -218,6 +219,7 @@ static int mmapAllocateHeap(Block **BaseBlock,
   }
 }
 
+#if 0
 static int ReserveHeap(Block **BaseBlock, 
 		       long numbytes, char *name)
 {
@@ -230,6 +232,7 @@ static int ReserveHeap(Block **BaseBlock,
     return 0;
   }
 }
+#endif /* 0 */
 #endif /* USEMMAP */
 
 #ifdef PE
@@ -380,11 +383,8 @@ void Initialize()
   InsertGuardPage();
   mmapAllocateHeap(&ToSpaceBaseBlock, IOASize, "ToSpace heap");
   InsertGuardPage();
-  ReserveHeap(&AOABaseBlock, AOAMaxSize, "AOA heap");
-  extendBlock(AOABaseBlock, AOABlockSize);
-  AOATopBlock = AOABaseBlock;
-  InsertGuardPage();
   AOAtoIOAalloc();
+  InsertGuardPage();
 #endif /* USEMMAP */
 
 #ifdef USEMMAP

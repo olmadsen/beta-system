@@ -26,7 +26,7 @@ Block * newBlock(long size)
 
 #ifdef USEMMAP
   sizeAlign = (size + sizeof(Block) + 8191) & ~8191;
-  theBlock = reserveBlock(sizeAlign);
+  theBlock = AllocateBlock(sizeAlign);
 #else
   theBlock = (Block *) MALLOC( sizeof(Block) + size );
 #endif /* USEMMAP */
@@ -44,7 +44,10 @@ Block * newBlock(long size)
 
 void freeBlock(Block * theBlock)
 {
+#ifdef USEMMAP
+#else
   FREE(theBlock);
+#endif /* USEMMAP */
 }
 
 long inArea(Block *  theBlock, Object * theObj)
