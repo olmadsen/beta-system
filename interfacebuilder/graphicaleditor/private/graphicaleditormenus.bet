@@ -1,609 +1,474 @@
 ORIGIN 'graphicaleditorprivate';
-INCLUDE 'editorwindowbody';
-INCLUDE '../newproperty';
-INCLUDE '../propagateinterface';
-
--- graphicalEditorLib: attributes --
-
+INCLUDE '../newproperty'
+        '../propagateinterface';
+-- graphicalEditorLib: Attributes --
 addProperty:
-  (# compList: ^componentEditorList;
-     newProp: @newProperty
-       (# editor: ^componentEditor;
-          onConfirm::
-            (#
-            do (if 'integer' -> type.equalNCS then
-                   (name[], 0) -> editor.data.setInt;
-               if);
-            #);
-       #);
-  enter compList[]
-  do l: compList.scan
-     (#
-     do current.node[] -> newProp.open;
-        current[] -> newProp.editor[];
-        leave l;
-     #);
-  #); 
-
-abstractSelection:
   (#
-  do (selection.first).node[] -> abstractNode;
+     compList: ^componentEditorList;
+     newProp: @newProperty
+       (#
+          editor: ^componentEditor;
+          onConfirm:: 
+            (# 
+            do
+               (if 'integer'->type.equalNCS then
+                   (name[],0)->editor.data.setInt; 
+               if);
+               
+            #);
+          
+       #);
+     
+  enter compList[]
+  do
+     l: compList.scan
+       (# 
+       do current.node[]->newProp.open; current[]->newProp.editor[]; leave l; 
+       #);
+     
   #);
-abstractNode:
-  (# node: ^astInterface.beta.attributeDecl;
-     thePatternDecl: ^astInterface.beta.patternDecl;
-     theSimpleDecl: ^astInterface.beta.simpleDecl;
-     theAttributesForm: ^astInterface.beta.attributesForm;
-     theAttributes: ^astInterface.beta.attributes;
-     theNames: ^astInterface.beta.names;
-     theStaticItem: ^astInterface.beta.staticItem;
-     theReferenceSpecification: ^astInterface.beta.referenceSpecification;
-     theObjectSpecification: ^astInterface.beta.objectSpecification;
-     frag: ^astInterface.fragmentForm;
-     group: ^astInterface.fragmentGroup;
-     name, groupName: ^text;
-     prefixName: ^text;
-     guienvLocation: (#  exit '~beta/guienv/guienv' #);
-     inst, newInst: ^instantiator;
-     compiledWindowItem, instantiatorType: ##object;
-  enter node[]
-  do (if node.symbol = gram.simpleDecl then
-         (* construct the node *)
-         node[] -> theSimpleDecl[];
-         
-         makeFragmentForm -> frag[];
-         'windowLib' -> frag.name;
-         (gram.attributesForm,frag[])->betaGram.newAst->theAttributesForm[]->frag.root[];
-         (gram.attributes,frag[])->betaGram.newAst->theAttributes[]
-           ->theAttributesForm.putAttributes;
-         
-         (gram.patternDecl, frag[]) -> betaGram.newAst -> thePatternDecl[];
-         (1,thePatternDecl[]) -> theAttributes.insert;
-         theSimpleDecl.getNames -> theNames[];
-         frag[] -> theNames.copy -> thePatternDecl.putNames;
-         theSimpleDecl.getReferenceSpecification -> theReferenceSpecification[];
-         (if theReferenceSpecification.symbol = gram.staticItem then
-             theReferenceSpecification[] -> theStaticItem[];
-             theStaticItem.getObjectSpecification -> theObjectSpecification[];
-             (if theObjectSpecification.symbol = gram.objectDescriptor then
-                 frag[] -> theObjectSpecification.copy -> thePatternDecl.putObjectDescriptor;
-             if);
-         if);
-         
-         
-         (* construct the file *)
-         
-         thePatternDecl[] -> betaGram.getName -> name[];
-         thePatternDecl[] -> betaGram.getPrefix -> prefixName[];
-         prefixName[] -> lookup -> inst[];
-         name[] -> MPS.expandToFullPath -> groupName[];
-         
-         
-         groupName[]->MPS.top.newGroup->group[];
-         'ORIGIN'  ->group.prop.addProp
-         (#  do guienvLocation->addString;  #);
-         
-         
-         gram.prefix -> thePatternDecl.suffixWalkForProd
-         (# scanCat:: betaGram.prefix;
-            theAttributeDenotation: ^astInterface.beta.attributeDenotation;
-            theNameApl: ^astInterface.beta.nameApl;
-            anInst: ^instantiator;
-         do current.getAttributeDenotation -> theAttributeDenotation[];
-            (if theAttributeDenotation.symbol = gram.nameApl then
-                theAttributeDenotation[] -> theNameApl[];
-                theNameApl.getText -> lookup -> anInst[];
-                (if anInst[] <> NONE then
-                    (if anInst.path[] <> NONE then
-                        (group[], anInst.path[]) -> addInclude;
+abstractSelection:
+  (#  do ('Custom',(selection.first).node[])->abstractNode;  #);
+  
+
+-- graphicalEditorFileMenu: Descriptor --
+graphicalEditorMenu
+  (#
+     closeItem: @menuItem
+       (#
+          eventHandler:: 
+            (#
+               onStatus::  (#  do true->value;  #);
+               onSelect:: 
+                 (# 
+                 do
+                    (if THIS(graphicalEditor).theEventHandler.onAboutToClose
+                     then
+                        THIS(graphicalEditor).close; 
                     if);
-                if);
-            if);
-         #);
-         group.loadIncludes;
-         frag[]->group.fragmentList.addFragment;
-         
-         group.markAsChanged;
-         (group[],'.bet' -> (groupName.copy).append)->com.prettyPrintGroup;
-         
-         
-         (* put it in the factory *)
-         
-         inst## -> instantiatorType##;
-         &instantiatorType[] -> newInst[];
-         
-         (inst.icon[],name[],newInst[],groupName[],'Custom',inst.width,inst.height, thePatternDecl[], false) 
-           -> factory.insert;
-         
-         
-         (* thePatternDecl[] -> addPatternToPalette; *)
-         
-         (* put in into the preferences *)
-         
-         THIS(graphicalEditorEnv).private.preferences.addPaletteEntry
-         (#
-         do name[] -> entry.name[];
-            groupName[] -> entry.path[];
-            thePatternDecl.frag.name -> entry.fragment[];
-            'Custom' -> entry.grouping[];
-         #);
-         THIS(graphicalEditorEnv).private.preferences.write;
-         
-         (* place it on the palette *)
-         
-         (newInst.grouping[], newInst.icon[], newInst.name[]) 
-           -> THIS(editorWindow).private.paletteTabber.addPaletteItem;
-         
-         (* Compile the windowitem *)
-         
-         (* (group.fullName, THIS(window)[]) -> com.evaluateFile -> compiledWindowItem##; *)
-         (thePatternDecl[], THIS(window)[]) -> com.compilePattern -> compiledWindowItem##;
-         
-         
-         
-         (if compiledWindowItem## <> NONE then
-             (if compiledWindowItem## <= windowItem## then
-                 (name[], compiledWindowItem##) -> THIS(graphicalEditorEnv).private.compiledWindowItems.define;
-             if);
-         if);
-         
-     if);
-  #);
+                    
+                 #);
+               
+            #);
+          open::  (#  do 'Close'->name; 'W'->key; closeItem[]->append;  #);
+          
+       #);
+     runItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onStatus::  (#  do true->value;  #);
+               onSelect:: 
+                 (# P: ##object; 
+                 do
+                    ((node.frag.father).fullName,THIS(guienv)[])
+                      ->com.evaluateFile->P##;
+                    (if P## <> none then
+                        (if P## <= window## then P##->executeWindow if)
+                    if);
+                    
+                 #);
+               
+            #);
+          open::  (#  do 'Run'->name; 'R'->key;  #);
+          
+       #);
+     runInsideItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onStatus::  (#  do true->value;  #);
+               onSelect:: 
+                 (# P: ##object; 
+                 do
+                    ((node.frag.father).fullName,THIS(graphicalEditor)[])
+                      ->com.evaluateFile->P##;
+                    (if P## <> none then
+                        (if P## <= window## then P##->executeWindow if)
+                    if);
+                    
+                 #);
+               
+            #);
+          open::  (#  do 'Run Inside Frigg'->name;  #);
+          
+       #);
+     runCanvasItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onStatus::  (#  do true->value;  #);
+               onSelect:: 
+                 (# P: ##object; 
+                 do
+                    ((node.frag.father).fullName,THIS(graphicalEditor)[])
+                      ->com.evaluateFile->P##;
+                    (if P## <> none then
+                        (if P## <= canvas## then P##->executeCanvas if)
+                    if);
+                    
+                 #);
+               
+            #);
+          open::  (#  do 'Run Canvas'->name;  #);
+          
+       #);
+     saveItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onStatus::  (#  do true->value;  #);
+               onSelect:: 
+                 (#  do node.frag.father->com.saveFragmentGroup #);
+               
+            #);
+          open::  (#  do 'Save'->name; 'S'->key;  #);
+          
+       #);
+     quitItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onStatus::  (#  do true->value;  #);
+               onSelect::  (#  do com.quitApplication #);
+               
+            #);
+          open::  (#  do 'Quit'->name; 'Q'->key;  #);
+          
+       #);
+     open:: 
+       (# 
+       do
+          'File'->name;
+          closeItem.open;
+          saveItem.open;
+          addSeparator;
+          (if com.dynamicCompilationAvailable then
+              runItem.open; addSeparator; 
+          if);
+          quitItem.open;
+          
+       #);
+     
+  #)  
 
--- graphicalEditorFileMenu: descriptor --
+-- graphicalEditorEditMenu: Descriptor --
 graphicalEditorMenu
-(#
-   closeItem: @menuItem
-     (#
-        eventHandler:: 
-          (#
-             onStatus::  (#  do true->value;  #);
-             onSelect:: 
-               (# 
-               do
-                  (if THIS(graphicalEditor).theEventHandler.onAboutToClose
-                      then
-                      THIS(graphicalEditor).close; 
-                  if);
-                  
-               #);
-             
-          #);
-        open:: 
-          (#  do 'Close'->name; 'W'->key; closeItem[]->append;  #);
-        
-     #);
-   runItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onStatus::  (#  do true->value;  #);
-             onSelect:: 
-               (# P: ##object; 
-               do
-                  ((node.frag.father).fullName,THIS(guienv)[])
-                    ->com.evaluateFile->P##;
-                  (if P## <> none then
-                      (if P## <= window## then P##->executeWindow if)
-                  if);
-                  
-               #);
-             
-          #);
-        open::  (#  do 'Run'->name; 'R'->key;  #);
-        
-     #);
-   runInsideItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onStatus::  (#  do true->value;  #);
-             onSelect:: 
-               (# P: ##object; 
-               do
-                  ((node.frag.father).fullName,THIS(graphicalEditor)[])
-                    ->com.evaluateFile->P##;
-                  (if P## <> none then
-                      (if P## <= window## then P##->executeWindow if)
-                  if);
-                  
-               #);
-             
-          #);
-        open::  (#  do 'Run Inside Frigg'->name;  #);
-        
-     #);
-   runCanvasItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onStatus::  (#  do true->value;  #);
-             onSelect:: 
-               (# P: ##object; 
-               do
-                  ((node.frag.father).fullName,THIS(graphicalEditor)[])
-                    ->com.evaluateFile->P##;
-                  (if P## <> none then
-                      (if P## <= canvas## then P##->executeCanvas if)
-                  if);
-                  
-               #);
-             
-          #);
-        open::  (#  do 'Run Canvas'->name;  #);
-        
-     #);
-   
-   saveItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onStatus::  (#  do true->value;  #);
-             onSelect:: 
-               (#  do node.frag.father->com.saveFragmentGroup #);
-             
-          #);
-        open::  (#  do 'Save'->name; 'S'->key;  #);
-        
-     #);
-   quitItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onStatus::  (#  do true->value;  #);
-             onSelect::  (#  do com.quitApplication #);
-             
-          #);
-        open::  (#  do 'Quit'->name; 'Q'->key;  #);
-        
-     #);
-   open:: 
-     (# 
-     do
-        'File'->name;
-        closeItem.open;
-        saveItem.open;
-        addSeparator;
-        (if com.dynamicCompilationAvailable then
-            runItem.open; addSeparator; 
-        if);
-        quitItem.open;
-        
-     #);
-   
-#)
+  (#
+     undoItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do undo;  #);
+               onStatus:: 
+                 (# t: ^text; 
+                 do
+                    (if canUndo then
+                        'Undo '->t[];
+                        undoText->t.append;
+                        t[]->name;
+                        true->value;
+                        
+                     else
+                        'Undo'->name; false->value; 
+                    if);
+                    
+                 #);
+               
+            #);
+          open::  (#  do 'Undo'->name; 'Z'->key;  #);
+          
+       #);
+     redoItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do redo;  #);
+               onStatus:: 
+                 (# t: ^text; 
+                 do
+                    (if canRedo then
+                        'Redo '->t[];
+                        redoText->t.append;
+                        t[]->name;
+                        true->value;
+                        
+                     else
+                        'Redo'->name; false->value; 
+                    if);
+                    
+                 #);
+               
+            #);
+          open::  (#  do 'Redo'->name; 'R'->key;  #);
+          
+       #);
+     cutItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do selection.doCut;  #);
+               onStatus::  (#  do not selection.empty->value;  #);
+               
+            #);
+          open::  (#  do 'Cut'->name; 'X'->key;  #);
+          
+       #);
+     copyItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do selection.doCopy;  #);
+               onStatus::  (#  do not selection.empty->value;  #);
+               
+            #);
+          open::  (#  do 'Copy'->name; 'C'->key;  #);
+          
+       #);
+     pasteItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do paste;  #);
+               onStatus::  (#  do canPaste->value;  #);
+               
+            #);
+          open::  (#  do 'Paste'->name; 'V'->key;  #);
+          
+       #);
+     deleteItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do selection.deleteAll;  #);
+               onStatus::  (#  do not selection.empty->value;  #);
+               
+            #);
+          open::  (#  do 'Delete'->name;  #);
+          
+       #);
+     gridItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do changeGrid;  #);
+               onStatus::  (#  do true->value;  #);
+               
+            #);
+          open::  (#  do 'Grid...'->name;  #);
+          
+       #);
+     findItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  #);
+               onStatus::  (#  do false->value;  #);
+               
+            #);
+          open::  (#  do 'Find...'->name;  #);
+          
+       #);
+     findAgainItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  #);
+               onStatus::  (#  do false->value;  #);
+               
+            #);
+          open::  (#  do 'Find again'->name;  #);
+          
+       #);
+     openSubEditorItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do selection.openSubEditor;  #);
+               onStatus::  (#  do selection.size >= 1->value;  #);
+               
+            #);
+          open::  (#  do 'Show Source Code'->name; 'J'->key;  #);
+          
+       #);
+     inspectItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onStatus::  (#  do true->value;  #);
+               onSelect::  (#  do thePropertyInspector.activate #);
+               
+            #);
+          open::  (#  do 'Object Inspector'->name; 'I'->key;  #);
+          
+       #);
+     objectFitToContents: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do selection.fitToContents;  #);
+               onStatus::  (#  do not selection.empty->value;  #);
+               
+            #);
+          open::  (#  do 'Fit to contents'->name;  #);
+          
+       #);
+     abstractItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onStatus::  (#  do not selection.empty->value;  #);
+               onSelect::  (#  do abstractSelection;  #);
+               
+            #);
+          open::  (#  do 'Abstract'->name;  #);
+          
+       #);
+     newPropertyItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onStatus::  (#  do not selection.empty->value;  #);
+               onSelect::  (#  do selection[]->addProperty;  #);
+               
+            #);
+          open::  (#  do 'Add Property'->name;  #);
+          
+       #);
+     propagateInterfaceItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onStatus::  (#  do not selection.empty->value;  #);
+               onSelect::  (#  do selection.first->propagateInterface;  #);
+               
+            #);
+          open::  (#  do 'Propagate Interface'->name;  #);
+          
+       #);
+     open:: 
+       (# 
+       do
+          'Edit'->name;
+          undoItem.open;
+          redoItem.open;
+          addSeparator;
+          cutItem.open;
+          copyItem.open;
+          pasteItem.open;
+          deleteItem.open;
+          addSeparator;
+          gridItem.open;
+          addSeparator;
+          openSubEditorItem.open;
+          addSeparator;
+          inspectItem.open;
+          objectFitToContents.open;
+          addSeparator;
+          abstractItem.open;
+          newPropertyItem.open;
+          propagateInterfaceItem.open;
+          
+       #);
+     
+  #)  
 
--- graphicalEditorEditMenu: descriptor --
+-- graphicalEditorAlignMenu: Descriptor --
 graphicalEditorMenu
-(#
-   undoItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do undo;  #);
-             onStatus:: 
-               (# t: ^text; 
-               do
-                  (if canUndo then
-                      'Undo '->t[];
-                      undoText->t.append;
-                      t[]->name;
-                      true->value;
-                      
-                   else
-                      'Undo'->name; false->value; 
-                  if);
-                  
-               #);
-             
-          #);
-        open::  (#  do 'Undo'->name; 'Z'->key;  #);
-        
-     #);
-   redoItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do redo;  #);
-             onStatus:: 
-               (# t: ^text; 
-               do
-                  (if canRedo then
-                      'Redo '->t[];
-                      redoText->t.append;
-                      t[]->name;
-                      true->value;
-                      
-                   else
-                      'Redo'->name; false->value; 
-                  if);
-                  
-               #);
-             
-          #);
-        open::  (#  do 'Redo'->name; 'R'->key;  #);
-        
-     #);
-   cutItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do selection.doCut;  #);
-             onStatus::  (#  do not selection.empty->value;  #);
-             
-          #);
-        open::  (#  do 'Cut'->name; 'X'->key;  #);
-        
-     #);
-   copyItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do selection.doCopy;  #);
-             onStatus::  (#  do not selection.empty->value;  #);
-             
-          #);
-        open::  (#  do 'Copy'->name; 'C'->key;  #);
-        
-     #);
-   pasteItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do paste;  #);
-             onStatus::  (#  do canPaste->value;  #);
-             
-          #);
-        open::  (#  do 'Paste'->name; 'V'->key;  #);
-        
-     #);
-   deleteItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do selection.deleteAll;  #);
-             onStatus::  (#  do not selection.empty->value;  #);
-             
-          #);
-        open::  (#  do 'Delete'->name;  #);
-        
-     #);
-   gridItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do changeGrid;  #);
-             onStatus::  (#  do true->value;  #);
-             
-          #);
-        open::  (#  do 'Grid...'->name;  #);
-        
-     #);
-   findItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  #);
-             onStatus::  (#  do false->value;  #);
-             
-          #);
-        open::  (#  do 'Find...'->name;  #);
-        
-     #);
-   findAgainItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  #);
-             onStatus::  (#  do false->value;  #);
-             
-          #);
-        open::  (#  do 'Find again'->name;  #);
-        
-     #);
-   openSubEditorItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do selection.openSubEditor;  #);
-             onStatus::  (#  do selection.size >= 1->value;  #);
-             
-          #);
-        open::  (#  do 'Show Source Code'->name; 'J'->key;  #);
-        
-     #);
-   inspectItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onStatus::  (#  do true->value;  #);
-             onSelect::  (#  do thePropertyInspector.activate #);
-             
-          #);
-        open::  (#  do 'Object Inspector'->name; 'I'->key;  #);
-        
-     #);
-   objectFitToContents: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do selection.fitToContents;  #);
-             onStatus::  (#  do not selection.empty->value;  #);
-             
-          #);
-        open::  (#  do 'Fit to contents'->name;  #);
-        
-     #);
-   abstractItem: @graphicalEditorItem
-     (# eventHandler::
-          (# onStatus::
-               (#
-               do not selection.empty -> value; 
-               #);
-             onSelect::
-               (#
-               do abstractSelection;
-               #);
-          #);
-        open::
-          (#
-          do 'Abstract' -> name;
-          #);
-     #);
-   newPropertyItem: @graphicalEditorItem
-     (# eventHandler::
-          (# onStatus::
-               (#
-               do not selection.empty -> value; 
-               #);
-             onSelect::
-               (# 
-               do selection[] -> addProperty;
-               #);
-          #);
-        open::
-          (#
-          do 'Add Property' -> name;
-          #);
-     #);
-   propagateInterfaceItem: @graphicalEditorItem
-     (# eventHandler::
-          (# onStatus::
-               (#
-               do not selection.empty -> value; 
-               #);
-             onSelect::
-               (# 
-               do selection.first -> propagateInterface;
-               #);
-          #);
-        open::
-          (#
-          do 'Propagate Interface' -> name;
-          #);
-     #);
-   open:: 
-     (# 
-     do
-        'Edit'->name;
-        undoItem.open;
-        redoItem.open;
-        addSeparator;
-        cutItem.open;
-        copyItem.open;
-        pasteItem.open;
-        deleteItem.open;
-        addSeparator;
-        gridItem.open;
-        addSeparator;
-        openSubEditorItem.open;
-        addSeparator;
-        inspectItem.open;
-        objectFitToContents.open;
-        addSeparator;
-        abstractItem.open;
-        newPropertyItem.open;
-        propagateInterfaceItem.open;
-     #);
-   
-#)
-
--- graphicalEditorAlignMenu: descriptor --
-graphicalEditorMenu
-(#
-   alignLeftItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do selection.alignLeft;  #);
-             onStatus::  (#  do selection.size > 1->value;  #);
-             
-          #);
-        open::  (#  do 'Left side'->name;  #);
-        
-     #);
-   alignRightItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do selection.alignRight;  #);
-             onStatus::  (#  do selection.size > 1->value;  #);
-             
-          #);
-        open::  (#  do 'Right side'->name;  #);
-        
-     #);
-   alignTopItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do selection.alignTop;  #);
-             onStatus::  (#  do selection.size > 1->value;  #);
-             
-          #);
-        open::  (#  do 'Top edge'->name;  #);
-        
-     #);
-   alignBottomItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do selection.alignBottom;  #);
-             onStatus::  (#  do selection.size > 1->value;  #);
-             
-          #);
-        open::  (#  do 'Bottom edge'->name;  #);
-        
-     #);
-   alignHorCenterItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do selection.alignHorCenter;  #);
-             onStatus::  (#  do selection.size > 1->value;  #);
-             
-          #);
-        open::  (#  do 'Vertical center'->name;  #);
-        
-     #);
-   alignVerCenterItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do selection.alignVerCenter;  #);
-             onStatus::  (#  do selection.size > 1->value;  #);
-             
-          #);
-        open::  (#  do 'Horizontal center'->name;  #);
-        
-     #);
-   showSpacingDialogItem: @graphicalEditorItem
-     (#
-        eventHandler:: 
-          (#
-             onSelect::  (#  do selection.showSpacingDialog;  #);
-             onStatus::  (#  do selection.size > 1->value;  #);
-             
-          #);
-        open::  (#  do 'Spacing...'->name;  #);
-        
-     #);
-   open:: 
-     (# 
-     do
-        'Align'->name;
-        alignLeftItem.open;
-        alignRightItem.open;
-        alignTopItem.open;
-        alignBottomItem.open;
-        alignHorCenterItem.open;
-        alignVerCenterItem.open;
-        addSeparator;
-        showSpacingDialogItem.open;
-        
-     #);
-   
-#)
+  (#
+     alignLeftItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do selection.alignLeft;  #);
+               onStatus::  (#  do selection.size > 1->value;  #);
+               
+            #);
+          open::  (#  do 'Left side'->name;  #);
+          
+       #);
+     alignRightItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do selection.alignRight;  #);
+               onStatus::  (#  do selection.size > 1->value;  #);
+               
+            #);
+          open::  (#  do 'Right side'->name;  #);
+          
+       #);
+     alignTopItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do selection.alignTop;  #);
+               onStatus::  (#  do selection.size > 1->value;  #);
+               
+            #);
+          open::  (#  do 'Top edge'->name;  #);
+          
+       #);
+     alignBottomItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do selection.alignBottom;  #);
+               onStatus::  (#  do selection.size > 1->value;  #);
+               
+            #);
+          open::  (#  do 'Bottom edge'->name;  #);
+          
+       #);
+     alignHorCenterItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do selection.alignHorCenter;  #);
+               onStatus::  (#  do selection.size > 1->value;  #);
+               
+            #);
+          open::  (#  do 'Vertical center'->name;  #);
+          
+       #);
+     alignVerCenterItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do selection.alignVerCenter;  #);
+               onStatus::  (#  do selection.size > 1->value;  #);
+               
+            #);
+          open::  (#  do 'Horizontal center'->name;  #);
+          
+       #);
+     showSpacingDialogItem: @graphicalEditorItem
+       (#
+          eventHandler:: 
+            (#
+               onSelect::  (#  do selection.showSpacingDialog;  #);
+               onStatus::  (#  do selection.size > 1->value;  #);
+               
+            #);
+          open::  (#  do 'Spacing...'->name;  #);
+          
+       #);
+     open:: 
+       (# 
+       do
+          'Align'->name;
+          alignLeftItem.open;
+          alignRightItem.open;
+          alignTopItem.open;
+          alignBottomItem.open;
+          alignHorCenterItem.open;
+          alignVerCenterItem.open;
+          addSeparator;
+          showSpacingDialogItem.open;
+          
+       #);
+     
+  #)  
 
 -- InterfaceBuilderGraphicalEditorWindowMenubarOpen: DoPart --
 do
@@ -613,4 +478,5 @@ do
    THIS(graphicalEditor).private.theEditMenu[]->append;
    THIS(graphicalEditor).private.theAlignMenu.open;
    THIS(graphicalEditor).private.theAlignMenu[]->append;
-   
+     
+
