@@ -84,7 +84,7 @@ IMAP: system
      sendFETCH: command
        (#
        do 'FETCH:'->log.putline;
-          'FETCH 4:5 (FLAGS BODY[HEADER])\n' -> outSocket.puttext
+          'FETCH 4 (FLAGS BODY[HEADER])\n' -> outSocket.puttext
        #);
      sendLIST: command
        (# done:: (# do listCompleted #);
@@ -110,7 +110,7 @@ IMAP: system
 
      sender: @ | system
        (#
-       do true -> doParse;
+       do 
           sendNOOP;        
 
           sendLOGIN;
@@ -121,13 +121,22 @@ IMAP: system
          (* ('"/users/olm/IMAP"','%') -> sendLIST;*)
           (*('alexandra','"*"') -> sendLIST;*)
           sendSELECT;
-          false -> doParse;
           sendFETCH;
           
        #);
-     doParse: @boolean;
-     receiver: @ | system
+     isOK: booleanValue
        (# R,A: ^text
+       enter R[]
+       do R.reset;
+          R.getAtom -> A[]; ' '->A.put;
+          (if A[] -> currentID.equal then
+              none -> currentID[];
+              true -> value
+          if);
+       #);
+     parseMesg: @boolean;
+     receiver: @ | system
+       (# R,A: ^text; resp: ^response
        do L: cycle
             (# ch: @char
             do (if outSocket.eos then 
@@ -136,13 +145,30 @@ IMAP: system
                if);
                getResponse -> R[] -> putline;
               (* R[] -> log.putline;*)
-               (if doParse then
-                   R[] -> parse;
-                else
-                   (* A message - hack *)
-                   R[] -> message;
-                   true -> doParse
-               if);
+               R[] -> parseImap -> resp[];
+               (if (resp[]<>none) then
+                   (if true
+                    // resp.isMsg then
+                       (# msg: @text; MR: ^messageResponse
+                       do cycle
+                          (#
+                          do getResponse -> R[];
+                             (if R[] -> isOk then 
+                                 msg[] -> parseMsg -> MR[];
+                                 'Subject: ' -> msg;
+                                 MR.subject[] -> msg.putline;
+                                 'To: ' -> msg.puttext;
+                                 MR.sender[] -> msg.putline;
+                                 msg[] -> message;
+                                 restart L 
+                             if);
+                             R[] -> msg.append;
+                          #)
+                       #);
+                    // resp.isList then
+                       resp[] -> listResp
+                   if)
+               if);       
                R.reset;
                R.getAtom -> A[]; ' '->A.put;
                (if A[] -> currentID.equal then
