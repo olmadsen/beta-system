@@ -63,6 +63,8 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon);
 /* FUNCTIONS */
 void PITAlloc(void)
 {
+  Block *block;
+
   /* The backpointer that will be placed in the persistent objects
      marking them as persistent is a pointer into a protected memory
      area. If the object has been assigned entry 'n' in the
@@ -71,10 +73,9 @@ void PITAlloc(void)
   */
   
   /* Allocate mmapped proxy indirection table. */
-  
-  mmapInitial((unsigned long) MAXENTRIES);
-  PIT = mmapHeapTop;
-  PITLimit = mmapHeapLimit;
+  block = reserveBlock((unsigned long) MAXENTRIES);
+  PIT = block -> top;
+  PITLimit = block -> limit;
 
   Claim((unsigned long)PITLimit < 0x7fffffff,
 	"PIT must be in positive adresses");

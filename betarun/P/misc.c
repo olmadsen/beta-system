@@ -72,7 +72,7 @@ unsigned long newPersistentObject(unsigned long storeID, Object *theObj)
   /* Create new entry in the objectTable */
   /* The flag FLAG_INMEM indicates that this object is not loaded from
      the store. It has no copy following it */
-  inx = insertObject(GCMark, FLAG_INMEM,
+  inx = insertObject((unsigned short)GCMark, FLAG_INMEM,
 		     sp -> storeID,
 		     sp -> offset,
 		     theObj);

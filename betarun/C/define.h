@@ -118,6 +118,7 @@
 
 #ifdef PERSIST
 #undef RTLAZY
+#define USEMMAP 
 #else
 #define RTLAZY /* Include support for lazy fetch */
 #endif /* PERSIST */

@@ -19,15 +19,18 @@
 #define inBlockUnused( theB, addr) ((theB->top <= (long *) addr) \
                               && ((long *) addr < theB->limit) )
 
-#define USEMMAP /* HACK! used by proxy.c, but not used for aoa, etc */
-
 Block * newBlock(long size)
 {
   Block * theBlock;
+  unsigned long sizeAlign;
 
+#ifdef USEMMAP
+  sizeAlign = (size + sizeof(Block) + 8191) & ~8191;
+  theBlock = reserveBlock(sizeAlign);
+#else
   theBlock = (Block *) MALLOC( sizeof(Block) + size );
+#endif /* USEMMAP */
   INFO_ALLOC(sizeof(Block) + size);
-  
   
   if( theBlock != 0 ){
     theBlock->next  = 0;
@@ -73,9 +76,9 @@ void mmapInitial(unsigned long numbytes)
   int fd = 0;
   int mmapflags = 0;
   signed long startadr = 0;
-  Claim(!mmapHeap, "mmapInitial: mmapHeap!=0, calling twice?\n");
-  Claim(!mmapHeapTop, "mmapInitial: mmapHeapTop!=0, calling twice?\n");
-  Claim(!mmapHeapLimit, "mmapInitial: mmapHeapLimit!=0, calling twice?\n");
+  Claim(mmapHeap == NULL, "mmapInitial: mmapHeap!=0, calling twice?\n");
+  Claim(mmapHeapTop == NULL, "mmapInitial: mmapHeapTop!=0, calling twice?\n");
+  Claim(mmapHeapLimit == NULL, "mmapInitial: mmapHeapLimit!=0, calling twice?\n");
   INFO(fprintf(output, "(#mmapInitial(%08X) ", (int)numbytes));
 
 #define MMAPSTART 0x10000000

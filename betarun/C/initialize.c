@@ -191,6 +191,10 @@ static long  AllocateHeap(long * base,
 	     )
 {
   if((*base = (long)MALLOC(numbytes)) != 0){
+    if (ObjectAlign((unsigned long)(*base)) != (unsigned long)(*base)) {
+      fprintf(output, "Allocated unaligned heap\n");
+      BetaExit(1);
+    }
     INFO_ALLOC(numbytes);
     *top   = *base;
     *limit = *base + numbytes;
