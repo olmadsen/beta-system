@@ -82,10 +82,15 @@ HandleCB:
 	stw %r13,-88(SP)
 	stw %r14,-84(SP)
 	stw %r15,-80(SP)
+        stw %r16,-76(SP)
 	stw %r17,-72(SP)
 	stw %r18,-68(SP)
-	bl CHandleCB,%r2    /* Call CHandleCB */
-	stw %r16,-76(SP)  
+        copy %r0,%r3 /* Clear BETA GC regs before entering BETA world */
+        copy %r0,%r4
+        copy %r0,%r5
+        copy %r0,%r6
+        bl CHandleCB,%r2    /* Call CHandleCB */
+        copy %r0,%r7
 	ldw -68(SP),%r18  /* Restore 15 words */
 	ldw -72(SP),%r17
 	ldw -76(SP),%r16
