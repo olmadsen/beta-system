@@ -1,4 +1,7 @@
 ORIGIN 'dependencyBody';
+INCLUDE '~beta/betaast/v5.0.2/donecheck';
+INCLUDE '~beta/containers/v1.4/list';
+INCLUDE 'findString';
 (*BODY 'heapanalyzis'*)
 --scanProperties:descriptor--
 (# PropError:
@@ -18,6 +21,7 @@ ORIGIN 'dependencyBody';
      do (* n is assumed to be lowercase *)
         (if true
          // 'origin'->n.equal // 'body'->n.equal // 'mdbody'->n.equal
+         // 'build' -> n.equal 
          // 'objfile'->n.equal // 'libfile'->n.equal // 'linkopt'->n.equal 
          // 'betarun'->n.equal // 'make'->n.equal // 'fswitch'->n.equal 
          // 'on'->n.equal // 'off'->n.equal // 'nolink' ->n.equal
@@ -43,7 +47,7 @@ do false -> originSetHere;
                ScanParameters
                (# doString::<
                     (# 
-                    do 395->xtrace
+                    do 15->xtrace
                        (#do ' group:'->xT; theGroup.nameT[]->xT;
                           '\n\torigin:'->xT; S[]->xT; xN
                        #);
@@ -86,6 +90,220 @@ do false -> originSetHere;
                     #);
                   doName:: (#do ('body',n[],3)->propError #)
                #);
+            // 'build' -> prop.equal  then
+               (# buildArgs: @ containerList (* mps has a list pattern *)
+                    (# element ::
+                         (# machineId: ^text;
+                            mArgs: [3] ^text; top: @integer
+                         #);
+                       add: @
+                         (# machineId: ^text;
+                            e: ^element
+                         enter machineId[]
+                         do &element[] -> e[];
+                            machineId[] -> e.machineId[];
+                            e[] -> append;
+                            e[] -> current[]
+                         #);
+                       current: ^element;
+                       addMarg: @
+                         (# ma: ^text
+                         enter ma[]
+                         do (if (current.top + 1 -> current.top) 
+                                > current.mArgs.range
+                                then
+                                current.mArgs.range -> current.mArgs.extend
+                            if);
+                            ma.copy -> current.mArgs[current.top][]
+                         #);
+                       findThisTarget: 
+                         (# default,pre,thiss: [3] ^element;
+                            dTop,pTop,tTop: @integer;
+                            preMatch: 
+                              (# t: ^text; b: @boolean
+                              enter t[]
+                              do
+                              exit b
+                              #);
+                            current: ^ element;
+                         do scan
+                            (#
+                            do (if true 
+                                // targetMachine[] -> current.machineId.equal 
+                                   then 
+                                   (if (tTop+1->tTop) > thiss.range then
+                                       thiss.range -> thiss.extend
+                                   if);
+                                   current[] -> thiss[tTop][] (* exact match *)
+                                // defaultId[] -> current.machineId.equal then
+                                   (if (dTop+1->dTop) > default.range then
+                                       default.range -> default.extend
+                                   if);
+                                   current[] -> default[dTop][]
+                                // current.machineId[] -> preMatch then
+                                   (if (pTop+1->pTop) > pre.range then
+                                       pre.range ->pre.extend
+                                   if);
+                                   current[] -> pre[pTop][]
+                            if)#);
+                            (if tTop > 0 then 
+                                (for i: tTop repeat
+                                     thiss[i][]-> current[];
+                                     INNER
+                                for)
+                             else (* no exact match *)
+                                (if pTop > 0  then
+                                    (for i: pTop repeat 
+                                         pre[i][] -> current[];
+                                         INNER
+                                    for);
+                                 else
+                                    (if dTop > 0 then
+                                        (for i: dTop repeat
+                                             default[i][] -> current[];
+                                             INNER
+                                        for);
+                                     else
+                                        (prop[],targetMachine[],6)->PropError
+                            if)if)if)
+                         #);                            
+                       display:
+                         (#
+                         do 20->xtrace
+                            (#
+                            do 'Building' -> xT;
+                               scan(#do current.machineId[] -> xT; 
+                                      (for i: current.top repeat
+                                        ' ' -> xC;
+                                           current.mArgs[i][] -> xT;
+                                      for);
+                                      xN
+                         #)#)#);
+                       check:
+                         (# e: ^element; arg: @text; T: ^text;
+                            m,m2: @integer; exeCommand: @boolean
+                         enter e[]
+                         do (if (e.top = 0) or (e.top = 2) then
+                                (prop[],targetMachine[],7) -> PropError
+                             else
+                                e.mArgs[1][]                                 
+                                  -> expandMacro2
+                                  -> objFile[]
+                                  -> EgetModTime -> m;
+                                (if m = -1 then
+                                    true -> exeCommand
+                                 else
+                                    (for i: e.top - 2 repeat
+                                         e.mArgs[1 + i][] 
+                                           -> T[] 
+                                           -> EgetModTime 
+                                           -> m2;
+                                         T[] -> isFile;
+                                         (if (m < m2) or (m2 = -1) then
+                                             (* if m2 = -1 then T is NOT
+                                              * existing, i.e. the command
+                                              * cannot be executed; the command
+                                              * is, however, marked for execution
+                                              * anyway, since it may be created
+                                              * later, and a possible job-file
+                                              * may then be ok
+                                              *)
+                                             true -> exeCommand
+                                         if)
+                                    for)
+                                if)
+                            if);
+                         exit exeCommand
+                         #);
+                       EgetModTime:
+                         (# t: ^text; m: @integer
+                         enter t[]
+                         do (t[],theGroup.nameT[] -> stripPathName) 
+                              -> thePathHandler.convertFilePath
+                              -> t[];
+                            t[] -> getModTime -> m;
+                            20->xTrace
+                            (#do 'EgetModTime: '->xT; T[] -> xT;
+                               '\nmodtime: '->xT; m->xI; xN
+                            #);
+                         exit m
+                         #);
+                       expandCommand:
+                         (# e: ^element; arg: @text; T: ^text; 
+                            lastSlash,argNo: @integer
+                         enter e[]
+                         do e.mArgs[e.top][] -> t[];
+                            
+                            (* First we expand args $0,$1, $2, ...;
+                             * args must be expanded before $$, since args
+                             * may contain $$.
+                             * Expansion is made backwards
+                             *    ..., $2, $1, $0
+                             * since the algoritm belwo may othwervise
+                             * replace e.g. $1 in $11
+                             *)
+                            (for ix: e.top - 1 repeat
+                                 arg.clear;
+                                 '$'->arg.put;
+                                 e.top - ix - 1 -> argNo -> arg.putint;
+                                 20->xTrace
+                                 (#do 'Find:'->xT; arg[]->xT; '  '->xT #);
+                                 findArg:
+                                   arg[] -> T.findString
+                                 (#
+                                 do (inx,inx+(argNo div 10 + 1)) -> T.delete;
+                                    (e.mArgs[argNo + 1][],inx) -> T.insert;
+                                    20->xTrace
+                                    (#do 'Replace:'->xT; 
+                                       e.mArgs[argNo + 1][] -> xT; '  '->xT;
+                                       T[] -> xT; xN
+                                    #); 
+                                    restart findArg (* same arguent may appear
+                                                     * several times
+                                                     *)
+                                 #)
+                            for);
+                            
+                            (* replace double $$ by targetDirectory *)
+                            T[] -> ExpandMacro2 -> T[];
+                            20->xTrace
+                            (#do 'Expanded command: '->xT; T[] -> xT; xN #);
+                            (theGroup.nameT[],thePathHandler.currentDirectory)
+                              -> thePathHandler. convertFilePath
+                              -> directory[];
+                            20->xTrace(#do 'dir1:'->xT; directory[]->xT; xN #);
+                            thePathHandler.directoryChar
+                              ->directory.findCh(#do inx -> lastSlash #);
+                            (if lastSlash > 0 then
+                                (1,lastSlash) -> directory.sub -> directory[]
+                            if);
+                            20->xTrace(#do 'dir1:'->xT; 
+                                         (if directory[] <> NONE then 
+                                             directory[] -> xT 
+                                         if); xN
+                                      #);
+                            T[] -> command[];
+                         #);
+                    #);
+                  textList: containerList(# element:: text #);
+                  defaultId: @ text;
+                  target: ^buildArgs.element;
+                  objFile,directory,command: ^text;
+               do 'default'->defaultId;
+                  buildArgs.clear;
+                  scanParameters
+                  (# doName:: (# do n[] -> buildArgs.add #);
+                     dostring:: (#do s[] -> buildArgs.addMarg #)
+                  #);
+                  (if switch[20] then buildArgs.display if);
+                  buildArgs.findThisTarget 
+                  (#
+                  do (if current[] -> buildArgs.check then
+                         current[] -> buildArgs.expandCommand
+                     if);
+                     (objFile[],directory[],command[]) -> BuildProperty
+                  #)
+               #)
             // ('mdbody'->prop.equal->MDBodyProp)
             // ('objfile'->prop.equal->objFileProp)
             // ('libfile'->prop.equal->libFileProp) 
@@ -147,14 +365,14 @@ do false -> originSetHere;
                                                -> stripPathName) 
                                                -> (*AST.*)thePathHandler.convertFilePath
                                                -> t[];
-                                             (if switch[390] then
+                                             (if switch[10] then
                                                  t[] -> f.name;
                                                  (if f.entry.exists  then
                                                      (* make file exists *)
                                                      (*AST.*)astFileExtension
                                                        -> theGroup.nameT.CopyAppend
                                                        -> f.name;
-                                                     (if switch[399] or f.entry.writeable  then
+                                                     (if switch[19] or f.entry.writeable  then
                                                          (* groupfile is writeable and/or switch is true *)
                                                          t[] -> isFile;
                                                          (makeProperty,t[]) 
@@ -165,7 +383,7 @@ do false -> originSetHere;
                                                      (*AST.*)astFileExtension
                                                        -> theGroup.nameT.CopyAppend
                                                        -> f.name;
-                                                     (if switch[399] or f.entry.writeable  then
+                                                     (if switch[19] or f.entry.writeable  then
                                                          (* groupfile is writable and/or switch is true *)
                                                          t[] -> isFile;
                                                      if);
@@ -248,7 +466,8 @@ do (*(if switch[10] then
     * may be accessed if exception is raised
     * by AST.top.open
     *)
-   381->xtrace(#do 'AstOpen: '->xT; fullname[]->xT; xN #);
+
+   1->xtrace(#do 'AstOpen: '->xT; fullname[]->xT; xN #);
    (fullname[],messagestream[]) -> (*AST.*)top.open
    (# astOverflow::<
         (# 
@@ -266,7 +485,7 @@ do (*(if switch[10] then
         do (if xverboseLevel<=xverboseLevel.actions then 
                'Parsing: '-> infostream.puttext; 
                ''''->infostream.put;
-               (if switch[35] then
+               (if useFullName then
                    fullname[]->infostream.puttext;
                 else
                    localname[]->infostream.puttext;
@@ -350,12 +569,10 @@ do (*(if switch[10] then
           S[]->MPSException; 
        #);
    if);
-   381->xtrace(#do ' Group: '->xT; g.nameT[]->xT; xN #);
+   1->xtrace(#do ' Group: '->xT; g.nameT[]->xT; xN #);
    (if doParse then
-       (* !!!!!!!!!!
-        * (false,this(AstInterface)[],g[]) -> setDoneCheckProperty;
-        *)
-        (if switch[4] then 
+       (false,this(AstInterface)[],g[]) -> setDoneCheckProperty;
+       (if useCompact then 
            ' Re-organizing fragment...'->infostream.puttext;
            g[]->addVirtualSuper; '...'->infostream.puttext;
             (* !!!!!! g[]->this(AstInterface).compact *)
@@ -394,7 +611,8 @@ do false -> DGP.hasProgramSlot;
    translist.init;
    bodylist.init;
    DGP.groupList.scan (# do current[]->DGP.groupList.TryToGC #);
-
+   false -> DGP.lastTransWasReal -> handledUsingList;
+   
    (*AST.*)doRealOpen->ASTval;
    false->(*AST.*)doRealOpen;
 
@@ -404,7 +622,7 @@ do false -> DGP.hasProgramSlot;
        rootFragment[]->infostream.puttext;
        ''' ...'->infostream.putline;
    if);
-   (if switch[382] then
+   (if switch[2] then
        (if lastRootFragment[]<>NONE then
            (if lastRootFragment[]->rootFragment.equal then
                true->handledUsingList;
@@ -419,7 +637,7 @@ do false -> DGP.hasProgramSlot;
                       t[]->getmodtime->m;
                       current.g[]->g[];
                       (if m>g.modtime then
-                          (if switch[384] then
+                          (if switch[4] then
                               t[]->tracestream.puttext;
                               m->tracestream.putint; ' '->tracestream.put;
                               g.modtime->tracestream.putint;
@@ -440,7 +658,7 @@ do false -> DGP.hasProgramSlot;
                           (* checking the group file *)
                           t[]->getmodTime->m;
                           (if m>current.g.modTime then 
-                              (if switch[384] then
+                              (if switch[4] then
                                   t[]->tracestream.puttext;
                                   m->tracestream.putint; ' '->tracestream.put;
                                   current.g.modtime->tracestream.putint;
@@ -450,7 +668,7 @@ do false -> DGP.hasProgramSlot;
                               isOpen->current.g.controller.status;
                               current.g[]->buildgraph;
                            else
-                              (if switch[384] then
+                              (if switch[4] then
                                   'Nothing for: '->tracestream.puttext;
                                   t[]->tracestream.putline;
                               if);
@@ -469,12 +687,12 @@ do false -> DGP.hasProgramSlot;
        L: (if not BodyList.Complete then restart L if)
    if);
 
-   (if not switch[395]  then
+   (if not switch[15]  then
        (if xverboseLevel<xverboseLevel.nothing then
            'Translating fragments ...'->infostream.putline;
        if);
        transList.scanAndClear(# do current[]->&translate #);
-       (if switch[388]  then 
+       (if switch[8]  then 
            'GroupList  '->tracestream.puttext;
            DGP.groupList.statistics(# do screen[]->print #);
        if);
@@ -483,8 +701,11 @@ do false -> DGP.hasProgramSlot;
    rootFragment.copy->lastRootFragment[];
 
 --DependencyGraphInit: dopart--
-do DGP.groupList.init;
-   <<SLOT ControlMDInit: descriptor>>; (* to compiler ? *)
+do (if not DGP.notFirst then
+       true->DGP.notFirst;
+       DGP.groupList.init;
+       <<SLOT ControlMDInit: descriptor>>; (* to compiler ? *)
+   if);
    INNER Init;
    (if errorStream[] = NONE then screen[] -> errorStream[] if);
    (if traceStream[] = NONE then screen[] -> traceStream[] if);
