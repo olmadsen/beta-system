@@ -858,25 +858,18 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
   
   /* Process the stack part */
 
-#ifdef PERSIST
-  /* datpete: There was previously a call of callRebinderC here in case 
-   * skipCparams was true, i.e. this was the frame corresponding to a
-   * beta pattern, that had called C. Is this still needed?
-   */
-#endif
-
   for (; theCell != (long*)theEnd; theCell+=2) {
     /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
 
-    /* Test for floating point regs on stack. The compiler may push
-     * up to 16 floating point (double) registers (128 bytes). If so it has
+    /* Test for tagged data regs on stack. The compiler may push
+     * floating point and busy %o-registers. If so it has
      * pushed a tag constructed as tag = -(n*2+4), where n is the number of
-     * 8-byte register pushed. 
+     * 8-byte stack-cells to skip. 
      * So n*2+2 longs should be skipped by GC (skipping the tag too).
-     * Since foo-loop skips 2 after continue, skip n*2 = -tag-4 longs.
+     * Since for-loop skips 2 after continue, skip n*2 = -tag-4 longs.
      */
-    int tag = (int)*theCell;
-    if ( (-(2*16+4)<=tag) && (tag<=-4) ){
+    int tag = (int)*theCell /* potential tag */;
+    if (tag<=-4){
       if ( (int)(theCell+(-tag-2)) > (int)(ar->fp) ){
 	/* Skip would be out of frame */
 	DEBUG_CODE({
@@ -1091,12 +1084,12 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
    */
   for (; theCell != (Object **) theEnd; theCell+=2) {
     /* Test for floating point regs on stack. See comment in ProcessAR */
-    int tag = (int)*theCell;
-    if ( (-(2*16+4)<=tag) && (tag<=-4) ){
+    int tag = (int)*theCell /* potential tag */;
+    if (tag<=-4){
       if ( (int)(theCell+(-tag-2)) > (int)(ar->fp) ){
 	/* Skip would be out of frame */
 	fprintf(output, 
-		"0x%08x: %d: NOT skipping %d float regs: skip would be out of frame! (%%fp=0x%08x).\n",
+		"0x%08x: %d: NOT skipping %d 8-byte cells: skip would be out of frame! (%%fp=0x%08x).\n",
 		(int)theCell,
 		tag,
 		(-tag-4)/2,
@@ -1104,16 +1097,19 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
 	Illegal();
       } else {
 	double *ptr;
-	int fn;
 	fprintf(output, 
-		"0x%08x: %d: Skipping tag and %d saved floating points regs:\n", 
+		"0x%08x: %d: Skipping tag and %d 8-byte stack cells:\n", 
 		(int)theCell,
 		tag,
 		(-tag-4)/2);
-	for (fn=0, ptr = (double*)(theCell+2); 
+	for (ptr = (double*)(theCell+2); 
 	     ptr < (double *)(theCell+(-tag-2));
-	     fn+=2, ptr++){
-	  fprintf(output, "0x%08x: [%%fr%d] %g\n", (int)ptr, fn, *ptr);
+	     ptr++){
+	  fprintf(output, "0x%08x: %8d %8.4g", (int)ptr, *(int*)ptr, *(float*)ptr);
+	  if ((long)ptr%8 == 0){
+	    fprintf(output, "%8.8g\n", *ptr);
+	  } 
+	  fprintf(output, "\n");
 	}
 	/* Do the skip  */
       	theCell += (-tag-4);
