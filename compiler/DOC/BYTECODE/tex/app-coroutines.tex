@@ -1,0 +1,83 @@
+\appendix{Appendix -- Coroutines} In this appendix, the classes {\tt
+Component} and {\tt Runner} are shown with the code for handling the
+thread-pool.
+
+{\tt\small\begin{verbatim}
+   class Component {
+      static Component current;     // The current executing Component
+      private Component caller;     // The calling Component
+      
+      private static Runner firstFree;
+
+      private Runner myRunner;      // the associated Runner
+      private Coroutine body;       // The actual Coroutine
+      private boolean isTerminated; // True if terminated
+      
+      public Component(Coroutine b) {
+         body = b;
+         caller = this;
+         if (firstFree == null) {
+            myRunner = new Runner();
+         } else { // get at Runner from the thread-pool
+            myRunner = firstFree;
+            firstFree = firstFree.next;
+            myRunner.myComponent = this;
+         }
+      }
+
+
+      public void swap() {
+         Component  old_current = current;
+         current = caller;
+         caller = old_current;
+
+         synchronized(old_current.myRunner) {
+            current.myRunner.go();
+            if (old_current.isTerminated) {
+               return;
+            } else {
+              try{ old_current.myRunner.wait(); }
+              catch (InterruptedException e) {}
+            }
+         }         
+      }
+   }
+\end{verbatim}
+}
+
+{\tt\small\begin{verbatim}
+   class Runner extends Thread {
+      Component myComponent;
+      Runner next;'
+
+      Runner(Component C) { 
+         myComponent = C; 
+         setDaemon(true) 
+      }
+
+      public void run() {
+         while (true) {
+            myComponent.body.Do();
+            myComponent.isTerminated = true;
+            myComponent.swap();
+
+            // return this Runner to the thread-pool
+            next = firstFree;
+            firstFree = this;
+            myComponent = null;
+
+            // wait for a new Component to use this Runner
+            synchronized (this) {
+               try{ wait(); } catch (InterruptedException e){}
+            }
+         }
+      }   
+      public void go() {
+        if !isAlive() { start(); }
+        else {
+           synchronized(this) {notify();};
+        }
+      }
+   }
+\end{verbatim}
+}
