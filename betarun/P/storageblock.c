@@ -103,9 +103,9 @@ CAStorage *SBcreate(char *host, char *path)
 #ifdef UNIX
                          , S_IFDIR | S_IREAD | S_IWRITE | S_IEXEC 
 #endif
-#ifdef nti_ms
+#ifdef nti
                          , 0
-#endif /* nti_ms */
+#endif /* nti */
                          ) >= 0) {         
        char *dbn = DBname(path);
        

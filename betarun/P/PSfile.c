@@ -19,9 +19,7 @@
 #endif
 #ifdef nti
 #include <io.h>
-#ifdef nti_ms
 #include <windows.h> /* to get CreateDirectory */
-#endif /* nti_ms */
 #endif /* nti */
 #include <errno.h>
 
@@ -41,7 +39,7 @@
  */
 int createDirectory(char *path, u_long attr)
 {
-#ifdef nti_ms
+#ifdef nti
   struct _SECURITY_ATTRIBUTES lpSA;
   
   lpSA.nLength = sizeof(struct _SECURITY_ATTRIBUTES);
@@ -212,15 +210,7 @@ long isDir(char *name)
   }
 #endif
 
-#ifdef nti_gnu
-  struct stat buf;
-  int result = _stat(name, &buf);
-  if (result != 0)
-    return 0;
-  if (buf.st_mode & S_IFDIR) 
-    return 1;
-#endif
-#ifdef nti_ms
+#ifdef nti
   struct _stat buf;
   int result = _stat(name, &buf);
   if (result != 0)
