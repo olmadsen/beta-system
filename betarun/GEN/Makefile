@@ -5,3 +5,6 @@ all: allways
 	cd apollo; make
 	cd mac; make
 allways:
+
+tags:
+	etags */*.bet
