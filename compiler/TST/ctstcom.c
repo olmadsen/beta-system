@@ -6,8 +6,9 @@
 # define STDCALL
 #endif
 
-#define test 1
+#define test 0
 struct xCOMclass; /* forward */
+
 
 struct data4a { long x; };
 struct data4b { short x; short y; };
