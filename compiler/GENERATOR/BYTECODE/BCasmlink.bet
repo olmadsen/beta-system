@@ -16,6 +16,9 @@ use_dotnet_modules:
 main_in_program:
   (# exit true #);
 
+generate_jar_manifest:
+  (# exit false #);
+
 unQuote:
   (# t: ^text;
   enter t[]
@@ -256,9 +259,9 @@ do (if common.switch[184] or common.switch[189] then
            #)if)
         else           
            (if verboseLevel <= verboseLevel.verbose then
-               'OOPS! AsmLink: skipping\n\t' -> screen.puttext;
+               'OOPS! AsmLink: skipping non-existing\n\t' -> screen.puttext;
                F[] -> screen.putline;
-               'as is has not been generated (compiler error).' 
+               ' (compiler error).' 
                  -> screen.putline;
        if)if)
     else
@@ -407,20 +410,25 @@ do 'ldTmp'->TODO
         
 do (if true
     // isJava then
-       'echo "Name: javabc/program.class" >' -> AFF.puttext;
-       objName[]->AFF.puttext;
-       '.manifest' -> AFF.putline;
-       'echo "Main-Class: program" >>' -> AFF.puttext;
-       objName[]->AFF.puttext;
-       '.manifest' -> AFF.putline;
-       
-       'jar cmf' -> AFF.puttext;
+       (if generate_jar_manifest then
+           'echo "Name: javabc/program.class" >' -> AFF.puttext;
+           objName[]->AFF.puttext;
+           '.manifest' -> AFF.putline;
+           'echo "Main-Class: program" >>' -> AFF.puttext;
+           objName[]->AFF.puttext;
+           '.manifest' -> AFF.putline;
+           'jar cmf' -> AFF.puttext;
+        else
+           'jar cf' -> AFF.puttext;           
+       if);
        (if verboseLevel <= verboseLevel.verbose then
            'v' ->AFF.puttext;
        if);
        ' '-> AFF.puttext; 
-       objName[]->AFF.puttext;
-       '.manifest ' -> AFF.puttext;
+       (if generate_jar_manifest then
+           objName[]->AFF.puttext;
+           '.manifest ' -> AFF.puttext;
+       if);
        CodeDirectory[] -> AFF.puttext;
        DirectoryChar -> AFF.put;
        objName[] -> e.path;
@@ -491,28 +499,38 @@ do 'asmlinkdynamic'->TODO
 ---linkObj:descriptor ---
 (# e: @diskentry;
    path, name: ^text;
-do lObj[] -> escDollar -> lObj[];
+do 
    (if true
     // isJava then
-       lObj[] -> unquote -> e.path;
-       (* Extract path of lObj as a relative path from current directory *)
-       e.path.head -> path[];
-       (path[], '') -> thePathHandler.localPath -> path[];
-       ' -C ' -> ldA.puttext;
-       path[] -> quote -> ldA.puttext;
-       ' ' -> ldA.put;
-       e.path.name -> name[];
+       lObj[] -> unquote -> name[];
        '.J.class' -> name.stripExtension;
        '.class' -> name.AppendExtension;
-       name[] -> quote -> ldA.puttext;
-       '\\\n\t' -> ldA.puttext
+       name[] -> e.path;
+       (if not e.exists then
+           (if verboseLevel <= verboseLevel.verbose then
+               'OOPS! AsmLink: skipping non-existing\n\t' -> screen.puttext;
+               name[] -> screen.putline;
+               '(compiler error).' 
+                 -> screen.putline;
+           if);
+        else
+           (* Extract path of lObj as a relative path from current directory *)
+           e.path.head -> path[];
+           (path[], '') -> thePathHandler.localPath -> path[];
+           ' -C ' -> ldA.puttext;
+           path[] -> quote -> ldA.puttext;
+           ' ' -> ldA.put;
+           e.path.name -> name[];
+           name[] -> escDollar -> quote -> ldA.puttext;
+           '\\\n\t' -> ldA.puttext
+       if);
     // isIL then
        (if use_dotnet_modules then
            (* lObj = '"foo.il.netmodule"' *)
            '.il.netmodule"' -> lObj.stripExtension;
            '.netmodule"' -> lObj.appendExtension;
            ' '->ldA.puttext;
-           lObj[] -> ldA.putText; 
+           lObj[] -> escDollar -> quote -> ldA.putText; 
         else
            (* lObj = '"foo.il.dll"' *)
            '.il.dll"' -> lObj.stripExtension;
@@ -574,19 +592,42 @@ do (if true
        if);
     // isJava then
        (if not common.switch[6] then
-           '/bin/rm -f '                             -> AFF.puttext; 
-           objName[]                                 -> AFF.puttext;
-           '.manifest'                               -> AFF.putline;
+           (if generate_jar_manifest then
+               '/bin/rm -f '                         -> AFF.puttext; 
+               objName[]                             -> AFF.puttext;
+               '.manifest'                           -> AFF.putline;
+           if);
            'echo "#!/bin/sh"                       >'-> AFF.puttext; 
            objName[]                                 -> AFF.puttext;
-           '\necho "exec java -jar '                 -> AFF.puttext;
+           '\necho "exec java '                      -> AFF.puttext;
+           (if generate_jar_manifest then
+               '-jar '                               -> AFF.puttext;
+            else
+               '-cp '                                -> AFF.puttext;
+           if);
+           (* Add LIBFILES to classpath *)
+           TX.scan
+           (#
+           do (if thisElm.kind = LibKind then 
+                  thisElm.T[] -> AFF.puttext;
+                  ':' -> AFF.put;
+              if)
+           #); 
            (CodeDirectory[], ObjDirectory[]) 
              -> thePathHandler.localpath
              -> AFF.puttext;
            DirectoryChar -> AFF.put;
            objName[] -> e.path;
            e.path.name                               -> AFF.puttext; 
-           '.jar" >> '                               -> AFF.puttext;
+           '.jar" '                                  -> AFF.puttext;
+           (if not generate_jar_manifest then
+               (if main_in_program then
+                   'program' -> AFF.puttext;
+                else
+                   objname[] -> AFF.puttext;
+               if);
+           if);
+           '>> '                                     -> AFF.puttext;
            objName[]                                 -> AFF.puttext;
            '\nchmod a+x '                            -> AFF.puttext;
            objName[] -> AFF.puttext;
