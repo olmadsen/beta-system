@@ -1,9 +1,13 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $Id: lvra.c,v 1.18 1992-09-03 12:57:17 beta Exp $
+ * Mod: $Id: lvra.c,v 1.19 1992-09-04 14:25:22 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
+
+static LVRACompaction();
+static LVRAAlive();
+static LVRAConstructFreeList();
 
 #define TableMAX 15
 
@@ -228,37 +232,27 @@ static ref(ValRep)LVRAAllocInBlock( range)
   return 0;
 }
 
-/* LVRAByteAlloc allocate a Byte repetition in the LVRArea. */
-ref(ValRep) LVRAByteAlloc( range)
-     long range;
-{
-  fprintf(output, "Allocation of large byte repetitions (%d) not yet implemented, sorry.\n", range);
-  exit (1);
-}
-
-/* LVRAWordAlloc allocate a Word repetition in the LVRArea. */
-ref(ValRep) LVRAWordAlloc( range)
-     long range;
-{
-  printf("Allocation of large word repetitions not yet implemented, sorry.\n");
-  exit (1);
-}
-/* LVRADoubleAlloc allocate a Double repetition in the LVRArea. */
-ref(ValRep) LVRADoubleAlloc( range)
-     long range;
-{
-  printf("Allocation of large Double repetitions not yet implemented, sorry.\n");
-  exit (1);
-}
-
 /* LVRAAlloc allocate a Value repetition in the LVRArea. */
-ref(ValRep) LVRAAlloc( range)
+ref(ValRep) LVRAAlloc(proto, range)
+     ref(ProtoType) proto;
      long range;
 {
   ref(ValRep)    newRep;
   long           size;
   ref(LVRABlock) block;
   long           rest;
+
+  switch( (int) proto){
+  case (int) ByteRepPTValue:
+    fprintf(output, "Allocation of large byte repetitions (%d) not yet implemented, sorry.\n", range);
+    exit (1);
+  case (int) WordRepPTValue:
+    fprintf(output, "Allocation of large word repetitions (%d) not yet implemented, sorry.\n", range);
+    exit (1);
+  case (int) DoubleRepPTValue:
+    fprintf(output, "Allocation of large double repetitions (%d) not yet implemented, sorry.\n", range);
+    exit (1);
+  }
 
   INFO_LVRA_ALLOC( fprintf( output, "<%d>", range) );
   if( LVRABaseBlock == 0 ){
