@@ -54,6 +54,9 @@ notifyFIXME:
 fixme_is_comment:
   (# exit true #);
 
+defaultversion:
+  (# exit '1:0:0:0' #);
+
 trace_opcode:
   (# opcode: @integer;
   enter opcode
@@ -106,6 +109,16 @@ _n:
      if);
   #);
 
+trace_string:
+  (# T: ^text
+  enter t[]
+  do out.nl;
+     'ldstr "'->out.puttext; 
+     T[]->out.puttext; 
+     '"' -> out.putln;
+     'call void [mscorlib]System.Console::WriteLine(string)' -> out.putln;
+  #);
+
 FIXME: 
   (# T: ^text
   enter T[]
@@ -116,11 +129,7 @@ FIXME:
      (if fixme_is_comment then
          T[] -> emitcomment;
       else
-         out.nl;
-         'ldstr "'->out.puttext; 
-         T[]->out.puttext; 
-         '"' -> out.putln;
-         'call void [mscorlib]System.Console::WriteLine(string)' -> out.putln;
+         T[] -> trace_string;
      if)
   #);
 ConvertType:
@@ -133,7 +142,9 @@ ConvertType:
      if);
      (if true 
       // T[]=NONE then
-         (DumpStack, 'ConvertType: T[] is none') -> Stop;
+         (*(DumpStack, 'ConvertType: T[] is none') -> Stop;*)
+         'ConvertType: T[] is none' -> fixme;
+         'ConvertTypeNONE' -> T[];
       // 'I' -> T.equal then
          'int32' -> T[];   (if trace_convert then  ' /*I*/' -> T.append if);
       // '[I' -> T.equal then
@@ -745,15 +756,7 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
      do '/* Assembly references. */' -> out.putline;
         'mscorlib' -> importAssembly;
         (if use_betarun then
-            out.indent;
-            '.assembly extern%s betarun {}\n'
-              -> out.putformat(# 
-                              do (if common.switch[186] then 
-                                     ' retargetable'->s 
-                                  else 
-                                     ''->s
-                                 if)
-                              #);
+            'betarun' -> importAssembly;
         if);
      #);
    emitBETAAssemblyReferences:
@@ -763,12 +766,13 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
            assemblyname: ^text;
         do current[] -> e.path;
            e.path.name -> assemblyname[];
-           (if assemblyname[] -> thisModuleName.equal then
+           (if assemblyname.copy->untick -> thisModuleName.equal then
                (*thisModuleName[]->emitcomment; out.newline *)
             else
                assemblyName[] -> importAssembly;
            if);
         #);
+        'Component' -> importAssembly;
      #);
    
    imported_assemblies: @texthashtable;
@@ -822,7 +826,12 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
                        '.publickeytoken = (%s)'
                          -> out.putformat(# do publickeytoken[]->s #);
                        out.newline;
-                    #);
+                    #)
+                 else
+                    out.nl;
+                    '.ver %s'
+                      -> out.putformat(# do defaultversion->s; #);
+                    out.newline;                       
                 if);
                 out.indent.dec;
                 '}' -> out.putln;
@@ -982,7 +991,7 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
                                #);
              out.indent.inc; out.putln;
              '.hash algorithm 32772	// selected algorithm is SHA1' -> out.putln;
-             '.ver 1:0:0:0		// version 1.0' -> out.putline;
+             '.ver ' -> out.puttext; defaultversion -> out.putline;
              out.indent.dec;
              out.indent;
              '}' -> out.putline;
@@ -1691,9 +1700,6 @@ do init;
                     '/* callprim: %s(%s) */'->out.putformat(# do prim[]->s; arg[]->s #);
                 if);
                 (if true 
-                 // 'new' -> prim.equal then
-                    arg.copy -> class[]; (* ugly! *)
-                    (* Rest is done in subsequent init *)
                  // 'initSuper' -> prim.equal then
                     out.nl;
                     'call  instance void '->out.puttext;
@@ -1723,25 +1729,39 @@ do init;
                     if);
                     delta -> stack_delta;
                     (*BCstate.fields.emitInit don't: No need to initialize to default values *)
+                 // 'new' -> prim.equal then
+                    arg.copy -> class[]; (* ugly! *)
+                    (if trace_opcodes then
+                        '/* callprim: new: class is: %s */'->out.putformat(# do class[]->s #);
+                    if);
+                    (* Rest is done in subsequent init *)
                  // 'init' -> prim.equal then
-                    (# ctor_signature: ^text;
-                    do 'void ' -> ctor_signature[];
-                       class[] (* class name *) -> AddClass -> ctor_signature.puttext;
-                       '::.ctor(' -> ctor_signature.puttext;
-                       (if false then
-                           '/*arg:'->out.puttext; arg[]->out.puttext;'*/'->out.puttext;
-                       if);
-                       (if ('-'->arg.equal) then
-                           (* no arguments *)
-                        else
-                           arg[] (* origin name *) -> AddClass -> ctor_signature.puttext;
-                       if);
-                       ')' -> ctor_signature.puttext;
-                       out.nl;
-                       'newobj  instance '-> out.puttext;
-                       ctor_signature[] -> out.puttext;
-                       1+(ctor_signature[]->function_stack_delta) -> stack_delta
-                    #);
+                    (if class[]=NONE then
+                        'callprim.init: class is NONE' -> putline;
+                     else
+                        (# ctor_signature: ^text;
+                        do 'void ' -> ctor_signature[];
+                           
+                           class[] (* class name *) -> AddClass -> ctor_signature.puttext;
+                           '::.ctor(' -> ctor_signature.puttext;
+                           (if false then
+                               '/*arg:'->out.puttext; arg[]->out.puttext;'*/'->out.puttext;
+                           if);
+                           (if ('-'->arg.equal) then
+                               (* no arguments *)
+                            else
+                               (if arg[]=NONE then
+                                   'callprim.init: arg is NONE' -> putline;
+                               if);
+                               arg[] (* origin name *) -> AddClass -> ctor_signature.puttext;
+                           if);
+                           ')' -> ctor_signature.puttext;
+                           out.nl;
+                           'newobj  instance '-> out.puttext;
+                           ctor_signature[] -> out.puttext;
+                           1+(ctor_signature[]->function_stack_delta) -> stack_delta
+                        #);
+                    if)
                  // 'NewVR1' -> prim.equal
                  // 'AlloVR1' -> prim.equal then
                     'char' -> newArray  
@@ -2111,44 +2131,80 @@ do init;
                     arg[] -> out.putln;
                     'call  class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)' -> out.putln;
                     'call  %s %s::AlloS(class [mscorlib]System.Object, class [mscorlib]System.Type)' -> out.putformat(# do sigStructure->s; sigStructure->s; #); out.putln;
+                    0 -> stack_delta;
                  // 'ObjS' -> prim.equal then
                     out.nl;
                     'call %s %s::ObjS(class [mscorlib]System.Object)' -> out.putformat(# do sigStructure->s; sigStructure->s; #); 
                     out.nl;
+                    -3 -> stack_delta;
                  // 'eqS' -> prim.equal then
                     out.nl;
                     'call bool %s::eqS(%s, %s)' -> out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
                     out.nl;
+                    -3 -> stack_delta;
                  // 'neS' -> prim.equal then
                     out.nl;
                     'call bool %s::neS(%s, %s)' -> out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
                     out.nl;
+                    -3 -> stack_delta;
                  // 'ltS' -> prim.equal then
                     out.nl;
                     'call bool %s::ltS(%s, %s)' -> out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
                     out.nl;
+                    -3 -> stack_delta;
                  // 'leS' -> prim.equal then
                     out.nl;
                     'call bool %s::leS(%s, %s)' -> out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
                     out.nl;
+                    -3 -> stack_delta;
                  // 'gtS' -> prim.equal then
                     out.nl;
                     'call bool %s::gtS(%s, %s)' -> out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
                     out.nl;
+                    -3 -> stack_delta;
                  // 'geS' -> prim.equal then
                     out.nl;
                     'call bool %s::geS(%s, %s)' -> out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
                     out.nl;
+                    -3 -> stack_delta;
                  // 'AlloSI' -> prim.equal then
                     out.nl;
                     'callvirt class [mscorlib]System.Object %s::AlloSI()' -> out.putformat(# do sigStructure->s; #);
                     out.nl;
+                    0 -> stack_delta;
                  // 'Att' -> prim.equal then
-                    'missing call of attach here' -> emitcomment;
-                    'we pop the stack to avoid overflow' -> emitcomment;
                     out.nl;
-                    'pop' -> out.puttext;
-                    -1 -> stack_delta;
+                    'Att'->emitcomment;
+                    out.nl;
+                    'ldfld class [\'%s\']\'Component\' [\'%s\']\'BetaObject\'::\'_comp\'' -> out.putformat(# do common.ComponentLocation->s; betaenv_name->s; #);
+                    out.nl;
+                    'callvirt void [\'%s\']\'Component\'::\'swap\'()'-> out.putformat(# do common.ComponentLocation->s; #);
+                    out.nl;
+                    0 -> stack_delta;
+                 // 'Susp' -> prim.equal then
+                    out.nl;
+                    'Susp'->emitcomment;
+                    out.nl;
+                    'ldsfld class [\'%s\']\'Component\' [\'%s\']\'Component\'::\'current\'' -> out.putformat(# do common.ComponentLocation->s; common.ComponentLocation->s; #);
+                    out.nl;
+                    'callvirt void [\'%s\']\'Component\'::\'swap\'()'-> out.putformat(# do common.ComponentLocation->s; #);
+                    out.nl;
+                    0 -> stack_delta;
+                 // 'SuspX' -> prim.equal then
+                    out.nl;
+                    'SuspX'->emitcomment;
+                    out.nl;
+                    'ldfld class [\'%s\']\'Component\' [\'%s\']\'BetaObject\'::\'_comp\'' -> out.putformat(# do common.ComponentLocation->s; betaenv_name->s; #);
+                    out.nl;
+                    'callvirt void [\'%s\']\'Component\'::\'swap\'()'-> out.putformat(# do common.ComponentLocation->s; #);
+                    out.nl;
+                    0 -> stack_delta;
+                 // 'AlloC' -> prim.equal then
+                    out.nl;
+                    'dup' -> out.putln;
+                    'call void [\'%s\']\'Component\'::\'AlloC\'(class [\'%s\']\'BetaObject\')'-> out.putformat(# do common.ComponentLocation->s; betaenv_name->s; #);
+                    out.nl;
+                    0 -> stack_delta;
                  else
                     'Primitive NYI: ' -> (prim[] -> ('(' -> (')' -> (arg.copy).append).prepend).prepend).prepend -> fixme;
                 if);
