@@ -240,9 +240,15 @@ extern void ProcessStackObj(StackObject *, CellProcessFunc func);
 extern void GeneralProcessStack(CellProcessFunc func);
 extern void ProcessStack(void);
 extern void DoStackCell(Object **theCell, Object *theObj);
+#ifdef RTVALHALLA
+extern long *CollectStackRoots(long *SP);
+#endif /* RTVALHALLA */
+
 #ifdef sparc
 extern long frame_PC;
-#endif
+void DisplaySPARCStack(BetaErr errorNumber, Object *theObj, long *thePC, long theSignal);
+#endif /* sparc */
+
 #ifdef NEWRUN
 extern long WindBackSP(long SP, Object *obj, long PC);
 extern void ProcessStackFrames(long SP, long StackStart, long stopAtComp, long dynOnly, CellProcessFunc func);
@@ -251,16 +257,15 @@ extern void PrintStackFrame(long *PrevSP, long *SP);
 extern void PrintRefStack(void);
 #endif /* RTDEBUG */
 #endif /* NEWRUN */
-#ifdef RTVALHALLA
-extern long *CollectStackRoots(long *SP);
+
+
 #ifdef intel
+#ifdef RTVALHALLA
 extern void ProcessValhallaRefStack(void);
 #ifdef RTDEBUG
 void PrintValhallaRefStack(void);
 #endif /* RTDEBUG */
 #endif /* RTVALHALLA */
-#endif /* intel */
-#ifdef intel
 extern void ProcessStackPart(long *low, long *high, CellProcessFunc whenObject,CellProcessFunc whenNotObject);
 extern int SkipDataRegs(long *theCell);
 extern void PrintStack(long *StackEnd);
