@@ -1,6 +1,10 @@
 ORIGIN 'betaenvbody';
 INCLUDE '~beta/dotnetlib/System/String';
+INCLUDE '~beta/dotnetlib/System/Environment';
+INCLUDE '~beta/dotnetlib/System/Threading/Thread';
 INCLUDE '~beta/dotnetlib/System/Console';
+INCLUDE '~beta/dotnetlib/System/IO/TextReader';
+INCLUDE '../textutils';
 
 --LIB: attributes--
 
@@ -49,14 +53,28 @@ ClrConsole: Stream
        #);
   #);
 ClrKeyBoard: Stream
-  (# Eos::<
-       (# do false -> value (* FIXME *) #);
+  (# in: ^TextReader;
+     buffer: [1]@char;
+     init:
+       (# 
+       do Console.get_In->in[]
+       exit THIS(ClrKeyboard)[]
+       #);
+     Eos::<
+       (# 
+       do (* This is different from the default implementation of eos
+           * which is blocking. 
+           *)
+          (in.Peek = ascii.eot) -> value;
+       #);
      OtherError::< 
        (# do 'Keyboard error'->msg.puttext #);
      Put::< 
        (# do 'Warning: attempt to Put to the Keyboard' -> screen.putline; #);
      Get::<
-       (# do Console.Read -> ch #);
+       (# 
+       do Console.Read -> ch;
+       #);
      GetAtom::<
        (# 
        do 'betaenv:ClrKeyboard.GetAtom' -> NYI
@@ -66,14 +84,32 @@ ClrKeyBoard: Stream
        do Console.ReadLine -> txt[];
        #);
      Peek::<
-       (# (* FIXME *) #);
+       (# 
+       do in.Peek->ch;
+          (* NOTICE: BETA char 8 bit, IL char 16 bit *)
+          ch %Band 0xff -> ch;
+       #);
   #);
 
 --betaenv_machine_type: dopart--
 do 'clr' -> T;
 
 --- betaenvStop: dopart ---
-do 'betaenv:stop' -> NYI (* Environment.Exit + Environment.StackTrace *)
+do newLine; 
+   (if T[] <> NONE then T[]->putText; newline if);
+   (if termCode
+    // normal  then 
+       0 -> Environment.DotnetExit;
+    // failure then 
+       1 -> Environment.DotnetExit;
+    // failureTrace then 
+       Environment.get_StackTrace -> Console.WriteLine_String;
+       1 -> Environment.DotnetExit;
+    // dumpStack then
+       Environment.get_StackTrace -> Console.WriteLine_String;
+    else
+       'Stop: Unknown termCode: '->screen.puttext; termCode->screen.putint; screen.newline;
+   if)
    
 --- betaenv_state:doPart ---
 do 'betaenv:state' -> NYI
@@ -87,7 +123,7 @@ do 'betaenv:doGC' -> NYI
 --betaenvbodyMDInitAscii: descriptor-- 
 (#
 do
-   (* Initialize private.NonWhiteSpace. Offsett by one to allow test for
+   (* Initialize private.NonWhiteSpace. Offset by one to allow test for
     * isNonWhiteSpace(0)
     *)
    (* From '!'(33) to '~'(126) is NonWhiteSpace *)
@@ -103,7 +139,7 @@ do
 do ascii.init;
    ascii.nl-> ascii.newline;
    &ClrConsole[]->screen[]; 
-   &ClrKeyboard[]->keyboard[];
+   (&ClrKeyboard[]).init->keyboard[];
    &rawArgumentHandler[]->argumentHandler[];
 #)
 
