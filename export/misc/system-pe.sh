@@ -18,12 +18,12 @@ then
 	FILES=`/users/beta/export/distribution/r3.1.1/files/system-pe.files`
 	echo "\
 $FILES \
-./betarun/v2.7/${CODEDIR}/%SDK%/betarun.lib \
-./betarun/v2.7/${CODEDIR}/%SDK%/betarunv.lib\
+./betarun/${BETARUN}/${CODEDIR}/%SDK%/betarun.lib \
+./betarun/${BETARUN}/${CODEDIR}/%SDK%/betarunv.lib\
 " \
 | /users/beta/export/distribution/r3.1.1/misc/icomp $DST/system.cmd
 
-echo "cd %BETALIB%\\betarun\\v2.7\\${TARGET}\%SDK%" > $DST/system-pe.cmd
+echo "cd %BETALIB%\\betarun\\${BETARUN}\\${TARGET}\%SDK%" > $DST/system-pe.cmd
 echo "ren  betarun.lib  betarun.lib.orig"          >> $DST/system-pe.cmd
 echo "ren  betarunv.lib betarunv.lib.orig"         >> $DST/system-pe.cmd
 echo "copy betarun.pe betarun.lib"                 >> $DST/system-pe.cmd
@@ -32,7 +32,7 @@ echo ""                                            >> $DST/system-pe.cmd
 cat $DST/system.cmd                                >> $DST/system-pe.cmd
 echo ""                                            >> $DST/system-pe.cmd
 echo ""                                            >> $DST/system-pe.cmd
-echo "cd %BETALIB%\\betarun\\v2.7\\${TARGET}\%SDK%">> $DST/system-pe.cmd
+echo "cd %BETALIB%\\betarun\\${BETARUN}\\${TARGET}\%SDK%">> $DST/system-pe.cmd
 echo "del betarun.lib"                             >> $DST/system-pe.cmd
 echo "del betarunv.lib"                            >> $DST/system-pe.cmd
 echo "ren betarunv.lib.orig betarunv.lib"          >> $DST/system-pe.cmd
@@ -59,14 +59,14 @@ else
 
 	/bin/rm -rf betarun
 	mkdir betarun
-	mkdir betarun/v2.7
-	mkdir betarun/v2.7/$TARGET
-	cp /users/beta/betarun/v2.7/$TARGET/betarun.pe ./betarun/v2.7/$TARGET/betarun.o
-	cp /users/beta/betarun/v2.7/$TARGET/betarun.pe ./betarun/v2.7/$TARGET/betarunv.o
+	mkdir betarun/${BETARUN}
+	mkdir betarun/${BETARUN}/$TARGET
+	cp /users/beta/betarun/${BETARUN}/$TARGET/betarun.pe ./betarun/${BETARUN}/$TARGET/betarun.o
+	cp /users/beta/betarun/${BETARUN}/$TARGET/betarun.pe ./betarun/${BETARUN}/$TARGET/betarunv.o
 
 	tar -rovhf $DST/system.tar \
-	  ./betarun/v2.7/${CODEDIR}/betarun.o \
-	  ./betarun/v2.7/${CODEDIR}/betarunv.o  \
+	  ./betarun/${BETARUN}/${CODEDIR}/betarun.o \
+	  ./betarun/${BETARUN}/${CODEDIR}/betarunv.o  \
 	>> $DST/system.lst
 
 	echo "Compressing..."
