@@ -1,0 +1,359 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+                      "http://www.w3.org/TR/REC-html40/loose.dtd"
+>
+<HTML>
+<HEAD>
+<META http-equiv="Content-Type" CONTENT="text/html; CHARSET=ISO-8859-1">
+<title>DLL usage in BETA</title>
+<link rev="made" href="mailto:beta@daimi.au.dk">
+<LINK REL="stylesheet" HREF="http://www.daimi.au.dk/~beta/doc/style/miadoc.css" TYPE="text/css">
+</HEAD>
+
+<BODY>
+<H1>DLL usage in BETA</H1>
+
+<H3>Contents</H3>
+
+<UL>
+<LI><A HREF="#beta_dll">Using a BETA-created DLL from a C program</A></LI>
+<UL>
+<LI><A HREF="#background">Background</A>
+<LI><A HREF="#beta_dll_example">Example</A>
+</UL>
+<LI><A HREF="#c_dll">Using a C-created DLL from a BETA program</A></LI>
+<UL>
+<LI><A HREF="#c_dll_example">Example</A>
+</UL>
+<LI><A HREF="#dll_links">DLL links</A></LI>
+</UL>
+
+
+<H3><A NAME="beta_dll">Using a BETA-created DLL from a C program</A></H3>
+
+As of July 11 2002 the compiler can now (with support from betarun) 
+generate a DLL out of a BETA program, if called with switch 321.
+<P>
+The link directive is modified by switch 321.
+By calling
+
+<PRE class=beta>
+beta -s 321 foo.bet
+</PRE>
+
+where <CODE>foo.bet</CODE> contains a <CODE>PROGRAM</CODE> fragment,
+<CODE>foo.dll</CODE> and <CODE>foo.lib</CODE> will be created instead of
+the usual <CODE>foo.exe</CODE>. The generated <CODE>foo.lib</CODE> 
+contains stubs, which can be linked into a C program, and will cause 
+<CODE>foo.dll</CODE> to be loaded.
+
+
+<H3><A NAME="background">Background</A></H3>
+No BETA entry points are exported from the DLL by default.
+You must write a DEF file specifying which entries you want to be
+callable in the DLL. This <EM>MUST</EM> include the entry point
+<CODE>InitializeBetaDll</CODE><SUP>[<A HREF="#fn1">1</A>]</SUP> which is part of the BETA runtime
+system, and which your C program <EM>MUST</EM> call before using any
+other BETA entry points.
+
+<P>
+The code of the <CODE>PROGRAM</CODE> fragment is usually executed 
+automatically (technically because the executable calls 
+<CODE>main</CODE>, which instantiates a component for 
+<CODE>betaenv</CODE>, attaches this component, which again executes 
+<CODE>PROGRAM</CODE>).<BR>
+When linked as a DLL the <CODE>PROGRAM</CODE> fragment is instead
+called when the above mentioned <CODE>InitializeBetaDll</CODE> is
+called from C. In the <CODE>PROGRAM</CODE> fragment, you should only
+do basic initialization, and return when you are done.
+<P>
+Aside from the above mentioned <CODE>InitializeBetaDll</CODE> entry
+point in the BETA runtime system, no other BETA entries inside the BETA DLL
+should be called directly (BETA entries do <EM>not</EM> use the C
+calling conventions!).<BR>
+Instead you should create callback entries in BETA and install these
+from <CODE>PROGRAM</CODE>. The install procedure could be in a small C
+wrapper, that you add to the BETA DLL using the usual
+<CODE>BUILD</CODE> mechanism. In this C wrapper you can have static
+function pointers for the BETA call back entries and supply functions
+that call these function pointers.
+<P>
+The final thing to notice is that the file you want to compile as a
+DLL should contain a <CODE>LINKOPT</CODE> property specifying a DEF
+file listing the entry points you want exported from the DLL (that is:
+<CODE>InitializeBetaDLL</CODE> and the functions in the above
+mentioned C wrapper).[<A HREF="#fn2">2</A>]</SUP>
+<P>
+<B><A NAME="beta_dll_example">Example</A></B>
+<P>
+Let us create a DLL containing a function <CODE>inc</CODE>, which
+enters an integer, and exits this integer incremented by 1.<BR>
+As mentioned above, 
+<OL>
+<LI>the <CODE>inc</CODE> function should be declared
+as a callback entry (using <CODE>CExternalEntry</CODE>)
+<LI>there should be a <CODE>PROGRAM</CODE> fragment installing this
+callback
+<LI>a C wrapper layer is added using <CODE>BUILD</CODE>
+<LI>a DEF file is specified using <CODE>LINKOPT</CODE>
+</OL>
+
+
+<BLOCKQUOTE>
+<B>binc.bet:</B>
+</BLOCKQUOTE>
+
+<PRE class=beta>
+ORIGIN '~beta/basiclib/betaenv';
+LINKOPT nti '-DEF:binc.def'; (* Export list from DLL *)
+BUILD nti 'binc.obj' 'binc.c' 'cl -nologo -c $1'; (* Wrappers for DLL entry points *)
+--LIB: attributes--
+inc: external
+  (# i: @integer;
+  enter i
+  do CExternalEntry;
+     'binc.bet: BETA callback function inc(' -&gt; puttext;
+     i-&gt;putint;
+     ') called.' -&gt; putline;
+     i+1-&gt;i;
+  exit i
+  #);
+install_inc: external
+  (* This function is located in binc.c *)
+  (# inc: ##external
+  enter inc##
+  #);
+--PROGRAM: descriptor--
+(* Called by InitializeBetaDll *)
+(# 
+do 'binc.bet: PROGRAM called from InitializeBetaDll' -&gt; putline;
+   'binc.bet: PROGRAM: Installing callbacks' -&gt; putline;
+   inc## -&gt; install_inc;
+#)
+</PRE>
+
+Of course the <CODE>inc</CODE> file could be in a separate file, which
+is <CODE>INCLUDE</CODE>d here.
+<P>
+The C wrapper layer contains the function pointer(s) for the BETA 
+callback entry(es), and callback installing function(s):
+
+<BLOCKQUOTE>
+<B>binc.c:</B>
+</BLOCKQUOTE>
+
+<PRE class=beta>
+#include <stdio.h>
+
+/* Type definition for inc function pointer */
+typedef int (*incptr)(int);
+
+/* Function pointer to save callback entry into BETA in */
+static incptr inc;
+
+void install_inc(incptr ip)
+{
+  fprintf(stdout, "binc.c: C function install_inc() called from BETA inside BETA DLL.\n");
+  inc = ip;
+}
+
+int call_inc(int i)
+{
+    fprintf(stdout, "binc.c: C function call_inc(%d) called from C outside BETA DLL.\n", i);
+    fprintf(stdout, "binc.c: Calling BETA function inc(%d) via function pointer inside BETA DLL.\n", i);
+    return inc(i);
+}
+</PRE>
+
+Notice that this C code becomes part of the BETA DLL.
+<P>
+The final part of the BETA DLL is the DEF file which simply names the
+DLL and lists the entries we want to access in the DLL. These are the 
+<CODE>InitializeBetaDll</CODE> entry and the entries in the C wrapper
+(except the callback installation function(s) which are only used
+from inside the DLL and need not be visible outside):
+
+
+<BLOCKQUOTE>
+<B>binc.def:</B>
+</BLOCKQUOTE>
+
+<PRE class=beta>
+LIBRARY         binc.dll
+EXPORTS         InitializeBetaDll
+                call_inc     
+</PRE>
+
+The BETA DLL can now be created using <CODE>beta -s 321 binc.bet</CODE>:
+<PRE class=beta>
+$ beta -s 321 binc.bet
+Mjølner BETA Compiler version: 5.5(5.3.972) --- Runtime System version: 5.3(93)
+Target machine platform: WinNT/Win95 (i386) (MS)
+Building dependency graph for: 'binc' ...
+Parsing: 'binc'
+Translating fragments ...
+Bind fragments in: 'binc'!Checking!Code generation
+"cl -nologo -c binc.c"
+binc.c
+Linking
+   Creating library binc.lib and object binc.exp
+Library on files: binc.dll and binc.lib
+$ 
+</PRE>
+
+Notice that the <CODE>BUILD</CODE> directive caused C compilation of
+the C wrapper layer.
+
+We now have a DLL, which can be used from C:
+
+<BLOCKQUOTE>
+<B>inc.c:</B>
+</BLOCKQUOTE>
+
+<PRE class=beta>
+#include &gt;stdio.h&gt;
+extern int call_inc(int);
+extern void InitializeBetaDll();
+
+main()
+{
+  printf("inc.c: Test of calling DLL generated from BETA\n");
+
+  printf("inc.c: Initializing BETA DLL\n");
+  InitializeBetaDll();
+
+  printf("inc.c: Calling C function call_inc(1) in BETA DLL\n");
+  printf("inc.c: Result: inc(1)=%d\n", call_inc(1));
+}
+</PRE>
+
+Notice that the <CODE>main()</CODE> function starts by calling 
+<CODE>InitializeBetaDll</CODE>, which loads the BETA DLL and
+initializes the runtime system in there and finally calls the
+<CODE>PROGRAM</CODE> fragment.<BR>
+The C program can then call the <CODE>call_inc</CODE> in the C wrapper
+of the BETA DLL, which in turn calls the actual <CODE>inc</CODE> BETA entry point.
+<P>
+When compiling the C program, you must include the 
+<CODE>binc.lib</CODE> stub library to specify where the C program
+should find the <CODE>call_inc</CODE> function:
+
+<PRE class=beta>
+$ cl -nologo inc.c binc.lib
+inc.c
+$
+</PRE>
+
+You now have <CODE>inc.exe</CODE> created in C which calls entries in
+the BETA DLL:
+
+<PRE class=beta>
+$ inc.exe
+inc.c: Test of calling DLL generated from BETA
+inc.c: Initializing BETA DLL
+binc.bet: PROGRAM called from InitializeBetaDll
+binc.bet: PROGRAM: Installing callbacks
+binc.c: C function install_inc() called from BETA inside BETA DLL.
+inc.c: Calling C function call_inc(1) in BETA DLL
+binc.c: C function call_inc(1) called from C outside BETA DLL.
+binc.c: Calling BETA function inc(1) via function pointer inside BETA DLL.
+binc.bet: BETA callback function inc(1) called.
+inc.c: Result: inc(1)=2
+$
+</PRE>
+
+Notice that you could place the DLL anywhere as long at it can be
+found via your <CODE>PATH</CODE>.
+
+
+
+
+
+
+
+
+
+
+
+
+<H3><A NAME="c_dll">Using a C-created DLL from a BETA program</A></H3>
+DLL's created from .c files can be used as such:
+
+<P>
+<B><A NAME="c_dll_example">Example</A></B>
+<P>
+
+<BLOCKQUOTE>
+<B>inc.bet:</B>
+</BLOCKQUOTE>
+
+<PRE class=beta>
+ORIGIN 'tstenv';
+BUILD nti    'cinc.lib' 'cinc.c' 'cinc.def' 'cl -Zi -LDd $1 -link -DEF:cinc.def'
+      dotnet 'cinc.dll' 'cinc.c' 'cinc.def' 'cl -Zi -LDd $1 -link -DEF:cinc.def'; 
+--PROGRAM: descriptor--
+(# inc: external
+     (# i: @integer
+     enter i
+     exit i
+     #);
+do 1 -> inc -> putint; newline;
+#)
+</PRE>
+
+
+<BLOCKQUOTE>
+<B>cinc.c:</B>
+</BLOCKQUOTE>
+
+<PRE class=beta>
+#include &lt;windows.h&gt;
+BOOL __stdcall DllMain(HINSTANCE hInst, DWORD dwReason, LPVOID lpReserved) {
+  return TRUE;
+}
+int inc(int i)
+{
+  return i+1;
+}
+</PRE>
+
+
+<BLOCKQUOTE>
+<B>cinc.def:</B>
+</BLOCKQUOTE>
+
+<PRE class=beta>
+LIBRARY         cinc.dll
+EXPORTS         DllMain @1 
+                inc @2     
+</PRE>
+
+<H3><A NAME="dll_links">DLL links</A></H3>
+
+<UL>
+<LI><A HREF="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/vccore98/HTML/_core_linker_reference.asp">Linker Reference</A>
+<LI><A HREF="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dllproc/dll_512r.asp">Dynamic Link Library Overview</A>
+<LI><A HREF="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dllproc/dll_8asu.asp">DllMain</A>
+<LI><A HREF="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/vccore98/HTML/_core_determine_which_exporting_method_to_use.asp">Determine Which Exporting Method to Use</A>
+<LI><A HREF="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dnw98bk/html/thedefdefinefile.asp">The .DEF file</A>
+</UL>
+
+<HR align=left width="30%">
+<SUP><A NAME="fn1">1</A></SUP> 
+<SPAN style="font-size:smaller">The call of <CODE>InitializeBetaDll</CODE>
+may seem redundant: Windows support a function called <CODE>DllMain</CODE>
+which is called automatically when a DLL is loaded. It has been attempted
+to use this for initializing the BETA DLL, but there are severe
+restrictions in what may be done in <CODE>DllMain</CODE>: Specifically
+one may not call any function that cause loading of other DLLs, and
+you cannot use <CODE>malloc</CODE> either. We need both things for
+initializing the BETA runtime, so we have to wait until the DLL
+is loaded and leave the responsibility to the user of the DLL.</SPAN>
+<P>
+<SUP><A NAME="fn2">2</A></SUP> 
+<SPAN style="font-size:smaller">The current mechanisme for creating a
+ DLL from BETA may seem a bit awkward - we hope to eliminate the need
+ manually supply the C wrapper layer and the DEF file in a later
+version of the compiler</SPAN>
+
+</BODY>
+</HTML>

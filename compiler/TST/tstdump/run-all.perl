@@ -116,6 +116,7 @@ foreach $f (@files) {
     if ($nti){
 	# betarun emits nothing to console on nti
 	print "[stderr not compared on nti]\n";
+	&rm("$f.err");
     } else {
 	if ( -f "output/$f.err" ) {
 	    open(IN, "<$f.err");
