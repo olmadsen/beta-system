@@ -60,7 +60,9 @@ static void BooleanProperty(name)
   ENTRY("debugaoa",   DebugAOA = TRUE);
   ENTRY("debuglvra",  DebugLVRA = TRUE);
   ENTRY("debugstack", DebugStack = TRUE);
+#ifdef RTVALHALLA
   ENTRY("debugvalhalla", DebugValhalla = TRUE);
+#endif
   ENTRY("debugall",   DebugIOA = TRUE; DebugAOA = TRUE;
 	DebugLVRA = TRUE; DebugStack=TRUE; DebugCBFA=TRUE);
 #endif
