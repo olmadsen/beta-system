@@ -92,7 +92,7 @@ int getHeapInfo(int infoId)
       return count;
     };
   default:
-    fprintf(output, "getHeapInfo: illegal opcode\n");
+    fprintf(output, "getHeapInfo: illegal opcode %d\n", (int)infoId);
     return 0;
   };
 }
