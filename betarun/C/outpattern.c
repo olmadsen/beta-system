@@ -520,6 +520,8 @@ errorTable[] =
   { QuaOrigErr,        "Qualification error in reference assignment; origins differ" },
   { RecursiveAttErr,   "Attach of component that is already attached" },
   { IOAFullErr,        "IOA heap is full" },
+  { FpZeroDivErr,      "Floating Point division by zero" },
+  { FpExceptErr,       "Floating Point exception" },
 #ifdef RTDEBUG
   { InterruptErr,      "User Interrupt" },
 #endif

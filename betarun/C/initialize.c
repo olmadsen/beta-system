@@ -254,6 +254,8 @@ void Initialize()
 
   SetupBetaSignalHandlers();
 
+  SetupFPU();
+
   MT_CODE(initSynchVariables());
 
   /* This hack is to cope with the sparc, where

@@ -139,7 +139,8 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
     if( !(inBetaHeap(theObj) && isObject(theObj))) theObj  = 0;
     switch( sig){
     case SIGFPE: 
-      todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig);break;
+      /* FIXME: handle zerodiv (int+fp) */
+      todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig);break;
     case SIGEMT:
       todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
     case SIGILL:
@@ -180,10 +181,12 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   switch( sig){
   case SIGFPE: 
     switch(code){
-    case FPE_INTDIV_TRAP: /* div by zero */
+    case FPE_INTDIV_TRAP: /* int div by zero */
       todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
+    case FPE_FLTDIV_TRAP: /* fp div by zero */
+      todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
     default: /* arithmetic exception */
-      todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig);
+      todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig);
     }
     break;
   case SIGEMT:
@@ -218,6 +221,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 
   switch(sig){
   case SIGFPE: 
+    fprintf(output, "scp.trapno==%d\n", scp.trapno);
     if (theObj==0 && scp.trapno==0) {
       /* IDIV uses %edx (i.e. current object register) for divisor.
        * If this is 0, theObj will be 0 when trap is taken.
@@ -227,7 +231,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
       theObj = (struct Object *) *StackEnd++;
       todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); 
     } else {
-      todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig); 
+      todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig); 
     }
     break;
   case SIGILL:
@@ -276,10 +280,11 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 
   switch( sig){
     case SIGFPE: 
-      if( code == 5 ) /* Only documented in 'man signal' */
+      if( code == 5 ) /* Only documented in 'man (5) signal' */
+	/* FIXME: handle zerodiv (fp) */
         todo=DisplayBetaStack(ZeroDivErr, theObj, PC, sig);
       else
-        todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig);  
+        todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig);  
       break;
     case SIGEMT:
       todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
@@ -321,7 +326,15 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 
   switch( sig){
     case SIGFPE:
-      todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig);
+      switch(code){
+      case FPE_INTDIV_TRAP: /* int div by zero */
+	todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
+      case FPE_FLTDIV_TRAP:
+      case FPE_FLTDIV_FAULT: /* fp div by zero */
+	todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
+      default: /* arithmetic exception */
+	todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig);
+      }
       break;
     case SIGEMT:
       todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
@@ -406,10 +419,12 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   switch(sig){
   case SIGFPE: 
     switch(info->si_code){
-    case FPE_INTDIV: /* div by zero */
+    case FPE_INTDIV: /* int div by zero */
       todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
+    case FPE_FLTDIV: /* fp div by zero */
+      todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
     default: /* arithmetic exception */
-      todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig);
+      todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig);
     }
     break;
   case SIGEMT:
@@ -482,20 +497,21 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
     todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
   case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
     todo=DisplayBetaStack( RepRangeErr, theObj, PC, sig);
-  case EXCEPTION_INT_DIVIDE_BY_ZERO:
-    todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
   case EXCEPTION_ILLEGAL_INSTRUCTION:
   case EXCEPTION_PRIV_INSTRUCTION:
     todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
+  case EXCEPTION_INT_DIVIDE_BY_ZERO:
+    todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
+  case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+    todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
   case EXCEPTION_FLT_DENORMAL_OPERAND:
   case EXCEPTION_FLT_INEXACT_RESULT:
   case EXCEPTION_FLT_OVERFLOW:
   case EXCEPTION_FLT_UNDERFLOW:
   case EXCEPTION_FLT_STACK_CHECK:
     todo=DisplayBetaStack( UnorderedFval, theObj, PC, sig); break;
-  case EXCEPTION_FLT_DIVIDE_BY_ZERO:
   case EXCEPTION_FLT_INVALID_OPERATION:
-    todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig); break;
+    todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig); break;
   default:
     todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
   }
@@ -508,15 +524,6 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
 /* beta_main: called from _AttBC */
 void beta_main(void (*AttBC)(struct Component *), struct Component *comp)
 {
-  /* enable floating point exceptions */
-#ifdef nti_ms
-  _controlfp(_EM_INVALID   | _EM_INEXACT | _EM_DENORMAL | _EM_OVERFLOW | 
-	     _EM_UNDERFLOW | _EM_ZERODIVIDE, _MCW_EM);
-#else
-  _control87(EM_INVALID   | EM_INEXACT | EM_DENORMAL | EM_OVERFLOW | 
-	     EM_UNDERFLOW | EM_ZERODIVIDE, MCW_EM);
-#endif
-
   /* Set up structured exception handling for rest of execution */
   __try 
     { 
@@ -572,7 +579,8 @@ OSStatus BetaSignalHandler(ExceptionInformation *info)
   case unresolvablePageFaultException: 
     todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
   case floatingPointException:
-    todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig); break;
+    /* FIXME: handle zerodiv (int+fp) */
+    todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig); break;
   default:
     todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig); break;
   }

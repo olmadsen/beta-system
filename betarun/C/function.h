@@ -13,6 +13,9 @@ extern long GetBetaCodeStart(void);
 extern long GetBetaCodeEnd(void);
 #endif /* RTDEBUG */
 
+/* C/floats.c */
+void SetupFPU(void);
+
 /* C/betaenv.c */
 extern void GetBetaEnv(void);
 

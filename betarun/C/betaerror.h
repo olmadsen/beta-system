@@ -21,6 +21,8 @@ enum BetaErr {
   QuaOrigErr =        -16 /* Qualification error in reference assignment; origins differ */,
   RecursiveAttErr =   -17 /* Attempt to attach a component that is already attached */,
   IOAFullErr =        -18 /* IOA heap is full */,
+  FpZeroDivErr =      -19 /* Floating Point division by zero */,
+  FpExceptErr =       -20 /* Floating Point exception */,
 #ifdef RTDEBUG	     	  
   InterruptErr =      -28 /* User Interupt */,
 #endif		     	  
