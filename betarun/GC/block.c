@@ -68,13 +68,13 @@ long inArea( theBlock, theObj )
 
 void mmapInitial(unsigned long numbytes)
 {
-  int fd;
-  int mmapflags;
-  signed long startadr;
+  int fd = 0;
+  int mmapflags = 0;
+  signed long startadr = 0;
   Claim(!mmapHeap, "mmapInitial: mmapHeap!=0, calling twice?\n");
   Claim(!mmapHeapTop, "mmapInitial: mmapHeapTop!=0, calling twice?\n");
   Claim(!mmapHeapLimit, "mmapInitial: mmapHeapLimit!=0, calling twice?\n");
-  INFO(fprintf(output, "(#mmapInitial(%08X))", (int)numbytes));
+  INFO(fprintf(output, "(#mmapInitial(%08X) ", (int)numbytes));
 
 #define MMAPSTART 0x10000000
 #define MMAPINCR  0x10000000
@@ -94,7 +94,7 @@ void mmapInitial(unsigned long numbytes)
 #endif /* linux */
 
 #ifdef hpux9pa
-  mmapflags = MAP_PRIVATE | MAP_FIXED;
+  mmapflags = MAP_PRIVATE | MAP_VARIABLE | MAP_ANONYMOUS;
 #ifndef MAP_FAILED
 #define MAP_FAILED -1
 #endif
@@ -104,7 +104,9 @@ void mmapInitial(unsigned long numbytes)
   mmapflags = MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED;
 #endif /* sun4s */
 
+#ifndef hpux9pa
   fd = open("/dev/zero", O_RDWR);
+#endif
   startadr = MMAPSTART;
   while (!mmapHeap && (!((startadr+numbytes-1) & (1<<31)))) {
     mmapHeap = mmap((void*)startadr, numbytes, PROT_NONE, mmapflags, fd,0);
@@ -113,10 +115,13 @@ void mmapInitial(unsigned long numbytes)
       startadr += MMAPINCR;
     }
   }
+#ifndef hpux9pa
   close(fd);
-  if ((long)mmapHeap == MAP_FAILED) {
+#endif
+  if (!mmapHeap) {
     mmapHeap = 0;
-    fprintf(output, "mmapInitial failed with errno %d\n", errno);
+    fprintf(output, "mmapInitial failed with errno %d:%s\n", 
+	    errno, strerror(errno));
     BetaExit(1);
   }
 #else
@@ -145,6 +150,7 @@ void mmapInitial(unsigned long numbytes)
 
   mmapHeapTop   = mmapHeap;
   mmapHeapLimit = (void*)((char*)mmapHeap + numbytes);
+  INFO(fprintf(output, "At %08X)", (int)mmapHeap));
 }
 
 void InsertGuardPage(void)
