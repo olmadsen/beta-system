@@ -987,6 +987,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
     break;    
 
     case VOP_EXT_HEAPINFO: {
+      /* FIXME: Extend this with information on IOA and CBFA */
       long index, min, max, usecount, usesize, freecount, freesize;
       valhalla_writeint(opcode);
       DEBUG_VALHALLA({
