@@ -31,6 +31,7 @@ void scanPartObjects(Object *obj, void (*)(Object *));
 
 /* LOCAL VARIABLES */
 static long totalFree = 0;
+static long lastAOAGCAt = -1000;  /* NumIOAGc of last AOAGC */
 
 /* tempAOArootsAlloc:
  *  Not enough room for the AOAroots table in ToSpace.
@@ -127,7 +128,7 @@ static void AOANewBlock(long newBlockSize)
 {
   Block * newblock;
   if (newBlockSize < (totalAOASize/100)*AOAINCREMENT) {
-    /* Expand at least 10 percent each time.
+    /* Expand at least AOAINCREMENT percent each time.
      * This makes blocks bigger, which decreases fragmentation.
      */
     newBlockSize = (totalAOASize/100)*AOAINCREMENT;
@@ -231,16 +232,24 @@ Object *AOAallocate(long numbytes)
   /* Try to find a chunk of memory in the freelist */
   newObj = AOAAllocateFromFreeList(numbytes);
   if (newObj) {
-    totalFree -= numbytes;
     newObj->GCAttr = DEADOBJECT;
-    if ((totalFree/(totalAOASize/100) > AOAPercentage) &&
-	(totalFree > AOAMinFree))
-      {
-	return newObj;
+    totalFree -= numbytes;
+    if (totalFree > AOAMinFree) {
+      return newObj;
+    } else {
+      if (lastAOAGCAt+5 > NumIOAGc) {
+	/* If there is already a need for another AOAGC within
+	 * 5 IOAGCs, then we need more memory.
+	 * CAVETAT: One reason for this could be lots
+	 * of allocations of large repetitions. In that case, maybe
+	 * some of them have died, and we really should GC anyway...
+	 */
+	AOANewBlock(AOABlockSize);
       } else {
 	AOANeedCompaction = TRUE;
-	return newObj;
-      }    
+      }
+      return newObj;
+    }    
   }
 
   if (AOABaseBlock == 0) {
@@ -431,6 +440,7 @@ void AOAGc()
   Object *target;
   Block *currentBlock;
   long starttime = 0;
+  unsigned long freeAtStart = totalFree;
 
   if (!AOABaseBlock)
     return;
@@ -441,7 +451,7 @@ void AOAGc()
   
   INFO_AOA({
     starttime = getmilisectimestamp();
-    fprintf(output,"\n#(AOA-%d:", (int)NumAOAGc);
+    fprintf(output,"\n#(AOA-%d[ioa#%d]:", (int)NumAOAGc, (int)NumIOAGc);
   });
 
   MAC_CODE(RotateTheCursorBack());
@@ -561,9 +571,13 @@ void AOAGc()
 
   AOARefStackUnHack();
   
-  /* Make sure there is sufficient free memory */
-  AOAMaybeNewBlock(0);
-  
+  /* If less than AOAPercentage of the heap was freed, allocate
+   * a new block now.
+   */
+  if ((long)(totalFree-freeAtStart)/(totalAOASize/100) < AOAPercentage) {
+    AOANewBlock(AOABlockSize);
+  }
+
   STAT_AOA(AOADisplayFreeList());
       
 #ifdef PERSIST
@@ -599,6 +613,8 @@ void AOAGc()
   AOANeedCompaction = FALSE;
   forceAOAGC = FALSE;
   TIME_AOA(aoatime += (int)(getmilisectimestamp() - starttime));
+
+  lastAOAGCAt = NumIOAGc;
 }
 
  
@@ -1396,7 +1412,7 @@ void scanOrigins(Object *theObj, void (*originAction)(Object **theCell))
 	  "IsPrototypeOfProcess(theProto)");
     
     if (!isSpecialProtoType(theProto)) {
-      originOffset = 4 * (long) (theProto -> OriginOff);
+      originOffset = (unsigned short)(4 * (long) (theProto -> OriginOff));
       theCell = (Object **)((long) theObj + originOffset);
       originAction(theCell);
       
