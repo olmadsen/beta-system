@@ -669,9 +669,24 @@ next:
       return -1;
     }
     DEBUG_SOCKETS(fprintf(output, "%d)", sock));
-
-    if(connect(sock,(struct SOCKADDR_type*)&addr,sizeof(addr))) {
+    
+    if (setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (char*)&on, sizeof(on))) {
       INFO_SOCKETS("createActiveSocket,2");
+      ERRNO = WSAGetLastError();
+      return -1;
+    }
+
+#if LINGER_ONOFF
+    if (setsockopt(sock, SOL_SOCKET, SO_LINGER,
+                   (char*)&li, sizeof(struct linger))) {
+      INFO_SOCKETS("createActiveSocket,2.1");
+    ERRNO = WSAGetLastError();
+    return -1;
+    }
+#endif
+    
+    if(connect(sock,(struct SOCKADDR_type*)&addr,sizeof(addr))) {
+      INFO_SOCKETS("createActiveSocket,3");
       ERRNO = WSAGetLastError();
       return -1;
     }
@@ -681,26 +696,11 @@ next:
   
   if (nonblock) {
     if (ioctlsocket(sock, FIONBIO, (unsigned long*)&nonblock)) {
-      INFO_SOCKETS("createActiveSocket,3");
+      INFO_SOCKETS("createActiveSocket,4");
       ERRNO = WSAGetLastError();
       return -1;
     }
   }
-
-  if (setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (char*)&on, sizeof(on))) {
-    INFO_SOCKETS("createActiveSocket,4");
-    ERRNO = WSAGetLastError();
-    return -1;
-  }
-
-#if LINGER_ONOFF
-  if (setsockopt(sock, SOL_SOCKET, SO_LINGER,
-		 (char*)&li, sizeof(struct linger))) {
-    INFO_SOCKETS("createActiveSocket,4.1");
-    ERRNO = WSAGetLastError();
-    return -1;
-  }
-#endif
 
 #else /* Not nti */
 
