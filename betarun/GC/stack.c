@@ -611,7 +611,7 @@ void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 {
   DEBUG_CODE(long oldDebugStack=DebugStack);
 
-  DEBUG_STACKOBJ(fprintf(output, " *-*-* StackObject 0x%x *-*-*\n", (int)sObj));
+  DEBUG_STACKOBJ(fprintf(output, " *-*-* StackObject: 0x%x, size: 0x%x *-*-*\n", (int)sObj, (int)(sObj->StackSize)));
   DEBUG_CODE(if (DebugStackObj){
     DebugStack=TRUE;
   } else {
@@ -719,12 +719,8 @@ void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
   long *        theEnd;
   DEBUG_CODE(long oldDebugStack=DebugStack);
 
-  DEBUG_STACKOBJ({
-    fprintf(output, 
-	    " *-*-* StackObject: 0x%x, size: 0x%x *-*-*\n", 
-	    (int)sObj, 
-	    (int)(sObj->StackSize));
-  });
+  DEBUG_STACKOBJ(fprintf(output, " *-*-* StackObject: 0x%x, size: 0x%x *-*-*\n", (int)sObj, (int)(sObj->StackSize)));
+
   DEBUG_CODE(if (DebugStackObj){
     DebugStack=TRUE;
   } else {
@@ -934,7 +930,8 @@ void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
     DEBUG_CODE(long oldDebugStack=DebugStack);
 
     DEBUG_STACKOBJ({
-      fprintf(output, " *-*-* StackObject 0x%x *-*-*\n", (int)sObj);
+      fprintf(output, " *-*-* StackObject: 0x%x, size: 0x%x *-*-*\n", (int)sObj, (int)(sObj->StackSize));
+fprintf(output, " *-*-* StackObject 0x%x *-*-*\n", (int)sObj);
       lastPC=PC;
       /* The PC of the topmost AR is saved in CallerLCS of the comp this stackobj 
        * belongs to. It is not known here. 
@@ -1129,7 +1126,7 @@ void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
   long    *theEnd;
   DEBUG_CODE(long oldDebugStack=DebugStack);
 
-  DEBUG_STACKOBJ(fprintf(output, " *-*-* StackObject 0x%x *-*-*\n", (int)sObj));	
+  DEBUG_STACKOBJ(fprintf(output, " *-*-* StackObject: 0x%x, size: 0x%x *-*-*\n", (int)sObj, (int)(sObj->StackSize)));
   DEBUG_CODE(if (DebugStackObj){
     DebugStack=TRUE;
   } else {
