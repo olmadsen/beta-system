@@ -8,7 +8,6 @@ default 'X11/editSheet_unixBody';
 
 INCLUDE 
 '~beta/guienv/v1.6/utils/graphicsadds'
-'~beta/containers/v1.6/list'
 '~beta/guienv/v1.6/utils/scrolleradds'
 '~beta/guienv/v1.6/private/datastructures/sequence'
 'cell';
@@ -48,13 +47,15 @@ platform: integerValue
 toStyledText:
   (# t: ^text; st: ^styledText; 
   enter t[]
-  do &styledText[]->st[]; t->st; 
+  do &styledText[]->st[]; 
+     (if t[]<>NONE then t->st; if);
   exit st[]
   #);
 toStdText:
   (# t: ^text; st: ^styledText; 
   enter st[]
-  do &Text[]->t[]; st->t; 
+  do &Text[]->t[]; 
+     (if st[]<>NONE then st->t; if);
   exit t[]
   #);
 
@@ -126,7 +127,7 @@ field_info:
                        (# overrideChildren:: 
                             (# do true -> value #);
                        do 
-                          frame -> clipRectangle; 
+                          frame -> clipRectangle;
                           (3,h-THIS(editSheet).private.textTopOffset)
                             -> moveTo;
                           THIS(editSheet).private.theTextStyle[] -> style;
@@ -159,7 +160,214 @@ field_info:
   #);
   
 
--- editSheetPrivate: Descriptor --
+
+
+-- editSheetOnEnableTarget: DoPart --
+do
+   (if private.theEditText.isOpen then
+       (if private.theEditText.visible then
+           private.theEditText[]->target; 
+       if);
+   if);
+   
+-- editSheetOnMouseDown: doPart --
+do inner onMouseDown;
+   
+-- editSheetOnMouseUp: doPart --
+do inner onMouseUp;
+
+-- editSheetOpen: DoPart --
+do
+   (0,0)->position;
+   (500,230)->size;
+   private.theRows.init;
+   private.scroller1.open;
+   private.scroller1.show;
+   createTheEditTextStyle -> private.theTextStyle[];
+   private.theTextStyle.lineHeight+8->private.lineHeight;
+   (if private.lineHeight < 20 then 20->private.lineHeight;  if);
+   true->border.visible;
+   borderStyles.etchedIn->border.style;
+   private.scroller1.contents.initTheTextField;
+   private.theEditFields.init;
+   gridOffset->private.next_vertical_pos;
+   INNER open;
+   private.header.createHeadingLabels;
+   (1,1)->private.theEditFields.select;
+   L: private.theHeadings.scan
+     (# 
+     do (current.width,private.lineHeight)->private.theEditText.size; leave L
+     #);
+   (* private.theEditText.show; *)
+     
+
+-- editSheetClose: DoPart --
+do INNER close;   
+
+-- editSheetSetStyle: DoPart --
+do   
+
+-- editSheetGetStyle: DoPart --
+do private.theTextStyle[]->theStyle[];   
+
+-- editSheetSetReadOnly: DoPart --
+do value->private.readOnly; value->private.theEditText.setReadOnly;   
+
+-- editSheetClear: DoPart --
+do private.clear; INNER clear;   
+
+-- editSheetRefresh: DoPart --
+do private.theEditFields.doRefresh;  
+
+-- editSheetFitToContents: DoPart --
+do
+   (# w,h,w1,h1: @integer; 
+   do
+      private.scroller1.contents.size->(w,h);
+      private.scroller1.size->(w1,h1);
+      (if private.next_vertical_pos+private.lineHeight > h then
+          private.next_vertical_pos+private.lineHeight-scrollbarHeight->h; 
+       else
+          h1+scrollbarHeight+10->h; 
+      if);
+      (w1-scrollbarWidth-4,h)->private.scroller1.contents.size;
+      true->private.scroller1.contents.bindRight;
+   #)
+
+-- editSheetNoOfColumns: DoPart --
+do private.noOfColumns->value;   
+
+-- editSheetNoOfRows: DoPart --
+do private.noOfRows->value;   
+
+-- editSheetAddHeading: DoPart --
+do
+   private.noOfColumns+1->private.noOfColumns;
+   theHeading[]->private.theHeadings.add;
+
+-- editSheetSetSelection: DoPart --
+do (c,r)->private.theEditFields.select;   
+
+-- editSheetGetSelection: DoPart --
+do
+   (if private.currentFieldInfo[] <> none then
+       (private.currentFieldInfo.i,private.currentFieldInfo.j)->(c,r); 
+   if);
+     
+-- rowInit: DoPart --
+do private.theFieldInfos.init; 
+   INNER init;   
+   
+-- rowSetColor: DoPart --
+do value->THIS(row).private.theColor;   
+
+-- rowGetColor: DoPart --
+do THIS(row).private.theColor->value;   
+   
+-- editSheetAddRow: DoPart --
+do
+   private.setContentsSize;
+   
+   (if theRow[] <> none then 
+       private.noOfRows+1->private.noOfRows;
+       (if not private.theEditText.visible then
+           private.theEditText.show;
+       if);
+       
+       false -> theRow.private.deleted;
+       theRow[]->private.theRows.append;  
+   if)  
+   
+-- editSheetDeleteRow: doPart --
+do 
+   (if theRow[] <> none then 
+       private.noOfRows-1->private.noOfRows;
+       (if private.noOfRows=0 then
+           (if private.theEditText.visible then
+               private.theEditText.hide;
+           if);
+       if);
+       true -> theRow.private.deleted;
+       theRow[]->private.theRows.remove; 
+       theRow.private.theFieldInfos.clear;
+   if);
+   
+-- editSheetDisableOnTouchedEvents: DoPart --
+do private.theEditText.removeChangeNotifications;   
+
+-- editSheetEnableOnTouchedEvents: DoPart --
+do private.theEditText.addChangeNotifications;   
+
+-- rowAddValue: DoPart --
+do (# aField_info: ^field_info;
+   do (if (value[] <> none) and (not private.deleted) then
+          &field_info[]->aField_info[];
+          value[]->toStyledText->aField_info.theCellRect.contents[];
+          aField_info[] -> private.theFieldInfos.append;
+          (if THIS(editSheet).private.currentFieldInfo[] = none then
+              aField_info[]->THIS(editSheet).private.currentFieldInfo[]; 
+          if);
+          (if aField_info[] = THIS(editSheet).private.currentFieldInfo[] then
+              value[]->toStyledText->THIS(editSheet).private.theEditText.contents; 
+          if);
+      if);
+   #)
+
+-- rowGetValue: DoPart --
+do
+   (if (i > 0) and (i <= private.theFieldInfos.size) and (not private.deleted) then
+       L:
+         private.theFieldInfos.scan
+         (# 
+         do (if current.i=i then 
+                (if current[] = THIS(editSheet).private.currentFieldInfo[] then
+                    THIS(editSheet).private.theEditText.contents->toStdText->v[];
+                 else
+                    current.theCellRect.contents[]->toStdText->v[];
+                if);
+                leave L;
+            if);
+         #);
+   if);
+   
+-- rowSetValue: DoPart --
+do
+   (if (i > 0) and (i <= private.theFieldInfos.size) and (v[]<>NONE) then
+       L:
+         private.theFieldInfos.scan
+         (# 
+         do (if current.i=i then 
+                
+                (if THIS(editSheet).private.currentFieldInfo[] = none then
+                    current[]->THIS(editSheet).private.currentFieldInfo[]; 
+                if);
+                (if current[] = THIS(editSheet).private.currentFieldInfo[] then
+                    v[]->toStyledText->THIS(editSheet).private.theEditText.contents; 
+                if);
+                v[]->toStyledText->current.theCellRect.contents[];
+                current.theCellRect.update;
+                leave L
+            if);
+         #);
+   if);
+   
+-- rowPrivate: Descriptor --
+(#
+   theFieldInfos: @sequence 
+     (# element:: field_Info;  
+        init::
+          (# 
+          do (if noOfColumns>0 then
+                 noOfColumns -> extendCapacityRight;
+             if);
+          #);
+     #);
+   selected,deleted: @boolean;
+   theColor: @color;
+#)  
+
+
+-- editSheetPrivate: descriptor --
 (#
    readOnly: @boolean;
    next_vertical_pos: @integer;
@@ -187,7 +395,7 @@ field_info:
           #);
         ''->toStyledText->private.theEditText.contents;
         true->update;
-        private.theEditText.show;
+        (* private.theEditText.show; *)
         
      #);
    noOfRows: @integer;
@@ -220,26 +428,82 @@ field_info:
      #);
    sizes: [0] ^point;
    theRows: @
-     (#
-        rows: [10] ^row;
+     (# curR: @integer;
+        
+        init: (# do rows.init; #);
+                   
+        rows: @sequence
+          (# 
+             element:: row;
+             
+             init::
+               (# 
+               do 31 -> extendCapacityRight;
+               #);
+             
+             remove:
+               (# theRow: ^row;
+               enter theRow[]
+               do (if theRow[]<>NONE then
+                      theRow[] -> delete;
+                  if);
+               #);
+             
+             indexError::
+               (# errMsg: ^text;
+               do true -> continue;
+                  &text[] -> errMsg[];
+                  'Failed to find row: ' -> errMsg.append;
+                  curR -> errMsg.putInt; '.' -> errMsg.append;
+                  errMsg[] -> rowNotFound;
+               #);
+          #);
+        
         append:
           (# aRow: ^row; 
           enter aRow[]
           do
-             noOfRows->aRow.j;
-             (if noOfRows > rows.range then 5->rows.extend;  if);
-             aRow[]->rows[noOfRows][];
+             noOfRows->aRow.j->curR;
+             
+             aRow[]->rows.append;
              aRow[]->scroller1.contents.addCellValue;
           #);
+        
+        remove:
+          (# theRow: ^row;
+          enter theRow[]
+          do (if theRow[]<>NONE then
+                 theRow.j -> curR;
+                 theRow[] -> rows.remove;
+             if);
+             rows.scan
+             (# 
+             do (if current.j > theRow.j then
+                    current.j - 1 -> current.j
+                if);
+                
+                (if current[] = theRow[] then
+                    'rows.remove failed. theRow.j = ' -> screen.putText;
+                    theRow.j -> putint; newline;
+                if);
+                
+             #);
+             theRow.j -> theEditFields.removeRow;
+             next_vertical_pos - lineHeight+gridOffset -> next_vertical_pos;
+          #);
+        
         get:
           (# j: @integer; theRow: ^row; 
           enter j
-          do
-             (if (j > 0) and (j <= rows.range) then rows[j][]->theRow[];  if);
+          do 
+             j -> curR;
+             (if (j>0) and (j<=noOfRows) then
+                 j -> rows.get -> theRow[];
+             if);
              
           exit theRow[]
           #);
-        clear: (#  do 10->rows.new;  #);
+        clear: (#  do rows.clear;  #);
         
      #);
    count: @integer;
@@ -366,96 +630,221 @@ field_info:
    
    currentFieldInfo: ^field_info;
    prevFieldInfo: ^field_info;
-   theEditFields: @list
-     (#
+   
+   fieldInfoList: sequence
+     (# rowNo: @integer;
+        element:: field_info;
+        
+        init::
+          (# 
+          do (if noOfColumns>0 then
+                 noOfColumns -> extendCapacityRight;
+             if);
+          #);
+        
         myClear:
           (# 
           do
              scan
-               (# 
-               do current.theCellRect.close;
-                  none ->current.theCellRect.contents[];
-               #);
+             (# 
+             do ''->toStyledText->current.theCellRect.contents[]; 
+                current.theCellRect.update;
+                current.theCellRect.close;
+                none ->current.theCellRect.contents[];
+             #);
              clear;
              
           #);
-        element:: field_info;
+        
         add:
           (# elm: ^element; 
           enter elm[]
-          do
-             elm[]->append;
-             (if THIS(theEditFields).size = 1 then
-                 elm[]->currentFieldInfo[]; 
-             if);
-             
+          do elm[]->append;
           #);
-        updateInfo:
-          (# i,j: @integer; v: ^styledText; 
-          enter (i,j,v[])
-          do
-             L: scan
-               (# 
-               do
-                  (if (current.i = i) and (current.j = j) then
-                      (if currentFieldInfo[] = none then
-                          current[]->currentFieldInfo[]; 
-                      if);
-                      (if current[] = currentFieldInfo[] then
-                          v[]->theEditText.contents; 
-                      if);
-                      v[]->current.theCellRect.contents[];
-                      current.theCellRect.update;
-                      leave L
-                  if);
-               #);
-          #);
-        getInfo:
-          (# i,j: @integer; v: ^text; tempValue: ^styledText; 
+        
+        
+        select:
+          (#
+             i,j: @integer;
+             r: @rectangle;
+             x,y,w,h: @integer;
+             i1,j1,i2,j2: @integer;
+             curRow,prevRow: ^row;
+             current: ^element;
           enter (i,j)
           do
-             L: scan
-               (# 
-               do
-                  (if (current.i = i) and (current.j = j) then
-                      (if current[] = currentFieldInfo[] then
-                          theEditText.contents->tempValue[];
-                          (if tempValue[] <> none then
-                              tempValue.copy->v[]; 
-                          if);
-                          
-                       else
-                          current.theCellRect.contents[]->tempValue[];
-                          (if tempValue[] <> none then
-                              tempValue.copy->v[]; 
-                          if);
-                          
-                      if);
-                      leave L
-                  if);
-                  
-               #);
-             
-          exit v[]
-          #);
-        navigate:
-          (# ch: @char; i,j: @integer; prevNoOfRows: @integer; 
-          enter ch
-          do
-             (if (head = none ) then
-                 (if ((ch = ascii.nl) or (ch = ascii.cr)) then
-                     noOfRows->prevNoOfRows;
-                     onNeedNewRow;
-                     1->i;
-                     (if noOfRows > prevNoOfRows then
-                         noOfRows->j; (i,j)->select; 
+             (if (i>0) and (i<=size) then
+                 theEditText.removeChangeNotifications;
+                 setContentsSize;
+                 i -> get -> current[];
+                 
+                 (if (current.i = i) and (current.j = j) then
+                     theEditText.hide;
+                     currentFieldInfo[]->prevFieldInfo[];
+                     current[]->currentFieldInfo[];
+                     (if prevFieldInfo[] <> none then
+                         theEditText.contents
+                           ->prevFieldInfo.theCellRect.contents[];
+                         
+                     if);
+                     current.theCellRect.position->(x,y);
+                     (x,y)->theEditText.position;
+                     current.theCellRect.size->(w,h);
+                     (w+2,h)->theEditText.size;
+                     (if current.theCellRect.contents[] <> none then
+                         current.theCellRect.contents[]->theEditText.contents; 
+                      else
+                         ''->toStyledText->theEditText.contents; 
+                     if);
+                     theEditText.show;
+
+                     (* (0,0) -> theEditText.margin; *)
+                     (* theEditText.updateMargins; *)
+                     theEditText[]->target;
+                     (if currentFieldInfo[] <> prevFieldInfo[] then
+                         (if currentFieldInfo[] <> none then
+                             currentFieldInfo->(i1,j1); 
+                         if);
+                         (if prevFieldInfo[] <> none then
+                             prevFieldInfo->(i2,j2); 
+                         if);
+                         currentFieldInfo.theCellRect[]
+                           ->scroller1.scrollIntoView;
+                         (i1,j1,i2,j2)->onSelectionChanged;
+                         j1->theRows.get->curRow[];
+                         (if curRow[] <> none then
+                             true->curRow.private.selected; 
+                         if);
+                         j2->theRows.get->prevRow[];
+                         (if prevRow[] <> none then
+                             false->prevRow.private.selected; 
+                         if);
+                         (if j1 <> j2 then
+                             (if curRow[] <> none then
+                                 curRow.private.theFieldInfos.scan
+                                 (# 
+                                 do (if current.i<>i1 then
+                                        current.theCellRect.drawTheText; 
+                                    if);
+                                 #);
+                             if);
+                             (if prevRow[] <> none then
+                                 prevRow.private.theFieldInfos.scan
+                                 (# 
+                                 do current.theCellRect.drawTheText; 
+                                 #);
+                             if);
+                         if);
                      if);
                      
                  if);
                  
+                 theEditText.addChangeNotifications;
+             if);
+          #);
+        
+        doRefresh:
+          (# 
+          do scan (#  do current.theCellRect.update;  #); 
+          #);
+        
+        decrementRowNo:
+          (# 
+          do scan 
+             (# x,y: @integer;
+             do current.j - 1 -> current.j;
+                
+                current.theCellRect.position -> (x,y);
+                (x,y-lineHeight+gridOffset)->current.theCellRect.position;
+                
+                current.theCellRect.update;
+             #);
+          #);
+        
+     #); (* End of fieldInfoList *)
+   
+   theEditFields: @sequence
+     (# element:: fieldInfoList;
+        
+        init::
+          (# 
+          do 31 -> extendCapacityRight;
+          #);
+        
+        myClear:
+          (# 
+          do scan
+             (# do current.myClear #);
+             theEditFields.clear;
+          #);
+        
+        add:
+          (# elm: ^field_info;
+             aFieldInfoList: ^fieldInfoList;
+          enter elm[]
+          do (if elm[]<>NONE then
+                 (if elm.j > THIS(theEditFields).size then
+                     &fieldInfoList[] -> aFieldInfoList[];
+                     aFieldInfoList.init;
+                     elm.j -> aFieldInfoList.rowNo;
+                     elm[] -> aFieldInfoList.append;
+                     aFieldInfoList[] -> append;
+                     (if THIS(theEditFields).size = 1 then
+                         elm[]->currentFieldInfo[]; 
+                     if);
+                  else
+                     elm.j -> get -> aFieldInfoList[];
+                     (if aFieldInfoList[]<>NONE then
+                         elm[] -> aFieldInfoList.append;
+                     if);
+                 if);
+             if);
+          #);
+        
+        removeRow:
+          (# rowNo: @integer;
+             theRowList: ^element;
+             oldSelection: @point;
+          enter rowNo
+          do 
+             selection -> oldSelection;
+             NONE -> THIS(editSheet).private.currentFieldInfo[];
+             (if oldSelection.v = rowNo then
+                 NONE -> THIS(editSheet).private.currentFieldInfo[];
+             if);
+             scan
+             (# 
+             do (if true 
+                 //(current.rowNo = rowNo) then
+                    current[] -> theRowList[];
+                 //(current.rowNo > rowNo) then
+                    current.rowNo -1 -> current.rowNo;
+                    current.decrementRowNo;
+                if);
+             #);
+             (if theRowList[]<>NONE then
+                 theRowList.myClear;
+                 theRowList[] -> delete;
+             if);
+             
+             (if oldSelection.v = noOfRows+1 then
+                 (oldSelection.h,oldSelection.v-1) -> selection;
               else
+                 oldSelection -> selection;
+             if);
+
+          #);
+        
+        navigate:
+          (# ch: @char; i,j: @integer; prevNoOfRows: @integer; 
+             aFieldInfoList: ^fieldInfoList;
+          enter ch
+          do
+             first -> aFieldInfoList[];
+             (if aFieldInfoList[] <> none then
+                 
                  (if currentFieldInfo[] = none then
-                     (head).elm[]->currentFieldInfo[]; 
+                     aFieldInfoList.first -> currentFieldInfo[]; 
                  if);
                  (if currentFieldInfo[] <> none then
                      (if ch
@@ -472,99 +861,41 @@ field_info:
                       // endKey then
                          noOfColumns->i; currentFieldInfo.j->j; 
                       // ascii.nl // ascii.cr then
-                         (if currentFieldInfo.j = noOfRows then
-                             noOfRows->prevNoOfRows;
-                             onNeedNewRow;
-                             currentFieldInfo.i->i;
-                             (if noOfRows > prevNoOfRows then
-                                 noOfRows->j; 
-                             if);
+                         
+                         (if currentFieldInfo.i=noOfColumns then
+                             1 -> i;
+                             currentFieldInfo.j+1->j;
+                          else
+                             currentFieldInfo.i+1->i; 
+                             currentFieldInfo.j->j; 
                          if);
                      if);
-                     (i,j)->select;
+                     (i,j) -> onNavigate ->select;
                  if);
              if);
           #);
         
         select:
-          (#
-             i,j: @integer;
-             r: @rectangle;
-             x,y,w,h: @integer;
-             i1,j1,i2,j2: @integer;
-             curRow,prevRow: ^row;
-             
-          enter (i,j)
-          do
-             theEditText.removeChangeNotifications;
-             setContentsSize;
-             L: scan
-               (# 
-               do
-                  (if (current.i = i) and (current.j = j) then
-                      theEditText.hide;
-                      currentFieldInfo[]->prevFieldInfo[];
-                      current[]->currentFieldInfo[];
-                      (if prevFieldInfo[] <> none then
-                          theEditText.contents
-                            ->prevFieldInfo.theCellRect.contents[];
-                          
-                      if);
-                      current.theCellRect.position->(x,y);
-                      (x,y)->theEditText.position;
-                      current.theCellRect.size->(w,h);
-                      (w+2,h)->theEditText.size;
-                      (if current.theCellRect.contents[] <> none then
-                          current.theCellRect.contents[]->theEditText.contents; 
-                       else
-                          ''->toStyledText->theEditText.contents; 
-                      if);
-                      theEditText.show;
-                      (* theEditText.enable; *)
-                      (0,0) -> theEditText.margin;
-                      theEditText.updateMargins;
-                      theEditText[]->target;
-                      (if currentFieldInfo[] <> prevFieldInfo[] then
-                          (if currentFieldInfo[] <> none then
-                              currentFieldInfo->(i1,j1); 
-                          if);
-                          (if prevFieldInfo[] <> none then
-                              prevFieldInfo->(i2,j2); 
-                          if);
-                          currentFieldInfo.theCellRect[]
-                            ->scroller1.scrollIntoView;
-                          (i1,j1,i2,j2)->onSelectionChanged;
-                          j1->theRows.get->curRow[];
-                          (if curRow[] <> none then
-                              true->curRow.private.selected; 
-                          if);
-                          j2->theRows.get->prevRow[];
-                          (if prevRow[] <> none then
-                              false->prevRow.private.selected; 
-                          if);
-                          (if j1 <> j2 then
-                              (if curRow[] <> none then
-                                  curRow.private.theFieldInfos.scan
-                                    (# 
-                                    do (if current.i<>i1 then
-                                           current.theCellRect.drawTheText; 
-                                       if);
-                                    #);
-                              if);
-                              (if prevRow[] <> none then
-                                  prevRow.private.theFieldInfos.scan
-                                    (# 
-                                    do current.theCellRect.drawTheText; 
-                                    #);
-                              if);
-                          if);
-                      if);
-                      
-                      leave L;
-                  if);
-               #);
-             theEditText.addChangeNotifications;
+          (# rowNo, colNo: @integer;
+             aFieldInfoList: ^fieldInfoList;
+          enter (colNo, rowNo)
+          do (if (rowNo>0) and (rowNo<=size) then
+                 rowNo -> get -> aFieldInfoList[];
+                 (if aFieldInfoList[]<>NONE then
+                     (colNo, rowNo) -> aFieldInfoList.select;
+                 if);
+             if);
           #);
+        
+        doRefresh:
+          (# 
+          do scan
+             (# 
+             do current.doRefresh;
+             #);
+             
+          #);
+        
      #);
    (* End of theEditFields *)
    verticalSeps: [0] @integer;
@@ -621,7 +952,7 @@ field_info:
                       (x+2,2)->aStaticText.position;
                       &separatorType[]->aSeparator[];
                       aSeparator.open;
-                      (h+current.width+2,0)->aSeparator.position;
+                      (h+current.width+2,0)->aSeparator.position; 
                       h+current.width+4->h;
                       
                   if);
@@ -733,6 +1064,7 @@ field_info:
                       do i+1 -> i;
                          current[]->aField_info[];
                          THIS(contentsType)[]->aField_info.theCellRect.open;
+                         
                          (if i = 1 then
                              (0,next_vertical_pos)->aField_info.theCellRect.position;
                              
@@ -752,6 +1084,7 @@ field_info:
                       curRow.private.theFieldInfos.scan
                       (# 
                       do current.theCellRect.show;
+                         current.theCellRect.update;
                       #);
                       
                       (j*lineHeight+gridOffset)->next_vertical_pos;
@@ -768,178 +1101,9 @@ field_info:
      do
         scroller1.contents.size->(w,h);
         (if noOfRows*lineHeight > h then
-            (w,h+noOfRows*lineHeight+lineHeight)->scroller1.contents.size
+            (* (w,h+noOfRows*lineHeight+lineHeight)->scroller1.contents.size *)
+            (w,h+lineHeight)->scroller1.contents.size
         if)
      #);
    
-#)  
-
--- editSheetOnEnableTarget: DoPart --
-do
-   (if private.theEditText.isOpen then
-       (if private.theEditText.visible then
-           private.theEditText[]->target; 
-       if);
-   if);
-
--- editSheetOpen: DoPart --
-do
-   (0,0)->position;
-   (500,230)->size;
-   private.scroller1.open;
-   private.scroller1.show;
-   createTheEditTextStyle -> private.theTextStyle[];
-   private.theTextStyle.lineHeight+8->private.lineHeight;
-   (if private.lineHeight < 20 then 20->private.lineHeight;  if);
-   true->border.visible;
-   borderStyles.etchedIn->border.style;
-   private.scroller1.contents.initTheTextField;
-   private.theEditFields.init;
-   gridOffset->private.next_vertical_pos;
-   INNER open;
-   private.header.createHeadingLabels;
-   (1,1)->private.theEditFields.select;
-   L: private.theHeadings.scan
-     (# 
-     do (current.width,private.lineHeight)->private.theEditText.size; leave L
-     #);
-   private.theEditText.show;
-     
-
--- editSheetClose: DoPart --
-do INNER close;   
-
--- editSheetSetStyle: DoPart --
-do   
-
--- editSheetGetStyle: DoPart --
-do private.theTextStyle[]->theStyle[];   
-
--- editSheetSetReadOnly: DoPart --
-do value->private.readOnly; value->private.theEditText.setReadOnly;   
-
--- editSheetClear: DoPart --
-do private.clear; INNER clear;   
-
--- editSheetRefresh: DoPart --
-do private.theEditFields.scan (#  do current.theCellRect.update;  #);   
-
--- editSheetFitToContents: DoPart --
-do
-   (# w,h,w1,h1: @integer; 
-   do
-      private.scroller1.contents.size->(w,h);
-      private.scroller1.size->(w1,h1);
-      (if private.next_vertical_pos+private.lineHeight > h then
-          private.next_vertical_pos+private.lineHeight+scrollbarHeight->h; 
-       else
-          h1+scrollbarHeight+10->h; 
-      if);
-      (w1-scrollbarWidth-4,h)->private.scroller1.contents.size;
-      true->private.scroller1.contents.bindRight;
-   #)
-
--- editSheetNoOfColumns: DoPart --
-do private.noOfColumns->value;   
-
--- editSheetNoOfRows: DoPart --
-do private.noOfRows->value;   
-
--- editSheetAddHeading: DoPart --
-do
-   private.noOfColumns+1->private.noOfColumns;
-   theHeading[]->private.theHeadings.add;
-
--- editSheetSetSelection: DoPart --
-do (i,j)->private.theEditFields.select;   
-
--- editSheetGetSelection: DoPart --
-do
-   (if private.currentFieldInfo[] <> none then
-       (private.currentFieldInfo.i,private.currentFieldInfo.j)->(i,j); 
-   if);
-     
--- rowInit: DoPart --
-do INNER ;   
-   
--- rowSetColor: DoPart --
-do value->THIS(row).private.theColor;   
-
--- rowGetColor: DoPart --
-do THIS(row).private.theColor->value;   
-   
--- editSheetAddRow: DoPart --
-do
-   private.setContentsSize;
-   private.noOfRows+1->private.noOfRows;
-   (if theRow[] <> none then theRow[]->private.theRows.append;  if)  
-
--- editSheetDisableOnTouchedEvents: DoPart --
-do private.theEditText.removeChangeNotifications;   
-
--- editSheetEnableOnTouchedEvents: DoPart --
-do private.theEditText.addChangeNotifications;   
-
--- rowAddValue: DoPart --
-do (# aField_info: ^field_info;
-   do (if value[] <> none then
-          &field_info[]->aField_info[];
-          value[]->toStyledText->aField_info.theCellRect.contents[];
-          aField_info[] -> private.theFieldInfos.append;
-          (if THIS(editSheet).private.currentFieldInfo[] = none then
-              aField_info[]->THIS(editSheet).private.currentFieldInfo[]; 
-          if);
-          (if aField_info[] = THIS(editSheet).private.currentFieldInfo[] then
-              value[]->toStyledText->THIS(editSheet).private.theEditText.contents; 
-          if);
-      if);
-   #)
-
--- rowGetValue: DoPart --
-do
-   (if (i > 0) and (i <= private.theFieldInfos.size) then
-       L:
-         private.theFieldInfos.scan
-         (# 
-         do (if current.i=i then 
-                (if current[] = THIS(editSheet).private.currentFieldInfo[] then
-                    THIS(editSheet).private.theEditText.contents->toStdText->v[];
-                 else
-                    current.theCellRect.contents[]->toStdText->v[];
-                if);
-                leave L;
-            if);
-         #);
-   if);
-   
--- rowSetValue: DoPart --
-do
-   (if (i > 0) and (i <= private.theFieldInfos.size) and (v[]<>NONE) then
-       L:
-         private.theFieldInfos.scan
-         (# 
-         do (if current.i=i then 
-                
-                (if THIS(editSheet).private.currentFieldInfo[] = none then
-                    current[]->THIS(editSheet).private.currentFieldInfo[]; 
-                if);
-                (if current[] = THIS(editSheet).private.currentFieldInfo[] then
-                    v[]->toStyledText->THIS(editSheet).private.theEditText.contents; 
-                if);
-                v[]->toStyledText->current.theCellRect.contents[];
-                current.theCellRect.update;
-                leave L
-            if);
-         #);
-   if);
-   
--- rowPrivate: Descriptor --
-(#
-   theFieldInfos: @sequence (# element:: field_Info;  #);
-   selected: @boolean;
-   theColor: @color;
-#)  
-
--- editSheetOnNeedNewRow: DoPart --
-do INNER; private.setContentsSize;  
-
+#)
