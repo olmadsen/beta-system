@@ -438,10 +438,10 @@ type name(unsigned size, Object *origin)
 
 
 /* CopyCT */
-#define ParamAscii(type, name)                          \
-    type name(unsigned char *ascii)
-#define FetchAscii()                                    \
-    ascii = (unsigned char *) getD0Reg();
+#define ParamAsciz(type, name)                          \
+    type name(unsigned char *asciz)
+#define FetchAsciz()                                    \
+    asciz = (unsigned char *) getD0Reg();
 
 
 #define ParamItemAscii(type, name)                      \

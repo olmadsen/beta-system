@@ -11,7 +11,7 @@
 #include "beta.h"
 #include "crun.h"
 
-ValRep *CopyCT(unsigned char *textPtr, long *SP)
+ValRep *CopyCT(unsigned char *asciz, long *SP)
 {
     ValRep *theRep;
     register unsigned range, size;
@@ -20,7 +20,7 @@ ValRep *CopyCT(unsigned char *textPtr, long *SP)
 
     /* Allocate a ValueRepetition and initialize it with some text.    */
 
-    range = textPtr ? strlen((char*)textPtr) : 0;
+    range = asciz ? strlen((char*)asciz) : 0;
     size = ByteRepSize(range);
 
     do {
@@ -40,14 +40,14 @@ ValRep *CopyCT(unsigned char *textPtr, long *SP)
     } while (!theRep);
     
     /* Assign the text to the body part of the repetition. */
-    if (textPtr) strcpy((char *)theRep->Body, (char*)textPtr);
+    if (asciz) strcpy((char *)theRep->Body, (char*)asciz);
 
     Ck(theRep);
 
     return theRep;
 }
 
-ValRep *CopyCT_W(unsigned char *textPtr, long *SP)
+ValRep *CopyCT_W(unsigned char *asciz, long *SP)
 {
     ValRep *theRep;
     register unsigned range, size;
@@ -57,7 +57,7 @@ ValRep *CopyCT_W(unsigned char *textPtr, long *SP)
 
     /* Allocate a ValueRepetition and initialize it with some text.    */
 
-    range = textPtr ? strlen((char*)textPtr) : 0;
+    range = asciz ? strlen((char*)asciz) : 0;
     size = ShortRepSize(range);
 
     do {
@@ -79,8 +79,8 @@ ValRep *CopyCT_W(unsigned char *textPtr, long *SP)
 
     /* Assign the text to the body part of the repetition. */
     for (i = 0; i < (size-headsize(ValRep)); i++){
-      /* printf("CopyCT_W: %c\n", textPtr + i); */
-      *((unsigned short*)theRep->Body[0]+i) = *(textPtr + i);
+      /* printf("CopyCT_W: %c\n", asciz + i); */
+      *((unsigned short*)theRep->Body[0]+i) = *(asciz + i);
     }
 
     Ck(theRep);

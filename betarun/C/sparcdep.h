@@ -78,7 +78,7 @@ typedef struct _RegWin {
 #define FetchORepObjOffLowHigh()
 #define FetchStruc()
 #define FetchOriginSize()
-#define FetchAscii()
+#define FetchAsciz()
 #define FetchItemAscii()
 #define FetchParamProtoCellOriginThis()  
 
@@ -492,15 +492,15 @@ void C##name(ObjectRep *theRep,                  \
 
 #ifdef MT
 /* CopyCT */
-#define ParamAscii(type, name)                          \
+#define ParamAsciz(type, name)                          \
   asmlabel(name, 					\
            "mov %l0,%o2; "                              \
 	   CallAndSave_I0_I1(name)                      \
            );                                           \
-type C##name(int i0, int i1, unsigned char *ascii)
+type C##name(int i0, int i1, unsigned char *asciz)
 #else /* MT */
 /* CopyCT */
-#define ParamAscii(type, name)                          \
+#define ParamAsciz(type, name)                          \
 asmlabel(name,                                          \
 	 "clr %o0; "                                    \
 	 "clr %o1; "                                    \
@@ -509,7 +509,7 @@ asmlabel(name,                                          \
 	 "ba "CPREF#name"; "                            \
 	 "mov %l0,%o2; "                                \
          );                                             \
-type C##name(int i0, int i1, unsigned char *ascii)
+type C##name(int i0, int i1, unsigned char *asciz)
 
 #endif /* MT */
 

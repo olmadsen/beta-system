@@ -6,30 +6,39 @@
 #include "beta.h"
 #include "crun.h"
 
-ParamAscii(ValRep *, CopyCT)
+ParamAsciz(ValRep *, CopyCT)
 {
   DeclReference1(ValRep *, theRep);
   register unsigned range, size;
   
-  FetchAscii();
+  FetchAsciz();
   
   DEBUG_CODE(NumCopyCT++);
   
   /* Allocate a ValueRepetition and initialize it with some text.    */
   
-  range = ascii ? strlen((const char *)ascii) : 0;
+  range = asciz ? strlen((char*)asciz) : 0;
   size = ByteRepSize(range);
   
-  theRep = (ValRep *) IOAalloc(size);
-  
-  SETPROTO(theRep,ByteRepPTValue);
-  if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-  theRep->LowBorder = 1;
-  theRep->HighBorder = range;
+  do {
+      if (range > LARGE_REP_SIZE) {
+          theRep = (ValRep *)LVRAAlloc(ByteRepPTValue, range);
+      }
+      
+      if (!theRep) {
+          theRep = (ValRep *)IOATryAlloc(size);
+          if (theRep) {
+              SETPROTO(theRep, ByteRepPTValue);
+              if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+              theRep->LowBorder = 1;
+              theRep->HighBorder = range;
+          }
+      }
+  } while (!theRep);
   
   /* Assign the text to the body part of the repetition. */
   
-  if (ascii) strcpy((char *)theRep->Body, (char *)ascii);
+  if (asciz) strcpy((char *)theRep->Body, (char *)asciz);
   
   Ck(theRep);
   
@@ -40,32 +49,41 @@ ParamAscii(ValRep *, CopyCT)
   return theRep;
 }
 
-ParamAscii(ValRep *, CopyCT_W)
+ParamAsciz(ValRep *, CopyCT_W)
 {
   DeclReference1(ValRep *, theRep);
   register unsigned range, size;
   int i;
   
-  FetchAscii();
+  FetchAsciz();
   
   DEBUG_CODE(NumCopyCT++);
   
   /* Allocate a ValueRepetition and initialize it with some text.    */
   
-  range = ascii ? strlen((const char *)ascii) : 0;
+  range = asciz ? strlen((const char *)asciz) : 0;
   size = ShortRepSize(range);
   
-  theRep = (ValRep *) IOAalloc(size);
-  
-  SETPROTO(theRep,ShortRepPTValue);
-  if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-  theRep->LowBorder = 1;
-  theRep->HighBorder = range;
+  do {
+      if (range > LARGE_REP_SIZE) {
+          theRep = (ValRep *)LVRAAlloc(ShortRepPTValue, range);
+      }
+      
+      if (!theRep) {
+          theRep = (ValRep *)IOATryAlloc(size);
+          if (theRep) {
+              SETPROTO(theRep, ShortRepPTValue);
+              if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+              theRep->LowBorder = 1;
+              theRep->HighBorder = range;
+          }
+      }
+  } while (!theRep);
   
   /* Assign the text to the body part of the repetition. */
   for (i = 0; i < (size-headsize(ValRep)); i++){
-    /* printf("CopyCT_W: %c\n", ascii + i); */
-    *((unsigned short*)theRep->Body[0]+i) = *(ascii + i);
+    /* printf("CopyCT_W: %c\n", asciz + i); */
+    *((unsigned short*)theRep->Body[0]+i) = *(asciz + i);
   }
   
   Ck(theRep);
