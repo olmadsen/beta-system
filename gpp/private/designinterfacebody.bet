@@ -1,4 +1,5 @@
 ORIGIN 'diagramattributes';
+INCLUDE '~beta/sysutils/v1.5/time';
 -- IndexIDListInsert: Descriptor --
 (# 
 do
@@ -44,7 +45,7 @@ do
                                             '.diag'->currentDiagramName.append;
                                             
                                         if);
-                                        name->openFragmentGroup
+                                        (name,true)->openFragmentGroup
                                      else
                                         ('Open',
                                          '.diag file is newer, open instead?')
@@ -77,7 +78,7 @@ do
                                                   ->currentDiagramName.append;
                                                 
                                             if);
-                                            name->openFragmentGroup
+                                            (name,true)->openFragmentGroup
                                         if)
                                     if)
                                  else
@@ -110,7 +111,7 @@ do
                                             '.diag'->currentDiagramName.append;
                                             
                                         if);
-                                        name->openFragmentGroup
+                                        (name,true)->openFragmentGroup
                                     if)
                                 if)
                              else
@@ -119,10 +120,10 @@ do
                                     '.diag'->currentDiagramName.append;
                                     
                                 if);
-                                name->openFragmentGroup
+                                (name,true)->openFragmentGroup
                             if)
                          else
-                            name->openFragmentGroup
+                            (name,true)->openFragmentGroup
                         if)
                      else
                         (if currentDiagramName[] = none then
@@ -130,7 +131,7 @@ do
                             '.diag'->currentDiagramName.append;
                             
                         if);
-                        name->openFragmentGroup
+                        (name,true)->openFragmentGroup
                     if)
                  else
                     (if currentDiagramName[] = none then
@@ -138,7 +139,7 @@ do
                         '.diag'->currentDiagramName.append;
                         
                     if);
-                    name->openFragmentGroup
+                    (name,true)->openFragmentGroup
                 if)
              else
                 (if '.diag'->ext.equal then
@@ -161,7 +162,7 @@ do
                         (if ok = yes then
                             name[]->currentDiagramName[];
                             name->removeExtension->name;
-                            name->openFragmentGroup
+                            (name,true)->openFragmentGroup
                         if)
                     if)
                  else
@@ -179,10 +180,13 @@ do
                         (currentDiagramName[] = none ) then
                             (if astFile.entry.exists then
                                 (if betFile.entry.exists then
-                                    (if betFile.entry.modtime >
-                                    diagFile.entry.modtime then
+                                    (if
+                                    (betFile.entry.modtime >
+                                     diagFile.entry.modtime) and
+                                    (betFile.entry.modtime >
+                                     astFile.entry.modtime) then
                                         ('Open',
-                                         '.bet file is newer than .diag file.\nOpen .bet file?')
+                                         '.bet file is newer. Open .bet file?')
                                           ->promptForBoolean->ok;
                                         (if ok = yes then
                                             (if currentDiagramName[] = none
@@ -192,7 +196,7 @@ do
                                                   ->currentDiagramName.append;
                                                 
                                             if);
-                                            name->openFragmentGroup
+                                            (name,true)->openFragmentGroup
                                         if)
                                      else
                                         '.diag'->name.append;
@@ -285,7 +289,7 @@ do
                                             '.diag'->currentDiagramName.append;
                                             
                                         if);
-                                        name->openFragmentGroup
+                                        (name,true)->openFragmentGroup
                                     if)
                                  else
                                     '.diag'->name.append;
@@ -313,7 +317,7 @@ do
                                     '.diag'->currentDiagramName.append;
                                     
                                 if);
-                                name->openFragmentGroup
+                                (name,true)->openFragmentGroup
                              else
                                 'Please select a .bet, '->help[];
                                 mps.astFileExtension->help.puttext;
@@ -811,17 +815,7 @@ do
                  arg.get;
                  (if arg.peek
                   // 'd' // 'D' then
-                     arg.get;
-                     (if arg.eos
-                      // true then
-                         true->switch[1]; 
-                      // false then
-                         (if arg.peek
-                          // 'e' then
-                             arg.get; (if arg.peek // 'x' then  if); 
-                         if)
-                     if);
-                     
+                     arg.get; (for i: 100 repeat true->switch[i] for); 
                   // 's' // 'S' then
                      arg.get; true->SwitchMode; swt.clear; restart getSwitch; 
                   // 'u' // 'U' then
@@ -858,7 +852,7 @@ do
          (if ('.bet'->ext.equal) or (mps.astFileExtension->ext.equal) then
              name->removeExtension->name;
              (if switch[17] then 'Opening: '->puttext; name[]->putline;  if);
-             name->openFragmentGroup
+             (name,true)->openFragmentGroup
           else
              'You must select a .bet or '->help[];
              mps.astFileExtension->help.puttext;
@@ -911,42 +905,71 @@ do
    thisOp:
      (# 
      do
-        (if autosaveGroupFile.entry.exists and groupFile.entry.exists then
-            (if autosaveGroupFile.entry.modtime > groupFile.entry.modtime then
-                (if autoSaveFrejaFile.entry.exists then
-                    (if autosaveFrejaFile.entry.modtime >
-                    groupFile.entry.modtime then
-                        ('Open','Autosave file is newer, recover?')
-                          ->promptForBoolean->ok;
-                        (if ok
-                         // yes then
-                            'mv .freja# .freja'->putLine;
-                            FrejaFileName[]
-                              ->autoSaveFrejaFile.entry.rename
-                                (#
-                                   error::< 
-                                     (# 
-                                     do
-                                        'Could not move '->msg;
-                                        FrejaFileName[]->msg.puttext;
-                                        '# into '->msg.puttext;
-                                        FrejaFileName[]->msg.puttext;
-                                        leave thisOp
-                                     #)
-                                #);
-                            '.diag'->(name.copy).append->diagFileName[];
-                            diagFileName
-                              ->recoverDiagFile
-                                (#
-                                   error::< 
-                                     (# 
-                                     do msg[]->alertUser; leave thisOp
-                                     #)
-                                #);
-                            (if (diagFileName,true,false)->checkDiagFile then
-                                diagFileName->openDiagram;
-                                true->doNotOpenAstFile
-                             else
+        (if checkAutoSave then
+            (if autosaveGroupFile.entry.exists and groupFile.entry.exists then
+                (if autosaveGroupFile.entry.modtime > groupFile.entry.modtime
+                 then
+                    (if autoSaveFrejaFile.entry.exists then
+                        (if autosaveFrejaFile.entry.modtime >
+                        groupFile.entry.modtime then
+                            ('Open','Autosave file is newer, recover?')
+                              ->promptForBoolean->ok;
+                            (if ok
+                             // yes then
+                                'mv .freja# .freja'->putLine;
+                                FrejaFileName[]
+                                  ->autoSaveFrejaFile.entry.rename
+                                    (#
+                                       error::< 
+                                         (# 
+                                         do
+                                            'Could not move '->msg;
+                                            FrejaFileName[]->msg.puttext;
+                                            '# into '->msg.puttext;
+                                            FrejaFileName[]->msg.puttext;
+                                            leave thisOp
+                                         #)
+                                    #);
+                                '.diag'->(name.copy).append->diagFileName[];
+                                diagFileName
+                                  ->recoverDiagFile
+                                    (#
+                                       error::< 
+                                         (# 
+                                         do msg[]->alertUser; leave thisOp
+                                         #)
+                                    #);
+                                (if (diagFileName,true,false)->checkDiagFile
+                                 then
+                                    diagFileName->openDiagram;
+                                    true->doNotOpenAstFile
+                                 else
+                                    groupFile.name
+                                      ->autoSaveGroupFile.entry.rename
+                                        (#
+                                           error::< 
+                                             (# 
+                                             do
+                                                'Could not move '->msg;
+                                                groupFile.name->msg.puttext;
+                                                '# into '->msg.puttext;
+                                                groupFile.name->msg.puttext;
+                                                leave thisOp
+                                             #)
+                                        #)
+                                if)
+                             // no then
+                                
+                             // cancel then
+                                leave thisOp
+                            if)
+                         else
+                            'Autosave '->help[];
+                            mps.astFileExtension->help.puttext;
+                            ' file is newer, recover?'->help.puttext;
+                            ('Open',help[])->promptForBoolean->ok;
+                            (if ok
+                             // yes then
                                 groupFile.name
                                   ->autoSaveGroupFile.entry.rename
                                     (#
@@ -960,11 +983,11 @@ do
                                             leave thisOp
                                          #)
                                     #)
+                             // no then
+                                
+                             // cancel then
+                                leave thisOp
                             if)
-                         // no then
-                            
-                         // cancel then
-                            leave thisOp
                         if)
                      else
                         'Autosave '->help[];
@@ -991,31 +1014,6 @@ do
                          // cancel then
                             leave thisOp
                         if)
-                    if)
-                 else
-                    'Autosave '->help[];
-                    mps.astFileExtension->help.puttext;
-                    ' file is newer, recover?'->help.puttext;
-                    ('Open',help[])->promptForBoolean->ok;
-                    (if ok
-                     // yes then
-                        groupFile.name
-                          ->autoSaveGroupFile.entry.rename
-                            (#
-                               error::< 
-                                 (# 
-                                 do
-                                    'Could not move '->msg;
-                                    groupFile.name->msg.puttext;
-                                    '# into '->msg.puttext;
-                                    groupFile.name->msg.puttext;
-                                    leave thisOp
-                                 #)
-                            #)
-                     // no then
-                        
-                     // cancel then
-                        leave thisOp
                     if)
                 if)
             if)
@@ -1211,6 +1209,8 @@ do
                  else
                     (if theDocument[]
                      // none then
+                        systemtime->UniqueDiagramID;
+                        fg[]->sifSetFrejaMark;
                         &OADDocument[]->myDocument[];
                         myDocument.new;
                         (if NoOfForms
@@ -1303,7 +1303,7 @@ do
 do (* first open the group, and then open the form *)
    '-'->name.findAll (#  do inx->index;  #);
    (1,index-1)->name.sub->groupname[];
-   groupname->openFragmentGroup->fg[];
+   (groupname,checkAutoSave)->openFragmentGroup->fg[];
    (index+1,name.length)->name.sub->formname[];
    fg.fragmentlist.scan
      (# 
@@ -1893,7 +1893,10 @@ do
                     scanning:
                     frejaFileName
                       ->scanAstFiles
-                        (# 
+                        (#
+                           fg: ^mps.fragmentGroup;
+                           frejamark: @integer;
+                           t: @text
                         do
                            currentGroupName->groupName;
                            '.bet'->(groupName.copy).append->betFile.name;
@@ -1908,44 +1911,53 @@ do
                             help[]->alertUser;
                             false->OK
                             if)*)
-                               (if groupFile.entry.modtime <> currentModTime
-                                then
-                                   groupFile.name->help.putLine;
-                                   'is inconsistent with'->help.putLine;
-                                   diagFile.name->help.putLine;
-                                   help[]->putline;
-                                   false->OK;
-                                   'modtime of '->puttext;
-                                   mps.astFileExtension->puttext;
-                                   ' file: '->putText;
-                                   groupFile.entry.modtime->putInt;
-                                   newLine;
-                                   'expected modtime: '->putText;
-                                   currentModtime->putInt;
-                                   newLine;
-                                   (if fromRecovery then
-                                       (if canTryRevert then
-                                           true->tryRevert
-                                       if)
-                                    else
-                                       'Open '->help.puttext;
-                                       mps.astFileExtension->help.puttext;
-                                       ' or .bet file instead?'->help.putText;
-                                       ('Open',help[])->promptForBoolean
-                                         ->doOpen;
-                                       (if doOpen = yes then
-                                           groupname->removeExtension
-                                             ->groupname;
-                                           (if currentDiagramName[] = none then
-                                               groupName.copy
-                                                 ->currentDiagramName[];
-                                               '.diag'
-                                                 ->currentDiagramName.append
-                                           if);
-                                           groupName->openFragmentGroup
-                                       if)
-                                   if);
-                                   leave scanning
+                               (currentGroupname[],t[])->mps.top.open->fg[];
+                               (if fg[] <> none then
+                                   fg[]->sifGetFrejaMark->frejamark
+                               if);
+                               (if not (frejamark = UniqueDiagramID) then
+                                   (if groupFile.entry.modtime <> currentModTime
+                                    then
+                                       groupFile.name->help.putLine;
+                                       'is inconsistent with'->help.putLine;
+                                       diagFile.name->help.putLine;
+                                       help[]->putline;
+                                       false->OK;
+                                       'modtime of '->puttext;
+                                       mps.astFileExtension->puttext;
+                                       ' file: '->putText;
+                                       groupFile.entry.modtime->putInt;
+                                       newLine;
+                                       'expected modtime: '->putText;
+                                       currentModtime->putInt;
+                                       newLine;
+                                       (if fromRecovery then
+                                           (if canTryRevert then
+                                               true->tryRevert
+                                           if)
+                                        else
+                                           'Open '->help.puttext;
+                                           mps.astFileExtension->help.puttext;
+                                           ' or .bet file instead?'
+                                             ->help.putText;
+                                           ('Open',help[])->promptForBoolean
+                                             ->doOpen;
+                                           (if doOpen = yes then
+                                               groupname->removeExtension
+                                                 ->groupname;
+                                               (if currentDiagramName[] = none
+                                                then
+                                                   groupName.copy
+                                                     ->currentDiagramName[];
+                                                   '.diag'
+                                                     ->currentDiagramName.append
+                                               if);
+                                               (groupName,true)
+                                                 ->openFragmentGroup
+                                           if)
+                                       if);
+                                       leave scanning
+                                   if)
                                if)
                             else
                                groupFile.name->help.putLine;
@@ -1959,7 +1971,7 @@ do
                                            groupName.copy->currentDiagramName[];
                                            '.diag'->currentDiagramName.append
                                        if);
-                                       groupName->openFragmentGroup
+                                       (groupName,true)->openFragmentGroup
                                    if)
                                 else
                                    help[]->alertUser
@@ -1970,27 +1982,32 @@ do
                            (if OK and betFile.entry.exists then
                                (if betFile.entry.modtime >
                                diagFile.entry.modtime then
-                                   betFile.name->help.putLine;
-                                   'is newer than'->help.putLine;
-                                   diagFile.name->help.putLine;
-                                   'Open .bet file instead?'->help.putText;
-                                   (if not fromRecovery then
-                                       ('Open',help[])->promptForBoolean
-                                         ->doOpen;
-                                       (if doOpen = yes then
-                                           groupname->removeExtension
-                                             ->groupname;
-                                           (if currentDiagramName[] = none then
-                                               groupName.copy
-                                                 ->currentDiagramName[];
-                                               '.diag'
-                                                 ->currentDiagramName.append
-                                           if);
-                                           groupName->openFragmentGroup
-                                       if)
-                                   if);
-                                   help[]->putLine;
-                                   false->OK
+                                   (if (groupFile.entry.exists) and
+                                   (betFile.entry.modtime >
+                                    groupFile.entry.modtime) then
+                                       betFile.name->help.puttext;
+                                       ' is newer.'->help.putLine;
+                                       'Open .bet file instead?'->help.putText;
+                                       (if not fromRecovery then
+                                           ('Open',help[])->promptForBoolean
+                                             ->doOpen;
+                                           (if doOpen = yes then
+                                               groupname->removeExtension
+                                                 ->groupname;
+                                               (if currentDiagramName[] = none
+                                                then
+                                                   groupName.copy
+                                                     ->currentDiagramName[];
+                                                   '.diag'
+                                                     ->currentDiagramName.append
+                                               if);
+                                               (groupName,true)
+                                                 ->openFragmentGroup
+                                           if)
+                                       if);
+                                       help[]->putLine;
+                                       false->OK
+                                   if)
                                if)
                            if);
                            (if OK and groupFile.entry.exists and
@@ -2013,7 +2030,7 @@ do
                                                '.diag'
                                                  ->currentDiagramName.append
                                            if);
-                                           groupName->openFragmentGroup
+                                           (groupName,true)->openFragmentGroup
                                        if)
                                    if);
                                    help[]->putLine;
@@ -2037,7 +2054,7 @@ do
                                 groupName.copy->currentDiagramName[];
                                 '.diag'->currentDiagramName.append
                             if);
-                            groupName->openFragmentGroup
+                            (groupName,true)->openFragmentGroup
                         if)
                     if)
                 if)
@@ -2054,7 +2071,7 @@ do
                         groupName.copy->currentDiagramName[];
                         '.diag'->currentDiagramName.append
                     if);
-                    groupName->openFragmentGroup
+                    (groupName,true)->openFragmentGroup
                 if);
                 help[]->putLine;
                 false->OK
@@ -2107,6 +2124,8 @@ do
                 leave l
              #)
        if);
+       UniqueDiagramID->f.putint;
+       ' '->f.putline;
        theDocument[]->theOADDocument[];
        (if theOADDocument[] = none then
            'theOADDocument[] is none'->putLine
@@ -2225,9 +2244,18 @@ do
 (# f: @file; t: ^Text
 do
    name[]->f.name;
+   thisOp:
    (if f.entry.exists then
        (if f.entry.readable then
            f.openRead;
+           (if not f.eos then
+               (if f.peek->ascii.isDigit then
+                   f.getline->t[];
+                   (if t[] = none then leave thisOp if);
+                   t.reset;
+                   t.getInt->UniqueDiagramID
+               if)
+           if);
            loop:
              (# 
              do
