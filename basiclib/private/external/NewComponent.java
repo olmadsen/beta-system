@@ -12,8 +12,7 @@ public class Component {
     //   kept in a freelist to avoid expensive allocation of Threads
 
     static final boolean do_trace       = false;
-    static final boolean use_reflection = false
-	/* use refection to call myComponent.body.do instead of myComponent.body.xdo */;
+    static final boolean use_reflection = true;
 
     static Component current;        // The current executing Component
     private static Runner firstFree; // First free Runner
@@ -22,6 +21,7 @@ public class Component {
     private static int releasedRunners = 0;
     private static int reusedRunners = 0;
     private static int newRunners = 0;
+    private static int interrupted = 0;
 
     private Runner myRunner ;       // The associated Runner
     private int myId;               // The id of this Component
@@ -29,7 +29,9 @@ public class Component {
                                     // this Component. When suspended,
                                     // is refers to this(Component)
     private BetaObject body;        // The BETA object of this Component
+    private boolean isRunning = false;  // true if at least one attach
     private boolean isTerminated = false;
+    private boolean isMainComponent = false;
     
     static {
 	if (do_trace){
@@ -40,25 +42,28 @@ public class Component {
     private static boolean noInit= true;
     
     Component(BetaObject b) { 
-	if ((noInit) & (current == null)) {
+	if ((noInit) & (current == null)) { 
 	    noInit = false;
 	    current = new Component(null);
+	    current.isMainComponent = true;
+	    current.myRunner.myComponent = current;
 	};
 	body = b; 
 	if (body != null) b.comp$ = this; 
         caller = this;
         myId = id = id + 1;
 	if (firstFree == null) {
-	    myRunner = new Runner(this);
+	    myRunner = new Runner(null);
 	    newRunners = newRunners + 1;
 	    trace("New Runner");
 	}
 	else {
 	    myRunner = firstFree;
 	    firstFree = firstFree.next;
+	    myRunner.next = null;
 	    freeRunners = freeRunners - 1;
 	    reusedRunners = reusedRunners + 1;
-	    myRunner.myComponent = this;
+	    //myRunner.myComponent = this;
 	    trace("Reusing Runner");
 	};
     }
@@ -85,12 +90,19 @@ public class Component {
 	if (current == this) {
 	    trace("suspend");
 	    isAttach = false;
+	    myRunner.myComponent = null;
 	} else {
 	    isAttach = true;
+	    isRunning = true;
 	    if (isTerminated) {
 		System.out.println("Attaching terminated component:"+getName());
 		display();
-	};};
+	    } else {
+		//System.out.println("set myComponent");
+		//caller.display();
+		myRunner.myComponent = caller;
+	    }
+	};
 	Component old_current;
 	old_current = current;
 	current = caller;
@@ -102,22 +114,34 @@ public class Component {
 	    //trace("calling go");
 	    current.myRunner.go();  
 	    if (old_current.isTerminated) {
+		old_current.trace("isTerminated");
 		old_current.myRunner = null;
+		if (current.isMainComponent) statistics();
 		return;
 	    } else { 
 		old_current.trace("wait");
 		try{old_current.myRunner.wait(); }
-		catch (InterruptedException e){} 
+		catch (InterruptedException e)
+		    { System.out.println("Interrupt in swap");} 
 	    }
 	}
     }
-    /*
     protected void finalize() throws Throwable {
-	 System.out.print("finalize:new:"+newRunners+','+"released:"+releasedRunners+','+"reused:"+reusedRunners+','+"free:"+freeRunners);
-	 if (myRunner != null) 
-	     System.out.print("myRunner != null");
-	 System.out.println();
-	 }*/
+	if (myRunner != null) {
+	    interrupted = interrupted + 1;
+	    System.out.print("Finalize:interrupt:");
+	    if (isRunning) {
+		System.out.print("isRunning:"); 
+	    } else {
+		System.out.print("isNotRunning:"); 
+	    };
+	    trace("Finalize:interrupt");
+	    if (isTerminated) System.out.print("isTerminated");
+	    statistics();
+	    myRunner.interrupt();
+	}
+
+    }
  
     public String getName() {
 	Class C = body.getClass();
@@ -125,11 +149,10 @@ public class Component {
     };
     public void displayID() {
 	    System.out.println("thread:"+Thread.currentThread().getName());
-	    System.out.print("   this:"+myId);
 	    if (current != null) 
-		System.out.print(",current:"+current.myId+',');
+		System.out.print("   current:"+current.myId+',');
 	    if (caller != null)
-		System.out.print(",caller:"+caller.myId);
+		System.out.print("   caller:"+caller.myId);
 	    System.out.print("\n   ");
 	    display();
 	    System.out.println();      
@@ -148,13 +171,19 @@ public class Component {
 	if ((caller != null) & (caller != this))
 	    caller.display();
     }
+    public void statistics() {
+	System.out.println("new:"+newRunners+','
+			   +"released:"+releasedRunners+','
+			   +"reused:"+reusedRunners+','
+			   +"free:"+freeRunners+','
+			   +"interrupted:"+interrupted);
+    }
     public void trace(String T) { 
 	if (do_trace) { 
 	    System.out.print("\n   "+T+':');
 	    displayID(); 
 	}
     } 
-
     public void trace2(String T) { if (true) trace(T); }
 
     static int runnerId=0;
@@ -168,11 +197,10 @@ public class Component {
 	    myRunId = runnerId = runnerId + 1;
 	    setDaemon(true);
 	}
-
-	public void run(){
+	public void doInterrupt() { interrupt(); }
+	public void run() {
 	    while (true) {
-		// myComponent.trace("Execute:body");
-		if (myComponent.body == null) return;
+		myComponent.trace("Execute:body");
 		// Call myComponent.body.do()
 		// We cannot do this directly, since "do" is
 		// a reserved Java language word.
@@ -186,29 +214,41 @@ public class Component {
 		    } catch (NoSuchMethodException e){
 			System.err.println("Component.java: myComponent.body.do(): no such method");
 		    } catch (Exception e){
+			
 			System.err.println("Component.java: cannot call myComponent.body.do()");
-			System.out.println("Class: "+myComponent.body
-					   .getClass().getName());
-
 			myComponent.displayID();
-		    }
+		    } ;
 		} else {
 		    // Calling this method xdo() instead.
-		    myComponent.body.xdo();
+		    // myComponent.body.xdo();
 		}
 		myComponent.isTerminated = true;
-		//myComponent.trace("Terminating Runner:"+myRunId);
-		myComponent.swap();
-		next = firstFree;
-		firstFree = this;
-		freeRunners = freeRunners + 1;
-		releasedRunners = releasedRunners + 1;
-		//myComponent.trace("Pooled Runner waits:"+myRunId);
-		myComponent = null;  
-		synchronized (this)
-		    { try{wait(); } catch (InterruptedException e){}
-		    };
-		myComponent.trace("Pooled Runner resumed:"+myRunId);
+		myComponent.trace("Terminating Runner:"+myRunId);
+		// myComponent.swap();
+		Component old_current = current;
+		current = myComponent.caller;
+		myComponent.caller = old_current;
+		myComponent.myRunner = null;
+		old_current = null;
+		myComponent = null;
+		current.myRunner.go();
+		while (true) {
+		    next = firstFree;
+		    firstFree = this;
+		    freeRunners = freeRunners + 1;
+		    releasedRunners = releasedRunners + 1;
+		    //myComponent.trace("Pooled Runner waits:"+myRunId);
+		    myComponent = null;  
+		    synchronized (this) {
+			try{wait(); 
+			myComponent.trace("Pooled Runner resumed:"+myRunId);
+			break; 
+			} catch (InterruptedException e) { 
+			    // return to Runner pool ;
+			    // System.out.println("myRunner interrupted");
+			};
+		    }
+		}
 	    }
 	}
 	public void go() { 
@@ -219,23 +259,9 @@ public class Component {
 	    }
 	    else {
 		//myComponent.trace("Runner:go:notify:"+myRunId);
-		// notify();
 		synchronized(this) {notify();};
 	    }
 	}
     }
-
-    /*
-    public class BasicComponent extends Component {
-	public BasicComponent(BetaObject b) { 
-	    super.BasicComponent();
-	    trace("BasicComponent");
-	}
-	
-	public void swap() {
-	    trace("basic:swap");
-	}
-    }
-    */
 }
 
