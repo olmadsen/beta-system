@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: sighandler.c,v $, rel: %R%, date: $Date: 1992-03-23 13:12:56 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: sighandler.c,v $, rel: %R%, date: $Date: 1992-03-23 13:34:20 $, SID: $Revision: 1.5 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -42,7 +42,7 @@ void SignalHandler(sig, code, scp, addr)
   /* Set StackEnd to the stack pointer just before trap. */
   StackEnd = (long *) scp->sc_sp;
 
-#ifdef sun-3
+#ifdef sun3
   /* Try to fetch the address of current Beta object in a0.*/
   theCell = (handle(Object)) (((long) scp) - ((long) 24));
   if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
