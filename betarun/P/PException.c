@@ -154,19 +154,13 @@ static long sourceReg(unsigned long instruction, ucontext_t *ucon, long returnSP
       
       /* its assumed that only rs1 or sr2 can be the culprit, not both */
       {
-	void *reg_contents1;
-	reg_contents1 = getRegisterContents(rs1, ucon, returnSP);
 	
 	if (simm13 != -1) {
-	  if (inPIT(reg_contents1)
-#ifdef RTLAZY
-	      || isLazyRef(reg_contents1)
-#endif /* RTLAZY */
-	      ) {
-	    sourcereg = rs1;
-	  } 
+	  sourcereg = rs1;
 	} else {
+	  void *reg_contents1;
 	  void *reg_contents2;
+	  reg_contents1 = getRegisterContents(rs1, ucon, returnSP);
 	  reg_contents2 = getRegisterContents(rs2, ucon, returnSP);
 	  
 	  if (inPIT(reg_contents1)
@@ -228,12 +222,26 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
     
     if (sourcereg != -1) {
       
-      /* Ok, so this is a genuine proxy reference. */
-  
+      /* Ok, so this is a genuine refNone or proxy reference. */
+      ip = getRegisterContents(sourcereg, ucon, returnSP);
+      if (!ip) {
+	/* RefNone */
+	Object ** theCell;
+	Object *    theObj = NULL;
+	/* Try to fetch the address of current Beta object from i0.*/
+	theCell = (Object **) &((RegWin*)ucon->uc_mcontext.gregs[REG_SP])->i0;
+	if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
+	StackEnd = (long *) ucon->uc_mcontext.gregs[REG_SP];
+	if (!DisplayBetaStack(RefNoneErr, 
+			      theObj,
+			      (long*)returnPC,
+			      sig)) {
+	  BetaExit(1);
+	}
+      }
+
       Claim(!BETAREENTERED, "Proxy met during rebinding!");
       
-      ip = getRegisterContents(sourcereg, ucon, returnSP);
-            
       /* Calculate absolute address by looking in appropriate tables */
       if (inPIT(ip)) {
 	/* 'unswizzleReference' *might* call back into beta code to
