@@ -66,8 +66,12 @@ static ValueProperty( name, value)
   ENTRY("ioa", IOASize = 1024 * intScan(name, value));
   ENTRY("aoa",  
 	AOABlockSize  = 1024 * intScan(name, value);
-	if (AOAMinFree>AOABlockSize) AOAMinFree=AOABlockSize;);
-  ENTRY("lvra", LVRABlockSize = 1024 * intScan(name, value));
+	if (AOAMinFree>AOABlockSize) AOAMinFree=AOABlockSize;
+	);
+  ENTRY("lvra", 
+	LVRABlockSize = 1024 * intScan(name, value);
+	if (LVRAMinFree>LVRABlockSize) LVRAMinFree=LVRABlockSize;
+	);
   ENTRY("cbfa", CBFABlockSize = 1024 * intScan(name, value));
 
   ENTRY("ioapercentage",
