@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: copyobject.c,v 1.14 1992-09-09 13:51:07 tthorn Exp $
+ * Mod: $Id: copyobject.c,v 1.15 1992-10-02 14:48:35 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
@@ -118,7 +118,7 @@ ref(Object) NewCopyObject( theObj, theCell)
 				  "NewCopyObject: isValRep(cast(ValRep)*theCell)" ));
 		return newObj;
 	    } else {
-		/* The ValRep was not large */
+		/* CopyObjectToLVRA failed */
 		return CopyObject( theObj);
 	    }
 	}
@@ -144,6 +144,6 @@ ref(Object) NewCopyObject( theObj, theCell)
 	}
     }
 #endif
-    /* theObj is not a ValRep, not old enough for AOA or is a stack object */
+    /* theObj is not copied to LVRA, not copied to AOA, or theObj is a stack object */
     return CopyObject(theObj);
 }
