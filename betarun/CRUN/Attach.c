@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Attach.c,v $, rel: %R%, date: $Date: 1992-08-01 20:23:48 $, SID: $Revision: 1.7 $
+ * Mod: Attach.c, rel: 1, date: 8/1/92, SID: 1.7
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -27,6 +27,7 @@ CAtt(ref(Component) theComp, ref(Object) theObj)
 
     /* printf("\nAttach: theComp = %x", theComp); */
 
+    Ck(theComp); Ck(theObj);
     getret(ActiveComponent->CallerLSC);
 
     AssignReference((long *)&theComp->CallerComp, cast(Item) ActiveComponent);

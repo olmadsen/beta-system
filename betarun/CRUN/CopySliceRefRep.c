@@ -1,8 +1,10 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-07-24 17:09:20 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:41 $, SID: $Revision: 1.10 $
  * by Peter Andersen and Tommy Thorn.
  */
+
+#define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
@@ -14,16 +16,20 @@ asmlabel(CopySRR, "
 ");
 
 void CCopySRR(ref(RefRep) theRep,
-		      ref(Item) theItem,
-		      unsigned offset, /* i ints */
-		      unsigned low,
-		      unsigned high
-		      )
+	      ref(Item) theItem,
+	      unsigned offset, /* i ints */
+	      unsigned low,
+	      unsigned high
+	      )
 {
     register unsigned size;
     register int i;
-    register ref(RefRep) newRep;
 
+    GCable_Entry
+
+#define newRep (cast(RefRep) GCreg3)
+      
+      Ck(theItem); Ck(theRep);
     /* Copy a slice of a Reference Repetition.
      * stack on entry [return(0),offset(4),Item(8),ValRep(12),...]
      * and registers DataReg1=low, DataReg2=high.
@@ -56,10 +62,6 @@ void CCopySRR(ref(RefRep) theRep,
     
     for (i = 0; i < size; ++i)
       newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
-    
-    /* stack[8] -> theItem;
-     * stack[4] -> offset
-     */
     
     AssignReference((long *)theItem + offset, cast(Item) newRep);
 }

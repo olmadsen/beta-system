@@ -1,8 +1,10 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopyRefRep.c,v $, rel: %R%, date: $Date: 1992-07-24 17:10:34 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: CopyRefRep.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:37 $, SID: $Revision: 1.2 $
  * by Peter Andersen and Tommy Thorn.
  */
+
+#define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
@@ -13,7 +15,12 @@ void CopyRR(ref(ValRep) theRep,
 	    )
 {
   register unsigned range, i;
-  register ref(RefRep) newRep = NULL;
+ 
+  GCable_Entry
+#define newRep (cast(RefRep) GCreg3)
+
+    Ck(theRep);Ck(theObj);
+  newRep = NULL;
   
   range = theRep->HighBorder;
   newRep = cast(RefRep) IOAcalloc(RefRepSize(range));

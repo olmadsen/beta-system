@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Suspend.c,v $, rel: %R%, date: $Date: 1992-08-01 20:23:51 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: Suspend.c,v $, rel: %R%, date: $Date: 1992-08-19 15:45:22 $, SID: $Revision: 1.7 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -21,7 +21,7 @@ ref(Component) Susp(ref(Object) theObj)
    * Suspending a component involving callBacks _must_ result
    * in an error.
    */
-  
+  Ck(theObj);
   if (ActiveCallBackFrame) BetaError(-13, theObj);
   
   /* This situation is this:
@@ -34,7 +34,7 @@ ref(Component) Susp(ref(Object) theObj)
      lastCompBlock->fp -> CallerComp..RegWin
      */
   
-  /* Pack the top most component block into 'ActiveComponent.StackObj',
+  /* Pack the topmost component block into 'ActiveComponent.StackObj',
    * that is, fp to lastCompBlock->fp
    */
   

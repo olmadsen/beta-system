@@ -1,8 +1,10 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: ExtendValRep.c,v $, rel: %R%, date: $Date: 1992-07-21 17:16:01 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: ExtendValRep.c,v $, rel: %R%, date: $Date: 1992-08-19 15:45:00 $, SID: $Revision: 1.5 $
  * by Peter Andersen and Tommy Thorn.
  */
+
+#define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
@@ -17,12 +19,18 @@ void CExtVR(ref(Object) theObj,
 	    long add /* What to extend the range with */
 	    )
 {
-  long *theCell = (long *) theObj + offset;
-  ref(ValRep) theRep = *casthandle(ValRep) theCell;
-  ref(ValRep) newRep;
-  long newRange = theRep->HighBorder + add; /* Range of new repetition */
+  long newRange; /* Range of new repetition */
   long copyRange; /* Range to copy from old rep */
   int i;
+
+  GCable_Entry
+
+#define theRep (cast(ValRep) GCreg2)
+#define newRep (cast(ValRep) GCreg3)
+  
+    Ck(theObj);
+  theRep = *casthandle(ValRep) ((long *) theObj + offset);
+  newRange = theRep->HighBorder + add; /* Range of new repetition */
   
   if (newRange < 0) newRange = 0;
   copyRange = DispatchValRepBodySize(theRep, (add < 0) ? newRange : theRep->HighBorder) >> 2;
@@ -47,9 +55,8 @@ void CExtVR(ref(Object) theObj,
     
     if (newRep) {
       /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      theCell = (long *) theObj + offset; /* Recalculation may be needed */
-      newRep->GCAttr = (int) theCell;
-      *casthandle(ValRep) theCell = newRep;
+      newRep->GCAttr = (int) ((long *) theObj + offset);
+      *casthandle(ValRep) ((long *) theObj + offset) = newRep;
       int_clear((char*)newRep->Body, newRange*4);
       for (i = 0; i < copyRange; ++i)
 	newRep->Body[i] = theRep->Body[i];
@@ -69,9 +76,7 @@ void CExtVR(ref(Object) theObj,
   newRep->HighBorder = newRange;
   
   /* Assign into theObj */
-  theCell = (long *) theObj + offset; /* Recalculation may be needed */
-
-  AssignReference(theCell, cast(Item) newRep);
+  AssignReference((long *) theObj + offset, cast(Item) newRep);
 
   /* Copy contents of old rep to new rep */
   for (i = 0; i < copyRange; ++i)

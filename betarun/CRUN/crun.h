@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-01 20:17:14 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-19 15:45:26 $, SID: $Revision: 1.7 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -18,7 +18,7 @@ extern char 	      * LVRAAlloc();
 extern char 	      * LVRAByteAlloc();
 extern ref(RefRep)	AlloRR();
 extern ref(StackObject) AlloSO() asm ("AlloSO");
-extern ref(ValRep)	CopyT() asm ("CopyT");
+extern void		CopyT() asm ("CopyT");
 extern ref(RefRep)	CopySRR() asm ("CopySRR");
 extern ref(ValRep)	CopySVR() asm ("CopySVR");
 extern ref(Structure)	AlloS() asm("AlloS");
@@ -41,6 +41,9 @@ extern void             CopyVR() asm("CopyVR");
 extern void             BetaError();
 extern void             ChkRA() asm("ChkRA");
 extern ref(Component)   Susp() asm("Susp");
+extern char	      * IOAalloc();
+extern char	      * IOAcalloc();
+
 
 static inline long DispatchValRepSize(ref(ValRep) theRep, unsigned range)
 {
@@ -63,13 +66,27 @@ static inline long DispatchValRepBodySize(ref(ValRep) theRep, unsigned range)
 }
 
 static inline void
-AssignReference(long *theCell, ref(Item) newObject)
+CCheckRefAsgn(handle(Object) theObjHandle)
 {
-  *(casthandle(Item)theCell) = newObject;
-  if (!inIOA(theCell)) ChkRA(casthandle(Item)theCell);
+  /* The Assignment *theObjHandle = theObj has just been
+   * done. We know the theObjHandle is in AOA, now check if
+   * *theObjHandle(==theObj) is in IOA.
+   */
+   
+  if (inIOA(*theObjHandle))
+    /* Remember this target cell. */
+    AOAtoIOAInsert(theObjHandle);
 }
 
 static inline void
+AssignReference(long *theCell, ref(Item) newObject)
+{
+  *(struct Item **)theCell = newObject;
+  if (! inIOA(theCell) && inIOA(newObject))
+    AOAtoIOAInsert(theCell);
+}
+
+static inline
 int_clear(char *p, unsigned size)
 {
   register int i;
@@ -77,37 +94,6 @@ int_clear(char *p, unsigned size)
     fprintf(stderr, "What! size&3 != 0\n");
   for (i = size-4; i >= 0; i -= 4)
     *(int *)(p+i) = 0;	/* Ugly Hacks Work Fast */
-}
-
-static inline char *
-IOAalloc(unsigned size)
-{
-  register char *p;
-
-  while ((char *)IOATop+size > (char *)IOALimit) {
-    DoGC(size);
-  }
-
-  p = (char *)IOATop;
-  IOATopoff += size;
-
-  return p;
-}
-
-static inline char *
-IOAcalloc(unsigned size)
-{
-  register char *p;
-
-  while ((char *) IOATop+size > (char *)IOALimit) {
-    DoGC(size);
-  }
-
-  p = (char *)IOATop;
-  IOATopoff += size;
-
-  int_clear(p, size);
-  return p;
 }
 
 static inline void
@@ -119,7 +105,7 @@ setup_item(ref(Item) theItem,
     register ref(GCEntry) initTab;
   
     theItem->Proto = prototype;
-    theItem->GCAttr = -1;
+    theItem->GCAttr = 1; /* Set item age to 1 */
 
     /* Initialize the body part of the item, according to the genTable. */
 
@@ -144,4 +130,7 @@ setup_item(ref(Item) theItem,
   ((int *)theItem)[prototype->OriginOff] = (int) origin;
 }
 
+#define Ck(r) \
+  (r && Claim(inIOA(r) || inAOA(r) || inLVRA(r), \
+	      #r ": none or inside IOA, AOA, or LVRA"))
 #endif

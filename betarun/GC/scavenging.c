@@ -1,10 +1,11 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-08-19 11:56:02 $, SID: $Revision: 1.27 $
+ * Mod: scavenging.c, rel: 1, date: 8/19/92, SID: 1.27
  * by Lars Bak.
  */
 #include "beta.h"
 #include "scavenging.h"
+#include "../CRUN/crun.h"
 
 extern ref(Object) NewCopyObject();
 
@@ -25,7 +26,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *end)
   if (inBetaHeap(ar->i2) && isObject(ar->i2)) ProcessReference(&ar->i2);
   if (inBetaHeap(ar->i3) && isObject(ar->i3)) ProcessReference(&ar->i3);
 
-  for (; theCell != (struct Object **) end; theCell += 2)
+  for (; theCell != (struct Object **) end; theCell+=2) /* change this to += 2 when olm gets to generate this code ?? */
     if (inBetaHeap(*theCell) && isObject(*theCell))
       ProcessReference(theCell);
   CompleteScavenging();
@@ -182,7 +183,6 @@ void IOAGc()
   AOAtoIOACount = 0;
   if( AOAtoIOAtable ){ 
     int i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
-    INFO_IOA( fprintf(output, "# AOAtoIOAtable\n"));
     for(i=0; i<AOAtoIOAtableSize; i++){ 
       if( *pointer ){
 	AOAtoIOACount++;
@@ -199,7 +199,7 @@ void IOAGc()
   ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
   ProcessReference( &ActiveComponent);
 #ifdef sparc
-  ProcessReference( BasicItemHandle );
+  ProcessReference( &BasicItem );
 #endif
   CompleteScavenging();
 
@@ -327,6 +327,7 @@ void ProcessReference( theCell)
   
   theObj = *theCell;
   
+  Ck(theObj);
   if( inIOA(theObj)){
     /* 'theObj' is inside IOA */
     DEBUG_IOA( Claim(isObject(theObj),"ProcessReference: theObj is consistent."));

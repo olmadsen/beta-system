@@ -1,8 +1,10 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-07-24 17:09:04 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:44 $, SID: $Revision: 1.10 $
  * by Peter Andersen and Tommy Thorn.
  */
+
+#define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
@@ -21,8 +23,12 @@ void CCopySVR(ref(ValRep) theRep,
 	      )
 {
   register long i;
-  register ref(ValRep) newRep;
+
+  GCable_Entry
+
+#define newRep (cast(ValRep) GCreg3)
   
+  Ck(theItem); Ck(theRep);
   /* Copy a slice of a Value Repetition. */
   
   /* Check that low and high are usable. */

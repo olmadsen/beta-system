@@ -1,8 +1,10 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateStackObject.c,v $, rel: %R%, date: $Date: 1992-07-23 15:03:03 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: AllocateStackObject.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:12 $, SID: $Revision: 1.6 $
  * by Peter Andersen and Tommy Thorn.
  */
+
+#define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
@@ -10,7 +12,9 @@
 ref(StackObject)
 AlloSO(unsigned size)
 {
-  register ref(StackObject) theStack;
+  GCable_Entry
+
+#define theStack (cast(StackObject) GCreg3)
 
   theStack = cast(StackObject) IOAalloc(StackObjectSize(size));
 

@@ -1,15 +1,18 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Misc.c,v $, rel: %R%, date: $Date: 1992-07-21 17:16:32 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: Misc.c,v $, rel: %R%, date: $Date: 1992-08-19 15:45:06 $, SID: $Revision: 1.6 $
  * by Peter Andersen and Tommy Thorn.
  */
+
+#define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
 
 asmlabel(Return, "retl; nop");
 
-void RefNone(ref(Object) theObj)
+void
+RefNone(ref(Object) theObj)
 {
     BetaError(-1, theObj);
 }
@@ -23,3 +26,38 @@ asmlabel(SetArgValues, "
 	retl
 	st %i1, [%g1]
 ");
+
+char *
+IOAalloc(unsigned size)
+{
+  register char *p;
+
+  GCable_Entry;
+
+  while ((char *)IOATop+size > (char *)IOALimit) {
+    DoGC();
+  }
+
+  p = (char *)IOATop;
+  IOATopoff += size;
+
+  return p;
+}
+
+char *IOAcalloc(unsigned size)
+{
+  register char *p;
+
+  GCable_Entry;
+
+  while ((char *) IOATop+size > (char *)IOALimit) {
+    DoGC();
+  }
+
+  p = (char *)IOATop;
+  IOATopoff += size;
+
+  int_clear(p, size);
+  return p;
+}
+

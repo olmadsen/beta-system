@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CInterface.c,v $, rel: %R%, date: $Date: 1992-07-24 17:08:34 $, SID: $Revision: 1.7 $
+ * Mod: CInterface.c, rel: 1, date: 7/24/92, SID: 1.7
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -28,6 +28,8 @@ char *CCpkVT(ref(Object) theObj, ref(ValRep) theRep)
      * nextText is used as a tmp. register only.
      * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
      */
+
+    Ck(theObj); Ck(theRep);
     if (bodysize > (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
       BetaError(-35, theObj);
     
@@ -62,6 +64,7 @@ char *CCpkSVT(ref(Object) currentObj, ref(ValRep) theRep, unsigned low, unsigned
     long i;
     unsigned char *oldBody;
 
+    Ck(currentObj); Ck(theRep);
     if (low<theRep->LowBorder) BetaError(-6, currentObj);
     if (high<theRep->LowBorder) BetaError(-7, currentObj);
     if (low>theRep->HighBorder) BetaError(-6, currentObj);

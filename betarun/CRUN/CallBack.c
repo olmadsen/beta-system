@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-07-31 16:35:08 $, SID: $Revision: 1.12 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:28 $, SID: $Revision: 1.13 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -24,6 +24,7 @@ void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
       return CCopyCPP(theStruct, theObj);
     }
 
+    Ck(theStruct);Ck(theObj);
     CBFATop->theStruct = theStruct;
     CBFATop->mov_o7_g1 = MOV_O7_G1;
     MK_CALL(&CBFATop->call_HandleCallBack, HandleCB);
@@ -84,4 +85,5 @@ int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
        making it save it on stack. */
     
     asm(""::"r" (&a6));
+    return retval;
 }

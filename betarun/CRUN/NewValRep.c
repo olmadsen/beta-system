@@ -1,8 +1,10 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: NewValRep.c,v $, rel: %R%, date: $Date: 1992-07-21 17:18:44 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: NewValRep.c,v $, rel: %R%, date: $Date: 1992-08-19 15:45:12 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
+
+#define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
@@ -18,28 +20,31 @@ void CNewVR(int range,
 	    int offset /* in ints */
 	    )
 {
-  register long *theCell = (long *)theObj+offset;
-  register ref(ValRep) theRep = cast(ValRep)(*theCell);
+    GCable_Entry
+
+
+#define theRep (cast(ValRep) GCreg3)
+  
+  Ck(theObj);
+  theRep = (casthandle(ValRep)theObj)[offset];
   
   switch( (int) theRep->Proto){
   case (int) ByteRepPTValue:
-    CAlloVR1(theObj, offset, range);
+    CAlloVR1(theObj, offset*4, range); /* MP MP !! */
     break;
   case (int) WordRepPTValue:
-    CAlloVR2(theObj, offset, range);
+    CAlloVR2(theObj, offset*4, range); /* MP MP !! */
     break;
   case (int) ValRepPTValue:
-    CAlloVR4(theObj, offset, range);
+    CAlloVR4(theObj, offset*4, range); /* MP MP !! */
     break;
   case (int) DoubleRepPTValue:
-    CAlloVR8(theObj, offset, range);
+    CAlloVR8(theObj, offset*4, range); /* MP MP !! */
     break;
   default:
     fprintf(output, "NewValRep: wrong prototype\n");
     exit(1);
   }
-  
-  theCell = (long *)theObj+offset;
-  if (!inIOA(theCell)) ChkRA(theCell);
+  if (!inIOA((long *)theObj+offset)) CCheckRefAsgn((long *)theObj+offset);
 }
   

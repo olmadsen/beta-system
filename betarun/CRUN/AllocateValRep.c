@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateValRep.c,v $, rel: %R%, date: $Date: 1992-08-17 10:31:29 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: AllocateValRep.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:15 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -25,9 +25,10 @@ ref(ValRep) CAlloVR1(ref(Object) theObj,
   if (range < 0)
     range = 0;
 
+  Ck(theObj);
   Size = ByteRepSize(range);
 
-  if (range > 4*LARGE_REP_SIZE) {
+  if (range > LARGE_REP_SIZE) {
     theRep = cast(ValRep) LVRAByteAlloc(range);
     if (theRep) {
       /* Make the LVRA-cycle: theCell -> theRep.GCAttr */

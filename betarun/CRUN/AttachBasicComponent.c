@@ -1,8 +1,10 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AttachBasicComponent.c,v $, rel: %R%, date: $Date: 1992-07-20 11:45:03 $, SID: $Revision: 1.4 $
+ * Mod: AttachBasicComponent.c, rel: 1, date: 7/20/92, SID: 1.4
  * by Peter Andersen and Tommy Thorn.
  */
+
+#define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
@@ -13,29 +15,29 @@ void AttBC(ref(Component) theComp)
 {
     register void (*entrypoint)();
 
-    register ref(Item)		betaenv	      asm("%l4");
     register ref(CallBackFrame) callBackFrame asm("%l5");
     register ref(RegWin)	nextCompBlock asm("%l6");
     register long 		level 	      asm("%l7");
 
+    GCable_Entry
+
+    Ck(theComp);
     /* Push the bottom component block. */
     /* Terminates the list of component blocks on the stack. */
 
-    betaenv = cast(Item) theComp->Body; /* Save betaenv obj. for mkTextObj */ 
     callBackFrame = cast(CallBackFrame) 0;
     nextCompBlock = cast(RegWin) 0;
     level = 0;
 
-    BasicItemHandle = StackPointer - 4; /* Needs to be thought about !! */
+    BasicItem = cast(Item) &theComp->Body;
 
     ActiveCallBackFrame = 0; lastCompBlock = cast(ComponentBlock) StackPointer;
-
     
     getret(theComp->CallerLSC);
 
     ActiveComponent = theComp;
 
-    entrypoint = ((void (**)()) (cast(Item)&theComp->Body)->Proto)[-1];
+    entrypoint = ((void (**)()) BasicItem->Proto)[-1];
     /* ?? should set theComp = 0 as done in Att.BasicComp.run */
     (*entrypoint)(&theComp->Body);
 

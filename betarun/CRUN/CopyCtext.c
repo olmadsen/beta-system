@@ -1,8 +1,10 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopyCtext.c,v $, rel: %R%, date: $Date: 1992-07-23 15:05:35 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: CopyCtext.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:34 $, SID: $Revision: 1.7 $
  * by Peter Andersen and Tommy Thorn.
  */
+
+#define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
@@ -11,8 +13,10 @@ asmlabel(CopyCT, "ba _CCopyCT; mov %l0, %o0");
 
 ref(ValRep) CCopyCT(unsigned char *textPtr)
 {
-  register ref(ValRep) theRep;
   register unsigned range, size, i;
+
+  GCable_Entry
+#define theRep (cast(ValRep) GCreg3)
 
   /* Allocate a ValueRepetition and initialize it with some text.    */
 

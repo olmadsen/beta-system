@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: ExitObjects.c,v $, rel: %R%, date: $Date: 1992-07-20 11:49:06 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: ExitObjects.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:54 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -12,13 +12,17 @@ asmlabel(ExitO, "
 	mov	%i0, %o2
 ");
 
+/* Note: The offset parameter is complely ignored. It's not needed
+   on the SPARC */
+
 void CExitO(ref(Object) exitObj, long exitAddr, ref(Object) theObj)
 {
     ref(Component) theComp;
     ref(RegWin) rw; /* Callers Register Window */
 
-    /* We return to exitAddr */
-    setret(exitAddr);
+    Ck(exitObj); Ck(theObj);
+    /* We return to exitAddr (the -8 is the SPARC convention) */
+    setret(exitAddr-8);
 
     /* We need to read the stack, thus this trap to flush regwins */
     asm("ta 3");

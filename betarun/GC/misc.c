@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: misc.c,v $, rel: %R%, date: $Date: 1992-08-19 11:57:50 $, SID: $Revision: 1.12 $
+ * Mod: misc.c, rel: 1, date: 8/19/92, SID: 1.12
  * by Lars Bak.
  */
 
@@ -14,6 +14,11 @@
 long isObject( theObj)
   ref(Object) theObj;
 { 
+#ifdef sparc
+    /* For the SPARC isObject also checkes alignment constraints */
+    if ((unsigned)theObj % 8 != 0)
+      return FALSE;
+#endif
   /* check that the GCAttr of the object is valid. */
   if( inBetaHeap(theObj->Proto) ) return FALSE;
   if( theObj->Proto == 0 ) return FALSE;

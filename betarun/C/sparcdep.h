@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-07-31 16:33:01 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-08-19 15:41:46 $, SID: $Revision: 1.3 $
  * by Tommy Thorn
  */
 
@@ -81,3 +81,22 @@ register long   retAddress   asm("%i7");
 
 /* Isn't life swell? */
 #define inIOA(x) (((unsigned) x - (unsigned) IOA) < (unsigned) IOATopoff)
+
+/* Defining this in the head of a module, together with a
+   GCable_Entry and GCable_Exit in every routine in that module makes
+   the activation record look like BETA, but *BEWARE*!:
+   CHECK THAT THE ROUTINE DOESN'T USE ANY STACK, OR LOOSE!!
+*/
+
+#ifdef GCable_Module
+register volatile void *GCreg0 asm("%o0");
+register volatile void *GCreg1 asm("%o1");
+register volatile void *GCreg2 asm("%o3");
+register volatile void *GCreg3 asm("%o4");
+
+#define GCable_Entry \
+  StackPointer = FramePointer-16; /* = 64 */ \
+  GCreg0 = GCreg1 = GCreg2 = GCreg3 = 0;
+
+#endif
+

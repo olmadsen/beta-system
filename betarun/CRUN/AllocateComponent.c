@@ -1,8 +1,10 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-07-23 17:18:04 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:02 $, SID: $Revision: 1.10 $
  * by Peter Andersen and Tommy Thorn.
  */
+
+#define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
@@ -11,7 +13,15 @@ ref(Component) AlloC(ref(ProtoType) prototype,
 		     ref(Object) origin
 		     )
 {
-    register ref(Component) theComp;
+    /* AlloC calls BETA code, thus we need to make AlloC's stack look
+       like BETA stack, and use our BETA register convention.
+       Summary: %o0 - 3 (%i0 - 3): only references or garbage */
+
+    GCable_Entry
+
+    Ck(origin);
+      
+#define theComp (cast(Component) GCreg3)
 
     theComp = cast(Component) IOAcalloc(ComponentSize(prototype->Size));
 

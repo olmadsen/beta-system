@@ -1,8 +1,10 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: MakeTextObj.c,v $, rel: %R%, date: $Date: 1992-07-21 17:15:17 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: MakeTextObj.c,v $, rel: %R%, date: $Date: 1992-08-19 15:45:03 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
+
+#define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
@@ -16,9 +18,12 @@ void MkTO(char *cText,
 	  ref(Item) theItem,
 	  unsigned offset /* i ints */ )
 {
-  ref(Item) theText;
+  GCable_Entry
 
-  theText = AlloI(TextProto, *BasicItemHandle);
+#define theText (cast(Item) GCreg3)
+
+  Ck(theItem); Ck(BasicItem);
+  theText = AlloI(TextProto, BasicItem);
   
   AssignReference((long *)theItem + offset, theText);
 
@@ -30,7 +35,7 @@ void MkTO(char *cText,
    * store range in pos. TEXT ATTRIBUTE HARDCODED:20.
    * (headsize(Item) + 2*sizeof(long) == 16)
    */
-  theItem->Body[2] =
-    theItem->Body[3] = (casthandle(ValRep)theText)[REP_OFF]->HighBorder;
+  theText->Body[2] =
+    theText->Body[3] = (casthandle(ValRep)theText)[REP_OFF]->HighBorder;
 }
 
