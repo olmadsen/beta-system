@@ -62,7 +62,7 @@ case "sun4*"
 			setenv LD_RUN_PATH $MOTIFHOME/lib:/usr/dt/lib:$OPENWINHOME/lib
 		endif
 		breaksw
-	case "5.[45]*":
+	case "5.[456]*":
 		######## Sun4 SPARC / Solaris configuration #######
 		setenv MACHINETYPE SUN4S
 		setenv objdir sun4s
@@ -157,6 +157,19 @@ case "9000/7??":
 		endif
 		breaksw
 	case "*9.*":
+		########### HP-UX 9 configuration ###################
+		setenv MACHINETYPE HPUX9PA
+		setenv objdir hpux9pa
+		setenv betaopt 
+		if ( ! $?MOTIFHOME ) setenv MOTIFHOME /usr/lib/Motif1.2
+		if ( ! $?MOTIFINC  ) setenv MOTIFINC  /usr/include/Motif1.2
+		if ( $?LD_LIBRARY_PATH ) then
+			setenv LD_LIBRARY_PATH ${MOTIFHOME}:/usr/lib/X11R5:$LD_LIBRARY_PATH
+		else
+			setenv LD_LIBRARY_PATH ${MOTIFHOME}:/usr/lib/X11R5
+		endif
+		breaksw
+	case "*10.*":
 		########### HP-UX 9 configuration ###################
 		setenv MACHINETYPE HPUX9PA
 		setenv objdir hpux9pa
