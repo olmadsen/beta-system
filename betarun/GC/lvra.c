@@ -39,12 +39,22 @@ void LVRAStatistics(void);
 static long LVRAAlive(ref(ValRep) theRep)
 {
 
+#if 0
+  /* This test is not complete: Of course it is allowed for a
+   * repetition to point back to ToSpace (will be the case for many
+   * dead repetitions!) as long as the cell i ToSpace does not
+   * point back to the repetition. The latter can never happen
+   * in a debug runtime system, since the entire ToSpace is cleared
+   * after the GC (see ioa.c, line no approx. 330).
+   * So the test does not give any meaning.
+   */
 #ifdef RTDEBUG
   /* LVRACheck calls LVRARepSize, which calls LVRAAlive */
   if (inToSpace(theRep->GCAttr)) {
     Claim(IOAActive, "LVRAAlive: only roots from ToSpace during IOAGc");
   }
-#endif
+#endif /* RTDEBUG */
+#endif /* 0 */
 
   if(!isValRep(theRep) ){
     return FALSE;

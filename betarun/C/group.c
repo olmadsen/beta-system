@@ -141,21 +141,22 @@ void AddGroup(group_header *new_group)
 #define GroupCodeEnd(group)   ((long)((group)->code_end))
 #endif
 
-/* IsBetaPrototype:
+/* IsPrototypeOfGroup:
  * Run through the prototype table of a file and
  * check if the gives address is equal to one of
  * the prototype adresses.
  */
-int IsBetaPrototype(group_header *gh, long data_addr) 
+int IsPrototypeOfGroup(group_header *gh, long data_addr) 
 { long* proto=&gh->protoTable[1];
   int i, NoOfPrototypes;
+
   NoOfPrototypes = gh->protoTable[0];
   TRACE_GROUP(fprintf(output, 
-		      ">>>IsBetaPrototype(group=0x%x, addr=0x%x)\n",
+		      ">>>IsPrototypeOfGroup(group=0x%x, addr=0x%x)\n",
 		      gh,
 		      data_addr));
   for (i=0; i<NoOfPrototypes; i++){
-    TRACE_GROUP(fprintf(output,">>>IsBetaPrototype: Try 0x%x\n", *proto));
+    TRACE_GROUP(fprintf(output,">>>IsPrototypeOfGroup: Try 0x%x\n", *proto));
     if ((*proto)==data_addr){
       return 1;
     } else {
@@ -165,16 +166,34 @@ int IsBetaPrototype(group_header *gh, long data_addr)
   return 0;
 }
 
+/* IsPrototypeOfProcess:
+ * Return TRUE if pt is a special proto type or
+ * a prototype of any pattern in the current process.
+ */
+int IsPrototypeOfProcess(long pt)
+{ 
+  group_header *gh;
 
-/* IsBetaCodeAddr (generic):
+  if (isSpecialProtoType(pt)) return 1;
+  gh = NextGroup(0);
+  while (gh){
+    if (IsPrototypeOfGroup(gh, pt)) return 1;
+    gh = NextGroup(gh);
+  }
+  return 0;
+} 
+
+
+/* IsBetaCodeAddrOfProcess:
  * Scan group to see if addr is within any BETA code segment.
  */
-int IsBetaCodeAddr(long addr) 
+int IsBetaCodeAddrOfProcess(long addr) 
 { 
 #ifdef MAC
   /* can't determine if an address is in a given object file on MAC.
    * Let's assume that it is the case.
    */
+  DEBUG_CODE(fprintf(output, "Warning: ppcmac: IsBetaCodeAddrOfProcess is NOT implemented!\n"));
   return TRUE;
 #else
   group_header *current = 0;
@@ -229,7 +248,7 @@ char *GroupName(long address, int isCode)
       }
     } else {
       /* data address; seach for Prototype */
-      if (IsBetaPrototype(current,address)) {
+      if (IsPrototypeOfGroup(current,address)) {
 	TRACE_GROUP(fprintf (output, "GroupName: proto: returns "));
 	TRACE_GROUP(fprintf (output, "%s\n", NameOfGroupMacro (current)));
 	return NameOfGroupMacro (current);

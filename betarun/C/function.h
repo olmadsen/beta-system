@@ -58,8 +58,9 @@ extern unsigned long        CodeEntry(struct ProtoType *theProto, long PC);
 /* C/group.c */
 extern struct group_header* NextGroup (struct group_header*);
 extern char *GroupName(long, int);
-int IsBetaPrototype(group_header *gh, long data_addr);
-int IsBetaCodeAddr(long addr);
+int IsPrototypeOfGroup(group_header *gh, long data_addr);
+int IsPrototypeOfProcess(long pt);
+int IsBetaCodeAddrOfProcess(long addr);
 
 /* C/exit.c */
 extern void BetaExit(long);

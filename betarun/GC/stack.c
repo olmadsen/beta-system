@@ -13,6 +13,172 @@
 
 #ifndef MT
 
+/*************************** Label Debug ****************************/
+
+#ifdef RTDEBUG
+
+#if 0
+#define DEBUG_LABELS 1
+#endif
+
+#ifdef nti
+#define getLabel(ref) "<unknown>"
+#define labelOffset 0
+#endif
+
+#if defined(sparc) || defined(linux)
+
+struct label {
+  long address;
+  char *id;
+};
+
+GLOBAL(long labelOffset) = 0;
+GLOBAL(struct label **labels) = 0;
+GLOBAL(long numLabels) = 0;
+
+static void initLabels()
+{
+  char ch;
+  char command[200];
+  char theLabel[200];
+  FILE *thePipe; 
+  long labelAddress;
+
+  fprintf(output, "(initLabels ... ");
+  fflush(output);
+
+#ifdef sun4s
+  (void)sprintf(command,"nm -hxp %s | egrep -v '( f | s | S | b | B )' | sort -r", ArgVector[0]);
+#endif
+#ifdef linux
+  (void)sprintf(command,"nm -Bv %s | egrep -v '( f | s | S | b | B | U )' | sort -r", ArgVector[0]);
+#endif
+
+#ifdef DEBUG_LABELS
+  fprintf(output, "\n%s:\n", command);
+#endif
+
+  /* Find number of labels */
+  thePipe = popen (command, "r");
+
+#ifdef SPARC_SKIP_TO_ETEXT
+  /* Skip to etext */
+  for (;;){
+    fscanf(thePipe, "0x%08x %c %s\n", (int*)&labelAddress, &ch, theLabel);
+    if (labelAddress==(long)&etext) break;
+  }
+#endif /* SPARC_SKIP_TO_ETEXT */
+  numLabels=0;
+  for (;;){
+    if (
+#ifdef sparc
+	fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel)
+#else
+	fscanf(thePipe, "%08x %c %s\n", (int*)&labelAddress, &ch, theLabel)
+#endif
+	== EOF) break;
+    numLabels++;
+#ifdef DEBUG_LABELS
+    fprintf(output, "0x%08x %c %s\n",  (unsigned)labelAddress, ch, theLabel);
+    fflush(output);
+#endif
+  }
+
+  if (! (labels=(struct label **)MALLOC(numLabels * sizeof(struct label *)))) {
+    fprintf(output, "Failed to allocate memory for labels\n");
+    numLabels = -1;
+    labels = 0;
+  } else {
+    long lastLab=0;
+    INFO_ALLOC(numLabels * sizeof(struct label *));
+
+      /* Read into labels */
+      pclose (thePipe);
+      thePipe = popen (command, "r");
+#ifdef SPARC_SKIP_TO_ETEXT
+      /* Skip to etext */
+      for (;;){
+	fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel);
+	if (labelAddress==(long)&etext) break;
+      }
+#endif /* SPARC_SKIP_TO_ETEXT */
+      /* Read labels */
+      for (;;lastLab++){
+	struct label *lab;
+	if (
+#ifdef sparc
+	    fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel)
+#else
+	    fscanf(thePipe, "%08x %c %s\n", (int *)&labelAddress, &ch, theLabel)
+#endif
+	    == EOF) break;
+	if (! (lab = (struct label *) MALLOC(sizeof(struct label)))){
+	  fprintf(output, "Allocation of struct label failed\n");
+	  numLabels = -1;
+	  /* free previously allocated labels */
+	  FREE(labels);
+	  labels = 0;
+	  break;
+	}
+	INFO_ALLOC(sizeof(struct label));
+	if (! (lab->id = (char *)MALLOC(strlen(theLabel)+1))) {
+	  fprintf(output, "Allocation of label id failed\n");
+	  numLabels = -1;
+	  /* free previously allocated labels */
+	  FREE(labels);
+	  labels = 0;
+	  break;
+	}
+	INFO_ALLOC(strlen(theLabel)+1);
+	lab->address = labelAddress;
+	strcpy(lab->id, theLabel);
+	labels[lastLab] = lab;
+      }
+      pclose (thePipe);
+    }
+  fprintf(output, " done)\n");
+  fflush(output);
+
+#ifdef DEBUG_LABELS
+  fprintf(output, "Labels:\n");
+  { 
+    long n;
+    for (n=0; n<numLabels; n++){
+      fprintf(output, "0x%x\t%s\n", (unsigned)labels[n]->address, labels[n]->id);
+    }
+  }
+  fflush(output);
+#endif
+}
+
+char *getLabel (addr)
+     long addr;
+{
+  long n;
+
+  if (numLabels==0) initLabels();
+
+  if (!addr){
+    labelOffset=0;
+    return "<unknown>";
+  }
+
+  if (labels){
+    for (n=0; n<numLabels; n++){
+      if (labels[n]->address <= addr){
+	labelOffset = addr-(labels[n]->address);
+	return labels[n]->id;
+      }
+    }
+  }
+  labelOffset=0;
+  return "<unknown>";
+}
+
+#endif /* sparc or linux */
+/************************* End Label Debug *************************/
+
 #ifdef NEWRUN
 /************************* Begin NEWRUN ****************************/
 
@@ -872,29 +1038,8 @@ void ProcessStackObj(struct StackObject *theStack)
 #ifdef intel
 
 #ifdef RTDEBUG
-static void PrintSkipped(long *current)
-{
-  struct Object *ref = (struct Object *)*current;
-  if (ref && inBetaHeap(ref)){
-    fprintf(output, "*** Suspicious stack-skip: 0x%x: 0x%x", (int)current, (int)ref);
-    fflush(output);
-    if (isObject(ref)){ 
-      fprintf(output, " proto: 0x%x (%s)", (int)ref->Proto, ProtoTypeName(ref->Proto));
-    } 
-    if (isValRep((struct ValRep*)((long)ref-headsize(ValRep)))){
-	fprintf(output, " (body of rep)");
-    }
-    if (inIOA(ref)) 
-      fprintf(output, " (is in IOA)");
-    if (inAOA(ref)) 
-      fprintf(output, " (is in AOA)");
-    if (inLVRA(ref)) 
-      fprintf(output, " (is in LVRA)");
-    if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
-      fprintf(output, " (is in ToSpace!)");
-    fprintf(output, "\n");
-  } 
-}
+static void PrintSkipped(long *current);
+void PrintRef(ref(Object) ref);
 #endif
 
 /* Traverse the StackArea [low..high] and Process all references within it. */
@@ -903,9 +1048,9 @@ void ProcessStackPart(long *low, long *high)
   ptr(long) current = low;
   ref(Object) theObj;
   handle(Object) theCell;
-  
-  DEBUG_STACK(fprintf(output, "StackPart: [0x%x..0x%x]\n", (int)low, (int)high);
-	      fprintf(output, "ComponentBlock/CallbackFrame: [0x%x, 0x%x, 0x%x]\n", 
+  DEBUG_STACK(fprintf(output, 
+		      "\n----- AR: low: 0x%08x, high: 0x%08x\n", (int)low, (int)high);
+	      fprintf(output, "ComponentBlock/CallbackFrame: [0x%08x, 0x%08x, 0x%08x]\n", 
 		      (int)(*(high+1)), (int)(*(high+2)), (int)(*(high+3)));
 	      );
   Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
@@ -917,19 +1062,41 @@ void ProcessStackPart(long *low, long *high)
       if( isObject( theObj) ){
 	if(inLVRA(theObj)){
 	  DEBUG_STACK(fprintf( output, "(STACK(%d) is pointer into LVRA)", current-low));
-	}else{
+	} else {
+	  DEBUG_STACK({ fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
+			PrintRef(*(Object**)current);
+		      });
 	  ProcessReference( (handle(Object))current);
 	  CompleteScavenging();
 	}
       } else {
-	DEBUG_CODE(if (!isValRep(theObj))
-		   fprintf(output, "*** Suspicious reference on stack: *0x%x=0x%x\n", 
-			   (int)current, (int)(*current)) );
+	DEBUG_CODE({
+	  if (!isValRep(theObj)){
+	    fprintf(output, "*** SUSPICIOUS REFERENCE ON STACK: 0x%08x: 0x%08x", 
+		    (int)current, (int)(*current));
+	    if (IsPrototypeOfProcess((long)theObj->Proto)){
+	      fprintf(output, " Proto: 0x%08x (%s)\n",
+		      (int)theObj->Proto,
+		      ProtoTypeName(theObj->Proto));
+	    } else {
+	      fprintf(output, " *** ILLEGAL PROTOTYPE: 0x%08x\n", (int)theObj->Proto);
+	    }
+	  }
+	});
       }
     } else {
       /* handle value register objects on the stack ref. ../Asm/DataRegs.s */
+      DEBUG_STACK({
+	if ((-8<=(*current)) && ((*current)<=-5))
+	  fprintf(output, 
+		  "0x%08x: %d (SKIP NEXT %d)\n", 
+		  (int)current, 
+		  (int)*current, 
+		  -(int)*current-4
+		  );
+      });
       switch(*current){
-      case -8: /* skip 4 */
+      case -8: 
 	current++; 
 	DEBUG_STACK(PrintSkipped(current)); 
 	/* deliberately no break here */
@@ -948,7 +1115,19 @@ void ProcessStackPart(long *low, long *high)
       default:
 	if (isLazyRef (*current)){
 	  /* (*current) is a dangling reference */
+	  DEBUG_STACK(fprintf(output, "0x%08x: %d - LAZY\n", (int)current, (int)*current));
 	  ProcessReference ((handle(Object))current);
+	} else {
+	  DEBUG_STACK({
+	    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
+	    if (*current){
+	      fprintf(output, " (%s+0x%x)\n",
+		      getLabel((long*)*current),
+		      (int)labelOffset);
+	    } else {
+	      fprintf(output, "\n");
+	    }
+	  });
 	}
 	break;
       }
@@ -965,6 +1144,7 @@ void ProcessStack()
     ref(CallBackFrame)  theFrame;
     ref(ComponentBlock) currentBlock;
     
+    DEBUG_STACK(fprintf(output, "\n ***** Trace of stack *****\n"));
     /*
      * First handle the topmost component block
      */
@@ -996,6 +1176,7 @@ void ProcessStack()
 	ProcessStackPart( theTop, theBottom-1);  
 	currentBlock = currentBlock->next;
     }
+    DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
 }
 
 void ProcessStackObj(theStack)
@@ -1034,158 +1215,67 @@ void ProcessStackObj(theStack)
   }
 }
 
-#endif /* intel */
-/***************************** End INTEL **********************************/
-
-/*************************** Sparc Label Debug ****************************/
-
 #ifdef RTDEBUG
-
-#ifdef sparc
-
-struct label {
-  long address;
-  char *id;
-};
-
-GLOBAL(long labelOffset) = 0;
-GLOBAL(struct label **labels) = 0;
-GLOBAL(long numLabels) = 0;
-
-static void initLabels()
+static void PrintSkipped(long *current)
 {
-  char ch;
-  char command[200];
-  char theLabel[200];
-  FILE *thePipe; 
-  long labelAddress;
-
-  fprintf(output, "(initLabels ... ");
-  fflush(output);
-
-#ifdef sun4s
-  (void)sprintf(command,"nm -hxp %s | egrep -v '( f | s | S | b | B )' | sort -r", ArgVector[0]);
-#else
-  (void)sprintf(command, "nm -grn %s", ArgVector[0]);
-#endif
-
-#ifdef DEBUG_LABELS
-  fprintf(output, "\n%s:\n", command);
-#endif
-
-  /* Find number of labels */
-  thePipe = popen (command, "r");
-
-#ifdef SPARC_SKIP_TO_ETEXT
-  /* Skip to etext */
-  for (;;){
-    fscanf(thePipe, "0x%08x %c %s\n", (int*)&labelAddress, &ch, theLabel);
-    if (labelAddress==(long)&etext) break;
-  }
-#endif /* SPARC_SKIP_TO_ETEXT */
-  numLabels=0;
-  for (;;){
-    if (fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel) == EOF)
-      break;
-    numLabels++;
-#ifdef DEBUG_LABELS
-    fprintf(output, "0x%08x %c %s\n",  (unsigned)labelAddress, ch, theLabel);
+  struct Object *ref = (struct Object *)*current;
+  DEBUG_STACK(fprintf(output, "0x%08x: 0x%08x ", (int)current, (int)ref));
+  if (ref && inBetaHeap(ref) && isObject(ref) && IsPrototypeOfProcess((long)ref->Proto)){ 
+    fprintf(output, "*** SUSPICIOUS STACK-SKIP!");
     fflush(output);
-#endif
-  }
-
-  if (! (labels=(struct label **)MALLOC(numLabels * sizeof(struct label *)))) {
-    fprintf(output, "Failed to allocate memory for labels\n");
-    numLabels = -1;
-    labels = 0;
+    if (!DebugStack) {
+      fprintf(output, "0x%08x: 0x%08x ", (int)current, (int)ref);
+    }
+    fprintf(output, " proto: 0x%08x (%s)\n", (int)ref->Proto, ProtoTypeName(ref->Proto)); 
   } else {
-    long lastLab=0;
-    INFO_ALLOC(numLabels * sizeof(struct label *));
-
-      /* Read into labels */
-      pclose (thePipe);
-      thePipe = popen (command, "r");
-#ifdef SPARC_SKIP_TO_ETEXT
-      /* Skip to etext */
-      for (;;){
-	fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel);
-	if (labelAddress==(long)&etext) break;
-      }
-#endif /* SPARC_SKIP_TO_ETEXT */
-      /* Read labels */
-      for (;;lastLab++){
-	struct label *lab;
-	if (fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel) == EOF)
-	  break;
-	if (! (lab = (struct label *) MALLOC(sizeof(struct label)))){
-	  fprintf(output, "Allocation of struct label failed\n");
-	  numLabels = -1;
-	  /* free previously allocated labels */
-	  FREE(labels);
-	  labels = 0;
-	  break;
-	}
-	INFO_ALLOC(sizeof(struct label));
-	if (! (lab->id = (char *)MALLOC(strlen(theLabel)+1))) {
-	  fprintf(output, "Allocation of label id failed\n");
-	  numLabels = -1;
-	  /* free previously allocated labels */
-	  FREE(labels);
-	  labels = 0;
-	  break;
-	}
-	INFO_ALLOC(strlen(theLabel)+1);
-	lab->address = labelAddress;
-	strcpy(lab->id, theLabel);
-	labels[lastLab] = lab;
-      }
-      pclose (thePipe);
-    }
-  fprintf(output, " done)\n");
+    fprintf(output, "- SKIPPED\n");
+  } 
   fflush(output);
-
-#ifdef DEBUG_LABELS
-  fprintf(output, "Labels:\n");
-  { 
-    long n;
-    for (n=0; n<numLabels; n++){
-      fprintf(output, "0x%x\t%s\n", (unsigned)labels[n]->address, labels[n]->id);
-    }
-  }
-  fflush(output);
-#endif
 }
-
-char *getLabel (addr)
-     long addr;
-{
-  long n;
-
-  if (numLabels==0) initLabels();
-
-  if (!addr){
-    labelOffset=0;
-    return "<unknown>";
-  }
-
-  if (labels){
-    for (n=0; n<numLabels; n++){
-      if (labels[n]->address <= addr){
-	labelOffset = addr-(labels[n]->address);
-	return labels[n]->id;
-      }
-    }
-  }
-  labelOffset=0;
-  return "<unknown>";
-}
-
 void PrintRef(ref(Object) ref)
 {
   if (ref) {
     if (inBetaHeap(ref) && isObject(ref) ){
       fprintf(output, ", is object");
       if (isProto((ref)->Proto)){
+	fprintf(output, ", proto ok: 0x%x (", 
+		(int)ref->Proto);
+	DescribeObject(ref);
+	fprintf(output, ")");
+      } else {
+	fprintf(output, ", proto NOT ok: 0x%x", (int)ref->Proto);
+      }
+    } else {
+      fprintf(output, ", is NOT object");
+      if (inBetaHeap(ref)){
+	if (inIOA(ref)) 
+	  fprintf(output, " (is in IOA)");
+	if (inAOA(ref)) 
+	  fprintf(output, " (in in AOA)");
+	if (inLVRA(ref)) 
+	  fprintf(output, " (is in LVRA)");
+	if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
+	  fprintf(output, " (is in ToSpace!)");
+      }
+    }
+  }
+  fprintf(output, "\n");
+}
+#endif
+
+
+#endif /* intel */
+/***************************** End INTEL **********************************/
+
+
+#ifdef sparc
+
+void PrintRef(ref(Object) ref)
+{
+  if (ref) {
+    if (inBetaHeap(ref) && isObject(ref) ){
+      fprintf(output, ", is object");
+      if (IsPrototypeOfProcess((ref)->Proto)){
 	fprintf(output, ", proto ok: 0x%x (", 
 		(int)ref->Proto);
 	DescribeObject(ref);

@@ -903,6 +903,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 		     long theSignal /* theSignal is zero if not applicable. */
 		     )
 {
+  FILE *old_output=0;
 #ifndef sparc
 #ifndef hppa
   ref(Component)      currentComponent;
@@ -994,7 +995,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
     isMakingDump=1;
   }
 
-  if (thePC && !IsBetaCodeAddr((long)thePC)){
+  if (thePC && !IsBetaCodeAddrOfProcess((long)thePC)){
     c_on_top = 1;
   }
 
@@ -1006,6 +1007,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 
   NotifyMessage[0]=0;
 
+  old_output = output;
   if (!OpenDumpFile(errorNumber))
     return 0;
   
@@ -1356,6 +1358,7 @@ P("      [ EXTERNAL ACTIVATION PART ]")
 #undef P
  
   fflush(output);
+  if (old_output) output = old_output; 
 
 #if defined(MAC)
   MakeMPWFile(dumpname);
@@ -1399,7 +1402,7 @@ void DescribeObject(theObject)
       return;
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):
-      fprintf(output, "ObjectRep\n"); return;
+      fprintf(output, "ObjectRep"); return;
     case SwitchProto(RefRepPTValue):
       fprintf(output, "RefRep"); return;
     case SwitchProto(LongRepPTValue):
@@ -1425,26 +1428,19 @@ void DescribeObject(theObject)
       return;
     }
   } else {
-    ref(GCEntry) stat = cast(GCEntry) ((long) theProto + theProto->GCTabOff);
-    ptr(short) dyn;
-    
-    while (*(short *) stat) stat++;	/* Step over static gc entries */ 
-    dyn = ((short *) stat) + 1;		/* Step over the zero */
-    while (*dyn++){};			/* Step over dynamic gc entries */
-    
 #ifdef sparc
     if (DebugStack){
 #ifdef MT
-      fprintf(output, "%s", (char *)dyn);
+      fprintf(output, "%s", ProtoTypeName(theProto));
 #else
       extern char *getLabel (long addr);
-      fprintf(output, "%s: \"%s\"", getLabel((long)theProto), (char *)dyn);
-#endif
+      fprintf(output, "%s: \"%s\"", getLabel((long)theProto), ProtoTypeName(theProto));
+#endif /* MT */
     } else {
-      fprintf(output, "%s", (char *)dyn);
+      fprintf(output, "\"%s\"", ProtoTypeName(theProto));
     }
-#else
-    fprintf(output, "%s", (char *)dyn);
+#else /* ! sparc */
+    fprintf(output, "\"%s\"", ProtoTypeName(theProto));
 #endif
   }
 }

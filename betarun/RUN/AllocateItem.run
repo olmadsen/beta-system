@@ -17,7 +17,8 @@ AlloI: public
      Size:          Word      = DataReg2;
      Offset:        Word      = DataReg2;
      DataReg2Long:  Long      = DataReg2; 
-     Tmp:           Long      = DataReg1;
+     TmpData:       Long      = DataReg1;
+     TmpAddr:       Long      = AddrReg1;
      initTab:       CodeArea  = AddrReg1; { index in GC table in prototype }
      Entry:         CodeArea  = AddrReg1;
      newTop:        DataArea  = AddrReg1;
@@ -26,6 +27,27 @@ AlloI: public
   do
      (if debug then 1 -> NumAlloI+ if); 
      (if debug then call Ck if);
+     
+     { General Stack Layout:
+       <DataReg2>
+       <AddrReg2>
+       <AddrReg1>
+     }
+     
+     (if debug then
+         (if do_unconditional_GC then
+             { The stuff for do_unconditional_GC has to be
+               *before* the again label, since we go to the again
+               label after having called garbage collector.
+               So we have to ensure that the Size register and the
+               stack look the same to this artificial GC.
+             }
+             push AddrReg1, AddrReg2, DataReg2Long;
+             0 -> Size!l;
+             protoType.Size -> Size;
+             goto GC;
+         if);
+     if);
      
      again:
      
@@ -101,29 +123,35 @@ AlloI: public
          initTab[0]!w -> Offset;
          (if Offset!l<>0 then
              { Insert the distance to the autonomous object. }
-             -1 -> Tmp;
-             initTab[2]!w -> Tmp!w;
-             Tmp!l -> theItem[4+Offset*4];
+             -1 -> TmpData;
+             initTab[2]!w -> TmpData!w;
+             TmpData!l -> theItem[4+Offset*4];
              { Insert the protoType from the initTab. }
-             initTab[4]!l -> Tmp!l; 
-             Tmp!l -> theItem[Offset*4]!l;
+             initTab[4]!l -> TmpData!l; 
+             TmpData!l -> theItem[Offset*4]!l;
              8 -> initTab+;
              goto loop
          if);
      if);
      
-     pReg1 -> Tmp!l;
+     { Store Origin }
+     pReg1 -> TmpAddr!l;
      0 -> Offset!l;
      protoType.OrigOff -> Offset;
+     TmpAddr!l -> theItem[Offset*4];
      protoType.GenPart -> Entry; { Must be before theItem -> Argument }
-     Tmp!l -> theItem[Offset*4];
      theItem -> Argument;
 
      (if Entry<>0 then
          clear AddrReg2; {Invalidate GC register}
          push Protect1Tag; {Protect DataReg2}
-         call Entry;
-         pop RegEax; {Discard Protect1Tag tag (to dummy eax)}
+         { Stack:
+           <tag1>
+           <General Stack Layout>
+           - data registers are tagged properly.
+         }
+         call Entry; { May cause GC }
+         pop TmpData!l; {Discard Protect1Tag tag (to dummy DataReg)}
      if);
      
      pop DataReg2Long, AddrReg2, AddrReg1;
@@ -134,7 +162,12 @@ AlloI: public
      { The IOA heap is full, so we need a garbage collection.  }
      Size!l -> ReqObjectSize; { Set the requested Object Size. }
      pop DataReg2Long, AddrReg2, AddrReg1;
+     { Stack: as on entry }
      push pReg1; { update origin }
+     { Stack:
+       <pReg1>
+       - data registers are tagged properly.
+     }
      call doGC;  { Call the Garbage Collector. }
      pop pReg1;
      goto again;

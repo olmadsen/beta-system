@@ -29,11 +29,26 @@ AlloVRI: public
        <Offset>    +4
        <AddrReg1>  +8
        <AddrReg2>  +12
-       
+       - data registers are tagged properly.
        ... 
      }     
      (if debug then call Ck; if);
      (if debug then 1 -> NumAlloVRI+ if); 
+     
+     (if debug then
+         (if do_unconditional_GC then
+             { See general comment in AllocateItem.run }
+             pReg3 -> Offset;
+             pReg4 -> Range;
+             push AddrReg2, AddrReg1;
+             push Offset;
+             pReg1 -> Origin;
+             push Protect1Tag; { tag }
+             goto GC;
+         if);
+     if);
+     
+     again:
      
      pReg3 -> Offset;
      pReg4 -> Range;
@@ -49,7 +64,13 @@ AlloVRI: public
      theRep[24+Range*4][] -> newTop;
      (if newTop > IOALimit then goto GC if);
      newTop -> IOATop;
-          
+     { newTop is in a GC register and points right after the last object
+       in IOA. Since we are going to allocate more stuff below, we have
+       to make sure the GC register is not used as root! Thus the need to
+       clear it!
+     }
+     0 -> newTop;
+   
      { The new Object is now allocated in IOA, but not initialized yet!}
      
      { Initialize the structual part of the repetition. }
@@ -73,13 +94,14 @@ AlloVRI: public
      
      { STACK:
        <theRep>
-       <tag>
+       <tag2>
        <Range>
        <Proto>
        <Origin>
-       <tag>
+       <tag1>
        <Offset>
        <general stack layout>
+       - data registers are tagged properly.
      }
      
      { Allocate item }
@@ -151,14 +173,20 @@ AlloVRI: public
      { The IOA heap is full, so we need a garbage collection.            }
      6 -> ReqObjectSize;     { Set the requested Object Size.            }
      Range -> ReqObjectSize+;
-     4 -> SP+; { pop tag }
+     { pop tag }
+     pop AddrReg2 { skip }; 
      pop Offset;
      pop AddrReg1, AddrReg2;
+     { Stack: as on entry }
      { pReg1 is still intact - AlloI has not yet been called }
      push pReg1;
+     { Stack:
+       <pReg1>
+       - data registers are tagged properly.
+     }
      call doGC;     { Call the Garbage Collector.               }
      pop pReg1;
-     goto AlloVRI     { Go back to the beginning of this routine. }
+     goto again     { Go back to the beginning of this routine. }
   #);
 
 AlloVRC: public
@@ -196,7 +224,23 @@ AlloVRC: public
      }
      
      (if debug then call Ck if);
-     (if debug then 1 -> NumAlloVRC+ if); 
+     (if debug then 1 -> NumAlloVRC+ if);
+     
+     (if debug then
+         (if do_unconditional_GC then
+             { See general comment in AllocateItem.run }
+             pReg3 -> Offset;
+             pReg4 -> Range;
+             push AddrReg2, AddrReg1;
+             push Offset;
+             pReg1 -> Origin;
+             push Protect1Tag; { tag }
+             (if Range < 0 then 0 -> Range if);
+             goto GC;
+         if);
+     if);
+     
+     again:
      
      pReg3 -> Offset;
      pReg4 -> Range;
@@ -212,6 +256,12 @@ AlloVRC: public
      theRep[24+Range*4][] -> newTop;
      (if newTop > IOALimit then goto GC if);
      newTop -> IOATop;
+     { newTop is in a GC register and points right after the last object
+       in IOA. Since we are going to allocate more stuff below, we have
+       to make sure the GC register is not used as root! Thus the need to
+       clear it!
+     }
+     0 -> newTop;
           
      { The new Object is now allocated in IOA, but not initialized yet!}
      
@@ -236,13 +286,14 @@ AlloVRC: public
      
      { STACK:
        <theRep>
-       <tag>
+       <tag2>
        <Range>
        <Proto>
        <Origin>
-       <tag>
+       <tag1>
        <Offset>
        <general stack layout>
+       - data registers are tagged properly.
      } 
      
      { Allocate item }
@@ -254,7 +305,8 @@ AlloVRC: public
      
      { AssignReference }
      pop theRep; { restore AddrReg2 }
-     4 -> SP+; { pop tag };
+     { pop tag }
+     pop Range { skip };
      pop Range;
      theRep[24+Range*4][] -> theCell;
      RegCall -> theCell[0];
@@ -317,9 +369,14 @@ AlloVRC: public
      4 -> SP+; { pop tag }
      pop Offset;
      pop AddrReg1, AddrReg2;
+     { Stack: as on entry }
      { pReg1 is still intact - AlloI has not yet been called }
      push pReg1;
+     { Stack:
+       <pReg1>
+       - data registers are tagged properly.
+     }
      call doGC;     { Call the Garbage Collector.               }
      pop pReg1;
-     goto AlloVRC     { Go back to the beginning of this routine. }
+     goto again     { Go back to the beginning of this routine. }
   #)

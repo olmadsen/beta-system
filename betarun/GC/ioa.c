@@ -38,7 +38,7 @@ void IOAGc()
   
   DEBUG_IOA(
 	    fprintf(output,
-		    "Before: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+		    "\nBefore: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
 		    (int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit);
 	    fprintf(output,
 		    "Before: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
@@ -333,7 +333,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
 
   DEBUG_IOA(
 	    fprintf(output,
-		    "After: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+		    "\nAfter: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
 		    (int)GLOBAL_IOA, 
 		    (int)GLOBAL_IOATop,
 		    (int)GLOBAL_IOALimit);
