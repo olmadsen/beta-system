@@ -14,9 +14,11 @@ INCLUDE '~beta/basiclib/numberio'
  *)
 -- texteditingPrivate: Descriptor --
 (#
-   markerlength: (#  exit 3 #);
-   markerBegin: (#  exit '[[ ' #);
-   markerEnd: (#  exit ' ]]' #);
+   markerlength: (# (* including the space *)  exit 3 #);
+   markerBegin:
+     (# (* must include a space as the "last" character *)  exit '[[ ' #);
+   markerEnd:
+     (# (* must include a space as the "first" character *)  exit ' ]]' #);
    selRow,selCol,endRow,endCol: @integer;
    editingLexems: @boolean;
    useExternalTextEditor: @boolean;
@@ -75,11 +77,14 @@ INCLUDE '~beta/basiclib/numberio'
           #);
         (if start > 0 then (1,start)->t.delete if);
         skipTrailingBlanks:
-        (if (t.length->t.inxGet)->ascii.isSpace then
+        (if (t.length > 0) and ((t.length->t.inxGet)->ascii.isSpace) then
             (t.length,t.length)->t.delete; restart skipTrailingBlanks
         if);
-        (((1->t.inxGet) = '(') and ((2->t.inxGet) = '*') and
-         ((t.length-1->t.inxGet) = '*') and ((t.length->t.inxGet) = ')'))->value
+        (if t.length >= 4 then
+            (((1->t.inxGet) = '(') and ((2->t.inxGet) = '*') and
+             ((t.length-1->t.inxGet) = '*') and ((t.length->t.inxGet) = ')'))
+              ->value
+        if)
      #);
    enterEditLexemMode:
      (# pos1,pos2: @integer
@@ -467,7 +472,7 @@ INCLUDE '~beta/basiclib/numberio'
         if);
         (if (IS.ch = ' ') or (IS.ch = 0) then
         (* this should be obsolete now after the markers are inserted later *)
-           theSifTextEditor.contents.selection->(pos1,pos2);
+            theSifTextEditor.contents.selection->(pos1,pos2);
             (pos1,pos1)->theSifTextEditor.contents.selection
         if);
         ifFrejaEditor:
@@ -668,8 +673,8 @@ INCLUDE '~beta/basiclib/numberio'
                      #);
                  ignoreMarkers:
                    (# 
-                   do
-                      (markerLength+1,textToParse.length-markerLength)
+                   do (* "eat" the markers excluding the spaces *)
+                      (markerLength,textToParse.length-markerLength+1)
                         ->textToParse.sub->textToParse[]
                    #);
                  (if textToParse[]->teInfo.textBefore.equal then
@@ -866,73 +871,98 @@ do true->TE.useExternalTextEditor; doTextedit
 
 -- checkTexteditingFinished: Descriptor --
 (#
-   posEndAfter,outCharS2,outLineS2,startPos,endPos: @integer;
-   newCS: @mps.astFocus;
-   outside: @boolean
+   oldWay:
+     (# posEndAfter: @integer; newCS: @mps.astFocus; outside: @boolean
+     do
+        TE.teInfo.posEndBefore+theSifTextEditor.lastPosition-
+        TE.teInfo.lastPosBefore
+          -> (* determine extent of edited text: *) posEndAfter;
+        (if
+        ((start < TE.teInfo.posStartBefore+TE.markerLength) or
+         (end < TE.teInfo.posStartBefore+TE.markerLength)) then
+            (start,end)->selectionToAST->newCS; true->outside
+        if);
+        (if
+        ((start > posEndAfter-TE.markerLength) or
+         (end > posEndAfter-TE.markerLength)) then
+            (start-2*TE.markerLength,end-2*TE.markerLength)->selectionToAST
+              ->newCS;
+            (*(if newCS.node[] <> none then newCS.node[]->astObserver if);
+             (start,end)->selectionToAST->newCS;
+             (if newCS.node[] <> none then newCS.node[]->astObserver if);*)
+            true->outside
+        if);
+        (if outside then
+            (if editingMode
+             // editAndParseMode then
+                false->textEditMode;
+                (TEexit.parseMode,newCS)->TE.exitEditAndParseMode
+             // editLexemMode then
+                false->textEditMode;
+                (TEexit.exitMode,newCS)->TE.exitEditLexemMode
+            if)
+        if)
+     #);
+   newWay:
+     (# posEndAfter,startSel,endSel: @integer; outside: @boolean
+     do
+        TE.teInfo.posEndBefore+theSifTextEditor.lastPosition-
+        TE.teInfo.lastPosBefore
+          -> (* determine extent of edited text: *) posEndAfter;
+        (start,end)->min->startSel;
+        (start,end)->max->endSel;
+        (if startSel < TE.teInfo.posStartBefore+TE.markerLength then
+            true->outSide;
+            (TE.teInfo.posStartBefore+TE.markerLength,TE.teInfo.posStartBefore+
+             TE.markerLength)->theSifTextEditor.contents.selection
+         else
+            (if endSel > posEndAfter-TE.markerLength then
+                true->outSide;
+                (posEndAfter-TE.markerLength,posEndAfter-TE.markerLength)
+                  ->theSifTextEditor.contents.selection
+            if)
+        if);
+        (if outSide then
+            ascii.bel->put;
+            'Textediting Mode: use ''Edit:Parse Text (Ctrl T or Ctrl Space)'' or ''Edit:Cancel Textediting (Esc)'' to exit'
+              ->edenv.ymerCallback.infoView
+        if)
+     #)
 do
-   TE.teInfo.posEndBefore+theSifTextEditor.lastPosition-TE.teInfo.lastPosBefore
-     -> (* determine extent of edited text: *) posEndAfter;
-   (if
-   ((start < TE.teInfo.posStartBefore+TE.markerLength) or
-    (end < TE.teInfo.posStartBefore+TE.markerLength)) then
-       (start,end)->selectionToAST->newCS; true->outside
-   if);
-   (if
-   ((start > posEndAfter-TE.markerLength) or
-    (end > posEndAfter-TE.markerLength)) then
-       (start-2*TE.markerLength,end-2*TE.markerLength)->selectionToAST->newCS;
-       (*(if newCS.node[] <> none then newCS.node[]->astObserver if);
-        (start,end)->selectionToAST->newCS;
-        (if newCS.node[] <> none then newCS.node[]->astObserver if);*)
-       true->outside
-   if);
-   (if outside then
-       (if editingMode
-        // editAndParseMode then
-           false->textEditMode;
-           (TEexit.parseMode,newCS)->TE.exitEditAndParseMode
-        // editLexemMode then
-           false->textEditMode; (TEexit.exitMode,newCS)->TE.exitEditLexemMode
-       if)
+   (if true (* do not allow to exit using the mouse anymore *) then
+       newWay
+    else
+       oldWay
    if)
 #)  
 
 -- keepInsideTexteditingArea: Descriptor --
-(# posEndAfter,pos,lineNo,charNo: @integer
+(# posEndAfter,pos: @integer; outSide: @boolean
 do
    TE.teInfo.posEndBefore+theSifTextEditor.lastPosition-TE.teInfo.lastPosBefore
      -> (* determine extent of edited text: *) posEndAfter;
    theSifTextEditor.contents.selection.start->pos;
-   pos->theSifTexteditor.posToLineChar->(lineNo,charNo);
    true->value;
    (if arrowKey
-    // leftArrow then
+    // leftArrow // rightArrow // upArrow // downArrow
+    // - 1 (* ascii.bs or ascii.del *) then
        (if pos < TE.teInfo.posStartBefore+TE.markerLength then
-           ascii.bel->put;
+           true->outSide;
            (TE.teInfo.posStartBefore+TE.markerLength,TE.teInfo.posStartBefore+
             TE.markerLength)->theSifTextEditor.contents.selection;
            false->value
-       if)
-    // rightArrow then
-       (if pos > posEndAfter-TE.markerLength then
+        else
+           (if pos > posEndAfter-TE.markerLength then
+               true->outSide;
+               (posEndAfter-TE.markerLength,posEndAfter-TE.markerLength)
+                 ->theSifTextEditor.contents.selection;
+               false->value
+           if)
+       if);
+       (if outSide then
            ascii.bel->put;
-           (posEndAfter-TE.markerLength,posEndAfter-TE.markerLength)
-             ->theSifTextEditor.contents.selection;
-           false->value
-       if)
-    // upArrow then
-       (if pos < TE.teInfo.posStartBefore+TE.markerLength then
-           ascii.bel->put;
-           (TE.teInfo.posStartBefore+TE.markerLength,TE.teInfo.posStartBefore+
-            TE.markerLength)->theSifTextEditor.contents.selection;
-           false->value
-       if)
-    // downArrow then
-       (if pos > posEndAfter-TE.markerLength then
-           ascii.bel->put;
-           (posEndAfter-TE.markerLength,posEndAfter-TE.markerLength)
-             ->theSifTextEditor.contents.selection;
-           false->value
+           'Textediting Mode: use ''Edit:Parse Text (Ctrl T or Ctrl Space)'' or ''Edit:Cancel Textediting (Esc)'' to exit'
+             ->edenv.ymerCallback.infoView
        if)
    if)
 #)  
