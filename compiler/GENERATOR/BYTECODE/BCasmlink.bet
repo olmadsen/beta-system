@@ -127,7 +127,7 @@ do 'jvm/' -> asmstate.jvmregexp; (* used by linkObj *)
        '@echo off\n'
          ->AFF.putText;
        (if isIL then
-           'if exist "ilasm.out" del "ilasm.out"\n'
+           'if exist "ilasm.out" del "ilasm.out" >NUL 2>&1\n'
              ->AFF.putText;
        if);
     // isJava then
@@ -206,23 +206,23 @@ do (if true
        (if check then
            'if exist "'->AFF.putText; 
            name[]->AFF.putText; 
-           (if hostIsWindows then  
+           (if isJava then  
                '.bat' -> AFF.puttext;
            if);
            '" '->AFF.putText
        if);
        'del "'->AFF.putText; 
        name[]->AFF.putText; 
-       (if hostIsWindows then  
+       (if isJava then  
            '.bat' -> AFF.puttext;
        if);
        '"' -> AFF.put; 
        (if verboseLevel > verboseLevel.verbose then
-           ' >NUL'->AFF.puttext;
+           ' >NUL 2>&1'->AFF.puttext;
        if);
        '' -> AFF.putline;
     // isJava then
-       'rm -f '->AFF.puttext; name[]->AFF.putline (* only OK for unix *)
+       'rm -f '->AFF.puttext; name[]->AFF.putline
     else
        'remove' -> todo
    if);
@@ -285,7 +285,7 @@ do (if common.switch[184] or common.switch[189] then
            if)
         else           
            (if verboseLevel <= verboseLevel.verbose then
-               'OOPS! AsmLink: skipping non-existing\n\t' -> screen.puttext;
+               'OOPS! AsmLink - skipping non-existing\n\t' -> screen.puttext;
                F[] -> screen.putline;
                ' (compiler error).' 
                  -> screen.putline;
@@ -360,7 +360,7 @@ do 'ldTmp'->TODO
 #)
 ---link: descriptor ---
 (# e: @diskentry;
-   MakeClrConfigFile:
+   GenerateClrConfigFile:
      (# ConfigFileName: ^text;
      do ObjName.copy -> ConfigFileName[];
         '.exe.config' -> ConfigFileName.append;
@@ -399,6 +399,40 @@ do 'ldTmp'->TODO
                -> f.putformat(# do probingdir[] -> s #);
              f.close;
           #)
+     #);
+   
+   GenerateClrExe:
+     (#
+     do 'ilasm /nologo '->AFF.puttext; 
+        (if false and common.switch[71] then
+            (* No console *)
+            '/winexe ' -> AFF.puttext;
+         else
+            '/exe ' -> AFF.puttext;
+        if);
+        (if verboseLevel > verboseLevel.verbose then
+            '/quiet ' ->AFF.puttext;
+        if);
+        (if true (*common.switch[41]*) then 
+            '/debug '->AFF.puttext
+        if);
+        '/output:' -> AFF.puttext;
+        ObjName[] -> AFF.puttext;
+        '.exe ' -> AFF.puttext;
+        'clr\\' -> AFF.puttext;
+        (if main_in_program then
+            'program' -> AFF.puttext;
+         else
+            objname[] -> AFF.puttext;
+        if);
+        '.il' -> AFF.puttext;
+        (if verboseLevel > verboseLevel.verbose then
+            ' >"ilasm.out" 2>&1'->AFF.puttext;
+        if);
+        AFF.newline;
+        (if not common.switch[21] then
+            'if errorlevel 1 goto linkerror' -> AFF.putLine;
+        if);
      #);
    
    GenerateClrVerify:
@@ -447,44 +481,24 @@ do (if true
        ' '-> AFF.puttext; 
        jarfilename -> quote -> AFF.puttext; cont;
     // isIL then
-       'ilasm /nologo '->AFF.puttext; 
-       (if false and common.switch[71] then
-           (* No console *)
-           '/winexe ' -> AFF.puttext;
-        else
-           '/exe ' -> AFF.puttext;
-       if);
-       (if verboseLevel > verboseLevel.verbose then
-           '/quiet ' ->AFF.puttext;
-       if);
-       (if true (*common.switch[41]*) then 
-           '/debug '->AFF.puttext
-       if);
-       '/output:' -> AFF.puttext;
-       ObjName[] -> AFF.puttext;
-       '.exe ' -> AFF.puttext;
-       'clr\\' -> AFF.puttext;
-       (if main_in_program then
-           'program' -> AFF.puttext;
-        else
-           objname[] -> AFF.puttext;
-       if);
-       '.il' -> AFF.puttext;
-       (if verboseLevel > verboseLevel.verbose then
-           ' >"ilasm.out" 2>&1'->AFF.puttext;
-       if);
-       AFF.newline;
-       (if not common.switch[21] then
-           'if errorlevel 1 goto linkerror' -> AFF.putLine;
-       if);
-       MakeClrConfigFile;
-       (*'.exe' -> (objname.copy).append -> asmstate.verifylist.append;*)
-       GenerateClrVerify;
-       AFF.newline;
+       (* Ensure applicationbase directory existence *)
        (# applicationbasedir: @Directory;
        do applicationbase -> applicationbasedir.name;
           applicationbasedir.touch;
        #);
+       (* Delete exising applicationbase directory contents *)
+       'del /f /q /s ' -> AFF.puttext;
+       applicationbase -> quote -> AFF.puttext;
+       (if verboseLevel > verboseLevel.verbose then
+           ' >NUL 2>&1' -> AFF.puttext;
+       if);
+       AFF.newline;
+       (if not common.switch[6] then
+           GenerateClrExe;
+           GenerateClrConfigFile;
+       if);
+       GenerateClrVerify;
+       AFF.newline;
     else
        'link' -> TODO;
    if);
@@ -562,15 +576,15 @@ do 'asmlinkdynamic'->TODO
      enter lObj[]
      do (* lObj = '"foo"' *)
         lObj[] -> unquote -> lObj[];
+        (*'adddllfile: ' -> puttext; lObj[] -> putline;*)
         (if lObj.length>0 then
-            '.il' -> lObj.stripExtension; (* For newly generated file - still needed??? *)
             '.dll' -> lObj.appendExtension;
             'copy ' -> ldA.puttext;
             lObj[] -> quote -> ldA.append;
             ' ' -> ldA.append;
             applicationbase -> quote -> ldA.puttext;
             (if verboseLevel > verboseLevel.verbose then
-                ' >NUL' -> ldA.puttext;
+                ' >NUL 2>&1' -> ldA.puttext;
             if);
             ldA.newline;
          else
@@ -614,7 +628,6 @@ do (*'linkObj: ' -> puttext; lObj[] -> putline;*)
            0 -> asmstate.link_line_length;
        if);
        lObj[] -> unquote -> path[];
-       (*'.dep'   -> path.stripExtension; -- not needed anymore *)
        '.class' -> path.AppendExtension;
        path[] -> addClassFile;
        (if hostIsWindows then
@@ -771,7 +784,12 @@ do (if isJava then AFF.newline; if);
      #);
 do (if true
     // isIL then
-       (if not common.switch[6] then
+       (if common.switch[6] then
+           (* No link, but DLL directory created for library *)
+           '\necho DLL Library created: '->AFF.puttext;
+           (applicationbase, thePathHandler.CurrentDirectory) -> thePathHandler.localPath 
+             -> AFF.putline;
+        else
            (* Link has been done *)
            'if exist "' -> AFF.puttext;
            objName[] -> AFF.puttext;
@@ -794,7 +812,7 @@ do (if true
            (jarfilename, thePathHandler.CurrentDirectory) -> thePathHandler.localPath 
              -> AFF.putline;
         else
-           (* Link: create wrapper script for program jar file *)
+           (* Create wrapper script for program jar file *)
            generateJavaWrapperScript;
            (if hostIsWindows then
                generateBatFileLabels;
