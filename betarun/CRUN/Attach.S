@@ -93,7 +93,7 @@ Att
 	sub	%r1,IOA,%r1
 	comb,<< %r1,IOAsize,Lnoinsert1	; jump if Activecomp. is in IOA
 	nop
-	set(SaveArea,%r1)
+	set(SaveArea,%r1)	;r19 and r22 are not object references
 	stws,ma	%r22,4(%r1)
 	stws,ma	%r19,4(%r1)
 	bl	AOAtoIOAInsert,%r2
@@ -102,7 +102,7 @@ Att
 	ldws,ma	4(%r1),%r22
 	ldws,ma	4(%r1),%r19
 Lnoinsert1
-	;; AssignReference... %r31 -> CallerComp(CA)
+	;; AssignReference... TH -> CallerObj(CA)
 	STW	TH,CallerObj(0,CA)		;use assignreference
 	sub	TH,IOA,%r1
 	comb,>>= %r1,IOAsize,Lnoinsert2
@@ -148,7 +148,7 @@ Lnoinsert2
 	LDW	CallerComp(0,CA),%r1
 	STW	%r1,0(0,%r19)		;ActiveComponent = ActComp.->CallerComp
 	COPY	%r1,%r19		;r19 = ActiveComponent
-	LDW	CallerObj(0,CA),TH
+;;	LDW	CallerObj(0,CA),TH
 	STW	%r0,StackObj(0,CA)
 	STW	%r0,CallerComp(0,CA)
 	STW	%r0,CallerObj(0,CA)
@@ -273,14 +273,12 @@ Lalloc
 	sub	%r1,IOA,%r1
 	comb,<< %r1,IOAsize,Lnoinsert	; jump if Activecomp. is in IOA
 	nop
-	set(SaveArea,%r1)
-	stws,ma	%r28,4(%r1)
-	stws,ma	%r19,4(%r1)
+	stws,mb	%r28,4(RSP)		;r19 and r28 here are obj refs
+	stws,mb	%r19,4(RSP)
 	bl	AOAtoIOAInsert,%r2
 	ldo	StackObj(%r19),%r26
-	set(SaveArea,%r1)
-	ldws,ma	4(%r1),%r28
-	ldws,ma	4(%r1),%r19
+	ldws,ma	-4(RSP),%r19
+	ldws,ma	-4(RSP),%r28
 Lnoinsert
 	COPY	%r28,%r21		;r21 = theStackObj
 Lnoalloc
@@ -329,12 +327,10 @@ Lhascaller
 #endif
 	STW	%r0,CallerObj(0,%r19)
 	STW	%r0,CallerComp(0,%r19)
-;;	LDW	-84(%r30),%r2
 	LDI	1,%r1
 	STW	%r1,CallerLSC(0,%r19)
 	COPY	%r19,%r22		;r22 = called = old Act.Comp
 	store(%r20,ActiveComponent)
-;;	COPY	%r22,CA
 	LDW	-128-20(%r23),%r2	;get rp from frame just before attach
 #ifdef REFSTACK
 	ldws,ma	-4(RSP),TH		;get refs that Att saved for me
@@ -350,14 +346,8 @@ Lhascaller
 ExitO
 	.EXPORT	ExitO
 ;; called with CA = exitObj, OR = exitAddr, TH = thisObject, D0 = offset
-	COMB,<>	CA,TH,Lnotthis
-	NOP
-	;--- exitObj == this
-	LDO	-4(RSP),RSP		;drop the ref off RefStack
-	BV	%r0(OR)
-	COPY	CA,TH
-	;--- exitObj != this
-Lnotthis				;doesn't handle components yet...
+	DEPI	1,31,1,TH
+	stws,mb	TH,4(RSP)		;push TH on refstk with tag
 	COPY	RSP,%r1
 Lbitnotset
 	LDWS,MA	-4(%r1),%r23
@@ -367,8 +357,9 @@ Lbitnotset
 	nop
 	;--- theObj != exitObj
 	load(ActiveComponent,%r20)	; r20 = ActiveComponent = theComp
-	ldw	Body(%r20),%r19		; r19 = ActiveComponent->Body
-	comb,<>	%r19,%r23,Lbitnotset	; skip forward if not the act. comp.
+	ldo	Body(%r20),%r19		; r19 = &(ActiveComponent->Body)
+	comb,<>	%r19,%r23,Lbitnotset	; loop if not the act. comp.
+	nop
 	;--- theObj == ActiveComponent->Body
 	;--- terminate component like in Attach
 ;; terminate component
