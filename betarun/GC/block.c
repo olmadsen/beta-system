@@ -69,19 +69,28 @@ long inArea( theBlock, theObj )
 void mmapInitial(unsigned long numbytes)
 {
   int fd;
+  int mmapflags;
   signed long startadr;
   Claim(!mmapHeap, "mmapInitial: mmapHeap!=0, calling twice?\n");
   Claim(!mmapHeapTop, "mmapInitial: mmapHeapTop!=0, calling twice?\n");
   Claim(!mmapHeapLimit, "mmapInitial: mmapHeapLimit!=0, calling twice?\n");
   INFO(fprintf(output, "(#mmapInitial(%08X))", (int)numbytes));
 #if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi)
+#ifdef sgi
+  mmapflags = MAP_AUTORESRV | MAP_PRIVATE | MAP_FIXED;
+#else
+#ifdef linux
+  mmapflags = MAP_PRIVATE | MAP_FIXED;
+#else
+  mmapflags = MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED;
+#endif
+#endif
 #define MMAPSTART 0x10000000
 #define MMAPINCR  0x10000000
   fd = open("/dev/zero", O_RDWR);
   startadr = MMAPSTART;
   while (!mmapHeap && (!((startadr+numbytes) & (1<<31)))) {
-    mmapHeap = mmap(startadr, numbytes, PROT_NONE, 
-		    MAP_PRIVATE | MAP_NORESERVE | MAP_FIXED, fd,0);
+    mmapHeap = mmap((void*)startadr, numbytes, PROT_NONE, mmapflags, fd,0);
     if (mmapHeap == MAP_FAILED) {
       mmapHeap = NULL;
       startadr += MMAPINCR;
