@@ -28,38 +28,50 @@ long AOAtoIOAAlloc()
 /* Allocate a larger AOAtoIOAtable based on the next entry in primes. */
 void AOAtoIOAReAlloc()
 {
-    /* Save the old table. */
-    ref(Block) oldBlock      = AOAtoIOAtable;
-    long        oldBlockSize  = AOAtoIOAtableSize;
-    
-    /* Exit if we can't find a new entry in prims. */
-    if( primes[++prim_index] == 0 ) BetaError(AOAtoIOAfullErr, 0);
-    
-    /* Allocate a new and larger block to hold AOAtoIOA references. */
-    AOAtoIOAtableSize = primes[prim_index];
-    if( AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long)) ){
-	AOAtoIOAtable->top = AOAtoIOAtable->limit;
-	AOAtoIOAClear();
-	INFO_AOA( fprintf( output, "#(AOAtoIOAtable resized %d longs.)\n",
-			  AOAtoIOAtableSize));
-    } else {
-	/* If the allocation of the new AOAtoIOAtable failed please
-	   terminate the program execution. */
-	BetaError(AOAtoIOAallocErr, 0);
+  /* Save the old table. */
+  ref(Block) oldBlock      = AOAtoIOAtable;
+  long        oldBlockSize  = AOAtoIOAtableSize;
+  
+  /* Exit if we can't find a new entry in prims. */
+  if( primes[++prim_index] == 0 ) BetaError(AOAtoIOAfullErr, 0);
+  
+  /* Allocate a new and larger block to hold AOAtoIOA references. */
+  AOAtoIOAtableSize = primes[prim_index];
+  if( AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long)) ){
+    AOAtoIOAtable->top = AOAtoIOAtable->limit;
+    AOAtoIOAClear();
+    INFO_AOA( fprintf( output, "#(AOAtoIOAtable resized to %d entries",
+		      AOAtoIOAtableSize));
+  } else {
+    /* If the allocation of the new AOAtoIOAtable failed please
+       terminate the program execution. */
+    BetaError(AOAtoIOAallocErr, 0);
+  }
+  
+  /* Move all entries from the old table into to new. */
+  { 
+    long i;
+    ptr(long) pointer = BlockStart( oldBlock);
+    for(i=0; i < oldBlockSize; i++){
+      if( *pointer ) AOAtoIOAInsert( (handle(Object))(*pointer) );
+      pointer++;
     }
-    
-    /* Move all entries from the old table into to new. */
-    { 
-      long i;
-      ptr(long) pointer = BlockStart( oldBlock);
-      for(i=0; i < oldBlockSize; i++){
-	if( *pointer ) AOAtoIOAInsert( (handle(Object))(*pointer) );
-	pointer++;
-      }
-    }
-    
-    /* Deallocate the old table. */
-    freeBlock( oldBlock);    
+  }
+  
+  INFO_AOA(
+	   {
+	     long i = 0;
+	     long used = 0;
+	     long *pointer = BlockStart(oldBlock);
+	     while (i++<oldBlockSize)
+	       if(*(pointer++)) 
+		 used++;
+	     fprintf(output, ", %d used.)\n", used);
+	   }
+	   );
+
+  /* Deallocate the old table. */
+  freeBlock( oldBlock);    
 }
 
 
