@@ -5,7 +5,7 @@
  * Copyright (C) 1992-94 Mjolner Informatics Aps.
  * Written by Ole Lehrmann Madsen, Jacob Seligmann, and Peter Andersen.
  *
- * $Id: betarun.h,v 1.6 1994-10-21 10:28:14 beta Exp $
+ * $Id: betarun.h,v 1.7 1994-11-22 15:00:35 beta Exp $
  *
  */
 
@@ -128,11 +128,19 @@ extern void Trap(void);
 
 #ifdef sgi
 
+#if 0
 #define SaveCurrSP() \
   { register long * SP asm("$29"); \
     asm("":"=r" (SP)); /* fool gcc */ \
     oldSP = SP; \
    }
+#else
+#define SaveCurrSP() \
+  { register long * SP; \
+    asm("move %0,$29" : "=r" (SP)); /* copy SP to C-var */ \
+    oldSP = SP; \
+   }
+#endif
 
 #define SaveCompState()				\
   asm(" addiu $29, $29, -108 ");		\
