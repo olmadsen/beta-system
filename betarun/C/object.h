@@ -168,6 +168,12 @@ typedef struct _Block{
   long          *mmapmaxlimit; /* max mmaplimit of block */
 } Block;
 
+typedef struct _AOAFreeChunk {
+  struct _AOAFreeChunk *next;
+  unsigned long GCAttr; /* Is FREECHUNK when in free list */
+  unsigned long size;
+} AOAFreeChunk;
+
 typedef struct _CallBackFrame {
   struct _CallBackFrame *  next;
 #if !(defined(hppa) && defined(UseRefStack))

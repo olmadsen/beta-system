@@ -300,6 +300,10 @@ extern void AOAFreeListAnalyze1(void);
 extern void AOAFreeListAnalyze2(void);
 extern void AOADisplayMemoryArea(long *start, long *end);
 extern void GCInfo(void) ;
+extern long AOAFreeListTotalFree(void);
+extern long AOAFreeListIndexGetStat(long index, long *min, long *max, 
+				    long *usecount, long *usesize, 
+				    long *freecount, long *freesize);
 
 #ifdef PERSIST
 /* proxy.c */

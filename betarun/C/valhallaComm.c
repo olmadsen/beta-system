@@ -301,6 +301,10 @@ void printOpCode (int opcode)
     fprintf (output,"VOP_LOOKUP_ADDRESS"); break;
   case VOP_MAIN_PHYSICAL:
     fprintf (output,"VOP_MAIN_PHYSICAL"); break;
+  case VOP_EXT_HEAPINFO:
+    fprintf (output,"VOP_EXT_HEAPINFO"); break;
+  case VOP_SCANHEAPS:
+    fprintf (output,"VOP_SCANHEAPS"); break;
   default:
     fprintf (output,"UNKNOWN OPCODE: %d", opcode); break;
   }
@@ -921,9 +925,113 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 			     (int)getMainPhysical()));
       valhalla_writeint(opcode);
       valhalla_writeint(getMainPhysical());
-      valhalla_socket_flush ();
+      valhalla_socket_flush();
     }
     break;    
+
+    case VOP_EXT_HEAPINFO: {
+      long index, min, max, usecount, usesize, freecount, freesize;
+      valhalla_writeint(opcode);
+      DEBUG_VALHALLA({
+	fprintf(output, "   min  -   max   usecount  usesize"
+		" / freecount freesize\n");
+      });
+      for (index = 0;
+	   AOAFreeListIndexGetStat(index, &min, &max, 
+				   &usecount, &usesize,
+				   &freecount, &freesize);
+	   index++) {
+	DEBUG_VALHALLA({
+	  fprintf(output, "%08x-%08x %8d %8d /  %8d %8d\n",
+		  (int)min, (int)max, (int)usecount, 
+		  (int)usesize, (int)freecount, (int)freesize);
+	});
+	valhalla_writeint(index);
+	valhalla_writeint(min);
+	valhalla_writeint(max);
+	valhalla_writeint(usecount);
+	valhalla_writeint(usesize);
+	valhalla_writeint(freecount);
+	valhalla_writeint(freesize);
+      }
+      DEBUG_VALHALLA(fprintf(output, "-1\n"));
+      valhalla_writeint(-1);
+      DEBUG_VALHALLA(fprintf(output, "\n"));
+      valhalla_socket_flush();
+    }
+    break;
+
+    case VOP_SCANHEAPS: {
+      Object *current;
+      Block *currentBlock;
+      ProtoType * proto;
+      long size;
+
+      forceAOAGC = TRUE;
+      /* FIXME: Forcing a IOA and AOAGC right here. This
+       * will make the results accurate rather than approximate.
+       * To get the least possible live garbage, everything has to
+       * be pushed to AOA, and then AOA must be GC'ed.
+       */
+      
+      valhalla_writeint(opcode);
+
+      DEBUG_VALHALLA(fprintf(output, " address   proto    size\n"));
+      for (current = (Object*)IOA;
+	   current < (Object*)IOATop;
+	   current = (Object*)((long)current + size)) {
+	proto = GETPROTO(current);
+	size = 4*ObjectSize(current);
+	DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
+			       (int)current, (int)proto, (int)size));
+	valhalla_writeint((int)current);
+	valhalla_writeint((int)proto);
+	valhalla_writeint((int)size);
+      }
+      if (current < (Object*)IOALimit) {
+	size = (long)IOALimit - (long)IOATop;
+	DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
+			       (int)IOATop, (int)0, (int)size));
+	valhalla_writeint((int)IOATop);
+	valhalla_writeint((int)0);
+	valhalla_writeint((int)size);
+      }
+      DEBUG_VALHALLA(fprintf(output, "0\n"));
+      valhalla_writeint(0);
+
+      for (currentBlock = AOABaseBlock;
+	   currentBlock;
+	   currentBlock = currentBlock -> next) {
+	for (current = (Object*)BlockStart(currentBlock);
+	     current < (Object*)currentBlock->limit;
+	     current = (Object*)((long)current + size)) {
+	  if (AOAISFREE(current)) {
+	    size = ((AOAFreeChunk*)current)->size;
+	    DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
+				   (int)current, (int)0, (int)size));
+	    valhalla_writeint((int)current);
+	    valhalla_writeint((int)0);
+	    valhalla_writeint((int)size);
+	  } else {
+	    proto = GETPROTO(current);
+	    size = 4*ObjectSize(current);
+	    DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
+				   (int)current, (int)proto, (int)size));
+	    valhalla_writeint((int)current);
+	    valhalla_writeint((int)proto);
+	    valhalla_writeint((int)size);
+	  }
+	}
+	DEBUG_VALHALLA(fprintf(output, "0\n"));
+	valhalla_writeint(0);
+      }
+      DEBUG_VALHALLA(fprintf(output, "-1\n"));
+      valhalla_writeint(-1);
+      DEBUG_VALHALLA(fprintf(output, "\n"));
+      valhalla_socket_flush();
+    }
+    break;
+
     default:
       {
 #ifdef nti

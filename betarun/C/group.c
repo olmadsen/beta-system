@@ -256,8 +256,8 @@ char *GroupName(long address, int isCode)
 
   while (current){
     if (isCode){
-      if ((GroupCodeStart(current) <= address) &&
-	  (address <= GroupCodeEnd(current))){
+      if ((GroupCodeStart(current) <= (unsigned long)address) &&
+	  ((unsigned long)address <= GroupCodeEnd(current))){
 	TRACE_GROUP(fprintf (output, "GroupName: returns "));
 	TRACE_GROUP(fprintf (output, "%s\n", NameOfGroupMacro (current)));
 	return NameOfGroupMacro (current);

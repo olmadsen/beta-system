@@ -41,11 +41,11 @@ void IOAGc()
   
   DEBUG_IOA({
     fprintf(output,
-	    "\nBefore: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
-	    (int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit);
+            "\nBefore: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+            (int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit);
     fprintf(output,
-	    "Before: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
-	    (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
+            "Before: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+            (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
   });
   
   NumIOAGc++;
@@ -53,7 +53,7 @@ void IOAGc()
   INFO_IOA({
     starttime = getmilisectimestamp();
     fprintf(output, "#(IOA-%d, %d bytes requested,", 
-	    (int)NumIOAGc, (int)ReqObjectSize*4);
+            (int)NumIOAGc, (int)ReqObjectSize*4);
   });
   
   /* Clear ToSpace to trigger errors earlier */
@@ -90,9 +90,9 @@ void IOAGc()
     long i; long * pointer = BlockStart( AOAtoIOAtable);
     for(i=0; i<AOAtoIOAtableSize; i++){ 
       if(*pointer){
-	AOAtoIOACount++;
-	Claim(inAOA(*pointer), "AOAtoIOAtable has a cell outside AOA");
-	ProcessAOAReference( (Object **)*pointer);
+        AOAtoIOACount++;
+        Claim(inAOA(*pointer), "AOAtoIOAtable has a cell outside AOA");
+        ProcessAOAReference( (Object **)*pointer);
       }
       pointer++;
     }
@@ -172,28 +172,28 @@ void IOAGc()
   ProcessCBFA();
   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
   
+  CompleteScavenging();
+  
   /* Objects copied til AOA until now has not been proceesed. 
    * During proceesing these objects, new objects may be copied to
-   * ToSpace and AOA, therefore we must alternate between handeling
+   * ToSpace and AOA, therefore we must alternate between handling
    * objects in ToSpace and AOA until no more objects is to procees.
    */
-  if (AOABaseBlock) {
-    if (HandledInAOAHead) {
-      while (1) {
-	Object *nextHead;
-	
-	ProcessAOAObject(HandledInAOAHead);
-	CompleteScavenging();
-	
-	nextHead = (Object *)HandledInAOAHead->GCAttr;
-	HandledInAOAHead->GCAttr = DEADOBJECT;
-	
-	if (HandledInAOAHead == HandledInAOATail) {
-	  HandledInAOAHead = NULL;
-	  break;
-	} else {
-	  HandledInAOAHead = nextHead;
-	}
+  if (AOABaseBlock && HandledInAOAHead) {
+    while (1) {
+      Object *nextHead;
+      
+      ProcessAOAObject(HandledInAOAHead);
+      CompleteScavenging();
+      
+      nextHead = (Object *)HandledInAOAHead->GCAttr;
+      HandledInAOAHead->GCAttr = DEADOBJECT;
+      
+      if (HandledInAOAHead != HandledInAOATail) {
+        HandledInAOAHead = nextHead;
+      } else {
+        HandledInAOAHead = NULL;
+        break;
       }
     }
   }
@@ -265,7 +265,7 @@ void IOAGc()
     IOAtoAOAtreshold = 0;
     do
       {
-	sum += IOAAgeTable[IOAtoAOAtreshold++];
+        sum += IOAAgeTable[IOAtoAOAtreshold++];
       } while ((sum < limit) && (IOAtoAOAtreshold < IOAMaxAge));
     
     if (limit && (IOAtoAOAtreshold < IOAMaxAge))
@@ -274,7 +274,7 @@ void IOAGc()
   }
   DEBUG_IOA( fprintf(output, " treshold=%d", (int)IOAtoAOAtreshold));
   DEBUG_IOA( fprintf(output, " AOAroots=%d", 
-		     (int)areaSize(AOArootsPtr,AOArootsLimit)));
+                     (int)areaSize(AOArootsPtr,AOArootsLimit)));
   
   /* Clear all of the unused part of IOA (i.e. [IOATop..IOALimit[), 
    * so that allocation routines do not need to clear cells.
@@ -283,9 +283,9 @@ void IOAGc()
 
   INFO_IOA({
     fprintf(output," %d%% used, ioatime=%dms)\n",
-	    (int)((100*areaSize(GLOBAL_IOA,GLOBAL_IOATop))
-		  / areaSize(GLOBAL_IOA,GLOBAL_IOALimit)),
-	    (int)(getmilisectimestamp() - starttime));
+            (int)((100*areaSize(GLOBAL_IOA,GLOBAL_IOATop))
+                  / areaSize(GLOBAL_IOA,GLOBAL_IOALimit)),
+            (int)(getmilisectimestamp() - starttime));
   });
 
 #ifdef MT
@@ -335,11 +335,11 @@ Program terminated.\n", (int)(4*ReqObjectSize));
 #endif
     } else {
       if (IOALooksFullCount==2) {
-	/* Have now done two IOAGc's without freeing enough space.
-	 * Make sure that all objects go to AOA in the next GC.
-	 */
-	IOAtoAOAtreshold=IOAMinAge+1;
-	DEBUG_IOA(fprintf(output, "Forcing all to AOA in next IOAGc\n"));
+        /* Have now done two IOAGc's without freeing enough space.
+         * Make sure that all objects go to AOA in the next GC.
+         */
+        IOAtoAOAtreshold=IOAMinAge+1;
+        DEBUG_IOA(fprintf(output, "Forcing all to AOA in next IOAGc\n"));
       }
       IOALooksFullCount++;
     }
@@ -352,17 +352,17 @@ Program terminated.\n", (int)(4*ReqObjectSize));
   DEBUG_CODE(memset(ToSpace, 0, IOASize));
 
   DEBUG_IOA(
-	    fprintf(output,
-		    "\nAfter: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
-		    (int)GLOBAL_IOA, 
-		    (int)GLOBAL_IOATop,
-		    (int)GLOBAL_IOALimit);
-	    fprintf(output,
-		    "After: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
-		    (int)ToSpace, 
-		    (int)ToSpaceTop, 
-		    (int)ToSpaceLimit);
-	    );
+            fprintf(output,
+                    "\nAfter: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+                    (int)GLOBAL_IOA, 
+                    (int)GLOBAL_IOATop,
+                    (int)GLOBAL_IOALimit);
+            fprintf(output,
+                    "After: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+                    (int)ToSpace, 
+                    (int)ToSpaceTop, 
+                    (int)ToSpaceLimit);
+            );
   INFO_HEAP_USAGE(PrintHeapUsage("after IOA GC"));
 
 } /* End IOAGc */
@@ -384,17 +384,17 @@ void DoStackCell(Object **theCell,Object *theObj)
       CompleteScavenging();
     } else {
       DEBUG_CODE({
-	fprintf(output, "[DoStackCell: ***Illegal: 0x%x: 0x%x]\n", 
-		(int)theCell,
-		(int)theObj);
-	Illegal();
+        fprintf(output, "[DoStackCell: ***Illegal: 0x%x: 0x%x]\n", 
+                (int)theCell,
+                (int)theObj);
+        Illegal();
       });
     }
   } else {
 #ifdef RTLAZY
     if (isLazyRef(theObj)) {
       DEBUG_LAZY(fprintf(output, 
-			 "DoStackCell: Lazy ref: %d\n", (int)theObj));
+                         "DoStackCell: Lazy ref: %d\n", (int)theObj));
       ProcessReference(theCell);
     } 
 #endif /* RTLAZY */
@@ -404,9 +404,9 @@ void DoStackCell(Object **theCell,Object *theObj)
      */
     else {
       if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
-	fprintf(output, 
-		"DoStackCell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
-	Illegal();
+        fprintf(output, 
+                "DoStackCell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
+        Illegal();
       }
     }
 #endif
@@ -427,17 +427,17 @@ static void DoAOACell(Object **theCell,Object *theObj)
       ProcessAOAReference(theCell);
     } else {
       DEBUG_CODE({
-	fprintf(output, "[DoStackCell: ***Illegal: 0x%x: 0x%x]\n", 
-		(int)theCell,
-		(int)theObj);
-	Illegal();
+        fprintf(output, "[DoStackCell: ***Illegal: 0x%x: 0x%x]\n", 
+                (int)theCell,
+                (int)theObj);
+        Illegal();
       });
     }
   } else {
 #ifdef RTLAZY
     if (isLazyRef(theObj)) {
       DEBUG_LAZY(fprintf(output, 
-			 "DoAOACell: Lazy ref: %d\n", (int)theObj));
+                         "DoAOACell: Lazy ref: %d\n", (int)theObj));
       ProcessAOAReference(theCell);
     }
 #endif /* RTLAZY */
@@ -447,9 +447,9 @@ static void DoAOACell(Object **theCell,Object *theObj)
      */
     else {
       if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
-	fprintf(output, 
-		"DoAOACell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
-	Illegal();
+        fprintf(output, 
+                "DoAOACell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
+        Illegal();
       }
     }
 #endif
@@ -496,35 +496,35 @@ void ProcessReference(Object ** theCell)
        * theCell in AOAroots table.
        */
       if( !inToSpace( GCAttribute))
-	if (inAOA( GCAttribute)) {
-	  MCHECK();
-	  saveAOAroot(theCell);
-	  MCHECK();
-	}
+        if (inAOA( GCAttribute)) {
+          MCHECK();
+          saveAOAroot(theCell);
+          MCHECK();
+        }
     }else{
       if( isAutonomous(GCAttribute) ){ 
-	/* '*theCell' is an autonomous object. */
-	*theCell = NewCopyObject( *theCell, theCell);
+        /* '*theCell' is an autonomous object. */
+        *theCell = NewCopyObject( *theCell, theCell);
       }else{
-	/* theObj is a part object. */
-	long Distance;
-	Object * newObj;
-	Object * AutObj;
-	
-	GetDistanceToEnclosingObject(theObj, Distance);
-	AutObj = (Object *) Offset(theObj, Distance);
-	if( isForward(AutObj->GCAttr) ){
-	  newObj = (Object *) AutObj->GCAttr;
-	  /* If the forward pointer refers an AOA object, insert
-	   * theCell in AOAroots table.
-	   */
-	  if( !inToSpace( AutObj->GCAttr))
-	    if( inAOA( AutObj->GCAttr)){
-	      MCHECK();
-	      saveAOAroot(theCell);
-	      MCHECK();
-	    }
-	}else{
+        /* theObj is a part object. */
+        long Distance;
+        Object * newObj;
+        Object * AutObj;
+        
+        GetDistanceToEnclosingObject(theObj, Distance);
+        AutObj = (Object *) Offset(theObj, Distance);
+        if( isForward(AutObj->GCAttr) ){
+          newObj = (Object *) AutObj->GCAttr;
+          /* If the forward pointer refers an AOA object, insert
+           * theCell in AOAroots table.
+           */
+          if( !inToSpace( AutObj->GCAttr))
+            if( inAOA( AutObj->GCAttr)){
+              MCHECK();
+              saveAOAroot(theCell);
+              MCHECK();
+            }
+        }else{
             newObj = NewCopyObject( AutObj, theCell);
         }
         *theCell = (Object *) Offset( newObj, -Distance);
@@ -539,9 +539,9 @@ void ProcessReference(Object ** theCell)
 #ifdef RTLAZY
     if (isLazyRef( *theCell)) {
       if (negIOArefs)
-	/* This is a dangling reference, and we are currently 
-	 * collecting as part of the trap handling */
-	negIOArefsINSERT((long) theCell);
+        /* This is a dangling reference, and we are currently 
+         * collecting as part of the trap handling */
+        negIOArefsINSERT((long) theCell);
       return;
     }
 #endif
@@ -570,8 +570,8 @@ void ProcessObject(theObj)
      Object * theObj;
 { 
   scanObject(theObj,
-	     ProcessReference,
-	     TRUE);
+             ProcessReference,
+             TRUE);
   /* CompleteScavenging();*/
 }
 
@@ -603,25 +603,25 @@ static void ProcessAOAReference(Object ** theCell)
       *theCell = (Object *) GCAttribute;
     } else {
       if (isAutonomous(GCAttribute)) { 
-	/* theObj is an autonomous object. 
-	 * Move it from IOA to ToSpace/AOA */
-	*theCell = NewCopyObject(theObj, 0);
+        /* theObj is an autonomous object. 
+         * Move it from IOA to ToSpace/AOA */
+        *theCell = NewCopyObject(theObj, 0);
       } else { 
-	/* theObj is a part object. */
-	long Distance;
-	Object * newObj;
-	Object * AutObj;
-	
-	Claim(isStatic(GCAttribute), "isStatic(GCAttribute)");
-	GetDistanceToEnclosingObject(theObj, Distance);
-	AutObj = (Object *) Offset(theObj, Distance);
-	Claim(!isStatic(AutObj->GCAttr), "!isStatic(AutObj->GCAttr)");
-	if (isForward(AutObj->GCAttr)) {
-	  newObj = (Object *) AutObj->GCAttr;
-	} else {
-	  newObj = NewCopyObject(AutObj, 0);
-	}
-	*theCell = (Object *) Offset(newObj, -Distance); 
+        /* theObj is a part object. */
+        long Distance;
+        Object * newObj;
+        Object * AutObj;
+        
+        Claim(isStatic(GCAttribute), "isStatic(GCAttribute)");
+        GetDistanceToEnclosingObject(theObj, Distance);
+        AutObj = (Object *) Offset(theObj, Distance);
+        Claim(!isStatic(AutObj->GCAttr), "!isStatic(AutObj->GCAttr)");
+        if (isForward(AutObj->GCAttr)) {
+          newObj = (Object *) AutObj->GCAttr;
+        } else {
+          newObj = NewCopyObject(AutObj, 0);
+        }
+        *theCell = (Object *) Offset(newObj, -Distance); 
       }
     }
   }
@@ -660,8 +660,8 @@ static void ProcessAOAReference(Object ** theCell)
 static void ProcessAOAObject(Object * theObj)
 { 
   scanObject(theObj,
-	     ProcessAOAReference,
-	     TRUE);
+             ProcessAOAReference,
+             TRUE);
 }
 
 /*
@@ -687,12 +687,12 @@ void CompleteScavenging()
   while (HandledInToSpace < ToSpaceTop) {
     theObj = (Object *) HandledInToSpace;
     HandledInToSpace = (long *) (((long) HandledInToSpace)
-				    + 4*ObjectSize(theObj));
+                                    + 4*ObjectSize(theObj));
     Claim(ObjectSize(theObj)>0, "CompleteScavenging: ObjectSize(theObj)>0");
     ProcessObject(theObj);
   }
   Claim( HandledInToSpace == ToSpaceTop,
-		     "CompleteScavenging: HandledInToSpace == ToSpaceTop");
+                     "CompleteScavenging: HandledInToSpace == ToSpaceTop");
 
 }
 
@@ -703,9 +703,9 @@ static void IOACheckPrintTheObj(Object *theObj)
     long i;
     if (NumIOAGc>=IOAGC_START_TRACE){
       fprintf(output, 
-	      "IOACheck: 0x%x (size 0x%x)\n", 
-	      (int)theObj, 
-	      (int)(4*ObjectSize(theObj)));
+              "IOACheck: 0x%x (size 0x%x)\n", 
+              (int)theObj, 
+              (int)(4*ObjectSize(theObj)));
       for (i=0; i<ObjectSize(theObj); i++){
         fprintf(output, 
                 "  0x%x: 0x%x\n",
@@ -718,12 +718,12 @@ static void IOACheckPrintTheObj(Object *theObj)
 
 static void IOACheckPrintSkipped(long *ptr, Object *theObj)
 {
-    if (NumIOAGc>=IOAGC_START_TRACE) {
-        fprintf(output, 
-                "Skipped %d longs\n",
-                (int)((long)ptr-(long)theObj)/4);
-        fflush(output);
-    }
+  if (NumIOAGc>=IOAGC_START_TRACE) {
+    fprintf(output, 
+	    "Skipped %d longs\n",
+	    (int)((long)ptr-(long)theObj)/4);
+    fflush(output);
+  }
 }
 
 static void IOACheckPrintIOA(void)
@@ -745,73 +745,72 @@ Object * lastObj=0;
  */
 void IOACheck()
 {
-    Object * theObj;
-    long        theObjectSize;
-    
-    theObj = (Object *) GLOBAL_IOA;
-    
-    lastObj=0;
-    IOACheckPrintIOA();
-    
-    if ((long *)theObj == TheIOATOP) return;
-    
-    while ((long *)theObj < TheIOATOP) {
+  Object * theObj;
+  long        theObjectSize;
+  
+  theObj = (Object *) GLOBAL_IOA;
+  
+  lastObj=0;
+  IOACheckPrintIOA();
+  
+  if ((long *)theObj == TheIOATOP) return;
+  
+  while ((long *)theObj < TheIOATOP) {
 #ifdef MT
-        /* Skip blank cells in beginning of objects */
-        {
-            long *ptr = (long *)theObj;
-            while ( (ptr<(long*)TheIOATOP) && (*ptr==0) ) ptr++;
-            if (ptr==TheIOATOP) break;
-            if ((long*)theObj<ptr){
-                IOACheckPrintSkipped(ptr, theObj);
-                if (NumIOASlices==1) {
-                    Claim(FALSE, "No skip should be needed when only one thread");
-                }
-            }
-            theObj = (Object *)ptr;
-        }
-#else /* Not MT */
-        Claim((long)(GETPROTO(theObj)), "IOACheck: GETPROTO(theObj)");
-	Claim(IsPrototypeOfProcess((long)(GETPROTO(theObj))),
-				   "IsPrototypeOfProcess(Proto)");
-#endif /* MT */
-
-        IOACheckPrintTheObj(theObj);
-
-        Claim(inIOA(theObj), "IOACheck: theObj in IOA");
-	Claim(isObject(theObj), "isObject(theObj)");
-        Claim(ObjectSize(theObj) > 0, "#IOACheck: ObjectSize(theObj) > 0");
-        theObjectSize = 4*ObjectSize(theObj);
-	Claim(ObjectAlign(theObjectSize)==(unsigned)theObjectSize,
-	      "ObjectSize aligned");
-        IOACheckObject (theObj);
-        lastObj = theObj;
-        theObj = (Object *) Offset(theObj, theObjectSize);
+    /* Skip blank cells in beginning of objects */
+    {
+      long *ptr = (long *)theObj;
+      while ( (ptr<(long*)TheIOATOP) && (*ptr==0) ) ptr++;
+      if (ptr==TheIOATOP) break;
+      if ((long*)theObj<ptr){
+	IOACheckPrintSkipped(ptr, theObj);
+	if (NumIOASlices==1) {
+	  Claim(FALSE, "No skip should be needed when only one thread");
+	}
+      }
+      theObj = (Object *)ptr;
     }
-    return;
+#else /* Not MT */
+    Claim((long)(GETPROTO(theObj)), "IOACheck: GETPROTO(theObj)");
+    Claim(IsPrototypeOfProcess((long)(GETPROTO(theObj))),
+	  "IsPrototypeOfProcess(Proto)");
+#endif /* MT */
+    
+    IOACheckPrintTheObj(theObj);
+    
+    Claim(inIOA(theObj), "IOACheck: theObj in IOA");
+    Claim(isObject(theObj), "isObject(theObj)");
+    Claim(ObjectSize(theObj) > 0, "#IOACheck: ObjectSize(theObj) > 0");
+    theObjectSize = 4*ObjectSize(theObj);
+    Claim(ObjectAlign(theObjectSize)==(unsigned)theObjectSize,
+	  "ObjectSize aligned");
+    IOACheckObject (theObj);
+    lastObj = theObj;
+    theObj = (Object *) Offset(theObj, theObjectSize);
+  }
 }
 
 
 void IOACheckReference(REFERENCEACTIONARGSTYPE)
 {
-    if (*theCell && inBetaHeap(*theCell) && isObject(*theCell)) {
-        if (isLazyRef(*theCell)){
-            fprintf(output, "Lazy in IOA: 0x%x: %d\n", (int)theCell, (int)*theCell);
-            return;
-        }
-        if (!(inIOA(*theCell) || inAOA(*theCell))) {
-            fprintf (output, "theCell = 0x%x, *theCell = 0x%x\n", 
-                     (int)theCell, (int)(*theCell));
-            Claim(inIOA(*theCell) || 
-                  inAOA(*theCell),
-		  "IOACheckReference: *theCell lazy ref or inside IOA, AOA");
-        }
+  if (*theCell && inBetaHeap(*theCell) && isObject(*theCell)) {
+    if (isLazyRef(*theCell)){
+      fprintf(output, "Lazy in IOA: 0x%x: %d\n", (int)theCell, (int)*theCell);
+      return;
     }
+    if (!(inIOA(*theCell) || inAOA(*theCell))) {
+      fprintf (output, "theCell = 0x%x, *theCell = 0x%x\n", 
+	       (int)theCell, (int)(*theCell));
+      Claim(inIOA(*theCell) || 
+	    inAOA(*theCell),
+	    "IOACheckReference: *theCell lazy ref or inside IOA, AOA");
+    }
+  }
 }
 
 void IOACheckObject (Object *theObj)
 {
-    scanObject(theObj, IOACheckReference, TRUE);
+  scanObject(theObj, IOACheckReference, TRUE);
 }
 
 #endif /* RTDEBUG */

@@ -26,7 +26,7 @@ void PrintHeapUsage(char *prompt)
 #ifdef USEMMAP
   aoasize=(long)AOABaseBlock->limit - (long)BlockStart(AOABaseBlock);
 #else
-  aoasize=AOABlockSize*aoablocks;
+  aoasize=totalAOASize;
 #endif
   fprintf(output, 
 	  "  AOA:            %8d Kb (%d blocks)\n", 
@@ -78,19 +78,10 @@ int getHeapInfo(int infoId)
     case 13 : return (int)CBFABlockSize;
     case 15 : return (int)((int)CBFATop - (int)CBFA);
     case 30 : return (int)AOABaseBlock;
-    case 31 : return (int)AOATopBlock;
+    case 31 : return 0; /* (int)AOATopBlock; */
     case 33 : return (int)AOABlockSize;
-    case 35 : {
-      int p = (int)AOABaseBlock;
-      int count = 0;
-      
-      while (p!=0)
-	{
-	  count +=  (* ((intptr) (p + 8))) - (p+16);
-	  p = * (intptr)p;
-	};
-      return count;
-    };
+    case 35 : return (int)totalAOASize;
+    case 36 : return (int)AOAFreeListTotalFree();
   default:
     fprintf(output, "getHeapInfo: illegal opcode %d\n", (int)infoId);
     return 0;

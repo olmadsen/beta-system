@@ -36,6 +36,8 @@
 #define VOP_LOOKUP_ADDRESS     21
 #define VOP_MAIN_PHYSICAL      22
 
+#define VOP_EXT_HEAPINFO       40
+#define VOP_SCANHEAPS          41
 #define VOP_STOPPED            50
 
 

@@ -76,29 +76,20 @@
 #define AOAFreeListPleaseMoreBytes 8192
 #define AOAFreeListTooManyBytes  (2*8192)
 
-/* LOCAL TYPES */
-typedef struct AOAFreeChunk {
-  struct AOAFreeChunk *next;
-  unsigned long GCAttr /* Should be 0 when in free list or dead  */;
-  unsigned long size   /* May never be accessed by objects less that
-			* 16 bytes
-			*/;
-} AOAFreeChunk;
-
 /* LOCAL FUNCTIONS */
 static long AOAFreeListIndex(long numbytes);
 static void AOAInsertFreeElement(AOAFreeChunk *freeChunk, long numbytes);
 static AOAFreeChunk *AOAFindInFree(unsigned long numbytes);
 static long AOASmallIndex2Size(long index);
-#if 0
 static long AOALargeIndex2Size(long index);
 static long AOAAnyIndex2Size(long index);
-#endif
 static int AOAWantsMore(long numbytes);
 
 /* LOCAL VARIABLES */
 static AOAFreeChunk *AOAFreeList[FreeListSmallMAX+FreeListLargeMAX+1];
 static unsigned long AOAFreeListSize[FreeListSmallMAX+FreeListLargeMAX+1];
+static unsigned long AOAInUseCount[FreeListSmallMAX+FreeListLargeMAX+1];
+static unsigned long AOAInUseSize[FreeListSmallMAX+FreeListLargeMAX+1];
 static unsigned long AOAMinGap = 16;          /* Must be at least 16 */
 /* IMPLEMENTATION */
 
@@ -133,7 +124,6 @@ static long AOASmallIndex2Size(long index)
   return 8 * index;
 }
 
-#if 0
 static long AOALargeIndex2Size(long index)
 {
   Claim(FreeListSmallMAX <= index 
@@ -152,7 +142,6 @@ static long AOAAnyIndex2Size(long index)
     return AOALargeIndex2Size(index);
   }
 }
-#endif
 
 /* AOAWantsMore:
  *   Returns true, iff the list a block of size numbytes 
@@ -203,7 +192,7 @@ static void AOAInsertFreeElement(AOAFreeChunk *freeChunk, long numbytes)
  *         free list of size 2*numbytes, and return the other part.
  *      4. Repeat with freelists 4*numbytes, 5*numbytes until
  *         size 256 is superseeded.
- *      5. Search for chunk in last index.
+ *      5. Search for chunk in the large block lists.
  *         This search finds the best match.  What best is is hard
  *         to determine. Currently, the smallest possible match is found,
  *         except that is must leave no gap or a gap larger than AOAMinGap.
@@ -226,6 +215,8 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
     /* remove the chunk from the freelist */
     AOAFreeList[index] = AOAFreeList[index]->next;
     AOAFreeListSize[index]--;
+    AOAInUseCount[index]++;
+    AOAInUseSize[index] += numbytes;
     return newChunk;
   }
 
@@ -252,7 +243,9 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
       /* remove the chunk from the freelist */
       AOAFreeList[index] = AOAFreeList[index]->next;
       AOAFreeListSize[index]--;
-      
+      AOAInUseCount[startindex]++;
+      AOAInUseSize[startindex] += numbytes;
+
       /* insert the remaining chunk in the free list */
       /* There must be a rest, as this is not a perfect match -mg */
       /* if (sizeOfRestChunk) */
@@ -285,6 +278,8 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
 	  /* remove the chunk from the freelist */
 	  *previous = current->next;
 	  AOAFreeListSize[index]--;
+	  AOAInUseCount[index]++;
+	  AOAInUseSize[index] += numbytes;
 	  return current;
 	}
 	if ((current->size > numbytes) &&
@@ -312,6 +307,8 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
 	/* remove the chunk from the freelist */
 	*bestFitPrevious = bestFit->next;
         AOAFreeListSize[bestFitIndex]--;
+	AOAInUseCount[startindex]++;
+	AOAInUseSize[startindex] += numbytes;
 
 	/* insert the remaining chunk in the free list */
 	/* There must be a rest, as this is not a perfect match -mg */
@@ -348,7 +345,7 @@ Object *AOAAllocateFromFreeList(long numbytes)
   }
 #endif
   newObj = (Object *)AOAFindInFree(numbytes);
-  STAT_AOA({
+  DETAILEDSTAT_AOA({
     fprintf(output, "AOAalloc:%d:%d\n", (int)newObj, (int)numbytes);
     if (newObj) {
       objectsInAOA++;
@@ -386,7 +383,7 @@ void AOAFreeInFreeList(Object *chunk)
   }
 #endif
   AOAInsertFreeElement((AOAFreeChunk *)chunk, numbytes);
-  STAT_AOA({
+  DETAILEDSTAT_AOA({
     objectsInAOA--;
     sizeOfObjectsInAOA -= numbytes;
   });
@@ -411,6 +408,11 @@ void AOAInsertFreeBlock(char *block, long numbytes)
  */
 void AOAInit(void)
 {
+  long index;
+  for (index=0; index <= FreeListSmallMAX+FreeListLargeMAX; index++) {
+    AOAInUseCount[index] = 0;
+    AOAInUseSize[index] = 0;
+  }
   AOACleanFreeList();
 }
 
@@ -423,6 +425,7 @@ void AOACleanFreeList(void)
   for (index=0; index <= FreeListSmallMAX+FreeListLargeMAX; index++) {
     AOAFreeList[index] = (AOAFreeChunk *)NULL;
     AOAFreeListSize[index] = 0;
+    /* AOAInUseCount/Size should not be cleaned, as it is updated on the fly */
   }
 }
 
@@ -464,17 +467,17 @@ static long doAnalysis(void)
 void AOAFreeListAnalyze1(void)
 {
   AOAMinGap = doAnalysis();
-  STAT_AOA(fprintf(output, "[Analyze1:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
+  DETAILEDSTAT_AOA(fprintf(output, "[Analyze1:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
 }
 
 void AOAFreeListAnalyze2(void)
 {
   unsigned long step1gap = AOAMinGap;
   AOAMinGap = doAnalysis();
-  STAT_AOA(fprintf(output, "[Analyze2:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
+  DETAILEDSTAT_AOA(fprintf(output, "[Analyze2:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
   if (step1gap < AOAMinGap)
     AOAMinGap = step1gap;
-  STAT_AOA(fprintf(output, "[Final:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
+  DETAILEDSTAT_AOA(fprintf(output, "[Final:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
 }
 
 
@@ -495,7 +498,7 @@ long AOAScanMemoryArea(long *start, long *end)
     if (AOAISALIVE(current)) {
       /* Leave as is */
       size = 4 * ObjectSize((Object *)current);
-      STAT_AOA({
+      DETAILEDSTAT_AOA({
 	if (isValRep((Object *)current)) {
 	  LVRSizeSum += size;
 	}
@@ -524,7 +527,12 @@ long AOAScanMemoryArea(long *start, long *end)
 	  size = current->size;
 	} else {
 	  size = 4 * ObjectSize((Object *)current);
-	  STAT_AOA({
+	  {
+	    long index = AOAFreeListIndex(size);
+	    AOAInUseCount[index]--;
+	    AOAInUseSize[index] -= size;
+	  }
+	  DETAILEDSTAT_AOA({
 	    if (freeChunkStart == current) {
 	      fprintf(output, "AOAfree:%d:%d\n", (int)current, (int)size);
      	    } else {
@@ -560,84 +568,139 @@ void GCInfo(void)
   fprintf(output,"GCInfo:\n");
   fprintf(output,"  %8lu (IOAGC)\n", NumIOAGc);
   fprintf(output,"  %8lu (AOAGC)\n", NumAOAGc);
-  STAT_AOA({
-    fprintf(output,"  %8lu (AOABlocks)\n", AOABlocks);
+  fprintf(output,"  %8lu (AOABlocks)\n", AOABlocks);
+  fprintf(output,"  %8lu (AOAKb)\n", totalAOASize/1024);
+
+  DETAILEDSTAT_AOA({
     fprintf(output,"  %8lu (objectsInAOA)\n", objectsInAOA);
     fprintf(output,"  %8lu (sizeOfObjectsInAOA)\n", sizeOfObjectsInAOA);
-    fprintf(output,"  %8lu (AOABlockSize)\n", AOABlockSize);
   });
 }
 
-#if defined(RTDEBUG) || defined(RTSTAT)
+#if defined(RTDEBUG)
 /* AOADisplayMemoryArea: */
 void AOADisplayMemoryArea(long *start, long *end) 
 {
   ;
 }
+#endif /* RTDEBUG */
 
 void AOADisplayFreeList(void)
 { 
   long index, freeSpace;
   AOAFreeChunk *current;
-  unsigned long numEntries;
+  unsigned long live, dead;
   long freeOfSize;
   long blksize;
 
   freeSpace=0;
   fprintf(output, "(AOAFreelist:\n");
-  fprintf(output, "  [   size   ][ freespace ] (entries)\n");    
+  fprintf(output, "    size  freespace   free    live  livesize  deadgraph\n");
   for (index=0; index < FreeListSmallMAX+FreeListLargeMAX; index++) {
-    numEntries=0;
     freeOfSize=0;
+    
+    if (AOAFreeListSize[index] || AOAInUseCount[index]) {
+      if (index <= FreeListSmallMAX) {
+	blksize = AOASmallIndex2Size(index);
+	dead = AOAFreeListSize[index];
+	live = AOAInUseCount[index];
+	freeOfSize = dead*blksize;
+      } else {
+	blksize = AOASmallIndex2Size(FreeListSmallMAX) 
+	  << (index-FreeListSmallMAX);
+	dead = AOAFreeListSize[index];
+	live = AOAInUseCount[index];
+	current = AOAFreeList[index];
+	while (current) {
+	  freeOfSize += current->size;
+	  current = current->next;
+	}
+      }
 
-    if (index <= FreeListSmallMAX) {
-      blksize = AOASmallIndex2Size(index);
-    } else {
-      blksize = AOASmallIndex2Size(FreeListSmallMAX) 
-	<< (index-FreeListSmallMAX);
+      fprintf(output, "0x%07X 0x%07X  %5lu %7lu 0x%07X ",
+	      (int)blksize,
+	      (int)freeOfSize,
+	      dead, live, AOAInUseSize[index]);
+      
+      dead = (dead+10-1)/10;  /* Scale graph by 10 */
+      if (dead > 24) {
+	dead = 24;
+      }
+      
+      while (dead) {
+	fprintf(output, "*");
+	dead--;
+      }
+      
+      fprintf(output, "\n");
+      freeSpace += freeOfSize;
     }
-    current = AOAFreeList[index];
-    while(current) {
-      freeOfSize += current->size;
-      current = current->next;
-      numEntries += 1;
-    }
-        
-    Claim(AOAFreeListSize[index] == numEntries,
-	  "AOAFreeListSize[index] == numEntries");
-
-    fprintf(output, "  [0x%08X][0x%08X ] ( %5lu ) ",
-	    (int)blksize,
-	    (int)freeOfSize,
-	    (unsigned long)numEntries);
-        
-    numEntries = (numEntries+7)/8;  /* Scale graph by 8 */
-    if (numEntries > 32) {
-      numEntries = 32;
-    }
-        
-    while (numEntries) {
-      fprintf(output, "*");
-      numEntries--;
-    }
-        
-    fprintf(output, "\n");
-    freeSpace += freeOfSize;
   }
-  fprintf(output, "   Total      [0x%8X])\n", (int)freeSpace);
+  fprintf(output, "   Total  0x%8X)\n", (int)freeSpace);
 
   fprintf(output, "Size of blocks in largelist:\n");
   for (index=FreeListSmallMAX; 
        index < FreeListSmallMAX+FreeListLargeMAX; 
        index++) {
-    fprintf(output, "[%d: ", (int)index);
     current = AOAFreeList[index];
-    while(current) {
-      fprintf(output, " 0x%08X", (int)(current->size));
-      current = current->next;
+    if (current) {
+      fprintf(output, "[%d: ", (int)index);
+      while (current) {
+	fprintf(output, " 0x%08X", (int)(current->size));
+	current = current->next;
+      }
+      fprintf(output, "]\n");
     }
-    fprintf(output, "]\n");
   }
 }
 
-#endif /* RTDEBUG */
+
+long AOAFreeListTotalFree(void)
+{
+  long res = 0;
+  long blksize;
+  int index;
+  AOAFreeChunk *current;
+
+  for (index=0; index < FreeListSmallMAX+FreeListLargeMAX; index++) {
+    if (index <= FreeListSmallMAX) {
+      blksize = AOASmallIndex2Size(index);
+      res += blksize*AOAFreeListSize[index];
+    } else {
+      blksize = AOASmallIndex2Size(FreeListSmallMAX) 
+	<< (index-FreeListSmallMAX);
+      current = AOAFreeList[index];
+      while (current) {
+	res += current->size;
+	current = current->next;
+      }
+    }
+  }
+  return res;
+}
+
+long AOAFreeListIndexGetStat(long index, long *min, long *max, 
+			     long *usecount, long *usesize, 
+			     long *freecount, long *freesize)
+{
+  AOAFreeChunk *current;
+
+  if (!AOABaseBlock || 
+      index < 0 || index >= FreeListSmallMAX+FreeListLargeMAX) {
+    return 0;
+  }
+
+  *min = AOAAnyIndex2Size(index);
+  *max = AOAAnyIndex2Size(index+1)-8;
+  *usecount = AOAInUseCount[index];
+  *usesize = AOAInUseSize[index];
+  *freecount = AOAFreeListSize[index];
+  *freesize = 0;
+  current = AOAFreeList[index];
+  while (current) {
+    *freesize += current->size;
+    current = current->next;
+  }
+
+  return 1;
+}

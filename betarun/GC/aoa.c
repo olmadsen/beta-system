@@ -17,7 +17,6 @@ static void AOACheckObjectRefSpecial(REFERENCEACTIONARGSTYPE);
 
 /* LOCAL VARIABLES */
 static long totalFree = 0;
-static long totalAOASize = 0;
 
 /* tempAOArootsAlloc:
  *  Not enough room for the AOAroots table in ToSpace.
@@ -242,7 +241,7 @@ Object *AOAallocate(long numbytes)
    * We add a new block and indicate that we want an AOAGC ASAP 
    */
   
-  STAT_AOA(fprintf(output,"Could not allocate 0x%0x bytes, "
+  DETAILEDSTAT_AOA(fprintf(output,"Could not allocate 0x%0x bytes, "
 		   "allocating new block now\n"
 		   "and requesting AOAGc from next IOAGc.\n",
 		   (int)numbytes));
@@ -409,6 +408,9 @@ void AOAGc()
   Block * currentBlock;
   long starttime = 0;
 
+  if (!AOABaseBlock)
+    return;
+
   NumAOAGc++;
 
   INFO_AOA({
@@ -487,7 +489,7 @@ void AOAGc()
   /* All space is alive until proven dead */
   totalFree = 0;
 
-  STAT_AOA(fprintf(output,"[Blocks: freed/free/total:\n"));
+  DETAILEDSTAT_AOA(fprintf(output,"[Blocks: freed/free/total:\n"));
 
   /* Scan each block in AOA. */
   LVRSizeSum = 0;
@@ -498,17 +500,17 @@ void AOAGc()
 	  "BlockStart(currentBlock)==currentBlock->top");
     /* Then each chunk in the block is examined */
 
-    freeInBlock = AOAScanMemoryArea(currentBlock -> top, 
+    freeInBlock = AOAScanMemoryArea(BlockStart(currentBlock),
 				    currentBlock -> limit);
     totalFree += freeInBlock;
         
-    STAT_AOA(fprintf(output,"[0x%08x/0x%08x/0x%08x] ",
+    DETAILEDSTAT_AOA(fprintf(output,"[0x%08x/0x%08x/0x%08x] ",
 		     (int)collectedMem, (int)freeInBlock, (int)BlockNumBytes(currentBlock)));
         
     currentBlock = currentBlock -> next;
   }
   
-  STAT_AOA(fprintf(output,"]\n"));
+  DETAILEDSTAT_AOA(fprintf(output,"]\n"));
 
   AOARefStackUnHack();
 
@@ -526,10 +528,13 @@ void AOAGc()
 
   AOAFreeListAnalyze2();
   STAT_AOA({
-    fprintf(output, "AOA-%d aoasize=0x%08x aoafree=0x%08x "
-	    "VR=0x%08x objects=0x%08x\n",
-	    (int)NumAOAGc, (int)totalAOASize, (int)totalFree,
-	    (int)LVRSizeSum,  (int)objectsInAOA);
+    fprintf(output, "AOA-%d aoasize=0x%08x aoafree=0x%08x\n",
+	    (int)NumAOAGc, (int)totalAOASize, (int)totalFree);
+    fflush(output);
+  });
+  DETAILEDSTAT_AOA({
+    fprintf(output, "AOA-%d VR=0x%08x numobjects=0x%08x\n",
+	    (int)NumAOAGc, (int)LVRSizeSum,  (int)objectsInAOA);
     fflush(output);
   });
   

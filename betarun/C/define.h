@@ -174,11 +174,11 @@
 
 #define headsize(x) (sizeof(x) - sizeof(long))
 
-#undef RTSTAT /* only set when measuring! */
-#ifdef RTSTAT
-#  define STAT_AOA(code)  if (StatAOA ) { code; }
+#undef DETAILEDSTAT /* only define when not measuring time! */
+#ifdef DETAILEDSTAT
+#  define DETAILEDSTAT_AOA(code)  if (StatAOA) { code; }
 #else
-#  define STAT_AOA(code)
+#  define DETAILEDSTAT_AOA(code)
 #endif
 
 /********* Debug macros *******/
@@ -233,6 +233,7 @@
 #  define INFO(code)      if (Info0   ) { code; }
 #  define INFO_IOA(code)  if (InfoIOA ) { code; }
 #  define INFO_AOA(code)  if (InfoAOA ) { code; }
+#  define STAT_AOA(code)  if (StatAOA ) { code; }
 #  define INFO_CBFA(code) if (InfoCBFA) { code; }
 #  define INFO_DOT(code)  if (InfoDOT ) { code; }
 #  define INFO_LABELS(code) if(InfoLabels) { code; }
@@ -242,6 +243,7 @@
 #  define INFO(code)
 #  define INFO_IOA(code)
 #  define INFO_AOA(code)
+#  define STAT_AOA(code)
 #  define INFO_LABELS(code)
 #  define INFO_CODE(code)
 #  define INFO_HEAP_USAGE(code) 
