@@ -3414,3 +3414,110 @@ do true -> okToQuit;
    (if okToQuit then
        Terminate;
    if);
+-- timerLib: attributes --
+unInitialized: (# exit 0 #);
+active: (# exit 1 #);
+sleeping: (# exit 2 #);
+
+-- GUIenvTimerStart: doPart --
+do interval -> private.interval;
+   (if private.status
+    //active then 
+       (* Nothing *)
+    //unInitialized then
+       private.init;
+       active -> private.status;
+       private.install;
+    //sleeping then
+       active -> private.status;
+       private.install;
+   if);
+   
+
+-- GUIenvTimerStop: doPart --
+do (if private.status = active then
+       private.delete;
+       sleeping -> private.status;
+   if);
+
+-- GUIenvTimerPrivate: descriptor --
+(# theAction: @action;
+   status: @integer;
+   interval: @integer;
+   appcontext: @integer;
+   callbackPtr: @integer;
+   timerID: @integer;
+   
+   std16x4toint: external
+    (# func: ##theTimerProc;
+       int: @integer;
+    enter func##
+    do 'copyinput'->callC
+    exit int
+    #);
+    
+    theTimerProcAddress: @integer;
+    theTimerProc: external
+      (# windowHandle,message,uTimerID,dwTime: @integer;
+      enter (windowHandle,message,uTimerId,dwTime)
+      do StdExternalEntry;
+         (if uTimerId=timerID then
+             (if status
+             //active then
+               theAction;
+             //sleeping then
+               (* Nothing *)
+             if);
+         if);
+      #);
+   
+   install: @
+     (# (* UINT    WINAPI SetTimer(HWND, UINT, UINT, TIMERPROC); *)
+        SetTimer: external
+        (# windowHandle: @integer; (* HWND *)
+           timerID: @integer; (* UINT *)
+           timeOutValue: @integer; (* UINT *)
+           theTimerProcAddress: @integer; (* TIMERPROC *)
+           result: @integer; (* UINT *)
+        enter (windowHandle,timerID,timeOutValue,theTimerProcAddress)
+        do callStd;
+        exit result
+        #);
+        msg: ^text; 
+     do (0, 0, interval, theTimerProcAddress) -> SetTimer -> timerID;
+        (if timerID=0 then
+          &text[] -> msg[];
+          'SetTimer failed. Error: ' -> msg.append;
+          GetLastError -> msg.putInt; '. ' -> msg.append;
+          (NONE, msg[], NONE) -> noteUser;
+        if);
+     #);
+   delete: @
+     (# (* BOOL    WINAPI KillTimer(HWND, UINT); *)
+        KillTimer: external
+        (# windowHandle: @integer; (* HWND *)
+           timerID: @integer; (* UINT *)
+           result: @integer; (* BOOL *)
+        enter (windowHandle,timerID)
+        do callStd;
+        exit result
+        #);
+        msg: ^text;
+     do (if ( (0,timerID) -> KillTimer)=0 then
+            &text[] -> msg[];
+            'KillTimer failed. Error: ' -> msg.append;
+            GetLastError -> msg.putInt; '. ' -> msg.append;
+            (NONE, msg[], NONE) -> noteUser;
+        else    
+            0 -> timerID;
+        if);        
+     #);
+   init:
+     (# 
+     do (* Get a pointer to the timer proc. *)
+        theTimerProc## -> std16x4toint -> theTimerProcAddress;
+     #);
+#)
+
+-- guienvFitToContents: doPart --
+do 
