@@ -3,4 +3,4 @@ CFLAGS	   = -D$(MACHINETYPE) -I$(BETARUNDIR)
 
 ../$(MACHINETYPE)/scanobjects.o: 
 	sh -c 'if [ ! -d ../$(MACHINETYPE) ]; then mkdir ../$(MACHINETYPE); fi'
-	$(CC) -c -o $(CFLAGS) ../$(MACHINETYPE)/scanobjects.o $(BETARUNDIR)/scanobjects.c
+	$(CC) -c $(CFLAGS) -o ../$(MACHINETYPE)/scanobjects.o $(BETARUNDIR)/scanobjects.c
