@@ -240,7 +240,7 @@ CAStorage *SBopen(char *host, char *path)
 void SBclose(CAStorage *csb)
 {
 
-  fprintf(stderr, "SBclose(csb=0x%08x)\n", (int)csb); fflush(stderr);
+  /* fprintf(stderr, "SBclose(csb=0x%08x)\n", (int)csb); fflush(stderr); */
 
    /* Unpersistify objects in memory */
    closeStore(csb);
