@@ -62,3 +62,9 @@ HRESULT CoCreateInstance(CLSID *rclsid,
   *ppv=NULL;
   return Unimplemented("CoCreateInstance");
 }
+
+
+HRESULT RegisterActiveObject(void *pUnk, CLSID *rclsid, long flags, unsigned reg) 
+{
+  return Unimplemented("RegisterActiveObject");
+}
