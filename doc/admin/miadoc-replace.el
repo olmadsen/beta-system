@@ -207,3 +207,29 @@
     (message "Removing up buttons")
     (tags-query-replace "<A HREF=index.html><IMG ALIGN=BOTTOM SRC=\"../images/up.gif\" ALT=Up BORDER=0></A>" "" nil)))
 
+(defun miadoc-replace21 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Removing empty lines in PRE")
+    (tags-query-replace "
+
+</PRE>" "
+</PRE>" nil)))
+
+(defun miadoc-replace22 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing quotes")
+    (tags-query-replace "&ograve;" "'" nil)))
+
+(defun miadoc-replace23 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing quotes")
+    (tags-query-replace "&oacute;" "'" nil)))
