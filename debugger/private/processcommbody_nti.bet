@@ -1,0 +1,731 @@
+ORIGIN 'processcommbody';
+MDBODY nti 'proccommmdbody_nti'
+       default 'proccommmdbody_default';
+BUILD default '$$/processComm.o' 'external/processComm.c' 'betacc $0 $1'
+       default '$$/coreaccess.o' 'external/coreaccess.c' 'external/coreaccess.h' 'betacc $0 $1';
+INCLUDE '~beta/objectserver/v2.4/ObjectSerializerTables'
+        '~beta/objectbrowser/v2.1/options'
+        '../processCommCodes'
+        '../buffered_sockio'
+        '~beta/basiclib/v1.5/formatio'
+        '~beta/process/v1.6/systemcomm';
+(* MAKE default 'external/processComm.make';
+ * OBJFILE default '$/processComm.o';
+ * 
+ * MAKE default 'external/coreaccess.make';
+ * OBJFILE default '$/coreaccess.o';
+ *)
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-96
+ *   All rights reserved.
+ *)
+-- lib: Attributes --
+getpid: external (* Get pid of valhalla process. *)
+  (# pid: @Integer;  exit pid #);
+(* PARAMETER AND ENVIRONMENT HANDLING
+ * ==================================
+ * 
+ * externals below are used to hand over parameters and environment
+ * variables to C routine doing the fork and execute operation.
+ * They are defined in 'external/processComm.c' *)
+initParamsAndEnv: external
+  (# numParam,numEnv: @Integer;  enter (numParam,numEnv) #);
+addEnv: external
+  (# name: @Integer; (* char* *) value: @Integer; (* char* *) 
+  enter (name,value)
+  #);
+addParam: external (# value: @Integer; (* char* *)  enter value #);
+executeProcess: external
+  (# execName: @Integer; (* char* *) pid: @Integer; 
+  enter execName
+  exit pid
+  #);
+setCodeStart: external
+  (# codeStart: @Integer; 
+  enter codeStart
+  #);
+valhallaMachineName: external
+  (# machineName: [1] @Char;  exit machineName #);
+  
+
+-- TextLib: Attributes --
+ensureZeroTerm: (#  do (if T.range < lgth then 0->T[lgth+1] if) #);   
+
+-- processCommPrivate: Descriptor --
+(#
+   curObj,curComp,PC,SP,signal: @Integer;
+   running: @Boolean;
+   sigText: ^Text;
+   errorNumber: @Integer;
+   errorText: ^Text;
+   terminated: @Boolean;
+   sock: ^systemenv.binarySocket;
+   frombuf,tobuf: @binsock_buffer;
+   onProcessStop:
+     (# 
+     do
+        (if sock[] <> none then sock.close; frombuf.close; tobuf.close;  if);
+        <<SLOT processCommMDstop:Descriptor>>;
+        TRUE->terminated;
+        0->curObj->curComp->PC->SP->signal->errorNumber;
+        FALSE->running;
+        none ->sigText[];
+        
+     #);
+   
+#)  
+
+-- processCommInit: DoPart --
+do
+   DOT.init;
+     (#
+        fromFD,toFD: @Integer;
+        environ: ^environDB;
+        execParams: ^executableParamDB;
+        PID: @Integer;
+        execName,valhallart,valhallartname: ^Text;
+        mdinit: (#  <<SLOT processCommMDinit:DoPart>> #);
+        sockgen: ^systemenv.socketGenerator;
+        
+     do
+        FALSE->pcPrivate.terminated;
+        getPIDparam->PID;
+        doFork:
+        (if PID = 0 then
+        (* Process isn't running already. *)
+        (* SETUP ENVIRONMENT
+         * ================= *)
+            getEnvironDB->environ[];
+            getExecutableParamDB->execParams[];
+            (execParams.size,environ.size+1)->initParamsAndEnv;
+            environ.scan
+              (# zero: @Integer; 
+              do
+                 (if not ('VALHALLART'->curname.equal) then
+                     curname.ensureZeroTerm;
+                     curvalue.ensureZeroTerm;
+                     (if true
+                      // (curname.lgth > 0) and (curvalue.lgth > 0) then
+                         (@@ curname.T[1],@@ curvalue.T[1])->addEnv; 
+                      // (curname.lgth = 0) and (curvalue.lgth = 0) then
+                         (@@ zero,@@ zero)->addEnv; 
+                      // (curname.lgth = 0) then
+                         (@@ zero,@@ curvalue.T[1])->addEnv; 
+                      // (curvalue.lgth = 0) then
+                         (@@ curname.T[1],@@ zero)->addEnv; 
+                     if);
+                     
+                 if);
+                 
+              #);
+              (# sysenv: ^systemenv; 
+              do
+                 getSystemEnv->sysenv[];
+                 objectPool.get (# type:: sysenv.socketGenerator #)->sockgen[];
+                 
+              #);
+            &Text[]->valhallart[];
+            (*pcPrivate.pid*)
+            sockgen.port->valhallart.putInt;
+            'valhallaID#'->valhallart.prepend;
+            'DebugValhalla'
+              ->(getOptionDB).getBooleanOption
+                (#
+                   found:: 
+                     (# 
+                     do
+                        (if value then
+                            'debugvalhalla:'->valhallart.prepend; 
+                        if);
+                        
+                     #)
+                #);
+            'VALHALLART'->valhallartname[];
+            valhallartname.ensureZeroTerm;
+            valhallart.ensureZeroTerm;
+            (@@ valhallartname.T[1],@@ valhallart.T[1])->addEnv;
+            (* SETUP COMMANDLINE PARAMETERS
+             * ============================ *)
+            execParams.scan
+              (#  do current.ensureZeroTerm; @@ current.T[1]->addParam #);
+            (* EXECUTE PROCESS
+             * =============== *)
+            (getEXECNAMEparam).copy->execName[];
+            execName.ensureZeroTerm;
+            onProcessFork;
+            (if (@@ execName.T[1]->executeProcess->PID) = - 1 then
+                forkFailed; 
+             else
+            (* Ok, the fork succeded. Insert the PID in the global
+             * valhallaParams.database. *)
+                PID->setPIDparam;
+                mdinit;
+                (* Machine dependent initialization. *)
+                (* Accept socket connection from debuggee. *)
+                onWaitForConnection;
+                10
+                  ->sockgen.getBinaryConnection
+                    (#
+                       timedOut:: 
+                         (# 
+                         do
+                            (if connectionTimedOut then
+                                continue; 
+                             else
+                                abort
+                                  (# 
+                                  do 0->setPIDparam; forkFailed; leave doFork; 
+                                  #)
+                            if);
+                            
+                         #);
+                       
+                    #)->pcPrivate.sock[];
+                (pcPrivate.sock[],BINSOCK_READ)->pcPrivate.frombuf.init;
+                (pcPrivate.sock[],BINSOCK_WRITE)->pcPrivate.tobuf.init;
+                onProcessForkDone;
+                
+            if)
+         else
+              (#
+                 port: @Integer;
+                 asock: ^systemenv.BinarySocket;
+                 sysenv: ^systemenv;
+                 
+              do
+                 getSystemEnv->sysenv[];
+                 &sysenv.BinarySocket[]->asock[]->pcPrivate.sock[];
+                 (sysenv.waitForEver,'localhost',getPORTparam)->asock.connect;
+                 (pcPrivate.sock[],BINSOCK_READ)->pcPrivate.frombuf.init;
+                 (pcPrivate.sock[],BINSOCK_WRITE)->pcPrivate.tobuf.init;
+                 mdinit;
+                 
+              #);
+            
+        if);
+        (# version: ^Text; opcode: @Integer; failure: @Boolean; 
+        do
+           VOP_BETARUN->pcPrivate.tobuf.binPutInt;
+           pcPrivate.tobuf.flush;
+           pcPrivate.frombuf.binGetInt
+           (#
+              timedOut::  (#  do TRUE->failure #);
+              timeOutValue::  (#  do 10->value #);
+              
+           #)->opcode;
+           (if failure or (opcode <> VOP_BETARUN) or not
+               (BETARUN_ID->(pcPrivate.frombuf.getText).equal) then
+               THIS(processInterface).kill;
+               wrongBetarunVersion;
+               
+           if);
+           
+        #);
+        (# opcode: @Integer; failure: @Boolean; 
+        do
+           VOP_DATASTART->pcPrivate.tobuf.binPutInt;
+           pcPrivate.tobuf.flush;
+           (if pcPrivate.frombuf.binGetInt
+               (#
+                  timedOut::  (#  do TRUE->failure #);
+                  timeOutValue::  (#  do 10->value #);
+               #)
+            // VOP_DATASTART then 
+               pcPrivate.frombuf.binGetInt -> setCodeStart;
+            else 
+               ;
+           if)
+        #);
+     #);
+   
+-- processCommKill: DoPart --
+do
+   VOP_KILL->pcPrivate.tobuf.binPutInt;
+   pcPrivate.tobuf.flush;
+   pcPrivate.onProcessStop;
+     
+
+-- processCommScanGroups: Descriptor --
+(# bgi: @pcPrivate.frombuf.binGetInt; gt: @pcPrivate.frombuf.getText; 
+do
+   VOP_SCANGROUPS->pcPrivate.tobuf.binPutInt;
+   pcPrivate.tobuf.flush;
+   (if bgi = VOP_SCANGROUPS then
+       loop:
+       (if not (''->(gt->groupName[]).equal) then
+           bgi->dataStart;
+           bgi->dataEnd;
+           bgi->codeStart;
+           bgi->codeEnd;
+           bgi->groupNameHash;
+           bgi->checkTime;
+           INNER scanGroups;
+           restart loop;
+           
+       if);
+       
+    else
+       formatError; 
+   if);
+   
+#)  
+
+-- processCommLoadProtoTable: DoPart --
+do
+     (#
+        adr: @Integer;
+        peekLong: @processData.peekLong;
+        tmp: @Integer;
+        gi: @pcPrivate.frombuf.binGetInt;
+        
+     do
+        ofi.dataStart+4->peekLong->adr->peekLong->ofi.protoCount;
+        (* 'loadProtoTable: protoCount = ' ->putText; ofi.protoCount->putInt;
+         * newline; *)
+        (if ofi.protoCount <> 0 then
+            ofi.protoCount->ofi.Tentries.new;
+            (adr+4,ofi.protoCount)
+              ->processData.peekMemoryLongs
+                (#  do @@ ofi.Tentries[1]->repAdr #);
+            ofi.protoCount->ofi.Mentries.new;
+            ofi.protoCount->ofi.Gentries.new;
+            ofi.protoCount->ofi.astRefs.new;
+            VOP_GETPROTOINFO->pcPrivate.tobuf.binPutInt;
+            ofi.dataStart->pcPrivate.tobuf.binPutInt;
+            pcPrivate.tobuf.flush;
+            (for i: ofi.protoCount repeat
+              gi->ofi.Mentries[i]; gi->ofi.Gentries[i]; gi->ofi.astRefs[i]; 
+            for);
+            (if gi <> VOP_GETPROTOINFO then VOP_GETPROTOINFO->commError if);
+            ofi.protoCount->ofi.doparts.new;
+            
+        if);
+        
+     #);
+     
+
+-- StatusValue: DoPart --
+do (if pcPrivate.running then running else INNER if);   
+
+-- statusBooleanValue: DoPart --
+do (if pcPrivate.running then running else INNER if);   
+
+-- StatusCurObj: DoPart --
+do pcPrivate.curObj->value  
+
+-- StatusCurComp: DoPart --
+do pcPrivate.curComp->value  
+
+-- StatusPC: DoPart --
+do pcPrivate.PC->value  
+
+-- StatusSP: DoPart --
+do pcPrivate.SP->value  
+
+-- StatusSignal: DoPart --
+do pcPrivate.signal->value; pcPrivate.sigText[]->sigtext[];   
+
+-- StatusError: DoPart --
+do pcPrivate.errorNumber->value; pcPrivate.errorText[]->errorText[];   
+
+-- StatusTerminated: DoPart --
+do pcPrivate.terminated->value;   
+
+-- RTSprocAdr: DoPart --
+do 'WARNING: RTSprocAdr is not implemented'->putline;   
+
+-- StatusGCcallback: DoPart --
+do 'StatusGCcallback not implemented'->putline;   
+
+-- StatusAttachCallback: DoPart --
+do 'StatusAttachCallback not implemented'->putline;   
+
+-- StatusCBFAcallback: DoPart --
+do 'StatusCBFAcallback not implemented'->putline;   
+
+-- processCommScanStack: DoPart --
+do VOP_SCANSTACK->pcPrivate.tobuf.binPutInt;
+   compAdr->pcPrivate.tobuf.binPutInt;
+   pcPrivate.tobuf.flush;
+   loop:
+   (if (pcPrivate.frombuf.binGetInt->tmp) <> - 1 then
+       (if (last+1->last) > returnObjs.range then
+           returnObjs.range->returnObjs.extend;
+           returnAdrs.range->returnAdrs.extend;
+           (* Cannot call INNER here, since we must ensure that the
+            * ScanStack communication is done before initiating 
+            * other communications with the debuggee. Thus we need
+            * to cache the returned values in a repetition. *)
+           
+       if);
+       tmp->returnAdrs[last];
+       pcPrivate.frombuf.binGetInt->returnObjs[last];
+       restart loop;
+       
+   if);
+   pcPrivate.frombuf.binGetInt->stacktype;
+   (if pcPrivate.frombuf.binGetInt <> VOP_SCANSTACK then
+       VOP_SCANSTACK->commError
+   if);
+   INNER ;
+     
+
+-- processCommCanonify: DoPart --
+do
+   VOP_OBJADRCANONIFY->pcPrivate.tobuf.binPutInt;
+   objAdr->pcPrivate.tobuf.binPutInt;
+   pcPrivate.tobuf.flush;
+   (if pcPrivate.frombuf.binGetInt = VOP_OBJADRCANONIFY then
+       pcPrivate.frombuf.binGetInt->objAdr; 
+    else
+       VOP_OBJADRCANONIFY->commError
+   if);
+     
+
+-- piDOTinit: Descriptor --
+(#  do dotPrivate.dot.init;  #)  
+
+-- piDOTinsert: DoPart --
+do
+   VOP_DOTINSERT->pcPrivate.tobuf.binPutInt;
+   objAdr->pcPrivate.tobuf.binPutInt;
+   pcPrivate.tobuf.flush;
+   (if pcPrivate.frombuf.binGetInt = VOP_DOTINSERT then
+       pcPrivate.frombuf.binGetInt->inx;
+       (inx,objAdr)->dotPrivate.dot.dotInsert;
+       pcPrivate.frombuf.binGetInt->objsize;
+       
+    else
+       VOP_DOTINSERT->commError
+   if);
+     
+
+-- piDOTinxToAddress: DoPart --
+do inx->dotPrivate.dot.findByInx->objAdr;   
+
+-- piDOTaddressToInx: DoPart --
+do
+   - 1->inx;
+   dotscan: dotPrivate.dot.scan
+     (# 
+     do
+        (if current.address = objAdr then
+            current.index->inx; leave dotscan; 
+        if);
+        
+     #)  
+
+-- piDOTscan: DoPart --
+do
+   dotPrivate.dot.scanAndDelete
+     (# 
+     do
+        current.index->dotinx;
+        current.address->adr;
+        INNER scan;
+        (if delete->deleteThis then
+            VOP_DOTDELETE->pcPrivate.tobuf.binPutInt;
+            current.index->pcPrivate.tobuf.binPutInt;
+            pcPrivate.tobuf.flush;
+            (if pcPrivate.frombuf.binGetInt <> VOP_DOTDELETE then
+                VOP_DOTDELETE->commError; 
+            if);
+            
+        if);
+        
+     #);
+     
+
+-- piDOTprivate: Descriptor --
+(#
+   reread:
+     (# inx,adr: @Integer; gi: @pcPrivate.frombuf.binGetInt; 
+     do
+        dot.reinit;
+        loop:
+        (if (gi->inx) <> - 1 then
+            gi->adr; (inx,adr)->dot.dotInsert; restart loop; 
+        if);
+        
+     #);
+   dot: @IntegerHashTable
+     (#
+        element::  (# index,address: @Integer #);
+        range::  (#  do 17->value #);
+        collisionRange::  (#  do 2->value #);
+        dotInsert:
+          (# adr,inx: @Integer; elm: ^element; 
+          enter (inx,adr)
+          do
+             &element[]->elm[];
+             (inx,adr)->(elm.index,elm.address);
+             (elm[],inx)->insert;
+             
+          #);
+        findByInx:
+          (# inx,address: @Integer; elm: ^element; 
+          enter inx
+          do
+             inx->find->elm[];
+             (if elm[] <> none then elm.address->address if);
+             
+          exit address
+          #);
+        
+     #);
+   
+#)  
+
+-- processCommMachineType: DoPart --
+do (if name[] = none then &Text[]->name[]; valhallaMachineName->name if);   
+
+-- processCommLib: Attributes --
+(* SetBreak, UnsetBreak, SendStopSig
+ * =================================
+ * 
+ * Externals declared in external/coreaccess.h 
+ * and contained in objectfile $/coreaccess.o. *)
+SetBreak: external
+  (#
+     pid: @Integer;
+     address: @Integer;
+     oldCodeAdr: @Integer;
+     errno: @Integer;
+     
+  enter (pid,address,oldCodeAdr)
+  exit errno
+  #);
+UnsetBreak: external
+  (# pid: @Integer; address: @Integer; oldCode: @Integer; errno: @Integer; 
+  enter (pid,address,oldCode)
+  exit errno
+  #);
+SendSIGINT: external
+  (# pid: @Integer; res: @Integer;  enter pid exit res #);
+(* Memory access
+ * =============
+ * 
+ * Memory access is implemented by communicating with the
+ * debugged process. peekDataBytes, peekInstrBytes and pokeBytes
+ * handle this communication. *)
+peekDataBytes:
+  (# address,length: @Integer; repAdr: @Integer; 
+  enter (address,length)
+  do
+     VOP_GETDATAMEM->pcPrivate.tobuf.binPutInt;
+     address->pcPrivate.tobuf.binPutInt;
+     length->pcPrivate.tobuf.binPutInt;
+     pcPrivate.tobuf.flush;
+     (if pcPrivate.frombuf.binGetInt = VOP_GETDATAMEM then
+         length
+           ->pcPrivate.frombuf.binGetBytes
+             (# 
+             do INNER peekDataBytes; THIS(peekDataBytes).repAdr->repAdr
+             #);
+         
+      else
+         VOP_GETDATAMEM->commError; 
+     if);
+     
+  #);
+peekInstrBytes:
+  (# address,length: @Integer; repAdr: @Integer; 
+  enter (address,length)
+  do
+     VOP_GETINSTRUCTIONMEM->pcPrivate.tobuf.binPutInt;
+     address->pcPrivate.tobuf.binPutInt;
+     length->pcPrivate.tobuf.binPutInt;
+     pcPrivate.tobuf.flush;
+     (if pcPrivate.frombuf.binGetInt = VOP_GETINSTRUCTIONMEM then
+         length
+           ->pcPrivate.frombuf.binGetBytes
+             (# 
+             do INNER peekInstrBytes; THIS(peekInstrBytes).repAdr->repAdr
+             #);
+         
+      else
+         VOP_GETINSTRUCTIONMEM->commError; 
+     if);
+     
+  #);
+pokeBytes:
+  (# address,length: @Integer; repAdr: @Integer; failure:< Exception; 
+  enter (address,length)
+  do
+     VOP_SETDATAMEM->pcPrivate.tobuf.binPutInt;
+     address->pcPrivate.tobuf.binPutInt;
+     length->pcPrivate.tobuf.binPutInt;
+     length
+       ->pcPrivate.tobuf.binPutBytes
+         (#  do INNER pokeBytes; THIS(pokeBytes).repAdr->repAdr;  #);
+     pcPrivate.tobuf.flush;
+     (if pcPrivate.frombuf.binGetInt <> VOP_SETDATAMEM then failure;  if);
+     
+  #)  
+
+-- doProcessDataPeekDouble: DoPart --
+do (address,8)->peekDataBytes (#  do @@ value->repAdr #);   
+
+-- doProcessDataPeekLong: DoPart --
+do (address,4)->peekDataBytes (#  do @@ value->repAdr #);   
+
+-- doProcessDataPeekShort: DoPart --
+do (address,2)->peekDataBytes (#  do @@ value->repAdr #);   
+
+-- doProcessDataPeekByte: DoPart --
+do (address,1)->peekDataBytes (#  do @@ value->repAdr #);   
+
+-- doProcessDataPeekMemoryLongs: DoPart --
+do
+   (address,4*length)
+     ->peekDataBytes
+       (# 
+       do INNER peekMemoryLongs; THIS(peekMemoryLongs).repAdr->repAdr
+       #);
+     
+
+-- doProcessDataPeekMemoryBytes: DoPart --
+do
+   (address,length)
+     ->peekDataBytes
+       (# 
+       do INNER peekMemoryBytes; THIS(peekMemoryBytes).repAdr->repAdr
+       #);
+     
+
+-- doProcessDataPokeDouble: DoPart --
+do
+   (address,8)
+     ->pokeBytes
+       (# failure::  (#  do accessFailure #) do @@ value->repAdr #);
+     
+
+-- doProcessDataPokeLong: DoPart --
+do
+   (address,4)
+     ->pokeBytes
+       (# failure::  (#  do accessFailure #) do @@ value->repAdr #);
+     
+
+-- doProcessDataPokeShort: DoPart --
+do
+   (address,2)
+     ->pokeBytes
+       (# failure::  (#  do accessFailure #) do @@ value->repAdr #);
+     
+
+-- doProcessDataPokeByte: DoPart --
+do
+   (address,1)
+     ->pokeBytes
+       (# failure::  (#  do accessFailure #) do @@ value->repAdr #);
+     
+
+-- doProcessTextPeekDouble: DoPart --
+do (address,8)->peekInstrBytes (#  do @@ value->repAdr #);   
+
+-- doProcessTextPeekLong: DoPart --
+do (address,4)->peekInstrBytes (#  do @@ value->repAdr #);   
+
+-- doProcessTextPeekShort: DoPart --
+do (address,2)->peekInstrBytes (#  do @@ value->repAdr #);   
+
+-- doProcessTextPeekByte: DoPart --
+do (address,1)->peekInstrBytes (#  do @@ value->repAdr #);   
+
+-- doProcessTextPeekMemoryLongs: DoPart --
+do
+   (address,4*length)
+     ->peekInstrBytes
+       (# 
+       do INNER peekMemoryLongs; THIS(peekMemoryLongs).repAdr->repAdr
+       #);
+     
+
+-- doProcessTextPeekMemoryBytes: DoPart --
+do
+   (address,length)
+     ->peekInstrBytes
+       (# 
+       do INNER peekMemoryBytes; THIS(peekMemoryBytes).repAdr->repAdr
+       #);
+     
+
+-- doProcessTextSetBreakpoint: DoPart --
+do
+     (# PID: @Integer; 
+     do
+        getPIDparam->PID;
+        (if ((PID,address,@@ oldcode)->SetBreak) <> 0 then accessFailure if);
+        
+     #);
+     
+
+-- doProcessTextUnsetBreakpoint: DoPart --
+do
+     (# PID: @Integer; 
+     do
+        getPIDparam->PID;
+        (if ((PID,address,oldcode)->UnsetBreak) <> 0 then accessFailure if);
+        
+     #);
+     
+
+-- ContinueBody: Descriptor --
+(# 
+do
+   beforeContinue;
+   VOP_CONTINUE->pcPrivate.tobuf.binPutInt;
+   (if steppingActions.size > 0 then
+       1->pcPrivate.tobuf.binPutInt; 
+    else
+       0->pcPrivate.tobuf.binPutInt; 
+   if);
+   pcPrivate.tobuf.flush;
+   (if pcPrivate.frombuf.binGetInt <> VOP_CONTINUE then failure if);
+   
+#)  
+
+-- processCommStop: DoPart --
+do getPIDparam->sendSIGINT  
+
+-- processCommWait: Descriptor --
+(# 
+do
+   dowait:
+   (if pcPrivate.frombuf.binGetInt = VOP_STOPPED then
+       pcPrivate.frombuf.binGetInt->pcPrivate.PC;
+       (if pcPrivate.PC = 0 then (* process is stopping *)
+           pcPrivate.onProcessStop; leave dowait; 
+       if);
+       pcPrivate.frombuf.binGetInt->pcPrivate.curObj;
+       pcPrivate.frombuf.binGetInt->pcPrivate.curComp;
+       pcPrivate.frombuf.binGetInt->pcPrivate.SP;
+       pcPrivate.frombuf.binGetInt->pcPrivate.signal;
+       pcPrivate.frombuf.getText->pcPrivate.sigText[];
+       pcPrivate.frombuf.binGetInt->pcPrivate.errorNumber;
+       (if pcPrivate.errorNumber < 0 then
+           pcPrivate.frombuf.getText->pcPrivate.errorText[]; 
+        else
+           'No Error'->pcPrivate.errorText[]; 
+       if);
+       dot.dotPrivate.reread;
+       VOP_STOPPED->pcPrivate.tobuf.binPutInt;
+       pcPrivate.tobuf.flush;
+       (if pcPrivate.errorNumber
+        // RTS_CBFA // RTS_ATTACH // RTS_SUSPEND then
+           steppingActions.execute; 
+       if);
+       
+    else
+       wrongMessage; 
+   if);
+   waitcount+1->waitcount;
+   afterWait;
+   
+#)  
+
+-- StatusPrivate: Descriptor --
+(#  #)  
+
