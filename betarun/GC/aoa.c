@@ -140,6 +140,8 @@ static struct Object *AOAallocate(long numbytes)
   }    
 }
 
+#ifndef RUN
+
 #ifdef NEWRUN
 #define AOA_ALLOC_PARAMS long numbytes, long *SP
 extern void DoGC(void);
@@ -196,6 +198,8 @@ struct Object *AOAcalloc(AOA_ALLOC_PARAMS)
   memset(theObj, 0, numbytes);
   return theObj;
 }
+
+#endif /* RUN */
 
 /* CopyObjectToAOA:
  *  move an object to AOA and return the address of the new location

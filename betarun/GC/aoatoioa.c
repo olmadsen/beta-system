@@ -28,7 +28,10 @@ long AOAtoIOAalloc()
 }
 
 /* Allocate a larger AOAtoIOAtable based on the next entry in primes. */
-static void AOAtoIOAReAlloc(void)
+#ifndef RUN
+static 
+#endif
+void AOAtoIOAReAlloc(void)
 {
   /* POTENTIAL ERROR: The AOAtoIOAInsert call below may cause 
    * AOAtoIOAReAlloc to be called in which case entries will be LOST!!!
@@ -104,8 +107,8 @@ static void AOAtoIOAReAlloc(void)
 
 void AOAtoIOAInsert(handle( Object) theCell)
 {
-    ptr(long) table;
-    unsigned long      index, count;
+    unsigned long *table;
+    unsigned long index, count;
 
 #ifdef RTDEBUG
     if (!inAOA( theCell)) {
@@ -133,14 +136,14 @@ void AOAtoIOAInsert(handle( Object) theCell)
       table[index] = (unsigned long) theCell;
       goto exit;
     }
-    if( table[index] == (long) theCell ) {
+    if( table[index] == (unsigned long) theCell ) {
       goto exit;
     }
     
     /* Second Hash function. */
     index = (((unsigned long) theCell)<<4) % AOAtoIOAtableSize;
     if( table[index] == 0 ){ 
-      table[index] = (long) theCell; 
+      table[index] = (unsigned long) theCell; 
       goto exit; 
     }
     if( table[index] == (unsigned long) theCell ) {
@@ -151,7 +154,7 @@ void AOAtoIOAInsert(handle( Object) theCell)
     while( count < 100 ){
 	count++; index = (count + (unsigned long) theCell) % AOAtoIOAtableSize;
 	if( table[index] == 0 ){ 
-	  table[index] = (long) theCell; 
+	  table[index] = (unsigned long) theCell; 
 	  goto exit;
 	}
 	if( table[index] == (unsigned long) theCell ) {

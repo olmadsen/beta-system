@@ -187,7 +187,8 @@ static void LVRAInsertFreeElement(ref(ValRep) freeRep)
  * into two repetitions. 
  * If none of the above tries succeed, the function returns 0.
  */
-static ref(ValRep) LVRAFindInFree(ref(ProtoType) proto, long range, long size)
+static ref(ValRep) 
+LVRAFindInFree(ref(ProtoType) proto, long range, unsigned long size)
 {
   ref(ValRep) currentRep;
   ptr(long)   takenFrom;
@@ -200,7 +201,7 @@ static ref(ValRep) LVRAFindInFree(ref(ProtoType) proto, long range, long size)
   takenFrom = (ptr(long)) &LVRATable[index];
   currentRep = (ref(ValRep)) LVRATable[index];
   while( currentRep ){
-    if( currentRep->HighBorder == size) {
+    if( currentRep->HighBorder == (long)size) {
       /* Update the chain in the freeList. */
       *takenFrom = (long) currentRep->Proto;
       
@@ -225,7 +226,7 @@ static ref(ValRep) LVRAFindInFree(ref(ProtoType) proto, long range, long size)
     takenFrom = (ptr(long)) &LVRATable[index];
     currentRep = (ref(ValRep)) LVRATable[index];
     while( currentRep != 0 ){
-      if( currentRep->HighBorder >= size+headsize(ValRep)) {
+      if( currentRep->HighBorder >= (long)size+headsize(ValRep)) {
 	/* currentRep is large enough for a repetition of size 'size', and
 	 * at least an empty repetition too.
 	 */
@@ -251,8 +252,8 @@ static ref(ValRep) LVRAFindInFree(ref(ProtoType) proto, long range, long size)
 	restRep->HighBorder = rest; /* size in bytes */
 	LVRAInsertFreeElement(restRep);
         DEBUG_LVRA(Claim(oldBorder == 
-			 (DispatchValRepSize(currentRep->Proto,
-					     currentRep->HighBorder)
+			 (long)(DispatchValRepSize(currentRep->Proto,
+						   currentRep->HighBorder)
 			  + restRep->HighBorder),
 			 "#LVRAFindInFree: old = new + rest"));
 	return currentRep;
@@ -316,7 +317,7 @@ static ref(ValRep)LVRAAllocInBlock(ref(ProtoType) proto, long range, long size)
   ref(ValRep) newRep;
   ptr(long)   newTop;
   
-  DEBUG_LVRA(Claim(size == DispatchValRepSize(proto, range),
+  DEBUG_LVRA(Claim(size == (long)DispatchValRepSize(proto, range),
 		   "proto+range => size\n"));
   newRep = (ref(ValRep)) LVRATopBlock->top;
   if( (newTop = (ptr(long)) Offset(newRep,size))<= LVRATopBlock->limit){

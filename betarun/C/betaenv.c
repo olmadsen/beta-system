@@ -6,7 +6,8 @@
 #include "beta.h"
 
 #include <stdio.h>
-#ifdef nti
+
+#ifdef nti_bor
 /* The following is necessary in order to get printf to
  * work with floats in e.g. putreal on borland.
  * If not you may get a message like:

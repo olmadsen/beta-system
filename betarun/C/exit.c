@@ -108,9 +108,9 @@ void BetaExit(long number)
 }
 
 #ifdef RTLAZY
-#if defined(linux) || defined(nti) || defined(mac68k)
-GLOBAL(static long RefNonePC) = 0; 
-GLOBAL(static int *RefNoneStackEnd) = 0;
+#ifdef RUN
+GLOBAL(long RefNonePC) = 0; 
+GLOBAL(int *RefNoneStackEnd) = 0;
 /* SBRANDT 7/6/94: RefNonePC is set by RefNone in Misc.run to point to return 
  * address after the "call RefNone" instruction during RefNone check. 
  * RefNoneStackEnd is set, also by RefNone, to point out the stackpart 

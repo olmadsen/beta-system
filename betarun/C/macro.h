@@ -129,9 +129,9 @@ do {                               \
 
 #if defined(sparc) || defined(hppa) || defined(crts) || defined(NEWRUN)
 /* Objects must be multiples of 8 bytes because of reals */
-#define ObjectAlign(numbytes) (((numbytes)+7) & ~7)
+#define ObjectAlign(numbytes) (unsigned long)(((numbytes)+7) & ~7)
 #else
-#define ObjectAlign(numbytes) (numbytes)
+#define ObjectAlign(numbytes) (unsigned long)(numbytes)
 #endif
 
 #define ByteRepBodySize(range)   ((((range)+4)/4)*4)
@@ -247,7 +247,7 @@ do {                               \
 
 #define IsComponentItem(item) \
 (item && \
- (((struct Item *)(item))->GCAttr == -(headsize(Component)/sizeof(long))) && \
+ (((struct Item *)(item))->GCAttr == -((long)(headsize(Component)/sizeof(long)))) && \
  ((long)(EnclosingComponent(item)->Proto)==(long)(ComponentPTValue)))
 
 /* Safe way to save AOAroots references */
