@@ -1,18 +1,18 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: ExtendRefRep.c,v $, rel: %R%, date: $Date: 1992-06-09 15:19:23 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: ExtendRefRep.c,v $, rel: %R%, date: $Date: 1992-07-21 17:19:04 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-asmlabel(ExtendRefRep, "
-	ba	_CExtendRefRep
+asmlabel(ExtRR, "
+	ba	_CExtRR
 	mov	%l7, %o2
 ");
 
-void CExtendRefRep(ref(Object) theObj,
+void CExtRR(ref(Object) theObj,
 		   unsigned offset, /* in longs */
 		   long add
 		   )
@@ -33,8 +33,9 @@ void CExtendRefRep(ref(Object) theObj,
     newRep->LowBorder = 1;
     newRep->HighBorder = newRange;
     
-    *casthandle(RefRep)((long *)theObj + offset) = newRep;
     for (i = 0; i < copyRange; ++i)
       newRep->Body[i] = theRep->Body[i];
+
+    AssignReference((long *)theObj + offset, cast(Item) newRep);
 }
 

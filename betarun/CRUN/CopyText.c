@@ -1,11 +1,17 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopyText.c,v $, rel: %R%, date: $Date: 1992-07-20 11:47:28 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: CopyText.c,v $, rel: %R%, date: $Date: 1992-07-21 17:17:47 $, SID: $Revision: 1.6 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
+
+extern void CopyText() asm("CopyText"); /* Alias */
+void CopyText(handle(Object) theObjHandle)
+{
+  CopyT(theObjHandle);
+}
 
 ref(ValRep) CopyT(char *asciz,
 		  ref(Item) theItem,
@@ -33,8 +39,5 @@ ref(ValRep) CopyT(char *asciz,
     for (i = 0; i < bodysize; ++i)
       theRep->Body[i] = asciz[i];
 
-    (casthandle(ValRep) theItem)[offset] = theRep;
-
-    if (!inIOA((int *)theItem + offset))
-      ChkRA((int *)theItem + offset);
+    AssignReference((long *)theItem + offset, cast(Item) theRep);
 }

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-07-20 11:44:10 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-07-21 17:16:43 $, SID: $Revision: 1.7 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -8,8 +8,8 @@
 #include "crun.h"
 
 ref(Component) AlloC(ref(ProtoType) prototype,
-				 ref(Object) origin
-				 )
+		     ref(Object) origin
+		     )
 {
     register ref(Component) theComp;
 

@@ -1,13 +1,13 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Suspend.c,v $, rel: %R%, date: $Date: 1992-06-08 23:55:49 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: Suspend.c,v $, rel: %R%, date: $Date: 1992-07-21 17:16:08 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-void Suspend(ref(Object) theObj)
+void Susp(ref(Object) theObj)
 {
     ref(RegWin) rw; 	/* Pointer to the saved reg.window of last frame */
     ref(Component) caller;
@@ -47,17 +47,13 @@ void Suspend(ref(Object) theObj)
 	|| (int)theStackObj == -1
 	|| Size > theStackObj->ObjectSize)
       {
-	  theStackObj = AllocateStackObject(5+Size);
-	  ActiveComponent->StackObj = theStackObj;
+	  theStackObj = AlloSO(5+Size);
+	  AssignReference((long *)ActiveComponent->StackObj, cast(Item) theStackObj);
       }
     /* FillStackObj */
     theStackObj->StackSize = Size;
     theStackObj->Body[0] = (long) FramePointer;
     memcpy(theStackObj->Body+1, FramePointer, Size*4 - 4);
-
-    /* ActiveComponent.StackObj -> CheckReferenceAssignment */
-    if (!inIOA(ActiveComponent->StackObj))
-      CheckReferenceAssignment((int *)&ActiveComponent->StackObj);
 
     caller = ActiveComponent->CallerComp;
     if (caller == 0)

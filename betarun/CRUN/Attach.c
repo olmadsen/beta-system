@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Attach.c,v $, rel: %R%, date: $Date: 1992-07-20 11:44:53 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: Attach.c,v $, rel: %R%, date: $Date: 1992-07-21 17:16:52 $, SID: $Revision: 1.5 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -26,12 +26,8 @@ void CAtt(ref(Component) theComp, ref(Object) theObj)
 
     getret(ActiveComponent->CallerLSC);
 
-    theComp->CallerComp = ActiveComponent;
-    theComp->CallerObj = theObj;
-    if (!inIOA(theComp)) {
-	ChkRA((int *)&theComp->CallerComp);
-	ChkRA((int *)&theComp->CallerObj);
-    }
+    AssignReference((long *)theComp->CallerComp, cast(Item) ActiveComponent);
+    AssignReference((long *)theComp->CallerObj, cast(Item) theObj);
 
     /* -1 tells that ActiveComponent is active (what else??) */
     ActiveComponent->StackObj = cast(StackObject) -1;

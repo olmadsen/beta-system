@@ -1,13 +1,13 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-06-16 23:50:20 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-07-21 17:16:16 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-ref(Structure) AllocateStruc(ref(ProtoType) proto, ref(Object) origin)
+ref(Structure) AlloS(ref(ProtoType) proto, ref(Object) origin)
 {
     register ref(Structure) newStruct;
 
@@ -21,7 +21,13 @@ ref(Structure) AllocateStruc(ref(ProtoType) proto, ref(Object) origin)
     return newStruct;
 }
 
+extern ref(Structure)	ThisStruc() asm("ThisStruc"); /* temporary alias */
 ref(Structure) ThisStruc(ref(Object) this)
+{
+  return ThisS(this);
+}
+
+ref(Structure) ThisS(ref(Object) this)
 {
     /* Allocate a structObject for thisObject. */
 
@@ -39,24 +45,23 @@ ref(Structure) ThisStruc(ref(Object) this)
 
     newStruct->iProto = origin->Proto;
     newStruct->iOrigin = (casthandle(Object)origin)[origin->Proto->OriginOff];
-    /* Correct ?? ?? ?? */
 
     /* MP */
     asm volatile ("restore %0, %%g0, %%l0;retl;nop"::"r" (newStruct));
     return newStruct;
 }
 
-ref(Item) AllocateStrucItem(ref(Structure) theStruct)
+ref(Item) AlloSI(ref(Structure) theStruct)
 {
-  return AllocateItem(theStruct->iProto, cast(Object) theStruct->iOrigin);
+  return AlloI(theStruct->iProto, cast(Object) theStruct->iOrigin);
 }
 
-ref(Component) AllocateStrucComponent(ref(Structure) theStruct)
+ref(Component) AlloSC(ref(Structure) theStruct)
 {
-  return AllocateComponent(theStruct->iProto, cast(Object) theStruct->iOrigin);
+  return AlloC(theStruct->iProto, cast(Object) theStruct->iOrigin);
 }
 
-int eqStruc(ref(Structure) arg1, ref(Structure) arg2)
+int EqS(ref(Structure) arg1, ref(Structure) arg2)
 {
     if (!arg1) {
 	if (!arg2)
@@ -72,13 +77,29 @@ int eqStruc(ref(Structure) arg1, ref(Structure) arg2)
     return 1;
 }
 
-int neStruc(ref(Structure) arg1, ref(Structure) arg2)
+int NeS(ref(Structure) arg1, ref(Structure) arg2)
 {
-    return !eqStruc(arg1, arg2);
+    return !EqS(arg1, arg2);
+}
+
+int LtS(ref(Structure) arg1, ref(Structure) arg2)
+{
+  return GtS(arg2, arg1);
 }
 
 
-int gtStruc(ref(Structure) arg1, ref(Structure) arg2)
+int LeS(ref(Structure) arg1, ref(Structure) arg2)
+{ 
+  return (EqS(arg1, arg2) || LtS(arg1, arg2));
+}
+
+
+int GeS(ref(Structure) arg1, ref(Structure) arg2)
+{ 
+  return (EqS(arg1, arg2) || GtS(arg1, arg2));
+}
+
+int GtS(ref(Structure) arg1, ref(Structure) arg2)
 {
   ref(ProtoType) proto1;
   ref(ProtoType) proto2;
@@ -116,27 +137,9 @@ int gtStruc(ref(Structure) arg1, ref(Structure) arg2)
 	 We need to generate a new item, as this is currently the only
 	 way we can get the origin. */
       
-      newObject = AllocateStrucItem(arg2);
+      newObject = AlloSI(arg2);
       return cast(Object)((long*)newObject)[proto2->OriginOff]==arg1->iOrigin;
     }
   return 0; 
-}
-
-
-int ltStruc(ref(Structure) arg1, ref(Structure) arg2)
-{
-  return gtStruc(arg2, arg1);
-}
-
-
-int leStruc(ref(Structure) arg1, ref(Structure) arg2)
-{
-  return eqStruc(arg1, arg2) || ltStruc(arg1, arg2);
-}
-
-
-int geStruc(ref(Structure) arg1, ref(Structure) arg2)
-{
-  return eqStruc(arg1, arg2) || gtStruc(arg1, arg2);
 }
 

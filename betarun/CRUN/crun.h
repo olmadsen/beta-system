@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-07-20 11:49:29 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-07-21 17:15:32 $, SID: $Revision: 1.5 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -25,20 +25,49 @@ extern ref(Structure)	AlloS() asm("AlloS");
 extern ref(Structure)	ThisS() asm("ThisS");
 extern ref(Item)	AlloSI() asm("AlloSI");
 extern ref(Component)	AlloSC() asm("AlloSC");
-extern int 		StrucEq() asm("StrucEq");
-extern int              StrucNe() asm("StrucNe");
-extern int              StrucLt() asm("StrucLt");
-extern int              StrucGt() asm("StrucGt");
-extern int              StrucLe() asm("StrucLe");
-extern int              StrucGe() asm("StrucGe");
+/* The following not capitalized to avoid loosing the ones starting with L */
+extern int 		EqS() asm("eqS"); 
+extern int              NeS() asm("neS");
+extern int              LtS() asm("ltS");
+extern int              GtS() asm("gtS");
+extern int              LeS() asm("leS");
+extern int              GeS() asm("geS");
 extern void             Return() asm ("Return");
 extern void             DoGC();
 extern void             RefNone() asm("RefNone");
 extern void             AttBC() asm("AttBC");
+extern void             CopyRR() asm("CopyRR");
 extern void             CopyVR() asm("CopyVR");
 extern void             BetaError();
 extern void             ChkRA() asm("ChkRA");
 extern void             Susp() asm("Susp");
+
+static inline long DispatchValRepSize(ref(ValRep) theRep, unsigned range)
+{
+  switch ( (int) (theRep)->Proto){
+  case (int) ByteRepPTValue:   return ByteRepSize(range);
+  case (int) WordRepPTValue:   return WordRepSize(range);
+  case (int) ValRepPTValue:    return ValRepSize(range);
+  case (int) DoubleRepPTValue: return ByteRepSize(range);
+  }
+}
+
+static inline long DispatchValRepBodySize(ref(ValRep) theRep, unsigned range)
+{
+  switch ( (int) (theRep)->Proto){
+  case (int) ByteRepPTValue:   return ByteRepBodySize(range);
+  case (int) WordRepPTValue:   return WordRepBodySize(range);
+  case (int) ValRepPTValue:    return ValRepBodySize(range);
+  case (int) DoubleRepPTValue: return ByteRepBodySize(range);
+  }
+}
+
+static inline void
+AssignReference(long *theCell, ref(Item) newObject)
+{
+  *(casthandle(Item)theCell) = newObject;
+  if (!inIOA(theCell)) ChkRA(casthandle(Item)theCell);
+}
 
 static inline void
 int_clear(char *p, unsigned size)
@@ -56,7 +85,7 @@ IOAalloc(unsigned size)
   register char *p;
 
   while ((char *)IOATop+size > (char *)IOALimit) {
-    PerformGC(size);
+    DoGC(size);
   }
 
   p = (char *)IOATop;

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-07-20 11:46:58 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-07-21 17:15:46 $, SID: $Revision: 1.11 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -26,7 +26,7 @@ void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 
     CBFATop->theStruct = theStruct;
     CBFATop->mov_o7_g1 = MOV_O7_G1;
-    MK_CALL(&CBFATop->call_HandleCallBack, HandleCallBack);
+    MK_CALL(&CBFATop->call_HandleCallBack, HandleCB);
     CBFATop->nop       = NOP;
     ++CBFATop;
     return (void *)&(CBFATop-1)->mov_o7_g1;
@@ -64,10 +64,10 @@ int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
     /* Level is not yet used */
     level         = 0;
     nextCompBlock = (long *) lastCompBlock;
-    callBackFrame = ActiveCallBack;
+    callBackFrame = ActiveCallBackFrame;
 
     lastCompBlock = cast(ComponentBlock) StackPointer;
-    ActiveCallBackFrame = StackPointer;
+    ActiveCallBackFrame = cast(CallBackFrame) StackPointer;
 
     theObj = AlloI(cb->theStruct->iProto, cb->theStruct->iOrigin);
 

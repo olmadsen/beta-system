@@ -1,15 +1,15 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopyCtext.c,v $, rel: %R%, date: $Date: 1992-06-11 17:18:35 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: CopyCtext.c,v $, rel: %R%, date: $Date: 1992-07-21 17:18:10 $, SID: $Revision: 1.5 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-asmlabel(CopyCtext, "ba _CCopyCtext; mov %l0, %o0");
+asmlabel(CopyCT, "ba _CCopyCT; mov %l0, %o0");
 
-ref(ValRep) CCopyCtext(unsigned char *textPtr)
+ref(ValRep) CCopyCT(unsigned char *textPtr)
 {
   register ref(ValRep) theRep;
   register unsigned size, i;

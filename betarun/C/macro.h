@@ -20,8 +20,15 @@
 
 #define ComponentItem(x) ((ref(Item)) (((long) x) + headsize(Component)))
 
-#define ValRepSize(range) (range*4 + 16)
-#define ByteRepSize(range) (((range+4)/4)*4 + 16)
+#define ValRepBodySize(range)    ((range)*4)
+#define ByteRepBodySize(range)   ((((range)+4)/4)*4)
+#define WordRepBodySize(range)   (((2*(range)+3)/4)*4)
+#define DoubleRepBodySize(range) ((range)*8)
+
+#define ValRepSize(range)    (ValRepBodySize(range) + headsize(ValRep))
+#define ByteRepSize(range)   (ByteRepBodySize(range) + headsize(ValRep))
+#define WordRepSize(range)   (WordRepBodySize(range) + headsize(ValRep))
+#define DoubleRepSize(range) (DoubleRepBodySize(range) + headsize(ValRep))
 
 #define toObject(x)      ((ref(Object))      x)
 #define toItem(x)        ((ref(Item))        x)
