@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -23,7 +21,6 @@ ParamThis(Component *, Susp)
   long Size;
   StackObject * theStackObj;
 
-  GCable_Entry();
   FetchThis();
   
   DEBUG_CODE(NumSusp++);

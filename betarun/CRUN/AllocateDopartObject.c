@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -12,8 +10,6 @@
 ParamOriginSize(DopartObject *, AlloDO)
 {
     DeclReference1(DopartObject *, theObj);
-    GCable_Entry();
-
     FetchOriginSize();
 
     DEBUG_CODE(NumAlloDO++);
@@ -32,13 +28,8 @@ ParamOriginSize(DopartObject *, AlloDO)
 
     Ck(origin); Ck(theObj);
 
-#ifdef sparc
-    return_in_i0(theObj);
-#endif
+    SPARC_CODE(return_in_i0(theObj));
+    HPPA_CODE(setThisReg(theObj));
 
-#ifdef hppa
-    setThisReg(theObj);
-    return theObj;
-#endif
-
+    return theObj /* keep gcc happy */; 
 }

@@ -51,6 +51,9 @@ static void IOACheckPrintSkipped(long *ptr, Object *theObj);
  * IOAGc:
  *  Called from doGC in Misc.c / PerformGC.run.
  *  Make a scavenging garbage collection on IOA.
+ *  
+ *  SPARC note: See requirements for stack setup before
+ *  IOAGc is called in ProcessSPARCStack in stack.c.
  */
 void IOAGc()
 {

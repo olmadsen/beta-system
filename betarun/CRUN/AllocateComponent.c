@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -16,7 +14,6 @@ ParamOriginProto(Component *,AlloC)
      find and update the reference in comp. */
 
     DeclReference1(Component *, comp);
-    GCable_Entry();
     FetchOriginProto();
 
     DEBUG_CODE(NumAlloC++);
@@ -38,22 +35,14 @@ ParamOriginProto(Component *,AlloC)
     ((Item *) &comp->Body)->GCAttr = -((headsize(Component))/4);
 
     if (proto->GenPart){
-#ifdef RTDEBUG
-      Protect2(origin, comp, CallBetaEntry(proto->GenPart,&comp->Body));
-#else
       Protect(comp, CallBetaEntry(proto->GenPart,&comp->Body));
-#endif
     }
 
-    Ck(origin); Ck(comp);
+    /* origin cannot be Ck'ed since it is not protected during call above */
+    Ck(comp);
 
-    GCable_Exit(1);
-
-#ifdef sparc
-    return_in_i1(comp);
-#else
+    SPARC_CODE(return_in_i1(comp));
     RETURN(comp);
-#endif
 }
 
 

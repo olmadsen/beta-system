@@ -3,8 +3,6 @@
  * by Peter Andersen.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -24,7 +22,6 @@ ParamObjOriginProtoOffRange(AlloVRI)
   /* Allocate repetition of offline items */
   DeclReference1(ObjectRep *, theRep);
   Item *item;
-  GCable_Entry();
   FetchObjOriginProtoOffRange();
 
   DEBUG_CODE(NumAlloVRI++);
@@ -49,7 +46,7 @@ ParamObjOriginProtoOffRange(AlloVRI)
 	    CallVEntry((void (*)())(theRep->iProto), theRep->iOrigin));
 #else
     Protect(theRep, 
-	    item = SPARC_AlloI((Object *) theRep->iOrigin, 0, theRep->iProto, 0, 0));
+	    item = OAlloI((Object *) theRep->iOrigin, 0, theRep->iProto, 0, 0));
 #endif /* MT */
 #endif
 #ifdef hppa
@@ -74,7 +71,6 @@ ParamObjOriginProtoOffRange(AlloVRC)
    */
   DeclReference1(ObjectRep *, theRep);
   Component *comp;
-  GCable_Entry();
   FetchObjOriginProtoOffRange();
 
   DEBUG_CODE(NumAlloVRC++);
@@ -98,7 +94,7 @@ ParamObjOriginProtoOffRange(AlloVRC)
 	    comp = CallAlloC(theRep->iProto, theRep->iOrigin));
 #else
     Protect(theRep, 
-	    comp = SPARC_AlloC((Object *) theRep->iOrigin, 0, theRep->iProto, 0, 0));
+	    comp = OAlloC((Object *) theRep->iOrigin, 0, theRep->iProto, 0, 0));
 #endif /* MT */
 #endif
 #ifdef hppa

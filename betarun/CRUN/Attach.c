@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -34,7 +32,6 @@ ParamThisComp(Component *, Att)
   register long          *tmp __asm__("%i1") 
     /* Needed for lastCompBlock assignment */;
   
-  GCable_Entry();
   FetchThisComp();
 
   DEBUG_CODE(NumAtt++);

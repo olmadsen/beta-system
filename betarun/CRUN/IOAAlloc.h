@@ -1,14 +1,7 @@
 
 /* Allocation in IOA heap */
-/* GC/PerformGC.c: Not declared in function.h, doGC should only be 
- * called from IOA(c)lloc or DoGC.
+/* NOTICE: doGC should only be called from IOA(c)lloc or DoGC.
  */
-#ifdef MT
-extern Object *doGC(unsigned long);
-#else
-extern void doGC();
-#endif
-
  
 #ifdef __GNUC__
 static __inline__
@@ -16,8 +9,6 @@ static __inline__
 char *IOAalloc(unsigned size)
 {
   register char *p;
-  
-  /*GCable_Entry();*/
   
   /*fprintf(output, "IOAalloc: IOATop=0x%x, size=0x%x\n", GLOBAL_IOATop, size);*/
   

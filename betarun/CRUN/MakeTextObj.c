@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -40,7 +38,6 @@ void MkTO(char *asciz,
     TextObject* theText;
     unsigned long range, i, repsize, size;
     ValRep *theRep;
-    GCable_Entry();
 
     DEBUG_CODE(NumMkTO++);
 

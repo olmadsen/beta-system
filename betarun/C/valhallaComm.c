@@ -544,23 +544,71 @@ static void terminate_reference_stack(long *PrevSP, long *SP)
   *StackCell=0;
   return;
 }
+
+long fix_stacks(long SP, Object *curObj, long PC)
+{
+  /* The SP points to end of current frame. We have to
+   * adjust it to point to end of previous frame, as
+   * this is expected when callback occurs (see figure
+   * "STACK LAYOUT at callback/gpart" in stack.c.
+   */
+  long PrevSP;
+  
+  DEBUG_STACK(fprintf(output, "fix_stacks: Finding previous frame:\n"));
+  PrevSP = WindBackSP(SP, curObj, (long)PC);
+    
+  /* The referencestack part of the top frame is not
+   * necessarily terminated at this point (depending on
+   * how the debuggee stopped).
+   * The two main cases are:
+   *   1. Debuggee is stopped in a breakpoint.
+   *   2. Debuggee detected a fatal error
+   *      (Qua may be an exception, if QuaCont is set).
+   * Here we go in and terminate the reference stack as if there was no
+   * references on it. This is assumed OK in case 1, since Ole
+   * claims that the compiler has nothing on the reference stack
+   * at the points where breakpoints may be set.
+   * In case two, we may forget a few references on the stack by terminating
+   * it, but since a fatal error has happened in the debugee, this should
+   * not harm it - it will not be able to continue anyway (yet - has to be
+   * reconsidered when system exceptions are introduced).
+   * A more elegant solution would be to include in the .db file format
+   * how many references are on stack between each imperative.
+   */
+  
+  DEBUG_STACK(fprintf(output, "fix_stacks: Terminating reference stack.\n"));
+  terminate_reference_stack((long*)PrevSP, (long*)SP);
+  
+  return prevSP;
+}
 #endif /* NEWRUN */
-INLINE Structure *valhalla_AlloS(Object *origin, ProtoType *proto, long *SP, Object *curobj)
+
+void set_betastacktop(long *SP)
+{
+#if defined(sparc) || defined(intel)
+  BetaStackTop = SP;
+#endif /* sparc || intel */
+#ifdef NEWRUN
+  BetaStackTop[0] = SP;
+#endif /* NEWRUN*/
+#ifdef hppa
+  fprintf(output, "set_betastacktop: NYI for hppa\n");
+#endif /* hppa */
+}
+
+INLINE Structure *valhalla_AlloS(Object *origin, ProtoType *proto, long *SP)
 {
   Structure *struc;
 #ifdef sparc
   extern Structure *CAlloS(Object *origin, int i1, ProtoType *proto);
-  BetaStackTop = SP; /* Must be set in case of GC during AlloS */
   struc = CAlloS(origin, 0, proto);
 #endif /* sparc */
 #ifdef intel
   extern Structure *VAlloS(Object *origin, ProtoType *proto);
-  BetaStackTop = SP; /* Must be set in case of GC during AlloS */
   struc = VAlloS(origin, proto);
 #endif /* intel */
 #ifdef NEWRUN
   extern Structure *AlloS(Object *origin, ProtoType *proto, long *SP);
-  BetaStackTop[0] = SP;
   struc = AlloS(origin, proto, SP);
 #endif /* NEWRUN*/
 #ifdef hppa
@@ -577,7 +625,6 @@ INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
   void *cb = 0;
 #ifdef sparc
   extern void *CCopyCPP(Structure * theStruct, Object * theObj);
-  BetaStackTop = SP; /* Must be set in case og GC during callback */
   cb = CCopyCPP(struc, curobj);
 #endif /* sparc */
 #ifdef intel
@@ -607,7 +654,6 @@ INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
 #endif /* intel */
 #ifdef NEWRUN
   extern void *CopyCPP(Structure *theStruct);
-  BetaStackTop[0] = SP;
   cb = CopyCPP(struc);  
 #endif /* NEWRUN */
 #ifdef hppa
@@ -911,47 +957,17 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "Prototype: %s\n", ProtoTypeName(proto)));
 
 #ifdef NEWRUN
-      /* The SP points to end of current frame. We have to
-       * adjust it to point to end of previous frame, as
-       * this is expected when callback occurs (see figure
-       * "STACK LAYOUT at callback/gpart" in stack.c.
-       */
-      {
-	long PrevSP;
-        DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: Finding previous frame:\n"));
-	PrevSP = WindBackSP(SP, curObj, (long)PC);
-
-	/* The referencestack part of the top frame is not
-	 * necessarily terminated at this point (depending on
-	 * how the debuggee stopped).
-	 * The two main cases are:
-	 *   1. Debuggee is stopped in a breakpoint.
-	 *   2. Debuggee detected a fatal error
-	 *      (Qua may be an exception, if QuaCont is set).
-	 * Here we go in and terminate the reference stack as if there was no
-	 * references on it. This is assumed OK in case 1, since Ole
-	 * claims that the compiler has nothing on the reference stack
-	 * at the points where breakpoints may be set.
-	 * In case two, we may forget a few references on the stack by terminating
-	 * it, but since a fatal error has happened in the debugee, this should
-	 * not harm it - it will not be able to continue anyway (yet - has to be
-	 * reconsidered when system exceptions are introduced).
-	 * A more elegant solution would be to include in the .db file format
-	 * how many references are on stack between each imperative.
-	 */
-	
-	DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: Terminating reference stack.\n"));
-	terminate_reference_stack((long*)PrevSP, (long*)SP);
-	SP=PrevSP;
-      }
-      
+      SP = fix_stacks(SP, curObj, (long)PC);
 #endif /* NEWRUN */
+
+      /* Save stackpointer in BetaStackTop to make the trap look like an external call */
+      set_betastacktop((long*)SP);
 
       /* Save origin and curObj in DOT in case of a GC during AlloS */
       origin_handle = DOThandleInsert(origin, DOTgarbageOnDelete, FALSE);
       curObj_handle = DOThandleInsert(curObj, DOTgarbageOnDelete, FALSE);
       /* valhalla_AlloS may cause GC */
-      struc = valhalla_AlloS(origin, proto, (long*)SP, curObj);
+      struc = valhalla_AlloS(origin, proto, (long*)SP);
       origin = DOThandleLookup(origin_handle);
       curObj = DOThandleLookup(curObj_handle);
       DOThandleDelete(origin_handle);
@@ -971,13 +987,6 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 			     "Calling callback function [%d]\n",
 			     valhalla_exelevel
 			     ));
-#ifndef gcc_frame_size
-      /* Save the current SP on the reference stack. This will allow
-       * isExecuteObjectSP to scan through this refstack and check
-       * if a given SP is an SP just before a trap callback.
-       */
-      SPARC_CODE(pushSP(SP));
-#endif /* gcc_frame_size */
       old_valhallaIsStepping = valhallaIsStepping;
       valhallaIsStepping = FALSE;
       valhalla_exelevel++;
@@ -988,9 +997,6 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       cb();
       valhalla_exelevel--;
       valhallaIsStepping = old_valhallaIsStepping;
-#ifndef gcc_frame_size
-      SPARC_CODE(popSP());
-#endif /* gcc_frame_size */
       DEBUG_VALHALLA(fprintf(output, "VOP_EXECUTEOBJECT done.\n"));
       valhalla_writeint (opcode);
       valhalla_socket_flush ();

@@ -62,7 +62,6 @@ register long _dummy7 __asm__("%r14"); /* really RefSP */
 __asm__ volatile ("" : : : /* "r3", "r4", "r5", "r6", "r7", */ "r8", "r9", \
 		  "r10",	"r11", "r12", "r13","r14","r15","r16");
 #define asmlabel(label, code)
-#define asmcomment(text) 
 
 /*
  * Take care of the reference stack.
@@ -316,19 +315,6 @@ static __inline__ long getRPReg()
 
 /* the __typeof__ is a GNU feature, it is used to produce fewer warnings */
 #define RETURN(v) return (__typeof__(v))(setCallReg((long *)(v)))
-
-/* Defining this in the head of a module, together with a
-   GCable_Entry and GCable_Exit in every routine in that module makes
-   the activation record look like BETA, but *BEWARE*!:
-   CHECK THAT THE ROUTINE DOESN'T USE ANY STACK, OR LOOSE!!
-*/
-
-#ifdef GCable_Module
-     
-#define GCable_Entry()
-#define GCable_Exit(n)
-
-#endif /* GCable_Module */
 
 #define DeclReference1(type, name) type name
 #define DeclReference2(type, name) type name

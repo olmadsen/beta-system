@@ -79,40 +79,11 @@ void ProcessValhallaRefStack(void)
 
 #endif /* RTVALHALLA */
 
-#ifndef gcc_frame_size
-#if defined(RTVALHALLA) || defined(PERSIST)
-#ifdef sparc
-/* ReferenceStack is used to store SP values corresponding to 
- * VOP_EXECUTEOBJECT stack values.
- */
-static int isExecuteObjectSP(long *SP)
-{
-  long *theSP;
-  long **theCell = (long **)&ReferenceStack[0];
-  long size = ((long)RefSP - (long)&ReferenceStack[0])/4;
-
-  /*fprintf(output, "isExecuteObjectSP(0x%x)=", (int)SP);*/
-  for(; size > 0; size--, theCell++) {
-    theSP = *theCell;
-    /*fprintf(output, "[0x%x:0x%x]", (int)theCell, (int)theSP);*/
-    if (theSP == SP) {
-      /*fprintf(output, "TRUE\n");*/
-      return 1;
-    }
-  }
-  /*fprintf(output, "FALSE\n");*/
-  return 0;
-}
-
-#endif /* sparc */
-#endif /* RTVALHALLA) || PERSIST */
-#endif /* gcc_frame_size */
-
 /************************* End Valhalla reference stack ****************/
 
 
 /************************* Other common debug stuff ****************/
-#ifndef gcc_frame_size
+#ifndef sparc
 #if defined(RTDEBUG) && (!defined(UseRefStack))
 static void PrintSkipped(long *current)
 {
@@ -131,7 +102,7 @@ static void PrintSkipped(long *current)
   fflush(output);
 }
 #endif /* RTDEBUG */
-#endif /* gcc_frame_size */
+#endif /* sparc */
 
 /************************* End common debug stuff *************************/
 
@@ -816,27 +787,10 @@ void ProcessHPPAStackObj(StackObject *sObj, CellProcessFunc func)
 #ifdef sparc
 #include "../CRUN/crun.h"
 
-/* Hej Peter!  
- *
- * Jeg bliver nød til at have denne funktion nedenunder
- * med, ellers kan jeg ikke compilere denne fil uden optimering. Jeg
- * har brug for at kompilere denne fil uden optimering.
- */
-void stack_dummy() {
-  CRUN_USE();
-}
-
-#ifndef gcc_frame_size
-static long skipCparams;
-#endif
-
-/* #define DEBUG_LABELS */
-/* #define SPARC_SKIP_TO_ETEXT 1*/
-
 #ifdef RTDEBUG
 static RegWin *BottomAR=0 /* Currently never set up - use StackStart? */;
 static RegWin *lastAR=0;
-static long PC = 0;
+long frame_PC = 0;
 static void PrintAR(RegWin *ar, RegWin *theEnd);
 static void PrintCAR(RegWin *cAR);
 #endif
@@ -901,49 +855,13 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
   ProcessStackCell(&ar->i4, "i4", func);
   
   /* Process the stack part */
-#ifndef gcc_frame_size
-  if (skipCparams){
-    /* This AR called C, skip one hidden word, and (at least) 
-     * six parameters (compiler allocates 12, that may be too much...)
-     */
-#if defined(RTVALHALLA) || defined(PERSIST)
-    Claim((long)theCell+48>=(long)ar->fp, "C Skip must be inside frame");
-    if (
-#if defined(RTVALHALLA)
-	(valhallaID && (valhalla_exelevel>0))
-#ifdef PERSIST
-	|| 
-#endif /* PERSIST */
-#endif /* RTVALHALLA */
-#ifdef PERSIST
-	(callRebinderC)
-#endif
-	) {
-      /* We are running under valhalla, and at least one evaluator is
-       * under execution.
-       * In this case a callback is simulated by setting BetaStackTop
-       * to the value of SP at the time valhallaOnProcess was called.
-       * This resembles a C call (BETA code was left, external code
-       * was entered). However, the BETA code was NOT left using
-       * an actual call instruction, and there was NOT allocated
-       * room on the stack for parameteres.
-       */
-      if (isExecuteObjectSP((long*)ar)){ 
-	DEBUG_VALHALLA(fprintf(output, 
-			       "ProcessAR: SP of VOP_EXECUTEOBJECT: 0x%x\n",
-			       (int)ar));
-	skipCparams = 0;
-      } 
-    }
-#endif /* RTVALHALLA || PERSIST */
-    if (skipCparams){
-      /* Will not skip out of frame - let's do it... */
-      theCell += (48/sizeof(long*));
-    }
-  }
-#endif /* !gcc_frame_size */
 
-  
+#ifdef PERSIST
+  /* datpete: There was previously a call of callRebinderC here in case 
+   * skipCparams was true, i.e. this was the frame corresponding to a
+   * beta pattern, that had called C. Is this still needed?
+   */
+#endif
 
   for (; theCell != (long*)theEnd; theCell+=2) {
     /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
@@ -972,40 +890,29 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
   }
 }
 
+/* ProcessSPARCStack:
+ *  Precondition: 
+ *     1. Register windows must be flushed to stack - asm(ta 3)
+ *     2. StackEnd must ppoint to top of stack part that is to be GC'ed.
+ *     3. If RTDEBUG, frame_PC must be PC corresponding to frame that
+ *        ends in StackEnd.
+ */
+
 static void ProcessSPARCStack(void)
 {
     RegWin *theAR;
     RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
     RegWin *nextCompBlock = (RegWin *) lastCompBlock;
     
-    /* Flush register windows to stack */
-    __asm__("ta 3");
-
-#ifndef gcc_frame_size
-    skipCparams=FALSE;
-#endif
-
     DEBUG_STACK(fprintf(output, "\n ***** Trace of stack *****\n"));
     DEBUG_STACK(fprintf(output,
 			"IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
 			(int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit));
 
-    /* StackEnd points to the activation record of doGC, which in turn was called
-     * from either DoGC, or IOA(c)alloc.
-     */
-    DEBUG_CODE( PC=((RegWin *) StackEnd)->i7 +8);
-    StackEnd = (long *)((RegWin *) StackEnd)->fp; /* Skip AR of doGC() */
-
-#if 0
-    /* IOA(c)alloc now inlined! */
-    StackEnd = (long *)((RegWin *) StackEnd)->fp
-      /* Skip AR of IOA(c)alloc / DoGC() / lazyFetchIOAGc() */;
-#endif
-
     for (theAR =  (RegWin *) StackEnd;
 	 theAR != (RegWin *) 0;
 #ifdef RTDEBUG
-	 PC = theAR->i7 +8,
+	 frame_PC = theAR->i7 +8,
 #endif
 	   theAR = (RegWin *) theAR->fp) {
       
@@ -1035,7 +942,7 @@ static void ProcessSPARCStack(void)
 	      fprintf(output, " (BetaStackTop)\n");
 	      for (cAR = theAR;
 		   cAR != (RegWin *) theAR->l6;
-		   PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp){
+		   frame_PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp){
 		if (!cAR) {
 		  fprintf(output, "ProcessStack: gone past _start - exiting...!\n");
 		  Illegal();
@@ -1047,19 +954,10 @@ static void ProcessSPARCStack(void)
 	  });
 	  
 	  theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
-	  
-#ifndef gcc_frame_size
-	  skipCparams = TRUE;
-#endif
-
 	}
       }
       ProcessAR(theAR, (RegWin *) theAR->fp, DoStackCell);
       CompleteScavenging();
-#ifndef gcc_frame_size
-      skipCparams=FALSE;
-#endif
-
       DEBUG_CODE(lastAR = theAR);
     }
     DEBUG_CODE(if (BottomAR) Claim(lastAR==BottomAR, "lastAR==BottomAR"));
@@ -1089,11 +987,11 @@ static void ProcessSPARCStackObj(StackObject *sObj, CellProcessFunc func)
       PrintCodeAddress((long)StackRefAction);
       fprintf(output, "\n");
       
-      lastPC=PC;
+      lastPC=frame_PC;
       /* The PC of the topmost AR is saved in CallerLCS of the comp 
        * this stackobj belongs to. It is not known here. 
        */
-      PC = 0;
+      frame_PC = 0;
     });
     DEBUG_CODE(if (DebugStackObj){
       DebugStack=TRUE;
@@ -1123,11 +1021,11 @@ static void ProcessSPARCStackObj(StackObject *sObj, CellProcessFunc func)
 	      && (long *) theAR <= &sObj->Body[sObj->StackSize],
 	      "ProcessSPARCStackObj: theAR in StackObject");
 	ProcessAR(theAR, (RegWin *) (theAR->fp + delta), func);
-	DEBUG_CODE(PC = theAR->i7 +8);
+	DEBUG_CODE(frame_PC = theAR->i7 +8);
       }
 
     DEBUG_STACKOBJ(fprintf(output, " *-*-* End StackObject 0x%x *-*-*\n", (int)sObj);
-		   PC=lastPC;
+		   frame_PC=lastPC;
 		   );
     DEBUG_CODE(DebugStack=oldDebugStack);
 }
@@ -1135,12 +1033,12 @@ static void ProcessSPARCStackObj(StackObject *sObj, CellProcessFunc func)
 #ifdef RTDEBUG
 void PrintCAR(RegWin *cAR)
 {
-  char *lab = getLabel(PC);
+  char *lab = getLabel(frame_PC);
   fprintf(output, 
 	  "\n----- C AR: 0x%x, end: 0x%x, PC: 0x%x <%s+0x%x>\n",
 	  (int)cAR, 
 	  (int)cAR->fp,
-	  (int)PC,
+	  (int)frame_PC,
 	  lab,
 	  (int)labelOffset);
   fprintf(output, "%%fp: 0x%x\n", (int)cAR->fp); 
@@ -1149,16 +1047,13 @@ void PrintCAR(RegWin *cAR)
 void PrintAR(RegWin *ar, RegWin *theEnd)
 {
   Object **theCell = (Object **) &ar[1];
-  char *lab = getLabel(PC);
-#ifndef gcc_frame_size
-  int oldSkipCparams = skipCparams;
-#endif
+  char *lab = getLabel(frame_PC);
 
   fprintf(output, 
 	  "\n----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x <%s+0x%x>\n",
 	  (int)ar, 
 	  (int)theEnd,
-	  (int)PC,
+	  (int)frame_PC,
 	  lab,
 	  (int)labelOffset);
 
@@ -1184,36 +1079,11 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
   fprintf(output, "%%l5: 0x%x\n", (int)ar->l5); 
   fprintf(output, "%%l6: 0x%x\n", (int)ar->l6); 
 
+  /* Now do the stack part */
   fprintf(output, "stackpart:\n");
   /* Notice that in INNER some return adresses are pushed. This is no
    * danger.
    */
-#ifndef gcc_frame_size
-  if (skipCparams){
-    /* This AR called C, skip one hidden word, and (at least) 
-     * six parameters. See comments in ProcessAR.
-     */
-    int i;
-    Claim((long)theCell+48>=(long)ar->fp, "C Skip must be inside frame");
-    if (valhallaID && (valhalla_exelevel>0)){
-      if (isExecuteObjectSP((long*)ar)){
-	DEBUG_STACK({
-	  fprintf(output, 
-		  "Frame is invoker of valhalla evaluator.\n"
-		  );
-	});
-	skipCparams = 0;
-      }
-      if (skipCparams){
-	fprintf(output, "Skipping 12 words in frame that called C:\n");
-	for (i=0; i<12; i++) PrintSkipped((long*)theCell+i);
-	theCell = (Object **)((long)theCell+48);
-      }
-    }      
-  }
-#endif /* gcc_frame_size */
-
-  /* Now do the stack part */
   for (; theCell != (Object **) theEnd; theCell+=2) {
     /* Test for floating point regs on stack. See comment in ProcessAR */
     int tag = (int)*theCell;
@@ -1234,9 +1104,6 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
     fprintf(output, "\n");
   }
   fflush(output);
-#ifndef gcc_frame_size
-  skipCparams = oldSkipCparams;
-#endif
 }
 
 /* PrintStack: (sparc).
@@ -1257,16 +1124,12 @@ void PrintStack(void)
   
   end  = (RegWin *)StackPointer;
   /* end points to the activation record of PrintStack() */
-  PC=((RegWin *) end)->i7 +8;
+  frame_PC=((RegWin *) end)->i7 +8;
   end = (RegWin *)((RegWin *) end)->fp; /* Skip AR of PrintStack() */
-
-#ifndef gcc_frame_size
-  skipCparams = TRUE; /* Skip 12 longs allocated for the call to PrintStack() */
-#endif
 
   for (theAR =  (RegWin *) end;
        theAR != (RegWin *) 0;
-       PC = theAR->i7 +8, theAR = (RegWin *) theAR->fp) {
+       frame_PC = theAR->i7 +8, theAR = (RegWin *) theAR->fp) {
     if (theAR == nextCompBlock) {
       /* This is the AR of attach. Continue, but get
        * new values for nextCompBlock and nextCBF. 
@@ -1287,20 +1150,14 @@ void PrintStack(void)
 			  RegWin *cAR;
 			  for (cAR = theAR;
 			       cAR != (RegWin *) theAR->l6;
-			       PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp)
+			       frame_PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp)
 			    PrintCAR(cAR);
 			});
 
 	    theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
-#ifndef gcc_frame_size
-	    skipCparams=TRUE;
-#endif
       }
     }
     PrintAR(theAR, (RegWin *) theAR->fp);
-#ifndef gcc_frame_size
-    skipCparams=FALSE;
-#endif
   }
    
   fprintf(output, " *****  PrintStack: End of trace  *****\n");

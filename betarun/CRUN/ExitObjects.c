@@ -3,8 +3,6 @@
  * by Peter Andersen, Tommy Thorn, and Jacob Seligmann
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -23,8 +21,6 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
 {
   Component * theComp;
   RegWin * rw;		/* Callers Register Window */
-
-  GCable_Entry();
 
   DEBUG_CODE(NumExO++);
 

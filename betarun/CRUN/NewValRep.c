@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -12,7 +10,6 @@
 
 ParamObjOffRange(NewVR1)
 {
-  GCable_Entry();
   FetchObjOffRange();
   
   DEBUG_CODE(NumNewVR1++);
@@ -29,7 +26,6 @@ ParamObjOffRange(NewVR1)
 
 ParamObjOffRange(NewVR2)
 {
-  GCable_Entry();
   FetchObjOffRange();
   
   DEBUG_CODE(NumNewVR2++);
@@ -46,7 +42,6 @@ ParamObjOffRange(NewVR2)
 
 ParamObjOffRange(NewVR4)
 {
-  GCable_Entry();
   FetchObjOffRange();
   
   DEBUG_CODE(NumNewVR4++);
@@ -63,7 +58,6 @@ ParamObjOffRange(NewVR4)
 
 ParamObjOffRange(NewVR8)
 {
-  GCable_Entry();
   FetchObjOffRange();
   
   DEBUG_CODE(NumNewVR8++);
@@ -86,7 +80,6 @@ ParamObjOffRange(NewVR8)
 ParamObjOffRange(NewVRI)
 {
   DeclReference1(ObjectRep *, theRep);
-  GCable_Entry();
   FetchObjOffRange();
   
   DEBUG_CODE(NumNewVRI++);
@@ -105,7 +98,6 @@ ParamObjOffRange(NewVRI)
 ParamObjOffRange(NewVRC)
 {
   DeclReference1(ObjectRep *, theRep);
-  GCable_Entry();
   FetchObjOffRange();
   
   DEBUG_CODE(NumNewVRC++);

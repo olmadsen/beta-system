@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -13,8 +11,6 @@ ParamRepObjOff(CopyVR1)
     DeclReference1(ValRep *, newRep);
     register unsigned range, i, size;
     
-    GCable_Entry();
-
     FetchRepObjOff();
 
     DEBUG_CODE(NumCopyVR1++);
@@ -60,7 +56,6 @@ ParamRepObjOff(CopyVR2)
     DeclReference1(ValRep *, newRep);
     register unsigned range, i, size;
     
-    GCable_Entry();
     FetchRepObjOff();
     
     DEBUG_CODE(NumCopyVR2++);
@@ -105,7 +100,6 @@ ParamRepObjOff(CopyVR4)
     DeclReference1(ValRep *, newRep);
     register unsigned range, i, size;
     
-    GCable_Entry();
     FetchRepObjOff();
     
     DEBUG_CODE(NumCopyVR4++);
@@ -150,7 +144,6 @@ ParamRepObjOff(CopyVR8)
     DeclReference1(ValRep *, newRep);
     register unsigned range, i, size;
     
-    GCable_Entry();
     FetchRepObjOff();
     
     DEBUG_CODE(NumCopyVR8++);
@@ -195,7 +188,6 @@ ParamORepObjOff(CopyVRI)
     DeclReference1(ObjectRep *, newRep);
     register unsigned range, i, size;
     
-    GCable_Entry();
     FetchORepObjOff();
     
     DEBUG_CODE(NumCopyVRI++);
@@ -235,7 +227,6 @@ ParamORepObjOff(CopyVRC)
     DeclReference1(ObjectRep *, newRep);
     register unsigned range, i, size;
     
-    GCable_Entry();
     FetchORepObjOff();
     
     DEBUG_CODE(NumCopyVRC++);

@@ -12,9 +12,7 @@
 typedef struct _RegWin {
   long l0, l1, l2, l3, l4, l5, l6, l7;
   long i0, i1, i2, i3, i4, i5, fp, i7;
-#ifdef gcc_frame_size
   long scratch[12];
-#endif
 } RegWin;
 
 #ifdef sun4s
@@ -49,61 +47,24 @@ typedef struct _RegWin {
   (*(long *)p = 0x40000000| (((unsigned) ((char*)f-(char*)p)) >> 2))
 #define NOP 0x1000000
 
-/* Defining this in the head of a module, together with a
-   GCable_Entry and GCable_Exit in every routine in that module makes
-   the activation record look like BETA, but *BEWARE*!:
-   CHECK THAT THE ROUTINE DOESN'T USE ANY STACK, OR LOOSE!!
-*/
-
-#ifdef GCable_Module
-register volatile void *GCreg0 __asm__("%o0");
-register volatile void *GCreg1 __asm__("%o1");
-register volatile void *GCreg2 __asm__("%o2");
-register volatile void *GCreg3 __asm__("%o3");
-register volatile void *GCreg4 __asm__("%o4");
-
-#ifdef MT
-#define GCable_Entry()
-#else
-/* We now no longer change the frame size but leaves it to
- * gcc compuited size. please do a 'make save-check' after build.
- * The garbage collector should handle this with skipCparams.
- */
-#define GCable_Entry() \
-  /* StackPointer = FramePointer-16; *//* = 64 */ \
-  GCreg0 = GCreg1 = GCreg2 = GCreg3 = GCreg4 = 0
-#endif
-
-#define GCable_Exit(n) /* nothing on the sparc */
-#endif /* GCable_Module */
-
 #define DeclReference1(type, name) type name
 #define DeclReference2(type, name) type name
 
 #define asmlabel(label, code) \
   __asm__(".text; .align 4; .global " #label "; " #label ": " code)
 
-#define asmcomment(text) \
-  __asm__("! " #text)
-
-
 #define RETURN(v) return v
 
 #define return_in_i1(value)                             \
     __asm__ volatile("":: "r" (value));                 \
-    __asm__("ret; restore %0, 0, %%i1"::"r" (value));   \
-    return value /* keep gcc happy */
-
-#define return_in_i1_and_i0(value)                             \
-    __asm__ volatile("":: "r" (value));                 \
-    __asm__("mov %0, %%i0"::"r" (value));   \
-    __asm__("ret; restore %i0, 0, %i1");   \
-    return value /* keep gcc happy */
+    __asm__("ret; restore %0, 0, %%i1"::"r" (value));   
 
 #define return_in_i0(value)                             \
     __asm__ volatile("":: "r" (value));                 \
-    __asm__("ret; restore %0, 0, %%i0"::"r" (value));   \
-    return value /* keep gcc happy */
+    __asm__("ret; restore %0, 0, %%i0"::"r" (value));   
+
+#define return_i1_in_o0()                               \
+    __asm__("ret; restore %i1, 0, %o0");                
 
 #define FetchOriginProto()
 #define FetchObjOriginProtoOffRange()
@@ -611,9 +572,13 @@ void C##name(Object * dstQuaOrigin,                  \
 
 #endif /* MT */
 
-/* On the SPARC we need to skip the first instruction */
+/* On the SPARC we need to skip the first instruction.
+ * And we clear the other outgoing registers %o1-%o4, since these will
+ * become %i registers in the BETA frame, i.e. GC roots.
+ * NOT needed: Each G entry clears %i-regs itself.
+ */
 #define CallBetaEntry(entry,item)			\
-    (* (void (*)()) ((long*)entry+1) )(item);
+    (* (void (*)()) ((long*)entry+1) )(item/*,0,0,0,0*/);
 
 #ifdef MT
     
@@ -688,13 +653,8 @@ CallAlloC(void *Ventry, Object *origin)
    RefTopOffReg--;\
 }
 #else
-#ifdef gcc_frame_size
 # define push(v) (StackPointer -= 2, StackPointer[28] = (long) v)
 # define pop(v) ((v) = (__typeof__(v))StackPointer[28], StackPointer += 2)
-#else
-# define push(v) (StackPointer -= 2, StackPointer[16] = (long) v)
-# define pop(v) ((v) = (__typeof__(v))StackPointer[16], StackPointer += 2)
-#endif
 #endif
 
 #define Protect(var, code)				\

@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -12,8 +10,6 @@ ParamItemAscii(Item *, CopyT)
 {
   DeclReference1(ValRep *, theRep);
   register unsigned range, size, i;
-  
-  GCable_Entry();
   
   DEBUG_CODE(NumCopyT++);
 

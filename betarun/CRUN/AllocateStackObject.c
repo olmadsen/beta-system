@@ -3,8 +3,6 @@
  * by Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -26,9 +24,6 @@ StackObject * AlloSO(unsigned size)
 #endif
 {
     DeclReference1(StackObject *, theStack);
-
-    GCable_Entry();
-
     DEBUG_CODE(NumAlloSO++);
 
     /* Do not try to allocate directly in AOA, unless Suspend 

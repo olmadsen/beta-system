@@ -15,8 +15,6 @@ register long _dummy8 __asm__("%r15"); /* really tmp data 1 */
 register long _dummy9 __asm__("%r16"); /* really tmp data 2 */
 #endif
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -25,8 +23,6 @@ ParamRepObjOffLowHigh(CopySVR1)
     DeclReference1(ValRep *, newRep);
     register long i, size, range;
     
-    GCable_Entry();
-   
     FetchRepObjOffLowHigh();
 
     DEBUG_CODE(NumCopySVR1++);
@@ -76,8 +72,6 @@ ParamRepObjOffLowHigh(CopySVR2)
     DeclReference1(ValRep *, newRep);
     register long i, size, range;
     
-    GCable_Entry();
-
     FetchRepObjOffLowHigh();
 
     DEBUG_CODE(NumCopySVR2++);
@@ -125,8 +119,6 @@ ParamRepObjOffLowHigh(CopySVR4)
     DeclReference1(ValRep *, newRep);
     register long i, size, range;
     
-    GCable_Entry();
-
     FetchRepObjOffLowHigh();
     
     DEBUG_CODE(NumCopySVR4++);
@@ -170,8 +162,6 @@ ParamRepObjOffLowHigh(CopySVR8)
     DeclReference1(ValRep *, newRep);
     register long i, size, range;
     
-    GCable_Entry();
-
     FetchRepObjOffLowHigh();
    
     DEBUG_CODE(NumCopySVR8++);
@@ -218,8 +208,6 @@ ParamORepObjOffLowHigh(CopySVRI)
     DeclReference1(ObjectRep *, newRep);
     register long i, size, range;
     
-    GCable_Entry();
-
     FetchORepObjOffLowHigh();
    
     DEBUG_CODE(NumCopySVRI++);
@@ -266,8 +254,6 @@ ParamORepObjOffLowHigh(CopySVRC)
     DeclReference1(ObjectRep *, newRep);
     register long i, size, range;
     
-    GCable_Entry();
-
     FetchORepObjOffLowHigh();
   
     DEBUG_CODE(NumCopySVRC++);

@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -29,7 +27,6 @@ ParamThisComp(void, AttBC)
 	/* don't move without changing SnakeAdditions.S */;
 #endif
 
-    GCable_Entry();
     FetchThisComp();
 
     Ck(comp);

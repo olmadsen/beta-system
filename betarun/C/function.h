@@ -315,4 +315,8 @@ extern long AOAFreeListIndexGetStat(long index, long *min, long *max,
 				    long *usecount, long *usesize, 
 				    long *freecount, long *freesize);
 /* PerformGC.c */
-extern void doGCFrom(long *sp);
+#ifdef MT
+extern Object *doGC(unsigned long);
+#else
+extern void doGC(void);
+#endif

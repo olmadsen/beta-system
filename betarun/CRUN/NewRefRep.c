@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -12,7 +10,6 @@
 
 ParamObjOffRange(NewRR)
 {
-    GCable_Entry();
     FetchObjOffRange();
 
     DEBUG_CODE(NumNewRR++);

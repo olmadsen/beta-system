@@ -3,8 +3,6 @@
  * by Peter Andersen, Tommy Thorn, and Jacob Seligmann
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -14,11 +12,7 @@
  * If you try to do this with an __asm__("nop") in a C function, the C function
  * will NOT become a leaf routine. Thus we do it manually her.
  */
-#ifdef sun4s
 asmlabel(Return, "nop; retl; nop");
-#else
-asmlabel(_Return, "nop; retl; nop");
-#endif /* sun4s */
 #else
 void Return() 
 {
@@ -35,36 +29,30 @@ void Return()
  */
 
 #ifndef MT
-Item *SPARC_AlloSI(Structure *s, int i1, int i2, int i3, int i4)
+Item *OAlloSI(Structure *s, int i1, int i2, int i3, int i4)
 {
   Item *CAlloSI(Structure *s, int i1, int i2, int i3, int i4);
-  GCable_Entry();
-  return CAlloSI(s, i1, i2 ,i3, i4);
-  GCable_Exit(1);
+  Item *i= CAlloSI(s, i1, i2 ,i3, i4);
+  return_i1_in_o0();
+  return i; /* Keep gcc happy */
 }
 
-Component *SPARC_AlloC(Object *origin, int i1, ProtoType *proto, int i3, int i4)
+Component *OAlloC(Object *origin, int i1, ProtoType *proto, int i3, int i4)
 {
-  Component *CAlloC(Object *origin, 
-			   int i1, 
-			   ProtoType *proto, 
-			   int i3, 
-			   int i4);
-  GCable_Entry();
-  return CAlloC(origin, i1, proto, i3, i4);
-  GCable_Exit(1);
+  Component *CAlloC(Object *origin, int i1, ProtoType *proto, int i3, int i4);
+  Component *c=CAlloC(origin, i1, proto, i3, i4);
+  return_i1_in_o0();
+  return c; /* Keep gcc happy */
 }
 
-Item *SPARC_AlloI(Object *origin, int i1, ProtoType *proto, int i3, int i4)
-{ Item *CAlloI(Object *origin, int i1, ProtoType *proto, int i3, int i4);
-  GCable_Entry();
-  MCHECK();
-  return CAlloI(origin, i1, proto, i3, i4);
-  MCHECK();
-  GCable_Exit(1);
+Item *OAlloI(Object *origin, int i1, ProtoType *proto, int i3, int i4)
+{ 
+  Item *CAlloI(Object *origin, int i1, ProtoType *proto, int i3, int i4);
+  Item *i = CAlloI(origin, i1, proto, i3, i4);
+  return_i1_in_o0();
+  return i; /* Keep gcc happy */
 }
-#endif /* MT */
-
+#endif /* !MT */
 #endif /* sparc */
 
 void RefNone(Object * theObj)
@@ -145,7 +133,7 @@ void SetArgValues(int argc, char *argv[])
 #ifdef sun4s
 asmlabel(FailureExit, 
 	 "mov	%i0, %o0; "
-	 "save  %sp,-112,%sp; " /* using 112 as gcc does - but 64 is enough? */
+	 "save  %sp,-112,%sp; " /* using 112 as gcc does -  */
 	 "mov	%i0, %o1; "
 	 "call	BetaError; "
 	 "mov	-8, %o0; "

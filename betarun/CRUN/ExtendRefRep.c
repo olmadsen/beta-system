@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #ifdef hppa
 register long _dummyx __asm__("r16");
 #endif
@@ -20,7 +18,6 @@ ParamObjOffRange(ExtRR)
     long add = range;
     long newRange, copyRange, i;
     
-    GCable_Entry();
     FetchObjOffRange();
 
     DEBUG_CODE(NumExtRR++);

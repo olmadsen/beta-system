@@ -248,11 +248,9 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
        * stack pointer at the point where the process left BETA via the trap.
        */
       BetaStackTop = (long *)returnSP; /* Must be set in case og GC during callback */
-#ifdef gcc_frame_size
       /* datpete 21/5/99: no need to push SP for GC anymore.
        * Thus could be saved in a local variable instead.
        */
-#endif /* gcc_frame_size */
       pushSP(returnSP);
 
       /* Calculate absolute address by looking in appropriate tables */

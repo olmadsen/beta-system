@@ -1188,3 +1188,9 @@ void PrintSignal(int sig)
 }
 #endif /* RTDEBUG */
 
+#ifdef RTDEBUG
+void sighandler_use(void)
+{
+  NotifySignalDuringDump(0);
+}
+#endif

@@ -3,8 +3,6 @@
  * by Peter Andersen, Tommy Thorn, and Jacob Seligmann
  */
 
-#define GCable_Module
-
 #ifdef hppa
 register long _dummy8 __asm__("%r15"); /* really tmp data 1 */
 register long _dummy9 __asm__("%r16"); /* really tmp data 2 */
@@ -19,8 +17,6 @@ ParamRepObjOffLowHigh(CopySRR)
     register long range;
     register long i;
     
-    GCable_Entry();
-
     FetchRepObjOffLowHigh();
 
     DEBUG_CODE(NumCopySRR++);

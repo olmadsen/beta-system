@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -13,7 +11,6 @@ ParamRepObjOff(CopyRR)
     DeclReference1(RefRep *, newRep);
     register unsigned range, i;
     
-    GCable_Entry();
     FetchRepObjOff();
     
     DEBUG_CODE(NumCopyRR++);

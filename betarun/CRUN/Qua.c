@@ -3,8 +3,6 @@
  * by Peter Andersen, Peter Oerbaek, Tommy Thorn, and Jacob Seligmann
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -30,7 +28,6 @@ ParamProtoCellOriginThis(Qua)
   Object * src;
   /* the source can be found in theCell since the assignment *has* been done */
   ProtoType * srcProto;
-  GCable_Entry();
   FetchParamProtoCellOriginThis();
 
   DEBUG_CODE(NumQua++);

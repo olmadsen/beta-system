@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -13,7 +11,6 @@ ParamOriginProto(Structure *, AlloS)
 {
   register Structure * newStruct;
   
-  GCable_Entry();
   FetchOriginProto();
 
   DEBUG_CODE(NumAlloS++);
@@ -30,51 +27,39 @@ ParamOriginProto(Structure *, AlloS)
 
   Ck(newStruct); Ck(origin);
   
-#ifdef sparc
-    return_in_i1_and_i0(newStruct);
-#else
+  SPARC_CODE(return_in_i1(newStruct));
   RETURN(newStruct);
-#endif
 }
 
 ParamStruc(Item *, AlloSI)
 {
   Item *ss;
   
-  GCable_Entry();
   FetchStruc();
 
   DEBUG_CODE(NumAlloSI++);
 
   Ck(struc); Ck(struc->iOrigin);
-#ifdef sparc
-  ss = SPARC_AlloI((Object *) struc->iOrigin, 0, struc->iProto, 0, 0);
-#endif
-#ifdef hppa
-  ss = CAlloI((Object *) struc->iOrigin, struc->iProto);
-#endif
+  SPARC_CODE(ss = OAlloI((Object *) struc->iOrigin, 0, struc->iProto, 0, 0));
+  HPPA_CODE(ss = CAlloI((Object *) struc->iOrigin, struc->iProto));
 
   Ck(ss); 
 
-#ifdef sparc
-  return_in_i1(ss);
-#else
+  SPARC_CODE(return_in_i1(ss));
   RETURN(ss);
-#endif
 }
 
 ParamStruc(Component *, AlloSC)
 {
   Component *ss;
   
-  GCable_Entry();
   FetchStruc();
 
   DEBUG_CODE(NumAlloSC++);
 
   Ck(struc);
 #ifdef sparc
-  ss = SPARC_AlloC((Object *) struc->iOrigin, 0, struc->iProto, 0, 0);
+  ss = OAlloC((Object *) struc->iOrigin, 0, struc->iProto, 0, 0);
 #endif
 #ifdef hppa
   ss = CAlloC((Object *) struc->iOrigin, struc->iProto);
@@ -82,11 +67,8 @@ ParamStruc(Component *, AlloSC)
 
   Ck(ss);
 
-#ifdef sparc
-  return_in_i1(ss);
-#else
+  SPARC_CODE(return_in_i1(ss));
   RETURN(ss);
-#endif
 }    
 
 Structure * ObjS(Object * theObj)
@@ -100,8 +82,6 @@ Structure * ObjS(Object * theObj)
    */
   
   register Structure * newStruct;
-  
-  GCable_Entry();
   
   /* Allocate a StructObject. */
 
@@ -131,8 +111,6 @@ Structure * ObjS(Object * theObj)
 
 long eqS(Structure * arg1, Structure * arg2)
 {
-  /*GCable_Entry();*/
-  
   DEBUG_CODE(NumeqS++);
 
   Ck(arg1); Ck(arg2);
@@ -152,8 +130,6 @@ long eqS(Structure * arg1, Structure * arg2)
 
 long neS(Structure * arg1, Structure * arg2)
 {
-  /* GCable_Entry(); */
-  
   DEBUG_CODE(NumneS++);
   Ck(arg1); Ck(arg2);
   return !eqS(arg1, arg2);
@@ -182,9 +158,6 @@ long ltS(Structure * arg1, Structure * arg2)
   ProtoType * proto2;
   DeclReference1(Item *, newObject);
 
-
-  GCable_Entry();
-  
   DEBUG_CODE(NumltS++);
   Ck(arg1); Ck(arg2);
   if (!arg1) return 0;
@@ -238,7 +211,7 @@ long ltS(Structure * arg1, Structure * arg2)
 		   newObject = (Item *)
 		   CallVEntry((void (*)())(arg1->iProto), arg1->iOrigin));
 #else
-	   Protect(arg2, newObject = SPARC_AlloSI(arg1, 0, 0, 0, 0));
+	   Protect(arg2, newObject = OAlloSI(arg1, 0, 0, 0, 0));
 #endif
 #endif
 #ifdef hppa
@@ -264,8 +237,6 @@ long CgtS(Structure * arg1, Structure * arg2)
 long gtS(Structure * arg1, Structure * arg2)
 #endif
 {
-  GCable_Entry();
-  
   DEBUG_CODE(NumgtS++);
   Ck(arg1); Ck(arg2);
 #ifdef MT
@@ -287,8 +258,6 @@ long CleS(Structure * arg1, Structure * arg2)
 long leS(Structure * arg1, Structure * arg2)
 #endif
 { 
-  GCable_Entry();
-  
   DEBUG_CODE(NumleS++);
   Ck(arg1); Ck(arg2);
 #ifdef MT
@@ -310,8 +279,6 @@ long CgeS(Structure * arg1, Structure * arg2)
 long geS(Structure * arg1, Structure * arg2)
 #endif
 { 
-  GCable_Entry();
-  
   DEBUG_CODE(NumgeS++);
   Ck(arg1); Ck(arg2);
 #ifdef MT

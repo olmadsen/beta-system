@@ -3,7 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
 #include "beta.h"
 #include "crun.h"
 
@@ -20,8 +19,6 @@ ParamThisOffRange(AlloVR1)
 {
     DeclReference1(ValRep *, theRep);
     register unsigned Size;
-
-    GCable_Entry();
     FetchThisOffRange();
   
     if (range < 0) range = 0;
@@ -56,8 +53,6 @@ ParamThisOffRange(AlloVR2)
 {
   DeclReference1(ValRep *, theRep);
   register unsigned Size;
-
-  GCable_Entry();
   FetchThisOffRange();
 
   DEBUG_CODE(NumAlloVR2++);
@@ -91,8 +86,6 @@ ParamThisOffRange(AlloVR4)
 {
   DeclReference1(ValRep *, theRep);
   register unsigned Size;
-
-  GCable_Entry();
   FetchThisOffRange();
 
   DEBUG_CODE(NumAlloVR4++);
@@ -127,8 +120,6 @@ ParamThisOffRange(AlloVR8)
 {
   DeclReference1(ValRep *, theRep);
   register unsigned Size;
-
-  GCable_Entry();
   FetchThisOffRange();
 
   DEBUG_CODE(NumAlloVR8++);

@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #ifdef hppa
 /* to keep Gcc's grappy little hand off this */
 register long _dummyx __asm__("r16");
@@ -24,7 +22,6 @@ ParamObjOffRange(ExtVR1)
   long i;
   long size; /* size of new repetition */
   
-  GCable_Entry();
   FetchObjOffRange();
   
   DEBUG_CODE(NumExtVR1++);
@@ -86,7 +83,6 @@ ParamObjOffRange(ExtVR2)
   long i;
   long size; /* size of new repetition */
   
-  GCable_Entry();
   FetchObjOffRange();
   
   DEBUG_CODE(NumExtVR2++);
@@ -144,7 +140,6 @@ ParamObjOffRange(ExtVR4)
   long i;
   long size; /* size of new repetition */
   
-  GCable_Entry();
   FetchObjOffRange();
   
   DEBUG_CODE(NumExtVR4++);
@@ -206,7 +201,6 @@ ParamObjOffRange(ExtVR8)
   long i;
   long size; /* size of new repetition */
   
-  GCable_Entry();
   FetchObjOffRange();
   
   DEBUG_CODE(NumExtVR8++);
@@ -269,7 +263,6 @@ ParamObjOffRange(ExtVRI)
   long i;
   long size; /* size of new repetition */
   
-  GCable_Entry();
   FetchObjOffRange();
 
   DEBUG_CODE(NumExtVRI++);
@@ -323,7 +316,7 @@ ParamObjOffRange(ExtVRI)
 	              CallVEntry((void (*)())REP->iProto,REP->iOrigin));
 #else
       Protect2(theRep, newRep,
-	       item = SPARC_AlloI((Object *) REP->iOrigin, 0, REP->iProto, 0, 0));
+	       item = OAlloI((Object *) REP->iOrigin, 0, REP->iProto, 0, 0));
 #endif /* MT */
 #endif
 #ifdef hppa
@@ -347,7 +340,6 @@ ParamObjOffRange(ExtVRC)
   long i;
   long size; /* size of new repetition */
   
-  GCable_Entry();
   FetchObjOffRange();
 
   DEBUG_CODE(NumExtVRC++);
@@ -401,7 +393,7 @@ ParamObjOffRange(ExtVRC)
 	       comp = CallAlloC(REP->iProto, REP->iOrigin));
 #else
       Protect2(theRep, newRep,
-	       comp = SPARC_AlloC((Object *) REP->iOrigin, 0, REP->iProto, 0, 0));
+	       comp = OAlloC((Object *) REP->iOrigin, 0, REP->iProto, 0, 0));
 #endif /* MT */
 #endif
 #ifdef hppa

@@ -124,8 +124,8 @@ void freeCBF(external_entry)
 #ifdef sparc
   Claim(theCBE->mov_o7_g1 == MOV_O7_G1, 
 	"theCBE->mov_o7_g1 is \"mov o7,i7\"");
-  Claim((theCBE->call_HandleCallBack & 0xc0000000) == 0x40000000, 
-	"theCBE->call_HandleCallBack is \"call\"");
+  Claim((theCBE->call_HandleCB & 0xc0000000) == 0x40000000, 
+	"theCBE->call_HandleCB is \"call\"");
   Claim(theCBE->nop == NOP,
 	"theCBE->nop is \"nop\"");
 #endif /* sparc */

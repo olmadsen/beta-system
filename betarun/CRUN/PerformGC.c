@@ -3,35 +3,40 @@
  * by Peter Andersen, Tommy Thorn, and Jacob Seligmann.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
 #ifndef MT
 
-void doGC() /* The one called from IOA(c)alloc */
+void doGC() /* The one called from IOAalloc */
 {
 #ifdef sparc
-    GCable_Entry();
-    MCHECK();
-    StackEnd = (long *)((struct RegWin *) StackPointer);
-    MCHECK();
-    IOAGc();
-    MCHECK();
+  DEBUG_CODE(extern long frame_PC);
+  MCHECK();
+  /* Flush register windows to stack */
+  __asm__("ta 3");
+  StackEnd = (long *)((struct RegWin *) StackPointer);
+  /* StackEnd points to the activation record of doGC, which in turn was 
+   * either branched to from DoGC, or called from inlined IOAalloc.
+   */
+  DEBUG_CODE(frame_PC=((RegWin *) StackEnd)->i7 +8);
+  StackEnd = (long *)((RegWin *) StackEnd)->fp; /* Skip AR of doGC() */
+  MCHECK();
+  IOAGc();
+  MCHECK();
 #endif
 #ifdef hppa
 #ifndef UseRefStack
-    StackEnd = (long *)getSPReg();
+  StackEnd = (long *)getSPReg();
 #endif /* UseRefStack */
-    PushGCRegs();
-    CkReg("doGC", *(RefSP-1), "%r7");
-    CkReg("doGC", *(RefSP-2), "%r6");
-    CkReg("doGC", *(RefSP-3), "%r5");
-    CkReg("doGC", *(RefSP-4), "%r4");
-    CkReg("doGC", *(RefSP-5), "%r3");
-    IOAGc();  /* saves r8 */
-    PopGCRegs();
+  PushGCRegs();
+  CkReg("doGC", *(RefSP-1), "%r7");
+  CkReg("doGC", *(RefSP-2), "%r6");
+  CkReg("doGC", *(RefSP-3), "%r5");
+  CkReg("doGC", *(RefSP-4), "%r4");
+  CkReg("doGC", *(RefSP-5), "%r3");
+  IOAGc();  /* saves r8 */
+  PopGCRegs();
 #endif
 }
 
@@ -39,25 +44,19 @@ void doGC() /* The one called from IOA(c)alloc */
 /* IOA(c)alloc is now in-lined.
  * That is, ProcessStack does not skip the regwin of IOA(c)alloc,
  * and thus there is no need for the extra regwin around doGC anymore.
+ * So we just branch to doGC with ReqObjectSize=0.
  */
-#ifdef sun4s
 asmlabel(DoGC,
 	 "sethi  %hi(ReqObjectSize),%g1\n"
 	 "ba     doGC\n"
          "clr    [%g1+%lo(ReqObjectSize)]\n");
-#else
-asmlabel(DoGC,
-	 "sethi  %hi(_ReqObjectSize),%g1\n"
-	 "ba     _doGC\n"
-         "clr    [%g1+%lo(_ReqObjectSize)]\n");
-#endif
-#else
+#else /* ! sparc */
 void DoGC() /* The one called directly from betaenv */
 {
   ReqObjectSize = 0;
   doGC();
 }
-#endif
+#endif /* ! sparc */
 
 #ifdef RTDEBUG
 void DoGC_UseCk()

@@ -4,8 +4,6 @@
  */
 
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -15,7 +13,6 @@ ParamOriginProto(Item *,AlloI)
 /* = Item * AlloI(Object *origin, ProtoType *proto) */
 {
     DeclReference1(Item *, item); /*= Item * item; */
-    GCable_Entry();
     MCHECK();
     FetchOriginProto();
 
@@ -38,24 +35,16 @@ ParamOriginProto(Item *,AlloI)
     setup_item(item, proto, origin); 
     
     if (proto->GenPart){
-#ifdef RTDEBUG
-      Protect2(origin, item, CallBetaEntry(proto->GenPart,item));
-#else
       Protect(item, CallBetaEntry(proto->GenPart,item));
-#endif
     }
 
-    Ck(origin);
+    /* origin cannot be ck'ed since it is not protected during call above */
     Ck(item);
 
     MCHECK();
 
-    GCable_Exit(1);    
-#ifdef sparc
-    return_in_i1(item);
-#else
+    SPARC_CODE(return_in_i1(item));
     RETURN(item);
-#endif
 }
 
 
@@ -67,7 +56,6 @@ ParamOriginProto(Item *,AlloI)
 ParamOriginProto(Item *,AlloH)
 {
     DeclReference1(Item *, item);
-    GCable_Entry();
     FetchOriginProto();
 
 #if defined(hppa) && defined(RTDEBUG)
@@ -84,8 +72,6 @@ ParamOriginProto(Item *,AlloH)
 
 
     Ck(item);
-
-    GCable_Exit(1);    
 
     RETURN(item);
 }

@@ -3,8 +3,6 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#define GCable_Module
-
 #include "beta.h"
 #include "crun.h"
 
@@ -13,7 +11,6 @@
 ParamThisOffRange(AlloRR)
 {
     DeclReference1(RefRep *, theRep);
-    GCable_Entry();
     FetchThisOffRange();
 
     DEBUG_CODE(NumAlloRR++);

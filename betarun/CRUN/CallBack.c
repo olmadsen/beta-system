@@ -19,11 +19,7 @@
 /**************************** sparc **************************/
 #ifdef sparc
 
-#ifdef __svr4__
 extern long HandleCB();
-#else
-extern long HandleCB() __asm__("HandleCB");
-#endif
 
 asmlabel(CopyCPP, 
 	 "ba	"CPREF"CopyCPP; "
@@ -50,11 +46,11 @@ void *CCopyCPP(Structure * theStruct, Object * theObj)
     Ck(theStruct);Ck(theObj);
     CBFATop->theStruct = theStruct;
     CBFATop->mov_o7_g1 = MOV_O7_G1;
-    MK_CALL(&CBFATop->call_HandleCallBack, HandleCB);
+    MK_CALL(&CBFATop->call_HandleCB, HandleCB);
     CBFATop->nop       = NOP;
     /* Flush the Instruction Cache, not nessesary I think [tthorn] */
     __asm__("iflush %0"::"r" (&CBFATop->mov_o7_g1));
-    __asm__("iflush %0"::"r" (&CBFATop->call_HandleCallBack));
+    __asm__("iflush %0"::"r" (&CBFATop->call_HandleCB));
     __asm__("iflush %0"::"r" (&CBFATop->nop));
     ++CBFATop;
 
@@ -91,7 +87,7 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
        TO IT. (%g1 is not generally safe to use, but ok here. (I hope :^) */
 
     cb = (CallBackEntry *)
-      ((char *) retAddress - ((char *)&cb->call_HandleCallBack - (char *)cb));
+      ((char *) retAddress - ((char *)&cb->call_HandleCB - (char *)cb));
     retAddress = g1;
 
     if (!cb->theStruct) { freeCallbackCalled(); return 0; }
@@ -102,7 +98,7 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
     tmp     = 0;
     ActiveCallBackFrame = (CallBackFrame *) StackPointer;
 
-    theObj = SPARC_AlloI(cb->theStruct->iOrigin, 0, cb->theStruct->iProto, 0, 0);
+    theObj = OAlloI(cb->theStruct->iOrigin, 0, cb->theStruct->iProto, 0, 0);
 
     /* Call the CallBack stub, with out first four args in %i1..%i4, and
        the rest on stack from %i5 and onwards */

@@ -190,7 +190,7 @@ typedef struct _CallBackEntry {
 #else
   Structure    *theStruct;
   long          mov_o7_g1;
-  long          call_HandleCallBack;
+  long          call_HandleCB;
   long          nop;
 #endif /* MT */
 #endif /* sparc */
