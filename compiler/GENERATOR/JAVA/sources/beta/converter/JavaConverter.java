@@ -10,7 +10,10 @@ class JavaConverter
     boolean trace = true;
 
     BetaOutput beta;
-    Class thisClass;
+    String className;
+    String packageName;
+    String superClass;
+    String superPkg;
 
     Map includes = new HashMap(10);
 
@@ -64,46 +67,91 @@ class JavaConverter
     void doFields(Class cls) throws Throwable
     {
 	boolean first = true;
+	Object o = null;
 	
 	Field fieldlist[] = cls.getDeclaredFields();
 	if (fieldlist.length==0) return;
 
 	for (int i = 0; i < fieldlist.length; i++) {
 	    Field f = fieldlist[i];
-	    if ((f.getModifiers() & Modifier.PRIVATE)==0){
+	    if (!Modifier.isPrivate(f.getModifiers())){
 		if (first){
 		    beta.nl();
 		    beta.commentline("Public/protected fields");
 		    beta.nl();
 		}
 		first = false;
-		boolean isStatic = (f.getModifiers() & Modifier.STATIC)!=0;
-		beta.putField(f.getName(), mapType(f.getType(),false), isStatic);
+		boolean isStatic = Modifier.isStatic(f.getModifiers());
+		String value = null;
+		if (isStatic && Modifier.isFinal(f.getModifiers())){
+		    String type = f.getType().getName();
+		    if (o == null){
+			// Create object to look up static final fields from
+			// FIXME: Object really needed?
+			// o = cls.newInstance() - only possible if default constructor exists
+			Constructor ctorlist[] = cls.getDeclaredConstructors();
+			for (int j = 0; j < ctorlist.length; j++) {
+			    Constructor ct = ctorlist[j];
+			    Class params[] = ct.getParameterTypes();
+			    if (params.length==0){
+				// Found default (parameterless) constructor)
+				o = ct.newInstance(null);
+				break;
+			    }
+			}
+		    }
+		    if (o!=null){
+			if (type.equals("byte")){
+			    value = new Byte(f.getByte(o)).toString(); 
+			} else if (type.equals("short")){
+			    value = new Short(f.getShort(o)).toString(); 
+			} else if (type.equals("int")){
+			    value = new Integer(f.getInt(o)).toString(); 
+			} else if (type.equals("long")){
+			    value = new Long(f.getLong(o)).toString(); 
+			} else if (type.equals("float")){
+			    value = new Float(f.getFloat(o)).toString(); 
+			} else if (type.equals("double")){
+			    value = new Double(f.getDouble(o)).toString(); 
+			} else if (type.equals("char")){
+			    value = new Character(f.getChar(o)).toString(); 
+			} else if (type.equals("boolean")){
+			    value = new Boolean(f.getBoolean(o)).toString(); 
+			}
+		    }
+		} 
+		if (value!=null){
+		    beta.putConstant(f.getName(), value);
+		} else {
+		    beta.putField(f.getName(), mapType(cls, f.getType(),false), isStatic);
+		}
 	    }
 	}
-	beta.nl();
     }
 
     void doConstructors(Class cls) throws Throwable
     {
 	String mangledName;
+	boolean first = true;
 
 	Constructor ctorlist[] = cls.getDeclaredConstructors();
 	if (ctorlist.length==0) return;
 
-	beta.nl();
-	beta.commentline("Public/protected constructors");
-	beta.nl();
-
 	for (int i = 0; i < ctorlist.length; i++) {
 	    Constructor ct = ctorlist[i];
-	    if ((ct.getModifiers() & Modifier.PRIVATE)==0){
+	    if (!Modifier.isPrivate(ct.getModifiers())){
+		if (first){
+		    beta.nl();
+		    beta.commentline("Public/protected constructors");
+		    beta.nl();
+		}
+		first = false;
 		String name = "_init";
 		Class params[] = ct.getParameterTypes();
-		boolean isStatic = (ct.getModifiers() & Modifier.STATIC)!=0;
+		boolean isStatic = Modifier.isStatic(ct.getModifiers());
 		String parameters[] = new String[params.length];
 		for (int j=0; j<params.length; j++){
-		    parameters[j] = mapType(params[j], false);
+		    parameters[j] = mapType(cls, params[j], false);
 		}
 		if (ctorlist.length>1) {
 		    mangledName = mangle(name, params);
@@ -113,25 +161,21 @@ class JavaConverter
 		beta.putMethod(name, mangledName, parameters, null, isStatic);
 	    }
 	}
-	beta.nl();
     }
 
     void doMethods(Class cls) throws Throwable
     {
 	IntegerMap methodcount;
 	String mangledName;
+	boolean first = true;
 
 	Method methlist[] = cls.getDeclaredMethods();
 	if (methlist.length==0) return;
 
-	beta.nl();
-	beta.commentline("Public/protected methods");
-	beta.nl();	
-	
 	// Record all methods in order to reveal overloaded methods 
 	methodcount = new IntegerMap(methlist.length);
 	for (int i = 0; i < methlist.length; i++) {  
-	    if ((methlist[i].getModifiers() & Modifier.PRIVATE)==0){
+	    if (!Modifier.isPrivate(methlist[i].getModifiers())){
 		methodcount.increment(methlist[i].getName());
 	    }
 	}
@@ -140,15 +184,21 @@ class JavaConverter
 	// Then process each method
 	for (int i = 0; i < methlist.length; i++) {  
 	    Method m = methlist[i];
-	    if ((m.getModifiers() & Modifier.PRIVATE)==0){
+	    if (!Modifier.isPrivate(m.getModifiers())){
+		if (first){
+		    beta.nl();
+		    beta.commentline("Public/protected methods");
+		    beta.nl();	
+		}
+		first = false;
 		String name = m.getName();
 		//System.err.println("Method " + name + ": modiciers: " + m.getModifiers());
-		boolean isStatic = (m.getModifiers() & Modifier.STATIC)!=0;
-		String returnType = mapType(m.getReturnType(), false);
+		boolean isStatic = Modifier.isStatic(m.getModifiers());
+		String returnType = mapType(cls, m.getReturnType(), false);
 		Class params[] = m.getParameterTypes();
 		String parameters[] = new String[params.length];
 		for (int j=0; j<params.length; j++){
-		    parameters[j] = mapType(params[j], false);
+		    parameters[j] = mapType(cls, params[j], false);
 		}
 		if (methodcount.value(name)>1) {
 		    mangledName = mangle(name, params);
@@ -158,7 +208,6 @@ class JavaConverter
 		beta.putMethod(name, mangledName, parameters, returnType, isStatic);
 	    }
 	}
-	beta.nl();
     }
 
     void doClasses(Class cls) throws Throwable
@@ -171,25 +220,23 @@ class JavaConverter
 	beta.nl();
 
 	for (int i = 0; i < classlist.length; i++) {
-	    String inner = classlist[i].getName();
-	    System.err.println("Warning: Inner class " + inner + " NYI");
-	    //new JavaConverter().convert(inner, null, false, beta.out);
+	    processClass(cls, classlist[i]);
 	}
     }
 
-    Object[] doIncludes(Class cls, Class sup){
+    Object[] doIncludes(Class cls){
 	// Scan all parameters of all methods to determine if other types
 	// are used as formal parameters, thus causing a need for a BETA INCLUDE.
 	
 	// Super class
-	mapType(sup, true);
+	mapType(cls, cls.getSuperclass(), true);
 
 	// scan fields 
 	Field fieldlist[] = cls.getDeclaredFields();
 	for (int i = 0; i < fieldlist.length; i++) {
 	    Field f = fieldlist[i];
-	    if ((f.getModifiers() & Modifier.PRIVATE)==0) {
-		mapType(f.getType(), true);
+	    if (!Modifier.isPrivate(f.getModifiers())) {
+		mapType(cls, f.getType(), true);
 	    }
 	}
 
@@ -197,10 +244,10 @@ class JavaConverter
 	Constructor ctorlist[] = cls.getDeclaredConstructors();
 	for (int i = 0; i < ctorlist.length; i++) {
 	    Constructor ct = ctorlist[i];
-	    if ((ct.getModifiers() & Modifier.PRIVATE)==0) {
+	    if (!Modifier.isPrivate(ct.getModifiers())) {
 		Class params[] = ct.getParameterTypes();
 		for (int j=0; j<params.length; j++){
-		    mapType(params[j], true);
+		    mapType(cls, params[j], true);
 		}
 	    }
 	}
@@ -209,11 +256,11 @@ class JavaConverter
 	Method methlist[] = cls.getDeclaredMethods();
 	for (int i = 0; i < methlist.length; i++) {  
 	    Method m = methlist[i];
-	    if ((m.getModifiers() & Modifier.PRIVATE)==0) {
-		mapType(m.getReturnType(), true);
+	    if (!Modifier.isPrivate(m.getModifiers())) {
+		mapType(cls, m.getReturnType(), true);
 		Class params[] = m.getParameterTypes();
 		for (int j=0; j<params.length; j++){
-		    mapType(params[j], true);
+		    mapType(cls, params[j], true);
 		}
 	    }
 	}
@@ -223,7 +270,8 @@ class JavaConverter
     }
 
     void include(String name){
-	if (name.equals(thisClass.getName())){
+	//System.err.println("include? " + name + ", self: " + className);
+	if (stripPackage(name).equals(className)){
 	    // No need to include current class
 	} else if (name.equals("java.lang.Object")){
 	    // No need to include Object
@@ -270,7 +318,7 @@ class JavaConverter
 	return mangled;
     }
 
-    String mapType(Class type, boolean doIncludes){
+    String mapType(Class user, Class type, boolean doIncludes){
 	String name = type.getName();
 	if (name.equals("void")){
 	    return null;
@@ -293,7 +341,20 @@ class JavaConverter
 	} else if (name.equals("boolean")){
 	    return "@boolean";
 	} else {
-	    if (doIncludes) include(name);
+	    // Reference to a class
+	    // Find out if that class is an inner class of some outmost class
+	    Class outmost = null;
+	    Class outer = type.getDeclaringClass();
+	    while (outer!=null){ 
+		outmost = outer;
+		outer = outer.getDeclaringClass(); 
+	    }
+	    if (outmost!=null){
+		name = unmangle(outmost, name);
+		if (doIncludes) include(outmost.getName());
+	    } else {
+		if (doIncludes) include(name);
+	    }
 	    return "^" + stripPackage(name);
 	}
     }
@@ -351,32 +412,56 @@ class JavaConverter
 	return (i >= 0) ? name.substring(i+1, name.length()) : name;
     }
 
-    int convert(String classname, String betalib, boolean overwrite, PrintStream out){
-	classname = slashToDot(classname);
-	System.err.println("Converting class\n\t\"" + classname + "\"");
-	try {
-	    Class cls = Class.forName(classname);
-	    thisClass = cls;
-	    String name  = cls.getName();
-	    String pkg   = cls.getPackage().getName();
-	    Class sup = cls.getSuperclass();
-	    String superName = null;
-	    String superPkg = null;
-	    name = stripPackage(name);
-	    pkg = dotToSlash(pkg);
-	    if (sup!=null){
-		superName = sup.getName();
-		superPkg  = sup.getPackage().getName();
-		superName = stripPackage(superName);
-		superPkg  = dotToSlash(superPkg);
+    String unmangle(Class outer, String innerName){
+	String unmangled = innerName;
+	if (outer!=null){
+	    String outerName = outer.getName() + '$';
+	    if (innerName.startsWith(outerName)){
+		unmangled = unmangled.substring(outerName.length(), unmangled.length());
 	    }
-	    beta = new BetaOutput(betalib, pkg, name, superPkg, superName, overwrite, out);
-	    beta.putHeader(doIncludes(cls, sup));
-	    doFields(cls);
-	    doConstructors(cls);
-	    doMethods(cls);
-	    doClasses(cls);
-	    beta.putTrailer();
+	}
+	return unmangled;
+    }
+
+    void processClass(Class outer, Class cls) throws Throwable {
+	String innerClass=null;
+	String innerName=null;
+	String innerSuper=null;
+	if (outer==null) {
+	    beta.putHeader(packageName, className, superClass, doIncludes(cls));
+	} else {
+	    innerClass = stripPackage(cls.getName());
+	    innerName  = stripPackage(unmangle(outer, cls.getName()));
+	    innerSuper = stripPackage(cls.getSuperclass().getName());
+	    beta.indent();
+	    beta.putPatternBegin(innerName, innerSuper);
+	}
+	doFields(cls);
+	doConstructors(cls);
+	doMethods(cls);
+	doClasses(cls);
+	if (outer==null) {
+	    beta.putTrailer(packageName, className);
+	    beta.close();
+	} else {
+	    beta.putTrailer(packageName, innerClass);
+	}
+    }
+
+    int convert(String clsname, String betalib, boolean overwrite, PrintStream out){
+	className = slashToDot(clsname);
+	System.err.println("Converting class\n\t\"" + className + "\"");
+	try {
+	    Class cls   = Class.forName(className);
+	    packageName = dotToSlash(cls.getPackage().getName());
+	    className   = stripPackage(cls.getName());
+	    Class sup   = cls.getSuperclass();
+	    if (sup!=null){
+		superPkg   = dotToSlash(sup.getPackage().getName());
+		superClass = stripPackage(sup.getName());
+	    }
+	    beta = new BetaOutput(betalib, packageName, className, overwrite, out);
+	    processClass(null, cls);
 	} catch (Throwable e) {
 	    e.printStackTrace();
 	    return 1;

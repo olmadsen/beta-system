@@ -6,10 +6,6 @@ import java.io.*;
 
 public class BetaOutput
 {
-    String className;
-    String packageName;
-    String superClass;
-    String superPackage;
     int    indentlevel = 0;
 
     public PrintStream out;
@@ -17,16 +13,10 @@ public class BetaOutput
     public BetaOutput(String betalib, 
 		      String pkg, 
 		      String cls, 
-		      String superPkg, 
-		      String superCls, 
 		      boolean overwrite,
 		      PrintStream outstream)
 	throws Throwable
     {
-	className    = cls;
-	packageName  = pkg;
-	superClass   = superCls;
-	superPackage = superPkg;
 	File entry   = new File(betalib + "/javalib/" + pkg + "/" + cls + ".bet");
 	File existing = null;
 	if (entry.exists() && !overwrite){
@@ -185,7 +175,21 @@ public class BetaOutput
 	
     }
 
-    public void putHeader(Object[] includes)
+    public void putPatternBegin(String className, String superClass){
+	put(mapReserved(className) + ": ");
+	if (superClass==null || superClass.equals("Object")){
+	    put("ExternalClass");
+	} else {
+	    put(superClass);
+	}
+	nl();
+	indent(+2);
+	indent();
+	put("(#");
+	indent(+3);
+    }
+
+    public void putHeader(String packageName, String className, String superClass, Object[] includes)
     {
 	putln("ORIGIN '~beta/basiclib/betaenv';");
 	if (includes!=null){
@@ -198,16 +202,7 @@ public class BetaOutput
 	putln(" * See http://java.sun.com/j2se/1.4.1/docs/api/" 
 			   + packageName + '/' + className + ".html");
 	putln(" *)");
-	put(mapReserved(className) + ": ");
-	if (superClass==null || superClass.equals("Object")){
-	    put("ExternalClass");
-	} else {
-	    put(superClass);
-	}
-	nl();
-	indent(+2);
-	putln("(#");
-	indent(+3);
+	putPatternBegin(className, superClass);
     }
 
     public void putField(String name, String type, boolean isStatic)
@@ -216,6 +211,11 @@ public class BetaOutput
 	    commentline("STATIC:");
 	}
 	putln(mapReserved(name) + ": " + mapReserved(type) + ";");
+    }
+
+    public void putConstant(String name, String value)
+    {
+	putln(mapReserved(name) + ": (# exit " + value + " #);");
     }
 
     public void putMethod(String name, String mangledName, String[] parameters, String returnType, boolean isStatic)
@@ -270,12 +270,15 @@ public class BetaOutput
 	indent(-2);
     }
 
-    public void putTrailer()
+    public void putTrailer(String packageName, String className)
     {
 	indent(-3);
 	putln("do '" + packageName + '/' + className + "' -> className;");
-	putln("#);");
+	putln("#);\n");
 	indent(-2);
-	out.close();
+    }
+
+    public void close(){
+	if (out != System.out) out.close();
     }
 }
