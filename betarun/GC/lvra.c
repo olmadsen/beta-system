@@ -33,7 +33,7 @@ DEBUG_CODE( long LVRATabNum[16] )
  * f(16) = 0; f(32) = 1 ..... f(64Kb) = 12; f(128Kb) = 13 etc.
  * The returned value is <= TableMAX.
  */
-int LVRATableIndex( range )
+static int LVRATableIndex( range )
   int range;
 { int index = 0; range >>= 4;
   while( ( range >>= 1 ) != 0) index++;
@@ -42,7 +42,7 @@ int LVRATableIndex( range )
 }
 
 /* LVRACleanTable initialize the Free List Table */
-LVRACleanTable()
+static LVRACleanTable()
 { int index;
   for(index=0;index <= TableMAX; index++) LVRATable[index] = 0;
   LVRAFreeListAvailable = FALSE;
@@ -50,7 +50,7 @@ LVRACleanTable()
 }
 
 #ifdef RTDEBUG
-LVRADisplayTable()
+static LVRADisplayTable()
 { int index;
   fprintf( output, "#(LVRAFreeList: ");
   for(index=0;index <= TableMAX; index++)
@@ -63,7 +63,7 @@ LVRADisplayTable()
 /* LVRAInsertFreeElement add a value repetition to the 
  * Free List Table. 
  */
-LVRAInsertFreeElement( freeRep)
+static LVRAInsertFreeElement( freeRep)
   ref(ValRep) freeRep;
 { int index; 
   ref(ValRep) headRep;
@@ -90,7 +90,7 @@ LVRAInsertFreeElement( freeRep)
  * two repetitions. 
  * If none of the above tries succeed the function returns 0.
  */
-ref(ValRep) LVRAFindInFree( range)
+static ref(ValRep) LVRAFindInFree( range)
      long range;
 {
   ref(ValRep) currentRep;
@@ -138,7 +138,7 @@ ref(ValRep) LVRAFindInFree( range)
 	currentRep->HighBorder = range;
 
         /* Used the rest to a new repetition, and insert it i the free list. */
-	restRep = (ref(ValRep)) Offset(currentRep, 4*(range+4));
+	restRep = (ref(ValRep)) Offset(currentRep, ValRepSize(range));
         restRep->Proto      = 0;
         restRep->GCAttr     = 0;
 	restRep->LowBorder  = 1;
@@ -161,12 +161,13 @@ ref(ValRep) LVRAFindInFree( range)
 #define inLVRABlock( theB, addr) (LVRABlockStart( theB) <= (ptr(long)) addr \
                                   && (ptr(long)) addr < theB->top)
 
-ref(LVRABlock) newLVRABlock( size )
-  int size;
+static ref(LVRABlock) newLVRABlock( range )
+  int range;
 {
   ref(LVRABlock) theBlock;
+  int            size = LVRABlockSize;
 
-  /* Insert printout */
+  if (ValRepSize(range) >  size) size = ValRepSize(range);
 
   theBlock = (ref(LVRABlock)) MALLOC( sizeof(struct LVRABlock) + size );
   
@@ -179,7 +180,8 @@ ref(LVRABlock) newLVRABlock( size )
     theBlock->state = 0;
     theBlock->top   = LVRABlockStart( theBlock );
     theBlock->limit = (ptr(long)) ((long) LVRABlockStart( theBlock) + (long) size);
-  }else{
+  } else {
+    MallocExhausted = TRUE;
     INFO_LVRA( fprintf( output ,"#(LVRA: failed to allocate new block %dKb)\n", 
 		       toKb(size))); 
   }
@@ -200,14 +202,14 @@ int inLVRA( theObj )
   return FALSE;
 }
 
-long LVRARestInBlock( theBlock)
+static long LVRARestInBlock( theBlock)
   ref(LVRABlock) theBlock;
 {
   return (long) theBlock->limit - (long) theBlock->top;
 }
 
 /* Allocate repetition with range in LVRATopBlock->[top..limit]. */
-ref(ValRep)LVRAAllocInBlock( range)
+static ref(ValRep)LVRAAllocInBlock( range)
  long        range;
 {
   ref(ValRep) newRep;
@@ -253,9 +255,10 @@ ref(ValRep) LVRADoubleAlloc( range)
 ref(ValRep) LVRAAlloc( range)
      long range;
 {
-  ref(ValRep) newRep;
-  long        size;
-  long        rest;
+  ref(ValRep)    newRep;
+  long           size;
+  ref(LVRABlock) block;
+  long           rest;
 
   INFO_LVRA_ALLOC( fprintf( output, "<%d>", range) );
   if( LVRABaseBlock == 0 ){
@@ -279,7 +282,7 @@ ref(ValRep) LVRAAlloc( range)
       newRep->GCAttr     = 0;
       newRep->LowBorder  = 1;
       newRep->HighBorder = rest;
-      LVRATopBlock->top =  (ptr(long)) Offset(LVRATopBlock->top, 4*(rest+4));
+      LVRATopBlock->top =  (ptr(long)) Offset(LVRATopBlock->top, ValRepSize(rest));
   }
   if( LVRALastIOAGc != NumIOAGc){
     LVRAConstructFreeList();
@@ -289,12 +292,10 @@ ref(ValRep) LVRAAlloc( range)
       if( newRep = LVRAAllocInBlock( range) ) return newRep;       
     }
     if( LVRACreateNewBlock || (range > LVRABigRange) ){
-      if( MallocExhausted ) return 0;
-      if( ValRepSize(range) > LVRABlockSize) size = ValRepSize(range);
-      else size = LVRABlockSize;
-      if( (LVRATopBlock->next = newLVRABlock( size) ) == 0 ){
-	MallocExhausted = TRUE; return 0;
-      }
+      if( (block = newLVRABlock( range)) == 0) return 0;
+      block->next        = LVRATopBlock->next;
+      LVRATopBlock->next = block;
+
       LVRATopBlock = LVRATopBlock->next;
       LVRACreateNewBlock = FALSE;
       if( newRep = LVRAAllocInBlock( range) ) return newRep;
@@ -303,19 +304,23 @@ ref(ValRep) LVRAAlloc( range)
   LVRACompaction();
   if( newRep = LVRAAllocInBlock( range) ) return newRep;
   if( newRep = LVRAFindInFree(range) ) return newRep;
-  if( MallocExhausted ) return 0;
-  if( ValRepSize(range) > LVRABlockSize) size = ValRepSize(range);
-  else size = LVRABlockSize;
-  if( (LVRATopBlock->next = newLVRABlock( size) ) == 0 ){
-    MallocExhausted = TRUE; return 0;
+  if( LVRATopBlock->next ){
+    LVRATopBlock = LVRATopBlock->next;
+    if( newRep = LVRAAllocInBlock( range) ) return newRep;
   }
+
+  if( (block = newLVRABlock( range)) == 0) return 0;
+
+  block->next        = LVRATopBlock->next;
+  LVRATopBlock->next = block;
+
   LVRATopBlock = LVRATopBlock->next;
   LVRACreateNewBlock = FALSE;
   if( newRep = LVRAAllocInBlock( range) ) return newRep;
   return 0;
 }
 
-LVRACompaction()
+static LVRACompaction()
 {
   ref(LVRABlock) srcBlock;
   ref(LVRABlock) dstBlock;
@@ -430,7 +435,7 @@ LVRACompaction()
   LVRALastIOAGc = 0;
 }
 
-LVRAAlive( theRep)
+static LVRAAlive( theRep)
      ref(ValRep) theRep;
 {
   if( !isValRep(theRep) ){
@@ -442,7 +447,7 @@ LVRAAlive( theRep)
   return ((long) theRep == *((long *) theRep->GCAttr));
 }
 
-LVRAConstructFreeList()
+static LVRAConstructFreeList()
 {
   ref(LVRABlock) currentLVRABlock;
   ref(ValRep)    currentValRep;
