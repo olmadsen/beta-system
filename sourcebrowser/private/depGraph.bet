@@ -1,0 +1,647 @@
+ORIGIN '~beta/guienv/v1.4/guienv';
+INCLUDE '~beta/containers/v1.5/sets';
+INCLUDE '~beta/mps/v5.1/astlevel'; 
+INCLUDE '~beta/betaast/v5.1/index';
+INCLUDE '~beta/guienv/v1.4/fields';
+INCLUDE '~beta/guienv/v1.4/controls';
+INCLUDE '~beta/guienv/v1.4/graphics';
+INCLUDE '~beta/guienv/v1.4/figureitems';
+INCLUDE '~beta/guienv/v1.4/utils/scrolleradds';
+INCLUDE 'arrows';
+INCLUDE 'depUtils';
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-96
+ *   All rights reserved.
+ *)
+
+--- guienvLib: attributes ---
+
+graphBrowser: window
+  (# AST: ^astInterface;
+     open::
+       (#
+       do true->gridAdjust->openIncludes->openBodies;
+          gridAdjust->(theMenubar).preferences.grid.checked;
+          openIncludes->(theMenubar).preferences.openInclude.checked;
+          openBodies->(theMenubar).preferences.openBody.checked;
+          contents->dependencyGraph.open;
+       #);
+     fgChanged:<
+       (# location: ^text
+       enter location[]
+       do INNER
+       #);
+     display:
+       (# location: ^text;
+          fgi: ^fgItem;
+          p1,p2: @point;
+       enter (location[], ast[])
+       do (10,10)->grid;
+          (2500,2500)->p1;
+          dependencyGraph.viewSize->p2;
+          (p2.h div 2, p2.v div 2)->p1.subtract;
+          p1->dependencyGraph.theScroll;
+          location[]->AST.expandtofullpath->newfgItem->fgi[]->fgl.append; 
+          (2500,2500)->adjustToGrid->fgi.wi.position;
+          true->fgi.wi.positioned;
+          fgi.wi.show
+       #);
+     grid: @point;
+     openBodies, openIncludes, gridAdjust: @boolean;
+     adjustToGrid: @
+       (# pos: @point
+       enter pos
+       do (if gridAdjust then
+              (pos.h mod grid.h, pos.v mod grid.v)->pos.subtract
+          if);
+       exit pos
+       #);
+     menubarType::
+       (# fileMenu: @menu
+            (# quitItem: @menuItem
+                 (# eventHandler:: 
+                      (# onSelect:: (# do THIS(graphBrowser).close #) #);
+                    open:: (#  do 'w'->key; 'Close'->name #)
+                 #);
+               prefItem: @menuItem
+                 (# open::
+                      (#
+                      do 'p'->key; 'Preferences'->name;
+                         preferences.open; preferences[]->submenu 
+                      #)
+                 #);
+               open:: 
+                 (# sep: ^menuItem
+                 do 'File'->name;
+                    prefItem.open; prefItem[]->append;
+                    &separator[]->sep[]; sep.open; sep[]->append;
+                    quitItem.open; quitItem[]->append
+                 #)
+            #);
+          preferences: @menu
+	    (# grid: @menuItem
+                 (# eventhandler::
+		      (# onSelect::
+			   (# do not checked->checked->gridAdjust #)
+		      #);
+		    open:: (# do 'Align to grid'->name #)
+                 #);
+               openInclude: @menuItem
+                 (# eventhandler::
+		      (# onSelect::
+			   (# do not checked->checked->openIncludes #)
+		      #);
+		    open:: (# do 'Open INCLUDEs'->name #)
+                 #);
+               openBody: @menuItem
+                 (# eventhandler::
+		      (# onSelect::
+			   (# do not checked->checked->openBodies #)
+		      #);
+		    open:: (# do 'Open BODYs'->name #)
+                 #);
+               hideInclude: @menuItem
+		 (# eventhandler::
+		      (# onStatus:: (# do not selected.empty->value #);
+                         onSelect::
+			   (#
+			   do (if not checked->checked then
+				  selected.scan(# do current.include.hide #)
+			       else
+				  selected.scan(# do current.include.show #)
+			      if)
+			   #)
+		      #);
+		    open:: (# do 'Hide INCLUDEs'->name #)
+		 #);
+               hideBody: @menuItem
+		 (# eventhandler::
+		      (# onStatus:: (# do not selected.empty->value #);
+                         onSelect::
+			   (#
+			   do (if not checked->checked then
+				  selected.scan(# do current.body.hide #)
+			       else
+				  selected.scan(# do current.body.show #)
+			      if)
+			   #)
+		      #);
+		    open:: (# do 'Hide BODYs'->name #)
+		 #);
+               hideAllInclude: @menuItem
+		 (# eventhandler::
+		      (# onSelect::
+			   (#
+			   do (if not checked->checked then
+				  fgl.scan(# do current.include.hide #)
+			       else
+				  fgl.scan(# do current.include.show #)
+			      if)
+			   #)
+		      #);
+		    open:: (# do 'Hide all INCLUDEs'->name #)
+		 #);
+               hideAllBody: @menuItem
+		 (# eventhandler::
+		      (# onSelect::
+			   (#
+			   do (if not checked->checked then
+				  fgl.scan(# do current.body.hide #)
+			       else
+				  fgl.scan(# do current.body.show #)
+			      if)
+			   #)
+		      #);
+		    open:: (# do 'Hide all BODYs'->name #)
+		 #);
+	       open::
+		 (# sep: ^menuItem
+		 do 'Preferences'->name; 
+                    grid.open; grid[]->append;
+                    &separator[]->sep[]; sep.open; sep[]->append;
+                    openInclude.open; openInclude[]->append;
+		    openBody.open; openBody[]->append;
+                    &separator[]->sep[]; sep.open; sep[]->append;
+                    hideInclude.open; hideInclude[]->append;
+		    hideBody.open; hideBody[]->append;
+                    &separator[]->sep[]; sep.open; sep[]->append;
+                    hideAllInclude.open; hideAllInclude[]->append;
+		    hideAllBody.open; hideAllBody[]->append
+		 #)
+	    #);
+	  open:: (# do fileMenu.open; fileMenu[]->append #)
+      #);
+     diagram: scroller
+       (# open::< (# do INNER open; (5000,5000)->contents.size #);
+	  contentsType::
+	    (# eventhandler::
+		 (# onMouseUp::
+		      (#
+		      do selected.scan(# do current.deselect #);
+			 selected.clear
+		      #)
+		 #);
+	       drawRect: @graphics
+		 (# tl,br: @point
+		 enter tl
+		 do transferModes.xorBlend[]->pen.mode;
+		    tl->br; (itemWidth,itemHeight)->br.add;
+		    (tl,br)->drawRect
+		 #)
+	    #);
+       #);
+     dependencyGraph: @diagram
+       (# open:: (# do true->bindLeft->bindTop->bindRight->bindBottom #) #);
+     connector: arrow
+       (# open::<
+	    (# from, to: @point
+	    enter (from, to)
+	    do from->start; to->end; INNER
+	    #)
+       #);
+     newConnector:
+       (# wi1, wi2: ^fgItem;
+	  connectorType:< connector;
+	  c: ^connectorType
+       enter (wi1[], wi2[])
+       do &connectorType[]->c[];
+	  c[]->wi1.startConnectors.append;
+	  c[]->wi2.endConnectors.append;
+	  INNER
+       #);
+     originConnector: connector
+       (# open::
+	    (#
+	    do 5->pen.size; (11,9)->controlPoint;
+	       true->arrowAtmid; true->filled
+	    #)
+       #);
+     includeConnector: connector
+       (# open::
+	    (#
+	    do 3->pen.size; (9,7)->controlPoint;
+	       true->arrowAtmid; true->filled
+	    #)
+       #);
+     bodyConnector: connector
+       (# open::
+	    (#
+	    do 1->pen.size; (7,5)->controlPoint; true->arrowAtmid;
+	    #)
+       #);
+     newOriginConnector: newConnector
+       (# connectorType:: originConnector
+       do (dependencyGraph.contents[],wi1.wi.south,wi2.wi.north)->c.open
+       #);
+     newIncludeConnector: newConnector
+       (# connectorType:: includeConnector
+       do (dependencyGraph.contents[],wi1.wi.east,wi2.wi.west)->c.open
+       #);
+     newBodyConnector: newConnector
+       (# connectorType:: bodyConnector
+       do (dependencyGraph.contents[],wi1.wi.south,wi2.wi.north)->c.open
+       #);
+     fgItem:
+       (# location: ^text;
+          shown, shownOrigin, shownIncludes, shownBodies: @boolean;
+          fg: ^astInterface.fragmentGroup;
+	  hide:
+	    (#
+	    do wi.hide;
+	       startConnectors.scan(# do current.hide #);
+	       endConnectors.scan(# do current.hide #);
+	    #);
+	  show:
+	    (#
+	    do wi.show;
+	       startConnectors.scan(# do current.show #);
+	       endConnectors.scan(# do current.show #);
+	    #);
+	  wi: ^fgST;
+	  connectors: list
+	    (# element:: connector;
+	       delta:< scan
+		 (# delta: @point
+		 enter delta
+		 do inner
+		 #)
+	    #);
+	  startConnectors: @connectors
+	    (# delta::
+		 (# pos: @point
+		 do current.start->pos; delta->pos.add;
+		    pos->current.start
+		 #)
+	    #);
+	  endConnectors: @connectors
+	    (# delta::
+		 (# pos: @point
+		 do current.end->pos; delta->pos.add;
+		    pos->current.end
+		 #)
+	    #);
+	  delta:
+	    (# delta: @point
+	    enter delta
+	    do wi.position->delta.add; delta->adjustToGrid->delta;
+	       wi.position->delta.subtract;
+	       delta->startConnectors.delta;
+	       delta->endConnectors.delta;
+	       wi.position->delta.add; delta->wi.position;
+	    #);
+	  select: (# do borderStyles.shadowIn->wi.border.style #);
+	  deselect: (# do borderStyles.shadowOut->wi.border.style #);
+	  fgST: staticText
+	    (# connectPoint:
+		 (# right, top, left, bottom: @integer
+		 do frame->((right,top),(left,bottom)); INNER
+		 #);
+	       north: connectPoint
+		 (# 
+		 exit (right+((left-right) div 2),top)
+		 #);
+	       south: connectPoint
+		 (# 
+		 exit (right+((left-right) div 2),bottom)
+		 #);
+	       east: connectPoint
+		 (# 
+		 exit (right,top+((bottom-top) div 2))
+		 #);
+	       west: connectPoint
+		 (# 
+		 exit (left,top+((bottom-top) div 2))
+		 #);
+	       drawRect:
+		 (# delta: @point
+		 enter delta
+		 do position->delta.add;
+		    delta->dependencyGraph.contents.drawRect
+		 #);
+	       drawRects:
+		 (# delta: @point; shiftkey: @boolean
+		 enter (delta,shiftkey)
+		 do (if true
+		     // shiftkey and (selected.size=1) then
+                        (if shownIncludes then
+                            include.scan(# do delta->current.wi.drawRect #)
+                        if);
+                        (if shownBodies then
+                            body.scan(# do delta->current.wi.drawRect #)
+                        if)
+		     else
+                        (*(if shownBodies then
+                         *    body.scan(# do delta->current.wi.drawRect #)
+                         *if)*)
+		    if);
+                    selected.scan(# do delta->current.wi.drawRect #)
+		 #);
+	       eventhandler::
+		 (# tracking: @boolean;
+		    onMouseUp::
+		      (#
+		      do (if true
+			  // tracking then
+			     false->tracking;
+			  // doubleclick then
+                             this(fgItem)[]->showFG
+                          // shiftkey then
+                             (if this(fgItem)[]->selected.has then
+                                 deselect;
+                                 this(fgItem)[]->selected.delete;
+                              else
+                                 select;
+                                 this(fgItem)[]->selected.insert;
+                             if)
+                          else
+			     selected.scan(# do current.deselect #);
+			     selected.clear;
+			     select;
+			     this(fgItem)[]->selected.insert;
+			     location[]->fgChanged
+			 if)
+		      #);
+		    onMouseDown::
+		      (# pos, delta: @point;
+		      do trackMouse
+			   (# mousePress:: 
+				(#
+				do position->pos;
+				   (0,0)->delta;
+				#);
+			      mouseMove::
+				(#
+				do (delta->adjustToGrid,shiftkey)->drawRects;
+                                   (if not tracking then
+                                       (if shiftkey then
+                                           (if not (this(fgItem)[]->selected.has) then
+                                               select;
+                                               this(fgItem)[]->selected.insert;
+                                           if)
+                                        else
+                                           selected.scan(# do current.deselect #);
+			                   selected.clear;
+			                   (if not (this(fgItem)[]->selected.has) then
+                                               select;
+			                       this(fgItem)[]->selected.insert
+                                           if);
+                                       if)
+                                   if);
+                                   true->tracking;
+				   (h,v)->delta.add; (h,v)->pos.add;
+				   (delta->adjustToGrid,shiftkey)->drawRects;
+				#);
+			      mouseRelease::
+				(#
+				do (delta->adjustToGrid,shiftkey)->drawRects;
+				   (if true
+				    // shiftkey and (selected.size=1) then
+                                       (if shownIncludes then
+                                           include.scan(# do delta->current.delta #)
+                                       if);
+                                       (if shownBodies then
+                                           body.scan(# do delta->current.delta #)
+                                       if);
+				    else
+                                       (*(if shownBodies then
+                                        *    body.scan(# do delta->current.delta #)
+                                        *if);*)
+				   if);
+                                   selected.scan(# do delta->current.delta #);
+				#)
+			   #)
+		      #)
+		 #);
+	       positioned: @boolean;
+	       open::
+		 (# fragmentDefaultName:
+		      (# f: @file
+		      enter f.name
+		      exit f.entry.path.name.prefix
+		      #);
+		 do location[]->fragmentDefaultName->label;
+		    (itemWidth,itemHeight)->size;
+		    false->positioned;
+		    true->border.visible;
+		    borderStyles.shadowOut->border.style;
+                    hide;
+	    #) #);
+	  setupOrigin:
+	    (# location: ^text
+	    enter location[]
+	    do l: fgl.find
+		 (# predicate::
+		      (# do current.location[]->location.equalNCS->value #);
+		    notFound::
+		      (# fgi: ^fgItem
+		      do location[]->newfgItem->fgi[];
+			 fgi[]->origin[]; fgi[]->fgl.append;
+		      #)
+		 do current[]->origin[]; leave l
+		 #)
+	    #);
+	  showOrigin:
+	    (#
+	    do (if not shownOrigin then
+                   true->shownOrigin;
+                   (if (origin[]<>NONE) then
+                       origin.body.find
+	               (# predicate::
+		            (# do current.location[]->location.equalNCS->value #);
+                          notFound::
+	                    (#  pos: @point
+	                    do (if not origin.wi.positioned then
+		                   wi.position->pos;
+		                   (0,itemHeight+verticalDistance)
+		                     ->pos.subtract;
+		                   pos->adjustToGrid->origin.wi.position
+	                       if);
+                               (origin[],this(fgItem)[])->newOriginConnector
+	                    #)
+                       #);
+                       origin.wi.show;
+                       true->origin.wi.positioned
+	           if)
+               if)
+	    #);
+	  setupInclude:
+	    (# location: ^text
+	    enter location[]
+	    do l: fgl.find
+		 (# predicate::
+		      (# do current.location[]->location.equalNCS->value #);
+		    notFound::
+		      (# fgi: ^fgItem
+		      do location[]->newfgItem->fgi[];
+			 fgi[]->include.append; fgi[]->fgl.append;
+		      #)
+		 do current[]->include.append; leave l
+		 #);
+               false->shownIncludes
+	    #);
+	  showIncludes:
+	    (# noOfIncludes, top: @integer;
+	       pos: @point
+	    do (if not shownIncludes then
+                   true->shownIncludes;
+                   include.scan
+                   (#
+                   do (if not current.wi.positioned then
+                          noOfIncludes+1->noOfIncludes
+                      if)
+                   #);
+	           wi.position->pos;
+	           (noOfIncludes-1)*(verticalDistance*2+itemHeight)->top;
+	           top div 2->top;
+	           (0,top)->pos.subtract;
+	           (itemWidth+horizontalDistance*2,0)->pos.add;
+                   include.scan
+	           (# 
+	           do (if not current.wi.positioned then
+		          pos->adjustToGrid->pos;
+	                  pos->current.wi.position;
+	                  (0,verticalDistance*2+itemHeight)->pos.add;
+	              if);
+                      current.wi.show;
+                      true->current.wi.positioned;
+                      (current[],this(fgItem)[])->newIncludeConnector;
+                   #)
+               if)
+	    #);
+	  setupBody:
+	    (# location: ^text
+	    enter location[]
+	    do l: fgl.find
+		 (# predicate::
+		      (# do current.location[]->location.equalNCS->value #);
+		    notFound::
+		      (# fgi: ^fgItem
+		      do location[]->newfgItem->fgi[];
+			 fgi[]->body.append; fgi[]->fgl.append;
+		      #)
+		 do current[]->body.append; leave l
+		 #);
+               false->shownBodies
+	    #);
+	  showBodies:
+	    (# noOfBodies, left: @integer;
+	       pos: @point
+	    do (if not shownBodies then
+                   true->shownBodies;
+                   body.scan
+                   (#
+                   do (if not current.wi.positioned then
+                          noOfBodies+1->noOfBodies
+                      if)
+                   #);
+	           wi.position->pos;
+	           (noOfBodies-1)*(horizontalDistance+itemWidth)->left;
+	           left div 2->left;
+	           (left,0)->pos.subtract;
+	           (0,itemHeight+verticalDistance)->pos.add;
+                   body.scan
+                   (# 
+                   do (if not current.wi.positioned then
+	                  pos->adjustToGrid->pos;
+	                  pos->current.wi.position;
+	                  (horizontalDistance+itemWidth,0)->pos.add;
+                      if);
+                      current.wi.show;
+                      true->current.wi.positioned;
+                      (this(fgItem)[],current[])->newBodyConnector;
+                   #)
+               if)
+	    #);             
+          origin: ^fgItem;
+          include: @list
+	    (# element:: fgItem;
+	       hide: scan(# do ;'-a-'->puttext; current.hide ;'-b-'->putline; #);
+	       show: scan(# do current.show #);
+            #);
+          body: @list
+            (# element:: fgItem;
+               hide: scan(# do current.hide #);
+               show: scan(# do current.show #);
+            #);
+       #);
+     newfgItem:
+       (# fgi: ^fgItem;
+	  location: ^text
+       enter location[]
+       do &fgItem[]->fgi[];
+	  location.copy->fgi.location[];
+	  &fgi.fgST[]->fgi.wi[]; dependencyGraph.contents[]->fgi.wi.open;
+          false->fgi.shown;
+       exit fgi[]
+       #);
+        
+     selected: @set(# element:: fgItem #);
+     fgl: @list
+       (# element:: fgItem #);
+        
+     verticalDistance: (# exit 25 #);
+     horizontalDistance: (# exit 25 #);
+     itemHeight: (# exit 25 #);
+     itemWidth: (# exit 100 #);
+        
+     showFG:
+       (# fg: ^astInterface.fragmentGroup; current: ^fgItem
+       enter current[]
+       do (if not current.shown then
+              true->current.shown;
+              ((current.location[],currentDirectory)
+                ->AST.thePathHandler.convertFilePath,screen[])
+                ->AST.top.open->fg[];
+              (ast[],fg[],'sun4s')->scanLocalDependency
+              (# doProperty:: 
+                   (# t: ^Text;
+                   do (* ORIGIN,BODY, MDBODY or MAKE *)
+                      (if true
+                       // 'ORIGIN'->prop.equalNCS then
+                          current.location[]->AST.stripPathName->t[];
+                          (if t[]=NONE then
+                              s.copy->AST.expandtofullpath->t[]
+                           else
+                              (s.copy,t[])
+                                ->AST.thePathHandler.convertFilePath->t[]
+                          if);
+                          t[]->current.setupOrigin 
+                          
+                       // 'BODY'->prop.equalNCS
+                       // 'MDBODY'->prop.equalNCS then
+                          current.location[]->AST.stripPathName->t[];
+                          (if t[]=NONE then
+                              s.copy->AST.expandtofullpath->t[]
+                           else
+                              (s.copy,t[])
+                                ->AST.thePathHandler.convertFilePath  ->t[]
+                          if);
+                          t[]->current.setupBody
+                      if)
+                   #);
+                 doFragmentLink:: 
+                   (#
+                      t: ^text
+                   do (* INCLUDE *)
+                      current.location[]->AST.stripPathName->t[];
+                      (if t[] = none then
+                          fle.name.copy
+                            ->AST.expandtofullpath->t[]
+                       else
+                          (fle.name.copy,t[])
+                            ->AST.thePathHandler.convertFilePath  ->t[]
+                      if);
+                      t[]->current.setupInclude
+                   #);
+                 doFragmentForm:: 
+                   (# 
+                   do 
+                   #)
+              #)
+          if);
+	  current.showOrigin;
+          (if openIncludes then current.showIncludes if);
+          (if openBodies then current.showBodies if)
+       #)
+  #)

@@ -5,7 +5,9 @@ INCLUDE '~beta/objectbrowser/v2.1/UI/obguienvadds'
         '~beta/guienv/v1.4/utils/pane'
         '~beta/basiclib/v1.5/formatio'
         '~beta/basiclib/v1.5/file'
+        '~beta/betaast/v5.1/donecheck'
         '~beta/editor/v5.1/fragmentscanner'
+        (*'~/newgroup'*)
 (*
  * COPYRIGHT
  *   Copyright Mjolner Informatics, 1995-96
@@ -34,63 +36,87 @@ do
      #)
 
 -- sourcebrowserprivate: Descriptor --
-(#
-   minHorizControlWidth: (#  exit 100 #);
-   initialProjectListViewWidth: (#  exit 146 #);
+(# initialProjectListViewWidth: (#  exit 146 #);
    initialGroupListViewWidth: (#  exit 146 #);
    initialFormListViewWidth: (#  exit 212 #);
    initialListViewHeight: (#  exit 150 #);
    initialWindowWidth:
      (# 
      exit initialProjectListViewWidth+initialGroupListViewWidth+
-     initialFormListViewWidth
+     initialFormListViewWidth+2*stdPaneWidth
      #);
-   outerctrl: @pane (* Vertical control containing upctrl and down. *)
-     (#
-        eventhandler:: 
+   stdMinSize: (#  exit 50 #);
+   stdPaneWidth: (# exit 2 #);
+   outerctrl: @pane
+     (* Vertical pane containing upctrl, down and locationView. *)
+     (# eventhandler:: 
           (# onFatherFrameChanged::  (#  do father.size->size #) #);
         dobind: (#  do upctrl.dobind; down.dobind;  #);
         open:: 
-          (#
-             setDefaults:: 
-               (#  do TRUE->verticalStacking; 50->minsize; 2->panewidth  #)
+          (# setDefaults:: 
+               (#
+               do TRUE->verticalStacking;
+                  stdMinSize->minsize;
+                  stdPaneWidth->panewidth
+               #)
           do
              (outerctrl[],false,50,2)->upctrl.open;
              outerctrl[]->down.open;
+             (outerctrl[],(initialWindowWidth,45))->locationView.open;
+             infoView.open;
              upctrl[]->appendMember;
              upctrl[]->fixedSize;
              down[]->appendMember;
+             locationView[]->appendMember;
+             locationView[]->fixedSize;
              appendsDone;
-             doBind
+             dobind
           #)
      #);
    upctrl: @pane
-   (* Horizontal group containing projectList, groupList and FragmentGroupView *)
-     (#
+   (* Horizontal pane containing projectList, groupList and fragmentGroupView *)
+     (# fatherFrame:: (# do upctrl.frame->fr #);
         dobind:
           (#
-          do projectList.dobind; grouplist.dobind; FragmentGroupView.dobind 
+          do projectList.dobind; grouplist.dobind; fragmentGroupView.dobind 
           #);
         open:: 
           (#
              setDefaults:: 
                (# 
                do
-                  FALSE->verticalStacking; minHorizControlWidth div 2->minsize 
+                  FALSE->verticalStacking;
+                  stdMinSize->minsize;
+                  stdPaneWidth->panewidth
                #)
           do
              upctrl[]->projectList.open;
              upctrl[]->grouplist.open;
-             upctrl[]->FragmentGroupView.open;
+             upctrl[]->fragmentGroupView.open;
              projectList[]->appendMember;
              grouplist[]->appendMember;
-             FragmentGroupView[]->appendMember;
+             fragmentGroupView[]->appendMember;
              appendsDone;
-             doBind
+             dobind
           #)
      #);
-   projectList: @labelled
-     (#
+   projectList: @labelled(*newgroup*)
+     (# zoomed: @boolean;
+        eventhandler::
+          (# onMouseDown::
+               (#
+               do (if doubleclick then
+                      (if zoomed then
+                          false->zoomed;
+                          upctrl.unzoom
+                       else
+                          true->zoomed;
+                          projectList[]
+                            ->upctrl.zoomMember
+                      if)
+                  if)
+               #)
+          #);
         dobind: (#  do contents.dobindings #);
         shownprojects: @List
           (#
@@ -202,9 +228,24 @@ do
           #)
      #);
    grouplist: @labelled
-     (#
+     (# zoomed: @boolean;
+        eventhandler::
+          (# onMouseDown::
+               (#
+               do (if doubleclick then
+                      (if zoomed then
+                          false->zoomed;
+                          upctrl.unzoom
+                       else
+                          true->zoomed;
+                          grouplist[]
+                            ->upctrl.zoomMember
+                      if)
+                  if)
+               #)
+          #);
         dobind: (#  do contents.dobindings #);
-        clear: (#  do emptyProjectListLabel->label; groups.clear  #);
+        clear: (#  do (*emptyProjectListLabel->label;*) groups.clear  #);
         contentsType:: listmoveableList
           (#
              clear:
@@ -212,14 +253,13 @@ do
                do
                   groups.clear;
                   0->setNumberOfItems;
-                  emptyProjectListLabel->label
+                  (*emptyProjectListLabel->label*)
                #);
              setgroup:
                (# g: ^projects.group; index: @Integer; 
                enter g[]
                do
                   sbprivate.fragmentGroupView.contents.clear;
-                  sbprivate.down.fragmentView.clear;
                   (if g[] = none then
                       selection.clear
                    else
@@ -234,11 +274,17 @@ do
              eventHandler:: 
                (#
                   onMouseUp:: 
-                    (# 
+                    (# selectedGroup: ^projects.group
                     do (if (not doubleClick) and (selection.first <> 0) then
-                           (currentProject[],
-                            selection.first->groups.getGroupByIndex)
-                             ->THIS(sourcebrowser).setGroup
+                           selection.first->groups.getGroupByIndex
+	                     ->selectedGroup[];
+                           (if selectedGroup.txtFile then
+                               selectedGroup.location[]->down.newAsciiEditor
+                            else
+		               (currentProject[],
+                               selection.first->groups.getGroupByIndex)
+                                 ->THIS(sourcebrowser).setGroup
+                           if)
                        if)
                     #)
                #);
@@ -283,7 +329,7 @@ do
                   groups.size->setNumberOfItems;
                   groups.scan
                     (#  do (current.index,current.g.name[])->settext #);
-                  p.name[]->label
+                  (*p.name[]->label*)
                exit first[]
                #)
           #);
@@ -303,7 +349,22 @@ do
           #)
      #);
    fragmentGroupView: @labelled
-     (#
+     (# zoomed: @boolean;
+        eventhandler::
+          (# onMouseDown::
+               (#
+               do (if doubleclick then
+                      (if zoomed then
+                          false->zoomed;
+                          upctrl.unzoom
+                       else
+                          true->zoomed;
+                          fragmentGroupView[]
+                            ->upctrl.zoomMember
+                      if)
+                  if)
+               #)
+          #);
         dobind: (#  do contents.dobindings #);
         contentsType:: listmoveableList
           (#
@@ -377,7 +438,7 @@ do
                            myAddText:: 
                              (#  do inx+1->inx; (inx,t[])->setText #)
                         #);
-                      ng.name[]->fragmentGroupView.label;
+                      (*ng.name[]->fragmentGroupView.label;*)
                       selection.clear;
                       INNER
                   if)
@@ -393,14 +454,13 @@ do
                       (if index <> 0 then
                           (index,FALSE)->selection.select;
                           selection.scrollIntoView;
-                          ff[]->down.fragmentView.newFragment
                       if)
                   if)
                #);
              clear:
                (# 
                do
-                  emptyGroupViewLabel->fragmentGroupView.label;
+                  (*emptyGroupViewLabel->fragmentGroupView.label;*)
                   none ->g[];
                   0->setNumberOfItems
                #);
@@ -433,7 +493,7 @@ do
                          doProperty:: 
                            (# t: ^Text; 
                            do (* ORIGIN,BODY, MDBODY or MAKE *)
-                              sbprivate.down.fragmentView.clear;
+                              sbprivate.down.popdown;
                               none ->currentForm[]; none ->onCurrentFormChange;
                               (inx,false)->selection.select;
                               selection.scrollIntoView;
@@ -444,7 +504,7 @@ do
                            (# 
                            do (* INCLUDE *)
                               (inx,false)->selection.select;
-                              sbprivate.down.fragmentView.clear;
+                              sbprivate.down.popdown;
                               none ->currentForm[]; none ->onCurrentFormChange;
                               selection.scrollIntoView;
                               true->propertySelected;
@@ -471,7 +531,21 @@ do
                            find:
                            (fg[],inx)
                              ->fgs.scanPropsAndFrags
-                               (# doFragmentForm:: 
+                           (# doProperty::
+                                (# t: ^text; f: @file;
+                                   view: ^sbprivate.down.asciiEditorView;
+                                do (if true
+                                    // 'MAKE'->prop.equalNCS then
+                                       currentGroup.location[]->f.name;
+                                       f.entry.path.head->t[];
+                                       ast.thepathhandler.directoryChar
+                                         ->t.put;
+                                       s[]->t.append;
+                                       t[]->sbprivate.down.newAsciiEditor
+                                   if);
+                                   leave find
+                                #);
+                              doFragmentForm:: 
                                     (# 
                                     do (currentProject[],currentGroup[],fle.open)
                                          ->THIS(sourceBrowser).setFragmentForm;
@@ -491,7 +565,7 @@ do
                            (fg[],inx)
                              ->fgs.scanPropsAndFrags
                                (# doProperty:: 
-                                    (# t: ^Text; 
+                                    (# t: ^Text; f: @file;
                                     do (* ORIGIN,BODY, MDBODY or MAKE *)
                                        (if true
                                         // 'ORIGIN'->prop.equalNCS
@@ -499,7 +573,12 @@ do
                                         // 'MDBODY'->prop.equalNCS then
                                            s[]->followLink; 
                                         // 'MAKE'->prop.equalNCS then
-                                           s[]->makeFileEdit; 
+                                           currentGroup.location[]->f.name;
+                                           f.entry.path.head->t[];
+                                           ast.thepathhandler.directoryChar
+                                             ->t.put;
+                                           s[]->t.append;
+                                           t[]->fileEdit; 
                                        if);
                                        leave find
                                     #);
@@ -553,108 +632,534 @@ do
           #)
      #);
    down: @Canvas
-     (#
-        dobind: (#  do fragmentView.dobind #);
+     (# aeList: @list (* ascii editors active in this browser *)
+          (# element:: (# ae: ^asciiEditor #);
+             findOrCreateAsciiEditor:
+               (# ae: ^asciiEditor;
+                  path: ^text; view: ^asciiEditorView
+               enter path[]
+               do 'Opening '->infoView.settext; path[]->infoView.append;
+                  ' ... '->infoView.append; infoView.msgPush;
+                  l: find
+                    (# predicate::
+                         (# do current.ae.path->path.equalNCS->value #);
+                       notFound::
+                         (# newElm: ^element
+                         do &asciiEditorView[]->view[];
+                            (down[],down.size)->view.open;
+                            (*path.copy->view.label;*) path.copy->view.path[];
+                            (if not view.ae.reload then leave l if);
+                            view.ae[]->ae[];
+                            &element[]->newElm[];
+                            view.ae[]->ae[]->newElm.ae[];
+                            newElm[]->append
+                         #)
+                    do current.ae[]->ae[]
+                    #);
+                  infoView.msgPop
+               exit ae[]
+               #);
+             closeAsciiEditor:
+               (# path: ^text; okToClose: @boolean; 
+               enter path[]
+               do locate
+                  (# predicate::
+                       (# do current.elm.ae.path->path.equalNCS->value #)
+                  do (if position.elm.ae.close->okToClose then
+                         position[]->delete
+                     if)
+                  #)
+               exit okToClose
+               #);
+             closeAsciiEditors:
+               (# okToClose: @boolean
+               do true->okToClose;
+                  l: iterate
+                    (# 
+                    do (if current.elm.ae.close->okToClose then
+                           current[]->delete
+                        else
+                           leave l
+                       if)
+                    #)
+               exit okToClose
+               #)
+          #);
+        dobind: (#  do (*currentView.dobind*) #);
         open:: 
           (# 
-          do
-             (initialWindowWidth,2*initialListViewHeight)->size;
-             (down[],size)->fragmentView.open
+          do (down[],down.size)->defaultView.open; defaultView.show; 
+             defaultView[]->currentView[]
           #);
-        fragmentView: @labelled
+        newfragment:
+          (# ff: ^astInterface.fragmentForm;
+             view: ^fragmentViewType;
+             cfe: ^codeeditor
+          enter ff[]
+          do &fragmentViewType[]->view[];
+             (down[],down.size)->view.open;
+             (ff[],ff.root[],none,view.contents[],cge[])
+               ->edenv.findOrCreateFormEditor->cfe[];
+             ff.name->view.label
+          exit (cfe[], view[])
+          #);
+        newAsciiEditor:
+          (# p: ^text
+          enter p[]
+          do p[]->aeList.findOrCreateAsciiEditor->cte[];
+             cte.show;
+             none->cfe[]
+          #);
+        popdown:
+          (#
+          do defaultView[]->popup
+          #);             
+        popup:
+          (# view: ^overlayType
+          enter view[]
+          do (if view[]<>NONE then view.bringToFront; view.show; if);
+             (if (currentView[]<>NONE) and (currentView[]<>view[]) then
+                 currentView.hide
+             if);
+             view[]->currentView[];
+          #);             
+        overlayType:(* canvas*)labelled
+          (# (*contents: @contentsType*);
+             (*contentsType:< windowItem*);
+             zoomed: @boolean;
+             eventhandler::<
+               (# onMouseDown::
+                    (#
+                    do (if doubleclick then
+                           (if zoomed then
+                               false->zoomed;
+                               outerctrl.unzoom
+                            else
+                               true->zoomed;
+                               down[]->outerctrl.zoomMember
+                           if)
+                       if)
+                    #);
+                  onFatherFrameChanged::
+                    (# do (if visible then down.size->size(*->contents.size*) if) #);
+                  onVisibleChanged::
+                    (# do (if visible then down.size->size(*->contents.size*) if) #);
+               #);
+             open::< 
+               (# sz: @point;
+                  (*openContents:<
+                   *  (# doneInINNER: @boolean
+                   *  do INNER;
+                   *     (if not doneInINNER then
+                   *         this(overlayType)[]->contents.open;
+                   *         true->doneInINNER
+                   *     if)
+                   *   #)
+                   *)
+               enter sz
+               do hide;
+                  sz->size;
+                  (*openContents;*)
+                  INNER
+               #)
+          #);
+        textView: overlayType
+          (# changed, allowEdit, loading: @boolean;
+             contentsType::< textEditor
+               (# contentsType::<
+                    (# eventhandler::<
+                         (# onTextChanged::
+                              (#
+                              do not loading->changed->locationView.changed
+                              #);
+                            onBeforeChange::
+                              (# do (loading or allowEdit)->allow #)
+                         #)
+                    #)
+               #)
+          #);
+        asciiEditorView: textView
+          (# path, name: ^text;
+             loadStream:
+               (# strm: ^stream;
+                  theText: @styledText;
+               enter strm[]
+               do strm.reset;
+                  strm.scan
+                  (# while:: (# do true->value #);
+                  do ch->theText.put;
+                  #);
+                  true->loading;
+                  theText[]->contents.contents.contents;
+                  false->loading;
+               #);
+             saveStream:
+               (# strm: ^stream;
+                  theText: ^styledText;
+               enter strm[]
+               do strm.reset;
+                  contents.contents.contents->theText[];
+                  theText[]->strm.puttext
+               #);
+             ae: @asciiEditor
+               (# allowEdit:: (# do this(asciiEditorView).allowEdit->value #);
+                  toggleAllowEdit::
+                    (#
+                    do not this(asciiEditorView).allowEdit
+                         ->this(asciiEditorView).allowEdit;
+                       not this(asciiEditorView).allowEdit
+                         ->locationView.locked;
+                    #);
+                  changed:: (# do this(asciiEditorView).changed->value #);
+                  cutStatus::
+                    (#
+                    do (contents.contents.selection.start
+                       <>contents.contents.selection.end)
+                         ->value
+                    #);
+                  doCut:: (# do contents.contents.cut #);
+                  copyStatus::
+                    (#
+                    do (contents.contents.selection.start
+                       <>contents.contents.selection.end)
+                         ->value
+                    #);
+                  doCopy:: (# do contents.contents.copy #);
+                  pasteStatus:: (# do (*clipboard.hasText*)true->value
+                                #);
+                  doPaste:: (# do contents.contents.paste #);
+                  doClear:: (# do contents.contents.clear #);
+                  save::
+                    (#
+                    do l:
+                         (# t: ^text;
+                            f: @file
+                              (# cleanUp:
+                                   (# msg: ^text
+                                   enter msg[]
+                                   do (none, msg[], 'Warning')->alertUser;
+                                      leave l
+                                   #);
+                                 accessError:: (# do msg[]->cleanup #);
+                                 writeError:: (# do msg[]->cleanup #);
+                                 readError:: (# do msg[]->cleanup #);
+                                 EOSerror:: (# do msg[]->cleanup #);
+                                 noSuchFileError:: (# do msg[]->cleanup #);
+                                 fileExistsError:: (# do msg[]->cleanup #);
+                                 noSpaceError:: (# do msg[]->cleanup #);
+                                 otherError:: (# do msg[]->cleanup #);
+                              #)
+                         do path
+                              ->fragmentGroupView.contents.AST.expandToFullPath
+                              ->f.name;
+                            (if f.entry.exists then
+                                (if f.entry.writeable then
+                                    f.openWrite; f[]->this(asciiEditorView).saveStream; f.close
+                                 else
+                                    'File exception for '''->t[];
+                                    f.name->t.append; t.newline;
+                                    'File is not writeable (Insufficient access privilegies)'->t.append;
+                                    (none, t[], 'Warning')->alertUser;
+                                    leave l
+                                if)
+                             else
+                                'File exception for '''->t[];
+                                f.name->t.append; t.newline;
+                                'File does not exist'->t.append;
+                                (none, t[], 'Warning')->alertUser;
+                                leave l
+                            if);
+                            false->locationView.changed;
+                         #)
+                    #);
+                  saveAs:: (# do #);
+                  reload::
+                    (# t: ^text; success: @boolean
+                    do l: 
+                         (# f: @file
+                              (# cleanUp:
+                                   (# msg: ^text
+                                   enter msg[]
+                                   do (none, msg[], 'Warning')->alertUser;
+                                      leave l
+                                   #);
+                                 accessError:: (# do msg[]->cleanup #);
+                                 writeError:: (# do msg[]->cleanup #);
+                                 readError:: (# do msg[]->cleanup #);
+                                 EOSerror:: (# do msg[]->cleanup #);
+                                 noSuchFileError:: (# do msg[]->cleanup #);
+                                 fileExistsError:: (# do msg[]->cleanup #);
+                                 noSpaceError:: (# do msg[]->cleanup #);
+                                 otherError:: (# do msg[]->cleanup #);
+                              #)
+                         do false->success;
+                            path
+                              ->fragmentGroupView.contents.AST.expandToFullPath
+                              ->f.name;
+                            (if f.entry.exists then
+                                (if f.entry.readable then
+                                    f.entry.writeable->this(asciiEditorView).allowEdit;
+                                    ''->t[]; t[]->loadStream;
+                                    f.openRead; f[]->loadStream; f.close;
+                                 else
+                                    'File exception for '''->t[];
+                                    f.name->t.append; t.newline;
+                                    'File is not readable (Insufficient access privilegies)'->t.append;
+                                    (none, t[], 'Warning')->alertUser;
+                                    leave l
+                                if)
+                             else
+                                'File exception for '''->t[];
+                                f.name->t.append; t.newline;
+                                'File does not exist'->t.append;
+                                (none, t[], 'Warning')->alertUser;
+                                leave l
+                            if);
+                            false->locationView.changed;
+                            true->success
+                         #)
+                    exit success
+                    #);
+                  search:: (# do #);
+                  replace:: (# do #);
+                  
+                  show::
+                    (#
+                    do this(asciiEditorView)[]->popup;
+                       none->currentGroup[]->onCurrentGroupChange;
+                       fragmentGroupView.contents.clear
+                    #);
+                  close::
+                    (# t: ^text
+                    do (if changed then
+                           'Text file: '->t[];
+                           path->t.putline;
+                           'have been changed.'->t.putline;
+                           'Save?'->t.puttext;
+                           (none ,'Warning',t[])
+                             ->promptForBoolean
+                           (# ok:: 
+                                (# do true->value; save #);
+                              notok:: 
+        	                (# do true->value #);
+        	              cancel:: 
+        	                (# do false->value #) 
+        	           #)
+                        else
+                           true->value
+                       if)
+                    #);
+                  path:: (# do this(asciiEditorView).path.copy->path[] #);
+               #)
+          #);
+        currentView: ^overlayType;
+        defaultView: @textView
+          (# open:: (# do emptyCodeViewLabel->label #) #);
+        ffViewType: codemoveableEditor
+          (# isolated:: trueObject;
+             dobind:
+               (# 
+               do TRUE->bindRight->bindBottom->bindLeft->bindTop
+               #);
+             selectNode:: 
+               (#
+               do (theEditorRoot[],node[],separate)
+                    ->THIS(sourceBrowser).selectNode
+               #);
+             open:: 
+               (# do this(ffViewType)[]->onCodeViewOpen #);
+             newfragment:: 
+               (# 
+               do
+                  (if editorRoot[] <> none then
+                      (if editorRoot.frag[] <> none then
+                          (*editorRoot.frag.name->currentView.label*)
+                       else
+                          (*emptyCodeViewLabel->currentView.label*)
+                      if)
+                   else
+                      (*emptyCodeViewLabel->currentView.label*)
+                  if)
+               #);
+             initialContractionLevel::  (#  do 2->value #);
+             charWidthType:: 
+               (# 
+               do
+                  (* HACK NEEDED UNTIL textEditor.defaultStyle gets 
+                   * implemented !!! *)
+                  fragmentGroupView.private.theLabel.style->ts[]
+               #);
+             getEncloser::  (#  do editorEncloser[]->theEncloser[] #)
+          #);
+        fragmentViewType: overlayType
           (#
              dobind:
                (#  do contents.dobind; TRUE->bindRight->bindBottom #);
-             lastFragment: ^astInterface.fragmentForm;
-             clearing: @Boolean;
-             clear:
-               (# 
-               do
-                  TRUE->clearing;
-                  contents.contents.all->contents.contents.selection.set;
-                  contents.contents.delete;
-                  none ->newfragment;
-                  none ->lastFragment[];
-                  FALSE->clearing
-               #);
-             newfragment:
-               (# ff: ^astInterface.fragmentForm
-               enter ff[]
-               do
-                  (if true
-                   // ff[] = none then
-                      emptyCodeViewLabel->fragmentView.label
-                   // lastFragment[] = none
-                   // not (lastFragment.root[]->ff.root.equal) then
-                      ff[]->lastFragment[];
-                      ff.name->fragmentView.label
-                  if);
-               #);
-             contentsType:: codemoveableEditor
-               (# isolated:: trueObject;
-                  dobind:
-                    (# 
-                    do TRUE->bindRight->bindBottom->bindLeft->bindTop
-                    #);
-                  selectNode:: 
-                    (#  do (theEditorRoot[],node[],separate)->THIS(sourceBrowser).selectNode #);
-                  open:: 
-                    (#  do fragmentView.contents[]->onCodeViewOpen #);
-                  newfragment:: 
-                    (# 
-                    do
-                       (if editorRoot[] <> none then
-                           (if editorRoot.frag[] <> none then
-                               editorRoot.frag.name->fragmentView.label
-                            else
-                               emptyCodeViewLabel->fragmentView.label
-                           if)
-                        else
-                           emptyCodeViewLabel->fragmentView.label
-                       if)
-                    #);
-                  initialContractionLevel::  (#  do 2->value #);
-                  charWidthType:: 
-                    (# 
-                    do
-                    (* HACK NEEDED UNTIL textEditor.defaultStyle gets 
-                     * implemented !!! *)
-                       THIS(fragmentView).private.theLabel.style->ts[]
-                    #);
-                  contentsType:: 
-                    (#
-                       eventHandler:: 
-                         (# onBeforeChange:: 
-                              (# 
-                              do (if not allow then clearing->allow if)
-                              #)
-                         #)
-                    #);
-                  getEncloser::  (#  do editorEncloser[]->theEncloser[] #)
-               #);
+             contentsType:: ffViewType;
              open:: 
-               (#
-                  sz: @Point;
-                  openContents:: 
+               (# openContents:: 
                     (# 
-                    do (none ,sz)->contents.open;
+                    do (this(fragmentViewType)[], sz)->contents.open;
                        TRUE->doneInInner
                     #)
-               enter sz
-               do sz->size; none ->lastFragment[]; none ->newfragment
                #)
-          #)
+          #);
      #);
    open:
      (# 
      do
         projects.init;
         (THIS(sourcebrowser)[],true,50,2)->outerctrl.open;
-        INNER ;
+        INNER open;
         outerctrl.size->THIS(sourcebrowser).size
      #)
 #)  
 
+-- sourcebrowserLocationViewMouseDown: dopart -- 
+do (if doubleclick then
+       (if private.zoomed then
+           false->private.zoomed;
+           contents.show; private.log.hide;
+           sbprivate.outerctrl.unzoom
+        else
+           true->private.zoomed; infoView.txt[]->screen.puttext;
+           locationView[]->sbprivate.outerctrl.zoomMember;
+           contents.frame->private.log.frame;
+           private.log.show; contents.hide;
+       if)
+   if)
+   
+-- sourcebrowserLocationViewDisplay: dopart --
+do m[]->contents.label;
+   '\n'->((7,m.length)->m.sub).append->private.log.append;
+   true->locationView.contents.update               
+   
+-- sourcebrowserLocationViewPrivate: descriptor --
+(# zoomed: @boolean;
+   log: @texteditor
+     (# inserting: @boolean;
+        contentsType::
+          (# eventhandler::
+               (# onBeforeChange:: (# do inserting->allow #) #)
+          #);
+        append:
+          (# msg: ^text
+          enter msg[]
+          do true->inserting; 
+             (contents.length,contents.length)->contents.selection.set;
+             contents.selection.scrollIntoView;
+             msg[]->contents.insert;
+             false->inserting
+          #);
+        open:: (# do true->bindleft->bindtop->bindright->bindbottom; hide #)
+     #);
+   changedLabel: @staticText
+     (# width: @integer;
+        eventhandler::
+          (# onFatherFrameChanged::
+               (# w,h: @integer
+               do locationView.size->(w,h); (w-width-5,0)->position
+               #)
+          #);
+        open::
+          (# w,h,y: @integer; p: @point
+          do '*'->label; hide;
+             preferredSize->size->(width,y); locationView.size->(w,h);
+             true->border.visible; borderStyles.etchedIn->border.style;
+             (w-width-5,0)->position
+          #)
+     #);
+   checkedLabel: @staticText
+     (# width: @integer;
+        eventhandler::
+          (# onFatherFrameChanged::
+               (# p: @point
+               do changedLabel.position->position;
+               #)
+          #);
+        open::
+          (# w,h: @integer; p: @point
+          do 'c'->label; hide; preferredSize->size;
+             true->border.visible; borderStyles.etchedIn->border.style;
+             changedLabel.position->position
+          #)
+     #);
+   lockedLabel: @staticText
+     (# calcNewPosition:
+          (# w,h: @integer; p: @point
+          do changedLabel.position->p; changedLabel.size->(w,h);
+             (w+5,0)->p.subtract; p->position
+          #);
+        eventhandler::
+          (# onFatherFrameChanged::
+               (# do calcNewPosition #)
+          #);
+        open::
+          (# w,h: @integer; p: @point
+          do '%'->label; hide; preferredSize->size;
+             true->border.visible; borderStyles.etchedIn->border.style;
+             calcNewPosition;
+          #)
+     #);
+#)
+
+-- sourcebrowserLocationViewChanged: dopart --
+do (if true
+    // status then
+       private.changedLabel.show
+    // not status then
+       private.changedLabel.hide
+   if);
+   status->isChanged
+
+-- sourcebrowserLocationViewChecked: dopart --
+do (if true
+    // status then
+       private.checkedLabel.show
+    // not status then
+       private.checkedLabel.hide
+   if);
+   status->isChecked
+
+-- sourcebrowserLocationViewLocked: dopart --
+do (if true
+    // status then
+       private.lockedLabel.show
+    // not status then
+       private.lockedLabel.hide
+   if);
+   status->isLocked
+
+-- sourcebrowserLocationViewMsg: dopart --
+do 'Location: '->(msg.copy).prepend->label; update;
+   (if true
+    // (cge[]<>none) and (cge.touched>0) then
+       false->checked; true->changed
+    // (cge[]<>none) and
+       ((sbprivate.fragmentGroupView.contents.ast[],cge.fg[])
+         ->getDoneCheckProperty) then
+       false->changed; true->checked
+    // (cte[]<>none) and cte.changed then
+       false->checked; true->changed
+    else
+       false->changed; false->checked; 
+   if);
+   (if true
+    // (cge[]<>none) and cge.isReadOnly
+    // (cte[]<>none) and not cte.allowEdit then
+       true->locked
+    else
+       false->locked
+   if)
+   
+-- sourcebrowserLocationViewOpen: dopart --
+do 'Location: '->label; sz->size;
+   locationView[]->private.changedLabel.open;
+   locationView[]->private.checkedLabel.open;
+   locationView[]->private.lockedLabel.open;
+   locationView[]->private.log.open;
+   INNER open
+   
 -- sourcebrowseropen: DoPart --
 do sbprivate.open (#  do INNER open #)  
 
@@ -668,30 +1173,25 @@ do
    none ->currentGroup[];
    none ->onCurrentGroupChange;
    sbprivate.fragmentGroupView.contents.clear;
-   sbprivate.down.fragmentView.clear;
+   sbprivate.down.popdown;
    none ->currentForm[];
    none ->onCurrentFormChange
 
 -- sourcebrowserSetProject: DoPart --
 do
    cursors.watch[]->mouse.busycursor;
-   p[]->sbprivate.projectlist.contents.setProject;
-   (if true
-    // p[] = none then
-       sbprivate.grouplist.contents.clear;
-       sbprivate.fragmentGroupView.contents.clear;
-       sbprivate.down.fragmentView.clear
-    // p[] <> currentProject[] then
-       p[]->sbprivate.grouplist.contents.scanGroups
-   if);
    (if p[] <> currentProject[] then
-       p[]->currentProject[]; p[]->onCurrentProjectChange
+       p[]->sbprivate.projectlist.contents.setProject;
+       p[]->sbprivate.grouplist.contents.scanGroups;
+       p[]->currentProject[]->onCurrentProjectChange
    if);
    INNER ;
    (if not setGroupDoneInInner then
        (if (currentProject[] <> none ) then
            (if groups.size = 1 then (* automatically select it *)
-               (groups.head).elm.g[]->currentProject.lastGroupSelected[]
+               (if not (groups.head).elm.g.txtFile then
+                   (groups.head).elm.g[]->currentProject.lastGroupSelected[]
+               if);
            if);
            currentProject.lastGroupSelected[]
              ->sbprivate.grouplist.contents.setgroup;
@@ -711,7 +1211,7 @@ do
                    l: currentGroup.fg.fragmentList.scan
                      (#
                         ff: ^astInterface.fragmentForm
-                        (* find first FF to select it automatically *)
+                          (* find first FF to select it automatically *)
                      do
                         (if current.type
                          // sbprivate.fragmentGroupView.contents.ast.formType
@@ -727,7 +1227,7 @@ do
                if)
            if);
            (if (currentGroup[] <> none ) and
-           (currentGroup.lastFormSelected[] <> none ) then
+               (currentGroup.lastFormSelected[] <> none ) then
                edenv.history.protect
                (#
                do currentGroup.lastFormSelected[]
@@ -738,13 +1238,13 @@ do
                #)
             else
                sbprivate.fragmentGroupView.contents.scrollToFirstFF;
-               sbprivate.down.fragmentView.clear;
+               sbprivate.down.popdown;
                none ->currentForm[]; none ->onCurrentFormChange; 
                false->propertySelected
            if)
         else
            sbprivate.fragmentGroupView.contents.clear;
-           sbprivate.down.fragmentView.clear;
+           sbprivate.down.popdown;
            none ->currentForm[]; none ->onCurrentFormChange;
            false->propertySelected
        if)
@@ -767,10 +1267,7 @@ do
    (if ff[] <> currentForm[] then
        ff[]->sbprivate.fragmentGroupView.contents.setfragmentForm;
        ff[]->currentForm[];
-       ff[]->oncurrentFormChange
+       ff[]->oncurrentFormChange;
    if);
-   false->propertySelected
-
--- sourcebrowserGetFragmentFormEditor: DoPart --
-do sbprivate.down.fragmentView.contents[]->theEditor[]  
+   false->propertySelected;
 
