@@ -1,0 +1,205 @@
+ORIGIN '../iostate';
+
+INCLUDE '~beta/basiclib/v1.5/private/basicsystemenv_unixbody'
+
+--- iomPrivate:descriptor ---
+(# fds: [2]@Integer;
+   reads: [2]@Boolean;
+   writes: [2]@Boolean;
+   excepts: [2]@Boolean;
+   
+   pendingRead: [2]@Boolean;
+   pendingWrite: [2]@Boolean;
+   pendingExcept: [2]@Boolean;
+   
+   last: @Integer;
+   
+   clearPending: @
+     (# 
+     do (for i:last repeat
+             false -> pendingRead[i] -> pendingWrite[i] -> pendingExcept[i]
+        for);
+     #);
+   
+   insert:
+     (# fd,inx: @Integer;
+     enter fd
+     do 0 -> inx;
+        dofind:
+          (for i: last repeat
+               (if fd //fds[i] then
+                   i -> inx;
+                   leave dofind;
+               if);
+          for);
+        (if inx//0 then
+            (if (last+1 -> last) > fds.range //true then
+                2 -> fds.extend;
+                2 -> reads.extend;
+                2 -> writes.extend;
+                2 -> excepts.extend;
+                2 -> pendingRead.extend;
+                2 -> pendingWrite.extend;
+                2 -> pendingExcept.extend;
+            if);
+            fd -> fds[last];
+            last -> inx;
+        if);
+        
+        INNER;
+     #);
+   
+   find: 
+     (# fd,inx: @Integer;
+        notFound:< Object;
+     enter fd
+     do 0 -> inx;
+        dofind:
+          (for i: last repeat
+               (if fd //fds[i] then
+                   i -> inx;
+                   leave dofind;
+               if);
+          for);
+        (if inx//0 then notfound else INNER if)
+     #);
+   
+   AddRead: insert (# do true -> reads[inx] #);
+   AddWrite: insert (# do true -> writes[inx] #);
+   AddExcept: insert (# do true -> excepts[inx] #);
+   
+   del: find
+     (# 
+     do INNER;
+        (if reads[inx] or writes[inx] or excepts[inx] //false then
+            fds[last] -> fds[inx];
+            reads[last] -> reads[inx];
+            writes[last] -> writes[inx];
+            excepts[last] -> excepts[inx];
+            last-1 -> last;
+        if);
+     #);
+   
+   delRead: del (# do false -> reads[inx] #);
+   delWrite: del (# do false -> writes[inx] #);
+   delExcept: del (# do false -> excepts[inx] #);
+   
+   onPending: find
+     (# 
+     do INNER;
+        (if ready.count > 0 //true then 
+            isReady -> block.error; 
+            THIS(IOmask)[] -> private.mdpriv.piodelete;
+            ready.V 
+        if);
+     #);
+   
+   onPendingRead: @onPending (# do true -> pendingRead[inx] #);
+   onPendingWrite: @onPending (# do true -> pendingWrite[inx] #);
+   onPendingException: @onPending (# do true -> pendingExcept[inx] #);
+   
+   state: @find 
+     (# notFound::< (# do false -> read -> write -> except #);
+        read,write,except: @Boolean
+     do (pendingRead[inx],pendingWrite[inx],pendingExcept[inx])
+          -> (read,write,except)
+     exit (read,write,except)
+     #);
+   
+   onTimeOut: @
+     (# error: @Integer;
+     enter error
+     do (if ready.count > 0 //true then error -> block.error; ready.V if);
+     #);
+   
+   ready: @semaphore;
+#)
+
+--- iomAddReadFD:dopart ---
+do fd -> iomPrivate.AddRead;
+
+--- iomAddWriteFD:dopart ---
+do fd -> iomPrivate.AddWrite;
+
+--- iomAddExceptFD:dopart ---
+do fd -> iomPrivate.AddExcept;
+
+--- iomDelReadFD:dopart ---
+do fd -> iomPrivate.delRead;
+
+--- iomDelWriteFD:dopart ---
+do fd -> iomPrivate.delWrite;
+
+--- iomDelExceptFD:dopart ---
+do fd -> iomPrivate.delExcept;
+   
+--- iomScan:descriptor ---
+(# 
+do (for i: iomPrivate.last repeat
+        iomPrivate.fds[i] -> curFD;
+        iomPrivate.reads[i] -> read;
+        iomPrivate.writes[i] -> write;
+        iomPrivate.excepts[i] -> except;
+        INNER scan
+   for);
+#)
+
+--- iomBlock:dopart ---
+do iomPrivate.clearPending;
+   THIS(IOmask)[] -> private.mdpriv.pioinsert;
+   iomPrivate.ready.P;
+   
+   
+--- iomTimeOut:dopart ---
+do error -> iomPrivate.onTimeOut
+   
+   
+--- iomContinue:dopart ---
+do
+   (if cause
+    //pioReadReady then
+       fd -> iomPrivate.onPendingRead;
+    //pioWriteReady then
+       fd -> iomPrivate.onPendingWrite;
+    //pioException then
+       fd -> iomPrivate.onPendingException;
+   if)
+   
+--- iomState:dopart ---
+do fd -> iomPrivate.state -> (read,write,except)
+   
+--- iosPrivate:descriptor ---
+(# fd: @Integer;
+   iom: @IOmask;
+#)
+
+--- IOstateFD:dopart ---
+do iosPrivate.fd -> value
+   
+--- iosinit:dopart ---
+do fd -> iosPrivate.fd; INNER init;
+   
+--- iosreadblock:dopart ---
+do iosPrivate.fd -> iosPrivate.iom.addReadFD;
+   iosPrivate.fd -> iosPrivate.iom.addExceptFD;
+   (if iosPrivate.iom.block //isReady then
+       false -> timedOut
+    else
+       true -> timedOut
+   if);
+   iosPrivate.fd -> iosPrivate.iom.delReadFD;
+   iosPrivate.fd -> iosPrivate.iom.delExceptFD;
+   
+--- ioswriteBlock:dopart ---
+do iosPrivate.fd -> iosPrivate.iom.addWriteFD;
+   iosPrivate.fd -> iosPrivate.iom.addExceptFD;
+   (if iosPrivate.iom.block //isReady then
+       false -> timedOut
+    else
+       true -> timedOut
+   if);
+   iosPrivate.fd -> iosPrivate.iom.delWriteFD;
+   iosPrivate.fd -> iosPrivate.iom.delExceptFD;
+   
+--- iosTimeOut:dopart ---
+do timeoutError -> iosPrivate.iom.timeOut
