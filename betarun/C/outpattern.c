@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: outpattern.c,v 1.29 1992-10-23 15:23:39 beta Exp $
+ * Mod: $Id: outpattern.c,v 1.30 1992-10-28 14:39:42 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
@@ -139,6 +139,7 @@ struct errorEntry {
     PascalCallBackErr, "Call back Pascal function has wrong return size",
     CompCallBackErr,   "Suspending component involving call backs",
     LeaveBasicCompErr, "Attempt to leave basic component",
+    QuaErr,            "Qualification error in reference assignment",
     EmulatorTrapErr,   "Emulator trap",
     IllegalInstErr,    "Illegal instruction",
     BusErr,            "Bus error",

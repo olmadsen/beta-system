@@ -12,6 +12,7 @@
 #define PascalCallBackErr  -12 /* Call back Pascal function has wrong return size */
 #define CompCallBackErr    -13 /* Suspending component involving call backs */
 #define LeaveBasicCompErr  -14 /* Attempt to leave basic component */
+#define QuaErr             -15 /* Qualification error in reference assignment */
 
 #define EmulatorTrapErr    -29 /* Emulator trap */
 #define IllegalInstErr     -30 /* Illegal instruction */
