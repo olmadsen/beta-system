@@ -22,8 +22,12 @@
 #ifndef __MOREFILESEXTRAS__
 #define __MOREFILESEXTRAS__
 
+#ifdef macosx
+#include <Carbon/Carbon.h>
+#else
 #include <Types.h>
 #include <Files.h>
+#endif
 
 #include "Optimization.h"
 
@@ -141,9 +145,9 @@ enum
 	
 /*****************************************************************************/
 
-#if PRAGMA_ALIGN_SUPPORTED
+
 #pragma options align=mac68k
-#endif
+
 
 /*
 **	For those times where you need to use more than one kind of File Manager parameter
@@ -211,9 +215,7 @@ struct MyAFPVolMountInfo
 typedef struct MyAFPVolMountInfo MyAFPVolMountInfo;
 typedef MyAFPVolMountInfo *MyAFPVolMountInfoPtr, **MyAFPVolMountInfoHandle;
 
-#if PRAGMA_ALIGN_SUPPORTED
 #pragma options align=reset
-#endif
 
 /*****************************************************************************/
 

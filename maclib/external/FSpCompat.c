@@ -28,12 +28,16 @@
 #define GENERATENODATA 0
 #endif
 
+#ifdef macosx
+#include <Carbon/Carbon.h>
+#else
 #include <Types.h>
 #include <Errors.h>
 #include <LowMem.h>
 #include <Gestalt.h>
 #include <Resources.h>
 #include <Script.h>
+#endif
 
 #define	__COMPILINGMOREFILES
 #define SystemSevenOrLater 1

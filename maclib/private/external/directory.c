@@ -1,9 +1,13 @@
+
+#ifdef macosx
+#include <Carbon/Carbon.h>
+#else
 #include <memory.h>
 #include <Files.h>
 #include <Errors.h>
 #include <stdio.h>
 #define longint long
-
+#endif
 
 extern char *pStrcat(unsigned char *s, unsigned char *t);
 extern char *pStrcpy(unsigned char *s, unsigned char *t);
@@ -51,7 +55,7 @@ char *PathNameFromDirID(long DirID, short vRefNum, char	*s)
 	}
 	ParID = block.dirInfo.ioDrParID;
     /* Append a Macintosh style colon (':') to directoryname */
-    pStrcat((unsigned char*)directoryName,"\p:");
+    pStrcat((unsigned char*)directoryName,"\001:");
 	/* s = directoryname + s */
     pStrcat((unsigned char*)directoryName,(unsigned char*)s);
     pStrcpy((unsigned char*)s,(unsigned char*)directoryName); 

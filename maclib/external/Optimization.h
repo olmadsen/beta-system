@@ -23,8 +23,9 @@
 /*
 **	If you want Pascal calling conventions disabled, set __WANTPASCALELIMINATION to 1.
 */
+
 #ifndef	__WANTPASCALELIMINATION
-#define	__WANTPASCALELIMINATION	0
+#define	__WANTPASCALELIMINATION	1
 #endif
 
 #if	__WANTPASCALELIMINATION

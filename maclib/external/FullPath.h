@@ -22,8 +22,12 @@
 #ifndef __FULLPATH__
 #define __FULLPATH__
 
+#ifdef macosx
+#include <Carbon/Carbon.h>
+#else
 #include <Types.h>
 #include <Files.h>
+#endif
 
 #include "Optimization.h"
 

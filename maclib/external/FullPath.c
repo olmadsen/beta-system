@@ -19,12 +19,16 @@
 **	descended from Apple Sample Code, but that you've made changes.
 */
 
+#ifdef macosx
+#include <Carbon/Carbon.h>
+#else
 #include <Types.h>
 #include <Errors.h>
 #include <Memory.h>
 #include <Files.h>
 #include <TextUtils.h>
 #include <Aliases.h>
+#endif
 
 #define	__COMPILINGMOREFILES
 

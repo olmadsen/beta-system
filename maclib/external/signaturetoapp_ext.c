@@ -4,12 +4,15 @@
 ////	By Jens Alfke			©1991 Apple Computer, Inc. All rights reserved.
 ////
 
-
+#ifdef macosx
+#include <Carbon/Carbon.h>
+#else
 #include <Errors.h>
 #include <Files.h>
 #include <Processes.h>
 #include <Folders.h>
 #include <AppleEvents.h>
+#endif
 
 #include "signaturetoapp_ext.h"
 
@@ -232,7 +235,7 @@ LaunchIt( const FSSpec *fileSpec, LaunchFlags launchControlFlags, const AppleEve
 	if( odoc ) {
 		err= AECoerceDesc(odoc,typeAppParameters, &paramDesc);
 		if( err ) return err;
-		HLock(paramDesc.dataHandle);
+		HLock((Handle) paramDesc.dataHandle);
 		pb.launchAppParameters = (void*) *paramDesc.dataHandle;
 	} else
 		pb.launchAppParameters = NULL;

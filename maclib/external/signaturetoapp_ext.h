@@ -6,12 +6,18 @@
 
 #pragma once
 
+
 #ifndef __SIGNATURETOAPP__
 	#define __SIGNATURETOAPP__
 
 #ifndef __PROCESSES__
+#ifdef macosx
+#include <Carbon/Carbon.h>
+#else
 	#include <Processes.h>
 #endif
+#endif
+
 
 #ifdef __cplusplus
 extern "C" {

@@ -22,8 +22,12 @@
 #ifndef __FSPCOMPAT__
 #define __FSPCOMPAT__
 
+#ifdef macosx
+#include <Carbon/Carbon.h>
+#else
 #include <Types.h>
 #include <Files.h>
+#endif
 
 #include "Optimization.h"
 

@@ -1,5 +1,9 @@
+#ifdef macosx
+#include <Carbon/Carbon.h>
+#else
 #include <AppleEvents.h>
 #include <Processes.h>
+#endif
 
 
 OSErr CreateAppleEvent(OSType suite, OSType id, AppleEvent *event, ProcessSerialNumber *targetPSN)
