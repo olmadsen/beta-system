@@ -46,13 +46,14 @@ GUIprocess: processInterface
        (# t: @Text;
        do (if status 
            //DBFILE_OK then
-              'Reading ' -> t.append; dbName[]->t.append;
+              (* 'Reading ' -> t.append; dbName[]->t.append; *)
            //DBFILE_NOTFOUND then
               'Could not find ' -> t.append; dbName[]->t.append;
+              t[]->putinfo;
            //DBFILE_NEWER then
               dbName[]->t.append; ' newer than executable'->t.append;
+              t[]->putinfo;
           if);
-          t[]->putinfo;
        #);
      onProcessFork::
        (# t: @Text;
@@ -65,19 +66,15 @@ GUIprocess: processInterface
        #);
      onDataSegmentScan::
        (# 
-       do 'Scanning data segments in debugged process'->putinfo;
+       do 'Scanning data segments of debugged process'->putinfo;
        #);
      onDataSegmentScanDone::
        (# 
-       do ''->putinfo;
+       do (* ''->putinfo; *)
        #);
      onLabelRead::
        (# 
-       do 'Scanning labels in executable'->putinfo;
-       #);
-     onLabelSort::
-       (# 
-       do 'Sorting labels in executable'->putinfo;
+       do 'Reading labels from executable'->putinfo;
        #);
      onLabelReadDone::
        (# 
@@ -93,19 +90,23 @@ GUIprocess: processInterface
                do remoteObjects.scanObjects
                   (# 
                   do (if current.bo.dotinx=dotinx then
-                         (* If there is only a single owner, it is
-                          * the DOTobjectOwner (remotedumper.bet),
-                          * and this object has no real owners left.
-                          * Delete the object from DOT (delete) and
-                          * from the remoteObjectDB (deleteObject) *)
-                         (current.refcount=1)->delete->deleteObject;
+                         (* Delete the object from DOT (delete) and
+                          * from the remoteObjectDB (deleteObject)
+                          * unless it has been touched since the
+                          * last time wait returned or has more than
+                          * one owner. *)
+                         
+                         (current.bo.timestamp<>rd.now) 
+                         and (current.refCount=1)->delete->deleteObject;
                          leave lookup;
                      if);
                   #);
                   remoteObjects.scanPatterns
                   (# 
                   do (if current.bp.dotinx=dotinx then
-                         (current.refcount=1)->delete->deletePattern;
+                         (* Same comment as above *)
+                         (current.bp.timestamp<>rd.now)
+                         and (current.refCount=1)->delete->deletePattern;
                          leave lookup
                      if);
                   #);
@@ -119,7 +120,7 @@ GUIprocess: processInterface
      afterWait::
        (# 
        do FALSE->running;
-          
+          rd.incTime;
           (if terminated then
               onTerminate;
            else      
@@ -156,7 +157,7 @@ GUIprocess: processInterface
                  if);
               #);
               
-              veu.moveables.scan (# do current.doUpdate #);
+              main.moveables.scan (# do current.doUpdate #);
               
           if);
        #);

@@ -116,13 +116,17 @@ processInterface: mpsinterface
       * execNotFound is raised if the executable could not be found. It is ok to leave
       * init on this occation.
       * 
-      * forkFailed is raised if it was not possible to fork the process. It is ok to leave
-      * init on this occation.
+      * forkFailed is raised if it was not possible to fork the process. 
+      * It is ok to leave init on this occation.
       * 
       * Calls INNER when all other initialization has finished. *)
      
      init::<
-       (# doingExpensiveRead:< Notification;
+       (# doingExpensiveRead:< Notification
+            (# dbName: ^Text;
+            enter dbName[]
+            do INNER
+            #);
           doingCheapRead:< Notification
             (# dbName: ^Text;
             enter dbName[]
@@ -134,9 +138,16 @@ processInterface: mpsinterface
             enter dbName[]
             do INNER
             #);
-          execNotFound:< Exception;
+          execNotFound:< executableException;
           forkFailed:< Exception;
        <<SLOT processInterfaceInit:dopart>>
+       #);
+     
+     rerun:
+       (# execNotFound:< executableException;
+          forkFailed:< Exception;
+          modtimeChanged:< executableException;
+       <<SLOT processInterfaceRerun:dopart>>
        #);
      
      
@@ -527,13 +538,26 @@ processInterface: mpsinterface
       * 
       * Implements access to information that can only be found in the
       * executable. Currently this only includes labels, and is needed only 
-      * if we fail to locate the information otherwise. *)
+      * if we fail to locate the information otherwise.
+      * 
+      * If the option readLabelsOnStartUp is TRUE, init will fork a nm
+      * process to read and sort the labels in the execuatable. The
+      * result is read from that process when finishInit is called. *)
 
      executable: @
-       (# 
-          init:
-            (# notFound:< Exception;
+       (# init:
+            (# notFound:< executableException;
             <<SLOT executableInit:dopart>>
+            #);
+          finishInit:
+            (# 
+            <<SLOT executableFinishInit:dopart>>
+            #);
+          
+          reinit:
+            (# modtimeChanged:< executableException;
+               notfound:< executableException;
+            <<SLOT executableReInit:dopart>>   
             #);
           
           kill: (# <<SLOT executableKill:dopart>> #);
@@ -810,7 +834,11 @@ processInterface: mpsinterface
            * fragment information and save it in a new ..db file. *)
           
           init:
-            (# doingExpensiveRead:< Object;
+            (# doingExpensiveRead:< Object
+                 (# dbName: ^Text;
+                 enter dbName[]
+                 do INNER
+                 #);
                doingCheapRead:<
                  (# dbName: ^Text;
                  enter dbName[]
@@ -963,15 +991,19 @@ processInterface: mpsinterface
      onDataSegmentScanDone:< Object;
      
      
-     (* onLabelRead, onLabelSort and onLabelReadDone
-      * ===========  ===========     ===============
+     (* onLabelRead, and onLabelReadDone
+      * ===========      ===============
       * Called before and after reading the code labels in the executable. *)
      
      onLabelRead:< Object;
-     onLabelSort:< Object;
      onLabelReadDone:< Object;
      
-
+     executableException: Exception 
+       (# execName: ^Text
+       enter execName[]
+       do INNER
+       #);
+     
      commError:< Exception
        (* Called in case of communication errors with the debugged process
         * that are not handled otherwise. *)

@@ -14,36 +14,50 @@ FILE *thePipe; /* The pipe from which the nameTable is read */
 int NextAddress;    
 char NextLabel[100]; /* The last address and label read from the pipe. */
 
-/* On sun4s, nm returns labels in decimal, not in hex as on
- * other architechtures. */
+#ifdef sun4s
+#define nmcommand "nm -hvp"
+#else
+#define nmcommand "nm -hvp"
+#endif
 
 void findNextLabel ()
-{
-  char type;
-  
-  for (;;)
-#ifdef sun4s
-    if (fscanf (thePipe, "%d %c %s", &NextAddress, &type, NextLabel) == EOF){
-#else
-    if (fscanf (thePipe, "%x %c %s", &NextAddress, &type, NextLabel) == EOF){
-#endif
-      NextAddress = 0;
-      pclose (thePipe);
-      break;
+{ char type;
+  char ch;
+  int inx;
+
+  while (1) {
+    NextAddress=0;
+    while ((ch=fgetc (thePipe))!=' ') {
+      if (ch==EOF) {
+	NextAddress = 0;
+	pclose (thePipe);
+	return;
+      }
+      NextAddress = (NextAddress*10)+(ch-'0');
     }
-    else if ((type == 'N') || (type == 'T'))
-      break;
-    else
+
+    type = fgetc (thePipe);
+    
+    if ((type != 'N') && (type != 'T')) {
       while (fgetc (thePipe) != '\n') continue;
+      continue;
+    }
+
+    fgetc (thePipe);
+
+    inx=0;
+    while ((NextLabel[inx++]=fgetc(thePipe))!='\n')
+      ;
+    NextLabel[inx-1] = 0;
+
+    return;
+  }
 };
 
 void initReadNameTable (char* execFileName)
-{
-  char command[100];
-
-  (void) strcpy (command, "nm -p ");
-  (void) strcat (command, execFileName);
-
+{ char command[100];
+  
+  sprintf (command,"%s %s",nmcommand,execFileName);
   thePipe = popen (command, "r");
 };
 

@@ -54,9 +54,9 @@ remotedumper: objectdumper
        enter pi[]
        do
           &remoteBetaObject[]->NONEobject[];
-          (0,0,0,NONE)->NONEobject.init;
+          (NONE,0,0,0)->NONEobject.init;
           &remoteBetaPattern[]->NONEpattern[];
-          (0,0,NONE)->NONEpattern.init;
+          (NONE,0,0)->NONEpattern.init;
        #);
   #);
 
@@ -91,8 +91,10 @@ newRemoteObject:
        if);
      (if bo[]=NONE then
          &remoteBetaObject[]->bo[];
-         (address,dotinx,objsize,rd[])->bo.init;
+         (rd[],address,dotinx,objsize)->bo.init;
          (bo[],rd.DOTobjectOwner[])->objects.addObjectOwner;
+         (* Ensure that only a single representative of this object is
+          * created, by registering it in the objects table. *)
      if);
   exit bo[]
   #);
@@ -127,7 +129,9 @@ newRemotePattern:
        if);
      (if bp[]=NONE then
          &remoteBetaPattern[]->bp[];
-         (address,dotinx,rd[])->bp.init;
+         (rd[],address,dotinx)->bp.init;
+         (* Ensure that only a single representative of this pattern is
+          * created, by registering it in the objects table. *)
          (bp[],rd.DOTpatternOwner[])->objects.addPatternOwner;
      if);
   exit bp[]
@@ -142,28 +146,29 @@ remoteBetaPattern: BetaPattern
      dotinx: @Integer;
      address: @Integer;
      state: [2]@Integer;
-     lastwaitcount: @Integer;
+     
+     lastwaitcount: @Integer; (* dumper.pi.waitcount when state was read. *)
      
      ensurestate: @
        (# 
        do
-          (if lastwaitcount<>od.pi.waitcount then
-              dotinx->od.pi.processComm.DOT.inxToAddress->address;
+          (if lastwaitcount<>dumper.pi.waitcount then
+              dotinx->dumper.pi.processComm.DOT.inxToAddress->address;
               (address+8,2)
-                ->od.pi.processComm.processData.peekMemoryLongs
+                ->dumper.pi.processComm.processData.peekMemoryLongs
               (# 
               do @@state[1]->repAdr;
               #);
-              od.pi.waitcount->lastwaitcount;
+              dumper.pi.waitcount->lastwaitcount;
           if)
        #);
      
      
      isNone:: (# do (dotinx=-1) -> value #);
      
-     init: 
+     init::
        (#
-       enter (address,dotinx,od[]) 
+       enter (address,dotinx) 
        do -1->lastwaitcount;
           (if address=0 then -1->dotinx if);
        #);
@@ -178,7 +183,7 @@ remoteBetaPattern: BetaPattern
      
      origin::
        (#
-       do ensurestate; (state[1],od[])->newRemoteObject->value[];
+       do ensurestate; (state[1],dumper[])->newRemoteObject->value[];
        #); 
   #);
 
@@ -192,42 +197,51 @@ remoteBetaObject: betaObject
      
      objectsize: @Integer; (* Size in longs. *)
      state: [0]@Integer;
-     lastwaitcount: @Integer; (* od.pi.waitcount when state was read. *)
+     lastwaitcount: @Integer; (* dumper.pi.waitcount when state was read. *)
+     
      address: @Integer;
+     (* Address of component header if this is a component. *)
+     
+     getAddress:
+       (# 
+       do ensurestate; 
+       exit address
+       #);
      
      ensurestate: @
        (# adr: @Integer;
        do
-          (if lastwaitcount<>od.pi.waitcount then
+          (if lastwaitcount<>dumper.pi.waitcount then
               (if state.range<objectsize then objectsize->state.new if);
-              dotinx->od.pi.processComm.DOT.inxToAddress->address;
-              (if iscomp then 24+address->address if);
-              (address,objectsize)
-                ->od.pi.processComm.processData.peekMemoryLongs
+              dotinx->dumper.pi.processComm.DOT.inxToAddress->address;
+              (if iscomp then 24+address->adr else address->adr if);
+              (adr,objectsize)
+                ->dumper.pi.processComm.processData.peekMemoryLongs
               (# 
               do @@state[1]->repAdr;
               #);
-              od.pi.waitcount->lastwaitcount;
+              dumper.pi.waitcount->lastwaitcount;
           if)
        #);
      
      protoAdr: @Integer;
      
      isComponentObject:: (# do iscomp->value #);
-     init:
+     init::
        (* If this betaObject is NONE, address=0 and the remaining
         * enter parameters are undefined. If it is a component object,
         * address will point to the component header, and so will all
         * addresses returned by DOT.inxToAddresse. *)
        (# address: @Integer; objects: ^remoteObjectDB;
-       enter (address,dotinx,objectsize,od[])
+       enter (address,dotinx,objectsize)
        do 
           -1->lastwaitcount;
           (if address<>0 then
-              ((address->od.pi.processComm.processData.peekLong->protoAdr)
-              =ComponentPTValue) -> iscomp;
+              address->dumper.pi.processComm.processData.peekLong->protoAdr;
+              (protoAdr=ComponentPTValue)->iscomp;
               (if iscomp then
-                  address+24->od.pi.processComm.processData.peekLong->protoAdr
+                  address+24
+                    ->dumper.pi.processComm.processData.peekLong->protoAdr
               if);
            else
               -1->dotinx;
@@ -243,135 +257,136 @@ remoteBetaObject: betaObject
        #);
      CharAttr::
        (#
-       do ensurestate; (if iscomp then offset+24->offset if);
+       do ensurestate;
           offset->state.%getByte->value;
        #);
      BooleanAttr::
        (# 
-       do ensurestate; (if iscomp then offset+24->offset if);
+       do ensurestate;
           offset->state.%getByte->value;
        #);
      ShortIntAttr:: 
        (#  
-       do ensurestate; (if iscomp then offset+24->offset if);
+       do ensurestate;
           offset->state.%getShort->value;
        #);
      IntegerAttr::
        (# 
-       do ensurestate; (if iscomp then offset+24->offset if);
+       do ensurestate;
           state[(offset div 4)+1]->value;
        #);
      RealAttr::
        (# 
-       do ensurestate; (if iscomp then offset+24->offset if);
+       do ensurestate;
           (state[(offset div 4)+1]) %putLongAt (@@value);
           (state[(offset div 4)+2]) %putLongAt (@@value+4);
        #);
      ReferenceAttr::
        (#
-       do ensurestate; (if iscomp then offset+24->offset if);
-          (state[(offset div 4)+1],od[])->newRemoteObject->value[];
+       do ensurestate;
+          (state[(offset div 4)+1],dumper[])->newRemoteObject->value[];
        #);
      PartObject::
        (* A negative offset means that the part object requested 
         * is offline allocated. In that case partObject should 
         * effectively do the same as referenceValue. *)
        (#
-       do ensurestate; (if iscomp then offset+24->offset if);
+       do ensurestate;
           (if offset < 0 then
-              (state[((-offset) div 4)+1],od[])->newRemoteObject->value[];
+              (state[((-offset) div 4)+1],dumper[])->newRemoteObject->value[];
            else
-              (address+offset,od[])->newRemoteObject->value[];
+              (if iscomp then 24+offset->offset if);
+              (address+offset,dumper[])->newRemoteObject->value[];
           if);
        #);
      Range::
        (#
-       do ensurestate; (if iscomp then offset+24->offset if);
+       do ensurestate;
           (state[(offset div 4)+1]+8,2) 
-            -> od.pi.processComm.processData.peekMemoryLongs
+            -> dumper.pi.processComm.processData.peekMemoryLongs
           (# 
           do @@low->repAdr;
           #);
        #);
      CharRepAttr::
        (#
-       do ensurestate; (if iscomp then offset+24->offset if);
+       do ensurestate;
           to-from+1 -> value.new;
           (state[(offset div 4)+1]+16+from-1,to-from+1)
-            -> od.pi.processComm.processData.peekMemoryBytes
+            -> dumper.pi.processComm.processData.peekMemoryBytes
           (# 
           do @@value[1]->repAdr
           #);
        #);
      BooleanRepAttr::
        (# 
-       do ensurestate; (if iscomp then offset+24->offset if);
+       do ensurestate;
           to-from+1 -> value.new;
           (state[(offset div 4)+1]+16+from-1,to-from+1)
-            -> od.pi.processComm.processData.peekMemoryBytes
+            -> dumper.pi.processComm.processData.peekMemoryBytes
           (# 
           do @@value[1]->repAdr
           #);
        #);
      ShortIntRepAttr::
        (# 
-       do ensurestate; (if iscomp then offset+24->offset if);
+       do ensurestate;
           to-from+1 -> value.new;
           (state[(offset div 4)+1]+16+2*(from-1),2*(to-from+1))
-            -> od.pi.processComm.processData.peekMemoryBytes
+            -> dumper.pi.processComm.processData.peekMemoryBytes
           (# 
           do @@value[1]->repAdr
           #);
        #);
      IntegerRepAttr::
        (# 
-       do ensurestate; (if iscomp then offset+24->offset if);
+       do ensurestate;
           to-from+1 -> value.new;
           (state[(offset div 4)+1]+16+4*(from-1),to-from+1)
-            -> od.pi.processComm.processData.peekMemoryLongs
+            -> dumper.pi.processComm.processData.peekMemoryLongs
           (# 
           do @@value[1]->repAdr
           #);
        #);
      RealRepAttr::
        (#  
-       do ensurestate; (if iscomp then offset+24->offset if);
+       do ensurestate;
           to-from+1 -> value.new;
           (state[(offset div 4)+1]+16+8*(from-1),2*(to-from+1))
-            -> od.pi.processComm.processData.peekMemoryLongs
+            -> dumper.pi.processComm.processData.peekMemoryLongs
           (# 
           do @@value[1]->repAdr
           #);
        #);
      ReferenceRepAttr::
        (# adrs: [0]@Integer;
-       do ensurestate; (if iscomp then offset+24->offset if);
+       do ensurestate;
           to-from+1 -> value.new; to-from+1 -> adrs.new;
           (state[(offset div 4)+1]+16+4*(from-1),to-from+1)
-            -> od.pi.processComm.processData.peekMemoryLongs
+            -> dumper.pi.processComm.processData.peekMemoryLongs
           (# 
           do @@adrs[1]->repAdr
           #);
           (for i:to-from+1 repeat
-               (adrs[i],od[])->newRemoteObject->value[i][];
+               (adrs[i],dumper[])->newRemoteObject->value[i][];
           for);
        #);
      PatRefRepAttr::
        (# adrs: [0]@Integer;
-       do ensurestate; (if iscomp then offset+24->offset if);
+       do ensurestate;
           to-from+1 -> value.new; to-from+1 -> adrs.new;
           (state[(offset div 4)+1]+16+4*(from-1),to-from+1)
-            -> od.pi.processComm.processData.peekMemoryLongs
+            -> dumper.pi.processComm.processData.peekMemoryLongs
           (# 
           do @@adrs[1]->repAdr
           #);
           (for i:to-from+1 repeat
-               (adrs[i],od[])->newRemotePattern->value[i][];
+               (adrs[i],dumper[])->newRemotePattern->value[i][];
           for);
        #);
      PatternAttr::
        (# 
-       do ensurestate; (if iscomp then offset+24->offset if);
-          (state[(offset div 4)+1],od[])->newRemotePattern->value[];
+       do ensurestate;
+          (state[(offset div 4)+1],dumper[])->newRemotePattern->value[];
        #);
   #);
