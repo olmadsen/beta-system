@@ -1,51 +1,107 @@
 ORIGIN '~beta/mps/v5.0.1/astlevel';
-BODY 'private/control'
-
+BODY 'private/dependencyBody'
 --astInterfaceLib: attributes--
-
+(* Generic library for building dependency graphs for BETA fragments.
+ *
+ * Usage:
+ *   AST.DependencyGraph
+ *     (# 
+ *     do graphInit; 
+ *        'ppc'->TargetMachine;      {* name used as selector MDBODY etc.*}
+ *        'ppc'->TargetDirectory; {* name of code directory (for OBJFILE etc.)*}
+ *        '<filename>'->scanExtent(# do ... current[] ... #);
+ *     #);
+ *
+ * or
+ *   (# AST: @AstInterface;
+ *      dg: @AST.DependencyGraph;
+ *   do ... {* init astlevel *}
+ *      dg.graphInit;
+ *      'ppc'->dg.TargetMachine;      
+ *      'ppc'->dg.TargetDirectory;
+ *      '<filename>'->dg.scanExtent(# do ... current[] ... #);
+ *   #)
+ * 
+ * This the first attempt to integrate dependency/v1.1 and 
+ * system/v5,1,3/control*.bet.
+ * A clean-up and thoroughly check with previous version MUST be made;
+ * exception handling is currently NOT fixed!
+ *)
 DependencyGraph:
-  (#
-  
-     (* Generic library for building dependency graphs for BETA
-	  * fragments.
-	  *
-	  * Usage:
-	  *   AST.DependencyGraph
-      *     (# 
-      *     do graphInit; 
-	  *        'ppc'->TargetMachine;      {* name used as selector MDBODY etc.         *}
-	  *        'ppc'->TargetDirectory;    {* name of code directory (for OBJFILE etc.) *}
-	  *        '<filename>'->scanExtent(# do ... current[] ... #);
-      *     #);
-	  *
-	  * or
-	  *   (# AST: @AstInterface;
-	  *      dg: @AST.DependencyGraph;
-	  *   do ... {* init astlevel *}
-	  *      dg.graphInit;
-	  *      'ppc'->dg.TargetMachine;      
-	  *      'ppc'->dg.TargetDirectory;
-	  *      '<filename>'->dg.scanExtent(# do ... current[] ... #);
-      *   #)
-      *)
-  
-     <<SLOT xDependencyGraphLib: attributes>>;
-     TargetDirectory: @text; 
-     TargetMachine: @text;
+  (# <<SLOT DependencyGraphLib: attributes>>;
      
-     AsmExt:< (# ext: @text do '.a'->ext; INNER exit ext[] #);
-     BinExt:< (# ext: @text do '.o'->ext; INNER exit ext[] #);
-     LibExt:< (# ext: @text do '.o'->ext; INNER exit ext[] #);
-     JobExt:< (# ext: @text do '..job'->ext; INNER exit ext[] #);
-     ExeExt:< (# ext: @text do ''->ext; INNER exit ext[] #);
-	 
-     graphInit: (# <<SLOT xDependencyGraphInit: dopart>> #);
-	 
-     scanner: (* abstract superpattern for scanExtent and scanDomain *)
-       (# MPSexception:< exception
-            (# T: ^text; 
-            enter T[]
+     TargetDirectory, TargetMachine: @text;
+     infoStream,messageStream,traceStream,errorStream: ^ stream;
+     
+     Init:<
+       (# 
+       enter(infoStream[],messageStream[],traceStream[],errorStream[])  
+       <<SLOT DependencyGraphInit: dopart>> 
+       #);
+     
+     scanExtent: scanExtentOrDomain (* scan all beta files in extent *)
+       (#
+       do INNER
+       #);
+
+     scanDomain: scanExtentOrDomain 
+       (* scan beta files in domain (ORIGIN and INCLUDES) *)
+       (# GiveDomain:: TrueObject
+       do INNER
+       #);
+
+     scanExtentOrDomain: scanner
+       (* Abstract super pattern for ScanExtent and ScanDomain *)
+       (# afterGroup:: (# <<SLOT dependencyafterGroup:doPart>> #); 
+          propertyFile:< (* called for each non BETA file in properties *)
+            (# fullname: ^Text;
+            enter fullname[]
             do INNER
+            #);
+       <<SLOT DependencyScanExtentOrDomain:dopart>>
+       #);
+
+     scanner:
+       (* Abstract super pattern for ScanExtentOrDomain
+        * also used as abstract super pattern for compiler controller
+        *)
+       (# <<SLOT ScannerLib:attributes>>;
+          init:< (# do root[] -> rootFragment[]; INNER #);
+          beforeGroup:< 
+            (* Called before each group is processed 
+             * by buildGraph in controller
+             *)
+            (# fg: ^FragmentGroup;
+            enter fg[]
+            do beingExamined->fg.controller.status;
+               (* initialize ancestorGroupTime *)
+               fg.modtime->fg.controller.ancestorTime;
+               INNER beforeGroup;
+            #);
+          afterGroup:<
+            (* Called after each group is processed 
+             * by buildGraph in controller
+             *)
+            (# fg: ^fragmentGroup; insert: @boolean
+            enter fg[]
+            do INNER;
+            exit insert
+            #);
+          GiveDomain:< BooleanValue; (* if TRUE only doamin is handled *)
+          CurrentProperty:<
+            (# propKind: @integer; arg: ^text
+            enter(propKind,arg[])
+            do INNER
+            #);
+          isFile:< notification
+            (# F: @file
+            enter F.name
+            do (if not F.entry.exists then
+                   '*** Warning! Files does not exist: ' -> msg;
+                   F.name -> msg.puttext;
+                   INNER
+               if)
+            exit F.name
             #);
           DoubleFormException:< exception
             (# n: ^text
@@ -57,10 +113,20 @@ DependencyGraph:
             enter FN[] 
             do INNER;
             #);
-          notExistingException:< exception
-            (# FullFN: ^text
-            enter FullFN[]
-            do INNER;
+          circularDependencyException:< exception
+            (# fg: ^fragmentGroup
+            enter fg[]
+            do INNER
+            #);
+          unknownPropertyException:< exception
+            (# n: ^text
+            enter n[]
+            do INNER
+            #);
+          emptyFragmentException:< exception
+            (# n: ^text
+            enter n[]
+            do INNER
             #);
           parseException:< exception
             (# FullFN: ^text
@@ -72,23 +138,94 @@ DependencyGraph:
             enter FN[] 
             do INNER;
             #);
+          MPSexception:< exception
+            (# T: ^text; 
+            enter T[]
+            do INNER
+            #);
+          notExistingException:< exception
+            (# FullFN: ^text
+            enter FullFN[]
+            do INNER;
+            #);
+          noSpaceException:< exception(#do INNER #);
+          fragmentException:< Exception
+            (# FG: ^fragmentGroup;
+               FF: ^fragmentForm;
+               slot: ^slotDesc;
+               errNo: @integer;
+               errMsg: ^text;
+               CloseGroup: ^object;
+            enter(FG[],FF[],slot[],errNo,errMsg[],CloseGroup[]) 
+            do INNER
+            #);
+          propertyException:< exception
+            (# FG: ^fragmentGroup;
+               p,t: ^text;
+               n: @integer;
+               CloseGroup: ^Object;
+               warning: @boolean
+            enter(FG[],p[],t[],n,CloseGroup[])
+            do inner
+            #);
+          (* just for the compiler - but odd:-) *)
+          addVirtualSuper:<
+            (# FG: ^FragmentGroup
+            enter fg[]
+            do inner
+            #);
           current: ^FragmentGroup;
           root: ^Text;
        enter root[]
-       do INNER
+       do INNER scanner
        #);
-     scanExtent: scanner (* scan all beta files in extent *)
-       (# propertyFile:< (* called for each non BETA file in properties *)
-            (# fullname: ^Text;
-            enter fullname[]
-            do INNER
-            #);
-       do <<SLOT xscanExtentDoPart: descriptor>>
+     
+     (* Argument values for CurrentPropery *)
+     makeProperty: (#exit 1 #);
+     objfileProperty: (#exit 2 #);
+     libfileProperty: (#exit 3 #);
+     linkoptProperty: (#exit 4 #);
+     betarunProperty: (#exit 5 #);
+     resourceProperty: (#exit 6 #);
+     
+     (* FragmentGroup controller.status *)
+     doParse: (# exit 8 #);
+     doCheck: (# exit 7 #);
+     doCodeGen: (# exit 6 #);
+     doAsm: (# exit 5 #);
+     doNothing: (# exit 4 #);
+     doneTranslate: (# exit 3 #);
+     beingExamined: (# exit 2 #);
+     isOpen: (# exit 1 #);  (* marked as open and in the list of fragments *)
+     justOpen: (# exit 0 #); (* initial value; open for the first time *)
+     (* A negative values means that the FragmentGroup is 
+      * not used in last graphs and could be GC'ed.
+      *)
+     
+     (* the following attributes must be reconsidered *)
+     rootFragment: ^text;
+     (************** preliminary: to cleaned up or removed *****************)
+     xverboseLevel: @ (* Level of output during compilation: *)
+       (# v: @Integer;
+          verbose: (# exit 0 #); (* more than default? *)
+          default: (# exit 1 #); (* normal, the old way, open, bind, etc. *)
+          actions: (# exit 2 #); (* only if somthing happens, parse, etc.*)
+          nothing: (# exit 3 #); (* nothing, only errors *)
+       enter v
+       exit v
        #);
-     scanDomain: scanner (* scan beta files in domain (ORIGIN and INCLUDES) *)
-       (# 
-       do <<SLOT xscanDomainDoPart: descriptor>>
+
+     switch: [500] @boolean;  
+     xtrace:
+       (# n: @integer;
+          Xt: (# t: ^text enter t[] #);
+          xI: @integer;
+          xN: @integer;
+       enter n
+       do (if false then inner if)
        #);
-     DependencyGraphPrivate: @<<SLOT xDependencyGraphPrivate: descriptor>>;
+     (* end-of-preliminary stuff*)
+
+     DGP: @<<SLOT DependencyGraphPrivate: descriptor>>;
   do INNER;
   #)

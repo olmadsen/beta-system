@@ -1,0 +1,377 @@
+ORIGIN '../dependency';
+INCLUDE 'xmisk';
+BODY 'controlbody';
+MDBODY mac     'control_macbody'
+nti     'control_ntbody'
+ppc     'control_ppcbody'
+default 'control_unixbody';
+---dependencyGraphLib:attributes---
+getmodtime: 
+  (# t: ^Text;
+     m: @integer;
+     doit: @<<SLOT getmodtimebody: descriptor>>;
+  enter t[]
+  do doit;
+  exit m
+  #);
+
+printFN: 
+  (# g: ^FragmentGroup;
+  enter g[]
+  do ''''->infostream.put;
+     (if switch[35] then
+         g.nameT[] -> infostream.puttext;
+      else
+         g.controller.printname[] -> infostream.puttext;
+     if);
+     ''''->infostream.put;
+  #);
+SetGroupTime: 
+  (# g,ancestor: ^FragmentGroup;
+  enter (g[],ancestor[])
+  do (ancestor.controller.ancestorTime,g.controller.ancestorTime)
+       -> &Max
+       -> g.controller.ancestorTime;
+     (if not ancestor.controller.ancestorsChecked then
+         false->g.controller.ancestorsChecked;
+     if);
+  #);
+
+---ScannerLib:attributes---
+controller:
+  (# Translate:< 
+       (* Called for each fragmentGroup that need attention:
+        * ScanExtent: all groups;
+        * ScanDomain: only groups in doamin;
+        * Compiler  : all groups that must be checked, etc.
+        *)
+       (# fg: ^fragmentGroup enter fg[] do INNER #);
+     <<SLOT ControllerLib:attributes>>;               
+     private: @ <<SLOT ControllerPrivate:descriptor>>;
+  do init; Private; INNER
+  #);
+CloseGroup:
+  (# g: ^fragmentGroup 
+  do (if g[] = NONE then INNER (* for init of g[] *)
+      else
+         g.close; 
+         g.fullName->DGP.groupList.deleteGroup; 
+     if)
+     exit this(closeGroup)[]
+  #)
+---DependencyScanExtentOrDomain:dopart--
+do controller(# translate:: (#do fg[]->current[]; INNER scanExtentOrDomain #)#)
+---controllerLib:attributes---
+AstOpen: 
+  (# fullname,localname: ^Text; g: ^FragmentGroup;
+  enter (fullname[],localname[])
+  do <<SLOT AstOpen:descriptor>>
+  exit g[]
+  #);
+
+cleanUpAfterException: 
+  (* Called by all exception handlers in this fragment (./control) 
+   * in order to allow some notion of cleaning up when control is
+   * transferred upwards to the compiler interface.
+   *)
+  (#
+  do (* !!!! lastTransWasReal; *)
+     (* Should be part of the AST cleanup instead ! *)
+     NONE->theCatcher[];
+  #);  
+
+OpenGroup:
+  (# name,path: ^text; fg: ^FragmentGroup
+  enter(name[],path[])
+  do (name[],path[]) 
+       -> DGP.groupList.insertGroup
+     (# notFound::(# do (fullname[],name[])->ASTOpen->current[] #);
+        found::
+          (#
+          do (if current.controller.status<=justOpen then
+                 (* we have a fragmentgroup in the list which is re-initialized.
+                  * It could have changed on disk:
+                  *)
+                 (# t: @ text;
+                    m: @integer;
+                 do (if switch[381] then
+                        'Group is re-initialized check diskfiles: '
+                          ->tracestream.puttext
+                     if);
+                    current.nameT->t; '.bet'->t.append;
+                    t[]->getmodtime->m;
+                    (if switch[381] then
+                        t[]->tracestream.puttext;
+                        m->tracestream.putint; ' '->tracestream.put;
+                        current.modtime->tracestream.putint; tracestream.newline
+                    if);
+                    (if m > current.modtime then
+                        current.close;
+                        NONE->g[];
+                        (fullname[],name[])->ASTOpen->g[];
+                        e.g.controller.printname[]
+                          -> current.controller.printname[];
+                        current[]->e.g[];
+                     else
+                        current.nameT->t;
+                        astFileExtension->t.append;
+                        (* checking the group file *)
+                        t[]->getmodTime->m;
+                        (* from KJM: 10.12.95 *)
+                        (if true
+                         // m > current.modTime  then 
+                            current.checkDiskRepresentation
+                         // m = -1 then
+                            (* .ast-file has been removed *)
+                            current.close;
+                            NONE->current[];
+                            (fullname[],name[])->ASTOpen->current[];
+                            e.g.controller.printname[]
+                              -> current.controller.printname[];
+                            current[]->e.g[];
+                 if)if)#);
+                 isOpen->current.controller.status;
+              else
+                 (if switch[381] then
+                     'Status is: '->tracestream.puttext; 
+                     current.controller.status->tracestream.putint;
+                     tracestream.newline;
+                  if);
+             if);
+     #)#)
+       -> fg[]
+  exit fg[]
+  #);
+ScanProperties: 
+  (# theGroup, next: ^FragmentGroup; nonEmpty: @boolean
+  enter theGroup[]
+  do <<SLOT ScanProperties:descriptor>>
+  exit nonEmpty
+  #);
+
+BuildGraph: 
+  (# theGroup,next: ^FragmentGroup;
+     nonEmpty: @boolean; 
+  enter theGroup[]
+  do 
+     (if switch[397] then
+         'Build: '->tracestream.puttext; thegroup.name -> tracestream.puttext;
+         ' '->tracestream.put;
+         theGroup.controller.status->tracestream.putint; tracestream.newline;
+     if);
+     (if true
+      // theGroup.controller.status = beingExamined then 
+         (* (theGroup[],12) -> Msg; (* circularity in fragment structure *)
+         theGroup[] -> circularDependencyException;
+      // theGroup.controller.status > beingExamined then
+         (* skip fragmentgroup; it is done *)
+      else 
+         theGroup[] -> beforeGroup;
+         theGroup[] -> scanProperties -> nonEmpty;
+         (* origin, body, mdbody, and externals *) 
+         theGroup.fragmentList.scan (* scan links *)
+         (# 
+         do (if current.type
+             // linkType then 
+                (if current.name.length = 0 then
+                    (# T: @text
+                    do '\n*** Error in property list of:\n\t'->T; 
+                       theGroup.name->T.puttext; '\n\n\t'->T.puttext;
+                       'Empty filename in property "INCLUDE"\n'->T.puttext;
+                       (theGroup[],NONE,NONE,0,T[]
+                       ,closeGroup(#do theGroup[]->g[] #))
+                        -> fragmentException;
+                    #)
+                 else
+                    (current.Name[],theGroup.name)
+                      -> OpenGroup 
+                      -> next[];
+                    (if next.controller.status < doneTranslate then
+                        next[] -> &buildGraph
+                    if);
+                    (theGroup[],next[]) -> setGroupTime;
+                if);
+             // formType then 
+                true->nonEmpty; 
+                (if 'program' -> current.name.equalNCS then
+                    (* 'PROGRAM SLOT found in file: '->screen.puttext;
+                     theGroup.fullname->screen.putline;*)
+                    true->DGP.hasProgramSlot
+                if);
+            if) 
+         #);
+         (if theGroup[] -> afterGroup then 
+             theGroup[]-> private.TransList.insert
+         if);
+         (if not nonEmpty then 
+             (*(theGroup[],2)->msg; *)
+             theGroup.fullname -> emptyFragmentException
+         if);
+  if)#);
+
+---DependencyGraphPrivate:descriptor---
+(# groupList: @Hashtable
+     (# element::
+          (# name: ^Text; (* to calc. the hash value *)
+             g: ^FragmentGroup;
+          #);
+        dummy: @Element;
+        hashFunction::
+          (# inx: @Integer;
+          do L: (for i: 7 repeat
+	             e.name.lgth-i+1 -> inx;
+                     (if inx < 1  then leave L if);
+                     e.name.T[inx]+value->value;
+          for)#);
+        equal::< (# do left.name[] -> right.name.equal -> value #);
+        rangeInitial::< (# do 117 -> value #);
+        deleteGroup:
+          (# fullname: ^Text;
+             e: ^Element;
+          enter fullname[]
+          do fullName[] -> dummy.name[];
+             dummy[] -> hashfunction -> findIndexed
+             (# predicate::< (# do fullname[] -> current.name.equal -> value #);
+             do current[] ->e[];
+             #);
+             (if e[]<>NONE then e[] -> delete if);
+          #);
+        insertGroup: 
+          (# g: ^FragmentGroup;
+             name,path,ext: ^Text;
+             e: ^Element;
+             fullname: ^Text;
+             NotFound:<
+               (# fullName,name: ^text; current: ^fragmentGroup
+               enter(fullName[],name[])
+               do INNER; 
+                  &element[]->e[];
+                  current.NameT[]->e.name[];
+                  name[]->current.controller.printName[];
+                  current[]->e.g[];
+                  isOpen->current.controller.status;
+                  e[]->insert;
+               exit current[]
+               #);
+             Found:<
+               (# current: ^fragmentGroup
+               do e.g[]->current[];
+                  INNER;
+               exit current[]
+               #);
+          enter(name[],path[])
+          do (name.length-3,name.length)->name.sub->ext[];
+             (if '.bet'->ext.equal then
+                 (name.length-3,name.length)->name.delete
+             if);
+             (name[],path[]->stripPathName)->thePathHandler.convertFilePath
+               ->fullname[];
+             (*(if switch[381] then
+              'insertGroup: '->tracestream.puttext; fullname[]->tracestream.putline 
+              if);*)
+             fullname[]->dummy.name[];
+             dummy[]->hashfunction->findIndexed
+             (# predicate:: (# do fullname[]->current.name.equal->value #);
+             do current[] ->e[];
+             #);
+             (if e[] = NONE then 
+                 (fullName[],name[]) -> NotFound -> g[]
+              else
+                 Found -> g[]
+             if);
+             NONE->dummy.name[];
+          exit g[]
+          #);
+        findGroup: 
+          (# fullname: ^Text;
+             g: ^FragmentGroup;
+          enter fullname[]
+          do fullname[]->dummy.name[];
+             dummy[]->hashfunction->findIndexed
+             (# predicate::< (# do fullname[]->current.name.equal->value #);
+             do current.g[]->g[];
+             #);
+             NONE->dummy.name[];
+          exit g[]
+          #);
+        TryToGC: 
+          (#  e: ^Element;
+          enter e[]
+          <<SLOT TryToGC: dopart>>
+          #);
+     #);
+   
+   lastTransWasReal,
+   hasProgramSlot: @boolean;
+#)
+---dependencyAfterGroup:doPart---
+do (*'DoneExamineGroup:'->puttext; fg.fullName->putline;*)
+   doNothing->fg.controller.status;
+   true -> insert;
+   (* !!!!!
+    * (if fg.origin = none then (* betaenv * )
+                                 fg.NameT[]->currentProperty
+                                 else
+                                 fg.NameT[]->currentProperty
+                                 if);
+                                 *)
+---controllerPrivate:descriptor---
+(#   SimpleList: 
+     (# S: [100] ^FragmentGroup; top: @integer;
+        ScanAndClear: 
+          (# inx: @integer; isEmpty: @boolean; current: ^FragmentGroup
+          do true->isEmpty;
+             (for i: top repeat
+                  i->inx;
+                  (if S[inx][] <> NONE then
+                      S[inx][]->current[];
+                      INNER;
+                      NONE->S[inx][];
+                      false->isEmpty;
+                  if)
+             for)
+          exit isEmpty
+          #);
+        init: (# do 0->top #);
+     #);
+   BodyList: @SimpleList
+     (# insert: 
+          (# g: ^FragmentGroup
+          enter g[]
+          do (if g.controller.status <= isOpen  then 
+                 (* the fragment is open but not handled, yet *)
+                 (if ((top+1->top)>S.range)  then
+                     s.range->S.extend;
+                 if);
+                 g[]->S[top][];
+             if);
+          #);
+        Complete: ScanAndClear
+          (# 
+          do (if switch[383] then 'Completing BodyList'->tracestream.putline if);
+             current[]->&buildGraph;
+          #);
+     #);   
+   
+   TransList: @SimpleList
+     (# insert: 
+          (# g: ^FragmentGroup
+          enter g[]
+          do (if ((top+1->top)>S.range)  then
+                 s.range->S.extend;
+             if);
+             g[]->S[top][];
+	     true->DGP.lastTransWasReal;
+          #);
+     #);   
+
+   ASTval: @boolean;
+   lastRootFragment: ^Text;
+   
+   handledUsingList, 
+   binaryCodeGen: @Boolean;
+
+   outputFile: ^text; (* !!!!! *)
+<<SLOT controlBody:doPart>>
+
+#)

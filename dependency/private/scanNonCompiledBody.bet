@@ -1,0 +1,134 @@
+ORIGIN '../scanNonCompiled';
+INCLUDE 'controlbody'
+---scanNonCompiledLib:attributes---
+InsertSubDir:
+  (* Inserts the directory name TargetDirectory immedidately before the
+   * base name of the entered path name. E.g. if TargetDirectory='sun3'
+   * and path='/home/frede/beta/system/v3.9/control' then the result will
+   * be:      '/home/frede/beta/system/v3.9/sun3/control'.
+   * Another example:  path='fusk' will result in: 'sun3/fusk'.
+   *)
+  (# path: ^text; dirCh: @text;
+     lastSlash,L: @integer;
+     asmDir: @boolean
+  enter(path[],asmDir)
+  do thePathHandler.DirectoryChar -> path.findCh(# do inx -> lastSlash #);
+     thePathHandler.DirectoryChar -> dirCh.put;
+     (if true
+      // b2c then
+         (# T: @text
+         do 'b2c'->T; 3->L;
+            (T[],lastSlash+1) -> path.insert;
+            (if not asmDir then
+                T.clear;
+                thePathHandler.DirectoryChar->T.put;
+                (T[],lastSlash+4)->path.insert;
+                (TargetDirectory[],lastSlash+5) -> path.insert;
+                4+TargetDirectory.length->L;
+         if)#)
+      // nti then
+         3->L;
+         (TargetDirectory[],lastSlash+1) -> path.insert;
+         (if not asmDir then
+             (dirCh[],lastSlash+4)->path.insert;
+             (sdkName[],lastSlash+5) -> path.insert;
+             sdkName.length->L;
+         if)
+      else
+         TargetDirectory.length->L;
+         (TargetDirectory[],lastSlash+1) -> path.insert;
+     if);
+     (dirCh[],lastSlash+1+L)-> path.insert;
+     inner;
+  exit path[]
+  #);
+
+CreateAsmFileName: 
+  (# g: ^FragmentGroup; T: ^text
+  enter g[]
+  do (* nti places the assembler files in the object directory and should
+      * therefore send 'false' as asmDir parameter to InsertSubDir. Other
+      * platforms should use 'true' as asmDir parameter (especially b2c).
+      *)
+     (g.NameT.copy,(not nti))
+       -> InsertSubDir(#do AsmExt[]->path.append #)
+       -> T[]
+  exit T[]
+  #);
+CreateObjFileName: 
+  (# g: ^FragmentGroup; T: ^text
+  enter g[]
+  do (g.NameT.copy,false)
+       -> InsertSubDir(# do BinExt[] -> path.append #)
+       -> T[]
+  exit T[]
+  #);
+
+---ScanNonCompiledBeforeGroup:doPart--
+do fg[] -> theGroup[];
+   (this(AstInterface)[],fg[])
+     -> getDoneCheckProperty
+     -> fg.controller.ancestorsChecked;
+
+---ScanNonCompiledAfterGroup:doPart---
+do (# groupT,asmT,objT: @Integer;
+   do doNothing->fg.controller.status;
+      fg.modtime->groupT;
+      (if (not fg.controller.ancestorsChecked) 
+          or (fg.controller.ancestorTime > groupT) 
+          or (not ((this(AstInterface)[],fg[])->getDoneCheckProperty))
+          or ((*common.*)switch[11])
+          then
+          (*fg[]->private.TransList.insert;*) true -> insert;
+          doCheck->fg.controller.status;
+          not binaryCodeGen->doAsm; (* if we have binaryCodeGen never do asm *)
+       else
+          (* check for asm and .o files for the job file *)
+          (* if asm is older than groupfile then it must be put into
+           * the TransList.
+           * If .o file is older than asm file is must be assembled
+           * in job file.
+           *)
+          (if binaryCodeGen then -1->asmT;
+           else fg[]->createAsmFileName->getModTime->asmT;
+          if);
+          fg[]->createObjFileName->getModtime->objT;
+          (if ((objT<groupT) and (asmT<groupT)) or (*common.*)switch[12]
+              then
+              (* both asm and obj file are older than group file
+               * or non existing
+               *)
+              (*fg[]->private.TransList.insert;*) true->insert;
+              doCodeGen->fg.controller.status;
+              not binaryCodeGen->doAsm; (* if we have binaryCodeGen never do asm *)
+           else
+              (* if obj file is older than asm file then assemble *)
+              (objT<asmT)->doAsm;
+          if);
+      if);
+      (if (*common.*)switch[385] then
+          'DoneExamine: '->tracestream.puttext; fg.name->tracestream.putline;
+          'Status: '->tracestream.puttext; fg.controller.status->tracestream.putint;
+          ' Anc check: '->tracestream.puttext; 
+          (if fg.controller.ancestorsChecked then 'True'->tracestream.puttext
+           else 'False'->tracestream.puttext
+          if);
+          ' Anc time: '->tracestream.puttext; 
+          fg.controller.ancestorTime->tracestream.putint; 
+          ' GroupT: '->tracestream.puttext; groupT->tracestream.putint; 
+          ' AsmT: '->tracestream.puttext; asmT->tracestream.putint; 
+          ' ObjT: '->tracestream.puttext; objT->tracestream.putint; 
+          ' Asm: '->tracestream.puttext; 
+          (if doAsm then 'True\n'->tracestream.puttext 
+           else 'False\n' ->tracestream.puttext 
+          if);
+      if);
+      INNER afterGroup;
+   #)
+---ScanNonCompiledDo:doPart---
+do (# do 
+      controller
+      (# translate:: (# do fg[]->this(scanNonCompiled).translate #)
+      #);
+      INNER ScanNonCompiled   
+   #)
