@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-08-25 19:24:11 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-08-27 15:17:59 $, SID: $Revision: 1.7 $
  * by Tommy Thorn
  */
 
@@ -99,13 +99,16 @@ register volatile void *GCreg1 asm("%o1");
 register volatile void *GCreg2 asm("%o3");
 register volatile void *GCreg3 asm("%o4");
 
-#define GCable_Entry \
+#define GCable_Entry() \
   StackPointer = FramePointer-16; /* = 64 */ \
-  GCreg0 = GCreg1 = GCreg2 = GCreg3 = 0;
+  GCreg0 = GCreg1 = GCreg2 = GCreg3 = 0
 #endif
 
-#define DeclReferences1(r1)		\
-  register r1 asm("%o4");
+#define DeclReference1(r1)		\
+  register r1 asm("%o4")
+
+#define DeclReference2(r1)		\
+  register r1 asm("%o3")
 
 #define asmlabel(label, code) \
   __asm__(".text;.align 4;.global " #label ";" #label ":" code)
@@ -115,44 +118,49 @@ register volatile void *GCreg3 asm("%o4");
    to Cname
 */
 
-#define ParamOriginProto(name)				\
+#define ParamOriginProto(type, name)			\
   asmlabel(name,					\
 	   "mov %i1,%o1;"				\
 	   "mov %i2,%o0;"				\
 	   "save %sp,-64,%sp;"				\
 	   "mov %i0,%o0;"				\
+	   "clr %o3;"					\
+	   "clr %o4;"					\
 	   "call _C"#name";"				\
 	   "mov %i1,%o1;"				\
 	   "ret;"					\
 	   "restore %o0,0,%i1");			\
- void *C##name(struct Object *origin, struct ProtoType *proto)
+  type C##name(struct Object *origin, struct ProtoType *proto)
 
 #define FetchOriginProto
 
 /* C procs that gets this and component */
-#define ParamThisComp(name)				\
+#define ParamThisComp(type, name)			\
   asmlabel(name, "mov %i0,%o0;b _C"#name";mov %i1,%o1");\
- void C##name(struct Object *this, struct Component *comp)
+ type C##name(struct Object *this, struct Component *comp)
 
 #define FetchThisComp
 
 /* C procs that gets this */
-#define ParamThis(name)				\
-  asmlabel(name, "b _C"#name";mov %i0,%o0;");\
- struct Component *C##name(struct Object *this)
+#define ParamThis(type, name)				\
+  asmlabel(name, "b _C"#name";mov %i0,%o0;");		\
+ type C##name(struct Object *this)
 
 #define FetchThis
 
 /* C procs that gets a Structure parameter, and returns in this */
-#define ParamStruc(name)				\
+#define ParamStruc(type, name)				\
   asmlabel(name,					\
 	   "mov %i1,%o0;"				\
 	   "save %sp,-64,%sp;"				\
+	   "clr %o1;"					\
+	   "clr %o3;"					\
+	   "clr %o4;"					\
 	   "call _C"#name";"				\
 	   "mov %i0,%o0;"				\
 	   "ret;"					\
 	   "restore %o0,0,%i1");			\
- void *C##name(struct Structure *struc)
+ type C##name(struct Structure *struc)
 
 #define FetchStruc
 
@@ -160,4 +168,6 @@ register volatile void *GCreg3 asm("%o4");
 #define CallBetaEntry(entry,item)			\
     (* (void (*)()) ((long*)entry+1) )(item)
 
+#define ForceVolatileRef(r)				\
+  __asm__("": "=r" (r))
 #endif
