@@ -47,11 +47,18 @@ fragmentBrowser: ymerApplication
                onGroupClosed:: 
                  (#  do fg[]->THIS(fragmentBrowser).onGroupClosed #);
                onGroupSaved:: 
-                 (#  do fg[]->THIS(fragmentBrowser).onGroupSaved #);
-               onGroupTouched:: 
                  (# t: ^text
                  do
                     fg[]->THIS(fragmentBrowser).onGroupSaved;
+                    (if (cge[] <> none ) and (cge.fg[] = fg[]) then
+                        locationView.label->t[];
+                        (' ',10)->t.inxPut;
+                        t[]->locationView.label
+                    if)
+                 #);
+               onGroupTouched:: 
+                 (# t: ^text
+                 do
                     (if (cge[] <> none ) and (cge.fg[] = fg[]) then
                         locationView.label->t[];
                         ('*',10)->t.inxPut;
@@ -331,56 +338,244 @@ fragmentBrowser: ymerApplication
                if);
                
             #);
-          check:
+          changedByOtherTool: booleanValue
             (#
                fg: ^astInterface.fragmentGroup;
-               status: @boolean;
-               nontExist: @boolean;
-               nont: ^astInterface.unexpanded
+               diskfile,textfile: @file;
+               t: @text
             enter fg[]
             do
-               edenv.nonterminalsExist->(nontExist,nont[]);
-               (if nontExist then
-                   nont[]->findAndSelect;
-                   (none ,
-                    'This fragment group cannot be checked\nbefore all nonterminals have been removed',
-                    'Compiler message')->alertUser;
-                   
+               fg.diskfilename->diskfile.name;
+               fg.textfilename->textfile.name;
+               (if textfile.entry.exists and
+               (textfile.entry.modTime > fg.modTime) then
+               (* 'Source file: '->t.puttext;
+                * fg.textfilename->t.putline;
+                * 'changed since last access - reload?'->t.puttext;
+                * (none ,'Notification',t[])
+                *  ->promptForBoolean
+                *      (# ok:: 
+                *	      (# do true->allowReload #);
+                *	    notok:: 
+                *	      (# do false->allowReload #);
+                *	    cancel:: 
+                * 	      (# do false->allowReload #) 
+                * 	 #)
+                *)
+                   t.clear;
+                   'Source file: '->t.puttext;
+                   fg.textfilename->t.putline;
+                   'changed since last access'->t.putline;
+                   'The file must have been changed by some other application.'
+                     ->t.putline;
+                   'Quit immediately (and restart) to avoid further problems'
+                     ->t.puttext;
+                   (none ,t[],'Warning')->alertUser;
+                   true->value
                 else
-                   callCompiler
-                     (# 
-                     do (fg.name,false,false)->activateCompiler->status; 
-                     #);
-                   (if edenv.frejaInterface[] <> none then
-                       not status->edenv.frejaInterface.groupChecked
+                   (if diskfile.entry.exists and
+                   (diskfile.entry.modTime > fg.modTime) then
+                   (* 'Group file: '->t.puttext;
+                    * fg.diskfilename->t.putline;
+                    * 'changed since last access - reload?'->t.puttext;
+                    * (none ,'Notification',t[])
+                    *   ->promptForBoolean
+                    * (# ok:: (# do true->allowReload #);
+                    *    notok:: (# do false->allowReload #);
+                    *    cancel:: (# do false->allowReload #)
+                    * #)
+                    *)
+                       t.clear;
+                       'Group file: '->t.puttext;
+                       fg.diskfilename->t.putline;
+                       'changed since last access'->t.putline;
+                       'The file must have been changed by some other application.'
+                         ->t.putline;
+                       'Quit immediately (and restart) to avoid further problems'
+                         ->t.puttext;
+                       (none ,t[],'Warning')->alertUser;
+                       true->value
                    if)
-               if);
-               (fg[],status)->onGroupChecked
+               if)
+            #);
+          check:
+            (#
+               fg,currentFG: ^astInterface.fragmentGroup;
+               status: @boolean;
+               nontExist: @boolean;
+               nont: ^astInterface.unexpanded;
+               wasChangedByOtherTool: @boolean
+            enter fg[]
+            do
+               scanningDP:
+               fg.name->mps.AST.expandToFullPath
+                 ->mps.dg.scanExtent
+                   (#
+                      warn: ^text;
+                      MPSexception:: 
+                        (# 
+                        do
+                           'MPS overflow - '->warn[];
+                           T[]->warn.puttext;
+                           ' too large)'->warn.putline;
+                           (none ,warn[],'Dependency Graph Error')->alertUser;
+                           true->continue
+                        #);
+                      DoubleFormException::  (#  do true->continue #);
+                      transAccessException:: 
+                        (# 
+                        do
+                           'No read access to: '->warn[];
+                           FN[]->warn.putline;
+                           (none ,warn[],'Dependency Graph Error')->alertUser;
+                           true->continue
+                        #);
+                      notExistingException:: 
+                        (# 
+                        do
+                           'Not a fragment file: '->warn[];
+                           fullFN[]->warn.putline;
+                           (none ,warn[],'Dependency Graph Error')->alertUser;
+                           true->continue
+                        #);
+                      parseException:: 
+                        (# 
+                        do
+                           'Parse errors in: '->warn[];
+                           fullFN[]->warn.putline;
+                           (none ,warn[],'Dependency Graph Error')->alertUser;
+                           true->continue
+                        #);
+                      transCreateDirException:: 
+                        (# 
+                        do
+                           'Unable to create directory: '->warn[];
+                           FN[]->warn.putline;
+                           (none ,warn[],'Dependency Graph Error')->alertUser;
+                           true->continue
+                        #);
+                      
+                   do
+                      current[]->currentFG[];
+                      groupEditorListScan: edenv.groupEditorlist.scan
+                        (# 
+                        do
+                           (if current.fg[] = fg[] then
+                               (if currentFG[]->changedByOtherTool then
+                                   true->wasChangedByOtherTool; leave scanningDP
+                               if);
+                               leave groupEditorListScan
+                           if)
+                        #)
+                   #);
+               (if not wasChangedByOtherTool then
+                   edenv.nonterminalsExist->(nontExist,nont[]);
+                   (if nontExist then
+                       nont[]->findAndSelect;
+                       (none ,
+                        'This fragment group cannot be checked\nbefore all nonterminals have been removed',
+                        'Compiler message')->alertUser;
+                       
+                    else
+                       callCompiler
+                         (# 
+                         do (fg.name,false,false)->activateCompiler->status; 
+                         #);
+                       (if edenv.frejaInterface[] <> none then
+                           not status->edenv.frejaInterface.groupChecked
+                       if)
+                   if);
+                   (fg[],status)->onGroupChecked
+               if)
             exit status
             #);
           compile:
             (#
-               fg: ^astInterface.fragmentGroup;
+               fg,currentFG: ^astInterface.fragmentGroup;
                status: @boolean;
                nontExist: @boolean;
-               nont: ^astInterface.unexpanded
+               nont: ^astInterface.unexpanded;
+               wasChangedByOtherTool: @boolean
             enter fg[]
             do
-               edenv.nonterminalsExist->(nontExist,nont[]);
-               (if nontExist then
-                   nont[]->findAndSelect;
-                   (none ,
-                    'This fragment group cannot be compiled\nbefore all nonterminals have been removed',
-                    'Compiler message')->alertUser
-                else
-                   callCompiler
-                     (# 
-                     do (fg.name,true,true)->activateCompiler->status; 
-                     #);
-                   (* not used anymore? (formsWithSemanticErrors.size = 0)->status;*)
-                   
-               if);
-               (fg[],status)->onGroupCompiled
+               scanningDP:
+               fg.name->mps.AST.expandToFullPath
+                 ->mps.dg.scanExtent
+                   (#
+                      warn: ^text;
+                      MPSexception:: 
+                        (# 
+                        do
+                           'MPS overflow - '->warn[];
+                           T[]->warn.puttext;
+                           ' too large)'->warn.putline;
+                           (none ,warn[],'Dependency Graph Error')->alertUser;
+                           true->continue
+                        #);
+                      DoubleFormException::  (#  do true->continue #);
+                      transAccessException:: 
+                        (# 
+                        do
+                           'No read access to: '->warn[];
+                           FN[]->warn.putline;
+                           (none ,warn[],'Dependency Graph Error')->alertUser;
+                           true->continue
+                        #);
+                      notExistingException:: 
+                        (# 
+                        do
+                           'Not a fragment file: '->warn[];
+                           fullFN[]->warn.putline;
+                           (none ,warn[],'Dependency Graph Error')->alertUser;
+                           true->continue
+                        #);
+                      parseException:: 
+                        (# 
+                        do
+                           'Parse errors in: '->warn[];
+                           fullFN[]->warn.putline;
+                           (none ,warn[],'Dependency Graph Error')->alertUser;
+                           true->continue
+                        #);
+                      transCreateDirException:: 
+                        (# 
+                        do
+                           'Unable to create directory: '->warn[];
+                           FN[]->warn.putline;
+                           (none ,warn[],'Dependency Graph Error')->alertUser;
+                           true->continue
+                        #);
+                      
+                   do
+                      current[]->currentFG[];
+                      groupEditorListScan: edenv.groupEditorlist.scan
+                        (# 
+                        do
+                           (if current.fg[] = fg[] then
+                               (if currentFG[]->changedByOtherTool then
+                                   true->wasChangedByOtherTool; leave scanningDP
+                               if);
+                               leave groupEditorListScan
+                           if)
+                        #)
+                   #);
+               (if not wasChangedByOtherTool then
+                   edenv.nonterminalsExist->(nontExist,nont[]);
+                   (if nontExist then
+                       nont[]->findAndSelect;
+                       (none ,
+                        'This fragment group cannot be compiled\nbefore all nonterminals have been removed',
+                        'Compiler message')->alertUser
+                    else
+                       callCompiler
+                         (# 
+                         do (fg.name,true,true)->activateCompiler->status; 
+                         #);
+                       (* not used anymore? (formsWithSemanticErrors.size = 0)->status;*)
+                       
+                   if);
+                   (fg[],status)->onGroupCompiled
+               if)
             exit status
             #);
           writeInfoView:
@@ -449,7 +644,8 @@ fragmentBrowser: ymerApplication
                     else
                        theGroupWithSemanticErrors[]
                          ->theSemanticErrorViewer.registerFragmentGroup;
-                       theSemanticErrorViewer.show
+                       theSemanticErrorViewer.show;
+                       theSemanticErrorViewer.bringToFront
                    if)
                if)
             #);
@@ -1210,7 +1406,7 @@ fragmentBrowser: ymerApplication
        #);
      inithere: @boolean;
      isBETAsif:< booleanValue;
-     editorVersion: (#  exit '5.0.2(3) Pre-release' #);
+     editorVersion: (#  exit '5.0.2(4) Pre-release' #);
      compilerVersion:
        (# version: ^text
        <<SLOT sifCompilerVersion:DoPart>>
