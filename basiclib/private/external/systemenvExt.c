@@ -81,6 +81,14 @@ void sleepDouble(double period)
 }
 # define ioctl ioctlsocket
 #else
+double getTimeAsDouble(void)
+{
+  struct timeval tp;
+  struct timezone tzp;
+  gettimeofday(&tp, &tzp);
+  return (double)tp.tv_sec + ((double)tp.tv_usec/1000000);
+}
+
 void sleepDouble(double period)
 {
   fd_set aset;
@@ -93,7 +101,7 @@ void sleepDouble(double period)
 #endif
 
 
-#if (defined(sun4s) || defined(nti))
+#if (defined(sun4s) || defined(nti) || defined(linux)) 
 # define CASTFDSET 
 #else 
 # define CASTFDSET (int *)
