@@ -143,7 +143,7 @@ void valhallaInit ()
 
       betalib = getenv ("BETALIB");
       if (!betalib) {
-	betalib="/usr/local/lib/beta";
+	betalib="/users/beta";
 	DEBUG_VALHALLA(fprintf(output,"BETALIB not found\n"));
       }
       sprintf (valhallaname,"%s/%s",betalib,"bin/valhalla2.0");
@@ -151,7 +151,7 @@ void valhallaInit ()
       
       execl (valhallaname,valhallaname,"-PID",tmp,"-EXECNAME",Argv(1),(char *) 0);
       fprintf (output, "Could not exec\n");
-      exit (0);
+      _exit (0);
       
     }
   }
@@ -563,7 +563,11 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   if (fifoBinGetInt (fifoTo) != VOP_STOPPED)
     fprintf (output, "Warning! Wrong answer from Valhalla on VOP_STOPPED\n"); 
 
-  res=valhallaCommunicate ((int) PC);
+  
+  switch (res=valhallaCommunicate ((int) PC)){
+  case CONTINUE: break;
+  case TERMINATE: exit (99);
+  }
   invops=FALSE;
 
   /* If we came here through BetaSignalHandler, signals have been redirected to
@@ -576,6 +580,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   InstallHandler(SIGEMT);
   InstallHandler(SIGINT);
 
+  
   return res;
 }
 

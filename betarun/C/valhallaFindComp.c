@@ -143,7 +143,7 @@ void scanComponentStack (struct ComponentStack* compStack,
 	       * order to update lastReturnAdr. */
 	      struct RegWin *cAR;
 	      forEach (lastReturnAdr,0);
-	      lastReturnAdr = theAR->i7;
+	      lastReturnAdr = theAR->i7+8;
 	      for (cAR = theAR;
 		   cAR != (struct RegWin *) theAR->l6;
 		   cAR = (struct RegWin *) cAR->fp) {
