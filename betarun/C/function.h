@@ -62,10 +62,6 @@ extern void DisplayCell(long pc, Object *theObj);
 extern int IsmakingDump(void);
 extern void  DisplayObject(FILE *,Object *,long);
 extern int  DisplayBetaStack(BetaErr, Object *, long *, long);
-#ifdef sparc
-extern void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func);
-extern void TraverseSparcStackPart(RegWin *theAR, Object* prevObj, CellDisplayFunc func);
-#endif /* sparc */
 extern void NotifyErrorDuringDump(BetaErr errorNumber, BetaErr errorNumber2);
 #ifdef NEWRUN
   extern unsigned long CodeEntry(ProtoType *theProto, long PC);
@@ -246,13 +242,16 @@ extern long *CollectStackRoots(long *SP);
 
 #ifdef sparc
 extern long frame_PC;
-void DisplaySPARCStack(BetaErr errorNumber, Object *theObj, long *thePC, long theSignal);
+extern void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func);
+extern void TraverseSparcStackPart(RegWin *theAR, Object* prevObj, CellDisplayFunc func);
+extern void DisplaySPARCStack(BetaErr errorNumber, Object *theObj, long *thePC, long theSignal);
 #endif /* sparc */
 
 #ifdef NEWRUN
 extern long WindBackSP(long SP, Object *obj, long PC);
 extern void ProcessStackFrames(long SP, long StackStart, long stopAtComp, long dynOnly, CellProcessFunc func);
 extern void PrintStackFrame(long *PrevSP, long *SP);
+extern void DisplayNEWRUNStack(long *pc, Object *theObj, int signal);
 #ifdef RTDEBUG
 extern void PrintRefStack(void);
 #endif /* RTDEBUG */
