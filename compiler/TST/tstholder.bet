@@ -8,14 +8,12 @@ test: (#exit false #);
 intHolder: holder  
   (# value: @integer;
      isNone: (# exit value = 0 #);
-     writeBack: (#do value %putLongAt adr #)
   enter value
   exit value          
   #);
 refHolder: holder    
-  (# type:< object;
+  (# type:< COM;
      ref: ^type;
-     writeBack: (#do (%getLongAt (@@ref)) %putLongAt adr #) 
   enter ref[] 
   exit ref[]
   #); 
@@ -30,7 +28,6 @@ tstHolder:
                (if S = 111 then 'a' -> put else error if);
                n + S -> S; 
                (if test then S -> putint; newline; if)  
-               (* S.writeBack;*)
             #);
           bar:<
             (# n: @integer; R: ^myClassHolder        
@@ -38,7 +35,6 @@ tstHolder:
             do (if test then 'myClass::bar'->putline if); 
                &myClass[] -> R; 
                n -> R.ref.kuk;
-               (*R.writeBack*)
                (if test then 'myClass::bar:end'->putline if);
             #);    
           foo1:<   
@@ -47,18 +43,18 @@ tstHolder:
             do (if test then  S -> putInt; newline if);
                (if S = 444 then 'd' -> put else error if);
                111 + S -> S; 
-               (*S.writeBack *) 
             #);
           foo2:<
             (# n,a,b,c: @integer; S: ^myClassHolder
             enter(n,S[])
-            do
+            do (* Call foo3, which instantiates a myClass and return via Holder (two level holder writeback) *)
                (n,S[]) -> foo3;
             #);
           foo3:<
             (# n: @integer; S: ^myClassHolder
             enter(n,S[])
-            do &myClass[] -> S;
+            do (* Instantiate a myClass and return via Holder *)
+               &myClass[] -> S;
                n -> S.ref.kuk;
             #);
                
@@ -112,25 +108,37 @@ tstHolder:
          Holders.Q -> putint; newline;
      if);  
      (if Holders.Q = 122 then 'b' -> put else error if);
+     
      (333,Holders.P[]) -> R.bar;   
      (if test then Holders.P.ref.kuk -> putint; newline; if);
      (if Holders.P.ref.kuk = 333 then 'c' -> put else error if);
+     
      444 -> Holders.Q; 
      Holders.Q[] -> R.foo1;
      (* Q -> putint; newline;   *)
      (if Holders.Q = 555 then 'e' -> put else error if);
-     (666,Holders.P[]) -> R.foo2;
-     (if Holders.P.ref.kuk = 666 then 'f' -> put else error if);
-     (# x: @char; S: ^ myClassHolder
-     do &myClassHolder[] -> S[];
-        (# y: @char
-        do (777,S[]) -> R.foo3;
-           (if S.ref.kuk = 777 then 'g' -> put else error if);
-        #);
+     
+     (* Call foo2 which calls foo3 *)
+     (# x: @char; 
+     do (666,Holders.P[]) -> R.foo2;
      #);
+     (# x: @char; 
+     do (if Holders.P.ref.kuk = 666 then 'f' -> put else error; Holders.P.ref.kuk->putint; if);
+     #);
+     
+     (* call foo3 directly *)
+     (# S: ^ myClassHolder
+     do (*&myClassHolder[] -> S[] // datpete:2003/02/20: Holders MUST be in COM when given to external that calls back! *)
+        Holders.P[] -> S[]; 
+        (777,S[]) -> R.foo3;
+        (if S.ref.kuk = 777 then 'g' -> put else error if);
+     #);
+     
      (# R: @TTTT;
-        X: @intHolder;
-     do 1010 -> X; 
+        (* X: @intHolder; // datpete:2003/02/20: Holders MUST be in COM when given to external that calls back! *)
+        X: ^intHolder;
+     do Holders.Q[] -> X[];
+        1010 -> X; 
         X[] -> R.foo1;
         none -> R.foo1;
         101 -> X;
