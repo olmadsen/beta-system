@@ -181,7 +181,6 @@ static void DOTgarbageOnDelete (index)
 { ;
 }
 
-
 #ifdef RTDEBUG
 void printOpCode (int opcode)
 {
@@ -647,7 +646,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   }
   valhalla_writetext (txt);
 
-  DEBUG_VALHALLA(fprintf(output,"ValhallaOnProcessStop: PC=%d, SP=0x%x, StackEnd=0x%x, curObj=%d,sig=%d,errorNumber=%d,errorText=%s\n",(int) PC, (int) SP, (int) StackEnd, (int) curObj, (int) sig, (int) errorNumber, txt));
+  DEBUG_VALHALLA(fprintf(output,"ValhallaOnProcessStop: PC=%d, SP=0x%x, curObj=%d,sig=%d,errorNumber=%d,errorText=%s\n",(int) PC, (int) SP, (int) curObj, (int) sig, (int) errorNumber, txt));
 			 
   valhalla_writeint (errorNumber);
   if (errorNumber<0) {
@@ -689,6 +688,16 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   
   return res;
 }
+
+#ifdef hppa
+/* Shortcut for calling valhallaOnProcessStop from SnakeAdditions.S 
+ * without having to transfer argument 5 via stack in assembler.
+ */
+void ValhallaOPS(long *PC, long event)
+{
+  ValhallaOnProcessStop(PC, 0, 0, 0, event);
+}
+#endif
 
 int connected_to_valhalla ()
 {
