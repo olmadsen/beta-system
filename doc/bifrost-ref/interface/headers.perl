@@ -9,7 +9,7 @@ while ( <> ) {
 $*=1;
 $_=$line;
 
-s/\(\*\*+\*\)\s+\(\*+\s+([^\*]+)\s+\*+\)\s+\(\*\*+\*\)\s+/<P><HR><P><H2><A name=\"$1\">$1<\/A><\/H2>\n/g;
+s/\(\*\*+\*\)\s+\(\*+\s+([^\*]+)\s+\*+\)\s+\(\*\*+\*\)\s+/<\/PRE><P><HR><P><H2><A name=\"$1\">$1<\/A><\/H2><PRE CLASS=interface>\n/g;
 
 # Delete copyrigth comments of the form
 # (*
