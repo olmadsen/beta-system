@@ -58,6 +58,7 @@ extern long M_Part(ProtoType * proto);
 #ifdef nti
 extern void NotifyFunc(char *s1);
 #endif
+extern void DisplayCell(long pc, Object *theObj);
 extern int IsmakingDump(void);
 extern void  DisplayObject(FILE *,Object *,long);
 extern int  DisplayBetaStack(BetaErr, Object *, long *, long);
@@ -65,10 +66,6 @@ extern int  DisplayBetaStack(BetaErr, Object *, long *, long);
 extern void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func);
 extern void TraverseSparcStackPart(RegWin *theAR, Object* prevObj, CellDisplayFunc func);
 #endif /* sparc */
-#ifdef intel
-  extern long *DisplayCallbackFrames(CallBackFrame *cbFrame, long *low, Object *currentObject, CellDisplayFunc func);
-  extern void DisplayStackPart(long *low, long *high, Object *currentObject, CellDisplayFunc func);
-#endif
 extern void NotifyErrorDuringDump(BetaErr errorNumber, BetaErr errorNumber2);
 #ifdef NEWRUN
   extern unsigned long CodeEntry(ProtoType *theProto, long PC);
@@ -267,6 +264,9 @@ void PrintValhallaRefStack(void);
 extern void ProcessStackPart(long *low, long *high, CellProcessFunc whenObject,CellProcessFunc whenNotObject);
 extern int SkipDataRegs(long *theCell);
 extern void PrintStack(long *StackEnd);
+extern void DisplayINTELStack(BetaErr errorNumber, Object *currentObject, long pc, long theSignal);
+extern long *DisplayCallbackFrames(CallBackFrame *cbFrame, long *low, Object *currentObject, CellDisplayFunc func);
+  extern void DisplayStackPart(long *low, long *high, Object *currentObject, CellDisplayFunc func);
 #endif /* intel */
 
 /* GC/ioa.c */

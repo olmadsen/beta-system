@@ -333,7 +333,7 @@ ProcessStackObj(StackObject *sObj, CellProcessFunc func)
   DEBUG_CODE(DebugStack=oldDebugStack);
 }
 
-/* beta.dump stuff below */
+/****************** beta.dump/valhalla/exception stuff below *****************/
 
 static Object *prevObj=0;
 static CellDisplayFunc displayFunc=0;
@@ -427,7 +427,7 @@ long *DisplayCallbackFrames(CallBackFrame *cbFrame,
       /* valhalla/system exceptions */
     }
     low = cbFrame->betaTop;
-    if (idMakingDump) {
+    if (isMakingDump) {
       low += 3;
       /* low+3 because the compiler pushes %edx, %edi, %ebp, %esi
        * before setting BetaStackTop.

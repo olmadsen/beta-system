@@ -219,7 +219,7 @@ void NotifyFunc(char *s1){
 
 /********************** DisplayCell: ********************/
 
-static void DisplayCell(long pc, Object *theObj)
+void DisplayCell(long pc, Object *theObj)
 {
   if (!strongIsObject(theObj)) {
     TRACE_DUMP(fprintf(output, "displaycell: (strongIsObject failed!?)\n"));
@@ -282,8 +282,6 @@ char *ProtoTypeName(ProtoType *theProto)
   return (char *) dyn;
 }
 
-/* Error-pc is used to remember original PC when the error happened */
-GLOBAL(static unsigned long error_pc);
 
 /*************************** ObjectDescription: **********************/
 
@@ -786,12 +784,6 @@ void DisplayNEWRUNStack(long *pc, Object *theObj, int signal)
 
 #endif /* NEWRUN */
 /************************* End NEWRUN ***************************/
-
-/************************* Begin INTEL ****************************/
-#ifdef intel
-
-#endif /* intel */
-/***************************** End INTEL **********************************/
 
 /*************************** Begin SPARC ******************************/
 #ifdef sparc
