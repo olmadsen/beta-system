@@ -40,7 +40,8 @@ fragmentGroupParser: propertyParser
    *
    *)
   (# parseFragmentOrGroup:
-       (# EOL: @integer
+       (# EOL: @integer;gram: ^treelevel;
+          
        do (if currentToken<>EOF then
 	      (if currentToken=beginGroup then
 		  beginGroup->accept; advance; endGroup->EOL;
@@ -54,14 +55,18 @@ fragmentGroupParser: propertyParser
 	      inputPos-1->inputPos;
 	      input.position-1->input.position;
 	      advance;
-	      dash->accept;
-	      advance;
-	      (if currentToken=endGroup then
-		  endGroup->accept; advance
-	       else
-		  EOL->parseFragmentList
+              (if currentToken<>dash then
+                  (*('"Fragment syntax expected"',3)->markerror*)
+                  parseWithoutProperties
+               else
+	          advance;
+	          (if currentToken=endGroup then
+		      endGroup->accept; advance
+	           else
+		      EOL->parseFragmentList
+	          if)
 	      if)
-	  if)
+          if)
        #);
      parseFragmentList:
        (# EOF: @integer
@@ -113,14 +118,6 @@ fragmentGroupParser: propertyParser
 	  mg: ^metagrammar;
 	  aGrammar: ^mg.Agrammar;
 	  gram: ^treelevel;
-	  frag: ^fragmentForm;
-	  ch: @char;
-	  lastPos: @integer;
-	  symbol: @nonterminalSymbol;
-	  lstFile: @file
-	    (# accessError::
-		 (# do (errorNumbers.WriteAccessOnLstFileError,msg[])->catcher #)
-	    #);
        do name->accept;
 	  theText->fragmentName;
 	  advance;
@@ -144,16 +141,22 @@ fragmentGroupParser: propertyParser
 		       #)
 		  #)->gram[];
 		gram[]->defaultGrammar[];
-		(if gram[]=NONE then 'gram is NONE'->putline; leave L if);
+		(if gram[]=NONE then
+                    (errorNumbers.grammarNotFound,'No defaultgrammar found.')
+                      ->catcher
+                if);
 		(if (grammarTable.meta[]->mg[])=NONE then
-		    'grammarTable.meta is NONE'->putline; leave L
+		    (errorNumbers.grammarNotFound,'No metagrammar found.')
+                      ->catcher
 		if);
 		(if gram.grammarast[]=NONE then
-		    'gram.grammarast is NONE'->putline; leave L
+		    (errorNumbers.grammarNotFound,'defaultgrammar.grammarast not found.')
+                      ->catcher
 		if);
 		gram.grammarAst.root[]->aGrammar[];
 		(if agrammar[]=NONE then
-		    'aGrammar is NONE'->putline; leave L
+		    (errorNumbers.grammarNotFound,'defaultgrammar.grammarast.root not found.')
+                      ->catcher
 		if);
 		('EOSchar','-')->aGrammar.getOptionString->t;
 		EOSchar->tt.put;
@@ -167,57 +170,55 @@ fragmentGroupParser: propertyParser
 		    (errorText,13)->markError
 		if)
 	     else
-		defaultGrammar[]->gram[];
-		(if gram[]=NONE then
-		    (if grammarTable.beta[]=NONE then
-			('beta',error[])->grammarTable.find
-			  (# ifNotFound::
-			       (# msg: @text;
-			       do 'Could not find the grammar: '->msg;
-				  'beta'->msg.putline;
-				  (errorNumbers.grammarNotFound,msg[])->catcher
-			       #)
-			  #)->grammarTable.beta[];
-		    if);
-		    grammarTable.beta[]->gram[];
-		    gram[]->defaultGrammar[]
-		if);
-		(if gram[]=NONE then
-		    (errorNumbers.grammarNotFound,'No defaultgrammar found.')
-		      ->catcher
-		if);
+                setupGrammar->gram[];
 	    if);
-	  (* do the parse *)
-	  (if gram.parser[]=NONE then 'gram.parser is NONE'->putline if);
-	  (if not gram.parser.haveBeenInitialized then
-	      (# msg: @text;
-	      do 'Error: Missing parse-tables for grammar: '->msg;
-		 fragmentName[]->msg.putLine;
-		 (errorNumbers.grammarNotFound,msg[])->catcher
-	      #)
-	  if);
-	  inputPos->lastPos->gram.parser.privatePart.initialPos;
+          dash->accept;
+          (fragmentName[],gram[],category[])->parseCodeFromCategory;
+       #);
+     parseCodeFromCategory: parseCode
+       (# category: ^text;
+       enter category[]
+       do (* parse the actual source code in this fragment form *)
 	  category.makeLC;
 	  (if true
 	   // ('attributes'->category.equal) then
-	      'attributesform'->category
+	      'attributesForm'->category
 	   // ('descriptor'->category.equal) then
-	      'descriptorform'->category
+	      'descriptorForm'->category
 	  if);
-	  category[]->gram.parser.findSymbolNo->symbol;
-	  (if symbol=0 then
+          category[]->gram.parser.findSymbolNo->symbol;
+       #);
+     parseCodeFromSymbol: parseCode
+       (#
+       enter symbol
+       #);
+     parseCode:
+       (# fragmentName: ^text;
+          gram: ^treelevel;
+          checkNameAndCategory:<
+            (# frag: ^fragmentForm enter frag[] do INNER #);
+          symbol: @nonterminalSymbol;
+          frag: ^fragmentForm;
+          lstFile: @file
+	    (# accessError::
+		 (# do (errorNumbers.WriteAccessOnLstFileError,msg[])->catcher #)
+	    #);
+       enter (fragmentName[],gram[])
+       do INNER;
+          (*(if symbol=0 then
 	      'MARKED'->(category.Copy).Append->gram.parser.findSymbolNo->symbol
-	  if);
+	  if);*)
 	  (if symbol=0 then
-	      ('name of construction nonterminal from the grammar expected as category',
+	      ('"Name of construction nonterminal from the grammar expected as category"',
 	       10)->markError;
 	   else
-	      dash->accept;
 	      gram[]->newfragmentForm->frag[];
 	      THIS(fragmentGroup)[]->frag.fatherR[];
 	      fragmentName.copy->frag.name;
+	      inputPos->gram.parser.privatePart.initialPos;
               (symbol,input[],a2s[],error[],frag[])->gram.parser->ok;
               (if ok then
+                  frag[]->checkNameAndCategory;
 		  frag[]->fragmentList.addFragment
 		    (# alreadyThere::
 			 (#
@@ -278,12 +279,103 @@ fragmentGroupParser: propertyParser
               (* the bobs-parser actually did eat the dash, so
                * forget about accepting the dash
                *)
+          if)
+       exit frag[]
+       #);
+     parseWithoutProperties:
+       (# gram: ^treelevel;
+          frag: ^fragmentForm;
+          f: @file; ext: ^text
+       do (* try to parse directly, ignoring properties *)
+          prop.proplist.clear;
+          prop.init;
+          none ->linklist[] (* to cancel cached INCLUDE's *);
+          true->ok;
+          0->inputPos;
+          0->input.position;
+          true->firstComment;
+          fgComment.clear;	         
+          textfileName->f.name;
+          f.entry.path.name.suffix->ext[];
+          l: grammarTable.scan
+            (# 
+            do (if ext[]->currentExtension.equalNCS then
+                   (if current[]=NONE then
+                       (currentName[],error[])->grammarTable.find
+                       (# ifNotFound::
+                            (# msg: @text;
+                            do 'Could not find the grammar: '->msg;
+                               currentName[]->msg.putline;
+                               (errorNumbers.grammarNotFound,msg[])->catcher
+                            #)
+                       #)->current[]
+                   if);
+                   current[]->defaultGrammar[];
+                   leave l
+               if)
+            #);
+          setupGrammar->gram[];
+          '_WITHOUT_FRAGMENT_SYNTAX'->prop.addProp;
+          (if gram[]=grammarTable.beta[] then
+              'ORIGIN'->prop.addProp
+              (# do '~beta/basiclib/betaenv'->addString #);
+              ('Untitled',gram[],'betaform')->
+              parseCodeFromCategory
+              (# checkNameAndCategory::
+                   (#
+                   do (if frag.root.symbol
+                       // 'descriptorForm'->gram.parser.findSymbolNo then
+                          'program'->frag.name
+                       // 'attributesForm'->gram.parser.findSymbolNo then
+                          'lib'->frag.name
+                      if)
+                   #)
+              #)
+           else
+              ('Untitled',gram[],1(*startSymbol*))->parseCodeFromSymbol
+          if)
+       #);
+     setupGrammar:
+       (# gram: ^treelevel;
+       do defaultGrammar[]->gram[];
+          (if gram[]=NONE then
+              (if grammarTable.beta[]=NONE then
+                  ('beta',error[])->grammarTable.find
+                  (# ifNotFound::
+                       (# msg: @text;
+                       do 'Could not find the grammar: '->msg;
+                          'beta'->msg.putline;
+                          (errorNumbers.grammarNotFound,msg[])->catcher
+                       #)
+                  #)->grammarTable.beta[]
+              if);
+              grammarTable.beta[]->gram[];
+          if);
+          gram[]->defaultGrammar[];
+          (if gram[]=NONE then
+              (errorNumbers.grammarNotFound,'No defaultgrammar found.')
+                ->catcher
+          if);
+          (if gram.parser[]=NONE then
+              (errorNumbers.grammarNotFound,'defaultgrammar.parser not found.')
+                ->catcher
+              
+          if);
+	  (if not gram.parser.haveBeenInitialized then
+	      (# msg: @text;
+	      do 'Error: Missing parse-tables for grammar: '->msg;
+		 gram.grammarIdentification->msg.putLine;
+		 (errorNumbers.grammarNotFound,msg[])->catcher
+	      #)
 	  if)
+       exit gram[]
        #);
      a2s: ^ a2sHandle
   do &a2sHandle[] -> a2s[];
      a2s.openWrite;
-     parsePropertyList; parseFragmentOrGroup; EOF->accept;
+     parsePropertyList;
+     parseFragmentOrGroup;
+     EOF->accept;
      a2s.close;
   #)
 
