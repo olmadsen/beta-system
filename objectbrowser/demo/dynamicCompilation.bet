@@ -1,0 +1,522 @@
+ORIGIN '~beta/guienv/guienv';
+INCLUDE '~beta/compiler/DYN/UI/evaluator'
+        '~/beta/objectbrowser/UI/evaluatormoveable'
+        '~/beta/objectbrowser/objectbrowserinterface'
+        '~beta/sysutils/objinterface'
+        '~beta/objectbrowser/windowedbrowser'
+        '~beta/objectbrowser/options'
+        '~beta/objectbrowser/optionlist'
+        '~beta/compiler/DYN/dynlib'
+        '~beta/compiler/DYN/AstOfObject'
+        '~beta/compiler/DYN/treelib'
+        '~beta/objectbrowser/UI/icons'
+        '~beta/objectbrowser/UI/iconlist'
+        '~beta/guienv/fields'
+        '~beta/basiclib/formatio'
+        '~beta/sysutils/envstring'
+        '~beta/sysutils/time';
+-- lib: Attributes --
+initialObjectBrowsersize: (#  exit (600,400) #);
+breakpoint: external (# objAdr: @Integer enter objAdr #)  
+
+-- program: Descriptor --
+GUIenv
+  (#
+     a: @ (# b: @text; c: @real #);
+     theObjectBrowserWindow: @objectbrowserinterface
+       (#
+          browser::< windowedbrowser
+            (#
+               objectViewType::< moveableObjectViewEvaluator
+                 (#
+                    onEvaluateButton::< 
+                      (# 
+                      do
+                         (if theBO##
+                          // be.localBetaObject## then
+                               (#
+                                  originFGname,evaluatorCode,dynamicFGname:
+                                    ^text;
+                                  aLocalBetaObject: ^be.localBetaObject;
+                                  FF: ^be.AST.fragmentForm;
+                                  FG: ^be.AST.fragmentGroup;
+                                  im: ^imagePair;
+                                  error: @boolean;
+                                  aMoveableList: ^moveableList;
+                                  constructUniqueID:
+                                    (#
+                                       T: @Text;
+                                       timeSec,timeMiliSec: @integer;
+                                       timeInMiliSec: @real
+                                    do
+                                       preciseTime->(timeSec,timeMiliSec);
+                                       timeSec->timeInMiliSec;
+                                       timeInMiliSec*1000000->timeInMiliSec;
+                                       timeInMiliSec+timeMiliSec->timeInMiliSec;
+                                       timeInMiliSec
+                                         ->t.putReal (#  do 0->precision #)
+                                    exit t.copy
+                                    #)
+                               do
+                                  theBO[]->aLocalBetaObject[];
+                                  aLocalBetaObject.o[]
+                                    ->be.AST.AstOfObject
+                                      (#  do FG.name->originFGname[] #);
+                                  contents.evaluator.editor.contents.contents
+                                    ->evaluatorCode[];
+                                  'dynamicDescriptor'
+                                    ->be.BETACFL.makeBETAfragmentForm->FF[];
+                                  (be.BETA.objectDescriptor,evaluatorCode[],
+                                   FF[])->be.BETACFL.parseText;
+                                  constructUniqueID->dynamicFGname[];
+                                  dynamicFGname[]
+                                    ->be.BETACFL.openBETAfragmentGroup->FG[];
+                                  FF.name->FG.fragmentList.deleteLocalName;
+                                  FF[]->FG.fragmentList.addFragment;
+                                  (if (FG.prop[] <> none ) then
+                                      'ORIGIN'
+                                        ->FG.prop.addProp
+                                          (# 
+                                          do originFGname[]->addString
+                                          #);
+                                      'doneCheck'
+                                        ->FG.prop.addProp
+                                          (#  do 0->addConst #);
+                                      
+                                   else
+                                      'Prop[] is none'->putLine
+                                  if);
+                                  FG.markAsChanged;
+                                  (FG.name,aLocalBetaObject.o[])
+                                    ->be.dc.activateCompiler->error;
+                                  (if not error then
+                                      be.dc.getImagePair->IM[];
+                                      (aLocalBetaObject.o[],IM[])
+                                        ->be.dc.executeObject->showObject;
+                                      getMoveableList->aMoveableList[];
+                                      aMoveableList.scan
+                                        (#  do current.doUpdate #)
+                                   else
+                                      'An error happend during compilation'
+                                        ->putLine
+                                  if);
+                                  
+                               #)
+                          // betaObject## then
+                             'betaObject'->putLine
+                          else
+                             'Unknown type of object in theBO##'->putLine
+                         if);
+                         INNER
+                      #)
+                 #);
+               init::< 
+                 (# options: ^optionDB
+                 do
+                    getOptionDB->options[];
+                    (charRepOnALine,TRUE)->options.setBooleanOption;
+                    (invisibleOrigins,TRUE)->options.setBooleanOption;
+                    (useShortObjectTitles,TRUE)->options.setBooleanOption;
+                    (numberObjects,TRUE)->options.setBooleanOption
+                 #);
+               mpsinterfaceType::< 
+                 (#
+                    onOpenGroup::< 
+                      (# t: ^Text; 
+                      do
+                         'opening '->t[];
+                         groupName[]->t.append;
+                         t[]->info.label;
+                         true->info.update;
+                         
+                      #);
+                    onOpenGroupDone::< 
+                      (#  do ''->info.label; true->info.update;  #);
+                    onOldGroup::< 
+                      (# 
+                      do
+                         'ERROR: "%s.%s" is older than "%s.%s". Recompile!!!\n'
+                           ->putFormat
+                             (# 
+                             do
+                                groupName[]->s;
+                                AST.astFileExtension->s;
+                                groupName[]->s;
+                                'bet'->s;
+                                
+                             #)
+                      #);
+                    onGroupNotFound::< 
+                      (# 
+                      do
+                         'ERROR: "%s.%s" not found !!! \n'
+                           ->putFormat
+                             (# 
+                             do groupName[]->s; AST.astFileExtension->s; 
+                             #);
+                         
+                      #);
+                    DC: @AST.dynamicCompiler;
+                    init::< 
+                      (# error: @boolean
+                      do
+                         dc.initDyn;
+                         'Initialising the dynamic compiler... '->putText;
+                         1->Arguments->DC.NT.init;
+                         (1->Arguments,none )->dc.activateCompiler->error;
+                         (if error then
+                             'The initialisation of the dynamic compiler failed'
+                               ->putLine;
+                             stop
+                          else
+                             'done'->putLine
+                         if);
+                         INNER
+                      #);
+                    
+                 #);
+               
+            #)
+       #);
+     aObjectBrowserWindow: @window
+       (#
+          clr: @rectangle;
+          clearInProgress: @Boolean;
+          isOpen,isInitialized: @boolean;
+          menuBarType::< 
+            (#
+               fileMenu: @Menu
+                 (#
+                    closeWindowItem: @menuitem
+                      (#
+                         open::  (#  do 'Close window'->name; 'W'->key #);
+                         eventHandler:: 
+                           (#
+                              onSelect:: 
+                                (#  do false->isOpen; THIS(window).hide #)
+                           #)
+                      #);
+                    quitWindowItem: @menuitem
+                      (#
+                         open::  (#  do 'Quit'->name; 'Q'->key #);
+                         eventHandler:: 
+                           (# onSelect::  (#  do stop #) #)
+                      #);
+                    open:: 
+                      (# 
+                      do
+                         'File'->name;
+                         closeWindowItem.open;
+                         closeWindowItem[]->append;
+                         quitWindowItem.open;
+                         quitWindowItem[]->append;
+                         
+                      #);
+                    
+                 #);
+               objectsMenu: @Menu
+                 (#
+                    closeObjectsItem: @menuitem
+                      (#
+                         open::  (#  do 'Close objects'->name #);
+                         eventHandler:: 
+                           (#
+                              onSelect:: 
+                                (# m: ^moveableList; 
+                                do
+                                   getMoveableList->m[];
+                                   m.scan
+                                     (# 
+                                     do
+                                        (if clr->current.inRect then
+                                            current.close
+                                        if);
+                                        
+                                     #);
+                                   clr->objworld.browserDrawRect;
+                                   false->clearInProgress;
+                                   
+                                #);
+                              onStatus::  (#  do clearInProgress->value #);
+                              
+                           #)
+                      #);
+                    open:: 
+                      (# 
+                      do
+                         'Objects'->name;
+                         closeObjectsItem.open;
+                         closeObjectsItem[]->append;
+                         
+                      #);
+                    
+                 #);
+               open::< 
+                 (# 
+                 do
+                    fileMenu.open;
+                    fileMenu[]->append;
+                    objectsMenu.open;
+                    objectsMenu[]->append
+                 #)
+            #);
+          open::< 
+            (# 
+            do
+               (if not isInitialized then
+                   initialObjectBrowsersize->size;
+                   'Embedded Object Browser'->title;
+                   contents->info.open;
+                   contents->objworld.open;
+                   objworld[]->aBrowser.init;
+                   myIcons[]->objectPool.put;
+                   true->isOpen;
+                   INNER ;
+                   true->isInitialized
+               if)
+            #);
+          close::<  (#  do false->isOpen #);
+          objworld: @Canvas
+            (#
+               open:: 
+                 (# sz: @Point; tmp: @Point; 
+                 do
+                    initialObjectBrowsersize->sz;
+                    info.size->tmp;
+                    sz.v-tmp.v->sz.v;
+                    sz->size;
+                    TRUE->bindLeft->bindRight->bindBottom->bindTop;
+                    
+                 #);
+               eventHandler:: 
+                 (#
+                    onMouseDown:: 
+                      (# 
+                      do
+                         (if buttonState
+                          // 1 then
+                             (if clearInProgress then
+                                 clr->browserDrawRect
+                             if);
+                             localPosition->SimpleDefineRect->clr;
+                             (if not clr.isEmpty then
+                                 true->clearInProgress; clr->browserDrawRect; 
+                              else
+                                 false->clearInProgress; 
+                             if);
+                             
+                         if);
+                         
+                      #);
+                    
+                 #);
+               
+            #);
+          info: @staticText
+            (#
+               open::< 
+                 (# sz: @Point; ts: ^TextStyle; pos: @Point; 
+                 do
+                    style->ts[];
+                    initialObjectBrowsersize->sz;
+                    ts.lineHeight+6->sz.v;
+                    sz->size;
+                    initialObjectBrowsersize->pos;
+                    0->pos.h;
+                    pos.v-sz.v->pos.v;
+                    pos->Position;
+                    TRUE->bindLeft->bindRight->bindBottom;
+                    FALSE->bindTop;
+                    TRUE->border.visible;
+                    borderStyles.shadowIn->border.style;
+                    
+                 #);
+               
+            #);
+          browser:< windowedbrowser
+            (#
+               objectViewType::< moveableObjectViewEvaluator
+                 (#
+                    onEvaluateButton::< 
+                      (# 
+                      do
+                         (if theBO##
+                          // be.localBetaObject## then
+                               (#
+                                  originFGname,evaluatorCode,dynamicFGname:
+                                    ^text;
+                                  aLocalBetaObject: ^be.localBetaObject;
+                                  FF: ^be.AST.fragmentForm;
+                                  FG: ^be.AST.fragmentGroup;
+                                  im: ^imagePair;
+                                  error: @boolean;
+                                  aMoveableList: ^moveableList;
+                                  constructUniqueID:
+                                    (#
+                                       T: @Text;
+                                       timeSec,timeMiliSec: @integer;
+                                       timeInMiliSec: @real
+                                    do
+                                       preciseTime->(timeSec,timeMiliSec);
+                                       timeSec->timeInMiliSec;
+                                       timeInMiliSec*1000000->timeInMiliSec;
+                                       timeInMiliSec+timeMiliSec->timeInMiliSec;
+                                       timeInMiliSec
+                                         ->t.putReal (#  do 0->precision #)
+                                    exit t.copy
+                                    #)
+                               do
+                                  theBO[]->aLocalBetaObject[];
+                                  aLocalBetaObject.o[]
+                                    ->be.AST.AstOfObject
+                                      (#  do FG.name->originFGname[] #);
+                                  contents.evaluator.editor.contents.contents
+                                    ->evaluatorCode[];
+                                  'dynamicDescriptor'
+                                    ->be.BETACFL.makeBETAfragmentForm->FF[];
+                                  (be.BETA.objectDescriptor,evaluatorCode[],
+                                   FF[])->be.BETACFL.parseText;
+                                  constructUniqueID->dynamicFGname[];
+                                  dynamicFGname[]
+                                    ->be.BETACFL.openBETAfragmentGroup->FG[];
+                                  FF.name->FG.fragmentList.deleteLocalName;
+                                  FF[]->FG.fragmentList.addFragment;
+                                  (if (FG.prop[] <> none ) then
+                                      'ORIGIN'
+                                        ->FG.prop.addProp
+                                          (# 
+                                          do originFGname[]->addString
+                                          #);
+                                      'doneCheck'
+                                        ->FG.prop.addProp
+                                          (#  do 0->addConst #);
+                                      
+                                   else
+                                      'Prop[] is none'->putLine
+                                  if);
+                                  FG.markAsChanged;
+                                  (FG.name,aLocalBetaObject.o[])
+                                    ->be.dc.activateCompiler->error;
+                                  (if not error then
+                                      be.dc.getImagePair->IM[];
+                                      (aLocalBetaObject.o[],IM[])
+                                        ->be.dc.executeObject->showObject;
+                                      getMoveableList->aMoveableList[];
+                                      aMoveableList.scan
+                                        (#  do current.doUpdate #)
+                                   else
+                                      'An error happend during compilation'
+                                        ->putLine
+                                  if);
+                                  
+                               #)
+                          // betaObject## then
+                             'betaObject'->putLine
+                          else
+                             'Unknown type of object in theBO##'->putLine
+                         if);
+                         INNER
+                      #)
+                 #);
+               init::< 
+                 (# options: ^optionDB
+                 do
+                    getOptionDB->options[];
+                    (charRepOnALine,TRUE)->options.setBooleanOption;
+                    (invisibleOrigins,TRUE)->options.setBooleanOption;
+                    (useShortObjectTitles,TRUE)->options.setBooleanOption;
+                    (numberObjects,TRUE)->options.setBooleanOption
+                 #);
+               mpsinterfaceType::< 
+                 (#
+                    onOpenGroup::< 
+                      (# t: ^Text; 
+                      do
+                         'opening '->t[];
+                         groupName[]->t.append;
+                         t[]->info.label;
+                         true->info.update;
+                         
+                      #);
+                    onOpenGroupDone::< 
+                      (#  do ''->info.label; true->info.update;  #);
+                    onOldGroup::< 
+                      (# 
+                      do
+                         'ERROR: "%s.%s" is older than "%s.%s". Recompile!!!\n'
+                           ->putFormat
+                             (# 
+                             do
+                                groupName[]->s;
+                                AST.astFileExtension->s;
+                                groupName[]->s;
+                                'bet'->s;
+                                
+                             #)
+                      #);
+                    onGroupNotFound::< 
+                      (# 
+                      do
+                         'ERROR: "%s.%s" not found !!! \n'
+                           ->putFormat
+                             (# 
+                             do groupName[]->s; AST.astFileExtension->s; 
+                             #);
+                         
+                      #);
+                    DC: @AST.dynamicCompiler;
+                    init::< 
+                      (# error: @boolean
+                      do
+                         dc.initDyn;
+                         'Initialising the dynamic compiler... '->putText;
+                         1->Arguments->DC.NT.init;
+                         (1->Arguments,none )->dc.activateCompiler->error;
+                         (if error then
+                             'The initialisation of the dynamic compiler failed'
+                               ->putLine;
+                             stop
+                          else
+                             'done'->putLine
+                         if);
+                         INNER
+                      #);
+                    
+                 #);
+               
+            #);
+          aBrowser: @browser;
+          myIcons: @iconDB
+            (#
+               movIcon: ^pixmap;
+               getIcon:: 
+                 (# 
+                 do
+                    (if TRUE
+                     // ObjectViewIcon->name.equalNCS then
+                        (if movIcon[]
+                         // none then
+                            &pixmap[]->movIcon[];
+                            '$(BETALIB)/bitmap/objectbrowser/ObjectViewIcon.xpm'
+                              ->expandEnvVar
+                                (#
+                                   defaultvalue:: 
+                                     (# 
+                                     do '/usr/local/lib/beta/'->envvarvalue[]
+                                     #)
+                                #)->movIcon.read;
+                            
+                        if);
+                        movIcon[]->theIcon[];
+                        
+                    if);
+                    
+                 #);
+               
+            #)
+       #)
+  do
+     theObjectBrowserWindow.open;
+     a[]->theObjectBrowserWindow.aBrowser.showObject
+  #)  
+
