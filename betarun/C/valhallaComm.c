@@ -2,10 +2,12 @@
 #include <stdio.h>
 #include <signal.h>
 #include <unistd.h>
-#include "valhallaFIFOS.h"
+/*#include "valhallaFIFOS.h"*/
 #include "valhallaComm.h"
 #include "valhallaFindComp.h"
 #include "dot.h"
+#include <errno.h>
+#include <sys/socket.h>
 
 /* Opcodes for communication between valhalla and debugged process.
  *
@@ -31,6 +33,130 @@
 #define VOP_OBJADRCANONIFY     13
 
 #define VOP_STOPPED            50
+
+
+
+/* SOCKET OPERATIONS
+ * ================= */
+
+/* Declarations of methods from ~beta/process/v1.4/sockets.c.
+ * To avoid space overhead in debug rts, consider moving used functions
+ * from sockets.c to valhalla specific file (with new names). */
+
+int openActiveSocket(unsigned long inetAddr, long port);
+int writeDataMax(int fd, char *srcbuffer, int length);
+int readDataMax(int fd, char *destbuffer, int buflen);
+unsigned long inetAddrOfThisHost(void);
+
+
+#define commbufsize 8192
+#define WSPACE (commbufsize-wnext)
+#define RAVAIL (rlen-rnext)
+
+char *wbuf, *rbuf;
+int *wheader, *rheader;
+int wnext, rnext, rlen;
+
+int sock;
+
+void valhalla_init_sockets (int valhallaport)
+{
+  sock = openActiveSocket (inetAddrOfThisHost(),valhallaport);
+
+  if (sock==-1)
+    fprintf (output, "WARNING -- valhalla_init_sockets failed. errno=%d\n",errno);
+  
+  wheader = (int *) malloc (commbufsize+2*sizeof(int)); wnext = 0;
+  rheader = (int *) malloc (commbufsize+2*sizeof(int)); rnext = 0; rlen = 0;
+  wbuf = (char *) &wheader[2];
+  rbuf = (char *) &rheader[2];
+}
+
+void valhalla_socket_flush ()
+{
+  wheader[0] = (wnext+3)/4; /* len = number of longs of data */
+  wheader[1] = wnext; /* header = number of bytes of data. */
+  DEBUG_VALHALLA (fprintf(output,"valhalla_socket_flush: len=%d,header=%d\n",wheader[0],wheader[1]));
+  if (writeDataMax (sock,(char *) wheader, (4*wheader[0])+8) != (4*wheader[0])+8) {
+    fprintf (output, "WARNING -- valhalla_socket_flush failed. errno=%d\n",errno);
+  }
+  DEBUG_VALHALLA (fprintf(output,"valhalla_socket_flush: Done"));
+  wnext=0;
+}
+
+void valhalla_writebytes (char* buf, int bytes)
+{ int written = 0;
+  
+  while (written<bytes) { 
+    if (WSPACE<bytes-written) {
+      memcpy (&wbuf[wnext],&buf[written],WSPACE);
+      written = WSPACE+written;
+      wnext=commbufsize;
+      valhalla_socket_flush ();
+    } else {
+      memcpy (&wbuf[wnext],&buf[written],bytes-written);
+      wnext = wnext+bytes-written;
+      return;
+    }
+  }
+}
+
+void valhalla_writeint (int val)
+{ 
+  valhalla_writebytes ((char *)&val,sizeof(val));
+}
+
+void valhalla_writetext (char* txt)
+{ int len = strlen (txt);
+  valhalla_writeint (len);
+  valhalla_writebytes (txt,len+1);
+}
+
+void valhalla_fill_buffer ()
+{ 
+  DEBUG_VALHALLA (fprintf(output,"valhalla_fill_buffer"));
+  if (readDataMax (sock,(char *) &rheader[0],sizeof(int)) != sizeof(int)) {
+    fprintf (output, "valhalla_fill_buffer failed (1) \n");
+    exit (99);
+  }
+  if (readDataMax (sock,(char *) &rheader[1],sizeof(int)) != sizeof(int)) {
+    fprintf (output, "valhalla_fill_buffer failed (2) \n");
+    exit (99);
+  }
+  if (rheader[0]*4>commbufsize) {
+    fprintf (output, "valhalla_fill_buffer failed (3) \n");
+    exit (99);
+  }
+  if (readDataMax (sock,rbuf,rheader[0]*4) != rheader[0]*4) {
+    fprintf (output, "valhalla_fill_buffer failed (4) \n");
+    exit (99);
+  }
+  rnext=0; rlen=rheader[1];
+  DEBUG_VALHALLA (fprintf(output,"valhalla_fill_buffer: Done"));
+}
+
+void valhalla_readbytes (char* buf, int bytes)
+{ int read=0;
+
+  while (read<bytes) {
+    if (RAVAIL<bytes-read) {
+      memcpy (&buf[read],&rbuf[rnext],RAVAIL);
+      read = RAVAIL+read;
+      valhalla_fill_buffer ();
+    } else {
+      memcpy (&buf[read],&rbuf[rnext],bytes-read);
+      rnext = rnext+bytes-read;
+      return;
+    }
+  }
+}
+
+int valhalla_readint ()
+{ int val;
+  valhalla_readbytes ((char *) &val,sizeof(val));
+  return val;
+}
+
 
 /* DOTgarbageOnDelete
  * ==================
@@ -82,11 +208,6 @@ void printOpCode (int opcode)
 
 int valhallaCommunicate (int curPC);
 
-/* FIFOS FOR VALHALLA COMMUNICATION
- * ================================ */
-
-static FILE *fifoFrom, *fifoTo;
-
 extern char *Argv (int);
 
 void InstallHandler (int sig)
@@ -113,21 +234,25 @@ void InstallHandler (int sig)
  * is textual form. */
 
 void valhallaInit ()
-{ char tmp[20];
-  int valhallaPID, pid;
+{ /*char tmp[20];*/
+  int valhallaPORT/*, pid*/;
   
   if (valhallaID) {
 
     /* Valhalla is already running. */
-    valhallaPID = atoi (valhallaID);
-    openFIFOS (valhallaPID,&fifoFrom,&fifoTo);
+    valhallaPORT = atoi (valhallaID);
+    DEBUG_VALHALLA (fprintf (output,"valhalla port = %d\n",valhallaPORT));
+    valhalla_init_sockets (valhallaPORT);
 
   } else {
     
     /* Valhalla is not running. */
-    
+
+    fprintf (output,"Start Valhalla is currently not supported\n");
+    return;
+    /*
     pid = getpid (); 
-    createFIFOS (pid); 
+    createFIFOS (pid);
     valhallaPID = vfork ();
     
     if (valhallaPID) {
@@ -155,6 +280,7 @@ void valhallaInit ()
       _exit (0);
       
     }
+    */
   }
 
   /* Make BetaSignalHandler handle the SIGINT signal.
@@ -187,51 +313,6 @@ void valhallaInit ()
 
 
 
-/* FIFO OPERATIONS
- * =============== */
-
-int fifoBinGetBytes (FILE *f, char* buf, int bytes)
-{
-  return fread (buf,1,bytes,f);
-}
-
-int fifoBinPutBytes (FILE *f, char* buf, int bytes)
-{
-  return fwrite(buf,1,bytes,f);
-}
-
-int fifoBinGetInt (FILE *f)
-{ int val;
-  if (fifoBinGetBytes (f, (char *)&val, sizeof(val)) != sizeof(val))
-    fprintf (output, "WARNING -- fifoBinGetInt failed\n");
-  return val;
-}
-
-void fifoBinPutInt (FILE *f, int val)
-{ 
-  if (fifoBinPutBytes (f, (char *)&val, sizeof(val)) != sizeof(val))
-    fprintf (output, "WARNING -- fifoBinPutInt failed\n");
-}
-
-int fifoGetText (FILE *f, char* buf, int buflen)
-{ int len;
-  len = fifoBinGetInt (f);
-  if (len < buflen) {
-    return fifoBinGetBytes (f,buf,len+1);
-  } else {
-    return -1;
-  }
-}
-
-void fifoPutText (FILE *f, char* txt)
-{ int len = strlen (txt);
-  fifoBinPutInt (f,len);
-  fifoBinPutBytes (f,txt,len+1);
-}
-
-
-
-
 /* int valhallaCommunicate (int curPC)
  * ==========================
  *
@@ -245,8 +326,8 @@ void fifoPutText (FILE *f, char* txt)
 void forEachStackEntry (int returnAdr, int returnObj)
 /* Used by VOP_SCANSTACK */
 {
-  fifoBinPutInt (fifoFrom, returnAdr);
-  fifoBinPutInt (fifoFrom, returnObj);
+  valhalla_writeint (returnAdr);
+  valhalla_writeint (returnObj);
   DEBUG_VALHALLA(fprintf(output,"forEachStackEntry: returnAdr=%d, returnObj=%d\n",returnAdr,returnObj));
 
 }
@@ -297,7 +378,7 @@ int valhallaCommunicate (int curPC)
 { int opcode;
 
   while (TRUE) {
-    opcode = fifoBinGetInt (fifoTo);
+    opcode = valhalla_readint ();
     
     DEBUG_VALHALLA(fprintf (output, "valhallaCommunicate: opcode is "));
     DEBUG_VALHALLA(printOpCode(opcode); fprintf (output,"\n"));
@@ -308,53 +389,51 @@ int valhallaCommunicate (int curPC)
       
       { group_header *current = 0;
 
-	fifoBinPutInt (fifoFrom,opcode);
+	valhalla_writeint (opcode);
 	while ((current = NextGroup (current))) {
-	  fifoPutText (fifoFrom,NameOfGroup(current));         /* groupName */
-	  fifoBinPutInt (fifoFrom, (int) current->self);       /* dataStart */ 
-	  fifoBinPutInt (fifoFrom, (int) current->next);       /* dataEnd   */
-	  fifoBinPutInt (fifoFrom, (int) current->code_start); /* codeStart */
-	  fifoBinPutInt (fifoFrom, (int) current->code_end);   /* codeEnd   */
+	  valhalla_writetext (NameOfGroup(current));     /* groupName */
+	  valhalla_writeint ((int) current->self);       /* dataStart */ 
+	  valhalla_writeint ((int) current->next);       /* dataEnd   */
+	  valhalla_writeint ((int) current->code_start); /* codeStart */
+	  valhalla_writeint ((int) current->code_end);   /* codeEnd   */
 	}
-	fifoPutText (fifoFrom,"");
-	fflush (fifoFrom);
+	valhalla_writetext ("");
+	valhalla_socket_flush ();
       }
       break;
 
     case VOP_KILL:
 
-      fclose (fifoFrom); fclose (fifoTo);
+      shutdown (sock,2);
       return TERMINATE;
 
     case VOP_CONTINUE:
       
-      valhallaIsStepping = fifoBinGetInt (fifoTo);
-      fifoBinPutInt (fifoFrom, opcode);
-      fflush (fifoFrom);
+      valhallaIsStepping = valhalla_readint ();
+      valhalla_writeint (opcode);
+      valhalla_socket_flush ();
       return CONTINUE;
       
     case VOP_GETDATAMEM:
     case VOP_GETINSTRUCTIONMEM:
       { 
-	int address = fifoBinGetInt (fifoTo);
-	int bytelen = fifoBinGetInt (fifoTo);
+	int address = valhalla_readint ();
+	int bytelen = valhalla_readint ();
 	DEBUG_VALHALLA(fprintf (output, "VOP_GET*MEM: %d bytes from address 0x%x\n",bytelen, address));
 	   
-	fifoBinPutInt (fifoFrom, opcode);
-	if (fifoBinPutBytes (fifoFrom, (char *) address, bytelen) != bytelen)
-	  fprintf (output, "VOP_GETDATAMEM: fifoBinPutBytes failed\n");
-	fflush (fifoFrom);
+	valhalla_writeint (opcode);
+	valhalla_writebytes ((char *) address, bytelen);
+	valhalla_socket_flush ();
       }
       break;
 
     case VOP_SETDATAMEM:
       {
-	int address = fifoBinGetInt (fifoTo);
-	int bytelen = fifoBinGetInt (fifoTo);
-	if (fifoBinGetBytes (fifoTo, (char *) address, bytelen) != bytelen)
-	  fprintf (output, "VOP_SETDATAMEM: fifoBinGetBytes failed\n");
-	fifoBinPutInt (fifoFrom, opcode);
-	fflush (fifoFrom);
+	int address = valhalla_readint ();
+	int bytelen = valhalla_readint ();
+	valhalla_readbytes((char *) address, bytelen);
+	valhalla_writeint (opcode);
+	valhalla_socket_flush ();
       }
       break;
 
@@ -362,16 +441,16 @@ int valhallaCommunicate (int curPC)
       { 
 	int address;
 	
-	fifoBinPutInt (fifoFrom, opcode);
-	while ((address = fifoBinGetInt (fifoTo)))
-	  fifoBinPutInt (fifoFrom, (* (int *) address));
-	fflush (fifoFrom);
+	valhalla_writeint (opcode);
+	while ((address = valhalla_readint ()))
+	  valhalla_writeint ((* (int *) address));
+	valhalla_socket_flush ();
       }
       break;
 
     case VOP_OBJADRCANONIFY:
       { int address;
-	struct Object *obj = (struct Object *) fifoBinGetInt (fifoTo);
+	struct Object *obj = (struct Object *) valhalla_readint ();
 
 	DEBUG_VALHALLA(fprintf(output,"Got object %d\n",(int) obj));
 	
@@ -389,31 +468,31 @@ int valhallaCommunicate (int curPC)
 	} else {
 	  address=0;
 	}
-	fifoBinPutInt (fifoFrom, opcode);
-	fifoBinPutInt (fifoFrom, address);
-	fflush (fifoFrom);
+	valhalla_writeint (opcode);
+	valhalla_writeint (address);
+	valhalla_socket_flush ();
       }
       break;
 
     case VOP_DOTINSERT:
       { int address, index;
 
-	address = fifoBinGetInt (fifoTo);
+	address = valhalla_readint ();
 	index = DOThandleInsert (address, DOTgarbageOnDelete, FALSE);
 
-	fifoBinPutInt (fifoFrom, opcode);
-	fifoBinPutInt (fifoFrom, index);
-	fifoBinPutInt (fifoFrom, ObjectSize((ref(Object)) address));
-	fflush (fifoFrom);
+	valhalla_writeint (opcode);
+	valhalla_writeint (index);
+	valhalla_writeint (ObjectSize((ref(Object)) address));
+	valhalla_socket_flush ();
       }
       break;
 
     case VOP_DOTDELETE:
       {
-	int handle = fifoBinGetInt (fifoTo);
+	int handle = valhalla_readint ();
 	DOThandleDelete (handle);
-	fifoBinPutInt (fifoFrom, opcode);
-	fflush (fifoFrom);
+	valhalla_writeint (opcode);
+	valhalla_socket_flush ();
       }
       break;
 
@@ -422,29 +501,28 @@ int valhallaCommunicate (int curPC)
 	struct group_header* header; int tableSize;
 	long** protoTable; int i;
 
-	header = (struct group_header*) fifoBinGetInt (fifoTo);
+	header = (struct group_header*) valhalla_readint ();
 	protoTable = (long **) header->protoTable;
 	
 	tableSize= (int) protoTable[0];
 
 	for (i=1; i<=tableSize; i++) {
 	  /* M entry point: */
-	  fifoBinPutInt (fifoFrom,
-			 findMentry ((struct ProtoType *) protoTable[i]));
+	  valhalla_writeint (findMentry ((struct ProtoType *) protoTable[i]));
 	  
-	  fifoBinPutInt (fifoFrom,protoTable[i][1]); /* G entry point. */
-	  fifoBinPutInt (fifoFrom,protoTable[i][4]); /* (formIndex,AstIndex) */
+	  valhalla_writeint (protoTable[i][1]); /* G entry point. */
+	  valhalla_writeint (protoTable[i][4]); /* (formIndex,AstIndex) */
 	};
-	fifoBinPutInt (fifoFrom, opcode);
+	valhalla_writeint (opcode);
 	
-	fflush (fifoFrom);
+	valhalla_socket_flush ();
       }
       break;
 
     case VOP_SCANSTACK:
       { struct ComponentStack cs;
 
-	cs.comp = (struct Component *) fifoBinGetInt (fifoTo);
+	cs.comp = (struct Component *) valhalla_readint ();
 
 	DEBUG_VALHALLA(fprintf (output,"Received component: %d, pt = %d\n",(int)cs.comp, (int) cs.comp->Proto));
 
@@ -452,7 +530,7 @@ int valhallaCommunicate (int curPC)
 
 	DEBUG_VALHALLA(fprintf (output,"FindComponentStack done. stacktype = %d. \n",cs.stacktype));
 	  
-	fifoBinPutInt (fifoFrom,cs.stacktype);
+	valhalla_writeint (cs.stacktype);
 	
 	DEBUG_VALHALLA(fprintf (output,"Scanning ComponentStack.\n"));
 	
@@ -460,9 +538,9 @@ int valhallaCommunicate (int curPC)
 	
 	DEBUG_VALHALLA(fprintf (output,"ScanComponentStack done.\n"));
 	
-	fifoBinPutInt (fifoFrom,-1);
-	fifoBinPutInt (fifoFrom, opcode);
-	fflush (fifoFrom);
+	valhalla_writeint (-1);
+	valhalla_writeint (opcode);
+	valhalla_socket_flush ();
       }
       break;
       
@@ -489,8 +567,8 @@ void forEachAlive (int handle, int address, DOTonDelete onDelete)
 {
   DEBUG_VALHALLA(fprintf (output,"forEachAlive: handle=%d, address=%d \n", handle, address));
   if (onDelete==DOTgarbageOnDelete) {
-    fifoBinPutInt (fifoFrom,handle);
-    fifoBinPutInt (fifoFrom,address);
+    valhalla_writeint (handle);
+    valhalla_writeint (address);
   }
 }
 
@@ -520,21 +598,21 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   } else
     invops=TRUE;
 
-  fifoBinPutInt (fifoFrom, VOP_STOPPED);
-  fifoBinPutInt (fifoFrom, (int) PC);
+  valhalla_writeint (VOP_STOPPED);
+  valhalla_writeint ((int) PC);
 
   if (PC==0) { /* Process about to stop. */
-    fflush (fifoFrom);
+    valhalla_socket_flush ();
     invops=FALSE;
     return TERMINATE;
   };
 
-  fifoBinPutInt (fifoFrom, (int) curObj);
-  fifoBinPutInt (fifoFrom, (int) ActiveComponent);
+  valhalla_writeint ((int) curObj);
+  valhalla_writeint ((int) ActiveComponent);
   
-  fifoBinPutInt (fifoFrom, (int) SP);
+  valhalla_writeint ((int) SP);
 
-  fifoBinPutInt (fifoFrom, sig);
+  valhalla_writeint (sig);
   switch (sig) {
   case SIGILL:  txt = "SIGILL"; break;
   case SIGFPE:  txt = "SIGFPE"; break;
@@ -547,14 +625,14 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
 #endif
   default: txt = "UNKNOWN"; break;
   }
-  fifoPutText (fifoFrom, txt);
+  valhalla_writetext (txt);
 
   DEBUG_VALHALLA(fprintf(output,"ValhallaOnProcessStop: PC=%d, SP=0x%x, StackEnd=0x%x, curObj=%d,sig=%d,errorNumber=%d,errorText=%s\n",(int) PC, (int) SP, (int) StackEnd, (int) curObj, (int) sig, (int) errorNumber, txt));
 			 
-  fifoBinPutInt (fifoFrom, errorNumber);
+  valhalla_writeint (errorNumber);
   if (errorNumber<0) {
     txt = ErrorMessage (errorNumber);
-    fifoPutText (fifoFrom, txt);
+    valhalla_writetext (txt);
   }
 
   /* Locate objects known by valhalla that have become garbage: */
@@ -562,11 +640,11 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
     
   /* Scan and send info on all alive objects known by valhalla: */
   DOTscan (forEachAlive);
-  fifoBinPutInt (fifoFrom,-1);
+  valhalla_writeint (-1);
 
-  fflush (fifoFrom);
+  valhalla_socket_flush ();
 
-  if (fifoBinGetInt (fifoTo) != VOP_STOPPED)
+  if (valhalla_readint () != VOP_STOPPED)
     fprintf (output, "Warning! Wrong answer from Valhalla on VOP_STOPPED\n"); 
 
   
