@@ -81,9 +81,14 @@ sub Chdir {
     my($p)=@_;
     $p = &path($p);
     if (!-d $p) {
-	print "Chdir Warning: \"$p\" does not exist.\n";
+		print "Chdir Warning: \"$p\" does not exist.\n";
     }
-    chdir $p;
+	if ($Generate) {
+	    print "cvsout \"cd $p\\n\"\n";
+		print "cd $p;\n"; 
+	}
+
+    chdir $p or die "Unable to chdir: $!" unless $simulate;
 }
 
 sub path {			# Convert path to LOCAL convention
@@ -187,50 +192,21 @@ sub GetAnswer {
 }
 
 sub cvsoutput {
-  if ($OS eq 'MAC'){
-      $maccvs=$ENV{'maccvs'}."MacCvs";
-      $cwd=`Directory`; chop $cwd;
-      $outfile=$ENV{'tempfolder'}."cvs.out";
-      
-      unlink($outfile) if (-f "$outfile");
-      $script  = "tell application \"$maccvs\"\n";
-      $script .= "do script { \"@_\" } environment { \"CVSROOT\", \"ariel:/users/beta/.CVSHOME\" } pathway \"$cwd\" mode file filename \"$outfile\"\n";
-      $script .= "end tell";
-      &MacPerl::DoAppleScript($script);
-      @output = ();
-      while(! -f "$outfile") { sleep(1) }
-      open (OUT, "$outfile") || die "cvsoutput: cannot open $outfile\n";
-      @output = <OUT>;
-      close OUT;
-  } else {
-      @output = `cvs @_ 2>&1`;
-  }	
+  @output = `cvs @_ 2>&1`;
   return @output;
 }
 
 sub cvs {
-  if ($OS eq 'MAC'){
-      $maccvs=$ENV{'maccvs'}."MacCvs";
-      $cwd=`Directory`; chop $cwd;
-      $outfile=$ENV{'tempfolder'}."cvs.out";
-      
-      unlink($outfile) if (-f "$outfile");
-      $script  = "tell application \"$maccvs\"\n";
-      $script .= "do script { \"@_\" } environment { \"CVSROOT\", \"ariel:/users/beta/.CVSHOME\" } pathway \"$cwd\" mode file filename \"$outfile\"\n";
-      $script .= "end tell";
-      &MacPerl::DoAppleScript($script);
-      @output = ();
-      while(! -f "$outfile") { sleep(1) }
-      open (OUT, "$outfile") || die "cvsoutput: cannot open $outfile\n";
-      print <OUT>;
-      close OUT;
-  } else {
       local ($cvscmd) = "cvs ";
-      $cvscmd .= "-d $ENV{'CVSROOT'} " if defined($ENV{'CVSROOT'});
+      $cvscmd .= "-d $ENV{'CVSROOT'} " if defined($ENV{'CVSROOT'}) && (!$Generate);
       $cvscmd .= "@_";
-      print "$cvscmd" if ($verbose);
-      system "$cvscmd";
-  }	
+      print "$cvscmd;\n" if ($verbose);
+	  if ($Generate) {
+	  	 print "cvsout \"$cvscmd\\n\"\n";
+		 print "set output [" . "$cvscmd" . "]\n";
+		 print "cvsout \"\$output\\n\"\n";
+	  }
+      system "$cvscmd" unless $simulate;
 }
 
 
@@ -240,7 +216,7 @@ sub SmartMkdir {
     foreach $dir (split '/', $path) {
 	$full .= $dir . '/';
 	if (!-d &path($full)){
-	    print "\tmkdir $full\n" if ($verbose);
+	    print "\tmkdir $full\n" if ($verbose || $simulate);
 	    mkdir (&path($full), 0755) if (!$simulate);
 	}
     }

@@ -1,6 +1,3 @@
-resource 'STR ' (128, "BETALIB", locked, preload) {
-	"<nothing>"
-};
 
 resource 'DITL' (-601, purgeable) {
 	{	/* array DITLarray: 11 elements */
