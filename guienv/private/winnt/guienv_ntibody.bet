@@ -1,7 +1,7 @@
 ORIGIN 'guienv_ntiprivate';
 (*
  * COPYRIGHT
- *       Copyright (C) Mjolner Informatics, 1994-96
+ *       Copyright (C) Mjolner Informatics, 1994-97
  *       All rights reserved.
  *)
 
@@ -36,6 +36,7 @@ INCLUDE '~beta/basiclib/v1.6/file';
 INCLUDE 'resizewindowitem';
 INCLUDE 'win32menubarprivate';
 INCLUDE 'guienvattributes';
+INCLUDE '../../utils/guienvadds'; 
 
 
 -- GUIENVreportLastError: doPart --
@@ -56,36 +57,93 @@ do GetLastError -> error;
      enter R[1]
      exit R[1]
      #);
-do windowHandle -> private.interfaceObjects.findByID -> theInterfaceObject[];
    
-   (if theInterfaceObject[]<>none then
-       &messageInfo[] -> info[] -> pushMessageInfo;
-       wParam -> longInt;
-       longInt.hiWord -> info.wParam.hiWord;
-       longInt.loWord -> info.wParam.loWord;
-       wParam -> info.wParam;
-       lParam -> longInt;
-       longInt.hiWord -> info.lParam.hiWord;
-       longInt.loWord -> info.lParam.loWord;
-       lParam -> info.lParam;
-       message -> info.message;
-       GetMessagePos -> longInt;
-       (longInt.loWord,longInt.hiWord) -> info.where;
-       getMessageTime -> info.time;
+   processWM_ENDSESSION:
+     (# 
+     do (if wParam<>0 then (* The session is beeing ended. *)
+            
+        if);
+        0 -> result;
+     #);
    
-       theInterfaceObject.dispatchMessage;
+   processWM_QUERYENDSESSION:
+     (# 
+     do (if onQuit then
+            1 -> result;
+         else
+            0 -> result;
+        if);
+     #);
+   
+   handlePalette:
+     (# hdc,hPal,hOldPal,uMappedColors: @integer;
+     do (if this(guienv).private.curhPal<>0 then
+            this(guienv).private.curhPal -> hPal;
+         else
+            this(guienv).private.ghPal -> hPal;
+        if);
+        (if (hPal<>0) then
+            windowHandle -> GetDC -> hdc;
+            (hdc, hPal, 0) -> SelectPalette -> hOldPal;
+            hdc -> RealizePalette -> uMappedColors;
+            (hdc, hOldPal, 1) -> SelectPalette;
+            hdc -> RealizePalette;
+            (windowHandle,hdc) -> ReleaseDC;
+            
+            (if (uMappedColors<>0) then
+                (windowHandle,0,1) -> InvalidateRect;
+                1 -> result;
+             else 
+                0 -> result;;
+            if);
+         else
+            (windowHandle,message,wParam,lParam) -> DefWindowProc -> result;
+        if);
+     #);
+   
+do (if message
+    //WM_QUERYENDSESSION then processWM_QUERYENDSESSION;
+    //WM_ENDSESSION then processWM_ENDSESSION;
+    //WM_PALETTECHANGED then
+       (if (wParam <> windowHandle) then
+           handlePalette;
+        else
+           0 -> result;
+       if);
+    //WM_QUERYNEWPALETTE then
+       handlePalette;
+    else
+       windowHandle -> private.interfaceObjects.findByID->theInterfaceObject[];
        
-       popMessageInfo;
-       (if info.handled then
-           info.result -> result;
+       (if theInterfaceObject[]<>none then
+           &messageInfo[] -> info[] -> pushMessageInfo;
+           wParam -> longInt;
+           longInt.hiWord -> info.wParam.hiWord;
+           longInt.loWord -> info.wParam.loWord;
+           wParam -> info.wParam;
+           lParam -> longInt;
+           longInt.hiWord -> info.lParam.hiWord;
+           longInt.loWord -> info.lParam.loWord;
+           lParam -> info.lParam;
+           message -> info.message;
+           GetMessagePos -> longInt;
+           (longInt.loWord,longInt.hiWord) -> info.where;
+           getMessageTime -> info.time;
+           
+           theInterfaceObject.dispatchMessage;
+           
+           popMessageInfo;
+           (if info.handled then
+               info.result -> result;
+            else
+               (windowHandle,message,wParam,lParam) -> DefWindowProc -> result;
+           if);
         else
            (windowHandle,message,wParam,lParam) -> DefWindowProc -> result;
        if);
-    else
-       (windowHandle,message,wParam,lParam) -> DefWindowProc -> result;
+       
+       none -> theInterfaceObject[];
    if);
-   
-   none -> theInterfaceObject[];
 #)
 
 -- GUIENVaddInterfaceObject: doPart --
@@ -147,8 +205,9 @@ do private.windows.scan
     #);
 
 -- GUIENVterminateBody: doPart --
-do 0 -> PostQuitMessage;
-
+do (if onQuit then
+       0 -> PostQuitMessage;
+   if);
 
 -- GUIENVsetTheMenubar: doPart --
 do theMenubar[] -> uienvTheMenubar;
@@ -281,7 +340,6 @@ do GetTickCount -> start;
 -- GUIENVupdateRect: doPart --
 do (# getrgnboxres: @integer;
       theNtRectPtr: @integer;
-      NULLREGION: (# exit 1 #);
    do &rectangle[] -> value[]; 
       (if interfaceObjectUpdateRgn<>-1 then
           16 -> malloc -> theNtRectPtr;
@@ -302,18 +360,10 @@ makeColorRef:
      red,green,blue: @integer;
   enter theColor[]
   do (if theColor[]<>NONE then
-         (* theColor.red div 256 -> red;
-          * theColor.green div 256 -> green;
-          * theColor.blue div 256 -> blue;
-          *)
          
-         theColor.red    -> red;
-         theColor.green  -> green;
-         theColor.blue   -> blue;
-         
-         (red,0) -> theColorRef.%putByte;
-         (green,1) -> theColorRef.%putByte;
-         (blue,2) -> theColorRef.%putByte;
+         (theColor.red div 256,0) -> theColorRef.%putByte;
+         (theColor.green div 256,1) -> theColorRef.%putByte;
+         (theColor.blue div 256,2) -> theColorRef.%putByte;
          (0,3) -> theColorRef.%putByte;
          
      if);
@@ -707,18 +757,6 @@ win32Menuitem: interfaceObject
        (# result: @integer;
           flags: @integer;
           name: ^text;
-          ModifyMenu: external
-            (#
-               in0: @integer; (* HMENU *)
-               in1: @integer; (* UINT *)
-               in2: @integer; (* UINT *)
-               in3: @integer; (* UINT *)
-               in4: [1] @char; (* LPCSTR *)
-               out: @integer; (* BOOL *)
-            enter (in0,in1,in2,in3,in4)
-            do 'ModifyMenuA' -> callStd;
-            exit out
-            #);
           hSubMenu: @integer;
           noOfItemsInSubmenu: @integer;
           
@@ -1356,20 +1394,6 @@ do
      exit (h,v)
      #);
    
-   TrackPopupMenu: external
-     (#
-        in0: @integer; (* HMENU *)
-        in1: @integer; (* UINT *)
-        in2: @integer; (* int *)
-        in3: @integer; (* int *)
-        in4: @integer; (* int *)
-        in5: @integer; (* HWND *)
-        in6: @integer; (* const RECT FAR* *)
-        out: @boolean; (* BOOL *)
-     enter (in0,in1,in2,in3,in4,in5,in6)
-     do callStd;
-     exit out
-     #);
    thePopupMenu: ^win32Menu; thePoupMenuID: @integer;
    theWindowItemID: @integer;
    theItem: ^interfaceObject;
@@ -1537,14 +1561,6 @@ do &fileMenu[] -> theFileMenu[];
 
 
 -- windowItemLib: attributes --
-GetSysColorBrush: external
-  (# color: @integer;
-     hBrush: @integer;
-  enter color
-  do callStd;
-  exit hBrush
-  #);
-
 
 updateArea:
   (# r: ^rectangle;
@@ -1650,7 +1666,7 @@ do (if not (oldFrame -> newFrame.isEqual) then
            if);
        if);
        
-       (if interfaceObjectID=0 then
+       (if (interfaceObjectID=0) and private.visibleFlag then
            (# 
            do oldFrame[] -> father.updateArea;
               newFrame[] -> father.updateArea;
@@ -1679,7 +1695,8 @@ do (if not (oldFrame -> newFrame.isEqual) then
      #);
    processMouseUp:
      (# w,h: @integer;
-     do extractInfo;
+     do 
+        extractInfo;
         (if (this(guienv).private.lastCaptureID = interfaceObjectID) then 
             size -> (w,h);
             (* Call onMouseUp only if mouse pointer is positioned over this 
@@ -1838,16 +1855,21 @@ do (if not (oldFrame -> newFrame.isEqual) then
                      //SB_BOTTOM then 'Got sb_bottom' -> screen.putline;
                      //SB_LINELEFT then 
                         theScrollbar.theEventHandler.onButtonUp;
+                        theScrollbar.theEventHandler.onValueChanged;
                      //SB_LINERIGHT then 
                         theScrollbar.theEventHandler.onButtonDown;
+                        theScrollbar.theEventHandler.onValueChanged;
                      //SB_PAGELEFT then 
                         theScrollbar.theEventHandler.onPageUp;
+                        theScrollbar.theEventHandler.onValueChanged;
                      //SB_PAGERIGHT then 
                         theScrollbar.theEventHandler.onPageDown;
+                        theScrollbar.theEventHandler.onValueChanged;
                      //SB_THUMBPOSITION then 
                         theScrollbar.value -> currentValue;
                         (pos - currentValue) 
                           -> theScrollbar.theEventHandler.onThumbMoved;
+                        theScrollbar.theEventHandler.onValueChanged;
                     if);
                 if);
             if);
@@ -1906,27 +1928,24 @@ do (if not (oldFrame -> newFrame.isEqual) then
          *         screen.newLine;
          *)
         
-        (if type
-         //EN_MAXTEXT then
-            (NONE,'The maximum text length has been reached.',NONE)
-              -> alertUser;
-         //0
-         //1 then
-            (if info.lParam=0 then
-                id -> processMenuSelect
+        (if info.lParam=0 then
+            (if type
+             //0
+             //1 then
+                (if info.lParam=0 then
+                    id -> processMenuSelect
+                if);
             if);
          else
-            (if info.lParam<>0 then
-                (if this(windowItem)## <= canvas## then
-                    this(windowItem)[] -> theFather[];
-                    L: theFather.private.children.scan
-                      (# 
-                      do (if info.lParam=current.interfaceObjectID then
-                             current.handleNotification;
-                             leave L;
-                         if);
-                      #);
-                if);
+            (if this(windowItem)## <= canvas## then
+                this(windowItem)[] -> theFather[];
+                L: theFather.private.children.scan
+                  (# 
+                  do (if info.lParam=current.interfaceObjectID then
+                         current.handleNotification;
+                         leave L;
+                     if);
+                  #);
             if);
         if);
      #);
@@ -2122,7 +2141,22 @@ do
 (# width,height: @integer;
    x,y: @integer;
    info: ^messageInfo;
-do (if windowItemClassStatus=isStandardClass then
+   hPal,hOldPal: @integer;
+   
+do 
+   (if (not (windowItemClassStatus=isSubClass)) and (interfaceObjectID<>0) then
+       (if this(guienv).private.curhPal<>0 then
+           this(guienv).private.curhPal -> hPal;
+        else
+           this(guienv).private.ghPal -> hPal;
+       if);
+       (if (hPal<>0) then
+           (windowItemDevice, hPal, 1) -> SelectPalette -> hOldPal;
+           windowItemDevice -> RealizePalette;
+       if);
+   if);
+   
+   (if windowItemClassStatus=isStandardClass then
        currentMessageInfo -> info[];
        true -> info.handled;
        (interfaceObjectID,info.message,info.wParam,info.lParam) -> DefWindowProc -> info.result;
@@ -2144,6 +2178,11 @@ do (if windowItemClassStatus=isStandardClass then
         else
            (this(windowItem)[],border.style,0,0,width,height) -> drawBorder;
        if);
+   if);
+   
+   (if hPal<>0 then
+       (windowItemDevice, hOldPal, 1) -> SelectPalette;
+       windowItemDevice -> RealizePalette;
    if);
 #)
 
@@ -2297,6 +2336,7 @@ do false -> enabled;
 -- windowItemEnterBackgroundColor: doPart --
 do assertOpen;
    theColor[] -> makeColorRef -> private.backGroundColor;
+   theColor -> private.theBkColor;
    (if this(windowItem)[]=this(window).contents then
        private.backGroundColor -> this(window).private.backGroundColor;
    if);
@@ -2307,7 +2347,7 @@ do assertOpen;
    
 -- windowItemExitBackgroundColor: doPart --
 do assertOpen;
-   private.backGroundColor -> extractColor -> theColor;
+   private.theBkColor -> theColor;
    
 -- GUIENVwindowitemBorderSetVisible: doPart --
 do value -> private.borderVisible;
@@ -2477,7 +2517,7 @@ do father.interfaceObjectID -> GetDC -> dc;
 do
 (# newFrame: @rectangle;
    w,h: @Integer;
-do frame -> father.defineRect -> newFrame;
+do frame -> father.DefineResizeRect -> newFrame;
    newFrame.size -> (w,h);
    (w,1) -> max -> w;
    (h,1) -> max -> h;
@@ -2518,15 +2558,6 @@ do
    fatherID,ID: @integer;
    hInstance: @integer;
    exStyle, style, defaultStyle: @integer;
-   errorcode: @integer;
-   
-   getWndProcAddr: external
-     (# hWnd: @integer;
-        addr: @integer;
-     enter hWnd
-     do callC;
-     exit addr
-     #);
    
    a2o: @addressToObject;
 do uienvStandardWindowClass -> windowItemClass;
@@ -2588,33 +2619,29 @@ do uienvStandardWindowClass -> windowItemClass;
          -> SetWindowLong -> interfaceObjectWindProc;       
    if);
    
-   (interfaceObjectID,GCL_HCURSOR,0) -> SetClassLong;
+   (if (windowItemClassStatus<>isNoClass) then
+       (interfaceObjectID,GCL_HCURSOR,0) -> SetClassLong;
+   if);
    cursors.arrow[] -> theCursor;
 #)
 
 -- GUIENVwindowitemOpen: doPart --
-do
-(# windowID: @integer;
-   bkColor: ^color;
-do interfaceObjectID -> windowID;
+do 
    true -> bindTop;
    true -> bindLeft;
    true -> private.visibleFlag;
-   &color[] -> bkColor[];
-   (192,192,192) -> bkColor;
-   (* bkColor[] -> backGroundColor; *)
    -1 -> this(windowItem).private.backGroundColor;
    
    inner open;
-   (windowID,HWND_TOP,0,0,0,0,SWP_NOMOVE + SWP_NOSIZE + SWP_NOACTIVATE) 
-     -> SetWindowPos;
+   (if (windowItemClassStatus<>isNoClass) then
+       (this(interfaceObject).private.interfaceObjectID,HWND_TOP,0,0,0,0,SWP_NOMOVE + SWP_NOSIZE + SWP_NOACTIVATE) 
+         -> SetWindowPos;
+   if);
    (if private.visibleFlag then show; if);
-#)
 
 -- GUIENVwindowitemClose: doPart --
 do
-(# result: @integer;
-   id: @integer;
+(# id: @integer;
 do inner close;
    (if private.hBackGroundBrush<>0 then
        private.hBackGroundBrush -> DeleteObject;
@@ -2628,7 +2655,7 @@ do inner close;
    (if (interfaceObjectID<>0) then
        interfaceObjectID -> id;
        0 -> interfaceobjectID;
-       ID -> DestroyWindow -> result;
+       ID -> DestroyWindow;
    if);
    NONE -> windowItemCursor;
 #)
@@ -2639,13 +2666,6 @@ do frame -> r;
    pt -> r.containsPoint -> value;
 
 -- separatorLib: attributes --
-singleLine: (# exit 1 #);
-doubleLine: (# exit 2 #);
-singleDashedLine: (# exit 3 #);
-doubleDashedLine: (# exit 4 #);
-etchedIn: (# exit 5 #);
-etchedOut: (# exit 6 #);
-
 theStyle:
   (# 
   enter private.style
@@ -2850,19 +2870,11 @@ cursorHandle:
   exit private.cursorHandle
   #);
 load:
-  (# LoadCursorInt: external
-       (#
-          in0: @integer; (* HINSTANCE *)
-          in1: @integer; (* LPCSTR *)
-          out: @integer; (* HCURSOR *)
-       enter (in0,in1)
-       do 'LoadCursorA' -> callStd;
-       exit out
-       #);
+  (# 
      name: @integer; (* LPCSTR *)
      result: @integer;
   enter name
-  do (0,name) -> LoadCursorInt -> cursorHandle -> result;
+  do (0,name) -> LoadCursorInteger -> cursorHandle -> result;
      (result,'cursorLib.load') -> checkNullError;
   #);
 -- GUIENVcursorPrivate: descriptor --
@@ -3040,17 +3052,7 @@ do useTextStyle
 
 -- GUIENVtextStyleFamilySizes: doPart --
 do
-(# EnumFontFamilies: external
-     (# hdc: @integer;  (* handle to device control *)
-        faceName: [1] @char; (* pointer to face-name string *)
-        ptr2EnumFontFaceProc: @integer;   (* pointer to callback function *)
-        lParam: @integer;
-        result: @integer;
-     enter (hdc,faceName,ptr2EnumFontFaceProc,lParam)
-     do 'EnumFontFamiliesA' -> callStd;
-     exit result
-     #);
-   
+(# 
    EnumFontFamiliesProcToPtr: external
      (# func: ##EnumFontFamiliesProc;
         int: @integer;
@@ -3514,4 +3516,4 @@ do (if private.status = active then
 #)
 
 -- guienvFitToContents: doPart --
-do 
+do preferredSize -> size;
