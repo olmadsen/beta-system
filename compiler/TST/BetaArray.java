@@ -14,15 +14,6 @@ public abstract class BetaArray {
     System.arraycopy(array, 0, newArray, 0, copysize);
     return newArray;
   }
-  public static boolean[] ExtVRZ(boolean[] array, int add) {
-    int copysize = array.length;
-    int newsize  = copysize + add;
-    if (newsize<0) newsize = 0;
-    if (copysize>newsize) copysize = newsize;
-    boolean[] newArray = new boolean[newsize];
-    System.arraycopy(array, 0, newArray, 0, copysize);
-    return newArray;
-  }
 
   public static char[] NewVR1(char[] array) {
     int size = array.length;
@@ -60,4 +51,202 @@ public abstract class BetaArray {
     System.arraycopy(array, low-1, newArray, 0, newsize);
     return newArray;
   }
+
+
+
+
+  public static boolean[] ExtVRZ(boolean[] array, int add) {
+    int copysize = array.length;
+    int newsize  = copysize + add;
+    if (newsize<0) newsize = 0;
+    if (copysize>newsize) copysize = newsize;
+    boolean[] newArray = new boolean[newsize];
+    System.arraycopy(array, 0, newArray, 0, copysize);
+    return newArray;
+  }
+
+  public static boolean[] NewVRZ(boolean[] array) {
+    int size = array.length;
+    if (size<0) size = 0;
+    return new boolean[size];
+  }
+
+  public static boolean[] CopyVRZ(boolean[] array) {
+    int size = array.length;
+    if (size<0) size = 0;
+    boolean[] newArray = new boolean[size];
+    System.arraycopy(array, 0, newArray, 0, size);
+    return newArray;
+  }
+
+  public static boolean[] CopySVRZ(int low, int high,boolean[] array) 
+    throws ArrayIndexOutOfBoundsException
+  {
+
+    // Check that low and high are usable. 
+    if (low<1) 
+      throw new ArrayIndexOutOfBoundsException("Repetition subrange out of bounds (low): " 
+					       + low 
+					       + "<1");
+    if (array.length<high) 
+      throw new ArrayIndexOutOfBoundsException("Repetition subrange out of bounds (high): "
+					       + high
+					       + ">"
+					       + array.length
+					       );
+      
+    int newsize = high - low + 1;
+    if (newsize<0) newsize = 0;
+    boolean[] newArray = new boolean[newsize];
+    System.arraycopy(array, low-1, newArray, 0, newsize);
+    return newArray;
+  }
+
+
+
+
+  public static short[] ExtVR2(short[] array, int add) {
+    int copysize = array.length;
+    int newsize  = copysize + add;
+    if (newsize<0) newsize = 0;
+    if (copysize>newsize) copysize = newsize;
+    short[] newArray = new short[newsize];
+    System.arraycopy(array, 0, newArray, 0, copysize);
+    return newArray;
+  }
+
+  public static short[] NewVR2(short[] array) {
+    int size = array.length;
+    if (size<0) size = 0;
+    return new short[size];
+  }
+
+  public static short[] CopyVR2(short[] array) {
+    int size = array.length;
+    if (size<0) size = 0;
+    short[] newArray = new short[size];
+    System.arraycopy(array, 0, newArray, 0, size);
+    return newArray;
+  }
+
+  public static short[] CopySVR2(int low, int high,short[] array) 
+    throws ArrayIndexOutOfBoundsException
+  {
+
+    // Check that low and high are usable. 
+    if (low<1) 
+      throw new ArrayIndexOutOfBoundsException("Repetition subrange out of bounds (low): " 
+					       + low 
+					       + "<1");
+    if (array.length<high) 
+      throw new ArrayIndexOutOfBoundsException("Repetition subrange out of bounds (high): "
+					       + high
+					       + ">"
+					       + array.length
+					       );
+      
+    int newsize = high - low + 1;
+    if (newsize<0) newsize = 0;
+    short[] newArray = new short[newsize];
+    System.arraycopy(array, low-1, newArray, 0, newsize);
+    return newArray;
+  }
+
+
+
+  public static int[] ExtVR4(int[] array, int add) {
+    int copysize = array.length;
+    int newsize  = copysize + add;
+    if (newsize<0) newsize = 0;
+    if (copysize>newsize) copysize = newsize;
+    int[] newArray = new int[newsize];
+    System.arraycopy(array, 0, newArray, 0, copysize);
+    return newArray;
+  }
+
+  public static int[] NewVR4(int[] array) {
+    int size = array.length;
+    if (size<0) size = 0;
+    return new int[size];
+  }
+
+  public static int[] CopyVR4(int[] array) {
+    int size = array.length;
+    if (size<0) size = 0;
+    int[] newArray = new int[size];
+    System.arraycopy(array, 0, newArray, 0, size);
+    return newArray;
+  }
+
+  public static int[] CopySVR4(int low, int high,int[] array) 
+    throws ArrayIndexOutOfBoundsException
+  {
+
+    // Check that low and high are usable. 
+    if (low<1) 
+      throw new ArrayIndexOutOfBoundsException("Repetition subrange out of bounds (low): " 
+					       + low 
+					       + "<1");
+    if (array.length<high) 
+      throw new ArrayIndexOutOfBoundsException("Repetition subrange out of bounds (high): "
+					       + high
+					       + ">"
+					       + array.length
+					       );
+      
+    int newsize = high - low + 1;
+    if (newsize<0) newsize = 0;
+    int[] newArray = new int[newsize];
+    System.arraycopy(array, low-1, newArray, 0, newsize);
+    return newArray;
+  }
+
+
+  public static double[] ExtVR8(double[] array, int add) {
+    int copysize = array.length;
+    int newsize  = copysize + add;
+    if (newsize<0) newsize = 0;
+    if (copysize>newsize) copysize = newsize;
+    double[] newArray = new double[newsize];
+    System.arraycopy(array, 0, newArray, 0, copysize);
+    return newArray;
+  }
+
+  public static double[] NewVR8(double[] array) {
+    int size = array.length;
+    if (size<0) size = 0;
+    return new double[size];
+  }
+
+  public static double[] CopyVR8(double[] array) {
+    int size = array.length;
+    if (size<0) size = 0;
+    double[] newArray = new double[size];
+    System.arraycopy(array, 0, newArray, 0, size);
+    return newArray;
+  }
+
+  public static double[] CopySVR8(int low, int high,double[] array) 
+    throws ArrayIndexOutOfBoundsException
+  {
+
+    // Check that low and high are usable. 
+    if (low<1) 
+      throw new ArrayIndexOutOfBoundsException("Repetition subrange out of bounds (low): " 
+					       + low 
+					       + "<1");
+    if (array.length<high) 
+      throw new ArrayIndexOutOfBoundsException("Repetition subrange out of bounds (high): "
+					       + high
+					       + ">"
+					       + array.length
+					       );
+      
+    int newsize = high - low + 1;
+    if (newsize<0) newsize = 0;
+    double[] newArray = new double[newsize];
+    System.arraycopy(array, low-1, newArray, 0, newsize);
+    return newArray;
+  }
+
 }
