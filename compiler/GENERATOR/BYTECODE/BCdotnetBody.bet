@@ -42,8 +42,12 @@ ConvertJavaType:
   exit T[]
   #);
 AddClass: ConvertJavaType
-  (# 
-  do (if true 
+  (# isStatic: @boolean;
+  do (if 'static '  -> ((1,7)->T.sub).equal then
+         true -> isStatic;
+         (1,7)->T.delete;
+     if);
+     (if true 
       // 'int32'   -> T.equal 
       // 'char'    -> T.equal 
       // 'void '   -> ((1,5)->T.sub).equal
@@ -59,6 +63,9 @@ AddClass: ConvertJavaType
       else
          (if trace_class then 'AddClass' -> emitcomment if);
          'class ' -> T.prepend;
+     if);
+     (if isStatic then
+         'static ' -> T.prepend;
      if);
   #);
 ReplaceJavaSlash:
@@ -210,6 +217,8 @@ do '\tldarg.0\n' -> out.puttext;
      do '/* Assembly references. */\n'
         '.assembly extern mscorlib {}\n'
           ->out.puttext;
+        '.assembly extern betarun {}\n'
+          -> out.puttext;
         '// FIXME: hardcoded:\n'
         '.assembly extern System.Windows.Forms {\n'
         '  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)\n'
@@ -328,11 +337,8 @@ do '\tldarg.0\n' -> out.puttext;
    getReg:
      (#  exit BC.get #);
    pushCst:
-     (# size: @integer;
-        i: @integer;
-     enter size
-     do 'ldc.i'->out.puttext;
-        size -> out.putint;
+     (# i: @integer;
+     do 'ldc.i4'->out.puttext;
         INNER; (* get constant into i with correct sign *)
         (if true
          // (i=-1) then '.m1' -> out.puttext;
@@ -592,7 +598,7 @@ do init;
              ' extends ' -> out.puttext;
              BC.getText -> thisSuperName[] -> out.puttext;
              '{' -> out.putline;
-             'class [mscorlib]System.Object'->thisSuperOrgName[];
+             'object'->thisSuperOrgName[];
              BC.get -> subLevel; 
              BC.gettext -> thisOrgName[];
              '  .field public ' -> out.puttext;
@@ -670,13 +676,19 @@ do init;
                     ')\n' -> out.puttext;
                     BCstate.fields.emitInit
                  // 'init' -> prim.equal then
-                    '\tnewobj\tinstance void '-> out.puttext;
-                    class[] (* class name *) -> AddClass -> out.puttext;
-                    '::.ctor(' -> out.puttext;
-                    (if not ('-'->arg.equal) then
-                        arg[] (* origin name *) -> AddClass -> emitsignature;
-                    if);
-                    ')' -> out.puttext;
+                    (if 'program'->class.equal then
+                        (* hack! *)
+                        '\tldstr "program"' -> out.putline;
+                        '\tcall object *[betarun]betarun.helpers::Create(string)' -> out.puttext;
+                     else
+                        '\tnewobj\tinstance void '-> out.puttext;
+                        class[] (* class name *) -> AddClass -> out.puttext;
+                        '::.ctor(' -> out.puttext;
+                        (if not ('-'->arg.equal) then
+                            arg[] (* origin name *) -> AddClass -> emitsignature;
+                        if);
+                        ')' -> out.puttext;
+                    if)
                 if);
              #);
              out.newline;
@@ -802,11 +814,25 @@ do init;
                     if)
                  #)
               // call then 
-                 'call' -> out.puttext;
-                 (if BC.get <> 1 then 'virt' -> out.puttext if);
-                 ' instance '->out.puttext;
-                 BC.getText->T[]->replaceJavaSlash->out.puttext;
-                 313->trace(#do '%%%call: '->xT; T[]->xT #)
+                 (# calltype: @integer;
+                 do BC.get -> calltype;
+                    BC.getText->T[];
+                    (* hack! *)
+                    (if 'void program::\'do\'()' -> T.equal then
+                        'ldstr "program"' -> out.putline;
+                        '\tldstr "do"' -> out.putline;
+                        '\tcall void [betarun]betarun.helpers::Call(object,string,string)' -> out.puttext;
+                     else
+                        (if calltype = 1 then
+                            'call' -> out.puttext 
+                         else
+                            'callvirt' -> out.puttext;
+                        if);
+                        ' instance '->out.puttext;
+                        T[]->replaceJavaSlash->out.puttext;
+                    if);
+                    313->trace(#do '%%%call: '->xT; T[]->xT #)
+                 #)
               // return then
                  (if BC.get 
                   // 0 
@@ -832,19 +858,19 @@ do init;
                  'cmpBoolAndJmp' -> emitcomment;
                  (BC.get,BC.get,BC.get) -> emitCmpBoolJmp
               // pushCst_s8 then
-                 1 -> pushCst(# c: @int8 (* CAREFULL: char in unsigned! *);
-                             do BC.get->c;
-                                c -> i (* sign extend *);
-                             #);
+                 pushCst(# c: @int8 (* CAREFULL: char in unsigned! *);
+                        do BC.get->c;
+                           c -> i (* sign extend *);
+                        #);
               // pushCst_s16 then
-                 2 -> pushCst(# c: @int16;
-                             do BC.getshort->c;
-                                c -> i (* sign extend *);
-                             #);
+                 pushCst(# c: @int16;
+                        do BC.getshort->c;
+                           c -> i (* sign extend *);
+                        #);
               // pushCst_s32 then
-                 4 -> pushCst(# 
-                             do BC.getlong->i;
-                             #);
+                 pushCst(# 
+                        do BC.getlong->i;
+                        #);
               // pushVal then
                  'pushVal'->out.puttext
               // pushNone then
