@@ -230,12 +230,12 @@ if ($betalib =~ /\/(r\d+\.\d+\.?[\w\d]*)/i) {
     print " --Setting it to $RELEASE.\n";
 }
 
-$native_objdir = $objdir;
+$target = $objdir;
 
 if ($clr){
-    $objdir = "clr";
+    $target = "clr";
 } elsif ($jvm){
-    $objdir = "jvm";
+    $target = "jvm";
 }
 
 
@@ -403,6 +403,7 @@ sub setup_sgi {
 # $ENV{'OS'} = $OS;
 $ENV{'MACHINETYPE'} = $MACHINETYPE;
 $ENV{'objdir'} = $objdir;
+$ENV{'target'} = $target;
 $ENV{'LD_LIBRARY_PATH'} = $LD_LIBRARY_PATH if (defined $LD_LIBRARY_PATH);
 $ENV{'LD_RUN_PATH'} = $LD_RUN_PATH if (defined $LD_RUN_PATH);
 

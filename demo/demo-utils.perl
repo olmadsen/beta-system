@@ -1,4 +1,11 @@
 #!/usr/local/bin/perl -s
+$BETALIB=$ENV{'BETALIB'};
+$BETALIB=~s%\\%/%g;
+push(@INC, $ENV{'BETALIB'} . "/bin/admin");
+if (-e "c:\\" && $ENV{'MIASDK'} eq ""){
+    $ENV{'MIASDK'} = ms;
+}
+require "env.perl";
 
 ### Main
 
@@ -287,9 +294,10 @@ sub find_local_progs()
 
 sub init()
 {
+    $SIG{'INT'}  = 'IntHandler';
+    $|=1;
     &read_command_options();
     &find_local_progs();
-    &setup_variables();
     if ($cleanall){
 	print "***Cleaning local directory.\n";
 	&cleanup_all();
@@ -595,59 +603,6 @@ sub run_all_demos
     }
 }
 
-sub setup_variables
-# Cut-down version of BETALIB/bin/admin/env.perl
-{
-    $SIG{'INT'}  = 'IntHandler';
-    
-    $|=1;
-    
-    # Add . to your path, since a lot of stuff doesn't otherwise work
-    $ENV{"PATH"} = ".:" . $ENV{"PATH"};
-    $betalib = $ENV{'BETALIB'};
-    
-    if (-e "c:\\") {
-	$OS = "WIN";
-	$ast = "astL";
-	$betalib =~ s#\\#/#g;
-	if ($ENV{'MIASDK'} =~ /^(ms|bor|gnu)$/i) {
-	    $MIASDK = $1;
-	    $MACHINETYPE = "\UNTI_$MIASDK";
-	    $objdir = "\L$MACHINETYPE";
-	} else {
-	    print "MIASDK not set, giving up\n";
-	    exit 1;
-	}
-    } elsif (-e "/etc") {
-	# UNIX
-	$OS = "UNIX";
-	$ast = "ast";
-	$mach = `uname -m`;
-	$rev  = `uname -r`;
-	if ($mach =~ /^Power Macintosh/) {
-	    $objdir = 'macosx';
-	} elsif ($mach =~ /^sun4/) {
-	    $objdir = 'sun4s';
-	} elsif ($mach =~ /^i.86/) {
-	    $objdir = 'linux';
-	    $ast = "astL";
-	} elsif ($mach =~ /^i86pc$/) {
-	    $objdir = 'sol_x86';
-	    $ast = "astL";
-	} else {
-	    print "Unknown/unsupported architecture.\n";
-	    exit 1;
-	}
-    } else {
-	# Macintosh
-	$OS = "MAC";
-	$objdir='ppcmac';
-    }
-    $ENV{'objdir'} = $objdir;
-    $ENV{'OS'}     = $OS;
-    $target     = $objdir unless defined($target);
-    $isByteCode = ($target eq "clr" || $target eq "jvm");
-}
 
 sub unlink_recursive()
 {
