@@ -1,7 +1,11 @@
-char betarun_version[] = "14";
+char betarun_version[] = "15";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.14  2001/05/23 12:23:57  falk
+ * Rettet en def i Exithandler metoden i ./C/sighandler.c
+ * Betarun version number: 14
+ *
  * Revision 1.13  2001/05/16 14:32:06  falk
  * a ExitHandler detail
  * Betarun version number: 13
