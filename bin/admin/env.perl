@@ -242,14 +242,17 @@ sub setup_linux {
 sub setup_sgi {
     $ENV{'MOTIFHOME'} = '/usr/lib';
 
-    if (!defined $ENV{'MOTIFINC'}) {
-	$ENV{'MOTIFINC'} = '/usr/include';
-    }
-    if (defined $ENV{'LD_LIBRARY_PATH'}) { 
-	$LD_LIBRARY_PATH = "$ENV{'MOTIFHOME'}:$ENV{'LD_LIBRARY_PATH'}";
-    } else {
-	$LD_LIBRARY_PATH = "$ENV{'MOTIFHOME'}";
-    }
+# No need to set LD_LIBRARY_PATH - MOTIFHOME is in a standard place
+# And setting LD_LIBRARY_PATH on sgi's where LD_LIBRARYN32_PATH is
+# also used by the linker results in annoying runtime warnings.
+#    if (!defined $ENV{'MOTIFINC'}) {
+#	$ENV{'MOTIFINC'} = '/usr/include';
+#    }
+#    if (defined $ENV{'LD_LIBRARY_PATH'}) { 
+#	$LD_LIBRARY_PATH = "$ENV{'MOTIFHOME'}:$ENV{'LD_LIBRARY_PATH'}";
+#    } else {
+#	$LD_LIBRARY_PATH = "$ENV{'MOTIFHOME'}";
+#    }
 }
 
 
