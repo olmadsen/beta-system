@@ -57,14 +57,10 @@ double i2f(long n)
 { 
   return (double)n;
 }
-
 #ifdef RTDEBUG
-void CallLazyItem()
-{
-	printf("error: CallLazyItem called\n");
-}
 void printCompStack(long * SPz, long dummy, long SPsize)
 { 
+#if 0
  int i;
  for (i=0; i < (SPsize / 4)+4; i++) {
     printf("StackElm: %i: &SPz[i]= 0x%x, SPz[i]=0x%x\n",
@@ -72,9 +68,9 @@ void printCompStack(long * SPz, long dummy, long SPsize)
 	&((long *)SPz)[i],
 	((long *)SPz)[i]);
  }
+#endif
 }
 #endif /* RTDEBUG */
-
 #endif /* macppc */
 
 #ifndef __GNUC__

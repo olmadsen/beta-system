@@ -18,8 +18,8 @@ Sym¥PPC      = -sym full
 ObjDir¥PPC   =
 
 PPCC         = MrC
-PPCCOptions  = {Includes} {Sym¥PPC} -D RTDEBUG -w 2 -traceback -D MAC
-Pre	         = SCpre -c
+PPCCOptions  = {Includes} {Sym¥PPC} -D RTDEBUG -w 2 -traceback -D MAC 
+Pre	         = SCpre -c -D __powerc
 
 Objects¥PPC  = ¶
 		{ObjDir¥PPC}:C:data.o ¶

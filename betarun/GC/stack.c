@@ -56,7 +56,7 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
     
   while(theProto && theProto->Prefix != theProto){
     theProto = theProto->Prefix;
-    TRACE_CODEENTRY(fprintf(output, "CodeEntry: new candidate: theProto=0x%x (%s))\n", theProto, ProtoTypeName(theProto)); 
+    TRACE_CODEENTRY(fprintf(output, "CodeEntry: new candidate: theProto=0x%x (%s)\n", theProto, ProtoTypeName(theProto))); 
     mPart = M_Part(theProto);
     gPart = G_Part(theProto);
     if((PC-gPart > 0) && (PC-gPart <= minDist)){ 
@@ -122,7 +122,7 @@ void ProcessRefStack(struct Object **topOfStack, long dynOnly, CellProcessFunc f
 }
 
 #define TRACE_STACK() \
-DEBUG_STACK(fprintf(output, "--- %s line %d:\n", __FILE__, __LINE__)); \
+DEBUG_STACK(fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__)); \
 DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));                \
 DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));                \
 DEBUG_STACK(fprintf(output, "New object: 0x%x", theObj));              \

@@ -54,7 +54,11 @@ long M_Part(ref(ProtoType) proto)
   }
   
   if (proto->MpartOff){
+#ifdef macppc
+    return **(long **)((long)proto+proto->MpartOff);
+#else
     return *(long *)((long)proto+proto->MpartOff);
+#endif
   } else {
     return MAXINT;
   }

@@ -52,7 +52,8 @@
 
 #define mac68k
 
-#endif
+#endif /* __powerc */
+#endif /* MAC */
 
 /********* Definition of RUN, CRUN, NEWRUN *********/
 

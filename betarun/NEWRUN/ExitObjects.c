@@ -17,14 +17,28 @@ long *ExO(long *jumpAdr,
   DEBUG_CODE(NumExO++);
 
 #if 0
-  printf("\nExO: jumpAdr=0x%x, exitObj=0x%x, PC=0x%x, this=0x%x\n",
-	 jumpAdr,exitObj,PC,this);
+  fprintf(output, "\nExO: jumpAdr=0x%x, exitObj=0x%x, PC=0x%x, this=0x%x\n",
+	  jumpAdr,exitObj,PC,this);
+  fflush(output);
+#define TRACE_EXO() \
+ fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__);  \
+ fprintf(output, "New SP:     0x%x\n", (long)SP);           \
+ fprintf(output, "New PC:     0x%x\n", (long)PC);           \
+ fprintf(output, "New object: 0x%x", (long)this);           \
+ if (this&&(this!=CALLBACKMARK)){                           \
+   fprintf(output, " (proto: 0x%x)", this->Proto);          \
+   fprintf(output, " (%s)\n", ProtoTypeName(this->Proto));  \
+ }                                                          \
+ fflush(output)
+ 
+#else
+#define TRACE_EXO()
 #endif
 
   while (this != exitObj) {
     /* Check for passing of a callback - see STACK LAYOUT in stack.c */
     if (this == CALLBACKMARK ) {
-      DEBUG_CODE(printf("ExO: passing cb\n"));
+      DEBUG_CODE(fprintf(output, "ExO: passing cb\n"); fflush(output));
       SP = (long*)GetSPbeta(SP);
       /* No need to check for SP=0 (can happen from main), 
        * since leaving of basic component is detected otherwise.
@@ -43,18 +57,20 @@ long *ExO(long *jumpAdr,
       /* Continue down the stack */
       PC = (long*)GetPC(SP);
       this = *((struct Object **)SP-DYNOFF);       
+      TRACE_EXO();
       continue;
     }
     /* Check for passing of a DoPart object */
     if ((long)this->Proto == (long)DopartObjectPTValue) {
       this = ((struct DopartObject *)this)->Origin;
+      TRACE_EXO();
       continue;
     }
     /* Check for passing of a component */
     if ((long)this->Proto == (long)ComponentPTValue) {
       struct Component *comp = (struct Component *)this;
       struct Component *callerComp = comp->CallerComp;
-      DEBUG_CODE(printf("ExO: passing comp 0x%x\n", (int)comp));
+      DEBUG_CODE(fprintf(output, "ExO: passing comp 0x%x\n", (int)comp); fflush(output));
       SP     = (long*) *--CSP; CSP--; /* count down one before reading and one after */
       PC   = (long *)callerComp->CallerLSC;
 
@@ -67,6 +83,7 @@ long *ExO(long *jumpAdr,
       comp->CallerComp = 0;
       comp->CallerObj  = 0;
       CompSP -= 2;
+      TRACE_EXO();
       continue;
     }
     /* Normal case: find stack frame size and continue */
@@ -80,6 +97,7 @@ long *ExO(long *jumpAdr,
       this = *((struct Object **)SP-DYNOFF); 
       /* RTS from the start of this frame gives PC */
       PC = (long*)GetPC(SP);
+      TRACE_EXO();
     }
   }
   return SP;

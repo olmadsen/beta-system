@@ -39,7 +39,7 @@
 #ifdef macppc
 #define GEN_CB_STUB()                                                         \
                                                                               \
- /*  0: &CBFATop->code[3]                                                     \
+ /*  0: &CBFATop->code[2]                                                     \
   *  1: 0     (TOC - not used)                                                \
   *  2: lis   r12,     entry >> 16                                            \
   *  3: lis   r24,     strucaddr >> 16                                        \
@@ -51,7 +51,7 @@
   *  9: bctr                                                                  \
   */                                                                          \
                                                                               \
-  CBFATop->code[0] = (long)&CBFATop->code[3];                                 \
+  CBFATop->code[0] = (long)&CBFATop->code[2];                                 \
   CBFATop->code[1] = 0;                                                       \
   CBFATop->code[2] = 0x3c000000 | (12<<21) | (entry >> 16);                   \
   CBFATop->code[3] = 0x3c000000 | (24<<21) | (strucaddr >> 16);               \

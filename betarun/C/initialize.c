@@ -59,13 +59,19 @@ void EnlargeMacHeap(char *buf)
 
 /* Prompt four C Strings */
 void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4)
-{ Str255 m1, m2, m3, m4;
-  if (msg1) sprintf((char*)m1, "%c%s", strlen(msg1), msg1);
-  if (msg2) sprintf((char*)m2, "%c%s", strlen(msg2), msg2);
-  if (msg3) sprintf((char*)m3, "%c%s", strlen(msg3), msg3);
-  if (msg4) sprintf((char*)m4, "%c%s", strlen(msg4), msg4);
-  ParamText(m1, m2, m3, m4);
-  Alert(CPromptID,0);
+{ 
+  if (StandAlone){
+    Str255 m1, m2, m3, m4;
+    if (msg1) sprintf((char*)m1, "%c%s", strlen(msg1), msg1);
+    if (msg2) sprintf((char*)m2, "%c%s", strlen(msg2), msg2);
+    if (msg3) sprintf((char*)m3, "%c%s", strlen(msg3), msg3);
+    if (msg4) sprintf((char*)m4, "%c%s", strlen(msg4), msg4);
+    ParamText(m1, m2, m3, m4);
+    Alert(CPromptID,0);
+  } else {
+    fprintf(output, "%s%s%s%s\n", msg1, msg2, msg3, msg4);
+	fflush(output);
+  }
 }
 #endif
 
@@ -261,9 +267,11 @@ void Initialize()
      *  {betalib}basiclib/v1.4/private/external/TextWindow/InlineInputSample.c
      * Temporary hack for the PPC console.
      */
-    extern void PPC_InitApplication(); 
-    PPC_InitApplication();
-  } else {
+    //extern void PPC_InitApplication(); 
+    //PPC_InitApplication();
+	fprintf(output, "%s: %d: warning: PPC_InitApplication not called\n");
+	fflush(output);
+} else {
     InitGraf((Ptr) &qd.thePort);
     InitFonts();
     InitWindows();
