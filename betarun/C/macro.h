@@ -228,7 +228,7 @@
 #define isData(addr) (((long)&BETA_data1 <= (long)(addr)) && \
 		      ((long)(addr) < (long)&BETA_end) )
 
-#if (defined(sparc) || defined(hpps) || defined(crts))
+#if (defined(sparc) || defined(hppa) || defined(crts))
 #define isProto(addr) (isSpecialProtoType(addr) || \
 		       (isData(addr) && (((int)(addr) & 3) == 0)))
 #else
