@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: objectsize.c,v $, rel: %R%, date: $Date: 1992-06-03 15:10:47 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: objectsize.c,v $, rel: %R%, date: $Date: 1992-06-04 14:28:09 $, SID: $Revision: 1.6 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -14,7 +14,8 @@ long ObjectSize(theObj)
   if( (long) theProto < 0 ){
     switch((long) theProto){
     case ByteRepPTValue:
-      return headsize(ValRep) + toValRep(theObj)->HighBorder;
+      /* BodySize= ((Range+1+3)/4)*4: One byte extra for \0 in strings and multiple of 4 */
+      return headsize(ValRep) + (((toValRep(theObj)->HighBorder+4) >> 2) << 2);
     case ValRepPTValue:
       return headsize(ValRep) + toValRep(theObj)->HighBorder*4;
     case RefRepPTValue:
