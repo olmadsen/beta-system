@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(34)";
+char betarun_version[] = "BETARUN VERSION 5.3(35)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.34  2001/08/22 12:05:25  datpete
+ * Fixed error in sparc debug code when processing StackObject
+ * Betarun version number: 34
+ *
  * Revision 1.33  2001/08/22 06:44:16  corry
  * Small makefile fix for profiling (Linux)
  * Put multiple include protection in a file or two

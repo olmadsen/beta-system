@@ -87,9 +87,6 @@ void valhalla_init_sockets (int valhallaport)
   valhalla_initSockets();
 #endif
   sock = valhalla_openActiveSocket (valhalla_inetAddrOfThisHost(),valhallaport);
-  
-  fprintf(output, "sock = %d\n", sock);
-  
   if (sock==-1) {
     fprintf (output, 
              "valhalla_init_sockets failed. errno=%d (%s)\n",
@@ -99,8 +96,6 @@ void valhalla_init_sockets (int valhallaport)
   } else {
     valhalla_create_buffers ();
   }
-  
-  fprintf(output, "done creating buffers\n");
 }
 
 void valhalla_await_connection (void)
