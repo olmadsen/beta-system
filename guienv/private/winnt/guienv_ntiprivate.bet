@@ -30,24 +30,42 @@ processOneEvent:
      idle: @doIdle;
      result: @integer;
      dispatchResult: @integer;
-  do idle;
-     (private.message,0,0,0) -> GetMessage -> continue;
-     (if continue=0 then
-         cleanUp;
-         Stop;
-      else
-         (if hAccelTable=0 then 
-             private.message -> TranslateMessage -> result;
-             private.message -> DispatchMessage -> dispatchResult;
+     msg, wParam: @integer;
+     
+  do idle; 
+     (private.message, 0, 0, 0, PM_REMOVE) -> PeekMessage -> result;
+     (if result = 0 then
+         (* Systemenv version. *)
+         (if XsystemEnvPresent then 
+             private.sysenv_UIIdle -> result;
+             (if result <> 0 then 
+                 WaitMessage 
+             if)
           else
-             (if ((GetActiveWindow,hAccelTable,private.message) 
-                   -> TranslateAccelerator) = 0 then
+             WaitMessage;
+         if);         
+      else
+         (private.message + 4 -> TOS'%adrGetLong') -> msg;
+         (private.message + 8 -> TOS'%adrGetLong') -> wParam;
+         (if msg  
+          // WM_QUIT then
+             cleanUp;
+             Stop;
+          else
+             (if this(guienv).private.hAccelTable=0 then 
                  private.message -> TranslateMessage -> result;
                  private.message -> DispatchMessage -> dispatchResult;
-             if); 
+              else
+                 (if ((GetActiveWindow,hAccelTable,private.message) 
+                       -> TranslateAccelerator) = 0 then
+                     private.message -> TranslateMessage -> result;
+                     private.message -> DispatchMessage -> dispatchResult;
+                 if); 
+             if);
          if);
      if);
   #);
+
 cleanUp:
   (# 
   do private.textstyles.cleanUp;
@@ -319,9 +337,14 @@ std16x4toint: external
 StandardWindowProc: external
   (# windowHandle,message,wParam,lParam: @integer;
      result: @integer;               
+     dispatch: <<SLOT GUIENVStandardWindowProc: descriptor>>;
   enter (windowHandle,message,wParam,lParam)
   do StdExternalEntry;
-     <<SLOT GUIENVStandardWindowProc: descriptor>>
+     (if XsystemEnvPresent then
+         &dispatch[]->XsystemEnvHandleCallback;
+      else
+         dispatch;
+     if);
   exit result
   #);
 
@@ -653,6 +676,7 @@ defaultScrollListTextStyle:
           exit count
            #);
      #);
+   sysenv_UIIdle: ^IntegerValue;
 #)
 
 -- GUIENVmenuPrivate: descriptor --

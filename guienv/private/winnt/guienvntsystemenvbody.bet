@@ -1,0 +1,427 @@
+ORIGIN '~beta/basiclib/v1.5/private/basicsystemenv_nt';
+
+INCLUDE '../../guienv';
+INCLUDE 'guienv_ntiprivate';
+INCLUDE '~beta/sysutils/v1.5/cstring';
+INCLUDE '~beta/win32lib/v1.2/mousecursorsupport';
+
+--- lib:attributes---
+XtInputNoneMask:   (# exit 0 #);
+XtInputReadMask:   (# exit 1 #);
+XtInputWriteMask:  (# exit 2 #);
+XtInputExceptMask: (# exit 4 #);
+
+---BasicScheduler:descriptor---
+SysHead
+(# 
+do initBeforeScheduler;
+   private.mdpriv.pioPrivate.start;
+#)
+
+--- forksecond:descriptor ---
+(# do private.mdpriv.pioPrivate.ensure #)
+
+--- pioEnsure:descriptor ---
+(# do private.mdpriv.pioPrivate.ensure #)
+
+--- pioPrivate:descriptor ---
+(# 
+   theUIenv: ^guienv;
+   sockethWND: @Integer;     (* Handle of hidden socket-window *)
+   SocketWindowClass: @text;
+   IdleTimer: @integer;
+   
+   std16x4toint: external
+     (# func: ##SocketWindowProc;
+        int: @integer;
+     enter func##
+     do 'copyinput'->callC
+     exit int
+     #);
+
+   
+   UIIdle: IntegerValue
+     (#
+     do attNext -> value;
+        (if value < 0 then
+            (if IdleTimer <> 0 then
+                (sockethWND, IdleTimer) -> KillTimer;
+            if);
+            (sockethWND, 0, -1000 * value, NONE) -> SetTimer -> IdleTimer;
+        if)
+     #);
+   
+
+   SocketWindowProc: external
+     (# windowHandle,message,wParam,lParam: @integer;
+        result: @integer;
+        idx: @integer;
+        iom: ^IOmask;
+        Idle:
+          (# res: @Integer;
+             oldTheActive: ^|sysHead;
+          do (if theActive[] =NONE then
+                 NONE -> oldTheActive[]
+              else
+                 (* We are about to reenter attNext. It is therefore 
+                  * necessary to remove theActive from the active queue
+                  * to ensure that it is not reattached before we are done
+                  * with this idle call. *)
+                 theActive[] -> oldTheActive[];
+                 theActive.ce[] -> private.active.delete;
+             if);
+             
+             (if attNext -> res
+              //0 then
+                 (* Ok. *)
+                 (if not active then
+                     (* active must have been set to false 
+                      * by a nested idle call. *)
+                     ensure;
+                 if);
+              //1
+              //2 then
+                 (* Currently nothing to do. *)
+                 false-> active;
+              else
+                 (* There is nothing to do right now, but someone is
+                  * sleeping. Setup a timer. *)
+                 
+                 false ->  active;
+                 
+                 (if IdleTimer <> 0 then
+                     (sockethWND, IdleTimer) -> KillTimer;
+                 if);
+                 (sockethWND, 0, -1000 * res, NONE) 
+                   -> SetTimer -> IdleTimer;
+                 
+                 true -> timerOn;
+             if);
+             
+             (if oldTheActive[]<>NONE then
+                 0 -> attNext.value;
+                 oldTheActive.ce[] -> private.active.append;
+                 oldTheActive[] -> theActive[];
+             if);
+          #);
+        
+        HandleCallback:
+          (#
+          do 1 -> result;
+             (if message
+              // USERMSG_SystemEnvSocket then
+                 'SocketMessage: wParam=' -> screen.putText; wParam -> screen.putInt;
+                 ' lParam=' -> screen.putText; lParam -> screen.putInt;
+                 screen.newLine;
+                 wParam -> FindIOmaskByFd -> idx;
+                 (if idx = 0 then
+                     'Unable to locate fd in SocketMessageWindow.' -> putText;
+                     (* The socket was probably closed? *)
+                  else
+                     ioms[idx][] -> iom[];
+                     (if lParam
+                      // FD_READ
+                      // FD_ACCEPT then 
+                         (wParam, pioReadReady) -> iom.continue;
+                      // FD_WRITE then 
+                         (wParam, pioWriteReady) -> iom.continue;
+                      // FD_CLOSE
+                      // FD_OOB then 
+                         (wParam, pioException) -> iom.continue;
+                      else
+                         'SockMessage UNHANDLED!' -> putText; newLine;
+                     if);
+                 if);
+                 Idle;
+                 
+              // WM_TIMER then
+                 (if wParam = IdleTimer then
+                     (sockethWND, IdleTimer) -> KillTimer;
+                     0 -> IdleTimer;
+                     'IdleTimer-event' -> putLine;
+                  else
+                     'Other timer-event' -> putLine;
+                 if);
+                 Idle;
+                 
+              else
+                 'Message in SocketWindow: '-> screen.putText;
+                 message -> screen.putInt; screen.newLine;
+                 (windowHandle,message,wParam,lParam)
+                   -> DefWindowProc -> result;
+             if);
+          #);
+     enter (windowHandle,message,wParam,lParam)
+     do StdExternalEntry;
+        &HandleCallback[] -> &registerCallback;
+     exit result
+     #);
+   
+   registerSocketClass:
+     (# cstr: @cString;
+        theClass: @WndClass;
+        result,WindowProcAddress: @integer;
+     do 'SocketWindowClass' -> SocketWindowClass;
+        'SocketWindowClass' -> cstr.set;
+        0 -> theClass.style;
+        SocketWindowProc## -> std16x4toint -> WindowProcAddress;
+        WindowProcAddress -> theClass.lpfnWndProc;
+        theUIenv.private.uienvHInstance -> theClass.hInstance;
+        (0,IDI_APPLICATION)-> LoadIconInteger -> theClass.hIcon;
+        (0,IDC_ARROW) -> LoadCursorInteger -> theClass.hCursor;
+        0 -> theClass.lpszMenuName;
+        cstr.charPtr -> theClass.lpszClassName;
+        theClass[] -> RegisterClass -> result; 
+        (if result=0 then
+            'Register socket class failed. Errorno= ' -> screen.putText;
+            GetLastError -> screen.putInt; screen.newline;
+        if);
+        cstr.free;
+     #);
+   
+   start:
+     (# 
+     do setWindowEnv;
+        
+        (if theWindowEnv[] =NONE then
+            (failure, 
+            'GuienvSystemEnv ERROR: setWindowEnv did not set theWindowEnv.') 
+              -> stop;
+        if);
+        
+        pioInsertInner[] -> pioInsert.doInner[];
+        pioDeleteInner[] -> pioDelete.doInner[];
+        
+        (if theWindowEnv## <= guienv##  then
+            theWindowEnv[] -> theUIEnv[];
+         else
+            (failure, 
+            'GuienvSystemEnv ERROR: TheWindowEnv is not a subpattern of guienv.') 
+              -> stop;
+        if);
+        
+        true -> theUIenv.XsystemEnvPresent;
+        &UIIdle[] -> theUIenv.private.sysenv_UIIdle[];
+        
+        theUIenv.doSetup;
+        
+        xcbt[] -> xcbt.init;
+        &registerCallback[] -> theUIEnv.XsystemEnvHandleCallback[];
+        
+        (* Create hidden window for socket (& maybe timer) messages *)
+        registerSocketClass;
+        (SocketWindowClass, 'SocketWindow', WS_OVERLAPPEDWINDOW, 10,
+        10,400,400,0,0,theUIenv.private.uienvHInstance,0) 
+          -> CreateWindow -> sockethWND;
+        (if sockethWND = 0 then
+            'Createwindow failed with GetLastError = ' -> putText;
+            GetLastError -> putInt;
+            newLine;
+            Stop;
+        if);
+        ensure;
+        theUIEnv;
+     #);
+   
+   XcallbackThread: System
+     (# 
+        cb: ^Object;
+        forked: @Boolean;
+        active: @Boolean;
+        thisXcbt: ^|XcallbackThread;
+        oldTheActive: ^|sysHead;
+        
+        init: (# enter thisXcbt[] #);
+        
+        next: @
+          (# firstTime: @Boolean;
+          enter cb[]
+          do
+             true -> active;
+             
+             (if theActive[] =NONE then
+                 NONE -> oldTheActive[]
+              else
+                 (* We are about to reenter attNext. It is therefore 
+                  * necessary to make sure that theActive is not scheduled
+                  * before this XcallbackThread is finished doing its 
+                  * work (corresponding to a callback from some local 
+                  * event loop). Logically this XcallbackThread and theActive
+                  * are one and the same thread. *)
+                 theActive[] -> oldTheActive[];
+                 theActive.ce[] -> private.active.delete;
+             if);
+             
+             (if not forked then
+                 thisXcbt[] -> fork;
+                 ce[] -> private.active.first[];
+                 true -> forked;
+              else
+                 ce[] -> private.active.prepend;
+             if);
+             true -> firstTime;
+             loop:
+               (if cb[] =NONE then
+                   (* The callback was executed until end. 
+                    * So we may forget about this XcallbackThread
+                    * and return to X. *)
+                   ce[] -> private.active.delete;
+                   ensure;
+                else
+                   (if firstTime  then
+                       false -> firstTime;
+                       private.attNext;
+                    else
+                       (* The callback blocked or paused. *) 
+                       TheUIEnv.processOneEvent;
+                   if);
+                   restart loop;
+               if);
+             
+             (if oldTheActive[]<>NONE then
+                 0 -> attNext.value;
+                 oldTheActive.ce[] -> private.active.append;
+                 oldTheActive[] -> theActive[];
+             if);
+             
+             false -> active;
+          #);
+        
+     do cycle (# do cb; NONE -> cb[]; pause #);
+     #);
+   
+   xcbt: @|XcallbackThread; 
+   (* This XcallbackThread is used in most cases. We only need multiple
+    * XcallbackThread in the case where some local event loop starts
+    * doing callbacks. In that case we need a XcallbackThread for callbacks
+    * from each of these eventloops. *)
+   
+   registerCallback: theUIenv.XsystemEnvHandleCallbackP
+     (# newxcbt: ^|XcallbackThread;
+     do (if xcbt.active  then
+            (* This is a callback from a local event loop. It is necessary
+             * to create a temporary XcallbackThread to handle the callback. *)
+            &|XcallbackThread[] -> newxcbt[] -> newxcbt.init;
+            cb[] -> newxcbt.next;
+         else
+            cb[] -> xcbt.next 
+        if)
+     #);
+   
+   theId: @Integer;
+   active: @Boolean;
+   
+   timerId: @Integer;
+   timerOn: @Boolean;
+   
+   ensure: @
+     (# 
+     do (if not active then 
+            (if theUIenv[]<>NONE then
+                'ensure' -> screen.putLine;
+                (if timerOn  then
+                    (* No need: timerId -> XtRemoveTimeOut; *)
+                    false -> timerOn;
+                if);
+                true -> active;
+                (* (appContext, idlePtr,0) -> XtAppAddWorkProc -> theId; *)
+                (*'XtAppAddWorkProc called' -> screen.putline;*)
+            if);
+        if)
+     #);
+   
+   
+   WSAAsyncSelect: external
+     (# fd, hWND, amsg, mask, out: @Integer;
+     enter (fd, hWND, amsg, mask)
+     do CallStd (* Std ? C ? ???*)
+     exit out
+     #);
+            
+            
+   iomsextend: (# exit 8 #);
+   ioms: [iomsextend]^IOmask;
+   
+   RemoveIOmask: 
+     (# iom: ^IOmask;
+     enter iom[]
+     do
+        scan: 
+          (for i: ioms.range repeat
+               (if ioms[i][]
+                // iom[] then 
+                   NONE -> ioms[i][]; 
+                   leave scan;
+               if)
+          for)
+     #);
+   FindIOmaskByFd:
+     (# fd, pos: @integer;
+     enter fd
+     do
+        scan: 
+          (for i: ioms.range repeat
+               (if ioms[i][] <> NONE then
+                   ioms[i].scan 
+                   (#
+                   do (if curFD = fd then
+                          i -> pos;
+                          leave scan;
+                      if)
+                   #)
+               if)
+          for)
+     exit pos
+     #);
+   AppendIOmask: 
+     (# iom: ^IOmask;
+     enter iom[]
+     do
+        scan: 
+          (if 1=1 then 
+              (for i: ioms.range repeat
+                   (if ioms[i][] 
+                    // iom[] then leave scan;
+                    // NONE then iom[] -> ioms[i][];
+                       leave scan;
+                   if)
+              for);
+               iomsextend -> ioms.extend;
+              iom[] -> ioms[ioms.range - iomsextend + 1][];
+          if);
+     #);
+     
+   pioInsertInner: @pioinsert.doInnerP
+     (# 
+     do elm[] -> AppendIOmask;
+        elm.scan
+        (# 
+           mask: @integer;
+           (* The masks below may need adjustment; Exactly what does except
+            * mean in this context?
+            *)
+        do (if read then 
+               mask %Bor (FD_READ %Bor FD_ACCEPT) -> mask;
+           if);
+           (if write then 
+               mask %Bor FD_WRITE -> mask;
+           if);
+           (if except then 
+               mask %Bor (FD_CLOSE %Bor FD_OOB) -> mask;
+           if);
+           (curFD, sockethWND, USERMSG_SystemEnvSocket, mask) 
+             -> WSAAsyncSelect;
+        #);
+     #);
+
+   pioDeleteInner: @piodelete.doInnerP
+     (#
+     do elm[] -> RemoveIOmask;
+        elm.scan
+        (# 
+        do
+           (curFD, sockethWND, 0, 0) -> WSAAsyncSelect;
+        #);
+     #)
+
+#)
