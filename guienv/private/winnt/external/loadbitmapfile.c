@@ -4,11 +4,6 @@
 #include <stdlib.h>
 #include "loadbitmapfile.h"
 
-#ifdef nti_gnu /* These are missing from the GNU include-files currently! */
- typedef BITMAPFILEHEADER FAR *LPBITMAPFILEHEADER;
- typedef BITMAPCOREHEADER FAR *LPBITMAPCOREHEADER;
-#endif
-
 HBITMAP BitmapFromDib (HANDLE );
 HANDLE ReadDibBitmapInfo (HFILE);
 BOOL DibInfo (HANDLE,LPBITMAPINFOHEADER);
