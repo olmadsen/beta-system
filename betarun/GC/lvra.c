@@ -36,10 +36,15 @@ DEBUG_CODE(GLOBAL(long LVRATabNum[TableMAX+1]))
 void LVRACheck(void);
 void LVRAStatistics(void);
 
-/* Never called during IOAGc, so no need to check for ToSpace */
 static long LVRAAlive(ref(ValRep) theRep)
 {
-  Claim(!IOAActive, "LVRAAlive: must not be called during IOAGc");
+
+#ifdef RTDEBUG
+  /* LVRACheck calls LVRARepSize, which calls LVRAAlive */
+  if (inToSpace(theRep->GCAttr)) {
+    Claim(IOAActive, "LVRAAlive: only roots from ToSpace during IOAGc");
+  }
+#endif
 
   if(!isValRep(theRep) ){
     return FALSE;
