@@ -70,10 +70,14 @@ void valhalla_create_buffers ()
 void valhalla_init_sockets (int valhallaport)
 {
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_init_sockets\n"));  
-  DEBUG_VALHALLA(fprintf(stdout,"debuggee: valhallaport=%d\n", valhallaport));
+  DEBUG_VALHALLA(fprintf(output,"debuggee: valhallaport=%d\n", valhallaport));
 #ifdef UNIX
-  DEBUG_VALHALLA(fprintf(stdout,"debuggee: dlopen(NULL)\n"));
-  self=dlopen(NULL,RTLD_LAZY|RTLD_GLOBAL);
+  DEBUG_VALHALLA(fprintf(output,"debuggee: dlopen(NULL)\n"));
+  self=dlopen(NULL, (RTLD_NOW | RTLD_GLOBAL) );
+  if (!self) {
+    fprintf(output, 
+	    "debuggee: dlopen(NULL) failed. Do NOT use dynamic compilation!\n");
+  }
 #endif /* UNIX */
 #ifdef nti
   valhalla_initSockets();
@@ -425,11 +429,13 @@ INLINE Structure *valhalla_AlloS(Object *origin, ProtoType *proto, long *SP, Obj
   struc = CAlloS(origin, 0, proto);
 #endif /* sparc */
 #ifdef intel
-  fprintf(output, "valhalla_AlloS: NYI for intel\n");
-  struc = 0;
+  extern Structure *VAlloS(Object *origin, ProtoType *proto);
+  BetaStackTop = SP; /* Must be set in case of GC during AlloS */
+  struc = VAlloS(origin, proto);
 #endif /* intel */
 #ifdef NEWRUN
   extern Structure *AlloS(Object *origin, ProtoType *proto, long *SP);
+  BetaStackTop[0] = SP;
   struc = AlloS(origin, proto, SP);
 #endif /* NEWRUN*/
 #ifdef hppa
@@ -701,6 +707,7 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "VOP_EXECUTEOBJECT:\n"));
       DEBUG_VALHALLA(fprintf(output, "Origin Object:\n"));
       DEBUG_VALHALLA(DescribeObject((Object *)origin));
+      DEBUG_VALHALLA(fprintf(output, "\n"));
       DEBUG_VALHALLA(fprintf(output, "Prototype: %s\n", ProtoTypeName(proto)));
 
       /* Save origin and vop_curobj in InterpretItem 
@@ -718,6 +725,7 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       InterpretItem[1]=0;
       DEBUG_VALHALLA(fprintf(output, "Struc Object:\n"));
       DEBUG_VALHALLA(DescribeObject((Object *)struc));
+      DEBUG_VALHALLA(fprintf(output, "\n"));
 
       /* Call the constructed callback function */
       cb = (void (*)(void))valhalla_CopyCPP(struc, vop_sp, vop_curobj);
@@ -755,7 +763,7 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       const char *sym=0;
       long off=0;
       DEBUG_VALHALLA(fprintf(output,"VOP_LOOKUP_SYM_OFF(%d)\n",(int)addr));
-#ifdef sun4s
+#if defined(sun4s) /* || defined(linux) - only in GNU libs 2 */
       /* Not available for sgi - grrrr... */
       {
 	Dl_info info;
@@ -776,12 +784,13 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
     case VOP_LOOKUP_ADDRESS: {
       char *sym = valhalla_readtext();
       long addr = 0;
-      DEBUG_VALHALLA(fprintf(output,"VOP_LOOKUP_ADDRESS(%s)\n",sym));
+      DEBUG_VALHALLA(fprintf(output,"VOP_LOOKUP_ADDRESS(%s)=",sym));
 #ifdef UNIX
       addr = (long)dlsym(self, sym);
 #else /* !UNIX */
       fprintf(output, "debuggee: VOP_LOOKUP_ADDRESS: NYI\n");
 #endif /* UNIX */
+      DEBUG_VALHALLA(fprintf(output,"0x%x\n",(int)addr));
       FREE(sym);
       valhalla_writeint (opcode);
       valhalla_writeint (addr);

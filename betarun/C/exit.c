@@ -11,6 +11,9 @@
 #endif /* RTVALHALLA */
 
 #ifdef RTDEBUG
+#ifdef UNIX
+#include <unistd.h>
+#endif /* UNIX */
 
 #ifdef MAC
 #define PrintMacNumVars()\
@@ -107,9 +110,14 @@ static void PrintNumVars(void)
 void BetaExit(long number)
 {
 #if (defined(RTVALHALLA) && !defined(nti_bor))
-  if (valhallaID) 
+  if (valhallaID) {
     /* Tell valhalla that we are terminating: */
     ValhallaOnProcessStop (0,0,0,0,0);
+#ifdef UNIX
+    DEBUG_CODE(fprintf(output, "debuggee: sleeping for 10 minuttes.\n"));
+    DEBUG_CODE(sleep(10*60));
+#endif
+  }
 #endif /* RTVALHALLA */
 
   InfoS_End();

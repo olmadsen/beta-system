@@ -6,6 +6,10 @@
 
 #include "beta.h"
 
+#ifdef UNIX
+#include <unistd.h>
+#endif /* UNIX */
+
 #if defined(MAC)
 #include <MachineExceptions.h>
 #include <CursorCtl.h>
@@ -125,8 +129,16 @@ void Illegal()
 #endif
   
   if (StopAtIllegal){
+#ifdef RTVALHALLA
+#ifdef UNIX
+    if (valhallaID){
+      fprintf(output, "debuggee: Illegal called. Sleeping for 10 minuttes\n");
+      sleep(10*60);
+    }
+#endif /* UNIX */
+#endif /* RTVALHALLA */
     fprintf(output, "Illegal: hardcoded break!\n");
-
+    
 #ifdef nti
     break_inst = 0xc39090cc; /* int 3 ; nop ; nop ; ret */
     f = (int(*)(void))&break_inst;

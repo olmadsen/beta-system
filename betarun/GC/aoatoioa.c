@@ -126,7 +126,20 @@ void AOAtoIOAInsert(handle( Object) theCell)
     unsigned long index, count;
 
     DEBUG_CODE(if (!inAOA( theCell)) {
-      fprintf(output, "AOAtoIOAInsert: 0x%x not in AOA!\n", (int)theCell);
+      fprintf(output, 
+	      "AOAtoIOAInsert: the cell 0x%x is not in AOA! ", 
+	      (int)theCell);
+      if (inBetaHeap((Object*)theCell)){
+	if (inIOA(theCell)) 
+	  fprintf(output, " (is in IOA)");
+	if (inAOA(theCell)) 
+	  fprintf(output, " (in in AOA)");
+	if (inLVRA((Object*)theCell)) 
+	  fprintf(output, " (is in LVRA)");
+	if (ToSpace<=(long*)theCell && (long*)theCell<ToSpaceLimit)
+	  fprintf(output, " (is in ToSpace!)");
+      }
+      fprintf(output, "\n\n");
       Illegal(); /* useful to break in */
     });
 
