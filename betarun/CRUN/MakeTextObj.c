@@ -79,5 +79,7 @@ void MkTO(char *cText,
       ((long *)theText)[REP_OFF+2] =
 	(casthandle(ValRep)theText)[REP_OFF]->HighBorder;
 
+    Ck(theText);
+
 }
 
