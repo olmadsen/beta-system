@@ -18,10 +18,14 @@ long *   savedRefSP;
 void Return() {}
 #endif
 #ifdef sparc
-/* The first nop is needed in the case that Return is called directly
- * from a runtime ruotine. This is the case for e.g. an empty program
+/* The first nop is needed in case Return is called directly from a 
+ * runtime ruotine. This is the case for e.g. an empty program.
  */
+#ifdef sun4s
 asmlabel(Return, "nop; retl; nop");
+#else
+asmlabel(_Return, "nop; retl; nop");
+#endif
 #endif
 
 void

@@ -25,7 +25,7 @@ extern ref(Structure)	ObjS() asm("ObjS");
 extern void		DoGC() asm("DoGC");
 extern ref(Item)	AlloSI() asm("AlloSI");
 extern ref(Component)	AlloSC() asm("AlloSC");
-extern void             Return() asm ("Return");
+extern void             Return();
 extern void             RefNone() asm("RefNone");
 extern void             AttBC() asm("AttBC");
 extern void             CopyRR() asm("CopyRR");
