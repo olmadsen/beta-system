@@ -43,12 +43,29 @@ Calculator: window
      close::  (#  do terminate #);
      display: @row
        (#
-          value_is_arithmetic_result: @boolean;
+          value_is_transient: @boolean;
           getint: integervalue
+            (* Exits decimal value of the displayed number (which is dec or hex) *)
             (# val: ^text
-            do caption1.label->val[]; val.reset; val.getint->value; 
+            do caption1.label->val[]; 
+               (if hexRadioButton.state then
+                   val[] -> hex2dec -> val[]; 
+               if);
+               val.reset; 
+               val.getint->value; 
             #);
-          value: @ (#  enter caption1.label exit caption1.label #);
+          putint:
+            (* Sets the displayed number (in hex or dec) according to the entered decimal value *)
+            (# dec: @integer;
+               val: ^text
+            enter dec
+            do '' -> val[];
+               dec -> val.putint;
+               (if hexRadioButton.state then
+                   val[] -> dec2hex -> val[]; 
+               if);
+               val[] -> caption1.label;
+            #);
           open::< 
             (# 
             do
@@ -80,8 +97,28 @@ Calculator: window
                  #)
             #)
        #);
+     hex2dec: 
+       (# hex, dec: ^text;
+       enter hex[]
+       <<SLOT CalculatorHex2Dec: dopart>>
+       exit dec[]
+       #);
+     dec2hex: 
+       (# hex, dec: ^text;
+       enter dec[]
+       <<SLOT CalculatorDec2Hex: dopart>>
+       exit hex[]
+       #);
      decRadioButton: @groupRadioButton
-       (#
+       (# eventhandler::
+            (# onStateChanged::
+                 (# 
+                 do (if state then
+                        (* changed from hex to dec *)
+                        display.caption1.label -> hex2dec -> display.caption1.label;
+                    if);
+                 #);
+            #);
           open::< 
             (# 
             do
@@ -95,6 +132,15 @@ Calculator: window
        #);
      hexRadioButton: @groupRadioButton
        (#
+          eventhandler::
+            (# onStateChanged::
+                 (# 
+                 do (if state then
+                        (* changed from dec to hex *)
+                        display.caption1.label -> dec2hex -> display.caption1.label;
+                    if);
+                 #);
+            #);
           open::< 
             (# 
             do
@@ -116,17 +162,17 @@ Calculator: window
                     label->numbertext[];
                     numbertext.reset;
                     numbertext.get->number;
-                    (if display.value_is_arithmetic_result then
+                    (if display.value_is_transient then
                         ''->numbertext[];
-                        false->display.value_is_arithmetic_result;
+                        false->display.value_is_transient;
                         
                      else
-                        display.value->numbertext[];
+                        display.caption1.label->numbertext[];
                         (if '0'->numbertext.equal then ''->numbertext[];  if);
                         
                     if);
                     number->numbertext.put;
-                    numbertext[]->display.value
+                    numbertext[]->display.caption1.label
                  #)
             #);
           
@@ -142,17 +188,17 @@ Calculator: window
                         label->numbertext[];
                         numbertext.reset;
                         numbertext.get->number;
-                        (if display.value_is_arithmetic_result then
+                        (if display.value_is_transient then
                             ''->numbertext[];
-                            false->display.value_is_arithmetic_result;
+                            false->display.value_is_transient;
                             
                          else
-                            display.value->numbertext[];
+                            display.caption1.label->numbertext[];
                             (if '0'->numbertext.equal then ''->numbertext[];  if);
                             
                         if);
                         number->numbertext.put;
-                        numbertext[]->display.value
+                        numbertext[]->display.caption1.label
                     if);
                  #)
             #);
@@ -163,18 +209,13 @@ Calculator: window
           eventhandler::< 
             (#
                onMouseUp::< 
-                 (# value: ^text; op1,op2: @integer; 
+                 (# op1,op2: @integer; 
                  do
-                    display.value->value[];
                     stack.pop->op1;
                     display.getint->op2;
-                    '0'->display.value;
                     INNER ;
-                    ''->value[];
-                    op1->value.putint;
-                    value[]->display.value;
-                    true->display.value_is_arithmetic_result;
-                    
+                    op1->display.putint;
+                    true->display.value_is_transient;
                  #);
                
             #);
@@ -305,12 +346,9 @@ Calculator: window
           eventhandler:: 
             (#
                onMouseUp:: 
-                 (# value: ^text; 
-                 do
-                    display.value->value[];
-                    value.reset;
-                    value.getint->stack.push;
-                    '0'->display.value;
+                 (# 
+                 do display.getint->stack.push;
+                    true -> display.value_is_transient;
                     
                  #);
                
@@ -415,7 +453,7 @@ Calculator: window
      pushbutton17: @pushbutton
        (#
           eventhandler:: 
-            (# onMouseUp::  (#  do '0'->display.value;  #);  #);
+            (# onMouseUp::  (#  do 0->display.putint;  #);  #);
           open::< 
             (# 
             do
@@ -429,7 +467,7 @@ Calculator: window
      pushbutton18: @pushbutton
        (#
           eventhandler:: 
-            (# onMouseUp::  (#  do '0'->display.value; stack.clear; #);  #);
+            (# onMouseUp::  (#  do 0->display.putint; stack.clear; #);  #);
           open::< 
             (# 
             do
@@ -536,5 +574,13 @@ Calculator: window
   
 
 -- PROGRAM: Descriptor --
-guienv (# main: @calculator;  do main.open;  #)  
+guienv 
+(# onStartApplication:: 
+     (# <<SLOT ProgramStart: dopart>> #);
+   onQuit:: 
+     (# <<SLOT ProgramQuit: dopart>> #);
+   main: @calculator;
+do 
+   main.open;
+#)  
 
