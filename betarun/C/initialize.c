@@ -412,7 +412,7 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
   INFO_HEAP_USAGE(PrintHeapUsage("After ToSpace heap allocation"));
 #endif /* USEMMAP */
 
-#ifdef NEWRUN
+#if defined(NEWRUN) || (defined(RTVALHALLA) && defined(intel))
   /* Allocate the internal Reference Stack */
   ReferenceStack = (struct Object **)MALLOC(REFSTACKSIZE*sizeof(struct Object *));
   if (!ReferenceStack){
@@ -421,6 +421,10 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
   INFO_HEAP_USAGE(PrintHeapUsage("after ReferenceStack allocation"));
   RefSP = &ReferenceStack[0]; /* points to first free element */
 
+#endif /* NEWRUN || (RTVALHALLA && intel) */
+
+#ifdef NEWRUN
+  /* Allocate the internal Component Stack */
   CompStack = (long *)MALLOC(REFSTACKSIZE*sizeof(long));
   if (!CompStack){
     AllocateHeapFailed("Component Stack",REFSTACKSIZE*sizeof(long));

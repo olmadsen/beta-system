@@ -32,7 +32,7 @@
 #define AOAMaxSize           (768*1024*1024)
 #define MAXCTEXTPOOL	     1000
 
-#if defined (UseRefStack) || defined(NEWRUN)
+#if defined (UseRefStack) || defined(NEWRUN) || (defined(RTVALHALLA) && defined(intel))
 #define REFSTACKSIZE         1000
 #endif
 

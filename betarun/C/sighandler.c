@@ -19,7 +19,31 @@
 #include <sys/ucontext.h>
 #endif
 
-#ifdef RTVALHALLA
+#ifdef linux
+#include <asm/sigcontext.h> 
+#endif
+
+#ifdef nti
+#include <float.h>
+#ifdef nti_gnu
+#include <excpt.h>
+#define OUR_EXCEPTION_CONTINUE_SEARCH ExceptionContinueSearch
+#define OUR_EXCEPTION_CONTINUE_EXECUTION ExceptionContinueExecution
+#else /* !nti_gnu */
+#define OUR_EXCEPTION_CONTINUE_SEARCH EXCEPTION_CONTINUE_SEARCH
+#define OUR_EXCEPTION_CONTINUE_EXECUTION EXCEPTION_CONTINUE_EXECUTION
+#endif /* nti_gnu */
+#endif /* nti */
+
+#ifdef ppcmac
+#include <MachineExceptions.h>
+#endif /* ppcmac */
+
+/***************************************************************************/
+/*************************** HELPER FUNCTIONS ******************************/
+/***************************************************************************/
+
+#if defined(RTVALHALLA) && defined(intel)
 #include "dot.h"
 /* DOTdummyOnDelete
  * ==================
@@ -36,7 +60,74 @@ static void DOTdummyOnDelete (int index)
    *   });
    */
 }
-#endif /* RTVALHALLA */
+
+typedef struct register_handles {
+  int edx;
+  int edi;
+  int ebp;
+  int esi;
+} register_handles;
+
+#ifdef linux
+
+static void SaveLinuxRegisters(struct sigcontext_struct *scp, 
+			       register_handles *handles)
+{
+  DEBUG_VALHALLA({
+    fprintf(output, 
+	    "Sighandler: Saving registers (at PC=0x%08x) in DOT:\n",
+	    (int)scp->eip);
+  });
+  if (scp->edx && isObject((Object*)scp->edx)){
+    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->edx));
+    handles->edx = DOThandleInsert((Object*)scp->edx, DOTdummyOnDelete, 0);
+  }
+  if (scp->edi && isObject((Object*)scp->edi)){
+    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->edi));
+    handles->edi = DOThandleInsert((Object*)scp->edi, DOTdummyOnDelete, 0);
+  }
+  if (scp->ebp && isObject((Object*)scp->ebp)){
+    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->ebp));
+    handles->ebp = DOThandleInsert((Object*)scp->ebp, DOTdummyOnDelete, 0);
+  }
+  if (scp->esi && isObject((Object*)scp->esi)){
+    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->esi));
+    handles->esi = DOThandleInsert((Object*)scp->esi, DOTdummyOnDelete, 0);
+  }
+  DEBUG_VALHALLA(fprintf(output, "\n"));
+}
+
+static void RestoreLinuxRegisters(struct sigcontext_struct *scp, 
+				  register_handles *handles)
+{
+  DEBUG_VALHALLA({
+    fprintf(output, "Sighandler: Restoring registers from DOT:\n");
+  });
+  if (handles->edx>=0) {
+    scp->edx = (unsigned long)DOThandleLookup(handles->edx);
+    DOThandleDelete (handles->edx);
+    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->edx));
+  }
+  if (handles->edi>=0) {
+    scp->edi = (unsigned long)DOThandleLookup(handles->edi);
+    DOThandleDelete (handles->edi);
+    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->edi));
+  }
+  if (handles->ebp>=0) {
+    scp->ebp = (unsigned long)DOThandleLookup(handles->ebp);
+    DOThandleDelete (handles->ebp);
+    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->ebp));
+  }
+  if (handles->esi>=0) {
+    scp->esi = (unsigned long)DOThandleLookup(handles->esi);
+    DOThandleDelete (handles->esi);
+    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->esi));
+  }
+  DEBUG_VALHALLA(fprintf(output, "\n"));
+}
+#endif /* linux */
+
+#endif /* RTVALHALLA && intel */
 
 /***************************************************************************/
 /******************** Handlers for various platforms  **********************/
@@ -115,7 +206,6 @@ static void ExitHandler(sig, code, scp, addr)
 }
 
 #if defined(linux)
-#include <asm/sigcontext.h> 
 void BetaSignalHandler(long sig, struct sigcontext_struct scp)
 #else
 void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
@@ -127,9 +217,6 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   ref(Object)    theObj = 0;
   long *PC;
   long todo = 0;
-#if defined(intel) && defined(RTVALHALLA)
-  int edx_handle=-1, edi_handle=-1, ebp_handle=-1, esi_handle=-1;
-#endif /* intel && RTVALHALLA */
 
 #ifdef RTDEBUG
   fprintf(output, 
@@ -283,58 +370,15 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
        * back after completing DisplayBetaStack (which calls 
        * valhallaOnProcessStop).
        */
-      DEBUG_VALHALLA({
-	fprintf(output, 
-		"Sighandler: Saving registers (at PC=0x%08x) in DOT:\n",
-		(int)PC);
-      });
-      if (scp.edx && isObject((Object*)scp.edx)){
-	DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp.edx));
-	edx_handle = DOThandleInsert((Object*)scp.edx, DOTdummyOnDelete, 0);
-      }
-      if (scp.edi && isObject((Object*)scp.edi)){
-	DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp.edi));
-	edi_handle = DOThandleInsert((Object*)scp.edi, DOTdummyOnDelete, 0);
-      }
-      if (scp.ebp && isObject((Object*)scp.ebp)){
-	DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp.ebp));
-	ebp_handle = DOThandleInsert((Object*)scp.ebp, DOTdummyOnDelete, 0);
-      }
-      if (scp.esi && isObject((Object*)scp.esi)){
-	DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp.esi));
-	esi_handle = DOThandleInsert((Object*)scp.esi, DOTdummyOnDelete, 0);
-      }
-      DEBUG_VALHALLA(fprintf(output, "\n"));
+      register_handles handles = {-1, -1, -1, -1};
+      SaveLinuxRegisters(&scp, &handles);
       todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); 
-      DEBUG_VALHALLA({
-	fprintf(output, "Sighandler: Restoring registers from DOT:\n");
-      });
-      if (edx_handle>=0) {
-	scp.edx = (unsigned long)DOThandleLookup(edx_handle);
-	DOThandleDelete (edx_handle);
-	DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp.edx));
-      }
-      if (edi_handle>=0) {
-	scp.edi = (unsigned long)DOThandleLookup(edi_handle);
-	DOThandleDelete (edi_handle);
-	DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp.edi));
-      }
-      if (ebp_handle>=0) {
-	scp.ebp = (unsigned long)DOThandleLookup(ebp_handle);
-	DOThandleDelete (ebp_handle);
-	DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp.ebp));
-      }
-      if (esi_handle>=0) {
-	scp.esi = (unsigned long)DOThandleLookup(esi_handle);
-	DOThandleDelete (esi_handle);
-	DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp.esi));
-      }
-      DEBUG_VALHALLA(fprintf(output, "\n"));
+      RestoreLinuxRegisters(&scp, &handles);
     } else {
       /* Not running under valhalla */
       todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); 
     }
-#else /* RTVALHALLA */
+#else /* !RTVALHALLA */
     /* No support for valhalla */
     todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig);
 #endif /* RTVALHALLA */
@@ -545,28 +589,22 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 
 /***************************** BEGIN nti ********************************/
 #ifdef nti
-#include <float.h>
 
 #ifdef nti_gnu
-#include <excpt.h>
-#define OUR_EXCEPTION_CONTINUE_SEARCH ExceptionContinueSearch
-#define OUR_EXCEPTION_CONTINUE_EXECUTION ExceptionContinueExecution
-EXCEPTION_DISPOSITION BetaSignalHandler_GNU
-(
- EXCEPTION_RECORD* pExceptionRec,
- void* pEstablisherFrame,
- CONTEXT* pContextRecord,
- void* pDispatcherContext) {
-  
+EXCEPTION_DISPOSITION 
+BetaSignalHandler_GNU(EXCEPTION_RECORD* pExceptionRec,
+		      void* pEstablisherFrame,
+		      CONTEXT* pContextRecord,
+		      void* pDispatcherContext) 
 #else  /* !nti_gnu */
-
-#define OUR_EXCEPTION_CONTINUE_SEARCH EXCEPTION_CONTINUE_SEARCH
-#define OUR_EXCEPTION_CONTINUE_EXECUTION EXCEPTION_CONTINUE_EXECUTION
-int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP ) { 
+int 
+BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
+#endif /* !nti_gnu */
+{
+#ifdef nti_ms
   EXCEPTION_RECORD* pExceptionRec =  lpEP->ExceptionRecord;
   CONTEXT* pContextRecord = lpEP->ContextRecord;
-#endif /* !nti_gnu */
-  
+#endif /* nti_ms */
   struct Object *theObj = 0;
   long *PC;
   long todo = 0;
@@ -679,8 +717,6 @@ void beta_main(void (*AttBC)(struct Component *), struct Component *comp)
 
 /***************************** BEGIN ppcmac ********************************/
 #ifdef ppcmac
-
-#include <MachineExceptions.h>
 
 OSStatus BetaSignalHandler(ExceptionInformation *info)
 {

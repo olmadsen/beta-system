@@ -393,6 +393,15 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 
 #endif /* RTDEBUG */
 
+#if defined(NEWRUN) || (defined(RTVALHALLA) && defined(intel))
+/* FIXME: push should do boundary check and realloc if needed */
+#define push(v) /* printf("push: RefSP=0x%x\n", RefSP); */ *RefSP++ = (struct Object *) v
+#define pop(v)  /* printf("pop: RefSP=0x%x\n", RefSP); */  v = (void *) *--RefSP
+
+#define SaveVar(v)    push(v)
+#define RestoreVar(v) pop(v)
+#endif /* NEWRUN || (RTVALHALLA && intel) */
+
 #ifdef NEWRUN
 
 #define AssignReference(theCell, newObject)                                  \
@@ -468,7 +477,7 @@ typedef union FormatI
   /* Get the stack size allocated for this frame */            \
   SPoff = -addiu.instr.offset;                                 \
 }
-#endif
+#endif /* sgi */
 
 #ifdef macppc
 
@@ -493,13 +502,7 @@ typedef union FormatI
   /* Get the stack size allocated for this frame */            \
   SPoff = -stwu.instr.d;                                       \
 }
-#endif
-
-#define push(v) /* printf("push: RefSP=0x%x\n", RefSP); */ *RefSP++ = (struct Object *) v
-#define pop(v)  /* printf("pop: RefSP=0x%x\n", RefSP); */  v = (void *) *--RefSP
-
-#define SaveVar(v)    push(v)
-#define RestoreVar(v) pop(v)
+#endif /* macppc */
 
 #define comppush(v) *CompSP++ = (long) v
 #define comppop(v)  v = *--CompSP
@@ -514,4 +517,4 @@ typedef union FormatI
   { code; }						\
   pop(v2); pop(v1)
 
-#endif
+#endif /* NEWRUN */
