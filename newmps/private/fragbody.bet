@@ -179,7 +179,7 @@ unPackAst:
        #);
       theSlot: ^SlotDesc;
   enter input[]
-  do &grammartable.beta.symbolToAst[] -> symbolToAst[];
+  do &grammar.symbolToAst[] -> symbolToAst[];
      1 -> pos;
      (input.T[pos] %sll 24) %bor (input.T[pos+1] %sll 16) %bor (input.T[pos+2] %sll 8) %bor input.T[pos+3] -> size;
      
@@ -267,12 +267,10 @@ packSemanticInfo:
      nameDcl: ^beta.NameDcl;
      
      fraginx: @integer;
-     betagram: ^beta;
      form: ^FragmentForm;
      out: ^Stream;
   enter (header[], info[])
   do 
-     grammartable.beta[] -> betagram[];
      (for inx: table.range repeat
           table[inx][] -> current[];
           info[] -> current.pack;
@@ -563,8 +561,11 @@ do saving:
           (# binary:: (# do true -> value #);
           #);
         filename: ^Text;
-     do (fullname).copy -> filename[];
+     do
+        (fullname).copy -> filename[];
         '.ast' -> filename.append;
+        
+        
         filename[] -> output.name;
         output.openWrite;
         output[] -> pack;
@@ -640,8 +641,10 @@ do (#
       fragmentlist.size -> output.putInt32u;
       fragmentlist.scan
       (#
-      do current.name -> output.putBinText;
+      do current.grammar.grammarIdentification -> output.putBinText;
+         current.name -> output.putBinText;
          current.category -> output.putInt16u;
+         
       #);
       output.position -> output.putInt32u;
       fragmentlist.scan
@@ -661,6 +664,8 @@ do unpacking:
         no: @integer;
         frag: ^fragmentForm;
         data: ^Text;
+        grammarName: ^Text;
+        gram: ^TreeLevel;
      do 
         input.getInt32u -> magic1;
         (if magic1 <> groupMagicNumber1 then
@@ -681,7 +686,9 @@ do unpacking:
         input[] -> prop.unPack;
         input.getInt32u -> no;
         (for no repeat
-             grammartable.beta[] -> newFragmentForm -> frag[];
+             input.getBinText -> grammarName[];
+             grammarName[] -> grammartable.lookup -> gram[];
+             gram[] -> newFragmentForm -> frag[];
              input.getBinText -> frag.nameT[];
              frag[] -> fragmentList.append;
              THIS(FragmentGroup)[] -> frag.father;
@@ -724,8 +731,7 @@ do (if controller.status = 7 then
    
 -- AstInterfaceTopOpen: doPart --
 do opengroup:
-     (# input: @File;
-        parse: @PropertyParser
+     (# parse: @PropertyParser
           (# syntaxerror::
                (#
                do msg.newline;
@@ -734,7 +740,7 @@ do opengroup:
                   '"' -> msg.puttext;
                #);
           #);
-        beta: ^TreeLevel;
+        gram: ^TreeLevel;
         frag: ^FragmentForm;
         fragname, cat: ^text;
         fullname: ^text;
@@ -747,7 +753,6 @@ do opengroup:
              do NONE -> current.son[];
              #);
           #);
-        compact: (# exit false #);
         dummy: @fragmentgroup;
 
         stripExtension:
@@ -779,14 +784,10 @@ do opengroup:
           #);
         
         astfile: @file (# binary:: (# do true -> value #); #);
-        betfile: @file;
-        
-     do
-        (if true then
-            name[] -> expandToFullPath -> fullname[];
-         else
-	    name.copy -> fullname[];
-        if);
+        textfile: @file;
+        sym: @integer;
+        grammarName: ^Text;
+     do name[] -> expandToFullPath -> fullname[];
         fullname[] -> stripExtension -> fullname[];
         
        
@@ -803,15 +804,28 @@ do opengroup:
         newFragmentGroup -> group[];
         fullname.copy -> group.name;
         fullname.copy -> group.fullname;
-        
         group[] -> grouptable.insert;
         
         
         '.ast' -> (fullname.copy).append -> astfile.name;
-        '.bet' -> (fullname.copy).append -> betfile.name;
+        
+        
+        identifyTextFile:
+          (# test:
+               (# ext: ^Text;
+               enter ext[]
+               do ext[] -> (fullname.copy).append -> textfile.name;
+                  (if textfile.entry.exists then
+                      leave identifyTextFile;
+                  if);
+               #);
+          do '.bet' -> test;
+             '.text' -> test;
+          #);
+        
         
         (if astfile.entry.exists then
-            (if astfile.entry.modtime > betfile.entry.modtime then
+            (if astfile.entry.modtime > textfile.entry.modtime then
                 astfile.openRead;
                 astfile[] -> group.unPack;
                 astfile.close;
@@ -821,15 +835,14 @@ do opengroup:
         if);
         
         'Parsing: \'' -> puttext;
-        name[] -> puttext;
+        textfile.name -> puttext;
         '\'' -> putline;
         
-        grammarTable.beta[] -> beta[];
-        '.bet' -> (fullname.copy).append -> input.name;
-        input.openRead;
-        input[] -> parse.init;
+        grammarTable.default[] -> gram[];
+        textfile.openRead;
+        textfile[] -> parse.init;
         parse.parsePropertyList -> group.prop[];
-        false -> beta.parser.trace;
+        false -> gram.parser.trace;
         parse.advance;
         loop:
           (if parse.token = parse.tokens.name then
@@ -840,28 +853,34 @@ do opengroup:
                   (if parse.token = parse.tokens.name then
                       parse.lex.gettext -> cat[];
                       parse.advance;
+                      (if parse.token = parse.tokens.colon then
+                          parse.advance;
+                          (if parse.token = parse.tokens.name then
+                              parse.lex.gettext -> grammarName[];
+                              grammarName[] -> grammarTable.lookup -> gram[];
+                              parse.advance;
+                          if);
+                      if);
                       (if parse.token = parse.tokens.dash then
-                          beta[] -> newFragmentForm -> frag[];
+                          gram[] -> newFragmentForm -> frag[];
                           fragname[] -> frag.name;
                           fragname.copy -> fragname[];
                           '-' -> fragname.prepend;
                           fullname[] -> fragname.prepend;
                           fragname[] -> frag.fullname;
                           (if true
-                           //'dopart' -> cat.equalNCS then
-                              (31, input[], frag[]) -> beta.parser.parse -> frag.root[];
-                           //'mainpart' -> cat.equalNCS then
-                              (5, input[], frag[]) -> beta.parser.parse -> frag.root[];
-                           else  
-                              (1, input[], frag[]) -> beta.parser.parse -> frag.root[];
+                           //'attributes' -> cat.equalNCS then
+                              (1, textfile[], frag[]) -> gram.parser.parse -> frag.root[];
+                           //'descriptor' -> cat.equalNCS then
+                              (1, textfile[], frag[]) -> gram.parser.parse -> frag.root[];
+                           else
+                              cat[] -> gram.nameToSymbol -> sym;
+                              (sym, textfile[], frag[]) -> gram.parser.parse -> frag.root[];
                           if);
                           (if frag.root[] <> NONE then
-                              (if compact then
-                                  frag.root[] -> killImps;
-                              if);
                               frag[] -> group.fragmentList.append;
                               group[] -> frag.father;
-                              beta.parser.lastCH -> parse.lex.ch;
+                              gram.parser.lastCH -> parse.lex.ch;
                               parse.advance;
                               restart loop;
                           if);
@@ -869,9 +888,22 @@ do opengroup:
                   if);
               if);
           if);
-        input.close;
+        textfile.close;
         group.save;
      #);
+   
+-- AstInterfaceGrammarTableRegister: doPart --
+do grammar[] -> grammars.append;
+   
+-- AstInterfaceGrammarTableLookup: doPart --
+do search: grammars.scan
+   (#
+   do (if current.grammarIdentification -> name.equalNCS then
+          current[] -> grammar[];
+          leave search;
+      if);
+   #);
+   
 -- AstInterfacePrivate: descriptor --
 (# debug: @boolean;
    debuga: @boolean;
@@ -887,9 +919,7 @@ do opengroup:
         addMsg:
           (# m: ^text
           enter m[]
-          do 'adding message: ' -> puttext;
-             m[] -> putline;
-             (if (top+1 -> top) > msg.range then
+          do (if (top+1 -> top) > msg.range then
                  msg.range -> msg.extend;
                  isWarn.range -> isWarn.extend;
              if);
