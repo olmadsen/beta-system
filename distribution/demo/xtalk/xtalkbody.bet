@@ -1,0 +1,469 @@
+ORIGIN 'xtalk';
+INCLUDE 'xtalkprotocol';
+INCLUDE '~beta/basiclib/v1.4/timehandler';
+INCLUDE '~beta/sysutils/v1.4/time';
+
+--- xtalkPrivate: descriptor ---
+(#
+   init:
+     (# 
+     do 'xtalk ' -> nameOnEnsemble[];
+        userName -> nameOnEnsemble.append;
+        (myProtocol[], nameOnEnsemble[]) -> theShell.myEnsemble.ns.put
+        (# overWrite:: (# do true -> value #)#);
+        timer.init;
+     #);
+   
+   currentPartner: ^xtalkProtocol;
+   currentPartnerName: ^Text;
+   
+   connected: @Boolean;
+   waitingForReply: @Boolean;
+   
+   nameOnEnsemble: ^Text;
+   myProtocol: @xtalkProtocol
+     (# 
+        callImpl:: 
+          (# 
+          do 
+             (if currentPartner[] //NONE then
+                 (p[],callerName[]) -> onCall;
+                 XT_OK -> reply
+              else
+                 XT_BUSY -> reply;
+             if);
+          #);
+        
+        eventImpl:: 
+          (# 
+          do (firstPos,lastPos,new[]) -> workArea.shadow.replace;
+          #);
+        
+        hangupImpl::
+          (# msg: ^Text;
+          do (if p[] //currentPartner[] then
+                 none -> currentPartner[];
+                 false -> connected;
+                 currentPartnerName.copy -> msg[];
+                 ' hung up' -> msg.append;
+                 msg[] -> warning.popup;
+                 'No connection' -> status.messages.labelString;
+                 true -> mBar.fileMenu.call.sensitive;
+                 false -> mBar.fileMenu.hangup.sensitive;
+             if)
+          #);
+        
+        replyImpl::
+          (# 
+          do
+             (if waitingForReply and (p[] = currentPartner[]) //true then
+                 onConnect; 
+                 XT_OK -> answer;
+              else
+                 XT_TIMEDOUT -> answer;
+             if)
+          #)
+     #);
+   
+   onQuit:
+     (# 
+     do (if connected //true then
+            myProtocol[] -> currentPartner.hangup;
+        if);
+        nameOnEnsemble[] -> theShell.myEnsemble.ns.remove;
+        theShell.kill;
+     #);
+   
+   (* ONCALL
+    * ======
+    * 
+    * is called when a request for connection arrives and this xtalk is
+    * not already connected or in the process of being connected. *)
+   
+   onCall: @
+     (# partner: ^xtalkProtocol;  partnerName: ^Text;
+        msg: ^Text;
+     enter (partner[],partnerName[])
+     do
+        (* Remember who requested a connection: *)
+        partner[] -> currentPartner[];
+        partnerName[] -> currentPartnerName[];
+        
+        'Call received from ' -> msg[];
+        partnerName[] -> msg.append;
+        '. Accept?' -> msg.append;
+        msg[] -> acceptMessage.popup;
+     #);
+   
+   (* ONCONNECT
+    * =========
+    * 
+    * is called when a connection is established. *)
+   
+   onConnect: @
+     (# msg: ^Text;
+     do
+        true -> connected;
+        false -> mBar.fileMenu.call.sensitive;
+        true -> mBar.fileMenu.hangup.sensitive;
+        
+        (* Clear windows: *)
+        
+        (0, workArea.shadow.lastPosition,'') -> workArea.shadow.replace;
+        (0, workArea.myText.lastPosition,'') -> workArea.myText.replace;
+        
+        'Connected to ' -> msg[]; currentPartnerName[] -> msg.append;
+        msg[] ->  status.messages.labelstring;
+        
+        (if waitingForReply //true then
+            (* We got the reply, so remove the timer: *)
+            waitForReply.onTimeOutId -> timer.unregister;
+        if);
+     exit status
+     #);
+   
+   timer: @timeHandler;
+   
+   (* WAITFORREPLY
+    * ============
+    * 
+    * is called when this xtalk requested a connection to a remote xtalk and
+    * is waiting for it to reply. *)
+   
+   waitForReply: @
+     (# partner: ^xtalkprotocol; partnerName: ^Text;
+        msg: ^Text;
+        onTimeOut: @
+          (# 
+          do (* The partner did not respond within 30 seconds. Forget it.*)
+             partnerName.copy -> msg[];
+             ' did not respond' -> msg.append;
+             msg[] -> warning.popup;
+             'No connection' ->  status.messages.labelstring;
+             none -> currentPartner[];
+             true -> mBar.fileMenu.call.sensitive;
+             false -> waitingForReply;
+          #);
+        onTimeOutId: @Integer;
+     enter (partner[],partnerName[])
+     do
+        (* Remember who we tried to connect to. *)
+        partner[] -> currentPartner[];
+        partnerName[] -> currentPartnerName[];
+        
+        'Waiting for ' -> msg[];
+        partnerName[] -> msg.append;
+        ' to reply' -> msg.append;
+        msg[] -> status.messages.labelstring;
+        
+        (onTimeOut[],30) -> timer.register -> onTimeOutId;
+        true -> waitingForReply;
+     #);
+   
+   (* ACCEPTOK
+    * ========
+    * 
+    * called when this xtalk accepts a connection. *)
+   
+   acceptOk: @
+     (# msg: ^Text;
+     do 
+        (if myProtocol[] -> currentPartner.reply
+         //XT_OK then
+            onConnect;
+         else
+            (* Partner gave up waiting. *)
+            currentPartnerName.copy -> msg[];
+            ' gave up' -> msg.append; 
+            msg[] -> warning.popup;
+            'No connection' -> status.messages.labelString;
+            NONE -> currentPartner[];
+        if)
+     #);
+   
+   clockThread: @|System
+     (#
+     do cycle (# do gettime -> status.clock.labelString; 1 -> sleep; #)
+     #);
+   
+   (* On communication failure or timeOut we simply pretend as if the
+    * partner hung up: *)
+   
+   onFailure: @ (# do currentPartner[] -> myProtocol.hangup #);
+#)
+
+--- xtalkOnFailure:descriptor ---
+(# do mymotif.window.xtalkPrivate.onFailure #)
+          
+--- xtalkShellInit:descriptor ---
+(#  
+do
+   (* When we get here, mymotif has already been initialized. This is
+    * so because the scheduler is not able to schedule coroutines until
+    * mymotif start generating idle events, and it wont do until it
+    * has been initialized. *)
+   mymotif.window.xtalkPrivate.init;
+#)
+
+--- callcb:descriptor ---
+(# 
+do getPartner.popup; false -> sensitive;
+#)
+
+--- callInit:descriptor ---
+(# 
+do
+   'Call' -> labelString; 'C' -> mnemonic;
+   'Ctrl<Key>c' -> accelerator;
+   'Ctrl+c' -> acceleratorText;
+#)
+
+--- hangupcb:descriptor ---
+(# msg: ^Text;
+do 
+   (if xtalkPrivate.connected //true then
+       xtalkPrivate.myProtocol[] -> xtalkPrivate.currentPartner.hangup;
+       none -> xtalkPrivate.currentPartner[];
+       false -> xtalkPrivate.connected;
+       true -> mBar.fileMenu.call.sensitive;
+       false -> mBar.fileMenu.hangup.sensitive;
+       'No connection' -> status.messages.labelString;
+   if);
+#)
+
+--- hangupInit:descriptor ---
+(# 
+do
+   'Hangup' -> labelString; 'H' -> mnemonic;
+   'Ctrl<Key>h' -> accelerator;
+   'Ctrl+h' -> acceleratorText;
+   false -> sensitive;
+#)
+
+--- quitcb:descriptor ---
+(# 
+do xtalkPrivate.onQuit 
+#)
+
+--- quitInit:descriptor ---
+(# 
+do 'Quit' -> labelString; 'Q' -> mnemonic;
+   'Ctrl<Key>q' -> accelerator;
+   'Ctrl+q' -> acceleratorText;
+#)
+
+--- fileMenuInit:descriptor ---
+(# 
+do call.init; hangup.init; quit.init
+#)
+
+--- fileButtonInit:descriptor ---
+(# 
+do 'File' -> labelString; 'F' -> mnemonic 
+#)
+
+--- mbarInit:descriptor ---
+(# 
+do fileButton.init; fileMenu.init; fileMenu -> fileButton.subMenuId;
+#)
+
+--- mtInit:descriptor ---
+(# 
+do true -> wordWrap; 
+   8 -> rows; 40 -> columns;
+   false -> resizeWidth;
+   false -> resizeHeight;
+   true -> autoShowCursorPosition
+#)
+
+--- shadowInit:descriptor ---
+(# 
+do true -> wordWrap;
+   8 -> rows; 40 -> columns;
+   false -> resizeWidth;
+   false -> resizeHeight;
+   true -> autoShowCursorPosition;
+   false -> editable
+#)
+   
+--- waInit:descriptor ---
+(# do myText.init; shadow.init #)
+   
+--- windowInit:descriptor ---
+(# 
+do mBar.init; workArea.init; status.init;
+   (mBar, 0, 0, 0, workArea) -> setAreas;
+   status -> messageWindow;
+   true -> showSeparator
+#)
+   
+--- msgInit:descriptor ---
+(# 
+do XmATTACH_FORM -> leftAttachment;
+   XmATTACH_WIDGET -> rightAttachment;
+   sep -> rightWidget;
+   'No connection' -> labelString;
+#)
+
+--- clockInit:descriptor ---
+(# 
+do gettime -> labelString;
+   XmATTACH_FORM -> rightAttachment;
+   xtalkPrivate.clockThread[] -> fork;
+#)
+
+--- sepInit:descriptor ---
+(# 
+do XmATTACH_WIDGET -> rightAttachment;
+   clock -> rightWidget;
+   XmATTACH_FORM -> topAttachment;
+   XmATTACH_FORM -> bottomAttachment;
+   XmSHADOW_ETCHED_IN -> separatorType;
+   XmVERTICAL -> orientation;
+#)
+
+--- statusInit:descriptor ---
+(# 
+do clock.init; sep.init; messages.init; 
+#)
+
+--- OkButtonBody:descriptor ---
+(# caller: @|System
+     (# tmp, partnerName, ensembleName: ^Text;
+        partnerEnsemble: ^ensemble;
+        partner: ^xtalkProtocol;
+        
+     do
+        call: shellErrorHandler
+          (# onFailure:
+               (# theError: ^error;
+               enter theError[]
+               do
+                  'Communication with ' -> tmp[];
+                  (if theError.theObj[] 
+                   //theShell.myEnsemble[] then
+                      theShell.myEnsemble.hostName[] -> tmp.append;
+                      ' ensemble' -> tmp.append;
+                   //partnerEnsemble[] then
+                      partnerEnsemble.hostName[] -> tmp.append;
+                      ' ensemble' -> tmp.append;
+                   //partner[] then
+                      'xtalk ' -> tmp.append;
+                      partnerName[] -> tmp.append;
+                  if);
+                  ' failed' -> tmp.append;
+                  tmp[] -> warning.popup;
+                  'No connection' -> status.messages.labelString;
+                  true -> mBar.fileMenu.call.sensitive;
+                  theError.abort (# do leave Call #);
+               #);
+             connectionFailed:: (# do THIS(connectionFailed)[] -> onFailure #);
+             connectionBroken:: (# do THIS(connectionBroken)[] -> onFailure #);
+             
+             timeOutCount: @Integer;
+             
+             timeoutValue:: (# do 10 -> sec #);
+             timeOut::
+               (# 
+               do
+                  (if theObj[] //theShell.myEnsemble[]//partnerEnsemble[] then
+                      THIS(timeOut)[] -> onFailure
+                  if);
+                  
+                  timeOutCount+1 -> timeOutCount;
+                  
+                  (if timeoutCount //6 then
+                      partnerName.copy -> tmp[];
+                      ' did not respond.' -> tmp.append;
+                      tmp[] -> warning.popup;
+                      'No connection' -> status.messages.labelString;
+                      true -> mBar.fileMenu.call.sensitive;
+                      abort (# do leave call #);
+                   else
+                      'Calling ' -> tmp[];
+                      partnerName[] -> tmp.append;
+                      ' (' -> tmp.append;
+                      timeOutCount*10 -> tmp.putInt;
+                      ' sec)' -> tmp.append;
+                      tmp[] -> status.messages.labelString;
+                      continue;
+                  if);
+               #);
+           
+          do
+             getPartner.ensembleName -> ensembleName[];
+             getPartner.partnerName -> partnerName[];
+             
+             (ensemble##, ensembleName[]) -> theShell.myEnsemble.ns.get
+             (# notfound:: 
+                  (# 
+                  do ' not found' -> ensembleName.append;
+                     ensembleName[] -> warning.popup;
+                     'No connection' -> status.messages.labelString;
+                     true -> mBar.fileMenu.call.sensitive;
+                     leaveHandler (# do leave Call #);
+                  #)
+             #) -> partnerEnsemble[];
+           
+             'xtalk ' -> tmp[];
+             partnerName[] -> tmp.append;
+             
+             (xtalkProtocol##, tmp[]) -> partnerEnsemble.ns.get
+             (# notfound:: 
+                  (# 
+                  do ' has no xtalk on ' -> partnerName.append;
+                     ensembleName[] -> partnername.append;
+                     partnerName[] -> warning.popup;
+                     'No connection' -> status.messages.labelString;
+                     true -> mBar.fileMenu.call.sensitive;
+                     leaveHandler (# do leave Call #);
+                  #)
+             #) -> partner[];
+             
+             (if (xtalkPrivate.myProtocol[],xtalkPrivate.nameOnEnsemble[])
+                   -> partner.call
+              //XT_BUSY then
+                 ' is busy' -> partnerName.append;
+                 partnerName[] -> warning.popup;
+                 'No connection' -> status.messages.labelString;
+                 true -> mBar.fileMenu.call.sensitive;
+              else
+                 (partner[],partnerName[]) -> xtalkPrivate.waitForReply;
+             if);
+          #);
+     #);
+   
+do caller[] -> fork;
+#)
+
+--- CancelButtonBody:descriptor ---
+(# 
+do true -> mBar.fileMenu.call.sensitive
+#)
+
+--- mvcb:descriptor ---
+(# xtbr: @XmTextBlockRec; cs: @Cstring; t: ^Text;
+do 
+   (if xtalkPrivate.connected //true then
+       
+       &Text[] -> t[]; data.text -> xtbr; xtbr.ptr -> cs;
+       (for i:xtbr.length repeat i-1 -> cs.inxget -> t.put  for);
+       
+       (data.startPos,data.endPos,t[]) 
+         ->  xtalkPrivate.currentPartner.event
+   if)
+#)
+
+--- acceptOk:descriptor ---
+(# 
+do xtalkPrivate.acceptOk;
+#)
+
+--- acceptCancel:descriptor ---
+(# 
+do (* Simply forget that we where called. *)
+   NONE -> xtalkPrivate.currentPartner[];
+#)
+
+--- lib:attributes ---
+gettime: (# exit systemTime -> formatTime #);
