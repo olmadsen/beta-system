@@ -2,71 +2,258 @@ ORIGIN '../graphicaleditor';
 INCLUDE '../../mpsstuff/mpsutils';
 INCLUDE '../../code/generate';
 INCLUDE '../../utils/catchallfile';
+INCLUDE '../../resourcesupport/private/parametersbody';
+INCLUDE '~beta/guienv/v1.4/utils/prompts';
 INCLUDE 'graphicaleditorprivate';
-INCLUDE '~beta/pretty/v5.0.1/pplib';
+INCLUDE '~beta/pretty/v5.1/pplib';
 
 -- graphicalEditorEnvLib: attributes --
 saveGroup:
   (# fg: ^astInterface.fragmentGroup;
   enter fg[]
-  do saving:
-       (# 
-          theFile: @catchAllFile
-            (# failure::
+  do (if fg.isOpen = false then
+         'Fragment group is not open!' -> putLine;
+      else
+         saving:
+           (# 
+              theFile: @catchAllFile
+                (# failure::
+                     (# 
+                     do msg[] -> putLine;
+                        leave saving;
+                     #);
+                #);
+              fileName: ^text;
+           do (fg.name).copy -> fileName[];
+              '.bet' -> fileName.append;
+              fileName[] -> theFile.name;
+              theFile.openWrite;
+              (MPS[], fg[], theFile[], none) -> prettyPrintFragment;
+              theFile.close;
+              fg.fragmentList.scan
+              (# frag: ^astInterface.fragmentForm;
+              do (if current.type = MPS.formType then
+                     current.open -> frag[];
+                     frag.recomputeSlotChain;
+                 if);
+              #);
+              'doneCheck' -> fg.prop.deleteProp;
+              fg.markAsChanged; 
+              fg[] -> onGroupSaved;
+           #);
+     if);
+  #);
+
+-- documentLib: attributes --
+
+related: booleanValue
+  (# fg: ^astInterface.fragmentGroup;
+  enter fg[]
+  do (if fg[] = interfaceGroup[] then
+         true -> value;
+      else
+         bodyGroups.scan
+         (# 
+         do (if fg[] = current[] then
+                true -> value;
+            if);
+         #);
+     if);
+  #);
+
+deleteAutoAstAutoSave:
+  (# name: ^text;
+  enter name[]
+  do
+     l: 
+       (#
+          fg: ^astInterface.fragmentGroup;
+          autoSaveFile: @catchAllFile
+            (# 
+               failure::
                  (# 
-                 do msg[] -> putLine;
-                    leave saving;
+                 do leave l;
                  #);
-            #);
-          fileName: ^text;
-       do (fg.name).copy -> fileName[];
-          '.bet' -> fileName.append;
-          fileName[] -> theFile.name;
-          theFile.openWrite;
-          (MPS[], fg[], theFile[], none) -> prettyPrintFragment;
-          theFile.close;
-          fg.fragmentList.scan
-          (# frag: ^astInterface.fragmentForm;
-          do (if current.type = MPS.formType then
-                 current.open -> frag[];
-                 frag.recomputeSlotChain;
+            #);;
+          astName: ^text;
+          autoFileName: ^text;
+          help: ^text;
+       do MPS.astFileExtension -> (name.copy).Append -> astName[];
+          '#' -> (astName.copy).Append -> autoFileName[];
+          autoFileName[] -> autoSaveFile.name;
+          
+          l: (if autoFileName[] -> entryReadable then
+                 autoSaveFile.delete;
              if);
-          #);
-          'doneCheck' -> fg.prop.deleteProp;
-                  fg.markAsChanged;
        #);
+     
+  #);
+checkAstAutoSaveFile:
+  (# name: ^text;
+     fg: ^astInterface.fragmentGroup;
+     autoSaveFile: @diskEntry;
+     astFile: @diskEntry;
+     astName: ^text;
+     autoFileName: ^text;
+     help: ^text;
+  enter name[]
+  do name[] -> MPS.top.groupTable.find -> fg[];
+     (if fg[] = none then
+         MPS.astFileExtension -> (name.copy).Append -> astName[] -> astFile.path;
+         '#' -> (astName.copy).Append -> autoFileName[];
+         autoFileName[] -> autoSaveFile.path;
+         
+         (if autoFileName[] -> entryReadable then
+             (if astFile.modTime < autoSaveFile.modTime then
+                 'Auto save file is newer: '->help[];
+                 astName[] ->help.append;
+                 help.newLine;
+                 'Do you want to recover?'->help.append;
+                 (none ,'Recover?',help[])
+                   -> promptForBoolean
+                 (#
+                    ok::< 
+                      (# 
+                      do
+                         astName[] -> autoSaveFile.rename;
+                      #)
+                 #)
+             if);
+         if);     
+     if);
+  #);
+
+checkAutoSaveFile:
+  (# name: ^text;
+     autoSaveFile: @diskEntry;
+     file: @diskEntry;
+     autoFileName: ^text;
+     help: ^text; 
+  enter name[]
+  do '#' -> (name.copy).Append -> autoFileName[];
+     (if autoFileName[] -> entryReadable then
+         name[] -> file.path;
+         autoFileName[] -> autoSaveFile.path;
+         (if file.modTime < autoSaveFile.modTime then
+             'Auto save file is newer: '->help[];
+             name[] -> help.append;
+             help.newLine;
+             'Do you want to recover?'->help.append;
+             (none ,'Recover?',help[])
+               -> promptForBoolean
+             (#
+                ok::< 
+                  (# 
+                  do
+                     name[] -> autoSaveFile.rename;
+                  #)
+             #)
+             if);
+     if);
+  #);
+
+astFileIsOpen: booleanValue
+  (# name: ^text;
+     fg: ^astInterface.fragmentGroup;
+  enter name[]
+  do name[] -> MPS.top.groupTable.find -> fg[];
+     fg[] <> none -> value;
+  #);
+
+astFileExistsOrOpen: booleanValue
+  (# name: ^text;
+  enter name[]
+  do (if name[] -> astFileIsOpen then
+         true -> value;
+      else
+         name[] -> astfileExists -> value;
+     if);
+  #);
+
+directoryAccesible: booleanValue
+  (# path: ^text;
+     lastSlashPos: @integer;
+  enter path[]
+  do path.copy -> path[];
+     path.reset;
+     MPS.thePathHandler.directoryChar -> path.findAll
+     (# 
+     do inx -> lastSlashPos;
+     #);
+     (if lastSlashPos > 0 then
+         (lastSlashPos, path.length) -> path.delete;
+         (if path[] -> entryReadable then
+             path[] -> entryWriteable -> value;
+          else
+             false -> value;
+         if);
+      else
+         false -> value;
+     if);
+     
   #);
 
 -- documentOpen: doPart --
 do l: (# bodyName: ^text;
          parametersFileName: ^text;
-      do bodyGroups.init;
-         name[] -> MPS.expandToFullPath -> MPS.safeOpen -> interfaceGroup[];
-         (if interfaceGroup[] <> none then
-             search: interfaceGroup.scanBodyGroups
-               (# bodyGroup: ^astInterface.fragmentGroup;
-               do  currentFullPath[] -> bodyName[];
-                  bodyName[] -> MPS.safeOpen -> bodyGroup[];
-                  (if bodyGroup[] <> none then
-                      bodyGroup[] -> bodyGroups.insert;
-                   else
-                      'the body cannot be opened' -> error;
-                  if);
-               #);
-             name.copy -> parametersFileName[];
-             '.res' -> parametersFileName.append;
-             &parameterStore[] -> theParameterStore[];
-             parametersFileName[] -> theParameterStore.load
-             (# 
-                error::
-                  (# 
-                  do msg[] -> this(open).error;
-                     leave l;
-                  #);
-             #);
-             this(document)[] -> this(graphicalEditorEnv).private.documents.append;
+         foundBody: @boolean;
+      do (if name[] -> directoryAccesible then
+             bodyGroups.init;
+             (if name[] -> astFileReadable then
+                 name[] -> MPS.expandToFullPath -> MPS.safeOpen -> interfaceGroup[];
+                 (if not (name[] -> astFileWriteable) then
+                     true -> readOnly;
+                 if);
+                 (if interfaceGroup[] <> none then
+                     search: interfaceGroup.scanBodyGroups
+                       (# bodyGroup: ^astInterface.fragmentGroup;
+                       do  currentFullPath[] -> bodyName[];
+                          (if bodyName[] -> astFileReadable then
+                              
+                              (* bodyName[] -> checkAstAutoSaveFile; *)
+                              bodyName[] -> MPS.safeOpen -> bodyGroup[];
+                              
+                              (if not (bodyName[] -> astFileWriteable) then
+                                  true -> readOnly;
+                              if);
+                              (if bodyGroup[] <> none then
+                                  bodyGroup[] -> onGroupOpen;
+                                  bodyGroup[] -> bodyGroups.insert;
+                              if);
+                           else
+                              'You do not have read acces to a body file' -> error;
+                              leave l;
+                          if);
+                       #);
+                     name.copy -> parametersFileName[];
+                     '.res' -> parametersFileName.append;
+                     (if parametersFileName[] -> entryReadable then
+                         parametersFileName[] -> checkAutoSaveFile;
+                         &parameterStore[] -> theParameterStore[];
+                         parametersFileName[] -> theParameterStore.load
+                         (# 
+                            error::
+                              (# 
+                              do msg[] -> this(open).error;
+                                 leave l;
+                              #);
+                         #);
+                         (if not (parametersFileName[] -> entryWriteable) then
+                             true -> readOnly;
+                         if);
+                      else
+                         'You do not have read acces to the resource file' -> error;
+                         leave l;
+                     if);
+                     this(document)[] -> this(graphicalEditorEnv).private.documents.append;
+                  else
+                     'the fragmentgroup cannot be opened' -> error;
+                 if);
+              else
+                 'You do not have read acces to the interface file' -> error;
+             if);
           else
-             'the fragmentgroup cannot be opened' -> error;
+             'You do not have read/write access to the directory' -> error;
          if);
       #);
    
@@ -77,45 +264,74 @@ do (# bodyShortName: ^text;
       theLink: ^astInterface.fragmentLink;
       frag: ^astInterface.fragmentForm;
       bodyGroup: ^astInterface.fragmentGroup;
-   do (*
-       * Create the interface fragmentgroup
-       *)
-      bodyGroups.init;
-      name[] -> MPS.expandToFullPath -> MPS.top.newGroup -> interfaceGroup[];
-      '~beta/guienv/v1.3.1/guienvall' -> interfaceGroup.originProperty;
-      'INCLUDE' -> interfaceGroup.prop.addProp
-      (# 
-      do '~beta/interfacebuilder/v1.3/resourcesupport/initfromresource' -> addString;
-      #);
-      MPS.newfragmentLink -> theLink[];
-      '~beta/interfacebuilder/v1.3/resourcesupport/initfromresource' -> theLink.name;
-      'initfromresource' -> theLink.localName[];
-      theLink[] -> interfaceGroup.fragmentList.addfragment;
-      'guienvLib' -> betaGram.newAttributesFrag -> frag[];
-      frag[] -> interfaceGroup.fragmentList.addFragment;
+
+      help: ^text;
       
-      (*
-       * Create the body fragmentgroup
-       *)
-      
-      interfaceGroup.shortName -> bodyShortName[];
-      'body' -> bodyShortName.append;
-      bodyShortName[] -> interfaceGroup.fullPath -> bodyFullPath[];
-      'BODY' -> interfaceGroup.prop.addProp
-      (# 
-      do bodyShortName[] -> addString;
-      #);
-      bodyFullPath[] -> MPS.expandToFullPath -> MPS.top.newGroup -> bodyGroup[];
-      interfaceGroup.shortName -> bodyGroup.originProperty;
-      bodyGroup[] -> bodyGroups.insert;
-      (* 
-       * Create the parameterStore
-       *)
-      
-      &parameterStore[] -> theParameterStore[];
-      '.res' -> name.copyAppend -> theParameterStore.create;
-      
-      this(document)[] -> this(graphicalEditorEnv).private.documents.append;
+   do (if name[] -> directoryAccesible then
+          (if name[] -> astFileExistsOrOpen then
+              name.copy -> help[];
+              ' already exists, please delete it first' -> help.append;
+              help[] -> error;
+           else
+              (if 'body' -> (name.copy).Append -> astFileExistsOrOpen then
+                  'body' -> (name.copy).Append  -> help[];
+                  ' already exists, please delete it first' -> help.append;
+                  help[] -> error;
+               else
+                  (if '.res' -> (name.copy).Append -> entryExists then
+                      '.res' -> (name.copy).Append  -> help[];
+                      ' already exists, please delete it first' -> help.append;
+                      help[] -> error;
+                   else
+                      
+                      (*
+                       * Create the interface fragmentgroup
+                       *)
+                      bodyGroups.init;
+                      name[] -> MPS.expandToFullPath -> MPS.top.newGroup -> interfaceGroup[];
+                      betaGram[] -> interfacegroup.defaultGrammar[];
+                      '~beta/guienv/v1.4/guienvall' -> interfaceGroup.originProperty;
+                      'INCLUDE' -> interfaceGroup.prop.addProp
+                      (# 
+                      do '~beta/interfacebuilder/v1.3/resourcesupport/initfromresource' -> addString;
+                      #);
+                      MPS.newfragmentLink -> theLink[];
+                      '~beta/interfacebuilder/v1.3/resourcesupport/initfromresource' -> theLink.name;
+                      'initfromresource' -> theLink.localName[];
+                      theLink[] -> interfaceGroup.fragmentList.addfragment;
+                      'guienvLib' -> betaGram.newAttributesFrag -> frag[];
+                      frag[] -> interfaceGroup.fragmentList.addFragment;
+                      
+                      (*
+                       * Create the body fragmentgroup
+                       *)
+                      
+                      interfaceGroup.shortName -> bodyShortName[];
+                      'body' -> bodyShortName.append;
+                      bodyShortName[] -> interfaceGroup.fullPath -> bodyFullPath[];
+                      'BODY' -> interfaceGroup.prop.addProp
+                      (# 
+                      do bodyShortName[] -> addString;
+                      #);
+                      bodyFullPath[] -> MPS.expandToFullPath -> MPS.top.newGroup -> bodyGroup[];
+                      
+                      betaGram[] -> bodyGroup.defaultGrammar[];
+                      interfaceGroup.shortName -> bodyGroup.originProperty;
+                      bodyGroup[] -> bodyGroups.insert;
+                      (* 
+                       * Create the parameterStore
+                       *)
+                      
+                      &parameterStore[] -> theParameterStore[];
+                      '.res' -> (name.copy).Append -> theParameterStore.create;
+                      
+                      this(document)[] -> this(graphicalEditorEnv).private.documents.append;
+                  if);
+              if);
+          if);
+       else
+          'You do not have read/ write access to the directory' -> error;
+      if);
    #);
    
    
@@ -126,11 +342,12 @@ do interfaceGroup[] -> saveGroup;
    do current[] -> saveGroup;
    #);
    theParameterStore.save;
+   false -> touched;
    
 -- graphicalEditorEnvFindDocument: doPart --
 do search: private.documents.scan
    (# 
-   do (if name[] -> current.name.equalNCS then
+   do (if fg[] = current.interfaceGroup[] then
           current[] -> theDocument[];
           leave search;
       if);
@@ -147,4 +364,131 @@ do this(graphicalEditorEnv).private.documents.scan
    (# 
    do current[] -> this(scanDocuments).current[];
       inner scanDocuments;
+   #);
+   
+-- entryExistsBody: doPart --
+do false -> value;
+   l: (# e: @diskEntry;
+      do name[] -> e.path;
+         e.exists
+         (# 
+            error::
+              (# 
+              do leave l;
+              #);
+         #) -> value;
+      #);
+
+-- entryReadableBody: doPart --
+do false -> value;
+   (if name[] -> entryExists then
+       l: (# e: @diskEntry;
+          do name[] -> e.path;
+             e.readable
+             (# error::
+                  (# 
+                  do leave l;
+                  #);
+                
+             #) -> value;
+          #);
+   if);
+
+-- entryWriteAbleBody: doPart --
+do false -> value;
+   (if name[] -> entryExists then
+       l: (# e: @diskEntry;
+          do name[] -> e.path;
+             e.writeAble
+             (# error::
+                  (# 
+                  do leave l;
+                  #);
+             #) -> value;
+          #);
+    else
+       true -> value;
+   if);
+
+-- astFileExistsBody: doPart --
+do (# path: ^text;
+   do MPS.astFileExtension -> (name.copy).Append -> path[];
+      (if path[] -> entryExists then
+          true -> value;
+       else
+          '.bet' -> (name.copy).Append -> path[];
+          path[] -> entryExists -> value;
+      if);
+      
+   #);
+
+-- astFileReadAbleBody: doPart --
+do (# path: ^text;
+   do MPS.astFileExtension -> (name.copy).Append -> path[];
+      (if path[] -> entryReadAble then
+          true -> value;
+       else
+          '.bet' -> (name.copy).Append -> path[];
+          path[] -> entryReadAble -> value;
+      if);
+      
+   #)
+
+-- astFileWriteAbleBody: doPart --
+do (# path: ^text;
+   do MPS.astFileExtension -> (name.copy).Append -> path[];
+      (if path[] -> entryWriteAble then
+         '.bet' -> (name.copy).Append -> path[];
+          path[] -> entryWriteAble -> value;
+       else
+          false -> value;
+      if);
+   #);
+ 
+-- documentAutoSave: doPart --
+do interfaceGroup[] -> autoSaveGroup;
+   bodyGroups.scan
+   (# 
+   do current[] -> autoSaveGroup;
+      current[] -> onGroupChanged;
+   #);
+   theParameterStore.autoSave;
+   true -> touched;
+   interFaceGroup[] -> onGroupChanged;
+   
+-- documentDeleteAutoSaveFiles: doPart --
+do interfaceGroup.name -> deleteAutoAstAutoSave;
+   bodyGroups.scan
+   (# 
+   do current.name -> deleteAutoAstAutoSave;
+   #);
+   theParameterStore.deleteAutoSave;
+   
+-- documentClose: doPart --
+do this(document)[] -> this(graphicalEditorEnv).private.documents.delete;
+   
+-- graphicalEditorFindRelatedDocument: doPart --
+do search: private.documents.scan
+   (# 
+   do (if (fg[] -> current.related) then
+          current[] -> theDocument[];
+          leave search;
+      if);
+   #);
+   
+-- graphicalEditorEnvCloseGraphicalEditors: doPart --
+do private.editors.scan
+   (# 
+   do (if current.theDocument[] = theDocument[] then
+          current.close;
+      if);
+   #);
+   
+-- graphicalEditorEnvFindResourceData: doPart --
+do search: private.documents.scan
+   (# 
+   do (if (fg[] = current.interfaceGroup[]) then
+          current.theParameterStore.private.data[] -> resourceData[];
+          leave search;
+      if);
    #);
