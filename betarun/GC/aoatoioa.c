@@ -275,7 +275,7 @@ static int AOAtoIOAInsertImpl(Object **theCell)
     DEBUG_CODE(conflictcount = 4);
     do {
       DEBUG_AOAtoIOA(fprintf(output, "[%d]", MAX_PROBES-(int)count));
-      Claim(((0<=index) && (index<AOAtoIOAtableSize)), "Index must be inside range");
+      Claim(((0<=index) && (index<(unsigned long)AOAtoIOAtableSize)), "Index must be inside range");
       if (table[index]==0){
 	/* Found free */
 	table[index] = (unsigned long)theCell; 

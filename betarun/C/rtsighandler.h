@@ -60,13 +60,13 @@ typedef struct register_handles {
 } register_handles;
 
 #ifdef linux
-void SaveLinuxRegisters(SIGNAL_CONTEXT *scp, register_handles *handles);
+void SaveLinuxRegisters(SIGNAL_CONTEXT scp, register_handles *handles);
 #define BeforeBetaCallback()
 #define AfterBetaCallback()
 #endif /* linux */
 
 #ifdef nti
-void SaveWin32Registers(SIGNAL_CONTEXT *scp, register_handles *handles);
+void SaveWin32Registers(SIGNAL_CONTEXT scp, register_handles *handles);
 #define BeforeBetaCallback()
 #define AfterBetaCallback()
 #endif /* nti */

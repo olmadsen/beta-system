@@ -54,7 +54,7 @@ static void NotifySignalDuringDump(int sig)
 
 #ifdef linux
 
-void SaveLinuxRegisters(SIGNAL_CONTEXT *scp, 
+void SaveLinuxRegisters(SIGNAL_CONTEXT scp, 
 			register_handles *handles)
 {
   DEBUG_VALHALLA({
@@ -111,7 +111,7 @@ static void RestoreLinuxRegisters(SIGNAL_CONTEXT scp,
 #endif /* linux */
 
 #ifdef nti
-void SaveWin32Registers(SIGNAL_CONTEXT *scp, 
+void SaveWin32Registers(SIGNAL_CONTEXT scp, 
 			register_handles *handles)
 {
   DEBUG_VALHALLA({
@@ -140,7 +140,7 @@ void SaveWin32Registers(SIGNAL_CONTEXT *scp,
   DEBUG_VALHALLA(fprintf(output, "\n"));
 }
 
-static void RestoreWin32Registers(SIGNAL_CONTEXT *scp, 
+static void RestoreWin32Registers(SIGNAL_CONTEXT scp, 
 				  register_handles *handles)
 {
   DEBUG_VALHALLA({

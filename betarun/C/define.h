@@ -113,15 +113,16 @@
 
 /* New persistence */
 #if defined(sparc) || defined(intel)
-/* #define PERSIST */
+#define PERSIST
+#define USEMMAP 
 #endif /* sparc || intel */
 
 #ifdef PERSIST
 #undef RTLAZY
-#define USEMMAP 
 #else
 #define RTLAZY /* Include support for lazy fetch */
 #endif /* PERSIST */
+
 
 /******** Misc. *******/
 #define FALSE	0
