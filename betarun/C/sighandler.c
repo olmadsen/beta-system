@@ -458,22 +458,29 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
     case SIGILL:
       todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
     case SIGBUS:
-    todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
-      
+      todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
     case SIGSEGV:
-      todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
-    case SIGTRAP:
-      /* 'code' can be various different things even for refnone. No known
-       * way to distinguish RefNone from EmulatorTrap based in sigcontext
-       * directly (instead a disassembly would be possible).
+      /* Either a segmentation fault in BETA or external code or
+       * a refnone in BETA code.
        */
+      if (IsBetaCodeAddrOfProcess((unsigned long)PC)){
+	/* Could still be a segmentation fault. Would need to
+	 * do a disassembly to make a better guess.
+	 * Here we just guess that it is a refnone.
+	 */
+	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); 
+      } else {
+	todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); 
+      }
+      break;
+    case SIGTRAP:
 #ifdef RTVALHALLA
       if (valhallaID){
 	/* We are running under valhalla */
 	register_handles handles = {-1, -1, -1, -1, -1};
 	DEBUG_CODE(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
 	SaveSGIRegisters(scp, &handles);
-	/* Hit RefNone or breakpoint */
+	/* Hit breakpoint */
 	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); 
 	RestoreSGIRegisters(scp, &handles);
       } else {
