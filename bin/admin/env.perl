@@ -282,7 +282,7 @@ sub setup_sun4_5_6 {
 	$ENV{'MOTIFHOME'} = '/usr/dt';
     }
     if (!defined $ENV{'MOTIFINC'}) {
-	$ENV{'MOTIFINC'} = "$ENV{'BETALIB'}/Xt/motif/private/external/include";
+	$ENV{'MOTIFINC'} = "$ENV{'BETALIB'}/X11/Motif/private/external/include";
     }
     if (!defined $ENV{'OPENWINHOME'}) {
 	$ENV{'OPENWINHOME'} = '/usr/openwin';
