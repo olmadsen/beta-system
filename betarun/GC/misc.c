@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: misc.c,v $, rel: %R%, date: $Date: 1991-03-09 12:06:01 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: misc.c,v $, rel: %R%, date: $Date: 1992-02-26 16:22:53 $, SID: $Revision: 1.5 $
  * by Lars Bak.
  */
 
@@ -84,7 +84,8 @@ Claim( expr, message)
 {
   if( expr == 0 ){
     fprintf( output,"Assumption (%s) failed!\n", message);
-    BetaExit(-1);
+    fprintf( output,"IOA: %X, IOATop: %X\n", IOA, IOATop);
+    BetaExit(0);
   }
 }
 
