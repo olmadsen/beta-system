@@ -1,0 +1,1391 @@
+\documentclass{article}
+%\documentclass{acm_proc_article-sp}
+\def \CS{C\#}
+\newcommand {\note}[1]{{\noindent\begin{quotation}\it Note! #1\end{quotation}}}
+
+\usepackage{epsfig}
+\usepackage[latin1]{inputenc}
+\begin{document}
+%\parindent 0pt
+%\parskip 3mm
+
+\title{Language Interoperability with BETA on .NET and Java Virtual Machines}
+%\numberofauthors{1}                            
+\author{ Ole Lehrmann Madsen \&\ Peter Andersen\\
+%\alignauthor Jens Larsen\\
+       Computer Science Department, Aarhus University\\
+            Åbogade 34, DK-8200 Århus N, Denmark}
+                              
+\maketitle 
+
+                         
+\begin{abstract}
+\note{Current version of how BETA is mapped into CLR/JVM}
+
+\end{abstract}
+
+\section{Introduction}
+The overall goal of the project presented in this paper is language
+interoperability between object-oriented languages. From a language
+design/theoretical point-of-view issues concerning language
+interoperability are interesting since they highlight essential
+similarities and differences between languages. From an implementation
+point of view, design and implementation of execution platforms
+(virtual machine, common run-times) supporting a wide range of
+languages are interesting.  From a practical point-of-view it is
+interesting to be able to reuse libraries and frameworks between
+across language borders.
+
+The work reported here describes an exercise in implementing the BETA
+language on Microsoft's .NET platform and the Java virtual machine
+platform.  BETA is an object-oriented programming language and
+implementations in the form off native compilers exists for a number
+of platforms just as a powerful IDE -- the Mjølner System -- is
+available, see www.mjolner.dk.  For BETA all three issues mentioned
+above are interesting.
+
+At the language design level it is interesting to explore to what
+extent languages are similar and just appear different due to
+syntactic issues.  It is interesting to explore to what extent
+mechanism found in one language can be simulated or abstracted in
+another language. And finally it is interesting to find out to what
+extent mechanisms differ fundamentally between languages.  For BETA
+the the project has contributed to achieve a better understanding of
+the parts of BETA that differ from other OO languages and it has
+contributed with knowledge about which primitives and abstraction
+mechanisms should be part of a language covering BETA and say the Java
+and \CS\ family of languages.
+
+Virtual machines with just-in-time compilers are becoming more and
+more common as the basic technology for implementing object-oriented
+languages. For some years Java from Sun Micro systems has been the
+dominant technology in industry, but with Microsoft's .NET platform,
+an alternative has arrived.  Both platforms are based on virtual
+machines with a bytecode instruction set and type information that
+makes it possible to verify the safety of a given program. The Java
+platform has been designed solely for supporting the Java language
+although there exist implementations for other languages. The
+.NET-platform on the other hand was designed to support language
+interoperability. On .NET it is e.g.\ possible to use a class written
+in one language and make a subclass of it in another language. The
+\CS\ language has been designed for the .NET-platform and is in many
+ways similar to the Java language.
+
+The porting of BETA to .NET and JVM has the following goals:
+\begin{itemize}
+\item To get experience with implementing a language like BETA on
+  these platforms.  BETA differs in many respects from Java and \CS\ 
+  and since the Java- and .NET platforms are both designed for
+  implementing Java- and \CS-like languages, there may be parts of
+  BETA that can not be easily implemented.
+  
+\item To be able to evaluate and compare the two platforms.  It is
+  interesting to investigate whether there are significant differences
+  between the two platforms.
+  
+\item To test language interoperability on these platforms.  One goal
+  is to find out if language interoperability does work as promised by
+  .NET. Another goal is to find out if language interoperability works
+  with BETA and the other .NET languages. Since BETA differs
+  significantly from e.g.\ \CS\ it is not obvious whether it is useful
+  in practice to use a BETA pattern (class) in \CS\ or Visual Basic.
+  Another goal is to experiment with language
+  interoperability on the Java platform.
+\item To offer a language BETA that can be used to write applications
+  for both platforms.  If the porting of BETA to both
+  platforms succeed, it will be possible to use BETA for implementing
+  applications that can run on both platforms.
+\end{itemize}
+
+In \cite{eclipsepaper} work on integrating BETA with the Eclipse
+integrated Development Environment (IDE) and Visual Studio has been
+reported. This is another example of language interoperability.
+
+\section{Am immediate mapping of BETA to CLR/JVM}
+
+There have been two issues regarding the mapping of BETA to CLR/JVM:
+\begin{enumerate}
+  
+\item CLR/JVM are typed virtual machines designed to support Java for
+  JVM and a number of languages like \CS, and VB for CLR. BETA is much
+  more general than Java and \CS\ so one issue has been to find a
+  mapping that works.
+
+\item The other issue is language interoperabiliby as seen from the
+  point-of-view of programmers. To obtain true language
+  interoperability, is should be possible to use classes written in
+  Java, \CS, etc. from BETA and vice versa. Given an implementation of
+  BETA for CLR/JVM this should be possible. The main issue will be
+  readability/understandability of doing this. Using Java and \CS\  from
+  BETA will probably not pose problems, since a BETA programmer just
+  have to understand the Java/\CS\ classes being used.
+  
+  The other way around may be more problematic. Since BETA is much
+  more general than Java and \CS, the mapping of BETA patterns to
+  CLR/JVM may without careful design be complicated and result in
+  class-files that are difficult to understand at the level of Java and
+  \CS.
+
+\end{enumerate}
+
+The mapping of BETA into CLR/JVM is described as as a mapping into a
+common subset of \CS\ and Java. The subsequent mapping into CLR/JVM
+bytecodes should then appear as straight forward.  That is a the
+\CS/Java level the mappings to the two platforms are essentially
+identical. There are of course differences when considering the
+bytecode level but these are purely technical -- the logical structure
+is identical.
+
+The language model -- as we from now on call {\it CJ} -- behind Java
+and \CS\ may be characterized in the following way:
+\begin{itemize}
+\item A program is a collection of classes where each
+  class defines the structure of a set of objects.
+\item A class defines
+\begin{itemize}
+\item A set of data-items -- instance variables belonging to instances
+  of the class, and static variables belonging to the class.
+\item A set of methods -- instance methods and static methods.
+\end{itemize}
+\item Classes may be textually nested: in Java real nesting in the
+  form of block-structure as in Simula and BETA is supported whereas
+  \CS\ only provides nesting as a scoping mechanism similar to C++.
+\item Methods may be overloaded.
+\item There is support for dynamic exceptions.
+\item Concurrency is supported in the form of threads and a
+  monitor-like construct.
+\end{itemize}
+
+The BETA language may be characterized in the following way:
+\begin{itemize}
+\item Class and method have been unified into the pattern mechanism.
+\item Patterns can be arbitrarily nested supporting general
+  block-structure.
+\item
+The INNER-mechanism is used to combine methods instead of super.
+\item Genericity is supported by means of virtual patterns.
+\item A pattern (method) invocation may return multiple values.
+\item Coroutines and concurrency is based on semi-coroutines as known
+  from Simula in the form of active objects. Basic synchronization
+  between concurrent objects is supported by a semaphore pattern.
+  These mechanisms are at a more basic level than threads and monitors
+  in CJ, but form a basis for implementing higher-level concurrency
+  abstractions like monitors and Ada-like rendezvous and schedulers.
+\item BETA has no constructor mechanism.
+\item Methods cannot be overloaded.
+\item BETA is based on a static exception handling mechanism
+  \cite{lindskov} and dynamic exceptions are only supported in an
+  experimental version of the language.
+\end{itemize}
+
+Note that this paper is not an attempt to present the rationale behind
+the generality of BETA compared to main stream languages like \CS\ and
+Java.  The purpose is to present the issues in mapping BETA to
+CLR/JVM. To do this we will use more or less useful examples to
+illustrate the mapping. The rationale behind BETA has been presented
+in a number of articles such as \cite{betabook,vclass}.
+
+
+Consider the following example of a BETA pattern describing a
+simple bank account:
+{\tt\small\begin{verbatim}
+   Account:
+     (# balance: @integer;
+        deposit: 
+          (# amount: @integer 
+          enter amount 
+          do balance + amount -> balance 
+          exit balance
+          #);
+        withdraw: 
+          (# amount: @integer enter amount do balance - amount -> balance #);
+     #);
+\end{verbatim}
+}
+    
+The {\tt Account} pattern has three attributes {\tt balance}, {\tt
+  deposit} and {\tt withdraw}. The attribute {\tt balance} is an
+instance variable holding the current value of the {\tt Account}.  The
+attributes {\tt deposit} and {\tt withdraw} describe operations on the
+account.  The operation {\tt deposit} inserts an amount on the account
+by adding to {\tt balance} to the value of the enter-parameter {\tt
+  amount} and returns (exit) the value of {\tt balance}.  The
+operation {\tt withdraw} similarly withdraws an amount from the
+account.
+    
+The following example shows an instance {\tt myAccount} of {\tt
+  Account}, an instance {\tt X} of {\tt integer}; a call of {\tt
+  myAccount.deposit} with enter arguments {\tt 120} and the resulting
+exit-value being assigned to {\tt X}; and a call of {\tt
+  myAccount.withdraw} with enter argument {\tt 50}.
+
+{\tt\small\begin{verbatim}
+   myAccount: @Account; X: @integer; 
+   120 -> myAccount.deposit -> X;
+   50 -> C.withdraw;
+\end{verbatim}
+}
+    
+Note that {\tt Account}, {\tt deposit} and {\tt withdraw} are all
+examples of patterns. In this example {\tt Account} is used as a class
+and {\tt deposit} and {\tt withdraw} as methods.  This use of the {\tt
+  Account} pattern is illustrated by the following simple mapping to a
+CJ class:
+
+{\tt\small\begin{verbatim}
+   class Account extends Object { 
+      int balance;
+      void deposit(int amount) { 
+         balance = balance + amount; 
+         return balance; 
+      }
+      int withdraw(int amount) { balance = balance - amount; }
+   }
+\end{verbatim}
+}
+
+The BETA declarations and invocations shown above then maps to the
+following declarations and invocations in CJ:
+
+{\tt\small\begin{verbatim}
+   Account myAccount = new Account(); int X;
+   X = myAccount.deposit(120);
+   myAcount.withdraw(50);
+\end{verbatim}
+}
+    
+The above mapping shows a simple semantics of the BETA {\tt Account}
+pattern.  To capture the full semantics of the {\tt Account} pattern a
+more complex mapping is needed. The fact that e.g.\  {\tt deposit} is a
+pattern means that it is possible to use {\tt deposit} as a class and
+create instances of {\tt deposit} as in the following example:
+
+{\tt\small\begin{verbatim}
+   myAccount: @Account; 
+   myDeposit: ^myAccount.deposit; 
+   myAccount.deposit[] -> myDeposit[];
+\end{verbatim}
+}
+    
+The variable {\tt myDeposit} may refer to instances of {\tt
+  myAccount.deposit}. The statement {\tt \&myAccount.deposit[] ->
+  myDeposit[]} creates an instance of the pattern {\tt
+  myAccount.deposit} and assigns its reference to {\tt myDeposit}.
+
+Using {\tt myDeposit}, the instance variable {\tt amount} in {\tt
+  myDeposit} may be assigned a value as in: 
+
+{\tt\small\begin{verbatim}
+   170 -> myDeposit.balance
+\end{verbatim}
+}
+    
+The pattern {\tt deposit} also defines a do-part, which is executed
+when {\tt deposit} is used a a procedure. The do-part of {\tt
+  myDeposit} may be executed directly by the following statement (the
+exact semantics should be clear when we show the complete mapping of
+the {\tt Account} pattern below):
+
+{\tt\small\begin{verbatim}
+   20 -> myDeposit -> X
+\end{verbatim}
+}
+
+To obtain the full semantics of the {\tt deposit} pattern, it is
+mapped into the following inner class\footnote{%
+  The reader may observe that this use of an inner class will work in
+  Java, but not in \CS. This issue is further discussed below.}  of 
+{\tt Account}:
+
+{\tt\small\begin{verbatim}
+   class deposit extends Object {
+      int amount;
+      void enter(int a) { amount = a; }
+      void do() { balance = balance + a; }
+      int exit() { return balance; }
+   }
+\end{verbatim}
+}
+
+A BETA invocation
+{\tt\small\begin{verbatim}
+    50 -> myAccount.deposit -> X
+\end{verbatim}
+}
+is then implemented as follows:
+{\tt\small\begin{verbatim}
+   deposit D = new deposit();
+   D.enter(5);
+   D.do();
+   X = D.exit();
+\end{verbatim}
+}
+
+To avoid generating the above code for each invocation, and {\tt
+  deposit}-method is generated as part of class {\tt Account}:
+
+{\tt\small\begin{verbatim}
+   int deposit(int amount) {
+       deposit D = new deposit();
+       D.enter(50);
+       D.do();
+       return D.exit();
+   }
+\end{verbatim}
+}
+
+The BETA invocation {\tt 50 -> myAccount.deposit -> X} may now be
+mapped into the corresponding CJ invocation {\tt X =
+  myAccount.deposit(50)}.
+
+\note{Drop new-method here}
+
+As mentioned,it is also possible to generate instances of the patter
+{\tt deposit}. To handle this a {\it new}-method of the following form
+is generated as part of class {\tt Account}.
+
+{\tt\small\begin{verbatim}
+   deposit deposit() { return deposit(); }
+\end{verbatim}
+}
+
+Instances of {\tt deposit} may now be generated by execution of {\tt
+  myDeposit = myAccount.deposit()}.
+
+The complete mapping of the {\tt Account} pattern is shown below:
+{\tt\small\begin{verbatim}
+   class Account extends Object {
+     int balance = 0;
+     int deposit(int amount) {
+       deposit D = new deposit();
+       D.enter(amount);
+       D.do();
+       return D.exit();
+     }
+     void withdraw(int amount) { ... };
+     class deposit extends Object { ... };
+     class withdraw extends Object { ... };
+   }
+\end{verbatim}
+}
+
+As can be seen, each inner pattern of {\tt Account} -- in this case
+{\tt deposit} and {\tt withdraw} -- gives rise to a method and an
+inner class.
+
+The method is for using the pattern as a method -- for {\tt withdraw}
+this is the method with the signature {\tt int withdraw(int amount)}.
+
+The {\tt Account} example also shows how to use BETA patterns from
+Java and \CS. A Java or \CS\ class may use the {\tt Account} class as
+shown above and invoke the {\tt deposit}- and {\tt deposit}-methods
+as shown in the following Java example:
+
+{\tt\small\begin{verbatim}
+   Account myAccount = new Account();
+   deposit myDeposit = myAccount.new deposit()
+   mydeposit.enter(170);
+   mydeposit.do();
+   int X = myDeposit.exit();
+\end{verbatim}
+}
+
+In the following sections we will more systematically show how
+BETA constructs are mapped into CJ.
+
+\section{The general scheme for mapping a pattern}
+\note{Consider skipping this part -- is very sketchy}
+
+Consider a pattern with nested patterns:
+{\tt\small\begin{verbatim}
+   Foo:
+      (# ...
+         f1: (# ... enter N1 do ... exit X1 #);
+         f2: (# ... enter N2 do ... exit X2 #);
+         f3: (# ... enter N3 do ... exit X3 #);
+      enter N
+      do ...
+      exit X
+      #)
+\end{verbatim}
+}
+\note{We still need to introduce the new-method}
+
+Pattern {\tt Foo} is mapped into the following class:
+{\tt\small\begin{verbatim}
+   class Foo extends Object {
+      ...
+      sX1 f1(sN1) { ... } // call-method for f1
+      f1 new$f1() { ... } // new-method for f1
+
+      sX2 f2(sN2) { ... } // call-method for f2
+      f2 new$f2() { ... } // new-method for f2
+
+      sX3 f3(sN3) { ... } // call-method for f3
+      f3 new$f3() { ... } // new-method for f2
+
+      void enter(sN) { ... }
+      void do() { ... }
+      sX exit() { ... }
+
+      class f1 extends Object { ... }
+      class f2 extends Object { ... }
+      class f3 extends Object { ... }
+   }
+\end{verbatim}
+}
+
+\noindent
+where {\tt sX1}, {\tt sN1}, \ldots, {\tt sN}, and {\tt sX} are the
+signatures corresponding to {\tt X1},{\tt N2}, \ldots {\tt N}, and {\tt
+  X} respectively.
+
+\section{Mapping nested patterns}
+Consider the following structure of nested (inner) patterns:
+{\tt\small\begin{verbatim}
+   A: (# ...
+         AA: (# ...
+                AAA: (# ... #)
+             #)
+      #)
+\end{verbatim}
+}
+
+This structure is mapped into the following structure of nested
+patterns:
+
+{\tt\small\begin{verbatim}
+   class A extends Object { 
+      class AA extends Object { 
+         ...
+         class AAA extends Object {
+            ...
+         }
+      }
+   }
+\end{verbatim}
+} 
+
+As mentioned above, this works for Java but not for \CS.  In \CS\ 
+instances of inner classes cannot refer to instance variables in the
+enclosing object.  To handle this BETA and Java maintains a structural
+reference to the enclosing object of an inner class.  For \CS, we have
+to generate this reference as part of the mapping. The above nested
+BETA patterns are thus mapped into the following \CS\ structure:
+
+{\tt\small\begin{verbatim}
+   class A extends Object { 
+      class AA extends Object { 
+         A origin;
+         AA(A org) { origin = org;}
+         ...
+         class AAA extends Object {
+            AA origin; 
+            AAA(AA org) { origin = org; }
+            ...
+         }
+      }
+   }
+\end{verbatim}
+} 
+
+Each inner class has an explicit reference, {\tt origin} to its
+enclosing object. The origin reference is setup by a constructor that
+has the origin as an argument.
+
+\note{Figure with nested A, AA, and AAA instances?}
+
+The {\tt Account} example thus maps into the following classes for
+\CS:
+
+{\tt\small\begin{verbatim}
+   class Account extends Object {
+      int balance = 0;
+      int deposit(int amount) {
+          deposit D = new deposit(this);
+          D.enter(amount);
+          D.do();
+          return D.exit();
+      }
+      void withdraw(int amount) { ... };
+      class deposit extends Object { 
+         origin Account;
+         int amount;
+         deposit(origin org) { origin = org; }
+         void enter(int a) { amount = a; }
+         void do() { origin.balance = origin.balance + amount; }
+         int exit() { return origin.balance; }
+      }
+      class withdraw extends Object { ... };
+}
+\end{verbatim}
+}
+
+\note{Some explanation ...}
+
+An inspection of the class-files and generated by Java (and \CS?)
+reveals that inner classes are flattened as outer classes and thus all
+appear at the same level of block structure.  To handle this a name
+mangling scheme is used by Java (and \CS?) to ensure uniqueness of
+class names. The above BETA patterns then at the class-file level are
+mapped into the following flat structure of classes:
+
+{\tt\small\begin{verbatim}
+   class A extends Object { ... }
+   class A$AA extends Object { 
+      A origin;
+      A$AA(A org) { origin = org; }
+      ...
+   }
+   class A$AA$AAA extends Object {
+      A$AA orgin;
+      A$AA$AAA(A$AA org) { origin org; }
+      ...
+   }
+\end{verbatim}
+} 
+  
+The flattening, name mangling and explicit origin reference are only a
+matter at the class-file level. At the user level -- Java and \CS\ 
+programmers using BETA, the flattening does not show up.  Except that
+\CS\ programmers have to deal with the origin reference.
+
+\note{We should either make use of Java inner classes or have a remark
+  about it. I.e. that we currently do not use them but plan to.}
+
+\section{Mapping subpatterns and inner}
+In BETA a pattern can be a subpattern of another pattern just as a
+class can be a subclass of another class. A subpattern can be mapped
+directly to a subclass in CJ.
+
+The inner-mechanism of BETA used for combination of the do-parts of a
+pattern and its superpattern cannot be directly mapped into CJ.  In
+the following example, an inner has been added to the {\tt withdraw}
+pattern of {\tt Account}. In addition an {\tt owner} attribute and a
+subpattern {\tt depositWithNotify} of {\tt withdraw} has been added.
+ 
+\note{A better example is perhaps needed: with code before and after inner }
+{\tt\small\begin{verbatim}
+   Account:
+      (# balance: @integer;
+         owner: ^Person;
+         deposit: 
+          (# amount: @integer 
+          enter amount 
+          do balance + amount -> balance; 
+             inner deposit
+          #);
+
+         depositWithNotify: withdraw
+           (# 
+           do amount -> owner.notify
+           #)
+      #)
+\end{verbatim}
+}
+
+Execution of {\tt 60 -> myAccount.depositWithNotify} implies that the
+do-part of {\tt deposit} is executed followed by an execution of the
+do-part of {\tt depositWithNotify}.  This is captured by the following
+mapping into CJ:
+
+{\tt\small\begin{verbatim}
+   class deposit extends Object {
+      ...
+      void do() {
+         balance = balance + amount;
+         do_1(); // inner deposit
+      }
+      protected void do_1()
+   }
+   class depositWithNotify extends deposit {
+      void do_1() { 
+         owner.notify(amount);
+      }
+   }
+\end{verbatim}
+}
+
+In general there may be an arbitrary number of subpatterns and inners
+and there may be statements to execute before and after an inner. This
+is illustrated in the following example:
+
+{\tt\small\begin{verbatim}
+    A: (# do X1; inner; Y1 #);
+    AA: A(# do X2; inner; Y2 #);
+    AAA: AA(# do X3; inner; Y3 #);
+\end{verbatim}
+}
+
+which will be mapped into:
+
+{\tt\small\begin{verbatim}
+   class A extends Object {
+      void do() { X1(); do_1(); Y1(); };
+      protected void do_1();
+   }
+   class AA extends A {
+      protected void do_1() { X2(); do_2(); Y2(); };
+      protected void do_2();
+   }
+   class AAA extends AA {
+      protected void do_2() { X3(); do_3(); Y3(); };
+      protected void do_3();
+   }
+\end{verbatim}
+}
+
+Consider instances:
+{\tt\small\begin{verbatim}
+   A a = new A(); AA aa = new AA(); AAA aaa = new AAA(); 
+\end{verbatim}
+}
+
+\note{text is missing for the next example}
+Execution of the do-method of theses objects takes places as follows
+{\tt\small\begin{verbatim}
+   a.do();   A.do(); X1(); ...
+\end{verbatim}
+}
+
+As can be seen, inner is the empty action if there are no subpatterns
+of a given pattern.
+
+\note{Example of a call should be shown somewhere}
+
+\section{Mapping virtual patterns}
+
+A BETA pattern may be virtual. A virtual pattern used as as procedure
+corresponds to a (virtual) method in Java and \CS. A virtual pattern
+used as a class corresponds to a class parameter of a generic class
+(parameterized class) in Java -- there is no counterpart in \CS\ (Is
+this correct?).
+
+\note{More references to virtual class literature}
+
+The following example shows the use of virtual patterns. The pattern
+{\tt Buffer} is a generic buffer that may hold an instance of the
+pattern {\tt elm}.  Pattern {\tt elm} is declared as a virtual pattern
+attribute of {\tt Buffer} -- the {\tt <} in {\tt elm:< object}
+indicates that {\tt elm} is a virtual attribute -- the {\tt object}
+part of the declaration indicates that {\tt elm} may be extended in
+subpatterns of {\tt Buffer} to subpatterns of {\tt object}. This means
+that the type (qualification) of {\tt elm} in {\tt Buffer} is {\tt
+  object} and that {\tt elm} can be used as if it is pattern {\tt
+  object}.
+
+The instance variable {\tt theElm}, the enter-argument {\tt E} of
+{\tt insert} and the exit-value {\tt X} of {\tt get}
+are all declared to be of type {\tt elm}, i.e. in {\tt
+  Buffer}, {\tt object}.
+
+Since {\tt object} is the most general superpattern in BETA, only few
+properties of {\tt elm } is known in {\tt Buffer}, but in subpatterns
+of {\tt Buffer}, {\tt elm} may be extended to any other pattern.
+
+\note{display - currently ignored}
+
+{\tt\small\begin{verbatim}
+   Buffer:
+     (# elm:< object;
+        theElm: ^elm;
+        put:
+          (# E: ^elm
+          enter E[] do E[] -> theElm[]
+          #);
+        get: 
+          (# X: ^elm
+          do theElm[] -> X[]
+          exit E[]
+          #);
+        display:<
+          (#
+          do 'Buffer: ' -> screen.puttext; inner;
+          #)
+     #);
+\end{verbatim}
+}
+
+Since {\tt elm} is qualified by {\tt object} arbitrary objects may be
+inserted into a {\tt Buffer} as shown in the following example where
+an {\tt Account} and a {\tt Person} are inserted into a {\tt
+  Buffer}-object.
+
+{\tt\small\begin{verbatim}
+   (# B: @Buffer; 
+      Joe: @Person;
+      myAccount: @Account
+      X: ^object;
+   do myAccount[] -> B.put;
+      Joe[] -> B.put;
+      B.get -> X[];
+   #)
+\end{verbatim}
+}
+
+The statement {\tt B.get -> X[]} retrieves the element from the buffer
+and assigns it to {\tt X}. Since {\tt get} returns a reference of type
+{\tt elm} the type of {\tt X} also has to be {\tt object}
+
+Also the type of en element retrieved from the buffer by {\tt get}
+is only know to be of type {\tt object}.
+
+In pattern {\tt AccountBuffer} -- a subpattern of {\tt Buffer} -- {\tt
+  elm} is extended to be the pattern {\tt Account} as specified by the
+declaration {\tt elm::< Account}. This means that inside {\tt
+  AccountBuffer}, we know that the instance variable {\tt theElm} is
+at least of type {\tt Account}. This is also the case for the
+enter-argument {\tt E} of put and the exit-value {\tt X} of get.
+
+
+%This fact is used i the {\tt display}
+%method where {\tt theElm} is used is written as a text to the screen.
+
+{\tt\small\begin{verbatim}
+   AccountBuffer: Buffer
+     (# elm::< Account
+        display::< 
+          (#
+          do theElm.balance -> putint;
+          #)
+     #);
+\end{verbatim}
+}
+
+The next example shows a use {\tt AccountBuffer}
+where only instances of {\tt Account} or subpatterns of {\tt Account}
+may be inserted:
+
+{\tt\small\begin{verbatim}
+   (# Joe: @Person;
+      myAccount: @Account
+      Q: @AccountBuffer; 
+      S: ^Account
+   do myAccount[] -> B.put;
+      Joe[] -> B.put;
+      B.get -> X[];
+      myAccount[] -> Q.put;
+      Q.get -> S[];
+   #)
+\end{verbatim}
+}
+
+In addition the type of elements retrieved from {\tt Q} is known to be
+of type {\tt Account}
+
+\subsection{First version of mapping}
+\note{Better heading needed} The pattern {\tt Buffer} is mapped into
+the following Java class.  The operations {\tt put} and {\tt get} are
+mapped into a method and an inner class following the general mapping
+for nested patterns. 
+
+The special thing here is the treatment of the virtual pattern {\tt
+  elm}. Since {\tt elm} is declared as a virtual {\tt object}, the
+type of {\tt theElm}, the argument {\tt a} of {\tt put} and the
+argument {\tt a} of the enter-method of class {\tt put} all become
+{\tt Object}.\footnote{There is a subtle difference between {\tt
+    object} in BETA and {\tt Object} in Java that we will ignore in
+  this paper}
+
+{\tt\small\begin{verbatim}
+   class Buffer extends Object {
+     Object theElm;
+
+     void put(Object a) {
+        put I = new put();
+        I.enter(a);
+        I.do         
+       }
+     Object get() { 
+        get G = new get();
+        G.do();
+        return G.exit();
+     }
+
+     class put {
+        Object E;
+        void enter(Object a) { E = a; }
+        void do() { theElm = E; }
+     }
+     class get { 
+        Object X;
+        void do() { X = theElm; }
+        Object exit() { return X; }
+     }
+   }
+\end{verbatim}
+}
+
+The BETA example above of using {\rm Buffer} is straight forward to
+map into the following CJ program:
+
+{\tt\small\begin{verbatim}
+   Account B;
+   Person Joe = new Person();
+   Object X;
+   Account myAccount = new Account();
+   Account S;
+   B.put(myAccount);
+   B.put(Joe);
+   X = B.get();
+\end{verbatim}
+}
+
+
+The pattern {\tt AccountBuffer} is mapped into the following Java class:
+
+{\tt\small\begin{verbatim}
+   class AccountBuffer extends Buffer {
+   }
+\end{verbatim}
+}
+
+As can bee seen, the body of the class is empty\footnote%
+{This is not entirely true since the current version of JBeta
+  generates dummy-methods corresponding to {\tt elm} in {\tt Buffer}}
+and {\tt AccountBuffer}, the reason being that the body of the BETA
+{\tt AccountBuffer} only extends the virtual pattern {\tt elm} to be
+at least {\tt Account}. This extension cannot be expressed in Java.
+Instead we have to make use of casts at various places.  The BETA
+example of using {\tt AccountBuffer} thus maps into:
+
+{\tt\small\begin{verbatim}
+   Person Joe = new Person();
+   Account myAccount = new Account();
+   AccountBuffer Q;
+   Account S;
+
+   Q.put(myAccount);
+   S = (Account) Q.get();    // cast
+\end{verbatim}
+}
+
+Note the statement {\tt S = (Account) Q.get();} where the value
+returned by {\tt Q.get()} must be casted to {\tt Account}. This cast
+is superfluous since the BETA compiler knows that it will not be
+needed. This can as mentioned not be expressed in Java.
+
+\note{Covariance should be mentioned}
+
+\subsection{Mapping {\tt  display} into CJ}
+The mapping of the virtual pattern {\tt display} follow the general
+scheme of mapping a nested pattern: a method and an inner class is
+generatated as shown below:
+
+
+{\tt\small\begin{verbatim}
+   class Buffer extends Object {
+     ...
+
+     void display() {
+        display D = new display();
+        D.do();
+      }
+
+     class display extends Object { 
+        void do() {
+          System.out.println(``Buffer: ``);
+          do_1();
+        }
+        void do_1();
+     }
+   }
+\end{verbatim}
+}
+ 
+In {\tt AccountBuffer}, the extension of {\tt display} gives rise to a
+redefinition of the {\tt display}-method and -class:
+
+{\tt\small\begin{verbatim}
+   class AccountBuffer extends Buffer {
+     ...
+
+     void display() {
+        display D = new display();
+        D.do();
+      }
+
+     class display extends Buffer.display { 
+       void do_1() { System.out.println(theElm.balance); }
+     }
+   }
+\end{verbatim}
+}
+
+As can be seen a new {\tt display}-class is defined in {\tt
+  AccountBuffer} and this class is a subclass of the {\tt
+  display}-class from {\tt Buffer}.  The {\tt display}-method
+generates an instance of the {\tt display}-class from {\tt
+  AccountBuffer}. In
+
+{\tt\small\begin{verbatim}
+    Buffer B = new Buffer();
+    B.display;
+    Buffer A = new AccountBuffer();
+    A.display()
+\end{verbatim}
+}
+
+{\tt B.display()} executes {\tt display} as defined in {\tt Buffer}
+whereas {\tt A.display} executes {\tt display} as defined in {\tt
+  AccountBuffer} according to the BETA semantics of method
+combination using inner.
+
+\subsection{Mapping nested virtual classes}
+A virtual pattern may also be a nested pattern as shown in the next example:
+
+{\tt\small\begin{verbatim}
+Structure:
+  (# root: @Node;
+     Node:< 
+       (# label: @integer;
+          add:< (# N: ^Node enter N[] do inner #);
+       #);
+     add:
+       (# V: @integer; N: ^Node
+       enter V
+       do &Node[] -> N[];
+          V -> N.label;
+          N[] -> root.add
+       #) 
+  #);
+\end{verbatim}
+}
+
+An instance of pattern {\tt Structure} has three attributes: an
+instance variables {\tt root} of type {\tt Node}, a nested virtual
+pattern {\tt Node}, and an operation {\tt add} for adding a {\tt Node}
+to the {\tt structure}. A {\tt Node} has two attributes: an instance
+variable {\tt label} and an operation {\tt add}.
+
+Since {\tt node} is a nested virtual pattern, {\tt Node} may be
+extended in subpatterns of {\tt Structure}. Instances of {\tt Node}
+will then be instances of the extended pattern. In {\tt Structure} two
+instances of {\tt Node} are created: one by {\tt root: @Node} and one
+in {\tt add} by the statement {\tt \&Node[] -> N[]}. These
+instance will be of a possibly extension of {\tt Node}.
+
+In pattern {\tt List}, {\tt Node} is extended with an instance
+variable {\tt succ} and an extension of {\tt add}.
+
+{\tt\small\begin{verbatim}
+List: Structure 
+  (# 
+     Node::< 
+       (# succ: ^Node;
+          add::< (# ... #)
+       #)
+  #);
+\end{verbatim}
+}
+
+If {\tt L} is a {\tt List} then {\tt L.root} and the instances created
+by {\tt L.add} below are instance of the extended {\tt Node} pattern.
+
+The extension of the virtual {\tt add} is supposed to append the
+enter-argument {\tt N} to the list defined by {\tt succ}.
+
+{\tt\small\begin{verbatim}
+(# L: @List;
+do (for i: 10 repeat i -> L.add for);
+#)
+\end{verbatim}
+}
+
+The next example shows another example of an extension of {\tt Node}
+in a subpattern {\tt BinTree} of {\tt Structure}:
+
+{\tt\small\begin{verbatim}
+BinTree: Structure
+  (#
+     Node::< 
+       (# left,right: ^Node;
+          addRight: @boolean;
+          add::< (# ... #);
+       #)
+  #)
+\end{verbatim}
+}
+
+Pattern {\tt Node} is extended with instance variables {\tt left},
+{\tt right} and {\tt addRight}, the latter in the extension of {\tt
+  add} to alternate between adding {\tt N} to the left- or right part
+of the binary tree.
+
+The example shows how to add elements to a {\tt BinTree}.
+
+{\tt\small\begin{verbatim}
+(# T: @BinTree;
+do (for i: 10 repeat i -> T.add for);
+#)
+\end{verbatim}
+}
+
+\subsubsection{Mapping of nested virtuals into CJ}
+
+Pattern {\tt Structure} is mapped into the CJ class shown below. The
+parts relating to the nested virtual {\tt Node}-pattern is the
+method{\tt Node new\$Node()} and the inner {\tt class Node}. For
+simplicity the {\tt add}-methods of {\tt Structure} are shown as
+CJ-methods although they are really mapped into a method and a class:
+
+
+{\tt\small\begin{verbatim}
+   class Structure {
+       Node root = new$Node();
+
+       Node new$Node() { return new Node(); }
+
+       void add(int V) {
+          Node N = new$Node();
+          N.label = V;
+          root.add(N);
+       }    
+       
+      class Node {
+         int label;
+         void add(Node N){ ... };
+      }
+   }
+\end{verbatim}
+}
+
+Pattern {\tt List} is mapped into the following CJ class:
+
+{\tt\small\begin{verbatim}
+   class List extends Structure {
+
+       Structure.Node new$Node() { return new Node(); }
+
+       class Node extends Structure.Node {
+          Structure.Node succ;
+          void add(Structure.Node N) { ... }
+
+       }
+   }
+\end{verbatim}
+} 
+  
+\note{We use {\tt Structure.Node} above, to ensure that {\tt
+    new\$Node()} is overwritten. Could we use {\tt Node} instead?
+  Return type is not used to distinguish signatures?}
+
+Here it should be noticed that a an inner class {\tt Node}
+corresponding to the extension of {\tt Node} in {\tt List} is defined.
+This class is a subclass of the {\tt Node} class (denoted {\tt
+  Structure.Node} defined in {\tt Structure}.
+
+Also, the method with signature {\tt Structure.Node new\$Node() } is a
+redefinition of the corresponding method in {\tt Structure}. The
+redefinition ensures that an instance of the {\tt List.Node} is
+returned in accordance with the semantics of virtual classes.
+
+Finally we consider the use of {\tt List}:
+
+{\tt\small\begin{verbatim}
+   List L = new List();
+   for (i=0; i<=10; i++) L.add(i); 
+\end{verbatim}
+}
+
+\note{Need external instances L.Node, T.Node}
+
+\subsection{Summing up}
+
+For a pattern: a call- and a new-method.
+
+Also the case for a virtual pattern
+
+For a non-nested (global), no inner class
+
+For a nested virtual: both
+
+Special dummy/empty cases that may be avoided
+
+Extra casts are needed
+
+Note, however, that how close CJ is to support virtual patterns.
+Mainly a matter of the new-method and avoiding the casts.
+We may simulate virtual classes by the above means.
+
+
+\section{Expressions and statements}
+Expressions and statemenst are in most cases straight forward to map intp CJ.
+
+{\bf Basic types}. BETA has basic types corresponding to 8, 16, and 32
+bits signed and unsigned integers, 8, and 16-bit characters, and 64
+bit floating point numbers. (, 16, and 32-bits signed number are
+directly supported by CJ - for the unsigned version a little extra
+effort is needed.
+
+{\bf Binary and unary operators}. All of the binary and unary
+operators of BETA maps direcly to corresponding operators in CJ.
+
+{\bf Multiple return values}. A BETA pattern may return a list of
+values. This can not be directly implemented in JVM/CLR -- instead the
+list of return values are stored in instance variables and a reference
+to the method-invocation is returned and used subsequently to retrieve
+the return list.
+
+{\bf Statements}. BETA's if-, and for-statements also maps easily into CJ.
+
+\subsection{Leave and restart}
+In BETA is possible to exit a nested scope of method invocations. To
+implement this in CJ, a (complicated) structure of exceptions have to
+be set up.
+
+{\tt\small\begin{verbatim}
+   foo:
+     (#
+     do ...;
+        L: (# Foo: 
+                (# 
+                do ...; leave L; 
+                   ...; restart L; ...
+                #);
+           do ...; Foo; ...
+           #);
+        Lx: ...
+     #)
+\end{verbatim}
+}
+  
+Execution of {\tt leave L} implies that execution continues at the
+point of {\tt Lx} --- equivalent to {\tt goto Lx}. Execution of {\tt
+  restart L} implies that execution continues at {\tt L} ---
+equivalent to {\tt goto L}. Execution of {\tt leave}/{\tt restart} may
+take place within arbitrarely nested pattern invocations\footnote{%
+  The patterns must be declared in the scope of {\tt L}, i.e. within
+  the object labelled by {\tt L}} --- in the example shown within the
+pattern {\tt Foo}.
+  
+In CJ the only way to implement leave and restart is to use the
+execption mechanism. At the point of {\tt }L, an exception handler is
+set up to catch exceptions that may be casted by {\tt leave} and/or
+{\tt restart}.  {\tt Leave} or {\tt restart} are then implemented by
+casting the appropriate exceptions.
+
+Although we have not yet made any performance measures of the
+resulting code, we expect the use of the exception mechanism to
+implement leave and restart to be inefficient.
+
+\subsection{Pattern variables}
+BETA supports patterns as first class
+values that can be passed as arguments to other patterns and
+returned as values. Special methods are generated to handle pattern
+variables - space does not allow the details to be described here.
+  
+
+\section{Coroutines, concurrency and synchronization}
+BETA has semi-coroutines in the style of Simula. BETA coroutines may be
+executed in the usual non-premptive way as known form Simula but
+also in concurrency with preemptive scheduling.  For synchronization
+of concurrent coroutines, a {\tt Semaphore} pattern is avaliable to
+express synchronization at the basic level. The BETA mechanism for
+coroutines, concurrency and synchronization are at a much more
+primitive level than in CJ. However, the powerful abstraction
+mechanisms of BETA makes it easy to build higher-level concurrency
+mechanisms such as monitors and Ada-like rendezvous and the BETA
+libraries include a number of such concurrency abstractions.
+  
+The basic coroutines can be implemented in CJ using Threads, but this
+requires considerable overhead -- basically a coroutine shift is much
+simpler than a thread shift. The coroutine implementation in CLR/JVM
+is probably the part of BETA that does not map very well. Space does
+not allow to give the details of the coroutine implementation, which
+is heavily inspired by \cite{helsgaun}.
+
+\subsection{Quality of the mapping and changes to BETA}
+Given the generality of BETA compared to Java, we find that
+the current mapping to Java is satisfactory from a usability
+point-of-view. The main nuisance is that two methods and an inner
+class is generated for each pattern attribute. 
+
+When the BETA project was initiated the main goal of unifying
+abstraction mechanisms like class and method into patterns was to
+obtain a uniform treatment of all abstraction mechanisms of the
+language. Given a pattern abstraction it was expected that specialized
+patterns for class and methods should be available.  This was termed
+{\it language restriction}. However, in practice there was no real
+demand/need for these special purpose abstractions. 
+
+In the context of mapping BETA to Java, the idea of language
+restrictions have been reintroduced. It is now in fact possible to
+annotate a pattern with either {\tt class} or {\tt proc} meaning that
+the pattern can only be used as a class or method. For such annotated
+patterns, only one method needs to be generated. And for {\tt
+  proc}-patterns the inner class may in fact be inlined -- the latter
+optimization has not been implemented.
+
+At this stage of the project, efficiency and optimization of the
+mapping has had little attention.The first impression, however, is
+that the JVM/CLR implementation results in code that is significantly
+slower than the native BETA compilers. We do expect to able to improve
+on parts of the implementation, but certain parts such as
+leave/restart and coroutines the mapping appear to be inherently
+inefficient.
+
+
+\section{Conclusion}
+
+\subsection{Evaluation}
+
+\subsection{Contributions} 
+
+\subsection{Lessons Learned}
+
+\subsection{Platform issues}
+\begin{itemize}
+\item
+No static link on stack frames
+\item
+Nested procedures/methods cannot be implemented using the stack
+\item
+Very rigid typing of class-fields 
+\item
+And method-locals on .NET
+\item
+Constructor initialization 
+\item
+Impossible to make setups before calling super constructor
+\item
+General exit out of nested method calls
+\item
+No support for covariant arguments
+\item
+No support for covariant return types
+\item
+Active objects
+\item
+
+.NET class references must be fully qualified, including location of binding
+\item
+Problems with separate compilation
+\item
+Large number of classes generated due to the generality of BETA patterns
+\item
+Java class files can only contain one (non-static) class per file 
+
+\item
+Lots of class files are generated
+\item
+.NET assemblies can contain any number of classes 
+\item
+No swap and dup\_x1/x2 on .NET
+\item
+Requirements for fully typed local variables in .NET. 
+\item
+Means that swap cannot be implemented in backend using local variables unless type of two top-of-stack objects are known.
+\item
+Type of field: super/this class
+
+\end{itemize}
+
+\subsection{Platform advantages}
+Well-defined run-time format
+
+More than just a calling convention for procedures
+
+Memory management
+
+Storage allocation
+
+Object format \& method activation format
+
+Garbage collection
+
+Efficient code generation
+
+We will have BETA for all Java- and .NET platforms
+
+Can this be utilized efficiently?
+
+If simple and direct mapping - yes
+
+If complex mapping - no?
+
+Inlining may help
+
+Can rely on generating methods that the JIT inlines
+
+\subsection{Language interoperability}
+\note{Elaborate}
+
+Java/\CS\  class inherited from BETA
+
+Straight forward
+
+Since name \& type-based,
+just specify the methods you will use
+
+Simpler than for COM --
+COM uses offsets
+
+All preceding methods must be declared
+
+BETA pattern inherited from Java/\CS\  class --
+Also straight forward
+
+Issues with default constructor 
+
+BETA object requires surrounding object (origin)
+
+Issues --
+Libraries and frameworks in Java/\CS\  -- 
+Java-string, \CS-String, BETA-text
+
+Automatic coercion implemented
+
+Overloading
+
+Constructors
+
+External class interface
+
+Interface syntax needed -- currently clumsy
+
+External name \& location
+
+Automatic include of interface files
+
+.NET assemblies
+
+Java class-files
+
+
+\note{A summary of the experiences with language interoperability on
+  JVM/CLR}
+
+
+\begin{thebibliography}{sms}
+\small
+\bibitem{eclipsepaper}{Andersen, P., Enevoldsen, M.B., Madsen, O.L:
+    Integration of BETA with Eclipse -- an exercise in language
+    interoperability, submitted for publication}
+
+\bibitem{helsgaun}{K. Helsgaun: Discrete Event Simulation in Java, 
+Writings in Computer Science, Roskilde University, Denmark, 2000, 
+{\tt http://www.dat.ruc.dk/~keld/research/JAVASIMULATION/
+     JAVASIMULATION-1.0/docs/Report.pdf}}
+
+\bibitem{lindskov}{J.L. Knudsen: A Static Exception Handling Mechanism? ...}
+
+
+\bibitem{vclass}{O.L. Madsen, B. Møller-Pedersen: 
+Virtual Classes - A Powerful Mechanism in Object-Oriented Programming
+In: Proceedings of OOPSLA'89, Object-Oriented Programming Systems, 
+Languages and Applications, Sigplan Notices, 1989 }
+
+\bibitem{betabook}{O.L. Madsen, B. Møller-Pedersen, K. Nygaard:
+    Object-Oriented Programming in the BETA Language. ACM
+    Press/Addison Wesley, 1993. Out of print -- a copy can be downloaded
+    from {\tt www.mjolner.dk}}\note{Here we should refer the new home
+    page of BETA}
+
+\bibitem{krab}{K. K. Thorup: Virtual classes in Java, ECOOP'97,
+  Jyvaskala, 1997.}
+  
+\end{thebibliography}
+
+\end{document}
+
