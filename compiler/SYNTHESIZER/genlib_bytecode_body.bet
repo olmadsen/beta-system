@@ -953,10 +953,7 @@ do genSuperDo:
            true -> ReturnSaved;
         #);
 
-        (if hasPref 
-            and (subLevel > 0) 
-            (*or ((thisDesc->sematt.descKind) = sematt.externalClassKind))*)
-            then 
+        (if hasPref and (subLevel > 0) then 
             (* hasPref and (sublevel = 0)
              * is a subclass of externalClass
              *)
@@ -974,13 +971,12 @@ do genSuperDo:
             Gen.ThisRegAdr -> preBase[];
             12 -> preBase.addOff -> preBase[];
             'origin' -> preBase.fieldName[];
-            
             preDen[] 
               -> isSpecialVirtual 
               -> (isSpecial,realPre[],preDescOrg[],chain[]);
             (if isSpecial then
                 301->trace(#
-                          do 'SpecialVirtual: realpre: '->xT; realPre[]->xA; xN;
+                          do 'SpecialVirtual:realpre: '->xT; realPre[]->xA; xN;
                              'preDescOrg: ' -> xT; preDescOrg[] -> xA
                           #);
                 preDescOrg[] -> preBase.bAdr.LocalDesc[];
@@ -996,18 +992,23 @@ do genSuperDo:
                    (preBase.bAdr.localDesc[],true)
                      -> EH.descName 
                      -> superOrgName[];
-                   preBase.bAdr.localDesc[] 
-                   (*-> sematt.descOrigin *)
-                     -> superOriginDesc[]
+                   preBase.bAdr.localDesc[] -> superOriginDesc[]
                 #)
              else
                 (* overvej *)
-                (*thisDesc[]
-                 -> sematt.descOrigin
-                 -> *) originDesc[]
-                  -> preBase.bAdr.LocalDesc[];
-                thisSuperChain->chain[];
-                chain[]->DH.ENC->chain[];
+                (* Consider
+                 *    X: (# B: A (# #) #)
+                 * We generate super for A(# ... #)
+                 * Origin for init for A(# #) is X
+                 * We have loaded this origin using loadArg1
+                 * in callInit.
+                 * Thus localDesc below is initialized to X
+                 * In addition we set ONlevel to 2
+                 * to signal to BCxxxBody that first level
+                 * origin has been loaded
+                 *)
+                originDesc[] -> preBase.bAdr.LocalDesc[];
+                thisSuperChain -> DH.ENC -> chain[];
                 (* NOTE: We enter the empty string '' as superOrgName,
                  * and redefined superOrgName in the do-part below;
                  * we need to reconsider the abstraction
@@ -1015,17 +1016,18 @@ do genSuperDo:
                 ''-> callInit
                 (#
                 do 301->trace(#
-                             do 'genSuper:callInit: ' -> xT; preDen[] -> xA; xN;
+                             do 'genSuper:callInit: '->xT; preDen[]->xA; xN;
                                 'localDesc:' -> xT;
                                 preBase.bAdr.localDesc[] -> xA
                              #);
                    true -> preBase.isOrigin;
                    2 -> prebase.ONlevel;
                    true -> preBase.isField;
+                   (thisDesc[]->theGen.fieldSignature).asText
+                     -> preBase.fieldType[];
                    (preBase[],originDesc[],preDen[],chain[])
                      -> genOrgAdr
                      -> preBase[];
-                   'origin' -> preBase.fieldName[];
                    301->trace(#
                              do 'genSuper:callInit:X:'->xH;
                                 preBase.bAdr.localDesc[] -> xA
@@ -1653,27 +1655,27 @@ do (# sig: @Signature;
       (if desc.isSlot then
           '\nOBS! Slots not handled by genDoMethod' -> putline          
        else
-          (if true
-           // (FormDesc.label = gram.doPart) and isDoPartForm then
-              (if FormDesc[] -> sematt.doPartHasTmp then
-                  true -> xIsDoPartForm;
-                  formDesc -> thisDesc
-              if);
-              true -> xIsDoPartForm;
-              formDesc -> thisDesc;
-              1->trace(#
+          (if FormDesc.label 
+           // gram.doPart then
+              (* Compiling a descriptor D: (# <<SLOT xD:doPart>> #)
+               * where the do-part is a form.
+               * Probably:
+               *   isDoPartForm <==> FormDesc.label = gram.doPart
+               * unless switch 323 = true
+               *)
+              (if isDoPartForm then
+                  (if FormDesc[] -> sematt.doPartHasTmp then
+                      301->trace(#do 'doPartHAsTmp:'->xT #);
+                      true -> xIsDoPartForm;
+                      formDesc -> thisDesc
+              if)if);
+              301->trace(#
                       do 'doPart:'->xT; formDesc[] -> xA
                       #)
-           // formDesc.label = gram.mainPart then
+           // gram.mainPart then
               (* '\ndopartform: do method'->putline*)
            else
-              (if formDesc.label 
-               // gram.doPart
-               // gram.mainPart then
-                  1->trace(#do 'dopart2:'->xT #)
-               else
-                  (desc[],false) -> initPtnGen;
-              if)
+              (desc[],false) -> initPtnGen;
           if);
           (if true then
               (desc[],thisSuperChain,false) -> sig.setMethodDesc;
@@ -1730,7 +1732,7 @@ do (# sig: @Signature;
           if);
           (false,exitId) -> mch.return;
           mch.endMethod;
-          (if isDoPartForm then
+          (if xisDoPartForm then
               theRealDesc -> thisDesc
           if)
       if)
@@ -1819,7 +1821,7 @@ do genExit:
                  superSig.addExit;
                  not (superSig.asText->(sig.asText).equal) -> value;
                  (if false (*value*) then
-                     1->trace(#
+                     301->trace(#
                              do 'exitMethodNeeded:super: ' -> xT;
                                 superSig.astext -> xT;
                                 ' thisDesc: ' -> xT;
@@ -2151,17 +2153,12 @@ do (# className,path: ^text; EH: @evalHandler;
              'Main' -> xT
          if)
       #);
-      (*false -> isDoPartForm;*)
+    (*  (if not common.switch[323] then false -> isDoPartForm if);*)
       (if true
        // 'program'->thisFormName.equalNCS then
           (thisDesc[],true) -> EH.descName -> className[];
           (className[],false) -> SetFileName;
           (BCname[],className[],thisDesc[],0,isDoPartForm) -> genClass;
-          (*mch.close;*) (* this close is needed for .NET to actually
-                          * produce a file; for jvm, the close
-                          * is in synthesizerboy: mkdataseg
-                          *)
-
        // 'tstenv'->thisFormName.equalNCS 
        // 'betaenv'->thisFormName.equalNCS then
           (thisDesc[],true) -> EH.descName -> className[];
