@@ -116,7 +116,7 @@ function SetLeft(left){
   }
 } 
 function GetLeft(){
-  if (document.all){
+  if (document.all && !Opera){
      return SideBar.style.pixelLeft;
   } else if (document.layers){
      return parseInt(SideBar.left);
@@ -138,7 +138,7 @@ function containsNN6 (container, containee) {
 
 function pull(e){
   // Ignore events bubbling from children
-  if (document.all) {
+  if (document.all && !Opera) {
      // Fails on MacIE5 - and seems not to be needed on IE.
      // if (this.contains(e.fromElement)){
      //   return;
@@ -156,7 +156,7 @@ function pull(e){
 
 function draw(e){
   // Ignore events bubbling from children
-  if (document.all) {
+  if (document.all && !Opera) {
      // Fails on MacIE5 - and seems not to be needed on IE.
      // if (this.contains(e.toElement)){
      //   return;
@@ -270,7 +270,7 @@ function onKey(e)
     if (e.modifiers){ return true; }
     c  = e.which;
     ch = String.fromCharCode(e.which);
-  } else if (document.all){
+  } else if (document.all && !Opera){
     c  = e.keyCode;
     if (e.modifiers){ return true; }
     ch = String.fromCharCode(event.keyCode);
