@@ -161,7 +161,7 @@ struct myData STDCALL f7(struct xCOMclass *this, long a, long b, long c)
   if (test) printf(" xCOMclass::F7: %d, %d, %d \n",a,b,c);
   mD.x = a+1234;
   mD.s = 321;
-  mD.c = 't';
+  mD.c = 'u';
   return mD;
 }
 
@@ -171,7 +171,7 @@ struct myBigData STDCALL f8(struct xCOMclass *this, long a, long b, long c)
   mD.x = a+1234;
   mD.y = 0x87654321;
   mD.s = 321;
-  mD.c = 's';
+  mD.c = 't';
   return mD;
 }
 
@@ -231,6 +231,7 @@ struct vtblX
 		     long f, long g, long h);
   long (STDCALL *g5)(struct bCOMclass *this, foo V);
   long (STDCALL *g6)(struct bCOMclass *this, struct bCOMclass *S, char ch);
+  long (STDCALL *g7)(struct bCOMclass *this);
   char (STDCALL *ch)(struct bCOMclass *this);
 };
 
@@ -264,6 +265,7 @@ void PutBobj(struct bCOMclass * R)
   if (test) printf("\nPrint af q.w = %c,%i\n",q.w,q.w);
   R->proto->g5(R,q);
   R->proto->g6(R,R,'%');
+  R->proto->g7(R);
   if (test) printf("\n   Leaving C PutbCOMclass\n");
 }
 
