@@ -14,6 +14,15 @@ public abstract class BetaArray {
     System.arraycopy(array, 0, newArray, 0, copysize);
     return newArray;
   }
+  public static boolean[] ExtVRZ(boolean[] array, int add) {
+    int copysize = array.length;
+    int newsize  = copysize + add;
+    if (newsize<0) newsize = 0;
+    if (copysize>newsize) copysize = newsize;
+    boolean[] newArray = new boolean[newsize];
+    System.arraycopy(array, 0, newArray, 0, copysize);
+    return newArray;
+  }
 
   public static char[] NewVR1(char[] array) {
     int size = array.length;
