@@ -115,6 +115,13 @@ case i86pc:
 	if ( ! $?MOTIFHOME ) setenv MOTIFHOME /usr/dt
 	if ( ! $?MOTIFINC )  setenv MOTIFINC  /usr/dt/include
 	breaksw
+case "Power Macintosh":
+	#################### MacOS X ppc configuration ###############
+	setenv MACHINETYPE MACOSX
+	setenv objdir macosx
+	#if ( ! $?MOTIFHOME ) setenv MOTIFHOME /usr/dt
+	#if ( ! $?MOTIFINC )  setenv MOTIFINC  /usr/dt/include
+	breaksw
 case "i?86":
 	#################### Linux configuration ######################
 	setenv MACHINETYPE LINUX

@@ -347,6 +347,8 @@ sub setup_variables
 	$ast = "ast";
 	$mach = `uname -m`;
 	$rev  = `uname -r`;
+	if ($mach =~ /^Power Macintosh/) {
+	    $objdir = 'macosx';
 	if ($mach =~ /^sun4/) {
 	    $objdir = 'sun4s';
 	} elsif ($mach =~ /^9000\/7../) {

@@ -59,7 +59,7 @@ $USE_GNUC="yes";
 $betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
 
 @MachineTypes = ('NTI_MS', 'NTI_GNU', 'NTI_BOR', 'SUN4S', 'HPUX9PA', 'LINUX', 'SGI', 'PPCMAC', 'X86SOL');
-@ObjDirs =  ('nti_ms', 'nti_gnu', 'nti_bor', 'sun4s', 'hpux9pa', 'linux', 'sgi', 'ppcmac', 'x86sol');
+@ObjDirs =  ('nti_ms', 'nti_gnu', 'nti_bor', 'sun4s', 'hpux9pa', 'linux', 'sgi', 'ppcmac', 'x86sol', 'macosx');
 @OsTypes = ('WIN', 'UNIX', 'MAC');
 
 %ObjExt = ('nti_ms', 'obj',
@@ -70,7 +70,9 @@ $betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
 	   'hpux9pa', 'o',
 	   'linux', 'o',
 	   'sgi', 'o',
-	   'ppcmac', 'obj');
+	   'ppcmac', 'obj',
+	   'macosx', 'o'
+);
 
 %AstExt = ('nti_ms', 'astL',
 	   'nti_gnu', 'astL',
@@ -80,7 +82,9 @@ $betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
 	   'hpux9pa', 'ast',
 	   'linux', 'astL',
 	   'sgi', 'ast',
-	   'ppcmac', 'ast');
+	   'ppcmac', 'ast',
+	   'macosx', 'ast',
+);
 
 if (-e "c:\\") {
     $CURRENTDIR='.';
@@ -180,6 +184,11 @@ if (-e "c:\\") {
     } elsif ($mach =~ /^i86pc$/) {
         $ENDIAN="L";
 	$MACHINETYPE = 'X86SOL';
+	$RUNTYPE="run";
+	$objdir = 'x86sol';
+	# &setup_x86sol;
+    } elsif ($mach =~ /^Power Macintosh$/) {
+	$MACHINETYPE = 'MACOSX';
 	$RUNTYPE="run";
 	$objdir = 'x86sol';
 	# &setup_x86sol;

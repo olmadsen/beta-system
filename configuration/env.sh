@@ -121,6 +121,14 @@ case "`uname -m`" in
 		MOTIFHOME=${MOTIFHOME-/usr/dt}
 		MOTIFINC=${MOTIFINC-/usr/dt/include}
 		;;
+	Power Macintosh)
+		#################### MacOS X ppc configuration ######################
+		MACHINETYPE=MACOSX
+		objdir=macosx
+		#MOTIFHOME=${MOTIFHOME-/usr/dt}
+		#MOTIFINC=${MOTIFINC-/usr/dt/include}
+		;;
+
 	IP[23][0127])
 		########### Silicon Graphics IRIX configuration #############
 		MACHINETYPE=SGI
