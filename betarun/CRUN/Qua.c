@@ -69,7 +69,7 @@ void Qua(ref(ProtoType) dstQuaProto,
       if (! inIOA(theCell)) 
 	/* in AOA area. */
 	negAOArefsINSERT((long)theCell);
-      srcProto = cast(ProtoType) findDanglingProto((int)src,(int)theCell);
+      srcProto = cast(ProtoType) findDanglingProto((int)src);
     } else 
 #endif
       if (! inIOA(theCell) && inIOA(src))
