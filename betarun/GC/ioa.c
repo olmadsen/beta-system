@@ -42,10 +42,7 @@ GLOBAL(static int IOALooksFullCount) = 0; /* consecutive unsuccessful IOAGc's */
 /* LOCAL FUNTIONS */
 static void ProcessAOAReference(Object ** theCell);
 static void ProcessAOAObject(Object * theObj);
-
-#ifndef KEEP_STACKOBJ_IN_IOA
 static void DoAOACell(Object **theCell,Object *theObj);
-#endif /* KEEP_STACKOBJ_IN_IOA */
 
 #ifdef RTDEBUG
 static void IOACheckPrintTheObj(Object *theObj);
@@ -96,10 +93,6 @@ void IOAGc()
   
     IOAActive = TRUE;
   
-#ifdef KEEP_STACKOBJ_IN_IOA
-    IOAStackObjectSum = IOAStackObjectNum = 0;
-#endif
-
     /* AOA roots start out by residing in upper part of ToSpace */
     AOArootsLimit = AOArootsPtr = ToSpaceLimit;
 
@@ -284,16 +277,6 @@ void IOAGc()
         long limit;
         long sum = 0;
         limit = areaSize(GLOBAL_IOA,GLOBAL_IOALimit) / 10;
-#ifdef KEEP_STACKOBJ_IN_IOA
-        limit -= IOAStackObjectSum;
-        if (limit < 0) {
-            DEBUG_IOA( fprintf(output, 
-                               "#IOA: %d StackObjects fill up more than 10%% of IOA (%d)\n", 
-                               (int)IOAStackObjectNum, 
-                               (int)IOAStackObjectSum));
-            limit = 0;
-        }
-#endif
         IOAtoAOAtreshold = 0;
         do
         {

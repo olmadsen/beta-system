@@ -33,9 +33,7 @@ extern void DoGC(void);
  *  void AOACheckReference(Object ** theCell)
  *  void AOACheckObjectSpecial(Object * theObj)
  *  #endif
- *  #ifndef KEEP_STACKOBJ_IN_IOA
  *  void StackRefActionWrapper(Object **theCell,Object *theObj)
- *  #endif
  *  Object * getRealObject(Object * obj)
  *  void checkNotInList(Object *target) 
  *  void appendToList(Object *target)
@@ -335,15 +333,7 @@ Object *CopyObjectToAOA(Object *theObj)
   size = 4*ObjectSize(theObj); 
   Claim(ObjectSize(theObj) > 0, "#ToAOA: ObjectSize(theObj) > 0");
   Claim((size&7)==0, "#ToAOA: (size&7)==0 ");
-  
-#ifdef KEEP_STACKOBJ_IN_IOA
-  DEBUG_CODE(
-	     if (theObj -> Proto == StackObjectPTValue) {
-	       fprintf(output,"CopyObjectToAOA: Trying to move stack object to AOA\n");
-	       Illegal();
-	     });
-#endif /* NEWRUN */
-      
+       
   if( (newObj = AOAallocate( size)) == 0 ) return 0;
   
   theEnd = (long *) (((long) newObj) + size); 
@@ -713,7 +703,6 @@ static Object * head;   /* Head of list build by collectList */
 static Object * tail;   /* Tail of list build by collectList */
 static long totalsize;
 
-#ifndef KEEP_STACKOBJ_IN_IOA
 static void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
 void StackRefActionWrapper(Object **theCell,Object *theObj)
 {
@@ -723,7 +712,6 @@ void StackRefActionWrapper(Object **theCell,Object *theObj)
     StackRefAction(theCell);
   }
 }
-#endif /* KEEP_STACKOBJ_IN_IOA */
 
 Object * getRealObject(Object * obj)
 {
@@ -840,14 +828,12 @@ void appendToListInAOA(REFERENCEACTIONARGSTYPE)
 #ifdef RTDEBUG
   if (!*theCell) {
     fprintf(output,"appendToListInAOA: Target is NULL!\n");
-    fflush(output);
     Illegal();
   }
   
   if (!inAOA(theCell)) {
     fprintf(output,
 	    "appendToListInAOA: TheCell is not in AOA!\n");
-    fflush(output);
     Illegal();
   }
 #endif
@@ -861,7 +847,6 @@ void appendToListInAOA(REFERENCEACTIONARGSTYPE)
 #ifdef RTDEBUG
       if (!inAOA(*theCell)) {
 	fprintf(output,"appendToListInAOA: Target points outside ToSpace!\n");
-	fflush(output);
 	Illegal();
       }
 #endif
@@ -871,7 +856,6 @@ void appendToListInAOA(REFERENCEACTIONARGSTYPE)
       fprintf(output,
 	      "[appendToListInAOA: Target points into IOA!\n"
 	      " How did this happen?]\n");
-      fflush(output);
       Illegal();
 #endif
     }
@@ -1095,19 +1079,8 @@ void scanObject(Object *obj,
 	break;
       }
     case SwitchProto(StackObjectPTValue):
-#ifdef KEEP_STACKOBJ_IN_IOA
-      { 
-	static int once = 0;
-	if (!once) {
-	  fprintf(output, "(Warning:liniarize.c: StackObjectPTValue not handled)\n");
-	  once = 0;
-	}
-      }
-    /* Illegal(); */
-#else
     StackRefAction = referenceAction;
     ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
-#endif
     break;
               
     case SwitchProto(StructurePTValue):

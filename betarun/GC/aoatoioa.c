@@ -309,7 +309,6 @@ void CheckAOAtoIOAtableSize(long *theCell, long PC)
       fprintf(output, " (is in ToSpace).\n");
     else
       fprintf(output, " (is not in ToSpace).\n");
-    fflush(output);
     Illegal();
     BetaExit(1);
   }

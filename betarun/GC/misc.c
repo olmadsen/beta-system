@@ -121,7 +121,7 @@ long isObject(void *theObj)
 
 void zero_check(char *p, long bytesize)
 {                                                       
-  register long i;                                      
+  long i;                                      
   if (ObjectAlign(bytesize)!=bytesize)                                       
     fprintf(output, "zero_check: ObjectAlign(bytesize)!=bytesize\n");   
   for (i = (long)(bytesize)/4-1; i >= 0; i--)           
@@ -163,6 +163,9 @@ void Illegal()
 
   /* used to break in! */
   fprintf(output, "Illegal() called\n");
+  fflush(stdout);
+  fflush(stderr);
+  fflush(output) /* not necessarily same as stderr */;
 
 #ifdef NEWRUN
   if (IOAActive){
@@ -543,7 +546,6 @@ static void RegError(long pc1, long pc2, char *reg, Object * value)
     fprintf(output, "(is in ToSpace)\n");
   }
   fprintf(output, "\n");
-  fflush(stdout);
   Illegal();
 }
 

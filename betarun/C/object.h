@@ -218,9 +218,7 @@ typedef struct _group_header
   struct _group_header **ptr; /* pointer back to beta_data file */
 } group_header;
 
-#if !defined(KEEP_STACKOBJ_IN_IOA)
 typedef void (*CellProcessFunc)(Object **theCell,Object *theObj);
-#endif
 
 typedef struct _nums
 {

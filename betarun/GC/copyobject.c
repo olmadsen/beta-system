@@ -25,22 +25,11 @@ static Object * CopyObject(Object * theObj)
     DEBUG_IOA( Claim( theObj->GCAttr<=IOAMaxAge,
 		     "CopyObject: Age of object<=IOAMaxAge."));
     
-    if (theObj->GCAttr==IOAMaxAge)
-      theObj->GCAttr--;
-#ifdef KEEP_STACKOBJ_IN_IOA
-    if (!isStackObject(theObj))
-      IOAAgeTable[theObj->GCAttr-IOAMinAge] += size;
-    else {
-	IOAStackObjectSum += size;
-	IOAStackObjectNum++;
-    }
-#else
+    if (theObj->GCAttr==IOAMaxAge) theObj->GCAttr--;
     IOAAgeTable[theObj->GCAttr-IOAMinAge] += size;
-#endif
-      
     
     DEBUG_AOA( IOAcopied += size );
-    
+
     {
 	register long * src;
 	register long * dst;
@@ -89,10 +78,6 @@ static Object * CopyObject(Object * theObj)
 Object * NewCopyObject(Object * theObj, Object ** theCell)
 {
     MCHECK();
-
-#ifdef KEEP_STACKOBJ_IN_IOA
-    if(isStackObject(theObj)) return CopyObject(theObj);
-#endif
 
     if( theObj->GCAttr < IOAtoAOAtreshold ){
         /* theObj is not old enough for AOA */

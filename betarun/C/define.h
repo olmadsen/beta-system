@@ -23,8 +23,6 @@
 #define do_unconditional_gc 0
 #endif
 
-#undef KEEP_STACKOBJ_IN_IOA
-
 #define RTINFO  /* Include support for runtime info */
 #define RTLAZY  /* Include support for lazy fetch */
 #ifdef RTDEBUG

@@ -189,11 +189,7 @@ extern void AOACheckObjectSpecial(Object *);
 extern Object * NewCopyObject(Object *, Object **);
 
 /* GC/stack.c */
-#if !defined(KEEP_STACKOBJ_IN_IOA)
 extern void ProcessStackObj(StackObject *, CellProcessFunc func);
-#else
-extern void ProcessStackObj(StackObject *);
-#endif
 
 extern void ProcessStack(void);
 #ifdef NEWRUN
