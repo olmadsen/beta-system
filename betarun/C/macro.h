@@ -193,10 +193,16 @@
 # define asmemptylabel(label) \
    __asm__(".globl " #label ";" #label ":" )
 # endif
+
+#if 0
 # ifdef hpux
 # define asmemptylabel(label) \
    __asm__("global " #label ";" #label ":" )
 # endif
+#else
+# define asmemptylabel(label)
+#endif
+
 # ifdef macintosh
 # define asmemptylabel(label)
 # endif
