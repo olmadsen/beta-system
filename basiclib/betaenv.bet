@@ -58,6 +58,7 @@ BODY 'private/betaenvbody';
     *)
    Holder: (# adr: @integer #);  
    
+   (* idx+ *)
    object: (* General superpattern *)
      (# _struc: 
           (* Exit a pattern reference for THIS(Object).
@@ -85,6 +86,7 @@ BODY 'private/betaenvbody';
           #)
      do INNER object
      #);
+   (* idx *)
    
    (* The following patterns define 'real' patterns corresponding to
     * the predefined simple patterns
@@ -102,11 +104,29 @@ BODY 'private/betaenvbody';
    realValue: (# value: @real do INNER realValue exit value #);
    realObject: realValue(# enter value do INNER realObject #);
    
+   (****  Integer limits *********************************************) 
+   MaxInt8:   (# exit 0x7f #);
+   MinInt8:   (# exit 0x80 #);
+   MaxInt8u:  (# exit 0xff #);
+   MinInt8u:  (# exit 0x00 #);
+   
+   MaxInt16:  (# exit 0x7fff #);
+   MinInt16:  (# exit 0x8000 #);
+   MaxInt16u: (# exit 0xffff #);
+   MinInt16u: (# exit 0x0000 #);
+   
+   MaxInt32:  (# exit 0x7fffffff #);
+   MinInt32:  (# exit 0x80000000 #);
+   MaxInt32u: (# exit 0xffffffff #);
+   MinInt32u: (# exit 0x00000000 #);
+   
+   MaxInt:    (# exit MaxInt32 #);
+   MinInt:    (# exit MinInt32 #);
+   
+   MaxReal:   (# exit 1.797693134862315E+308 #);
+   MinReal:   (# exit 2.225073858507201E-308 #);
+
    (****  Implementation dependent constants *************************) 
-   maxInt: integerValue(# <<SLOT betaenvMaxInt: dopart>> #);
-   minInt: integervalue(# <<SLOT betaenvMinInt: dopart>> #);
-   maxReal: realValue(# <<SLOT betaenvMaxReal: dopart>> #);
-   minReal: realValue(# <<SLOT betaenvMinReal: dopart>> #);
    infReal: (* Returns the real value 'Infinity' *)
      realValue(# <<SLOT betaenvInfReal: dopart>> #);
    
@@ -910,28 +930,34 @@ BODY 'private/betaenvbody';
    (* External language interface: See file 'external.bet' for further
     * patterns.
     *)
-   external:
+   External:
      (* Is only meaningful with interface to externals *)
      (# callC,callPascal,pascal,pascalTrap,callStd,
         cExternalEntry,pascalExternalEntry,stdExternalEntry: @text
      #);
-   cStruct: (* Super-pattern for describing cStruct-patterns *)
+   cStruct: 
+     (* Super-pattern for describing structures which can be given
+      * 'by refererence' (using the usual [] notation) to an external
+      * function (e.g. a C function described as a specialization
+      * of the above External pattern). See file external.bet for
+      * supported operations on cStruct.
+      *)
      (# <<SLOT cStructLib: attributes>>;
+        (* 'R' is the bytestream containing THIS(cStruct).  
+         * MUST be declared as the first attribute
+         *);
         R: [(byteSize-1) div 4 + 1] @integer;
-        byteSize:< integerObject
-          (* 'R' is the bytestream containing THIS(cStruct).  Must be
-           * declared as the first attribute
-           *);
-        chkBounds:< (* Number of bytes in THIS(cStruct) *)
-          (# inx: @integer; continue: @boolean
+        byteSize:< 
+          (* Number of bytes in THIS(cStruct) *)
+          IntegerObject;
+          
+        BoundsExceeded:< Exception
+          (* Raised if indexing outside range of R *)
+          (# inx: @integer; 
           enter inx
-          do (if ((inx < 0) or (R.range*4 < inx)) then
-                 INNER chkBounds;
-                 (if not continue then 
-                     (failureTrace,'Index error in cStruct')->&stop
-                 if)
-             if)
-          #)
+          <<SLOT BetaEnvCstructBoundsExceeded: DoPart>>
+          #);
+        chk: @(# inx: @integer enter inx <<SLOT BetaEnvCstructChk: DoPart>> #);
      #);
    data:
      (* The 'data' pattern may be used for definining simple data
