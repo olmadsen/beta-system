@@ -5,6 +5,20 @@
 
 #include "beta.h"
 #include "crun.h"
+
+#ifdef ppcmac
+#define WIND_BACK_SP                                          \
+      SP = *(long**)SP /* Use FramePointer */
+#else
+#define WIND_BACK_SP                                          \
+      {                                                       \
+        long SPoff;                                           \
+        /* size allocated on stack when this became active */ \
+        GetSPoff(SPoff, CodeEntry(GETPROTO(this), (long)PC)); \
+        SP = (long *)((long)SP+SPoff);                        \
+      }
+#endif
+
   
 long *ExO(long *jumpAdr, 
 	  Object *exitObj, 
@@ -13,22 +27,28 @@ long *ExO(long *jumpAdr,
 	  long *SP) 
 {
   long *CSP = CompSP;
+  long *OrigSP = SP;
+  long *OrigPC = PC;
+  Object *theObj = this;
+  Component *OrigActiveComponent = ActiveComponent;
+  /* ActiveCallBackFrame and lastCompBlock not used on NEWRUN */
 
   DEBUG_CODE(NumExO++);
 
 #if 0
-  fprintf(output, "\nExO: jumpAdr=0x%x, exitObj=0x%x, PC=0x%x, this=0x%x\n",
-	  jumpAdr,exitObj,PC,this);
+  fprintf(output, "\nExO: ");
+  fprintf(output, "\n  jumpAdr:"); PrintCodeAddress((long)jumpAdr);
+  fprintf(output, "\n  exitObj:"); PrintRef(exitObj);
+  fprintf(output, "\n  PC:     "); PrintCodeAddress((long)PC);
+  fprintf(output, "\n  this:   "); PrintRef(this);
+  fprintf(output, "\n");
   fflush(output);
 #define TRACE_EXO() \
- fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__);  \
- fprintf(output, "New SP:     0x%x\n", (long)SP);           \
- fprintf(output, "New PC:     0x%x\n", (long)PC);           \
- fprintf(output, "New object: 0x%x", (long)this);           \
- if (this&&(this!=CALLBACKMARK)&&(this!=GENMARK)){          \
-   fprintf(output, " (proto: 0x%x)", GETPROTO(this));          \
-   fprintf(output, " (%s)\n", ProtoTypeName(GETPROTO(this)));  \
- }                                                          \
+ fprintf(output, "File %s; Line %d", __FILE__, __LINE__);       \
+ fprintf(output, "\nNew SP:     0x%08x", (long)SP);               \
+ fprintf(output, "\nNew PC:    "); PrintCodeAddress((long)PC); \
+ fprintf(output, "\nNew object:"); PrintRef(this);             \
+ fprintf(output, "\n");                                         \
  fflush(output)
  
 #else
@@ -44,9 +64,23 @@ long *ExO(long *jumpAdr,
 			 (this==GENMARK)?"allocation/main":"callback"); 
 		 fflush(output));
       SP = (long*)GetSPbeta(SP);
-      /* No need to check for SP=0 (can happen from main), 
-       * since leaving of basic component is detected otherwise.
-       */
+      /* Check for SP=0 (can happen from main) */
+      if (SP==0){
+	/* Attempt to leave basic component! */
+	/* Restore global variables to ensure correct dump.
+	 * FramePointer and StackPointer are still unchanged 
+	 * at this point.
+	 */
+	DEBUG_CODE({
+	  fprintf(output, "Leaving basic component - calling BetaError\n");
+	});
+	SP = OrigSP;
+	PC = OrigPC;
+	this = theObj;
+	/*WIND_BACK_SP; (done in BetaError) */
+	ActiveComponent = OrigActiveComponent;
+	BetaError(LeaveBasicCompErr,theObj,SP,PC);
+      }	
 
       /* Check top frame */
       this = GetThis(SP);
@@ -86,6 +120,9 @@ long *ExO(long *jumpAdr,
 
       /* TerminateComponent: (see Attach.c) */
       DEBUG_CODE(NumTermComp++);
+      /* No need to check for comp->CallerComp == 0 since illegal
+       * leave is detected above.
+       */
       ActiveComponent  = comp->CallerComp;
       this             = comp->CallerObj;
       comp->CallerLSC  = -2; /* indicate that comp is terminated */
@@ -100,16 +137,8 @@ long *ExO(long *jumpAdr,
     /* Normal case: find stack frame size and continue */
     {  
     
-#ifdef ppcmac
-      SP = *(long**)SP; /* Use FramePointer */
-#else
-      {
-        long SPoff;
-        /* size allocated on stack when this became active */
-        GetSPoff(SPoff, CodeEntry(GETPROTO(this), (long)PC)); 
-        SP = (long *)((long)SP+SPoff);    
-      }
-#endif
+      WIND_BACK_SP;
+
       /* SP now points to end of previous frame, i.e. bottom of top frame */
       /* normal dyn from the start of this frame gives current object */
       this = *((Object **)SP-DYN_OFF); 

@@ -268,6 +268,7 @@ extern int EqualNCS(char *s1, char *s2);
 extern void assignRef(long *theCell, Item * newObject);
 extern int strongIsObject(Object *obj);
 extern void PrintProto(ProtoType *proto);
+extern void PrintObjProto(Object *obj);
 extern void PrintCodeAddress(unsigned long addr);
 extern char *getLabel (unsigned long addr);
 extern long labelOffset;

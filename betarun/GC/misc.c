@@ -248,6 +248,23 @@ void PrintProto(ProtoType *proto)
   fflush(output);
 }
 
+void PrintObjProto(Object *obj)
+{
+#ifdef NEWRUN
+  if (obj==CALLBACKMARK){
+    fprintf(output, "[CALLBACKMARK]");
+    fflush(output);
+    return;
+  }
+  if (obj==GENMARK){
+    fprintf(output, "[GENMARK]");
+    fflush(output);
+    return;
+  }
+#endif /* NEWRUN */
+  PrintProto(GETPROTO(obj));
+}
+
 void PrintCodeAddress(unsigned long addr)
 {
   char *lab = getLabel(addr);

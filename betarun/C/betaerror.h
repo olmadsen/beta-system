@@ -29,7 +29,7 @@ typedef enum _BetaErr {
 #endif
   InterruptErr =      -28 /* User Interupt */,
 		     	  
-  EmulatorTrapErr =   -29 /* Emulator trap */,
+  EmulatorTrapErr =   -29 /* Breakpoint trap */,
   IllegalInstErr =    -30 /* Illegal instruction */,
   BusErr =            -31 /* Bus error */,
   SegmentationErr =   -32 /* Segmentation fault */,

@@ -24,6 +24,8 @@ $exe = "\.exe" if ($nti);
 $ENV{'BETART'}="";
 $ENV{'LD_LIBRARY_PATH'}= $ENV{'LD_LIBRARY_PATH'} . ":" . $ENV{'BETALIB'} . "/lib/${objdir}:../lib/${objdir}";
 
+print "Preserving executables (use -f in next run)\n" if ($Preserve);
+
 print "\nRemoving old output- and dump files...\n";
 print "======================================================\n";
 &rm("*.out");
@@ -140,7 +142,7 @@ foreach $f (@files) {
 		&rm("$f.dump");
 		&rm("$f.ref");
 		&rm("$f.app");
-		&rm("$f$exe") unless $Preserve;
+		&rm("$f$exe") unless ($Preserve||$FastMode);
 	    } else {
 		print "[Difference in dump]\n";
 		system("diff $Context -i $f.ref $f.app > $f.diff");

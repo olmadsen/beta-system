@@ -116,6 +116,8 @@ void BetaError(BetaErr err, Object *theObj)
 	theObj = (Object *)GetDyn(SP);
 	/* DELIBERATELY NO BREAK HERE */
       case RepRangeErr /* called via HandleIndexErr in betaenv.o */:
+	/* DELIBERATELY NO BREAK HERE */
+      case LeaveBasicCompErr:
 	/* Wind back to start of frame of caller of betaenv.o code stub */
 	SP = (long*)WindBackSP((long)SP, theObj, (long)thePC);
       }
@@ -311,7 +313,7 @@ errorTable[] =
 #ifdef RTDEBUG
   { InterruptErr,      "User Interrupt" },
 #endif
-  { EmulatorTrapErr,   "Emulator trap" },
+  { EmulatorTrapErr,   "Breakpoint trap" },
   { IllegalInstErr,    "Illegal instruction" },
   { BusErr,            "Bus error" },
 #ifdef UNIX
