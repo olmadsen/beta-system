@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: crun.h,v 1.19 1992-09-09 14:12:55 tthorn Exp $
+ * Mod: $Id: crun.h,v 1.20 1992-10-15 10:23:20 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -51,12 +51,12 @@ AssignReference(long *theCell, ref(Item) newObject)
 }
 
 static inline
-int_clear(char *p, unsigned size)
+int_clear(char *p, unsigned bytesize)
 {
   register int i;
-  if (size&3)
-    fprintf(stderr, "What! size&3 != 0\n");
-  for (i = size-4; i >= 0; i -= 4)
+  if (bytesize&3)
+    fprintf(stderr, "What! bytesize&3 != 0\n");
+  for (i = bytesize-4; i >= 0; i -= 4)
     *(int *)(p+i) = 0;	/* Ugly Hacks Work Fast */
 }
 
