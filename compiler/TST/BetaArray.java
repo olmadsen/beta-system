@@ -48,7 +48,7 @@ public abstract class BetaArray {
     int newsize = high - low + 1;
     if (newsize<0) newsize = 0;
     char[] newArray = new char[newsize];
-    System.arraycopy(array, low-1, newArray, 0, newsize);
+    if (newsize>0) System.arraycopy(array, low-1, newArray, 0, newsize);
     return newArray;
   }
 
@@ -98,7 +98,7 @@ public abstract class BetaArray {
     int newsize = high - low + 1;
     if (newsize<0) newsize = 0;
     boolean[] newArray = new boolean[newsize];
-    System.arraycopy(array, low-1, newArray, 0, newsize);
+    if (newsize>0) System.arraycopy(array, low-1, newArray, 0, newsize);
     return newArray;
   }
 
@@ -148,7 +148,7 @@ public abstract class BetaArray {
     int newsize = high - low + 1;
     if (newsize<0) newsize = 0;
     short[] newArray = new short[newsize];
-    System.arraycopy(array, low-1, newArray, 0, newsize);
+    if (newsize>0) System.arraycopy(array, low-1, newArray, 0, newsize);
     return newArray;
   }
 
@@ -197,7 +197,7 @@ public abstract class BetaArray {
     int newsize = high - low + 1;
     if (newsize<0) newsize = 0;
     int[] newArray = new int[newsize];
-    System.arraycopy(array, low-1, newArray, 0, newsize);
+    if (newsize>0) System.arraycopy(array, low-1, newArray, 0, newsize);
     return newArray;
   }
 
@@ -245,7 +245,56 @@ public abstract class BetaArray {
     int newsize = high - low + 1;
     if (newsize<0) newsize = 0;
     double[] newArray = new double[newsize];
-    System.arraycopy(array, low-1, newArray, 0, newsize);
+    if (newsize>0) System.arraycopy(array, low-1, newArray, 0, newsize);
+    return newArray;
+  }
+
+
+
+  public static Object[] ExtRR(Object[] array, int add) {
+    int copysize = array.length;
+    int newsize  = copysize + add;
+    if (newsize<0) newsize = 0;
+    if (copysize>newsize) copysize = newsize;
+    Object[] newArray = new Object[newsize];
+    System.arraycopy(array, 0, newArray, 0, copysize);
+    return newArray;
+  }
+
+  public static Object[] NewRR(Object[] array) {
+    int size = array.length;
+    if (size<0) size = 0;
+    return new Object[size];
+  }
+
+  public static Object[] CopyRR(Object[] array) {
+    int size = array.length;
+    if (size<0) size = 0;
+    Object[] newArray = new Object[size];
+    System.arraycopy(array, 0, newArray, 0, size);
+    return newArray;
+  }
+
+  public static Object[] CopySRR(int low, int high,Object[] array) 
+    throws ArrayIndexOutOfBoundsException
+  {
+
+    // Check that low and high are usable. 
+    if (low<1) 
+      throw new ArrayIndexOutOfBoundsException("Repetition subrange out of bounds (low): " 
+					       + low 
+					       + "<1");
+    if (array.length<high) 
+      throw new ArrayIndexOutOfBoundsException("Repetition subrange out of bounds (high): "
+					       + high
+					       + ">"
+					       + array.length
+					       );
+      
+    int newsize = high - low + 1;
+    if (newsize<0) newsize = 0;
+    Object[] newArray = new Object[newsize];
+    if (newsize>0) System.arraycopy(array, low-1, newArray, 0, newsize);
     return newArray;
   }
 
