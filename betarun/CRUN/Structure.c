@@ -14,6 +14,13 @@ ParamOriginProto(struct Structure *, AlloS)
   
   GCable_Entry();
   FetchOriginProto();
+
+#if 0
+  if ((NumAlloI > 15000) && (NumAlloI<20000)) {
+    fprintf(output, "AlloS\n");
+    fprintf(output, "NumAlloI: %d\n", (int)NumAlloI);
+  }
+#endif
     
   /* Allocate a StructObject. */
     
@@ -25,6 +32,8 @@ ParamOriginProto(struct Structure *, AlloS)
   newStruct->GCAttr = 1;
   newStruct->iOrigin = origin;
   newStruct->iProto = proto;
+
+  Ck(newStruct);
   
 #ifdef sparc
     return_in_i1(newStruct);
@@ -81,6 +90,8 @@ ref(Structure) ThisS(ref(Object) this)
   newStruct->iProto = origin->Proto;
   newStruct->iOrigin = (casthandle(Object)origin)[origin->Proto->OriginOff];
   
+  Ck(newStruct);
+
   return newStruct;
 }
 
@@ -111,6 +122,8 @@ ref(Structure) ObjS(ref(Object) theObj)
   
   newStruct->iProto = theObj->Proto;
   newStruct->iOrigin = (casthandle(Object)theObj)[theObj->Proto->OriginOff];
+
+  Ck(newStruct);
   
   return newStruct;
 }
@@ -135,6 +148,8 @@ ParamStruc(struct Item *, AlloSI)
   Protect(struc, 
 	  ss = AlloI(cast(Object) struc->iOrigin, struc->iProto));
 #endif
+
+  Ck(ss);
 
 #ifdef sparc
   return_in_i1(ss);
@@ -162,6 +177,8 @@ ParamStruc(struct Component *, AlloSC)
   Protect(struc, 
 	  ss = AlloC(cast(Object) struc->iOrigin, struc->iProto));
 #endif
+
+  Ck(ss);
 
 #ifdef sparc
   return_in_i1(ss);
