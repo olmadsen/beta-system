@@ -5,6 +5,10 @@ cs:
 	csc -nologo -debug:full -t:exe -r:clr/helloworld/hellowrapper.dll helloworld.cs
 	helloworld.exe
 
+beta:
+	nbeta helloworld.bet
+	helloworld.exe
+
 clean:
 	rm -f *~ *.dll *.astL *.a2s *.exp *.ilk *.obj *.lib *.config.new *.exe *.stackdump *.pdb *.dump
 	rm -rf clr jvm
