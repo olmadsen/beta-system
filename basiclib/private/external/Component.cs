@@ -13,7 +13,7 @@ public class Component
   static Component(){
     // Parse BETART
     betart = System.Environment.GetEnvironmentVariable("BETART");
-    if (betart.Length>0){
+    if (betart!=null && betart.Length>0){
       System.Console.WriteLine("Using BETART: " + betart);
       string[] values = betart.Split(new char[]{':'}, 100);
       foreach (string v in values){
@@ -35,18 +35,16 @@ public class Component
 
   private void run() 
     { 
-      
-      if (nocatch){
-	body.Do();
-      } else {
-	try
-	  {
-	    body.Do();
-	  } catch (System.Exception e) {
-	    //throw e;
+      try
+	{
+	  body.Do();
+	} catch (System.Exception e) {
+	  if (nocatch){
+	    throw e;
+	  } else {
 	    makeDumpFile(e);
 	  }
-      }
+	}
       // Terminate component
       lock(this) { 
          System.Threading.Monitor.Pulse(this);

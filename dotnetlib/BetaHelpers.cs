@@ -87,4 +87,9 @@ public class BetaHelpers
     DateTime dt = DateTime.FromFileTime(ModTimeToFileTime(modtime));
     return dt.ToString("ddd MMM dd HH':'mm':'ss yyyy", DateTimeFormatInfo.InvariantInfo);
   }
+
+  public static string AssemblyNameGetPublicKeyToken(System.Reflection.AssemblyName an){
+    // Needed since result of an.GetPublicKeyToken is intu8 array -- currently not supported
+    return an.GetPublicKeyToken().ToString();
+  }
 }
