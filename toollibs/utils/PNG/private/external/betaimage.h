@@ -22,7 +22,28 @@ typedef struct BetaImage {
 
 
 
+typedef struct BetaPalette {
+  Color colormap[256];
+  long ncolors;
+  unsigned char rgbmap[32768];
+  unsigned char xpixel[256];
+} BetaPalette;
 
 
+int BetaCreateImage(BetaImage *image, 
+		    long width, 
+		    long height,
+		    long pixel_size,
+		    void *data);
+
+long BetaAllocColor (BetaPalette *palette, Color *color, Color* actual);
+void BetaDitherImage (BetaPalette *palette, BetaImage *image);
+
+void BetaDitherImage24To8 (BetaPalette *palette, 
+			   BetaImage *image, 
+			   BetaImage *image8);
+
+void MakeColorMap1(BetaPalette *palette);
+void BetaInitRGBmap(BetaPalette *palette);
 
 #endif

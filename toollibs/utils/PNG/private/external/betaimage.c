@@ -1,99 +1,194 @@
 #include <stdlib.h>
 #include <math.h>
-#include "betadither.h"
+#include "betaimage.h"
+
+
+void inv_cmap (int colors,
+	       unsigned char  *colormap[3], 
+	       int bits,
+	       unsigned long * dist_buf, 
+	       unsigned char  *rgbmap );
 
 
 
-typedef unsigned int Uint32;
-typedef int Sint32;
 
 
-/*
- * How many 1 bits are there in the Uint32.
- * Low performance, do not call often.
- */
-static int number_of_bits_set( Uint32 a )
+
+
+void MakeGrayMap(BetaPalette *palette)
 {
-    if(!a) return 0;
-    if(a & 1) return 1 + number_of_bits_set(a >> 1);
-    return(number_of_bits_set(a >> 1));
-}
-
-
-/*
- * How many 0 bits are there at least significant end of Uint32.
- * Low performance, do not call often.
- */
-static int free_bits_at_bottom( Uint32 a )
-{
-      /* assume char is 8 bits */
-    if(!a) return sizeof(Uint32) * 8;
-    if(((Sint32)a) & 1l) return 0;
-    return 1 + free_bits_at_bottom ( a >> 1);
-}
-
-
-
-
-static void BetaSwapBig(BetaImage *image)
-{
-  unsigned char *row;
-  unsigned char *pixel;
-
-  int i, j;
-
-  unsigned char r, g, b, a;
-
-  row = image->data;
-
-  for(j = 0; j < image->height; j++) {
-    pixel = row;
-    for(i = 0; i < image->width; i++) {
-      r = pixel[0];
-      g = pixel[1];
-      b = pixel[2];
-      a = pixel[3];
-
-      
-      pixel[0] = a;
-      pixel[1] = b;
-      pixel[2] = g; 
-      pixel[3] = r;
-
-      pixel += 4;
-    }
-    row += image->rowbytes;
+  int index;
+  for (index = 0; index < 32; index++) {
+    palette->colormap[index].red = index * 255 / 32;
+    palette->colormap[index].green = index * 255 / 32;
+    palette->colormap[index].blue = index * 255 / 32;
   }
+  palette->ncolors = 32;
 }
 
-static void BetaSwapLittle(BetaImage *image)
+
+void MakeRedMap(BetaPalette *palette)
 {
-  unsigned char *row;
-  unsigned char *pixel;
-
-  int i, j;
-
-  unsigned char r, g, b, a;
-
-  row = image->data;
-
-  for(j = 0; j < image->height; j++) {
-    pixel = row;
-    for(i = 0; i < image->width; i++) {
-      r = pixel[0];
-      g = pixel[1];
-      b = pixel[2];
-      a = pixel[3];
-
-
-      pixel[0] = b;
-      pixel[1] = g;
-      pixel[2] = r;
-      pixel[3] = a;
-      pixel += 4;
-    }
-    row += image->rowbytes;
+  int index;
+  for (index = 0; index < 32; index++) {
+    palette->colormap[index].red = 255;
+    palette->colormap[index].green = index * 255/ 32;
+    palette->colormap[index].blue = 0;
   }
+  palette->colormap[32].red = 0;
+  palette->colormap[32].green = 0;
+  palette->colormap[32].blue = 0;
+  palette->colormap[32].red = 255;
+  palette->colormap[32].green = 255;
+  palette->colormap[32].blue = 255;
+  palette->ncolors = 34;
+  
+}
+
+void MakeColorMap(BetaPalette *palette)
+{
+  int red = 0;
+  int green = 0;
+  int blue = 0;
+  int index = 0;
+
+  while (red < 8) {
+    green = 0;
+    while (green < 8) {
+      blue = 0;
+      while (blue < 4) {
+	palette->colormap[index].red = red << 5;
+	palette->colormap[index].green = green << 5;
+	palette->colormap[index].blue = blue << 6;
+	index++;
+	blue++;
+      }
+      green++;
+    }
+    red++;
+  }
+  palette->ncolors = 256;
+}
+
+void MakeColorMap5(BetaPalette *palette)
+{
+  int red = 0;
+  int green = 0;
+  int blue = 0;
+  int index = 0;
+
+  palette->colormap[0].red = 0;
+  palette->colormap[0].green = 0;
+  palette->colormap[0].blue = 0;
+
+  palette->colormap[1].red = 255;
+  palette->colormap[1].green = 255;
+  palette->colormap[1].blue = 255;
+
+  palette->colormap[2].red = 255;
+  palette->colormap[2].green = 0;
+  palette->colormap[2].blue = 0;
+
+  palette->colormap[3].red = 0;
+  palette->colormap[3].green = 255;
+  palette->colormap[3].blue = 0;
+
+  palette->colormap[4].red = 0;
+  palette->colormap[4].green = 0;
+  palette->colormap[4].blue = 255;
+
+  palette->colormap[2].red = 255;
+  palette->colormap[2].green = 0;
+  palette->colormap[2].blue = 255;
+  
+  palette->colormap[3].red = 0;
+  palette->colormap[3].green = 255;
+  palette->colormap[3].blue = 255;
+
+  palette->colormap[4].red = 255;
+  palette->colormap[4].green = 255;
+  palette->colormap[4].blue = 0;
+
+  palette->ncolors = 5;
+}
+
+
+
+void MakeColorMap1(BetaPalette *palette)
+{
+    double N;
+    int i;
+    int levelsq, levelsc;
+    
+    int levels = 6;
+    
+    palette->ncolors = 216;
+
+
+    levelsq = levels*levels;	/* squared */
+    levelsc = levels*levelsq;	/* and cubed */
+
+    N = 255.0 / (levels - 1);    /* Get size of each step */
+
+    /* 
+     * Set up the color map entries.
+     */
+    for(i = 0; i < levelsc; i++) {
+	palette->colormap[i].red = (int)(0.5 + (i%levels) * N);
+	palette->colormap[i].green = (int)(0.5 + ((i/levels)%levels) * N);
+	palette->colormap[i].blue = (int)(0.5 + ((i/levelsq)%levels) * N);
+    }
+}
+
+void BetaInitRGBmap(BetaPalette *palette)
+{
+  unsigned char *colormap[3];
+  unsigned long *dist_buf;
+  long index = 0;
+
+  colormap[0] = malloc(palette->ncolors);
+  colormap[1] = malloc(palette->ncolors);
+  colormap[2] = malloc(palette->ncolors);
+  index = 0;
+  while(index < palette->ncolors) {
+    (colormap[0])[index] = palette->colormap[index].red;
+    (colormap[1])[index] = palette->colormap[index].green;
+    (colormap[2])[index] = palette->colormap[index].blue;
+    index++;
+  }
+  dist_buf = malloc(32768 * 4);
+  inv_cmap(palette->ncolors, colormap, 5, dist_buf, palette->rgbmap);
+  free(dist_buf);
+  free(colormap[0]);
+  free(colormap[1]);
+  free(colormap[2]);
+  
+}
+
+
+
+
+
+long BetaAllocColor (BetaPalette *palette, Color *color, Color* actual)
+{
+  long red;
+  long green;
+  long blue;
+  long index;
+
+  red = color->red;
+  green = color->green;
+  blue = color->blue;
+  
+  red = red >> 3;
+  green = green >> 3;
+  blue = blue >> 3;
+  index = (red << 10) | (green << 5) | blue;
+  
+  actual->red = palette->colormap[palette->rgbmap[index]].red;
+  actual->green = palette->colormap[palette->rgbmap[index]].green;
+  actual->blue = palette->colormap[palette->rgbmap[index]].blue;
+  return palette->xpixel[palette->rgbmap[index]];
 }
 
 
@@ -226,7 +321,8 @@ static void BetaFillRow(long width, Color *row, Color *fill)
   }
 }
 
-static void BetaDitherRow(long width, Color *thisrow, unsigned char *src, Color *nextrow, int odd)
+static void BetaDitherRow(BetaPalette *palette, long width, Color *thisrow, 
+			  unsigned char *src, Color *nextrow, int odd)
 {
   long x;
   Color error;
@@ -237,7 +333,7 @@ static void BetaDitherRow(long width, Color *thisrow, unsigned char *src, Color 
     while (x >= 0) {
       fsclamp(&thisrow[x]);
       
-      src[x] = BetaAllocColor(&thisrow[x], &actual);
+      src[x] = BetaAllocColor(palette, &thisrow[x], &actual);
       
       error.red = FSError((thisrow[x].red - actual.red));
       error.green = FSError((thisrow[x].green - actual.green));
@@ -268,7 +364,7 @@ static void BetaDitherRow(long width, Color *thisrow, unsigned char *src, Color 
     while (x < width) {
       fsclamp(&thisrow[x]);
       
-      src[x] = BetaAllocColor(&thisrow[x], &actual);
+      src[x] = BetaAllocColor(palette, &thisrow[x], &actual);
       
       error.red = FSError((thisrow[x].red - actual.red));
       error.green = FSError((thisrow[x].green - actual.green));
@@ -296,7 +392,7 @@ static void BetaDitherRow(long width, Color *thisrow, unsigned char *src, Color 
   }
 }
 
-void BetaDitherImage (BetaImage *image)
+void BetaDitherImage (BetaPalette *palette, BetaImage *image)
 {
   Color *thisrow;
   Color *nextrow;
@@ -327,7 +423,7 @@ void BetaDitherImage (BetaImage *image)
   while (index < image->height) {
     BetaAddRow(image->width, thisrow, nextrow, row, image->palette);
     BetaFillRow(image->width, nextrow, &empty);
-    BetaDitherRow(image->width, thisrow, row, nextrow, index & 1);
+    BetaDitherRow(palette, image->width, thisrow, row, nextrow, index & 1);
     index++;
     row += image->rowbytes;
   }
@@ -335,7 +431,7 @@ void BetaDitherImage (BetaImage *image)
   free(nextrow);
 }
 
-void BetaDitherImage24To8 (BetaImage *image, BetaImage *image8)
+void BetaDitherImage24To8 (BetaPalette *palette, BetaImage *image, BetaImage *image8)
 {
   Color *thisrow;
   Color *nextrow;
@@ -366,7 +462,7 @@ void BetaDitherImage24To8 (BetaImage *image, BetaImage *image8)
   while (index < image->height) {
     BetaAddRow24(image->width, thisrow, nextrow, (unsigned long *)srcrow);
     BetaFillRow(image->width, nextrow, &empty);
-    BetaDitherRow(image->width, thisrow, row, nextrow, index & 1);
+    BetaDitherRow(palette, image->width, thisrow, row, nextrow, index & 1);
     index++;
     row += image8->rowbytes;
     srcrow += image->rowbytes;
@@ -376,7 +472,7 @@ void BetaDitherImage24To8 (BetaImage *image, BetaImage *image8)
   free(nextrow);
 }
 
-void BetaTranslateImage(BetaImage *image)
+void BetaTranslateImage(BetaImage *image, BetaPalette *palette)
 {
   unsigned char *row;
   int i, j;
@@ -385,210 +481,9 @@ void BetaTranslateImage(BetaImage *image)
   row = image->data;
   for (i = 0; i < image->height; i++) {
     for (j = 0; j < image->width; j++) {
-      row[j] = BetaAllocColor(&(image->palette[row[j]]), &actual);
+      row[j] = BetaAllocColor(palette, &(image->palette[row[j]]), &actual);
     }
     row += image->rowbytes;
   }
-}
-
-
-
-
-int BetaImageToXImage8(Display *display, BetaImage *image, XImage **ximage)
-{
-  BetaImage image8;
-
-  BetaCreateImage(&image8, image->width, image->height, 8, NULL); 
-  if(image->pixel_size == 8) {
-    memcpy(image8.data, image->data, image->height * image->rowbytes);
-    image8.palette = image->palette;
-    image8.palette_size = image->palette_size;
-    BetaDitherImage(&image8);
-  }
-  else {
-    BetaDitherImage24To8(image, &image8);
-  }
-  (*ximage) = XCreateImage
-    (display, 
-     DefaultVisual(display, DefaultScreen(display)), 
-     image8.pixel_size, ZPixmap, 0, 
-     image8.data, image8.width, image8.height, 32, image8.rowbytes);
-  return 0;
-}
-
-
-int BetaImageToXImage24(Display *display, BetaImage *image, XImage **ximage)
-{
-
-  Visual *visual;
-  XImage *im;
-  int depth;
-  unsigned char *row;
-  unsigned char *pixel;
-  int i, j;
-  unsigned char r, g, b, a;
-
-  
-  visual = DefaultVisual(display, DefaultScreen(display));
-
-
-  depth = DefaultDepth(display, DefaultScreen(display));
-
-  im = XCreateImage
-    (display, visual, depth, ZPixmap,0, 0,
-     image->width, image->height, 32, 0);
-
-
-  
-  im->data = (char *) malloc(image->height * im->bytes_per_line);
-
-  row = image->data;
-  for (j = 0; j < image->height; j++) {
-    pixel = row;
-    for(i = 0; i < image->width; i++) {
-      r = pixel[0];
-      g = pixel[1];
-      b = pixel[2];
-      a = pixel[3];
-      XPutPixel(im, i, j, MakePixel(r, g, b));
-      pixel+=4;
-    }
-    row+=image->rowbytes;
-  }
-  *ximage = im;
-  return 0;
-}
-
-int BetaImageToXImage(Display *display, BetaImage *image, XImage **ximage)
-{
- 
-  int displayDepth;
-
-  displayDepth = XDefaultDepth(display,DefaultScreen(display));
-
-  if (displayDepth == 8 ) {
-    BetaImageToXImage8(display,image,ximage);
-  } else {
-    BetaImageToXImage24(display,image,ximage);
-  }
-  return 0;
-}
-
-static int levels = 50;
-
-
-int InsideMandelbrotSet(double x, double y)
-{
-  double xx, yy, px, py;
-  int count;
-  double norm;
-  
-  xx = x;
-  yy = y;
-  norm = sqrt(xx*xx + yy*yy);
-  
-  count = 0;
-  while ((count != levels) && (norm < 2.0)) {
-    px = xx*xx;
-    py = yy*yy;
-    norm = sqrt(px + py);
-    yy = 2*xx*yy + y;
-    xx = px - py + x;
-    
-    count++;
-  }
-  return count;
-}
-
-
-double TranslateCoord(long x, long o, double oo, long unit)
-{
-  return ((x - o) * (1.0 / unit) + oo);
-}
-
-long MakeColor(long red, long green, long blue)
-{
-  return (red << 16) | (green << 8) | blue;
-}
-
-long max(long x, long y)
-{
-  if (x > y)
-    return x;
-  else
-    return y;
-}
-
-long min(long x, long y)
-{
-  if (x < y)
-    return x;
-  else
-    return y;
-}
-
-
-
-void MandelbrotImage(Display* display, XImage **ximage)
-{
-  Colormap cmap;
-  int screen;
-  Visual *visual;
-  int x, y;
-  double xx, yy;
-  int width, height;
-  int inside;
-  BetaImage image;
-  unsigned char *row;
-
-  Color insideColor, outsideColor, ignore;
-  long red, green, blue;
-
-  insideColor.red = 0;
-  insideColor.green = 0;
-  insideColor.blue = 0;
-  
-  outsideColor.red = 255;
-  outsideColor.green = 255;
-  outsideColor.blue = 255;
-  
-  width = 600;
-  height = 600;
-  screen = DefaultScreen(display);
-  visual = DefaultVisual(display, screen);
-  
-  BetaInitColor(display);
-
-  BetaCreateImage(&image, width, height, 32, NULL);
-  image.pixel_size = 24;
-  row = image.data;
-  
-  for (y = 0; y < height; y++) {
-    yy = TranslateCoord(height - y, height / 2, 0, 150);
-    for (x = 0; x < width; x++) {
-      xx = TranslateCoord(x, width / 2, 0, 150);
-      inside = InsideMandelbrotSet(xx, yy);
-
-      if (inside == levels) {
-	((long *) row)[x] = 0;
-      }
-      else { 
-	if (inside < 10) {
-	  red = 255;
-	  blue = 0;
-	  green = 0;
-	}
-	else {
-	  red = 255;
-	  green = (inside - 10) * 255 /(levels - 10);
-	  blue = 0;
-	}
-	((long *) row)[x] = MakeColor(red, green, blue);
-      }
-    }
-    row += image.rowbytes;
-  }
-  BetaImageToXImage(display, &image, ximage);
-  return;
 }
 

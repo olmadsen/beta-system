@@ -37,7 +37,9 @@ int BetaReadPNG(char *name, BetaImage *image, int row_order)
   /*
    * Open file and check that it is in PNG format
    */
-  
+ 
+  printf("beta read png %s\n", name);
+
   fp = fopen(name, "rb");
 
   if(!fp) {
