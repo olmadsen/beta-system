@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $Id: lvra.c,v 1.29 1992-10-14 23:29:22 datpete Exp $
+ * Mod: $Id: lvra.c,v 1.30 1992-10-19 09:17:47 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -414,9 +414,10 @@ ref(ValRep) LVRAAlloc(proto, range)
 ref(ValRep) LVRACAlloc(proto, range)
      ref(ProtoType)  proto;
      long range;
+     
 {
-  newrep = LVRAAlloc(proto, range);
-  if (newrep){
+  ref(ValRep) newRep = LVRAAlloc(proto, range);
+  if (newRep){
     /* Clear the body of newRep */
     register char *p = (char*)newRep->Body;
     register unsigned size = DispatchValRepBodySize(proto,range);
@@ -424,7 +425,7 @@ ref(ValRep) LVRACAlloc(proto, range)
     for (i = size-4; i >= 0; i -= 4)
       *(long *)(p+i) = 0;
   }
-  return newrep;
+  return newRep;
 }
 
 
@@ -475,12 +476,23 @@ static LVRACompaction()
   long           srcSize;
   long           numBlocks;
   long           sizeBlocks;
+
+#ifdef RTDEBUG
+  long sizeDead=0;
+  long numDead=0;
+  long numAlive=0;
+  long numMoved=0;
+  long numFree=0;
+#endif
   
 #ifdef macintosh
   RotateTheCursor();
 #endif
   
   NumLVRAGc++;
+
+  DEBUG_LVRA( LVRACheck() );
+
   /* Run compaction elements in 'LVRABlock{->next}*'  */
   INFO_LVRA( fprintf( output, "#(LVRA-%d ", NumLVRAGc) ); 
   
@@ -501,6 +513,7 @@ static LVRACompaction()
     while( ((ptr(long)) srcRep) < srcBlock->top){
       srcSize = LVRARepSize(srcRep);
       if (alive = LVRAAlive(srcRep)) {
+	DEBUG_LVRA(numAlive++);
 	if (srcRep != dstRep) {
 	  long rest;
 	  /* srcRep is alive. Find place to move it to in dstBlock 
@@ -521,6 +534,7 @@ static LVRACompaction()
 	      dstBlock->top =  (ptr(long)) Offset(dstBlock->top, rest);
 	      saved += rest;
 	      LVRAInsertFreeElement(dstRep);
+	      numFree++;
 	    }
 	    dstBlock = dstBlock->next;
 	    DEBUG_LVRA( Claim( dstBlock, "LVRACompaction: dstBlock"));
@@ -529,17 +543,23 @@ static LVRACompaction()
 
 	  /* Move srcRep */
 	  if (srcRep == dstRep){
-	    /* srcRep could not be moved "down" in the LVRA */
+	    /* srcRep could not be moved "down" in the LVRA: no free
+	     * places below
+	     */
 	  } else {
-	    /* Preserve the LVRA-cycle */
+	    /* Preserve the LVRA-cycle: update the cell referencing srcRep */
 	    *((ptr(long)) srcRep->GCAttr) = (long) dstRep;
+	    DEBUG_LVRA(numMoved++);
 	    RepCopy(dstRep, srcRep);
 	  }
 
 	} /* srcRep != dstRep */
 	dstRep = (ref(ValRep)) ((long) dstRep + srcSize );
 
-      } /* srcRep alive */
+      } else {
+	DEBUG_LVRA(numDead++);
+	DEBUG_LVRA(sizeDead+=srcSize);
+      }
       srcRep = (ref(ValRep)) (((long) srcRep) + srcSize);
 
     } /* while */
@@ -548,11 +568,15 @@ static LVRACompaction()
   }
   dstBlock->top = (ptr(long)) dstRep;
   
+  /* Count saved parts of all blocks from LVRATopBlock and forward.
+   * Update top of all blocks *after* LVRATopBlock
+   */
   LVRATopBlock = dstBlock;
+  saved += (long) dstBlock->limit - (long) dstBlock->top;
   dstBlock = dstBlock->next;
   while( dstBlock ){
-    dstBlock->top = LVRABlockStart(dstBlock);
     saved += (long) dstBlock->limit - (long) dstBlock->top;
+    dstBlock->top = LVRABlockStart(dstBlock);
     dstBlock = dstBlock->next;
   }
   
@@ -569,12 +593,17 @@ static LVRACompaction()
     else
       LVRACreateNewBlock = FALSE;
   }
-  DEBUG_AOA(if( LVRACreateNewBlock ) 
+  DEBUG_LVRA(if( LVRACreateNewBlock ) 
 	    fprintf(output, " (new block needed in next LVRAAlloc) "));
   
   INFO_LVRA(fprintf(output, " %dKb in %d blocks, %d%% free)\n",
 		    toKb(sizeBlocks), numBlocks, (100*saved)/sizeBlocks));
+  DEBUG_LVRA(fprintf(output, "Dead: %d, Alive: %d, Moved: %d, FreeList: %d\n",
+		     numDead, numAlive, numMoved, numFree));
+  DEBUG_LVRA(fprintf(output, "Size of dead reps: %d (0x%x)\n", 
+		     sizeDead, sizeDead));
   LVRALastIOAGc = 0;
+  DEBUG_LVRA( LVRACheck() );
 }
 
 static LVRAConstructFreeList()
@@ -671,12 +700,14 @@ LVRACheck()
 { ref(LVRABlock) theBlock;
   ref(ValRep)    rep;
   int theObjectSize;
+  long numReps=0;
   
   theBlock = LVRABaseBlock;
   while( theBlock ){    
     /* traverse currentLVRABlock. */
     rep = (ref(ValRep)) LVRABlockStart(theBlock);
     while ((long *)rep < theBlock->top) {
+      numReps++;
       theObjectSize = LVRARepSize(rep);
       rep = (struct ValRep *) ((long)rep + theObjectSize);
     }
@@ -685,5 +716,6 @@ LVRACheck()
     /* Take the next element in the LVRA block chain. */
     theBlock = theBlock->next;
   }
+  fprintf(output, "#LVRACheck: %d repetitions in LVRA\n", numReps);
 } 
 #endif
