@@ -1,6 +1,6 @@
 /*
   Compilation statements: 
-    (make clean; jbeta -x tstenv; \rm -f javabc/String.class)
+    (make clean; jbeta -x betaenv; \rm -f javabc/String.class)
     jbeta -x Bclass.bet
     javac -d javabc -classpath javabc BclassUser.java
     java -classpath javabc BclassUser
@@ -9,7 +9,7 @@
 class Jclass extends Bclass
 {
   // Java constructor must transfer origin object to BETA constructor
-  Jclass(tstenv origin)
+  Jclass(betaenv origin)
     {
 	super(origin);
     }
