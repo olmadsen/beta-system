@@ -304,6 +304,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 	      DEBUG_CODE(ILLEGAL);
 	      BetaExit(1);
 	    }
+	    reentered = 0;
 	    return;
 	  }
 	} else {
