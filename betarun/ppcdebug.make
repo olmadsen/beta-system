@@ -2,6 +2,7 @@
 MAKEFILE     = ppcdebug.make
 ¥MondoBuild¥ = ¶
        {MAKEFILE} ¶
+		:NEWRUN:crun.h ¶
 		:C:macro.h ¶
 		:C:beta.h ¶
 		:C:define.h ¶
@@ -22,58 +23,58 @@ PPCCOptions  = {Includes} {Sym¥PPC} -D RTDEBUG -w 2 -traceback -D MAC
 Pre	         = SCpre -c -D __powerc
 
 Objects¥PPC  = ¶
-		{ObjDir¥PPC}:C:data.o ¶
-		{ObjDir¥PPC}:C:argument.o ¶
-		{ObjDir¥PPC}:C:betaenv.o ¶
-		{ObjDir¥PPC}:C:cbfa.o ¶
-		{ObjDir¥PPC}:C:dot.o ¶
-		{ObjDir¥PPC}:C:exit.o ¶
-		{ObjDir¥PPC}:C:group.o ¶
-		{ObjDir¥PPC}:C:initialize.o ¶
-		{ObjDir¥PPC}:C:outpattern.o ¶
-		{ObjDir¥PPC}:C:property.o ¶
-		{ObjDir¥PPC}:C:wordsort.o ¶
-		{ObjDir¥PPC}:C:valhallaComm.o ¶
-		{ObjDir¥PPC}:C:valhallaSOCKETS.o ¶
-		{ObjDir¥PPC}:C:valhallaFindComp.o ¶
-		{ObjDir¥PPC}:GC:aoa.o ¶
-		{ObjDir¥PPC}:GC:aoatoioa.o ¶
-		{ObjDir¥PPC}:GC:block.o ¶
-		{ObjDir¥PPC}:GC:copyobject.o ¶
-		{ObjDir¥PPC}:GC:ioa.o ¶
-		{ObjDir¥PPC}:GC:lvra.o ¶
-		{ObjDir¥PPC}:GC:misc.o ¶
-		{ObjDir¥PPC}:GC:objectsize.o ¶
-		{ObjDir¥PPC}:GC:stack.o ¶
-		{ObjDir¥PPC}:NEWRUN:AllocateComponent.o ¶
-		{ObjDir¥PPC}:NEWRUN:AllocateDopartObject.o ¶
-		{ObjDir¥PPC}:NEWRUN:AllocateItem.o ¶
-		{ObjDir¥PPC}:NEWRUN:AllocateObjectRep.o ¶
-		{ObjDir¥PPC}:NEWRUN:AllocateRefRep.o ¶
-		{ObjDir¥PPC}:NEWRUN:AllocateStackObject.o ¶
-		{ObjDir¥PPC}:NEWRUN:AllocateValRep.o ¶
-		{ObjDir¥PPC}:NEWRUN:Attach.o ¶
-		{ObjDir¥PPC}:NEWRUN:CallBack.o ¶
-		{ObjDir¥PPC}:NEWRUN:CheckReferenceAssignment.o ¶
-		{ObjDir¥PPC}:NEWRUN:CInterface.o ¶
-		{ObjDir¥PPC}:NEWRUN:CopyCtext.o ¶
-		{ObjDir¥PPC}:NEWRUN:CopyRefRep.o ¶
-		{ObjDir¥PPC}:NEWRUN:CopySliceRefRep.o ¶
-		{ObjDir¥PPC}:NEWRUN:CopySliceValRep.o ¶
-		{ObjDir¥PPC}:NEWRUN:CopyText.o ¶
-		{ObjDir¥PPC}:NEWRUN:CopyValRep.o ¶
-		{ObjDir¥PPC}:NEWRUN:ExitObjects.o ¶
-		{ObjDir¥PPC}:NEWRUN:ExtendRefRep.o ¶
-		{ObjDir¥PPC}:NEWRUN:ExtendValRep.o ¶
-		{ObjDir¥PPC}:NEWRUN:Main.o ¶
-		{ObjDir¥PPC}:NEWRUN:MakeTextObj.o ¶
-		{ObjDir¥PPC}:NEWRUN:Misc.o ¶
-		{ObjDir¥PPC}:NEWRUN:NewRefRep.o ¶
-		{ObjDir¥PPC}:NEWRUN:NewValRep.o ¶
-		{ObjDir¥PPC}:NEWRUN:PerformGC.o ¶
-		{ObjDir¥PPC}:NEWRUN:Qua.o ¶
-		{ObjDir¥PPC}:NEWRUN:Structure.o ¶
-		{ObjDir¥PPC}:NEWRUN:Suspend.o
+		{ObjDir¥PPC}:C:data.debug ¶
+		{ObjDir¥PPC}:C:argument.debug ¶
+		{ObjDir¥PPC}:C:betaenv.debug ¶
+		{ObjDir¥PPC}:C:cbfa.debug ¶
+		{ObjDir¥PPC}:C:dot.debug ¶
+		{ObjDir¥PPC}:C:exit.debug ¶
+		{ObjDir¥PPC}:C:group.debug ¶
+		{ObjDir¥PPC}:C:initialize.debug ¶
+		{ObjDir¥PPC}:C:outpattern.debug ¶
+		{ObjDir¥PPC}:C:property.debug ¶
+		{ObjDir¥PPC}:C:wordsort.debug ¶
+		{ObjDir¥PPC}:C:valhallaComm.debug ¶
+		{ObjDir¥PPC}:C:valhallaSOCKETS.debug ¶
+		{ObjDir¥PPC}:C:valhallaFindComp.debug ¶
+		{ObjDir¥PPC}:GC:aoa.debug ¶
+		{ObjDir¥PPC}:GC:aoatoioa.debug ¶
+		{ObjDir¥PPC}:GC:block.debug ¶
+		{ObjDir¥PPC}:GC:copyobject.debug ¶
+		{ObjDir¥PPC}:GC:ioa.debug ¶
+		{ObjDir¥PPC}:GC:lvra.debug ¶
+		{ObjDir¥PPC}:GC:misc.debug ¶
+		{ObjDir¥PPC}:GC:objectsize.debug ¶
+		{ObjDir¥PPC}:GC:stack.debug ¶
+		{ObjDir¥PPC}:NEWRUN:AllocateComponent.debug ¶
+		{ObjDir¥PPC}:NEWRUN:AllocateDopartObject.debug ¶
+		{ObjDir¥PPC}:NEWRUN:AllocateItem.debug ¶
+		{ObjDir¥PPC}:NEWRUN:AllocateObjectRep.debug ¶
+		{ObjDir¥PPC}:NEWRUN:AllocateRefRep.debug ¶
+		{ObjDir¥PPC}:NEWRUN:AllocateStackObject.debug ¶
+		{ObjDir¥PPC}:NEWRUN:AllocateValRep.debug ¶
+		{ObjDir¥PPC}:NEWRUN:Attach.debug ¶
+		{ObjDir¥PPC}:NEWRUN:CallBack.debug ¶
+		{ObjDir¥PPC}:NEWRUN:CheckReferenceAssignment.debug ¶
+		{ObjDir¥PPC}:NEWRUN:CInterface.debug ¶
+		{ObjDir¥PPC}:NEWRUN:CopyCtext.debug ¶
+		{ObjDir¥PPC}:NEWRUN:CopyRefRep.debug ¶
+		{ObjDir¥PPC}:NEWRUN:CopySliceRefRep.debug ¶
+		{ObjDir¥PPC}:NEWRUN:CopySliceValRep.debug ¶
+		{ObjDir¥PPC}:NEWRUN:CopyText.debug ¶
+		{ObjDir¥PPC}:NEWRUN:CopyValRep.debug ¶
+		{ObjDir¥PPC}:NEWRUN:ExitObjects.debug ¶
+		{ObjDir¥PPC}:NEWRUN:ExtendRefRep.debug ¶
+		{ObjDir¥PPC}:NEWRUN:ExtendValRep.debug ¶
+		{ObjDir¥PPC}:NEWRUN:Main.debug ¶
+		{ObjDir¥PPC}:NEWRUN:MakeTextObj.debug ¶
+		{ObjDir¥PPC}:NEWRUN:Misc.debug ¶
+		{ObjDir¥PPC}:NEWRUN:NewRefRep.debug ¶
+		{ObjDir¥PPC}:NEWRUN:NewValRep.debug ¶
+		{ObjDir¥PPC}:NEWRUN:PerformGC.debug ¶
+		{ObjDir¥PPC}:NEWRUN:Qua.debug ¶
+		{ObjDir¥PPC}:NEWRUN:Structure.debug ¶
+		{ObjDir¥PPC}:NEWRUN:Suspend.debug
 
 
 ppcdebug ÄÄ {¥MondoBuild¥} {Objects¥PPC}
@@ -83,7 +84,7 @@ ppcdebug ÄÄ {¥MondoBuild¥} {Objects¥PPC}
 		{Objects¥PPC} ¶
 		-xm library
 
-:C:data.o Ä :C:data.gen {¥MondoBuild¥}
+:C:data.debug Ä :C:data.gen {¥MondoBuild¥}
 	# generating :C:data.h
 	catenate :C:export.h :C:data.gen > :C:tmpdata.c
 	{Pre} {PPCCOptions} :C:tmpdata.c -o :C:data.h
@@ -99,8 +100,8 @@ ppcdebug ÄÄ {¥MondoBuild¥} {Objects¥PPC}
 	delete -y :C:tmpdata.c
 	# done
 	{PPCC} {PPCCOptions} :C:data.c -o {Targ} 
-:C:data.o Ä :C:declare.h 
-:C:data.o Ä :C:export.h 
+:C:data.debug Ä :C:declare.h 
+:C:data.debug Ä :C:export.h 
 
-.o Ä .c {¥MondoBuild¥}
+.debug Ä .c {¥MondoBuild¥}
 	{PPCC} {PPCCOptions} {depdir}{default}.c -o {Targ} 

@@ -76,3 +76,103 @@ char *CpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
 
     return CTextPoolEnd - bodysize; 
 }
+
+
+#ifdef MAC
+
+char * PpkVT(ref(ValRep) theRep, long *SP)
+{
+    long bodysize = ByteRepBodySize(theRep->HighBorder);
+    long i;
+    char *oldBody,*res;
+
+    DEBUG_CODE(NumPpkVT++);
+    /* Check range overflow on CTextPool.
+     * nextText is used as a tmp. register only.
+     * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
+     */
+
+    Ck(theRep);
+    if (bodysize+1 > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
+      BetaError(CTextPoolErr, GetThis(SP), SP, 0);
+    
+	res=(char *)CTextPoolEnd;
+	/* Set the first byte in the pascal string eq the length */
+	*((char *)CTextPoolEnd)++ = (char)bodysize;
+    
+    /* Copy the contents of the repetition to the CTextPool. */
+    oldBody = (char *)(theRep->Body);
+    for (i = 0;  i < bodysize; i++)
+      *(((char *)CTextPoolEnd))++ = *(char *)((long)oldBody+i);
+	  
+    CTextPoolEnd = (char*)((((long)CTextPoolEnd+3)/4)*4); /* long align next text */
+
+    return res;
+}
+
+char * PpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
+{
+    long bodysize;
+    long i;
+    char *oldBody,*res;
+
+    /* printf("PpkSVT: theRep=0x%x, low=0x%x, high=0x%x, SP=0x%x\n", theRep, low, high, SP); */
+    Ck(theRep);
+    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
+      BetaError(RepLowRangeErr, GetThis(SP), SP, 0);
+    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
+      BetaError(RepHighRangeErr, GetThis(SP), SP, 0);
+    high = high - low + 1;
+    if (high<0) high=0;
+
+    bodysize = ByteRepBodySize(high);
+     /* Check range overflow on CTextPool.
+     * nextText is used as a tmp. register only.
+     * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
+     */
+    if (bodysize+1 > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
+      BetaError(CTextPoolErr, GetThis(SP), SP, 0);
+    
+	res=(char *)CTextPoolEnd;
+    /* Copy the contents of the repetition to the CTextPool. */
+    oldBody = (char *)((long)theRep->Body+(low-theRep->LowBorder));
+
+	/* Set the first byte in the pascal string eq the length */
+	*((char *)CTextPoolEnd)++ = (char)high;
+
+    for (i = 0;  i < high; i++)
+      *(((char *)CTextPoolEnd))++ = *(char *)((long)oldBody+i);
+	  
+    CTextPoolEnd = (char*)((((long)CTextPoolEnd+3)/4)*4); /* long align next text */
+
+    return res;
+}
+
+char * PpkCT(char *text, long *SP)
+{
+    long bodysize = strlen(text);
+    char *res;
+    long i;
+
+    /* Check range overflow on CTextPool.
+     * nextText is used as a tmp. register only.
+     * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
+     */
+
+    if (bodysize+1 > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
+      BetaError(CTextPoolErr, GetThis(SP), SP, 0);
+    
+	res=(char *)CTextPoolEnd;
+	/* Set the first byte in the pascal string eq the length */
+	*((char *)CTextPoolEnd)++ = (char)bodysize;
+    
+	/* Copy the contents of the string to the CTextPool. */
+	strcpy(CTextPoolEnd, text);
+	  
+    CTextPoolEnd = (char*)((((long)CTextPoolEnd+3)/4)*4); /* long align next text */
+
+    return res;
+}
+
+
+#endif

@@ -11,8 +11,6 @@ void SetProtos(struct ProtoType *basic, struct ProtoType *text) {
    TextProto = text; 
 }
 
-extern void BETA_main(void);
-
 void main(long argc, char *argv[])
 {
   SetArgValues(argc,argv); /* Initializes ArgC and ArgV */

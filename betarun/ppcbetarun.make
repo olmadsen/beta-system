@@ -2,6 +2,7 @@
 MAKEFILE     = ppcbetarun.make
 ¥MondoBuild¥ = ¶
        {MAKEFILE} ¶
+		:NEWRUN:crun.h ¶
 		:C:macro.h ¶
 		:C:beta.h ¶
 		:C:define.h ¶
@@ -22,19 +23,19 @@ PPCCOptions  = {Includes} {Sym¥PPC} -w 2 -D MAC
 Pre	         = SCpre -c -D __powerc
 
 Objects¥PPC  = ¶
-		{ObjDir¥PPC}:C:data.c.x ¶
-		{ObjDir¥PPC}:C:argument.c.x ¶
-		{ObjDir¥PPC}:C:betaenv.c.x ¶
-		{ObjDir¥PPC}:C:cbfa.c.x ¶
-		{ObjDir¥PPC}:C:dot.c.x ¶
-		{ObjDir¥PPC}:C:exit.c.x ¶
-		{ObjDir¥PPC}:C:group.c.x ¶
-		{ObjDir¥PPC}:C:initialize.c.x ¶
-		{ObjDir¥PPC}:C:outpattern.c.x ¶
-		{ObjDir¥PPC}:C:property.c.x ¶
-		{ObjDir¥PPC}:C:wordsort.c.x ¶
-		{ObjDir¥PPC}:C:valhallaComm.c.x ¶
-		{ObjDir¥PPC}:C:valhallaSOCKETS.c.x ¶
+		{ObjDir¥PPC}:C:data.o ¶
+		{ObjDir¥PPC}:C:argument.o ¶
+		{ObjDir¥PPC}:C:betaenv.o ¶
+		{ObjDir¥PPC}:C:cbfa.o ¶
+		{ObjDir¥PPC}:C:dot.o ¶
+		{ObjDir¥PPC}:C:exit.o ¶
+		{ObjDir¥PPC}:C:group.o ¶
+		{ObjDir¥PPC}:C:initialize.o ¶
+		{ObjDir¥PPC}:C:outpattern.o ¶
+		{ObjDir¥PPC}:C:property.o ¶
+		{ObjDir¥PPC}:C:wordsort.o ¶
+		{ObjDir¥PPC}:C:valhallaComm.o ¶
+		{ObjDir¥PPC}:C:valhallaSOCKETS.o ¶
 		{ObjDir¥PPC}:C:valhallaFindComp.o ¶
 		{ObjDir¥PPC}:GC:aoa.o ¶
 		{ObjDir¥PPC}:GC:aoatoioa.o ¶

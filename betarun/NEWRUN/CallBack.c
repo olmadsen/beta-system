@@ -60,7 +60,8 @@
   CBFATop->code[6] = 0x80000000 | (12<<16);                                   \
   CBFATop->code[7] = 0x7c0903a6;                                              \
   CBFATop->code[8] = 0x80000000 | ( 2<<21) | (12<<16) | 4;                    \
-  CBFATop->code[9] = 0x4e800420
+  CBFATop->code[9] = 0x4e800420;                                              \
+  FlushCodeCache(&CBFATop->code[0], &CBFATop->code[9])
  
 #endif /* macppc */
 
@@ -75,6 +76,8 @@ void *CopyCPP(struct Structure *theStruct)
   unsigned long strucaddr; /* Address of struc */
 
   DEBUG_CODE(NumCopyCPP++);
+
+	/*DebugStr("\pCopyCPP called");*/
 
   if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
  

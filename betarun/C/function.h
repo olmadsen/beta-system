@@ -183,12 +183,20 @@ extern void RotateTheCursorBack(void);
 #endif
 
 #ifdef NEWRUN
-extern struct Object * GetThis(long *SP);
+/* Defined in betaenv */
+extern void DoGC(long *SP); /* The one called directly from betaenv */
+extern void doAtt(long SPx, struct Object *topObj, long spSize, long *stack, long entry);
 extern long *GetSP(void);
 extern void CallB(struct Object *caller,
-		  struct Object *callee,
-		  long address,
-		  long SP);
+		          struct Object *callee,
+		          long address,
+		          long SP);
+extern void BETA_main(void);
+#ifdef ppcmac
+extern void FlushCodeCash(long start, long end);
+#endif
+
+extern struct Object * GetThis(long *SP);
 #endif
 
 

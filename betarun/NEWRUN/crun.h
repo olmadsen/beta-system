@@ -59,13 +59,17 @@ extern void *               CopyCPP(struct Structure *theStruct);
 extern void 		    CinitT(void);
 extern char *		    CpkVT(struct ValRep *theRep, long *SP);
 extern char *		    CpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP);
+#ifdef MAC
+extern char *		    PpkVT(struct ValRep *theRep, long *SP);
+extern char *		    PpkCT(char *, long *SP);
+extern char *		    PpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP);
+#endif
 extern void 		    ChkRA(struct Object **theObjHandle);
 extern void                 Att(struct Object *this, struct Component *comp, long RA, long SPx);
 extern void                 SetProtos(struct ProtoType *basic, struct ProtoType *text);
 
 /* Garbage collector interface */
 extern void                 doGC(long *SP, struct Object *this, unsigned long NumLongs); /* The one called from IOA(c)alloc */
-extern void 		    DoGC(long *SP); /* The one called directly from betaenv */
 
 #ifdef __GNUC__
 /* GCC supports inline functions.

@@ -24,6 +24,11 @@ void Illegal()
   f = (int(*)())1;
   f();
 #endif
+#ifdef MAC
+  /* call MacsBug */
+  fprintf(output, "Illegal: calling debugger.\n");
+  DebugStr("\pIllegal Called. Type 'g' to return to shell");
+#endif
 #if defined(SGI) || defined(sgi)
   /* avoid optimizing the function away */
   fprintf(output, "Illegal() called\n");

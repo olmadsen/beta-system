@@ -21,7 +21,7 @@ void BetaExit(long number)
   InfoS_End();
 
 #ifdef RTDEBUG
-#if defined(UNIX) || defined (crts)
+#if defined(UNIX) || defined (crts) || defined(NEWRUN)
   fprintf(stderr, "\n");
   fprintf(stderr, "IOAGc:    %-8d  ", (int)NumIOAGc);
   fprintf(stderr, "AOAGc:    %-8d  ", (int)NumAOAGc);
@@ -72,6 +72,11 @@ void BetaExit(long number)
   fprintf(stderr, "Att:      %-8d  ", (int)NumAtt);
   fprintf(stderr, "Susp:     %-8d  ", (int)NumSusp);
   fprintf(stderr, "TermComp: %-8d\n", (int)NumTermComp);
+#ifdef MAC
+  fprintf(stderr, "PpkVT:    %-8d  ", (int)NumPpkVT);
+  fprintf(stderr, "PpkCT:    %-8d  ", (int)NumPpkCT);
+  fprintf(stderr, "PpkSVT:   %-8d\n", (int)NumPpkSVT);  
+#endif
   fprintf(stderr, "\n");
   fprintf(stderr, "AOAAlloc: %-8d\n", (int)NumAOAAlloc);
   fprintf(stderr, "\n");

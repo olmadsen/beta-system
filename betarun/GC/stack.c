@@ -131,13 +131,17 @@ DEBUG_STACK(if (theObj&&(theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){    \
               fprintf(output, " (%s)\n", ProtoTypeName(theObj->Proto));\
 	    })
 
+#ifdef ppcmac
+static long StackObjEnd; /* extra "parameter" for ProcessStackFrames */
+#endif
+
 /* ProcessStackFrames:
  *  The main stack traversal routine.
  *  Scans through frames in stack part.
  */
 void ProcessStackFrames(long SP, 
 			long StackStart, 
-			long stopAtComp,
+			long isStackObject,
 			long dynOnly,
 			CellProcessFunc func
 			)
@@ -173,6 +177,10 @@ void ProcessStackFrames(long SP,
   struct Object *this;
   long *CSP = CompSP;
   long SPoff, PC;
+#ifdef macppc
+  long SPz = StackObjEnd; /* Used for stackobjects */
+#endif
+  
 
   DEBUG_STACK(fprintf(output, "ProcessStackFrames(SP=0x%x, StackStart=0x%x)\n",
 		      SP, StackStart));
@@ -298,11 +306,12 @@ void ProcessStackFrames(long SP,
      *                               |  Y item    |
      * 
      */
+
     if ((long)theObj->Proto == (long)ComponentPTValue) {
       struct Component *comp = (struct Component *)theObj;
       struct Component *callerComp = comp->CallerComp;
 
-      if (stopAtComp){
+      if (isStackObject){
 	/* Processing stackobject:
 	 * Stop processing when the component is reached
 	 */
@@ -313,7 +322,11 @@ void ProcessStackFrames(long SP,
       }
       /* SP     = (long)callerComp->SPx; */
       SP     = *--CSP; CSP--; /* count down one before reading and one after */
+#ifdef ppcmac
+      PC = (long)-1; /* Check everywhere */
+#else
       PC     = (long)callerComp->CallerLSC;
+#endif
       theObj = comp->CallerObj;
       TRACE_STACK();
       if (SP<StackStart) {
@@ -346,15 +359,25 @@ void ProcessStackFrames(long SP,
        *      SP->|            |
        *          |            |
        */
-      long SPoff;
-      /* size allocated on stack when theObj became active */
+      
       DEBUG_CODE(Claim(!isSpecialProtoType(theObj->Proto), 
 		       "!isSpecialProtoType(theObj->Proto)"));
-      GetSPoff(SPoff, CodeEntry(theObj->Proto, PC)); 
-      DEBUG_STACK(fprintf(output, "SP:          0x%x\n", SP));
-      DEBUG_STACK(fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(theObj->Proto, PC)));
-      SP = (long)SP+SPoff;      
-      DEBUG_STACK(fprintf(output, "SPoff:       0x%x\n", SPoff));
+      
+#ifdef ppcmac
+      SP = *(long*)SP; /* Use FramePointer */
+      if (isStackObject){
+      	SP += SPz; 
+      }
+#else
+      {
+         long SPoff /* size allocated on stack when theObj became active */;
+	 GetSPoff(SPoff, CodeEntry(theObj->Proto, PC)); 
+         DEBUG_STACK(fprintf(output, "SP:          0x%x\n", SP));
+         DEBUG_STACK(fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(theObj->Proto, PC)));
+         DEBUG_STACK(fprintf(output, "SPoff:       0x%x\n", SPoff));
+         SP = (long)SP+SPoff;
+      }
+#endif
       /* SP now points to end of previous frame, i.e. bottom of top frame */
       /* normal dyn from the start of this frame gives current object */
       theObj = *((struct Object **)SP-DYNOFF); 
@@ -398,6 +421,9 @@ void ProcessStack()
 void ProcessStackObj(struct StackObject *sObj, CellProcessFunc func)
 {
   DEBUG_STACK(fprintf(output, "\nProcessStackObject 0x%x\n", sObj));
+#ifdef ppcmac
+  StackObjEnd = (long)sObj->Body;
+#endif
   ProcessStackFrames((long)sObj->Body+(long)sObj->StackSize, /* top frame off */
 		     (long)sObj->Body+(long)sObj->BodySize, /* bottom */
 		     TRUE, /* Stop at component */

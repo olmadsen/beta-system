@@ -919,6 +919,12 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 		     (long)StackStart
 		     ));
   
+
+#ifdef ppcmac
+  fprintf(output, "DisplayBetaStack: NYI for ppcmac\n"); fflush(output);
+  return 0;
+#endif
+
 #ifdef RTVALHALLA
   if (valhallaID){
 #ifdef UseRefStack

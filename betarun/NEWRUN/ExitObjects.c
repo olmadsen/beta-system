@@ -36,6 +36,7 @@ long *ExO(long *jumpAdr,
 #endif
 
   while (this != exitObj) {
+  
     /* Check for passing of a callback - see STACK LAYOUT in stack.c */
     if ((this == CALLBACKMARK) || (this == GENMARK)) {
       DEBUG_CODE(fprintf(output, 
@@ -63,19 +64,25 @@ long *ExO(long *jumpAdr,
       TRACE_EXO();
       continue;
     }
+    
     /* Check for passing of a DoPart object */
     if ((long)this->Proto == (long)DopartObjectPTValue) {
       this = ((struct DopartObject *)this)->Origin;
       TRACE_EXO();
       continue;
     }
+    
     /* Check for passing of a component */
     if ((long)this->Proto == (long)ComponentPTValue) {
       struct Component *comp = (struct Component *)this;
       struct Component *callerComp = comp->CallerComp;
       DEBUG_CODE(fprintf(output, "ExO: passing comp 0x%x\n", (int)comp); fflush(output));
       SP     = (long*) *--CSP; CSP--; /* count down one before reading and one after */
-      PC   = (long *)callerComp->CallerLSC;
+#ifdef ppcmac
+      PC = (long*)-1; /* Check everywhere */
+#else
+      PC     = (long)callerComp->CallerLSC;
+#endif
 
       /* TerminateComponent: (see Attach.c) */
       DEBUG_CODE(NumTermComp++);
@@ -89,12 +96,20 @@ long *ExO(long *jumpAdr,
       TRACE_EXO();
       continue;
     }
+    
     /* Normal case: find stack frame size and continue */
     {  
-      long SPoff;
-      /* size allocated on stack when this became active */
-      GetSPoff(SPoff, CodeEntry(this->Proto, (long)PC)); 
-      SP = (long *)((long)SP+SPoff);      
+    
+#ifdef ppcmac
+      SP = *(long**)SP; /* Use FramePointer */
+#else
+      {
+        long SPoff;
+        /* size allocated on stack when this became active */
+        GetSPoff(SPoff, CodeEntry(this->Proto, (long)PC)); 
+        SP = (long *)((long)SP+SPoff);    
+      }
+#endif
       /* SP now points to end of previous frame, i.e. bottom of top frame */
       /* normal dyn from the start of this frame gives current object */
       this = *((struct Object **)SP-DYNOFF); 
