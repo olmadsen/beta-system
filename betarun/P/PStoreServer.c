@@ -283,7 +283,8 @@ unsigned long getExt(unsigned long name_r, Object *theObj, Object **theCell)
 		target = lookUpReferenceEntry(getCurrentStoreID(), nameMap[count].offset));
 #else
 	/* FIXME: Should protect regs */
-	target = lookUpReferenceEntry(getCurrentStoreID, nameMap[count].offset));
+	target = lookUpReferenceEntry(getCurrentStoreID, 
+				      nameMap[count].offset);
 #endif
 	theCell = (Object **)((unsigned long)theObj + offset);
 	*theCell = target;

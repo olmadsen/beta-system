@@ -1,6 +1,5 @@
 #include "beta.h"
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
-
 #ifdef MAC
 #include <Events.h>
 #endif
@@ -72,31 +71,11 @@ int valhalla_readDataMax(int fd, char *destbuffer, int buflen)
 
 int valhalla_writeDataMax(int fd, char *srcbuffer, int length)
 {
-  /*fprintf(output, "valhalla_writeDataMax: fd=%d\n", (int)fd);*/
-#ifdef MACNOT
-	EventRecord theEvent;
-  Boolean result = false;
-  long sleep = 2; /* Measured in 1/60 secs */
-  int send = 0;
-  int count = 0;
-  	
-  	DEBUG_VALHALLA(fprintf(output, "Send data %d\n", length));
-
-  while(count < length) {
-  	send = writeDataMax(fd, srcbuffer + count, length - count);
-  	DEBUG_VALHALLA(fprintf(output, "send %d\n", send));
-  	if (send == -1) {
-  		return -1;
-  	}
-  	else {
-  		count += send;
-  	}
-  	result = WaitNextEvent(everyEvent, &theEvent, sleep, nil);
-  }
-  return count;
-#else
-  return writeDataMax(fd, srcbuffer, length);
-#endif
+  int res;
+  DEBUG_VALHALLA(fprintf(output, "valhalla_writeDataMax: fd=%d\n", (int)fd));
+  res = writeDataMax(fd, srcbuffer, length);
+  DEBUG_VALHALLA(fprintf(output, "valhalla_writeDataMax: res=%d\n", res));
+  return res;
 }
 
 #endif /* RTVALHALLA */
