@@ -1,3 +1,7 @@
+#ifdef hppa
+#undef RTDEBUG /* Sorry. The new gcc complains about getR2Reg() */
+#endif
+
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
  * by Peter Andersen and Tommy Thorn.
@@ -41,7 +45,7 @@ void CCopySRR(ref(RefRep) theRep,
 #endif
 
 #ifdef hppa
-    low = (unsigned) getR2Reg();
+    low =  (unsigned) getR2Reg(); 
     high = (unsigned) getR1Reg();
 #endif
     
