@@ -101,11 +101,12 @@ struct Component * Att(struct Object *this, struct Component *comp)
     GetStackPointer(SP);
     GetFramePointer_Att(FP);
     attachStackSize = ((long)FP-(long)SP)/4;
-    attachSaveArea = malloc(attachStackSize);
+    attachSaveArea = MALLOC(attachStackSize*4);
+    INFO_ALLOC(attachStackSize);
     memcpy(attachSaveArea, SP+1, attachStackSize*4);
   
     if (ActiveComponent->StackObj == (struct StackObject *)0){
-      free(attachSaveArea);
+      FREE(attachSaveArea);
       BetaError(CompTerminatedErr, this);
     }
     theStackObj = ActiveComponent->StackObj;
@@ -114,7 +115,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
     /* Restore the Attach part of the stack */
     newSP = baseStackPtr-sizeToMove;
     memcpy(newSP-attachStackSize+1, attachSaveArea, attachStackSize*4);
-    free(attachSaveArea);
+    FREE(attachSaveArea);
     SetFramePointer(newSP);
     SetStackPointer(newSP - attachStackSize);
 
@@ -155,7 +156,8 @@ struct Component * Att(struct Object *this, struct Component *comp)
   GetStackPointer(SP);
   GetFramePointer(FP);
   attachStackSize = ((long)FP-(long)SP)/4;
-  attachSaveArea = malloc(attachStackSize*4);
+  attachSaveArea = MALLOC(attachStackSize*4);
+  INFO_ALLOC(attachStackSize*4);
   memcpy(attachSaveArea, SP+1, attachStackSize*4);
   
   /* Pack current component block to stack */
@@ -176,7 +178,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
   
   ActiveComponent = comp;
   if (ActiveComponent->StackObj == (struct StackObject *)0){
-    free(attachSaveArea);
+    FREE(attachSaveArea);
     BetaError(CompTerminatedErr, this);
   }
   theStackObj = ActiveComponent->StackObj;
@@ -187,7 +189,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
   memcpy(newSP-attachStackSize+1, attachSaveArea, attachStackSize*4);
   SetStackPointer(newSP - attachStackSize);
   SetFramePointer(newSP);
-  free(attachSaveArea);
+  FREE(attachSaveArea);
   
   /* Activate new componont */
   memcpy(newSP+1, theStackObj->Body+1, sizeToMove*4);

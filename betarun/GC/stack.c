@@ -231,8 +231,9 @@ void ProcessStackObj(struct StackObject *theStackObject)
 
   theEnd = &theStackObject->Body[1] + theStackObject->StackSize;
 
-/* fprintf(output, "ProcessStackObj: theStack: 0x%x, StackSize: 0x%x, BodySize: 0x%x\n", 
-		    (int)theStackObject, (int)(theStackObject->StackSize), (int)(theStackObject->BodySize)); */
+  /* fprintf(output, "ProcessStackObj: theStack: 0x%x, StackSize: 0x%x, BodySize: 0x%x\n", 
+     (int)theStackObject, (int)(theStackObject->StackSize), (int)(theStackObject->BodySize)); */
+  
   /* ProcessRefStack(*theEnd, theEnd+1); */
   ProcessRefStack(theStackObject->BodySize-theStackObject->StackSize-1, theEnd);
 }
@@ -804,17 +805,17 @@ static void initLabels()
     numLabels++;
   }
 
-  if (! (labels=(struct label **)malloc(numLabels * sizeof(struct label *)))) {
+  if (! (labels=(struct label **)MALLOC(numLabels * sizeof(struct label *)))) {
     fprintf(output, "Failed to allocate memory for labels\n");
     numLabels = -1;
     labels = 0;
-  }
-  else
-    {
-      long lastLab=0;
-      /* Read into labels */
-      pclose (thePipe);
-      thePipe = popen (command, "r");
+  } else {
+    long lastLab=0;
+    INFO_ALLOC(numLabels * sizeof(struct label *));
+
+    /* Read into labels */
+    pclose (thePipe);
+    thePipe = popen (command, "r");
 #ifdef SPARC_LD_SEGMENT_TEST
       /* Skip to etext */
       for (;;){
@@ -827,22 +828,24 @@ static void initLabels()
 	struct label *lab;
 	if (fscanf(thePipe, "%x %c %s", (int *)&labelAddress, &ch, theLabel) == EOF)
 	  break;
-	if (! (lab = (struct label *) malloc(sizeof(struct label)))){
+	if (! (lab = (struct label *) MALLOC(sizeof(struct label)))){
 	  fprintf(output, "Allocation of struct label failed\n");
 	  numLabels = -1;
 	  /* free previously allocated labels */
-	  free(labels);
+	  FREE(labels);
 	  labels = 0;
 	  break;
 	}
-	if (! (lab->id = (char *)malloc(strlen(theLabel)+1))) {
+	INFO_ALLOC(sizeof(struct label));
+	if (! (lab->id = (char *)MALLOC(strlen(theLabel)+1))) {
 	  fprintf(output, "Allocation of label id failed\n");
 	  numLabels = -1;
 	  /* free previously allocated labels */
-	  free(labels);
+	  FREE(labels);
 	  labels = 0;
 	  break;
 	}
+	INFO_ALLOC(strlen(theLabel)+1);
 	lab->address = labelAddress;
 	strcpy(lab->id, theLabel);
 	labels[lastLab] = lab;

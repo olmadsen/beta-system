@@ -47,7 +47,8 @@ struct Component * Susp(struct Object * this)
   GetStackPointer(SP);
   GetFramePointer(FP);
   suspStackSize = ((long)FP-(long)SP)/4;
-  suspSaveArea = malloc(suspStackSize*4);
+  suspSaveArea = MALLOC(suspStackSize*4);
+  INFO_ALLOC(suspStackSize*4);
   memcpy(suspSaveArea, SP+1, suspStackSize*4);
 
   /* Pack current component block to stack */
@@ -74,7 +75,7 @@ struct Component * Susp(struct Object * this)
     BetaExit(0);
   }
   if (caller->StackObj == 0){
-    free(suspSaveArea);
+    FREE(suspSaveArea);
     BetaError(CompTerminatedErr, this);
   }
   theStackObj = caller->StackObj;
@@ -101,7 +102,7 @@ struct Component * Susp(struct Object * this)
   /* Change active component */
   called = ActiveComponent;
   ActiveComponent = caller;
-  free(suspSaveArea);
+  FREE(suspSaveArea);
 
   setret_Susp(ActiveComponent->CallerLSC); 
 
