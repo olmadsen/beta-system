@@ -27,6 +27,8 @@ static long FreePercentage( bottom, top, limit)
  */
 void IOAGc()
 {
+static IOALooksFull = FALSE;
+
 #ifdef macintosh
   RotateTheCursor();
 #endif
@@ -330,13 +332,27 @@ You may order an unconstrained version from\n",
     DEBUG_LVRA( LVRACheck() );
     InfoS_LabB();
     
-    /* Based on IOAPercentage, determine if IOA space is exhausted. */
-    
-    if( FreePercentage( IOA, (long) IOATop + ReqObjectSize*4, IOALimit) 
-       < IOAPercentage ){
-      fprintf( output,"#IOA Heap space full, request: %d.\n", ReqObjectSize);
-      BetaExit(1);
-    }
+#ifdef RTDEBUG
+    /* Old heuristic */
+    if ((FreePercentage(IOA, (long) IOATop+ReqObjectSize*4, IOALimit) 
+	 < IOAPercentage) 
+	&& !(IOATop+4*ReqObjectSize > IOALimit))
+      fprintf(output,
+	      ">>> Interesting fact: The old RTS would have written\n"
+	      ">>>   \"#IOA Heap space full, request: %d\"\n"
+	      ">>> and exited at this point.\n", 
+	      ReqObjectSize);
+#endif /* RTDEBUG */
+
+    if (IOATop+4*ReqObjectSize > IOALimit)
+      if (IOALooksFull) {
+	fprintf(output, "Sorry, IOA is full: cannot allocate %d bytes.\n"
+		"Program terminated.\n", 4*ReqObjectSize);
+	BetaExit(1);
+      } else
+	IOALooksFull = TRUE;
+    else
+      IOALooksFull = FALSE;
     
 #ifdef hpux
     /*    cachectl(CC_FLUSH, 0, 0); */
