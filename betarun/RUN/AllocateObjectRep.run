@@ -3,27 +3,27 @@
 { Parameters:
                      generelt        sparc  Snake   Ix86   MC68          
 					                 		   
-     object          this            %i0    %r3     %edx   %a0 RegObj     
+     object          this            %i0    %r3     %edx   %a0 RegThis     
      offset in this  primReg1        %l0    %r9     %eax   %d0 DataRegA  
      range           primReg2        %l1    %r10    %ebx   %d1 DataRegB  
-     prototype       callReg         %i1    %r4     %edi   %a1 RegArg    
+     prototype       callReg         %i1    %r4     %edi   %a1 RegCall    
      origin          originReg       %o0    %r26    pReg1  %d7 DataReg1  
 }
 
 AlloORR: public
   (#
      { AllocateObjectRepetitionReference: Allocate repetition of offline items.
-       Destroys: RegArg, DataReg1, DataReg2, AddrReg1, AddrReg2.
+       Destroys: RegCall, DataReg1, DataReg2, AddrReg1, AddrReg2.
        May cause GC.
      }
      
      { Input variable.  }
-     theObj: Item      = RegObj;   { The object, which refer the objrep }
+     theObj: Item      = RegThis;   { The object, which refer the objrep }
      Offset: Long      = DataRegA; { Offset in the theObj.              
                                      Same phys reg as DataReg1 on intel.
                                    }
      Range:  Long      = DataRegB; { The range of the refRep.           }
-     Proto:  ProtoType = RegArg;   { The Prototype for the elements     }
+     Proto:  ProtoType = RegCall;   { The Prototype for the elements     }
      Origin: Item      = DataReg1; { The Origin for the elements.
                                      pReg1 in Intel version
                                    }
@@ -64,7 +64,7 @@ AlloORR: public
      (if newTop > IOALimit then goto GC if);
      newTop -> IOATop;
           
-     { The new Object is now allocated, but not initialized yet!}
+     { The new Object is now allocated in IOA, but not initialized yet!}
      
      { Initialize the structual part of the repetition. }
      -10    -> theRep.ProtoType; { DynItemRepPTValue }
@@ -72,13 +72,13 @@ AlloORR: public
      1      -> theRep.LowBorder;
      Range  -> theRep.HighBorder;
      Proto  -> theRep.iProto;
-     Origin -> theRep.iOrigin;
+     Origin -> theRep.iOrigin; { ChkRA not needed: theRep is in IOA }
      
      { Initialize the body part of the repetition. }
      1 -> Range-;
      loop:
      push Origin; { save DataReg1 across AlloI call }
-     push Proto;  { save RegArg across AlloI call }
+     push Proto;  { save RegCall across AlloI call }
      push Range;  { save DataRegB/DataReg2 across AlloI call } 
      push -6;     { tag }
      { intel: no need to save _preg1 during AlloI }
@@ -97,18 +97,20 @@ AlloORR: public
      
      { Allocate item }
      { Origin and Proto are already in the right registers for AlloI }
-     call AlloI; { Destroys: RegArg (output), DataReg1, DataReg2, AddrReg1, AddrReg2. 
+     call AlloI; { Destroys: RegCall (output), DataReg1, DataReg2, AddrReg1, AddrReg2. 
                    On intel DataReg1 is DataRegA, and DataReg2 is DataRegB.
                  }
-     { AlloI returns item in RegArg }
+     { AlloI returns item in RegCall }
+     
+     { theRep may now have been moved to AOA }
      
      { AssignReference }
      pop theRep; { restore AddrReg2 }
      4 -> SP+; { pop tag };
      pop Range;
      theRep[24+Range*4][] -> theCell;
-     RegArg -> theCell[0];
-     (if theCell outside IOA then  { The theCell resides in AOA and the item in IOA  }
+     RegCall -> theCell[0];
+     (if theCell outside IOA then  { theCell resides in AOA and the item in IOA  }
          push theCell;
          (if hp then
              theCell -> theCell-; { clear AddrReg1 before ChkRA }
@@ -138,7 +140,7 @@ AlloORR: public
      pop Offset;
      theObj[Offset][] -> theCell;
      theRep -> theCell[0];
-     (if theCell outside IOA then  { The theCell resides in AOA and theRep in IOA }
+     (if theCell outside IOA then  { theCell resides in AOA and theRep in IOA or AOA }
          push theCell;
          (if hp then
              theCell -> theCell-; { clear AddrReg1 before ChkRA }
@@ -174,17 +176,17 @@ AlloORRC: public
   (#
      { AllocateObjectRepetitionReferenceComponent: 
        Allocate repetition of offline components.
-       Destroys: RegArg (output), DataReg1, DataReg2, AddrReg1, AddrReg2.
+       Destroys: RegCall (output), DataReg1, DataReg2, AddrReg1, AddrReg2.
        May cause GC.
      }
      
      { Input variable.  }
-     theObj: Item      = RegObj;   { The object, which refer the objrep }
+     theObj: Item      = RegThis;   { The object, which refer the objrep }
      Offset: Long      = DataRegA; { Offset in the theObj.              
                                      Same phys reg as DataReg1 on intel.
                                    }
      Range:  Long      = DataRegB; { The range of the refRep.           }
-     Proto:  ProtoType = RegArg;   { The Prototype for the elements     }
+     Proto:  ProtoType = RegCall;   { The Prototype for the elements     }
      Origin: Item      = DataReg1; { The Origin for the elements.
                                      pReg1 in Intel version
                                    }
@@ -226,7 +228,7 @@ AlloORRC: public
      (if newTop > IOALimit then goto GC if);
      newTop -> IOATop;
           
-     { The new Object is now allocated, but not initialized yet!}
+     { The new Object is now allocated in IOA, but not initialized yet!}
      
      { Initialize the structual part of the repetition. }
      -11    -> theRep.ProtoType; { DynCompRepPTValue }
@@ -234,17 +236,17 @@ AlloORRC: public
      1      -> theRep.LowBorder;
      Range  -> theRep.HighBorder;
      Proto  -> theRep.iProto;
-     Origin -> theRep.iOrigin;
+     Origin -> theRep.iOrigin; { ChkRA not needed: theRep is in IOA }
      
      { Initialize the body part of the repetition. }
      1 -> Range-;
      loop:
-     push Origin; { save DataReg1 across AlloI call }
-     push Proto;  { save RegArg across AlloI call }
-     push Range;  { save DataRegB/DataReg2 across AlloI call } 
+     push Origin; { save DataReg1 across AlloC call }
+     push Proto;  { save RegCall across AlloC call }
+     push Range;  { save DataRegB/DataReg2 across AlloC call } 
      push -6;     { tag }
-     { intel: no need to save _preg1 during AlloI }
-     push theRep; { save AddrReg2 across AlloI call }
+     { intel: no need to save _preg1 during AlloC }
+     push theRep; { save AddrReg2 across AlloC call }
      
      { STACK:
        <theRep>
@@ -258,18 +260,20 @@ AlloORRC: public
      } 
      
      { Allocate item }
-     { Origin and Proto are already in the right registers for AlloI }
-     call AlloC; { Destroys: RegArg (output), DataReg1, DataReg2, AddrReg1, AddrReg2. 
+     { Origin and Proto are already in the right registers for AlloC }
+     call AlloC; { Destroys: RegCall (output), DataReg1, DataReg2, AddrReg1, AddrReg2. 
                    On intel DataReg1 is DataRegA, and DataReg2 is DataRegB.
                  }
-     { AlloC returns item in RegArg }
+     { AlloC returns item in RegCall }
+     
+     { theRep may now have been moved to AOA }
      
      { AssignReference }
      pop theRep; { restore AddrReg2 }
      4 -> SP+; { pop tag };
      pop Range;
      theRep[24+Range*4][] -> theCell;
-     RegArg -> theCell[0];
+     RegCall -> theCell[0];
      (if theCell outside IOA then  { The theCell resides in AOA and the item in IOA  }
          push theCell;
          (if hp then

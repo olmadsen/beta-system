@@ -795,7 +795,9 @@ void LVRACheck(void)
     /* Take the next element in the LVRA block chain. */
     theBlock = theBlock->next;
   }
+#if 0
   fprintf(output, "#LVRACheck: %d repetitions in LVRA\n", (int)numReps);
+#endif
 } 
 
 void LVRAStatistics(void)

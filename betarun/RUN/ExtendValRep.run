@@ -23,7 +23,7 @@ ExtVR: public
      theCell:     DataArea         = AddrReg1;
      
      newRange:    Long             = DataReg2;
-     BodySize:    Long             = DataReg4; { Saved and restored. }
+     BodySize:    Long             = RegCall; { Saved and restored. }
      offset:      Long             = DataReg2;
      
      oldBodySize: Long             = DataReg1;
@@ -75,14 +75,14 @@ ExtVR: public
      }
      
      (if theRep.ProtoType <= -10 then { ObjectRepetition }
-         push DataReg4;
+         push RegCall;
          
          { STACK:
-           <DataReg4>
+           <RegCall>
            <General stack layout>
          }
          
-         newRange -> BodySize; { destroys bodysize }
+         newRange -> BodySize; { destroys bodysize/RegCall }
          IOATop -> newRep;
          4 -> BodySize*;
          newRep[24+BodySize][] -> newTop;
@@ -97,9 +97,9 @@ ExtVR: public
          }
          
          (if intel then
-             push RegArg, RegObj; { 8 }
+             push RegCall, RegThis; { 8 }
           else
-             push RegArg, RegObj, DataRegA, DataRegB; { 16 }
+             push RegCall, RegThis, DataRegA, DataRegB; { 16 }
          if);
          push addSize; {Save addSize}
          push theRep; {Save theRep}
@@ -134,9 +134,9 @@ ExtVR: public
          pop theRep; {Restore theRep}
          pop addSize; {Restore addSize}
          (if intel then
-             pop  RegObj, RegArg;
+             pop  RegThis, RegCall;
           else
-             pop  DataRegB, DataRegA, RegObj, RegArg;
+             pop  DataRegB, DataRegA, RegThis, RegCall;
          if);
          
          { STACK:
@@ -167,14 +167,14 @@ ExtVR: public
              pop newRange; { restore Newrange }
              
              { Calculate BodySize of new repetition }
-             push DataReg4; { save DataReg4 }
+             push RegCall; { save RegCall }
              
              { STACK:
-               <DataReg4>
+               <RegCall>
                <General stack layout>
              }
              
-             newRange -> BodySize; { invalidates DataReg4 }
+             newRange -> BodySize; { invalidates RegCall }
              (if theRep.ProtoType = -8 then { double rep }
                  2 -> BodySize*; 
                  goto BodySizeOK
@@ -198,14 +198,14 @@ ExtVR: public
      { end LVRAcheck }
      
      { Calculate BodySize of new repetition }
-     push DataReg4; { save DataReg4 }
+     push RegCall; { save RegCall }
      
      { STACK:
-       <DataReg4>
+       <RegCall>
        <General stack layout>
      }
      
-     newRange -> BodySize; { invalidates DataReg4 }
+     newRange -> BodySize; { invalidates RegCall }
      (if theRep.ProtoType = -8 then { double rep }
          2 -> BodySize*; 
          goto IOAalloc
@@ -229,21 +229,27 @@ ExtVR: public
      newRep[16+BodySize][] -> newTop;
      
      CheckGC:
+     
+     { STACK:
+       <RegCall>
+       <General stack layout>
+     } 
+     
      (if newTop > IOALimit then goto GC if);
      newTop -> IOATop;
           
      { The new Object is now allocated, but not assigned yet!}
      
      { STACK:
-       <DataReg4>
+       <RegCall>
        <General stack layout>
      } 
      
      { recalculate theRep, it has been invalidated above }
      push newRange; { save newRange }
      { STACK:
-       <newRange>
-       <DataReg4>
+       <newRange/DataReg2>
+       <RegCall>
        <General stack layout>
      } 
      (if intel then
@@ -262,7 +268,7 @@ ExtVR: public
      pop newRange; { restore Newrange }
      
      { STACK:
-       <DataReg4>
+       <RegCall>
        <General stack layout>
      }
      
@@ -312,7 +318,7 @@ ExtVR: public
      
      { STACK:
        <DataReg3>
-       <DataReg4>
+       <RegCall>
        <General stack layout>
      }
      
@@ -348,7 +354,7 @@ ExtVR: public
      
      { STACK:
        <DataReg3>
-       <DataReg4>
+       <RegCall>
        <General stack layout>
      }
 
@@ -383,7 +389,7 @@ ExtVR: public
      { Clear the extension part of newRep }
      
      { first clear the BYTES from newRep[theRep.highborder+1..oldBodySize]
-       if it is a valrep.
+       if it is an integer rep.
      }
      (if theRep.ProtoType = -6 then
          push oldBodySize;
@@ -426,7 +432,7 @@ ExtVR: public
      
      { STACK:
        <DataReg3>
-       <DataReg4>
+       <RegCall>
        <General stack layout>
      }
 
@@ -463,33 +469,46 @@ ExtVR: public
      { STACK:
        <oldBodySize>
        <DataReg3>
-       <DataReg4>
+       <RegCall>
        <General stack layout>
      }
      
      (if BodySize > 0 then
          4 -> BodySize-;
+         
+         { Clear extension as LONGS - undefined cells will confuse GC during AlloI/AlloC }
+         push BodySize;
+         push AddrReg1;
+         stack[8] -> oldBodySize;
+         newObjRep[24+oldBodySize][] -> theExt;
+         clearloop:
+         0 -> theExt[BodySize];
+         4 -> BodySize-;
+         (if FLAGS >= 0 then goto clearloop if);
+         pop AddrReg1;
+         pop BodySize;
+         
          initloop:
          
          push BodySize;
-         push -8;
+         push -7; { protect BodySize, oldBodySize, DataReg3, but NOT RegCall }
          
          { STACK:
            <tag>
            <BodySize>
            <oldBodySize>
            <DataReg3>
-           <DataReg4>
+           <RegCall>
            <General stack layout>
          }
          
          { setup parameters for AlloI/AlloC }
          
          (if intel then
-             newObjRep.iProto  -> RegArg;
+             newObjRep.iProto  -> RegCall;
              newObjRep.iOrigin -> pReg1;
           else
-             newObjRep.iProto  -> RegArg;
+             newObjRep.iProto  -> RegCall;
              newObjRep.iOrigin -> DataReg1; { destroys oldBodySize, addSize }
          if);
          
@@ -502,17 +521,17 @@ ExtVR: public
          if);
 
          (if newRep.ProtoType=-10 then
-             call AlloI; { Destroys: RegArg(output), DataReg1, DataReg2, AddrReg1, AddrReg2. 
+             call AlloI; { Destroys: RegCall(output), DataReg1, DataReg2, AddrReg1, AddrReg2. 
                            On intel DataReg1 is DataRegA, and DataReg2 is DataRegB.
                          }
              goto AssignElemReference;
          if);
          (if newRep.ProtoType=-11 then
-             call AlloC; { Destroys: RegArg(output), DataReg1, DataReg2, AddrReg1, AddrReg2. 
+             call AlloC; { Destroys: RegCall(output), DataReg1, DataReg2, AddrReg1, AddrReg2. 
                            On intel DataReg1 is DataRegA, and DataReg2 is DataRegB.
                          }
          if);
-         { AlloI/C returns item in RegArg }
+         { AlloI/C returns item in RegCall }
          
          AssignElemReference: 
          { recalculate newObjRep - may have moved in GC caused by AlloI/C }
@@ -522,7 +541,7 @@ ExtVR: public
            <BodySize>
            <oldBodySize>
            <DataReg3>
-           <DataReg4>
+           <RegCall>
            <General stack layout>
          } 
          
@@ -546,17 +565,18 @@ ExtVR: public
          
          { assign }
          4 -> SP+; { pop tag }
+         RegCall -> DataReg2; { save the newly allocated item/component }
          pop BodySize;
          
          { STACK:
            <oldBodySize>
            <DataReg3>
-           <DataReg4>
+           <RegCall>
            <General stack layout>
          }
          
          theExt[BodySize][] -> theCell;
-         RegArg { new item/comp } -> theCell[0];
+         DataReg2 { new item/comp } -> theCell[0];
          (if theCell outside IOA then  { The theCell resides in AOA and the item in IOA  }
              push theCell;
              (if hp then
@@ -572,7 +592,7 @@ ExtVR: public
          { STACK:
            <oldBodySize>
            <DataReg3>
-           <DataReg4>
+           <RegCall>
            <General stack layout>
          } 
      if);
@@ -580,7 +600,7 @@ ExtVR: public
      { STACK:
        <oldBodySize>
        <DataReg3>
-       <DataReg4>
+       <RegCall>
        <General stack layout>
      }
 
@@ -590,12 +610,12 @@ ExtVR: public
               
      { STACK:
        <DataReg3>
-       <DataReg4>
+       <RegCall>
        <General stack layout>
      }
      
      pop DataReg3; { restore DataReg3 }
-     pop DataReg4; { restore DataReg4 }
+     pop RegCall; { restore RegCall }
      
      { STACK:
        <General stack layout>
@@ -612,7 +632,7 @@ ExtVR: public
      4 -> ReqObjectSize;     { Set the requested Object Size.            }
      4 -> BodySize/;
      BodySize -> ReqObjectSize+;
-     pop DataReg4; { Restore DataReg4 }
+     pop RegCall; { Restore RegCall }
      (if intel then pop DataReg2, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      call doGC;              { Call the Garbage Collector.               }
