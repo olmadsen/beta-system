@@ -2,17 +2,36 @@ ORIGIN '../Impl/PaintImpl';
 INCLUDE 'BifrostWinNTimpl';
 INCLUDE 'utils';
 
-INCLUDE '~beta/guienv/v1.6/private/winnt/guienv_ntiprivate';
-INCLUDE '~beta/win32lib/v1.6/wingdi';
+INCLUDE
+'~beta/guienv/v1.6/private/winnt/guienv_ntiprivate'
+'~beta/guienv/v1.6/private/winnt/paletteFunctions'
+'~beta/win32lib/v1.6/wingdi';
 
+-- PaintAttributes: attributes --
+paintHandlePalette:
+  (# hPal: @integer;
+     hdc: @integer;
+  enter hdc
+  do (if this(guienv).private.curhPal<>0 then
+         this(guienv).private.curhPal -> hPal;
+      else
+         this(guienv).private.ghPal -> hPal;
+     if);
+     (if (hPal<>0) then
+         (hdc, hPal, 1) -> SelectPalette;
+         hdc -> RealizePalette;
+     if);
+  #);
 
 -- PaintFillShapeBody: dopart --
-do (# polyFillMode: @integer;
+do (# polyFillMode: @integer; 
    do (if not theShape.isClosed then
           (if displayWarnings then
               'Trying to fill non-closed Shape; ignoring request' -> putline;
           if);
        else
+          theCanvas.implpart.hdc -> paintHandlePalette;
+
           (if polyFillMode=EvenOddRule then
               ALTERNATE -> polyFillMode;
            else
@@ -24,14 +43,18 @@ do (# polyFillMode: @integer;
    #);
    
 -- PaintFillLineBody: dopart --
-do INNER;
+do theCanvas.implpart.hdc -> paintHandlePalette;
+   INNER;
 
 -- PaintFillMultiLineBody: dopart --
-do INNER;
+do theCanvas.implpart.hdc -> paintHandlePalette;
+   INNER;
 
 -- PaintFillTextBody: dopart --
 do (# prevBkMode: @integer;
-   do (theCanvas.implpart.hdc,TRANSPARENT) -> SetBkMode -> prevBkMode;       
+   do theCanvas.implpart.hdc -> paintHandlePalette;
+      
+      (theCanvas.implpart.hdc,TRANSPARENT) -> SetBkMode -> prevBkMode;       
       (theCanvas[],theText.theFontName, theText.theStyle, theText.Size) 
         -> SetWin32Font;
       INNER fillText;
@@ -40,16 +63,20 @@ do (# prevBkMode: @integer;
 
 
 -- PaintFillPieBody: dopart --
-do INNER;   
+do theCanvas.implpart.hdc -> paintHandlePalette;
+   INNER;   
    
 -- PaintFillArcBody: dopart --
-do INNER;
+do theCanvas.implpart.hdc -> paintHandlePalette;
+   INNER;
 
 -- PaintFillRectBody: dopart --
-do INNER;
+do theCanvas.implpart.hdc -> paintHandlePalette;
+   INNER;
 
 -- PaintFillEllipseBody: dopart --
-do INNER;
+do theCanvas.implpart.hdc -> paintHandlePalette;
+   INNER;
 
 -- SolidColorImplPart: descriptor --
 (# 
@@ -92,24 +119,32 @@ do (if debugGraphic then
        'SolidColorSetCanvasPaintBody begin.' -> screen.putline; 
    if);
    INNER;
-   (theCanvas.implpart.hdc,
-   (theCanvas.implpart.hdc,implpart.theWin32Color[] -> makeColorRef)->GetNearestColor)
-     ->SetTextColor;
+   
+   (if  (implpart.allocated=0) then
+       (this(guienv).private.ghPal, implpart.theWin32Color) -> createColor -> implpart.allocated;
+   if);
+   
+   (theCanvas.implpart.hdc,implpart.theWin32Color[] -> makeColorRef)
+     ->SetTextColor; 
    
    (if debugGraphic then
        'SolidColorSetCanvasPaintBody done.' -> screen.putline; 
    if);
    
 -- SolidColorSetBorderPaintBody: dopart --
-do implpart.theWin32Color[] -> makeColorRef -> theCanvas.implpart.theBorderColor;
+do (if (implpart.allocated=0) then
+       (this(guienv).private.ghPal, implpart.theWin32Color) -> createColor -> implpart.allocated;
+   if);
+   implpart.theWin32Color[] -> makeColorRef -> theCanvas.implpart.theBorderColor;
 
 -- SolidColorSetBackgroundPaintBody: dopart --
-do implpart.theWin32Color[]-> makeColorRef -> theCanvas.SetCanvasBackgroundColor; 
+do (if (implpart.allocated=0) then
+       (this(guienv).private.ghPal, implpart.theWin32Color) -> createColor -> implpart.allocated;
+   if);
+   implpart.theWin32Color[]-> makeColorRef -> theCanvas.SetCanvasBackgroundColor; 
    (if theCanvas.implpart.hdc<>0 then
        (* setting of background paint is handled upon open *)
-       (theCanvas.implpart.hdc,
-       (theCanvas.implpart.hdc,theCanvas.implpart.backGroundColor) -> GetNearestColor)
-         -> SetBkColor;
+       (theCanvas.implpart.hdc,theCanvas.implpart.backGroundColor) -> SetBkColor;
    if);
 
 -- SolidColorFillShapeBody: dopart --
@@ -146,12 +181,8 @@ do (# theBrush, theOldBrush: @integer; thePen, theOldPen: @integer; theColor: @i
            *)
           
           implpart.theWin32Color[] -> makeColorRef -> theColor;
-          (theCanvas.implpart.hdc,implpart.theWin32Color[] -> makeColorRef) 
-            -> GetNearestColor -> theColor;
-          theColor -> CreateSolidBrush -> theBrush;
-          
-          (* implpart.theWin32Color[] 
-           -> makeColorRef -> CreateSolidBrush -> theBrush; *)
+          implpart.theWin32Color[] 
+            -> makeColorRef -> CreateSolidBrush -> theBrush; 
           (theCanvas.implpart.hdc, theBrush) -> SelectObject -> theOldBrush;
           
           NULL_PEN -> GetStockObject -> thePen;
@@ -176,7 +207,6 @@ do (# theBrush, theOldBrush: @integer; thePen, theOldPen: @integer; theColor: @i
 do (if debugGraphic then
        'SolidColorFillLineBody begin.' -> screen.putLine;
    if);
-   
    theCanvas[]->setCanvasPaint;
    theLine.begin 
      -> theLine.privatepart.go2canvasTM.m.transformPoint 
@@ -189,6 +219,7 @@ do (if debugGraphic then
    
    8 -> malloc -> ntpPtr;
    (if ntpPtr<>0 then
+       
        theLine.Width -> lineWidth;
        ((PS_GEOMETRIC,PS_SOLID) -> tos'%or')-> penStyle;
        ((penStyle,PS_INSIDEFRAME) -> tos'%or')-> penStyle;
