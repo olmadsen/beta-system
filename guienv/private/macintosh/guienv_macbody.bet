@@ -1,0 +1,1560 @@
+ORIGIN 'guienv_macprivate';
+OBJFILE mac 'mac/guienv_mac.o'
+        ppcmac 'ppcmac/guienv_ppcmac.o'
+		ppc 'ppc/guienv_ppcmac.o';
+RESOURCE mac 'external/guienv.r'
+         ppc 'external/guienv.r'
+		 ppcmac 'external/guienv.r';
+
+INCLUDE 'eventsstuff';
+INCLUDE '~beta/maclib/v3.0/osutils';
+INCLUDE '~beta/maclib/v3.0/debug';
+INCLUDE 'windowsstuff';
+INCLUDE '~beta/maclib/v3.0/fonts';
+INCLUDE 'quickdrawstuff';
+INCLUDE '~beta/maclib/v3.0/dialogs';
+INCLUDE '~beta/maclib/v3.0/toolutils';
+INCLUDE '~beta/maclib/v3.0/scrap';
+INCLUDE '~beta/maclib/v3.0/textedit';
+INCLUDE '~beta/maclib/v3.0/desk';
+INCLUDE '~beta/maclib/v3.0/menus';
+INCLUDE '~beta/maclib/v3.0/memory';
+INCLUDE '~beta/containers/v1.5/list';
+INCLUDE '~beta/sysutils/v1.5/objinterface';
+INCLUDE 'diskinitstuff';
+INCLUDE '../linkedlist';
+INCLUDE 'raster_macprivate';
+INCLUDE '../../fields';
+INCLUDE '../../graphics';
+
+-- canvasLib: attributes --
+processMouseDown:
+	(# pt: @point;
+		theHitObject: ^windowitem;
+		theCanvas: ^canvas;
+	enter pt
+	do pt -> private.children.findHitObject -> theHitObject[];
+		(if theHitObject[]//none then
+			pt -> currentLocalPosition;
+			this(canvas)[] -> hitWindowitem;
+			theEventHandler.onMouseDown;
+		else
+			theHitObject.position -> pt.subTract;
+			(if theHitObject.struc <= canvas## then
+				theHitObject[] -> theCanvas[];
+				pt -> theCanvas.processMouseDown
+			else
+				pt -> currentLocalPosition;
+				theHitObject[] -> hitWindowitem;
+				theHitObject.theEventHandler.onMouseDown;
+			if);
+		if);
+	#);
+	
+-- GUIENVLib: attributes --
+EraseRectangle: external
+	(# left, top, right, bottom: @integer;
+	enter	 (left, top, right, bottom)
+	#);
+makeColor:
+	(# maxValue: (# exit 65535 #);
+   	percent: @integer;
+   	value: @integer;
+   	theColor: ^color;
+   enter	percent
+   do (maxValue * percent) div 100 -> value;
+  		&color[] -> theColor[];
+   	(value, value, value) -> theColor;
+   exit theColor[]
+   #);
+MACLocalToGlobal: External (# p: ^macPoint enter p[] do '$A870' -> PascalTrap; #);
+MACGlobalToLocal: External (# p: ^macPoint enter p[] do '$A871' -> PascalTrap; #);
+sleep: (# exit 2 #);
+mainLoop:
+	(#	processOne: @processOneEvent;
+	do l:
+			(if not private.done then
+				processOne;
+				restart l;
+			if);
+	#);
+processOneEvent:
+	(# gotEvent: @boolean;
+		dispatch: @dispatchEvent;
+		idle: @doIdle;
+		currentTime: @integer;
+		WaitNextEvent: External
+			(# eventMask: @ShortInt;
+				theEvent: @integer;
+				sleep,mouseRgn: @Integer;
+				result: @Boolean;
+			enter (eventMask, theEvent, sleep, mouseRgn)
+			do '$A860' -> PascalTrap;
+			exit result
+			#);
+	do	(if private.globalMacMenuBar.needsUpdate then
+			private.globalMacMenuBar.update;
+		if);
+		(if private.updateCursorFlag then
+			doUpdateCursor;
+		if);
+		TickCount -> currentTime;
+		(if currentTime - private.timerQueue.lastVisit > private.timerQueue.minInterval then
+			private.timerQueue.executeElapsed;
+		if);
+		(everyEvent,private.event.address,sleep,private.cursorRegion) -> WaitNextEvent -> gotEvent;
+		(if gotEvent then
+			dispatch;
+		if);
+	#);
+dispatchEvent:
+	(# doProcessMouseDown: @processMouseDown;
+		doProcessMouseUp: @processMouseUp;
+		doProcessKeyDown: @processKeyDown;
+		doProcessActivate: @processActivate;
+		doProcessUpdate: @processUpdate;
+		doProcessDiskEvent: @processDiskEvent;
+		doProcessOsEvent: @processOsEvent;
+		doProcessHighLevelEvent: @processHighLevelEvent;
+	do (if private.event.what <> mouseUp then
+			none -> hitWindow;
+		if);
+		(if private.event.what
+			//mouseDown then doProcessMouseDown
+			//mouseUp then doProcessMouseUp
+			//keyDown//autoKey then doProcessKeyDown
+			//activateEvt then doProcessActivate
+			//updateEvt then doProcessUpdate
+			//diskEvt then doProcessDiskEvent
+			//osEvt then doProcessOsEvent
+			//kHighLevelEvent then doProcessHighLevelEvent
+		if);
+	#);
+doIdle:
+	(# theWindow: ^window;
+	do	(if private.globalMacMenuBar.needsUpdate then
+			private.globalMacMenuBar.update;
+		if);
+		activeWindow -> theWindow[];
+		(if theWindow[]<>none then
+			theWindow.processIdle;
+		if);
+	#);
+processMouseDown:
+	(# partCode: @integer;
+		windowPointer: @longint;
+		theWindow: ^window;
+		macPt: @macPoint;
+		clickPosition,pt: @point;
+		time,dlbClickTime: @integer;
+		SystemClick: External
+			(# theEvent: @integer;
+			   theWindow: @Integer;
+			enter (theEvent,theWindow)
+			do '$A9B3' -> pascalTrap;
+			#);
+	do false -> doubleClickPossible;
+		(private.event.where,windowPointer[]) -> FindWindow -> partCode;
+		(if partCode
+			//inMenubar then
+				(if modalState//systemModal then
+					30 -> SysBeep;
+				else
+					processMenubarClick;
+				if);
+			//inSysWindow then
+				(private.event.address,windowPointer) -> SystemClick;
+			//inDesk then
+		else
+			(* first determine if this can possibly be a doubleclick *)
+			private.event.where -> macPt;
+			macPt.getPoint -> clickPosition;
+			private.event.when -> time;
+			lastClickPosition -> pt;
+			clickPosition -> pt.subTract;
+			(if (pt.h*pt.h + pt.v*pt.v) < 10 then
+				GetDblTime -> dlbClickTime;
+				((time - lastClickTime) < dlbClickTime) -> doubleClickPossible;
+		  	if);
+			clickPosition -> lastClickPosition;
+			time -> lastClickTime;
+			(* now find the window *)
+			windowPointer -> private.windows.findBywindowPointer -> theWindow[];
+			(if theWindow[]<>none then
+				theWindow[] -> hitWindow;
+				partCode -> theWindow.processMouseDown;
+			if);
+		if);
+	#);
+processMouseUp: 
+	(# theWindow: ^window;
+	do hitWindow -> theWindow[];
+		(if theWindow[]<>none then
+			theWindow.processMouseUp;
+			none -> hitWindow;
+		if);
+	#);
+processKeyDown: 
+	(# key: @char;
+		result: @longInt;
+		theWindow: ^window;
+	do private.event.charCode -> key;
+		(if private.event.cmdKey then
+			(if private.event.what//keyDown then
+				private.globalMacMenubar.adjust;
+				key -> MenuKey -> result;
+				(if result.hiWord<>0 then
+					(result.hiWord,result.loWord) -> processMenuSelect;
+					0 -> HiliteMenu;
+				if);
+			if);
+		else
+			activeWindow -> theWindow[];
+			(if theWindow[]<>none then
+				key -> theWindow.processKeyDown;
+			if);
+		if);
+	#);
+processActivate: 
+	(# theWindow: ^window;
+	do private.event.message -> private.windows.findByWindowPointer -> theWindow[];
+		(if theWindow[]<>none then
+			private.event.activeFlag -> theWindow.processActivate;
+		if);
+	#);
+processUpdate: 
+	(# windowPointer: @integer;
+		theWindow: ^window;
+	do	private.event.message -> windowPointer;
+		windowPointer -> private.windows.findByWindowPointer -> theWindow[];
+		(if theWindow[]<>none then
+			theWindow.processUpdate;
+		if);
+	#);
+processDiskEvent: 
+	(# message: @longint;
+		macPt: @macPoint;
+		theError: @integer;
+	do private.event.message -> message;
+		(if message.hiWord<>0 then
+			(* DILoad; *)
+			(120,120) -> macPt.setPoint;
+			(* (macPt,message) -> DIBadMount -> theError; *)
+		if);
+	#);
+processOsEvent: 
+	(#
+	do (if private.event.app4Selector
+			//1 then
+				(if private.event.resume then
+					processResume;
+				else
+					processSuspend;
+				if);
+			//250 then processMouseMoved;
+		if);
+	#);
+processResume:
+	(#	theWindow: ^window;
+	do activeWindow -> theWindow[];
+		(if theWindow[] <> none then
+			true -> theWindow.processActivate;
+		if);
+		true -> updateCursor;
+	#);
+processSuspend:
+	(#	theWindow: ^window;
+	do activeWindow -> theWindow[];
+		(if theWindow[] <> none then
+			false -> theWindow.processActivate;
+		if);
+	#);
+processMouseMoved:
+	(#
+	do doUpdateCursor;
+	#);
+processHighLevelEvent: 
+	(#
+	#);
+
+processMenubarClick:
+	(# result: @longint;
+	do	private.globalMacMenubar.adjust;
+		private.event.where -> MenuSelect -> result;
+		(if result.hiWord<>0 then
+			(result.hiWord,result.loWord) -> processMenuSelect;
+			0 -> HiliteMenu;
+		if);
+	#);
+processMenuSelect:
+	(# menuID,itemNumber: @integer;
+		theMenu: ^menu;
+		appleMenuID: (# exit 128 #);
+	enter (menuID,itemNumber)
+	do (if menuID//appleMenuID then
+			itemNumber -> processAppleMenuSelect;
+		else
+			menuID -> private.menus.findByID -> theMenu[];
+			itemNumber -> theMenu.itemSelected;
+		if);
+	#);
+processAppleMenuSelect:
+	(# number: @integer;
+		itemText: @pascalString;
+		rep:  ^text;
+		daRefNum: @integer;
+	enter number
+	do (if number//1 then
+			showAboutBox;
+		else
+			(appleMenu,number,itemText[]) -> GetMenuItemText;
+			itemText.getText -> rep[];
+			rep -> OpenDeskAcc -> daRefNum;
+		if);
+	#);
+showAboutBox:
+	(# result: @integer;
+	do (7128,0) -> Alert -> result;
+	#);
+
+
+-- GUIENVdoUpdateCursor: doPart --
+do
+(# macPt, windowPosition: @macPoint;
+	cursorRgn: @integer;
+	theWindow: ^window;
+	left, top: @integer;
+	visRgn: @integer;
+	result: @integer;
+	handled: @boolean;
+	GlobalToLocal: External (# p: ^macPoint enter p[] do '$A871' -> PascalTrap; #);
+do false -> private.updateCursorFlag;
+	private.cursorRegion -> cursorRgn;
+	(cursorRgn, -32768, -32768, 32766, 32766) -> SetRectRgn;
+	private.event.where -> macPt;
+	activeWindow -> theWindow[];
+	(if theWindow[] <> None then
+		theWindow.private.windowPointer -> SetPort;
+		(0, 0) -> SetOrigin;
+		0 -> windowPosition.h;
+		0 -> windowPosition.v;
+		windowPosition[] -> LocalToGlobal;
+		windowPosition.h -> left;
+		windowPosition.v -> top;
+		macPt[] -> GlobalToLocal;
+		theWindow.private.windowPointer + 24 -> TOS'%adrGetLong' -> visRgn;
+		(macPt, visRgn) -> PtInRgn  -> result;
+		(if result <> 0 then
+			macPt.getPoint -> theWindow.handleCursor -> handled;
+			(if not handled then
+				(visRgn, cursorRgn) -> CopyRgn;
+				(cursorRgn, left, top) -> OffsetRgn;
+				cursors.cross[] -> mouse.busyCursor;
+			if);
+		else
+			(left, top) -> SetOrigin;
+			(cursorRgn, visRgn, cursorRgn) -> DiffRgn;
+			(0, 0) -> SetOrigin;
+			cursors.arrow[] -> mouse.busyCursor;
+		if);
+	else
+		cursors.arrow[] -> mouse.busyCursor;
+	if);
+#)
+
+-- GUIENVterminateBody: descriptor --
+(#
+do true -> private.done;
+#)
+
+-- GUIENVsetTheMenubar: descriptor --
+(#
+do theMenubar[] -> private.theMenuBar[];
+	globalMacMenuBar -> theMenubar.changeMacMenubar;
+#)
+
+-- GUIENVgetTheMenubar: descriptor --
+(#
+do  (* Not Implemented !!! *)
+#)
+
+-- GUIENVinterfaceObjectEvent: descriptor --
+(# 
+do (if private.beforeActions[]<>None then
+       private.beforeActions.scan
+       (# 
+       do (if (current.eventType## >= this(event).struc) then
+              this(event)[] -> current;
+          if);
+       #);
+   if);
+   inner event;
+   (if private.afterActions[]<>None then
+       private.afterActions.scan
+       (# 
+       do (if (current.eventType## >= this(event).struc) then
+              this(event)[] -> current;
+          if);
+       #);
+   if);
+#)
+
+-- GUIENVbasicEventShiftKey: descriptor --
+(#	
+do this(guienv).private.event.shiftKey -> value;
+#)
+
+-- GUIENVbasicEventAltKey: descriptor --
+(#
+do this(guienv).private.event.optionKey -> value;
+#)
+
+-- GUIENVbasicEventMetaKey: descriptor --
+(#
+do this(guienv).private.event.cmdKey -> value;
+#)
+
+-- GUIENVbasicEventControlKey: descriptor --
+(#
+do this(guienv).private.event.controlKey -> value
+#)
+
+-- GUIENVbasicEventButtonState: descriptor --
+(#
+do (* this(guienv).private.event.btnState -> value; *)
+	1 -> value;
+#)
+
+-- GUIENVbasicEventWhen: descriptor --
+(#
+do this(guienv).private.event.when -> value;
+#)
+
+-- GUIENVbasicEventGlobalPosition: descriptor --
+(#	macPt: @macPoint;
+do this(guienv).private.event.where -> macPt;
+	macPt.getPoint -> p;
+#)
+
+-- GUIENVbasicEventLocalPosition: descriptor --
+(#
+do currentLocalPosition -> p;
+#)
+
+-- GUIENVmouseEventDoubleClick: descriptor --
+(#
+do doubleClickPossible -> value;
+#)
+
+-- GUIENVkeyEventCh: descriptor --
+(# 
+do this(guienv).private.event.charCode -> theChar;
+#)
+
+-- GUIENVmouseDownDelay: descriptor --
+(#
+do	inner delay;
+#)
+
+-- interfaceObjectLib: attributes --
+actionList: linkedList
+  (# element::< action;
+  #);
+
+-- GUIENVinterfaceObjectPrependAction: descriptor --
+(# 
+do (if private.beforeActions[]//none then
+       &actionList[] -> private.beforeActions[];
+   if);
+   (if theAction[] -> private.beforeActions.member//false then
+       theAction[] -> private.beforeActions.prepend;
+   if);
+#)
+
+-- GUIENVinterfaceObjectAppendAction: descriptor --
+(# 
+do (if private.afterActions[]//none then
+       &actionList[] -> private.afterActions[];
+   if);
+   (if theAction[] -> private.afterActions.member//false then
+       theAction[] -> private.afterActions.append;
+   if);
+#)
+
+-- GUIENVinterfaceObjectDeleteAction: descriptor --
+(# 
+do 
+   (if private.beforeActions[]<>none then
+       theAction[] -> private.beforeActions.delete;
+   if);
+   (if private.afterActions[]<>none then
+       theAction[] -> private.afterActions.delete;
+   if);
+#)
+
+-- GUIENVintefaceObjectCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- GUIENVinterfaceObjectOpen: descriptor --
+(#
+do create;
+	inner open;
+#)
+
+-- GUIENVinterfaceObjectClose: descriptor --
+(#
+do inner close;
+#)
+
+-- GUIENVenableEventType: descriptor --
+(#
+do (* Not Implemented !!! *)
+#)
+
+-- GUIENVdisableEventType: descriptor --
+(#
+do (* Not Implemented !!! *)
+#)
+
+-- GUIENVinterfaceObjectGetLayout: descriptor --
+(#
+do (* Not Implemented !!! *)
+#)
+
+-- GUIENVinterfaceObjectException: descriptor --
+(#
+do (* Not Implemented !!! *)
+#)
+
+-- GUIENVnotOpenedException: descriptor --
+(#
+do (* Not Implemented !!! *)
+#)
+-- GUIENVseparatorSetStyle: doPart --
+do (if value <> private.style then
+		value -> private.style;
+		theEventHandler.onStyleChanged;
+		updateMaybe;
+	if);
+	
+-- GUIENVseparatorGetStyle: doPart --
+do private.style -> value;
+
+-- GUIENVwindowseparatorCreate: doPart --
+do inner create;
+
+-- GUIENVwindowseparatorOpen: doPart --
+do (if this(window).style = plain then
+		separatorStyles.singleLine -> private.style;
+	else
+		separatorStyles.etchedIn -> private.style;
+	if);
+	initialLayout;
+	inner open;
+	
+-- GUIENVwindowseparatorClose: doPart --
+do inner close;
+
+-- GUIENVwindowSeparatorOnRefresh: doPart --
+do graphics
+		(# width, height: @integer;
+			from, to: @point;
+			dx, dy: @integer;
+			lightColor: ^color;
+	   	darkColor: ^color;
+		do (if thIS(windowItem).private.backGroundStyle = whiteBackGround then
+				75 -> makeColor -> lightColor[];
+				60 -> makeColor -> darkColor[];
+			else
+				100 -> makeColor -> lightColor[];
+				60 -> makeColor -> darkColor[];
+			if);
+			size -> (width, height);
+			(if vertical then
+				(width div 2, 0) -> from;
+				(width div 2, height) -> to;
+				1 -> dx;
+				0 -> dy;
+			else
+				(0, height div 2) -> from;
+				(width,  height div 2) -> to;
+				0 -> dx;
+				1 -> dy;
+			if);
+			(if this(separator).private.style
+				//separatorStyles.singleLine then
+					(from, to) -> drawLine;
+	  			//separatorStyles.doubleLine then
+					(-1 * dx,-1 * dy) -> from.add;
+					(-1 * dx, -1  * dy) -> to.add;
+					(from, to) -> drawLine;
+					(2 * dx, 2  * dy) -> from.add;
+					(2 * dx, 2  * dy) -> to.add;
+					(from, to) -> drawLine;
+				//separatorStyles.singleDashedLine then
+					patterns.gray[] -> pen.stipple;
+					(from, to) -> drawLine;
+				//separatorStyles.doubleDashedLine then
+					(-1 * dx,-1 * dy) -> from.add;
+					(-1 * dx, -1  * dy) -> to.add;
+					patterns.gray[] -> pen.stipple;
+					(from, to) -> drawLine;
+					(2 * dx, 2  * dy) -> from.add;
+					(2 * dx, 2  * dy) -> to.add;
+					(from, to) -> drawLine;
+				//separatorStyles.etchedOut then
+					lightColor -> pen.foregroundColor;
+					(from, to) -> drawLine;
+					(1 * dx, 1  * dy) -> from.add;
+					(1 * dx, 1  * dy) -> to.add;
+					darkColor -> pen.foregroundColor;
+					(from, to) -> drawLine;
+				//separatorStyles.etchedIn then
+					darkColor -> pen.foregroundColor;
+					(from, to) -> drawLine;
+					(1 * dx, 1  * dy) -> from.add;
+					(1 * dx, 1  * dy) -> to.add;
+					lightColor -> pen.foregroundColor;
+					(from, to) -> drawLine;
+			if);
+		#);
+	
+	inner onRefresh;
+	
+-- GUIENVseparatorPutLayout: doPart --
+do
+
+-- GUIENVseparatorGetLayout: doPart --
+do
+-- GUIENVwindowseparatorPrivate: descriptor --
+(# style: @integer;
+#)
+
+-- separatorLib: attributes --
+initialLayout:
+	(# width, height: @integer;
+		left, top, right, bottom: @integer;
+	do 
+		father.size -> (width, height);
+		(if vertical then
+			width div 2 -> left;
+			left + 3 -> right;
+			((left, 0), (right, height)) -> this(windowItem).private.windowItemFrame;
+			
+		else
+			height div 2 -> top;
+			top + 3 -> bottom;
+			((0, top), (width, bottom)) -> this(windowItem).private.windowItemFrame;
+		if);
+		calculateFocus;
+	#);
+	
+
+-- GUIENVinterfaceObjectPrivate: descriptor --
+(# beforeActions,afterActions: ^actionList;
+#)
+
+-- menubarLib: attributes --
+adjust:
+	(#
+	do private.menus.scan
+			(#
+			do current.adjust;
+			#);
+	#);
+changeMacMenubar:
+	(# theMacMenubar: ^macMenubar;
+	enter theMacMenubar[]
+	do (if theMacMenubar[]<>private.theMacMenubar[] then
+			(if theMacMenubar[] = none then
+				scan
+					(#
+					do current[] -> private.theMacMenubar.delete;
+					#);
+			else
+				scan
+					(#
+					do current[] -> theMacMenubar.append;
+					#);
+			if);
+			theMacMenubar[] -> private.theMacMenubar[];
+		if);
+	#);
+
+-- GUIENVmenubarAppend: descriptor --
+(#
+do (if theMenu[] -> private.menus.has//false then
+		theMenu[] -> private.menus.append;
+		this(menubar)[] -> theMenu.owner;
+		(if private.theMacMenuBar[]<>none then
+			theMenu[] -> private.theMacMenuBar.append;
+		if);
+	if);
+#)
+
+-- GUIENVmenubarDelete: descriptor --
+(#
+do	(if theMenu[] -> private.menus.has then
+		theMenu[] -> private.menus.remove;
+		none -> theMenu.owner;
+		(if private.theMacMenuBar[]<>none then
+			theMenu[] -> private.theMacMenuBar.delete;
+		if);
+	if);
+#)
+
+-- GUIENVmenubarClear: descriptor --
+(#
+do	scan
+		(#
+		do current[] -> delete;
+		#);
+#)
+
+-- GUIENVmenubarAppendMenubar: descriptor --
+(#
+do	(* not implemented *)
+#)
+
+-- GUIENVmenubarReplaceMenubar: descriptor --
+(#
+do 	(* not implemented *)
+#)
+
+-- GUIENVmenubarDeleteMenubar: descriptor --
+(#
+do 	(* not implemented *)
+#)
+
+-- GUIENVmenubarScan: descriptor --
+(#
+do	private.menus.scan
+		(#
+		do current[] -> this(scan).current[];
+			inner scan;
+		#);
+#)
+
+-- GUIENVmenubarCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- GUIENVmenubarOpen: descriptor --
+(#
+do inner open;
+#)
+
+-- GUIENVmenubarClose: descriptor --
+(#
+do inner close;
+#)
+-- GUIENVmenubarPutLayout: doPart --
+do
+
+-- GUIENVmenubarGetLayout: doPart --
+do
+
+-- GUIENVmenubarPrivate: descriptor --
+(# menus: @list
+		(# element::< menu;
+			findByID:
+				(# ID: @integer;
+					e: ^element;
+				enter ID
+				do	l: scan
+						(#
+						do (if current.private.menuID//ID then
+								current[] -> e[];
+							if);
+						#);
+				exit e[]
+				#);
+			remove:
+				(# e: ^element;
+				enter e[]
+				do e[] -> at -> delete;
+				#);
+		#);
+	theMacMenubar: ^macMenuBar;
+#)
+
+-- GUIENVmenuSetName: descriptor --
+(#
+do theName -> private.name;
+	destroyMenu;
+	buildMenu;
+#)
+
+-- GUIENVmenuGetName: descriptor --
+(#
+do private.name.copy -> theName[];
+#)
+
+-- menuitemLib: attributes --
+adjust:
+	(#
+	do	(if theEventHandler.onStatus then
+			enable;
+		else
+			disable;
+		if);
+	#);
+enable:
+	(#
+	do (this(menu).private.handle,private.number) -> EnableItem;
+	#);
+disable:
+	(#
+	do (this(menu).private.handle,private.number) -> DisableItem;
+	#);
+updateAll:
+	(#
+	do updateName;
+		updateKey;
+		updateMark;
+		updateFace;
+		updateChecked;
+		updateSubMenu;
+	#);
+updateName:
+	(#
+	do (if private.name.empty then
+			(handle,private.number,' ') -> SetMenuItemText;
+		else
+			(handle,private.number,private.name) -> SetMenuItemText;
+		if);
+	#);
+updateKey:
+	(#
+	do (handle,private.number,private.key) -> SetItemCmd;
+	#);
+updateMark:
+	(#
+	do (if private.mark<>0 then
+			(handle,private.number,private.mark) -> SetItemMark;
+		if);
+	#);
+updateFace:
+	(#
+	do (handle,private.number,private.face) -> SetItemStyle;
+	#);
+updateChecked:
+	(#
+	do (handle,private.number,private.checked) -> CheckItem;
+	#);
+updateSubMenu:
+	(# 
+	do (if private.submenu[]//none then
+			 (handle,private.number,private.mark) -> SetItemMark;
+			 (handle,private.number,private.key) -> SetItemCmd; 
+		else
+			(handle,private.number,private.subMenu.menuID) -> SetItemMark;
+			(handle,private.number,27) -> SetItemCmd;
+		if);
+	#);
+buildItem:
+	(#
+	do (if menuitemIsSeparator then
+			(this(menu).private.handle,'(-') -> AppendMenu;
+		else
+			(this(menu).private.handle,'...') -> AppendMenu;
+			updateAll;
+		if);
+	#);
+(**********
+-- UIENVmenuitemSetMark: descriptor --
+(#
+do c -> private.mark;
+	(if private.number<>0 then
+		updateMark;
+	if);
+#)
+
+-- UIENVmenuitemGetMark: descriptor --
+(#
+do  private.mark -> c;
+#)
+******)
+-- GUIENVmenuitemSetKey: descriptor --
+(#
+do c -> private.key;
+	(if private.number<>0 then
+		updateKey;
+	if);
+#)
+
+-- GUIENVmenuitemGetKey: descriptor --
+(#
+do private.key -> c;
+#)
+(*********
+-- UIENVmenuitemSetFace: descriptor --
+(#
+do f -> private.face;
+	(if private.number<>0 then
+		updateFace;
+	if);
+#)
+
+-- UIENVmenuitemGetFace: descriptor --
+(#
+do private.face -> f;
+#)
+*****)
+-- GUIENVmenuitemSetName: descriptor --
+(#
+do t -> private.name;
+	(if private.number<>0 then
+		updateName;
+	if);
+#)
+
+-- GUIENVmenuitemGetName: descriptor --
+(#
+do private.name.copy -> t[];
+#)
+
+-- GUIENVmenuitemSetChecked: descriptor --
+(#
+do checked -> private.checked;
+	(if private.number<>0 then
+		updateChecked;
+	if);
+#)
+
+-- GUIENVmenuitemGetChecked: descriptor --
+(#
+do private.checked -> checked;
+#)
+
+-- GUIENVsetSubMenu: descriptor --
+(#
+do (if private.subMenu[]<>none then
+		private.subMenu.menuID -> DeleteMenu;
+		none -> private.subMenu[];
+	if);
+	theMenu[] -> private.subMenu[];
+	(if private.subMenu[]<>none then
+		(private.subMenu.handle,-1) -> InsertMenu;
+	if);
+	(if private.number<>0 then
+		updateSubMenu;
+	if);
+#)
+
+-- GUIENVgetSubMenu: descriptor --
+(#
+do private.subMenu[] -> theMenu[];
+#)
+
+-- GUIENVmenuitemPosition: descriptor --
+(#
+do private.number -> value;
+#)
+
+-- GUIENVmenuitemPutLayout: doPart --
+do
+
+-- GUIENVmenuitemGetLayout: doPart --
+do
+
+-- GUIENVmenuitemOnStatus: descriptor --
+(#
+do true -> value;
+	inner onStatus;
+#)
+
+-- GUIENVmenuitemCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- GUIENVmenuitemOpen: descriptor --
+(#
+do inner open;
+#)
+
+-- GUIENVmenuitemAttach: descriptor --
+(#
+do (if theAction[]<>none then
+		none -> theAction.theMenuitem[];
+	if);
+	anAction[] -> theAction[];
+	(if theAction[]<>none then
+		this(dynamicMenuitem)[] -> theAction.theMenuitem[];
+	if);
+#)
+
+-- GUIENVmenuitemDetach: descriptor --
+(#
+do	none -> attach;
+#)
+
+-- GUIENVdynamicMenuitemOnStatus: descriptor --
+(#
+do	(if theAction[]//none then
+		false -> value;
+	else
+		theAction.onStatus -> value;
+	if);
+#)
+
+-- GUIENVdynamicMenuitemOnSelect: descriptor --
+(#
+do (if theAction[]//none then
+	else
+		theAction.onSelect;
+	if);
+#)
+
+-- GUIENVactionOnStatus: descriptor --
+(#
+do	true -> value;
+	inner onStatus;
+#)
+
+-- GUIENVseparatorCreate: descriptor --
+(#
+do	inner create;
+#)
+
+-- GUIENVseparatorOpen: descriptor --
+(#
+do	true -> menuitemIsSeparator;
+	inner open;
+#)
+
+-- GUIENVseparatorClose: descriptor --
+(#
+do	inner close;
+#)
+
+-- menuLib: attributes --
+adjust:
+	(#
+	do theEventHandler.onSelect;
+		private.menuitems.scan
+			(#
+			do current.adjust;
+			#);
+	#);
+itemSelected:
+	(# itemNumber: @integer;
+		theItem: ^menuitem;
+	enter itemNumber
+	do itemNumber -> private.menuitems.findByNumber -> theItem[];
+		(if theItem[]<>none then
+			theItem.theEventHandler.onSelect;
+		else
+			debug
+				(#
+				do 'Did not find the item' -> putLine;
+				#);
+		if);
+	#);
+buildMenu:
+	(# theMenubar: ^menuBar;
+	do	(if private.handle//0 then
+			(private.menuID,private.name) -> NewMenu -> private.handle;
+			private.menuItems.scan
+				(#
+				do current.buildItem;
+				#);
+			owner -> theMenubar[];
+			(if theMenubar[]<>none then
+				(if theMenubar.private.theMacMenubar[]<>none then
+					this(menu)[] -> theMenubar.private.theMacMenubar.append;
+				if);
+			if);
+		if);
+	#);
+destroyMenu:
+	(# theMenubar: ^menuBar;
+	do (if private.handle//0 then
+		else
+			owner -> theMenubar[];
+			(if theMenubar[]<>none then
+				(if theMenubar.private.theMacMenubar[]<>none then
+					this(menu)[] -> theMenubar.private.theMacMenubar.delete;
+				if);
+			if);
+			private.handle -> DisposeMenu;
+			0 -> private.handle;
+		if);
+	#);
+-- GUIENVmenuAppend: descriptor --
+(#
+do (if theMenuitem[] -> private.menuitems.has//false then
+		theMenuitem[] -> private.menuitems.append;
+		private.menuitems.size -> theMenuitem.private.number;
+		(if theMenuitem.menuitemIsSeparator then
+			(private.handle,'(-') -> AppendMenu;
+		else
+			(private.handle,'...') -> AppendMenu;
+			theMenuitem.updateAll;
+		if);
+	if);
+#)
+
+-- GUIENVmenuDelete: descriptor --
+(# pos: ^private.menuitems.theCellType;
+do (if theMenuitem[] -> private.menuitems.has then
+		(handle,theMenuitem.number) -> DeleteMenuItem;
+		theMenuitem[] -> private.menuitems.at -> pos[];
+		pos[] -> private.menuitems.iterateFrom
+			(#
+			do current.elm.number - 1 -> current.elm.number;
+			#);
+		pos[] -> private.menuitems.delete;
+	if);
+#)
+
+-- GUIENVmenuScan: descriptor --
+(#
+do private.menuItems.scan
+		(#
+		do current[] -> this(scan).current[];
+			inner scan;
+		#);
+#)
+
+-- GUIENVmenuClear: descriptor --
+(#
+do scan
+		(#
+		do current[] -> delete;
+		#);
+#)
+
+-- GUIENVmenuNoOfMenuitems: descriptor --
+(#
+do	private.menuitems.size -> value;
+#)
+
+-- GUIENVmenuPopUp: descriptor --
+(# result: @longInt;
+	p: @point;
+do	popupAt -> popupIn.toScreenCoordinates -> p;
+	adjust;
+	(handle, -1) -> InsertMenu;
+	(handle,p.v,p.h,popupWith) -> PopUpMenuSelect -> result;
+	(if result.hiWord<>0 then
+		(result.hiWord,result.loWord) -> processMenuSelect;
+	if);
+	menuID -> DeleteMenu;
+#)
+
+-- GUIENVmenuGetMenuitemByNumber: descriptor --
+(#
+do number -> private.menuitems.findByNumber -> theMenuitem[];
+#)
+
+-- GUIENVmenuEnable: descriptor --
+(#
+do	(handle,0) -> EnableItem;
+	true -> menuEnabled;
+#)
+
+-- GUIENVmenuDisable: descriptor --
+(#
+do (handle,0) -> DisableItem;
+	false -> menuEnabled;
+#)
+
+-- GUIENVmenuEnabled: descriptor --
+(#
+do menuEnabled -> value;
+#)
+
+-- GUIENVmenuCreate: descriptor --
+(#
+do inner create;
+#)
+
+-- GUIENVmenuOpen: descriptor --
+(# t: ^text;
+do this(Menu)[] -> getPatternName -> t[];
+	t -> private.name;
+	(lastMenuID + 1) -> lastMenuID;
+	(lastMenuID,private.name) -> NewMenu -> private.handle;
+	lastMenuID -> private.menuID;
+	this(menu)[] -> this(guienv).private.menus.append;
+	inner open;
+#)
+
+-- GUIENVmenuClose: descriptor --
+(#
+do inner close;
+	this(menu)[] -> this(guienv).private.menus.remove;
+	menuID -> DeleteMenu;
+	handle -> DisposeMenu;
+	0 -> handle;
+#)
+
+-- GUIENVmenuPutLayout: doPart --
+do
+
+-- GUIENVmenuGetLayout: doPart --
+do
+
+
+-- GUIENVstandardFileMenuOpen: descriptor --
+(#
+do newMenuitem.open;
+	'New' -> newMenuitem.name;
+	newMenuitem[] -> append;
+	
+	openMenuitem;
+	'Open...' -> openMenuitem.name;
+	openMenuitem[] -> append;
+	
+	closeMenuitem;
+	'Close' -> closeMenuitem.name;
+	closeMenuitem[] -> append;
+	
+	saveMenuitem;
+	'Save' -> saveMenuitem.name;
+	saveMenuitem[] -> append;
+	
+	saveAsMenuitem;
+	'Save as...' -> saveAsMenuitem.name;
+	saveAsMenuitem[] -> append;
+	
+	revertMenuitem;
+	'Revert' -> revertMenuitem.name;
+	revertMenuitem[] -> append;
+	
+	printMenuitem;
+	'Print...' -> printMenuitem.name;
+	printMenuitem[] -> append;
+	
+	pageSetUpMenuitem;
+	'Page setup' -> pageSetUpMenuitem.name;
+	pageSetUpMenuitem[] -> append;
+	
+	quitMenuitem;
+	'Quit' -> quitMenuitem.name;
+	quitMenuitem[] -> append;
+	inner open;
+#)
+
+-- GUIENVstandardEditMenuOpen: descriptor --
+(#
+do undoMenuitem.open;
+	'Undo' -> undoMenuitem.name;
+	undoMenuitem[] -> append;
+	
+	cutMenuitem.open;
+	'Cut' -> cutMenuitem.name;
+	cutMenuitem[] -> append;
+	
+	copyMenuitem.open;
+	'Copy' -> copyMenuitem.name;
+	copyMenuitem[] -> append;
+	
+	pasteMenuitem.open;
+	'Paste' -> pasteMenuitem.name;
+	pasteMenuitem[] -> append;
+	
+	clearMenuitem.open;
+	'Clear' -> clearMenuitem.name;
+	clearMenuitem[] -> append;
+	inner open;
+#)
+-- GUIENVwindowGetContents: doPart --
+do 
+
+
+
+-- GUIENVwindowitemPutLayout: doPart --
+do
+
+-- GUIENVwindowitemGetLayout: doPart --
+do
+
+-- GUIENVstandardMenubarOpen: descriptor --
+(# 
+do &fileMenu[] -> theFileMenu[];
+	(if theFileMenu.struc <= menu## then
+		theFileMenu.open;
+		theFileMenu[] -> append;
+	else
+		none -> theFileMenu[];
+	if);
+	&editMenu[] -> theeditMenu[];
+	(if theeditMenu.struc <= menu## then
+		theeditMenu.open;
+		theeditMenu[] -> append;
+	else
+		none -> theeditMenu[];
+	if);
+	inner open;
+#)
+
+-- windowLib: attributes --
+
+processIdle:
+	(#
+	do theEventHandler.onIdle;
+		(if windowTarget<>none then
+			private.windowTarget.theEventHandler.onIdle;
+		if);
+	#);
+processMouseDown:
+	(# partCode: @integer;
+		handleTheEvent: @boolean;
+		grayRgn: @regionRecord;
+		screenBounds: @macRect;
+		a,b,c,d: @integer;
+	enter partCode
+	do (if this(window)[]//activeWindow then
+			true -> handleTheEvent;
+		else
+			(modalState = modeless) -> handleTheEvent
+		if);				
+		(if handleTheEvent then
+			(if partCode
+				//inContent then
+					(if this(window)[]//activeWindow then
+						processContentClick;
+					else
+						private.windowPointer -> SelectWindow;
+					if);
+				//inDrag then
+					GetGrayRgn -> grayRgn.init;
+					grayRgn.bounds -> ((a,b),(c,d));
+					((a,b),(c,d)) -> screenBounds;
+					(private.windowPointer,this(guienv).private.event.where,screenBounds[]) -> DragWindow;
+				//inGrow then
+					processResize;
+				//inGoAway then
+					processGoAway;
+				//inZoomIn//inZoomOut then
+					partCode -> processZoom;
+			if);
+		else
+			30 -> SysBeep;
+		if);
+	#);
+processMouseUp:
+	(# theWindowItem: ^windowItem;
+	do hitWindowitem -> theWindowItem[];
+		(if theWindowitem[]<>none then
+			theWindowitem.theEventHandler.onMouseUp;
+			none -> hitWindowitem;
+		if);
+	#);
+processKeyDown:
+	(# key: @char;
+		defaultButton: ^windowItem;
+	enter key
+	do windowDefaultButton -> defaultButton[];
+		(if defaultButton[]<>None then
+			(if key//13//3 then
+				true -> defaultButton.hilite;
+				10 -> system.wait;
+				false -> defaultButton.hilite;
+				defaultButton.theEventHandler.onMouseUp;
+			if);
+		if);
+		(if windowTarget<>none then
+			private.windowTarget.theEventhandler.onKeyDown;
+		else
+			theEventHandler.onKeyDown;
+		if);
+	#);
+processActivate:
+	(#	doActivate: @boolean;
+	enter doActivate
+	do (if doActivate<>windowActive then
+			doActivate -> windowActive;
+			(if doActivate then
+				theEventHandler.onActivate;
+				(if windowTarget<>none then
+					private.windowTarget.theEventHandler.onEnableTarget;
+				if);
+			else
+				theEventHandler.onDeactivate;
+				(if windowTarget<>none then
+					private.windowTarget.theEventHandler.onDisableTarget;
+				if);
+			if);
+			invalidateGrowIcon;
+		if);
+		handleCursor;
+	#);
+processUpdate:
+	(#	
+	do private.windowPointer -> BeginUpdate;
+		private.windowContents.theEventHandler.onRefresh;
+		theEventHandler.onRefresh;
+		drawDefaultButton;
+		drawGrow;
+		private.windowPointer -> EndUpdate;
+	#);
+erasePortRect:
+	(# 
+	do private.windowContents.focus
+			(# port: @grafPortRecord;
+				mr: @macRect;
+				a,b,c,d: @integer;
+			do private.windowPointer -> port;
+				port.portRectangle -> ((a,b),(c,d));
+				(a, b, c, d) -> EraseRectangle;
+			#);
+	#);
+processContentClick:
+	(# macPt: @macPoint;
+		GlobalToLocal: External (# p: ^macPoint enter p[] do '$A871' -> PascalTrap; #);
+	do 
+		this(guienv).private.event.where -> macPt;
+		private.windowPointer -> SetPort;
+		(0,0) -> SetOrigin;
+		macPt[] -> GlobalToLocal;
+		macPt.getPoint -> private.windowContents.processMouseDown;
+	#);
+processResize:
+	(# 
+		limit: @macRect;
+		result: @macPoint;
+		width,height: @integer;
+	do	
+		(theMinSize,theMaxSize) -> limit;
+		(private.windowPointer,this(guienv).private.event.where,limit[]) -> GrowWindow -> result;
+		result.getPoint -> (width,height);
+		(if (width<>0) or (height<>0) then
+			(width,height) -> size;
+		if);
+	#);
+processGoAway:
+	(#
+		result: @boolean;
+	do 
+		(private.windowPointer,this(guienv).private.event.where) -> TrackGoAway -> result;
+		(if result then
+			(if theEventHandler.onAboutToClose then
+				close;
+			if);
+		if);
+	#);
+processZoom:
+	(# partCode: @integer;
+		result: @boolean;
+	enter partCode
+	do 
+		(private.windowPointer,this(guienv).private.event.where,partCode) -> TrackBox -> result;
+		(if result then
+			partCode ->	zoom;
+		if);
+	#);
+zoom:
+	(# partCode: @integer;
+		r: @rectangle;
+	enter partCode
+	do  erasePortRect;
+		private.windowPointer -> SetPort;
+		(private.windowPointer,partCode,false) -> ZoomWindow;
+		getBounds -> r;
+		r.size -> size;
+	#);
+getBounds:
+	(#  LocalToGlobal: External (# p: ^macPoint enter p[] do '$A870' -> PascalTrap; #);
+		port: @grafportRecord;
+		r: @rectangle;
+		left,top,right,bottom: @integer;
+		translate:
+			(#	pt: @point;
+				macPt: @macPoint;
+			enter pt
+			do pt -> macPt.setPoint;
+				macPt[] -> LocalToGlobal;
+				macPt.getPoint -> pt;
+			exit pt
+			#);
+	do private.windowPointer -> SetPort;
+		(0,0) -> SetOrigin;
+		private.windowPointer -> port;
+		port.portRectangle -> ((left,top),(right,bottom));
+		(left,top) -> translate -> r.topLeft;
+		(right,bottom) -> translate -> r.bottomRight;
+	exit r
+	#);
+getGrowIconBounds:
+	(# bounds: @rectangle;
+	do size -> bounds.bottomRight;
+		bounds.bottom - 15 -> bounds.top;
+		bounds.right - 15 -> bounds.left;
+	exit bounds
+	#);
+drawGrow:
+	(# mr: @macRect;
+	do private.windowPointer -> SetPort;
+		getGrowIconBounds -> mr;
+		mr[] -> ClipRect;
+		(0,0) -> SetOrigin;
+		this(guienv).private.grayPixPat -> BackPixPat;
+		private.windowPointer -> DrawGrowIcon;
+	#);
+drawDefaultButton:
+	(#	theButton: ^windowItem;
+		r: @rectangle;
+	do windowDefaultButton -> theButton[];
+		(if theButton[]<>None then
+			theButton.frame -> r;
+			(if this(window).style = plain then
+				theButton.father.graphics
+					(#
+					do (-4,-4) -> r.inset;
+						3 -> pen.size;
+						(r, ((0, 0), (16,16))) -> drawRoundRect;
+					#);
+				else
+					theButton.father.graphics
+					(#
+					do (-3,-3) -> r.inset;
+						2 -> pen.size;
+						(r, ((0, 0), (4,4))) -> drawRoundRect;
+					#);
+					(* (-4, -4) -> r.inset;
+					(r, borderStyles.shadowIn) -> theButton.father.drawBorder; *)
+			if);
+		if);
+	#);
+invalidateGrowIcon:
+	(# mr: @macRect;
+	do private.windowPointer -> SetPort;
+		getGrowIconBounds -> mr;
+		(0,0) -> SetOrigin;
+		mr[] -> InvalRect;
+	#);
+handleCursor: booleanValue
+	(# pt: @point;
+		hitObject: ^windowItem;
+		left, right: @integer;
+	enter pt
+	do pt -> private.windowContents.findHitObject -> hitObject[];
+		pt -> hitObject.handleCursor;
+		true -> value;
+	#);
+-- GUIENVupdateRect: doPart --
+do (# rgnTop: (# exit 2 #);
+		rgnLeft: (# exit 4 #);
+		rgnBottom: (# exit 6 #);
+		rgnRight: (# exit 8 #);
+		
+		visibleRgn: @integer;
+		address: @integer;
+		theWindowItem: ^window.windowItem;
+	do this(interfaceObject)[] -> theWindowItem[];
+		&rectangle[] -> value[];
+		
+		theWindowItem.private.clip -> visibleRgn;
+		visibleRgn -> TOS'%adrGetLong' -> address;
+		address + rgnLeft -> TOS'%adrGetSignedShort' -> value.left;
+		address + rgnTop -> TOS'%adrGetSignedShort' -> value.top;
+		address + rgnRight -> TOS'%adrGetSignedShort' -> value.right;
+		address + rgnBottom -> TOS'%adrGetSignedShort' -> value.bottom;
+   #);

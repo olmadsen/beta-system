@@ -1,0 +1,779 @@
+ORIGIN '../guienvbody';
+BODY 'guienv_macbody' 'guienv_macbody2';
+
+INCLUDE 'eventsstuff';
+INCLUDE 'quickdrawstuff';
+INCLUDE '~beta/containers/v1.5/list';
+INCLUDE '~beta/maclib/v3.0/memory';
+
+-- guienvLib: attributes --
+ResetPen:
+	(#
+	do	PenNormal;
+		blackColor -> foreColor;
+		whiteColor -> backColor;
+	#);
+	
+plain: (# exit 1 #);
+shadows: (# exit 2 #);
+mixed: (# exit 3 #);
+
+noneBackGround: (# exit 0 #);
+whiteBackGround: (# exit 1 #);
+grayBackGround: (# exit 2 #);
+
+timerAction:
+	(# interval: @integer;
+		time: @integer;
+	do inner;
+	#);
+
+currentLocalPosition:
+	(#
+	enter private.currentLocalPosition
+	exit private.currentLocalPosition
+	#);
+cursorRegion:
+	(#
+	enter private.cursorRegion
+	exit private.cursorRegion
+	#);
+modalState:
+	(#
+	enter private.modalState
+	exit private.modalState
+	#);
+lastMenuID:
+	(#
+	enter private.lastMenuID
+	exit private.lastMenuID
+	#);
+appleMenu:
+	(#
+	enter private.appleMenu
+	exit private.appleMenu
+	#);
+utilityPort:
+	(#
+	enter private.utilityPort
+	exit private.utilityPort
+	#);
+doubleClickPossible:
+	(#
+	enter private.doubleClickPossible
+	exit private.doubleClickPossible
+	#);
+lastClickTime:
+	(#
+	enter private.lastClickTime
+	exit private.lastClickTime
+	#);
+lastClickPosition:
+	(#
+	enter private.lastClickPosition
+	exit private.lastClickPosition
+	#);
+hitWindow:
+	(#
+	enter private.hitWindow[]
+	exit private.hitWindow[]
+	#);
+globalMacMenubar:
+	(#
+	exit private.globalMacMenubar[]
+	#);
+(* activeWindow:
+	(#
+	enter private.activeWindow[]
+	exit private.activeWindow[]
+	#);
+	*)
+activeWindow:
+	(# theWindow: ^window;
+	do <<SLOT GUIENVactiveWindow: descriptor>>
+	exit theWindow[]
+	#);
+modeless: (# exit 1 #);
+applicationModal: (# exit 2 #);
+systemModal: (# exit 3 #);
+
+saveRestoreFocus:
+	(#
+	do <<SLOT GUIENVsaveRestoreFocus: descriptor>>;
+	#);
+makeMacRect:
+	(#	r: ^rectangle;
+		mr: ^macRect;
+	enter r[]
+	do &macRect[] -> mr[];
+		(mr.R, 0, r.top)    -> TOS'%inxPutShort';
+		(mr.R, 2, r.left)   -> TOS'%inxPutShort';
+		(mr.R, 4, r.bottom) -> TOS'%inxPutShort';
+		(mr.R, 6, r.right)  -> TOS'%inxPutShort'
+	exit mr[]
+	#);
+makeMacPoly:
+	(#	points: [0] ^point;
+		macPoly: @integer;
+	enter points
+	do withUtilityPort
+			(#
+			do OpenPoly -> macPoly;
+				points[1] -> MoveTo;
+				(for inx: points.range - 1 repeat
+					points[inx + 1] -> LineTo;
+				for);
+				points[1] -> LineTo;
+				ClosePoly;
+			#);
+	exit macPoly
+	#);
+withUtilityPort:
+	(#	currentPort: @longInt;
+	do currentPort[] -> GetPort;
+		utilityPort -> SetPort;
+		inner;
+		currentPort -> SetPort;
+	#);
+savePenState:
+	(# 
+	do
+		inner;
+		
+	#);
+macMenuBar:
+	(#	menus: @list
+			(# element::< menu;
+			#);
+		append:
+			(# theMenu: ^menu;
+			enter theMenu[]
+			do <<SLOT GUIENVmacMenuBarappend: descriptor>>;
+			#);
+		delete:
+			(# theMenu: ^menu;
+			enter theMenu[]
+			do <<SLOT GUIENVmacMenuBardelete: descriptor>>;
+			#);
+		member: booleanValue
+			(# theMenu: ^menu;
+			enter theMenu[]
+			do <<SLOT GUIENVmacMenuBarmember: descriptor>>;
+			#);
+		findByName:
+			(# name: ^text;
+				theMenu: ^menu;
+			enter name[]
+			do <<SLOT GUIENVmacMenuBarFindByName: descriptor>>;
+			exit theMenu[]
+			#);
+		findByID:
+			(# ID: @integer;
+				theMenu: ^menu;
+			enter ID
+			do <<SLOT GUIENVmacMenuBarFindByID: descriptor>>;
+			exit theMenu[]
+			#);
+		init:
+			(# do <<SLOT GUIENVmacMenuBarInit: descriptor>>; #);
+		update:
+			(# do <<SLOT GUIENVmacMenuBarUpdate: descriptor>>; #);
+		adjust:
+			(#
+			<<SLOT MacMenuBarAdjust: doPart>>
+			#);
+		needsUpdate: @boolean;
+	#);
+debug: trace
+	(# putLine: @msg.putLine;
+		putInt: @msg.putInt;
+		put: @msg.put;
+		putText: @msg.putText;
+		putPoint:
+			(#	pt: @point;
+			enter pt
+			do pt.h -> putInt;
+				' ' -> put;
+				pt.v -> putInt;
+			#);
+		putRect:
+			(# r: @rectangle;
+			enter r
+			do r.topLeft -> putPoint;
+				' ' -> put;
+				r.bottomRight -> putPoint;
+			#);
+		msg: @text;
+		DebugStr: External 
+			(# str: [1] @Char; 
+			enter str
+			do '$ABFF' -> PascalTrap;
+			#);
+	do inner;
+		msg -> debugStr;
+	#);
+
+updateCursor:
+	(# immediate: @boolean;
+	enter	immediate
+	do (if immediate then
+			doUpdateCursor;
+		else
+			true -> private.updateCursorFlag;
+		if);
+	#);
+doUpdateCursor: (# <<SLOT GUIENVdoUpdateCursor: doPart>> #);
+-- GUIENVPrivate: descriptor --
+(# 
+	grayPixPat, whitePat: @integer;
+	backGround: ^color;
+	done: @boolean; (* True when the eventloop should terminate *)
+	cursorRegion, emptyRgn, wideRgn: @integer;
+	updateCursorFlag: @boolean;
+	event: @
+		(# address: @integer;
+			init:
+				(#
+				do 16 -> NewPtr -> address;
+				#);
+			what: @(# value: @integer  do address + 0 -> TOS'%adrGetShort' -> value; exit value #);
+			message: @(# value: @integer  do address + 2 -> TOS'%adrGetLong' -> value; exit value #);
+			keyCode: @(# value: @integer  do address + 4 -> TOS'%adrGetByte' -> value; exit value #);
+			charCode: @(# value: @integer  do address + 5 -> TOS'%adrGetByte' -> Value; exit value #);
+			when: @(# value: @integer  do address + 6 -> TOS'%adrGetLong' ->value; exit value #);
+			where: @(# value: @integer  do address + 10 -> TOS'%adrGetLong' ->value; exit value #);
+			modifiers: @(# value: @integer  do address + 14 -> TOS'%adrGetShort' -> value; exit value #);
+			app4Selector: @(# value: @integer  do address + 2 -> TOS'%adrGetByte' -> value; exit value #);
+			childDiedStatus: @(# value: @integer  do address + 3 -> TOS'%adrGetByte' -> value; exit value #);
+			resume: @(# b: @Boolean exit message -> TOS'%GetBits[31,1]' -> b #);
+			scrapDataHasChanged: @(# b: @Boolean exit message -> TOS'%GetBits[30,1]' -> b #);
+			activeFlag: @(# b: @Boolean exit modifiers -> TOS'%GetBits[31,1]' -> b #);
+			btnState: @(# b: @Boolean exit modifiers -> TOS'%GetBits[24,1]' -> b #);
+			cmdKey: @(# b: @Boolean exit modifiers -> TOS'%GetBits[23,1]' -> b #);
+			shiftKey: @(# b: @Boolean exit modifiers -> TOS'%GetBits[22,1]' -> b #);
+			alphaLock: @(# b: @Boolean exit modifiers -> TOS'%GetBits[21,1]' -> b #);
+			optionKey: @(# b: @Boolean exit modifiers -> TOS'%GetBits[20,1]' -> b #);
+			controlKey: @(# b: @Boolean exit modifiers -> TOS'%GetBits[19,1]' -> b #);
+		#);
+	currentLocalPosition: @point;
+	modalState: @integer;
+	activeWindow: ^window;
+	windows: @list
+		(# element::< window;
+			findBywindowPointer:
+				(# e: ^element;
+					windowPointer: @integer;
+				enter windowPointer
+				do <<SLOT GUIENVwindowsFindBywindowPointer: descriptor>>;
+				exit e[]
+				#);
+			remove:
+				(# e: ^element;
+				enter e[]
+				do e[] -> at -> delete;
+				#);
+		#);
+	menus: @list
+		(# element::< menu;
+			findByID:
+				(# ID: @integer;
+					e: ^element;
+				enter ID
+				do	l: scan
+						(#
+						do (if current.private.menuID//ID then
+								current[] -> e[];
+							if);
+						#);
+				exit e[]
+				#);
+			remove:
+				(# e: ^element;
+				enter e[]
+				do e[] -> at -> delete;
+				#);
+		#);
+	theMenubar: ^menubar;
+	globalMacMenubar: @macMenuBar;
+	lastMenuID: @integer;
+	appleMenu: @integer;
+	utilityPort: @integer;
+	hitWindow: ^window;
+	doubleClickPossible: @boolean;
+	lastClickTime: @integer;
+	lastClickPosition: @point;
+	
+	timerQueue: @
+		(# R: [16] ^timerAction;
+			top: @integer;
+			lastVisit: @integer;
+			minInterval: @integer;
+			init:
+				(#
+				<<SLOT TimerQueueInit: doPart>>
+				#);
+			insert:
+				(# action: ^timerAction;
+					inserted: @boolean;
+				enter	action[]
+				<<SLOT TimerQueueInsert: doPart>>
+				#);
+			delete:
+				(# action: ^timerAction;
+				enter	action[]
+				<<SLOT TimerQueueDelete: doPart>>
+				#);
+			scan:
+				(# current: ^timerAction;
+				<<SLOT TimerQueueScan: doPart>>
+				#);
+			executeElapsed: @
+				(# currentTime: @integer;
+					interval: @integer;
+					inx: @integer;
+					current: ^timerAction;
+				<<SLOT TimerQueueExecuteElapsed: doPart>>
+				#);
+		#);
+#)
+
+-- windowLib: attributes --
+style:
+	(#
+	enter private.style
+	exit private.style
+	#);
+windowPointer:
+	(# 
+	enter private.windowPointer
+	exit private.windowPointer 
+	#);
+theMaxSize:
+	(#
+	enter private.theMaxSize
+	exit private.theMaxSize
+	#);
+theMinSize:
+	(#
+	enter private.theMinSize
+	exit private.theMinSize
+	#);
+windowTarget:
+	(#
+	enter private.windowTarget[]
+	exit private.windowTarget[]
+	#);
+windowContents:
+	(#
+	enter private.windowContents[]
+	exit private.windowContents[]
+	#);
+hitWindowitem:
+	(#
+	enter private.hitWindowitem[]
+	exit private.hitWindowitem[]
+	#);
+windowDefaultButton:
+	(#
+	enter private.windowDefaultButton[]
+	exit private.windowDefaultButton[]
+	#);
+useTextStyle:
+	(# style: ^textStyle;
+	enter style[]
+	do <<SLOT GUIENVwindowUseTextStyle: descriptor>>
+	#);
+windowActive:
+	(#
+	enter private.windowActive
+	exit private.windowActive
+	#);
+windowVisible:
+	(#
+	enter private.windowVisible
+	exit private.windowVisible
+	#);
+windowMenuBar:
+	(#
+	enter private.windowMenuBar[]
+	exit private.windowMenuBar[]
+	#);
+windowSize:
+	(# left, top, right, bottom: @integer;
+		topOffset: (# exit 16 #);
+		leftOffset: (# exit 18 #);
+		bottomOffset: (# exit 20 #);
+		rightOffset: (# exit 22 #);
+		width, height: @integer;
+	do	private.windowPointer + leftOffset -> TOS'%adrGetSignedShort' -> left;
+		private.windowPointer + topOffset -> TOS'%adrGetSignedShort' -> top;
+		private.windowPointer + rightOffset -> TOS'%adrGetSignedShort' -> right;
+		private.windowPointer + bottomOffset -> TOS'%adrGetSignedShort' -> bottom;
+		right - left -> width;
+		bottom - top -> height;
+		debug
+			(#
+			do width -> putInt;
+				' ' ->put;
+				height -> putInt;
+				newLine;
+			#);
+	exit (width, height)
+	#);
+-- GUIENVwindowPrivate: descriptor --
+(# windowPointer: @integer;
+	style: @integer;
+	theMaxSize: @point;
+	theMinSize: @point;
+	windowActive: @boolean;
+	windowVisible: @boolean;
+	windowTarget: ^windowItem;
+	windowContents: @canvas
+		(# eventHandler::<
+				(# onMouseDown::<
+						(#
+						do this(window).theEventHandler.onMouseDown;
+						#);
+				#);
+			open::
+				(#
+				do 
+					windowSize -> size;
+				#);
+		#);
+	hitWindowitem: ^windowItem;
+	windowDefaultButton: ^windowItem;
+	windowMenuBar: ^menuBar;
+#)
+
+-- menuLib: attributes --
+menuID:
+	(#
+	enter private.menuID
+	exit private.menuID
+	#);
+handle:
+	(#
+	enter private.handle
+	exit private.handle
+	#);
+menuEnabled:
+	(#
+	enter private.menuEnabled
+	exit private.menuEnabled
+	#);
+owner:
+	(#
+	enter private.owner[]
+	exit private.owner[]
+	#);
+
+-- GUIENVmenuPrivate: descriptor --
+(# menuID: @integer;
+	handle: @integer;
+	name: @text;
+	menuEnabled: @boolean;
+	owner: ^menubar;
+	menuitems: @list
+		(# element::< menuitem;
+			findByNumber:
+				(# number: @integer;
+					e: ^element;
+				enter number
+				do l: scan
+						(#
+						do	(if current.private.number//number then
+								current[] -> e[];
+								leave l;
+							if);
+						#);
+				exit e[]
+				#);
+		#);
+#)
+
+-- menuItemLib: attributes --
+number:
+	(#
+	enter private.number
+	exit private.number
+	#);
+menuitemIsSeparator:
+	(#
+	enter private.menuitemIsSeparator
+	exit private.menuitemIsSeparator
+	#);
+
+-- GUIENVmenuitemPrivate: descriptor --
+(# number: @integer;
+	name: @text;
+	key,mark: @char;
+	subMenu: ^menu;
+	face: @integer;
+	checked: @boolean;
+	menuitemIsSeparator: @boolean;
+#)
+
+-- windowitemLib: attributes --
+
+debugMe:
+	(#
+	enter private.debugMe
+	exit private.debugMe
+	#);
+
+drawBorder:
+	(# style: @integer;
+		r: @rectangle;
+	enter (r, style)
+	<<SLOT GUIENVwindowItemDrawBorder: doPart>>
+	#);
+
+backGroundStyle:
+	(#
+	enter private.backGroundStyle
+	exit private.backGroundStyle
+	#);
+	
+privateOrigin: (# exit (private.originX, private.originY) #);
+privateClip: (# exit private.clip #);
+privateWindowItemFrame:
+	(#
+	enter	private.windowItemFrame
+	#);
+privateAutomaticUpdate:
+	(#
+	enter private.automaticUpdate
+	exit private.automaticUpdate
+	#);
+
+updateMaybe:
+	(#
+	do (if private.automaticUpdate then update if);
+	#);
+
+focus:
+	(# h,v: @integer;
+	<<SLOT GUIENVwindowitemFocus: doPart>>
+	#);
+focusVisible:
+	(# visibleRgn: @integer;
+	<<SLOT GUIENVwindowItemFocusVisible: doPart>>
+	#);
+focusZero:
+	(# h,v: @integer;
+		windowClip: @integer; (* RgnHandle *)
+  	<<SLOT GUIENVwindowitemFocusZero: doPart>>
+	#);
+focusEmpty:
+	(#
+	<<SLOT GUIENVwindowItemFocusEmpty: doPart>>
+	#);
+	
+hit: booleanValue
+	(# pt: @point;
+	enter pt
+	do pt -> private.theMethods.hit -> value;
+	#);
+hitMethod: booleanValue
+	(#	pt: @point;
+	enter pt
+	do inner;
+	#);
+defaultHitMethod: hitMethod
+	(#
+	do <<SLOT GUIENVwindowItemDefaultHitMethod: descriptor>>;
+	#);
+
+handleCursor: booleanValue
+	(#	pt: @point;
+	enter pt
+	do pt -> private.theMethods.handleCursor -> value;
+	#);
+handleCursorMethod: booleanValue
+	(#	pt: @point;
+	enter pt
+	do inner;
+	#);
+defaultHandleCursorMethod: handleCursorMethod
+	(#
+	do <<SLOT GUIENVwindowItemdefaultHandleCursorMethod: descriptor>>;
+	#);
+	
+calculateFocus:
+	(# siblingsRgn: @integer;
+	enter siblingsRgn
+	do siblingsRgn -> private.theMethods.calculateFocus 
+	#);
+calculateFocusMethod:
+	(# siblingsRgn: @integer;
+	enter siblingsRgn
+	do inner;
+	#);
+defaultCalculateFocus: calculateFocusMethod
+	(# <<SLOT GUIENVwindowItemCalculateFocus: doPart>> #);
+	
+getVisibleRgn:
+	(# rgn: @integer;
+	enter	rgn
+	do rgn -> private.theMethods.getVisibleRegion;
+	#);
+findHitObject:
+	(# pt: @point;
+		hitObject: ^windowItem;
+	enter pt
+	do pt -> private.theMethods.findHitObject -> hitObject[];
+	exit hitObject[]
+	#);
+	
+methods:
+	(#	hit:< 
+			hitMethod;
+		calculateFocus:<
+			calculateFocusMethod;
+		handleCursor:< 
+			handleCursorMethod;
+		getVisibleRegion:<
+			(# rgn: @integer;
+			enter rgn
+			<<SLOT GUIENVwindowItemGetVisibleRegion: doPart>>
+			#);
+		findHitObject:<
+			(# pt: @point;
+				hitObject: ^windowItem;
+			enter pt
+			<<SLOT GUIENVwindowItemFindHitObject: doPart>>
+			exit hitObject[]
+			#);
+	#);
+defaultMethods: methods
+	(# hit::<
+			defaultHitMethod;
+		handleCursor::<
+			defaultHandleCursorMethod;
+		calculateFocus::< defaultCalculateFocus;
+	#);
+windowitemMethods:
+	(#
+	enter private.theMethods[]
+	exit private.theMethods[]
+	#);
+windowItemCursor:
+	(#
+	enter private.windowItemCursor[]
+	exit private.windowItemCursor[]
+	#);
+	
+toScreenCoordinates:
+	(# p, q: @point;
+	enter p
+	<<SLOT GUIENVwindowItemToScreenCoordinates: doPart>>
+	exit q
+	#);
+
+-- GUIENVwindowitemPrivate: descriptor --
+(# originX, originY: @integer;
+	clip: @integer; (* Region handle *)
+	backGroundStyle: @integer;
+	windowItemFrame: @rectangle;
+	visibleFlag,enabledFlag,hiliteFlag,
+	automaticUpdate,updateOnResize, borderVisibleFlag: @boolean;
+	borderStyle: @integer;
+	theMethods: ^methods;
+	windowItemCursor: ^cursor;
+	debugMe: @boolean;
+#)
+
+-- canvasLib: attributes --
+
+canvasMethods: methods
+	(#	hit::< defaultHitMethod;
+		calculateFocus::< defaultCalculateFocus
+			(# <<SLOT GUIENVCanvasCalculateFocus: doPart>> #);
+		handleCursor::< defaultHandleCursorMethod
+			(# <<SLOT GUIENVcanvasHandleCursor: doPart>> #);
+		getVisibleRegion::<
+			(#
+			<<SLOT GUIENVcanvasGetVisibleRgn: doPart>>
+			#);
+		findHitObject::
+			(#
+			<<SLOT GUIENVcanvasFindHitObject: doPart>>
+			#);
+	#);
+calculateFocusForChildren:
+	(# siblingsRgn: @integer;
+	<<SLOT GUIENVcanvasCalculateFocusForChildren: doPart>>
+	#);
+
+-- GUIENVcanvasPrivate: descriptor --
+(# children: @list
+		(# element::< windowItem;
+			remove:
+				(# e: ^element;
+				enter e[]
+				do e[] -> at -> delete;
+				#);
+			findHitObject:
+				(# pt: @point;
+					e: ^element;
+				enter pt
+				do l: scanReverse
+						(# where::<
+								(#
+								do (if (current.private.enabledFlag and current.private.visibleFlag)//true then
+										pt -> current.hit -> value;
+									else
+										false -> value;
+									if);
+								#);
+						do current[] -> e[];
+							leave l;
+						#);
+				exit e[]
+				#);
+		#);
+	selection: @list
+     (# 
+        element::< windowitem;
+     #);
+#)
+
+-- textStyleLib: attributes --
+familyID:
+	(#
+	enter private.familyID
+	exit private.familyID
+	#);
+textStyleSize:
+	(#
+	enter private.textStyleSize
+	exit private.textStyleSize
+	#);
+textStyleFace:
+	(#
+	enter private.textStyleFace
+	exit private.textStyleFace
+	#);
+textStyleAttributes:
+	(#
+	enter (familyID,textStyleSize,textStyleFace)
+	exit (familyID,textStyleSize,textStyleFace)
+	#);
+getInfo:
+	(# info: ^FontInfo;
+	do &FontInfo[] -> info[];
+		withTextStyle
+			(#
+			do info[] -> GetFontInfo;
+			#);
+	exit info[]
+	#);
+withTextStyle:
+	(#
+	do <<SLOT GUIENVTextStyleWithTextStyle: descriptor>>
+	#);
+-- GUIENVtextStylePrivate: descriptor --
+(# familyID,textStyleSize,textStyleFace: @integer;
+#)
+
