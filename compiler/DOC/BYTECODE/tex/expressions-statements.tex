@@ -1,0 +1,152 @@
+
+\section{Expressions and statements}
+Expressions and statemenst are in most cases straight forward to map intp CJ.
+
+{\bf Basic types}. BETA has basic types corresponding to 8, 16, and 32
+bits signed and unsigned integers, 8, and 16-bit characters, and 64
+bit floating point numbers. (, 16, and 32-bits signed number are
+directly supported by CJ - for the unsigned version a little extra
+effort is needed.
+
+{\bf Binary and unary operators}. All of the binary and unary
+operators of BETA maps direcly to corresponding operators in CJ.
+
+{\bf Multiple return values}. A BETA pattern may return a list of
+values. This can not be directly implemented in JVM/CLR -- instead the
+list of return values are stored in instance variables and a reference
+to the method-invocation is returned and used subsequently to retrieve
+the return list.
+
+{\bf Statements}. BETA's if-, and for-statements also maps easily into CJ.
+
+\subsection{Leave and restart}
+In BETA is possible to exit a nested scope of method invocations:
+
+{\tt\small\begin{verbatim}
+  Foo:
+    (#
+    do ...;
+       L: (# Bar: 
+               (# 
+               do ...; leave L; 
+                  ...; restart L; ...
+               #);
+          do ...; Bar; ...
+          #);
+       Lx: ...
+    #)
+\end{verbatim}
+}
+  
+Execution of {\tt leave L} implies that execution continues at the
+point of {\tt Lx} --- equivalent to {\tt goto Lx}. Execution of {\tt
+  restart L} implies that execution continues at {\tt L} ---
+equivalent to {\tt goto L}. Execution of {\tt leave}/{\tt restart} may
+take place within arbitrarely nested pattern invocations\footnote{%
+  The patterns must be declared in the scope of {\tt L}, i.e. within
+  the object labelled by {\tt L}} --- in the example shown within the
+pattern {\tt Bar}. 
+
+Notice that this involves {\em stack unwinding}, since the stack
+frame for {\tt Bar} must be removed, before execution continues at
+{\tt Lx}. JVM and CLR both have bytecodes for making an arbitrary 
+jump to another bytecode, {\em but only within the current method}.
+The stack unwinding is thus not directly possible. It can be obtained,
+though, by using the exception mechanism. 
+At the point of {\tt L}, an exception handler is
+set up to catch exceptions that may be thrown by {\tt leave} and/or
+{\tt restart}.  {\tt Leave} or {\tt restart} are then implemented by
+throwing the appropriate exceptions. The exception thrown has to
+contain information about
+\begin{enumerate}
+\item The {\em object}  to unwind to
+\item Which {\em label}  in this object is the target
+\end{enumerate}
+\noindent
+At the label definition site the exception handler code must then test
+whether the object to unwind to is identical to itself {\em and} the
+target label is numbered identical to it's own label. If so, the
+handler makes an unconditional jump to the first statement after the
+labeled region. If both conditions are not met, the handler propegates
+(re-throws) the exception further up the stack.
+
+A special problem comes with implementing leave/restart across
+Coroutine borders. As detailed below, the current Coroutine
+implementation involves Threads, and the propagation of the
+leave/restart exception would thus involve catching the exception in
+the thread's entry point, and signal this to the parent thread. This
+has not yet been implemented.
+
+Although we have not yet made any performance measures of the
+resulting code, we expect the use of the exception mechanism to
+implement leave and restart to be inefficient.
+
+\subsection{Pattern variables}
+BETA supports patterns as first class
+values that can be passed as arguments to other patterns and
+returned as values. Pattern variables are used to denote the type of a
+pattern. This can be used to instantiate new objects corresponding to
+that pattern, and to test subpattern-relations (using relational
+operators) between two patterns.
+In that sence it resembles the {\tt Class} class of Java and
+the {\tt Type} class of .NET. However, because of the general block
+structure in BETA, a pattern variable cannot simply be mapped to 
+{\tt Class}/{\tt Type}. Consider this example:
+
+{\tt\small\begin{verbatim}
+  T: (# P: (# ... #); ... #);
+  X1, X2: @T;
+\end{verbatim}
+}
+
+\noindent
+The two patterns {\tt X1.P} and {\tt X1.P} are considered different
+patterns, since they have different surrounding objects. 
+This means that the test
+{\tt X1.P\#\# = X2.P\#\#} will return {\tt false}. The expression {\tt
+X1.P\#\#} denotes the pattern value of {\tt X1.P}.
+Thus a simple test on the {\tt Class}/{\tt Type} of the generated
+classes will not suffice to implement, e.g., the pattern value test
+mentioned -- we need to somehow combine the {\tt Class}/{\tt Type}
+information with the surrounding object. Java has no corresponding
+concept. .NET has the so-called {\em delegates}\cite{delegates}, which
+are used to tie up a {\em function pointer} and a specific object. As
+mentioned, we need to combine the full type information of the pattern
+with a specific surrounding object, so we cannot use delegates.
+instead we define a CJ class {\tt Structure} with the following outline
+(here Java syntax):
+
+{\tt\small\begin{verbatim}
+  public class Structure {
+       public Object iOrigin;
+       public Class iProto;
+       ...
+       public static boolean ltS(Structure arg1, Structure arg2)
+       {
+	  ... determine if arg1 is same pattern as arg2 ...
+       }
+       ...
+  } 
+\end{verbatim}
+}
+
+\noindent
+As can be seen, the two fields {\tt iOrigin} and {\tt iProto} are used
+to hold the object reference to the surrounding object, and the {\tt
+Class} information of the pattern, respectively. A number of operations can then be
+implemented, like the {\tt ltS}, which implements the test for
+subpattern relation. The implementation use the
+reflection libraries of Java and .NET to run through the superclass
+chain, but takes into account the corresponding origin fields.
+
+Class {\tt Structure} also contains methods for instantiating objects
+given a pattern value. Again this makes heave use of the platform
+reflection libraries, which provide methods to make instances of a
+given class. 
+
+Given this class {\tt Structure} it is pretty straight-forward to
+support the various pattern variable features of BETA, but seen from
+Java/\CS, the code will appear strange, since pattern variables will
+be qualified with class {\tt Structure} in the generated CJ code. This
+is one place that the mapping from BETA to CJ is less elegant, than we
+had hoped for.

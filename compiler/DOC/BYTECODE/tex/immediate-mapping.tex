@@ -1,0 +1,291 @@
+\section{An immediate mapping of BETA to CLR/JVM}
+
+There have been two issues regarding the mapping of BETA to CLR/JVM:
+\begin{enumerate}
+  
+\item CLR/JVM are typed virtual machines designed to support Java for
+  JVM and a number of languages like \CS, and VB for CLR. BETA is much
+  more general than Java and \CS\ so one issue has been to find a
+  mapping that works.
+
+\item The other issue is language interoperabiliby as seen from the
+  point-of-view of programmers. To obtain true language
+  interoperability, is should be possible to use classes written in
+  Java, \CS, etc. from BETA and vice versa. Given an implementation of
+  BETA for CLR/JVM this should be possible. The main issue will be
+  readability/understandability of doing this. Using Java and \CS\  from
+  BETA will probably not pose problems, since a BETA programmer just
+  have to understand the Java/\CS\ classes being used.
+  
+  The other way around may be more problematic. Since BETA is much
+  more general than Java and \CS, the mapping of BETA patterns to
+  CLR/JVM may without careful design be complicated and result in
+  class-files that are difficult to understand at the level of Java and
+  \CS.
+
+\end{enumerate}
+
+The mapping of BETA into CLR/JVM is described as as a mapping into a
+common subset of \CS\ and Java. The subsequent mapping into CLR/JVM
+bytecodes should then appear as straight forward.  That is a the
+\CS/Java level the mappings to the two platforms are essentially
+identical. There are of course differences when considering the
+bytecode level but these are purely technical -- the logical structure
+is identical.
+
+The language model -- as we from now on call {\it CJ} -- behind Java
+and \CS\ may be characterized in the following way:
+\begin{itemize}
+\item A program is a collection of classes where each
+  class defines the structure of a set of objects.
+\item A class defines
+\begin{itemize}
+\item A set of data-items -- instance variables belonging to instances
+  of the class, and static variables belonging to the class.
+\item A set of methods -- instance methods and static methods.
+\end{itemize}
+\item Classes may be textually nested: in Java real nesting in the
+  form of block-structure as in Simula and BETA is supported whereas
+  \CS\ only provides nesting as a scoping mechanism similar to C++.
+\item Methods may be overloaded.
+\item There is support for dynamic exceptions.
+\item Concurrency is supported in the form of threads and a
+  monitor-like construct.
+\end{itemize}
+
+The BETA language may be characterized in the following way:
+\begin{itemize}
+\item Class and method have been unified into the pattern mechanism.
+\item Patterns can be arbitrarily nested supporting general
+  block-structure.
+\item
+The INNER-mechanism is used to combine methods instead of super.
+\item Genericity is supported by means of virtual patterns.
+\item A pattern (method) invocation may return multiple values.
+\item Coroutines and concurrency is based on semi-coroutines as known
+  from Simula in the form of active objects. Basic synchronization
+  between concurrent objects is supported by a semaphore pattern.
+  These mechanisms are at a more basic level than threads and monitors
+  in CJ, but form a basis for implementing higher-level concurrency
+  abstractions like monitors and Ada-like rendezvous and schedulers.
+\item BETA has no constructor mechanism.
+\item Methods cannot be overloaded.
+\item BETA is based on a static exception handling mechanism
+  \cite{lindskov} and dynamic exceptions are only supported in an
+  experimental version of the language.
+\end{itemize}
+
+Note that this paper is not an attempt to present the rationale behind
+the generality of BETA compared to main stream languages like \CS\ and
+Java.  The purpose is to present the issues in mapping BETA to
+CLR/JVM. To do this we will use more or less useful examples to
+illustrate the mapping. The rationale behind BETA has been presented
+in a number of articles such as \cite{betabook,vclass}.
+
+
+Consider the following example of a BETA pattern describing a
+simple bank account:
+{\tt\small\begin{verbatim}
+   Account:
+     (# balance: @integer;
+        deposit: 
+          (# amount: @integer 
+          enter amount 
+          do balance + amount -> balance 
+          exit balance
+          #);
+        withdraw: 
+          (# amount: @integer enter amount do balance - amount -> balance #);
+     #);
+\end{verbatim}
+}
+    
+The {\tt Account} pattern has three attributes {\tt balance}, {\tt
+  deposit} and {\tt withdraw}. The attribute {\tt balance} is an
+instance variable holding the current value of the {\tt Account}.  The
+attributes {\tt deposit} and {\tt withdraw} describe operations on the
+account.  The operation {\tt deposit} inserts an amount on the account
+by adding to {\tt balance} to the value of the enter-parameter {\tt
+  amount} and returns (exit) the value of {\tt balance}.  The
+operation {\tt withdraw} similarly withdraws an amount from the
+account.
+    
+The following example shows an instance {\tt myAccount} of {\tt
+  Account}, an instance {\tt X} of {\tt integer}; a call of {\tt
+  myAccount.deposit} with enter arguments {\tt 120} and the resulting
+exit-value being assigned to {\tt X}; and a call of {\tt
+  myAccount.withdraw} with enter argument {\tt 50}.
+
+{\tt\small\begin{verbatim}
+   myAccount: @Account; X: @integer; 
+   120 -> myAccount.deposit -> X;
+   50 -> C.withdraw;
+\end{verbatim}
+}
+    
+Note that {\tt Account}, {\tt deposit} and {\tt withdraw} are all
+examples of patterns. In this example {\tt Account} is used as a class
+and {\tt deposit} and {\tt withdraw} as methods.  This use of the {\tt
+  Account} pattern is illustrated by the following simple mapping to a
+CJ class:
+
+{\tt\small\begin{verbatim}
+   class Account extends Object { 
+      int balance;
+      void deposit(int amount) { 
+         balance = balance + amount; 
+         return balance; 
+      }
+      int withdraw(int amount) { balance = balance - amount; }
+   }
+\end{verbatim}
+}
+
+The BETA declarations and invocations shown above then maps to the
+following declarations and invocations in CJ:
+
+{\tt\small\begin{verbatim}
+   Account myAccount = new Account(); int X;
+   X = myAccount.deposit(120);
+   myAcount.withdraw(50);
+\end{verbatim}
+}
+    
+The above mapping shows a simple semantics of the BETA {\tt Account}
+pattern.  To capture the full semantics of the {\tt Account} pattern a
+more complex mapping is needed. The fact that e.g.\  {\tt deposit} is a
+pattern means that it is possible to use {\tt deposit} as a class and
+create instances of {\tt deposit} as in the following example:
+
+{\tt\small\begin{verbatim}
+   myAccount: @Account; 
+   myDeposit: ^myAccount.deposit; 
+   myAccount.deposit[] -> myDeposit[];
+\end{verbatim}
+}
+    
+The variable {\tt myDeposit} may refer to instances of {\tt
+  myAccount.deposit}. The statement {\tt \&myAccount.deposit[] ->
+  myDeposit[]} creates an instance of the pattern {\tt
+  myAccount.deposit} and assigns its reference to {\tt myDeposit}.
+
+Using {\tt myDeposit}, the instance variable {\tt amount} in {\tt
+  myDeposit} may be assigned a value as in: 
+
+{\tt\small\begin{verbatim}
+   170 -> myDeposit.balance
+\end{verbatim}
+}
+    
+The pattern {\tt deposit} also defines a do-part, which is executed
+when {\tt deposit} is used a a procedure. The do-part of {\tt
+  myDeposit} may be executed directly by the following statement (the
+exact semantics should be clear when we show the complete mapping of
+the {\tt Account} pattern below):
+
+{\tt\small\begin{verbatim}
+   20 -> myDeposit -> X
+\end{verbatim}
+}
+
+To obtain the full semantics of the {\tt deposit} pattern, it is
+mapped into the following inner class\footnote{%
+  The reader may observe that this use of an inner class will work in
+  Java, but not in \CS. This issue is further discussed below.}  of 
+{\tt Account}:
+
+{\tt\small\begin{verbatim}
+   class deposit extends Object {
+      int amount;
+      void enter(int a) { amount = a; }
+      void do() { balance = balance + a; }
+      int exit() { return balance; }
+   }
+\end{verbatim}
+}
+
+A BETA invocation
+{\tt\small\begin{verbatim}
+    50 -> myAccount.deposit -> X
+\end{verbatim}
+}
+is then implemented as follows:
+{\tt\small\begin{verbatim}
+   deposit D = new deposit();
+   D.enter(5);
+   D.do();
+   X = D.exit();
+\end{verbatim}
+}
+
+To avoid generating the above code for each invocation, and {\tt
+  deposit}-method is generated as part of class {\tt Account}:
+
+{\tt\small\begin{verbatim}
+   int deposit(int amount) {
+       deposit D = new deposit();
+       D.enter(50);
+       D.do();
+       return D.exit();
+   }
+\end{verbatim}
+}
+
+The BETA invocation {\tt 50 -> myAccount.deposit -> X} may now be
+mapped into the corresponding CJ invocation {\tt X =
+  myAccount.deposit(50)}.
+
+\note{Drop new-method here}
+
+As mentioned,it is also possible to generate instances of the patter
+{\tt deposit}. To handle this a {\it new}-method of the following form
+is generated as part of class {\tt Account}.
+
+{\tt\small\begin{verbatim}
+   deposit deposit() { return deposit(); }
+\end{verbatim}
+}
+
+Instances of {\tt deposit} may now be generated by execution of {\tt
+  myDeposit = myAccount.deposit()}.
+
+The complete mapping of the {\tt Account} pattern is shown below:
+{\tt\small\begin{verbatim}
+   class Account extends Object {
+     int balance = 0;
+     int deposit(int amount) {
+       deposit D = new deposit();
+       D.enter(amount);
+       D.do();
+       return D.exit();
+     }
+     void withdraw(int amount) { ... };
+     class deposit extends Object { ... };
+     class withdraw extends Object { ... };
+   }
+\end{verbatim}
+}
+
+As can be seen, each inner pattern of {\tt Account} -- in this case
+{\tt deposit} and {\tt withdraw} -- gives rise to a method and an
+inner class.
+
+The method is for using the pattern as a method -- for {\tt withdraw}
+this is the method with the signature {\tt int withdraw(int amount)}.
+
+The {\tt Account} example also shows how to use BETA patterns from
+Java and \CS. A Java or \CS\ class may use the {\tt Account} class as
+shown above and invoke the {\tt deposit}- and {\tt deposit}-methods
+as shown in the following Java example:
+
+{\tt\small\begin{verbatim}
+   Account myAccount = new Account();
+   deposit myDeposit = myAccount.new deposit()
+   mydeposit.enter(170);
+   mydeposit.do();
+   int X = myDeposit.exit();
+\end{verbatim}
+}
+
+In the following sections we will more systematically show how
+BETA constructs are mapped into CJ.
