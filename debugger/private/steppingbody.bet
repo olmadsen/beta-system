@@ -13,7 +13,7 @@ LIB_ITEM 'valhallastep';
 debugStepBreak:(# exit false #)
 
 -- steppingIntoListLib: Attributes --
-handleImperativesOpt:
+handleImperativesOpt: (* step-into *)
   (#
      a: ^MPS.AST.ast;
      imps: ^MPS.BETACFL.Imperatives;
@@ -43,16 +43,18 @@ handleImperativesOpt:
      if);
      
   #);
-handleElsePartOpt:
+handleElsePartOpt: (* step-into *)
   (# a: ^MPS.AST.ast; ep: ^MPS.BETACFL.elsePart; 
   enter a[]
-  do
-     (if a.kind <> MPS.AST.kinds.optional then
-         (a[]->ep[]).getImperatives->handleImperativesOpt; 
+  do (if debugStepBreak then
+         'handleElsePartOpt, index:%d\n'->screen.putformat(# do a.index->d #);
      if);
-     
+     (if a.kind <> MPS.AST.kinds.optional then
+         (a[]->ep[]).getImperatives->handleImperativesOpt
+     if)
   #);
-handleINNER:
+
+handleINNER: (* step-into *)
 (* This is  hairy: Locate the objectdescriptor of the 
  * current object, and use it together with the current dopart
  * to find out what dopart will receive control as a result of
@@ -196,13 +198,12 @@ handleINNER:
                        #);
                      
                   #)->dpi[];
-              dpi.dp.getImperatives->handleImperativesOpt;
-              
+              dpi.dp.getImperatives->handleImperativesOpt     
           if)
-       #);
-     
+       #)     
   #);
-handleEvaluation:
+
+handleEvaluation: (* step-into *)
 (* Some kind of evaluation. All we can do now is a suffix walk
  * looking for the following situations:
  * 
@@ -372,7 +373,7 @@ onFailure:
      if);
      
   #);
-intoUnExp:
+intoUnExp: (* step-into *)
   (#
      unexp: ^MPS.AST.unexpanded;
      ofi: ^ObjectFileInfo;
@@ -419,10 +420,12 @@ intoUnExp:
        #);
      
   #);
-handleImp:
+handleImp: (* step-into *)
   (# imp: ^MPS.AST.ast; 
   enter imp[]
-  do
+  do (if debugStepBreak then
+         'HandleImp on symbol:%d\n'->screen.putformat(# do imp.symbol->d #)
+     if);
      (if imp.symbol
       // MPS.BETA.LabelledImp then
          intoLabelled:
@@ -666,7 +669,19 @@ getReturnAddress:
      
   exit retAdr
   #);
-handleImperativesOpt:
+
+handleElsePartOpt: (* step-over *)
+  (# a: ^MPS.AST.ast; ep: ^MPS.BETACFL.elsePart; 
+  enter a[]
+  do (if debugStepBreak then
+         'handleElsePartOpt-Over, index:%d\n'->screen.putformat(# do a.index->d #)
+     if);
+     (if a.kind <> MPS.AST.kinds.optional then
+         (a[]->ep[]).getImperatives->handleImperativesOpt
+     if)
+  #);
+
+handleImperativesOpt: (* step-over *)
   (#
      a: ^MPS.AST.ast;
      imps: ^MPS.BETACFL.Imperatives;
@@ -696,7 +711,7 @@ handleImperativesOpt:
      if);
      
   #);
-handleImp:
+handleImp: (* step-over *)
   (# imp,brother: ^MPS.AST.ast; limpi: ^ImperativeInfo; 
   enter imp[]
   do
@@ -908,6 +923,7 @@ handleImp:
                        cs: ^MPS.BETACFL.CaseSelection;
                        alt: ^MPS.BETACFL.Alternative;
                        sels: ^MPS.BETACFL.Selections;
+                       gi: ^MPS.BETACFL.generalIfImp;
                        (* set breakpoint in all imperatives, ie. then parts.
                         * and in all selection.eval's, this is done by handleSelection.
                         * In addition also set break after the if.
@@ -916,8 +932,11 @@ handleImp:
                        a[]->cs[];
                        cs[]->MPS.nextbrother->handleSelections;
                        (cs.father).father->alt[];
-                       (alt.father).father->overlist
+                       (alt.father).father->gi[]->overlist (* (alt.father).father is the general-if *)
                          ->(stepsetIMPs.appendList,stepsetADRs.appendList);
+                       (* also set break in opt-elsepart *)
+                       gi.getElsePartOpt->handleElsePartOpt;
+                       
                        loop:
                          (# 
                          do (if debugStepBreak then
