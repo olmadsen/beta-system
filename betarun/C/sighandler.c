@@ -495,22 +495,24 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
   }
   sig = (long)SavedExceptRec.ExceptionCode;
   switch (SavedExceptRec.ExceptionCode){
-  case EXCEPTION_ACCESS_VIOLATION:  
-  case EXCEPTION_DATATYPE_MISALIGNMENT:  
+  case EXCEPTION_ACCESS_VIOLATION:
+  case EXCEPTION_DATATYPE_MISALIGNMENT:
     todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
   case EXCEPTION_STACK_OVERFLOW:
     todo=DisplayBetaStack( StackErr, theObj, PC, sig); break;
   case EXCEPTION_BREAKPOINT:
-    printf("EXCEPTION_BREAKPOINT:\n"); fflush(output);
     DEBUG_VALHALLA(fprintf(output, "sighandler: breakpoint at PC 0x%x\n", (int)PC); fflush(output));
-#ifdef nti_gnu
-    if ( ((*((char*)PC)) != (char)0xcc ) && ((*((char*)PC-1)) == (char)0xcc ) ){
+    if ( ((*((char*)PC)) != (char)0xcc ) && ((*((char*)PC-1)) == (char)0xcc ) ) {
       /* int3 break */
+      /* Ofcourse it would be the best to ask valhalla if we have put a break her */
       PC = (long *) ((long)SavedContextRec.Eip-1);
-#if 1
-      SavedContextRec.Eip = (long)PC; /* PC points just after int3 instruction */
+#ifdef nti_gnu
+      pContextRecord->Eip--;
+#else
+      lpEP->ContextRecord->Eip--;
 #endif
-      DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x 0x%x\n", (int)PC, (int)SavedContextRec.Eip); fflush(output);)
+      /* PC points just after int3 instruction */
+      DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)(PC-1)); fflush(output));
     }
 #endif
     todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
