@@ -110,20 +110,37 @@ methodCall: evVal
      asgToMethod::
        (# A: ^mch.address; aD: @mch.RegAdr; destField: @text; xNo: @integer;
           xScan: @ | scanXadr; more: @boolean;
-       do '\nMethodCall:asgToItem' -> putline;
+       do '\nMethodCall:asgToMethod: ' -> puttext;
+          sig.asText -> puttext; ' ' -> put;
+          noOfArgs -> putint; ':' -> put;
+          (for i: (noOfArgs,entertypes.range) -> min repeat
+               entertypes[i] -> putint; ' ' -> put;
+          for);
+          newline;
           (if sig.isMultiValExit then
               theGen.AllocAndStoreTmp -> A[];
               (* we need to get the right values instead of
                * gen.thisRegAdr and thisSuperChain
                * from the place where methodCall is instantiated
                *)
-              (sig.thisMethodDesc[],gen.thisRegAdr,0(*??nOff*),thisSuperChain) 
+              (sig.thisMethodDesc[],gen.thisRegAdr,0(*??nOff*),chain[]) 
                 -> xScan -> more;
               'exit_' -> destField;
               (sig.thisMethodDesc[] -> theGen.fieldSignature).asText 
                 -> aD.receiverType[]
                 -> aD.descName[]; (* elim descName *)
-              loop:
+              true -> aD.isField;
+              (if true then
+                  (for i: noOfArgs repeat
+                       (A[],&mch.adrRegOperand[]) -> mch.ldVal;
+                       xNo + 1 
+                         -> xNo 
+                         -> (destField.copy).putint 
+                         -> aD.fieldName[];
+                       (aD[],&mch.dataRegOperand[]) -> mch.ldVal;
+                  for)
+               else
+                  loop:
                 (if more then
                     (A[],&mch.adrRegOperand[]) -> mch.ldVal;
                     true -> aD.isField;
@@ -133,12 +150,58 @@ methodCall: evVal
                     xScan -> more;
                     (if more then restart loop if)
                 if)
+              if)
           if)
        #);
-          
+     asgToExitArgs::
+       (# A: ^mch.address; aS,aD: @mch.RegAdr; 
+          srcField,destField: @text; xNo: @integer;
+          xScan: @ | scanXadr; more: @boolean;
+       do 'MethodCall:asgToExitArgs'->putline;
+          (if sig.isMultiValExit then
+              theGen.AllocAndStoreTmp -> A[];
+              (* we need to get the right values instead of
+               * gen.thisRegAdr and thisSuperChain
+               * from the place where methodCall is instantiated
+               *)
+              (sig.thisMethodDesc[],gen.thisRegAdr,0(*??nOff*),chain[]) 
+                -> xScan -> more;
+              'exit_' -> destField;
+              'exit_' -> srcField;
+              (sig.thisMethodDesc[] -> theGen.fieldSignature).asText 
+                -> aS.receiverType[]
+                -> aS.descName[]; (* elim descName *)
+              (rDesc[] -> theGen.fieldSignature).asText 
+                -> aD.receiverType[]
+                -> aD.descName[]; (* elim descName *)              
+
+              loop:
+                (if more then
+                    (A[],&mch.adrRegOperand[]) -> mch.ldVal;
+                    true -> aS.isField;
+                    true -> aD.isField;
+                    xNo + 1 
+                      -> xNo 
+                      -> (srcField.copy).putint 
+                      -> aS.fieldName[];
+                    (aS[],&mch.dataRegOperand[]) -> mch.ldVal;
+                    exitNo + 1 
+                      -> exitNo
+                      -> (destField.copy).putint 
+                      -> aD.fieldName[];
+                    (&mch.dataRegOperand[],aD[]) -> mch.stVal;
+                    xScan -> more;
+                    (if more then
+                        (originAdr[],none) -> mch.ldVal;
+                        restart loop 
+                    if)
+                if)
+          if)
+       #);       
      asgToList::
-       (# lEV: @ExitMultiVal; exitNo: @integer
+       (# A: ^mch.address; lEV: @ExitMultiVal; exitNo: @integer
        do 313->trace(#do 'asgToList:'->display #);
+          theGen.AllocAndStoreTmp -> A[];
           sig.XXsig.asText -> lEV.class[];
           EV -> scanList
           (# E: @ASTindex;
@@ -273,8 +336,9 @@ methodCall: evVal
                  '\nOBS! methodCall:regAnd'->putline
        if)#); 
      (* class: ^text*)
-     sig: ^theGen.signature
-  enter sig[]
+     sig: ^theGen.signature;
+     chain: ^DH.superChain
+  enter(sig[],chain[])
   exit this(methodCall)[]
   #);
 CoerceTypes:
@@ -369,7 +433,8 @@ mkByteCodeCall:
                           *        value should be popped
                           *)
      theThisDesc: @ASTindex; (* aliasing:-(*)
-  enter(EV,hasArguments,hasExit)
+     chain: ^DH.superChain
+  enter(EV,hasArguments,hasExit,chain[])
   do EV.son->VN;
      '!mkByteCodeCall:'->mch.comment;
      311->trace(# do 'mkBytecodeCall: ' -> xT; EV[] -> xA; VN[] -> xA #);
@@ -388,7 +453,7 @@ mkByteCodeCall:
          (* make sure that innerdesc.getID is defined *)
          (VN,common.itemKind,2,null)->DS.push;
      if);
-     EV.sonRef -> sig.setMethodDesc; 
+     (EV.sonRef,chain[],true) -> sig.setMethodDesc; 
      &ASTindex[] -> receiverDesc[]; 
      (if VN.label 
       // gram.remote then
@@ -659,7 +724,7 @@ mkByteCodeCall:
      (if not hasExit and (sig.XXsig.elmType <> 10 (*void*)) then
          mch.popStack
      if);
-     sig[] -> MethodCall -> W[]
+     (sig[],sig.thisChain[]) -> methodCall -> W[]
      (*sig.XXsig.asText -> MethodCall -> W[]*)
   exit W[]
   #)
@@ -724,7 +789,7 @@ do (if stest then
                (baseAdr[],EV[],false,EHchain[],false) -> doGenItem -> V[] 
             else
                (if switch182 then
-                   (EV,false,false) -> mkByteCodeCall -> V[]                    
+                   (EV,false,false,EHchain[]) -> mkByteCodeCall -> V[]                    
                 else
                    (baseAdr.copy,EV[],false,EHchain[],false)->doGenItem->V[] 
            if)if)
@@ -1127,7 +1192,7 @@ do (if stest then
                (baseAdr[],EV[],doExit,chain1[],false)->doGenItem->V[] 
             else
                (if switch182 then
-                   (EV,false,true) -> mkByteCodeCall -> V[]
+                   (EV,false,true,chain1[]) -> mkByteCodeCall -> V[]
                 else
                    (baseAdr.copy,EV[],doExit,chain1[],false)->doGenItem->V[] 
                if)
@@ -1161,7 +1226,7 @@ do (if stest then
                (baseAdr[],EV[],doExit,chain1[],true)->doGenItem->V[] 
             else
                (if switch182 then
-                   (EV,false,true) -> mkByteCodeCall -> V[]
+                   (EV,false,true,chain1[]) -> mkByteCodeCall -> V[]
                 else
                    (baseAdr.copy,EV[],doExit,chain1[],true)->doGenItem->V[] 
                if)
@@ -1818,7 +1883,7 @@ do lEV[]->lEV1[];
                  -> V[]
             else
                (if switch182 then                   
-                   (EV,true,doExit) -> mkBytecodeCall
+                   (EV,true,doExit,chain1[]) -> mkBytecodeCall
                    (# 
                    do '!assignValToEval:insert:asgToMethod'->mch.comment;
                       (# T: [sig.noOfEnterArgs] @integer;
@@ -1859,10 +1924,10 @@ do lEV[]->lEV1[];
                  -> V[];
             else
                (if switch182 then
-                   (EV,true,doExit) -> mkByteCodeCall
+                   (EV,true,doExit,chain1[]) -> mkByteCodeCall
                    (# 
                    do (# T: [sig.noOfEnterArgs] @integer;
-                      top,firstArg: @integer
+                         top,firstArg: @integer
                       do sig.scanEnter
                          (#
                          do current.elmType -> T[top+1 -> top];
@@ -2044,7 +2109,7 @@ do lEV[]->lEV1[];
                  -> EH.AssignValToEval
                  -> V[];
             else
-               (baseAdr.copy,lEV1[],EV1[],doExit,chain1[])
+               (baseAdr.copy,lEV1[],EV1[],true(*doExit*),chain1[])
                  -> EH.AssignValToEval
                  -> V[];
            if);

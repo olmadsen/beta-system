@@ -402,6 +402,18 @@ mkSignature:
      if)
   exit tsig[]
   #);
+mkArraySig:
+  (* we should simplify mkSignature and this one *)
+  (# desc: ^ASTindex; sig: ^type;
+     EH: @evalHandler
+  enter desc[]
+  do (if (desc -> sematt.descKind) = sematt.standardKind then
+         desc[] -> valueSignature ->array ->  sig[]
+      else
+          (desc[],true) -> EH.descName -> Reference -> array -> sig[]
+     if)
+  exit sig[]
+  #);
 mkArraySignature:
   (* we should simplify mkSignature and this one *)
   (# desc: ^ASTindex; tsig: ^text;
@@ -463,31 +475,34 @@ Signature: ISignature
      thisChain: ^DH.superChain;(* desc chain of def- or call-location *)
      
      setMethodDesc:
-       (# EV: ^ASTindex; MN,vKind: @integer
-       enter EV[]
-       do (if EV.label = gram.unExpanded then
+       (# EV: ^ASTindex; MN,vKind: @integer;
+          chain,c: ^DH.superChain;
+          addToChain: @boolean
+       enter(EV[],chain[],addToChain)
+       do (if chain[] = none then 
+              '\nOBS! setMethodDesc:chain is none' -> putline;
+              thisSuperChain -> c[] 
+          if);
+          (if EV.label 
+           // gram.unExpanded then
               EV -> thisMethodDesc
            else
-              (thisSuperChain,EV) 
+              (chain[],EV) 
                 -> DH.theDesc
-                -> (thisMethodDesc,MN,thisChain[],vKind);
+                -> (thisMethodDesc,MN,c[],vKind);
           if);
-          (if false then 
-          thisMethodDesc[] -> descLocation -> location[];
+          (if addToChain then
+              c[] -> thisChain[]
+           else 
+              chain[] -> thisChain[]
+          if);
           313->trace(#
-                    do 'signature:setDesc: "' -> xT; 
-                       (if location[] = none then 
-                           'none' -> xT
-                        else
-                           location[] -> xT; 
-                       if);
-                       '"' -> put; xN;
-                       thisMethodDesc[] -> xA
+                    do 'signature:setDesc: ' -> xT; 
+                       thisMethodDesc[] -> xA; xN;
+                       'ThisChain: ' -> xT; thisChain
                     #);
-          (if location[] <> none then
-              location[] -> mch.import
-          if)if)
        #);
+(*     setThisChain: (# do thisSuperChain -> thisChain[] #);*)
      markStatic: (# do true -> isStatic #);
      addReceiver: 
        (* only receiverDesc should be enter arg;
@@ -613,43 +628,47 @@ Signature: ISignature
                     do 'addEnter:'->xT; theDesc[] -> xA
                     #);
           ListSignature -> NNsig[];
-          (if thisChain[] <> none then
-              (if not (theDesc->thisMethodDesc.equal) then 
-                  (if not common.switch[188] then
-                      'addEnter:desc not equal'->putline
-                  if)
-              if);
-              313->trace(#
-                        do 'addEnter:theDesc(from enter):'->xT;
-                           theDesc[]->xA; xN;
-                           'thisMethodDesc( for setDesc): ' -> xT;
-                           thisMethodDesc[] -> xA;
-                           (if thisChain[] <> none then
-                               thisChain
-                           if) 
-                        #);
-              (if isStatic then (* should be origin of thisMethodDesc *)
-                  (# org: ^ASTindex
-                  do thisMethodDesc[] -> sematt.descOrigin -> org[];
-                     (if org.isNull then
-                         'object' -> reference -> sig[]
-                      else
-                         (org[] ,true)
-                           -> EH.descName 
-                           -> reference 
-                           -> sig[]
-                     if);
-                     org[] -> descLocation -> sig.location[];
-                     sig[] -> NNsig.append;
-                  #)
-              if);              
-              (thisMethodDesc[],gen.thisRegAdr,0,thisChain[],true) -> nScan -> more;
-           else
-              (theDesc[],gen.thisRegAdr,0,thisSuperChain,true) -> nScan -> more;
+          (if thisChain[] = none then
+              '\nOBS! signature:addEnter:thisChain is none! ' -> putline;
+              thisSuperChain -> thisChain[]
           if);
+          (if not (theDesc->thisMethodDesc.equal) then 
+              (if not common.switch[188] then
+                  'addEnter:desc not equal'->putline
+          if)if);
+          313->trace(#
+                    do 'addEnter:theDesc(from enter):'->xT;
+                       theDesc[]->xA; xN;
+                       'thisMethodDesc( for setDesc): ' -> xT;
+                       thisMethodDesc[] -> xA;
+                       (if thisChain[] <> none then
+                           thisChain
+                       if) 
+                    #);
+          (if isStatic then (* should be origin of thisMethodDesc *)
+              (# org: ^ASTindex
+              do thisMethodDesc[] -> sematt.descOrigin -> org[];
+                 (if org.isNull then
+                     'object' -> reference -> sig[]
+                  else
+                     (org[] ,true)
+                       -> EH.descName 
+                       -> reference 
+                       -> sig[]
+                 if);
+                 org[] -> descLocation -> sig.location[];
+                 sig[] -> NNsig.append;
+              #)
+          if);              
+          (thisMethodDesc[],gen.thisRegAdr,0,thisChain[],true) 
+            -> nScan 
+            -> more;
+          
           Loop:
             (if more then
-                (nScan.thisEv[],theDesc[],true) -> getAttSig -> NNsig.append;
+                (nScan.thisEv[],thisMethodDesc[],true,thisChain[])
+                  -> getAttSig
+                  -> NNsig.append;
                 313->trace(#do 'Nsig: '->xt; NNsig.asText -> xT #);
                 nScan -> more;
                 restart Loop
@@ -795,8 +814,9 @@ scanNargs:
      nD: ^sematt.AttDesc; 
      theDesc: ^ASTindex;
      more: @boolean;
-     xSig: ^ListSignature
-  enter theDesc[]
+     xSig: ^ListSignature;
+     chain: ^DH.superChain
+  enter(theDesc[],chain[])
   do (theDesc[],gen.thisRegAdr,0,ThisSuperChain,true) -> nScan -> more;
      ListSignature -> xSig[];
      Loop:
@@ -805,14 +825,51 @@ scanNargs:
                      do 'scanNargs:elm:'->xT;
                         nScan.thisEv[]->xA
                      #);
-           (nScan.thisEv[],theDesc[],true) -> getAttSig -> xSig.append;
+           (nScan.thisEv[],theDesc[],true,chain[])
+             -> getAttSig 
+             -> xSig.append;
            313->trace(#do 'sig: '->xt; xSig.asText -> xT #);
            nScan -> more;
            restart Loop
        if)
   exit xSig[]
   #);
-
+ScanXargs:
+  (# EH: @EvalHandler;
+     xScan: @ | EH.scanXAdr;   
+     nD: ^sematt.AttDesc; 
+     theDesc: ^ASTindex;
+     more: @boolean;
+     xSig: ^ListSignature;
+     sig: ^Type;
+     chain: ^DH.superChain
+  enter(theDesc[],chain[])
+  do (theDesc[],gen.thisRegAdr,0,chain[]) -> xScan -> more;
+     ListSignature -> xSig[];
+     Loop:
+       (if more then
+           313->trace(#
+                     do 'scanXargs:elm:'->xT;
+                        xScan.thisEv[]->xA
+                     #);
+           (xScan.thisEv[],theDesc[],false,chain[])
+             -> getAttSig
+             -> xSig.append;
+           313->trace(#do 'sig: '->xt; xSig.asText -> xT #);
+           xScan -> more;
+           restart Loop
+       if);
+     (if xSig.top = 1 then 
+         (* Avoid returning a list, since
+          * a list signals a multiValExit
+          *)
+         xSig.L[1][] -> sig[]
+      else
+         xSig[] -> sig[]
+     if)
+  exit sig[]
+  #);
+     
 ScanXarg:
   (# theDesc,exitP: ^ASTindex;
      EH: @evalHandler;
@@ -854,7 +911,7 @@ getAttSig:
           (*nD.display;*)
           (if nD.spec.label 
            // gram.dynamicItem // gram.staticItem then
-              (theDesc->DH.newSingle,nD.apl)
+              (chain[](*theDesc->DH.newSingle*),nD.apl)
                 -> DH.theDesc
                 -> (desc,MN,EVchain[],isVirtual);
               (if desc.label = gram.objectDescriptor then
@@ -876,8 +933,9 @@ getAttSig:
           if);
        exit sig[]
        #);
-     isEnter: @boolean
-  enter(EV[],theDesc[],isEnter)
+     isEnter: @boolean;
+     chain: ^DH.superChain
+  enter(EV[],theDesc[],isEnter,chain[])
   do 313->trace(#
                do 'getAttSig:'->xT;
                   EV[] -> xA;
@@ -886,14 +944,22 @@ getAttSig:
                #);
      (if EV.label
       // gram.insertedItem  then
-         (# den: @ASTindex;
+         (# den,desc: @ASTindex; mn,isVirt: @integer
          do EV.son -> den;
-            (if den.label = gram.objectDescriptor then                
-                den[] -> scanNargs -> xSig[];
+            '\ngetAttSig:InsertedItem' ->putline;
+            (if den.label = gram.objectDescriptor then 
+                (* just to get the corretc chain[] *)
+                (chain[],den)->DH.theDesc->(desc,MN,chain[],isVirt);
+                (if isEnter then
+                    (den[],chain[]) -> scanNargs -> xSig[];
+                 else
+                    (den[],chain[]) -> scanXargs -> xSig[];
+                if);
                 313->trace(#do 'getAttSig:inserted:'->xT;  xSig.asText->xT#)
              else
                 'unknownInsertedItem;'-> Reference -> xSig[]                
-         if)#)
+            if)
+         #)
          (* // gram.objectDenotation then
           'LunknownObjectDenotation;'->sig[]*)
       // gram.objectReference 
@@ -907,10 +973,17 @@ getAttSig:
          #)
       // gram.assignmentEvaluation then
          (* preliminary *)
-         (if not common.switch[188] then
-             '\nOBS! Incomplete signature of assignment' -> putline;
-         if);
-         sematt.integerDesc[] -> valueSignature -> xSig[]
+         (if true then
+             (# EV1: @ASTindex
+             do EV.son -> EV1;
+                (EV1[],theDesc[],isEnter,chain[]) -> getAttSig -> xSig[]
+             #)
+          else
+             (if not common.switch[188] then
+                 '\nOBS! Incomplete signature of assignment' -> putline;
+             if);
+             sematt.integerDesc[] -> valueSignature -> xSig[]
+         if)
       // gram.evalList then
          (# lSig: ^ListSignature
          do '\ngetAttSig:evalList' -> putline;
@@ -918,7 +991,7 @@ getAttSig:
             Ev.son -> scanList
             (# E: @ASTindex
             do currentNode->E;
-               (E[],theDesc[],true) -> getAttSig -> lSig.append
+               (E[],theDesc[],true,chain[]) -> getAttSig -> lSig.append
             #);
             lSig[] -> xSig[]
          #)
@@ -949,21 +1022,31 @@ getAttSig:
               // sematt.generalKind 
               // sematt.classKind 
               // sematt.externalClassKind then
+                 (# desc: @ASTindex; MN,isVirt: @integer
+                 do
+                    (chain[],nD.desc)->DH.theDesc->(desc,MN,chain[],isVirt);
+                 #);
                  (if isEnter then
-                     nD.desc[] -> scanNargs -> xSig[] (*sig[]*)
+                     (nD.desc[],chain[]) -> scanNargs -> xSig[] (*sig[]*)
                   else
-                     (# xEV: ^ASTindex
-                     do nD.desc[] -> scanXarg -> xEV[];
-                        (* is thisDesc correct here? *)
-                        (xEV[],thisDesc[],false) -> theGen.getAttSig -> Xsig[];
-                     #)
+                     (if true then
+                         (nD.desc[],chain[]) -> scanXargs -> xSig[]
+                      else
+                         (# xEV: ^ASTindex
+                         do nD.desc[] -> scanXarg -> xEV[];
+                            (* is thisDesc correct here? *)
+                            (xEV[],thisDesc[],false,chain[]) 
+                              -> theGen.getAttSig 
+                              -> Xsig[];
+                         #)
+                     if)
                  if)
               else
                  (* don't work if virtual - we should get generalKind
                   * but ...
                   *)
                  (if nD.spec.label = gram.dynamicItem then
-                     (theDesc->DH.newSingle,nD.apl)
+                     (chain[](*theDesc->DH.newSingle*),nD.apl)
                        -> DH.theDesc
                        -> (desc,MN,EVchain[],isVirtual);
                      (if desc.label = gram.objectDescriptor then

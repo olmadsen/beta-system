@@ -4,6 +4,7 @@ INCLUDE 'genlib';
 INCLUDE 'auxlib';
 INCLUDE 'asgtoitem';
 INCLUDE 'genlib_bytecode';
+INCLUDE 'nxlength';
 INCLUDE '../CHECKER/nxoffsets';
 INCLUDE '../CHECKER/setnxoffsets';
 INCLUDE '../CHECKER/nxallocbody';
@@ -619,7 +620,7 @@ do (*350->cTrace(#do 'exeItem'->T #);*)
            A[]->gen.ExeTop (* avoid external entry-pt*)
         else
            (*(topDescNo,topFormId[])->gen.exeDo*)
-           311 -> trace(#do 'exeItem:'->xT; doExit -> xB #);
+           301 -> trace(#do 'exeItem:'->xT; doExit -> xB #);
            (if doExit then
                'doExit:dup'->mch.comment;
                (* we need to execute the exit part *)
@@ -679,6 +680,7 @@ ExitArgs: evVal
               if);
                   
               ('X',lDesc[],0) -> CallEntry;
+              '\nOBSExitArgs:exeExit' -> putline
           if);
        #);
      exitPartExecuted: @boolean;
@@ -723,7 +725,8 @@ ExitArgs2: evVal
        do (if not exitPartExecuted then
               true -> exitPartExecuted;
               lA.toCallReg;
-              ('X',lDesc[],0) -> CallEntry;
+              ('X',lDesc[],0) -> CallEntry(# chain::(#do lChain[]->c[] #)#);
+              '\nExitArgs2:'->putline
           if);
        #);
      exitPartExecuted: @boolean;
@@ -783,7 +786,7 @@ doTransferEnter:
              cError(#do 'TransN2:not in CallReg'->xT #)
          if);
          mch.pushReg -> max;
-         ('N',desc[],0) -> CallEntry;
+         ('N',desc[],0) -> CallEntry(# chain::(#do EVChain[]->c[] #)#);;
          max -> mch.popReg;
       else
          (* Here baseAdr is the one in EvalHandler, which is the context
@@ -834,7 +837,7 @@ doTransferEnter:
             '!transferenter1:'->mch.comment;
             (rBaseReg,desc[],A[],EVchain[]) -> V.asgToItem ->A[];
             (if switch182 then
-                ('N',desc[],0)->callEntry
+                ('N',desc[],0)->callEntry(# chain::(#do EVChain[]->c[] #)#);
             if);
             '!transferenter2:'->mch.comment;
             (if rAtmpXinx > 0 then
@@ -909,7 +912,8 @@ doTransferComEnter:
          (if isCallReg then              
              A.toCallReg -> A[]
      if)if);
-     (if switch182 then ('N',desc[],0)->callEntry if);
+     (if switch182 then 
+         ('N',desc[],0)->callEntry(# chain::(#do EVchain[]->c[] #)#); if);
      (if stest then
          301 -> ctrace(#do 'doEnterCompTransferC:'->xT; A.display->xT#)
      if);
@@ -967,13 +971,18 @@ itemEvVal: EvVal
        #);
      exitExecuted: @boolean;
      ExeExit:
-       (#
+       (# A: ^mch.address
        do (if switch182 then 
               (if not exitExecuted then
-                  ('X',lDesc[],0) -> CallEntry;
+                  ('X',lDesc[],0) 
+                    -> CallEntry(# chain::(#do lChain[]->c[] #)#);
+                  (if isMultiValExit then
+                      theGen.AllocAndStoreTmp -> A[];
+                  if);
                   true -> exitExecuted
               if)
           if);
+       exit A[]
        #);
      isMultiValExit: booleanValue
        (# EH: @evalHandler; 
@@ -1045,7 +1054,7 @@ itemEvVal: EvVal
               (* just a first guess! *)
           'itemVal:pushVal' -> mch.comment;
           true -> SingleItemVal(#do 
-                                  311 -> trace(#
+                                  301 -> trace(#
                                               do 'ItemVal:pushVal:' -> xT;
                                                  XV.display;
                                               #);
@@ -1906,7 +1915,10 @@ itemEvVal: EvVal
                        -> XV.asgToItem
                        -> this(asgToItem).rAx[] 
                        -> this(asgToItem).rA[];
-                     (if switch182 then ('N',rDesc[],0)->callEntry if);
+                     (if switch182 then 
+                         ('N',rDesc[],0)
+                           ->callEntry(# chain::(#do lChain[]->c[] #)#); 
+                     if);
                      (if stest then
                          301->ctrace
                          (#do 'asgToItem:X=1,N>1-end:'->xH; display; xN;
@@ -2101,7 +2113,10 @@ itemEvVal: EvVal
                   if);
                   xScan.getExitVal->XV[];
                   (rBaseReg,rDesc[],rA[],rChain[]) -> XV.asgToItem->rA[];
-                  (if switch182 then ('N',rDesc[],0)->callEntry if);
+                  (if switch182 then 
+                      ('N',rDesc[],0)
+                        ->callEntry(# chain::(#do lChain[]->c[] #)#)
+                  if);
                   XV.release;
                else
                   L: (#
@@ -2152,9 +2167,8 @@ itemEvVal: EvVal
               (lA[],class[],none) -> mch.loadRef;
               true -> lA.noTmp
           if);
-          ExeExit;  
+          ExeExit -> A[];  
           (if isMultiValExit then
-              theGen.AllocAndStoreTmp -> A[];
               (lDesc[],lA[],0(*??nOff*),lChain[]) -> xScan -> more;
               'exit_' -> destField;
               (lDesc[] -> theGen.fieldSignature).asText 
@@ -2173,18 +2187,24 @@ itemEvVal: EvVal
           if)
        #);
      asgToExitArgs::
-       (# xScan: @ | scanXadr; more: @boolean;
-          srcField,destField: @text; xNo: @integer;
+       (# xScan: @ | scanXadr; more,isMVX: @boolean;
+          srcField,destField: @text; xNo,xNo1: @integer;
           aS,aD: @mch.regAdr; A: ^mch.address;
-          class: ^text
-       do (if isMultiValExit then
+          class: ^text;
+          V: ^evVal;
+          desc: @ASTindex; MN,isV: @integer; chain: ^DH.superChain;
+          doLoadOrigin: @boolean
+       do (if true(*isMultiValExit*) then
+              311->trace(#do 'asgtoExitVal: xNo: ' -> xT; xNo -> xI ;xN;
+                           lDesc[] -> xA
+                        #);
               lDesc[] -> theGen.mkSignature -> class[];
               (if not lA.noTmp then
                   (lA[],class[],none) -> mch.loadRef;
                   true -> lA.noTmp
               if);
-              ExeExit;
-              theGen.AllocAndStoreTmp -> A[];
+              ExeExit->A[];
+              isMultiValExit-> isMVX;
               (lDesc[],lA[],0(*??nOff*),lChain[]) -> xScan -> more;
               'exit_' -> srcField;
               'exit_' -> destField;
@@ -2196,22 +2216,38 @@ itemEvVal: EvVal
                 -> aD.descName[]; (* elim descName *)              
               loop:
                 (if more then
-                    (A[],&mch.adrRegOperand[]) -> mch.ldVal;
-                    true -> aD.isField;
-                    true -> aS.isField;
-                    xNo + 1 
-                      -> xNo
-                      -> (srcField.copy).putint 
-                      -> aS.fieldName[];
-                    (aS[],&mch.dataRegOperand[]) -> mch.ldVal;
-                     exitNo + 1 
-                      -> exitNo
-                      -> (destField.copy).putint 
-                      -> aD.fieldName[];
-                    (&mch.dataRegOperand[],aD[]) -> mch.stVal;
+                   (* (lchain[],xScan.thisEv.son)
+                      -> DH.theDesc
+                      -> (desc,MN,chain[],isV);*)
+                    (for i: (xScan.thisEv[],false,lDesc[],lChain[])
+                           -> sematt.getNXlength
+                           (*(desc[],false,chain[])
+                           -> sematt.xGetNxLength *)
+                         repeat
+                         311->trace(#do 'asgtoExitVal: i: ' -> xT; i -> xI #);
+                         (if isMVX then
+                             (if doLoadOrigin then
+                                 (originAdr[],none) -> mch.ldVal;
+                             if);
+                             true -> doLoadOrigin;
+                             (A[],&mch.adrRegOperand[]) -> mch.ldVal;
+                             true -> aS.isField;
+                             xNo + 1 
+                               -> xNo
+                               -> (srcField.copy).putint 
+                               -> aS.fieldName[];
+                             (aS[],&mch.dataRegOperand[]) -> mch.ldVal;
+                         if);
+                         true -> aD.isField;
+                         exitNo + 1 
+                           -> exitNo
+                           -> (destField.copy).putint 
+                           -> aD.fieldName[];
+                         (&mch.dataRegOperand[],aD[]) -> mch.stVal;
+                    for);
                     xScan -> more;
                     (if more then  
-                        (originAdr[],none) -> mch.ldVal;
+                        
                         restart loop 
                     if)
                 if)
@@ -2513,7 +2549,7 @@ itemEvVal: EvVal
      getExitElements:
        (* see asgToCproc *)
        (# xScan: @ | scanXadr; X: ^evVal; isFrozen: @boolean
-       do (*311->cTrace(#do 'itemVal:getExitElements: ' -> xT; lEs[] -> xA #);*)
+       do (*301->cTrace(#do 'itemVal:getExitElements: ' -> xT; lEs[] -> xA #);*)
           (*(if not lA.frozenReg then lA.freezeREg; true -> isFrozen if);*)
           lA.doFreeze -> isFrozen;
           (lDesc[],lA[],0,lChain[]) -> xScan;
