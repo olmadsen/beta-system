@@ -805,7 +805,7 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
   SET_TIMESTAMP(newSock);
 
 #ifdef nti
-  if (ioctlsocket(newSock, FIONBIO, (unsigned long*)&nonblock)) {
+  if (ioctlsocket(newSock, FIONBIO, (unsigned long*)&on)) {
     INFO_SOCKETS("acceptConn,3");
     errno = WSAGetLastError();
     return -1;
