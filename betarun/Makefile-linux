@@ -38,11 +38,10 @@ RUN/Qua.run \
 RUN/Suspend.run \
 RUN/linuxadditions.run
 
+######### betarun.o #########
+
 betarun.o: linux.o C/c.common.o P/c.p.o GC/c.gc.o 
 	ld -x -r -o betarun.o C/c.common.o P/c.p.o GC/c.gc.o linux.o
-
-betarun_debug.o: C/c.common.debug P/c.p.debug GC/c.gc.debug linux-debug.o
-	ld -r -o betarun_debug.o C/c.common.debug P/c.p.debug GC/c.gc.debug linux-debug.o
 
 linux.o: linux.asm
 	cp linux.asm linux.c
@@ -50,34 +49,8 @@ linux.o: linux.asm
 	as -o linux.o linux.s
 	rm linux.c linux.s
 
-
-linux-debug.o: linux-debug.asm
-	cp linux-debug.asm linux-debug.c
-	gcc -E linux-debug.c > linux-debug.s
-	as -o linux-debug.o linux-debug.s
-	rm linux-debug.c linux-debug.s
-
 linux.asm: RUN/linux.run RUN/linuxadditions.run $(RUNDEPS)
 	../GEN/linux/gen -o linux.asm RUN/linux
-
-linux-debug.asm: RUN/linux.run RUN/linuxadditions.run $(RUNDEPS)
-	../GEN/linux/gen -debug -o linux-debug.asm RUN/linux
-
-debug: betarun_debug.o
-
-asm: linux-debug.asm
-
-gen:
-	cd ../GEN/linux; make --no-print-directory
-
-C/c.common.debug: ALWAYS
-	cd C; make debug
-
-P/c.p.debug: ALWAYS
-	cd P; make debug
-
-GC/c.gc.debug: ALWAYS
-	cd GC; make debug
 
 C/c.common.o: ALWAYS
 	cd C; make
@@ -88,7 +61,7 @@ P/c.p.o: ALWAYS
 GC/c.gc.o: ALWAYS
 	cd GC; make
 
-######### betarun_v.o / betarunv.a  #########
+######### betarun_v.o #########
 
 betarun_v.o: C/c.common.valhalla P/c.p.valhalla GC/c.gc.valhalla linux.o
 	ld -dn -r -o betarun_v.o C/c.common.valhalla P/c.p.valhalla GC/c.gc.valhalla linux.o
@@ -112,13 +85,63 @@ C/c.common.valhalla: ALWAYS
 P/c.p.valhalla: ALWAYS
 	cd P;  make valhalla PROF="$(PROF)" PE=$(PE)
 
-CRUN/c.run.valhalla: ALWAYS
-	cd CRUN; make valhalla PROF="$(PROF)"
-
 GC/c.gc.valhalla: ALWAYS
 	cd GC; make valhalla PROF="$(PROF)"
 
 valhalla: betarun_v.o
+
+######### betarun_debug.o ###################
+
+betarun_debug.o: C/c.common.debug P/c.p.debug GC/c.gc.debug linux-debug.o
+	ld -r -o betarun_debug.o C/c.common.debug P/c.p.debug GC/c.gc.debug linux-debug.o
+
+C/c.common.debug: ALWAYS
+	cd C; make debug
+
+P/c.p.debug: ALWAYS
+	cd P; make debug
+
+GC/c.gc.debug: ALWAYS
+	cd GC; make debug
+
+linux-debug.o: linux-debug.asm
+	cp linux-debug.asm linux-debug.c
+	gcc -E linux-debug.c > linux-debug.s
+	as -o linux-debug.o linux-debug.s
+	rm linux-debug.c linux-debug.s
+
+linux-debug.asm: RUN/linux.run RUN/linuxadditions.run $(RUNDEPS)
+	../GEN/linux/gen -debug -o linux-debug.asm RUN/linux
+
+asm: linux-debug.asm
+
+debug: betarun_debug.o
+
+######### betarun_ugc.o (variant of betarun_debug.o) ##########
+
+betarun_ugc.o: C/c.common.ugc GC/c.gc.ugc P/c.p.ugc linux-ugc.o
+	ld -r -o betarun_ugc.o linux-ugc.o C/c.common.debug GC/c.gc.debug P/c.p.debug
+
+C/c.common.ugc: ALWAYS
+	cd C; make debug PROF="-Ddo_unconditional_gc $(PROF)"
+
+GC/c.gc.ugc: ALWAYS
+	cd GC; make debug PROF="-Ddo_unconditional_gc $(PROF)"
+
+P/c.p.ugc: ALWAYS
+	cd P; make debug PROF="-Ddo_unconditional_gc $(PROF)"
+
+linux-ugc.o: linux-ugc.asm
+	cp linux-ugc.asm linux-ugc.c
+	gcc -E linux-ugc.c > linux-ugc.s
+	as -o linux-ugc.o linux-ugc.s
+	rm linux-ugc.c linux-ugc.s
+
+linux-ugc.asm: RUN/linux.run RUN/linuxadditions.run $(RUNDEPS)
+	../GEN/linux/gen -debug -ugc -o linux-ugc.asm RUN/linux
+
+ugc: betarun_ugc.o
+
 
 ########## All ###########
 
@@ -129,7 +152,16 @@ all:
 	make valhalla
 	make pe 
 	make clean
+	make ugc
+	make clean
 	make debug
+
+######### Generator #########
+
+gen:
+	cd ../GEN/linux; make --no-print-directory
+
+#############################
 
 tags:
 	etags RUN/*.run GC/*.[hc] C/*.[hc] P/*.[hc] C/data.gen
