@@ -77,10 +77,18 @@
 #define BlockStart( theB) ((ptr(long)) Offset( theB, sizeof(struct Block)))
 #define LVRABlockStart( theB) ((ptr(long)) Offset( theB, sizeof(struct LVRABlock)))
 
-
-#ifdef sparc
-/* 64 bit alignment because of the reals */
-#define MALLOC(size) memalign(64, size)
+#ifdef RTDEBUG
+#  ifdef sparc
+     /* 64 bit alignment because of the reals */
+#    define MALLOC(size) memset(memalign(64, (size)), 0, (size))
+#  else
+#    define MALLOC(size) calloc(size)
+#  endif
 #else
-#define MALLOC(size) malloc(size)
+#  ifdef sparc
+     /* 64 bit alignment because of the reals */
+#    define MALLOC(size) memalign(64, (size))
+#  else
+#    define MALLOC(size) malloc(size)
+#  endif
 #endif
