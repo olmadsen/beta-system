@@ -1,49 +1,106 @@
-ORIGIN '../designenv';
-INCLUDE '../designenvutils'
+ORIGIN 'designobjectbody';
 -- NewDocument: Descriptor --
 (# newPage: ^Page; 
 do (* prevent the callback from New *)
-   disable.MenuEventCallBack;
-   disable.PostMenuEventCallBack;
-   (menuID.fileMenu,menuID.fileMenu.New)->CallOAMenu;
+   UI.disable.MenuEventCallBack;
+   UI.disable.PostMenuEventCallBack;
+   (UI.menuID.fileMenu,UI.menuID.fileMenu.New)->designUtils.CallOAMenu;
    (* create a new document just by simulating New in File menu *)
    THIS(Document)[]->theDocument[];
    onInit->newPage[];
    (if newPage[]
-    // none then &DesignPage[]->newPage[]; (* new document makes a new page automatically *) 
+    // none then
+       &DesignPage[]->newPage[];
+       (* new document makes a new page automatically *)
+       
    if);
-   DSStrGetCurPage->newPage.onInit;
+   UI.DSStrGetCurPage->newPage.onInit;
    (* init page with id *)
    newPage[]->CurrentPage;
    (* allow onInit to create other pages *)
    (* allow the callback from New *)
-   enable.MenuEventCallBack;
-   enable.PostMenuEventCallBack;
+   UI.enable.MenuEventCallBack;
+   UI.enable.PostMenuEventCallBack;
    
 #)  
 
--- DocumentPrivatePart: Descriptor --
-(#
-   currentPageID: @Integer;
-   coarsening: @Integer;
-   (* no os pages currently made by coarsening
-    * but not yet made as beta object *)
-   doingCoarse: @Boolean;
-   InteractiveCreatedObject: ^Object;
-   hackw,hackh: @Integer;
-   
-#)  
+-- onKeyDown: DoPart --
+do INNER onKeyDown  
+
+-- fileOpenDiagram: DoPart --
+do
+     (#
+        DSFileOpenDiagram: external
+          (# ok: @Boolean; fileNameP: @integer; 
+          enter (fileNameP)
+          do 'DSFile_OpenDiagram'->callC; 
+          exit ok
+          #);
+        
+     do (@@ name.T[1])->DSFileOpenDiagram
+     #)  
+
+-- fileSavePagesAsDiagram: DoPart --
+do
+     (#
+        count: @shortRef;
+        list: @integerRef;
+        cancelled: ^integerRef;
+        prompt: @text;
+        dummyFilter: ##external
+     do
+        @@ pages[1]->list;
+        pages.range->count;
+        &integerRef[]->cancelled[];
+        ' '->prompt.puttext;
+        (@@ filename.T[1],false,cancelled[],true,count,list,dummyFilter##,
+         prompt)->UI.DSFileSavePagesAsDiagram
+     #)  
+
+-- fileSavePage: DoPart --
+do
+     (# cancelled: ^integerRef; name: ^text
+     do
+        &integerRef[]->cancelled[];
+        (if filename[] <> none then
+            (@@ filename.T[1],false,cancelled[])->UI.DSFileSavePage
+         else
+            'untitled'->name[];
+            (@@ name.T[1],true,cancelled[])->UI.DSFileSavePage
+        if)
+     #)  
+
+-- fileLoadPage: DoPart --
+do
+     (# pageCount: ^shortRef; pageList,cancelled: ^integerRef; name: ^text
+     do
+        &shortRef[]->pageCount[];
+        &integerRef[]->pageList[];
+        &integerRef[]->cancelled[];
+        (if filename[] <> none then
+            (@@ filename.T[1],false,pageCount[],pageList[],cancelled[])
+              ->UI.DSFileLoadPage
+         else
+            'untitled'->name[];
+            (@@ name.T[1],true,pageCount[],pageList[],cancelled[])
+              ->UI.DSFileLoadPage
+        if);
+        (if cancelled = 0 then (pageCount,pageList)->GetIntList->pages if)
+     #)  
+
+-- abortCommand: DoPart --
+do UI.DSUIAbortCommand  
 
 -- DocumentID: Descriptor --
-(#  do DSStrGetDocID->i;  #)  
+(#  do UI.DSStrGetDocID->i;  #)  
 
 -- DocModified: Descriptor --
-(#  do b->DSStrSetDiagModified;  #)  
+(#  do b->UI.DSStrSetDiagModified;  #)  
 
 -- SetPage: Descriptor --
 (# 
 do
-   (if p.ID->DSStrSetCurPage
+   (if p.ID->UI.DSStrSetCurPage
     // true then p.ID->privatepart.currentPageID; 
     else
        'SetPage failed; error ID: '->putline; 
@@ -54,7 +111,7 @@ do
 -- GetPage: Descriptor --
 (# 
 do (* test whether current is the same page *)
-   (if (DSStrGetCurPage->pid) <> privatepart.currentPageID
+   (if (UI.DSStrGetCurPage->pid) <> privatepart.currentPageID
     // true then (* no find the new page *)
        pid->theObjectList.Find->p[]; pid->privatepart.currentPageID; 
    if);
@@ -62,28 +119,36 @@ do (* test whether current is the same page *)
    
 #)  
 
+-- getPageList: DoPart --
+do
+     (# count: @ShortRef; listRef: @IntegerRef; 
+     do
+        (count[],listRef[])->UI.DSStrGetPageList;
+        (count,listRef)->GetIntList->pages
+     #)  
+
 -- GetPages: Descriptor --
 (# count: @ShortRef; listRef: @IntegerRef; 
 do (* get the pages from design/oa and make a list... *)
-   (count[],listRef[])->DSStrGetPageList;
+   (count[],listRef[])->UI.DSStrGetPageList;
    (count,listRef)->GetIntList->theObjectList.NodeIDsToList->pagelist[];
    
 #)
 (*************************** GLOBAL **********************************)  
 
 -- MaxGroupSize: Descriptor --
-(#  do DSRdAttrGetMaxGroupSize->size;  #)  
+(#  do UI.DSRdAttrGetMaxGroupSize->size;  #)  
 
 -- PolyGetSide: Descriptor --
 (# sidesRef: ^shortRef; orientRef: ^integerRef; 
-do (sidesRef[],orientRef[])->DSRdAttrPolyDefaults; sidesRef->side; 
+do (sidesRef[],orientRef[])->UI.DSRdAttrPolyDefaults; sidesRef->side; 
 #)  
 
 -- PolySetSide: Descriptor --
 (# sidesRef: ^shortRef; orientRef: ^integerRef; 
 do
-   (sidesRef[],orientRef[])->DSRdAttrPolyDefaults;
-   (if (side,orientRef)->DSWtAttrRegularPolyInfo
+   (sidesRef[],orientRef[])->UI.DSRdAttrPolyDefaults;
+   (if (side,orientRef)->UI.DSWtAttrRegularPolyInfo
     // false then 'PolySetSide: could not set'->putline; 
    if);
    
@@ -91,14 +156,14 @@ do
 
 -- PolyGetOrient: Descriptor --
 (# sidesRef: ^shortRef; orientRef: ^integerRef; 
-do (sidesRef[],orientRef[])->DSRdAttrPolyDefaults; orientRef->orient; 
+do (sidesRef[],orientRef[])->UI.DSRdAttrPolyDefaults; orientRef->orient; 
 #)  
 
 -- PolySetOrient: Descriptor --
 (# sidesRef: ^shortRef; orientRef: ^integerRef; 
 do
-   (sidesRef[],orientRef[])->DSRdAttrPolyDefaults;
-   (if (sidesRef,orient)->DSWtAttrRegularPolyInfo
+   (sidesRef[],orientRef[])->UI.DSRdAttrPolyDefaults;
+   (if (sidesRef,orient)->UI.DSWtAttrRegularPolyInfo
     // false then 'PolySetOrient: could not set'->putline; 
    if);
    
@@ -106,17 +171,149 @@ do
 (*********** CURSOR HANDLING ***********)  
 
 -- SetCursor: Descriptor --
-(#  do ID->DSUIChangeCursor->oldCurs;  #)  
+(#  do ID->UI.DSUIChangeCursor->oldCurs;  #)  
 
 -- RestoreCursor: Descriptor --
-(#  do oldCurs->DSUIChangeCursor;  #)  
+(#  do oldCurs->UI.DSUIChangeCursor;  #)  
 
 -- ResetCursor: Descriptor --
 (#  do CrossHair->set;  #)  
 
 -- SetStatusBar: Descriptor --
-(#  do msg->DSUISetStatusBarMessage;  #)  
+(#  do msg->UI.DSUISetStatusBarMessage;  #)  
 
 -- ResetStatusBar: Descriptor --
-(#  do DSUIRestoreStatusBar;  #)  
+(#  do UI.DSUIRestoreStatusBar;  #)  
+
+-- shapeRectangle: DoPart --
+do 1->v  
+
+-- shapeEllipse: DoPart --
+do 2->v  
+
+-- shapePolygon: DoPart --
+do 3->v  
+
+-- shapeRndRect: DoPart --
+do 4->v  
+
+-- shapeWedge: DoPart --
+do 5->v  
+
+-- shapePicture: DoPart --
+do 6->v  
+
+-- shapeLine: DoPart --
+do 7->v  
+
+-- shapeStraightConn: DoPart --
+do 20->v  
+
+-- shapeCurveTopConn: DoPart --
+do 21->v  
+
+-- shapeCurveSideConn: DoPart --
+do 22->v  
+
+-- fontSystemFont: DoPart --
+do 0->v  
+
+-- fontSystem: DoPart --
+do 0->v  
+
+-- fontApplFont: DoPart --
+do 1->v  
+
+-- fontNewYork: DoPart --
+do 2->v  
+
+-- fontGeneva: DoPart --
+do 3->v  
+
+-- fontMonaco: DoPart --
+do 4->v  
+
+-- fontVenice: DoPart --
+do 5->v  
+
+-- fontLondon: DoPart --
+do 6->v  
+
+-- fontAthens: DoPart --
+do 7->v  
+
+-- fontRoman: DoPart --
+do 7->v  
+
+-- fontSanFran: DoPart --
+do 8->v  
+
+-- fontScript: DoPart --
+do 8->v  
+
+-- fontToronto: DoPart --
+do 9->v  
+
+-- fontCairo: DoPart --
+do 11->v  
+
+-- fontLosAngeles: DoPart --
+do 12->v  
+
+-- fontModern: DoPart --
+do 12->v  
+
+-- fontTimes: DoPart --
+do 20->v  
+
+-- fontTmsRoman: DoPart --
+do 20->v  
+
+-- fontHelvetica: DoPart --
+do 21->v  
+
+-- fontCourier: DoPart --
+do 22->v  
+
+-- fontSymbol: DoPart --
+do 23->v  
+
+-- fontTaliesin: DoPart --
+do 24->v  
+
+-- fontTerminal: DoPart --
+do 24->v  
+
+-- textJustLeftJustification: DoPart --
+do 1->v  
+
+-- textJustCentered: DoPart --
+do 2->v  
+
+-- textJustRightJustification: DoPart --
+do 0->v  
+
+-- textStylePlaintext: DoPart --
+do 0->v  
+
+-- textStyleBold: DoPart --
+do 2->v  
+
+-- textStyleItalic: DoPart --
+do 4->v  
+
+-- textStyleUnderLine: DoPart --
+do 8->v  
+
+-- textStyleOutLine: DoPart --
+do 16->v  
+
+-- textStyleShadow: DoPart --
+do 32->v  
+
+-- textStyleCondense: DoPart --
+do 64->v  
+
+-- textStyleExtented: DoPart --
+do 128->v  
 
