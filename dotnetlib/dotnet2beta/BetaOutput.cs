@@ -6,7 +6,7 @@ namespace beta.converter
     public class BetaOutput
       {
 	internal bool trace = false;
-	internal bool do_flush = true;
+	internal bool do_flush = false;
 		
 	internal int indentlevel = 0;
 
@@ -77,9 +77,9 @@ namespace beta.converter
 	      // no file involved
 	      return ;
 	    }
-	    System.Console.Error.Write("Output file:\n\t\"" + entry.FullName + "\"" + "\n");
+	    System.Console.Error.Write("    --> \"" + entry.FullName + "\"" + "\n");
 	    if (existing != null) {
-	      System.Console.Error.Write("NOTICE: Not overwriting existing\n\t\"" + existing.FullName + "\"" + "\n");
+	      System.Console.Error.Write("NOTICE:\n\tNot overwriting existing\n\t\"" + existing.FullName + "\"" + "\n");
 	      System.Console.Error.Write("\tUse -f or -F option if overwrite desired." + "\n");
 	    }
 	  }

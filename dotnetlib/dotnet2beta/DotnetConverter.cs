@@ -12,6 +12,7 @@ namespace beta.converter
 	internal static bool trace_type = false;
 	internal static bool trace_file = false;
 	internal static bool trace_runtime = false;
+	internal static bool verbose = false;
 		
 	internal IDictionary includes;
 	internal static IDictionary converted;
@@ -40,7 +41,7 @@ namespace beta.converter
 	      Console.Error.WriteLine("\n" + msg + "\n");
 	    }
 	    Console.Error.WriteLine("Usage:\n");
-	    Console.Error.WriteLine("dotnet2beta [-h][-f][-F][-] <dotnet class name>");
+	    Console.Error.WriteLine("dotnet2beta [-h][-v][-f][-F][-] <dotnet class name>");
 	    Console.Error.WriteLine(" e.g.   dotnet2beta System.String\n");
 	    Console.Error.WriteLine("Output files will be placed in BETALIB/dotnetlib in a directory");
 	    Console.Error.WriteLine("structure corresponding to the namespace of the class.");
@@ -49,6 +50,7 @@ namespace beta.converter
 					   + "/dotnetlib/System/String.bet\n");
 	    Console.Error.WriteLine("Options:");
 	    Console.Error.WriteLine("   -h  Display this help");
+	    Console.Error.WriteLine("   -v  Verbose output");
 	    Console.Error.WriteLine("   -f  Force overwrite of existing output file");
 	    Console.Error.WriteLine("   -F  Force overwrite of existing output file AND files for refered classes");
 	    Console.Error.WriteLine("   -   Output to terminal instead of file");
@@ -68,6 +70,9 @@ namespace beta.converter
 		    switch (args[i]){
 		    case "-h":
 		      usage(null);
+		      break;
+		    case "-v":
+		      verbose = true;
 		      break;
 		    case "-f":
 		      overwrite = 1;
@@ -659,11 +664,11 @@ namespace beta.converter
 	    includes.Values.CopyTo(inc,0);
 	    for (int i = 0; i < inc.Length; i++)
 	      {
-		Console.Error.Write("\nRefered by " 
-				    + slashToDot(namespaceName + "." + className) 
-				    + ": " 
-				    + slashToDot((String) inc[i]) 
-				    + "\n");
+		if (verbose) Console.Error.Write("\nRefered by " 
+						    + slashToDot(namespaceName + "." + className) 
+						    + ": " 
+						    + slashToDot((String) inc[i]) 
+						    + "\n");
 		DotnetConverter dotnet2beta = new DotnetConverter();
 		if (dotnet2beta.needsConversion(slashToDot((String) inc[i]), betalib, overwrite, output) != null)
 		  {
@@ -676,14 +681,16 @@ namespace beta.converter
 		  }
 		else
 		  {
-		    if (converted[slashToDot((String) inc[i])] != null)
-		      {
-			Console.Error.Write("  --> skipped: already converted by this program execution" + "\n");
-		      }
-		    else
-		      {
-			Console.Error.Write("  --> ignored: already converted (use -F to force overwrite)" + "\n");
-		      }
+		    if (verbose){
+		      if (converted[slashToDot((String) inc[i])] != null)
+			{
+			  Console.Error.Write("  --> skipped: already converted by this program execution" + "\n");
+			}
+		      else
+			{
+			  Console.Error.Write("  --> ignored: already converted (use -F to force overwrite)" + "\n");
+			}
+		    }
 		  }
 	      }
 	    return 0;
@@ -751,7 +758,7 @@ namespace beta.converter
 	      }
 #endif
 	    converted[slashToDot(clsname)] = clsname;
-	    Console.Error.Write("Done." + "\n");
+	    if (verbose) Console.Error.Write("Done." + "\n");
 	    return convertIncludes(betalib, ((overwrite == 2)?2:- 1), ((output == Console.Out)?output:null));
 	  }
 
