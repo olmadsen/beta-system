@@ -21,8 +21,8 @@ void unswizzle_dummy()
 #define MAXPERSISTENTBYTES 2048 * Kb
 
 /* LOCAL VARIABLES */
-static loadedBytes = 0;
-static forceAOACompaction = 0;
+static unsigned long loadedBytes = 0;
+static unsigned long forceAOACompaction = 0;
 
 /* IMPORTS */
 extern PStoreHeader *currentPStore;

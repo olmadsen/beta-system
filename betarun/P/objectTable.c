@@ -11,6 +11,7 @@
 #include "PStoreServer.h"
 #include "PStore.h"
 #include "crossStoreReferences.h"
+#include "specialObjectsTable.h"
 
 void objt_dummy() {
 #ifdef sparc
@@ -483,6 +484,7 @@ void removeUnusedObjects()
   /* mark dead objects dead and clean up tables */
   OTEndGC();
   RTEndGC();
+  SOEndGC();
 }
 
 #endif /* PERSIST */

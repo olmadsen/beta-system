@@ -53,14 +53,13 @@ unsigned long insertSpecialObject(unsigned long tag, Object *theObj)
   
   if (currentTable) {
     Claim(theObj == getRealObject(theObj), "Unexpected part object");
+    Claim(inAOA(theObj), "insertSpecialObject: Where is theObj");
     
     newEntry = (SOTEntry *)malloc(sizeof(SOTEntry));
     newEntry -> tag = tag;
     newEntry -> theObj = theObj;
     
     inx = STInsert(&currentTable, newEntry);
-    theObj -> GCAttr = AOASpecial;
-    
     return inx;
   } else {
     initSpecialObjectTable();
@@ -68,7 +67,7 @@ unsigned long insertSpecialObject(unsigned long tag, Object *theObj)
   }
 }
 
-void unmarkSpecialObjects(void)
+void SOStartGC(void)
 {
   unsigned long inx, maxIndex;
   SOTEntry *entry;
@@ -86,7 +85,7 @@ void unmarkSpecialObjects(void)
   }
 }
 
-void GCspecialObjectsTable(void)
+void SOEndGC(void)
 {
   unsigned long inx, maxIndex;
   SOTEntry *entry;

@@ -11,20 +11,6 @@
 #include "beta.h"
 #include "dot.h"
 
-#ifdef sparc
-#include "../CRUN/crun.h"
-/* Hej Peter!  
- *
- * Jeg bliver nød til at have denne funktion nedenunder
- * med, ellers kan jeg ikke compilere denne fil uden optimering. Jeg
- * har brug for at kompilere denne fil uden optimering.
- */
-void ioa_dummy() {
-  CRUN_USE();
-}
-#endif /* sparc */
-
-
 #ifdef PERSIST
 #include "../P/objectTable.h"
 #include "../P/misc.h"
@@ -282,18 +268,14 @@ void IOAGc()
       if (repeatIOAGc) {
 	/* We have done the extra IOAGC */
 	
-	/* There are no longer any special objects in IOA */
-	freeSOTags();
-	
 	/* To handle persistent objects moved from ioa to aoa */
 	flushDelayedEntries();
 	
 	/* All persistent objects have now been moved to AOA and
-	   inserted in the PObjects table. All persistent references in
-	   IOA have been marked ALIVE. */
-
+	   inserted in the PObjects table. All persistent references
+	   in IOA have been marked ALIVE. */
 	clearAOAclients();
-
+	
 	AOAGc();
 	
 	repeatIOAGc = 0;
@@ -301,6 +283,9 @@ void IOAGc()
 	/* To handle objects explicitly marked as persistent by
 	   'put' */
 	flushDelayedEntries();
+	
+	/* There are no longer any special objects in IOA */
+	freeSOTags();
 	
 	/* Mark special objects moved to AOA as special */
 	remarkSpecialObjects();
@@ -314,10 +299,11 @@ void IOAGc()
 	   during the ensuing IOAGc. */
 
 	repeatIOAGc = 1;
-
+	
 	OTStartGC();
 	RTStartGC();
-	
+	SOStartGC();
+
 	/* All entries marked alive have been marked
 	   POTENTIALLYDEAD. They must prove themselves relevant during
 	   the ensuing GC. */
@@ -490,9 +476,6 @@ Program terminated.\n", (int)(4*ReqObjectSize));
   
 #ifdef PERSIST
   if (repeatIOAGc) {
-#ifdef sparc
-    StackEnd = (long *)((struct RegWin *) StackPointer);
-#endif
     goto IOAGCstart;
     /* Yuhuuu!!!! */
   }
@@ -647,7 +630,8 @@ void ProcessReference(Object ** theCell, long refType)
     /* If the forward pointer refers an AOA object, insert
      * theCell in AOAroots table.
      */
-    
+    Claim(!inToSpace(*theCell), "*theCell is in to space ??");
+
 #ifdef RTLAZY
     if (isLazyRef( *theCell)) {
       if (negIOArefs)
@@ -701,20 +685,21 @@ static void ProcessAOAReference(Object ** theCell, long refType)
   Object * theObj;
   long GCAttribute;
 
-
 #ifndef PERSIST
   if (*theCell) {
-      /* This Claim assumes that the StackObj is at offset 8 in
-       * the Component struct. --mg
-       */
-      Claim(inBetaHeap(*theCell) ||
+    /* This Claim assumes that the StackObj is at offset 8 in
+     * the Component struct. --mg
+     */
+    Claim(inBetaHeap(*theCell) ||
           ((long)*theCell==-1 && GETPROTO((Object *)(theCell-2))==ComponentPTValue),
-           "inBetaHeap(*theCell)");
+	  "inBetaHeap(*theCell)");
   } else {
     return;
   }
 #endif /* PERSIST */
 
+  Claim(inAOA(theCell), "ProcessAOAReference: Where is theCell ?");
+  
   theObj = *theCell; /* the object referenced from the cell */
   
   if (inIOA(theObj)) { /* theObj is inside IOA */

@@ -6,8 +6,8 @@
 void initSpecialObjectTable(void);
 unsigned long SOTSize(void);
 unsigned long insertSpecialObject(unsigned long tag, Object *theObj);
-void unmarkSpecialObjects(void);
-void GCspecialObjectsTable(void);
+void SOStartGC(void);
+void SOEndGC(void);
 void remarkSpecialObjects(void);
 void saveTagForObject(Object *realObj, unsigned long tag);
 unsigned long getTagForObject(Object *theObj);
