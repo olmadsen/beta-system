@@ -1,0 +1,306 @@
+ORIGIN '../editSheetBody';
+
+INCLUDE
+'~beta/guienv/v1.6/private/winnt/guienv_ntiprivate'
+'~beta/guienv/v1.6/private/winnt/fields_ntibody'
+'~beta/win32lib/v1.6/wingdi'
+'~beta/win32lib/v1.6/wingdiconsts'
+'~beta/win32lib/v1.6/systemmetrics'
+'~beta/win32lib/v1.6/winuserconsts'
+'~beta/guienv/v1.6/private/winnt/richTextConsts';
+
+-- lib: Attributes --
+
+bitComp:
+  (# style: @integer; mask: @integer; 
+  enter (style,mask)
+  do style %Band (%Bnot mask)->style; 
+  exit style
+  #);
+VK_HOME: (#  exit 0x24 #);
+VK_END: (#  exit 0x23 #);
+WS_EX_CLIENTEDGE: (#  exit 0x00000200 #);
+ENM_MOUSEEVENTS: (#  exit 0x00020000 #);
+EM_SETBKGNDCOLOR: (#  exit (WM_USER+67) #);
+
+-- homeKeyImpl: doPart --
+do VK_HOME->theKey
+   
+-- endKeyImpl: doPart --
+do VK_END -> theKey
+   
+-- platformImpl: doPart --
+do win32 -> value;
+
+-- ShiftModifierBody: dopart --
+do VK_SHIFT -> m; 
+   
+-- ControlModifierBody: dopart --
+do VK_CONTROL -> m;
+
+-- isModifierOnBody: doPart --
+do theModifier->isVKeyDown -> value;
+   
+-- scrollbarWidthImpl: doPart --
+do SM_CXVSCROLL->GetSystemMetrics->w;
+   
+-- scrollbarHeightImpl: doPart --
+do SM_CYHSCROLL->GetSystemMetrics->h;
+   
+-- createTheEditTextStyleImpl: doPart --
+do &textStyle[]->theTextStyle[];
+   'Courier New' -> theTextStyle.name;
+   8->theTextStyle.size;
+   
+-- createTheHeaderTextStyleImpl: doPart --
+do &textStyle[]->theTextStyle[];
+   'MS Sans Serif' -> theTextStyle.name;
+   8->theTextStyle.size;
+   
+   
+-- theEditTextLib: attributes --
+textFieldNotiMethods: windowItemNotificationMethods
+  (#
+     handleNotification:: 
+       (#
+          processNotify:
+            (#
+               code1: @integer;
+               message: @integer;
+               newWparam: @integer;
+               newLparam: @integer;
+               longInt: @CStruct
+                 (#
+                    ByteSize::  (#  do 4->Value;  #);
+                    loWord: signedShort
+                      (# Pos::  (#  do 0->Value;  #);  #);
+                    hiWord: signedShort
+                      (# Pos::  (#  do 2->Value;  #);  #);
+                    
+                 enter R[1]
+                 exit R[1]
+                 #);
+               oldInfo: ^messageInfo;
+               
+            do
+               false->didSomething;
+               info.lParam+8->tos'%adrGetLong'->code1;
+               (if code1
+                // EN_MSGFILTER then
+                   info.lParam+12->tos'%adrGetLong'->message;
+                   (if message
+                    // WM_LBUTTONUP  //WM_MBUTTONUP // WM_RBUTTONUP  then
+                       
+                       true->private.notification;
+                       &messageInfo[]->oldInfo[];
+                       info.wParam->oldInfo.wParam;
+                       info.lParam->oldInfo.lParam;
+                       info.message->oldInfo.message;
+                       info.where->oldInfo.where;
+                       info.time->oldInfo.time;
+                       info.lParam+16->tos'%adrGetLong'->newWparam;
+                       info.lParam+20->tos'%adrGetLong'->newLparam;
+                       newWparam->longInt;
+                       longInt.hiWord->info.wParam.hiWord;
+                       longInt.loWord->info.wParam.loWord;
+                       newWparam->info.wParam;
+                       newLparam->longInt;
+                       longInt.hiWord->info.lParam.hiWord;
+                       longInt.loWord->info.lParam.loWord;
+                       newLparam->info.lParam;
+                       message->info.message;
+                       GetMessagePos->longInt;
+                       (longInt.loWord,longInt.hiWord)->info.where;
+                       getMessageTime->info.time;
+                       (if message
+                        // WM_LBUTTONUP then 1->info.button; 
+                        // WM_MBUTTONUP then 2 -> info.button; 
+                           
+                           'WM_MBUTTONUP' -> screen.putline;
+                           
+                        // WM_RBUTTONUP then 3->info.button; 
+                       if);
+                       FALSE->info.callback;
+                       theEventHandler.onMouseUp;
+                       oldInfo.wParam->info.wParam;
+                       oldInfo.lParam->info.lParam;
+                       oldInfo.message->info.message;
+                       oldInfo.where->info.where;
+                       oldInfo.time->info.time;
+                       false->private.notification;
+                       true->didSomething;
+                       1->info.result;
+                       
+                   if);
+                   
+               if);
+               
+            #);
+          didSomething: @boolean;
+          type: @integer;
+          
+       do
+          false->didSomething;
+          
+          (if info.message
+           // WM_COMMAND then
+              info.wParam.hiWord->type;
+              (if type = EN_CHANGE then onTouched;  if);
+              
+           // WM_NOTIFY then
+              processNotify; 
+          if);
+          didSomething or info.handled->info.handled;
+       #);
+  #);
+
+textFieldMethods: windowItemMethods
+  (#      
+     dispatchMessage::
+       (# didSomething: @boolean;
+       do (if info.message = WM_MBUTTONUP then theEventHandler.onMouseUp;
+              true -> didSomething;
+          if);
+          didSomething or info.handled -> info.handled;
+       #);
+  #);
+
+-- theEditTextUpdateMargins: doPart --
+do setTextFieldMargins;
+
+-- theEditTextSetReadOnly: doPart --
+do
+   interfaceObjectID->windowID;
+   (if value then
+       (windowID,EM_SETREADONLY,1,0)->SendMessage;
+       (windowID,EM_SETBKGNDCOLOR,0,COLOR_BTNFACE->GetSysColor)
+         ->SendMessage;
+       
+    else
+       (windowID,EM_SETREADONLY,0,0)->SendMessage;
+       (windowID,EM_SETBKGNDCOLOR,1,0)->SendMessage;
+   if); 
+   
+   
+-- setEditTextColorImpl: doPart --
+do (# cf: @CHARFORMAT; windowID: @integer; 
+   do
+      sizeOfCharFormat->malloc->cf.ptr;
+      (if cf.ptr <> 0 then
+          THIS(textField).interfaceObjectID->windowID;
+          (cf.ptr,0,sizeOfCharFormat)->memset;
+          sizeOfCharFormat->cf.cbSize;
+          CFM_COLOR->cf.dwMask;
+          0x00FF0000->cf.crTextColor;
+          (windowID,EM_SETCHARFORMAT,0,cf.ptr)->SendMessage;
+          cf.ptr->free;
+      if);
+   #);
+   
+-- addChangeNotificationsImpl: doPart --
+do
+   interfaceObjectID->windowID;
+   (windowID,EM_GETEVENTMASK,0,0)->SendMessage->theMask;
+   (theMask,ENM_CHANGE)->tos'%or'->theMask;
+   (theMask,ENM_MOUSEEVENTS)->tos'%or'->theMask;
+   (windowID,EM_SETEVENTMASK,0,theMask)->SendMessage->theMask;
+   
+   
+-- removeChangeNotificationsImpl: doPart --
+do
+   interfaceObjectID->windowID;
+   (windowID,EM_GETEVENTMASK,0,0)->SendMessage->theMask;
+   (theMask,ENM_CHANGE)->bitComp->theMask;
+   (theMask,ENM_MOUSEEVENTS)->tos'%or'->theMask;
+   (windowID,EM_SETEVENTMASK,0,theMask)->SendMessage->theMask;
+   
+-- theEditTextCreate: doPart --
+do &textFieldNotiMethods[]->theNotiMethods;
+   &textfieldMethods[] -> theMethods;
+   
+-- theEditTextOpen: doPart --
+do interfaceObjectID->windowID;
+   (ENM_CHANGE,ENM_MOUSEEVENTS)->tos'%or'->theMask;
+   (windowID,EM_SETEVENTMASK,0,theMask)->SendMessage;
+   THIS(editSheet).private.theTextStyle[]->defaultStyle;
+   setEditTextColor;
+   hide;
+   true->border.visible;
+   (0,0) -> margin; 
+   (2,gridOffset)->position;
+   (100,18)->size;
+   true->isOpen;
+   
+   
+-- scroller1Lib: attributes --
+scrollerMethods: windowItemMethods
+  (#
+     vertical: (#  exit 0 #);
+     horizontal: (#  exit 1 #);
+     contentsWidth,contentsHeight,viewWidth,viewHeight: @integer;
+     dispatchMessage::< 
+       (#
+          processScroll:
+            (#
+               amount: @integer;
+               absolute: @boolean;
+               width,height: @integer;
+               orientation: @integer;
+               
+            enter orientation
+            do
+               privateViewSize->(width,height);
+               (if info.wParam.loWord
+                // SB_LINELEFT // SB_LINEUP then
+                   lineHeight->amount; 
+                // SB_LINERIGHT // SB_LINEDOWN then
+                   - lineHeight->amount; 
+                // SB_PAGELEFT // SB_PAGEUP then
+                   (if orientation = vertical then
+                       height->amount; 
+                    else
+                       width->amount; 
+                   if);
+                   
+                // SB_PAGERIGHT // SB_PAGEDOWN then
+                   (if orientation = vertical then
+                       - height->amount
+                    else
+                       - width->amount; 
+                   if);
+                   
+                // SB_THUMBPOSITION then
+                   - info.wParam.hiWord->amount; true->absolute; 
+               if);
+               (if orientation = vertical then
+                   (if absolute then
+                       (0,amount)->scrollTo; 
+                    else
+                       (0,amount)->scroll; 
+                   if);
+                   
+                else
+                   (if absolute then
+                       (amount,0)->scrollTo; 
+                    else
+                       (amount,0)->scroll; 
+                   if);
+                   
+               if);
+               
+            #);
+       do
+          (if info.message
+           // WM_HSCROLL then
+              horizontal->processScroll; 
+           // WM_VSCROLL then
+              vertical->processScroll; 
+          if);
+          
+       #);
+  #);
+
+-- scroller1Create: doPart --
+do WS_HSCROLL->windowItemStyle; &scrollerMethods[]->theMethods; 
+   
+   
