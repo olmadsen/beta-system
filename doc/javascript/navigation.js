@@ -208,10 +208,24 @@ function openhelp()
 
 function onKey(e)
 {
-  var c = document.layers ? e.which : document.all ? event.keyCode : document.getElementById ? e.keyCode : 1;
-  var ch = String.fromCharCode(c);
-  //window.status = 'pressed ' + c + ' "' + ch + '"';
+  var c;
+  var ch;
+  if (document.layers){
+    c  = e.which;
+    ch = String.fromCharCode(e.which);
+  } else if (document.all){
+    c  = event.keyCode;
+    ch = String.fromCharCode(event.keyCode);
+  } else if (document.getElementById){
+    c  = e.keyCode;
+    ch = String.fromCharCode(e.keyCode);
+  } else {
+    c  = 1;
+    ch = '*';
+  }
+  //window.status = 'Pressed ' + c + ' "' + ch + '"';
   if (ch=='?') {
+    // Fails in Netscape 6 (c==0)
     openhelp();
     return false;
   }
@@ -250,7 +264,12 @@ function onKey(e)
   }
 }
 
-if (document.layers){
-   document.captureEvents(Event.KEYUP);
+if (!document.all && document.getElementById){
+   // onkeypress does not seem to work
+   document.onkeydown=onKey;
+} else {
+   if (document.layers){
+      document.captureEvents(Event.KEYPRESS);
+   }
+   document.onkeypress=onKey;
 }
-document.onkeyup=onKey;
