@@ -126,8 +126,9 @@ if ( $REMOVEASTS == "yes" ) then
     date >>& $LOG
     echo "rebuildall.sh: Building betarun." >>& $LOG
     date >>& $LOG
-    cd $BETALIB/betarun/$objdir
-    make all >>& $LOG
+    #cd $BETALIB/betarun/$objdir
+    #make all >>& $LOG
+    mbs_make >>& $LOG
     date >>& $LOG
     echo "rebuildall.sh: Building compiler." >>& $LOG
     mbs_compiletools compiler >>& $LOG
@@ -153,8 +154,9 @@ if ( $REMOVEASTS == "yes" ) then
 else
     date >>& $LOG
     echo "rebuildall.sh: Building betarun." >>& $LOG
-    cd $BETALIB/betarun/$objdir
-    make all >>& $LOG
+    #cd $BETALIB/betarun/$objdir
+    #make all >>& $LOG
+    mbs_make >>& $LOG
     cd $BETALIB
     date >>& $LOG
     echo "rebuildall.sh: Building compiler." >>& $LOG
