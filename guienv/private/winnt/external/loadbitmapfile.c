@@ -458,6 +458,7 @@ UINT LoadDIBitmapFile (LPSTR szFile, BITMAPINFOHEADER_EXT * lpBIHExt)
       }
     
     lpBIHExt->hBitmap = hbm;
+    lpBIHExt->hDib    = hdib;
 
     return BITMAP_OK;
 }

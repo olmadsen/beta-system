@@ -28,6 +28,7 @@ typedef struct tagBITMAPINFOHEADER_EXT{
   DWORD  biClrUsed; 
   DWORD  biClrImportant; 
   HBITMAP hBitmap;
+  HANDLE hDib;
 } BITMAPINFOHEADER_EXT;
 
 /*****************************************************/
