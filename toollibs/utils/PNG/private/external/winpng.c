@@ -3,6 +3,24 @@
 #include <stdio.h>
 #include "betapng.h"
 
+static void SetBit(unsigned char *data, unsigned long n)
+{
+  unsigned long byte;
+  unsigned long bit;
+  unsigned char *ptr;
+  unsigned char mask;
+  
+  byte = n >> 3;
+  bit = n & 7;
+  bit = 7 - bit;
+  
+  mask = 1 << bit;
+
+  ptr = data + byte;
+  *ptr = *ptr | mask;
+  return;
+}
+
 
 
 void getPixels1(HDC hdc, HBITMAP hbm, BITMAP *bitmap, unsigned char **data)
@@ -72,7 +90,6 @@ void write_bmp_to_png(HDC hdc, HBITMAP hbmp, char *file_name)
 {
   BITMAP bitmap;
   int result;
-  int i, j;
 
   FILE *fp;
   png_structp png_ptr;
@@ -162,8 +179,163 @@ void write_bmp_to_png(HDC hdc, HBITMAP hbmp, char *file_name)
   return;
 }
 
+int betaImage2RGB(BetaImage *src, BetaImage *dst)
+{
+  unsigned char r, g, b, a;
+  unsigned char *src_row;
+  unsigned char *dst_row;
+  unsigned char *src_pixel;
+  unsigned char *dst_pixel;
+  int i, j;
 
-int readPNG(char *name, HBITMAP *phbmp, int *width, int *height, int *depth)
+  dst->width = src->width;
+  dst->height = src->height;
+  dst->rowbytes = (((dst->width * 3) + 3) >> 2) << 2;
+  dst->data = malloc(dst->rowbytes * dst->height);
+  if(dst->data == NULL) {
+    return 1;
+  }
+
+  src_row = src->data;
+  dst_row = dst->data;
+  for(j = 0; j < src->height; j++) {
+    src_pixel = src_row;
+    dst_pixel = dst_row;
+    for(i = 0; i < src->width; i++) {
+      r = src_pixel[0];
+      g = src_pixel[1];
+      b = src_pixel[2];
+      a = src_pixel[3];
+      dst_pixel[0] = b;
+      dst_pixel[1] = g;
+      dst_pixel[2] = r;
+      src_pixel += 4;
+      dst_pixel += 3; 
+    }
+    src_row += src->rowbytes;
+    dst_row += dst->rowbytes;
+  }
+  return 0;
+}
+
+int betaImage2Mask(BetaImage *src, BetaImage *dst)
+{
+  unsigned char a;
+  unsigned char *src_row;
+  unsigned char *dst_row;
+  unsigned char *src_pixel;
+  unsigned char *dst_pixel;
+  int i, j;
+
+  
+  dst->width = src->width;
+  dst->height = src->height;
+  dst->rowbytes = ((((src->width + 7) >> 3) + 1) >> 1) << 1;
+
+  dst->data = malloc(dst->rowbytes * dst->height);
+
+  if(dst->data == NULL) {
+    return 1;
+  }
+
+  src_row = src->data;
+  dst_row = dst->data;
+  for(j = 0; j < src->height; j++) {
+    src_pixel = src_row;
+    dst_pixel = dst_row;
+    for(i = 0; i < src->width; i++) {
+      a = src_pixel[3];
+      src_pixel += 4;
+      if (a < 200)
+        SetBit(dst_row, i);
+    }
+    src_row += src->rowbytes;
+    dst_row += dst->rowbytes;
+  }
+  return 0;
+}
+
+
+int betaImage2DIB(BetaImage *image, HBITMAP *phbmp)
+{
+  BITMAPINFO bmi;
+  HDC hdc;
+  int result = 0;
+  int i, j;
+  
+  bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  bmi.bmiHeader.biWidth = image->width;
+  bmi.bmiHeader.biHeight = -image->height;
+  bmi.bmiHeader.biPlanes = 1;
+  bmi.bmiHeader.biBitCount = 24;
+  bmi.bmiHeader.biCompression = BI_RGB;
+
+  hdc = GetDC(NULL);
+
+  if(!hdc) {
+    result = GetLastError();
+    return result;
+  }
+  
+  *phbmp = CreateDIBitmap(hdc, (LPBITMAPINFOHEADER) &bmi, CBM_INIT, image->data, &bmi, DIB_RGB_COLORS);
+  
+  
+  if(!(*phbmp)) {
+    result = GetLastError();
+  }
+
+  ReleaseDC(NULL, hdc);
+  
+  return result;
+}
+
+
+
+int readPNG(char *name, HBITMAP *phbmp, int *width, int *height, HBITMAP *hmask)
+{
+  BetaImage image;
+  BetaImage rgb;
+  BetaImage mask;
+  
+  int result;
+
+  BITMAPINFO bmi;
+  HDC hdc;
+  
+
+  result = BetaReadPNG(name, &image);
+
+  printf("aaa\n");
+  
+  if(result != 0) {
+    return result;
+  }
+  
+  *width = image.width;
+  *height = image.height;
+
+  printf("bbb\n");
+  
+  result = betaImage2RGB(&image, &rgb);
+
+
+  printf("...\n");
+  if (result != 0) {
+    return result;
+  }
+
+  betaImage2DIB(&rgb, phbmp);
+  
+  if(image.alpha) {
+    printf("creating mask\n");
+    betaImage2Mask(&image, &mask);
+    *hmask = CreateBitmap(mask.width, mask.height, 1, 1, mask.data);
+  }  
+  return result;
+}
+
+
+int readPNG1(char *name, HBITMAP *phbmp, int *width, int *height, int *depth)
 {
   HDC hdc;
   HDC hdcmem;

@@ -11,6 +11,7 @@ typedef struct BetaImage {
   long palette_size;
   Color *palette;
   void *data;
+  int alpha;
 } BetaImage;
 
 
