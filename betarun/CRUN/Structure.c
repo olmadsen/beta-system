@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Structure.c,v 1.25 1992-10-28 14:40:26 beta Exp $
+ * Mod: $Id: Structure.c,v 1.26 1992-10-30 12:35:07 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -175,8 +175,8 @@ int LtS(ref(Structure) arg1, ref(Structure) arg2)
 	   /* Now there is some hope, now we need to check if origins are equal. */
 	   
 	   if (proto2->OriginOff == arg1->iProto->OriginOff){
-	     /* The prototypes have same origin offset (same prefix level), so
-		the result is (arg1->iOrigin == arg2->iOrigin) */
+	     /* The original prototypes have same origin offset (same prefix level),
+		 so the result is (arg1->iOrigin == arg2->iOrigin) */
 	     return arg1->iOrigin == arg2->iOrigin;
 	   }
 	   
