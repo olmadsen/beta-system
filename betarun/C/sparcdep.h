@@ -344,9 +344,9 @@ static __inline__ ProtoType *findProto(unsigned long *Ventry)
 
 /* CopyRR, CopyVR1, CopyVR2, CopyVR4, CopyVR8 */
 #define ParamRepObjOff(name)                            \
-void name(ValRep *theRep,                        \
-	   Object *theObj,                       \
-	   unsigned offset /* in ints */)
+void name(SimpleRep *theRep,                            \
+	  Object *theObj,                               \
+	  unsigned offset /* in ints */)
 
 #else /* MT */
 
@@ -355,8 +355,8 @@ void name(ValRep *theRep,                        \
   asmlabel(name,                                        \
 	   CallAndSave_I0_I1_O0(name)                   \
 	   );                                           \
-void C##name(ValRep *theRep,                     \
-	     Object *theObj,                     \
+void C##name(SimpleRep *theRep,                         \
+	     Object *theObj,                            \
 	     unsigned offset /* in ints */)
      
 #endif /* MT */

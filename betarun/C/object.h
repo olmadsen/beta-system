@@ -78,29 +78,21 @@ typedef struct _Component{
   long               Body[1];   /* The body part               */ 
 } Component;
 
-typedef struct _ValRep{
+typedef struct _SimpleRep{
 #ifdef COM
-  long      *vtbl;      /* {Byte/Short/Long/Double}RepPTValue-DISP_OFF */
+  long      *vtbl;      /* {Byte/Short/Long/Double/Ref}RepPTValue-DISP_OFF */
 #else /* !COM */
-  ProtoType *Proto;     /* {Byte/Short/Long/Double}RepPTValue  */
+  ProtoType *Proto;     /* {Byte/Short/Long/Double/Ref}RepPTValue  */
 #endif /* COM */
   long       GCAttr;    /* The GC attribute            */
   long       LowBorder; /* Lower bound of range        */
   long       HighBorder;/* Higher bound of range       */
   long       Body[1];   /* The body part               */ 
-} ValRep;
+} SimpleRep;
 
-typedef struct _RefRep{
-#ifdef COM
-  long      *vtbl;      /* RefRepPTValue-DISP_OFF */
-#else /* !COM */
-  ProtoType *Proto;     /* RefRepPTValue  */
-#endif /* COM */
-  long       GCAttr;    /* The GC attribute            */
-  long       LowBorder; /* Lower bound of range        */
-  long       HighBorder;/* Higher bound of range       */
-  long       Body[1];   /* The body part               */ 
-} RefRep;
+typedef struct _SimpleRep ValRep;
+typedef struct _SimpleRep RefRep;
+
 
 typedef struct _ObjectRep{
 #ifdef COM
