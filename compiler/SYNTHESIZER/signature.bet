@@ -1,6 +1,57 @@
 ORIGIN 'genlib';
 INCLUDE 'auxlib';
 ---theGenLib:attributes---
+descLocation:
+  (* Return the fragmentgroup (file location) of desc
+   * 1.  location = ''    desc is in this group
+   * 2.  location = 'foo' desc is declared in 'foo'
+   * 3.  location = none  desc is slot and location
+   *                          of the form for the slot
+   *                          is not known. The slot is
+   *                          a descriptor- doPart or 
+   *                          mainpart-slot
+   * Part of the code here is copied form mkEntryPoint;
+   * this should be unified.
+   *)
+  (# desc: ^ASTindex; location: ^text;
+     N: @ASTindex;
+     formId: ^text; descNo: @integer;
+  enter desc[]
+  do 187->ctrace(#
+                do 'location:'->xT; desc[] -> xA
+                #);
+     (if desc.label = gram.mainPart then
+         desc[] -> sematt.MainPartDesc -> desc[]
+     if);
+     (if desc.label
+      // gram.objectDescriptor then 
+         desc.descId -> (formId[],descNo);
+         desc.son->N; N.brother->N;
+         (if N.isSlot then 
+             (* desc has mainPart slot *)
+             NONE -> location[] (* is this what we want? *)
+          else 
+             (* check if do-part is a slot *)
+             N.son->N;     (* att-part*)
+             N.brother->N; (* action-part*)
+             N.son->N;     (* enter-part*)
+             N.brother->N; (* do-part *)
+             (if N.isSlot then 
+                 (* desc has do-part slot *)
+                 NONE -> location[] (* is this what we want? *)
+              else
+                 (if (formId[]->formSet.isLocal) <> 0 then
+                     '' -> location[] 
+                  else 'nonlocal'->putline;
+                     (desc.frag[]).name -> location[]
+                 if)
+             if)
+         if)
+      // gram.unExpanded then
+         NONE -> location[]
+     if);
+  exit location[]
+  #);
 
 Type: 
   (# isRef: < booleanValue;
@@ -8,9 +59,19 @@ Type:
      elmType:<  integerValue;
      asText:<
        (# T: ^text
-       do inner
+       do inner;
+          187->ctrace(# 
+                     do 'Signature:'  ->xT; T[] -> xT;
+                        ' location:'->xT;
+                        (if location[] = none then
+                            'unknown' -> xT
+                         else
+                            location[] -> xT
+                     if)#)
+
        exit T[]
-       #)
+       #);
+     location: ^text
   do inner
   exit this(Type)[]
   #);
@@ -52,6 +113,11 @@ Reference: Type
                   'class [/*FIXME:hardcoded in signature.bet:*/.module tstenv.netmodule]' -> T.append;
               if);
               class[] -> T.append
+          if);
+          (if stest then 
+              187->trace(#
+                        do 'descLocation:: '->xT; location[] -> xT
+                        #)
           if)
        #)
   enter class[]
@@ -177,7 +243,8 @@ mkSignature:
   do (if (desc -> sematt.descKind) = sematt.standardKind then
          (desc[] -> valueSignature -> sig[]).astext -> tsig[]
       else
-         (desc[] -> EH.descName -> Reference).asText -> tsig[]
+         (desc[] -> EH.descName -> Reference).asText -> tsig[];
+         (*desc[] -> descLocation -> tsig.location[]*)
      if);
      (if isJava then
          (* hack *)
@@ -207,14 +274,17 @@ Signature:
    * As can be seen the difference is the receiver present in
    * the method call
    *)
-  (# receiver: ^text; (* an optional receiver *)
+  (# receiver: ^text;         (* an optional receiver *)
      isStatic: @boolean;
-     method: ^text;   (* method name *)
-     NNsig: ^ListSignature;    (* input arguments *)
-     XXsig: ^Type;    (* return type *)
+     method: ^text;           (* method name *)
+     NNsig: ^ListSignature;   (* input arguments *)
+     XXsig: ^Type;            (* return type *)
      
      
      thisDesc: @ASTindex;      (* descriptor of this method (pattern) *)
+     location: ^text;          (* fragment group (file) where thisDesc is 
+                                * declared - see descLocation above
+                                *)
      thisChain: ^DH.superChain;(* desc chain of def- or call-location *)
      
      setDesc:
@@ -223,6 +293,7 @@ Signature:
        do (thisSuperChain,EV) 
             -> DH.theDesc
             -> (thisDesc,MN,thisChain[],vKind);
+          thisDesc[] -> descLocation -> location[];
        #);
      markStatic: (# do true -> isStatic #);
      addReceiver: (# enter receiver[] #);     
@@ -299,7 +370,15 @@ Signature:
                   '\n*** method is none ' -> putline
               if);
               noNsig -> enterSig -> T.append
-          if)
+          if);
+          187->ctrace(# 
+                     do 'Signature:'  ->xT; T[] -> xT;
+                        ' location:'->xT;
+                        (if location[] = none then
+                            'unknown' -> xT
+                         else
+                            location[] -> xT
+                     if)#)
        exit T[]
        #);
 
@@ -377,6 +456,7 @@ Signature:
        enter desc[]
        do setVoidXsig;
           desc[] -> EH.descName -> Reference -> XXsig[];
+          desc[] -> descLocation -> XXsig.location[];
        #);
      setExit: (# enter XXsig[] #);
      addExit:
@@ -498,7 +578,8 @@ getAttSig:
                   desc[] 
                     -> EH.descName
                     -> Reference 
-                    -> sig[];                         
+                    -> sig[];  
+                  desc[] -> descLocation -> sig.location[];
                else 
                   ' ***??? not descriptor ' -> putline;
                   '?notDescriptor?'->Reference -> sig[];
@@ -579,7 +660,7 @@ getAttSig:
                            -> EH.descName
                            -> Reference 
                            -> xsig[];
-                         
+                         desc[] -> descLocation -> xsig.location[]
                       else 
                          ' ***??? not descriptor ' -> putline;
                          '?notDescriptor?'->Reference -> xSig[];
