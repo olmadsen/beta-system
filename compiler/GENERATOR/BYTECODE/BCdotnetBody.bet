@@ -57,6 +57,17 @@ fixme_is_comment:
 defaultversion:
   (# exit '1:0:0:0' #);
 
+betaenv_signature:
+  (# T: @Text
+  do 'class [\'%s\']\'%s\'' -> T.putformat(# do common.betaenv.groupname->s; common.betaenv.groupname->s; #);
+  exit T.copy
+  #);
+betaenv_clrbody:
+  (# T: @Text;
+  do '%s_clrbody' -> T.putformat(# do common.betaenv.groupname->s #);
+  exit T.copy
+  #);
+
 trace_opcode:
   (# opcode: @integer;
   enter opcode
@@ -599,6 +610,7 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
    init:
      (# BCmch: ^ByteCodeMachine;
         PH: @pathhandler;
+        setargfile: @text;
         trace_name: (# exit false #);
      do ObjectPool.get(# type::assemblyinfohashtable #)
           -> lookedup_assemblies[];
@@ -660,6 +672,9 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
             emitModuleHeader;
          else
             emitAssemblyHeader;
+        if);
+        (if true (* isProgram *) then
+            betaenv_clrbody -> importAssembly;
         if);
      #);
    allocLocal:
@@ -1546,7 +1561,7 @@ do init;
              
              (if (subLevel = 0) and (common.betaenv.groupname ->thisClassName.equalNCS) then
                  '.field public static ' -> out.puttext;
-                 'class [\'%s\']\'%s\'' -> out.putformat(# do common.betaenv.groupname->s; common.betaenv.groupname->s; #);
+                 betaenv_signature -> out.puttext;
                  ' betaenvRef'-> out.putln;
              if);
              
@@ -1718,12 +1733,10 @@ do init;
                     (if (subLevel = 0) and (common.betaenv.groupname ->thisClassName.equalNCS) then
                         out.nl;
                         'ldarg.0' -> out.putln; (* this(betaenv)[] *)
-                        'stsfld  class [\'%s\']\'%s\' [\'%s\']\'%s\'::betaenvRef' 
+                        'stsfld  %s %s::betaenvRef' 
                           -> out.putformat(# 
-                                          do common.betaenv.groupname->s; 
-                                             common.betaenv.groupname->s; 
-                                             common.betaenv.groupname->s; 
-                                             common.betaenv.groupname->s; 
+                                          do betaenv_signature->s; 
+                                             betaenv_signature->s; 
                                           #);
                     if);
                     delta -> stack_delta;
@@ -2090,12 +2103,10 @@ do init;
                     0 -> stack_delta;
                     out.nl;
                     'char []' -> allocLocal -> storeLocal;
-                    'ldsfld  class [\'%s\']\'%s\' [\'%s\']\'%s\'::betaenvRef' 
+                    'ldsfld  %s %s::betaenvRef' 
                       -> out.putformat(# 
-                                      do common.betaenv.groupname->s; 
-                                         common.betaenv.groupname->s; 
-                                         common.betaenv.groupname->s; 
-                                         common.betaenv.groupname->s; 
+                                      do betaenv_signature->s; 
+                                         betaenv_signature->s; 
                                       #);
                     1 -> stack_delta;
                     out.nl;
@@ -2205,6 +2216,28 @@ do init;
                     out.nl;
                     'pop' -> out.putln;
                     0 -> stack_delta;
+                 // 'initArgs' -> prim.equal then
+                    (# BCmch: ^ByteCodeMachine;
+                       program_name, sig: ^text;
+                    do (* Find program name *)
+                       (mch[]->BCmch[]).mstate.thisSourceFileName.copy -> program_name[];
+                       (* First argument (betanev instance) loaded by dup in genMain *)
+                       (* load program name *)
+                       out.nl;
+                       'ldstr  ' -> out.puttext; program_name[] -> strquote -> out.putln;
+                       (* load args[] of main() *)
+                       'ldarg.0' -> out.putln;
+                       (* Call SetArgValues, which copies main.args to betaenv.ArgVector 
+                        * with conversion String->Text of each element
+                        *)
+                       'call   void class [\'' -> out.puttext;
+                       betaenv_clrbody -> out.puttext;
+                       '\']\'SetArgValues\'::\'SetArgValues\'(' -> out.puttext;
+                       betaenv_signature -> out.puttext;
+                       ', '
+                       'class [mscorlib]System.String, '
+                       'class [mscorlib]System.String[])' -> out.putln;
+                    #)
                  else
                     'Primitive NYI: ' -> (prim[] -> ('(' -> (')' -> (arg.copy).append).prepend).prepend).prepend -> fixme;
                 if);
@@ -2895,6 +2928,19 @@ safequote:
              T.copy -> T[];
              '\''->T.prepend;
              '\''->T.append; 
+         if);
+     if)
+  exit T[]
+  #);
+strQuote:
+  (# T: ^text;
+  enter T[]
+  do (if T.lgth>0 then
+         (if (not (T.T[1]='\"')) and 
+             (not (T.T[T.lgth]='"')) then 
+             T.copy -> T[];
+             '"'->T.prepend;
+             '"'->T.append; 
          if);
      if)
   exit T[]
