@@ -92,10 +92,101 @@ getErrors:
   #)  
 
 -- ConnectionClose: DoPart --
-do private.close; INNER close  
+do
+     (# 
+     do
+          (#
+             twiceClose: exception
+               (# 
+               do
+                  'Attempt to close '->msg;
+                  THIS(Connection)[]->getPatternName->msg.append;
+                  ' that is not open.'->msg.append
+               #);
+             checkError:
+               (# 
+               do
+                  (if rc <> SQL_SUCCESS then
+                      (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)
+                        ->closeException
+                  if)
+               #);
+             rc: @shortint
+          do
+             (if not THIS(Connection).private.isOpen then twiceClose if);
+             THIS(Connection).private.hdbc->SQLDisconnect->rc;
+             checkError;
+             THIS(Connection).private.hdbc->SQLFreeConnect->rc;
+             checkError;
+             false->THIS(Connection).private.isOpen
+          #)
+     #);
+   INNER  
 
 -- ConnectionOpen: DoPart --
-do (name[],username[],password[])->private.open;   
+do
+     (#
+        twiceOpen: exception
+          (# 
+          do
+             'Attempt to open '->msg;
+             THIS(Connection)[]->getPatternName->msg.append;
+             ' twice.'->msg.append
+          #);
+        allocateHDBC:
+          (# rc: @shortint; henv: @integer
+          enter henv
+          do
+             (henv,@@ THIS(connection).private.hdbc)->SQLAllocConnect->rc;
+             (if rc <> SQL_SUCCESS then
+                 (SQL_HANDLE_ENV,henv)->openConnectionException
+             if)
+          #);
+        openConnection:
+          (# rc: @shortint; henv: @integer
+          enter henv
+          do
+             (if true
+              // userName[] = none // userName.empty then
+                 (THIS(connection).private.hdbc,@@ name.t[1],SQL_NTS,0,0,0,0)
+                   ->SQLConnect->rc
+              // password[] = none // password.empty then
+                 (THIS(connection).private.hdbc,@@ name.t[1],SQL_NTS,@@
+                  userName.t[1],SQL_NTS,0,0)->SQLConnect->rc
+              else
+                 (THIS(connection).private.hdbc,@@ name.t[1],SQL_NTS,@@
+                  userName.t[1],SQL_NTS,@@ passWord.t[1],SQL_NTS)->SQLConnect
+                   ->rc
+             if);
+             (if rc = SQL_SUCCESS then
+                 true->THIS(connection).private.isOpen
+              else
+                 (SQL_HANDLE_DBC,THIS(connection).private.hdbc)
+                   ->openConnectionException
+             if)
+          #);
+        setAutoCommitMode:
+          (# rc: @shortint
+          do
+             (THIS(Connection).private.hdbc,SQL_ATTR_AUTOCOMMIT,
+              SQL_AUTOCOMMIT_ON)->SQLSetConnectOption->rc;
+             (if rc = SQL_SUCCESS then
+                 true->THIS(connection).private.isOpen
+              else
+                 (SQL_HANDLE_DBC,THIS(connection).private.hdbc)
+                   ->openConnectionException
+             if)
+          #)
+     do
+        (if THIS(connection).private.isOpen then
+            twiceOpen
+         else
+            getHenv->allocateHDBC
+        if);
+        getHenv->openConnection;
+        setAutoCommitMode
+     #);
+   INNER  
 
 -- DBEnvBDBCException: DoPart --
 do
@@ -117,7 +208,7 @@ do
    INNER BDBCException  
 
 -- DirectSQLStatementExecute: DoPart --
-do private.execute->res[];   
+do private.execute->res[]; 1->currentMarker;   
 
 -- SQLStatementPrivate: Descriptor --
 (#
@@ -181,62 +272,6 @@ do private.execute->res[];
         if)
      #)
 #)  
-
--- getTables: DoPart --
-do
-     (# rc: @shortint; hstmt: @integer
-     do
-        (THIS(Connection).private.hdbc,@@ hstmt)->SQLAllocStmt->rc;
-        (if rc <> SQL_SUCCESS then
-            (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)->connectionException
-        if);
-        (hstmt,0,0,0,0,0,0,0,0)->SQLTables->rc;
-        (if rc <> SQL_SUCCESS then
-            (SQL_HANDLE_STMT,hstmt)->connectionException
-        if);
-        hstmt->SQLFetch->rc;
-        until:
-          (#
-             getByNumber:
-               (#
-                  i: @integer;
-                  res: ^text;
-                  target: @cString;
-                  StrLen_or_IndPtr: @integer
-               enter i
-               do
-                  255->target.init;
-                  (hstmt,i,SQL_CHAR,target,255,@@ StrLen_or_IndPtr)->SQLGetData
-                    ->rc;
-                  (if rc <> SQL_SUCCESS then
-                      (SQL_HANDLE_STMT,hstmt)->connectionException
-                  if);
-                  target.get->res[];
-                  target.free
-               exit res[]
-               #)
-          do
-             (if rc = SQL_SUCCESS then
-                 &table[]->current[];
-                 1->getByNumber->current.CatalogName[];
-                 2->getByNumber->current.SchemaName[];
-                 3->getByNumber->current.TableName[];
-                 4->getByNumber->current.TableType[];
-                 INNER scanTables;
-                 hstmt->SQLFetch->rc;
-                 restart until
-              else
-                 (if rc <> SQL_NO_DATA then
-                     (SQL_HANDLE_STMT,hstmt)->connectionException
-                 if)
-             if)
-          #);
-        (hstmt,SQL_CLOSE)->SQLFreeStmt->rc;
-        (if rc <> SQL_SUCCESS then
-            (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)->connectionException
-        if)
-     #);
-     
 
 -- SQLStatementGet: DoPart --
 do private.t[]->t[]; INNER get  
@@ -494,86 +529,6 @@ do
           #)
      #)  
 
--- ConnectionInfoAutoCommitModeEnter: DoPart --
-do
-     (# commitAttr: @integer; rc: @shortint
-     do
-        (if autoCommit then
-            SQL_AUTOCOMMIT_ON->commitAttr
-         else
-            SQL_AUTOCOMMIT_OFF->commitAttr
-        if);
-        (THIS(Connection).private.hdbc,SQL_ATTR_AUTOCOMMIT,commitAttr)
-          ->SQLSetConnectOption->rc;
-        (rc,THIS(Connection).private.hdbc)->private.checkError
-     #)  
-
--- ConnectionInfoAutoCommitModeExit: DoPart --
-do
-     (# commitAttr: @integer; rc: @shortint
-     do
-        (THIS(Connection).private.hdbc,SQL_ATTR_AUTOCOMMIT,@@ commitAttr)
-          ->SQLGetConnectOption->rc;
-        (rc,THIS(Connection).private.hdbc)->private.checkError;
-        (if commitAttr = SQL_AUTOCOMMIT_ON then true->autoCommit if)
-     #)  
-
--- ConnectionCommit: DoPart --
-do
-     (# rc: @shortint
-     do
-        (private.hdbc,SQL_NULL_HANDLE,SQL_COMMIT)->SQLTransact->rc;
-        (rc,private.hdbc)->private.checkError
-     #)  
-
--- ConnectionRollBack: DoPart --
-do
-     (# rc: @shortint
-     do
-        (private.hdbc,SQL_NULL_HANDLE,SQL_ROLLBACK)->SQLTransact->rc;
-        (rc,private.hdbc)->private.checkError
-     #)  
-
--- ConnectionInfoTransactionsSupported: DoPart --
-do
-     (# support: @integer; rc: @shortint
-     do
-        (THIS(connection).private.hdbc,SQL_TXN_CAPABLE,@@ support,0,NULL)
-          ->SQLGetInfo->rc;
-        (rc,THIS(connection).private.hdbc)->private.checkError;
-        (if support <> SQL_TC_NONE then true->isSupported if)
-     #)  
-
--- ConnectionInfoTransactionLevelEnter: DoPart --
-do
-     (# rc: @shortint
-     do
-        (THIS(Connection).private.hdbc,SQL_ATTR_TXN_ISOLATION,level)
-          ->SQLSetConnectOption->rc;
-        (rc,THIS(Connection).private.hdbc)->private.checkError
-     #)  
-
--- ConnectionInfoTransactionLevelExit: DoPart --
-do
-     (# rc: @shortint
-     do
-        (THIS(Connection).private.hdbc,SQL_ATTR_TXN_ISOLATION,@@ level)
-          ->SQLSetConnectOption->rc;
-        (rc,THIS(Connection).private.hdbc)->private.checkError
-     #)  
-
--- ConnectionInfoREAD_UNCOMMITTED: DoPart --
-do SQL_TXN_READ_UNCOMMITTED->value  
-
--- ConnectionInfoREAD_COMMITTED: DoPart --
-do SQL_TXN_READ_COMMITTED->value  
-
--- ConnectionInfoREPEATABLE_READ: DoPart --
-do SQL_TXN_REPEATABLE_READ->value  
-
--- ConnectionInfoSERIALIZABLE: DoPart --
-do SQL_TXN_SERIALIZABLE->value  
-
 -- DirectSQLStatementPrivate: Descriptor --
 (#
    replace:
@@ -726,101 +681,6 @@ do SQL_TXN_SERIALIZABLE->value
             if)
         if)
      exit res[]
-     #)
-#)  
-
--- ConnectionOpenPrivate: Descriptor --
-(#
-   open:
-     (# 
-     enter (name[],userName[],password[])
-     do
-          (#
-             twiceOpen: exception
-               (# 
-               do
-                  'Attempt to open '->msg;
-                  THIS(Connection)[]->getPatternName->msg.append;
-                  ' twice.'->msg.append
-               #);
-             allocateHDBC:
-               (# rc: @shortint; henv: @integer
-               enter henv
-               do
-                  (henv,@@ THIS(connection).private.hdbc)->SQLAllocConnect->rc;
-                  (if rc <> SQL_SUCCESS then
-                      (SQL_HANDLE_ENV,henv)->openConnectionException
-                  if)
-               #);
-             openConnection:
-               (# rc: @shortint; henv: @integer
-               enter henv
-               do
-                  (if true
-                   // userName[] = none // userName.empty then
-                      (THIS(connection).private.hdbc,@@ name.t[1],SQL_NTS,0,0,0,
-                       0)->SQLConnect->rc
-                   // password[] = none // password.empty then
-                      (THIS(connection).private.hdbc,@@ name.t[1],SQL_NTS,@@
-                       userName.t[1],SQL_NTS,0,0)->SQLConnect->rc
-                   else
-                      (THIS(connection).private.hdbc,@@ name.t[1],SQL_NTS,@@
-                       userName.t[1],SQL_NTS,@@ passWord.t[1],SQL_NTS)
-                        ->SQLConnect->rc
-                  if);
-                  (if rc = SQL_SUCCESS then
-                      (if rc = SQL_SUCCESS then
-                          true->THIS(connection).private.isOpen
-                       else
-                          (SQL_HANDLE_DBC,THIS(connection).private.hdbc)
-                            ->openConnectionException
-                      if)
-                   else
-                      (SQL_HANDLE_DBC,THIS(connection).private.hdbc)
-                        ->openConnectionException
-                  if)
-               #)
-          do
-             (if THIS(connection).private.isOpen then
-                 twiceOpen
-              else
-                 getHenv->allocateHDBC
-             if);
-             getHenv->openConnection
-          #)
-     #)
-#)  
-
--- ConnectionClosePrivate: Descriptor --
-(#
-   close:
-     (# 
-     do
-          (#
-             twiceClose: exception
-               (# 
-               do
-                  'Attempt to close '->msg;
-                  THIS(Connection)[]->getPatternName->msg.append;
-                  ' that is not open.'->msg.append
-               #);
-             checkError:
-               (# 
-               do
-                  (if rc <> SQL_SUCCESS then
-                      (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)
-                        ->closeException
-                  if)
-               #);
-             rc: @shortint
-          do
-             (if not THIS(Connection).private.isOpen then twiceClose if);
-             THIS(Connection).private.hdbc->SQLDisconnect->rc;
-             checkError;
-             THIS(Connection).private.hdbc->SQLFreeConnect->rc;
-             checkError;
-             false->THIS(Connection).private.isOpen
-          #)
      #)
 #)  
 
