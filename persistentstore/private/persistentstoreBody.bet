@@ -16,9 +16,32 @@ lazyFetchImplemented: external
   (# implemented: @Boolean;
   exit implemented
   #);
+
+assertPSOpen: 
+  (# location:< (# value: ^text do INNER exit value[] #);
+     t: ^Text;
+  do (if not pspriv.isOpen then
+         'Tried to use an unopened persistent store.  Operation: '->t[];
+         location->t.putLine;
+         'Exiting with dump.'->t.putLine;
+         (FailureTrace, t[])->Stop;
+     if);
+  #);
+
+assertPSNotOpen: 
+  (# location:< (# value: ^text do INNER exit value[] #);
+     t: ^Text;
+  do (if not pspriv.isOpen then
+         'Tried to use an already opened persistent store.  Operation: '->t[];
+         location->t.putLine;
+         'Exiting with dump.'->t.putLine;
+         (FailureTrace, t[])->Stop;
+     if);
+  #);
+
 -- PersistentInit: Descriptor --
 (# 
-do
+do assertPSNotOpen(# location::(# do 'init'->value[] #) #);
    getPSobjectServer->pspriv.os[];
    &pspriv.locationImpl[]->pspriv.location[];
    pspriv.location[]->pspriv.os.lastlocation[];
@@ -28,7 +51,7 @@ do
 
 -- PersistentCommit: Descriptor --
 (# 
-do
+do assertPSOpen(# location::(# do 'commit'->value[] #) #);
    (if doCheckpoint then 
        checkpoint; 
     else
@@ -41,7 +64,8 @@ do
 
 -- PersistentReget: Descriptor --
 (# doreget: @boolean; foundOID: @OIDtype; 
-do
+do assertPSOpen(# location::(# do 'reget'->value[] #) #);
+   
    (if theObject[] = none then    
        (if lastupdate = 0 then
            false->doreget; 
@@ -146,7 +170,7 @@ do
           
        #);
    false->pspriv.writeAllowed;
-   
+   true->pspriv.isOpen;
 #)  
 
 -- PersistentOpenWrite: Descriptor --
@@ -170,7 +194,7 @@ do
           
        #);
    true->pspriv.writeAllowed;
-   
+   true->pspriv.isOpen;
 #)  
 
 -- PersistentCreate: Descriptor --
@@ -195,7 +219,7 @@ do
        #);
    true->pspriv.writeAllowed;
    pspriv.location.numberofUpdates->lastUpdate;
-   
+   true->pspriv.isOpen;
 #)  
 
 -- PersistentDelete: Descriptor --
@@ -216,7 +240,7 @@ do
 #)  
 
 -- PersistentCheckPoint: DoPart --
-do
+do assertPSOpen(# location::(# do 'checkpoint'->value[] #) #);
    (if pspriv.writeAllowed
     // true then
          (# 
@@ -273,8 +297,8 @@ do
 
 -- PersistentClose: Descriptor --
 (# 
-do
-   (if doCheckpoint // true then checkpoint if);
+do assertPSOpen(# location::(# do 'close'->value[] #) #);
+   (if doCheckpoint then checkpoint if);
    pspriv.location.close
      (#
         danglersExists::< 
@@ -332,12 +356,12 @@ do
           #)
      #);
    pspriv.clear;
-   
+   false->pspriv.isOpen;
 #)  
 
 -- PersistentGet: Descriptor --
 (# 
-do
+do assertPSOpen(# location::(# do 'get'->value[] #) #);
    getIt:
      (# foundOID: @OIDtype; 
      do
@@ -374,7 +398,7 @@ do
 
 -- PersistentPut: Descriptor --
 (# OID: @OIDtype; gcf: @Integer; rootfound: @boolean; 
-do
+do assertPSOpen(# location::(# do 'put'->value[] #) #);
    (if obj[] // none then 0->gcf else obj[]->getGCField->gcf;  if);
    (if true
     // (gcf = - 1) then
@@ -404,14 +428,14 @@ specialInfo: (# type: ##Object; OID: @OIDtype;  #);
 
 -- registerSpecialObject: Descriptor --
 (# found: @Boolean; specialName: ^Text; 
-do
+do 
    true->found;
    '##special##'->specialName[];
    name[]->specialName.append;
    (specialName[],specialInfo##)
      ->get
        (#
-          notFound::< 
+          notFound::
             (# si: ^specialInfo; 
             do
                false->found;
@@ -425,8 +449,8 @@ do
                true->continue;
                
             #);
-          allowLazyFetch::<  (#  do false->value #);
-          quaError::< 
+          allowLazyFetch::(#  do false->value #);
+          quaError::
             (# 
             do
                (failuretrace,'Unexpected quaError in registerSpecialObject')
@@ -435,15 +459,14 @@ do
             #);
           
        #);
-   (if found // true then alreadyThere if);
+   (if found then alreadyThere if);
    
 #)  
 
 -- registerSpecialInstance: Descriptor --
 (# si: ^specialInfo; specialName: ^Text; 
-do
-   (if o[]
-    // none then
+do 
+   (if o[]=none then
        (failuretrace,'registerSpecialInstance: Object is NONE')->stop; 
    if);
    '##special##'->specialName[];
@@ -488,7 +511,8 @@ do
 #)  
 
 -- psprivate: Descriptor --
-(#
+(# 
+   isOpen: @Boolean;
    os: ^PSobjectServer;
    specialObjects: ^PSobjectServer.specialObjectsTable;
    name: ^text;
