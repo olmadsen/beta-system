@@ -132,7 +132,6 @@ extern void Illegal();
 #endif
 extern long isObject(ref(Object));
 extern long inBetaHeap(ref(Object));
-extern long ObjectType(ref(Object));
 extern void Claim(long, char*);
 #if defined(macintosh) || defined(MAC)
 extern void InitTheCursor(void);
