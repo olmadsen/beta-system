@@ -260,6 +260,10 @@ u_long /* in reference id */ SBINREFcreate(CAStorage *csb, u_long offset)
     SBINreference sbin;
 
     Claim(csb -> open, "Store closed");
+
+#ifdef DEBUGPERSISTENCE
+    fprintf(output, "SBINREFcreate: offset = 0x%X\n", (int)offset);
+#endif /* DEBUGPERSISTENCE */
     
     /* Allocate room for a new in reference */
     id = CAallocate(csb, SBINReferences, sizeof(struct sbinreference));
@@ -268,6 +272,10 @@ u_long /* in reference id */ SBINREFcreate(CAStorage *csb, u_long offset)
     sbin.offset = ntohl(offset);
     CAsave(csb, SBINReferences, (char *)&sbin, id, sizeof(struct sbinreference));
     
+#ifdef DEBUGPERSISTENCE
+    fprintf(output, "SBINREFcreate: id = 0x%X\n", (int)id);
+#endif /* DEBUGPERSISTENCE */
+
     return id;
 }
 
@@ -300,6 +308,13 @@ u_long /* out reference id */ SBOUTREFcreate(CAStorage *csb,
     
     Claim(csb -> open, "Store closed");
     
+#ifdef DEBUGPERSISTENCE
+    fprintf(output, "SBOUTREFcreate: host = %s, path = %s, id = 0x%X\n",
+            host,
+            path,
+            (int)id);
+#endif /* DEBUGPERSISTENCE */
+
     /* See comment (1) below for explenation of the alignment below.
      */
     hostnamelength = strlen(host);
@@ -345,7 +360,11 @@ u_long /* out reference id */ SBOUTREFcreate(CAStorage *csb,
            outid + sizeof(u_long) * 2 + hostnamelength + pathnamelength,
            sizeof(u_long));
     
-    
+#ifdef DEBUGPERSISTENCE
+    fprintf(output, "SBOUTREFcreate: outid = 0x%X\n",
+            (int)outid);
+#endif /* DEBUGPERSISTENCE */
+
     return outid | OUTREFERENCE;
 }
 
@@ -396,6 +415,11 @@ u_long /* group name id */ SBGNcreate(CAStorage *csb, char *groupname)
 
     Claim(csb -> open, "Store closed");
 
+#ifdef DEBUGPERSISTENCE
+    fprintf(output, "SBGNcreate: groupname = %s\n",
+            groupname);
+#endif /* DEBUGPERSISTENCE */
+
     length = strlen(groupname);
     
     /* Allocate room for a new groupname */
@@ -407,6 +431,11 @@ u_long /* group name id */ SBGNcreate(CAStorage *csb, char *groupname)
     
     /* Write groupname */
     CAsave(csb, SBGroupNames, groupname, groupid + sizeof(u_long), length);
+    
+#ifdef DEBUGPERSISTENCE
+    fprintf(output, "SBGNcreate: groupid = 0x%X\n",
+            (int)groupid);
+#endif /* DEBUGPERSISTENCE */
     
     return groupid;    
 }
@@ -456,6 +485,11 @@ u_long /* object id */ SBOBJcreate(CAStorage *csb, char *obj, u_long nb)
     
     Claim(csb -> open, "Store closed");
 
+#ifdef DEBUGPERSISTENCE
+    fprintf(output, "SBOBJcreate: nb = 0x%X\n",
+            (int)nb);
+#endif /* DEBUGPERSISTENCE */
+
     /* (1) In order to handle references to objects in other storage
      * blocks, to types of references must be allowed. One type is
      * references into the object area to objects in the same storage
@@ -485,6 +519,11 @@ u_long /* object id */ SBOBJcreate(CAStorage *csb, char *obj, u_long nb)
     /* Write object to area */
     CAsave(csb, SBObjects, obj, oid + sizeof(u_long), nb);
 
+#ifdef DEBUGPERSISTENCE
+    fprintf(output, "SBOBJcreate: oid = 0x%X\n",
+            (int)oid);
+#endif /* DEBUGPERSISTENCE */
+
     return oid + sizeof(u_long);
 }
 
@@ -493,7 +532,13 @@ void SBOBJsave(CAStorage *csb, char *obj, u_long oid, u_long nb)
 {
    u_long nbendian;
    
-   Claim(csb -> open, "Store closed");
+#ifdef DEBUGPERSISTENCE
+   fprintf(output, "SBOBJsave: oid = 0x%X, nb = 0x%X\n",
+           (int)oid,
+           (int)nb);
+#endif /* DEBUGPERSISTENCE */
+
+    Claim(csb -> open, "Store closed");
    /* The object must not be a part object */
    
    /* Write object size */

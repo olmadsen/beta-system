@@ -104,6 +104,19 @@ void CAload(CAStorage *cas, u_long areaID, char *buffer, u_long offset, u_long n
 
 void CAsave(CAStorage *cas, u_long areaID, char *buffer, u_long offset, u_long nb)
 {
+#ifdef DEBUGPERSISTENCE
+   {
+      u_long current;
+
+      fprintf(output, "CAsave: 0x%8X, ", (int)offset);
+      
+      for (current = 0; current < nb; current++) {
+         fprintf(output, "0x%X ", (int)buffer[current]);
+      }
+      fprintf(output, "\n");
+   }
+#endif /* DEBUGPERSISTENCE */
+
    loadsave(cas, areaID, buffer, offset, nb, save);
    cas -> updates += 1;
 }

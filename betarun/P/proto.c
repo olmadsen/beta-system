@@ -192,23 +192,26 @@ void exportProtoType(Object *theObj)
    protoAddrToID(GETPROTO(theObj),
                  &group,
                  &protoNo);
-  
+   
+#ifdef DEBUGPERSISTENCE
+   fprintf(output, "exportProtoType: proto = 0x%X, id = (0x%X, 0x%X)\n",
+           (int)GETPROTO(theObj),
+           (int)group,
+           (int)protoNo);
+#endif /* DEBUGPERSISTENCE */
+   
    if (group == -1) {
       /* the prototype is a special prototype and thus no conversion
          is necessary */
-#ifdef PSENDIAN
-      theObj->vtbl = (long *)htonl((unsigned long)GETPROTO(theObj));
-#endif
+      ;
    } else {
       Claim(protoNo != -1, "exportProtoType: Export of proto pointer failed");
       Claim(group < ( 1 << 16), "exportProtoType: Group too large");
       Claim(protoNo < ( 1 << 16), "exportProtoType: protoNo too large");
-#ifdef PSENDIAN
-      theObj->vtbl = (long *)htonl((unsigned long)((group << 16) | protoNo));
-#else
       SETPROTO(theObj, (ProtoType *)((group << 16) | protoNo));
-#endif
    }
+   
+   theObj->vtbl = (long *)htonl((unsigned long)theObj->vtbl);
 }
 
 ProtoType *translateStoreProto(ProtoType *theProto, CAStorage *store)
@@ -228,73 +231,11 @@ ProtoType *translateStoreProto(ProtoType *theProto, CAStorage *store)
 
 void importProtoType(Object *theObj)
 { 
-#ifdef PSENDIAN
-   SETPROTO(theObj, translateStoreProto((ProtoType*)
-                                        ntohl((unsigned long)theObj->vtbl), currentcsb));
-#else
+   theObj->vtbl = (long *)htonl((unsigned long)theObj->vtbl);
+   
    SETPROTO(theObj, translateStoreProto(GETPROTO(theObj), currentcsb));
-#endif
+   
    Claim(GETPROTO(theObj) != NULL, "Could not find prototype");
-}
-
-unsigned long StoreObjectSize(Object * theObj, CAStorage *store)
-{ 
-#ifdef PSENDIAN
-   ProtoType * theProto = (ProtoType*)ntohl((unsigned long)theObj->vtbl);
-#else
-   ProtoType * theProto = GETPROTO(theObj);
-#endif
-  
-   if (isNotSpecialProtoType(theProto)) {
-      /* This is an item, so find the size in the protoType. */
-      theProto = translateStoreProto(theProto, store);
-      Claim(theProto != NULL, "Could not find prototype");
-      return theProto->Size;
-   } else {
-      switch(SwitchProto(theProto)){
-        case SwitchProto(ShortRepPTValue):
-           return ShortRepSize(((ValRep*)theObj)->HighBorder) >> 2;
-          
-        case SwitchProto(ByteRepPTValue):
-           return ByteRepSize(((ValRep*)theObj)->HighBorder) >> 2;
-      
-        case SwitchProto(DoubleRepPTValue):
-           return DoubleRepSize(((ValRep*)theObj)->HighBorder) >> 2;
-              
-        case SwitchProto(LongRepPTValue):
-           return LongRepSize(((ValRep*)theObj)->HighBorder) >> 2;
-      
-        case SwitchProto(DynItemRepPTValue):
-        case SwitchProto(DynCompRepPTValue):
-           return DynObjectRepSize(((ObjectRep *)theObj)->HighBorder) >> 2;
-      
-        case SwitchProto(RefRepPTValue):
-           return RefRepSize(((RefRep*)theObj)->HighBorder) >> 2;
-      
-        case SwitchProto(ComponentPTValue):
-           theProto = translateStoreProto(GETPROTO(ComponentItem(theObj)), store);
-           Claim(theProto != NULL, "Could not find prototype");
-           
-           return ComponentSize(theProto) >> 2;
-           
-        case SwitchProto(StackObjectPTValue):
-           return StackObjectSize(((StackObject*)theObj)->BodySize) >> 2;
-           
-        case SwitchProto(StructurePTValue):
-           return StructureSize >> 2;
-              
-        case SwitchProto(DopartObjectPTValue):
-           return DopartObjectSize(((DopartObject *)(theObj))->Size) >> 2;
-        default:
-           DEBUG_CODE(
-              fprintf(stderr, 
-                      "ObjectSize: Error: Unknown ProtoType %d for object 0x%08x\n",
-                      (int)theProto, 
-                      (int)theObj);
-              );
-      }
-   }
-   return 0;
 }
 
 #endif /* PERSIST */

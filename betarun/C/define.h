@@ -113,6 +113,7 @@
 /* New persistence */
 #if defined(sparc) || defined(intel) || defined(sgi)
 #define PERSIST
+/* #define DEBUGPERSISTENCE */
 /* #define USEMMAP  uses to mych RAM */
 #endif /* sparc || intel || defined(sgi) */
 
