@@ -162,6 +162,7 @@ void BetaError(BetaErr err, Object *theObj)
       case CompCallBackErr /* Susp */:
       case RecursiveAttErr /* Att */:
       case CompTerminatedErr /* Att */:
+      case LeaveBasicCompErr /* ExO*/:
 	/* Should be caught by valhalla, so thePC must be set up.
 	 * Current object was pushed as the first thing, when
 	 * the error was detected, but the PC was left on stack.
@@ -202,7 +203,6 @@ void BetaError(BetaErr err, Object *theObj)
 	 * Caused by:
 	 *    RefNoneErr - OK: is handled specially below
 	 *    QuaErr - OK: is handled specially below
-	 *    LeaveBasicCompErr (ExO) - FIXME
 	 *    FIXME: should insert debug assertion that no other errors
 	 *           are met here.
 	 */

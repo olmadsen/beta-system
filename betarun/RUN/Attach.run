@@ -10,7 +10,7 @@ Att: public
      theObj:  Item      = RegThis;
      
      { Used variables. }
-     compObj:      Object      = RegCall;
+     compItem:      Object      = RegCall;
      stackPointer: StackArea   = SP;
      theProto:     ProtoType   = AddrReg2;
      theAddr:      CodeArea    = AddrReg1;
@@ -31,25 +31,27 @@ Att: public
           
      ActiveComponent -> comp.CallerComp;
      { comp.CallerComp[] -> CheckReferenceAssignment. }
-     comp -> theCell; theCell[16][] -> theCell;
+     comp.CallerComp[] -> theCell;
      
      (if call_chkra_unconditionally then
          call ChkRA_EBP;
       else
-         (if theCell outside IOA then
-             push theCell;
-             call ChkRA; { No need to remove parameter }
-         if);
+         { Cheaper to delay to below, to only test "outside" once }
      if);
 
      theObj -> comp.CallerObj;
      { comp.CallerObj -> CheckReferenceAssignment. }
-     comp -> theCell; theCell[12][] -> theCell;
+     comp.CallerObj[] -> theCell;
      
      (if call_chkra_unconditionally then
          call ChkRA_EBP;
       else
          (if theCell outside IOA then
+             { ChkRA(comp.CallerObj) }
+             push theCell;
+             call ChkRA; { No need to remove parameter }
+             { ChkRA(comp.CallerComp) }
+             4 -> theCell+;
              push theCell;
              call ChkRA; { No need to remove parameter }
          if);
@@ -97,25 +99,27 @@ Att: public
      pop comp.CallerLSC; { Save the return address }
      ActiveComponent -> comp.CallerComp;
      { comp.CallerComp -> CheckReferenceAssignment. }
-     comp -> theCell; theCell[16][] -> theCell;
+     comp.CallerComp[] -> theCell;
 
      (if call_chkra_unconditionally then
          call ChkRA_EBP;
       else
-         (if theCell outside IOA then
-             push theCell;
-             call ChkRA; { No need to remove parameter }
-         if);
+         { Cheaper to delay to below, to test "outside" just once }
      if);
      
      theObj -> comp.CallerObj;
      { comp.StackObj -> CheckReferenceAssignment. }
-     comp -> theCell; theCell[12][] -> theCell;
+     comp.CallerObj[] -> theCell;
 
      (if call_chkra_unconditionally then
          call ChkRA_EBP;
       else
          (if theCell outside IOA then
+             { ChkRA(comp.CallerObj) }
+             push theCell;
+             call ChkRA; { No need to remove parameter }
+             { ChkRA(comp.CallerComp) }
+             4 -> theCell+;
              push theCell;
              call ChkRA; { No need to remove parameter }
          if);
@@ -135,11 +139,14 @@ Att: public
      0            -> ActiveCallBackFrame;  
      
      comp -> ActiveComponent;
-     comp[24][] -> compObj;
-     compObj.ProtoType -> theProto;  
+     comp[24][] -> compItem;
+     compItem.ProtoType -> theProto; 
+     
+     { Set return address so that theEntry will return to TerminateComponent }
      TerminateComponent[] -> theAddr;
      push theAddr;
      
+     { Jump to the M-part }
      theProto.TopMpart -> theEntry;
      goto theEntry; {AddrRegs ok; stack ok, too}
      
