@@ -9,6 +9,9 @@ cancel
 echo testcursor
 testcursor %1
 
+echo testscrollingcursor
+testscrollingcursor %1
+
 echo testpatternparser
 testpatternparser
 

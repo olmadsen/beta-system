@@ -2,6 +2,8 @@ echo Recompiling all tests...
 
 call beta testcursor.bet
 
+call beta testscrollingcursor.bet
+
 call beta testpatternparser.bet
 
 rem call beta testpositionedupdate.bet
