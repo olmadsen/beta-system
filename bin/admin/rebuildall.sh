@@ -7,13 +7,11 @@
 
 # configuration:
 set CVSUPDATE=yes
-set RCMUPDATE=yes
 set BUILDMACHINES=()  # (lisa amigo) # hp and sgi turned of, linux handled by special crontab
 
 # You can touch the following files to get a one-shot effect as if the
 # flags had been set in this script:
 # "$BETALIB/.rebuildall-cvsupdate"
-# "$BETALIB/.rebuildall-rcmupdate"
 
 ### Usage:
 # Put in crontab on the machine where a periodical recompilation 
@@ -102,22 +100,10 @@ if ( $REMOVEASTS == "yes" ) then
 	rm -f "$BETALIB/.rebuildall-cvsupdate"
 	set CVSUPDATE=yes
     endif
-    if (-f "$BETALIB/.rebuildall-rcmupdate") then
-	rm -f "$BETALIB/.rebuildall-rcmupdate"
-	set RCMUPDATE=yes
-    endif
 
     if ( $CVSUPDATE == "yes" ) then
         echo "rebuildall.sh: Doing mbs_cvsupdate -u -c." >>& $LOG
         mbs_cvsupdate -u -c >>& $LOG
-    endif
-    if ( $RCMUPDATE == "yes" ) then
-	if ( $MACHINETYPE == "SUN4S" ) then
-	    echo "rebuildall.sh: Doing rcm -do 'gettip;quit'." >>& $LOG
-	    cd $BETALIB/compiler
-	    rcm -do "gettip; quit" >>& $LOG
-	    cd $BETALIB
-	endif
     endif
     #date >>& $LOG
     #echo "rebuildall.sh: Checking compiler." >>& $LOG
