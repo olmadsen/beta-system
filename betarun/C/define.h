@@ -18,20 +18,22 @@
 /*#undef COM*/
 
 #ifndef do_unconditional_gc
-#ifdef RTDEBUG
+# ifdef RTDEBUG
 /* Trigger unconditional GC at every allocation.
  * MT: Should match define i BetaRun.bet!
  * RUN: Should match define in Declaration.run
  */
-#define do_unconditional_gc 0 /*1*/ 
-#else /* RTDEBUG */
-#define do_unconditional_gc 0
-#endif /* RTDEBUG */
+#   define do_unconditional_gc 0 /*1*/ 
+# else /* RTDEBUG */
+#   define do_unconditional_gc 0
+# endif /* RTDEBUG */
 #endif /* do_unconditional_gc */
 
 #define RTINFO  /* Include support for runtime info */
-#ifdef RTDEBUG
-#define RTVALHALLA
+# ifdef RTDEBUG
+# ifndef RTVALHALLA
+#   define RTVALHALLA
+# endif
 #endif
 
 /******* Define specific machine types *********/
@@ -50,9 +52,9 @@
 #endif
 
 #ifdef hpux
-#ifdef hppa
-#define hpux9pa
-#endif
+# ifdef hppa
+#   define hpux9pa
+# endif
 #endif
 
 /************* Macintosh defines ***************
