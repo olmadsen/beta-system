@@ -57,6 +57,9 @@ static long AllocateBaseBlock(void);
 static void markObjectAlive(Object * obj);
 #endif
 static void AOANewBlock(long newBlockSize);
+#ifdef RTDEBUG
+static void AOACheckObjectRefSpecial(REFERENCEACTIONARGSTYPE);
+#endif /* RTDEBUG */
 
 /* LOCAL VARIABLES */
 static long totalFree = 0;
@@ -621,125 +624,9 @@ void AOACheckObject(Object *theObj)
   }
   AOA_DUMP_TEXT(":\n");
   
-  if( isSpecialProtoType(theProto) ){  
-    switch( SwitchProto(theProto) ){
-    case SwitchProto(ByteRepPTValue):
-    case SwitchProto(ShortRepPTValue):
-    case SwitchProto(DoubleRepPTValue):
-    case SwitchProto(LongRepPTValue): 
-      return; /* No references in the type of object, so do nothing*/
-      
-    case SwitchProto(DynItemRepPTValue):
-    case SwitchProto(DynCompRepPTValue):
-      /* Check iOrigin */
-      AOACheckReference( (Object **)(&REP->iOrigin) );
-      /* Check rest of repetition */
-      switch(SwitchProto(theProto)){
-      case SwitchProto(DynItemRepPTValue):
-      case SwitchProto(DynCompRepPTValue):
-	{ long *pointer;
-	register long size, index;
-	  
-	/* Scan the repetition and follow all entries */
-	{ 
-	  size = REP->HighBorder;
-	  pointer = (long *)&REP->Body[0];
-	    
-	  for (index=0; index<size; index++) {
-	    AOACheckReference( (Object **)(pointer) );
-	    pointer++;
-	  }
-	}
-	}
-      break;
-      }
-      return;
-
-    case SwitchProto(RefRepPTValue):
-      /* Scan the repetition and follow all entries */
-      { long * pointer;
-      register long size, index;
-	
-      size = ((RefRep*)theObj)->HighBorder;
-      pointer =  (long *) &((RefRep*)theObj)->Body[0];
-	
-      for(index=0; index<size; index++) {
-	AOACheckReference( (Object **)(pointer) );
-	pointer++;
-      }
-      }
-      
-    return;
-      
-    case SwitchProto(ComponentPTValue):
-      { Component * theComponent;
-	
-      theComponent = ((Component*)theObj);
-      if (theComponent->StackObj == (StackObject *)-1) {
-	/* printf("\nAOACheckObject: theComponent->StackObj=-1, skipped!\n"); */
-      } else {
-	AOACheckReference( (Object **)(&theComponent->StackObj));
-      }
-      AOACheckReference( (Object **)(&theComponent->CallerComp));
-      AOACheckReference( (Object **)(&theComponent->CallerObj));
-      AOACheckObject( (Object *)(ComponentItem( theComponent)));
-      }
-    return;   
-    case SwitchProto(StackObjectPTValue):
-#ifdef KEEP_STACKOBJ_IN_IOA
-      Claim( FALSE, "AOACheckObject: theObj should not be StackObject.");
-#else
-      ProcessStackObj((StackObject *)theObj, CheckAOACell);
-#endif /* KEEP_STACKOBJ_IN_IOA */
-      return; 
-    case SwitchProto(StructurePTValue):
-      AOACheckReference( &(((Structure*)theObj))->iOrigin );
-      return;
-    case SwitchProto(DopartObjectPTValue):
-      AOACheckReference( &((DopartObject *)(theObj))->Origin );
-      return;
-    }
-  } else {
-    short *  Tab;
-    long *   theCell;
-    
-    /* Calculate a pointer to the GCTable inside the ProtoType. */
-    Tab = (short *) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
-    
-    /* Handle all the static objects. 
-     * The static table have the following structure:
-     * { .word Offset
-     *   .word Distance_To_Inclosing_Object
-     *   .long T_entry_point
-     * }*
-     * This table contains all static objects on all levels.
-     * Here vi only need to perform ProcessObject on static objects
-     * on 1 level. The recursion in ProcessObject handle other
-     * levels. 
-     * The way to determine the level of an static object is to 
-     * compare the Offset and the Distance_To_Inclosing_Object.
-     */
-    
-    while (*Tab != 0) {
-      Claim( *(long *) Offset( theObj, *Tab * 4 + 4) == (long) Tab[1],
-	     "AOACheckObject: EnclosingObject match GCTab entry.");
-      if (*Tab == -Tab[1]) { 
-	AOACheckObject( (Object *)(Offset( theObj, *Tab * 4)));
-      }
-      Tab += 4;
-    }
-    Tab++;
-    
-    /* Handle all the references in the Object. */
-    while(*Tab != 0) {
-      theCell = (long *) Offset( theObj, ((*Tab++) & (short) ~3) );
-      /* sbrandt 24/1/1994: 2 least significant bits in prototype 
-       * dynamic offset table masked out. As offsets in this table are
-       * always multiples of 4, these bits may be used to distinguish
-       * different reference types. */ 
-      AOACheckReference((Object **)theCell);
-    }
-  }
+  scanObject(theObj,
+	     AOACheckReference,
+	     TRUE);
 }
 
 /* AOACheckReference: Consistency check on AOA reference */
@@ -787,13 +674,19 @@ void AOACheckReference(Object **theCell)
   }
 }
 
+/* */
+static void AOACheckObjectRefSpecial(REFERENCEACTIONARGSTYPE)
+{
+  return;
+}
+
 /* AOACheckObjectSpecial: Weak consistency check on AOA object */
 void AOACheckObjectSpecial(Object *theObj)
 {
   ProtoType * theProto;
   
   theProto = theObj->Proto;
-
+  
 #ifdef MT
   /* The way part objects are allocated in V-entries
    * may leave part objects with uninitialized prototypes.
@@ -804,70 +697,10 @@ void AOACheckObjectSpecial(Object *theObj)
   Claim(!inBetaHeap((Object *)theProto),
 	 "#AOACheckObjectSpecial: !inBetaHeap(theProto)");
   
-  if( isSpecialProtoType(theProto) ){  
-    switch(SwitchProto(theProto)){
-    case SwitchProto(ByteRepPTValue):
-    case SwitchProto(ShortRepPTValue):
-    case SwitchProto(DoubleRepPTValue):
-    case SwitchProto(LongRepPTValue): return;
-    case SwitchProto(DynItemRepPTValue): return;
-    case SwitchProto(DynCompRepPTValue): return;
-    case SwitchProto(RefRepPTValue): return;
-    case SwitchProto(ComponentPTValue):
-      AOACheckObjectSpecial( (Object *)(ComponentItem( theObj)));
-      return;
-    case SwitchProto(StackObjectPTValue):
-#ifdef KEEP_STACKOBJ_IN_IOA
-      Claim( FALSE, "AOACheckObjectSpecial: theObj must not be StackObject.");
-#else
-      fprintf(output, 
-	      "AOACheckObjectSpecial: no check of stackobject 0x%x\n", (int)theObj);
-#endif
-      return;
-    case SwitchProto(StructurePTValue):
-      return;
-    case SwitchProto(DopartObjectPTValue):
-      return;
-    default:
-      Claim( FALSE, "AOACheckObjectSpecial: theObj must be KNOWN.");
-    }
-  } else {
-    short *Tab;
-    long  *theCell;
-    
-    /* Calculate a pointer to the GCTable inside the ProtoType. */
-    Tab = (short *) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
-    
-    /* Handle all the static objects. 
-     * The static table have the following structure:
-     * { .word Offset
-     *   .word Distance_To_Inclosing_Object
-     *   .long T_entry_point
-     * }*
-     * This table contains all static objects on all levels.
-     * Here vi only need to perform ProcessObject on static objects
-     * on 1 level. The recursion in ProcessObject handle other
-     * levels. 
-     * The way to determine the level of an static object is to 
-     * compare the Offset and the Distance_To_Inclosing_Object.
-     */
-    
-    while (*Tab != 0) {
-      if( *Tab == -Tab[1] ) 
-	AOACheckObjectSpecial( (Object *)(Offset( theObj, *Tab * 4)));
-      Tab += 4;
-    }
-    Tab++;
-    
-    /* Handle all the references in the Object. */
-    while( *Tab != 0 ){
-      theCell = (long *) Offset( theObj, ((*Tab++) & (short) ~3) );
-      /* sbrandt 24/1/1994: 2 least significant bits in prototype 
-       * dynamic offset table masked out. As offsets in this table are
-       * always multiples of 4, these bits may be used to distinguish
-       * different reference types. */ 
-    }
-  }
+  scanObject(theObj,
+	     AOACheckObjectRefSpecial,
+	     TRUE);
+  
 }
 
 #endif
@@ -1284,6 +1117,9 @@ void scanObject(Object *obj,
     case SwitchProto(DopartObjectPTValue):
       referenceAction(&(((DopartObject *)(obj))->Origin));
       break;
+    default:
+      Claim( FALSE, "scanObject: theObj must be KNOWN.");
+      
     }
   } 
 }

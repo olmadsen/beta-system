@@ -32,10 +32,6 @@ GLOBAL(static int IOALooksFullCount) = 0; /* consecutive unsuccessful IOAGc's */
  *   void ProcessObject(Object * theObj)
  *   void CompleteScavenging()
  *
- *   #ifndef KEEP_STACKOBJ_IN_IOA
- *   void DoIOACell(Object **theCell,Object *theObj)
- *   #endif 
- *
  *   #ifdef RTDEBUGGC/
  *   void IOACheck()
  *   void IOACheckObject (Object *theObj)
@@ -399,38 +395,6 @@ Program terminated.\n", (int)(4*ReqObjectSize));
 
 } /* End IOAGc */
 
-/* DoIOACell:
- * 
- */
-void DoIOACell(Object **theCell,Object *theObj)
-{    
-  if (!theObj) {
-    return;
-  }
-  if (inBetaHeap(theObj)) {
-    if (isObject(theObj)) {
-      DEBUG_CODE(if (!CheckHeap) Ck(theObj));
-      ProcessReference(theCell);
-      CompleteScavenging();
-    } else {
-      DEBUG_CODE({
-	fprintf(output, "[DoIOACell: ***Illegal: 0x%x: 0x%x]\n", 
-		(int)theCell,
-		(int)theObj);
-	Illegal();
-      });
-    }
-  } else {
-#ifdef RTLAZY
-    if (isLazyRef(theObj)) {
-      DEBUG_LAZY(fprintf(output, 
-			 "DoIOACell: Lazy ref: %d\n", (int)theObj));
-      ProcessReference(theCell);
-    }
-#endif /* RTLAZY */
-  }
-}
-
 /* DoStackCell:
  *  Used by the routines in stack.c, that traverse the stack.
  */
@@ -603,123 +567,10 @@ void ProcessReference( theCell)
 void ProcessObject(theObj)
      Object * theObj;
 { 
-    ProtoType * theProto;
-  
-
-    theProto = theObj->Proto;
-
-#ifdef MT
-    /* The way part objects are allocated in V-entries
-     * may leave part objects with uninitialized prototypes.
-     */
-    if (!theProto) return;
-#endif
-  
-    if( isSpecialProtoType(theProto) ){  
-        switch( SwitchProto(theProto) ){
-          case SwitchProto(ByteRepPTValue):
-          case SwitchProto(ShortRepPTValue):
-          case SwitchProto(DoubleRepPTValue):
-          case SwitchProto(LongRepPTValue): 
-              return; /* No references in the type of object, so do nothing*/
-      
-          case SwitchProto(DynItemRepPTValue):
-          case SwitchProto(DynCompRepPTValue):
-              /* Process iOrigin */
-              ProcessReference( (Object **)(&REP->iOrigin) );
-              /* Process rest of repetition */
-              switch(SwitchProto(theProto)){
-                case SwitchProto(DynItemRepPTValue):
-                case SwitchProto(DynCompRepPTValue):
-                { long *pointer;
-                register long size, index;
-	
-                /* Scan the repetition and follow all entries */
-                { size = REP->HighBorder;
-                pointer = (long *)&REP->Body[0];
-	
-                for (index=0; index<size; index++) {
-                    ProcessReference( (Object **)(pointer++) );
-                }
-                }
-                }
-                break;
-              }
-              return;
-
-          case SwitchProto(RefRepPTValue):
-              /* Scan the repetition and follow all entries */
-          { long * pointer;
-          register long size, index;
-      
-          size = ((RefRep*)(theObj))->HighBorder;
-          pointer =  (long *) &((RefRep*)(theObj))->Body[0];
-      
-          for(index=0; index<size; index++) 
-              if( *pointer != 0 ) ProcessReference( (Object **)(pointer++) );
-              else pointer++;
-          }
-          return;
-    
-          case SwitchProto(ComponentPTValue):
-          { Component * theComponent;
-      
-          theComponent = ((Component*)theObj);
-          ProcessReference( (Object **)(&theComponent->StackObj));
-          ProcessReference( (Object **)(&theComponent->CallerComp));
-          ProcessReference( &theComponent->CallerObj);
-          ProcessObject( (Object *)ComponentItem( theComponent));
-          }
-          return;
-    
-          case SwitchProto(StackObjectPTValue):
-#if !defined(KEEP_STACKOBJ_IN_IOA)
-              ProcessStackObj((StackObject *)theObj, DoIOACell);
-#else
-              ProcessStackObj((StackObject *)theObj);
-#endif
-	      CompleteScavenging();
-              return;
-      
-          case SwitchProto(StructurePTValue):
-              ProcessReference( &((Structure*)theObj)->iOrigin );
-              return;
-      
-          case SwitchProto(DopartObjectPTValue):
-              ProcessReference( &((DopartObject *)(theObj))->Origin );
-              return;
-        }
-    }else{
-        GCEntry *tab =
-            (GCEntry *) ((char *) theProto + theProto->GCTabOff);
-        short *refs_ofs;
-        Object **theCell;
-    
-        /* Handle all the static objects. 
-         *
-         * The static table, tab[0], tab[1], 0,
-         * contains all static objects on all levels.
-         * Here we only need to perform ProcessObject on static objects
-         * on 1 level. The recursion in ProcessObject handle other
-         * levels. 
-         * The way to determine the level of an static object is to 
-         * compare the Offset (StaticOff) and the
-         * Distance_To_Inclosing_Object (OrigOff).
-         */
-        for (;tab->StaticOff; ++tab)
-            if (tab->StaticOff == -tab->OrigOff)
-                ProcessObject((Object *)((long *)theObj + tab->StaticOff));
-    
-        /* Handle all the references in the Object. */
-        for (refs_ofs = (short *)&tab->StaticOff + 1; *refs_ofs; ++refs_ofs) {
-            theCell = (Object **) ((char *) theObj + ((*refs_ofs) & (short) ~3));
-            /* sbrandt 24/1/1994: 2 least significant bits in prototype 
-             * dynamic offset table masked out. As offsets in this table are
-             * always multiples of 4, these bits may be used to distinguish
-             * different reference types. */ 
-            if (*theCell ) ProcessReference(theCell);
-        }
-    }
+  scanObject(theObj,
+	     ProcessReference,
+	     TRUE);
+  CompleteScavenging();
 }
 
 /*
@@ -793,125 +644,10 @@ static void ProcessAOAReference(Object ** theCell)
  */
 
 static void ProcessAOAObject(Object * theObj)
-{ ProtoType * theProto;
-
- theProto = theObj->Proto;
-
-#ifdef MT
-/* The way part objects are allocated in V-entries
- * may leave part objects with uninitialized prototypes.
- */
- if (!theProto) return;
-#endif
-
- if( isSpecialProtoType(theProto) ){  
-     switch( SwitchProto(theProto) ){
-       case SwitchProto(ByteRepPTValue): 
-       case SwitchProto(ShortRepPTValue): 
-       case SwitchProto(DoubleRepPTValue): 
-       case SwitchProto(LongRepPTValue): 
-           return; /* No references in the type of object, so do nothing*/
-
-       case SwitchProto(DynItemRepPTValue):
-       case SwitchProto(DynCompRepPTValue):
-           /* Process iOrigin */
-           ProcessAOAReference( (Object **)(&REP->iOrigin) );
-           /* Process rest of repetition */
-           switch(SwitchProto(theProto)){
-             case SwitchProto(DynItemRepPTValue):
-             case SwitchProto(DynCompRepPTValue):
-             { long *pointer;
-             register long size, index;
-      
-             /* Scan the repetition and follow all entries */
-             { size = REP->HighBorder;
-             pointer = (long *)&REP->Body[0];
-      
-             for (index=0; index<size; index++) {
-                 ProcessAOAReference( (Object **)(pointer++) );
-             }
-             }
-             }
-             break;
-           }
-           return;
-
-       case SwitchProto(RefRepPTValue):
-           /* Scan the repetition and follow all entries */
-       { long * pointer;
-       register long size, index;
-    
-       size = ((RefRep*)(theObj))->HighBorder;
-       pointer =  (long *) &((RefRep*)(theObj))->Body[0];
-       for(index=0; index<size; index++) 
-           if(*pointer) 
-               ProcessAOAReference( (Object **)(pointer++) );
-           else pointer++;
-       }
-       return;
-       case SwitchProto(ComponentPTValue):
-       { Component * theComponent;
-       theComponent = ((Component*)theObj);
-       ProcessAOAReference( (Object **)(&theComponent->StackObj));
-       ProcessAOAReference( (Object **)(&theComponent->CallerComp));
-       ProcessAOAReference( (Object **)(&theComponent->CallerObj));
-       ProcessAOAObject( (Object *)(ComponentItem( theComponent)));
-       }
-       return;
-       case SwitchProto(StackObjectPTValue):
-#ifdef KEEP_STACKOBJ_IN_IOA
-           Claim( FALSE, "ProcessAOAObject: No StackObject in AOA");
-#else
-           /* Machine dependant traversal of stackobj */
-           ProcessStackObj((StackObject *)theObj, DoAOACell);
-#endif /* KEEP_STACKOBJ_IN_IOA */
-	   CompleteScavenging();
-           return;
-       case SwitchProto(StructurePTValue):
-           ProcessAOAReference( &(((Structure*)(theObj)))->iOrigin );
-           return;
-       case SwitchProto(DopartObjectPTValue):
-           ProcessAOAReference( &((DopartObject *)(theObj))->Origin );
-           return;
-     }
- }else{
-     short *  Tab;
-     long *   theCell;
-  
-     /* Calculate a pointer to the GCTabel inside the ProtoType. */
-     Tab = (short *) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
-  
-     /* Handle all the static objects. 
-      * The static table have the following structure:
-      * { .word Offset
-      *   .word Distance_To_Inclosing_Object
-      *   .long T_entry_point
-      * }*
-      * This table contains all static objects on all levels.
-      * Here vi only need to perform ProcessAOAObject on static objects
-      * on 1 level. The recursion in ProcessAOAObject handle other
-      * levels. 
-      * The way to determine the level of an static object is to 
-      * compare the Offset and the Distance_To_Inclosing_Object.
-      */
-  
-     while( *Tab != 0 ){
-         if( *Tab == -Tab[1] ) 
-             ProcessAOAObject( (Object *)(Offset( theObj, *Tab * 4)));
-         Tab += 4;
-     }
-     Tab++;
-  
-     /* Handle all the references in the Object. */
-     while( *Tab != 0 ){
-         theCell = (long *) Offset( theObj, ((*Tab++) & (short) ~3) );
-         /* sbrandt 24/1/1994: 2 least significant bits in prototype 
-          * dynamic offset table masked out. As offsets in this table are
-          * always multiples of 4, these bits may be used to distinguish
-          * different reference types. */ 
-         if(*theCell) ProcessAOAReference( (Object **)theCell );
-     }
- }
+{ 
+  scanObject(theObj,
+	     ProcessAOAReference,
+	     TRUE);
 }
 
 /*
