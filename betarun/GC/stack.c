@@ -515,9 +515,9 @@ void ProcessStackPart(low, high)
   ref(Object) theObj;
   handle(Object) theCell;
   
-  DEBUG_IOA(fprintf(output, "StackPart: [0x%x..0x%x]\n", low, high);
+  DEBUG_IOA(fprintf(output, "StackPart: [0x%x..0x%x]\n", (int)low, (int)high);
 	    fprintf(output, "ComponentBlock/CallbackFrame: [0x%x, 0x%x, 0x%x]\n", 
-		    *(high+1), *(high+2), *(high+3));
+		    (int)(*(high+1)), (int)(*(high+2)), (int)(*(high+3)));
 	    );
   Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
   
@@ -535,7 +535,7 @@ void ProcessStackPart(low, high)
       } else {
 	DEBUG_CODE( if (!isValRep(theObj))
 		   fprintf(output, "Suspicious reference on stack: *0x%x=0x%x\n", 
-			   current, *current) );
+			   (int)current, (int)(*current)) );
       }
     }else{
       /* handle value register objects on the stack ref. ../Asm/DataRegs.s */
