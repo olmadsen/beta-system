@@ -375,6 +375,8 @@ static inline struct Item * CAlloSI(struct Structure *s)
 		  "\tSTW\t%r14,RR'RefSP(0,%r1)\n"             \
 		  )
 
+#define SaveVar(var) pushReference(var)
+#define RestoreVar(var) popReference(var)
 
 #define Protect(var, code) \
   pushReference(var); { code; } var = (typeof(var))popReference();
