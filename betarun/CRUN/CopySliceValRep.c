@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-06-08 23:55:47 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-06-09 00:57:37 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -13,12 +13,12 @@ asmlabel(CopySliceValRep, "
 	mov	%l6, %o4
 ");
 
-ref(ValRep) CCopySliceValRep(ref(ValRep) theRep,
-				ref(Item) theItem,
-				unsigned offset, /* i ints */
-				unsigned low,
-				unsigned high
-			    )
+void CCopySliceValRep(ref(ValRep) theRep,
+		      ref(Item) theItem,
+		      unsigned offset, /* i ints */
+		      unsigned low,
+		      unsigned high
+		      )
 {
     register unsigned size;
     register int i;
@@ -62,8 +62,6 @@ ref(ValRep) CCopySliceValRep(ref(ValRep) theRep,
     (casthandle(ValRep)theItem)[offset] = newRep;
     if (!inIOA(theItem))
       CheckReferenceAssignment((int *)theItem + offset);
-    
-    return cast(ValRep) 12; /* What? Why 12?? */
 }
 
 
