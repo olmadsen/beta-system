@@ -520,6 +520,11 @@ char *DescribeObject(theObject)
 	     (cast(Structure)theObject)->iOrigin,
 	     (cast(Structure)theObject)->iProto);
       return buffer;
+    case (long) DopartObjectPTValue:
+      sprintf(buffer, 
+	     "Dopart: origin: 0x%x", 
+	     (cast(DopartObject)theObject)->Origin);
+      return buffer;
     case (long) RefRepPTValue:
       return "RefRep";	
     case (long) ValRepPTValue:

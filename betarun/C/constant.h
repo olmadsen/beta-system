@@ -9,9 +9,10 @@
 #define ByteRepPTValue         ((struct ProtoType *) -6)
 #define WordRepPTValue         ((struct ProtoType *) -7)
 #define DoubleRepPTValue       ((struct ProtoType *) -8)
+#define DopartObjectPTValue    ((struct ProtoType *) -9)
 
 #define MaxPTValue             -1
-#define MinPTValue             -8
+#define MinPTValue             -9
 
 
 #define ItemType                1
@@ -23,6 +24,7 @@
 #define ByteRepType             7
 #define WordRepType             8
 #define DoubleRepType           9
+#define DopartType             10
 
 #define IOAMaxAge             128
 

@@ -28,6 +28,14 @@ struct Item{
     long            Body[1];   /* The body part              */ 
 };
 
+struct DopartObject{ 
+    ref(ProtoType)  Proto;     /* Reference to the Prototype */
+    long            GCAttr;    /* The GC attribute           */
+    ref(Object)     Origin;    /* Origin of dopart object    */
+    long            Size;      /* Size of the object         */
+    long            Body[1];   /* The body part              */ 
+};
+
 struct StackObject{
     ref(ProtoType)  Proto;     /* Reference to the Prototype  */
     long            GCAttr;    /* The GC attribute            */

@@ -356,6 +356,10 @@ static void FollowObject( theObj)
     case (long) StructurePTValue:
       ReverseAndFollow( &(toStructure(theObj))->iOrigin );
       return;
+
+    case (long) DopartObjectPTValue:
+      ReverseAndFollow( &(cast(DopartObject)(theObj))->Origin );
+      return;
     }
   }else FollowItem( theObj);
 }
@@ -799,14 +803,15 @@ void AOACheckObject( theObj)
 	AOACheckReference( &theComponent->CallerObj);
 	AOACheckObject( ComponentItem( theComponent));
       }
-      return;
-      
+      return;   
     case (long) StackObjectPTValue:
       Claim( FALSE, "AOACheckObject: theObj should not be StackObject.");
-      return;
-      
+      return; 
     case (long) StructurePTValue:
       AOACheckReference( &(toStructure(theObj))->iOrigin );
+      return;
+    case (long) DopartObjectPTValue:
+      AOACheckReference( &(cast(DopartObject)(theObj))->Origin );
       return;
     }
   }else{
@@ -900,6 +905,8 @@ void AOACheckObjectSpecial( theObj)
       Claim( FALSE, "AOACheckObjectSpecial: theObj must not be StackObject.");
       return;
     case (long) StructurePTValue:
+      return;
+    case (long) DopartObjectPTValue:
       return;
     default:
       Claim( FALSE, "AOACheckObjectSpecial: theObj must be KNOWN.");

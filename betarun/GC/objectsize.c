@@ -36,6 +36,9 @@ long ObjectSize(theObj)
 
     case (long) StructurePTValue:
       return StructureSize >> 2;
+
+    case (long) DopartObjectPTValue:
+      return DopartObjectSize((cast(DopartObject)(theObj))->Size) >> 2;
     }
   }else
     /* This is an item, so find the size in the protoType. */

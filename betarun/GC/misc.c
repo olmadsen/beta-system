@@ -65,6 +65,7 @@ long ObjectType(aObj)
        case (long) ValRepPTValue:      return ValRepType;    
        case (long) RefRepPTValue:      return RefRepType;    
        case (long) StructurePTValue:   return StructureType; 
+       case (long) DopartObjectPTValue:      return DopartType; 
      }
   }else return ItemType;
 }

@@ -464,6 +464,10 @@ void ProcessObject(theObj)
 	case (long) StructurePTValue:
 	  ProcessReference( &(toStructure(theObj))->iOrigin );
 	  return;
+
+	case (long) DopartObjectPTValue:
+	  ProcessReference( &(cast(DopartObject)(theObj))->Origin );
+	  return;
       }
   }else{
       struct GCEntry *tab =
@@ -610,6 +614,9 @@ void ProcessAOAObject(theObj)
 	  return;
 	case (long) StructurePTValue:
 	  ProcessAOAReference( &(toStructure(theObj))->iOrigin );
+	  return;
+	case (long) DopartObjectPTValue:
+	  ProcessAOAReference( &(cast(DopartObject)(theObj))->Origin );
 	  return;
       }
   }else{
@@ -791,6 +798,9 @@ void IOACheckObject (theObj)
 	    
 	  case (long) StructurePTValue:
 	    IOACheckReference( &(toStructure(theObj))->iOrigin );
+	    return;
+	  case (long) DopartObjectPTValue:
+	    IOACheckReference( &(cast(DopartObject)(theObj))->Origin );
 	    return;
 	}
     } else {
