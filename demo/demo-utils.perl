@@ -5,11 +5,31 @@
 undef %progs;
 undef @dirs;
 
+sub usage(){
+    print "Usage:\n";
+    print "perl -s run.demos [-h] [-c] [-j] [-d]\n";
+    print "  -h  print this help\n";
+    print "  -p  preserve executables after execution\n";
+    print "  -c  skip compilation (run only)\n";
+    print "  -d  target clr (.NET bytecode)\n";
+    print "  -j  target jvm (Java bytecode)\n";
+    print "\n";
+    print "Example run.demos:\n";
+    print '  push (@INC, "$ENV{\'BETALIB\'}/demo");' . "\n";
+    print '  do "demo-utils.perl";' . "\n";
+    print '  &setup_demo_run();' . "\n";
+    print '  &run_demo("subdir", "programname", "arg1 arg2");' . "\n";
+    print '  &complete_demo_run();' . "\n";
+    exit;
+}
+
 sub read_command_options()
 {
+    &usage()              if (defined($h));
     $target       = "clr" if (defined($d));
     $target       = "jvm" if (defined($j));
     $skip_compile = 1     if (defined($c));
+    $preserve     = 1     if (defined($p));
 };
 
 sub findprogs
@@ -43,67 +63,79 @@ sub findprogs
     }
 }
 
-sub checkprogs
-# check that all programs in %progs have been executed
+sub print_summary
 {
-    print "\nProgram run status:\n";
-    print "====================\n";
+    print "\nProgram run status ($target):\n";
+    print "===============================\n";
     foreach $prog (sort keys %progs){
 	if (!defined $progs{$prog}){
 	    print "CHECK  : Not a program file (or not compiled): $prog.bet\n";
-	} elsif ($progs{$prog}==111){
-	    print "SKIPPED: program skipped in bytecode mode: $prog\n";
 	} elsif ($progs{$prog}==999){
 	    print "CHECK  : program not attempted run: $prog\n";
 	} elsif ($progs{$prog}==0){
-	    print "ok     : program tested ok: $prog\n";
+	    if ($status{$prog}==1){
+		print "ok     : program tested ok: $prog\n";
+	    } elsif ($status{$prog}==0){
+		print "DIFF   : program ran ok, but with wrong output: $prog\n";
+	    } else {
+		print "CHECK  : program ran ok, but output not tested: $prog\n";
+	    }
 	} else {
 	    if (-f "$prog"){
-		print "ERROR: Program run with error: $prog (exit $progs{$prog})\n";
+		print "ERROR: Program ran with error: $prog (exit $progs{$prog})\n";
 	    } else {
 		print "ERROR: Program not compiled: $prog\n";
 	    }
 	}
     }
+    print "\n";
+}
+   
+sub expand_envvar
+{
+    my ($var) = @_;
+    return $ENV{$var} if (defined($ENV{$var}));
+    print "Warning: environment variable not defined: $var\n";
 }
 
-sub read_default
-# read run.default to run.def while expanding environment variables.
+sub compare_expected()
 {
-    open(IN, "<run.default") || die "cannot open run.default: $!\n";
-    open(OUT, ">run.def") || die "cannot open run.def: $!\n";
+    local ($dir, $exec) = @_;
+    local $prog = ($dir eq ".")? "$exec" : "$dir/$exec";
+
+    unlink "$prog.out";
+    open(IN, "<$prog.run") || die "Unable to read raw output $prog.run: $!";
+    open(OUT, ">$prog.out") || die "Unable to write processed output $prog.out: $!";
     while(<IN>) {
+	s/\015$//;
 	s/\$\{(\w+)\}/expand_envvar($1)/ge;
 	print OUT;
     }
     close IN;
     close OUT;
-}
-    
-sub expand_envvar
-{
-    my ($var) = @_;
-    return $ENV{$var} if (defined($ENV{$var}));
-    print SAVEERR "Warning: environment variable not defined: $var\n";
-}
-
-sub compare_output
-{
-    if ( -f "run.default"){
-	print("Comparing run.default with run.out\n");
-	&read_default();
-	if (system("diff run.def run.out") == 0){
-	    print "[No differences]\n";
-	    unlink "run.out";
-	    unlink "run.def";
+    unlink "$prog.diff";
+    if ( -f "reference/$exec.run" ){
+	if (system("diff $diffoptions reference/$exec.run $prog.out") == 0){
+	    print "[output is correct]\n";
+	    unlink "$prog.run";
+	    unlink "$prog.out";
+	    unlink "$prog" unless ($preserve);
+	    unlink "$prog-jdb" if ($target eq "jvm" && !$preserve);
+	    $status{$prog} = 1;
 	} else {
-	    print "[Differences found]\n";
+	    # Save diff file for easy lookup
+	    system "diff $diffoptions reference/$exec.run $prog.out > $prog.diff";
+	    print "[Difference in output - see $prog.diff]\n";
+	    $status{$prog} = 0;
 	}
     } else {
-	print("Renaming run.out to run.default\n");
-	rename("run.out","run.default");
+	system "mv $prog.run reference/$exec.run";
+	print "[No reference existed. $exec.run used for future reference]\n";
+	print "[Please do a manual 'cvs add reference/$exec.run']\n";
+	$status{$prog} = 2;
     }
 }
+
 
 sub find_local_progs()
 {
@@ -114,67 +146,37 @@ sub find_local_progs()
     }
 }
 
-sub setup_demo_run
+sub init()
 {
-
     &read_command_options();
     &find_local_progs();
     &setup_variables();
     &compile_all_demos();
+}
 
-    unlink "run.def";
+sub setup_demo_run
+{
+    &init();
 
-    open(SAVEOUT, ">&STDOUT");
-    open(SAVEERR, ">&STDERR");
-    
-    select(SAVEERR); $| = 1;       # make unbuffered
-    select(SAVEOUT); $| = 1;       # make unbuffered
- 
-    open(STDOUT, ">run.out") || die "Can't redirect stdout";
-    open(STDERR, ">&STDOUT") || die "Can't dup stdout";
-    
-    select(STDERR); $| = 1;       # make unbuffered
-    select(STDOUT); $| = 1;       # make unbuffered
-    
-    print(SAVEOUT "Running demos with output to file run.out\n");
-    print SAVEOUT "BETALIB: $betalib\n";
-    print SAVEOUT "Platform: $target\n";
+    print( "Testing demos against reference output in directory 'reference'\n");
+    print  "BETALIB: $betalib\n";
+    print  "Platform: $target\n";
 }
 
 sub setup_graphics_demo_run
 {
-    &read_command_options();
-    &find_local_progs();
-    &setup_variables();
-    &compile_all_demos();
-
-    unlink "run.def";
-
-    open(STDERR, ">&STDOUT") || die "Can't dup stdout";
-    select(STDERR); $| = 1;       # make unbuffered
-    select(STDOUT); $| = 1;       # make unbuffered
-
-    print(SAVEOUT "Running demos with output to file run.out\n");
+    &init();
 }
 
 sub complete_demo_run()
 {
-    print(SAVEOUT "\nRun done\n");
-
-    close(STDOUT);
-    close(STDERR);
-    
-    open(STDOUT, ">&SAVEOUT");
-    open(STDERR, ">&SAVEERR");
-    
-    &compare_output();
-    &checkprogs();
+    print( "\nRun done\n");
+    &print_summary();
 }
 
 sub complete_graphics_demo_run()
 {
-    print("Run done\n");
-    &checkprogs();
+    &complete_demo_run()
 }
 
 sub trim_path
@@ -201,53 +203,54 @@ sub countdirs
 
 sub run_demo
 {
-    my ($dir, $prog, $args, $skip_bytecode) = @_;
-
-    if (defined($skip_bytecode) && isByteCode){
-	print "*** Skipping $prog in bytecode mode ***\n";
-	$progs{$prog} = 111;
-	return;
-    }
+    my ($dir, $exec, $args,) = @_;
 
     $dir = '.' if ($dir eq "");
     if (!-d $dir){
-	print SAVEOUT "\nrun_demo(\"" . join('", "', @_) . "\"): $dir is not a directory\n";
+	print "\nrun_demo(\"" . join('", "', @_) . "\"): $dir is not a directory\n";
 	exit 1;
     }
-    my ($numdirs) = &countdirs("$dir/$prog");
+    my ($numdirs) = &countdirs("$dir/$exec");
 
-    print "\n";
     chdir "$dir" || die "cannot chdir($dir): $!\n";
-    print "############# Running $prog\n";
-    print SAVEOUT ".";
-    system("$prog $args");
-    $progs{&trim_path("$dir/$prog")}=$?;
+    unlink "$exec.dump $exec.run";
+    print "-"x10 . "$executing $exec" . "-"x10  . "\n"; 
+    system "$exec > $exec.run";
+    
+    $progs{&trim_path("$dir/$exec")}=$?;
     chdir ("../" x $numdirs) if ($numdirs>0);
+    &compare_expected($dir, $exec);
 
 }
 
 sub write_to_demo
 {
-    my ($dir, $prog, $args, @inputlines) = @_;
+    my ($dir, $exec, $args, @inputlines) = @_;
 
     $dir = '.' if ($dir eq "");
     if (!-d $dir){
-	print SAVEOUT "\nwrite_to_demo(\"" . join('", "', @_) . "\"): $dir is not a directory\n";
+	print "\nwrite_to_demo(\"" . join('", "', @_) . "\"): $dir is not a directory\n";
 	exit 1;
     }
-    my ($numdirs) = &countdirs("$dir/$prog");
+    my ($numdirs) = &countdirs("$dir/$exec");
 
-    print "\n";
     chdir "$dir" || die "cannot chdir($dir): $!\n";
-    print "############# Running $prog\n";
-    print SAVEOUT ".";
-    open (EXEC, "| $prog $args");
+    unlink "$exec.dump $exec.run";
+    print "-"x10 . "$executing $exec with input" . "-"x10  . "\n";
+    open(SAVEOUT, ">&STDOUT");
+    select(SAVEOUT); $| = 1;       # make unbuffered
+    open(STDOUT, ">$exec.run") || die "Can't redirect stdout";
+    open (EXEC, "| $exec $args");
     foreach $input (@inputlines){
 	print EXEC $input;
     }
     close EXEC;
-    $progs{&trim_path("$dir/$prog")}=$?;
+    close(STDOUT);
+    open(STDOUT, ">&SAVEOUT");
+
+    $progs{&trim_path("$dir/$exec")}=$?;
     chdir ("../" x $numdirs) if ($numdirs>0);
+    &compare_expected($dir, $exec);
 
 }
 
@@ -489,7 +492,7 @@ sub IntHandler
     chop $answer;
     if ($answer eq "y"){
 	print("run.demos interrupted\n");
-	&checkprogs();
+	&print_summary();
 	exit(0);
     } else {
 	print "Please answer question asked before interrupt: ";
