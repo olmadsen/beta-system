@@ -181,6 +181,19 @@ void Initialize()
   
   if (!output)  
     output = stderr;
+
+#ifdef RTDEBUG
+  { 
+    char buf[512];
+    sprintf(buf, "RTS: Version %s\nRTS: Garbage collector may perform consistency checks on heaps (use BETART).",BETARUN_ID);
+    Notify(buf);
+    if (do_unconditional_gc){
+      sprintf(buf, "RTS: Doing unconditional GC at every allocation!\n");
+      Notify(buf);
+    }
+  }
+#endif
+
 #ifdef nti_gnu
   if (!beta_instance){
     beta_instance = (long)GetModuleHandle(0);
@@ -231,19 +244,6 @@ void Initialize()
     IOASliceSize = IOASize / NumIOASlices;
   }
   IOASliceSize = ObjectAlignDown(IOASliceSize);
-#endif
-
-
-#ifdef RTDEBUG
-  { 
-    char buf[512];
-    sprintf(buf, "RTS: Version %s\nRTS: Garbage collector may perform consistency checks on heaps (use BETART).",BETARUN_ID);
-    Notify(buf);
-    if (do_unconditional_gc){
-      sprintf(buf, "RTS: Doing unconditional GC at every allocation!\n");
-      Notify(buf);
-    }
-  }
 #endif
 
   INFO( fprintf( output, "#(Heap info: IOA=2*%dKb", (int)IOASize/Kb) );
