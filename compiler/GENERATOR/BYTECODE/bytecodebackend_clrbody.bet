@@ -267,6 +267,36 @@ emitFunc:
      99->_n;
   #);
 
+TracePrimno:
+  (# primno: @integer;
+     T: ^text;
+  enter primno
+  do (if primno
+      // common.new
+      // common.initSuper then
+         'initSuper' -> t[];
+      // common.setClass then
+         'setClass' -> t[];
+      // common.init_prim then
+         'init_prim' -> t[];
+      // common.text2CharArray then
+         'text2CharArray' -> t[];
+      // common.charArray2String then
+         'charArray2String' -> t[];
+      // common.ExternalString2BetaText then
+         'ExternalString2BetaText' -> t[];
+      // common.BetaText2ExternalString then
+         'BetaText2ExternalString' -> t[];
+      // common.BetaText2BetaCharArray then
+         'BetaText2BetaCharArray' -> t[];
+      // common.char2rep then
+         'char2rep' -> t[];
+      else
+         'unknownPrimitive:'->T[];
+         primNo -> T.put;
+     if)
+  exit T[]
+  #);
 
 EmitPrimNo:
   (# primNo: @integer; arg: ^text;
@@ -277,7 +307,7 @@ EmitPrimNo:
      (if trace_opcodes then
          (# msg: ^text
          do 'EmitPrimNo: ' -> msg[];
-            primno -> msg.putint; 
+            primno -> TracePrimno -> msg.puttext; 
             '('->msg.put;
             arg[]->msg.puttext;
             ') class: ' -> msg.puttext; mstate.class[] -> msg.puttext;
@@ -290,6 +320,7 @@ EmitPrimNo:
          (if trace_opcodes then
              '/* EmitPrimNo: new: class is: %s */'->mstate.out.putformat(# do mstate.class[]->s #);
          if);
+         (* mstate.out.nl; *)
          (* Rest is done in subsequent init_prim *)
       // common.init_prim then
          (if mstate.class[]=NONE then
@@ -312,14 +343,13 @@ EmitPrimNo:
                     arg[] (* origin name *) -> AddClass -> ctor_signature.puttext;
                 if);
                 ')' -> ctor_signature.puttext;
-                mstate.out.nl;
                 'newobj  instance '-> mstate.out.puttext;
                 ctor_signature[] -> mstate.out.puttext;
                 1+(ctor_signature[]->function_stack_delta) -> stack_delta
              #);
-         if)
-      // common.initSuper then
+         if);
          mstate.out.nl;
+     // common.initSuper then
          'call  instance void '->mstate.out.puttext;
          mstate.thisSuperName[] -> mstate.out.puttext;
          '::.ctor(' -> mstate.out.puttext;
@@ -336,7 +366,7 @@ EmitPrimNo:
          ')' -> mstate.out.putln;
          (if (mstate.subLevel = 0) and (common.betaenv.groupname ->mstate.thisClassName.equalNCS) then
              'ldarg.0' -> mstate.out.putln; (* this(betaenv)[] *)
-             'stsfld  %s %s::betaenvRef\n' 
+             'stsfld  %s %s::betaenvRef' 
                -> mstate.out.putformat(# 
                                       do betaenv_signature->s; 
                                          betaenv_signature->s; 
@@ -344,35 +374,36 @@ EmitPrimNo:
          if);
          delta -> stack_delta;
          (*mstate.fields.emitInit don't: No need to initialize to default values *)
+         mstate.out.nl;
       // common.setClass then       
          arg[] -> mstate.class[]
+         (*mstate.out.nl;*)
       // common.Text2CharArray  then
-         (if trace_textop then
+         (if trace_opcodes then
              'Text2CharArray:'->emitcomment;
              mstate.out.nl;
          if);
-         mstate.out.nl;
          'callvirt instance char[] [mscorlib]System.String::ToCharArray()' 
-           -> mstate.out.putln;
+           -> mstate.out.puttext;
          0 -> stack_delta;
+         mstate.out.nl;
       // common.CharArray2String then
-         (if trace_textop then
+         (if trace_opcodes then
              'CharArray2String:'->emitcomment;
              mstate.out.nl;
          if);
-         mstate.out.nl;
          'newobj  instance void class [mscorlib]System.String::.ctor(char[])' -> mstate.out.puttext;
          0 -> stack_delta;
+         mstate.out.nl;
       // common.ExternalString2BetaText then
          (* Note! Hardcoding of pattern 'text'
           * including case, etc. Should be handled
           * more generally
           *)
-         (if trace_textop then
+         (if trace_opcodes then
              'ExternalString2BetaText:'->emitcomment;
              mstate.out.nl;
          if);  
-         mstate.out.nl;
          (* Stack: string. FIXME: may be null *)
          'callvirt instance char[] [mscorlib]System.String::ToCharArray()' 
            -> mstate.out.putln;
@@ -396,16 +427,16 @@ EmitPrimNo:
          'callvirt instance void class [%s]text::\''
            -> mstate.out.putformat(# do betaenv_name->s; #);
          common.enterMethod -> mstate.out.puttext;
-         '\'(char[])' -> mstate.out.putln;
+         '\'(char[])' -> mstate.out.puttext;
          -2 -> stack_delta;
-      // common.BetaText2BetaCharArray then
          mstate.out.nl;
+      // common.BetaText2BetaCharArray then
          'ldfld  char[] [\'%s\']text::T' -> mstate.out.putformat(# do betaenv_name->s; #);
          mstate.out.nl;
       // common.BetaText2ExternalString then
          (# textsig: @text;
             textloc: @integer;
-         do (if trace_textop then
+         do (if trace_opcodes then
                 'BetaText2ExternalString:'->emitcomment;
                 mstate.out.nl;
             if);
@@ -430,8 +461,7 @@ EmitPrimNo:
           * and return the array on the stack.
           *)
          (# loc_ch: @integer;
-         do mstate.out.nl;
-            'char' -> allocLoc -> loc_ch -> storeLoc;
+         do 'char' -> allocLoc -> loc_ch -> storeLoc;
             -1 -> stack_delta;
             'ldc.i4.1' -> mstate.out.putln;
             'newarr  char' -> mstate.out.putln;
@@ -443,13 +473,13 @@ EmitPrimNo:
             -3 -> stack_delta;
             loc_ch -> releaseLoc;
          #);
+         mstate.out.nl;
       else
          '\n\nUnknown primitive no: ' -> puttext;
          primNo -> putint;
          ' with arg: ' -> puttext;
          arg[] -> putline
      if);
-     mstate.out.nl;
   #);
 
 emitPrim:
@@ -461,87 +491,68 @@ emitPrim:
      (if trace_opcodes then
          (# msg: ^text;
          do &text[] -> msg[];
-            '  callprim: %s(%s)\n'->msg.putformat(# do prim[]->s; arg[]->s #);
+            '  emitPrim: %s(%s)\n'->msg.putformat(# do prim[]->s; arg[]->s #);
             msg[] -> emitcomment;
          #);
      if);
      (if true 
       // 'AlloS' -> prim.equal then
-         mstate.out.nl;
          'ldtoken  ' -> mstate.out.puttext; 
          arg[] -> mstate.out.putln;
          'call  class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)' -> mstate.out.putln;
          'call  %s %s::AlloS(class [mscorlib]System.Object, class [mscorlib]System.Type)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; #); mstate.out.putln;
          0 -> stack_delta;
       // 'ObjS' -> prim.equal then
-         mstate.out.nl;
          'call %s %s::ObjS(class [mscorlib]System.Object)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; #); 
          mstate.out.nl;
          -3 -> stack_delta;
       // 'eqS' -> prim.equal then
-         mstate.out.nl;
          'call bool %s::eqS(%s, %s)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
          mstate.out.nl;
          -3 -> stack_delta;
       // 'neS' -> prim.equal then
-         mstate.out.nl;
          'call bool %s::neS(%s, %s)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
          mstate.out.nl;
          -3 -> stack_delta;
       // 'ltS' -> prim.equal then
-         mstate.out.nl;
          'call bool %s::ltS(%s, %s)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
          mstate.out.nl;
          -3 -> stack_delta;
       // 'leS' -> prim.equal then
-         mstate.out.nl;
          'call bool %s::leS(%s, %s)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
          mstate.out.nl;
          -3 -> stack_delta;
       // 'gtS' -> prim.equal then
-         mstate.out.nl;
          'call bool %s::gtS(%s, %s)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
          mstate.out.nl;
          -3 -> stack_delta;
       // 'geS' -> prim.equal then
-         mstate.out.nl;
          'call bool %s::geS(%s, %s)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
          mstate.out.nl;
          -3 -> stack_delta;
       // 'AlloSI' -> prim.equal then
-         mstate.out.nl;
          'callvirt class [mscorlib]System.Object %s::AlloSI()' -> mstate.out.putformat(# do sigStructure->s; #);
          mstate.out.nl;
          0 -> stack_delta;
       // 'Att' -> prim.equal then
-         mstate.out.nl;
-         'Att'->emitcomment;
-         mstate.out.nl;
          'ldfld class [\'%s\']\'Component\' [\'%s\']\'%s\'::\'_comp\'' -> mstate.out.putformat(# do common.ComponentLocation->s; betaenv_name->s; common.BetaObjectClass->s #);
          mstate.out.nl;
          'callvirt void [\'%s\']\'Component\'::\'swap\'()'-> mstate.out.putformat(# do common.ComponentLocation->s; #);
          mstate.out.nl;
          0 -> stack_delta;
       // 'Susp' -> prim.equal then
-         mstate.out.nl;
-         'Susp'->emitcomment;
-         mstate.out.nl;
          'ldsfld class [\'%s\']\'Component\' [\'%s\']\'Component\'::\'current\'' -> mstate.out.putformat(# do common.ComponentLocation->s; common.ComponentLocation->s; #);
          mstate.out.nl;
          'callvirt void [\'%s\']\'Component\'::\'swap\'()'-> mstate.out.putformat(# do common.ComponentLocation->s; #);
          mstate.out.nl;
          0 -> stack_delta;
       // 'SuspX' -> prim.equal then
-         mstate.out.nl;
-         'SuspX'->emitcomment;
-         mstate.out.nl;
          'ldfld class [\'%s\']\'Component\' [\'%s\']\'BetaObject\'::\'_comp\'' -> mstate.out.putformat(# do common.ComponentLocation->s; betaenv_name->s; #);
          mstate.out.nl;
          'callvirt void [\'%s\']\'Component\'::\'swap\'()'-> mstate.out.putformat(# do common.ComponentLocation->s; #);
          mstate.out.nl;
          0 -> stack_delta;
       // 'AlloC' -> prim.equal then
-         mstate.out.nl;
          'dup' -> mstate.out.putln;
          'newobj  instance void [\'%s\']\'Component\'::.ctor(class [\'%s\']\'BetaObject\')' -> mstate.out.putformat(# do common.ComponentLocation->s; betaenv_name->s; #);
          mstate.out.nl;
@@ -554,7 +565,6 @@ emitPrim:
             (mch[]->BCmch[]).mstate.thisSourceFileName.copy -> program_name[];
             (* First argument (betanev instance) loaded by dup in genMain *)
             (* load program name *)
-            mstate.out.nl;
             'ldstr  ' -> mstate.out.puttext; program_name[] -> strquote -> mstate.out.putln;
             (* load args[] of main() *)
             'ldarg.0' -> mstate.out.putln;
@@ -599,71 +609,55 @@ emitPrim:
          if);
          arg[] -> newArray;
       // 'ExtVR1' -> prim.equal then
-         mstate.out.nl;
          'call char[] %s::ExtVR1(char[],int32)'
            -> mstate.out.putformat(# do sigBetaArray->s #);
       // 'ExtVRB' -> prim.equal then
-         mstate.out.nl;
          'call int8[] %s::ExtVRB(int8[],int32)'
            -> mstate.out.putformat(# do sigBetaArray->s #);
       // 'CopyVR1' -> prim.equal then
-         mstate.out.nl;
          'call char[] %s::CopyVR1(char[])'
            -> mstate.out.putformat(# do sigBetaArray->s #);
       // 'CopySVR1' -> prim.equal then
-         mstate.out.nl;
          'call char[] %s::CopySVR1(int32,int32,char[])' 
            -> mstate.out.putformat(# do sigBetaArray->s #);
          
       // 'ExtVRZ' -> prim.equal then
-         mstate.out.nl;
          'call bool[] %s::ExtVRZ(bool[],int32)'
            -> mstate.out.putformat(# do sigBetaArray->s #);
       // 'CopyVRZ' -> prim.equal then
-         mstate.out.nl;
          'call bool[] %s::CopyVRZ(bool[])'
            -> mstate.out.putformat(# do sigBetaArray->s #);
       // 'CopySVRZ' -> prim.equal then
-         mstate.out.nl;
          'call bool[] %s::CopySVRZ(int32,int32,bool[])' 
            -> mstate.out.putformat(# do sigBetaArray->s #);
          
       // 'ExtVR2' -> prim.equal then
-         mstate.out.nl;
          'call int16[] %s::ExtVR2(int16[],int32)'
            -> mstate.out.putformat(# do sigBetaArray->s #);
       // 'CopyVR2' -> prim.equal then
-         mstate.out.nl;
          'call int16[] %s::CopyVR2(int16[])'
            -> mstate.out.putformat(# do sigBetaArray->s #);
       // 'CopySVR2' -> prim.equal then
-         mstate.out.nl;
          'call int16[] %s::CopySVR2(int32,int32,int16[])' 
            -> mstate.out.putformat(# do sigBetaArray->s #);
          
       // 'ExtVR4' -> prim.equal then
-         mstate.out.nl;
          'call int32[] %s::ExtVR4(int32[],int32)'
            -> mstate.out.putformat(# do sigBetaArray->s #);
       // 'CopyVR4' -> prim.equal then
-         mstate.out.nl;
          'call int32[] %s::CopyVR4(int32[])'
            -> mstate.out.putformat(# do sigBetaArray->s #);
       // 'CopySVR4' -> prim.equal then
-         mstate.out.nl;
          'call int32[] %s::CopySVR4(int32,int32,int32[])' 
            -> mstate.out.putformat(# do sigBetaArray->s #);
          
       // 'ExtVR8' -> prim.equal then
-         mstate.out.nl;
          'call float64[] %s::ExtVR8(float64[],int32)'
            -> mstate.out.putformat(# do sigBetaArray->s #);
       // 'CopyVR8' -> prim.equal then
-         mstate.out.nl;
          'call float64[] %s::CopyVR8(float64[])'
            -> mstate.out.putformat(# do sigBetaArray->s #);
       // 'CopySVR8' -> prim.equal then
-         mstate.out.nl;
          'call float64[] %s::CopySVR8(int32,int32,float64[])' 
            -> mstate.out.putformat(# do sigBetaArray->s #);
          
@@ -685,11 +679,8 @@ emitPrim:
           *)
          (# loc_oldrep, loc_add, loc_copysize, loc_newsize, loc_newrep: @integer;
             lab1, lab2: @LocalLab;
-         do mstate.out.nl;
-            'ExtRR' -> emitComment;
-            (* 'ldstr "ExtRR" pop' -> mstate.out.putln; (* visible in ildasm *)
+         do (* 'ldstr "ExtRR" pop' -> mstate.out.putln; (* visible in ildasm *)
             (* arg: "class [location]type[]" *)
-            mstate.out.nl;
             arg[] -> allocLoc -> loc_oldrep;
             'int32' -> allocLoc -> loc_add;
             'int32'  -> allocLoc -> loc_copysize;
@@ -749,11 +740,8 @@ emitPrim:
           *   }
           *)
          (# loc_oldrep, loc_size, loc_newrep: @integer;
-         do mstate.out.nl;
-            'CopyRR' -> emitComment;
-            (* 'ldstr "CopyRR" pop' -> mstate.out.putln; (* visible in ildasm *)
+         do (* 'ldstr "CopyRR" pop' -> mstate.out.putln; (* visible in ildasm *)
             (* arg: "class [location]type[]" *)
-            mstate.out.nl;
             arg[]    -> allocLoc -> loc_oldrep;
             'int32'  -> allocLoc -> loc_size;
             arg[]    -> allocLoc -> loc_newrep;
@@ -794,11 +782,8 @@ emitPrim:
           *)
          (# loc_oldrep, loc_low, loc_high, loc_newsize, loc_newrep: @integer;
             lab1, lab2: @LocalLab;
-         do mstate.out.nl;
-            'CopySRR' -> emitComment;
-            (*'ldstr "CopySRR" pop' -> mstate.out.putln; (* visible in ildasm *)
+         do (*'ldstr "CopySRR" pop' -> mstate.out.putln; (* visible in ildasm *)
             (* arg: "class [location]type[]" *)
-            mstate.out.nl;
             arg[]    -> allocLoc -> loc_oldrep;
             'int32'  -> allocLoc -> loc_low;
             'int32'  -> allocLoc -> loc_high;
@@ -887,7 +872,6 @@ emitCallExternal:
          'PInvoke of %s NYI'->msg.putformat(# do prim[]->s #);
          msg[] -> dotnetFIXME;
          &text[]->msg[];
-         mstate.out.nl;
          '// .method public hidebysig static pinvokeimpl("xxx.dll" cdecl) <returntype> %s(<arguments>) cil managed preservesig {}' 
            -> msg.putformat(# do prim[]->s #);
          msg[] -> mstate.out.putline;;
@@ -898,7 +882,6 @@ emitCallExternal:
          msg[] -> mstate.out.putline;
       else
          (* Normal clr call *)
-         mstate.out.nl;
          'call  ' -> mstate.out.puttext;  
          prim[] -> mstate.out.putln;
          prim[] -> function_stack_delta -> stack_delta;
@@ -907,17 +890,18 @@ emitCallExternal:
   #);
 
 ---bytecode_newImp:doPart---
-do (if generateLineNumbers then
+do (if trace_opcodes then
+       'newImp' -> emitcomment
+   if);
+   (if generateLineNumbers then
        (if (astRef (*line*) < 0) or (astRef (*line*) >= mstate.betafile.length) then
            (* FIXME! *)
            (if true then
-               mstate.out.nl;
                '// position ignored: ' -> mstate.out.puttext;
                astRef (* line *) -> mstate.out.putint;
                ' (outside file)' -> mstate.out.putln;
            if);
         else
-           mstate.out.nl;
            '.line  ' -> mstate.out.puttext; 
            astRef (*line*) -> mstate.out.putint;
            ':' -> mstate.out.put;
@@ -959,7 +943,6 @@ do reg.out;
        0 -> mstate.A.isField
    if);
    fieldType[] -> mstate.A.fieldType[];   
-   true -> mstate.hasFields;
    
 ---byteCode_RegAdr_index:doPart--- (* UNCHANGED FROM JVM *)
 do '\nOBS! RegADr:index:'->puttext;
@@ -1290,7 +1273,7 @@ do (if trace_opcodes then 'constructorDef'->emitcomment if);
        signature[] -> AddClass -> mstate.thisSignature.puttext;
    if);
    ')' -> mstate.thisSignature.put;
-   (if mstate.hasfields then
+   (if mstate.fields.top>0 then
        mstate.out.putln;
        mstate.out.putln;
    if);
@@ -1498,7 +1481,6 @@ do (if trace_opcodes then 'endLabel'->emitcomment if);
 do (if trace_opcodes then 'break'->emitcomment if);
    (* exitObj already pushed *)
    pushCst(# do JmpAdr.labno -> i #); 
-   mstate.out.nl;
    'newobj  instance void [\'%s\']ExOException::.ctor(object,int32)' 
      -> mstate.out.Putformat(# do betaenv_name->s #);
    mstate.out.nl;
@@ -1516,7 +1498,7 @@ do (if trace_opcodes then 'breakSimple'->emitcomment if);
    0 -> stack_delta;
    
 ---byteCode_cmpToBool:doPart--   
-do (if trace_opcodes or trace_compares then 'cmpToBool'->emitcomment if);
+do (if trace_opcodes then 'cmpToBool'->emitcomment if);
    op1.loadToReg; 
    op2.loadToReg;
    (* op3 is a register to load 0 or 1;
@@ -1525,14 +1507,14 @@ do (if trace_opcodes or trace_compares then 'cmpToBool'->emitcomment if);
    cond -> emitCmpToBool;
    
 ---byteCode_cmpAndJmp:doPart---
-do (if trace_opcodes or trace_compares then 'cmpAndJmp'->emitcomment if);
+do (if trace_opcodes then 'cmpAndJmp'->emitcomment if);
    op1.loadToReg; 
    op2.loadToReg;
    lab.out;
    (cond, mstate.localLabArg, isRef %band 1) -> emitCmpJmp;
    
 ---byteCode_cmpBoolAndJmp:doPart--
-do (if trace_opcodes or trace_compares then 'cmpBoolAndJmp'->emitcomment if);
+do (if trace_opcodes then 'cmpBoolAndJmp'->emitcomment if);
    op.loadToReg;
    lab.out;  
    (cond, mstate.localLabArg) -> emitCmpBoolJmp
@@ -1588,7 +1570,7 @@ do (if trace_opcodes then 'endMethod'->emitcomment if);
        mstate.max_stack_height -> mstate.out.putint;
    if);
    mstate.out.indent.dec;
-   mstate.out.putln;
+   mstate.out.putln; (* Gives extra line before '', be needed to get lower indentation *)
    '}'->mstate.out.putline;
    
 ---byteCode_callPrim:doPart--
@@ -1658,7 +1640,7 @@ do (if trace_opcodes then 'classDef'->emitcomment if);
    (if not ('-'->orgName.equal) then
        '.field public ' -> mstate.out.puttext;
        orgName[] -> AddClass -> mstate.out.puttext;
-       ' origin'-> mstate.out.putln;
+       ' origin'-> mstate.out.puttext;
    if);
    mstate.fields.init;
    className[] -> mstate.thisClassName[];      
@@ -1708,7 +1690,6 @@ do (if trace_opcodes then 'methodDef'->emitcomment if);
    0                       -> mstate.fields.numLocals; (* FIXME: why inside fields? *)
    noOfEnterArgs           -> mstate.fields.numArguments; (* FIXME: why inside fields?  *)
    1                       -> mstate.MappedLocals.new;
-   false                   -> mstate.hasFields;
    (if 'main' -> methodname.equal then
        mstate.out.putln;
        'static void \'Main\'(string[] args)' -> mstate.thisSignature[];
@@ -1760,6 +1741,7 @@ do (if trace_opcodes then 'emitTextConst'->emitcomment if);
    'ldstr'->mstate.out.puttext;
    ' '->mstate.out.put; 
    S[] -> emitString;
+   mstate.out.nl;
    
 ---byteCode_close:doPart---
 do (if trace_opcodes then 'close'->emitcomment if);
@@ -1780,13 +1762,13 @@ do (if trace_opcodes then 'real32toReal64'->emitcomment if);
    'conv.r8'->mstate.out.putln;
    
 ---byteCode_cmpToBoolFloat:doPart--
-do (if trace_opcodes or trace_compares then 'cmpToBoolFloat'->emitcomment if);
+do (if trace_opcodes then 'cmpToBoolFloat'->emitcomment if);
    op1.loadToReg; 
    op2.loadToReg;
    cond -> emitCmpToBool
    
 ---byteCode_cmpAndJmpFloat:doPart--
-do (if trace_opcodes or trace_compares then 'byteCode_cmpAndJmpFloat'->emitcomment if);
+do (if trace_opcodes then 'byteCode_cmpAndJmpFloat'->emitcomment if);
    op1.loadToReg; 
    op2.loadToReg;
    lab.out; 
@@ -1909,9 +1891,6 @@ do (if trace_opcodes then 'setPackagePath'->emitcomment if);
    
 ---bytecode_comment:doPart--
 do (if trace_comments then
-       mstate.out.nl;
-       '/* ' -> mstate.out.puttext; 
-       (*T[] -> putline;*) T[] -> mstate.out.puttext;
-       ' */ ' -> mstate.out.putline;
+       T[] -> emitcomment
    if)
    

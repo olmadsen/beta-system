@@ -8,11 +8,12 @@ INCLUDE '~beta/toollibs/utils/fileExtensions';
 INCLUDE '~beta/basiclib/texthash';
 INCLUDE '~beta/sysutils/pathhandler';
 MDBODY nti     'BCclrWindowsBody'
+       clr     'BCclrWindowsBody'
        default 'BCclrUnixBody';
 
 --ByteCodeMachinelib: attributes--
 trace_opcodes: 
-  (# exit common.switch[190] #);
+  (# exit (*false*) common.switch[190] #);
 trace_mem:
   (# exit false #);
 trace_locals:
@@ -22,11 +23,7 @@ trace_sig:
 trace_n:
   (# exit false #);
 trace_comments:
-  (# exit common.switch[190] #);
-trace_compares:
-  (# exit false #);
-trace_textop:
-  (# exit false #);
+  (# exit false (*trace_opcodes*) #);
 trace_class:
   (# exit false #);
 trace_convert:
@@ -643,7 +640,9 @@ importAssembly:
          assemblyname[] -> safequote -> mstate.out.puttext;
          <<SLOT ImportAssemblyVersion: descriptor>>
       else
-         'already imported: ' -> (assemblyname.copy).prepend -> emitcomment;
+         (if trace_opcodes then
+             'already imported: ' -> (assemblyname.copy).prepend -> emitcomment;
+         if);
      if)
   #);
 
@@ -1092,7 +1091,10 @@ loadOrigin:
   #);
 allocStack:
   (#
-  do (if not compute_stack_height then
+  do (if trace_opcodes then
+         'allocStack' -> emitcomment;
+     if);
+     (if not compute_stack_height then
          '.maxstack 1000' -> mstate.out.putln;
      if);
   #);
@@ -1100,7 +1102,7 @@ emitCmpJmp:
   (* Compare two top elements and jump conditionally *)
   (# cond,lab,isRef: @integer (* oLM: isRef=1: reference cmp *)
   enter(cond,lab,isRef)
-  do (if trace_compares then
+  do (if trace_opcodes then
          'emitCmpJmp' -> emitcomment;
      if);
      (if cond
@@ -1125,7 +1127,7 @@ emitCmpToBool:
   (* Compare two top elements and push result *)
   (# cond: @integer
   enter cond
-  do (if trace_compares then
+  do (if trace_opcodes then
          'emitCmpToBool' -> emitcomment;
      if);
      (if cond
@@ -1155,7 +1157,7 @@ emitCmpBoolJmp:
   (* Compare top with 0 and jump conditionally *)
   (# cond,lab: @integer
   enter (cond,lab)
-  do (if trace_compares then
+  do (if trace_opcodes then
          'emitCmpBoolJmp' -> emitcomment;
      if);
      'ldc.i4.0' -> mstate.out.putln;
@@ -1452,7 +1454,6 @@ mkClassListFile:
                  *)
    isMainMethod: @boolean; (* true if generating code for main method *)
    hasMainMethod: @boolean; (* true if generating code for module with main method *)
-   hasFields: @boolean; (* true if generating code for a method that has any fields *)
    previousWasJmp: @boolean;
    
    betafile: @file(# initialized: @boolean; pc: @positionConverter #);
@@ -1556,7 +1557,7 @@ mkClassListFile:
                      if);
                  if);
              if);
-             (*mstate.out.newline;*)
+             mstate.out.nl;
           #);
         use: @
           (# l: @integer;
@@ -1606,9 +1607,22 @@ mkClassListFile:
         numLocals, numCells, numArguments: @integer;
         LocalVariables: [1]@integer;
         new:
-          (# F,FN,T: ^text; methodClassTag: @char; 
+          (# F,FN,T: ^text; 
+             methodClassTag: @char; 
+             msg: ^text;
           enter(F[],FN[],T[],methodClassTag)
-          do (if (top+1->top) > Field.range then
+          do (if trace_opcodes then
+                 'mstate.fields.new: F: ' -> msg[];
+                 F[] -> msg.puttext;
+                 ', FN: ' -> msg.puttext;
+                 FN[] -> msg.puttext;
+                 ', T: ' -> msg.puttext;
+                 T[] -> msg.puttext;
+                 ', tag: ' -> msg.puttext;
+                 methodClassTag -> msg.put; 
+                 msg[] -> emitcomment;
+             if);
+             (if (top+1->top) > Field.range then
                  Field.range -> Field.extend;
                  FieldName.range -> FieldName.extend;
                  Type.range -> Type.extend;
@@ -1663,8 +1677,9 @@ mkClassListFile:
               // 'C' then
                  (* end class fields *)
               else
-                 'mstate.fields.new: unknown tag: ' -> screen.puttext;
-                 methodClassTag -> screen.put; screen.newline;
+                 'mstate.fields.new: unknown tag: ' -> msg[];
+                 methodClassTag -> msg.put; 
+                 msg[] -> emitcomment;
              if);
           #);
         scan:
