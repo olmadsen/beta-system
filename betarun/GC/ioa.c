@@ -17,7 +17,7 @@
 static long FreePercentage( bottom, top, limit)
      long bottom, top, limit;
 {
-    return (100 * areaSize(top, limit))/areaSize(bottom, limit); 
+  return (100 * areaSize(top, limit))/areaSize(bottom, limit); 
 }
 
 /*
@@ -28,32 +28,32 @@ static long FreePercentage( bottom, top, limit)
 void IOAGc()
 {
 #ifdef macintosh
-    RotateTheCursor();
+  RotateTheCursor();
 #endif
-
+  
 #ifdef RTDEBUG
-    memset(ToSpace, 0, IOASize);
+  memset(ToSpace, 0, IOASize);
 #endif
-    
-    NumIOAGc++;
-
-/******************** DEMO Limitation in IOAGc ****************************/
+  
+  NumIOAGc++;
+  
+  /******************** DEMO Limitation in IOAGc ****************************/
 #ifdef DEMO
-    if (NumIOAGc==20) {
-
+  if (NumIOAGc==20) {
+    
 #ifdef macintosh
-      Prompt(
-"\p\
+    Prompt(
+	   "\p\
 This program was compiled using the demo version of \
 the Mj\277lner BETA System. The demo version is limited \
 in the number of garbage collections allowed. This ",
-"\p\
+	   "\p\
 limit will soon be reached; if you want to save your \
 work, please do it now, and quit your program.",
-"", "");
-
+	   "", "");
+    
 #else macintosh
-      fprintf(output, "\
+    fprintf(output, "\
   ********************************************************\n\
   * This program was compiled using the demo version of  *\n\
   * the Mjolner BETA System. The demo version is limited *\n\
@@ -63,28 +63,28 @@ work, please do it now, and quit your program.",
   ********************************************************\n\
 ");
 #endif macintosh
-
-    } else
+    
+  } else
     if (NumIOAGc==30) {
-
+      
 #ifdef macintosh
       Prompt(
-"\p\
+	     "\p\
 This program was compiled using the demo version of \
 the Mj\277lner BETA System. The demo version is limited \
 in the number of garbage collections allowed. This ",
-"\p\
+	     "\p\
 limit has now been reached and your program will be \
 terminated - sorry!\n\
 You may order an unconstrained version from\n",
-"\p\n\
+	     "\p\n\
     Mj\277lner Informatics, Gustav Wiedsvej 10,\n\
     Science Park Aarhus, DK-8000 Aarhus C, Denmark,\n",
-"\p\
+	     "\p\
     Phone: +45 86 20 20 00,  Fax: +45 86 20 12 22\n\
     e-mail: support@mjolner.dk"
-);
-
+	     );
+      
 #else macintosh
       fprintf(output, "\
   ********************************************************\n\
@@ -102,50 +102,50 @@ You may order an unconstrained version from\n",
   ********************************************************\n\
 ");
 #endif macintosh
-
+      
       exit(0);
     }
 #endif DEMO
-/***************** End of DEMO Limitation in IOAGc ****************************/
-
-    IOAActive = TRUE;
-    
-    INFO_IOA( fprintf( output, "#(IOA-%d %d? ", NumIOAGc, ReqObjectSize));
-    InfoS_LabA();
-    
-    /* Initialize the ToSpace */
-    ToSpaceTop       = ToSpace;
-    HandledInToSpace = ToSpace;
-    
-    DEBUG_IOA( IOACheck() );
-    DEBUG_LVRA( LVRACheck() );
-    
-    DEBUG_AOA( AOAtoIOACheck() );
-    DEBUG_AOA( AOACheck() );
-    IOAStackObjectSum = IOAStackObjectNum = 0;
-    AOArootsLimit = AOArootsPtr = ToSpaceLimit;
-    { long i; for(i=0; i < IOAMaxAge;i++) IOAAgeTable[i] = 0; }
-    /* Save the state of AOA, this state is used at end of IOAGc, to proceed 
-     * not handled objects.
-     */
-    HandledAOABlock = AOATopBlock;
-    if( AOATopBlock ) HandledInAOA = AOATopBlock->top;
-    
-    AOAtoIOACount = 0;
-    if( AOAtoIOAtable ){ 
-	long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
-	for(i=0; i<AOAtoIOAtableSize; i++){ 
+  /***************** End of DEMO Limitation in IOAGc ****************************/
+  
+  IOAActive = TRUE;
+  
+  INFO_IOA( fprintf( output, "#(IOA-%d %d? ", NumIOAGc, ReqObjectSize));
+  InfoS_LabA();
+  
+  /* Initialize the ToSpace */
+  ToSpaceTop       = ToSpace;
+  HandledInToSpace = ToSpace;
+  
+  DEBUG_IOA( IOACheck() );
+  DEBUG_LVRA( LVRACheck() );
+  
+  DEBUG_AOA( AOAtoIOACheck() );
+  DEBUG_AOA( AOACheck() );
+  IOAStackObjectSum = IOAStackObjectNum = 0;
+  AOArootsLimit = AOArootsPtr = ToSpaceLimit;
+  { long i; for(i=0; i < IOAMaxAge;i++) IOAAgeTable[i] = 0; }
+  /* Save the state of AOA, this state is used at end of IOAGc, to proceed 
+   * not handled objects.
+   */
+  HandledAOABlock = AOATopBlock;
+  if( AOATopBlock ) HandledInAOA = AOATopBlock->top;
+  
+  AOAtoIOACount = 0;
+  if( AOAtoIOAtable ){ 
+    long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
+    for(i=0; i<AOAtoIOAtableSize; i++){ 
 #ifdef RTLAZY
-	    if( *pointer > 0){
+      if( *pointer > 0){
 #else
-	    if ( *pointer ){
+	if ( *pointer ){
 #endif
-	      AOAtoIOACount++;
-	      ProcessAOAReference( *pointer);
-	    }
-	    pointer++;
+	  AOAtoIOACount++;
+	  ProcessAOAReference( *pointer);
 	}
-    }
+	pointer++;
+      }
+    };
     DEBUG_AOA( AOAtoIOAReport() );
     DEBUG_AOA( AOAcopied = 0; IOAcopied = 0; );
     
@@ -157,9 +157,14 @@ You may order an unconstrained version from\n",
     ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
     ProcessReference( &ActiveComponent);
     ProcessReference( &BasicItem );
-    if (InterpretItem) {
-      INFO_IOA(fprintf(output, " (InterpretItem"); fflush(output));
-      ProcessReference( &InterpretItem );
+    if (InterpretItem[0]) {
+      INFO_IOA(fprintf(output, " (InterpretItem[0]"); fflush(output));
+      ProcessReference( &InterpretItem[0] );
+      INFO_IOA(fprintf(output, ")"); fflush(output));
+    }
+    if (InterpretItem[1]) {
+      INFO_IOA(fprintf(output, " (InterpretItem[1]"); fflush(output));
+      ProcessReference( &InterpretItem[1] );
       INFO_IOA(fprintf(output, ")"); fflush(output));
     }
 #ifdef RTLAZY
@@ -169,35 +174,36 @@ You may order an unconstrained version from\n",
       INFO_IOA(fprintf(output, ")"); fflush(output));
     }
 #endif
+    
     CompleteScavenging();
     
     ProcessStack();
     
     /* Follow all struct pointers in the Call Back Functions area. */
     if (CBFABlockSize){
-	if( CBFATop != CBFA->entries ){
-	    ref(CallBackArea) cbfa = CBFA;
-	    ref(CallBackEntry) current = cbfa->entries;
-	    long limit = (long) cbfa->entries + CBFABlockSize;
+      if( CBFATop != CBFA->entries ){
+	ref(CallBackArea) cbfa = CBFA;
+	ref(CallBackEntry) current = cbfa->entries;
+	long limit = (long) cbfa->entries + CBFABlockSize;
+	
+	for (; current != CBFATop; current++){
+	  if ( (long) current >= limit){
+	    /* Go to next block */
+	    cbfa = cbfa->next;        
+	    /* guarentied to be non-nil since current != CBFATop */
 	    
-	    for (; current != CBFATop; current++){
-		if ( (long) current >= limit){
-		    /* Go to next block */
-		    cbfa = cbfa->next;        
-		    /* guarentied to be non-nil since current != CBFATop */
-		    
-		    current = cbfa->entries; 
-		    /* guarentied to be different from CBFATop. 
-		     * If not the block would not have been allocated 
-		     */
-		    limit = (long)cbfa->entries + CBFABlockSize;
-		}
-		if (current->theStruct){
-		  ProcessReference(&current->theStruct);
-		}
-	    }
-	    CompleteScavenging();
+	    current = cbfa->entries; 
+	    /* guarentied to be different from CBFATop. 
+	     * If not the block would not have been allocated 
+	     */
+	    limit = (long)cbfa->entries + CBFABlockSize;
+	  }
+	  if (current->theStruct){
+	    ProcessReference(&current->theStruct);
+	  }
 	}
+	CompleteScavenging();
+      }
     }
     
     /* Objects copied til AOA until now has not been proceesed. 
@@ -206,52 +212,52 @@ You may order an unconstrained version from\n",
      * objects in ToSpace and AOA until no more objects is to procees.
      */
     if( AOABaseBlock ){
-	if( !HandledAOABlock ){
-	    HandledAOABlock = AOABaseBlock; HandledInAOA = BlockStart( AOABaseBlock);
+      if( !HandledAOABlock ){
+	HandledAOABlock = AOABaseBlock; HandledInAOA = BlockStart( AOABaseBlock);
+      }
+      while( HandledAOABlock ){
+	/* Process objects from AOAoldTop to blockPtr->top. */
+	while( HandledInAOA < HandledAOABlock->top ){
+	  ProcessAOAObject( (ref(Object))  HandledInAOA );
+	  DEBUG_CODE( Claim(ObjectSize((ref(Object)) HandledInAOA ) > 0,
+			    "ObjectSize((ref(Object)) HandledInAOA ) > 0") );
+	  HandledInAOA = (ptr(long)) (((long) HandledInAOA)
+				      + 4*ObjectSize( (ref(Object)) HandledInAOA ));
+	  CompleteScavenging();
 	}
-	while( HandledAOABlock ){
-	    /* Process objects from AOAoldTop to blockPtr->top. */
-	    while( HandledInAOA < HandledAOABlock->top ){
-		ProcessAOAObject( (ref(Object))  HandledInAOA );
-		DEBUG_CODE( Claim(ObjectSize((ref(Object)) HandledInAOA ) > 0,
-			   "ObjectSize((ref(Object)) HandledInAOA ) > 0") );
-		HandledInAOA = (ptr(long)) (((long) HandledInAOA)
-					    + 4*ObjectSize( (ref(Object)) HandledInAOA ));
-		CompleteScavenging();
-	    }
-	    HandledAOABlock = HandledAOABlock->next;
-	    if( HandledAOABlock ) HandledInAOA = BlockStart( HandledAOABlock);
-	}
-	DEBUG_AOA( AOAtoIOACheck());
+	HandledAOABlock = HandledAOABlock->next;
+	if( HandledAOABlock ) HandledInAOA = BlockStart( HandledAOABlock);
+      }
+      DEBUG_AOA( AOAtoIOACheck());
     }
-
+    
     if( DOT ){
-	/* The Debugger Object Table is in use, so traverse this table. */
-	ptr(long) current = DOT;
-	while( current < DOTTop){
-	    if( *current ) {
-	      if (inIOA(*current)){
-		INFO_DOT(fprintf(output, "#DOT: updating IOA reference 0x%x\n", *current));
-		if( isForward( (cast(Object)(*current))->GCAttr ) ){ 
-		  /* *current has a forward pointer. */
-		  *current = (long) (ref(Object)) (cast(Object)(*current))->GCAttr;
-		} else {
-		  *current = 0;
-                  DOTSize--;
-		}
-	      }
+      /* The Debugger Object Table is in use, so traverse this table. */
+      ptr(long) current = DOT;
+      while( current < DOTTop){
+	if( *current ) {
+	  if (inIOA(*current)){
+	    INFO_DOT(fprintf(output, "#DOT: updating IOA reference 0x%x\n", *current));
+	    if( isForward( (cast(Object)(*current))->GCAttr ) ){ 
+	      /* *current has a forward pointer. */
+	      *current = (long) (ref(Object)) (cast(Object)(*current))->GCAttr;
+	    } else {
+	      *current = 0;
+	      DOTSize--;
 	    }
-	    current++;
+	  }
 	}
+	current++;
+      }
     }
     
     if( AOANeedCompaction)  AOAGc();
     
     if (tempAOAroots) {
-	/* ToSpace was not big enough to hold both objects and table.
-	 * Free the table that was allocated in CopyObject().
-	 */
-	tempAOArootsFree();
+      /* ToSpace was not big enough to hold both objects and table.
+       * Free the table that was allocated in CopyObject().
+       */
+      tempAOArootsFree();
     }
 #ifdef RTDEBUG
     else {
@@ -262,52 +268,52 @@ You may order an unconstrained version from\n",
     
     /* Swap IOA and ToSpace */
     {
-	ptr(long) Tmp; ptr(long) TmpTop; ptr(long) TmpLimit;
+      ptr(long) Tmp; ptr(long) TmpTop; ptr(long) TmpLimit;
       
-	Tmp     = IOA;     TmpTop     = IOATop;     TmpLimit     = IOALimit; 
+      Tmp     = IOA;     TmpTop     = IOATop;     TmpLimit     = IOALimit; 
       
 #ifdef sparc
-	IOA       = ToSpace;                          
-	IOATopoff = (char *) ToSpaceTop - (char *) IOA;
+      IOA       = ToSpace;                          
+      IOATopoff = (char *) ToSpaceTop - (char *) IOA;
 #endif
 #ifdef hppa
-	setIOAReg(ToSpace);
-	setIOATopoffReg((char *) ToSpaceTop - (char *) IOA);
+      setIOAReg(ToSpace);
+      setIOATopoffReg((char *) ToSpaceTop - (char *) IOA);
 #endif
 #ifdef mc68020
-	IOA       = ToSpace;                          
-	IOATop    = ToSpaceTop; 
+      IOA       = ToSpace;                          
+      IOATop    = ToSpaceTop; 
 #endif
 #ifdef linux
-	IOA       = ToSpace;                          
-	IOATop    = ToSpaceTop; 
+      IOA       = ToSpace;                          
+      IOATop    = ToSpaceTop; 
 #endif
-	IOALimit     = ToSpaceLimit;
+      IOALimit     = ToSpaceLimit;
       
-	ToSpace = Tmp;     ToSpaceTop = TmpTop;     ToSpaceLimit = TmpLimit;
+      ToSpace = Tmp;     ToSpaceTop = TmpTop;     ToSpaceLimit = TmpLimit;
     }
     
     IOAActive = FALSE;
     
     {
-	long limit = areaSize(IOA,IOALimit) / 10;long sum = 0;
+      long limit = areaSize(IOA,IOALimit) / 10;long sum = 0;
       
-	limit -= IOAStackObjectSum;
-	if (limit < 0) {
-	    DEBUG_IOA( fprintf(output, 
-			       "#IOA: %d StackObjects fill up more than 10%% of IOA (%d)\n", 
-			       IOAStackObjectNum, 
-			       IOAStackObjectSum));
-	    limit = 0;
-	}
-	IOAtoAOAtreshold = 0;
-	do
-	  {
-	      sum += IOAAgeTable[IOAtoAOAtreshold++];
-	  } while ((sum < limit) && (IOAtoAOAtreshold < IOAMaxAge));
-	
-	if (limit)
-	  IOAtoAOAtreshold +=1; 
+      limit -= IOAStackObjectSum;
+      if (limit < 0) {
+	DEBUG_IOA( fprintf(output, 
+			   "#IOA: %d StackObjects fill up more than 10%% of IOA (%d)\n", 
+			   IOAStackObjectNum, 
+			   IOAStackObjectSum));
+	limit = 0;
+      }
+      IOAtoAOAtreshold = 0;
+      do
+	{
+	  sum += IOAAgeTable[IOAtoAOAtreshold++];
+	} while ((sum < limit) && (IOAtoAOAtreshold < IOAMaxAge));
+      
+      if (limit)
+	IOAtoAOAtreshold +=1; 
     }
     DEBUG_IOA( fprintf( output, " treshold=%d", IOAtoAOAtreshold));
     DEBUG_IOA( fprintf( output, " AOAroots=%d", 
@@ -325,78 +331,78 @@ You may order an unconstrained version from\n",
     
     if( FreePercentage( IOA, (long) IOATop + ReqObjectSize*4, IOALimit) 
        < IOAPercentage ){
-	fprintf( output,"#IOA Heap space full, request: %d.\n", ReqObjectSize);
-	BetaExit(1);
+      fprintf( output,"#IOA Heap space full, request: %d.\n", ReqObjectSize);
+      BetaExit(1);
     }
-
+    
 #ifdef hpux
-/*    cachectl(CC_FLUSH, 0, 0); */
+    /*    cachectl(CC_FLUSH, 0, 0); */
 #endif
-}
-
-/*
- * ProcessReference:
- *  Takes as input a reference to a cell containing a root for IOA.
- *  If the cell refers an object residing in IOA, the 
- *  object is copied to ToSpace/AOA and the cell is updated.
- *  Furthermore one forward reference in the most enclosing
- *  object is inserted in the GC-attribute.
- *  Copies at most one object to ToSpace/AOA. You must call 
- *  CompleteScavenging sometimes later to process references from the 
- *  copied object.
- *  Optimization: USE theObj instead of newObj and inline GetDistanceToEnc....
- */
-
-void ProcessReference( theCell)
-     handle(Object) theCell;
-{
+  }
+  
+  /*
+   * ProcessReference:
+   *  Takes as input a reference to a cell containing a root for IOA.
+   *  If the cell refers an object residing in IOA, the 
+   *  object is copied to ToSpace/AOA and the cell is updated.
+   *  Furthermore one forward reference in the most enclosing
+   *  object is inserted in the GC-attribute.
+   *  Copies at most one object to ToSpace/AOA. You must call 
+   *  CompleteScavenging sometimes later to process references from the 
+   *  copied object.
+   *  Optimization: USE theObj instead of newObj and inline GetDistanceToEnc....
+   */
+  
+  void ProcessReference( theCell)
+    handle(Object) theCell;
+  {
     ref(Object) theObj;
     long GCAttribute;
     
     theObj = *theCell;
     
     if( inIOA(theObj)){
-	/* 'theObj' is inside IOA */
-	DEBUG_IOA( Claim(isObject(theObj),"ProcessReference: theObj is consistent."));
-	GCAttribute = theObj->GCAttr;
-	if( isForward(GCAttribute) ){ 
-	    /* theObj has a forward pointer. */
-	    *theCell = (ref(Object)) GCAttribute;
-	    DEBUG_LVRA( Claim( !inLVRA(GCAttribute), "ProcessReference: Forward ValRep"));
+      /* 'theObj' is inside IOA */
+      DEBUG_IOA( Claim(isObject(theObj),"ProcessReference: theObj is consistent."));
+      GCAttribute = theObj->GCAttr;
+      if( isForward(GCAttribute) ){ 
+	/* theObj has a forward pointer. */
+	*theCell = (ref(Object)) GCAttribute;
+	DEBUG_LVRA( Claim( !inLVRA(GCAttribute), "ProcessReference: Forward ValRep"));
+	/* If the forward pointer refers an AOA object, insert
+	 * theCell in AOAroots table.
+	 */
+	if( !inToSpace( GCAttribute))
+	  if (inAOA( GCAttribute)) {
+	    saveAOAroot(theCell);
+	  }
+      }else{
+	if( GCAttribute >= 0 ){ 
+	  /* '*theCell' is an autonomous object. */
+	  *theCell = NewCopyObject( *theCell, theCell);
+	}else{
+	  /* theObj is a part object. */
+	  long Distance;
+	  ref(Object) newObj;
+	  ref(Object) AutObj;
+	  
+	  Distance = GetDistanceToEnclosingObject( theObj);
+	  AutObj = (ref(Object)) Offset( theObj, Distance);
+	  if( isForward(AutObj->GCAttr) ){
+	    newObj = (ref(Object)) AutObj->GCAttr;
 	    /* If the forward pointer refers an AOA object, insert
 	     * theCell in AOAroots table.
 	     */
-	    if( !inToSpace( GCAttribute))
-	      if (inAOA( GCAttribute)) {
-		  saveAOAroot(theCell);
+	    if( !inToSpace( AutObj->GCAttr))
+	      if( inAOA( AutObj->GCAttr)){
+		saveAOAroot(theCell);
 	      }
-	}else{
-	    if( GCAttribute >= 0 ){ 
-		/* '*theCell' is an autonomous object. */
-		*theCell = NewCopyObject( *theCell, theCell);
-	    }else{
-		/* theObj is a part object. */
-		long Distance;
-		ref(Object) newObj;
-		ref(Object) AutObj;
-		
-		Distance = GetDistanceToEnclosingObject( theObj);
-		AutObj = (ref(Object)) Offset( theObj, Distance);
-		if( isForward(AutObj->GCAttr) ){
-		    newObj = (ref(Object)) AutObj->GCAttr;
-		    /* If the forward pointer refers an AOA object, insert
-		     * theCell in AOAroots table.
-		     */
-		    if( !inToSpace( AutObj->GCAttr))
-		      if( inAOA( AutObj->GCAttr)){
-			  saveAOAroot(theCell);
-		      }
-		}else
-		  newObj = NewCopyObject( AutObj, theCell);
-		*theCell = (ref(Object)) Offset( newObj, -Distance);
-	    }
+	  }else
+	    newObj = NewCopyObject( AutObj, theCell);
+	  *theCell = (ref(Object)) Offset( newObj, -Distance);
 	}
-	DEBUG_IOA( Claim( !inIOA(*theCell),"ProcessReference: !inIOA(*theCell)"));
+      }
+      DEBUG_IOA( Claim( !inIOA(*theCell),"ProcessReference: !inIOA(*theCell)"));
     }else{
       /* '*theCell' is pointing outside IOA */
       /* If the forward pointer refers an AOA object, insert
@@ -423,66 +429,66 @@ void ProcessReference( theCell)
 	return;
       }
     }
-}
-
-/*
- * ProcessObject:
- *  Takes as input a reference to an object residing in the ToSpace.
- *  It traverses the object and processes all the references in it.    
- */
-
-void ProcessObject(theObj)
-     ref(Object) theObj;
-{ ref(ProtoType) theProto;
+  }
   
-  theProto = theObj->Proto;
+  /*
+   * ProcessObject:
+   *  Takes as input a reference to an object residing in the ToSpace.
+   *  It traverses the object and processes all the references in it.    
+   */
   
-  if( (long) theProto < 0 ){  
+  void ProcessObject(theObj)
+    ref(Object) theObj;
+  { ref(ProtoType) theProto;
+    
+    theProto = theObj->Proto;
+    
+    if( (long) theProto < 0 ){  
       switch( (long) theProto ){
-	case (long) ByteRepPTValue:
-	case (long) WordRepPTValue:
-	case (long) DoubleRepPTValue:
-	case (long) ValRepPTValue: return; /* No references in the type of object, so do nothing*/
+      case (long) ByteRepPTValue:
+      case (long) WordRepPTValue:
+      case (long) DoubleRepPTValue:
+      case (long) ValRepPTValue: return; /* No references in the type of object, so do nothing*/
+	
+      case (long) RefRepPTValue:
+	/* Scan the repetition and follow all entries */
+	{ ptr(long) pointer;
+	  register long size, index;
 	  
-	case (long) RefRepPTValue:
-	  /* Scan the repetition and follow all entries */
-	  { ptr(long) pointer;
-	    register long size, index;
-
-	    size = toRefRep(theObj)->HighBorder;
-	    pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
-	    
-	    for(index=0; index<size; index++) 
-	      if( *pointer != 0 ) ProcessReference( pointer++ );
-	      else pointer++;
+	  size = toRefRep(theObj)->HighBorder;
+	  pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
+	  
+	  for(index=0; index<size; index++) 
+	    if( *pointer != 0 ) ProcessReference( pointer++ );
+	    else pointer++;
 	}
+	
+	return;
+	
+      case (long) ComponentPTValue:
+	{ ref(Component) theComponent;
 	  
-	  return;
-	  
-	case (long) ComponentPTValue:
-	  { ref(Component) theComponent;
-	    
-	    theComponent = Coerce( theObj, Component);
-	    ProcessReference( &theComponent->StackObj);
-	    ProcessReference( &theComponent->CallerComp);
-	    ProcessReference( &theComponent->CallerObj);
-	    ProcessObject( ComponentItem( theComponent));
-	  }
-	  return;
-	  
-	case (long) StackObjectPTValue:
-	  ProcessStackObj((struct StackObject *)theObj);
-	  return;
-	  
-	case (long) StructurePTValue:
-	  ProcessReference( &(toStructure(theObj))->iOrigin );
-	  return;
-
-	case (long) DopartObjectPTValue:
-	  ProcessReference( &(cast(DopartObject)(theObj))->Origin );
-	  return;
+	  theComponent = Coerce( theObj, Component);
+	  ProcessReference( &theComponent->StackObj);
+	  ProcessReference( &theComponent->CallerComp);
+	  ProcessReference( &theComponent->CallerObj);
+	  ProcessObject( ComponentItem( theComponent));
+	}
+	return;
+	
+      case (long) StackObjectPTValue:
+	ProcessStackObj((struct StackObject *)theObj);
+	return;
+	
+      case (long) StructurePTValue:
+	ProcessReference( &(toStructure(theObj))->iOrigin );
+	return;
+	
+      case (long) DopartObjectPTValue:
+	ProcessReference( &(cast(DopartObject)(theObj))->Origin );
+	return;
       }
-  }else{
+    }else{
       struct GCEntry *tab =
 	(struct GCEntry *) ((char *) theProto + theProto->GCTabOff);
       short *refs_ofs;
@@ -505,28 +511,28 @@ void ProcessObject(theObj)
       
       /* Handle all the references in the Object. */
       for (refs_ofs = (short *)&tab->StaticOff + 1; *refs_ofs; ++refs_ofs) {
-	  theCell = (struct Object **) ((char *) theObj + ((*refs_ofs) & (short) ~3));
-	  /* sbrandt 24/1/1994: 2 least significant bits in prototype 
-	   * dynamic offset table masked out. As offsets in this table are
-	   * always multiples of 4, these bits may be used to distinguish
-	   * different reference types. */ 
-	  if (*theCell ) ProcessReference(theCell);
+	theCell = (struct Object **) ((char *) theObj + ((*refs_ofs) & (short) ~3));
+	/* sbrandt 24/1/1994: 2 least significant bits in prototype 
+	 * dynamic offset table masked out. As offsets in this table are
+	 * always multiples of 4, these bits may be used to distinguish
+	 * different reference types. */ 
+	if (*theCell ) ProcessReference(theCell);
       }
+    }
   }
-}
-
-
-/*
- * ProcessAOAReference:
- *  Takes as input a reference to a cell residing outside IOA.
- *  If the cell refers an object residing in IOA, the 
- *  object is copied to ToSpace/AOA and the cell is updated.
- *  Furthermore one forward reference in the most enclosing
- *  object is inserted in the GC-attribute.
- */
-void ProcessAOAReference( theCell)
-     handle(Object) theCell;
-{
+  
+  
+  /*
+   * ProcessAOAReference:
+   *  Takes as input a reference to a cell residing outside IOA.
+   *  If the cell refers an object residing in IOA, the 
+   *  object is copied to ToSpace/AOA and the cell is updated.
+   *  Furthermore one forward reference in the most enclosing
+   *  object is inserted in the GC-attribute.
+   */
+  void ProcessAOAReference( theCell)
+    handle(Object) theCell;
+  {
     ref(Object) theObj;
     long GCAttribute;
     
@@ -534,43 +540,43 @@ void ProcessAOAReference( theCell)
     theObj = *theCell;
     
     if( inIOA(theObj)){ /* theObj is inside IOA */
-	GCAttribute = theObj->GCAttr;
-	if( GCAttribute > 2048 ){ /* theObj has a forward pointer. */
-	    *theCell = (ref(Object)) GCAttribute;
-	    DEBUG_LVRA( Claim( !inLVRA(GCAttribute),
-			      "ProcessAOAReference: Forward ValRep"));
-	}else{
-	    if( GCAttribute >= 0 ){ /* theObj is an autonomous object. */
-		*theCell = NewCopyObject( theObj, 0);
-		if( !inToSpace( *theCell)){
-		    if( inLVRA( *theCell)){
-			/* Preserve the LVRA-cycle. */
-			((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
-			DEBUG_LVRA( Claim( isValRep(*theCell),
-					  "ProcessAOAReference: isValRep(*theCell)"));
-		    }
-		}
-	    }else{ /* theObj is a part object. */
-		long Distance;
-		ref(Object) newObj;
-		ref(Object) AutObj;
-		
-		Distance = GetDistanceToEnclosingObject( theObj);
-		AutObj = (ref(Object)) Offset( theObj, Distance);
-		if( !isAutonomous(AutObj->GCAttr)) 
-		  newObj = (ref(Object)) AutObj->GCAttr;
-		else
-		  newObj = NewCopyObject( AutObj, 0);
-		*theCell = (ref(Object)) Offset( newObj, -Distance);
+      GCAttribute = theObj->GCAttr;
+      if( GCAttribute > 2048 ){ /* theObj has a forward pointer. */
+	*theCell = (ref(Object)) GCAttribute;
+	DEBUG_LVRA( Claim( !inLVRA(GCAttribute),
+			  "ProcessAOAReference: Forward ValRep"));
+      }else{
+	if( GCAttribute >= 0 ){ /* theObj is an autonomous object. */
+	  *theCell = NewCopyObject( theObj, 0);
+	  if( !inToSpace( *theCell)){
+	    if( inLVRA( *theCell)){
+	      /* Preserve the LVRA-cycle. */
+	      ((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
+	      DEBUG_LVRA( Claim( isValRep(*theCell),
+				"ProcessAOAReference: isValRep(*theCell)"));
 	    }
+	  }
+	}else{ /* theObj is a part object. */
+	  long Distance;
+	  ref(Object) newObj;
+	  ref(Object) AutObj;
+	  
+	  Distance = GetDistanceToEnclosingObject( theObj);
+	  AutObj = (ref(Object)) Offset( theObj, Distance);
+	  if( !isAutonomous(AutObj->GCAttr)) 
+	    newObj = (ref(Object)) AutObj->GCAttr;
+	  else
+	    newObj = NewCopyObject( AutObj, 0);
+	  *theCell = (ref(Object)) Offset( newObj, -Distance);
 	}
+      }
     }else{
-	if( inLVRA( *theCell)){
-	    /* Preserve the LVRA-cycle. */
-	    ((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
-	    DEBUG_LVRA( Claim( isValRep(*theCell), 
-			      "ProcessAOAReference: isValRep(*theCell)"));
-	}
+      if( inLVRA( *theCell)){
+	/* Preserve the LVRA-cycle. */
+	((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
+	DEBUG_LVRA( Claim( isValRep(*theCell), 
+			  "ProcessAOAReference: isValRep(*theCell)"));
+      }
     }
     DEBUG_AOA( Claim( !inIOA(*theCell),"ProcessAOAReference: !inIOA(*theCell)"));
     DEBUG_AOA( if( inAOA( *theCell)){ AOACheckObjectSpecial( *theCell); } );
@@ -584,59 +590,59 @@ void ProcessAOAReference( theCell)
     else if ( isLazyRef (*theCell ) )
       negAOArefsINSERT((long) theCell);
 #endif
-}
-
-/*
- * ProcessAOAObject:
- *  Takes as input a reference to an object residing in the AOA.
- *  It traverse the object and process all the references in it.    
- */
-
-void ProcessAOAObject(theObj)
-     ref(Object) theObj;
-{ ref(ProtoType) theProto;
+  }
   
-  theProto = theObj->Proto;
+  /*
+   * ProcessAOAObject:
+   *  Takes as input a reference to an object residing in the AOA.
+   *  It traverse the object and process all the references in it.    
+   */
   
-  if( (long) theProto < 0 ){  
+  void ProcessAOAObject(theObj)
+    ref(Object) theObj;
+  { ref(ProtoType) theProto;
+    
+    theProto = theObj->Proto;
+    
+    if( (long) theProto < 0 ){  
       switch( (long) theProto ){
-	case (long) ByteRepPTValue: 
-	case (long) WordRepPTValue: 
-	case (long) DoubleRepPTValue: 
-	case (long) ValRepPTValue: 
-	  return; /* No references in the type of object, so do nothing*/
-	case (long) RefRepPTValue:
-	  /* Scan the repetition and follow all entries */
-	  { ptr(long) pointer;
-	    register long size, index;
-	    
-	    size = toRefRep(theObj)->HighBorder;
-	    pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
-	    for(index=0; index<size; index++) 
-	      if( *pointer != 0 ) ProcessAOAReference( pointer++ );
-	      else pointer++;
+      case (long) ByteRepPTValue: 
+      case (long) WordRepPTValue: 
+      case (long) DoubleRepPTValue: 
+      case (long) ValRepPTValue: 
+	return; /* No references in the type of object, so do nothing*/
+      case (long) RefRepPTValue:
+	/* Scan the repetition and follow all entries */
+	{ ptr(long) pointer;
+	  register long size, index;
+	  
+	  size = toRefRep(theObj)->HighBorder;
+	  pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
+	  for(index=0; index<size; index++) 
+	    if( *pointer != 0 ) ProcessAOAReference( pointer++ );
+	    else pointer++;
 	}
-	  return;
-	case (long) ComponentPTValue:
-	  { ref(Component) theComponent;
-	    theComponent = Coerce( theObj, Component);
-	    ProcessAOAReference( &theComponent->StackObj);
-	    ProcessAOAReference( &theComponent->CallerComp);
-	    ProcessAOAReference( &theComponent->CallerObj);
-	    ProcessAOAObject( ComponentItem( theComponent));
+	return;
+      case (long) ComponentPTValue:
+	{ ref(Component) theComponent;
+	  theComponent = Coerce( theObj, Component);
+	  ProcessAOAReference( &theComponent->StackObj);
+	  ProcessAOAReference( &theComponent->CallerComp);
+	  ProcessAOAReference( &theComponent->CallerObj);
+	  ProcessAOAObject( ComponentItem( theComponent));
 	}
-	  return;
-	case (long) StackObjectPTValue:
-	  Claim( FALSE, "ProcessAOAObject: No StackObject in AOA");
-	  return;
-	case (long) StructurePTValue:
-	  ProcessAOAReference( &(toStructure(theObj))->iOrigin );
-	  return;
-	case (long) DopartObjectPTValue:
-	  ProcessAOAReference( &(cast(DopartObject)(theObj))->Origin );
-	  return;
+	return;
+      case (long) StackObjectPTValue:
+	Claim( FALSE, "ProcessAOAObject: No StackObject in AOA");
+	return;
+      case (long) StructurePTValue:
+	ProcessAOAReference( &(toStructure(theObj))->iOrigin );
+	return;
+      case (long) DopartObjectPTValue:
+	ProcessAOAReference( &(cast(DopartObject)(theObj))->Origin );
+	return;
       }
-  }else{
+    }else{
       ptr(short)  Tab;
       ptr(long)   theCell;
       
@@ -658,231 +664,231 @@ void ProcessAOAObject(theObj)
        */
       
       while( *Tab != 0 ){
-	  if( *Tab == -Tab[1] ) 
-	    ProcessAOAObject( Offset( theObj, *Tab * 4));
-	  Tab += 4;
+	if( *Tab == -Tab[1] ) 
+	  ProcessAOAObject( Offset( theObj, *Tab * 4));
+	Tab += 4;
       }
       Tab++;
       
       /* Handle all the references in the Object. */
       while( *Tab != 0 ){
-	  theCell = (ptr(long)) Offset( theObj, ((*Tab++) & (short) ~3) );
-	  /* sbrandt 24/1/1994: 2 least significant bits in prototype 
-	   * dynamic offset table masked out. As offsets in this table are
-	   * always multiples of 4, these bits may be used to distinguish
-	   * different reference types. */ 
-	  if( *theCell != 0 ) ProcessAOAReference( theCell );
+	theCell = (ptr(long)) Offset( theObj, ((*Tab++) & (short) ~3) );
+	/* sbrandt 24/1/1994: 2 least significant bits in prototype 
+	 * dynamic offset table masked out. As offsets in this table are
+	 * always multiples of 4, these bits may be used to distinguish
+	 * different reference types. */ 
+	if( *theCell != 0 ) ProcessAOAReference( theCell );
       }
+    }
   }
-}
-
-/*
- * CompleteScavenging:
- *  Process all the objects in the ToSpace, which has not been handled yet.
- *  i.e. objects coiped to ToSpace since last call of CompleteScavenging.
- *  The reason that this is done "stepwise" is to ensure the locallity of 
- *  related objects, to avoid unnecessary swapping. 
- */
-
-void CompleteScavenging()
-{
-    ref(Object) theObj;
-    
-    while( HandledInToSpace < ToSpaceTop){
+  
+  /*
+   * CompleteScavenging:
+   *  Process all the objects in the ToSpace, which has not been handled yet.
+   *  i.e. objects coiped to ToSpace since last call of CompleteScavenging.
+   *  The reason that this is done "stepwise" is to ensure the locallity of 
+   *  related objects, to avoid unnecessary swapping. 
+   */
+  void CompleteScavenging()
+    {
+      ref(Object) theObj;
+      
+      while( HandledInToSpace < ToSpaceTop){
 	theObj = (ref(Object)) HandledInToSpace;
 	HandledInToSpace = (ptr(long)) (((long) HandledInToSpace)
 					+ 4*ObjectSize(theObj));
 	DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0") );
 	ProcessObject( theObj);
+      }
+      DEBUG_IOA( Claim( HandledInToSpace == ToSpaceTop,
+		       "CompleteScavenging: HandledInToSpace == ToSpaceTop"));
     }
-    DEBUG_IOA( Claim( HandledInToSpace == ToSpaceTop,
-		     "CompleteScavenging: HandledInToSpace == ToSpaceTop"));
-}
-
-/*
- * GetDistanceToEnclosingObject:
- *  Find the offset (negative) to the most inclosing object e.g.
- *  the offset to the autonomous object in which theObj reside.  
- */
-
-long GetDistanceToEnclosingObject( theObj)
-     ref(Object)theObj;
-{
+  
+  /*
+   * GetDistanceToEnclosingObject:
+   *  Find the offset (negative) to the most inclosing object e.g.
+   *  the offset to the autonomous object in which theObj reside.  
+   */
+  
+  long GetDistanceToEnclosingObject( theObj)
+    ref(Object)theObj;
+  {
     long Distance, GCAttribute;
     
     Distance = 0;
     GCAttribute = theObj->GCAttr*4;
     while( GCAttribute < 0 ){
-	Distance += GCAttribute; 
-	theObj = (struct Object *) Offset( theObj, GCAttribute);
-	GCAttribute = theObj->GCAttr*4;
+      Distance += GCAttribute; 
+      theObj = (struct Object *) Offset( theObj, GCAttribute);
+      GCAttribute = theObj->GCAttr*4;
     }
     return Distance;
-}
-
+  }
+  
 #ifdef RTDEBUG
-void IOACheck()
-{
-    ref(Object) theObj;
-    long        theObjectSize;
-    
-    theObj = (ref(Object)) IOA;
-    /*fprintf(output, "\n");*/
-    while ((long *) theObj < IOATop) {
-      Claim(theObj->Proto, "IOACheck: theObj->Proto");
-      theObjectSize = 4*ObjectSize(theObj);
-      Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0");
-
-      IOACheckObject (theObj);
-      theObj = (ref(Object)) Offset(theObj, theObjectSize);
+  void IOACheck()
+    {
+      ref(Object) theObj;
+      long        theObjectSize;
+      
+      theObj = (ref(Object)) IOA;
+      /*fprintf(output, "\n");*/
+      while ((long *) theObj < IOATop) {
+	Claim(theObj->Proto, "IOACheck: theObj->Proto");
+	theObjectSize = 4*ObjectSize(theObj);
+	Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0");
+	IOACheckObject (theObj);
+	theObj = (ref(Object)) Offset(theObj, theObjectSize);
+      }
     }
-}
-
-void IOACheckObject (theObj)
-     ref(Object) theObj;
-{
+  
+  void IOACheckObject (theObj)
+    ref(Object) theObj;
+  {
     ref(ProtoType) theProto;
     
     theProto = theObj->Proto;
-
+    
     /* DEBUG_IOA(printf("IOACheckObject: theObj = %x\n", theObj)); */
     Claim( !inBetaHeap(theProto),"#IOACheckObject: !inBetaHeap(theProto)");
     
     if( (long) theProto < 0 ){  
-	switch( (long) theProto ){
-	  case (long) ByteRepPTValue:
-	  case (long) WordRepPTValue:
-	  case (long) DoubleRepPTValue:
-	  case (long) ValRepPTValue:
-	    /* No references in the type of object, so do nothing*/
-	    return;
-	    
-	  case (long) RefRepPTValue:
-	    /* Scan the repetition and follow all entries */
-	    { ptr(long) pointer;
-	      register long size, index;
-	      
-	      size = toRefRep(theObj)->HighBorder;
-	      pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
-	      
-	      for(index=0; index<size; index++) 
+      switch( (long) theProto ){
+      case (long) ByteRepPTValue:
+      case (long) WordRepPTValue:
+      case (long) DoubleRepPTValue:
+      case (long) ValRepPTValue:
+	/* No references in the type of object, so do nothing*/
+	return;
+	
+      case (long) RefRepPTValue:
+	/* Scan the repetition and follow all entries */
+	{ ptr(long) pointer;
+	  register long size, index;
+	  
+	  size = toRefRep(theObj)->HighBorder;
+	  pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
+	  
+	  for(index=0; index<size; index++) 
 #ifdef RTLAZY
-		if( *pointer > 0) IOACheckReference( pointer++ );
+	    if( *pointer > 0) IOACheckReference( pointer++ );
 #else
-	        if( *pointer != 0) IOACheckReference( pointer++ );
+	  if( *pointer != 0) IOACheckReference( pointer++ );
 #endif
-		else pointer++;
-	  }
-	    
-	    return;
-	    
-	  case (long) ComponentPTValue:
-	    { ref(Component) theComponent;
-	      
-	      theComponent = Coerce( theObj, Component);
-	      if (theComponent->StackObj == (ref(StackObject))-1) {
-		  /*  printf("\nIOACheckObject: theComponent->StackObj=-1, skipped!\n"); */
-	      } else {
-		  IOACheckReference( &theComponent->StackObj);
-	      }
-	      IOACheckReference( &theComponent->CallerComp);
-	      IOACheckReference( &theComponent->CallerObj);
-	      IOACheckObject( ComponentItem( theComponent));
-	  }
-	    return;
-	    
-	  case (long) StackObjectPTValue:
-	    { ref(StackObject) theStackObject;
-	      ptr(long)        stackptr; 
-	      handle(Object)   theCell; 
-	      ptr(long)        theEnd;
-	      
-	      theStackObject = Coerce(theObj, StackObject);
-	      
-	      theEnd = &theStackObject->Body[0] + theStackObject->StackSize;
-	      
-	      for( stackptr = &theStackObject->Body[0]; stackptr < theEnd; stackptr++){
-		  if( inIOA( *stackptr)){
-		      theCell = (handle(Object)) stackptr;
-		      if( isObject( *theCell ) ) IOACheckReference( stackptr);
-		  }else{
-		      switch( *stackptr ){
-			case -8: stackptr++;
-			case -7: stackptr++;
-			case -6: stackptr++;
-			case -5: stackptr++;
-			  break;
-		      }
-		  }
-	      }
-	  }
-	    return;
-	    
-	  case (long) StructurePTValue:
-	    IOACheckReference( &(toStructure(theObj))->iOrigin );
-	    return;
-	  case (long) DopartObjectPTValue:
-	    IOACheckReference( &(cast(DopartObject)(theObj))->Origin );
-	    return;
+	  else pointer++;
 	}
+	
+	return;
+	
+      case (long) ComponentPTValue:
+	{ ref(Component) theComponent;
+	  
+	  theComponent = Coerce( theObj, Component);
+	  if (theComponent->StackObj == (ref(StackObject))-1) {
+	    /*  printf("\nIOACheckObject: theComponent->StackObj=-1, skipped!\n"); */
+	  } else {
+	    IOACheckReference( &theComponent->StackObj);
+	  }
+	  IOACheckReference( &theComponent->CallerComp);
+	  IOACheckReference( &theComponent->CallerObj);
+	  IOACheckObject( ComponentItem( theComponent));
+	}
+	return;
+	
+      case (long) StackObjectPTValue:
+	{ ref(StackObject) theStackObject;
+	  ptr(long)        stackptr; 
+	  handle(Object)   theCell; 
+	  ptr(long)        theEnd;
+	  
+	  theStackObject = Coerce(theObj, StackObject);
+	  
+	  theEnd = &theStackObject->Body[0] + theStackObject->StackSize;
+	  
+	  for( stackptr = &theStackObject->Body[0]; stackptr < theEnd; stackptr++){
+	    if( inIOA( *stackptr)){
+	      theCell = (handle(Object)) stackptr;
+	      if( isObject( *theCell ) ) IOACheckReference( stackptr);
+	    }else{
+	      switch( *stackptr ){
+	      case -8: stackptr++;
+	      case -7: stackptr++;
+	      case -6: stackptr++;
+	      case -5: stackptr++;
+		break;
+	      }
+	    }
+	  }
+	}
+	return;
+	
+      case (long) StructurePTValue:
+	IOACheckReference( &(toStructure(theObj))->iOrigin );
+	return;
+      case (long) DopartObjectPTValue:
+	IOACheckReference( &(cast(DopartObject)(theObj))->Origin );
+	return;
+      }
     } else {
-	short *Tab;
-	long *theCell;
-	
-	/* Calculate a pointer to the GCTabel inside the ProtoType. */
-	Tab = (short *) ((long) theProto + (long) theProto->GCTabOff);
-	
-	/* Handle all the static objects. 
-	 * The static table have the following structure:
-	 * { .word Offset
-	 *   .word Distance_To_Inclosing_Object
-	 *   .long T_entry_point
-	 * }*
-	 * This table contains all static objects on all levels.
-	 * Here vi only need to perform ProcessObject on static objects
-	 * on 1 level. The recursion in ProcessObject handle other
-	 * levels. 
-	 * The way to determine the level of an static object is to 
-	 * compare the Offset and the Distance_To_Inclosing_Object.
-	 */
-	
-	while( *Tab != 0 ){
-	    if( *Tab == -Tab[1] ) 
-	      IOACheckObject( Offset( theObj, *Tab * 4));
-	    Tab += 4;
-	}
-	Tab++;
-	
-	/* Handle all the references in the Object. */
-	while (*Tab != 0) {
-	  theCell = (long *) Offset(theObj, ((*Tab++) & (short) ~3));
-	  /* sbrandt 24/1/1994: 2 least significant bits in prototype 
-	   * dynamic offset table masked out. As offsets in this table are
-	   * always multiples of 4, these bits may be used to distinguish
-	   * different reference types. */ 
+      short *Tab;
+      long *theCell;
+      
+      /* Calculate a pointer to the GCTabel inside the ProtoType. */
+      Tab = (short *) ((long) theProto + (long) theProto->GCTabOff);
+      
+      /* Handle all the static objects. 
+       * The static table have the following structure:
+       * { .word Offset
+       *   .word Distance_To_Inclosing_Object
+       *   .long T_entry_point
+       * }*
+       * This table contains all static objects on all levels.
+       * Here vi only need to perform ProcessObject on static objects
+       * on 1 level. The recursion in ProcessObject handle other
+       * levels. 
+       * The way to determine the level of an static object is to 
+       * compare the Offset and the Distance_To_Inclosing_Object.
+       */
+      
+      while( *Tab != 0 ){
+	if( *Tab == -Tab[1] ) 
+	  IOACheckObject( Offset( theObj, *Tab * 4));
+	Tab += 4;
+      }
+      Tab++;
+      
+      /* Handle all the references in the Object. */
+      while (*Tab != 0) {
+	theCell = (long *) Offset(theObj, ((*Tab++) & (short) ~3));
+	/* sbrandt 24/1/1994: 2 least significant bits in prototype 
+	 * dynamic offset table masked out. As offsets in this table are
+	 * always multiples of 4, these bits may be used to distinguish
+	 * different reference types. */ 
 #ifdef RTLAZY
-	    if (*theCell > 0) IOACheckReference(theCell);
+	if (*theCell > 0) IOACheckReference(theCell);
 #else
-	    if (*theCell != 0) IOACheckReference(theCell);
+	if (*theCell != 0) IOACheckReference(theCell);
 #endif
-	}
+      }
     }
-}
-
-void IOACheckReference(theCell)
-     handle(Object) theCell;
-{
+  }
+  
+  void IOACheckReference(theCell)
+    handle(Object) theCell;
+  {
     if( *theCell ){
-	if (!(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)))
-	  Claim( inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell),
-		"IOACheckReference: *theCell inside IOA, AOA or LVRA");
-	if( inLVRA(*theCell) ){
-	    Claim( ((ref(ValRep)) *theCell)->GCAttr == (long) theCell,
-		  "IOACheckReference:  ((ref(ValRep)) *theCell)->GCAttr == theCell");
-	    DEBUG_LVRA( Claim( isValRep(*theCell),
-			      "IOACheckReference: isValRep(*theCell)"));
-	}
+      if (!(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell))) {
+	fprintf (stderr, "theCell = 0x%x, *theCell = 0x%x\n", theCell, *theCell);
+	Claim( inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell),
+	      "IOACheckReference: *theCell inside IOA, AOA or LVRA");
+      }
+      if( inLVRA(*theCell) ){
+	Claim( ((ref(ValRep)) *theCell)->GCAttr == (long) theCell,
+	      "IOACheckReference:  ((ref(ValRep)) *theCell)->GCAttr == theCell");
+	DEBUG_LVRA( Claim( isValRep(*theCell),
+			  "IOACheckReference: isValRep(*theCell)"));
+      }
     }
-}
-
+  }
+  
 #endif /* RTDEBUG */
