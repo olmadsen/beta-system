@@ -1,0 +1,439 @@
+ORIGIN 'documentationgenerator';
+INCLUDE '~beta/basiclib/file'
+        '../component/component'
+        '../code/match'
+        'htmlgenerator';
+-- DocumentationGeneratorInit: DoPart --
+do
+   (if frag[] <> none then
+         (# e: @diskEntry; 
+         do
+            (frag.father).fullname->fileName[];
+            '.html'->fileName.append;
+            fileName[]->e.path;
+            e.path.name.suffix->documentTitle[];
+            
+         #)
+   if);
+   true->preformatComments;
+   INNER ;
+     
+
+-- DocumentationGeneratorGenerate: DoPart --
+do
+     (#
+        methodProto,virtualProto: ^astInterface.expanded;
+        tmpFrag: ^astInterface.fragmentForm;
+        gram: @grammar;
+        f: @file;
+        emptyDoPart: ^astInterface.beta.doPart;
+        makeAttributesUnexpanded:
+          (# proto: ^astInterface.expanded; 
+          enter proto[]
+          do
+             l:
+             gram.attributes
+               ->proto.suffixWalkForProd
+                 (#
+                    unExp: ^astInterface.unExpanded;
+                    father: ^astInterface.expanded;
+                    
+                 do
+                    (gram.attributes,tmpFrag[])->MPS.betaCFL.newUnexpanded
+                      ->unExp[];
+                    gram.attributes->unExp.nonTerminalSymbol;
+                    current.father->father[];
+                    (current.sonNo,unExp[])->father.put;
+                    leave l;
+                    
+                 #);
+             
+          #);
+        removeStar:
+          (# in,out: ^text; 
+          enter in[]
+          do
+             &text[]->out[];
+             in.scanAll
+               (#  do (if ch <> '*' then ch->out.put;  if);  #);
+             
+          exit out[]
+          #);
+        attributeEntry:
+          (#
+             name: ^text;
+             theCode: ^astInterface.expanded;
+             node: ^astInterface.beta.attributeDecl;
+             comment: ^text;
+             init:
+               (#
+                  comp: @component;
+                  extractComments:
+                    (# 
+                    do
+                       &text[]->comment[];
+                       theCode.suffixWalk
+                         (# 
+                         do
+                            (if current.hasComment then
+                                current.scanComments
+                                  (# 
+                                  do
+                                     (if current[] <> none then
+                                         current[]->removeStar->comment.append
+                                     if)
+                                  #);
+                                none ->current.addComment
+                            if)
+                         #)
+                    #)
+               enter node[]
+               do
+                  node[]->comp.node[];
+                  comp.name->name[];
+                  tmpFrag[]->node.copy->theCode[];
+                  extractComments;
+                  (if includeCode then
+                      l:
+                      gram.objectDescriptor
+                        ->theCode.suffixWalkForProd
+                          (#  do current[]->theCode[]; leave l;  #);
+                      (if not includeDoPart then
+                          gram.doPart
+                            ->theCode.suffixWalkForProd
+                              (# father: ^astInterface.expanded
+                              do
+                                 current.father->father[];
+                                 (current.sonNo,emptyDoPart[])->father.put
+                              #)
+                      if)
+                   else
+                      none ->theCode[]
+                  if);
+                  
+               #);
+             prettyprintCode:
+               (# str: ^text
+               do &text[]->str[]; (theCode[],str[])->pretty.printNode
+               exit str[]
+               #)
+          #);
+        patternEntry:
+          (#
+             name: ^text;
+             comment: ^text;
+             node: ^astInterface.beta.patternDecl;
+             init:
+               (# comp: @component
+               enter node[]
+               do
+                  node[]->comp.node[];
+                  comp.name->name[];
+                  comp.getComment->comment[];
+                  simpleMethods.init;
+                  virtualMethods.init;
+                  comp.scan
+                    (# anEntry: ^attributeEntry
+                    do
+                       (if (MPS.AST[],current[],methodProto[])->match then
+                           &attributeEntry[]->anEntry[];
+                           current[]->anEntry.init;
+                           anEntry[]->simpleMethods.append
+                        else
+                           (if (MPS.AST[],current[],virtualProto[])->match then
+                               &attributeEntry[]->anEntry[];
+                               current[]->anEntry.init;
+                               anEntry[]->virtualMethods.append
+                           if)
+                       if)
+                    #)
+               #);
+             simpleMethods: @list (# element:: attributeEntry #);
+             virtualMethods: @list (# element:: attributeEntry #)
+          #);
+        document:
+          (#
+             patterns: @list (# element:: patternEntry #);
+             theAttributes: ^astInterface.beta.attributes;
+             frag: ^astInterface.fragmentForm;
+             comment: ^text;
+             init:
+               (# theAttributesForm: @MPS.betacfl.attributesForm
+               enter frag[]
+               do
+                  frag.root.index->theAttributesForm.index;
+                  frag[]->theAttributesForm.frag[];
+                  &text[]->comment[];
+                  theAttributesForm.scanComments
+                    (# 
+                    do
+                       (if current[] <> none then
+                           current[]->removeStar->comment.append
+                       if)
+                    #);
+                  theAttributesForm.getAttributes->theAttributes[];
+                  theAttributes.scanComments
+                    (# 
+                    do
+                       (if current[] <> none then
+                           current[]->removeStar->comment.append
+                       if)
+                    #);
+                  patterns.init;
+                  theAttributes.newScan
+                    (# anEntry: ^patternEntry
+                    do
+                       &patternEntry[]->anEntry[];
+                       current[]->anEntry.init;
+                       anEntry[]->patterns.append;
+                       
+                    #)
+               #);
+             output:
+               (# out: ^stream
+               enter out[]
+               do
+                  out[]
+                    ->htmlDocument
+                      (#
+                         outputComment:
+                           (# theComment: ^text
+                           enter theComment[]
+                           do
+                              (if preformatComments then
+                                  formated (#  do theComment[]->emit #)
+                               else
+                                  (if keepNewlinesInComments then
+                                      theComment.reset;
+                                      l:
+                                      (if not theComment.eos then
+                                          theComment.getLine->emit;
+                                          break;
+                                          restart l
+                                      if)
+                                   else
+                                      theComment[]->emit
+                                  if)
+                              if)
+                           #);
+                         outputAttribute:
+                           (# entry: ^attributeEntry
+                           enter entry[]
+                           do
+                              row
+                                (# 
+                                do
+                                   cell
+                                     (# 
+                                     do
+                                        formated
+                                          (#  do entry.name[]->emit #)
+                                     #);
+                                   (if includeCode then
+                                       cell
+                                         (# 
+                                         do
+                                            formated
+                                              (# 
+                                              do entry.prettyprintCode->emit
+                                              #)
+                                         #)
+                                   if);
+                                   cell
+                                     (# 
+                                     do entry.comment[]->outputComment
+                                     #);
+                                   
+                                #);
+                              
+                           #)
+                      do
+                         head;
+                         body
+                           (# 
+                           do
+                              comment[]->outputComment;
+                              patterns.scan
+                                (# 
+                                do
+                                   heading2
+                                     (# 
+                                     do
+                                        italic
+                                          (#  do current.name[]->emit;  #);
+                                        
+                                     #);
+                                   current.comment[]->outputComment;
+                                   (if not current.simpleMethods.empty then
+                                       heading3
+                                         (#  do 'Simple Methods'->emit;  #);
+                                       center
+                                         (# 
+                                         do
+                                            '100%'
+                                              ->table
+                                                (# 
+                                                do
+                                                   row
+                                                     (# 
+                                                     do
+                                                        cell
+                                                          (# 
+                                                          do
+                                                             center
+                                                               (# 
+                                                               do
+                                                                  bold
+                                                                    (# 
+                                                                    do
+                                                                       'Method'
+                                                                         ->emit
+                                                                    #)
+                                                               #)
+                                                          #);
+                                                        (if includeCode then
+                                                            cell
+                                                              (# 
+                                                              do
+                                                                 center
+                                                                   (# 
+                                                                   do
+                                                                      bold
+                                                                        (# 
+                                                                        do
+                                                                           'Code'
+                                                                             ->
+                                                                               emit
+                                                                        #)
+                                                                   #)
+                                                              #)
+                                                        if);
+                                                        cell
+                                                          (# 
+                                                          do
+                                                             center
+                                                               (# 
+                                                               do
+                                                                  bold
+                                                                    (# 
+                                                                    do
+                                                                       'Description'
+                                                                         ->emit
+                                                                    #)
+                                                               #)
+                                                          #);
+                                                        
+                                                     #);
+                                                   current.simpleMethods.scan
+                                                     (# 
+                                                     do
+                                                        current[]
+                                                          ->outputAttribute
+                                                     #);
+                                                   
+                                                #);
+                                            
+                                         #)
+                                   if);
+                                   (if not current.virtualMethods.empty then
+                                       heading3
+                                         (# 
+                                         do 'Virtual Methods'->emit; 
+                                         #);
+                                       center
+                                         (# 
+                                         do
+                                            '100%'
+                                              ->table
+                                                (# 
+                                                do
+                                                   row
+                                                     (# 
+                                                     do
+                                                        cell
+                                                          (# 
+                                                          do
+                                                             center
+                                                               (# 
+                                                               do
+                                                                  bold
+                                                                    (# 
+                                                                    do
+                                                                       'Method'
+                                                                         ->emit
+                                                                    #)
+                                                               #)
+                                                          #);
+                                                        (if includeCode then
+                                                            cell
+                                                              (# 
+                                                              do
+                                                                 center
+                                                                   (# 
+                                                                   do
+                                                                      bold
+                                                                        (# 
+                                                                        do
+                                                                           'Code'
+                                                                             ->
+                                                                               emit
+                                                                        #)
+                                                                   #)
+                                                              #)
+                                                        if);
+                                                        cell
+                                                          (# 
+                                                          do
+                                                             center
+                                                               (# 
+                                                               do
+                                                                  bold
+                                                                    (# 
+                                                                    do
+                                                                       'Description'
+                                                                         ->emit
+                                                                    #)
+                                                               #)
+                                                          #);
+                                                        
+                                                     #);
+                                                   current.virtualMethods.scan
+                                                     (# 
+                                                     do
+                                                        current[]
+                                                          ->outputAttribute
+                                                     #);
+                                                   
+                                                #);
+                                            
+                                         #)
+                                   if)
+                                #);
+                              
+                           #);
+                         
+                      #)
+               #)
+          #);
+        theDocument: @document;
+        
+     do
+        filename[]->f.name;
+        f.openWrite;
+        MPS.betaCFL[]->MPS.AST.newFragmentForm->tmpFrag[];
+        (tmpFrag[],'do',gram.doPart)->parseText->emptyDoPart[];
+        (tmpFrag[],
+         '<<nameDcl>>: <<prefix>> (# <<attributes>> <<enterPart>> do <<imperatives>> <<exitPart>> #)',
+         gram.attributeDecl)->parseText->methodProto[];
+        methodProto[]->makeAttributesUnexpanded;
+        (tmpFrag[],
+         '<<nameDcl>>:< <<prefix>> (# <<attributes>> <<enterPart>> do <<imperatives>> <<exitPart>> #)',
+         gram.attributeDecl)->parseText->virtualProto[];
+        virtualProto[]->makeAttributesUnexpanded;
+        frag[]->theDocument.init;
+        f[]->theDocument.output;
+        f.close;
+        
+     #);
+     
+
