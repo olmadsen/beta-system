@@ -17,10 +17,20 @@ INCLUDE '../../mpsstuff/mpsutils';
 INCLUDE '../../dialogs/spacingdialog';
 INCLUDE '../classinfo';
 INCLUDE '../../dragmanager/dragmanager';
+INCLUDE '../../buildermenu';
+
 
 MDBODY default 'X11/graphicaleditor_X11body';
 
 
+-- InterfaceBuilderGraphicalEditorWindowMenubarOpen: doPart --
+do this(graphicalEditor).private.theFileMenu.open;
+   this(graphicalEditor).private.theFileMenu[] -> append;
+   this(graphicalEditor).private.theEditMenu.open;
+   this(graphicalEditor).private.theEditMenu[] -> append;
+   this(graphicalEditor).private.theAlignMenu.open;
+   this(graphicalEditor).private.theAlignMenu[] -> append;;
+   
 -- lib: attributes --
 getMPS: objectPool.get
   (# type:: astInterface;
@@ -76,21 +86,13 @@ delay:
   #);
 
 -- windowitemEditornew: doPart --
-do (# theAttributeDecl: ^astInterface.beta.attributeDecl;
-      className, instanceName: ^text;
-      theAttributes: ^astInterface.beta.attributes;
+do (# 
    do  (if data[] = none then
            newData;
        if);
-      (if node[]= None then
-          owner.getMainAttributes -> theAttributes[];
-          type -> getClassName -> className[];
-          (type, data.id) -> freshName -> instanceName[];
-          (theAttributes.frag[], instanceName[],className[])
-            -> betaGram.newSingularItem -> theAttributeDecl[];
-          data.id -> theAttributeDecl.guiInfo;
-          theAttributeDecl[] -> owner.appendAttribute;
-          theAttributeDecl[] -> node[];
+      (if node[] = None then
+          newNode;
+          node[] -> owner.appendAttribute;
       if);
       (if this(windowItemEditor)## <= textEditorEditor## then
           this(windowItemEditor)[] -> qua
@@ -111,7 +113,7 @@ do (# theAttributeDecl: ^astInterface.beta.attributeDecl;
       if);
    #);
    inner;
-   generateSimpleOpen;
+   
    
 -- windowItemEditorLib: attributes --
 
@@ -207,10 +209,18 @@ createShadowTree:
 
 delete:
   (# father: ^astInterface.list;
+     oldElements: ^astInterface.astList;
+     deleteInx: @integer;
   do closeCodeDialog;
      closeWindowItem;
      node.father -> father[];
-     node.sonNo -> father.delete;
+     node.sonNo -> deleteInx;
+     deleteInx -> father.delete;
+     &MPS.astList[] -> oldElements[];
+     oldElements.init;
+     node[] -> oldElements.insert;
+     (true, father.frag[], father[], deleteInx, 1, oldElements[])
+       -> theFragServer.notifyListElementsDeleted;
      this(windowitemEditor)[] -> owner.children.delete;
      (#
      do data.id -> owner.deleteOpenImp;
@@ -243,28 +253,34 @@ isPrivateToOwner: booleanValue
      if);
   #);
 
-traverse:
+traverseCallback:
   (# current: ^windowItemEditor;
+     continue: @boolean;
+  enter current[]
+  do true -> continue;
+     inner;
+  exit continue
+  #);
+
+recTraverse:
+  (# callback: ^traverseCallback;
+     editor: ^windowItemEditor;
      theCanvasEditor: ^canvasEditor;
-     forEach:<
-       (# 
-       do inner;
-       #);
-  do this(windowItemEditor)[] -> current[];
-     forEach;
-     (if this(windowItemEditor)## <= canvasEditor## then
-         this(windowItemEditor)[] -> theCanvasEditor[];
-         theCanvasEditor.children.scan
-         (# 
-         do &current.traverse
-            (# forEach:: 
-                 (# 
-                 do current[] -> this(traverse).current[]; 
-                    this(traverse).forEach;
-                 #);
-            #);
-         #);
+  enter (editor[], callback[])
+  do (if editor[] -> callback then
+         (if editor## <= canvasEditor## then
+             editor[] -> theCanvasEditor[];
+             theCanvasEditor.children.scan
+             (# 
+             do (current[], callback[]) -> &recTraverse;
+             #);
+         if);
      if);
+  #);
+
+traverse:
+  (# forEach:< traverseCallback;
+  do (this(windowItemEditor)[], &forEach[]) -> recTraverse;
   #);
      
 closeCodeDialog:
@@ -279,6 +295,30 @@ closeCodeDialog:
 (* 
  * Code
  *)
+
+appendToAttributes:
+  (# theAttribute: ^astInterface.beta.attributeDecl;
+     theAttributes: ^astInterface.beta.attributes;
+     insertInx: @integer;
+  enter (theAttributes[], theAttribute[])
+  do (if theAttributes.empty then
+         (# father: ^astInterface.expanded;
+            sonNo: @integer;
+            newAttributes: ^astInterface.beta.attributes;
+         do theAttributes.father -> father[];
+            theAttributes.sonNo -> sonNo;
+            (father.frag[], theAttribute[])-> betaGram.newAttributes -> newAttributes[];
+            (sonNo, newAttributes[]) -> father.put;
+            (true, father.frag[], theAttributes[], newAttributes[])
+              -> theFragServer.notifyAstReplaced;
+         #);
+      else
+         theAttributes.noOfSons -> insertInx;
+         theAttribute[] -> theAttributes.append;
+         (true, theAttributes.frag[], theAttributes[], insertInx) 
+           -> theFragServer.notifyListElementInserted;
+     if)
+  #);
 
 updateOpen:
   (# theDoPart: ^astInterface.beta.doPart;
@@ -304,6 +344,8 @@ prependOpenImp:
          else
             theDoPart.getImperatives -> theImperatives[];
             (1, imp[]) -> theImperatives.insert;
+            (true, theImperatives.frag[], theImperatives[], 1) 
+              -> theFragServer.notifyListElementInserted;
         if);
      #);
   #);
@@ -334,38 +376,13 @@ appendOpenImp:
              else
                 (insertInx + 1, imp[]) -> theImperatives.insert;
             if);
+            (true, theImperatives.frag[], theImperatives[], insertInx)
+              -> theFragServer.notifyListElementInserted;
         if);
      #);
   #);
 
-deleteOpenImp1:
-  (# theDoPart: ^astInterface.beta.doPart;
-     id: @integer;
-     failure:
-       (# 
-       do
-       #);
-  enter id
-  do (# theImperatives: ^astInterface.beta.imperatives;
-        deleteInx: @integer;
-     do findOpenDoPart -> theDoPart[];
-        (if theDoPart[] = none then
-            failure;
-         else
-            theDoPart.getImperatives -> theImperatives[];
-            l: theImperatives.iterate
-              (# 
-              do (if current.guiInfo = id then
-                     current.sonNo -> deleteInx;
-                     leave l;
-                 if);
-              #);
-            (if deleteInx <> 0 then
-                deleteInx -> theImperatives.delete;
-            if);
-        if);
-     #);
-  #);
+
 
 deleteOpenImp:
   (# theDoPart: ^astInterface.beta.doPart;
@@ -377,20 +394,28 @@ deleteOpenImp:
   enter id
   do (# theImperatives: ^astInterface.beta.imperatives;
         deleteInx: @integer;
+        oldElements: ^astInterface.astList;
      do findOpenDoPart -> theDoPart[];
         (if theDoPart[] = none then
             failure;
          else
+            &MPS.astList[] -> oldElements[];
+            oldElements.init;
             theDoPart.getImperatives -> theImperatives[];
             l: theImperatives.iterate
               (# 
               do (if current.guiInfo = id then
                      current.sonNo -> deleteInx;
+                     current[] -> oldElements.insert;
                      leave l;
                  if);
               #);
             (if deleteInx <> 0 then
+                
                 deleteInx -> theImperatives.delete;
+                (true, theImperatives.frag[], theImperatives[], deleteInx, 1, oldElements[])
+                  -> theFragServer.notifyListElementsDeleted;
+                
             if);
         if);
      #);
@@ -421,7 +446,7 @@ updateInitImp:
   (# theDoPart: ^astInterface.beta.doPart;
   do findOpenDoPart -> theDoPart[];
      (if theDoPart[] <> none then
-         0 -> deleteOpenImp1;
+         0 -> deleteOpenImp;
          theDoPart.frag[] -> generateInitImp -> prependOpenImp;
      if);
   #);
@@ -447,6 +472,17 @@ findVirtual:
   exit theVirtual[]
   #);
 
+appendAttributeToNode:
+  (# node, theAttribute: ^astInterface.beta.attributeDecl;
+  enter (node[], theAttribute[])
+  do 
+     (# theAttributes: ^astInterface.beta.attributes;
+        insertInx: @integer;
+     do node[] -> betaGram.getAttributes -> theAttributes[];
+        (theAttributes[], theAttribute[]) -> appendToAttributes;
+     #);
+  #);
+
 createVirtual:
   (# name: ^text;
      theVirtual: ^astInterface.beta.attributeDecl;
@@ -464,34 +500,52 @@ createVirtual:
             (currentNode[], 'eventHandler') -> betaGram.findAttribute -> currentNode[];
             (if currentNode[] = none then
                 (theAttribute.frag[], 'eventHandler', none) -> betaGram.newVirtualBinding -> currentNode[];
-                (theAttribute[], currentNode[]) -> betaGram.appendAttribute;
+                (theAttribute[], currentNode[]) -> appendAttributeToNode;
             if);
         if);
         (currentNode.frag[], name[], none) -> betaGram.newVirtualBinding -> theVirtual[];
-        (currentNode[], theVirtual[]) -> betaGram.appendAttribute;
+        (currentNode[], theVirtual[]) -> appendAttributeToNode;
      #);
   exit theVirtual[]
   #);
 
 
-
-reEstablishNode:
-  (# gram: @grammar;
-     theExpanded: ^astInterface.expanded;
-  do 
-     this(graphicalEditor).private.contentsEditor.privateAttributes[] -> theExpanded[];
-     l: theExpanded.suffixWalk
-     (# 
-     do (if (current.symbol = gram.simpleDecl) OR (current.symbol = gram.patternDecl) then
-            (if current.hasGUIcomment then
-                (if data.ID = current.guiInfo then
-                    current[] -> node[];
-                    leave l;
-                if);
-            if);
-        if);
-     #);
+handleAstReplaced:
+  (# oldAst, newAst: ^astInterface.AST;
+     succes: @boolean;
+  enter (oldAst[], newAst[])
+  do false -> succes;
+     (if oldAst[] -> node.equal then
+         newAst[] -> node[]; (* !!! Check for validitet *)
+         true -> succes;
+      else
+         (if (node[], newAst[]) -> isAncestor then
+             true -> succes;
+          else
+             (if (oldAst[], node[]) -> isAncestor then
+                 (# theAttributes: ^astInterface.beta.attributes;
+                 do owner.getMainAttributes -> theAttributes[];
+                    (if theAttributes[] <> none then
+                        l: theAttributes.iterate
+                        (# 
+                        do (if current.hasGUIcomment then
+                               (if data.ID = current.guiInfo then
+                                   current[] -> node[];
+                                   true -> succes;
+                                   leave l;
+                               if);
+                           if);
+                        #);
+                    if);
+                 #);
+              else
+                 true -> succes;
+             if);
+         if);
+     if);
+  exit succes
   #);
+
 
 
 createOpenDopart:
@@ -513,11 +567,11 @@ createOpenDopart:
         if);
         
         (node.frag[], 'open', none) -> betaGram.newVirtualBinding -> openDecl[];
-        (node[], openDecl[]) -> betaGram.appendAttribute;
+        (node[], openDecl[]) -> appendAttributeToNode;
         openDecl[] -> betaGram.getObjectDescriptor -> theObjectDescriptor[];
         (if isPrivateToWindow then
             node.frag[] -> betaGram.newDoPart ->  theDoPart[];
-            (theObjectDescriptor[], theDoPart[]) -> betaGram.setDoPart;
+            (theObjectDescriptor[], theDoPart[]) -> betaGram.setDoPart; (* !!! NOTIFY !!! *)
          else
             node[] -> betaGram.getName -> slotName[];
             'Open' -> slotName.append;
@@ -575,17 +629,12 @@ findOpenDoPart:
   exit theDoPart[]
   #);
 
-generateSimpleOpen:
+generateSimpleOpen: (* !!! NOTIFY !!! *)
   (# theDoPart: ^astInterface.beta.doPart;
      theImperatives, oldImperatives: ^astInterface.beta.imperatives;
      theImp: ^astInterface.beta.imp;
      theInnerImp: ^astInterface.beta.innerImp;
-  do 
-     false -> findOpenDoPart -> theDoPart[];
-     (if theDoPart[] = none then
-         false -> createOpenDopart -> theDoPart[];
-     if);
-     theDoPart.getImperatives -> oldImperatives[];
+  do false -> createOpenDopart -> theDoPart[];
      (betaGram.imperatives, theDoPart.frag[]) 
        -> betaGram.newAst 
        -> theImperatives[] 
@@ -604,15 +653,9 @@ generateSimpleOpen:
            -> betaGram.newOptional 
            -> theInnerImp.putNameAplOpt;
      if);
-     (if oldImperatives[]<>none then
-         oldImperatives.iterate
-         (# 
-         do theDoPart.frag[] -> current.copy -> theImperatives.smartAppend;
-         #);
-     if);
   #);
 
-changeOwner:
+changeOwnerOld:
   (# newOwner: ^canvasEditor;
      theAttribute: ^astInterface.beta.attributeDecl;
      theAttributes: ^astInterface.beta.attributes;
@@ -644,6 +687,13 @@ changeOwner:
      
   #);
 
+changeOwner:
+  (# newOwner: ^canvasEditor;  
+  enter newOwner[]
+  do delete;
+     newOwner[] -> owner[];
+     reInsert;
+  #);
 
 handleMouseDown: theWindowItem.mouseDownAction
   (# 
@@ -795,20 +845,6 @@ do (#
       private.theViewsPalette.open;
       private.theToolPalette.open;
       selectMode -> private.mode;
-      
-      ('PushButton',pushButtonEditor##) -> addObjectSpecification;
-      ('StaticText',staticTextEditor##) -> addObjectSpecification;
-      ('TextScrollList',textScrollListEditor##) -> addObjectSpecification;
-      ('Scroller',scrollerEditor##) -> addObjectSpecification;
-      ('Canvas',canvasEditor##) -> addObjectSpecification;
-      ('IconButton',iconButtonEditor##) -> addObjectSpecification;
-      ('OptionButton',optionButtonEditor##) -> addObjectSpecification;
-      ('RadioButton',radioButtonEditor##) -> addObjectSpecification;
-      ('CheckBox',checkBoxEditor##) -> addObjectSpecification;
-      ('ScrollBar',scrollbarEditor##) -> addObjectSpecification;
-      ('EditText',editTextEditor##) -> addObjectSpecification;
-      ('TextField',textFieldEditor##) -> addObjectSpecification;
-      ('TextEditor',textEditorEditor##) -> addObjectSpecification;
       private.initEditorGenerator;
       private.initNames;
       private.initSizes;
@@ -826,6 +862,8 @@ do (#
 do 
    
 -- graphicalEditorLib: attributes --
+
+
 (*
  * container types
  *)
@@ -1424,30 +1462,6 @@ contentsEditorObject:
   exit private.contentsEditorObject[]
   #);
 
-objectSpecification:
-  (# ID: ^text;
-     type: ##windowItemEditor;
-  #);
-addObjectSpecification:
-  (# type: ##windowItemEditor;
-     ID: ^text;
-     spec: ^objectSpecification;
-  enter (ID[],type##)
-  do &objectSpecification[] -> spec[];
-     ID[] -> spec.ID[];
-     type## -> spec.type##;
-     spec[] -> private.objectSpecificationList.append;
-  #);
-uniqueID:
-  (# 
-  do private.currentId + 1 -> private.currentId;
-  exit private.currentId
-  #);
-currentType:
-  (# 
-  enter private.currentType##
-  exit private.currentType##
-  #);
 
 
 translateRect:
@@ -1458,9 +1472,107 @@ translateRect:
      (r.bottomRight, from[], to[]) -> translate -> r.bottomRight;
   #);
 
-findPrivateAttributes:
-  (# 
-  do findBody;
+
+
+(*
+ * Handling of private attributes
+ *)
+
+findPrivateSlotName:
+  (# slotName: ^text;
+  do (# theAst: ^astInterface.AST;
+        theSimpleDecl: ^astInterface.beta.simpleDecl;
+        theReferenceSpecification: ^astInterface.beta.ReferenceSpecification;
+        theStaticItem: ^astInterface.beta.staticItem;
+        theUnExpanded: ^astInterface.unExpanded;
+        theSlotDesc: ^astInterface.slotDesc;
+     do (node[], 'private') -> betaGram.findAttribute -> theAst[];
+        (if theAst[] <> none then
+            (if theAst.symbol = betaGram.simpleDecl then
+                theAst[] -> theSimpleDecl[];
+                theSimpleDecl.getReferenceSpecification -> theReferenceSpecification[];
+                (if theReferenceSpecification.symbol = betagram.staticItem then
+                    theReferenceSpecification[] -> theStaticItem[];
+                    theStaticItem.getObjectSpecification -> theAst[];
+                    (if theAst.kind = MPS.kinds.unExpanded then
+                        theAst[] -> theUnExpanded[];
+                        (if theUnExpanded.isSlot then
+                            theUnExpanded.theSlot -> theSlotDesc[];
+                            theSlotDesc.name -> slotName[];
+                         else
+                            failure;
+                        if);
+                     else
+                        failure;
+                    if);
+                 else
+                    failure;
+                if);
+             else
+                failure;
+            if);
+         else
+            failure;
+        if);
+     #);
+  exit slotName[]
+  #);
+
+findPrivate:
+  (# failure:< object;
+  do findBody -> private.body[];
+     (if private.body[] <> none then
+         true -> private.body.changed;
+         (# slotName: ^text;
+            frag: ^astInterface.fragmentForm;
+         do findPrivateSlotName -> slotName[];
+            (if slotName[] <> none then
+                slotName[] -> private.body.findFragment -> frag[];
+                (if frag[] <> none then 
+                    (if frag.category = betaGram.descriptorForm then
+                        frag[] -> private.privateFrag[];
+                        private.privateFrag[] -> private.privateFragHandler.frag[];
+                        private.privateFragHandler[] -> theFragServer.subscribe;
+                     else
+                        failure;
+                    if);
+                 else
+                    failure;
+                if);
+             else
+                failure;
+            if);
+         #);
+      else
+         failure;
+     if);
+  #);
+findBody:
+  (# failure:< object;
+     body: ^astInterface.fragmentGroup;
+  do (# group: ^astInterface.fragmentGroup;
+        fullPath: ^text;
+     do node.frag.father -> group[];
+        (if group[] <> none then
+            search: group.scanBodyGroups
+              (# 
+              do 
+                 currentFullPath[] -> fullPath[];
+                 leave search;
+              #);
+            (if fullPath[] <> none then
+                fullPath[] -> MPS.safeOpen -> body[];
+                (if body[] = none then
+                    failure;
+                if);
+             else
+                failure;
+            if);
+         else
+            failure;
+        if);
+     #);
+  exit body[]
   #);
 
 createPrivateAttributes:
@@ -1477,7 +1589,7 @@ createPrivateAttributes:
      theMainPart: ^astInterface.beta.mainPart;
      name: ^text;
      privateFrag: ^astInterface.fragmentForm;
-  do body -> group[];
+  do private.body[] -> group[];
      (if group[]<>None then
          node.frag[] -> frag[];
          (betaGram.simpleDecl, frag[]) -> betaGram.newAst -> theSimpleDecl[];
@@ -1499,44 +1611,481 @@ createPrivateAttributes:
          (privateFrag[], none) 
            -> betaGram.newDescriptorForm -> theDescriptorForm[]
            -> privateFrag.root[];
+         privateFrag[] -> private.privateFrag[];
+         private.privateFrag[] -> private.privateFragHandler.frag[];
+         private.privateFragHandler[] -> theFragServer.subscribe;
      else
          failure;
      if);
   #);
 
-findBody:
+createBody:
   (# group: ^astInterface.fragmentGroup;
      theBody: ^astInterface.fragmentGroup;
      name, fullPath: ^text;
   do node.frag.father -> group[];
-     
-     search: group.scanBodyGroups
-       (# 
-       do currentLocalPath[] -> name[];
-          currentFullPath[] -> fullPath[];
-          leave search;
-       #);
-     (if name[] = none then
-         
-         group.shortName -> name[];
-         'body' -> name.append;
-         name[] -> group.fullPath -> fullPath[];
-         'BODY' -> group.prop.addProp
-         (# 
-         do name[] -> addString;
-         #);
-     if);
-     fullPath[] -> MPS.safeOpen -> theBody[];
-     (if theBody[] = None then
-         fullPath[] -> MPS.top.newGroup -> theBody[];
-         group.shortName -> theBody.originProperty;
-     if);
-     theBody[] -> body;
+     group.shortName -> name[];
+     'body' -> name.append;
+     name[] -> group.fullPath -> fullPath[];
+     'BODY' -> group.prop.addProp
+     (# 
+     do name[] -> addString;
+     #);
+     fullPath[] -> MPS.top.newGroup -> theBody[];
+     group.shortName -> theBody.originProperty;
+     theBody[] -> private.body[];
      true -> theBody.changed;
+     true -> group.changed;
   #);
 
 -- graphicalEditorPrivate: descriptor --
-(#
+(# 
+   theFileMenu: @builderMenu
+     (# 
+        closeItem: @builderItem
+          (# eventHandler::
+               (# onStatus::
+                    (# 
+                    do true -> value;
+                    #);
+                  onSelect::
+                    (# 
+                    do this(graphicalEditor).close;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Close' -> name;
+                  'W' -> key;
+               #);
+          #);
+        saveItem: @builderItem
+          (# eventHandler::
+               (# onStatus::
+                    (# 
+                    do true -> value;
+                    #);
+                  onSelect::
+                    (# 
+                    do save;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Save all' -> name;
+                  'S' -> key;
+               #);
+          #);
+        open::
+          (# 
+          do 'File' -> name;
+             closeItem.open;
+             saveItem.open;
+          #);
+     #);
+   theEditMenu: @builderMenu
+     (# undoItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do undo;
+                    #);
+                  onStatus::
+                    (# t: ^text;
+                    do (if canUndo then 
+                           'Undo ' -> t[];
+                           undoText -> t.append;
+                           t[] -> name;
+                           true -> value;
+                        else
+                           'Undo' -> name;
+                           false -> value;
+                       if);
+                    #);
+               #);
+             open::
+               (# 
+               do 'Undo' -> name;
+                  'Z' -> key;
+               #);
+          #);
+        redoItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do redo;
+                    #);
+                  onStatus::
+                    (# t: ^text;
+                    do (if canRedo then 
+                           'Redo ' -> t[];
+                           redoText -> t.append;
+                           t[] -> name;
+                           true -> value;
+                        else
+                           'Redo' -> name;
+                           false -> value;
+                       if);
+                    #);
+               #);
+             open::
+               (# 
+               do 'Redo' -> name;
+                  'R' -> key;
+               #);
+          #);
+        cutItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do selection.doCut;
+                    #);
+                  onStatus::
+                    (# 
+                    do not selection.empty  -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Cut' -> name;
+                  'X' -> key;
+               #);
+          #);
+        copyItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do selection.doCopy;
+                    #);
+                  onStatus::
+                    (# 
+                    do not selection.empty  -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Copy' -> name;
+                  'C' -> key;
+               #);
+          #);
+        pasteItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do paste;
+                    #);
+                  onStatus::
+                    (# 
+                    do canPaste -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Paste' -> name;
+                  'V' -> key;
+               #);
+          #);
+        deleteItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do selection.deleteAll;
+                    #);
+                  onStatus::
+                    (# 
+                    do not selection.empty -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Delete' -> name;
+               #);
+          #);
+        findItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    #);
+                  onStatus::
+                    (# 
+                    do false -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Find...' -> name;
+               #);
+          #);
+        findAgainItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    #);
+                  onStatus::
+                    (# 
+                    do false -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Find again' -> name;
+               #);
+          #);
+        objectInfoItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do selection.showInfo;
+                    #);
+                  onStatus::
+                    (# 
+                    do not selection.empty -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Object info...' -> name;
+                  'I' -> key;
+               #);
+          #);
+        objectCodeItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do (if selection.empty then
+                           showCode;
+                        else
+                           selection.showCode;
+                       if);
+                    #);
+                  onStatus::
+                    (# 
+                    do true  -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Object code...' -> name;
+                  'K' -> key;
+               #);
+          #);
+        objectFitToContents: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do selection.fitToContents;
+                    #);
+                  onStatus::
+                    (# 
+                    do not selection.empty -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Fit to contents' -> name;
+               #);
+          #);
+        open::
+          (# 
+          do 'Edit' -> name;
+             undoItem.open;
+             redoItem.open;
+             addSeparator;
+             cutItem.open;
+             copyItem.open;
+             pasteItem.open;
+             deleteItem.open;
+             addSeparator;
+             findItem.open;
+             findAgainItem.open;
+             addSeparator;
+             objectInfoItem.open;
+             objectCodeItem.open;
+             objectFitToContents.open;
+          #);
+     #);
+   theAlignMenu: @builderMenu
+     (#
+        alignLeftItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do selection.alignLeft;
+                    #);
+                  onStatus::
+                    (# 
+                    do not selection.empty -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Left side' -> name;
+               #);
+          #);
+        alignRightItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do selection.alignRight;
+                    #);
+                  onStatus::
+                    (# 
+                    do not selection.empty -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Right side' -> name;
+               #);
+          #);
+        alignTopItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do selection.alignTop;
+                    #);
+                  onStatus::
+                    (# 
+                    do not selection.empty -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Top edge' -> name;
+               #);
+          #);
+        alignBottomItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do selection.alignBottom;
+                    #);
+                  onStatus::
+                    (# 
+                    do not selection.empty -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Bottom edge' -> name;
+               #);
+          #);
+        alignHorCenterItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do selection.alignHorCenter;
+                    #);
+                  onStatus::
+                    (# 
+                    do not selection.empty -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Horizontal center' -> name;
+               #);
+          #);
+        alignVerCenterItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do selection.alignVerCenter;
+                    #);
+                  onStatus::
+                    (# 
+                    do not selection.empty -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Vertical center' -> name;
+               #);
+          #);
+        showSpacingDialogItem: @builderItem
+          (# eventHandler::
+               (# onSelect::
+                    (# 
+                    do selection.showSpacingDialog;
+                    #);
+                  onStatus::
+                    (# 
+                    do not selection.empty -> value;
+                    #);
+               #);
+             open::
+               (# 
+               do 'Spacing...' -> name;
+               #);
+          #);
+        open::
+          (#
+          do 'Align' -> name;
+             alignLeftItem.open;
+             alignRightItem.open;
+             alignTopItem.open;
+             alignBottomItem.open;
+             alignHorCenterItem.open;
+             alignVerCenterItem.open;
+             addSeparator;
+             showSpacingDialogItem.open;
+          #);
+     #);
+   (*
+    * Handling of private attributes
+    *)
+   
+   body: ^astInterface.fragmentGroup;
+   privateFrag: ^astInterface.fragmentForm;
+   
+   (*
+    * Fragment handler
+    *)
+   
+   
+   fragHandler, privateFragHandler: @fragmentHandler
+     (# handleAstReplaced:
+          (#  oldAst, newAst: ^astInterface.ast; 
+          enter (oldAst[], newAst[])
+          do contentsEditor.traverse
+             (# forEach::
+                  (# 
+                  do (oldAst[], newAst[]) -> current.handleAstReplaced -> continue;
+                  #);
+             #);
+          #);
+        astReplaced::
+          (#
+          do (oldAst[], newAst[]) -> handleAstReplaced;
+          #);
+        (* astReplacedSequence:<
+         *           (# rootOfSequence: ^astInterface.ast
+         *           enter rootOfSequence[]
+         *           do inner;
+         *           #);
+         *         listElementInserted:<
+         *           (# position: @integer; listNode: ^astInterface.expanded; 
+         *           enter (listNode[], position)
+         *           do inner;
+         *           #);
+         *         listElementsDeleted:<
+         *           (# oldElements: ^astInterface.astList;
+         *              listNode: ^astInterface.expanded;
+         *              position, length: @integer
+         *           enter (listNode[], position, length, oldElements[])
+         *           do inner;
+         *           #);
+         *         listElementsReplaced:<
+         *           (# oldElements: ^astInterface.astList;
+         *              listNode: ^astInterface.expanded;
+         *              position, length, newLength: @integer
+         *           enter (listNode[], position, length, oldElements[], newLength)
+         *           do inner;
+         *           #);
+         *)
+     #);
+   
+   
    (*
     * Undo and redo
     *)
@@ -1692,26 +2241,6 @@ findBody:
         (200, 100) -> sizes[21];
        
      #);
-   currentId: @integer;
-   currentType: ##windowItemEditor;
-   lastTime: @integer;
-   startUptime: @integer;
-   objectSpecificationList: @list
-     (# element::< objectSpecification;
-        findObjectType:
-          (# ID: ^text;
-             type: ##windowItemEditor;
-          enter ID[]
-          do l: scan
-               (# 
-               do (if current.ID[] -> ID.equalNCS//true then
-                      current.type## -> type##;
-                      leave l;
-                  if);
-               #);
-          exit type##
-          #);
-     #);
    
    contentsEditorObject: @canvas
      (# setRealFrame:
@@ -1810,21 +2339,19 @@ findBody:
           do theWindowItem.size -> (width, height);
           exit (width, height)
           #);
-        (* privateControl: @astController
-         *           (# onDeleted::
-         *                (# 
-         *                do 'privateControl deleted' -> putLine;
-         *                #);
-         *           #);
-         *)
-        privateAttributes: ^astInterface.beta.attributes;
+        
         getMainAttributes::
           (# 
-          do privateAttributes[] -> theAttributes[];
+          do getPrivateAttributes -> theAttributes[];
           #);
         getPrivateAttributes::
-          (# 
-          do privateAttributes[] -> theAttributes[];
+          (# theDescriptorForm: ^astInterface.beta.descriptorForm;
+             theObjectDescriptor: ^astInterface.beta.objectDescriptor;
+             theMainPart: ^astInterface.beta.mainPart;
+          do privateFrag.root[] -> theDescriptorForm[];
+             theDescriptorForm.getObjectDescriptor -> theObjectDescriptor[];
+             theObjectDescriptor.getMainPart -> theMainPart[];
+             theMainPart.getAttributes -> theAttributes[];
           #);
         mouseDown::
           (# 
@@ -1838,78 +2365,10 @@ findBody:
         init::
           (# theAttributes: ^astInterface.beta.attributes;
           do createTheReciever;
-             theAttribute[] -> findPrivateAttributes -> privateAttributes[];
-          #);
-        findPrivateAttributes:
-          (# node: ^astInterface.beta.attributeDecl;
-             theAttributes: ^astInterface.beta.attributes;
-             failure:
-               (# 
-               do 'Failed to find private attributes' -> putLine;
-               #);
-          enter node[]
-          do (# theAst: ^astInterface.AST;
-                group: ^astInterface.fragmentGroup;
-                theSimpleDecl: ^astInterface.beta.simpleDecl;
-                theReferenceSpecification: ^astInterface.beta.ReferenceSpecification;
-                theStaticItem: ^astInterface.beta.staticItem;
-                theUnExpanded: ^astInterface.unExpanded;
-                theSlotDesc: ^astInterface.slotDesc;
-                frag: ^astInterface.fragmentForm;
-                theDescriptorForm: ^astInterface.beta.descriptorForm;
-                theObjectDescriptor: ^astInterface.beta.objectDescriptor;
-                theMainPart: ^astInterface.beta.mainPart;
-             do (node[], 'private') -> betaGram.findAttribute -> theAst[];
-                (if theAst[]<>None then
-                    (if theAst.symbol = betaGram.simpleDecl then
-                        theAst[] -> theSimpleDecl[];
-                        theSimpleDecl.getReferenceSpecification -> theReferenceSpecification[];
-                        (if theReferenceSpecification.symbol = betagram.staticItem then
-                            theReferenceSpecification[] -> theStaticItem[];
-                            theStaticItem.getObjectSpecification -> theAst[];
-                            (if theAst.kind = MPS.kinds.unExpanded then
-                                theAst[] -> theUnExpanded[];
-                                (if theUnExpanded.isSlot then
-                                    theUnExpanded.theSlot -> theSlotDesc[];
-                                    theSlotDesc.name -> body.findFragment -> frag[];
-                                    (if frag[]<>None then
-                                        (if frag.category = betaGram.descriptorForm then
-                                            frag.root[] -> theDescriptorForm[];
-                                            theDescriptorForm.getObjectDescriptor -> theObjectDescriptor[];
-                                            theObjectDescriptor.getMainPart -> theMainPart[];
-                                            theMainPart.getAttributes -> theAttributes[];
-                                         else
-                                            failure;
-                                        if);
-                                     else
-                                        failure;
-                                    if);
-                                 else
-                                    failure;
-                                if);
-                             else
-                                failure;
-                            if);
-                         else
-                            failure;
-                        if);
-                     else
-                        failure;
-                    if);
-                 else
-                    failure;
-                if);
-             #);
-          exit theAttributes[]
           #);
      #);
    
-   initializing: @boolean;
-   body: ^astInterface.fragmentGroup;
-   
-   
    theClassInfo: ^classInfo;
-   
    
    theControlPalette: @controlPalette
      (# 
@@ -2150,15 +2609,17 @@ getMainFrag:
 appendAttribute:
   (# theAttribute: ^astInterface.beta.attributeDecl;
      theAttributes: ^astInterface.beta.attributes;
+     insertInx: @integer;
   enter theAttribute[]
-  do getMainAttributes -> theAttributes[];
+  do 
+     getMainAttributes -> theAttributes[];
      (if theAttributes[] = none then
          failure;
       else
-         theAttribute[] -> theAttributes.smartAppend;
-         
+         (theAttributes[], theAttribute[]) -> appendToAttributes;
      if);
   #);
+
 scanAttributes:
   (# current: ^astInterface.beta.attributeDecl;
      theAttributes: ^astInterface.beta.attributes;
@@ -2194,7 +2655,7 @@ do (# data: ^windowItemData;
       node.guiInfo -> ID;
       ID -> theObjectStore.get -> data[];
       data.size ->  initialize;
-      findPrivateAttributes;
+      findPrivate;
       (none, node[], data[]) -> private.contentsEditor.init;
       show;
       inner init;
@@ -2409,7 +2870,11 @@ do (# frag: ^astInterface.fragmentForm;
       true -> data.bindLeft -> data.bindTop;
       (300, 200) -> data.size;
       data.id -> thePatternDecl.guiInfo;
-      true -> privateAttributes;
+      findBody -> private.body[];
+      (if private.body[] = none then
+          createBody;
+      if);
+      createPrivateAttributes;
       (none, thePatternDecl[], data[]) -> private.contentsEditor.init;
       private.contentsEditor.generateSimpleOpen;
       show;
@@ -2510,7 +2975,9 @@ do (100,22) -> data.size;
    'Courier' -> data.style.name[];inner
 
 -- GraphicalEditorTextFieldEditorNewData: doPart --
-do inner
+do &textStyleData[] -> data.defaultStyle[];
+   'Courier' -> data.defaultStyle.name[];
+   inner
 
 -- GraphicalEditorScrollListEditorNewData: doPart --
 do inner
@@ -2531,8 +2998,7 @@ do group[] -> private.body[];
 do private.body[] -> group[]
 
 -- GraphicalEditorEnterPrivateAttributes: doPart --
-do findBody;
-   createPrivateAttributes;
+do 
    
 -- GraphicalEditorExitPrivateAttributes: doPart --
 do 
@@ -2544,10 +3010,7 @@ do
 do 
 
 
-   
-   (* -- GraphicalEditorWindowItemdEditorAncestorReplaced: doPart --
-    * do reEstablishNode;
-    *)
+
    
 -- GraphicalEditorWindowItemEditorClose: doPart --
 do inner close;
@@ -3209,3 +3672,16 @@ do (# theNode: ^astInterface.beta.attributeDecl;
    #);
 -- graphicalEditorShowCode: doPart --
 do (contentsEditor).showCodeDialog;
+   
+-- windowItemEditorNewNode: doPart --
+do (# theAttributes: ^astInterface.beta.attributes;
+      className, instanceName: ^text;
+   do owner.getMainAttributes -> theAttributes[];
+      type -> getClassName -> className[];
+      (type, data.id) -> freshName -> instanceName[];
+      (theAttributes.frag[], instanceName[],className[])
+        -> betaGram.newSingularItem -> node[];
+      data.id -> node.guiInfo;
+      generateSimpleOpen;
+   #);
+   inner;

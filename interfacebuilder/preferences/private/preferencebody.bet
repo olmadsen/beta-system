@@ -1,0 +1,175 @@
+ORIGIN '../preference';
+INCLUDE '~beta/datastructures/v0.1/set';
+INCLUDE '../../utils/catchallfile';
+
+-- preferencesLib: attributes --
+
+option:
+  (# key, value: ^text;
+  #);
+
+
+parse:
+  (# syntaxError:<
+       (# ch: @char;
+       enter ch
+       do inner;
+       #);
+     input: ^stream;
+     key, value: ^text;
+     next:
+       (# 
+       do (if input.eos then
+              EOS -> ch;
+           else
+              input.get -> ch;
+          if);
+       #);
+     ch: @char;
+     EOS: (# exit 0 #);
+  enter input[]
+  do next;
+     skipEmptyLines:
+       (if true
+        //ch = EOS then 
+           leave skipEmptyLines;
+        //ch = ascii.newLine then
+           next;
+           restart skipEmptyLines;
+        //ch -> ascii.isLetter
+        //ch -> ascii.isDigit then
+           &text[] -> key[];
+           key.clear;
+           readKey:
+             (if true
+              //ch -> ascii.isLetter
+              //ch -> ascii.isDigit
+              //ch = '-'
+              //ch = '_' then
+                 ch -> key.put;
+                 next;
+                 restart readKey;
+              //ch = ':' then
+                 next;
+                 skipBlanks:
+                   (if true 
+                    //ch = ascii.sp (* Space *)
+                    //ch = ascii.ht (* Tab *) then
+                       next;
+                       restart skipBlanks;
+                    else
+                       &text[] -> value[];
+                       value.clear;
+                       readValue:
+                         (if true
+                          //ch = ascii.newLine then
+                             
+                             (key[], value[]) -> setOption;
+                             next;
+                             restart skipEmptyLines;
+                          //ch = EOS then
+                             (key[], value[]) -> setOption;
+                          else
+                             ch -> value.put;
+                             next;
+                             restart readValue;
+                         if);
+                   if);
+              else
+                 ch -> syntaxError;
+             if);
+        else
+           ch -> syntaxError;
+       if);
+  #);
+
+prettyPrint:
+  (# output: ^stream;
+  enter output[]
+  do private.options.scan
+     (# 
+     do current.key[] -> output.putText;
+        ': ' -> output.putText;
+        current.value[] -> output.putLine;
+     #);
+  #);
+
+-- preferencesInit: doPart --
+do reading:
+     (# theFile: @catchAllFile
+          (# failure::
+               (# 
+               do msg[] -> this(init).failure;
+                  leave reading;
+               #);
+          #);
+     do private.options.init;
+        fileName.copy -> private.fileName[];
+        fileName[] -> theFile.name;
+        (if theFile.entry.exists then
+            theFile.openRead;
+            theFile[] -> parse
+            (# syntaxError::
+               (# 
+               do 'syntax error' -> failure;
+               #);
+            #);
+            theFile.close;
+        if);
+     #)
+-- preferencesSave: doPart --
+do saving:
+     (# theFile: @catchAllFile
+          (# failure::
+               (# 
+               do msg[] -> this(save).failure;
+                  leave saving;
+               #);
+          #);
+     do private.fileName[] -> theFile.name;
+        theFile.openWrite;
+        theFile[] -> prettyPrint;
+        theFile.close;
+     #);
+
+-- preferencesSetOption: doPart --
+do (# theOption: ^option;
+   do key[] -> private.options.find -> theOption[];
+      (if theOption[] = none then
+          &option[] -> theOption[];
+          key[] -> theOption.key[];
+          theOption[] -> private.options.insert;
+      if);
+      value[] -> theOption.value[];
+   #);
+
+-- preferencesGetOption: doPart --
+do (# theOption: ^option;
+   do key[] -> private.options.find -> theOption[];
+      (if theOption[] = none then
+          default;
+       else
+          theOption.value[] -> value[];
+      if);
+   #);
+
+-- preferencesPrivate: descriptor --
+(# options: @set
+     (# element:: option;
+        find:
+          (# theOption: ^option;
+             key: ^text;
+          enter key[]
+          do search: scan
+             (# 
+             do (if current.key[] -> key.equalNCS then
+                    current[] -> theOption[];
+                    leave search;
+                if);
+             #);
+          exit theOption[]
+          #);
+     #);
+   fileName: ^text;
+#)
+

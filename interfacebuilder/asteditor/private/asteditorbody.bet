@@ -2,6 +2,7 @@ ORIGIN '../asteditor';
 INCLUDE '~beta/guienv/v1.3.1/fields';
 INCLUDE 'parsing';
 INCLUDE '../../mpsstuff/mpsutils';
+INCLUDE '~beta/guienv/v1.3.1/utils/timer';
 
 -- astEditorLib: attributes --
 
@@ -19,7 +20,23 @@ textContents:
        exit t[]
        #)
   #);
-
+postPrettyPrint:
+  (# theTimer: @timer
+       (# action::
+            (# 
+            do (if this(asteditor).private.doprettyPrint then
+                   prettyPrint;
+                   false -> this(asteditor).private.doPrettyPrint;
+                   pause;
+               if);
+            #);
+       #);
+  do (if not private.doPrettyPrint then
+         1 -> theTimer.activate;
+         true -> private.doPrettyPrint;
+     if);
+  #);
+  
 prettyPrint:
   (# t: @styledText;
   do (node[],t[]) -> pretty.printNode;
@@ -45,18 +62,34 @@ do (500, 200) -> size;
    
 
 -- IBastEditorPrivate: descriptor --
-(# dirtyFlag: @boolean;
+(# doPrettyPrint: @boolean;
+   
+   dirtyFlag: @boolean;
    obsoleteFlag: @boolean;
    settingContents: @boolean;
    fragHandler: @fragmentHandler
-     (# astReplaced::
+     (# isAncestorOrEqual: booleanValue
+          (# ancestor, self: ^astInterface.AST;
+          enter (ancestor[], self[])
+          do (if (ancestor[], self[]) -> astEqual then
+                 true -> value;
+              else
+                 (if (ancestor[], self[]) -> isAncestor then
+                     true -> value;
+                  else
+                     false -> value;
+                 if);
+             if);
+          #);
+        
+        astReplaced::
           (#
           do (if (oldAst[], node[]) -> astEqual then
                  newAst[] -> node[];
-                 prettyPrint;
+                 postPrettyPrint;
               else
                  (if (node[], newAst[]) -> isAncestor then
-                     prettyPrint;
+                     postPrettyPrint;
                   else
                      (if (oldAst[], node[]) -> isAncestor then
                          obsolete;
@@ -64,31 +97,50 @@ do (500, 200) -> size;
                  if)
              if);
           #);
-        (* astReplacedSequence:<
-         *           (# rootOfSequence: ^astInterface.ast
-         *           enter rootOfSequence[]
-         *           do inner;
-         *           #);
-         *         listElementInserted:<
-         *           (# position: @integer; listNode: ^astInterface.expanded; 
-         *           enter (listNode[], position)
-         *           do inner;
-         *           #);
-         *         listElementsDeleted:<
-         *           (# oldElements: ^astInterface.astList;
-         *              listNode: ^astInterface.expanded;
-         *              position, length: @integer
-         *           enter (listNode[], position, length, oldElements[])
-         *           do inner;
-         *           #);
-         *         listElementsReplaced:<
-         *           (# oldElements: ^astInterface.astList;
-         *              listNode: ^astInterface.expanded;
-         *              position, length, newLength: @integer
-         *           enter (listNode[], position, length, oldElements[], newLength)
-         *           do inner;
-         *           #);
-         *)
+        listElementInserted::
+          (# 
+          do (if ((node[], listNode[]) -> isAncestorOrEqual) then
+                 postPrettyPrint;
+             if);
+          #);
+        handleListElementsDeleted:
+          (# oldElements: ^astInterface.astList;
+             listNode: ^astInterface.expanded;
+          enter (listNode[], oldElements[])
+          do (if (node[], listNode[]) ->  isAncestorOrEqual then
+                 postPrettyPrint;
+              else
+                 l: oldElements.scan
+                   (# 
+                   do (if ((current[], node[]) -> isAncestorOrEqual) then
+                          obsolete;
+                          leave l;
+                      if);
+                   #);
+             if);
+          #);
+        listElementsDeleted::
+          (# 
+          do (listNode[], oldElements[]) -> handleListElementsDeleted;
+          #);
+        listElementsReplaced::
+          (# 
+          do (listNode[], oldElements[]) -> handleListElementsDeleted;
+          #);
+        astReplacedSequence::
+          (# doPretty: @boolean;
+          do false -> doPretty;
+             (if (rootOfSequence[], node[]) -> isAncestorOrEqual then
+                 true -> doPretty;
+              else
+                 (if (node[], rootOfSequence[]) -> isAncestor then 
+                     true -> doPretty;
+                 if);
+             if);
+             (if doPretty then
+                 postPrettyPrint;
+             if);
+          #);
      #);
    open:
      (# 
@@ -193,6 +245,7 @@ do (500, 200) -> size;
  *)
 -- EditorEnvAstEditorClose: doPart --
 do inner;
+   private.fragHandler[] -> theFragServer.unsubscribe;
    this(astEditor)[] -> delete;
    
 -- EditorEnvAstEditorEnterDirty: doPart --
@@ -260,7 +313,7 @@ do (# textToParse: ^text;
            else
               (* Do nothing *)
           if);
-          (frag[], node[], newAst[]) -> theFragServer.notifyAstReplaced;
+          (true, frag[], node[], newAst[]) -> theFragServer.notifyAstReplaced;
        else
           (if not fatal then
               textToParse.Reset;
@@ -283,6 +336,7 @@ do (# textToParse: ^text;
    
 -- AstEditorObsolete: doPart --
 do true -> private.obsoleteFlag;
+   false -> private.doPrettyPrint;
    private.parseButton.disable;
    private.revertButton.disable;
    true -> readOnly;
