@@ -1,0 +1,103 @@
+{ Qua check.
+  The reference assignment src[]->dst[] has just been made. dst resides in theCell.
+  Perform.
+  1. CheckReferenceAssigment
+  2. Qua Check: Check if the actual qualification of src is less than or equal than
+  qualification of dst, as given by dstQuaProto and dstQuaOrigin.
+}
+
+Qua: public
+  (#
+     { input variables }
+     dstQuaProto:  ProtoType = RegArg;
+     dstQuaOrigin: Object    = RegAdr;
+     theCell:      Long      = DataReg1;
+     
+     { used variables }
+     src:          Object    = AddrReg1;
+     srcStruc:     Structure = AddrReg1;
+     srcProto:     ProtoType = AddrReg2;
+     srcOrigin:    Long      = DataReg1;
+     offset:       Long      = DataReg1;
+     
+     argument:     Structure = RegArg;
+     newObject:    Object    = RegArg     
+  do
+     theCell -> src;
+     src[0] -> src;
+     (if src = 0 then return if);
+     
+     { 1. Check reference assignment }
+     (if theCell outside IOA then
+         push theCell;
+         call ChkRA
+     if);
+     
+     { 2. Qua Check }
+     src.Proto -> srcProto;
+     (if srcProto = -3 then
+         { It was a pattern variable assignment: src is a struc-object }
+         srcStruc.iProto  -> srcProto;
+         srcStruc.iOrigin -> srcOrigin
+      else
+         { It was a normal reference assignment: src is normal object }
+         srcProto.OrigOff -> offset;
+         src[offset*4] -> srcOrigin
+     if);
+     
+     { Check for eqS }
+     (if srcProto = dstQuaProto then
+         (if srcOrigin = dstQuaOrigin then
+             { Structures are identical. All is OK }
+             return
+         if)
+     if);
+     
+     { Inlined version of ltS without struc objects }
+     
+     (if dstQuaProto = dstQuaProto.Prefix then
+         { dstQuaProto is Object## }
+         return;
+     if);
+     
+     { Prefix of srcProto is the first try }
+     srcProto -> proto1;
+     proto1.Prefix -> proto1;
+     loop:
+     (if proto1 = proto1.Prefix then goto failure if); { proto1 = Object## }
+     (if proto1 = dstQuaProto then
+         { Now there is some hope, now we need to check is origin are equal. }
+         0 -> offset;
+         dstQuaProto.OrigOff -> offset;
+         srcProto -> proto1;
+         (if offset = proto1.OrigOff then
+             { The prototypes have same origin offset, so   }
+             { the result is (srcOrigin = dstQuaOrigin).    }
+             (if srcOrigin = dstQuaOrigin then return if);
+             goto failure
+         if);
+         
+         { Src may have several origins (one per prefixlevel).
+           We find the origin at the offset determined *by the prefix* (dstQuaProto)
+           This should be the same as the origin of the qualification of dst.
+         }
+         (if src.Proto = -3 then
+             push dstQuaOrigin;
+             src -> argument;
+             call AlloSI
+             pop dstQuaOrigin;
+         if);
+         dstQuaProto.OrigOff -> offset;
+         
+         newObject[offset*4] -> srcOrigin;
+         (if dstQuaOrigin = srcOrigin then return if);    
+         goto failure
+     if);
+     proto1.Prefix -> proto1;
+     goto loop;
+    
+     failure:
+     push -15;
+     call BetaError;
+     return { in case of QuaCont }
+  #);
