@@ -17,10 +17,10 @@ sub usage()
 $verbose = $v;
 
 if ($f){
-    $css = "/~beta/doc/style/miadoc.css";
-    $lastmodscript = "/~beta/doc/javascript/lastmod.js";
-    $imagedir = "/~beta/doc/images/";
-    $topfile = "/~beta/doc/index.html#grammars";
+    $css = "http://www.mjolner.com/mjolner-system/documentation/style/miadoc.css";
+    $lastmodscript = "http://www.mjolner.com/mjolner-system/documentation/javascript/lastmod.js";
+    $imagedir = "http://www.mjolner.com/mjolner-system/documentation/images/";
+    $topfile = "http://www.mjolner.com/mjolner-system/documentation/index.html#grammars";
 } else {
     $css = "../style/miadoc.css";
     $lastmodscript = "../javascript/lastmod.js";
@@ -51,7 +51,7 @@ sub print_header()
 EOT
 
     &print_button("index", $inxfile);
-    &print_button("up", $topfile);
+    &print_button("top", $topfile);
 
     print<<EOT;
 <P></P>
@@ -83,7 +83,7 @@ sub print_trailer
 EOT
 
     &print_button("index", $inxfile);
-    &print_button("up", $topfile);
+    &print_button("top", $topfile);
 
     print<<EOT;
 </BODY>
@@ -249,7 +249,8 @@ sub print_index_header
 <P></P>
 EOT
 
-    &print_button("top", $htmlfile);
+    &print_button("up", $htmlfile);
+    &print_button("top", $topfile);
 
     print<<EOT;
 <P></P>
@@ -278,7 +279,8 @@ sub print_index_trailer()
 <P></P>
 EOT
 
-    &print_button("top", $htmlfile);
+    &print_button("up", $htmlfile);
+    &print_button("top", $topfile);
 
     print<<EOT;
 </BODY>

@@ -69,11 +69,11 @@ if ($fullpath){
     if ($extradir){
 	print "int2html.perl: Both -f and -x specified: -x is ignored\n";
     }
-    $css = "http://www.daimi.au.dk/~beta/doc/style/miadoc.css";
-    $lastmodscript = "http://www.daimi.au.dk/~beta/doc/javascript/lastmod.js";
-    $imagedir = "http://www.daimi.au.dk/~beta/doc/images/";
-    $topfile = "http://www.daimi.au.dk/~beta/doc/index.html";
-    $upfile = "http://www.daimi.au.dk/~beta/doc/index.html";
+    $css = "http://www.mjolner.com/mjolner-system/documentation/style/miadoc.css";
+    $lastmodscript = "http://www.mjolner.com/mjolner-system/documentation/javascript/lastmod.js";
+    $imagedir = "http://www.mjolner.com/mjolner-system/documentation/images/";
+    $topfile = "http://www.mjolner.com/mjolner-system/documentation/index.html";
+    $upfile = "http://www.mjolner.com/mjolner-system/documentation/index.html";
 } else {
     if ($extradir){
 	$css = "../../../style/miadoc.css";
