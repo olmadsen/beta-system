@@ -468,6 +468,9 @@ typedef union FormatI
 #define push(v) /* printf("push: RefSP=0x%x\n", RefSP); */ *RefSP++ = (struct Object *) v
 #define pop(v)  /* printf("pop: RefSP=0x%x\n", RefSP); */  v = (void *) *--RefSP
 
+#define SaveVar(v)    push(v)
+#define RestoreVar(v) pop(v)
+
 #define comppush(v) *CompSP++ = (long) v
 #define comppop(v)  v = *--CompSP
 

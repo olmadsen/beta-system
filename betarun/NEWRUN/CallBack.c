@@ -119,12 +119,9 @@ void *CopyPPP(struct Structure *theStruct,
   unsigned long entry;     /* Beta code stub, e.g. _foo */
   unsigned long strucaddr; /* Address of struc */
   int res_size = size & 0xff;
-  int par_size = (size & 0xff00)>>8;
   UniversalProcPtr functionPtr;             
 
   DEBUG_CODE(NumCopyPPP++);
-
-  /*DebugStr("\pCopyPPP called");*/
 
   if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
   Ck(theStruct); Ck(theStruct->iOrigin);
@@ -150,7 +147,10 @@ void *CopyPPP(struct Structure *theStruct,
   ++CBFATop;
   Ck(theStruct); Ck(theStruct->iOrigin);
 
-  /* Create a pascal function pointer */
+  /* Complete the univProcInfo to be a pascal function pointer */
+  /* FIXME: The compiler could make the complete univProcInfo. This would
+   * save the size parameter, and the calculation below at runtime.
+   */
   univProcInfo |= kPascalStackBased | RESULT_SIZE(SIZE_CODE(res_size));
   functionPtr = NewRoutineDescriptor((ProcPtr)&(CBFATop-1)->code[0],
 				     univProcInfo, 

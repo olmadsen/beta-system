@@ -43,7 +43,7 @@ void MkTO(char *asciz,
     }
 
     /* Allocate in IOA/AOA */
-    push(theItem);
+    SaveVar(theItem);
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "MkTO allocates in AOA\n"));
       theText=(struct TextObject*)AOAcalloc(size, SP);
@@ -56,7 +56,7 @@ void MkTO(char *asciz,
       theText=(struct TextObject*)IOAalloc(size, SP);
       theText->GCAttr = 1;
     }
-    pop(theItem);
+    RestoreVar(theItem);
 
     /* The new TextObject and Repetition are now allocated */
     /* No need to call setup_item - no inlined partobjects in Text */
