@@ -66,6 +66,27 @@
 #define EnableFPUexceptions(mask) __setfpucw(_FPU_DEFAULT & ~(mask))
 #endif
 
+#ifdef hpux9pa
+#if 0 /* NOT TESTET */
+trye: man -k float trap exception fpu fpe
+#define FPU_ZERODIVISION  (1L<<3)
+#define FPU_INVALID       (1L<<4)
+#define FPU_DENORMALIZED  0
+#define FPU_OVERFLOW      (1L<<2)
+#define FPU_UNDERFLOW     (1L<<1)
+#define FPU_PRECISIONLOST (1L<<0)
+#define EnableFPUexceptions(mask) \
+{ unsigned double status; \
+  register double *statusaddr = &status; \
+  __asm__ volatile ("\tFSTDS\t%%fr0,0(0,%0)" :: "=r" (statusaddr)); \
+  status |= (mask)<<16; \
+  __asm__ volatile ("\tFLDDS\t%%fr0,0(0,%0)" : "r" (statusaddr)); \
+}
+#
+#endif
+#endif
+
+
 #ifdef sgi
   /* see set_fpc_csr(3c), handle_sigfpes(3c) */
 #endif

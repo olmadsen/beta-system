@@ -377,7 +377,9 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 #endif
 
 #ifdef sun4s  
-  if (info->_data._fault._trapno - 0x80 == 17) {
+  if (info->_data._fault._trapno-0x80 == 17  /* solaris 2.3, 2.4, 2.5 */ || 
+      info->_data._fault._trapno-0x100 == 17 /* solaris 2.5.1 */
+      ) {
 #else
   if (code == ILL_TRAP_FAULT(17)) {
 #endif

@@ -984,26 +984,10 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 
 
 
-#define BETAENV_RUNTIME_HANDLER 0
+#define BETAENV_RUNTIME_HANDLER 1
 #if BETAENV_RUNTIME_HANDLER
 
-  /* Assuming the following in tstenv/betaenv:
-   *    RuntimeException: ^LowlevelException;
-   *    RuntimeErrorHandler: external
-   *      (# error, currentObject, SP, PC: @integer;
-   *         skip_dump: @boolean;
-   *      enter (error, currentObject, PC, SP)
-   *      do cExternalEntry;
-   *         (if RuntimeException[]<>NONE then
-   *             (error, currentObject, PC, SP)
-   *               -> RuntimeException 
-   *               -> skip_dump;
-   *         if);
-   *      exit continue
-   *      #);
-   * do ...
-   *    RuntimeErrorHandler## -> makeCBF; (* first CB installed *)
-   */
+  /* see TST/tstprogram.bet */
   
   if (errorNumber==StopCalledErr){
       DEBUG_CODE(fprintf(output, "RTS: ignoring handler for StopCalled\n"));
