@@ -1,0 +1,91 @@
+ORIGIN 'comenv';
+INCLUDE
+'~beta/win32lib/winerror';
+
+BUILD default 
+'$$/misc.obj' 
+'external/misc.cpp' 
+'betacc $0 $1';
+
+BUILD nti '$$/guids.obj' 'external/guids.c' 'betacc $0 $1';
+
+-- lib: attributes --
+getCLSID_simpleserver: external
+  (# cslid: @integer;
+  do callC;
+  exit cslid
+  #);
+
+CoRegisterClassObject2: external
+  
+  (# rclsid: ^GUIDdata
+       (* Class identifier (CLSID) to be registered *);
+     pUnk: ^IUnknown
+       (* Pointer to the class object *);
+     dwClsContext: @integer
+       (* Context for running executable code *);
+     flags: @integer
+       (* How to connect to the class object *);
+     lpdwRegister: @integer
+       (* Pointer to the value returned *);
+     result: @integer
+       (* This function supports the standard return values E_INVALIDARG,
+        * E_OUTOFMEMORY, and E_UNEXPECTED, as well as the following: S_OK:
+        * The class object was registered successfully.  CO_E_OBJISREG:
+        * Already registered in the class object table.
+        *); 
+  enter (rclsid[],pUnk[],dwClsContext,flags,lpdwRegister)
+  do 'CoRegisterClassObject' -> callStd;
+  exit result
+  #);
+
+-- comEnvInitClassFact: doPart --
+do true -> result;
+   
+   SimpleServer_CLSID -> theClsid;
+   ISimpleServer_IID->SimpleServer_IID;
+   
+   (if theAutoApplObj[]=none then
+       &ApplicationObject[] -> theAutoApplObj[];
+   if);
+   
+   &myCF[] -> theCF[];
+   theCF.init;
+   theAutoApplObj[] -> theCF.theApplObject[];
+   theCF.AddRef;
+   
+   (# cholder: @CLSIDHolder;
+      theCLSID_simpleserver: @integer;
+   do
+      getCLSID_simpleserver -> theCLSID_simpleserver;
+      (theClsid.binary[], theCF[],
+      CLSCTX_LOCAL_SERVER, REGCLS_SINGLEUSE, @@m_dwRegCO)
+        -> CoRegisterClassObject2
+        -> hr;
+   #);
+           
+   (if (hr.FAILED) then
+       ('CoRegisterClassObject failed.',hr.value) -> ComErrorMessage;
+       FALSE -> result;
+    else
+       (if hr.value=S_OK then 'CoRegisterClassObject returns S_OK.'->putline; if);
+       TRUE  -> result;
+   if);
+   
+   
+   
+
+   
+-- comEnvCloseClassFact: doPart --
+do 
+   
+   (* Opposite of CoRegisterClassObject; class factory ref is now 1 *)
+   (if (0<>m_dwRegCO) then
+       m_dwRegCO -> CoRevokeClassObject; 
+       0 -> m_dwRegCO;
+   if);
+   
+   (* The last Release, which frees the class factory. *)
+   (if theCF[]<>NONE then
+       theCF.Release;
+   if);
