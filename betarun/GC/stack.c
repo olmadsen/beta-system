@@ -317,56 +317,61 @@ void ProcessStackObj(struct StackObject *theStack)
 }
 #endif /* sparc */
 
-/****************************** LINUX *************************************/
+/****************************** LINUX & NTI **********************************/
 
-#ifdef linux
+#if (defined(linux) || defined(nti))
 
 /* Traverse the StackArea [low..high] and Process all references within it. */
 void ProcessStackPart(low, high)
      ptr(long) low;
      ptr(long) high;
 {
-    ptr(long) current = low;
-    ref(Object) theObj;
-    handle(Object) theCell;
-    
-    DEBUG_IOA(fprintf(output, "StackPart: [0x%x..0x%x]\n", low, high);
-	      fprintf(output, "ComponentBlock/CallbackFrame: [0x%x, 0x%x, 0x%x]\n", 
-		      *(high+1), *(high+2), *(high+3));
-	      );
-    Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
-    
-    while( current <= high ){
-	if( inBetaHeap( *current)){
-	    theCell = (handle(Object)) current;
-	    theObj  = *theCell;
-	    if( isObject( theObj) ){
-		if( /*inLVRA( theObj) ||*/ isValRep(theObj) ){
-		    DEBUG_IOA( fprintf( output, "(STACK(%d) is *ValRep)", current-low));
-		}else{
-		    ProcessReference( current);
-		    CompleteScavenging();
-		}
-	    }
+  ptr(long) current = low;
+  ref(Object) theObj;
+  handle(Object) theCell;
+  
+  DEBUG_IOA(fprintf(output, "StackPart: [0x%x..0x%x]\n", low, high);
+	    fprintf(output, "ComponentBlock/CallbackFrame: [0x%x, 0x%x, 0x%x]\n", 
+		    *(high+1), *(high+2), *(high+3));
+	    );
+  Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
+  
+  while( current <= high ){
+    if( inBetaHeap( *current)){
+      theCell = (handle(Object)) current;
+      theObj  = *theCell;
+      if( isObject( theObj) ){
+	if( /*inLVRA( theObj) ||*/ isValRep(theObj) ){
+	  DEBUG_IOA( fprintf( output, "(STACK(%d) is *ValRep)", current-low));
 	}else{
-	    /* handle value register objects on the stack ref. ../Asm/DataRegs.s */
-	    switch( *current){
-	      case -8: current++;
-	      case -7: current++;
-	      case -6: current++;
-	      case -5: current++;
-		break;
-#ifdef RTLAZY
-	      default:
-		if (isLazyRef (*current))
-		  /* (*current) is a dangling reference */
-		  ProcessReference (current);
-		break;
-#endif
-            }
+	  ProcessReference( current);
+	  CompleteScavenging();
 	}
-	current++;
+      } else {
+	DEBUG_CODE( if (!isValRep(theObj))
+		   fprintf(output, "Suspicious reference on stack: *0x%x=0x%x\n", 
+			   current, *current) );
+      }
+    }else{
+      /* handle value register objects on the stack ref. ../Asm/DataRegs.s */
+      switch( *current){
+      case -8: current++;
+      case -7: current++;
+      case -6: current++;
+      case -5: current++;
+	break;
+#ifdef RTLAZY
+      default:
+	if (isLazyRef (*current)){
+	  /* (*current) is a dangling reference */
+	  ProcessReference (current);
+	}
+	break;
+#endif
+      }
     }
+    current++;
+  }
 }
 
 void ProcessStack()
@@ -444,7 +449,7 @@ void ProcessStackObj(theStack)
   }
 }
 
-#endif /* linux */
+#endif /* linux & nti */
 
 
 /***************************** MC680X0 ************************************/
