@@ -51,12 +51,8 @@ FIXME:
 (# name_index, descriptor_index: @integer;
 do (if methodClassTag 
     // 'c' // 'p' // '[' then
-       (* field name *)
-       FN[] -> jcf.constant_pool.utf8strings.add -> name_index;
-       (* field type *)
        (if methodClassTag = '[' then '[' -> T.prepend if);
-       T[] -> jcf.constant_pool.utf8strings.add -> descriptor_index;
-       (name_index, descriptor_index) -> jcf.fields.add;
+       (FN[], T[]) -> jcf.emitFieldDef;
    if);
 #)
 
@@ -77,9 +73,7 @@ do (if currentTag
        if);
        putfield -> jcf.emit;
        (if currentTag = '[' then '[' -> currenttype.prepend if);       
-       (thisClassName[], currentFieldName[], currentType[])
-         -> jcf.constant_pool.fieldrefs.addtext
-         -> jcf.emitShort;
+       (thisClassName[], currentFieldName[], currentType[]) -> jcf.emitFieldRef; 
    if)     
 #)
 
@@ -314,9 +308,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                         'OBS! missing type info (fieldType)' -> fixme;
                     if);
                 if);
-                (ClassName[], TheFieldName[], TheFieldType[])
-                  -> jcf.constant_pool.fieldrefs.addtext
-                  -> jcf.emitShort;
+                (ClassName[], TheFieldName[], TheFieldType[]) -> jcf.emitFieldRef; 
              #);
            load:
              (#
@@ -390,10 +382,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                 (if withQua then
                     checkcast  -> jcf.emit;
                     (* remove enclosing 'L...;' *)
-                    (2,class.length-1) 
-                      -> class.sub 
-                      -> jcf.constant_pool.classes.addtext 
-                      -> jcf.emitShort;
+                    (2,class.length-1) -> class.sub -> jcf.emitClassRef;
                 if);
                 (if ONlevel > 0 then
                     putfield  -> jcf.emit; 
@@ -427,10 +416,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                     checkcast  -> jcf.emit;
                     BC.gettext -> sig[]; 
                     (* remove enclosing 'L...;' *)
-                    (2,sig.length-1) 
-                      -> sig.sub 
-                      -> jcf.constant_pool.classes.addtext 
-                      -> jcf.emitShort;
+                    (2,sig.length-1) -> sig.sub -> jcf.emitClassRef;
                 if);
              #);
            pushAdr:
@@ -546,21 +532,20 @@ do (# commentstream: @stream (* maybe something more useful *);
             (if opCode
              // classDef then
                 BC.gettext
-                  -> thisClassName[];
-                thisClassname[] -> jcf.constant_pool.classes.addtext -> index;
-                index -> jcf.thisClassIndex;
+                  -> thisClassName[]
+                  -> jcf.constant_pool.classes.addtext
+                  -> jcf.thisClassIndex;
                 BC.get -> thisBlockLevel;
                 (thisBlockLevel,thisClassname[]) -> BCstate.blocks.mark;
-                BC.getText -> thisSuperName[];
-                thisSuperName[] -> jcf.constant_pool.classes.addtext -> index;
-                index -> jcf.superClassIndex;
+                BC.getText 
+                  -> thisSuperName[] 
+                  -> jcf.constant_pool.classes.addtext 
+                  -> jcf.superClassIndex;
                 
                 'java/lang/Object'->thisSuperOrgName[];
                 BC.get -> subLevel; 
                 BC.gettext -> thisOrgName[];
-                'origin' -> jcf.constant_pool.utf8strings.add -> index;
-                thisOrgName[] -> jcf.constant_pool.utf8strings.add -> index2;
-                (index, index2) -> jcf.fields.add;
+                ('origin', thisOrgName[]) -> jcf.emitFieldDef;
                 
                 313->ctrace(# do '%%%class: "'->xT;
                               thisClassName[] -> xT;
@@ -650,7 +635,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                     // 'new' -> prim.equal then
                        new -> jcf.emit;
                        (* class name*)
-                       arg[] -> jcf.constant_pool.classes.addtext -> jcf.emitShort;
+                       arg[] -> jcf.emitClassRef;
                        _dup -> jcf.emit;
                        arg[] -> class[]; (* ugly *)                       
                     // 'initSuper' -> prim.equal then                       
@@ -659,11 +644,8 @@ do (# commentstream: @stream (* maybe something more useful *);
                            arg[] -> makeSignature -> sig.append;
                        if);
                        ')V' -> sig.append;
-                       (thisSuperName[], '<init>', sig[]) 
-                         -> jcf.constant_pool.methodrefs.addtext 
-                         -> index;
                        invokespecial -> jcf.emit;
-                       index -> jcf.emitShort;
+                       (thisSuperName[], '<init>', sig[]) -> jcf.emitMethodRef; 
                        BCstate.fields.emitInit;
                     // 'init' -> prim.equal  then
                        '(' -> sig[];
@@ -671,10 +653,8 @@ do (# commentstream: @stream (* maybe something more useful *);
                            arg[] -> makeSignature -> sig.append;
                        if);
                        ')V' -> sig.append;
-                       (class[], '<init>', sig[]) 
-                         -> jcf.constant_pool.methodrefs.addtext 
-                         -> index;
                        invokespecial -> jcf.emit;
+                       (class[], '<init>', sig[]) -> jcf.emitMethodRef; 
                        index -> jcf.emitShort;
                     // 'AlloVR4' -> prim.equal then
                        T_INT -> emitNewArray
@@ -682,44 +662,30 @@ do (# commentstream: @stream (* maybe something more useful *);
                        T_CHAR -> emitNewArray  
                     // 'Text2CharArray' -> prim.equal then
                        invokevirtual -> jcf.emit;
-                       ('java/lang/String', 'toCharArray', '()[C') 
-                         -> jcf.constant_pool.methodrefs.addtext 
-                         -> jcf.emitShort;
+                       ('java/lang/String', 'toCharArray', '()[C') -> jcf.emitMethodRef; 
                     // 'Text2BetaText' -> prim.equal then
                        (* Note! Hardcoding of pattern 'text'
                         * including case, etc. Should be handled
                         * more generally
                         *)
                        invokevirtual -> jcf.emit;
-                       ('java/lang/String', 'toCharArray', '()[C') 
-                         -> jcf.constant_pool.methodrefs.addtext 
-                         -> jcf.emitShort;
+                       ('java/lang/String', 'toCharArray', '()[C') -> jcf.emitMethodRef; 
                        new -> jcf.emit;
-                       'text' 
-                         -> jcf.constant_pool.classes.addtext 
-                         -> jcf.emitShort;
+                       'text' -> jcf.emitClassRef;
                        dup_x1 -> jcf.emit;
                        dup_x1 -> jcf.emit;
                        aconst_null -> jcf.emit;
                        invokespecial -> jcf.emit; 
-                       ('text', '<init>', '(Ltstenv;)V') 
-                         -> jcf.constant_pool.methodrefs.addtext 
-                         -> jcf.emitShort;
+                       ('text', '<init>', '(Ltstenv;)V') -> jcf.emitMethodRef;  
                        invokevirtual -> jcf.emit; 
-                       ('text', 'enter', '([C)V') 
-                         -> jcf.constant_pool.methodrefs.addtext 
-                         -> jcf.emitShort;
+                       ('text', 'enter', '([C)V') -> jcf.emitMethodRef; 
                     // 'CharArray2String' -> prim.equal then
                        new -> jcf.emit;
-                       'java/lang/String' 
-                         -> jcf.constant_pool.classes.addtext 
-                         -> jcf.emitShort;
+                       'java/lang/String' -> jcf.emitClassRef;
                        dup_x1 -> jcf.emit;
                        swap -> jcf.emit;
                        invokespecial -> jcf.emit;
-                       ('java/lang/String', '<init>', '([C)V') 
-                         -> jcf.constant_pool.methodrefs.addtext 
-                         -> jcf.emitShort;
+                       ('java/lang/String', '<init>', '([C)V') -> jcf.emitMethodRef; 
                     // 'Att' -> prim.equal then
                        (* missing call of attach here
                         * we pop the stack to avoid overflow
@@ -740,14 +706,10 @@ do (# commentstream: @stream (* maybe something more useful *);
                        ('java/io/PrintStream'-> ((1,19)->prim.sub).equal) then
                        (* FIXME: hardcoded *)
                        getstatic -> jcf.emit;
-                       ('java/lang/System', 'out', 'Ljava/io/PrintStream;')
-                         -> jcf.constant_pool.fieldrefs.addtext
-                         -> jcf.emitShort;
+                       ('java/lang/System', 'out', 'Ljava/io/PrintStream;')->jcf.emitFieldRef;
                        swap -> jcf.emit;
                        invokevirtual -> jcf.emit; 
-                       (m[], n[], d[]) 
-                         -> jcf.constant_pool.methodrefs.addtext 
-                         -> jcf.emitShort;
+                       (m[], n[], d[]) -> jcf.emitMethodRef;
                     else
                        'callExternal' -> FIXME;
                    if);
@@ -760,9 +722,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                     '_do_'-> thisInnerMethodName.append;
                     subLevel+1 -> thisInnerMethodName.putint;
                 if);
-                (thisClassName[], thisInnerMethodName[], '()V')
-                  -> jcf.constant_pool.methodrefs.addtext
-                  -> jcf.emitShort;
+                (thisClassName[], thisInnerMethodName[], '()V') -> jcf.emitMethodRef; 
              // comment then
                 (# T: ^text
                 do BC.gettext -> T[];
@@ -844,8 +804,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                                      -> TheFieldType[];
                                if);
                                (TheClassName[], TheFieldName[], TheFieldType[])
-                                 -> jcf.constant_pool.fieldrefs.addtext
-                                 -> jcf.emitShort;
+                                 -> jcf.emitFieldRef;
                            if);
                        if)
                     #)
@@ -857,7 +816,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                     if);
                     (# n, d, m: ^text; s: @boolean;
                     do BC.getText->T[]->splitClassSignature->(n[], d[], s, m[]);
-                       (m[], n[], d[]) -> jcf.constant_pool.methodrefs.addtext -> jcf.emitShort;
+                       (m[], n[], d[]) -> jcf.emitMethodRef; 
                     #);
                     313->trace(#do '%%%call: '->xT; T[]->xT #)
                  // return then
@@ -927,9 +886,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                      // pushCst_s32 then
                         BC.getLong -> jcf.emitLong                        
                      // pushText then 
-                        BC.getText
-                          -> jcf.constant_pool.strings.addtext
-                          -> jcf.emit;
+                        BC.getText -> jcf.emitString;
                      // jmp then 
                         (* Opcode goto emitted above *)
                         BC.get (* opcode label *); 
