@@ -213,18 +213,18 @@ char *ProtoTypeName(struct ProtoType *theProto)
     /* ProtoTypeName is used for some debug output, where
      * the prototype may be a special one
      */
-    switch ((long) theProto){
-    case (long) ComponentPTValue:    return "[Component]";
-    case (long) StackObjectPTValue:  return "[StackObj]";
-    case (long) StructurePTValue:    return "[StrucObject]";
-    case (long) DopartObjectPTValue: return "[DopartObject]";
-    case (long) DynItemRepPTValue:
-    case (long) DynCompRepPTValue:   return "[ObjectRep]";
-    case (long) RefRepPTValue:       return "[RefRep]";
-    case (long) ValRepPTValue:       return "[IntegerRep]";
-    case (long) ByteRepPTValue:      return "[CharRep]";
-    case (long) WordRepPTValue:      return "[ShortRep]";
-    case (long) DoubleRepPTValue:    return "[RealRep]";
+    switch (ProtoConst(theProto)){
+    case ProtoConst(ComponentPTValue):    return "[Component]";
+    case ProtoConst(StackObjectPTValue):  return "[StackObj]";
+    case ProtoConst(StructurePTValue):    return "[StrucObject]";
+    case ProtoConst(DopartObjectPTValue): return "[DopartObject]";
+    case ProtoConst(DynItemRepPTValue):
+    case ProtoConst(DynCompRepPTValue):   return "[ObjectRep]";
+    case ProtoConst(RefRepPTValue):       return "[RefRep]";
+    case ProtoConst(ValRepPTValue):       return "[IntegerRep]";
+    case ProtoConst(ByteRepPTValue):      return "[CharRep]";
+    case ProtoConst(WordRepPTValue):      return "[ShortRep]";
+    case ProtoConst(DoubleRepPTValue):    return "[RealRep]";
     }
   }
 #endif /* RTDEBUG */
@@ -399,26 +399,26 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       staticObj = 0;
     TRACE_DUMP(fprintf(output, ">>>TraceDump: staticObj=0x%x\n", staticObj));
     if( isSpecialProtoType(staticObj->Proto) ){
-      switch ((long) staticObj->Proto){
-      case (long) ComponentPTValue:
+      switch (ProtoConst(staticObj->Proto)){
+      case ProtoConst(ComponentPTValue):
 	staticObj = cast(Object) ComponentItem(theObj);
 	break;
-      case (long) DopartObjectPTValue:
+      case ProtoConst(DopartObjectPTValue):
 	staticObj = (cast(DopartObject)theObj)->Origin;
 	break;
 
 #ifdef STATIC_OBJECT_REPETITIONS
-      case (long) StatItemRepPTValue:
-      case (long) StatCompRepPTValue:
+      case ProtoConst(StatItemRepPTValue):
+      case ProtoConst(StatCompRepPTValue):
 #endif /* STATIC_OBJECT_REPETITIONS */
-      case (long) DynItemRepPTValue:
-      case (long) DynCompRepPTValue:
-      case (long) StackObjectPTValue:
-      case (long) ByteRepPTValue:
-      case (long) WordRepPTValue:
-      case (long) DoubleRepPTValue:
-      case (long) ValRepPTValue:
-      case (long) RefRepPTValue:
+      case ProtoConst(DynItemRepPTValue):
+      case ProtoConst(DynCompRepPTValue):
+      case ProtoConst(StackObjectPTValue):
+      case ProtoConst(ByteRepPTValue):
+      case ProtoConst(WordRepPTValue):
+      case ProtoConst(DoubleRepPTValue):
+      case ProtoConst(ValRepPTValue):
+      case ProtoConst(RefRepPTValue):
 	/* This is an error */
 	fprintf(output,
 		"    -- Surrounding object damaged %s!\n", 
@@ -472,15 +472,15 @@ void DisplayObject(output,theObj,retAddress)
      * in dump file.
      */
     if (lastDisplayedObject &&
-	(lastDisplayedObject->Proto==ComponentPTValue) &&
-	(lastDisplayedObject != theObj)){
+	(ProtoConst(lastDisplayedObject->Proto)==ProtoConst(ComponentPTValue)) 
+	&& (lastDisplayedObject != theObj)){
       fprintf(output, "\n"); fflush(output);
     }
   }
 
   if( isSpecialProtoType(theObj->Proto) ){
-    switch ((long) theObj->Proto){
-    case (long) ComponentPTValue:
+    switch (ProtoConst(theObj->Proto)){
+    case ProtoConst(ComponentPTValue):
       theItem = cast(Object) ComponentItem(theObj);
       if (theItem == cast(Object) BasicItem) {
 	if (!basic_dumped){
@@ -496,7 +496,7 @@ void DisplayObject(output,theObj,retAddress)
 	ObjectDescription(theItem, retAddress, "comp", 1);
       }
       break;
-    case (long) DopartObjectPTValue:
+    case ProtoConst(DopartObjectPTValue):
       theItem = (cast(DopartObject)theObj)->Origin;
       /* Check whether theItem is actually an item or is the
        * body part of a component.
@@ -510,32 +510,32 @@ void DisplayObject(output,theObj,retAddress)
 	ObjectDescription(theItem, retAddress, "item", 1);
       }
       break;
-    case (long) StructurePTValue:
+    case ProtoConst(StructurePTValue):
       fprintf(output, "  strucobject\n");
-    case (long) StackObjectPTValue:
+    case ProtoConst(StackObjectPTValue):
       fprintf(output,"  stackobject\n");
       break;
-    case (long) ByteRepPTValue:
+    case ProtoConst(ByteRepPTValue):
       fprintf(output,"  ByteRep\n");
       break;
-    case (long) WordRepPTValue:
+    case ProtoConst(WordRepPTValue):
       fprintf(output,"  WordRep\n");
       break;
-    case (long) DoubleRepPTValue:
+    case ProtoConst(DoubleRepPTValue):
       fprintf(output,"  DoubleRep\n");
       break;
-    case (long) ValRepPTValue:
+    case ProtoConst(ValRepPTValue):
       fprintf(output,"  ValRep\n");
       break;
 #ifdef STATIC_OBJECT_REPETITIONS
-    case (long) StatItemRepPTValue:
-    case (long) StatCompRepPTValue:
+    case ProtoConst(StatItemRepPTValue):
+    case ProtoConst(StatCompRepPTValue):
 #endif /* STATIC_OBJECT_REPETITIONS */
-    case (long) DynItemRepPTValue:
-    case (long) DynCompRepPTValue:
+    case ProtoConst(DynItemRepPTValue):
+    case ProtoConst(DynCompRepPTValue):
       fprintf(output, "  ObjectRep\n"); 
       break;
-    case (long) RefRepPTValue:
+    case ProtoConst(RefRepPTValue):
       fprintf(output,"  RefRep\n");
       break;
     } 
@@ -1012,7 +1012,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 #endif
     fflush(output);
     fflush(stdout);
-    exit(1);
+    BetaExit(1);
   }
   isMakingDump=1;
 
@@ -1357,37 +1357,37 @@ void DescribeObject(theObject)
 {
   ref(ProtoType) theProto = theObject->Proto;
   if (isSpecialProtoType(theProto)){
-    switch ((long) theProto){
-    case (long) ComponentPTValue:
+    switch (ProtoConst(theProto)){
+    case ProtoConst(ComponentPTValue):
       fprintf(output, "Component: ");
       DescribeObject((struct Object *)(cast(Component)theObject)->Body);
       return;
-    case (long) StackObjectPTValue:
+    case ProtoConst(StackObjectPTValue):
       fprintf(output, "StackObj");
       return;
-    case (long) StructurePTValue:
+    case ProtoConst(StructurePTValue):
       fprintf(output, 
 	      "Struc: origin: 0x%x, proto: 0x%x", 
 	      (int)((cast(Structure)theObject)->iOrigin),
 	      (int)((cast(Structure)theObject)->iProto));
       return;
-    case (long) DopartObjectPTValue:
+    case ProtoConst(DopartObjectPTValue):
       fprintf(output, 
 	      "Dopart: origin: 0x%x", 
 	      (int)((cast(DopartObject)theObject)->Origin));
       return;
 #ifdef STATIC_OBJECT_REPETITIONS
-    case (long) StatItemRepPTValue:
-    case (long) StatCompRepPTValue:
+    case ProtoConst(StatItemRepPTValue):
+    case ProtoConst(StatCompRepPTValue):
 #endif /* STATIC_OBJECT_REPETITIONS */
-    case (long) DynItemRepPTValue:
-    case (long) DynCompRepPTValue:
+    case ProtoConst(DynItemRepPTValue):
+    case ProtoConst(DynCompRepPTValue):
       fprintf(output, "ObjectRep\n"); return;
-    case (long) RefRepPTValue:
+    case ProtoConst(RefRepPTValue):
       fprintf(output, "RefRep"); return;
-    case (long) ValRepPTValue:
+    case ProtoConst(ValRepPTValue):
       fprintf(output, "IntegerRep"); return;
-    case (long) ByteRepPTValue:
+    case ProtoConst(ByteRepPTValue):
       fprintf(output, "CharRep: '");
       if ( (((cast(ValRep)theObject)->HighBorder)-((cast(ValRep)theObject)->LowBorder)+1) > 10 ){
 	fprintf(output, "%s", (char *)(cast(ValRep)theObject)->Body);
@@ -1397,10 +1397,10 @@ void DescribeObject(theObject)
 	fprintf(output, "'");
       }
       return;
-    case (long) WordRepPTValue:
+    case ProtoConst(WordRepPTValue):
       fprintf(output, "ShortRep");
       return;
-    case (long) DoubleRepPTValue:
+    case ProtoConst(DoubleRepPTValue):
       fprintf(output, "RealRep");
       return;
     default:

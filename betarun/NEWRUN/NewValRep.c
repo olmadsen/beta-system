@@ -42,7 +42,7 @@ void NewVR(struct Object *theObj,
 #ifdef RTDEBUG
 	  default:
 	    Notify("NewValRep: wrong prototype");
-	    exit(1);
+	    BetaExit(1);
 #endif
 	  }
 	  );

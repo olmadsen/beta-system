@@ -79,7 +79,7 @@ void valhalla_await_connection ()
   sock = valhalla_acceptConn (psock,&blocked,&inetAdr);
   if (sock==-1) {
     fprintf (output,"valhalla_await_connection: acceptConn failed\n");
-    exit (99);
+    BetaExit (99);
   } else {
     valhalla_create_buffers ();
   }
@@ -130,19 +130,19 @@ void valhalla_fill_buffer ()
   DEBUG_VALHALLA (fprintf(output,"valhalla_fill_buffer\n"));
   if (valhalla_readDataMax (sock,(char *) &rheader[0],sizeof(int)) != sizeof(int)) {
     fprintf (output, "valhalla_fill_buffer failed (1) \n");
-    exit (99);
+    BetaExit (99);
   }
   if (valhalla_readDataMax (sock,(char *) &rheader[1],sizeof(int)) != sizeof(int)) {
     fprintf (output, "valhalla_fill_buffer failed (2) \n");
-    exit (99);
+    BetaExit (99);
   }
   if (rheader[0]*4>commbufsize) {
     fprintf (output, "valhalla_fill_buffer failed (3) \n");
-    exit (99);
+    BetaExit (99);
   }
   if (valhalla_readDataMax (sock,rbuf,rheader[0]*4) != rheader[0]*4) {
     fprintf (output, "valhalla_fill_buffer failed (4) \n");
-    exit (99);
+    BetaExit (99);
   }
   rnext=0; rlen=rheader[1];
   DEBUG_VALHALLA (fprintf(output,"valhalla_fill_buffer: Done\n"));
@@ -301,7 +301,7 @@ void valhallaInit ()
       
       execl (valhallaname,valhallaname,"-PORT",tmpport,"-PID",tmppid,"-EXECNAME",Argv(1),(char *) 0);
       fprintf (output, "Could not exec\n");
-      _exit (99);
+      BetaExit (99);
     }
   }
 
@@ -322,11 +322,11 @@ void valhallaInit ()
   { int todo;
     switch (todo=valhallaCommunicate (0,0)) {
     case CONTINUE: break;
-    case TERMINATE: exit (99);
+    case TERMINATE: BetaExit (99);
     default:
       fprintf (output, "Unexpected return from valhallaCommunicate: %d \n",
 	       todo);
-      exit (99);
+      BetaExit (99);
     }
   }
     
@@ -480,12 +480,12 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
 	
 	if (obj) {
 	  address = (int) obj;
-	  if (obj->Proto != ComponentPTValue) {
+	  if (ProtoConst(obj->Proto) != ProtoConst(ComponentPTValue)) {
 	    DEBUG_VALHALLA(fprintf(output,"Not ComponentPTValue\n"));
 	    if (obj->GCAttr == -6) {
 	      struct Component *comp = (struct Component *) (address - 24);
 	      DEBUG_VALHALLA(fprintf(output,"GCAttr was -6\n"));
-	      if (comp->Proto == ComponentPTValue)
+	      if (ProtoConst(comp->Proto) == ProtoConst(ComponentPTValue))
 		address = address - 24;
 	    }
 	  }
@@ -634,7 +634,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
 
   if (invops) {
     fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
-    exit (99);
+    BetaExit (99);
   } else
     invops=TRUE;
 
@@ -690,7 +690,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   
   switch (res=valhallaCommunicate ((int) PC, curObj)){
   case CONTINUE: break;
-  case TERMINATE: exit (99);
+  case TERMINATE: BetaExit (99);
   }
   invops=FALSE;
 

@@ -108,7 +108,7 @@ main(int argc, char *argv[])
   int i, n;
 
   if (argc < 2)
-    exit(1);
+    BetaExit(1);
   n = atoi(argv[1]);
   {
     int v[n];

@@ -12,7 +12,7 @@ void CBFAAlloc()
     char buf[100];
     sprintf(buf, "Too small CBFA specified: %dKb", (int)CBFABlockSize/Kb);
     Notify2(buf, "Check your BETART environment variable");
-    exit(1);
+    BetaExit(1);
   }
   if ( CBFABlockSize == 0 ) {
     INFO_CBFA( Notify2("Warning, CBFA size of 0Kb specified.",
@@ -25,7 +25,7 @@ void CBFAAlloc()
       char buf[300];
       sprintf(buf, "%s: Cannot allocate CBFA", ArgVector[0]);
       Notify(buf);
-      exit(1);
+      BetaExit(1);
     }
     lastCBFA = CBFA;
     if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
@@ -38,7 +38,7 @@ void CBFAAlloc()
       EnlargeMacHeap(buf);
 #endif
       Notify(buf);
-      exit(1);
+      BetaExit(1);
     }
     lastCBFA->next = 0;
     CBFATop = lastCBFA->entries;
@@ -53,7 +53,7 @@ void CBFArelloc()
   if ( CBFABlockSize == 0 ) {
     Notify2("Using callbacks and CBFA size of 0Kb specified",
 	    "Check your BETART environment variable");
-    exit(1);
+    BetaExit(1);
   }
 
   /* We can claim that top must equal limit since the block size
@@ -67,7 +67,7 @@ void CBFArelloc()
     char buf[300];
     sprintf(buf, "%s: Cannot allocate CBFA", ArgVector[0]);
     Notify(buf);
-    exit(1);
+    BetaExit(1);
   }
   lastCBFA = lastCBFA->next;
   if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
@@ -77,7 +77,7 @@ void CBFArelloc()
 	    ArgVector[0],
 	    (int)CBFABlockSize/Kb);
     Notify(buf);
-    exit(1);
+    BetaExit(1);
   }
   lastCBFA->next = 0;
   CBFATop = lastCBFA->entries;

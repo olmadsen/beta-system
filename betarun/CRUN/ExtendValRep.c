@@ -135,8 +135,8 @@ void ExtVR(ref(Object) theObj,
       if (add>0){
 	/* Allocate/Initialize new extra elements */
 
-	switch((long)theRep->Proto){
-	case (long) DynItemRepPTValue:
+	switch(ProtoConst(theRep->Proto)){
+	case ProtoConst(DynItemRepPTValue):
 	  while(--add>=0){
 	    struct Item *item;
 #ifdef sparc
@@ -154,7 +154,7 @@ void ExtVR(ref(Object) theObj,
 	    AssignReference((long *)((long)&NEWREP->Body + (range+add)*4), item);
 	  }
 	  break;
-	case (long) DynCompRepPTValue:
+	case ProtoConst(DynCompRepPTValue):
 	  while(--add>=0){
 	    struct Component *comp;
 #ifdef sparc

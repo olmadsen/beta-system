@@ -193,7 +193,7 @@ static char *unscrambleString(unsigned char *p, int len, int sum)
   }
   q[len] = '\0';
   if (chk != sum)
-    exit(1);
+    BetaExit(1);
   return q;
 }
 #endif /* PE */
@@ -319,7 +319,7 @@ void Initialize()
     char buf[100];
     sprintf(buf,"Too small IOA size specified: %dKb", (int)IOASize/Kb);
     Notify2(buf, "Check your BETART environment variable.");
-    exit(1);
+    BetaExit(1);
   }
   if( !AllocateHeap((long*)&tmpIOA,(long*)&tmpIOATop,(long*)&IOALimit, IOASize ) ){
     char buf[300];
@@ -330,7 +330,7 @@ void Initialize()
     EnlargeMacHeap(buf);
 #endif
     Notify(buf);
-    exit(1);
+    BetaExit(1);
   }
 
 #if defined(sparc) || defined(NEWRUN)
@@ -369,7 +369,7 @@ void Initialize()
     EnlargeMacHeap(buf);
 #endif
     Notify(buf);
-    exit(1);
+    BetaExit(1);
   }
   RefSP = &ReferenceStack[0]; /* points to first free element */
 
@@ -384,7 +384,7 @@ void Initialize()
     EnlargeMacHeap(buf);
 #endif
     Notify(buf);
-    exit(1);
+    BetaExit(1);
   }
   CompSP = &CompStack[0]; /* points to first free element */
 
@@ -399,7 +399,7 @@ void Initialize()
     EnlargeMacHeap(buf);
 #endif
     Notify(buf);
-    exit(1);
+    BetaExit(1);
   }
   GenSP = &GenStack[0]-1; /* points below first free element */
 #endif /* NEWRUN */
@@ -414,7 +414,7 @@ void Initialize()
     EnlargeMacHeap(buf);
 #endif
     Notify(buf);
-    exit(1);
+    BetaExit(1);
   }
   
   /* Allocate the Callback Function Area */

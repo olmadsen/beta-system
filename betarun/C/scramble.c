@@ -5,6 +5,7 @@
  */
 
 #include <stdio.h>
+#define BetaExit(n) exit(n)
 
 /*
  * This program is used to generate scrambled strings for C/initialize.c
@@ -116,7 +117,7 @@ void encode(void)
     dec = ((enc - 41) ^ oldenc);
     if (c != dec) {
       printf("Oops, encoding error!");
-      exit(1);
+      BetaExit(1);
     }
     chk += c;
     printf("0x%02x", enc);
@@ -142,7 +143,7 @@ void decode(void)
     if (c != (unsigned char)SCRAMBLETEMPLATE[i]) {
       fprintf(stderr,"Decoding FAILED: c='%c', template='%c'\n", 
 	     c, SCRAMBLETEMPLATE[i]);
-      exit(1);
+      BetaExit(1);
     }
     chk += c;
     putchar(c);
@@ -150,7 +151,7 @@ void decode(void)
   if (chk != SCRAMBLECHK) {
     fprintf(stderr, "Consistency check FAILED: chk==%d, SCRAMBLECHK=%d\n", 
 	    chk, SCRAMBLECHK);
-    exit(1);
+    BetaExit(1);
   }
   printf("Decoding OK!\n");
 }

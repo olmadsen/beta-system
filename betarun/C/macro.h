@@ -86,7 +86,10 @@ register unsigned IOATopOff asm("%g7");
 #endif
 #endif
 
-
+/* Cast ProtoType to constant - advantage to use chars, since they
+ * will fit in a gcc jump table.
+ */
+#define ProtoConst(proto)      ((signed char) ((int)(proto)))
 
 #if defined(sparc) || defined(NEWRUN)
 #define inIOA(x)     (((unsigned)(x) - (unsigned)(IOA)) < (unsigned)(IOATopOff))
@@ -98,7 +101,8 @@ register unsigned IOATopOff asm("%g7");
 #define inToSpace(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceTop)) 
 #define inAOA(x)     inArea(AOABaseBlock, (struct Object *)(x))
 
-#define isSpecialProtoType(x) ((MinPTValue <= (long)(x)) && ((long)(x) <= MaxPTValue))
+#define isSpecialProtoType(x) ((ProtoConst(MinPTValue) <= ProtoConst(x)) && \
+                               (ProtoConst(x) <= ProtoConst(MaxPTValue)))
 
 #define isNegativeRef(x) ((long)(x) < 0)
 #define isPositiveRef(x) ((long)(x) > 0)
@@ -107,18 +111,18 @@ register unsigned IOATopOff asm("%g7");
 #define isStatic(x)       (-0xFFFF <= (x)) && ((x) <= -1)
 #define isForward(x)      ((x) > 2048 )
 
-#define isValRep(x)      (((long)DoubleRepPTValue <= (long)((x)->Proto))\
-			  && ((long)((x)->Proto) <= (long)ValRepPTValue))
+#define isValRep(x)      ((ProtoConst(DoubleRepPTValue) <= ProtoConst((x)->Proto))\
+			  && (ProtoConst((x)->Proto) <= ProtoConst(ValRepPTValue)))
 #ifdef STATIC_OBJECT_REPETITIONS
-#define isObjectRep(x)   (((long)StatCompRepPTValue <= (long)((x)->Proto))\
-			  && ((long)((x)->Proto) <= (long)DynItemRepPTValue))
+#define isObjectRep(x)   ((ProtoConst(StatCompRepPTValue) <= ProtoConst((x)->Proto))\
+			  && (ProtoConst((x)->Proto) <= ProtoConst(DynItemRepPTValue)))
 #else /* STATIC_OBJECT_REPETITIONS */
-#define isObjectRep(x)   (((long)DynCompRepPTValue <= (long)((x)->Proto))\
-			  && ((long)((x)->Proto) <= (long)DynItemRepPTValue))
+#define isObjectRep(x)   ((ProtoConst(DynCompRepPTValue) <= ProtoConst((x)->Proto))\
+			  && (ProtoConst((x)->Proto) <= ProtoConst(DynItemRepPTValue)))
 #endif /* STATIC_OBJECT_REPETITIONS */
 
-#define isStackObject(x) ((x)->Proto == StackObjectPTValue)
-#define isComponent(x)   ((x)->Proto == ComponentPTValue)
+#define isStackObject(x) (ProtoConst((x)->Proto) == ProtoConst(StackObjectPTValue))
+#define isComponent(x)   (ProtoConst((x)->Proto) == ProtoConst(ComponentPTValue))
 
 #define ComponentItem(x) ((ref(Item)) (((long)(x)) + headsize(Component)))
 
@@ -259,28 +263,28 @@ register unsigned IOATopOff asm("%g7");
 #define IsComponentItem(item) \
 (item && \
  (((struct Item *)(item))->GCAttr == -(headsize(Component)/sizeof(long))) && \
- (EnclosingComponent(item)->Proto==ComponentPTValue))
+ (ProtoConst(EnclosingComponent(item)->Proto)==ProtoConst(ComponentPTValue)))
 
 /* Generic ValRepSize */
 
-#define DispatchValRepSize(proto, range)			\
-(((proto) == ByteRepPTValue) ? ByteRepSize(range) :		\
- (((proto) == ValRepPTValue)   ? ValRepSize(range)  :		\
-  (((proto) == DoubleRepPTValue) ? DoubleRepSize(range) :	\
+#define DispatchValRepSize(proto, range)			                        \
+((ProtoConst(proto) == ProtoConst(ByteRepPTValue)) ? ByteRepSize(range) :		\
+ ((ProtoConst(proto) == ProtoConst(ValRepPTValue))   ? ValRepSize(range)  :		\
+  ((ProtoConst(proto) == ProtoConst(DoubleRepPTValue)) ? DoubleRepSize(range) :    	\
    WordRepSize(range))))
 
-#define DispatchValRepBodySize(proto, range)			\
-(((proto) == ByteRepPTValue) ? ByteRepBodySize(range) :		\
- (((proto) == ValRepPTValue)   ? ValRepBodySize(range)  :	\
-  (((proto) == DoubleRepPTValue) ? DoubleRepBodySize(range) :	\
+#define DispatchValRepBodySize(proto, range)			                        \
+((ProtoConst(proto) == ProtoConst(ByteRepPTValue)) ? ByteRepBodySize(range) :      	\
+ ((ProtoConst(proto) == ProtoConst(ValRepPTValue))   ? ValRepBodySize(range)  : 	\
+  ((ProtoConst(proto) == ProtoConst(DoubleRepPTValue)) ? DoubleRepBodySize(range) :	\
    WordRepBodySize(range))))
 
 #ifdef STATIC_OBJECT_REPETITIONS
 
-#define DispatchObjectRepSize(proto, range, iproto)		         \
-((((proto) == DynItemRepPTValue) ||                                      \
- (((proto) == DynCompRepPTValue)) ? DynObjectRepSize(range) :	         \
-  (((proto) == StatItemRepPTValue)  ? StatItemRepSize(range, iproto)  :	 \
+#define DispatchObjectRepSize(proto, range, iproto)		                          \
+(((ProtoConst(proto) == ProtoConst(DynItemRepPTValue)) ||                                 \
+ (((ProtoConstproto) == ProtoConst(DynCompRepPTValue))) ? DynObjectRepSize(range) :	  \
+  ((ProtoConst(proto) == ProtoConst(StatItemRepPTValue)) ? StatItemRepSize(range, iproto):\
    StatCompRepSize(range, iproto))))
 
 #else /* STATIC_OBJECT_REPETITIONS */

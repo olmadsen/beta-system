@@ -12,47 +12,47 @@ long ObjectSize(theObj)
   ref(ProtoType) theProto = theObj->Proto;
 
   if( isSpecialProtoType(theProto) ){
-    switch((long) theProto){
-    case (long) WordRepPTValue:
+    switch(ProtoConst(theProto)){
+    case ProtoConst(WordRepPTValue):
       return WordRepSize(toValRep(theObj)->HighBorder) >> 2;
 
-    case (long) ByteRepPTValue:
+    case ProtoConst(ByteRepPTValue):
       return ByteRepSize(toValRep(theObj)->HighBorder) >> 2;
 
-    case (long) DoubleRepPTValue:
+    case ProtoConst(DoubleRepPTValue):
       return DoubleRepSize(toValRep(theObj)->HighBorder) >> 2;
 
-    case (long) ValRepPTValue:
+    case ProtoConst(ValRepPTValue):
       return ValRepSize(toValRep(theObj)->HighBorder) >> 2;
 
 #ifdef STATIC_OBJECT_REPETITIONS
-    case (long) StatItemRepPTValue:
+    case ProtoConst(StatItemRepPTValue):
       return StatItemRepSize(((struct ObjectRep *)theObj)->HighBorder,
 			     ((struct ObjectRep *)theObj)->iProto
 			     ) >> 2;
-    case (long) StatCompRepPTValue:
+    case ProtoConst(StatCompRepPTValue):
       return StatCompRepSize(((struct ObjectRep *)theObj)->HighBorder,
 			     ((struct ObjectRep *)theObj)->iProto
 			     ) >> 2;
 #endif /* STATIC_OBJECT_REPETITIONS */
 
-    case (long) DynItemRepPTValue:
-    case (long) DynCompRepPTValue:
+    case ProtoConst(DynItemRepPTValue):
+    case ProtoConst(DynCompRepPTValue):
       return DynObjectRepSize(((struct ObjectRep *)theObj)->HighBorder) >> 2;
       
-    case (long) RefRepPTValue:
+    case ProtoConst(RefRepPTValue):
       return RefRepSize(toRefRep(theObj)->HighBorder) >> 2;
 
-    case (long) ComponentPTValue:
+    case ProtoConst(ComponentPTValue):
       return ComponentSize(ComponentItem(theObj)->Proto) >> 2;
 
-    case (long) StackObjectPTValue:
+    case ProtoConst(StackObjectPTValue):
       return StackObjectSize(toStackObject(theObj)->BodySize) >> 2;
 
-    case (long) StructurePTValue:
+    case ProtoConst(StructurePTValue):
       return StructureSize >> 2;
 
-    case (long) DopartObjectPTValue:
+    case ProtoConst(DopartObjectPTValue):
       return DopartObjectSize((cast(DopartObject)(theObj))->Size) >> 2;
 #ifdef RTDEBUG
     default:

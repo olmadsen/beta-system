@@ -82,12 +82,12 @@ void Qua(ref(ProtoType) dstQuaProto,
     if (srcProto == 0) {
       /* src was not a dangler so its prototype has not been looked up yet. */
 #endif
-      switch((long) src->Proto){
-      case (long) StructurePTValue:
+      switch(ProtoConst(src->Proto)){
+      case ProtoConst(StructurePTValue):
 	/* It was a pattern variable assignment: src is a struc-object */
 	srcProto  = (cast(Structure)src)->iProto;
 	break;
-      case (long) ComponentPTValue:
+      case ProtoConst(ComponentPTValue):
 	/* It was a component-reference assignment: src points to a component */
 	src       = cast(Object)(cast(Component)src)->Body;
 	srcProto  = src->Proto;
@@ -179,18 +179,18 @@ void OQua(struct Object **theCell,
       else if (isLazyRef(src)) {
 	negAOArefsINSERT((long)theCell);
 	fprintf (stderr, "Aaarghh: Strict QUA check on lazy reference -- Goodbye cruel world\n");
-	exit (99);
+	BetaExit (99);
       }
 #endif
     
     /* 2. Qua Check */
-    switch((long) src->Proto){
-    case (long) StructurePTValue:
+    switch(ProtoConst(src->Proto)){
+    case ProtoConst(StructurePTValue):
       /* It was a pattern variable assignment: src is a struc-object */
       srcProto  = (cast(Structure)src)->iProto;
       srcOrigin = (cast(Structure)src)->iOrigin;
       break;
-    case (long) ComponentPTValue:
+    case ProtoConst(ComponentPTValue):
       /* It was a component-reference assignment: src points to a component */
       src       = cast(Object)(cast(Component)src)->Body;
       srcProto  = src->Proto;

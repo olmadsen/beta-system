@@ -189,7 +189,7 @@ void FailureExit()
 void Trap()
 {
   fprintf(output, "Trap called... Exiting\n");
-  exit(0);
+  BetaExit(1);
 }
 
 char GetByte(unsigned long a, int byteNo /* 0-3 */)
@@ -266,7 +266,7 @@ void initJmpPool()
 
 void reallocJmpList()     
 {
-  fprintf(output,"***ERROR: Jump Stack Overflow...\n"); fflush(output); exit(1);
+  fprintf(output,"***ERROR: Jump Stack Overflow...\n"); fflush(output); BetaExit(1);
 }
 
 long GetJumpStackSize(void)
@@ -331,7 +331,7 @@ void FreeJmpBuf(unsigned long addr, unsigned long off)
     jmp_buf_stack_top--;
 	if ((jmp_buf_stack_top==jmp_buf_stack) || !(jmp_buf_stack_top->jumpBuffer)) {
 	   fprintf(output,"*** ERROR in FreeJmpBuf: jmp_buf_stack reached or jmp_buf_stack_top->jumpBuffer==0 (0x%x,0x%x,0x%x)\n",(unsigned)jmp_buf_stack,(unsigned)jmp_buf_stack_top,(unsigned)jmp_buf_stack_top->jumpBuffer);
-	   exit(1);
+	   BetaExit(1);
 	}
   }
   if (info) {

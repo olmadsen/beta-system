@@ -155,7 +155,7 @@ void OQua(struct Object **theCell,
 	negAOArefsINSERT((long)theCell);
 	fprintf (output, 
 		 "Error: Strict QUA check on lazy reference\n");
-	exit (99);
+	BetaExit (99);
       }
 #endif
     

@@ -59,61 +59,61 @@ void NewVR(ref(Object) theObj,
 #endif
 	    theRep = (casthandle(ValRep)theObj)[offset];
 	    
-	    switch( (long) theRep->Proto){
+	    switch( ProtoConst(theRep->Proto)){
 #ifdef sparc
-	    case (long) ByteRepPTValue:
+	    case ProtoConst(ByteRepPTValue):
 	      CAlloVR1(theObj, 0, offset*4, 0, 0, range);
 	      break;
-	    case (long) WordRepPTValue:
+	    case ProtoConst(WordRepPTValue):
 	      CAlloVR2(theObj, 0, offset*4, 0, 0, range); 
 	      break;
-	    case (long) ValRepPTValue:
+	    case ProtoConst(ValRepPTValue):
 	      CAlloVR4(theObj, 0, offset*4, 0, 0, range);
 	      break;
-	    case (long) DoubleRepPTValue:
+	    case ProtoConst(DoubleRepPTValue):
 	      CAlloVR8(theObj, 0, offset*4, 0, 0, range); 
 	      break;
-	    case (long) DynItemRepPTValue:
+	    case ProtoConst(DynItemRepPTValue):
 	      CAlloORR(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
 	      break;
-	    case (long) DynCompRepPTValue:
+	    case ProtoConst(DynCompRepPTValue):
 	      CAlloORRC(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
 	      break;
 #ifdef STATIC_OBJECT_REPETITIONS
-	    case (long) StatItemRepPTValue:
+	    case ProtoConst(StatItemRepPTValue):
 	      CAlloORG(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
 	      break;
-	    case (long) StatCompRepPTValue:
+	    case ProtoConst(StatCompRepPTValue):
 	      CAlloORGC(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
 	      break;
 #endif /* STATIC_OBJECT_REPETITIONS */
 #else
-	    case (long) ByteRepPTValue:
+	    case ProtoConst(ByteRepPTValue):
 	      AlloVR1(theObj, offset*4, range);
 	      break;
-	    case (long) WordRepPTValue:
+	    case ProtoConst(WordRepPTValue):
 	      AlloVR2(theObj, offset*4, range); 
 	      break;
-	    case (long) ValRepPTValue:
+	    case ProtoConst(ValRepPTValue):
 	      AlloVR4(theObj, offset*4, range);
 	      break;
-	    case (long) DoubleRepPTValue:
+	    case ProtoConst(DoubleRepPTValue):
 	      AlloVR8(theObj, offset*4, range); 
 	      break;
-	    case (long) DynItemRepPTValue:
+	    case ProtoConst(DynItemRepPTValue):
 	      SetObjOriginProtoOffRange();
 	      AlloORR(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 	      break;
-	    case (long) DynCompRepPTValue:
+	    case ProtoConst(DynCompRepPTValue):
 	      SetObjOriginProtoOffRange();
 	      AlloORRC(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 	      break;
 #ifdef STATIC_OBJECT_REPETITIONS
-	    case (long) StatItemRepPTValue:
+	    case ProtoConst(StatItemRepPTValue):
 	      SetObjOriginProtoOffRange();
 	      AlloORG(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 	      break;
-	    case (long) StatCompRepPTValue:
+	    case ProtoConst(StatCompRepPTValue):
 	      SetObjOriginProtoOffRange();
 	      AlloORGC(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 	      break;
@@ -121,7 +121,7 @@ void NewVR(ref(Object) theObj,
 #endif
 	    default:
 	      Notify("NewValRep: wrong prototype");
-	      exit(1);
+	      BetaExit(1);
 	    }
 #ifdef hppa
 	    setThisReg(popReference());

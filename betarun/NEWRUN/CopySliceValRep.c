@@ -168,7 +168,7 @@ void CopySVR(struct ValRep *theRep,
 #ifdef RTDEBUG
       default:
 	Notify("CopySliceValRep: wrong prototype");
-	exit(1);
+	BetaExit(1);
 #endif
     }
         

@@ -1,6 +1,7 @@
 /* constants */
 
-/* -- Prototype constants */
+/* Prototype constants */
+
 #define ComponentPTValue       ((struct ProtoType *) -1)
 #define StackObjectPTValue     ((struct ProtoType *) -2)
 #define StructurePTValue       ((struct ProtoType *) -3)
@@ -18,11 +19,11 @@
 #endif /* STATIC_OBJECT_REPETITIONS */
 
 #ifdef STATIC_OBJECT_REPETITIONS
-#define MaxPTValue             -1
-#define MinPTValue             -13
+#define MaxPTValue             ((struct ProtoType *) -1)
+#define MinPTValue             ((struct ProtoType *) -13)
 #else /* STATIC_OBJECT_REPETITIONS */
-#define MaxPTValue             -1
-#define MinPTValue             -11
+#define MaxPTValue             ((struct ProtoType *) -1)
+#define MinPTValue             ((struct ProtoType *) -11)
 #endif /* STATIC_OBJECT_REPETITIONS */
 
 #ifdef UseRefStack

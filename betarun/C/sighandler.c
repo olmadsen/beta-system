@@ -9,7 +9,7 @@
 void BetaSignalHandler (long sig)
 {
   fprintf(output, "\nBetaSignalHandler: Caught signal %d. Exiting.\n", sig);
-  exit(1);
+  BetaExit(1);
 }
 #endif
 
@@ -24,7 +24,7 @@ void ExitHandler(int sig)
 		     (int)sig);
 	     fflush(stderr);
 	     );
-  BetaExit(-1);
+  BetaExit(1);
 }
 
 void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
@@ -82,7 +82,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
     todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
   }
 
-  if (!todo) BetaExit(-1);
+  if (!todo) BetaExit(1);
 }
   
 /***** END sun4s ****/
@@ -108,7 +108,7 @@ static void ExitHandler(sig, code, scp, addr)
 	     fflush(stderr);
 	     );
 #endif
-  BetaExit(-1); 
+  BetaExit(1); 
 }
 
 #if defined(linux) || defined(nti)
@@ -436,7 +436,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   }
 #endif /* apollo */
 
-  if (!todo) BetaExit(-1);
+  if (!todo) BetaExit(1);
 }
 
 #endif /* crts */

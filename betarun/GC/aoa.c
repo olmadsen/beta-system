@@ -33,7 +33,7 @@ void tempAOArootsAlloc(void)
       EnlargeMacHeap(buf);
 #endif
       Notify(buf);
-      exit(1);
+      BetaExit(1);
     } 
     AOArootsLimit = (long *) ((char *) tempAOAroots + IOASize);
     INFO_IOA(fprintf(output, "\nallocated temporary AOAroots table, "));
@@ -339,7 +339,7 @@ static void extendRAFStackArea(void)
     EnlargeMacHeap(buf);
 #endif
     Notify(buf);
-    exit(-1);
+    BetaExit(1);
   }
   memcpy(newBase, RAFStackBase, oldSize);
   if (RAFStackBase != IOA) {
@@ -506,18 +506,18 @@ static void FollowObject(ref(Object) theObj)
   theProto = theObj->Proto;
   
   if( isSpecialProtoType(theProto) ){  
-    switch( (long) theProto ){
-    case (long) ByteRepPTValue:
-    case (long) WordRepPTValue:
-    case (long) DoubleRepPTValue:
-    case (long) ValRepPTValue: return;
+    switch( ProtoConst(theProto) ){
+    case ProtoConst(ByteRepPTValue):
+    case ProtoConst(WordRepPTValue):
+    case ProtoConst(DoubleRepPTValue):
+    case ProtoConst(ValRepPTValue): return;
       /* No references in a Value Repetition, so do nothing*/
       
-    case (long) DynItemRepPTValue:
-    case (long) DynCompRepPTValue:
+    case ProtoConst(DynItemRepPTValue):
+    case ProtoConst(DynCompRepPTValue):
 #ifdef STATIC_OBJECT_REPETITIONS
-    case (long) StatItemRepPTValue:
-    case (long) StatCompRepPTValue:
+    case ProtoConst(StatItemRepPTValue):
+    case ProtoConst(StatCompRepPTValue):
 #endif /* STATIC_OBJECT_REPETITIONS */
       /* Follow the iOrigin */
 #ifdef RTLAZY
@@ -531,9 +531,9 @@ static void FollowObject(ref(Object) theObj)
       RAFPush(&REP->iOrigin);
 #endif
       /* Follow rest of repetition */
-      switch( (long) theProto ){
-      case (long) DynItemRepPTValue:
-      case (long) DynCompRepPTValue:
+      switch( ProtoConst(theProto) ){
+      case ProtoConst(DynItemRepPTValue):
+      case ProtoConst(DynCompRepPTValue):
 	{ long *pointer;
 	  register long size, index;
 	  
@@ -559,7 +559,7 @@ static void FollowObject(ref(Object) theObj)
 	}
 	break;
 #ifdef STATIC_OBJECT_REPETITIONS
-      case (long) StatItemRepPTValue:
+      case ProtoConst(StatItemRepPTValue):
 	{ struct Item *theItem;
 	  register long size, index;
 	  
@@ -575,7 +575,7 @@ static void FollowObject(ref(Object) theObj)
 	  }
 	}
 	break;
-      case (long) StatCompRepPTValue:
+      case ProtoConst(StatCompRepPTValue):
 	{ struct Component *theComp;
 	  register long size, index;
 	  
@@ -595,7 +595,7 @@ static void FollowObject(ref(Object) theObj)
       }
       return;
 
-    case (long) RefRepPTValue:
+    case ProtoConst(RefRepPTValue):
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
 	register long size, index;
@@ -619,7 +619,7 @@ static void FollowObject(ref(Object) theObj)
       }
       return;
       
-    case (long) ComponentPTValue:
+    case ProtoConst(ComponentPTValue):
       { ref(Component) theComponent;
 	
 	theComponent = Coerce( theObj, Component);
@@ -630,7 +630,7 @@ static void FollowObject(ref(Object) theObj)
       }
       return;
       
-    case (long) StackObjectPTValue:
+    case ProtoConst(StackObjectPTValue):
 #ifdef KEEP_STACKOBJ_IN_IOA
       Notify("FollowObject: Error: StackObject in AOA.");
 #else
@@ -662,11 +662,11 @@ static void FollowObject(ref(Object) theObj)
 #endif /* KEEP_STACKOBJ_IN_IOA */
       return;
       
-    case (long) StructurePTValue:
+    case ProtoConst(StructurePTValue):
       RAFPush(&(toStructure(theObj))->iOrigin);
       return;
 
-    case (long) DopartObjectPTValue:
+    case ProtoConst(DopartObjectPTValue):
       RAFPush(&(cast(DopartObject)(theObj))->Origin);
       return;
     }
@@ -970,7 +970,7 @@ static void Phase3()
       EnlargeMacHeap(buf);
 #endif
       Notify(buf);
-      exit(-1);
+      BetaExit(1);
     }
     INFO_AOA( fprintf(output, "#(AOA: new block for table %d longs)\n",
 		      (int)AOAtoIOACount));
@@ -1128,17 +1128,17 @@ void AOACheckObject( theObj)
 	"#AOACheckObject: !inBetaHeap(theProto)");
   
   if( isSpecialProtoType(theProto) ){  
-    switch( (long)  theProto ){
-    case (long) ByteRepPTValue:
-    case (long) WordRepPTValue:
-    case (long) DoubleRepPTValue:
-    case (long) ValRepPTValue: return; /* No references in the type of object, so do nothing*/
+    switch( ProtoConst(theProto) ){
+    case ProtoConst(ByteRepPTValue):
+    case ProtoConst(WordRepPTValue):
+    case ProtoConst(DoubleRepPTValue):
+    case ProtoConst(ValRepPTValue): return; /* No references in the type of object, so do nothing*/
       
-    case (long) DynItemRepPTValue:
-    case (long) DynCompRepPTValue:
+    case ProtoConst(DynItemRepPTValue):
+    case ProtoConst(DynCompRepPTValue):
 #ifdef STATIC_OBJECT_REPETITIONS
-    case (long) StatItemRepPTValue:
-    case (long) StatCompRepPTValue:
+    case ProtoConst(StatItemRepPTValue):
+    case ProtoConst(StatCompRepPTValue):
 #endif /* STATIC_OBJECT_REPETITIONS */
       /* Check iOrigin */
 #ifdef RTLAZY
@@ -1148,9 +1148,9 @@ void AOACheckObject( theObj)
       AOACheckReference( (handle(Object))(&REP->iOrigin) );
 #endif
       /* Check rest of repetition */
-      switch((long)theProto){
-      case (long) DynItemRepPTValue:
-      case (long) DynCompRepPTValue:
+      switch(ProtoConst(theProto)){
+      case ProtoConst(DynItemRepPTValue):
+      case ProtoConst(DynCompRepPTValue):
 	{ long *pointer;
 	  register long size, index;
 	  
@@ -1172,7 +1172,7 @@ void AOACheckObject( theObj)
 	}
 	break;
 #ifdef STATIC_OBJECT_REPETITIONS
-      case (long) StatItemRepPTValue:
+      case ProtoConst(StatItemRepPTValue):
 	{ struct Item *theItem;
 	  register long size, index;
 	  
@@ -1188,7 +1188,7 @@ void AOACheckObject( theObj)
 	  }
 	}
 	break;
-      case (long) StatCompRepPTValue:
+      case ProtoConst(StatCompRepPTValue):
 	{ struct Component *theComp;
 	  register long size, index;
 	  
@@ -1208,7 +1208,7 @@ void AOACheckObject( theObj)
       }
       return;
 
-    case (long) RefRepPTValue:
+    case ProtoConst(RefRepPTValue):
       /* Scan the repetition and follow all entries */
       { long * pointer;
 	register long size, index;
@@ -1228,7 +1228,7 @@ void AOACheckObject( theObj)
       
       return;
       
-    case (long) ComponentPTValue:
+    case ProtoConst(ComponentPTValue):
       { ref(Component) theComponent;
 	
 	theComponent = Coerce( theObj, Component);
@@ -1257,7 +1257,7 @@ void AOACheckObject( theObj)
 	AOACheckObject( (ref(Object))(ComponentItem( theComponent)));
       }
       return;   
-    case (long) StackObjectPTValue:
+    case ProtoConst(StackObjectPTValue):
 #ifdef KEEP_STACKOBJ_IN_IOA
       Claim( FALSE, "AOACheckObject: theObj should not be StackObject.");
 #else
@@ -1291,10 +1291,10 @@ void AOACheckObject( theObj)
 #endif
 #endif /* KEEP_STACKOBJ_IN_IOA */
       return; 
-    case (long) StructurePTValue:
+    case ProtoConst(StructurePTValue):
       AOACheckReference( &(toStructure(theObj))->iOrigin );
       return;
-    case (long) DopartObjectPTValue:
+    case ProtoConst(DopartObjectPTValue):
       AOACheckReference( &(cast(DopartObject)(theObj))->Origin );
       return;
     }
@@ -1389,22 +1389,22 @@ void AOACheckObjectSpecial( theObj)
 	"#AOACheckObjectSpecial: !inBetaHeap(theProto)");
   
   if( isSpecialProtoType(theProto) ){  
-    switch( (long) theProto ){
-    case (long) ByteRepPTValue:
-    case (long) WordRepPTValue:
-    case (long) DoubleRepPTValue:
-    case (long) ValRepPTValue: return;
+    switch(ProtoConst(theProto)){
+    case ProtoConst(ByteRepPTValue):
+    case ProtoConst(WordRepPTValue):
+    case ProtoConst(DoubleRepPTValue):
+    case ProtoConst(ValRepPTValue): return;
 #ifdef STATIC_OBJECT_REPETITIONS
-    case (long) StatItemRepPTValue: return;
-    case (long) StatCompRepPTValue: return;
+    case ProtoConst(StatItemRepPTValue): return;
+    case ProtoConst(StatCompRepPTValue): return;
 #endif /* STATIC_OBJECT_REPETITIONS */
-    case (long) DynItemRepPTValue: return;
-    case (long) DynCompRepPTValue: return;
-    case (long) RefRepPTValue: return;
-    case (long) ComponentPTValue:
+    case ProtoConst(DynItemRepPTValue): return;
+    case ProtoConst(DynCompRepPTValue): return;
+    case ProtoConst(RefRepPTValue): return;
+    case ProtoConst(ComponentPTValue):
       AOACheckObjectSpecial( (ref(Object))(ComponentItem( theObj)));
       return;
-    case (long) StackObjectPTValue:
+    case ProtoConst(StackObjectPTValue):
 #ifdef KEEP_STACKOBJ_IN_IOA
       Claim( FALSE, "AOACheckObjectSpecial: theObj must not be StackObject.");
 #else
@@ -1412,9 +1412,9 @@ void AOACheckObjectSpecial( theObj)
 	      "AOACheckObjectSpecial: no check of stackobject 0x%x\n", theObj);
 #endif
       return;
-    case (long) StructurePTValue:
+    case ProtoConst(StructurePTValue):
       return;
-    case (long) DopartObjectPTValue:
+    case ProtoConst(DopartObjectPTValue):
       return;
     default:
       Claim( FALSE, "AOACheckObjectSpecial: theObj must be KNOWN.");

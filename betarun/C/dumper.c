@@ -70,39 +70,39 @@ static DumpObject( theObj)
     }
     if( inIOA( theObj)){
       if( isSpecialProtoType( theObj->Proto )){
-        switch( (long) theObj->Proto ){
-	case (long) ComponentPTValue:
+        switch(ProtoConst(theObj->Proto)){
+	case ProtoConst(ComponentPTValue):
 	  DumpFormat('C', theObj->GCAttr, 4*ObjectSize(theObj),
 		     DumpItemName( ComponentItem( theObj) ),
 		     DumpItemFragment( ComponentItem( theObj) ) );
 	  break;
-	case (long) StackObjectPTValue:
+	case ProtoConst(StackObjectPTValue):
 	  DumpFormat('S', theObj->GCAttr, 4*ObjectSize(theObj), 0, 0);
 	  break;
-        case (long) ByteRepPTValue:
+        case ProtoConst(ByteRepPTValue):
 	  DumpFormat('B', theObj->GCAttr, 4*ObjectSize(theObj), 
 		     DumpValContents( theObj), "" );
 	  break;
-        case (long) WordRepPTValue:
+        case ProtoConst(WordRepPTValue):
 	  DumpFormat('W', theObj->GCAttr, 4*ObjectSize(theObj), 
 		     DumpValContents( theObj), "" );
 	  break;
-        case (long) DoubleRepPTValue:
+        case ProtoConst(DoubleRepPTValue):
 	  DumpFormat('D', theObj->GCAttr, 4*ObjectSize(theObj), 
 		     DumpValContents( theObj), "" );
 	  break;
-        case (long) ValRepPTValue:
+        case ProtoConst(ValRepPTValue):
 	  DumpFormat('V', theObj->GCAttr, 4*ObjectSize(theObj), 
 		     DumpValContents( theObj), "" );
 	  break;
 #ifdef STATIC_OBJECT_REPETITIONS
-	case (long) StatItemRepPTValue:
-	case (long) StatCompRepPTValue:
+	case ProtoConst(StatItemRepPTValue):
+	case ProtoConst(StatCompRepPTValue):
 #endif /* STATIC_OBJECT_REPETITIONS */
-	case (long) DynItemRepPTValue:
-	case (long) DynCompRepPTValue:
+	case ProtoConst(DynItemRepPTValue):
+	case ProtoConst(DynCompRepPTValue):
 	  fprintf(output, "DumpObject: ObjectRep\n"); return;
-        case (long) RefRepPTValue:
+        case ProtoConst(RefRepPTValue):
 	  DumpFormat('R', theObj->GCAttr, 4*ObjectSize(theObj), 0, 0);
 	  break;
         default:

@@ -65,21 +65,21 @@ printMessage(FILE *fp,
   char *name;
 
   if ((long)proto < 0)
-    switch ((long) proto) {
-    case (long)ComponentPTValue: name = "[Component]"; break;
-    case (long)StackObjectPTValue: name = "[Stack_Object]"; break;
-    case (long)StructurePTValue: name = "[Struc_Object]"; break;
+    switch (ProtoConst(proto)) {
+    case ProtoConst(ComponentPTValue): name = "[Component]"; break;
+    case ProtoConst(StackObjectPTValue): name = "[Stack_Object]"; break;
+    case ProtoConst(StructurePTValue): name = "[Struc_Object]"; break;
 #ifdef STATIC_OBJECT_REPETITIONS
-    case (long) StatItemRepPTValue:
-    case (long) StatCompRepPTValue:
+    case ProtoConst(StatItemRepPTValue):
+    case ProtoConst(StatCompRepPTValue):
 #endif /* STATIC_OBJECT_REPETITIONS */
-    case (long) DynItemRepPTValue:
-    case (long) DynCompRepPTValue: name = "[Object_Repetition]"; break;
-    case (long)RefRepPTValue: name = "[Reference_Repetition]"; break;
-    case (long)ValRepPTValue: name = "[Value_Repetition]"; break;
-    case (long)ByteRepPTValue: name = "[Byte_Repetition]"; break;
-    case (long)WordRepPTValue: name = "[Word_Repetition]"; break;
-    case (long)DoubleRepPTValue: name = "[Double_Repetition]"; break;
+    case ProtoConst(DynItemRepPTValue):
+    case ProtoConst(DynCompRepPTValue): name = "[Object_Repetition]"; break;
+    case ProtoConst(RefRepPTValue): name = "[Reference_Repetition]"; break;
+    case ProtoConst(ValRepPTValue): name = "[Value_Repetition]"; break;
+    case ProtoConst(ByteRepPTValue): name = "[Byte_Repetition]"; break;
+    case ProtoConst(WordRepPTValue): name = "[Word_Repetition]"; break;
+    case ProtoConst(DoubleRepPTValue): name = "[Double_Repetition]"; break;
     default: name = "[???]"; break;
     }
   else {
