@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-12 18:59:05 $, SID: $Revision: 1.21 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-15 15:23:35 $, SID: $Revision: 1.22 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -150,17 +150,22 @@ void IOAGc()
   ProcessStack();
   
   /* Follow all struct pointers in the Call Back Functions area. */
-  if( CBFATop > CBFA ){ 
-    ref(CallBackEntry) current = CBFA;
+  if( CBFATop != CBFA->entries ){
+    ref(CallBackArea) cbfa = CBFA;
+    ref(CallBackEntry) current = cbfa->entries;
+    long limit = (long) cbfa->entries + CBFABlockSize + sizeof(struct CallBackEntry);
     
-    for (current = CBFA; current != CBFATop; current++)
+    for (; current != CBFATop; current++){
+      if ( (long) current > limit){
+	/* Go to next block */
+	cbfa = cbfa->next;        /* guarentied to be non-nil since current != CBFATop */
+	current = cbfa->entries;  /* guarentied to be different from CBFATop. If not the block
+				     would not have been allocated */
+	limit = (long) cbfa->entries + CBFABlockSize + sizeof(struct CallBackEntry);
+      }
       if (current->theStruct)
 	ProcessReference(&current->theStruct);
-      else {
-	/* The long after Current->theStruct points to next CBFA block */
-	current = cast(CallBackEntry) ( *(((long *)current)+1) );
-	ProcessReference(&current->theStruct);
-      }
+    }
     CompleteScavenging();
   }
   
