@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: ExtendValRep.c,v 1.11 1992-09-07 15:38:40 beta Exp $
+ * Mod: $Id: ExtendValRep.c,v 1.12 1992-09-08 14:55:12 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -41,6 +41,7 @@ void CExtVR(ref(Object) theObj,
 #endif
 
     Ck(theObj);
+    newRep = (struct ValRep *)0;
     theRep = *casthandle(ValRep) ((long *) theObj + offset);
     newRange = theRep->HighBorder + add; /* Range of new repetition */
     
