@@ -350,6 +350,11 @@ e-mail: support@mjolner.dk"
     DEBUG_AOA( AOACheck() );
     DEBUG_LVRA( LVRACheck() );
 
+    /* Clear all of the unused part of IOA, so that RT routines does
+     * not need to clear cells
+     */
+    memset(IOATop, 0, IOASize - ((long)IOATop-(long)IOA) );
+
     InfoS_LabB();
     
     if (IOATop+4*ReqObjectSize > IOALimit)
