@@ -1,9 +1,10 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateValRep.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:15 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: AllocateValRep.c,v $, rel: %R%, date: $Date: 1992-08-27 15:38:14 $, SID: $Revision: 1.9 $
  * by Peter Andersen and Tommy Thorn.
  */
 
+#define GCable_Module
 #include "beta.h"
 #include "crun.h"
 
@@ -19,35 +20,40 @@ ref(ValRep) CAlloVR1(ref(Object) theObj,
 		     unsigned range
 		     )
 {
-  register ref(ValRep) theRep;
-  register unsigned Size;
+    DeclReference1(struct ValRep *theRep);
+    register unsigned Size;
 
-  if (range < 0)
-    range = 0;
+    GCable_Entry();
 
-  Ck(theObj);
-  Size = ByteRepSize(range);
+    if (range < 0) range = 0;
 
-  if (range > LARGE_REP_SIZE) {
-    theRep = cast(ValRep) LVRAByteAlloc(range);
-    if (theRep) {
-      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      theRep->GCAttr = (int) ((char *) theObj + offset);
-      *casthandle(ValRep)((char *)theObj + offset) = theRep;
-      int_clear((char*)theRep->Body, Size - headsize(ValRep));
-      return theRep;
+    Ck(theObj);
+    Size = ByteRepSize(range);
+
+    if (range > LARGE_REP_SIZE) {
+	theRep = cast(ValRep) LVRAByteAlloc(range);
+	if (theRep) {
+	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
+	    theRep->GCAttr = (int) ((char *) theObj + offset);
+	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
+	    int_clear((char*)theRep->Body, Size - headsize(ValRep));
+	    return theRep;
+	}
     }
-  }
 
-  theRep = cast(ValRep) IOAcalloc(Size);
+  
+    theRep = cast(ValRep) IOAcalloc(Size);
 
-  theRep->Proto = ByteRepPTValue;
-  theRep->GCAttr = 1;
-  theRep->LowBorder = 1;
-  theRep->HighBorder = range;
-
-  *casthandle(ValRep)((char *)theObj + offset) = theRep;
-  return theRep;
+    ForceVolatileRef(theObj);
+    Ck(theObj);
+  
+    theRep->Proto = ByteRepPTValue;
+    theRep->GCAttr = 1;
+    theRep->LowBorder = 1;
+    theRep->HighBorder = range;
+    
+    AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+    return theRep;
 }
 
 asmlabel(AlloVR2, "
@@ -62,33 +68,38 @@ ref(ValRep) CAlloVR2(ref(Object) theObj,
 		     unsigned range
 		     )
 {
-  register ref(ValRep) theRep;
-  register unsigned Size;
+    DeclReference1(struct ValRep *theRep);
+    register unsigned Size;
 
-  if (range < 0) range = 0;
+    GCable_Entry();
 
-  Size = WordRepSize(range);
+    if (range < 0) range = 0;
 
-  if (range > LARGE_REP_SIZE) {
-    theRep = cast(ValRep) LVRAWordAlloc(range);
-    if (theRep) {
-      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      theRep->GCAttr = (int) ((char *) theObj + offset);
-      *casthandle(ValRep)((char *)theObj + offset) = theRep;
-      int_clear((char*)theRep->Body, Size - headsize(ValRep));
-      return theRep;
+    Size = WordRepSize(range);
+
+    if (range > LARGE_REP_SIZE) {
+	theRep = cast(ValRep) LVRAWordAlloc(range);
+	if (theRep) {
+	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
+	    theRep->GCAttr = (int) ((char *) theObj + offset);
+	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
+	    int_clear((char*)theRep->Body, Size - headsize(ValRep));
+	    return theRep;
+	}
     }
-  }
 
-  theRep = cast(ValRep) IOAcalloc(Size);
+    theRep = cast(ValRep) IOAcalloc(Size);
 
-  theRep->Proto = WordRepPTValue;
-  theRep->GCAttr = 1;
-  theRep->LowBorder = 1;
-  theRep->HighBorder = range;
+    ForceVolatileRef(theObj);
+    Ck(theObj);
 
-  *casthandle(ValRep)((char *)theObj + offset) = theRep;
-  return theRep;
+    theRep->Proto = WordRepPTValue;
+    theRep->GCAttr = 1;
+    theRep->LowBorder = 1;
+    theRep->HighBorder = range;
+    
+    AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+    return theRep;
 }
 
 asmlabel(AlloVR4, "
@@ -103,34 +114,41 @@ ref(ValRep) CAlloVR4(ref(Object) theObj,
 			   unsigned range
 			   )
 {
-  register ref(ValRep) theRep;
-  register unsigned Size;
+    DeclReference1(struct ValRep *theRep);
+    register unsigned Size;
 
-  if (range < 0)
-    range = 0;
+    GCable_Entry();
 
-  Size = ValRepSize(range);
+    if (range < 0)
+      range = 0;
 
-  if (range > LARGE_REP_SIZE) {
-    theRep = cast(ValRep) LVRAAlloc(range);
-    if (theRep) {
-      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      theRep->GCAttr = (int) ((char *) theObj + offset);
-      *casthandle(ValRep)((char *)theObj + offset) = theRep;
-      int_clear((char*)theRep->Body, Size - headsize(ValRep));
-      return theRep;
+    Size = ValRepSize(range);
+
+    if (range > LARGE_REP_SIZE) {
+	theRep = cast(ValRep) LVRAAlloc(range);
+	if (theRep) {
+	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
+	    theRep->GCAttr = (int) ((char *) theObj + offset);
+	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
+	    int_clear((char*)theRep->Body, Size - headsize(ValRep));
+	    return theRep;
+	}
     }
-  }
 
-  theRep = cast(ValRep) IOAcalloc(Size);
+    theRep = cast(ValRep) IOAcalloc(Size);
 
-  theRep->Proto = ValRepPTValue;
-  theRep->GCAttr = 1;
-  theRep->LowBorder = 1;
-  theRep->HighBorder = range;
+    ForceVolatileRef(theObj);
+    Ck(theObj);
+    
+    theRep->Proto = ValRepPTValue;
+    theRep->GCAttr = 1;
+    theRep->LowBorder = 1;
+    theRep->HighBorder = range;
 
-  *casthandle(ValRep)((char *)theObj + offset) = theRep;
-  return theRep;
+
+    AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+
+    return theRep;
 }
 
 
@@ -146,32 +164,37 @@ ref(ValRep) CAlloVR8(ref(Object) theObj,
 		     unsigned range
 		     )
 {
-  register ref(ValRep) theRep;
-  register unsigned Size;
+    DeclReference1(struct ValRep *theRep);
+    register unsigned Size;
 
-  if (range < 0)
-    range = 0;
+    GCable_Entry();
 
-  Size= DoubleRepSize(range);
+    if (range < 0)
+      range = 0;
 
-  if (range > LARGE_REP_SIZE) {
-    theRep = cast(ValRep) LVRADoubleAlloc(range);
-    if (theRep) {
-      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      theRep->GCAttr = (int) ((char *) theObj + offset);
-      *casthandle(ValRep)((char *)theObj + offset) = theRep;
-      int_clear((char*)theRep->Body, Size - headsize(ValRep));
-      return theRep;
+    Size= DoubleRepSize(range);
+
+    if (range > LARGE_REP_SIZE) {
+	theRep = cast(ValRep) LVRADoubleAlloc(range);
+	if (theRep) {
+	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
+	    theRep->GCAttr = (int) ((char *) theObj + offset);
+	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
+	    int_clear((char*)theRep->Body, Size - headsize(ValRep));
+	    return theRep;
+	}
     }
-  }
 
-  theRep = cast(ValRep) IOAcalloc(Size);
+    theRep = cast(ValRep) IOAcalloc(Size);
 
-  theRep->Proto = DoubleRepPTValue;
-  theRep->GCAttr = 1;
-  theRep->LowBorder = 1;
-  theRep->HighBorder = range;
+    ForceVolatileRef(theObj);
+    Ck(theObj);
 
-  *casthandle(ValRep)((char *)theObj + offset) = theRep;
-  return theRep;
+    theRep->Proto = DoubleRepPTValue;
+    theRep->GCAttr = 1;
+    theRep->LowBorder = 1;
+    theRep->HighBorder = range;
+
+    AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+    return theRep;
 }
