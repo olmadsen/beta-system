@@ -24,7 +24,7 @@ distanceToLine: (* algorithm from Graphical Gems II, p. 10-13 *)
        do (P.v-A.v)*(B.h-A.h)-(P.h-A.h)*(B.v-A.v)->abs->a2;
           (((B.h-A.h)->abs)+((B.v-A.v)->abs)
 	     -((((B.h-A.h)->abs,(B.v-A.v)->abs)->min) div 2))->res;
-          a2 div res->res
+	  (if res <> 0 then a2 div res->res if)
        exit res
        #);
      d2: @integer;
@@ -87,20 +87,8 @@ do
    color.init;
    black->color.RGBValues;
 
-   (* This is located here, because designLabel, needs to
-    * copy theText in INNER.
-    *)
-   &designObjectText[]->theText[];
-
    init;
    INNER;
-
-   (* create Text *)
-   theText.init;
-   color[]->theText.setPaint;
-   (textCoordinates,Helvetica,Plain,12,false,t[])->theText.initText;
-   theText[]->THIS(designObject).add;
-   &<<SLOT hideTextOutline:descriptor>>;
 
    c->setCenter;
 
@@ -165,35 +153,40 @@ do
       repair
    #)
 
--- bifrostObjectRepostionText:descriptor --
-(#
-   tc: @point;				(* text upperleft *)
-   tr: @rectangle			(* text bounds *)
+-- bifrostNodeRepostionText: doPart --
 do
-   getcenter -> tc;
-   theText.getBounds -> tr;
-   sb.y -> tc.y;
+   shape.getBounds->sb;
+   INNER repositionText;
+   (#
+      tc: (* text upperleft *) @point;
+      tr: (* text bounds *) @rectangle
+   do
+      (if theText[] <> NONE then
+	  getcenter -> tc;
+	  theText.getBounds -> tr;
+	  sb.y -> tc.y;
 
-   <<SLOT repositionTextAdjust: descriptor>>;
+	  <<SLOT repositionTextAdjust: descriptor>>;
 
-   (if textJust
-    // justification.default
-    // justification.left then
-       tc.x - sb.width div 2 + 2 -> tc.x
-    // justification.right then
-       tc.x + sb.width div 2 - 2 -> tc.x
-    // justification.center then
-       tc.x - tr.width div 2     -> tc.x
-    else
-       (if UI.verbose then
-	   '%d: unknown text justification %d\n'
-	     -> putFormat(# do id -> d; textJust -> d #)
-       if)
-   if);
-   (tc.x-tr.x,tc.y-tr.y) -> theText.move
-#)
+	  (if textJust
+	   // justification.default
+	   // justification.left then
+	      tc.x - sb.width div 2 + 2 -> tc.x
+	   // justification.right then
+	      tc.x + sb.width div 2 - 2 -> tc.x
+	   // justification.center then
+	      tc.x - tr.width div 2     -> tc.x
+	   else
+	      (if UI.verbose then
+		  '%d: unknown text justification %d\n'
+		    -> putFormat(# do id -> d; textJust -> d #)
+	      if)
+	  if);
+	  (tc.x-tr.x,tc.y-tr.y) -> theText.move
+      if)
+   #)
 
--- bifrostObjectTextJustSet:doPart --
+-- bifrostNodeTextJustSet:doPart --
 do
    (if tj // justification.default then
        justification.left -> tj		(* revisit - default setting *)
@@ -604,10 +597,6 @@ do
    (bound,(connPrivate.theArrow.getShape).getBounds)->rectUnion->bound;
    (bound,(connPrivate.theLine.getShape).getBounds)->rectUnion->bound
 
--- bifrostConnTextCoordinates: DoPart --
-do
-   connPrivate.theLine.TM -> connPrivate.theLine.theShape.computeCenter -> p
-
 -- bifrostConnNew: DoPart --
 do
    (if UI.verbose then
@@ -740,7 +729,21 @@ do
    nodePrivate.regionConnectors.init;
    color.copy->shapeColor[];
    &paint[] -> filledShapeColor[];
+
+   (* This is located here, because designLabel, needs to
+    * copy theText in INNER.
+    *)
+   &designObjectText[]->theText[];
+
    INNER ;
+
+   (* create Text *)
+   theText.init;
+   color[]->theText.setPaint;
+   (textCoordinates,Helvetica,Plain,12,false,t[])->theText.initText;
+   theText[]->THIS(designObject).add;
+   &<<SLOT hideTextOutline:descriptor>>;
+
    (if filledShape[] <> NONE then
        (* The filledShape is most likely to interfere with the shape.
 	* So lets not draw the outline.
@@ -1340,10 +1343,13 @@ do
 	(if true
 	 // (exactpos[] <> NONE) and doubleclick then
 	    (* doubleclicked on a control point - delete it *)
-	    exactPos ->hitConn.connPrivate.theLine.deletePoint;
-	    hitConn.connPrivate.theLine.points
-	      -> hitConn.connPrivate.setPoints;
-	    hitConn.connPrivate.connect
+	    (if (hitConn.connPrivate.theLine.points).npoints > 2 then
+		(* if we end up with less than 2 points we're in trouble *)
+		exactPos -> hitConn.connPrivate.theLine.deletePoint;
+		hitConn.connPrivate.theLine.points
+		  -> hitConn.connPrivate.setPoints;
+		hitConn.connPrivate.connect
+            if)
 
 	 // doubleclick then
 	    (* doubleclicked (not on controlpoint) - insert a new point *)
@@ -2318,7 +2324,7 @@ do
    'This is an ellipse'->putLine;
    INNER
 
--- bifrostObjectTextSize:doPart --
+-- bifrostNodeTextSize:doPart --
 do
    theText.getBounds -> bnd
 
@@ -2566,7 +2572,19 @@ do
 		 (* aliases for shapes *)
 	      // 'designObjectText' -> patternName.equalNCS then
 		 currentReadPicture[] -> dobj[];
-		 &designObjectText[] -> dobj.theText[] -> GO[];
+		 &designObjectText[] -> GO[];
+		 (if true
+		  // dobj## <= designNode## then
+		     dobj[] -> dn[];
+		     GO[] -> dn.theText[];
+		  // dobj## <= designConn## then
+		     (* for backwards compatibility *)
+		     dobj[] -> dc[];
+		     GO[] -> dc.textToDelete[]
+		  else
+		     'Error during load - text object on unknown object type'
+		       -> putLine
+                 if)
 	      // 'designRectShape' -> patternName.equalNCS then
 		 currentReadPicture[] -> dn[];
 		 &designRectShape[] -> dn.shape[] -> GO[];
@@ -2612,6 +2630,7 @@ do
      do
 	(if UI.verbose then screen[] -> private.debug[] if)
      #);
+   rougeText;
    &<<SLOT bifrostPageLoadDrawMaybe: descriptor>>;
    oldRepair -> dontRepair
 #)
@@ -2685,9 +2704,11 @@ do
 	   (if UI.verbose then
 	       'bifrostobjectbody-bifrostGroupToggle: insert' -> putLine
 	   if);
-	   theObject[] -> private.implList.insertRR;
-	   theObject.addGroupHilight;
-	   true -> private.modeOn
+	   (if theObject.moveable then
+	       theObject[] -> private.implList.insertRR;
+	       theObject.addGroupHilight;
+	       true -> private.modeOn
+           if)
 	else
 	   (if UI.verbose then
 	       'bifrostobjectbody-bifrostGroupToggle: parentInGroup' -> putLine
@@ -3099,9 +3120,7 @@ do
 
 -- bifrostConnShapeContainsPoint:DoPart --
 do
-   (((cv[],pt) -> connPrivate.theFatLine.containsPoint)
-      or ((cv[],pt) -> theText.containsPoint))
-     -> value;
+   (cv[],pt) -> connPrivate.theFatLine.containsPoint -> value;
    INNER
 
 -- kukkuk:doPart --
@@ -3476,12 +3495,6 @@ do
    (#
       tc: @Point
    do
-      theText.position -> tc;
-
-      ((tc,oc) -> subPoints,nc) -> addPoints -> tc;
-
-      tc -> theText.position;
-
       ScanGOsReverse
 	(#
 	   dobj: ^designObject
@@ -3494,3 +3507,23 @@ do
 	   if)
 	#);
    #)
+
+-- bifrostPageRougeText:descriptor --
+(#
+   (* Removes text from connectors - for backwards compatibility only *)
+do
+   theMainPicture.scanGOsReverse
+     (#
+	dc: ^designConn
+     do
+	(if go## <= designConn## then
+	    go[] -> dc[];
+	    (if dc.textToDelete[] <> NONE then
+		'Note: removing text from connector with id=%d\n'
+		  -> putFormat(# do dc.ID -> d #);
+		dc.textToDelete[] -> dc.delete;
+		NONE -> dc.textToDelete[]
+            if)
+	if)
+     #)
+#)
