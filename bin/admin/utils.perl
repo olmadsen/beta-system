@@ -128,9 +128,10 @@ sub bootbeta {
 }
 
 sub which {
-    my($cmd)=@_;
+    my($cmd, $all)=@_;
     my(@path);
-    print "which($cmd)\n" if($verbose);
+    my($found);
+    print "which($cmd, $all)\n" if($verbose);
     if ($OS eq 'MAC'){
 	@path = split(',', $ENV{'COMMANDS'});
     } elsif ($OS eq 'WIN'){
@@ -138,33 +139,36 @@ sub which {
     } else {
 	@path = split(':', $ENV{'PATH'});
     }
+    $found = "";
     foreach $dir (@path) {
-	print "  Trying: $dir/$cmd - " if($verbose);
+	print "  Trying: $dir/$cmd\n" if($verbose);
 	if (-f "$dir/$cmd"){
 	    print "yep, that's it!\n" if($verbose);
-	    $cmd = "$dir/$cmd";
-	    break;
+	    $found .= "$dir/$cmd";
+	    $found .= "\n" if ($all);
+	    last unless ($all);
 	}
 	if ($OS eq 'WIN'){
-	    print "no.\n  Trying: $dir\\$cmd.bat - " if($verbose);
+	    print "Trying: $dir\\$cmd.bat\n" if($verbose);
 	    if (-f "$dir/$cmd.bat"){
 		print "yep, that's it!\n" if($verbose);
-		$cmd = "$dir/$cmd.bat";
-		break;
+		$found .= "$dir/$cmd.bat";
+		$found .= "\n" if ($all);
+		last unless ($all);
 	    }
-	    print "no.\n  Trying: $dir/$cmd.exe - " if($verbose);
+	    print "Trying: $dir/$cmd.exe\n" if($verbose);
 	    if (-f "$dir/$cmd.exe"){
 		print "yep, that's it!\n" if($verbose);
-		$cmd = "$dir/$cmd.exe";
-		break;
+		$found .= "$dir/$cmd.exe";
+		$found .= "\n" if ($all);
+		last unless ($all);
 	    }
 	}
 	if ($OS eq 'WIN'){
-	    $cmd =~ s#/#\\#g;
+	    $found =~ s#/#\\#g;
 	}
-	print "no.\n" if($verbose);
     }
-    return "$cmd";
+    return "$found";
 }
 
 sub execute_script {
@@ -174,7 +178,7 @@ sub execute_script {
     } elsif ($OS eq 'WIN'){
 	my(@cmd) = split(' ', $cmd);
 	my($comspec) = $ENV{'COMSPEC'};
-	#@cmd[0] = &which(@cmd[0]);
+	#@cmd[0] = &which(@cmd[0], 0);
 	print "$comspec /C @cmd\n";
 	system "$comspec /C @cmd";
     } else {
