@@ -75,26 +75,27 @@
  program exbobs(input,output(* removed by JLK to please p2c: ,parsin,parsout,tables*));
 
  label 999;
- const
-   const1=2400;
-   const2=900;
-   const3=720;
-   const4=80000; (* JLK: 17/6-95 was 40000 *)
-   const5=63;
-   const6=6000;
-   const7=20000;
-   const8=480; (* JLK: 17/6-95 was 240 *)
-   const9=10000; (* ESS: 30/6-95 was 2000 *)
-   const10=7200;
-   const11=130;
-   const12=840;
-   const13=5;
-   const14=15;
-   const16=10000; (*NOTICE: CONST16>CONST2*) (* JLK: 17/6-95 was 5000 *)
-   const18=75;
-   const19=12000; (*MAX SIZE OF ARRAY LABELBUF/ SUM OF LENGTH *)
-                  (* OF ALL PRODUCTION LABELS (OPTIONS[34])   *)
-   const20=1200;  (*max length of a production label *)
+const
+   const1  = 2400;
+   const2  = 1200; (* datpete: 9/3/99 was 900 *)
+   const3  = 720;
+   const4  = 80000; (* JLK: 17/6-95 was 40000 *)
+   const5  = 63;
+   const6  = 6000;
+   const7  = 20000;
+   const8  = 600; (* datpete 9/3/99: was 480 *)(* JLK: 17/6-95 was 240 *)
+   const9  = 10000; (* ESS: 30/6-95 was 2000 *)
+   const10 = 7200;
+   const11 = 130;
+   const12 = 1500; (*datpete: 9/3/99: was 840 *)
+   const13 = 5;
+   const14 = 15;
+   const16 = 10000; (*NOTICE: CONST16>CONST2*) (* JLK: 17/6-95 was 5000 *)
+   const18 = 75;
+   const19 = 18000; (* datpete: 9/3/99: was 12000 *)
+                    (* MAX SIZE OF ARRAY LABELBUF/ SUM OF LENGTH *)
+                    (* OF ALL PRODUCTION LABELS (OPTIONS[34])   *)
+   const20 = 1200;  (* max length of a production label *)
  
    minch=' '; maxch='~'; (*THE FIRST/LAST CHAR IN TYPE CHAR*)
    setmax=63;            (*MAX. VALUE OF INTEGERS IN A SET *)
@@ -611,12 +612,12 @@ end;
      ms: dayfilemsg;
      i,j: integer;
    begin
-      writeln('!!!!! ERROR IN ',s1,': ',s2,'TO SMALL (',cc:1,')');
+      writeln('!!!!! ERROR IN ',s1,': ',s2,'TOO SMALL (',cc:1,')');
       writeln(blst); writeln(blst);
-      write(blst,'***** ERROR IN ',s1,': ',s2,'TO SMALL (',cc:1,')');
+      write(blst,'***** ERROR IN ',s1,': ',s2,'TOO SMALL (',cc:1,')');
 (*     constval(cc,aa);
      m[1]:=s2; m[3]:=aa;
-     m[2]:=' TO SMALL '; m[4]:='          ';
+     m[2]:=' TOO SMALL '; m[4]:='          ';
      for i:=1 to 4 do
      for j:=1 to 10 do ms[(i-1)*10+j]:=m[i,j];
       writeln(ms); writeln(blst,ms);
