@@ -98,7 +98,7 @@ char * PpkVT(ref(ValRep) theRep, long *SP)
     
 	res=(char *)CTextPoolEnd;
 	/* Set the first byte in the pascal string eq the length */
-	*((char *)CTextPoolEnd)++ = (char)bodysize;
+	*((char *)CTextPoolEnd)++ = (char)theRep->HighBorder;
     
     /* Copy the contents of the repetition to the CTextPool. */
     oldBody = (char *)(theRep->Body);
@@ -106,6 +106,15 @@ char * PpkVT(ref(ValRep) theRep, long *SP)
       *(((char *)CTextPoolEnd))++ = *(char *)((long)oldBody+i);
 	  
     CTextPoolEnd = (char*)((((long)CTextPoolEnd+3)/4)*4); /* long align next text */
+	
+#if 0
+	fprintf(output, "PpkVT: returning pascal string at address 0x%x with length %d\n", res, *(char*)res);
+	fprintf(output, "Characters:\n");
+	for (i=0; i<(unsigned)*(char*)res; i++){
+		fprintf(output, "0x%x\t'%c'\n", (unsigned)*((char*)res+i+1), *((char*)res+i+1));
+	}
+	fflush(output);
+#endif
 
     return res;
 }
@@ -144,6 +153,15 @@ char * PpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
       *(((char *)CTextPoolEnd))++ = *(char *)((long)oldBody+i);
 	  
     CTextPoolEnd = (char*)((((long)CTextPoolEnd+3)/4)*4); /* long align next text */
+
+#if 0
+    fprintf(output, "PpkSVT: returning pascal string at address 0x%x with length %d\n", res, *(char*)res);
+	fprintf(output, "Characters:\n");
+	for (i=0; i<(unsigned)*(char*)res; i++){
+		fprintf(output, "0x%x\t'%c'\n", (unsigned)*((char*)res+i+1), *((char*)res+i+1));
+	}
+	fflush(output);
+#endif
 
     return res;
 }
