@@ -17,11 +17,11 @@ void BetaSignalHandler (long sig)
 
 /****** BEGIN sun4s *****/
 
-void ExitHandler(long sig)
+void ExitHandler(int sig)
 {
   DEBUG_CODE(fprintf(stderr, 
 		     "ExitHandler: Caught signal %d during signal handling\n",
-		     sig);
+		     (int)sig);
 	     fflush(stderr);
 	     );
   BetaExit(-1);

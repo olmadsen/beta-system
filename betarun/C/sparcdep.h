@@ -37,11 +37,6 @@ struct RegWin {
 #define USCORE "_"
 #endif
 
-register long *IOA asm("%g6");
-register unsigned IOATopoff asm("%g7");
-
-#define IOATop ((long *) ((char *)IOA+IOATopoff))
-
 /* Refcheck: R[] -> S[];
     R[] in %l1 and S[] at %l2+Soff
     check for %l2+SOFF in [IOA, IOA+IOATopoff]
@@ -97,7 +92,7 @@ register long   retAddress   asm("%i7");
 #endif
 
 /* Isn't life swell? This generates optimal code $^)*/
-#define inIOA(x) (((unsigned) x - (unsigned) IOA) < (unsigned) IOATopoff)
+#define inIOA(x) (((unsigned) x - (unsigned) IOA) < (unsigned) IOATopOff)
 
 
 /* Defining this in the head of a module, together with a
@@ -297,7 +292,7 @@ register volatile void *GCreg4 asm("%o4");
 static inline void USE()
 { int x;
   x=(int)IOA;
-  x=(int)IOATopoff;
+  x=(int)IOATopOff;
   x=(int)StackPointer;
   x=(int)FramePointer;
   x=(int)retAddress;

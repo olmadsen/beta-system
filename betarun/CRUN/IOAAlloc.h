@@ -35,7 +35,7 @@ char *IOAalloc(unsigned size)
   IOATop = (long*)((long)IOATop+size);
 #endif
 #ifdef sparc
-  IOATopoff += size;
+  IOATopOff += size;
 #endif
 #ifdef crts
   IOATop = (long*)((long)IOATop+size);
@@ -73,7 +73,7 @@ char *IOAcalloc(unsigned size)
   IOATop = (long*)((long)IOATop+size);
 #endif
 #ifdef sparc
-  IOATopoff += size;
+  IOATopOff += size;
 #endif
 #ifdef crts
   IOATop = (long*)((long)IOATop+size);

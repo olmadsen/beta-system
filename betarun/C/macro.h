@@ -1,14 +1,23 @@
 /* macroes */
 
+
+#ifdef sparc
+register long    *IOA       asm("%g6");
+register unsigned IOATopOff asm("%g7");
+#define           IOATop    ((long *) ((long)IOA+IOATopOff))
+
+#else
+/* not sparc */
 #define IOA           _IOA.start
-#if defined(sparc) || defined(NEWRUN)
+#define IOALimit      _IOA.limit
+#define IOASize       _IOA.size
+#if defined(NEWRUN)
 #define IOATopOff     _IOA.topoff
 #define IOATop        ((long *) ((long)IOA+IOATopOff))
 #else
 #define IOATop        _IOA.top
-#endif
-#define IOALimit      _IOA.limit
-#define IOASize       _IOA.size
+#endif /* NEWRUN */
+#endif /* sparc */
 
 #ifdef RTLAZY
 #define isLazyRef(ref) ((lastDangler <= ((int)(ref))) && (((int)(ref)) < -101))

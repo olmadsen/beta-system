@@ -1060,8 +1060,6 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
      long *thePC;
      long theSignal; /* theSignal is zero if not applicable. */
 {
-  char *dumpname;
-
 #ifndef sparc
 #ifndef hppa
 #ifndef crts

@@ -169,25 +169,6 @@ void FailureExit()
 }
 #endif
 
-
-#ifdef RTDEBUG
-#ifndef hppa
-void CCk(ref(Object) r)
-{
-  if(r) 
-    Claim(inIOA(r) || inAOA(r) || inLVRA(r) || isLazyRef(r),
-	  "Reference none or inside IOA, AOA, or LVRA");
-}
-#endif /* hppa */
-#endif
-
-#ifdef RTDEBUG
-void Misc_UseCk()
-{
-  Ck(0);
-}
-#endif
-
 #ifdef crts
 
 /* Global address registers */

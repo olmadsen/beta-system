@@ -172,45 +172,6 @@ setup_item(ref(Item) theItem,
   ((long *)theItem)[prototype->OriginOff] = (long) origin;
 }
 
-#ifdef RTDEBUG
-  /* Consistency checks - Checks for valid references */
-
-extern void Illegal();
-
-#define CkReg(func, value, reg)                                                  \
-{ struct Object *theObj = (struct Object *)(value);                              \
-  if (theObj && /* Cleared registers are ok */                                   \
-      !isLazyRef(theObj) &&                                                      \
-      !isProto(theObj) && /* e.g. AlloI is called with prototype in ref. reg. */ \
-      !isCode(theObj) && /* e.g. at INNER a ref. reg contains code address */    \
-      !(inBetaHeap(theObj) && isObject(theObj))){                                \
-    fprintf(output,                                                              \
-	    "%s: ***Illegal reference register %s: 0x%x\n",                      \
-	    func, reg, (int)theObj);                                             \
-    Illegal();								         \
-   }								                 \
-}
-
-#ifdef hppa
-  static char __CkString[80];
-#define Ck(r) \
-   { sprintf(__CkString, "%s: %d: Ck failed: %s (0x%x)", __FILE__, __LINE__, #r, (int)(r)); \
-     if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(cast(Object)(r)) || isLazyRef(r), __CkString); }
-#else
-/*#  define Ck(r) \
- *  if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r), __FILE__":" #r ": none or inside IOA, AOA, or LVRA")
- */
-extern void CCk(ref(Object) r); /* Easier to debug a function call - PA */
-#define Ck(r) CCk(cast(Object)r)
-#endif /* hppa */
-
-#else /* RTDEBUG */
-
-#define CkReg(func, value, reg)
-#define Ck(r)
-
-#endif /* RTDEBUG */
-
 #endif
 
 #ifdef __GNUC__

@@ -54,7 +54,7 @@ void TraceXcall(long arg1, ...)
   fprintf(output, ")\n"); fflush(output);
 }
 
-void TraceXres(long res)
+void TraceXres(unsigned int res)
 {
   fprintf(output, "returns 0x%x\n", res);
   fflush(output);

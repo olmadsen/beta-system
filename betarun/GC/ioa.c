@@ -241,11 +241,7 @@ void IOAGc()
       
       Tmp = IOA; TmpTop = IOATop; TmpLimit = IOALimit; 
       
-#ifdef sparc
-      IOA       = ToSpace;                          
-      IOATopoff = (char *) ToSpaceTop - (char *) IOA;
-#endif
-#ifdef NEWRUN
+#if defined(NEWRUN) || defined(sparc)
       IOA       = ToSpace;                          
       IOATopOff = (char *) ToSpaceTop - (char *) IOA;
 #endif

@@ -329,12 +329,7 @@ void Initialize()
     exit(1);
   }
 
-#if defined(sparc)
-  IOA = tmpIOA;
-  IOATopoff = tmpIOATop - IOA;
-#endif
-
-#if defined(NEWRUN)
+#if defined(sparc) || defined(NEWRUN)
   IOA = tmpIOA;
   IOATopOff = tmpIOATop - IOA;
 #endif

@@ -131,30 +131,31 @@ ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
 	return newObj;
       } 
     }
+  }
 #endif /* CHECK_LVRA_IN_IOA */
     
-    if( theObj->GCAttr >= IOAtoAOAtreshold ){
-      /* theObj is old enough to go into AOA */
-      ref(Object) newObj;
-      
+  if( theObj->GCAttr >= IOAtoAOAtreshold ){
+    /* theObj is old enough to go into AOA */
+    ref(Object) newObj;
+    
 #ifdef KEEP_STACKOBJ_IN_IOA
-      if( isStackObject(theObj) ) return CopyObject(theObj);
+    if( isStackObject(theObj) ) return CopyObject(theObj);
 #endif
-      
-      if( (newObj = CopyObjectToAOA(theObj)) ){
-	/* Insert theCell in AOAroots table. 
-	 * Used as roots in mark-sweep if an AOA GC is invoked after IOAGc.
-	 */
-	if (theCell) {
-	  saveAOAroot(theCell);
-	}
-	return newObj;
-      } else {
-	/* CopyObjectToAOA failed */
-	return CopyObject(theObj);
+    
+    if( (newObj = CopyObjectToAOA(theObj)) ){
+      /* Insert theCell in AOAroots table. 
+       * Used as roots in mark-sweep if an AOA GC is invoked after IOAGc.
+       */
+      if (theCell) {
+	saveAOAroot(theCell);
       }
+      return newObj;
     } else {
-      /* theObj is not old enough for AOA */
+      /* CopyObjectToAOA failed */
       return CopyObject(theObj);
     }
+  } else {
+    /* theObj is not old enough for AOA */
+    return CopyObject(theObj);
   }
+}
