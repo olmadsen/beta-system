@@ -2,6 +2,25 @@ ORIGIN 'diagramattributes';
 INCLUDE '~beta/sysutils/objinterface'
         'gppinterfacebody';
 (* DIAGRAM *)
+-- diagramTitlePopupOpen: DoPart --
+do
+   true->opened;
+   editItem.open;
+   'Edit...'->editItem.name;
+   editItem[]->append;
+   sep1.open;
+   sep1[]->append;
+   hideitem.open;
+   'Hide'->hideItem.name;
+   hideItem[]->append;
+   INNER open  
+
+-- diagramTitleOnRightMouseDown: DoPart --
+do
+   (if not thePopup.opened then thePopup.open if);
+   (1,mousePos,inWindow[])->thePopup.popup;
+   INNER onRightMouseDown  
+
 -- TitleInteractiveNew: Descriptor --
 (#  do (w,h)->Size #)  
 
@@ -27,8 +46,8 @@ do
 -- TitleOnSelect: Descriptor --
 (# 
 do
-   (PatternDiagrams.private.oldSelection[],THIS(title)[])->changedFocus;
-   THIS(title)[]->PatternDiagrams.private.oldSelection[];
+   (patterndiagrams.oldSelection[],THIS(title)[])->changedFocus;
+   THIS(title)[]->patterndiagrams.oldSelection[];
    enableEditName;
    INNER onSelect;
    
@@ -52,6 +71,7 @@ do
 
 -- diagramTitleDump: DoPart --
 do
+   'Diagram.titleNode'->nodetype[];
    '********theParentNode********'->putline;
    (if theParentNode <> none then
        (theParentNode).ID->putint; newline
@@ -131,18 +151,6 @@ do
     #)
     if); *)
    (tleft+(MaxWidth div 2),ty,MaxWidth,GppProp.Height)->titleNode.geometry;
-   (* (if regions[] <> none then
-    regions.scan
-    (# theObject: ^DesignObject
-    do
-    (if current## <= PatternDiagramNode## then
-    current[]->theObject[]; titleNode[]->theObject.createRegion
-    if)
-    #);
-    (if not regionsWithSize.empty then
-    regionsWithSize.restoreRegionSizes; regionsWithSize.clear
-    if)
-    if); *)
    LocalNodes.scan
      (# currentLocalNode: ^PatternDiagramNode
      do
@@ -163,6 +171,18 @@ do
         if);
         (tleft+(MaxWidth div 2),y,MaxWidth,GppProp.Height)->current.geometry
      #);
+   (* (if regions[] <> none then
+    regions.scan
+    (# theObject: ^DesignObject
+    do
+    (if current## <= PatternDiagramNode## then
+    current[]->theObject[]; titleNode[]->theObject.createRegion
+    if)
+    #);
+    (if not regionsWithSize.empty then
+    regionsWithSize.restoreRegionSizes; regionsWithSize.clear
+    if)
+    if); *)
    (if theSurroundBox <> none then
        TitleNode.geometry->(tx,ty,tw,th);
        (if localNodes.empty or (not gppProp.showAttributes) then
@@ -171,17 +191,16 @@ do
            (tx,ty-gppProp.height div 2+((localNodes.size+1)*gppProp.height) div
             2,tw,(localNodes.size+1)*gppProp.height)->(theSurroundBox).geometry
        if)
-   if)
+   if);
+   (if localNodeOrder = gppProp.inCompartments then showCompartments if)
 #)  
 
 -- localNodesDump: DoPart --
 do
-   'LocalNodes:'->putline;
    scan
      (# t: @text
      do current.id->putint; ': '->puttext; current.theText.get->t; t[]->putline
-     #);
-   'End LocalNodes'->putline  
+     #)  
 
 -- InsertDiagramNode: Descriptor --
 (#
@@ -196,7 +215,7 @@ do
         x-(w div 2)->x;
         x+gppProp.width->x;
         gppProp.width*2->w;
-        previousNode[]->PatternDiagrams.private.addAfterNode[];
+        previousNode[]->patterndiagrams.addAfterNode[];
         (x-(w div 2),y-(h div 2)+gppProp.height)->startPos;
         (anAst[],startpos)->DisplayAST->startpos
      #);
@@ -254,27 +273,27 @@ do
         i+1->i;
         
      #);
-   (if PatternDiagrams.private.newNode[] = none then
+   (if patterndiagrams.newNode[] = none then
        'OOBS: newNode is NONE'->screen.putline; 
     else
        (if pos <> 0 then
-           (PatternDiagrams.private.newNode[],
-            PatternDiagrams.private.addAfterNode[]->localNodes.at)
+           (patterndiagrams.newNode[],
+            patterndiagrams.addAfterNode[]->localNodes.at)
              ->localNodes.insertAfter
         else
            (if switch[60] then
                'InsertDiagramNode - prepending in localNodes: '->puttext;
-               PatternDiagrams.private.newNode.theText.get->aText;
+               patterndiagrams.newNode.theText.get->aText;
                aText[]->putline
            if);
-           PatternDiagrams.private.newNode[]
+           patterndiagrams.newNode[]
              ->
                localNodes.prepend
                (*The new node is the topmost localNode when pos=0*)
        if);
        
    if);
-   none ->PatternDiagrams.private.addAfterNode[];
+   none ->patterndiagrams.addAfterNode[];
    false->remakingDiagram;
    localNodes.adjustSizes;
    
@@ -306,7 +325,7 @@ do
    d.theDiagram->dListDiagram[];
    (if d## <= dListDiagram.DiagramNode## then
        d[]->dDiagramNode[];
-       dDiagramNode.theDeclaration->RemoveListElement;
+       dDiagramNode.theDeclaration[]->RemoveListElement;
        (if deletenode then
            (if dDiagramNode.CurrentDecomposDiagram <> none then
                dDiagramNode.CurrentDecomposDiagram->dListDiagram[];
@@ -316,7 +335,7 @@ do
        
     else
        (if d## <= dListDiagram.NonTerminalNode## then
-           d[]->dNonTerminalNode[]; dNonTerminalNode.unExp->RemoveListElement
+           d[]->dNonTerminalNode[]; dNonTerminalNode.unExp[]->RemoveListElement
        if)
    if);
    scanner: localnodes.scan
@@ -371,6 +390,14 @@ do
      #);
    (if switch[60] then 'DeleteDiagramNode end of scanner'->putline if);
    d[]->localnodes.at->localnodes.delete;
+   (if d.attributeType
+    // gppProp.SimpleAttribute then
+       d[]->attributes.at->attributes.delete
+    // gppProp.operation then
+       d[]->operations.at->operations.delete
+    // gppProp.localClass then
+       d[]->localClasses.at->localClasses.delete
+   if);
    0->MaxWidth;
    0->MaxHeight;
    titleNode[]->updateMaxWH;
@@ -463,8 +490,8 @@ do
                 current.theText.get->aText;
                 aText[]->putline
             if);
-            current[]->PatternDiagrams.private.addAfterNode[];
-            PatternDiagrams.private.addAfterNode[]->localNodes.at->thePos[];
+            current[]->patterndiagrams.addAfterNode[];
+            patterndiagrams.addAfterNode[]->localNodes.at->thePos[];
             (if thePos.pred[] <> none then
                 thePos.pred[]->insertAfterPos[]
              else
@@ -475,7 +502,7 @@ do
             d.geometry->(x,y,w,h);
             (x-(w div 2),y-(h div 2))->startPos;
             (newAST[],startpos)->DisplayAST->startpos;
-            (if patternDiagrams.private.newNode[] = none then
+            (if patterndiagrams.newNode[] = none then
                 'OOBS: newNode is NONE'->screen.putline
              else
                 
@@ -492,23 +519,22 @@ do
             
         if)
      #);
-   (if PatternDiagrams.private.newNode[]
+   (if patterndiagrams.newNode[]
     // none then 'OOBS: newNode is NONE'->screen.putline; 
     else
        (if insertAfterPos[] <> none then
-           (PatternDiagrams.private.newNode[],insertAfterPos[])
-             ->localNodes.insertAfter
+           (patterndiagrams.newNode[],insertAfterPos[])->localNodes.insertAfter
         else
            (if insertBeforePos[] <> none then
-               (PatternDiagrams.private.newNode[],insertBeforePos[])
+               (patterndiagrams.newNode[],insertBeforePos[])
                  ->localNodes.insertBefore
             else
-               PatternDiagrams.private.newNode[]->localNodes.append
+               patterndiagrams.newNode[]->localNodes.append
            if)
        if);
        
    if);
-   none ->PatternDiagrams.private.addAfterNode[];
+   none ->patterndiagrams.addAfterNode[];
    false->remakingDiagram;
    0->MaxWidth;
    0->MaxHeight;
@@ -781,6 +807,7 @@ do
    UDNoOfRefConnectors.Init;
    UDMaxHeight.init;
    UDMaxWidth.init;
+   UDlocalNodeOrder.init;
    (if not initialisingSaved then
        THIS(ListDiagram)[]->theDiagram; geometry->(x,y,w,h); 
    if);
@@ -837,13 +864,13 @@ do (* tell the parent node that it is no longer detailed *)
                             (if current[] =
                             theListDiagram.titleNode.thePrefixConn then
                                 theListDiagram[]->thePatternDeclDiagram[];
-                                none ->thePatternDeclDiagram.thePrefix;
+                                none ->thePatternDeclDiagram.thePrefix[];
                                 none ->theListDiagram.titleNode.thePrefixConn;
                                 theListDiagram.titleNode.unmakeRegion;
                                 theListDiagram.theParentNode->theNode[];
                                 theNode.theDiagram->theListDiagram[];
                                 theNode[]->theDiagramNode[];
-                                none ->theDiagramNode.thePrefix
+                                none ->theDiagramNode.thePrefix[]
                             if)
                         if)
                     if)
@@ -1029,22 +1056,21 @@ do
    if)
 #)  
 
+-- ListDiagramShowCompartments: DoPart --
+do INNER showCompartments  
+
 -- OADDiagramNew: Descriptor --
-(# theDummyDesc: ^betaGram.ObjectDescriptor
+(# 
 do
 (* save THIS(OADDiagram) with the ASTindex of the  
  * descriptor it is generated from so it can be located later
  *)
-   (if theDescriptor <> none
-    // true then
-       theDescriptor->theDummyDesc[];
-       (theDummyDesc.index,theDummyDesc.frag.fullname,THIS(OADDiagram)[])
+   (if theDescriptor[] <> none then
+       (theDescriptor.index,theDescriptor.frag.fullname,THIS(OADDiagram)[])
          ->PatternDiagrams.theList.insertPD;
-       (* titleNode.ConcludeDisplay; *)
        
    if);
-   titleNode.concludeDisplay;
-   
+   titleNode.concludeDisplay
 #)  
 
 -- OADDisplayDeclarations: Descriptor --
@@ -1076,24 +1102,19 @@ do
 #)  
 
 -- OADDiagramOnRemove: Descriptor --
-(# theDummyDesc: ^betaGram.ObjectDescriptor
+(# 
 do (* remove the diagram from the list of patterndiagrams on the page *)
-   (if theDescriptor <> none
-    // true then
-       theDescriptor->theDummyDesc[];
-       (*if this is the last diagram on the page close the page *)
-       (theDummyDesc.index,theDummyDesc.frag.fullname)
+   (if theDescriptor[] <> none then
+   (*if this is the last diagram on the page close the page *)
+       (theDescriptor.index,theDescriptor.frag.fullname)
          ->PatternDiagrams.theList.deletePD;
-       (if PatternDiagrams.theList.size
-        // 0 then
+       (if PatternDiagrams.theList.size = 0 then
            theFragmentNode
              ->theGroupPage.currentObject (#  do true->autoPan #);
            true->theGroupPage.visible;
            close
-       if);
-       
-   if);
-   
+       if)
+   if)
 #)  
 
 -- OADDisplay: Descriptor --
@@ -1102,31 +1123,28 @@ do (* remove the diagram from the list of patterndiagrams on the page *)
    e: ^LocalNodes.element;
    det: ^AbstractNode;
    x,y,w,h,tx,ty,tw,th: @Integer;
-   theDummyDesc: ^betaGram.ObjectDescriptor;
    theBox: ^SurroundBox
 do
-   (if theDescriptor
-    // none then
-       (if switch[60] // true then 'theDescriptor is NONE '->puttext if); 
+   (if theDescriptor[] = none then
+       60->trace (#  do 'theDescriptor is NONE '->T #); 
    if);
    CalculateNextCenter->theCenter;
-   (if theDescriptor <> none
-    // true then
-       theDescriptor->theDummyDesc[];
-       theDummyDesc.index->titleNode.astIndex;
-       (if switch[60] then
-           'OADDisplay: '->putText;
-           titleNode.astIndex->putInt;
-           '->astIndex'->putLine
-       if);
-       
+   (if theDescriptor[] <> none then
+       theDescriptor.index->titleNode.astIndex;
+       60
+         ->trace
+           (# 
+           do
+              'OADDisplay: %i ->astindex\n'
+                ->T.putFormat (#  do titlenode.astIndex->i #)
+           #)
    if);
    INNER Display;
    &SurroundBox[]->theBox[];
    (if gppProp.DiagramPositioning
     // gppProp.AllManual then
        cursor.Picture->cursor.set;
-       THIS(OADDiagram)[]->patternDiagrams.private.interactiveNewDiagram[]
+       THIS(OADDiagram)[]->patterndiagrams.interactiveNewDiagram[]
     // gppProp.AllAuto then
        (if switch[70] then
            '******** diagrambody-OADDisplay 4 calling new with ********'
@@ -1161,6 +1179,8 @@ do
         tw,(localNodes.size+1)*gppProp.height)->theBox.geometry
    if);
    titleNode[]->theBox.CreateRegion;
+   yellow3->titleNode.fillType;
+   sortAttributesAndOperations;
    (if switch[60] then
        'OADDisplay: surroundBox.getParent%s\n'
          ->putformat
@@ -1388,8 +1408,100 @@ do
 #)
 (* FRAGMENTDIAGRAMS *)  
 
+-- OADDiagramSortAttributesAndOperations: DoPart --
+do
+   70->trace (#  do 'SortAttributesAndOperations'->t #);
+   false->repair;
+   gppProp.inCompartments->localNodeOrder;
+   localNodes.clear;
+   attributes.scan
+     (#  do current[]->localNodes.append #);
+   operations.scan
+     (#  do current[]->localNodes.append #);
+   localClasses.scan
+     (#  do current[]->localNodes.append #);
+     (# x,y: @integer
+     do
+        titleNode.center->(x,y);
+        localNodes.scan
+          (#  do (x,y+gppProp.height->y)->current.center #);
+        showCompartments
+     #);
+   true->repair  
+
+-- OADDiagramShowCompartmets: DoPart --
+do
+   false->repair;
+   (if not attributes.empty then
+       (attributes.head).elm.geometry->(x,y,w,h);
+       (if attributes.size > 1 then
+           (attributes.last).elm.center->(x2,y2);
+           (x,(y2-y) div 2+y,w,attributes.size*h)->(x,y,w,h)
+       if);
+       (if attributesBox = none then
+           &SurroundBox[]->theBox[];
+           (x,y,w,h,shape.Rectangle)->theBox.new;
+           false->theBox.selectable;
+           false->theBox.sizeable;
+           titlenode[]->theBox.createRegion;
+           yellow3->theBox.fillType;
+           theBox[]->attributesBox
+        else
+           (x,y,w,h)->(attributesBox).geometry
+       if)
+    else
+       (if attributesBox <> none then
+           (attributesBox).delete; none ->attributesBox
+       if)
+   if);
+   (if not operations.empty then
+       (operations.head).elm.geometry->(x,y,w,h);
+       (if operations.size > 1 then
+           (operations.last).elm.center->(x2,y2);
+           (x,(y2-y) div 2+y,w,operations.size*h)->(x,y,w,h)
+       if);
+       (if operationsBox = none then
+           &SurroundBox[]->theBox[];
+           (x,y,w,h,shape.Rectangle)->theBox.new;
+           false->theBox.selectable;
+           false->theBox.sizeable;
+           titlenode[]->theBox.createRegion;
+           yellow3->theBox.fillType;
+           theBox[]->operationsBox
+        else
+           (x,y,w,h)->(operationsBox).geometry
+       if)
+    else
+       (if operationsBox <> none then
+           (operationsBox).delete; none ->operationsBox
+       if)
+   if);
+   (if not localClasses.empty then
+       (localClasses.head).elm.geometry->(x,y,w,h);
+       (if localClasses.size > 1 then
+           (localClasses.last).elm.center->(x2,y2);
+           (x,(y2-y) div 2+y,w,localClasses.size*h)->(x,y,w,h)
+       if);
+       (if localClassesBox = none then
+           &SurroundBox[]->theBox[];
+           (x,y,w,h,shape.Rectangle)->theBox.new;
+           false->theBox.selectable;
+           false->theBox.sizeable;
+           titlenode[]->theBox.createRegion;
+           yellow3->theBox.fillType;
+           theBox[]->localClassesBox
+        else
+           (x,y,w,h)->(localClassesBox).geometry
+       if)
+    else
+       (if localClassesBox <> none then
+           (localClassesBox).delete; none ->localClassesBox
+       if)
+   if);
+   true->repair  
+
 -- PatternAttDiagramDisplay: Descriptor --
-(#  do (if theAST <> none then (theAST).index->titleNode.astIndex if) #)  
+(#  do (if theAST[] <> none then theAST.index->titleNode.astIndex if) #)  
 
 -- FragmentDiagramNew: Descriptor --
 (#
@@ -1528,6 +1640,9 @@ do (* show fragments starting at low-left of the titleNode *)
    
 #)  
 
+-- FragmentDiagramTitleDump: DoPart --
+do 'FragmentDiagram.titleNode'->nodetype[]; INNER dump  
+
 -- InsertFragmentNode: DoPart --
 do
      (#
@@ -1544,7 +1659,7 @@ do
           do
              previousNode.geometry->(x,y,w,h);
              (x-(w+1) div 2,y-((h+1) div 2))->(x,y);
-             previousNode[]->PatternDiagrams.private.addAfterNode[];
+             previousNode[]->patterndiagrams.addAfterNode[];
              (if ff.type = mps.formType then
                  ff.root[]->theRoot[];
                  (if theRoot.symbol
@@ -1633,27 +1748,27 @@ do
              i+1->i;
              
           #);
-        (if PatternDiagrams.private.newNode[]
+        (if patterndiagrams.newNode[]
          // none then 'OOBS: newNode is NONE'->screen.putline; 
          else
             (if pos <> 0 then
-                (PatternDiagrams.private.newNode[],
-                 PatternDiagrams.private.addAfterNode[]->localNodes.at)
+                (patterndiagrams.newNode[],
+                 patterndiagrams.addAfterNode[]->localNodes.at)
                   ->localNodes.insertAfter
              else
                 (if switch[60] then
                     'InsertDiagramNode - prepending in localNodes: '->puttext;
-                    PatternDiagrams.private.newNode.theText.get->aText;
+                    patterndiagrams.newNode.theText.get->aText;
                     aText[]->putline
                 if);
-                PatternDiagrams.private.newNode[]
+                patterndiagrams.newNode[]
                   ->
                     localNodes.prepend
                     (*The new node is the topmost localNode when pos=0*)
             if);
             
         if);
-        none ->PatternDiagrams.private.addAfterNode[];
+        none ->patterndiagrams.addAfterNode[];
         localNodes.adjustSizes;
         
      #)  
@@ -1671,7 +1786,7 @@ do
         d.theDiagram->dListDiagram[];
         d[]->dFragmentNode[];
         (dFragmentNode.theFragment).father->theGroup[];
-        dFragmentNode.theRoot->RemoveListElement;
+        dFragmentNode.theRoot[]->RemoveListElement;
         (if dFragmentNode.currentDecomposDiagram <> none then
             (dFragmentNode.currentDecomposDiagram).titleNode.abstract; 
         if);

@@ -6,6 +6,8 @@ INCLUDE '~beta/betaast/betasematt'
         '~beta/basiclib/formatio'
         '~beta/basiclib/textUtils'
         '~beta/sysutils/errorscreen'
+        '~beta/bifrost/colornames'
+        '~beta/guienv/guienv'
         'gpputils'
         'indexIDList';
 BODY 'private/diagramattributes'
@@ -635,6 +637,12 @@ GppInterface:
                            (# Type::< Diagram #);
                          invisibleText: @ReferenceUserData
                            (# type::< text #);
+                         propertyString: @ReferenceUserData
+                           (# type:: text #);
+                         attributeType:
+                         (* whether it is an attribute, operation, local class or other *)
+                         @integerUserData;
+                         astIndex: @IntegerUserData;
                          onSelect::< 
                            (#  <<SLOT PatternDiagramNodeOnSelect:DoPart>> #);
                          abstract:< Object;
@@ -644,7 +652,6 @@ GppInterface:
                          detailRecursively:< Object;
                          overview:< Object;
                          abstractedFromDiagramBelow:< Object;
-                         astIndex: @IntegerUserData;
                          getAstNode:<
                            (# anAST: ^MPS.AST; 
                            do INNER ; 
@@ -669,6 +676,11 @@ GppInterface:
                               dist: @Point; (* distance to adjust the node *) 
                            enter dist
                            do INNER
+                           #);
+                         insertDiagramNode:<
+                           (# newAST: ^mps.ast
+                           enter newAST[]
+                           <<SLOT PatternDiagramNodeInsertDiagramNode:DoPart>>
                            #);
                          GetGroup:<
                          (* return the FragmentGroup this node belongs to *)
@@ -702,11 +714,18 @@ GppInterface:
                            do INNER
                            exit theDiagram[]
                            #);
+                         insertPropertySpec:<
+                           (# ps: ^text
+                           enter ps[]
+                           <<SLOT PatternDiagramNodeInsertPropertySpec:DoPart>>
+                           #);
                          dump:<
-                           (# 
+                           (# nodetype: ^text
                            do
                               <<SLOT PatternDiagramNodeDump:Descriptor>>;
-                              INNER
+                              INNER ;
+                              '********it is a***************'->putline;
+                              nodetype[]->putline
                            #);
                          onInit::< 
                            (# 
@@ -737,6 +756,30 @@ GppInterface:
                                 (# Type::< PatternDiagramNode #);
                               thePrefixConn: @ReferenceUserData
                                 (# Type::< Connector #);
+                              thePopup: @popupDesc;
+                              popupDesc:< theUI.menu
+                                (#
+                                   opened: @boolean;
+                                   editItem: @menuItem
+                                     (#
+                                        eventHandler:: 
+                                          (# onSelect::  (#  do  #) #)
+                                     #);
+                                   sep1: @separator;
+                                   hideItem: @menuItem
+                                     (#
+                                        eventHandler:: 
+                                          (# onSelect::  (#  do  #) #)
+                                     #);
+                                   open::< 
+                                     (# 
+                                     <<SLOT diagramTitlePopupOpen:DoPart>>
+                                     #)
+                                #);
+                              onRightMouseDown::< 
+                                (# 
+                                <<SLOT diagramTitleOnRightMouseDown:DoPart>>
+                                #);
                               interactiveNew::< 
                                 (#
                                    w,h: @Integer;
@@ -842,17 +885,24 @@ GppInterface:
                            enter TitleNode.UDMaxWidth
                            exit TitleNode.UDMaxWidth
                            #);
-                         updateMaxWH:
-                           (# thePatternDiagramNode: ^PatternDiagramNode
-                           enter thePatternDiagramNode[]
-                           do <<SLOT updateMaxWH:Descriptor>>; 
+                         localNodeOrder:
+                           (# 
+                           enter titleNode.UDlocalNodeOrder
+                           exit titleNode.UDlocalNodeOrder
                            #);
-                         LocalNodesDesc:
-                          containerlist
+                         attributes: @nodeList;
+                         operations: @nodeList;
+                         localClasses: @nodeList;
+                         localNodes: ^LocalNodesDesc;
+                         nodeList: containerList
                            (#
                               element::< PatternDiagramNode;
                               emptyContainerError::< 
                                 (#  do true->continue #);
+                              dump: (#  <<SLOT localNodesDump:DoPart>> #)
+                           #);
+                         LocalNodesDesc: nodeList
+                           (#
                               abstractAll: scan
                               (* abstracts detailed attributes on other pages *)
                                 (# 
@@ -861,12 +911,17 @@ GppInterface:
                               adjustSizes:
                                 (# 
                                 do <<SLOT LocalNodesAdjustSizes:Descriptor>>; 
-                                #);
-                              dump: (#  <<SLOT localNodesDump:DoPart>> #);
-                              
+                                #)
                            #);
-                         localNodes:
-                           ^LocalNodesDesc;
+                         updateMaxWH:
+                           (# thePatternDiagramNode: ^PatternDiagramNode
+                           enter thePatternDiagramNode[]
+                           do <<SLOT updateMaxWH:Descriptor>>; 
+                           #);
+                         showCompartments:<
+                           (# 
+                           <<SLOT ListDiagramShowCompartments:DoPart>>
+                           #);
                          new::< 
                            (# 
                            do &LocalNodesDesc[]->localNodes[]; INNER
@@ -895,24 +950,13 @@ GppInterface:
                               UDNoOfRefConnectors: @IntegerUserData;
                               UDMaxHeight: @IntegerUserData;
                               UDMaxWidth: @IntegerUserData;
+                              UDlocalNodeOrder: @integerUserData;
                               PatternDiagNodeReference:
                                LocalNodesReferenceUserData
                                 (# Type::< PatternDiagramNode #);
                               resetLocalNodesUD:
                                 (# 
                                 do <<SLOT resetLocalNodesUD:Descriptor>>; 
-                                #);
-                              onInit::< 
-                                (#
-                                   x,y,h,w:
-                                     @Integer;
-                                   (* the geometry of THIS(Title) *)
-                                   
-                                do
-                                   <<SLOT ListDiagramOnInit:Descriptor>>;
-                                   INNER ;
-                                   (* make the containing patterns *)
-                                   
                                 #);
                               onRemove::< 
                                 (# 
@@ -953,10 +997,24 @@ GppInterface:
                                 #);
                               overview::< 
                                 (#  <<SLOT ListDiagramOverview:DoPart>> #);
-                              GetFragment::<
-                               
+                              insertDiagramNode::< 
+                                (# 
+                                <<SLOT ListDiagramTitleNodeInsertDiagramNode:DoPart>>
+                                #);
+                              GetFragment::< 
                                 (# 
                                 do <<SLOT titleGetFragment:Descriptor>>; 
+                                #);
+                              onInit::< 
+                                (#
+                                   x,y,h,w: @Integer;
+                                   (* the geometry of THIS(Title) *)
+                                   
+                                do
+                                   <<SLOT ListDiagramOnInit:Descriptor>>;
+                                   INNER ;
+                                   (* make the containing patterns *)
+                                   
                                 #);
                               dump::< 
                                 (#  <<SLOT ListDiagramTitleDump:DoPart>> #);
@@ -968,10 +1026,21 @@ GppInterface:
                       #);
                     OADDiagram: ListDiagram
                       (#
-                         theDescriptor:
+                         theDescriptor: ^betaGram.ObjectDescriptor;
+                         attributesBox:
                            (# 
-                           enter titleNode.UDtheDescriptor
-                           exit titleNode.UDtheDescriptor
+                           enter titleNode.UDattributesBox
+                           exit titleNode.UDattributesBox
+                           #);
+                         operationsBox:
+                           (# 
+                           enter titleNode.UDoperationsBox
+                           exit titleNode.UDoperationsBox
+                           #);
+                         localClassesBox:
+                           (# 
+                           enter titleNode.UDlocalClassesBox
+                           exit titleNode.UDlocalClassesBox
                            #);
                          New::< 
                            (# 
@@ -994,10 +1063,44 @@ GppInterface:
                            enter titleshape
                            do <<SLOT OADDisplay:Descriptor>>; 
                            #);
+                         sortAttributesAndOperations:<
+                           (# 
+                           <<SLOT OADDiagramSortAttributesAndOperations:DoPart>>
+                           #);
+                         showCompartments::< 
+                           (# theBox: ^SurroundBox; x,y,w,h,x2,y2: @integer
+                           <<SLOT OADDiagramShowCompartmets:DoPart>>
+                           #);
                          title::< 
                            (#
-                              UDtheDescriptor: @ASTReferenceUserData
-                                (# Type::< betaGram.ObjectDescriptor #);
+                              UDattributesBox: @ReferenceUserData
+                                (# type:: SurroundBox #);
+                              UDoperationsBox: @ReferenceUserData
+                                (# type:: SurroundBox #);
+                              UDlocalClassesBox: @ReferenceUserData
+                                (# type:: SurroundBox #);
+                              popupDesc::< 
+                                (#
+                                   sortItem: @menuItem
+                                     (#
+                                        eventHandler:: 
+                                          (#
+                                             onSelect:: 
+                                               (# 
+                                               do sortAttributesAndOperations
+                                               #)
+                                          #)
+                                     #);
+                                   open::< 
+                                     (# 
+                                     do
+                                        sortItem.open;
+                                        'Show Seperate Compartments'
+                                          ->sortItem.name;
+                                        sortItem[]->append;
+                                        INNER open
+                                     #)
+                                #);
                               onRemove::< (* callback from delete *) 
                                 (# 
                                 do
@@ -1015,10 +1118,8 @@ GppInterface:
                               dump::< 
                                 (# 
                                 do <<SLOT OADDiagramDump:Descriptor>>; INNER
-                                #);
-                              
-                           #);
-                         
+                                #)
+                           #)
                       #);
                     FragmentDiagram: ListDiagram
                     (* Display all fragments of the Group *)
@@ -1054,7 +1155,6 @@ GppInterface:
                            (#
                               UDfullname:
                                 @ReferenceUserData (# Type::< Text #);
-                              (*toby 28-11-94: persistent version of theGroup*)
                               UDtheGroup: @ReferenceUserData
                                 (#
                                    Type::< mps.FragmentGroup;
@@ -1065,16 +1165,22 @@ GppInterface:
                                         
                                      #)
                                 #);
+                              (*toby 28-11-94: persistent version of theGroup*)
                               onInit::< 
                                 (# 
                                 do
                                    <<SLOT FragmentDiagramTitleInit:Descriptor>>;
                                    
+                                #);
+                              dump::< 
+                                (# 
+                                <<SLOT FragmentDiagramTitleDump:DoPart>>
                                 #)
                            #);
                          
                       #);
-                    PatternDiagram: OADDiagram
+                    PatternDiagram:
+                     OADDiagram
                       (#
                          DisplayDeclarations::<
                          (* called from Display to actually display *) 
@@ -1105,11 +1211,15 @@ GppInterface:
                               (* return the ASTnode THIS(title) is generated from *)
                               
                                 (# 
-                                do theDescriptor->anAST[]; INNER getASTNode
+                                do theDescriptor[]->anAST[]; INNER getASTNode
                                 #);
-                              
+                              dump::< 
+                                (# 
+                                <<SLOT PatternDiagramTitleDump:DoPart>>
+                                #)
                            #);
-                         new::< (* call to create THIS(PatternDiagram) *) 
+                         new::<
+                         (* call to create THIS(PatternDiagram) *) 
                            (# anAST: ^MPS.AST; titleshape: @Integer; 
                            enter (anAST[],titletext,titleshape)
                            do INNER ; 
@@ -1118,11 +1228,7 @@ GppInterface:
                       #);
                     PatternAttDiagram: PatternDiagram
                       (#
-                         theAST:
-                           (# 
-                           enter titleNode.UDtheAST
-                           exit titleNode.UDtheAST
-                           #);
+                         theAST: ^mps.ast;
                          DisplayDeclarations::< 
                            (# 
                            do
@@ -1141,15 +1247,13 @@ GppInterface:
                            #);
                          title::< 
                            (#
-                              UDtheAST: @ASTReferenceUserData
-                                (# Type::< mps.AST #);
                               onInit::< 
                                 (# 
                                 do <<SLOT PatternAttDiagramOnInit:Descriptor>>
                                 #);
                               getASTNode::< 
                                 (# 
-                                do theAST->anAST[]; INNER getASTNode
+                                do theAST[]->anAST[]; INNER getASTNode
                                 #);
                               dump::< 
                                 (# 
@@ -1162,11 +1266,7 @@ GppInterface:
                       #);
                     PatternDeclDiagram: PatternDiagram
                       (#
-                         thePrefix:
-                           (# 
-                           enter titleNode.UDthePrefix
-                           exit titleNode.UDthePrefix
-                           #);
+                         thePrefix: ^betaGram.ObjectDescriptor;
                          DisplayDeclarations::< 
                            (# 
                            do
@@ -1177,12 +1277,6 @@ GppInterface:
                            do
                               <<SLOT PatternDeclDiagramDisplay:Descriptor>>;
                               INNER
-                                ;
-                              
-                           #);
-                         DisplayPrefix:
-                           (# 
-                           do <<SLOT PatternDiagramDisplayPrefix:Descriptor>>
                            #);
                          DisplayInheritance:
                            (# 
@@ -1192,8 +1286,6 @@ GppInterface:
                            #);
                          title::< 
                            (#
-                              UDthePrefix: @ASTReferenceUserData
-                                (# Type::< betaGram.ObjectDescriptor #);
                               ConcludeDisplay::< 
                                 (# 
                                 <<SLOT PatternDeclDiagramConcludeDisplay:DoPart>>
@@ -1230,35 +1322,10 @@ GppInterface:
                                 (# 
                                 do
                                    <<SLOT PatternClassificationDiagramOnInit:Descriptor>>
-                                #)
-                           #);
-                         
-                      #);
-                    PatternNonTerminalDiagram: PatternDiagram
-                      (#
-                         theDesc:
-                           (# 
-                           enter titleNode.UDtheDesc
-                           exit titleNode.UdtheDesc
-                           #);
-                         DisplayDeclarations::< 
-                           (# 
-                           do
-                              <<SLOT PatternNonTerminalDisplayDeclarations:Descriptor>>
-                           #);
-                         New::< 
-                           (# 
-                           do <<SLOT PatternNonTerminalDiagramNew:Descriptor>>
-                           #);
-                         title::< 
-                           (#
-                              UDtheDesc: @ASTReferenceUserData
-                                (# Type::< mps.AST #);
-                              onInit::< 
+                                #);
+                              dump::< 
                                 (# 
-                                do
-                                   <<SLOT PatternNonTerminalDiagramOnInit:Descriptor>>;
-                                   
+                                <<SLOT PatternClassificationDiagramDump:DoPart>>
                                 #)
                            #);
                          
@@ -1648,7 +1715,14 @@ GppInterface:
                          private:
                            @<<SLOT AggregationConnectorPrivate:Descriptor>>
                       #);
-                    BoxToNode: (* if node is a SurroundBox, return title *)
+                    createConnectorText:
+                      (# con: ^connector; t: ^text; theLabel: ^LabelNode
+                      enter (con[],t[])
+                      <<SLOT createConnectorText:DoPart>>
+                      exit theLabel[]
+                      #);
+                    BoxToNode:
+                    (* if node is a SurroundBox, return title *)
                       (# theNode: ^DesignObject
                       enter theNode[]
                       <<SLOT BoxToNode:DoPart>>
@@ -2648,6 +2722,7 @@ GppInterface:
      mps: ^astInterface;
      betaGram: ^astInterface.beta;
      gram: @grammar;
+     theUI: ^guienv;
      
   do <<SLOT InitGPP:Descriptor>>; INNER ; theDesignInterface; 
   #)  

@@ -1,5 +1,4 @@
 ORIGIN 'diagramattributes';
-INCLUDE 'patterndiagramsbody';
 -- PatternDiagramConcludeDisplay: DoPart --
 do
      (#
@@ -85,6 +84,9 @@ do
         INNER concludeDisplay
      #)  
 
+-- PatternDiagramTitleDump: DoPart --
+do 'PatternDiagram.titleNode'->nodetype[]; INNER dump  
+
 -- PatternDiagramOnInit: Descriptor --
 (# pos: @Point; w1,h1: @Integer; x2,y2,w2,h2: @integer; 
 do
@@ -122,13 +124,7 @@ do false->repair; INNER detail; true->repair
 -- PatternDiagramNodeDump: Descriptor --
 (# x,y,w,h: @integer; connectors: ^ObjectList
 do
-   '********connectors********'->putline;
-   getConnectors->connectors[];
-   (if connectors[] <> none then
-       connectors.scan (#  do current.ID->putint; ' '->puttext #); newline
-    else
-       'none'->putline
-   if);
+   'PatternDiagramNode'->nodetype[];
    '********theDiagram********'->putline;
    (if theDiagram <> none then
        (theDiagram).titleText[]->putline
@@ -151,18 +147,38 @@ do
    newLine;
    'h: '->putText;
    h->putint;
-   newLine
+   newLine;
+   '********connectors********'->putline;
+   getConnectors->connectors[];
+   (if connectors[] <> none then
+       connectors.scan (#  do current.ID->putint; ' '->puttext #); newline
+    else
+       'none'->putline
+   if);
+   '********propertySting********'->putline;
+   (if propertyString <> none then
+       propertyString->putline
+    else
+       'none'->putline
+   if)
 #)  
 
 -- OADDiagramOnInit: Descriptor --
-(#  do UDPrivate.UDOADDiagram->UserDataInit; UDtheDescriptor.Init #)  
+(# 
+do
+   UDPrivate.UDOADDiagram->UserDataInit;
+   UDattributesBox.init;
+   UDoperationsBox.init;
+   UDlocalClassesBox.init
+#)  
 
 -- OADDiagramDump: Descriptor --
 (# 
 do
+   'OADDiagram.titleNode'->nodetype[];
    '********theDescriptor********'->putline;
-   (if theDescriptor <> none then
-       (theDescriptor).dump; newline
+   (if theDescriptor[] <> none then
+       theDescriptor.dump; newline
     else
        'is NONE!'->putline
    if)
@@ -171,13 +187,86 @@ do
 -- PatternAttDiagramDump: Descriptor --
 (# 
 do
+   'PatternAttDiagram.titlenode'->nodetype[];
    '********theAST********'->putline;
-   (if theAST <> none then
-       (theAST).dump; newline
+   (if theAST[] <> none then
+       theAST.dump; newline
     else
        'is NONE!'->putline
    if)
 #)  
+
+-- PatternDiagramNodeInsertDiagramNode: DoPart --
+do
+     (#
+        displayNode:
+          (# x,y,w,h: @Integer; startPos: @point
+          do
+             geometry->(x,y,w,h);
+             x-(w div 2)->x;
+             x+gppProp.width->x;
+             gppProp.width*2->w;
+             THIS(PatternDiagramNode)[]->patterndiagrams.addAfterNode[];
+             (x-(w div 2),y-(h div 2)+gppProp.height)->startPos;
+             (newAST[],startpos)->ld.DisplayAST->startpos
+          #);
+        moveDownNodes:
+          (# moveDown: @boolean
+          do
+             ld.localnodes.scan
+               (# x,y: @integer; aText: @Text; 
+               do
+                  (if moveDown or (THIS(PatternDiagramNode)[] = ld.titleNode[])
+                   then
+                      (if switch[60] then
+                          'InsertDiagramNode: move down '->puttext;
+                          current.theText.get->aText;
+                          aText[]->putline
+                      if);
+                      current.center->(x,y);
+                      (x,y+gppProp.height)->current.center
+                   else
+                      (if current[] = THIS(PatternDiagramNode)[] then
+                          true->moveDown
+                      if)
+                  if)
+               #)
+          #);
+        ld: ^listDiagram
+     do
+        (if switch[60] then
+            'PatternDiagramNode ------- InsertDiagramNode: %i\n'
+              ->putformat (#  do newAST.Index->i #);
+            newAST.dump;
+            newLine
+        if);
+        theDiagram->ld[];
+        true->ld.remakingDiagram;
+        displayNode;
+        (if not (ld.localNodeOrder = gppProp.inCompartments) then
+            moveDownNodes
+        if);
+        (if patterndiagrams.newNode[] = none then
+            'OOBS: newNode is NONE'->screen.putline; 
+         else
+            INNER insertDiagramNode
+        if);
+        none ->patterndiagrams.addAfterNode[];
+        false->ld.remakingDiagram;
+        ld.localNodes.adjustSizes
+     #)  
+
+-- PatternDiagramNodeInsertPropertySpec: DoPart --
+do
+     (# t: ^text
+     do
+        propertyString->t[];
+        (if t[] = none then &text[]->t[] if);
+        (if t.empty then '{}'->t.puttext if);
+        (if not ('{}'->t.equal) then (',',t.length)->t.insert if);
+        (ps[],t.length)->t.insert;
+        t[]->propertyString
+     #)  
 
 -- PatternDiagramNodeOnInit: Descriptor --
 (# 
@@ -187,18 +276,19 @@ do
    invisibleText.init;
    theMarkNode.Init;
    defaultShape.Init;
-   astIndex.Init
+   astIndex.Init;
+   propertyString.init
 #)  
 
 -- PatternAttDiagramDisplayDeclarations: Descriptor --
-(# anAST: ^MPS.AST do theAST->anAST[]; anAST[]->theAttributes[];  #)  
+(#  do theAST[]->theAttributes[] #)  
 
 -- PatternAttDiagramNew: Descriptor --
 (# 
 do
    (if anAST.symbol
     // betaGram.Attributes then
-       anAST[]->theAST;
+       anAST[]->theAST[];
        shape.RndRect->Display;
        (anAST.index,anAST.frag.fullname,THIS(PatternAttDiagram)[])
          ->PatternDiagrams.theList.insertPD;
@@ -211,31 +301,27 @@ do
 (****************** PatternDeclDiagram *******************)  
 
 -- PatternAttDiagramOnInit: Descriptor --
-(# 
-do UDPrivate.UDPatternAttDiagram->UserDataInit; UdtheAST.Init; 2->lineThickness
-#)  
+(#  do UDPrivate.UDPatternAttDiagram->UserDataInit; 2->lineThickness #)  
 
 -- PatternDeclDiagramDump: Descriptor --
 (# 
 do
+   'PatternDeclDiagram.titleNode'->nodetype[];
    '********thePrefix********'->putline;
-   (if thePrefix <> none then
-       (thePrefix).dump; newline
+   (if thePrefix[] <> none then
+       thePrefix.dump; newline
     else
        'is NONE!'->putline
    if)
 #)  
 
 -- PatternDeclDiagramDisplayDeclarations: Descriptor --
-(# main: ^betaGram.MainPart; theDummyDesc: ^betaGram.ObjectDescriptor
+(# main: ^betaGram.MainPart
 do
-   (if theDescriptor
-    // none then none ->theAttributes[]; 
+   (if theDescriptor[] = none then
+       none ->theAttributes[]; 
     else
-       theDescriptor->theDummyDesc[];
-       theDummyDesc.getMainPart->main[];
-       main.getAttributes->theAttributes[];
-       
+       theDescriptor.getMainPart->main[]; main.getAttributes->theAttributes[]; 
    if);
    
 #)  
@@ -246,30 +332,26 @@ do
    subList: ^DiagramList;
    prefixDiagram: ^PatternDiagram;
    e: ^localNodes.element;
-   theDummyDesc: ^betaGram.ObjectDescriptor;
    theDiagramNode: ^DiagramNode;
    anAST,theFather: ^MPS.AST
 do
-   (if theDescriptor
-    // none then (* I must be generated from a non-terminal *)
-       none ->thePrefix; 
+   (if theDescriptor[] = none then (* I must be generated from a non-terminal *)
+       none ->thePrefix[]
     else
-       theDescriptor->theDummyDesc[];
-       (if theDummyDesc.frag.father->isChecked
-        // true then
-           theDescriptor->getPrefix->thePrefix;
-           (if thePrefix <> none then
-               theDummyDesc.father->theFather[];
+       (if theDescriptor.frag.father->isChecked then
+           theDescriptor[]->getPrefix->thePrefix[];
+           (if thePrefix[] <> none then
+               theDescriptor.father->theFather[];
                (if theFather## <= betaGram.AttributeDecl## then
-                   (theFather[],(thePrefix).father)
-                     ->patternDiagrams.private.InheritanceList.insert
+                   (theFather[],thePrefix.father)
+                     ->patterndiagrams.InheritanceList.insert
                 else
                (*could be a singular*)
                    theFather.father->theFather[];
                    (if theFather[] <> none then
                        (if theFather## <= betaGram.AttributeDecl## then
-                           ((theDummyDesc.father).father,(thePrefix).father)
-                             ->patternDiagrams.private.InheritanceList.insert
+                           ((theDescriptor.father).father,thePrefix.father)
+                             ->patterndiagrams.InheritanceList.insert
                        if)
                    if)
                if)
@@ -277,62 +359,63 @@ do
         else
            theParentNode->theDiagramNode[];
            (if theDiagramNode[] <> none then
-               (if theDiagramNode.thePrefix <> none then
-                   theDiagramNode.thePrefix->thePrefix
+               (if theDiagramNode.thePrefix[] <> none then
+                   theDiagramNode.thePrefix[]->thePrefix[]
                if)
            if)
-       if);
-       
+       if)
    if);
-   (if thePrefix <> none
-    // true then (* find diagram *)
-       ((thePrefix).index,(thePrefix).frag.fullname)
-         ->PatternDiagrams.theList.findPD->prefixDiagram[];
-       (if prefixDiagram[]
-        // none then
-           (PatternDiagrams.private.NextFreeColumn,
-            PatternDiagrams.private.NextFreeLine)->theCenter;
-           
+   (if thePrefix[] <> none then (* find diagram *)
+       60
+         ->trace
+           (# 
+           do
+              'PatternDeclDiagram-Display: thePrefix=%i\n'
+                ->t.putformat (#  do thePrefix.index->i #)
+           #);
+       (thePrefix.index,thePrefix.frag.fullname)->PatternDiagrams.theList.findPD
+         ->prefixDiagram[];
+       (if prefixDiagram[] = none then
+           (patterndiagrams.NextFreeColumn,patterndiagrams.NextFreeLine)
+             ->theCenter
         else
+           60
+             ->trace
+               (# 
+               do
+                  'PatternDeclDiagram-Display: prefixDiagram=%s\n'
+                    ->t.putformat (#  do prefixDiagram.titleText[]->s #)
+               #);
            prefixDiagram[]->PatternDiagrams.theList.GetSubPatternDiagrams
              ->subList[];
-           (if subList.size
-            // 0 then (* I am the first subpat of perfixDiagram[] *)
-               (if prefixDiagram.localNodes.size > 0
-                // true then
+           (if subList.size = 0 then
+           (* I am the first subpat of prefixDiagram[] *)
+               (if prefixDiagram.localNodes.size > 0 then
                    prefixDiagram.localNodes.Last
-                     (#  do position.elm[]->e[]; e.Center->(x,y) #);
-                   
+                     (#  do position.elm[]->e[]; e.Center->(x,y) #)
                 else
                    prefixDiagram.titleNode.Center->(x,y); 
                if);
                prefixDiagram.titleNode.Center->theCenter;
-               (if x-gppProp.width > theCenter.x
-                // true then
-                (* the last box is not in the same column as the
-                 * title:  use center of the last box *)
+               (if x-gppProp.width > theCenter.x then
+               (* the last box is not in the same column as the
+                * title:  use center of the last box *)
                    x->theCenter.x; 
                if);
-               y+gppProp.DownFromPrefix->theCenter.y;
-               
+               y+gppProp.DownFromPrefix->theCenter.y
             else
                (- 10000,- 10000)->theCenter;
                subList.scanPatternDiagrams
                  (# p1: @Point; 
                  do
-                    (if thisDiagram[]
-                     // THIS(PatternDeclDiagram)[] then 
-                     else
+                    (if thisDiagram[] <> THIS(PatternDeclDiagram)[] then
                         thisDiagram.titleNode.Center->p1;
                         (if p1.x > theCenter.x
                          // true then p1->theCenter
-                        if);
-                        
-                    if);
-                    
+                        if)
+                    if)
                  #);
-               theCenter.x+gppProp.width+gppProp.RightFromPrevious->theCenter.x;
-               
+               theCenter.x+gppProp.width+gppProp.RightFromPrevious->theCenter.x
            if)
        if)
    if);
@@ -347,8 +430,8 @@ do
         x1,y1,x2,y2: @integer
      do
         (if gppProp.DiagramPositioning = gppProp.AllAuto then
-            (if thePrefix <> none then
-                ((thePrefix).index,(thePrefix).frag.fullname)
+            (if thePrefix[] <> none then
+                (thePrefix.index,thePrefix.frag.fullname)
                   ->PatternDiagrams.theList.findPD->prefixDiagram[];
                 (if prefixDiagram[] <> none then
                     prefixDiagram[]->prettyprintSubPatterns
@@ -368,9 +451,8 @@ do
              else
             (* I am the top-most super-pattern *)
                 THIS(PatternDeclDiagram)[]
-                  ->
-                    PatternDiagrams.private.inheritanceList.
-                      GetSubPatternDiagrams->subList[];
+                  ->patterndiagrams.inheritanceList.GetSubPatternDiagrams
+                  ->subList[];
                 (if not subList.empty then
                     subList.scan
                       (#  do current.e.titleNode.unMakeRegion #);
@@ -388,55 +470,6 @@ do
         if)
      #)  
 
--- PatternDiagramDisplayPrefix: Descriptor --
-(# prefixDiagram: ^PatternDiagram; con: ^PrefixConnector; 
-do
-   (if switch[50]
-    // true then 'PatternDiagramDisplayPrefix'->screen.putline; 
-   if);
-   (if theDescriptor <> none then
-       (if thePrefix <> none then (* is the prefix displayed on this page *)
-           ((thePrefix).index,(thePrefix).frag.fullname)
-             ->PatternDiagrams.theList.findPD->prefixDiagram[];
-           (if prefixDiagram[] <> none then
-           (* Yes, go make a connector between the diagrams *)
-               &PrefixConnector[]->con[];
-               (titleNode[],prefixDiagram.titleNode[])->con.new;
-               prefixDiagram.titleNode[]->titleNode.CreateRegion;
-               (* and make THIS to a region of prefix *)
-               con[]->titleNode.thePrefixConn;
-               
-           if)
-        else
-       (* No prefix *)
-           
-       if);
-       (* now check for any shown subpatterns of this descriptor *)
-       PatternDiagrams.theList.scanPatternDiagrams
-         (# con: ^PrefixConnector; theDummyDesc: ^betaGram.ObjectDescriptor
-         do
-            (if thisDiagram.thePrefix <> none then
-                theDescriptor->theDummyDesc[];
-                (if thisDiagram.thePrefix->theDummyDesc.equal then
-                (* yes this diagram *)
-                    &PrefixConnector[]->con[];
-                    (thisDiagram.titleNode[],titleNode[])->con.new;
-                    titleNode[]->thisDiagram.titleNode.CreateRegion;
-                    con[]->thisDiagram.titleNode.thePrefixConn;
-                    
-                if)
-            if)
-         #);
-       
-    else
-       (if switch[50]
-        // true then 'DisplayPrefix: No Descriptor!!!'->putline
-       if);
-       
-   if);
-   
-#)  
-
 -- PatternDeclDiagramDisplayInheritance: Descriptor --
 (#
    prefixDiagram,subDiagram: ^PatternDeclDiagram;
@@ -448,14 +481,14 @@ do
    theDecl,theSuperDecl: ^betaGram.AttributeDecl
 do
    (if switch[50] then 'DisplayInheritance: '->putline if);
-   (if not patternDiagrams.private.InheritanceList.empty then
+   (if not patterndiagrams.InheritanceList.empty then
        (if theParentNode <> none then
            theParentNode->theParent[];
            theParent.theDiagram->theListDiagram[];
            (if theParent## <= theListDiagram.DiagramNode## then
                theParent[]->theDiagramNode[];
-               theDiagramNode.theDeclaration->theDecl[];
-               patternDiagrams.private.InheritanceList.scan
+               theDiagramNode.theDeclaration[]->theDecl[];
+               patterndiagrams.InheritanceList.scan
                  (# ff: ^mps.fragmentform; t: @Text
                  do
                     (if (theDecl.index = current.sub) and
@@ -463,8 +496,8 @@ do
                         current.superFrag[]->topDotOpen->ff[];
                         current.super->ff.indexToNode->theSuperDecl[]->AstToNode
                           ->theNode[];
-                        theSuperDecl.getSon2->theDiagramNode.thePrefix
-                          ->thePrefix;
+                        theSuperDecl.getSon2->theDiagramNode.thePrefix[]
+                          ->thePrefix[];
                         (if theNode[] <> none then
                             theNode.theDiagram->theListDiagram[];
                             theNode[]->superNode[];
@@ -512,8 +545,7 @@ do
                         if)
                     if)
                  #)
-           if);
-           
+           if)
        if)
    if);
    
@@ -528,14 +560,11 @@ do
    theDummyGroup: ^mps.fragmentgroup
 do
    UDPrivate.UDPatternDeclDiagram->UserDataInit;
-   UDthePrefix.Init;
    (if not initialisingSaved then
        theFragmentNode->theDummyFragNode[];
        theDummyFragNode.theDiagram->fd[];
-       DisplayInheritance;
-       
-   if);
-   
+       DisplayInheritance
+   if)
 #)  
 
 -- PatternDeclDiagramNew: Descriptor --
@@ -543,7 +572,7 @@ do
 do
    (if anAST.symbol
     // betaGram.ObjectDescriptor then
-       anAST[]->theDescriptor; titleShape->Display; 
+       anAST[]->theDescriptor[]; titleShape->Display; 
     else
        'PatternDeclDiagram New: unknown AST symbol'->putline; 
    if);
@@ -585,7 +614,7 @@ do
                        tempAst[]->ad[];
                        ad.findDescriptor->thisInheritor[];
                        (if thisInheritor[]
-                        // theDescriptor then
+                        // theDescriptor[] then
                            (if switch[50]
                             // true then 'Found inheritor.'->screen.putline; 
                            if);
@@ -653,54 +682,8 @@ do
 -- PatternClassificationDiagramOnInit: Descriptor --
 (#  do UDPrivate.UDPatternClassificationDiagram->UserDataInit #)  
 
--- PatternNonTerminalDiagramNew: Descriptor --
-(# 
-do
-   'PatternNonTerminalDiagramNew: '->screen.puttext;
-   titletext[]->screen.putline;
-   (if anAst[]
-    // none then 'PatternNonTerminalDiagramNew anAST is NONE'->putline; 
-    else
-       (if anAST.symbol
-        // betaGram.ObjectDescriptor then
-           anAST[]->theDescriptor; titleshape->Display; 
-        else
-           'PatternNonTerminalDiagram New: unknown AST symbol'->putline; 
-       if)
-   if);
-   
-#)  
-
--- PatternNonTerminalDisplayDeclarations: Descriptor --
-(#
-   nt: ^NonTerminalNode;
-   unExp: ^mps.unexpanded;
-   x,y: @Integer;
-   main: ^betaGram.MainPart;
-   theDummyDesc: ^betaGram.ObjectDescriptor
-do
-   (if theDescriptor
-    // none then
-       none ->theAttributes[];
-       'NonTerminal: theDescriptor is NONE'->putline;
-       (*&NonTerminalNode[] -> nt[];
-        (gram.attributedecl,theDescriptor.frag[]) -> betagram.newUnexpanded -> unExp[];
-        (startpos,unExp[]) -> nt.display;
-        THIS(PatternNonTerminalDiagram)[] -> nt.theDiagram[];*)
-       
-    else
-       theDescriptor->theDummyDesc[];
-       theDummyDesc.getMainPart->main[];
-       main.getAttributes->theAttributes[];
-       
-   if);
-   
-#)  
-
--- PatternNonTerminalDiagramOnInit: Descriptor --
-(# 
-do UDPrivate.UDPatternNonTerminalDiagram->UserDataInit; UDtheDesc.Init
-#)  
+-- PatternClassificationDiagramDump: DoPart --
+do 'PatternClassificationDiagram.titleNode'->nodetype[]; INNER dump  
 
 -- CommentNodeOnInit: Descriptor --
 (# 
