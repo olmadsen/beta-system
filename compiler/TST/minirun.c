@@ -2,17 +2,48 @@
 #define trace true 
 #define fulltrace 1
 
-#if 1
-#define TRACE(code) code
+#if 0
+#define TRACE_A(code) code;
+#else
+#define TRACE_A(code)
+#endif
+
+#if 0
+#define TRACE(code) code; fflush(stdout);
 #else
 #define TRACE(code)
 #endif
 
 #if 0
-#define TRACE_COMP(code) code
+#define TRACE2(code) code; fflush(stdout);
+#else
+#define TRACE2(code)
+#endif
+
+#if 0
+#define TRACE3(code) code; fflush(stdout);
+#else
+#define TRACE3(code)
+#endif
+
+#if 0
+#define TRACE_COMP(code) code; fflush(stdout);
 #else
 #define TRACE_COMP(code)
 #endif
+
+#if 0
+#define TRACE_CB(code) code; fflush(stdout);
+#else
+#define TRACE_CB(code)
+#endif
+
+#if 0
+#define TRACE_C(code) code; fflush(stdout);
+#else
+#define TRACE_C(code)
+#endif
+
 #ifdef __powerc
 #define PPC
 #endif
@@ -33,7 +64,7 @@
  */
 
 /****** platform dependent constants 
- *  SPinstOff     : offset in code segement (G or M-entry) of instruction
+ *  SPinstOff     : offset in code segment (G or M-entry) of instruction
  *                  decrementing SP; the SP increment is supposed to be 
  *                  the lower 16 bits of the instruction
  *  INNERinVDB    : true if IDT is merged with VDT
@@ -41,30 +72,39 @@
  *                  this is the entry of the main-entry point
  */
 
+#define mEntryOff 3
+    /* offset in prototype for offset to M-entry point 
+     * when inner-dispatch is merged with virtual-dispatch
+     */
+
 #define INNERinVDB 1
 
-#ifdef SGI
-
+/* Case V1 above  */
+#ifdef SGI-with-INNERinVDB = 0
 #include <sys/cachectl.h>
 #define mainEntry  -1
 #define SPinstOff 3
 #define pcOff -1
 #define callerOff -2
-
 #endif
 
+/* Case V2 above  */
+#ifdef SGI
+#include <sys/cachectl.h>
+#define mainEntry  0
+  /* 0 signals that the inner-dispatch table is NOT before the prototype */
+#define SPinstOff 3
+#define pcOff -1
+#define callerOff -2
+#endif  /* SGI */
+
+/* Case V3 above */
 #ifdef PPC
 #define SPinstOff 2
-
 #define mainEntry 0
   /* 0 signals that the inner-dispatch table is NOT before the prototype */
-#define mEntryOff 3
-    /* offset in prototype for offset to M-entry point 
-     * when inner-dispatch is merged with virtual-dispatch
-     */
 #define pcOff 2
 #define callerOff -1
-
 #endif /* PPC */
 
 #define ref(x)    struct x *
@@ -75,7 +115,14 @@ long BetaStackTop,BetaThis;
 
 long oldHT=0;
 long heap[heapMax];
+
+#ifdef PPC
 long IOA= (long) &heap[0];
+#endif
+#ifdef SGI
+long _IOA= (long) &heap[0];
+#endif
+
 long IOAused=0;
 long IOAtop = 0; /*&heap[heapMax];*/
 long heapTop=0;
@@ -123,6 +170,31 @@ void dumpHeap(long start, long end) {
            if ((i % 4) == 0) printf("\n");
         };)
  }
+ 
+long dumpObjX(long *obj, long size)
+{ int i;
+  for (i=0; i<size; i++)  printf("obj[%i] = &0x%x = 0x%x\n",i*4, &obj[i],obj[i]);
+  fflush(stdout);
+}
+
+char *ProtoText(long *proto) {
+  long statOff,off,i;
+  /*  for (i=0; i<20; i++) printf("proto %i = %x\n",i,proto[i] );*/
+  statOff = (proto[0] >> 16) & 0xffff;
+  off = ((short *)proto)[statOff / 2] ;
+  while (off != 0) {
+    statOff = statOff + 8;
+    off = ((short *)proto)[statOff / 2] ;
+  }
+  statOff = statOff + 2;
+  off = ((short *)proto)[statOff / 2] ;
+  while (off != 0) {
+    statOff = statOff + 2;
+    off = ((short *)proto)[statOff / 2] ;
+  };
+  statOff = statOff + 2;
+  return (char *) &((char *)proto)[statOff];
+}
 
 void FatalErr(int n) {
    switch (n) {
@@ -141,17 +213,28 @@ void BetaError(int n, long * this, long SP, long RA)
 
 typedef void (* EntryPoint)(long,long *);
 
+EntryPoint theTopEntry(long * proto)
+{
+#ifdef INNERinVDB
+  return (void (*)(long,long *)) proto[6];
+#else
+  return(EntryPoint) proto[-1];
+#endif
+}
+
 EntryPoint theMainEntry(long * proto)
 { int i;
-#ifdef INNER_IN_VDT
- /* printf("MainEntry: mentryoff=%i, mentryoff2=%i, mentry=0x%x\n"
-  , mEntryOff, (proto[mEntryOff] & 0xffff) / 4,  proto[(proto[mEntryOff] & 0xffff) / 4]);
-  fflush(stdout);
-  for (i=0; i < 10; i++) printf("\nProto: i:%i, proto: 0x%x\n",i, proto[i]);*/
+#ifdef INNERinVDB
+  TRACE_COMP(printf("MainEntry: mentryoff=%i, mentryoff2=%i, mentry=0x%x\n"
+        ,mEntryOff,(proto[mEntryOff] & 0xffff) / 4
+        ,proto[(proto[mEntryOff] & 0xffff) / 4]);
+        fflush(stdout);
+        for (i=0; i < 10; i++) printf("Proto: i:%i, proto: 0x%x\n",i,proto[i])
+   )
   
   return (void (*)(long,long *)) proto[(proto[mEntryOff] & 0xffff) / 4];
 #else
-  return(EntryPoint) proto[-1];
+  return(EntryPoint) proto[-1]; /* probably wrong??*/
 #endif
 }
 
@@ -170,33 +253,67 @@ long AllocHeap(int size) {
    /* the following is to experiment with ChkRA: by redefining
     * _IOA, the oldest objects becomes logically outside _IOA
     */
+#ifdef PPC
    if ((heapTop > 1000) && (heapTop < 2000)) { IOA= &heap[heapTop]; }
+#endif
+#ifdef SGI
+   if ((heapTop > 1000) && (heapTop < 2000)) { _IOA= &heap[heapTop]; }
+#endif
+
    for (i=0; i<size; i++) ((long *)start)[i]=0;
    if (heapTop > heapMax) FatalErr(1);
   /* printf("AllocHeap: 0x%x %i 0x%x\n",start,size,start+size*4);*/
    return start;
 }
 
-int AlloI(int origin, long *proto,long SP) {
+long noOfAlloI = 0, alloImin=1400, alloImark1=1457, alloImark2=1468, savedObj,savedSize;
+
+
+
+char * BufferAdr;
+char * GetTextFromStream3(long F, long toEOL) 
+{  char * s;
+   printf("Before:GetTextFromStream\n");
+   dumpObjX((long *)savedObj,savedSize);
+   printf("Buffer address = 0x%x\n",BufferAdr);
+	
+   /*   s = GetTextFromStream(F,toEOL);*/
+   
+   BufferAdr = s;
+   printf("Buffer address = 0x%x\n",BufferAdr);
+   
+   printf("After:GetTextFromStream\n");
+   dumpObjX((long *)savedObj,savedSize);
+   
+   return s;
+}
+
+long AlloI(int origin, long *proto,long SP) {
   long orgOff; short size=196;
   void (*Gentry)();
   long start,statOff;  
-  /*printf("proto=:%x, origin=%x\n", (long)proto,origin);*/
+  char * s;
+  noOfAlloI = noOfAlloI + 1;
+  TRACE_A(if (noOfAlloI > alloImin) {
+        s = ProtoText(proto);
+        printf("AlloI: %i, %s proto=0x%x, origin=0x%x, origin.origin = 0x%x", 
+		         noOfAlloI, s, (long)proto,origin,((long *)origin)[2]);}
+  )
   if ((int)proto > 1 ) {
-     /* printf("%x %x %x %x %x %x %x %x\n",proto[0],proto[1],proto[2],proto[3]
+     TRACE(printf("%x %x %x %x %x %x %x %x\n",proto[0],proto[1],proto[2],proto[3]
       ,proto[4]
-      ,proto[5],proto[6],proto[7]);*/
+      ,proto[5],proto[6],proto[7]))
     statOff = (proto[0] >> 16) & 0xffff;
     orgOff = proto[0] & 0xffff;
     size = ( (short *)proto)[6];
     Gentry = (void (*)())proto[1];
   } else if (proto == 0) printf("proto=0\n");
   oldHT = heapTop;
-  if (size == 0) {printf("\n***AlloI size=0\n"); size = 196;}
+  if (size == 0) {printf("\n***AlloI size=0\n"); fflush(stdout); size = 196;}
   start = AllocHeap(size+4);
-
-    /*printf("\nAlloi: start=%x, orgOff=%i, size=%i, gEntry=%x, origin=%x\n"
-      ,start,orgOff,size,Gentry,origin);*/
+ 
+  TRACE(printf("AlloI: start=%x, orgOff=%i, size=%i, gEntry=%x, origin=%x\n"
+      ,start,orgOff,size,Gentry,origin);)
 
    if ((int)proto > 1 ) {int off,pt,loc;
       ((long *)start)[0] = (long) proto;
@@ -205,17 +322,34 @@ int AlloI(int origin, long *proto,long SP) {
       while (off != 0) {
 	     pt = ((long *)proto)[(statOff + 4) / 4];
 	     loc =  ((short *)proto)[(statOff + 2) / 2];
-	     /* printf("PartObj: obj=0x%x, off=%i, proto=%x, loc=%i\n",
-                     &((long *)start)[off],off,pt,loc); */
+	     TRACE(printf("PartObj: obj=0x%x, off=%i, proto=%x, loc=%i\n",
+                     &((long *)start)[off],off,pt,loc))
 	     ((long *)start)[off ] =  pt;
              ((long *)start)[off  + 1] = loc;
 	     statOff = statOff + 8;
              off = ((short *)proto)[statOff / 2] ;
-	    }
+      }
+      TRACE_A(if (noOfAlloI > alloImin) 
+	         printf(", adr=0x%x, charBuf=0x%x\n",start,BufferAdr);
+	         if (noOfAlloI == alloImark1) {
+		     savedObj = start;
+		     savedSize = size;
+		     dumpObjX((long *)start,(long)size);
+		  }
+	          fflush(stdout);
+		  if (noOfAlloI > alloImark1) {
+		      dumpObjX((long *)savedObj,savedSize);
+		      /*dumpObjX((long *)origin,10);*/
+		   }
+		   if (noOfAlloI == alloImark2) {
+		      dumpObjX((long *)origin,10);
+		      FatalErr(0);
+                    }
+	    )
       Gentry(SP,start);
 
     };
-   /*  printf("After Gentry\n");*/
+   TRACE(printf("After Gentry\n");)
    /* dumpHeap();*/
    return start;
 }
@@ -252,7 +386,9 @@ long AlloC(int origin, long *proto, long SP) {
  }
 
 int AlloS(long origin, long proto) {
-   long start;
+   long start,i;
+   TRACE_CB(printf("AlloS origin = 0x%x proto = 0x%x\n",origin,proto))
+   TRACE_CB(for (i=0; i<10; i++) printf("proto[%i] = 0x%x\n",i,((long *)proto)[i]))
    start = AllocHeap(4+1);
    ((long *)start)[0] = -3;
    ((long *)start)[1] = 0;
@@ -262,13 +398,15 @@ int AlloS(long origin, long proto) {
 }
 
 int AlloSI(long dummy, long *struc,long SP) /* NO dummy in real betarun */ {
+   TRACE_CB(printf("AlloSI: dummy=0x%x struc=0x%x SP=0x%x\n",dummy,struc,SP))
+   TRACE_CB(printf("AlloSI: proto = 0x%x origin =0x%x\n", struc[3],struc[2])) 
    return AlloI(struc[2],(long *)struc[3],SP);
 }
 
 long AlloDO(int size, long origin ) {
     long start;
     start = AllocHeap(size);
-    ((long *)start)[0] = 0;
+    ((long *)start)[0] = -9;
     ((long *)start)[2] = origin;
     return start;
 }
@@ -276,7 +414,7 @@ long AlloDO(int size, long origin ) {
 /* not found in betarun.h */
 int AlloORR(long origin, long proto, long obj, long off, long range,long SP) {
     long start,i; 
-/*    printf("AlloORR: range=%i, off=%i\n",range,off);*/
+    TRACE_COMP( printf("AlloORR: proto=0x%x, obj=0x%x, range=%i, off=%i\n",proto,obj,range,off);)
     start = AllocHeap(24 + range);
 
    ((long *)start)[0 ] = -12;
@@ -292,10 +430,11 @@ int AlloORR(long origin, long proto, long obj, long off, long range,long SP) {
 }  
 
 /* not found in official betarun.h */
-int AlloORRC(long origin, long proto, long obj, long off, long range, long SP) {
-    long start,i; 
-/*    printf("AlloORRC: range=%i, off=%i\n",range,off);*/
-    start = AllocHeap(24 + range);
+int AlloORRC(long origin, long proto, long obj, long off, long range, long SP)
+{ long start,i; 
+  TRACE_COMP( printf("AlloORR: proto=0x%x, obj=0x%x, range=%i, off=%i\n",proto,obj,range,off);)
+
+   start = AllocHeap(24 + range);
 
    for (i=0;  i < range; i++)
        ((long *)start)[6 + i] = AlloC(origin,(long *)proto,0);
@@ -431,7 +570,7 @@ long CpkVT(long *rep){int start,range,i;
      }
    betaTextPos = betaTextPos + 1;
    betaTextArea[betaTextPos] =0;
-   /* printf("BetaText: %s\n", (char *)&betaTextArea[start+1]); */
+   TRACE_C(printf("BetaText: %s\n", (char *)&betaTextArea[start+1]); )
    return (long) &betaTextArea[start+1];    
 }
 
@@ -451,11 +590,34 @@ long CpkSVT(long *rep, long first, long last) {
 #endif
    return (long) &betaTextArea[start+1];
 }
-
+long PpkVT(long *rep){ int start,range,i;
+   TRACE(for (i=0; i < 5; i++) printf("PpkVT: %x\n",rep[i]))
+   start = betaTextPos;
+   range = rep[3];
+   betaTextPos = betaTextPos + 1;
+   betaTextArea[betaTextPos] = range;
+   for (i=0; i < range; i++){
+       betaTextPos = betaTextPos + 1;
+       betaTextArea[betaTextPos] = ((char *)rep)[16+i];
+     }
+   betaTextPos = betaTextPos + 1;
+   betaTextArea[betaTextPos] =0;
+   TRACE(printf("BetaText: size=%i %s\n", (int)betaTextArea[start+1],(char *)&betaTextArea[start+2]))
+   return (long) &betaTextArea[start+1];    
+}
+long PpkSVT(long *rep, long first, long last) {
+   printf("PpkSVT\n"); fflush(stdout); return CpkSVT(rep,first,last); 
+}
 long CopyCT(char * txt){
    long newRep,range,i;
    range = strlen(txt);
-  /*  printf("CopyCT: range=%i  %s\n",range,txt);*/
+   TRACE_A(printf("CopyCT: range=%i  %s\n",range,txt);
+           if (noOfAlloI > alloImark1) {
+		       printf("txt\n");
+			   dumpObjX((long *)txt,savedSize);
+			   printf("openFile obj\n");
+			   dumpObjX((long *)savedObj,savedSize);
+		})
    newRep = AllocHeap(4 + (range / 4) + 1);
    ((long *)newRep)[0] = -6; 
    ((long *)newRep)[1] = 0;
@@ -464,9 +626,10 @@ long CopyCT(char * txt){
    for (i=0; i < range; i++)
        ((char *)newRep)[16+i] = txt[i];
    ((char*)newRep)[16+range]=0;
+   TRACE_A(dumpObjX((long *)newRep,4 + range/4 + 1);
+           if (noOfAlloI > alloImark1) { dumpObjX((long *)savedObj,savedSize);})
    return (long) newRep;
  }
-
 
 long dummyCallBack(){ put('C'); return 100;}
 
@@ -478,44 +641,47 @@ long cbTop=0;
  * sometimes dummy is used instead of struc!
  * MUST be fixed
 */
-long CopyCPP(long *struc, long *dummy) {
-  long start,entry,res;
+long CopyCPP(long *struc, long *dummy) 
+{ long start,entry,res,i;
 
-   if (struc[0] != -3) printf("\n*** CopyCPP: illegal struc parameter\n");
-   entry= ((long *)struc[3])[5];
-   start = &CallBack[cbTop];
-   /* printf("\nentry=%x\n",entry); */
+  if (struc[0] != -3) printf("\n*** CopyCPP: illegal struc parameter\n");
+  entry= ((long *)struc[3])[5];
+  start = &CallBack[cbTop];
+  TRACE_CB(printf("CopyCPP: entry=0x%x, start=0x%x\n",entry,start);)
 
 #ifdef PPC
   /* callBack[cbTop]   = struc
-    * callBack[cbTop+1] = lis r12,     entry >> 16
-    * callBack[cbTop+2] = ori r12,r12, entry & 0xffff
-    * callBack[cbTop+3] = lwz r0, 0(r12)
-    * callBack[cbTop+4] = stw  RTOC,20(SP)
-    * callBack[cbTop+5] = mtctr r0			
-    * callBack[cbTop+6] = lis r25,     start >> 16         -- dataReg0
-    * callBack[cbTop+7] = lwz RTOC, 4(r12)
-    * callBack[cbTop+8] = ori r25,r25, start & 0xffff
-    * callBack[cbTop+9] = bctr
-    */
+   * CallBack[cbTop+1] = &CallBack[cbTop+3];
+   * callBack[cbTop+2] = 0  TOC - not used 
+   * callBack[cbTop+3] = lis r12,     entry >> 16
+   * callBack[cbTop+4] = lis r24,     start >> 16         -- dataReg0
+   * callBack[cbTop+5] = ori r12,r12, entry & 0xffff
+   * callBack[cbTop+6] = ori r24,r24, start & 0xffff
+   * callBack[cbTop+7] = lwz r0, 0(r12)
+   * callBack[cbTop+8] = mtctr r0			
+   * callBack[cbTop+9] = lwz RTOC, 4(r12)
+   * callBack[cbTop+10] = bctr
+   */
 
-   CallBack[cbTop] = (long)struc;
-   CallBack[cbTop+1] = 0x3c000000 | (12 << 21) | (entry >> 16);
-   CallBack[cbTop+2] = 0x60000000 | (12 << 21) | (12 << 16) | (entry & 0xffff);
-   CallBack[cbTop+3] = 0x80000000 | (12 << 16);
-   CallBack[cbTop+4] = 0x90000000 | ( 2 << 21) | ( 1 << 16) | 20;
-   CallBack[cbTop+5] = 0x7c0903a6 ;
-   CallBack[cbTop+6] = 0x3c000000 | (25 << 21) | (start >> 16);
-   CallBack[cbTop+7] = 0x80000000 | ( 2 << 21) | (12 << 16) | 4;
-   CallBack[cbTop+8] = 0x60000000 | (25 << 21) | (25 << 16) | (start & 0xffff);
-   CallBack[cbTop+9] = 0x4e800420;
+  CallBack[cbTop] = (long)struc;
+  CallBack[cbTop+1] = &CallBack[cbTop+3];
+  CallBack[cbTop+2] = 0;
+  CallBack[cbTop+3] = 0x3c000000 | (12 << 21) | (entry >> 16);
+  CallBack[cbTop+4] = 0x3c000000 | (24 << 21) | (start >> 16);
+  CallBack[cbTop+5] = 0x60000000 | (12 << 21) | (12 << 16) | (entry & 0xffff);
+  CallBack[cbTop+6] = 0x60000000 | (24 << 21) | (24 << 16) | (start & 0xffff);
+  CallBack[cbTop+7] = 0x80000000 | (12 << 16);
+  CallBack[cbTop+8] = 0x7c0903a6 ;
+  CallBack[cbTop+9] = 0x80000000 | ( 2 << 21) | (12 << 16) | 4;
+  CallBack[cbTop+10] = 0x4e800420;
 
-
-   cbTop = cbTop + 10;
-
-
-   res=_flush_cache((long *)&CallBack[0],(long)&CallBack[cbTop+1],BCACHE);
-   return(long)&CallBack[cbTop-9];
+  TRACE_CB(for (i=cbTop; i < cbTop+11; i++) 
+           printf("CB code: i=%i, 0x%x\n",i,CallBack[i]);)
+  TRACE_CB(Debugger();)	
+  cbTop = cbTop + 11;
+  /* FlushCodeCache;*/
+  /*  needed for the 604; not needed for the 601 */
+  return(long)&CallBack[cbTop-10];
 #endif
 
 #ifdef SGI
@@ -525,7 +691,6 @@ long CopyCPP(long *struc, long *dummy) {
     * callBack[cbTop+3] = lui r8,    start>>16
     * callBack[cbTop+4] = jr  t9
     * callBack[cbTop+5] = ori r8,r8, start & 0xffff
-
     */
 
    CallBack[cbTop] = (long)struc;
@@ -538,8 +703,8 @@ long CopyCPP(long *struc, long *dummy) {
 
    cbTop = cbTop + 6;
 
-   /* printf("\nCopyCPP, funcPtr=%x\n",funcPtr);*/
-   /*res=_flush_cache((long *)&CallBack[0],(long)&CallBack[cbTop+1],BCACHE);*/
+   TRACE_CB(printf("\nCopyCPP, funcPtr=%x\n",funcPtr))
+   res=_flush_cache((long *)&CallBack[0],(long)&CallBack[cbTop+1],BCACHE);
    return(long)&CallBack[cbTop-5];
 #endif
 }
@@ -551,8 +716,7 @@ long AlloSICB(long *CallBackPtr,long SP){
    return start;
  }
 
-
-dumpObj(char *s, long * sObj){
+void dumpObj(char *s, long * sObj){
    int i;
 /*   printf("%s = 0x%x\n",s,sObj);
    for (i=0; i<10; i++)
@@ -635,7 +799,7 @@ void MkTO(char *txt, long *obj, long off, long sp) {
 
 long * CopyT(char *txt, long *obj, long off){
    int i, repObj, range;
-   /*printf("CopyT; obj=%x, off=%i, txt=%s\n", (long)obj, off, txt);*/
+   TRACE_C(printf("CopyT; obj=%x, off=%i, txt=%s\n", (long)obj, off, txt))
    range = strlen(txt);
    repObj = AllocHeap(4 + (range/4) +2);
 
@@ -655,10 +819,10 @@ long * CopyT(char *txt, long *obj, long off){
 void CopyVR(long sourceRep, long destObj, long off, int sp) {
   long i, repObj, range, head=4, srcKind;
   range = ((long *)sourceRep)[3];
-  /*printf("CopyVR: sourceRep=0x%x, destObj=%x, off=%i, range=%i\n", sourceRep, destObj,off,range);*/
+  TRACE2(printf("CopyVR: sourceRep=0x%x, destObj=%x, off=%i, range=%i\n", sourceRep, destObj,off,range);)
   repObj = AllocHeap(96); /* OBS proper size must be used */
   
-  /*if (((long *)repObj)[0] = -8) printf("txt=%x\n",((char *)sourceRep)[16]);*/
+  TRACE2(if (((long *)repObj)[0] = -8) printf("txt=%x\n",((char *)sourceRep)[16]);)
   
   srcKind = ((long *)sourceRep)[0];
   ((long *)repObj)[0]= srcKind;
@@ -677,7 +841,7 @@ void CopyVR(long sourceRep, long destObj, long off, int sp) {
   };  
     
   ((long *)destObj)[off] = repObj;
-  
+  TRACE2( if (srcKind == -6)  printf("char rep: %s\n",&((char *)repObj)[16]);)
 }
 
 void CopyRR(long sourceRep, long destObj, long off, int sp) {
@@ -692,15 +856,19 @@ void HandleIndexErr(){
  FatalErr(2);
  }
 
-/* NOT implemented !! */
-void ThisS(long *this){}
+long ThisS(long *this)
+{ TRACE_CB(printf("ThisS: origin = 0x%x proto =0x%x\n", this[2],this[0])) 
+  return AlloS(this[2],this[0]); 
+}
 
 void Qua(long *dstQuaProto, long *theCell, long *dstQuaOrigin, long SP) {
 }
 
 void ChkRA(long *theObjHandle, long dummy, long IOAbot, long IOAused) {
-/*printf("\nChkRA  obj=0x%x, IOAbot=0x%x, IOA=%i\n",theObjHandle,IOAbot,IOAused);
-*/
+/* Note: registers must be saved before calling ChkRA since any code
+ * may destroyc registers
+ */
+/*printf("ChkRA  obj=0x%x, IOAbot=0x%x, IOA=%i\n",theObjHandle,IOAbot,IOAused);*/
 
 }
 
@@ -793,21 +961,23 @@ long *dyn(long * obj, long SP, long LSC) {
 
 long findMentry(long *proto, long PC)
  { long mEntry, PCdist, minPC=0x3fffffff,theMentry;
-   /*printf("findMentry1: proto=0x%x, PC=0x%x, mEoff=%i\n",proto,PC,(proto[mEntryOff] / 4)); 
-   fflush(stdout);*/
+   TRACE3(printf("findMentry1: proto=0x%x, PC=0x%x, actual-mEntrOoff=%i\n"
+           ,proto,PC,(proto[mEntryOff] & 0xffff) / 4))
    while (proto != 0) {
-      mEntry = proto[(proto[mEntryOff] / 4) & 0xffff];
-	  mEntry = ((long *) mEntry)[0]; 
-      /*printf("findMentry2:0x%x\n",mEntry); fflush(stdout);*/
+      mEntry = proto[(proto[mEntryOff] & 0xffff) / 4];
+#ifdef PPC
+      /* mEntry is a TOC-entry; go indirect to find the code address */
+      mEntry = ((long *) mEntry)[0]; 
+#endif
+      TRACE3(printf("findMentry2:0x%x\n",mEntry))
       PCdist = PC - mEntry;
       if ((PCdist > 0) && (PCdist < minPC)) {
          minPC = PCdist;
          theMentry = mEntry;
       };
       proto = super(proto);
-   };
-   
-  /* printf("findMentry3 min:0x%x\n",theMentry);fflush(stdout);*/
+   };   
+   TRACE3(printf("findMentry3 min:0x%x\n",theMentry))
    return theMentry;
  }
 
@@ -823,7 +993,7 @@ long *dyn2(long * obj, long SP, long LSC) {
    long * proto, * codeStart, * caller;
    long SPoff,SPx,PL,inst,opCode,destReg,baseReg,offset,i;
    struct Component *callerComp;
-   /*printf("dyn2a: obj=0x%x, SP=0x%x, LSC=0x%x\n", obj,SP,LSC); fflush(stdout);*/
+   TRACE3(printf("dyn2a: obj=0x%x, SP=0x%x, LSC=0x%x\n", obj,SP,LSC))
    if ((long) obj == 4 ) {
       SPglobal= ((long *)SP)[0];
       LSCglobal= 0; /* how do we find the real one? */
@@ -838,17 +1008,22 @@ long *dyn2(long * obj, long SP, long LSC) {
      LSCglobal = callerComp->CallerLSC;
      return ((struct Component *)obj)->CallerObj;
    }
+   if (proto == (long *) -9) {
+      TRACE3(printf("DoPart object\n"))
+	  obj = ((long *)obj)[2]; /* get the real object via origin */
+	  proto = (long *)obj[0];
+   }
    codeStart = (long *) findMentry(proto,LSC);
-   /*for (i=-3; i<=3; i++) {
+   TRACE3(for (i=-3; i<=3; i++) {
       printf("code: %i, 0x%x, 0x%x\n", i, codeStart[i], (codeStart[i] & 0xffff) | 0xffff0000 ); fflush(stdout);
 	  };
-	  printf("codeStart: %i, 0x%x\n",SPinstOff,codeStart[SPinstOff]); fflush(stdout);*/
+	  printf("codeStart: %i, 0x%x\n",SPinstOff,codeStart[SPinstOff]))
    SPoff = (codeStart[SPinstOff] & 0xffff) | 0xffff0000; 
    SPoff = - SPoff;
    SPx = SP + SPoff;
    LSCglobal= ((long *)SPx)[pcOff];
    caller =  (long *)((long *)SPx)[callerOff];
-   /*printf("dyn2b: SPoff=%i, caller=0x%x\n\n",SPoff,caller); */
+   TRACE3(printf("dyn2b: SPoff=%i, caller=0x%x\n\n",SPoff,caller))
    SPglobal = SPx;
 
    return caller;
@@ -865,8 +1040,8 @@ long ExO(long jumpAdr,long * exitObj, long PC, long * this, long SP) {
   long SPx;
   void (* compAdr)(long a0,long * a1);
 
-  /*printf("\nExO: jumpAdr=0x%x, exitObj=0x%x, PC=0x%x, this=0x%x\n",
-        jumpAdr,exitObj,PC,this); fflush(stdout);*/
+  TRACE3(printf("\nExO: jumpAdr=0x%x, exitObj=0x%x, PC=0x%x, this=0x%x\n",
+        jumpAdr,exitObj,PC,this))
   a = this; SPx = SP; LSCglobal = PC; SPxGlobalTop = SPtop; /* missing */
   while (a != exitObj) {
 #ifdef INNERinVDB
@@ -880,36 +1055,32 @@ long ExO(long jumpAdr,long * exitObj, long PC, long * this, long SP) {
   return SPx;
 }
 
-void Terminated(){   
-  FatalErr(4);
-}
-
 void printCompStack(long * SPz, long dummy, long SPsize)
 { int i;
- /* for (i=0; i < (SPsize / 4)+4; i++) {
-		 printf("StackElm: %i: &SPz[i]= 0x%x, SPz[i]=0x%x\n"
-		 ,i*4, &((long *)SPz)[i],((long *)SPz)[i]); fflush(stdout);
- }*/
+ TRACE_COMP(for (i=0; i < (SPsize / 4)+4; i++) {
+		     printf("StackElm: %i: &SPz[i]= 0x%x, SPz[i]=0x%x\n"
+		    ,i*4, &((long *)SPz)[i],((long *)SPz)[i]);} )
+ 
 }
 
 void terminate()
 { long SPx;
-  ref(object) this;
-  EntryPoint compAdr;
+  ref(object) callerObj;
+  EntryPoint callingRA;
   
   SPx = SPxStack[SPtop];
   SPtop = SPtop - 1;
   ActiveComponent->CallerLSC = -1;
-  this = ActiveComponent->CallerObj;
+  callerObj = ActiveComponent->CallerObj;
   ActiveComponent = ActiveComponent->CallerComp;
-  compAdr = (EntryPoint) ActiveComponent->CallerLSC;
+  callingRA = (EntryPoint) ActiveComponent->CallerLSC;
   
-  TRACE_COMP(printf("Terminating component: activeComponent=0x%x, this=0x%x, SPx=0x%x, compAdr=0x%x\n"
-  ,ActiveComponent,this,SPx,compAdr); fflush(stdout);)
+  TRACE_COMP(printf("Terminating component: activeComponent=0x%x, callerObj=0x%x, SPx=0x%x, callingRA=0x%x\n"
+  ,ActiveComponent,callerObj,SPx,callingRA))
   /* we get here when the component terminates; we must return a proper
    * a0 and a1, since th and SP are set after Att
    */
-  compAdr(SPx,(long *)this);
+  callingRA(SPx,(long *)callerObj);
 }
 
 /* NO RA and SPx in official betarun */
@@ -925,36 +1096,32 @@ void Att(ref(Object) this, struct Component * comp, long RA, long SPx)
   SPy = GetSP();
   if (ActiveComponent != 0) {
     ActiveComponent->CallerLSC = RA;
-    /* ActiveComponent->SPx = SPx;*/
-    /* ActiveComponent->SPy = SPy;*/
     SPtop = SPtop + 1;
     SPxStack[SPtop] = SPx;
     SPyStack[SPtop] = SPy;
   } else { printf("ActiveComponet == 0 \n");};
-  TRACE_COMP(printf("\nAtt: comp=0x%x, this=0x%x, SPx=0x%x, SPy=0x%x, RA=0x%x\n"
-	 ,(long)comp,(long)this,SPx,SPy,RA); fflush(stdout);)
+  TRACE_COMP(printf("\nAtt: comp=0x%x, this=0x%x, SPx=0x%x, SPy=0x%x,RA=0x%x\n"
+	 ,(long)comp,(long)this,SPx,SPy,RA))
   /* dumpObj("Attach comp",comp); */
    
   topObj = comp->CallerObj; 
   compAdr = (void (*)(long,long *)) comp->CallerLSC;
-  TRACE_COMP(printf("\ncompAdr=0x%x\n",compAdr); fflush(stdout);)
-  if ((long)compAdr == -1) Terminated(); 
+  TRACE_COMP(printf("\ncompAdr=0x%x\n",compAdr))
+  if ((long)compAdr == -1) FatalErr(4); 
 
   isFirst = compAdr == 0;
 
   compObj = comp->Body;
-  TRACE_COMP(printf("\nBody=0x%x\n",compObj); fflush(stdout);)
+  TRACE_COMP(printf("\nBody=0x%x\n",compObj))
 
   compProto =  (long *) compObj[0];
-  TRACE_COMP(printf("\nCompProto=0x%x\n",compProto);fflush(stdout);)
+  TRACE_COMP(printf("\nCompProto=0x%x\n",compProto))
   
  
   if (isFirst) { 
-    /* printf("***First\n");*/ 
-    /* compAdr = (void (*)(long,long *)) compProto[-1];*/
-	compAdr = theMainEntry(compProto);
-	TRACE_COMP(printf("First: compAdr=0x%x\n",compAdr);fflush(stdout);)
-    topObj = compObj;
+     compAdr = theTopEntry(compProto);
+     TRACE_COMP(printf("First: compAdr=0x%x\n",compAdr))
+      topObj = compObj;
    } else {
      /* pack current component to stack object */
      sObj = comp->StackObj;
@@ -962,28 +1129,30 @@ void Att(ref(Object) this, struct Component * comp, long RA, long SPx)
      SPsize = ((long *)sObj)[2];
 
      SPz = SPy - SPsize; 
-
+     TRACE_COMP(printf("UnPack: SPz=0x%x, SPy=0x%x, SPsize=%i\n",SPz,SPy,SPsize);)
      /* Unpack Stack Object. 
-	  * NOTE: after unpacking the stack object you CANNOT call other C-functions
-	  * since this will DESTROY the stack!
-	  */
-     for (i=0; i < SPsize / 4; i++) {
+      * NOTE: after unpacking the stack object you CANNOT call other 
+      * C-functions since this will DESTROY the stack!
+      */
+     for (i=0; i < (SPsize / 4); i++) {
          ((long *)SPz)[0+i] = sObj[3 + i];
-	 }	
-	 /* on PPC the stack contains SP pointers that links stack segments;
-	  * these have been made relative, since the stack may be unpacked
-	  * at another place in memory
-	  */
-	 spLoc = 0; sp = ((long *)SPz)[spLoc];
-	 ((long *) SPz)[spLoc] = SPz + sp;
-	 
-	 while (sp < SPsize / 4) {
-		spLoc = sp;
-		sp = ((long *)SPz)[sp];
-		((long *) SPz)[spLoc] = SPz + sp;
-	 }
-	 /* DONT do this! Will DESTROY stack: printCompStack(SPz,0,SPsize);*/
-   }
+   }	
+#ifdef  PPC
+   /* on PPC the stack contains SP pointers that links stack segments;
+    * these have been made relative, since the stack may be unpacked
+    * at another place in memory
+    */
+   spLoc = 0; sp = ((long *)SPz)[spLoc];
+   ((long *) SPz)[spLoc] = SPz + sp;
+	
+   while (sp < SPsize) {
+	 spLoc = sp;
+	 sp = ((long *)SPz)[sp / 4];
+	 ((long *) SPz)[spLoc / 4] = SPz + ((long *) SPz)[spLoc / 4] ;
+    }
+#endif
+   /* DONT do this! Will DESTROY stack: printCompStack(SPz,0,SPsize);*/
+  }
   
   /* if (ActiveComponent != 0) ActiveComponent->StackObj =  -1; */
   
@@ -999,7 +1168,8 @@ void Att(ref(Object) this, struct Component * comp, long RA, long SPx)
     * Subsequent calls after Attach; a0=SPz, a1=ca;
     */
 
-  compAdr(SPz,topObj,SPsize);
+  /*compAdr(SPz,topObj,SPsize);*/
+  compAdr(SPz,topObj);
   
   /* Since compAdr has executed BETA code, registers may have been destroyed.
    * On SGI this does NOT cause problmes;
@@ -1014,61 +1184,70 @@ void Att(ref(Object) this, struct Component * comp, long RA, long SPx)
 void Susp(long * this, long oldSP, long RA, long SPz){
    long first;
    struct Component * returnComp;
-   long * returnObj;
+   long * callerObj;
    void (* callingRA)(long SP , long * this);
    long SPx, SPy, spLoc, sp;
    int i;
    long * sObj; 
-   TRACE_COMP(printf("\nSusp:  ActiveComponent=0x%x\n",ActiveComponent); fflush(stdout);)
+   TRACE_COMP(printf("\nSusp:  ActiveComponent=0x%x\n",ActiveComponent))
 
-   returnComp = (struct Component*) ActiveComponent->CallerComp;
-   returnObj = ActiveComponent->CallerObj;
-
-   callingRA = returnComp->CallerLSC;
-   /* SPx = returnComp->SPx;   */
-   /* SPy = returnComp->SPy;   */
    SPx = SPxStack[SPtop];
    SPy = SPyStack[SPtop];
    SPtop = SPtop - 1;
-
-   ActiveComponent->CallerObj = this;
-   ActiveComponent->CallerLSC =  RA;
-
    
+   ActiveComponent->CallerLSC =  RA;
+   callerObj = ActiveComponent->CallerObj;
+
+   returnComp = (struct Component*) ActiveComponent->CallerComp;   
+   callingRA = returnComp->CallerLSC;
+  
+   ActiveComponent->CallerObj = this;
+  
    /* pack stack SPz - SPy to  activeCompSP*/
    sObj = AlloSO(SPy - SPz);
 
+#ifdef PPC
    /* on PPC the stack contains SP pointers that links stack segments;
-	* these must be made relative, since the stack may be unpacked
-	* at another place in memory
-	*/  
+    * these must be made relative, since the stack may be unpacked
+    * at another place in memory
+    */  
    TRACE_COMP(printCompStack(SPz,0,(SPy - SPz));)
 	
+   /* The next call of GetSP() is VERY TRICKY!
+    * Let SP be the current strack pointer of this C-frame;
+    * The code that packs the stack and converts absolute SP-links 
+    * to relative SP-links assumes that  SP[0] points to the
+    * previous stack-frame! This is ONLY the case if a C-function has 
+    * called from this frame; the call of GetSP guarantees this!
+    * Note all calls of e.g. printCompStack will also gaurantee this,
+    * test prints don¿t show the problem!
+    */
+   sp=GetSP();
    spLoc = SPz; sp = ((long *)SPz)[0];
-   while (sp < SPx) { 
-        TRACE_COMP(printf(" spLoc=0x%x, sp=0x%x\n", spLoc,sp); fflush(stdout);)
-	    ((long *)spLoc)[0] = sp - SPz ;
-		spLoc = sp;
-		sp = ((long *)sp)[0];
+   while (sp <= SPy) { 
+         TRACE_COMP(printf(" spLoc=0x%x, sp=0x%x\n", spLoc,sp))
+	 ((long *)spLoc)[0] = sp - SPz ;
+	 spLoc = sp;
+	 sp = ((long *)sp)[0];
    };
+#endif
+
    /* copy SPz[0],  SPz[1], ... , SPz[(SPy - SPz - 4) / 4] = SPy[-1] */
-   
    for (i=0;  i < (SPy - SPz) / 4; i++) {
        sObj[3+i] = ((long *)SPz)[0 + i];
-   };	
-   
+  };	
+
+
    TRACE_COMP(printCompStack(&sObj[3],0,SPy-SPz);)
 
    dumpObj("Suspend stackObj",sObj);
    ActiveComponent->StackObj = sObj;
    dumpObj("Suspend active", (long *)ActiveComponent);
    /* return to returnComp at RA */
-   /* thisObj must be set - perhaps it is already set, since
-      R30 is saved over a call? No - is smashed by BETA code, of course!*/
 
    ActiveComponent = ActiveComponent->CallerComp;
    /* ActiveComponent->CallerComp = 0;*/
-   callingRA(SPx,returnObj);
+   callingRA(SPx,callerObj);
  }
 
 int eqS(long * lft, long * rht) {
@@ -1129,60 +1308,46 @@ void Initialize() {
 void SetProtos(long *adr, long *textP) {
    T1BETAENVadr = adr;
    TextProto= textP;
-   printf("T1BETAENV = 0x%x\n",T1BETAENVadr); fflush(stdout);
+   TRACE(printf("T1BETAENV = 0x%x\n",T1BETAENVadr))
 
 }
 
-void main() {
-  long a0;
-   char ch;
-   void (* M1BETAENV)(long a0,long * a1);
-   printf("Starting simple betarun!\n"); fflush(stdout);
-   betaTextArea = (char *)malloc(1000);
-   /*   heapTop = (long *) malloc(100000);*/
-	     printf("SetProtos: %x\n",SetProtos);
-   Debugger();
-   BETA_main();
-   ActiveComponent = (struct Component *)AlloC(0,T1BETAENVadr,GetSP());
-   topObj = ActiveComponent->Body;
+long ArgCount;
+char * * ArgVector;
 
-   /*G1BETAENV(0,topObj);*/
-   if (mainEntry == -1) 
-      M1BETAENV =  (void (*)(long,long *)) T1BETAENVadr[mainEntry];
-   else	{
-      M1BETAENV = (void (*)(long,long *)) 
-               T1BETAENVadr[(T1BETAENVadr[mEntryOff] / 4) & 0xffff];
-   };
-   M1BETAENV(0,topObj);
-   printf("End simple betarun\n"); fflush(stdout);
- }
+char *Argv(long n) 
+{ if (n <= ArgCount) {return ArgVector[n-1];} else return ""; 
+}
+long Argc(){return ArgCount;}
+
+void main(long argc, char *argv[]) 
+{ long a0,i;
+  char ch;
+  void (* M1BETAENV)(long a0,long * a1);
+  printf("Starting simple betarun!\n"); fflush(stdout);
+  ArgCount = argc;
+  ArgVector = argv;
+  betaTextArea = (char *)malloc(1000);
+  TRACE(printf("SetProtos: %x\n",SetProtos))
+   
+#ifdef PPC
+  Debugger();
+#endif
+
+  BETA_main();
+  ActiveComponent = (struct Component *)AlloC(0,T1BETAENVadr,GetSP());
+  topObj = ActiveComponent->Body;
+
+  M1BETAENV = theTopEntry(T1BETAENVadr);
+  M1BETAENV(0,topObj);
+  printf("End simple betarun\n"); fflush(stdout);
+}
 
 void AttBC(){}
 
 void BetaExit(){}
 void FailureExit(){}
-void Argc(){}
-void Argv(){}
 void DoGC(){}
-
-char *ProtoText(long *proto) {
-  long statOff,off,i;
-  /*  for (i=0; i<20; i++) printf("proto %i = %x\n",i,proto[i] );*/
-  statOff = (proto[0] >> 16) & 0xffff;
-  off = ((short *)proto)[statOff / 2] ;
-  while (off != 0) {
-    statOff = statOff + 8;
-    off = ((short *)proto)[statOff / 2] ;
-  }
-  statOff = statOff + 2;
-  off = ((short *)proto)[statOff / 2] ;
-  while (off != 0) {
-    statOff = statOff + 2;
-    off = ((short *)proto)[statOff / 2] ;
-  };
-  statOff = statOff + 2;
-  return (char *) &((char *)proto)[statOff];
-}
 
 void PrintBetaStack(long *this, long SP, long LSC) {
   long *a;
@@ -1199,11 +1364,124 @@ void PrintBetaStack(long *this, long SP, long LSC) {
       }}
       printf("%s: 0x%x %s\n",kind,a,pt);
 
+#ifdef INNERinVDB
+      a = dyn2(a,SPglobal,LSCglobal);
+#else
       a = dyn(a,SPglobal,LSCglobal);
-
+#endif
     }
 }
 
 void doGC() {printf("\n**** doGC ******\n"); }
 
 double i2f(long n) { return (double)n; }
+
+/* ----------------- Functions supporting Stream.GetText -------------------- */
+
+static char *OutOfMemError="Out of memory during StreamGetText\n";
+
+#define INITBUFFERSIZE  500   /* Initial size of Buffer. */
+
+static char *Buffer;          /* Nuffer space allocate here. */
+static int  BufferSize=0;     /* Current size of Buffer. */
+
+
+void InitBuffer2()
+  {
+   BufferSize=INITBUFFERSIZE;
+   Buffer=(char *)malloc(BufferSize);
+   if(!Buffer)
+     {
+      fputs(OutOfMemError,stderr);
+      exit(147);
+     }
+}
+
+
+void EnlargeBuffer2()
+  /* Double the size of Buffer or allocate an initial Buffer. */
+{
+   BufferSize*=2;
+   Buffer=realloc(Buffer,BufferSize);
+   if(!Buffer)
+     {
+      fputs(OutOfMemError,stderr);
+      exit(147);
+     }
+}
+
+
+static char streamStatus;
+
+
+int StreamError2()
+  /* Return whether or not last call to GetTExtFromStream succeeded. */
+{
+  return(streamStatus==EOF);
+}
+ 
+
+char *GetTextFromStream2(F,toEOL)
+  /* Read a string from the file. If toEOL is true then read to end of line,
+     else read to first space. Skip the character (eol or space) that causes
+     reading to stop.
+     Call StreamError afterwards to see if operation succeeded.
+  */
+  FILE *F;
+  int  toEOL;
+{
+   register FILE *F1;        /* We use a lot of registers for efficiency. */
+   register char *Buffer1;
+   register int  i,ch;
+   int           oldSize;
+
+   if(!BufferSize)            /* The first time, initialize Buffer. */
+     InitBuffer2();
+   F1=F;
+   oldSize=0;                 /* This much of Buffer currently used. */
+   if(!toEOL)                 /* Skip to first non-blank. */
+     {
+      while((ch=getc(F1))<=' ' && ch!=EOF) 
+        /* SKIP */ ;
+      if(ch==EOF || ungetc(ch,F1)==EOF)
+        {
+         streamStatus=ch;
+         return("");
+        }
+     }
+   while(1)
+     {
+      Buffer1=Buffer+oldSize; /* Insert from this place in Buffer. */
+      i=BufferSize-oldSize;
+      if(toEOL)               /* We have two almost identical copies of the
+                                 inner loop, one reading to eol the other to
+                                 a blank.
+                              */
+        {
+         while(i--)           /* While more room in Buffer. */
+           {
+            if((*Buffer1++=ch=getc(F1))=='\n' || ch==EOF)
+              {
+               streamStatus=ch;
+               Buffer1[-1]=0; /* Skip the stop char. */
+               return(Buffer);
+              }
+           }
+        }
+      else
+        {
+         while(i--)           /* While more room in Buffer. */
+           {
+            if((*Buffer1++=ch=getc(F1))<=' ' || ch==EOF)
+              {
+               streamStatus=ch;
+               Buffer1[-1]=0; /* Skip the stop char. */
+               return(Buffer);
+              }
+           }
+        }
+      oldSize=BufferSize;
+      EnlargeBuffer2();
+     }
+}
+  
