@@ -14,7 +14,7 @@ static long M_Part(ref(ProtoType) proto)
       * then above the prototype, the INNER table can be used to find
       * the M-entry:
       *
-      *        long: Return
+      *        long: _Return
       *        long: M-entry
       *        long: M-entry of prefix
       *        long: M-entry of prefix-prefix
@@ -23,39 +23,15 @@ static long M_Part(ref(ProtoType) proto)
       *
       * Should ONLY be called for a prototype which is known to correspond to 
       * object with do-part.
-      * NOTICE. The Return entry point has no underscore (_) prepended to its
-      * name on any platform.
       */
 {
-#ifdef macintosh
-#error Address of label Return not yet calculated for Macintosh. / datpete
-  
-  /* Maybe 
-   *   extern void Return();
-   * and
-   *   &Return 
-   * i.e. a function pointer, can be used on mac instead of asm("Return"),
-   * since the mac C-compiler does not put a underscore in front of 
-   * function names.
-   */
-  
-#else /* Not macintosh */
-#ifdef hppa
-  extern void Return() asm("Return");
-#else
-#ifdef nti
-  extern long *Return;
-#else
-  extern long *Return asm("Return");
-#endif
-#endif
-#endif
+  extern void Return();
   long *m;
   long *r;
   
   m = (long *)proto - 1;
   r = m - 1;
-  while ( (*r != (long)&Return) && (r != 0) ){
+  while ( (*r != (long)Return) && (r != 0) ){
     /* r != 0 just to avoid segmentation fault if something is wrong */
     m = r;
     r = m - 1;
@@ -225,8 +201,8 @@ char *GroupName(long address, int isCode)
     c_on_top=0;
   }
   
-  DEBUG_CODE(fprintf (stderr, "GroupName returning (adr) 0x%x\n",(long) group->ascii));
-  DEBUG_CODE(fprintf (stderr, "GroupName returning (string) %s\n", group->ascii));
+  /*DEBUG_CODE(fprintf (stderr, "GroupName returning (adr) 0x%x\n",(long) group->ascii));*/
+  /*DEBUG_CODE(fprintf (stderr, "GroupName returning (string) %s\n", group->ascii));*/
 
   return group->ascii;
 }
