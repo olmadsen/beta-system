@@ -207,7 +207,7 @@ int findDanglingProto (int dangler)
     this = this->next;
   }
 
-  fprintf (stderr, "Fatal Error: Prototype of Dangling ref not found\n");
+  fprintf(output, "Fatal Error: Prototype of Dangling ref not found\n");
   return 0;
 }
 
