@@ -187,7 +187,8 @@ You may order an unconstrained version from\n",
 	ref(CallBackEntry) current = cbfa->entries;
 	long limit = (long) cbfa->entries + CBFABlockSize;
 	
-	for (; current != CBFATop; (long)current+=CallBackEntrySize){
+	for (; current != CBFATop; 
+	     current = (ref(CallBackEntry))((long)current+CallBackEntrySize)){
 	  if ( (long) current >= limit){
 	    /* Go to next block */
 	    cbfa = cbfa->next;        
@@ -285,7 +286,7 @@ You may order an unconstrained version from\n",
       IOA       = ToSpace;                          
       IOATop    = ToSpaceTop; 
 #endif
-#ifdef linux
+#if defined(linux) || defined(nti)
       IOA       = ToSpace;                          
       IOATop    = ToSpaceTop; 
 #endif
@@ -445,7 +446,7 @@ You may order an unconstrained version from\n",
     
     theProto = theObj->Proto;
     
-    if( (long) theProto < 0 ){  
+    if( isNegativeProto(theProto) ){  
       switch( (long) theProto ){
       case (long) ByteRepPTValue:
       case (long) WordRepPTValue:
@@ -606,7 +607,7 @@ You may order an unconstrained version from\n",
     
     theProto = theObj->Proto;
     
-    if( (long) theProto < 0 ){  
+    if( isNegativeProto(theProto) ){  
       switch( (long) theProto ){
       case (long) ByteRepPTValue: 
       case (long) WordRepPTValue: 
@@ -757,7 +758,7 @@ You may order an unconstrained version from\n",
     /* DEBUG_IOA(printf("IOACheckObject: theObj = %x\n", theObj)); */
     Claim( !inBetaHeap(theProto),"#IOACheckObject: !inBetaHeap(theProto)");
     
-    if( (long) theProto < 0 ){  
+    if( isNegativeProto(theProto) ){  
       switch( (long) theProto ){
       case (long) ByteRepPTValue:
       case (long) WordRepPTValue:
