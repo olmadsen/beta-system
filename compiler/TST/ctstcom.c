@@ -9,6 +9,8 @@
 #define test 0
 struct xCOMclass; /* forward */
 
+#include <stdio.h>
+#include <stdlib.h>
 
 struct data4a { long x; };
 struct data4b { short x; short y; };
@@ -110,7 +112,7 @@ struct xCOMclass
 
 char STDCALL f1(struct xCOMclass *this, long n) 
 { char ch;
-  if (test) printf("  xCOMclass::f1: %i\n",n);
+  if (test) printf("  xCOMclass::f1: %i\n",(int)n);
   this->val = this->val + n;
   ch = '!';           
   if (n == 1013)  ch = 'a';
@@ -120,7 +122,7 @@ char STDCALL f1(struct xCOMclass *this, long n)
 char STDCALL f2(struct xCOMclass *this, long a, long b, long c)
      /* a = 10, b= 20, c = 2 */
 { char ch;
-  if (test) printf(" xCOMclass::f2: %i,%i,%i\n",a,b,c);
+  if (test) printf(" xCOMclass::f2: %i,%i,%i\n",(int)a,(int)b,(int)c);
   this->val = this->val + a + b + c;
   ch = '!';
   if (this->val == 1045) ch = 'b';
@@ -129,7 +131,7 @@ char STDCALL f2(struct xCOMclass *this, long a, long b, long c)
 
 char STDCALL f3(struct xCOMclass *this, char *t, long ix)
 { char ch;
-  if (test) printf(" xCOMclass::F3: %s %i\n",t,ix);
+  if (test) printf(" xCOMclass::F3: %s %i\n",t,(int)ix);
   this->str = t;
   ch = this->str[ix];
   return ch;
@@ -137,7 +139,7 @@ char STDCALL f3(struct xCOMclass *this, char *t, long ix)
 
 char *STDCALL f4(struct xCOMclass *this, long ix, char *t)
 { char *s;
-  if (test) printf(" xCOMclass::F4: %s %i %c %c\n",t,ix,t[ix],this->str[ix]);
+  if (test) printf(" xCOMclass::F4: %s %i %c %c\n",t,(int)ix,(int)t[ix],(int)this->str[ix]);
   s = "?!?";
   if (this->str[ix] == t[ix]) s = "def";
   return s;
@@ -145,7 +147,7 @@ char *STDCALL f4(struct xCOMclass *this, long ix, char *t)
 
 char STDCALL f5(struct xCOMclass *this, struct myData *S)
 { char c;
-  if (test) printf(" xCOMclass::F5: %i %i %c \n",S->x,S->s,S->c);
+  if (test) printf(" xCOMclass::F5: %i %i %c \n",(int)S->x,(int)S->s,(int)S->c);
   c = '!';
   if (S->x == 1199) {c = 'q';};
   return c;
@@ -153,14 +155,14 @@ char STDCALL f5(struct xCOMclass *this, struct myData *S)
 
 char STDCALL f6(struct xCOMclass *this, struct myData S)
 { char ch = '!';
-  if (test) printf(" xCOMclass::F6: %i %i %c \n",S.x,S.s,S.c);
+  if (test) printf(" xCOMclass::F6: %i %i %c \n",(int)S.x,(int)S.s,(int)S.c);
   if ((S.x == 6060) & (S.s == 7070)) ch = S.c;
   return ch;
 }    
 
 struct myData STDCALL f7(struct xCOMclass *this, long a, long b, long c)
 { struct myData mD;
-  if (test) printf(" xCOMclass::F7: %d, %d, %d \n",a,b,c);
+  if (test) printf(" xCOMclass::F7: %d, %d, %d \n",(int)a,(int)b,(int)c);
   mD.x = a+1234;
   mD.s = 321;
   mD.c = 'u';
@@ -169,7 +171,7 @@ struct myData STDCALL f7(struct xCOMclass *this, long a, long b, long c)
 
 struct myBigData STDCALL f8(struct xCOMclass *this, long a, long b, long c)
 { struct myBigData mD;
-  if (test) printf(" xCOMclass::F8: %d, %d, %d \n",a,b,c);
+  if (test) printf(" xCOMclass::F8: %d, %d, %d \n",(int)a,(int)b,(int)c);
   mD.x = a+1234;
   mD.y = 0x87654321;
   mD.s = 321;
@@ -179,14 +181,14 @@ struct myBigData STDCALL f8(struct xCOMclass *this, long a, long b, long c)
 
 char STDCALL f9(struct xCOMclass *this, long a, struct myData S, long b)
 {
- if (test) printf(" xCOMclass::F9: %d, %d, %d \n",a,S.x,b);
+ if (test) printf(" xCOMclass::F9: %d, %d, %d \n",(int)a,(int)S.x,(int)b);
  if ((a == S.x) & (b == S.s)) {return S.c;}
  else {return '?';};
 }
 
 char STDCALL f10(struct xCOMclass *this, long a, struct myData *S)
 {
- if (test) printf(" xCOMclass::F10: %d, %d\n",a,S->x);
+ if (test) printf(" xCOMclass::F10: %d, %d\n",(int)a,(int)S->x);
  if (a == S->x) {return S->c;}
  else {return '?';};
 }
@@ -200,7 +202,7 @@ static struct vtbl theVTBL;
 struct xCOMclass * GetXobj()
 { struct xCOMclass * R;
   /* initialize dispatch table */  
-  if (test) printf(" GetxCOMclass: &f1 = %x,f1=%x\n",&f1,f1);
+  if (test) printf(" GetxCOMclass: &f1 = %x,f1=%x\n",(int)&f1,(int)f1);
   theVTBL.f1 = &f1;
   theVTBL.f2 = &f2;
   theVTBL.f3 = &f3;
@@ -216,7 +218,7 @@ struct xCOMclass * GetXobj()
   R->proto = &theVTBL;
   R->val = 0;
   R->balance = 0;
-  if (test) printf(" GetxCOMclass: &f1 = %x,f1=%x\n",&f1,f1);
+  if (test) printf(" GetxCOMclass: &f1 = %x,f1=%x\n",(int)&f1,(int)f1);
   return R; 
 }
 
@@ -278,9 +280,9 @@ void PutBobj(struct bCOMclass * R)
   /* the following call overwrites q.w on sun4s */
   R->proto->g4(R,111,112,113,114,115,116,117,118);
 
-  if (test) printf("\nPrint af q.w = %c,%i\n",q.w,q.w);
+  if (test) printf("\nPrint af q.w = %c,%i\n",(int)q.w,(int)q.w);
   q.w ='*'; /* on sun4s foo q = {...,'*'} don't work! */
-  if (test) printf("\nPrint af q.w = %c,%i\n",q.w,q.w);
+  if (test) printf("\nPrint af q.w = %c,%i\n",(int)q.w,(int)q.w);
   R->proto->g5(R,q);
   R->proto->g6(R,R,'%');
   R->proto->g7(R);
@@ -292,9 +294,9 @@ void olsen(struct xCOMclass * R)
 { struct myData mD;
   struct myBigData mDB;
   mD = f7(R,11,12,'*');
-  printf(" xCOMclass::F6: %i %i %i %c \n",mD.x,mD.s,mD.c);
+  printf(" xCOMclass::F6: %i %i %i %c \n",(int)mD.x,(int)mD.s,(int)mD.c,(int)mDB.c);
   mDB = f8(R,11,12,'*');
-  printf(" xCOMclass::F6: %i %i %i %c \n",mDB.x,mDB.y,mDB.s,mDB.c);
+  printf(" xCOMclass::F6: %i %i %i %c \n",(int)mDB.x,(int)mDB.y,(int)mDB.s,(int)mDB.c);
 }
 
 struct data1 { long x; };
@@ -320,11 +322,11 @@ void hansen()
   struct data3 d3;
  
   setData1(&d1);
-  printf("d1:%i\n",d1.x);
+  printf("d1:%i\n",(int)d1.x);
   setData2(&d2);
-  printf("d2:%i,%i\n",d2.x,d2.y);
+  printf("d2:%i,%i\n",(int)d2.x,(int)d2.y);
   setData3(&d3);
-  printf("d3:%i,%i,%i\n",d3.x,d3.y,d3.z);
+  printf("d3:%i,%i,%i\n",(int)d3.x,(int)d3.y,(int)d3.z);
 }
 
 /*
