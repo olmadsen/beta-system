@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(38)";
+char betarun_version[] = "BETARUN VERSION 5.3(39)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.38  2001/09/09 13:34:42  beta
+ * hppa AlloI warning fixed
+ * Betarun version number: 38
+ * Developer: pa
+ *
  * Revision 1.37  2001/09/09 13:24:03  beta
  * hppa PException (MG?)
  * Betarun version number: 37
