@@ -116,14 +116,51 @@ sub bootbeta {
     }
 }
 
+sub which {
+    my($cmd)=@_;
+    my(@path);
+    print "which($cmd)\n" if($verbose);
+    if ($OS eq 'MAC'){
+	@path = split(',', $ENV{'Commands'});
+    } elsif ($OS eq 'WIN'){
+	@path = split(';', $ENV{'Path'});
+    } else {
+	@path = split(':', $ENV{'PATH'});
+    }
+    foreach $dir (@path) {
+	print "  Trying: $dir/$cmd - " if($verbose);
+	if (-f "$dir/$cmd"){
+	    print "yep, that's it!\n" if($verbose);
+	    return "$dir/$cmd";
+	}
+	if ($OS eq 'WIN'){
+	    print "no.\n  Trying: $dir\\$cmd.bat - " if($verbose);
+	    if (-f "$dir\\$cmd.bat"){
+		print "yep, that's it!\n" if($verbose);
+		return "$dir\\$cmd.bat";
+	    }
+	    print "no.\n  Trying: $dir\\$cmd.exe - " if($verbose);
+	    if (-f "$dir\\$cmd.exe"){
+		print "yep, that's it!\n" if($verbose);
+		return "$dir\\$cmd.exe";
+	    }
+	}
+	print "no.\n" if($verbose);
+    }
+    print "Not found.\n" if($verbose);
+    return "$cmd";
+}
+
 sub execute_script {
     my($cmd)=@_;
     if ($OS eq 'MAC'){
     	print "execute_script: NYI for mac\n";
     } elsif ($OS eq 'WIN'){
+	my(@cmd) = split(' ', $cmd);
 	my($comspec) = $ENV{'ComSpec'};
-	print "$comspec -c $cmd\n";
-	system "$comspec -c $cmd";
+	@cmd[0] = &which(@cmd[0]);
+	print "$comspec /C @cmd\n";
+	system "$comspec /C @cmd";
     } else {
 	my(@cmd) = split(' ', $cmd);
 	#print "execute_script: @cmd\n";
