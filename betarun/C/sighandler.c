@@ -451,6 +451,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 
 /***************************** BEGIN nti ********************************/
 #ifdef nti
+#include <float.h>
 
 int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
 { 
@@ -459,21 +460,22 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
   struct Object *theObj = 0;
   long *PC;
   long todo = 0;
+  long sig;
 
   SavedExceptRec =  *(lpEP)->ExceptionRecord;  
   SavedContextRec = *(lpEP)->ContextRecord;
   
   if (SavedContextRec.ContextFlags & CONTEXT_CONTROL){
-    PC = SavedContextRec.Eip;
-    StackEnd = SavedContextRec.Esp;
+    PC       = (long *)SavedContextRec.Eip;
+    StackEnd = (long *)SavedContextRec.Esp;
   } else {
     /* Can't display stack if SP unknown */
     return EXCEPTION_CONTINUE_SEARCH;
   }
   if (SavedContextRec.ContextFlags & CONTEXT_INTEGER){
-    theObj = SavedContextRec.Edx;
+    theObj = (struct Object *)SavedContextRec.Edx;
   }
-
+  sig = (long)SavedExceptRec.ExceptionCode;
   switch (SavedExceptRec.ExceptionCode){
   case EXCEPTION_ACCESS_VIOLATION:  
   case EXCEPTION_DATATYPE_MISALIGNMENT:  
@@ -507,8 +509,8 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
 void beta_main(void (*AttBC)(struct Component *), struct Component *comp)
 {
   /* enable floating point exceptions */
-  controlfp(EM_INVALID | EM_INEXACT | EM_DENORMAL | EM_OVERFLOW | 
-	    EM_UNDERFLOW | EM_ZERODIVIDE, MCM_EM);
+  controlfp(_EM_INVALID | _EM_INEXACT | _EM_DENORMAL | _EM_OVERFLOW | 
+	    _EM_UNDERFLOW | _EM_ZERODIVIDE, _MCW_EM);
 
   __try 
     { 
