@@ -247,6 +247,7 @@ ptr(long) base; /* points out a cell which should refer the base. */
      long size;      /* the size of the requested heap in bytes.       */
 {
   if( (*base = (long) MALLOC( size)) != 0){
+    INFO_ALLOC(size);
     *top   = *base;
     
     *limit = *base + size; 
@@ -474,7 +475,7 @@ void Initialize()
   }
 #endif /* sun4s */
 
-#ifdef crts
+#if defined(crts) && !defined(SIMPLEJMP) 
   /* Initialize pool of jump buffers */
   initJmpPool();
 #endif /* crts */

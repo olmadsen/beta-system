@@ -15,6 +15,8 @@ ref(Block) newBlock( size )
   ref(Block) theBlock;
 
   theBlock = (ref(Block)) MALLOC( sizeof(struct Block) + size );
+  INFO_ALLOC(sizeof(struct Block) + size);
+  
   
   if( theBlock != 0 ){
     theBlock->next  = 0;

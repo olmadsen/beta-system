@@ -119,9 +119,11 @@
 
 #ifdef macintosh
 #  define MALLOC(size) NewPtr(size)
+#  define REALLOC(src,size) xxxxxxxPtr(src,size)
 #  define FREE(ptr) DisposPtr((Ptr)ptr)
 #else
 #  define FREE(ptr) free(ptr)
+#  define REALLOC(src,size) realloc(src,size)
 #  ifdef RTDEBUG
 #    ifdef sparc
        /* 64 bit alignment because of the reals */
@@ -139,7 +141,11 @@
 #  endif
 #endif
 
-
+#if 0
+#define INFO_ALLOC(size) fprintf(output, "alloc: 0x%x at: %s: %d\n",size, __FILE__, __LINE__)
+#else
+#define INFO_ALLOC(size)
+#endif
 
 /* MACRO_CopyBlock copy from address src to address dst a block
  * of length = len bytes. (Used to be longs!!)
