@@ -19,6 +19,8 @@ extern struct Item     *AlloI();
 extern struct Component*CAlloC();
 extern struct Item     *CAlloI();
 /* binding of entry names */
+
+#ifndef __svr4__
 extern void 		CinitT() asm("CinitT");
 extern ref(StackObject) AlloSO() asm("AlloSO");
 extern void		CopyT() asm("CopyT");
@@ -36,9 +38,7 @@ extern void             CopyRR() asm("CopyRR");
 extern void             CopyVR() asm("CopyVR");
 extern void             ChkRA() asm("ChkRA");
 extern ref(Component)   Susp() asm("Susp");
-#endif
 
-#if defined(sparc)||defined(hppa)
 extern long 		 eqS() asm("eqS"); 
 extern long              neS() asm("neS");
 extern long              gtS() asm("gtS");
@@ -46,6 +46,25 @@ extern long              leS() asm("leS");
 extern long              geS() asm("geS");
 extern long              ltS() asm("ltS");
 #else
+extern long 		 eqS(); 
+extern long              neS();
+extern long              gtS();
+extern long              leS();
+extern long              geS();
+extern long              ltS();
+#endif
+#endif
+
+#ifdef hppa
+extern long 		 eqS() asm("eqS"); 
+extern long              neS() asm("neS");
+extern long              gtS() asm("gtS");
+extern long              leS() asm("leS");
+extern long              geS() asm("geS");
+extern long              ltS() asm("ltS");
+#endif
+
+#ifdef crts
 extern long 		 eqS(struct Structure *, struct Structure *);
 extern long              neS(struct Structure *, struct Structure *);
 extern long              gtS(struct Structure *, struct Structure *);
