@@ -1,5 +1,7 @@
-/* File: AllocateRefRep.c
- * $Id: AllocateRefRep.c,v 1.1 1992-06-06 03:36:32 beta Exp $
+/*
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
+ * Mod: $RCSfile: AllocateRefRep.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:14 $, SID: $Revision: 1.2 $
+ * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"

@@ -1,11 +1,13 @@
-/* File: Structure.c
- * $Id: Structure.c,v 1.1 1992-06-06 03:36:48 beta Exp $
+/*
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
+ * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:38 $, SID: $Revision: 1.2 $
+ * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-/* $Id: Structure.c,v 1.1 1992-06-06 03:36:48 beta Exp $
+/* $Id: Structure.c,v 1.2 1992-06-06 03:57:38 beta Exp $
  */
 
 /* params ?? */

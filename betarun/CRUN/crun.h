@@ -1,5 +1,9 @@
-#ifndef _CRUN_H_
-#define _CRUN_H_
+/*
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
+ * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-06-06 03:57:41 $, SID: $Revision: 1.2 $
+ * by Peter Andersen and Tommy Thorn.
+ */
+
 
 #define asmlabel(label, code) \
   asm(".text;.align 4;.global " #label ";" #label ":" code)

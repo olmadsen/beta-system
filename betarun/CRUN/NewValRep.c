@@ -1,5 +1,7 @@
-/* File: NewValRep.c
- * $Id: NewValRep.c,v 1.1 1992-06-06 03:36:47 beta Exp $
+/*
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
+ * Mod: $RCSfile: NewValRep.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:36 $, SID: $Revision: 1.2 $
+ * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"

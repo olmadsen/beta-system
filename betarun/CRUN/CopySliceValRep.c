@@ -1,5 +1,7 @@
-/* File: CopySliceValRep.c
- * $Id: CopySliceValRep.c,v 1.1 1992-06-06 03:36:40 beta Exp $
+/*
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
+ * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:26 $, SID: $Revision: 1.2 $
+ * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"

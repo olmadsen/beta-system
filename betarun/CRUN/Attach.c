@@ -1,5 +1,7 @@
-/* File: Attach.c
- * $Id: Attach.c,v 1.1 1992-06-06 03:36:34 beta Exp $
+/*
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
+ * Mod: $RCSfile: Attach.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:18 $, SID: $Revision: 1.2 $
+ * by Peter Andersen and Tommy Thorn.
  */
 
 /* IMPORTANT NOTE: I have departed from the former practice

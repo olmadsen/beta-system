@@ -1,5 +1,7 @@
-/* File: Misc.c
- * $Id: Misc.c,v 1.1 1992-06-06 03:36:45 beta Exp $
+/*
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
+ * Mod: $RCSfile: Misc.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:34 $, SID: $Revision: 1.2 $
+ * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
@@ -26,7 +28,7 @@ void CheckReferenceAssignment(handle(Object) theObjHandle)
       find out ...
       / peter
  */
-  return
+  return;
 }
 
 void ReferenceIsNone(ref(Object) theObj)
