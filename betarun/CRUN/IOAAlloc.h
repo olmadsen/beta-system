@@ -6,9 +6,9 @@
 extern void doGC();
 
 
-static 
+ 
 #ifdef __GNUC__
-inline 
+static inline 
 #endif
 char *IOAalloc(unsigned size)
 {
@@ -44,9 +44,9 @@ char *IOAalloc(unsigned size)
   return p;
 }
 
-static
+
 #ifdef __GNUC__
-inline 
+static inline 
 #endif
 char *IOAcalloc(unsigned size)
 {
