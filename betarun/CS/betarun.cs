@@ -1,4 +1,3 @@
-// csc /t:lib betarun.cs
 using System;
 using System.Reflection;
 

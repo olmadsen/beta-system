@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(83)";
+char betarun_version[] = "BETARUN VERSION 5.3(84)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.98  2002/03/19 13:39:54  grouleff
+ * underscore for gnu as well.
+ * Betarun version number: 83 
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.97  2002/03/19 13:17:03  corry
  * get rid of ^M breakage from Cygwin
  * Betarun version number: 82++

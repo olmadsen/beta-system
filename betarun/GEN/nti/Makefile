@@ -1,2 +1,0 @@
-gen:
-	beta -qw gen
