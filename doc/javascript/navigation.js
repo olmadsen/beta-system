@@ -264,16 +264,18 @@ function onKey(e)
 {
   var c;
   var ch;
+  e = (e) ? e : ((window.event) ? window.event : "");
+  if (!e) return;
   if (document.layers){
     if (e.modifiers){ return true; }
     c  = e.which;
     ch = String.fromCharCode(e.which);
   } else if (document.all){
-    c  = event.keyCode;
-    if (event.modifiers){ return true; }
+    c  = e.keyCode;
+    if (e.modifiers){ return true; }
     ch = String.fromCharCode(event.keyCode);
   } else if (document.getElementById){
-    if (e.cntlKey || e.metaKey){ return true; }
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey){ return true; }
     c  = e.charCode;
     ch = String.fromCharCode(e.charCode);
   } else {
@@ -324,6 +326,6 @@ function onKey(e)
 if (document.layers){
    document.captureEvents(Event.KEYPRESS);
 }
-
 document.onkeypress=onKey;
+window.onkeypress=onKey;
 window.onload=on_load;
