@@ -587,7 +587,6 @@ static void find_foreach(long PC, Object *theObj)
   }
 }
 
-#if defined(sparc) || defined(linux) || defined(sgi)
 /* Usage:
  *  throw:
  *    INCLUDE '~beta/sysutils/objinterface';
@@ -603,6 +602,10 @@ static void find_foreach(long PC, Object *theObj)
  */
 Object *find_activation(ProtoType *proto)
 {
+#ifdef hppa
+  fprintf(output, "find_activation: NYI\n");
+  return 0;
+#endif
 #ifdef NEWRUN
   StackEnd = BetaStackTop[0];
 #else /* !NEWRUN */
@@ -611,8 +614,18 @@ Object *find_activation(ProtoType *proto)
   activation_object = 0;
   activation_proto = proto;
   scanComponentStack (ActiveComponent, 0, 0, find_foreach);
+#if 0
+  /* FIXME:  stops at component - must continue with CallerComp in loop here */
+  /* probably this: */
+  {
+    Component *comp = ActiveComponent;
+    while (!activation_object && comp){
+      scanComponentStack (comp, 0, 0, find_foreach);
+      comp = comp->CallerComp;
+    }
+  }
+#endif
   return activation_object;
 }
-#endif /* sparc */
 
 #endif /* RTVALHALLA */
