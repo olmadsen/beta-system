@@ -5,12 +5,26 @@ require "env.perl";
 
 $betaopts="-qwl";
 
+# To compile only specific tools, specify the fragmentnames as arguments
+# Example:
+#            mbs_compiletools sif frigg freja
+# -will compile only those tools, without further questions...
+#
 #---------- don't change below (except maybe after "main:") -------
 
+sub matchInList {
+    local($name, @list) = @_;
+    return 1 if ($#list <0);
+    foreach $m (@list) {
+	return 1 if ($name =~ /$m/);
+    }
+    return 0;
+}
 
 sub CompileExbobs 
 {
     local ($dir, $fragment, $name, $inCodeDir) = @_;
+    return if (!matchInList("exbobs", @DoOnly));
     if ($ask eq "y"){
 	print "\n***** Build $name in $betalib/$dir (y/n/q)? ";
 	$answer = &GetAnswer();
@@ -54,6 +68,7 @@ sub CompileAppl
 {
     local ($dir, $fragment, $name, $inCodeDir) = @_;
     local ($tempname);
+    return if (!matchInList($fragment, @DoOnly));
     if ($ask eq "y"){
 	print "\n***** Build $name in $betalib/$dir (y/n/q)? ";
 	$answer = &GetAnswer();
@@ -140,6 +155,7 @@ sub CompileCompiler
 	    
 sub CompileFile {
     local ($dir, $fragment) = @_;
+    return if (!matchInList($fragment, @DoOnly));
     if (!chdir(&path("$betalib/$dir"))) { print "unable to chdir to $betalib/$dir\n"; return; }
     print "BETA $betaopts -p --nolink $fragment\n";
     &beta("$betaopts -p --nolink $fragment");
@@ -173,7 +189,7 @@ print "$0 STARTED\n";
 if ( "$MACHINETYPE" ne "SGI" ){
     $betaopts .= "d"; # link with betarun.o and strip
 }
-if ($#ARGV>-1) { $betaopts .= " @ARGV"; }
+if ($#ARGV>-1) { @DoOnly = @ARGV; }
 
 print "\nCompiling tools in $betalib with options \"$betaopts\"\n";
 
@@ -183,52 +199,53 @@ if (($MACHINETYPE eq "NTI") && ($SDK eq "ms")){
 }
 
 $rmast=0; $rmcode=0;
-print "\n***** Build a new compiler (y/n/q)? ";
-$answer = &GetAnswer();
-if ($answer eq "q") { exit(0); }
-if ($answer eq "y") { 
-    print "Do you want to REMOVE ALL ast-files\n";
-    print "when the compiler has been created (y/n/q)? ";
+if (!defined @DoOnly) {
+    print "\n***** Build a new compiler (y/n/q)? ";
     $answer = &GetAnswer();
     if ($answer eq "q") { exit(0); }
     if ($answer eq "y") { 
-	$rmast=1;
-    } else {
-	print "Do you want to REMOVE ALL object-files for this machinetype ($objdir)\n";
+	print "Do you want to REMOVE ALL ast-files\n";
 	print "when the compiler has been created (y/n/q)? ";
 	$answer = &GetAnswer();
 	if ($answer eq "q") { exit(0); }
 	if ($answer eq "y") { 
-	    $rmcode=1;
+	    $rmast=1;
+	} else {
+	    print "Do you want to REMOVE ALL object-files for this machinetype ($objdir)\n";
+	    print "when the compiler has been created (y/n/q)? ";
+	    $answer = &GetAnswer();
+	    if ($answer eq "q") { exit(0); }
+	    if ($answer eq "y") { 
+		$rmcode=1;
+	    }
+	}		        
+	# Build the new compiler:
+	$binary = 1;
+	if ($MACHINETYPE eq "NTI" && $SDK eq "bor") {
+	    $binary = 0;
 	}
-    }
-    # Build the new compiler:
-    $binary = 1;
-    if ($MACHINETYPE eq "NTI" && $SDK eq "bor") {
-	$binary = 0;
-    }
-    $oldask = $ask; $ask = 'n';
-    if ($binary) {
-	&CompileCompiler("compiler", "beta", "beta", 1);
+	$oldask = $ask; $ask = 'n';
+	if ($binary) {
+	    &CompileCompiler("compiler", "beta", "beta", 1);
     } else {
 	&CompileCompiler("compiler", "abeta", "beta", 1);
     }
-    $ask = $oldask;
-    if ($rmast) {
-	$FromAnotherScript = 1;
-	require "mbs_rmast";
+	$ask = $oldask;
+	if ($rmast) {
+	    $FromAnotherScript = 1;
+	    require "mbs_rmast";
+	}
+	if ($rmcode) {
+	    $FromAnotherScript = 1;
+	    require "mbs_rmcode";
+	}
     }
-    if ($rmcode) {
-	$FromAnotherScript = 1;
-	require "mbs_rmcode";
-    }
-    
-}
 
-print "\nAsk for each remaining tool (y/n/q)? ";
-$ask = &GetAnswer();
-if ($ask eq "q"){ exit(0); }
-if ($ask ne "n"){ $ask="y"; }
+    print "\nAsk for each remaining tool (y/n/q)? ";
+    $ask = &GetAnswer();
+    if ($ask eq "q"){ exit(0); }
+    if ($ask ne "n"){ $ask="y"; }
+}
 
 # exbobs: MACHINETYPE prefix maintained to avoid having to change UNIX makefile
 &CompileExbobs("bobsgen/v1.6", "${MACHINETYPE}exbobs.c", "${MACHINETYPE}exbobs", 1);
