@@ -535,35 +535,33 @@ int pid;
  return 1;
 }
 
-int awaitNotExecuting(pid)
-int pid;
 
-/* Waits for the process denoted by process identity, pid to die or 
-   receive a signal. The call does NOT return until the process has
-   either died or been signalled. A return of 1 means that the process
-   died, and a return of 2 implies that the process was somehow signaled.
-   Error codes to be returned:
-
-   -1 : Error in system call
-    0 : The indicated process was not a child of the calling process
-    
-*/
-   
-
+/* awaitNotExecuting: 
+ * Return codes:
+ *  
+ *  -1 : Error in system call
+ *   0 : The indicated process terminated.
+ */
+int awaitNotExecuting(int pid)
 {
-  DWORD retval = WaitForSingleObject((HANDLE)pid, INFINITE);
-  if (retval != WAIT_FAILED)
-    return (int) retval;
+  DWORD state = WaitForSingleObject((HANDLE)pid, INFINITE);
+  if (state == WAIT_OBJECT_0)
+    return 0;
+  if (state == WAIT_FAILED)
+    return -1;
   return -1;
 }
 
-int stillExecuting(pid)
-int pid;
-
+int stillExecuting(int pid)
 {
-  if (WaitForSingleObject((HANDLE)pid, 1) != WAIT_FAILED)
+  DWORD state = WaitForSingleObject((HANDLE)pid, 0);
+  if (state == WAIT_TIMEOUT)
     return 1;
-  return 0;
+  if (state == WAIT_OBJECT_0)
+    return 0;
+  if (state == WAIT_FAILED)
+    return -1;
+  return -1;
 }
 
 #ifdef nti_bor
