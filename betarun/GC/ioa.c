@@ -13,7 +13,13 @@
 
 #ifdef sparc
 #include "../CRUN/crun.h"
-#endif
+#endif /* sparc */
+#ifdef PERSIST
+#include "../P/objectTable.h"
+#include "../P/misc.h"
+#include "../P/referenceTable.h"
+#include "../P/PException.h"
+#endif /* PERSIST */
 
 #define REP ((ObjectRep *)theObj)
 
@@ -36,7 +42,13 @@ static void IOACheckPrintIOA(void);
 void IOAGc()
 {
   long starttime = 0;
+  
+#ifdef PERSIST
+  repeatIOAGc = 0;
 
+ IOAGCstart:
+#endif /* PERSIST */
+  
   MAC_CODE(RotateTheCursor());
   
   DEBUG_IOA({
@@ -210,17 +222,58 @@ void IOAGc()
   }
 #endif
 
-  if (AOANeedCompaction || forceAOAGC) {
-    if (!noAOAGC) {
+  if (!noAOAGC) {
+#ifdef PERSIST
+    if (AOANeedCompaction || forceAOAGC) {
+      /* before we do AOAGC we need to do an additional IOAGC */
+      if (repeatIOAGc) {
+	/* We have done the extra IOAGC */
+	
+	/* To handle persistent objects moved from ioa to aoa */
+	flushDelayedEntries();
+	
+	/* All persistent objects have now been moved to AOA and
+	   inserted in the PObjects table. All persistent references in
+	   IOA have been marked ALIVE. */
+	
+	AOAGc();
+	
+	showStatistics();
+	
+	repeatIOAGc = 0;
+      } else {
+	/* To handle objects explicitly marked as persistent by
+	   'markPersistentObject' */
+	flushDelayedEntries();
+	
+	resetStatistics();
+	
+	updatePersistentObjects();
+	/* All new persistent objects in AOA have been registered in the
+	   PObjectsTable and assigned a store. Any new persistent object
+	   in IOA has been marked as IOAPersist and will be moved to AOA
+	   during the ensuing IOAGc. */
+	
+	repeatIOAGc = 1;
+	
+	OTStartGC();
+	RTStartGC();
+	
+	/* All entries marked alive have been marked
+	   POTENTIALLYDEAD. They must prove themselves relevant during
+	   the ensuing GC. */
+      }
+    }
+#else 
+    if (AOANeedCompaction || forceAOAGC) {
       AOAGc();
     }
-    forceAOAGC = FALSE;
   }
+#endif /* PERSIST */
   
   if (tempAOAroots) {
     /* ToSpace was not big enough to hold both objects and table.
-     * Free the table that was allocated by saveAOAroot().
-     */
+     * Free the table that was allocated by saveAOAroot().  */
     tempAOArootsFree();
   }    
   
@@ -371,9 +424,14 @@ Program terminated.\n", (int)(4*ReqObjectSize));
             );
   INFO_HEAP_USAGE(PrintHeapUsage("after IOA GC"));
 
+#ifdef PERSIST
+  if (repeatIOAGc) {
+    StackEnd = (long *)((struct RegWin *) StackPointer);
+    goto IOAGCstart;
+    /* Yuhuuu!!!! */
+  }
+#endif /* PERSIST */
 } /* End IOAGc */
-
-
 
 /* DoStackCell:
  *  Used by the routines in stack.c, that traverse the stack.
@@ -462,12 +520,12 @@ static void DoAOACell(Object **theCell,Object *theObj)
   }
 }
 
-
 static void IOAUpdateAOARoots(Object **theCell, long GCAttribute)
 {
   if (!inToSpace(GCAttribute)) {
     if (inAOA(GCAttribute)) {
       MCHECK();
+      Claim(!inAOA(theCell), "!inAOA(theCell)");
       saveAOAroot(theCell);
       MCHECK();
     }
@@ -491,85 +549,68 @@ void ProcessReference(Object ** theCell)
 {
   Object * theObj;
   long GCAttribute;
-
-#ifdef PERSIST
-  Block *persistentBlock;
-#endif /* PERSIST */
-
+  
   theObj = *theCell;
   
   if( inIOA(theObj)){
     /* 'theObj' is inside IOA */
-      
 #ifdef RTDEBUG
     {
-          char buf[512];
-          DEBUG_IOA(sprintf(buf, 
-                            "ProcessReference: theObj (0x%x) is consistent.", 
-                            (int)theObj); 
-                    Claim(isObject(theObj),buf));
-      }
+      char buf[512];
+      DEBUG_IOA(sprintf(buf, 
+			"ProcessReference: theObj (0x%x) is consistent.", 
+			(int)theObj); 
+		Claim(isObject(theObj),buf));
+    }
 #endif
+    
+    GCAttribute = theObj->GCAttr;
+    
+    if (isForward(GCAttribute)) { 
+      /* theObj has a forward pointer, i.e has already been moved */
       
-      GCAttribute = theObj->GCAttr;
+      *theCell = (Object *) GCAttribute; /* update cell to reference forward obj */
+
+      /* If the forward pointer refers an AOA object, insert
+       * theCell in AOAroots table.
+       */
       
-      if (isForward(GCAttribute)) { 
-	/* theObj has a forward pointer, i.e has already been moved */
+      IOAUpdateAOARoots(theCell, GCAttribute);
 	
-	*theCell = (Object *) GCAttribute; /* update cell to reference forward obj */
-	
-	/* If the forward pointer refers an AOA object, insert
-	 * theCell in AOAroots table.
-	 */
-	
-	IOAUpdateAOARoots(theCell, GCAttribute);
+    } else {
+      if (isAutonomous(GCAttribute)) { 
+	/* '*theCell' is an autonomous object. */
+	*theCell = NewCopyObject( *theCell, theCell);
 	
       } else {
-	if (isAutonomous(GCAttribute)) { 
-	  /* '*theCell' is an autonomous object. */
-	  *theCell = NewCopyObject( *theCell, theCell);
+	/* theObj is a part object. */
+	long Distance;
+	Object * newObj;
+	Object * AutObj;
+	
+	Claim(isStatic(GCAttribute), "Is not static?");
+	GetDistanceToEnclosingObject(theObj, Distance);
+	AutObj = (Object *) Offset(theObj, Distance);
+	
+	if (isForward(AutObj->GCAttr)) {
+	  newObj = (Object *) AutObj->GCAttr;
 	  
+	  /* If the forward pointer refers an AOA object, insert
+	   * theCell in AOAroots table.
+	   */
+	  IOAUpdateAOARoots(theCell, AutObj->GCAttr);
+	      
 	} else {
-	  /* theObj is a part object. */
-	  long Distance;
-	  Object * newObj;
-	  Object * AutObj;
-	  
-	  Claim(isStatic(GCAttribute), "Is not static?");
-	  GetDistanceToEnclosingObject(theObj, Distance);
-	  AutObj = (Object *) Offset(theObj, Distance);
-	  
-	  if (isForward(AutObj->GCAttr)) {
-#ifdef PERSIST
-	    if (!inProxy(AutObj->GCAttr)) {
-#endif /* PERSIST */
-	      newObj = (Object *) AutObj->GCAttr;
-	      
-	      /* If the forward pointer refers an AOA object, insert
-	       * theCell in AOAroots table.
-	       */
-	      IOAUpdateAOARoots(theCell, AutObj->GCAttr);
-	      
-#ifdef PERSIST
-	    } else {
-	      /* The enclosing object has been moved to persistent AOA */
-	      *theCell = (Object *)addConstantToProxy(AutObj->GCAttr, -Distance);
-	      
-	      /* No tables needs to be updated */
-	      return;
-	    }
-#endif /* PERSIST */
-	  } else {
-	    newObj = NewCopyObject( AutObj, theCell);
-	  }
-	  *theCell = (Object *) Offset( newObj, -Distance);
+	  newObj = NewCopyObject( AutObj, theCell);
 	}
+	*theCell = (Object *) Offset( newObj, -Distance);
       }
+    }
       
-      /* The referred object must have been copied to ToSpace */
-      Claim(!inIOA(*theCell),"ProcessReference: !inIOA(*theCell)");
+    /* The referred object must have been copied to ToSpace */
+    Claim(!inIOA(*theCell),"ProcessReference: !inIOA(*theCell)");
       
-      /* End inIOA(theObj) */
+    /* End inIOA(theObj) */
       
   } else {
     /* '*theCell' is pointing outside IOA */
@@ -583,30 +624,22 @@ void ProcessReference(Object ** theCell)
         /* This is a dangling reference, and we are currently 
          * collecting as part of the trap handling */
         negIOArefsINSERT((long) theCell);
-      return;
-    }
+    } else
 #endif
-    
+#if PERSIST
+    if (inPIT((void *)*theCell)) {
+	referenceAlive(((void *)*theCell));
+	INFO_PERSISTENCE(TtoP++);
+    } else 
+#endif /* PERSIST */
     if (inAOA(*theCell)) {
       MCHECK();
+      Claim(!inAOA(theCell), "!inAOA(theCell)");
       saveAOAroot(theCell);
       MCHECK();
       return;
     } 
-#ifdef PERSIST
-    else if ((persistentBlock = inPersistentAOA((long)*theCell))) {
-      /* Create new proxy for this reference */
-      *theCell = (Object *)newProxy(persistentBlock, *theCell);
-    }
-#endif /* PERSIST */
   }
-  
-#ifdef PERSIST 
-  if (forceAOAGC && inProxy((long) *theCell)) {
-    proxyAlive(theCell);
-  }
-#endif /* PERSIST */
-  
 }
 
 /*
@@ -636,28 +669,14 @@ static void ProcessAOAReference(Object ** theCell)
 {
   Object * theObj;
   long GCAttribute;
-#ifdef PERSIST
-  long InPersistentAOA = 0;
-#endif /* PERSIST */
 
-#ifdef PERSIST
-  Claim(inAOA(theCell) || inPersistentAOA((long)theCell), "inAOA(theCell)");
-#endif /* PERSIST */
 
   if (*theCell) {
-#ifdef PERSIST
-    Claim(inBetaHeap(*theCell) || inProxy((long)*theCell), "inBetaHeap(*theCell)");
-#else
     Claim(inBetaHeap(*theCell), "inBetaHeap(*theCell)");
-#endif /* PERSIST */
   } else {
     return;
   }
 
-#ifdef PERSIST
-  InPersistentAOA = (long) inPersistentAOA((long)theCell);
-#endif /* PERSIST */
-  
   theObj = *theCell; /* the object referenced from the cell */
   
   if (inIOA(theObj)) { /* theObj is inside IOA */
@@ -668,21 +687,13 @@ static void ProcessAOAReference(Object ** theCell)
       /* The object has already been moved to ToSpace or AOA. */
 
       *theCell = (Object *) GCAttribute;
-      
+
     } else {
       if (isAutonomous(GCAttribute)) { 
         /* theObj is an autonomous object. 
          * Move it from IOA to ToSpace/AOA */
-#ifdef PERSIST
-	if (InPersistentAOA) {
-	  *theCell = NewCopyObject(theObj, theCell);
-	} else {
-#endif /* PERSIST */
-	  *theCell = NewCopyObject(theObj, NULL);
-#ifdef PERSIST
-	}
-#endif /* PERSIST */
-	
+	*theCell = NewCopyObject(theObj, NULL);
+
       } else { 
         /* theObj is a part object. */
         long Distance;
@@ -697,39 +708,14 @@ static void ProcessAOAReference(Object ** theCell)
         Claim(!isStatic(AutObj->GCAttr), "!isStatic(AutObj->GCAttr)");
 	
         if (isForward(AutObj->GCAttr)) {
-
-#ifdef PERSIST
-	  if (!inProxy(AutObj->GCAttr)) {
-#endif /* PERSIST */
-	    newObj = (Object *) AutObj->GCAttr;
-	    *theCell = (Object *) Offset(newObj, -Distance); 
-#ifdef PERSIST 
-	    if (InPersistentAOA) {
-	      if (inAOA(*theCell)) {
-		MCHECK();
-		saveAOAroot(theCell);
-		MCHECK();
-	      }
-	    }
-	  } else {
-	    /* This is not an error. It has just not been implemented yet */
-	    Claim(FALSE, "inProxy !");
-	    newObj = NULL;
-	    return;
-	  }
-#endif /* PERSIST */
-        } else {
-#ifdef PERSIST
-	  if (inPersistentAOA) {
-	    newObj = NewCopyObject(AutObj, theCell);
-	  } else {
-#endif /* PERSIST */
-	    newObj = NewCopyObject(AutObj, 0);
-	  }
+	  
+	  newObj = (Object *) AutObj->GCAttr;
 	  *theCell = (Object *) Offset(newObj, -Distance); 
-#ifdef PERSIST
+
+        } else {
+	  newObj = NewCopyObject(AutObj, 0);
 	}
-#endif /* PERSIST */
+	*theCell = (Object *) Offset(newObj, -Distance); 
       }
     }
   } 
@@ -746,19 +732,19 @@ static void ProcessAOAReference(Object ** theCell)
 #else /* MT */
     AOAtoIOAInsert( theCell);
 #endif /* MT */
+  } 
+#ifdef PERSIST
+  else if (inPIT((void *)*theCell)) {
+    referenceAlive(((void *)*theCell));
+    INFO_PERSISTENCE(TtoP++);
   }
-  
+#endif /* PERSIST */
+
 #ifdef RTLAZY
   else if (isLazyRef(*theCell)) {
     negAOArefsINSERT((long) theCell);
   }
 #endif
-  
-#ifdef PERSIST 
-  else if (forceAOAGC && inProxy((long) *theCell)) {
-    proxyAlive(theCell);
-  } 
-#endif /* PERSIST */
   
 }
 
@@ -847,6 +833,10 @@ void foreachObjectInIOA(void (*objectAction)(Object *, void *),
   }
 }
 
+void setForceAOAGC(void)
+{
+  forceAOAGC = TRUE;
+}
 
 #ifdef RTDEBUG
 
@@ -909,9 +899,6 @@ void checkObjectAction(Object *theObj, void *generic)
 	"IsPrototypeOfProcess(Proto)");
 #endif /* MT */
   
-#ifdef PERSIST    
-  
-#else
   { 
     long theObjectSize;
 
@@ -924,7 +911,6 @@ void checkObjectAction(Object *theObj, void *generic)
     Claim(ObjectAlign(theObjectSize)==(unsigned)theObjectSize,
 	  "ObjectSize aligned");
   }
-#endif /* PERSIST  */
   IOACheckObject (theObj);
 }  
 
@@ -935,15 +921,6 @@ void IOACheck()
 
 void IOACheckReference(REFERENCEACTIONARGSTYPE)
 {
-#ifdef PERSIST
-  if (!inProxy((long)*theCell)) {
-    if (!inIOA(*theCell)) {
-      if (!inAOA(*theCell)) {
-	Claim(FALSE, "*theCell in Fromspace ?");
-      }
-    }
-  }
-#else
   if (*theCell && inBetaHeap(*theCell) && isObject(*theCell)) {
     if (isLazyRef(*theCell)){
       fprintf(output, "Lazy in IOA: 0x%x: %d\n", (int)theCell, (int)*theCell);
@@ -957,7 +934,6 @@ void IOACheckReference(REFERENCEACTIONARGSTYPE)
 	    "IOACheckReference: *theCell lazy ref or inside IOA, AOA");
     }
   }
-#endif /* PERSIST */
 }
 
 void IOACheckObject (Object *theObj)
