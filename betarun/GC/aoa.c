@@ -233,13 +233,19 @@ Object *AOAallocate(long numbytes)
   if (newObj) {
     totalFree -= numbytes;
     newObj->GCAttr = DEADOBJECT;
-        
-    if ((totalFree/(totalAOASize/100) < AOAPercentage) ||
-	(totalFree < AOAMinFree)) {
-      AOANeedCompaction = TRUE;
-    }
-    return newObj;
-        
+    if 
+#ifdef PERSIST
+	 (totalFree > IOASize) 
+#else
+	 ((totalFree/(totalAOASize/100) < AOAPercentage) ||
+	  (totalFree < AOAMinFree))
+#endif /* PERSIST */
+      {
+	return newObj;
+      } else {
+	AOANeedCompaction = TRUE;
+	return newObj;
+      }    
   }
 
   if (AOABaseBlock == 0) {
@@ -428,7 +434,6 @@ void AOAGc()
   long *pointer;
   long *cellptr;
   Object *target;
-  
   Block *currentBlock;
   long starttime = 0;
 
@@ -482,7 +487,6 @@ void AOAGc()
   MAC_CODE(RotateTheCursorBack());
   
   DEBUG_AOA(fprintf(output,"[Marking all Live Objects in AOA]\n"));
-  
   if (pointer < AOArootsLimit) {
     /* Clear old tail (if any) */
     clearTail();
@@ -551,7 +555,7 @@ void AOAGc()
     freeInBlock = AOAScanMemoryArea(BlockStart(currentBlock),
 				    currentBlock -> limit);
     totalFree += freeInBlock;
-    
+
     DETAILEDSTAT_AOA(fprintf(output,"[0x%08x/0x%08x/0x%08x] ",
 			     (int)collectedMem, (int)freeInBlock, (int)BlockNumBytes(currentBlock)));
     
@@ -559,7 +563,7 @@ void AOAGc()
   }
   
   DETAILEDSTAT_AOA(fprintf(output,"]\n"));
-  
+
   AOARefStackUnHack();
   
   /* Make sure there is sufficient free memory */
