@@ -1,0 +1,200 @@
+ORIGIN 'astlevel';
+
+INCLUDE 'betacfl';
+INCLUDE 'gram';
+
+-- astInterfaceLib: Attributes --
+
+AstAsAstIndex:
+  (# N: ^AST
+  enter N[]
+  exit N[]
+  #);
+  
+  
+NULL: (#  exit none #);
+ASTindex: 
+  (# <<SLOT ASTindexLib:attributes>>;
+     theAst: ^AST;
+     
+     asAST: (# exit theAst[] #);
+     isNull: (# exit theAst[] = none #);
+     theFragmentForm: (#exit theAst.frag #);
+     nodeId: (# exit theAst.index #);
+     equal:
+       (# anAst: ^AST; B: @boolean
+       enter anAst[]
+       do (if (anAst[] <> NONE) and (theAST[] <> NONE) then
+              theAst[] -> anAST.equal -> B 
+          if)
+       exit B
+       #);
+     brother: (# exit theAst.nextBrother #);
+     son: (# exit theAst.son[] #);
+     sonRef:
+       (# S: @ASTindex
+       do son -> S
+       exit S[]
+       #);
+     father: (# exit theAST.father #);
+     label:
+       (#
+       enter theAst.symbol
+       exit theAst.symbol
+       #);
+     isSlot: 
+       (# un: ^unExpanded; B: @boolean
+       do (* this should be optimized be declaring
+           * isSlot as an attribute of AST
+           *)
+          (if label = prodNo.unExpanded then
+              theAst[] -> un[];
+              un.isSlot -> B
+          if)
+       exit B
+       #);
+     theSlotName:
+       (# un: ^unExpanded; sd: ^slotDesc
+       do theAst[]->un[]; un.theSlot->sd[]
+       exit sd.name
+       #);
+     stringLength: 
+       (# LX: ^lexemText
+       do theAst.son[] -> LX[]
+       exit LX.lgth
+       #);
+     getText:
+       (# LT: ^lexemText
+       do theAst.son[] -> LT[]
+       exit LT.getText
+       #);
+     textEq: (# t: @text enter t exit (getText->t.equalNCS) #);
+     internal: (#  exit (label > 0) #);
+     astKind: (#  exit label -> (theAst.frag).grammar.kindOfSymbol #);
+     nodeClass: (#  exit grammarTable.beta.nodeClassArray[label] #);
+  enter theAst[]
+  exit theAst[]
+  #);
+addPrefix:
+  (* desc must be a descriptor with empty prefix;
+   * a non empty prefix node is inserted;
+   * the name of the prefix is the empty string;
+   * Is used for virtual categories like v::< (# ... #)
+   *)
+  (# desc: ^expanded;
+     f: ^fragmentForm;
+     pref: ^expanded;
+     napl: ^expanded;
+     na: ^nameAppl;
+     gram: @grammar;
+  enter desc[]
+  do desc.frag->f[];
+     (gram.Prefix,f[])->grammarTable.beta.newAst->pref[];
+     (gram.NameApl,f[])->grammarTable.beta.newAst->napl[];
+     (nameAppl,f[])->grammarTable.beta.newAst->na[];
+     ''->na.putText;
+     na[]->napl.putson1;
+     napl[]->pref.putson1;
+     pref[]->desc.putson1;
+  exit napl[]
+  #);
+adjustForm:
+  (# f: ^fragmentForm; a: ^expanded; gram: @grammar
+  enter f[]
+  do (if f.root.symbol
+      // gram.Attributes (* OLM: was AttributeL in old grammar/index *) then
+	 (gram.AttributesForm,f[])->grammarTable.beta.newAst->a[];
+	 f.root[]->a.putson1;
+	 a[]->f.root[]
+      // gram.ObjectDescriptor then
+	 (gram.DescriptorForm,f[])->grammarTable.beta.newAst->a[];
+	 f.root[]->a.putson1;
+	 a[]->f.root[]
+     if)
+  #);
+less: (#  exit 0 #);
+equal: (#  exit 1 #);
+greater: (#  exit 2 #);
+CMP: (* compare two names *)
+  (# res: @integer;
+     lowerCaseDoesNotMatter: (#  exit 0xDFDFDFDF #);
+     (* the hex-value dfdfdfdf:
+      * the bitvalue to be used to mask such that
+      * lower and upper case does not matter *)
+     N1,N2: ^AST;
+     NT1,NT2: ^lexemText;
+     T1,T2: ^text;
+     c1,c2: @char;
+     l1,l2: @integer
+  enter(N1[],N2[]) 
+  do N1.son[] -> NT1[];
+     N2.son[] -> NT2[];
+     NT1.getText -> T1[]; 
+     NT2.getText -> T2[]; 
+     L:
+     (if (T1.length->l1) = (T2.length->l2) then
+         equal -> res;
+         T1.makeLC;
+         T2.makeLC;
+         (for i: T1.length repeat
+              (if (T1.T[i]->c1) <> (T2.T[i]->c2) then
+                  less -> res;
+                  (if c1 > c2 then greater -> res if);
+                  leave L
+         if)for)
+      else
+         (if l1 < l2 then
+             less -> res
+          else
+             greater -> res
+         if)
+     if)
+  exit res
+  #);
+EQS: (* compare two names *)
+  (# n1,n2: ^AST
+  enter(n1[],n2[])
+  exit((n1[],n2[])->CMP) = equal 
+  #);
+scanList:
+  (* scan the elements of the list;
+   * currentNode will exit t1, t2, ... Tn+1
+   * tail will exit the tail of the list.
+   *)
+  (# sCurrent: ^AST;
+     currentNode: (# exit sCurrent[] #);
+     tail: (# exit sCurrent.nextBrother #);
+     anAst: ^AST;
+     EX: ^expanded;
+     symbol: @integer
+  enter anAst[]
+  do (if (anAst.symbol->symbol) > 0 (* expanded *) then
+         (if grammarTable.beta.nodeClassArray[symbol] = kinds.list then
+             anAst[] -> EX[];    (* we assume expanded here! *)
+             EX.scan
+             (# 
+             do (if current.kind <> kinds.optional then
+                    current[] -> sCurrent[]; 
+                    INNER scanList 
+                if)
+             #)
+          else
+             anAst[] -> sCurrent[];
+             INNER scanList
+     if)if)
+  #);
+prettyPrinter: 
+  (# st: ^stream;
+     a: ^ast;
+     level: @integer;
+     editorMode: @boolean
+  enter (a[],st[],level,editorMode)
+  do 
+  #);
+
+---fragmentFormLib: attributes---
+theGSForm: (# exit root[] #)
+
+---slotDescLib: attributes---
+theNode: (# exit father #)
+
