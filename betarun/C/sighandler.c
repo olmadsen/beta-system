@@ -62,7 +62,6 @@ static int HandleInterrupt(Object *theObj, long *PC, int sig)
 }
 #endif /* UNIX */
 
-#ifdef RTVALHALLA 
 
 /* FIXME: The SaveXXXRegisters and RestoreXXXRegisters functions
  * may easily be abstracted into a general set of two functions
@@ -311,8 +310,6 @@ void RestoreSGIRegisters(SIGNAL_CONTEXT scp,
 }
 #endif /* sgi */
 
-#endif /* RTVALHALLA */
-
 void set_BetaStackTop(long *SP)
 {
 #if defined(sparc) || defined(intel)
@@ -494,23 +491,14 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
       }
       break;
     case SIGTRAP:
-#ifdef RTVALHALLA
-      if (valhallaID){
-	/* We are running under valhalla */
+      {
 	register_handles handles = {-1, -1, -1, -1, -1};
-	DEBUG_CODE(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
+	DEBUG_VALHALLA(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
 	SaveSGIRegisters(scp, &handles);
 	/* Hit breakpoint */
 	todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); 
 	RestoreSGIRegisters(scp, &handles);
-      } else {
-	/* Not running under valhalla */
-	todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); 
-      }
-#else /* !RTVALHALLA */
-      /* No support for valhalla */
-      todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig);
-#endif /* RTVALHALLA */
+      } 
       break;
     case SIGINT: /* Interrupt */
       todo=HandleInterrupt(theObj, PC, sig); break;
@@ -588,21 +576,12 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
       PC = (long *) scp.eip;
       DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)PC));
     }
-#ifdef RTVALHALLA
-    if (valhallaID){
-      /* We are running under valhalla */
+    {
       register_handles handles = {-1, -1, -1, -1};
       SaveLinuxRegisters(&scp, &handles);
       todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); 
       RestoreLinuxRegisters(&scp, &handles);
-    } else {
-      /* Not running under valhalla */
-      todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); 
     }
-#else /* !RTVALHALLA */
-    /* No support for valhalla */
-    todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig);
-#endif /* RTVALHALLA */
     break;
    case SIGSEGV:
     switch (scp.trapno) {
@@ -877,21 +856,13 @@ int BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
       PC = (long *) --pContextRecord->Eip;
       DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)PC); fflush(output));
     }
-#ifdef RTVALHALLA
-    if (valhallaID){
+    {
       /* We are running under valhalla. */
       register_handles handles = {-1, -1, -1, -1};
       SaveWin32Registers(pContextRecord, &handles);
       todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); 
       RestoreWin32Registers(pContextRecord, &handles);
-    } else {
-      /* Not running under valhalla */
-      todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); 
-    }
-#else /* !RTVALHALLA */
-    /* No support for valhalla */
-    todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig);
-#endif /* RTVALHALLA */
+    } 
     break;
   case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
     todo=DisplayBetaStack( RepRangeErr, theObj, PC, sig); break;

@@ -32,7 +32,7 @@ SYSTEMEXCEPTIONHANDLER systemexceptionhandler = NULL;
 
 /* InstallSystemExceptionHandler: To be called from beta. */
 void InstallSystemExceptionHandler(SYSTEMEXCEPTIONHANDLER sex){
-  fprintf(output, "InstallSystemExceptionHandler: Warning: NOT GC safe!!\n");
+  fprintf(output, "InstallSystemExceptionHandler: Warning: Not yet tested!!\n");
   systemexceptionhandler = sex;
 }
 
@@ -1726,21 +1726,29 @@ int DisplayBetaStack(BetaErr errorNumber,
 #endif /* MT */
   
   /* Handle systemexceptions: see TST/tstprogram.bet */
-  if (errorNumber==StopCalledErr){
+  if (systemexceptionhandler){
+    if (errorNumber==StopCalledErr){
       DEBUG_CODE(fprintf(output, "RTS: ignoring systemexceptionhandler for StopCalled\n"));
-  } else {
-    if (systemexceptionhandler){
+    } else {
       int skip_dump;
-      DEBUG_CODE(fprintf(output, "RTS: calling systemexceptionhandler\n"));
+      int old_isMakingDump = isMakingDump;
+      DEBUG_CODE(fprintf(output, "DisplayBetaStack: calling systemexceptionhandler\n"));
       /* FIXME: Save registers etc. as described in
        * http://www.daimi.au.dk/~beta/doc/betarun/internal/trapcallbacks.html
        * Cannot use BetaCallBack (rtsignalhandler.h) since we do not
        * have a signal context here!!! Not always? Index Errors, for instance.
+       * Is now partly fixed: For (some) errors coming from signals, the valhalla
+       * solution is now used.
        */
       set_BetaStackTop(StackEnd);
+      isMakingDump = 0; /* In case the user leaves the handler */
       skip_dump = systemexceptionhandler(errorNumber, theObj, thePC, StackEnd);
+      isMakingDump = old_isMakingDump;
       /* FIXME: Restore registers */
-      if (skip_dump) return 0;
+      if (skip_dump) {
+	isMakingDump = 0;
+	return 0;
+      }
     }
   }
 
@@ -1824,6 +1832,7 @@ int DisplayBetaStack(BetaErr errorNumber,
 
   if (NotifyMessage[0]) Notify(NotifyMessage);
 
+  isMakingDump = 0;
   return 0;
 } /* DisplayBetaStack */
 
