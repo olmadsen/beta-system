@@ -74,6 +74,7 @@ void BetaError(BetaErr err, Object *theObj)
 #endif
 
   DEBUG_CODE({
+    fprintf(output, "\n");
     fprintf(output, "BetaError(err=%d", err);
     PrintBetaError(err);
     fprintf(output, ",\n");

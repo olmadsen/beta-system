@@ -247,11 +247,12 @@ static void ExitHandler(sig, code, scp, addr)
 { 
 #ifdef UNIX
   output = stderr;
-  DEBUG_CODE(fprintf(output, "ExitHandler: Caught signal %d", (int)sig);
-	     PrintSignal((int)sig);
-	     fprintf(output, " during signal handling\n");
-	     fflush(output);
-	     );
+  DEBUG_CODE({
+    fprintf(output, "\nExitHandler: Caught signal %d", (int)sig);
+    PrintSignal((int)sig);
+    fprintf(output, " during signal handling\n");
+    fflush(output);
+  });
 #endif
   BetaExit(1); 
 }

@@ -874,7 +874,8 @@ int DisplayBetaStack(BetaErr errorNumber,
 #endif
 #endif
 
-  TRACE_DUMP({
+  DEBUG_CODE({
+    fprintf(output, "\n");
     fprintf(output, "DisplayBetaStack(errorNumber=%d", errorNumber);
     PrintBetaError(errorNumber); fprintf(output, ",\n");
     fprintf(output, "                 theObj=0x%x ", (int)theObj);
@@ -1367,7 +1368,13 @@ P("      [ EXTERNAL ACTIVATION PART ]")
 
 void DescribeObject(Object *theObj)
 {
-  ProtoType * theProto = theObj->Proto;
+  ProtoType * theProto;
+
+  if (!theObj){
+    fprintf(output, "[NONE]");
+    return;
+  }
+  theProto = theObj->Proto;
   if (isSpecialProtoType(theProto)){
     switch (SwitchProto(theProto)){
     case SwitchProto(ComponentPTValue):
