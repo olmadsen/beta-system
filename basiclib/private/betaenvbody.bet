@@ -619,10 +619,18 @@ DefaultKeyBoard: Stream
        (# do KeyboardPeek->ch #);
   #);
 
+trace_exceptions: (# exit false #);
+
 doContinue: (# exit 1 #);
 doRetry: (# exit 2 #);
 doPropagate: (# exit 3 #);
 doAbort: (# exit 4 #);
+
+find_activation: external
+  (# proto, startObj, theObj: @integer;
+  enter (proto, startObj)
+  exit theObj
+  #);
 
 --BetaEnvCstructChk: DoPart--
 do (if ((inx<0) or (R.range*4<inx)) then inx->BoundsExceeded if)
@@ -842,24 +850,7 @@ do TOS'DoGC'
           (# t: ^try;
              i, j: @integer;
           enter t[]
-          do (*L: 
-               (#
-               do (if t[] = storage[top-i][] then
-                      (#
-                         j: @integer;
-                      do (for j<=i repeat
-                              NONE->storage[top-j][];
-                              j+1->j;
-                         for);
-                         top-i->top;
-                         leave L;
-                      #);
-                   else
-                      i+1->i;
-                      restart L;
-                  if);
-               #);*)
-             L1: 
+          do L1: 
                (#
                do (if t[] = storage[top-i][] then
                       NONE->storage[top-i][];
@@ -898,8 +889,11 @@ do doAbort->this(handler).status
 (#
 do (if this(handler).current##<=type## then
        this(handler).current[]->current[];
-       (if (predicate##<booleanValue##) then
-           (if predicate then INNER when if)
+       (if predicate##<booleanValue## then
+           (* predicate further bound *)
+           (if predicate then 
+               INNER when 
+           if)
         else
            INNER when
        if);
@@ -926,46 +920,37 @@ do doPropagate->status;
 #)
 
 --- exceptTry: dopart ---
-do (*this(try)[]->(getTryList).prepend;*)
-   this(try)[]->betaenvPrivate.tryList.prepend;
+do this(try)[]->betaenvPrivate.tryList.prepend;
    tryBlock:
      (# dummy: @char;
      do &(# dummy: @char; do leave tryBlock #)[]->private.abortBlock[];
         &(# dummy: @char; do restart tryBlock #)[]->private.retryBlock[];
         INNER try;
      #);
-   (*(getTryList).head->(getTryList).delete*)
    betaenvPrivate.tryList.head->betaenvPrivate.tryList.delete;
    
 --- exceptThrowPrivate: descriptor ---
 (# handler: ^try;
-   (*l: ^tl.theCellType; tl: ^trylist;*)
-   t: ^text; proto: @prototype; raise: ^exception; unknownEx: ^unknown;
-   (*l: ^tl.theCellType; tl: ^trylist;*)
+   t: ^text; 
+   proto: @prototype; 
+   raise: ^exception; 
+   unknownEx: ^unknown;
    l: ^try;
    e: ^exception;
 #)
 
 --- exceptThrow: dopart ---
-do (*getTryList->private.tl[];
-    private.tl.head->private.l[];*)
-   betaenvPrivate.tryList.head->private.l[];
-   '\t\t\t\t***Throwing '->puttext;
+do betaenvPrivate.tryList.head->private.l[];
    current##->getProtoTypeForStruc->private.proto;
-   private.proto.labid->puttext; '***'->putline;
-   
-   (if current[] <> NONE then
-       current[]->private.e[];
+   (if trace_exceptions then
+       '\t\t\t\t***Throwing '->puttext;
+       private.proto.labid->puttext; '***'->putline;
    if);
    
+   (if current[] <> NONE then current[]->private.e[] if);
+   
    (* Find the right try block *)
-   (#
-      proto, obj: @integer;
-      find_activation: external
-        (# proto, startObj, theObj: @integer;
-        enter (proto, startObj)
-        exit theObj
-        #);
+   (# proto, obj: @integer;
    do try##->getProtoTypeForStruc->proto;
       (# dummy: @char do (proto, 0)->find_activation->obj #);
       (if obj <> 0 then
@@ -974,22 +959,29 @@ do (*getTryList->private.tl[];
           NONE->private.handler[];
       if);
    #);
-   (if private.handler[] <> NONE then 'found try block'->putline; 
-    else 'did not find try block'->putline;
+   (if trace_exceptions then
+       (if private.handler[] <> NONE then 
+           'found try block'->putline; 
+        else 
+           'did not find try block'->putline;
+       if);
    if);
    
    throwing:
-     (if (*private.l[]=NONE then*) private.handler[] = NONE then
-	 (if true
-	  // current##<=unknown## then
-             '\t\t\t\t***Exception "Unknown" not handled'->putline;
+     (if private.handler[] = NONE then
+	 (if current##<=unknown## then
+             (if trace_exceptions then
+                 '\t\t\t\t***Exception "Unknown" not handled'->putline;
+             if);
              current[]->private.raise[];
              '**** Exception "Unknown" not handled\n'
                ->private.raise.msg.prepend;
              private.raise
           else
-	     '\t\t\t\t***Exception not handled" - converted to "Unknown"'
-               ->putline;
+	     (if trace_exceptions then
+                 '\t\t\t\t***Exception not handled" - converted to "Unknown"'
+                   ->putline;
+             if);
 	     '**** Dynamic exception: '->private.t[];
 	     current##->getProtoTypeForStruc->private.proto;
              private.proto.labid->private.t.putline;
@@ -1003,14 +995,19 @@ do (*getTryList->private.tl[];
 	     private.unknownEx[]->throw
 	 if)
       else
-	 (*private.l.elm[]->private.handler[]; *)
 	 (if current[]->private.handler.private.theHandler
 	  // doContinue then
-	     '\t\t\t\t***Continuing '->puttext;private.handler.name->puttext;
-	     '***'->putline;
+	     (if trace_exceptions then
+                 '\t\t\t\t***Continuing '->puttext;
+                 private.handler.name->puttext;
+	         '***'->putline;
+             if);
 	  // doRetry then
-	     '\t\t\t\t***Retrying '->puttext;private.handler.name->puttext;
-	     '***'->putline;
+	     (if trace_exceptions then
+                 '\t\t\t\t***Retrying '->puttext;
+                 private.handler.name->puttext;
+	         '***'->putline;
+             if);
 	     ll: betaenvPrivate.tryList.scan
 	       (# 
 	       do current.finally;
@@ -1022,37 +1019,41 @@ do (*getTryList->private.tl[];
                #);
 	     private.handler.private.retryBlock;
 	  // doPropagate then
-	     '\t\t\t\t***Propagating '->puttext;
 	     current##->getProtoTypeForStruc->private.proto;
-             private.proto.labid->puttext;
-	     ' from '->puttext; private.handler.name->puttext;
-	     '***'->putline;
+	     (if trace_exceptions then
+                 '\t\t\t\t***Propagating '->puttext;
+                 private.proto.labid->puttext;
+	         ' from '->puttext; 
+                 private.handler.name->puttext;
+	         '***'->putline;
+             if);
 	     private.l[]->betaenvPrivate.tryList.succ->private.l[];
              (* Find the next try block *)
-             (#
-                proto, obj: @integer;
-                find_activation: external
-                  (# proto, startObj, theObj: @integer;
-                  enter (proto, startObj)
-                  exit theObj
-                  #);
+             (# proto, obj: @integer;
              do try##->getProtoTypeForStruc->proto;
-                (proto, %getLongAt(@@private.handler))->find_activation->obj;
+                (proto, %getLongAt(@@private.handler))
+                  ->find_activation
+                  ->obj;
                 (if obj <> 0 then
                     obj->addressToObject->private.handler[];
                  else
                     NONE->private.handler[];
                 if);
              #);
-             (if private.handler[] <> NONE then
-                 'Found try block to propagate to'->putline;
-              else
-                 'Found no try block to propagate to'->putline;
+             (if trace_exceptions then
+                 (if private.handler[] <> NONE then
+                     'Found try block to propagate to'->putline;
+                  else
+                     'Found no try block to propagate to'->putline;
+                 if);
              if);
 	     restart throwing;
 	  // doAbort then
-	     '\t\t\t\t***Aborting '->puttext; private.handler.name->puttext;
-	     '***'->putline;
+	     (if trace_exceptions then
+                 '\t\t\t\t***Aborting '->puttext; private.handler.name
+                   ->puttext;
+	         '***'->putline;
+             if);
 	     ll: betaenvPrivate.tryList.scan
 	       (# temp: ^try;
 	       do current[]->temp[];
