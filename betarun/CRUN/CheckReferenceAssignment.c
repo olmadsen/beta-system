@@ -6,6 +6,13 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef sparc
+#ifdef PERSIST
+#include "../P/PException.h"
+#include "../P/referenceTable.h"
+#endif /* PERSIST */
+#endif /* sparc */
+
 /* The Assignment *theCell = theObj has just been
  * done. We know the theCell is in AOA, now check if
  * *theCell is in IOA.
@@ -28,9 +35,16 @@ void ChkRA()
     
 #ifdef RTLAZY
     /* It may be a dangling (negative) reference */
-    if (isLazyRef(*theCell))
+    if (isLazyRef(*theCell)) {
       negAOArefsINSERT((long)theCell);
+    }
 #endif
+#ifdef PERSIST
+    if (inPIT((void *)*theCell)) {
+      newAOAclient(getPUID((void *)*theCell), theCell);
+      INFO_PERSISTENCE(TtoP++);
+    }
+#endif /* PERSIST */
     return; 
   }
   
