@@ -77,9 +77,10 @@ static void Initialize(XbButtonWidget request,XbButtonWidget new) {
 static void GetValuesHook(XbButtonWidget w, ArgList args,Cardinal *nargs) {
   Cardinal i = 0;
   String key = "labelString";
+
   while (i != *nargs) {
     if(strcmp(args[i].name,key) == 0) {
-      args[i].value = (long) XmStringCopy((XmString) (args[i].value));
+      *(long*)args[i].value = (long) XmStringCopy( *(XmString*) (args[i].value));
       break;
     }
     i++;
