@@ -12,6 +12,7 @@ do (name[],username[],password[])->private.open;
 
 -- DBEnvBDBCException: DoPart --
 do
+   'Hello World'->putline;
    THIS(exception)[]->getPatternName->msg.putLine;
      (#
         MAX_ERROR: (#  exit 255 #);
@@ -49,6 +50,9 @@ do
 
 -- DirectSQLStatementSet: DoPart --
 do t[]->private.set  
+
+-- DirectSQLStatementInfoGetExpandedContents: DoPart --
+do (Contents.get).copy->private.theColumns.replace->t[]  
 
 -- DirectSQLStatementInfoNoOfPlaceHolders: DoPart --
 do private.theColumns.range->value  
@@ -165,16 +169,20 @@ shortIntToSigned: integerValue
 -- ResultSetPrivate: Descriptor --
 (#
    hstmt: @integer;
-   theColInfos: ^colInfos;
+   theColInfos: @colInfos;
    colInfos:
    (* Return first column no corresponding to 'name'
     Returns -1 if not found *)
      (#
         elms: [0] ^Info.ColumnInfo;
+        isInitialised: @boolean;
+        assertInitialised:
+          (#  do (if not isInitialised then init if) #);
         getColumnByName:
           (# name: ^text; res: @integer
           enter name[]
           do
+             assertInitialised;
              L:
              (for j: elms.range repeat
                (if elms[j].ColumnName[]->name.equalNCS then
@@ -189,7 +197,8 @@ shortIntToSigned: integerValue
           do name[]->getColumnByName->getInfoByNo->res[]
           exit res[]
           #);
-        getInfoByNo: (# i: @integer enter i exit elms[i][] #);
+        getInfoByNo:
+          (# i: @integer enter i do assertInitialised exit elms[i][] #);
         init:
           (#
              ColumnName: @cString;
@@ -202,13 +211,11 @@ shortIntToSigned: integerValue
              ColumnNo: @shortint;
              ColumnTypeName: @cString;
              StringLengthPtr: @shortint;
-             hstmt: @integer;
              rc1,rc2: @shortint;
              theInfo: ^info.ColumnInfo
-          enter hstmt
           do
-             info.NoOfCols->elms.new;
-             (for i: info.NoOfCols repeat
+             getNumCols->elms.new;
+             (for i: elms.range repeat
                &Info.ColumnInfo[]->theInfo[];
                THIS(Connection).Private.MAX_COL_TXT->ColumnName.init;
                i->ColumnNo;
@@ -230,13 +237,18 @@ shortIntToSigned: integerValue
                ColumnTypeName.get->theInfo.DataTypeName[];
                ColumnTypeName.free;
                theInfo[]->elms[i][]
-             for)
+             for);
+             true->isInitialised
           exit (rc1,rc2)
           #)
      #);
    getRowCount: integerValue
      (# rc: @shortint
      do (hstmt,@@ value)->SQLRowCount->rc; (rc,hstmt)->checkError
+     #);
+   getNumCols: integerValue
+     (# rc: @shortint
+     do (hstmt,@@ value)->SQLNumResultCols->rc; (rc,hstmt)->checkError
      #);
    scan:
      (# rc: @shortint
@@ -268,23 +280,6 @@ shortIntToSigned: integerValue
                 (SQL_HANDLE_STMT,hstmt)->resultSetException
             if)
         if)
-     #);
-   init: (* Set up metadata *)
-     (#
-        getNumCols:
-          (# hstmt,cCols: @integer; rc: @shortint
-          enter hstmt
-          do (hstmt,@@ cCols)->SQLNumResultCols->rc
-          exit (cCols,rc)
-          #);
-        rc,rcp: @shortint
-     do
-        hstmt->getNumCols->(info.NoOfCols,rc);
-        (rc,hstmt)->checkError;
-        &colInfos[]->theColInfos[];
-        hstmt->theColInfos.init->(rc,rcp);
-        (rc,hstmt)->checkError;
-        (rcp,hstmt)->checkError
      #)
 #)  
 
@@ -300,9 +295,7 @@ do
        private.theResultSet.assertClosed;
        INNER execute;
        (* res[] = none IFF an exception was thrown *)
-       (if res[] <> none then
-           res.private.init; res[]->private.theResultSet.set
-       if)
+       (if res[] <> none then res[]->private.theResultSet.set if)
     else
        exception
          (#  do 'Attempt to execute SQLStatement before open'->msg #)
@@ -313,6 +306,9 @@ do private.close
 
 -- ResultGetColumnByName: DoPart --
 do INNER getColumnByName  
+
+-- ResultSetInfoNoOfCols: DoPart --
+do private.getNumCols->value  
 
 -- ResultSetInfoRowCount: DoPart --
 do private.getRowCount->value  
@@ -602,18 +598,36 @@ do name[]->private.getBooleanByName->res
         init: (# i: @integer enter i do i->rep.new #);
         insert:
           (# i: @integer; t: ^text enter (i,t[]) do t[]->rep[i][] #);
-        replace: (* Replaces placeholders in t[] with what is kept in rep *)
-          (# t,tmp: ^text; j: @integer
+        replace:
+        (* Replaces placeholders in t[] with what is kept in rep
+         * Doesn't replace a given placeholder if that placeholder has not been set
+         *)
+          (# t,tmp: ^text; j: @integer; placeHoldersToBeSkipped: @integer
           enter t[]
           do
              (for i: rep.range repeat
-               t.reset;
-               0->j;
-               L: t.scan (#  do j+1->j; (if ch = '?' then leave L if) #);
-               (1,j-1)->t.sub->tmp[];
-               rep[i][]->tmp.append;
-               (j+1,t.length)->t.sub->tmp.append;
-               tmp[]->t[]
+               (if rep[i][] = none then
+                   placeHoldersToBeSkipped+1->placeHoldersToBeSkipped
+                else
+                   t.reset;
+                   0->j;
+                   findPlaceHolderIndex: t.scan
+                     (# skippedNo: @integer
+                     do
+                        j+1->j;
+                        (if ch = '?' then
+                            (if skippedNo = placeHoldersToBeSkipped then
+                                leave findPlaceHolderIndex
+                             else
+                                skippedNo+1->skippedNo
+                            if)
+                        if)
+                     #);
+                   (1,j-1)->t.sub->tmp[];
+                   rep[i][]->tmp.append;
+                   (j+1,t.length)->t.sub->tmp.append;
+                   tmp[]->t[]
+               if)
              for)
           exit t[]
           #);
@@ -660,13 +674,12 @@ do name[]->private.getBooleanByName->res
                enter henv
                do
                   (if true
-                   // userName[] = none then
+                   // userName[] = none // userName.empty then
                       (THIS(connection).private.hdbc,@@ name.t[1],SQL_NTS,0,0,0,
                        0)->SQLConnect->rc
-                   // password[] = none then
+                   // password[] = none // password.empty then
                       (THIS(connection).private.hdbc,@@ name.t[1],SQL_NTS,@@
-                       userName.t[1],SQL_NTS,@@ passWord.t[1],SQL_NTS)
-                        ->SQLConnect->rc
+                       userName.t[1],SQL_NTS,0,0)->SQLConnect->rc
                    else
                       (THIS(connection).private.hdbc,@@ name.t[1],SQL_NTS,@@
                        userName.t[1],SQL_NTS,@@ passWord.t[1],SQL_NTS)
