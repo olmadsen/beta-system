@@ -1,7 +1,22 @@
 ORIGIN '../ptOffsetTable';
 
--- ptOTscanSimpleTypesBody:doPart --
-do pt.scanSimples
+-- ptOTscanSimpleTypesBody:descriptor --
+(# i,inx: @Integer;
+   
+   traceSimples: (# exit false #);
+   debugSimples: (# exit true #);
+
+do (if traceSimples then
+       '---- Building elm for proto: '->putText;
+       pt.labId->putLine;
+       '---- Size='->putText;pt.size->putInt;newLine;
+       (for i:pt.size - 1 repeat
+            'ofs['->putText; i->putInt; ']='->putText;
+            ofs[i]->putInt;newLine;
+       for);
+   if);
+   0 -> simplepos;
+   pt.scanSimples
    (# 
    do simplePos+1 -> simplePos;
       (if simplePos > simpleTypes.Range then
@@ -9,57 +24,81 @@ do pt.scanSimples
           simpleOfs.Range -> simpleOfs.extend;
       if);
       simpleType -> simpleTypes[simplePos];
-      (inx * 4) + thisOffset -> simpleOfs[simplePos];
+      thisOffset -> simpleOfs[simplePos];
    #);
    
--- ptOTcopySimpleTypesBody:doPart --  
-do (if 0<simplepos then
+   (if 0<simplepos then
        (* Reserve space for the most probable need (All longs) *)
        simplepos -> elm.simpleVals.new;
        simplepos -> elm.simpleTypes.new;
+       (if traceSimples then
+           '-- Simples:'->putLine;
+           (for i:simplepos repeat
+                'At '->putText; simpleOfs[i] div 4->putInt; ': '->putText;
+                simpleTypes[i]->putInt;newLine;
+           for);
+       if);
+                
        1 -> i; 
        simpleloop:
-         (#
-         do (* safety checks. Remove once it works. *)
-            (if ofs[simpleOfs[i] div 4]
-             //simple then else 
-                'simpleOfs points at a nonsimple:' -> putText;
-                ofs[simpleOfs[i] div 4] -> putInt; newLine;
-                Stop;
-            if);
-            (if (simpleOfs[i] mod 4)<> 0 then
-                'datatype found at non-long boundery!' -> putLine;
-                Stop;
+         (# inx: @Integer;
+         do simpleOfs[i] div 4 -> inx;
+            (if debugSimples then
+                (if i<simplepos then
+                    (if simpleOfs[i+1] <= simpleOfs[i] then
+                        pt.labId->putText; ':'->put;
+                        'simpleOfs are not in increasing order'->putLine;
+                        Stop;
+                    if);
+                if);
+                (if (ofs[inx])<>simple then
+                    (if ofs[inx]<>simpleTypes[i] then
+		        pt.labId->putText; ':'->put;
+                        'simpleOfs[' -> putText;simpleOfs[i] div 4 -> putInt; 
+		        ']='->putText; ofs[simpleOfs[i] div 4]->putInt;
+	                ' simpleTypes[i]='->putText;
+                        simpleTypes[i]->putInt; newLine;
+                        Stop;
+                    if);
+                if);
             if);
             
             (* Find out what type the subwords have. Also mark
-             * that it has been handled. The rest are BIN32 *)
+             * that it has been handled. The rest are BIN32 
+             * The code for INT16 depends on the fact, that 
+             * simpleofs[i]<simpleofs[i+1] for all i...
+             * It is not clear whether this is always the case!
+             *)
             (if simpleTypes[i]
              // SIMPLETYPE_INT32 then
-                SIMPLETYPE_INT32 -> ofs[simpleOfs[i] div 4];
+                SIMPLETYPE_INT32 -> ofs[inx];
                 i+1->i;
              // SIMPLETYPE_REAL64 then
-                SIMPLETYPE_REAL64  -> ofs[(simpleOfs[i] div 4) + 0];
-                SIMPLETYPE_HANDLED -> ofs[(simpleOfs[i] div 4) + 1];
+                SIMPLETYPE_REAL64  -> ofs[inx + 0];
+                SIMPLETYPE_HANDLED -> ofs[inx + 1];
                 i+1->i
              // SIMPLETYPE_INT16 then
                 (if i<simplepos then
-                    (if simpleTypes[i+1]
-                     // SIMPLETYPE_INT16 then
+                    (if (simpleTypes[i+1]=SIMPLETYPE_INT16)
+                        and (simpleOfs[i+1] div 4 = inx) then
                         SIMPLETYPE_INT16INT16
-                          -> ofs[simpleOfs[i] div 4];
+                          -> ofs[inx];
                         i+2->i;
                      else
                         SIMPLETYPE_INT16BIN16
-                          -> ofs[simpleOfs[i] div 4];
+                          -> ofs[inx];
                         i+1->i;
                     if)
                  else
                     SIMPLETYPE_INT16BIN16
-                      -> ofs[simpleOfs[i] div 4];
+                      -> ofs[inx];
                     i+1->i;
                 if)
+             else
+                'Unhandled simpleType in ptOTcopySimpleTypesBody'->putLine;
+                Stop;
             if);
             (if i<=simplepos then restart simpleloop if)
          #)
    if);
+#)
