@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Misc.c,v 1.15 1992-09-24 10:39:18 datpete Exp $
+ * Mod: $Id: Misc.c,v 1.16 1992-09-25 22:03:38 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
