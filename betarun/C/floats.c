@@ -39,8 +39,14 @@ void SetupFPU(void)
   fprintf(output, "setupfpu: floating point exceptions not enabled\n");
 #endif
 
-#ifdef linux
+#ifdef sun4
+  /* see ieee_handler(3M), sigfpe */
   fprintf(output, "setupfpu: floating point exceptions not enabled\n");
+#endif
+
+#ifdef linux
+#include <i386/fpu_control.h>
+  __setfpucw(_FPU_IEEE);
 #endif
 
 #ifdef sgi
