@@ -9,10 +9,6 @@
 #include <unistd.h>
 #include <sys/time.h>
 
-#ifdef sparc
-extern int utimes(char *file, struct timeval *tvp);
-#endif
-
 #if defined(linux)
 #include <utime.h>
 #endif
