@@ -2,11 +2,11 @@ all: dist link-check
 
 # Re-generate all the generated files in the various manuals.
 dist:
-	@env -i PATH=$$PATH BETALIB=$$BETALIB QUIET=1 sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then /usr/xpg4/bin/grep -q dist: $$d/Makefile; status=$$?; if [ $$status -eq 0 ] ; then cd $$d; echo ""; echo "---$$d---"; make dist; cd ..; fi; fi; done'
+	@perl -s build
 
 # Re-generate all the generated files except PDF in the various manuals.
 doc:
-	@env -i PATH=$$PATH BETALIB=$$BETALIB QUIET=1 sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then /usr/xpg4/bin/grep -q doc: $$d/Makefile; status=$$?; if [ $$status -eq 0 ] ; then cd $$d; echo ""; echo "---$$d---"; make doc; cd ..; fi; fi; done'
+	@perl -s build -p
 
 link-check:
 	@echo Checking all links from index.html
@@ -18,8 +18,6 @@ make-check:
 	@echo Checking Makefiles
 	sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then echo $$d; cd $$d; make -n; cd ..; fi; done'
 
-interface-check:
-	sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then /usr/xpg4/bin/grep -q interface: $$d/Makefile; status=$$?; if [ $$status -eq 0 ] ; then cd $$d; echo $$d; cd ..; fi; fi; done'
 
 up: update
 

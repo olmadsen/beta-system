@@ -1,5 +1,5 @@
 var StartVisible = 0;
-var DrawDelay    = 1000;
+var DrawDelay    = 500;
 var PullStepTime = 15;
 var DrawStepTime = 30;
 
