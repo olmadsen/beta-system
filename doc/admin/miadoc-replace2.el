@@ -29,7 +29,7 @@
   (let ((case-replace nil)(case-fold-search t))
     (message "Fixing PRE CLASS=BETA")
     (tags-query-replace "<pre\\s-*class\\s-*=\\s-*beta>\\([][
-\\s- 	a-zA-Z0-9@#$%^&*()-+=|';:,.<>~/]*\\)</pre>" "<BETA>\\1</BETA>" nil)))
+\\s- 	\\w@#$%^&*()-+=|';:,.<>~/]*\\)</pre>" "<BETA>\\1</BETA>" nil)))
 
 (defun miadoc-replace5 ()
   (interactive)
@@ -73,7 +73,7 @@
 
   (let ((case-replace nil)(case-fold-search t))
     (message "Changing WORD MARKER to <INX>WORD</INX>")
-    (tags-query-replace "\\([-a-zA-Z0-9]+\\)\\s-*<a\\s-+name=marker[-0-9]+>\\s-*</a>" "<INX>\\1</INX>" nil)))
+    (tags-query-replace "\\(\\w+\\)\\s-*<a\\s-+name=marker[-0-9]+>\\s-*</a>" "<INX>\\1</INX>" nil)))
 
 (defun miadoc-replace8a ()
   (interactive)
