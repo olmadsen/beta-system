@@ -96,8 +96,9 @@ case "`uname -m`" in
 		#################### Linux configuration ######################
 		MACHINETYPE=LINUX
 		objdir=linux
-		MOTIFINC=${MOTIFINC-/usr/include/Xm}
-		MOTIFHOME=${MOTIFHOME-/usr/lib/X11/Motif}
+		#MOTIFINC=${MOTIFINC-/usr/include/Xm}
+		MOTIFINC=${MOTIFINC-/usr/X11/include}
+		#MOTIFHOME=${MOTIFHOME-/usr/lib/X11/Motif}
 		PATH=/usr/bin/X11:$PATH
 		export PATH
 		case "`uname -r`" in

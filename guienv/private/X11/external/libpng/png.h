@@ -105,7 +105,7 @@ extern "C" {
  */
 
 /* include the compression library's header */
-#include "zlib.h"
+#include "../zlib/zlib.h"
 
 /* include all user configurable info */
 #include "pngconf.h"
