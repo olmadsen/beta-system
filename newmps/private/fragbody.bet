@@ -5,6 +5,7 @@ INCLUDE '~beta/basiclib/binfile';
 
 INCLUDE '../bytestream';
 INCLUDE '../donecheck';
+INCLUDE '../betacfl';
 
 
 -- AstInterfaceLib: attributes --
@@ -33,7 +34,14 @@ packAst:
         index -> current.inx;
         current[] -> table.append;
      #);
+     index -> THIS(FragmentForm).table.new;
+     table.scan
+     (# 
+     do current[] -> THIS(FragmentForm).table[current.inx][];
+     #);
+     
      index -> output.putInt32u;
+     
      table.scan
      (# slot: ^SlotDesc;
      do (if current.symbol = prodNo.unExpanded then
@@ -177,6 +185,112 @@ unPackAst:
          table[index][] -> firstSlot[];
      if);
   #);
+
+packSemanticInfo:
+  (# header: ^Text;
+     info: ^Text;
+     current: ^AST;
+     nameApl: ^beta.NameApl;
+     nameDcl: ^beta.NameDcl;
+     import: [1] ^FragmentForm;
+     top: @integer;
+     
+     fraginx: @integer;
+     betagram: ^beta;
+     form: ^FragmentForm;
+     
+  enter (header[], info[])
+  do grammartable.beta[] -> betagram[];
+     (for inx: table.range repeat
+          table[inx][] -> current[];
+          (if current## = betagram.nameApl## then
+              current[] -> nameApl[];
+              nameApl.dclref[] -> nameDcl[];
+              (if nameDcl[] = NONE then
+                  0 -> info.putInt32u;
+                  0 -> info.putInt32u;
+               else
+                  nameDcl.form[] -> form[];
+                  (if form[] = current.form[] then
+                      0 -> info.putInt32u;
+                   else
+                      0 -> fraginx;
+                      search:
+                        (#
+                        do (for inx: top repeat
+                                (if import[inx][] = form[] then
+                                    inx -> fraginx;
+                                    leave search;
+                                if);
+                           for);
+                           top + 1 -> top;
+                           (if top > import.range then
+                               import.range -> import.extend;
+                           if);
+                           top -> fraginx;
+                           form[] -> import[top][];
+                        #);
+                      fraginx -> info.putInt32u;
+                  if);
+                  nameDcl.inx -> info.putInt32u;
+              if);
+          if);
+     for);
+     top -> header.putInt32u;
+     (for inx: top repeat
+          import[inx][] -> form[];
+          (form.father).fullname -> header.putBinText;
+          form.name -> header.putBinText;
+     for);
+  #);
+unPackSemanticInfo:
+  (# header, info: ^Text;
+     import: [0] ^FragmentForm;
+     nameApl: ^beta.nameApl;
+     current: ^AST;
+     betagram: ^beta;
+     forminx, dclinx: @integer;
+     top: @integer;
+     fullname: ^Text;
+     name: ^Text;
+     group: ^FragmentGroup;
+  enter (header[], info[])
+  do grammartable.beta[] -> betagram[];
+     header.reset;
+     info.reset;
+     header.getInt32u -> top;
+     top -> import.new;
+     (for inx: top repeat
+          header.getBinText -> fullname[];
+          header.getBinText -> name[];
+          (fullname[], screen[]) -> THIS(astinterface).top.open -> group[];
+          (if group[] <> NONE then
+              search: group.scan
+                (#
+                do (if name[] -> (current.name).equalNCS then
+                       current[] -> import[inx][];
+                       leave search;
+                   if);
+                #);
+          if);
+     for);
+     (for inx: table.range repeat
+          table[inx][] -> current[];
+          (if current## = betagram.nameApl## then
+              current[] -> nameApl[];
+              info.getInt32u -> forminx;
+              info.getInt32u -> dclinx;
+              (if forminx = 0 then
+                  (if dclinx <> 0 then
+                      table[dclinx][] -> nameApl.dclref[];
+                  if);
+               else
+                  import[forminx].table[dclinx][] -> nameApl.dclref[];
+              if);
+          if);
+     for);
+  #);
+
 -- FragmentFormCategory: doPart --
 do root.symbol -> sy;
 
@@ -192,71 +306,47 @@ do firstSlot[] -> current[];
 -- FragmentFormPack: doPart --
 do (# data: ^Text;
       groupID: ^Text;
-   do &Text[] -> data[];
-      data[] -> packAst;
-      importtop -> output.putInt32u;
-      (for inx: importtop repeat
-           (THIS(AstInterface)[], import[inx].father) -> getGroupIDProperty -> groupID[];
-           
-           (import[inx].father).fullname -> output.putBinText;
-           import[inx].name -> output.putBinText;
-           groupID[] -> output.putBinText;
-      for);
+      header: ^Text;
+      info: ^Text;
+   do 'pack: ' -> puttext;
+      fullname -> putline;
       
+      &Text[] -> data[];
+      data[] -> packAst;
       data[] -> output.putBinText;
+      &Text[] -> header[];
+      &Text[] -> info[];
+      'A' -> put;
+      (header[], info[]) -> packSemanticInfo;
+      'B' -> put;
+      header[] -> output.putBinText;
+      info[] -> output.putBinText;
+      'C' -> put;
+      newline;
    #);
    
 -- FragmentFormUnpack: doPart --
-do (# fullname: ^Text;
-      name: ^Text;
-      data: ^Text;
-      group: ^astInterface.FragmentGroup;
-      groupID: ^TEXT;
-      value: ^Text;
-      clear: @boolean;
+do (# data: ^Text;
       size: @integer;
+      header, info: ^Text;
       getBytes: @input.getBytes;
-   do input.getInt32u -> importtop;
-      importtop + 1 -> import.new;
-      (for inx: importtop repeat
-           input.getBinText -> fullname[];
-           input.getBinText -> name[];
-           input.getBinText -> groupID[];
-           (fullname[], screen[]) -> top.open  -> group[];
-           (if group[] <> NONE then
-               (THIS(AstInterface)[], group[]) -> getGroupIDProperty -> value[];
-               (if value[] <> NONE then
-                   (if groupID[] -> value.equal then
-                       search: group.scan
-                         (#
-                         do (if current.name -> name.equalNCS then
-                                current[] -> import[inx][];
-                                leave search;
-                            if);
-                         #);
-                   if);
-               if);
-           if);
-           
-      for);
-      
-      (for inx: importtop repeat
-           (if import[inx][] = NONE then
-               true -> clear;
-           if);
-      for);
-      (if clear then
-          1 -> import.new;
-          0 -> importtop;
-      if);
+   do 'unpack: ' -> puttext;
+      '???' -> putline;
+      fullname -> putline;
       input.getInt32u -> size;
       &Text[] -> data[];
       size -> data.T.new;
-      
       (@@data.T[1], size) -> getBytes;
       size -> data.lgth;
       data.reset;
       data[] -> unPackAst;
+      'A' -> put;
+      input.getBinText -> header[];
+      input.getBinText -> info[];
+      'B' -> put;
+      (header[], info[]) -> unPackSemanticInfo;
+      'C' -> put;
+      newline;
    #);
    
    
@@ -583,7 +673,7 @@ do opengroup:
           exit stripped[]
           #);
         
-        bytfile: @file;
+        bytfile: @file (# binary:: (# do true -> value #); #);
      do  name[] -> expandToFullPath -> fullname[];
         fullname[] -> stripExtension -> fullname[];
         
