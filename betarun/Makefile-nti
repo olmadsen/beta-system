@@ -1,5 +1,6 @@
 RUNDEPS= \
 RUN/AllocateComponent.run \
+RUN/AllocateDopartObject.run \
 RUN/AllocateItem.run \
 RUN/AllocateRefRep.run \
 RUN/AllocateStackObject.run \
@@ -36,13 +37,32 @@ betarun.o: nti.o C/c.common.o GC/c.gc.o
 betarun.demo: C/c.common.o GC/c.gc.o nti.o
 	ld -x -r -o betarun.demo C/c.common.o GC/c.gc.o nti.o
 
-betarun.debug: C/c.common.debug GC/c.gc.debug nti.o
-	ld -r -o betarun.debug C/c.common.debug GC/c.gc.debug nti.o
-
-debug: betarun.debug
+betarun.debug: C/c.common.debug GC/c.gc.debug ntidebug.o
+	ld -r -o betarun.debug C/c.common.debug GC/c.gc.debug ntidebug.o
 
 nti.o: nti.asm
 	as -o nti.o nti.asm
+
+ntidebug.o: ntidebug.asm
+	as -o ntidebug.o ntidebug.asm
+
+nti.asm: RUN/nti.run RUN/ntiadditions.run $(RUNDEPS)
+	- ../GEN/nti/gen -o nti.asm RUN/nti
+
+ntidebug.asm: RUN/nti.run RUN/ntiadditions.run $(RUNDEPS)
+	- ../GEN/nti/gen -debug -o ntidebug.asm RUN/nti
+
+demo:
+	rm -f C/c.common.o C/initialize.o
+	DEMO="-DDEMO"; export DEMO; make betarun.demo
+	rm -f C/c.common.o C/initialize.o
+
+debug: betarun.debug
+
+asm: ntidebug.asm
+
+gen:
+	cd ../GEN/nti; make
 
 C/c.common.debug: ALWAYS
 	cd C; make debug
@@ -56,39 +76,30 @@ C/c.common.o: ALWAYS
 GC/c.gc.o: ALWAYS
 	cd GC; make
 
-demo:
-	rm -f C/c.common.o C/initialize.o
-	DEMO="-DDEMO"; export DEMO; make betarun.demo
-	rm -f C/c.common.o C/initialize.o
-
-
-
-nti.asm: RUN/nti.run RUN/ntiadditions.run $(RUNDEPS)
-	make asm
-
-asm: 
-	- ../GEN/nti/gen -o nti.asm RUN/nti
-gen:
-	cd ../GEN/nti; make
-
 tags:
 	etags RUN/*.run GC/*.[hc] C/*.[hc] C/data.gen
+
+check:
+	@echo generating list of undefined labels
+	@nm betarun.o | grep ' U ' > .new-undefined
+	@echo find difference between .old-undefined and .new-undefined
+	@diff .old-undefined .new-undefined
+
+gendef:
+	@echo generating list of undefined labels
+	@nm betarun.o | grep ' U ' > .old-undefined
 
 clean: ALWAYS
 	@echo Do \'cvs update\' on a SUN
 	cd C; make clean
 	cd GC; make clean
-	- rm -f *.group
-	- rm -f *~ \#*
-	- rm -f RUN/*.group RUN/*~
+	- rm -f *.group *.lst core *~ \#*
+	- rm -f RUN/*.group RUN/*~ RUN/*.lst RUN/core
 
-commit:
-	cvscom
-
-com:
-	cvscom
-
-
+tar: ntidebug.asm nti.asm
+	tar cvhf nti.tar ntidebug.asm nti.asm Makefile \
+                 C/*.h C/data.gen C/*.c C/Makefile C/ymakefile-C C/xmakefile\
+                 GC/*.h GC/*.c GC/Makefile GC/ymakefile-GC GC/xmakefile
 
 ALWAYS:
 
