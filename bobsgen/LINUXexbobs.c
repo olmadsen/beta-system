@@ -83,7 +83,7 @@
 /* removed by JLK to please p2c: ,parsin,parsout,tables*/
 
 #define const1          2400
-#define const2          900
+#define const2          1200   /* datpete: 9/3/99 was 900 */
 #define const3          720
 
 #define const4          80000L   /* JLK: 17/6-95 was 40000 */
@@ -91,20 +91,23 @@
 #define const5          63
 #define const6          6000
 #define const7          20000
-#define const8          480   /* JLK: 17/6-95 was 240 */
+#define const8          600
+/* datpete 9/3/99: was 480 */
+/* JLK: 17/6-95 was 240 */
 #define const9          10000   /* ESS: 30/6-95 was 2000 */
 #define const10         7200
 #define const11         130
-#define const12         840
+#define const12         1500   /*datpete: 9/3/99: was 840 */
 #define const13         5
 #define const14         15
 #define const16         10000
 /*NOTICE: CONST16>CONST2*/
 /* JLK: 17/6-95 was 5000 */
 #define const18         75
-#define const19         12000   /*MAX SIZE OF ARRAY LABELBUF/ SUM OF LENGTH */
+#define const19         18000   /* datpete: 9/3/99: was 12000 */
+/* MAX SIZE OF ARRAY LABELBUF/ SUM OF LENGTH */
 /* OF ALL PRODUCTION LABELS (OPTIONS[34])   */
-#define const20         1200   /*max length of a production label */
+#define const20         1200   /* max length of a production label */
 
 #define minch           ' '
 #define maxch           '~'   /*THE FIRST/LAST CHAR IN TYPE CHAR*/
@@ -312,7 +315,7 @@ Static long splstart, spllen;
 Static FILE *spltab, *f1, *f2, *f3, *f4, *f5;
 
 
-Static Void initspl()
+Static void initspl(void)
 {
   if (spltab != NULL)
     spltab = freopen("spltab   ", "w", spltab);
@@ -325,16 +328,14 @@ Static Void initspl()
 }
 
 
-Static Void splch(ch)
-Char ch;
+Static void splch(Char ch)
 {
   spllen++;
   putc(ch, spltab);
 }
 
 
-Static Void syspl(sy)
-long sy;
+Static void syspl(long sy)
 {
   symbspl[sy].splstart = splstart;
   symbspl[sy].spllen = spllen;
@@ -343,8 +344,7 @@ long sy;
 }
 
 
-Static Void prspl(p)
-long p;
+Static void prspl(long p)
 {
   prodspl[p].splstart = splstart;
   prodspl[p].spllen = spllen;
@@ -353,8 +353,7 @@ long p;
 }
 
 
-Static Void spl(a)
-Char *a;
+Static void spl(Char *a)
 {
   long i;
 
@@ -365,8 +364,7 @@ Char *a;
 }
 
 
-Static Void spl20(a)
-Char *a;
+Static void spl20(Char *a)
 {
   long i;
 
@@ -377,8 +375,7 @@ Char *a;
 }
 
 
-Static Void tv(p)
-nontelm *p;
+Static void tv(nontelm *p)
 {
   if (p == NULL)
     return;
@@ -387,11 +384,11 @@ nontelm *p;
   spl(p->word1);
   spl(p->word2);
   spl(p->word3);
-  syspl((long)p->nontermvaerdi);
+  syspl(p->nontermvaerdi);
 }
 
 
-Static Void rosegram()
+Static void rosegram(void)
 {
   long l, p, i, c, abrhslen, corhslen, rhsinx, FORLIM;
   _REC_rhs *WITH;
@@ -508,7 +505,7 @@ Static Void rosegram()
 /******************** end ROSE *************************************/
 /*$L-*/
 
-Static Void initmax()
+Static void initmax(void)
 {
   long i;
 
@@ -517,15 +514,14 @@ Static Void initmax()
 }
 
 
-Static Void updatemax(cst, val)
-long cst, val;
+Static void updatemax(long cst, long val)
 {
   if (cstmax[cst - 1] < val)
     cstmax[cst - 1] = val;
 }
 
 
-Static Void printmax()
+Static void printmax(void)
 {
   long i;
 
@@ -618,14 +614,13 @@ Static Void printmax()
 }
 
 
-Static long clock()
+Static long clock(void)
 {
   return 0;
 }
 
 
-Static Void msg(m)
-Char *m;
+Static void msg(Char *m)
 {
   /* WRITES A MESSAGE IN THE KRONOS DAYFILE */
   /* THIS PROCEDURE MAY BEE REMOVED         */
@@ -633,9 +628,7 @@ Char *m;
 }
 
 
-Static Void writech(ch, no)
-Char ch;
-long no;
+Static void writech(Char ch, long no)
 {
   long i;
 
@@ -644,19 +637,17 @@ long no;
 }
 
 
-Static Char lf()
+Static Char lf(void)
 {
   putc('\n', blst);
   return ' ';
 }  /*LF*/
 
 
-Static Void allocate PP((pointer2 *p));
+Static void allocate(pointer2 *p);
 
 
-Static Void outalf(a, t)
-Char *a;
-long *t;
+Static void outalf(Char *a, long *t)
 {
   long i;
   Char STR1[256];
@@ -667,16 +658,14 @@ long *t;
   i = alfalength;
   while (a[i - 1] == ' ')
     i--;
-/* p2c: exbobs.p, line 418: Note:
+/* p2c: exbobs.p, line 419: Note:
  * Format for packed-array-of-char will work only if width < length [321] */
   fprintf(blst, "%.*s", (int)i, a);
   *t += i;
 }
 
 
-Static Void outalf20(a, t)
-Char *a;
-long *t;
+Static void outalf20(Char *a, long *t)
 {
   long i;
   Char STR1[256];
@@ -687,15 +676,14 @@ long *t;
   i = alfal20;
   while (a[i - 1] == ' ')
     i--;
-/* p2c: exbobs.p, line 428: Note:
+/* p2c: exbobs.p, line 429: Note:
  * Format for packed-array-of-char will work only if width < length [321] */
   fprintf(blst, "%.*s", (int)i, a);
   *t += i;
 }
 
 
-Static Void nontwrit(i, t)
-long i, *t;
+Static void nontwrit(long i, long *t)
 {
   nontelm *WITH;
 
@@ -725,8 +713,7 @@ long i, *t;
 }
 
 
-Static Void symbwrite(blst, i, t)
-long blst, i, *t;
+Static void symbwrite(long i, long *t)
 {
   if (i <= termg)
     outalf20(internrep[i + 1], t);
@@ -744,9 +731,8 @@ struct LOC_outgrammar {
   long altpos;
 } ;
 
-Local Void lfcheck(i, pos, max, indpos, LINK)
-long i, *pos, max, indpos;
-struct LOC_outgrammar *LINK;
+Local void lfcheck(long i, long *pos, long max, long indpos,
+		   struct LOC_outgrammar *LINK)
 {
   long j;
 
@@ -760,9 +746,7 @@ struct LOC_outgrammar *LINK;
   *pos = i + indpos;
 }
 
-Local Void writenont(n, pos, LINK)
-long n, *pos;
-struct LOC_outgrammar *LINK;
+Local void writenont(long n, long *pos, struct LOC_outgrammar *LINK)
 {
   long i, j;
   /*packed*/
@@ -789,33 +773,27 @@ struct LOC_outgrammar *LINK;
   i = alfalength * 3;
   while (c[i - 1] == ' ')
     i--;
-  lfcheck(i + 2, pos, (long)labelpos, LINK->altpos + 3, LINK);
+  lfcheck(i + 2, pos, labelpos, LINK->altpos + 3, LINK);
   putc('<', blst);
   for (j = 0; j < i; j++)
     putc(c[j], blst);
   putc('>', blst);
 }
 
-Local Void writeterm(t, pos, LINK)
-Char *t;
-long *pos;
-struct LOC_outgrammar *LINK;
+Local void writeterm(Char *t, long *pos, struct LOC_outgrammar *LINK)
 {
   long i, j;
 
   i = alfal20;
   while (t[i - 1] == ' ')
     i--;
-  lfcheck(i, pos, (long)labelpos, LINK->altpos + 3, LINK);
+  lfcheck(i, pos, labelpos, LINK->altpos + 3, LINK);
   for (j = 0; j < i; j++)
     putc(t[j], blst);
 }
 
-Local Void nextprod(lhs, rhsp, bobsno, seqno, LINK)
-long *lhs;
-pointer2 *rhsp;
-long *bobsno, *seqno;
-struct LOC_outgrammar *LINK;
+Local void nextprod(long *lhs, pointer2 *rhsp, long *bobsno, long *seqno,
+		    struct LOC_outgrammar *LINK)
 {
   long lhsi, k, FORLIM, FORLIM1;
 
@@ -845,7 +823,7 @@ _L10: ;
 
 /**********/
 
-Static Void outgrammar()
+Static void outgrammar(void)
 {
   struct LOC_outgrammar V;
   long lhs, bobsno, oldlhs, pos, symb, p, seqno, k, i;
@@ -904,7 +882,7 @@ Static Void outgrammar()
       FORLIM1 = WITH->first + WITH->length;
       for (k = WITH->first; k < FORLIM1; k++) {
 	pos++;
-	lfcheck(1L, &pos, (long)pagew, labelpos + 2L, &V);
+	lfcheck(1, &pos, pagew, labelpos + 2, &V);
 	putc(labelbuf[k], blst);
       }
     }
@@ -924,8 +902,7 @@ Static jmp_buf _JL999;
 
 
 
-Static Void stop(n)
-long n;
+Static void stop(long n)
 {
   /* ALL ABNORMAL TERMINATION IS THROUGH THIS PROCEDURE*/
   putc('\n', blst);
@@ -968,9 +945,7 @@ long n;
 }  /*STOP*/
 
 
-Static Void constval(c, r)
-long c;
-Char *r;
+Static void constval(long c, Char *r)
 {
   Char gem[21];
   long a, b, i, j;
@@ -986,7 +961,7 @@ Char *r;
   j = 10;
   do {
     b = a % 10;
-/* p2c: exbobs.p, line 598:
+/* p2c: exbobs.p, line 599:
  * Note: Using % for possibly-negative arguments [317] */
     a /= 10;
     gem[j] = (Char)(b + '0');
@@ -998,27 +973,24 @@ Char *r;
 }
 
 
-Static Void consterror(s1, s2, cc)
-Char *s1, *s2;
-long cc;
+Static void consterror(Char *s1, Char *s2, long cc)
 {
-  printf("!!!!! ERROR IN %.*s: %.*sTO SMALL (%ld)\n",
+  printf("!!!!! ERROR IN %.*s: %.*sTOO SMALL (%ld)\n",
 	 alfalength, s1, alfalength, s2, cc);
-  fprintf(blst, "\n\n***** ERROR IN %.*s: %.*sTO SMALL (%ld)",
+  fprintf(blst, "\n\n***** ERROR IN %.*s: %.*sTOO SMALL (%ld)",
 	  alfalength, s1, alfalength, s2, cc);
   /*     constval(cc,aa);
        m[1]:=s2; m[3]:=aa;
-       m[2]:=' TO SMALL '; m[4]:='          ';
+       m[2]:=' TOO SMALL '; m[4]:='          ';
        for i:=1 to 4 do
        for j:=1 to 10 do ms[(i-1)*10+j]:=m[i,j];
         writeln(ms); writeln(blst,ms);
    */
-  stop(0L);
+  stop(0);
 }
 
 
-Static Void allocate(p)
-pointer2 *p;
+Static void allocate(pointer2 *p)
 {
   /* VAR P:POINTER2 */
   if (*p >= const4)
@@ -1027,7 +999,7 @@ pointer2 *p;
 }  /*ALLOCATE*/
 
 
-Static Void initprod()
+Static void initprod(void)
 {
   pointer2 p;
   long k, i, l, FORLIM;
@@ -1041,7 +1013,7 @@ Static Void initprod()
     while (p != rhsnil) {
       k++;
       if (k > const1)
-	consterror("INITPROD  ", "CONST1    ", (long)const1);
+	consterror("INITPROD  ", "CONST1    ", const1);
       WITH = &prod[k];
       WITH->leftside = i;
       WITH->start = p;
@@ -1062,7 +1034,7 @@ D SIDE*/
 }
 
 
-Static Void dump1()
+Static void dump1(void)
 {
   long i;
   boolean sorted;
@@ -1091,7 +1063,7 @@ Static Void dump1()
 }
 
 
-Static Void dump2()
+Static void dump2(void)
 {
   pointer2 lqb;
   _REC_rhs *WITH;
@@ -1112,7 +1084,7 @@ Static Void dump2()
 }
 
 
-Static Void dump3()
+Static void dump3(void)
 {
   long i, FORLIM;
   _REC_husknonterm *WITH;
@@ -1130,7 +1102,7 @@ Static Void dump3()
 }
 
 
-Static Void dump4()
+Static void dump4(void)
 {
   long i, FORLIM;
 
@@ -1143,7 +1115,7 @@ Static Void dump4()
 }
 
 
-Static Void dump5()
+Static void dump5(void)
 {
   /* OPTION 16 */
   long i, t, FORLIM;
@@ -1165,14 +1137,14 @@ Static Void dump5()
     fprintf(blst, "%8d", WITH->laengde);
     fprintf(blst, "        ");
     if (i != 0)
-      nontwrit((long)WITH->leftside, &t);
+      nontwrit(WITH->leftside, &t);
     fputc(lf(), blst);
   }
   fprintf(blst, "%c%c", lf(), lf());
 }
 
 
-Static Void outterminal()
+Static void outterminal(void)
 {
   /* OUTPUT THE INTERN VALUES OF TERMINALS */
   long i, FORLIM;
@@ -1187,9 +1159,7 @@ Static Void outterminal()
 }  /*OUTTERMINAL*/
 
 
-Static Void newelm(top, rname)
-pointer2 *top;
-Char *rname;
+Static void newelm(pointer2 *top, Char *rname)
 {
   if (*top >= const4)
     consterror(rname, "CONST4    ", const4);
@@ -1197,8 +1167,7 @@ Char *rname;
 }  /*NEWELM*/
 
 
-Static Void matrixout(s)
-rtype *s;
+Static void matrixout(rtype *s)
 {
   long i, j, FORLIM, FORLIM1;
 
@@ -1209,11 +1178,11 @@ rtype *s;
     fprintf(blst, "%c ", lf());
     FORLIM1 = nontslut;
     for (j = 0; j <= FORLIM1; j++) {
-      if (P_inset((int)(j % (setmax + 1)), s[i].r[j / (setmax + 1)]))
+      if (P_inset(j % (setmax + 1), s[i].r[j / (setmax + 1)]))
 	putc('1', blst);
       else
 	putc('0', blst);
-/* p2c: exbobs.p, line 763:
+/* p2c: exbobs.p, line 764:
  * Note: Using % for possibly-negative arguments [317] */
     }
   }
@@ -1221,7 +1190,7 @@ rtype *s;
 }
 
 
-Static Void inithelp()
+Static void inithelp(void)
 {
   long i, symb;
 
@@ -1236,8 +1205,7 @@ Static Void inithelp()
 }
 
 
-Static Void skrivparser(p)
-konfigt *p;
+Static void skrivparser(konfigt *p)
 {
   /*  PROCEDURE TIL TEST AF GENERERET PARSER   */
   long t, i;
@@ -1284,7 +1252,7 @@ konfigt *p;
 	    putc(' ', blst);
 	    outalf20(internrep[WITH->UU.U1.inf + 1], &dummy);
 	  } else
-	    nontwrit((long)WITH->UU.U1.inf, &dummy);
+	    nontwrit(WITH->UU.U1.inf, &dummy);
 	}
       }
       fputc(lf(), blst);
@@ -1295,10 +1263,7 @@ konfigt *p;
 }  /*SKRIVPARSER*/
 
 
-Static Void allocp(p, m, a)
-konfigt **p;
-long m;
-Char *a;
+Static void allocp(konfigt **p, long m, Char *a)
 {
   if (freeptr != NULL) {
     *p = freeptr;
@@ -1307,15 +1272,15 @@ Char *a;
     switch (m) {
 
     case 1:   /* changed by JLK to please p2c: new(p,1); */
-      *p = (konfigt *)Malloc(sizeof(konfigt));
+      *p = Malloc(sizeof(konfigt));
       break;
 
     case 5:   /* changed by JLK to please p2c: new(p,5); */
-      *p = (konfigt *)Malloc(sizeof(konfigt));
+      *p = Malloc(sizeof(konfigt));
       break;
     }
     if (*p == NULL)
-      consterror(a, "CONST6    ", (long)const6);
+      consterror(a, "CONST6    ", const6);
     seqIndex++;
     (*p)->seq = seqIndex;   /* line added by jlk to solve Linux problem */
   }
@@ -1323,7 +1288,7 @@ Char *a;
 }  /*ALLOCP*/
 
 
-Static Void initempty()
+Static void initempty(void)
 {
   long pn, rhsinx, j;
   boolean empty, changes;
@@ -1367,8 +1332,7 @@ Static Void initempty()
 
 
 
-Static Void remember(p)
-konfigt *p;
+Static void remember(konfigt *p)
 {
   /* REMEMBER IS USED TO COUNT THE
      FREQUENCY OF HOW OFTEN
@@ -1386,16 +1350,14 @@ konfigt *p;
   }
   fcqi++;
   if (fcqi > const3)
-    consterror(" REMEMBER ", "CONST3    ", (long)const3);
+    consterror(" REMEMBER ", "CONST3    ", const3);
   fcq[fcqi - 1].udgang = p;
   fcq[fcqi - 1].frekvens = 1;
 _L5: ;
 }
 
 
-Static Void optimize(maxnextp, md)
-konfigt **maxnextp;
-long *md;
+Static void optimize(konfigt **maxnextp, long *md)
 {
   /* OPTIMIZE FINDS THE NEXTP,WHICH IS MOST OFTEN USED IN
      THE STATE,AND DELETES THE STATEELEMENTS WHERE IT OCCURS*/
@@ -1453,8 +1415,7 @@ _L10:
 }
 
 
-Static Void timecheck(a)
-Char *a;
+Static void timecheck(Char *a)
 {
   dayfilemsg m;
   long i;
@@ -1473,14 +1434,13 @@ Char *a;
 }  /* TIMECHECK */
 
 
-Local long heap()
+Local long heap(void)
 {
   return 777;
 }
 
 
-Static Void heapcheck(a)
-Char *a;
+Static void heapcheck(Char *a)
 {
   dayfilemsg m;
   long i;
@@ -1498,9 +1458,7 @@ Char *a;
 }  /* HEAPCHECK */
 
 
-Static Void constcheck(a, c1, c2)
-Char *a;
-long c1, c2;
+Static void constcheck(Char *a, long c1, long c2)
 {
   dayfilemsg m;
   alfa_ b1, b2;
@@ -1519,15 +1477,14 @@ long c1, c2;
 }  /* CONSTCHECK */
 
 
-Static Void writem(pnr, dot)
-long pnr, dot;
+Static void writem(long pnr, long dot)
 {
   long t, i, FORLIM;
 
   fflush(blst);
   P_ioresult = 0;
   t = 0;
-  nontwrit((long)prod[pnr].leftside, &t);
+  nontwrit(prod[pnr].leftside, &t);
   fprintf(blst, " ::= ");
   t += 5;
   FORLIM = prod[pnr].laengde;
@@ -1539,7 +1496,7 @@ long pnr, dot;
     if (rhs[i + prod[pnr].start].symbol_ <= termg)
       outalf20(internrep[rhs[i + prod[pnr].start].symbol_ + 1], &t);
     else
-      nontwrit((long)rhs[i + prod[pnr].start].symbol_, &t);
+      nontwrit(rhs[i + prod[pnr].start].symbol_, &t);
     putc(' ', blst);
   }
   if (dot == 0 || dot == prod[pnr].laengde + 1)
@@ -1578,14 +1535,12 @@ struct LOC_ingrammar {
   long i;
 } ;
 
-Local Void gramerror PP((long a, struct LOC_ingrammar *LINK));
-Local Void inch PP((struct LOC_ingrammar *LINK));
-Local Void space PP((struct LOC_ingrammar *LINK));
-Local Void nterminal PP((Char *meta, struct LOC_ingrammar *LINK));
+Local void gramerror(long a, struct LOC_ingrammar *LINK);
+Local void inch(struct LOC_ingrammar *LINK);
+Local void space(struct LOC_ingrammar *LINK);
+Local void nterminal(Char *meta, struct LOC_ingrammar *LINK);
 
-Local boolean testch(ch1, ch2, LINK)
-Char ch1, ch2;
-struct LOC_ingrammar *LINK;
+Local boolean testch(Char ch1, Char ch2, struct LOC_ingrammar *LINK)
 {
   /* USED BY TERMINPUT AND TERMINAL */
   return ((LINK->chgroup[ch1] == LINK->chgroup[ch2] &&
@@ -1596,11 +1551,7 @@ struct LOC_ingrammar *LINK;
   /*TRUE- IF OPTIONS[5] AND CH1,CH2<>SEP */
 }  /*TESTCH*/
 
-Local Void pack(b, inx, a, LINK)
-Char *b;
-long inx;
-Char *a;
-struct LOC_ingrammar *LINK;
+Local void pack(Char *b, long inx, Char *a, struct LOC_ingrammar *LINK)
 {
   long i;
 
@@ -1618,9 +1569,7 @@ struct LOC_terminput {
 } ;
 
 
-Local Void inputerror(nr, LINK)
-long nr;
-struct LOC_terminput *LINK;
+Local void inputerror(long nr, struct LOC_terminput *LINK)
 {
   /* ERROR-PROCEDURE LOCAL FOR TERMINPUT*/
   if (nr & 1)
@@ -1636,7 +1585,7 @@ struct LOC_terminput *LINK;
     break;
 
   case 3:
-    consterror("TERMINPUT ", "CONST12   ", (long)const12);
+    consterror("TERMINPUT ", "CONST12   ", const12);
     break;
 
   case 6:
@@ -1649,7 +1598,7 @@ struct LOC_terminput *LINK;
     break;
 
   case 7:
-    consterror("TERMINPUT ", "CONST2    ", (long)const2);
+    consterror("TERMINPUT ", "CONST2    ", const2);
     break;
 
   case 4:
@@ -1678,18 +1627,17 @@ struct LOC_terminput *LINK;
   /*  VED ULIGE NR. HELT UD- ELLERS HUSK FEJLEN    */
   fprintf(blst, "%c          ", lf());
   if (nr & 1)
-    stop(0L);
+    stop(0);
 }
 
-Local Void fresh(LINK)
-struct LOC_terminput *LINK;
+Local void fresh(struct LOC_terminput *LINK)
 {
   /* NY CELLE I TERMTREE ALLOCERES OG INITIALISERES   */
   termelm *WITH;
 
-  termtop = (termelm *)Malloc(sizeof(termelm));
+  termtop = Malloc(sizeof(termelm));
   if (termtop == NULL)
-    inputerror(3L, LINK);
+    inputerror(3, LINK);
   WITH = termtop;
   WITH->ok = false;
   WITH->tegn = ch;
@@ -1699,22 +1647,20 @@ struct LOC_terminput *LINK;
   trmax++;   /*USED IN PROCEDURE FINALPARSER*/
 }
 
-Local long newTermNo(LINK)
-struct LOC_terminput *LINK;
+Local long newTermNo(struct LOC_terminput *LINK)
 {
   /* allocate new terminal number */
   if (!LINK->noNewTerm) {   /* skip */
     if (termantal < const2)
       termantal++;
     else
-      inputerror(7L, LINK);
+      inputerror(7, LINK);
   }
   LINK->noNewTerm = false;
   return termantal;
 }
 
-Local Void terminput(LINK)
-struct LOC_ingrammar *LINK;
+Local void terminput(struct LOC_ingrammar *LINK)
 {
   struct LOC_terminput V;
   /*INDLAESNING AF TERMINALER ADSKILT MED SPACE EL. EOL
@@ -1763,7 +1709,7 @@ struct LOC_ingrammar *LINK;
     inch(LINK);
   while (ch != LINK->metasymbol[3]) {
     if (ch != LINK->metasymbol[4])
-      inputerror(8L, &V);
+      inputerror(8, &V);
     inch(LINK);
     i = 0;
     /*   LQKKE -SAALAENGE NAESTE CHAR-VAERDI GODKENDT   */
@@ -1774,9 +1720,9 @@ struct LOC_ingrammar *LINK;
 	  goto _L100;
       }
       if ((i > 0) & (!testch(c[i - 1], ch, LINK)))
-	inputerror(9L, &V);
+	inputerror(9, &V);
       if (i == alfal20 && !options[3])
-	inputerror(6L, &V);
+	inputerror(6, &V);
       if (i < alfal20) {
 	i++;
 	c[i - 1] = ch;
@@ -1820,7 +1766,7 @@ _L10:
     } while (true);
 _L100:
     if (i == 0)
-      inputerror(10L, &V);
+      inputerror(10, &V);
     /* ch = ' ' or m[4] */
     if (ch == ' ' || ch == LINK->metasymbol[3]) {
       if (options[2] && ch == ' ') {
@@ -1839,7 +1785,7 @@ _L12:   /*GOTO 12 LIG NY TERMINAL IKKE NYT NUMMER*/
       if (i == 1) {
 	WITH = &entry_[c[0]];
 	if (WITH->ok1) {
-	  inputerror(2L, &V);
+	  inputerror(2, &V);
 	  goto _L14;
 	}
 	WITH->intern1 = newTermNo(&V);
@@ -1847,7 +1793,7 @@ _L12:   /*GOTO 12 LIG NY TERMINAL IKKE NYT NUMMER*/
 	WITH->ok1 = true;
       } else {
 	if (gemp->ok) {
-	  inputerror(2L, &V);
+	  inputerror(2, &V);
 	  goto _L14;
 	}
 	gemp->intern = newTermNo(&V);
@@ -1890,7 +1836,7 @@ _L12:   /*GOTO 12 LIG NY TERMINAL IKKE NYT NUMMER*/
       memcpy(internrep[termantal + 1], alfac, sizeof(alfa20));
 _L14: ;   /* OLM 11.4.93 */
     } else
-      inputerror(4L, &V);
+      inputerror(4, &V);
 _L22:
     while (ch == ' ')
       inch(LINK);
@@ -1901,7 +1847,7 @@ _L22:
   if (options[0])
     outterminal();
   if (V.stoperror)
-    stop(2L);
+    stop(2);
 }
 
 /* Local variables for terminal: */
@@ -1909,9 +1855,7 @@ struct LOC_terminal {
   struct LOC_ingrammar *LINK;
 } ;
 
-Local Void inputerror_(nr, LINK)
-long nr;
-struct LOC_terminal *LINK;
+Local void inputerror_(long nr, struct LOC_terminal *LINK)
 {
   /*  ERROR-PROC. LOCAL FOR TERMINAL    */
   errorboo = true;
@@ -1923,24 +1867,22 @@ struct LOC_terminal *LINK;
 
   case 1:
     fprintf(blst, "*** Empty terminal symbol\n\n");
-    gramerror(23L, LINK->LINK);
+    gramerror(23, LINK->LINK);
     break;
 
   case 2:
     fprintf(blst, "*** Fatal system error: illegal call of terminal\n\n");
-    gramerror(23L, LINK->LINK);
+    gramerror(23, LINK->LINK);
     break;
 
   case 3:
     fprintf(blst, "***  Illegal terminal symbol\n\n");
-    gramerror(23L, LINK->LINK);   /*GOTO88;*/
+    gramerror(23, LINK->LINK);   /*GOTO88;*/
     break;
   }
 }
 
-Local boolean metach(ch, LINK)
-Char ch;
-struct LOC_terminal *LINK;
+Local boolean metach(Char ch, struct LOC_terminal *LINK)
 {
   boolean b;
   long j;
@@ -1953,8 +1895,7 @@ struct LOC_terminal *LINK;
 
 
 /*----------------------------------------------------------*/
-Local Void terminal(LINK)
-struct LOC_ingrammar *LINK;
+Local void terminal(struct LOC_ingrammar *LINK)
 {
   /* KALDES MED CHAR-VALUE I CH; LEVERER I TERMREP DEN INTERNE
      REPRAESENTATION AF NAESTE TERMINAL PAA INPUT-
@@ -1972,7 +1913,7 @@ struct LOC_ingrammar *LINK;
   while (ch == ' ')
     inch(LINK);
   if (ch != LINK->metasymbol[4])
-    inputerror_(2L, &V);
+    inputerror_(2, &V);
   inch(LINK);
   LINK->i = 0;
   do {
@@ -2013,7 +1954,7 @@ _L66:
    * for j:=1 to i do write(blst,buf[j]); write(blst,'"=');
    */
   if (LINK->i == 0)
-    inputerror_(1L, &V);
+    inputerror_(1, &V);
   if (LINK->i == 1) {
     WITH = &entry_[buf[0]];
     if (!WITH->ok1)
@@ -2026,13 +1967,11 @@ _L66:
   }
   goto _L88;
 _L77:
-  inputerror_(3L, &V);
+  inputerror_(3, &V);
 _L88: ;   /*writeln(blst,termrep)*/
 }
 
-Local Void fejl(i, LINK)
-long i;
-struct LOC_ingrammar *LINK;
+Local void fejl(long i, struct LOC_ingrammar *LINK)
 {
   fputc(lf(), blst);
   if ((unsigned long)i >= 32 || ((1L << i) & 0x3300) == 0)
@@ -2065,7 +2004,7 @@ struct LOC_ingrammar *LINK;
     break;
 
   case 7:
-    consterror("INGRAMMAR ", "CONST2    ", (long)const2);
+    consterror("INGRAMMAR ", "CONST2    ", const2);
     break;
 
   case 8:
@@ -2106,7 +2045,7 @@ struct LOC_ingrammar *LINK;
     break;
 
   case 14:
-    consterror("INGRAMMAR ", "CONST11   ", (long)const11);
+    consterror("INGRAMMAR ", "CONST11   ", const11);
     break;
 
   case 15:
@@ -2147,15 +2086,13 @@ struct LOC_ingrammar *LINK;
     nboo2 = true;
   else {
     if ((unsigned long)i >= 32 || ((1L << i) & 0xdb300L) == 0)
-      stop(0L);
+      stop(0);
   }
   options[7] = false;
 }
 
 
-Local Void gramerror(a, LINK)
-long a;
-struct LOC_ingrammar *LINK;
+Local void gramerror(long a, struct LOC_ingrammar *LINK)
 {
   if (a < 23)   /*NOT CALLED FROM TERMINAL*/
     fejl(a, LINK);
@@ -2165,8 +2102,7 @@ struct LOC_ingrammar *LINK;
 }
 
 
-Local Void goalsymb(LINK)
-struct LOC_ingrammar *LINK;
+Local void goalsymb(struct LOC_ingrammar *LINK)
 {
   /* PROCEDUREN LAESER GOALSYMBOLKORTET*/
   long i;
@@ -2175,23 +2111,22 @@ struct LOC_ingrammar *LINK;
     LINK->buffer[i] = s;
     space(LINK);
   }
-  pack(LINK->buffer, 1L, LINK->alfav, LINK);
+  pack(LINK->buffer, 1, LINK->alfav, LINK);
   if (!strncmp(LINK->alfav, "GOALSYMBOL", sizeof(alfa_))) {
     if (s == '=') {
       nterminal(&LINK->metasymbol[3], LINK);
       goalhusk = count;
     } else
-      fejl(2L, LINK);
+      fejl(2, LINK);
   } else
-    fejl(3L, LINK);
+    fejl(3, LINK);
   goaltest = true;
   nboo1 = false;
   space(LINK);
 }
 
 
-Local Void goalprod(LINK)
-struct LOC_ingrammar *LINK;
+Local void goalprod(struct LOC_ingrammar *LINK)
 {
   /* INDSAETTELSE AF GOALPRODUKTIONEN*/
   long i;
@@ -2222,8 +2157,7 @@ struct LOC_ingrammar *LINK;
   point = huskp;
 }
 
-Local Void nontmeta(LINK)
-struct LOC_ingrammar *LINK;
+Local void nontmeta(struct LOC_ingrammar *LINK)
 {
   /* read the terminal symbols used to delimit nonterminals*/
   /* when parsing sentential forms */
@@ -2236,7 +2170,7 @@ struct LOC_ingrammar *LINK;
     space(LINK);
   }
   if (strncmp(buf, "NONTERMINAL=", 12)) {
-    gramerror(23L, LINK);
+    gramerror(23, LINK);
     return;
   }
   ch = s;
@@ -2247,7 +2181,7 @@ struct LOC_ingrammar *LINK;
   else
     space(LINK);
   if (ch != LINK->metasymbol[3]) {
-    gramerror(23L, LINK);
+    gramerror(23, LINK);
     return;
   }
   space(LINK);
@@ -2259,13 +2193,12 @@ struct LOC_ingrammar *LINK;
   else
     space(LINK);
   if (s != LINK->metasymbol[3])
-    gramerror(23L, LINK);
+    gramerror(23, LINK);
   else
     space(LINK);
 }
 
-Local Void comment(LINK)
-struct LOC_ingrammar *LINK;
+Local void comment(struct LOC_ingrammar *LINK)
 {
   /* THE PROCEDURE READS THE COMMENT CARD IF ANY */
   /*packed*/
@@ -2277,7 +2210,7 @@ struct LOC_ingrammar *LINK;
     space(LINK);
   }
   if (strncmp(buf, "COMMENT=", 8)) {
-    gramerror(22L, LINK);
+    gramerror(22, LINK);
     return;
   }
   ch = s;
@@ -2288,13 +2221,13 @@ struct LOC_ingrammar *LINK;
   else
     space(LINK);
   if (s != LINK->metasymbol[3]) {
-    gramerror(20L, LINK);
+    gramerror(20, LINK);
     return;
   }
   i = 1;
   space(LINK);
   if (s != LINK->metasymbol[4])
-    fejl(24L, LINK);
+    fejl(24, LINK);
   space(LINK);
   while (s != LINK->metasymbol[4] && i <= alfalength) {
     comend[i - 1] = s;
@@ -2304,14 +2237,13 @@ struct LOC_ingrammar *LINK;
   comlength = i - 1;
   space(LINK);
   if (s != LINK->metasymbol[3])
-    gramerror(21L, LINK);
+    gramerror(21, LINK);
   else
     space(LINK);
 }
 
 
-Local Void dumpnonterminternrep(LINK)
-struct LOC_ingrammar *LINK;
+Local void dumpnonterminternrep(struct LOC_ingrammar *LINK)
 {
   if (!options[5])
     return;
@@ -2322,13 +2254,12 @@ struct LOC_ingrammar *LINK;
   nterminal(&LINK->metasymbol[2], LINK);
 }
 
-Local Void inch(LINK)
-struct LOC_ingrammar *LINK;
+Local void inch(struct LOC_ingrammar *LINK)
 {
   if (P_eof(stdin)) {
     ch = ' ';
     if (LINK->eofflag)
-      fejl(1L, LINK);
+      fejl(1, LINK);
     else
       longjmp(LINK->_JL7777, 1);
     return;
@@ -2348,8 +2279,7 @@ struct LOC_ingrammar *LINK;
     putc(ch, blst);
 }  /*INCH*/
 
-Local Void space(LINK)
-struct LOC_ingrammar *LINK;
+Local void space(struct LOC_ingrammar *LINK)
 {
   do {
     inch(LINK);
@@ -2358,9 +2288,7 @@ struct LOC_ingrammar *LINK;
 }
 
 
-Local Void laes(a, LINK)
-long *a;
-struct LOC_ingrammar *LINK;
+Local void laes(long *a, struct LOC_ingrammar *LINK)
 {
   long i;
 
@@ -2377,8 +2305,7 @@ struct LOC_ingrammar *LINK;
 }
 
 
-Local Void stringdef(LINK)
-struct LOC_ingrammar *LINK;
+Local void stringdef(struct LOC_ingrammar *LINK)
 {
   /*packed*/
   Char buf[9];
@@ -2391,9 +2318,9 @@ struct LOC_ingrammar *LINK;
   if (!strncmp(buf, "STRINGCH=", 9))
     stringch = s;
   else
-    fejl(17L, LINK);
+    fejl(17, LINK);
   if (entry_[stringch].ok1 == false)
-    fejl(9L, LINK);
+    fejl(9, LINK);
   space(LINK);
   if (s == LINK->metasymbol[3])
     space(LINK);
@@ -2408,14 +2335,13 @@ struct LOC_nterminal {
   long i;
 } ;
 
-Local Void nextword(LINK)
-struct LOC_nterminal *LINK;
+Local void nextword(struct LOC_nterminal *LINK)
 {
   long i;
 
   space(LINK->LINK);
   if (s == LINK->LINK->metasymbol[2]) {
-    gramerror(12L, LINK->LINK);
+    gramerror(12, LINK->LINK);
     error1 = true;
     goto _L26;
   }
@@ -2428,15 +2354,14 @@ struct LOC_nterminal *LINK;
   }
   for (i--; i <= 29; i++)
     LINK->LINK->buffer[i] = ' ';
-  pack(LINK->LINK->buffer, 1L, LINK->alfa1, LINK->LINK);
-  pack(LINK->LINK->buffer, 11L, LINK->alfa2, LINK->LINK);
-  pack(LINK->LINK->buffer, 21L, LINK->alfa3, LINK->LINK);
+  pack(LINK->LINK->buffer, 1, LINK->alfa1, LINK->LINK);
+  pack(LINK->LINK->buffer, 11, LINK->alfa2, LINK->LINK);
+  pack(LINK->LINK->buffer, 21, LINK->alfa3, LINK->LINK);
 _L26: ;
   /*END NEXTWORD*/
 }
 
-Local Void visitnode(p)
-nontelm *p;
+Local void visitnode(nontelm *p)
 {
   fprintf(blst, " %.*s%.*s%.*s",
 	  alfalength, p->word1, alfalength, p->word2, alfalength, p->word3);
@@ -2446,9 +2371,7 @@ nontelm *p;
 
 
 
-Local Void udord(p, LINK)
-nontelm *p;
-struct LOC_nterminal *LINK;
+Local void udord(nontelm *p, struct LOC_nterminal *LINK)
 {
   if (p == NULL)
     return;
@@ -2458,8 +2381,7 @@ struct LOC_nterminal *LINK;
 }
 
 
-Local Void indord(LINK)
-struct LOC_nterminal *LINK;
+Local void indord(struct LOC_nterminal *LINK)
 {
   nontelm *WITH;
 
@@ -2502,9 +2424,9 @@ struct LOC_nterminal *LINK;
   }
   if (!LINK->boo)
     return;
-  statp = (nontelm *)Malloc(sizeof(nontelm));
+  statp = Malloc(sizeof(nontelm));
   if (statp == NULL)
-    fejl(14L, LINK->LINK);
+    fejl(14, LINK->LINK);
   WITH = statp;
   memcpy(WITH->word1, LINK->alfa1, sizeof(alfa_));
   memcpy(WITH->word2, LINK->alfa2, sizeof(alfa_));
@@ -2514,7 +2436,7 @@ struct LOC_nterminal *LINK;
   WITH->nontermvaerdi = internv;
   count = internv;
   if (internv >= const2)
-    fejl(7L, LINK->LINK);
+    fejl(7, LINK->LINK);
   internv++;
   husknonterm[count].nontermp = statp;
   WITH = last;
@@ -2540,9 +2462,7 @@ struct LOC_nterminal *LINK;
 
 
 
-Local Void nterminal(meta_, LINK)
-Char *meta_;
-struct LOC_ingrammar *LINK;
+Local void nterminal(Char *meta_, struct LOC_ingrammar *LINK)
 {
   struct LOC_nterminal V;
   nontelm *WITH;
@@ -2555,7 +2475,7 @@ struct LOC_ingrammar *LINK;
   }
   if (nontermboo) {
     nextword(&V);
-    first = (nontelm *)Malloc(sizeof(nontelm));
+    first = Malloc(sizeof(nontelm));
     WITH = first;
     memcpy(WITH->word1, V.alfa1, sizeof(alfa_));
     memcpy(WITH->word2, V.alfa2, sizeof(alfa_));
@@ -2575,24 +2495,23 @@ struct LOC_ingrammar *LINK;
 }
 
 
-Local Void metasymb(LINK)
-struct LOC_ingrammar *LINK;
+Local void metasymb(struct LOC_ingrammar *LINK)
 {
   /* METASYMB LAESER ET KORT MED FQLGENDE UDSEENDE : */
   /*  METAVARIABLE M1=   M2=  M3=  M4=  M5= */
   count = 11;
   laes(&count, LINK);
-  pack(LINK->buffer, 1L, LINK->alfav, LINK);
+  pack(LINK->buffer, 1, LINK->alfav, LINK);
   if (strncmp(LINK->alfav, LINK->metavar, sizeof(alfa_)))
   {  /*METAVARIABLE GENKENDT*/
-    fejl(6L, LINK);
+    fejl(6, LINK);
     return;
   }
   j = 1;
   while (j <= 5) {
     count = 3;
     laes(&count, LINK);
-    pack(LINK->buffer, 1L, LINK->alfav, LINK);
+    pack(LINK->buffer, 1, LINK->alfav, LINK);
     if (!strncmp(LINK->m[j], LINK->alfav, sizeof(alfa_))) {
       LINK->metasymbol[j - 1] = s;
       LINK->i = j;
@@ -2600,20 +2519,19 @@ struct LOC_ingrammar *LINK;
 	while (LINK->i > 1) {
 	  LINK->i--;
 	  if (s == LINK->metasymbol[LINK->i - 1])
-	    fejl(10L, LINK);
+	    fejl(10, LINK);
 	}
       }
       j++;
     } else
-      fejl(5L, LINK);
+      fejl(5, LINK);
     if (j <= 5)
       space(LINK);
   }
 }
 
 
-Local Void init(LINK)
-struct LOC_ingrammar *LINK;
+Local void init(struct LOC_ingrammar *LINK)
 {
   Char c;
   long i;
@@ -2670,8 +2588,7 @@ struct LOC_ingrammar *LINK;
   nontr = -1;
 }  /*INIT*/
 
-Local Void enter(no)
-long no;
+Local void enter(long no)
 {
   long i;
 
@@ -2683,10 +2600,7 @@ long no;
     nolooki++;
 }
 
-Local long findlabel(lab, labellength, LINK)
-Char *lab;
-long labellength;
-struct LOC_ingrammar *LINK;
+Local long findlabel(Char *lab, long labellength, struct LOC_ingrammar *LINK)
 {
   long Result, i, j, k, no;
   pointer2 p;
@@ -2712,7 +2626,7 @@ struct LOC_ingrammar *LINK;
 	    boo = (labelbuf[k + j] == lab[j] && boo);
 	  if (boo) {
 	    Result = rhs[p].first;
-	    enter((long)rhs[p].first);
+	    enter(rhs[p].first);
 	    no++;
 	  }
 	}
@@ -2725,21 +2639,19 @@ struct LOC_ingrammar *LINK;
 	    lf(), (int)labellength, lab, lf());
     Result = -1;
   }
-/* p2c: exbobs.p, line 1817: Note:
+/* p2c: exbobs.p, line 1818: Note:
  * Format for packed-array-of-char will work only if width < length [321] */
   if (no > 1) {
     fprintf(blst, "%cLABEL DECLARED MORE THAN ONCE: %.*s%c",
 	    lf(), (int)labellength, lab, lf());
     return -1;
   }
-/* p2c: exbobs.p, line 1822: Note:
+/* p2c: exbobs.p, line 1823: Note:
  * Format for packed-array-of-char will work only if width < length [321] */
   return Result;
 }
 
-Local Void readlabel(pt, LINK)
-long pt;
-struct LOC_ingrammar *LINK;
+Local void readlabel(long pt, struct LOC_ingrammar *LINK)
 {
   long lo, i;
   alfa_ sa;
@@ -2753,7 +2665,7 @@ struct LOC_ingrammar *LINK;
   if (options[32]) {
     /* use the input seqNo as the first part of the label */
     if (linx + 15 > const19)
-      consterror("READLABEL ", "CONST19   ", (long)const19);
+      consterror("READLABEL ", "CONST19   ", const19);
     constval(prodseqno, sa);
     i = 2;
     while (sa[i - 1] != ')') {
@@ -2774,7 +2686,7 @@ struct LOC_ingrammar *LINK;
       inch(LINK);
       s = ch;
       if (linx + 1 >= const19)
-	consterror("READLABEL ", "CONST19   ", (long)const19);
+	consterror("READLABEL ", "CONST19   ", const19);
     }
   }
   if (linx - lo > const20) {
@@ -2790,9 +2702,7 @@ struct LOC_readspecialpurposeinput {
   struct LOC_ingrammar *LINK;
 } ;
 
-Local Void readalfa(a, LINK)
-Char *a;
-struct LOC_readspecialpurposeinput *LINK;
+Local void readalfa(Char *a, struct LOC_readspecialpurposeinput *LINK)
 {
   long i;
 
@@ -2809,8 +2719,7 @@ struct LOC_readspecialpurposeinput *LINK;
   }  /* WHILE */
 }  /* READALFA */
 
-Local boolean valid(ch)
-Char ch;
+Local boolean valid(Char ch)
 {
   /* valid */
   return (ch == '*' || ch == '_' || ch == '/' || ch == '-' || isalnum(ch));
@@ -2818,10 +2727,8 @@ Char ch;
            ((ch >= chr(ord('A')+40B)) AND (ch <= chr(ord('Z')+40B))); */
 }
 
-Local Void readlabel_(lab, l, LINK)
-Char *lab;
-long *l;
-struct LOC_readspecialpurposeinput *LINK;
+Local void readlabel_(Char *lab, long *l,
+		      struct LOC_readspecialpurposeinput *LINK)
 {
   long i;
 
@@ -2836,8 +2743,7 @@ struct LOC_readspecialpurposeinput *LINK;
   *l = i - 1;
 }
 
-Local Void readspecialpurposeinput(LINK)
-struct LOC_ingrammar *LINK;
+Local void readspecialpurposeinput(struct LOC_ingrammar *LINK)
 {
   struct LOC_readspecialpurposeinput V;
   labelarr lab;
@@ -2878,7 +2784,7 @@ struct LOC_ingrammar *LINK;
 
 
 
-Static Void ingrammar()
+Static void ingrammar(void)
 {
   struct LOC_ingrammar V;
   alfa_ buf;
@@ -2894,7 +2800,7 @@ Static Void ingrammar()
     /* OPTIONS INDLAESES */
     do {
       if (s == 'M') {
-	fejl(15L, &V);
+	fejl(15, &V);
 	goto _L111;
       }
       space(&V);
@@ -2910,7 +2816,7 @@ Static Void ingrammar()
 	  space(&V);
 	} while (s >= '0' && s <= '9');
 	if (optno > const18)
-	  fejl(16L, &V);
+	  fejl(16, &V);
 	else
 	  options[optno - 1] = !options[optno - 1];
       } else {
@@ -2992,7 +2898,7 @@ _L111: ;
   help[nontstart].rightp = top;
   termantal++;
   if (termantal >= const2)
-    consterror("INGRAMMAR ", "CONST2    ", (long)const2);
+    consterror("INGRAMMAR ", "CONST2    ", const2);
   internv = termantal;
   goalhusk = termantal;
       /*this should be the goalsymb if no GOALCARD is def*/
@@ -3034,7 +2940,7 @@ _L13:
       metasymb(&V);
     else {
       if (s != V.metasymbol[2]) {
-	gramerror(12L, &V);
+	gramerror(12, &V);
 	goto _L13;
       }
       /* NY VENSTRE SIDE*/
@@ -3059,7 +2965,7 @@ _L13:
       space(&V);
       venstreboo = false;
       if (s != V.metasymbol[0]) {
-	gramerror(13L, &V);
+	gramerror(13, &V);
 	goto _L13;
       }
       readlabel(helpp, &V);
@@ -3067,11 +2973,11 @@ _L13:
 _L10:
       if (s == V.metasymbol[1]) {  /*END OF ALTERNATIVE/BEGINNING OF NEXT*/
 	if (tal == 0) {
-	  gramerror(8L, &V);
+	  gramerror(8, &V);
 	  goto _L13;
 	}
 	if (emptyboo && tal > 1)
-	  fejl(4L, &V);
+	  fejl(4, &V);
 	emptyboo = false;
 	rhs[helpp].basisl = tal;
 	tal = 0;
@@ -3092,7 +2998,7 @@ _L10:
 	}
 	tal++;
 	if (tal > 15) {
-	  gramerror(19L, &V);
+	  gramerror(19, &V);
 	  goto _L13;
 	}
 	husknonterm[count].rightboo = true;
@@ -3118,7 +3024,7 @@ _L10:
 	rhs[point].link = rhsnil;
 	tal++;
 	if (tal > 15) {
-	  gramerror(19L, &V);
+	  gramerror(19, &V);
 	  goto _L13;
 	}
 	rhs[point].symbol_ = termrep;
@@ -3132,11 +3038,11 @@ _L10:
 	goto _L10;
       }
       if (tal == 0) {
-	gramerror(8L, &V);
+	gramerror(8, &V);
 	goto _L13;
       }
       if (emptyboo && tal > 1)
-	fejl(4L, &V);
+	fejl(4, &V);
       emptyboo = false;
       rhs[helpp].basisl = tal;
       lefthelp[husk[k - 2]] = huskp;
@@ -3148,7 +3054,7 @@ _L10:
   fprintf(blst,
     "\n\n*********************************  END OF LIST ****************************\n\n\n");
   if (errorboo)
-    stop(2L);
+    stop(2);
 
   if (options[5])
     dumpnonterminternrep(&V);
@@ -3160,7 +3066,7 @@ _L7777: ;
 #undef maxopt
 
 
-Static Void unused()
+Static void unused(void)
 {
   long i, FORLIM;
   _REC_husknonterm *WITH;
@@ -3196,7 +3102,7 @@ Static Void unused()
   }
   nontslut = internv - 1;
   if (nboo2) {
-    stop(3L);
+    stop(3);
     return;
   }
   fprintf(blst, "\nIT HAS BEEN CHECKED THAT ALL NONTERMINALS\n");
@@ -3205,7 +3111,7 @@ Static Void unused()
 }  /* UNUSED */
 
 
-Static Void erasure()
+Static void erasure(void)
 {
   long lambda, m, ll, kk, k, i, j, l;
   pointer2 pq, oldp, p, pp, ppp;
@@ -3553,7 +3459,7 @@ _L100: ;
 */
 /********************* vhrecurs***************************/
 
-Static Void termination()
+Static void termination(void)
 {
   pointer2 p;
   boolean nonew, termboo;
@@ -3607,7 +3513,7 @@ Static Void termination()
   fprintf(blst, " THE ABOVE STANDING NONTERMINALS CANNOT PRODUCE");
   fputc(lf(), blst);
   fprintf(blst, " A STRING OF ONLY TERMINAL SYMBOLS ");
-  stop(3L);
+  stop(3);
 }
 
 
@@ -3622,8 +3528,7 @@ struct LOC_fjernkaede {
   long fjern, indsat;
 } ;
 
-Local Void fjskriv(LINK)
-struct LOC_fjernkaede *LINK;
+Local void fjskriv(struct LOC_fjernkaede *LINK)
 {
   long z;
 
@@ -3635,9 +3540,7 @@ struct LOC_fjernkaede *LINK;
   fputc(lf(), blst);
 }
 
-Local boolean fjernkaede(t, LINK)
-boolean *t;
-struct LOC_idogfjern *LINK;
+Local boolean fjernkaede(boolean *t, struct LOC_idogfjern *LINK)
 {
   struct LOC_fjernkaede V;
   boolean Result;
@@ -3697,9 +3600,7 @@ struct LOC_identprod {
   pointer2 startp2;
 } ;
 
-Local Void skriv(x, LINK)
-long *x;
-struct LOC_identprod *LINK;
+Local void skriv(long *x, struct LOC_identprod *LINK)
 {
   long l, jj, ll;
   pointer2 stepp3;
@@ -3737,9 +3638,7 @@ struct LOC_identprod *LINK;
 }
 
 
-Local boolean identprod(t, LINK)
-boolean *t;
-struct LOC_idogfjern *LINK;
+Local boolean identprod(boolean *t, struct LOC_idogfjern *LINK)
 {
   struct LOC_identprod V;
   long laengde1, i, kk;
@@ -3815,8 +3714,7 @@ struct LOC_idogfjern *LINK;
 
 
 
-Static Void idogfjern(b)
-boolean b;
+Static void idogfjern(boolean b)
 {
   struct LOC_idogfjern V;
   boolean boo1, boo2, boo3, boo4;
@@ -3869,8 +3767,7 @@ boolean b;
 }
 
 
-Static Void freelist(pt)
-konfigt *pt;
+Static void freelist(konfigt *pt)
 {
   konfigt *p;
 
@@ -3906,9 +3803,7 @@ struct LOC_niceparser {
   pointer2 rightp;
 } ;
 
-Local long sqg(p, LINK)
-konfigt *p;
-struct LOC_niceparser *LINK;
+Local long sqg(konfigt *p, struct LOC_niceparser *LINK)
 {
   long i;
 
@@ -3919,8 +3814,7 @@ struct LOC_niceparser *LINK;
   return i;
 }
 
-Local Void linemark(LINK)
-struct LOC_niceparser *LINK;
+Local void linemark(struct LOC_niceparser *LINK)
 {
   long i, FORLIM;
 
@@ -3933,8 +3827,7 @@ struct LOC_niceparser *LINK;
   fputc(lf(), blst);
 }
 
-Local Void udskriv(LINK)
-struct LOC_niceparser *LINK;
+Local void udskriv(struct LOC_niceparser *LINK)
 {
   long k, j;
   prodtype *WITH;
@@ -3977,7 +3870,7 @@ struct LOC_niceparser *LINK;
     allocate(&LINK->rightp);
     WITH1 = &rhs[LINK->rightp];
     if (WITH1->symbol_ >= nontstart)
-      nontwrit((long)WITH1->symbol_, &LINK->count);
+      nontwrit(WITH1->symbol_, &LINK->count);
     else
       outalf20(internrep[WITH1->symbol_ + 1], &LINK->count);
     putc(' ', blst);
@@ -4000,8 +3893,7 @@ struct LOC_niceparser *LINK;
     fputc(lf(), blst);
 }
 
-Local Void niceparser(LINK)
-struct LOC_lr0 *LINK;
+Local void niceparser(struct LOC_lr0 *LINK)
 {
   struct LOC_niceparser V;
   konfigt *p;
@@ -4038,10 +3930,7 @@ struct LOC_lr0 *LINK;
   fputc(lf(), blst);
 }
 
-Local Void juster(startp, boo, LINK)
-konfigt *startp;
-boolean boo;
-struct LOC_lr0 *LINK;
+Local void juster(konfigt *startp, boolean boo, struct LOC_lr0 *LINK)
 {
   /******   FOR NY TILSTAND NOTERES FOREKOMST AF  */
   /* (PROD. NR., SYMBOL NR.) FOR DENNE   */
@@ -4073,8 +3962,7 @@ struct LOC_lr0 *LINK;
   }
 }
 
-Local Void stackellerej(LINK)
-struct LOC_lr0 *LINK;
+Local void stackellerej(struct LOC_lr0 *LINK)
 {
   /******   CHECKER HVORVIDT  (TILSTAND, OVERGANGSSYMBOL)
     ER STAKKET ELLER SKAL STAKKES      */
@@ -4088,7 +3976,7 @@ struct LOC_lr0 *LINK;
     return;
   LINK->stacktael++;
   if (LINK->stacktop == const9)
-    consterror("LR0       ", "CONST9    ", (long)const9);
+    consterror("LR0       ", "CONST9    ", const9);
 
   LINK->stacktop++;
   WITH1->overgang = true;
@@ -4102,9 +3990,7 @@ struct LOC_geninititems {
   struct LOC_lr0 *LINK;
 } ;
 
-Local long makegoalprod(sy, LINK)
-long sy;
-struct LOC_geninititems *LINK;
+Local long makegoalprod(long sy, struct LOC_geninititems *LINK)
 {
   long Result;
   pointer2 ptr;
@@ -4137,15 +4023,13 @@ struct LOC_geninititems *LINK;
   return Result;
 }
 
-Local konfigt *goalitem(sy, LINK)
-long sy;
-struct LOC_geninititems *LINK;
+Local konfigt *goalitem(long sy, struct LOC_geninititems *LINK)
 {
   konfigt *Result;
   pointer2 ptr;
   konfigt *WITH;
 
-  allocp(&classtop, 1L, "LR0       ");
+  allocp(&classtop, 1, "LR0       ");
   Result = classtop;
   WITH = classtop;
   WITH->ifbasis = true;
@@ -4163,8 +4047,7 @@ struct LOC_geninititems *LINK;
   return Result;
 }
 
-Local Void geninititems(LINK)
-struct LOC_lr0 *LINK;
+Local void geninititems(struct LOC_lr0 *LINK)
 {
   /* This procedure extends the BOBS system  such that any  nonterminal
      can be  the startsymbol (goal symbol) of the parser.
@@ -4209,7 +4092,7 @@ struct LOC_lr0 *LINK;
 
 
 /*$L+*/
-Static Void lr0()
+Static void lr0(void)
 {
   struct LOC_lr0 V;
   konfigt *helpp, *closp, *oldp;
@@ -4260,7 +4143,7 @@ Static Void lr0()
      juster(rodp,true);
    end of old initial item generation  */
 
-  allocp(&classtop, 1L, "LR0       ");
+  allocp(&classtop, 1, "LR0       ");
   begintilst = classtop;
   while (V.stacktop > 0) {
     WITH = &V.stack[V.stacktop - 1];
@@ -4282,7 +4165,7 @@ Static Void lr0()
     closp = lqbep;
     while (true) {
       if (V.baslae == const5)
-	consterror("LR0       ", "CONST5    ", (long)const5);
+	consterror("LR0       ", "CONST5    ", const5);
       V.baslae++;
       WITH2 = classtop;
       WITH2->ifbasis = true;
@@ -4306,7 +4189,7 @@ Static Void lr0()
 	  goto _L20;
       } while (lqbep->UU.U1.inf != symb);
       helpp = classtop;
-      allocp(&classtop, 1L, "LR0       ");
+      allocp(&classtop, 1, "LR0       ");
       helpp->derivp = classtop;
     }
 _L20:
@@ -4346,14 +4229,14 @@ _L20:
       closp->nextp = rhs[V.lqbep2].parserp;
       V.stacktop -= V.stacktael;
       freelist(begintilst);
-      allocp(&classtop, 1L, "LR0       ");
+      allocp(&classtop, 1, "LR0       ");
       begintilst = classtop;
       continue;
     }
     /******    BASIS-SET ACCEPTERET SOM NYT  */
     closp->nextp = begintilst;
     if (tilstnr == const10)
-      consterror("LR0       ", "CONST10   ", (long)const10);
+      consterror("LR0       ", "CONST10   ", const10);
     tilstnr++;
     tilstand[tilstnr].oldstart = begintilst;
     juster(begintilst, true, &V);
@@ -4371,7 +4254,7 @@ _L20:
 	    while (prod[prodno].leftside == WITH2->UU.U1.inf) {
 	      WITH4 = &prod[prodno];
 	      helpp = classtop;
-	      allocp(&classtop, 1L, "LR0       ");
+	      allocp(&classtop, 1, "LR0       ");
 	      helpp->derivp = classtop;
 	      WITH5 = classtop;
 	      WITH5->ifbasis = false;
@@ -4396,7 +4279,7 @@ _L20:
     }
     if (closp->derivp != NULL)
       juster(closp->derivp, false, &V);
-    allocp(&classtop, 1L, "LR0       ");
+    allocp(&classtop, 1, "LR0       ");
     begintilst = classtop;
   }
   gemp = classtop;
@@ -4411,7 +4294,7 @@ _L20:
 /******  END OF PROCEDURE  LR0      */
 
 /*$L-*/
-Static Void lookb()
+Static void lookb(void)
 {
   /* LOOKB GENERATES THE LOOKBACKSTATES */
   long prodnr, symb, md, r1;
@@ -4430,7 +4313,7 @@ Static Void lookb()
   while (prodnr <= antalprod) {   /*FOR prodnr:=1 TO antalprod DO*/
     WITH = &prod[prodnr];
     fcqi = 0;
-    allocp(&classtop, 5L, "LOOKBP    ");
+    allocp(&classtop, 5, "LOOKBP    ");
     begintilst = classtop;
     symb = WITH->leftside;
     point = WITH->start;
@@ -4444,9 +4327,9 @@ Static Void lookb()
 	fprintf(blst, " THE STARTSYMBOL CANNOT PRODUCE A STRING CONTAINING ");
 	fprintf(blst, "%c ", lf());
 	r1 = 1;
-	nontwrit((long)WITH->leftside, &r1);
+	nontwrit(WITH->leftside, &r1);
 	fprintf(blst, "%c%c", lf(), lf());
-	stop(3L);
+	stop(3);
       }
       WITH1->UU.lookbp = tilstp;
       while (tilstp->UU.U1.inf != symb)
@@ -4455,7 +4338,7 @@ Static Void lookb()
       remember(tilstp);
       WITH1->nextp = tilstp;
       oldp = classtop;
-      allocp(&classtop, 5L, "LOOKB     ");
+      allocp(&classtop, 5, "LOOKB     ");
       oldp->derivp = classtop;
       point = rhs[point].link;
     }
@@ -4475,7 +4358,7 @@ Static Void lookb()
       WITH1->mode = 5;
       antaltilst++;
       if (antaltilst > const10)
-	consterror("LOOKB     ", "CONST10   ", (long)const10);
+	consterror("LOOKB     ", "CONST10   ", const10);
       tilstand[antaltilst].oldstart = begintilst;
       WITH->lookbackp = begintilst;
     }
@@ -4590,8 +4473,7 @@ struct LOC_adequad {
 /*                                                                */
 /******************************************************************/
 
-Local long symbmax(LINK)
-struct LOC_adequad *LINK;
+Local long symbmax(struct LOC_adequad *LINK)
 {
   if (options[58])
     return nontslut;
@@ -4599,25 +4481,19 @@ struct LOC_adequad *LINK;
     return (nontstart - 1);
 }
 
-Local boolean itemeq(it1, it2, LINK)
-item it1, it2;
-struct LOC_adequad *LINK;
+Local boolean itemeq(item it1, item it2, struct LOC_adequad *LINK)
 {
   return (it1.p == it2.p && it1.d == it2.d && it1.nobot == it2.nobot);
 }
 
-Local Void cr(n, LINK)
-long n;
-struct LOC_adequad *LINK;
+Local void cr(long n, struct LOC_adequad *LINK)
 {
   putc('\n', blst);
   for (; n >= 1; n--)
     putc(' ', blst);
 }
 
-Local Void empty_(m, LINK)
-boolean *m;
-struct LOC_adequad *LINK;
+Local void empty_(boolean *m, struct LOC_adequad *LINK)
 {
   long i, FORLIM;
 
@@ -4626,9 +4502,7 @@ struct LOC_adequad *LINK;
     m[i] = false;
 }
 
-Local Void inter(m, n, LINK)
-boolean *m, *n;
-struct LOC_adequad *LINK;
+Local void inter(boolean *m, boolean *n, struct LOC_adequad *LINK)
 {
   long i, FORLIM;
 
@@ -4637,9 +4511,7 @@ struct LOC_adequad *LINK;
     m[i] = (m[i] && n[i]);
 }
 
-Local Void union_(m, n, LINK)
-boolean *m, *n;
-struct LOC_adequad *LINK;
+Local void union_(boolean *m, boolean *n, struct LOC_adequad *LINK)
 {
   long i, FORLIM;
 
@@ -4648,9 +4520,7 @@ struct LOC_adequad *LINK;
     m[i] = (m[i] || n[i]);
 }
 
-Local boolean isempty(m, LINK)
-boolean *m;
-struct LOC_adequad *LINK;
+Local boolean isempty(boolean *m, struct LOC_adequad *LINK)
 {
   boolean b;
   long i, FORLIM;
@@ -4663,17 +4533,13 @@ struct LOC_adequad *LINK;
 }
 
 
-Local boolean terminal_(symb, LINK)
-long symb;
-struct LOC_adequad *LINK;
+Local boolean terminal_(long symb, struct LOC_adequad *LINK)
 {
   return (symb <= termg || options[58]);
 }
 
 
-Local boolean emptys(pn, l, LINK)
-long pn, l;
-struct LOC_adequad *LINK;
+Local boolean emptys(long pn, long l, struct LOC_adequad *LINK)
 {
   long i;
   boolean emptyboo;
@@ -4693,20 +4559,14 @@ _L33:
   return emptyboo;
 }  /* EMPTYS */
 
-Local konfigt *gotox(r, symb, LINK)
-konfigt *r;
-long symb;
-struct LOC_adequad *LINK;
+Local konfigt *gotox(konfigt *r, long symb, struct LOC_adequad *LINK)
 {
   while (r->UU.U1.inf != symb)
     r = r->derivp;
   return (r->nextp);
 }  /* GOTOX */
 
-Local konfigt *gotos(r, p, l, LINK)
-konfigt *r;
-long p, l;
-struct LOC_adequad *LINK;
+Local konfigt *gotos(konfigt *r, long p, long l, struct LOC_adequad *LINK)
 {
   long i, sy;
 
@@ -4719,12 +4579,8 @@ struct LOC_adequad *LINK;
   return r;
 }
 
-Local Void pred(p, l, t, rl, s, LINK)
-long p, l;
-konfigt *t;
-long *rl;
-konfigt **s;
-struct LOC_adequad *LINK;
+Local void pred(long p, long l, konfigt *t, long *rl, konfigt **s,
+		struct LOC_adequad *LINK)
 {
   if (*rl == -1) {  /* INITIAL CALL */
     *rl = prod[p].start;
@@ -4748,9 +4604,7 @@ _L10: ;
 /*                                                   */
 /*****************************************************/
 
-Local Void optimalisering(x, LINK)
-tilstcheck x;
-struct LOC_adequad *LINK;
+Local void optimalisering(tilstcheck x, struct LOC_adequad *LINK)
 {
   long seq;
 
@@ -4775,9 +4629,7 @@ struct LOC_adequad *LINK;
 
 
 
-Local Void lalrtext(x, LINK)
-long x;
-struct LOC_adequad *LINK;
+Local void lalrtext(long x, struct LOC_adequad *LINK)
 {
   long i;
 
@@ -4826,9 +4678,7 @@ struct LOC_adequad *LINK;
 }
 
 
-Local Void adeqwrite(x, LINK)
-long x;
-struct LOC_adequad *LINK;
+Local void adeqwrite(long x, struct LOC_adequad *LINK)
 {
   switch (x) {
 
@@ -4837,20 +4687,20 @@ struct LOC_adequad *LINK;
     fprintf(blst, " *********************");
     fprintf(blst, "  A list of LR(1) conflicts  ");
     fprintf(blst, "*********************");
-    cr(0L, LINK);
-    cr(0L, LINK);
+    cr(0, LINK);
+    cr(0, LINK);
     break;
 
   /*OVERSKRIFT TIL LOOKAHEAD-MAENGDERNE LALR1 */
   case 6:
     /*UDSKRIFT AF AFSLUTNING PAA LOOKAHEAD-MAENGDERNE LALR1 */
-    cr(0L, LINK);
-    cr(0L, LINK);
+    cr(0, LINK);
+    cr(0, LINK);
     fprintf(blst, " *********************");
     fprintf(blst, " End of LR(1) conflicts  ");
     fprintf(blst, "*************************");
-    cr(0L, LINK);
-    cr(0L, LINK);
+    cr(0, LINK);
+    cr(0, LINK);
     break;
 
   case 3:
@@ -4860,9 +4710,7 @@ struct LOC_adequad *LINK;
   }
 }
 
-Local konfigt *findreduce(pnr, LINK)
-long pnr;
-struct LOC_adequad *LINK;
+Local konfigt *findreduce(long pnr, struct LOC_adequad *LINK)
 {
   pointer2 p1, p2;
   konfigt *pt;
@@ -4878,16 +4726,16 @@ struct LOC_adequad *LINK;
       p1 = rhs[p1].link;
       if (p1 != rhsnil)
 	continue;
-      allocp(&pt, 1L, "FINDREDUCE");
+      allocp(&pt, 1, "FINDREDUCE");
       pt->mode = 3;
       pt->UU.U1.inf = WITH->laengde - 1;
       pt->UU.U1.prodnr = pnr;
       pt->nextp = WITH->lookbackp;
       pt->derivp = NULL;   /*TRUNC*/
       antaltilst++;
-      updatemax(10L, antaltilst);
+      updatemax(10, antaltilst);
       if (antaltilst > const10)
-	consterror("FINDREDUCE", "CONST10   ", (long)const10);
+	consterror("FINDREDUCE", "CONST10   ", const10);
       tilstand[antaltilst].oldstart = pt;
       newelm(&top, "FINDREDUCE");
       p1 = top;
@@ -4900,8 +4748,7 @@ struct LOC_adequad *LINK;
 }  /* FINDREDUCE */
 
 
-Local Void initdot(LINK)
-struct LOC_adequad *LINK;
+Local void initdot(struct LOC_adequad *LINK)
 {
   long i;
   konfigt *p;
@@ -4932,10 +4779,7 @@ struct LOC_lookahead {
 
 
 
-Local boolean enterdone(r, symb, LINK)
-konfigt *r;
-long symb;
-struct LOC_lookahead *LINK;
+Local boolean enterdone(konfigt *r, long symb, struct LOC_lookahead *LINK)
 {
   /* IF r IN done[symb] OR r=nil THEN enterdone=false */
   /* IF r NOTIN done[symb]       THEN enterdone=true  */
@@ -4955,9 +4799,9 @@ struct LOC_lookahead *LINK;
   }
   if (i == 0) {   /*not found*/
     LINK->donetop++;
-    updatemax(16L, LINK->donetop);
+    updatemax(16, LINK->donetop);
     if (LINK->donetop > const16)
-      consterror("EnterDone ", "const16   ", (long)const16);
+      consterror("EnterDone ", "const16   ", const16);
     LINK->done[oldi].lnk = LINK->donetop;
     i = LINK->donetop;
   }
@@ -4970,9 +4814,7 @@ _L2:
   return Result;
 }  /* EnterDone */
 
-Local boolean entertm(r, LINK)
-konfigt *r;
-struct LOC_lookahead *LINK;
+Local boolean entertm(konfigt *r, struct LOC_lookahead *LINK)
 {
   /* IF r IN    tm THEN entertm=false */
   /* IF r NOTIN tm THEN entertm=true  */
@@ -4992,9 +4834,7 @@ struct LOC_lookahead *LINK;
   }
 }  /* entertm*/
 
-Local Void trans(r, LINK)
-konfigt *r;
-struct LOC_lookahead *LINK;
+Local void trans(konfigt *r, struct LOC_lookahead *LINK)
 {
   if (!entertm(r, LINK))
     return;
@@ -5007,7 +4847,7 @@ struct LOC_lookahead *LINK;
        *  this option. The reason is that 59 includes nonterminals
        *  in the lookahead sets.
        */
-      if (terminal_((long)r->UU.U1.inf, LINK->LINK))
+      if (terminal_(r->UU.U1.inf, LINK->LINK))
 	LINK->look[r->UU.U1.inf] = true;
       if (emptya[r->UU.U1.inf])
 	trans(r->nextp, LINK);
@@ -5017,10 +4857,7 @@ struct LOC_lookahead *LINK;
 }  /* TRANS */
 
 
-Local Void lalr1(t, pn, dn, LINK)
-konfigt *t;
-long pn, dn;
-struct LOC_lookahead *LINK;
+Local void lalr1(konfigt *t, long pn, long dn, struct LOC_lookahead *LINK)
 {
   long lhs, rlink;
   konfigt *s, *r;
@@ -5038,8 +4875,8 @@ struct LOC_lookahead *LINK;
       r = s;
       while (r != NULL) {
 	if (r->dot != 0 && r->UU.U1.inf == lhs) {
-	  if (emptys((long)r->UU.U1.prodnr, r->dot + 1L, LINK->LINK))
-	    lalr1(s, (long)r->UU.U1.prodnr, (long)r->dot, LINK);
+	  if (emptys(r->UU.U1.prodnr, r->dot + 1, LINK->LINK))
+	    lalr1(s, r->UU.U1.prodnr, r->dot, LINK);
 	}
 
 	r = r->derivp;
@@ -5058,11 +4895,8 @@ struct LOC_lookahead *LINK;
 
 
 
-Local Void lookahead(pointp, prodno, dotno, look_, LINK)
-konfigt *pointp;
-long prodno, dotno;
-boolean *look_;
-struct LOC_adequad *LINK;
+Local void lookahead(konfigt *pointp, long prodno, long dotno, boolean *look_,
+		     struct LOC_adequad *LINK)
 {
   struct LOC_lookahead V;
   long j, FORLIM;
@@ -5071,7 +4905,7 @@ struct LOC_adequad *LINK;
   V.look = look_;
   if (options[38]) {
     fprintf(blst, "     ");
-    writech('-', 60L);
+    writech('-', 60);
     fprintf(blst, "%c%c     STATE    PRODNO     DOTNO     LEVEL%c",
 	    lf(), lf(), lf());
   }
@@ -5084,7 +4918,7 @@ struct LOC_adequad *LINK;
   V.reclevel = 0;
 
   if (dotno == 0)
-    lalr1(pointp, prodno, prod[prodno].laengde + 1L, &V);
+    lalr1(pointp, prodno, prod[prodno].laengde + 1, &V);
   else
     lalr1(pointp, prodno, dotno, &V);
 
@@ -5093,11 +4927,11 @@ struct LOC_adequad *LINK;
   for (j = 0; j <= FORLIM; j++) {
     if (V.look[j]) {
       LINK->la[LINK->lalaengde] = j;
-      updatemax(8L, LINK->lalaengde);
+      updatemax(8, LINK->lalaengde);
       if (LINK->lalaengde < const8)
 	LINK->lalaengde++;
       else
-	consterror("LOOKAHEAD ", "CONST8    ", (long)const8);
+	consterror("LOOKAHEAD ", "CONST8    ", const8);
     }
   }
 }  /* LOOKAHEAD */
@@ -5119,10 +4953,7 @@ struct LOC_lalr1_ {
   konfigt *lalrpt;
 } ;
 
-Local Void trans_(t, stacktop, LINK)
-konfigt *t;
-long stacktop;
-struct LOC_lalr1_ *LINK;
+Local void trans_(konfigt *t, long stacktop, struct LOC_lalr1_ *LINK)
 {
   long inx, lhs, i;
   konfigt *r;
@@ -5140,8 +4971,8 @@ struct LOC_lalr1_ *LINK;
   /* push t */
   LINK->LINK->tmtop++;
   if (LINK->LINK->tmtop > const16)
-    consterror("trans     ", "const16   ", (long)const16);
-  updatemax(16L, LINK->LINK->tmtop);
+    consterror("trans     ", "const16   ", const16);
+  updatemax(16, LINK->LINK->tmtop);
   LINK->LINK->tm[LINK->LINK->tmtop - 1].s = t;
   LINK->LINK->tm[LINK->LINK->tmtop - 1].lnk = stacktop;
   stacktop = LINK->LINK->tmtop;
@@ -5157,7 +4988,7 @@ struct LOC_lalr1_ *LINK;
 	i--;
       }
       if (inx == 0) {
-	allocp(&r, 1L, "trans     ");
+	allocp(&r, 1, "trans     ");
 	r->UU.U1.prodnr = t->UU.U1.prodnr;
 	r->mode = i;
 	r->derivp = LINK->lalrpt;
@@ -5176,10 +5007,8 @@ _L10: ;
 }  /* trans */
 
 
-Local Void lalr1_(statep, prodno, dotno, LINK)
-konfigt *statep;
-long prodno, dotno;
-struct LOC_lalrlookahead *LINK;
+Local void lalr1_(konfigt *statep, long prodno, long dotno,
+		  struct LOC_lalrlookahead *LINK)
 {
   struct LOC_lalr1_ V;
   long leftinf, hinx;
@@ -5218,8 +5047,8 @@ struct LOC_lalrlookahead *LINK;
 	} while (hinx != 0);
 	LINK->lltop++;
 	if (LINK->lltop > const16)
-	  consterror("LALRLOOKAH", "const16   ", (long)const16);
-	updatemax(16L, LINK->lltop);
+	  consterror("LALRLOOKAH", "const16   ", const16);
+	updatemax(16, LINK->lltop);
 	hinx = LINK->lltop;
 	LINK->ll[LINK->l].lnk = hinx;
       } else
@@ -5234,11 +5063,11 @@ struct LOC_lalrlookahead *LINK;
       transp = transp->nextp;
       LINK->tmtop = 0;
       V.lalrpt = NULL;
-      trans_(transp, 0L, &V);
+      trans_(transp, 0, &V);
       loopp = V.lalrpt;
       while (loopp != NULL) {
 	WITH2 = loopp;
-	lalr1_(runp, (long)WITH2->UU.U1.prodnr, (long)WITH2->mode, LINK);
+	lalr1_(runp, WITH2->UU.U1.prodnr, WITH2->mode, LINK);
 	loopp = WITH2->derivp;
       }
       if (V.lalrpt != NULL)
@@ -5257,10 +5086,8 @@ _L2:   /*TRY NEXT */
 /******************************************************************/
 
 
-Local Void lalrlookahead(pointp, prodno, LINK)
-konfigt *pointp;
-long prodno;
-struct LOC_adequad *LINK;
+Local void lalrlookahead(konfigt *pointp, long prodno,
+			 struct LOC_adequad *LINK)
 {
   struct LOC_lalrlookahead V;
   long j, FORLIM;
@@ -5274,17 +5101,17 @@ struct LOC_adequad *LINK;
     WITH->mrk = false;
     WITH->lamrk = false;
   }
-  lalr1_(pointp, prodno, (long)prod[prodno].laengde, &V);
+  lalr1_(pointp, prodno, prod[prodno].laengde, &V);
   LINK->lalaengde = 0;
   FORLIM = symbmax(LINK);
   for (j = 0; j <= FORLIM; j++) {
     if (V.ll[j].lamrk) {
       LINK->la[LINK->lalaengde] = j;
-      updatemax(8L, LINK->lalaengde);
+      updatemax(8, LINK->lalaengde);
       if (LINK->lalaengde < const8)
 	LINK->lalaengde++;
       else
-	consterror("LalrLookah", "const8    ", (long)const8);
+	consterror("LalrLookah", "const8    ", const8);
     }
   }
 }  /* LALRLOOKAHEAD */
@@ -5305,9 +5132,7 @@ struct LOC_dotrans {
   boolean *transla;
 } ;
 
-Local boolean entertm_(r, LINK)
-konfigt *r;
-struct LOC_dotrans *LINK;
+Local boolean entertm_(konfigt *r, struct LOC_dotrans *LINK)
 {
   long i;   /* LOOP-POINTER TO TM */
 
@@ -5327,16 +5152,14 @@ struct LOC_dotrans *LINK;
   }
 }  /* ENTERTM */
 
-Local Void trans__(r, LINK)
-konfigt *r;
-struct LOC_dotrans *LINK;
+Local void trans__(konfigt *r, struct LOC_dotrans *LINK)
 {
   /*       */
   if (!entertm_(r, LINK))
     return;
   while (r != NULL) {
     if (r->dot != 0) {
-      if (terminal_((long)r->UU.U1.inf, LINK->LINK->LINK))
+      if (terminal_(r->UU.U1.inf, LINK->LINK->LINK))
 	LINK->transla[r->UU.U1.inf] = true;
       else if (emptya[r->UU.U1.inf])
 	trans__(r->nextp, LINK);
@@ -5346,10 +5169,7 @@ struct LOC_dotrans *LINK;
 }  /* TRANS */
 
 
-Local Void dotrans(r, transla_, LINK)
-konfigt *r;
-boolean *transla_;
-struct LOC_lrcond *LINK;
+Local void dotrans(konfigt *r, boolean *transla_, struct LOC_lrcond *LINK)
 {
   struct LOC_dotrans V;
 
@@ -5360,10 +5180,7 @@ struct LOC_lrcond *LINK;
   trans__(r, &V);
 }  /* DOTRANS */
 
-Local Void sort(it1, it2, swap, LINK)
-item *it1, *it2;
-boolean *swap;
-struct LOC_lrcond *LINK;
+Local void sort(item *it1, item *it2, boolean *swap, struct LOC_lrcond *LINK)
 {
   item it;
 
@@ -5383,11 +5200,8 @@ struct LOC_enterdone_ {
   boolean swap;
 } ;
 
-Local boolean enterdone_(r, it1, it2, swap_, LINK)
-konfigt *r;
-item it1, it2;
-boolean swap_;
-struct LOC_lrcond *LINK;
+Local boolean enterdone_(konfigt *r, item it1, item it2, boolean swap_,
+			 struct LOC_lrcond *LINK)
 {
   /* RETURNS FALSE IF  (IT1,IT2,R) in Done or R=NIL */
   /* OTHERWISE TRUE, and inserts (IT1,IT2,R) in Done*/
@@ -5399,7 +5213,7 @@ struct LOC_lrcond *LINK;
 
   V.LINK = LINK;
   V.swap = swap_;
-/* p2c: exbobs.p, line 3952:
+/* p2c: exbobs.p, line 3953:
  * Note: Taking & of possibly promoted param swap [324] */
   sort(&it1, &it2, &V.swap, LINK);
   Result = false;
@@ -5417,9 +5231,9 @@ struct LOC_lrcond *LINK;
     }
     if (i == 0) {   /*not found*/
       LINK->donetop++;
-      updatemax(16L, LINK->donetop);
+      updatemax(16, LINK->donetop);
       if (LINK->donetop > const16)
-	consterror("lr-cond   ", "const16   ", (long)const16);
+	consterror("lr-cond   ", "const16   ", const16);
       LINK->done[oldi].lnk = LINK->donetop;
       i = LINK->donetop;
     }
@@ -5435,16 +5249,14 @@ _L10:
   return Result;
 }  /* ENTERDONE */
 
-Local Void pritem(it, LINK)
-item it;
-struct LOC_lrcond *LINK;
+Local void pritem(item it, struct LOC_lrcond *LINK)
 {
   if (it.nobot)
     fprintf(blst, "    ");
   else
     fprintf(blst, " // ");
-  writem((long)it.p, (long)it.d);
-  cr(16L, LINK->LINK);
+  writem(it.p, it.d);
+  cr(16, LINK->LINK);
 }
 
 /* Local variables for cond: */
@@ -5460,14 +5272,12 @@ struct LOC_cond {
   item is, js;
 } ;
 
-Local boolean bottom(LINK)
-struct LOC_cond *LINK;
+Local boolean bottom(struct LOC_cond *LINK)
 {
   return (!(LINK->is.nobot || LINK->js.nobot));
 }
 
-Local Void trace(LINK)
-struct LOC_cond *LINK;
+Local void trace(struct LOC_cond *LINK)
 {
   long a1, a2, a3;
 
@@ -5493,7 +5303,7 @@ struct LOC_cond *LINK;
 
   /* LocalLR:=LocalLALR INTER LALR1(Is,S) */
   if (LINK->ir.nobot)   /* result in LA1 */
-    lookahead(LINK->s, (long)LINK->is.p, (long)LINK->is.d, LINK->LINK->la1,
+    lookahead(LINK->s, LINK->is.p, LINK->is.d, LINK->LINK->la1,
 	      LINK->LINK->LINK);
   else
     empty_(LINK->LINK->la1, LINK->LINK->LINK);
@@ -5508,21 +5318,20 @@ struct LOC_cond *LINK;
 
   if (LINK->conflict)
     return;
-  lookahead(LINK->s, (long)LINK->js.p, (long)LINK->js.d, LINK->LINK->la2,
+  lookahead(LINK->s, LINK->js.p, LINK->js.d, LINK->LINK->la2,
 	    LINK->LINK->LINK);
   inter(LINK->LINK->la1, LINK->LINK->la2, LINK->LINK->LINK);
   LINK->moreconflict = !isempty(LINK->LINK->la1, LINK->LINK->LINK);
   /* MoreConflict= (LALR1(Is,S) INTER LALR1(Js,S)) <> EMPTY */
 }  /*Trace*/
 
-Local Void print(LINK)
-struct LOC_cond *LINK;
+Local void print(struct LOC_cond *LINK)
 {
   long i, FORLIM;
 
   fprintf(blst, "(%4ld)---------------------------------------------",
 	  LINK->level);
-  cr(16L, LINK->LINK->LINK);
+  cr(16, LINK->LINK->LINK);
 
   if (!LINK->swap)
     pritem(LINK->is, LINK->LINK);
@@ -5530,7 +5339,7 @@ struct LOC_cond *LINK;
   if (LINK->contrib) {
     fprintf(blst, "%20c", ' ');
     fprintf(blst, "which generates: ");
-    cr(41L, LINK->LINK->LINK);
+    cr(41, LINK->LINK->LINK);
     FORLIM = termg;
     for (i = 0; i <= FORLIM; i++) {
       if (LINK->LINK->locallalr[i]) {
@@ -5542,28 +5351,23 @@ struct LOC_cond *LINK;
       }
     }
   }
-  cr(16L, LINK->LINK->LINK);
+  cr(16, LINK->LINK->LINK);
   if (LINK->swap)
     pritem(LINK->is, LINK->LINK);
   if (bottom(LINK)) {
     fprintf(blst, "(***  path terminated by bottom  ***)");
-    cr(16L, LINK->LINK->LINK);
+    cr(16, LINK->LINK->LINK);
     return;
   }
 
   if (LINK->loopp) {
     fprintf(blst, "(***  path terminated by loop    ***)");
-    cr(16L, LINK->LINK->LINK);
+    cr(16, LINK->LINK->LINK);
   }
 }  /*Print*/
 
-Local Void cond(ir_, jr_, t, lr_, level_, conflict_, swap_, LINK)
-item ir_, jr_;
-konfigt *t;
-boolean *lr_;
-long level_;
-boolean conflict_, swap_;
-struct LOC_lrcond *LINK;
+Local void cond(item ir_, item jr_, konfigt *t, boolean *lr_, long level_,
+		boolean conflict_, boolean swap_, struct LOC_lrcond *LINK)
 {
   struct LOC_cond V;
   long lhs, rlink;
@@ -5577,7 +5381,7 @@ struct LOC_lrcond *LINK;
   V.level = level_;
   V.conflict = conflict_;
   V.swap = swap_;
-/* p2c: exbobs.p, line 4056:
+/* p2c: exbobs.p, line 4057:
  * Note: Taking & of possibly promoted param swap [324] */
   sort(&V.ir, &V.jr, &V.swap, LINK);
   V.is = V.ir;
@@ -5587,14 +5391,14 @@ struct LOC_lrcond *LINK;
     fprintf(blst, " COND:%12d%12d%12d%12d%12ld\n",
 	    V.ir.p, V.ir.d, V.jr.p, V.jr.d, (long)t);
   rlink = -1;
-  pred((long)V.jr.p, (long)V.jr.d, t, &rlink, &V.s, LINK->LINK);
+  pred(V.jr.p, V.jr.d, t, &rlink, &V.s, LINK->LINK);
   while (V.s != NULL) {
     r = V.s;
     while (r != NULL) {
       if (r->dot != 0 && r->UU.U1.inf == lhs) {
 	V.js.p = r->UU.U1.prodnr;
 	V.js.d = r->dot;
-	V.js.nobot = V.jr.nobot & emptys((long)V.js.p, V.js.d + 1L, LINK->LINK);
+	V.js.nobot = V.jr.nobot & emptys(V.js.p, V.js.d + 1, LINK->LINK);
 	if (options[37])
 	  fprintf(blst, " cond-inner%12d%12d%s%12d%12d%s%12ld\n",
 		  V.is.p, V.is.d, V.is.nobot ? " TRUE" : "FALSE", V.js.p,
@@ -5609,7 +5413,7 @@ struct LOC_lrcond *LINK;
       }
       r = r->derivp;
     }
-    pred((long)V.jr.p, (long)V.jr.d, t, &rlink, &V.s, LINK->LINK);
+    pred(V.jr.p, V.jr.d, t, &rlink, &V.s, LINK->LINK);
   }
 }  /* COND */
 
@@ -5621,11 +5425,8 @@ struct LOC_lrcond *LINK;
 /******************************************************************/
 
 
-Local boolean lrcond(it1, it2, t, c1, c2, LINK)
-item it1, it2;
-konfigt *t;
-boolean *c1, *c2;
-struct LOC_adequad *LINK;
+Local boolean lrcond(item it1, item it2, konfigt *t, boolean *c1, boolean *c2,
+		     struct LOC_adequad *LINK)
 {
   /* STATE  */
   struct LOC_lrcond V;
@@ -5641,7 +5442,7 @@ struct LOC_adequad *LINK;
   empty_(lr, LINK);
   memcpy(V.global, c1, sizeof(laset));
   inter(V.global, c2, LINK);
-  cond(it1, it2, t, lr, 0L, false, false, &V);
+  cond(it1, it2, t, lr, 0, false, false, &V);
   return check;
 }  /* LRCOND */
 
@@ -5653,10 +5454,7 @@ struct LOC_testconflicts {
 } ;
 
 /**/
-Local Void mark_(c, index, LINK)
-boolean *c;
-long index;
-struct LOC_testconflicts *LINK;
+Local void mark_(boolean *c, long index, struct LOC_testconflicts *LINK)
 {
   long i;
   konfigt *p;
@@ -5672,8 +5470,7 @@ struct LOC_testconflicts *LINK;
 }  /* MARK */
 
 /**/
-Local boolean check(LINK)
-struct LOC_testconflicts *LINK;
+Local boolean check(struct LOC_testconflicts *LINK)
 {
   long i;
   boolean b;
@@ -5687,51 +5484,49 @@ struct LOC_testconflicts *LINK;
     return b;
   LINK->LINK->headwrite = false;
   LINK->LINK->lrok = false;
-  adeqwrite(5L, LINK->LINK);
+  adeqwrite(5, LINK->LINK);
   return b;
 }  /* CHECK */
 
 /**/
-Local Void ShiftReduceConflict(prodindex, LINK)
-long prodindex;
-struct LOC_testconflicts *LINK;
+Local void ShiftReduceConflict(long prodindex, struct LOC_testconflicts *LINK)
 {
   long i;
   symbol inf;
   konfigt *p;
   long FORLIM;
 
-  cr(2L, LINK->LINK);
+  cr(2, LINK->LINK);
   for (i = 1; i <= 61; i++)
     putc('-', blst);
-  cr(2L, LINK->LINK);
+  cr(2, LINK->LINK);
   fprintf(blst, "LALR(1) conflict of type SHIFT/REDUCE");
-  cr(0L, LINK->LINK);
-  cr(4L, LINK->LINK);
+  cr(0, LINK->LINK);
+  cr(4, LINK->LINK);
   fprintf(blst, "Conflicting item(s):");
   FORLIM = LINK->LINK->termant;
   for (i = 0; i < FORLIM; i++) {
     inf = LINK->LINK->stack[i].symb;
     if (LINK->c1[inf] && LINK->c2[inf]) {   /* CONFLICT ON INF */
-      cr(6L, LINK->LINK);
-      writem((long)LINK->LINK->stack[i].pnr, (long)LINK->LINK->stack[i].token);
+      cr(6, LINK->LINK);
+      writem(LINK->LINK->stack[i].pnr, LINK->LINK->stack[i].token);
       LINK->LINK->it1.p = LINK->LINK->stack[i].pnr;
       LINK->LINK->it1.d = LINK->LINK->stack[i].token;
       LINK->LINK->it1.nobot = false;   /*trunc*/
     }
   }
-  cr(4L, LINK->LINK);
+  cr(4, LINK->LINK);
   fprintf(blst, "In conflict with production:");
-  cr(6L, LINK->LINK);
+  cr(6, LINK->LINK);
   p = LINK->LINK->lookant[prodindex - 1].point;
   fprintf(blst, "%3d: ", p->UU.U1.prodnr);
-  writem((long)p->UU.U1.prodnr, 0L);
+  writem(p->UU.U1.prodnr, 0);
   LINK->LINK->it2.p = p->UU.U1.prodnr;
   LINK->LINK->it2.d = prod[LINK->LINK->it2.p].laengde + 1;
   LINK->LINK->it2.nobot = true;
-  cr(6L, LINK->LINK);
+  cr(6, LINK->LINK);
   fprintf(blst, "Lookaheadset:");
-  cr(6L, LINK->LINK);
+  cr(6, LINK->LINK);
   FORLIM = termg;
   for (i = 0; i <= FORLIM; i++) {
     if (LINK->c2[i]) {
@@ -5739,9 +5534,9 @@ struct LOC_testconflicts *LINK;
       putc(' ', blst);
     }
   }
-  cr(4L, LINK->LINK);
+  cr(4, LINK->LINK);
   fprintf(blst, "Conflict on symbol(s):");
-  cr(6L, LINK->LINK);
+  cr(6, LINK->LINK);
   FORLIM = termg;
   for (i = 0; i <= FORLIM; i++) {
     if (LINK->c1[i] && LINK->c2[i]) {   /* CONFLICT */
@@ -5749,29 +5544,28 @@ struct LOC_testconflicts *LINK;
       putc(' ', blst);
     }
   }
-  cr(4L, LINK->LINK);
+  cr(4, LINK->LINK);
   fprintf(blst, "Other shift item(s) in that state:");
   FORLIM = LINK->LINK->termant;
   for (i = 0; i < FORLIM; i++) {
     inf = LINK->LINK->stack[i].symb;
     if (!(LINK->c1[inf] && LINK->c2[inf])) {
-      cr(6L, LINK->LINK);
-      writem((long)LINK->LINK->stack[i].pnr, (long)LINK->LINK->stack[i].token);
+      cr(6, LINK->LINK);
+      writem(LINK->LINK->stack[i].pnr, LINK->LINK->stack[i].token);
     }
   }
-  cr(0L, LINK->LINK);
+  cr(0, LINK->LINK);
   if (!options[34])
     return;
   fprintf(blst, "Backwards trace:");
-  cr(4L, LINK->LINK);
+  cr(4, LINK->LINK);
   lrcond(LINK->LINK->it1, LINK->LINK->it2, LINK->confstate, LINK->c1,
 	 LINK->c2, LINK->LINK);
 }
 
 /**/
-Local Void ReduceReduceConflict(index1, index2, LINK)
-long index1, index2;
-struct LOC_testconflicts *LINK;
+Local void ReduceReduceConflict(long index1, long index2,
+				struct LOC_testconflicts *LINK)
 {
   long i;
   konfigt *p;
@@ -5779,20 +5573,20 @@ struct LOC_testconflicts *LINK;
 
   LINK->LINK->pr1 = LINK->LINK->lookant[index1 - 1].point->UU.U1.prodnr;
   LINK->LINK->pr2 = LINK->LINK->lookant[index2 - 1].point->UU.U1.prodnr;
-  cr(2L, LINK->LINK);
+  cr(2, LINK->LINK);
   for (i = 1; i <= 61; i++)
     putc('-', blst);
-  cr(2L, LINK->LINK);
+  cr(2, LINK->LINK);
   fprintf(blst, "LALR(1) conflict of type: REDUCE/REDUCE");
-  cr(4L, LINK->LINK);
+  cr(4, LINK->LINK);
   fprintf(blst, "first conflicting production:");
-  cr(6L, LINK->LINK);
+  cr(6, LINK->LINK);
   p = LINK->LINK->lookant[index1 - 1].point;
   fprintf(blst, "%3ld: ", LINK->LINK->pr1);
-  writem((long)p->UU.U1.prodnr, 0L);
-  cr(6L, LINK->LINK);
+  writem(p->UU.U1.prodnr, 0);
+  cr(6, LINK->LINK);
   fprintf(blst, "Lookahead set:");
-  cr(5L, LINK->LINK);
+  cr(5, LINK->LINK);
   FORLIM = termg;
   for (i = 0; i <= FORLIM; i++) {
     if (LINK->c1[i]) {
@@ -5800,15 +5594,15 @@ struct LOC_testconflicts *LINK;
       putc(' ', blst);
     }
   }
-  cr(4L, LINK->LINK);
+  cr(4, LINK->LINK);
   fprintf(blst, "second conflicting production:");
-  cr(5L, LINK->LINK);
+  cr(5, LINK->LINK);
   p = LINK->LINK->lookant[index2 - 1].point;
   fprintf(blst, "%3ld: ", LINK->LINK->pr2);
-  writem((long)p->UU.U1.prodnr, 0L);
-  cr(6L, LINK->LINK);
+  writem(p->UU.U1.prodnr, 0);
+  cr(6, LINK->LINK);
   fprintf(blst, "lookahead set:");
-  cr(5L, LINK->LINK);
+  cr(5, LINK->LINK);
   FORLIM = termg;
   for (i = 0; i <= FORLIM; i++) {
     if (LINK->c2[i]) {
@@ -5816,20 +5610,20 @@ struct LOC_testconflicts *LINK;
       putc(' ', blst);
     }
   }
-  cr(4L, LINK->LINK);
+  cr(4, LINK->LINK);
   fprintf(blst, "Conflict on symbol(s)");
-  cr(5L, LINK->LINK);
+  cr(5, LINK->LINK);
   FORLIM = termg;
   for (i = 0; i <= FORLIM; i++) {
     if (LINK->c1[i] && LINK->c2[i])
       outalf20(internrep[i + 1], &dummy);
   }
-  cr(4L, LINK->LINK);
+  cr(4, LINK->LINK);
 
   if (!options[34])
     return;
   fprintf(blst, "Backwards trace:");
-  cr(4L, LINK->LINK);
+  cr(4, LINK->LINK);
   LINK->LINK->it1.p = LINK->LINK->pr1;
   LINK->LINK->it1.d = prod[LINK->LINK->it1.p].laengde + 1;
   LINK->LINK->it1.nobot = true;
@@ -5841,9 +5635,7 @@ struct LOC_testconflicts *LINK;
 }  /* REDUCE/REDUCE-CONFLICT */
 
 
-Local Void testconflicts(confstate_, LINK)
-konfigt *confstate_;
-struct LOC_adequad *LINK;
+Local void testconflicts(konfigt *confstate_, struct LOC_adequad *LINK)
 {
   /**************************************************************/
   /* USING GLOBAL VARIABLES:                                    */
@@ -5894,8 +5686,7 @@ struct LOC_adequad *LINK;
 /*                                                                */
 /******************************************************************/
 
-Local Void predtest(LINK)
-struct LOC_adequad *LINK;
+Local void predtest(struct LOC_adequad *LINK)
 {
   long rlink, i;   /* INDEX TO PROD */
   long oldprodno, oldstate;
@@ -5909,9 +5700,9 @@ struct LOC_adequad *LINK;
     skrivparser(gemp);
   fprintf(blst, "\f");
   fputc(lf(), blst);
-  writech('*', 20L);
+  writech('*', 20);
   fprintf(blst, " PRED-TEST (OPTION 38) ");
-  writech('*', 20L);
+  writech('*', 20);
   fprintf(blst, "%c%c", lf(), lf());
   fprintf(blst, "PRODNO     STATE      PRED%c%c", lf(), lf());
   oldprodno = -1;
@@ -5921,7 +5712,7 @@ struct LOC_adequad *LINK;
     t = prod[i].start;
     while (t != rhsnil) {
       rlink = -1;
-      pred(i, prod[i].laengde + 1L, rhs[t].parserp, &rlink, &s, LINK);
+      pred(i, prod[i].laengde + 1, rhs[t].parserp, &rlink, &s, LINK);
       while (s != NULL) {
 	if (oldprodno == i)
 	  fprintf(blst, "         ");
@@ -5934,17 +5725,14 @@ struct LOC_adequad *LINK;
 	  fprintf(blst, "%7ld   ", (long)rhs[t].parserp);
 	oldstate = (long)rhs[t].parserp;
 	fprintf(blst, "%12ld%c", (long)s, lf());
-	pred(i, prod[i].laengde + 1L, rhs[t].parserp, &rlink, &s, LINK);
+	pred(i, prod[i].laengde + 1, rhs[t].parserp, &rlink, &s, LINK);
       }
       t = rhs[t].link;
     }
   }
 }  /* PREDTEST */
 
-Local Void looktestud(start, pnr, LINK)
-konfigt *start;
-long pnr;
-struct LOC_adequad *LINK;
+Local void looktestud(konfigt *start, long pnr, struct LOC_adequad *LINK)
 {  /* UDSKRIV LOOKAHEADMAENGDERNE */
   long w, t, FORLIM;
 
@@ -5962,8 +5750,7 @@ struct LOC_adequad *LINK;
   fprintf(blst, "%c%c", lf(), lf());
 }  /* OPTION 37 */
 
-Local Void testlrcond(LINK)
-struct LOC_adequad *LINK;
+Local void testlrcond(struct LOC_adequad *LINK)
 {
   long p[10], d[10];
   long j, i;
@@ -5994,8 +5781,7 @@ struct LOC_adequad *LINK;
 }  /* TESTLR */
 
 
-Local Void lookaheadtest(LINK)
-struct LOC_adequad *LINK;
+Local void lookaheadtest(struct LOC_adequad *LINK)
 {
   long i, t, FORLIM;
 
@@ -6003,11 +5789,11 @@ struct LOC_adequad *LINK;
     return;
   fprintf(blst, "\f");
   fputc(lf(), blst);
-  writech('*', 25L);
+  writech('*', 25);
   fprintf(blst, " LOOKAHEAD-TEST ");
-  writech('*', 25L);
+  writech('*', 25);
   fputc(lf(), blst);
-  writech(' ', 25L);
+  writech(' ', 25);
   if (options[26])
     fprintf(blst, " OLD LOOKAHEAD%c", lf());
   else
@@ -6019,7 +5805,7 @@ struct LOC_adequad *LINK;
       if (options[26])
 	lalrlookahead(rhs[t].parserp, i, LINK);
       else
-	lookahead(rhs[t].parserp, i, 0L, LINK->la1, LINK);
+	lookahead(rhs[t].parserp, i, 0, LINK->la1, LINK);
       looktestud(rhs[t].parserp, i, LINK);
       t = rhs[t].link;
     }
@@ -6035,7 +5821,7 @@ struct LOC_adequad *LINK;
 /**************************************************************/
 
 
-Static Void adequad()
+Static void adequad(void)
 {
   struct LOC_adequad V;
   long pnr, lsymb, i, j, k, l;
@@ -6094,8 +5880,8 @@ Static Void adequad()
       V.helpp = V.helpp->derivp;
     } while (V.helpp != NULL);
     if (V.prodant > const14)
-      consterror("ADEQUAD   ", "CONST6    ", (long)const6);
-    updatemax(6L, V.prodant);
+      consterror("ADEQUAD   ", "CONST6    ", const6);
+    updatemax(6, V.prodant);
 
     /* test if the state is inadequate or adequate       */
     if (V.prodant > 1 || V.prodant == 1 && V.termant > 0)
@@ -6114,11 +5900,11 @@ Static Void adequad()
 	  if (options[26])   /* Old LookAhead */
 	    lalrlookahead(start, pnr, &V);
 	  else  /* New LookAhead  */
-	    lookahead(start, pnr, 0L, V.la1, &V);
+	    lookahead(start, pnr, 0, V.la1, &V);
 	  /**********************************************/
 
 	  l = V.lalaengde - 1;
-	  allocp(&lqbep1, 1L, "ADEQUAD   ");
+	  allocp(&lqbep1, 1, "ADEQUAD   ");
 	  V.helpp->nextp = lqbep1;
 	  V.prodant++;
 	  V.lookant[V.prodant - 1].ant = V.lalaengde;
@@ -6133,7 +5919,7 @@ Static Void adequad()
 	    if (j == l)
 	      lqbep2->derivp = V.helpp->derivp;
 	    else {
-	      allocp(&lqbep1, 1L, "ADEQUAD   ");
+	      allocp(&lqbep1, 1, "ADEQUAD   ");
 	      lqbep2->derivp = lqbep1;
 	    }
 	  }
@@ -6142,7 +5928,7 @@ Static Void adequad()
 	  if (WITH->UU.U1.inf <= symbmax(&V) && WITH->nextp != NULL) {
 	    V.termant++;
 	    if (V.termant > const2)
-	      consterror("ADEQUAD   ", "CONST2    ", (long)const2);
+	      consterror("ADEQUAD   ", "CONST2    ", const2);
 	    else {
 	      V.stack[V.termant - 1].symb = WITH->UU.U1.inf;
 	      V.stack[V.termant - 1].pnr = WITH->UU.U1.prodnr;
@@ -6263,17 +6049,17 @@ Static Void adequad()
 
   /*******************************/
   if (options[11])
-    adeqwrite(6L, &V);
+    adeqwrite(6, &V);
   if (V.lrok)   /* IF NOT LROK */
-    lalrtext(1L, &V);
+    lalrtext(1, &V);
   /********************************* experimental change ********/
   /*    end********/
   /* IF LROK THEN */
   /*   else
         begin******/
   if (V.lrok == false) {
-    adeqwrite(6L, &V);
-    lalrtext(2L, &V);
+    adeqwrite(6, &V);
+    lalrtext(2, &V);
     /****  stop(0) ;*********/
   }
   /*******************************/
@@ -6332,16 +6118,13 @@ struct LOC_finalparser {
 } ;
 
 
-Local Void copy_(ch, skip, LINK)
-Char *ch;
-boolean skip;
-struct LOC_finalparser *LINK;
+Local void copy_(Char *ch, boolean skip, struct LOC_finalparser *LINK)
 {
   if (P_eof(parsin)) {
     fputc(lf(), blst);
     fprintf(blst, " FILE PARSIN IS NOT A CORRECT PARSER ");
     msg("=ERROR(S) IN FILE   PARSIN              ");
-    stop(0L);
+    stop(0);
     return;
   }
   /* changed by JLK to please p2c:
@@ -6371,9 +6154,7 @@ struct LOC_finalparser *LINK;
 }  /*COPY*/
 
 
-Local Void search(skip, LINK)
-boolean skip;
-struct LOC_finalparser *LINK;
+Local void search(boolean skip, struct LOC_finalparser *LINK)
 {
   Char a[5];
   long i;
@@ -6405,9 +6186,7 @@ struct LOC_finalparser *LINK;
   copy_(&ch, skip, LINK);
 }  /*SEARCH*/
 
-Local long stateno(pt, LINK)
-konfigt *pt;
-struct LOC_finalparser *LINK;
+Local long stateno(konfigt *pt, struct LOC_finalparser *LINK)
 {
   long k, l, u, sno, ptSeq;
 
@@ -6445,8 +6224,7 @@ struct LOC_finalparser *LINK;
   /*BINARY SEARCH*/
 }  /*STATENO*/
 
-Local Void emitconstants(LINK)
-struct LOC_finalparser *LINK;
+Local void emitconstants(struct LOC_finalparser *LINK)
 {
   long m;
 
@@ -6531,19 +6309,16 @@ struct LOC_convertlex {
   struct LOC_emitlex *LINK;
 } ;
 
-Local Void incrtinx(LINK)
-struct LOC_convertlex *LINK;
+Local void incrtinx(struct LOC_convertlex *LINK)
 {
   if (LINK->LINK->tinx < const12)
     LINK->LINK->tinx++;
   else
-    consterror("CONVERTLEX", " CONST12  ", (long)const12);
-  updatemax(12L, LINK->LINK->tinx);
+    consterror("CONVERTLEX", " CONST12  ", const12);
+  updatemax(12, LINK->LINK->tinx);
 }
 
-Local Void visit(p, LINK)
-termelm *p;
-struct LOC_convertlex *LINK;
+Local void visit(termelm *p, struct LOC_convertlex *LINK)
 {
   lxelm *WITH1;
 
@@ -6565,8 +6340,7 @@ struct LOC_convertlex *LINK;
   visit(p->higherp, LINK);
 }  /*VISIT*/
 
-Local Void convertlex(LINK)
-struct LOC_emitlex *LINK;
+Local void convertlex(struct LOC_emitlex *LINK)
 {
   struct LOC_convertlex V;
   Char c;
@@ -6596,8 +6370,7 @@ struct LOC_emitlex *LINK;
   }
 }  /*CONVERTLEX*/
 
-Local Void emitlex(LINK)
-struct LOC_finalparser *LINK;
+Local void emitlex(struct LOC_finalparser *LINK)
 {
   struct LOC_emitlex V;
   long t;
@@ -6626,8 +6399,7 @@ struct LOC_finalparser *LINK;
   }
 }  /*EMITLEX*/
 
-Local boolean nolookahead(p)
-long p;
+Local boolean nolookahead(long p)
 {
   long i;
 
@@ -6642,8 +6414,7 @@ long p;
   }
 }
 
-Local Void emitpars(LINK)
-struct LOC_finalparser *LINK;
+Local void emitpars(struct LOC_finalparser *LINK)
 {
   lrinx si, FORLIM;
   lrelm *WITH;
@@ -6654,7 +6425,7 @@ struct LOC_finalparser *LINK;
   for (si = 0; si <= FORLIM; si++) {
     WITH = &LINK->lr[si];
     if (WITH->kind == 3) {
-      if (nolookahead((long)rhs[prod[WITH->UU.U0.prodn].start].first))
+      if (nolookahead(rhs[prod[WITH->UU.U0.prodn].start].first))
 	WITH->kind = 7;
     }
     if (WITH->kind == 7)
@@ -6688,9 +6459,7 @@ struct LOC_compress {
   lrinx si, sstart;
 } ;
 
-Local Void lapres(start, LINK)
-konfigt **start;
-struct LOC_compress *LINK;
+Local void lapres(konfigt **start, struct LOC_compress *LINK)
 {
   konfigt *sp;
   long m;
@@ -6707,7 +6476,7 @@ struct LOC_compress *LINK;
   }
   m = 4;
   optimize(&sp, &m);
-  allocp(&classtop, 1L, "LAPRES    ");
+  allocp(&classtop, 1, "LAPRES    ");
   oldp->derivp = classtop;   /*OLDP IS SET IN OPTIMIZE*/
   WITH = classtop;
   WITH->UU.U1.inf = 0;
@@ -6718,9 +6487,7 @@ struct LOC_compress *LINK;
   *start = begintilst;
 }  /*LAPRES*/
 
-Local Void deletetail(s, LINK)
-long s;
-struct LOC_compress *LINK;
+Local void deletetail(long s, struct LOC_compress *LINK)
 {
   long t;
   lrinx sinx, tinx, sx, tx, oldsinx, smatch;
@@ -6786,8 +6553,7 @@ _L20:
          writeln(tables,stateNo(lookBackEntry[I]));
      END; */
 
-Local Void compress(LINK)
-struct LOC_finalparser *LINK;
+Local void compress(struct LOC_finalparser *LINK)
 {
   /* THE CLASS PARSER IS COMPRESSED INTO THE ARRAY LR*/
   struct LOC_compress V;
@@ -6859,7 +6625,7 @@ struct LOC_finalparser *LINK;
       }/*CASE*/
       statep = WITH1->derivp;
       if (V.si >= const7 - 1)
-	consterror("COMPRESS  ", "CONST7    ", (long)const7);
+	consterror("COMPRESS  ", "CONST7    ", const7);
       V.si++;
     }
     if (tailoptim && ((1L << LINK->lr[V.sstart].kind) & 0x16) != 0)
@@ -6906,8 +6672,7 @@ struct LOC_finalparser *LINK;
   }  /*FOR*/
 }  /*COMPRESS*/
 
-Local Void errortable(LINK)
-struct LOC_finalparser *LINK;
+Local void errortable(struct LOC_finalparser *LINK)
 {
   long i, i5, no, j, StateIcount, StateJcount;
   lrinx lqbep, testp, gemp;
@@ -6935,8 +6700,8 @@ struct LOC_finalparser *LINK;
       if (no < const1)
 	no++;
       else
-	consterror("ERRORTABLE", "CONST1    ", (long)const1);
-      updatemax(1L, no);
+	consterror("ERRORTABLE", "CONST1    ", const1);
+      updatemax(1, no);
       WITH->errorno = no;
       i5 = 0;
       LINK->lr[WITH->newstart].UU.U1.err = no;
@@ -6950,7 +6715,7 @@ struct LOC_finalparser *LINK;
 	  fprintf(blst, "%c%s%s", lf(), blank, blank);
 	  i5 = 0;
 	}
-	symbwrite(blst, (long)WITH1->UU.U1.symb, &i5);
+	symbwrite(WITH1->UU.U1.symb, &i5);
 	putc(' ', blst);
 	lqbep = WITH1->chain;
 	i5++;
@@ -6995,8 +6760,7 @@ _L33: ;   /* NOT IDENTICAL      */
   LINK->errorcount = no;
 }
 
-Local Void spl_(a)
-Char *a;
+Local void spl_(Char *a)
 {
   long i;
 
@@ -7006,8 +6770,7 @@ Char *a;
   }
 }
 
-Local Void spl20_(a)
-Char *a;
+Local void spl20_(Char *a)
 {
   long i;
 
@@ -7017,8 +6780,7 @@ Char *a;
   }
 }
 
-Local Void tv_(p)
-nontelm *p;
+Local void tv_(nontelm *p)
 {
   if (p == NULL)
     return;
@@ -7031,8 +6793,7 @@ nontelm *p;
   putc('\n', tables);
 }
 
-Local Void emitlabels(LINK)
-struct LOC_finalparser *LINK;
+Local void emitlabels(struct LOC_finalparser *LINK)
 {
   long pn, i, FORLIM;
   prodtype *WITH;
@@ -7069,7 +6830,7 @@ struct LOC_finalparser *LINK;
 }  /*EMITLABELS*/
 
 
-Static Void finalparser()
+Static void finalparser(void)
 {
   struct LOC_finalparser V;
   long i;
@@ -7126,9 +6887,9 @@ Static Void finalparser()
   /*     IF options[57] then emitLookBackEntry;*/
   if (options[32] || options[33])
     emitlabels(&V);
-  updatemax(7L, V.smax + 1);
+  updatemax(7, V.smax + 1);
 
-/* p2c: exbobs.p, line 5141: Note:
+/* p2c: exbobs.p, line 5142: Note:
  * Format for packed-array-of-char will work only if width < length [321] */
 }  /*FINALPARSER*/
 
@@ -7139,9 +6900,7 @@ Static Void finalparser()
 /*                                                    */
 /******************************************************/
 
-main(argc, argv)
-int argc;
-Char *argv[];
+main(int argc, Char *argv[])
 {
   PASCAL_MAIN(argc, argv);
   if (setjmp(_JL999))
@@ -7219,8 +6978,8 @@ Char *argv[];
   initempty();
   /*   RoseGram; */
   outgrammar();
-  updatemax(1L, antalprod);
-  updatemax(2L, nontslut);
+  updatemax(1, antalprod);
+  updatemax(2, nontslut);
   if (options[46])
     timecheck("OUT-GRAMMAR         ");
   if (options[45])
@@ -7230,8 +6989,8 @@ Char *argv[];
 
   lr0();
   lookb();
-  updatemax(10L, antaltilst);
-  updatemax(4L, top);
+  updatemax(10, antaltilst);
+  updatemax(4, top);
   if (options[46])
     timecheck("LR0 & LOOKB         ");
   if (options[45])

@@ -83,7 +83,7 @@
 /* removed by JLK to please p2c: ,parsin,parsout,tables*/
 
 #define const1          2400
-#define const2          900
+#define const2          1200   /* datpete: 9/3/99 was 900 */
 #define const3          720
 
 #define const4          80000L   /* JLK: 17/6-95 was 40000 */
@@ -91,20 +91,23 @@
 #define const5          63
 #define const6          6000
 #define const7          20000
-#define const8          480   /* JLK: 17/6-95 was 240 */
+#define const8          600
+/* datpete 9/3/99: was 480 */
+/* JLK: 17/6-95 was 240 */
 #define const9          10000   /* ESS: 30/6-95 was 2000 */
 #define const10         7200
 #define const11         130
-#define const12         840
+#define const12         1500   /*datpete: 9/3/99: was 840 */
 #define const13         5
 #define const14         15
 #define const16         10000
 /*NOTICE: CONST16>CONST2*/
 /* JLK: 17/6-95 was 5000 */
 #define const18         75
-#define const19         12000   /*MAX SIZE OF ARRAY LABELBUF/ SUM OF LENGTH */
+#define const19         18000   /* datpete: 9/3/99: was 12000 */
+/* MAX SIZE OF ARRAY LABELBUF/ SUM OF LENGTH */
 /* OF ALL PRODUCTION LABELS (OPTIONS[34])   */
-#define const20         1200   /*max length of a production label */
+#define const20         1200   /* max length of a production label */
 
 #define minch           ' '
 #define maxch           '~'   /*THE FIRST/LAST CHAR IN TYPE CHAR*/
@@ -655,7 +658,7 @@ Static void outalf(Char *a, long *t)
   i = alfalength;
   while (a[i - 1] == ' ')
     i--;
-/* p2c: exbobs.p, line 418: Note:
+/* p2c: exbobs.p, line 419: Note:
  * Format for packed-array-of-char will work only if width < length [321] */
   fprintf(blst, "%.*s", (int)i, a);
   *t += i;
@@ -673,7 +676,7 @@ Static void outalf20(Char *a, long *t)
   i = alfal20;
   while (a[i - 1] == ' ')
     i--;
-/* p2c: exbobs.p, line 428: Note:
+/* p2c: exbobs.p, line 429: Note:
  * Format for packed-array-of-char will work only if width < length [321] */
   fprintf(blst, "%.*s", (int)i, a);
   *t += i;
@@ -958,7 +961,7 @@ Static void constval(long c, Char *r)
   j = 10;
   do {
     b = a % 10;
-/* p2c: exbobs.p, line 598:
+/* p2c: exbobs.p, line 599:
  * Note: Using % for possibly-negative arguments [317] */
     a /= 10;
     gem[j] = (Char)(b + '0');
@@ -972,13 +975,13 @@ Static void constval(long c, Char *r)
 
 Static void consterror(Char *s1, Char *s2, long cc)
 {
-  printf("!!!!! ERROR IN %.*s: %.*sTO SMALL (%ld)\n",
+  printf("!!!!! ERROR IN %.*s: %.*sTOO SMALL (%ld)\n",
 	 alfalength, s1, alfalength, s2, cc);
-  fprintf(blst, "\n\n***** ERROR IN %.*s: %.*sTO SMALL (%ld)",
+  fprintf(blst, "\n\n***** ERROR IN %.*s: %.*sTOO SMALL (%ld)",
 	  alfalength, s1, alfalength, s2, cc);
   /*     constval(cc,aa);
        m[1]:=s2; m[3]:=aa;
-       m[2]:=' TO SMALL '; m[4]:='          ';
+       m[2]:=' TOO SMALL '; m[4]:='          ';
        for i:=1 to 4 do
        for j:=1 to 10 do ms[(i-1)*10+j]:=m[i,j];
         writeln(ms); writeln(blst,ms);
@@ -1179,7 +1182,7 @@ Static void matrixout(rtype *s)
 	putc('1', blst);
       else
 	putc('0', blst);
-/* p2c: exbobs.p, line 763:
+/* p2c: exbobs.p, line 764:
  * Note: Using % for possibly-negative arguments [317] */
     }
   }
@@ -2635,14 +2638,14 @@ Local long findlabel(Char *lab, long labellength, struct LOC_ingrammar *LINK)
 	    lf(), (int)labellength, lab, lf());
     Result = -1;
   }
-/* p2c: exbobs.p, line 1817: Note:
+/* p2c: exbobs.p, line 1818: Note:
  * Format for packed-array-of-char will work only if width < length [321] */
   if (no > 1) {
     fprintf(blst, "%cLABEL DECLARED MORE THAN ONCE: %.*s%c",
 	    lf(), (int)labellength, lab, lf());
     return -1;
   }
-/* p2c: exbobs.p, line 1822: Note:
+/* p2c: exbobs.p, line 1823: Note:
  * Format for packed-array-of-char will work only if width < length [321] */
   return Result;
 }
@@ -5209,7 +5212,7 @@ Local boolean enterdone_(konfigt *r, item it1, item it2, boolean swap_,
 
   V.LINK = LINK;
   V.swap = swap_;
-/* p2c: exbobs.p, line 3952:
+/* p2c: exbobs.p, line 3953:
  * Note: Taking & of possibly promoted param swap [324] */
   sort(&it1, &it2, &V.swap, LINK);
   Result = false;
@@ -5377,7 +5380,7 @@ Local void cond(item ir_, item jr_, konfigt *t, boolean *lr_, long level_,
   V.level = level_;
   V.conflict = conflict_;
   V.swap = swap_;
-/* p2c: exbobs.p, line 4056:
+/* p2c: exbobs.p, line 4057:
  * Note: Taking & of possibly promoted param swap [324] */
   sort(&V.ir, &V.jr, &V.swap, LINK);
   V.is = V.ir;
@@ -6885,7 +6888,7 @@ Static void finalparser(void)
     emitlabels(&V);
   updatemax(7, V.smax + 1);
 
-/* p2c: exbobs.p, line 5141: Note:
+/* p2c: exbobs.p, line 5142: Note:
  * Format for packed-array-of-char will work only if width < length [321] */
 }  /*FINALPARSER*/
 
