@@ -3,7 +3,7 @@
  * Provides support for reading code labels from the nametable of an 
  * executable file.
  *
- * Sets up a fd to nm output and reads the nametable from this descriptor.
+ * Sets up a fp to nm output and reads the nametable from this file pointer.
  * 
  * This file is used by
  *   - debugger 
@@ -16,6 +16,9 @@
 
 #ifdef nti_gnu
 #  include "winntdef.h"
+
+void unlink(const char *name);
+
 #endif /* nti_gnu */
 
 #include "beta.h"
@@ -64,8 +67,8 @@
 #ifdef nti
 #define Hexadecimal
 #define NMOUTFILE "temp.nmoutfile"
-#define NMSORTOUTFILE "temp.nmsortoutfile"
-#define pclose(fd) fclose(fd); unlink(NMSORTOUTFILE) /* ; fprintf(output,"Close & deleting %s\n",NMSORTOUTFILE)*/
+#undef pclose
+#define pclose(fp) fclose(fp); /* unlink(NMOUTFILE) / * ; fprintf(output,"Close & deleting %s\n",NMOUTFILE)*/
 static void DumpFile(labeltable *table, LPSTR filename);
 #endif /* nti */
 
@@ -81,10 +84,10 @@ void findNextLabel (labeltable *table)
 
   while (1) {
     table->NextAddress=0;
-    while ((ch=fgetc (table->fd))!=' ') {
+    while ((ch=fgetc (table->fp))!=' ') {
       if (ch==EOF) {
 	table->NextAddress = -1; /* datpete 14/3/96: changed from 0 */
-	pclose (table->fd);
+	pclose (table->fp);
 	return;
       }
 #ifdef Hexadecimal
@@ -101,7 +104,7 @@ void findNextLabel (labeltable *table)
 #endif
     }
 
-    while ((ch=fgetc (table->fd))==' ') {
+    while ((ch=fgetc (table->fp))==' ') {
       ;
     }
 
@@ -109,24 +112,24 @@ void findNextLabel (labeltable *table)
 
     if (!table->full){
       if ((type != 'N') && (type != 'T')) {
-	while (fgetc (table->fd) != '\n') {
+	while (fgetc (table->fp) != '\n') {
 	  continue;
 	}
 	continue;
       }
     }
     
-    fgetc (table->fd);
+    fgetc (table->fp);
     
     inx=0;
-    while ((ch = fgetc(table->fd))!='\n') {
+    while ((ch = fgetc(table->fp))!='\n') {
       if (ch == ' ') {
 	/* Skipping blanks */
 	;
       } else if (ch == EOF)  {
 	/* Error */
 	table->NextAddress = -1; 
-	pclose (table->fd);
+	pclose (table->fp);
 	return;
       } else {
 	if (inx < MAXLABLELENGTH - 1) {
@@ -143,7 +146,10 @@ void findNextLabel (labeltable *table)
 
 labeltable *initReadNameTable (char* execFileName, int full)
 { 
+#ifndef nti
   char command[100];
+#endif /* nti */
+
   labeltable *table = (labeltable*)MALLOC(sizeof(labeltable));
 
 #ifdef ppcmac
@@ -156,6 +162,7 @@ labeltable *initReadNameTable (char* execFileName, int full)
     return 0;
   }
   table->full = full;
+
 #ifndef nti 
   /* ! nti */
   if (full){
@@ -163,27 +170,28 @@ labeltable *initReadNameTable (char* execFileName, int full)
   } else {
     sprintf (command,TERSE_NMCOMMAND,execFileName);
   }
-  table->fd = popen(command, "r");
+  table->fp = popen(command, "r");
 #else /* nti */
   table->main_logical=0;
   table->textSectionNumber=0;
   table->PCOFFSymbolTable=0;
   table->COFFSymbolCount=0;
+  table->name_buffer = NULL;
+  table->name_space = 0;
+  table->name_count = 0;
+  table->names = NULL;
 
   /*fprintf(output,"Opening %s\n",NMOUTFILE);*/
-  if ((table->fd = fopen(NMOUTFILE,"w+"))==NULL) {
+  if ((table->fp = fopen(NMOUTFILE,"w+"))==NULL) {
     fprintf(output,"couldn't open file %s\n",NMOUTFILE); 
     FREE(table);
     return 0;
   }
   /* run nm */
   DumpFile(table, execFileName );
-  fclose (table->fd);
-  sprintf(command,"sort < %s > %s",NMOUTFILE,NMSORTOUTFILE);
-  system(command);
-  unlink(NMOUTFILE);
-  if ((table->fd = fopen(NMSORTOUTFILE,"r"))==NULL) {
-    fprintf(output,"couldn't open file %s\n",NMSORTOUTFILE); 
+  fclose (table->fp);
+  if ((table->fp = fopen(NMOUTFILE,"r"))==NULL) {
+    fprintf(output,"couldn't open file %s\n",NMOUTFILE); 
     FREE(table);
     return 0;
   }
@@ -245,8 +253,8 @@ static void DumpSymbolTable(labeltable *table,
 			    unsigned cSymbols);
 static void DumpSectionTable(labeltable *table,
 			     PIMAGE_SECTION_HEADER section,
-			     unsigned cSections,
-			     BOOL IsEXE);
+			     unsigned cSections);
+static int indirectstrcmp(const char **s1, const char **s2);
 
 typedef struct
 {
@@ -275,15 +283,14 @@ static char * SzStorageClass2[] = {
 
 static void DumpSectionTable(labeltable *table,
 			     PIMAGE_SECTION_HEADER section,
-			     unsigned cSections,
-			     BOOL IsEXE)
+			     unsigned cSections)
 {
     unsigned i;
     table->textSectionNumber = (DWORD)-1;
 
     for ( i=1; i <= cSections; i++, section++ )
     {
-      if (strcmp(section->Name,TEXTSECTIONNAME)==0) {
+      if (strcmp((const char *)section->Name,TEXTSECTIONNAME)==0) {
 	table->textSectionNumber = (DWORD)i;
 	break;
       }
@@ -297,9 +304,11 @@ static void DumpSectionTable(labeltable *table,
 static void DumpExeFile(labeltable *table, PIMAGE_DOS_HEADER dosHeader) {
   PIMAGE_NT_HEADERS pNTHeader;
   DWORD base = (DWORD)dosHeader;
+  int i;
   
   pNTHeader = MakePtr( PIMAGE_NT_HEADERS, dosHeader,
 		       dosHeader->e_lfanew );
+
   
   /* First, verify that the e_lfanew field gave us a reasonable */
   /* pointer, then verify the PE signature. */
@@ -328,7 +337,7 @@ static void DumpExeFile(labeltable *table, PIMAGE_DOS_HEADER dosHeader) {
 
   DumpSectionTable( table,
 		    IMAGE_FIRST_SECTION(pNTHeader), 
-		    pNTHeader->FileHeader.NumberOfSections, TRUE);
+		    pNTHeader->FileHeader.NumberOfSections);
 
   /*
    * Initialize these vars here since we'll need them in DumpLineNumbers
@@ -341,8 +350,12 @@ static void DumpExeFile(labeltable *table, PIMAGE_DOS_HEADER dosHeader) {
   if ( pNTHeader->FileHeader.NumberOfSymbols 
        && pNTHeader->FileHeader.PointerToSymbolTable) {
     DumpSymbolTable(table,table->PCOFFSymbolTable, table->COFFSymbolCount);
-    fprintf(table->fd,"\n");
   }
+
+  qsort(table->names, table->name_count, sizeof(char *),
+        (int (*)(const void *, const void *))indirectstrcmp);
+  for (i = 0; i < table->name_count; i++)
+    fprintf(table->fp, "%s\n", table->names[i]);
 }
 
 static void DumpFile(labeltable *table, LPSTR filename) {
@@ -395,44 +408,75 @@ static void DumpSymbolTable(labeltable *table,
 			    unsigned cSymbols) {
   unsigned i;
   PSTR stringTable;
-  char sectionName[10];
   
   /* The string table apparently starts right after the symbol table */
-  stringTable = (PSTR)&pSymbolTable[cSymbols]; 
+  /* Due to packing problems on gcc (18 byte long struct) we don't do this the simple way  -EC */
+  /* stringTable = (PSTR)&pSymbolTable[cSymbols]; */
+  stringTable = ((PSTR)pSymbolTable) + IMAGE_SIZEOF_SYMBOL * cSymbols;
   
   for (i=0; i < cSymbols; i++) {
     if (SECTION_CONDITION) {
       if (SzStorageClass1[2]==GetSZStorageClass(pSymbolTable->StorageClass)) {
-	
-	/* this symbol passed */
-	sprintf(sectionName,"N"); /* Identification really don't matter for BETA */
-	if (pSymbolTable) {
-	  fprintf(table->fd,"%08X", pSymbolTable->Value);
-	} else 
+	long space_needed = 0;
+	if (table->name_count >= table->name_space) {
+	  int new_size = table->name_space;
+	  int old;
+          PSTR *new_names;
+
+	  new_names = MALLOC((table->name_space * 4 + 15) * sizeof(char *));
+	  for (old = 0; old < new_size; old++)
+	    new_names[old] = table->names[old];
+	  for ( ; new_size < table->name_space * 4 + 15; new_size++)
+	    new_names[new_size] = 0;
+          table->names = new_names;
+	  table->name_space = new_size;
+	}
+
+	if (!pSymbolTable)
 	  fprintf(output,"DumpSymbolTable (i=%d) pSymbolTable is NULL\n", pSymbolTable->Value);
-	fprintf(table->fd," %s ", sectionName);
+
+        /* Strings in C really suck rocks through a straw!  I need 8 for
+	 * the address, 3 for the " N ", 1 for the null, 2 for luck.  If you
+	 * change this don't forget both +11's a few lines down.
+	 */
+	space_needed = 14 + (pSymbolTable->N.Name.Short ?  8 :
+	                     strlen(stringTable + pSymbolTable->N.Name.Long));
+
+	if (space_needed > table->name_buffer_space) {
+	  table->name_buffer = MALLOC(20000);
+	  table->name_buffer_space = 20000;
+	}
+
+	/* this symbol passed */
+	sprintf(table->name_buffer,"%08X N ", pSymbolTable->Value);
 	if ( pSymbolTable->N.Name.Short != 0 ){
-	  fprintf(table->fd,"%-20.8s", pSymbolTable->N.ShortName);
+	  memcpy(table->name_buffer+11,
+                 (const char *)&(pSymbolTable->N.ShortName), 8);
+	  table->name_buffer[19] = 0;
 	  if (!table->main_logical){
-	    if (strncmp(pSymbolTable->N.ShortName, "_main", 8)==0){
+	    if (strncmp((const char *)pSymbolTable->N.ShortName, "_main", 8)==0){
 	      table->main_logical = pSymbolTable->Value;
 	    }
 	  }
 	} else {
-	  fprintf(table->fd,"%-20s", stringTable + pSymbolTable->N.Name.Long);
+	  sprintf(table->name_buffer+11, "%s%c",
+	          stringTable + pSymbolTable->N.Name.Long, 0);
 	  if (!table->main_logical){
 	    if (strcmp(stringTable + pSymbolTable->N.Name.Long, "_main")==0){
 	      table->main_logical = pSymbolTable->Value;
 	    }
 	  }
 	}
-	fprintf(table->fd,"\n");
+	table->names[table->name_count++] = table->name_buffer;
+	table->name_buffer_space -= space_needed;
+	table->name_buffer += space_needed;
       }
     }
     /* Take into account any aux symbols */
     i += pSymbolTable->NumberOfAuxSymbols;
-    pSymbolTable += pSymbolTable->NumberOfAuxSymbols;
-    pSymbolTable++;
+    /* Due to packing problems on gcc (18 byte long struct) we don't do this the simple way  -EC */
+    /* pSymbolTable += pSymbolTable->NumberOfAuxSymbols + 1; */
+    pSymbolTable = (PIMAGE_SYMBOL)((char *)pSymbolTable + IMAGE_SIZEOF_SYMBOL * (pSymbolTable->NumberOfAuxSymbols + 1));
   }
 }
 
@@ -444,6 +488,11 @@ static PSTR GetSZStorageClass(BYTE storageClass) {
     return SzStorageClass2[storageClass-IMAGE_SYM_CLASS_BLOCK];
   else
     return "???";
+}
+
+static int indirectstrcmp(const char **s1, const char **s2)
+{
+  return strcmp(*s1, *s2);
 }
 
 #endif /* nti */

@@ -277,15 +277,21 @@ typedef void (*CellDisplayFunc)(long PC, Object *theObj);
 #define MAXLABLELENGTH 200
 
 typedef struct _labeltable {
-  FILE *fd;            /* The file descriptor from which the nameTable is read */
-  int NextAddress;     /* The last address read from the fd. */
-  char NextLabel[MAXLABLELENGTH]; /* The last label read from the fd. */
+  FILE *fp;            /* The file pointer from which the nameTable is read */
+  int NextAddress;     /* The last address read from the fp. */
+  char NextLabel[MAXLABLELENGTH]; /* The last label read from the fp. */
   int full;            /* Include all symbols? */
 #ifdef nti
-  int main_logical;  /* Used to calculate offset for mapped process */
+  int main_logical;    /* Used to calculate offset for mapped process */
   DWORD textSectionNumber;
   PIMAGE_SYMBOL PCOFFSymbolTable;
   DWORD COFFSymbolCount;
+  char *name_buffer;   /* We don't need to keep all the name buffer addresses */
+                       /* around as we never need to free them */
+  long name_buffer_space; /* How much space is available in the current buffer*/
+  char **names;        /* One big array of pointers to strings */
+  int name_count;      /* How many names are in the names array */
+  int name_space;      /* How many names are there space for */
 #endif /* nti */
 } labeltable;
 

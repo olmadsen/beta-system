@@ -127,6 +127,9 @@ typedef struct _IMAGE_COFF_SYMBOLS_HEADER {
     DWORD   RvaToFirstByteOfData;
     DWORD   RvaToLastByteOfData;
 } IMAGE_COFF_SYMBOLS_HEADER, *PIMAGE_COFF_SYMBOLS_HEADER;
+
+// This should never change, but if it does, then don't forget to update
+// the SIZEOF macro after it!  -EC
 typedef struct _IMAGE_SYMBOL {
     union {
         BYTE    ShortName[8];
