@@ -260,6 +260,20 @@ void DOTinit ()
 int DOThandleInsert (Object *ObjRef, DOTonDelete onDelete, int allowCompaction)
 { int handle, DOTinx;
   
+#ifdef RTDEBUG
+{
+  ProtoType *proto;
+  proto = GETPROTO(ObjRef);
+  if (!isSpecialProtoType(proto) && !IsPrototypeOfProcess((long)proto)) {
+    fprintf(output, 
+	    "DOThandleInsert: Object at 0x%x has illegal proto 0x%x\n",
+	    (int)ObjRef, (int)proto);
+    Illegal();
+  }
+}
+#endif
+
+
   if ((DOTinx = DOTinsert (ObjRef,allowCompaction)) == -1)
     return -1;
   
@@ -303,9 +317,20 @@ Object *DOThandleLookup (int handle)
 { Object *objAdr;
   
   objAdr = (Object *)DOT[handleTable[(int)handle]];
-  if (objAdr == 0)
+  if (objAdr == 0) {
     privDOThandleDelete (handle);
-
+  }
+#ifdef RTDEBUG
+  else {
+    ProtoType *proto;
+    proto = GETPROTO(objAdr);
+    if (!isSpecialProtoType(proto) && !IsPrototypeOfProcess((long)proto)) {
+      fprintf(output, 
+	      "DOThandleLookup: Object at 0x%x has illegal proto 0x%x\n",
+	      (int)objAdr, (int)proto);
+    }
+  }
+#endif
   return objAdr;
 }
 
