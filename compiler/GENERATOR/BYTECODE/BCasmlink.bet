@@ -12,16 +12,10 @@ INCLUDE '~beta/containers/list';
  *)
 
 --lib: attributes--
-use_clr_betarun:
-  (# exit false #);
-use_clr_modules:
-  (# exit false #);
 main_in_program:
   (# exit true #);
-
-generate_jar_manifest:
-  (# exit false #);
 use_java_classpath:
+  (* Use 'java -cp ... for eecuting jar files instead of 'java -jar ...' *)
   (# exit true #);
 
 unQuote:
@@ -97,15 +91,18 @@ hostIsWindows: booleanValue
   (# 
   do ('nti'->((1,3)->(machine_type).sub).equal) -> value;
   #);
-jarfilename:
+applicationbase:
   (# path: ^text;
      e: @diskentry;
   do CodeDirectory.copy -> path[] (* Full path *);
      DirectoryChar -> path.put;
-     objname[] -> e.path;
-     e.path.name -> path.append;
-     '.jar' -> path.append;
+     objname[] -> e.path; e.path.name -> path.append;
+     INNER
   exit path[]
+  #);
+jarfilename: applicationbase
+  (# 
+  do '.jar' -> path.append;
   #);
 
 --asmState:descriptor--
@@ -163,11 +160,7 @@ do (if true
 (# 
 do (if true
     // isIL then
-       (if use_clr_modules then
-           '.netmodule' -> ext;
-        else
-           '.dll' -> ext;
-       if);
+       '.dll' -> ext;
     // isJava then
        '.dep' -> ext
     else
@@ -319,11 +312,7 @@ do (if common.switch[184] or common.switch[189] then
                '/output:' -> AFF.puttext;
                '.il' -> F.stripextension;
                F[] -> AFF.puttext;
-               (if use_clr_modules then
-                   '.netmodule ' -> AFF.puttext;
-                else
-                   '.dll ' -> AFF.puttext;
-               if);
+               '.dll ' -> AFF.puttext;
                F[] -> AFF.puttext;
                (if verboseLevel > verboseLevel.verbose then
                    ' >"ilasm.out" 2>&1'->AFF.puttext;
@@ -380,7 +369,12 @@ do 'ldTmp'->TODO
                   WriteError::(# do error #);
                   NoSpaceError::(# do error #);
                #);
-          do ConfigFileName[] -> f.name;
+             e: @diskentry;
+             probingdir: ^text;
+          do 'clr\\' -> probingdir[];
+             objname[] -> e.path;
+             e.path.name -> probingdir.append;
+             ConfigFileName[] -> f.name;
              (if f.entry.exists then
                  (* Will no overwrite existing .config file *)
                  '.new' -> ConfigFileName.append;
@@ -390,43 +384,13 @@ do 'ldTmp'->TODO
              '<configuration>\n'
              '   <runtime>\n'
              '      <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1">\n'
-             '         <probing privatePath="clr"/>\n'
+             '         <probing privatePath="%s"/>\n'
              '      </assemblyBinding>\n'
              '   </runtime>\n'
              '</configuration>\n'
-               -> f.puttext;
+               -> f.putformat(# do probingdir[] -> s #);
              f.close;
           #)
-     #);
-   
-   BuildClrBetarun:
-     (# cs: @diskentry;
-        bd: @diskentry;
-        csc:
-          (# 
-          do 'csc /t:module /out:' -> AFF.puttext;
-             e.path -> AFF.puttext;
-             ' ' -> AFF.put;
-             cs.path -> AFF.putline;
-          #);
-     do (if use_clr_betarun then
-            (if not userDefinedBetaRun then
-                ('~beta/betarun/CS/betarun.cs','') -> thePathHandler.convertFilePath -> cs.path;
-                (if cs.exists then
-                    '.dll' -> (betarun.copy).append -> e.path;
-                    (if (not e.exists) or (e.modtime < cs.modtime) then
-                        (betarunlib[], '') -> thePathHandler.convertFilePath -> bd.path;
-                        (if (not bd.exists) then
-                            echo; 'Creating directory ' -> AFF.puttext; bd.path -> AFF.putline;
-                            bd.path -> (&directory[]).touchDir
-                        if);
-                        echo; 'Building ' -> AFF.puttext; e.path -> AFF.putline;
-                        csc;
-                    if);
-                    'copy ' -> AFF.puttext; e.path -> AFF.puttext; ' .' -> AFF.putline;
-                if)
-            if)
-        if)
      #);
    
    GenerateClrVerify:
@@ -437,11 +401,7 @@ do 'ldTmp'->TODO
             do (if '.exe' -> current.checkExtension then
                    current[] -> F[];
                 else
-                   (if use_clr_modules then
-                       '.netmodule ' -> current.append -> f[];
-                    else
-                       '.dll ' -> current.append -> f[];
-                   if);
+                   '.dll ' -> current.append -> f[];
                if);
                AFF.newline;
                'echo verifying '->AFF.puttext;
@@ -465,83 +425,51 @@ do 'ldTmp'->TODO
         
 do (if true
     // isJava then
-       (if generate_jar_manifest then
-           'echo Name: jvm/'       -> AFF.puttext;
-           (if packagePath[] = none then
-               common.BetaPackage  -> AFF.puttext;
-            else
-               packagePath[]       -> AFF.puttext;
-           if);
-           'program.class >'       -> AFF.puttext;
-           objName[]->AFF.puttext;
-           '.manifest' -> AFF.putline;
-           'echo Main-Class: program >>' -> AFF.puttext;
-           objName[]->AFF.puttext;
-           '.manifest' -> AFF.putline;
-           '\njar cmf' -> AFF.puttext;
-        else
-           '\njar cf' -> AFF.puttext;           
-       if);
+       '\njar cf' -> AFF.puttext;           
        (if verboseLevel <= verboseLevel.verbose then
            'v' ->AFF.puttext;
        if);
        ' '-> AFF.puttext; 
-       (if generate_jar_manifest then
-           objName[]->AFF.puttext;
-           '.manifest ' -> AFF.puttext;
-       if);
        jarfilename -> AFF.puttext; ' '->AFF.put; cont;
     // isIL then
-       (if use_clr_betarun then
-           BuildClrBetarun;
-           'al /nologo ' -> AFF.puttext;
-           (if common.switch[71] then
-               (* No console *)
-               '/t:winexe ' -> AFF.puttext;
-            else
-               '/t:exe ' -> AFF.puttext;
-           if);
-           '/main:betaenv.main ';
-           (if common.switch[41] then 
-               (* debug info? *)
-           if);
-           '/out:' -> AFF.puttext;
-           objName.copy -> AppendExe -> quote -> AFF.puttext;
+       'ilasm /nologo '->AFF.puttext; 
+       (if false and common.switch[71] then
+           (* No console *)
+           '/winexe ' -> AFF.puttext;
         else
-           'ilasm /nologo '->AFF.puttext; 
-           (if false and common.switch[71] then
-               (* No console *)
-               '/winexe ' -> AFF.puttext;
-            else
-               '/exe ' -> AFF.puttext;
-           if);
-           (if verboseLevel > verboseLevel.verbose then
-               '/quiet ' ->AFF.puttext;
-           if);
-           (if true (*common.switch[41]*) then 
-               '/debug '->AFF.puttext
-           if);
-           '/output:' -> AFF.puttext;
-           ObjName[] -> AFF.puttext;
-           '.exe ' -> AFF.puttext;
-           'clr\\' -> AFF.puttext;
-           (if main_in_program then
-               'program' -> AFF.puttext;
-            else
-               objname[] -> AFF.puttext;
-           if);
-           '.il' -> AFF.puttext;
-           (if verboseLevel > verboseLevel.verbose then
-               ' >"ilasm.out" 2>&1'->AFF.puttext;
-           if);
-           AFF.newline;
+           '/exe ' -> AFF.puttext;
        if);
+       (if verboseLevel > verboseLevel.verbose then
+           '/quiet ' ->AFF.puttext;
+       if);
+       (if true (*common.switch[41]*) then 
+           '/debug '->AFF.puttext
+       if);
+       '/output:' -> AFF.puttext;
+       ObjName[] -> AFF.puttext;
+       '.exe ' -> AFF.puttext;
+       'clr\\' -> AFF.puttext;
+       (if main_in_program then
+           'program' -> AFF.puttext;
+        else
+           objname[] -> AFF.puttext;
+       if);
+       '.il' -> AFF.puttext;
+       (if verboseLevel > verboseLevel.verbose then
+           ' >"ilasm.out" 2>&1'->AFF.puttext;
+       if);
+       AFF.newline;
        (if not common.switch[21] then
            'if errorlevel 1 goto linkerror' -> AFF.putLine;
        if);
        MakeClrConfigFile;
        (*'.exe' -> (objname.copy).append -> asmstate.verifylist.append;*)
        GenerateClrVerify;
+       AFF.newline;
+       (# applicationbasedir: @Directory;
+       do applicationbase -> applicationbasedir.name;
+          applicationbasedir.touch;
+       #);
     else
        'link' -> TODO;
    if);
@@ -553,13 +481,7 @@ do (if true
     // isJava then
        (* currently nothing *)
     // isIL then
-       (if use_clr_betarun then
-           (if userDefinedBetaRun then
-               betaRun[]->linkObj
-            else
-               '.dll'->betaRun.CopyAppend->linkObj
-           if)
-       if)
+       (* currently nothing *)
     else
        'addbetarun' -> TODO;
    if);
@@ -570,7 +492,7 @@ do 'asmlinkdynamic'->TODO
 #)
 ---linkObj:descriptor ---
 (# e: @diskentry;
-   path, name, jvm: ^text;
+   path, name: ^text;
    ldAputText:
      (# T: ^text
      enter T[]
@@ -602,6 +524,20 @@ do 'asmlinkdynamic'->TODO
             ' \\\n\t' -> ldAputtext
         if);
      #);
+   addDllFile:
+     (# lObj: ^text;
+        e: @diskentry;
+     enter lObj[]
+     do (* lObj = '"foo.il.dll"' *)
+        '.il.dll"' -> lObj.stripExtension;
+        '.dll"' -> lObj.appendExtension;
+        lObj[] -> e.path;
+        'copy ' -> ldA.puttext;
+        lObj[] -> ldA.append;
+        ' ' -> ldA.append;
+        applicationbase -> quote -> ldA.puttext;
+        ' >NUL' -> ldA.putline;
+     #)
 do 
    (if true
     // isJava then
@@ -644,20 +580,7 @@ do
            #);
        if);
     // isIL then
-       (if use_clr_modules then
-           (* lObj = '"foo.il.netmodule"' *)
-           '.il.netmodule"' -> lObj.stripExtension;
-           '.netmodule"' -> lObj.appendExtension;
-           ' '->ldA.puttext;
-           (if not hostIsWindows then
-               lObj[] -> escDollar -> quote -> ldA.putText; 
-           if);
-        else
-           (* lObj = '"foo.il.dll"' *)
-           '.il.dll"' -> lObj.stripExtension;
-           '.dll"' -> lObj.appendExtension;
-           (* File not inserted *)
-       if);
+       lObj[] -> addDllFile;
     else
        'linkObj' -> TODO;
    if);
@@ -797,9 +720,6 @@ do (if true
              -> AFF.putline;
         else
            (* Link: create wrapper script for program jar file *)
-           (if generate_jar_manifest and (not common.switch[23]) then
-               (false, '.manifest' -> (objName.copy).append) -> Remove;
-           if);
            generateJavaWrapperScript;
            (if hostIsWindows then
                generateBatFileLabels;
