@@ -31,7 +31,7 @@ Java_beta_PcreJvmHelpers_last_error_offset (JNIEnv *env, jclass c)
  *   returns:   array: [compiled_regexp, extra, subpatterns]
  */
 JNIEXPORT jintArray JNICALL 
-Java_beta_PcreJvmHelper_initialize(JNIEnv *env, jobject jobj, jstring jexp, jint options)
+Java_beta_PcreJvmHelper_initialize(JNIEnv *env, jclass jobj, jstring jexp, jint options)
 {
   const char *regexp=NULL;
   pcre *compiled_regexp;
@@ -80,3 +80,28 @@ Java_beta_PcreJvmHelper_initialize(JNIEnv *env, jobject jobj, jstring jexp, jint
   return jresult;
 }
 
+
+/* exec:
+ */
+
+JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_exec
+  (JNIEnv *env, jclass jobj, jint code, jint extra, jstring jsubject, jint length, jint startoffset, jint options, jintArray jovector, jint ovecsize)
+{
+  int result;
+  int ovector[ovecsize];
+  const char *subject = (*env)->GetStringUTFChars(env, jsubject, (jboolean *)NULL);
+  (*env)->GetIntArrayRegion(env,jovector,0,ovecsize,ovector);
+
+  result = pcre_exec((const pcre *)code, 
+		     (const pcre_extra *)extra,
+		     (const char *)subject, 
+		     length, 
+		     startoffset,
+		     options, 
+		     ovector, 
+		     ovecsize);
+
+  (*env)->ReleaseStringUTFChars(env, jsubject, subject);
+
+  return result;
+}
