@@ -593,27 +593,48 @@ void CCk(void *r, char *fname, int lineno, char *ref)
       }
 #endif /* MT */
 
-      /* Check alignment */
-      if (
 #ifdef PERSIST
-	    inPIT(r) || 
-#endif /* PERSIST */
-	    (ObjectAlign((unsigned)r)==(unsigned)r)) {
-	fprintf(output, "CCk:%s:%d: Ck(%s): bad aligment: (%s=0x%x)\n",
+      /* Check not in PIT */
+      if (inPIT(r)) {
+	fprintf(output, "CCk:%s:%d: Ck(%s): inPIT: (%s=0x%x)\n",
 		fname, lineno, ref, ref, (int)(r));
 	fflush(output);
 	ILLEGAL;
       }
-      /* Check it's in a heap */
-      if (!(inIOA(rr) || inAOA(rr)
-#ifdef PERSIST
-	    || inPIT(rr)
 #endif /* PERSIST */
-	    )) {
-	fprintf(output, "CCk:%s:%d: Ck(%s): not in Heap: (%s=0x%x)\n",
+
+      if (!inBetaHeap(rr)){
+	fprintf(output, "Warning: CCk:%s:%d: Ck(%s): not in Heap: (%s=0x%x). COM?\n",
 		fname, lineno, ref, ref, (int)(r));
 	fflush(output);
-	ILLEGAL;
+      } else {
+	/* Check alignment */
+	if (ObjectAlign((unsigned)r)!=(unsigned)r) {
+	  fprintf(output, "CCk:%s:%d: Ck(%s): bad aligment: (%s=0x%x)\n",
+		  fname, lineno, ref, ref, (int)(r));
+	  fflush(output);
+	  ILLEGAL;
+	}
+	
+	/* Check it's not in ToSpace */
+	if (inToSpace(rr)) {
+	  fprintf(output, "CCk:%s:%d: Ck(%s): is in ToSpace: (%s=0x%x)\n",
+		  fname, lineno, ref, ref, (int)(r));
+	  fflush(output);
+	  ILLEGAL;
+	}
+
+	/* Check it's in a heap */
+	if (!(inIOA(rr) || inAOA(rr)
+#ifdef PERSIST
+	      || inPIT(rr)
+#endif /* PERSIST */
+	      )) {
+	  fprintf(output, "CCk:%s:%d: Ck(%s): not in Heap: (%s=0x%x)\n",
+		  fname, lineno, ref, ref, (int)(r));
+	  fflush(output);
+	  ILLEGAL;
+	}
       }
     }
 }

@@ -1227,14 +1227,37 @@ int SkipDataRegs(long *theCell)
 
 static 
 void ProcessIntelStackCell(Object **theCell, Object *theObj)
-{
+{    
   DEBUG_STACK({ 
     fprintf(output, "0x%08x: 0x%08x", (int)theCell, (int)theObj);
     PrintRef(theObj);
     fprintf(output, "\n");
   });
-  ProcessReference(theCell, REFTYPE_DYNAMIC);
-  CompleteScavenging();
+  if (!theObj) {
+    return;
+  }
+  if (inBetaHeap(theObj)) {
+    if (isObject(theObj)){
+      DEBUG_CODE(if (!CheckHeap) Ck(theObj));
+      ProcessReference(theCell, REFTYPE_DYNAMIC);
+      CompleteScavenging();
+    } else {
+      DEBUG_CODE({
+        fprintf(output, "[ProcessIntelStackCell: ***Illegal: 0x%x: 0x%x]\n", 
+                (int)theCell,
+                (int)theObj);
+        ILLEGAL;
+      });
+    }
+  } else {
+    /* Object pointing outside BETA heaps. Maybe a COM reference? */
+    DEBUG_CODE({
+      fprintf(output, 
+	      "0x%08x: 0x%08x stack cell points outside BETA. COM?\n", 
+	      (int)theCell, 
+	      (int)theObj);
+    });
+  }
 }
 
 /* Traverse the StackArea [low..high] and Process all references within it. */
@@ -1314,45 +1337,41 @@ void ProcessStackPart(long *low,
   }
 }
 
+static 
+long *ProcessCallbackFrames(CallBackFrame *cbFrame, long *low)
+{
+  while (cbFrame){
+    ProcessStackPart(low, (long *)cbFrame-1, ProcessIntelStackCell, 0);
+    low     = cbFrame->betaTop;
+    cbFrame = cbFrame->next;
+  }
+  return low;
+}
+
 static
 void ProcessINTELStack(void)
 {
-    long *theTop;
-    long *theBottom;
-    
-    CallBackFrame *  theFrame;
-    ComponentBlock * currentBlock;
+    long *low                    = StackEnd;
+    long *high                   = (long *) lastCompBlock;
+    CallBackFrame *cbFrame       = ActiveCallBackFrame;
+    ComponentBlock *currentBlock = lastCompBlock;
     
     DEBUG_STACK(fprintf(output, "\n ***** Trace of stack *****\n"));
     /*
      * First handle the topmost component block
      */
-    theTop    = StackEnd;
-    theBottom = (long *) lastCompBlock;
-    theFrame  = ActiveCallBackFrame;
-    /* Follow the stack */
-    while( theFrame){
-	ProcessStackPart(theTop, (long *)theFrame-1, ProcessIntelStackCell, 0);
-	theTop   = theFrame->betaTop;
-	theFrame = theFrame->next;
-    }
-    ProcessStackPart(theTop, theBottom-1, ProcessIntelStackCell,0);  
+    if (cbFrame){ low = ProcessCallbackFrames(cbFrame, low); }
+    ProcessStackPart(low, high-1, ProcessIntelStackCell,0);  
     
     /*
      * Then handle the remaining component blocks.
      */
-    currentBlock = lastCompBlock;
-    while( currentBlock->next ){
-	theTop    = (long *) ((long) currentBlock +
-			      sizeof(ComponentBlock) );
-	theBottom = (long *) currentBlock->next;
-	theFrame  = currentBlock->callBackFrame;
-	while( theFrame){
-	    ProcessStackPart( theTop, (long *)theFrame-1, ProcessIntelStackCell,0);
-	    theTop   = theFrame->betaTop;
-	    theFrame = theFrame->next;
-	}
-	ProcessStackPart(theTop, theBottom-1, ProcessIntelStackCell,0);  
+    while (currentBlock->next){
+	low      = (long *) ((long) currentBlock + sizeof(ComponentBlock) );
+	high     = (long *) currentBlock->next;
+	cbFrame  = currentBlock->callBackFrame;
+	if (cbFrame){ low = ProcessCallbackFrames(cbFrame, low); }
+	ProcessStackPart(low, high-1, ProcessIntelStackCell,0);  
 	currentBlock = currentBlock->next;
     }
     DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));

@@ -700,7 +700,7 @@ void ProcessReference(Object ** theCell, long refType)
      * theCell in AOAroots table.
      */
     Claim(!inToSpace(*theCell), "*theCell is in to space ??");
-
+    
     if (inAOA(*theCell)) {
       MCHECK();
       Claim(!inAOA(theCell), "!inAOA(theCell)");
@@ -709,10 +709,11 @@ void ProcessReference(Object ** theCell, long refType)
       return;
     } 
 #ifdef PERSIST
-    else if (inPIT((void *)*theCell)) {
-      referenceAlive(((void *)*theCell));
-      newIOAclient(getPUID((void *)*theCell), theCell);
-    } 
+    else 
+      if (inPIT((void *)*theCell)) {
+	referenceAlive(((void *)*theCell));
+	newIOAclient(getPUID((void *)*theCell), theCell);
+      } 
 #endif /* PERSIST */
   }
 }
