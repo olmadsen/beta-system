@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: AllocateItem.c,v 1.17 1993-02-12 13:56:59 datpete Exp $
+ * Mod: $Id: AllocateItem.c,v 1.18 1993-02-16 14:57:14 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -16,9 +16,6 @@ ParamOriginProto(struct Item *,AlloI)
     FetchOriginProto
 
     Ck(origin);
-#ifdef sparc
-    DEBUG_STACK(CheckStack());
-#endif
 
 #if defined(hppa) && defined(RTDEBUG)
     if((unsigned)getRefSP() > (unsigned)ReferenceStack + 990*4) {
