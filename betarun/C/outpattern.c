@@ -379,6 +379,14 @@ static void ObjectDescription(Object *obj,
       } 
     }
     if( staticObj && isObject( staticObj ) ){
+      if (!SimpleDump) {
+	fprintf(output, "    { Surrounding object 0x%x, proto 0x%x ", 
+		(int)staticObj, 
+		(int)proto);
+	DEBUG_CODE(PrintProto(proto); fprintf(output, " "));
+	fprintf(output, "}\n");
+      }
+
       groupname = GroupName((long)GETPROTO(staticObj),0);
       if (groupname==NULL){
 	fprintf(output,
@@ -388,14 +396,6 @@ static void ObjectDescription(Object *obj,
 	return;
       }
       proto = GETPROTO(staticObj);
-
-      if (!SimpleDump) {
-	fprintf(output, "    { Surrounding object 0x%x, proto 0x%x ", 
-		(int)staticObj, 
-		(int)proto);
-	DEBUG_CODE(PrintProto(proto); fprintf(output, " "));
-	fprintf(output, "}\n");
-      }
 
       fprintf(output,"    -- ");
       fprintf(output,"%s", ProtoTypeName(proto));

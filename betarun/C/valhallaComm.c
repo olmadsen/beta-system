@@ -3,12 +3,6 @@ extern int doshutdown(int fd, int how);
 
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 
-#if 0
-#  define TRACE_VALHALLACOMM(code) { code; }
-#else
-#  define TRACE_VALHALLACOMM(code)
-#endif
-
 #include <stdio.h>
 #include <errno.h>
 #include "valhallaComm.h"
@@ -208,7 +202,7 @@ void valhalla_fill_buffer ()
 
   received = valhalla_readDataMax (sock,(char *) &rheader[0],sizeof(int));
   rheader[0]=htonl(rheader[0]);
-  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer: converted rheader[0] to %0x%x\n",(int)rheader[0]));
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer: converted rheader[0] to 0x%x\n",(int)rheader[0]));
 
   if (received != sizeof(int)) { 
     TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer,1\n"));
