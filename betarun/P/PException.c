@@ -445,6 +445,7 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
   PC = (unsigned char*)pContextRecord->Eip;
 
   Claim(!IOAActive, "!IOAActive");
+  INFO_PERSISTENCE(numPF++);
 
   switch (PC[0]) {
   case 0x62:  /* BOUND R32, M32, M32 */
