@@ -61,8 +61,8 @@ DISTFILES = README FAQ INDEX ChangeLog configure Make*[a-z0-9] *.[ch] *.mms \
   contrib/delphi*/*.???
 
 
-#OBJDIR = ../../$(MACHINETYPE)
-OBJDIR = ../../$(objdir)
+#OBJDIR = ../../$(objdir)
+OBJDIR = ../../$(MACHINETYPE)
 
 
 all: $(OBJDIR)/libz.a
