@@ -263,7 +263,7 @@ You may order an unconstrained version from\n",
 	      *current = (long) theObj;
 	      if (!theObj) DOTSize--;
 	  
-	      DEBUG_IOA( Claim( (theObj == 0) || inToSpace (theObj) ,"DOT element NONE or in ToSpace "));
+	      DEBUG_IOA( Claim( (theObj == 0) || inToSpace (theObj) || inAOA (theObj) ,"DOT element NONE, in ToSpace, or in AOA "));
 
 	    }
 	  }
