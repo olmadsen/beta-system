@@ -133,7 +133,7 @@ static char *machine_name()
 char *ProtoTypeName(struct ProtoType *theProto)
 {
   ref(GCEntry) stat;
-  ptr(short) dyn;
+  short *dyn;
 
 #ifdef RTDEBUG
   if (isSpecialProtoType(theProto)){
@@ -164,10 +164,18 @@ char *ProtoTypeName(struct ProtoType *theProto)
 
 #if defined(linux) || defined(nti)
   /* Step over little endian long/short/real position information */
-  {
-    dyn += (theProto->Size+15)>>4; /* step over 'long' bit vector */
-    while (*dyn++);                /* step over 'short' list */
-    while (*dyn++);                /* step over 'real' list */
+  { 
+    int skiplists=0; /* number of entries for shortints and reals */
+
+    if((*(char*)dyn) & 0x80) skiplists++;
+    if((*(char*)dyn) & 0x40) skiplists++;
+    
+    /* step over 'integer' bit vector (short-aligned) */
+    dyn += (theProto->Size+15)>>4; 
+ 
+    while (skiplists--){
+      while (*dyn++);                /* step over shortint/real info */
+    }
   }
 #endif
 
