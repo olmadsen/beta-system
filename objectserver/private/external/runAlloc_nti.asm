@@ -42,7 +42,7 @@ _DoAlloVR1:
 	mov	edx,8[esp]	; offset to pReg1
 	mov	_pReg1,edx
 	mov	edx,12[esp]	; range to pReg2
-	mov	_pReg1,edx
+	mov	_pReg2,edx
 	mov	edx,4[esp]	; obj to RegObj
 	jmp	AlloVR1
 
@@ -51,7 +51,7 @@ _DoAlloVR2:
 	mov	edx,8[esp]	; offset to pReg1
 	mov	_pReg1,edx
 	mov	edx,12[esp]	; range to pReg2
-	mov	_pReg1,edx
+	mov	_pReg2,edx
 	mov	edx,4[esp]	; obj to RegObj
 	jmp	AlloVR2
 
@@ -60,7 +60,7 @@ _DoAlloVR4:
 	mov	edx,8[esp]	; offset to pReg1
 	mov	_pReg1,edx
 	mov	edx,12[esp]	; range to pReg2
-	mov	_pReg1,edx
+	mov	_pReg2,edx
 	mov	edx,4[esp]	; obj to RegObj
 	jmp	AlloVR4
 
@@ -69,7 +69,7 @@ _DoAlloVR8:
 	mov	edx,8[esp]	; offset to pReg1
 	mov	_pReg1,edx
 	mov	edx,12[esp]	; range to pReg2
-	mov	_pReg1,edx
+	mov	_pReg2,edx
 	mov	edx,4[esp]	; obj to RegObj
 	jmp	AlloVR8
 
@@ -78,7 +78,7 @@ _DoAlloRR:
 	mov	edx,8[esp]	; offset to pReg1
 	mov	_pReg1,edx
 	mov	edx,12[esp]	; range to pReg2
-	mov	_pReg1,edx
+	mov	_pReg2,edx
 	mov	edx,4[esp]	; obj to RegObj
 	jmp	AlloRR
 
