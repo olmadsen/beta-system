@@ -325,7 +325,11 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       }
       fprintf(output, " in %s\n", GroupName((long)theObj->Proto,0) );
     } else {
-      fprintf(output,"    -- Surrounding object damaged!\n");
+      if (staticObj){
+	fprintf(output,"    -- Surrounding object damaged!\n");
+      } else {
+	fprintf(output,"    -- Surrounding object is zero!\n");
+      }
     }
   }
 }
@@ -631,8 +635,9 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
     }else{
       fprintf(output,"  Current object is damaged!\n");
     }
-  }else
-    fprintf(output,"Current object is damaged!\n");
+  } else {
+    fprintf(output,"Current object is zero!\n");
+  }
 #endif
   
   if (StackStart == 0){
@@ -668,7 +673,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 	    DisplayObject(output, theObj, (long)PC);
 	  }
 	} else {
-	  fprintf(output, "  [Damaged object!: %x]\n", (long)theObj);
+	  if (theObj) fprintf(output, "  [Damaged object!: %x]\n", (long)theObj);
 	}
       }
       theCell--;
