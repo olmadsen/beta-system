@@ -315,13 +315,24 @@ selectSockets (int *readCandidates, int *writeCandidates, int *exceptCandidates,
       i++;
     }
   } else {
-    switch(errno){
+#ifdef nti
+    errno = WSAGetLastError();
+#endif
+    switch (errno) {
+#ifdef nti
+    case WSAEINVAL:
+#else
     case EINVAL:
+#endif
       fprintf(stderr, 
 	      "selectSockets: warning: select returned EINVAL\n", 
 	      res);
       /* deliberately no break here: fall through */
+#ifdef nti
+    case WSAEINTR:
+#else
     case EINTR:
+#endif
       /* unset everything: */
       res = 0;
       
@@ -346,7 +357,11 @@ selectSockets (int *readCandidates, int *writeCandidates, int *exceptCandidates,
 	i++;
       }
       break;
+#ifdef nti
+    case WSAENOTSOCK:
+#else
     case EBADF:
+#endif
       fprintf(stderr, 
 	      "selectSockets: error: select returned EBADF\n", 
 	      res);
