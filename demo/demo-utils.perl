@@ -179,7 +179,10 @@ sub cleanup()
 sub cleanup_exec()
 {
     my ($prog) = @_;
-    my @files = ("$prog", "$prog-jdb");
+    my @files = ("$prog", "$prog-jdb", 
+		 "$prog.bat", "$prog-jdb.bat", 
+		 "$prog.exe", "$prog.exe.config", "$prog.exe.config.new",
+		 );
     foreach $f (@files){
 	#print "  cleanup_exec: $f\n";
 	if (-e $f){
