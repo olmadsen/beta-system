@@ -394,14 +394,14 @@ static void timeout_event( XtPointer client_data, XtIntervalId *id)
 #define BorderPix 2
 	struct liteClue_context_str * obj = (struct liteClue_context_str *) client_data;
 	XcgLiteClueWidget cw = obj->cw;
-	Position  mouse_x,abs_x, abs_y;
+	Position  mouse_x,mouse_y,abs_x, abs_y;
 	
 	XRectangle ink;
 	XRectangle logical;
 	Position   w_height;	
 	Position   w_width;
 	Widget w;
-	int    mouse_x_int,dummy;
+	int    mouse_x_int,mouse_y_int,dummy;
 
 	if (cw->liteClue.interval_id == (XtIntervalId)0)
 		return;	/* timeout was removed but callback happened anyway */
@@ -419,9 +419,11 @@ static void timeout_event( XtPointer client_data, XtIntervalId *id)
 	XtTranslateCoords(w, w_width, w_height,&abs_x, &abs_y);
 
 	/* FGC find mousepos */
-	XQueryPointer(XtDisplay(w),XtWindow(w),(Window*)&dummy,(Window*)&dummy,&mouse_x_int,&dummy,&dummy,&dummy,&dummy);
+	XQueryPointer(XtDisplay(w),XtWindow(w),(Window*)&dummy,(Window*)&dummy,&mouse_x_int,&mouse_y_int,&dummy,&dummy,&dummy);
 	mouse_x=mouse_x_int;
+	mouse_y=mouse_y_int;
 	abs_x=mouse_x;
+	abs_y=mouse_y+12;   /* flyt op til markoer */
 
 #if XtSpecificationRelease < 5		/* R4 hack */
 	{
