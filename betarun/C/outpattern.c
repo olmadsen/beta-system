@@ -48,6 +48,7 @@ static struct Object **lastCell=0;
 #endif
 
 static int basic_dumped=0;
+static int isMakingDump=0;
 
 static char *machine_name(void);
 
@@ -487,11 +488,13 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
   long mPart = M_Part(theProto);
   long gPart = G_Part(theProto);
 
-  if (theObj==(struct Object *)BasicItem){
+  if (isMakingDump && (theObj==(struct Object *)BasicItem)){
     /* BasicItem will be shown as component */
     TRACE_DUMP(fprintf(output, "(BasicItem ignored - will be shown as comp)\n"));
     return;
   }
+
+  TRACE_CODEENTRY(fprintf(output, "ObjectDescription: initial: theProto=0x%x (%s), addr=0x%x\n", theProto, ProtoTypeName(theProto), retAddress)); 
 
   if (retAddress) {
     /* Find the active prefix level based on the retAddress.
@@ -501,7 +504,6 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
      * to retAddress is smallest.
      */
     
-    TRACE_CODEENTRY(fprintf(output, "ObjectDescription: initial: theProto=0x%x (%s), addr=0x%x\n", theProto, ProtoTypeName(theProto), retAddress)); 
     gDist  = retAddress - gPart; 
     TRACE_CODEENTRY(fprintf(output, "initial gPart: 0x%x, gDist: 0x%x\n", gPart, gDist));
     mDist  = retAddress - mPart;
@@ -653,7 +655,9 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
   }
 }
 
-/********************** DisplayObject: ********************/
+/********************** DisplayObject: ********************
+ * Called by DisplayBetaStack and BetaError (in case of QuaCont)
+ */
 
 static struct Object *lastDisplayedObject=0;
 
@@ -666,11 +670,15 @@ void DisplayObject(output,theObj,retAddress)
 { 
   ref(Object) theItem=0;
 
-  /* Make an empty line after the last line of a component */
-  if (lastDisplayedObject &&
-      (lastDisplayedObject->Proto==ComponentPTValue) &&
-      (theObj->Proto != ComponentPTValue)){
-    fprintf(output, "\n"); fflush(output);
+  if (isMakingDump){
+    /* Make an empty line after the last line of a component 
+     * in dump file.
+     */
+    if (lastDisplayedObject &&
+	(lastDisplayedObject->Proto==ComponentPTValue) &&
+	(theObj->Proto != ComponentPTValue)){
+      fprintf(output, "\n"); fflush(output);
+    }
   }
 
   if( isSpecialProtoType(theObj->Proto) ){
@@ -682,7 +690,10 @@ void DisplayObject(output,theObj,retAddress)
 	  fprintf(output,
 		  "  basic component in %s\n", 
 		  GroupName((long)theItem->Proto,0) );
-	  basic_dumped=1;
+	  if (isMakingDump) {
+	    /* only dump basicitem once in dump file */
+	    basic_dumped=1;
+	  }
 	}
       } else {
 	ObjectDescription(theItem, retAddress, "comp", 1);
@@ -723,7 +734,7 @@ void DisplayObject(output,theObj,retAddress)
     ObjectDescription(theObj, retAddress, "item", 1);
   }
 
-  lastDisplayedObject=theObj;
+  if (isMakingDump) lastDisplayedObject=theObj;
 }
 
 /******************** ErrorMessage ******************/
@@ -822,12 +833,14 @@ static void DumpCell(struct Object **theCell,struct Object *theObj)
       if ((theObj->GCAttr == -(headsize(Component)/sizeof(long))) && 
 	  (theComp->Proto==ComponentPTValue)) {
 	/* theObj is a component item - dump as comp */
+	TRACE_DUMP(fprintf(output, " dump as comp"));
 	theObj = (struct Object *)theComp;
 	/* PC for previous frame is found just above dyn */
 	PC = *((long *)theCell+1);
       } else {
 	if (theObj->Proto==ComponentPTValue){
 	  theComp = (struct Component *)theObj;
+	  TRACE_DUMP(fprintf(output, " is comp - getting real dyn"));
 	  /* Passing a component frame. The real dyn is found 
 	   * as theComp->CallerObj - see stack.c for details.
 	   */
@@ -1135,8 +1148,6 @@ static char *OpenDumpFile(long errorNumber)
 }
 #endif /* nti */
 
-
-static int isMakingDump=0;
 
 /**************** DisplayBetaStack: *******************/
 

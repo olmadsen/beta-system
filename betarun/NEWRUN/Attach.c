@@ -23,33 +23,48 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
 #if 0
    fprintf(output, "Att(this=0x%x, comp=0x%x, RA=0x%x, SPx=0x%x\n",
 	   this, comp, RA, SPx);
+   fprintf(output, "Att: comp= 0x%x, CallerLSC=0x%x\n", 
+	   (int)comp, 
+	   (int)comp->CallerLSC);
 #endif
+
+   if ((long)comp->CallerLSC == -2) {
+     /* CallerLCS is set to -2 in ExitObjects.c when the component terminates.
+      * So we are attempting to attach a component, that is terminated.
+      */
+     long SPoff;
+     /* adjust SPx to be SP of previous frame. */
+     GetSPoff(SPoff, CodeEntry(this->Proto, RA)); 
+     SPx = ((long)SPx+SPoff);
+     BetaError(CompTerminatedErr, this, (long *)SPx, (long *)RA); 
+   }
+
+   if (((long)comp->CallerLSC != 0) && ((long)comp->StackObj==0)) {
+     /* comp has a resume address but no stack object.
+      * This means that is is active.
+      */
+     long SPoff;
+     /* adjust SPx to be SP of previous frame. */
+     GetSPoff(SPoff, CodeEntry(this->Proto, RA)); 
+     SPx = ((long)SPx+SPoff);
+     BetaError(RecursiveAttErr, this, (long *)SPx, (long *)RA);
+   }
 
    SPy = (long)GetSP();
    if (ActiveComponent) {
      ActiveComponent->CallerLSC = RA;
+#if 0
+     fprintf(output, 
+	     "Susp: comp=0x%x, CallerLSC set to 0x%x\n",
+	     (int)ActiveComponent,
+	     RA);
+#endif
      comppush(SPy); /* fprintf(output, "comppush SPy: 0x%x\n", SPy); */
      comppush(SPx); /* fprintf(output, "comppush SPx: 0x%x\n", SPx); */
    } else { 
      DEBUG_CODE(fprintf(output, "ActiveComponent == 0\n"); Illegal());
    };
    
-   if ((long)comp->CallerLSC == -1) {
-     /* adjust SPx to be SP of previous frame. */
-     long SPoff;
-     GetSPoff(SPoff, CodeEntry(this->Proto, RA)); 
-     SPx = ((long)SPx+SPoff);
-     BetaError(RecursiveAttErr, this, (long *)SPx, (long *)RA);
-   }
-
-   if ((long)comp->CallerLSC == -2) {
-     /* adjust SPx to be SP of previous frame. */
-     long SPoff;
-     GetSPoff(SPoff, CodeEntry(this->Proto, RA)); 
-     SPx = ((long)SPx+SPoff);
-     BetaError(CompTerminatedErr, this, (long *)SPx, (long *)RA); 
-   }
-
    isFirst = (comp->CallerLSC == 0);
    if (isFirst) { 
      compObj = (struct Object *)comp->Body;
@@ -68,6 +83,10 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
    AssignReference(&comp->CallerObj, this); /* may call AOAtoIOAinsert */
    comp->StackObj   = 0;
    comp->CallerLSC = -1; /* indicate that comp is attached */
+
+#if 0
+   fprintf(output, "Att: comp=0x%x, CallerLSC set to -1\n", comp);
+#endif
 
    ActiveComponent = comp;
 

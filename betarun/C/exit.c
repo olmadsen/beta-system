@@ -216,10 +216,10 @@ void BetaError(long errorNo, struct Object *theObj)
 	if (QuaCont) {
 	  fprintf(output, "\n*** OBS. ");
 	  fprintf(output, ErrorMessage(QuaErr));
-	  fprintf(output, ".\nCurrent object:\n");
 	  if( theObj != 0 ){
 	    if( isObject(theObj)){
-	      DisplayObject(output, theObj, 0);
+	      fprintf(output, ".\nCurrent object:\n");
+	      DisplayObject(output, theObj, (long)thePC);
 	    }else{
 	      fprintf(output,"Current object is damaged!\n");
 	    }

@@ -95,6 +95,13 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
    ActiveComponent->CallerLSC = RA;
 
 #if 0
+   fprintf(output, 
+	   "Susp: comp=0x%x, CallerLSC set to 0x%x\n",
+	   (int)ActiveComponent,
+	   RA);
+#endif
+
+#if 0
    fprintf(output, "Susp: packing stack object:\n");
    for (i=0;  i < (SPy-SPz)/4; i++)
      fprintf(output, "  0x%x=*0x%x (0x%x)\n", 
