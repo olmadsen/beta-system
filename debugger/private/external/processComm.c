@@ -11,11 +11,7 @@
 static char **envp;
 static char **argv;
 static int envc,argc;
-#ifdef nti_gnu
-#define ENVIRON _environ
-#else
 #define ENVIRON environ
-#endif
 
 extern char **ENVIRON;
 
