@@ -197,7 +197,6 @@ sub setup_graphics_demo_run
 
 sub complete_demo_run()
 {
-    print( "\nRun done\n");
     &print_summary();
 }
 
