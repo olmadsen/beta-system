@@ -201,6 +201,7 @@ static void saveCurrentBlock(void)
 {
   if (currentPStore) {
     if (touched) {
+      DEBUG_CODE(fprintf(output, "PS:saveCurrentBlock\n"));
       windTo(currentFd, currentPStore -> headerSize + currentBlockStart * currentPStore -> blockSize);
       WRITESOME(currentFd, 
 		currentBlock, 
@@ -366,6 +367,7 @@ void saveStore(unsigned long storeID)
   if (currentPStore) {
     if (currentStoreID == storeID) {
       saveCurrentBlock();
+      DEBUG_CODE(fprintf(output, "PS:saveStore:saving header\n"));
       Rewind(currentFd);
       WRITESOME(currentFd, currentPStore, currentPStore -> headerSize);
     }
@@ -385,6 +387,8 @@ void closeStore(unsigned long storeID)
       free(currentPStore);
       currentPStore = NULL;
       currentStoreID = -1;
+      freeProtoHandling();
+      initProtoHandling();
     }
   }
 }

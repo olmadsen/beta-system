@@ -303,7 +303,8 @@ void updatePersistentObjects(void)
   maxIndex = STSize(currentTable);
   for (count=0; count<maxIndex; count++) {
     entry = STLookup(currentTable, count);
-    if ((entry -> GCAttr == ENTRYALIVE) || (entry -> GCAttr == DELAYEDENTRYALIVE)) {
+    if (entry -> GCAttr == ENTRYALIVE 
+	|| entry -> GCAttr == DELAYEDENTRYALIVE) {
       Claim(entry -> theObj == getRealObject(entry -> theObj), "Prt object in object table?");
 #ifdef RTDEBUG
       if (!inToSpace(entry -> theObj)) {

@@ -64,7 +64,9 @@ char *FindNameByGroupID(unsigned long group)
     current += strlen(current)+1;
     idx++;
   }
-  fprintf(output, "Got groupindex outside range in use\n");
+  fprintf(output, 
+	  "Got groupindex outside range in use: looking for %d, last is %d\n",
+	  (int)group, (int)idx);
   DEBUG_CODE(ILLEGAL);
   BetaExit(1);
   return NULL;
