@@ -426,7 +426,7 @@ namespace beta.converter
 	    indent(- 3);
 	    indent();
 	    put("do '");
-	    if (isValue) put("valuetype ");
+	    if (isValue) put("@valuetype ");
 	    put("[" + resolution + ']' + namespaceName + '.' + className.Replace('+', '/') + "' -> className;");
 	    // Nested classes are indicated by '/' in IL, but by '+' in the type system!
 	    nl();

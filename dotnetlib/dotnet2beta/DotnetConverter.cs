@@ -18,7 +18,7 @@ namespace beta.converter
 
 	internal static bool use_nonwrapper_super = false; // enabling creates too many circular dependencies
 
-	internal enum TraceFlags: int16 { Type = 1, File = 2, Runtime = 4 };
+	internal enum TraceFlags { Type = 1, File = 2, Runtime = 4 };
 
 	internal static TraceFlags trace = 0;
 		
@@ -849,7 +849,7 @@ namespace beta.converter
 	    
 	    if (outer == null){
 	      beta.putTrailer(resolution, namespaceName, className, isValue);
-	      beta.close(!cls.IsValueType);
+	      beta.close(true /*!cls.IsValueType*/);
 	    } else {
 	      // Assuming same resolution/namespace:
 	      beta.putTrailer(resolution, namespaceName, stripNamespace(cls.FullName), isValue); 
