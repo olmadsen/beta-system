@@ -6,6 +6,9 @@ java: clean java_indenter eclipse
 beta: clean beta_indenter eclipse
 	java -classpath ../jvm:jvm Eclipse
 
+beta.windows: clean beta_indenter eclipse
+	java -classpath ..\jvm;jvm Eclipse
+
 jvm:
 	mkdir jvm
 
@@ -19,7 +22,8 @@ java_indenter: dummies
 	javac -classpath jvm -d jvm BetaAutoIndentStrategy.java
 
 beta_indenter: dummies
-	cd ..; rm -rf jvm; jbeta -s 188 tstenv.bet
+	rm -rf ../jvm	
+	cd .. && jbeta -s 188 tstenv.bet
 	jbeta -qw -s 188 BetaAutoIndentStrategy.bet
 
 eclipse:
