@@ -1,321 +1,575 @@
-ORIGIN '../seqContainers';
-(*
- * COPYRIGHT
- *	 Copyright (C) Mjolner Informatics, 1992-94
- *	 All rights reserved.
- *)
---- sequentialContainerStorageBody: descriptor ---
-(# first, last: (* Private *) ^theCellType;
-   length: @integer;
+ORIGIN '../seqContainers'
+
+--- sequentialContainerTheScannerDopart : doPart ---
+do private.topelement[]->aCell[];
+   l:(if aCell[]<>NONE then
+         aCell.elm[]->s.current[];
+         (if s.current[]->s.where then
+             s;
+             INNER theScanner;
+         if);
+         aCell.pred[]->aCell[];
+         restart l;
+     if);
    
-   insertFirst: @
-     (# elm: ^element;
-        cElm: ^theCellType
-     enter elm[]
-     do &theCellType[]->cElm[];
-        elm[]->cElm.elm[];
-        first[]->cElm.succ[];
-        (if length = 0 then 
-            cElm[]->last[];
-         else cElm[]->first.pred[]
-        if);
-        cElm[]->first[];
-        length+1->length;
-        NONE->elm[]; NONE->cElm[]
-     #);
-   insertLast: @
-     (# elm: ^element;
-        cElm: ^theCellType
-     enter elm[]
-     do &theCellType[]->cElm[];
-        elm[]->cElm.elm[];
-        last[]->cElm.pred[];
-        (if length = 0 then 
-            cElm[]->first[];
-         else cElm[]->last.succ[]
-        if);
-        cElm[]->last[];
-        length+1->length;
-        NONE->elm[]; NONE->cElm[]
-     #);
-   remove: @
-     (# elm: ^element; cElm: ^theCellType
-     enter cElm[]
-     do (* assumes that the seqContainer is NON-empty !! *)
-        (if cElm[]
-         //first[] then removeFirst->elm[]; NONE->removeFirst.elm[]
-         //last[]  then removeLast->elm[]; NONE->removeLast.elm[]
-         else cElm.elm[]->elm[];
-            cElm.succ[]->cElm.pred.succ[];
-            cElm.pred[]->cElm.succ.pred[];
-            length-1->length
-        if);
-        NONE->cElm[]
-     exit elm[]
-     #);
-   removeFirst: @
-     (# elm: ^element
-     do (* assumes that the seqContainer is NON-empty !! *)
-        first.elm[]->elm[];
-        (if first[] = last[] then NONE->first[]->last[]
-         else NONE->first.succ.pred[];
-            first.succ[]->first[]
-        if);
-        length-1->length
-     exit elm[]
-     #);
-   removeLast: @
-     (# elm: ^element
-     do (* assumes that the seqContainer is NON-empty !! *)
-        last.elm[]->elm[];
-        (if first[] = last[] then NONE->first[]->last[]
-         else NONE->last.pred.succ[];
-            last.pred[]->last[]
-        if);
-        length-1->length
-     exit elm[]
-     #);
-   scan: 
-     (# current: ^theCellType
-     do first[]->current[];
-        loop: (if current[] = NONE then leave loop
-               else INNER; current.succ[]->current[]; restart loop
-              if)
-     #) 
+--- sequentialContainerPrivate : descriptor ---
+(#
+   topElement:^theCelltype;
+   bottomElement:^theCelltype;
+   size:@integer;
+   queues:@integer;
+   tempelm:^theCelltype;
 #)
 
---- sequentialContainerImplementationScannerPrivateBody: descriptor ---
-(# scanner: 
-     (# start:< (# do INNER #);
-        next:< (# do INNER #)
-     #);
-   doScanner: scanner
-     (# start::< (# do storage.first[]->currentCell[];
-                    (if currentCell[] = NONE then &voidScanner[]->theScanner[] if)
-                 #);
-        next::< (# theCell: ^theCellType
-                do currentCell[]->theCell[]; theCell.succ[]->currentCell[];
-                   (if currentCell[] = NONE then &voidScanner[]->theScanner[] if)
-                #)
-     #);
-   voidScanner: scanner
-     (# start::< (# do NONE->currentCell[] #);
-        next::< (# do NONE->currentCell[] #)
-     #);
-   theScanner: ^scanner
-#)
---- sequentialContainerImplementationScannerStartOPDopart: dopart ---
-do &sequentialContainerImplementationScannerPrivate.doScanner[]->sequentialContainerImplementationScannerPrivate.theScanner[];
-   sequentialContainerImplementationScannerPrivate.theScanner.start;
-   (if currentCell[] = NONE then
-       NONE->currentElm[];
-       INNER startOP
-    else currentCell[]->theCell[]; theCell.elm[]->currentElm[]
-   if)
---- sequentialContainerImplementationScannerNextOPDopart: dopart ---
-do sequentialContainerImplementationScannerPrivate.theScanner.next;
-   (if currentCell[] = NONE then
-       NONE->currentElm[];
-       INNER nextOP
-    else currentCell[]->theCell[]; theCell.elm[]->currentElm[]
-   if)
---- sequentialContainerImplementationScannerMoreOPDopart: dopart ---
-do (currentCell[]<>NONE)->value
-
---- sequentialContainerClearDopart: dopart ---
-do NONE->storage.first[]->storage.last[]; 0->storage.length; INNER
---- sequentialContainerSizeDopart: dopart ---
-do storage.length->value; INNER
+--- sequentialContainerSize:doPart ---
+do private.size->value
    
+--- sequentialContainerClear:doPart---
+do NONE->private.topElement[];
+   NONE->private.bottomElement[];
+   0->private.size;
+   
+--- sequentialContainerEmpty:doPart ---
+do 0=private.size->value;
+      
+--- sequentialContainerHas:doPart ---
+do
+   fgc:
+     (# aCell:^theCelltype;
+        myEqual:@equal;
+     do
+        private.topelement[]->aCell[];
+        fgc2:(if aCell[]<>NONE then
+                 (if (aCell.elm[],elm[])->myEqual then
+                     true->value;
+                 if);
+                 aCell.pred[]->aCell[];
+                 restart fgc2;
+             if);
+     #);
+   
+   (*-----------stack------------*)   
+   
+--- sequentialContainerStackPrivFind:descriptor ---
+(# mytop:^theCellType;
+   pre:@predicate;
+enter mytop[]
+do (if mytop[]<>NONE then
+       mytop.elm[]->current[];
+       (if current[]->pre then
+           INNER find;
+           leave privateFinder;
+       if);
+       mytop.pred[]->mytop[];
+       restart privateFinder;
+   if);
+   notfound;
+#)
+
+--- sequentialContainerStackFind:doPart ---
+do private.topelement[]->privateFinder;
+   
+   
+--- sequentialContainerStackCopy:doPart ---
+do
+   (if not doneinInner then 
+       fgc:(# thestackCopy:^stack;
+              cnt:@integer;
+              pre:@predicate;
+              runCell:^theCelltype;
+           do
+              this(stack)._new->thestackCopy[];
+              private.topelement[]->runCell[];
+              l:(if runCell[]<>NONE then
+                    (if runCell.elm[]->pre then
+                        theStackCopy.private.topelement[]->runCell.pred[];
+                        runCell[]->theStackCopy.private.topelement[];
+                        1+cnt->cnt;
+                        runCell.pred[]->runCell[];
+                        restart l;
+                    if);
+                if);
+              cnt->theStackCopy.private.size;
+              theStackCopy[]->theCopy[];
+           #);
+   if);
    
 --- sequentialContainerStackTopDopart: dopart ---
-do (if storage.length = 0 then
-       (if empty## = emptyContainer## then emptyContainerError else empty if)
-    else storage.first.elm[]->elm[]
-   if);
-   INNER
---- sequentialContainerStackPushDopart: dopart ---
-do elm[]->storage.insertFirst; INNER
---- sequentialContainerStackPopDopart: dopart ---
-do (if storage.length = 0 then
-       (if empty## = emptyContainer## then emptyContainerError else empty if)
+do (if private.size=0 then
+       empty
     else
-       storage.removeFirst->elm[]; NONE->storage.removeFirst.elm[]
+       private.topelement.elm[]->elm[];
    if);
-   INNER
---- sequentialContainerStackImplementationCopierDopart: dopart ---
-do storage.scan(# do (if current.elm[]->thePredicate then
-                         current.elm[]->theCopy.storage.insertLast
- 	  	     if)
-               #);
-   INNER
+   
+--- sequentialContainerStackPushDopart: dopart ---
+do &theCelltype[]->private.tempelm[];
+   elm[]->private.tempelm.elm[];
+   private.topelement[]->private.tempelm.pred[];
+   private.tempelm[]->private.topelement[];
+   private.size+1->private.size;
+   
+--- sequentialContainerStackPopDopart: dopart ---
+do
+   (if private.size=0 then
+       emptyContainerError
+    else
+       private.topelement.elm[]->elm[];
+       private.topelement.pred[]->private.topelement[];
+       private.size-1->private.size;
+   if);
+   
+(*------------queue----------*)
+
+   
+--- sequentialContainerQueueHas:doPart ---
+do
+   queuehas:(# 
+               aCell:^theCelltype;
+               myEqual:@equal;
+            do
+               private.topElement[]->aCell[];
+               fgc2:(if aCell[]<>NONE then
+                        (if (aCell.elm[],elm[])->myEqual then
+                            true->value;
+                            leave fgc2;
+                        if);
+                        aCell.pred[]->aCell[];
+                        restart fgc2;
+                    if);   
+            #);
+   
+   
+--- sequentialContainerQueuePrivFind:descriptor ---
+(# mytop:^theCellType;
+   pre:@predicate;
+enter mytop[]
+do (if mytop[]<>NONE then
+       mytop.elm[]->current[];
+       (if current[]->pre then
+           INNER find;
+           leave privateFinder;
+       if);
+       mytop.pred[]->mytop[];
+       restart privateFinder;
+   if);
+   notfound;
+#)
+
+--- sequentialContainerQueueFind:doPart ---
+do private.topElement[]->privateFinder;
+   
+--- sequentialContainerQueueCopy:doPart ---
+do
+   (if not doneinInner then 
+       fgc:(# thequeueCopy:^queue;
+              cnt:@integer;
+              pre:@predicate;
+              runCell,aCell:^theCelltype;
+              ii:^insert;
+           do
+              this(queue)._new->thequeueCopy[];
+              &thequeueCopy.insert[]->ii[];
+              private.topElement[]->runCell[];
+              l:(if runCell[]<>NONE then
+                    (if runCell.elm[]->pre then
+                        runCell.copy->aCell[];
+                        aCell.elm[]->ii;
+                        runCell.pred[]->runCell[];
+                        restart l;
+                    if);
+                if);
+              theQueueCopy[]->theCopy[];
+           #);
+   if);
 
 --- sequentialContainerQueueFrontDopart: dopart ---
-do (if storage.length = 0 then
-       (if empty## = emptyContainer## then emptyContainerError else empty if)
-    else storage.last.elm[]->elm[]
+do
+   (if private.size=0 then
+       empty;
+    else
+       private.topElement.elm[]->elm[];
    if);
-   INNER
+   
+   
 --- sequentialContainerQueueInsertDopart: dopart ---
-do elm[]->storage.insertFirst; INNER
---- sequentialContainerQueueRemoveDopart: dopart ---
-do (if storage.length = 0 then
-       (if empty## = emptyContainer## then emptyContainerError else empty if)
+do
+   &theCelltype[]->private.tempelm[];
+   elm[]->private.tempelm.elm[];
+   (if private.size
+    // 0 then
+       private.tempelm[]->private.topElement[];
+    // 1 then
+       private.tempelm[]->private.bottomElement[];
+       private.topElement[]->private.bottomElement.succ[];
+       private.bottomElement[]->private.topElement.pred[];
     else
-       storage.removeLast->elm[]; NONE->storage.removeLast.elm[]
+       private.bottomElement[]->private.tempelm.succ[];
+       private.tempelm[]->private.bottomElement.pred[];
+       private.tempelm[]->private.bottomElement[];
    if);
-   INNER
---- sequentialContainerQueueImplementationCopierDopart: dopart ---
-do storage.scan(# do (if current.elm[]->thePredicate then
-                         current.elm[]->theCopy.storage.insertLast
- 	  	     if)
-               #)
-
---- sequentialContainerPrioQueueImplementationScannerStartOPDopart: dopart ---
-do storage.first[]->currentCell[];
-   l: (if currentCell[] <> NONE then
-          currentCell[]->currentQueue[];
-          &currentQueue.theQueue.implementationScanner[]->theQueueScanner[];
-          theQueueScanner.start->currentElm[];
-          theQueueScanner.currentCell[]->currentCell[];
-          currentQueue.succ[]->currentQueue[];
-          (if not theQueueScanner.more then restart l if) 
-      if);
-   INNER
---- sequentialContainerPrioQueueImplementationScannerNextOPDopart: dopart ---
-do (if theQueueScanner[] = NONE then
-       storage.first[]->currentQueue[]
-    else
-       theQueueScanner.next->currentElm[];
-       theQueueScanner.currentCell[]->currentCell[];
-   if);
-   l: (if currentCell[] = NONE then
-          (if currentQueue[] <> NONE then
-              &currentQueue.theQueue.implementationScanner[]->theQueueScanner[];
-              theQueueScanner.start->currentElm[];
-              theQueueScanner.currentCell[]->currentCell[];
-              currentQueue.succ[]->currentQueue[];
-              (if currentCell[] = NONE then restart l if)
-          if)
-      if);
+   NONE->private.tempelm[];
+   1+private.size->private.size;
    INNER;
---- sequentialContainerPrioQueueImplementationCopierDopart: dopart ---
-do storage.scan
-   (# do (NONE,thePredicate[])->current.theQueue.implementationCopier->theQueueCopy[];
-      (if current.elm[]->thePredicate then
-          current.elm[]->theCopy.storage.insertLast;
-          current.prio->theCopy.storage.last.prio;
-          theQueueCopy[]->theCopy.storage.last.theQueue[]
-       else
-          (if theQueueCopy.size<>0 then
-              theQueueCopy.remove->theCopy.storage.insertLast;
-              current.prio->theCopy.storage.last.prio;
-              theQueueCopy[]->theCopy.storage.last.theQueue[]
-          if)
-      if)
-   #)
+   
+--- sequentialContainerQueueRemoveDopart: dopart ---
+do
+   (if private.size=0 then empty if);
+   private.topElement.elm[]->elm[];
+   private.size-1->private.size;
+   (if private.size>0 then
+       NONE->private.topElement.pred.succ[];
+       private.topElement.pred[]->private.topElement[];
+    else
+       NONE->private.bottomElement[];
+       NONE->private.topElement[];
+   if);
+   
+  
+   
+(*--------------Deque------------*)
+   
+--- sequentialContainerDequeFrontDopart: dopart ----
+do   
+   (if private.size=0 then
+       empty;
+    else
+       private.topElement.elm[]->elm[];
+   if);
 
---- sequentialContainerPrioQueueSizeDopart: dopart ---
-do storage.scan(# do current.theQueue.size+value->value #); INNER
---- sequentialContainerPrioQueueFrontDopart: dopart ---
-do (if size = 0 then
-       (if empty## = emptyContainer## then emptyContainerError else empty if)
-    else seek: (# 
- 	       do storage.scan(# do (if current.prio = prio then 
-				        current.elm[]->elm[];
-				        leave seek
-				    if)
-                              #);
-		  (* not found...return NONE *)
-		  NONE->elm[]
-               #)
-   if);
-   INNER
---- sequentialContainerPrioQueueInsertDopart: dopart ---
-do seek: (# 
-	 do storage.scan(# do (if current.prio = prio then 
-			          current.elm[]->current.theQueue.insert;
-			          elm[]->current.elm[];
-			          leave seek
-			      if)
-                        #);
-	    (* first time this priority have appeared...create it *)
-   	    elm[]->storage.insertFirst;
-   	    prio->storage.first.prio;
-   	    &queue[]->storage.first.theQueue[]
-         #);
-   INNER
---- sequentialContainerPrioQueueRemoveDopart: dopart ---
-do (if size = 0 then
-       (if empty## = emptyContainer## then emptyContainerError else empty if)
-    else seek: (# 
-	       do storage.scan(# do (if current.prio = prio then
-			  	        current.elm[]->elm[];
-                                        (if current.theQueue.storage.length=0 then
-                                            current[]->storage.remove->current.elm[]
-                                         else
-                                            current.theQueue.remove->current.elm[]
-                                        if);
-			  	        leave seek
-		      	      	    if)
-                              #);
-	       	  (* not found...return NONE *)
-	       	  NONE->elm[]
-               #)
-   if);
-   INNER
---- sequentialContainerPrioQueueScanPriorityPrivate: descriptor ---
-(# thePredicate: @where;
-   theStart: @start; theEnd: @end
-#)
---- sequentialContainerPrioQueueScanPriorityDopart: dopart ---
-do sequentialContainerPrioQueueScanPriorityPrivate.theStart;
-   seek: storage.scan(# do (if current.prio = prio then
-			       current.elm[]->this(scanPriority).current[];
-			       INNER scanPriority;
-		      	       current.theQueue.scan(# where::< (# do current[]->this(scanPriority).sequentialContainerPrioQueueScanPriorityPrivate.thePredicate->value #)
-						       
-					      	    do current[]->this(scanPriority).current[];
- 						       INNER scanPriority
-                                                    #);
-		      	       leave seek
-		           if)
-                     #);
-   sequentialContainerPrioQueueScanPriorityPrivate.theEnd
-
---- sequentialContainerDequeFrontDopart: dopart ---
-do (if storage.length = 0 then
-       (if empty## = emptyContainer## then emptyContainerError else empty if)
-    else storage.first.elm[]->elm[]
-   if);
-   INNER
+   
 --- sequentialContainerDequeInsertFrontDopart: dopart ---
-do elm[]->storage.insertFirst; INNER
+do
+   &theCelltype[]->private.tempelm[];
+   elm[]->private.tempelm.elm[];
+   (if true 
+    // private.size=0 then
+       private.tempelm[]->private.topelement[]->private.bottomelement[];
+    // private.size>0 then
+       private.topelement[]->private.tempelm.pred[];
+       private.tempelm[]->private.tempelm.pred.succ[];
+   if);
+   private.tempelm[]->private.topelement[];
+   private.size+1->private.size;
+      
+   
 --- sequentialContainerDequeRemoveFrontDopart: dopart ---
-do (if storage.length = 0 then
-       (if empty## = emptyContainer## then emptyContainerError else empty if)
-    else
-       storage.removeFirst->elm[]; NONE->storage.removeFirst.elm[]
+do
+   (if private.size=0 then
+       empty;
    if);
-   INNER
+   private.topelement.elm[]->elm[];
+   (if true
+    // private.size>1 then
+       private.topelement.pred[]->private.topelement[];
+       NONE->private.topelement.succ[];
+    // private.size=1 then
+       NONE->private.bottomelement[];
+       NONE->private.topelement[];
+   if);
+   private.size-1->private.size;
+   
 --- sequentialContainerDequeBackDopart: dopart ---
-do (if storage.length = 0 then
-       (if empty## = emptyContainer## then emptyContainerError else empty if)
-    else storage.last.elm[]->elm[]
-   if);
-   INNER
+do
+   private.bottomelement.elm[]->elm[];
+   
 --- sequentialContainerDequeInsertBackDopart: dopart ---
-do elm[]->storage.insertLast; INNER
---- sequentialContainerDequeRemoveBackDopart: dopart ---
-do (if storage.length = 0 then
-       (if empty## = emptyContainer## then emptyContainerError else empty if)
-    else
-       storage.removeLast->elm[]; NONE->storage.removeLast.elm[]
+do 
+   &theCelltype[]->private.tempelm[];
+   elm[]->private.tempelm.elm[];
+   (if true 
+    // private.size=0 then
+       private.tempelm[]->private.bottomelement[]->private.topelement[];
+    // private.size>0 then
+       private.bottomelement[]->private.tempelm.succ[];
+       private.tempelm[]->private.tempelm.succ.pred[];
    if);
-   INNER
---- sequentialContainerDequeImplementationCopierDopart: dopart ---
-do storage.scan(# do (if current.elm[]->thePredicate then
-                         current.elm[]->theCopy.storage.insertLast
- 	  	     if)
-               #)
+   private.tempelm[]->private.bottomelement[];
+   private.size+1->private.size;
+      
+   
+--- sequentialContainerDequeRemoveBackDopart: dopart ---
+do
+   (if private.size=0 then
+       empty;
+   if);
+   private.bottomelement.elm[]->elm[];
+   (if true
+    // private.size>1 then
+       private.bottomelement.succ[]->private.bottomelement[];
+       NONE->private.bottomelement.pred[];
+    // private.size=1 then
+       NONE->private.bottomelement[];
+       NONE->private.topelement[];
+   if);
+   private.size-1->private.size;
+   
+   
+(*-----------PrioQueue-------*)
+---  prioQueueLib: attributes ---
+scanQueues:
+  (# theQ:^queue;
+     priori:@integer;
+     stopscan:@boolean;
+     firstelm:^element;
+  do
+     private.topelement[]->private.tempelm[];
+     _loop:(for i:private.queues repeat
+                private.tempelm.thequeue[]->theQ[];
+                private.tempelm.prio->priori;
+                private.tempelm.elm[]->firstelm[];
+                INNER;
+                (if stopscan then
+                    leave _loop;
+                 else
+                    private.tempelm.pred[]->private.tempelm[];
+                if);
+           for);
+  exit stopscan
+  #);
 
+_insertFront:
+  (# elm:^element;
+  enter elm[]
+  do
+     &theCelltype[]->private.tempelm[];
+     elm[]->private.tempelm.elm[];
+     private.topelement[]->private.tempelm.pred[];
+     private.tempelm[]->private.topelement[];
+     private.queues+1->private.queues;
+     private.size+1->private.size;
+  #);
+
+_insertQueue:
+  (# 
+     elm:^element;
+     que:^queue;
+     prio:@integer;
+  enter (elm[],que[],prio)
+  do
+     &theCelltype[]->private.tempelm[];
+     elm[]->private.tempelm.elm[];
+     que[]->private.tempelm.theQueue[];
+     prio->private.tempelm.prio;
+     private.topelement[]->private.tempelm.pred[];
+     private.tempelm[]->private.topelement[];
+     private.size+1->private.size;
+     private.queues+1->private.queues;
+     (if que[]<>NONE then
+         que.size+private.size->private.size;
+     if);
+  #);
+
+--- sequentialContainerPrioQueueTheScannerDopart : doPart ---
+do
+   (if aCell.theQueue[]<>NONE then
+       (# myelm:^aCell.theQueue.theCelltype;
+       do
+          aCell.theQueue.private.topelement[]->myelm[];
+          l:(if myelm[]<>none then
+             myelm.elm[]->s.current[];
+             s;
+             myelm.pred[]->myelm[];
+             restart l;
+            if);
+       #);
+   if);
+   
+--- sequentialContainerPrioQueueFrontDopart: dopart ---
+do
+   scanQueues(# 
+             do (if priori=prio then
+                    firstelm[]->elm[];
+                    true->stopscan;
+                if);
+             #);
+   
+--- sequentialContainerPrioQueueInsertDopart: dopart ---
+do
+   (if
+   scanQueues(# 
+             do (if priori=prio then
+                    elm[]->theQ.insert;
+                    1+private.size->private.size;
+                    true->stopscan;
+                if);
+             #) then
+    else
+       elm[]->_insertFront;
+       &queue[]->private.topelement.theQueue[];
+       prio->private.topelement.prio;
+   if);
+   
+--- sequentialContainerPrioQueueRemoveDopart: dopart ---
+do
+   scanQueues(# 
+             do
+                (if priori=prio then
+                    firstelm[]->elm[];
+                    (if theQ.size>0 then
+                        theQ.remove->private.tempelm.elm[];
+                    if);
+                    private.size-1->private.size;
+                    true->stopscan;
+                if);
+             #);
+   (if elm[]=NONE then 'not found any: '->puttext; prio->putint; newline; if); 
+   
+--- sequentialContainerPrioQueueScanPriorityDopart: dopart ---
+do
+   start;
+   scanQueues(# 
+             do (if priori=prio then
+                    firstelm[]->current[];
+                    Inner scanPriority;
+                    theQ.scan(#
+                             do current[]->this(scanPriority).current[];
+                                Inner scanPriority
+                             #);
+                    true->stopscan;
+                if);
+             #);
+   end;
+   
+--- sequentialContainerPrioQueueCopy:doPart ---
+do
+   (if not doneinInner then 
+       fgc:(# theprioQueueCopy:^prioQueue;
+              cnt:@integer;
+              pre:@predicate;
+              runCell,aCell:^theCelltype;
+              theQ:^queue;
+              ii:^_insertqueue;
+           do
+              this(prioQueue)._new->theprioQueueCopy[];
+              &theprioQueueCopy._insertqueue[]->ii[];
+              private.topElement[]->runCell[];
+              l:(if runCell[]<>NONE then
+                    (if runCell.elm[]->pre then
+                        runCell.copy->aCell[];
+                        (aCell.elm[],aCell.theQueue[],runCell.prio)->ii;
+                        runCell.pred[]->runCell[];
+                        restart l;
+                    if);
+                if);
+              theprioQueueCopy[]->theCopy[];
+           #);
+   if);
+   
+   
+   (*--------------PriorityQueue--------*)
+   
+-- priorityQueueInsert: descriptor --
+(# ins: @storage.insert;
+   
+do (if storage.size = storage.data.range then
+       storage.data.range -> storage.data.extend;
+   if);
+   storage.size + 1 -> storage.size;
+   elm[] -> ins;
+#)
+
+-- priorityQueueMin: doPart --
+do (if storage.size = 0 then
+       emptyContainer;
+    else
+       storage.data[1][] -> elm[];
+   if);
+   
+-- priorityQueueDeleteMin: descriptor --
+(# del: @storage.deleteMin;
+do (if storage.size > 0 then
+       storage.data[1][] -> elm[];
+       del;
+   if);
+#)
+
+-- priorityQueueInit: doPart --
+do 1 -> storage.data.new;
+   0 -> storage.size;
+   inner;
+
+-- priorityQueueClear: doPart --
+do 1 -> storage.data.new;
+   0 -> storage.size;
+   inner;
+
+-- priorityQueueEmpty: doPart --
+do storage.size = 0 -> value;
+
+-- priorityQueueSize: doPart --
+do storage.size -> value;
+
+-- priorityQueueScan: doPart --
+do (for inx: storage.size repeat
+        storage.data[inx][] -> current[];
+        inner;
+   for);
+
+-- priorityQueueHas: doPart --
+do false -> value;
+   l:
+     (for inx: storage.size repeat
+          (if elm[] = storage.data[inx][] then
+              true -> value;
+              leave l;
+          if);
+     for);
+
+-- priorityQueueStorage: descriptor --
+(# data: [1] ^element;
+   size: @integer;
+   
+   insert:
+     (# n, fatherInx: @integer;
+        elm, father: ^element;
+        doLess: @less;
+     enter elm[]
+     do (if size = 1 then
+            elm[] -> data[1][];
+         else
+            size -> n;
+            l:
+              (if n > 1 then
+                  data[(n div 2) -> fatherInx][] -> father[];
+                  (if (elm[], father[]) -> doLess then
+                      father[] -> data[n][];
+                      fatherInx -> n;
+                      restart l;
+                   else
+                      elm[] -> data[n][];
+                  if);
+               else
+                  elm[] -> data[n][];
+              if);
+        if);
+     #);
+   deleteMin:
+     (# sonInx: @integer;
+        n: @integer;
+        elm, son1, son2: ^element;
+        doLess: @less;
+     do none -> data[1][];
+        data[size][] -> elm[];
+        size - 1 -> size;
+        (if size <> 0 then
+            1 -> n;
+            l: (#
+               do 2 * n -> sonInx;
+                  (if sonInx <= size then
+                      (if (sonInx < size) and ((data[sonInx +1][], data[sonInx][]) -> doLess) then
+                          sonInx + 1 -> sonInx;
+                      if);
+                      (if (data[sonInx][], elm[]) -> doLess then
+                          data[sonInx][] -> data[n][];
+                          sonInx -> n;
+                          restart l;
+                       else
+                          elm[] -> data[n][];
+                      if);
+                   else
+                      elm[] -> data[n][];
+                  if);
+               #);
+        if);
+     #);
+#)
