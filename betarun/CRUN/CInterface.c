@@ -6,7 +6,6 @@
 #include "beta.h"
 #include "crun.h"
 
-extern void CinitT() asm("CinitT");
 void CinitT(void)
 {
     CTextPoolEnd = CTextPool;
