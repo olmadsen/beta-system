@@ -1,5 +1,25 @@
 #!/usr/local/bin/perl
 
+# TODO: 
+# 1. Make several file names accepted on command line
+#    and generate separate HTML file for each. The generate 
+#    idx.html which contains *common* index.
+#
+# 2. There is a problem with subclass in index.
+# 
+# 3. In index:
+#       X.y
+#       X.z
+#    should perhaps be
+#       X
+#        y
+#        z
+#
+# 4. Add navigation buttons. Should automatically set up
+#    next and previous, based on the argument files (see 1).
+#
+ 
+
 # Style sheet:
 $css = "/~beta/doc/style/miadoc.css";
 
@@ -15,6 +35,9 @@ sub print_header
 </HEAD>
 <BODY>
 <H1>$title</H1>
+<UL>
+<LI><A HREF="#Index.identifiers"><I>Index</I></A>
+</UL>
 <PRE CLASS=interface>
 EOT
 }
