@@ -8,7 +8,6 @@
 #include "crun.h"
 
 #ifdef sparc
-
 asmlabel(ExO, "
         mov     %i1, %o1
         ba       "CPREF"ExitO
