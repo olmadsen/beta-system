@@ -2,8 +2,12 @@ ORIGIN '../groupsinfo';
    
 --- groupsInfoProtoGroupToOD:dopart ---
 do
-   groupName[]->find->elm[]; elm.ods[proto+1][]->od[];
-   INNER;
+   groupName[]->find->elm[]; 
+   
+   (if proto+1 <= elm.last then 
+       elm.ods[proto+1][]->od[];
+       INNER;
+   if);
    
 --- groupsInfoODtoProtoGroup:dopart ---
 do
@@ -50,25 +54,98 @@ newGroupsInfoElement:
           (exp.symbol=BETA.DescriptorForm)->firstInDescriptorForm;
           BETA.ObjectDescriptor->exp.suffixWalkForProd
           (# scanCat:: BETACFL.ObjectDescriptor;
-          do (if (current.kind -> tos'%getByte[0]') = generalKind 
-              //false then
+             createsPrototype: @Boolean;
+          do 
+             (if (current.kind -> tos'%getByte[0]')<>generalKind then
+                 
                  (* Current is a constant, a standard pattern 
                   * (int, real, ...) or an external declaration. 
-                  * In all these cases no prototype is generated.
-                  *)
+                  * In all these cases no prototype is generated
+                  * UNLESS it is an external corresponding to a
+                  * callback procedure. *)
+                 
+                 (# (* Code in this descriptor was based on "cProcDecoder"
+                     * from "sematt.bet" in the compiler, but rewritten
+                     * to use the "betacfl" interface instead of the
+                     * "index" interface. For maintainability, future 
+                     * compilers should set a semantic attribute revealing
+                     * whether an objectdescriptor generates a prototype. *)
+                    
+                    mp: ^BETACFL.MainPart; ap: ^BETACFL.ActionPart;
+                    dp: ^BETACFL.DoPart; imps: ^BETACFL.Imperatives;
+                    imp: ^BETACFL.Imp; ae: ^BETACFL.assignmentEvaluation; 
+                    tr: ^BETACFL.Transaction; ad: ^BETACFL.attributeDenotation;
+                    obd: ^BETACFL.objectDenotation;
+                    a: ^AST.ast;
+                    
+                    getExtKind:
+                      (# a: ^AST.ast; na: ^BETACFL.NameApl; t: ^Text;
+                         createsPrototype :@Boolean;
+                      enter a[]
+                      do 
+                         (if a.symbol//BETA.NameApl then
+                             (a[]->na[]).getText->t[];
+                             (if true
+                              //'CallC'->t.equalNCS
+                              //'CallPascal'->t.equalNCS
+                              //'Pascal'->t.equalNCS
+                              //'CallStd'->t.equalNCS
+                              //'PascalTrap'->t.equalNCS then
+                                 FALSE->createsPrototype;
+                              else
+                                 TRUE->createsPrototype;
+                             if)
+                          else
+                             FALSE->createsPrototype;
+                         if);
+                      exit createsProtoType
+                      #);
+                    
+                 do
+                    (current.getMainPart->mp[]).getActionPart->ap[];
+                    ap.getDoPartOpt->a[];
+                    (if a.kind<>AST.kinds.optional then
+                        (a[]->dp[]).getImperatives->imps[];
+                        L: imps.newScan (# do current[]->imp[]; leave L #);
+                        (if imp[]<>NONE then
+                            (* imp is first imperative in dopart *)
+                            (if imp.symbol
+                             //BETA.assignmentEvaluation then
+                                (* 'xxx'->YY *)
+                                (imp[]->ae[]).getTransAction->tr[];
+                                (if tr.symbol//BETA.objectDenotation then
+                                    (tr[]->obd[]).getAttributeDenotation->ad[];
+                                    ad[]->getExtKind->createsProtoType;
+                                if);
+                             //BETA.objectDenotation then
+                                (imp[]->obd[]).getAttributeDenotation->ad[];
+                                ad[]->getExtKind->createsProtoType;
+                             else
+                                TRUE->createsProtoType;
+                            if);
+                        if);
+                    if);
+                 #)
               else
+                 (if not (current.kind->TOS'%getBits[13,1]') then
+                     (* Current is *not* an inserted item 
+                      * of the inlined kind. *)
+                     TRUE->createsPrototype;
+                 if);
+             if);
+             
+             (if createsPrototype then
                  current[]->new.append;
                  (if firstInDescriptorForm then
                      (if (current.getPrefixOpt).kind<>AST.kinds.optional then
-                         (* In descriptor forms with prefixed 
-                          * descriptors, the prototype is put twice
-                          * into the data segment prototype table.
-                          * Probably some awful compiler hack. *)
+                         (* In descriptor forms with prefixed descriptors, the
+                          * prototype is put twice into the data segment 
+                          * prototype table! Don't know why! *)
                          current[]->new.append;
                      if);
                  if);
              if);
-             FALSE->firstInDescriptorForm;
+             FALSE->firstInDescriptorForm->createsPrototype;
           #);
        #);
      
@@ -115,3 +192,4 @@ newGroupsInfoElement:
      
   exit new[]   
   #);
+

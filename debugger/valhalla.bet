@@ -7,6 +7,7 @@ INCLUDE 'processCommCodes';
 INCLUDE 'UI/GUIprocess';
 INCLUDE 'UI/stackview';
 INCLUDE 'UI/objectviewadds';
+INCLUDE 'UI/codemoveable';
 INCLUDE 'valhallaoptionlist';
 INCLUDE 'valhallaiconlist';
 
@@ -32,17 +33,27 @@ systemenv
    
    debuggeeIsRunning:
      (# value: @Boolean
-     do (if debuggee[]<>NONE then debuggee.running->value 
+     do (if debuggee[]<>NONE then 
+            (debuggee.running) and (not debuggee.terminated)->value 
          else FALSE->value
         if);
      exit value
      #);
    debuggeeIsReady: 
      (# value: @Boolean
-     do (if debuggee[]<>NONE then not debuggee.running->value 
+     do (if debuggee[]<>NONE then 
+            (not debuggee.running) and (not debuggee.terminated)->value 
          else FALSE->value
         if);
      exit value
+     #);
+   ensureKilled:
+     (# 
+     do (if debuggee[]<>NONE then
+            (if not debuggee.terminated then
+                debuggee.kill; gui.onTerminate;
+            if);
+        if);
      #);
    
    remoteObjects: @remoteObjectDB;
@@ -56,8 +67,7 @@ systemenv
    setOption: globalOptions.setBooleanOption (# #);
    
    icons: @gui.iconDB
-     (# movIcon: ^bitmap;
-        stackIcon: ^bitmap;
+     (# movIcon, stackIcon, codeIcon: ^bitmap;
         getIcon::
           (# newIcon:
                (# fileName: ^Text;
@@ -83,6 +93,11 @@ systemenv
                      'StackViewIcon.xbm'->newIcon->stackIcon[];
                  if);
                  stackIcon[]->theIcon[];
+              //CodeViewIcon -> name.equalNCS then
+                 (if codeIcon[]//NONE then
+                     'CodeViewIcon.xbm'->newIcon->codeIcon[];
+                 if);
+                 codeIcon[]->theIcon[];
              if);
           #);       
      #);
@@ -188,7 +203,7 @@ systemenv
                            (# 
                            do execName[]->s;
                            #);
-                           (gui.main[],t[],'Rereading...')->gui.alertUser;
+                           (t[],'Rereading...')->gui.alertInfo;
                         #);
                    do s[]->fork; pause; FALSE->rerun; restart doinit;
                    #);
@@ -216,17 +231,28 @@ systemenv
         'Debuggee is running'->gui.putinfo;
         debuggee.processComm.wait;
         
-        (if debuggee[]<>NONE then
+        (if debuggeeIsReady then
             'Debuggee stopped'->gui.putinfo;
             (debuggee.curObj,debuggee.rd[])->NewRemoteObject->bo[];
-            
             (if not bo.isNone then
                 (bo[],FALSE)->gui.main.OpenMoveableObjectView
                 (# getFather:: (# do gui.main.objworld[]->father[]#)#);
+             else
+                'Current Object was NONE'->gui.putinfo;
             if);
          else
             'Debuggee terminated'->gui.putinfo;
         if);
+     #);
+   
+   mystackview: gui.main.stackview
+     (# openNewObjectView:: gui.main.OpenMoveableObjectView
+          (# getFather:: (# do gui.main.objworld[]->father[]#)#);
+        openNewCodeView::
+          (# 
+          do (gui.main.objworld[],debuggee[],cast[])
+               ->(&gui.main.codemoveable[]).open;
+          #);
      #);
    
    newstackview:
@@ -236,7 +262,7 @@ systemenv
           (# end::
                (# 
                do (gui.main.objworld[],comp[],debuggee[])
-                    ->(&gui.main.stackview[]).open;
+                    ->(&mystackview[]).open;
                #);
           do (if current.component[]->comp.equal then
                  current.wriggle;
@@ -253,7 +279,8 @@ systemenv
         onTerminate::
           (# 
           do 0->setPIDparam;
-             main.moveables.scan (# do current.close #)
+             main.moveables.scan (# do current.close #);
+             'debuggee terminated'->putinfo;
           #);
         
         onMoveablesInsert::
@@ -287,19 +314,10 @@ systemenv
                             eventHandler::
                               (# onSelect::
                                    (#
-                                   do (if enabled then
-                                          (if debuggee[]<>NONE then
-                                              debuggee.kill; onTerminate;
-                                          if);
-                                          (if newExecName<>NONE then
-                                              newDebuggee;
-                                          if);
+                                   do ensureKilled;
+                                      (if newExecName<>NONE then
+                                          FALSE->newDebuggee;
                                       if);
-                                   #);
-                                 onStatus:: (# do enabled->value #);
-                                 enabled: 
-                                   (# 
-                                   exit debuggeeIsReady or (debuggee[]=NONE)
                                    #);
                               #);
                          #);
@@ -310,17 +328,22 @@ systemenv
                               (# onSelect::
                                    (#
                                    do (if enabled then
-                                          (if debuggee[]<>NONE then
-                                              debuggee.kill; onTerminate;
-                                          if);
+                                          ensureKilled;
                                           TRUE->newDebuggee;
                                       if);
                                    #);
                                  onStatus:: (# do enabled->value #);
                                  enabled: 
-                                   (# 
-                                   exit (debuggeeIsReady or (debuggee[]=NONE))
-                                      and (getEXECNAMEparam<>NONE)
+                                   (# value: @Boolean;
+                                   do (if debuggee[]<>NONE then
+                                          debuggeeIsReady or 
+                                          debuggee.terminated ->value;
+                                       else
+                                          TRUE->value;
+                                      if);
+                                      value and (getEXECNAMEparam<>NONE)
+                                        ->value;
+                                   exit value
                                    #);
                               #);
                          #);
@@ -330,9 +353,7 @@ systemenv
                             eventHandler::
                               (# onSelect::
                                    (#
-                                   do (if enabled then
-                                          debuggee.kill; onTerminate;
-                                      if);
+                                   do (if enabled then ensureKilled if);
                                    #);
                                  onStatus:: (# do enabled->value #);
                                  enabled: (# exit debuggeeIsReady #);
@@ -351,16 +372,30 @@ systemenv
                          #);
                        
                        showStackItem: @menuItem
-                         (# open:: (# do 'Show Active Stack'->name #);
+                         (# open:: 
+                              (# 
+                              do 'Active Stack'->name;
+                                 'A'->key;
+                              #);
                             eventHandler::
                               (# onSelect::
                                    (# 
-                                   do (if debuggeeIsReady then
+                                   do (if enabled then
                                           (debuggee.curComp,debuggee.rd[])
                                             ->newRemoteObject->newstackview
                                       if);
                                    #);
-                                 onStatus:: (# do debuggeeIsReady->value #);
+                                 onStatus:: 
+                                   (#
+                                   do enabled->value
+                                   #);
+                                 enabled:
+                                   (# value: @Boolean;
+                                   do (if (debuggeeIsReady->value) then
+                                          (debuggee.curComp<>0)->value;
+                                      if);
+                                   exit value
+                                   #);
                               #)
                          #);
                        

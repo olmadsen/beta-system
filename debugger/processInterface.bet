@@ -769,10 +769,12 @@ processInterface: mpsinterface
           impAstRefs: [0]@ShortInt;  (* Imperative ast indices.           *)
           
           Mentry: @Integer;          (* Mentry point of this dopart. *)
+          Tentry: @Integer;          (* Prototype whose dopart this dopartInfo
+                                      * is about. *)
           ofi: ^ObjectFileInfo;      (* ObjectFileInfo of fragment group
                                       * containing this dopart. *)
-          dp: ^BETACFL.doPart;      (* The ast itself. *)
-          (* Mentry, ofi and dp are filled out by 
+          dp: ^BETACFL.doPart;       (* The ast itself. *)
+          (* Mentry, Tentry, ofi and dp are filled out by 
            * utilities.codeAddressToImperative before caching this dopartInfo 
            * in the doparts attribute of the ObjectFileInfo containing the 
            * prototype whose dopart is this dopartInfo. *)
@@ -934,11 +936,27 @@ processInterface: mpsinterface
             exit pti[]
             #);
           
+          
+                    
           (* codeAddressToImperative
            * =======================
            * 
-           * Maps a code address to information on the corresponding BETA 
+           * Maps a code address (codeAdr) to information on the corresponding BETA 
            * imperative.
+           * 
+           * If the code address corresponds to a G entry, the onGentry virtual
+           * is called with information on the prototype whose Gentry contains
+           * codeAdr.
+           * 
+           * If some error occurs during the mapping (e.g. some ..db file
+           * was not found), but the codeAdr still seems to correspond to
+           * some BETA code address, information on the prototype whose dopart
+           * contains the code address is still available. In that case, 
+           * onPartialMinfo is called with the prototype whose Mentry contains
+           * codeAdr.
+           * 
+           * notBetaCode is called if codeAdr does not correspond to a BETA
+           * code address.
            * 
            * Returns NONE in case of failure. *)
           
@@ -946,10 +964,25 @@ processInterface: mpsinterface
             (# onGentry:< 
                  (* Called if a G entry is found. *)
                  (# protoAdr: @Integer; 
-                    (* Address of prototype whose Gpart contains address *)
+                    (* Address of prototype whose Gpart contains codeAdr *)
                     offset: @Integer;
-                    (* Offset from Gentry point to address. *)
+                    (* Offset from Gentry point to codeAdr. *)
                  enter (protoAdr,offset)
+                 do INNER
+                 #);
+               onPartialMinfo:<
+                 (# protoAdr: @Integer;
+                    (* Address of prototype whose Mpart contains codeAdr *)
+                    offset: @Integer;
+                    (* Offset from Mentry to codeAdr. *)
+                    dp: ^BETACFL.doPart;
+                    (* Dopart containing protoAdr, if known. *)
+                 enter (protoAdr,offset,dp[])
+                 do INNER
+                 #);
+               notBetaCode:<
+                 (# errormsg: ^Text;
+                 enter errormsg[]
                  do INNER
                  #);
                codeAdr: @Integer;
@@ -1016,24 +1049,31 @@ processInterface: mpsinterface
           if);
        #);
      
-     infoLoadFailed:< Exception
-       (* Called in case demand load of extra info for an ObjectFileInfo
-        * has failed. *)
+     dbLoadFailed:< Exception
+       (* Called in case demand load of extra info from ..db file for an 
+        * ObjectFileInfo has failed. *)
        (# ofi: ^ObjectFileInfo; 
-          nodbfile: @Boolean; (* TRUE if it was dbManager.readDB that failed.
-                               * FALSE if it was processComm.loadProtoTable 
-                               * that failed. *)
-       enter (ofi[],nodbfile)
+          dbfilename: ^Text;
+          dbstatus: @Integer;
+       enter (ofi[],dbfilename[],dbstatus)
        do INNER;
           (if not continue then
-              'Failed to load debug info from '->msg.putText;
-              (if nodbfile then
-                  'DBFILE'-> msg.putText
-               else
-                  'PROCESS'->msg.putText
+              dbfilename[]->msg.putText;
+              (if dbstatus
+               //DBFILE_NOTFOUND then
+                  ' not found'->msg.putText;
+               //DBFILE_NEWER then
+                  ' newer than executable'->msg.putText;
               if);
-              ' for '->msg.putText;
-              ofi.groupName[]->msg.putText;
+          if);
+       #);
+     
+     codeAddressToImperativeFailure:< Exception
+       (# errormsg: ^Text;
+       enter errormsg[]
+       do INNER;
+          (if not continue then
+              errormsg[]->msg.putText
           if);
        #);
      

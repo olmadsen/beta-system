@@ -1,57 +1,124 @@
 ORIGIN '../valhallaparams';
 INCLUDE '../environment';
-
+INCLUDE '~beta/objectbrowser/v2.0/options';
+INCLUDE '~beta/basiclib/v1.4/formatio';
+INCLUDE '~beta/sysutils/v1.4/envstring';
 
 --- parseValhallaParams:descriptor ---
 (# environ: ^environDB;
    valhallaParams: ^valhallaParamDB;
    execParams: ^executableParamDB;
+   options: ^optionDB;
    
-   i: @Integer; name,value: ^Text;
+  name,val1,val2: ^Text;
+   
+   nextParam: @|
+     (# value: ^Text;
+        valhallaopts: ^Text;
+        i: @Integer; 
+     do 
+        '$(VALHALLAOPTS)' -> expandEnvVar
+          (# defaultValue::< (# do NONE -> envvarvalue[] #)
+          #) -> valhallaopts[];
+        
+        (if valhallaopts[]<>NONE then
+            valhallaopts.reset;
+            loop:
+              (# 
+              do valhallaopts.getAtom->value[];
+                 (if value.length=0 then leave loop if);
+                 suspend;
+                 restart loop;
+              #)
+        if);
+        
+        2->i;
+        loop:
+          (if (i<=NoOfArguments) then
+              i->arguments->value[];
+              suspend;
+              i+1->i;
+              restart loop;
+          if);
+        
+        NONE->value[];
+        loop: (# do suspend; restart loop #);
+     exit value[]
+     #);
+   
 do 
    getEnvironDB->environ[];
    getValhallaParamDB->valhallaParams[];
    getExecutableParamDB->execParams[];
+   getOptionDB->options[];
    
-   2->i;
    loop:
-     (if (i <= NoOfArguments) then
-         i -> Arguments -> name[];
+     (if (nextParam->name[])<>NONE then
          (if true
           // ('-PID'->name.equalNCS) then
-             (if (i<NoOfArguments) then
-                 i+1->Arguments->value[]; 
-                 ('-PID',value[])->valhallaParams.add;
+             (if (nextParam->val1[])<>NONE then
+                 ('-PID',val1[])->valhallaParams.add;
                  (* Check format of -PID command line parameter: *)
-                 value.reset; 
-                 value.getInt
+                 val1.reset; 
+                 val1.getInt
                  (# syntaxError::
                       (# 
                       do 'Wrong format of -PID command line parameter'
                            -> msg.putText;
                       #);
-                 #) 
+                 #)
+              else
+                 '%s usage: %s <processId>'->putformat
+                 (# 
+                 do name[]->s; name[]->s;
+                 #);
              if);
-             i+2->i;
           // ('-ENVIRONMENT'->name.equalNCS) 
           // ('-ENV' -> name.equalNCS)  then
-             (if (i+1<NoOfArguments) then
-                 i+1->Arguments->name[];
-                 i+2->Arguments->value[];
-                 (name[],value[])->environ.add;
+             nextParam->val1[]; nextParam->val2[];
+             (if val2[]<>NONE then
+                 (val1[],val2[])->environ.add;
+              else
+                 '%s usage: %s <envName> <envValue>'->putFormat
+                 (# 
+                 do name[]->s; name[]->s;
+                 #);
              if);
-             i+3->i;
           // ('-EXECNAME'->name.equalNCS) 
           // ('-EXEC'->name.equalNCS) then
-             (if (i<NoOfArguments) then
-                 i+1->Arguments->value[];
-                 ('-EXECNAME',value[])->valhallaParams.add;
+             (if (nextParam->val1[])<>NONE then
+                 ('-EXECNAME',val1[])->valhallaParams.add;
+              else
+                 '%s usage: %s <executableName>'->putFormat
+                 (# 
+                 do name[]->s; name[]->s
+                 #);
              if);
-             i+2->i;
+          //('-BOOLEANOPTION'->name.equalNCS)
+          //('-BOPT'->name.equalNCS) then
+             nextParam->val1[]; nextParam->val2[];
+             (if val2[]<>NONE then
+                 (if true
+                  //('TRUE'->val2.equalNCS) then
+                     (val1[],TRUE)->options.setBooleanOption;
+                  //'FALSE'->val2.equalNCS then
+                     (val1[],FALSE)->options.setBooleanOption;
+                  else
+                     'Param error: %s in "%s %s %s" should be TRUE or FALSE\n'
+                       ->putFormat
+                     (# 
+                     do val2[]->s; name[]->s; val1[]->s; val2[]->s;
+                     #)
+                 if);
+              else
+                 '%s usage: %s <optionName> [TRUE|FALSE]'->putFormat
+                 (# 
+                 do name[]->s; name[]->s;
+                 #);
+             if);
           else
              'Unknown command line parameter: ' -> putText;
              name[] -> putLine;
-             i+1 -> i;
          if);
          restart loop;
      if);
