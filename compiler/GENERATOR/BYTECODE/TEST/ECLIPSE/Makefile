@@ -29,7 +29,9 @@ eclipse:
 	javac -classpath jvm -d jvm Eclipse.java
 
 install: clean beta_indenter
-	cp -r ../jvm/beta $(ECLIPSE_INSTALLDIR)
+#	mkdir -p $(ECLIPSE_INSTALLDIR)/beta
+#	cp ../jvm/beta/*.class $(ECLIPSE_INSTALLDIR)/beta
+	cp ../jvm/org/eclipse/ui/betaeditor/beta/*.class $(ECLIPSE_INSTALLDIR)/org/eclipse/ui/betaeditor/beta
 	cp jvm/org/eclipse/ui/betaeditor/beta/*.class $(ECLIPSE_INSTALLDIR)/org/eclipse/ui/betaeditor/beta
 
 java_install: clean java_indenter
