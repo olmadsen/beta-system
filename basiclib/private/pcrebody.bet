@@ -10,16 +10,62 @@ MDBODY jvm     'pcre_jvmbody'
    compiled_regexp: @Integer;
    extra: @Integer;
    oVector: [1] @Integer;
+   errtext, erroffset: @integer;
 #)
 
 -- PcreLib: attributes --
-exec:
+do_compile:
+  (# exp: ^text;
+     options: @integer;
+  enter (exp[], options)
+  <<SLOT PcreCompile:dopart>>
+  #);
+do_locale_compile:
+  (# exp: ^text;
+     options: @integer;
+  enter (exp[], options)
+  <<SLOT PcreLocaleCompile:dopart>>
+  #);
+do_study:
+  (# options: @integer;
+  enter (options)
+  <<SLOT PcreStudy:dopart>>
+  #);
+do_full_info:
+  (# 
+  <<SLOT PcreFullInfo:dopart>>
+  #);
+do_exec:
   (# subject: ^text;
      position, options, status: @integer
   enter (subject[], position, options)
   <<SLOT PcreExec:dopart>>
   exit status
   #);
+report_error:
+  (# regexp: ^text
+  enter regexp[]
+  <<SLOT PcreError: dopart>>
+  #);
+
+--- PcreInit: dopart ----
+do (if options %Band pcre_C_LOCALE <> 0 then
+       (exp[], options %Band pcre_NONBETAOPTIONS) -> do_compile 
+    else
+       (exp[], options %Band pcre_NONBETAOPTIONS) -> do_locale_compile 
+   if);
+   (if private.compiled_regexp = 0 then
+       exp[]->report_error;
+    else
+       (if options %Band pcre_DO_STUDY <> 0 then
+           options %Band pcre_NONBETAOPTIONS -> do_study;
+           (if private.errtext <> 0 then
+               exp[]->report_error;
+           if);
+       if);
+       do_full_info;
+       ((subpatterns + 1) * 3) -> private.oVector.new;
+   if);
 
 ---- PcreMatchPos: dopart ----
 do private.oVector[1] + 1 -> start;
@@ -119,7 +165,7 @@ do options -> opt;
    private.oVector.range -> private.oVector.new;
    (if subject.T.range = 0 then 1 -> subject.T.extend; 0 -> subject.T[1] if);
    position - 1 -> psn;
-   (subject[], psn, opt %Band pcre_NONBETAOPTIONS) -> exec -> result;
+   (subject[], psn, opt %Band pcre_NONBETAOPTIONS) -> do_exec -> result;
    (result <> pcre_ERROR_NOMATCH) -> matched;
    (if matched then
        INNER;
@@ -137,7 +183,7 @@ do split;
         (if private.oVector[2] >= subject.lgth then
 	    leave loop;  (* Got to end of string *)
 	if);
-        (subject[], private.oVector[2], opt %Band pcre_NONBETAOPTIONS) -> exec -> result;
+        (subject[], private.oVector[2], opt %Band pcre_NONBETAOPTIONS) -> do_exec -> result;
         (result <> pcre_ERROR_NOMATCH) -> matched;
         (if matched then
 	    split;
@@ -161,4 +207,12 @@ do split;
 do (1, private.oVector[1]) -> subject.sub -> new[];
    replacement[] -> rep -> new.append;
    (private.oVector[2] + 1, subject.lgth) -> subject.sub -> new.append;
+   INNER;
+   
+--PcreCompilationError:dopart--
+do 'PCRE: Error compiling regular expression "' -> msg.append;
+   regexp[] -> msg.append;
+   '":\n      ' -> msg.append;
+   errorText[] -> msg.append;
+   msg.newline;
    INNER;

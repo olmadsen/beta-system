@@ -11,84 +11,67 @@
 #include "pcre/study.c"
 #include "pcre/pcre.c"
 
-/* JNI wrappers for functions we need to call from BETA via JNI */
-
 static char *errtext=NULL;
 static int erroffset=0;
 
+/* JNI wrappers for functions we need to call from BETA via JNI */
 
-/* Accessor functions for error reporting */
-JNIEXPORT jstring JNICALL 
-Java_beta_PcreJvmHelpers_last_error (JNIEnv *env, jclass c)
-{
-}
-
-JNIEXPORT jint JNICALL 
-Java_beta_PcreJvmHelpers_last_error_offset (JNIEnv *env, jclass c)
-{
-}
-
-
-/* initialize:
- *   arguments: regexp, options
- *   returns:   array: [compiled_regexp, extra, subpatterns]
+/*
+ * Class:     beta_PcreJvmHelper
+ * Method:    compile
+ * Signature: (Ljava/lang/String;II)I
  */
-JNIEXPORT jintArray JNICALL 
-Java_beta_PcreJvmHelper_initialize(JNIEnv *env, jclass jobj, jstring jexp, jint options)
+JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_compile
+(JNIEnv *env, jclass jobj, jstring jexp, jint options, jint tableptr)
 {
   const char *regexp=NULL;
   pcre *compiled_regexp;
-  pcre_extra *extra;
-  int subpatterns;
-  int result[3];
-  jintArray jresult = (*env)->NewIntArray(env, 3);
-  (*env)->SetIntArrayRegion(env, jresult, 0, 3, result);
-
-  if (!jexp) return jresult;
   
+  if (!jexp) return 0;
+  errtext=NULL;
   regexp = (*env)->GetStringUTFChars(env, jexp, (jboolean *)NULL);
-  
-  if (options & PCRE_C_LOCALE){
-    result[0] = (int)pcre_compile(regexp, 
-				  options & PCRE_NONBETAOPTIONS,
-				  (const char **)&errtext,
-				  &erroffset, 
-				  0);
-  } else {
-    result[0] = (int)locale_pcre_compile(regexp, 
-					 options & PCRE_NONBETAOPTIONS,
-					 (const char **)&errtext,
-					 &erroffset);
-  }
-  if (!result[0]){
-    return jresult;
-  } else {
-    if (options & PCRE_DO_STUDY){
-      result[1] = (int)pcre_study((pcre*)result[0], 
-				  options & PCRE_NONBETAOPTIONS, 
-				  (const char **)&errtext);
-      if (!errtext){
-	return jresult;
-      }
-    }
-    pcre_fullinfo((pcre*)result[0], 
-		  (pcre*)result[1], 
-		  PCRE_INFO_CAPTURECOUNT, 
-		  &result[2]);
-    (*env)->SetIntArrayRegion(env, jresult, 0, 3, result);
-  }
-
+  compiled_regexp = pcre_compile(regexp, 
+				 options,
+				 (const char **)&errtext,
+				 &erroffset, 
+				 (const unsigned char *)0);
   (*env)->ReleaseStringUTFChars(env, jexp, regexp);
-
-  return jresult;
+  return (jint)compiled_regexp;
 }
 
 
-/* exec:
- */
 
+/*
+ * Class:     beta_PcreJvmHelper
+ * Method:    locale_compile
+ * Signature: (Ljava/lang/String;I)I
+ */
+JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_locale_1compile
+(JNIEnv *env, jclass jobj, jstring jexp, jint options)
+{
+  const char *regexp=NULL;
+  pcre *compiled_regexp;
+
+  if (!jexp) return 0;
+  errtext=NULL;
+  regexp = (*env)->GetStringUTFChars(env, jexp, (jboolean *)NULL);
+  compiled_regexp = locale_pcre_compile(regexp, 
+					options,
+					(const char **)&errtext,
+					&erroffset);
+  (*env)->ReleaseStringUTFChars(env, jexp, regexp);
+  return (jint)compiled_regexp;
+}
+
+
+
+/*
+ * Class:     beta_PcreJvmHelper
+ * Method:    exec
+ * Signature: (IILjava/lang/String;III[II)I
+ */
 JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_exec
-  (JNIEnv *env, jclass jobj, jint code, jint extra, jstring jsubject, jint length, jint startoffset, jint options, jintArray jovector, jint ovecsize)
+(JNIEnv *env, jclass jobj, jint code, jint extra, jstring jsubject, jint length, jint startoffset, jint options, jintArray jovector, jint ovecsize)
 {
   int result;
   int ovector[ovecsize];
@@ -110,3 +93,72 @@ JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_exec
 
   return result;
 }
+
+
+
+/*
+ * Class:     beta_PcreJvmHelper
+ * Method:    study
+ * Signature: (II)I
+ */
+JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_study
+(JNIEnv *env, jclass jobj, jint code, jint options)
+{
+  pcre_extra *extra;
+  errtext=NULL;
+  extra = pcre_study((pcre*)code, 
+		     options, 
+		     (const char **)&errtext);
+  return (jint)extra;
+}
+
+
+
+/*
+ * Class:     beta_PcreJvmHelper
+ * Method:    full_info
+ * Signature: (III)[I
+ */
+JNIEXPORT jintArray JNICALL Java_beta_PcreJvmHelper_full_1info
+(JNIEnv *env, jclass jobj, jint code, jint extra, jint what)
+{
+  int results[2]; /* Multiple return: (where, status) */
+  results[1]=pcre_fullinfo((pcre*)code, 
+			   (pcre_extra*)extra, 
+			   what, 
+			   (void*)&results[0]);
+  jintArray jresults = (*env)->NewIntArray(env, 2);
+  (*env)->SetIntArrayRegion(env, jresults, 0, 2, results);
+  return jresults;
+}
+
+
+
+/*
+ * Class:     beta_PcreJvmHelper
+ * Method:    last_error
+ * Signature: ()Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_beta_PcreJvmHelper_last_1error
+(JNIEnv *env, jclass jobj)
+{
+  if (errtext){
+    return (*env)->NewStringUTF(env, errtext);
+  } else {
+    return NULL;
+  }
+}
+
+
+
+/*
+ * Class:     beta_PcreJvmHelper
+ * Method:    last_error_offset
+ * Signature: ()I
+ */
+JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_last_1error_1offset
+(JNIEnv *env, jclass jobj)
+{
+  return erroffset;
+}
+
