@@ -35,8 +35,8 @@ else
 	if [ "$TARGET" = "mac" ]
 	then
 	  echo $0: packing \"macintosh\" too...
-	  FILES="$FILES ./guienv/v1.2/private/macintosh"
-	  FILES="$FILES ./guienv/v1.2/utils/private/macintosh"
+	  FILES="$FILES ./guienv/private/macintosh"
+	  FILES="$FILES ./guienv/utils/private/macintosh"
 	fi
 
 	cd ${BETALIB}; 

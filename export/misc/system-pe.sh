@@ -131,9 +131,9 @@ else
 	mkdir betarun/${BETARUN}/$TARGET
 	cp ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun_pe.o ./betarun/${BETARUN}/$TARGET/betarun.o
 	cp ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun_pe.o ./betarun/${BETARUN}/$TARGET/betarun_v.o
-	cp ${BETALIB}/crypt/v1.0/${TARGET}/decrypt ./betarun/${BETARUN}/$TARGET/
-	${BETALIB}/crypt/v1.0/${objdir}/encrypt $PRODKEY 0 ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun.o ./betarun/${BETARUN}/$TARGET/betarun_o.crypt
-	${BETALIB}/crypt/v1.0/${objdir}/encrypt $PRODKEY 0 ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun_v.o ./betarun/${BETARUN}/$TARGET/betarun_v_o.crypt
+	cp ${BETALIB}/crypt/${TARGET}/decrypt ./betarun/${BETARUN}/$TARGET/
+	${BETALIB}/crypt/${objdir}/encrypt $PRODKEY 0 ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun.o ./betarun/${BETARUN}/$TARGET/betarun_o.crypt
+	${BETALIB}/crypt/${objdir}/encrypt $PRODKEY 0 ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun_v.o ./betarun/${BETARUN}/$TARGET/betarun_v_o.crypt
 	tar -rovhf $DST/system.tar \
 	  ./betarun/${BETARUN}/${CODEDIR}/betarun.o \
 	  ./betarun/${BETARUN}/${CODEDIR}/betarun_v.o  \
