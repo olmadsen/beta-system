@@ -14,19 +14,18 @@ INCLUDE '../../code/pattern';
 INCLUDE '../../code/followsemanticlink';
 INCLUDE '../../code/match';
 INCLUDE '../../asteditor/asteditor';
-INCLUDE '../../palettes/palette';
 INCLUDE '~beta/guienv/v1.6/utils/guienvstuff';
 INCLUDE '../../guienvstuff/killtranslations';
 INCLUDE '../../mpsstuff/mpsutils';
 INCLUDE '../../dialogs/spacingdialog';
 INCLUDE '../classinfo';
-INCLUDE '../../dragmanager/dragmanager';
 INCLUDE '../../buildermenu';
 INCLUDE '~beta/guienv/v1.6/utils/prompts';
 INCLUDE '../../resourcesupport/easyinterface';
 INCLUDE '../../guienvstuff/loadbitmap';
 INCLUDE '../../code/private/generatebody';
-
+INCLUDE 'classinfobody';
+INCLUDE 'editorwindowbody';
 
 MDBODY mac    'macintosh/graphicaleditor_mac'
        ppcmac 'macintosh/graphicaleditor_mac'
@@ -129,8 +128,8 @@ do this(graphicalEditor).private.theFileMenu.open;
 -- windowitemEditornew: doPart --
 do (# 
    do false -> inherited;
-      type -> newData -> data[];
-      type -> makeData -> defaultData[];
+      newData -> data[];
+      makeData -> defaultData[];
       newNode;
       realCreateOpen;
       node[] -> getClassData -> theClassData[];
@@ -160,23 +159,16 @@ do (if theWindowItem[]<>contents then
 do (# node: ^astInterface.beta.attributeDecl;
       super: ^astInterface.beta.patternDecl;
       theAttributes: ^astInterface.beta.attributes;
-      name, className: ^text;
+      name: ^text;
       vertical: @boolean;
    do (if theClassData[] = NONE then
           2 -> trace
           (# 
           do 'NewEditor simple: ' -> xT; xN;
-             'type = ' -> xT; type -> xI;
           #);
           false -> vertical;
-          (if type = verSeparatorType then
-              true -> vertical;
-          if);
-          (if type = verScrollbarType then
-              true -> vertical;
-          if);
-          (type, vertical) -> makeEditor -> theEditor[];
-          (this(canvasEditor)[],type, none) -> theEditor.new;
+          (className.copy, vertical) -> makeEditor -> theEditor[];
+          (this(canvasEditor)[], className.copy, none) -> theEditor.new;
           selection.clear;
           theEditor.select;
        else
@@ -187,17 +179,17 @@ do (# node: ^astInterface.beta.attributeDecl;
              ' vertical = ' -> xT;
              theClassData.vertical -> xB;
           #);
-          (type, theClassData.vertical) -> makeEditor -> theEditor[];
+          (theClassData.theClass.name.copy, theClassData.vertical) -> makeEditor -> theEditor[];
           theClassData.node[] -> super[];
           super[] -> betaGram.getName -> className[];
-          type -> uniqueName -> name[];
+          className[] -> newUniqueName -> name[];
           getMainAttributes -> theAttributes[];
           (theAttributes.frag[], name[], className[]) -> betaGram.newSingularItem -> node[];
           (node[], super[]) -> setSemanticLink;
           node[] -> appendAttribute;
           node[] -> getClassData -> theClassData[];
           (if theClassData[] <> none then
-              (this(canvasEditor)[],node[], NONE, type, false, theClassData[], none) 
+              (this(canvasEditor)[],node[], NONE, false, theClassData[], none) 
                 -> theEditor.init;
               theEditor.realCreateOpen;
           if);
@@ -207,19 +199,22 @@ do (# node: ^astInterface.beta.attributeDecl;
 
 -- graphicalEditorOpen: doPart --
 do (# 
-   do contents -> private.theDragManager.init;
+   do THIS(graphicalEditorEnv).private.theFactory.scan
+      (# 
+      do (current.icon[], current.name[], 0) 
+           -> THIS(editorWindow).private.thePalette.addPaletteItem;
+      #);
+      
       this(graphicalEditor)[] -> insert;
       hide;
       'Graphical Objects' -> title;
       
       (600, 500) -> size;
       private.theClipBoard.init;
-      private.theControlPalette.open;
-      private.theToolPalette.open;
       selectMode -> private.mode;
       private.initNames;
       private.initSizes;
-      
+      private.defaultSizes.init;
    #);
 
 -- graphicalEditorClose: doPart --
@@ -262,59 +257,10 @@ do INNER;
 			  if);
 		      if);
 		      (if private.selected then
-			  (if actualMode
-			   //selectMode then
-			      
-			      pt -> theWindowItem.delay
-			      (# 
-			      do theEvent[] -> selection.drag;
-			      #);
-			   //resizeMode then
-			      (# width,height: @integer;
-				 dh,dv: @integer;
-				 h,v: @integer;
-				 doTop,doLeft,doBottom,doRight: @boolean;
-			      do pt -> (h,v);
-				 theWindowItem.size -> (width,height);
-				 width div 3 -> dh;
-				 height div 3 -> dv;
-				 
-				 (if (h <= dh) then 
-				     true -> doLeft 
-				 if);
-				 (if (h >= (width - dh)) then
-				     true -> doRight
-				 if);
-				 (if (v <= dv) then
-				     true -> doTop
-				 if);
-				 (if (v >= (height - dv)) then 
-				     true -> doBottom
-				 if);
-				 (if (doLeft or doBottom or doTop or doRight) then
-				     (doLeft,doTop,doRight,doBottom) -> reConfigure;
-				  else
-				     width div 2 -> dh;
-				     height div 2 -> dv;
-				     
-				     (if (h <= dh) then 
-					 true -> doLeft
-				      else
-					 true -> doRight;
-				     if);
-				     (if (v <= dv) then
-					 true -> doTop
-				      else
-					 true -> doBottom;
-				     if);
-				     (doLeft,doTop,doRight,doBottom) -> reConfigure;
-				 if);
-			      #);
-			   //hierarkiMode then
-			      (if owner[] <> none then
-				  theEvent[] -> selection.interactiveChangeHierarki;
-			      if);
-			  if);
+                          pt -> theWindowItem.delay
+                          (# 
+                          do theEvent[] -> selection.drag;
+                          #);
 		      if);
 		   #);
 	       if);
@@ -422,14 +368,13 @@ do (# theClassData: ^classData;
       
       
       (if theClassData[] <> none then
-          (theClassData.theClass.type, theClassData.vertical) -> makeEditor -> theEditor[];
+          (theClassData.theClass.name.copy, theClassData.vertical) -> makeEditor -> theEditor[];
           theEditor[] -> private.contentsEditor[];
-          (none, node[], none, theClassData.theClass.type, false, theClassData[], privateFrag[])
+          (none, node[], none, false, theClassData[], privateFrag[])
             -> theEditor.init;
           
           inner init;
-          (* private.theCustomPalette.open; *)
-          adjustPalettes;
+          adjustSize;
           private.controlPoints.init;
           show;
           (if platform = X11 then
@@ -485,7 +430,7 @@ do (# makeTitle:
 	   ' : info' -> title.append;
 	exit title[]
 	#);
-   do (data.copy, makeTitle, platform) -> editInfo
+   do (data.copy, makeTitle, platform, node[] -> betaGram.getPrefix) -> newEditInfo
       (# 
 	 onOk::
 	   (# 
@@ -578,8 +523,8 @@ do (# theDoPart: ^astInterface.beta.doPart;
       #);
       true -> private.initializing;
       inherited -> this(windowItemEditor).inherited;
-      type -> newData -> data[];
-      type -> makeData -> defaultData[];
+      newData -> data[];
+      makeData -> defaultData[];
       4 -> trace
       (# 
       do 'type -> makeData -> defaultData[]' -> xT;
@@ -623,14 +568,13 @@ do (#
       private.adorner.open;
       node[] -> getClassData -> theClassData[];
       (if theClassData[] <> none then
-          (theClassData.theClass.type, theClassData.vertical) -> makeEditor -> theEditor[];
+          (theClassData.theClass.name.copy, theClassData.vertical) -> makeEditor -> theEditor[];
           theEditor[] -> private.contentsEditor[];
-          (none, node[], none, theClassData.theClass.type, false, theClassData[], privateFrag[])
+          (none, node[], none, false, theClassData[], privateFrag[])
             -> theEditor.init;
           theEditor.realCreateOpen;
           
-          (* private.theCustomPalette.open;*)
-          adjustPalettes;
+          adjustSize;;
           private.controlPoints.init;
           show;
           (if platform = X11 then
@@ -821,6 +765,11 @@ do search:
 do screen[] -> tracestream[];
    private.editors.init;
    private.theFactory.init;
+   private.infoDialogs.init;
+   ('pushbutton', buttonDialog##) -> registerDialog;
+   
+   
+   
    (theFragServer[], MPS[], pretty[]) -> theAstEditorEnv.init;
    private.theScrap.init;
    getClassInfo -> private.theClassInfo[];
@@ -851,10 +800,7 @@ do
 
 
 -- GraphicalEditorCanvasEditorCreateTheWindowItem: doPart --
-do (if not (locked OR inherited) then
-       createTheReciever;
-   if);
-   (if not initial then
+do (if not initial then
        children.scan
        (#
        do current.createTheWindowItem;
@@ -995,10 +941,9 @@ do inner;
 
 -- windowItemEditorNewNode: doPart --
 do (# theAttributes: ^astInterface.beta.attributes;
-      className, instanceName: ^text;
+      instanceName: ^text;
    do owner.getMainAttributes -> theAttributes[];
-      type -> getClassName -> className[];
-      type -> uniqueName -> instanceName[];
+      className[] -> newUniqueName -> instanceName[];
       (theAttributes.frag[], instanceName[],className[])
 	-> betaGram.newSingularItem -> node[];
    #);
@@ -1104,8 +1049,8 @@ do (# initAttributes:
 	   do (if current[] -> isStaticItem then
 		  current[] -> getClassData -> theClassData[];
 		  (if theClassData[] <> none then
-		      (theClassData.theClass.type, theClassData.vertical) -> makeEditor -> theEditor[];
-		      (this(canvasEditor)[],current[], NONE, theClassData.theClass.type, super, theClassData[], none)
+		      (theClassData.theClass.name.copy, theClassData.vertical) -> makeEditor -> theEditor[];
+		      (this(canvasEditor)[],current[], NONE,  super, theClassData[], none)
 			-> theEditor.init;
 		  if);
 	      if);
@@ -1152,14 +1097,14 @@ do (# superNode: ^astInterface.beta.attributeDecl;
 	      if);
 	   else
 	      (if theClass.supported  then
-		  (if theClass.type
+		  (* (if theClass.type
 		   //scrollbarType
 		   //separatorType then
 		      (node[], 'vertical') -> betaGram.findAttribute -> verticalDecl[];
 		      (if verticalDecl[] <> none then
 			  true -> theClassData.vertical;
 		      if);
-		  if);
+		  if); *)
 		  theClass[] -> theClassData.theClass[];
 	       else
 		  NONE -> theClassData[];
@@ -1200,3 +1145,60 @@ do borderStyles.shadowIn -> data.borderStyle;
    true -> data.borderVisible;
    inner
  
+-- graphicalEditorEnvInsertCustom: doPart --
+do (# canvasClass: ^classInfo.class;
+   do 'canvas' -> private.theClassInfo.lookup -> canvasClass[];
+      ('canvas' -> loadBitmap, name[], theInstantiator[]) 
+        -> private.theFactory.insert;
+      (name[], canvasClass[], true) -> private.theClassInfo.private.table.add;
+   #);
+-- graphicalEditorMousedownInItem: doPart --
+do (# value: ^rectangle;
+      prox: @proxy
+        (# moveTo::
+             (# theCreateOperation: ^createOperation;
+             do &createOperation[] -> theCreateOperation[];
+                (theCanvasEditor[],  newFrame[], NONE, name[]) -> theCreateOperation.init;
+             #);
+        #);
+   do &rectangle[] -> value[];
+      p -> value.topLeft;
+      name[]  -> getDefaultSize -> value.size;
+      true -> prox.palette;
+      (value[], prox[]) -> THIS(editorWindow).private.thePalette.dragAndDrop;
+   #);
+   
+-- recievingCanvasEditorHilite: doPart --
+do graphics
+   (# overrideChildren:: (# do true -> value #);
+      h, v: @integer;
+   do size -> (h, v);
+      transferModes.xorBlend -> pen.mode;
+      2 -> pen.size;
+      ((0 + 2, 0 + 2), (h - 2, v - 2)) -> drawRect;
+   #);
+   
+-- recievingCanvasEditorLowlite: doPart --
+do graphics
+   (# overrideChildren:: (# do true -> value #);
+      h, v: @integer;
+   do size -> (h, v);
+      transferModes.xorBlend -> pen.mode;
+      2 -> pen.size;
+      ((0 + 2, 0 + 2), (h - 2, v - 2)) -> drawRect;
+   #);
+   
+-- recievingCanvasEditorAccept: doPart --
+do (if dragee.palette then
+       TRUE -> value;
+    else
+       (if (THIS(graphicalEditor).selection.first).owner[] = THIS(recievingCanvasEditor)[]  then
+           TRUE -> value;
+        else
+           THIS(recievingCanvasEditor)[] -> THIS(graphicalEditor).selection.moveAllowed -> value;
+       if);
+   if);
+   
+-- recievingCanvasEditorRecieve: doPart --
+do (THIS(recievingCanvasEditor)[], bounds[]) -> dragee.moveTo;
+

@@ -20,13 +20,11 @@ INCLUDE '../../code/pattern';
 INCLUDE '../../code/followsemanticlink';
 INCLUDE '../../code/match';
 INCLUDE '../../asteditor/asteditor';
-INCLUDE '../../palettes/palette';
 INCLUDE '~beta/guienv/v1.6/utils/guienvstuff';
 INCLUDE '../../guienvstuff/killtranslations';
 INCLUDE '../../mpsstuff/mpsutils';
 INCLUDE '../../dialogs/spacingdialog';
 INCLUDE '../classinfo';
-INCLUDE '../../dragmanager/dragmanager';
 INCLUDE '../../buildermenu';
 INCLUDE '~beta/guienv/v1.6/utils/prompts';
 INCLUDE '../../resourcesupport/easyinterface';
@@ -34,6 +32,8 @@ INCLUDE '../../guienvstuff/loadbitmap';
 INCLUDE '../../code/private/generatebody';
 INCLUDE '../../classes/classes';
 INCLUDE '../../view/colorsupport';
+INCLUDE '../patterndictionary';
+INCLUDE '../../dialogs/infodialogs';
 
 -- lib: attributes --
 
@@ -236,13 +236,11 @@ controlPointEnv:
 
 makeEditor:
   (# editor: ^windowItemEditor;
-     type: @integer;
      name: ^text;
+     className: ^text;
      vertical: @boolean;
-  enter (type, vertical)
-  do type -> getClassName -> name[];
-     
-     2 -> trace
+  enter (name[], vertical)
+  do 2 -> trace
      (# 
      do 'MakeEditor: ' -> xT; xN; name[] -> xT;
      #);
@@ -259,26 +257,13 @@ dontHandleFrameChanged:
   exit private.dontHandleFrameChanged
   #);
 
-adjustPalettes:
-  (# r1, r2, r3, r4: @rectangle;
+adjustSize:
+  (# r: @rectangle;
      right, bottom: @integer;
-  do private.adorner.frame -> r1;
-     private.theToolPalette.frame -> r2;
+  do private.adorner.frame -> r;
 
-
-     (10, r2.bottom + 10) -> private.theControlPalette.position;
-     private.theControlPalette.frame -> r3;
-
-     (*  (if not private.theCustomPalette.patterns.empty then
-      * 	 (r1.right + 10, 10) -> private.theCustomPalette.position;
-      * 	 private.theCustomPalette.frame -> r4;
-      * 	 r4.right -> right;
-      *       else
-      * 	 r1.right -> right;
-      *      if);
-      *)
-     r1.right -> right;
-     (r1.bottom, (r2.bottom, r3.bottom) -> MAX) -> MAX -> bottom;
+     (r.right, 800) -> Max -> right;
+     (r.bottom, 600) -> Max -> bottom;
 
      (right + 10, bottom + 10) -> size;
   #);
@@ -287,11 +272,8 @@ adjustPalettes:
 
 makeData:
   (# data: ^parameters;
-     type: @integer;
-  enter type
   do &parameters[] -> data[];
      data.init;
-     type -> data.type;
      true -> data.bindLeft;
      false -> data.bindRight;
      true -> data.bindTop;
@@ -530,11 +512,11 @@ clipBoard:
 	  tree: ^shadowTree;
 	  editor: ^windowItemEditor;
 	  data: ^parameters;
-	  type: @integer;
 	  top: @boolean;
        enter (node[], owner[], tree[], top)
-       do tree.data.type -> type;
-	  (type, false) -> makeEditor -> editor[];
+       do 
+          
+	  (tree.theClassData.theClass.name.copy, false) -> makeEditor -> editor[];
 	  owner[] -> editor.owner[];
 	  &parameters[] -> data[];
 	  data.init;
@@ -546,7 +528,7 @@ clipBoard:
 	  tree.theClassData[] -> editor.theClassData[];
 	  tree.inherited -> editor.inherited;
 	  (if top then
-	      (node[], type -> uniqueName) -> betaGram.setName;
+	      (node[], node[] -> makeUniqueName) -> betaGram.setName;
 	   else
 	      editor[] -> owner.children.append;
 	  if);
@@ -582,40 +564,23 @@ clipBoard:
  * Generating names
  *)
 
-getClassName:
-  (# type: @integer;
-     name: ^text;
-  enter type
-  do private.names[type].copy -> name[];
-  exit name[]
-  #);
-freshName:
-  (# type: @integer;
-     id: @integer;
-     name: ^text;
-  enter (type, id)
-  do type -> uniqueName -> name[];
-  exit name[]
-  #);
-uniqueName:
-  (# type: @integer;
-     name: ^text;
-  enter type
-  do type -> getClassName -> name[];
+newUniqueName:
+  (# name: ^text;
+  enter name[]
+  do name.copy -> name[];
      private.uniqueID + 1 -> private.uniqueID;
      private.uniqueID -> name.putInt;
   exit name[]
   #);
-
 (*
  * Default sizes
  *)
 
 getDefaultSize:
   (# width, height: @integer;
-     type: @integer;
-  enter type
-  do private.sizes[type] -> (width, height);
+     name: ^text;
+  enter name[]
+  do name[] -> private.defaultSizes.lookup -> (width, height);
   exit (width, height)
   #);
 
@@ -872,11 +837,14 @@ createOperation: operation
      type: @integer;
      theEditor: ^windowItemEditor;
      theClassData: ^classData;
+     className: ^text;
      init::
        (#
-       enter (owner[], type, bounds[], theClassData[])
-       do selection.clear;
-	  (type, theClassData[]) -> owner.newEditor -> theEditor[];
+       enter (owner[], bounds[], theClassData[], className[])
+       do 'createOperation: ' -> putText;
+          className[] -> putLine;
+          selection.clear;
+	  (theClassData[], className[]) -> owner.newEditor -> theEditor[];
 	  bounds.topLeft -> theEditor.theWindowitem.position;
 	  bounds.topLeft -> theEditor.changePosition;
        #);
@@ -1028,38 +996,7 @@ makeChangeWindowSizeOperation: makeOperation
 (* End of undo *)
 
 
-(*
- * drag and drop
- *)
 
-changeHierarkiDragger: private.theDragManager.changeHierarkiDragger
-  (#
-  #);
-
-createDragger: private.theDragManager.createDragger
-  (#
-  #);
-
-
-reciever: private.theDragManager.reciever
-  (#
-  #);
-
-(* end *)
-
-
-
-initialize:
-  (# width, height: @integer;
-  enter (width, height)
-  do
-     (* (contents, width, height) -> private.windowView.open;
-      *      private.windowView.bringBack;
-      *      private.contentsEditorObject[] -> private.contentsEditor.theWindowItem[];
-      *      (private.viewPaletteRight + 5,
-      *       (private.viewPaletteBottom + 5, private.windowViewBottom + 5) -> max) -> size;
-      *)
-  #);
 
 generateEditor:
   (# we: ^windowItemEditor;
@@ -1200,52 +1137,6 @@ appendChild: codeGuard
 	if);
      #);
   #);
-
-(*
- * Drag and drop support
- *)
-
-recieverType: reciever
-  (* Should be a singular object, but a reciever can
-   * not be reused.
-   *)
-  (# savedStyle: @integer;
-     onHilite::
-       (#
-       do true -> theWindowItem.hilite;
-		  this(window).update;
-       #);
-     onLowLite::
-       (#
-       do false -> theWindowItem.hilite;
-		  this(window).update;
-       #);
-
-     recieve::
-       (#
-       do (this(canvasEditor)[], frame[]) -> theDragger.moveTo;
-       #);
-  #);
-
-createTheReciever:
-  (#
-  do (if private.theReciever[] <> none then
-	 private.theReciever.delete;
-     if);
-     &recieverType[] -> private.theReciever[];
-     theWindowItem[] -> private.theReciever.init;
-  #);
-(* End of drag and drop support *)
-
-(*
- * Locking
- *)
-
-
-
-
-(* End of locking *)
-
 
 (*
  * Code
@@ -1470,49 +1361,27 @@ bounds:
      #);
   exit theBounds[]
   #);
-
-interactiveChangeHierarki:
-  (# theDragger: @changeHierarkiDragger;
-     event: ^windowItem.eventHandler.mouseDown;
-  enter event[]
-  do theDragger.init;
-     (first).owner.theWindowItem[] -> theDragger.item[];
-     bounds -> theDragger.bounds[];
-     (event[], (first).theWindowItem[]) -> theDragger.drag
-     (#
-	frame::
-	  (#
-	  do &rectangle[] -> value[];
-	     theDragger.bounds -> value;
-	  #);
-     #);
-  #);
-
 drag:
-  (# theEvent: ^windowItem.eventhandler.mouseDown;
-  enter theEvent[]
-  do (# oldBounds, newBounds: ^rectangle;
-	dh, dv: @integer;
-     do
-	bounds -> oldBounds[];
-	(oldBounds[], (first).theWindowItem.father[], contents)
-	  -> translateRect;
-	&rectangle[] -> newBounds[];
-	(oldBounds, true, true, true, true)
-	  -> (contents).defineRect -> newBounds;
-	newBounds.left - oldBounds.left -> dh;
-	newBounds.top - oldBounds.top -> dv;
-	(dh, dv) -> makeMoveOperation;
-     #);
-  #);
-
-
-removeControlPoints:
-  (#
-  do
-  #);
-showControlPoints:
-  (#
+  (# theProxy: @proxy
+       (# moveTo::
+            (# dh, dv: @integer;
+            do newFrame.left - oldBounds.left -> dh;
+               newFrame.top - oldBounds.top -> dv;
+               (if theCanvasEditor[] = (first).owner[] then
+                   (dh, dv) -> makeMoveOperation;
+                else
+                   (theCanvasEditor[], dh, dv) -> selection.makeChangeOwnerOperation;
+               if);
+            #);
+       #);
+     oldBounds: ^rectangle;
+     event: ^windowItem.eventHandler.mouseDown;
+     dragItem: ^windowItem;
+  enter event[]
+  do bounds -> oldBounds[];
+     (first).owner.theWindowItem[] -> dragItem[];
+     FALSE -> theProxy.palette;
+     (oldBounds[], theProxy[]) -> dragItem.dragAndDrop;
   #);
 
 selectable: booleanValue
@@ -1698,18 +1567,6 @@ assertWindowItem:
 	 error;
      if);
   #);
-
-
-showControlPoints:
-  (#
-  do
-  #);
-removeControlPoints:
-  (#
-  do
-  #);
-
-
 
 
 editName:
@@ -2260,61 +2117,9 @@ inherited:
   exit private.inherited
   #);
 
-
-
-dragOrResize:
-  (# theEvent: ^windowItem.eventhandler.mouseDown;
-     width, height: @integer;
-     minBorder: (# exit 1 #);
-     maxBorder: (# exit 5 #);
-     borderRatio: (# exit 5 #);
-     borderWidth: @integer;
-     borderHeight: @integer;
-     h, v: @integer;
-     x, y: @integer;
-     doLeft, doTop, doRight, doBottom: @boolean;
-  enter (theEvent[], (h, v))
-  do theWindowItem.size -> (width, height);
-
-
-     (((width div borderRatio), maxBorder) -> Min, minBorder) -> max -> borderWidth;
-     (((height div borderRatio), maxBorder) -> Min, minBorder) -> max -> borderHeight;
-
-     (if (h <= borderWidth) then
-	 true -> doLeft
-     if);
-     (if (h >= (width - borderWidth)) then
-	 true -> doRight
-     if);
-     (if (v <= borderHeight) then
-	 true -> doTop
-     if);
-     (if (v >= (height - borderHeight)) then
-	 true -> doBottom
-     if);
-     (if doLeft or doTop or doRight or doBottom then
-	 (doLeft, doTop, doRight, doBottom) -> reConfigure;
-      else
-	 theEvent[] -> selection.drag;
-     if);
-  #);
-
 closeWindowItem:
   (#
-  do traverse
-     (# forEach::<
-	  (#
-	  do current[] -> qua
-	     (# as:: canvasEditor;
-		quaError:: (# do true -> continue #);
-	     do (if thisObj.private.theReciever[] <> none then
-		    thisObj.private.theReciever.delete;
-		    none -> thisObj.private.theReciever[];
-		if);
-	     #);
-	  #);
-     #);
-     theWindowItem.close;
+  do theWindowItem.close;
      none -> theWindowItem[];
   #);
 fixOptionButtons:
@@ -2843,11 +2648,64 @@ handleRefresh: theWindowItem.refreshAction
 
 -- canvasEditorPrivate: descriptor --
 (#
-   theReciever: ^recieverType;
 #)
 
 
 -- graphicalEditorEnvLib: attributes --
+insertCustom:
+  (# theInstantiator: ^instantiator;
+     name: ^text;
+  enter (name[], theInstantiator[])
+  <<SLOT graphicalEditorEnvInsertCustom: doPart>>
+  #);
+registerDialog:
+  (# name: ^text;
+     dialog: ##windowItemDialog;
+  enter (name[], dialog##)
+  do (name[], dialog##) -> private.infoDialogs.define;
+  #);
+lookupDialog:
+  (# name: ^text;
+     dialog: ##windowItemDialog;
+  enter name[]
+  do name[] -> private.infoDialogs.lookup -> dialog##;
+  exit dialog##
+  #);
+makeUniqueName:
+  (# node: ^astInterface.beta.attributeDecl;
+     name: ^text;
+  enter node[]
+  do node[] -> betaGram.getName -> name[];
+     'Copy' -> name.append;
+  exit name[]
+  #);
+
+
+newEditInfo:
+  (# data: ^parameters;
+     title: ^text;
+     onOK:<
+       object;
+     onCancel:<
+       object;
+     platform: @integer;
+     name: ^text;
+  enter (data[], title[], platform, name[])
+  do (# dialog: ##windowItemDialog;
+        theDialog: ^windowItemDialog;
+     do name[] -> lookupDialog -> dialog##;
+        (if dialog## = NONE then
+            &windowItemDialog[] -> theDialog[];
+         else
+            &dialog[] -> theDialog[];
+        if);
+        &onOK[] -> theDialog.onOk[];
+        platform -> theDialog.platform;
+        data[] -> theDialog.open;
+        title[] -> theDialog.title;
+        theDialog.showModal
+     #);
+  #);
 
 defined: booleanValue
   (# name: ^text;
@@ -3134,7 +2992,8 @@ shadowTree:
 (# theClassInfo: ^classInfo;
 
    theFactory: @factory;
-
+   infoDialogs: @patternDictionary;
+   
    theScrap: @scrap;
    editors: @list
      (# element:: graphicalEditor;
@@ -3233,6 +3092,39 @@ shadowTree:
 		  closeItem[] -> append;
 	       #);
 	  #);
+        runItem: @graphicalEditorItem
+          (# eventHandler::
+	       (# onStatus::
+		    (#
+		    do true -> value;
+		    #);
+		  onSelect::
+		    (#
+		    do ((node.frag.father).fullName, THIS(guienv)[]) -> evaluateFile;
+		    #);
+	       #);
+	     open::
+	       (#
+	       do 'Run' -> name;
+                  'R' -> key;
+	       #);
+          #);
+        runInsideItem: @graphicalEditorItem
+          (# eventHandler::
+	       (# onStatus::
+		    (#
+		    do true -> value;
+		    #);
+		  onSelect::
+		    (#
+		    do ((node.frag.father).fullName, THIS(graphicalEditor)[]) -> evaluateFile;
+		    #);
+	       #);
+	     open::
+	       (#
+	       do 'Run Inside Frigg' -> name;
+	       #);
+          #);
 	saveItem: @graphicalEditorItem
 	  (# eventHandler::
 	       (# onStatus::
@@ -3254,6 +3146,8 @@ shadowTree:
 	  (#
 	  do 'File' -> name;
 	     closeItem.open;
+             runItem.open;
+             runInsideItem.open;
 	     (* saveItem.open;*)
 	  #);
      #);
@@ -3677,48 +3571,6 @@ shadowTree:
      (# element:: operation;
      #);
 
-   (*
-    * Drag and drop
-    *)
-
-
-   theDragManager: @dragManager
-     (# dragger::
-	  (#  moveTo:<
-	       (# theCanvasEditor: ^canvasEditor;
-		  newFrame: ^rectangle;
-	       enter (theCanvasEditor[], newFrame[])
-	       do inner;
-	       #);
-	  #);
-	changeHierarkiDragger: dragger
-	  (# bounds: ^rectangle;
-	     moveTo::
-	       (# dh, dv: @integer;
-	       do newFrame.left - bounds.left -> dh;
-		  newFrame.top - bounds.top -> dv;
-		  (if theCanvasEditor[] -> selection.moveAllowed then
-		      (if (selection.first).owner[] <> theCanvasEditor[] then
-			  (theCanvasEditor[], dh, dv) -> selection.makeChangeOwnerOperation;
-		      if);
-		   else
-		      system.beep;
-		  if);
-	       #);
-	  #);
-	createDragger: dragger
-	  (# type: @integer;
-	     theClassData: ^classData;
-	     moveTo::
-	       (# theEditor: ^windowItemEditor;
-		  theCreateOperation: ^createOperation;
-	       do &createOperation[] -> theCreateOperation[];
-		  (theCanvasEditor[], type, newFrame[], theClassData[]) -> theCreateOperation.init;
-	       #);
-	  #);
-     #);
-
-   (* END of drag and drop *)
 
    (*
     * Clipboard
@@ -3769,6 +3621,63 @@ shadowTree:
 	'rect' -> names[29][];
      #);
    sizes: [29] ^point;
+   defaultSizes: @sequence
+     (# element::
+          (# name: ^text;
+             width, height: @integer;;
+          #);
+        define:
+          (# name: ^text;
+             width, height: @integer;
+             elm: ^element;
+          enter (name[], width, height)
+          do &element[] -> elm[];
+             name[] -> elm.name[];
+             width -> elm.width;
+             height -> elm.height;
+             elm[] -> append;
+          #);
+        lookup:
+          (# name: ^text;
+             width, height: @integer;
+          enter name[]
+          do l: scan
+             (# 
+             do (if name[] -> current.name.equalNCS then
+                    current.width -> width;
+                    current.height -> height;
+                    leave l;
+                if);
+             #);
+          exit (width, height)
+          #);
+        init::
+          (# 
+          do ('windowItem', 100, 20) -> define;
+	     ('separator', 100, 4) ->  define;
+	     ('canvas', 200, 100) ->  define;
+	     ('abstractscroller', 200, 100) ->  define;
+	     ('scroller', 200, 100) ->  define;
+	     ('texteditor', 200, 100) ->  define;
+	     ('control', 100, 20) ->  define;
+	     ('button', 100, 20) ->  define;
+	     ('pushButton', 60, 20) ->  define;
+	     ('iconButton', 40, 40) ->  define;
+	     ('optionButton', 100, 40) ->  define;
+	     ('staticText', 60, 16) ->  define;
+	     ('toggleButton', 100, 20) ->  define;
+	     ('radioButton', 100, 20) ->  define;
+	     ('checkBox', 100, 20) ->  define;
+	     ('scrollbar', 100, 16) ->  define;
+	     ('editText', 100, 30) ->  define;
+	     ('textField', 200, 100) ->  define;
+	     ('scrollList', 200, 100)  ->  define;
+	     ('textScrollList', 200, 100) ->  define;
+	     ('window', 300, 200) ->  define;
+	     ('scrollbar-vertical', 16, 100) ->  define;
+	     ('separator-vertical', 4, 100) ->  define;
+          #);
+     #);
    initSizes:
      (#
      do (for inx: sizes.range repeat
@@ -3815,7 +3724,7 @@ shadowTree:
 	  do bringBack;
 	     true -> border.visible;
 	     borderstyles.shadowOut -> border.style;
-	     (toolPaletteRight + 10, 10) -> position;
+	     (5, 45) -> position;
 	  #);
 	eventHandler::
 	  (# onChildFrameChanged::
@@ -3832,151 +3741,4 @@ shadowTree:
 
    contentsEditor: ^windowItemEditor;
 
-   theCustomPalette: @palette
-     (#
-	patterns: @sequence
-	  (# element:: classData;
-	  #);
-
-	addPattern:
-	  (# thePattern: ^astInterface.beta.patternDecl;
-	     theClassData: ^classData;
-	  enter thePattern[]
-	  do
-	     thePattern[] -> getClassData -> theClassData[];
-	     (if theClassData[] <> none then
-		 theClassData[] -> patterns.append;
-		 (none,
-		 thePattern[] -> betaGram.getName,
-		 theClassData.theClass.type,
-		 patterns.size) -> addPaletteItem;
-	     if);
-	  #);
-
-	addPatternsFromAttributes:
-	  (# theAttributes: ^astInterface.beta.attributes;
-	  enter theAttributes[]
-	  do (if theAttributes[] <> none then
-		 theAttributes.newScan
-		 (#
-		 do (if current.symbol = betaGram.patternDecl then
-			current[] -> addPattern;
-		    if);
-		 #);
-	     if);
-	  #);
-	addPatternsFromNode:
-	  (# node: ^astInterface.beta.attributeDecl;
-	  enter node[]
-	  do node[] -> betaGram.getAttributes -> addPatternsFromAttributes;
-	  #);
-	open::
-	  (#
-	  do patterns.init;
-	     contentsEditor.getPublicAttributes -> addPatternsFromAttributes;
-	     contentsEditor.getPrivateAttributes -> addPatternsFromAttributes;
-	     (mps[], contentsEditor.node.frag.father, 'windowLib') -> scanDomain
-	     (#
-	     do (if current.symbol = betaGram.patternDecl then
-		    current[] -> addPattern;
-		if);
-	     #);
-	     fit;
-	     (if patterns.empty then
-		 hide;
-	     if);
-
-	  #);
-	mouseDownInItem::
-	  (# theDragger: @createDragger;
-	  do (if not readOnly then
-		 theCustomPalette[] -> theDragger.item[];
-		 type -> theDragger.type;
-		 (if index <> 0 then
-		     index -> patterns.get -> theDragger.theClassData[];
-		 if);
-		 (event[], theControlPalette[]) -> theDragger.drag
-		 (#
-		    frame::
-		      (#
-		      do &rectangle[] -> value[];
-			 p -> value.topLeft;
-			 (32, 32) -> value.size;
-		      #);
-		 #);
-	     if);
-	  #);
-     #);
-
-   theControlPalette: @controlPalette
-     (#
-	mouseDownInItem::
-	  (# theDragger: @createDragger;
-	  do (if not readOnly then
-		 theControlPalette[] -> theDragger.item[];
-		 type -> theDragger.type;
-		 (event[], theControlPalette[]) -> theDragger.drag
-		 (#
-		    frame::
-		      (#
-		      do &rectangle[] -> value[];
-			 p -> value.topLeft;
-			 type -> getDefaultSize -> value.size;
-		      #);
-		 #);
-	     if);
-	  #);
-	open::
-	  (# ignore: @integer;
-	  do (10, 10) -> position;
-	     frame -> ((ignore, ignore), (controlPaletteRight, controlPaletteBottom));
-	  #);
-     #);
-   theViewsPalette: @viewPalette
-     (#
-
-	mouseDownInItem::
-	  (# theDragger: @createDragger;
-	  do (if not readOnly then
-		 theViewsPalette[] -> theDragger.item[];
-		 type -> theDragger.type;
-		 (event[], theViewsPalette[])  -> theDragger.drag
-		 (#
-		    frame::
-		      (#
-		      do &rectangle[] -> value[];
-			 p -> value.topLeft;
-			 type -> getDefaultSize -> value.size;
-		      #);
-		 #);
-	     if);
-
-	  #);
-	open::
-	  (# ignore: @integer;
-	  do (200, controlPaletteBottom + 10) -> position;
-	     frame -> ((ignore, ignore), (viewPaletteRight, viewPaletteBottom));
-	  #);
-     #);
-   theToolPalette: @toolPalette
-     (# mouseDownInItem::
-	  (#
-	  do (if not readOnly then
-		 type -> this(graphicalEditor).mode;
-	     if);
-	  #);
-	open::
-	  (# width, height: @integer;
-	  do (10, 10) -> position;
-	     size -> (width, height);
-	     width + 10 -> toolPaletteRight;
-	     height + 10 -> toolPaletteBottom;
-	  #);
-
-     #);
-
-   toolPaletteRight, toolPaletteBottom: @integer;
-   controlPaletteBottom, controlPaletteRight: @integer;
-   viewPaletteRight, viewPaletteBottom: @integer;
-   windowViewBottom: @integer;
 #)
