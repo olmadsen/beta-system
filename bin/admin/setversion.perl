@@ -42,12 +42,38 @@ sub ProcessCurrentDirectory {
 	    } else {
 		if ($line =~ /^---\s*include\s+(.*)$/) {
 		    $line = "INCLUDE $1;\n";          # Change to new syntax.
-		    print "$cwd/$file, --- include -> INCLUDE\n";
+		    print "NOTE! $cwd/$file, --- include -> INCLUDE\n";
 		    $changed = 1;
 		}
-		if ($line =~ /^(ORIGIN|INCLUDE|BODY|MDBODY)\s+\'\~beta\/([^\/]+)\/(v\d+\.\d+[^\/]*)\/(.*)$/) {
-		    ($type, $lib, $ver, $rest) = ($1, $2, $3, $4);
+		$foundone = 0;
+		if ($line =~ /^(ORIGIN|INCLUDE|BODY|MDBODY)\s+\'(\~beta\/)?([^\/]+)\/(v\d+\.\d+[^\/]*)\/(.*)$/) {
+		    ($type, $beta, $lib, $ver, $rest) = ($1, $2, $3, $4, $5);
+		    if ($beta) {
+			$foundone = 1;
+		    } elsif ($rest !~ /\;/) {
+			$LastLineContinue = 1;
+		    }
+		} elsif ($line =~ /^(ORIGIN|INCLUDE|BODY|MDBODY)\s+\'[^\~]+\'(.*)$/) {
+		    ($type, $rest) = ($1, $2);
+		    if ($rest !~ /\;/) {
+			$LastLineContinue = 1;
+		    }
+		} elsif ($LastLineContinue && $line =~ /^\s*\'(\~beta\/)?([^\/]+)\/(v\d+\.\d+[^\/]*)\/(.*)$/) { 
+		    $type = ' ' x length($type);
+		    ($beta, $lib, $ver, $rest) = ($1, $2, $3, $4);
+		    if ($beta) {
+			$foundone = 1;
+		    } elsif ($rest !~ /\;/) {
+			$LastLineContinue = 1;
+		    }
+		} 
+		    
+		if ($foundone) {
 		    $new = $line; #Expect not to make any changes.
+		    $LastLineContinue = 0;
+		    if ($rest !~ /\;/) {
+			$LastLineContinue = 1;
+		    }
 		    foreach $library (@libraries) {
 			if ($lib eq $library) {
 			    $version = $versions{$lib};
