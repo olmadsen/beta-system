@@ -18,7 +18,7 @@ do
         ext,help: ^Text;
         didRecover: @boolean;
         ok: @integer;
-        diagFile,astFile,betFile: @file
+        diagFile,autoSaveDiagFile,astFile,betFile: @file
      do
         thisOp:
           (#
@@ -53,6 +53,7 @@ do
                      name->removeExtension->name;
                      name->prependCurrentPath->help[];
                      '.diag'->(help.copy).append->diagFile.name;
+                     '.diag#'->(help.copy).append->autoSaveDiagFile.name;
                      mps.astFileExtension->(help.copy).append->astFile.name;
                      '.bet'->(help.copy).append->betFile.name;
                      (if switch[17] then
@@ -65,13 +66,18 @@ do
                                 betFile.name->s
                              #)
                      if);
-                     (if diagFile.entry.exists then
-                         doOpenDiagram
+                     (if currentDiagramName[] = none then
+                         (if diagFile.entry.exists or
+                         autoSaveDiagFile.entry.exists then
+                             doOpenDiagram
+                          else
+                             doOpenFragmentGroup
+                         if)
                       else
                          doOpenFragmentGroup
                      if)
                   else
-                     (if '.diag'->ext.equal then
+                     (if ('.diag'->ext.equal) or ('.diag#'->ext.equal) then
                          (if currentDiagramName[] = none then
                              name
                                ->checkAutoSaveFile
@@ -100,6 +106,8 @@ do
                              if);
                              name->prependCurrentPath->help[];
                              '.diag'->(help.copy).append->diagFile.name;
+                             '.diag#'->(help.copy).append
+                               ->autoSaveDiagFile.name;
                              mps.astFileExtension->(help.copy).append
                                ->astFile.name;
                              '.bet'->(help.copy).append->betFile.name;
@@ -113,7 +121,9 @@ do
                                         betFile.name->s
                                      #)
                              if);
-                             (if diagFile.entry.exists and
+                             (if
+                             (diagFile.entry.exists or
+                              autoSaveDiagFile.entry.exists) and
                              (currentDiagramName[] = none ) then
                                  doOpenDiagram
                               else
@@ -468,7 +478,8 @@ do
                      if)
                   #);
                 theOADDocument.theGroupPage.patterndiagrams.parseDiagram;
-                readOnlyCheck
+                readOnlyCheck;
+                false->theOADDocument.theGroupPage.visible
              else
                 'Either Group Page or Work Sheet was not found - quit immediatly to avoid further problems'
                   ->alertUser
@@ -1221,41 +1232,47 @@ do
    didRecover,ok: @boolean;
    
 do
-   (if NoOfArguments > 1
-    // true then
-       (for i: NoOfArguments-1 repeat
-         i+1->Arguments->arg[];
-         0->arg.setpos;
-         getSwitch:
-         (if SwitchMode
-          // true then
-             arg.getint->N;
-             (if True
-              // (0 < N) and (N <= switch.range) then
-                 True->Switch[N]; 
-              // N = 0 then
-                 false->SwitchMode; 
-             if)
-          else
-             (if arg.peek
-              // '-' then
-                 arg.get;
-                 (if arg.peek
-                  // 'd' // 'D' then
-                     arg.get; (for i: 100 repeat true->switch[i] for); 
-                  // 's' // 'S' then
-                     arg.get; true->SwitchMode; swt.clear; restart getSwitch; 
-                  // 'u' // 'U' then
-                     arg.get; true->userdataVerbose
-                  // 'v' // 'V' then
-                     true->verbose
-                 if);
-                 
+   (if isStandAloneFreja then
+       (if NoOfArguments > 1
+        // true then
+           (for i: NoOfArguments-1 repeat
+             i+1->Arguments->arg[];
+             0->arg.setpos;
+             getSwitch:
+             (if SwitchMode
+              // true then
+                 arg.getint->N;
+                 (if True
+                  // (0 < N) and (N <= switch.range) then
+                     True->Switch[N]; 
+                  // N = 0 then
+                     false->SwitchMode; 
+                 if)
               else
-                 arg[]->openFile
+                 (if arg.peek
+                  // '-' then
+                     arg.get;
+                     (if arg.peek
+                      // 'd' // 'D' then
+                         arg.get; (for i: 100 repeat true->switch[i] for); 
+                      // 's' // 'S' then
+                         arg.get;
+                         true->SwitchMode;
+                         swt.clear;
+                         restart getSwitch;
+                         
+                      // 'u' // 'U' then
+                         arg.get; true->userdataVerbose
+                      // 'v' // 'V' then
+                         true->verbose
+                     if);
+                     
+                  else
+                     arg[]->openFile
+                 if)
              if)
-         if)
-       for)
+           for)
+       if)
    if)
 #)  
 
@@ -1573,7 +1590,8 @@ do
    groupFile,autosaveGroupFile: @file;
    doRecover,doNotRecover: @boolean;
    ok: @integer;
-   groupName,frejaFileName,autosaveFrejaFileName,diagFileName,help: ^text
+   groupName,frejaFileName,autosaveFrejaFileName,diagFileName: ^text;
+   help: @text
 do
    name->prependCurrentPath->diagFileName[]->diagFile.name;
    '#'->(diagFileName.copy).append->autosaveDiagFile.name;
@@ -1591,8 +1609,12 @@ do
         (if autosaveDiagFile.entry.exists then
             (if DiagFile.entry.exists then
                 (if autosaveDiagFile.entry.modtime > DiagFile.entry.modtime then
-                    ('Open','Autosave file is newer, recover?')
-                      ->promptForBoolean->ok;
+                    'Autosave file %s is newer than %s, recover?'
+                      ->help.putformat
+                        (# 
+                        do autoSaveDiagFile.name->s; DiagFile.name->s
+                        #);
+                    ('Open',Help[])->promptForBoolean->ok;
                     (if ok
                      // yes then
                         true->doRecover
@@ -1603,8 +1625,9 @@ do
                     if)
                 if)
              else
-                ('Open','No .diag file, recover from Autosave file?')
-                  ->promptForBoolean->ok;
+                'Autosave file %s exists, recover?'
+                  ->help.putformat (#  do autoSaveDiagFile.name->s #);
+                ('Open',help[])->promptForBoolean->ok;
                 (if ok
                  // yes then
                     true->doRecover
