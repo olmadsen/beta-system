@@ -594,12 +594,12 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       }
       if (legal) {
 	address = (int) obj;
-	if ((obj->Proto) != (ComponentPTValue)) {
+	if ((GETPROTO(obj)) != (ComponentPTValue)) {
 	  DEBUG_VALHALLA(fprintf(output,"debuggee: Not ComponentPTValue\n"));
 	  if (obj->GCAttr == -6) {
 	    Component *comp = (Component *) (address - 24);
 	    DEBUG_VALHALLA(fprintf(output,"debuggee: GCAttr was -6\n"));
-	    if ((comp->Proto) == (ComponentPTValue))
+	    if ((GETPROTO(comp)) == (ComponentPTValue))
 	      address = address - 24;
 	  }
 	}
@@ -658,7 +658,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       int stacktype;
       
       comp = (Component *) valhalla_readint ();
-      DEBUG_VALHALLA(fprintf (output,"debuggee: Received component: %d, pt = %d\n",(int)comp, (int) comp->Proto));
+      DEBUG_VALHALLA(fprintf (output,"debuggee: Received component: %d, pt = %d\n",(int)comp, (int) GETPROTO(comp)));
       
       DEBUG_VALHALLA(fprintf (output,"debuggee: Scanning ComponentStack.\n"));
       stacktype=scanComponentStack (comp,curObj,PC,HandleStackCell);
@@ -737,11 +737,11 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       {
 	long SPoff /* size allocated on stack when theObj became active */;
 	DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: Finding previous frame:\n"));
-	GetSPoff(SPoff, CodeEntry(curObj->Proto, PC)); 
+	GetSPoff(SPoff, CodeEntry(GETPROTO(curObj), PC)); 
 	DEBUG_STACK({
 	  fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__);
 	  fprintf(output, "Old SP:      0x%x\n", SP);
-	  fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(curObj->Proto, PC));
+	  fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(GETPROTO(curObj), PC));
 	  fprintf(output, "SPoff:       0x%x\n", SPoff);
 	  fprintf(output, "New SP:      0x%x\n", SP+SPoff);
 	});

@@ -88,7 +88,7 @@ void RefNone(Object * theObj)
     pushReg((void *)getR8Reg()); /* R8 is NOT to be GC'ed */
     
     LazyDangler = (long)theObj; /* dangling reference */
-    CallBetaEntry(LazyItem->Proto->TopMpart, LazyItem);
+    CallBetaEntry(OBJPROTOFIELD(LazyItem,TopMpart), LazyItem);
     
     setR8Reg((long)popReg());
     setD4Reg((long)popReg());

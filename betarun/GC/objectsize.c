@@ -8,7 +8,7 @@
 /* ObjectSize returns the size of an object in number of LONGS. */
 long ObjectSize(Object * theObj)
 { 
-    ProtoType * theProto = theObj->Proto;
+    ProtoType * theProto = GETPROTO(theObj);
     
     if (isNotSpecialProtoType(theProto)) {
         /* This is an item, so find the size in the protoType. */

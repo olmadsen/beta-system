@@ -331,7 +331,7 @@ static void TSDCheckReference(int i, Object *ref)
 void ProcessStackObj(StackObject *sObj)
 {
   Object **handle = (Object **)&sObj->Body;
-  Object **last   = (Object **)((long)&sObj->Proto + sObj->refTopOff);
+  Object **last   = (Object **)((long)&GETPROTO(sObj) + sObj->refTopOff);
   DEBUG_MT(fprintf(output, "ProcessStackObj: 0x%x\n",(int)sObj));
   while (handle<=last) {
     if (inBetaHeap(*handle) 

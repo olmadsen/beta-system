@@ -127,7 +127,7 @@ int strongIsObject(Object *obj)
   if (!inBetaHeap(obj))
     return 0;
 
-  proto = obj->Proto;
+  proto = GETPROTO(obj);
   gc = obj->GCAttr;
 
   if (inAOA(obj)) {
@@ -200,7 +200,7 @@ long isObject(void *theObj)
     return 0;
 
   isObjectState = 3;
-  proto = obj->Proto;
+  proto = GETPROTO(obj);
   gc = obj->GCAttr;
 
   if (inAOA(obj)) {
@@ -313,7 +313,7 @@ void PrintRef(Object *ref)
 	DescribeObject(ref);
 	fprintf(output, ")");
       } else {
-	fprintf(output, ", proto NOT ok: 0x%x", (int)ref->Proto);
+	fprintf(output, ", proto NOT ok: 0x%x", (int)GETPROTO(ref));
       }
     } else {
       fprintf(output, ", is NOT object");
@@ -964,7 +964,7 @@ void DescribeObject(Object *theObj)
     fprintf(output, "[NONE]");
     return;
   }
-  theProto = theObj->Proto;
+  theProto = GETPROTO(theObj);
   if (isSpecialProtoType(theProto)){
     switch (SwitchProto(theProto)){
     case SwitchProto(ComponentPTValue):

@@ -300,7 +300,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
     theObj = CurrentObject = (Object *) scp->sc_regs[30];
     if (IsBetaCodeAddrOfProcess((long)PC)){ 
       long SPoff;
-      GetSPoff(SPoff, CodeEntry(theObj->Proto, (long)PC)); 
+      GetSPoff(SPoff, CodeEntry(GETPROTO(theObj), (long)PC)); 
       StackEnd = (long *) ((long)scp->sc_regs[29]+SPoff);
     }
     if( !(inBetaHeap(theObj) && isObject(theObj))) theObj  = 0;

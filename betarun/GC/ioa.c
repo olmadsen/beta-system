@@ -741,8 +741,8 @@ void IOACheck()
             theObj = (Object *)ptr;
         }
 #else /* Not MT */
-        Claim((long)(theObj->Proto), "IOACheck: theObj->Proto");
-	Claim(IsPrototypeOfProcess((long)(theObj->Proto)),
+        Claim((long)(GETPROTO(theObj)), "IOACheck: GETPROTO(theObj)");
+	Claim(IsPrototypeOfProcess((long)(GETPROTO(theObj))),
 				   "IsPrototypeOfProcess(Proto)");
 #endif /* MT */
 

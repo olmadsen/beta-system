@@ -50,7 +50,7 @@ printMessage(FILE *fp,
 	     int printOrigin,
 	     int printSize)
 {
-  ProtoType * proto=theObj->Proto;
+  ProtoType * proto=GETPROTO(theObj);
   char *name;
 
   if ((long)proto < 0)
@@ -82,7 +82,7 @@ printMessage(FILE *fp,
     if (printOrigin) {
       fprintf(fp," ");
       printMessage(fp,
-		   (Object *)(((long*)theObj)[theObj->Proto->OriginOff]),
+		   (Object *)(((long*)theObj)[OBJPROTOFIELD(theObj,OriginOff)]),
 		   0,	/* don't print origins recursively */
 		   0);	/* don't print size of origin */
     }
@@ -147,10 +147,10 @@ scanAOAliveObjects(int printVisited, int printOrigin, int printSize,
       }
 
       /* Expose the object */
-      if (((long) theObj->Proto) >= 0) {
+      if (((long) GETPROTO(theObj)) >= 0) {
 
 	/* Real object: filter by root */
-	if ((0==rootProto) || isPrefix(rootProto,theObj->Proto)) {
+	if ((0==rootProto) || isPrefix(rootProto,GETPROTO(theObj))) {
 	  if (printVisited)
 	    noise_cb(theObj,printOrigin,printSize);
 	  if (docallback)
@@ -203,10 +203,10 @@ scanIOAliveObjects(int printVisited,
     }
 
     /* Expose the object */
-    if (((long) theObj->Proto) >= 0) {
+    if (((long) GETPROTO(theObj)) >= 0) {
 
       /* Real object: filter by root */
-      if ((0==rootProto) || isPrefix(rootProto,theObj->Proto)) {
+      if ((0==rootProto) || isPrefix(rootProto,GETPROTO(theObj))) {
 	if (printVisited)
 	  noise_cb(theObj,printOrigin,printSize);
 	if (docallback)
@@ -294,25 +294,25 @@ void scanIOAliveForRef(Object * target,
     }
 
     /* Check the object */
-    if (((long) theObj->Proto) >= 0) {
+    if (((long) GETPROTO(theObj)) >= 0) {
 #if DEBUG_SCANREF
       fprintf(output, "ScanRefs:Looking at %08X %s\n", 
-	      (long)theObj, ProtoTypeName(theObj->Proto));
+	      (long)theObj, ProtoTypeName(GETPROTO(theObj)));
 #endif
       /* Real object: Scan refs or target */
-      gce = (GCEntry*)((long)theObj->Proto + theObj->Proto->GCTabOff);
+      gce = (GCEntry*)((long)GETPROTO(theObj) + OBJPROTOFIELD(theObj,GCTabOff));
       while (gce->StaticOff) {
 	/* Check static refs here. */
 #if DEBUG_SCANREF
-	if (((long)gce->Proto) >0)
+	if (((long)GETPROTO(gce)) >0)
 	  fprintf(output, "ScanRefs:Looking at static part at %08X: %s\n",
-		  (long)theObj+(gce->StaticOff*4),ProtoTypeName(gce->Proto));
+		  (long)theObj+(gce->StaticOff*4),ProtoTypeName(GETPROTO(gce)));
 #endif
 	if ((long)theObj+(gce->StaticOff*4) == (long)target) {
 	  /* Found a pointer at target */
 	  if (printName) {
 	    fprintf(output, "ScanRefs:Found target as static part of %s\n", 
-		    ProtoTypeName(theObj->Proto));
+		    ProtoTypeName(GETPROTO(theObj)));
 	  }
 	  if (cb) 
 	    (*cb)(theObj);
@@ -329,7 +329,7 @@ void scanIOAliveForRef(Object * target,
 	  /* Found a pointer at target */
 	  if (printName) {
 	    fprintf(output, "ScanRefs:Found pointer to target from %s\n", 
-		    ProtoTypeName(theObj->Proto));
+		    ProtoTypeName(GETPROTO(theObj)));
 	  }
 	  if (cb) 
 	    (*cb)(theObj);
@@ -339,7 +339,7 @@ void scanIOAliveForRef(Object * target,
     }
     else {
       /* Non-object: most are ignored for now */
-      switch ((long)(theObj->Proto)) {
+      switch ((long)(GETPROTO(theObj))) {
       case (long)ComponentPTValue:
 #if DEBUG_SCANREF
 	fprintf(output, "ScanRefs:Component, skipping header\n");
@@ -350,7 +350,7 @@ void scanIOAliveForRef(Object * target,
 	;
 #if DEBUG_SCANREF
 	fprintf(output, "ScanRefs:skipping at %08X proto %08X\n", 
-		(long)theObj, (long)(theObj->Proto));
+		(long)theObj, (long)(GETPROTO(theObj)));
 #endif
       }
     }

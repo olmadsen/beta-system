@@ -36,7 +36,7 @@ ParamObjOffRange(ExtRR)
     Protect2(theRep, theObj,
 	     newRep = (RefRep *) IOAalloc(RefRepSize(newRange)));
    
-    newRep->Proto = RefRepPTValue;
+    SETPROTO(newRep,RefRepPTValue);
     if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = newRange;

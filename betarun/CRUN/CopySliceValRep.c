@@ -49,7 +49,7 @@ ParamRepObjOffLowHigh(CopySVR1)
     Protect2(theRep,theObj,newRep= (ValRep *) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
-    newRep->Proto = ByteRepPTValue;
+    SETPROTO(newRep,ByteRepPTValue);
     if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
@@ -100,7 +100,7 @@ ParamRepObjOffLowHigh(CopySVR2)
     Protect2(theRep,theObj,newRep = (ValRep *) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
-    newRep->Proto = ShortRepPTValue;
+    SETPROTO(newRep,ShortRepPTValue);
     if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
@@ -149,7 +149,7 @@ ParamRepObjOffLowHigh(CopySVR4)
     Protect2(theRep,theObj,newRep = (ValRep *) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
-    newRep->Proto = LongRepPTValue;
+    SETPROTO(newRep,LongRepPTValue);
     if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
@@ -194,7 +194,7 @@ ParamRepObjOffLowHigh(CopySVR8)
     Protect2(theRep,theObj,newRep = (ValRep *) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
-    newRep->Proto = DoubleRepPTValue;
+    SETPROTO(newRep,DoubleRepPTValue);
     if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
@@ -242,7 +242,7 @@ ParamORepObjOffLowHigh(CopySVRI)
     Protect2(theRep,theObj,newRep = (ObjectRep *) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
-    newRep->Proto = DynItemRepPTValue;
+    SETPROTO(newRep,DynItemRepPTValue);
     if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
@@ -290,7 +290,7 @@ ParamORepObjOffLowHigh(CopySVRC)
     Protect2(theRep,theObj,newRep = (ObjectRep *) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
-    newRep->Proto = DynCompRepPTValue;
+    SETPROTO(newRep,DynCompRepPTValue);
     if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;

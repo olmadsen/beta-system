@@ -26,7 +26,7 @@ ParamAscii(ValRep *, CopyCT)
   
   theRep = (ValRep *) IOAalloc(size);
   
-  theRep->Proto = ByteRepPTValue;
+  SETPROTO(theRep,ByteRepPTValue);
   if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;

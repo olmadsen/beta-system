@@ -99,7 +99,7 @@ setup_item(Item * theItem,
 {
     register GCEntry * initTab;
   
-    theItem->Proto = prototype;
+    SETPROTO(theItem,prototype);
     if (IOAMinAge!=0) theItem->GCAttr = IOAMinAge; /* Set item age to IOAMinAge */
 
     /* Initialize the body part of the item, according to the genTable. */
@@ -118,11 +118,11 @@ setup_item(Item * theItem,
 	register PartObject * po;
 	
 	po = (PartObject *) ((long *)theItem + initTab->StaticOff);
-	po->Proto = initTab->Proto;
+	SETPROTO(po,GETPROTO(initTab));
 	po->OrigOff = initTab->OrigOff;
 
 	/*
-	if ( (long)po->Proto == -1)
+	if ( (long)GETPROTO(po) == -1)
 	  printf("\nsetup_item: component: 0x%08x\n", po);
         */
     }

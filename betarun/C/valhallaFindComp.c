@@ -190,7 +190,7 @@ static void HandleStackCell(Object **theCell,Object *theObj)
 		     theCell, theObj);
 	     fflush(output);
 	     if (isObject(theObj)){
-	       fprintf(output, ", proto=0x%x", theObj->Proto);
+	       fprintf(output, ", proto=0x%x", GETPROTO(theObj));
 	       fflush(output);
 	     });
 
@@ -230,7 +230,7 @@ static void HandleStackCell(Object **theCell,Object *theObj)
     }
     
     /* Check if theObj is a component */
-    if (theObj && (theObj->Proto==ComponentPTValue)){
+    if (theObj && (GETPROTO(theObj)==ComponentPTValue)){
       TRACE_SCAN(fprintf(output, " found next comp - stop\n"));
       /* Passing a component frame. The real dyn is found 
        * as theComp->CallerObj - see stack.c for details.

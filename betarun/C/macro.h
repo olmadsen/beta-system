@@ -56,15 +56,29 @@ extern int dmalloc_verify(int);
  */
 #define GLOBAL(var) var
 
-/* Macros to access prototypes, that are displaced as COM objects */
+/* Macros to access prototypes, that are displaced as COM objects.
+ * DISP_OFF is defined in constant.h
+ * COM is defined in define.h
+ */
 #ifdef COM
-/* Get real protoype from an object */
-#define PROTO(obj)              ((ProtoType*)(((long)((obj)->Proto))-DISP_OFF))
-/* Get a field from an unadjusted prototype pointer */
-#define PROTOFIELD(proto,field) (((ProtoType*)(((long)(proto))-DISP_OFF))->field)
+
+/* convert vtbl to prototype */
+#define V2P(vtbl)                 ((ProtoType*)(((long)(vtbl))-DISP_OFF))
+/* convert prototype to vtbl */
+#define P2V(proto)                ((long*)(((long)(proto))+DISP_OFF))
+/* Get real prototype from an object */
+#define GETPROTO(obj)             V2P((obj)->vtbl)
+/* Set vtbl in an object */
+#define SETPROTO(obj, proto)      ((obj)->vtbl = P2V(proto))
+/* Get a field from an unadjusted prototype pointer in an object */
+#define OBJPROTOFIELD(obj,field)  (V2P((obj)->vtbl)->field)
+
 #else /* !COM */
-#define PROTO(obj)              ((obj)->Proto)
-#define PROTOFIELD(proto,field) (((ProtoType*)(proto))->field)
+
+#define GETPROTO(obj)             ((obj)->Proto)
+#define SETPROTO(obj, proto)      ((obj)->Proto = (proto))
+#define OBJPROTOFIELD(obj,field)  ((obj)->Proto->field)
+
 #endif /* COM */
 
 #ifdef RTLAZY
@@ -357,7 +371,7 @@ extern void CClaim(long cond, char *description, char *fname, int lineno);
    for (; initTab->StaticOff; ++initTab) {                                      \
       register PartObject *po;                                           \
       po = (PartObject *)(((long *)(theItem)) + initTab->StaticOff);     \
-      po->Proto = initTab->Proto;                                               \
+      SETPROTO(po,GETPROTO(initTab));                                               \
       po->OrigOff = initTab->OrigOff;                                           \
    }                                                                            \
                                                                                 \

@@ -54,7 +54,7 @@ ParamObjOffRange(ExtVR1)
       Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
       
       /* Assign structural part of new repetition */
-      newRep->Proto = ByteRepPTValue;
+      SETPROTO(newRep,ByteRepPTValue);
 
       if (IOAMinAge!=0) {
           newRep->GCAttr = IOAMinAge;
@@ -115,7 +115,7 @@ ParamObjOffRange(ExtVR2)
       Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
       
       /* Assign structural part of new repetition */
-      newRep->Proto = ShortRepPTValue;
+      SETPROTO(newRep,ShortRepPTValue);
       if (IOAMinAge!=0) {
           newRep->GCAttr = IOAMinAge;
       }
@@ -179,7 +179,7 @@ ParamObjOffRange(ExtVR4)
       Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
       
       /* Assign structural part of new repetition */
-      newRep->Proto = LongRepPTValue;
+      SETPROTO(newRep,LongRepPTValue);
       if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
       newRep->LowBorder = theRep->LowBorder;
       newRep->HighBorder = newRange;
@@ -235,7 +235,7 @@ ParamObjOffRange(ExtVR8)
       Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
       
       /* Assign structural part of new repetition */
-      newRep->Proto = DoubleRepPTValue;
+      SETPROTO(newRep,DoubleRepPTValue);
       if (IOAMinAge!=0) {
           newRep->GCAttr = IOAMinAge;
       }
@@ -291,7 +291,7 @@ ParamObjOffRange(ExtVRI)
   Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
   
   /* Assign structural part of new repetition */
-  newRep->Proto = DynItemRepPTValue;
+  SETPROTO(newRep,DynItemRepPTValue);
   if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
   newRep->LowBorder = theRep->LowBorder;
   newRep->HighBorder = newRange;
@@ -369,7 +369,7 @@ ParamObjOffRange(ExtVRC)
   Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
   
   /* Assign structural part of new repetition */
-  newRep->Proto = DynCompRepPTValue;
+  SETPROTO(newRep,DynCompRepPTValue);
   if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
   newRep->LowBorder = theRep->LowBorder;
   newRep->HighBorder = newRange;

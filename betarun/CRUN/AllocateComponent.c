@@ -30,7 +30,7 @@ ParamOriginProto(Component *,AlloC)
     /* The new Component is now allocated, but not initialized yet! */
 
     /* Initialize the structual part; prototype, age etc. */
-    comp->Proto = ComponentPTValue;
+    SETPROTO(comp,ComponentPTValue);
     if (IOAMinAge!=0) comp->GCAttr = IOAMinAge;
 
     setup_item((Item *) &comp->Body, proto, origin);

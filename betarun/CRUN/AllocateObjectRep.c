@@ -32,7 +32,7 @@ ParamObjOriginProtoOffRange(AlloVRI)
   Protect2(theObj, origin,  
 	  theRep = (ObjectRep *)IOAalloc(DynObjectRepSize(range)));
 
-  theRep->Proto = DynItemRepPTValue;
+  SETPROTO(theRep,DynItemRepPTValue);
   if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
@@ -82,7 +82,7 @@ ParamObjOriginProtoOffRange(AlloVRC)
   Protect2(theObj, origin,  
 	  theRep = (ObjectRep *)IOAalloc(DynObjectRepSize(range)));
 
-  theRep->Proto = DynCompRepPTValue;
+  SETPROTO(theRep,DynCompRepPTValue);
   if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;

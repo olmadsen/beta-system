@@ -41,7 +41,7 @@ ParamOriginProto(Item *,AlloCOM)
      * the proto type struct 
      */
     /* item->Proto++; does not work - adds 28 */
-    item->Proto = (ProtoType *)((long)item->Proto+sizeof(ProtoType)-4);
+    SETPROTO(item,(ProtoType *)((long)GETPROTO(item)+sizeof(ProtoType)-4));
 
     if (proto->GenPart){
 #ifdef RTDEBUG

@@ -17,14 +17,22 @@ typedef struct _ProtoType{
   long               TopMpart;  /* 24: M entry for top prefix                     */
 } ProtoType;
 
-typedef struct _Item{ 
+typedef struct _Item{
+#ifdef COM
+  long      *vtbl;      /* Pointer to virtual dispatch table in ProtoType */
+#else /* !COM */
   ProtoType *Proto;     /* Reference to the Prototype */
+#endif /* COM */
   long       GCAttr;    /* The GC attribute           */
   long       Body[1];   /* The body part              */ 
 } Item;
 
 typedef struct _Object{ 
+#ifdef COM
+  long      *vtbl;      /* Pointer to virtual dispatch table in ProtoType */
+#else /* !COM */
   ProtoType *Proto;     /* Reference to the Prototype */
+#endif /* COM */
   long       GCAttr;    /* The GC attribute           */
   long       Body[1];   /* The body part              */ 
 } Object;
@@ -105,7 +113,11 @@ typedef struct _DopartObject{
 } DopartObject;
 
 typedef struct _TextObject { 
+#ifdef COM
+  long      *vtbl;      /* Pointer to virtual dispatch table in ProtoType */
+#else /* !COM */
   ProtoType *Proto;     /* Reference to TextProto     */
+#endif /* COM */
   long       GCAttr;    /* The GC attribute           */
   Object    *Origin;    /* Reference to basicItem     */
   ValRep    *T;         /* Repetition holding chars   */
@@ -195,11 +207,11 @@ typedef struct _ComponentBlock{
 typedef struct _GCEntry {
   unsigned short  StaticOff;
   short           OrigOff;
-  ProtoType      *Proto;
+  ProtoType      *Proto; /* vtbl? */
 } GCEntry;
 
 typedef struct _PartObject {
-  ProtoType *Proto;
+  ProtoType *Proto;  /* vtbl? */
   long       OrigOff;
 } PartObject;
 

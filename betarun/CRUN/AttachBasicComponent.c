@@ -64,7 +64,7 @@ ParamThisComp(void, AttBC)
     ActiveComponent->StackObj = (StackObject *) -1;
 
     /* ?? should set comp = 0 as done in AttachBasicComponent.run */
-    CallBetaEntry( BasicItem->Proto->TopMpart, &comp->Body);
+    CallBetaEntry( OBJPROTOFIELD(BasicItem,TopMpart), &comp->Body);
 
     /* TerminateBasicComponent: */
     BetaExit(0);

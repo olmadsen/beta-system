@@ -559,7 +559,7 @@ void AOACheckObject(Object *theObj)
 { 
   ProtoType * theProto;
   
-  theProto = theObj->Proto;
+  theProto = GETPROTO(theObj);
 
 #ifdef MT
   /* The way part objects are allocated in V-entries
@@ -647,7 +647,7 @@ void AOACheckObjectSpecial(Object *theObj)
 {
   ProtoType * theProto;
   
-  theProto = theObj->Proto;
+  theProto = GETPROTO(theObj);
   
 #ifdef MT
   /* The way part objects are allocated in V-entries
@@ -1007,7 +1007,7 @@ void scanObject(Object *obj,
 {
   ProtoType * theProto;
     
-  theProto = obj->Proto;
+  theProto = GETPROTO(obj);
   Claim(IsPrototypeOfProcess((long)theProto), "IsPrototypeOfProcess(theProto)");
   if (!isSpecialProtoType(theProto)) {
     GCEntry *tab =
@@ -1162,7 +1162,7 @@ ValRep * LVRAAlloc(ProtoType * proto, long range)
 
   size = DispatchValRepSize(proto, range);
   newRep = (ValRep *) AOAallocate(size);
-  newRep->Proto      = proto;
+  SETPROTO(newRep,proto);
   newRep->LowBorder  = 1;
   newRep->HighBorder = range; /* indexes */
   return newRep;

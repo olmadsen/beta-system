@@ -71,7 +71,7 @@ void MkTO(char *asciz,
       RestoreVar(theItem);
       /* An uninitialized value repetition is at the end of theText */
       theRep = (ValRep *)((long)theText+ItemSize(TextProto));
-      theRep->Proto = ByteRepPTValue;
+      SETPROTO(theRep,ByteRepPTValue);
       if (IOAMinAge!=0) {
         theRep->GCAttr = IOAMinAge;
       }
@@ -81,7 +81,7 @@ void MkTO(char *asciz,
 
     /* The new TextObject and Repetition are now allocated */
     /* No need to call setup_item - no inlined partobjects in Text */
-    theText->Proto = TextProto;
+    SETPROTO(theText,TextProto);
     /* theText->GCAttr set above if in IOA */
     theText->Origin = (Object *)BasicItem;   
 

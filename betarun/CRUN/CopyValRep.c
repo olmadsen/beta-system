@@ -32,7 +32,7 @@ ParamRepObjOff(CopyVR1)
     } else {
         /* Allocate in IOA */
         Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
-        newRep->Proto = ByteRepPTValue;
+        SETPROTO(newRep,ByteRepPTValue);
         
         if (IOAMinAge!=0) {
             newRep->GCAttr = IOAMinAge;
@@ -78,7 +78,7 @@ ParamRepObjOff(CopyVR2)
     } else {
         /* Allocate in IOA */
         Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
-        newRep->Proto = ShortRepPTValue;
+        SETPROTO(newRep,ShortRepPTValue);
 
         if (IOAMinAge!=0) {
             newRep->GCAttr = IOAMinAge;
@@ -122,7 +122,7 @@ ParamRepObjOff(CopyVR4)
     } else {
         /* Allocate in IOA */
         Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
-        newRep->Proto = LongRepPTValue;
+        SETPROTO(newRep,LongRepPTValue);
 
         if (IOAMinAge!=0) {
             newRep->GCAttr = IOAMinAge;
@@ -167,7 +167,7 @@ ParamRepObjOff(CopyVR8)
     } else {
         /* Allocate in IOA */
         Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
-        newRep->Proto = DoubleRepPTValue;
+        SETPROTO(newRep,DoubleRepPTValue);
 
         if (IOAMinAge!=0) {
             newRep->GCAttr = IOAMinAge;
@@ -206,7 +206,7 @@ ParamORepObjOff(CopyVRI)
     
     Protect2(theObj, theRep, newRep = (ObjectRep *) IOAalloc(size));
     
-    newRep->Proto = DynItemRepPTValue;
+    SETPROTO(newRep,DynItemRepPTValue);
 
     if (IOAMinAge!=0) {
         newRep->GCAttr = IOAMinAge;
@@ -246,7 +246,7 @@ ParamORepObjOff(CopyVRC)
     
     Protect2(theObj, theRep, newRep = (ObjectRep *) IOAalloc(size));
     
-    newRep->Proto = DynCompRepPTValue;
+    SETPROTO(newRep,DynCompRepPTValue);
 
     if (IOAMinAge!=0) {
         newRep->GCAttr = IOAMinAge;

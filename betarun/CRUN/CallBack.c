@@ -108,7 +108,7 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
        the rest on stack from %i5 and onwards */
     
     /* As usual, skip the first instruction */
-    cbr = (long (*)()) ((long*)theObj->Proto->CBR+1);
+    cbr = (long (*)()) ((long*)OBJPROTOFIELD(theObj,CBR)+1);
     
 #ifdef RTVALHALLA
     if (valhallaIsStepping)
@@ -296,14 +296,14 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
 
 #ifdef RTVALHALLA
     if (valhallaIsStepping)
-      ValhallaOnProcessStop ((long *) theObj->Proto->CBR,0,0,0,RTS_CBFA);
+      ValhallaOnProcessStop ((long *) OBJPROTOFIELD(theObj,CBR),0,0,0,RTS_CBFA);
 #endif
 
     /* setThisReg(0); To prevent pushing of garbage in the CallBackRoutine.
      * No longer necessary since registers are now cleared in 
      * SnakeAdditions.S (HandleCB). SBRANDT 25/7/94 */
     setCallReg(theObj);
-    retval = theObj->Proto->CBR(a1, a2, a3, a4, &FOR - 128/4);
+    retval = OBJPROTOFIELD(theObj,CBR)(a1, a2, a3, a4, &FOR - 128/4);
 
     BETA_CLOBBER();
 

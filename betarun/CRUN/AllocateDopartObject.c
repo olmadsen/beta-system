@@ -25,7 +25,7 @@ ParamOriginSize(DopartObject *, AlloDO)
     Protect(origin, 
 	    theObj = (DopartObject *) IOAalloc(DopartObjectSize(size)));
 
-    theObj->Proto  = DopartObjectPTValue;
+    SETPROTO(theObj,DopartObjectPTValue);
     if (IOAMinAge!=0) theObj->GCAttr = IOAMinAge;
     theObj->Origin = origin;
     theObj->Size   = size;

@@ -23,7 +23,7 @@ ParamOriginProto(Structure *, AlloS)
   Ck(origin);
   Protect(origin, newStruct = (Structure *) IOAalloc(StructureSize));
   
-  newStruct->Proto = StructurePTValue;
+  SETPROTO(newStruct,StructurePTValue);
   if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
   newStruct->iOrigin = origin;
   newStruct->iProto = proto;
@@ -108,7 +108,7 @@ Structure * ObjS(Object * theObj)
   DEBUG_CODE(NumObjS++);
 
 #ifdef RTDEBUG
-  if (theObj->Proto == DopartObjectPTValue){
+  if (GETPROTO(theObj) == DopartObjectPTValue){
     fprintf(output, "ObjS: called with DoPartObject: 0x%x\n", (int)theObj);
     theObj = ((DopartObject *)theObj)->Origin; /* the "real" object */
   }
@@ -117,10 +117,10 @@ Structure * ObjS(Object * theObj)
   Ck(theObj);
   Protect(theObj, newStruct = (Structure *) IOAalloc(StructureSize));
   
-  newStruct->Proto = StructurePTValue;
+  SETPROTO(newStruct,StructurePTValue);
   if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
-  newStruct->iProto = theObj->Proto;
-  newStruct->iOrigin = ((Object **)theObj)[theObj->Proto->OriginOff];
+  newStruct->iProto = GETPROTO(theObj);
+  newStruct->iOrigin = ((Object **)theObj)[OBJPROTOFIELD(theObj,OriginOff)];
 
   Ck(newStruct); Ck(theObj);
   

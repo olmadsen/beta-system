@@ -176,7 +176,7 @@ static void ObjectDescription(Object *obj,
 			      int print_origin)
 {
   signed long  gDist=MAXINT, mDist, activeDist=0;
-  ProtoType   *proto=obj->Proto;
+  ProtoType   *proto=GETPROTO(obj);
   ProtoType   *activeProto=proto;
   char        *groupname;
   long         mPart = M_Part(proto);
@@ -251,7 +251,7 @@ static void ObjectDescription(Object *obj,
 #endif
   }
 
-  proto = obj->Proto;
+  proto = GETPROTO(obj);
 
   if (groupname==NULL){
     /* GroupName failed */
@@ -296,7 +296,7 @@ static void ObjectDescription(Object *obj,
     
     /** Print Static Environment Object. **/
 
-    proto = obj->Proto;
+    proto = GETPROTO(obj);
     if (!activeProto) activeProto = proto;
     if (!activeProto) return;
     addr=(long)obj + (4*(long)activeProto->OriginOff);
@@ -305,8 +305,8 @@ static void ObjectDescription(Object *obj,
     else
       staticObj = 0;
     TRACE_DUMP(fprintf(output, ">>>TraceDump: staticObj=0x%x\n", (int)staticObj));
-    if( isSpecialProtoType(staticObj->Proto) ){
-      switch (SwitchProto(staticObj->Proto)){
+    if( isSpecialProtoType(GETPROTO(staticObj)) ){
+      switch (SwitchProto(GETPROTO(staticObj))){
       case SwitchProto(ComponentPTValue):
 	staticObj = (Object *) ComponentItem(obj);
 	break;
@@ -326,12 +326,12 @@ static void ObjectDescription(Object *obj,
 	fprintf(output,
 		"    -- Illegal surrounding object (0x%x) %s!\n",
 		(int)staticObj,
-		ProtoTypeName(staticObj->Proto));
+		ProtoTypeName(GETPROTO(staticObj)));
 	return;
       } 
     }
     if( staticObj && isObject( staticObj ) ){
-      groupname = GroupName((long)staticObj->Proto,0);
+      groupname = GroupName((long)GETPROTO(staticObj),0);
       if (groupname==NULL){
 	fprintf(output,
 		"    -- Surrounding object (0x%x) damaged!\n",
@@ -339,7 +339,7 @@ static void ObjectDescription(Object *obj,
 		);
 	return;
       }
-      proto = staticObj->Proto;
+      proto = GETPROTO(staticObj);
 
       DEBUG_CODE({
 	fprintf(output, "    [surrounding object 0x%x, proto 0x%x ", 
@@ -392,21 +392,21 @@ void DisplayObject(FILE   *output, /* Where to dump object */
      * in dump file.
      */
     if (lastDisplayedObject &&
-	((lastDisplayedObject->Proto)==(ComponentPTValue)) 
+	((GETPROTO(lastDisplayedObject))==(ComponentPTValue)) 
 	&& (lastDisplayedObject != obj)){
       fprintf(output, "\n"); fflush(output);
     }
   }
 
-  if( isSpecialProtoType(obj->Proto) ){
-    switch (SwitchProto(obj->Proto)){
+  if( isSpecialProtoType(GETPROTO(obj)) ){
+    switch (SwitchProto(GETPROTO(obj))){
     case SwitchProto(ComponentPTValue):
       theItem = (Object *) ComponentItem(obj);
       if (theItem == (Object *) BasicItem) {
 	if (!basic_dumped){
 	  fprintf(output,
 		  "  basic component in %s\n", 
-		  GroupName((long)theItem->Proto,0) );
+		  GroupName((long)GETPROTO(theItem),0) );
 	  if (isMakingDump) {
 	    /* only dump basicitem once in dump file */
 	    basic_dumped=1;
@@ -563,7 +563,7 @@ static void DumpCell(Object **theCell, Object *theObj)
   }
     
   /* Check if theObj IS a component */
-  if (theObj && (theObj->Proto==ComponentPTValue)){
+  if (theObj && (GETPROTO(theObj)==ComponentPTValue)){
     TRACE_DUMP(fprintf(output, " is comp - getting real dyn"));
     /* Passing a component frame. The real dyn is found 
      * as theComp->CallerObj - see stack.c for details.
@@ -638,13 +638,13 @@ static void PrintSkipped(long *current)
   if (ref && 
       inBetaHeap(ref) && 
       isObject(ref) && 
-      IsPrototypeOfProcess((long)ref->Proto)){ 
+      IsPrototypeOfProcess((long)GETPROTO(ref))){ 
     fprintf(output, "*** SUSPICIOUS STACK-SKIP!");
     fflush(output);
     fprintf(output, 
 	    " proto: 0x%08x (%s)\n", 
-	    (int)ref->Proto,
-	    ProtoTypeName(ref->Proto)); 
+	    (int)GETPROTO(ref),
+	    ProtoTypeName(GETPROTO(ref))); 
   } else {
     fprintf(output, "- SKIPPED\n");
   } 
@@ -1157,7 +1157,7 @@ void DisplayCurrentObject(Object *theObj, long *thePC)
       DEBUG_CODE({
 	extern int isObjectState;
 	if (inBetaHeap(theObj)){
-	  fprintf(output, "    proto: 0x%x\n", (int)theObj->Proto);
+	  fprintf(output, "    proto: 0x%x\n", (int)GETPROTO(theObj));
 	  fflush(output);
 	  fprintf(output, "    gc:    0x%x\n", (int)theObj->GCAttr);
 	  fflush(output);

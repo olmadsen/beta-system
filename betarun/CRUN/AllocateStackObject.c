@@ -37,7 +37,7 @@ StackObject * AlloSO(unsigned size)
      */
     theStack = (StackObject *) IOAalloc(StackObjectSize(size));
 
-    theStack->Proto = StackObjectPTValue;
+    SETPROTO(theStack,StackObjectPTValue);
     if (IOAMinAge!=0) theStack->GCAttr = IOAMinAge;
     theStack->BodySize = size;
     /* No need: IOA is memset(0) theStack->StackSize = 0; */

@@ -83,13 +83,13 @@ static void PrintSkipped(long *current)
 {
   Object *ref = (Object *)*current;
   DEBUG_STACK(fprintf(output, "0x%08x: 0x%08x ", (int)current, (int)ref));
-  if (ref && inBetaHeap(ref) && isObject(ref) && IsPrototypeOfProcess((long)ref->Proto)){ 
+  if (ref && inBetaHeap(ref) && isObject(ref) && IsPrototypeOfProcess((long)GETPROTO(ref))){ 
     fprintf(output, "*** SUSPICIOUS STACK-SKIP!");
     fflush(output);
     if (!DebugStack) {
       fprintf(output, "0x%08x: 0x%08x ", (int)current, (int)ref);
     }
-    fprintf(output, " proto: 0x%08x (%s)\n", (int)ref->Proto, ProtoTypeName(ref->Proto)); 
+    fprintf(output, " proto: 0x%08x (%s)\n", (int)GETPROTO(ref), ProtoTypeName(GETPROTO(ref))); 
   } else {
     fprintf(output, "- SKIPPED\n");
   } 
@@ -107,7 +107,7 @@ static void DumpProto(Object *theObj)
 {                                                                
   if ((theObj)&&((theObj)!=CALLBACKMARK)&&((theObj)!=GENMARK)){  
      if (isObject(theObj)){                                      
-       PrintProto(theObj->Proto);   
+       PrintProto(GETPROTO(theObj));   
        fprintf(output, "\n");
      } else {                                                    
        fprintf(output, " (ILLEGAL OBJECT!)");                    
@@ -364,7 +364,7 @@ void ProcessStackFrames(long SP,
 #if 0
     DEBUG_STACK(fprintf(output, "Testing for Dopart Object\n"));
 #endif
-    if ((long)theObj->Proto == (long)DopartObjectPTValue) {
+    if ((long)GETPROTO(theObj) == (long)DopartObjectPTValue) {
       DEBUG_STACK(fprintf(output, "Passing dopart object 0x%x\n", theObj));
       theObj = ((DopartObject *)theObj)->Origin;
       continue;
@@ -407,7 +407,7 @@ void ProcessStackFrames(long SP,
      * 
      */
 
-    if ((long)theObj->Proto == (long)ComponentPTValue) {
+    if ((long)GETPROTO(theObj) == (long)ComponentPTValue) {
       Component *comp = (Component *)theObj;
       Component *callerComp = comp->CallerComp;
 
@@ -466,8 +466,8 @@ void ProcessStackFrames(long SP,
        *          |            |
        */
       
-      Claim(!isSpecialProtoType(theObj->Proto), 
-		       "!isSpecialProtoType(theObj->Proto)");
+      Claim(!isSpecialProtoType(GETPROTO(theObj)), 
+		       "!isSpecialProtoType(GETPROTO(theObj))");
       
 #ifdef ppcmac
       SP = *(long*)SP; /* Use FramePointer */
@@ -481,11 +481,11 @@ void ProcessStackFrames(long SP,
 #if 0
 	DEBUG_STACK(fprintf(output, "Finding previous frame\n"));
 #endif
-	GetSPoff(SPoff, CodeEntry(theObj->Proto, PC)); 
+	GetSPoff(SPoff, CodeEntry(GETPROTO(theObj), PC)); 
 #if 0
 	DEBUG_STACK(fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__));
 	DEBUG_STACK(fprintf(output, "New SP:      0x%x\n", SP));
-	DEBUG_STACK(fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(theObj->Proto, PC)));
+	DEBUG_STACK(fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(GETPROTO(theObj), PC)));
 	DEBUG_STACK(fprintf(output, "SPoff:       0x%x\n", SPoff));
 #endif
 	SP = (long)SP+SPoff;
@@ -1160,12 +1160,12 @@ void ProcessStackPart(long *low, long *high)
 	  if (!isValRep(theObj)){
 	    fprintf(output, "*** SUSPICIOUS REFERENCE ON STACK: 0x%08x: 0x%08x", 
 		    (int)current, (int)(*current));
-	    if (IsPrototypeOfProcess((long)theObj->Proto)){
+	    if (IsPrototypeOfProcess((long)GETPROTO(theObj))){
 	      fprintf(output, " Proto: 0x%08x (%s)\n",
-		      (int)theObj->Proto,
-		      ProtoTypeName(theObj->Proto));
+		      (int)GETPROTO(theObj),
+		      ProtoTypeName(GETPROTO(theObj)));
 	    } else {
-	      fprintf(output, " *** ILLEGAL PROTOTYPE: 0x%08x\n", (int)theObj->Proto);
+	      fprintf(output, " *** ILLEGAL PROTOTYPE: 0x%08x\n", (int)GETPROTO(theObj));
 	    }
 	  }
 	});
@@ -1349,12 +1349,12 @@ void ProcessINTELStackObj(StackObject *sObj, CellProcessFunc func)
 	    if (!isValRep(theObj)){
 	      fprintf(output, "*** SUSPICIOUS REFERENCE IN STACKOBJ: 0x%08x: 0x%08x", 
 		      (int)current, (int)(*current));
-	      if (IsPrototypeOfProcess((long)theObj->Proto)){
+	      if (IsPrototypeOfProcess((long)GETPROTO(theObj))){
 		fprintf(output, " Proto: 0x%08x (%s)\n",
-			(int)theObj->Proto,
-			ProtoTypeName(theObj->Proto));
+			(int)GETPROTO(theObj),
+			ProtoTypeName(GETPROTO(theObj)));
 	      } else {
-		fprintf(output, " *** ILLEGAL PROTOTYPE: 0x%08x\n", (int)theObj->Proto);
+		fprintf(output, " *** ILLEGAL PROTOTYPE: 0x%08x\n", (int)GETPROTO(theObj));
 	      }
 	    }
 	  }
@@ -1410,12 +1410,12 @@ void PrintStackPart(long *low, long *high)
 	if (!isValRep(theObj)){
 	  fprintf(output, "*** SUSPICIOUS REFERENCE ON STACK: 0x%08x: 0x%08x", 
 		  (int)current, (int)(*current));
-	  if (IsPrototypeOfProcess((long)theObj->Proto)){
+	  if (IsPrototypeOfProcess((long)GETPROTO(theObj))){
 	    fprintf(output, " Proto: 0x%08x (%s)\n",
-		    (int)theObj->Proto,
-		    ProtoTypeName(theObj->Proto));
+		    (int)GETPROTO(theObj),
+		    ProtoTypeName(GETPROTO(theObj)));
 	  } else {
-	    fprintf(output, " *** ILLEGAL PROTOTYPE: 0x%08x\n", (int)theObj->Proto);
+	    fprintf(output, " *** ILLEGAL PROTOTYPE: 0x%08x\n", (int)GETPROTO(theObj));
 	  }
 	}
       }
