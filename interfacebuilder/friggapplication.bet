@@ -1,4 +1,4 @@
-ORIGIN '~beta/editor/ymersiflib';
+ORIGIN '~beta/basiclib/betaenv';
 INCLUDE 'graphicaleditor/graphicaleditor'
         'graphicaleditor/standardeditors'
         'graphicaleditor/basiceditors'
@@ -15,44 +15,47 @@ INCLUDE 'graphicaleditor/graphicaleditor'
         'buildermenu'
         'classes/classes'
         'graphicaleditor/overview'
-        'additional/additional';
+        'additional/additional'
+        '~beta/sourcebrowser/ymerInterface'
+        'frigginterface';
 BODY 'private/friggapplicationbody';
--- systemlib: Attributes --
-friggApplication: fragmentBrowser
+-- lib: Attributes --
+friggApplication: (*GRAM fragmentBrowser *)
   (#
+     gui: ^guienv;
+     mps: ^ymermps;
+     ymer: ^ymerEnvInterface;
+     ymerbrowser: ^ymerbrowserInterface;
      <<SLOT friggApplicationLib:Attributes>>;
-     isBETAsif::< 
+     isBETAsif:< booleanValue
        (# 
        do true->value; INNER
        #);
-     okToTextEdit::
-       (#
-       do node[] -> theGraphicalEditorEnv.okToTextEdit -> value;
+     externalInterface:@friggInterface
+       (# 
+          askEditUserInterface:: 
+            (# name: ^text; className: ^text;
+            do
+               false->value;
+               (if node.symbol
+                // MPS.betacfl.patternDecl // MPS.betacfl.simpleDecl then
+                   node[]->theGraphicalEditorEnv.getClassName->className[];
+                   (if className[] = none then
+                       false->value; 
+                    else
+                       true->value; 
+                   if)
+               if)
+            #);
+          editUserInterface::
+            (#
+            do node[]->editWindow 
+            #);
        #);
-     askEditUserInterface:: 
-       (#
-          name: ^text;
-          className: ^text;
-          
-       do
-          false->value;
-          (if node.symbol
-           // MPS.betacfl.patternDecl
-           // MPS.betacfl.simpleDecl then
-              node[]->theGraphicalEditorEnv.getClassName->className[];
-              (if className[] = none then
-                  false->value; 
-               else
-                  true->value; 
-              if)
-          if);
-          
-       #);
-     editUserInterface::  (#  do node[]->editWindow #);
      editWindow:
        (#
           theAttributeDecl: ^astInterface.ast;
-          theGraphicalEditor: ^graphicalEditorEnv.graphicalEditor;
+          theGraphicalEditor: ^gui.graphicalEditorEnv.graphicalEditor;
           
        enter theAttributeDecl[]
        do
@@ -101,9 +104,32 @@ friggApplication: fragmentBrowser
        do INNER
        exit structure##
        #);
-     pretty: @MPS.AST.prettyPrinter;
-     theGraphicalEditorEnv: @graphicalEditorEnv
+     pretty: ^MPS.AST.prettyPrinter;
+     theGraphicalEditorEnv: ^frigggraphicaleditorenv;
+     frigggraphicaleditorenv:gui.graphicalEditorEnv
        (#
+          ymerBrowser: ^ymerBrowserInterface;
+          findform:
+            (# ff: ^astInterface.fragmentForm
+            enter ff[]
+            do
+               (if ff[] <> none then
+                   ((ff.father).fullName,ff.name)
+                     ->ymerbrowser.selectFragmentForm
+                else
+                   'findForm: ff is none!'->putLine
+               if)
+            #);
+          findGroup:
+            (# fg: ^astInterface.fragmentGroup
+            enter fg[]
+            do
+               (if fg[] <> none then
+                   fg.fullName->ymerbrowser.selectFragmentGroup
+                else
+                   'findGroup: fg is none!'->putLine
+               if)
+            #);
           commands:: 
             (#
                dynamicCompilationAvailable:: 
@@ -132,7 +158,7 @@ friggApplication: fragmentBrowser
                     
                  #);
                createSourceFile:: 
-                 (# 
+                 (# t:^text;
                  do
                     group.name->ymerBrowser.appendProject;
                     ymerBrowser.appendDone
@@ -173,22 +199,14 @@ friggApplication: fragmentBrowser
             #);
           
        #);
-     ymerBrowserWindow::< 
-       (#
-          browserTitle::< 
-            (# 
-            do
-               'Frigg: Mjolner BETA Browser and Interfacebuilder'->title;
-               INNER ;
-               
-            #);
-          (*
-           * Menubar
-           *)
-          menubarType::< 
+     setupMenus:
+       (# 
+       do
+          &gui.MenubarAppendMenuAction
             (#
-               ibMenu: @builderMenu
+               friggmenu: gui.BuilderMenu
                  (#
+                    browser: ^ymerBrowserInterface;
                     newWindowItem: @builderItem
                       (#
                          eventHandler:: 
@@ -248,7 +266,7 @@ friggApplication: fragmentBrowser
                                            (if browser.cfe.cs.node[] <> none
                                             then
                                                browser.cfe.cs.node[]
-                                                 ->askEditUserInterface->value
+                                                 ->externalinterface.askEditUserInterface->value
                                            if);
                                            
                                        if);
@@ -421,9 +439,9 @@ friggApplication: fragmentBrowser
                                    
                                 #);
                               onSelect:: 
-                                (# theOverView: ^overView; 
+                                (# theOverView: ^gui.overView; 
                                 do
-                                   &overView[]->theOverView[];
+                                   &gui.overView[]->theOverView[];
                                    browser.cfe.cs.node[]->theOverView.open;
                                    ;
                                    
@@ -440,14 +458,300 @@ friggApplication: fragmentBrowser
                          newCanvasLibItem.open;
                          addSeparator;
                          openGraphicalEditor.open;
-                         newGraphicalEditor.open;
-                         
+                         newGraphicalEditor.open
                       #);
                     
                  #);
-               open::<  (#  do ibMenu.open; ibMenu[]->append; INNER #);
+               fm: ^friggmenu;
+               
+            do &friggmenu[]->fm[]; theBrowser[]->fm.browser[];
+               fm.open; fm[]->themenubar.append; 
+            #)[]->ymer.addMenuAction;
+          
+       #);
+     friggBrowserWindowExt: (* ymerbrowserwindow::< *)
+       (#
+          init:(# enter ymerBrowserInt[]
+               do ymerBrowserInt.ymerBrowser[]->ymerBrowser[];
+                  ymerBrowserInt[]->theGraphicalEditorEnv.ymerBrowser[]->this(friggApplication).ymerBrowser[];
+               #);
+          ymerBrowserInt: ^ymerBrowserInterface;
+          ymerBrowser: ^gui.window;
+          browserTitle:
+            (# title: ^text; 
+            do
+               'Frigg: Mjolner BETA Browser and Interfacebuilder'->title;
+               INNER ;
                
             #);
+          (*
+           * Menubar
+           *)
+          (*
+           menubarType::< 
+           (#
+           ibMenu: @builderMenu
+           (#
+           newWindowItem: @builderItem
+           (#
+           eventHandler:: 
+           (#
+           onStatus::  (#  do true->value #);
+           onSelect:: 
+           (#  <<SLOT newWindowItemOnSelect:DoPart>> #);
+           
+           #);
+           open::  (#  do 'New Window'->name;  #);
+           
+           #);
+           newWindowLibItem: @builderItem
+           (#
+           eventHandler:: 
+           (#
+           onStatus:: 
+           (# 
+           <<SLOT ibMenuNewWindowLibItemOnStatus:DoPart>>
+           #);
+           onSelect:: 
+           (# 
+           <<SLOT ibMenuNewWindowLibItemOnSelect:DoPart>>
+           #);
+           
+           #);
+           open::  (#  do 'New Window library...'->name;  #);
+           
+           #);
+           newCanvasLibItem: @builderItem
+           (#
+           eventHandler:: 
+           (#
+           onStatus:: 
+           (# 
+           <<SLOT ibMenuNewCanvasLibItemOnStatus:DoPart>>
+           #);
+           onSelect:: 
+           (# 
+           <<SLOT ibMenuNewCanvasLibItemOnSelect:DoPart>>
+           #);
+           
+           #);
+           open::  (#  do 'New Canvas library...'->name;  #);
+           
+           #);
+           openGraphicalEditor: @builderItem
+           (#
+           eventHandler:: 
+           (#
+           onStatus:: 
+           (# name: ^text; className: ^text; 
+           do
+           false->value;
+           (if browser.cfe[] <> none then
+           (if browser.cfe.cs[] <> none then
+           (if browser.cfe.cs.node[] <> none
+           then
+           browser.cfe.cs.node[]
+           ->askEditUserInterface->value
+           if);
+           
+           if);
+           
+           if);
+           
+           #);
+           onSelect:: 
+           (# 
+           do browser.cfe.cs.node[]->editWindow; 
+           #);
+           
+           #);
+           open::  (#  do 'Edit object'->name;  #);
+           
+           #);
+           newGraphicalEditor: @builderItem
+           (#
+           eventHandler:: 
+           (#
+           onStatus:: 
+           (#
+           frag: ^astInterface.fragmentForm;
+           fragName: ^text;
+           
+           do
+           false->value;
+           (if browser.cfe[] <> none then
+           (if browser.cfe.cs.node[] <> none then
+           browser.cfe.cs.node.frag[]->frag[];
+           (if frag[] <> none then
+           (if frag.category =
+           mps.betaCfl.attributesForm then
+           frag.name->fragName[];
+           (if true
+           //
+           'guienvLib'
+           ->fragName.equalNCS then
+           'Create window...'->name;
+           true->value;
+           
+           //
+           'windowLib'
+           ->fragName.equalNCS then
+           'Create canvas...'->name;
+           true->value;
+           
+           else
+           'Create...'->name;
+           false->value;
+           
+           if);
+           
+           if);
+           
+           if);
+           
+           if);
+           
+           if);
+           
+           #);
+           onSelect:: 
+           (#
+           frag: ^astInterface.fragmentForm;
+           result: @boolean;
+           fragName,className: ^text;
+           
+           <<SLOT newGraphicalEditorOnSelect:DoPart>>
+           #);
+           
+           #);
+           open:: 
+           (# 
+           do
+           'Create...'->name;
+           
+           #);
+           
+           #);
+           addToPalette: @builderItem
+           (#
+           eventHandler:: 
+           (#
+           onStatus:: 
+           (# 
+           do
+           false->value;
+           (if browser.cfe[] <> none then
+           (if browser.cfe.cs.node[] <> none then
+           (if browser.cfe.cs.node.symbol =
+           theGraphicalEditorEnv.gram.
+           patternDecl then
+           true->value; 
+           if);
+           
+           if);
+           
+           if);
+           
+           #);
+           onSelect:: 
+           (# 
+           do
+           browser.cfe.cs.node[]
+           ->
+           theGraphicalEditorEnv.
+           addPatternToPalette;
+           
+           #)
+           #);
+           open::  (#  do 'Add to Palette'->name;  #);
+           
+           #);
+           createDocumentationItem: @builderItem
+           (#
+           eventHandler:: 
+           (#
+           onStatus:: 
+           (# frag: ^astInterface.fragmentForm; 
+           do
+           false->value;
+           (if browser.cfe[] <> none then
+           (if browser.cfe.cs.node[] <> none then
+           browser.cfe.cs.node.frag[]->frag[];
+           (if frag[] <> none then
+           (if frag.category =
+           mps.betaCfl.attributesForm then
+           true->value; 
+           if);
+           
+           if);
+           
+           if);
+           
+           if);
+           
+           #);
+           onSelect:: 
+           (# 
+           do
+           browser.cfe.cs.node.frag[]
+           ->createDocumentation;
+           
+           #);
+           
+           #);
+           open::  (#  do 'Create Documentation'->name;  #);
+           
+           #);
+           showOverViewItem: @builderItem
+           (#
+           eventHandler:: 
+           (#
+           onStatus:: 
+           (# 
+           do
+           false->value;
+           (if browser.cfe[] <> none then
+           (if browser.cfe.cs.node[] <> none then
+           (if browser.cfe.cs.node.symbol =
+           theGraphicalEditorEnv.gram.
+           patternDecl then
+           true->value; 
+           if);
+           
+           if);
+           
+           if);
+           
+           #);
+           onSelect:: 
+           (# theOverView: ^overView; 
+           do
+           &overView[]->theOverView[];
+           browser.cfe.cs.node[]->theOverView.open;
+           ;
+           
+           #)
+           #);
+           open::  (#  do 'Show Overview'->name;  #);
+           
+           #);
+           open:: 
+           (# 
+           do
+           'GUI'->name;
+           newWindowLibItem.open;
+           newCanvasLibItem.open;
+           addSeparator;
+           openGraphicalEditor.open;
+           newGraphicalEditor.open;
+           
+           #);
+           
+           #);
+           open::<  (#  do ibMenu.open; ibMenu[]->append; INNER #);
+           
+           #);
+           *)
           (* End of Menubar *)
           (*
            * Handling of windows
@@ -523,9 +827,14 @@ friggApplication: fragmentBrowser
             #);
           
        #);
-     init::< 
+     init:<
        (# arg: ^text; 
+       enter ymer[]
        do
+          ymer.gui[]->gui[];
+          ymer.mps[]->mps[];
+          &frigggraphicaleditorenv[]->theGraphicalEditorEnv[];
+          &MPS.ast.prettyPrinter[]->pretty[];
           MPS.betaCfl[]->pretty.init;
           pretty[]->objectPool.put;
           initializeDynamicCompiler;
