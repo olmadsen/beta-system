@@ -224,7 +224,7 @@ register volatile void *GCreg4 asm("%o4");
 
 #ifdef RTVALHALLA
 #define ValhallaCallBetaEntry(entry,item,event)		 \
-    ValhallaOnProcessStop ((long*)entry+1,0,0,0,event); \
+    ValhallaOnProcessStop ((long*)entry+2,0,0,0,event); \
     (* (void (*)()) ((long*)entry+1) )(item);
 #endif
 

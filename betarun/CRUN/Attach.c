@@ -115,15 +115,6 @@ struct Component * Att(struct Object *this, struct Component *comp)
     push(this);
     entryAdr = *((long **)((long)((cast(Item) &comp->Body)->Proto)+sizeof(struct ProtoType)+4));
 
-#ifdef RTVALHALLA
-    if (informValhallaOnAttach)
-      ValhallaCallBetaEntry(entryAdr, &comp->Body, RTS_ATTACH);
-    else
-      CallBetaEntry(entryAdr, &comp->Body);
-#else
-    CallBetaEntry(entryAdr, &comp->Body);
-#endif
-
     pop(this);
 
     /* When the attached component terminates the following code is executed.  */
@@ -337,7 +328,7 @@ ParamThisComp(struct Component *, Att)
     entryAdr = ((long **)(cast(Item) &comp->Body)->Proto)[-1];
 
 #ifdef RTVALHALLA
-    if (informValhallaOnAttach) {
+    if (valhallaIsStepping) {
       ValhallaCallBetaEntry(entryAdr, &comp->Body, RTS_ATTACH);
     } else {
       CallBetaEntry(entryAdr, &comp->Body);
@@ -435,7 +426,12 @@ ParamThisComp(struct Component *, Att)
     rw->l7 = level;
     asm("ta 3");
     ((char *)FramePointer) -= size;
-    
+
+#ifdef RTVALHALLA
+    if (valhallaIsStepping)
+      ValhallaOnProcessStop ((long *)comp->CallerLSC,0,0,0,RTS_ATTACH);
+#endif
+
     setret(comp->CallerLSC);
     /* Fool gcc into believing that level, next.. is used */
     asm(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));

@@ -34,6 +34,11 @@ void valhallaInit ();
  *  4. From Callback.c, to inform that some BETA external entry is about to be
  *     called. In this case,  PC is the BETA code address where control is being 
  *     transferred, SP, curObj and sig are undefined, and errorNumber is RTS_CBFA.
+ *
+ *  5. From Suspend.c, to inform that some BETA coroutine was suspended, and we are
+ *     about to return to the calling component. In this case,  PC is the BETA code 
+ *     address where control is being transferred, SP, curObj and sig are undefined, and
+ *     errorNumber is RTS_SUSPEND.
  * 
  * In any case calls back to valhalla to inform that this process has stopped.
  *
@@ -47,6 +52,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
 /* Values of errorNumber in cases 3 and 4 of calling ValhallaOnProcessStop. */
 #define  RTS_ATTACH 1
 #define RTS_CBFA 2
+#define RTS_SUSPEND 3
 
 /* Return values from ValhallaOnProcessStop */
 

@@ -326,8 +326,7 @@ int valhallaCommunicate (int curPC)
 
     case VOP_CONTINUE:
       
-      informValhallaOnCallback = fifoBinGetInt (fifoTo);
-      informValhallaOnAttach = fifoBinGetInt (fifoTo);
+      valhallaIsStepping = fifoBinGetInt (fifoTo);
       fifoBinPutInt (fifoFrom, opcode);
       fflush (fifoFrom);
       return CONTINUE;

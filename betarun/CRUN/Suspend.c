@@ -8,6 +8,10 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef RTVALHALLA
+#include "valhallaComm.h"
+#endif
+
 #ifdef crts
 
 #ifdef MAC
@@ -224,6 +228,12 @@ ParamThis(struct Component *, Susp)
   /* Change active component */
   called = ActiveComponent;
   ActiveComponent = caller; 
+
+#ifdef RTVALHALLA
+  if (valhallaIsStepping)
+    ValhallaOnProcessStop (ActiveComponent->CallerLSC,0,0,0,RTS_SUSPEND);
+#endif
+
   setret(ActiveComponent->CallerLSC);
   asmemptylabel(SuspEnd);
   return called; /* maintain %o0 across 'call Att' */
