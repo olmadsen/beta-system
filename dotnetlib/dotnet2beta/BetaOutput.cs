@@ -5,22 +5,23 @@ namespace beta.converter
     public class BetaOutput
       {
 	internal int indentlevel = 0;
+	internal bool trace = false;
 		
 	public System.IO.TextWriter output;
 		
 	internal System.IO.FileInfo entry;
 	internal System.IO.FileInfo existing = null;
 		
-	public BetaOutput(System.String betalib, System.String resolution, System.String ns, System.String cls, System.String supNs, System.String sup, int overwrite, System.IO.StreamWriter outstream)
+	public BetaOutput(System.String betalib, System.String ns, System.String cls, System.String supNs, System.String sup, int overwrite, System.IO.TextWriter outstream)
 	  {
 			
 	    openStream(betalib, ns, "_" + cls, overwrite, outstream);
 	    if (output != null)
-	      putWrapper(resolution, ns, cls, supNs, sup);
+	      putWrapper(ns, cls, supNs, sup);
 	    openStream(betalib, ns, cls, overwrite, outstream);
 	  }
 		
-	internal virtual void  openStream(System.String betalib, System.String ns, System.String cls, int overwrite, System.IO.StreamWriter outstream)
+	internal virtual void  openStream(System.String betalib, System.String ns, System.String cls, int overwrite, System.IO.TextWriter outstream)
 	  {
 	    entry = new System.IO.FileInfo(betalib + "/dotnetlib/" + ns + "/" + cls + ".bet");
 	    if (System.IO.File.Exists(entry.FullName) || System.IO.Directory.Exists(entry.FullName)) {
@@ -34,7 +35,10 @@ namespace beta.converter
 		entry = new System.IO.FileInfo(entry.FullName + ".new");
 	      }
 	    }
-	    System.IO.Directory.CreateDirectory(entry.Directory.Name);
+	    if (trace){
+	      System.Console.Error.WriteLine("Creating directory " + entry.Directory.FullName);
+	    }
+	    System.IO.Directory.CreateDirectory(entry.Directory.FullName);
 	    if (outstream != null) {
 	      output = outstream;
 	    }
@@ -241,19 +245,16 @@ namespace beta.converter
 	    }
 			
 	    // Compare against other patterns that may confuse 
-	    if (word.Equals("File")) {
+	    switch (word){
+	    case "File":
+	      return prefix + "Dotnet" + word;
+	    case "Hashtable":
+	      return prefix + "Dotnet" + word;
+	    case "Class":
+	      return prefix + "Dotnet" + word;
+	    case "Process":
 	      return prefix + "Dotnet" + word;
 	    }
-	    else if (word.Equals("Hashtable")) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.Equals("Class")) {
-	      return prefix + "Dotnet" + word;
-	    }
-	    else if (word.Equals("Process")) {
-	      return prefix + "Dotnet" + word;
-	    }
-			
 	    // Not reserved
 	    return prefix + word;
 	  }
@@ -284,7 +285,7 @@ namespace beta.converter
 	    indent(+ 3);
 	  }
 		
-	public virtual void  putWrapper(System.String resolution, System.String namespaceName, System.String className, System.String superNs, System.String superClass)
+	public virtual void  putWrapper(System.String namespaceName, System.String className, System.String superNs, System.String superClass)
 	  {
 	    putln("ORIGIN '~beta/basiclib/betaenv';");
 	    if ((superClass != null) && !superClass.Equals("Object")) {
@@ -299,7 +300,7 @@ namespace beta.converter
 	    putln(" *)");
 	    putPatternBegin("_" + className, superClass);
 	    nl();
-	    putTrailer(resolution, namespaceName, className);
+	    putTrailer(namespaceName, className);
 	  }
 		
 	public virtual void  putHeader(System.String namespaceName, System.String className, System.Object[] includes)
@@ -387,10 +388,10 @@ namespace beta.converter
 	  indent(- 2);
 	}
 		
-	public virtual void  putTrailer(System.String resolution, System.String namespaceName, System.String className)
+	public virtual void  putTrailer(System.String namespaceName, System.String className)
 	  {
 	    indent(- 3);
-	    putln("do '[" + resolution + ']' + namespaceName + '/' + className + "' -> className;");
+	    putln("do " + namespaceName + '/' + className + "' -> className;");
 	    putln("INNER;");
 	    putln("#);\n");
 	    indent(- 2);
