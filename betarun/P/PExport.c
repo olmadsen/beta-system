@@ -102,6 +102,7 @@ static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
 }
 
 extern void checkOrigins(Object *theObj, void *generic);
+extern void EndianconvertFromStore(Object *obj);
 
 /* Exports the object to 'store' */
 void exportObject(Object *theObj, unsigned long store)
@@ -113,6 +114,9 @@ void exportObject(Object *theObj, unsigned long store)
 	     processReferenceToStoreReference,
 	     NULL,
 	     TRUE);
+#ifdef PSENDIAN
+  EndianconvertFromStore(theObj);
+#endif
 }
 
 

@@ -382,9 +382,7 @@ void RTEndGC(void)
 void CheckForNewAOAclient(Object **theCell)
 {
 #ifdef PERSIST
-  if (inPIT((void *)*theCell)) {
-    newAOAclient(getPUID((void *)*theCell), theCell);
-  }
+  newAOAclient(getPUID((void *)*theCell), theCell);
 #endif /* PERSIST */
 }
 #endif /* RUN */

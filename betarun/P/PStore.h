@@ -1,12 +1,15 @@
 #ifndef _PSTORE_H_
 #define _PSTORE_H_
-#include "../C/beta.h"
+#include "beta.h"
 
 #ifdef sparc
 #define OURINLINE __inline__
 #else
 #define OURINLINE
 #endif
+
+/* If set, keep store in big-endian format also on little-endian machines */
+/* #define PSENDIAN */ /* Not quite ready yet... --mog */
 
 #define MAXNAMELENGTH     100
 #define MAXNAMES          10
@@ -116,6 +119,9 @@ void insertRoot(unsigned long storeID,
 		unsigned long offset);
 unsigned long getNumberOfUpdates(unsigned long host_r, 
 				 unsigned long path_r);
+
+char *FindNameByGroupID(unsigned long group);
+unsigned long FindGroupIDByName(char *name);
 
 #endif /* _PSTORE_H_ */
 

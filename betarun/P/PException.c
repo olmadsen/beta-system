@@ -421,46 +421,42 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
   long *proxy, *absAddr = 0;
   unsigned char* PC;
   unsigned char modrm;
-  int isBeta;
+  static unsigned char reentered = 0;
+
+  if (reentered) {
+    return 1;
+  }
+  reentered = 1;
 
   PC = (unsigned char*)pContextRecord->Eip;
   StackEnd = (long *)pContextRecord->Esp;
 
-  isBeta = IsBetaCodeAddrOfProcess((unsigned long)PC);
-
   Claim(!IOAActive, "!IOAActive");
   INFO_PERSISTENCE(numPF++);
+  INFO_PERSISTENCE({
+    fprintf(output, "proxyTrapHandler:%d:0x%08x\n", numPF, PC);
+  });
 
-  if (isBeta){
-    switch (PC[0]) {
-    case 0x62:  /* BOUND R32, M32, M32 */
-    case 0x80:  /* CMP R/M8, IMM8 */
-    case 0x88:  /* MOV R/M8, R8 */
-    case 0x89:  /* MOV R/M32, R32 */
-    case 0x8a:  /* MOV R8, R/M8 */
-    case 0x8b:  /* MOV R32, R/M32 */
-    case 0xc6:  /* MOV R/M8, IMM8 */
-    case 0xc7:  /* MOV R/M32, IMM32 */
-      modrm = PC[1]; 
-      proxy = decodeModRM(pContextRecord, modrm, PC+1);
-      break;
-    case 0x0f: /* Two-byte instruction. */
-      switch (PC[1]) {
-      case 0xb6: /* MOVZX R32, R/M8 */
-      case 0xb7: /* MOVZX R32, R/M16 */
-      case 0xbe: /* MOVSX R32, R/M8 */
-      case 0xbf: /* MOVSX R32, R/M16 */
-	modrm = PC[2]; 
-	proxy = decodeModRM(pContextRecord, modrm, PC+2);
-	break;
-      default:
-	DEBUG_CODE({
-	  fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
-		  "%02x %02x %02x %02x %02x %02x\n", 
-		  (int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
-	});
-	return 1;
-      }
+  switch (PC[0]) {
+  case 0x62:  /* BOUND R32, M32, M32 */
+  case 0x80:  /* CMP R/M8, IMM8 */
+  case 0x88:  /* MOV R/M8, R8 */
+  case 0x89:  /* MOV R/M32, R32 */
+  case 0x8a:  /* MOV R8, R/M8 */
+  case 0x8b:  /* MOV R32, R/M32 */
+  case 0xc6:  /* MOV R/M8, IMM8 */
+  case 0xc7:  /* MOV R/M32, IMM32 */
+    modrm = PC[1]; 
+    proxy = decodeModRM(pContextRecord, modrm, PC+1);
+    break;
+  case 0x0f: /* Two-byte instruction. */
+    switch (PC[1]) {
+    case 0xb6: /* MOVZX R32, R/M8 */
+    case 0xb7: /* MOVZX R32, R/M16 */
+    case 0xbe: /* MOVSX R32, R/M8 */
+    case 0xbf: /* MOVSX R32, R/M16 */
+      modrm = PC[2]; 
+      proxy = decodeModRM(pContextRecord, modrm, PC+2);
       break;
     default:
       DEBUG_CODE({
@@ -468,24 +464,37 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
 		"%02x %02x %02x %02x %02x %02x\n", 
 		(int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
       });
+      reentered = 0;
       return 1;
     }
+    break;
+  default:
+    DEBUG_CODE({
+      fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
+	      "%02x %02x %02x %02x %02x %02x\n", 
+	      (int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
+    });
+    reentered = 0;
+    return 1;
+  }
     
-    if (inPIT(proxy)) {
-      /* Calculate absolute address by looking in appropriate tables */
-      absAddr = (long*)unswizzleReference(proxy);
+  if (inPIT(proxy)) {
+    /* Calculate absolute address by looking in appropriate tables */
+    absAddr = (long*)unswizzleReference(proxy);
       
-      /* Now write the new value back into sourcereg: */
-      setRegisterContents(pContextRecord, sourcereg, (long)absAddr);
+    /* Now write the new value back into sourcereg: */
+    setRegisterContents(pContextRecord, sourcereg, (long)absAddr);
       
-      return 0;
-    } else if (!proxy) {
-      /* Normal refNone:  Handle as regular refNone. */
-      return 2;
-    }
+    reentered = 0;
+    return 0;
+  } else if (!proxy) {
+    /* Normal refNone:  Handle as regular refNone. */
+    reentered = 0;
+    return 2;
   }
 
   /* Exception not handled, let sighandler decide what to do. */
+  reentered = 0;
   return 1;
 }
 /******************************* NTI end ******************************/

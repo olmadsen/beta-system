@@ -710,4 +710,62 @@ StoreProxy *lookupStoreProxy(unsigned long storeID,
   }
 }
 
+char *FindNameByGroupID(unsigned long group)
+{
+  unsigned long idx = 1;
+  char *current = currentPStore->protoNames.names;
+  char *end = current+currentPStore->protoNames.top;
+  while (current<end) {
+    if (idx == group) {
+      return current;
+    }
+    current += strlen(current)+1;
+    idx++;
+  }
+  fprintf(output, 
+	  "Got groupindex outside range in use: looking for %d, last is %d\n",
+	  (int)group, (int)idx);
+  DEBUG_CODE(ILLEGAL);
+  BetaExit(1);
+  return NULL;
+}
+
+unsigned long FindGroupIDByName(char *name)
+{
+  unsigned long idx = 1;
+  char *current = currentPStore->protoNames.names;
+  char *end = current+currentPStore->protoNames.top;
+  while (current<end) {
+    if (!strcmp(current,name)) {
+      return idx;
+    }
+    current += strlen(current)+1;
+    idx++;
+  }
+  DEBUG_CODE(Claim(current == end, "FindGroupIDByName: passed end."));
+
+  /* Not found in table.  Add new entry. */
+  {
+    unsigned long len = strlen(name) + 1;
+    if (currentPStore->protoNames.top + len > currentPStore->protoNames.size) {
+      /* Make room for more groupnames now! */
+      /* FIXME!  Do this... */
+      fprintf(output,
+	      "FindGroupIDByName: NYI: Make room for more groupnames\n");
+      DEBUG_CODE(ILLEGAL);
+      BetaExit(1);
+    } 
+    
+    DEBUG_CODE({
+      Claim(currentPStore->protoNames.top + len 
+	    <= currentPStore->protoNames.size,
+	    "FindGroupIDByName: Did not get enough room");
+    });
+    
+    memcpy(current, name, len);
+    currentPStore->protoNames.top += len;
+    return idx;
+  }
+}
+
 #endif /* PERSIST */

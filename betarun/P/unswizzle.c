@@ -23,9 +23,6 @@ static unsigned long forceAOACompaction = 0;
 int betaenvHandle; 
 int programHandle;
 
-/* IMPORTS */
-extern PStoreHeader *currentPStore;
-
 /* LOCAL FUNCTION DECLARATIONS */
 static Object *loadObject(unsigned long store, unsigned long offset, unsigned long inx);
 static Object *storeNotOpen(unsigned long store, 
@@ -89,6 +86,150 @@ Object *lookUpReferenceEntry(unsigned long store, unsigned long offset, unsigned
   }
 }
 
+#ifdef PSENDIAN
+static void EndianconvertFromStoreProc(REFERENCEACTIONARGSTYPE)
+{
+  *theCell = (Object*)ntohl((unsigned long)*theCell);
+}
+
+void EndianconvertFromStore(Object *obj)
+{
+  ProtoType * theProto;
+  
+  theProto = GETPROTO(obj);
+
+  if (!isSpecialProtoType(theProto)) {
+    unsigned char *ebits, b, do_int16, do_real64;
+    unsigned long offset, pos;
+    short * refs_ofs;
+    short *ptr;
+    int numbytes;
+    GCEntry *tab =
+      (GCEntry *) ((char *) theProto + theProto->GCTabOff);
+
+    /* Handle all reference fields in obj: */
+    scanObject(obj, EndianconvertFromStoreProc, NULL, TRUE);
+    /* Skip part-object table: */
+    for (;tab->StaticOff; ++tab) {
+      ;
+    }
+    /* Skip dynrefs : */
+    for (refs_ofs = (short *)&tab->StaticOff+1; *refs_ofs; refs_ofs++) {
+      ;
+    }
+
+    /* Handle all longs: */
+    ebits = (unsigned char*) (refs_ofs + 1);
+    b = *ebits++;
+    do_int16  = (b & 0x80);
+    do_real64 = (b & 0x40);
+
+    if (b & 0x3f) { /* Any longs in the first 8 words? */
+      offset = 2;
+      while (b & 0x3f) { /* Any longs in the first 8 words? */
+	if (b & 0x20) {
+	  *((unsigned long*)obj+offset) = ntohl(*((unsigned long*)obj+offset));
+	}
+	b *= 2;
+	offset++;
+      }
+    }
+    pos = 8;
+    
+    numbytes = ((ObjectSize(obj)-1) / 8);
+    while (numbytes--) {
+      b = *ebits++;
+      if (b) {
+	offset = pos;
+	while (b) {
+	  if (b & 0x80) {
+	    *((unsigned long*)obj+offset) = ntohl(*((unsigned long*)obj+offset));
+	  }
+	  offset++;
+	  b *= 2;
+	}
+      }
+      pos += 8;
+    }
+    
+    if ((unsigned long)ebits & 1) {
+      ebits++;
+    }
+
+    ptr = (short*)ebits;
+    if (do_int16) {
+      while (*ptr) {
+	*(unsigned short*)((char*)obj+*ptr) = ntohs(*(unsigned short*)((char*)obj+*ptr));
+	ptr++;
+      }
+      ptr++;
+    }
+
+    if (do_real64) {
+      while (*ptr) {
+	unsigned long x = ntohl(*(unsigned long*)((char*)obj+*ptr));
+	*(unsigned long*)((char*)obj+*ptr) = 
+	  ntohl(*(unsigned long*)((char*)obj+*ptr+4));
+	*(unsigned long*)((char*)obj+*ptr+4) = x;
+	ptr++;
+      }
+    }
+  } else {
+    switch (SwitchProto(theProto)) {
+    case SwitchProto(LongRepPTValue):     
+      {
+	unsigned long *pointer;
+	long offset, offsetTop;
+              
+	offset =  (char*)(&((ValRep*)(obj))->Body[0]) - (char*)obj;
+	offsetTop = offset + 4 * ((ValRep*)(obj))->HighBorder;
+
+	while (offset < offsetTop) {
+	  pointer = (unsigned long *)((char*)obj + offset);
+	  *pointer = ntohl(*pointer);
+	  offset += 4;
+	}
+	break;
+      }
+
+    case SwitchProto(DoubleRepPTValue):
+      {
+	unsigned long *pointer, x;
+	long offset, offsetTop;
+	
+	offset =  (char*)(&((ValRep*)(obj))->Body[0]) - (char*)obj;
+	offsetTop = offset + 8 * ((ValRep*)(obj))->HighBorder;
+	
+	while (offset < offsetTop) {
+	  pointer = (unsigned long*)((char*)obj + offset);
+	  x = ntohl(*pointer);
+	  *pointer = ntohl(*(pointer+1));
+	  *(pointer+1) = x;
+	  offset += 8;
+	}
+	break;
+      }
+    case SwitchProto(ShortRepPTValue):
+      {
+	unsigned short *pointer;
+	long offset, offsetTop;
+              
+	offset =  (char*)(&((ValRep*)(obj))->Body[0]) - (char*)obj;
+	offsetTop = offset + 2 * ((ValRep*)(obj))->HighBorder;
+	
+	while (offset < offsetTop) {
+	  pointer = (unsigned short*)((char*)obj + offset);
+	  *pointer = ntohs(*pointer);
+	  offset += 2;
+	}
+	break;
+      }
+    }
+  }
+}
+#endif /* PSENDIAN */
+
+
 static Object *loadObject(unsigned long store, unsigned long offset, unsigned long inx)
 {
   unsigned long size, distanceToPart;
@@ -105,6 +246,7 @@ static Object *loadObject(unsigned long store, unsigned long offset, unsigned lo
     
     if (distanceToPart == 0) {
       size = 4*StoreObjectSize(theRealStoreObj);
+      forceAOAAllocation = TRUE; /* The following allocation must not fail*/
       theRealObj = AOAallocate(2*size);
       loadedBytes += 2*size;
       if (loadedBytes > MAXPERSISTENTBYTES) {
@@ -136,6 +278,9 @@ static Object *loadObject(unsigned long store, unsigned long offset, unsigned lo
       ((Object*)((char*)theRealObj+size))->GCAttr = (long)newPUID(0);
       
       /* The real object is imported */
+#ifdef PSENDIAN
+      EndianconvertFromStore(theRealObj);
+#endif
       importStoreObject(theRealObj, store, offset, inx);
       
       Claim(ObjectSize(((Object*)((char*)theRealObj+size)))

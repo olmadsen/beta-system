@@ -830,9 +830,8 @@ BetaSignalHandler_GNU(EXCEPTION_RECORD* pExceptionRec,
 		      CONTEXT* pContextRecord,
 		      void* pDispatcherContext) 
 #else  /* !nti_gnu */
-int 
-BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
-#endif /* !nti_gnu */
+int BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
+#endif /* nti_gnu */
 {
 #ifdef nti_ms
   EXCEPTION_RECORD* pExceptionRec =  lpEP->ExceptionRecord;
