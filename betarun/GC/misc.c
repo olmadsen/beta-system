@@ -82,6 +82,7 @@ void Claim( expr, message)
     fprintf(output,
 	    "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
 	    ToSpace, ToSpaceTop, ToSpaceLimit);
+    Illegal(); /* Usefull to break in */
     BetaExit(0);
   }
 }
