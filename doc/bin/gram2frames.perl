@@ -299,7 +299,7 @@ sub print_frameset()
     &print_header($title,"",$flag_base|$flag_frame);
 
     print<<"EOT";
-<FRAMESET BORDER=0 ROWS="$height,*">
+<FRAMESET FRAMEBORDER=0 FRAMESPACING=0 BORDER=0 ROWS="$height,*">
    <NOFRAMES>
    <BODY>
    <H1>$title</H1>
@@ -312,8 +312,8 @@ sub print_frameset()
    </UL>
    </BODY>
    </NOFRAMES>
-   <FRAME SRC="$basename-nav.html" NAME="${basename}Nav" FRAMEBORDER=0 SCROLLING=NO MARGINHEIGHT=1>
-   <FRAME SRC="$basename-body.html" NAME="${basename}Body" FRAMEBORDER=0 >
+   <FRAME SRC="$basename-nav.html" NAME="${basename}Nav"SCROLLING=NO MARGINHEIGHT=1>
+   <FRAME SRC="$basename-body.html" NAME="${basename}Body">
 </FRAMESET>
 </HTML>
 EOT

@@ -434,9 +434,9 @@ sub print_frameset()
 
     # FRAMESPACING and BORDER below are not valid HTML 4.0, 
     # but required by IE4 and NS4, respectively, to display this correctly
-    # See http://webbuilder.netscape.com/Authoring/Frames/ss03.html
+    # See e.g. http://www.idocs.com/tags/frames/noborder.html
     print<<"EOT";
-<FRAMESET FRAMESPACING=0 BORDER=0 ROWS="$height,*">
+<FRAMESET FRAMESPACING=0 FRAMEBORDER=0 BORDER=0 ROWS="$height,*">
    <NOFRAMES>
    <BODY$bodyatt>
    $header
@@ -449,8 +449,8 @@ sub print_frameset()
    </UL>
    </BODY>
    </NOFRAMES>
-   <FRAME SRC="$basename-nav.html" NAME="${targetbase}Nav" FRAMEBORDER=0 SCROLLING=NO NORESIZE $marginheight>
-   <FRAME SRC="$basename-body.html" FRAMEBORDER=0 NORESIZE NAME="${targetbase}Body">
+   <FRAME SRC="$basename-nav.html" NAME="${targetbase}Nav" SCROLLING=NO NORESIZE $marginheight>
+   <FRAME SRC="$basename-body.html" NORESIZE NAME="${targetbase}Body">
 </FRAMESET>
 </HTML>
 EOT
