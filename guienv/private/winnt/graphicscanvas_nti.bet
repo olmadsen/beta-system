@@ -17,11 +17,35 @@ BUILD nti '$$/rotatetext.obj' 'external/rotatetext.cpp' 'betacc $0 $1';
 
 
 BUILD nti '$$/ovalfill.obj' 'external/ovalfill.c' 'betacc $0 $1';
+BUILD nti '$$/imageprocessing.obj' 'external/imageprocessing.c' 'betacc $0 $1';
 
 
 -- lib: attributes --
 
-
+WeimanExpansionOut: external
+  (# src, src_width, src_height: @integer;
+     dst, dst_width, dst_height: @integer;
+     p, q: @integer;
+  enter (src, src_width, src_height, dst, dst_width, dst_height, p, q)
+  #);
+WeimanExpansionIn: external
+  (# src, src_width, src_height: @integer;
+     dst, dst_width, dst_height: @integer;
+     p, q: @integer;
+  enter (src, src_width, src_height, dst, dst_width, dst_height, p, q)
+  #);
+WeimanExpansionOutVert: external
+  (# src, src_width, src_height: @integer;
+     dst, dst_width, dst_height: @integer;
+     p, q: @integer;
+  enter (src, src_width, src_height, dst, dst_width, dst_height, p, q)
+  #);
+WeimanExpansionInVert: external
+  (# src, src_width, src_height: @integer;
+     dst, dst_width, dst_height: @integer;
+     p, q: @integer;
+  enter (src, src_width, src_height, dst, dst_width, dst_height, p, q)
+  #);
 
 write_pixels_to_png: external
   (# pixels: @int32u;
@@ -1012,6 +1036,264 @@ PolygonScan:
                      restart loop;
                  if);
             #);
+       #);
+     
+     GlobalEdgeTable: [0] @EdgeTable;
+     ActiveEdgeTable: @EdgeTable;
+     
+     
+     Edge:
+       (# dx: @real;
+          ymax: @integer;
+          xmin: @real;
+       #);
+     
+     convert:
+       (# y: @integer;
+          xleft, xright: @integer;
+          tmp: @real;
+          color: @integer;
+          buffer: [0] @int8u;
+          rowbytes: @integer;
+          lx: @integer;
+          count: @integer;
+          line: @integer;
+          gray: @integer;
+          ll, rr: @integer;
+          i: @integer;
+       do private.colorvalue -> color;
+          1 -> y;
+          (right + 7) div 8 -> rowbytes;
+          rowbytes -> buffer.new;
+          rowbytes -> ll;
+          0 -> rr;
+          (for major: scanlines div 8 repeat
+               rowbytes -> ll;
+               0 -> rr;
+               
+               (for minor: 8 repeat
+                    GlobalEdgeTable[y].scan
+                    (#
+                    do current[] -> ActiveEdgeTable.insert;
+                    #);
+                    y -> ActiveEdgeTable.weed;
+                    ActiveEdgeTable.sort;
+                    (if ActiveEdgeTable.top > 0 then
+                        (if ActiveEdgeTable.top = 2 then
+                            ActiveEdgeTable.storage[1].xmin -> ceil -> tmp;
+                            tmp -> xleft;
+                            ActiveEdgeTable.storage[2].xmin -> ceil -> tmp;
+                            tmp -> xright;
+                            (if xleft = xright then
+                                xleft div 8 + 1 -> lx;
+                                buffer[lx] + 1 -> buffer[lx];
+                                (if lx < ll then
+                                    lx -> ll;
+                                 else
+                                    (if lx > rr then
+                                        lx -> rr;
+                                    if);
+                                if);
+                             else
+                                (for i: (xright - xleft) repeat
+                                     (xleft + i - 1) div 8 + 1 -> lx;
+                                     buffer[lx] + 1 -> buffer[lx];
+                                     (if lx < ll then
+                                         lx -> ll;
+                                      else
+                                         (if lx > rr then
+                                             lx -> rr;
+                                         if);
+                                     if);
+                                for);
+                            if);
+                            
+                        if);
+                    if);
+                    y + 1 -> y;
+                    ActiveEdgeTable.scan
+                    (#
+                    do current.xmin + current.dx -> current.xmin;
+                    #);
+               for);
+               
+               
+               
+               (for k: (rr - ll) + 1  repeat
+                    ll + k - 1 -> i;
+                    0 -> count;
+                    buffer[i] -> count;
+                    0 -> buffer[i];
+                    (if count > 0 then
+                        (if count = 64 then
+                            (xorigin + i - 1, yorigin + major - 1, color) -> plotpixel;
+                         else
+                            (count * 0xFF) / 64 -> gray;
+                            (xorigin + i - 1, yorigin + major  - 1, gray, color) -> blend_pixel;
+                        if);
+                    if);
+               for);
+          for);
+       #);
+     
+     
+     prepare:
+       (# 
+	  insertEdge:
+	    (# p1, p2: ^FixedPoint;
+	       
+	       e: ^Edge;
+               low, high: ^FixedPoint;
+               inx: @integer;
+	    enter (p1[], p2[])
+	    do (if p1.y <> p2.y then
+	           
+		   (if p1.y < p2.y then
+		       p1[] -> low[];
+                       p2[] -> high[];
+		    else
+		       p2[] -> low[];
+                       p1[] -> high[];
+		   if);
+                   
+		   &Edge[] -> e[];
+                   (high.x - low.x) / (high.y - low.y) -> e.dx;
+		   high.y + 1 -> e.ymax;
+		   low.x  -> e.xmin;
+                   low.y + 1 -> inx;
+                   e[] -> GlobalEdgeTable[inx].insert;
+	       if);
+	    #);
+          
+          data: [0] ^FixedPoint;
+          ox, oy: @real;
+          curve: @PointList;
+       do (if poly.size > 2 then
+              
+              (* Calculate origin *)
+              
+              (poly.head).elm.x -> ox;
+              (poly.head).elm.y -> oy;
+              poly.scan
+              (#
+              do (if current.x < ox then
+                     current.x -> ox;
+                 if);
+                 (if current.y < oy then
+                     current.y -> oy;
+                 if);
+              #);
+              ox -> floor -> xorigin;
+              oy -> floor -> yorigin;
+              
+              
+              poly.size -> data.new;
+              poly.scan
+              (# inx: @integer;
+              do inx + 1 -> inx;
+                 &FixedPoint[] -> data[inx][];
+                 (current.x - xorigin) * 8.0  -> data[inx].x;
+                 (current.y - yorigin) * 8.0 -> data[inx].y;
+              #);
+              data[1].x -> left -> right;
+	      data[1].y -> top -> bottom;
+	      (for inx: data.range - 1 repeat
+	           (if data[inx+1].x < left then
+	               data[inx+1].x -> left;
+	           if);
+	           (if data[inx+1].x > right then
+	               data[inx+1].x -> right;
+	           if);
+	           (if data[inx+1].y < top then
+	               data[inx+1].y -> top;
+	           if);
+	           (if data[inx+1].y > bottom then
+	               data[inx+1].y -> bottom;
+	           if);
+	      for);
+              
+	      ((bottom + 7) div 8) * 8 -> scanlines;
+              
+              
+	      scanlines -> GlobalEdgeTable.new;
+              
+	      (for inx: data.range repeat
+	           (if inx = data.range then
+		       (data[inx][], data[1][]) -> insertEdge;
+		    else
+		       (data[inx][], data[inx+1][]) -> insertEdge;
+		   if);
+	      for);
+              (for inx: GlobalEdgeTable.range repeat
+                   GlobalEdgeTable[inx].sort;
+              for);
+          if);
+       #);
+     
+  enter poly[]
+  do prepare;
+     convert;
+  #);
+
+PolygonScan1:
+  (# poly: ^PointList;
+     left, top, right, bottom: @integer;
+     xorigin: @integer;
+     yorigin: @integer;
+     
+     scanlines: @integer;
+     
+     EdgeTable:
+       (# storage: [1] ^Edge;
+          top: @integer;
+          
+          insert:
+            (# theEdge: ^Edge;
+            enter theEdge[]
+            do top + 1 -> top;
+               (if top > storage.range then
+                   storage.range -> storage.extend;
+               if);
+               theEdge[] -> storage[top][];
+            #);
+          sort:
+            (# k: @integer;
+               tmp: ^Edge;
+            do (for i: top - 1 repeat
+                    (for j: top - i repeat
+                         top - j + 1 -> k;
+                         (if storage[k].xmin < storage[k-1].xmin then
+                             storage[k][] -> tmp[];
+                             storage[k-1][] -> storage[k][];
+                             tmp[] -> storage[k-1][];
+                         if);
+                    for);
+               for);
+            #);
+          scan:
+            (# current: ^Edge;
+            do (for inx: top repeat
+                    storage[inx][] -> current[];
+                    INNER;
+               for);
+            #);
+          weed:
+            (# y: @integer;
+               inx: @integer;
+            enter y
+            do 1 -> inx;
+               loop:
+                 (if inx <= top then
+                     (if storage[inx].ymax = y then
+                         storage[top][] -> storage[inx][];
+                         NONE -> storage[top][];
+                         top - 1 -> top;
+                      else
+                         inx + 1 -> inx;
+                     if);
+                     restart loop;
+                 if);
+            #);
           print:
             (#
             do scan
@@ -1695,5 +1977,95 @@ do (# ptr: @integer;
           if);
           false -> changedFlag;
       if);
+   #);
+   
+-- GUIenvLib: attributes --
+GMD:
+  (# n, m: @integer;
+     p, q: @integer;
+  enter (n, m)
+  do n -> p;
+     m -> q;
+     loop:
+       (#
+       do (if p > q then
+              p - q -> p;
+              restart loop;
+          if);
+          (if q > p then
+              q - p -> q;
+              restart loop;
+          if);
+       #);
+  exit p
+  #);
+WeimanExpandWidth:
+  (# src: ^Pixmap;
+     dst: ^Pixmap;
+     d: @integer;
+     p, q: @integer;
+     width: @integer;
+  enter (src[], width)
+  do &Pixmap[] -> dst[];
+     (width, src.height) -> dst.init;
+     (width, src.width) -> GMD -> d;
+     width div d -> p;
+     src.width div d -> q;
+     (if p > q then
+         (src.private.pixels, src.width, src.height,
+         dst.private.pixels, dst.width, dst.height,
+         p, q) -> WeimanExpansionOut;
+      else
+         (src.private.pixels, src.width, src.height,
+         dst.private.pixels, dst.width, dst.height,
+         p, q) -> WeimanExpansionIn;
+     if);
+  exit dst[]
+  #);
+
+WeimanExpandHeight:
+  (# src: ^Pixmap;
+     dst: ^Pixmap;
+     d: @integer;
+     p, q: @integer;
+     height: @integer;
+  enter (src[], height)
+  do &Pixmap[] -> dst[];
+     (src.width, height) -> dst.init;
+     (height, src.height) -> GMD -> d;
+     height div d -> p;
+     src.height div d -> q;
+          
+     (if p > q then
+         (src.private.pixels, src.width, src.height,
+         dst.private.pixels, dst.width, dst.height,
+         p, q) -> WeimanExpansionOutVert;
+      else
+         (src.private.pixels, src.width, src.height,
+         dst.private.pixels, dst.width, dst.height,
+         p, q) -> WeimanExpansionInVert;
+     if);
+  exit dst[]
+  #);
+
+-- GUIenvScalePixmap: doPart --
+do (# copy: ^Pixmap;
+      
+   do (if width <> src.width then
+          (src[], width) -> WeimanExpandWidth -> copy[];
+          (if height <> src.height then
+              (copy[], height) -> WeimanExpandHeight -> dst[];
+              copy.dispose;
+           else
+              copy[] -> dst[];
+          if);
+       else
+          (if height <> src.height then
+              (src[], height) -> WeimanExpandHeight -> dst[];
+           else
+              src[] -> dst[];
+          if);
+      if);
+      
    #);
    
