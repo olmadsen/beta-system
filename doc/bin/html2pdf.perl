@@ -27,7 +27,7 @@ $verbose = "-v" if (defined($v));
 if ($old){
     $htmldoc = "htmldoc";
 } else {
-    $htmldoc = "htmldoc-1.8b4";
+    $htmldoc = "htmldoc-1.8.3";
     #NOTICE: from config.h.in:
     #define MAX_CHAPTERS	1000
     #define MAX_COLUMNS	20

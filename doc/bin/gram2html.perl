@@ -60,8 +60,6 @@ EOT
     print<<EOT;
 <P></P>
 <P>$title</P>
-<HR>
-<!---------------------------------------------------------->
 
 <H1>$title</H1>
 <PRE CLASS=gram>
@@ -162,7 +160,7 @@ sub make_hrefs
 sub make_h2
 {
     local ($string) = @_[0];
-    return "<P><HR><P><H2>$string</H2>";
+    return "<P><H2>$string</H2>";
 }
 
 sub quote_strings
@@ -299,8 +297,6 @@ EOT
     print<<EOT;
 <P></P>
 <P>Index for $title</P>
-<HR>
-<!---------------------------------------------------------->
 
 <H1><A name="Index">Index for $title</A></H1>
 <PRE CLASS=gram>

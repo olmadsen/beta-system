@@ -76,8 +76,6 @@ foreach $betafile (@ARGV) {
 <A HREF=index.html#_toc><IMG ALIGN=BOTTOM SRC="../images/content.gif" ALT=Contents BORDER=0></A>
 <A HREF=inx.html><IMG ALIGN=BOTTOM SRC="../images/index.gif" ALT=Index BORDER=0></A>
 <P>
-<HR>
-<!---------------------------------------------------------->
 
 <H1>$title</H1>
 EOT

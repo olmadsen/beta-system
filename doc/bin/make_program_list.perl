@@ -56,8 +56,6 @@ print<<"EOT";
 <A HREF=inx.html><IMG ALIGN=BOTTOM SRC="../images/index.gif" ALT=Index BORDER=0></A>
 <P>
 <P>$title</P>
-<HR>
-<!---------------------------------------------------------->
 
 <H1>List of programs</H1>
 EOT

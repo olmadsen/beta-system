@@ -165,8 +165,6 @@ EOT
     print<<EOT;
 <P></P>
 <P>Interface Description</P>
-<HR>
-<!---------------------------------------------------------->
 
 <H1>$title</H1>
 <PRE CLASS=interface>
@@ -225,8 +223,6 @@ EOT
     print<<EOT;
 <P></P>
 <P>Interface Description</P>
-<HR>
-<!---------------------------------------------------------->
 
 <H1><A name="Index.identifiers">Index of Identifiers</A></H1>
 <PRE CLASS=interface>
@@ -442,8 +438,6 @@ EOT
     print<<EOT;
 <P></P>
 <P>Interface Description</P>
-<HR>
-<!---------------------------------------------------------->
 
 <H1><A name="Interface.TOC">Table of Contents</A></H1>
 EOT
