@@ -26,8 +26,9 @@
 #define TRACE3(code)
 #endif
 
+long compC=0;
 #if 0
-#define TRACE_COMP(code) code; fflush(stdout);
+#define TRACE_COMP(code)  if (compC > -1) {code; fflush(stdout);}; compC = compC + 1;
 #else
 #define TRACE_COMP(code)
 #endif
@@ -110,18 +111,12 @@
 #define ref(x)    struct x *
 
 long *T1BETAENVadr;
-#define heapMax 1000000
+#define heapMax 6000000
 long BetaStackTop,BetaThis;
 
 long oldHT=0;
 long heap[heapMax];
 
-/*#ifdef PPC
-long IOA= (long) &heap[0];
-#endif
-#ifdef SGI
-long _IOA= (long) &heap[0];
-#endif*/
 long _IOA= (long) &heap[0];
 
 long IOAused=0;
@@ -136,7 +131,7 @@ long betaTextPos =0;
 /*extern void M1ENV(int a, int b);*/
 
 extern long BetaStackTop,BetaThis;
-long  TextProto;
+long  * TextProto;
 long topObj;
 typedef long ProtoType;
 typedef long StackObj;
@@ -151,11 +146,11 @@ typedef struct Component{
     ref(Component)  CallerComp;/* Calling component           */ 
     long            CallerLSC; /* Local sequence counter in
 				  calling object              */ 
-    /*long            SPx;       /* SP before Att               */
-    /*long            SPy;       /* SP of last long in Att-frame*/
-    /*long            level;     /* to be used for real conc    */
-    /*long            dummy;     /* MUST be 8-byte aligned      */
-    long            Body[1];   /* The body part               */ 
+    /*long            SPx;       SP before Att               */
+    /*long            SPy;       SP of last long in Att-frame*/
+    /* long            level;    to be used for real conc    */
+    /* long            dummy;    MUST be 8-byte aligned      */
+    long            Body[1];    /* The body part               */ 
 } Component;
 
 struct Component * ActiveComponent = 0;
@@ -254,7 +249,7 @@ long AllocHeap(int size) {
    /* the following is to experiment with ChkRA: by redefining
     * _IOA, the oldest objects becomes logically outside _IOA
     */
-   if ((heapTop > 1000) && (heapTop < 2000)) { _IOA= &heap[heapTop]; }
+   if ((heapTop > 1000) && (heapTop < 2000)) { _IOA= (long)&heap[heapTop]; }
 
    for (i=0; i<size; i++) ((long *)start)[i]=0;
    if (heapTop > heapMax) FatalErr(1);
@@ -366,7 +361,7 @@ long * AlloSO(long size) {
 long AlloC(int origin, long *proto, long SP) {
    struct Component *start;
    start = (struct Component*)AllocHeap(6);
-   start->Proto = -1;
+   start->Proto = (struct ProtoType *) -1;
    start->GCAttr = 0;
    AlloI(origin,proto,SP); /* and AlloI does allignment */
    /* the following initializations will only happen for dynamically
@@ -378,7 +373,7 @@ long AlloC(int origin, long *proto, long SP) {
    start->CallerComp = 0;
    start->CallerLSC = proto[-1];
    */
-   return start;
+   return (long) start;
  }
 
 int AlloS(long origin, long proto) {
@@ -642,7 +637,7 @@ long CopyCPP(long *struc, long *dummy)
 
   if (struc[0] != -3) printf("\n*** CopyCPP: illegal struc parameter\n");
   entry= ((long *)struc[3])[5];
-  start = &CallBack[cbTop];
+  start = (long)&CallBack[cbTop];
   TRACE_CB(printf("CopyCPP: entry=0x%x, start=0x%x\n",entry,start);)
 
 #ifdef PPC
@@ -660,7 +655,7 @@ long CopyCPP(long *struc, long *dummy)
    */
 
   CallBack[cbTop] = (long)struc;
-  CallBack[cbTop+1] = &CallBack[cbTop+3];
+  CallBack[cbTop+1] = (long)&CallBack[cbTop+3];
   CallBack[cbTop+2] = 0;
   CallBack[cbTop+3] = 0x3c000000 | (12 << 21) | (entry >> 16);
   CallBack[cbTop+4] = 0x3c000000 | (24 << 21) | (start >> 16);
@@ -708,7 +703,7 @@ long CopyCPP(long *struc, long *dummy)
 /* NOT in official betarun */
 long AlloSICB(long *CallBackPtr,long SP){
    long start;
-   start = AlloSI(0,CallBackPtr[0],SP);  
+   start = (long)AlloSI(0,(long *)CallBackPtr[0],SP);  
    return start;
  }
 
@@ -808,7 +803,7 @@ long * CopyT(char *txt, long *obj, long off){
    };
     
    obj[off] = repObj;
-   /*obj[2] = topObj; /* origin */
+   /*obj[2] = topObj; /origin */
    return obj;
  }
 
@@ -848,9 +843,7 @@ void CopySRR(long *src, long *dst, int off, int first, int last, int sp){
    CopySVR(src,dst,off,first,last,sp);
 }
 
-void HandleIndexErr(){
- FatalErr(2);
- }
+/* void HandleIndexErr(){FatalErr(2)} */
 
 long ThisS(long *this)
 { TRACE_CB(printf("ThisS: origin = 0x%x proto =0x%x\n", this[2],this[0])) 
@@ -934,7 +927,7 @@ long *dyn(long * obj, long SP, long LSC) {
      SPxGlobalTop = SPxGlobalTop - 1;
 
      LSCglobal = callerComp->CallerLSC;
-     return ((struct Component *)obj)->CallerObj;
+     return (long *)((struct Component *)obj)->CallerObj;
    }
    if (isTop(proto)) { PL = 1; }
    else { 
@@ -971,7 +964,7 @@ long findMentry(long *proto, long PC)
          minPC = PCdist;
          theMentry = mEntry;
       };
-      proto = super(proto);
+      proto = (long *)super(proto);
    };   
    TRACE3(printf("findMentry3 min:0x%x\n",theMentry))
    return theMentry;
@@ -1002,11 +995,11 @@ long *dyn2(long * obj, long SP, long LSC) {
      SPxGlobalTop = SPxGlobalTop - 1;
 
      LSCglobal = callerComp->CallerLSC;
-     return ((struct Component *)obj)->CallerObj;
+     return (long *)((struct Component *)obj)->CallerObj;
    }
    if (proto == (long *) -9) {
       TRACE3(printf("DoPart object\n"))
-	  obj = ((long *)obj)[2]; /* get the real object via origin */
+	  obj = (long *)((long *)obj)[2]; /* get the real object via origin */
 	  proto = (long *)obj[0];
    }
    codeStart = (long *) findMentry(proto,LSC);
@@ -1051,12 +1044,18 @@ long ExO(long jumpAdr,long * exitObj, long PC, long * this, long SP) {
   return SPx;
 }
 
+int fatal=0;
 void printCompStack(long * SPz, long dummy, long SPsize)
 { int i;
- TRACE_COMP(for (i=0; i < (SPsize / 4)+4; i++) {
+ TRACE_COMP(for (i=0; i < 16 /*(SPsize / 4)+4*/; i++) {
 		     printf("StackElm: %i: &SPz[i]= 0x%x, SPz[i]=0x%x\n"
-		    ,i*4, &((long *)SPz)[i],((long *)SPz)[i]);} )
- 
+		    ,i*4, &((long *)SPz)[i],((long *)SPz)[i]);}
+		    )
+ if (fatal){
+			for (i=0; i < (SPsize / 4)+4; i++) {
+		     printf("StackElm: %i: &SPz[i]= 0x%x, SPz[i]=0x%x\n"
+		    ,i*4, &((long *)SPz)[i],((long *)SPz)[i]);} 
+ }
 }
 
 void terminate()
@@ -1067,7 +1066,7 @@ void terminate()
   SPx = SPxStack[SPtop];
   SPtop = SPtop - 1;
   ActiveComponent->CallerLSC = -1;
-  callerObj = ActiveComponent->CallerObj;
+  callerObj = (struct object *)ActiveComponent->CallerObj;
   ActiveComponent = ActiveComponent->CallerComp;
   callingRA = (EntryPoint) ActiveComponent->CallerLSC;
   
@@ -1081,13 +1080,13 @@ void terminate()
 
 /* NO RA and SPx in official betarun */
 void Att(ref(Object) this, struct Component * comp, long RA, long SPx)
-{ long first;
+{ long first,inside,SPZ0,oldSPZ0;
   long * compObj;
   long * compProto;
   void (* compAdr)(long a0,long * a1);
   long SPy,SPz,SPsize,sp,spLoc;
-  int isFirst,i;
-  long * sObj, * topObj;
+  int isFirst,i,n;
+  long * sObj=0, * topObj;
 
   SPy = GetSP();
   if (ActiveComponent != 0) {
@@ -1100,7 +1099,7 @@ void Att(ref(Object) this, struct Component * comp, long RA, long SPx)
 	 ,(long)comp,(long)this,SPx,SPy,RA))
   /* dumpObj("Attach comp",comp); */
    
-  topObj = comp->CallerObj; 
+  topObj = (long *)comp->CallerObj; 
   compAdr = (void (*)(long,long *)) comp->CallerLSC;
   TRACE_COMP(printf("\ncompAdr=0x%x\n",compAdr))
   if ((long)compAdr == -1) FatalErr(4); 
@@ -1113,43 +1112,7 @@ void Att(ref(Object) this, struct Component * comp, long RA, long SPx)
   compProto =  (long *) compObj[0];
   TRACE_COMP(printf("\nCompProto=0x%x\n",compProto))
   
- 
-  if (isFirst) { 
-     compAdr = theTopEntry(compProto);
-     TRACE_COMP(printf("First: compAdr=0x%x\n",compAdr))
-      topObj = compObj;
-   } else {
-     /* pack current component to stack object */
-     sObj = comp->StackObj;
-     dumpObj("Attach stackObj",sObj);
-     SPsize = ((long *)sObj)[2];
-
-     SPz = SPy - SPsize; 
-     TRACE_COMP(printf("UnPack: SPz=0x%x, SPy=0x%x, SPsize=%i\n",SPz,SPy,SPsize);)
-     /* Unpack Stack Object. 
-      * NOTE: after unpacking the stack object you CANNOT call other 
-      * C-functions since this will DESTROY the stack!
-      */
-     for (i=0; i < (SPsize / 4); i++) {
-         ((long *)SPz)[0+i] = sObj[3 + i];
-   }	
-#ifdef  PPC
-   /* on PPC the stack contains SP pointers that links stack segments;
-    * these have been made relative, since the stack may be unpacked
-    * at another place in memory
-    */
-   spLoc = 0; sp = ((long *)SPz)[spLoc];
-   ((long *) SPz)[spLoc] = SPz + sp;
-	
-   while (sp < SPsize) {
-	 spLoc = sp;
-	 sp = ((long *)SPz)[sp / 4];
-	 ((long *) SPz)[spLoc / 4] = SPz + ((long *) SPz)[spLoc / 4] ;
-    }
-#endif
-   /* DONT do this! Will DESTROY stack: printCompStack(SPz,0,SPsize);*/
-  }
-  
+   
   /* if (ActiveComponent != 0) ActiveComponent->StackObj =  -1; */
   
   comp->CallerComp = ActiveComponent;
@@ -1158,17 +1121,86 @@ void Att(ref(Object) this, struct Component * comp, long RA, long SPx)
   
   ActiveComponent = comp;
 
-   /* Execute comp.
-    * 1st call starts at M111FOO; a0=dummy, a1=ca; i.e a0 is not used
-    * in this situation, since M111FOO adjusts SP as usual.
-    * Subsequent calls after Attach; a0=SPz, a1=ca;
-    */
+  if (isFirst) { 
+     compAdr = theTopEntry(compProto);
+     TRACE_COMP(printf("First: compAdr=0x%x\n",compAdr))
+     topObj = compObj;
 
-  /* compAdr(SPz,topObj,SPsize);*/
-  if (isFirst)
-    { CallB(0,topObj,compAdr,SPz); }
-  else
-    compAdr(SPz,topObj);
+     /* Execute comp.
+      * 1st call starts at M111FOO; a0=dummy, a1=ca; i.e a0 is not used
+      * in this situation, since M111FOO adjusts SP as usual.
+      * Subsequent calls after Attach; a0=SPz, a1=ca;
+      * compAdr(SPz,topObj,SPsize);
+      */ 
+     CallB(0,topObj,compAdr,SPz);
+   } else {
+     /* pack current component to stack object */
+     sObj = (long *)comp->StackObj;
+     dumpObj("Attach stackObj",sObj);
+     SPsize = ((long *)sObj)[2];
+
+     SPz = SPy - SPsize; 
+     TRACE_COMP(printf("UnPack: SPz=0x%x, SPy=0x%x, SPsize=%i\n",SPz,SPy,SPsize);)
+     
+#ifdef PPC
+     /* on PPC the stack contains SP pointers that links stack segments;
+      * these have been made relative, since the stack may be unpacked
+      * at another place in memory
+      */
+     spLoc = 0; 
+     sp = sObj[3 + spLoc];
+     inside=0;
+     sObj[3 + spLoc] = SPz + sp;
+
+     SPZ0 = sObj[3];
+     if ((!isFirst) && ((SPZ0 <= SPz) || (SPy < SPZ0)) ){ 
+        printf("\nIllegal (1) SPz[0] = 0x%x \n",SPZ0);
+	printf("sp = 0x%x, SPz=0x%x, SPy=0x%x, SPsize=%i, spLoc=%i\n"
+	        ,sp,SPz,SPy,SPsize,spLoc);
+        printf("&sObj[0] = 0x%x\n",&sObj[0]);
+	for (i=0; i<6; i++) printf("0x%x ",sObj[i]); printf("\n");
+	fatal = 1;
+	printCompStack(&sObj[3],0,SPsize);
+	FatalErr(6);
+      };
+	   
+      while (sp < SPsize) { inside=1;
+	    spLoc = sp;
+	    sp = sObj[3 + (sp / 4)];
+	    sObj[3 + (spLoc / 4)] = SPz + sObj[3 + (spLoc / 4)] ;
+       }
+#endif
+
+     /* Unpack Stack Object. 
+      * NOTE: after unpacking the stack object you CANNOT call other 
+      * C-functions since this will DESTROY the stack!
+      */
+   /*  n=0;
+     for (i=0; i < (SPsize / 4); i++) {n = n + 1;
+         ((long *)SPz)[0+i] = sObj[3 + i];
+	 SPZ0 = ((long *)SPz)[0];
+         if (SPZ0 != sObj[3])
+	   { printf("\nIllegal (-1) SPz[0] = 0x%x , oldSPZ0 = 0x%x\n",SPZ0,oldSPZ0);
+	     printf("SPz=0x%x, SPy=0x%x, SPsize=%i, n=%i, i=%i\n"
+	        ,SPz,SPy,SPsize,n,i);
+	     printf("&sObj[0] = 0x%x\n",&sObj[0]);
+	     for (i=0; i<6; i++) printf("0x%x ",sObj[i]); printf("\n");
+	     fatal = 1;
+	     printCompStack(&sObj[3],0,SPsize);
+	     FatalErr(6);
+	    };
+	  oldSPZ0= SPZ0;
+     }*/
+     /* DONT do this! Will DESTROY stack: printCompStack(SPz,0,SPsize);*/
+   
+     /* Execute comp.
+      * 1st call starts at M111FOO; a0=dummy, a1=ca; i.e a0 is not used
+      * in this situation, since M111FOO adjusts SP as usual.
+      * Subsequent calls after Attach; a0=SPz, a1=ca;
+      */
+     /* compAdr(SPz,topObj,SPsize);*/
+     doAtt(SPz,topObj,SPsize,&sObj[3],compAdr);
+   }	
 
   /* Since compAdr has executed BETA code, registers may have been destroyed.
    * On SGI this does NOT cause problmes;
@@ -1184,7 +1216,8 @@ void Susp(long * this, long oldSP, long RA, long SPz){
    long first;
    struct Component * returnComp;
    long * callerObj;
-   void (* callingRA)(long SP , long * this);
+   /*void (* callingRA)(long SP , long * this);*/
+   EntryPoint callingRA;
    long SPx, SPy, spLoc, sp;
    int i;
    long * sObj; 
@@ -1195,12 +1228,12 @@ void Susp(long * this, long oldSP, long RA, long SPz){
    SPtop = SPtop - 1;
    
    ActiveComponent->CallerLSC =  RA;
-   callerObj = ActiveComponent->CallerObj;
+   callerObj = (long *)ActiveComponent->CallerObj;
 
    returnComp = (struct Component*) ActiveComponent->CallerComp;   
-   callingRA = returnComp->CallerLSC;
+   callingRA = (EntryPoint)returnComp->CallerLSC;
   
-   ActiveComponent->CallerObj = this;
+   ActiveComponent->CallerObj = (struct Object *)this;
   
    /* pack stack SPz - SPy to  activeCompSP*/
    sObj = AlloSO(SPy - SPz);
@@ -1240,7 +1273,7 @@ void Susp(long * this, long oldSP, long RA, long SPz){
    TRACE_COMP(printCompStack(&sObj[3],0,SPy-SPz);)
 
    dumpObj("Suspend stackObj",sObj);
-   ActiveComponent->StackObj = sObj;
+   ActiveComponent->StackObj = (struct StackObject *)sObj;
    dumpObj("Suspend active", (long *)ActiveComponent);
    /* return to returnComp at RA */
 
@@ -1335,7 +1368,7 @@ void main(long argc, char *argv[])
 
   BETA_main();
   ActiveComponent = (struct Component *)AlloC(0,T1BETAENVadr,GetSP());
-  topObj = ActiveComponent->Body;
+  topObj = (long) ActiveComponent->Body;
 
   M1BETAENV = theTopEntry(T1BETAENVadr);
   CallB(0,topObj,M1BETAENV,0);
@@ -1347,7 +1380,7 @@ void AttBC(){}
 
 void BetaExit(){}
 void FailureExit(){}
-void DoGC(){}
+/*void DoGC(){}*/
 
 void PrintBetaStack(long *this, long SP, long LSC) {
   long *a;

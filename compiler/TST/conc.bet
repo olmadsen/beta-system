@@ -1,0 +1,82 @@
+origin 'tstenv' 
+---lib:attributes---
+systemenv:
+  (# csys:
+       (* 24+O:  item-proto
+        * 24+4:  gc-felt
+        * 24+8:  origin
+        * 24+12: returnLink
+        * 24+16: returnAdr
+        * 24+20: savedOrigin
+        * 24+24: savedReturn1
+        * 24+28: savedReturn2
+        * 24+32: savedSize
+        * 24+36: TentryPoint
+        *)
+       (# savedOrigin: ^object;
+          savedReturn1,savedReturn2: @integer;
+          savedSize,TentryPoint: @integer;
+          id: @integer;
+       do INNER
+       #);
+
+     SetupVirtualTimer: external
+       (# n: @integer
+       enter n
+       #);
+     semaphore:
+       (# P: (# #);
+          V: (# #);
+       #);
+     SQS: @
+       (# Q: [10] ^| csys; top: @ integer;
+          m: @semaphore;
+          insert:
+            (# S: ^| csys
+            enter S[]
+            do m.P;
+               (if (top + 1 -> top) > Q.range then Q.range -> Q.extend if);
+               S[] -> Q[top][];
+               m.v;
+            #);
+          next: @
+            (# ix: @integer
+            do  (ix mod top) + 1 -> ix; ix->putint; newline
+            exit Q[ix][]
+            #);
+       #);
+     fork: (# S: ^| csys enter S[] do S[] -> SQS.insert #);
+     scheduler: @ |
+       (# active: ^| csys
+       do 100000 -> SetUpVirtualTimer;
+          L: (# 
+             do SQS.next -> active[];
+                active;
+                restart L
+             #)
+       #);
+     main:< csys;
+  do &|main[] -> fork;
+     scheduler
+  #)
+---program:descriptor---
+(#  eat:
+     (# n: @integer
+     enter n
+     do (if N > 0 then n-1 -> eat if)
+     #)
+do
+   systemenv
+   (# S1: @ | csys(# do (for i: 1000 repeat '.'->put; 1000->eat for); ')'->put; #);
+      S2: @ | csys(# do (for i: 1000 repeat ','->put; 1000->eat for); ']' -> put; #); 
+      main:: 
+        (#
+        do '!'->put;
+           S1[] -> fork;
+           S2[] -> fork;
+           L: (#do  '*'->put; suspend; restart L #)
+        #)
+   #)
+#)
+
+
