@@ -882,4 +882,89 @@ char *getLabel (long addr)
 /************************* End Label Debug *************************/
 
 
+/************************* DescribeObject: *************************/
+
+void DescribeObject(Object *theObj)
+{
+  ProtoType * theProto;
+
+  if (!theObj){
+    fprintf(output, "[NONE]");
+    return;
+  }
+  theProto = theObj->Proto;
+  if (isSpecialProtoType(theProto)){
+    switch (SwitchProto(theProto)){
+    case SwitchProto(ComponentPTValue):
+      fprintf(output, "Component: ");
+      DescribeObject((Object *)((Component *)theObj)->Body);
+      PrintWhichHeap(theObj);
+      return;
+    case SwitchProto(StackObjectPTValue):
+      fprintf(output, "StackObj");
+      PrintWhichHeap(theObj);
+      return;
+    case SwitchProto(StructurePTValue):
+      fprintf(output, 
+	      "Struc: origin: 0x%x \"%s\", proto: 0x%x \"%s\"", 
+	      (int)(((Structure *)theObj)->iOrigin),
+	      ProtoTypeName((((Structure *)theObj)->iOrigin)->Proto),
+	      (int)(((Structure *)theObj)->iProto),
+	      ProtoTypeName(((Structure *)theObj)->iProto)
+	      );
+      PrintWhichHeap(theObj);
+      return;
+    case SwitchProto(DopartObjectPTValue):
+      fprintf(output, 
+	      "Dopart: origin: 0x%x, proto: 0x%x (%s)", 
+	      (int)(((DopartObject *)theObj)->Origin),
+	      (int)(((DopartObject *)theObj)->Origin)->Proto,
+	      ProtoTypeName((((DopartObject *)theObj)->Origin)->Proto)
+	      );
+      PrintWhichHeap(theObj);
+      return;
+    case SwitchProto(DynItemRepPTValue):
+    case SwitchProto(DynCompRepPTValue):
+      fprintf(output, "ObjectRep"); 
+      PrintWhichHeap(theObj);
+      return;
+    case SwitchProto(RefRepPTValue):
+      fprintf(output, "RefRep"); 
+      PrintWhichHeap(theObj);
+      return;
+    case SwitchProto(LongRepPTValue):
+      fprintf(output, "IntegerRep"); 
+      PrintWhichHeap(theObj);
+      return;
+    case SwitchProto(ByteRepPTValue):
+      fprintf(output, "CharRep: '");
+      if ( ((((ValRep *)theObj)->HighBorder)-(((ValRep *)theObj)->LowBorder)+1) > 10 ){
+	fprintf(output, "%s", (char *)((ValRep *)theObj)->Body);
+	fprintf(output, "...'");
+      } else {
+	fprintf(output, "%s", (char *)((ValRep *)theObj)->Body);
+	fprintf(output, "'");
+      }
+      PrintWhichHeap(theObj);
+      return;
+    case SwitchProto(ShortRepPTValue):
+      fprintf(output, "ShortRep");
+      PrintWhichHeap(theObj);
+      return;
+    case SwitchProto(DoubleRepPTValue):
+      fprintf(output, "RealRep");
+      PrintWhichHeap(theObj);
+      return;
+    default:
+      fprintf(output, "Unknown special prototype!");
+      return;
+    }
+  } else {
+    /* ordinary object */
+    fprintf(output, "\"%s\" <%s>", 
+	    ProtoTypeName(theProto), getLabel((long)theProto));
+    PrintWhichHeap(theObj);
+  }
+}
+
 #endif /* RTDEBUG */

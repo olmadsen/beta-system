@@ -219,6 +219,7 @@ typedef struct _group_header
 } group_header;
 
 typedef void (*CellProcessFunc)(Object **theCell,Object *theObj);
+typedef void (*CellDisplayFunc)(long PC, Object *theObj);
 
 typedef struct _labeltable {
   FILE *fd;            /* The file descriptor from which the nameTable is read */

@@ -49,8 +49,7 @@
 #include "heap.h"
 #include "registers.h"
 #include "macro.h"
-#include "function.h"
-#include "data.h"
+
 
 #ifdef sparc
 #include "sparcdep.h"
@@ -59,5 +58,8 @@
 #ifdef hppa
 #include "snakedep.h"
 #endif
+
+#include "function.h"
+#include "data.h"
 
 #endif /* _BETA_H_ */

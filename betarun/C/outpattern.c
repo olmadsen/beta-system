@@ -22,6 +22,8 @@ static char NotifyMessage[500] = { 0 /* rest is uninitialized */};
 GLOBAL(static int basic_dumped)=0;
 GLOBAL(static int isMakingDump)=0;
 
+/******************************* M_Part: *****************************/
+
 long M_Part(ProtoType * proto)
      /* Return the address og of the M-entry for the prototype proto.
       *
@@ -48,6 +50,8 @@ long M_Part(ProtoType * proto)
   }
 
 }
+
+/***************************** machine_type: **************************/
 
 char *machine_type(void)
 {
@@ -97,6 +101,14 @@ return MACHINE_TYPE;
 
 #undef MACHINE_TYPE
 
+}
+
+
+/********************** DisplayCell: ********************/
+
+static void DisplayCell(long PC, Object *theObj)
+{
+  DisplayObject(output, theObj, PC);
 }
 
 /************************* ProtoTypeName **********************/
@@ -451,12 +463,64 @@ void DisplayObject(FILE   *output, /* Where to dump object */
 }
 
 
+/************************* Begin HPPA ****************************/
+#ifdef hppa
+
+void DisplayHPPAStack(long *thePC) 
+{
+#ifdef UseRefStack
+  /*
+   * The ReferenceStack way of tracing the Beta stack.
+   */
+  Object **theCell = /*getRefSP()*/ (Object **)(RefSP-1);
+  Object *theObj;
+  long   *PC=thePC;
+  
+  while((void **)theCell > &ReferenceStack[0]) {
+    if ((*theCell)==(Object *)ExternalMarker){
+      TRACE_DUMP(fprintf(output, "  cb: "));
+      fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
+    } else if (!isLazyRef(*theCell) && (unsigned)*theCell & 1) {
+      /* The reference is tagged: Should appear in beta.dump */
+      theObj = (Object *)((unsigned)*theCell & ~1);
+      PC = 0; /* No way to tell the PC ?? */
+#if 0 /* not yet */
+#ifdef RTVALHALLA
+      theCell--;
+      PC = (long *)*theCell
+#endif
+#endif
+	if(theObj && isObject(theObj)) {
+	  /* Check if theObj is inlined in a component */
+	  if (!isComponent(theObj) && IsComponentItem(theObj)) {
+	    DisplayObject(output, 
+			  (Object *)EnclosingComponent(theObj), 
+			  (long)PC);
+	    if (theObj==(Object *)BasicItem) break;
+	  } else {
+	    DisplayObject(output, theObj, (long)PC);
+	  }
+	} else {
+	  if (theObj) fprintf(output, "  [Damaged object!: %x]\n", (int)theObj);
+	}
+    }
+    theCell--;
+  }
+  fflush(output);
+#else
+#error DisplayHPPAStack not implemented
+#endif /* UseRefStack */
+}
+
+#endif /* hppa */
+/*************************** End HPPA ****************************/
+
 /*************************** Begin NEWRUN ***************************/
 #ifdef NEWRUN
 /*
  * This is the NEWRUN specifics of DisplayBetaStack
  */
-static void DumpCell(Object **theCell,Object *theObj)
+static void DumpCell(Object **theCell, Object *theObj)
 { 
   register long PC=-1;
   long *SP;
@@ -572,33 +636,37 @@ void DisplayNEWRUNStack(long *PC)
 /* Traverse the StackArea [low..high] and Process all references within it. 
  * Stop when theComp is reached.
  */
-static void DisplayStackPart(FILE *output, 
-			     long *low, 
-			     long *high,
-			     Component *theComp)
+
+void DisplayStackPart(long *low, 
+		      long *high,
+		      Component *theComp,
+		      CellDisplayFunc func)
 {
-  long * current = low;
-  Object * theObj;
-  Object ** theCell;
-  long retAddr=0;
+  long    *current = low;
+  Object  *theObj;
+  Object **theCell;
+  long     retAddr=0;
 
   TRACE_DUMP(fprintf(output, ">>>TraceDump: StackPart [0x%x..0x%x]\n", (int)low, (int)high));
-  while( current <= high ){
+  while (current<=high){
     retAddr=0;
-    if( inBetaHeap( (Object *)(*current))){
+    if(inBetaHeap((Object *)(*current))){
       theCell = (Object **) current;
       theObj  = *theCell;
-      if( inIOA(theObj) || inAOA(theObj) ){
-	if( isObject( theObj) && NotInHeap(*(current+1))){
+      if (inIOA(theObj)||inAOA(theObj)){
+	if (isObject(theObj) 
+	    /* && NotInHeap(*(current+1)) 
+	     * NIX, INNER chains pushes PC's subsequently
+	     */){
 	  if (theComp && (Object *)theComp->Body==theObj){
 	    retAddr=*(current+1); /* pc of theComp, when it was left */
 	    break;
 	  }
 	}
-	DisplayObject(output, theObj, (long) *(current+1));
+	func((long)*(current+1), theObj);
       }
     }else{
-      switch( *current){
+      switch (*current){
       case -8: current++;
       case -7: current++;
       case -6: current++;
@@ -609,11 +677,8 @@ static void DisplayStackPart(FILE *output,
     current++;
   }
   if (theComp){
-    DisplayObject( output, (Object *) theComp, retAddr);
-    /* Make an empty line after the component */
-    fprintf( output, "\n");
+    func(retAddr, theComp);
   }
-  fflush(output);
 }
 
 void DisplayINTELStack(BetaErr errorNumber, 
@@ -651,7 +716,7 @@ void DisplayINTELStack(BetaErr errorNumber,
 
   /* Follow the stack */
   while (cbFrame) {
-    DisplayStackPart(output, lowAddr, (long *)cbFrame-2, 0);
+    DisplayStackPart(lowAddr, (long *)cbFrame-2, 0, DisplayCell);
     /* -2 because 2 longs are not shown:
      *    1. The last of the three pushed words in the callback frame
      *    2. The address of the call back stub.
@@ -672,17 +737,18 @@ void DisplayINTELStack(BetaErr errorNumber,
     }
     lowAddr += 2;
   }
-  
+
   /* Displays the objects from the last callback was initiated
    * (if any) and onwards to the ComponentBlock.
    */
-  DisplayStackPart(output, lowAddr, highAddr-3, currentComponent);  
+  DisplayStackPart(lowAddr, highAddr-3, currentComponent, DisplayCell);  
   /* -3 because 3 longs are not shown: 
    *    1. The last of the three pushed words in the comp block
    *    2. The address of the M-part for the component.
    *    3. The current object saved by the M-part.
    */
-  
+  /* Make an empty line after the component */
+  fprintf( output, "\n");
   fflush( output);
   
   /*
@@ -712,7 +778,7 @@ void DisplayINTELStack(BetaErr errorNumber,
 
     /* Display callbackframes in the component */
     while (cbFrame) {
-      DisplayStackPart(output, lowAddr, (long *)cbFrame-2, 0);
+      DisplayStackPart(lowAddr, (long *)cbFrame-2, 0, DisplayCell);
       /* -2 because 2 longs are not shown:
        *    1. The last of the three pushed words in the callback frame
        *    2. The address of the call back stub.
@@ -737,13 +803,16 @@ void DisplayINTELStack(BetaErr errorNumber,
     /* Displays the objects from the last callback was initiated
      * (if any) and onwards to the ComponentBlock.
      */
-    DisplayStackPart(output, lowAddr, highAddr-3, currentComponent); 
+    DisplayStackPart(lowAddr, highAddr-3, currentComponent, DisplayCell); 
     /* -3 because:
      *  3 longs are not shown: 
      *    1. The last of the three pushed words in the comp block
      *    2. The address of the M-part for the component.
      *    3. The current object saved by the M-part.
      */
+    /* Make an empty line after the component */
+    fprintf( output, "\n");
+    fflush( output);
     currentBlock = currentBlock->next;
     currentObject    = currentComponent->CallerObj;
     retAddr          = currentComponent->CallerLSC;
@@ -760,7 +829,7 @@ void DisplayINTELStack(BetaErr errorNumber,
  * This is the SPARC specifics of DisplayBetaStack
  */
 
-void DisplayAR(FILE *output, RegWin *theAR, long PC)
+void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func)
 {
   Object *lastObj /* used for last successfully identified object */;
   long* this, *end;
@@ -787,7 +856,7 @@ void DisplayAR(FILE *output, RegWin *theAR, long PC)
 		(int)lastObj);
       });
     } 
-    DisplayObject(output, lastObj, PC);
+    func(PC, lastObj);
   }
 
   /* Then handle possible pushed PCs (%o7s) in the
@@ -846,13 +915,13 @@ void DisplayAR(FILE *output, RegWin *theAR, long PC)
 		    (int)lastObj);
 	  });
 	} 
-	DisplayObject(output, lastObj, PC);
+	func(PC, lastObj);
 	this+=2; /* Skip the object */
       } else {
 	/* No Object below the code. Display with the previous
 	 * found object.
 	 */
-	DisplayObject(output, lastObj, PC);
+	func(PC, lastObj);
       }
     }
     this+=2;
@@ -971,7 +1040,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
       continue;
     } 
     /* Normal frame */
-    DisplayAR(output, theAR, (long)PC);
+    DisplayAR(theAR, (long)PC, DisplayCell);
   }
   return;
 }
@@ -1019,7 +1088,7 @@ void DisplayCurrentObject(Object *theObj, long *thePC)
   }
 }
 
-/********************** OpenDumpFile ********************/
+/********************** OpenDumpFile: ********************/
 
 #ifdef UNIX
 static int OpenDumpFile(long errorNumber)
@@ -1371,54 +1440,9 @@ int DisplayBetaStack(BetaErr errorNumber,
     return 0;
   }
  
-/************************* Begin HPPA ****************************/
- 
-#if defined(UseRefStack) && !defined(SGI)
-  /*
-   * The ReferenceStack way of tracing the Beta stack.
-   */
-  {
-    Object **theCell = /*getRefSP()*/ (Object **)(RefSP-1);
-    Object *theObj;
-    long   *PC=thePC;
-
-    while((void **)theCell > &ReferenceStack[0]) {
-      if ((*theCell)==(Object *)ExternalMarker){
-	TRACE_DUMP(fprintf(output, "  cb: "));
-	fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
-      } else if (!isLazyRef(*theCell) && (unsigned)*theCell & 1) {
-	/* The reference is tagged: Should appear in beta.dump */
-	theObj = (Object *)((unsigned)*theCell & ~1);
-	PC = 0; /* No way to tell the PC ?? */
-#if 0 /* not yet */
-#ifdef RTVALHALLA
-	theCell--;
-	PC = (long *)*theCell
+#ifdef hppa
+  DisplayHPPAStack();
 #endif
-#endif
-	if(theObj && isObject(theObj)) {
-	  /* Check if theObj is inlined in a component */
-	  if (!isComponent(theObj) && IsComponentItem(theObj)) {
-	    DisplayObject(output, 
-			  (Object *)EnclosingComponent(theObj), 
-			  (long)PC);
-	    if (theObj==(Object *)BasicItem) break;
-	  } else {
-	    DisplayObject(output, theObj, (long)PC);
-	  }
-	} else {
-	  if (theObj) fprintf(output, "  [Damaged object!: %x]\n", (int)theObj);
-	}
-      }
-      theCell--;
-    }
-    
-    fflush(output);
-  }
-#endif
-/************************* End HPPA ****************************/
-
-
 #ifdef NEWRUN
   DisplayNEWRUNStack(thePC);
 #endif
@@ -1477,91 +1501,3 @@ int DisplayBetaStack(BetaErr errorNumber,
   return 0;
 } /* DisplayBetaStack */
 
-
-
-#ifdef RTDEBUG
-
-void DescribeObject(Object *theObj)
-{
-  ProtoType * theProto;
-
-  if (!theObj){
-    fprintf(output, "[NONE]");
-    return;
-  }
-  theProto = theObj->Proto;
-  if (isSpecialProtoType(theProto)){
-    switch (SwitchProto(theProto)){
-    case SwitchProto(ComponentPTValue):
-      fprintf(output, "Component: ");
-      DescribeObject((Object *)((Component *)theObj)->Body);
-      PrintWhichHeap(theObj);
-      return;
-    case SwitchProto(StackObjectPTValue):
-      fprintf(output, "StackObj");
-      PrintWhichHeap(theObj);
-      return;
-    case SwitchProto(StructurePTValue):
-      fprintf(output, 
-	      "Struc: origin: 0x%x \"%s\", proto: 0x%x \"%s\"", 
-	      (int)(((Structure *)theObj)->iOrigin),
-	      ProtoTypeName((((Structure *)theObj)->iOrigin)->Proto),
-	      (int)(((Structure *)theObj)->iProto),
-	      ProtoTypeName(((Structure *)theObj)->iProto)
-	      );
-      PrintWhichHeap(theObj);
-      return;
-    case SwitchProto(DopartObjectPTValue):
-      fprintf(output, 
-	      "Dopart: origin: 0x%x, proto: 0x%x (%s)", 
-	      (int)(((DopartObject *)theObj)->Origin),
-	      (int)(((DopartObject *)theObj)->Origin)->Proto,
-	      ProtoTypeName((((DopartObject *)theObj)->Origin)->Proto)
-	      );
-      PrintWhichHeap(theObj);
-      return;
-    case SwitchProto(DynItemRepPTValue):
-    case SwitchProto(DynCompRepPTValue):
-      fprintf(output, "ObjectRep"); 
-      PrintWhichHeap(theObj);
-      return;
-    case SwitchProto(RefRepPTValue):
-      fprintf(output, "RefRep"); 
-      PrintWhichHeap(theObj);
-      return;
-    case SwitchProto(LongRepPTValue):
-      fprintf(output, "IntegerRep"); 
-      PrintWhichHeap(theObj);
-      return;
-    case SwitchProto(ByteRepPTValue):
-      fprintf(output, "CharRep: '");
-      if ( ((((ValRep *)theObj)->HighBorder)-(((ValRep *)theObj)->LowBorder)+1) > 10 ){
-	fprintf(output, "%s", (char *)((ValRep *)theObj)->Body);
-	fprintf(output, "...'");
-      } else {
-	fprintf(output, "%s", (char *)((ValRep *)theObj)->Body);
-	fprintf(output, "'");
-      }
-      PrintWhichHeap(theObj);
-      return;
-    case SwitchProto(ShortRepPTValue):
-      fprintf(output, "ShortRep");
-      PrintWhichHeap(theObj);
-      return;
-    case SwitchProto(DoubleRepPTValue):
-      fprintf(output, "RealRep");
-      PrintWhichHeap(theObj);
-      return;
-    default:
-      fprintf(output, "Unknown special prototype!");
-      return;
-    }
-  } else {
-    /* ordinary object */
-    fprintf(output, "\"%s\" <%s>", 
-	    ProtoTypeName(theProto), getLabel((long)theProto));
-    PrintWhichHeap(theObj);
-  }
-}
-
-#endif /* RT_DEBUG */

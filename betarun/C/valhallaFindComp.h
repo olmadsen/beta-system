@@ -22,12 +22,6 @@
  *
  * If returnObj==0, this is a C return address. */
 
-typedef void (*forEachCallType) (int,int);
-/* int returnAdr;  Return address 
- * int returnObj;  Current object corresponding to returnAdr.
- *                 If returnObj==0, this is a C return address. */
-
-
 
 /* scanComponentStack
  * ==================
@@ -43,7 +37,7 @@ typedef void (*forEachCallType) (int,int);
 int scanComponentStack (Component* comp, 
 			Object *curObj,
 			int PC,
-			forEachCallType forEach);
+			CellDisplayFunc forEach);
 
 #endif /* VALHALLA_FINDCOMP_H */
 #endif /* RTVALHALLA */

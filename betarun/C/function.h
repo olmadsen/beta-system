@@ -56,13 +56,14 @@ extern char *ProtoTypeName(ProtoType *theProto);
 extern long M_Part(ProtoType * proto);
 extern void  DisplayObject(FILE *,Object *,long);
 extern int  DisplayBetaStack(BetaErr, Object *, long *, long);
-#ifdef RTDEBUG
-extern void DescribeObject(Object *);
-extern void DescribeProto(ProtoType * theProto);
-
+#ifdef sparc
+extern void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func);
+#endif
+#ifdef intel
+extern void DisplayStackPart(long *low, long *high, Component *theComp, CellDisplayFunc func);
 #endif
 #ifdef NEWRUN
-extern unsigned long        CodeEntry(ProtoType *theProto, long PC);
+extern unsigned long CodeEntry(ProtoType *theProto, long PC);
 #endif
 
 /* C/group.c */
@@ -248,6 +249,7 @@ extern long labelOffset;
 extern void PrintRef(Object *ref);
 extern void PrintProto(ProtoType *proto);
 extern void PrintCodeAddress(long addr);
+extern void DescribeObject(Object *);
 #endif /* RTDEBUG */
 extern long inBetaHeap(Object *);
 #if defined(MAC)

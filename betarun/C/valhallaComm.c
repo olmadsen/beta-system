@@ -410,13 +410,18 @@ void valhallaInit (int debug_valhalla)
  *    0: CONTINUE.
  *    1: TERMINATE. */
 
-void forEachStackEntry (int returnAdr, int returnObj)
+void HandleStackCell(long returnAdr, Object *returnObj)
 /* Used by VOP_SCANSTACK */
 {
   DEBUG_VALHALLA (fprintf(output,"debuggee: forEachStackEntry \n"));  
-  valhalla_writeint (returnAdr);
-  valhalla_writeint (returnObj);
-  DEBUG_VALHALLA(fprintf(output,"debuggee: forEachStackEntry: returnAdr=%d, returnObj=%d\n",returnAdr,returnObj));
+  valhalla_writeint ((int)returnAdr);
+  valhalla_writeint ((int)returnObj);
+  DEBUG_VALHALLA({
+    fprintf(output,
+	    "debuggee: forEachStackEntry: returnAdr=%d, returnObj=%d\n",
+	    (int)returnAdr,
+	    (int)returnObj);
+  });
 }
 
 extern void Return ();
@@ -648,7 +653,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       DEBUG_VALHALLA(fprintf (output,"debuggee: Received component: %d, pt = %d\n",(int)comp, (int) comp->Proto));
       
       DEBUG_VALHALLA(fprintf (output,"debuggee: Scanning ComponentStack.\n"));
-      stacktype=scanComponentStack (comp,curObj,PC,forEachStackEntry);
+      stacktype=scanComponentStack (comp,curObj,PC,HandleStackCell);
       DEBUG_VALHALLA(fprintf (output,"debuggee: ScanComponentStack done.\n"));
       
       valhalla_writeint (-1);
