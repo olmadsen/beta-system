@@ -1,109 +1,90 @@
-#!/bin/sh
+#!/usr/local/bin/perl5
+#-*-Perl-*-
 
-# ONLY TO BE USED ON UNIX
+$betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
+$betalib =~ s#\\#/#g;
+$dirs=require "$betalib/bin/admin/dirlist";
 
-echo $0: Not up to date
-echo $0: Do not use
-exit 1
+$|=1;
 
+print "This script will CVS-tag each repository in $RELEASE.\n";
 
+print "Are you sure that you want to do this (no/yes)? ";
 
-#------- configuration --------
+$yes = <STDIN>;
+chop $yes;
+exit if ($yes ne 'yes');
 
-TAG=r4_0_lazy_fixed
-RELEASE=4.0
+print "Really sure? ";
+$yes = <STDIN>;
+chop $yes;
+exit if ($yes ne 'yes');
 
-MODULES="\
-Xt \
-basiclib \
-betaast \
-bifrost \
-containers \
-configuration \
-threads \
-datastructures \
-valhalla \
-betademo \
-tutorial \
-dependency \
-designenv \
-distribution \
-editor \
-emacs \
-freja \
-gpp \
-guienv \
-interfacebuilder \
-man \
-meta \
-mps \
-objectbrowser \
-objectserver \
-persistentstore \
-pretty \
-prettygen \
-process \
-system \
-sysutils \
-sourcebrowser \
-unixlib \
-betawc \
-betatar \
-betafs \
-maclib \
-win32lib \
-"
+print "Use a common tag for all repositories (yes/no)? ";
+$onetag = <STDIN>;
+chop $onetag;
 
-
-# not under CVS:
-#   bobs
-#   bobsgen
-#   contrib/changed
-#   contrib/futures
-#   contrib/gleipner
-#   contrib/invariant
-#   contrib/rbeta
-#   contrib/tcs
-#   designlib
-
-
-#---------- don't change below -------
-
-echonl(){
-  if [ -f /usr/bin/sun ]; 
-  then 
-    echo -n "$1"
-  else
-    echo "$1\c"
-  fi
+($defaulttag = $RELEASE . "a") =~ s/\./\_/g;
+if ($onetag ne "no"){
+    print "\nTag to use (default \"$defaulttag\"): ";
+    $read = <STDIN>;
+    chop $read;
+    if ($read eq ""){ 
+	$newtag = $defaulttag;
+    } else {
+	$newtag = $read; 
+    }
+} else {
+    print "\nPrefix to use in tags (default \"$defaulttag\"): ";
+    $read = <STDIN>;
+    chop $read;
+    if ($read eq ""){ 
+	$tagprefix = $defaulttag;
+    } else {
+	$tagprefix = $read; 
+    }
 }
 
-echo ""
-echo   "This script will mark all the following CVS modules in release $RELEASE"
-echo   "with the tag $TAG (using 'cvs rtag $TAG <module>')."
-echo   ""
-
-for d in $MODULES
-do
-	echo $d
-done
-
-echo ""
-
-echonl   "Are you sure that you want to tag all these modules ? (no/yes)"
-read answer
-if [ "$answer" != "yes" ]; then  exit 0; fi
-
-echo ""
-echonl "Really sure? (no/yes) "
-read answer
-if [ "$answer" != "yes" ]; then  exit 0; fi
-
-for module in $MODULES
-do
-	echo --------- Tagging $module ---------
-	cvs rtag $TAG $module
-done
-
-echo ""
-echo $0 COMPLETE
+foreach $dir (split ' ', $dirs) {
+    if ($CvsTags{$dir} =~ /^\%(\S+)/) {
+	next if ($1 eq 'IGNORE');
+	next if ($1 eq 'NONCVS');
+	print "  [Unknown '%'-tag in CvsTag: \"$1\", skipping $dir]\n";
+	next;
+    }
+    ($cvsmodule, $tag) = split(/\@/,$CvsTags{$dir});
+    if ($cvsmodule =~ /\w+\/\w+/){
+	print "  [$cvsmodule is a sub-repository, skipped]\n";
+	next;
+    }
+    if ($doneflag{$cvsmodule}){
+	print "  [$cvsmodule tagged once, skipped]\n";
+	next;
+    }
+    if ($onetag eq "no"){
+	# ask for individual tag
+	$defaulttag = $tagprefix;
+	if ($dir =~ /\/([v|r|\d|\.]+)\/?/) {
+	    $defaulttag .= "_$1";
+	}
+	$defaulttag =~ s/\./\_/g;
+	print "\nTag to use for $cvsmodule (default \"$defaulttag\"): ";
+	$read = <STDIN>;
+	chop $read;
+	if ($read eq ""){ 
+	    $newtag = $defaulttag;
+	} else {
+	    $newtag = $read; 
+	}
+    }
+    # construct CVS command
+    if ($tag eq "HEAD"){
+	$cvscmd = "cvs -Q rtag $newtag $cvsmodule";
+    } else {
+	$cvscmd = "cvs -Q rtag -r $tag $newtag $cvsmodule";
+    }
+    print "$cvscmd\n";
+    #system("");
+    #exit(1) if ($?);
+    $doneflag{$cvsmodule}=1;
+}
