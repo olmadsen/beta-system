@@ -54,6 +54,16 @@ public class BetaHelpers
     return result;
   }
 
+  public static void WriteInt8(BinaryWriter bw, sbyte v){
+    // Not really needed, since there is a Write(sbyte)
+    bw.Write(v);
+  }  
+
+  public static sbyte ReadInt8(BinaryReader br){
+    // Not really needed, since there is a ReadSByte()
+    return br.ReadSByte();
+  }  
+
   public static void WriteInt8Array(BinaryWriter bw, sbyte[] R, int range){
     // Needed since int8u (argument type of bw.Write) not implemented in nbeta
     byte[] Rx = new byte[range];
@@ -64,7 +74,7 @@ public class BetaHelpers
   }
 
   public static void ReadInt8Array(BinaryReader br, sbyte[] R, int range){
-    // Needed since int8u (result type of bw.ReadBytes) not implemented in nbeta
+    // Needed since int8u (result type of br.ReadBytes) not implemented in nbeta
     byte[] Rx = br.ReadBytes(range);
     for (int i=0; i<range; i++){
       R[i] = (sbyte)Rx[i];
