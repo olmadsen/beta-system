@@ -82,16 +82,23 @@
 #define UNIX 1
 #endif
 
+#ifdef hpux9mc
+#define UNIX 1
+#endif
+
+#ifdef hpux
+#define UNIX 1
 #ifdef hppa
 #define UseRefStack 1
+#endif
+#endif
+
+#ifdef sparc
+#define UNIX 1
 #endif
 
 #ifdef nti 
 #define intel 1
-#endif
-
-#ifdef hpux
-#  define UNIX 1
 #endif
 
 #ifdef crts

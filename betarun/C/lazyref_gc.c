@@ -31,10 +31,10 @@
 #ifdef INLINE
 #undef INLINE
 #endif
-#if defined(nti) || defined(MAC) || defined(sgi)
+#if defined(nti) || defined(MAC) || defined(sgi) || defined(hpux9mc)
 #define INLINE
 #else
-#define INLINE inline
+#define INLINE static inline
 #endif
 
 /* #define LAZYDEBUG 1 */
@@ -92,7 +92,7 @@ void preLazyGC ()
   /* fprintf (stderr, "preLazyGC done\n"); */
 }
 
-static INLINE int danglerLookup (int* danglers, int low, int high, int dangler)
+INLINE int danglerLookup (int* danglers, int low, int high, int dangler)
 { int mid;
 
   /* fprintf (stderr, "danglerLookup(%d)\n", dangler); */
@@ -120,7 +120,7 @@ int getNextDangler ()
 
 #ifndef AssignReference
 #ifndef CRUN
-static INLINE void AssignReference(long *theCell, ref(Item) newObject)
+INLINE void AssignReference(long *theCell, ref(Item) newObject)
 /* If theCell is in AOA and will now reference an object in IOA, then insert in table */
 {
   *(struct Item **)theCell = newObject;
