@@ -274,18 +274,44 @@ do (# fileName: ^text;
         exit frag[]
         #);
       
+      bodyGroup: ^astInterface.fragmentGroup;
       astFileName: ^text;
       betFileName: ^text;
+      bodyFileName: ^text;
+      bodyAstFileName: ^text;
+      bodyBetFileName: ^text;
       gram: @grammar;
       guienvLocation: (# exit '~beta/guienv/v1.6/guienvall' #);
       iconNameLocation: (# exit '~beta/guienv/v1.6/utils/iconname' #);
       
+      getShortName:
+        (# name: ^text;
+           shortName: ^text;
+           lastDirCharPos: @integer;
+        enter name[]
+        do name.reset;
+           MPS.AST.thePathHandler.directoryChar -> name.find
+           (# 
+           do inx -> lastDirCharPos;
+           #);
+           (if (lastDirCharPos > 0) AND (lastDirCharPos < name.length) then
+               (lastDirCharPos + 1, name.length) -> name.sub
+                 -> shortName[];
+            else
+               name.copy -> shortName[];
+           if);
+        exit shortName[]
+        #);
    do fileCreationDialog -> fileName[];
       (if fileName[] <> NONE then
           fileName[] -> stripExtension;
           '.ast' -> (fileName.copy).append -> astFileName[];
           '.bet' -> (fileName.copy).append -> betFileName[];
-          (if (astFileName[] -> entryExists) OR (betFileName[] -> entryExists) then
+          'body' -> (fileName.copy).append -> bodyFileName[];
+          '.ast' -> (bodyFileName.copy).append -> bodyAstFileName[];
+          '.bet' -> (bodyFileName.copy).append -> bodyBetFileName[];
+          (if (astFileName[] -> entryExists) OR (betFileName[] -> entryExists) OR
+              (bodyAstFileName[] -> entryExists) OR (bodyBetFileName[] -> entryExists) then
               'does already exist' -> putLine;
            else
               fileName[] -> createFragmentGroup -> group[];
@@ -298,14 +324,28 @@ do (# fileName: ^text;
                   (# 
                   do iconNameLocation -> addString;
                   #);
+                  'BODY' -> group.prop.addProp
+                  (# 
+                  do bodyFileName[] -> getShortName -> addString;
+                  #);
                   group.loadIncludes;
                   fragName[] -> MPS.betaCFL.newAttributesFrag -> frag[];
                   frag[] -> group.fragmentList.addFragment;
                   group.markAsChanged;
                   (MPS.AST[], group[], NONE, betFileName[]) -> prettyprintFragment;
-                  fileName[] -> ymerbrowser.appendProject;
-                  ymerbrowser.appendDone;
               if);
+              bodyFileName[] -> createFragmentGroup ->  bodyGroup[];
+              (if bodyGroup[] <> NONE then
+                  'ORIGIN' -> bodyGroup.prop.addProp
+                  (# 
+                  do fileName[] -> getShortName -> addString;
+                  #);
+                  bodyGroup.markAsChanged;
+                  (MPS.AST[], bodyGroup[], NONE, bodyBetFileName[]) -> prettyprintFragment;
+              if);
+              bodyBetFileName[] -> ymerbrowser.appendProject;
+              fileName[] -> ymerbrowser.appendProject;
+              ymerbrowser.appendDone;
           if);
       if);
    #)
@@ -322,6 +362,7 @@ do l:
         fg: ^astInterface.fragmentGroup;
         classes: ^patternList;
         classNames: @textList;
+        gram: @grammar;
      do classNames.init;
         className[] -> classNames.append;
         
@@ -350,10 +391,54 @@ do l:
                            super: ^astInterface.beta.patternDecl;
                         do
                            (frag[], name[], className[]) -> mps.betacfl.newPatternAttribute -> theAttribute[];
+                           (# 
+                              group, bodyGroup: ^astInterface.fragmentGroup;
+                              
+                              bodyName: ^text;
+                              t: @text;
+                              decl: ^astInterface.beta.simpleDecl;
+                              privateFrag, theFragment: ^astinterface.fragmentForm;
+                              privateName: ^text;
+                           do frag.father -> group[];
+                              (if group[] <> NONE then
+                                  l: group.scanBodyGroups
+                                  (# 
+                                  do currentFullPath[] -> bodyName[];
+                                     leave l;
+                                     
+                                  #);
+                                  (if bodyName[] <> NONE then
+                                      bodyName[] -> MPS.AST.safeOpen -> bodyGroup[];
+                                      (if bodyGroup[] <> NONE then
+                                          'private' -> (name.copy).append -> privateName[];
+                                          'private: @<<SLOT ' -> t.append;
+                                          privateName[] -> t.append;
+                                          ': descriptor>>' -> t.append;
+                                          (frag[],  t[], gram.simpleDecl) -> parseText -> decl[];
+                                          (theAttribute[], decl[]) -> MPS.betaCFL.appendAttribute;
+                                          MPS.betaCFL[] -> MPS.AST.newFragmentForm -> privateFrag[];
+                                          privateName[] -> privateFrag.name;
+                                          privateName[] -> bodyGroup.findFragment -> theFragment[];
+                                          (if theFragment[] <> none then
+                                              theFragment[] -> bodyGroup.deleteFragment;
+                                          if);
+                                          privateFrag[] -> bodyGroup.fragmentList.addFragment;
+                                          (privateFrag[], none) 
+                                            -> MPS.betaCFL.newDescriptorForm
+                                            -> privateFrag.root[];
+                                      if);
+                                  if);
+                              if);
+                           #);
+                           
+                           
+                           
                            className[] -> classes.findByName -> super[];
                            (if super[] <> none then
                                (theAttribute[], super[]) -> setSemanticLink;
                            if);
+                           
+                           
                            (if theAttributes.noOfsons = 1 then
                                1 -> theAttributes.get -> son1[];
                                (if son1.kind = mps.ast.kinds.optional then
