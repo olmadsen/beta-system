@@ -34,7 +34,7 @@ static void AssertLock(mutex_t* lock)
 {
   if (mutex_trylock(lock) != EBUSY) {
     fprintf(output, "Does not have required lock!\n");
-    Illegal();
+    ILLEGAL;
   }
 }
 #endif
@@ -240,7 +240,7 @@ void TSDCheck(void)
 		(int)TSDlist[i]->_TSDinx,
 		i,
 		(int)NumTSD);
-	Illegal();
+	ILLEGAL;
       }
 
       /* Check TSDFlags */
@@ -250,7 +250,7 @@ void TSDCheck(void)
 		(int)TSDlist[i]->_TSDFlags,
 		i,
 		(int)Flag_MAX);
-	Illegal();
+	ILLEGAL;
       }
 
       /* Check CTextPoolEnd */
@@ -265,7 +265,7 @@ void TSDCheck(void)
 		"CTextPoolEnd lies in the interval [0x%x..0x%x[\n",
 		(int)&TSDlist[i]->_CTextPool,
 		(int)&TSDlist[i]->_CTextPool[MAXCTEXTPOOL/4]);
-	Illegal();
+	ILLEGAL;
       }
 
       /* Check thread_id. Cannot check against NumTSD, since several
@@ -277,7 +277,7 @@ void TSDCheck(void)
 		"Suspicious thread id %d in TSD[%d]\n", 
 		(int)TSDlist[i]->_thread_id,
 		i);
-	Illegal();
+	ILLEGAL;
       }
 
       /* Check local IOA top and limit */
@@ -288,7 +288,7 @@ void TSDCheck(void)
 		(int)TSDlist[i]->_IOATop,
 		(int)TSDlist[i]->_IOALimit,
 		i);
-	Illegal();
+	ILLEGAL;
       }
       if (TSDlist[i]->_IOATop > gIOATop){
 	fprintf(output, 
@@ -296,7 +296,7 @@ void TSDCheck(void)
 		(int)TSDlist[i]->_IOATop,
 		(int)gIOATop,
 		i);
-	Illegal();
+	ILLEGAL;
       }
       if (TSDlist[i]->_IOALimit > gIOALimit){
 	fprintf(output, 
@@ -304,7 +304,7 @@ void TSDCheck(void)
 		(int)TSDlist[i]->_IOALimit,
 		(int)gIOALimit,
 		i);
-	Illegal();
+	ILLEGAL;
       }
 #endif
 
@@ -323,7 +323,7 @@ static void TSDCheckReference(int i, Object *ref)
 {
   if (ref && !(inBetaHeap(ref) && isObject(ref))) { 
     fprintf(output, "Illegal reference 0x%x in TSD[%d]\n", (int)ref, i); 
-    Illegal();
+    ILLEGAL;
   }
 }
 #endif /* RTDEBUG */

@@ -19,13 +19,13 @@ void readLong(int fd, unsigned long *n)
   
   if ((nb = read(fd, n, sizeof(unsigned long))) < 0) {
     perror("readLong");
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
   
   if (nb != sizeof(unsigned long)) {
     fprintf(output, "readLong: Could not read long\n");
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
 }
@@ -40,7 +40,7 @@ void readSome(int fd, char *buffer, unsigned long size)
   while (toread>0) {
     if ((nb = read(fd, ptr, toread)) < 0) {
       perror("readSome");
-      DEBUG_CODE(Illegal());
+      DEBUG_CODE(ILLEGAL);
       BetaExit(1);
     } else if (nb == 0) {
       return;
@@ -52,7 +52,7 @@ void readSome(int fd, char *buffer, unsigned long size)
   
   if ((unsigned long)(ptr - (char*)buffer) != size) {
     fprintf(output, "readSome: Could not read\n");
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
 }
@@ -62,7 +62,7 @@ void Rewind(int fd)
 {
   if (lseek(fd, 0, SEEK_SET) < 0) {
     perror("Rewind");
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
 }
@@ -74,13 +74,13 @@ void writeLong(int fd, unsigned long *n)
   
   if ((nb = write(fd, n, sizeof(unsigned long))) < 0) {
     perror("writeLong");
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
   
   if (nb != sizeof(unsigned long)) {
     fprintf(output, "putName: Could not write long\n");
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
 }
@@ -90,7 +90,7 @@ void windTo(int fd, unsigned long pos)
 {
   if (lseek(fd, pos, SEEK_SET) < 0) {
     perror("windTo");
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
 }
@@ -102,7 +102,7 @@ void writeSome(int fd, void *buffer, unsigned long size)
   
   if ((nb = write(fd, buffer, size)) < 0) {
     perror("writeSome");
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
 }

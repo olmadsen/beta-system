@@ -546,7 +546,7 @@ long AOAScanMemoryArea(long *start, long *end)
 	  fprintf(output, "AOAScanMemoryArea: "
 		  "Bogus GCAttr value in AOAFreeChunk:%d\n",
 		  (int)(current->GCAttr));
-	  Illegal();
+	  ILLEGAL;
 	  BetaExit(1);
 	}
 #endif

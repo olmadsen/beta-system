@@ -1767,7 +1767,7 @@ unsigned long CodeEntry(ProtoType *theProto, long PC)
     if (isMakingDump){
       NotifyErrorDuringDump(InternalErr);
     }
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
   if (minDist == PC) {
@@ -1778,7 +1778,7 @@ unsigned long CodeEntry(ProtoType *theProto, long PC)
     if (isMakingDump){
       NotifyErrorDuringDump(InternalErr);
     }
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
   if (minDist == gDist) {

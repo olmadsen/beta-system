@@ -329,7 +329,7 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 #define Ck(r) CCk(r, __FILE__, __LINE__, #r)
 extern void CClaim(long cond, char *description, char *fname, int lineno);
 #define Claim(r,t) CClaim(r, t, __FILE__, __LINE__)
-
+#define ILLEGAL Illegal(__FILE__, __LINE__)
 #else /* !RTDEBUG */
 
 #define isObject(obj) 1 /* assumed always true */

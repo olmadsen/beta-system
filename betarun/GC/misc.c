@@ -341,7 +341,7 @@ failure:
    * rejects an object reference that the non-debug version would
    * accept (isObject is defined to TRUE in non-debug). 
    * This is suspicious and gives a difference in behaviour
-   * - we have better issue a warning, and call Illegal().
+   * - we have better issue a warning, and call ILLEGAL.
    */
   fprintf(output, "RTS: DEBUG isObject(0x%x) returns FALSE (state = %d).\n", (int)theObj, (int)isObjectState);
   return 0;
@@ -364,7 +364,7 @@ void zero_check(char *p, long bytesize)
 	      (int)((long *)(p)+i),
 	      (int)*((long *)(p)+i)
 	      );                                
-      Illegal();                                        
+      ILLEGAL;                                        
     }                                                   
 }
 
@@ -379,13 +379,25 @@ void CkReg(char *func,long value, char *reg)
     fprintf(output,                                                          
 	    "%s: ***Illegal reference register %s: 0x%x\n",                  
 	    func, reg, (int)theObj); 
-    Illegal();								     
+    ILLEGAL;								     
   }								             
 }
 
 void PrintRef(Object *ref)
 {
   if (ref) {
+#ifdef NEWRUN
+    if (ref==CALLBACKMARK){
+      fprintf(output, " CALLBACKMARK (%d)\n", (int)ref);
+      fflush(output);
+      return;
+    }
+    if (ref==GENMARK){
+      fprintf(output, " GENMARK (%d)\n", (int)ref);
+      fflush(output);
+      return;
+    }
+#endif /* NEWRUN */
     if (inBetaHeap(ref) && isObject(ref) ){
       fprintf(output, " is object");
       if (IsPrototypeOfProcess((long)GETPROTO(ref))) {
@@ -408,7 +420,7 @@ void PrintRef(Object *ref)
   fflush(output);
 }
 
-void Illegal()
+void Illegal(char *file, int line)
 { 
 #if defined(sgi) || defined(nti)
   GLOBAL(static unsigned break_inst);
@@ -416,7 +428,7 @@ void Illegal()
 #endif
 
   /* used to break in! */
-  fprintf(output, "Illegal() called\n");
+  fprintf(output, "Illegal() called from %s, line %d\n",file,line);
   fflush(stdout);
   fflush(stderr);
   fflush(output) /* not necessarily same as stderr */;
@@ -443,8 +455,8 @@ void Illegal()
     }
 #endif /* UNIX */
 #endif /* RTVALHALLA */
-    fprintf(output, "Illegal: hardcoded break!\n");
-    
+    fprintf(output, "Illegal: hardcoded break: %s, line %d\n",file,line);
+    fflush(output);
 #ifdef nti
     break_inst = 0xc39090cc; /* int 3 ; nop ; nop ; ret */
     f = (int(*)(void))&break_inst;
@@ -521,7 +533,7 @@ void CClaim(long expr, char *description, char *fname, int lineno)
   fprintf(output,
 	  "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
 	  (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
-  Illegal(); /* Usefull to break in */
+  ILLEGAL; /* Usefull to break in */
 }
 #endif
 
@@ -580,7 +592,7 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 	fprintf(output, "CCk:%s:%d: Ck(%s): bad aligment: (%s=0x%x)\n",
 		fname, lineno, ref, ref, (int)(r));
 	fflush(output);
-	Illegal();
+	ILLEGAL;
       }
       /* Check it's in a heap */
       if (!(inIOA(rr) || inAOA(rr) || isLazyRef(rr) 
@@ -591,7 +603,7 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 	fprintf(output, "CCk:%s:%d: Ck(%s): not in Heap: (%s=0x%x)\n",
 		fname, lineno, ref, ref, (int)(r));
 	fflush(output);
-	Illegal();
+	ILLEGAL;
       }
     }
 }
@@ -855,7 +867,7 @@ static void RegError(long pc1, long pc2, char *reg, Object * value)
     fprintf(output, "%s points out of BETA heaps!\n", reg);
   }
   fprintf(output, "\n");
-  Illegal();
+  ILLEGAL;
 }
 
 static long CheckCell(Object *theCell)

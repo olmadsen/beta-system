@@ -448,10 +448,10 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 	/* We are running under valhalla */
 	register_handles handles = {-1, -1, -1, -1, -1};
 	DEBUG_CODE(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
-	SaveSGIRegisters(scp, &handles);
+	/*SaveSGIRegisters(scp, &handles);*/
 	/* Hit RefNone or breakpoint */
 	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); 
-	RestoreSGIRegisters(scp, &handles);
+	/*RestoreSGIRegisters(scp, &handles);*/
       } else {
 	/* Not running under valhalla */
 	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); 

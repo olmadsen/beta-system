@@ -600,7 +600,7 @@ void DoStackCell(Object **theCell,Object *theObj)
         fprintf(output, "[DoStackCell: ***Illegal: 0x%x: 0x%x]\n", 
                 (int)theCell,
                 (int)theObj);
-        Illegal();
+        ILLEGAL;
       });
     }
   } else {
@@ -618,8 +618,11 @@ void DoStackCell(Object **theCell,Object *theObj)
     else {
       if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
         fprintf(output, 
-                "DoStackCell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
-        Illegal();
+                "DoStackCell: 0x%x: 0x%x is outside BETA heaps!\n", 
+		theCell, 
+		theObj);
+	fflush(output);
+        ILLEGAL;
       }
     }
 #endif

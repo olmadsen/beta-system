@@ -109,7 +109,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
     comppush(SPy); /* fprintf(output, "comppush SPy: 0x%x\n", SPy); */
     comppush(SPx); /* fprintf(output, "comppush SPx: 0x%x\n", SPx); */
   } else { 
-    DEBUG_CODE(fprintf(output, "ActiveComponent == 0\n"); Illegal());
+    DEBUG_CODE(fprintf(output, "ActiveComponent == 0\n"); ILLEGAL);
   };
   
   if (!isFirst){
@@ -254,7 +254,7 @@ void Att(Object *this, Component *comp, long RA, long SPx)
     comppush(SPy); /* fprintf(output, "comppush SPy: 0x%x\n", SPy); */
     comppush(SPx); /* fprintf(output, "comppush SPx: 0x%x\n", SPx); */
   } else { 
-    DEBUG_CODE(fprintf(output, "ActiveComponent == 0\n"); Illegal());
+    DEBUG_CODE(fprintf(output, "ActiveComponent == 0\n"); ILLEGAL);
   };
    
   isFirst = (comp->CallerLSC == 0);

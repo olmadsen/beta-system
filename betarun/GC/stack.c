@@ -47,7 +47,7 @@ void PrintValhallaRefStack(void)
 	fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
 		(int)theCell, 
 		(int)theObj);
-	Illegal();
+	ILLEGAL;
       }
     }
   }
@@ -695,7 +695,7 @@ void ProcessRefStack(unsigned size, Object **bottom, CellProcessFunc func)
 	fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
 	      (int)theCell, 
 	      (int)*theCell);
-      Illegal();
+      ILLEGAL;
     }
     });
     *theCell = (Object *)((unsigned)*theCell | i);
@@ -848,7 +848,7 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
 	/* Skip would be out of frame */
 	DEBUG_CODE({
 	  fprintf(output, "Attempt to skip out of frame!\n");
-	  Illegal();
+	  ILLEGAL;
 	});
       } else {
 	/* Do the skip */
@@ -917,7 +917,7 @@ static void ProcessSPARCStack(void)
 		   frame_PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp){
 		if (!cAR) {
 		  fprintf(output, "ProcessStack: gone past _start - exiting...!\n");
-		  Illegal();
+		  ILLEGAL;
 		  BetaExit(1);
 		}
 		PrintCAR(cAR);
@@ -978,7 +978,7 @@ static void ProcessSPARCStackObj(StackObject *sObj, CellProcessFunc func)
 	DEBUG_CODE({
 	  fprintf(output, 
 		  "stackobject 0x%x has stacksize=0\n", (int)sObj);
-	    Illegal();
+	    ILLEGAL;
 	});
       }
       return;
@@ -1068,7 +1068,7 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
 		tag,
 		(-tag-4)/2,
 		(int)(ar->fp));
-	Illegal();
+	ILLEGAL;
       } else {
 	long *ptr;
 	fprintf(output, 
@@ -1218,7 +1218,7 @@ int SkipDataRegs(long *theCell)
 		"*** 0x%08x: %d: Negative non-tag stack cell!\n", 
 		(int)theCell,
 		(int)tag);
-	Illegal();
+	ILLEGAL;
       }
     });
   }

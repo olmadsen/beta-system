@@ -267,7 +267,7 @@ extern long labelOffset;
 #ifdef RTDEBUG
 extern const char *WhichHeap(Object *ref);
 extern void PrintWhichHeap(Object *ref);
-extern void Illegal(void);
+extern void Illegal(char*file,int line);
 extern void PrintRef(Object *ref);
 extern void DescribeObject(Object *);
 #endif /* RTDEBUG */

@@ -83,7 +83,7 @@ static void *getRegisterContents(unsigned long reg, ucontext_t *ucon, long retur
   } else {
     fprintf(output, "getRegisterContents: "
 	    "Unsupported register\n");
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
     BetaExit(1);
   }
   return (void *)-1;
@@ -108,18 +108,18 @@ static long sourceReg(unsigned long instruction, ucontext_t *ucon, long returnSP
     /* Bicc, FBfcc, CBccc, SETHI. These instructions does not access
        memory, but should they be able to cause a SIGBUS. */
     DEBUG_CODE(fprintf(output,"getSourceRegister: SIGBUS caused by optype = 0 ??\n"));
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
     break;
   case 1:
     /* CALL. Should these be able to cause a SIGBUS? */
     DEBUG_CODE(fprintf(output,"getSourceRegister: SIGBUS caused by optype = 1 ??\n"));
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
     break;
   case 2:
     /* Arithmetic, logical, shift and remaining. Should these be able
      * to cause a SIGBUS? */
     DEBUG_CODE(fprintf(output,"getSourceRegister: SIGBUS caused by optype = 3 (type 2) ??\n"));
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
     break;
   case 3: 
     {
@@ -273,7 +273,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 	case 0x0: /* g0 */
 	  fprintf(output, "proxyTrapHandler: "
 		  "Code using %%g0 for proxy!!\n");
-	  DEBUG_CODE(Illegal());
+	  DEBUG_CODE(ILLEGAL);
 	  BetaExit(1);
 	  break;
 	case 0x1: /* g1 */
@@ -314,7 +314,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 	default:
 	  fprintf(output, "proxyTrapHandler: "
 		  "Unsupported source register\n");
-	  DEBUG_CODE(Illegal());
+	  DEBUG_CODE(ILLEGAL);
 	  BetaExit(1);
 	}
 	return;
@@ -567,7 +567,7 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
 
   if (scp.trapno==5 || scp.trapno==12) {
     BetaSignalHandler(sig, scp);
-    DEBUG_CODE(Illegal());
+    DEBUG_CODE(ILLEGAL);
   }
   INFO_PERSISTENCE(numPF++);
   PC = (unsigned char*) scp.eip;

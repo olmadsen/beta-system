@@ -264,7 +264,7 @@ int DOThandleInsert (Object *ObjRef, DOTonDelete onDelete, int allowCompaction)
     fprintf(output, 
 	    "DOThandleInsert: Object at 0x%x has illegal proto 0x%x\n",
 	    (int)ObjRef, (int)proto);
-    Illegal();
+    ILLEGAL;
   }
 }
 #endif

@@ -729,7 +729,7 @@ void AOACheckReference(Object **theCell, long refType)
 	      "Dangler in AOA, but NOT in negAOArefs table: 0x%x: %d\n", 
 	      (int)theCell, 
 	      (int)*theCell);
-      Illegal();
+      ILLEGAL;
     }
     return;
   }

@@ -224,14 +224,14 @@ static int AOAtoIOAInsertImpl(Object **theCell)
 	      (int)theCell);
       PrintWhichHeap((Object*)theCell);
       fprintf(output, "\n\n");
-      Illegal(); /* useful to break in */
+      ILLEGAL; /* useful to break in */
     });
 
 #ifdef RTDEBUG    
       if (*(long*)theCell & 7) {
 	fprintf(output, "\n*theCell is not 8-aligned. Proto=0x%08X\n",
 		(int)(GETPROTO(*(Object**)theCell)));
-	Illegal(); /* useful to break in */
+	ILLEGAL; /* useful to break in */
       }
 #endif
       
@@ -342,7 +342,7 @@ void CheckAOAtoIOAtableSize(long *theCell, long PC)
       fprintf(output, " (is in ToSpace).\n");
     else
       fprintf(output, " (is not in ToSpace).\n");
-    Illegal();
+    ILLEGAL;
     BetaExit(1);
   }
 }
