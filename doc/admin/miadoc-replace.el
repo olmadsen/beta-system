@@ -382,3 +382,11 @@
 <ADDRESS>\\1</ADDRESS>
 </TD>
 <TD width=\"50%\" align=\"right\"><SCRIPT LANGUAGE=JavaScript SRC=\"\\2javascript/lastmod.js\"></SCRIPT></TD>" nil)))
+
+(defun miadoc-replace37 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing quotes")
+    (tags-query-replace "&otilde;" "'" nil)))
