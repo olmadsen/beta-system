@@ -15,15 +15,11 @@ goto start
 :isboot
 set boot=1
 if "%2"=="" goto missing
-echo 3
 if not "%3"=="" goto missing
-echo 4
 set grammar=%2
-echo 5
 if not "%grammar%"=="metagrammar" goto normal
 echo booting metagrammar with bobsit
 %BETALIB%\boot\bin\nti_%MIASDK%\exbobs < %BETALIB%\boot\grammars\metagrammar\%grammar%-parser.bobs
-echo 6
 
 :start
 if not exist bobslist goto KEEPGOING
