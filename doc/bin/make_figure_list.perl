@@ -2,7 +2,7 @@
 
 if ($#ARGV == -1) {
     print "Usage:\n";
-    print "make_program_list <files or wildcard>\n";
+    print "make_figure_list <files or wildcard>\n";
     exit 1;
 }
 
@@ -11,7 +11,7 @@ print<<'EOT';
 <HTML>
 
 <HEAD>
-<TITLE>List of programs</TITLE>
+<TITLE>List of figures</TITLE>
 <LINK REL="stylesheet" HREF="../style/miadoc.css" TYPE="text/css">
 </HEAD>
 
@@ -28,7 +28,7 @@ print<<'EOT';
 <HR>
 <!---------------------------------------------------------->
 
-<H1>List of programs</H1>
+<H1>List of figures</H1>
 EOT
 
 print "<DL><DT><DL>\n";
@@ -37,8 +37,8 @@ foreach $file (@ARGV) {
     next if ($file =~ /~$/) ; # skip tilde files
     next if (!open(IN, $file));
     while (<IN>) {
-	if (m/<A NAME=\"?([a-zA-Z0-9_]+\.bet)\"?><H4 CLASS=betacaption>[a-zA-Z0-9_]+\.bet<\/H4><\/A>/i){
-	    print "<DT><A HREF=$file#$1>$1</A>\n<DD>\n";
+	if (m/<A NAME=\"?(figure_[0-9]+)\"?><STRONG CLASS=figure>(Figure [0-9]+:[a-zA-Z0-9_ ]+)<\/STRONG><\/A>/i){
+	    print "<DT><A HREF=$file#$1>$2</A>\n<DD>\n";
 	}
     }
     close IN;
