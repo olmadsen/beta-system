@@ -32,9 +32,20 @@ struct struct_tagDISPPARAMS *InitDispatch(long cArgs)
   return S;
 }
 
-char *MkNameList(char *name) 
-{ if (test) printf("MkNameList: %s\n",name);
-  return name;
+char *MkNameList(short *pszName) 
+{ char * names; long i;
+
+  for (i=0; pszName[i] !=0;i++) 
+    { if (test) printf(" pszName[%i]=%i\n",i,pszName[i]);};
+
+  names = (char *)malloc(i);
+
+  for (i=0; pszName[i] !=0;i++) names[i] = pszName[i];
+  names[i]=0;
+
+
+  if (test) printf("MkNameList: %s\n",names);
+  return names;
 }
 
 long textLen(char *name)
@@ -147,10 +158,11 @@ long BETA_Invoke(struct idispatch *pdisp
 		 , long pvRet       // not used: type is NOT correct
 		 , long pexcepinfo  // not used: type is NOT correct
 		 , long pnArgError  // not used: type is NOT correct
-		 , char *pszName
+		 , short *pszName
 		 , char *pszFmt
 		 , ...)
 { char * nameList;
+  char * names;
   long * resList; 
   long HR,dispid;
   struct struct_tagDISPPARAMS *argList;
@@ -160,11 +172,13 @@ long BETA_Invoke(struct idispatch *pdisp
   if (test) 
      printf("BETA_Invoke: %s noOfArgs=%i types=%s\n",pszName,noOfArgs,pszFmt);
 
+
   for (j=0 ;pszFmt[j] != 0;) {
     if (pszFmt[j] == '&') j = j + 1;
     j= j + 1;
     noOfArgs=noOfArgs + 1;
   };
+
   j = 0;
   if (test) 
     printf("BETA_Invoke: %s noOfArgs=%i types=%s\n",pszName,noOfArgs,pszFmt);
@@ -213,6 +227,7 @@ long BETA_Invoke(struct idispatch *pdisp
     };
  L:
   va_end(ap);
+
   nameList = MkNameList(pszName);
 
   resList = MkResList();
