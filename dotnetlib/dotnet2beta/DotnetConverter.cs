@@ -328,11 +328,31 @@ namespace beta.converter
 		
 	internal virtual bool isRelevant(System.Reflection.FieldInfo f)
 	  {
+	    /* Ignore unsafe fields */
+	    System.Object[] attributes = f.GetCustomAttributes(typeof(System.CLSCompliantAttribute),true);
+	    for (int i=0; i<attributes.Length; i++){
+	      if (! ((System.CLSCompliantAttribute)attributes[i]).IsCompliant){
+		if (trace) {
+		  System.Console.Error.Write("UNSAFE FIELD (ignored): " + f.ToString());
+		}
+		return false;
+	      }
+	    }
 	    return true;
 	  }
 		
 	internal virtual bool isRelevant(System.Type t)
 	  {
+	    /* Ignore unsafe types */
+	    System.Object[] attributes = t.GetCustomAttributes(typeof(System.CLSCompliantAttribute),true);
+	    for (int i=0; i<attributes.Length; i++){
+	      if (! ((System.CLSCompliantAttribute)attributes[i]).IsCompliant){
+		if (trace) {
+		  System.Console.Error.Write("UNSAFE FIELD (ignored): " + t.ToString());
+		}
+		return false;
+	      }
+	    }
 	    return true;
 	  }
 		
@@ -344,7 +364,7 @@ namespace beta.converter
 	    for (int i=0; i<attributes.Length; i++){
 	      if (! ((System.CLSCompliantAttribute)attributes[i]).IsCompliant){
 		if (trace) {
-		  System.Console.Error.Write("UNSAFE (ignored): ");
+		  System.Console.Error.Write("UNSAFE METHOD/CONSTRUCTOR(ignored): \n   ");
 		  print_method(m);
 		}
 		return false;
