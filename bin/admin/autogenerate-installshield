@@ -1,5 +1,6 @@
 #! perl
 
+use File::DosGlob;
 
 # Takes the list of files.z to be included as args. 
 # Configure:
@@ -16,17 +17,8 @@ $RestSize         = 1380;                # Size of rest of disks. (in kb)
 $RuleTemplate     = "setup.rul.template";
 
 ##############################################################
-
-$| = 1;   # Flush all read/writes
-
-$betalib = $ENV{'BETALIB'};
-$CWD = `cd`; chop $CWD;
-$log = "beta_$ENV{'MIASDK'}.lst";
-$RoomLeftOnCurDisk = $FirstSize;
-$SPLIT ="$InstallShieldDir\\program\\split.exe";
-$LastDisk = 0;
-$CurDisk = 1;
-$AutoRuleText = "szSDK = $ENV{'MIASDK'}\n";
+# Impl, do not touch.
+##############################################################
 
 sub mayrm {
     foreach $file (@_) {
@@ -34,20 +26,55 @@ sub mayrm {
     }
 }
 
-if ($#ARGV == -1) {
-    print "autogenerate-installshield: Give me *.cmd files as argument!\n";
+sub SmartRmDir {
+    my ($path) = @_;
+    if ($ENV{'COMSPEC'} =~ /4nt/i) {
+	system "$ENV{'COMSPEC'} /C del /S /Q /X /Y $path";
+    } elsif ($ENV{'COMSPEC'} =~ /cmd/i) {
+	
+    } else {
+	
+    }
+}
+
+sub Usage {
+    print "autogenerate-installshield. Usage:\n";
+    print "Normally, just say:\n\n";
+    print "autogenerate-installshield ms *.cmd\n\n";
+    print "Which packs a complete system for nti_ms\n";
+    print "If in doubt, check Quality pages!\n";
     exit 1;
 }
 
-foreach $file (@ARGV) {
-    if ($file =~ /^(.*)\.cmd$/i) {
-	push(@FileList, $1);
-    } elsif ($file eq "-u") {
-	$UseDefaults = 1;
-	print "Using auto-chosen defaults!\n";
-    } else {
-	print "Unable to handle argument '$file'.\n";
-	exit 1;
+&Usage if ($#ARGV <= 0);
+$MIASDK = shift @ARGV;
+if ($MIASDK !~ /^(ms|gnu|bor)$/) {
+    &Usage;
+}
+
+$ENV{'MIASDK'} = $MIASDK; # Export to other programs, if any should need it.
+$| = 1;   # Flush all read/writes
+$betalib = $ENV{'BETALIB'};
+$CWD = `cd`; chop $CWD;
+$log = "beta_${MIASDK}.lst";
+$RoomLeftOnCurDisk = $FirstSize;
+$SPLIT ="$InstallShieldDir\\program\\split.exe";
+$LastDisk = 0;
+$CurDisk = 1;
+$AutoRuleText = "szSDK = $MIASDK\n";
+
+
+foreach $f (@ARGV) {
+    foreach $file (&File::DosGlob::doglob(1,$f)) {
+	if ($file =~ /^(.*)\.cmd$/i) {
+	    push(@FileList, $1);
+	} elsif ($file eq "-u") {
+	    $UseDefaults = 1;
+	    print "Using auto-chosen defaults!\n";
+	} else {
+	    print "Unable to handle argument '$file'.\n";
+	    exit 1;
+	}
     }
 }
 
@@ -105,7 +132,7 @@ if (-d "datafiles") {
 	exit 1;
     }
     print "\n\nDELETING DATAFILES!!!\n\n";
-    system "del /sxyzq datafiles";
+    SmartRmDir('datafiles');
     print "done.\n\n\n";
 }
 
@@ -146,11 +173,17 @@ foreach $file (@FileList) {
 	print LOG "------Packing $nam:\n";
 	close(LOG);
 	unlink "$betalib/$nam.z" if (-e "$betalib/$nam.z");
+	for ($i=0; $i < 10; $i++) {
+	    unlink "$betalib/$nam.00$i" if (-e "$betalib/$nam.00$i");
+	    unlink "$betalib/$nam.01$i" if (-e "$betalib/$nam.01$i");
+	    unlink "$betalib/$nam.02$i" if (-e "$betalib/$nam.02$i");
+	}
 	open (IN, "<$file.cmd") || die "$!";
 	chdir $betalib;
 	foreach $line (<IN>) {
 	    chop $line;
 	    next if ($line =~ /^$/);
+	    $line =~ s/%MIASDK%/$ENV{'MIASDK'}/gi;
 	    if ($line =~ /^icomp/i) {
 		print "$line\n";
 		system ("$InstallShieldDir\\program\\$line >>$CWD\\zfiles\\$nam.lst");
@@ -170,6 +203,7 @@ foreach $file (@FileList) {
 	}
 	close(IN);
 	chdir $CWD;
+	unlink "zfiles/$nam.z" if (-e "zfiles/$nam.z");
 	rename("$betalib/$nam.z", "zfiles/$nam.z") || die "$!";
     }
     open (LOG, ">>datafiles/$log") || die "$!";
