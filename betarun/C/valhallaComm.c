@@ -247,6 +247,8 @@ void forEachStackEntry (int returnAdr, int returnObj)
 {
   fifoBinPutInt (fifoFrom, returnAdr);
   fifoBinPutInt (fifoFrom, returnObj);
+  DEBUG_VALHALLA(fprintf(output,"forEachStackEntry: returnAdr=%d, returnObj=%d\n",returnAdr,returnObj));
+
 }
 
 extern void Return ();
@@ -547,6 +549,8 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   }
   fifoPutText (fifoFrom, txt);
 
+  DEBUG_VALHALLA(fprintf(output,"ValhallaOnProcessStop: PC=%d, SP=0x%x, StackEnd=0x%x, curObj=%d,sig=%d,errorNumber=%d,errorText=%s\n",(int) PC, (int) SP, (int) StackEnd, (int) curObj, (int) sig, (int) errorNumber, txt));
+			 
   fifoBinPutInt (fifoFrom, errorNumber);
   if (errorNumber<0) {
     txt = ErrorMessage (errorNumber);

@@ -54,6 +54,8 @@ void BetaSignalHandler (sig, info, ucon)
   StackEnd = (long *) ucon->uc_mcontext.gregs[REG_SP];
   PC = (long *) ucon->uc_mcontext.gregs[REG_PC];
 
+  DEBUG_VALHALLA(fprintf(output,"BetaSignalHandler: StackEnd set to 0x%x\n",(int) StackEnd));
+
   /* Try to fetch the address of current Beta object from i0.*/
   theCell = casthandle(Object) &(cast(RegWin)StackEnd)->i0;
   if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;

@@ -72,8 +72,8 @@ void findComponentStack (struct ComponentStack* compStack, int PC)
 	/* comp is the active component. */
 
 	compStack->stacktype = CS_ACTIVECOMPONENT;
-	
 	compStack->info.if_onstack.lastAR = (struct RegWin *) StackEnd;
+
 	compStack->info.if_onstack.activeCBF 
 	  = (struct RegWin *) ActiveCallBackFrame;
 	compStack->returnAdr = PC;
@@ -138,12 +138,18 @@ void scanComponentStack (struct ComponentStack* compStack,
     break;
   case CS_PROCESSORSTACK:
   case CS_ACTIVECOMPONENT:
-    { struct RegWin *theAR;
+    { struct RegWin *theAR = compStack->info.if_onstack.lastAR;
       struct RegWin *nextCBF = compStack->info.if_onstack.activeCBF;
-      int lastReturnAdr = compStack->returnAdr; 
+      int lastReturnAdr = compStack->returnAdr;
+
+      /* Skip external code on top of stack: */
+      while ((int) theAR < (int) BetaStackTop) {
+	forEach (lastReturnAdr,0);
+	lastReturnAdr = theAR->i7+8;
+	theAR = (struct RegWin *) theAR->fp;
+      }	
       
-      for (theAR  = compStack->info.if_onstack.lastAR;
-	   theAR != compStack->info.if_onstack.firstAR;
+      for (;theAR != compStack->info.if_onstack.firstAR;
 	   theAR = (struct RegWin *) theAR->fp)
 	{
 	  if (theAR == nextCBF) {
@@ -165,8 +171,6 @@ void scanComponentStack (struct ComponentStack* compStack,
 	    }
 	    theAR = (struct RegWin *) theAR->l6; /* Skip to betaTop */
 	  }
-	  DEBUG_VALHALLA(fprintf(output,"lastReturnAdr=%x,theAR->i0=%x,theAR->fp=%x\n",(int)lastReturnAdr,(int)theAR->i0,(int)theAR->fp));
-
 	  handleStackPart (theAR,lastReturnAdr,forEach);
 	  lastReturnAdr = theAR->i7+8; /* First return address used is actually PC of the process. 
 					* For other return addresses, add 8. */
