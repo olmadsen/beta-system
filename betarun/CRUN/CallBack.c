@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:15 $, SID: $Revision: 1.19 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-08-31 19:19:01 $, SID: $Revision: 1.20 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -36,11 +36,8 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 {
     theObj = cast(Object) getThisReg();
 
-    if (CBFATop+1 > CBFALimit){
-      CBFArelloc();
-      setThisReg((long *)theObj);
-      RETURN(CopyCPP(theStruct, cast(Object) 0));
-    }
+    Ck(theObj);
+    if (CBFATop+1 > CBFALimit) CBFArelloc();
 
     CBFATop->theStruct = theStruct;
 
