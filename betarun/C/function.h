@@ -144,6 +144,10 @@ extern int fprintf(FILE *, const char *, ...);
 extern int fflush(FILE *);
 extern int tolower(int);
 extern int fclose(FILE *);
+#ifdef sun4s
+extern int pclose(FILE *);
+#else
 extern void pclose(FILE *);
+#endif
 extern int fscanf(FILE *stream, const char *format, ...);
 #endif
