@@ -8,7 +8,7 @@ INCLUDE '~beta/sysutils/endian';
  *   See http://java.sun.com/docs/books/vmspec/2nd-edition/html/ClassFile.doc.html
  *   Section numbers below refer to this document.
  *
- *   $Id: classfiledefs.bet,v 1.2 2002-06-12 14:00:25 datpete Exp $
+ *   $Id: classfiledefs.bet,v 1.3 2002-06-13 07:49:04 datpete Exp $
  *)
 
 (* Section 4.1 *)
@@ -75,11 +75,6 @@ cp_info: entry
        #);
   exit THIS(cp_info)[]
   #);
-nyi_cp_info: cp_info
-  (# write::(# do 'Attempt to write unimplemented cp_info'
-                 -> screen.putline;
-            #);
-  #);
 CONSTANT_Class_info: cp_info
   (* Section 4.4.1 *)
   (# tag:: (# do CONSTANT_Class->value #);
@@ -120,18 +115,41 @@ CONSTANT_String_info: cp_info
      write:: (# do string_index -> htons -> putShort; #);
   enter string_index
   #);
-Constant_Integer_info: nyi_cp_info
+Constant_U4_info: cp_info
   (* Section 4.4.4 *)
-  (# #);
-Constant_Float_info: nyi_cp_info
+  (# bytes: @int32;
+     write:: (# do bytes -> htonl -> putlong; #);
+  #);
+Constant_Integer_info: Constant_U4_info
   (* Section 4.4.4 *)
-  (# #);
-Constant_Long_info: nyi_cp_info
+  (# tag:: (# do CONSTANT_Integer->value #);#);
+Constant_Float_info: Constant_U4_info
+  (* Section 4.4.4 *)
+  (# (* FIXME (not needed for BETA) *)
+     tag:: (# do CONSTANT_Float->value #);
+  #);
+Constant_Long_info: cp_info
   (* Section 4.4.5 *)
-  (# #);
-Constant_Double_info: nyi_cp_info
+  (# (* FIXME (not needed for BETA) *)
+     tag:: (# do CONSTANT_long->value #);
+     high_bytes: @int32;
+     low_bytes: @int32;
+     write::
+       (# 
+       do high_bytes -> htonl -> putlong; 
+          low_bytes -> htonl -> putlong; 
+       #);
+  #);
+Constant_Double_info: cp_info
   (* Section 4.4.5 *)
-  (# #);
+  (# tag:: (# do CONSTANT_Double->value #);
+     bytes: @real;
+     write:: 
+       (# pl: @putlong
+       do %getlongAt(@@bytes)   -> htonl -> pl; 
+          %getlongAt(@@bytes+4) -> htonl -> pl; 
+       #);
+  #);
 CONSTANT_NameAndType_info: cp_info
   (* Section 4.4.6 *)
   (# tag:: (# do CONSTANT_NameAndType->value #);
@@ -150,9 +168,8 @@ CONSTANT_Utf8_info: cp_info
      length: @int16u;
      bytes: [8]@int8u;
      write:: 
-       (# pb: ^BinFile.putBytes;
+       (# pb: @putBytes;
        do length -> htons -> putShort; 
-          &putBytes[] -> pb[]; (* Must be preallocated *)
           (@@bytes[1], length) -> pb;
        #);
      make_utf8:
@@ -172,10 +189,13 @@ CONSTANT_Utf8_info: cp_info
                  inc;
                  ch -> bytes[length];
               else
-                 'CONSTANT_Utf8_info.make_utf8: NYI for ch='
+                 (* FIXME *)
+                 'CONSTANT_Utf8_info.make_utf8: NYI for ch=\''
                    -> screen.puttext;
                  ch->screen.put;
-                 screen.newline;
+                 '\' (' -> screen.puttext;
+                 ch->screen.putint;
+                 ')' -> screen.putline;
              if);
           #);
        #);
@@ -191,7 +211,18 @@ constant_pool_table: entry_table
 
 field_info: entry
   (* Section 4.5 *)
-  (# (* NYI *)
+  (# access_flags: @int16u;
+     name_index: @int16u;
+     descriptor_index: @int16u;
+     attributes: @Attribute_table;
+     write::
+       (# ps: @putShort;
+       do access_flags     -> htons -> ps;
+          name_index       -> htons -> ps;
+          descriptor_index -> htons -> ps;
+          attributes.write;
+       #);
+  enter (access_flags, name_index, descriptor_index)
   exit THIS(field_info)[]
   #);
 
@@ -207,9 +238,8 @@ method_info: entry
      descriptor_index: @int16u;
      attributes: @Attribute_table;
      write::
-       (# ps: ^BinFile.putShort;
-       do &putShort[] -> ps[];
-          access_flags     -> htons -> ps;
+       (# ps: @putShort;
+       do access_flags     -> htons -> ps;
           name_index       -> htons -> ps;
           descriptor_index -> htons -> ps;
           attributes.write;
@@ -270,13 +300,10 @@ Code_attribute: attribute_info
           s %Band 0xff -> _code[code_length];
        #);
      write::
-       (# pb: ^BinFile.PutBytes;
-          ps: ^BinFile.PutShort;
-          pl: ^BinFile.PutLong;
-       do &THIS(BinFile).putBytes[] -> pb[];
-          &THIS(BinFile).putShort[] -> ps[];
-          &THIS(BinFile).putLong[]  -> pl[];
-          max_stack -> htons -> ps;
+       (# pb: @THIS(BinFile).PutBytes;
+          ps: @THIS(BinFile).PutShort;
+          pl: @THIS(BinFile).PutLong;
+       do max_stack -> htons -> ps;
           max_locals -> htons -> ps;
           code_length -> htonl -> pl;
           (@@_code[1], code_length) -> pb;
