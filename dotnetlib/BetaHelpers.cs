@@ -1,4 +1,7 @@
 using System;
+using System.Threading;
+using System.Globalization;
+using System.IO;
 
 public class BetaHelpers
 {
@@ -37,8 +40,18 @@ public class BetaHelpers
     return modtime;
   }
 
-  public static bool diskentryHasAttribute(System.IO.FileSystemInfo info, int att){
+  public static bool diskentryHasAttribute(FileSystemInfo info, int att){
     // Needed because of missing bit-operations for enumerations (implemented as references)
-    return (info.Attributes & ((System.IO.FileAttributes)att)) != 0;
+    return (info.Attributes & ((FileAttributes)att)) != 0;
   }
+
+  public static string formatReal(string format, double r){
+    // Needed because boxing not implemented in beta
+    CultureInfo old_culture = Thread.CurrentThread.CurrentCulture;
+    Thread.CurrentThread.CurrentCulture = new CultureInfo("en-us");
+    string result = String.Format(format, r); // boxing r here
+    Thread.CurrentThread.CurrentCulture = old_culture;
+    return result;
+  }
+
 }
