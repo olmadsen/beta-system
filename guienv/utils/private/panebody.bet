@@ -1,44 +1,46 @@
 ORIGIN '../pane';
-INCLUDE '../../graphics';
-INCLUDE '../graphicsadds'; (* graphics.clip
-Children *)
+INCLUDE '~beta/guienv/v1.3.1/graphics';
+INCLUDE '~beta/guienv/v1.3.1/utils/graphicsadds'; (* graphics.clipChildren *)
+INCLUDE '~beta/guienv/v1.3.1/utils/guienvadds'; (* translate *)
 
+INCLUDE '~beta/basiclib/v1.4/numberio';
 --- panelib:attributes ---
 enforceConstraints:
   (# beforeframe,afterframe: @rectangle;
      pos: @Point;
-  do paneprivate.members[1].frame->beforeframe;
-     (for i: paneprivate.seps.range repeat
-          paneprivate.members[i+1].frame->afterframe;
-          (if paneprivate.moved[i] then
-              paneprivate.seps[i].position->pos;
-              (if verticalStacking then
+  do dppriv.members[1].frame->beforeframe;
+     (for i: dppriv.last-1 repeat
+          dppriv.members[i+1].frame->afterframe;
+          (if dppriv.moved[i] then
+              dppriv.seps[i].position->pos;
+              (if dppriv.vs then
                   pos.v-1->beforeframe.bottom;
-                  pos.v+panewidth->afterframe.top;
+                  pos.v+dppriv.pw->afterframe.top;
                else
                   pos.h-1->beforeframe.right;
-                  pos.h+panewidth->afterframe.left;
+                  pos.h+dppriv.pw->afterframe.left;
               if);
           if);
-          (if not (paneprivate.members[i].frame->beforeframe.isEqual) then
-              beforeframe->paneprivate.members[i].frame;
+          (if not (dppriv.members[i].frame->beforeframe.isEqual) then
+              beforeframe->dppriv.members[i].frame;
           if);
-          (if i<paneprivate.seps.range then
+          (if i<dppriv.last-1 then
               afterframe->beforeframe;
            else
-              (if not (paneprivate.members[paneprivate.last].frame
+              (if not (dppriv.members[dppriv.last].frame
                     ->afterframe.isEqual) then
-                  afterframe->paneprivate.members[paneprivate.last].frame;
+                  afterframe->dppriv.members[dppriv.last].frame;
               if);
           if);
      for);
   #);
 
 panecanvas: canvas
-  (# inx: @Integer; (* Index in paneprivate.seps *)
+  (# inx: @Integer; (* Index in dppriv.seps *)
      eventHandler::
        (# onMouseDown::
-            (# pos,oldpos,fsize: @Point;
+            (# pos,oldpos,fsize,fpos: @Point;
+               mouseMoved: @Boolean;
                sepinx: @Integer; sep: ^panecanvas;
                down: (# exit 1 #);
                up: (# exit 2 #);
@@ -47,7 +49,7 @@ panecanvas: canvas
                     getpos:
                       (# p: @Point; value: @Integer;
                       enter p
-                      do (if verticalStacking then p.v->value;
+                      do (if dppriv.vs then p.v->value;
                           else p.h->value;
                          if);
                       exit value
@@ -55,28 +57,27 @@ panecanvas: canvas
                     setpos:
                       (# p: ^Point; value: @Integer;
                       enter (p[],value)
-                      do (if verticalStacking then value-> p.v
+                      do (if dppriv.vs then value-> p.v
                           else value->p.h
                          if);
                       #);
                     sepinx: @Integer;
                  enter direction
-                 do
-                    position->oldpos;
-                    TRUE->paneprivate.moved[inx];
+                 do position->oldpos;
+                    TRUE->dppriv.moved[inx];
                     (if direction
                      //down then
                         inx+1->sepinx;
                         loop:
-                          (if sepinx<paneprivate.last then
-                              paneprivate.seps[sepinx][]->sep[];
+                          (if sepinx<dppriv.last then
+                              dppriv.seps[sepinx][]->sep[];
                               sep.position->pos;
-                              (if (oldpos->getpos)+panewidth+minsize>(pos->getpos)
+                              (if (oldpos->getpos)+dppriv.pw+dppriv.ms>(pos->getpos)
                                   then
-                                  (pos[],(oldpos->getpos)+panewidth+minsize)
+                                  (pos[],(oldpos->getpos)+dppriv.pw+dppriv.ms)
                                     ->setpos;
                                   pos->sep.position;
-                                  TRUE->paneprivate.moved[sepinx];
+                                  TRUE->dppriv.moved[sepinx];
                                else
                                   leave loop;
                               if);
@@ -88,14 +89,14 @@ panecanvas: canvas
                         inx-1->sepinx;
                         loop:
                           (if sepinx>0 then
-                              paneprivate.seps[sepinx][]->sep[];
+                              dppriv.seps[sepinx][]->sep[];
                               sep.position->pos;
-                              (if (oldpos->getpos)<(pos->getpos)+panewidth+minsize
+                              (if (oldpos->getpos)<(pos->getpos)+dppriv.pw+dppriv.ms
                                   then
-                                  (pos[],(oldpos->getpos)-panewidth-minsize)
+                                  (pos[],(oldpos->getpos)-dppriv.pw-dppriv.ms)
                                     ->setpos;
                                   pos->sep.position;
-                                  TRUE->paneprivate.moved[sepinx];
+                                  TRUE->dppriv.moved[sepinx];
                                else
                                   leave loop;
                               if);
@@ -106,74 +107,146 @@ panecanvas: canvas
                     if);
                     enforceConstraints;
                  #);
-            do position->oldpos;
-               father.size->fsize;
-               father.graphics
-               (#  
-               do FALSE->clipChildren; 
-                  patterns.black[]->Pen.stipple; 
-                  TransferModes.xorBlend[]->Pen.mode;
-                  2->pen.size;
-                  father.trackmouse
-                  (# draw: @
-                       (# 
+            do 
+               (if not (dppriv.sliding or ((inx=dppriv.last) and not shiftKey)) then
+                   position->oldpos;
+                   father.size->fsize;
+                   (position,this(paneCanvas)[],father.father[])
+                     ->translate->fpos;
+                   father.father.graphics
+                   (# 
+                   do FALSE->clipChildren; 
+                      patterns.black[]->Pen.stipple; 
+                      TransferModes.xorBlend[]->Pen.mode;
+                      2->pen.size;
+                      father.father.trackmouse
+                      (# draw: @
+                           (# 
+                           do
+                              (if dppriv.vs then
+                                  ((fpos.h,pos.v-dppriv.pw),(fpos.h,pos.v))
+                                    ->drawLine;
+                                  (if not (shiftKey and (onMemberResize=paneResizable)) then
+                                      ((fpos.h,pos.v),(fpos.h,pos.v+dppriv.pw))
+                                        ->drawLine;
+                                  if);
+                                  ((fpos.h+fsize.h,pos.v-dppriv.pw),(fpos.h+fsize.h,pos.v))
+                                    ->drawLine;
+                                  ((fpos.h,pos.v),(fpos.h+fsize.h,pos.v))->drawLine;
+                                  (if not (shiftKey and (onMemberResize=paneResizable)) then
+                                      ((fpos.h+fsize.h,pos.v),(fpos.h+fsize.h,pos.v+dppriv.pw))
+                                        ->drawLine;
+                                  if);
+                               else
+                                  ((pos.h-dppriv.pw,fpos.v),(pos.h,fpos.v))
+                                    ->drawLine;
+                                  (if not (shiftKey and (onMemberResize=paneResizable)) then
+                                      ((pos.h,fpos.v),(pos.h+dppriv.pw,fpos.v))
+                                        ->drawLine;
+                                  if);
+                                  ((pos.h,fpos.v),(pos.h,fpos.v+fsize.v))->drawLine;
+                                  ((pos.h-dppriv.pw,fpos.v+fsize.v),(pos.h,fpos.v+fsize.v))
+                                    ->drawLine;
+                                  (if not (shiftKey and (onMemberResize=paneResizable)) then
+                                      ((pos.h,fpos.v+fsize.v),(pos.h+dppriv.pw,fpos.v+fsize.v))
+                                        ->drawLine;
+                                  if);
+                              if);
+                           #);
+                         mousePress:: (# do curPt->pos; draw #);
+                         mouseMove:: 
+                           (# 
+                           do (if dppriv.vs then
+                                  (if curPt.v<>prevPt.v then
+                                      draw;
+                                      curPt->pos;
+                                      draw;
+                                      true->mouseMoved;
+                                  if);
+                               else
+                                  (if curPt.h<>prevPt.h then
+                                      draw;
+                                      curPt->pos;
+                                      draw;
+                                      true->mouseMoved;
+                                  if);
+                              if);      
+                           #);
+                         mouseRelease::
+                           (# 
+                           do draw;
+                           #);
+                      #);
+                   #);
+                   (if Shiftkey and (onMemberResize=paneResizable) then
+                       (# delta: @Integer;
+                          sz: @Point;
+                          oldmembers: [0]^Canvas;
                        do
-                          (if verticalStacking then
-                              ((0,pos.v),(fsize.h,pos.v))->drawLine;
+                          (* Resize member before separator *)
+                          (if dppriv.vs then
+                              (if (pos.v-oldpos.v->delta)<>0 then
+                                  prevmember.size->sz;
+                                  (sz.h,sz.v+delta)->prevmember.size;
+                              if);
                            else
-                              ((pos.h,0),(pos.h,fsize.v))->drawLine;
+                              (if (pos.h-oldpos.h->delta)<>0 then
+                                  prevmember.size->sz;
+                                  (sz.h+delta,sz.v)->prevmember.size;
+                              if);
                           if);
-                       #);
-                     mousePress:: (# do curPt->pos; draw #);
-                     mouseMove:: 
-                       (# 
-                       do (if verticalStacking then
-                              (if curPt.v<>prevPt.v then
-                                  draw;
-                                  curPt->pos;
-                                  draw;
-                              if);
-                           else
-                              (if curPt.h<>prevPt.h then
-                                  draw;
-                                  curPt->pos;
-                                  draw;
-                              if);
-                          if);      
-                       #);
-                     mouseRelease::
-                       (# 
-                       do draw;
-                       #);
-                  #);
-               #);
-               (if verticalStacking then
-                   (inx*minsize+(inx-1)*panewidth,pos.v)->max->pos.v;
-                   (fsize.v-(paneprivate.last-inx)*(minsize+panewidth),pos.v)
-                     ->min->pos.v;
-                   (if true
-                    //pos.v>oldpos.v then
-                       (* Walk down *)
-                       pos.v->oldpos.v; oldpos->position;
-                       down->walkPanes;
-                    //pos.v<oldpos.v then
-                       (* Walk up *)
-                       pos.v->oldpos.v; oldpos->position;
-                       up->walkPanes;
-                   if);
-                else
-                   (inx*minsize+(inx-1)*panewidth,pos.h)->max->pos.h;
-                   (fsize.h-(paneprivate.last-inx)*(minsize+panewidth),pos.h)
-                     ->min->pos.h;
-                   (if true
-                    //pos.h>oldpos.h then
-                       (* Walk right *)
-                       pos.h->oldpos.h; oldpos->position;
-                       down->walkPanes;
-                    //pos.h<oldpos.h then
-                       (* Walk left *)
-                       pos.h->oldpos.h; oldpos->position;
-                       up->walkPanes;
+                          
+                          (* Use appendMember to slide members into position. *)
+                          TRUE->dppriv.sliding;
+                          (0,0)->dppriv.szaccum;
+                          dppriv.members->oldmembers;
+                          0->dppriv.last->dppriv.members.new;
+                          
+                          (for j:oldmembers.range repeat
+                               oldmembers[j][]->appendMember
+                               (# 
+                               do (* Slide separator into new position: *)
+                                  (if dppriv.seps[j][]<>NONE then
+                                      j->dppriv.seps[j].attach;
+                                  if);
+                               #);
+                          for);
+                          appendsDone;
+                          FALSE->dppriv.sliding;
+                       #)
+                    else
+                       (if true
+                        //not mouseMoved then
+                           (* nothing *)
+                        //dppriv.vs then
+                           (inx*dppriv.ms+(inx-1)*dppriv.pw,pos.v)->max->pos.v;
+                           (fsize.v-(dppriv.last-inx)*(dppriv.ms+dppriv.pw),pos.v)
+                             ->min->pos.v;
+                           (if true
+                            //pos.v>oldpos.v then
+                               (* Walk down *)
+                               pos.v->oldpos.v; oldpos->position;
+                               down->walkPanes;
+                            //pos.v<oldpos.v then
+                               (* Walk up *)
+                               pos.v->oldpos.v; oldpos->position;
+                               up->walkPanes;
+                           if);
+                        else
+                           (inx*dppriv.ms+(inx-1)*dppriv.pw,pos.h)->max->pos.h;
+                           (fsize.h-(dppriv.last-inx)*(dppriv.ms+dppriv.pw),pos.h)
+                             ->min->pos.h;
+                           (if true
+                            //pos.h>oldpos.h then
+                               (* Walk right *)
+                               pos.h->oldpos.h; oldpos->position;
+                               down->walkPanes;
+                            //pos.h<oldpos.h then
+                               (* Walk left *)
+                               pos.h->oldpos.h; oldpos->position;
+                               up->walkPanes;
+                           if);
+                       if);
                    if);
                if);
             #);
@@ -181,86 +254,294 @@ panecanvas: canvas
      memberaction: prevmember.action
        (# eventType:: prevmember.theEventHandler.frameChanged;
           sz,nsz: @Point;
-       do (if not paneprivate.moved[inx] then
-              (* The event was not generated due to this pane being 
-               * moved. *)
-              size->sz; theEvent.newFrame.size->nsz;
-              (if verticalStacking then
-                  (0,theEvent.newFrame.bottom+1)->position;
-                  (nsz.h,sz.v)->size;
-               else
-                  (theEvent.newFrame.right+1,0)->position;
-                  (sz.h,nsz.v)->size;
+       do (if not dppriv.sliding then
+              (if not dppriv.moved[inx] then
+                  (* The event was not generated due to this pane being 
+                   * moved. *)
+                  size->sz; theEvent.newFrame.size->nsz;
+                  (if dppriv.vs then
+                      (0,theEvent.newFrame.bottom+1)->position;
+                      (nsz.h,sz.v)->size;
+                   else
+                      (theEvent.newFrame.right+1,0)->position;
+                      (sz.h,nsz.v)->size;
+                  if);
               if);
+              FALSE->dppriv.moved[inx];
           if);
-          FALSE->paneprivate.moved[inx];
        #);
      prevmember: ^Canvas;
-     open::
+     pmaction: ^memberaction;
+     open:: 
+       (# 
+       enter inx
+       do
+          dppriv.members[inx][]->prevmember[];
+          attach;
+          cursors.cross[]->theCursor;
+          &memberaction[]->pmaction[]->prevmember.appendAction;
+       #);
+     attach:
        (# pframe: @rectangle; fsize: @Point;
-       enter inx   
-       do THIS(panecanvas)[]->paneprivate.seps[inx][];
-          paneprivate.members[inx][]->prevmember[];
-          paneprivate.members[inx].frame->pframe;
+       enter inx
+       do 
+          THIS(panecanvas)[]->dppriv.seps[inx][];
+          dppriv.members[inx].frame->pframe;
           father.size->fsize;
-          (if verticalStacking then
+          (if dppriv.vs then
               (0,pframe.bottom+1)->position;
-              (fsize.h,panewidth)->size;
+              (fsize.h,dppriv.pw)->size;
            else
               (pframe.right+1,0)->position;
-              (panewidth,fsize.v)->size;
+              (dppriv.pw,fsize.v)->size;
           if);
-          cursors.cross[]->theCursor;
-          &memberaction[]->prevmember.appendAction;
+       #);
+     deattach:
+       (#
+       do pmaction[]->prevmember.deleteAction;
        #);
   #);
 
---- paneopen:descriptor ---
-(# sz,msz: @Point;
-do 
-   2->panewidth;
+--- paneonframechanged:descriptor ---
+(# tmpFrame: @rectangle; sz: @point;
+   ofw,ofh,nfw,nfh,w,h: @Integer;
+   sw,sh: @real;
+do
+   (if (not dppriv.resizing) and (dppriv.last<>0) then
+       
+       (* External event caused resize *)
+       
+       oldFrame.size->(ofw,ofh);
+       (* OldFatherWidth, OldFatherHeight *)
+       
+       newFrame.size->(nfw,nfh);
+       (* NewFatherWidth, NewFatherHeight *)
+       
+       (if (nfw<>ofw) or (nfh<>ofh) then
+           
+           (for i: dppriv.last repeat
+                (if dppriv.fixedSize[i] and not dppriv.vs then
+                    dppriv.members[i].size->(w,h);
+                    nfw-w->nfw; ofw-w->ofw;
+                if);
+                (if dppriv.fixedSize[i] and dppriv.vs then
+                    dppriv.members[i].size->(w,h);
+                    nfh-h->nfh; ofh-h->ofh;
+                if);
+           for);
+           
+           nfw/ofw->sw; nfh/ofh->sh;
+           
+           (0,0)->dppriv.szaccum;
+           (for i:dppriv.last repeat
+                dppriv.members[i].size->sz;
+                (if not (dppriv.fixedSize[i] and dppriv.vs) then
+                    sz.v*sh->sz.v;
+                if);
+                (if not (dppriv.fixedSize[i] and not dppriv.vs) then
+                    sz.h*sw->sz.h
+                if);
+                
+                dppriv.szaccum.v->tmpFrame.top;
+                dppriv.szaccum.h->tmpFrame.left;
+                
+                tmpFrame.left+sz.h->tmpFrame.right;
+                tmpFrame.top+sz.v->tmpFrame.bottom;
+                tmpFrame->dppriv.members[i].frame;
+                (if dppriv.vs then
+                    (0,sz.v)->dppriv.szaccum.add;
+                    (0,dppriv.pw)->dppriv.szaccum.add;
+                 else
+                    (sz.h,0)->dppriv.szaccum.add;
+                    (dppriv.pw,0)->dppriv.szaccum.add;
+                if);          
+           for);
+       if);
+   if);
    
-   INNER open;
-   
-   paneprivate.szaccum->size;
-   onGroupSizeComputed;
-   
-   paneprivate.last-1->paneprivate.seps.new;
-   paneprivate.last-1->paneprivate.moved.new;
-   
-   (for i: paneprivate.last-1 repeat (NONE,i)->(&panecanvas[]).open for);
+   INNER onFrameChanged;
 #)
 
---- paneappendMember:dopart ---
+--- paneopen:dopart ---
+do setDefaults;
+   (2,panewidth)->max->dppriv.pw;
+   verticalStacking->dppriv.vs;
+   minsize->dppriv.ms;
+   0->dppriv.extcount;
+   
+   INNER open;
+
+--- paneappendmember:dopart ---
 do (# msz: @Point;
-   do paneprivate.last+1->paneprivate.last;
-      1->paneprivate.members.extend;
+   do 
+      dppriv.last+1->dppriv.last;
+      1->dppriv.members.extend;
+      1->dppriv.fixedSize.extend;
+      dppriv.extcount+1->dppriv.extcount;
       
       member.size->msz;
-      (if verticalStacking then
-          (0,paneprivate.szaccum.v)->member.position;
-          ((paneprivate.szaccum.h,msz.h)->max,paneprivate.szaccum.v+msz.v)
-            ->paneprivate.szaccum;
-          (if not lastmember then
-              (0,panewidth)->paneprivate.szaccum.add;
-          if);
+      (if dppriv.vs then
+          (0,dppriv.szaccum.v)->member.position;
+          ((dppriv.szaccum.h,msz.h)->max,dppriv.szaccum.v+msz.v)
+            ->dppriv.szaccum;
+          (0,dppriv.pw)->dppriv.szaccum.add;
        else
-          (paneprivate.szaccum.h,0)->member.position;
-          (paneprivate.szaccum.h+msz.h,(paneprivate.szaccum.v,msz.v)->max)
-            ->paneprivate.szaccum;
-          (if not lastmember then
-              (panewidth,0)->paneprivate.szaccum.add;
+          (dppriv.szaccum.h,0)->member.position;
+          (dppriv.szaccum.h+msz.h,(dppriv.szaccum.v,msz.v)->max)
+            ->dppriv.szaccum;
+          (dppriv.pw,0)->dppriv.szaccum.add;
+      if);
+      
+      member[]->dppriv.members[dppriv.last][];
+      INNER appendmember;
+   #);
+
+--- paneappenddone: dopart ---
+do
+   (# sz,msz: @Point;
+   do dppriv.szaccum->sz;
+      (dppriv.pw,sz.v)->max->sz.v;
+      (dppriv.pw,sz.h)->max->sz.h; (* to avoid zero-sized pane *)
+      
+      (if onMemberResize=paneFixed then
+          (if dppriv.vs then
+              (0,-dppriv.pw)->sz.add;
+           else
+              (-dppriv.pw,0)->sz.add;
+          if);          
+      if);
+      
+      TRUE->dppriv.resizing; sz->size; FALSE->dppriv.resizing; 
+   
+      (if not dppriv.sliding then
+          (if dppriv.extcount>0 then
+              dppriv.extcount->dppriv.seps.extend;
+              dppriv.extcount->dppriv.moved.extend;
           if);
       if);
       
-      member[]->paneprivate.members[paneprivate.last][];
-      INNER;
+      (for i: dppriv.last-1 repeat
+           (if not dppriv.sliding then
+               (if dppriv.seps[i][]//NONE then 
+                   (* Ensure members are same heigth (or width) *)
+                   dppriv.members[i].size->msz;
+                   (if dppriv.vs then
+                       (if msz.h<>sz.h then
+                           (sz.h,msz.v)->dppriv.members[i].size;
+                       if);
+                    else
+                       (if msz.v<>sz.v then
+                           (msz.h,sz.v)->dppriv.members[i].size;
+                       if);
+                   if);
+                   (NONE,i)->(&panecanvas[]).open 
+               if);
+           if)
+      for);
+      (if not dppriv.sliding  and (onMemberResize=paneResizable) then
+          (NONE,dppriv.last)->(&panecanvas[]).open
+      if);
+      
+      0->dppriv.extcount;
    #);
    
+--- paneFixedSize: dopart ---
+do 
+   find:
+     (for i: dppriv.last repeat
+          (if dppriv.members[i][]=member[] then
+              true->dppriv.fixedSize[i];
+              leave find;
+          if)
+     for)
+
+--- panedeletemember:dopart ---
+do 
+   TRUE->dppriv.sliding;
+
+   (* Find and remove member and corresponding separator. *)
+   remove:
+     (for i: dppriv.last repeat
+          (if dppriv.members[i][]=member[] then
+              
+              member.close;
+              NONE->dppriv.members[i][];
+
+	      (if dppriv.last>1 then
+                  (* Deattach and close a separator: *)
+                  (if true
+                   //i<=dppriv.last then
+                      dppriv.seps[i].deattach; dppriv.seps[i].close;
+                      NONE->dppriv.seps[i][];
+                   else
+                      dppriv.seps[i-1].deattach; dppriv.seps[i-1].close;
+                      NONE->dppriv.seps[i-1][];
+                  if)
+              if);
+
+              (* Reset and simulate open with remaining members *)
+              (# oldmembers: [0]^Canvas;
+                 skipped: @Integer;
+              do 
+	         (0,0)->dppriv.szaccum;
+	         dppriv.members->oldmembers;
+                 0->dppriv.last->dppriv.members.new;
+
+                 (for j:oldmembers.range repeat
+                      (if oldmembers[j][]<>NONE then
+                          oldmembers[j][]->appendMember
+                          (# 
+                          do (* Slide separator into new position: *)
+                             (if dppriv.seps[j][]<>NONE then
+                                 j-skipped->dppriv.seps[j].attach;
+                             if);
+                          #);
+                       else
+                          1->skipped;
+                      if);
+                 for);
+                 appendsDone;
+                 (* Update dppriv.moved to new size: *)
+	         dppriv.last->dppriv.moved.new;
+                 (* Update dppriv.seps to new size: *)
+                 (if dppriv.last>0 then
+                     dppriv.seps[1:dppriv.last]->dppriv.seps;
+                  else
+                     0->dppriv.seps.new;
+                 if);
+                     
+                 leave remove;
+              #);
+          if)
+     for);
+
+   FALSE->dppriv.sliding;
+   
+--- panefithorizdefault:descriptor ---
+(# do dppriv.vs->value #)
+--- panefitvertdefault:descriptor ---
+(# do not dppriv.vs->value #)
+--- panefittofather:descriptor ---
+(# fsz,msz,newsz: @Point; 
+do fatherSize->fsz;
+   size->msz->newsz;
+   (if fitHoriz then fsz.h->newsz.h if);
+   (if fitVert then fsz.v->newsz.v if);
+   (if not (newsz->msz.isEqual) then newsz->size if);       
+#)
+
 --- paneprivate:descriptor ---
 (# seps: [0]^panecanvas;
    moved: [0]@Boolean;
    members: [0]^Canvas;
+   fixedSize: [0]@Boolean;
    last: @Integer;
    szaccum: @Point;
+   vs: @Boolean; (* VerticalStacking *)
+   ms: @Integer; (* minsize          *)
+   pw: @Integer; (* panewidth        *)
+
+   extcount: @Integer; (* Number of panes to add in this append round. *)
+   sliding: @Boolean;  (* TRUE iff appendMember is used to slide members. *)
+   resizing: @Boolean; (* TRUE iff appendsDone is setting size. *)
 #)

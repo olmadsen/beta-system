@@ -1,4 +1,4 @@
-BETA = beta+
+BETA = beta
 
 all:
 	$(BETA) guienvall guienvsystemenv;\

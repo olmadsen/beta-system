@@ -14,6 +14,10 @@
 #define MOTIF12
 #endif
 
+#ifdef hpux9mc
+#define MOTIF12
+#endif
+
 #include <sys/time.h>
 #include <X11/Xlib.h>
 #include <X11/Intrinsic.h>

@@ -14,6 +14,10 @@
 #define MOTIF12
 #endif
 
+#ifdef hpux9mc
+#define MOTIF12
+#endif
+
 #include <stdio.h>
 #include <X11/IntrinsicP.h>
 #include <X11/Intrinsic.h>
@@ -123,7 +127,7 @@ static void Initialize(XbCanvasWidget request,XbCanvasWidget new) {
   if (request->core.height <= 0)
     new->core.height = 5;
   new->manager.navigation_type = XmSTICKY_TAB_GROUP;
-  new->drawing_area.resize_policy  = XmRESIZE_ANY;
+  new->drawing_area.resize_policy  = XmRESIZE_NONE;
   new->drawing_area.margin_width = 0;
   new->drawing_area.margin_height = 0;
 }

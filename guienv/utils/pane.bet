@@ -1,34 +1,106 @@
-ORIGIN '../guienv';
+ORIGIN '~beta/guienv/v1.3.1/guienv';
 BODY 'private/panebody';
 --- windowLib:attributes ---
 Pane: Canvas
+  (* 
+   * Initialization:
+   *   1. Call open.
+   *   2. From within INNER open, call appendMember repeatedly until all 
+   *      initial members have been appended.
+   *   3. From within INNER open, call appendsDone.
+   *
+   * Extension:
+   *   1. Call appendMember repeatedly until all new members have
+   *      been appended.
+   *   2. Call appendsDone.
+   * 
+   * Deletion:
+   *   1. Call deleteMember.
+   * 
+   * If the application allows interactive change of the size of the Pane,
+   * the members are automatically extended, since correct operation of
+   * the pane depends on the assumption that members fill out the
+   * pane. DO NOT INTERFERE WITH AUTOMATIC MEMBER RESIZING! E.g., do
+   * not bind members, and do not install actions that resize members. This is
+   * taken care of by pane.
+   *)
   (# <<SLOT PaneLib:attributes>>;
-     
-     verticalStacking: @Boolean;
-     (* Whether members should be stacked on top or beside each other.
-      * Set it in INNER open before appending members. 
-      *)
-     minsize: @Integer
-       (* The minimal accepted height of members. Set it in INNER open. *);
-     panewidth: @Integer
-       (* The width of the separators separating members. Default i 2.
-        * Set it in INNER open. 
-        *);
+
      open::<
-       (# onGroupSizeComputed:< Object
-            (* Called when the size of this pane has been computed and set. The
-             * size is computed to be large enough to contain all members.
-             *);
-       do <<SLOT paneopen:descriptor>>
+       (* verticalStacking: Whether members are stacked vert. or horiz.
+        * minsize: Minimal height (or width) of members after interaction.
+        * panewidth: Width of the separators between members. Minimum is 2. *)
+       (# setDefaults:<
+            (* May be used to set default values for verticalStacking,
+             * minsize, and panewidth. *)
+            (# do INNER #);
+          verticalStacking: @Boolean;
+          minsize, panewidth: @Integer;
+       enter (verticalStacking,minsize,panewidth)
+       <<SLOT paneopen:dopart>>
        #);
-     appendMember:
-       (* Should be called from open of the new member which should be called
-        * from inside open of this Pane. *)
+
+     appendMember: 
        (# member: ^Canvas;
-          lastmember: @Boolean;
-       enter (member[],lastmember)
+       enter member[]
        <<SLOT paneappendmember:dopart>>
        #);
+     appendsDone: (# <<SLOT paneappenddone:dopart>> #);
+
+     fixedSize:
+       (* Will not respond to automatic resizing in vertical or
+        * horizontal direction (depending on the stacking order of
+        * this pane
+        *)
+       (# member: ^Canvas;
+       enter member[]
+       <<SLOT paneFixedSize: dopart>>
+       #);
      
-     paneprivate: @<<SLOT paneprivate:descriptor>>;
-  #);
+     deleteMember:
+       (# member: ^Canvas;
+       enter member[]
+       <<SLOT panedeletemember:dopart>>
+       #);
+     
+     onMemberResize:< IntegerValue
+       (* If onMemberResize=paneFixed (default), then dragging a
+        * separator will resize both of its surrounding members, and keep the 
+        * size of the pane fixed.
+        * If onMemberResize=paneResizable, then, in addition, dragging a 
+        * separator with the Shift key down will resize the member immediately
+        * before the dragged separator, and keep the rest of the member 
+        * sizes unchanged. As a result, the pane itself is resized. *);
+     paneFixed: IntegerValue (# do 0->value #);
+     paneResizable: IntegerValue (# do 1->value #);
+     
+     fitToFather:
+       (* Changes the size of this pane to fit the size of its 
+        * father frame. 
+        * If fitHoriz is TRUE, the pane is fitted horizontally. 
+        * Default of fitHoriz is verticalStacking.
+        * If fitVert is TRUE, the pane is fitted vertically.
+        * Default of fitVert is not verticalStacking.
+        * Further bind fatherSize in case "father.size" is not the size
+        * to be fitted against. *)
+       (# fitHoriz:< BooleanObject
+            (# do <<SLOT panefithorizdefault:descriptor>>; INNER #);
+          fitVert:< BooleanObject
+            (# do <<SLOT panefitvertdefault:descriptor>>; INNER #);
+          fatherSize:<
+            (# sz: @Point;
+            do INNER; (if (0,0)->sz.isEqual then father.size->sz if);
+            exit sz
+            #);
+       do <<SLOT panefittofather:descriptor>>
+       #);
+     
+     dppriv: @<<SLOT paneprivate:descriptor>>;
+     
+     eventHandler::<
+       (# onFrameChanged::<
+            (* Resizes members to maintain invariant that the pane 
+             * is filled by its members. *)
+            (# do <<SLOT paneonframechanged:descriptor>> #);
+       #);
+  #)
