@@ -1,3 +1,13 @@
+/*
+ * betarun.c: merge of complete C BETA Runtime system.
+ *
+ * Copyright (C) 1992-94 Mjolner Informatics Aps.
+ * Written by Ole Lehrmann Madsen, Jacob Seligmann, and Peter Andersen.
+ *
+ * $Id: betarun.c,v 1.2 1994-04-11 14:27:50 beta Exp $
+ *
+ */
+
 #include "C/end.c"
 #include "C/initialize.c"
 #include "C/betaenv.c"
