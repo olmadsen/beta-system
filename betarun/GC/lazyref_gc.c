@@ -2,7 +2,7 @@
 
 
 #include "../C/beta.h"
-#include "../CRUN/crun.h"
+
 
 static int negAOAmax = 0; 
 /* Max number of integers possible to put into the negAOArefs table. */
@@ -39,7 +39,7 @@ void negIOArefsINSERT(long fieldAdr)
 {
   if (negIOAsize == negIOAmax) {
     negIOAmax = 2*negIOAmax;
-    negIOArefs = (int *) realloc (negIOArefs, negIOAmax*sizeof(int));
+    negIOArefs = (long *) realloc (negIOArefs, negIOAmax*sizeof(int));
   }
 
   negIOArefs[negIOAsize++] = fieldAdr;
@@ -50,7 +50,7 @@ void preLazyGC ()
 {
   negIOAsize = 0; 
   negIOAmax = DEFAULTNEGTABLESIZE;
-  negIOArefs = (int *) malloc (negIOAmax*sizeof(int));
+  negIOArefs = (long *) malloc (negIOAmax*sizeof(int));
 }
 
 static inline int danglerLookup (int* danglers, int low, int high, int dangler)
@@ -71,8 +71,20 @@ static inline int danglerLookup (int* danglers, int low, int high, int dangler)
     return -1;
 } 
 
+#ifdef sparc
+#include "../CRUN/crun.h"
+#else
+static inline void
+AssignReference(long *theCell, ref(Item) newObject)
+{
+  *(struct Item **)theCell = newObject;
+  if (! inIOA(theCell) && inIOA(newObject))
+    AOAtoIOAInsert(theCell);
+}
+#endif
 
-void setupDanglers (long* danglers, long* objects, int count)
+
+void setupDanglers (int* danglers, long* objects, int count)
 { int i, dangler, inx;
 
   for (i = 0; i < negIOAsize; i++)
@@ -247,6 +259,9 @@ int (*fetchFromDisc)(int); /* BETA callback function. */
  * ===== */
 
 #ifdef sparc
+
+#include "../CRUN/crun.h"
+
 /* #define FilterUnknown 0xFFF8201F */
 #define FilterUnknown 0xFFF8200F  /* ???????? */
 #define KnownMask 0x80900000
@@ -267,7 +282,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 {
   int instruction, sreg, dangler;
 
-  fprintf (stderr, "trapHandler\n");
+  /* fprintf (stderr, "trapHandler\n"); */
 
   if (code == ILL_TRAP_FAULT(17)) {
     /* Ok, this has been a "tle 17" instruction meaning either 
@@ -315,7 +330,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
   } else
     SignalHandler (sig, code, scp, addr);
 
-  fprintf (stderr, "trapHandler returning\n");
+  /* fprintf (stderr, "trapHandler returning\n"); */
 }
 
 #endif
