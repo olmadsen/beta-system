@@ -593,7 +593,7 @@ static void adjust_header(group_header *gh)
 
 #endif /* mac */
 
-static int valhallaCommunicate (int curPC, struct Object* curObj)
+static int valhallaCommunicate (int PC, int SP, Object* curObj)
 { int opcode;
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhallaCommunicate\n"));  
   while (TRUE) {
