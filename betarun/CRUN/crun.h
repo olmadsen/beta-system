@@ -21,7 +21,7 @@ extern void		CopySRR() asm("CopySRR");
 extern void		CopySVR() asm("CopySVR");
 extern ref(Structure)	AlloS() asm("AlloS");
 extern ref(Structure)	ThisS() asm("ThisS");
-extern ref(Structure)	Struc() asm("Struc");
+extern ref(Structure)	ObjS() asm("ObjS");
 extern void		DoGC() asm("DoGC");
 extern ref(Item)	AlloSI() asm("AlloSI");
 extern ref(Component)	AlloSC() asm("AlloSC");
