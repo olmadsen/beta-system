@@ -1,5 +1,5 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Oerbaek, Peter Andersen, Tommy Thorn and Kim Jensen Moeller.
  */
 

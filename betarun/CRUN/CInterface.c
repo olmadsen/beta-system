@@ -1,5 +1,5 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -20,17 +20,21 @@ asmlabel(CpkVT, "
 
 char *
 #ifdef sparc
-      CCpkVT(ref(Object) theObj, ref(ValRep) theRep)
-#else
-       CpkVT(ref(ValRep) theRep)
+      CCpkVT(ref(Object) currentObj, ref(ValRep) theRep)
+#endif
+#ifdef hppa
+      CpkVT(ref(ValRep) theRep)
+#endif
+#ifdef crts
+      CpkVT(struct Object *currentObj, ref(ValRep) theRep)
 #endif
 {
     long bodysize = ByteRepBodySize(theRep->HighBorder);
     long i;
 
 #ifdef hppa
-    ref(Object) theObj;
-    theObj = cast(Object) getThisReg();
+    ref(Object) currentObj;
+    currentObj = cast(Object) getThisReg();
 #endif
 
     /* Check range overflow on CTextPool.
@@ -38,9 +42,9 @@ char *
      * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
      */
 
-    Ck(theObj); Ck(theRep);
+    Ck(currentObj); Ck(theRep);
     if (bodysize > (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
-      BetaError(CTextPoolErr, theObj);
+      BetaError(CTextPoolErr, currentObj);
     
     /* Copy the contents of the repetition to the CTextPool. */
     for (i = 0; i < bodysize/4; ++i)
@@ -62,8 +66,12 @@ char *
 #ifdef sparc
       CCpkSVT(ref(Object) currentObj, ref(ValRep) theRep, unsigned low,
 	      long high)
-#else
-       CpkSVT(ref(ValRep) theRep, unsigned low, long high)
+#endif
+#ifdef hppa
+      CpkSVT(ref(ValRep) theRep, unsigned low, long high)
+#endif
+#ifdef crts
+      CpkSVT(struct Object *currentObj, ref(ValRep) theRep, unsigned low, long high)
 #endif
 {
     long bodysize;

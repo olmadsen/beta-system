@@ -1,7 +1,22 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen and Tommy Thorn.
  */
+
+
+#define GCable_Module
+
+#include "beta.h"
+#include "crun.h"
+
+#ifdef crts
+ParamThisComp(struct Component *, Att)
+{
+  fprintf(output, "Attach NYI\n");
+}
+#endif
+
+#ifdef sparc
 
 /* IMPORTANT NOTE: I have departed from the former practice
    of saving LSC of the caller in the called component.
@@ -9,11 +24,6 @@
    control should be transfered when the component is reactivated.
    Notice, that on the SPARC you should add 8 to this address.
    */
-
-#define GCable_Module
-
-#include "beta.h"
-#include "crun.h"
 
 ParamThisComp(struct Component *, Att)
 {
@@ -178,3 +188,4 @@ ParamThisComp(struct Component *, Att)
     return comp; /* still ?? */
   }
 }
+#endif /* sparc */

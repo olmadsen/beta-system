@@ -1,13 +1,20 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
+#ifdef sparc
 /* This is called with target in %g1, which is a super temp. */
+#endif
+
+#ifdef crts
+void ChkRA(struct Object **theObjHandle)
+#else
 void ChkRA()
+#endif
 {
 #ifdef sparc
   register handle(Object) theObjHandle asm("%g1");

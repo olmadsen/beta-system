@@ -31,6 +31,15 @@
 #include "function.h"
 #include "data.h"
 
+#ifdef crts
+#ifndef RTINFO
+#define RTINFO
+#endif
+#ifndef RTLAZY
+#define RTLAZY
+#endif
+#endif
+
 #ifdef sparc
 #include "sparcdep.h"
 #endif

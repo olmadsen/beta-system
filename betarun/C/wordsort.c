@@ -1,5 +1,5 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * Mod: wordsort.c
  * by Tommy Thorn
  */
@@ -13,7 +13,7 @@
  *  
  */
 
-typedef unsigned int elem;	/* for easy change of types */
+typedef unsigned long elem;	/* for easy change of types */
 
 #define SWAP(a,b) do { elem t = *a; *a = *b; *b = t; } while(0)
 #define maxt 0

@@ -1,5 +1,5 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -8,6 +8,14 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef crts
+ParamThis(struct Component *, Susp)
+{
+  fprintf(output, "Suspend NYI\n");
+}
+#endif
+
+#ifdef sparc
 ParamThis(struct Component *, Susp)
 {
   ref(RegWin) rw; 	/* Pointer to the saved reg.window of last frame */
@@ -95,3 +103,4 @@ ParamThis(struct Component *, Susp)
   asmemptylabel(SuspEnd);
   return called; /* maintain %o0 across 'call Att' */
 }
+#endif /* sparc */

@@ -1,11 +1,62 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen, Tommy Thorn, and Jacob Seligmann
  */
 
 
 #ifndef _CRUN_H_
 #define _CRUN_H_
+
+#ifdef crts
+#define ParamOriginProto(t,name)			 \
+  t name(struct Object *origin, struct ProtoType *proto)
+#define ParamThisComp(t,name)                            \
+  t name(struct Object *this, struct Component *comp)
+#define ParamObjOffRange(t, name)			 \
+  t name(struct Object *theObj,			         \
+	 unsigned offset, /* in bytes */		 \
+	 unsigned range				         \
+	 )
+#define ParamStruc(t, name)                              \
+  t name(struct Structure *struc)
+#define ParamThis(t,name)                                \
+  t name(struct Object *this)
+
+#define setret(newret)
+#define getret(saved)
+
+#define RETURN(v) return v
+#define GCable_Entry()
+#define GCable_Exit(v)
+
+#define CallBetaEntry(entry,item)	                \
+    (* (void (*)()) ((long*)entry) )(item)
+
+extern void pushAdr(long *a);
+extern long *popAdr();
+#define push(v) pushAdr((long*)v)
+#define pop(v) (long*)v=popAdr()
+
+#define Protect(var, code)				\
+  push(var);						\
+  { code; }						\
+  pop(var);
+
+#define Protect2(v1, v2, code)				\
+  push(v1); push(v2);					\
+  { code; }						\
+  pop(v2); pop(v1);
+
+
+#define DeclReference1(type, name) type name
+#define DeclReference2(type, name) type name
+
+#define FetchOriginProto
+#define FetchStruc
+#define FetchThis
+#define FetchThisComp
+
+#endif
 
 #ifndef hppa
 extern struct Component* CAlloC();

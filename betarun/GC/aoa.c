@@ -473,7 +473,7 @@ static void Phase1()
 #ifdef RTDEBUG
   { /* Make sure that there are no duplicate AOA roots! */
     long old=0;
-    WordSort(AOArootsPtr, AOArootsLimit-AOArootsPtr);
+    WordSort((unsigned long *)AOArootsPtr, AOArootsLimit-AOArootsPtr);
     while (pointer > AOArootsPtr){
 #ifdef hppa
       /* See below... */
@@ -747,11 +747,11 @@ static void Phase3()
   /* Clear the AOAtoIOAtable. */
   AOAtoIOAClear();
   
-  WordSort(table, AOAtoIOACount);
-  WordSort(AOAtoLVRAtable, AOAtoLVRAsize);
+  WordSort((unsigned long*)table, AOAtoIOACount);
+  WordSort((unsigned long*)AOAtoLVRAtable, AOAtoLVRAsize);
 #ifdef RTLAZY
   if (negAOArefs)
-    WordSort (negAOArefs, negAOAsize);
+    WordSort((unsigned long*)negAOArefs, negAOAsize);
 #endif
 
 

@@ -1,5 +1,5 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -13,6 +13,9 @@ static TerminateBasicComponent() { BetaExit(0); }
 ParamThisComp(void, AttBC)
 {
     register long *entrypoint;
+
+#ifdef crts
+#endif
 
 #ifdef sparc
     register ref(CallBackFrame) callBackFrame asm("%l5");
@@ -38,6 +41,9 @@ ParamThisComp(void, AttBC)
     Ck(comp);
     /* Push the bottom component block. */
     /* Terminates the list of component blocks on the stack. */
+#ifdef crts
+    fprintf(output, "AttachBasicComponent NYI\n");
+#endif
 #ifdef sparc
     callBackFrame = cast(CallBackFrame) 0;
     nextCompBlock = cast(RegWin) 0;
@@ -68,7 +74,6 @@ ParamThisComp(void, AttBC)
 
     /* TerminateBasicComponent: */
     BetaExit(0);
-
 
 #ifdef sparc
     /* The following volapyk is to fool gcc into beliving that

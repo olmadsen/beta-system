@@ -1,5 +1,5 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -21,13 +21,19 @@ asmlabel(NewRR, "
 void NewRR(ref(Object) theObj,
 	   long offset, 
 	   long range)
-#else
+#endif
+#ifdef sparc
 void CNewRR(ref(Object) theObj, 
 	    int i1,
 	    long offset /* in ints */,
 	    int i3,
 	    int i4,
 	    long range)
+#endif
+#ifdef crts
+void NewRR(ref(Object) theObj,
+	   long offset, 
+	   long range)
 #endif
 {
     GCable_Entry();
@@ -45,8 +51,12 @@ void CNewRR(ref(Object) theObj,
     AlloRR();
     setThisReg(popReference());
     theObj = popReference();
-#else
+#endif
+#ifdef sparc
     Protect(theObj,if (range<0) range=0; CAlloRR(theObj, 0, offset*4, 0, 0, range));
+#endif
+#ifdef crts
+    Protect(theObj,if (range<0) range=0; AlloRR(theObj, offset*4, range));
 #endif
     if (! inIOA((struct Object **)theObj+offset) &&
 	inIOA(*(struct Object **)theObj+offset))

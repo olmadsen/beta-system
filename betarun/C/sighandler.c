@@ -5,6 +5,15 @@
  */
 #include "beta.h"
 
+#ifdef crts
+void BetaSignalHandler (sig)
+  long sig;
+{
+  fprintf(output, "BetaSignalHandler: Caught signal %d. Exiting.\n", sig);
+  exit(1);
+}
+#endif
+
 #if defined(UNIX) || defined(nti)
 #include <signal.h>
 #endif /* UNIX || nti */
@@ -109,6 +118,7 @@ void BetaSignalHandler (sig, info, ucon)
 /***** END sun4s ****/
 
 #else /* sun4s */
+#ifndef crts
 
 /* This procedure is called if a nasty signal is recieved
  * during execution of BetaSignalHandler.
@@ -353,4 +363,5 @@ void BetaSignalHandler(sig, code, scp, addr)
   BetaExit(-1);
 }
 
+#endif /* crts */
 #endif /* sun4s */

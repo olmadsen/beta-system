@@ -1,5 +1,5 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1991-93 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1991-94 Mjolner Informatics Aps.
  * dumper.c
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */

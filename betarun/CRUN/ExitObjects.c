@@ -1,11 +1,13 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen, Tommy Thorn, and Jacob Seligmann
  */
 
 #define GCable_Module
 #include "beta.h"
 #include "crun.h"
+
+#ifdef sparc
 
 asmlabel(ExO, "
         mov     %i1, %o1
@@ -57,3 +59,4 @@ void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
     FramePointer = (long *) rw;
 }
 
+#endif /* sparc */

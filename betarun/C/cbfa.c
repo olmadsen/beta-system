@@ -33,7 +33,7 @@ void CBFAAlloc()
 	CBFATop = lastCBFA->entries;
 	CBFALimit = cast(CallBackEntry) ((long) lastCBFA->entries + CBFABlockSize);
     }
-    INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb); );
+    INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb) );
 }
 
 void CBFArelloc()
@@ -60,7 +60,7 @@ void CBFArelloc()
     CBFATop = lastCBFA->entries;
     CBFALimit = cast(CallBackEntry) ((long) lastCBFA->entries + CBFABlockSize);
     
-    INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb); );
+    INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb) );
 }
 
 void freeCBF(external_entry)

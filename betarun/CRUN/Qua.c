@@ -1,5 +1,5 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen, Peter Oerbaek, Tommy Thorn, and Jacob Seligmann
  */
 
@@ -238,8 +238,12 @@ void COQua(ref(Object) dstQuaOrigin,
 	    if (src->Proto == StructurePTValue){
 #ifdef sparc
 	      Protect(dstQuaOrigin, src = cast(Object) CAlloSI(cast(Structure)src, 0, 0, 0, 0));
-#else
+#endif
+#ifdef hppa
 	      Protect(dstQuaOrigin, src = cast(Object) CAlloSI(cast(Structure)src));
+#endif
+#ifdef crts
+	      Protect(dstQuaOrigin, src = cast(Object) AlloSI(cast(Structure)src));
 #endif
 	    }
 	    less = (cast(Object)((long*)src)[dstQuaProto->OriginOff] == dstQuaOrigin);

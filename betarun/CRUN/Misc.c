@@ -1,5 +1,5 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen, Tommy Thorn, and Jacob Seligmann
  */
 
@@ -17,21 +17,26 @@ long *   savedRefSP;
 #ifdef hppa
 void Return() {}
 #endif
-#ifdef sparc
-/* The first nop is needed in case Return is called directly from a 
- * runtime ruotine. This is the case for e.g. an empty program.
- */
-#ifdef sun4s
-asmlabel(Return, "nop; retl; nop");
-#else
-asmlabel(_Return, "nop; retl; nop");
-#endif
+
+#ifdef crts
+void Return() {}
 #endif
 
-void
-RefNone(ref(Object) theObj)
+#ifdef sparc
+     /* The first nop is needed in case Return is called directly from a 
+      * runtime ruotine. This is the case for e.g. an empty program.
+      */
+#ifdef sun4s
+     asmlabel(Return, "nop; retl; nop");
+#else
+     asmlabel(_Return, "nop; retl; nop");
+#endif
+#endif
+     
+     void
+       RefNone(ref(Object) theObj)
 {
-    BetaError(RefNoneErr, theObj);
+  BetaError(RefNoneErr, theObj);
 }
 
 #ifdef hppa
@@ -64,30 +69,34 @@ extern void doGC();
 /* inline */
 #endif
 char *
-IOAalloc(unsigned size)
+  IOAalloc(unsigned size)
 {
   register char *p;
-
+  
   GCable_Entry();
-
+  
   DEBUG_CODE(Claim(size>0, "IOAalloc: size>0"));
 #if (defined(sparc) || defined(hppa))
   DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAalloc: (size&7)==0"));
   DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAalloc: (IOATop&7)==0"));
 #endif
-
+  
   while ((char *)IOATop+size > (char *)IOALimit) {
-      ReqObjectSize = size / 4;
-      doGC();
+    ReqObjectSize = size / 4;
+    doGC();
   }
-
+  
   p = (char *)IOATop;
 #ifdef hppa
   setIOATopoffReg(getIOATopoffReg() + size);
-#else
+#endif
+#ifdef sparc
   IOATopoff += size;
 #endif
-
+#ifdef crts
+  IOATop += size;
+#endif
+  
   return p;
 }
 
@@ -95,30 +104,34 @@ IOAalloc(unsigned size)
 /* inline */
 #endif
 char *
-IOAcalloc(unsigned size)
+  IOAcalloc(unsigned size)
 {
   register char *p;
-
+  
   GCable_Entry();
-
+  
   DEBUG_CODE(Claim(size>0, "IOACalloc: size>0"));
 #if (defined(sparc) || defined(hppa))
   DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAcalloc: (size&7)==0"));
   DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAcalloc: (IOATop&7)==0"));
 #endif
-
+  
   while ((char *) IOATop+size > (char *)IOALimit) {
-      ReqObjectSize = size / 4;
-      doGC();
+    ReqObjectSize = size / 4;
+    doGC();
   }
-
+  
   p = (char *)IOATop;
 #ifdef hppa
   setIOATopoffReg(getIOATopoffReg() + size);
-#else
+#endif
+#ifdef sparc
   IOATopoff += size;
 #endif
-
+#ifdef crts
+  IOATop += size;
+#endif
+  
   long_clear(p, size);
   return p;
 }
@@ -153,7 +166,51 @@ void CCk(ref(Object) r)
   if(r) 
     Claim(inIOA(r) || inAOA(r) || inLVRA(r) || isLazyRef(r),
 	  "Reference none or inside IOA, AOA, or LVRA");
-  }
+}
 #endif
 #endif
 
+#ifdef crts
+
+/* Global address registers */
+long *a0,*a1,*a2,*a3,*a4,*a7;
+int leave;
+
+/* New RT routines for crts */
+static long *refstack[1000];
+static long reftop=0;
+
+void pushAdr(a)
+     long *a;
+{
+  refstack[reftop] = a;
+  reftop=reftop+1;
+}
+
+long *popAdr()
+{
+  reftop=reftop-1;
+  return (long *)refstack[reftop];
+}  
+
+int CallBackPar(off)
+     int off;
+{
+}
+
+int GetByte(int a,int byteNo)
+{}
+int GetShort(int a,int shortNo)
+{}
+int PutBits(int a,int b,int c,int d)
+{}
+int GetBits(int a,int b,int c)
+{}
+int GetSignedBits(int a,int b,int c)
+{}
+int SignExtByte(int a)
+{}
+int SignExtWord(int a)
+{}
+
+#endif /* crts */

@@ -183,6 +183,12 @@
 # if defined(linux) || defined(nti)
 # define asmemptylabel(label)
 # else
+# if defined(sparc) || defined(hppa)
   /* See sparcdep.h/snakedep.h */
+# else
+# define asmlabel(label, code)
+# define asmemptylabel(label)
+# define asmcomment(text)
+# endif
 # endif
 #endif

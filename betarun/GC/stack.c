@@ -337,6 +337,22 @@ void ProcessStackObj(struct StackObject *theStack)
 }
 #endif /* sparc */
 
+#ifdef crts
+
+void ProcessStackPart(long *low, long *high)
+{
+}
+
+void ProcessStackObj(struct StackObject *theStack)
+{
+}
+
+void ProcessStack()
+{
+}
+
+#endif /* crts */
+
 /****************************** LINUX & NTI **********************************/
 
 #if (defined(linux) || defined(nti))

@@ -1,5 +1,5 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -129,9 +129,14 @@ ParamStruc(struct Item *, AlloSI)
 #ifdef sparc
   Protect(struc, 
 	  ss = CAlloI(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0));
-#else
+#endif
+#ifdef hppa
   Protect(struc, 
 	  ss = CAlloI(cast(Object) struc->iOrigin, struc->iProto));
+#endif
+#ifdef crts
+  Protect(struc, 
+	  ss = AlloI(cast(Object) struc->iOrigin, struc->iProto));
 #endif
   RETURN(ss);
 }
@@ -146,9 +151,14 @@ ParamStruc(struct Component *, AlloSC)
 #ifdef sparc
   Protect(struc, 
 	  ss = CAlloC(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0));
-#else
+#endif
+#ifdef hppa
   Protect(struc, 
 	  ss = CAlloC(cast(Object) struc->iOrigin, struc->iProto));
+#endif
+#ifdef crts
+  Protect(struc, 
+	  ss = AlloC(cast(Object) struc->iOrigin, struc->iProto));
 #endif
   RETURN(ss);
 }    
@@ -263,8 +273,12 @@ long LtS(ref(Structure) arg1, ref(Structure) arg2)
 	   
 #ifdef sparc
 	   Protect(arg2, newObject = CAlloSI(arg1, 0, 0, 0, 0));
-#else
+#endif
+#ifdef hppa
 	   Protect(arg2, newObject = CAlloSI(arg1));
+#endif
+#ifdef crts
+	   Protect(arg2, newObject = AlloSI(arg1));
 #endif
 	   return cast(Object)((long*)newObject)[proto2->OriginOff] == (arg2->iOrigin);
 	 }

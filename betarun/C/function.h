@@ -12,7 +12,7 @@ extern void GetBetaEnv(void);
 extern void SetupProperties(char *);
 
 /* C/wordsort.c */
-extern void WordSort(void *, int);
+extern void WordSort(unsigned long*, int);
 
 #ifdef RTDEBUG
 /* C/dumper.c */

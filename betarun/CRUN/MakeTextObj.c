@@ -1,5 +1,5 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -57,8 +57,12 @@ void MkTO(char *cText,
     ClearCParams(); /* OK here: is not called from RT */
     Protect(theItem, theText = CAlloI((struct Object *)BasicItem, 0, 
 				      TextProto, 0, 0));
-#else
+#endif
+#ifdef hppa
     Protect(theItem, theText = CAlloI((struct Object *)BasicItem, TextProto));
+#endif
+#ifdef crts
+    Protect(theItem, theText = (struct Item *)AlloI((struct Object *)BasicItem, TextProto));
 #endif
 
     AssignReference((long *)theItem + offset, theText);
