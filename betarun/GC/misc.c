@@ -174,6 +174,7 @@ int strongIsObject(Object *obj)
     if (!IsBetaDataAddrOfProcess((unsigned long)proto)) {
       fprintf(output,"proto is not in data segment: 0x%08X\n", (int)proto);
       fflush(output);
+      DEBUG_CODE(Illegal());
       return 0;
     }
   }

@@ -817,10 +817,11 @@ static long skipCparams;
 /* #define SPARC_SKIP_TO_ETEXT 1*/
 
 #ifdef RTDEBUG
-RegWin *BottomAR=0, *lastAR=0;
-GLOBAL(long PC) = 0;
-void PrintAR(RegWin *ar, RegWin *theEnd);
-void PrintCAR(RegWin *cAR);
+static RegWin *BottomAR=0 /* Currently never set up - use StackStart? */;
+static RegWin *lastAR=0;
+static long PC = 0;
+static void PrintAR(RegWin *ar, RegWin *theEnd);
+static void PrintCAR(RegWin *cAR);
 #endif
 
 /* ProcessStackCell:
@@ -1012,11 +1013,7 @@ static void ProcessSPARCStack(void)
       skipCparams=FALSE;
       DEBUG_CODE(lastAR = theAR);
     }
-    DEBUG_CODE(if (BottomAR)
-               Claim(lastAR==BottomAR, "lastAR==BottomAR");
-               else
-               BottomAR=lastAR;
-	       );
+    DEBUG_CODE(if (BottomAR) Claim(lastAR==BottomAR, "lastAR==BottomAR"));
     DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
 }
 

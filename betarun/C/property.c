@@ -91,6 +91,7 @@ static void BooleanProperty(char *name)
   ENTRY("DebugIOA",   DebugIOA = TRUE);
   ENTRY("CheckHeap",   CheckHeap = TRUE);
   ENTRY("StopAtIllegal",   StopAtIllegal = TRUE);
+  ENTRY("SAI",   StopAtIllegal = TRUE);
   ENTRY("DebugAlloI",   DebugAlloI = TRUE);
   ENTRY("DebugCBFA",  DebugCBFA = TRUE);
   ENTRY("DumpAOA",   DumpAOA = TRUE);
