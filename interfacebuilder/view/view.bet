@@ -26,7 +26,7 @@ world: canvas
         * (if theInspector[] <> NONE then
         * obj[] -> theInspector.inspect;
         * if);
-        *) obj[]->getPatternName->putLine; 
+        *) (* obj[]->getPatternName->putLine;  *) 
        #);
      updateArea:
        (#
@@ -95,18 +95,7 @@ world: canvas
        (#
           children: @sequence (# element:: wrapper;  #);
           updateChild:: 
-            (# w: ^wrapper; area: ^box; 
-            do
-               'updatechild'->putLine;
-               child[]->w[];
-               w->makeBox->area[];
-               w.naturalWidth->width;
-               w.naturalHeight->height;
-               (x,y,width,height)->makeBox->compute;
-               w[]->area.union->area[];
-               area[]->THIS(world).updateArea;
-               
-            #);
+            (# w: ^wrapper do child[]->w[]; true->w.changedFlag;  #);
           onMouseDown:: 
             (# 
             do
@@ -161,16 +150,7 @@ world: canvas
                     THIS(wrapper)[]->theInterior.super[];
                     
                  #);
-               draw:: 
-                 (# 
-                 do
-                    true->override;
-                    (0,0,0)->g.pen.foreGroundColor;
-                    asRectangle->g.fillRect;
-                    THIS(box)[]->theInterior.compute;
-                    (g[])->theInterior.draw;
-                    
-                 #);
+               draw::  (#  do true->override; (g[])->theInterior.draw;  #);
                onMouseDown:: 
                  (# r: @rectangle; newBounds,area: ^box; 
                  do
@@ -179,8 +159,41 @@ world: canvas
                     (r.left,r.top,r.right-r.left,r.bottom-r.top)->makeBox
                       ->newBounds[];
                     THIS(box)[]->newBounds.union->area[];
-                    newBounds->THIS(box);
+                    newBounds[]->compute;
                     area[]->updateArea;
+                    
+                 #);
+               changedFlag: @boolean;
+               processChanged:
+                 (# area: ^box; width,height: @integer; 
+                 do
+                    false->changedFlag;
+                    THIS(wrapper)->makeBox->area[];
+                    naturalWidth->width;
+                    naturalHeight->height;
+                    4
+                      ->trace
+                        (# 
+                        do
+                           'update'->xT;
+                           ' width = '->xT;
+                           width->xI;
+                           'height = '->xT;
+                           height->xI
+                        #);
+                    (x,y,width,height)->makeBox->compute;
+                    4
+                      ->trace
+                        (# 
+                        do
+                           'after'->xT;
+                           ' width = '->xT;
+                           width->xI;
+                           'height = '->xT;
+                           height->xI
+                        #);
+                    THIS(wrapper)[]->area.union->area[];
+                    area[]->THIS(world).updateArea;
                     
                  #);
                
@@ -263,18 +276,17 @@ world: canvas
             (# g: ^graphics; 
             enter g[]
             do
-               (if traceDraw then
-                   indent;
-                   THIS(view)[]->getPatternName
-                     ->putText;
-                   '.draw'->putLine;
-                   level+1->level;
-                   
-               if);
+               5
+                 ->trace
+                   (# 
+                   do
+                      xN;
+                      THIS(view)[]->getPatternName
+                        ->xT;
+                      up
+                   #);
                INNER ;
-               (if traceDraw then
-                   level-1->level; 
-               if);
+               5->trace (#  do down #);
                
             #);
           onMouseDown:<
@@ -343,10 +355,30 @@ world: canvas
             do (if doInspect then THIS(view)[]->inspect;  if); INNER ; 
             exit handled
             #);
-          updateChild:< (# child: ^view;  enter child[] do INNER ;  #);
+          updateChild:<
+            (# child: ^view; 
+            enter child[]
+            do
+               1
+                 ->trace
+                   (# 
+                   do
+                      THIS(view)[]->getPatternName->xT;
+                      '.updateChild: '->xT;
+                      child[]->getPatternName->xT;
+                      xN
+                   #);
+               INNER ;
+               
+            #);
           changed:<
             (# 
             do
+               2
+                 ->trace
+                   (# 
+                   do THIS(view)[]->getPatternName->xT; '.changed'->xt; xN
+                   #);
                (if super[] <> none then
                    THIS(view)[]->super.updateChild; 
                if);
@@ -356,7 +388,12 @@ world: canvas
           compute:<
             (# bounds: ^box; 
             enter bounds[]
-            do bounds->THIS(view); INNER ; 
+            do
+               3->trace (#  do xN; THIS(view)[]->getPatternName->xT; up #);
+               bounds->THIS(view);
+               INNER ;
+               3->trace (#  do down #);
+               
             #);
           copy:<
             (# type:< view; new: ^type; s: ##view; 
@@ -406,13 +443,7 @@ world: canvas
                
             #);
           draw:: 
-            (# 
-            do
-               THIS(view)[]->compute;
-               children.scan
-                 (#  do (g[])->current.draw;  #);
-               
-            #);
+            (#  do children.scan (#  do (g[])->current.draw;  #);  #);
           onMouseDown::< 
             (# theLayout: ^layout; 
             do
@@ -949,7 +980,7 @@ world: canvas
      margin: adorner
        (#
           size:
-            (# theSize: @integer; 
+            (# 
             enter (#  enter theSize do changed;  #)
             exit theSize
             #);
@@ -977,13 +1008,16 @@ world: canvas
      open::< 
        (# 
        do
+          screen[]->traceStream[];
           grey2->background[];
           bulletinBoard.init;
           true->doInspect;
           THIS(world)[]->floatingText.open;
+          100->updateTimer.start;
           INNER ;
           
        #);
+     close::<  (#  do INNER ; updateTimer.stop #);
      eventHandler::< 
        (#
           onRefresh:: 
@@ -1008,9 +1042,56 @@ world: canvas
             #);
           
        #);
-     traceDraw: (#  exit false #);
-     level: @integer;
-     indent: (#  do (for level repeat '  '->putText;  for);  #);
+     updateTimer: @timer
+       (#
+          action:: 
+            (# 
+            do
+               bulletinboard.children.scan
+                 (# 
+                 do (if current.changedFlag then current.processChanged if)
+                 #)
+            #)
+       #);
+     switch: [255] @boolean;
+     indent: [255] @integer;
+     trace:
+       (#
+          xT: (# xT: ^text enter xT[] do xT[]->tracestream.putText #);
+          xC: (# c: @char;  enter c do c->tracestream.put;  #);
+          xI:
+            (# n: @integer
+            enter n
+            do
+               ' '->tracestream.put; n->tracestream.putint; ' '->tracestream.put
+            #);
+          xB:
+            (# b: @boolean
+            enter b
+            do
+               (if b then
+                   ' true '->traceStream.puttext
+                else
+                   ' false '->traceStream.puttext
+               if)
+            #);
+          xN:
+            (# 
+            do
+               tracestream.newline;
+               '$'->xC;
+               no->xI;
+               ': '->xT;
+               (for indent[no] repeat '  '->xT;  for)
+            #);
+          up: (#  do indent[no]+1->indent[no] #);
+          down: (#  do indent[no]-1->indent[no] #);
+          no: @integer;
+          
+       enter no
+       do (if switch[no] then INNER ;  if); 
+       #);
+     traceStream: ^stream;
      
   #);
   
