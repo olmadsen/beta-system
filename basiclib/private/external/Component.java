@@ -176,7 +176,7 @@ public class Component {
 		// a reserved Java language word.
 		try{
 		    myComponent.body.Do();
-		} catch (Exception e){
+		} catch (Throwable e){
 		    // Cannot have a catch ExOException, since
 		    // myComponent.body.Do (the BETA code) does not
 		    // declare that it throws this particular exception.
