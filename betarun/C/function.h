@@ -135,3 +135,13 @@ extern void InitTheCursor(void);
 extern void RotateTheCursor(void);
 extern void RotateTheCursorBack(void);
 #endif
+
+
+#ifdef sparc
+/* Fucking header files on sun4 do not include function prototypes?? */
+extern char *memalign(unsigned alignment, unsigned size);
+extern int fprintf(FILE *, const char *, ...);
+extern int fflush(FILE *);
+extern int tolower(int);
+extern int fclose(FILE *);
+#endif
