@@ -14,18 +14,20 @@ check_pack()
 	STRANGE=`egrep -e '~|^#|core|\.dump' $pack.lst`
 	if [ "$STRANGE" != "" ]
 	then
-		echo ""
-		echo "*** STRANGE FILES PACKED (consult $DST/$pack.lst):"
-		echo ""
-		egrep -e '~|^#|core|\.dump' $pack.lst
+		echo "" | tee -a $DST/errors.lst
+		echo "*** STRANGE FILES PACKED (consult $DST/$pack.lst):" \
+                        | tee -a $DST/errors.lst
+		echo "" | tee -a $DST/errors.lst
+		egrep -e '~|^#|core|\.dump' $pack.lst | tee -a $DST/errors.lst
 	fi
 	if [ "$PROBLEMS" != "" ]
 	then
-		echo ""
-		echo "*** PROBLEMS (consult $DST/$pack.lst):"
-		echo ""
-		#echo $PROBLEMS
-		grep -v '^a' $pack.lst
+		echo "" | tee -a $DST/errors.lst
+		echo "*** PROBLEMS (consult $DST/$pack.lst):" \
+                        | tee -a $DST/errors.lst
+		echo "" | tee -a $DST/errors.lst
+		#echo $PROBLEMS | tee -a $DST/errors.lst
+		grep -v '^a' $pack.lst | tee -a $DST/errors.lst
 	fi
 
 }
