@@ -1,6 +1,7 @@
 ORIGIN '~beta/guienv/v1.3/guienv';
 BODY 'private/siftexteditorbody'
-     'private/mydialogsbody';
+     'private/mydialogsbody'
+     'private/codeviewerbody';
 INCLUDE '~beta/guienv/v1.3/guienv'
         '~beta/guienv/v1.3/fields'
         '~beta/guienv/v1.3/guienvactions'
@@ -12,10 +13,8 @@ INCLUDE '~beta/guienv/v1.3/guienv'
         '~beta/betaast/v4.9.1/donecheck'
         '~beta/betaast/v4.9.1/gram'
         '~beta/sysutils/v1.4/envstring'
-        '~beta/interfacebuilder/v1.0/guienvstuff/timer'
-        'guienvstuff/textfieldstuff'
+        '~beta/guienv/v1.3/utils/timer'
         'editorenv';
-(*'~beta/interfacebuilder/v1.0d/guienvadds/textfieldadds'*)
 -- windowlib: Attributes --
 sifTextEditor: textEditor
   (#
@@ -74,6 +73,7 @@ sifTextEditor: textEditor
      frag: ^mps.fragmentForm;
      node: ^mps.ast;
      theWindow: (#  exit THIS(window)[] #);
+     textEditing: @boolean;
      onOpen:<
        (# 
        do
@@ -100,19 +100,28 @@ sifTextEditor: textEditor
      onDoubleClick:<
        (# start,end: @integer
        enter (start,end)
-       do (start,end)->SifViewer.selectionToAST; SifViewer.handleDoubleClick; 
+       <<SLOT codeviewerOnDoubleClick:DoPart>>
        #);
      onClick:<
-       (# start,end,line1,char1,line2,char2: @integer
+       (#
+          start,end,line1,char1,line2,
+            char2: @integer
        enter (start,end)
-       do (start,end)->SifViewer.selectionToAST; 
+       <<SLOT codeviewerOnClick:DoPart>>
        #);
+     enterTextEditing:
+       (# ch: @char
+       enter ch
+       <<SLOT codeviewerEnterTextEditing:DoPart>>
+       #);
+     exitTextEditing: (#  <<SLOT codeviewerExitTextEditing:DoPart>> #);
      prettyprinting: @boolean;
      showContents:
        (# 
        do
           (if SifViewer.switch[2] then
-              (if SifViewer.switch[3] then
+              (if SifViewer.switch[3]
+               then
                   'contents: '->screen.putLine;
                   '['->screen.put;
                   contents.contents->screen.putText;
@@ -194,71 +203,16 @@ sifTextEditor: textEditor
                       #);
                     
                  #);
-               onKeyDown::< 
+               onKeyDown::<  (#  <<SLOT codeViewerOnKeyDown:DoPart>> #);
+               onMouseDown::< 
                  (# 
-                 do
-                    (if sifViewer[] <> none then
-                        (if SifViewer.switch[1] then
-                            'onKeyDown: '->putText; ch->put; newLine; 
-                        if);
-                        (if ch
-                         // 'p' then
-                            (SifViewer.frag.root[],- 1)
-                              ->SifViewer.astView.pp.present;
-                            SifViewer.cs->sifViewer.setFocus;
-                            
-                         else
-                            INNER ; 
-                        if);
-                        
-                    if);
-                    
+                 <<SLOT codeViewerOnMouseDown:DoPart>>
                  #);
-               onMouseDown::<  (#  <<SLOT codeViewerOnMouseDown:DoPart>> #);
-               onMouseUp::< 
+               onMouseUp::<  (#  <<SLOT codeviwerOnMouseUp:DoPart>> #);
+               onBeforeChange::< 
                  (# 
-                 do
-                    (if sifViewer[] <> none then
-                        (if SifViewer.switch[1] then
-                            '-------------------'->putLine;
-                            'onMouseUp'->putLine;
-                            
-                        if);
-                        (if SifViewer.switch[2] then
-                            'selection: '->putText;
-                            selection.start->putInt;
-                            ' '->put;
-                            selection.end->putInt;
-                            newLine;
-                            
-                        if);
-                        (if not skipMouseUp then
-                            (if doubleClick then
-                                (if SifViewer.switch[1] then
-                                    'doubleClick'->putLine; 
-                                if);
-                                oldSelection->onDoubleClick
-                             else
-                                (if selection.start <> selection.end then
-                                    (if SifViewer.switch[1] then
-                                        'draggingSelection'->putLine; 
-                                    if);
-                                    selection->oldSelection;
-                                    true->draggingSelection
-                                if);
-                                selection->oldSelection->onClick
-                            if);
-                            
-                         else
-                            FALSE->skipMouseUp; 
-                        if);
-                        INNER ;
-                        
-                    if);
-                    theTimer.activate;
-                    
+                 <<SLOT codeViewerOnBeforeChange:DoPart>>
                  #);
-               onBeforeChange::<  (#  do prettyprinting->allow; INNER #);
                onTextChanged::< 
                  (# 
                  do
@@ -434,20 +388,37 @@ sifTextEditor: textEditor
        do <<SLOT sdeWtexteditorrefresh:Descriptor>>
        exit tt[]
        #);
+     lastPosition:
+       (# pos: @integer
+       <<SLOT sdeWtexteditorLastposition:DoPart>>
+       exit pos
+       #);
+     posToLineChar:
+       (# pos: @integer; line,char: @integer; 
+       enter pos
+       <<SLOT sdeWtexteditorposToLineChar:DoPart>>
+       exit (line,char)
+       #);
+     lineCharToPos:
+       (#
+          line,char: @integer;
+          pos: @integer;
+          
+       enter (line,char)
+       <<SLOT sdeWtexteditorlineCharToPos:DoPart>>
+       exit pos
+       #);
      open::< 
        (#
           defaultSize:<
-            (# value: @Point; 
-            do
-               (600,300)->value;
-               INNER
-            exit value
-            #);
+            (# value: @Point;  do (600,300)->value; INNER exit value #);
           
-       do
-       (*contents.afterButtonUpAction[]->appendAction;*)
+       do (*contents.afterButtonUpAction[]->appendAction;*)
           defaultSize->size; INNER ; 
        #);
+     closeGroup: (* if value then close is OK *) booleanValue (#  do  #);
+     saveGroup: (#  do  #);
+     saveGroupAs: (# name: ^text enter name[] do  #);
      newfragment:<
        (# 
        enter (mps[],betaGrammar[], (*UI[],*) frag[],node[])
@@ -503,18 +474,15 @@ codeviewer:
                         true->skipLeadingBlanks;
                         
                      else
-                        (if skipLeadingBlanks
-                         // true then
-                            (if (ch->ascii.isSpace)
-                             // false then
+                        (if skipLeadingBlanks then
+                            (if not (ch->ascii.isSpace) then
                                 ch->put;
                                 lengthOfLastLine+1->lengthOfLastLine;
                                 false->skipLeadingBlanks
                             if)
                          else
                         (* skipping tabs *)
-                            (if (ch->ascii.isSpace)
-                             // true then
+                            (if (ch->ascii.isSpace) then
                                 (if ch
                                  // ascii.sp then
                                     ch->put;
@@ -543,8 +511,7 @@ codeviewer:
           measureSpecialComment::< 
             (# 
             do
-               (if (com.lgth > 40)
-                // true then
+               (if (com.lgth > 40) then
                    100
                      ->length
                      (* only used to provoke a break
@@ -617,8 +584,7 @@ codeviewer:
             (# 
             do
                (if switch[1] then 'out.newLine'->screen.putLine;  if);
-               (if windowLine.length > 0
-                // true then
+               (if windowLine.length > 0 then
                    windowLine[]->theWholeText.putLine; windowLine.clear; 
                 else
                (*'eating emtyline!'->screen.putLine;*)
@@ -721,138 +687,18 @@ codeviewer:
      trace:
        (# str: ^text
        do
-          (if doTrace
-           // true then INNER ; '/'->screen.put; str[]->screen.putText; 
+          (if doTrace then
+              INNER ; '/'->screen.put; str[]->screen.putText; 
           if)
        #);
      test:
        (# str: ^text; 
-       do (if edDebug // true then INNER ; str[]->screen.putText;  if)
+       do (if edDebug then INNER ; str[]->screen.putText;  if)
        #);
      selectionToAST:
-       (#
-          start,end,line1,char1,line2,char2: @integer;
-          newCS: @astFocus;
-          startNode,endNode,nca,firstListElement,lastListElement: ^mps.ast;
-          prod: ^mg.prod;
-          expNode: ^mps.expanded;
-          startSonNo,endSonNo: @integer;
-          synCatNo: @mps.nonterminalSymbol;
-          startInx,startSubinx,endInx,endSubInx: @integer
+       (# start,end: @integer
        enter (start,end)
-       do
-          (if start = end then
-              start->theSifTexteditor.contents.posToRowCol->(line1,char1);
-              (if switch[2] then
-                  'onClick after posToRowCol: '->putText;
-                  line1->screen.putint;
-                  ' '->screen.put;
-                  char1->screen.putint;
-                  ' '->screen.put;
-                  
-              if);
-              (line1,char1)->astView.pp.hit->(startNode[],startInx,startSubinx);
-              startNode[]->nca[];
-              0->startSonNo;
-              (if switch[2] then
-                  'onClick: startSonNo, index: '->putText;
-                  startSonNo->putInt;
-                  ' '->put;
-                  startNode.index->putInt;
-                  newLine;
-                  'startSon: inx, subinx: '->putText;
-                  startInx->putInt;
-                  ' '->put;
-                  startSubInx->putInt;
-                  newLine;
-                  
-              if)
-           else
-              start->theSifTexteditor.contents.posToRowCol->(line1,char1);
-              end->theSifTexteditor.contents.posToRowCol->(line2,char2);
-              (if switch[2] then
-                  'onClick after posToRowCol: '->putText;
-                  line1->screen.putint;
-                  ' '->screen.put;
-                  char1->screen.putint;
-                  ' '->screen.put;
-                  line2->screen.putint;
-                  ' '->screen.put;
-                  char2->screen.putint;
-                  ' '->screen.put;
-                  newLine;
-                  
-              if);
-              (line1,char1)->astView.pp.hit->(startNode[],startInx,startSubinx);
-              (line2,char2)->astView.pp.hit->(endNode[],endInx,endSubInx);
-              startNode[]->endNode.nearestCommonAncestor
-                ->(nca[],startSonNo,endSonNo);
-              (if (startNode[]->endNode.equal) and (startInx = endInx) and
-              (startSubinx = endSubinx) then
-                  
-               else
-                  0->startInx->startSubInx
-              if);
-              (if switch[2] then
-                  'onClick: startSonNo, index: '->putText;
-                  startSonNo->putInt;
-                  ' '->put;
-                  startNode.index->putInt;
-                  newLine;
-                  'startSon: inx, subinx: '->putText;
-                  startInx->putInt;
-                  ' '->put;
-                  startSubInx->putInt;
-                  newLine;
-                  'onClick endSonNo, index: '->putText;
-                  endSonNo->putInt;
-                  ' '->put;
-                  endNode.index->putInt;
-                  newLine;
-                  'emdSon: inx, subinx: '->putText;
-                  endInx->putInt;
-                  ' '->put;
-                  endSubInx->putInt;
-                  newLine;
-                  'noClick: nca index: '->putText;
-                  nca.index->putInt;
-                  newLine;
-                  
-              if);
-              
-          if);
-          (if ((startSonNo = 0) or (endSonNo = 0))
-           // true then (nca[],1,startInx,startSubInx)->newCS
-           else
-              nca[]->getSynCatNo->synCatNo;
-              (if synCatNo.isLexem
-               // true then (nca[],1,startInx,startSubInx)->newCS; 
-               else
-                  synCatNo->prodList.get->prod[];
-                  (if prod.symbol
-                   // mg.listZero // mg.listOne then
-                      nca[]->expNode[];
-                      startSonNo->expNode.get->firstListElement[];
-                      endSonNo->expNode.get->lastListElement[];
-                      (if switch[2] then
-                          'onClick: first: '->putText;
-                          firstListElement.index->putInt;
-                          newLine;
-                          'onClick: last: '->putText;
-                          lastListElement.index->putInt;
-                          newLine;
-                          
-                      if);
-                      (firstListElement[],endSonNo-startSonNo+1,0,0)->newCS;
-                      
-                   else
-                      (nca[],1,startInx,startSubInx)->newCS; 
-                  if);
-                  
-              if);
-              
-          if);
-          newCS->setFocus
+       do <<SLOT seletionToAst:Descriptor>>; 
        #);
      aFocusChangedEvent: @focusChangedEvent;
      focusChangedEvent:<
@@ -861,7 +707,8 @@ codeviewer:
           t: ^text;
           commentAst: ^mps.comment;
           inContr: @boolean;
-          contractionNode,fatherNode: ^mps.ast;
+          contractionNode,fatherNode:
+            ^mps.ast;
           unexp: ^mps.unexpanded
        enter newCS
        do (* from notification.focusChanged *)
@@ -997,10 +844,9 @@ codeviewer:
        do
           (if
           ((node.kind = mps.kinds.unexpanded) or
-           (node.kind = mps.kinds.optional))
-           // true then
+           (node.kind = mps.kinds.optional)) then
               node[]->nontNode[]; nontNode.nonterminalSymbol->synCatNo
-           // false then
+           else
               node.symbol->synCatNo
           if)
        exit synCatNo
@@ -1047,8 +893,7 @@ codeviewer:
                (if node.kind
                 // mps.kinds.comment then 'comment'->str; 
                 else
-                   (if synCatNo.isLexem
-                    // true then
+                   (if synCatNo.isLexem then
                        (if node.kind
                         // mps.kinds.nameAppl then
                            'nameAppl'->str; 
@@ -1062,7 +907,7 @@ codeviewer:
                            'lexem'->str; 
                        if);
                        
-                    // false then
+                    else
                        synCatNo->Prodlist.get->prod[];
                        (if prod.symbol
                         // mg.alternation then
@@ -1093,9 +938,9 @@ codeviewer:
                 else
                    fatherNode[]->getSynCatNo->fatherSynCatNo;
                    (if fatherSynCatNo.isLexem (* should not be necessary? *)
-                    // true then
+                    then
                        'fatherLexem'->screen.putText; 
-                    // false then
+                    else
                        fatherSynCatNo->Prodlist.get->fatherProd[];
                        (if fatherProd.symbol
                         // mg.listOne // mg.listZero then
@@ -1103,8 +948,7 @@ codeviewer:
                            fatherSynCatNo->screen.putInt;
                            
                         else
-                           (if synCatNo.isLexem
-                            // false then
+                           (if not synCatNo.isLexem then
                                loop:
                                  (# 
                                  do
@@ -1229,10 +1073,9 @@ codeviewer:
                     &text[]->theWholeText[];
                     1->char1->char2;
                     1->line1->line2;
-                    (if node.hasComment
-                     // false then (* ('  ',1)->insertLine;*)
+                    (if not node.hasComment then (* ('  ',1)->insertLine;*)
                         ''->setText
-                     // true then
+                     else
                         hasCommentLabel:
                           (# 
                           do (*node.getComment->aComment[];*)
@@ -1269,10 +1112,8 @@ codeviewer:
                                    else
                                       (if lineno
                                        // firstRealLine then
-                                          (if skipLeadingBlanks
-                                           // true then
-                                              (if (ch <> ' ')
-                                               // true then
+                                          (if skipLeadingBlanks then
+                                              (if (ch <> ' ') then
                                                   ch->t1.put;
                                                   char2+1->char2;
                                                   false->skipLeadingBlanks;
@@ -1324,8 +1165,8 @@ codeviewer:
                     (CS.node[],subCommentInx1,subCommentInx2,commentText[])
                       -> (*sde.*) editComment->reprettyprint;
                     false->commentEditorPrivate.commentTouched;
-                    (if astView.pp.includeComments
-                     // true then true->rePrettyprint; 
+                    (if astView.pp.includeComments then
+                        true->rePrettyprint; 
                     if);
                     (if commentText.length
                      // 0 then 'Empty comment'->screen.putLine
@@ -1385,7 +1226,7 @@ codeviewer:
            (# 
            do
            (if commentEditorPrivate.commentTouched
-           // true then commentEditorPrivate.exitCommentEditing; 
+           then commentEditorPrivate.exitCommentEditing; 
            if);
            INNER
            #);
@@ -1403,8 +1244,8 @@ codeviewer:
            // 3 [* MPW enter key *] then
            commentEditorPrivate.exitCommentEditing
            else
-           (if commentEditorPrivate.commentTouched
-           // false then
+           (if not commentEditorPrivate.commentTouched
+           then
            sde.fragmentTouched;
            true->commentEditorPrivate.commentTouched;
            
@@ -1533,8 +1374,7 @@ codeviewer:
           commentWindowsTest:
             (# 
             do
-               (if true
-                // false then
+               (if false then
                    '######################## commentWindows'->putLine;
                    commentWindows.scan
                      (# 
@@ -1562,10 +1402,8 @@ codeviewer:
             do
                (if
                (((node[],subcommentInx1,subcommentInx2)
-                   ->commentWindows.findWindow->theWindow[]) <> none )
-                // true then
-                   (if updateWindow
-                    // true then
+                   ->commentWindows.findWindow->theWindow[]) <> none ) then
+                   (if updateWindow then
                        (node[],subCommentInx1,subCommentInx2)
                          ->theWindow.commentEditorPrivate.writeComment
                     else
@@ -1672,8 +1510,7 @@ codeviewer:
                                     (# 
                                     do
                                        searchFrag.fullName->de.path;
-                                       (if traceSLOTsearch
-                                        // true then
+                                       (if traceSLOTsearch then
                                            s[]->screen.putText; ' '->screen.put
                                        if);
                                        (s[],de.path.head)
@@ -1696,13 +1533,12 @@ codeviewer:
                                              do
                                                 (if
                                                 (current.name[]
-                                                   ->slotName.equalNCS)
-                                                 // true then
+                                                   ->slotName.equalNCS) then
                                                     (if current.type
                                                      // mps.formType then
                                                         true->found;
-                                                        (if traceSLOTsearch
-                                                         // true then newLine
+                                                        (if traceSLOTsearch then
+                                                            newLine
                                                         if);
                                                         current.f[]->ff[]
                                                           ->bindingFound;
@@ -1748,8 +1584,7 @@ codeviewer:
                                     (# 
                                     do
                                        searchFrag.fullName->de.path;
-                                       (if traceSLOTsearch
-                                        // true then
+                                       (if traceSLOTsearch then
                                            s[]->screen.putText; ' '->screen.put
                                        if);
                                        (if foundMachineType or isDefaultMachine
@@ -1785,13 +1620,12 @@ codeviewer:
                                                  do
                                                     (if
                                                     (current.name[]
-                                                       ->slotName.equalNCS)
-                                                     // true then
+                                                       ->slotName.equalNCS) then
                                                         (if current.type
                                                          // mps.formType then
                                                             true->found;
                                                             (if traceSLOTsearch
-                                                             // true then
+                                                             then
                                                                 newLine
                                                             if);
                                                             current.f[]->ff[]
@@ -1818,8 +1652,7 @@ codeviewer:
        do
           searchedUnexp.theSlot->theSlot[];
           theSlot.name->slotName[];
-          (if traceSLOTsearch
-           // true then
+          (if traceSLOTsearch then
               newLine;
               'Searching for a SLOT binding of '''->putText;
               slotName[]->putText;
@@ -1827,7 +1660,7 @@ codeviewer:
               ' in:'->putLine
           if);
           frag.father->&searchBinding->found;
-          (if found // false then slotName[]->bindingNotFound if)
+          (if not found then slotName[]->bindingNotFound if)
        #);
      selectNode:<
        (# node: ^mps.ast
@@ -1859,12 +1692,11 @@ codeviewer:
            else
               node[]->theNode[]
           if);
-          (if (itemSelected > 0)
-           // true then
+          (if (itemSelected > 0) then
               node.frag[]->ff[];
               ff.father->fg[];
-              (if (mps[],fg[])->getDoneCheckProperty (* isChecked *)
-               // false then (* itemselected is 1 *)
+              (if not ((mps[],fg[])->getDoneCheckProperty) (* isChecked *) then
+              (* itemselected is 1 *)
                   'This fragment group must be (re)checked'->help[];
                   help.newLine;
                   'in order to (re)build the semantic links.'->help.putLine;
@@ -2017,7 +1849,7 @@ codeviewer:
           if);
           
        #);
-     onMiddleButton:< (# pos: @point enter pos do INNER #);
+     onPopUpButton:< (# pos: @point enter pos do INNER #);
      selectArea:
        (#
           f: @astFocus;
@@ -2037,10 +1869,8 @@ codeviewer:
           if);
           (f.node[],f.subcommentInx1,f.subcommentInx2)->astView.pp.select
             ->(l1,c1,l2,c2);
-          (if (1 < f.length)
-           // true then
-              (if (1 < f.length)
-               // true then
+          (if (1 < f.length) then
+              (if (1 < f.length) then
                   f.node[]->checkFatherNode->node[];
                   (if astView.pp.ppDebug then
                       'node.index: '->putText; node.index->putInt; newLine; 
@@ -2072,8 +1902,7 @@ codeviewer:
        enter node[]
        do
           loop:
-          (if (node.kind = mps.kinds.interior)
-           // true then
+          (if (node.kind = mps.kinds.interior) then
               node[]->expNode[];
               (if expNode.noOfSons
                // 1 then
@@ -2113,8 +1942,7 @@ codeviewer:
        enter node[]
        do
           loop:
-          (if (node.father <> none )
-           // true then
+          (if (node.father <> none ) then
               node.father->fatherNode[];
               fatherNode.symbol->Prodlist.get->prod[];
               (if fatherNode.noOfSons
@@ -2134,6 +1962,27 @@ codeviewer:
           if);
           
        exit node[]
+       #);
+     hasComment:
+       (# node: ^mps.ast; hasOne: @boolean; expNode: ^mps.expanded; 
+       enter node[]
+       do
+          false->hasOne;
+          (if (node.struc <= mps.expanded##)
+           // true then
+              node[]->expNode[];
+              loop: expNode.suffixWalk
+                (# 
+                do
+                   (if current.hasComment
+                    // true then true->hasOne; leave loop
+                   if);
+                   
+                #);
+              
+          if);
+          
+       exit hasOne
        #);
      contractionCategories: [1] @integer;
      getPropertiesFromGrammar:
@@ -2158,8 +2007,8 @@ codeviewer:
                                  do
                                     (if
                                     ((c > 0) and
-                                     (c <= contractionCategories.range))
-                                     // true then 1->contractionCategories[c]
+                                     (c <= contractionCategories.range)) then
+                                        1->contractionCategories[c]
                                     if)
                                  #)
                             #)
@@ -2196,8 +2045,7 @@ codeviewer:
        enter node[]
        do
           (if node[] = none then cs.node[]->node[] if);
-          (if (node.struc <= mps.expanded##)
-           // true then
+          (if (node.struc <= mps.expanded##) then
               node[]->expNode[];
               expNode.suffixWalk
                 (#
@@ -2208,8 +2056,8 @@ codeviewer:
                 do
                    true->doContract;
                    Current.symbol->symbol;
-                   (if symbol.predefined
-                    // true then false->doContract; 
+                   (if symbol.predefined then
+                       false->doContract; 
                     else
                        (if Current.kind
                         // mps.kinds.unexpanded then
@@ -2234,8 +2082,7 @@ codeviewer:
                         else
                            
                        if);
-                       (if doContract
-                        // true then
+                       (if doContract then
                            (if contractionCategories[symbol]
                             // 1 then Current[]->setContraction
                            if);
@@ -2250,8 +2097,7 @@ codeviewer:
        enter node[]
        do
           (if node[] = none then cs.node[]->node[] if);
-          (if node.hasComment
-           // false then
+          (if not node.hasComment then
               (mps.comment,0,frag[])->betaGrammar.newlexemText->newComment[];
               &text[]->t[];
               t[]->newcomment.putText;
@@ -2274,12 +2120,10 @@ codeviewer:
             (# 
             do
                node.father->fatherNode[];
-               (if (fatherNode[] = none )
-                // false then
-                   (if fatherNode.hasComment
-                    // true then
+               (if (fatherNode[] <> none ) then
+                   (if fatherNode.hasComment then
                        (if (fatherNode.typeOfComment = astView.pp.holocomment)
-                        // true then
+                        then
                            fatherNode[]->contractionNode[];
                            true->inContr;
                            leave loop
@@ -2304,12 +2148,10 @@ codeviewer:
             (# 
             do
                node.father->fatherNode[];
-               (if (fatherNode[] = none )
-                // false then
-                   (if fatherNode.hasComment
-                    // true then
+               (if (fatherNode[] <> none ) then
+                   (if fatherNode.hasComment then
                        (if (fatherNode.typeOfComment = astView.pp.holocomment)
-                        // true then
+                        then
                            fatherNode[]->holoNode[]->openContraction;
                            true->inHolo;
                            
@@ -2329,15 +2171,13 @@ codeviewer:
        enter node[]
        do
           (if node[] = none then cs.node[]->node[] if);
-          (if node.hasComment
-           // true then
+          (if node.hasComment then
               (if node.typeOfComment
                // astView.pp.holocomment then
                   node.getComment->aComment[];
-                  (if (aComment.curLength > 0)
-                   // true then
+                  (if (aComment.curLength > 0) then
                       astView.pp.normalComment->node.typeOfComment; 
-                   // false then
+                   else
                       none ->node.addComment; 
                   if);
                   
@@ -2363,15 +2203,13 @@ codeviewer:
           
        enter (node[],level)
        do
-          (if node.hasComment
-           // true then
+          (if node.hasComment then
               (if node.typeOfComment
                // astView.pp.holocomment then
                   node.getComment->aComment[];
-                  (if (aComment.curLength > 0)
-                   // true then
+                  (if (aComment.curLength > 0) then
                       astView.pp.normalComment->node.typeOfComment; 
-                   // false then
+                   else
                       none ->node.addComment; 
                   if);
                   
@@ -2384,8 +2222,7 @@ codeviewer:
               anExp.scan
                 (# 
                 do
-                   (if current.hasComment
-                    // true then
+                   (if current.hasComment then
                        (if current.typeOfComment
                         // astView.pp.holocomment then
                            current[]->openContraction; true->openedOne; 
@@ -2393,9 +2230,8 @@ codeviewer:
                    if);
                    
                 #);
-              (if openedOne // true then level-1->level if);
-              (if (level > 0)
-               // true then
+              (if openedOne then level-1->level if);
+              (if (level > 0) then
                   anExp.scan
                     (#  do (current[],level)->&openContractionLevel #)
               if)
@@ -2435,8 +2271,8 @@ codeviewer:
             ->setContractions
             (*false->abstracted;
              loop: frag.prop.scanProp (# doProp::<  <<@32602:MainPart>>; #);
-             (if abstracted
-             // false then
+             (if not abstracted
+             then
              ff.root[]->setContractions; 'ABSTRACTED'->frag.prop.addProp;
              if)*)
        #);
@@ -2508,7 +2344,9 @@ codeviewer:
      doCut:< object;
      doCopy:< object;
      doPaste:< object;
-     doTextedit:< object;
+     doTextedit:< (# ch: @char enter ch do INNER #);
+     checkTexteditingFinished:<
+       (# start,end: @integer enter (start,end) do INNER #);
      doParseText:< object;
      doRevertTextedit:< object;
      doShowTexteditCommands:< object;
@@ -2552,8 +2390,7 @@ codeviewer:
                       '-parser'->help.append;
                       mps.parserFileExtension->help.append;
                       help[]->bobsFile.name;
-                      (if bobsFile.entry.exists
-                       // true then
+                      (if bobsFile.entry.exists then
                           bobsFile.name->theMetagrammar.parser.initialize; 
                        else
                           'No parser available: '->screen.putText;
@@ -2570,32 +2407,7 @@ codeviewer:
      init:<
        (# grammar: ^mg.Agrammar
        enter (mps[],betaGrammar[],UI[],theSifTextEditor[],frag[],node[])
-       do
-          false->switch[1];
-          false->switch[2];
-          false->switch[3];
-          metaGrammarInit;
-          &mps.astViewer[]->astView[];
-          &windowOutput[]->astView.out[];
-          betaGrammar.grammarAst.root[]->grammar[];
-          betaGrammar[]->ag[];
-          grammar.getProductionList->prodList[];
-          astView.out.init;
-          frag.grammar.grammarAst.father->fg[];
-          fg.father->fg[];
-          fg.fullName->astView.pp.init;
-          true->astView.pp.abstractPresentation;
-          true->astView.pp.editorMode;
-          theSifTextEditor.contents.size->theSifTextEditor.charWidth
-            ->astView.pp.width;
-          getPropertiesFromGrammar;
-          &editorEnv[]->edenv[]
-            ->objectPool.put
-              (# alreadyThere::<  (#  do true->continue #) #);
-          mps[]->edenv.init;
-          INNER ;
-          theSifTexteditor.onOpen;
-          
+       do <<SLOT codeviewerinit:Descriptor>>; 
        #)
   #)  
 
@@ -2615,7 +2427,7 @@ nonModalAlert:
   enter message[]
   <<SLOT mydialogsNonModalAlert:DoPart>>
   #);
-promptForBoolean:
+mypromptForBoolean:
   (#
      message: ^text;
      confirm:< object;
@@ -2624,12 +2436,12 @@ promptForBoolean:
   enter message[]
   <<SLOT mydialogsPromptForBoolean:DoPart>>
   #);
-promptForTriBoolean:
+mypromptForTriBoolean:
   (# message: ^text; yes:< object; no:< object; cancel:< object; 
   enter message[]
   <<SLOT mydialogsPromptForTriBoolean:DoPart>>
   #);
-promptForText:
+mypromptForText:
   (#
      message,defaultText: ^text;
      confirm:<
