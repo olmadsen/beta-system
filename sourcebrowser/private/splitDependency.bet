@@ -8,7 +8,9 @@ INCLUDE '~beta/dependency/v1.0.1/dependency';
  *   All rights reserved.
  *)
 --- dependencyPrivate: descriptor ---
-(# Module: 
+(# errorMsg: @text;
+   
+   Module: 
      (# Path, Library, Version, Name: ^text;
         NumberOfForms: @integer;
         
@@ -163,16 +165,24 @@ INCLUDE '~beta/dependency/v1.0.1/dependency';
      #);
 
    System: 
-     (# LibList: [100]^Library;
+     (# maxLib: (# exit 100 #);
+        LibList: [maxLib]^Library;
         LibEnd: @integer;
 
-        ProgList: [100]^Library;
+        maxProg: (# exit 100 #);
+        ProgList: [maxProg]^Library;
         ProgEnd: @integer;
-        
-        errorMsg: @text;
-        
+       
         Insert: 
-          (# theModule: ^Module; isPresent, libFound: @boolean;
+          (#
+             conflict:<
+               (# lib,v1,v2: ^text;
+               enter (lib[],v1[],v2[])
+               do 
+                  INNER 
+               #);
+             
+             theModule: ^Module; isPresent, libFound: @boolean;
           enter theModule[]
           do false->isPresent->libFound;
              (if theModule.isLibrary then
@@ -181,17 +191,10 @@ INCLUDE '~beta/dependency/v1.0.1/dependency';
                    (for i: LibEnd repeat
                         (if (theModule.Library[]->LibList[i].name.equal) then
                             true->libFound;
-                            (if not (LibList[i].version[]
-                                  ->theModule.version.equal) then
-                                '*** Version conflict between: '
-                                  ->errorMsg.putText; 
-                                theModule.Library[]->errorMsg.putText;
-                                ' '->errorMsg.put; theModule.version[]
-                                  ->errorMsg.putText;
-                                ' and '->errorMsg.putText;
-                                LibList[i].version[]->errorMsg.putLine;
-                                '    Fragment: '->errorMsg.puttext;
-                                theModule.name[]->errorMsg.putline;
+                            (if not (LibList[i].version[]->theModule.version.equal) then
+                                (theModule.Library[],
+                                LibList[i].version[],
+                                theModule.version[])->conflict;
                             if);
                             theModule[]->LibList[i].insert->isPresent;
                             leave loop
@@ -307,6 +310,151 @@ INCLUDE '~beta/dependency/v1.0.1/dependency';
            if);
      exit theModule[]
      #);
+
+   ListGraph: 
+     (# fg: ^mps.ast.fragmentGroup;
+        maxList: (# exit 100 #);
+        List: [maxList]^text; End: @integer;
+        NodeName: ^text;
+
+        PleaseInsert: 
+          (# Name, Path: ^text
+          enter (Name[], Path[])
+          do (if (End=List.range) then 
+                 List.range/2->List.extend
+             if);
+             &text[]->List[End+1->End][]; 
+             (Name[],Path[])->mps.ast.thePathHandler.convertFilePath->List[End][];
+          #);
+
+        Target: ^text;
+        Found: @boolean;
+        thisModule: ^Module;
+        NumberOfForms: @integer;
+        ph: @pathHandler; f: @file; filename: ^text;
+     enter NodeName[]
+     do ph.init;
+        mps.ast.dependencyGraph
+        (#
+        do graphInit;
+           machineType->TargetMachine;
+           machineType->TargetDirectory;
+           
+           0->NumberOfForms;
+
+           nodename[]->scanextent
+           (#
+           do
+              current.fullname->ParseModuleName->thisModule[];
+              (if not (thisModule[]->MySystem.insert
+                  (# conflict::
+                       (# do 
+                          '#### Conflict between: '->errorMsg.puttext;
+                          lib[]->errorMsg.putText;
+                          ' '->errorMsg.put; v1[]->errorMsg.putText;
+                          ' and '->errorMsg.putText; v2[]->errorMsg.putLine;
+                          (nodename[],thisModule[])->FindIncludePlace;
+                       #)
+                  #)
+                  ) then
+                  0->NumberOfForms;
+                  current[]->fg[];
+                  fg.fragmentList.scan
+                  (# do (if current.type
+                         // mps.ast.formType  then
+                            NumberOfForms + 1->NumberOfForms; 
+                  if) #);
+                  NumberOfForms->thisModule.NumberOfForms;
+              if)
+           #)
+        #)
+     #);
+   
+   
+   FindIncludePlace:
+     (# 
+        scanPropList:
+          (# prop: ^propertyList;
+             propfilename: ^text;
+          enter prop[]
+          do
+             prop.scanProp
+             (# doProp::
+                  (# 
+                  do 
+                     (if ('include'->prop.equal) or
+                         ('body'->prop.equal) then
+                         scanParameters
+                         (# filename:^text;
+                            doString::(# do s[]->propfilename[];
+                                         INNER scanPropList #);
+                            
+                          #);
+                     if);
+                  #);
+             #);
+          #);
+        
+        stripName:
+          (# t: ^text;
+             inx: @integer;
+          enter t[]
+          do
+             (* Find last / *)
+             1->inx;
+             L: (for i: t.length repeat
+                     (t.length-i)->inx->t.pos;
+                     (if t.get='/' then inx+1->inx; leave  L if)
+                for);
+          exit (1,inx)->t.sub
+          #);
+        
+        fg: ^mps.ast.fragmentGroup;
+        NodeName,path,name: ^text;
+        thisModule,curModule: ^Module;
+        found: @boolean;
+     enter (NodeName[],thisModule[])
+     do mps.ast.dependencyGraph
+        (#
+        do graphInit;
+           
+           nodename[]->scanextent
+           (#
+           do
+              current.fullname->stripName->path[];
+              current.prop[]->scanPropList
+              (# 
+              do (if (propfilename.T[1]<>'~') and
+                     (propfilename.T[1]<>'/') then
+                     path[]->name[];
+                     propfilename[]->name.append;
+                  else
+                     propfilename[]->name[];
+                 if);
+                 name[]->parseModuleName->curModule[];
+                 false->found;
+                 (if curModule.library[]->thisModule.library.equal then
+                     (if not found then
+                         '   %s depends on:\n'->errorMsg.putformat
+                         (# do current.fullname->s#);
+                         true->found;
+                     if);
+                     '      %s\n'->errorMsg.putFormat(# do name[]->s; #);     
+                 if);
+              #);
+           #);
+        #);
+     #);
+           
+             
+   ExpandFileName: 
+     (# 
+        Name: ^text; ExpandedName: ^text
+     enter Name[]
+     do (Name[], mps.ast.thePathHandler.currentDirectory)
+          -> mps.ast.thePathHandler.convertFilePath->ExpandedName[];
+    exit ExpandedName[]
+     #);
    
    MySystem: @System;
 #)
@@ -314,13 +462,24 @@ INCLUDE '~beta/dependency/v1.0.1/dependency';
 --- dependencyRegister: dopart ---
 do fgName[]
      ->dependencyPrivate.ParseModuleName
-     ->dependencyPrivate.MySystem.insert;
-
+     ->dependencyPrivate.MySystem.insert
+   (# conflict::
+        (# do 
+           '#### Conflict between: '->dependencyPrivate.errorMsg.puttext;
+           lib[]->dependencyPrivate.errorMsg.putText;
+           ' '->dependencyPrivate.errorMsg.put;
+           v1[]->dependencyPrivate.errorMsg.putText;
+           ' and '->dependencyPrivate.errorMsg.putText;
+           v2[]->dependencyPrivate.errorMsg.putLine;
+           (fgName[],theModule[])->dependencyPrivate.FindIncludePlace;
+        #)
+   #);
+   
 --- dependencyCreateSubprojects: descriptor ---
 (#
 do selectedProj[]->dependencyPrivate.mySystem.dump;
-   (if not dependencyPrivate.mySystem.errorMsg.empty then
-       (NONE, dependencyPrivate.mySystem.errorMsg[], 'Version conflicts')
+   (if not dependencyPrivate.errorMsg.empty then
+       (NONE, dependencyPrivate.errorMsg[], 'Version conflicts')
          ->alertUser
    if)
 #)
