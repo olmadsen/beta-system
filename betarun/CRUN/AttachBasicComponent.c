@@ -22,7 +22,7 @@ ParamThisComp(void, AttBC)
 
 #ifdef hppa
     long			dummy;
-    struct ComponentBlock       cb; /* don't move without changing Attach.S */
+    struct ComponentBlock       cb; /* don't move without changing SnakeAdditions.S */
 
     comp = cast(Component)getCallReg();
 #endif
