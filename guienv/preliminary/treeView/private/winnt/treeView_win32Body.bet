@@ -10,12 +10,21 @@ INCLUDE
 '~beta/win32lib/v1.6/commctrl'
 '~beta/win32lib/v1.6/systemmetrics'
 '~beta/win32lib/v1.6/mousecursorsupport'
+'~beta/win32lib/v1.6/gdistructs'
 '~beta/sysutils/v1.6/cstring'
 '~beta/sysutils/v1.6/objinterface';
 
 LINKOPT nti 'comctl32.lib';
 
 -- lib: attributes --
+memset: external
+  (# dest,c,count: @integer;
+     result: @integer;
+  enter (dest,c,count)
+  do callC;
+  exit result
+  #);
+
 TVSIL_NORMAL: (# exit    0 #);
 TVSIL_STATE: (# exit     2 #);
 
@@ -394,7 +403,7 @@ treeViewMethods: windowItemNotificationMethods
                    #);
                    
                 //NM_RCLICK then
-                   mouse.globalPosition -> globalToLocal 
+                   mouse.globalPosition 
                      -> tvPrivate.itemFromPoint -> tempItem[];
                    (if tempItem[]<>NONE then
                        mouse.globalPosition -> tempItem.onRMouseUp;
@@ -604,23 +613,34 @@ do inner;
         theTV_HITTESTINFO: @TV_HITTESTINFO;
         result: @integer;
         x,y,x2,y2: @integer;
-        windowId: @integer;
         theItem: ^treeItem;
+        ntp: @ntPOINTextR;
      enter (x,y)
-     do interfaceObjectID -> windowId;
+     do 
+        8 -> malloc -> ntp.ptr;
         sizeOf_TV_HITTESTINFO -> malloc -> theTV_HITTESTINFO.ptr;
-        (if theTV_HITTESTINFO.ptr<>0 then
-            this(treeView).position -> (x2,y2);
-            (x-x2,y-y2) -> theTV_HITTESTINFO.pt;
+        (if (theTV_HITTESTINFO.ptr<>0) and (ntp.ptr<>0) then
+            (x,y) -> ntp;
+            (treeViewId,ntp.ptr) -> ScreenToClient;
+            ntp.ptr -> getPointFromNtPointPtr -> (x,y);
             
-            (windowId,theTV_HITTESTINFO.ptr) ->  TreeView_HitTest -> result;
-            (if result=-1 then
+            (theTV_HITTESTINFO.ptr,0,sizeOf_TV_HITTESTINFO)->memset;
+            this(treeView).position -> (x2,y2);
+            (x,y) -> theTV_HITTESTINFO.pt;
+            
+            (treeViewId,theTV_HITTESTINFO.ptr) ->  TreeView_HitTest -> result;
+            (if result=0 then
                 'No item hit.' -> screen.putLine;
              else
                 theTV_HITTESTINFO.hItem->tvPrivate.findtreeItem->theItem[]
             if);
             
+            (* Clean up *)
             theTV_HITTESTINFO.ptr -> free;
+            ntp.ptr -> free;
+         else
+            'Failed to allocate TV_HITTESTINFO in itemFromPoint.'
+              -> resourceAllocationError;
         if);
      exit theItem[]
      #);
