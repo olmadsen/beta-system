@@ -50,6 +50,7 @@ foldersTree = gFld("<B>Contents</B>", "");
 			    insFld(aux2, gLnk(0, "Error Reports Overview", "../mjolner/internal/errorReportsStatus.html"));
 			    insFld(aux2, gLnk(0, "Executive summary", "../mjolner/internal/mjolnerbugs.html"));
 			    insFld(aux2, gLnk(0, "r5.0 status", "../mjolner/internal/r5.0-status.txt"));
+			    insFld(aux2, gLnk(0, "r5.0 done", "../mjolner/internal/r5.0-done.txt"));
 			    insFld(aux2, gLnk(0, "after r5.0", "../mjolner/internal/after-r5.0.txt"));
 			    insFld(aux2, gLnk(0, "r5.0 test status", "../mjolner/internal/r5.0-test-status.txt"));
 
