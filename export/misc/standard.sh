@@ -137,6 +137,10 @@ if [ "$PACKBETACL" = "yes" ]; then
    ${BETALIB}/export/misc/betacl.sh
 fi
 
+if [ "$PACKDOC" = "yes" ]; then
+   ${BETALIB}/export/misc/doc.sh
+fi
+
 if [ "$TARGET" = "nti" ]
 then
    ${BETALIB}/export/misc/make_list.perl $DST/*.cmd

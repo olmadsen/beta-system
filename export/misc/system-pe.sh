@@ -72,13 +72,13 @@ then
 echo ""                                                       >> $DST/system.pack
 echo "# special PE betarun"                                   >> $DST/system.pack
 echo "newfolder {newbeta}betarun: „ Dev:Null"              >> $DST/system.pack
-echo "newfolder {newbeta}betarun:v2.9: „ Dev:Null"         >> $DST/system.pack
-echo "newfolder {newbeta}betarun:v2.9:ppcmac: „ Dev:Null"  >> $DST/system.pack
+echo "newfolder {newbeta}betarun:v3.0: „ Dev:Null"         >> $DST/system.pack
+echo "newfolder {newbeta}betarun:v3.0:ppcmac: „ Dev:Null"  >> $DST/system.pack
 
 # add special betarun files
-echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun_pe.obj {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun.obj"  \
+echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun.pe {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun.obj"  \
   >> $DST/system.pack
-echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun_pe.obj {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun_v.obj" \
+echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun.pe {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun_v.obj" \
   >> $DST/system.pack
 
 # Add locking of betarun files if specified in environment.
