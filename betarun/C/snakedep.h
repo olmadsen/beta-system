@@ -177,6 +177,13 @@ static inline void setThisReg(void *p)
   asm volatile ("COPY\t%0, %%r3" : /* no out */ : "r" (p)); 
 }
 
+static inline long *getRetReg()
+{     
+  long *res; 
+  asm volatile ("COPY\t%%r28, %0" : "=r" (res)); 
+  return res;
+}
+
 static inline long *getCallReg()
 {     
   long *res; 
@@ -192,14 +199,15 @@ static inline void *setCallReg(void *p)
 
 static inline long *getOriginReg()
 {     
+  /* This is probably a nop in most cases since r26 = first C param */
   long *res; 
-  asm volatile ("COPY\t%%r5, %0" : "=r" (res)); 
+  asm volatile ("COPY\t%%r26, %0" : "=r" (res));
   return res;
 }
 
 static inline void *setOriginReg(void *p)
 {     
-  asm volatile ("COPY\t%0, %%r5" : /* no out */ : "r" (p));
+  asm volatile ("COPY\t%0, %%r26" : /* no out */ : "r" (p));
   return p;
 }
 
