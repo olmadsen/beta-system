@@ -1,0 +1,219 @@
+ORIGIN '~beta/basiclib/betaenv';
+---textlib:attributes---
+ScanBeta:
+  (* The standard C interpretation of characters is used as follows:
+   *	\\	\
+   *	\n	newline
+   *	\b	backspace
+   *	\t	tab
+   *	\r	carriage return
+   *	\'	'
+   *	\ooo \oo \o deotes a char by its octal value
+   *	other sequences starting by \ are ignored.
+   *)
+  (# ch: @char; 
+     nextCh: @ |
+       (# c: @char; L,V: @integer;
+          isDigit:
+	    (# bool: @boolean
+	    do (if  (L>=0) then
+		   (if ('0'<=c) and (c<='7') then
+		       c-'0' + V*8 ->V; true->bool
+               if)if)
+            exit bool
+            #);
+          last: @(#exit (L<=0) #);
+       do length->L; 
+          SUSPEND;
+          scanAll(#do ch->c; L-1->L; SUSPEND #);
+          L-1->L; cycle(#do SUSPEND #)
+       exit c 
+       #);
+     oneMore: @boolean;
+     NullChar:< (# pos: @integer enter pos do inner #);
+     StringDelimiter:< (# pos: @integer enter pos do inner #);
+     (* OBS! we use '\\' since beta3.1 for MAC cannot parse '\' *)
+     slash: (# ch: @char do '\\'->ch exit ch #);
+  do nextCh; (* just initialize last *)
+     Loop:	  
+       (if not nextCh.last then
+	   nextCh;
+	   L: (if (nextCh.c) 
+               // slash then
+	          (if (nextCh)
+	           // 'n' then ascii.newline->Ch
+	           // 't' then ascii.ht->Ch
+		   // 'v' then ascii.vt->Ch
+		   // 'b' then ascii.bs->Ch
+		   // 'r' then ascii.cr->Ch
+		   // 'f' then ascii.np->Ch
+		   // 'a' then ascii.bel->Ch
+	           // slash then slash->Ch
+		   // '?' then '?'->Ch
+	           // '\'' then '\''->Ch
+		   // '"' then '"'->Ch
+	           else 0->nextCh.V; 
+		      (if nextCh.isDigit then
+			  (if (not nextCh.last) -> oneMore then 
+			      nextCh; 
+		              (if nextCh.isDigit then
+			          (if (not nextCh.last) -> oneMore then
+				      nextCh; true->oneMore;
+			              (if nextCh.isDigit then
+                                          (if (not nextCh.last) -> oneMore then
+                                              nextCh;
+                                          if)
+                          if)if)if)if);
+                          nextCh.V->Ch;
+                          (if nextCh.V = 0 then length-nextCh.L->NullChar if);
+                          INNER;
+                          (* nextCh.last cannot be used here since
+                           * the nextCh reading 'X' in
+                           * '\101X' will make nextCh.last=true
+                           * and 'X' will thus be skipped
+                           *)
+                          (if oneMore then restart L 
+                           else leave ScanBeta
+                          if);
+                       else nextCh.c->Ch 
+                  if)if)
+               // 0 then 
+                  (* skip: a string lexem may have the form:
+                   *    'abcd'   'efgh' 'ijkl'
+                   * The lexer turns this into
+                   *    'abcd<0>efgh<0>ijkl'
+                   * where <0> represents a null character.
+                   * The compiler should skip such null characters.
+                   * A pretty printer should use the null character
+                   * for formatting the string into string units.
+                   * StringDelimiter is used for this purpose.
+                   *)
+                  length-nextCh.L->StringDelimiter;
+                  restart Loop;
+               else nextCh.c->Ch
+              if);
+           INNER;
+	   restart Loop;
+       if);
+  #);
+isBetaChar: scanBeta
+  (# l: @integer
+  do (if (l+1->l) > 1 then leave isBetaChar if)
+  exit l = 1
+  #);
+ScanForSpecialChars:
+  (* This is a special version of ScanBeta, that is used by the prettyprinter
+   * in order to print the text with the special characters themselves and
+   * not the interpretation of them
+   * 
+   * The standard C interpretation of characters is used as follows:
+   *	\\	\
+   *	\n	newline
+   *	\b	backspace
+   *	\t	tab
+   *	\r	carriage return
+   *	\'	'
+   *	\ooo \oo \o deotes a char by its octal value
+   *	other sequences starting by \ are ignored.
+   *)
+  (# ch: @char; 
+     nextCh: @ |
+       (# c: @char; L,V: @integer;
+          isDigit:
+	    (# bool: @boolean
+	    do (if  (L>=0) then
+		   (if ('0'<=c) and (c<='7') then
+		       c-'0' + V*8 ->V; true->bool
+               if)if)
+            exit bool
+            #);
+          last: @(#exit (L<=0) #);
+       do length->L; 
+          SUSPEND;
+          scanAll(#do ch->c; L-1->L; SUSPEND #);
+          L-1->L; cycle(#do SUSPEND #)
+       exit c 
+       #);
+     oneMore: @boolean;
+     onNullChar:< (# pos: @integer enter pos do inner #);
+     onStringDelimiter:< (# pos: @integer enter pos do inner #);
+     onSpecialChar:< (# ch: @char enter ch do inner #);
+     octString: @text;
+     onOctalValue:< (# t: @text enter t do inner #);
+     onSlash:<object;
+     onSingleQuote:<object;
+    (* OBS! we use '\\' since beta3.1 for MAC cannot parse '\' *)
+     slash: (# ch: @char do '\\'->ch exit ch #);
+  do nextCh; (* just initialize last *)
+     Loop:	  
+       (if not nextCh.last then
+	   nextCh;
+	   L: (if (nextCh.c) 
+               // slash then
+	          (if (nextCh)
+	           // 'n' 
+	           // 't' 
+		   // 'v' 
+		   // 'b' 
+		   // 'r'
+		   // 'f'
+		   // 'a' then nextCh.c->onSpecialChar; restart Loop
+	           // slash then onSlash;  restart Loop
+		   // '?' then  nextCh.c->onSpecialChar; restart Loop
+	           // '\'' then onSingleQuote;  restart Loop
+		   // '"' then nextCh.c->onSpecialChar; restart Loop
+	           else 0->nextCh.V; 
+		      (if nextCh.isDigit then
+			  (if (not nextCh.last) -> oneMore then 
+                              octString.reset;
+                              nextCh.c->octString.put;
+			      nextCh; 
+		              (if nextCh.isDigit then
+			          (if (not nextCh.last) -> oneMore then
+                                      nextCh.c->octString.put;
+				      nextCh; 
+                                      true->oneMore;
+			              (if nextCh.isDigit then
+                                          nextCh.c->octString.put;
+                                          (if (not nextCh.last) -> oneMore then
+                                              nextCh;
+                                          if)
+                                      if)
+                                  if)
+                               if)
+                           if);
+                          nextCh.V->Ch;
+                          octString->onOctalValue; 
+                          restart L; 
+                          (if nextCh.V = 0 then length-nextCh.L->onNullChar if);
+                          INNER;
+                          (* nextCh.last cannot be used here since
+                           * the nextCh reading 'X' in
+                           * '\101X' will make nextCh.last=true
+                           * and 'X' will thus be skipped
+                           *)
+                          (if oneMore then restart L 
+                           else leave ScanForSpecialChars
+                          if);
+                       else nextCh.c->Ch 
+                  if)if)
+               // 0 then 
+                  (* skip: a string lexem may have the form:
+                   *    'abcd'   'efgh' 'ijkl'
+                   * The lexer turns this into
+                   *    'abcd<0>efgh<0>ijkl'
+                   * where <0> represents a null character.
+                   * The compiler should skip such null characters.
+                   * A pretty printer should use the null character
+                   * for formatting the string into string units.
+                   * StringDelimiter is used for this purpose.
+                   *)
+                  length-nextCh.L->onStringDelimiter;
+                  restart Loop;
+               else nextCh.c->Ch
+              if);
+           INNER;
+	   restart Loop;
+       if);
+  #);
+     
