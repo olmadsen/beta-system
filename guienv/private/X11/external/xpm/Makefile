@@ -58,7 +58,7 @@ OBJS= data.o create.o misc.o rgb.o scan.o parse.o hashtab.o \
 
 CFLAGS= $(CDEBUGFLAGS) $(DEFINES)
 
-OBJDIR = ../../$(objdir)
+OBJDIR = ../../$(MACHINETYPE)
 
 all: $(OBJDIR)/libXpm.a
 
