@@ -877,6 +877,8 @@ BOOL DrawTransparentBitmapFromMaskHDC
 
    // Delete the memory bitmaps.
    DeleteObject(SelectObject(hdcBack, bmBackOld));
+   SelectObject(hdcObject, bmObjectOld);
+   DeleteObject(bmAndObject);
 //   DeleteObject(SelectObject(hdcObject, bmObjectOld));
    DeleteObject(SelectObject(hdcMem, bmMemOld));
    DeleteObject(SelectObject(hdcSave, bmSaveOld));
