@@ -4,36 +4,63 @@
 #include "valhallaFindComp.h"
 
 #if (defined(hpux) || defined(linux) || defined(macintosh)) 
-void findComponentStack (struct ComponentStack* compStack, int PC)
-{
-  printf("findComponentStack NYI\n");
-}
 
-void scanComponentStack (struct ComponentStack* compStack,
-			 forEachCallType forEach)
+int scanComponentStack (struct Component* comp,
+			int PC,
+			forEachCallType forEach)
 {
   printf("scanComponentStack NYI\n");
+  return 0;
 }
 #endif
+
+
+
 
 
 #ifdef sgi
-void findComponentStack (struct ComponentStack* compStack, int PC)
-{
-  printf("findComponentStack NYI\n");
-}
 
-void scanComponentStack (struct ComponentStack* compStack,
-			 forEachCallType forEach)
-{
-  printf("scanComponentStack NYI\n");
+int scanComponentStack (struct Component* comp,
+			int PC,
+			forEachCallType forEach)
+{ /* scan through the stackpart corresponding to the comp parameter.
+   * PC is the top code-address.
+   * calling "forEach" for each (object, code-address) pair on the stcak.
+   */
 }
 #endif
+
+
+
 
 
 #ifdef sparc
 
 # define objIsValRep(theObj) inLVRA(theObj)
+
+
+struct ComponentStack{
+  struct Component *comp; /* The component */
+  int stacktype;          /* One of CS_*   */
+  int returnAdr;          /* The address to return to when this component 
+			   * starts running the next time. */
+  union {
+    struct { /* if stacktype==CS_PROCESSORSTACK or CS_ACTIVECOMPONENT: */
+      /* FirstAR is the largest address that is not part of the stack of comp.
+       * lastAR is the least RegWin that *is* part of the stack, i.e. the 
+       * StackEnd for this component stack. Notice that the stack grows 
+       * downwards. 
+       * I.e. to scan the stack, scan from (and including) lastAR to firstAR.
+       * activeCBF is the active callback frame of this component.
+       */
+      struct RegWin* firstAR;
+      struct RegWin* lastAR;
+      struct RegWin* activeCBF;
+    } if_onstack;
+    /* if stacktype==CS_STACKOBJ: */
+    struct StackObject *stackObj; 
+  } info;
+};
 
 void handleStackPart (struct RegWin *theAR, int lastReturnAdr, forEachCallType forEach)
 { long* this, *end;
@@ -65,9 +92,20 @@ void handleStackPart (struct RegWin *theAR, int lastReturnAdr, forEachCallType f
 
 
 /* findComponentStack (SPARC)
- * ========================== */
+ *
+ * Fills in the structure compStack. compStack->comp should point to a 
+ * component object. PC is expected to be the current BETA PC, and is
+ * used to set compStack->returnAdr in case compStack->comp is the
+ * active component.
+ *
+ * The implementation of findComponentStack assumes that it has been called
+ * via some other runtime routine that correctly set up the StackEnd
+ * variable to point to the top of the current BETA stack. This is
+ * e.g. the case with BetaError or BetaSignalHandler.
+ * ========================== 
+ */
 
-void findComponentStack (struct ComponentStack* compStack, int PC)
+static void findComponentStack (struct ComponentStack* compStack, int PC)
 { 
   struct RegWin *thisCompBlock = (struct RegWin *) lastCompBlock;
   struct RegWin *prevCompBlock = 0;
@@ -131,10 +169,19 @@ void findComponentStack (struct ComponentStack* compStack, int PC)
 }
 
 
-void scanComponentStack (struct ComponentStack* compStack,
+void scanComponentStack (struct Component* comp,
+			 int PC,
 			 forEachCallType forEach)
-{
-  DEBUG_VALHALLA(fprintf (output,"Entering scanComponentStack. Stacktype = %d\n",compStack->stacktype))
+{ struct ComponentStack compStack;
+
+  compStack.comp = comp;
+
+  DEBUG_VALHALLA(fprintf (output,"Entering scanComponentStack. Stacktype = %d\n",compStack->stacktype));
+
+  findComponentStack (&compStack,PC);
+
+  DEBUG_VALHALLA(fprintf (output,"FindComponentStack done. stacktype = %d. \n",cs.stacktype));
+
   switch (compStack->stacktype) {
   case CS_NOSTACK: 
     break;
@@ -201,6 +248,7 @@ void scanComponentStack (struct ComponentStack* compStack,
       break;
     }
   }
+  return compStack->stacktype;
 }
 
 #endif /* sparc */

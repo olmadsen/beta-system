@@ -393,6 +393,7 @@ INLINE int findMentry (struct ProtoType *proto)
     }
   }
   
+  /*fprintf(stderr, "findMentry: proto=0x%x, mpart=0x%x\n", proto, Mentry);*/
   return Mentry;
 }
 
@@ -542,25 +543,18 @@ int valhallaCommunicate (int curPC)
       break;
 
     case VOP_SCANSTACK:
-      { struct ComponentStack cs;
+      { struct Component *comp;
+	int stacktype;
 
-	cs.comp = (struct Component *) valhalla_readint ();
+	comp = (struct Component *) valhalla_readint ();
+	DEBUG_VALHALLA(fprintf (output,"Received component: %d, pt = %d\n",(int)cs.comp, (int) comp->Proto));
 
-	DEBUG_VALHALLA(fprintf (output,"Received component: %d, pt = %d\n",(int)cs.comp, (int) cs.comp->Proto));
-
-	findComponentStack (&cs,curPC);
-
-	DEBUG_VALHALLA(fprintf (output,"FindComponentStack done. stacktype = %d. \n",cs.stacktype));
-	  
-	valhalla_writeint (cs.stacktype);
-	
 	DEBUG_VALHALLA(fprintf (output,"Scanning ComponentStack.\n"));
-	
-	scanComponentStack (&cs,forEachStackEntry);
-	
+	stacktype=scanComponentStack (comp,curPC,forEachStackEntry);
 	DEBUG_VALHALLA(fprintf (output,"ScanComponentStack done.\n"));
 	
 	valhalla_writeint (-1);
+	valhalla_writeint (stacktype);
 	valhalla_writeint (opcode);
 	valhalla_socket_flush ();
       }

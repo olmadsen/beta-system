@@ -113,7 +113,7 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
     */
 #ifdef RTVALHALLA
     if (valhallaIsStepping)
-      ValhallaOnProcessStop (address,0,0,0,RTS_ATTACH)
+      ValhallaOnProcessStop ((long*)address,0,0,0,RTS_ATTACH);
 #endif
     CallBetaEntry(address, arg0, arg1);
 
@@ -135,7 +135,7 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
    /* we must return a proper a0 and a1, since th and SP are set after Att */
 #ifdef RTVALHALLA
     if (valhallaIsStepping)
-      ValhallaOnProcessStop (RA,0,0,0,RTS_ATTACH)
+      ValhallaOnProcessStop ((long*)RA,0,0,0,RTS_ATTACH);
 #endif
    CallBetaEntry(RA, SPx, this);
 }
