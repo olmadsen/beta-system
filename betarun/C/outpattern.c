@@ -405,7 +405,7 @@ static void ObjectDescription(Object *obj,
   fprintf(output," in %s\n", groupname);
   if (!SimpleDump){
     /* Print lowlevel info after standard info */
-    proto=GETPROTO(obj);
+    proto=activeProto/*GETPROTO(obj)*/;
     fprintf(output, "  { PC  0x%x", (int)pc);
     if (!SimpleDump) PrintCodeAddress(pc);
     fprintf(output, 
