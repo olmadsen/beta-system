@@ -1,142 +1,61 @@
-[[------- CallBack: System ----
+[[------- ntiadditions: System ----
 
-CopyCPP: public
+{ SetArgValues sets to runtime variable which makes it posible   }
+{ to retrieve the arguments from the command line.               }
+SetArgValues: public
+(#
+  stackPointer: StackArea = SP;
+  theVector:    StackArea = AddrReg1
+do
+   push AddrReg1;
+   stackPointer[12]  -> ArgCount;
+   stackPointer[16] -> theVector;
+   theVector -> ArgVector;
+   pop AddrReg1;
+   return
+#);
+
+{ Routine called from betaenvbody in case of detected failure. }
+FailureExit: public = '_FailureExit'
+(#
+  { Called from betaenvbody: (FailureTrace,'') -> Stop }
+  CurrentObject: Object = RegThis
+do
+  push CurrentObject;
+  push StopCalledErr;
+  call BetaError;
+#);
+
+Ret: public = '_Return' (# do return #);
+
+LazyItem: cvar;
+_CallLazyItem: public
   (#
+     { SBRANDT 21/7/94. Execute the lazy item object. Called from exit.c. }
+     
+     { CallLazyItem is necessary on mac since the mac C compiler does not }
+     { allow inline assembly code.                                        }
+     
      { Used variables. }
-     theCBStruct: DataArea = AddrReg1;
-     newTop:      DataArea = AddrReg2;
-     stack: StackArea  = SP;
-     theRoutine: CodeArea = AddrReg2;
-     tmpCalc: DataArea = DataReg1;
+     theObj:       Item   = RegCall;
+     theProto:     ProtoType = AddrReg1;
+     startAddress: CodeArea = RegThis { Previously DataReg1, but RegThis }
+                                      { should be well-defined or zero. }
   do
-     {
-       Stack layout:
-       <AddrReg2>         +0
-       <AddrReg1>         +4
-       <DataReg1>         +8
-       <return address>   +12
-       <struct>           +16
+     { Save local base pointer from C routine. Since the C routine does }
+     { very little work upon return from CallLazyItem, only the local   }
+     { base needs to be saved.
      }
-          
-     (if debug then call Ck if);
-     (if debug then 1 -> NumCopyCPP+ if); 
-     
-     push DataReg1, AddrReg1, AddrReg2;
-     
-     again:
-     
-     { Find a free entry in the Call Back Functions Area. }
-     { This area is defined by [ CBFA <= CBFATop <= CBFALimit ]. }
-     
-     CBFATop -> theCBStruct;
-     theCBStruct[12][] -> newTop;
-     (if newTop > CBFALimit then
-         { Search through the area to find a free one.
-           Not yet implemented: No one are ever freed 
-         }
-	 PushAll;
-         call CBFArelloc;
-         PopAll;
-         goto again;
-     if);
-     
-     newTop -> CBFATop;
-     
-     stack[16] -> theCBStruct[0];
-     232 -> theCBStruct[4]!b;  {Write call opcode: 0xe8}
-     HandleCB[] -> theRoutine; 
-     theCBStruct[9][] -> tmpCalc; 
-     tmpCalc -> theRoutine-;
-     theRoutine -> theCBStruct[5]; {Write call argument: relative offset to HandleCB[]}
-     195 -> theCBStruct[9]!b; { Write ret opcode: 0xc3}
-     theCBStruct[4][] -> theCBStruct;
-     theCBStruct -> stack[16];
-     
-     pop AddrReg2, AddrReg1, DataReg1;
-     {(code '	invd' code);} {Flush cache -- i486 only}
-     (if debug then call Ck if);
-     return
-  #);
-
-
-
-HandleCB: public
-  (#
-     { Output variable. }
-     { C call returns result i eax }
-     
-     { Used variables. }
-     stack: StackArea = SP;
-     dataPointer: DataArea = RegCall;
-     theStruct:   Structure = RegCall;
-     theProto:    ProtoType = RegCall;
-     resObj:      Object    = RegCall;
-     newProto:    ProtoType = RegAdr;
-     codePointer: CodeArea  = RegAdr;
-     theObj: Object = RegThis
-  do
-     { (if debug then call Ck if); }
-     { calling Ck does not give meaning here: registers are undefined from C }
-     
-     (code '	push	ecx' code);
-     (code '	push	edx' code);
-     (code '	push	ebx' code);
-     (code '	push	ebp' code);
-     (code '	push	esi' code);
-     (code '	push	edi' code);
-     
-     { Push CallBackFrame = (next, betaTop, tmp). }
-     push 0;
-     push BetaStackTop;
-     push ActiveCallBackFrame;
-     
-     stack -> ActiveCallBackFrame;
-     
-     stack[36{(3+6)*4}] -> dataPointer;
-     dataPointer[-9{sizeof(struct)+sizeof(call)=4+5}] -> theStruct;
-     
-     (if theStruct=0 then
-         pop ActiveCallBackFrame;
-         pop BetaStackTop;
-         4 -> SP+;
-         call freeCallbackCalled;
-         (code '	pop	edi' code);
-         (code '	pop	esi' code);
-         (code '	pop	ebp' code);
-         (code '	pop	ebx' code);
-         (code '	pop	edx' code);
-         (code '	pop	ecx' code);
-         return;
-     if);
-     
-     theStruct.iOrigin -> pReg1;
-     theStruct.iProto -> theProto;
-     { clear GC registers except RegCall before AlloI }
-     (code '	xor	ebp,ebp' code);
-     (code '	xor	esi,esi' code);
-     (code '	xor	edx,edx' code);
-     (code '	xor	ecx,ecx' code);
-     call AlloI; {GC regs OK; stack safe, too}
-     resObj -> theObj;
-     resObj.ProtoType ->  newProto;
-     newProto.CBR -> codePointer;
-     (if debug then call Ck if);
-     call codePointer; {Returns result in eax}
-     
-     pop ActiveCallBackFrame;
-     pop BetaStackTop;
-     4 -> stack+;
-     
-     (code '	pop	edi' code);
-     (code '	pop	esi' code);
-     (code '	pop	ebp' code);
-     (code '	pop	ebx' code);
-     (code '	pop	edx' code);
-     (code '	pop	ecx' code);
-     
+     push AddrReg1;
+     LazyItem -> theObj;
+     theObj.ProtoType -> theProto;
+     theProto.TopMpart -> startAddress;
+     call startAddress;
+     pop AddrReg1;
      return;
-  #);
+  #)
 
+---- CallbackAdditions: system ----
 CopyPPP: public
   (#
      { Used variables. }
@@ -253,69 +172,12 @@ CopySPP: public
      pop AddrReg2, AddrReg1, SavedDR1;
      {(code '	invd' code);} {Flush cache -- i486 only}
      return 4;
-  #)
-
-------- ntiadditions: System ----
-
-{ SetArgValues sets to runtime variable which makes it posible   }
-{ to retrieve the arguments from the command line.               }
-SetArgValues: public
-(#
-  stackPointer: StackArea = SP;
-  theVector:    StackArea = AddrReg1
-do
-   push AddrReg1;
-   stackPointer[12]  -> ArgCount;
-   stackPointer[16] -> theVector;
-   theVector -> ArgVector;
-   pop AddrReg1;
-   return
-#);
-
-{ Routine called from betaenvbody in case of detected failure. }
-FailureExit: public = '_FailureExit'
-(#
-  { Called from betaenvbody: (FailureTrace,'') -> Stop }
-  CurrentObject: Object = RegThis
-do
-  push CurrentObject;
-  push StopCalledErr;
-  call BetaError;
-#);
+  #);
 
 { Used by valhalla DYN object evaluation (callback from betarun) }
 _HandleCB: public
   (#
   do goto HandleCB;
   #);
-
-Ret: public = '_Return' (# do return #);
-
-LazyItem: cvar;
-_CallLazyItem: public
-  (#
-     { SBRANDT 21/7/94. Execute the lazy item object. Called from exit.c. }
-     
-     { CallLazyItem is necessary on mac since the mac C compiler does not }
-     { allow inline assembly code.                                        }
-     
-     { Used variables. }
-     theObj:       Item   = RegCall;
-     theProto:     ProtoType = AddrReg1;
-     startAddress: CodeArea = RegThis { Previously DataReg1, but RegThis }
-                                      { should be well-defined or zero. }
-  do
-     { Save local base pointer from C routine. Since the C routine does }
-     { very little work upon return from CallLazyItem, only the local   }
-     { base needs to be saved.
-     }
-     push AddrReg1;
-     LazyItem -> theObj;
-     theObj.ProtoType -> theProto;
-     theProto.TopMpart -> startAddress;
-     call startAddress;
-     pop AddrReg1;
-     return;
-  #)
 
 ----]]

@@ -1,0 +1,147 @@
+[[------- CallBack: System ----
+
+CopyCPP: public
+  (#
+     { Used variables. }
+     theCBStruct: DataArea = AddrReg1;
+     newTop:      DataArea = AddrReg2;
+     stack: StackArea  = SP;
+     theRoutine: CodeArea = AddrReg2;
+     tmpCalc: DataArea = DataReg1;
+  do
+     {
+       Stack layout:
+       <AddrReg2>         +0
+       <AddrReg1>         +4
+       <DataReg1>         +8
+       <return address>   +12
+       <struct>           +16
+     }
+          
+     (if debug then call Ck if);
+     (if debug then 1 -> NumCopyCPP+ if);
+     
+     push DataReg1, AddrReg1, AddrReg2;
+     
+     again:
+     
+     { Find a free entry in the Call Back Functions Area. }
+     { This area is defined by [ CBFA <= CBFATop <= CBFALimit ]. }
+     
+     CBFATop -> theCBStruct;
+     (if linux then
+         { sizeof(CallBackEntry is 10 }
+         theCBStruct[10][] -> newTop;
+      else
+         { sizeof(CallBackEntry is 12 }
+         theCBStruct[12][] -> newTop;
+     if);
+     (if newTop > CBFALimit then
+         { Search through the area to find a free one.
+           Not yet implemented: No one are ever freed 
+         }
+	 PushAll;
+         call CBFArelloc;
+         PopAll;
+         goto again;
+     if);
+     
+     newTop -> CBFATop;
+     
+     stack[16] -> theCBStruct[0];
+     232 -> theCBStruct[4]!b;  { Write call opcode: 0xe8 }
+     HandleCB[] -> theRoutine; 
+     theCBStruct[9][] -> tmpCalc; 
+     tmpCalc -> theRoutine-;
+     theRoutine -> theCBStruct[5]; {Write call argument: relative offset to HandleCB[]}
+     195 -> theCBStruct[9]!b; { Write ret opcode: 0xc3 }
+     theCBStruct[4][] -> theCBStruct;
+     theCBStruct -> stack[16];
+     
+     pop AddrReg2, AddrReg1, DataReg1;
+     {(code '	invd' code);} { Flush cache -- i486 only }
+     (if debug then call Ck if);
+     return
+  #);
+
+
+
+HandleCB: public
+  (#
+     { Output variable. }
+     { C call returns result i eax }
+     
+     { Used variables. }
+     stack: StackArea = SP;
+     dataPointer: DataArea = RegCall;
+     theStruct:   Structure = RegCall;
+     theProto:    ProtoType = RegCall;
+     resObj:      Object    = RegCall;
+     newProto:    ProtoType = RegAdr;
+     codePointer: CodeArea  = RegAdr;
+     theObj: Object = RegThis
+  do
+     { (if debug then call Ck if); }
+     { calling Ck does not give meaning here: registers are undefined from C }
+     
+     push RegEcx;
+     push RegEdx;
+     push RegEbx;
+     push RegEbp;
+     push RegEsi;
+     push RegEdi;
+     
+     { Push CallBackFrame = (next, betaTop, tmp). }
+     push 0;
+     push BetaStackTop;
+     push ActiveCallBackFrame;
+     
+     stack -> ActiveCallBackFrame;
+     
+     stack[36{(3+6)*4}] -> dataPointer;
+     dataPointer[-9{sizeof(struct)+sizeof(call)=4+5}] -> theStruct;
+     
+     (if theStruct=0 then
+         pop ActiveCallBackFrame;
+         pop BetaStackTop;
+         4 -> SP+;
+         call freeCallbackCalled;
+         pop RegEdi;
+         pop RegEsi;
+         pop RegEbp;
+         pop RegEbx;
+         pop RegEdx;
+         pop RegEcx;
+         return;
+     if);
+
+     theStruct.iOrigin -> pReg1;
+     theStruct.iProto -> theProto;
+     { clear GC registers except RegCall before AlloI }
+     clear RegEbp;
+     clear RegEsi;
+     clear RegEdx;
+     clear RegEcx;
+     
+     call AlloI; {GC regs OK; stack safe, too}
+     resObj -> theObj;
+     resObj.ProtoType ->  newProto;
+     newProto.CBR -> codePointer;
+     (if debug then call Ck if);
+     call codePointer; {Returns result in eax}
+     
+     pop ActiveCallBackFrame;
+     pop BetaStackTop;
+     4 -> stack+;
+     
+     pop RegEdi;
+     pop RegEsi;
+     pop RegEbp;
+     pop RegEbx;
+     pop RegEdx;
+     pop RegEcx;
+     
+     return;
+  #)
+
+----]]
