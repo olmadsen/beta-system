@@ -3,6 +3,7 @@ INCLUDE '~beta/bifrost/v2.3/EPSfile'
 	'~beta/bifrost/v2.3/RasterGrays'
 	'aligndialog'
 	'~beta/guienv/v1.6/controls'
+	'~beta/bifrost/v2.3/private/Impl/GoImpl'
 	'~beta/bifrost/v2.3/private/PS/EPSread';
 MDBODY nti     'bifrostdesignNTbody'
        default 'bifrostdesignX11body';
@@ -3295,3 +3296,120 @@ do
 do
    true -> theScroller.contents.update
 #)
+
+-- designPictureInteractiveMove: doPart --
+do
+   (* TAKEN from bifrost/private/Impl/GoImpl.bet cvs ver 1.4 *)
+   (if not doneInInner then
+       thecanvas.InteractionHandler
+         (#
+            mousePoint: @Point;
+            stopinteraction: @boolean;
+            mm: @MoveMatrix;
+            offset: @Point;
+            myabs: @abs;
+	    vs: (* View Size*) @Point;
+	    cs: (* Canvas Size *) @Point;
+	    oldoff: (* old offset *) @Point;
+	    vtl: (* view top left *) @Point;
+	    vbr: (* view bottom right *) @Point;
+	    xscroll: (# exit 10 #);
+	    yscroll: (# exit 10 #);
+	    everScrolled: @boolean;
+            Initialize::< 
+              (# 
+              do (* Erase original highlight *)
+                 (if private.hilited then
+                     (theCanvas[],false,none )->theshape.drawhilite; 
+                 if);
+                 (* Highlight outline *)
+                 (theCanvas[],true,none )->theshape.ho;
+                 startPoint->mousePoint;
+                 
+		 theCanvas.size -> cs;
+		 theScroller.viewSize -> vs;
+              #);
+            Motion::< 
+              (# 
+		 scrolled: @Boolean
+              do (* erase outline at old position *)
+                 offset->oldoff->mm;
+                 (theCanvas[],false,mm[])->theshape.ho;
+                 (* Find new offset and draw outline *)
+                 GetPointerLocation->thecanvas.DeviceToCanvas->mousePoint;
+                 (mousePoint.x-startpoint.x,mousePoint.y-startpoint.y)->offset;
+                 (if themodifier->isModifierOn then
+		     (* Constrain to orthogonal movements *)
+                     (if (offset.y->myabs) > (offset.x->myabs) then
+			 (* 90 degrees *)
+                         0->offset.x; 
+                      else
+			 (* 0 degrees *)
+                         0->offset.y; 
+                     if)
+                 if);
+
+
+		 theScroller.theScroll -> vtl;
+		 (vtl,vs) -> addPoints -> vbr;
+
+		 (if true
+		  // (vbr.x < mousepoint.x) and (offset.x > oldoff.x) then
+		     (* scroll right *)
+		     (vtl.x+xscroll,vtl.y) -> theScroller.theScroll;
+ 		     (vbr.x,vbr.y,xscroll,vs.y) -> theCanvas.damaged;
+		     true -> scrolled
+		  // (vtl.x-500 < mousepoint.x) (* FIXME: HACK *) 
+		       and (mousepoint.x < vtl.x)
+		       and (offset.x < oldoff.x) then
+		     (* scroll left *)
+		     (vtl.x-xscroll,vtl.y) -> theScroller.theScroll;
+ 		     (vtl.x-xscroll,vbr.y,xscroll,vs.y) -> theCanvas.damaged;
+		     true -> scrolled
+                 if);
+		 
+ 		 (if true
+		  // ((cs.y-vtl.y) < mousepoint.y)
+		       and (mousepoint.y < (cs.y-vtl.y)+500) (* FIXME: HACK *)
+		       and (offset.y > oldoff.y) then
+		     (* scroll up *)
+		     (vtl.x,vtl.y-yscroll) -> theScroller.theScroll;
+ 		     (vtl.x,cs.y-vtl.y+yscroll,vs.x,yscroll)
+		       -> theCanvas.damaged;
+		     true -> scrolled
+ 		  // (mousepoint.y < (cs.y-vbr.y))
+		       and (offset.y < oldoff.y) then
+		     (* scroll down *)
+		     (vtl.x,vtl.y+yscroll) -> theScroller.theScroll;
+ 		     (vtl.x,cs.y-vbr.y,vs.x,yscroll) -> theCanvas.damaged; 
+		     true -> scrolled 
+		 if);
+
+		 (if scrolled then true -> everScrolled; theCanvas.repair if);
+
+                 offset->mm;
+                 (theCanvas[],true,mm[])->theshape.ho
+              #);
+            ButtonRelease::<  (#  do true->stopinteraction #);
+            TerminateCondition::<  (#  do stopinteraction->value;  #);
+            Terminated::< 
+              (# GB: @GetBounds; 
+              do (* Erase outline highlight *)
+                 (theCanvas[],false,none )->theshape.ho;
+                 (if (offset.x <> 0) or (offset.y <> 0) then
+                     GB->thecanvas.damaged;
+                     offset->move;
+                     GB->thecanvas.damaged;
+                     
+                 if);
+		 (if everScrolled then cleanUp if);
+                 (* Restore original highlight *)
+                 (if private.hilited then
+                     (theCanvas[],false,none )->theshape.drawHilite
+                 if);
+                 
+              #)
+         #);
+       thecanvas.repair;
+       true->doneInInner
+   if)
