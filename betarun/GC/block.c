@@ -158,6 +158,16 @@ void mmapInitial(unsigned long numbytes)
 			    MEM_RESERVE, PAGE_NOACCESS);
     startadr += MMAPINCR;
   }
+  while (!mmapHeap) {
+    fprintf(output, "mmapInitial failed with GetLastError %d, "
+	    "trying without placement\n", 
+	    GetLastError());
+    mmapHeap = VirtualAlloc(NULL, numbytes, 
+			    MEM_RESERVE, PAGE_NOACCESS);
+    numbytes /= 2;
+    fprintf(output, "mmapInitial failed with GetLastError %d, "
+	    "trying half size %d\n", GetLastError(), numbytes);
+  }
   if (!mmapHeap) {
     fprintf(output, "mmapInitial failed with GetLastError %d\n", 
 	    GetLastError());
