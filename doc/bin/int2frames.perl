@@ -489,7 +489,7 @@ EOT
 EOT
     } else {
 	print <<EOT;
-<BODY$bodyatt onLoad="fixPrintButton()">
+<BODY$bodyatt onLoad='fixPrintButton("$imagedir")'>
 <TABLE WIDTH="100%" CELLPADDING=0 CELLSPACING=2>
 <TR>
 <TD NOWRAP>
