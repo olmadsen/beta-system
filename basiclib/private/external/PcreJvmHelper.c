@@ -74,7 +74,11 @@ JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_exec
 (JNIEnv *env, jclass jobj, jint code, jint extra, jstring jsubject, jint length, jint startoffset, jint options, jintArray jovector, jint ovecsize)
 {
   int result;
-  int *ovector = malloc(ovecsize);
+#ifdef WIN32
+  int *ovector = malloc(sizeof(int)*ovecsize);
+#else
+  int ovector[ovecsize];
+#endif
   const char *subject = (*env)->GetStringUTFChars(env, jsubject, (jboolean *)NULL);
   (*env)->GetIntArrayRegion(env, jovector, 0, ovecsize, (jint *)ovector);
 #ifdef TRACE
@@ -90,7 +94,9 @@ JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_exec
 		     ovecsize);
   (*env)->SetIntArrayRegion(env, jovector, 0, ovecsize, (jint*)ovector);
   (*env)->ReleaseStringUTFChars(env, jsubject, subject);
+#ifdef WIN32
   free(ovector);
+#endif
 
   return result;
 }
