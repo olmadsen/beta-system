@@ -1,0 +1,1114 @@
+ORIGIN 'bifrostobjectbody';
+LIB_ITEM 'designenv';
+
+
+-- bifrostPageReattachConnectors: Descriptor --
+connList.scan
+  (#
+  do
+     (if UI.verbose then 'bifrostPage.reattachConnectors'->putLine if);
+     current
+       ->lookupDesignPicture
+	 (# objectDesc:: thePage.designConn; bi: ^IDBifrost
+	 do
+	    bifrostObjectList.rep[theObject.connPrivate.node1ID][]->bi[];
+	    bi.IO[]->theObject.connPrivate.node1[];
+	    theObject[]->theObject.connPrivate.node1.startConnectors.insert;
+	    bifrostObjectList.rep[theObject.connPrivate.node2ID][]->bi[];
+	    bi.IO[]->theObject.connPrivate.node2[];
+	    theObject[]->theObject.connPrivate.node2.endConnectors.insert
+	 #)
+  #)
+
+-- bifrostPageOnMouseDown: Descriptor --
+(#
+   hitNode: ^designNode;
+   hitConn: ^designConn;
+   hitObject: ^designObject;
+   cp: ^point;
+   (* control point *)
+   exactPos: ^point;
+   moved: @boolean;
+   dontRepairGroup: @boolean;
+   doMove:
+     (#
+     do
+	true->moved;
+	(if true
+	 // (not designGroup.isEmpty) then
+	    designGroup.private.implList.scan
+	      (# cnt: @point
+	      do
+		 current.getCenter->cnt;
+		 (if current.load_prevPicture[] <> none then
+		     current[]->current.load_prevPicture.delete
+		 if);
+		 current[]->theMainPicture.group.add;
+		 cnt->current.setCenter
+	      #);
+	    IDMatrix->pagePrivate.interactionTM[];
+	    pagePrivate.interactionNodes.init;
+	    (theMainPicture.group[],mousepos,noModifier)->interactivemove;
+	    IDMatrix->pagePrivate.interactionTM[];
+	    (for i: pagePrivate.interactionNodes.size repeat
+	      false->pagePrivate.interactionNodes.list[i].nodePrivate.isMoved
+	    for);
+	    pagePrivate.interactionNodes.release;
+	    designGroup.private.implList.scan
+	      (# cnt: @point
+	      do
+		 current.getCenter->cnt;
+		 current[]->theMainPicture.group.delete;
+		 (if current.load_prevPicture[] <> none then
+		     current[]->current.load_prevPicture.add
+		 if);
+		 cnt->current.setCenter
+	      #);
+	    (* toby says that onDrag should be called on all nodes in
+	     * group selection
+	     *)
+	    designGroup.private.implList.scan
+	      (#  do current.onDrag #)
+	 // hitObject## <= designNode## then
+	    hitObject[]->hitNode[];
+	    (if hitNode.moveable then
+		IDMatrix->pagePrivate.interactionTM[];
+		pagePrivate.interactionNodes.init;
+		(hitNode[],mousepos,noModifier)->interactivemove;
+		IDMatrix->pagePrivate.interactionTM[];
+		(for i: pagePrivate.interactionNodes.size repeat
+		  false
+		    ->pagePrivate.interactionNodes.list[i].nodePrivate.isMoved
+		for);
+		pagePrivate.interactionNodes.release;
+		hitNode.onDrag
+	    if)
+	 // hitObject## <= designConn## then
+	    'Should not happen: doMove hitObject## <= designConn##'->putLine
+	 else
+	    'dont know how to move this kind of object'->putLine
+	if)
+     #);
+   buttonOne:
+     (#
+     do
+	(if hitObject.selectable then
+	    (if true
+	     // (shiftModified and (not (hitObject## <= designConn##))) then
+		(if UI.verbose then 'toggle group selection'->putLine if);
+		hitObject[]->designGroup.toggle;
+		true->dontRepairGroup
+	     // doubleClick then
+		(if UI.verbose then
+		    '%d: doubleClick\n'->putFormat (#  do hitObject.ID->d #)
+		if);
+		designGroup.clear;
+		hitObject.onDoubleClick
+	     else
+		hitObject[]->THIS(bifrostPage).designSelection;
+		hitObject[]->designGroup.click
+	    if)
+	if)
+     #);
+   interactiveMoveConn:
+     (#
+	whichEnd: (* node1 is true *) @boolean;
+	isEnd: @boolean;
+	npl: (* new point list *) ^pointArray;
+	newPos: @point;
+	tc,oc,nc: @Point;
+	(* Text, Old, New Center *)
+	newAttach: ^designObject
+     do
+	hitObject[]->hitConn[];
+	(if THIS(bifrostPage).designSelection <> none then
+	    (THIS(bifrostPage).designSelection).unhilite
+	if);
+	hitConn.connPrivate.damaged;
+	hitConn.connPrivate.theLine.TM
+	  ->hitConn.connPrivate.theLine.theShape.computeCenter->oc;
+	(if true
+	 // (exactpos[] <> none ) and doubleclick then
+	 (* doubleclicked on a control point - delete it *)
+	    (if (hitConn.connPrivate.theLine.points).npoints > 2 then
+	    (* if we end up with less than 2 points we're in trouble *)
+		exactPos->hitConn.connPrivate.theLine.deletePoint;
+		hitConn.connPrivate.theLine.points
+		  ->hitConn.connPrivate.setPoints;
+		hitConn.connPrivate.connect
+	    if)
+	 // doubleclick then
+	 (* doubleclicked (not on controlpoint) - insert a new point *)
+	    (mousePos,mousePos->hitConn.connPrivate.theLine.closestLineSegment)
+	      ->hitConn.connPrivate.thePoints.insertPoint;
+	    hitConn.connPrivate.thePoints[]->hitConn.connPrivate.setPoints
+	 // (exactpos[] <> none ) then
+	 (* clicked on a control point - move it *)
+	    exactPos->hitConn.connPrivate.isEndPoint->(isEnd,whichEnd);
+	    (hitConn.connPrivate.theLine[],exactPos,noModifier)
+	      ->interactiveReshape;
+	    (if isEnd then (* move end point to another node *)
+		(if UI.verbose then 'Hit end point'->putLine if);
+		hitConn.connPrivate.theLine.points->npl[];
+		(if whichEnd then
+		    1->npl.getPoint->newPos
+		 else
+		    npl.npoints->npl.getPoint->newPos
+		if);
+		(newpos,hitConn[])->findHitObject->newAttach[];
+		(if newAttach[] <> none then
+		    (if UI.verbose then newAttach.dump if);
+		    (if newAttach## <= designConn## then
+			(if UI.verbose then
+			    'Oh silly. you can\'t expect that to work'->putLine
+			if)
+		     else
+			hitConn.getMyObject
+			  (#
+			     dc: ^thePage.connector;
+			     ok: @boolean;
+			     theNew: ^object
+			  do
+			     theObject[]->dc[];
+			     newAttach.ID->theDocument.theObjectList.Find
+			       ->theNew[];
+			     (theNew[],whichEnd)->dc.onReattach->ok;
+			     (if ok and UI.verbose then 'OK'->putLine if)
+			  #)
+		    if)
+		if)
+	    if);
+	    hitConn.connPrivate.theLine.points->hitConn.connPrivate.setPoints;
+	    hitConn.connPrivate.connect
+	if);
+	hitConn.connPrivate.theLine.TM
+	  ->hitConn.connPrivate.theLine.theShape.computeCenter->nc;
+	(oc,nc)->hitConn.moveRegions;
+	hitConn.connPrivate.damaged;
+	hitObject[]->THIS(bifrostPage).designSelection;
+	hitObject.hilite
+     #);
+   normalIA:
+     (#
+	x,y: @integer;
+	leftBtn,middleBtn,rightBtn: @boolean;
+	dp: ^theDocument.page
+     do
+	none ->exactpos[];
+	(if designSelection <> none then
+	    designSelection->hitObject[];
+	    (if true
+	     // hitObject## <= designNode## then
+		hitObject[]->hitNode[];
+		(hitNode.shape[],mousePos)->HitControl->exactpos[]
+	     // hitObject## <= designConn## then
+		hitObject[]->hitConn[];
+		(hitConn.connPrivate.theLine[],mousePos)->HitControl->exactpos[]
+	    if)
+	if);
+	(if exactpos[] = none then
+	    (if UI.extremelyVerbose then
+		'NormalIA: Mousepos %dx%d\n'
+		  ->putformat (#  do mousepos.x->d; mousepos.y->d #)
+	    if);
+	    (mousepos,none )->findHitObject->hitObject[]
+	 else
+	    (if UI.extremelyVerbose then 'got exact pos'->putLine if)
+	if);
+	(if hitObject[] <> none then
+	    (if buttonState
+	     // 1 then
+		(if designSelection <> none then
+		    (designSelection).unhilite;
+		    (THIS(bifrostPage).designSelection).hiliteReset
+		if);
+		(if hitObject## <= designConn## then
+		    interactiveMoveConn
+		 else
+		    false->moved;
+		    (if exactpos[] <> none then
+		    (* we are CERTAIN that hitNode[] <> NONE *)
+			designGroup.clear;
+			(if hitNode.sizeable then
+			    (hitNode.shape[],exactPos,shiftModifier)
+			      ->theScroller.contents.interactiveReshape;
+			    hitNode.onSize
+			if);
+			hitNode[]->THIS(bifrostPage).designSelection
+		     else
+			buttonOne;
+			interactionhandler
+			  (#
+			     terminateInteraction: @boolean;
+			     idle::
+			       (#
+			       do (if theGUI.mouse.buttonState = 0 then
+				      true -> terminateInteraction
+                                  if)
+                               #);
+			     motion::
+			       (#
+			       do true -> terminateInteraction;
+				  doMove
+                               #);
+			     buttonRelease:: (# do true->terminateInteraction #);
+			     terminateCondition::
+			       (# do terminateInteraction -> value #);
+			     keyRelease::
+			       (#
+			       do (if ch = ascii.esc then
+				      true -> terminateInteraction
+                                  if)
+                               #)
+                          #)
+		    if)
+		if);
+		(if designSelection <> none then
+		    (designSelection).hiliteReset; (designSelection).hilite
+		if)
+	     // 2 then
+		(if UI.verbose then hitObject.dump if)
+	     // 3 (* right click *) then
+		localPosition->hitObject.onRightMouseDown
+	    if)
+	 else
+	    designGroup.clear;
+	    (if UI.verbose then mousepos->putPoint; newline if)
+	if);
+	localPosition->(x,y);
+	(if buttonState
+	 // 1 then
+	    true->leftBtn
+	 // 2 then
+	    true->middleBtn
+	 // 3 then
+	    true->rightBtn
+	if);
+	THIS(bifrostPage).theMainPicture.ID->theDocument.theObjectList.Find
+	  ->dp[];
+	(x,y,leftBtn,middleBtn,rightBtn,shiftModified,controlModified,
+	 metaModified, (* shiftLockKey? *) false)->dp.onMouseDown
+     #);
+   connIA:
+     (#
+	ml: ^multiline;
+	dp: ^theDocument.page;
+	dc: ^dp.designConnector;
+	pa: ^pointArray;
+	n1,n2: ^designNode;
+	ho: ^designObject;
+	pts: [0] @integer;
+	bnd: @rectangle;
+	initialiser: @object
+	  (#
+	  do
+	     pts->dc.points;
+	     true->dc.selectable;
+	     true->dc.borderVisible;
+	     dc[]->dp.CurrentObject
+	  #)
+     do
+	(mousepos,none )->findHitObject->ho[];
+	(if ho[] // none then leave connIA if);
+	(if ho## <= designNode## then
+	    ho[]->n1[]; (if ho## <= designLabel## then leave connIA if)
+	 else
+	    leave connIA
+	if);
+	(* 'Left click to insert point.  Right click on a node to finish. Hold shift down to get rigth angles' -> infoBar.label; *)
+	&multiline[]->ml[];
+	ml.init;
+	(ml[],mousepos,shiftModifier)
+	  ->theScroller.contents.interactiveCreateShape;
+	ml.getBounds->damage;
+	ml.points->pa[];
+	(if pa.npoints < 2 then leave connIA if);
+	(pa.npoints->pa.getPoint,none )->findHitObject->ho[];
+	(if ho[] // none then leave connIA if);
+	(if ho## <= designNode## then
+	    ho[]->n2[]; (if ho## <= designLabel## then leave connIA if)
+	 else
+	    leave connIA
+	if);
+	(if ho[]
+	 // n1[] then
+	    (if pa.npoints
+	     // 2 then
+		n1.shape.getBounds->bnd;
+		2->pa.deletePoint;
+		1->pa.deletePoint;
+		(bnd.x+(bnd.width div 2),bnd.y-(bnd.height div 2))->pa.addPoint;
+		(bnd.x+bnd.width+30,bnd.y-(bnd.height div 2))->pa.addPoint;
+		(bnd.x+bnd.width+30,bnd.y+30)->pa.addPoint;
+		(bnd.x+(bnd.width div 2),bnd.y+30)->pa.addPoint;
+		1->pa.getPoint->pa.addPoint
+	    if)
+	if);
+	pa.npoints*2->pts.new;
+	pa.scanPoints
+	  (#  do current->bifrost2design->(pts[inx*2-1],pts[inx*2]) #);
+	THIS(bifrostPage).theMainPicture.ID->theDocument.theObjectList.Find
+	  ->dp[];
+	(if UI.interactiveNewConn then
+	    UI.interactiveNewObject[]->dc[]; false->UI.interactiveNewConn
+	 else
+	    &dp.designConnector[]->dc[]
+	if);
+	initialiser[]->dc.visualAttributes.initInteractive[];
+	(if designSelection <> none then (designSelection).unhilite if);
+	(n1.ID->theDocument.theObjectList.Find,
+	 n2.ID->theDocument.theObjectList.Find)->dc.new;
+	none ->dc.visualAttributes.initInteractive[]
+     #);
+   EllipseIA:
+     (#
+	el: ^ellipse;
+	dp: ^theDocument.page;
+	de: ^dp.designEllipse;
+	cnt,dim: @point
+     do
+	&ellipse[]->el[];
+	el.init;
+	(* 'Left click to finish. Hold shift down for circle.' -> infoBar.label; *)
+	(el[],mousepos,shiftModifier)
+	  ->theScroller.contents.interactiveCreateShape;
+	el.center->bifrost2design->cnt;
+	el.horizontalRadius*2->dim.x;
+	el.verticalRadius*2->dim.y;
+	THIS(bifrostPage).theMainPicture.ID->theDocument.theObjectList.Find
+	  ->dp[];
+	&dp.designEllipse[]->de[];
+	(cnt.x,cnt.y,dim.x,dim.y)->de.new;
+	true->de.selectable;
+	true->de.borderVisible;
+	true->de.moveable;
+	true->de.sizeable;
+	de[]->dp.CurrentObject
+     #);
+   RndRectIA: (#  do rectIA #);
+   WedgeIA:
+     (#  do 'interactive new Wedge not implemented yet!'->putLine #);
+   polyIA:
+     (#
+	ml: ^multiline;
+	dp: ^theDocument.page;
+	dpoly: ^dp.designPolygon;
+	pa: ^pointArray;
+	pts: [0] @integer;
+	bnd: @rectangle
+     do
+	&multiline[]->ml[];
+	ml.init;
+	(* 'Left click to insert point.  Right click to finish. Hold shift down to get rigth angles' -> infoBar.label; *)
+	(ml[],mousepos,shiftModifier)
+	  ->theScroller.contents.interactiveCreateShape;
+	ml.getBounds->damage;
+	ml.getBounds->bnd;
+	bnd.x+bnd.width div 2->bnd.x;
+	bnd.y-bnd.height div 2->bnd.y;
+	(bnd.x,bnd.y)->bifrost2design->(bnd.x,bnd.y);
+	ml.points->pa[];
+	(if pa.npoints < 2 then leave polyIA if);
+	pa.npoints*2->pts.new;
+	pa.scanPoints
+	  (#  do current->bifrost2design->(pts[inx*2-1],pts[inx*2]) #);
+	THIS(bifrostPage).theMainPicture.ID->theDocument.theObjectList.Find
+	  ->dp[];
+	&dp.designPolygon[]->dpoly[];
+	(bnd.x,bnd.y,0,0,pts)->dpoly.new;
+	true->dpoly.selectable;
+	true->dpoly.borderVisible;
+	true->dpoly.moveable;
+	false->dpoly.sizeable;
+	dpoly[]->dp.CurrentObject
+     #);
+   LineIA: (#  do 'interactive new Line not implemented yet!'->putLine #);
+   LabelIA:
+     (#
+	txt: ^graphicText;
+	dp: ^theDocument.page;
+	dl: ^dp.designLabel;
+	bnd: @rectangle;
+	t: ^text
+     do
+	&graphicText[]->txt[];
+	txt.init;
+	(* 'Type in text.  Press enter when done.' -> infoBar.label; *)
+	(txt[],mousepos,noModifier)
+	  ->theScroller.contents.interactiveCreateShape;
+	txt.getBounds->bnd;
+	bnd.x+bnd.width div 2->bnd.x;
+	bnd.y-bnd.height div 2->bnd.y;
+	(bnd.x,bnd.y)->bifrost2design->(bnd.x,bnd.y);
+	txt.theText->t[];
+	THIS(bifrostPage).theMainPicture.ID->theDocument.theObjectList.Find
+	  ->dp[];
+	&dp.designLabel[]->dl[];
+	(bnd.x,bnd.y,bnd.width,bnd.height,t)->dl.new;
+	true->dl.selectable;
+	false->dl.borderVisible;
+	dl[]->dp.CurrentObject
+     #);
+   PictureIA:
+     (#  do 'interactive new Picture not implemented yet!'->putLine #);
+   rectIA:
+     (#
+	rct: ^rect;
+	bnd: @rectangle;
+	dp: ^theDocument.page;
+	dr: ^dp.designRect
+     do
+	&rect[]->rct[];
+	rct.init;
+	(* 'Left click to finish.  Hold shift down for square.' -> infoBar.label; *)
+	(rct[],mousepos,shiftModifier)
+	  ->theScroller.contents.interactiveCreateShape;
+	rct.getBounds->bnd;
+	bnd.x+bnd.width div 2->bnd.x;
+	bnd.y-bnd.height div 2->bnd.y;
+	(bnd.x,bnd.y)->bifrost2design->(bnd.x,bnd.y);
+	THIS(bifrostPage).theMainPicture.ID->theDocument.theObjectList.Find
+	  ->dp[];
+	&dp.designRect[]->dr[];
+	bnd->dr.new;
+	true->dr.selectable;
+	true->dr.borderVisible;
+	true->dr.moveable;
+	true->dr.sizeable;
+	dr[]->dp.CurrentObject
+     #);
+   findHitObject:
+     (# hitObject: ^designObject; mousepos: @point; butNotThis: ^Object
+     enter (mousepos,butNotThis[])
+     do
+	scan: theMainPicture.ScanGOsReverse
+	  (#
+	  do
+	     (if go## <= designObject## then
+		 go[]->hitObject[];
+		 (if UI.extremelyVerbose then
+		     'top level:'->putLine; hitObject.dump
+		 if);
+		 (if (THIS(BifrostCanvas)[],mousepos)->hitObject.containsPoint
+		  then
+		     (if UI.extremelyVerbose then
+			 '\ncontains point!!!'->putLine
+		     if);
+		     (if go[] <> butNotThis[] then
+			 (THIS(BifrostCanvas)[],mousepos)
+			   ->hitObject.findSmallestHit->hitObject[];
+			 (if hitObject[] <> none then
+			     leave scan
+			  else
+			     (if UI.extremelyVerbose then
+				 go[]->hitObject[];
+				 hitObject.dump;
+				 'no regions'->putLine
+			     if)
+			 if)
+		     if)
+		  else
+		     (if UI.extremelyVerbose then
+			 '\nDo not contains point!!!'->putLine
+		     if);
+
+		 if);
+		 none ->hitObject[]
+	     if)
+	  #)
+     exit hitObject[]
+     #)
+do
+   (if UI.verbose then
+       (if controlModified then 'controlModified '->putText if);
+       (if metaModified then 'metaModified '->putText if);
+       (if shiftModified then 'shiftModified '->putText if);
+       (if controlModified or metaModified or shiftModified then newline if)
+   if);
+   mousepos->devicetocanvas->mousepos;
+   false->dontRepairGroup;
+   (if not SifIsInEditMode then
+       (if interactiveState
+	// iaDisabled then (* do nothing *)
+
+	// iaNormal then
+	   normalIA; updateInfoBar
+	// iaConn then
+	   connIA; iaNormal->interactiveState; updateInfoBar
+	// iaRect then
+	   rectIA; iaNormal->interactiveState; updateInfoBar
+	// iaEllipse then
+	   ellipseIA; iaNormal->interactiveState; updateInfoBar
+	// iaRndRect then
+	   rndRectIA; iaNormal->interactiveState; updateInfoBar
+	// iaWedge then
+	   wedgeIA; iaNormal->interactiveState; updateInfoBar
+	// iaPoly then
+	   polyIA; iaNormal->interactiveState; updateInfoBar
+	// iaLine then
+	   lineIA; iaNormal->interactiveState; updateInfoBar
+	// iaLabel then
+	   labelIA; iaNormal->interactiveState; updateInfoBar
+	// iaPicture then
+	   pictureIA; iaNormal->interactiveState; updateInfoBar
+	else
+	   'Warning: internal problem in bifrostobjectbody-bifrostPageOnMouseDown'
+	     ->putLine;
+	   'this is not serious. Please send a bug report to support@mjolner.dk'
+	     ->putLine;
+	   iaNormal->interactiveState;
+	   updateInfoBar
+       if);
+
+    else
+       'Info: cannot change focus while sif is in texteditmode.'->InfoBar.label;
+
+   if);
+   false->dontRepair;
+   dontRepairGroup->THIS(bifrostPage).repair;
+   (* According to Lennert Sloth the following is needed to be able
+    * to get keyEvents.  This could be a problem like the problem with
+    * Sif when the freja diagram is changed
+    *)
+   theScroller.contents[]->target
+#)
+
+-- bifrostPageOnKeyDown: Descriptor --
+(#
+do
+   (if theDocument[] <> none then
+   (* Alt keys does not work in win32, so lets cheat a bit *)
+       &<<SLOT bifrostPageKeyDown:Descriptor>>
+   if)
+#)
+
+-- bifrostPagePrint: Descriptor --
+(# rct: @rectangle
+do (* FIXME: the group selection should not be lost when printing *)
+   designGroup.clear;
+   theMainPicture.getbounds->rct;
+   (if UI.verbose then rct->putBounds; newLine if);
+   '%d %d translate\n'
+     ->out.putFormat
+       (#
+       do
+	  - rct.x->d;
+	  rct.height-rct.y->d (* 30-rct.x -> d; 30+rct.height-rct.y -> d *)
+       #);
+   'Begin'->out.putline;
+   out[]->theMainPicture.writePS;
+   'End'->out.putline;
+
+#)
+
+-- bifrostPageSave: Descriptor --
+(#
+   out: @text;
+   rct: @rectangle;
+   realscale,hscale,vscale: @real;
+   rotate: @boolean;
+   op: @out.putLine;
+   on: @out.newline;
+   ot: @out.putText;
+   bu: @point
+do
+   thisOp:
+     (#
+	diag: @file
+	  (#
+	     cleanUp:
+	       (# msg: ^text
+	       enter msg[]
+	       do (none ,msg[],'Warning')->theGUI.alertUser; leave thisOp
+	       #);
+	     accessError::  (#  do msg[]->cleanup #);
+	     writeError::  (#  do msg[]->cleanup #);
+	     readError::  (#  do msg[]->cleanup #);
+	     EOSerror::  (#  do msg[]->cleanup #);
+	     noSuchFileError::  (#  do msg[]->cleanup #);
+	     fileExistsError::  (#  do msg[]->cleanup #);
+	     noSpaceError::  (#  do msg[]->cleanup #);
+	     otherError::  (#  do msg[]->cleanup #);
+
+	  #);
+
+     do (* open file *) (* fileName[]->out.name;
+			 out.openWrite;*)
+	theMainPicture.getbounds->rct;
+	(if true
+	 // scaled then
+	    scale / 100.0->realscale
+	 // scaleToFit then
+	    (if rct.height < rct.width then true->rotate if);
+	    (if rotate then
+	    (* 11 inches in 1/72 of an inch
+	     * .5 inch top and bottom margin
+	     *)
+		(792-72) / rct.width->vscale;
+		(* 8 inches in 1/72 of an inch
+		 * .5 inch right and left margin
+		 *)
+		(576-72) / rct.height->hscale
+	     else
+	    (* 11 inches in 1/72 of an inch
+	     * .5 inch top and bottom margin
+	     *)
+		(792-72) / rct.height->vscale;
+		(* 8 inches in 1/72 of an inch
+		 * .5 inch right and left margin
+		 *)
+		(576-72) / rct.width->hscale
+	    if);
+	    (if vscale < hscale then
+		vscale->realscale
+	     else
+		hscale->realscale
+	    if);
+	    (if realscale > 1.0 then 1.0->realscale if)
+	 else
+	    1.0->realscale
+	if);
+	'%!PS-Adobe-3.0'->out.putline;
+	out.startEPSfile;
+	'%%Pages: 1'->op;
+	'%%%%BoundingBox: %d %d %d %d\n%%%%EndComments\n'
+	  ->out.putFormat
+	    (#
+	    do
+	       36->d;
+	       36->d;
+	       (if rotate then
+		   ((rct.height*realscale)->bu.x)+36->d;
+		   ((rct.width*realscale)->bu.y)+36->d
+		else
+		   ((rct.width*realscale)->bu.x)+36->d;
+		   ((rct.height*realscale)->bu.y)+36->d
+	       if)
+	    #);
+	'%%BeginProlog'->op;
+	UI.getCVSinfoPS->out.putLine;
+	'%%BeginResource: procset Mjolner-Bifrost-StandardMacros 1.0 0'->op;
+	out.writeMacros;
+	'%%EndResource'->op;
+	on;
+	'%%BeginResource: procset pahe-bbox 1.0 0'->op;
+	'/pahe-bbox'->op;
+	'{ exch 0 0 moveto'->op;
+	'  dup'->op;
+	'  0 lineto'->op;
+	'  exch dup 3 1 roll lineto'->op;
+	'  0 exch lineto'->op;
+	'  0 0 lineto'->op;
+	'  stroke } def'->op;
+	'%%EndResource'->op;
+	on;
+	'%%EndProlog'->op;
+	on;
+	'%%Page: ('->ot;
+	THIS(bifrostPage).title->ot;
+	') 1'->op;
+	'%%BeginPageSetup'->op;
+	'/pgsave save def'->op;
+	'%%EndPageSetup'->op;
+	on;
+	'gsave'->op;
+	'36 36 translate'->op;
+	'newpath'->op;
+	'0 setlinewidth'->op;
+	'[4 4] 4 setdash'->op;
+	(if not UI.verbose then '% '->ot if);
+	'%d %d pahe-bbox\n'->out.putFormat (#  do bu.x->d; bu.y->d #);
+	'grestore'->op;
+	on;
+	'36 36 translate % 0.5 inch margin'->op;
+	'%% vscale %f hscale %f \n'
+	  ->out.putFormat (#  do vscale->f; hscale->f #);
+	'%f %f scale\n'->out.putFormat (#  do realscale->f; realscale->f #);
+	(if rotate then
+	    '90 rotate'->op;
+	    '0 -%d translate\n'->out.putFormat (#  do rct.height->d #)
+	if);
+	out[]->print;
+	(* showpage only by public demand /pahe *)
+	'pgsave restore'->op;
+	'showpage'->op;
+	'%%Trailer'->op;
+	'%%EOF'->op;
+	fileName[]->diag.name;
+	diag.openWrite;
+	out[]->diag.puttext;
+	diag.close (* out.close *)
+     #)
+#)
+
+-- bifrostPageLoad: Descriptor --
+(# oldRepair: @boolean
+do
+   dontRepair->oldRepair;
+   true->dontRepair;
+   psfile[]
+     ->loadPicture
+       (#
+	  parseError::  (#  do msg[]->THIS(load).parseError #);
+	  createGO::
+	    (#
+	       dp: ^designPicture;
+	       dobj: ^designObject;
+	       dn: ^designNode;
+	       dc: ^designConn
+	    do
+	       (if true
+		// 'designconn'->patternName.equalNCS then
+		   &designConn[]->GO[]
+		// 'designrect'->patternName.equalNCS then
+		   &designRect[]->GO[]
+		// 'designellipse'->patternName.equalNCS then
+		   &designEllipse[]->GO[]
+		// 'designpoly'->patternName.equalNCS then
+		   &designPoly[]->GO[]
+		// 'designlabel'->patternName.equalNCS then
+		   &designLabel[]->GO[]
+		// 'mainPicture'->patternName.equalNCS then
+		   &mainPicture[]->theMainPicture[]->GO[];
+		   (* aliases for shapes *)
+
+		// 'designObjectText'->patternName.equalNCS then
+		   currentReadPicture[]->dobj[];
+		   &designObjectText[]->GO[];
+		   (if true
+		    // dobj## <= designNode## then
+		       dobj[]->dn[]; GO[]->dn.theText[];
+		    // dobj## <= designConn## then
+		    (* for backwards compatibility *)
+		       dobj[]->dc[]; GO[]->dc.textToDelete[]
+		    else
+		       'Error during load - text object on unknown object type'
+			 ->putLine
+		   if)
+		// 'designRectShape'->patternName.equalNCS then
+		   currentReadPicture[]->dn[];
+		   &designRectShape[]->dn.shape[]->GO[];
+
+		// 'designRectFilledShape'->patternName.equalNCS then
+		   currentReadPicture[]->dn[];
+		   &designRectFilledShape[]->dn.filledShape[]->GO[];
+
+		// 'designEllipseShape'->patternName.equalNCS then
+		   currentReadPicture[]->dn[];
+		   &designEllipseShape[]->dn.shape[]->GO[];
+
+		// 'designEllipseFilledShape'->patternName.equalNCS then
+		   currentReadPicture[]->dn[];
+		   &designEllipseFilledShape[]->dn.filledShape[]->GO[];
+
+		// 'designPolyShape'->patternName.equalNCS then
+		   currentReadPicture[]->dn[];
+		   &designPolyShape[]->dn.shape[]->GO[];
+
+		// 'designPolyFilledShape'->patternName.equalNCS then
+		   currentReadPicture[]->dn[];
+		   &designPolyFilledShape[]->dn.filledShape[]->GO[];
+
+		// 'designConnLine'->patternName.equalNCS then
+		   currentReadPicture[]->dc[];
+		   &designConnLine[]->dc.connPrivate.theLine[]->GO[];
+
+		// 'designConnFatLine'->patternName.equalNCS then
+		   currentReadPicture[]->dc[];
+		   &designConnFatLine[]->dc.connPrivate.theFatLine[]->GO[];
+
+		// 'bifrostConnArrow'->patternName.equalNCS then
+		   currentReadPicture[]->dc[];
+		   &dc.connPrivate.bifrostConnArrow[]->dc.connPrivate.theArrow[]
+		     ->GO[]
+		else
+		   'Unknown shape: %s\n'
+		     ->putFormat (#  do patternName[]->s #)
+	       if);
+	       (if GO## <= designPicture## then
+		   GO[]->dp[];
+		   currentReadPicture[]->dp.load_prevPicture[];
+		   dp[]->currentReadPicture[]
+	       if);
+	       (if GO## <= designNode## then
+		   GO[]->dn[]; dn.startConnectors.init; dn.endConnectors.init
+	       if)
+	    #)
+       do (if UI.verbose then screen[]->private.debug[] if)
+       #);
+   rougeText;
+   &<<SLOT bifrostPageLoadDrawMaybe:Descriptor>>;
+   oldRepair->dontRepair
+#)
+
+-- bifrostPageOnActivate: DoPart --
+do
+   (if THIS(bifrostPage)[] <> currentBifrostPage[] then
+       THIS(bifrostPage)[]->currentBifrostPage[];
+       (if (theDocument[] <> none ) and
+       (currentBifrostPage.theMainPicture[] <> none ) and
+       (currentBifrostPage.theMainPicture.ID <> 0) then
+	   currentBifrostPage.theMainPicture.ID->theDocument.theObjectList.find
+	     ->theDocument.currentPage
+	else
+	   THIS(bifrostPage)[]->currentBifrostPage[];
+	   (currentBifrostPage.theMenuBar).checkMenuBar
+       if)
+   if);
+
+
+-- bifrostPageUpdateMenuBar: DoPart --
+do
+     (# fileMenuSeen: @boolean
+     do
+	(theMenuBar).clear;
+	(if bifrostDesignDebug then
+	    (theMenuBar).extraMenu[]->(theMenuBar).append
+	if);
+	THIS(designEnv).menuBar.scan
+	  (# t: ^text
+	  do
+	     (if current.att.menu[] <> none then
+		 current.att.menu.name->t[];
+		 (if (* This is a hack for windows *) 'file'->t.equalNCS then
+		     (if not fileMenuSeen then
+			 current.att.menu[]->(theMenuBar).append;
+			 true->fileMenuSeen
+		     if)
+		  else
+		     current.att.menu[]->(theMenuBar).append
+		 if)
+	     if)
+	  #)
+     #)
+   
+   -- bifrostPageUpdateInfoBar: DoPart --
+do
+     (# obj: ^designObject
+     do
+	(if designSelection
+	 // none then 'Info:'->infoBar.label
+	 else
+	    designSelection->obj[];
+	    (if true
+	     // obj## <= designNode## then
+		'Info: one node selected'->infoBar.label
+	     // obj## <= designConn## then
+		'Info: one connector selected'->infoBar.label
+	     else
+		'Info: one object selected'->infoBar.label
+	    if)
+	if);
+	designGroup.private.updateInfoBar
+     #)
+   
+   -- bifrostPageDamage: DoPart --
+do
+   (if UI.extremelyVerbose then 'damaged: r '->putText; rct->putBounds if);
+   (if damaged.width
+    // 0 then (if UI.extremelyVerbose then ' d -'->putText if); rct->damaged
+    else
+       (if UI.extremelyVerbose then ' d '->putText; damaged->putBounds if);
+       (rct,damaged)->rectUnion->damaged
+   if);
+   (if UI.extremelyVerbose then
+       ' d\' '->putText; damaged->putBounds; newline
+   if)
+
+-- bifrostPageCheckMenuBar: DoPart --
+do
+   check:
+     (#
+	currentMenus: [0] ^theGUI.menu; menuInx: @integer; extraName: @text;
+     do
+	(if dontUpdate then leave check if);
+	(if currentBifrostPage[] // none then leave check if);
+	(if not currentBifrostPage.theScroller.contents.ready then
+	    leave check
+	if);
+	(if UI.verbose then
+	    '%d: bifrostPageCheckMenuBar-bifrostobjectbody\n'
+	      ->putFormat (#  do currentBifrostPage.theMainPicture.ID->d #)
+	if);
+	'Extras'->extraName;
+	scan
+	  (#
+	  do
+	     (if not (current.name->extraName.equal) then
+		 menuInx+1->menuInx
+	     if)
+	  #);
+	menuInx->currentMenus.new;
+	0->menuInx;
+	scan
+	  (#
+	  do
+	     (if not (current.name->extraName.equal) then
+		 menuInx+1->menuInx; current[]->currentMenus[menuInx][]
+	     if)
+	  #);
+	0->menuInx;
+	(if currentMenus.range <> THIS(designenv).menuBar.size then
+	    currentBifrostPage.updateMenuBar; leave check
+	if);
+	THIS(designenv).menuBar.scan
+	  (#
+	     theMenu: ^theGUI.menu;
+	     currentMenuItems: [0] ^theMenu.menuItem;
+	     itemInx: @integer
+	  do
+	     menuInx+1->menuInx;
+	     currentMenus[menuInx][]->theMenu[];
+	     (if UI.menuVerbose then
+		 '%d: %s\n'
+		   ->putFormat
+		     (#  do current.ID->d; current.att.name[]->s #)
+	     if);
+	     (if not (current## <= THIS(designenv).designMenu##) then
+		 (if not (theMenu.name->current.att.name.equal) then
+		     currentBifrostPage.updateMenuBar; leave check
+		 if);
+		 (if theMenu.noOfMenuitems <> current.itemList.size then
+		     (if current.att.menu.noOfMenuitems <>
+		     theMenu.noOfMenuitems
+		     (*
+		      * This check is not necessary, but someone
+		      * is by-passing the designenv menu
+		      * interface somehow. The `Windows' menu in
+		      * freja is an example of this.
+		      * /pahe
+		      *) then
+			 currentBifrostPage.updateMenuBar; leave check
+		     if)
+		 if);
+		 theMenu.noOfMenuitems->currentMenuItems.new;
+		 0->itemInx;
+		 theMenu.scan
+		   (#
+		   do
+		      itemInx+1->itemInx; current[]->currentMenuItems[itemInx][]
+		   #);
+		 0->itemInx;
+		 current.itemList.scan
+		   (# txt: @text
+		   do
+		      itemInx+1->itemInx;
+		      (if UI.menuVerbose then
+			  ' %d: %s %s\n'
+			    ->putFormat
+			      (#
+			      do
+				 current.itemNumber->d;
+				 currentMenuItems[itemInx].name->s;
+				 current.att.name[]->s
+			      #)
+		      if);
+		      txt.clear;
+		      0->current.att.name.pos;
+		      (if current.att.name.peek
+		       // '\\' then
+			  current.att.name.get;
+			  current.att.name.get;
+			  current.att.name.getLine->txt.putText
+		       // '-' then
+			  'separator'->txt.putText
+		       else
+			  current.att.name[]->txt.putText
+		      if);
+		      (if not (currentMenuItems[itemInx].name->txt.equal) then
+			  currentBifrostPage.updateMenuBar; leave check
+		      if)
+		   #)
+	     if)
+	  #)
+     #)
+
+-- bifrostPageRepair: DoPart --
+do
+   (if (not dontRepair) and (damage.damaged.width <> 0) then
+       (if designSelection <> none then (designSelection).unhilite if);
+       (if not dontUpdateGroup then designGroup.update if);
+       damage.damaged->theScroller.contents.damaged;
+       theScroller.contents.repair;
+       (if UI.warnDanger then 'repair just called'->putLine if);
+       0->damage.damaged.width;
+       (if designSelection <> none then (designSelection).hilite if);
+       (if autoPanObject[] <> none then autoPanObject.autoPan if);
+       updateInfoBar
+   if)
+
+-- bifrostPageSetZoom: DoPart --
+do
+     (#
+	putPoint:
+	  (# px,py: @Integer
+	  enter (px,py)
+	  do '(%d,%d)'->putFormat (#  do px->d; py->d #)
+	  #);
+	oldzoom: @vector;
+	scroll: @point
+     do
+	theScroller.contents.ZoomFactor->oldzoom;
+	(if UI.verbose then
+	    'new zoom factor: %f %f\n'->putFormat (#  do newzoom->(f,f) #);
+	    'old zoom factor: %f %f\n'->putFormat (#  do oldzoom->(f,f) #);
+
+	if);
+	theScroller.theScroll->scroll;
+	newzoom->theScroller.contents.ZoomFactor;
+	(if UI.verbose then scroll->putPoint if);
+	scroll.x / oldzoom.x->scroll.x;
+	scroll.y / oldzoom.y->scroll.y;
+	(if UI.verbose then scroll->putPoint if);
+	scroll.x*newzoom.x->scroll.x;
+	scroll.y*newzoom.y->scroll.y;
+	(if UI.verbose then scroll->putPoint if);
+	scroll->theScroller.theScroll
+     #);
+   (*
+    (if (theDocument.currentPage).currentObject<>NONE then
+    'curent is not none'->putline;
+    (theDocument.currentPage).currentObject -> (theDocument.currentPage).scrollIntoView;
+    'curent is not none 2'->putline;
+    else
+
+    if);
+    *)
+
+
+-- bifrostPageGetZoom: DoPart --
+do theScroller.contents.ZoomFactor->v
+
+-- bifrostPageBlowup: DoPart --
+do
+     (# oldzoom: @vector
+     do zoom->oldzoom; (oldzoom.x+0.25,oldzoom.y+0.25)->zoom
+     #)
+
+-- bifrostPageReduce: DoPart --
+do
+     (# oldzoom: @vector
+     do zoom->oldzoom; (oldzoom.x-0.25,oldzoom.y-0.25)->zoom
+     #)
+   
+   -- bifrostPageCleanUp: Descriptor --
+(#  do true->theScroller.contents.update #)
+   
+   
+-- bifrostPageRougeText: Descriptor --
+(# (* Removes text from connectors - for backwards compatibility only *)
+do
+   theMainPicture.scanGOsReverse
+     (# dc: ^designConn
+     do
+	(if go## <= designConn## then
+	    go[]->dc[];
+	    (if dc.textToDelete[] <> none then
+		'Note: removing text from connector with id=%d\n'
+		  ->putFormat (#  do dc.ID->d #);
+		dc.textToDelete[]->dc.delete;
+		none ->dc.textToDelete[]
+	    if)
+	if)
+     #)
+#)
