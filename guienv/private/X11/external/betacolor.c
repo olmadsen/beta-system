@@ -211,7 +211,7 @@ void BetaInitColor(Display *display, Colormap cmap)
 
   Visual *visual;
 
-  visual = DefaultVisual(display, DefaultScreen(display));
+  visual = DefaultVisual(display, DefaultScreen(display));    
 
   switch(visual->class) {
   case PseudoColor:

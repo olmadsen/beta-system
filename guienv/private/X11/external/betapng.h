@@ -2,6 +2,6 @@
 #define _BETAPNG_H
 #include "betaimage.h"
 
-int BetaReadPNGToBetaImage(char *name, BetaImage *image);
+int BetaReadPNGToBetaImage(char *name, BetaImage *image, int byteorder);
 
 #endif

@@ -10,14 +10,26 @@ int BetaReadPNGFileToXImage(Display *display, char *name, XImage **ximage)
   Visual *visual;
   BetaImage image;
   int error;
+  int byte_order;
+  static initialized=0;
   
   screen = DefaultScreen(display);
   visual = DefaultVisual(display, screen);
   cmap = DefaultColormap(display, screen);
+  byte_order = XImageByteOrder(display);
+
+  if (!initialized) {
+    BetaInitColor(display, cmap);
+    initialized=1;
+  };
   
-  BetaInitColor(display, cmap);
-  
-  error = BetaReadPNGToBetaImage(name, &image);
+  if(byte_order == LSBFirst) {
+    BetaSetByteSwap(1);
+    error = BetaReadPNGToBetaImage(name, &image, 2);
+  }
+  else {
+    error = BetaReadPNGToBetaImage(name, &image, 1);
+  }
   
   if (error == 0) {
     BetaImageToXImage(display, &image, ximage);

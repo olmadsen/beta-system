@@ -28,6 +28,15 @@ int BetaCreateImage(BetaImage *image,
 
 static int  fserrmap[512];   /* -255 .. 0 .. +255 */
 
+static long SwapByteOrder=0;
+
+void BetaSetByteSwap(int order)
+{
+  SwapByteOrder = order;
+  return;
+}
+
+
 static int FSError(int comp)
 {
   return fserrmap[256 + comp];
@@ -111,10 +120,15 @@ static void BetaAddRow24(long width,  Color *row, Color *error, unsigned long *s
 {
   long index = 0;
   while (index < width) {
-    
-    row[index].red = error[index].red + ((src[index] & 0x00FF0000) >> 16);
-    row[index].green = error[index].green + ((src[index] & 0x0000FF00) >> 8);
-    row[index].blue = error[index].blue + (src[index] & 0x000000FF);
+    if (!SwapByteOrder) {
+      row[index].red = error[index].red + ((src[index] & 0x00FF0000) >> 16);
+      row[index].green = error[index].green + ((src[index] & 0x0000FF00) >> 8);
+      row[index].blue = error[index].blue + (src[index] & 0x000000FF); 
+    } else {
+      row[index].red = error[index].red + ((src[index] & 0x0000FF00) >> 8);
+      row[index].green = error[index].green + ((src[index] & 0x00FF0000) >> 16);
+      row[index].blue = error[index].blue + ((src[index] & 0xFF000000) >> 24);
+    };
     index++;
   }
 }
@@ -318,11 +332,27 @@ void BetaCopyImage(BetaImage *src, BetaImage *dst)
 }
 
 
-
 int BetaImageToXImage(Display *display, BetaImage *image, XImage **ximage)
 {
+ 
+  int displayDepth;
+
+  displayDepth = XDefaultDepth(display,DefaultScreen(display));
+
+  if (displayDepth == 8 ) {
+    BetaImageToXImage8(display,image,ximage);
+  } else {
+    BetaImageToXImage24(display,image,ximage);
+  }
+  return 0;
+}
+
+
+
+int BetaImageToXImage8(Display *display, BetaImage *image, XImage **ximage)
+{
   BetaImage image8;
-  
+
   BetaCreateImage(&image8, image->width, image->height, 8, NULL); 
   if(image->pixel_size == 8) {
     memcpy(image8.data, image->data, image->height * image->rowbytes);
@@ -339,6 +369,15 @@ int BetaImageToXImage(Display *display, BetaImage *image, XImage **ximage)
      image8.pixel_size, ZPixmap, 0, 
      image8.data, image8.width, image8.height, 32, image8.rowbytes);
   return 0;
+}
+
+int BetaImageToXImage24(Display *display, BetaImage *image, XImage **ximage)
+{
+  (*ximage) = XCreateImage
+    (display, 
+     DefaultVisual(display, DefaultScreen(display)), 
+     image->pixel_size, ZPixmap, 0, 
+     image->data, image->width, image->height, 32, image->rowbytes);
 }
 
 

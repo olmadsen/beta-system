@@ -27,4 +27,6 @@ void BetaDitherImage (BetaImage *image);
 void BetaOrderedDitherImage (BetaImage *image);
 void BetaDitherImage24To8 (BetaImage *image, BetaImage *image8);
 
+void BetaSetByteSwap(int);
+
 #endif

@@ -9,7 +9,10 @@
 #define MemoryError      3
 
 
-int BetaReadPNGToBetaImage(char *name, BetaImage *image)
+#define _MSBFirst 1
+#define _LSBFirst 2
+
+int BetaReadPNGToBetaImage(char *name, BetaImage *image,int byteorder)
 {
   FILE *fp;
   char header[8];
@@ -98,7 +101,13 @@ int BetaReadPNGToBetaImage(char *name, BetaImage *image)
     else if (depth == 16) {
       png_set_strip_16(png_ptr);
     }
-    png_set_filler(png_ptr, 0, PNG_FILLER_BEFORE);
+    if(byteorder == _LSBFirst) {
+      png_set_filler(png_ptr, 0, PNG_FILLER_AFTER);
+      png_set_bgr(png_ptr);
+    }
+    else {
+       png_set_filler(png_ptr, 0, PNG_FILLER_BEFORE);
+    }
   }
 
   /* The following code converts grayscale to paletted
@@ -118,6 +127,10 @@ int BetaReadPNGToBetaImage(char *name, BetaImage *image)
     pixel_size = 8;
     if(depth < 8)
       png_set_packing(png_ptr);
+
+    if(byteorder == _LSBFirst) {
+      png_set_bgr(png_ptr);
+    }
   }
   
   /* The following code removes the alpha information
@@ -200,7 +213,7 @@ int BetaReadPNGToBetaImage(char *name, BetaImage *image)
     else while (index < num_palette) {
       betapalette[index].red = palette[index].red;
       betapalette[index].green = palette[index].green;
-      betapalette[index].blue = palette[index].blue;
+      betapalette[index].blue = palette[index].blue; 
       index++;
     };
   }
