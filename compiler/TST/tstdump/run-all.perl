@@ -3,6 +3,9 @@
 
 # nti usage: perl -I..\..\..\..\bin\admin run-all.perl
 
+
+push(@INC, $ENV{'BETALIB'} . "/bin/admin");
+
 $UseDefaults = 1 if ($u);
 
 require "env.perl";
@@ -90,6 +93,7 @@ foreach $f (@files) {
 	    open(OUT, ">$f.ref") || die "Unable to write reference dump:$!";
 	    while(<IN>) {
 		s/MACHINE_TYPE/$objdir/g;
+		s/address 0x[0-9a-f]+/address 0xXXXXXXXX/g;
 		print OUT;
 	    }
 	    close IN;
@@ -100,6 +104,7 @@ foreach $f (@files) {
 	    while(<IN>) {
 		next if (/\{/);
 		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
+		s/address 0x[0-9a-f]+/address 0xXXXXXXXX/g;
 		print OUT;
 	    }
 	    close IN;
@@ -123,6 +128,7 @@ foreach $f (@files) {
 		next if (/\{/);
 		s/$objdir/MACHINE_TYPE/g;
 		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
+		s/address 0x[0-9a-f]+/address 0xXXXXXXXX/g;
 		print OUT;
 	    }
 	    close IN;
@@ -130,19 +136,23 @@ foreach $f (@files) {
 	}
     } else {
 	print "[No dump created.]\n";
+	open(OUT, ">$f.nodump") || die "Unable to write nodump: $!";
+	close(OUT);
     }
     print "--------------------------\n";
 }
 
-date
+system("date");
 print "Summary:\n";
 foreach $f (@files) {
     $f =~ s%^\.\/%%;
     $f =~ s/${exe}$//;
     next if ($f !~ m/^$match$/);
-    if (-f "$f.out")  { print "  $f: difference in output\n"; }
-    if (-f "$f.err")  { print "  $f: difference in stderr\n"; }
-    if (-f "$f.diff") { print "  $f: difference in dump\n"; }
+    if (-f "$f.out")   { print "  $f: difference in output\n"; }
+    if (-f "$f.err")   { print "  $f: difference in stderr\n"; }
+    if (-f "$f.diff")  { print "  $f: difference in dump\n"; }
+    if (-f "$f.nodump"){ print "  $f: no dump created\n"; &rm("$f.nodump"); }
+    if (-f "$f.candidate"){ print "  $f: no reference dump exists. Candidate created\n"; }
 }
 
 print "Done.\n";
