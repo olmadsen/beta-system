@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $Id: lvra.c,v 1.30 1992-10-19 09:17:47 beta Exp $
+ * Mod: $Id: lvra.c,v 1.31 1992-10-20 21:01:56 tthorn Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -534,7 +534,9 @@ static LVRACompaction()
 	      dstBlock->top =  (ptr(long)) Offset(dstBlock->top, rest);
 	      saved += rest;
 	      LVRAInsertFreeElement(dstRep);
+#ifdef RTDEBUG
 	      numFree++;
+#endif
 	    }
 	    dstBlock = dstBlock->next;
 	    DEBUG_LVRA( Claim( dstBlock, "LVRACompaction: dstBlock"));
