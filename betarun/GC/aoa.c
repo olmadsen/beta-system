@@ -416,7 +416,7 @@ static void FollowObject( theObj)
 	  negAOArefsINSERT ((long)&REP->iOrigin);
 #else
       /* no need to test for zero - the object is always there */
-      RAFPush(pointer);
+      RAFPush(&REP->iOrigin);
 #endif
       /* Follow rest of repetition */
       switch( (long) theProto ){
