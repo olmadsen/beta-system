@@ -1007,7 +1007,7 @@ this comment"
   "BETA compiler command.")
 (defun beta-check ()
   (interactive)
-  (compile (concat beta-compiler-command" "beta-compiler-options" -nocode "buffer-file-name)))
+  (compile (concat beta-compiler-command" "beta-compiler-options" --nocode "buffer-file-name)))
 (defun beta-compile ()
   (interactive)
   (compile (concat beta-compiler-command" "beta-compiler-options" "buffer-file-name)))
@@ -1021,14 +1021,27 @@ this comment"
 ;;; A generally applicable function:
 
 (defun indent-buffer ( )
-  "Indent the whole buffer according to mode."
+  "Indent the entire buffer according to mode."
   (interactive "*")
   (save-excursion
     (if (> (point-max) 10000)
-	(message "Indenting the whole buffer ... (be patient)")
-      (message "Indenting the whole buffer ..."))
+	(message "Indenting the entire buffer ... (be patient)")
+      (message "Indenting the entire buffer ..."))
     (indent-region (point-min) (point-max) nil)
-    (message "Indenting the whole buffer ... done")))
+    (message "Indenting the entire buffer ... done")))
+
+;;; A much faster indent-buffer:
+
+(defun beta-indent-buffer ( )
+  "Indent the entire buffer, using beta-fast-indent-buffer."
+  (interactive "*")
+  (require 'beta-fast-indent)
+  (save-excursion
+    (if (> (point-max) 10000)
+	(message "Indenting the entire buffer ... (be patient)")
+      (message "Indenting the entire buffer ..."))
+    (beta-fast-indent-buffer)
+    (message "Indenting the entire buffer ... done")))
 
 
 
