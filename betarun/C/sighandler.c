@@ -94,7 +94,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   theCell = casthandle(Object) &(cast(RegWin)ucon->uc_mcontext.gregs[REG_SP])->i0;
   if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
 
-  switch( sig){
+  switch(sig){
   case SIGFPE: 
     switch(info->si_code){
     case FPE_INTDIV: /* div by zero */
@@ -106,11 +106,20 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   case SIGEMT:
     todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
   case SIGILL: /* Illegal instruction or trap */
-    if (info->_data._fault._trapno - 0x80 == 17)
-      /* tle 17 trap => ref none */
-      todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig);
-    else
-      todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig);
+    switch(info->si_code){
+    case ILL_ILLTRP:
+      switch(info->si_trapno-17){
+      case 0x80: /* Solaris 2.3, 2.4, 2.5 */
+      case 0x100: /* Solaris 2.5.1 */
+	/* tle 17 trap => ref none */
+	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
+      default:
+	todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
+      }
+      break;
+    default:
+      todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
+    }
     break;
   case SIGBUS: /* Bus error */
     todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
