@@ -26,11 +26,16 @@ Node *TInit(void)
   return new;
 }
 
+static Node *new;
+
 static OURINLINE void insertDown(unsigned long key, void *contents, Node *current, unsigned long insertKey)
 {
   if (current -> down == NULL) {
-    current -> down = (Node *)calloc(sizeof(struct Node), 1);
-    current -> down -> d = -1;
+    current -> down = new = (Node *)malloc(sizeof(struct Node));
+    new -> d = -1;
+    new -> contents = NULL;
+    new -> right = NULL;
+    new -> down = NULL;
   }
   TInsert(key, contents, current -> down, insertKey);
 }
@@ -38,8 +43,11 @@ static OURINLINE void insertDown(unsigned long key, void *contents, Node *curren
 static OURINLINE void insertRight(unsigned long key, void *contents, Node *current, unsigned long insertKey)
 {
   if (current -> right == NULL) {
-    current -> right = (Node *)calloc(sizeof(struct Node), 1);
-    current -> right -> d = -1;
+    current -> right = new = (Node *)malloc(sizeof(struct Node));
+    new -> d = -1;
+    new -> contents = NULL;
+    new -> right = NULL;
+    new -> down = NULL;
   }
   TInsert(key, contents, current -> right, insertKey);
 }

@@ -265,6 +265,29 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
 	  newEntryInx = insertReference(ENTRYALIVE,
 					store,
 					offset + distanceToPart);
+	} else {
+	  /* An indirect reference exists to the object that this cell
+	     refers directly. This is unsafe since reference
+	     comparison could be compromised. This can happen if the
+	     reference type is offline or origin, since offline/origin
+	     allocated objects are fetched and unswizzled immidiately
+	     where as dynamic references are unswizzled at IOAGc
+	     only. */
+	  
+	  /* If this reference type is offline or origin, we know
+             about the problem. If it is not, an offline/origin
+             reference has been copied to a dynamic cell. */
+	  
+	  /* The problem can be fixed by generating a refnon check on
+	     both arguments to a reference comparison iff either
+	     reference has type offline/origin. This is not
+	     transparent as all programs would suffer. Thus this
+	     approach is only feasible if such reference comparisons
+	     are seldom. */
+
+	  /* In other words: the 'indexLookupRT' above should not be
+             necessary */
+	  ;
 	}
 	*theCell = newPUID(newEntryInx);
 	Claim(*theCell != NULL, "Assigning NULL");
@@ -303,8 +326,7 @@ void showStatistics(void)
      fprintf(output, " Block loads             : %d\n", numSL);
      fprintf(output, "\n");
      fprintf(output, " OT size                 : %d\n", (int)OTSize());
-     fprintf(output, "]\n"));
-  */
+     fprintf(output, "]\n")); */
 
   printObjectStoreStatistics();
   printProxyStatistics();

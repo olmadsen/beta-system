@@ -140,7 +140,6 @@ void clearCells(Array *clients)
       theCell = (Object **)(clients -> theCells[count]);
       if (inPIT((void *)(*theCell))) {
 	*theCell = (Object *)NULL;
-	Claim(*theCell != NULL, "Assigning NULL");
       }
     }
   }

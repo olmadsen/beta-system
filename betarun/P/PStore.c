@@ -44,6 +44,7 @@ static PStoreHeader *currentPStore = NULL;
 static int currentFd = -1;
 static char *currentBlock = NULL;
 static unsigned long currentBlockStart = -1, currentBlockEnd = -1;
+static unsigned long touched = 0;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static void markStartBlock(unsigned long blockNo);
@@ -91,10 +92,12 @@ static unsigned long isStartBlock(unsigned long blockNo)
 static void saveCurrentBlock(void)
 {
   if (currentPStore) {
-    windTo(currentFd, currentPStore -> headerSize + currentBlockStart * currentPStore -> blockSize);
-    writeSome(currentFd, 
-	      currentBlock, 
-	      (currentBlockEnd - currentBlockStart + 1) * currentPStore -> blockSize);
+    if (touched) {
+      windTo(currentFd, currentPStore -> headerSize + currentBlockStart * currentPStore -> blockSize);
+      writeSome(currentFd, 
+		currentBlock, 
+		(currentBlockEnd - currentBlockStart + 1) * currentPStore -> blockSize);
+    }
   }
 }
 
@@ -126,6 +129,7 @@ static unsigned long ensureBlock(unsigned long blockNo)
     readSome(currentFd, currentBlock, ((delta + 1) * currentPStore -> blockSize));
     currentBlockStart = blockStart;
     currentBlockEnd = blockEnd;
+    touched = 0;
   }
   
   return delta;
@@ -154,7 +158,7 @@ int createPStore(unsigned long storeID)
   currentPStore -> maxNumBlocks = INITIALBLOCKSINSTORE;
   currentPStore -> storeID = storeID;
   currentPStore -> topBlock = 0;
-  /* We do not whant any zero offsets, as this might produce none
+  /* We do not want any zero offsets, as this might produce none
      references other places */
   currentPStore -> nextFree = 8;
   
@@ -271,7 +275,7 @@ StoreProxy *allocateObject(unsigned long size)
       
       currentPStore -> topBlock += blocks;
       currentPStore -> nextFree = bytes;
-
+      
       /* The new object requires the allocation of 'blocks' new
          blocks. We need to check if there is still space in the
          store. */
@@ -334,6 +338,7 @@ int setStoreObject(unsigned long storeID, unsigned long offset, Object *theObj)
 		 theObj, 
 		 ObjectSize(theObj)*4);
 	  
+	  touched = 1;
 	  /* Handle prototype */
 	  exportProtoTypes(ObjectInStore);
 	  return 1;
