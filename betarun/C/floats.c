@@ -135,14 +135,18 @@ extern unsigned int set_fpc_csr(unsigned int csr);
 #define FPU_OVERFLOW      (1L << 25) /* OE bit */
 #define FPU_UNDERFLOW     (1L << 26) /* UE bit */
 #define FPU_PRECISIONLOST (1L << 28) /* XE bit */
-#define EnableFPUexceptions(mask)                                   \
-{                                                                   \
-  if ( (mask) | FPU_ZERODIVISION)  __asm__ __volatile("mtfsb1 27"); \
-  if ( (mask) | FPU_INVALID)       __asm__ __volatile("mtfsb1 24"); \
-  if ( (mask) | FPU_OVERFLOW)      __asm__ __volatile("mtfsb1 25"); \
-  if ( (mask) | FPU_UNDERFLOW)     __asm__ __volatile("mtfsb1 26"); \
-  if ( (mask) | FPU_PRECISIONLOST) __asm__ __volatile("mtfsb1 28"); \
+
+static void EnableIEEE754Exceptions(mask)
+{      
+  /* Possibly need to set MSR bits too, but mfmsr/mtmsr are supervisor only!*/
+  if (mask & FPU_ZERODIVISION)  __asm__ __volatile("mtfsb1 27"); 
+  if (mask & FPU_INVALID)       __asm__ __volatile("mtfsb1 24"); 
+  if (mask & FPU_OVERFLOW)      __asm__ __volatile("mtfsb1 25"); 
+  if (mask & FPU_UNDERFLOW)     __asm__ __volatile("mtfsb1 26"); 
+  if (mask & FPU_PRECISIONLOST) __asm__ __volatile("mtfsb1 28"); 
 }
+#define EnableFPUexceptions(mask) EnableIEEE754Exceptions(mask)
+
 #endif /* macosx */
 
 

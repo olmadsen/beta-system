@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(90)";
+char betarun_version[] = "BETARUN VERSION 5.3(90+)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.110  2002/04/07 20:50:00  datpete
+ * Signal handling implemented (in assember!) on macosx
+ * Betarun version number: 90
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.109  2002/04/05 13:07:25  datpete
  * Changes for .NET: Extra betarun helper routines
  * Betarun version number: 89+
