@@ -40,8 +40,12 @@ int ReadJPGFileToDib(char *path, BITMAPINFOHEADER **dib)
   nchannels = 3;
 
   dib_line_width = width * nchannels;
+#if 0
   dib_pad_bytes = IJL_DIB_PAD_BYTES(width, nchannels);
-
+#else
+  dib_pad_bytes = 0;
+#endif
+  
   wholeimagesize = (dib_line_width + dib_pad_bytes) * height;
 
   buffer = (char *) malloc(sizeof(BITMAPINFOHEADER) + wholeimagesize);
