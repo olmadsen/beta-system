@@ -23,7 +23,7 @@ typedef struct {
 
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
-#endif RTVALHALLA
+#endif /* RTVALHALLA */
 
 #if defined(macintosh) ||defined(MAC)
 #include <Quickdraw.h>
@@ -56,10 +56,10 @@ void EnlargeMacHeap(char *buf)
 /* Prompt four C Strings */
 void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4)
 { Str255 m1, m2, m3, m4;
-  if (msg1) sprintf(m1, "%c%s", strlen(msg1), msg1);
-  if (msg2) sprintf(m2, "%c%s", strlen(msg2), msg2);
-  if (msg3) sprintf(m3, "%c%s", strlen(msg3), msg3);
-  if (msg4) sprintf(m4, "%c%s", strlen(msg4), msg4);
+  if (msg1) sprintf((char*)m1, "%c%s", strlen(msg1), msg1);
+  if (msg2) sprintf((char*)m2, "%c%s", strlen(msg2), msg2);
+  if (msg3) sprintf((char*)m3, "%c%s", strlen(msg3), msg3);
+  if (msg4) sprintf((char*)m4, "%c%s", strlen(msg4), msg4);
   ParamText(m1, m2, m3, m4);
   Alert(CPromptID,0);
 }
@@ -256,11 +256,11 @@ Mj\277lner BETA System and may not be used for commercial purposes"
 #endif /* macintosh */
 #endif /* PE */
 
-  long AllocateHeap( base, top, limit, size)
-ptr(long) base; /* points out a cell which should refer the base. */
-     ptr(long) top;
-     ptr(long) limit;
-     long size;      /* the size of the requested heap in bytes.       */
+long AllocateHeap(
+     ptr(long) base, /* points out a cell which should refer the base. */
+     ptr(long) top,
+     ptr(long) limit,
+     long size)      /* the size of the requested heap in bytes.       */
 {
   if( (*base = (long) MALLOC( size)) != 0){
     INFO_ALLOC(size);
@@ -310,7 +310,11 @@ void PatchDataLabels(void)
 
   //Debugger();
   start = (long *)&BETA_data1;
+#ifdef macintosh
+  *start = (long)&BETA_data1;
+#else
   *start = (long *)&BETA_data1;
+#endif
   *(start+1) = *start+*(start+1);
   *(start+2) = *start+*(start+2);
   
@@ -327,9 +331,10 @@ void PatchDataLabels(void)
 #ifdef __powerc
   extern void PPC_InitApplication();
 //extern void PutLine(char *);
-//QDGlobals qd;
 #endif
-
+#ifdef macintosh
+QDGlobals qd;
+#endif
 void Initialize()
 {
   /* This hack is to cope with the sparc, where
@@ -428,7 +433,7 @@ void Initialize()
     Notify2(buf, "Check your BETART environment variable.");
     exit(1);
   }
-  if( !AllocateHeap( &tmpIOA,     &tmpIOATop,     &IOALimit, IOASize ) ){
+  if( !AllocateHeap((long*)&tmpIOA,(long*)&tmpIOATop,(long*)&IOALimit, IOASize ) ){
     char buf[300];
     sprintf(buf,"Couldn't allocate the IOA heap (%dKb).", (int)IOASize/Kb);
 #ifdef macintosh
@@ -460,7 +465,7 @@ void Initialize()
   cFloatStackPtr = (double *)&CFloatStack[0];
 #endif
 
-  if( !AllocateHeap( &ToSpace, &ToSpaceTop, &ToSpaceLimit, IOASize ) ){
+  if( !AllocateHeap( (long*)&ToSpace, (long*)&ToSpaceTop, (long*)&ToSpaceLimit, IOASize ) ){
     char buf[300];
     sprintf(buf,
 	    "Couldn't allocate the ToSpace heap (%dKb)\n", 
@@ -544,7 +549,7 @@ void Initialize()
 #ifdef RTVALHALLA
   if (valhallaID)
     valhallaInit ();
-#endif RTVALHALLA
+#endif /* RTVALHALLA */
   
 }
 

@@ -32,7 +32,7 @@
 
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
-#endif RTVALHALLA
+#endif /* RTVALHALLA */
 
 #ifdef macintosh
 #define JUMP_TABLE(addr) (*(long *)(((long)(addr))+2))
@@ -187,7 +187,8 @@ static ptr(char) ProtoTypeName(theProto)
   
   while (*(short *) stat) stat++;	/* Step over static gc entries */ 
   dyn = ((short *) stat) + 1;		/* Step over the zero */
-  while (*dyn++);			/* Step over dynamic gc entries */
+  while (*dyn++)
+     ;			/* Step over dynamic gc entries */
 
 #if defined(linux) || defined(nti)
   /* Step over little endian long/short/real position information */
@@ -1119,7 +1120,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
      * StackEnd, ActiveCallbackFrame and lastCompBlock.
      */
     currentComponent = ActiveComponent;
-    lowAddr  = StackEnd;
+    lowAddr  = (long *) StackEnd;
     highAddr = (long *) lastCompBlock;
     cbFrame  = ActiveCallBackFrame; 
 
@@ -1267,7 +1268,7 @@ P("      [ EXTERNAL ACTIVATION PART ]")
   /* Set file type and creator to make xxx.dump an MPW file */
   {  FInfo fn;
      Str255 fname;
-     sprintf(fname, "%c%s", strlen(dumpname), dumpname);
+     sprintf((char*)fname, "%c%s", strlen(dumpname), dumpname);
      if (GetFInfo(fname, 0, &fn) != noErr) return 0;
      fn.fdType = 'TEXT';
      fn.fdCreator = 'MPS ';
@@ -1358,4 +1359,4 @@ void DescribeObject(theObject)
   }
 }
 
-#endif RT_DEBUG
+#endif /* RT_DEBUG */

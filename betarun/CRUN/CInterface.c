@@ -120,7 +120,7 @@ char *
 }
 
 #ifdef MAC
-char * PpkVT(struct Object *currentObj, ref(ValRep) theRep)
+unsigned char * PpkVT(struct Object *currentObj, ref(ValRep) theRep)
 {
     long bodysize = theRep->HighBorder;
     long i;
@@ -149,7 +149,7 @@ char * PpkVT(struct Object *currentObj, ref(ValRep) theRep)
     return res;
 }
 
-char * PpkSVT(struct Object *currentObj, ref(ValRep) theRep, unsigned low, long high)
+unsigned char * PpkSVT(struct Object *currentObj, ref(ValRep) theRep, unsigned low, long high)
 {
     long bodysize;
     long i;
@@ -184,7 +184,7 @@ char * PpkSVT(struct Object *currentObj, ref(ValRep) theRep, unsigned low, long 
     return res;
 }
 
-char * PpkCT(struct Object *currentObj, char *text)
+unsigned char * PpkCT(struct Object *currentObj, char *text)
 {
     long bodysize = strlen(text);
     unsigned char *res;

@@ -11,7 +11,7 @@
 
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
-#endif RTVALHALLA
+#endif /* RTVALHALLA */
 
 #ifdef crts
 
@@ -35,7 +35,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
   long jump_stack_size;
   char * attachSaveArea;
   struct StackObject * theStackObj;
-  long * newSP, *SP, *FP, RA;
+  long * newSP, *SP, *FP, *RA;
   long * entryAdr;
 
   getret(RA); /* Fetch return address */
@@ -51,7 +51,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
 
   if (comp->StackObj == cast(StackObject) -1 || comp == ActiveComponent)
     BetaError(RecursiveAttErr, this);
-  ActiveComponent->CallerLSC = RA;	/* Save our return address */
+  ActiveComponent->CallerLSC = (long)RA;	/* Save our return address */
 
   AssignReference((long *)&comp->CallerComp, cast(Item) ActiveComponent);
   AssignReference((long *)&comp->CallerObj, cast(Item) this);
@@ -113,7 +113,8 @@ struct Component * Att(struct Object *this, struct Component *comp)
 
     /* Call attached component */
     push(this);
-    entryAdr = *((long **)((long)((cast(Item) &comp->Body)->Proto)+sizeof(struct ProtoType)+4));
+    CallBetaEntry(*((long *)((long)((cast(Item) &comp->Body)->Proto)+sizeof(struct ProtoType)+4)), &comp->Body);
+    //entryAdr = *((long **)((long)((cast(Item) &comp->Body)->Proto)+sizeof(struct ProtoType)+4));
 
     pop(this);
 

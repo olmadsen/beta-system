@@ -21,8 +21,8 @@
 #endif
 
 extern long a0;
-extern void PackAndFreeJmpBuf(long);
-extern void UnPackAndAllocateJmpBuf(long, long);
+extern void PackAndFreeJmpBuf(long*);
+extern void UnPackAndAllocateJmpBuf(long*, long);
 extern long GetJumpStackSize(void);
 
 struct Component * Susp(struct Object * this)

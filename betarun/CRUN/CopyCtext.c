@@ -33,7 +33,7 @@ ref(ValRep) CopyCT(unsigned char *textPtr)
 
     /* Allocate a ValueRepetition and initialize it with some text.    */
 
-    range = textPtr ? strlen(textPtr) : 0;
+    range = textPtr ? strlen((const char *)textPtr) : 0;
     size = ByteRepSize(range);
 
     /* LVRA missing */
@@ -46,7 +46,7 @@ ref(ValRep) CopyCT(unsigned char *textPtr)
 
     /* Assign the text to the body part of the repetition. */
 
-    strcpy((char *)theRep->Body, textPtr);
+    strcpy((char *)theRep->Body, (char *)textPtr);
 
     Ck(theRep);
 

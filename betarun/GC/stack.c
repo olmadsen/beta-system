@@ -245,7 +245,7 @@ void ProcessStackObj(struct StackObject *theStackObject)
 
   theEnd = &theStackObject->Body[1] + theStackObject->StackSize;
 
-  ProcessRefStack(theStackObject->BodySize-theStackObject->StackSize-1, theEnd);
+  ProcessRefStack(theStackObject->BodySize-theStackObject->StackSize-1, (long**)theEnd);
 }
 
 

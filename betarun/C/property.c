@@ -24,10 +24,10 @@
 #endif
 
 #ifndef DEMO
-static long intScan();
+static long intScan(char*,char*);
 #endif /* !DEMO */
 
-static long CmpStr();
+static long CmpStr(char*,char*);
 
 /* 
  * If you want to add properties, change BooleanProperty or ValueProperty. 
@@ -86,7 +86,7 @@ static void ValueProperty( name, value)
 {
 #ifdef RTVALHALLA
   ENTRY("valhallaid", valhallaID = strdup (value));
-#endif RTVALHALLA
+#endif /* RTVALHALLA */
 
   ENTRY("ioa", IOASize = 1024 * intScan(name, value));
   ENTRY("aoa",  
@@ -276,7 +276,7 @@ void SetupProperties( betart)
      /* Set file type and creator to make xxx.info an MPW file */
      { FInfo fn;
        Str255 fname;
-       sprintf(fname, "%c%s", strlen(infoname), infoname);
+       sprintf((char*)fname, "%c%s", strlen(infoname), infoname);
        FREE(infoname);
        if (GetFInfo(fname, 0, &fn) != noErr) return;
        fn.fdType = 'TEXT';

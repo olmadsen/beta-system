@@ -7,9 +7,9 @@
 
 #define REP ((struct ObjectRep *)theObj)
 
-static void FollowObject();
+static void FollowObject(Object * theObj);
 static void Phase1();
-static void Phase2();
+static void Phase2(long *numAddr, long *sizeAddr, long *usedAddr);
 static void Phase3();
 
 /* EXPORTING:
@@ -252,7 +252,7 @@ static void extendRAFStackArea(void)
 	    "AOA GC: Failed to allocate RAF stack area: %d longs.", 
 	    (int)newSize/4);
 #ifdef macintosh
-    EnlargemacHeap(buf);
+    EnlargeMacHeap(buf);
 #endif
     Notify(buf);
     exit(-1);
@@ -357,7 +357,7 @@ static void FollowItem( theObj)
   
   while( *Tab != 0 ){
     if( *Tab == -Tab[1] ) 
-      FollowObject( Offset( theObj, *Tab * 4));
+      FollowObject( (struct Object*)Offset( theObj, *Tab * 4));
     Tab += 4;
   }
   Tab++;
@@ -473,7 +473,7 @@ static void FollowObject( theObj)
 	    theComp = (struct Component *)&REP->Body[0];
 	    
 	    for (index=0; index<size; index++) {
-	      FollowObject(theComp);
+	      FollowObject((Object * )theComp);
 	      theComp = (struct Component *)((long)theComp + ComponentSize(REP->iProto));
 	    }
 	  }
@@ -552,7 +552,7 @@ static void FollowObject( theObj)
       RAFPush(&(cast(DopartObject)(theObj))->Origin);
       return;
     }
-  }else FollowItem( theObj);
+  }else FollowItem( (struct Item*) theObj);
 }
 
 /* Phase1 of the Mark-Sweep GC, reverse:
@@ -658,7 +658,7 @@ static void handleAliveStatic( theObj, freeObj )
     
     while( *Tab != 0 ){
       if( *Tab == -Tab[1] ){ 
-	handleAliveStatic( Offset( theObj, *Tab * 4), Offset( freeObj, *Tab * 4) );
+	handleAliveStatic( (struct Object*) Offset( theObj, *Tab * 4),(struct Object*) Offset( freeObj, *Tab * 4) );
 	DEBUG_AOA( Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4)
 			 == (long) Tab[1],
 			 "AOACheckObject: EnclosingObject match GCTab entry."));
@@ -668,7 +668,7 @@ static void handleAliveStatic( theObj, freeObj )
   }else{
     /* This is a component so update theObj and Proto to Item. */
     if( theProto == ComponentPTValue )
-      handleAliveStatic( ComponentItem( theObj), ComponentItem( freeObj) );
+      handleAliveStatic( (struct Object*)ComponentItem( theObj), (struct Object*)ComponentItem( freeObj) );
   } 
 }
 
@@ -698,7 +698,7 @@ static void handleAliveObject( theObj, freeObj)
     
     while( *Tab != 0 ){
       if( *Tab == -Tab[1] ){
-	handleAliveStatic( Offset( theObj, *Tab * 4), Offset( freeObj, *Tab * 4) );
+	handleAliveStatic( (struct Object*)Offset( theObj, *Tab * 4), (struct Object*)Offset( freeObj, *Tab * 4) );
 	DEBUG_AOA( Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4)
 			 == (long) Tab[1],
 			 "AOACheckObject: EnclosingObject match GCTab entry."));
@@ -708,7 +708,7 @@ static void handleAliveObject( theObj, freeObj)
   }else{
     /* This is a component so update theObj and Proto to Item. */
     if( theProto == ComponentPTValue )
-      handleAliveStatic( ComponentItem( theObj), ComponentItem( freeObj) );
+      handleAliveStatic( (struct Object*)ComponentItem( theObj), (struct Object*)ComponentItem( freeObj) );
   } 
 }
 
@@ -858,7 +858,7 @@ static void Phase3()
       char buf[300];
       sprintf(buf,"#Phase3: allocation failed %d longs\n", (int)AOAtoIOACount);
 #ifdef macintosh
-      EnlargemacHeap(buf);
+      EnlargeMacHeap(buf);
 #endif
       Notify(buf);
       exit(-1);

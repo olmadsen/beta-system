@@ -127,8 +127,18 @@ asmlabel(SetArgValues, "
 #else
 void SetArgValues(int argc, char *argv[])
 {
+#ifdef __powerc
+  if (StandAlone) {
+    ArgCount = 0;
+    ArgVector = 0;
+  } else {
+    ArgCount = argc;
+    ArgVector = argv;
+  }
+#else
   ArgCount = argc;
   ArgVector = argv;
+#endif
 }
 #endif
 

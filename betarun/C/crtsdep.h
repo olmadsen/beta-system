@@ -1,8 +1,8 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * crtsdep.h
- * by Ole Lehrmann Madsen, Peter Andersen and Peter Ryberg Jensen
- * $Id: crtsdep.h,v 1.12 1995-09-19 08:39:02 beta Exp $
+ * by Ole Lehrmann Madsen, Peter Andersen, Kim Jensen M¿ller, and Peter Ryberg Jensen
+ * $Id: crtsdep.h,v 1.13 1995-11-24 12:42:39 kjm Exp $
  */
 
 #define JUMPSTACK 1
@@ -303,13 +303,13 @@ extern long * oldSP;
 
 /* PowerPC mess: */
 
-#define MK_CALL(f)                            \
-{ unsigned long * code;                       \
-  unsigned long * func = (unsigned long *) f; \
-  code = NewPtr(4*18);                        \
-*(code++) = CBFATop->theStruct;               \
-CBFATop->code[0] = code;                      \
-CBFATop->code[1] = *(func+1); /* TOC */       \
+#define MK_CALL(f)                              \
+{ unsigned long * code;                         \
+  unsigned long * func = (unsigned long *) f;   \
+  code = (unsigned long *) NewPtr(4*18);        \
+*(code++) = (unsigned long) CBFATop->theStruct; \
+CBFATop->code[0] = (unsigned long*) code;        \
+CBFATop->code[1] = (unsigned long*) *(func+1); /* TOC */    \
 *(code++) = 0x7C0802A6; /* mflr      r0;  				*/ \
 *(code++) = 0xBF41FFE8; /* stmw      r26,-0x0018(SP) 	*/ \
 *(code++) = 0x90010008; /* stw       r0,0x0008(SP) 		*/ \
@@ -369,15 +369,15 @@ CBFATop->code[1] = *(func+1); /* TOC ?? */    \
 #define setret(newret) (*(oldSP+2) = newret)
 #define setret_Susp(newret) (*(oldSP+2) = newret)
 
-#define getret(saved) (saved = *(oldSP+2))
+#define getret(saved) (saved = (long*)*(oldSP+2))
 #define getret_Susp(saved) (saved = *(oldSP+2))
 
 #define getret_CB(saved) (saved = *(oldSP+2))
 
-extern PPC_SetStackPointer(long);
+extern PPC_SetStackPointer(long*);
 #define SetStackPointer(newSP) PPC_SetStackPointer(newSP)
 
-extern PPC_GetStackPointer(long);
+extern long * PPC_GetStackPointer();
 #define GetStackPointer(SP) (SP=PPC_GetStackPointer())
 
 #define SetFramePointer(newFP) (oldSP = newFP)

@@ -11,7 +11,7 @@
 
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
-#endif RTVALHALLA
+#endif /* RTVALHALLA */
 
 /*************************** crts ***************************/
 #ifdef crts
@@ -63,7 +63,7 @@ long pascal HandlePCB(long arg1, long arg2, long arg3, long arg4, long arg5, lon
 {
   struct Item * theObj;
   struct CallBackEntry * cb;
-  long retval,PCB_SP;
+  long retval,*PCB_SP;
   long pascal (*cbr)();
   long retAddr, *FP;
   
@@ -153,10 +153,10 @@ void *CopyPPP(ref(Structure) theStruct, long size, ref(Object) theObj, long univ
   Ck(theObj);
   CBFATop->theStruct = theStruct;
   
-  code = NewPtr(4*18);                        
-  *(code++) = CBFATop->theStruct;               
-  CBFATop->code[0] = code;                
-  CBFATop->code[1] = *(func+1); /* TOC ?? */    
+  code = (unsigned long *) NewPtr(4*18);                        
+  *(code++) = (unsigned long) CBFATop->theStruct;               
+  CBFATop->code[0] = (unsigned long*) code;                
+  CBFATop->code[1] = (unsigned long*) *(func+1); /* TOC ?? */    
   *(code++) = 0x7C0802A6; /* mflr      r0;  				*/ 
   *(code++) = 0xBF41FFE8; /* stmw      r26,-0x0018(SP) 	    */ 
   *(code++) = 0x90010008; /* stw       r0,0x0008(SP) 		*/ 

@@ -8,7 +8,7 @@
 #include "beta.h"
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
-#endif RTVALHALLA
+#endif /* RTVALHALLA */
 
 void BetaExit( number )
      long number;
@@ -17,12 +17,12 @@ void BetaExit( number )
   if (valhallaID) 
     /* Tell valhalla that we are terminating: */
     ValhallaOnProcessStop (0,0,0,0,0);
-#endif RTVALHALLA
+#endif /* RTVALHALLA */
 
   InfoS_End();
 
 #ifdef RTDEBUG
-#ifdef UNIX
+#if defined(UNIX) || defined (crts)
   { extern long NumAlloI;
     fprintf(stderr, "\nNumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d.\n", 
 	    (int)NumIOAGc, (int)NumAOAGc, (int)NumLVRAGc);
@@ -122,7 +122,6 @@ void BetaError(errorNo, theObj)
 #error Find out Stack End for hppa without Reference Stack
 #endif /* UseRefStack */
 #endif /* hppa */
-
 #ifdef crts
       getret(thePC);
 #endif
@@ -266,7 +265,7 @@ void BetaError(errorNo, theObj)
 	/* Normal RefNone error: Display BETA stack.
 	 * Adjust StackEnd before calling DisplayBetaStack.
 	 */
-	StackEnd += 20
+	StackEnd += 20;
 	  /* Ignore 4 adr regs, and 8 dataregs+tags (see RefNone
 	   * in Misc.run)
 	   */
