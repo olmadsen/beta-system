@@ -1,5 +1,6 @@
 import beta.*;
 import org.eclipse.ui.betaeditor.beta.*;
+import org.eclipse.jface.text.*;
    
 public class Eclipse
 {
@@ -12,7 +13,7 @@ public class Eclipse
 	System.out.println("Eclipse: creating BetaAutoIndentStrategy.");
 	bais = new BetaAutoIndentStrategy();
 	System.out.println("Eclipse: calling customizeDocumentCommand.");
-	bais.customizeDocumentCommand(null, null);
+	bais.customizeDocumentCommand(new IDocument(), new DocumentCommand());
 	System.out.println("Eclipse: done.");
     }
 
