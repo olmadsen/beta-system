@@ -1110,9 +1110,9 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       extern void (M1PROGRAM)(void); /* probably problem with underscore on NTI */
       DEBUG_VALHALLA(fprintf(output,
                              "VOP_PROGRAM_PATH()=%s\n",
-                             GroupName(M1PROGRAM)));
+                             GroupName((long)M1PROGRAM,1)));
       valhalla_writeint(opcode);
-      valhalla_writetext(GroupName(M1PROGRAM));
+      valhalla_writetext(GroupName((long)M1PROGRAM,1));
       valhalla_socket_flush();
       
     }
