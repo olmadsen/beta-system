@@ -37,7 +37,7 @@ escDollar:
             '\\' -> S.put
         if);
         ch -> S.put
-     #) 
+     #);
   exit S[]
   #);
 TODO: 
@@ -69,23 +69,37 @@ BackslashToSlash:
   #);
 
 --translateasmlinklib: attributes ---
-isJava:  (# exit common.targetMachineId = common.javabc #);
-isIL:    (# exit common.targetMachineId = common.dotnet #);
-
+isJava:  
+  (# exit common.targetMachineId = common.javabc #);
+isIL:    
+  (# exit common.targetMachineId = common.dotnet #);
+hostIsWindows: booleanValue
+  (# 
+  do ('nti'->((1,3)->(machine_type).sub).equal) -> value;
+  #);
 
 --asmState:descriptor--
 (#  #)
 --HasSharedLibs:descriptor--
 (#do false -> value #)
 ---cont: descriptor --
-(# do '\\\n\t' -> AFF.puttext  #)
+(# 
+do (if hostIsWindows then
+       ' '->AFF.put;
+    else
+       '\\\n\t' -> AFF.puttext
+   if);
+#)
 ---header: descriptor ---
 (#
 do (if true
-    // isIL then
+    // isIL or hostIsWindows then
        '@echo off\n'
-       'if exist "ilasm.out" (del "ilasm.out")\n'
          ->AFF.putText;
+       (if isIL then
+           'if exist "ilasm.out" (del "ilasm.out")\n'
+             ->AFF.putText;
+       if);
     // isJava then
        '#! /bin/sh '->AFF.putLine;
        'BETALIB='->AFF.putText; BetaLib[]->AFF.putLine;
@@ -94,8 +108,6 @@ do (if true
        'MACHINETYPE='->AFF.putText; TargetMachine->AFF.putLine;
        'export MACHINETYPE'->AFF.putLine;
        'TMPDIR=${TMPDIR-/tmp}'->AFF.putLine;
-       (* Disable linking *)
-       (*true -> common.switch[6];*)
     else
        'AsmHeader: unknown platform' -> TODO; 
    if);
@@ -133,7 +145,7 @@ do 'LibExt'->TODO
 ---JobExt: descriptor ---
 (# 
 do (if true
-    // isIL then
+    // isIL or hostIsWindows then
        '.bat' -> ext;
     // isJava then
        '..job' -> ext
@@ -164,9 +176,7 @@ do (if true
 ---Remove: descriptor ---
 (# 
 do (if true
-    // isJava then
-       'rm -f '->AFF.puttext; name[]->AFF.putline (* only OK for unix *)
-    // isIL then
+    // isIL or hostIsWindows then
        (if check then
            'if exist "'->AFF.putText; name[]->AFF.putText; '" '->AFF.putText
        if);
@@ -175,19 +185,21 @@ do (if true
            '" >NUL'->AFF.puttext;
        if);
        ')' -> AFF.putline;
+    // isJava then
+       'rm -f '->AFF.puttext; name[]->AFF.putline (* only OK for unix *)
     else
        'remove' -> todo
    if);
 #)
 ---ChangeDirectory:doPart---
 do (if true
-    // isJava then
-       'cd '->AFF.puttext; dir[] -> AFF.putline
-    // isIL then
+    // isIL or hostIsWindows then
        (if (dir.lgth>1) and (dir.T[2]=':') then
            (* change drive *)
            dir.T[1]->AFF.put; ':' -> AFF.put; AFF.newline;
        if);
+       'cd '->AFF.puttext; dir[] -> AFF.putline
+    // isJava then
        'cd '->AFF.puttext; dir[] -> AFF.putline
     else
        'ChangeDirectory'->TODO
@@ -195,11 +207,11 @@ do (if true
        
 ---AddCommand:doPart---
 do (if true
-    // isJava then
-       cmd[] -> AFF.putline;
-    // isIL then
+    // isIL or hostIsWindows then
        cmd[] -> AFF.putline;
        'if errorlevel 1 goto builderror' -> AFF.putLine;
+    // isJava then
+       cmd[] -> AFF.putline;
     else
        'AddCommand'->TODO
    if);
@@ -249,7 +261,9 @@ do (if common.switch[184] or common.switch[189] then
    (if not e.exists then
        (if isJava then
            (if common.switch[18] then
-               F[] -> escDollar -> F[];
+               (if not hostIsWindows then
+                   F[] -> escDollar -> F[];
+               if);
                (# FN: ^text
                do (F.length-1,F.length) -> (F.copy).delete -> FN[];
                   'jcf-dump -c "' -> AFF.puttext;
@@ -499,6 +513,7 @@ do 'asmlinkdynamic'->TODO
 ---linkObj:descriptor ---
 (# e: @diskentry;
    path, name: ^text;
+   pwd: ^text;
 do 
    (if true
     // isJava then
@@ -516,13 +531,23 @@ do
         else
            (* Extract path of lObj as a relative path from current directory *)
            e.path.head -> path[];
-           (path[], '') -> thePathHandler.localPath -> path[];
+           thePathHandler.CurrentDirectory -> pwd[];
+           (if hostIsWindows then
+               (* Make sure drive name is same case *)
+               path.T[1] -> ascii.upcase -> path.T[1];
+               pwd.T[1]  -> ascii.upcase -> pwd.T[1];
+           if);
+           (path[], pwd[]) -> thePathHandler.localPath -> path[];
            ' -C ' -> ldA.puttext;
            path[] -> quote -> ldA.puttext;
            ' ' -> ldA.put;
            e.path.name -> name[];
-           name[] -> escDollar -> quote -> ldA.puttext;
-           '\\\n\t' -> ldA.puttext
+           (if hostIsWindows then
+               name[] -> quote -> ldA.puttext;
+            else
+               name[] -> escDollar -> quote -> ldA.puttext;
+               '\\\n\t' -> ldA.puttext
+           if);
        if);
     // isIL then
        (if use_dotnet_modules then
@@ -530,7 +555,9 @@ do
            '.il.netmodule"' -> lObj.stripExtension;
            '.netmodule"' -> lObj.appendExtension;
            ' '->ldA.puttext;
-           lObj[] -> escDollar -> quote -> ldA.putText; 
+           (if not hostIsWindows then
+               lObj[] -> escDollar -> quote -> ldA.putText; 
+           if);
         else
            (* lObj = '"foo.il.dll"' *)
            '.il.dll"' -> lObj.stripExtension;
@@ -551,6 +578,89 @@ do (if isJava then AFF.newline; if);
 #)
 ---trailer: descriptor ---
 (# e: @diskentry;
+   generateBatFileLabels:
+     (# 
+     do 'goto exit\n'
+        '\n'
+        ':builderror\n'
+        'echo Error(s) during BUILD.\n'
+        'goto exit\n'
+        ':asmerror\n'
+        'if exist "ilasm.out" (type "ilasm.out")\n'
+        'echo Error(s) during assembling.\n'
+        'goto exit\n'
+        ':reserror\n'
+        'echo Error(s) during resource compiling.\n'
+        'goto exit\n'
+        ':linkerror\n'
+        'echo Error(s) during link\n'
+        'goto exit\n'
+          ->AFF.putText;
+        (if common.switch[37] then
+            ':linkerror\necho A Verification Error Occurred\ngoto exit'->AFF.putLine;
+        if);
+        AFF.newline;
+        ':exit\n'
+          ->AFF.putText;
+     #);
+   generateJavaWrapperScript:
+     (# 
+     do (if hostIsWindows then
+            'echo @echo off    > '       -> AFF.puttext; 
+         else
+            'echo "#!/bin/sh"  > '       -> AFF.puttext;
+        if);
+        objName[]                        -> AFF.puttext;
+        (if hostIsWindows then  
+            '.bat'                       -> AFF.puttext;
+            '\necho java '               -> AFF.puttext;
+         else
+            '\necho "exec java '         -> AFF.puttext;
+        if);
+        (if generate_jar_manifest then
+            '-jar '                      -> AFF.puttext;
+         else
+            '-cp '                       -> AFF.puttext;
+        if);
+        (* Add LIBFILES to classpath *)
+        TX.scan
+        (#
+        do (if thisElm.kind = LibKind then 
+               thisElm.T[] -> AFF.puttext;
+               (if hostIsWindows then
+                   ';' -> AFF.put;
+                else
+                   ':' -> AFF.put;
+               if);
+           if)
+        #); 
+        (CodeDirectory[], ObjDirectory[]) 
+          -> thePathHandler.localpath
+          -> AFF.puttext;
+        DirectoryChar -> AFF.put;
+        objName[] -> e.path;
+        e.path.name                               -> AFF.puttext; 
+        (if hostIsWindows then
+            '.jar '                               -> AFF.puttext;
+         else
+            '.jar" '                              -> AFF.puttext;
+        if);
+        (if not generate_jar_manifest then
+            (if main_in_program then
+                'program' -> AFF.puttext;
+             else
+                objname[] -> AFF.puttext;
+            if);
+        if);
+        '>> '                                     -> AFF.puttext;
+        objName[]                                 -> AFF.puttext;
+        (if hostIsWindows then 
+            '.bat'                                -> AFF.putline;
+         else
+            '\nchmod a+x '                        -> AFF.puttext;
+            objName[] -> AFF.puttext;
+        if);
+     #);
 do (if true
     // isIL then
        (if not common.switch[6] then
@@ -564,28 +674,7 @@ do (if true
            '.exe)' -> AFF.putline;
        if);
        AFF.newline;
-       'goto exit\n'
-       '\n'
-       ':builderror\n'
-       'echo Error(s) during BUILD.\n'
-       'goto exit\n'
-       ':asmerror\n'
-       'if exist "ilasm.out" (type "ilasm.out")\n'
-       'echo Error(s) during assembling.\n'
-       'goto exit\n'
-       ':reserror\n'
-       'echo Error(s) during resource compiling.\n'
-       'goto exit\n'
-       ':linkerror\n'
-       'echo Error(s) during link\n'
-       'goto exit\n'
-         ->AFF.putText;
-       (if common.switch[37] then
-           ':linkerror\necho A Verification Error Occurred\ngoto exit'->AFF.putLine;
-       if);
-       AFF.newline;
-       ':exit\n'
-         ->AFF.putText;
+       generateBatFileLabels;
        (if not common.switch[23] then
            'if exist "ilasm.out" (del "ilasm.out")\n'
              ->AFF.putText;
@@ -597,40 +686,10 @@ do (if true
                objName[]                             -> AFF.puttext;
                '.manifest'                           -> AFF.putline;
            if);
-           'echo "#!/bin/sh"                       >'-> AFF.puttext; 
-           objName[]                                 -> AFF.puttext;
-           '\necho "exec java '                      -> AFF.puttext;
-           (if generate_jar_manifest then
-               '-jar '                               -> AFF.puttext;
-            else
-               '-cp '                                -> AFF.puttext;
+           generateJavaWrapperScript;
+           (if hostIsWindows then
+               generateBatFileLabels;
            if);
-           (* Add LIBFILES to classpath *)
-           TX.scan
-           (#
-           do (if thisElm.kind = LibKind then 
-                  thisElm.T[] -> AFF.puttext;
-                  ':' -> AFF.put;
-              if)
-           #); 
-           (CodeDirectory[], ObjDirectory[]) 
-             -> thePathHandler.localpath
-             -> AFF.puttext;
-           DirectoryChar -> AFF.put;
-           objName[] -> e.path;
-           e.path.name                               -> AFF.puttext; 
-           '.jar" '                                  -> AFF.puttext;
-           (if not generate_jar_manifest then
-               (if main_in_program then
-                   'program' -> AFF.puttext;
-                else
-                   objname[] -> AFF.puttext;
-               if);
-           if);
-           '>> '                                     -> AFF.puttext;
-           objName[]                                 -> AFF.puttext;
-           '\nchmod a+x '                            -> AFF.puttext;
-           objName[] -> AFF.puttext;
            '\necho Object program on file: '->AFF.puttext;
            objName[] -> AFF.putline;
        if);
