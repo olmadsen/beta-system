@@ -25,7 +25,12 @@ ParamThis(struct Component *, Susp)
    * in an error.
    */
   Ck(this);
-  if (ActiveCallBackFrame) BetaError(CompCallBackErr, this);
+  if (ActiveCallBackFrame)
+    if (SuspCont)
+      fprintf (stderr, "WARNING!! Suspending component involving callback. (SuspCont is TRUE)\n");
+    else
+      BetaError(CompCallBackErr, this);
+  
   
   /* This situation is this:
      sp -> Suspend..RegWin

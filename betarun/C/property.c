@@ -38,6 +38,7 @@ static BooleanProperty( name)
 	Info0 = TRUE; InfoIOA = TRUE; InfoAOA = TRUE; 
 	InfoLVRA = TRUE; InfoCBFA = TRUE; InfoLVRAAlloc = TRUE);
   ENTRY("quacont",  QuaCont = TRUE);
+  ENTRY("suspcont", SuspCont = TRUE);
 
 #ifdef RTDEBUG
   ENTRY("debugioa",   DebugIOA = TRUE);
