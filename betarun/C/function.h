@@ -40,7 +40,7 @@ extern void CBFArelloc();
 extern void freeCBF();
 
 /* C/sighandler.c */
-extern void SignalHandler();
+extern void BetaSignalHandler();
 
 
 /* GC/block.c */
