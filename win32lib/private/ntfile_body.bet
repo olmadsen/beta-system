@@ -1,209 +1,25 @@
 ORIGIN '../ntfile';
+BUILD nti '$$/ntfileInt.obj' 'external/ntfileInt.c'
+          'betacc $0 $1';
+
 -- INCLUDE '~beta/basiclib/v1.6/private/file_ntbody'
 
--- NtFilePermLib: attributes -- 
-
-convert: 
-  (# mode,who: @char;
-     pos,offset: @integer;
-     permBuf: [9] @integer;
-  enter(who,mode)
-  do (if who
-      // 'a' then -1 -> pos
-      // 'o' then 0 -> pos
-      // 'g' then 3 -> pos
-      // 'u' then 6 -> pos 
-      else WrongUserError
-     if);
-     (if mode 
-      // 'x' then 1 -> offset
-      // 'w' then 2 -> offset
-      // 'r' then 3 -> offset
-      else WrongModeError
-     if);
-     (*(if THIS(NtEntry).private.dostat
-      // True then othererror
-     if);*)
-     inner;
+-- LIB: attributes --
+getEntryAccessTime: External
+  (# path: [1]@char;
+     time: @integer;
+  enter path
+  exit time (* -1 => error *)
   #);
-
-convertAndAssign: convert
-  (# 
-  do inner;
-     (if (THIS(NtEntry).private.path,@@permBuf[1]) 
-	   -> changeProtection
-      // -1 then ChangePermError;
-     if);
+getEntryCreationTime: External
+  (# path: [1]@char;
+     time: @integer;
+  enter path
+  exit time (* -1 => error *)
   #);
-
--- NtEntryChangePermError: dopart --
-do 'Failed to change permission for disk entry.\n' -> msg.append; INNER
-
--- NtEntryPermWrongUser: dopart-- 
-do 'Wrong user specification for disk entry permission.\n' -> msg.append; INNER
-
--- NtEntryPermWrongMode: dopart -- 
-do 'Wrong mode specification for disk entry permission.\n' -> msg.append; INNER
-
--- NtEntryPermHas: dopart -- 
-do (who,mode) -> 
-   convert(# 
-          do (if pos//-1 then
-                 (permBuf[  offset]=1) and
-                 (permBuf[3+offset]=1) and
-                 (permBuf[6+offset]=1)
- 		   -> result;
-              else
-                 permBuf[pos+offset]=1 -> result;
-             if);
-          #);
-
--- NtEntryPermAdd: dopart -- 
-do (who,mode) -> 
-   convertAndAssign
-   (# 
-   do (if pos//-1 then
-          1 -> permBuf[offset];
-          1 -> permBuf[3+offset];
-          1 -> permBuf[6+offset];
-       else
-          1 -> permBuf[pos+offset] 
-      if)
-   #);
-
--- NtEntryPermRemove: dopart -- 
-do (who,mode) -> 
-   convertAndAssign
-   (# 
-   do (if pos//-1 then
-          0 -> permBuf[  offset];
-          0 -> permBuf[3+offset];
-          0 -> permBuf[6+offset];
-       else
-          0 -> permBuf[pos+offset]
-      if)
-   #);
-
--- NtEntryDevice: dopart --
-do (*(if private.dostat
-    // false then private.statBuf[1] -> value
-    // True then -1 -> value; error;
-   if)*)
-
-
--- NtEntryInode: dopart --  
-do (*(if private.dostat
-    // false then private.statBuf[2] -> value
-    // True then -1 -> value; error;
-   if)*)
-
--- NtEntryIsCharSpecial: dopart -- 
-do (*(if private.dostat
-    // false then private.statBuf[4]=1 -> value
-    // True then false -> value; error;
-   if)*)
-
--- NtEntryIsBlockSpecial: dopart -- 
-do (*(if private.dostat
-    // false then private.statBuf[5]=1 -> value
-    // True then false -> value; error;
-   if)*)
-
--- NtEntryIsSocket: dopart --  
-do (*(if private.dostat
-    // false then private.statBuf[8]=1 -> value
-    // True then false -> value; error;
-   if)*)
-
--- NtEntryGetOwner: dopart --
-do (*(if private.dostat
-    // false then private.statBuf[12] -> uid
-    // True then -1 -> uid; error;
-   if)*)
-
--- NtEntryGetGroup: dopart --   
-do (*(if private.dostat
-    // false then private.statBuf[13] -> gid
-    // True then -1 -> gid; error;
-   if)*)
-
--- NtEntryDeviceType: dopart --  
-do (*(if private.dostat
-    // false then private.statBuf[14] -> value
-    // True then -1 -> value; error;
-   if)*)
 
 -- NtEntryAccessTime: dopart -- 
-do (*(if private.dostat
-    // false then private.statBuf[16] -> value
-    // True then -1 -> value; error;
-   if)*)
+do (if (private.path -> getEntryAccessTime -> time) = -1 then error if)
 
--- NtEntryStatusTime: dopart -- 
-do (*(if private.dostat
-    // false then private.statBuf[18] -> value
-    // True then -1 -> value; error;
-   if)*)
-
--- NtEntryOptBlockSize: dopart -- 
-do (*(if private.dostat
-    // false then private.statBuf[19] -> value
-    // True then -1 -> value; error;
-   if)*)
-
--- NtEntryBlocks: dopart -- 
-do (*(if private.dostat
-    // false then private.statBuf[20] -> value
-    // True then -1 -> value; error;
-   if)*)
-
-
--- NtEntrySetOwner: descriptor -- 
-(# gid: @integer;
-do (*(if private.dostat
-    // false then private.statBuf[13] -> gid
-    // True then -1 -> gid; error;
-   if);
-   (if (private.path, uid, gid) -> chownNtEntry
-    // -1 then error;
-   if)*)
-#)
-
--- NtEntrySetGroup: descriptor --  
-(# uid: @integer;
-do (*(if private.dostat
-    // false then private.statBuf[12] -> uid
-    // True then -1 -> uid; error;
-   if);
-   (if (private.path, uid, gid) -> chownNtEntry
-    // -1 then error;
-   if)*)
-#)
-
--- NtFileOpenExeWrite:dopart --
-do INNER;
-   (if (entry.private.path -> entryExists)
-    // -1 then entry.DiskEntryException
-    // 1 then 
-       (* Entry exist. If exec perm is not set previously, open
-        * don't seem to work. Thus let's do it manually:
-        *)
-       ('a','x') -> entry.permission.add
-   if);
-   (entry.private.path[],binary->writeCreateMode,true) -> doOpen;
-   true -> private.outputFile;
-   ('w',binary)->SetBinTxtMode -> private.SetUpNtStream;
-
--- NtFileOpenExeAppend:dopart -- 
-do INNER;
-   (if (entry.private.path -> entryExists)
-    // -1 then entry.DiskEntryException
-    // 1 then 
-       (* Entry exist. If exec perm is not set previously, open
-        * don't seem to work. Thus let's do it manually:
-        *)
-       ('a','x') -> entry.permission.add
-   if);
-   (entry.private.path[], binary->appendCreateMode,true) -> doOpen;
-   true -> private.outputFile;
-   ('a',binary)->SetBinTxtMode -> private.SetUpNtStream;
+-- NtEntryCreationTime: dopart -- 
+do (if (private.path -> getEntryCreationTime -> time) = -1 then error if)
