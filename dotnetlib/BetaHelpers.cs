@@ -13,6 +13,15 @@ public class BetaHelpers
   }
 
   // static methods
+  public static long int2long(int i){
+    // Needed because of missing int64 arithmetic in beta
+    return (long)i;
+  }
+  public static int  long2int(long j){
+    // Needed because of missing int64 arithmetic in beta
+    return (int)j;
+  }
+
   public static long modtimeToFileTime(int modtime){
     // Convert modtime (seconds since 1970/1/1) to filetime
     // Needed because of missing int64 arithmetic in beta
