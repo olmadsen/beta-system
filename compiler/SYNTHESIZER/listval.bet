@@ -832,19 +832,31 @@ ListVal: EvVal
                     'index' -> AR.fieldName[];
                     (if repElmSize
                      // 1 then 'C' -> AR.fieldType[];
-                     // 2 then 'C' -> AR.fieldType[];
-                     // 4 then (theGen.int32value).asText  -> AR.fieldType[];
+                     // 2 then (theGen.int16value).asText  -> AR.fieldType[]
+                     // 4 then (theGen.int32value).asText  -> AR.fieldType[]
                     if);
+                    (* evaluate index *)
                     (baseAdr.copy,offset[],false,rchain[])->ExpEval->lv[];
                     lv.pushVal;
                     (* stack = [... rep,index 
                      *)
+                    (* adjust index
+                     * size 1: no adjustment
+                     * size 2: multiply by 2
+                     * size 4: multiply by 4
+                     *)
+                    (if size > 1 then
+                        (size -> mch.newCstOp,mch.dataTop[],4) -> mch.gMult
+                    if);
+                        
                     mch.duplicate;
                     (repElmSize->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
                     (mch.dataTop[],&mch.doubleDataRegOperand[],false(*mod*)) 
                       -> mch.gDiv;
-                    (8->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
-                    (mch.dataTop[],mch.dataTop[],4) -> mch.gMult;
+                    (if size < 4 then (* ??4 *)
+                        (8->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                        (mch.dataTop[],mch.dataTop[],4) -> mch.gMult;
+                    if);
                     (* store in tmp *)
                     AR.fieldType[]
                       -> theGen.allocAndStoreTmp 
@@ -856,7 +868,14 @@ ListVal: EvVal
                     (* duplicate rep & index *)
                     (0,true) -> mch.duplicate;
                     (AR[],mch.dataTop[]) -> mch.ldVal;
-                    (0x00FFFFFF->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                    (if size
+                     // 1 then
+                        (0x00FFFFFF->mch.newCstOp,mch.dataTop[]) 
+                          -> mch.ldCst;
+                     // 2 then
+                        (0x0000FFFF->mch.newCstOp,mch.dataTop[]) 
+                          -> mch.ldCst;
+                    if);
                     (tA[],mch.dataTop[]) -> mch.ldVal;
                     (mch.dataTop[],mch.dataTop[]) -> mch.rotateRight;
                     
@@ -868,13 +887,22 @@ ListVal: EvVal
                  do (baseAdr.copy,val[],false,rchain[])->ExpEval->lv[];
                     true->lv.pushVal;
                     (* stack = [ ...,rep,index,rep[index],val *)
-                    (if (size=1) and (repElmSize=4) then
+                    (if true
+                     // (size=1) and (repElmSize=4) then
                         (24->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
                         (tA[],mch.dataTop[]) -> mch.ldVal;
                         (mch.dataTop[],mch.dataTop[],4) -> mch.gSub;
                         (mch.dataTop[],mch.dataTop[]) 
                           -> mch.logicalShiftLeft;
                         (mch.dataTop[],mch.dataTop[],4) -> mch.gOr;
+                     // (size=2) and (repElmSize=4) then
+                        (16->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                        (tA[],mch.dataTop[]) -> mch.ldVal;
+                        (mch.dataTop[],mch.dataTop[],4) -> mch.gSub;
+                        (mch.dataTop[],mch.dataTop[]) 
+                          -> mch.logicalShiftLeft;
+                        (mch.dataTop[],mch.dataTop[],4) -> mch.gOr;
+                        
                     if)
                  #)
             enter size
@@ -893,6 +921,16 @@ ListVal: EvVal
                           '\nA.size:undefined'->putline
                       if)
                    // 2 then
+                      (if A.size
+                       // 1 then
+                          'PutInt16:in:int8'->putline
+                       // 2 then
+                          'PutInt16:in:int16'->putline
+                       // 4 then
+                          'PutInt16:in:int32'->putline
+                       else
+                          '\nA.size:undefined'->putline
+                      if)
                    // 4 then
                    else
                       '\nsize:undefined'->putline
@@ -941,10 +979,33 @@ ListVal: EvVal
                        else
                           '\nA.size:undefined'->putline
                       if)
-                   // 2 then
-                   // 4 then
-                   else
-                      '\nsize:undefined'->putline
+                // 2 then
+                      (if A.size
+                       // 1 then 
+                          '\nR%.putShort where R: [e] @char/int8/int8u'
+                          ' is not implemented' -> putline;
+                       // 2 then
+                          '\nR%.putShort where R: [e] @int16/int16u'
+                          ' is not implemented' -> putline;
+                       // 4 then
+                          (* we need to select the right int32 element
+                           * of the repetition: offset div 4;
+                           * and then the right part of the int32 word:
+                           * offset mod 4 - +/- 1
+                           *)
+                          (2,4) -> doIndex; 
+                          (* stack = [ ...,rep,index,rep[index] *)
+                          (2,4) -> eval;
+                          (* stack = [ ...,rep,index,rep[index],val *)
+
+                          (mch.dataTop[],AR[]) -> mch.stVal
+                       else
+                          '\nA.size:undefined'->putline
+                      if)
+                   
+                // 4 then
+                else
+                   '\nsize:undefined'->putline
                if);
             #);
                
