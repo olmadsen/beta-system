@@ -190,27 +190,42 @@
 /********* Debug macros *******/
 #ifdef RTDEBUG
 #ifdef MT
-#  define DEBUG_MT(code)  if( DebugMT )  { code; }
+#  define DEBUG_MT(code)  \
+     if( DebugMT )  { code; /* fflush(output); */ }
 #else
 #  define DEBUG_MT(code)
 #endif
-#  define DEBUG_IOA(code)  if( DebugIOA )  { code; }
-#  define CHECK_HEAP(code)  if( CheckHeap )  { code; }
-#  define DEBUG_ALLOI(code)  if( DebugAlloI )  { code; }
-#  define DEBUG_CBFA(code) if( DebugCBFA )  { code; }
-#  define DEBUG_AOA(code)  if( DebugAOA )  { code; }
+#  define DEBUG_IOA(code)  \
+     if( DebugIOA )  { code; /* fflush(output); */ }
+#  define CHECK_HEAP(code)  \
+     if( CheckHeap )  { code; /* fflush(output); */ }
+#  define DEBUG_ALLOI(code)  \
+     if( DebugAlloI )  { code; /* fflush(output); */ }
+#  define DEBUG_CBFA(code) \
+     if( DebugCBFA )  { code; /* fflush(output); */ }
+#  define DEBUG_AOA(code)  \
+     if( DebugAOA )  { code; /* fflush(output); */ }
 #ifdef PERSIST
-#  define DEBUG_PERSISTENCE(code)  if( DebugPersistence )  { code; }
+#  define DEBUG_PERSISTENCE(code)  \
+     if( DebugPersistence )  { code; /* fflush(output); */ }
 #endif /* RTINFO */
-#  define DEBUG_AOAtoIOA(code)  if( DebugAOAtoIOA )  { code; }
-#  define DEBUG_LIN(code) if( DebugLIN ) { code; }
+#  define DEBUG_AOAtoIOA(code)  \
+     if( DebugAOAtoIOA )  { code; /* fflush(output); */ }
+#  define DEBUG_LIN(code) \
+     if( DebugLIN ) { code; /* fflush(output); */ }
 #  define DEBUG_CODE(code)  code;
-#  define DEBUG_STACK(code) if( DebugStack ) { code; }
-#  define DEBUG_STACKOBJ(code) if( DebugStackObj ) { code; }
-#  define DEBUG_VALHALLA(code) if( DebugValhalla ) { code; }
-#  define DEBUG_SOCKETS(code) if( DebugSockets ) { code; }
-#  define DEBUG_LAZY(code) if( DebugLazy ) { code; }
-#  define DEBUG_LABELS(code) if( DebugLabels ) { code; }
+#  define DEBUG_STACK(code) \
+     if( DebugStack ) { code; /* fflush(output); */ }
+#  define DEBUG_STACKOBJ(code) \
+     if( DebugStackObj ) { code; /* fflush(output); */ }
+#  define DEBUG_VALHALLA(code) \
+     if( DebugValhalla ) { code; /* fflush(output); */ }
+#  define DEBUG_SOCKETS(code) \
+     if( DebugSockets ) { code; /* fflush(output); */ }
+#  define DEBUG_LAZY(code) \
+     if( DebugLazy ) { code; /* fflush(output); */ }
+#  define DEBUG_LABELS(code) \
+     if( DebugLabels ) { code; /* fflush(output); */ }
 #  define TRACE_GROUP(code) \
      if (TraceGroup) { code; fflush(output); } 
 #  define TRACE_DUMP(code) \

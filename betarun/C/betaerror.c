@@ -446,6 +446,7 @@ errorTable[] =
 #else
   { StackErr,          "Stack Overflow" },
 #endif
+  { InternalErr,       "Internal Error" },
 #ifdef UNIX
   { UnknownSigErr,     "Unknown signal" },
 #else

@@ -41,5 +41,6 @@ typedef enum _BetaErr {
   AOAtoIOAallocErr =  -36 /* Failed to allocate AOAtoIOAtable */,
   UnorderedFval =     -37 /* Unordered Floating Point Value */,
   StackErr =          -38 /* Stack Overflow */,
+  InternalErr =       -99 /* Internal Error */,
   UnknownSigErr =    -100 /* Unknown signal */
 } BetaErr;

@@ -526,19 +526,8 @@ static void terminate_reference_stack(long *SP)
     long numbytes = (long)SP - (long)StackEndAtSignal;
     Claim(numbytes>0, "numbytes>0");
     fprintf(output, "terminate_reference_stack: top frame:\n");
-    for (StackCell=SP-1; StackCell>=SP-(numbytes/sizeof(long*)); StackCell--){
-      fprintf(output, "\t0x%08x: 0x%08x ", (int)StackCell, (int)*StackCell);
-      if (StackCell==SP-1){
-	fprintf(output, "=RTS: ");
-	PrintCodeAddress((int)*StackCell);
-      }
-      if (StackCell==SP-2){
-	fprintf(output, "=DYN: "); /* FIXME: ppcmac: not correct */
-	PrintRef((Object*)*StackCell);
-      }
-      fprintf(output, "\n");
-      fflush(output);
-    }
+    PrintStackFrames(SP, numbytes/sizeof(long*));
+    
   });
 
 #ifdef sgi
@@ -919,30 +908,6 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "Prototype: %s\n", ProtoTypeName(proto)));
 
 #ifdef NEWRUN
-#if 0 
-      ALREADY DONE IN SIGHANDLER.C;
-
-
-      /* The SP points to end of the top frame. We have to
-       * adjust it to point to end of previous frame (aka top of top frame), as
-       * this is expected when callback occurs (see figure
-       * "STACK LAYOUT at callback/gpart" in stack.c.
-       */
-      {
-        long SPoff /* size allocated on stack when theObj became active */;
-        DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: Finding previous frame:\n"));
-        GetSPoff(SPoff, CodeEntry(GETPROTO(curObj), PC)); 
-        DEBUG_STACK({
-          fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__);
-          fprintf(output, "Old SP:      0x%x\n", SP);
-          fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(GETPROTO(curObj), PC));
-          fprintf(output, "SPoff:       0x%x\n", SPoff);
-          fprintf(output, "New SP:      0x%x\n", SP+SPoff);
-        });
-        SP = (long)SP+SPoff;
-      }
-#endif /* 0 */
-
       /* The referencestack part of the top frame is not
        * necessarily terminated at this point (depending on
        * how the debuggee stopped).
@@ -995,7 +960,10 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       old_valhallaIsStepping = valhallaIsStepping;
       valhallaIsStepping = FALSE;
       valhalla_exelevel++;
-      /* cb() may cause GC */
+      /* FIXME: do we need a valhalla_socket_flush here in case of nested
+       * evaluators?
+       */
+      /* Callback: cb() may cause GC */
       cb();
       valhalla_exelevel--;
       valhallaIsStepping = old_valhallaIsStepping;

@@ -20,7 +20,6 @@
 static char NotifyMessage[500] = { 0 /* rest is uninitialized */};
 
 GLOBAL(static int basic_dumped)=0;
-GLOBAL(static int isMakingDump)=0;
 
 /******************************* M_Part: *****************************/
 
@@ -588,7 +587,7 @@ static void DumpCell(Object **theCell, Object *theObj)
   DisplayObject(output, theObj, PC);
 }
 
-void DisplayNEWRUNStack(long *PC)
+void DisplayNEWRUNStack(long *PC, Object *theObj, int signal)
 { 
 
   /* First check for errors occured outside BETA and adjust StackEnd to
@@ -621,6 +620,29 @@ void DisplayNEWRUNStack(long *PC)
     }
 #endif /* sgi */
   }
+
+  /* Second, if a signal was the reason program stopped, the NEWRUN
+   * stack pointer should be adjusted to point to second topmost frame.
+   */
+  if (signal){
+    if (IsBetaCodeAddrOfProcess((long)PC)){ 
+      long SPoff;
+      DEBUG_CODE(fprintf(output, "DisplayBetaStack: Adjusting StackEnd\n"));
+      GetSPoff(SPoff, CodeEntry(GETPROTO(theObj), (long)PC)); 
+      StackEnd = (long *) ((long)StackEndAtSignal+SPoff);
+      DEBUG_CODE({
+	fprintf(output, 
+		"DisplayBetaStack: "
+		"Adjusted StackEnd from 0x%08x to 0x%08x\n", 
+		(int)StackEndAtSignal,
+		(int)StackEnd);
+      });
+    } else {
+      fprintf(output, "DisplayBetaStack: Cannot adjust StackEnd.\n");
+      fflush(output);
+    }
+  }
+
   /* Dump the stack */
   ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, TRUE, DumpCell);
 }
@@ -1467,13 +1489,7 @@ int DisplayBetaStack(BetaErr errorNumber,
 
   if (isMakingDump){
     /* Something went wrong during the dump. Stop here! */
-    fprintf(output, "\n# Error during dump: ");
-    fprintf(output, ErrorMessage(errorNumber));
-    fprintf(output, ". Aborting.\n\n");
-    fflush(output);
-    fflush(stdout);
-    isMakingDump=0; /* allow other threads to make dump */
-    if (NotifyMessage[0]) Notify(NotifyMessage);
+    NotifyErrorDuringDump(errorNumber);
     BetaExit(1);
   } else {
     isMakingDump=1;
@@ -1531,7 +1547,7 @@ int DisplayBetaStack(BetaErr errorNumber,
   DisplayHPPAStack(thePC);
 #endif
 #ifdef NEWRUN
-  DisplayNEWRUNStack(thePC);
+  DisplayNEWRUNStack(thePC, theObj, theSignal);
 #endif
 #ifdef sparc
   DisplaySPARCStack(errorNumber, theObj, thePC, theSignal);
@@ -1589,6 +1605,18 @@ int DisplayBetaStack(BetaErr errorNumber,
   return 0;
 } /* DisplayBetaStack */
 
+void NotifyErrorDuringDump(BetaErr errorNumber)
+{
+  fprintf(output, "\n# Error during dump: ");
+  fprintf(output, ErrorMessage(errorNumber));
+  fprintf(output, ". Aborting.\n\n");
+  fflush(output);
+  fflush(stdout);
+  isMakingDump=0; /* allow other threads to make dump */
+  if (NotifyMessage[0]) Notify(NotifyMessage);
+  return;
+}
+
 #ifdef NEWRUN
 
 /*************************** CodeEntry: ***************************/
@@ -1641,14 +1669,28 @@ unsigned long CodeEntry(ProtoType *theProto, long PC)
 	    "Fatal Error: CodeEntry(proto=0x%x, PC=0x%x): minDist == MAXINT\n",
 	    protoArg,
 	    PC);
+    if (isMakingDump){
+      NotifyErrorDuringDump(InternalErr);
+    }
+    DEBUG_CODE(Illegal());
+    BetaExit(1);
+  }
+  if (minDist == PC) {
+    fprintf(output, 
+	    "Fatal Error: CodeEntry(proto=0x%x, PC=0x%x) returns 0.\n",
+	    protoArg,
+	    PC);
+    if (isMakingDump){
+      NotifyErrorDuringDump(InternalErr);
+    }
     DEBUG_CODE(Illegal());
     BetaExit(1);
   }
   if (minDist == gDist) {
-    TRACE_CODEENTRY(fprintf(output, "CodeEntry returns: 0x%x\n", G_Part(activeProto)));
+    TRACE_CODEENTRY(fprintf(output, "CodeEntry returns G_part(0x%x): 0x%x\n", (int)activeProto, G_Part(activeProto)));
     return (unsigned long)G_Part(activeProto);
   } else {
-    TRACE_CODEENTRY(fprintf(output, "CodeEntry returns: 0x%x\n", M_Part(activeProto)));
+    TRACE_CODEENTRY(fprintf(output, "CodeEntry returns M_part(0x%x): 0x%x\n", (int)activeProto, M_Part(activeProto)));
     return (unsigned long)M_Part(activeProto);
   }
 }

@@ -366,6 +366,23 @@ static void RestoreSGIRegisters(struct sigcontext *scp,
 #error GetPCandSP should be defined
 #endif
 
+static void NotifySignalDuringDump(int sig)
+{
+  BetaErr err;
+  switch ((int)sig){
+#ifdef UNIX
+#ifdef RTDEBUG
+  case SIGINT: err=InterruptErr; break;
+#endif /* RTDEBUG */
+  case SIGSEGV: err=SegmentationErr; break;
+  case SIGBUS: err=BusErr; break;
+  case SIGILL: err=IllegalInstErr; break;
+#endif /* UNIX */
+  default: err=UnknownSigErr;
+  }
+  NotifyErrorDuringDump(err);
+}
+
 /* This procedure is called if a nasty signal is received
  * during execution of BetaSignalHandler.
  * Please Exit nicely.
@@ -384,6 +401,9 @@ static void ExitHandler(sig, code, scp, addr)
     fflush(output);
   });
 #endif
+  if (isMakingDump) {
+    NotifySignalDuringDump((int)sig);
+  }
   BetaExit(1); 
 }
 
@@ -423,22 +443,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   { 
     PC = (long *) scp->sc_pc;
     theObj = CurrentObject = (Object *) scp->sc_regs[30];
-    StackEndAtSignal = (long*) scp->sc_regs[29];
-    if (IsBetaCodeAddrOfProcess((long)PC)){ 
-      long SPoff;
-      GetSPoff(SPoff, CodeEntry(GETPROTO(theObj), (long)PC)); 
-      StackEnd = (long *) ((long)StackEndAtSignal+SPoff);
-      DEBUG_CODE({
-	fprintf(output, 
-		"BetaSignalHandler: "
-		"Adjusted StackEnd from 0x%08x to 0x%08x\n", 
-		(int)scp->sc_regs[29],
-		(int)StackEnd);
-      });
-    } else {
-      fprintf(output, "BetaSignalHandler: Cannot adjust StackEnd.\n");
-      fflush(output);
-    }
+    StackEndAtSignal = StackEnd = (long*) scp->sc_regs[29];
     if( !(inBetaHeap(theObj) && isObject(theObj))) theObj  = 0;
     switch( sig){
     case SIGFPE: 
@@ -669,6 +674,9 @@ static void ExitHandler(int sig)
     fprintf(output, " during signal handling.\n");
     fflush(output);
   });
+  if (isMakingDump) {
+    NotifySignalDuringDump((int)sig);
+  }
   BetaExit(1);
 }
 

@@ -63,6 +63,7 @@ extern void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func);
 extern long *DisplayCallbackFrames(CallBackFrame *cbFrame, long *low, Object *currentObject, CellDisplayFunc func);
 extern void DisplayStackPart(long *low, long *high, Object *currentObject, CellDisplayFunc func);
 #endif
+extern void NotifyErrorDuringDump(BetaErr errorNumber);
 #ifdef NEWRUN
 extern unsigned long CodeEntry(ProtoType *theProto, long PC);
 #endif
@@ -215,7 +216,8 @@ extern void ProcessStackObj(StackObject *, CellProcessFunc func);
 extern void ProcessStack(void);
 #ifdef NEWRUN
 extern void ProcessStackFrames(long SP, long StackStart, long stopAtComp, long dynOnly, CellProcessFunc func);
-#endif
+void PrintStackFrames(long *SP, int numcells);
+#endif /* NEWRUN */
 #if (defined(RTVALHALLA) && defined(intel))
 extern void ProcessValhallaRefStack(void);
 #endif /* RTVALHALLA && intel */

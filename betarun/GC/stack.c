@@ -130,6 +130,13 @@ static void PrintSkipped(long *current)
 #ifdef NEWRUN
 /************************* Begin NEWRUN ****************************/
 
+/* FIXME: Possibly add function
+ *    long *WindBackSP(long *SP, Object *obj, long *PC)
+ * and use instead of macro unwinding. The overhead in calling function
+ * is probably less than the overhead introduced by cache misses due to
+ * large code.
+ */
+
 #ifdef RTDEBUG
 static void DumpProto(Object *theObj)
 {                                                                
@@ -142,12 +149,31 @@ static void DumpProto(Object *theObj)
      }                                                           
   }                                                              
 }
-#else /* !RTDEBUG */
-#define DumpProto(theObj) 
-#endif /* RTDEBUG */
+void PrintStackFrames(long *SP, int numlongs)
+{
+  long *StackCell;
+
+  for (StackCell=SP-1; StackCell>=(SP-numlongs); StackCell--){
+    fprintf(output, "\t0x%08x: 0x%08x ", (int)StackCell, (int)*StackCell);
+    if (StackCell==SP-1){
+      fprintf(output, "(RTS)");
+      PrintCodeAddress((int)*StackCell);
+    }
+    if (StackCell==SP-2){
+      fprintf(output, "(DYN)"); /* FIXME: ppcmac: not correct */
+      PrintRef((Object*)*StackCell);
+    }
+    fprintf(output, "\n");
+    fflush(output);
+  }
+}
 
 #define FrameSeparator() \
 fprintf(output, "============================================================================\n")
+
+#else /* !RTDEBUG */
+#define DumpProto(theObj) 
+#endif /* RTDEBUG */
 
 /* ProcessRefStack:
  *  Process references in a stack frame.
