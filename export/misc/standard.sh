@@ -137,3 +137,9 @@ if [ "$PACKBETACL" = "yes" ]; then
    /users/beta/export/distribution/r3.1.1/misc/betacl.sh
 fi
 
+if [ "$TARGET" = "nti" ]
+then
+   /users/beta/export/distribution/r3.1.1/misc/make_list.perl $DST/*.cmd
+else
+   /users/beta/export/distribution/r3.1.1/misc/make_list.perl $DST/*.lst
+fi

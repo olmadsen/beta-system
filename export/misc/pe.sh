@@ -44,4 +44,9 @@ if [ "$PACKCONTRIB" = "yes" ]; then
    /users/beta/export/distribution/r3.1.1/misc/contrib.sh
 fi
 
-/users/beta/export/distribution/r3.1.1/misc/check_problems.sh
+if [ "$TARGET" = "nti" ]
+then
+   /users/beta/export/distribution/r3.1.1/misc/make_list.perl $DST/*.cmd
+else
+   /users/beta/export/distribution/r3.1.1/misc/make_list.perl $DST/*.lst
+fi
