@@ -23,12 +23,14 @@
 
 void doUGC(int doit)
 {
-  DoUGC = doit;
-  if (doit){
-    fprintf(output, "Unconditional GC activated via doUGC\n");
-  } else {
-    fprintf(output, "Unconditional GC deactivated via doUGC\n");
-  }    
+  DEBUG_CODE({
+    DoUGC = doit;
+    if (doit){
+      fprintf(output, "Unconditional GC activated via doUGC\n");
+    } else {
+      fprintf(output, "Unconditional GC deactivated via doUGC\n");
+    }
+  });
 }
 
 long inBetaHeap(Object *theObj)

@@ -6,10 +6,48 @@
 #include "beta.h"
 #include "crun.h"
 
+static void extendCTextPool(int size);
+
+#define CHECK_AND_EXTEND_POOL(size) { \
+  if (size > ((char *)CTextPool + Maxctextpool) - CTextPoolEnd) \
+     extendCTextPool(size); \
+}
+
+
+static int CTextPoolSize = 1;
+static int Maxctextpool = 0;
+
+static void extendCTextPool(int size)
+{
+  char *newpool;
+  do {
+    CTextPoolSize *= 2;
+  } while (CTextPoolSize < size+10);
+  
+  newpool = (char*)malloc(CTextPoolSize);
+  memset(newpool, 0, CTextPoolSize);
+
+  /* Insert link to previous pool: */
+  *(char **)newpool = CTextPool;
+  CTextPool = newpool;
+  CTextPoolEnd = (char *)CTextPool + sizeof(char*);
+  Maxctextpool = CTextPoolSize - 4;
+}
+
+
 void CinitT(void)
 {
   DEBUG_CODE(NumCinitT++);
-  CTextPoolEnd = (char *)CTextPool;
+  if (CTextPool) {
+    char **oldpool, **pool = *(char ***)CTextPool;
+    while (pool) {
+      oldpool = pool;
+      pool = (char **)*pool;
+      free(oldpool);
+    }
+    CTextPoolEnd = (char *)CTextPool + sizeof(char*);
+    *(char **)CTextPool = NULL;
+  }
 }
 
 char *CCpkVT(ValRep * theRep, long *SP)
@@ -24,8 +62,7 @@ char *CCpkVT(ValRep * theRep, long *SP)
    * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
    */
 
-  if (bodysize > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
-    BetaError(CTextPoolErr, 0, SP, 0);
+  CHECK_AND_EXTEND_POOL(bodysize);
   
   /* Copy the contents of the repetition to the CTextPool */
   for (i = 0; i < bodysize/4; ++i, CTextPoolEnd += 4)
@@ -66,8 +103,7 @@ char *CCpkSVT(ValRep *theRep, unsigned low, long high, long *SP)
    * nextText is used as a tmp. register only.
    * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
    */
-  if (bodysize > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
-    BetaError(CTextPoolErr, 0, SP, 0);
+  CHECK_AND_EXTEND_POOL(bodysize);
   
   /* Copy the contents of the repetition to the CTextPool. */
   oldBody = (unsigned char *)((unsigned)theRep->Body+(low-theRep->LowBorder));
@@ -99,8 +135,7 @@ char *CCpkVT_W(ValRep * theRep, long *SP)
    * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
    */
 
-  if (bodysize > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
-    BetaError(CTextPoolErr, 0, SP, 0);
+  CHECK_AND_EXTEND_POOL(bodysize);
   
   /* Copy the contents of the repetition to the CTextPool */
   for (i = 0; i < bodysize; i++, CTextPoolEnd+=2){
@@ -143,8 +178,7 @@ char *CCpkSVT_W(ValRep *theRep, unsigned low, long high, long *SP)
    * nextText is used as a tmp. register only.
    * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
    */
-  if (bodysize > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
-    BetaError(CTextPoolErr, 0, SP, 0);
+  CHECK_AND_EXTEND_POOL(bodysize);
   
   /* Copy the contents of the repetition to the CTextPool. */
   oldBody = (unsigned char *)((unsigned)theRep->Body+(low-theRep->LowBorder));
@@ -183,8 +217,7 @@ char * PpkVT(ValRep *theRep, long *SP)
    * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
    */
 
-  if (bodysize+1 > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
-    BetaError(CTextPoolErr, 0, SP, 0);
+  CHECK_AND_EXTEND_POOL(bodysize+1);
   
   res=(char *)CTextPoolEnd;
   /* Set the first byte in the pascal string eq the length */
@@ -239,8 +272,7 @@ char * PpkSVT(ValRep *theRep, unsigned low, long high, long *SP)
    * nextText is used as a tmp. register only.
    * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
    */
-  if (bodysize+1 > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
-    BetaError(CTextPoolErr, 0, SP, 0);
+  CHECK_AND_EXTEND_POOL(bodysize+1);
   
   res=(char *)CTextPoolEnd;
   /* Copy the contents of the repetition to the CTextPool. */
