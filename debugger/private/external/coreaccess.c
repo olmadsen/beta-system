@@ -5,7 +5,7 @@
 
 #include "coreaccess.h"
 
-#if defined(sun4s) || defined(sgi) || defined(linux)
+#if defined(sun4s) || defined(sgi)
 
 /* Implementation using the /proc file system. */
 #include <fcntl.h>
@@ -32,7 +32,7 @@ int getfd (pid_t pid)
 { int i;
   for (i=0;i<=lastpid;i++) 
     if (pid==pids[i]) return fds[i];
-  fprintf (stderr,"getfd failed. Returning -1.\n");
+  fprintf (stderr,"getfd failed (pid=%d, lastpid=%d). Returning -1.\n", pid, lastpid);
   return -1;
 }
 
@@ -51,6 +51,12 @@ int newfd (pid_t pid)
   sprintf (filename, "/proc/%d", (int)pid);
   fds[lastpid] = open (filename,O_RDWR | O_SYNC);
   if (fds[lastpid] == -1) {
+    fprintf (stderr,
+	     "coreaccess.c: failed to open /proc/%d, errno=%d (%s)\n",
+	     pid,
+	     errno,
+	     strerror(errno)
+	     );
     lastpid--;
     return errno;
   }
@@ -125,18 +131,11 @@ int ReadImage (pid_t pid, int address, int* value)
 int SetBreak (pid_t pid, int address, int* oldInstruction) 
 { int res;
   
-  if (res==ReadImage (pid, address, oldInstruction)) {
+  if (res=ReadImage (pid, address, oldInstruction)) {
     fprintf (stderr,"ReadImage failed. SetBreak returning %d.\n",res);
     return res;
   };
   return WriteImage (pid,address,BREAK_INST);
-#if defined(hpux) && !defined(hppa)
-  /* MC 680x0 instruction generating illegal instruction trap:
-   *   Asm syntax: ILLEGAL
-   *   Instruction format: 0100 1010 1111 1100 = 0x4afc */
-  WriteImage (pid, address, ((0x4afc0000) | ((*oldInstruction) & 0x0000ffff)));
-#endif
-
 }
 
 int UnsetBreak (pid_t pid, int address, int oldInstruction)
@@ -145,7 +144,7 @@ int UnsetBreak (pid_t pid, int address, int oldInstruction)
 }
 
 
-#else /* Neither Solaris, sgi nor linux */
+#else /* Neither Solaris nor sgi */
 
 /* Implementation of coreaccess.h using ptrace. */
 #include <sys/ptrace.h>
@@ -158,9 +157,22 @@ int UnsetBreak (pid_t pid, int address, int oldInstruction)
 #define PT_RIUSER PTRACE_PEEKTEXT   
 #endif
 
+#ifdef linux
+#define PT_ATTACH PTRACE_ATTACH
+#define PT_DETACH PTRACE_DETACH
+#define PT_WIUSER PTRACE_POKETEXT
+#define PT_RIUSER PTRACE_PEEKTEXT   
+#endif
+
+#ifdef linux
+#define PTRACE(req, pid, addr, data, addr2) ptrace(req, pid, addr, data)
+#else
+#define PTRACE(req, pid, addr, data, addr2) ptrace(req, pid, addr, data, addr2)
+#endif
+
 int Attach (pid_t pid)
 { errno = 0; 
-  ptrace (PT_ATTACH, pid, 0, 0, 0);
+  PTRACE (PT_ATTACH, pid, 0, 0, 0);
   if (errno) return errno;
   waitpid (pid,0,0); 
   return errno;
@@ -168,19 +180,19 @@ int Attach (pid_t pid)
 
 int Detach (pid_t pid)
 { errno = 0; 
-  ptrace (PT_DETACH, pid, 1, 0, 0); 
+  PTRACE (PT_DETACH, pid, 1, 0, 0); 
   return errno;
 }
 
 int ReadImage (pid_t pid, int address, int *value)
 { errno = 0; 
-  *value = ptrace (PT_RIUSER, pid, address, 0, 0); 
+  *value = PTRACE (PT_RIUSER, pid, address, 0, 0); 
   return errno;
 }
 
 int WriteImage (pid_t pid, int address, int value)
 { errno = 0;
-  ptrace (PT_WIUSER, pid, address, value, 0);  
+  PTRACE (PT_WIUSER, pid, address, value, 0);  
   return errno;
 }
 
