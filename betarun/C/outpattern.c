@@ -140,8 +140,6 @@ struct group_header* NextGroup (struct group_header* current)
      /* Return group in executable following current. 
       * If current is NULL, first group is returned. */
 { 
-  extern long *BETA_data1; /* C-variable */
-  extern long *BETA_end; /* C-variable */
   long *limit;
 
   /*DEBUG_CODE(fprintf (output, "NextGroup. current = 0x%x\n", current));*/
