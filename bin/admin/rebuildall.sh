@@ -1,12 +1,17 @@
 #!/usr/local/bin/tcsh
 
 # Der er frysning nu, lad vaer med at blande dig!!!
-exit 0   # Den er overstaaet nu...
+# exit 0   # Den er overstaaet nu...
 
 # configuration:
-set CVSUPDATE=yes
+set CVSUPDATE=no
 set RCMUPDATE=no 
 set BUILDMACHINES=(lisa amigo)
+
+# You can touch the following files to get a one-shot effect as if the
+# flags had been set in this script:
+# "$BETALIB/.rebuildall-cvsupdate"
+# "$BETALIB/.rebuildall-rcmupdate"
 
 ### Usage:
 # Put in crontab on the machine where a periodical recompilation 
@@ -15,7 +20,7 @@ set BUILDMACHINES=(lisa amigo)
 # after the machine running this script has cleaned up everything.
 #
 # Arguments: 
-#   First aguments is the bealib to cleanup.
+#   First aguments is the betalib to cleanup.
 #
 #   Second argument is 'yes' iff all asts and codefiles should be removed
 #	before the compilation begins.  Set this on one platform only and set
@@ -71,6 +76,7 @@ source ${BETALIB}/configuration/env.csh >& /dev/null
 setenv LOG ${BETALIB}/log/rebuildall.$MACHINETYPE
 setenv RAGNAROOT /users/beta/.Ragnarok
 
+
 # Hack:  HP machines have too little space on /tmp.  Use ~beta/tmp instead.
 # Well, lisa has enough room on /tmp.  No need for now.
 #if ( $$MACHINETYPE == "HPUX9PA" ) then
@@ -85,6 +91,17 @@ if ( $REMOVEASTS == "yes" ) then
     mbs_rmast -u >>& $LOG
     echo "rebuildall.sh: Removing all code files for all platforms." >>& $LOG
     mbs_rmcode -u sun4s linux sgi hpux9pa nti_ms nti_gnu ms gnu bor >>& $LOG
+
+    # Check one-shot variables...
+    if (-f "$BETALIB/.rebuildall-cvsupdate") then
+	rm -f "$BETALIB/.rebuildall-cvsupdate"
+	set CVSUPDATE=yes
+    endif
+    if (-f "$BETALIB/.rebuildall-rcmupdate") then
+	rm -f "$BETALIB/.rebuildall-rcmupdate"
+	set RCMUPDATE=yes
+    endif
+
     if ( $CVSUPDATE == "yes" ) then
         echo "rebuildall.sh: Doing mbs_cvsupdate -u." >>& $LOG
         mbs_cvsupdate -u >>& $LOG
