@@ -232,7 +232,9 @@ extern void AOACheckObjectSpecial(Object *);
 extern Object * NewCopyObject(Object *, Object **);
 
 /* GC/stack.c */
+extern void DoStackCell(Object **theCell,Object *theObj);
 extern void ProcessStackObj(StackObject *, CellProcessFunc func);
+extern void GeneralProcessStack(CellProcessFunc func);
 extern void ProcessStack(void);
 #ifdef NEWRUN
 extern long WindBackSP(long SP, Object *obj, long PC);
