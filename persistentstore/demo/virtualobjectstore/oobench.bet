@@ -1,0 +1,240 @@
+ORIGIN '~beta/basiclib/betaenv';
+
+INCLUDE '~beta/basiclib/random';
+INCLUDE '~beta/basiclib/numberio';
+INCLUDE '~beta/persistentstore/virtualobjectstore';
+INCLUDE 'part';
+INCLUDE 'parttable';
+
+---lib:attributes---
+gettimestampdouble: external
+  (# now:@Real;
+  exit now
+  #);
+
+--- program: descriptor ---
+
+(# PS: @persistentstore
+     (# allowLazyFetch::<TrueObject;             
+        maxcountonDanglerHit::(# do 500->value#);
+        onDanglerhit::< (# do  #);
+     #);
+   dbName: ^text;
+   nparts: @integer;
+   pointfivepercent: @integer;
+   onepercent: @integer;
+   PartTbl:^PartTable;
+   p: ^part;
+   c:^connection;
+   topart: ^part;
+   partid: @integer;
+   topartid: @integer;
+   starttime, endtime: @Real
+     
+do 'Benchmark for persistent store' -> putline;
+   
+   'Enter persistent store name: ' -> puttext; 
+   keyboard.getline -> dbName[];
+   (*open database with name dbName*)
+   'Initialize the database'->putline;
+   dbName[] -> PS.openwrite;
+
+   'Get table'->putline;
+   
+   ('PartTbl', PartTable##) -> PS.get -> PartTbl[];
+   
+   'DB open finished.'->putline; 
+   PartTbl.size->nparts;
+   'size: '->puttext; nparts->putint; newline;
+   Loop: cycle
+     (# input:^text;
+        nullprocedure:
+          (# x,y: @integer;
+             type:^text;
+          enter (x,y,type[])
+          do ;
+          #);
+        
+        lookup:
+          (# nlookups: @integer;
+             randompartids: [1] @integer;
+             partid: @integer;
+             i: @integer;
+             p:^part;
+          do gettimestampdouble -> startTime;
+             
+             1000->nlookups;
+             nlookups->randompartids.new;
+             
+             'Generating random ids'->putline;
+             (for i:nlookups repeat
+                  (1,nparts)->ignuin->randompartids[i];
+             for);
+             
+             'Looking up 1000 objects'->putline;
+             (for i:nlookups repeat
+                  randompartids[i]->partid;
+                  partid->PartTbl.findIndexed
+                  (# predicate::< (# do (current.id=partid)->value#)
+                  #)->p[];
+                  (p.x,p.y,p.type[])->nullprocedure;
+             for);
+             'Lookup finished.'->putline;
+             gettimestampdouble -> endTime;
+             newline;
+             'Used time in seconds :'->puttext;
+             (endtime-starttime)->putreal;
+             newline;
+             
+          #);
+        traverse:
+          (# maxlevel: @integer;
+             randompartid: @integer;
+             count: @integer; (* number of nodes visited *)
+             direction: ^text;
+             p:^part;
+             forward: 
+               (# level: @integer;
+                  p:^part;
+               enter (p[],level)
+               do (p.x,p.y,p.type[])->nullprocedure;
+                  count+1->count;
+                  (if (level<maxlevel) then
+                      level+1->level;
+                      p.to.scan
+                      (# 
+                      do (current.p[], level)->&forward;
+                      #);
+                  if)
+               #);
+             reverse: 
+               (# level: @integer;
+                  p:^part;
+               enter (p[],level)
+               do (p.x,p.y,p.type[])->nullprocedure;
+                  count+1->count;
+                  (if (level<maxlevel) then
+                      level+1->level;
+                      p.from.scan(# do (current[], level)->&reverse#)
+                  if);
+               #);
+          enter direction[]
+          do
+             gettimestampdouble -> startTime;
+             7->maxlevel;
+             (1,nparts)->ignuin->randompartid;
+             randompartid->PartTbl.findIndexed
+             (# predicate::<
+                  (# do                                     
+                     (current.id=randompartid)->value
+                  #)
+             #)->p[];
+             (if 'forward'->direction.equal then
+                 (p[],0)->forward;
+                 'Nodes visisted: '->puttext; count->putint;newline;       
+              else
+                 (* cpuTime->starttime;        *)
+                 (p[],0)->reverse;;
+                 'Nodes visisted: '->puttext; count->putint;newline;       
+             if);
+             gettimestampdouble -> endTime;
+             newline;
+             'Used time in seconds :'->puttext;
+             (endtime-starttime)->putreal;
+             newline;
+             
+          #);
+        insert:
+          (# ninsertions: @integer;
+             c:^connection;
+             topart:^part;
+             p:^part;
+             i,j: @integer;
+             topartid: @integer;
+             types:@typenames;
+             months:@monthnames;
+             monthid:@integer;
+          do  gettimestampdouble -> startTime;
+             100->ninsertions;
+             'Inserting'->puttext;
+             types.init;
+             months.init;
+             (nparts div 100)->onepercent;;
+             (for i:ninsertions repeat
+                  (if ((i mod 10)=0) 
+                      then  '.'->puttext;
+                  if);
+                  &part[]->p[];
+                  p.init;
+                  (i+nparts) -> p.id; 
+                  (1,10)->ignuin->types->p.type;
+                  (0,99999)->ignuin->p.x;
+                  (0,99999)->ignuin->p.y;
+                  
+                  (1,12)->ignuin->monthid->months->p.build.month;
+                  (if true
+                   // ((monthid = 4) or (monthid = 6) or (monthid = 9) or (monthid = 11))
+                      then  (1,30)->ignuin->p.build.day;
+                   // (monthid = 2) then (1,28)->ignuin->p.build.day;
+                   else (1,31)->ignuin->p.build.day;
+                  if);
+                  (1986,1996)->ignuin->p.build.year;
+                  
+                  (for j:3 repeat
+                       &connection[]->c[];
+                       (1,10)->ignuin->types->c.type;
+                       (0,99999)->ignuin->c.length;
+                       
+                       (if (((1,10)->ignuin)>1) then
+                           (nparts-((1,onepercent)->ignuin)-1)->topartid; 
+                        else
+                           (1,nparts)->ignuin->topartid;  
+                       if);
+                       
+                       topartid->PartTbl.findIndexed
+                       (# predicate::<
+                            (# do
+                               (current.id=topartid)->value
+                            #)
+                       #)->topart[];
+                       topart[]->c.p[];
+                       p[]->c.p.from.append;
+                       c[]->p.to.append;
+                  for);
+                  (p.x,p.y,p.type[])->nullprocedure;
+                  p[]->PartTbl.insert;
+             for);
+             '\nUpdating the database'->putline;
+             PS.checkpoint;
+             gettimestampdouble -> endTime;
+             newline;
+             'Used time in seconds :'->puttext;
+             (endtime-starttime)->putreal;
+             newline;
+          #);
+        quit:
+          (# 
+          do PS.close;
+             leave Loop;
+          #);
+        
+     do ' The OO1 benchmark'->putline;
+        'Enter l for LOOKUP'->putline;  
+        'Enter t for TRAVERSAL'->putline;
+        'Enter r for REVERSE TRAVERSAL'->putline;
+        'Enter i for INSERT'->putline;
+        'Enter q to QUIT'->putline;
+        keyboard.getline->input[];
+        (if 1->input.inxGet->ascii.lowCase
+         //'l' then lookup
+         //'t' then 'forward'->traverse
+         //'r' then 'reverse'->traverse
+         //'i' then insert; restart Loop
+         //'q' then quit
+         else restart Loop
+        if);
+     #);
+#)         
+
+
+

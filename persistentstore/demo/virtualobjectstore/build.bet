@@ -1,0 +1,144 @@
+(* Benchmark for Mjolner persistent store
+ * ======================================
+ * 
+ * Originally developed by Johanna Wiederhold;
+ * modified by Ole Lehrmann Madsen
+ * 
+ * A connected graph with a specific number of nodes
+ * is constructed and stored in a persistent store.
+ * For details see the Thesis by JW.
+ * 
+ * Input: number of nodes in graph.
+ *        Typical values: 500, 1000, 1500, 2000, ...
+ * 
+ * Output is:
+ * - time after creating the graph
+ * - time after creating the graph and making a PS.checkpoint;
+ *   this is the time that should be compared with other systems
+ * - time after PS.close
+ *)
+
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/basiclib/random';
+INCLUDE '~beta/basiclib/numberio';
+INCLUDE '~beta/persistentstore/virtualobjectstore';
+INCLUDE 'part';
+INCLUDE 'parttable';
+
+---lib:attributes---
+gettimestampdouble: external
+  (# now:@Real;
+  exit now
+  #);
+
+--- program: descriptor ---
+(# PS:@persistentstore;
+   PartTbl:^PartTable;       
+   dbName: ^text;
+   nparts: @integer;
+   pointfivepercent: @integer;
+   onepercent: @integer;
+   
+   p: ^part;
+   c:^connection;
+   topart: ^part;
+   partid: @integer;
+   topartid: @integer;
+   monthid:@integer;
+   types: @typenames;
+   months: @monthnames;
+   starttime, endtime: @Real;
+   j:@integer;
+
+do 'Benchmark for persistent store\n' -> puttext;
+   'Enter number of objects to be generated: '->puttext;
+   keyboard.getint -> nparts;
+   gettimestampdouble -> starttime;
+   'db-' -> dbName[];
+   nparts -> dbName.putint;
+   'Creating persistent store: '->puttext; dbName[] ->putline;
+   dbName[] -> PS.create; 
+   &PartTable[] -> PartTbl[];
+   PartTbl.init;
+   (PartTbl[],'PartTbl') -> PS.put;
+   (nparts div 100)->onepercent;
+   (nparts div 200)->pointfivepercent;
+   types.init;
+   months.init;
+   (* eller PartTable erst zum Schluss persistent machen*)
+   (* eller erst objekter in einem array und zum Schluss einsetzen *)     
+   (* Insert nparts parts persistently into PartTable . *)
+   
+   (*cpuTime -> starttime;
+    systemtime -> formattime ->putline;*)
+   
+   'Generating ' -> puttext; nparts->putint; 
+   ' part objects to be inserted into parttable  '->puttext;
+   (for partid:nparts repeat 
+        (if ((partid mod (nparts div 20))=0) then  
+            '.'->puttext;
+        if);
+        &part[] -> p[]; 
+        p.init;
+        partid -> p.id; 
+        (1,10)->ignuin->types->p.type;
+        (0,99999)->ignuin->p.x;
+        (0,99999)->ignuin->p.y;
+        (1,12)->ignuin->monthid->months->p.build.month;
+        (if true
+         // ((monthid = 4) or (monthid = 6) or (monthid = 9) or (monthid = 11))
+            then  (1,30)->ignuin->p.build.day;
+         // (monthid = 2) then (1,28)->ignuin->p.build.day;
+         else (1,31)->ignuin->p.build.day;
+        if);
+        (1986,1996)->ignuin->p.build.year;
+        (for j:3 repeat
+             &connection[]->c[];
+             (1,10)->ignuin->types->c.type;
+             (0,99999)->ignuin->c.length;
+             c[]->p.to.append;
+        for);
+        p[] -> PartTbl.insert;
+   for);
+   '\nConnecting parts' -> puttext;
+   (* make connections *)
+   
+   (for partid:nparts repeat
+        (if ((partid mod (nparts div 20))=0) then 
+            '.'->puttext;
+        if);
+        partid->PartTbl.findIndexed 
+        (#predicate::< (#do (current.id=partid)->value#);
+        #)->p[];
+        p.to.scan 
+        (# do 
+           (if (((1,10)->ignuin)>1) then 
+               (((1,onepercent)->ignuin)+partid-pointfivepercent-1)->topartid; 
+               (if (topartid < pointfivepercent) then 
+                   topartid+pointfivepercent->topartid;
+               if);
+               (if (topartid > (nparts-pointfivepercent))then
+                   topartid-pointfivepercent->topartid;
+               if)
+            else
+               (1,nparts)->ignuin->topartid;  
+           if);
+           topartid->PartTbl.findIndexed 
+           (#predicate::< (#do (current.id=topartid)->value#); #)->topart[];
+           topart[]->current.p[];
+           p[]->current.p.from.append;
+        #);
+   for);
+   newline;
+   'Persistent store checkpoint'->putline;
+   PS.checkpoint;
+   'Part table updated and stored. ' -> putLine;
+   'Closing persistent store ... ' -> puttext;
+   gettimestampdouble -> endtime;
+   newline;
+   'Used time in seconds :'->puttext;
+   (endtime-starttime)->putreal;
+   newline;
+   PS.close;
+#)
+
