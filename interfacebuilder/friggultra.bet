@@ -1,0 +1,216 @@
+ORIGIN '~beta/guienv/v1.6/guienv';
+INCLUDE 'graphicaleditor/graphicaleditor';
+INCLUDE '~beta/objectbrowser/v2.2/mpsinterface';
+INCLUDE 'prettyprinter/prettyprinter';
+INCLUDE 'dialogs/createdialog';
+INCLUDE 'code/generate';
+
+-- program: Descriptor --
+GUIenv
+(#
+   createSourceFile:
+     (# fileName: ^text;
+        
+        group: ^astInterface.fragmentGroup;
+        frag: ^astInterface.fragmentForm;
+        stripExtension:
+          (# path: ^text;
+             lastDotInx, lastSlashInx: @integer;
+          enter path[]
+          do '.' -> path.findAll (# do inx -> lastDotInx #);
+             MPS.ast.thePathHandler.directoryChar -> path.findAll (# do inx -> lastSlashInx #);
+             (if (lastDotInx > 0) and (lastDotInx > lastSlashInx) then
+                 (lastDotInx, path.length) -> path.delete;
+             if);
+          #);
+        
+        createFragmentGroup:
+          (# name: ^text;
+             group: ^astInterface.fragmentGroup;
+          enter name[]
+          do name[] -> MPS.AST.top.newGroup -> group[];
+          exit group[]
+          #);
+        createFragmentForm:
+          (# name: ^text;
+             frag: ^astInterface.fragmentForm;
+          enter name[]
+          do MPS.betaCFL[] -> MPS.AST.newFragmentForm -> frag[];
+             name[] -> frag.name;
+          exit frag[]
+          #);
+        
+        astFileName: ^text;
+        betFileName: ^text;
+        gram: @grammar;
+        guienvLocation: (# exit '~beta/guienv/v1.6/guienv' #);
+     enter fileName[]
+     do  fileName[] -> stripExtension;
+        '.ast' -> (fileName.copy).append -> astFileName[];
+        '.bet' -> (fileName.copy).append -> betFileName[];
+        (if (astFileName[] -> entryExists) OR (betFileName[] -> entryExists) then
+            'does already exist' -> putLine;
+         else
+            fileName[] -> createFragmentGroup -> group[];
+            (if group[] <> NONE then
+                'ORIGIN' -> group.prop.addProp
+                (# 
+                do guienvLocation -> addString;
+                #);
+                'guienvLib' -> MPS.betaCFL.newAttributesFrag -> frag[];
+                frag[] -> group.fragmentList.addFragment;
+                group.markAsChanged;
+                (* (MPS.AST[], group[], NONE, betFileName[]) -> prettyprintFragment; *)
+            if);
+        if);
+     exit group[]
+     #);
+   newGraphicalEditor:
+     (# gram: @grammar;
+        name, superName, groupName: ^text;
+        group: ^astInterface.fragmentGroup;
+        frag: ^astInterface.fragmentForm;
+        theAttribute: ^astInterface.beta.attributeDecl;
+        theGraphicalEditor: ^graphicalEditorEnv.graphicalEditor;
+     enter (name[], superName[], groupName[])
+     do groupName[] -> createSourceFile -> group[];
+        group.fragmentList.scan
+        (# theAttributesForm: ^astInterface.beta.attributesForm;
+           theAttributes: ^astInterface.beta.attributes;
+        do (if current.type = MPS.AST.formType then
+               current.open -> frag[];
+               frag.root[] -> theAttributesForm[];
+               theAttributesForm.getAttributes -> theAttributes[];
+               (# son1: ^mps.ast.ast;
+                  doReplace: @boolean;
+                  super: ^astInterface.beta.patternDecl;
+               do
+                  (frag[], name[], superName[]) -> mps.betacfl.newPatternAttribute -> theAttribute[];
+                  (if theAttributes.noOfsons = 1 then
+                      1 -> theAttributes.get -> son1[];
+                      (if son1.kind = mps.ast.kinds.optional then
+                          true -> doReplace;
+                      if);
+                  if);
+                  (if doReplace then
+                      (1, theAttribute[]) -> theAttributes.put;
+                   else
+                      theAttribute[] -> theAttributes.append;
+                  if);
+                  &theGraphicalEditorEnv.graphicalEditor[] -> theGraphicalEditor[];
+                  theGraphicalEditor.open;
+                  theAttribute[] -> theGraphicalEditor.new;
+                  (if doReplace then
+                      (true, frag[], son1[], theAttribute[])
+                        -> theFragServer.notifyAstReplaced; 
+                   else
+                      (true, frag[], theAttributes[], theAttributes.noOfSons - 1) 
+                        -> theFragServer.notifyListElementInserted;
+                  if);
+               #);
+           if);
+        #);
+     #);
+   
+   mainWindow: @window
+     (#
+        open:: 
+          (# 
+          do 
+             'Create' -> title;
+             (280,40)->size;
+             newButton.open;
+             openBtn.open;
+             quitButton.open;
+             'Frigg: Mjolner BETA Interfacebuilder'->Title;
+             
+          #);
+        close::  (#  do Terminate;  #);
+        newButton: @pushButton
+          (# eventHandler::
+               (# onMouseUp::
+                    (# theCreateDialog: @createDialog
+                         (# 
+                            onOK::
+                              (# 
+                              do (name[], superName[], groupName[]) -> newGraphicalEditor;
+                                 close;
+                              #);
+                            onCancel:: (# do close #);
+                         #);
+                       groups, classes: @textList;
+                       defaultName: ^text;
+                    do groups.init;
+                       classes.init;
+                       'window1' -> defaultName[];
+                       defaultName[] -> groups.append;
+                       'window' -> classes.append;
+                       (defaultName[], classes[], groups[]) -> theCreateDialog.run;
+                    #);
+               #);
+             open::<
+               (# 
+               do
+                  (80,20)->size;
+                  (10,10)->position;
+                  'New...'->label;
+                  
+               #)
+          #);
+        openBtn: @pushButton
+          (#
+             open::<
+               (# 
+               do
+                  (80,20)->size;
+                  (100,10)->position;
+                  'Open...'->label;
+                  
+               #)
+          #);
+        quitButton: @pushButton
+          (#
+             open::<
+               (# 
+               do
+                  (80,20)->size;
+                  (190,10)->position;
+                  'Quit'->label;
+                  
+               #)
+          #)
+     #);
+   MPS: @mpsInterface (#  #);
+   theFragServer: @fragmentServer
+     (#
+        subscribe::  (#  #);
+        notifyAstReplaced::  (#  #);
+        notifyListElementInserted::  (#  #);
+        notifyAstReplacedSequence::  (#  #);
+        notifyListElementsDeleted::  (#  #);
+        notifyListElementsReplaced::  (#  #);
+        
+     #);
+   pretty: @MPS.AST.prettyPrinter;
+   theGraphicalEditorEnv: @graphicalEditorEnv
+     (#
+        save::  (#  #);
+        openAstEditor::  (#  #);
+        autoSaveGroup::  (#  #);
+        onGroupOpen::  (#  #);
+        saveFragmentGroup::  (#  #);
+        onGroupChanged::  (#  #);
+        onGroupSaved::  (#  #);
+        
+     #);
+   
+do
+   MPS.init;
+   theFragServer.init;
+   MPS.betaCfl[]->pretty.init;
+   pretty[]->objectPool.put;
+   (theFragServer[],MPS.AST[],MPS.betaCfl[],pretty[])
+     ->theGraphicalEditorEnv.init;
+   mainWindow.open;
+#)  
+
