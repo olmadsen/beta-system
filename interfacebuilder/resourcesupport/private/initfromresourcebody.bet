@@ -1,0 +1,135 @@
+ORIGIN '../initfromresource';
+MDBODY mac 'macintosh/initfromresource_macbody'
+       ppc 'macintosh/initfromresource_macbody'
+       nti 'winnt/initfromresource_ntibody'
+       default 'X11/initfromresource_X11body';
+INCLUDE '../../atom/atom';
+INCLUDE '~beta/datastructures/v0.1/map';
+INCLUDE '~beta/datastructures/v0.1/intmap';
+INCLUDE '~beta/guienv/v1.3.1/controls';
+-- guienvLib: attributes --
+
+resourceStore: intMap
+  (# element:: tableAtom;
+     init::
+       (# resources: ^listAtom;
+       enter resources[]
+       do resources.storage.scan
+          (# ID: ^intAtom;
+          do 'id' -> (current.asTableAtom).lookup -> ID[];
+             (ID, current[]) -> put;
+          #);
+       #);
+  #);
+
+resourceDB:
+  (#
+     init:
+       (# theStream: ^stream;
+          parser: @atomParser;
+          theResourceStoreList: ^listAtom;
+       enter theStream[]
+       do theStream[] -> parser.init;
+          parser.readAtom -> theResourceStoreList[];
+          (if theResourceStoreList[] <> none then
+              theResourceStoreList[] -> initDatabase;
+          if);
+       #);
+     initDatabase:
+       (# theResourceStoreList: ^listAtom;
+       enter theResourceStoreList[]
+       do storage.init;
+          theResourceStoreList.storage.scan
+          (# name: ^textAtom;
+             resources: ^listAtom;
+             theResourceStore: ^resourceStore;
+             currentTable: ^tableAtom;
+          do current.asTableAtom -> currentTable[];
+             'name' -> currentTable.lookup -> name[];
+             'value' -> currentTable.lookup -> resources[];
+             &resourceStore[] -> theResourceStore[];
+             resources[] -> theResourceStore.init;
+             (name, theResourceStore[]) -> storage.insert;
+          #);
+       #);
+     get:
+       (# name: ^text;
+          theResourceStore: ^resourceStore;
+       enter name[]
+       do name[] -> storage.lookup -> theResourceStore[];
+       exit theResourceStore[]
+       #);
+     storage: @textMap
+       (# element:: resourceStore;
+       #);
+  #);
+
+getResourceDB: objectPool.get
+  (# type:: resourceDB;
+     init::
+       (# 
+       <<SLOT getResourceDBInit: doPart>>
+       #);
+  #);
+
+getResources:
+  (# storeName: ^text;
+     ID: @integer;
+     resources: ^tableAtom;
+  enter (storeName[], ID)
+  do (# theResourceDB: ^resourceDB;
+        theResourceStore: ^resourceStore;
+     do getResourceDB -> theResourceDB[];
+        (if theResourceDB[] <> none then
+            storeName[] -> theResourceDB.get -> theResourceStore[];
+            (if theResourceStore[] <> none then
+                ID -> theResourceStore.get -> resources[];
+            if);
+        if);
+     #)
+  exit resources[]
+  #);
+
+
+-- windowLib: attributes --
+
+initWindowItem:
+  (# type:< windowItem;
+     obj: ^type;
+     resources: ^tableAtom;
+     width, height: ^intAtom;
+     x, y: ^intAtom;
+  enter (resources[], obj[])
+  do 'x' -> resources.lookup -> x[];
+     'y' -> resources.lookup -> y[];
+     'width' -> resources.lookup -> width[];
+     'height' -> resources.lookup -> height[];
+     ((x, y), (x + width, y + height)) -> obj.frame;
+     inner;
+  #);
+initButton: initWindowItem
+  (# type::< button;
+     theLabel: ^textAtom;
+  do 'label' -> resources.lookup -> thelabel[];
+     theLabel -> obj.label;
+  #);
+
+-- windowInitFromResource: doPart --
+do (# resources: ^tableAtom;
+      width, height: ^intAtom;
+   do (storeName[], ID) -> getResources -> resources[];
+      'width' -> resources.lookup -> width[];
+      'height' -> resources.lookup -> height[];
+      (width, height) -> size;
+   #);
+   
+-- windowItemInitFromResource: doPart --
+do (# resources: ^tableAtom;
+   do (storeName[], ID) -> getResources -> resources[];
+      (if true 
+       //this(windowItem)## <= button## then
+          (resources[], this(windowItem)[]) -> initButton;
+       else
+          (resources[], this(windowItem)[]) -> initWindowItem;
+      if);
+   #)

@@ -1,18 +1,19 @@
-ORIGIN '~beta/editor/v5.0/ymersiflib';
-BODY '~beta/editor/v5.0/private/compiler';
+ORIGIN '~beta/editor/v5.0.1/ymersiflib';
+BODY '~beta/editor/v5.0.1/private/compiler';
+BODY '~beta/editor/v5.0.1/private/nouser';
 
 INCLUDE 'graphicaleditor/graphicaleditor';
 INCLUDE '~beta/guienv/v1.3.1/utils/getfile';
 INCLUDE 'mpsstuff/mpsutils';
-INCLUDE 'objectsstore/getresourcefile';
 INCLUDE 'dialogs/promptfortextdialog';
 INCLUDE 'code/generate';
+INCLUDE 'resourcesupport/parameters';
 (* INCLUDE 'preferences/preferences'; *)
 INCLUDE 'guienvstuff/getpreferencefile';
 INCLUDE 'editorenv/prettyprinter';
 INCLUDE 'utils/catchallfile';
 INCLUDE 'buildermenu';
-INCLUDE '~beta/pretty/v4.9.1/pplib';
+INCLUDE '~beta/pretty/v5.0.1/pplib';
 
 
 -- program: descriptor --
@@ -265,55 +266,78 @@ fragmentBrowser
           #);
      #);
    
-   
+   compileResources:
+     (# root: ^astInterface.fragmentGroup;
+        fileExists: booleanValue
+          (# fileName: ^text;
+             anEntry: @diskEntry;
+          enter fileName[]
+          do fileName[] -> anEntry.path;
+             l: anEntry.exists
+             (# error::
+                  (# 
+                  do leave l;
+                  #);
+             #) -> value;
+          #);
+        addResourceFile:
+          (# resourceFileName: ^text;
+             
+          enter resourceFileName[]
+          do adding:
+               (# theFile: @catchAllFile
+                    (# failure::
+                         (# 
+                         do leave adding;
+                         #);
+                    #);
+                  parser: @atomParser;
+                  ignoreAtom: ^text;
+                  version: @integer;
+                  parameterList: ^atom;
+                  resourceEntry: ^tableAtom;
+                  nameAtom: ^textAtom;
+               do resourceFileName[] -> theFile.name;
+                  theFile.openRead;
+                  theFile.getAtom -> ignoreAtom[];
+                  theFile.getInt -> version;
+                  (if version = 2 then
+                      theFile[] -> parser.init;
+                      parser.readAtom -> parameterList[];
+                      &tableAtom[] -> resourceEntry[];
+                      resourceEntry.storage.init;
+                      &textAtom[] -> nameAtom[];
+                      theFile.entry.path.name.prefix -> nameAtom;
+                      ('name', nameAtom[]) -> resourceEntry.define;
+                      ('value', parameterList[]) -> resourceEntry.define;
+                      resourceEntry[] -> theListAtom.storage.append;
+                  if);
+                  theFile.close;
+               #);
+          #);
+        theListAtom: ^listAtom;
+        printer: @atomPrinter;
+        output: @file;
+     enter root[]
+     do &listAtom[] -> theListAtom[];
+        theListAtom.storage.init;
+        machineType -> MPS.dg.targetMachine;
+        machineType -> MPS.dg.targetDirectory;
+        root.name -> MPS.dg.scanExtent
+        (# resourceFileName: ^text;
+        do '.res' -> (current.name).copyAppend -> resourceFileName[];
+           (if resourceFileName[] -> fileExists then
+               resourceFileName[] -> addResourceFile;
+           if);
+        #);
+        'resources' -> output.name;
+        output.openWrite;
+        output[] -> printer.init;
+        theListAtom[] -> printer.printAtom;
+        output.close;
+     #);
    ymerBrowserWindow::
      (# 
-        (*
-         * Resource file handling
-         *)
-        
-        theObjectStore: @objectDataStore;
-        objectStoreInited: @boolean;
-        resourceFileName: ^text;
-        
-        getResourceFile:
-          (# 
-          do 'res' -> getFile -> resourceFileName[];
-             (if resourceFileName[] <> none then
-                 theObjectStore.init;
-                 resourceFileName[] -> theObjectStore.readFile;
-                 true -> objectStoreInited;
-             if);
-          #);
-        createResourceFile:
-          (# 
-          do 'Resource file:' -> createFile -> resourceFileName[];
-             (if resourceFileName[] <> none then
-                 '.res' -> resourceFileName.append;
-                 theObjectStore.init;
-                 resourceFileName[] -> theObjectStore.readFile;
-                 true -> objectStoreInited;
-             if);
-          #);
-        ensureResourceFile: booleanValue
-          (# 
-          do (if not objectStoreInited then
-                 (if resourceFileName[] = none then
-                     (none, 'You must create or open a resourcefile', '') -> noteUser;
-                     false -> value;
-                  else
-                     theObjectStore.init;
-                     resourceFileName[] -> theObjectStore.readFile;
-                     true -> objectStoreInited;
-                     true -> value;
-                 if);
-              else
-                 true -> value;
-             if);
-          #);
-        
-        (* End Resource file handling *)
-        
         (*
          * Menubar
          *)
@@ -369,10 +393,7 @@ fragmentBrowser
                               (# group: ^astInterface.fragmentGroup;
                                  result: @boolean;
                               do cfe.cs.node.frag.father -> group[];
-                                 ensureResourceFile -> result;
-                                 (if result then
-                                     cfe.cs.node[] -> editWindow;
-                                 if);
+                                 cfe.cs.node[] -> editWindow;
                               #);
                          #);
                        open::
@@ -406,10 +427,7 @@ fragmentBrowser
                                          (if frag[] <> None then
                                              (if frag.category = mps.betaCfl.attributesForm then
                                                  frag.father -> group[];
-                                                 ensureResourceFile -> result;
-                                                 (if result then
-                                                     frag[] -> createWindow;
-                                                 if);
+                                                 frag[] -> createWindow;
                                              if);
                                          if);
                                      if);
@@ -421,51 +439,31 @@ fragmentBrowser
                          do 'Create window...' -> name;
                          #);
                     #);
-                  resourceFileItem: @builderItem
+                  compileResourcesItem: @builderItem
                     (# eventHandler::
                          (# onStatus::
-                              (# t: ^text;
-                              do 
-                                 'Resourcefile: ' -> t[];
-                                 (if resourceFileName[] <> none then
-                                     resourceFileName[] -> getName -> t.append;;
-                                  else
-                                     'NONE' -> t.append;;
+                              (# 
+                              do false -> value;
+                                 (if cfe[] <> none then
+                                     (if cfe.frag[]<>none then
+                                         true -> value;
+                                     if);
                                  if);
-                                 t[] -> name;
-                              #);
-                         #);
-                    #);
-                  createResourceFileItem: @builderItem
-                    (# eventHandler::
-                         (# onStatus::
-                              (# 
-                              do not objectStoreInited  -> value;
                               #);
                             onSelect::
-                              (#
-                              do createResourceFile;
+                              (# frag: ^astInterface.fragmentForm;
+                              do cfe.frag[] -> frag[];
+                                 (if 'program' -> (frag.name).equalNCS then
+                                     frag.father -> compileResources;
+                                  else
+                                     'not program' -> putLine;
+                                 if);
                               #);
+                            
                          #);
                        open::
                          (# 
-                         do 'New resourcefile...' -> name;
-                         #);
-                    #);
-                   getResourceFileItem: @builderItem
-                    (# eventHandler::
-                         (# onStatus::
-                              (# 
-                              do not objectStoreInited  -> value;
-                              #);
-                            onSelect::
-                              (#
-                              do getResourceFile;
-                              #);
-                         #);
-                       open::
-                         (# 
-                         do 'Open resourcefile...' -> name;
+                         do 'Compile resources' -> name;
                          #);
                     #);
                   open::
@@ -478,9 +476,7 @@ fragmentBrowser
                        openGraphicalEditor.open;
                        newGraphicalEditor.open;
                        addSeparator;
-                       resourceFileItem.open;
-                       createResourceFileItem.open;
-                       getResourceFileItem.open;
+                       compileResourcesItem.open;
                     #);
                #);
              open::
@@ -537,7 +533,7 @@ fragmentBrowser
                       'false' -> putText;
                   if);
                #);
-          do theObjectStore.save;
+          do 
              browser.edenv.saveAll;
              MPS.AST.top.groupTable.scan
              (# 
@@ -585,12 +581,19 @@ fragmentBrowser
         editWindow:
           (# theAttributeDecl: ^astInterface.ast;
              theGraphicalEditor: ^graphicalEditorEnv.graphicalEditor;
+             theDocument: ^graphicalEditorEnv.document;
+             fg: ^astInterface.fragmentGroup;
           enter theAttributeDecl[]
-          do 
+          do theAttributeDecl.frag.father -> fg[];
+             fg.name -> theGraphicalEditorEnv.findDocument -> theDocument[];
+             (if theDocument[] = none then
+                 &theGraphicalEditorEnv.document[] -> theDocument[];
+                 fg.name -> theDocument.open;
+             if);
              theAttributeDecl[] -> theGraphicalEditorEnv.find -> theGraphicalEditor[];
              (if theGraphicalEditor[] = none then
                  &theGraphicalEditorEnv.graphicalEditor[] -> theGraphicalEditor[];
-                 theObjectStore[] -> theGraphicalEditor.theObjectStore[];
+                 theDocument[] -> theGraphicalEditor.theDocument[];
                  theGraphicalEditor.open;
                  theAttributeDecl[] -> theGraphicalEditor.init;
               else
@@ -600,9 +603,17 @@ fragmentBrowser
         createGUI:
           (# theAttribute: ^astInterface.beta.attributeDecl;
              theGraphicalEditor: ^graphicalEditorEnv.graphicalEditor;
+             theDocument: ^graphicalEditorEnv.document;
+             fg: ^astInterface.fragmentGroup;
           enter theAttribute[]
-          do  &theGraphicalEditorEnv.graphicalEditor[] -> theGraphicalEditor[];
-             theObjectStore[] -> theGraphicalEditor.theObjectStore[];
+          do theAttribute.frag.father -> fg[];
+             fg.name -> theGraphicalEditorEnv.findDocument -> theDocument[];
+             (if theDocument[] = none then
+                 &theGraphicalEditorEnv.document[] -> theDocument[];
+                 fg.name -> theDocument.open;
+             if);
+             &theGraphicalEditorEnv.graphicalEditor[] -> theGraphicalEditor[];
+             theDocument[] -> theGraphicalEditor.theDocument[];
              theGraphicalEditor.open;
              theAttribute[] -> theGraphicalEditor.new;
           #);
@@ -627,34 +638,38 @@ fragmentBrowser
              #);
           #);
         createSourceFile:
-          (# fileName: ^text;
-             group: ^astInterface.fragmentGroup;
-             theLink: ^astInterface.fragmentLink;
-             frag: ^astInterface.fragmentForm;
+          (# theDocument: ^graphicalEditorEnv.document;
+             fileName: ^text;
           do 'File name: ' -> createFile -> fileName[];
-             (if fileName[] <> none then
-                 fileName[] -> MPS.AST.top.newGroup -> group[];
-                 '~beta/guienv/v1.3.1/guienvall' -> group.originProperty;
-                 'INCLUDE' -> group.prop.addProp
-                 (# 
-                 do '~beta/interfacebuilder/v1.2/objectsstore/initfromresource' -> addString;
-                 #);
-                 MPS.AST.newfragmentLink -> theLink[];
-                 '~beta/interfacebuilder/v1.2/objectsstore/initfromresource' -> theLink.name;
-                 'initfromresource' -> theLink.localName[];
-                 theLink[] -> group.fragmentList.addfragment;
-                 'guienvLib' -> MPS.betaCfl.newAttributesFrag -> frag[];
-                 frag[] -> group.fragmentList.addFragment;
-                 group[] -> saveGroup;
-                 fileName[]->ymerBrowser.appendProject; ymerBrowser.appendDone;
-             if);
+             l:
+               (if fileName[] <> none then
+                   &theGraphicalEditorEnv.document[] -> theDocument[];
+                   fileName[] -> theDocument.new
+                   (# 
+                      error::
+                        (# 
+                        do msg[] -> putLine;
+                           leave l;
+                        #);
+                   #);
+                   theDocument.interfaceGroup.markAsChanged;
+                   theDocument.bodyGroups.scan
+                   (# 
+                   do current.markAsChanged;
+                      current.name -> ymerBrowser.appendProject; 
+                   #);
+                   theDocument.theParameterStore.save;
+                   theDocument.interfaceGroup.name -> ymerBrowser.appendProject; 
+                      
+                   ymerBrowser.appendDone;
+               if);
           #);
      #);
    init::
      (# 
      do ymerBrowser.initCompiler;
         ('Sif: Known Bugs and Inconveniences',
-        '~beta/editor/v5.0/doc/TODO')-> helpDocument;
+        '~beta/editor/v5.0.1/doc/TODO')-> helpDocument;
         (* ('mjolner', 'Interfacebuilder') -> getPreferencesSection  -> prefs[]; *)
         theFragServer.init;
         (theFragServer[], MPS.AST[], MPS.betaCfl[], pretty[]) -> theGraphicalEditorEnv.init;

@@ -2,11 +2,30 @@ ORIGIN '../atom';
 
 -- tableAtomDefine: doPart --
 do (# elm: ^storage.element;
-   do &storage.element[] -> elm[];
+   do search: storage.scan
+        (# 
+        do (if current.key[] -> key.equalNCS then
+               current[] -> elm[];
+               leave search;
+           if);
+        #);
+      (if elm[] = none then
+          &storage.element[] -> elm[];
+          elm[] -> storage.insert;
+      if);
       key[] -> elm.key[];
       value[] -> elm.value[];
-      elm[] -> storage.insert;
    #);
+   
+-- tableAtomLookup: doPart --
+do search: storage.scan
+   (# 
+   do (if current.key[] -> key.equalNCS then
+          current.value[] -> value[];
+          leave search;
+      if);
+   #);
+   
 -- atomParserInit: doPart --
 do nextCH;
    nextToken;
@@ -21,6 +40,10 @@ do (if private.token
        readtextAtom -> theAtom[];
     //number then
        readIntAtom -> theAtom[];
+    //trueToken then
+       true -> readBool -> theAtom[];
+    //falseToken then
+       false -> readBool -> theAtom[];
     else
        'error' -> putLine;
    if);
@@ -88,6 +111,15 @@ readIntAtom:
      nextToken;
   exit theIntAtom[]
   #);
+readBool:
+  (# theBoolAtom: ^boolAtom;
+     value: @boolean;
+  enter value
+  do &boolAtom[] -> theBoolAtom[];
+     value -> theBoolAtom;
+     nextToken;
+  exit theBoolAtom[]
+  #);
 dumpTokens:
   (# 
   do printTokens:
@@ -146,6 +178,8 @@ name: (# exit 6 #);
 number: (# exit 7 #);
 string: (# exit 8 #);
 error: (# exit 9 #);
+trueToken: (# exit 10 #);
+falseToken: (# exit 11 #);
 
 nextCH:
   (# 
@@ -195,7 +229,14 @@ nextToken:
                  restart readName;
              if);
            private.value.reset;
-           name -> tokenID;
+           (if true 
+            //'true' -> private.value.equalNCS then
+               trueToken -> tokenID;
+            //'false' -> private.value.equalNCS then
+               falseToken -> tokenID;
+            else
+               name -> tokenID;
+           if);
         //private.ch -> ASCII.isDigit then
            private.value.clear;
            private.ch -> private.value.put;
@@ -211,6 +252,7 @@ nextToken:
            number -> tokenID;
         //private.ch = '''' then
            nextCH;
+           private.value.clear;
            readString:
              (if true
               //private.ch = EOS then
@@ -239,12 +281,20 @@ nextToken:
 printTextAtom:
   (# theTextAtom: ^textAtom;
   enter theTextAtom[]
-  do theTextAtom -> theStream.putText;
+  do '''' -> theStream.put;
+     theTextAtom -> theStream.putText;
+     '''' -> theStream.put;
   #);
 printBoolAtom:
   (# theBoolAtom: ^boolAtom;
   enter theBoolAtom[]
-  do 
+  do (if theBoolAtom
+      //true then
+         'True' -> theStream.putText;
+      //false then
+         'False' -> theStream.putText;
+     if);
+         
   #);
 printIntAtom:
   (# theIntAtom: ^intAtom;
@@ -254,26 +304,29 @@ printIntAtom:
 printListAtom:
   (# theListAtom: ^listAtom;
   enter theListAtom[]
-  do '(' -> theStream.put;
+  do private.indent + 1 -> private.indent;
+     '(' -> theStream.put;
      theListAtom.storage.scan
      (# beenHere: @boolean;
      do (if beenHere then
-            ' ' -> theStream.put;
+            printNewLine;
          else
             true -> beenHere;
         if);
         current[] -> printAtom;
      #);
      ')' -> theStream.put;
+     private.indent - 1 -> private.indent;
   #);
 printTableAtom:
   (# theTableAtom: ^tableAtom;
   enter theTableAtom[]
-  do '[' -> theStream.put;
+  do private.indent + 2 -> private.indent;
+     '[ ' -> theStream.putText;
      theTableAtom.storage.scan
      (# beenHere: @boolean;
      do (if beenHere then
-            ' ' -> theStream.put;
+            printNewLine;
          else
             true -> beenHere;
         if);
@@ -281,7 +334,16 @@ printTableAtom:
         ': ' -> theStream.putText;
         current.value[] -> printAtom;
      #);
-     ']' -> theStream.put;
+     ' ]' -> theStream.putText;
+     private.indent - 2 -> private.indent;
+  #);
+
+printNewLine:
+  (# 
+  do theStream.newLine;
+     (for private.indent repeat
+          ' ' -> theStream.put;
+     for);
   #);
 
 -- atomPrinterInit: doPart --
@@ -302,7 +364,7 @@ do (if theAtom.type
    if);
    
 -- atomPrinterPrivate: descriptor --
-(# 
+(# indent: @integer;
    
 #)
 

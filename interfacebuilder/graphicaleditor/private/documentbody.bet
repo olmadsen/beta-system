@@ -1,0 +1,144 @@
+ORIGIN '../graphicaleditor';
+INCLUDE '../../mpsstuff/mpsutils';
+INCLUDE '../../code/generate';
+INCLUDE '../../utils/catchallfile';
+INCLUDE 'graphicaleditorprivate';
+INCLUDE '~beta/pretty/v5.0.1/pplib';
+
+-- graphicalEditorEnvLib: attributes --
+saveGroup:
+  (# fg: ^astInterface.fragmentGroup;
+  enter fg[]
+  do saving:
+       (# 
+          theFile: @catchAllFile
+            (# failure::
+                 (# 
+                 do msg[] -> putLine;
+                    leave saving;
+                 #);
+            #);
+          fileName: ^text;
+       do (fg.name).copy -> fileName[];
+          '.bet' -> fileName.append;
+          fileName[] -> theFile.name;
+          theFile.openWrite;
+          (MPS[], fg[], theFile[], none) -> prettyPrintFragment;
+          theFile.close;
+          fg.fragmentList.scan
+          (# frag: ^astInterface.fragmentForm;
+          do (if current.type = MPS.formType then
+                 current.open -> frag[];
+                 frag.recomputeSlotChain;
+             if);
+          #);
+          'doneCheck' -> fg.prop.deleteProp;
+                  fg.markAsChanged;
+       #);
+  #);
+
+-- documentOpen: doPart --
+do l: (# bodyName: ^text;
+         parametersFileName: ^text;
+      do bodyGroups.init;
+         name[] -> MPS.safeOpen -> interfaceGroup[];
+         (if interfaceGroup[] <> none then
+             search: interfaceGroup.scanBodyGroups
+               (# bodyGroup: ^astInterface.fragmentGroup;
+               do  currentFullPath[] -> bodyName[];
+                  bodyName[] -> MPS.safeOpen -> bodyGroup[];
+                  (if bodyGroup[] <> none then
+                      bodyGroup[] -> bodyGroups.insert;
+                   else
+                      'the body cannot be opened' -> error;
+                  if);
+               #);
+             name.copy -> parametersFileName[];
+             '.res' -> parametersFileName.append;
+             &parameterStore[] -> theParameterStore[];
+             parametersFileName[] -> theParameterStore.load
+             (# 
+                error::
+                  (# 
+                  do msg[] -> this(open).error;
+                     leave l;
+                  #);
+             #);
+             this(document)[] -> this(graphicalEditorEnv).private.documents.append;
+          else
+             'the fragmentgroup cannot be opened' -> error;
+         if);
+      #);
+   
+-- documentNew: doPart --
+do (# bodyShortName: ^text;
+      bodyFullPath: ^text;
+      resourceFileName: ^text;
+      theLink: ^astInterface.fragmentLink;
+      frag: ^astInterface.fragmentForm;
+      bodyGroup: ^astInterface.fragmentGroup;
+   do (*
+       * Create the interface fragmentgroup
+       *)
+      bodyGroups.init;
+      name[] -> MPS.top.newGroup -> interfaceGroup[];
+      '~beta/guienv/v1.3.1/guienvall' -> interfaceGroup.originProperty;
+      'INCLUDE' -> interfaceGroup.prop.addProp
+      (# 
+      do '~beta/interfacebuilder/v1.3/resourcesupport/initfromresource' -> addString;
+      #);
+      MPS.newfragmentLink -> theLink[];
+      '~beta/interfacebuilder/v1.3/resourcesupport/initfromresource' -> theLink.name;
+      'initfromresource' -> theLink.localName[];
+      theLink[] -> interfaceGroup.fragmentList.addfragment;
+      'guienvLib' -> betaGram.newAttributesFrag -> frag[];
+      frag[] -> interfaceGroup.fragmentList.addFragment;
+      
+      (*
+       * Create the body fragmentgroup
+       *)
+      
+      interfaceGroup.shortName -> bodyShortName[];
+      'body' -> bodyShortName.append;
+      bodyShortName[] -> interfaceGroup.fullPath -> bodyFullPath[];
+      'BODY' -> interfaceGroup.prop.addProp
+      (# 
+      do bodyShortName[] -> addString;
+      #);
+      bodyFullPath[] -> MPS.top.newGroup -> bodyGroup[];
+      interfaceGroup.shortName -> bodyGroup.originProperty;
+      bodyGroup[] -> bodyGroups.insert;
+      (* 
+       * Create the parameterStore
+       *)
+      
+      &parameterStore[] -> theParameterStore[];
+      '.res' -> name.copyAppend -> theParameterStore.create;
+      
+      this(document)[] -> this(graphicalEditorEnv).private.documents.append;
+   #);
+   
+   
+-- documentSave: doPart --
+do interfaceGroup[] -> saveGroup;
+   bodyGroups.scan
+   (# 
+   do current[] -> saveGroup;
+   #);
+   theParameterStore.save;
+   
+-- graphicalEditorEnvFindDocument: doPart --
+do search: private.documents.scan
+   (# 
+   do (if name[] -> current.name.equalNCS then
+          current[] -> theDocument[];
+          leave search;
+      if);
+   #);
+
+-- documentDefaultBodyGroup: doPart --
+do l: bodyGroups.scan
+   (# 
+   do current[] -> group[];
+      leave l;
+   #);

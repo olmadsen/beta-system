@@ -1,0 +1,223 @@
+ORIGIN '../parameters';
+INCLUDE '../../utils/catchallfile';
+
+-- parametersLib: attributes --
+
+lookup:
+  (# key: ^text;
+     theAtom: ^atom;
+  enter key[]
+  do key[] -> data.lookup -> theAtom[];
+     (if theAtom[] = none then
+         exception
+         (# 
+         do 'parameter = ' -> msg.putText;
+            key[] -> msg.putText;
+            ' is undefined' -> msg.putText;
+         #);
+      else
+         inner;
+     if);
+  #);
+
+typeError:
+  (# key, type: ^text;
+  enter (key[], type[])
+  do exception
+     (# 
+     do 'parameter ' -> msg.putText;
+        key[] -> msg.putText;
+        ' has wrong type - ' -> msg.putText;
+        type[] -> msg.putText;
+        ' expected' -> msg.putText;
+     #);
+  #);
+
+-- parametersType: doPart --
+do 'type' -> getInt -> value;
+
+-- parametersSetID: doPart --
+do ('ID', value) -> setInt;
+
+-- parametersGetID: doPart --
+do 'ID' -> getInt -> value;
+
+-- parametersGetBool: doPart --
+do key[] -> lookup
+   (# theBoolAtom: ^boolAtom;
+   do theAtom.asBoolAtom -> theBoolAtom[];
+      (if theBoolAtom[] = none then
+          (key[], 'bool') -> typeError;
+       else
+          theBoolAtom -> value;
+      if);
+   #);
+
+-- parametersSetBool: doPart --
+do (# theBoolAtom: ^boolAtom;
+   do &boolAtom[] -> theBoolAtom[];
+      value -> theBoolAtom;
+      (key[], theBoolAtom[]) -> data.define;
+   #);
+
+-- parametersGetInt: doPart --
+do key[] -> lookup
+   (# theIntAtom: ^intAtom;
+   do theAtom.asIntAtom -> theIntAtom[];
+      (if theIntAtom[] = none then
+          (key[], 'int') -> typeError;
+       else
+          theIntAtom -> value;
+      if);
+   #);
+
+-- parametersSetInt: doPart --
+do (# theIntAtom: ^intAtom;
+   do &intAtom[] -> theIntAtom[];
+      value -> theIntAtom;
+      (key[], theIntAtom[]) -> data.define;
+   #)
+
+-- parametersGetText: doPart --
+do key[] -> lookup
+   (# theTextAtom: ^textAtom;
+   do theAtom.asTextAtom -> theTextAtom[];
+      (if theTextAtom[] = none then
+          (key[], 'text') -> typeError;
+       else
+          theTextAtom -> value[];
+      if);
+   #);
+-- parametersSetText: doPart --
+do (# theTextAtom: ^textAtom;
+   do &textAtom[] -> theTextAtom[];
+      value[] -> theTextAtom;
+      (key[], theTextAtom[]) -> data.define;
+   #)
+
+-- parametersCopy: doPart --
+do &parameters[] -> theCopy[];
+   &tableAtom[] -> theCopy.data[];
+   theCopy.data.storage.init;
+   data.storage.scan
+   (# 
+   do (current.key[], current.value[]) -> theCopy.data.define;
+   #);
+
+-- parametersSet: doPart --
+do (# theID: @integer;
+   do ID -> theID;
+      data.storage.clear;
+      theCopy.data.storage.scan
+      (# 
+      do (current.key[], current.value[]) -> data.define;
+      #);
+      theID -> ID;
+   #);
+
+-- parameterStoreLoad: doPart --
+do reading:
+     (# theFile: @catchAllFile
+          (# failure::
+               (# 
+               do leave reading;
+               #);
+          #);
+        ignoreAtom: ^text;
+        parser: @atomParser;
+        version: @integer;
+     do fileName.copy -> private.fileName[];
+        fileName[] -> theFile.name;
+        theFile.openRead;
+        theFile.getAtom -> ignoreAtom[];
+        theFile.getInt -> version;
+        (if version
+         //1 then
+            'older version - needs conversion' -> putLine;
+         //2 then
+            theFile[] -> parser.init;
+            parser.readAtom -> private.data[];
+            private.data.storage.scan
+            (# theTableAtom: ^tableAtom;
+               params: ^parameters;
+            do current.asTableAtom -> theTableAtom[];
+               (if theTableAtom[] <> none then
+                   &parameters[] -> params[];
+                   theTableAtom[] -> params.data[];
+                   (private.maxID, params.ID) -> max -> private.maxID;
+                   params[] -> private.parametersList.append;
+                else
+                   leave reading;
+               if);
+            #);
+         else
+            'newer version - cannot handle' -> putLine;
+        if);
+        theFile.close;
+        theFile.entry.path.name.prefix -> private.shortName[];
+     #);
+   
+-- parameterStoreCreate: doPart --
+do creating:
+     (# theFile: @file;
+     do fileName.copy -> private.fileName[];
+        &listAtom[] -> private.data[];
+        private.data.storage.init;
+        private.parametersList.init;
+        0 -> private.maxID;
+        fileName[] -> theFile.name;
+        theFile.entry.path.name.prefix -> private.shortName[];
+     #);
+
+
+-- parameterStoreSave: doPart --
+do writing:
+     (# theFile: @catchAllFile
+          (# failure::
+               (# 
+               do leave writing;
+               #);
+          #);
+        printer: @atomPrinter;
+     do private.fileName[] -> theFile.name;
+        theFile.openWrite;
+        'version: ' -> theFile.putText;
+        2 -> theFile.putInt;
+        theFile.newLine;
+        theFile[] -> printer.init;
+        private.data[] -> printer.printAtom;
+        theFile.close;
+     #);
+
+-- parameterStoreGet: doPart --
+do search: private.parametersList.scan
+     (# 
+     do (if ID = current.ID then
+            current[] -> params[];
+            leave search;
+        if);
+     #);
+
+
+-- parameterStoreNew: doPart --
+do &parameters[] -> params[];
+   &tableAtom[] -> params.data[];
+   params.data.storage.init;
+   ('type', type) -> params.setInt;
+   private.maxID + 1 -> private.maxID;
+   private.maxID -> params.ID;
+   params[] -> private.parametersList.append;
+   params.data[] -> private.data.storage.append;
+   
+-- parameterStoreShortName: doPart --
+do private.shortName.copy -> value[];
+
+-- parameterStorePrivate: descriptor --
+(# data: ^listAtom;
+   fileName: ^text;
+   maxID: @integer;
+   parametersList: @sequence
+     (# element:: parameters;
+     #);
+   shortName: ^text;
+#)
