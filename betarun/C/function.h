@@ -9,6 +9,7 @@ extern void EnlargeMacHeap(char *buf);
 extern long GetBetaCodeStart(void);
 extern long GetBetaCodeEnd(void);
 #endif /* RTDEBUG */
+extern unsigned long address_of_me(void);
 
 /* C/floats.c */
 void SetupFPU(void);

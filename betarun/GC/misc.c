@@ -152,18 +152,17 @@ void Illegal()
 #endif
 
 #ifdef MAC
-
-	{ 
-		extern ExceptionHandler default_exceptionhandler;
-		/* Reinstall original sighandler */
-		
-		if (default_exceptionhandler) {
-			InstallExceptionHandler(default_exceptionhandler);
-		}
-		/* call MacsBug */
-		DebugStr("\pIllegal Called. Type 'g' to return to shell");
-	}
-#endif
+    { 
+      extern ExceptionHandler default_exceptionhandler;
+      /* Reinstall original sighandler */
+      
+      if (default_exceptionhandler) {
+        InstallExceptionHandler(default_exceptionhandler);
+      }
+      /* call MacsBug */
+      DebugStr("\pIllegal Called. Type 'g' to return to shell");
+    }
+#endif /* MAC */
   }
 }
 #endif
@@ -324,16 +323,18 @@ long isInAOA(long x)
 
 GLOBAL(static long gcGiveTime)=0;
 void StartGiveTime(void)
-{   gcGiveTime=1;
+{   
+  gcGiveTime=1;
 #if defined(Mac)
-	gcInbackground = FALSE;
+  gcInbackground = FALSE;
 #endif
-	return;
+  return;
 }
 
 void StopGiveTime(void)
-{   gcGiveTime=0;
-	return;
+{  
+  gcGiveTime=0;
+  return;
 }
 
 
@@ -345,97 +346,96 @@ GLOBAL(static Boolean gcInbackground)=FALSE;
 
 void GiveTime(void)
 {
-	EventRecord 	event;
-	Boolean 		gotEvent;
-	WindowPtr 		thisWindow;
-	short 			part;
-	long 			menuResult;
-	short 			menuID;
-	short 			menuItem;
-	Str255			daName;
-	short			daRefNum;
-	
-	gotEvent = WaitNextEvent(everyEvent, &event, 2, 0);
-	if (gotEvent) {
-		switch (event.what) {
-			case mouseDown:
-				part = FindWindow(event.where, &thisWindow);
-				switch(part) {
-					case inMenuBar:
-						menuResult = MenuSelect(event.where);
-						menuID = HiWord(menuResult);
-						menuItem = LoWord(menuResult);
-						switch(menuID) {
-							case 128: /* Apple Menu */
-								switch(menuItem) {
-									case 1:
-										break;
-									default:
-										GetMenuItemText(GetMenuHandle(128), menuItem, daName);
-										daRefNum = OpenDeskAcc(daName);
-										break;
-								}
-								break;
-						}
-						break;
-					case inSysWindow:
-						SystemClick(&event, thisWindow);
-						break;
-					case inContent:
-						break;
-					case inDrag:
-						break;
-					case inGrow:
-						break;
-					case inGoAway:
-						break;
-					case inZoomIn:
-						break;
-					case inZoomOut:
-						break;
-				}
-				break;
-			case mouseUp:
-				break;
-			case keyDown:
-			case autoKey:
-				break;
-			case activateEvt:
-				break;
-			case updateEvt:
-				thisWindow = (WindowPtr) event.message;
-				BeginUpdate(thisWindow);
-				EndUpdate(thisWindow);
-				break;
-			case diskEvt:
-				break;
-			osEvt:
-				break;
-			kHighLevelEvent:
-				break;
-		}
-	}
-	return;
+  EventRecord   event;
+  Boolean       gotEvent;
+  WindowPtr     thisWindow;
+  short         part;
+  long          menuResult;
+  short         menuID;
+  short         menuItem;
+  Str255        daName;
+  short         daRefNum;
+  
+  gotEvent = WaitNextEvent(everyEvent, &event, 2, 0);
+  if (gotEvent) {
+    switch (event.what) {
+    case mouseDown:
+      part = FindWindow(event.where, &thisWindow);
+      switch(part) {
+      case inMenuBar:
+        menuResult = MenuSelect(event.where);
+        menuID = HiWord(menuResult);
+        menuItem = LoWord(menuResult);
+        switch(menuID) {
+        case 128: /* Apple Menu */
+          switch(menuItem) {
+          case 1:
+            break;
+          default:
+            GetMenuItemText(GetMenuHandle(128), menuItem, daName);
+            daRefNum = OpenDeskAcc(daName);
+            break;
+          }
+          break;
+        }
+        break;
+      case inSysWindow:
+        SystemClick(&event, thisWindow);
+        break;
+      case inContent:
+        break;
+      case inDrag:
+        break;
+      case inGrow:
+        break;
+      case inGoAway:
+        break;
+      case inZoomIn:
+        break;
+      case inZoomOut:
+        break;
+      }
+      break;
+    case mouseUp:
+      break;
+    case keyDown:
+    case autoKey:
+      break;
+    case activateEvt:
+      break;
+    case updateEvt:
+      thisWindow = (WindowPtr) event.message;
+      BeginUpdate(thisWindow);
+      EndUpdate(thisWindow);
+      break;
+    case diskEvt:
+      break;
+    osEvt:
+      break;
+    kHighLevelEvent:
+      break;
+    }
+  }
+  return;
 }
 
 void InitTheCursor(void)   
 { 
-
+  
   if(StandAlone == 0 || gcRotateCursor) InitCursorCtl(0); 
   else {
-  	if (GetResource('acur', 0)) {
-		InitCursorCtl(0); 
-	}
+    if (GetResource('acur', 0)) {
+      InitCursorCtl(0); 
+    }
   }
-  
 }
 
 void RotateTheCursor() 
 {
   if(StandAlone == 0 || gcRotateCursor) SpinCursor(32);
   if (gcGiveTime && StandAlone) {
-  	SpinCursor(32);
-  	GiveTime();
+    SpinCursor(32);
+    GiveTime();
   }
 }
 
@@ -443,12 +443,12 @@ void RotateTheCursorBack()
 { 
   if(StandAlone == 0 || gcRotateCursor) SpinCursor(-32);
   if (gcGiveTime && StandAlone) {
-  	SpinCursor(-32);
-  	GiveTime();
+    SpinCursor(-32);
+    GiveTime();
   }
 }
 
-#endif
+#endif /* MAC */
 
 
 
