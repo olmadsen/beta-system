@@ -107,8 +107,8 @@ ListVal: EvVal
      evId:: (# do 'ListVal:' -> id[] #);
      display::
        (# 
-       do 'evl='->xT; evl[]->xA; xN;
-          'thisBaseAdr='->xT; thisBaseAdr.display->xT;
+       do 'lEvl: '->xT; evl[]->xA; xN;
+          'thisBaseAdr: '->xT; thisBaseAdr.display->xT;
           (*lCHain[]->printChain*)
        #);
      loadVal::< (#do cError(#do 'listVal: loadVal'->xT #)#);
@@ -445,10 +445,11 @@ ListVal: EvVal
                #)
             #);
           rEv,elmDesc: @ASTindex;
+          addToChain: @boolean
        do 301->trace(#
-                    do 'listVal:asgToMethod:next:'->xT; next->xI; 
+                    do 'asgToMethod:'->display; 'next:'->xT; next->xI; 
                        'type:'->xT; enterTypes[next]->xI; xN;
-                       'left: ' -> xT; evl[] -> xA;  
+                       'left: ' -> xT; evl[] -> xA; xN;
                        'right: ' -> xT; rElm[] -> xA;
                        rchain
                     #);
@@ -470,7 +471,7 @@ ListVal: EvVal
 
           (if isRep and (enterTypes[next] = 12) (* repetition *)  then
               301->trace(#
-                      do 'listVal:asgToMethod:toRep:'->xT; evl[] -> xA; xN;
+                      do 'asgToMethod:toRep:'->display; evl[] -> xA; xN;
                          'size:'->xT; size -> xI;
                          'isValueRep:' -> xT; isValueRep->xB;
                            'isBoolRep:' -> xT; isBoolRep->xB;
@@ -492,93 +493,119 @@ ListVal: EvVal
                 -> asgList2Rep;
               next + 1 -> next
            else   
-              (if false then
-                  (enterTypes,noOfArgs,next,rElm[],rChain[]) 
-                    -> V.asgToMethod
-                       -> next                  
+              (* OBS! Don't work: rElm is an evaluation; we cannot
+               * called theDesc and nScan, etc.
+               * So more complicated - like assignValToEval
+               *)
+              (if rElm.label
+               // gram.evalList then
+                  301->trace(#
+                            do 'asgToMethod:asgToList: '->display; rElm[]->xA 
+                            #);
+                  rElm[] -> asgToMlist
+               // gram.assignmentEvaluation then
+                  301->trace(#
+                            do 'asgToMethod:asgToAssignEval:'->display;
+                               rElm[]->xA 
+                            #);
+                  rElm.son -> RN1;
+                  (enterTypes,noOfArgs,next,RN1[],rChain[]) 
+                    -> asgToMethod
+                    -> next                      
                else
-                  (* OBS! Don't work: rElm is an evaluation; we cannot
-                   * called theDesc and nScan, etc.
-                   * So more complicated - like assignValToEval
+                  301->trace(#
+                            do 'asgToMethod:A: '->display; 
+                               'rElm: ' -> xT; relm[] -> xA 
+                            #);
+                  (* In principle we need a case for each eval type
+                   * so the following code is probably not complete
                    *)
-                  (if rElm.label
-                   // gram.evalList then
-                      301->trace(#
-                              do 'asgToMethod:asgToList:'->xT; rElm[]->xA 
-                              #);
-                      rElm[] -> asgToMlist
-                   // gram.assignmentEvaluation then
-                      301->trace(#
-                              do 'asgToMethod:asgToAssignEval:'->xT;
-                                 rElm[]->xA 
-                              #);
-                      rElm.son -> RN1;
-                      (enterTypes,noOfArgs,next,RN1[],rChain[]) 
-                        -> asgToMethod
-                        -> next                      
-                   else
-                      301->trace(#do ' list:2:methodA: '->xT; relm[] -> xA #);
-                      (* in principle we need a case for each eval type
-                       * so currently the following code is probably
-                       * not complete
-                       *)
-                      (if rElm.label 
-                       // gram.objectDenotation
-                       // gram.insertedItem then
-                          rElm.son -> rElm
-                       // gram.thisObject then
-                          'This!'->putline
-                      if);
+                  (if rElm.label 
+                   // gram.objectDenotation
+                   // gram.insertedItem then
+                      rElm.son -> rElm
+                   // gram.thisObject then
+                      'This!'->putline
+                  if);
+                  (if true then
                       (if rElm.label = gram.objectDescriptor then
                           rElm -> descRef;
-                          rChain[] -> chain1[]
+                          rChain[] -> chain1[];
+                          true -> addToChain;
+                          (* This is very tricky:-(
+                           * When calling nScan below, descRef
+                           * should be the head of chain1; this
+                           * is at entry to asgToMethod already
+                           * the case - done in evbody where V.asgToMethod
+                           * originally is called. For nested calls, like
+                           * the one below at the case: nScan.N=1
+                           * we must append descRef to chain1 - done
+                           * by calling DH.theDesc - and update
+                           * nScan.thisChain - it would be nice if
+                           * descRef was not already appended in evbody
+                           * - AND we should probably check asgToMethod
+                           * in other places as well
+                           *)
                        else
                           (rChain[],rElm)
                             -> DH.theDesc
                             -> (descRef,chain1[])
                       if);
+                   else
+                      (rChain[],rElm)
+                        -> DH.theDesc
+                        -> (descRef,chain1[])
+                  if);
+
+                  301->trace(#
+                            do 'asgToMethod:B: '->display; 
+                               'rDesc: ' -> xT; xN; descRef[] -> xA;
+                               chain1
+                            #);
+                  (* Note: chain1.head is descRef *)
+                  (descRef[],thisBaseAdr[](*not used*),0,chain1[],true) 
+                    -> nScan;
+                  (if nScan.N = 1 then
                       301->trace(#
-                                do ' list:3:method: '->xT; 
-                                   descRef[] -> xA;
-                                   chain1
+                                do 'asgToMethod:N=1:asgTo: ' ->display;
+                                   nScan.thisEv[] -> xA;
+                                   nScan.thisChain
                                 #);
-                      (descRef[],thisBaseAdr[](*not used*),0,
-                      chain1[](*rChain[]*),true) 
-                        -> nScan;
-                      (if nScan.N = 1 then
-                          301->trace(#
-                                  do 'asgToMethod:N=1:asgTo: '->xT;
-                                     nScan.thisEv[] -> xA
-                                  #);
-                          (enterTypes,noOfArgs,next,nScan.thisEv[],nScan.thisChain[]) 
-                            -> asgToMethod
-                            -> next
-                       else
-                          evl->scanList 
-                          (# Ev: @ASTindex
-                          do currentNode->Ev;
-                             301->trace(#
-                                       do 'asgToMethod:[:'->display; xN;
-                                          'next: ' -> xT; next->xI; 
-                                          'type:'->xT; enterTypes[next]->xI 
-                                       #);
-                             (thisBaseAdr.copy,Ev[],true,lChain[])
-                               -> ExpEval
-                               -> V[];
-                             (if V[] = none then
-                                 '\nOBS! listVal:asgToMethod:V is none'
-                                   ->putline
-                             if);
-                             301->trace(#
-                                       do 'asgToMethod:]:' ->display; xN;
-                                          'V: ' -> xT; V.display; xN;
-                                          'type: ' -> xT; V.type -> xA;
-                                       #);
-                             (enterTypes,noOfArgs,next,nScan.thisEv[],nScan.thisChain[]) 
-                               -> V.asgToMethod
-                               -> next;
-                             nScan 
-          #)if)if)if)if)
+                      (if addToChain then
+                          (rChain[],rElm)
+                            -> DH.theDesc
+                            -> (descRef,chain1[]);
+                          chain1[] -> nScan.thisChain[];
+                      if);
+                      (enterTypes,noOfArgs,next,nScan.thisEv[],nScan.thisChain[]) 
+                        -> asgToMethod
+                        -> next
+                   else
+                      evl->scanList 
+                      (# Ev: @ASTindex
+                      do currentNode->Ev;
+                         301->trace(#
+                                   do 'asgToMethod:[:'->display; xN;
+                                      'next: ' -> xT; next->xI; 
+                                      'type:'->xT; enterTypes[next]->xI 
+                                   #);
+                         (thisBaseAdr.copy,Ev[],true,lChain[])
+                           -> ExpEval
+                           -> V[];
+                         (if V[] = none then
+                             '\nOBS! listVal:asgToMethod:V is none'
+                               ->putline
+                         if);
+                         301->trace(#
+                                   do 'asgToMethod:]:' ->display; xN;
+                                      'V: ' -> xT; V.display; xN;
+                                      'type: ' -> xT; V.type -> xA;
+                                   #);
+                         (enterTypes,noOfArgs,next,nScan.thisEv[],nScan.thisChain[]) 
+                           -> V.asgToMethod
+                           -> next;
+                         nScan 
+          #)if)if)if)
        #);
      asgToExitArgs::
        (# xNo: @integer; V: ^evVal; xT: ^ExitTypes
