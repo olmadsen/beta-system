@@ -58,6 +58,7 @@ static void BooleanProperty(char *name)
   ENTRY("stopatillegal",   StopAtIllegal = TRUE);
   ENTRY("debugalloi",   DebugAlloI = TRUE);
   ENTRY("debugcbfa",  DebugCBFA = TRUE);
+  ENTRY("dumpaoa",   DumpAOA = TRUE);
   ENTRY("debugaoa",   DebugAOA = TRUE);
   ENTRY("debuglvra",  DebugLVRA = TRUE);
   ENTRY("debugstack", DebugStack = TRUE);

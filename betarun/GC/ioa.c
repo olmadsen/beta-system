@@ -272,8 +272,9 @@ void IOAGc()
       }
     }
     
-    if( AOANeedCompaction)  AOAGc();
-    
+    DEBUG_CODE(dump_aoa=(AOANeedCompaction && DumpAOA));
+    if( AOANeedCompaction) AOAGc();
+
     if (tempAOAroots) {
       /* ToSpace was not big enough to hold both objects and table.
        * Free the table that was allocated by saveAOAroot().
@@ -349,6 +350,7 @@ void IOAGc()
     DEBUG_CBFA( CBFACheck() );
     DEBUG_AOA( AOACheck() );
     DEBUG_LVRA( LVRACheck() );
+    DEBUG_CODE(if (dump_aoa) AOACheck());
 
     /* Clear all of the unused part of IOA, so that RT routines does
      * not need to clear cells.

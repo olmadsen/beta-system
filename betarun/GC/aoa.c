@@ -1096,13 +1096,41 @@ static void Phase3()
 #ifdef RTDEBUG
 ref(Object) lastAOAObj=0;
 
+static FILE *dump_aoa_file=NULL;
+static int dump_aoa_lastnum = 0;
+#define AOA_DUMP(code) { code; }
+#define AOA_DUMP_TEXT(text) \
+  if (dump_aoa){ fprintf(dump_aoa_file, "%s", text); }
+#define AOA_DUMP_LONG(num) \
+  if (dump_aoa){ fprintf(dump_aoa_file, "0x%08x", num); }
+#define AOA_DUMP_INT(num) \
+  if (dump_aoa){ fprintf(dump_aoa_file, "%d", num); }
+
 /* AOACheck: Consistency check on entire AOA area */
 void AOACheck()
 {
   ref(Block)  theBlock  = AOABaseBlock;
   ref(Object) theObj;
   long        theObjectSize;
-  
+
+  if (dump_aoa) {
+    char name[16];
+    if (dump_aoa_file) {
+      fclose(dump_aoa_file);
+    }
+    sprintf(name,"aoa_dump%04d",NumAOAGc);
+    dump_aoa_file = fopen(name, "w+");
+    if (!dump_aoa_file) {
+      fprintf(output, "failed to open aoa_dump_file\n");
+      dump_aoa=0;
+    } else {
+      AOA_DUMP_TEXT("========AOA-");
+      AOA_DUMP_LONG(NumAOAGc);
+      AOA_DUMP_TEXT("========\n");
+      AOA_DUMP_TEXT(" Object   : Proto    : size     :GCAttr: Name :\n");
+    }
+  }  
+
 #if 0
   if (theBlock != 0){
      fprintf(output, 
@@ -1129,6 +1157,7 @@ void AOACheck()
     }
 #endif
   }
+  dump_aoa = 0;
 } 
 
 /* AOACheckObject: Consistency check on AOA object */
@@ -1140,6 +1169,22 @@ void AOACheckObject( theObj)
 
   Claim( !inBetaHeap((ref(Object))theProto),
 	"#AOACheckObject: !inBetaHeap(theProto)");
+
+  AOA_DUMP_TEXT(":");
+  AOA_DUMP_LONG(theObj);
+  AOA_DUMP_TEXT(":");
+  AOA_DUMP_LONG(theProto);
+  AOA_DUMP_TEXT(":");
+  AOA_DUMP_LONG(ObjectSize(theObj));
+  AOA_DUMP_TEXT(":");
+  AOA_DUMP_INT(theObj->GCAttr);
+  AOA_DUMP_TEXT(":");
+  AOA_DUMP_TEXT(ProtoTypeName(theProto));
+  if (theProto==ComponentPTValue){
+    AOA_DUMP_TEXT(" ");
+    AOA_DUMP_TEXT(ProtoTypeName((ComponentItem(theObj))->Proto));
+  }
+  AOA_DUMP_TEXT(":\n");
   
   if( isSpecialProtoType(theProto) ){  
     switch( SwitchProto(theProto) ){
