@@ -26,7 +26,7 @@ do rn -> mstate.A.reg;
 do (*labNo -> mstate.jcf.labs.def;    *)
    '   L' -> mstate.preF.puttext;
    labNo -> mstate.preF.putint; ':' -> mstate.preF.put;
-   ' push.argument 0 0\n\tpop'->mstate.preF.puttext;
+  (* ' push.argument 0 0\n\tpop'->mstate.preF.puttext;*)
    mstate.preF.newline
   
 ---byteCode_LocalLab_out:doPart--- (* unused? *)
@@ -112,13 +112,17 @@ if)
 do A.out;
    (* '\tpop.field ' -> mstate.preF.puttext;*)
    (if mstate.A.isField 
-    // 0 then mstate.A.DISPLAY; ';LOAD'->MSTATE.PREf.PUTLINE;mstate.A.load
+    // 0 then 
+(*mstate.A.DISPLAY; ';LOAD'->MSTATE.PREf.PUTLINE;mstate.A.load*)
+       mstate.A.store
     // 2 then
-       'at:put:' -> mstate.preF.emitsend
+       'at:put:' -> mstate.preF.emitsend;
+       '\tpop\n' -> mstate.preF.puttext
     else
        ':'->(mstate.A.fieldName.copy).append -> mstate.preF.emitsend;
+       '\tpop\n' -> mstate.preF.puttext
    if);
-   '\tpop\n' -> mstate.preF.puttext
+
 
 ---byteCode_cpReg:doPart---
 do (* called from synthesizer, but no code generated *)
@@ -181,11 +185,11 @@ do '\tdup\n' -> mstate.preF.puttext;
    
 ---byteCode_allocAndStoreLocal:doPart---
 do '; allocandStoreLocal ' -> mstate.preF.putline;
-   '\tpop.local 10 0\n' -> mstate.preF.puttext;
+   '\tpop.local 9 0\n' -> mstate.preF.puttext;
    
 ---byteCode_loadLocal:doPart---
 do '; loadLocal ' -> mstate.preF.putline;
-   '\tpush.local 10 0\n' -> mstate.preF.puttext;
+   '\tpush.local 9 0\n' -> mstate.preF.puttext;
    
 --byteCode_popStack:doPart---
 do '\tpop\n' -> mstate.preF.puttext
@@ -233,7 +237,8 @@ do (# F: ^text
 do 
    
 ---byteCode_constructorDef:doPart---
-do '  .instance_method '-> mstate.preF.puttext;
+do 1 -> mstate.fields.numArguments;
+   '  .instance_method '-> mstate.preF.puttext;
    'CONSTRUCTOR:' -> mstate.preF.emitsymbol;
    ' ; origin is to be supplied as argument' -> mstate.preF.puttext;
    '\n  {\n'-> mstate.preF.puttext;
@@ -398,7 +403,6 @@ do (# lastDot: @integer;
    do (if mstate.thisFirstClass[] = NONE then
           classname[] -> mstate.thisFirstClass[];
       if);
-
       className.scanAll
       (# pos: @integer
       do pos+1 -> pos;
@@ -443,7 +447,7 @@ do (* '\n}\n' -> mstate.preF.puttext;
    ' ; origin is to be supplied as argument' -> mstate.preF.puttext;
    mstate.preF.newline;
    '  {' -> mstate.preF.putLine;
-   '\t.locals 0\n\t.maxstacksize 100' -> mstate.preF.putline;
+   '\t.locals 10\n\t.maxstacksize 100' -> mstate.preF.putline;
    '\tpush.argument 0 0 ; self' -> mstate.preF.putline;
    'new' -> mstate.preF.emitsupersend;
    '\tpush.argument 1 0 ; origin' -> mstate.preF.putline;
@@ -463,6 +467,7 @@ do (#
    do methodname[] -> mstate.thisInnerMethodName[];  
       signature[] -> mstate.thisSignature[];
       noOfEnterArgs -> mstate.fields.numArguments;
+
       0 -> mstate.fields.numCells;
       mstate.thisSignature[] 
         -> splitSignature 
@@ -474,7 +479,7 @@ do (#
       if);
       (for i: noOfEnterArgs repeat ':' -> methodname.put for);
       methodName[] -> mstate.preF.emitsymbol;
-      '\n  {\n\t.locals 0\n\t.maxstacksize 100\n'-> mstate.preF.puttext;
+      '\n  {\n\t.locals 10\n\t.maxstacksize 100\n'-> mstate.preF.puttext;
    #)
    
 --byteCode_emitTextConst:doPart---
@@ -552,9 +557,17 @@ do
     * I.e. BCname is the fill path and localFileptah is a local path
     *)
 do  (if localFilePath[] = none then
-       (* hack to signal that BCname is the currentFileName  *)
-       1->trace(#do 'Init:setFile:BCname: ' -> xT; BCname[] -> xT#);
-    	BCname[] -> mstate.thisFileName[];
+        (* A new pra-file is opened for a form in mstate.thisFileName,
+         * i.e. the code of this form is in a seperate file
+         * we should make sure that mstate.thisFileName is imported
+         * but apparently the synthesizer does this! Otherwise
+         * we may import it here.
+         * The if-test above is a hack to signal that we are
+         * starting on a new file and BCname is the currentFileName  *)
+        1->trace(#do 'Init:setFile:BCname: ' -> xT; BCname[] -> xT#);
+        BCname[] -> mstate.thisFileName[]; 
+        none -> mstate.thisFirstClass[];
+        mstate.classes.init; 
     else
        1 -> trace
        (#
@@ -562,7 +575,7 @@ do  (if localFilePath[] = none then
           '     localFilepath: ' -> xT; localFilePath[] -> xT;
        #);
        mstate.classes.init; (* still ? *)   
-       BCname [] -> mstate.thisFullPath[];
+       BCname[] -> mstate.thisFullPath[];
        BCname[] 
          -> mstate.splitPathAndName 
          -> (mstate.thisFullPath[],mstate.thisFileName[]->mstate.thisSourceFileName[]);  
@@ -580,17 +593,8 @@ do  (if localFilePath[] = none then
        do '    setFile: ' -> xT; mstate.thisFileName[] -> xT
        #);       
    if);
-   (if oneFile then
-      (# fn: ^text
-      do true -> mstate.notClosed;
-      (*mstate.thisFileName[] -> (mstate.thisFullPath.copy).append -> fn[];
-      '.pra' -> (fn.copy).AppendExtension -> mstate.preF.name;
-      mstate.preF.openWrite;*)
-      (*'.bet' 
-       -> (mstate.thisSourceFileName.copy).AppendExtension 
-       -> mstate.preF.SourceFile;*)
-    	#)
-   if)
+   true -> mstate.notClosed;
+
 ---bytecode_setPackagePath:doPart---
 do 
    
