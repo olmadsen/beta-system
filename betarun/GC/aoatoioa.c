@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: aoatoioa.c,v $, rel: %R%, date: $Date: 1991-01-30 10:51:58 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: aoatoioa.c,v $, rel: %R%, date: $Date: 1991-02-06 08:21:08 $, SID: $Revision: 1.2 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -9,7 +9,7 @@ AOAtoIOAInsert( theCell)
   handle( Object) theCell;
 {
   ptr(long) table = BlockStart( AOAtoIOAtable);
-  long      index;
+  long      index, count;
 
   DEBUG_AOA( Claim( inAOA( theCell),"AOAtoIOAInsert theCell outside AOA"));
 
@@ -23,8 +23,13 @@ AOAtoIOAInsert( theCell)
   if( table[index] == 0 ){ table[index] = (long) theCell; return; }
   if( table[index] == (long) theCell ) return;
 
-  fprintf( stderr, "ProcessAOAReference: AOAtoIOATable overlap:::::::::\n");
-  BetaError(-999,0);
+  count = 0;
+  while( count < 100 ){
+    count++; index = (count + (long) theCell) % AOAtoIOAtableSize;
+    if( table[index] == 0 ){ table[index] = (long) theCell; return; }
+    if( table[index] == (long) theCell ) return;
+  }
+  BetaError(-33,0);
 }
 
 AOAtoIOAClear()

@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-01-30 10:51:44 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-02-06 08:21:04 $, SID: $Revision: 1.2 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -23,7 +23,8 @@ long AOACreateNewBlock = FALSE;
 
 /* Some primes to determine the size of the AOAtoIOAtable. */
 /* primes(n+1) ~~ primes(n) * 1.5                          */
-static int primes[] = { 503, 757, 1151, 1733, 2609, 3917, 5879, 8821, 13241, 19867, 0 };
+static int primes[] = {   503,   757,  1151,  1733,  2609,  3917,
+                         5879,  8821, 13241, 19867, 29803, 44711, 0 };
 
 /* AOAAllocate allocate 'size' number of bytes in the Adult object area.
  * If the allocation succeeds the function returns a reference to the allocated
@@ -43,8 +44,8 @@ static ref(Object) AOAAllocate( size)
     if( MallocExhausted || (AOABlockSize == 0) ) return 0;
     /* Check if the AOAtoIOAtable is allocated. If not the allocate it. */
     if( AOAtoIOAtable == 0 ){
-        if( AOAtoIOAtable = newBlock(primes[3] * 4) ){
-          AOAtoIOAtableSize = primes[3];
+        if( AOAtoIOAtable = newBlock(primes[7] * 4) ){
+          AOAtoIOAtableSize = primes[7];
           AOAtoIOAtable->top = AOAtoIOAtable->limit;
 	  AOAtoIOAClear();
 	  INFO_AOA( fprintf( output, "#(AOA: AOAtoIOAtable allocated %d longs.)\n",
@@ -63,6 +64,8 @@ static ref(Object) AOAAllocate( size)
       AOATopBlock  = AOABaseBlock;
     }else{
       MallocExhausted = TRUE;
+      INFO_AOA( fprintf( output, "#(AOA: block allocated failed %dKb.)\n",
+			AOABlockSize/Kb));
       return 0;
     }
   }
@@ -169,7 +172,7 @@ static ReverseAndFollow( theCell)
     }
     if( theObj->GCAttr == 0 ){
       /* theObj is autonomous and not marked. */
-      *theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
+      *theCell = (ref(Object)) 1; theObj->GCAttr = (long) theCell;
       FollowObject( theObj);
       return;
     }
@@ -177,10 +180,15 @@ static ReverseAndFollow( theCell)
     autObj = theObj;
     while( autObj->GCAttr < 0 )
       autObj = (struct Object *) Offset( autObj, autObj->GCAttr*4 );
-    if( autObj->GCAttr == 0)
+    if( autObj->GCAttr == 0){
+      /* The autonomous objects is not marked: so mark it and follow the object.
+       */
       autObj->GCAttr = 1;    
-    *theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
-    if( autObj->GCAttr == 0 ) FollowObject( autObj);
+      *theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
+      FollowItem( autObj);
+    }else{
+      *theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
+    }
   }
 }
 
@@ -205,20 +213,12 @@ static FollowItem( theObj)
     }
     Tab++;
 
-    /* Handle all the static objects. */
     while( *Tab != 0 ){
-	statObj = (ref(Object)) Offset( theObj, *Tab * 4);
-        statProto = statObj->Proto;
-        /* Calculate a pointer to the GCTabel inside the ProtoType. */
-        statTab = (ptr(short)) ((long) ((long) statProto) + ((long) statProto->GCTabOff));
-
-        /* Handle all the references in the static Object. */
-        while( *statTab != 0 ){
-        theCell = (ptr(long)) Offset( theObj, *statTab++ );
-        if( *theCell != 0 ) ReverseAndFollow( theCell );
-        }
-        Tab += 4;
+      if( *Tab == -Tab[3] ) 
+	FollowObject( Offset( theObj, *Tab * 4));
+      Tab += 4;
     }
+
 }
 
 /* FollowObject is used during Phase1 of the Mark-Sweep GC. 
@@ -234,7 +234,8 @@ static FollowObject( theObj)
 
   if( (long) theProto < 0 ){  
     switch( (long) theProto ){
-    case ValRepPTValue: return; /* No references in the type of object, so do nothing*/
+    case ValRepPTValue: return;
+      /* No references in a Value Repetition, so do nothing*/
 
     case RefRepPTValue:
       /* Scan the repetition and follow all entries */
@@ -312,8 +313,12 @@ static handleAliveStatic( theObj, freeObj )
     while( *Tab++ != 0 );
 
     while( *Tab != 0 ){
-      if( *Tab == -Tab[3] ) 
+      if( *Tab == -Tab[3] ){ 
 	handleAliveStatic( Offset( theObj, *Tab * 4), Offset( freeObj, *Tab * 4) );
+        DEBUG_AOA( Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4)
+			 == (long) Tab[3],
+			 "AOACheckObject: EnclosingObject match GCTab entry."));
+      }
       Tab += 4;
     }
   }else{
@@ -337,7 +342,7 @@ static handleAliveObject( theObj, freeObj)
     nextCell = (handle(Object)) *theCell;
     *theCell = freeObj;
   }
-  DEBUG_AOA( Claim( ((long) theCell == 0) || ((long) theCell == 1),
+  DEBUG_AOA( Claim( (long) theCell == 1,
 		   "handleAliveObject:  chainEnd == 0 or 1"));
   theObj->GCAttr = (long) freeObj; /* Save forward pointer to Phase3. */
  
@@ -349,8 +354,12 @@ static handleAliveObject( theObj, freeObj)
     while( *Tab++ != 0 );
 
     while( *Tab != 0 ){
-      if( *Tab == -Tab[3] ) 
+      if( *Tab == -Tab[3] ){
 	handleAliveStatic( Offset( theObj, *Tab * 4), Offset( freeObj, *Tab * 4) );
+        DEBUG_AOA( Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4)
+			 == (long) Tab[3],
+			 "AOACheckObject: EnclosingObject match GCTab entry."));
+      }
       Tab += 4;
     }
   }else{
@@ -419,7 +428,7 @@ static Phase3()
       if( *pointer++ ) AOAtoIOACount++;
   }
 
-  if( ((long) ToSpaceLimit - (long) ToSpaceTop) > (AOAtoIOACount * 4) )
+  if( ((long) ToSpacePtr - (long) ToSpaceTop) > (AOAtoIOACount * 4) )
     table = ToSpaceTop;
   else{
     if( !(table = (ptr(long)) malloc( AOAtoIOACount * 4))){
@@ -454,6 +463,7 @@ static Phase3()
   { ref(Block)  theBlock;
     ref(Object) theObj;
     ref(Object) nextObj;
+    ref(Object) newObj;
     long        theObjectSize;
     long        start, stop, diff;
    
@@ -473,29 +483,25 @@ static Phase3()
 
         DEBUG_AOA( if( start<stop ) Claim( table[start] > (long) theObj,
 					  "Phase3: table[start] > (long) theObj"));
-
-	if( (ref(Object)) theObj->GCAttr){
-          if( theObj != (ref(Object)) theObj->GCAttr){
+	if( theObj->GCAttr ){
+          /* The forward pointer is present, so theObj is alive. */
+          newObj = (ref(Object)) theObj->GCAttr;
+          diff = (long) theObj - (long) newObj;
+          if( diff != 0 ){
+	    DEBUG_AOA( Claim( theObj > newObj, "#Phase3: theObj > newObj"));
             /* theObj need a new location in AOA, so move it. */
-	    MACRO_CopyBlock( theObj, theObj->GCAttr, theObjectSize);
-	    while( (start<stop) && (table[start] < (long)nextObj) ){
-	      if( inToSpace( *(ptr(long)) table[start])){
-                diff = (long) theObj - theObj->GCAttr;
-		AOAtoIOAInsert( table[start]-diff);
-              }
-	      start++;
-	    }
-          }else{
-            /* theObj reside on the same location. */
-	    while( (start<stop) && (table[start] < (long)nextObj) ){
-	      if( inToSpace( *(ptr(long)) table[start]))
-		AOAtoIOAInsert( table[start]);
-	      start++;
-	    }
+	    MACRO_CopyBlock( theObj, newObj, theObjectSize);
 	  }
-	}else
+	  while( (start<stop) && (table[start] < (long)nextObj) ){
+	    if( inToSpace( *(ptr(long)) (table[start]-diff)))
+	      AOAtoIOAInsert( table[start]-diff);
+	    start++;
+	  }
+	}else{
+          /* theObj is not reachable. */
           while( (start<stop) && (table[start] < (long)nextObj )) start++;
-	theObj->GCAttr = 0;
+	}
+	newObj->GCAttr = 0;
 	theObj = nextObj;
       }
       theBlock->top = theBlock->info.nextTop;
@@ -534,6 +540,8 @@ AOACheckObject( theObj)
 { ref(ProtoType) theProto;
 
   theProto = theObj->Proto;
+
+  Claim( !inBetaHeap(theProto),"#AOACheckObject: !inBetaHeap(theProto)");
 
   if( (long) theProto < 0 ){  
     switch( (long) theProto ){
@@ -603,6 +611,8 @@ AOACheckObject( theObj)
      */
 
     while( *Tab != 0 ){
+      Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4) == (long) Tab[3],
+	    "AOACheckObject: EnclosingObject match GCTab entry.");
       if( *Tab == -Tab[3] ) 
 	AOACheckObject( Offset( theObj, *Tab * 4));
       Tab += 4;
@@ -620,6 +630,7 @@ AOACheckReference( theCell)
     Claim( inAOA(*theCell) || inIOA(*theCell) || inLVRA(*theCell),
 	  "AOACheckReference: *theCell outside IOA, AOA and LVRA");
     if( inIOA( *theCell) ){
+      IOACheckObject( *theCell);
       for(i=0; (i < AOAtoIOAtableSize) && (!found); i++){
 	if( *pointer ) found = (*pointer == (long) theCell);
         pointer++;
@@ -628,4 +639,65 @@ AOACheckReference( theCell)
     }
   }
 }
+
+
+AOACheckObjectSpecial( theObj)
+  ref(Object) theObj;
+{ ref(ProtoType) theProto;
+
+  theProto = theObj->Proto;
+
+  Claim( !inBetaHeap(theProto),"#AOACheckObjectSpecial: !inBetaHeap(theProto)");
+
+  if( (long) theProto < 0 ){  
+    switch( (long) theProto ){
+    case ValRepPTValue: return;
+    case RefRepPTValue: return;
+    case ComponentPTValue:
+      AOACheckObjectSpecial( ComponentItem( theObj));
+      return;
+    case StackObjectPTValue:
+      Claim( FALSE, "AOACheckObjectSpecial: theObj is StackObject.");
+      return;
+    case StructurePTValue:
+      return;
+    default:
+      Claim( FALSE, "AOACheckObjectSpecial: theObj is UNKNOWN.");
+    }
+  }else{
+    ptr(short)  Tab;
+    ptr(long)   theCell;
+
+    /* Calculate a pointer to the GCTabel inside the ProtoType. */
+    Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
+
+    /* Handle all the references in the Object. */
+    while( *Tab != 0 ){
+      theCell = (ptr(long)) Offset( theObj, *Tab++ );
+    }
+    Tab++;
+
+
+    /* Handle all the static objects. 
+     * The static table have the following structure:
+     * { .word Offset
+     *   .long T_entry_point
+     *   .word Distance_To_Inclosing_Object
+     * }*
+     * This table contains all static objects on all levels.
+     * Here vi only need to perform ProcessObject on static objects
+     * on 1 level. The recursion in ProcessObject handle other
+     * levels. 
+     * The way to determine the level of an static object is to 
+     * compare the Offset and the Distance_To_Inclosing_Object.
+     */
+
+    while( *Tab != 0 ){
+      if( *Tab == -Tab[3] ) 
+	AOACheckObjectSpecial( Offset( theObj, *Tab * 4));
+      Tab += 4;
+    }
+  }
+}
+
 #endif

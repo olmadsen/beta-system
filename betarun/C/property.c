@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1991-01-30 10:56:25 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1991-02-06 08:21:25 $, SID: $Revision: 1.2 $
  * by Lars Bak
  */
 
@@ -95,6 +95,10 @@ SetupProperties( betart)
   char name[100];
   char value[100];
 
+  while( (betart[start] == ' ')
+	|| (betart[start] == '\t')
+	|| (betart[start] == '\n' ) ) start++;
+  pos = start;
   while( (betart[pos] != '\0') && (betart[pos] != ':') ) pos++;
   finish = (betart[0] == '\0');
 
@@ -119,12 +123,17 @@ SetupProperties( betart)
       }else{
         /* the item has the form  "<name>", where <name>  = betart[start..pos-1]. */
         for(i=start; i<pos; i++)  name[i-start] = betart[i]; name[pos-start] = '\0';
-        BooleanProperty( name);
+	if( start < pos)
+	  BooleanProperty( name);
       }
     }
     finish = (betart[pos] == '\0');
     if( !finish ){
       pos++; start = pos;
+      while( (betart[start] == ' ')
+	    || (betart[start] == '\t')
+	    || (betart[start] == '\n') ) start++;
+      pos = start;
       while( (betart[pos] != '\0') && (betart[pos] != ':') ) pos++;
     }
   }  

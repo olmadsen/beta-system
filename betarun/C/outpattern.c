@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-01-30 10:55:27 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-02-06 08:21:21 $, SID: $Revision: 1.2 $
  * by Lars Bak
  */
 
@@ -111,7 +111,9 @@ ErrorMessage(output, errorNumber)
   if( errorNumber == -32){
       fprintf(output,"Segmentation fault"); return;
     }
-
+  if( errorNumber == -33){
+      fprintf(output,"AOAtoIOAtable is full (temporary)"); return;
+  }
   if( errorNumber == -100){
       fprintf(output,"Unknown signal"); return;
     }

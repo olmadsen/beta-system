@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: lvra.c,v $, rel: %R%, date: $Date: 1991-01-30 10:51:16 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: lvra.c,v $, rel: %R%, date: $Date: 1991-02-06 08:20:58 $, SID: $Revision: 1.2 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -26,7 +26,7 @@ DEBUG_CODE( long LVRATabNum[16] )
 
 /* LVRAtabelIndex find a index in the Tabel in the range [0..TabelMAX].
  * The index is a sort of a log2 function.
- * f(16) = 0; f(32) = 1 ..... f(64Kb) = 12 etc.
+ * f(16) = 0; f(32) = 1 ..... f(64Kb) = 12; f(128Kb) = 13 etc.
  * The returned value is <= TabelMAX.
  */
 int LVRATabelIndex( range )
@@ -41,8 +41,20 @@ int LVRATabelIndex( range )
 LVRACleanTabel()
 { int index;
   for(index=0;index <= TabelMAX; index++) LVRATabel[index] = 0;
+  LVRAFreeListAvailable = FALSE;
   DEBUG_CODE( for(index=0;index <= TabelMAX; index++) LVRATabNum[index] = 0 );
 }
+
+#ifdef RTDEBUG
+LVRADisplayTable()
+{ int index;
+  fprintf( output, "#(LVRAFreeList: ");
+  for(index=0;index <= TabelMAX; index++)
+    if( LVRATabel[index] )
+      fprintf( output, "%d:%d ", index, LVRATabNum[index]);
+  fprintf( output, ")\n");
+}
+#endif
 
 /* LVRAInsertFreeElement add a value repetition to the 
  * Free List Table. 
@@ -52,12 +64,15 @@ LVRAInsertFreeElement( freeRep)
 { int index; 
   ref(ValRep) headRep;
 
+  LVRAFreeListAvailable = TRUE;
   index = LVRATabelIndex( freeRep->HighBorder );
   /* Insert the repetition as the first element in the list. */
   headRep = LVRATabel[index];  LVRATabel[index] = freeRep;
-  DEBUG_CODE( LVRATabNum[index]++);
   freeRep->Proto  = 0; 
   freeRep->GCAttr = (long) headRep;
+  DEBUG_CODE( if( index == TabelMAX )
+	        fprintf( output, "(LVRAInsert=%d)", freeRep->HighBorder));
+  DEBUG_CODE( LVRATabNum[index]++);
 }
 
 /* LVRAFindInFree try to find space for at repetition with range 'range'.
@@ -74,6 +89,7 @@ ref(ValRep) LVRAFindInFree( range)
   ref(ValRep) restRep;
   long rest;
   int index;
+  DEBUG_CODE( int oldBorder);
 
   index = LVRATabelIndex( range );
   takenFrom = (ptr(long)) &LVRATabel[index];
@@ -103,6 +119,7 @@ ref(ValRep) LVRAFindInFree( range)
 	*takenFrom = currentRep->GCAttr;
 
         DEBUG_CODE( LVRATabNum[index]--);
+        DEBUG_CODE( oldBorder = currentRep->HighBorder );
 
 	rest = currentRep->HighBorder - range;
 	
@@ -117,6 +134,10 @@ ref(ValRep) LVRAFindInFree( range)
 	restRep->LowBorder  = 1;
 	restRep->HighBorder = rest-4;
 	LVRAInsertFreeElement( restRep);
+        DEBUG_LVRA( Claim( ValRepSize( oldBorder) ==
+			  (ValRepSize(currentRep->HighBorder)
+			   + ValRepSize(restRep->HighBorder)),
+			  "#LVRAFindInFree: old = new + rest"));	      
 	return currentRep;
       }
       takenFrom = &currentRep->GCAttr;
@@ -184,7 +205,7 @@ ref(ValRep)LVRAinitValRep( newRep, range)
 long LVRARestInBlock( theBlock)
   ref(LVRABlock) theBlock;
 {
-  return theBlock->limit - theBlock->top;
+  return (long) theBlock->limit - (long) theBlock->top;
 }
 
 /* Allocate repetition with range in LVRATopBlock->[top..limit]. */
@@ -195,7 +216,7 @@ ref(ValRep)LVRAAllocInBlock( range)
   ptr(long)   newTop;
  
   newRep = (ref(ValRep)) LVRATopBlock->top;
-  if( (newTop = (ptr(long)) Offset(newRep,ValRepSize(range)))
+  if( (newTop = (ptr(long)) Offset(newRep,4*(range+4)))
      <= LVRATopBlock->limit){
     LVRATopBlock->top = newTop;
     newRep->Proto      = (ref(ProtoType)) -3;
@@ -216,6 +237,7 @@ ref(ValRep) LVRAAlloc( range)
   long        size;
   long        rest;
 
+  DEBUG_LVRA( fprintf( output, "<%d>", range) );
   if( LVRABaseBlock == 0 ){
     if( LVRABlockSize == 0) return 0;
     if( MallocExhausted ) return 0;
@@ -236,8 +258,7 @@ ref(ValRep) LVRAAlloc( range)
       newRep->GCAttr     = 0;
       newRep->LowBorder  = 1;
       newRep->HighBorder = rest;
-      LVRATopBlock->top =  (ptr(long)) 
-	Offset(LVRATopBlock->top, ValRepSize(rest));
+      LVRATopBlock->top =  (ptr(long)) Offset(LVRATopBlock->top, 4*(rest+4));
   }
   LVRAConstructFreeList();
   if( newRep = LVRAFindInFree(range) ) return newRep;
@@ -285,9 +306,6 @@ LVRACompaction()
    * during {CopyValRep,CopySliceValRep,ExtednValRep}.
    */
 
-  if( theValRepSource != 0)
-    if( inLVRA( theValRepSource ) ) return;
- 
   /* Run compaction elements in LVRABlock{->next}*  */
   INFO_LVRA( fprintf( output, "#(LVRA: compaction") ); 
 
@@ -307,8 +325,6 @@ LVRACompaction()
       alive =  LVRAAlive( srcRep );
       theObjectSize = ValRepSize(srcRep->HighBorder);
       if( alive ){
-       DEBUG_LVRA( Claim( ((long) srcRep) = *((ptr(long)) srcRep->Proto),
-			 "LVRACompaction: srcRep == *srcRep->Proto"));
        if( srcRep != dstRep ){
 	 long size, index, rest;
 	 ptr(long) src;
@@ -329,7 +345,7 @@ LVRACompaction()
              saved += ValRepSize(rest);
 	   }
            dstBlock = dstBlock->next;
-	   DEBUG_LVRA( Claim( dstBlock != 0, "LVRACompaction: dstBlock == 0"));
+	   DEBUG_LVRA( Claim( dstBlock, "LVRACompaction: dstBlock"));
 	   dstRep = (ref(ValRep)) LVRABlockStart(dstBlock);
 	 }
 	 size = srcRep->HighBorder;
@@ -403,36 +419,39 @@ LVRAConstructFreeList()
 
   while( currentLVRABlock != 0){    
     numBlocks++; 
-    sizeBlocks += (long) currentLVRABlock->limit - (long) currentLVRABlock;
+    sizeBlocks += (long) currentLVRABlock->limit -
+      (long) currentLVRABlock - (long) sizeof(struct LVRABlock);
     /* traverse currentLVRABlock. */
     currentValRep = (ref(ValRep)) LVRABlockStart(currentLVRABlock);
     while( ((ptr(long))currentValRep) < currentLVRABlock->top){
       alive =  LVRAAlive( currentValRep );
       theObjectSize = ValRepSize(currentValRep->HighBorder);
 
-      DEBUG_LVRA( 
-	if( alive )
-	  Claim( ((long) currentValRep) = *((ptr(long)) currentValRep->Proto),
-		"LVRACompaction: The cycle for live ValRep is not preserved")
-      );
       if( startRep ){
 	if( alive ){ 
 	  LVRAInsertFreeElement( startRep );
 	  saved += ValRepSize( startRep->HighBorder);
-	  startRep = 0;
+          DEBUG_LVRA( Claim( (saved > 0) && (saved <= sizeBlocks),
+			    "#LVRAMakeFree: (saved > 0) && (saved <= sizeBlocks)"));
+          startRep = 0;
 	}else{
 	  /* Connect [startRep..currentRep] to one object, by enlarging the 
 	   * startRep HighBorder
 	   */
 	  startRep->HighBorder += ValRepStructSize + currentValRep->HighBorder;
 	}
-      }else if( !alive )startRep = currentValRep;
+      }else{
+	if( !alive )
+	  startRep = currentValRep;
+      }
 
       currentValRep = (ref(ValRep)) (((long) currentValRep)+theObjectSize);
     }
     if( startRep ){
       LVRAInsertFreeElement( startRep );
       saved += ValRepSize( startRep->HighBorder);
+      DEBUG_LVRA( Claim( (saved > 0) && (saved <= sizeBlocks),
+			"#LVRAMakeFree: (saved > 0) && (saved <= sizeBlocks)"));
     }
 
     /* Take the next element in the LVRA block chain. */
@@ -442,6 +461,7 @@ LVRAConstructFreeList()
   }
   INFO_LVRA( fprintf( output, "  %dKb in %d blocks, %dKb free)\n",
 		     toKb(sizeBlocks), numBlocks, toKb(saved)));
+  DEBUG_LVRA( LVRADisplayTable() );
 }
 
 LVRAStatistics()
@@ -470,3 +490,24 @@ ref(ValRep) CopyObjectToLVRA( theRep)
   return newRep;
 }
 
+#ifdef RTDEBUG
+LVRACheck()
+{ ref(LVRABlock) theBlock;
+  ref(ValRep)    currentValRep;
+  int theObjectSize;
+
+  theBlock = LVRABaseBlock;
+  while( theBlock ){    
+    /* traverse currentLVRABlock. */
+    currentValRep = (ref(ValRep)) LVRABlockStart(theBlock);
+    while( ((ptr(long))currentValRep) < theBlock->top){
+      theObjectSize = ValRepSize(currentValRep->HighBorder);
+      currentValRep = (ref(ValRep)) (((long) currentValRep)+theObjectSize);
+    }
+    Claim( (long *) currentValRep == theBlock->top,
+          "#LVRACheck: currentValRep == theBlock->top");
+    /* Take the next element in the LVRA block chain. */
+    theBlock = theBlock->next;
+  }
+} 
+#endif

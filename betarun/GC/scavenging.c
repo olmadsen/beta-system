@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-01-30 10:51:33 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-02-06 08:21:01 $, SID: $Revision: 1.2 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -21,7 +21,7 @@ IOAGc()
   NumIOAGc++;
   IOAActive = TRUE;
 
-  INFO_IOA( fprintf( output, "#(IOA-%d ?%d ", NumIOAGc, ReqObjectSize));
+  INFO_IOA( fprintf( output, "#(IOA-%d %d?", NumIOAGc, ReqObjectSize));
   InfoS_LabA();
 
   /* Initialize the ToSpace */
@@ -29,6 +29,7 @@ IOAGc()
   HandledInToSpace = ToSpace;
 
   DEBUG_IOA( IOACheck() );
+  DEBUG_LVRA( LVRACheck() );
 
 #ifdef AO_Area
   DEBUG_AOA( AOAtoIOACheck() );
@@ -145,9 +146,6 @@ IOAGc()
 
   IOAActive = FALSE;
 
-  INFO_IOA( fprintf( output,", %d%%)\n",
-		    (100 * areaSize(IOA,IOATop))/areaSize(IOA,IOALimit)));
-
 #ifdef AO_Area
   { int limit = areaSize(IOA,IOALimit) / 10;int sum = 0;
 
@@ -155,10 +153,13 @@ IOAGc()
     do{ sum += IOAAgeTable[IOAtoAOAtreshold++];
     }while( ( sum < limit ) && (IOAtoAOAtreshold < IOAMaxAge));
     IOAtoAOAtreshold +=1;
-
-    INFO_IOA( fprintf( output, "#AOATreshold %d\n", IOAtoAOAtreshold));
   }
+  INFO_IOA( fprintf( output, " treshold=%d", IOAtoAOAtreshold));
+  INFO_IOA( fprintf( output, " IOAtoAOA=%d", areaSize(ToSpacePtr,IOALimit)));
 #endif
+
+  INFO_IOA( fprintf( output," %d%%)\n",
+		    (100 * areaSize(IOA,IOATop))/areaSize(IOA,IOALimit)));
 
 #ifdef LVR_Area
   if( LVRANeedCompaction) LVRACompaction();
@@ -166,7 +167,7 @@ IOAGc()
 
   DEBUG_IOA( IOACheck() );
   DEBUG_AOA( AOACheck() );
-
+  DEBUG_LVRA( LVRACheck() );
   InfoS_LabB();
 
   if( ReqObjectSize *4 >= ( (long) IOALimit - (long) IOATop ) ){
@@ -219,6 +220,7 @@ ProcessReference( theCell)
 /* PLEASE OPTIMIZE THIS. */
 #ifdef AO_Area
   if( inAOA( *theCell)){ /* theCell belongs to IOA and theObj belongs to AOA. */
+    DEBUG_AOA( AOACheckObjectSpecial( *theCell));
     *--ToSpacePtr = (long) theCell;
   }
 #endif
@@ -280,8 +282,6 @@ ProcessObject(theObj)
         handle(Object)   theCell; 
         ptr(long)        theEnd;
 
-        DEBUG_IOA( fprintf( output, "+"));
-
         theStackObject = Coerce(theObj, StackObject);
 
 	DEBUG_IOA( Claim(theStackObject->StackSize <= theStackObject->ObjectSize,
@@ -290,9 +290,10 @@ ProcessObject(theObj)
         theEnd = &theStackObject->Body[0] + theStackObject->StackSize;
 
         for( stackptr = &theStackObject->Body[0]; stackptr < theEnd; stackptr++){
-          if( inIOA( *stackptr)){
+          if( inBetaHeap( *stackptr)){
             theCell = (handle(Object)) stackptr;
-            if( isObject( *theCell ) ) ProcessReference( stackptr);
+            if( isObject( *theCell ) )
+	      ProcessReference( stackptr);
           }else{
              switch( *stackptr ){
 	     case -8: stackptr++;
@@ -392,6 +393,8 @@ ProcessAOAReference( theCell)
     ((ref(ValRep)) theObj)->Proto  = (ref(ProtoType)) theCell;
 #endif
   DEBUG_AOA( Claim( !inIOA(*theCell),"ProcessAOAReference: !inIOA(*theCell)"));
+  DEBUG_AOA( if( inAOA( *theCell)){ AOACheckObjectSpecial( *theCell); } );
+
   /* Insert 'theCell' in the AOAtoIOAtable iff *theCell is inToSpace. */
   if( inToSpace( *theCell ) ) AOAtoIOAInsert( theCell);
 }
@@ -541,9 +544,13 @@ IOACheckObject( theObj)
 
   theProto = theObj->Proto;
 
+  Claim( !inBetaHeap(theProto),"#IOACheckObject: !inBetaHeap(theProto)");
+
   if( (long) theProto < 0 ){  
     switch( (long) theProto ){
-    case ValRepPTValue: return; /* No references in the type of object, so do nothing*/
+    case ValRepPTValue:
+    /* No references in the type of object, so do nothing*/
+      return;
 
     case RefRepPTValue:
       /* Scan the repetition and follow all entries */

@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: misc.c,v $, rel: %R%, date: $Date: 1991-01-30 10:52:23 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: misc.c,v $, rel: %R%, date: $Date: 1991-02-06 08:21:10 $, SID: $Revision: 1.2 $
  * by Lars Bak.
  */
 
@@ -21,6 +21,11 @@ long isObject( theObj)
   ref(Object) theObj;
 { 
   /* check that the GCAttr of the object is valid. */
+  if( inBetaHeap(theObj->Proto) ) return FALSE;
+#ifdef AO_Area
+  if( inAOA(theObj) && (isStatic(theObj->GCAttr) || (theObj->GCAttr == 0)) ) 
+    return TRUE;
+#endif
   if( isStatic(theObj->GCAttr) || isAutonomous(theObj->GCAttr) ){
     return TRUE;
   }else{
