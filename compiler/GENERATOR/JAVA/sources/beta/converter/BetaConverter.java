@@ -7,6 +7,9 @@ import java.lang.reflect.*;
 
 class BetaConverter
 {
+    BetaOutput out;
+    Class thisClass;
+
     static void usage(){
 	System.err.println("Usage: BetaConverter <java class name>");
 	System.err.println("e.g.:  BetaConverter java.lang.String");
@@ -20,8 +23,6 @@ class BetaConverter
 	out.nl();
 	// Currently not supported
     }
-
-    BetaOutput out;
 
     void doConstructors(Class cls) throws Throwable
     {
@@ -52,7 +53,23 @@ class BetaConverter
 	Method methlist[] = cls.getDeclaredMethods();
 	for (int i = 0; i < methlist.length; i++) {  
 	    Method m = methlist[i];
-	    out.putMethod(m.getName(), m.getParameterTypes(), mapType(m.getReturnType()));
+	    String returnType = mapType(m.getReturnType());
+	    Class params[] = m.getParameterTypes();
+	    List parameters = new ArrayList(params.length);
+	    for (int j=0; j<params.length; j++){
+		parameters.add(mapType(params[j]));
+	    }
+	    out.putMethod(m.getName(), parameters, returnType);
+	}
+    }
+
+    void include(String name){
+	if (name.equals(thisClass.getName())){
+	    // No need to include current class
+	} else if (name.equals("java.lang.Object")){
+	    // No need to include Object
+	} else {
+	    System.err.println("INCLUDE of library corresponding to " + name + " NYI");
 	}
     }
 
@@ -62,6 +79,8 @@ class BetaConverter
 	    return null;
 	} else if (name.equals("byte")){
 	    return "@char";
+	} else if (name.startsWith("[")){
+	    return mapInternalType(name);
 	} else if (name.equals("short")){
 	    return "@int16";
 	} else if (name.equals("int")){
@@ -77,31 +96,81 @@ class BetaConverter
 	} else if (name.equals("boolean")){
 	    return "@boolean";
 	} else {
+	    include(name);
 	    return "^" + stripPackage(name);
 	}
     }
 
+    String mapInternalType(String name){
+	// name == "[..."
+	name = name.substring(1, name.length());
+	if (name.startsWith("[")){
+	    System.err.println("Warning: mapInternalType: [" 
+			       + name 
+			       + ": Cannot map multidimensional arrays to BETA");
+	    out.fixme("[" + name + ": Cannot map multidimensional arrays to BETA");
+	    return "[0]" + mapInternalType(name);
+	} else if (name.equals("B")){
+	    return "[0]@char";
+	} else if (name.equals("C")){
+	    return "[0]@char";
+	} else if (name.equals("D")){
+	    return "[0]@real";
+	} else if (name.equals("F")){
+	    return "[0]@real32";
+	} else if (name.equals("I")){
+	    return "[0]@int32";
+	} else if (name.equals("J")){
+	    return "[0]@int64";
+	} else if (name.equals("S")){
+	    return "[0]@int16";
+	} else if (name.equals("Z")){
+	    return "[0]@boolean";
+	} else if (name.equals("V")){
+	    System.err.println("Warning: mapInternalType: [V: Array of void???"); 
+	    out.fixme("[V: Array of void???");
+	    return "[0]@int32";
+	} else if (name.startsWith("L")){
+	    name = name.substring(1,name.length()-1);
+	    include(name);
+	    return "[0]^" + stripPackage(name);
+	} else {
+	    System.err.println("Warning: mapInternalType: [" + name + ": unknown type"); 
+	    return "[0]@int32";
+	}
+    }
+
+    String slashToDot(String name){
+	return name.replaceAll("/", ".");
+    }
+
+    String dotToSlash(String name){
+	return name.replaceAll("\\.", "/");
+    }
+
     String stripPackage(String name){
-	int iDot = name.lastIndexOf('.');
-	return (iDot >= 0)? name.substring(iDot+1, name.length()) : name;
+	int i;
+	i = slashToDot(name).lastIndexOf('.');
+	return (i >= 0) ? name.substring(i+1, name.length()) : name;
     }
 
     int convert(String classname){
 	System.err.println("Converting class \"" + classname + "\".");
 	try {
 	    Class cls = Class.forName(classname);
+	    thisClass = cls;
 	    String name  = cls.getName();
 	    String pkg   = cls.getPackage().getName();
 	    Class sup = cls.getSuperclass();
 	    String superName = null;
 	    String superPkg = null;
 	    name = stripPackage(name);
-	    pkg = pkg.replaceAll("\\.", "/");
+	    pkg = dotToSlash(pkg);
 	    if (sup!=null){
 		superName = sup.getName();
 		superPkg  = sup.getPackage().getName();
 		superName = stripPackage(superName);
-		superPkg = superPkg.replaceAll("\\.", "/");
+		superPkg = dotToSlash(superPkg);
 	    }
 	    out = new BetaOutput(pkg, name, superPkg, superName);
 	    out.header();

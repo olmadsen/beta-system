@@ -1,6 +1,7 @@
 package beta.converter;
 
 import java.lang.*;
+import java.util.*;
 import java.lang.reflect.*;
 
 public class BetaOutput
@@ -31,9 +32,18 @@ public class BetaOutput
 	indentlevel += delta;
     }
 
+    public void comment(String cmt){
+	System.out.print("(* " + cmt + " *)");
+    }
+
     public void commentline(String cmt){
 	indent();
-	System.out.println("(* " + cmt + " *)");
+	comment(cmt);
+	nl();
+    }
+
+    public void fixme(String msg){
+	comment("FIXME: " + msg);
     }
 
     public void put(String txt){
@@ -72,7 +82,7 @@ public class BetaOutput
 	indent(+3);
     }
 
-    public void putMethod(String name, Class methods[], String returnType)
+    public void putMethod(String name, List parameters, String returnType)
     {
 	putln(name + ": proc");
 	indent(+2);
@@ -80,8 +90,28 @@ public class BetaOutput
 	if (returnType!=null){
 	    put("result: " + returnType);
 	}
-	nl();
 	indent(+3);
+	nl();
+	if (parameters.size()>0){
+	    int n = 0;
+	    for (Iterator i = parameters.iterator(); i.hasNext(); n++){
+		putln("arg" + n + ": " + i.next() + ";");
+	    }
+	    n = 0;
+	    indent(-3);
+	    indent();
+	    put("enter (");
+	    boolean comma = false;
+	    for (Iterator i = parameters.iterator(); i.hasNext(); n++){
+		if (comma) put(", "); else comma=true;
+		put("arg" + n);
+		String arg = (String)i.next();
+		if (arg.startsWith("^")) put("[]");
+	    }
+	    put(")");
+	    indent(+3);
+	    nl();
+	}
 	indent(-3);
 	if (returnType!=null){
 	    indent(); put("exit result");
