@@ -18,6 +18,7 @@ INCLUDE '~beta/process/v1.4/osinterface'
    editorID: @Integer;
    graf: ^theGraphicalInterface.DesignInterface;
    anElement: ^theGraphicalInterface.sifEditorList.element;
+   ff: ^theGraphicalInterface.fragmentForm;
    errorPos: @integer;
    ParseErrorText: ^text;
    dashpos: @integer;
@@ -64,7 +65,7 @@ INCLUDE '~beta/process/v1.4/osinterface'
                 &theGraphicalInterface.sifEditorList.element[]->anElement[];
                 editorId->anElement.editorId;
                 ff[]->anElement.ff[];
-                anElement[]->theGraphicalInterface.sifEditorList.append;
+                anElement[]->theGraphicalInterface.sifEditorList.insert;
                 
             if);
             (if theGraphicalInterface.theDesignInterface.theDocument[]
@@ -132,7 +133,7 @@ INCLUDE '~beta/process/v1.4/osinterface'
                 &theGraphicalInterface.sifEditorList.element[]->anElement[];
                 editorId->anElement.editorId;
                 ff[]->anElement.ff[];
-                anElement[]->theGraphicalInterface.sifEditorList.append;
+                anElement[]->theGraphicalInterface.sifEditorList.insert;
                 
             if);
             (if theGraphicalInterface.theDesignInterface.theDocument[]
@@ -283,15 +284,46 @@ do
                if);
                
             // 'openForm'->command.equal then
-               (if editorId <> 0 then
-                   editorID
-                     ->theDoc.theGroupPage.theFragmentNode.SifEditorInstanceNo;
-                   &theGraphicalInterface.sifEditorList.element[]->anElement[];
-                   editorId->anElement.editorId;
-                   theDoc.theGroupPage.askedForFragmentForm[]->anElement.ff[];
-                   anElement[]->theGraphicalInterface.sifEditorList.append
-               if);
-               
+                 (# ffName: ^Text
+                 do
+                    (if editorId <> 0 then
+                        &theGraphicalInterface.sifEditorList.element[]
+                          ->anElement[];
+                        editorId->anElement.editorId;
+                        trailer.reset;
+                        trailer.getAtom;
+                        trailer.getAtom->ffName[];
+                        searchFrag:
+                        theDoc.theGroupPage.patternDiagrams.theList.
+                          scanFragmentDiagrams
+                          (# 
+                          do
+                             thisDiagram.localNodes.scan
+                               (# fn: ^thisDiagram.fragmentNode
+                               do
+                                  (if current## <= thisDiagram.fragmentNode##
+                                   then
+                                      current[]->fn[];
+                                      (if
+                                      (fn.theFragment).fullName->ffName.equal
+                                       then
+                                          editorID->fn.SifEditorInstanceNo;
+                                          fn.theFragment->anElement.ff[];
+                                          leave searchFrag
+                                      if)
+                                  if)
+                               #)
+                          #);
+                        (if anElement.ff[] <> none then
+                            anElement[]
+                              ->theGraphicalInterface.sifEditorList.insert
+                         else
+                            'Freja openForm: Fragmentform not open in Freja?'
+                              ->putline
+                        if)
+                    if);
+                    
+                 #)
             // 'save'->command.equal then
                (if graf.currentDiagramName[] <> none then
                    graf.currentDiagramName->graf.removeExtension->fileName;
@@ -587,7 +619,6 @@ do
                if);
                
             // ('parse'->command.equal) then
-               trailer[]->putLine;
                theDoc.CurrentPage->theOADPage[];
                theOADPage.theTextBefore.clear;
                theOADPage.parseableText.clear;
@@ -601,10 +632,17 @@ do
                false->theOADPage.ongoingTextediting
             // ('parseAfter'->command.equal) then
                theDoc.CurrentPage->theOADPage[];
-               (* trailer.getInt
-                ->
-                graf.IndexIDList.indexToObject
-                ->theOADPage.private.newAssociationNode.thePatternNode *)
+               editorId->theGraphicalInterface.sifEditorList.findFragmentForm
+                 ->ff[];
+               (if ff[]
+                // none then
+                   'Fragment form '->putText; ' not found!!!!'->putLine; 
+                else
+                   trailer.reset;
+                   trailer.getInt->ff.indexToNode->theOADPage.AstToNode
+                     ->theOADPage.private.newAssociationNode.thePatternNode;
+                   
+               if);
                
             // ('newBETAProgram'->command.equal) then
                
@@ -857,8 +895,8 @@ do
    search: scan
      (# 
      do
-        (if current.ff.name
-         // oldff.name then ff[]->current.ff[]; leave search; 
+        (if current.ff.fullname->(ff.fullname).equal then
+            ff[]->current.ff[]; leave search; 
         if)
      #)
 #)  
@@ -869,9 +907,30 @@ do
    search: scan
      (# 
      do
-        (if current.ff.name
-         // ff.name then current.editorId->editorId; leave search; 
+        (if current.ff.fullname->(ff.fullname).equal then
+            current.editorId->editorId; leave search; 
         if)
+     #)
+#)  
+
+-- SifEditorListInsert: Descriptor --
+(# editorID: @integer
+do
+   theElm.ff[]->findEditorId->editorID;
+   (if editorID = 0 then theElm[]->append if)
+#)  
+
+-- SifEditorListDump: Descriptor --
+(# 
+do
+   scan
+     (# 
+     do
+        '('->puttext;
+        current.editorId->putint;
+        ', '->puttext;
+        current.ff.fullname->puttext;
+        ')'->putline
      #)
 #)  
 
@@ -943,8 +1002,6 @@ do
        'newObject.SifEditorInstanceNo: '->putText;
        newObject.SifEditorInstanceNo->putInt;
        newline;
-
-
        (* 'oldObject: '->putLine;
         oldObject.dump;
         'newObject: '->putLine;
@@ -953,7 +1010,6 @@ do
         oldFocus.dump;
         'newFocus: '->putLine;
         currentFocus.dump;*)
-
        
    if);
    (if oldFocus[] <> none then (* use oldFocus instead of oldObject *)
@@ -1060,14 +1116,6 @@ do
 do
    '#0openForm '->t[];
    ff.fullName->t.putText;
-   ff[]->askedForFragmentForm[];
-   (if switch[1] then
-       (if askedForFragmentForm[] <> none then
-           
-        else
-           'askedForFragmentForm is NONE !!!!'->putline
-       if)
-   if);
    fn[]->theFragmentNode[];
    (if switch[1] then
        (if theFragmentNode[] <> none then
@@ -1581,7 +1629,7 @@ do
                              (#  do '~beta/'->envVarValue[] #);
                            
                         #)->betalib[];
-                    '/bin/frejasif4.9.1'->betalib.append;
+                    '/bin/frejasif4.9.1+'->betalib.append;
                     betalib[]->envVarValue[]
                  #)
             #)->theModel.theGraphicalInterface.ExpandToFullPath->t[];
@@ -2758,10 +2806,9 @@ do
 
 -- FrejaKbdEvent: Descriptor --
 (# L: [1] @integer; aPtr: @externalRecord
-do
-(*'KbdEvent, frejaLocked is: '->putText;
- Frejalocked->putInt;
- newLine;*)
+do (*'KbdEvent, frejaLocked is: '->putText;
+    Frejalocked->putInt;
+    newLine;*)
    (if FrejaLocked = 0 then
        (if callbackVerbose then 'Callback KbdEvent'->putLine if);
        (1,keyNrP)->getIntList->L;
