@@ -1,9 +1,11 @@
 odir = ../$(MACHINETYPE)/
 debug =
 
-make: $(odir)extShellSockets.o $(odir)getUser.o \
+# Removed, for the time being:
+# $(odir)extShellSockets.o 
+
+make: $(odir)getUser.o \
       $(odir)remoteStart.o $(odir)outputRedirection.o \
-      $(odir)timing.o $(odir)thisHost.o \
       $(MACHINETYPE)/startAsDeamon
 
 $(odir)getUser.o: getUser.c
@@ -27,9 +29,6 @@ $(odir)deamonStart.o: deamonStart.c
 $(odir)startAsDeamon.o: startAsDeamon.c
 	gcc $(debug) -D$(MACHINETYPE) -O -c startAsDeamon.c -o $(odir)startAsDeamon.o
 	
-$(odir)thisHost.o: thisHost.c
-	gcc $(debug) -D$(MACHINETYPE) -I $(BETALIB)/process/v1.5/private/external -O -c thisHost.c -o $(odir)thisHost.o
-
 $(MACHINETYPE)/startAsDeamon: $(odir)startAsDeamon.o $(odir)deamonStart.o
 	-sh -c 'if [ ! -d $(MACHINETYPE) ]; then mkdir $(MACHINETYPE); fi'
 	gcc $(debug) -D$(MACHINETYPE) $(odir)startAsDeamon.o $(odir)deamonStart.o -o $(MACHINETYPE)/startAsDeamon

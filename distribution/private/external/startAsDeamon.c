@@ -6,7 +6,7 @@
 /* #define SADDEBUG 1 */
 
 #ifdef SADDEBUG
-#define SADOUT "/users/beta/distribution/v1.0/test/sadout"
+#define SADOUT "/users/beta/r4.1/distribution/v1.6/test/sadout"
 #endif
 
 char tmp[100];
