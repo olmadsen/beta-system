@@ -5,7 +5,7 @@
  */
 #include "beta.h"
 
-static LVRACompaction();
+void LVRACompaction();
 static LVRAConstructFreeList();
 
 #define TableMAX 16
@@ -474,7 +474,7 @@ ref(Object) CopyObjectToLVRA(theRep)
 
 /********************** LVRA garbage collection *************************/
 
-static LVRACompaction()
+void LVRACompaction()
 {
   ref(LVRABlock) srcBlock;
   ref(LVRABlock) dstBlock;
@@ -623,6 +623,7 @@ static LVRACompaction()
 		     sizeDead, sizeDead));
   LVRALastIOAGc = 0;
   DEBUG_LVRA( LVRACheck() );
+  asmemptylabel(EndLVRA);
 }
 
 static LVRAConstructFreeList()
