@@ -60,7 +60,7 @@ $cmd = "$htmldoc -v -t pdf -f $pdf --toclevels 4 --bodycolor #ffffff --size A4 -
 
 print "$cmd\n";
 $ENV{'LD_LIBRARY_PATH'} = "/usr/local/lib";
-system "$cmd";
+system "$cmd" || die "ERROR in HTMLDOC !!!";
 unlink "title.html";
 
 if (-f $pdf){
