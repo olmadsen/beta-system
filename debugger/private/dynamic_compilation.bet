@@ -1,575 +1,616 @@
 ORIGIN '../valhallaapplication';
+INCLUDE '~beta/compiler/GENERATOR/disass'
+        'processinterfacebody';
 LIB_ITEM 'valhalla';
-INCLUDE '~beta/compiler/GENERATOR/disass';
-INCLUDE 'processinterfacebody';
-
---ValhallaInitCompiler:descriptor--
-(# initialised,error: @boolean;
-   exename: ^text;
-   tmp: ^text;
-do 'Compiling Evaluator ...'->putpinfo;
+-- ValhallaInitCompiler: Descriptor --
+(# initialised,error: @boolean; exename: ^text; tmp: ^text; 
+do
+   'Compiling Evaluator ...'->putpinfo;
    (if not initialised then
        (if false then (* do not want unconditional tracing *)
            (if valhallaprefs.dynamiccompilation then
-               screen[]->DC.NT.traceStream[];
-               screen[]->DC.NT.infoStream[];
+               screen[]->DC.NT.traceStream[]; screen[]->DC.NT.infoStream[]; 
            if);
+           
        if);
        dc.initDyn;
-       (getEXECNAMEparam,true) -> DC.NT.init
-       (# ExternalLookup::
-            (# do t[] -> debuggee.processComm.Lookup_Address -> i #);
-       #);
+       (getEXECNAMEparam,true)
+         ->DC.NT.init
+           (#
+              ExternalLookup:: 
+                (#  do t[]->debuggee.processComm.Lookup_Address->i #);
+              
+           #);
        'Initializing Dynamic Compiler ['->tmp[];
-       DC.compilerversion -> tmp.puttext;
-       '] ...' -> tmp.puttext;
-       tmp[] -> putpinfo;
+       DC.compilerversion->tmp.puttext;
+       '] ...'->tmp.puttext;
+       tmp[]->putpinfo;
        getEXECNAMEparam->exename[];
-       exefileextension -> exename.stripextension;
-       (exename[], NONE, NONE) -> dc.activateCompiler -> error;
+       exefileextension->exename.stripextension;
+       (exename[],none ,none )->dc.activateCompiler->error;
        (if error then
-           'Initialisation of dynamic compiler failed' -> putpinfo;
-           'Initialisation of dynamic compiler failed' 
-             -> debuggee.othererror;
+           'Initialisation of dynamic compiler failed'->putpinfo;
+           'Initialisation of dynamic compiler failed'->debuggee.othererror;
+           
         else
            'Dynamic compiler initialized.'->putpinfo
        if);
        (if 'DebugDynamic'->getOption then
-           'Getting process offset ...' -> DC.NT.tracestream.puttext;
+           'Getting process offset ...'->DC.NT.tracestream.puttext; 
        if);
-       debuggee.processComm.get_main_physical - ('main'->DC.NT.lookupC)
-         -> DC.NT.logical2physical_offset;
+       debuggee.processComm.get_main_physical-('main'->DC.NT.lookupC)
+         ->DC.NT.logical2physical_offset;
        (if 'DebugDynamic'->getOption then
-           'Done: is ' -> DC.NT.tracestream.puttext;
-           DC.NT.logical2physical_offset -> DC.NT.tracestream.putint;
+           'Done: is '->DC.NT.tracestream.puttext;
+           DC.NT.logical2physical_offset->DC.NT.tracestream.putint;
            DC.NT.tracestream.newline;
+           
        if);
        true->initialised
    if)
-#)
+#)  
+
 -- debuggeeCurObj: DoPart --
 do
    (if curObjStatus then
        (debuggee.currentRemoteBetaObject,FALSE)
-         ->(*FGC, gui.*) main.OpenMoveableObjectView
-       (#
-          moveableObjectViewType:: (*FGC, gui.*) main.moveableObjectViewEvaluator
-          (#
-             openEvaluatorMenuEntry::< 
-               (#  do valhallaPrefs.DynamicCompilation->value #);
-             onEvaluateButton::< 
-               (#
-                  originFGname,evaluatorCode,dynamicFGname: ^text;
-                  aRemoteBetaObject: ^debuggee.remoteBetaObject;
-                  FF: ^MPS.AST.fragmentForm;
-                  FG,originFG: ^MPS.AST.fragmentGroup;
-                  im: ^imagePair;
-                  error: @boolean;
-                  constructUniqueID:
-                    (#
-                       T: @Text;
-                       timeSec,timeMiliSec: @integer;
-                       timeInMiliSec: @real
-                    do
-                       preciseTime->(timeSec,timeMiliSec);
-                       timeSec->timeInMiliSec;
-                       timeInMiliSec*1000000->timeInMiliSec;
-                       timeInMiliSec+timeMiliSec->timeInMiliSec;
-                       timeInMiliSec->t.putReal (#  do 0->precision #)
-                    exit t.copy
-                    #);
-                  aPTI: ^debuggee.prototypeInfo;
-                  anOD: ^MPS.BETACFL.objectDescriptor;
-                  anIndex: @MPS.AST.index;
-                  dataAreaStart,codeAreaStart: @integer;
-                  allocateMemory:
-                    (#
-                       allocationFailed:< exception (#  do INNER #);
-                       IMG: ^IM.loadableImage;
-                       anImage: ^image;
-                       numBytes,allocatedAreaStart: @integer;
-                       tmp: ^text;
-                    enter IMG[]
-                    do
-                       IMG.im[]->anImage[];
-                       (if trace then
-                           'LIP: '->puttext; anImage.LIP->puthex; 
-                       if);
-                       (if IMG.isCode then
-                           anImage.LIP->numBytes
-                        else
-                           (if trace then
-                               ' GOTnoOfBytes: '->puttext;
-                               IM.GOTnoOfBytes->puthex;
-                               
-                           if);
-                           anImage.LIP+IM.GOTnoOfBytes->numBytes
-                       if);
-                       (if trace then newline if);
-                       (if anImage.buffer_ptr <> 0 then
-                           'Normal externally allocated data buffer'
-                             ->tmp[];
-                           'Buffer size: %i\n'
-                             -> tmp.putFormat(# do anImage.buffer_size->i #);
-                           'Still needs to be implemented'->tmp.putLine;
-                           tmp[] -> putpinfo;
-                           tmp[] -> debuggee.othererror;
-                        else
-                           numBytes
-                             ->debuggee.processComm.processData.allocateMemory
-                             ->allocatedAreaStart;
-                           (if allocatedAreaStart = 0 then
-                               allocationFailed
-                           if)
-                       if)
-                    exit allocatedAreaStart
-                    #);
-                  protoAddress,objectAddress: @integer;
-                  trace: @boolean;
-                  dumpCode:
-                    (# DA: @disass;
-                    do '\nDYNAMIC CODE SEGMENT:'->putline;
-                       (if DA.hasDisass then                               
-                           (for i: IM.xCode.IM.LIP div 4 repeat
-                                codeAreaStart + (i-1)*4 -> puthex; 
-                                ':' -> put; '\t'->put;
-
-                                codeAreaStart + (i-1)*4 
-                                  ->
-                                debuggee.processComm.processData.peeklong
-                                (# accessFailure::
-                                     (#do 'Reading code adr failed'->msg.append
-                                #)#)
-                                  -> DA
-                                  -> screen.putline;
-                           for)
-                        else
-                           (codeAreaStart,IM.xCode.IM.LIP div 4)
-                             -> dumpMemoryArea;
-                       if);
-                    #);
-                  dumpMemoryArea:
-                    (#
-                       address,length: @integer;
-                       memoryContents: @integer;
-                       adr,con: @text
-                    enter (address,length)
-                    do
-                       'Address\t\tContents'->putLine;
-                       (for g: length repeat
-                            address+(g-1)*4
-                              ->adr.putHex
-                            (#
-                               format::< 
-                                 (# 
-                                 do true->zeroPadding; true->uppercase
-                                 #)
-                            #);
-                            '0x'->adr.prepend;
-                            address+(g-1)*4
-                              ->debuggee.processComm.processData.peekLong
-                              ->con.putHex
-                            (#
-                               format::< 
-                                 (# 
-                                 do true->zeroPadding; true->uppercase
-                                 #)
-                            #);
-                            '0x'->con.prepend;
-                            '%s\t%s\n'
-                              ->putFormat (#  do adr[]->s; con[]->s #);
-                            adr.clear;
-                            con.clear
-                       for)
-                    #);
-                  originObjectAddress,dynamicProtoAddress,
-                  originObjectProtoAddress: @integer;
-                  nameOfDynamicPattern: @text;
-                  a: ^MPS.AST.ast;
-                  theCexternalEntry: ^MPS.BETACFL.ObjectDenotation;
-                  theAttributes: ^MPS.BETACFL.attributes;
-                  theObjectDescriptor: ^MPS.BETACFL.objectDescriptor;
-                  thePatternDecl: ^MPS.BETACFL.patternDecl;
-                  theMainPart: ^MPS.BETACFL.mainPart;
-                  theActionPart: ^MPS.BETACFL.actionPart;
-                  theDoPart: ^MPS.BETACFL.doPart;
-                  theImperatives: ^MPS.BETACFL.imperatives
-               do
-                  compilationAndLinking:
-                    (# errorDuringCompilation: @alertUser
-                    do
-                       initCompiler;
-                       debuggee.currentRemoteBetaObject
-                         ->aRemoteBetaObject[];
-                       aRemoteBetaObject.protoAdr
-                         ->debuggee.utilities.protoAddressToPrototypeInfo
-                         ->aPTI[];
-                       aPTI.ofi.groupName[]->originFGname[];
-                       originFGname[]->MPS.BETACFL.openBETAfragmentGroup
-                         ->originFG[];
-                       aPTI.objdesc[]->anOD[];
-                       (anOD.index,anOD.frag[])->anIndex;
-                       contents.evaluator.editor.contents.contents
-                         ->evaluatorCode[];
-                       'dynamicPattern'->nameOfDynamicPattern.append;
-                       dynamicCodeCounter->nameOfDynamicPattern.putInt;
-                       ': external '->evaluatorCode.prepend;
-                       nameOfDynamicPattern[]->evaluatorCode.prepend;
-                       'dynamicCode'->MPS.BETACFL.makeBETAfragmentForm
-                         ->FF[];
-                       (MPS.BETACFL.ObjectDenotation,'cExternalEntry',
-                       FF[])->MPS.BETACFL.parseText->theCexternalEntry[];
-                       (MPS.BETA.attributes,evaluatorCode[],FF[])
-                         ->MPS.BETACFL.parseText
-                       (#
-                          parseError::< 
-                            (# 
-                            do
-                               (main[],'Parse errors',
-                               'Compilation Errors')
-                                 ->errorDuringCompilation;
-                               leave compilationAndLinking
-                            #)
-                       #)->theAttributes[];
-                       theAttributes.getSon1->thePatternDecl[];
-                       thePatternDecl.getObjectdescriptor
-                         ->theObjectDescriptor[];
-                       theObjectDescriptor.getMainPart->theMainPart[];
-                       theMainPart.getActionPart->theActionPart[];
-                       theActionPart.getDoPartOpt->a[];
-                       (if a## = MPS.BETACFL.doPart## then
-                           a[]->theDoPart[]
-                        else
-                           leave compilationAndLinking
-                       if);
-                       theDoPart.getImperatives->a[];
-                       (if a## = MPS.BETACFL.imperatives## then
-                           a[]->theImperatives[];
-                           (1,theCexternalEntry[])->theImperatives.insert
-                        else
-                           (MPS.BETACFL.Imperatives,'cExternalEntry',FF[])
-                             ->MPS.BETACFL.parseText->theImperatives[];
-                           theImperatives[]->theDoPart.putImperatives
-                       if);
-                       theAttributes[]->FF.root[];
-                       constructUniqueID->dynamicFGname[];
-                       dynamicFGname[]->MPS.BETACFL.openBETAfragmentGroup
-                         ->FG[];
-                       FF.name->FG.fragmentList.deleteLocalName;
-                       FF[]->FG.fragmentList.addFragment;
-                       (if (FG.prop[] <> none ) then
-                           'ORIGIN'
-                             ->FG.prop.addProp
-                           (#  do originFGname[]->addString #);
-                           'doneCheck'
-                             ->FG.prop.addProp (#  do 0->addConst #);
-                           
-                        else
-                           (main[],'No properties','Unrecoverable error')
-                             ->errorDuringCompilation;
-                           leave compilationAndLinking
-                       if);
-                       FG.markAsChanged;
-                       (FG.name,anIndex[],originFG[])
-                         ->dc.activateCompiler
-                       (#
-                          Report::<
-                            (# 
-                            do
-                               (main[],'Compilation Error',msg[])
-                                 ->errorDuringCompilation;
-                               leave compilationAndLinking
-                            #);
-                          semanticErrorsNotification::<
-                            (#  do true->error #)
-                       #)->error;
-                       (if not error then
-                           true->dc.getImagePair->IM[];
-                           (if false then
-                               dc.imageList.scan (#  #)
-                           if);
-                           (if 'DebugDynamic'->getOption then
-                               true->trace;
-                               true->IM.trace;
-                               newLine;
-                               newLine;
-                               'ALLOCATION:'->putLine
-                           if);
-                           (* Collect external symbols for building possible
-                            * Global Offset Table (GOT) in data segment.
-                            * This is currently only needed for SGI
-                            *)
-                           DC.NT[]->IM.xCollectExternals;
-                           allocation:
-                             (# 
-                             do
-                                IM.xData[]
-                                  ->allocateMemory
-                                (#
-                                   allocationFailed::< 
-                                     (# 
-                                     do
-                                        'data: Allocation failed'
-                                          ->msg.append
-                                     #)
-                                #)->dataAreaStart;
-                                IM.xCode[]
-                                  ->allocateMemory
-                                (#
-                                   allocationFailed::< 
-                                     (# 
-                                     do
-                                        'code: Allocation failed'
-                                          ->msg.append
-                                     #)
-                                #)->codeAreaStart
-                             #);
-                           (if 'DebugDynamic'->getOption then
-                               'Allocation Succeed'->putLine;
-                               'Datasegment buffer: %s\tCode-segment buffer: %s\n\n'
-                                 ->putFormat
-                               (# st: @text
-                               do
-                                  dataAreaStart
-                                    ->st.putHex
-                                  (#
-                                     format::< 
-                                       (# 
-                                       do
-                                          true->zeroPadding;
-                                          true->uppercase
-                                       #)
-                                  #);
-                                  '0x'->st.prepend;
-                                  st[]->s;
-                                  st.clear;
-                                  codeAreaStart
-                                    ->st.putHex
-                                  (#
-                                     format::< 
-                                       (# 
-                                       do
-                                          true->zeroPadding;
-                                          true->uppercase
-                                       #)
-                                  #);
-                                  '0x'->st.prepend;
-                                  st[]->s
-                               #);
-                               newLine;
-                               newLine;
-                               'RELOCATION:'->putLine
-                           if);
-                           relocation:
-                             (# 
-                             do
-                                (dataAreaStart,codeAreaStart)
-                                  ->IM.xAllocImage;
-                                dc.NT[]->IM.xCollectEntries;
-                                dc.NT[]->IM.xRelocate
-                             #);
-                           (if 'DebugDynamic'->getOption then
-                               'Relocation Succeed'->putLine;
-                               newLine;
-                               newLine;
-                               'WRITING RELOCATED SEGMENTS TO DEBUGGEE:'
-                                 ->putLine
-                           if);
-                           writeToDebuggee:
-                             (# 
-                             do
-                                IM.xTransferImage
-                                (# 
-                                do
-                                   (outProcessAdr,item)
-                                     ->
-                                   debuggee.processComm.processData.
-                                   pokeLong
+         -> (*FGC, gui.*) main.OpenMoveableObjectView
+           (#
+              moveableObjectViewType:: (*FGC, gui.*)
+               main.moveableObjectViewEvaluator
+                (#
+                   openEvaluatorMenuEntry::< 
+                     (#  do valhallaPrefs.DynamicCompilation->value #);
+                   onEvaluateButton::< 
+                     (#
+                        originFGname,evaluatorCode,dynamicFGname: ^text;
+                        aRemoteBetaObject: ^debuggee.remoteBetaObject;
+                        FF: ^MPS.AST.fragmentForm;
+                        FG,originFG: ^MPS.AST.fragmentGroup;
+                        im: ^imagePair;
+                        error: @boolean;
+                        constructUniqueID:
+                          (#
+                             T: @Text;
+                             timeSec,timeMiliSec: @integer;
+                             timeInMiliSec: @real
+                          do
+                             preciseTime->(timeSec,timeMiliSec);
+                             timeSec->timeInMiliSec;
+                             timeInMiliSec*1000000->timeInMiliSec;
+                             timeInMiliSec+timeMiliSec->timeInMiliSec;
+                             timeInMiliSec->t.putReal (#  do 0->precision #)
+                          exit t.copy
+                          #);
+                        aPTI: ^debuggee.prototypeInfo;
+                        anOD: ^MPS.BETACFL.objectDescriptor;
+                        anIndex: @MPS.AST.index;
+                        dataAreaStart,codeAreaStart: @integer;
+                        allocateMemory:
+                          (#
+                             allocationFailed:< exception (#  do INNER #);
+                             IMG: ^IM.loadableImage;
+                             anImage: ^image;
+                             numBytes,allocatedAreaStart: @integer;
+                             tmp: ^text;
+                             
+                          enter IMG[]
+                          do
+                             IMG.im[]->anImage[];
+                             (if trace then
+                                 'LIP: '->puttext; anImage.LIP->puthex; 
+                             if);
+                             (if IMG.isCode then
+                                 anImage.LIP->numBytes
+                              else
+                                 (if trace then
+                                     ' GOTnoOfBytes: '->puttext;
+                                     IM.GOTnoOfBytes->puthex;
+                                     
+                                 if);
+                                 anImage.LIP+IM.GOTnoOfBytes->numBytes
+                             if);
+                             (if trace then newline if);
+                             (if anImage.buffer_ptr <> 0 then
+                                 'Normal externally allocated data buffer'
+                                   ->tmp[];
+                                 'Buffer size: %i\n'
+                                   ->tmp.putFormat
+                                     (#  do anImage.buffer_size->i #);
+                                 'Still needs to be implemented'->tmp.putLine;
+                                 tmp[]->putpinfo;
+                                 tmp[]->debuggee.othererror;
+                                 
+                              else
+                                 numBytes
+                                   ->
+                                     debuggee.processComm.processData.
+                                       allocateMemory->allocatedAreaStart;
+                                 (if allocatedAreaStart = 0 then
+                                     allocationFailed
+                                 if)
+                             if)
+                          exit allocatedAreaStart
+                          #);
+                        protoAddress,objectAddress: @integer;
+                        trace: @boolean;
+                        dumpCode:
+                          (# DA: @disass; 
+                          do
+                             '\nDYNAMIC CODE SEGMENT:'->putline;
+                             (if DA.hasDisass then
+                                 (for i: IM.xCode.IM.LIP div 4 repeat
+                                   codeAreaStart+(i-1)*4->puthex;
+                                   ':'->put;
+                                   '\t'->put;
+                                   codeAreaStart+(i-1)*4
+                                     ->debuggee.processComm.processData.peeklong
+                                       (#
+                                          accessFailure:: 
+                                            (# 
+                                            do
+                                               'Reading code adr failed'
+                                                 ->msg.append
+                                            #)
+                                       #)->DA->screen.putline;
+                                   
+                                 for)
+                              else
+                                 (codeAreaStart,IM.xCode.IM.LIP div 4)
+                                   ->dumpMemoryArea;
+                                 
+                             if);
+                             
+                          #);
+                        dumpMemoryArea:
+                          (#
+                             address,length: @integer;
+                             memoryContents: @integer;
+                             adr,con: @text
+                          enter (address,length)
+                          do
+                             'Address\t\tContents'->putLine;
+                             (for g: length repeat
+                               address+(g-1)*4
+                                 ->adr.putHex
                                    (#
-                                      accessFailure::< 
+                                      format::< 
+                                        (# 
+                                        do true->zeroPadding; true->uppercase
+                                        #)
+                                   #);
+                               '0x'->adr.prepend;
+                               address+(g-1)*4
+                                 ->debuggee.processComm.processData.peekLong
+                                 ->con.putHex
+                                   (#
+                                      format::< 
+                                        (# 
+                                        do true->zeroPadding; true->uppercase
+                                        #)
+                                   #);
+                               '0x'->con.prepend;
+                               '%s\t%s\n'
+                                 ->putFormat (#  do adr[]->s; con[]->s #);
+                               adr.clear;
+                               con.clear
+                             for)
+                          #);
+                        originObjectAddress,dynamicProtoAddress,
+                          originObjectProtoAddress: @integer;
+                        nameOfDynamicPattern: @text;
+                        a: ^MPS.AST.ast;
+                        theCexternalEntry: ^MPS.BETACFL.ObjectDenotation;
+                        theAttributes: ^MPS.BETACFL.attributes;
+                        theObjectDescriptor: ^MPS.BETACFL.objectDescriptor;
+                        thePatternDecl: ^MPS.BETACFL.patternDecl;
+                        theMainPart: ^MPS.BETACFL.mainPart;
+                        theActionPart: ^MPS.BETACFL.actionPart;
+                        theDoPart: ^MPS.BETACFL.doPart;
+                        theImperatives: ^MPS.BETACFL.imperatives
+                     do
+                        compilationAndLinking:
+                          (# errorDuringCompilation: @gui.alertUser
+                          do
+                             initCompiler;
+                             debuggee.currentRemoteBetaObject
+                               ->aRemoteBetaObject[];
+                             aRemoteBetaObject.protoAdr
+                               ->debuggee.utilities.protoAddressToPrototypeInfo
+                               ->aPTI[];
+                             aPTI.ofi.groupName[]->originFGname[];
+                             originFGname[]->MPS.BETACFL.openBETAfragmentGroup
+                               ->originFG[];
+                             aPTI.objdesc[]->anOD[];
+                             (anOD.index,anOD.frag[])->anIndex;
+                             contents.evaluator.editor.contents.contents
+                               ->evaluatorCode[];
+                             'dynamicPattern'->nameOfDynamicPattern.append;
+                             dynamicCodeCounter->nameOfDynamicPattern.putInt;
+                             ': external '->evaluatorCode.prepend;
+                             nameOfDynamicPattern[]->evaluatorCode.prepend;
+                             'dynamicCode'->MPS.BETACFL.makeBETAfragmentForm
+                               ->FF[];
+                             (MPS.BETACFL.ObjectDenotation,'cExternalEntry',
+                              FF[])->MPS.BETACFL.parseText->theCexternalEntry[];
+                             (MPS.BETA.attributes,evaluatorCode[],FF[])
+                               ->MPS.BETACFL.parseText
+                                 (#
+                                    parseError::< 
+                                      (# 
+                                      do
+                                         (main[],'Parse errors',
+                                          'Compilation Errors')
+                                           ->errorDuringCompilation;
+                                         leave compilationAndLinking
+                                      #)
+                                 #)->theAttributes[];
+                             theAttributes.getSon1->thePatternDecl[];
+                             thePatternDecl.getObjectdescriptor
+                               ->theObjectDescriptor[];
+                             theObjectDescriptor.getMainPart->theMainPart[];
+                             theMainPart.getActionPart->theActionPart[];
+                             theActionPart.getDoPartOpt->a[];
+                             (if a## = MPS.BETACFL.doPart## then
+                                 a[]->theDoPart[]
+                              else
+                                 leave compilationAndLinking
+                             if);
+                             theDoPart.getImperatives->a[];
+                             (if a## = MPS.BETACFL.imperatives## then
+                                 a[]->theImperatives[];
+                                 (1,theCexternalEntry[])->theImperatives.insert
+                              else
+                                 (MPS.BETACFL.Imperatives,'cExternalEntry',FF[])
+                                   ->MPS.BETACFL.parseText->theImperatives[];
+                                 theImperatives[]->theDoPart.putImperatives
+                             if);
+                             theAttributes[]->FF.root[];
+                             constructUniqueID->dynamicFGname[];
+                             dynamicFGname[]->MPS.BETACFL.openBETAfragmentGroup
+                               ->FG[];
+                             FF.name->FG.fragmentList.deleteLocalName;
+                             FF[]->FG.fragmentList.addFragment;
+                             (if (FG.prop[] <> none ) then
+                                 'ORIGIN'
+                                   ->FG.prop.addProp
+                                     (#  do originFGname[]->addString #);
+                                 'doneCheck'
+                                   ->FG.prop.addProp (#  do 0->addConst #);
+                                 
+                              else
+                                 (main[],'No properties','Unrecoverable error')
+                                   ->errorDuringCompilation;
+                                 leave compilationAndLinking
+                             if);
+                             FG.markAsChanged;
+                             (FG.name,anIndex[],originFG[])
+                               ->dc.activateCompiler
+                                 (#
+                                    Report::< 
+                                      (# 
+                                      do
+                                         (main[],'Compilation Error',msg[])
+                                           ->errorDuringCompilation;
+                                         leave compilationAndLinking
+                                      #);
+                                    semanticErrorsNotification::< 
+                                      (#  do true->error #)
+                                 #)->error;
+                             (if not error then
+                                 true->dc.getImagePair->IM[];
+                                 (if false then
+                                     dc.imageList.scan (#  #)
+                                 if);
+                                 (if 'DebugDynamic'->getOption then
+                                     true->trace;
+                                     true->IM.trace;
+                                     newLine;
+                                     newLine;
+                                     'ALLOCATION:'->putLine
+                                 if);
+                                 (* Collect external symbols for building possible
+                                  * Global Offset Table (GOT) in data segment.
+                                  * This is currently only needed for SGI
+                                  *)
+                                 DC.NT[]->IM.xCollectExternals;
+                                 allocation:
+                                   (# 
+                                   do
+                                      IM.xData[]
+                                        ->allocateMemory
+                                          (#
+                                             allocationFailed::< 
+                                               (# 
+                                               do
+                                                  'data: Allocation failed'
+                                                    ->msg.append
+                                               #)
+                                          #)->dataAreaStart;
+                                      IM.xCode[]
+                                        ->allocateMemory
+                                          (#
+                                             allocationFailed::< 
+                                               (# 
+                                               do
+                                                  'code: Allocation failed'
+                                                    ->msg.append
+                                               #)
+                                          #)->codeAreaStart
+                                   #);
+                                 (if 'DebugDynamic'->getOption then
+                                     'Allocation Succeed'->putLine;
+                                     'Datasegment buffer: %s\tCode-segment buffer: %s\n\n'
+                                       ->putFormat
+                                         (# st: @text
+                                         do
+                                            dataAreaStart
+                                              ->st.putHex
+                                                (#
+                                                   format::< 
+                                                     (# 
+                                                     do
+                                                        true->zeroPadding;
+                                                        true->uppercase
+                                                     #)
+                                                #);
+                                            '0x'->st.prepend;
+                                            st[]->s;
+                                            st.clear;
+                                            codeAreaStart
+                                              ->st.putHex
+                                                (#
+                                                   format::< 
+                                                     (# 
+                                                     do
+                                                        true->zeroPadding;
+                                                        true->uppercase
+                                                     #)
+                                                #);
+                                            '0x'->st.prepend;
+                                            st[]->s
+                                         #);
+                                     newLine;
+                                     newLine;
+                                     'RELOCATION:'->putLine
+                                 if);
+                                 relocation:
+                                   (# 
+                                   do
+                                      (dataAreaStart,codeAreaStart)
+                                        ->IM.xAllocImage;
+                                      dc.NT[]->IM.xCollectEntries;
+                                      dc.NT[]->IM.xRelocate
+                                   #);
+                                 (if 'DebugDynamic'->getOption then
+                                     'Relocation Succeed'->putLine;
+                                     newLine;
+                                     newLine;
+                                     'WRITING RELOCATED SEGMENTS TO DEBUGGEE:'
+                                       ->putLine
+                                 if);
+                                 writeToDebuggee:
+                                   (# 
+                                   do
+                                      IM.xTransferImage
                                         (# 
                                         do
-                                           'writeToDebuggee: Failed to move segments'
-                                             ->msg.append
+                                           (outProcessAdr,item)
+                                             ->
+                                               debuggee.processComm.processData.
+                                                 pokeLong
+                                               (#
+                                                  accessFailure::< 
+                                                    (# 
+                                                    do
+                                                       'writeToDebuggee: Failed to move segments'
+                                                         ->msg.append
+                                                    #)
+                                               #)
                                         #)
-                                   #)
-                                #)
-                             #);
-                           (if 'DebugDynamic'->getOption then
-                               'writeToDebuggee Succeed'->putLine;
-                               newLine;
-                               newLine;
-                               'ADDING GROUP TO DEBUGGEE'->putLine
-                           if);
-                           addingGroup:
-                             (# new: ^processInterface.ObjectFileInfo;
-                             do
-                                IM.dataStart
-                                  ->
-                                debuggee.processComm.processData.
-                                addGroup
-                                (#
-                                   accessFailure::< 
-                                     (# 
-                                     do 'AddGroup failed'->msg.append
-                                     #);
-                                do &debuggee.ObjectFileInfo[] -> new[];
-                                   groupName[] -> new.groupName[];
-                                   dataStart -> new.dataStart;
-                                   dataEnd -> new.dataEnd;
-                                   codeStart -> new.codeStart;
-                                   codeEnd -> new.codeEnd;
-                                   groupNameHash -> new.groupNameHash;
-                                   checkTime -> new.checkTime;
-                                   LL_INITIAL -> new.loadLevel;
-                                   new[] -> debuggee.piPrivate.ObjectFileInfos.insert;
-                                #);
-                                
-                             #);
-                           (if 'DebugDynamic'->getOption then
-                               'addingGroup Succeed'->putLine;
-                               'Adding header located at: %s\n\n'
-                                 ->putFormat
-                               (# st: @text
-                               do
-                                  IM.dataStart
-                                    ->st.putHex
-                                  (#
-                                     format::< 
-                                       (# 
-                                       do
-                                          true->zeroPadding;
-                                          true->uppercase
-                                       #)
-                                  #);
-                                  '0x'->st.prepend;
-                                  st[]->s
-                               #);
-                               newLine;
-                               newLine;
-                           if);
-                           calculateOrigin:
-                             (#
-                             do (if aRemoteBetaObject.isComp then
-                                    aRemoteBetaObject.getAddress+24
-                                      ->objectAddress
-                                 else
-                                    aRemoteBetaObject.getAddress
-                                      ->objectAddress
-                                if);
-                             #);
-                           calculateProto:
-                             (# 
-                             do (1->IM.indexedOff) -> protoAddress;
-                             #);
-                           executeObjectInDebuggee:
-                             (# tmp: @text; impi: ^processInterface.ImperativeInfo; 
-                             do (objectAddress, protoAddress) -> 
-                                debuggee.processComm.processData.executeObject
-                                (# accessFailure::< 
-                                     (# 
-                                     do 'executeObjectInDebuggee: failed'->msg.append
-                                     #)
-                                #);
-                                
-                                debuggee.processComm.Wait2
-                                (#
-                                   wrongMessage::
-                                     (#
-                                     do  'executeObjectInDebuggee: failed, wrong message'->msg.append
-                                     #);
-                                #);
-                                
-                                tmp.clear;
-                                'Runtime Error: %s'
-                                  ->tmp.putformat
-                                (# dummy: @Integer; 
-                                do debuggee.error->(dummy,s); 
-                                #);
-                                tmp[]->(*FGC, gui.*) putpinfo;
-                                
-                                debuggee.currentRemoteCode->impi[];
-                                (if impi[] <> none then
-                                    impi.cast[]
-                                      ->newcodemoveable
-                                    (#
-                                       openIfNotFound:: 
-                                         (# 
-                                         do alwaysCurCode->(*FGC, gui.*) getOption->value; 
-                                         #);
-                                       wriggleIfFound:: 
-                                         (# 
+                                   #);
+                                 (if 'DebugDynamic'->getOption then
+                                     'writeToDebuggee Succeed'->putLine;
+                                     newLine;
+                                     newLine;
+                                     'ADDING GROUP TO DEBUGGEE'->putLine
+                                 if);
+                                 addingGroup:
+                                   (# new: ^processInterface.ObjectFileInfo; 
+                                   do
+                                      IM.dataStart
+                                        ->
+                                          debuggee.processComm.processData.
+                                            addGroup
+                                          (#
+                                             accessFailure::< 
+                                               (# 
+                                               do 'AddGroup failed'->msg.append
+                                               #);
+                                             
+                                          do
+                                             &debuggee.ObjectFileInfo[]->new[];
+                                             groupName[]->new.groupName[];
+                                             dataStart->new.dataStart;
+                                             dataEnd->new.dataEnd;
+                                             codeStart->new.codeStart;
+                                             codeEnd->new.codeEnd;
+                                             groupNameHash->new.groupNameHash;
+                                             checkTime->new.checkTime;
+                                             LL_INITIAL->new.loadLevel;
+                                             new[]
+                                               ->
+                                                 debuggee.piPrivate.
+                                                   ObjectFileInfos.insert;
+                                             
+                                          #);
+                                      
+                                   #);
+                                 (if 'DebugDynamic'->getOption then
+                                     'addingGroup Succeed'->putLine;
+                                     'Adding header located at: %s\n\n'
+                                       ->putFormat
+                                         (# st: @text
                                          do
-                                            (found[] <> lastEditor[])->value;
-                                            found.bringToFront;
-                                            
+                                            IM.dataStart
+                                              ->st.putHex
+                                                (#
+                                                   format::< 
+                                                     (# 
+                                                     do
+                                                        true->zeroPadding;
+                                                        true->uppercase
+                                                     #)
+                                                #);
+                                            '0x'->st.prepend;
+                                            st[]->s
                                          #);
-                                       
-                                    #);
-                                    
-                                 else
-                                    (if alwaysCurCode->(*FGC, gui.*) getOption then
-                                        (*FGC, gui.*) debuggeeCurCode; 
-                                    if);
-                                    
-                                if);
-
-
-                             #);
-                           (if 'DebugDynamic'->getOption then
-                               'executeObjectInDebuggee Succeed'->putLine;
-                               (* 'Executing struc located at: %s'
-                                * putFormat
-                                * (# st: @text
-                                * do
-                                *    strucAddress
-                                *      ->st.putHex
-                                *        (#
-                                *           format::< 
-                                *             (# 
-                                *             do
-                                *                true->zeroPadding;
-                                *                true->uppercase
-                                *             #)
-                                *        #);
-                                *    st[]->s
-                                * #)
-                                *)
-                           if)
-                       if);
-                       
-                    #);
-                  
-               #);
-             contentsType::< 
-               (#
-                  evaluatorType::< 
-                    (#
-                       open::< 
-                         (#
-                            T: @styledText;
-                            track: @trackMouse;
-                            cursorPos: @integer
-                         do
-                            '(#\ndo \n#)'->T.putText;
-                            T[]->evaluator.editor.contents.contents;
-                            evaluator.editor.contents.all
-                              ->evaluator.editor.contents.scanText
-                            (# 
-                            do
-                               (if ch = 'd' then
-                                   start+3->cursorPos
-                               if)
-                            #);
-                            (cursorPos,cursorPos)
-                              ->evaluator.editor.contents.selection;
-                            evaluator.editor[]->main.target
-                         #)
-                    #)
-               #)
-          #);
-          getFather::  (#  do (*FGC, gui.*) main.objworld[]->father[] #)
-       #)
+                                     newLine;
+                                     newLine;
+                                     
+                                 if);
+                                 calculateOrigin:
+                                   (# 
+                                   do
+                                      (if aRemoteBetaObject.isComp then
+                                          aRemoteBetaObject.getAddress+24
+                                            ->objectAddress
+                                       else
+                                          aRemoteBetaObject.getAddress
+                                            ->objectAddress
+                                      if);
+                                      
+                                   #);
+                                 calculateProto:
+                                   (# 
+                                   do (1->IM.indexedOff)->protoAddress; 
+                                   #);
+                                 executeObjectInDebuggee:
+                                   (#
+                                      tmp: @text;
+                                      impi: ^processInterface.ImperativeInfo;
+                                      
+                                   do
+                                      (objectAddress,protoAddress)
+                                        ->
+                                          debuggee.processComm.processData.
+                                            executeObject
+                                          (#
+                                             accessFailure::< 
+                                               (# 
+                                               do
+                                                  'executeObjectInDebuggee: failed'
+                                                    ->msg.append
+                                               #)
+                                          #);
+                                      debuggee.processComm.Wait2
+                                        (#
+                                           wrongMessage:: 
+                                             (# 
+                                             do
+                                                'executeObjectInDebuggee: failed, wrong message'
+                                                  ->msg.append
+                                             #);
+                                           
+                                        #);
+                                      tmp.clear;
+                                      'Runtime Error: %s'
+                                        ->tmp.putformat
+                                          (# dummy: @Integer; 
+                                          do debuggee.error->(dummy,s); 
+                                          #);
+                                      tmp[]-> (*FGC, gui.*) putpinfo;
+                                      debuggee.currentRemoteCode->impi[];
+                                      (if impi[] <> none then
+                                          impi.cast[]
+                                            ->newcodemoveable
+                                              (#
+                                                 openIfNotFound:: 
+                                                   (# 
+                                                   do
+                                                      alwaysCurCode
+                                                        -> (*FGC, gui.*)
+                                                          getOption->value;
+                                                      
+                                                   #);
+                                                 wriggleIfFound:: 
+                                                   (# 
+                                                   do
+                                                      (found[] <> lastEditor[])
+                                                        ->value;
+                                                      found.bringToFront;
+                                                      
+                                                   #);
+                                                 
+                                              #);
+                                          
+                                       else
+                                          (if
+                                          alwaysCurCode
+                                            -> (*FGC, gui.*) getOption then
+                                          (*FGC, gui.*)
+                                              debuggeeCurCode; 
+                                          if);
+                                          
+                                      if);
+                                      
+                                   #);
+                                 (if 'DebugDynamic'->getOption then
+                                     'executeObjectInDebuggee Succeed'->putLine;
+                                     (* 'Executing struc located at: %s'
+                                      * putFormat
+                                      * (# st: @text
+                                      * do
+                                      *    strucAddress
+                                      *      ->st.putHex
+                                      *        (#
+                                      *           format::< 
+                                      *             (# 
+                                      *             do
+                                      *                true->zeroPadding;
+                                      *                true->uppercase
+                                      *             #)
+                                      *        #);
+                                      *    st[]->s
+                                      * #)
+                                      *)
+                                     
+                                 if)
+                             if);
+                             
+                          #);
+                        
+                     #);
+                   contentsType::< 
+                     (#
+                        evaluatorType::< 
+                          (#
+                             open::< 
+                               (#
+                                  T: @styledText;
+                                  track: @trackMouse;
+                                  cursorPos: @integer
+                               do
+                                  '(#\ndo \n#)'->T.putText;
+                                  T[]->evaluator.editor.contents.contents;
+                                  evaluator.editor.contents.all
+                                    ->evaluator.editor.contents.scanText
+                                      (# 
+                                      do
+                                         (if ch = 'd' then
+                                             start+3->cursorPos
+                                         if)
+                                      #);
+                                  (cursorPos,cursorPos)
+                                    ->evaluator.editor.contents.selection;
+                                  evaluator.editor[]->main.target
+                               #)
+                          #)
+                     #)
+                #);
+              getFather:: 
+                (#  do (*FGC, gui.*) main.objworld[]->father[] #)
+           #)
    if);
-   
+     
 
