@@ -364,12 +364,12 @@
 
   (let ((case-replace t)(case-fold-search t))
     (message "Fixing footer")
-    (tags-query-replace "<TD width=\"33%\" align=\"left\">\\s-*<ADDRESS>\\(.*\\)</ADDRESS>\\s-*</TD>\\s-*<TD width=\"34%\" align=\"center\"><FONT size=-1>&COPY; <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A></FONT></TD>\\s-*<TD width=\"33%\" align=\"right\"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC=\"../javascript/lastmod.js\"></SCRIPT></FONT></TD>" 
+    (tags-query-replace "<TD width=\"33%\" align=\"left\">\\s-*<ADDRESS>\\(.*\\)</ADDRESS>\\s-*</TD>\\s-*<TD width=\"34%\" align=\"center\"><FONT size=-1>&COPY; <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A></FONT></TD>\\s-*<TD width=\"33%\" align=\"right\"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC=\"\\(\\.?\\.?/?\\.?\\.?/?\\)javascript/lastmod.js\"></SCRIPT></FONT></TD>" 
 "<TD width=\"40%\" align=\"left\">
 <ADDRESS>\\1</ADDRESS>
 </TD>
 <TD width=\"20%\" align=\"center\"><FONT size=-1>&COPY; <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A></FONT></TD>
-<TD width=\"40%\" align=\"right\"><SCRIPT LANGUAGE=JavaScript SRC=\"../javascript/lastmod.js\"></SCRIPT></TD>" nil)))
+<TD width=\"40%\" align=\"right\"><SCRIPT LANGUAGE=JavaScript SRC=\"\\2javascript/lastmod.js\"></SCRIPT></TD>" nil)))
 
 (defun miadoc-replace36 ()
   (interactive)
@@ -377,8 +377,8 @@
 
   (let ((case-replace t)(case-fold-search t))
     (message "Fixing footer")
-    (tags-query-replace "<TD width=\"33%\" align=\"left\">\\s-*<ADDRESS>\\(.*\\)</ADDRESS>\\s-*</TD>\\s-*<TD width=\"34%\" align=\"center\">&nbsp;?</TD>\\s-*<TD width=\"33%\" align=\"right\"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC=\"../javascript/lastmod.js\"></SCRIPT></FONT></TD>" 
+    (tags-query-replace "<TD width=\"33%\" align=\"left\">\\s-*<ADDRESS>\\(.*\\)</ADDRESS>\\s-*</TD>\\s-*<TD width=\"34%\" align=\"center\">&nbsp;?</TD>\\s-*<TD width=\"33%\" align=\"right\"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC=\"\\(\\.?\\.?/?\\.?\\.?/?\\)javascript/lastmod.js\"></SCRIPT></FONT></TD>" 
 "<TD width=\"50%\" align=\"left\">
 <ADDRESS>\\1</ADDRESS>
 </TD>
-<TD width=\"50%\" align=\"right\"><SCRIPT LANGUAGE=JavaScript SRC=\"../javascript/lastmod.js\"></SCRIPT></TD>" nil)))
+<TD width=\"50%\" align=\"right\"><SCRIPT LANGUAGE=JavaScript SRC=\"\\2javascript/lastmod.js\"></SCRIPT></TD>" nil)))
