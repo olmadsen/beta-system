@@ -1,4 +1,5 @@
 ORIGIN 'astPrivate';
+INCLUDE '~beta/basiclib/binfile';
 LIB_ITEM 'mpsastlevel';
 (*
  * COPYRIGHT
@@ -880,15 +881,19 @@ do
 
 -- fragmentGroupRealOpen: Descriptor --
 (#
-   f: @file
-     (#
-	accessError::
+   f: @binfile
+     (# accessError::
 	  (#
 	  do (errorNumbers.noReadAccess,msg[])->catcher; true->continue
 	  #);
-	binary:: trueObject
+        GB: @GetBytes;
      #);
-   getRep: @f.getRep;
+   getRep: @
+     (# adr, longs: @integer;
+     enter (adr, longs)
+     do (adr,4*longs) -> f.GB;
+     #);
+   
    b: [2] @integer;
    garbagefl: ^fragmentListDescription;
    garbageProp: ^propertyList;
@@ -977,7 +982,7 @@ do false->locked.value;
 do
    l:
      (#
-	f: @file
+	f: @binfile
 	  (#
 	     accessError::
 	       (#
@@ -1003,9 +1008,13 @@ do
 	       (#
 	       do (errorNumbers.otherFileError,msg[])->catcher; leave l
 	       #);
-	     binary:: trueObject
+             PB: @PutBytes;
 	  #);
-	putRep: @f.putRep;
+        putRep: @
+          (# adr, longs: @integer;
+          enter (adr, longs)
+          do (adr,4*longs) -> f.PB;
+          #);
 	b: [2] @integer;
 	dirWriteable:
 	  (# f: @file
@@ -1116,13 +1125,13 @@ do
 
 -- fragmentGroupUnpack: Descriptor --
 (#
-   f: @file
+   f: @binfile
      (#
 	accessError::
 	  (#
 	  do (errorNumbers.noReadAccess,msg[])->catcher; true->continue
 	  #);
-	binary:: trueObject
+        GB: @GetBytes;
      #);
    textFile: @file
      (#
@@ -1239,24 +1248,27 @@ do
 	     #)
        if)
     else
-       (if f.entry.exists
-	 (#
-	    error::
-	      (#
-	      do true->continue; (errorNumbers.otherFileError,msg[])->catcher
-	      #)
-	 #) then
-	     (# getRep: @f.getRep; b: [2] @integer
-	     do (if trace.active and trace.d[trace.FragmentOpen] then
-		    trace.FragmentOpen->signalTrace
-		      (# start::
-			   (#
-			   do 'OpenRead(unpack) fragmentGroup-file: '->msg.puttext;
-			      f.name->msg.puttext
-			   #)
-		      #);
-		if);
-		(if f.entry.isFile
+       (if f.entry.exists(# error::
+	                      (#
+	                      do true->continue; (errorNumbers.otherFileError,msg[])->catcher
+                         #)#) 
+           then
+           (# getRep: @
+                (# adr, longs: @integer;
+                enter (adr, longs)
+                do (adr,4*longs) -> f.GB;
+                #);
+              b: [2] @integer
+           do (if trace.active and trace.d[trace.FragmentOpen] then
+                  trace.FragmentOpen->signalTrace
+                  (# start::
+                       (#
+                       do 'OpenRead(unpack) fragmentGroup-file: '->msg.puttext;
+                          f.name->msg.puttext
+                       #)
+                  #);
+              if);
+              (if f.entry.isFile
 		  (#
 		     error::
 		       (#
@@ -1265,7 +1277,7 @@ do
 			  (errorNumbers.otherFileError,msg[])->catcher
 		       #)
 		  #) then
-		    (if f.entry.readable
+                  (if f.entry.readable
 		      (#
 			 error::
 			   (#
@@ -1274,75 +1286,75 @@ do
 			      (errorNumbers.otherFileError,msg[])->catcher
 			   #)
 		      #) then
-			f.openRead
-		     else
-			  (# t: @text
-			  do
-			     'No read access to the file: "'->t;
-			     f.name->t.append;
-			     '"'->t.putline;
-			     (errorNumbers.noReadAccess,t[])->catcher
-			  #)
-		    if)
-		 else
-		      (# t: @text
-		      do
-			 'Filename "'->t;
-			 f.name->t.append;
-			 '" refers to a directory, not a file'->t.putline;
-			 (errorNumbers.otherFileError,t[])->catcher
-		      #)
-		if);
-		(@@ b[1],b.range)->getRep;
-		(if (b[1] <> groupBlackNumber) then
-		      (# t: @text
-		      do
-			 ' Trying to access a group file with wrong magic number "'
-			   ->t;
-			 fullName->t.append;
-			 '"'->t.put;
-			 (errorNumbers.badformat,t[])->catcher;
-
-		      #);
-
-		if);
-		(if (b[2] > repS.r.range) then
-		    b[2]-repS.r.range->repS.extend;
-		if);
-		0->repS.top;
-		(@@ repS.r[1],b[2])->getRep;
-		(* get r from f *)
-		repS[]->fragmentList.repRestore;
-                repS[]->prop.repRestore;
-                
-		(if doRealOpen then
-		    fragmentList.scan
-		      (# ff: ^fragmentForm
-		      do
-			 (if current.type = formType then
-			     current.f[]->ff[]; repS[]->ff.repRestoreStruct
-			 if)
-		      #);
-		    fragmentList.scan
-		      (# ff: ^fragmentForm
-		      do
-			 (if current.type = formType then
-			     current.f[]->ff[];
-			     (@@ ff.a[1],ff.curTop)->getRep;
-			     (if ff.lcurtop>1 then (@@ ff.l[1],ff.lcurTop)->getRep if);
-			     ff.rootInx->ff.indexToNode->ff.root[];
-			     (if defaultGrammar[] = none then
-				 ff.grammar[]->defaultGrammar[]
-			     if);
-
-			 if)
-		      #);
-		if);
-		f.close;
-		f.entry.modTime (# error::  (#  do true->continue #) #)
-		  ->modTime;
-		this(fragmentGroup)[]->signalGroupUnpack
-	     #)
+                      f.openRead
+                   else
+                      (# t: @text
+                      do
+                         'No read access to the file: "'->t;
+                         f.name->t.append;
+                         '"'->t.putline;
+                         (errorNumbers.noReadAccess,t[])->catcher
+                      #)
+                  if)
+               else
+                  (# t: @text
+                  do
+                     'Filename "'->t;
+                     f.name->t.append;
+                     '" refers to a directory, not a file'->t.putline;
+                     (errorNumbers.otherFileError,t[])->catcher
+                  #)
+              if);
+              (@@ b[1],b.range)->getRep;
+              (if (b[1] <> groupBlackNumber) then
+                  (# t: @text
+                  do
+                     ' Trying to access a group file with wrong magic number "'
+                       ->t;
+                     fullName->t.append;
+                     '"'->t.put;
+                     (errorNumbers.badformat,t[])->catcher;
+                     
+                  #);
+                  
+              if);
+              (if (b[2] > repS.r.range) then
+                  b[2]-repS.r.range->repS.extend;
+              if);
+              0->repS.top;
+              (@@ repS.r[1],b[2])->getRep;
+              (* get r from f *)
+              repS[]->fragmentList.repRestore;
+              repS[]->prop.repRestore;
+              
+              (if doRealOpen then
+                  fragmentList.scan
+                  (# ff: ^fragmentForm
+                  do
+                     (if current.type = formType then
+                         current.f[]->ff[]; repS[]->ff.repRestoreStruct
+                     if)
+                  #);
+                  fragmentList.scan
+                  (# ff: ^fragmentForm
+                  do
+                     (if current.type = formType then
+                         current.f[]->ff[];
+                         (@@ ff.a[1],ff.curTop)->getRep;
+                         (if ff.lcurtop>1 then (@@ ff.l[1],ff.lcurTop)->getRep if);
+                         ff.rootInx->ff.indexToNode->ff.root[];
+                         (if defaultGrammar[] = none then
+                             ff.grammar[]->defaultGrammar[]
+                         if);
+                         
+                     if)
+                  #);
+              if);
+              f.close;
+              f.entry.modTime (# error::  (#  do true->continue #) #)
+                ->modTime;
+              this(fragmentGroup)[]->signalGroupUnpack
+           #)
        if)
    if);
 
