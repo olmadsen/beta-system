@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Structure.c,v 1.20 1992-09-21 17:05:02 tthorn Exp $
+ * Mod: $Id: Structure.c,v 1.21 1992-10-02 16:57:46 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -63,7 +63,7 @@ ref(Structure) ThisS(ref(Object) this)
     /* asm volatile ("restore %0, %%g0, %%l0;retl;nop"::"r" (newStruct)); */
 #endif
 #ifdef hppa
-    setD0Reg((int)newStruct);
+    /* setD0Reg((int)newStruct); */
 #endif
     return newStruct;
 }
