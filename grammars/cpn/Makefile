@@ -1,6 +1,6 @@
 
 html:
-	${BETALIB}/doc/bin/gram2html.perl -c -f cpn-meta.gram > cpn.html
+	${BETALIB}/doc/bin/gram2html.perl -c -f cpn-meta.gram
 dogram:
 	dogram cpn
 parse:
