@@ -78,11 +78,7 @@ void BetaExit(long number)
 #endif /* UNIX */
 #endif /* RTDEBUG */
 
-#ifdef apollo
-  AsmExit( number );
-#else
   exit( number );
-#endif
 }
 
 #ifdef RTLAZY

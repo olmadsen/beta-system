@@ -96,8 +96,6 @@ static char *machine_name()
 #else
   return "(sun4)";
 #endif
-#else
-  return "(sun3)";
 #endif
 #endif
   

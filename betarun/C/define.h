@@ -24,8 +24,6 @@
 #    else
 #      define sun4
 #    endif
-#  else
-#    define sun3
 #  endif
 #endif
 

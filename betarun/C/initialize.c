@@ -447,10 +447,6 @@ void Initialize()
 #endif
 #endif
 
-#ifdef apollo
-     signal( SIGINT,  (void (*)(int))BetaSignalHandler);
-     signal( SIGQUIT, (void (*)(int))BetaSignalHandler);
-#endif /* apollo */
    }
 #endif /* UNIX || crts */
 

@@ -136,10 +136,6 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #ifdef SIGEMT
   signal( SIGEMT,  ExitHandler);
 #endif
-#ifdef apollo
-  signal( SIGINT,  ExitHandler);
-  signal( SIGQUIT, ExitHandler);
-#endif
 
   /* Set StackEnd to the stack pointer just before trap. */
 #if (defined(linux) || defined(nti))
@@ -165,37 +161,6 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #endif /* hppa */
 
 #endif /* (linux || nti) */
-
-#ifdef sun3
-  /* Try to fetch the address of current Beta object in a0.*/
-  theCell = (handle(Object)) (((long) scp) - ((long) 24));
-  if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
-
-  switch( sig){
-    case SIGFPE: 
-      switch(code){
-      case FPE_TRAPV_TRAP:
-	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
-      case FPE_CHKINST_TRAP:
-	todo=DisplayBetaStack( RepRangeErr, theObj, PC, sig); break;
-      case FPE_INTDIV_TRAP:
-	todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
-      default:
-        todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig);
-      }
-      break;
-    case SIGEMT:
-      todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
-    case SIGILL:
-      todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
-    case SIGBUS:
-      todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
-    case SIGSEGV:
-      todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
-    default: 
-      todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
-  }
-#endif
 
 #ifdef sgi
   { 
@@ -370,6 +335,10 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
       todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
     case SIGSEGV:
       todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
+#if defined(RTDEBUG) && defined(linux)
+    case SIGINT: /* Interrupt */
+      todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
+#endif
     default: 
       todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
   }
@@ -404,39 +373,6 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
       todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);
   }
 #endif /* hppa */
-
-#ifdef apollo
-  /* Try to fetch the address of current Beta object in a0.*/
-  theCell = (handle(Object)) (((long) scp) - ((long) 24));
-  if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
-
-  switch( sig){
-    case SIGQUIT:
-      break;
-    case SIGINT:
-      break;
-    case SIGFPE: 
-      switch(code){
-      case FPE_SUBRNG_TRAP:
-	todo=DisplayBetaStack( RepRangeErr, theObj, PC, sig); break;
-      case FPE_INTDIV_TRAP:
-	todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
-      default:
-        todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig);
-      }
-      break;
-    case SIGEMT:
-      todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
-    case SIGILL:
-      todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
-    case SIGBUS:
-      todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
-    case SIGSEGV:
-      todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
-    default: 
-      todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
-  }
-#endif /* apollo */
 
   if (!todo) BetaExit(1);
 }
