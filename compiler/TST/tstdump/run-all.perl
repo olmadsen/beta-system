@@ -149,7 +149,7 @@ foreach $f (@files) {
     print "--------------------------\n";
 }
 
-open(SUMMARY, ">summary.run-all" || die "cannot open summary.run-all for writing: $!\n";
+open(SUMMARY, ">summary.run-all" || die "cannot open summary.run-all for writing: $!\n");
 
 print SUMMARY ctime(time);
 print SUMMARY "Summary:\n";
@@ -164,7 +164,7 @@ foreach $f (@files) {
     if (-f "$f.candidate"){ print SUMMARY "  $f: no reference dump exists. Candidate created\n"; }
 }
 close SUMMARY;
-open(SUMMARY, "summary.run-all" || die "cannot open summary.run-all for reading: $!\n";
+open(SUMMARY, "summary.run-all" || die "cannot open summary.run-all for reading: $!\n");
 while(<SUMMARY>){
     print;
 }
