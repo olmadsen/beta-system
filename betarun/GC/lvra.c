@@ -110,7 +110,7 @@ ref(ValRep) LVRAFindInFree( range)
 
       DEBUG_CODE( LVRATabNum[index]--);
       /* Initialize the returned repetition. */
-      currentRep->Proto      = (ref(ProtoType)) -3;
+      currentRep->Proto      = ValRepPTValue;
       currentRep->GCAttr     = 0;
 
       return currentRep;
@@ -132,7 +132,7 @@ ref(ValRep) LVRAFindInFree( range)
 
 	rest = currentRep->HighBorder - range;
 	
-        currentRep->Proto      = (ref(ProtoType)) -3;
+        currentRep->Proto      = ValRepPTValue;
 	currentRep->GCAttr     = 0;
 	currentRep->LowBorder  = 1;
 	currentRep->HighBorder = range;
@@ -198,18 +198,6 @@ int inLVRA( theObj )
     theBlock = theBlock->next;
   }
   return FALSE;
-}
-
-
-ref(ValRep)LVRAinitValRep( newRep, range)
- ref(ValRep) newRep;
- long        range;
-{
-  newRep->Proto      = (ref(ProtoType)) -3;
-  newRep->GCAttr     = 0;
-  newRep->LowBorder  = 1;
-  newRep->HighBorder = range;
-  return newRep;
 }
 
 long LVRARestInBlock( theBlock)
@@ -445,7 +433,7 @@ LVRACompaction()
 LVRAAlive( theRep)
      ref(ValRep) theRep;
 {
-  if( (long) theRep->Proto != -3 ){
+  if( !isValRep(theRep) ){
     DEBUG_LVRA( Claim( theRep->GCAttr == 0,"LVRAAlive: theRep->GCAttr == 0"));
     return FALSE;
   }
