@@ -1,3 +1,5 @@
+/* version.c */
+extern char *get_betarun_version(void);
 /* C/initialize.c */
 extern void Initialize(void);
 #if defined(MAC)
