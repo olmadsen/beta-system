@@ -205,14 +205,8 @@
      if( DebugCBFA )  { code; /* fflush(output); */ }
 #  define DEBUG_AOA(code)  \
      if( DebugAOA )  { code; /* fflush(output); */ }
-#ifdef PERSIST
-#  define DEBUG_PERSISTENCE(code)  \
-     if( DebugPersistence )  { code; /* fflush(output); */ }
-#endif /* RTINFO */
 #  define DEBUG_AOAtoIOA(code)  \
      if( DebugAOAtoIOA )  { code; /* fflush(output); */ }
-#  define DEBUG_LIN(code) \
-     if( DebugLIN ) { code; /* fflush(output); */ }
 #  define DEBUG_CODE(code)  code;
 #  define DEBUG_STACK(code) \
      if( DebugStack ) { code; /* fflush(output); */ }
@@ -240,9 +234,6 @@
 #  define DEBUG_CBFA(code)
 #  define DEBUG_AOA(code)
 #  define DEBUG_AOAtoIOA(code)
-#ifdef PERSIST
-#  define DEBUG_PERSISTENCE(code)
-#endif /* PERSIST */
 #  define DEBUG_LIN(code)
 #  define DEBUG_CODE(code)
 #  define DEBUG_STACK(code)
@@ -260,13 +251,7 @@
 #  define INFO(code)      if (Info0   ) { code; }
 #  define INFO_IOA(code)  if (InfoIOA ) { code; }
 #  define INFO_AOA(code)  if (InfoAOA ) { code; }
-#  ifdef PERSIST
-#  define INFO_PROXY(code) if (InfoProxy ) { code; }
-#  define INFO_PERSISTENTSTORE(code) if (InfoPersistentStore ) { code; }
-#  else 
-#  define INFO_PROXY(code)
-#  define INFO_PERSISTENTSTORE(code)
-#  endif /* PERSIST */
+#  define INFO_PERSISTENCE(code) if (InfoPersistence ) { code; }
 #  define INFO_VARS(code) if (InfoVars ) { code; }
 #  define STAT_AOA(code)  if (StatAOA ) { code; }
 #  define INFO_CBFA(code) if (InfoCBFA) { code; }
@@ -279,7 +264,7 @@
 #  define INFO_IOA(code)
 #  define INFO_AOA(code)
 #  define INFO_PROXY(code)
-#  define INFO_PERSISTENTSTORE(code)
+#  define INFO_PERSISTENCE(code)
 #  define INFO_VARS(code)
 #  define STAT_AOA(code)
 #  define INFO_LABELS(code)
@@ -303,7 +288,11 @@
 
 #define DEADOBJECT 1
 #define FREECHUNK 2
+#ifdef PERSIST
+#define LISTEND IOAPersist + 1
+#else
 #define LISTEND 3
+#endif /* PERSIST */
 
 #define REFERENCEACTIONARGSTYPE Object **theCell
 #define REFERENCEACTIONARGS theCell

@@ -140,8 +140,6 @@ void BetaExit(long number)
 #endif /* RTDEBUG */
 
   INFO_HEAP_USAGE(PrintHeapUsage("at exit"));
-  INFO_PROXY(showProxyStatistics());
-  INFO_PERSISTENTSTORE(showPersistenceStatistics());
 
 #ifdef MT
   DEBUG_MT(fprintf(output, "[thread 0x%x terminated]\n", (int)ThreadId);

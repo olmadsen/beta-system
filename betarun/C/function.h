@@ -182,6 +182,10 @@ void AOAtoIOAReport(void);
 #endif
 
 /* GC/aoa.c */
+void scanOrigins(Object *theObj, void (*originAction)(Object **theCell));
+void clearTail(void);
+Object *getHead(void);
+void prependToList(Object *target);
 extern void (*objectAction)(Object *theObj);
 extern void tempAOArootsAlloc(void);
 extern void tempAOArootsFree(void);
@@ -240,7 +244,6 @@ extern void IOACheckReference(REFERENCEACTIONARGSTYPE);
 #endif
 
 /* GC/misc.c */
-extern Object *getOrigin(Object *theObj, long *originOffset);
 extern long getmilisectimestamp(void);
 extern long milisecsincelast(void);
 extern int EqualNCS(char *s1, char *s2);
@@ -288,10 +291,8 @@ extern void scanObject(Object *obj,
 extern Object * getRealObject(Object * obj);
 extern void appendToListInAOA(REFERENCEACTIONARGSTYPE);
 extern void prependToListInAOA(REFERENCEACTIONARGSTYPE);
-extern void initialCollectList(Object * root,
-                               void (*referenceAction)(REFERENCEACTIONARGSTYPE));
-extern void extendCollectList(Object * root,
-                              void (*referenceAction)(REFERENCEACTIONARGSTYPE));
+extern void collectList(Object * root,
+			void (*referenceAction)(REFERENCEACTIONARGSTYPE));
 extern void scanList(Object * root, void (foreach)(Object * current));
 
 /* aoafreelist.c */
@@ -305,78 +306,10 @@ extern long AOAScanMemoryArea(long *start, long *end);
 extern void AOAFreeListAnalyze1(void);
 extern void AOAFreeListAnalyze2(void);
 extern void AOADisplayMemoryArea(long *start, long *end);
-extern void GCInfo(void) ;
+extern void GCInfo(void);
 extern long AOAFreeListTotalFree(void);
 extern long AOAFreeListIndexGetStat(long index, long *min, long *max, 
 				    long *usecount, long *usesize, 
 				    long *freecount, long *freesize);
-
-#ifdef PERSIST
-/* proxy.c */
-extern long inProxy(long ip);
-extern long proxyAlive(Object **theCell);
-extern void initProxySpace(void); 
-extern void freeProxySpace(void); 
-extern long newProxy(Block *theBlock, Object *theObj);
-extern void sweepAndCollectProxySpace(void);
-extern long addConstantToProxy(long ip, long offset);
-extern void proxyStop(void);
-extern void dumpObject(long obj);
-extern void removeProxyMovedMark(void);
-
-#ifdef RTINFO
-extern void showProxyStatistics(void);
-#endif /* RTINFO */
-extern void getProxyAttributes(long ip,
-			       void **dummy,
-			       u_long *id,
-			       u_long *offset);
-extern long proxyIsAlive(long ip);
-extern void *initProxyList(void);
-extern u_long appendProxyToList(long ip, void **a);
-extern void freeProxyList(void *a);
-extern u_long sizeOfProxyList(void *a);
-extern u_long *appendProxiesToProcess(void *a);
-
-/* store.c */
-extern void putName(Object *ip, char *name);
-extern void getName(char *name,   
-		    void **dummy,
-		    long *GCAttr,
-		    long *id,    
-		    long *offset);
-extern void _create(char *name);
-extern long _openRead(char *name);
-extern long _openWrite(char *name);
-extern long unknownStore(char *storeName);
-extern long unknownId(long id);
-extern long getNextStoreId(void);
-extern char *getStoreOfProcess(void);
-extern void savePersistentAOABlock(Block *b);
-extern Block *loadPersistentAOABlock(long id);
-extern void unswizzleOrigins(Block *b);
-
-/* linearize.c */
-extern Block *inPersistentAOA(long theObj);
-extern void _checkpoint(Object *roots);
-extern void _exportPersistentAOABlocks(void);
-extern void _unpersistifyAOABlocks(void);
-extern long _get(char *name);
-extern void _put(Object *theObj, char *name);
-extern void rebuildAOAtoIOATable(void);
-extern void foreachObjectInBlocks(Block *b, 		
-				  void (*objectAction)(Object *, void *),
-				  void *generic);
-extern Object *CopyObjectToPersistentAOA(Object *theObj);
-extern Object *lookUpObject(void *dummy, long id, long offset);
-#ifdef RTDEBUG
-extern void checkPersistentAOA(void);
-extern void checkPersistentAOAAfterIOA(void);
-#endif /* RTDEBUG */
-#ifdef RTINFO
-extern void showPersistenceStatistics(void);
-#endif /* RTINFO */
-#endif /* PERSIST */
-
 /* PerformGC.c */
 extern void doGCFrom(long *sp);

@@ -153,15 +153,24 @@ do {                               \
  * another object.  Also LINKEND is legal, and is alive.
  * Please note that GCAttr==0 is illegal as none of the above is zero...
  */
-#define AOAISDEAD(obj)  ((obj)->GCAttr == DEADOBJECT)
-#define AOAISFREE(obj)  ((obj)->GCAttr == FREECHUNK)
-#define AOAISALIVE(obj) ((obj)->GCAttr >=  LISTEND)
-#define isLink(gcattr) ((gcattr) > LISTEND)
-#define isEnd(gcattr) ((gcattr) == LISTEND)
+#define AOAISDEAD(obj)       ((obj)->GCAttr == DEADOBJECT)
+#define AOAISFREE(obj)       ((obj)->GCAttr == FREECHUNK)
+#define AOAISALIVE(obj)      ((obj)->GCAttr >=  LISTEND)
+#ifdef PERSIST
+#define AOAISPERSISTENT(obj) (inPIT((void *)((obj)->GCAttr)))
+#define PERSISTENTMARK(inx)  ((long)newPUID(inx))
+#endif /* PERSIST */
+#define isLink(gcattr)       ((gcattr) > LISTEND)
+#define isEnd(gcattr)        ((gcattr) == LISTEND)
 
+#ifdef PERSIST
+#define isAutonomous(gc)   ((IOAMinAge <= (gc)) && ((gc) <= IOAPersist))
+#define isForward(gc)      ((gc) > LISTEND)
+#else 
 #define isAutonomous(gc)   ((IOAMinAge <= (gc)) && ((gc) <= IOAMaxAge))
-#define isStatic(gc)       ((-0xFFFF <= (gc)) && ((gc) <= -1))
 #define isForward(gc)      ((gc) > IOAMaxAge)
+#endif /* PERSIST */
+#define isStatic(gc)       ((-0xFFFF <= (gc)) && ((gc) <= -1))
 
 #define isValRep(x)      (((long)(DoubleRepPTValue) <= (long)(GETPROTO(x)))\
 			  && ((long)(GETPROTO(x)) <= (long)(LongRepPTValue)))

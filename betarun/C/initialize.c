@@ -7,7 +7,12 @@
 
 #ifdef DMALLOC
 GLOBAL(long mcheck_line);
-#endif
+#endif /* DMALLOC */
+
+#ifdef PERSIST
+extern void initObjectTable(void);
+extern void initReferenceTable(void);
+#endif /* PERSIST */
 
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
@@ -447,10 +452,12 @@ void Initialize()
   if (valhallaID) valhallaInit (0);
 #endif /* RTVALHALLA */
 #endif /* nti_bor */
-  
+
 #ifdef PERSIST
-  initProxySpace();
+  initObjectTable();
+  initReferenceTable();
 #endif /* PERSIST */
+  
 }
 
 #ifdef sparc
