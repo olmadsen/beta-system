@@ -27,4 +27,8 @@ class IDocumentImpl implements IDocument
 
     public void replace(int x, int y, String s){ 
     }
+
+    public int getLineOffset(){ 
+      return 42;
+    }
 }
