@@ -2,6 +2,12 @@
 
 . $BETALIB/configuration/env.sh
 
+BETART="";
+export BETART
+
+LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:../lib/${objdir}"
+export LD_LIBRARY_PATH
+
 echo ""
 echo Removing old output- and dump files...
 echo "======================================================"
