@@ -15,6 +15,9 @@ void SetupFPU(void);
 
 /* C/betaenv.c */
 extern void GetBetaEnv(void);
+extern int isWinNT();
+extern int isWin95();
+extern int isWin32s();
 
 /* C/property.c */
 extern void SetupProperties(char *);

@@ -450,51 +450,39 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 #define OUR_EXCEPTION_CONTINUE_EXECUTION ExceptionContinueExecution
 EXCEPTION_DISPOSITION BetaSignalHandler_GNU
 (
- struct _EXCEPTION_RECORD* pExceptionRec,
+ EXCEPTION_RECORD* pExceptionRec,
  void* pEstablisherFrame,
- struct _CONTEXT* pContextRecord,
- void* pDispatcherContext
- )
-{
-  EXCEPTION_RECORD SavedExceptRec = *pExceptionRec;
-  CONTEXT SavedContextRec = *pContextRecord;
-  struct Object *theObj = 0;
-  long *PC;
-  long todo = 0;
-  long sig;
-
-  printf ("In BetaSignalHandler_GNU exception handler!\n");
-
+ CONTEXT* pContextRecord,
+ void* pDispatcherContext) {
+  
 #else  /* !nti_gnu */
 
 #define OUR_EXCEPTION_CONTINUE_SEARCH EXCEPTION_CONTINUE_SEARCH
 #define OUR_EXCEPTION_CONTINUE_EXECUTION EXCEPTION_CONTINUE_EXECUTION
-
-int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
-{ 
-  EXCEPTION_RECORD SavedExceptRec =  *(lpEP)->ExceptionRecord;
-  CONTEXT SavedContextRec = *(lpEP)->ContextRecord;
+int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP ) { 
+  EXCEPTION_RECORD* pExceptionRec =  lpEP->ExceptionRecord;
+  CONTEXT* pContextRecord = lpEP->ContextRecord;
+#endif /* !nti_gnu */
+  
   struct Object *theObj = 0;
   long *PC;
   long todo = 0;
   long sig;
 
-#endif /* !nti_gnu */
-
   if (NoCatchException) return OUR_EXCEPTION_CONTINUE_SEARCH;
   
-  if (SavedContextRec.ContextFlags & CONTEXT_CONTROL){
-    PC       = (long *)SavedContextRec.Eip;
-    StackEnd = (long *)SavedContextRec.Esp;
+  if (pContextRecord->ContextFlags & CONTEXT_CONTROL){
+    PC       = (long *)pContextRecord->Eip;
+    StackEnd = (long *)pContextRecord->Esp;
   } else {
     /* Can't display stack if SP unknown */
     return OUR_EXCEPTION_CONTINUE_SEARCH;
   }
-  if (SavedContextRec.ContextFlags & CONTEXT_INTEGER){
-    theObj = (struct Object *)SavedContextRec.Edx;
+  if (pContextRecord->ContextFlags & CONTEXT_INTEGER){
+    theObj = (struct Object *)pContextRecord->Edx;
   }
-  sig = (long)SavedExceptRec.ExceptionCode;
-  switch (SavedExceptRec.ExceptionCode){
+  sig = (long)pExceptionRec->ExceptionCode;
+  switch (pExceptionRec->ExceptionCode){
   case EXCEPTION_ACCESS_VIOLATION:
   case EXCEPTION_DATATYPE_MISALIGNMENT:
     todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
@@ -502,16 +490,10 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
     todo=DisplayBetaStack( StackErr, theObj, PC, sig); break;
   case EXCEPTION_BREAKPOINT:
     DEBUG_VALHALLA(fprintf(output, "sighandler: breakpoint at PC 0x%x\n", (int)PC); fflush(output));
-    if ( ((*((char*)PC)) != (char)0xcc ) && ((*((char*)PC-1)) == (char)0xcc ) ) {
-      /* int3 break */
-      /* Ofcourse it would be the best to ask valhalla if we have put a break her */
-      PC = (long *) ((long)SavedContextRec.Eip-1);
-#ifdef nti_gnu
-      pContextRecord->Eip--;
-#else
-      lpEP->ContextRecord->Eip--;
-#endif
-      /* PC points just after int3 instruction */
+    if (!isWinNT()) {
+      /* Fix the problem with win95 returning PC after the int3 break
+	 instruction. NT returns PC pointing at the int3 instruction. */
+      PC = (long *) --pContextRecord->Eip;
       DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)PC); fflush(output));
     }
     todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
@@ -529,8 +511,8 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
   case EXCEPTION_FLT_DIVIDE_BY_ZERO:
     todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
   case EXCEPTION_FLT_STACK_CHECK:
-    if (SavedContextRec.ContextFlags & CONTEXT_FLOATING_POINT){
-      if (SavedContextRec.FloatSave.StatusWord & (1L<<9)){
+    if (pContextRecord->ContextFlags & CONTEXT_FLOATING_POINT){
+      if (pContextRecord->FloatSave.StatusWord & (1L<<9)){
 	/* C1=1: overflow */
 	todo=DisplayBetaStack( FpStackOflowErr, theObj, PC, sig); break;
       } else {

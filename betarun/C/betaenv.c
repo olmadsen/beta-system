@@ -4,6 +4,7 @@
  */
 
 #include "beta.h"
+#include <winbase.h>
 
 #include <stdio.h>
 
@@ -94,4 +95,32 @@ void SetupArgValues(int ret, int inst, int prev, char *cmd, int show)
     }
   }
 }
-#endif
+
+static int GetWindowsVerson(){
+  /* Return values:
+     0 for win32s, 1 for win95 and 2 for winnt.
+     #define VER_PLATFORM_WIN32s	(0)
+     #define VER_PLATFORM_WIN32_WINDOWS (1)
+     #define VER_PLATFORM_WIN32_NT	(2)
+     */
+  
+  OSVERSIONINFO osvi;
+  memset(&osvi, 0, sizeof(OSVERSIONINFO));
+  osvi.dwOSVersionInfoSize = sizeof (OSVERSIONINFO);
+  GetVersionEx (&osvi);
+  return osvi.dwPlatformId;
+}
+
+int isWinNT() {
+  return GetWindowsVerson()==VER_PLATFORM_WIN32_NT;
+}
+
+int isWin95() {
+  return GetWindowsVerson()==VER_PLATFORM_WIN32_WINDOWS;
+}
+
+int isWin32s() {
+  return GetWindowsVerson()==VER_PLATFORM_WIN32s;
+}
+
+#endif /* nti */
