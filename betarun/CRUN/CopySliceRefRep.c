@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 21:57:30 $, SID: $Revision: 1.13 $
+ * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-09-01 11:32:26 $, SID: $Revision: 1.14 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -50,10 +50,8 @@ void CCopySRR(ref(RefRep) theRep,
     
     /* stack[12] -> theRep; */
     /* Check that low and high usable. */
-    if (low<theRep->LowBorder) BetaError(-6, theItem);
-    if (high<theRep->LowBorder) BetaError(-7, theItem);
-    if (low>theRep->HighBorder) BetaError(-6, theItem);
-    if (high>theRep->HighBorder) BetaError(-7, theItem);
+    if (low < theRep->LowBorder) BetaError(-6, theItem);
+    if (high > theRep->HighBorder) BetaError(-7, theItem);
     
     /* Calculate the range of the new repetition. */
     size = high - low + 1;
