@@ -184,6 +184,10 @@ static void StartWSA(void)
     atexit(StopWSA);
   } else {
     INFO_SOCKETS("WSAStartup failed");
+    fprintf(stderr,
+	    "TCP/IP (Windows sockets) initialization failed. Giving Up.\n");
+    fprintf(stderr,
+	    "Make sure you have TCP/IP networking properly installed.\n");
     exit(1);
   }
 }
@@ -202,7 +206,7 @@ void initSockSignals(void)
 
 void initSockets(void)
 {
-  static initialized=0;
+  static char initialized=0;
 
   if (!initialized) {
     initialized = 1;
