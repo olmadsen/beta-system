@@ -672,35 +672,111 @@ ListVal: EvVal
 	    (* (@@A,val)->putByte/Short *) 
           (# size: @integer; bsNo: @integer
           enter size
-          do evl->scanList
-             (# E: @ASTindex; i: @integer; dr1: ^mch.dataRegOperand
-             do currentNode->E;
-                (if i+1->i
-                 // 1 then (* val *)
-                    (baseAdr.copy,E[],false,rchain[])->ExpEval->lv[];
-                 // 2 then (* byteNo *) 
-                    E[]->getConst->(bsNo,V1[]); 
-                    (if V1[]=none then
-                        (if size//2 then bsNo*2->bsNo if);
-                        bsNo->A.addOff->A[]
-                     else
-                        V1.loadVal2->V1[]; (*Check this evrywhere*)
-                        V1.toDataReg->dr1[];
-                        (A[],dr1[],size)->primIndex->A[]
-                    if)
-                if);
-             #) ;
-             lv.toDataReg->dr[];
-             (if size
-              // 1 then (dr[],A[])->mch.stByte
-              // 2 then (dr[],A[])->mch.stHalf
-              // 4 then (dr[],A[])->mch.stVal
-             if);
-             A.freeAdr; (* cleared if InxRegAdr *)
-             (dr,false,false,false)->mkComputedEvVal->V[]
-             (* A.aReg does NOT denoet a real object - must be cleared *)
+          do (if switch182 then 
+                 size -> putBWforByteCode
+              else
+                 evl->scanList
+                 (# E: @ASTindex; i: @integer; dr1: ^mch.dataRegOperand
+                 do currentNode->E;
+                    (if i+1->i
+                     // 1 then (* val *)
+                        (baseAdr.copy,E[],false,rchain[])->ExpEval->lv[];
+                     // 2 then (* byteNo *) 
+                        E[]->getConst->(bsNo,V1[]); 
+                        (if V1[] = none then
+                            (if size = 2 then bsNo*2->bsNo if);
+                            bsNo->A.addOff->A[]
+                         else
+                            V1.loadVal2->V1[]; (*Check this evrywhere*)
+                            V1.toDataReg->dr1[];
+                            (A[],dr1[],size)->primIndex->A[]
+                        if)
+                    if);
+                 #) ;
+                 lv.toDataReg->dr[];
+                 (if size
+                  // 1 then (dr[],A[])->mch.stByte
+                  // 2 then (dr[],A[])->mch.stHalf
+                  // 4 then (dr[],A[])->mch.stVal
+                 if);
+                 (for i:3 repeat mch.nop for);
+                 A.freeAdr; (* cleared if InxRegAdr *)
+                 (dr,false,false,false)->mkComputedEvVal->V[]
+                 (* A.aReg does NOT denote a real object - must be cleared *)
+             if)
           #);
-
+          putBWforBytecode:
+            (# size,off: @integer; val,offSet: @ASTindex; V: ^evVal;
+               eval:
+                 (# shift: @integer
+                 enter shift
+                 do (baseAdr.copy,val[],false,rchain[])->ExpEval->lv[];
+                    true -> lv.pushVal;
+                    (if shift > 0 then
+                        (mch.dataTop[],shift->mch.newCstOp)
+                          -> mch.logicalShiftLeft;
+                    if);
+                    (mch.dataTop[],mch.dataTop[],4) -> mch.gOr
+                 #)
+            enter size
+            do mch.duplicate;
+               (A[],&mch.dataRegOperand[]) -> mch.ldVal;
+               evl->scanList
+               (# i: @integer
+               do (if i+1 -> i
+                   // 1 then currentNode -> val
+                   // 2 then currentNode -> offSet
+               if)#);
+               offSet[] -> getConst -> (off,V[]);
+               (if size
+                // 1 then 
+                   (if V[] = none then
+                       (if off
+                        // 0 then
+                           (mch.DataTop[],0x00FFFFFF->mch.newCstOp,4) 
+                             -> mch.gAnd;
+                           24 -> eval
+                        // 1 then
+                           (mch.DataTop[],0xFF00FFFF->mch.newCstOp,4) 
+                             -> mch.gAnd;
+                           16 -> eval
+                        // 2 then
+                           (mch.DataTop[],0xFFFF00FF->mch.newCstOp,4)
+                             -> mch.gAnd;
+                           8 -> eval;
+                        // 3 then
+                           (mch.DataTop[],0xFFFFFF00->mch.newCstOp,4) 
+                             -> mch.gAnd;
+                           0 -> eval
+                       if);
+                    else
+                       '\nBytecode:putBW: '
+                       'missing implementation '
+                       'for computed byte position'
+                       -> putline
+                   if)
+                // 2 then
+                   (if V[] = none then
+                       (if off
+                        // 0 then
+                           (mch.DataTop[],0x0000FFFF->mch.newCstOp,4) 
+                             -> mch.gAnd;
+                           16 -> eval
+                        // 1 then
+                           (mch.DataTop[],0xFFFF0000->mch.newCstOp,4) 
+                             -> mch.gAnd;
+                           0 -> eval
+                       if);
+                    else
+                       '\nBytecode:putBW: '
+                       'missing implementation '
+                       'for computed short position'
+                       -> putline
+                   if)
+                   
+               if);
+               (mch.dataTop[],A[]) -> mch.stVal
+            #); 
           inxPut:
 	    (* (val,inx)->R.inxPut/byte/short/long *)
 	    (* (R,inx,val) -> inxPut/byte/short/long 
@@ -753,7 +829,11 @@ ListVal: EvVal
             enter ar
             do ar[]->mch.gClr; ar.deAlloc
             #)
-       do EV.son-> EV1; EV1.son->EV1; Ev1.brother->op;
+       do 301->trace(#
+                    do 'asgToNewPrim:'->display; xN;
+                       EV[]->xA; 
+                    #);
+          EV.son-> EV1; EV1.son->EV1; Ev1.brother->op;
           (baseAdr.copy,EV1[],false,rchain[])->genAdr->A[];
           (if op[]->sematt.primitiveToNumber->opCode
            // 9 (* putByte *) then 
