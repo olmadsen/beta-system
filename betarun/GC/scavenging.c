@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-01-01 22:20:41 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-02-26 16:24:13 $, SID: $Revision: 1.10 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -759,7 +759,7 @@ IOACheckReference( theCell)
 
   if( *theCell ){
     Claim( inAOA(*theCell) || inIOA(*theCell) || inLVRA(*theCell),
-	  "IOACheckReference: *theCell outside IOA, AOA and LVRA");
+	  "IOACheckReference: *theCell inside IOA, AOA or LVRA");
     if( inLVRA(*theCell) ){
       Claim( ((ref(ValRep)) *theCell)->GCAttr == (long) theCell,
 	    "IOACheckReference:  ((ref(ValRep)) *theCell)->GCAttr == theCell");
