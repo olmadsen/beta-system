@@ -6,13 +6,65 @@ INCLUDE '~beta/win32lib/wingdi';
 INCLUDE '~beta/win32lib/wingdiconsts';
 INCLUDE '~beta/win32lib/dcmanagement';
 INCLUDE '~beta/guienv/graphics';
+INCLUDE '~beta/basiclib/math';
+BUILD nti '$$/aadraw.obj' 'external/aadraw.c' 'betacc $0 $1';
+
+-- lib: attributes --
+
+init_tables: external
+  (# buffer: @int32u;
+     width, height: @integer;
+  enter (buffer, width, height)
+  #);
+aamoveto: external
+  (# x, y: @real;
+  enter (x, y)
+  #);
+aalineto: external
+  (# x, y: @real;
+  enter (x, y)
+  #);
+aapen: external
+  (# red, green, blue: @real;
+  enter (red, green, blue)
+  #);
+
+ANTIALIAS: (# exit true #);
+-- SurfaceLib: attributes --
+ComputeOutline:
+  (# x, y: @real;
+     a, b: @real;
+     outline: ^PointList;
+     p: ^Point2d;
+     angle: @real;
+     degree: @integer;
+     step: (# exit 10 #);
+     number: (# exit 36 #);
+  enter (x, y, a, b)
+  do &PointList[] -> outline[];
+     (for number repeat
+          (degree / 180) * PI -> angle;
+          &Point2d[] -> p[];
+          x + (angle -> cos)*a -> p.x;
+          y + (angle -> sin)*b -> p.y;
+          p[] -> outline.append;
+          degree + step -> degree;
+     for);
+     &Point2d[] -> p[];
+     x + (0 -> cos)*a -> p.x;
+     y + (0 -> sin)*b -> p.y;
+     p[] -> outline.append;
+  exit outline[]
+  #);
 
 -- GraphicsCanvasOpen: doPart --
 do INNER;
    &Pixmap[] -> image[];
    size -> image.init;
    image[] -> doublebuffer.init;
-   
+   (if ANTIALIAS then
+       (image.private.pixels, image.width, image.height) -> init_tables;
+   if);
 
 -- GraphicsCanvasOnRefresh: doPart --
 do (# windowid, pixmapid: @integer;
@@ -60,26 +112,72 @@ do (# r: @ntRect;
    #);
    
 -- PixmapSurfaceDrawOval: doPart --
-do (# nullbrush: @integer;
-      prev: @integer;
-      xi, yi: @integer;
-   do NULL_BRUSH  -> GetStockObject -> nullbrush;
-      (private.hdc, nullbrush) -> SelectObject -> prev;
-      (0, 0) -> transform -> (xi, yi);
-      (private.hdc, xi, yi, xi + width, yi + height) -> Ellipse;
-      (private.hdc, prev) -> SelectObject;
-   #);
-
+do (if ANTIALIAS then
+       (# flag: @boolean;
+          xi, yi: @integer;
+          xr, yr: @real;
+          cx, cy: @integer;
+          curve: ^PointList;
+       do (width/2,height/2) -> transform -> (cx, cy);
+          (cx, cy, width/2, height/2) -> ComputeOutline -> curve[];
+          true -> flag;
+          curve.scan
+          (#
+          do current  -> (xr, yr);
+             (if flag then
+                 (xr, yr) -> aamoveto;
+                 false -> flag;
+              else
+                 (xr, yr) -> aalineto;
+             if);
+          #);
+          
+       #);
+   else
+       (# nullbrush: @integer;
+          prev: @integer;
+          xi, yi: @integer;
+       do NULL_BRUSH  -> GetStockObject -> nullbrush;
+          (private.hdc, nullbrush) -> SelectObject -> prev;
+          (0, 0) -> transform -> (xi, yi);
+          (private.hdc, xi, yi, xi + width, yi + height) -> Ellipse;
+          (private.hdc, prev) -> SelectObject;
+       #);
+   if);
 -- PixmapSurfaceFillOval: doPart --
-do (# nullpen: @integer;
-      prev: @integer;
-      xi, yi: @integer;
-   do NULL_PEN -> GetStockObject -> nullpen;
-      (private.hdc, nullpen) -> SelectObject -> prev;
-      (0, 0) -> transform -> (xi, yi);
-      (private.hdc, xi, yi, xi + width, yi + height) -> Ellipse;
-      (private.hdc, prev) -> SelectObject;
-   #);
+do (if ANTIALIAS then
+       (# flag: @boolean;
+          xi, yi: @integer;
+          xr, yr: @real;
+          cx, cy: @integer;
+          curve: ^PointList;
+          ntPoints: [0] @integer;
+          size: @integer;
+       do (width/2,height/2) -> transform -> (cx, cy);
+          (cx, cy, width/2, height/2) -> ComputeOutline -> curve[];
+          curve.size -> size;
+          2 * size ->  ntPoints.new;
+          curve.scan
+          (# xi, yi: @integer;
+             i: @integer;
+          do i + 1 -> i;
+             current -> (xi, yi);
+             xi -> ntPoints[(i*2)-1];
+             yi -> ntPoints[i*2];
+          #);
+          (private.hdc,@@ntPoints[1],size) -> Polygon;
+       #);
+    else
+       (# nullpen: @integer;
+          prev: @integer;
+          xi, yi: @integer;
+       do NULL_PEN -> GetStockObject -> nullpen;
+          (private.hdc, nullpen) -> SelectObject -> prev;
+          (0, 0) -> transform -> (xi, yi);
+          (private.hdc, xi, yi, xi + width, yi + height) -> Ellipse;
+          (private.hdc, prev) -> SelectObject;
+       #);
+   if);
 
 -- PixmapSurfaceDrawPolygon: doPart --
 do (# flag: @boolean;
@@ -126,6 +224,10 @@ do (# red, green, blue: @int8u;
    do theColor.red %srl 8 -> red;
       theColor.green %srl 8 -> green;
       theColor.blue %srl 8 -> blue;
+      
+      (if ANTIALIAS then
+          (blue / 255, green / 255, red / 255) -> aapen;
+      if);
       
       red %bor (green %sll 8) %bor (blue %sll 16) -> colorref;
       (private.hdc, colorref) -> SetTextColor;
