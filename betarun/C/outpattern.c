@@ -1686,7 +1686,7 @@ unsigned long CodeEntry(ProtoType *theProto, long PC)
   }
   if (minDist == MAXINT) {
     fprintf(output, 
-	    "Fatal Error: CodeEntry(proto=0x%x, PC=0x%x): minDist == MAXINT\n",
+	    "RTS: Fatal Error: CodeEntry(proto=0x%x, PC=0x%x): minDist == MAXINT\n",
 	    protoArg,
 	    PC);
     if (isMakingDump){
@@ -1697,7 +1697,7 @@ unsigned long CodeEntry(ProtoType *theProto, long PC)
   }
   if (minDist == PC) {
     fprintf(output, 
-	    "Fatal Error: CodeEntry(proto=0x%x, PC=0x%x) returns 0.\n",
+	    "RTS: Fatal Error: CodeEntry(proto=0x%x, PC=0x%x) returns 0.\n",
 	    protoArg,
 	    PC);
     if (isMakingDump){
