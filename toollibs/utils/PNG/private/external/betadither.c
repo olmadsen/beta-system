@@ -2,8 +2,7 @@
 #include <math.h>
 #include "betadither.h"
 
-
-static void BetaSwap(BetaImage *image)
+static void BetaSwapBig(BetaImage *image)
 {
   unsigned char *row;
   unsigned char *pixel;
@@ -21,10 +20,43 @@ static void BetaSwap(BetaImage *image)
       g = pixel[1];
       b = pixel[2];
       a = pixel[3];
+
+      
       pixel[0] = a;
       pixel[1] = b;
       pixel[2] = g; 
       pixel[3] = r;
+
+      pixel += 4;
+    }
+    row += image->rowbytes;
+  }
+}
+
+static void BetaSwapLittle(BetaImage *image)
+{
+  unsigned char *row;
+  unsigned char *pixel;
+
+  int i, j;
+
+  unsigned char r, g, b, a;
+
+  row = image->data;
+
+  for(j = 0; j < image->height; j++) {
+    pixel = row;
+    for(i = 0; i < image->width; i++) {
+      r = pixel[0];
+      g = pixel[1];
+      b = pixel[2];
+      a = pixel[3];
+
+
+      pixel[0] = b;
+      pixel[1] = g;
+      pixel[2] = r;
+      pixel[3] = a;
       pixel += 4;
     }
     row += image->rowbytes;
@@ -376,12 +408,17 @@ int BetaImageToXImage24(Display *display, BetaImage *image, XImage **ximage)
 {
 
   Visual *visual;
+  int  byte_order;
   
   visual = DefaultVisual(display, DefaultScreen(display));
+  byte_order = ImageByteOrder(display);
   
-  if(visual->red_mask = 0xFF) {
-    BetaSwap(image);
+  if(byte_order == LSBFirst) {
+    BetaSwapLittle(image);
+  } else {
+    BetaSwapBig(image);
   }
+  
   (*ximage) = XCreateImage
     (display, 
      DefaultVisual(display, DefaultScreen(display)), 
