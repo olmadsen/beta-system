@@ -204,8 +204,12 @@ case "i?86":
 		endif
 		breaksw
 	default:
-		### Not needed ####
 		set xlib=/usr/X11R6/lib
+		if ( $?LD_LIBRARY_PATH ) then
+		  setenv LD_LIBRARY_PATH ${xlib}:${MOTIFHOME}:$LD_LIBRARY_PATH
+		else
+		  setenv LD_LIBRARY_PATH ${xlib}:${MOTIFHOME}
+		endif
 		breaksw
 	endsw
 	breaksw

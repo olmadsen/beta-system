@@ -179,7 +179,7 @@ case "`uname -m`" in
 			LD_LIBRARY_PATH=/usr/X11R5/lib/:$MOTIFHOME:$LD_LIBRARY_PATH
 			;;
 		*)
-			#LD_LIBRARY_PATH=/usr/X11R6/lib/:$MOTIFHOME:$LD_LIBRARY_PATH
+			LD_LIBRARY_PATH=/usr/X11R6/lib/:$MOTIFHOME:$LD_LIBRARY_PATH
 			;;
 		esac
 		;;
