@@ -885,7 +885,6 @@ changeOperation: singleOperation
      doIt:: 
        (# 
        do
-          selection.clear;
           TRUE->THIS(graphicalEditor).private.allowPositionChange;
           (newData[],false)->theEditor.changeData;
           newData.data.storage.scan
@@ -894,7 +893,6 @@ changeOperation: singleOperation
             #);
           theEditor.applyObjectData;
           FALSE->THIS(graphicalEditor).private.allowPositionChange;
-          theEditor.select;
           
        #);
      unDoIt:: 
@@ -1130,6 +1128,36 @@ scanAttributes:
   
 
 -- selectionLib: Attributes --
+extractData:
+  (# data: ^parameters; count,firstData: ^parameters
+  do
+     &parameters[]->data[];
+     data.init;
+     &parameters[]->count[];
+     count.init;
+     scan
+       (# 
+       do
+          current.data.data.storage.scan
+            (# val: @integer
+            do
+               current.key[]->count.getInt->val;
+               (current.key[],val+1)->count.setInt;
+               
+            #)
+       #);
+     (first).data[]->firstData[];
+     count.data.storage.scan
+       (# val: @integer
+       do
+          (current.value.asIntAtom).value->val;
+          (if val = size then
+              (current.key[],(current.key[]->firstData.find))->data.data.define
+          if)
+       #);
+     
+  exit data[]
+  #);
 moveControlPoints:
   (# b: ^rectangle; 
   do
@@ -3227,6 +3255,7 @@ hasInclude: booleanValue
 (#
    thePropertyInspector: @propertyInspector
      (#
+        data: ^parameters;
         activate:
           (# 
           do
@@ -3238,63 +3267,121 @@ hasInclude: booleanValue
           #);
         deActivate: (#  do (if active then hide; false->active if) #);
         active: @boolean;
-        textChanged:: 
-          (# data: ^parameters
+        propertyChanged:: 
+          (#
+             newData: ^parameters;
+             theAtom: ^atom;
+             asBool:
+               (# str: ^text; b: @boolean
+               enter str[]
+               do
+                  (if str[] <> none then
+                      (if true
+                       // 'true'->str.equalNCS then
+                          true->b
+                       // 'false'->str.equalNCS then
+                          false->b
+                      if)
+                  if)
+               exit b
+               #);
+             asInt:
+               (# str: ^text; int: @integer
+               enter str[]
+               do
+                  l:
+                  (if str[] <> none then
+                      str.asInt (# syntaxError:: (#  do leave l #) #)->int
+                  if)
+               exit int
+               #)
           do
-             &parameters[]->data[];
-             data.init;
-             (name[],value[])->data.setText;
-             (selection.first,data[])->makeChangeOperation
-          #);
-        intChanged:: 
-          (# data: ^parameters
-          do
-             &parameters[]->data[];
-             data.init;
-             (name[],value)->data.setInt;
-             (selection.first,data[])->makeChangeOperation
-          #);
-        boolChanged:: 
-          (# data: ^parameters
-          do
-             &parameters[]->data[];
-             data.init;
-             (name[],value)->data.setBool;
-             (selection.first,data[])->makeChangeOperation
+             &parameters[]->newData[];
+             newData.init;
+             name[]->data.find->theAtom[];
+             (if theAtom[] <> none then
+                 (if theAtom.type
+                  // textType then
+                     (name[],value[])->newdata.setText
+                  // boolType then
+                     (name[],value[]->asBool)->newdata.setBool
+                  // intType then
+                     (name[],value[]->asInt)->newdata.setInt
+                 if);
+                 selection.scan
+                   (#  do (current[],newData[])->makeChangeOperation #)
+             if)
           #);
         update:
-          (# theEditor: ^windowItemEditor; data: ^parameters
+          (# theEditor: ^windowItemEditor
           do
              (if active then
-                 (contents).hide;
-                 inspectorPane.propertyPane.scan
-                   (#  do current.close #);
                  (if not selection.empty then
-                     selection.first->theEditor[];
-                     (if theEditor[] <> none then
-                         theEditor.data[]->data[];
-                         data.data.storage.scan
+                     selection.extractData->data[];
+                     (if data[] <> none then
+                         inspectorPane.propertyPane.scan
                            (# 
                            do
+                              current[]
+                                ->qua
+                                  (# as:: propertyView
+                                  do
+                                     (if (thisObj.name->data.find) = none then
+                                         thisObj.close
+                                     if)
+                                  #)
+                           #);
+                         data.data.storage.scan
+                           (# propView: ^propertyView
+                           do
+                              current.key[]->inspectorPane.propertyPane.find
+                                ->propView[];
                               (if current.value.type
                                // intType then
-                                  (current.key[],
-                                   (current.value.asIntAtom).value)
-                                    ->inspectorPane.propertyPane.makeIntProperty
+                                  (if propView[] = none then
+                                      (current.key[],
+                                       (current.value.asIntAtom).value)
+                                        ->makeIntProperty
+                                   else
+                                      propView[]
+                                        ->qua
+                                          (# as:: textPropertyView
+                                          do
+                                             (current.value.asIntAtom).value
+                                               ->thisObj.intValue
+                                          #)
+                                  if)
                                // boolType then
-                                  (current.key[],
-                                   (current.value.asBoolAtom).value)
-                                    ->
-                                      inspectorPane.propertyPane.
-                                        makeBoolProperty
+                                  (if propView[] = none then
+                                      (current.key[],
+                                       (current.value.asBoolAtom).value)
+                                        ->makeBoolProperty
+                                   else
+                                      propView[]
+                                        ->qua
+                                          (# as:: boolPropertyView
+                                          do
+                                             (current.value.asBoolAtom).value
+                                               ->thisObj.value
+                                          #)
+                                  if)
                                // textType then
-                                  (current.key[],
-                                   (current.value.asTextAtom).value[])
-                                    ->
-                                      inspectorPane.propertyPane.
-                                        makeTextProperty
+                                  (if propView[] = none then
+                                      (current.key[],
+                                       (current.value.asTextAtom).value[])
+                                        ->makeTextProperty
+                                   else
+                                      propView[]
+                                        ->qua
+                                          (# as:: textPropertyView
+                                          do
+                                             (current.value.asTextAtom).value[]
+                                               ->thisObj.value
+                                          #)
+                                  if)
                               if)
-                           #)
+                           #);
+                         inspectorPane.propertyPane.changed
                      if)
                  if)
              if);
@@ -3302,7 +3389,10 @@ hasInclude: booleanValue
           #);
         open::  (#  do hide #);
         eventHandler:: 
-          (# onAboutToClose::  (#  do deactivate; false->okToClose #) #)
+          (#
+             onAboutToClose:: 
+               (#  do thePropertyInspector.deactivate; false->okToClose #)
+          #)
      #);
    hasPrivateAttributes: @boolean;
    allowPositionChange: @boolean;
