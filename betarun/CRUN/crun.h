@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-07-21 17:15:32 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-01 20:17:14 $, SID: $Revision: 1.6 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -40,7 +40,7 @@ extern void             CopyRR() asm("CopyRR");
 extern void             CopyVR() asm("CopyVR");
 extern void             BetaError();
 extern void             ChkRA() asm("ChkRA");
-extern void             Susp() asm("Susp");
+extern ref(Component)   Susp() asm("Susp");
 
 static inline long DispatchValRepSize(ref(ValRep) theRep, unsigned range)
 {
