@@ -34,6 +34,38 @@ static void BetaSwapBig(BetaImage *image)
 }
 
 
+static void BetaGetAlphaImage(BetaImage *image)
+{
+  unsigned char *row;
+  unsigned char *pixel;
+
+  int i, j;
+
+  unsigned char r, g, b, a;
+
+  row = image->data;
+
+  for(j = 0; j < image->height; j++) {
+    pixel = row;
+    for(i = 0; i < image->width; i++) {
+      r = pixel[0];
+      g = pixel[1];
+      b = pixel[2];
+      a = pixel[3];
+
+      
+      pixel[0] = 255;
+      pixel[1] = 255 - a;
+      pixel[2] = 255 - a; 
+      pixel[3] = 255 - a;
+
+      pixel += 4;
+    }
+    row += image->rowbytes;
+  }
+}
+
+
 
 RgnHandle BuildMask(BetaImage *image)
 {
@@ -125,3 +157,109 @@ int readPNG(char *name, GWorldPtr *gworld, RgnHandle *maskrgn)
 	
 	return 0;
 }
+
+
+int readPNGAlphaImage(char *name, GWorldPtr *gworld)
+{
+	int 			result;
+	BetaImage 		image;
+	PixMapHandle	dstPixMap;
+	
+	
+	long	dstRowBytes;
+	char	*dst;
+	
+	long	srcRowBytes;
+	char	*src;
+	int		j;
+	
+	
+	
+	Rect box;
+	
+	result = BetaReadPNG(name, &image, 1);
+	
+	if(result != 0) {
+		return result;
+	}	
+	
+	box.left = 0;
+	box.top = 0;
+	box.right = image.width;
+	box.bottom = image.height;
+	
+	result = NewGWorld(gworld, 24, &box, NULL, NULL, 0);
+	
+	dstPixMap = GetGWorldPixMap(*gworld);
+	dst = GetPixBaseAddr(dstPixMap);
+	dstRowBytes = (long) (**dstPixMap).rowBytes & 0x7fff;
+	
+	
+	
+	BetaGetAlphaImage(&image);
+	
+	src = image.data;
+	srcRowBytes = image.rowbytes;
+	
+	for(j = 0; j < image.height; j++) {
+		BlockMove(src, dst, srcRowBytes);
+		src += srcRowBytes;
+		dst += dstRowBytes;
+	}
+	
+	return 0;
+}
+
+
+int readPNGrgbImage(char *name, GWorldPtr *gworld)
+{
+	int 			result;
+	BetaImage 		image;
+	PixMapHandle	dstPixMap;
+	
+	
+	long	dstRowBytes;
+	char	*dst;
+	
+	long	srcRowBytes;
+	char	*src;
+	int		j;
+	
+	
+	
+	Rect box;
+	
+	result = BetaReadPNG(name, &image, 1);
+	
+	if(result != 0) {
+		return result;
+	}
+	
+	
+	box.left = 0;
+	box.top = 0;
+	box.right = image.width;
+	box.bottom = image.height;
+	
+	result = NewGWorld(gworld, 24, &box, NULL, NULL, 0);
+	
+	dstPixMap = GetGWorldPixMap(*gworld);
+	dst = GetPixBaseAddr(dstPixMap);
+	dstRowBytes = (long) (**dstPixMap).rowBytes & 0x7fff;
+	
+	
+	
+	BetaSwapBig(&image);
+	
+	src = image.data;
+	srcRowBytes = image.rowbytes;
+	
+	for(j = 0; j < image.height; j++) {
+		BlockMove(src, dst, srcRowBytes);
+		src += srcRowBytes;
+		dst += dstRowBytes;
+	}
+	
+	return 0;
+}
+
