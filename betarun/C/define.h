@@ -39,7 +39,7 @@
 #define RTLAZY /* Include support for lazy fetch */
 #endif /* PERSIST */
 #ifdef RTDEBUG
-#if (!defined(MAC) && !defined(hppa))
+#if (!defined(MAC) /*&& !defined(hppa)*/)
 #define RTVALHALLA
 #endif
 #endif

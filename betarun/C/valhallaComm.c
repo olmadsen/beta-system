@@ -43,7 +43,7 @@ extern int doshutdown(int fd, int how);
 #endif /* mac */
 #endif /* nti */
 
-#ifdef UNIX
+#if (defined(UNIX) && !defined(hppa))
 static void *self=0;
 #endif /* UNIX */
 
@@ -88,9 +88,9 @@ void valhalla_create_buffers ()
 
 void valhalla_init_sockets (int valhallaport)
 {
+#if (defined(UNIX) && !defined(hppa))
   TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_init_sockets\n"));  
   TRACE_VALHALLACOMM(fprintf(output,"debuggee: valhallaport=%d\n", valhallaport));
-#ifdef UNIX
   DEBUG_VALHALLA(fprintf(output,"debuggee: dlopen(NULL)\n"));
   self=dlopen(NULL, (RTLD_NOW | RTLD_GLOBAL) );
   if (!self) {
@@ -952,7 +952,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
         }
       }
 #else /* !sun4s */
-      fprintf(output, "debuggee: VOP_LOOKUP_SYM_OFF: NYI\n");
+      fprintf(output, "debuggee: VOP_LOOKUP_SYM_OFF(0x%x): NYI\n", (int)addr);
 #endif /* sun4s */
       valhalla_writeint (opcode);
       valhalla_writetext(sym);
@@ -964,7 +964,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       char *sym = valhalla_readtext();
       long addr = 0;
       DEBUG_VALHALLA(fprintf(output,"VOP_LOOKUP_ADDRESS(%s)=",sym));
-#ifdef UNIX
+#if (defined(UNIX) && !defined(hppa))
       addr = (long)dlsym(self, sym);
 #else /* !UNIX */
       fprintf(output, "debuggee: VOP_LOOKUP_ADDRESS: NYI\n");
