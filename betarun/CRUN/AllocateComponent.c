@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-08-22 02:08:25 $, SID: $Revision: 1.13 $
+ * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-08-24 02:30:54 $, SID: $Revision: 1.14 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -18,10 +18,7 @@ ParamOriginProto(AlloC)
     GCable_Entry
     FetchOriginProto
 
-#ifdef DEBUG_IOA
-    if (origin) /* origin is none first time, and only there */
-      Ck(origin);
-#endif
+    Ck(origin);
 
     comp = cast(Component) IOAcalloc(ComponentSize(proto->Size));
 
@@ -43,5 +40,5 @@ ParamOriginProto(AlloC)
 
     CallBetaEntry(proto->GenPart,&comp->Body);
 
-    ReturnDual(comp);
+    return comp;
 }

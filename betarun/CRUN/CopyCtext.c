@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopyCtext.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:34 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: CopyCtext.c,v $, rel: %R%, date: $Date: 1992-08-24 02:31:07 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -37,9 +37,9 @@ ref(ValRep) CCopyCT(unsigned char *textPtr)
     theRep->Body[i] = *((long *)textPtr + i);
   }
 
-  asm("mov %0, %%i1"::"r" (theRep)); /* hack hack. Olm wants the
-				        result in %o1 */
-  return theRep;
+  __asm__("ret;restore %0, 0, %%i2"::"r" (theRep)); /* hack hack. Olm wants the
+				        result in %i2 */
+  return theRep; /* dummy, keeps gcc happy */
 }
 
 

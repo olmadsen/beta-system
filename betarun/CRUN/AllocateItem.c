@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateItem.c,v $, rel: %R%, date: $Date: 1992-08-22 02:08:34 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: AllocateItem.c,v $, rel: %R%, date: $Date: 1992-08-24 02:31:01 $, SID: $Revision: 1.11 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -25,5 +25,5 @@ ParamOriginProto(AlloI)
 
     CallBetaEntry(proto->GenPart,item);
     
-    ReturnDual(item);
+    return item;
 }

@@ -11,30 +11,29 @@
    Notice, that on the SPARC you should add 8 to this address.
 */
 
+#define GCable_Module
+
 #include "beta.h"
 #include "crun.h"
 
-asmlabel(Att, "
-	b	_CAtt
-	mov	%i0, %o1
-");
-
-ref(Component)
-CAtt(ref(Component) theComp, ref(Object) theObj)
+ParamThisComp(Att)
 {
     register ref(CallBackFrame)  callBackFrame asm("%l5");
     register long              * nextCompBlock asm("%l6");
     register long                level         asm("%l7");
-    int first = theComp->CallerLSC == 0;
-    void (*entrypoint)();
+    int first = comp->CallerLSC == 0;
+/*    void (*entrypoint)();*/
+    
+    GCable_Entry
+    FetchThisComp
 
-    /* printf("\nAttach: theComp = %x", theComp); */
+    /* printf("\nAttach: comp = %x", comp); */
 
-    Ck(theComp); Ck(theObj);
+    Ck(comp); Ck(this);
     getret(ActiveComponent->CallerLSC);
 
-    AssignReference((long *)&theComp->CallerComp, cast(Item) ActiveComponent);
-    AssignReference((long *)&theComp->CallerObj, cast(Item) theObj);
+    AssignReference((long *)&comp->CallerComp, cast(Item) ActiveComponent);
+    AssignReference((long *)&comp->CallerObj, cast(Item) this);
 
     /* -1 tells that ActiveComponent is active */
     ActiveComponent->StackObj = cast(StackObject) -1;
@@ -48,33 +47,36 @@ CAtt(ref(Component) theComp, ref(Object) theObj)
     ActiveCallBackFrame = 0;
 
     if (first) {
-	ActiveComponent = theComp;
-	entrypoint = ((void (**)())
-		      (cast(Item) &theComp->Body)->Proto)[-1];
-	(*entrypoint)(cast(Item) &theComp->Body); /* Activate the Comp */
+	ActiveComponent = comp;
+	CallBetaEntry(((void (**)())(cast(Item) &comp->Body)->Proto)[-1],
+		      &comp->Body);
+
+/*	entrypoint = ((void (**)())
+		      (cast(Item) &comp->Body)->Proto)[-1];
+	(*entrypoint)(cast(Item) &comp->Body);  Activate the Comp */
 
 	/* Fool gcc into believing that level, next.. is used */
 	asm(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
 
 	/* TerminateComponent: */
-	theComp = ActiveComponent;
-	ActiveComponent = theComp->CallerComp;
-	theObj          = theComp->CallerObj;
-	theComp->StackObj   = 0;
-	theComp->CallerComp = 0;
-	theComp->CallerObj  = 0;
+	comp = ActiveComponent;
+	ActiveComponent  = comp->CallerComp;
+	this             = comp->CallerObj;
+	comp->StackObj   = 0;
+	comp->CallerComp = 0;
+	comp->CallerObj  = 0;
 	
 	/* Pop the Component Block */
 	ActiveCallBackFrame = callBackFrame;
 	lastCompBlock = cast(ComponentBlock) nextCompBlock;
 	setret(ActiveComponent->CallerLSC);
-	return theComp; /* maintain %o0 */
+	return comp;  /* maintain %o0 ?? */
     } 
-    if (theComp->StackObj == 0){
-      /* printf("\nAttach: theComp->StackObj == 0, thecomp=%x", (long)theComp); */
-      BetaError(-2, theObj);
+    if (comp->StackObj == 0){
+      /* printf("\nAttach: comp->StackObj == 0, comp=%x", (long)comp); */
+      BetaError(-2, this);
     }
-    ActiveComponent = theComp;
+    ActiveComponent = comp;
 
     /* Unpack 'ActiveComponent.StackObj' on top of the stack.
        
@@ -113,10 +115,9 @@ CAtt(ref(Component) theComp, ref(Object) theObj)
 	((char *)FramePointer) -= size;
     }
     
-    setret(theComp->CallerLSC);
+    setret(comp->CallerLSC);
     /* Fool gcc into believing that level, next.. is used */
     asm(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
 
-    return theComp;
+    return comp; /* still ?? */
 }
-

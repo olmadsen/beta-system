@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-08-22 02:08:54 $, SID: $Revision: 1.14 $
+ * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-08-24 02:31:12 $, SID: $Revision: 1.15 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -25,7 +25,7 @@ ParamOriginProto(AlloS)
     newStruct->iOrigin = origin;
     newStruct->iProto = proto;
 
-    ReturnDual(newStruct);
+    return newStruct;
 }
 
 ref(Structure) ThisS(ref(Object) this)
@@ -55,18 +55,20 @@ ref(Structure) ThisS(ref(Object) this)
     return newStruct;
 }
 
-ref(Item) AlloSI(ref(Structure) theStruct)
+ParamStruc(AlloSI)
 {
     GCable_Entry
-    Ck(theStruct);
-    return CAlloI(cast(Object) theStruct->iOrigin, theStruct->iProto);
+    FetchStruc
+    Ck(struc);
+    return CAlloI(cast(Object) struc->iOrigin, struc->iProto);
 }
 
-ref(Component) AlloSC(ref(Structure) theStruct)
+ParamStruc(AlloSC)
 {
     GCable_Entry
-    Ck(theStruct);
-    return CAlloC(cast(Object) theStruct->iOrigin, theStruct->iProto);
+    FetchStruc
+    Ck(struc);
+    return CAlloC(cast(Object) struc->iOrigin, struc->iProto);
 }
 
 int EqS(ref(Structure) arg1, ref(Structure) arg2)

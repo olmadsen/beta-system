@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-08-22 02:08:42 $, SID: $Revision: 1.15 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-08-24 02:31:04 $, SID: $Revision: 1.16 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -52,6 +52,7 @@ int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
     ref(Item) 		         theObj;
     ref(CallBackEntry) cb;
     int retval;
+    int (*cbr)();
 
     /* Calculate the address of the CallBackEntry. As our return
        address points to the call in the middle of the CallBackEntry,
@@ -75,7 +76,9 @@ int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
     /* Call the CallBack stub, with out first four args in %i1..%i4, and
        the rest on stack from %i5 and onwards */
     
-    retval = theObj->Proto->CallBackRoutine(theObj, a1, a2, a3, a4, &a5);
+    /* As usual, skip the first instruction */
+    cbr = (int (*)()) ((int*)theObj->Proto->CallBackRoutine+1);
+    retval = cbr(theObj, a1, a2, a3, a4, &a5);
 
     /* Pop CallBackFrame */
     ActiveCallBackFrame = next;

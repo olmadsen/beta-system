@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: ExitObjects.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:54 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: ExitObjects.c,v $, rel: %R%, date: $Date: 1992-08-24 02:31:10 $, SID: $Revision: 1.5 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -8,7 +8,9 @@
 #include "crun.h"
 
 asmlabel(ExitO, "
-	ba	_CExitO
+	mov	%i1, %o0
+	mov	%i2, %o1
+	b	_CExitO
 	mov	%i0, %o2
 ");
 
