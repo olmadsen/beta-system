@@ -10,11 +10,11 @@
 #define isLazyRef(ref) 0
 #endif
 
-#ifdef macintosh
-#define Notify(s1)           CPrompt(s1, "", "", "");
-#define Notify2(s1,s2)       CPrompt(s1, s2, "", "");
-#define Notify3(s1,s2,s3)    CPrompt(s1, s2, s3, "");
-#define Notify4(s1,s2,s3,s4) CPrompt(s1, s2, s3, s4);
+#if defined(macintosh) || defined (MAC)
+#define Notify(s1)           CPrompt(s1, "","","")
+#define Notify2(s1,s2)       CPrompt(s1, s2, "", "")
+#define Notify3(s1,s2,s3)    CPrompt(s1, s2, s3, 0)
+#define Notify4(s1,s2,s3,s4) CPrompt(s1, s2, s3, s4)
 #else /* not macintosh */
 #define Notify(s1)           fprintf(output, "%s\n", s1);
 #define Notify2(s1,s2)       fprintf(output, "%s\n%s\n", s1, s2);
@@ -117,7 +117,7 @@
 #define BlockStart( theB) ((ptr(long)) Offset( theB, sizeof(struct Block)))
 #define LVRABlockStart( theB) ((ptr(long)) Offset( theB, sizeof(struct LVRABlock)))
 
-#ifdef macintosh
+#if defined(macintosh) || defined(MAC)
 #  define MALLOC(size) NewPtr(size)
 #  define REALLOC(src,size) xxxxxxxPtr(src,size)
 #  define FREE(ptr) DisposPtr((Ptr)ptr)
@@ -252,13 +252,13 @@ extern long *etext;
 #define isCode(addr) ( ((unsigned long)&start <= (unsigned long)(addr)) &&  \
                        ((unsigned long)(addr) < (unsigned long)&etext) )
 
-#endif sparc
+#endif /* sparc */
 
 #ifdef hppa
 extern long *etext;
 #define isCode(addr) ( /*((usigned long)0 <= (unsigned long)(addr)) &&*/  \
                        ((unsigned long)(addr) < (unsigned long)&etext) )
-#endif hppa
+#endif /* hppa */
 
 #ifdef crts
 #define isCode(addr) ((GetBetaCodeStart()<=(long)(addr)) && \

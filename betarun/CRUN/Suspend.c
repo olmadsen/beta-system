@@ -9,13 +9,25 @@
 #include "crun.h"
 
 #ifdef crts
+
+#ifdef MAC
+#  define SPStartOff 0
+#else
+#  define SPStartOff 1
+#endif
+
 extern long a0;
+extern void PackAndFreeJmpBuf(long);
+extern void UnPackAndAllocateJmpBuf(long, long);
+extern long GetJumpStackSize(void);
+
 struct Component * Susp(struct Object * this)
 /* ParamThis(struct Component *, Susp) */
 {
   struct Component * caller;
   struct Component * called;
   long sizeToMove, sizeOfRefStack;
+  long jump_stack_size;
   struct StackObject * theStackObj;
   long suspStackSize;
   char * suspSaveArea;
@@ -49,25 +61,33 @@ struct Component * Susp(struct Object * this)
   suspStackSize = ((long)FP-(long)SP)/4;
   suspSaveArea = MALLOC(suspStackSize*4);
   INFO_ALLOC(suspStackSize*4);
-  memcpy(suspSaveArea, SP+1, suspStackSize*4);
+  MEMCPY(suspSaveArea, SP+SPStartOff, suspStackSize*4);
 
   /* Pack current component block to stack */
   theStackObj = ActiveComponent->StackObj;
   sizeToMove = ((long)baseStackPtr-(long)FP)/4; /* Number of longs on run-time stack */
   sizeOfRefStack = ((long)RefSP - (long)baseRefSP)/4; /* Number of longs on reference stack */
+  jump_stack_size = GetJumpStackSize();
+  
+  DEBUG_IOA(fprintf(output,"Suspend: stacksize: %d\n",jump_stack_size));
+
   if ( ((long)theStackObj == 0) || ((long)theStackObj == -1) || 
-      ((sizeToMove+sizeOfRefStack) > theStackObj->BodySize) ){
+      ((sizeToMove+jump_stack_size+sizeOfRefStack) > theStackObj->BodySize) ){
     push(this);
-    theStackObj = AlloSO(sizeToMove+sizeOfRefStack+1);
+    theStackObj = AlloSO(sizeToMove+jump_stack_size+sizeOfRefStack+1);
     pop(this);
     AssignReference((long *)&ActiveComponent->StackObj, (struct Item *) theStackObj);
   }
-  theStackObj->StackSize = sizeToMove; /* Saved as longs, as GC expect this! */
-  theStackObj->Body[0] = (long) FP;
-  memcpy(theStackObj->Body+1, FP+1, sizeToMove*4);
+    /* Save as number of longs as GC expects this! */
+  theStackObj->StackSize = sizeToMove+jump_stack_size; /* Saved as longs, as GC expect this! */
+  theStackObj->Body[0] = sizeToMove; /* save size of machine stack; was FP(not used?) */
+  MEMCPY(theStackObj->Body+1, FP+SPStartOff, sizeToMove*4);
 
+  /* save jump stack from Misc.c */
+  PackAndFreeJmpBuf(&theStackObj->Body[1+sizeToMove]); 
+	
   /* Pack current reference stack to stack. */
-  memcpy(theStackObj->Body+1+sizeToMove, baseRefSP, sizeOfRefStack*4);
+  MEMCPY(theStackObj->Body+1+sizeToMove+jump_stack_size, baseRefSP, sizeOfRefStack*4);
     
   caller = ActiveComponent->CallerComp;
   if (caller == 0){
@@ -79,20 +99,26 @@ struct Component * Susp(struct Object * this)
     BetaError(CompTerminatedErr, this);
   }
   theStackObj = caller->StackObj;
-  sizeToMove = theStackObj->StackSize; /* sizeToMove is now number of longs! */
+  caller->StackObj = cast(StackObject) 0; /* clear cell for b2c */
+  jump_stack_size = theStackObj->StackSize; /* jump_stack_size is sum of machine and jump stack */
+  sizeToMove = theStackObj->Body[0];
+  jump_stack_size = jump_stack_size - sizeToMove;
 
   /* Restore the Susp part of the stack */
   newSP = baseStackPtr-sizeToMove;
-  memcpy(newSP-suspStackSize+1, suspSaveArea, suspStackSize*4);
+  MEMCPY(newSP-suspStackSize+SPStartOff, suspSaveArea, suspStackSize*4);
   SetStackPointer(newSP-suspStackSize);
   SetFramePointer(newSP);
 
   /* Activate new componont: caller */
-  memcpy(newSP+1, theStackObj->Body+1, sizeToMove*4);
+  MEMCPY(newSP+SPStartOff, theStackObj->Body+1, sizeToMove*4);
   
+  /* Restore jump stack. no_of_buffers is first */
+  UnPackAndAllocateJmpBuf(&theStackObj->Body[1+sizeToMove+1], theStackObj->Body[1+sizeToMove]);
+
   /* Restore reference stack */
   sizeOfRefStack = theStackObj->BodySize-theStackObj->StackSize-1; /* In longs! */
-  memcpy(baseRefSP, theStackObj->Body+1+sizeToMove, sizeOfRefStack*4);
+  MEMCPY(baseRefSP, theStackObj->Body+1+sizeToMove+jump_stack_size, sizeOfRefStack*4);
   RefSP = baseRefSP + sizeOfRefStack;
   a0=(long)popAdr();
 
@@ -168,7 +194,7 @@ ParamThis(struct Component *, Susp)
   /* FillStackObj */
   theStackObj->StackSize = Size;
   theStackObj->Body[0] = (long) FramePointer;
-  memcpy(theStackObj->Body+1, FramePointer, Size*4 - 4);
+  MEMCPY(theStackObj->Body+1, FramePointer, Size*4 - 4);
   
   caller = ActiveComponent->CallerComp;
   if (caller == 0)

@@ -2,10 +2,10 @@
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * crtsdep.h
  * by Ole Lehrmann Madsen, Peter Andersen and Peter Ryberg Jensen
- * $Id: crtsdep.h,v 1.4 1994-11-15 15:08:09 beta Exp $
+ * $Id: crtsdep.h,v 1.5 1995-01-24 11:00:39 beta Exp $
  */
 
-#define SIMPLEJMP 1
+#define JUMPSTACK 1
 
 #define ParamOriginProto(retType,name)			 \
   retType name(struct Object *origin, struct ProtoType *proto)
@@ -98,12 +98,12 @@ extern void 			CopyT(char *asciz,
 
 extern struct StackObject *     AlloSO(unsigned size);
 
-#ifndef SIMPLEJMP
+#ifdef JUMPSTACK
 extern void initJmpPool(void);
 #endif
 
 /************************************************************************************/
-/*                           Machine dependent makroes                              */
+/*                           Machine dependent makros                               */
 /************************************************************************************/
 
 #if defined(SUN4) || defined(SUN4S)
@@ -259,3 +259,101 @@ extern long * oldSP;
 #define SaveCompState_sparc()
 
 #endif /* SGI */
+
+#ifdef MAC
+
+// this must be hacked to PowerPC code!!!!!!!!
+ 
+extern long * oldSP;
+
+/* For callbacks in Callback.c */
+
+/* PowerPC mess: */
+
+#define MK_CALL(f)                            \
+{ unsigned long * code;                       \
+  unsigned long * func = (unsigned long *) f; \
+  code = NewPtr(4*18);                        \
+*(code++) = CBFATop->theStruct;               \
+CBFATop->code[0] = code;                      \
+CBFATop->code[1] = *(func+1); /* TOC */       \
+*(code++) = 0x7C0802A6; /* mflr      r0;  				*/ \
+*(code++) = 0xBF41FFE8; /* stmw      r26,-0x0018(SP) 	*/ \
+*(code++) = 0x90010008; /* stw       r0,0x0008(SP) 		*/ \
+*(code++) = 0x9421FFB0; /* stwu      SP,-0x0050(SP) 	*/ \
+*(code++) = 0x3F400000 | (((unsigned) &oldSP & 0xffff0000)>>16); /* lis       r26,1 			*/ \
+*(code++) = 0x635A0000 | ((unsigned) &oldSP & 0xffff);           /* ori       r26,r26,0xFFFF 	*/ \
+*(code++) = 0x903A0000; /* stw       SP,0x0000(r26) 	*/ \
+*(code++) = 0x3F400000 | ((*func & 0xffff0000)>>16); 		 /* lis       r26,1 			*/ \
+*(code++) = 0x635A0000 |  (*func & 0xffff);           		 /* ori       r26,r26,0xFFFF 	*/ \
+*(code++) = 0x7F4803A6; /* mtlr      r26;  				*/ \
+*(code++) = 0x4E800021; /* blrl 						*/ \
+*(code++) = 0x60000000; /* nop 							*/ \
+*(code++) = 0x80010058; /* lwz       r0,0x0058(SP) 		*/ \
+*(code++) = 0x30210050; /* addic     SP,SP,80 			*/ \
+*(code++) = 0x7C0803A6; /* mtlr      r0   				*/ \
+*(code++) = 0xBB41FFE8; /* lmw       r26,-0x0018(SP) 	*/ \
+*(code++) = 0x4E800020; /* blr 							*/ \
+}
+
+/* PowerPC UniversalProcPointer Call */
+
+#define MK_UNIV_CALL(f,univProcInfo)          \
+{ unsigned long * code;                       \
+  unsigned long * func = (unsigned long *) f; \
+  UniversalProcPtr myCallBack;                \
+  code = NewPtr(4*18);                        \
+*(code++) = CBFATop->theStruct;               \
+myCallBack = NewRoutineDescriptor((ProcPtr)code, univProcInfo, GetCurrentISA()); \
+CBFATop->code[0] = myCallBack;                \
+CBFATop->code[1] = *(func+1); /* TOC ?? */    \
+*(code++) = 0x7C0802A6; /* mflr      r0;  				*/ \
+*(code++) = 0xBF41FFE8; /* stmw      r26,-0x0018(SP) 	*/ \
+*(code++) = 0x90010008; /* stw       r0,0x0008(SP) 		*/ \
+*(code++) = 0x9421FFB0; /* stwu      SP,-0x0050(SP) 	*/ \
+*(code++) = 0x3F400000 | (((unsigned) &oldSP & 0xffff0000)>>16); /* lis       r26,1 			*/ \
+*(code++) = 0x635A0000 | ((unsigned) &oldSP & 0xffff);           /* ori       r26,r26,0xFFFF 	*/ \
+*(code++) = 0x903A0000; /* stw       SP,0x0000(r26) 	*/ \
+*(code++) = 0x3F400000 | ((*func & 0xffff0000)>>16); 		 /* lis       r26,1 			*/ \
+*(code++) = 0x635A0000 |  (*func & 0xffff);           		 /* ori       r26,r26,0xFFFF 	*/ \
+*(code++) = 0x7F4803A6; /* mtlr      r26;  				*/ \
+*(code++) = 0x4E800021; /* blrl 						*/ \
+*(code++) = 0x60000000; /* nop 							*/ \
+*(code++) = 0x80010058; /* lwz       r0,0x0058(SP) 		*/ \
+*(code++) = 0x30210050; /* addic     SP,SP,80 			*/ \
+*(code++) = 0x7C0803A6; /* mtlr      r0   				*/ \
+*(code++) = 0xBB41FFE8; /* lmw       r26,-0x0018(SP) 	*/ \
+*(code++) = 0x4E800020; /* blr 							*/ \
+}
+
+#define NUMBER_TO_STRUCT (12*4)
+
+/* flush the data cache */
+#define FlushCache
+
+/* Used for components in Attach.c and Suspend.c */
+
+#define setret(newret) (*(oldSP+2) = newret)
+#define setret_Susp(newret) (*(oldSP+2) = newret)
+
+#define getret(saved) (saved = *(oldSP+2))
+#define getret_Susp(saved) (saved = *(oldSP+2))
+
+#define getret_CB(saved) (saved = *(oldSP+2))
+
+extern PPC_SetStackPointer(long);
+#define SetStackPointer(newSP) PPC_SetStackPointer(newSP)
+
+extern PPC_GetStackPointer(long);
+#define GetStackPointer(SP) (SP=PPC_GetStackPointer())
+
+#define SetFramePointer(newFP) (oldSP = newFP)
+#define GetFramePointer(FP) (FP = oldSP)
+
+#define GetFramePointer_Att(FP) (FP = (SP + 120/4))
+
+#define SaveCompState_sparc()
+
+#define HandlePCB_Frame_Size 72
+
+#endif /* MAC */

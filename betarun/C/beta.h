@@ -11,13 +11,13 @@
 extern long *BETA_data1; /* C-variable */
 extern long *BETA_end; /* C-variable */
 
-#ifndef macintosh
+#if !defined(macintosh) && !defined(MAC)
 # include <string.h>
 # include <malloc.h>
 # include <memory.h>
 #endif
 
-#ifdef macintosh
+#if defined(macintosh) || defined (MAC)
 # include <Memory.h>
 # include <StdLib.h>
 # include <String.h>

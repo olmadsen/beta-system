@@ -28,7 +28,7 @@ long LVRAFreeListMemory;
 
 static struct ValRep *LVRATable[TableMAX+1];
 
-DEBUG_CODE(long LVRATabNum[TableMAX+1] );
+DEBUG_CODE(long LVRATabNum[TableMAX+1] )
 
 #ifdef RTDEBUG
 long LVRAAlive(theRep)
@@ -521,7 +521,7 @@ void LVRACompaction()
   long numFree=0;
 #endif
   
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
   RotateTheCursorBack();
 #endif
   
@@ -683,7 +683,7 @@ static void LVRAConstructFreeList()
   long           theObjectSize;
   long           sizeBlocks;
   
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
   RotateTheCursorBack();
 #endif
   

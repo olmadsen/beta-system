@@ -14,7 +14,7 @@
 #include "beta.h"
 #include <ctype.h>
 
-#ifdef macintosh
+#if defined(macintosh) || defined(MAC)
 #include <String.h>
 #include <Files.h>
 #endif
@@ -48,7 +48,7 @@ static void BooleanProperty(name)
 
 #ifdef valhallaRT
    ENTRY("valhallatest", valhallaTest = TRUE);
-#endif valhallaRT
+#endif /* valhallaRT */
 
 #ifdef sparc
   ENTRY("suspcont", SuspCont = TRUE);
@@ -79,7 +79,7 @@ static void ValueProperty( name, value)
 {
 #ifdef valhallaRT
   ENTRY("valhallaid", valhallaID = strdup (value));
-#endif valhallaRT
+#endif /* valhallaRT */
 
   ENTRY("ioa", IOASize = 1024 * intScan(name, value));
   ENTRY("aoa",  
@@ -164,7 +164,7 @@ static void ValueProperty( name, value)
     Notify(buf);
   }
 }
-#endif DEMO
+#endif /* DEMO */
 
 /**********************************************************/
 /* PRIVATE PART ---- don't change below ---- PRIVATE PART */
@@ -250,8 +250,8 @@ void SetupProperties( betart)
       pos = start;
       while( (betart[pos] != '\0') && (betart[pos] != ':') ) pos++;
     }
-  }  
-#ifdef macintosh
+  }
+#if defined(macintosh) || defined(MAC)
   if ((output == stderr) && StandAlone) {
      char *infoname; 
      char *execname;

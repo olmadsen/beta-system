@@ -95,6 +95,98 @@ void SetArgValues(int argc, char *argv[])
 }
 #endif
 
+#ifdef MAC
+
+/* GC/PerformGC.c: Not declared in function.h, doGC should only be 
+ * called from IOA(c)lloc or DoGC.
+ */
+extern void doGC();
+
+
+#ifndef RTDEBUG
+/* inline */
+#endif
+char *
+  IOAalloc(unsigned size)
+{
+  register char *p;
+  
+  GCable_Entry();
+  
+  /*fprintf(output, "IOAalloc: IOATop=0x%x, size=0x%x\n", IOATop, size);*/
+  
+  DEBUG_CODE(Claim(size>0, "IOAalloc: size>0"));
+#if (defined(sparc) || defined(hppa) || defined(crts))
+  DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAalloc: (size&7)==0"));
+  DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAalloc: (IOATop&7)==0"));
+#endif
+  
+  while ((char *)IOATop+size > (char *)IOALimit) {
+    ReqObjectSize = size / 4;
+    doGC();
+  }
+  
+  p = (char *)IOATop;
+#ifdef hppa
+  /*
+    setIOATopoffReg(getIOATopoffReg() + size);
+    */
+  IOATop = (long*)((long)IOATop+size);
+#endif
+#ifdef sparc
+  IOATopoff += size;
+#endif
+#ifdef crts
+  IOATop = (long*)((long)IOATop+size);
+#endif
+  
+  return p;
+  
+}
+
+#ifndef RTDEBUG
+/* inline */
+#endif
+char *
+  IOAcalloc(unsigned size)
+{
+  
+  register char *p;
+  
+  GCable_Entry();
+  
+  /*fprintf(output, "IOACalloc: IOATop=0x%x, size=0x%x\n", IOATop, size);*/
+  
+  DEBUG_CODE(Claim(size>0, "IOACalloc: size>0"));
+#if (defined(sparc) || defined(hppa) || defined(crts))
+  DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAcalloc: (size&7)==0"));
+  DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAcalloc: (IOATop&7)==0"));
+#endif
+  
+  while ((char *) IOATop+size > (char *)IOALimit) {
+    ReqObjectSize = size / 4;
+    doGC();
+  }
+  
+  p = (char *)IOATop;
+#ifdef hppa
+  /*setIOATopoffReg(getIOATopoffReg() + size);*/
+  IOATop = (long*)((long)IOATop+size);
+#endif
+#ifdef sparc
+  IOATopoff += size;
+#endif
+#ifdef crts
+  IOATop = (long*)((long)IOATop+size);
+#endif
+  
+  long_clear(p, size);
+  
+  return p;
+}
+
+#endif /* MAC */
+
 #ifdef sparc
 #ifdef sun4s
 asmlabel(FailureExit, "
@@ -127,7 +219,7 @@ void CCk(ref(Object) r)
     Claim(inIOA(r) || inAOA(r) || inLVRA(r) || isLazyRef(r),
 	  "Reference none or inside IOA, AOA, or LVRA");
 }
-#endif hppa
+#endif /* hppa */
 #endif
 
 #ifdef RTDEBUG
@@ -200,10 +292,10 @@ signed long SignExtWord(signed short a)
 long memcnt=0;
 #define INFO_ALLOC(size) {\
   memcnt+=size; \
-  /*fprintf(output, "jmp-alloc: 0x%x total 0x%x\n",size, memcnt); */}
+  DEBUG_IOA(fprintf(output, "jmp-alloc: 0x%x total 0x%x\n",size, memcnt)); }
 #define INFO_FREE(size) {\
   memcnt-=size; \
-  /*fprintf(output, "jmp-free: 0x%x total 0x%x\n",size, memcnt);*/ }
+  DEBUG_IOA(fprintf(output, "jmp-free: 0x%x total 0x%x\n",size, memcnt)); }
 #else
 #define INFO_FREE(size)
 #endif
@@ -211,125 +303,107 @@ long memcnt=0;
 
 /* Basis type in pool of jump buffers */
 typedef struct jmpInfoElem {
-  jmp_buf *jumpBuffer;
+  jmp_buf jumpBuffer; /* inline buffer */
   long * refTop;
 } jmpInfoElem;
 
-#ifdef SIMPLEJMP
-jmp_buf glb_jmp_buf;
-#else
-/* Implementation of a pool of jmpbuffers. */
-#define maxNoInPool 1000
+#ifdef JUMPSTACK
 
-jmp_buf *CRTSjbp;
-jmpInfoElem *jumpList;
-jmpInfoElem *jumpListHead;
-long numInJumpBuf=maxNoInPool;
+/* Implementation of a stack of jmpInfoElem. */
+#define JmpStackSize 200
+
+jmpInfoElem * jmp_buf_stack;
+jmpInfoElem * jmp_buf_stack_top;
 
 void initJmpPool()
-{
-  jmpInfoElem *tmp;
-  jmp_buf *jumpBufPool;
-  int i;
-  
-  jumpList = (jmpInfoElem *)MALLOC(sizeof(jmpInfoElem)*numInJumpBuf);
-  INFO_ALLOC(sizeof(jmpInfoElem)*numInJumpBuf);
-  jumpListHead = jumpList;
-  jumpBufPool = (jmp_buf *)MALLOC(sizeof(jmp_buf)*numInJumpBuf);
-  INFO_ALLOC(sizeof(jmp_buf)*numInJumpBuf);
-  tmp = jumpList;
-  for (i=0; i<numInJumpBuf; i++){ 
-    tmp->jumpBuffer = jumpBufPool+i;
-    tmp++;
-  }
+{  
+  jmp_buf_stack = (jmpInfoElem *)MALLOC(sizeof(jmpInfoElem)*JmpStackSize);
+  jmp_buf_stack_top = jmp_buf_stack;
 }
 
 void reallocJmpList()     
 {
-  int i=0;
-  jmpInfoElem *p;
-  jmp_buf * jmpBufPool;
-  fprintf(output,"WARNING: JmpPool overflow...\n"); fflush(output);
-  jumpListHead = (jmpInfoElem *) REALLOC(jumpListHead,
-					 2*numInJumpBuf*sizeof(jmpInfoElem));
-  jumpList = jumpListHead+numInJumpBuf; /* Points to element after last element */
-  p = jumpList;
-  jmpBufPool = (jmp_buf *)MALLOC(numInJumpBuf*sizeof(jmp_buf));
-  INFO_ALLOC(numInJumpBuf*sizeof(jmp_buf));
-  /* Initialize new chain section to point to malloc'ed pool area */
-  for (i=0; i<numInJumpBuf; i++){
-    p->jumpBuffer = jmpBufPool+i;
-    p++;
-  }
-  numInJumpBuf*=2;
+  fprintf(output,"***ERROR: Jump Stack Overflow...\n"); fflush(output); exit(1);
 }
 
-#endif SIMPLEJMP
+long GetJumpStackSize(void)
+{ 
+  return (((long)jmp_buf_stack_top-(long)jmp_buf_stack)/4)+1; /* longs on stack */
+}
+void PackAndFreeJmpBuf(long dest)
+{ long long_size = ((long)jmp_buf_stack_top-(long)jmp_buf_stack)/4; /* longs on stack */
+  if (!(long_size)) {
+    jmp_buf_stack_top=jmp_buf_stack; /* reset */
+	*(long*)dest=0; /* empty stack */
+    return;
+  }
+  *(long*)dest=long_size; /* save long_size */
+  dest+=4;
+  memcpy((char*)dest, jmp_buf_stack, long_size*4);
+  jmp_buf_stack_top=jmp_buf_stack; /* reset */
+}
+void UnPackAndAllocateJmpBuf(long src, long long_size)
+{
+  if (!long_size) {
+    jmp_buf_stack_top=jmp_buf_stack; /* reset */
+    return;
+  }
+  memcpy((char*)jmp_buf_stack, (char*)src, long_size*4);
+  jmp_buf_stack_top = (jmpInfoElem *) ((long)jmp_buf_stack+(long_size*4));
+}
 
+#endif
 
 /* 1. allocate a jmp_buf to be used by longjmp;   */
 /*    this is done below                          */
 /* 2. save stacktop of ref. stack;                */
-/*    this is currently NOT done                  */
 /* 3. save ref. for above info in a0[off]         */
-/*    currently only 1 is saved                   */
 /* 4. return jmp_buf                              */
+
+void FreeJmpBuf(int addr, int off);
 
 jmp_buf *GetJmpBuf(int addr, int off)
 {
-#ifdef SIMPLEJMP
-
   jmpInfoElem *info;
-  if (*(jmpInfoElem **)(addr+off) != 0 ) {
-    info=*(jmpInfoElem **)(addr+off);
-    info->refTop = RefSP;
-    /*    FreeJmpBuf(addr,off);*/
-  } else {
-    info = (jmpInfoElem *)MALLOC(sizeof(jmpInfoElem));
-    INFO_ALLOC(sizeof(jmpInfoElem));
-    info->refTop = RefSP;
-    info->jumpBuffer = (jmp_buf *)MALLOC(sizeof(jmp_buf));
-    INFO_ALLOC(sizeof(jmp_buf));
-    *(jmpInfoElem **)(addr+off) = info;
-  }
-  return info->jumpBuffer;
-
-#else SIMPLEJMP
-
-  jmp_buf *tmp;
-  
-  if (jumpList >= jumpListHead+numInJumpBuf){
-    reallocJmpList();
-  }
-  tmp = jumpList->jumpBuffer;
-  jumpList->refTop = RefSP; 
-  *(jmpInfoElem **)(addr+off) = jumpList;
-  jumpList=jumpList+1;
-  return tmp;
-#endif SIMPLEJMP
+  if (*(jmpInfoElem **)(addr+off)) /* is a buffer already allocated? */
+     FreeJmpBuf(addr, off);        /* then free it */
+  if ((long)jmp_buf_stack_top>=(long)jmp_buf_stack+(long)sizeof(jmpInfoElem)*JmpStackSize)
+     reallocJmpList();
+  info=jmp_buf_stack_top; /* info points into first free on Stack (this is a static address) */
+  jmp_buf_stack_top++;
+  info->refTop = RefSP;
+  *(jmpInfoElem **)(addr+off) = info;
+  /*fprintf(output,"GetJmpBuf (0x%x,%d)\n",addr,off);*/
+  return &(info->jumpBuffer);
 }
+
+/*static long old_size=0;*/
 
 void FreeJmpBuf(int addr, int off)
 {
-#ifdef SIMPLEJMP
   jmpInfoElem *info = *(jmpInfoElem **)(addr+off);
+
+  if (!info) return; /* no jump buffer here */
+  
+  /* free jmpInfoElem until info */
+  while((jmp_buf_stack_top-1)!=info) {
+    jmp_buf_stack_top--;
+	if ((jmp_buf_stack_top==jmp_buf_stack) || !(jmp_buf_stack_top->jumpBuffer)) {
+	   fprintf(output,"*** ERROR in FreeJmpBuf: jmp_buf_stack reached or jmp_buf_stack_top->jumpBuffer==0 (0x%x,0x%x,0x%x)\n",jmp_buf_stack,jmp_buf_stack_top,jmp_buf_stack_top->jumpBuffer);
+	   exit(1);
+	}
+  }
   if (info) {
-    FREE(info->jumpBuffer); /* NO! Look at how it is used in UseJmpBuf! */
-    INFO_FREE(sizeof(jmpInfoElem));
-    FREE(info);
-    INFO_FREE(sizeof(jmp_buf));
     *(jmpInfoElem **)(addr+off) = 0;
+	jmp_buf_stack_top--; /* info itself */
   } else {
     fprintf(output,"WARNING: attempt to clear jmp_buf 0 in 0x%x, off: %d\n",addr,off);
   }
-#endif SIMPLEJMP
-#if 0
-  jmpInfoElem *p;
-  p = *(jmpInfoElem **)(addr+off);
-  jumpList = jumpList-1; /* Previous element in list */
-  jumpList->jumpBuffer = p->jumpBuffer;
-  jumpList->nextElem = jumpList+1; /* Next element in list */
-#endif
+  /*fprintf(output,"FreeJmpBuf (0x%x,%d)\n",addr,off);
+  if (old_size<GetJumpStackSize()) {
+    fprintf(output,"FreeJmpBuf Grow: (%d,%d)\n",old_size,GetJumpStackSize());
+    old_size=GetJumpStackSize();
+  }*/
 }
 
 /* 1. get ref. to stateinfo from a1[off]  */
@@ -339,29 +413,15 @@ void FreeJmpBuf(int addr, int off)
 /* 4. return saved jmp_buf                */
 /* 5. jmp_buf should really be deallocaed */
 
+
 jmp_buf *UseJmpBuf(int addr, int off)
 {
-#ifdef SIMPLEJMP  
   jmpInfoElem *info;
-  jmp_buf *jbuf;
   
   a0 = (long)addr;                                
   info = *(jmpInfoElem **)(addr+off); 
   RefSP = info->refTop;                               
-  memcpy(&glb_jmp_buf, info->jumpBuffer, sizeof(jmp_buf));
   FreeJmpBuf(addr, off);
-  return &glb_jmp_buf;
-#else SIMPLEJMP
-  jmpInfoElem *p;
-  jmp_buf *jbuf;
-  
-  a0 = (long)addr;                                
-  p = *(jmpInfoElem **)(addr+off); 
-  RefSP = p->refTop;                               
-  CRTSjbp = p->jumpBuffer;
-  jbuf = p->jumpBuffer;
-  FreeJmpBuf(addr, off);
-  return jbuf;
-#endif SIMPLEJMP
+  return &(info->jumpBuffer);
 }
 #endif /* crts */

@@ -21,7 +21,7 @@ typedef struct {
 #include <signal.h>
 #endif
 
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
 #include <Quickdraw.h>
 #include <TextEdit.h>
 #include <Fonts.h>
@@ -50,7 +50,7 @@ void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4)
 #endif
 
 #ifdef DEMO
-#ifdef macintosh 
+#if defined(macintosh ) ||Êdefined(MAC)
 /* The following data was created using C/scramble.c with template
 #define SCRAMBLETEMPLATE "\
 Mj\277lner BETA System\r\
@@ -175,7 +175,7 @@ subject to the restrictions in the demo license.\
 #endif /* DEMO */
   
 #ifdef PE
-#ifdef macintosh
+#if defined(macintosh) || defined(MAC)
 /* The following data was created using C/scramble.c with template
 #define SCRAMBLETEMPLATE "\n\
 Note:\n\nThis program was compiled using a Personal Edition of the \
@@ -308,6 +308,12 @@ void PatchDataLabels(void)
 }
 #endif /* macintosh */
 
+#ifdef __powerc
+//extern void InitTextWindow();
+//extern void PutLine(char *);
+QDGlobals qd;
+#endif
+
 void Initialize()
 {
   /* This hack is to cope with the sparc, where
@@ -327,11 +333,27 @@ void Initialize()
   PatchDataLabels ();
 #endif
   
+#ifdef __powerc
+  if (0/*StandAlone*/) {
+     //InitTextWindow(); /* initializes toolbox, make a window for writing text, etc. */
+     //PutLine("Experimental Mj¿lner BETA System for PowerMac\n\n");
+  } else {
+    InitGraf((Ptr) &qd.thePort);
+	InitFonts();
+    InitWindows();
+    InitMenus();
+    TEInit();
+    InitDialogs(nil);
+    InitCursor();
+    InitTheCursor();
+  }
+#endif
+
   GetBetaEnv();
   
 #ifdef DEMO
   {
-#ifdef macintosh
+#if defined(macintosh) ||Êdefined(MAC)
     char *p, *q;
     unsigned char peHeaderMessage[] = DEMOHEADERSTRING;
     unsigned char peMessage[] = DEMOSTRING;
@@ -476,7 +498,7 @@ void Initialize()
   }
 #endif /* sun4s */
 
-#if defined(crts) && !defined(SIMPLEJMP) 
+#if defined(crts) && defined(JUMPSTACK) 
   /* Initialize pool of jump buffers */
   initJmpPool();
 #endif /* crts */

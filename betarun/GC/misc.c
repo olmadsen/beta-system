@@ -6,7 +6,7 @@
 
 #include "beta.h"
 
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
 #include <CursorCtl.h>
 #endif /* macintosh */
 
@@ -105,7 +105,7 @@ void Claim( expr, message)
   }
 }
 
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
 long gcRotateCursor=0;
 void InitTheCursor()   { if(StandAlone == 0 || gcRotateCursor) InitCursorCtl(0); }
 void RotateTheCursor() { if(StandAlone == 0 || gcRotateCursor) SpinCursor(32); }

@@ -61,7 +61,11 @@ extern long              geS(struct Structure *, struct Structure *);
 extern long              ltS(struct Structure *, struct Structure *);
 #endif
 
-static inline void
+#ifdef MAC
+static void 
+#else
+static inline void 
+#endif
 AssignReference(long *theCell, ref(Item) newObject)
 {
   *(struct Item **)theCell = newObject;
@@ -69,7 +73,11 @@ AssignReference(long *theCell, ref(Item) newObject)
     AOAtoIOAInsert(casthandle(Object)theCell);
 }
 
-static inline void
+#ifdef MAC
+static void 
+#else
+static inline void 
+#endif
 long_clear(char *p, unsigned bytesize)
 {
   register long i;
@@ -81,7 +89,18 @@ long_clear(char *p, unsigned bytesize)
     *(long *)(p+i) = 0;	/* Ugly Hacks Work Fast */
 }
 
-static inline void
+/* inline version of memcpy; works only for 4 byte aligned */
+#define MEMCPY(dst,src,bytesize)            \
+{  register long i;                         \
+   for (i = (bytesize)-4; i >= 0; i -= 4)     \
+       *(long *)(((char *)(dst))+i) = *(long *)(((char *)(src))+i); \
+}
+
+#ifdef MAC
+static void 
+#else
+static inline void 
+#endif
 zero_check(char *p, unsigned bytesize)
 {
   register long i;
@@ -93,7 +112,11 @@ zero_check(char *p, unsigned bytesize)
     if (*(long *)(p+i) != 0) fprintf(output, "zero_check failed\n");	
 }
 
-static inline void
+#ifdef MAC
+static void 
+#else
+static inline void 
+#endif
 setup_item(ref(Item) theItem,
 	   ref(ProtoType) prototype,
 	   ref(Object) origin
@@ -172,6 +195,8 @@ extern void CCk(ref(Object) r); /* Easier to debug a function call - PA */
 #endif /* RTDEBUG */
 
 #endif
+
+#ifndef MAC
 
 /* Allocation in IOA heap */
 /* GC/PerformGC.c: Not declared in function.h, doGC should only be 
@@ -252,3 +277,5 @@ static inline char *IOAcalloc(unsigned size)
   
   return p;
 }
+
+#endif /* MAC */

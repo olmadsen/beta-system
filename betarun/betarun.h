@@ -5,7 +5,7 @@
  * Copyright (C) 1992-94 Mjolner Informatics Aps.
  * Written by Ole Lehrmann Madsen, Jacob Seligmann, and Peter Andersen.
  *
- * $Id: betarun.h,v 1.7 1994-11-22 15:00:35 beta Exp $
+ * $Id: betarun.h,v 1.8 1995-01-24 11:00:06 beta Exp $
  *
  */
 
@@ -96,6 +96,14 @@ extern long * RefSP;
 extern long * oldSP;
 
 extern void Trap(void);
+
+#define LOCAL_DECLS \
+	long d0,d1,d2,d3,d4,d5,d6,d7, \
+	     C1,C2,C3,C4,C5,C6,C7,C8,C9,C10; \
+	char *T1, *T2, *T3, *T4, *T5, *T6, *T7, *T8, *T9, *T10; \
+	double fp0,fp1,fp2,fp3,fp4,fp5,fp6,fp7,fTmp; \
+	double F1,F2,F3,F4,F5,F6,F7;
+
 
 #if defined(sun4) || defined(sun4s)
 /* oldStackPtr is provided to the callback function by HandleCB which read the
@@ -215,6 +223,51 @@ extern void Trap(void);
 
 #endif /* sgi */
 
+#ifdef MAC
+
+extern long PPC_GetStackPointer();
+#define SaveCurrSP() oldSP=PPC_GetStackPointer()
+
+extern void PPC_SaveCompState(void);
+#define SaveCompState()	\
+  PPC_SaveCompState(); \
+  SaveCurrSP();  
+
+extern void PPC_RestoreCompState(void);
+#define RestoreCompState() \
+  PPC_RestoreCompState();
+
+#define CallBackPar1(dReg) (dReg = arg1)
+#define CallBackPar2(dReg) (dReg = arg2)
+#define CallBackPar3(dReg) (dReg = arg3)
+#define CallBackPar4(dReg) (dReg = arg4)
+#define CallBackPar5(dReg) (dReg = arg5)
+#define CallBackPar6(dReg) (dReg = arg6)
+
+#define CallBackParN(oldStackPtr, dReg, parNo) \
+    if (parNo==7) dReg = arg7;                 \
+	else if (parNo==8) dReg = arg8;            \
+	else dReg = *(long *)(oldStackPtr+(24*4)+(parNo-1)*4);
+
+#define CallBackPascalPar1(dReg) (dReg = *(long *)(ParamPtr+(1-1)))
+#define CallBackPascalPar2(dReg) (dReg = *(long *)(ParamPtr+(2-1)))
+#define CallBackPascalPar3(dReg) (dReg = *(long *)(ParamPtr+(3-1)))
+#define CallBackPascalPar4(dReg) (dReg = *(long *)(ParamPtr+(4-1)))
+#define CallBackPascalPar5(dReg) (dReg = *(long *)(ParamPtr+(5-1)))
+#define CallBackPascalPar6(dReg) (dReg = *(long *)(ParamPtr+(6-1)))
+
+#define CallBackPascalParN(oldStackPtr, dReg, parNo) \
+    dReg = *(long *)((parNo-1));
+
+#define CallBackPascalParShort1(dReg) (dReg = *(short *)(ParamPtr+(1-1)))
+#define CallBackPascalParShort2(dReg) (dReg = *(short *)(ParamPtr+(2-1)))
+#define CallBackPascalParShort3(dReg) (dReg = *(short *)(ParamPtr+(3-1)))
+#define CallBackPascalParShort4(dReg) (dReg = *(short *)(ParamPtr+(4-1)))
+#define CallBackPascalParShort5(dReg) (dReg = *(short *)(ParamPtr+(5-1)))
+#define CallBackPascalParShort6(dReg) (dReg = *(short *)(ParamPtr+(6-1)))
+
+#endif /* MAC */
+
 #include <setjmp.h>
 jmp_buf *UseJmpBuf(int,int);
 jmp_buf *GetJmpBuf(int,int);
@@ -243,6 +296,7 @@ extern void 			CinitT(void);
 extern char *			CpkVT(struct Object *currentObj, struct ValRep *theRep);
 extern char *			CpkSVT(struct Object *currentObj, struct ValRep *theRep, unsigned low, long high);
 extern void *			CopyCPP(struct Structure *theStruct, struct Object *theObj);
+extern void *			CopyPPP(struct Structure *theStruct, long size, struct Object *theObj);
 extern void 			ChkRA(struct Object **theObjHandle);
 extern struct ValRep *		CopyCT(unsigned char *textPtr);
 extern void 			CopyRR(struct ValRep *theRep, struct Object* theObj, unsigned offset);

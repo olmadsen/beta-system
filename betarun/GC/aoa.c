@@ -137,8 +137,8 @@ ref(Object) CopyObjectToAOA( theObj)
   theObj->GCAttr = (long) newObj;
   
   DEBUG_AOA( AOAcopied += size );
-  DEBUG_AOA( fprintf(output, "#ToAOA: IOA-address: 0x%x AOA-address: 0x%x proto: 0x%x size: %d\n", 
-		     (int)theObj, (int)newObj, (int)(theObj->Proto), (int)size));
+  /* DEBUG_AOA( fprintf(output, "#ToAOA: IOA-address: 0x%x AOA-address: 0x%x proto: 0x%x size: %d\n", 
+		     (int)theObj, (int)newObj, (int)(theObj->Proto), (int)size)); */
   
   /* Return the new object in ToSpace */
   return newObj;
@@ -163,24 +163,24 @@ void AOAGc()
 
   INFO_AOA( fprintf(output, "\n#(AOA-%d ", (int)NumAOAGc); fflush(output) );
   /* Mark all reachable objects within AOA and reverse all pointers. */
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
   RotateTheCursorBack();
 #endif
   DEBUG_AOA( fprintf( output, "1"); fflush(output) );
   Phase1();  
   /* Calculate new addresses for the reachable objects and reverse pointers. */
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
   RotateTheCursorBack();
 #endif
   DEBUG_AOA( fprintf( output, "2"); fflush(output) );
   Phase2( &blocks, &size, &used); 
   /* Copy all reachable objects to their new locations. */
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
   RotateTheCursorBack();
 #endif
   DEBUG_AOA( fprintf( output, "3"); fflush(output) );
   Phase3();  
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
   RotateTheCursorBack();
 #endif
   AOANeedCompaction = FALSE;
@@ -432,7 +432,29 @@ static void FollowObject( theObj)
       return;
       
     case (long) StackObjectPTValue:
+#ifndef crts
       Notify("FollowObject: Error: StackObject in AOA.");
+#else
+      /* CRTS */
+      /* Scan the StackObject for object references and follow all entries */
+      { ref(StackObject) theStackObject;
+        handle(Object)   theCell; 
+        long             *stackptr; 
+        long             size;
+        
+        theStackObject = Coerce(theObj, StackObject);
+        
+        stackptr = &theStackObject->Body[1] + theStackObject->StackSize;
+	size = theStackObject->BodySize-theStackObject->StackSize-1;
+	for(; size > 0; size--, stackptr++) {
+          theCell = (handle(Object)) stackptr;
+	  if(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)) {
+	     if (isObject(*theCell))
+               RAFPush((handle(Object))stackptr);
+	  }
+        }
+      }
+#endif
       return;
       
     case (long) StructurePTValue:
@@ -888,7 +910,7 @@ void AOACheck()
     theObj = (ref(Object)) BlockStart(theBlock);
     while( (ptr(long)) theObj < theBlock->top ){
       theObjectSize = 4*ObjectSize( theObj);
-      fprintf(output,"AOACheck: ObjectSize=0x%x, ", (int)theObjectSize);
+      /* fprintf(output,"AOACheck: ObjectSize=0x%x, ", (int)theObjectSize); */
       Claim(ObjectSize(theObj) > 0, "#AOACheck: ObjectSize(theObj) > 0");
       AOACheckObject( theObj);
       theObj = (ref(Object)) Offset( theObj, theObjectSize);
@@ -965,7 +987,29 @@ void AOACheckObject( theObj)
       }
       return;   
     case (long) StackObjectPTValue:
+#ifndef crts
       Claim( FALSE, "AOACheckObject: theObj should not be StackObject.");
+#else
+      /* CRTS */
+      /* Scan the StackObject for object references and follow all entries */
+      { ref(StackObject) theStackObject;
+        handle(Object)   theCell; 
+        long             *stackptr; 
+        long             size;
+        
+        theStackObject = Coerce(theObj, StackObject);
+        
+        stackptr = &theStackObject->Body[1] + theStackObject->StackSize;
+	size = theStackObject->BodySize-theStackObject->StackSize-1;
+	for(; size > 0; size--, stackptr++) {
+          theCell = (handle(Object)) stackptr;
+	  if(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)) {
+	     if (isObject(*theCell))
+               AOACheckReference((handle(Object))stackptr);
+	  }
+        }
+      }
+#endif
       return; 
     case (long) StructurePTValue:
       AOACheckReference( &(toStructure(theObj))->iOrigin );
@@ -1068,7 +1112,11 @@ void AOACheckObjectSpecial( theObj)
       AOACheckObjectSpecial( (ref(Object))(ComponentItem( theObj)));
       return;
     case (long) StackObjectPTValue:
+#ifndef crts
       Claim( FALSE, "AOACheckObjectSpecial: theObj must not be StackObject.");
+#else
+      /* do nothing? (as for RefRepPTValue) */
+#endif
       return;
     case (long) StructurePTValue:
       return;

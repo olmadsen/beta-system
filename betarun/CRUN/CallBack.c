@@ -5,6 +5,9 @@
 
 #include "beta.h"
 #include "crun.h"
+#ifdef __powerc
+#include <MixedMode.h>
+#endif
 
 /*************************** crts ***************************/
 #ifdef crts
@@ -12,8 +15,13 @@
 /* HandleCallBack is called from a CallBackEntry, setup like below. */ 
 
 long * oldSP;
+extern long a0;
 
+#ifdef __powerc
+long HandleCB(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6, long arg7, long arg8)
+#else
 long HandleCB(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
+#endif  
 {
   struct Item * theObj;
   struct CallBackEntry * cb;
@@ -37,10 +45,48 @@ long HandleCB(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
 
   /* Call the CallBack stub. Gcc push the necessary parameters to stack */
   cbr = (long (*)()) ((long*)theObj->Proto->CallBackRoutine);
-  retval = cbr(theObj, oldSP, arg1, arg2, arg3, arg4, arg5, arg6);  
+  a0=(long)theObj; /* set current object */
+#ifdef __powerc
+  retval = cbr(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);  
+#else
+  retval = cbr(arg1, arg2, arg3, arg4, arg5, arg6);  
+#endif  
+  return retval;
+}
+
+#ifdef __powerc
+long pascal HandlePCB(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6, long arg7, long arg8)
+{
+  struct Item * theObj;
+  struct CallBackEntry * cb;
+  long retval,PCB_SP;
+  long pascal (*cbr)();
+  long retAddr, *FP;
+  
+  GetStackPointer(PCB_SP);
+  getret_CB(retAddr); /* Get return address */
+  GetFramePointer(FP); /* Get framepointer */
+  /* Calculate the address of the CallBackEntry. As our return
+     address points to the call in the middle of the CallBackEntry,
+     we subtract the offset (notice that the value of cb is not used.)
+   */
+  cb = cast(CallBackEntry) (retAddr - NUMBER_TO_STRUCT);
+
+  if (!cb->theStruct) { freeCallbackCalled(); return 0; }
+  
+  Ck(cb->theStruct); 
+  Ck(cb->theStruct->iOrigin);
+  theObj = AlloI(cb->theStruct->iOrigin, cb->theStruct->iProto);
+
+  /* Call the CallBack stub. Pascal parameters on stack */
+  cbr = (long (*)()) ((long*)theObj->Proto->CallBackRoutine);
+  a0=(long)theObj; /* set current object */
+  retval = cbr(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);  
+  //retval = cbr(PCB_SP+HandlePCB_Frame_Size+24);  
   
   return retval;
 }
+#endif
 
 #if 0
 /* DO NOT REMOVE!!! Used to create code for new call back stubs to fill in CBFA->code[x] */
@@ -68,8 +114,74 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
   MK_CALL( HandleCB);
   FlushCache;
   ++CBFATop;
-  return (void *)(&(CBFATop-1)->code[0]);
+#ifdef MAC
+    return (void *)(&(CBFATop-1)->code[0]);
+#else
+    return (void *)(&(CBFATop-1)->code[0]);
+#endif
 }
+
+#ifdef _powerc
+
+void *CopyPPP(ref(Structure) theStruct, long size, ref(Object) theObj, long univProcInfo)
+{
+
+  int res_size = size & 0xff;
+  int par_size = (size & 0xff00)>>8;
+  int i;
+  unsigned long * code;                       
+  unsigned long * func = (unsigned long *) HandlePCB; 
+  UniversalProcPtr myCallBack;             
+
+  /* Take the next free entry in the Call Back Functions Area.	*/
+  /* This area is defined by 
+   * [ lastCBFABlock->entries <= CBFATop < CBFALimit ].
+   */
+  
+  if (CBFATop+1 > CBFALimit){
+    CBFArelloc();
+  }
+  
+  Ck(theStruct);
+  Ck(theObj);
+  CBFATop->theStruct = theStruct;
+  
+  code = NewPtr(4*18);                        
+  *(code++) = CBFATop->theStruct;               
+  CBFATop->code[0] = code;                
+  CBFATop->code[1] = *(func+1); /* TOC ?? */    
+  *(code++) = 0x7C0802A6; /* mflr      r0;  				*/ 
+  *(code++) = 0xBF41FFE8; /* stmw      r26,-0x0018(SP) 	    */ 
+  *(code++) = 0x90010008; /* stw       r0,0x0008(SP) 		*/ 
+  *(code++) = 0x9421FFB0; /* stwu      SP,-0x0050(SP) 	    */ 
+  *(code++) = 0x3F400000 | (((unsigned) &oldSP & 0xffff0000)>>16); /* lis       r26,oldSP		*/ 
+  *(code++) = 0x635A0000 | ((unsigned) &oldSP & 0xffff);           /* ori       r26,r26,oldSP 	*/ 
+  *(code++) = 0x903A0000; /* stw       SP,0x0000(r26) 	    */ 
+  *(code++) = 0x3F400000 | ((*func & 0xffff0000)>>16); 	   /* lis       r26,func		*/ 
+  *(code++) = 0x635A0000 |  (*func & 0xffff);              /* ori       r26,r26,func 	*/ 
+  *(code++) = 0x7F4803A6; /* mtlr      r26;  				*/ 
+  *(code++) = 0x4E800021; /* blrl 						    */ 
+  *(code++) = 0x60000000; /* nop 							*/ 
+  *(code++) = 0x80010058; /* lwz       r0,0x0058(SP) 		*/ 
+  *(code++) = 0x30210050; /* addic     SP,SP,80 			*/ 
+  *(code++) = 0x7C0803A6; /* mtlr      r0   				*/ 
+  *(code++) = 0xBB41FFE8; /* lmw       r26,-0x0018(SP) 	    */ 
+  *(code++) = 0x4E800020; /* blr 							*/ 
+
+  univProcInfo |= kPascalStackBased | RESULT_SIZE(SIZE_CODE(res_size));
+  //for (i=1; par_size>0; i++, par_size -= 4) 
+  //   univProcInfo |= STACK_ROUTINE_PARAMETER(i, SIZE_CODE(4));
+  myCallBack = NewRoutineDescriptor((ProcPtr)&CBFATop->code[0], univProcInfo, GetCurrentISA()); 
+
+  //myCallBack = NewRoutineDescriptor((ProcPtr)HandlePCB, univProcInfo, GetCurrentISA());
+  //return (void *)myCallBack;
+
+
+  FlushCache;
+  ++CBFATop;
+  return (void *)(myCallBack);
+}
+#endif /* _powerc */
 
 #endif /* crts */
 

@@ -8,6 +8,7 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifndef MAC
 asmlabel(NewRR, "
 	mov	%o1, %o2
 	mov	%l7, %o5
@@ -16,6 +17,7 @@ asmlabel(NewRR, "
 	ba	"CPREF"NewRR
         clr     %o4
 ");
+#endif
 
 #ifdef hppa
 void NewRR(ref(Object) theObj,

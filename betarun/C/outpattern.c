@@ -6,7 +6,7 @@
 
 #include "beta.h"
 
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
 #include <String.h>
 #include <Files.h>
 #endif
@@ -583,9 +583,9 @@ static void DisplayStackPart( output, low, high, theComp)
   fflush(output);
 }
 
-#endif crts
-#endif hppa
-#endif sparc
+#endif /* crts */
+#endif /* hppa */
+#endif /* sparc */
 
 #ifdef sparc
 
@@ -634,7 +634,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 
  c_on_top = 0;
 
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
   dirCh = ':';
   execname = ArgVector[0]; /* Always right ??? */
 #else
@@ -673,7 +673,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   
   if( (output = fopen(dumpname,"w")) == NULL){
     /* beta.dump cannot be opened */
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
     if (StandAlone){
       /* macintosh, failed to open dump file: running as standalone application */
       int i=2;
@@ -700,7 +700,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 #endif
   }else{
     /* beta.dump opened successfully */
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
     if (StandAlone){
       /* macintosh, dump file opened OK: running as stand alone application */
       char *lookat;
@@ -1025,7 +1025,7 @@ P("      [ EXTERNAL ACTIVATION PART ]")
   
   fclose(output);
 
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
   /* Set file type and creator to make xxx.dump an MPW file */
   {  FInfo fn;
      Str255 fname;

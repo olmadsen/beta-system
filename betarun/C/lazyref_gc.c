@@ -16,9 +16,9 @@
  * Corresponding changes for the C runtime system are made in Misc.c, Qua.c
  * and CheckReferenceAssignment.c. */
 
-#if defined(macintosh) || defined(nti)
-#include <beta.h>
-#include <data.h>
+#if defined(macintosh) || defined(nti) || defined(MAC)
+#include "beta.h"
+#include "data.h"
 #else
 #include <C/beta.h>
 #include <C/data.h>
@@ -83,7 +83,7 @@ void preLazyGC ()
   /* fprintf (stderr, "preLazyGC done\n"); */
 }
 
-#if defined(macintosh) || defined(nti)
+#if defined(macintosh) || defined(nti) || defined(MAC)
 static int danglerLookup (int* danglers, int low, int high, int dangler)
 #else
 static inline int danglerLookup (int* danglers, int low, int high, int dangler)
@@ -114,7 +114,7 @@ int getNextDangler ()
 }
 
 #ifndef sparc
-#if defined(macintosh) || defined(nti)
+#if defined(macintosh) || defined(nti) || defined(MAC)
    static void
 #else
    static inline void
@@ -140,7 +140,7 @@ void setupDanglers (int* danglers, long* objects, int count)
       if ((inx = danglerLookup (danglers, 0, count - 1, dangler)) >= 0) {
 	/* fprintf (stderr, "setupDanglerIOA(%d)\n", dangler); */
 	/*if (!inIOA(negIOArefs[i]))*/
-#ifdef hppa
+#if defined (hppa) || defined(crts)
 	if ( ((long)&ReferenceStack[0] <= negIOArefs[i]) &&
 	     (negIOArefs[i]< (long)RefSP))
 #else

@@ -1,12 +1,12 @@
 /* C/initialize.c */
-#ifdef macintosh
+#if defined(macintosh) || defined(MAC)
 extern void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4);
 extern long StandAlone;
 #endif
 #ifdef RTDEBUG
 extern long GetBetaCodeStart();
 extern long GetBetaCodeEnd();
-#endif;
+#endif
 
 /* C/betaenv.c */
 extern void GetBetaEnv(void);
@@ -133,7 +133,7 @@ extern long isObject(ref(Object));
 extern long inBetaHeap(ref(Object));
 extern long ObjectType(ref(Object));
 extern void Claim(long, char*);
-#ifdef macintosh
+#if defined(macintosh) || defined(MAC)
 extern void InitTheCursor(void);
 extern void RotateTheCursor(void);
 extern void RotateTheCursorBack(void);

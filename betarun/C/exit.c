@@ -13,7 +13,7 @@ void BetaExit( number )
 #ifdef RTDEBUG
   char buf[100];
 #ifdef crts
-  extern long memcnt;
+  extern long GetJumpStackSize(void);
 #endif
 #endif /* RTDEBUG */
 
@@ -30,7 +30,7 @@ void BetaExit( number )
 #endif
   Notify(buf);
 #ifdef crts
-  fprintf(output,"Memory allocated (not freed) in jmp-bufs: %d (Kb)\n",memcnt/Kb);
+  fprintf(output,"jmp-buf stack: %d\n",GetJumpStackSize());
 #endif
 #endif /* RTDEBUG */
 #ifdef apollo
@@ -81,8 +81,8 @@ void BetaError(errorNo, theObj)
       /* RefSP is used */
 #else
 #error Find out Stack End for hppa without Reference Stack
-#endif REFSTACK
-#endif hppa
+#endif /* REFSTACK */
+#endif /* hppa */
 
 #if !(defined(hppa) || defined(sparc) || defined(crts))
       /* Ordinary MOTOROLA-like stack */

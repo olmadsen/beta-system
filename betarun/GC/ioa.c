@@ -23,7 +23,7 @@ void IOAGc()
 {
 static IOALooksFullCount = 0; /* consecutive unsuccessful IOAGc's */
 
-#ifdef macintosh
+#if defined(macintosh) ||defined(MAC)
   RotateTheCursor();
 #endif
   
@@ -57,7 +57,7 @@ work, please do it now, and quit your program.",
   * work, please do it now, and quit your program.       *\n\
   ********************************************************\n\
 ");
-#endif macintosh
+#endif /*macintosh*/
     
   } else
     if (NumIOAGc==30) {
@@ -93,11 +93,11 @@ e-mail: support@mjolner.dk"
   *     e-mail: support@mjolner.dk                       *\n\
   ********************************************************\n\
 ");
-#endif macintosh
+#endif /*macintosh*/
       
       exit(0);
     }
-#endif DEMO
+#endif /* DEMO */
   /***************** End of DEMO Limitation in IOAGc ****************************/
   
   IOAActive = TRUE;
@@ -671,7 +671,29 @@ void ProcessAOAObject(theObj)
       }
       return;
     case (long) StackObjectPTValue:
+#ifndef crts
       Claim( FALSE, "ProcessAOAObject: No StackObject in AOA");
+#else
+      /* CRTS */
+      /* Scan the StackObject for object references and follow all entries */
+      { ref(StackObject) theStackObject;
+        handle(Object)   theCell; 
+        long             *stackptr; 
+        long             size;
+        
+        theStackObject = Coerce(theObj, StackObject);
+        
+        stackptr = &theStackObject->Body[1] + theStackObject->StackSize;
+	size = theStackObject->BodySize-theStackObject->StackSize-1;
+	for(; size > 0; size--, stackptr++) {
+          theCell = (handle(Object)) stackptr;
+	  if(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)) {
+	     if (isObject(*theCell))
+               ProcessAOAReference((handle(Object))stackptr);
+	  }
+        }
+      }
+#endif
       return;
     case (long) StructurePTValue:
       ProcessAOAReference( &(toStructure(theObj))->iOrigin );

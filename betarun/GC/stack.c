@@ -152,7 +152,7 @@ void ProcessRefStack(size, bottom)
   struct Object **theCell;
   struct Object *theObj;
 
-  DEBUG_IOA(PrintRefStack());
+  /*DEBUG_IOA(PrintRefStack());*/
   theCell = (struct Object **)bottom;
   for(; size > 0; size--, theCell++) {
 #if 0
@@ -165,7 +165,7 @@ void ProcessRefStack(size, bottom)
 #else
     i=0;
 #endif
-    DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", (int)theCell, (int)*theCell));
+    /* DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", (int)theCell, (int)*theCell));*/
     theObj = *theCell;
     if(theObj && 
        /* (theObj!=(struct Object *)ExternalMarker) && */
@@ -184,6 +184,7 @@ void ProcessRefStack(size, bottom)
     }
 #endif
 #ifdef RTDEBUG
+#ifndef MAC
     else {
       if (theObj 
 	  && !isProto(theObj) /* e.g. AlloI is called with prototype in ref. reg. */
@@ -200,6 +201,7 @@ void ProcessRefStack(size, bottom)
       }
     }
 #endif
+#endif
     if(i) *theCell = (struct Object *)((unsigned)*theCell | 1);
   }
 }
@@ -211,7 +213,7 @@ void ProcessStack()
 }
 
 /*
- * A stackobject on the snake looks like this:
+ * A stackobject in the CRTS looks like this:
  * Header
  * Body (the runtime stack-section)
  * RefStackLength
@@ -818,9 +820,9 @@ static void initLabels()
     long lastLab=0;
     INFO_ALLOC(numLabels * sizeof(struct label *));
 
-    /* Read into labels */
-    pclose (thePipe);
-    thePipe = popen (command, "r");
+      /* Read into labels */
+      pclose (thePipe);
+      thePipe = popen (command, "r");
 #ifdef SPARC_LD_SEGMENT_TEST
       /* Skip to etext */
       for (;;){

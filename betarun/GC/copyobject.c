@@ -125,7 +125,9 @@ ref(Object) NewCopyObject( theObj, theCell)
     
     if( theObj->GCAttr >= IOAtoAOAtreshold ){
 	/* theObj is old enough to go into AOA */
+#ifndef crts
 	if( !isStackObject(theObj) ){
+#endif
 	    ref(Object) newObj; 
 	    if( (newObj = CopyObjectToAOA(theObj)) ){
 		/* Insert theCell in AOAroots table. 
@@ -138,7 +140,9 @@ ref(Object) NewCopyObject( theObj, theCell)
 	    } else {
 		return CopyObject(theObj);
 	    }
+#ifndef crts
 	}
+#endif
     }
     /* theObj is not copied to LVRA, not copied to AOA, or theObj is a stack object */
     return CopyObject(theObj);

@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #endif
 
-#ifdef macintosh
+#if defined(macintosh) || defined(MAC)
 #include <StdLib.h>
 #include <Resources.h>
 #include <String.h>
@@ -28,7 +28,7 @@ void GetBetaEnv()
   char *getenv();
 #endif
   
-#ifdef macintosh
+#if defined(macintosh) || defined(MAC)
   char **theHandle;
   long length;
   
