@@ -13,9 +13,6 @@ beta: clean
 	javac -d jvm DefaultAutoIndentStrategy.java
 	javac -d jvm DocumentCommand.java
 	jbeta -s 188 BetaAutoIndentStrategy.bet
-	mkdir -p jvm/org/eclipse/ui/betaeditor/beta
-	mv jvm/org.eclipse.ui.betaeditor.beta.BetaAutoIndentStrategy.class jvm/org/eclipse/ui/betaeditor/beta/BetaAutoIndentStrategy.class
-	rm jvm/BetaAutoIndentStrategy.class # dummy dependency class
 	javac -classpath jvm -d jvm Eclipse.java
 	java -classpath jvm Eclipse
 
