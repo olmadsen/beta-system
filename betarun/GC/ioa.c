@@ -105,7 +105,7 @@ void IOAGc()
   /* Follow ActiveComponent */ 
 #ifndef MT
   if (!ActiveComponent && NumIOAGc == 1) {
-    char buf[300];
+    char buf[512];
     sprintf(buf, "Could not allocate basic component");
 #ifdef MAC
     EnlargeMacHeap(buf);
@@ -305,7 +305,7 @@ void IOAGc()
   if ((long)IOATop+4*(long)ReqObjectSize > (long)IOALimit) {
     /* Not enough freed by this GC */
     if (IOALooksFullCount > 2) {
-      char buf[100];
+      char buf[512];
       sprintf(buf, "Sorry, IOA is full: cannot allocate %d bytes.\n\
 Program terminated.\n", (int)(4*ReqObjectSize));
       Notify(buf);
@@ -438,7 +438,7 @@ void ProcessReference( theCell)
   if( inIOA(theObj)){
     /* 'theObj' is inside IOA */
 #ifdef RTDEBUG
-    { char buf[100];
+    { char buf[512];
     DEBUG_IOA(sprintf(buf, 
 		      "ProcessReference: theObj (0x%x) is consistent.", 
 		      (int)theObj); 
