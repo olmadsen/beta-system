@@ -695,7 +695,8 @@ void PrintCAR(RegWin *cAR);
 #endif
 
 /* ProcessStackCell:
- * Called for each register in 
+ * Called for each GC register in the register window.
+ */
 static __inline__ void ProcessStackCell(long *addr, char *desc, CellProcessFunc func)
 {
   /* 
