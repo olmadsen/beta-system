@@ -87,7 +87,7 @@ sub Chdir {
 	    print "cvsout \"cd $p\\n\"\n";
 		print "cd $p;\n"; 
 	}
-
+    print "chdir($p)\n" if $verbose;
     chdir $p or die "Unable to chdir: $!" unless $simulate;
 }
 
@@ -200,14 +200,14 @@ sub cvsoutput {
 
 sub cvs {
       local ($cvscmd) = "cvs ";
-      $cvscmd .= "-d $ENV{'CVSROOT'} " if defined($ENV{'CVSROOT'}) && (!$Generate);
+      #$cvscmd .= "-d $ENV{'CVSROOT'} " if defined($ENV{'CVSROOT'}) && (!$Generate);
       $cvscmd .= "@_";
-      print "$cvscmd;\n" if ($verbose);
-	  if ($Generate) {
-	  	 print "cvsout \"$cvscmd\\n\"\n";
-		 print "set output [" . "$cvscmd" . "]\n";
-		 print "cvsout \"\$output\\n\"\n";
-	  }
+      print "$cvscmd\n" if ($verbose);
+      if ($Generate) {
+	  print "cvsout \"$cvscmd\\n\"\n";
+	  print "set output [" . "$cvscmd" . "]\n";
+	  print "cvsout \"\$output\\n\"\n";
+      }
       system "$cvscmd" unless $simulate;
 }
 

@@ -3,141 +3,51 @@
 
 push(@INC, $ENV{'BETALIB'} . "/bin/admin");
 
-$FastModeSkipDirs="(/doc\$|/betarun|/grammars|/contrib)";
-
 if ($h || ($#ARGV>0)){
     print "Usage: mbs_cvsupdate [-h][-u][-s][-f][-c] [dir]\n";
     print "          -h   Print this help\n";
     print "          -v   Verbose output\n";
-    print "          -n   No effects - only print what would be done\n";
+    print "          -n   No effects - show update status of files\n";
     print "          -u   Use defaults - ask no questions\n";
     print "          -s   Skip check of .bet/.ast consistency after update\n";
-    print "          -d   Skip update of doc directories\n";
-    print "          -f   Fast mode - skip update of some directories:\n";
-    print "               $FastModeSkipDirs\n";
-    print "          -c   Skip RCM update of compiler\n";
     print "          -g   Generate CVS commands on stdout instead of executing\n";
-    print "          dir  Start directory. Skip all dirs in dirlist before dir.\n";
-    print "               Most useful with -u. Notice that compiler is not part\n";
-    print "               of regular dirlist. \n";
-    print "               Use -c or -f too if compiler should be skipped.\n";
-	
     exit 0;
 }
 
-if ($#ARGV==0){
-    $LookingForStartDir = shift @ARGV;
-    print "Skipping until start dir: $LookingForStartDir\n";
-};
-
 $UseDefaults = 1 if ($u);
 $SkipBetCheck = 1 if ($s);
-$FastMode = 1 if ($f);
-$SkipCompiler = 1 if ($c);
-$SkipDoc = 1 if ($d);
 $Generate = 1 if ($g);
 
-
-
 if ($Generate){
-    print "Generate CVS commands on stdout instead of executing\n";
+    print "Generating CVS commands on stdout instead of executing\n";
 	$UseDefaults=1;
 	$simulate = 1;
 }
 
-require "dirlist";
+require "env.perl";
 
-print "This script will do a 'cvs update' in each directory in $betalib.\n";
+print "This script will do a 'cvs update' of the entire $betalib.\n";
 if (!$UseDefaults) {
-    print "Are you sure that you want to update in all of these directories? (no/yes) ";
+    print "Are you sure that you want to update the entire BETALIB? (no/yes) ";
 
     $yes = &GetAnswer();
     exit if ($yes ne 'yes');
-
-    print "\nWould you like to be prompted for each directory? (yes/no) ";
-    $doprompt = &GetAnswer();
-} else {
-    $doprompt = 'no';
 }
 
-print "Updating bin and bin/admin...\n" unless ($Generate);
-chdir &path("$betalib/bin") or die "Unable to chdir: $!";
-&cvs("-q update -Pd") if (!$simulate);
-&ParseDirlist;			# Reparse dirlist, as it may have changed.
-
-print "Checking out missing modules, if any...\n" unless ($Generate);
-
-$UseDefaults = 1; $quiet = 1;
-require "mbs_cvsget";
-
-foreach $dir (@Dirs) {
-    if ($CvsTags{$dir} =~ /^\%(\S+)/) {
-	next if ($1 eq 'IGNORE');
-	next if ($1 eq 'NONCVS');
-	print "Unknown '%'-tag in CvsTag: \"$1\", skipping $dir\n";
-	next;
-    }
-    $basedir = "$betalib/$dir";
-    next if (!-d &path($basedir));
-    if (!-d &path("$basedir/CVS")) {
-	print "Missing CVS directory in $dir!  Skipping! \n";
-	print "If you want to update $dir, please rename it and restart.\n";
-	next;
-    }
-    if ($LookingForStartDir){
-	if ($basedir =~ m/$LookingForStartDir/){
-	    $LookingForStartDir=0;
-	} else {
-	    print "---- Skipped $basedir\n" unless ($Generate);
-	    next;
-	}
-    }
-    if ($doprompt eq "yes"){
-	print  "\nPerform 'cvs update' in \n";
-	print "  $basedir? (y/n/q) ";
-	$answer = &GetAnswer();
-	if ($answer eq "y"){
-	    # just go on
-	} elsif ($answer eq "n"){
-	    next;
-	} elsif ($answer eq "q"){
-	    exit 0;
-	}
-    } else {
-	if (($FastMode) && ($basedir =~ m%$FastModeSkipDirs%)){
-	    print "---- Fast mode:    $basedir skipped ---\n" unless ($Generate);;
-	    next;
-	} elsif (($SkipDoc) && ($basedir =~ m%/doc$%)){
-	    print "---- -d invoked:   $basedir skipped ---\n" unless ($Generate);
-	    next;
-	} else {
-	    print "**** cvs update in $basedir ****\n" unless ($Generate);
-	}
-    }
-	&Chdir("$basedir");
-    &cvs("-q update -Pd");
-    if ($?) {
-	print "CVS command failed - probably due to conflicts.\n";
-        print "Look for a line that starts 'C '\n";
-	exit(1);
-    };
+$basedir = "$betalib";
+if (!-d &path("$basedir/CVS")) {
+    print "Missing CVS directory in $betalib!  Bailing out! \n";
+    exit 1;
 }
 
-if ($FastMode) {
-    print "---- Fast mode:    compiler skipped ---\n" unless ($Generate);
-} elsif ($SkipCompiler) {
-    print "---- Invoked -c:   compiler skipped ---\n" unless ($Generate);
-} elsif (-d "$betalib/compiler/CVS") {
-    print "---- CVS Compiler: RCM compiler fetch skipped ---\n" unless ($Generate);
-} else {
-    print "**** rcm update in compiler ****\n" unless ($Generate);
-    require "mbs_rcmgettip" unless ($Generate);;
+&Chdir("$basedir");
+&cvs("-q  update -Pd") unless ($simulate);
+&cvs("-qn update -Pd") if     ($simulate);
+if ($?) {
+    print "CVS command failed - probably due to conflicts.\n";
+    print "Look for a line that starts 'C '\n";
+    exit(1);
 }
 
-
-if ($FastMode){
-    print "Fast mode: Check for .bet/.ast consistency skipped.\n";
-} else {
-    $UseDefaults=1;
-    require &path("$betalib/bin/admin/mbs_checkbet") if (!$SkipBetCheck);
-}
+$UseDefaults=1;
+require &path("$betalib/bin/admin/mbs_checkbet") if (!$SkipBetCheck);
