@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-09-01 11:31:56 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-09-03 09:47:34 $, SID: $Revision: 1.11 $
  * by Tommy Thorn
  */
 
@@ -172,9 +172,15 @@ register volatile void *GCreg3 asm("%o4");
 #define CallBetaEntry(entry,item)			\
     (* (void (*)()) ((long*)entry+1) )(item);
 
-#define Protect(var, code) \
-  { code; } __asm__("": "=r" (var))
+/* The asm's tell GCC that 'var' is read and modified in 'code' */
+
+#define Protect(var, code)				\
+  { code; }			     			\
+  __asm__ volatile("":: "r" (var));			\
+  __asm__ volatile("": "=r" (var))
 
 #define Protect2(v1, v2, code) \
-  { code; } __asm__("": "=r" (v1), "=r" (v2))
+  { code; }						\
+  __asm__ volatile("":: "r" (v1), "r" (v2));		\
+  __asm__ volatile("": "=r" (v1), "=r" (v2))
 #endif
