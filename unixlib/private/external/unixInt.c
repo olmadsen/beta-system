@@ -181,8 +181,12 @@ int err;
 #if (defined(hpux) || defined(sgi))
   return strerror(err);
 #else
-# ifdef sun
+#ifdef sun
+#ifdef sun4s
+  return strerror(err);
+#else
    if(err<=sys_nerr) return sys_errlist[err];
+#endif /* sun4s */
 # endif /* sun */
   /* No string available: return the number as string */
   { char *str=(char *)malloc(10);
