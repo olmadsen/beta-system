@@ -222,6 +222,37 @@ static void showScrambledString(unsigned char *p, int len, int sum)
 }
 #endif /* defined(PE) || defined(DEMO)&&!defined(macintosh) */
 
+#ifdef macintosh
+/*
+ * PatchDataLabels by Per Jessen Schmidt
+ * Fix BETA_data labels for the Macintosh
+ */
+
+//#include <osUtils.h>
+
+extern long *BETA_data1; /* C-variable */
+extern long *BETA_end;
+
+void PatchDataLabels(void)
+{ long *start;
+  long temp;
+
+  //Debugger();
+  start = (long *)&BETA_data1;
+  *start = (long *)&BETA_data1;
+  *(start+1) = *start+*(start+1);
+  *(start+2) = *start+*(start+2);
+  
+  while(*(start+2) != (long)&BETA_end) {
+    temp = *(start+2);
+    start = (long *)*(start+2);
+	*start = temp;
+    *(start+1) = *start+*(start+1);
+    *(start+2) = *start+*(start+2);
+  }//while
+}
+#endif /* macintosh */
+
 Initialize()
 {
   /* This hack is to cope with the sparc, where
@@ -238,6 +269,7 @@ Initialize()
   InitCursor();
   InitTheCursor();
   UnloadSeg((Ptr)_DataInit); /* Unload %A5Init% segment */
+  PatchDataLabels ();
 #endif
   
   GetBetaEnv();

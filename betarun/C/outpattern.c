@@ -519,6 +519,12 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
      long *thePC;
      long theSignal; /* theSignal is zero if not applicable. */
 {
+#ifndef sparc
+  ref(Component)      currentComponent;
+#endif
+  char *dumpname;
+  char dirCh;
+  char *execname, *localname;
 
 #ifdef valhallaRT
   if (valhallaTest)
@@ -527,15 +533,8 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 #else
   theSignal = 0; 
   /* Just to avoid a compiler warning if valhallaRT is not defined. */ 
-#endif
+#endif  
 
-#ifndef sparc
-  ref(Component)      currentComponent;
-#endif
-  char *dumpname;
-  char dirCh;
-  char *execname, *localname;
-  
   c_on_top = 0;
 
 #ifdef macintosh
